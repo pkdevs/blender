@@ -26,6 +26,20 @@ enum class AttrDomain : int8_t;
 
 namespace geometry {
 
+/**
+ * Create a copy containing all of the masked elements. Caller must ensure dependent masks match
+ * (e.g. all vertices related to kept edges/faces are included).
+ */
+std::optional<Mesh *> mesh_copy_by_mask(const Mesh &src_mesh,
+                                        IndexMask vert_mask,
+                                        IndexMask edge_mask,
+                                        IndexMask face_mask,
+                                        const bke::AttributeFilter &attribute_filter);
+
+/**
+ * Create a copy that includes all elements fully defined by the domain selection filter.
+ * (e.g. faces will only be kept if all vertices are retained when filtering the vertex domain).
+ */
 std::optional<Mesh *> mesh_copy_selection(const Mesh &src_mesh,
                                           const VArray<bool> &selection,
                                           bke::AttrDomain selection_domain,

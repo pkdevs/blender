@@ -127,80 +127,21 @@ static void gather_vert_attributes(const Mesh &mesh_src,
                          mesh_dst.attributes_for_write());
 }
 
-std::optional<Mesh *> mesh_copy_selection(const Mesh &src_mesh,
-                                          const VArray<bool> &selection,
-                                          const bke::AttrDomain selection_domain,
-                                          const bke::AttributeFilter &attribute_filter)
+std::optional<Mesh *> mesh_copy_by_mask(const Mesh &src_mesh,
+                                        const IndexMask vert_mask,
+                                        const IndexMask edge_mask,
+                                        const IndexMask face_mask,
+                                        const bke::AttributeFilter &attribute_filter)
 {
-  PRF_scope(ProfileCategory::Default);
+  if (vert_mask.is_empty()) {
+    return nullptr;
+  }
   const Span<int2> src_edges = src_mesh.edges();
   const OffsetIndices src_faces = src_mesh.faces();
   const Span<int> src_corner_verts = src_mesh.corner_verts();
   const Span<int> src_corner_edges = src_mesh.corner_edges();
   const bke::AttributeAccessor src_attributes = src_mesh.attributes();
 
-  if (selection.is_empty()) {
-    return std::nullopt;
-  }
-  if (const std::optional<bool> single = selection.get_if_single()) {
-    return *single ? std::nullopt : std::make_optional<Mesh *>(nullptr);
-  }
-
-  threading::EnumerableThreadSpecific<IndexMaskMemory> memory;
-  IndexMask vert_mask;
-  IndexMask edge_mask;
-  IndexMask face_mask;
-  switch (selection_domain) {
-    case bke::AttrDomain::Point: {
-      const VArraySpan<bool> span(selection);
-      threading::parallel_invoke(
-          src_mesh.verts_num > 1024,
-          [&]() { vert_mask = IndexMask::from_bools(span, memory.local()); },
-          [&]() { edge_mask = edge_selection_from_vert(src_edges, span, memory.local()); },
-          [&]() {
-            face_mask = face_selection_from_vert(
-                src_faces, src_corner_verts, span, memory.local());
-          });
-      break;
-    }
-    case bke::AttrDomain::Edge: {
-      const VArraySpan<bool> span(selection);
-      threading::parallel_invoke(
-          src_edges.size() > 1024,
-          [&]() {
-            edge_mask = IndexMask::from_bools(span, memory.local());
-            vert_mask = vert_selection_from_edge(
-                src_edges, edge_mask, src_mesh.verts_num, memory.local());
-          },
-          [&]() {
-            face_mask = face_selection_from_edge(
-                src_faces, src_corner_edges, span, memory.local());
-          });
-      break;
-    }
-    case bke::AttrDomain::Face: {
-      const VArraySpan<bool> span(selection);
-      face_mask = IndexMask::from_bools(span, memory.local());
-      threading::parallel_invoke(
-          face_mask.size() > 1024,
-          [&]() {
-            vert_mask = vert_selection_from_face(
-                src_faces, face_mask, src_corner_verts, src_mesh.verts_num, memory.local());
-          },
-          [&]() {
-            edge_mask = edge_selection_from_face(
-                src_faces, face_mask, src_corner_edges, src_mesh.edges_num, memory.local());
-          });
-      break;
-    }
-    default:
-      BLI_assert_unreachable();
-      break;
-  }
-
-  if (vert_mask.is_empty()) {
-    return nullptr;
-  }
   const bool same_verts = vert_mask.size() == src_mesh.verts_num;
   const bool same_edges = edge_mask.size() == src_mesh.edges_num;
   const bool same_faces = face_mask.size() == src_mesh.faces_num;
@@ -273,14 +214,92 @@ std::optional<Mesh *> mesh_copy_selection(const Mesh &src_mesh,
             dst_attributes);
       });
 
+  return dst_mesh;
+}
+
+std::optional<Mesh *> mesh_copy_selection(const Mesh &src_mesh,
+                                          const VArray<bool> &selection,
+                                          const bke::AttrDomain selection_domain,
+                                          const bke::AttributeFilter &attribute_filter)
+{
+  const Span<int2> src_edges = src_mesh.edges();
+  const OffsetIndices src_faces = src_mesh.faces();
+  const Span<int> src_corner_verts = src_mesh.corner_verts();
+  const Span<int> src_corner_edges = src_mesh.corner_edges();
+
+  if (selection.is_empty()) {
+    return std::nullopt;
+  }
+  if (const std::optional<bool> single = selection.get_if_single()) {
+    return *single ? std::nullopt : std::make_optional<Mesh *>(nullptr);
+  }
+
+  threading::EnumerableThreadSpecific<IndexMaskMemory> memory;
+  IndexMask vert_mask;
+  IndexMask edge_mask;
+  IndexMask face_mask;
+  switch (selection_domain) {
+    case bke::AttrDomain::Point: {
+      const VArraySpan<bool> span(selection);
+      threading::parallel_invoke(
+          src_mesh.verts_num > 1024,
+          [&]() { vert_mask = IndexMask::from_bools(span, memory.local()); },
+          [&]() { edge_mask = edge_selection_from_vert(src_edges, span, memory.local()); },
+          [&]() {
+            face_mask = face_selection_from_vert(
+                src_faces, src_corner_verts, span, memory.local());
+          });
+      break;
+    }
+    case bke::AttrDomain::Edge: {
+      const VArraySpan<bool> span(selection);
+      threading::parallel_invoke(
+          src_edges.size() > 1024,
+          [&]() {
+            edge_mask = IndexMask::from_bools(span, memory.local());
+            vert_mask = vert_selection_from_edge(
+                src_edges, edge_mask, src_mesh.verts_num, memory.local());
+          },
+          [&]() {
+            face_mask = face_selection_from_edge(
+                src_faces, src_corner_edges, span, memory.local());
+          });
+      break;
+    }
+    case bke::AttrDomain::Face: {
+      const VArraySpan<bool> span(selection);
+      face_mask = IndexMask::from_bools(span, memory.local());
+      threading::parallel_invoke(
+          face_mask.size() > 1024,
+          [&]() {
+            vert_mask = vert_selection_from_face(
+                src_faces, face_mask, src_corner_verts, src_mesh.verts_num, memory.local());
+          },
+          [&]() {
+            edge_mask = edge_selection_from_face(
+                src_faces, face_mask, src_corner_edges, src_mesh.edges_num, memory.local());
+          });
+      break;
+    }
+    default:
+      BLI_assert_unreachable();
+      break;
+  }
+
+  std::optional<Mesh *> dst_mesh = mesh_copy_by_mask(
+      src_mesh, vert_mask, edge_mask, face_mask, attribute_filter);
+  if (!dst_mesh) {
+    return dst_mesh;
+  }
+
   if (selection_domain == bke::AttrDomain::Edge) {
-    copy_loose_vert_hint(src_mesh, *dst_mesh);
+    copy_loose_vert_hint(src_mesh, *dst_mesh.value());
   }
   else if (selection_domain == bke::AttrDomain::Face) {
-    copy_loose_vert_hint(src_mesh, *dst_mesh);
-    copy_loose_edge_hint(src_mesh, *dst_mesh);
+    copy_loose_vert_hint(src_mesh, *dst_mesh.value());
+    copy_loose_edge_hint(src_mesh, *dst_mesh.value());
   }
-  copy_overlapping_hint(src_mesh, *dst_mesh);
+  copy_overlapping_hint(src_mesh, *dst_mesh.value());
 
   return dst_mesh;
 }

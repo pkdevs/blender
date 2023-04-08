@@ -127,12 +127,12 @@ BLI_INLINE void mesh_calc_tessellation_for_face_impl(const Span<int> corner_vert
   }
 }
 
-static void mesh_calc_tessellation_for_face(const Span<int> corner_verts,
-                                            const Span<float3> positions,
-                                            const int face_start,
-                                            const int face_size,
-                                            int3 *tri,
-                                            MemArena **pf_arena_p)
+void mesh_calc_tessellation_for_face(const Span<int> corner_verts,
+                                     const Span<float3> positions,
+                                     const int face_start,
+                                     const int face_size,
+                                     int3 *tri,
+                                     MemArena **pf_arena_p)
 {
   mesh_calc_tessellation_for_face_impl(
       corner_verts, positions, face_start, face_size, tri, pf_arena_p, false, nullptr);

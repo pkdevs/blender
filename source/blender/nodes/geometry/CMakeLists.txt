@@ -34,6 +34,7 @@ set(SRC
   nodes/node_geo_attribute_domain_size.cc
   nodes/node_geo_attribute_statistic.cc
   nodes/node_geo_bake.cc
+  nodes/node_geo_clip_geometry.cc
   nodes/node_geo_blur_attribute.cc
   nodes/node_geo_bone_info.cc
   nodes/node_geo_boolean.cc

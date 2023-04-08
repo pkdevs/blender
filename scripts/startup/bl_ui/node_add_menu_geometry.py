@@ -554,6 +554,7 @@ class NODE_MT_gn_mesh_operations_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeFlipFaces")
         self.node_operator(layout, "GeometryNodeMeshBevel")
         self.node_operator(layout, "GeometryNodeMeshBoolean")
+        self.node_operator(layout, "GeometryNodeClipGeometry")
         self.node_operator(layout, "GeometryNodeMeshToCurve")
         self.node_operator(layout, "GeometryNodeMeshToDensityGrid")
         self.node_operator(layout, "GeometryNodeMeshToPoints")

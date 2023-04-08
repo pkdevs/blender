@@ -38,6 +38,13 @@ void corner_tris_calc(Span<float3> vert_positions,
                       Span<int> corner_verts,
                       MutableSpan<int3> corner_tris);
 
+void mesh_calc_tessellation_for_face(Span<int> corner_verts,
+                                     Span<float3> positions,
+                                     int face_start,
+                                     int face_size,
+                                     int3 *tri,
+                                     MemArena **pf_arena_p);
+
 /**
  * A version of #corner_tris_calc which takes pre-calculated face normals
  * (used to avoid having to calculate the face normal for NGON tessellation).

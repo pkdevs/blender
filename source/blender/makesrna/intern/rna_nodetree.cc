@@ -11075,6 +11075,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeCameraInfo");
   define("GeometryNode", "GeometryNodeCaptureAttribute", rna_def_geo_capture_attribute);
   define("GeometryNode", "GeometryNodeClosureToList", def_geo_closure_to_list);
+  define("GeometryNode", "GeometryNodeClipGeometry");
   define("GeometryNode", "GeometryNodeClusterByConnected");
   define("GeometryNode", "GeometryNodeClusterByDistance");
   define("GeometryNode", "GeometryNodeCollectionChildren");

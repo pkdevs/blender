@@ -69,6 +69,14 @@ template<typename T> class OffsetIndices {
     return std::max<int64_t>(offsets_.size() - 1, 0);
   }
 
+  /**
+   * Return the end of the offset range (last offset).
+   */
+  int64_t last() const
+  {
+    return offsets_.last();
+  }
+
   bool is_empty() const
   {
     return this->size() == 0;
