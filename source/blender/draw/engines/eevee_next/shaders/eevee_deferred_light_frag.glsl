@@ -10,10 +10,9 @@
  */
 
 #pragma BLENDER_REQUIRE(eevee_gbuffer_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_renderpass_lib.glsl)
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_light_eval_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_reflection_probe_eval_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_lightprobe_eval_lib.glsl)
 
 void main()
 {
@@ -60,16 +59,9 @@ void main()
   }
 
   vec3 diffuse_light = vec3(0.0);
-#ifdef DO_REFLECTION_PROBES
-  vec3 reflection_light = imageLoad(indirect_reflection_img, texel).rgb;
-  vec3 refraction_light = imageLoad(indirect_refraction_img, texel).rgb;
-#else
   vec3 reflection_light = vec3(0.0);
   vec3 refraction_light = vec3(0.0);
-#endif
   float shadow = 1.0;
-
-  lightprobe_eval(diffuse_data, reflection_data, P, Ng, V, diffuse_light, reflection_light);
 
   light_eval(diffuse_data,
              reflection_data,
@@ -82,44 +74,13 @@ void main()
              reflection_light,
              shadow);
 
-  /* Apply color and output lighting to render-passes. */
-  vec4 color_0_packed = texelFetch(gbuffer_color_tx, ivec3(texel, 0), 0);
-  vec4 color_1_packed = texelFetch(gbuffer_color_tx, ivec3(texel, 1), 0);
+  render_pass_value_out(uniform_buf.render_pass.shadow_id, shadow);
 
-  reflection_data.color = gbuffer_color_unpack(color_0_packed);
-  refraction_data.color = is_refraction ? gbuffer_color_unpack(color_1_packed) : vec3(0.0);
-  diffuse_data.color = is_refraction ? vec3(0.0) : gbuffer_color_unpack(color_1_packed);
+  /* Store lighting for next deferred pass. */
+  /* Output object ID for sub-surface screen space processing. */
+  float f_sss_id = gbuffer_object_id_f16_pack(diffuse_data.sss_id);
 
-  /* Light passes. */
-  if (uniform_buf.render_pass.diffuse_light_id >= 0) {
-    imageStore(rp_color_img,
-               ivec3(texel, uniform_buf.render_pass.diffuse_light_id),
-               vec4(diffuse_light, 1.0));
-  }
-  if (uniform_buf.render_pass.specular_light_id >= 0) {
-    vec3 specular_light = reflection_light + refraction_light;
-    imageStore(rp_color_img,
-               ivec3(texel, uniform_buf.render_pass.specular_light_id),
-               vec4(specular_light, 1.0));
-  }
-  if (uniform_buf.render_pass.shadow_id >= 0) {
-    imageStore(rp_value_img, ivec3(texel, uniform_buf.render_pass.shadow_id), vec4(shadow));
-  }
-
-  if (!is_last_eval_pass) {
-    /* Store lighting for next deferred pass. */
-    vec4 diffuse_radiance;
-    diffuse_radiance.xyz = diffuse_light;
-    /* Output object ID for sub-surface screen space processing. */
-    diffuse_radiance.w = gbuffer_object_id_f16_pack(diffuse_data.sss_id);
-    imageStore(out_diffuse_light_img, texel, diffuse_radiance);
-    imageStore(out_specular_light_img, texel, vec4(reflection_light + reflection_light, 0.0));
-  }
-
-  diffuse_light *= diffuse_data.color;
-  reflection_light *= reflection_data.color;
-  refraction_light *= refraction_data.color;
-  /* Add radiance to combined pass. */
-  out_radiance = vec4(diffuse_light + reflection_light + refraction_light, 0.0);
-  out_transmittance = vec4(1.0);
+  imageStore(direct_diffuse_img, texel, vec4(diffuse_light, f_sss_id));
+  imageStore(direct_reflect_img, texel, vec4(reflection_light, 1.0));
+  imageStore(direct_refract_img, texel, vec4(refraction_light, 1.0));
 }
