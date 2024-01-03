@@ -20,10 +20,10 @@
 
 AUD_NAMESPACE_BEGIN
 
-const int JOSResampleReader::m_len = 325078;
-const int JOSResampleReader::m_L = 2304;
+const int JOSResampleReader::m_len_high = 325078;
+const int JOSResampleReader::m_L_high = 2304;
 
-const float JOSResampleReader::m_coeff[] = {
+const float JOSResampleReader::m_coeff_high[m_len_high + 1] = {
 9.639035268e-01f, 9.639032492e-01f, 9.639024165e-01f, 9.639010286e-01f, 9.638990855e-01f, 9.638965872e-01f, 9.638935338e-01f, 9.638899253e-01f, 9.638857615e-01f, 9.638810427e-01f,
 9.638757686e-01f, 9.638699395e-01f, 9.638635552e-01f, 9.638566158e-01f, 9.638491212e-01f, 9.638410716e-01f, 9.638324668e-01f, 9.638233070e-01f, 9.638135921e-01f, 9.638033220e-01f,
 9.637924970e-01f, 9.637811168e-01f, 9.637691817e-01f, 9.637566915e-01f, 9.637436463e-01f, 9.637300461e-01f, 9.637158908e-01f, 9.637011807e-01f, 9.636859155e-01f, 9.636700955e-01f,
