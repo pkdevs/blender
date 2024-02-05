@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.1.0 Alpha (b'8b1da14f0a3d')\n"
+"Project-Id-Version: Blender 4.1.0 Alpha (b'3d7e84f57d8a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-01-22 11:04+0000\n"
+"POT-Creation-Date: 2024-02-05 09:44+0000\n"
 "PO-Revision-Date: 2024-01-20 18:03+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -3965,6 +3965,10 @@ msgid "This collection was added via a library override in the current blend fil
 msgstr "தற்போதைய கலப்பு கோப்பில் ஒரு நூலகம் மேலெழுதும் வழியாக இந்த சேகரிப்பு சேர்க்கப்பட்டது"
 
 
+msgid "Solo"
+msgstr "தனி"
+
+
 msgid "Visible"
 msgstr "தெரியும்"
 
@@ -3983,10 +3987,6 @@ msgstr "இந்த எலும்பு சேகரிப்பின் ம
 
 msgid "Effective Visibility"
 msgstr "பயனுள்ள தெரிவுநிலை"
-
-
-msgid "Whether this bone collection is effectively visible in the viewport. This is True when this bone collection and all of its ancestors are visible"
-msgstr "இந்த எலும்பு சேகரிப்பு காட்சியமைப்பில் திறம்பட காணப்படுகிறதா. இந்த எலும்பு சேகரிப்பு மற்றும் அதன் மூதாதையர்கள் அனைவரும் தெரியும் போது இது உண்மை"
 
 
 msgid "Unique within the Armature"
@@ -19926,6 +19926,30 @@ msgstr "குழி காரணி"
 
 msgid "The contrast of the cavity mask"
 msgstr "குழி முகமூடியின் மாறுபாடு"
+
+
+msgid "Area Normal Falloff"
+msgstr "பரப்பு சாதாரண வீழ்ச்சி"
+
+
+msgid "Extend the angular range with a falloff gradient"
+msgstr "கோண வரம்பை ஒரு வீழ்ச்சி சாய்வு மூலம் நீட்டிக்கவும்"
+
+
+msgid "Area Normal Limit"
+msgstr "பரப்பு சாதாரண வரம்பு"
+
+
+msgid "The range of angles that will be affected"
+msgstr "பாதிக்கப்படும் கோணங்களின் வரம்பு"
+
+
+msgid "View Normal Falloff"
+msgstr "சாதாரண வீழ்ச்சியைக் காண்க"
+
+
+msgid "View Normal Limit"
+msgstr "சாதாரண வரம்பைக் காண்க"
 
 
 msgid "Blending Mode"
@@ -40358,14 +40382,6 @@ msgid "2D Scale for the warp"
 msgstr "போருக்கு 2 டி அளவு"
 
 
-msgid "UV Layer"
-msgstr "புறஊதா அடுக்கு"
-
-
-msgid "UV Layer name"
-msgstr "புறஊதா அடுக்கு பெயர்"
-
-
 msgid "WeightVG Edit Modifier"
 msgstr "Weithvg திருத்து மாற்றியமைத்தல்"
 
@@ -42620,10 +42636,6 @@ msgstr "பாதையை மீறவும்"
 
 msgid "In a local override data, whether this NLA track comes from the linked reference data, or is local to the override"
 msgstr "உள்ளக மேலெழுத தரவுகளில், இந்த என்எல்ஏ டிராக் இணைக்கப்பட்ட குறிப்பு தரவுகளிலிருந்து வந்ததா, அல்லது மேலெழுதத்திற்கு உள்ளக"
-
-
-msgid "Solo"
-msgstr "தனி"
 
 
 msgid "NLA Track is evaluated itself (i.e. active Action and all other NLA Tracks in the same AnimData block are disabled)"
@@ -45275,6 +45287,10 @@ msgstr "ஒப்பிடுக"
 
 msgid "Input Type"
 msgstr "உள்ளீட்டு வகை"
+
+
+msgid "Menu"
+msgstr "பட்டியல்"
 
 
 msgid "Element-Wise"
@@ -49410,6 +49426,10 @@ msgid "Value to Normal"
 msgstr "இயல்பான மதிப்பு"
 
 
+msgid "Active item"
+msgstr "செயலில் உள்ள உருப்படி"
+
+
 msgid "Bake Item"
 msgstr "உருப்படி சுட்டுக்கொள்ளவும்"
 
@@ -49838,10 +49858,6 @@ msgid "Declaration of sockets and ui panels of a node group"
 msgstr "ஒரு முனை குழுவின் சாக்கெட்டுகள் மற்றும் யுஐ பேனல்கள் அறிவிப்பு"
 
 
-msgid "Active item"
-msgstr "செயலில் உள்ள உருப்படி"
-
-
 msgid "Active Index"
 msgstr "செயலில் உள்ள அட்டவணை"
 
@@ -50144,6 +50160,10 @@ msgstr "சுட்டுக்கொள்ளும்"
 
 msgid "Bake data for every bake node"
 msgstr "ஒவ்வொரு சுட்டுக்கொள்ளும் முனைக்கும் தரவை சுட்டுக்கொள்ளுங்கள்"
+
+
+msgid "Data-Block"
+msgstr "தரவு-தடுப்பு"
 
 
 msgid "Nodes Modifier Panel"
@@ -51896,11 +51916,6 @@ msgstr "அனைத்தையும் காட்டு"
 
 msgid "Show all bone collections"
 msgstr "அனைத்து எலும்பு சேகரிப்புகளையும் காட்டு"
-
-
-msgctxt "Operator"
-msgid "Solo Visibility"
-msgstr "தனி தெரிவுநிலை"
 
 
 msgctxt "Operator"
@@ -58329,14 +58344,6 @@ msgid "Relative Asset Identifier"
 msgstr "உறவினர் சொத்து அடையாளங்காட்டி"
 
 
-msgid "Session UUID"
-msgstr "அமர்வு uuid"
-
-
-msgid "Session UUID of the data-block to use by the operator"
-msgstr "ஆபரேட்டரால் பயன்படுத்த தரவு-தொகுதியின் அமர்வு UUID"
-
-
 msgctxt "Operator"
 msgid "Set Geometry Randomization"
 msgstr "வடிவியல் சீரற்றமயமாக்கலை அமைக்கவும்"
@@ -61395,14 +61402,6 @@ msgstr "வளைவு பிரிவுகளுக்கு பயன்ப�
 msgctxt "Operator"
 msgid "Scale from Neighbor"
 msgstr "அண்டை வீட்டிலிருந்து அளவு"
-
-
-msgid ""
-"Increase or decrease the value of selected keys \n"
-"  in relationship to the neighboring one"
-msgstr ""
-"தேர்ந்தெடுக்கப்பட்ட விசைகளின் மதிப்பை அதிகரிக்கவும் அல்லது குறைக்கவும் \n"
-"  அண்டை ஒருவருடனான உறவில்"
 
 
 msgid "Which end of the segment to use as a reference to scale from"
@@ -67513,6 +67512,16 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட முனை�
 
 
 msgctxt "Operator"
+msgid "Add Item"
+msgstr "உருப்படியைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Remove Item"
+msgstr "உருப்படியை அகற்று"
+
+
+msgctxt "Operator"
 msgid "Find Node"
 msgstr "முனை கண்டுபிடிக்க"
 
@@ -67600,18 +67609,8 @@ msgid "Toggle hiding of selected nodes"
 msgstr "தேர்ந்தெடுக்கப்பட்ட முனைகளை மறைத்து மாற்றவும்"
 
 
-msgctxt "Operator"
-msgid "Add Item"
-msgstr "உருப்படியைச் சேர்க்கவும்"
-
-
 msgid "Add an item to the index switch"
 msgstr "குறியீட்டு சுவிட்சில் ஒரு உருப்படியைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Remove Item"
-msgstr "உருப்படியை அகற்று"
 
 
 msgid "Remove an item from the index switch"
@@ -68297,6 +68296,10 @@ msgid "Split baked maps per material, using material name in output file (extern
 msgstr "வெளியீட்டு கோப்பில் மூலப்பொருள் பெயரைப் பயன்படுத்தி (வெளிப்புறம் மட்டும்) ஒரு மூலப்பொருளுக்கு வேகவைத்த வரைபடங்களை பிரிக்கவும்"
 
 
+msgid "UV Layer"
+msgstr "புறஊதா அடுக்கு"
+
+
 msgid "UV layer to override active"
 msgstr "செயலில் மேலெழுத புறஊதா அடுக்கு"
 
@@ -68630,10 +68633,6 @@ msgstr "எல்லா காட்சிகளிலிருந்தும�
 msgctxt "Operator"
 msgid "Drop Geometry Node Group on Object"
 msgstr "பொருளில் வடிவியல் முனை குழுவை விடுங்கள்"
-
-
-msgid "Session UUID of the geometry node group being dropped"
-msgstr "வடிவியல் முனை குழுவின் அமர்வு UUID கைவிடப்படுகிறது"
 
 
 msgid "Show the datablock selector in the modifier"
@@ -69533,10 +69532,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட இணைக�
 
 msgid "Override Collection"
 msgstr "சேகரிப்பை மீறவும்"
-
-
-msgid "Session UUID of the directly linked collection containing the selected object, to make an override from"
-msgstr "தேர்ந்தெடுக்கப்பட்ட பொருளைக் கொண்ட நேரடியாக இணைக்கப்பட்ட சேகரிப்பின் அமர்வு UUID, ஒரு மேலெழுதலை உருவாக்க"
 
 
 msgid "Make linked data local to each object"
@@ -71085,8 +71080,8 @@ msgid "Snap selected item(s) to the mouse location"
 msgstr "தேர்ந்தெடுக்கப்பட்ட உருப்படி (களை) சுட்டி இருப்பிடத்திற்கு ச்னாப் செய்யுங்கள்"
 
 
-msgid "Object name to place (uses the active object when this and 'session_uuid' are unset)"
-msgstr "இடத்திற்கு பொருள் பெயர் (இது மற்றும் 'அமர்வு_ஐடி' ஆகியவை அமைக்கப்படாதபோது செயலில் உள்ள பொருளைப் பயன்படுத்தவும்)"
+msgid "Session UUID"
+msgstr "அமர்வு uuid"
 
 
 msgid "Session UUID of the object to place (uses the active object when this and 'name' are unset)"
@@ -74198,6 +74193,10 @@ msgid "Add a directory to be used as a local extension repository"
 msgstr "உள்ளக நீட்டிப்பு களஞ்சியமாகப் பயன்படுத்த ஒரு கோப்பகத்தைச் சேர்க்கவும்"
 
 
+msgid "URL"
+msgstr "URL"
+
+
 msgctxt "Operator"
 msgid "Remove Extension Repository"
 msgstr "நீட்டிப்பு களஞ்சியத்தை அகற்று"
@@ -75763,10 +75762,6 @@ msgstr "கருப்பொருள்கள்"
 
 msgid "Editing"
 msgstr "எடிட்டிங்"
-
-
-msgid "Extensions"
-msgstr "நீட்டிப்புகள்"
 
 
 msgid "Add-ons"
@@ -83964,10 +83959,6 @@ msgid "A string value"
 msgstr "ஒரு சரம் மதிப்பு"
 
 
-msgid "Data-Block"
-msgstr "தரவு-தடுப்பு"
-
-
 msgid "A data-block value"
 msgstr "தரவு-தொகுதி மதிப்பு"
 
@@ -84624,10 +84615,6 @@ msgstr "கருவிகளை அணுகுவதற்கான செய�
 
 msgid "Open a website in the web browser"
 msgstr "வலை உலாவியில் ஒரு வலைத்தளத்தைத் திறக்கவும்"
-
-
-msgid "URL"
-msgstr "URL"
 
 
 msgid "URL to open"
@@ -85382,10 +85369,6 @@ msgid "Editable cavity curve"
 msgstr "திருத்தக்கூடிய குழி வளைவு"
 
 
-msgid "Average multiple input samples together to smooth the brush stroke"
-msgstr "தூரிகை பக்கவாதத்தை மென்மையாக்க சராசரி பல உள்ளீட்டு மாதிரிகள் ஒன்றாக"
-
-
 msgid "Active Palette"
 msgstr "செயலில் தட்டு"
 
@@ -85656,30 +85639,6 @@ msgstr "ச்டென்சில் அடுக்கு"
 
 msgid "Set the mask layer from the UV map buttons"
 msgstr "புறஊதா வரைபட பொத்தான்களிலிருந்து முகமூடி அடுக்கை அமைக்கவும்"
-
-
-msgid "Area Normal Falloff"
-msgstr "பரப்பு சாதாரண வீழ்ச்சி"
-
-
-msgid "Extend the angular range with a falloff gradient"
-msgstr "கோண வரம்பை ஒரு வீழ்ச்சி சாய்வு மூலம் நீட்டிக்கவும்"
-
-
-msgid "Area Normal Limit"
-msgstr "பரப்பு சாதாரண வரம்பு"
-
-
-msgid "The range of angles that will be affected"
-msgstr "பாதிக்கப்படும் கோணங்களின் வரம்பு"
-
-
-msgid "View Normal Falloff"
-msgstr "சாதாரண வீழ்ச்சியைக் காண்க"
-
-
-msgid "View Normal Limit"
-msgstr "சாதாரண வரம்பைக் காண்க"
 
 
 msgid "Maximum edge length for dynamic topology sculpting (as divisor of Blender unit - higher value means smaller edge length)"
@@ -86992,10 +86951,6 @@ msgid "Prototypes"
 msgstr "முன்மாதிரிகள்"
 
 
-msgid "Extension Repositories"
-msgstr "நீட்டிப்பு களஞ்சியங்கள்"
-
-
 msgid "Applications"
 msgstr "பயன்பாடுகள்"
 
@@ -87163,10 +87118,6 @@ msgstr "பாணிகள்"
 
 msgid "Transparent Checkerboard"
 msgstr "வெளிப்படையான செக்கர்போர்டு"
-
-
-msgid "Menu"
-msgstr "பட்டியல்"
 
 
 msgid "Menu Background"
@@ -89532,16 +89483,8 @@ msgid "Auto Keyframe Insert Available"
 msgstr "ஆட்டோ கீஃப்ரேம் செருகல் கிடைக்கிறது"
 
 
-msgid "Automatic keyframe insertion in available F-Curves"
-msgstr "கிடைக்கக்கூடிய எஃப்-வளைவுகளில் தானியங்கி கீஃப்ரேம் செருகல்"
-
-
 msgid "Keyframe Insert Needed"
 msgstr "கீஃப்ரேம் செருகல் தேவை"
-
-
-msgid "Keyframe insertion only when keyframe needed"
-msgstr "கீஃப்ரேம் தேவைப்படும்போது மட்டுமே கீஃப்ரேம் செருகல்"
 
 
 msgid "Cursor Surface Project"
@@ -89646,6 +89589,10 @@ msgstr "நீட்டிக்கப்பட்ட சொத்து உல�
 
 msgid "Enable Asset Browser editor and operators to manage regular data-blocks as assets, not just poses"
 msgstr "வழக்கமான தரவு-தொகுதிகளை சொத்துகளாக நிர்வகிக்க சொத்து உலாவி திருத்தி மற்றும் ஆபரேட்டர்களை இயக்கவும்"
+
+
+msgid "Extension Repositories"
+msgstr "நீட்டிப்பு களஞ்சியங்கள்"
 
 
 msgid "Enables extension repositories, accessible from the \"Extension Repositories\" panel in the \"File Paths\" section of the preferences. These paths are exposed as add-ons, package management is not yet integrated"
@@ -98038,14 +97985,6 @@ msgid "Type of filter to use for image transformation"
 msgstr "பட மாற்றத்திற்கு பயன்படுத்த வடிகட்டி வகை"
 
 
-msgid "Subsampling (3×3)"
-msgstr "துணை மாதிரி (3 × 3)"
-
-
-msgid "Use nearest with 3×3 subsamples during rendering"
-msgstr "ரெண்டரிங் போது 3 × 3 துணை மாதிரிகளுடன் அருகில் பயன்படுத்தவும்"
-
-
 msgid "Move along X axis"
 msgstr "X அச்சில் நகர்த்தவும்"
 
@@ -105411,11 +105350,6 @@ msgid "Settings to define an extension repository"
 msgstr "நீட்டிப்பு களஞ்சியத்தை வரையறுக்க அமைப்புகள்"
 
 
-msgctxt "File browser"
-msgid "Local Directory"
-msgstr "உள்ளக அடைவு"
-
-
 msgid "The local directory containing extensions"
 msgstr "நீட்டிப்புகளைக் கொண்ட உள்ளக அடைவு"
 
@@ -111624,6 +111558,10 @@ msgid "Gamepad"
 msgstr "கேம்பேட்"
 
 
+msgid "Extensions"
+msgstr "நீட்டிப்புகள்"
+
+
 msgid "HP Reverb G2"
 msgstr "எச்பி ரெவெர்ப் சி 2"
 
@@ -112537,6 +112475,16 @@ msgstr "காட்சி(கள்)"
 
 msgid "Brush(es)"
 msgstr "தூரிகை(கள்)"
+
+
+msgctxt "Operator"
+msgid "Location"
+msgstr "இடம்"
+
+
+msgctxt "Operator"
+msgid "Rotation"
+msgstr "சுழற்சி"
 
 
 msgid "Unknown"
@@ -114744,11 +114692,6 @@ msgstr "இயல்புநிலை அமைப்புகளைப் ப�
 
 
 msgctxt "Operator"
-msgid "Location"
-msgstr "இடம்"
-
-
-msgctxt "Operator"
 msgid "Affine"
 msgstr "அஃபீன்"
 
@@ -114817,6 +114760,11 @@ msgstr "இருப்பிடத்திற்கான தடங்கள�
 
 msgid "Timecode Index"
 msgstr "டைம்கோட் இன்டெக்ச்"
+
+
+msgctxt "Operator"
+msgid "Zoom"
+msgstr "பெரிதாக்கு"
 
 
 msgctxt "Operator"
@@ -115435,16 +115383,6 @@ msgstr "பிரித்தெடுக்கும் தட்டு"
 msgctxt "Operator"
 msgid "Generate Grease Pencil"
 msgstr "பசை எழுதுகோலை உருவாக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Horizontally"
-msgstr "கிடைமட்டமாக"
-
-
-msgctxt "Operator"
-msgid "Vertically"
-msgstr "செங்குத்தாக"
 
 
 msgctxt "Operator"
@@ -116221,11 +116159,6 @@ msgstr "உருமாற்றத்தின் போது முன்ன�
 
 
 msgctxt "Operator"
-msgid "Zoom"
-msgstr "பெரிதாக்கு"
-
-
-msgctxt "Operator"
 msgid "Fit Preview in Window"
 msgstr "சாளரத்தில் முன்னோட்டத்தை பொருத்தவும்"
 
@@ -116362,11 +116295,6 @@ msgstr "தேர்வுநீக்கப்பட்ட கீற்று�
 msgctxt "Operator"
 msgid "Position"
 msgstr "நிலைமை"
-
-
-msgctxt "Operator"
-msgid "Rotation"
-msgstr "சுழற்சி"
 
 
 msgctxt "Operator"
@@ -117323,8 +117251,8 @@ msgid "Invert Pan Axis"
 msgstr "தலைகீழ் பான் அச்சு"
 
 
-msgid "The add-on to use extensions is disabled! See:"
-msgstr "நீட்டிப்புகளைப் பயன்படுத்த சேர்க்கை முடக்கப்பட்டுள்ளது! காண்க:"
+msgid "Preferences:"
+msgstr "விருப்பத்தேர்வுகள்:"
 
 
 msgid "No custom MatCaps configured"
@@ -117399,11 +117327,6 @@ msgid "Fly/Walk"
 msgstr "பறக்க/நடை"
 
 
-msgctxt "Operator"
-msgid "Extension Add-on Repository"
-msgstr "நீட்டிப்பு சேர்க்கை களஞ்சியம்"
-
-
 msgid "Multiple add-ons with the same name found!"
 msgstr "அதே பெயருடன் பல துணை நிரல்கள் காணப்படுகின்றன!"
 
@@ -117424,20 +117347,12 @@ msgid "Enable Cycles Render Engine add-on to use Cycles"
 msgstr "சுழற்சிகளைப் பயன்படுத்த என்சின் கூடுதல் வழங்க சுழற்சிகளை இயக்கவும்"
 
 
+msgid "Error (see console)"
+msgstr "பிழை (கன்சோலைப் பார்க்கவும்)"
+
+
 msgid ":"
 msgstr ":"
-
-
-msgid "Load Factory %s Preferences"
-msgstr "தொழிற்சாலை %s விருப்பங்களை ஏற்றவும்"
-
-
-msgid "Color Set %d"
-msgstr "வண்ண தொகுப்பு %d"
-
-
-msgid "Color %d"
-msgstr "வண்ண %d"
 
 
 msgid "Description:"
@@ -117472,25 +117387,21 @@ msgid "User:"
 msgstr "பயனர்:"
 
 
-msgid "description"
-msgstr "விவரம்"
+msgid "Load Factory %s Preferences"
+msgstr "தொழிற்சாலை %s விருப்பங்களை ஏற்றவும்"
 
 
-msgid "location"
-msgstr "இடம்"
+msgid "Color Set %d"
+msgstr "வண்ண தொகுப்பு %d"
+
+
+msgid "Color %d"
+msgstr "வண்ண %d"
 
 
 msgctxt "Operator"
 msgid "Documentation"
 msgstr "ஆவணம்"
-
-
-msgid "Preferences:"
-msgstr "விருப்பத்தேர்வுகள்:"
-
-
-msgid "Error (see console)"
-msgstr "பிழை (கன்சோலைப் பார்க்கவும்)"
 
 
 msgctxt "Operator"
@@ -117841,11 +117752,6 @@ msgstr "பின்னணி"
 msgctxt "Operator"
 msgid "Make Local..."
 msgstr "உள்ளக செய்யுங்கள் ..."
-
-
-msgctxt "Operator"
-msgid "Insert Keyframe with Keying Set"
-msgstr "கீயிங் செட்டுடன் கீஃப்ரேமை செருகவும்"
 
 
 msgctxt "Operator"
@@ -118826,6 +118732,11 @@ msgstr "சேகரிப்பு நிகழ்வு"
 msgctxt "Operator"
 msgid "Delete Global"
 msgstr "உலகளாவிய நீக்கு"
+
+
+msgctxt "Operator"
+msgid "Insert Keyframe with Keying Set"
+msgstr "கீயிங் செட்டுடன் கீஃப்ரேமை செருகவும்"
 
 
 msgctxt "Operator"
@@ -121267,10 +121178,6 @@ msgstr "சேடர்களை தொகுக்கும் (%d மீதம
 
 msgid "Optimizing Shaders (%d remaining)"
 msgstr "சேடர்களை மேம்படுத்துதல் (%d மீதமுள்ளது)"
-
-
-msgid "EEVEE (Legacy)"
-msgstr "ஈவி (மரபு)"
 
 
 msgid "%d Ref. Cubemaps, %d Irr. Samples (%s in memory)"
@@ -128378,14 +128285,6 @@ msgid "Level Set"
 msgstr "நிலை தொகுப்பு"
 
 
-msgid ""
-"Byte Color (sRGB encoded):\n"
-"%3d  %3d  %3d  %3d"
-msgstr ""
-"பைட் நிறம் (எச்ஆர்சிபி குறியாக்கப்பட்டது): \n"
-"%3d  %3d  %3d  %3d"
-
-
 msgid "Data Set"
 msgstr "தரவு தொகுப்பு"
 
@@ -131362,12 +131261,12 @@ msgid "%s area type does not support gizmos"
 msgstr "%s பரப்பு வகை கிச்மோசை ஆதரிக்காது"
 
 
-msgid "Unknown operator"
-msgstr "தெரியாத ஆபரேட்டர்"
-
-
 msgid "Operator missing srna"
 msgstr "ஆபரேட்டர் எச்ஆர்என்ஏ காணவில்லை"
+
+
+msgid "Unknown operator"
+msgstr "தெரியாத ஆபரேட்டர்"
 
 
 msgid "Gizmo target property '%s.%s' not found"
@@ -133763,10 +133662,6 @@ msgid "Shade Smooth"
 msgstr "நிழல் மென்மையானது"
 
 
-msgid "Delta Time"
-msgstr "டெல்டா நேரம்"
-
-
 msgid "Baked %d - %d"
 msgstr "வேகவைத்த %d - %d"
 
@@ -133777,6 +133672,10 @@ msgstr "பிரேம்கள் %d - %d"
 
 msgid "Skip"
 msgstr "தவிர்க்கவும்"
+
+
+msgid "Delta Time"
+msgstr "டெல்டா நேரம்"
 
 
 msgid "Forward the output of the simulation input node directly to the output node and ignore the nodes in the simulation zone"
