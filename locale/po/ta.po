@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.1.0 Alpha (b'3d7e84f57d8a')\n"
+"Project-Id-Version: Blender 4.1.0 Beta (b'835651cfddcb')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-02-05 09:44+0000\n"
+"POT-Creation-Date: 2024-02-12 11:01+0000\n"
 "PO-Revision-Date: 2024-01-20 18:03+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -1479,10 +1479,6 @@ msgid "ID Name"
 msgstr "ஐடி பெயர்"
 
 
-msgid "If this is set, the asset gets a custom ID, otherwise it takes the name of the class used to define the menu (for example, if the class name is \"OBJECT_AST_hello\", and bl_idname is not set by the script, then bl_idname = \"OBJECT_AST_hello\")"
-msgstr "இது அமைக்கப்பட்டால், சொத்து ஒரு தனிப்பயன் ஐடியைப் பெறுகிறது, இல்லையெனில் மெனுவை வரையறுக்கப் பயன்படுத்தப்படும் வகுப்பின் பெயரை எடுக்கும் (எடுத்துக்காட்டாக, வகுப்பு பெயர் \"பொருள்_ச்ட்_எல்லோ\", மற்றும் பி.எல்_ஐடி பெயர் ச்கிரிப்டால் அமைக்கப்படவில்லை என்றால், bl_idname = \"Object_ast_hello\")"
-
-
 msgid "Options"
 msgstr "விருப்பங்கள்"
 
@@ -2207,14 +2203,6 @@ msgid "Horizontal dimension of the baking map"
 msgstr "பேக்கிங் வரைபடத்தின் கிடைமட்ட பரிமாணம்"
 
 
-msgid "Bezier Curve Point"
-msgstr "பெசியர் வளைவு புள்ளி"
-
-
-msgid "Bezier curve point with two handles"
-msgstr "இரண்டு கைப்பிடிகளுடன் பெசியர் வளைவு புள்ளி"
-
-
 msgid "Control Point"
 msgstr "கட்டுப்பாட்டு புள்ளி"
 
@@ -2401,14 +2389,6 @@ msgstr "பசை எழுதுகோல்"
 
 msgid "Grease Pencil data-blocks"
 msgstr "பசை எழுதுகோல் தரவு-தொகுதிகள்"
-
-
-msgid "Grease Pencil v3"
-msgstr "பசை எழுதுகோல் வி 3"
-
-
-msgid "Grease Pencil v3 data-blocks"
-msgstr "பசை எழுதுகோல் வி 3 தரவு-தொகுதிகள்"
 
 
 msgid "Hair Curves"
@@ -3508,17 +3488,9 @@ msgid "Ease In"
 msgstr "எளிதாக"
 
 
-msgid "Length of first Bezier Handle (for B-Bones only)"
-msgstr "முதல் பெசியர் கைப்பிடியின் நீளம் (பி-எலும்புகளுக்கு மட்டும்)"
-
-
 msgctxt "Armature"
 msgid "Ease Out"
 msgstr "எளிதாக்குங்கள்"
-
-
-msgid "Length of second Bezier Handle (for B-Bones only)"
-msgstr "இரண்டாவது பெசியர் கைப்பிடியின் நீளம் (பி-எலும்புகளுக்கு மட்டும்)"
 
 
 msgid "B-Bone End Handle Type"
@@ -7205,10 +7177,6 @@ msgid "Floor"
 msgstr "தரை"
 
 
-msgid "Use position (and optionally rotation) of target to define a 'wall' or 'floor' that the owner can not cross"
-msgstr "உரிமையாளர் கடக்க முடியாத ஒரு 'சுவர்' அல்லது 'தளத்தை' வரையறுக்க இலக்கின் நிலை (மற்றும் விருப்பமாக சுழற்சி) பயன்படுத்தவும்"
-
-
 msgid "Follow Path"
 msgstr "பாதையைப் பின்பற்றுங்கள்"
 
@@ -8037,6 +8005,7 @@ msgid "Movie tracking object to follow (if empty, camera object is used)"
 msgstr "திரைப்பட கண்காணிப்பு பொருள் பின்பற்ற வேண்டும் (காலியாக இருந்தால், கேமரா பொருள் பயன்படுத்தப்படுகிறது)"
 
 
+msgctxt "MovieClip"
 msgid "Track"
 msgstr "டிராக்"
 
@@ -9269,10 +9238,6 @@ msgid "Handle Type"
 msgstr "கைப்பிடி வகை"
 
 
-msgid "Curve interpolation at this point: Bezier or vector"
-msgstr "இந்த கட்டத்தில் வளைவு இடைக்கணிப்பு: பெசியர் அல்லது திசையன்"
-
-
 msgid "Auto Handle"
 msgstr "ஆட்டோ கைப்பிடி"
 
@@ -9391,10 +9356,6 @@ msgstr "புதிய வீச்சுகள் பயன்படுத்�
 
 msgid "Poly"
 msgstr "பாலி"
-
-
-msgid "Bezier"
-msgstr "பெசியர்"
 
 
 msgid "Depth"
@@ -19319,34 +19280,6 @@ msgid "Grid scale"
 msgstr "கட்ட அளவு"
 
 
-msgid "Collection of related drawings"
-msgstr "தொடர்புடைய வரைபடங்களின் சேகரிப்பு"
-
-
-msgid "Set layer visibility"
-msgstr "அடுக்கு தெரிவுநிலையை அமைக்கவும்"
-
-
-msgid "Grease Pencil Layer Group"
-msgstr "பசை எழுதுகோல் அடுக்கு குழு"
-
-
-msgid "Group of Grease Pencil layers"
-msgstr "பசை எழுதுகோல் அடுக்குகளின் குழு"
-
-
-msgid "Set layer group visibility"
-msgstr "அடுக்கு குழு தெரிவுநிலையை அமைக்கவும்"
-
-
-msgid "Protect group from further editing and/or frame changes"
-msgstr "மேலும் எடிட்டிங் மற்றும்/அல்லது பிரேம் மாற்றங்களிலிருந்து குழுவைப் பாதுகாக்கவும்"
-
-
-msgid "Group name"
-msgstr "குழு பெயர்"
-
-
 msgid "Grease Pencil Layers"
 msgstr "பசை எழுதுகோல் அடுக்குகள்"
 
@@ -19389,14 +19322,6 @@ msgstr "செயலில் அடுக்கு முகமூடி அட
 
 msgid "Active index in layer mask array"
 msgstr "அடுக்கு முகமூடி வரிசையில் செயலில் உள்ள குறியீடு"
-
-
-msgid "Collection of Grease Pencil layers"
-msgstr "பசை எழுதுகோல் அடுக்குகளின் சேகரிப்பு"
-
-
-msgid "Active Grease Pencil layer"
-msgstr "செயலில் பசை எழுதுகோல் அடுக்கு"
 
 
 msgid "Editor header containing UI elements"
@@ -19473,6 +19398,10 @@ msgstr "தூரிகை"
 
 msgid "Font"
 msgstr "எழுத்துரு"
+
+
+msgid "Grease Pencil v3"
+msgstr "பசை எழுதுகோல் வி 3"
 
 
 msgid "Key"
@@ -21315,10 +21244,6 @@ msgid "Draw a line with dabs separated according to spacing"
 msgstr "இடைவெளியின் படி பிரிக்கப்பட்ட DAB களுடன் ஒரு கோட்டை வரையவும்"
 
 
-msgid "Define the stroke curve with a bezier curve (dabs are separated according to spacing)"
-msgstr "ஒரு பெசியர் வளைவுடன் வீச்சு வளைவை வரையறுக்கவும் (இடைவெளியின் படி DAB கள் பிரிக்கப்படுகின்றன)"
-
-
 msgid "Per Vertex Displacement"
 msgstr "ஒரு வெர்டெக்ச் இடப்பெயர்ச்சிக்கு"
 
@@ -21533,10 +21458,6 @@ msgstr "மேலெழுதும் மேலெழுதவும்"
 
 msgid "Don't show overlay during a stroke"
 msgstr "பக்கவாதத்தின் போது மேலடுக்கு காட்ட வேண்டாம்"
-
-
-msgid "Define the stroke curve with a bezier curve. Dabs are separated according to spacing"
-msgstr "வீச்சு வளைவை ஒரு பெசியர் வளைவுடன் வரையறுக்கவும். DAB கள் இடைவெளியின் படி பிரிக்கப்படுகின்றன"
 
 
 msgid "Custom Icon"
@@ -24210,22 +24131,6 @@ msgid "Offset amount when drawing in surface mode"
 msgstr "மேற்பரப்பு பயன்முறையில் வரையும்போது ஆஃப்செட் அளவு"
 
 
-msgid "Grease Pencil data-block"
-msgstr "பசை எழுதுகோல் தரவு-தொகுதி"
-
-
-msgid "Layer Groups"
-msgstr "அடுக்கு குழுக்கள்"
-
-
-msgid "Grease Pencil layer groups"
-msgstr "பசை எழுதுகோல் அடுக்கு குழுக்கள்"
-
-
-msgid "Grease Pencil layers"
-msgstr "பசை எழுதுகோல் அடுக்குகள்"
-
-
 msgid "Image data-block referencing an external or packed image"
 msgstr "வெளிப்புற அல்லது நிரம்பிய படத்தைக் குறிக்கும் பட தரவு-தொகுதி"
 
@@ -26348,6 +26253,10 @@ msgstr "முனை மரம் சிட்டை"
 
 msgid "Grease Pencil Data"
 msgstr "பசை எழுதுகோல் தரவு"
+
+
+msgid "Grease Pencil data-block"
+msgstr "பசை எழுதுகோல் தரவு-தொகுதி"
 
 
 msgid "Interface"
@@ -30695,14 +30604,6 @@ msgid "Maintained by community developers"
 msgstr "சமூக உருவாக்குநர்களால் பராமரிக்கப்படுகிறது"
 
 
-msgid "Testing"
-msgstr "சோதனை"
-
-
-msgid "Newly contributed scripts (excluded from release builds)"
-msgstr "புதிதாக பங்களித்த கைஉரைகள் (வெளியீட்டு உருவாக்கங்களிலிருந்து விலக்கப்பட்டுள்ளது)"
-
-
 msgid "Asset Blend Path"
 msgstr "சொத்து கலப்பு பாதை"
 
@@ -33281,10 +33182,6 @@ msgid "Collection of keymaps"
 msgstr "கீமாப்களின் தொகுப்பு"
 
 
-msgid "Bezier curve point with two handles defining a Keyframe on an F-Curve"
-msgstr "ஒரு எஃப்-வளைவில் ஒரு கீஃப்ரேமை வரையறுக்கும் இரண்டு கைப்பிடிகளுடன் பெசியர் வளைவு புள்ளி"
-
-
 msgid "Amount to boost elastic bounces for 'elastic' easing"
 msgstr "'மீள்' தளர்த்தலுக்கான மீள் பவுன்ச் அதிகரிக்கும் அளவு"
 
@@ -33411,11 +33308,6 @@ msgstr "நேரியல்"
 
 msgid "Straight-line interpolation between A and B (i.e. no ease in/out)"
 msgstr "A மற்றும் B க்கு இடையில் நேர்-வரி இடைக்கணிப்பு (அதாவது/வெளியே எளிதில் இல்லை)"
-
-
-msgctxt "Action"
-msgid "Bezier"
-msgstr "பெசியர்"
 
 
 msgid "Smooth interpolation between A and B, with some control over curve shape"
@@ -34311,10 +34203,6 @@ msgid "Backbone Stretcher"
 msgstr "முதுகெலும்பு ச்ட்ரெச்சர்"
 
 
-msgid "Bezier Curve"
-msgstr "பெசியர் வளைவு"
-
-
 msgid "Blueprint"
 msgstr "புளூபிரிண்ட்"
 
@@ -34437,14 +34325,6 @@ msgstr "முதுகெலும்பு நீளம்"
 
 msgid "Amount of backbone stretching"
 msgstr "முதுகெலும்பு நீட்சி அளவு"
-
-
-msgid "Replace stroke backbone geometry by a Bezier curve approximation of the original backbone geometry"
-msgstr "அசல் முதுகெலும்பு வடிவவியலின் பெசியர் வளைவு தோராயத்தால் வீச்சு முதுகெலும்பு வடிவவியலை மாற்றவும்"
-
-
-msgid "Maximum distance allowed between the new Bezier curve and the original backbone geometry"
-msgstr "புதிய பெசியர் வளைவு மற்றும் அசல் முதுகெலும்பு வடிவவியலுக்கு இடையில் அதிகபட்ச தூரம் அனுமதிக்கப்படுகிறது"
 
 
 msgid "Produce a blueprint using circular, elliptic, and square contour strokes"
@@ -35415,6 +35295,10 @@ msgid "Rotation Track Specials"
 msgstr "சுழற்சி டிராக் ச்பெசல்கள்"
 
 
+msgid "Track"
+msgstr "டிராக்"
+
+
 msgid "Clean Up"
 msgstr "சுத்தம் செய்"
 
@@ -35588,10 +35472,6 @@ msgstr "சரிசெய்யவும்"
 
 msgid "Keying"
 msgstr "கீயிங்"
-
-
-msgid "Tracking"
-msgstr "கண்காணிப்பு"
 
 
 msgid "Layout"
@@ -38566,10 +38446,6 @@ msgstr "ஊக்கின் மையம், வீழ்ச்சி மற�
 
 msgid "Vertex Indices"
 msgstr "வெர்டெக்ச் குறியீடுகள்"
-
-
-msgid "Indices of vertices bound to the modifier. For bezier curves, handles count as additional vertices"
-msgstr "மாற்றியமைப்பாளருடன் பிணைக்கப்பட்ட செங்குத்துகளின் குறியீடுகள். பெசியர் வளைவுகளுக்கு, கையாளுதல்கள் கூடுதல் செங்குத்துகளாக எண்ணப்படுகின்றன"
 
 
 msgid "Laplacian Deform Modifier"
@@ -45109,10 +44985,6 @@ msgid "Minimum speed for a pixel to be blurred (used to separate background from
 msgstr "ஒரு பிக்சலுக்கான குறைந்தபட்ச வேகம் மங்கலானது (பின்னணியில் இருந்து பின்னணியைப் பிரிக்கப் பயன்படுகிறது)"
 
 
-msgid "Interpolate between frames in a Bezier curve, rather than linearly"
-msgstr "நேரியல் அல்லாமல், ஒரு பெசியர் வளைவில் பிரேம்களுக்கு இடையில் இடைக்கணிப்பு"
-
-
 msgid "Tile Order"
 msgstr "ஓடு வரிசை"
 
@@ -45719,10 +45591,6 @@ msgid "Retrieve the curve a control point is part of"
 msgstr "வளைவை மீட்டெடுக்கவும் ஒரு கட்டுப்பாட்டு புள்ளி ஒரு பகுதியாகும்"
 
 
-msgid "Bezier Segment"
-msgstr "பெசியர் பிரிவு"
-
-
 msgid "Generate a 2D Bézier spline from the given control points and handles"
 msgstr "கொடுக்கப்பட்ட கட்டுப்பாட்டு புள்ளிகள் மற்றும் கைப்பிடிகளிலிருந்து 2 டி பெசியர் ச்ப்லைனை உருவாக்கவும்"
 
@@ -45811,10 +45679,6 @@ msgid "Create a quadrilateral from four points"
 msgstr "நான்கு புள்ளிகளிலிருந்து ஒரு நாற்காலியை உருவாக்கவும்"
 
 
-msgid "Quadratic Bezier"
-msgstr "இருபடி பெசியர்"
-
-
 msgid "Generate a poly spline in a parabola shape with control points positions"
 msgstr "கட்டுப்பாட்டு புள்ளிகள் நிலைகளுடன் ஒரு பரபோலா வடிவத்தில் பாலி ச்ப்லைனை உருவாக்குங்கள்"
 
@@ -45889,10 +45753,6 @@ msgstr "உள்ளீட்டு வளைவிலிருந்து ப�
 
 msgid "Evaluated"
 msgstr "மதிப்பீடு செய்யப்பட்டது"
-
-
-msgid "Create points from the curve's evaluated points, based on the resolution attribute for NURBS and Bezier splines"
-msgstr "வளைவின் மதிப்பிடப்பட்ட புள்ளிகளிலிருந்து புள்ளிகளை உருவாக்கவும், இது NURBS மற்றும் BEZIER SPLINES க்கான தெளிவுத்திறன் பண்புக்கூறு அடிப்படையில்"
 
 
 msgid "Sample each spline by evenly distributing the specified number of points"
@@ -46113,14 +45973,6 @@ msgstr "ஒவ்வொரு கட்டுப்பாட்டு புள�
 
 msgid "How to choose number of vertices on fillet"
 msgstr "ஃபில்லட்டில் செங்குத்துகளின் எண்ணிக்கையை எவ்வாறு தேர்வு செய்வது"
-
-
-msgid "Align Bezier handles to create circular arcs at each control point"
-msgstr "ஒவ்வொரு கட்டுப்பாட்டு புள்ளியிலும் வட்ட வளைவுகளை உருவாக்க பெசியர் கைப்பிடிகளை சீரமைக்கவும்"
-
-
-msgid "Add control points along a circular arc (handle type is vector if Bezier Spline)"
-msgstr "வட்ட வளைவுடன் கட்டுப்பாட்டு புள்ளிகளைச் சேர்க்கவும் (பெசியர் ச்ப்லைன் என்றால் கைப்பிடி வகை திசையன் ஆகும்)"
 
 
 msgid "Flip Faces"
@@ -46794,10 +46646,6 @@ msgstr "ஒவ்வொரு உள்ளீட்டு ச்ப்லைன�
 
 msgid "How to specify the amount of samples"
 msgstr "மாதிரிகளின் அளவைக் குறிப்பிடுவது எப்படி"
-
-
-msgid "Output the input spline's evaluated points, based on the resolution attribute for NURBS and Bezier splines. Poly splines are unchanged"
-msgstr "NURBS மற்றும் BEZIER SPLINES க்கான தெளிவுத்திறன் பண்புக்கூறு அடிப்படையில் உள்ளீட்டு ச்ப்லைனின் மதிப்பிடப்பட்ட புள்ளிகளை வெளியிடுங்கள். பாலி ச்ப்லைன்கள் மாறாமல் உள்ளன"
 
 
 msgid "Sample the specified number of points along each spline"
@@ -51106,10 +50954,6 @@ msgid "Choose the interpolation type with which new keys will be added"
 msgstr "புதிய விசைகள் சேர்க்கப்படும் இடைக்கணிப்பு வகையைத் தேர்வுசெய்க"
 
 
-msgid "New keys will be beziers"
-msgstr "புதிய விசைகள் பெசியர்சாக இருக்கும்"
-
-
 msgid "New keys will be linear"
 msgstr "புதிய விசைகள் நேரியல்"
 
@@ -55200,15 +55044,6 @@ msgid "Toggle between Vector and Auto handles"
 msgstr "திசையன் மற்றும் ஆட்டோ கைப்பிடிகளுக்கு இடையில் மாற்றவும்"
 
 
-msgctxt "Operator"
-msgid "Add Bezier Circle"
-msgstr "பெசியர் வட்டத்தை சேர்க்கவும்"
-
-
-msgid "Construct a Bezier Circle"
-msgstr "ஒரு பெசியர் வட்டத்தை உருவாக்குங்கள்"
-
-
 msgid "The alignment of the new object"
 msgstr "புதிய பொருளின் சீரமைப்பு"
 
@@ -55243,15 +55078,6 @@ msgstr "புதிதாக சேர்க்கப்பட்ட பொர�
 
 msgid "Scale for the newly added object"
 msgstr "புதிதாக சேர்க்கப்பட்ட பொருளுக்கான அளவு"
-
-
-msgctxt "Operator"
-msgid "Add Bezier"
-msgstr "பெசியர் சேர்க்கவும்"
-
-
-msgid "Construct a Bezier Curve"
-msgstr "ஒரு பெசியர் வளைவை உருவாக்குங்கள்"
 
 
 msgctxt "Operator"
@@ -55485,10 +55311,6 @@ msgstr "செயலில் உள்ள ச்ப்லைன் வகைய
 
 msgid "Handles"
 msgstr "கையாளுகிறது"
-
-
-msgid "Use handles when converting bezier curves into polygons"
-msgstr "பெசியர் வளைவுகளை பலகோணங்களாக மாற்றும்போது கைப்பிடிகளைப் பயன்படுத்தவும்"
 
 
 msgctxt "Operator"
@@ -55860,8 +55682,20 @@ msgstr "சுழற்சிகளை யூலர் சைக்சாக ம
 
 
 msgctxt "Operator"
-msgid "Export PLY"
-msgstr "ஏற்றுமதி"
+msgid "Export STL (legacy)"
+msgstr "ஏற்றுமதி STL (மரபு)"
+
+
+msgid "Save STL triangle mesh data"
+msgstr "எச்.டி.எல் முக்கோண கண்ணி தரவை சேமிக்கவும்"
+
+
+msgid "Ascii"
+msgstr "ASCII"
+
+
+msgid "Save the file in ASCII file format"
+msgstr "கோப்பை ASCII கோப்பு வடிவத்தில் சேமிக்கவும்"
 
 
 msgid "X Forward"
@@ -55908,39 +55742,6 @@ msgid "-Z Up"
 msgstr "-Z அப்"
 
 
-msgid "ASCII"
-msgstr "ASCII"
-
-
-msgid "Apply Modifiers"
-msgstr "மாற்றியமைப்பாளர்களைப் பயன்படுத்துங்கள்"
-
-
-msgid "Selection Only"
-msgstr "தேர்வு மட்டும்"
-
-
-msgid "Export selected objects only"
-msgstr "தேர்ந்தெடுக்கப்பட்ட பொருட்களை மட்டுமே ஏற்றுமதி செய்யுங்கள்"
-
-
-msgctxt "Operator"
-msgid "Export STL (legacy)"
-msgstr "ஏற்றுமதி STL (மரபு)"
-
-
-msgid "Save STL triangle mesh data"
-msgstr "எச்.டி.எல் முக்கோண கண்ணி தரவை சேமிக்கவும்"
-
-
-msgid "Ascii"
-msgstr "ASCII"
-
-
-msgid "Save the file in ASCII file format"
-msgstr "கோப்பை ASCII கோப்பு வடிவத்தில் சேமிக்கவும்"
-
-
 msgid "Batch Mode"
 msgstr "தொகுப்பு முறை"
 
@@ -55961,6 +55762,10 @@ msgid "Export in this reference space"
 msgstr "இந்த குறிப்பு இடத்தில் ஏற்றுமதி"
 
 
+msgid "Apply Modifiers"
+msgstr "மாற்றியமைப்பாளர்களைப் பயன்படுத்துங்கள்"
+
+
 msgid "Apply the modifiers before saving"
 msgstr "சேமிப்பதற்கு முன் மாற்றியமைப்பாளர்களைப் பயன்படுத்துங்கள்"
 
@@ -55971,6 +55776,14 @@ msgstr "காட்சி அலகு"
 
 msgid "Apply current scene's unit (as defined by unit scale) to exported data"
 msgstr "ஏற்றுமதி செய்யப்பட்ட தரவுகளுக்கு தற்போதைய காட்சியின் அலகு (அலகு அளவால் வரையறுக்கப்பட்டுள்ளது) பயன்படுத்தவும்"
+
+
+msgid "Selection Only"
+msgstr "தேர்வு மட்டும்"
+
+
+msgid "Export selected objects only"
+msgstr "தேர்ந்தெடுக்கப்பட்ட பொருட்களை மட்டுமே ஏற்றுமதி செய்யுங்கள்"
 
 
 msgctxt "Operator"
@@ -57161,18 +56974,6 @@ msgstr "ஏற்றுமதி அமைப்புகளை நினைவ�
 
 msgid "Store glTF export settings in the Blender project"
 msgstr "கலப்பான் திட்டத்தில் சி.எல்.டி.எஃப் ஏற்றுமதி அமைப்புகளை சேமிக்கவும்"
-
-
-msgid "Material Groups"
-msgstr "மூலப்பொருள் குழுக்கள்"
-
-
-msgid "Generate an OBJ group for each part of a geometry using a different material"
-msgstr "வெவ்வேறு மூலப்பொருளைப் பயன்படுத்தி வடிவவியலின் ஒவ்வொரு பகுதிக்கும் ஒரு OBJ குழுவை உருவாக்கவும்"
-
-
-msgid "Smooth Groups"
-msgstr "மென்மையான குழுக்கள்"
 
 
 msgctxt "Operator"
@@ -58764,16 +58565,8 @@ msgid "Animation path"
 msgstr "அனிமேசன் பாதை"
 
 
-msgid "Smooth Bezier curve"
-msgstr "மென்மையான பெசியர் வளைவு"
-
-
 msgid "Polygon Curve"
 msgstr "பலகோண வளைவு"
-
-
-msgid "Bezier curve with straight-line segments (vector handles)"
-msgstr "நேர்-வரி பிரிவுகளுடன் பெசியர் வளைவு (திசையன் கைப்பிடிகள்)"
 
 
 msgid "Link Strokes"
@@ -59341,6 +59134,10 @@ msgstr "மீள்"
 msgctxt "Operator"
 msgid "Active Layer"
 msgstr "செயலில் அடுக்கு"
+
+
+msgid "Active Grease Pencil layer"
+msgstr "செயலில் பசை எழுதுகோல் அடுக்கு"
 
 
 msgctxt "Operator"
@@ -61092,14 +60889,6 @@ msgid "Handle Length"
 msgstr "நீளத்தை கையாளவும்"
 
 
-msgid "Length to make selected keyframes' bezier handles"
-msgstr "தேர்ந்தெடுக்கப்பட்ட கீஃப்ரேம்களின் பெசியர் கைப்பிடிகளை உருவாக்க நீளம்"
-
-
-msgid "Side of the keyframes' bezier handles to affect"
-msgstr "கீஃப்ரேம்களின் பெசியர் கையாளுதலின் பக்கம் பாதிக்க"
-
-
 msgid "Equalize selected keyframes' left handles"
 msgstr "தேர்ந்தெடுக்கப்பட்ட கீஃப்ரேம்களின் இடது கைப்பிடிகளை சமப்படுத்தவும்"
 
@@ -61833,6 +61622,10 @@ msgstr "தொடக்கத்திலிருந்து தேர்ந�
 
 msgid "Selects random points from the current strokes selection"
 msgstr "தற்போதைய வீச்சுகள் தேர்விலிருந்து சீரற்ற புள்ளிகளைத் தேர்ந்தெடுக்கிறது"
+
+
+msgid "By Material"
+msgstr "மூலப்பொருள் மூலம்"
 
 
 msgctxt "Operator"
@@ -62748,11 +62541,6 @@ msgstr "வெளிப்படைத்தன்மைக்கு ஆல்�
 
 
 msgctxt "Operator"
-msgid "Import PLY"
-msgstr "இறக்குமதி செய்ய"
-
-
-msgctxt "Operator"
 msgid "Import STL (legacy)"
 msgstr "இறக்குமதி STL (மரபு)"
 
@@ -63001,10 +62789,6 @@ msgstr "பதிவு நிலை"
 
 msgid "The glTF format requires discontinuous normals, UVs, and other vertex attributes to be stored as separate vertices, as required for rendering on typical graphics hardware. This option attempts to combine co-located vertices where possible. Currently cannot combine verts with different normals"
 msgstr "GLTF வடிவமைப்பிற்கு வழக்கமான கிராபிக்ச் வன்பொருளில் வழங்குவதற்குத் தேவையான, இடைவிடாத இயல்புகள், புறஊதா மற்றும் பிற வெர்டெக்ச் பண்புகளை தனித்தனி செங்குத்துகளாக சேமிக்க வேண்டும். இந்த விருப்பம் முடிந்தவரை இணை அமைந்துள்ள செங்குத்துகளை இணைக்க முயற்சிக்கிறது. தற்போது வெர்ட்டுகளை வெவ்வேறு இயல்புகளுடன் இணைக்க முடியாது"
-
-
-msgid "Import OBJ groups as vertex groups"
-msgstr "OBJ குழுக்களை வெர்டெக்ச் குழுக்களாக இறக்குமதி செய்யுங்கள்"
 
 
 msgctxt "Operator"
@@ -66231,10 +66015,6 @@ msgid "Separate selected geometry into a new mesh"
 msgstr "தேர்ந்தெடுக்கப்பட்ட வடிவவியலை புதிய கண்ணி எனப் பிரிக்கவும்"
 
 
-msgid "By Material"
-msgstr "மூலப்பொருள் மூலம்"
-
-
 msgid "By Loose Parts"
 msgstr "தளர்வான பகுதிகளால்"
 
@@ -68467,24 +68247,12 @@ msgid "Curve from Mesh or Text objects"
 msgstr "கண்ணி அல்லது உரை பொருள்களிலிருந்து வளைவு"
 
 
-msgid "Mesh from Curve, Surface, Metaball, Text, or Point Cloud objects"
-msgstr "வளைவு, மேற்பரப்பு, வளர்சிதை மாற்ற, உரை அல்லது புள்ளி மேகப் பொருள்களிலிருந்து கண்ணி"
-
-
 msgid "Grease Pencil from Curve or Mesh objects"
 msgstr "வளைவு அல்லது கண்ணி பொருள்களிலிருந்து பசை எழுதுகோல்"
 
 
-msgid "Point Cloud from Mesh objects"
-msgstr "கண்ணி பொருள்களிலிருந்து புள்ளி மேகம்"
-
-
 msgid "Curves from evaluated curve data"
 msgstr "மதிப்பிடப்பட்ட வளைவு தரவுகளிலிருந்து வளைவுகள்"
-
-
-msgid "Grease Pencil v3 from Grease Pencil"
-msgstr "பசை எழுதுகோல் வி3 பசை எழுதுகோலிலிருந்து"
 
 
 msgctxt "Operator"
@@ -74193,8 +73961,20 @@ msgid "Add a directory to be used as a local extension repository"
 msgstr "உள்ளக நீட்டிப்பு களஞ்சியமாகப் பயன்படுத்த ஒரு கோப்பகத்தைச் சேர்க்கவும்"
 
 
+msgid "The local directory containing extensions"
+msgstr "நீட்டிப்புகளைக் கொண்ட உள்ளக அடைவு"
+
+
+msgid "Unique repository name"
+msgstr "தனித்துவமான களஞ்சிய பெயர்"
+
+
 msgid "URL"
 msgstr "URL"
+
+
+msgid "Remote URL or path for extension repository"
+msgstr "தொலைநிலை URL அல்லது நீட்டிப்பு களஞ்சியத்திற்கான பாதை"
 
 
 msgctxt "Operator"
@@ -74567,10 +74347,6 @@ msgstr "ரெண்டரிங் செய்ய தற்போதைய 3D 
 
 msgid "Write Image"
 msgstr "படத்தை எழுதுங்கள்"
-
-
-msgid "Save rendered the image to the output path (used only when animation is disabled)"
-msgstr "படத்தை வெளியீட்டு பாதையில் சேமிக்கவும் (அனிமேசன் முடக்கப்பட்டால் மட்டுமே பயன்படுத்தப்படுகிறது)"
 
 
 msgctxt "Operator"
@@ -77616,10 +77392,6 @@ msgstr "வேகத்தை அமைக்கவும்"
 
 msgid "Set speed of retimed segment"
 msgstr "மறுபயன்பாட்டு பிரிவின் வேகத்தை அமைக்கவும்"
-
-
-msgid "Preserve Current retiming"
-msgstr "தற்போதைய மறுபிரவேசத்தைப் பாதுகாக்கவும்"
 
 
 msgid "Keep speed of other segments unchanged, change strip length instead"
@@ -83427,6 +83199,10 @@ msgid "Export Material Groups"
 msgstr "ஏற்றுமதி மூலப்பொருள் குழுக்கள்"
 
 
+msgid "Generate an OBJ group for each part of a geometry using a different material"
+msgstr "வெவ்வேறு மூலப்பொருளைப் பயன்படுத்தி வடிவவியலின் ஒவ்வொரு பகுதிக்கும் ஒரு OBJ குழுவை உருவாக்கவும்"
+
+
 msgid "Export Materials"
 msgstr "ஏற்றுமதி மூலப்பொருட்கள்"
 
@@ -83560,6 +83336,10 @@ msgid "Character used to separate objects name into hierarchical structure"
 msgstr "பொருள்களின் பெயரை படிநிலை கட்டமைப்பில் பிரிக்கப் பயன்படுத்தப்படும் எழுத்து"
 
 
+msgid "Import OBJ groups as vertex groups"
+msgstr "OBJ குழுக்களை வெர்டெக்ச் குழுக்களாக இறக்குமதி செய்யுங்கள்"
+
+
 msgid "Split By Group"
 msgstr "குழுவால் பிரிக்கப்படுகிறது"
 
@@ -83665,6 +83445,11 @@ msgid "Open a path in a file browser"
 msgstr "கோப்பு உலாவியில் ஒரு பாதையைத் திறக்கவும்"
 
 
+msgctxt "Operator"
+msgid "Export PLY"
+msgstr "ஏற்றுமதி"
+
+
 msgid "Save the scene to a PLY file"
 msgstr "காட்சியை ஒரு பிளை கோப்பில் சேமிக்கவும்"
 
@@ -83707,6 +83492,11 @@ msgstr "ஏற்றுமதி வெர்டெக்ச் இயல்ப�
 
 msgid "Export specific vertex normals if available, export calculated normals otherwise"
 msgstr "குறிப்பிட்ட வெர்டெக்ச் இயல்புகளை ஏற்றுமதி செய்தால், கணக்கிடப்பட்ட இயல்புகளை ஏற்றுமதி செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Import PLY"
+msgstr "இறக்குமதி செய்ய"
 
 
 msgid "Import an PLY file as an object"
@@ -85981,11 +85771,6 @@ msgid "Transforms"
 msgstr "உருமாற்றங்கள்"
 
 
-msgctxt "MovieClip"
-msgid "Scene Setup"
-msgstr "காட்சி அமைப்பு"
-
-
 msgid "Predefined track color"
 msgstr "முன் வரையறுக்கப்பட்ட டிராக் நிறம்"
 
@@ -87350,11 +87135,6 @@ msgstr "கத்தி"
 msgctxt "Operator"
 msgid "Poly Build"
 msgstr "பாலி உருவாக்க"
-
-
-msgctxt "Operator"
-msgid "Spin Duplicates"
-msgstr "சுழல் நகல்கள்"
 
 
 msgctxt "Operator"
@@ -91725,12 +91505,12 @@ msgid "Property has been dynamically created at runtime"
 msgstr "இயக்க நேரத்தில் சொத்து மாறும் வகையில் உருவாக்கப்பட்டுள்ளது"
 
 
-msgid "Skip Save"
-msgstr "சேமிக்கவும்"
-
-
 msgid "True when the property is not saved in presets"
 msgstr "முன்னமைவுகளில் சொத்து சேமிக்கப்படாதபோது உண்மை"
+
+
+msgid "Skip Save"
+msgstr "சேமிக்கவும்"
 
 
 msgid "Base"
@@ -98590,14 +98370,6 @@ msgid "Vertex weight group, to blend with basis shape"
 msgstr "வெர்டெக்ச் எடைக் குழு, அடிப்படை வடிவத்துடன் கலக்க"
 
 
-msgid "Shape Key Bezier Point"
-msgstr "வடிவம் விசை பெசியர் புள்ளி"
-
-
-msgid "Point in a shape key for Bezier curves"
-msgstr "பெசியர் வளைவுகளுக்கான வடிவ விசையில் புள்ளி"
-
-
 msgid "Handle 1 Location"
 msgstr "1 இருப்பிடத்தைக் கையாளவும்"
 
@@ -98961,11 +98733,6 @@ msgstr "சிறுகுறிப்பு எங்கிருந்து �
 
 msgid "Show annotation data-block which belongs to movie clip"
 msgstr "மூவி கிளிப்பிற்கு சொந்தமான சிறுகுறிப்பு தரவு-தொகுதியைக் காட்டு"
-
-
-msgctxt "MovieClip"
-msgid "Track"
-msgstr "டிராக்"
 
 
 msgid "Show annotation data-block which belongs to active track"
@@ -99431,10 +99198,6 @@ msgid "Show Handles and Interpolation"
 msgstr "கைப்பிடிகள் மற்றும் இடைக்கணிப்பைக் காட்டு"
 
 
-msgid "Display keyframe handle types and non-bezier interpolation modes"
-msgstr "கீஃப்ரேம் கைப்பிடி வகைகள் மற்றும் பெசியர் அல்லாத இடைக்கணிப்பு முறைகளைக் காண்பி"
-
-
 msgid "Show Markers"
 msgstr "குறிப்பான்களைக் காட்டு"
 
@@ -99629,10 +99392,6 @@ msgstr "விரிவாக்கத்தைக் காட்டு"
 
 msgid "Show Handles"
 msgstr "கைப்பிடிகளைக் காட்டு"
-
-
-msgid "Show handles of Bezier control points"
-msgstr "பெசியர் கட்டுப்பாட்டு புள்ளிகளின் கைப்பிடிகளைக் காட்டு"
 
 
 msgid "Auto Normalization"
@@ -101578,18 +101337,6 @@ msgid "Opacity of UV overlays"
 msgstr "புறஊதா மேலடுக்குகளின் ஒளிபுகாநிலை"
 
 
-msgid "Element of a curve, either NURBS, Bezier or Polyline or a character with text objects"
-msgstr "ஒரு வளைவின் உறுப்பு, நர்ப்ச், பெசியர் அல்லது பாலிலைன் அல்லது உரை பொருள்களைக் கொண்ட ஒரு எழுத்து"
-
-
-msgid "Bezier Points"
-msgstr "பெசியர் புள்ளிகள்"
-
-
-msgid "Collection of points for Bezier curves only"
-msgstr "பெசியர் வளைவுகளுக்கான புள்ளிகளின் சேகரிப்பு மட்டுமே"
-
-
 msgid "Character Index"
 msgstr "எழுத்து அட்டவணை"
 
@@ -101646,10 +101393,6 @@ msgid "Radius Interpolation"
 msgstr "ஆரம் இடைக்கணிப்பு"
 
 
-msgid "The type of radius interpolation for Bezier curves"
-msgstr "பெசியர் வளைவுகளுக்கான ஆரம் இடைக்கணிப்பு வகை"
-
-
 msgid "Curve or Surface subdivisions per segment"
 msgstr "ஒரு பிரிவுக்கு வளைவு அல்லது மேற்பரப்பு உட்பிரிவுகள்"
 
@@ -101662,28 +101405,8 @@ msgid "Tilt Interpolation"
 msgstr "சாய்ந்த இடைக்கணிப்பு"
 
 
-msgid "The type of tilt interpolation for 3D, Bezier curves"
-msgstr "3D, பெசியர் வளைவுகளுக்கான சாய்ந்த இடைக்கணிப்பு வகை"
-
-
 msgid "The interpolation type for this curve element"
 msgstr "இந்த வளைவு உறுப்புக்கான இடைக்கணிப்பு வகை"
-
-
-msgid "Bezier U"
-msgstr "பெசியர் யு"
-
-
-msgid "Make this nurbs curve or surface act like a Bezier spline in the U direction"
-msgstr "இந்த நர்ப்ச் வளைவு அல்லது மேற்பரப்பு யு திசையில் ஒரு பெசியர் ச்ப்லைன் போல செயல்படுங்கள்"
-
-
-msgid "Bezier V"
-msgstr "பெசியர் வி"
-
-
-msgid "Make this nurbs surface act like a Bezier spline in the V direction"
-msgstr "இந்த நர்ப்ச் மேற்பரப்பு வி திசையில் ஒரு பெசியர் ச்ப்லைன் போல செயல்படுங்கள்"
 
 
 msgid "Make this curve or surface a closed loop in the U direction"
@@ -101712,14 +101435,6 @@ msgstr "இந்த நர்ப்ச் மேற்பரப்பு வி
 
 msgid "Smooth the normals of the surface or beveled curve"
 msgstr "மேற்பரப்பு அல்லது பெவெல் வளைவின் இயல்புகளை மென்மையாக்கவும்"
-
-
-msgid "Spline Bezier Points"
-msgstr "ச்ப்லைன் பெசியர் புள்ளிகள்"
-
-
-msgid "Collection of spline Bezier points"
-msgstr "ச்ப்லைன் பெசியர் புள்ளிகளின் தொகுப்பு"
 
 
 msgid "Spline point without handles"
@@ -101852,10 +101567,6 @@ msgstr "ஏகப்பட்ட சிறப்பம்சத்தைக் �
 
 msgid "Studio light image file has separate \"diffuse\" and \"specular\" passes"
 msgstr "ச்டுடியோ லைட் படக் கோப்பில் தனித்தனி \"பரவல்\" மற்றும் \"ஏகப்பட்ட\" பாச்கள் உள்ளன"
-
-
-msgid "Lights user to display objects in solid draw mode"
-msgstr "திட டிரா பயன்முறையில் பொருட்களைக் காண்பிக்க பயனரை விளக்குகிறது"
 
 
 msgctxt "Light"
@@ -102613,10 +102324,6 @@ msgstr "டோப் தாள் துணை சேனல்"
 
 msgid "Interpolation Line"
 msgstr "இடைக்கணிப்பு வரி"
-
-
-msgid "Color of lines showing non-bezier interpolation modes"
-msgstr "பெசியர் அல்லாத இடைக்கணிப்பு முறைகளைக் காட்டும் வரிகளின் நிறம்"
 
 
 msgid "Color of Keyframe"
@@ -104587,14 +104294,6 @@ msgid "When creating new strokes, the weight data is added according to the curr
 msgstr "புதிய வீச்சுகள் உருவாக்கும்போது, தற்போதைய வெர்டெக்ச் குழு மற்றும் எடைக்கு ஏற்ப எடை தரவு சேர்க்கப்படுகிறது, எந்த வெர்டெக்ச் குழு தேர்ந்தெடுக்கப்படவில்லை என்றால், எடை சேர்க்கப்படவில்லை"
 
 
-msgid "Multi-frame Editing"
-msgstr "மல்டி-பிரேம் எடிட்டிங்"
-
-
-msgid "Enable multi-frame editing"
-msgstr "மல்டி-ஃபிரேம் எடிட்டிங் இயக்கவும்"
-
-
 msgid "Cycle-Aware Keying"
 msgstr "சுழற்சி-விழிப்புணர்வு கீயிங்"
 
@@ -105350,29 +105049,12 @@ msgid "Settings to define an extension repository"
 msgstr "நீட்டிப்பு களஞ்சியத்தை வரையறுக்க அமைப்புகள்"
 
 
-msgid "The local directory containing extensions"
-msgstr "நீட்டிப்புகளைக் கொண்ட உள்ளக அடைவு"
-
-
 msgid "Enable the repository"
 msgstr "களஞ்சியத்தை இயக்கவும்"
 
 
 msgid "Unique module identifier"
 msgstr "தனித்துவமான பகுதி அடையாளங்காட்டி"
-
-
-msgid "Unique repository name"
-msgstr "தனித்துவமான களஞ்சிய பெயர்"
-
-
-msgctxt "File browser"
-msgid "Remote Path"
-msgstr "தொலைநிலை பாதை"
-
-
-msgid "Remote URL or path for extension repository"
-msgstr "தொலைநிலை URL அல்லது நீட்டிப்பு களஞ்சியத்திற்கான பாதை"
 
 
 msgid "Local Cache"
@@ -108277,16 +107959,6 @@ msgstr "3D பார்வை கருவி: மெச், ச்பின் 
 
 
 msgctxt "WindowManager"
-msgid "3D View Tool: Edit Mesh, Spin Duplicates"
-msgstr "3D பார்வை கருவி: மெச், ச்பின் நகல்களைத் திருத்து"
-
-
-msgctxt "WindowManager"
-msgid "3D View Tool: Edit Mesh, Spin Duplicates (fallback)"
-msgstr "3D பார்வை கருவி: மெச், ச்பின் நகல்களைத் திருத்து (குறைவடையும்)"
-
-
-msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Smooth"
 msgstr "3D பார்வை கருவி: மெச் திருத்து, மென்மையானது"
 
@@ -111043,10 +110715,6 @@ msgid "Add a new Variant Slot"
 msgstr "புதிய மாறுபாடு ச்லாட்டைச் சேர்க்கவும்"
 
 
-msgid "Curves as NURBS"
-msgstr "வளைவுகள் nurbs"
-
-
 msgctxt "Operator"
 msgid "Lightwave Point Cache (.mdd)"
 msgstr "லைட்வேவ் பாயிண்ட் கேச் (.mdd)"
@@ -111315,6 +110983,10 @@ msgid "Selected asset %s is not an Action"
 msgstr "தேர்ந்தெடுக்கப்பட்ட சொத்து %s ஒரு செயல் அல்ல"
 
 
+msgid "Action %r is not a legacy pose library"
+msgstr "செயல் %ஆர் ஒரு மரபு போச் நூலகம் அல்ல"
+
+
 msgid "Unable to convert to pose assets"
 msgstr "போச் சொத்துக்களாக மாற்ற முடியவில்லை"
 
@@ -111325,10 +110997,6 @@ msgstr "%s இலிருந்து தேர்ந்தெடுக்க�
 
 msgid "Deselected bones from %s"
 msgstr "%s இலிருந்து அனுப்பப்பட்ட எலும்புகள்"
-
-
-msgid "Action %r is not a legacy pose library"
-msgstr "செயல் %ஆர் ஒரு மரபு போச் நூலகம் அல்ல"
 
 
 msgctxt "Operator"
@@ -111532,6 +111200,10 @@ msgstr "இறக்குமதி போ ..."
 msgctxt "Operator"
 msgid "Invert Selection"
 msgstr "தலைகீழ் தேர்வு"
+
+
+msgid "Tracking"
+msgstr "கண்காணிப்பு"
 
 
 msgid "Positional"
@@ -112141,10 +111813,6 @@ msgid "Data path not set"
 msgstr "தரவு பாதை அமைக்கப்படவில்லை"
 
 
-msgid "Properties from override data can not be edited"
-msgstr "மேலெழுதும் தரவிலிருந்து பண்புகளை திருத்த முடியாது"
-
-
 msgid "Cannot add properties to override data"
 msgstr "தரவை மேலெழுத பண்புகளைச் சேர்க்க முடியாது"
 
@@ -112443,10 +112111,6 @@ msgstr "ப்ளெண்டரை ஏற்றவும் %d.%d அமைப�
 
 msgid "Windowing Environment: %s"
 msgstr "windowing சூழல்: %s"
-
-
-msgid "Type \"%s\" can not be found"
-msgstr "\"%s\" வகை கண்டுபிடிக்க முடியவில்லை"
 
 
 msgid "Material(s)"
@@ -117665,11 +117329,6 @@ msgstr "குரங்கு"
 
 
 msgctxt "Operator"
-msgid "Bezier"
-msgstr "பெசியர்"
-
-
-msgctxt "Operator"
 msgid "Nurbs Curve"
 msgstr "Nurbs வளைவு"
 
@@ -119749,10 +119408,6 @@ msgid "armatures"
 msgstr "ஆயுதங்கள்"
 
 
-msgid "Attribute name can not be empty"
-msgstr "பண்புக்கூறு பெயர் காலியாக இருக்க முடியாது"
-
-
 msgid "Attribute is not part of this geometry"
 msgstr "பண்புக்கூறு இந்த வடிவவியலின் ஒரு பகுதியாக இல்லை"
 
@@ -119771,10 +119426,6 @@ msgstr "பண்புக்கூறு தேவை மற்றும் அ
 
 msgid "Layer '%s' could not be created"
 msgstr "அடுக்கு '%s' உருவாக்க முடியவில்லை"
-
-
-msgid "This attribute can not be accessed in a procedural context"
-msgstr "இந்த பண்புகளை ஒரு நடைமுறை சூழலில் அணுக முடியாது"
 
 
 msgid "Library file, loading empty scene"
@@ -119927,14 +119578,6 @@ msgstr "குறைந்தது இரண்டு புள்ளிகள�
 
 msgid "Must have more control points than Order"
 msgstr "ஒழுங்கை விட அதிக கட்டுப்பாட்டு புள்ளிகள் இருக்க வேண்டும்"
-
-
-msgid "%d more %s row(s) needed for Bezier"
-msgstr "பெசியருக்கு தேவையான %d அதிக %s வரிசை (கள்)"
-
-
-msgid "%d more point(s) needed for Bezier"
-msgstr "பெசியருக்கு தேவைப்படும் %d அதிக புள்ளி (கள்)"
 
 
 msgid "curves"
@@ -120872,10 +120515,6 @@ msgid "No valid formats found"
 msgstr "சரியான வடிவங்கள் எதுவும் கிடைக்கவில்லை"
 
 
-msgid "Can't allocate FFMPEG format context"
-msgstr "FFMPEG வடிவமைப்பு சூழலை ஒதுக்க முடியாது"
-
-
 msgid "Render width has to be 720 pixels for DV!"
 msgstr "ரெண்டர் அகலம் டி.வி.க்கு 720 பிக்சல்கள் இருக்க வேண்டும்!"
 
@@ -120886,10 +120525,6 @@ msgstr "ரெண்டர் உயரம் டி.வி-என்.டி.எ
 
 msgid "Render height has to be 576 pixels for DV-PAL!"
 msgstr "ரெண்டர் உயரம் டி.வி-பாலுக்கு 576 பிக்சல்கள் இருக்க வேண்டும்!"
-
-
-msgid "FFMPEG only supports 48khz / stereo audio for DV!"
-msgstr "FFMPEG டி.வி.க்கு 48KHz / ச்டீரியோ ஆடியோவை மட்டுமே ஆதரிக்கிறது!"
 
 
 msgid "Error initializing video stream"
@@ -121422,10 +121057,6 @@ msgstr "<அறியப்படாத மாற்றியமைப்பா�
 
 msgid "y = (Ax + B)"
 msgstr "y = (கோடாரி + பி)"
-
-
-msgid "✕ (Ax + B)"
-msgstr "✕ (கோடாரி + பி)"
 
 
 msgid "Add Control Point"
@@ -122010,10 +121641,6 @@ msgid "Cannot duplicate current selection"
 msgstr "தற்போதைய தேர்வை நகலெடுக்க முடியாது"
 
 
-msgid "Only bezier curves are supported"
-msgstr "பெசியர் வளைவுகள் மட்டுமே ஆதரிக்கப்படுகின்றன"
-
-
 msgid "Active object is not a selected curve"
 msgstr "செயலில் உள்ள பொருள் தேர்ந்தெடுக்கப்பட்ட வளைவு அல்ல"
 
@@ -122024,16 +121651,6 @@ msgstr "%d வளைவு (களை) பிரிக்க முடியவ�
 
 msgid "%d curves could not make segments"
 msgstr "%d வளைவுகள் பிரிவுகளை உருவாக்க முடியவில்லை"
-
-
-msgctxt "Curve"
-msgid "BezierCurve"
-msgstr "பெசியர்கர்வ்"
-
-
-msgctxt "Curve"
-msgid "BezierCircle"
-msgstr "பெசியர்கிர்கில்"
 
 
 msgctxt "Curve"
@@ -122377,10 +121994,6 @@ msgstr "செயல்படுத்தப்படவில்லை!"
 
 msgid "No strokes to paste, select and copy some points before trying again"
 msgstr "மீண்டும் முயற்சிக்கும் முன் ஒட்டவும், சில புள்ளிகளைத் தேர்ந்தெடுத்து நகலெடுக்கவும் வீச்சுகள் இல்லை"
-
-
-msgid "Can not paste strokes when active layer is hidden or locked"
-msgstr "செயலில் அடுக்கு மறைக்கப்படும்போது அல்லது பூட்டப்பட்டால் வீச்சுகள் ஒட்ட முடியாது"
 
 
 msgid "No grease pencil data"
@@ -123768,6 +123381,10 @@ msgid "Triangulated Mesh"
 msgstr "முக்கோண கண்ணி"
 
 
+msgid "Curves as NURBS"
+msgstr "வளைவுகள் nurbs"
+
+
 msgid "PBR Extensions"
 msgstr "பிபிஆர் நீட்டிப்புகள்"
 
@@ -123780,8 +123397,20 @@ msgid "Object Groups"
 msgstr "பொருள் குழுக்கள்"
 
 
+msgid "Material Groups"
+msgstr "மூலப்பொருள் குழுக்கள்"
+
+
+msgid "Smooth Groups"
+msgstr "மென்மையான குழுக்கள்"
+
+
 msgid "Smooth Group Bitflags"
 msgstr "மென்மையான குழு பிட்ஃப்ளாக்ச்"
+
+
+msgid "ASCII"
+msgstr "ASCII"
 
 
 msgid "Batch"
@@ -123915,10 +123544,6 @@ msgstr "வெட்டுக்களின் எண்ணிக்கை: %s,
 
 msgid "Loop cut does not work well on deformed edit mesh display"
 msgstr "சிதைந்த திருத்து மெச் காட்சியில் லூப் வெட்டு சரியாக வேலை செய்யாது"
-
-
-msgid "The geometry can not be extracted with dyntopo activated"
-msgstr "டைன்டோபோ செயல்படுத்தப்பட்டதன் மூலம் வடிவவியலை பிரித்தெடுக்க முடியாது"
 
 
 msgid "Path selection requires two matching elements to be selected"
@@ -124509,10 +124134,6 @@ msgstr "சிக்கல் பேக்கிங் பொருள் \"%s\"
 
 msgid "Modifier containing the node is disabled"
 msgstr "முனையைக் கொண்ட மாற்றியமைத்தல் முடக்கப்பட்டுள்ளது"
-
-
-msgid "Can not determine bake location on disk"
-msgstr "வட்டில் சுட்டுக்கொள்ளும் இடத்தை தீர்மானிக்க முடியாது"
 
 
 msgid "Bake directory of object %s, modifier %s is empty, setting default path"
@@ -126901,10 +126522,6 @@ msgid "Deleted %u drivers"
 msgstr "நீக்கப்பட்டது %u இயக்கிகள்"
 
 
-msgid "Decimate F-Curves by specifying how much they can deviate from the original curve"
-msgstr "அசல் வளைவிலிருந்து எவ்வளவு விலக முடியும் என்பதைக் குறிப்பிடுவதன் மூலம் எஃப்-வளைவுகளை அழிக்கவும்"
-
-
 msgid "Decimate Keyframes"
 msgstr "கீஃப்ரேம்களை அழிக்கவும்"
 
@@ -126917,12 +126534,12 @@ msgid "Scale from Neighbor Keys"
 msgstr "அண்டை விசைகளிலிருந்து அளவு"
 
 
+msgid "Decimate F-Curves by specifying how much they can deviate from the original curve"
+msgstr "அசல் வளைவிலிருந்து எவ்வளவு விலக முடியும் என்பதைக் குறிப்பிடுவதன் மூலம் எஃப்-வளைவுகளை அழிக்கவும்"
+
+
 msgid "Cannot find keys to operate on"
 msgstr "செயல்பட விசைகளைக் கண்டுபிடிக்க முடியவில்லை"
-
-
-msgid "Decimate: Skipping non linear/bezier keyframes!"
-msgstr "டெசிமேட்: அல்லாத நேரியல்/பெசியர் கீஃப்ரேம்களைத் தவிர்ப்பது!"
 
 
 msgid "You need at least 2 keys to the right side of the selection"
@@ -127341,18 +126958,6 @@ msgid "Could not add material"
 msgstr "மூலப்பொருள் சேர்க்க முடியவில்லை"
 
 
-msgid ""
-"Can not add node group '%s' to '%s':\n"
-"  %s"
-msgstr ""
-"'%s' இல் '%s' என்ற முனை குழுவைச் சேர்க்க முடியாது: \n"
-"  %s"
-
-
-msgid "Can not add node group '%s' to '%s'"
-msgstr "'%s' இல் '%s' இல் முனை குழு சேர்க்க முடியாது"
-
-
 msgid "Node tree type %s undefined"
 msgstr "முனை மரம் வகை %s வரையறுக்கப்படவில்லை"
 
@@ -127543,30 +127148,6 @@ msgstr "முனை குழுவிற்குள் இல்லை"
 
 msgid "Cannot separate nodes"
 msgstr "முனைகளை பிரிக்க முடியாது"
-
-
-msgid ""
-"Can not add node '%s' in a group:\n"
-"  %s"
-msgstr ""
-"ஒரு குழுவில் '%s' முனை சேர்க்க முடியாது: \n"
-"   %s"
-
-
-msgid "Can not add node '%s' in a group"
-msgstr "ஒரு குழுவில் '%s' முனை சேர்க்க முடியாது"
-
-
-msgid "Can not add zone input node '%s' to a group without its paired output '%s'"
-msgstr "ஒரு குழுவில் அதன் சோடி வெளியீடு '%s' இல்லாமல் மண்டல உள்ளீட்டு முனை '%s' ஐ சேர்க்க முடியாது"
-
-
-msgid "Can not add zone output node '%s' to a group without its paired input '%s'"
-msgstr "ஒரு குழுவில் அதன் சோடி உள்ளீடு '%s' இல்லாமல் மண்டல வெளியீட்டு முனை '%s' ஐ சேர்க்க முடியாது"
-
-
-msgid "Can not insert group '%s' in '%s'"
-msgstr "'%s' குழுவை '%s' இல் செருக முடியாது"
 
 
 msgid "Disconnect"
@@ -128233,32 +127814,12 @@ msgid "Select movie or image strips"
 msgstr "மூவி அல்லது பட கீற்றுகளைத் தேர்ந்தெடுக்கவும்"
 
 
-msgid "Can not create key inside of speed transition"
-msgstr "வேக மாற்றத்தின் உள்ளே விசையை உருவாக்க முடியாது"
-
-
-msgid "Can not create freeze frame"
-msgstr "முடக்கம் சட்டத்தை உருவாக்க முடியாது"
-
-
-msgid "Can not create transition from first or last key"
-msgstr "முதல் அல்லது கடைசி விசையிலிருந்து மாற்றத்தை உருவாக்க முடியாது"
-
-
-msgid "Can not create transition"
-msgstr "மாற்றத்தை உருவாக்க முடியாது"
-
-
 msgid "Retiming key must be selected"
 msgstr "மறுபரிசீலனை செய்யும் விசையைத் தேர்ந்தெடுக்க வேண்டும்"
 
 
 msgid "No keys or strips selected"
 msgstr "சாவிகள் அல்லது கீற்றுகள் தேர்ந்தெடுக்கப்படவில்லை"
-
-
-msgid "This strip type can not be retimed"
-msgstr "இந்த துண்டு வகையை மறுபரிசீலனை செய்ய முடியாது"
 
 
 msgid "No active sequence!"
@@ -128773,10 +128334,6 @@ msgid "No object selected"
 msgstr "எந்த பொருளும் தேர்ந்தெடுக்கப்படவில்லை"
 
 
-msgid "Auto Keying On"
-msgstr "ஆட்டோ கீயிங் ஆன்"
-
-
 msgid "along X"
 msgstr "x உடன்"
 
@@ -128815,6 +128372,10 @@ msgstr "%s z பூட்டுதல்"
 
 msgid "along local Z"
 msgstr "உள்ளக இசட் உடன்"
+
+
+msgid "Auto Keying On"
+msgstr "ஆட்டோ கீயிங் ஆன்"
 
 
 msgid " along Y axis"
@@ -128951,14 +128512,6 @@ msgstr "Scaleb: %s: %s: %s %s %s"
 
 msgid "ScaleB X: %s  Y: %s  Z: %s%s %s"
 msgstr "Scaleb x: %s  y: %s  z: %s %s %s"
-
-
-msgid "Bend Angle: %s Radius: %s Alt, Clamp %s"
-msgstr "வளைவு கோணம்: %s ஆரம்: %s alt, blamp %s"
-
-
-msgid "Bend Angle: %.3f Radius: %.4f, Alt, Clamp %s"
-msgstr "வளைவு கோணம்: %.3f ஆரம்: %.4f, alt, blamp %s"
 
 
 msgid "Envelope: %s"
@@ -129307,16 +128860,16 @@ msgid "Could not initialize stitching on any selected object"
 msgstr "தேர்ந்தெடுக்கப்பட்ட எந்தவொரு பொருளிலும் தையலை துவக்க முடியவில்லை"
 
 
-msgid "Lock Method"
-msgstr "பூட்டு முறை"
-
-
 msgid "Minimize Stretch. Blend %.2f"
 msgstr "நீட்டிப்பைக் குறைக்கவும். கலவை %.2f"
 
 
 msgid "Press + and -, or scroll wheel to set blending"
 msgstr "கலப்பதை அமைக்க + மற்றும் -, அல்லது உருட்டல் சக்கரத்தை அழுத்தவும்"
+
+
+msgid "Lock Method"
+msgstr "பூட்டு முறை"
 
 
 msgid "Object has non-uniform scale, unwrap will operate on a non-scaled version of the mesh"
@@ -130223,14 +129776,6 @@ msgid "Dynamic Effects"
 msgstr "மாறும் விளைவுகள்"
 
 
-msgid "Bezier spline cannot have points added"
-msgstr "பெசியர் ச்ப்லைன் புள்ளிகள் சேர்க்கப்பட முடியாது"
-
-
-msgid "Only Bezier splines can be added"
-msgstr "பெசியர் ச்ப்லைன்களை மட்டுமே சேர்க்க முடியும்"
-
-
 msgid "Curve '%s' does not contain spline given"
 msgstr "வளைவு '%s' கொடுக்கப்பட்ட ச்ப்லைன் இல்லை"
 
@@ -130576,16 +130121,8 @@ msgid "unable to load movie clip"
 msgstr "மூவி கிளிப்பை ஏற்ற முடியவில்லை"
 
 
-msgid "Can not create object in main database with an evaluated data data-block"
-msgstr "மதிப்பிடப்பட்ட தரவு தரவு-தடுப்புடன் பிரதான தரவுத்தளத்தில் பொருளை உருவாக்க முடியாது"
-
-
 msgid "Object does not have geometry data"
 msgstr "பொருளுக்கு வடிவியல் தரவு இல்லை"
-
-
-msgid "%s '%s' is outside of main database and can not be removed from it"
-msgstr "%s '%s' பிரதான தரவுத்தளத்திற்கு வெளியே உள்ளது, அதிலிருந்து அகற்ற முடியாது"
 
 
 msgid "%s '%s' must have zero users to be removed, found %d (try with do_unlink=True parameter)"
@@ -131061,10 +130598,6 @@ msgid "Modifier was not found in the stack"
 msgstr "மாற்றியமைப்பாளர் அடுக்கில் காணப்படவில்லை"
 
 
-msgid "Recursion detected, can not use this strip"
-msgstr "மறுநிகழ்வு கண்டறியப்பட்டது, இந்த துண்டு பயன்படுத்த முடியாது"
-
-
 msgid "Sequences.new_sound: unable to open sound file"
 msgstr "CHOUNESS.NEW_SOUND: ஒலி கோப்பைத் திறக்க முடியவில்லை"
 
@@ -131187,10 +130720,6 @@ msgstr "சூழலில் செயலில் சாளரம் இல்
 
 msgid "Not a non-modal keymap"
 msgstr "மாதிரி அல்லாத கீமாப் அல்ல"
-
-
-msgid "Can not mix modal/non-modal items"
-msgstr "மாதிரி/மாதிரி அல்லாத உருப்படிகளை கலக்க முடியாது"
 
 
 msgid "Not a modal keymap"
@@ -131604,10 +131133,6 @@ msgstr "முடக்கப்பட்டது, ஓபன்சுப்ட�
 
 msgid "Output Attributes"
 msgstr "வெளியீட்டு பண்புக்கூறுகள்"
-
-
-msgid "Can not load the baked data"
-msgstr "வேகவைத்த தரவை ஏற்ற முடியாது"
 
 
 msgid "No named attributes used"
@@ -132218,10 +131743,6 @@ msgid "An index used to group values together for multiple separate accumulation
 msgstr "பல தனித்தனி திரட்டல்களுக்கு ஒன்றாக குழு மதிப்புகளுக்கு பயன்படுத்தப்படும் ஒரு குறியீடு"
 
 
-msgid "The attribute output can not be used without the geometry output"
-msgstr "பண்புக்கூறு வெளியீடு வடிவியல் வெளியீடு இல்லாமல் பயன்படுத்த முடியாது"
-
-
 msgid "Edge Count"
 msgstr "விளிம்பு எண்ணிக்கை"
 
@@ -132577,10 +132098,6 @@ msgstr "வெளிப்புற புள்ளிகளின் தேர�
 
 msgid "Curve Index"
 msgstr "வளைவு அட்டவணை"
-
-
-msgid "Input curves do not have Bezier type"
-msgstr "உள்ளீட்டு வளைவுகளுக்கு பெசியர் வகை இல்லை"
 
 
 msgid "For points, the portion of the spline's total length at the control point. For Splines, the factor of that spline within the entire curve"
@@ -133550,12 +133067,16 @@ msgid "Determines the order of points in each curve"
 msgstr "ஒவ்வொரு வளைவிலும் புள்ளிகளின் வரிசையை தீர்மானிக்கிறது"
 
 
-msgid "Source Position"
-msgstr "மூல நிலை"
+msgid "Sample Position"
+msgstr "மாதிரி நிலை"
 
 
 msgid "The target mesh must have faces"
 msgstr "இலக்கு கண்ணி முகங்களைக் கொண்டிருக்க வேண்டும்"
+
+
+msgid "Source Position"
+msgstr "மூல நிலை"
 
 
 msgid "Is Hit"
@@ -133590,16 +133111,8 @@ msgid "The source geometry must contain a mesh or a point cloud"
 msgstr "மூல வடிவவியலில் ஒரு கண்ணி அல்லது புள்ளி மேகம் இருக்க வேண்டும்"
 
 
-msgid "Sample Position"
-msgstr "மாதிரி நிலை"
-
-
 msgid "The source mesh must have faces"
 msgstr "மூல கண்ணி முகங்களைக் கொண்டிருக்க வேண்டும்"
-
-
-msgid "Source UV Map"
-msgstr "மூல புறஊதா வரைபடம்"
 
 
 msgid "Sample UV"
@@ -133644,18 +133157,6 @@ msgstr "வடிவவியலின் பகுதிகள் தேர்�
 
 msgid "Mesh has no faces for material assignment"
 msgstr "மெச் மூலப்பொருள் ஒதுக்கீட்டிற்கு முகங்கள் இல்லை"
-
-
-msgid "Volumes only support a single material; selection input can not be a field"
-msgstr "தொகுதிகள் ஒரு மூலப்பொருளை மட்டுமே ஆதரிக்கின்றன; தேர்வு உள்ளீடு ஒரு புலமாக இருக்க முடியாது"
-
-
-msgid "Point clouds only support a single material; selection input can not be a field"
-msgstr "புள்ளி மேகங்கள் ஒரு மூலப்பொருளை மட்டுமே ஆதரிக்கின்றன; தேர்வு உள்ளீடு ஒரு புலமாக இருக்க முடியாது"
-
-
-msgid "Curves only support a single material; selection input can not be a field"
-msgstr "வளைவுகள் ஒரு மூலப்பொருளை மட்டுமே ஆதரிக்கின்றன; தேர்வு உள்ளீடு ஒரு புலமாக இருக்க முடியாது"
 
 
 msgid "Shade Smooth"
@@ -134394,10 +133895,6 @@ msgid "Could not resolve path (%s)"
 msgstr "பாதையை தீர்க்க முடியவில்லை (%s)"
 
 
-msgid "Can not initialize the GPU"
-msgstr "GPU ஐ துவக்க முடியாது"
-
-
 msgid "Failed allocate render result, out of memory"
 msgstr "தோல்வியுற்றது நினைவகத்திற்கு வெளியே, ரெண்டர் முடிவை ஒதுக்கவும்"
 
@@ -134525,24 +134022,12 @@ msgid "Strips must have the same number of inputs"
 msgstr "கீற்றுகள் ஒரே எண்ணிக்கையிலான உள்ளீடுகளைக் கொண்டிருக்க வேண்டும்"
 
 
-msgid "Can not move strip to non-meta strip"
-msgstr "மெட்டா அல்லாத துண்டுக்கு துண்டு நகர்த்த முடியாது"
-
-
-msgid "Strip can not be moved into itself"
-msgstr "ச்ட்ரிப்பை தனக்குத்தானே நகர்த்த முடியாது"
-
-
 msgid "Moved strip is already inside provided meta strip"
 msgstr "நகர்த்தப்பட்ட துண்டு ஏற்கனவே மெட்டா துண்டு வழங்கப்படுகிறது"
 
 
 msgid "Moved strip is parent of provided meta strip"
 msgstr "நகர்த்தப்பட்ட துண்டு வழங்கப்பட்ட மெட்டா ச்ட்ரிப்பின் பெற்றோர்"
-
-
-msgid "Can not move strip to different scene"
-msgstr "துண்டு வெவ்வேறு காட்சிக்கு நகர்த்த முடியாது"
 
 
 msgctxt "Sequence"
@@ -134614,12 +134099,12 @@ msgid "Region could not be drawn!"
 msgstr "மண்டலத்தை வரைய முடியவில்லை!"
 
 
-msgid "Blender File View"
-msgstr "கலப்பான் கோப்பு பார்வை"
-
-
 msgid "Input pending "
 msgstr "உள்ளீடு நிலுவையில் உள்ளது "
+
+
+msgid "Blender File View"
+msgstr "கலப்பான் கோப்பு பார்வை"
 
 
 msgid "Missing 'window' in context"
