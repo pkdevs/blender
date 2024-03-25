@@ -1,7 +1,7 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.1.0 Beta (b'4b7cc5b6608a')\n"
+"Project-Id-Version: Blender 4.1.0 Release Candidate (b'64bfe491645f')\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2020-01-01 00:00+0000\n"
 "PO-Revision-Date: 2024-01-20 18:03+0000\n"
@@ -4404,18 +4404,6 @@ msgid "Number of pixels to expand or contract fill area"
 msgstr "நிரம்பிய பரப்பை விரிவாக்க அல்லது ஒப்பந்தம் செய்ய பிக்சல்களின் எண்ணிக்கை"
 
 
-msgid "Direction"
-msgstr "திசையில்"
-
-
-msgid "Add effect of brush"
-msgstr "தூரிகையின் விளைவைச் சேர்க்கவும்"
-
-
-msgid "Subtract effect of brush"
-msgstr "தூரிகையின் விளைவு"
-
-
 msgid "Eraser Mode"
 msgstr "அழிப்பான் பயன்முறை"
 
@@ -4462,6 +4450,10 @@ msgstr "மூடல் அளவு"
 
 msgid "Strokes end extension for closing gaps, use zero to disable"
 msgstr "இடைவெளிகளை மூடுவதற்கு ச்ட்ரோக்ச் இறுதி நீட்டிப்பு, முடக்க பூச்சியத்தைப் பயன்படுத்தவும்"
+
+
+msgid "Direction"
+msgstr "திசையில்"
 
 
 msgid "Direction of the fill"
@@ -20451,6 +20443,14 @@ msgstr "துணி உருவகப்படுத்துதலின் �
 
 msgid "Amount of random elements that are going to be affected by the brush"
 msgstr "தூரிகையால் பாதிக்கப்படவிருக்கும் சீரற்ற கூறுகளின் அளவு"
+
+
+msgid "Add effect of brush"
+msgstr "தூரிகையின் விளைவைச் சேர்க்கவும்"
+
+
+msgid "Subtract effect of brush"
+msgstr "தூரிகையின் விளைவு"
 
 
 msgid "Max Element Distance"
@@ -113266,14 +113266,6 @@ msgid "Caps Type"
 msgstr "Caps வகை"
 
 
-msgid "CCW"
-msgstr "சி.சி.டபிள்யூ"
-
-
-msgid "CW"
-msgstr "சி.டபிள்யூ."
-
-
 msgid "Invert to Fill"
 msgstr "நிரப்ப தலைகீழாக"
 
@@ -119874,18 +119866,6 @@ msgid "Auto Smooth"
 msgstr "ஆட்டோ மென்மையான"
 
 
-msgid "Socket_1"
-msgstr "சாக்கெட்_1"
-
-
-msgid "Input_1_use_attribute"
-msgstr "உள்ளீட்டு_1_பண்புக்கூறு_பயன்படுத்து"
-
-
-msgid "Input_1_attribute_name"
-msgstr "உள்ளீட்டு_1_பண்புக்கூறு_பெயர்"
-
-
 msgid "Tangent space can only be computed for tris/quads, aborting"
 msgstr "TRIS/QUADS க்கு மட்டுமே தொடுகோடு கணக்கிட முடியும், கருக்கலைப்பு"
 
@@ -121245,20 +121225,12 @@ msgid "No object found to operate on"
 msgstr "செயல்பட எந்த பொருளும் இல்லை"
 
 
-msgid "Bone collections can only be added to an Armature"
-msgstr "எலும்பு சேகரிப்புகளை ஒரு ஆர்மேச்சரில் மட்டுமே சேர்க்க முடியும்"
-
-
 msgid "Cannot add bone collections to a linked Armature without an override"
 msgstr "எலும்பு சேகரிப்புகளை மேலெழுதாமல் இணைக்கப்பட்ட ஆர்மெச்சரில் சேர்க்க முடியாது"
 
 
 msgid "Cannot add bone collections to a linked Armature with a system override; explicitly create an override on the Armature"
 msgstr "இணைக்கப்பட்ட ஆர்மேச்சரில் எலும்பு சேகரிப்புகளை ஒரு அமைப்பு மேலெழுதலுடன் சேர்க்க முடியாது; வெளிப்படையாக ஆர்மேச்சரில் ஒரு மேலெழுதலை உருவாக்கவும்"
-
-
-msgid "Bone collections can only be edited on an Armature"
-msgstr "எலும்பு சேகரிப்புகளை ஒரு ஆர்மெச்சரில் மட்டுமே திருத்த முடியும்"
 
 
 msgid "Cannot update a linked Armature with a system override; explicitly create an override on the Armature"
@@ -121271,6 +121243,10 @@ msgstr "ஆர்மேச்சருக்கு செயலில் எல�
 
 msgid "Cannot edit bone collections that are linked from another blend file"
 msgstr "மற்றொரு கலப்பு கோப்பிலிருந்து இணைக்கப்பட்ட எலும்பு சேகரிப்புகளைத் திருத்த முடியாது"
+
+
+msgid "Bone collections can only be edited on an Armature"
+msgstr "எலும்பு சேகரிப்புகளை ஒரு ஆர்மெச்சரில் மட்டுமே திருத்த முடியும்"
 
 
 msgid "Cannot edit bone collections on linked Armatures without override"
@@ -121794,6 +121770,10 @@ msgstr "முனை குழுவில் குழு வெளியீட
 
 msgid "Data-block inputs are unsupported"
 msgstr "தரவு-தொகுதி உள்ளீடுகள் ஆதரிக்கப்படவில்லை"
+
+
+msgid "Node group's first output must be a geometry"
+msgstr "நோட் குழுவின் முதல் வெளியீடு ஒரு வடிவவியலாக இருக்க வேண்டும்"
 
 
 msgid "Annotation Create Poly: LMB click to place next stroke vertex | ESC/Enter to end  (or click outside this area)"
@@ -131133,10 +131113,6 @@ msgstr "நோட் குழுமத்தின் வடிவியல் 
 
 msgid "Node group must have an output socket"
 msgstr "முனை குழுவில் வெளியீட்டு சாக்கெட் இருக்க வேண்டும்"
-
-
-msgid "Node group's first output must be a geometry"
-msgstr "நோட் குழுவின் முதல் வெளியீடு ஒரு வடிவவியலாக இருக்க வேண்டும்"
 
 
 msgid "NormalEdit"
