@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Alpha (b'c30667711948')\n"
+"Project-Id-Version: Blender 4.2.0 Alpha (b'7b7e9f224c89')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-15 10:09+0000\n"
+"POT-Creation-Date: 2024-04-22 07:36+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -687,32 +687,16 @@ msgid "After Current"
 msgstr "மின்னோட்டத்திற்குப் பிறகு"
 
 
-msgid "Number of frames to show after the current frame (only for 'Around Current Frame' Onion-skinning method)"
-msgstr "தற்போதைய சட்டகத்திற்குப் பிறகு காண்பிக்க வேண்டிய பிரேம்களின் எண்ணிக்கை ('தற்போதைய சட்டகத்தை சுற்றி' வெங்காயம்-தோல் முறை மட்டுமே)"
-
-
 msgid "Before Current"
 msgstr "மின்னோட்டத்திற்கு முன்"
-
-
-msgid "Number of frames to show before the current frame (only for 'Around Current Frame' Onion-skinning method)"
-msgstr "தற்போதைய சட்டகத்திற்கு முன் காண்பிக்க வேண்டிய பிரேம்களின் எண்ணிக்கை ('தற்போதைய சட்டகத்தை சுற்றி' வெங்காயம்-தோல் முறை மட்டுமே)"
 
 
 msgid "End Frame"
 msgstr "இறுதி சட்டகம்"
 
 
-msgid "End frame of range of paths to display/calculate (not for 'Around Current Frame' Onion-skinning method)"
-msgstr "காண்பிக்க/கணக்கிடுவதற்கான பாதைகளின் வரம்பின் இறுதி சட்டகம் ('தற்போதைய சட்டகத்தை சுற்றி' வெங்காய-தோல் முறை அல்ல)"
-
-
 msgid "Start Frame"
 msgstr "தொடக்க சட்டகம்"
-
-
-msgid "Starting frame of range of paths to display/calculate (not for 'Around Current Frame' Onion-skinning method)"
-msgstr "காண்பிக்க/கணக்கிடுவதற்கான பாதைகளின் வரம்பின் தொடக்க சட்டகம் ('தற்போதைய சட்டகத்தை சுற்றி' வெங்காய-தோல் முறை அல்ல)"
 
 
 msgid "Frame Step"
@@ -5513,10 +5497,6 @@ msgid "Toe-in"
 msgstr "கால்-இன்"
 
 
-msgid "Rotated cameras, looking at the convergence distance"
-msgstr "சுழலும் கேமராக்கள், குவிப்பு தூரத்தைப் பார்க்கின்றன"
-
-
 msgid "Interocular Distance"
 msgstr "இடைநிலை தூரம்"
 
@@ -6495,10 +6475,6 @@ msgstr "srgb காட்சிக்கான agx அடிப்படை ப�
 
 msgid "AgX Log"
 msgstr "agx பதிவு"
-
-
-msgid "Log Encoding with Chroma inset and rotation, and with 25 Stops of Dynamic Range"
-msgstr "குரோமா இன்செட் மற்றும் சுழற்சியுடன் பதிவு குறியாக்கம், மற்றும் மாறும் வரம்பின் 25 நிறுத்தங்களுடன்"
 
 
 msgid "Display P3"
@@ -16342,10 +16318,6 @@ msgid "Mask layer name"
 msgstr "முகமூடி அடுக்கு பெயர்"
 
 
-msgid "GPencil Sculpt Guide"
-msgstr "gpencil சிற்பம் வழிகாட்டி"
-
-
 msgid "Guides for drawing"
 msgstr "வரைவதற்கான வழிகாட்டிகள்"
 
@@ -17163,16 +17135,8 @@ msgid "Vertex Weight Angle"
 msgstr "வெர்டெக்ச் எடை கோணம்"
 
 
-msgid "Generate Vertex Weights base on stroke angle"
-msgstr "வீச்சு கோணத்தில் வெர்டெக்ச் எடைகள் தளத்தை உருவாக்குங்கள்"
-
-
 msgid "Vertex Weight Proximity"
 msgstr "வெர்டெக்ச் எடை அருகாமை"
-
-
-msgid "Generate Vertex Weights base on distance to object"
-msgstr "பொருளுக்கு தூரத்தில் வெர்டெக்ச் எடைகள் தளத்தை உருவாக்குங்கள்"
 
 
 msgid "Array"
@@ -17213,10 +17177,6 @@ msgstr "வீச்சுகள் நீட்டிக்கவும் அ�
 
 msgid "Line Art"
 msgstr "கோட்டோவியம்"
-
-
-msgid "Generate line art strokes from selected source"
-msgstr "தேர்ந்தெடுக்கப்பட்ட மூலத்திலிருந்து வரி கலை வீச்சுகள் உருவாக்குங்கள்"
 
 
 msgid "Mirror"
@@ -17451,16 +17411,16 @@ msgid "Use Object Offset"
 msgstr "பொருள் ஆஃப்செட் பயன்படுத்தவும்"
 
 
-msgid "Enable object offset"
-msgstr "பொருள் ஆஃப்செட்டை இயக்கவும்"
+msgid "Add another object's transformation to the total offset"
+msgstr "மொத்த ஆஃப்செட்டில் மற்றொரு பொருளின் மாற்றத்தை சேர்க்கவும்"
 
 
 msgid "Shift"
 msgstr "மாற்றம்"
 
 
-msgid "Enable shift"
-msgstr "சிப்டை இயக்கவும்"
+msgid "Add an offset relative to the object's bounding box"
+msgstr "பொருளின் எல்லை பெட்டியுடன் தொடர்புடைய ஆஃப்செட்டைச் சேர்க்கவும்"
 
 
 msgid "Uniform Scale"
@@ -17917,10 +17877,6 @@ msgid "Lattice Modifier"
 msgstr "லட்டு மாற்றியமைப்பாளர்"
 
 
-msgid "Change stroke using lattice to deform modifier"
-msgstr "மாற்றியமைப்பாளரை சிதைக்க லட்டு பயன்படுத்தி பக்கவாதத்தை மாற்றவும்"
-
-
 msgid "Lattice object to deform with"
 msgstr "சிதைக்க லட்டு பொருள்"
 
@@ -18073,10 +18029,6 @@ msgid "Crease Threshold"
 msgstr "மடிப்பு வாசல்"
 
 
-msgid "Angles smaller than this will be treated as creases. Crease angle priority: object line art crease override > mesh auto smooth angle > line art default crease"
-msgstr "இதை விட சிறிய கோணங்கள் மடிப்புகளாக கருதப்படும். மடிப்பு கோண முன்னுரிமை: பொருள் வரி கலை மடிப்பு மேலெழுதல்> கண்ணி ஆட்டோ மென்மையான கோணம்> வரி கலை இயல்புநிலை மடிப்பு"
-
-
 msgid "Invert Vertex Group"
 msgstr "தலைகீழ் வெர்டெக்ச் குழு"
 
@@ -18213,10 +18165,6 @@ msgid "Camera Object"
 msgstr "கேமரா பொருள்"
 
 
-msgid "Use specified camera object for generating line art"
-msgstr "வரி கலையை உருவாக்க குறிப்பிட்ட கேமரா பொருளைப் பயன்படுத்தவும்"
-
-
 msgid "Generate strokes from the objects in this collection"
 msgstr "இந்த சேகரிப்பில் உள்ள பொருட்களிலிருந்து வீச்சுகள் உருவாக்குங்கள்"
 
@@ -18227,10 +18175,6 @@ msgstr "இந்த பொருளிலிருந்து வீச்ச�
 
 msgid "Source Type"
 msgstr "மூல வகை"
-
-
-msgid "Line art stroke source type"
-msgstr "வரி கலை வீச்சு மூல வகை"
 
 
 msgid "Source Vertex Group"
@@ -18275,10 +18219,6 @@ msgstr "பின் முகம் குறைத்தல்"
 
 msgid "Remove all back faces to speed up calculation, this will create edges in different occlusion levels than when disabled"
 msgstr "கணக்கீட்டை விரைவுபடுத்த அனைத்து முகங்களையும் அகற்றவும், இது முடக்கப்பட்டதை விட வெவ்வேறு மறைமுக மட்டங்களில் விளிம்புகளை உருவாக்கும்"
-
-
-msgid "Use cached scene data from the first line art modifier in the stack. Certain settings will be unavailable"
-msgstr "அடுக்கில் முதல் வரி கலை மாற்றியமைப்பாளரிடமிருந்து தற்காலிக சேமிப்பு காட்சி தரவைப் பயன்படுத்தவும். சில அமைப்புகள் கிடைக்காது"
 
 
 msgid "Clipping Boundaries"
@@ -18521,10 +18461,6 @@ msgid "Instanced Objects"
 msgstr "நிறுவப்பட்ட பொருள்கள்"
 
 
-msgid "Allow particle objects and face/vertex instances to show in line art"
-msgstr "வரி கலையில் காட்ட துகள் பொருள்கள் மற்றும் முகம்/வெர்டெக்ச் நிகழ்வுகளை அனுமதிக்கவும்"
-
-
 msgid "Offset Towards Custom Camera"
 msgstr "தனிப்பயன் கேமராவை நோக்கி ஈடுசெய்யவும்"
 
@@ -18583,10 +18519,6 @@ msgstr "ஒய் அச்சை பிரதிபலிக்கவும்"
 
 msgid "Mirror the Z axis"
 msgstr "சட் அச்சை பிரதிபலிக்கவும்"
-
-
-msgid "Clip points"
-msgstr "கிளிப் புள்ளிகள்"
 
 
 msgid "Multiply Modifier"
@@ -20839,10 +20771,6 @@ msgid "Brush Height"
 msgstr "தூரிகை உயரம்"
 
 
-msgid "Affectable height of brush (layer height for layer tool, i.e.)"
-msgstr "தூரிகையின் பாதிக்கக்கூடிய உயரம் (அடுக்கு கருவிக்கான அடுக்கு உயரம், அதாவது)"
-
-
 msgid "Brush Icon Filepath"
 msgstr "துலக்கு படவுரு ஃபைல்பாத்"
 
@@ -22564,10 +22492,6 @@ msgid "Collections that are immediate children of this collection"
 msgstr "இந்தத் தொகுப்பின் உடனடி குழந்தைகளாக இருக்கும் தொகுப்புகள்"
 
 
-msgid "Children collections their parent-collection-specific settings"
-msgstr "குழந்தைகள் தங்கள் பெற்றோர்-சேகரிப்பு-குறிப்பிட்ட அமைப்புகளை சேகரிக்கிறார்கள்"
-
-
 msgid "Objects of the collection with their parent-collection-specific settings"
 msgstr "அவர்களின் பெற்றோர்-சேகரிப்பு-குறிப்பிட்ட அமைப்புகளுடன் சேகரிப்பின் பொருள்கள்"
 
@@ -22664,10 +22588,6 @@ msgid "Usage"
 msgstr "பயன்பாடு"
 
 
-msgid "How to use this collection in line art"
-msgstr "வரி கலையில் இந்த தொகுப்பை எவ்வாறு பயன்படுத்துவது"
-
-
 msgid "Generate feature lines for this collection"
 msgstr "இந்த சேகரிப்புக்கான அம்ச வரிகளை உருவாக்கவும்"
 
@@ -22678,10 +22598,6 @@ msgstr "மறைவு மட்டுமே"
 
 msgid "Only use the collection to produce occlusion"
 msgstr "மறைவை உருவாக்க மட்டுமே சேகரிப்பைப் பயன்படுத்தவும்"
-
-
-msgid "Don't use this collection in line art"
-msgstr "இந்தத் தொகுப்பை வரி கலையில் பயன்படுத்த வேண்டாம்"
 
 
 msgid "Intersection Only"
@@ -25255,6 +25171,10 @@ msgid "Number of ray directions to evaluate when baking"
 msgstr "பேக்கிங் செய்யும் போது மதிப்பீடு செய்ய கதிர் திசைகளின் எண்ணிக்கை"
 
 
+msgid "Capture Distance"
+msgstr "படப்பிடிப்பு தூரம்"
+
+
 msgid "Capture Emission"
 msgstr "உமிழ்வைப் பிடிக்கவும்"
 
@@ -25273,10 +25193,6 @@ msgstr "சுட்டுக்கொள்ள ஒளி மிகவும் 
 
 msgid "Capture World"
 msgstr "உலகத்தைப் பிடிக்கவும்"
-
-
-msgid "Bake incoming light from the world, instead of just the visibility, for more accurate lighting, but lose correct blending to surrounding irradiance volumes"
-msgstr "உலகத்திலிருந்து உள்வரும் ஒளியை சுட்டுக்கொள்ளுங்கள், தெரிவுநிலைக்கு பதிலாக, மிகவும் துல்லியமான விளக்குகளுக்கு, ஆனால் சுற்றியுள்ள கதிர்வீச்சு தொகுதிகளுக்கு சரியான கலவையை இழக்கவும்"
 
 
 msgid "Clamp Direct"
@@ -25309,14 +25225,6 @@ msgstr "டைலேசன் த்ரெசோல்ட்"
 
 msgid "Ratio of front-facing surface hits under which a grid sample will reuse neighbors grid sample lighting"
 msgstr "முன் எதிர்கொள்ளும் மேற்பரப்பு வெற்றிகளின் விகிதம், இதன் கீழ் ஒரு கட்டம் மாதிரி அண்டை கட்டம் மாதிரி விளக்குகளை மீண்டும் பயன்படுத்தும்"
-
-
-msgid "Capture Escape Bias"
-msgstr "தப்பிக்கும் சார்பைப் பிடிக்கவும்"
-
-
-msgid "Moves capture points outside objects"
-msgstr "பொருள்களுக்கு வெளியே பிடிப்பு புள்ளிகளை நகர்த்துகிறது"
 
 
 msgid "Facing Bias"
@@ -25357,14 +25265,6 @@ msgstr "தீர்மானம் சட்"
 
 msgid "Number of samples along the z axis of the volume"
 msgstr "தொகுதியின் சட் அச்சில் உள்ள மாதிரிகளின் எண்ணிக்கை"
-
-
-msgid "Capture Surface Bias"
-msgstr "மேற்பரப்பு சார்பைப் பிடிக்கவும்"
-
-
-msgid "Moves capture points position away from surfaces to avoid artifacts"
-msgstr "கலைப்பொருட்களைத் தவிர்ப்பதற்காக மேற்பரப்புகளிலிருந்து பிடிப்பு புள்ளிகளைப் பிடிக்கவும் நகர்வுகள்"
 
 
 msgid "Validity Threshold"
@@ -25686,10 +25586,6 @@ msgstr "அதிக முன்னுரிமையின் வரி நி
 
 msgid "Line Art Settings"
 msgstr "வரி கலை அமைப்புகள்"
-
-
-msgid "Line art settings for material"
-msgstr "மூலப்பொருளுக்கான வரி கலை அமைப்புகள்"
 
 
 msgid "Max Vertex Displacement"
@@ -27018,10 +26914,6 @@ msgstr "ஒளி குழு"
 
 msgid "Lightgroup that the object belongs to"
 msgstr "பொருள் சொந்தமானது"
-
-
-msgid "Line art settings for the object"
-msgstr "பொருளுக்கான வரி கலை அமைப்புகள்"
 
 
 msgid "Location of the object"
@@ -34791,8 +34683,8 @@ msgid "Falloff"
 msgstr "வீழ்ச்சி"
 
 
-msgid "Falloff type the feather"
-msgstr "வீழ்ச்சி இறகு தட்டச்சு செய்க"
+msgid "Falloff type of the feather"
+msgstr "இறகின் வீழ்ச்சி வகை"
 
 
 msgid "Smooth falloff"
@@ -37171,14 +37063,6 @@ msgstr "இறுதி செங்குத்துகளை ஒன்றி�
 
 msgid "Merge vertices in first and last duplicates"
 msgstr "முதல் மற்றும் கடைசி நகல்களில் செங்குத்துகளை ஒன்றிணைக்கவும்"
-
-
-msgid "Add another object's transformation to the total offset"
-msgstr "மொத்த ஆஃப்செட்டில் மற்றொரு பொருளின் மாற்றத்தை சேர்க்கவும்"
-
-
-msgid "Add an offset relative to the object's bounding box"
-msgstr "பொருளின் எல்லை பெட்டியுடன் தொடர்புடைய ஆஃப்செட்டைச் சேர்க்கவும்"
 
 
 msgid "Bevel Modifier"
@@ -49503,14 +49387,6 @@ msgid "Rotate a vector around a pivot point (center)"
 msgstr "ஒரு மைய புள்ளியை (மையம்) சுற்றி ஒரு திசையனை சுழற்றுங்கள்"
 
 
-msgid "Invert angle"
-msgstr "தலைகீழ் கோணம்"
-
-
-msgid "Type of rotation"
-msgstr "சுழற்சி வகை"
-
-
 msgid "Rotate a point using axis angle"
 msgstr "அச்சு கோணத்தைப் பயன்படுத்தி ஒரு புள்ளியை சுழற்றுங்கள்"
 
@@ -50552,16 +50428,8 @@ msgid "Object Line Art"
 msgstr "பொருள் வரி கலை"
 
 
-msgid "Object line art settings"
-msgstr "பொருள் வரி கலை அமைப்புகள்"
-
-
 msgid "Angles smaller than this will be treated as creases"
 msgstr "இதை விட சிறிய கோணங்கள் மடிப்புகளாக கருதப்படும்"
-
-
-msgid "How to use this object in line art calculation"
-msgstr "வரி கலை கணக்கீட்டில் இந்த பொருளை எவ்வாறு பயன்படுத்துவது"
 
 
 msgid "Inherit"
@@ -65330,10 +65198,6 @@ msgid "Edge Index"
 msgstr "விளிம்பு அட்டவணை"
 
 
-msgid "Falloff type of the feather"
-msgstr "இறகின் வீழ்ச்சி வகை"
-
-
 msgctxt "Mesh"
 msgid "Object Index"
 msgstr "பொருள் அட்டவணை"
@@ -65491,10 +65355,6 @@ msgstr "இடைமுகம் இன் சாதாரண திசையன
 
 msgid "Absolute Coordinates"
 msgstr "முழுமையான ஒருங்கிணைப்புகள்"
-
-
-msgid "Copy Absolute coordinates or Normal vector"
-msgstr "முழுமையான ஆயத்தொகுப்புகள் அல்லது சாதாரண திசையன் நகலெடுக்கவும்"
 
 
 msgid "Mode of tools taking input from interface"
@@ -68146,10 +68006,6 @@ msgid "Make Links"
 msgstr "இணைப்புகளை உருவாக்குங்கள்"
 
 
-msgid "Makes a link between selected output in input sockets"
-msgstr "உள்ளீட்டு சாக்கெட்டுகளில் தேர்ந்தெடுக்கப்பட்ட வெளியீட்டிற்கு இடையில் ஒரு இணைப்பை உருவாக்குகிறது"
-
-
 msgid "Replace socket connections with the new links"
 msgstr "புதிய இணைப்புகளுடன் சாக்கெட் இணைப்புகளை மாற்றவும்"
 
@@ -69209,10 +69065,6 @@ msgid "Add a Grease Pencil object to the scene"
 msgstr "காட்சிக்கு பசை எழுதுகோல் பொருளைச் சேர்க்கவும்"
 
 
-msgid "Stroke offset for the line art modifier"
-msgstr "வரி கலை மாற்றியமைப்பிற்கான வீச்சு ஆஃப்செட்"
-
-
 msgid "Create an empty grease pencil object"
 msgstr "வெற்று பசை எழுதுகோல் பொருளை உருவாக்கவும்"
 
@@ -69233,28 +69085,12 @@ msgid "Scene Line Art"
 msgstr "காட்சி வரி கலை"
 
 
-msgid "Quickly set up line art for the entire scene"
-msgstr "முழு காட்சிக்கும் விரைவாக வரி கலையை அமைக்கவும்"
-
-
 msgid "Collection Line Art"
 msgstr "சேகரிப்பு வரி கலை"
 
 
-msgid "Quickly set up line art for the active collection"
-msgstr "செயலில் சேகரிப்புக்கு வரி கலையை விரைவாக அமைக்கவும்"
-
-
-msgid "Quickly set up line art for the active object"
-msgstr "செயலில் உள்ள பொருளுக்கு வரி கலையை விரைவாக அமைக்கவும்"
-
-
 msgid "Show In Front"
 msgstr "முன்னால் காட்டு"
-
-
-msgid "Show line art grease pencil in front of everything"
-msgstr "எல்லாவற்றிற்கும் முன்னால் வரி கலை பசை எழுதுகோல் காட்டு"
 
 
 msgid "Use lights for this grease pencil object"
@@ -69722,17 +69558,9 @@ msgid "Bake Line Art"
 msgstr "சுட்டுக்கொள்ள வரி கலை"
 
 
-msgid "Bake Line Art for current GPencil object"
-msgstr "தற்போதைய gpencil பொருளுக்கான சுட்டுக் கலை கலை"
-
-
 msgctxt "Operator"
 msgid "Bake Line Art (All)"
 msgstr "சுட்டுக்கொள்ள வரி கலை (அனைத்தும்)"
-
-
-msgid "Bake all Grease Pencil objects that have a line art modifier"
-msgstr "வரி கலை மாற்றியமைப்பைக் கொண்ட அனைத்து பசை எழுதுகோல் பொருள்களையும் சுட்டுக்கொள்ளுங்கள்"
 
 
 msgctxt "Operator"
@@ -69740,17 +69568,9 @@ msgid "Clear Baked Line Art"
 msgstr "வேகவைத்த வரி கலை"
 
 
-msgid "Clear all strokes in current GPencil object"
-msgstr "தற்போதைய gpencil பொருளில் அனைத்து பக்கவாதங்களையும் அழிக்கவும்"
-
-
 msgctxt "Operator"
 msgid "Clear Baked Line Art (All)"
 msgstr "தெளிவான வேகவைத்த வரி கலை (அனைத்தும்)"
-
-
-msgid "Clear all strokes in all Grease Pencil objects that have a line art modifier"
-msgstr "வரி கலை மாற்றியமைப்பைக் கொண்ட அனைத்து பசை எழுதுகோல் பொருள்களிலும் அனைத்து பக்கவாதங்களையும் அழிக்கவும்"
 
 
 msgid "Link objects to a collection"
@@ -74623,10 +74443,6 @@ msgstr "உள்ளக களஞ்சியத்தைச் சேர்க�
 
 msgid "Add a repository managed manually without referencing an external repository"
 msgstr "வெளிப்புற களஞ்சியத்தைக் குறிப்பிடாமல் கைமுறையாக நிர்வகிக்கப்படும் களஞ்சியத்தைச் சேர்க்கவும்"
-
-
-msgid "Manually set the path for extensions to be stored. When disabled a users extensions directory is created"
-msgstr "நீட்டிப்புகளை சேமிக்க கைமுறையாக பாதையை அமைக்கவும். முடக்கப்பட்டால் பயனர்கள் நீட்டிப்பு அடைவு உருவாக்கப்படுகிறது"
 
 
 msgctxt "Operator"
@@ -83126,10 +82942,6 @@ msgid "Include Animations"
 msgstr "அனிமேசன்களைச் சேர்க்கவும்"
 
 
-msgid "Export animations if available (exporting animations will enforce the decomposition of node transforms into  <translation> <rotation> and <scale> components)"
-msgstr "கிடைத்தால் ஏற்றுமதி அனிமேசன்கள் (அனிமேசன்களை ஏற்றுமதி செய்வது முனை உருமாற்றங்களின் சிதைவை  <மொழிபெயர்ப்பு> <சுழற்சி> மற்றும் <scale> கூறுகளாக அமல்படுத்தும்)"
-
-
 msgid "Include Armatures"
 msgstr "ஆயுதங்களை சேர்க்கவும்"
 
@@ -86661,10 +86473,6 @@ msgid "Effects"
 msgstr "விளைவுகள்"
 
 
-msgid "Spot Shape"
-msgstr "ச்பாட் வடிவம்"
-
-
 msgid "Text Boxes"
 msgstr "உரை பெட்டிகள்"
 
@@ -87194,20 +87002,12 @@ msgid "Raytracing Presets"
 msgstr "ரெய்ட்ரேசிங் முன்னமைவுகள்"
 
 
-msgid "Screen Tracing"
-msgstr "திரை தடமறிதல்"
-
-
 msgid "Shadows"
 msgstr "நிழல்கள்"
 
 
-msgid "Volume Lighting"
-msgstr "தொகுதி விளக்குகள்"
-
-
-msgid "Volume Shadows"
-msgstr "தொகுதி நிழல்கள்"
+msgid "Screen Tracing"
+msgstr "திரை தடமறிதல்"
 
 
 msgid "Screen Space Reflections"
@@ -89773,10 +89573,6 @@ msgstr "நகல் வளைவுகள்"
 
 msgid "Causes curves data to be duplicated with the object"
 msgstr "வளைவுகளின் தரவு பொருளுடன் நகலெடுக்கப்படுகிறது"
-
-
-msgid "Duplicate GPencil"
-msgstr "gpencil நகல்"
 
 
 msgid "Causes grease pencil data to be duplicated with the object"
@@ -94307,44 +94103,8 @@ msgid "Accumulate samples by reprojecting last tracing results"
 msgstr "கடைசி தடமறிதல் முடிவுகளை மறுபரிசீலனை செய்வதன் மூலம் மாதிரிகளைக் குவிக்கவும்"
 
 
-msgid "Number of rays per pixel"
-msgstr "பிக்சலுக்கு கதிர்களின் எண்ணிக்கை"
-
-
-msgid "1 rpp"
-msgstr "1 ஆர்பிபி"
-
-
-msgid "1 ray per pixel"
-msgstr "பிக்சலுக்கு 1 கதிர்"
-
-
-msgid "1/4 rpp"
-msgstr "1/4 ஆர்பிபி"
-
-
-msgid "1 ray for every 4 pixels"
-msgstr "ஒவ்வொரு 4 பிக்சல்களுக்கும் 1 கதிர்"
-
-
-msgid "1/16 rpp"
-msgstr "1/16 ஆர்பிபி"
-
-
-msgid "1 ray for every 16 pixels"
-msgstr "ஒவ்வொரு 16 பிக்சல்களுக்கும் 1 கதிர்"
-
-
 msgid "Clamp ray intensity to reduce noise (0 to disable)"
 msgstr "சத்தத்தைக் குறைக்க கிளம்ப் கதிர் தீவிரம் (முடக்க 0)"
-
-
-msgid "Screen-Trace Max Roughness"
-msgstr "ச்கிரீன்-டிரேச் அதிகபட்ச கடினத்தன்மை"
-
-
-msgid "Maximum roughness to use the tracing pipeline for. Higher roughness surfaces will use horizon scan. A value of 1 will disable horizon scan"
-msgstr "தடமறிதல் குழாய்வழியைப் பயன்படுத்த அதிகபட்ச கடினத்தன்மை. அதிக கடினத்தன்மை மேற்பரப்புகள் ஒரைசன் ச்கேன் பயன்படுத்தும். 1 இன் மதிப்பு அடிவான ச்கேன் முடக்கும்"
 
 
 msgid "Screen-Trace Precision"
@@ -94361,6 +94121,10 @@ msgstr "திரை-பாதை தடிமன்"
 
 msgid "Surface thickness used to detect intersection when using screen-tracing"
 msgstr "ச்கிரீன்-ட்ரேசிங் பயன்படுத்தும் போது குறுக்குவெட்டைக் கண்டறிய மேற்பரப்பு தடிமன் பயன்படுத்தப்படுகிறது"
+
+
+msgid "Maximum roughness to use the tracing pipeline for. Higher roughness surfaces will use horizon scan. A value of 1 will disable horizon scan"
+msgstr "தடமறிதல் குழாய்வழியைப் பயன்படுத்த அதிகபட்ச கடினத்தன்மை. அதிக கடினத்தன்மை மேற்பரப்புகள் ஒரைசன் ச்கேன் பயன்படுத்தும். 1 இன் மதிப்பு அடிவான ச்கேன் முடக்கும்"
 
 
 msgid "Enable noise reduction techniques for raytraced effects"
@@ -96619,10 +96383,6 @@ msgid "Precision of the horizon scan"
 msgstr "அடிவான ச்கேனின் மதிப்புகளருகில்"
 
 
-msgid "4 px"
-msgstr "4px"
-
-
 msgid "Constant thickness of the surfaces considered when doing horizon scan and by extension ambient occlusion"
 msgstr "அடிவான ச்கேன் செய்யும்போது கருதப்படும் மேற்பரப்புகளின் நிலையான தடிமன் மற்றும் நீட்டிப்பு சுற்றுப்புற மறுப்பு மூலம்"
 
@@ -96633,10 +96393,6 @@ msgstr "ஒளி வாசல்"
 
 msgid "Minimum light intensity for a light to contribute to the lighting"
 msgstr "விளக்குகளுக்கு பங்களிக்க ஒரு ஒளியின் குறைந்தபட்ச ஒளி தீவிரம்"
-
-
-msgid "Background Separation"
-msgstr "பின்னணி பிரிப்பு"
 
 
 msgid "Lower values will reduce background bleeding onto foreground elements"
@@ -96671,16 +96427,8 @@ msgid "Select the tracing method used to find scene-ray intersections"
 msgstr "காட்சி-ரே குறுக்குவெட்டுகளைக் கண்டறிய பயன்படுத்தப்படும் தடமறிதல் முறையைத் தேர்ந்தெடுக்கவும்"
 
 
-msgid "No intersection with scene geometry"
-msgstr "காட்சி வடிவவியலுடன் குறுக்குவெட்டு இல்லை"
-
-
 msgid "Screen-Trace"
 msgstr "ச்கிரீன்-டிரேச்"
-
-
-msgid "Raytrace against the depth buffer"
-msgstr "ஆழமான இடையகத்திற்கு எதிராக ரேட்ரேச்"
 
 
 msgid "Reflection Trace Options"
@@ -96907,20 +96655,12 @@ msgid "Volume Max Ray Depth"
 msgstr "தொகுதி அதிகபட்ச கதிர் ஆழம்"
 
 
-msgid "Maximum surface intersection count used by the accurate volume intersection method. Will create artifact if it is exceeded"
-msgstr "துல்லியமான தொகுதி குறுக்குவெட்டு முறையால் பயன்படுத்தப்படும் அதிகபட்ச மேற்பரப்பு குறுக்குவெட்டு எண்ணிக்கை. கலைப்பொருளை மீறினால் அதை உருவாக்கும்"
-
-
 msgid "Exponential Sampling"
 msgstr "அதிவேக மாதிரி"
 
 
 msgid "Distribute more samples closer to the camera"
 msgstr "கேமராவுக்கு நெருக்கமான கூடுதல் மாதிரிகளை விநியோகிக்கவும்"
-
-
-msgid "Number of samples to compute volumetric effects"
-msgstr "அளவீட்டு விளைவுகளை கணக்கிட மாதிரிகளின் எண்ணிக்கை"
 
 
 msgid "Volumetric Shadow Samples"
@@ -96933,14 +96673,6 @@ msgstr "அளவீட்டு நிழலைக் கணக்கிட ம
 
 msgid "Start distance of the volumetric effect"
 msgstr "அளவீட்டு விளைவின் தூரம் தொடங்கவும்"
-
-
-msgid "Control the quality of the volumetric effects (lower size increase vram usage and quality)"
-msgstr "அளவீட்டு விளைவுகளின் தரத்தை கட்டுப்படுத்தவும் (குறைந்த அளவு vram பயன்பாடு மற்றும் தரம்)"
-
-
-msgid "2 px"
-msgstr "2 பக்ச்"
 
 
 msgid "Grease Pencil Render"
@@ -97270,10 +97002,6 @@ msgstr "நினைவக பயன்பாட்டு செலவில் 
 
 msgid "Use Default Fade"
 msgstr "இயல்புநிலை மங்கலைப் பயன்படுத்தவும்"
-
-
-msgid "Fade effect using the built-in default (usually make transition as long as effect strip)"
-msgstr "உள்ளமைக்கப்பட்ட இயல்புநிலையைப் பயன்படுத்தி மங்கல் விளைவு (பொதுவாக விளைவு துண்டு வரை மாற்றத்தை ஏற்படுத்தும்)"
 
 
 msgid "Use Linear Modifiers"
@@ -101145,14 +100873,6 @@ msgstr "சீப்ரா கோடுகளுடன் அதிகப்ப�
 
 msgid "Show Overlays"
 msgstr "மேலடுக்குகளைக் காட்டு"
-
-
-msgid "Separate Colors"
-msgstr "தனி வண்ணங்கள்"
-
-
-msgid "Separate color channels in preview"
-msgstr "முன்னோட்டத்தில் வண்ண சேனல்களை பிரிக்கவும்"
 
 
 msgid "Transform Preview"
@@ -112240,12 +111960,12 @@ msgid "Target object not specified"
 msgstr "இலக்கு பொருள் குறிப்பிடப்படவில்லை"
 
 
-msgid "GeometryNodes"
-msgstr "வடிவியல் அறிவிப்பு"
-
-
 msgid "Node group must have a geometry output"
 msgstr "முனை குழுவில் ஒரு வடிவியல் வெளியீடு இருக்க வேண்டும்"
+
+
+msgid "GeometryNodes"
+msgstr "வடிவியல் அறிவிப்பு"
 
 
 msgid "Image path not set"
@@ -113450,24 +113170,12 @@ msgid "Interpolation U"
 msgstr "இடைக்கணிப்பு u"
 
 
-msgid "Shadow Softness"
-msgstr "நிழல் மென்மை"
-
-
-msgid "Trace Distance"
-msgstr "சுவடு தூரம்"
-
-
 msgid "Clipping Start"
 msgstr "கிளிப்பிங் தொடக்கம்"
 
 
 msgid "Clipping Offset"
 msgstr "கிளிப்பிங் ஆஃப்செட்"
-
-
-msgid "Capture Distance"
-msgstr "படப்பிடிப்பு தூரம்"
 
 
 msgid "Bleed Bias"
@@ -113850,10 +113558,6 @@ msgstr "எதுவுமில்லை"
 msgctxt "Operator"
 msgid "Invert"
 msgstr "புரட்டு"
-
-
-msgid "Max Displacement"
-msgstr "அதிகபட்ச இடப்பெயர்ச்சி"
 
 
 msgid "Render Method"
@@ -114816,16 +114520,16 @@ msgid "Cascade Size"
 msgstr "அடுக்கு அளவு"
 
 
-msgid "Pool Size"
-msgstr "பூல் அளவு"
-
-
 msgid "Tracing"
 msgstr "தடமறிதல்"
 
 
 msgid "Rays"
 msgstr "கதிர்கள்"
+
+
+msgid "Volume Shadows"
+msgstr "தொகுதி நிழல்கள்"
 
 
 msgid "Temporal Reprojection"
@@ -114861,11 +114565,6 @@ msgstr "வழங்குதல் எஞ்சின்"
 msgctxt "Operator"
 msgid "Bake Cubemap Only"
 msgstr "சுட்டுக்கொள்ள க்யூப்மேப் மட்டும்"
-
-
-msgctxt "Operator"
-msgid "Bake Volumes"
-msgstr "சுட்டுக்கொள்ளுங்கள் தொகுதிகள்"
 
 
 msgid "Shadow Resolution"
@@ -116830,10 +116529,6 @@ msgid "Fractional Preview Zoom"
 msgstr "பின்ன முன்னோட்டம் பெரிதாக்கு"
 
 
-msgid "Show Separate Color Channels"
-msgstr "தனி வண்ண சேனல்களைக் காட்டு"
-
-
 msgctxt "Operator"
 msgid "Change Scene..."
 msgstr "காட்சியை மாற்று..."
@@ -117772,14 +117467,6 @@ msgid "Cycles is disabled in this build"
 msgstr "இந்த கட்டமைப்பில் சுழற்சிகள் முடக்கப்பட்டுள்ளன"
 
 
-msgid "Microsoft Store installation"
-msgstr "நுண்மென் கடை நிறுவல்"
-
-
-msgid "Use Windows 'Default Apps' to associate with blend files"
-msgstr "கலப்பு கோப்புகளுடன் இணைக்க சாளரங்கள் 'இயல்புநிலை பயன்பாடுகளைப் பயன்படுத்தவும்"
-
-
 msgid "Open blend files with this Blender version"
 msgstr "இந்த கலப்பான் பதிப்பில் கலப்பு கோப்புகளைத் திறக்கவும்"
 
@@ -117832,6 +117519,14 @@ msgstr "தனிப்பயன் %s கட்டமைக்கப்பட�
 
 msgid "Enable Cycles Render Engine add-on to use Cycles"
 msgstr "சுழற்சிகளைப் பயன்படுத்த என்சின் கூடுதல் வழங்க சுழற்சிகளை இயக்கவும்"
+
+
+msgid "Microsoft Store installation"
+msgstr "நுண்மென் கடை நிறுவல்"
+
+
+msgid "Use Windows 'Default Apps' to associate with blend files"
+msgstr "கலப்பு கோப்புகளுடன் இணைக்க சாளரங்கள் 'இயல்புநிலை பயன்பாடுகளைப் பயன்படுத்தவும்"
 
 
 msgid "Error (see console)"
@@ -121433,14 +121128,6 @@ msgstr "lib: தரவு என்பது முக்கிய என்ப�
 
 msgid "LIB: %s: '%s' is directly linked from '%s' (parent '%s'), but is a non-linkable data type"
 msgstr "lib:%s: '%s' நேரடியாக '%s' (பெற்றோர் '%s') இலிருந்து இணைக்கப்பட்டுள்ளது, ஆனால் இது இணைக்க முடியாத தரவு வகை"
-
-
-msgid "Read packed library:  '%s', parent '%s'"
-msgstr "பேக் செய்யப்பட்ட நூலகத்தைப் படியுங்கள்: '%s', பெற்றோர் '%s'"
-
-
-msgid "Read library:  '%s', '%s', parent '%s'"
-msgstr "நூலகத்தைப் படியுங்கள்: '%s', '%s', பெற்றோர் '%s'"
 
 
 msgid "Cannot find lib '%s'"
@@ -127635,10 +127322,6 @@ msgid " RGB byte"
 msgstr " ஆர்சிபி பைட்"
 
 
-msgid ",  %s"
-msgstr ",  %s"
-
-
 msgid "Frame %d / %d"
 msgstr "பிரேம் %d / %d"
 
@@ -128455,18 +128138,6 @@ msgstr ""
 " * வசூல் மற்றும் பொருள்களுக்குள் அமைக்க மாற்றம்"
 
 
-msgid "Number of users of this data-block"
-msgstr "இந்த தரவு-தடுப்பின் பயனர்களின் எண்ணிக்கை"
-
-
-msgid "Data-block will be retained using a fake user"
-msgstr "போலி பயனரைப் பயன்படுத்தி தரவு-தொகுதி தக்கவைக்கப்படும்"
-
-
-msgid "Data-block has no users and will be deleted"
-msgstr "டேட்டா-பிளாக் பயனர்கள் இல்லை மற்றும் நீக்கப்படும்"
-
-
 msgid "Change the object in the current mode"
 msgstr "தற்போதைய பயன்முறையில் பொருளை மாற்றவும்"
 
@@ -129083,20 +128754,12 @@ msgid "File association registered"
 msgstr "கோப்பு சங்கம் பதிவு செய்யப்பட்டது"
 
 
-msgid "Unable to register file association"
-msgstr "கோப்பு சங்கத்தை பதிவு செய்ய முடியவில்லை"
-
-
 msgid "Unregistration not possible from Microsoft Store installations"
 msgstr "நுண்மென் கடை நிறுவல்களிலிருந்து பதிவு செய்ய முடியாது"
 
 
 msgid "File association unregistered"
 msgstr "கோப்பு சங்கம் பதிவு செய்யப்படவில்லை"
-
-
-msgid "Unable to unregister file association"
-msgstr "கோப்பு சங்கத்தை பதிவு செய்ய முடியவில்லை"
 
 
 msgid "There is no asset library to remove"
@@ -129109,10 +128772,6 @@ msgstr "அகற்ற நீட்டிப்பு களஞ்சியம�
 
 msgid "Not available for Microsoft Store installations"
 msgstr "நுண்மென் கடை நிறுவல்களுக்கு கிடைக்கவில்லை"
-
-
-msgid "Windows-only operator"
-msgstr "சாளரங்கள் மட்டும் ஆபரேட்டர்"
 
 
 msgid "Create object instance from object-data"
@@ -130133,10 +129792,6 @@ msgid "Towards Custom Camera"
 msgstr "தனிப்பயன் கேமராவை நோக்கி"
 
 
-msgid "Cached from the first line art modifier"
-msgstr "முதல் வரி கலை மாற்றியமைப்பிலிருந்து தற்காலிகமாக சேமிக்கப்பட்டது"
-
-
 msgid "Object is not in front"
 msgstr "பொருள் முன்னால் இல்லை"
 
@@ -130208,14 +129863,6 @@ msgstr "காலக்கெடு"
 
 msgid "External library data"
 msgstr "வெளிப்புற நூலக தரவு"
-
-
-msgid "All line art objects are now cleared"
-msgstr "அனைத்து வரி கலை பொருட்களும் இப்போது அழிக்கப்பட்டுள்ளன"
-
-
-msgid "No active object or active object isn't a GPencil object"
-msgstr "செயலில் உள்ள பொருள் அல்லது செயலில் உள்ள பொருள் ஒரு gpencil பொருள் அல்ல"
 
 
 msgid "Object type mismatch, Alembic object path pointed to Camera when importing, but not any more"
@@ -130331,10 +129978,6 @@ msgid "%s: Can't copy %s. The source and destination paths are the same"
 msgstr "%s: %s ஐ நகலெடுக்க முடியாது. மூல மற்றும் இலக்கு பாதைகள் ஒன்றே"
 
 
-msgid "%s: Can't write to asset %s:  %s"
-msgstr "%s: சொத்துக்கு எழுத முடியாது %s:  %s"
-
-
 msgid "%s: Can't open source asset %s"
 msgstr "%s: மூல சொத்து %s திறக்க முடியாது"
 
@@ -130397,10 +130040,6 @@ msgstr "வாசிப்புக்கு அமெரிக்க டால�
 
 msgid "USD Import: unable to open stage to read %s"
 msgstr "யு.எச்.டி இறக்குமதி: %s படிக்க கட்டத்தை திறக்க முடியவில்லை"
-
-
-msgid "An exception occurred invoking USD hook '%s'.  Please see the console for details"
-msgstr "யுஎச்டி ஊக் '%s' ஐத் தூண்டுவதற்கு விதிவிலக்கு ஏற்பட்டது.  விவரங்களுக்கு கன்சோலைப் பார்க்கவும்"
 
 
 msgid "An exception occurred invoking USD hook '%s'"
@@ -130509,10 +130148,6 @@ msgstr "%s: கூட்டு %s க்கு எலும்பு சேர�
 
 msgid "%s: Mismatch in bone and joint counts for skeleton %s"
 msgstr "%s: எலும்பில் பொருந்தாத தன்மை மற்றும் எலும்புக்கூடு %s க்கான கூட்டு எண்ணிக்கைகள்"
-
-
-msgid "%s:  Mismatch in bind xforms and joint counts for skeleton %s"
-msgstr "%s:  பிணைப்பு எக்ச்ஃபார்ம்களில் பொருந்தாத தன்மை மற்றும் எலும்புக்கூடு %s க்கான கூட்டு எண்ணிக்கைகள்"
 
 
 msgid "USD Skeleton Import: bone matrices with negative determinants detected in prim %s. Such matrices may indicate negative scales, possibly due to mirroring operations, and can't currently be converted to Blender's bone representation. The skeletal animation won't be imported"
@@ -135422,10 +135057,6 @@ msgstr "\"%s\" தேவைகள் மறுசீரமைப்பை மீ
 
 msgid "%d libraries and %d linked data-blocks are missing (including %d ObjectData and %d Proxies), please check the Info and Outliner editors for details"
 msgstr "%d நூலகங்கள் மற்றும் %d இணைக்கப்பட்ட தரவு-தொகுதிகள் காணவில்லை ( %d ஆப்செக்ட் டேட்டா மற்றும் %d ப்ராக்சீச் உட்பட), தயவுசெய்து விவரங்களுக்கு செய்தி மற்றும் வெளிப்புற ஆசிரியர்களை சரிபார்க்கவும்"
-
-
-msgid "%d libraries have overrides needing resync (auto resynced in %.0fm%.2fs),  please check the Info editor for details"
-msgstr "%d நூலகங்கள் மறுசீரமைப்பு தேவைப்படுவதை மீறிவிட்டன (ஆட்டோ %.0fm %.2fs இல் ஒத்திருக்கிறது),  விவரங்களுக்கு செய்தி எடிட்டரைச் சரிபார்க்கவும்"
 
 
 msgid "%d sequence strips were not read because they were in a channel larger than %d"
