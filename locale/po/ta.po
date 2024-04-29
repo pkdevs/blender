@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Alpha (b'7b7e9f224c89')\n"
+"Project-Id-Version: Blender 4.2.0 Alpha (b'3a5389d5abe0')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-22 07:36+0000\n"
+"POT-Creation-Date: 2024-04-29 07:27+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -17043,14 +17043,6 @@ msgid "List of gizmos in the Gizmo Map"
 msgstr "கிச்மோ வரைபடத்தில் கிச்மோசின் பட்டியல்"
 
 
-msgid "Has Reports"
-msgstr "அறிக்கைகள் உள்ளன"
-
-
-msgid "GizmoGroup has a set of reports (warnings and errors) from last execution"
-msgstr "கிச்மோகுரூப்பில் கடைசி மரணதண்டனையின் அறிக்கைகள் (எச்சரிக்கைகள் மற்றும் பிழைகள்) உள்ளன"
-
-
 msgid "VR Controller Poses Indicator"
 msgstr "வி.ஆர் கன்ட்ரோலர் காட்டி காட்டுகிறது"
 
@@ -21889,22 +21881,6 @@ msgid "Use pressure to modulate wet persistence"
 msgstr "ஈரமான நிலைத்தன்மையை மாற்றியமைக்க அழுத்தத்தைப் பயன்படுத்தவும்"
 
 
-msgid "Grab UVs"
-msgstr "uv களைப் பிடிக்கவும்"
-
-
-msgid "Relax"
-msgstr "ஓய்வெடுங்கள்"
-
-
-msgid "Relax UVs"
-msgstr "uv களை தளர்த்தவும்"
-
-
-msgid "Pinch UVs"
-msgstr "பிஞ்ச் புறஊதா"
-
-
 msgid "Vertex Paint Tool"
 msgstr "வெர்டெக்ச் பெயிண்ட் கருவி"
 
@@ -25826,14 +25802,6 @@ msgstr "முன்னோட்டம் உலகம்"
 
 msgid "Use the current world background to light the preview render"
 msgstr "முன்னோட்ட ரெண்டரை ஒளிரச் செய்ய தற்போதைய உலக பின்னணியைப் பயன்படுத்தவும்"
-
-
-msgid "Raytrace Refraction"
-msgstr "ரேட்ரேச் ஒளிவிலகல்"
-
-
-msgid "Use raytracing to determine refracted color instead of using only light probes. This prevents the surface from contributing to the lighting of surfaces not using this setting"
-msgstr "ஒளி ஆய்வுகள் மட்டுமே பயன்படுத்துவதற்குப் பதிலாக ஒளிவிலகல் வண்ணத்தைத் தீர்மானிக்க ரேட்ரேசிங்கைப் பயன்படுத்தவும். இந்த அமைப்பைப் பயன்படுத்தாத மேற்பரப்புகளின் விளக்குகளுக்கு மேற்பரப்பு பங்களிப்பதை இது தடுக்கிறது"
 
 
 msgid "Subsurface Translucency"
@@ -35310,8 +35278,8 @@ msgid "Tracking"
 msgstr "கண்காணிப்பு"
 
 
-msgid "Fractional Zoom"
-msgstr "பகுதியளவு சூம்"
+msgid "Zoom"
+msgstr "பெரிதாக்கு"
 
 
 msgid "Collection Specials"
@@ -43728,10 +43696,6 @@ msgid "Spin"
 msgstr "சுழல்"
 
 
-msgid "Zoom"
-msgstr "பெரிதாக்கு"
-
-
 msgid "Defocus"
 msgstr "டிஃபோகச்"
 
@@ -47384,6 +47348,10 @@ msgstr "முகம் தொகுப்பு"
 
 msgid "Each face's sculpt face set value"
 msgstr "ஒவ்வொரு முகத்தின் சிற்பமான முகம் தொகுப்பு மதிப்பு"
+
+
+msgid "Mouse Position"
+msgstr "சுட்டி நிலை"
 
 
 msgid "Selection"
@@ -54896,6 +54864,10 @@ msgid "Add a new or update an existing hair particle system on the surface objec
 msgstr "மேற்பரப்பு பொருளில் புதிய முடி துகள் அமைப்பைப் புதுப்பிக்கவும் அல்லது புதுப்பிக்கவும்"
 
 
+msgid "Handles"
+msgstr "கையாளுகிறது"
+
+
 msgctxt "Operator"
 msgid "Toggle Cyclic"
 msgstr "சுழற்சி மாற்றவும்"
@@ -55679,10 +55651,6 @@ msgstr "ச்ப்லைன் வகையை அமைக்கவும்"
 
 msgid "Set type of active spline"
 msgstr "செயலில் உள்ள ச்ப்லைன் வகையை அமைக்கவும்"
-
-
-msgid "Handles"
-msgstr "கையாளுகிறது"
 
 
 msgid "Use handles when converting Bézier curves into polygons"
@@ -61852,15 +61820,6 @@ msgstr "அனைத்து செயலில் உள்ள பிரேம
 
 msgid "Delete active frames for all layers"
 msgstr "அனைத்து அடுக்குகளுக்கும் செயலில் உள்ள பிரேம்களை நீக்கு"
-
-
-msgctxt "Operator"
-msgid "Grease Pencil Draw Mode Toggle"
-msgstr "பசை எழுதுகோல் டிரா பயன்முறை மாற்று"
-
-
-msgid "Enter/Exit draw mode for grease pencil"
-msgstr "பசை எழுதுகோலுக்கு டிரா பயன்முறையை உள்ளிடவும்"
 
 
 msgid "Duplicate the selected points"
@@ -76904,6 +76863,10 @@ msgid "Randomize vertex positions"
 msgstr "வெர்டெக்ச் நிலைகளை சீரற்றதாக்குங்கள்"
 
 
+msgid "Relax"
+msgstr "ஓய்வெடுங்கள்"
+
+
 msgid "Relax mesh"
 msgstr "மெச் தளர்த்தவும்"
 
@@ -77148,17 +77111,32 @@ msgid "Trims the mesh within the lasso as you move the brush"
 msgstr "நீங்கள் தூரிகையை நகர்த்தும்போது லாசோவுக்குள் கண்ணி ஒழுங்கமைக்கிறது"
 
 
-msgctxt "Operator"
-msgid "Sculpt UVs"
-msgstr "uvs சிற்பம்"
+msgid "Grab UVs"
+msgstr "uv களைப் பிடிக்கவும்"
 
 
-msgid "Sculpt UVs using a brush"
-msgstr "ஒரு தூரிகையைப் பயன்படுத்தி uv களை சிற்பம் செய்யுங்கள்"
+msgid "Pinch UVs"
+msgstr "பிஞ்ச் புறஊதா"
 
 
-msgid "Switch brush to relax mode for duration of stroke"
-msgstr "வீச்சு காலத்திற்கு முறையை தளர்த்த தூரிகையை மாற்றவும்"
+msgid "Relax UVs"
+msgstr "uv களை தளர்த்தவும்"
+
+
+msgid "Algorithm used for UV relaxation"
+msgstr "புறஊதா தளர்வுக்கு பயன்படுத்தப்படும் வழிமுறை"
+
+
+msgid "Use Laplacian method for relaxation"
+msgstr "தளர்வுக்கு லாப்லாசியன் முறையைப் பயன்படுத்தவும்"
+
+
+msgid "Use HC method for relaxation"
+msgstr "தளர்வுக்கு hc முறையைப் பயன்படுத்தவும்"
+
+
+msgid "Use Geometry (cotangent) relaxation, making UVs follow the underlying 3D geometry"
+msgstr "வடிவியல் (கோட்டாங்கென்ட்) தளர்வைப் பயன்படுத்தவும், புறஊதாக்கள் அடிப்படை 3 டி வடிவவியலைப் பின்பற்றுகின்றன"
 
 
 msgctxt "Operator"
@@ -78130,10 +78108,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட கீற்�
 
 msgid "The side to which the selection is applied"
 msgstr "தேர்வு பயன்படுத்தப்படும் பக்கம்"
-
-
-msgid "Mouse Position"
-msgstr "சுட்டி நிலை"
 
 
 msgid "No Change"
@@ -87873,13 +87847,13 @@ msgstr "அழிக்கவும்"
 
 
 msgctxt "Operator"
-msgid "Tint"
-msgstr "நிறம்"
+msgid "Cutter"
+msgstr "கட்டர்"
 
 
 msgctxt "Operator"
-msgid "Cutter"
-msgstr "கட்டர்"
+msgid "Tint"
+msgstr "நிறம்"
 
 
 msgctxt "Operator"
@@ -94103,10 +94077,6 @@ msgid "Accumulate samples by reprojecting last tracing results"
 msgstr "கடைசி தடமறிதல் முடிவுகளை மறுபரிசீலனை செய்வதன் மூலம் மாதிரிகளைக் குவிக்கவும்"
 
 
-msgid "Clamp ray intensity to reduce noise (0 to disable)"
-msgstr "சத்தத்தைக் குறைக்க கிளம்ப் கதிர் தீவிரம் (முடக்க 0)"
-
-
 msgid "Screen-Trace Precision"
 msgstr "ச்கிரீன்-டிரேச் மதிப்புகளருகில்"
 
@@ -96453,14 +96423,6 @@ msgstr "கியூப் நிழல்கள் தீர்மானம்"
 
 msgid "Size of point and area light shadow maps"
 msgstr "புள்ளி மற்றும் பரப்பு ஒளி நிழல் வரைபடங்களின் அளவு"
-
-
-msgid "Shadow Normal Bias"
-msgstr "நிழல் சாதாரண சார்பு"
-
-
-msgid "Move shadows along their normal"
-msgstr "நிழல்களை அவற்றின் இயல்புடன் நகர்த்தவும்"
 
 
 msgid "Shadow Pool Size"
@@ -103130,6 +103092,10 @@ msgid "Theme settings for the Image Editor"
 msgstr "பட திருத்திக்கான கருப்பொருள் அமைப்புகள்"
 
 
+msgid "Settings for asset shelf"
+msgstr "சொத்து அலமாரிக்கான அமைப்புகள்"
+
+
 msgid "Edge Select"
 msgstr "விளிம்பு தேர்ந்தெடுக்கவும்"
 
@@ -104058,10 +104024,6 @@ msgid "Theme settings for the 3D viewport"
 msgstr "3d வியாபோர்ட்டிற்கான கருப்பொருள் அமைப்புகள்"
 
 
-msgid "Settings for asset shelf"
-msgstr "சொத்து அலமாரிக்கான அமைப்புகள்"
-
-
 msgid "Bone Locked Weight"
 msgstr "எலும்பு பூட்டப்பட்ட எடை"
 
@@ -104967,30 +104929,6 @@ msgstr "புறஊதா ஒத்திசைவு தேர்வு"
 
 msgid "Keep UV and edit mode mesh selection in sync"
 msgstr "யு.வி மற்றும் திருத்து பயன்முறை கண்ணி தேர்வை ஒத்திசைவில் வைத்திருங்கள்"
-
-
-msgid "Relaxation Method"
-msgstr "தளர்வு முறை"
-
-
-msgid "Algorithm used for UV relaxation"
-msgstr "புறஊதா தளர்வுக்கு பயன்படுத்தப்படும் வழிமுறை"
-
-
-msgid "Use Laplacian method for relaxation"
-msgstr "தளர்வுக்கு லாப்லாசியன் முறையைப் பயன்படுத்தவும்"
-
-
-msgid "HC"
-msgstr "எச்.சி."
-
-
-msgid "Use HC method for relaxation"
-msgstr "தளர்வுக்கு hc முறையைப் பயன்படுத்தவும்"
-
-
-msgid "Use Geometry (cotangent) relaxation, making UVs follow the underlying 3D geometry"
-msgstr "வடிவியல் (கோட்டாங்கென்ட்) தளர்வைப் பயன்படுத்தவும், புறஊதாக்கள் அடிப்படை 3 டி வடிவவியலைப் பின்பற்றுகின்றன"
 
 
 msgid "UV Sculpt"
@@ -108878,11 +108816,6 @@ msgstr "துகள்"
 
 
 msgctxt "WindowManager"
-msgid "Knife Tool Modal Map"
-msgstr "கத்தி கருவி மாதிரி வரைபடம்"
-
-
-msgctxt "WindowManager"
 msgid "Cancel"
 msgstr "ரத்துசெய்"
 
@@ -108890,6 +108823,21 @@ msgstr "ரத்துசெய்"
 msgctxt "WindowManager"
 msgid "Confirm"
 msgstr "உறுதிப்படுத்தவும்"
+
+
+msgctxt "WindowManager"
+msgid "Panning"
+msgstr "paning"
+
+
+msgctxt "WindowManager"
+msgid "Rotate"
+msgstr "சுழற்றுங்கள்"
+
+
+msgctxt "WindowManager"
+msgid "Knife Tool Modal Map"
+msgstr "கத்தி கருவி மாதிரி வரைபடம்"
 
 
 msgctxt "WindowManager"
@@ -108955,11 +108903,6 @@ msgstr "வெட்டு சேர்க்கவும்"
 msgctxt "WindowManager"
 msgid "Add Cut Closed"
 msgstr "வெட்டப்பட்ட வெட்டு சேர்க்கவும்"
-
-
-msgctxt "WindowManager"
-msgid "Panning"
-msgstr "paning"
 
 
 msgctxt "WindowManager"
@@ -110396,11 +110339,6 @@ msgstr "வெர்ட்/எட்ச் ச்லைடு"
 
 
 msgctxt "WindowManager"
-msgid "Rotate"
-msgstr "சுழற்றுங்கள்"
-
-
-msgctxt "WindowManager"
 msgid "TrackBall"
 msgstr "டிராக்பால்"
 
@@ -111778,10 +111716,6 @@ msgid "Add New"
 msgstr "புதிதாக சேர்க்கவும்"
 
 
-msgid "%s (Global)"
-msgstr "%s (உலகளாவிய)"
-
-
 msgctxt "Operator"
 msgid "New"
 msgstr "புதிய"
@@ -111824,20 +111758,8 @@ msgid "Torus"
 msgstr "டோரச்"
 
 
-msgid "Removed %d empty and/or fake-user only Actions"
-msgstr "அகற்றப்பட்ட %d வெற்று மற்றும்/அல்லது போலி-பயனர் மட்டுமே செயல்கள்"
-
-
-msgid "Removed %d of %d bone collections"
-msgstr "%d எலும்பு சேகரிப்புகளின் %d அகற்றப்பட்டது"
-
-
 msgid "Nothing to bake"
 msgstr "சுட எதுவும் இல்லை"
-
-
-msgid "Complete report available on '%s' text datablock"
-msgstr "'%s' உரை தரவு பிளாக்கில் முழுமையான அறிக்கை கிடைக்கிறது"
 
 
 msgid "No active bone to copy from"
@@ -111846,10 +111768,6 @@ msgstr "நகலெடுக்க செயலில் எலும்பு 
 
 msgid "No selected bones to copy to"
 msgstr "நகலெடுக்க தேர்ந்தெடுக்கப்பட்ட எலும்புகள் இல்லை"
-
-
-msgid "Bone colors were synced; for %d bones this will not be visible due to pose bone color overrides"
-msgstr "எலும்பு வண்ணங்கள் ஒத்திசைக்கப்பட்டன; %d எலும்புகளுக்கு இது எலும்பு நிறத்தை மீறுவதால் இது தெரியாது"
 
 
 msgid "None of the bone collections is marked 'solo'"
@@ -111862,18 +111780,6 @@ msgstr "அனைத்து எலும்பு சேகரிப்பு�
 
 msgid "Go to pose mode to copy pose bone colors"
 msgstr "போச் எலும்பு வண்ணங்களை நகலெடுக்க போச் பயன்முறைக்குச் செல்லுங்கள்"
-
-
-msgid "Cannot do anything in mode %r"
-msgstr "பயன்முறை %r இல் எதையும் செய்ய முடியாது"
-
-
-msgid "Could not find material or light using Shader Node Tree - %s"
-msgstr "சேடர் முனை மரத்தைப் பயன்படுத்தி மூலப்பொருள் அல்லது ஒளியைக் கண்டுபிடிக்க முடியவில்லை - %s"
-
-
-msgid "Could not find scene using Compositor Node Tree - %s"
-msgstr "இசையமைப்பாளர் முனை மரத்தைப் பயன்படுத்தி காட்சியைக் கண்டுபிடிக்க முடியவில்லை - %s"
 
 
 msgid "Asset metadata from external asset libraries can't be edited, only assets stored in the current file can"
@@ -111896,10 +111802,6 @@ msgid "Unable to find any running process"
 msgstr "இயங்கும் எந்தவொரு செயல்முறையையும் கண்டுபிடிக்க முடியவில்லை"
 
 
-msgid "Blender sub-process exited with error code %d"
-msgstr "பிழைக் குறியீடு %d உடன் வெளியேறியது"
-
-
 msgid "Selection pair not found"
 msgstr "தேர்வு இணை கிடைக்கவில்லை"
 
@@ -111914,10 +111816,6 @@ msgstr "அடுத்த உறுப்பு மறைக்கப்பட�
 
 msgid "Last selected not found"
 msgstr "கடைசியாக தேர்ந்தெடுக்கப்பட்டதாக இல்லை"
-
-
-msgid "Identified %d problematic tracks"
-msgstr "அடையாளம் காணப்பட்ட %d சிக்கலான தடங்கள்"
 
 
 msgid "No usable tracks selected"
@@ -111938,14 +111836,6 @@ msgstr "இயக்க கண்காணிப்பு பொருள் க
 
 msgid "Some strings were fixed, don't forget to save the .blend file to keep those changes"
 msgstr "சில சரங்கள் சரி செய்யப்பட்டன, அந்த மாற்றங்களை வைத்திருக்க .கலப்பு கோப்பை சேமிக்க மறக்காதீர்கள்"
-
-
-msgid "Previews generation process failed for file '%s'!"
-msgstr "முன்னோட்டங்கள் தலைமுறை செயல்முறை '%s' கோப்புக்கு தோல்வியுற்றது!"
-
-
-msgid "Previews clear process failed for file '%s'!"
-msgstr "முன்னோட்டங்கள் '%s' கோப்புக்கு தெளிவான செயல்முறை தோல்வியுற்றது!"
 
 
 msgid "No active camera in the scene"
@@ -111972,10 +111862,6 @@ msgid "Image path not set"
 msgstr "பட பாதை அமைக்கப்படவில்லை"
 
 
-msgid "Image path %r not found, image may be packed or unsaved"
-msgstr "பட பாதை %r கண்டுபிடிக்கப்படவில்லை, படம் நிரம்பியிருக்கலாம் அல்லது சேமிக்கப்படவில்லை"
-
-
 msgid "Image is packed, unpack before editing"
 msgstr "படம் நிரம்பியுள்ளது, திருத்துவதற்கு முன் திறக்கவும்"
 
@@ -111984,28 +111870,12 @@ msgid "Could not make new image"
 msgstr "புதிய படத்தை உருவாக்க முடியவில்லை"
 
 
-msgid "Could not find image '%s'"
-msgstr "படத்தை '%s' கண்டுபிடிக்க முடியவில்லை"
-
-
 msgid "Image editor could not be launched, ensure that the path in User Preferences > File is valid, and Blender has rights to launch it"
 msgstr "பட எடிட்டரைத் தொடங்க முடியவில்லை, பயனர் விருப்பத்தேர்வுகள்> கோப்பில் பாதை செல்லுபடியாகும் என்பதை உறுதிப்படுத்தவும், அதைத் தொடங்க கலப்பானுக்கு உரிமை உண்டு"
 
 
 msgid "Context incorrect, image not found"
 msgstr "சூழல் தவறானது, படம் காணப்படவில்லை"
-
-
-msgid "%d mesh(es) with no active UV layer, %d duplicates found in %d mesh(es), mirror may be incomplete"
-msgstr "செயலில் உள்ள புறஊதா அடுக்கு இல்லாத %d மெச் (எச்), %d மெச் (எச்) இல் காணப்படும் %d நகல்கள், கண்ணாடி முழுமையடையாது"
-
-
-msgid "%d mesh(es) with no active UV layer"
-msgstr "செயலில் உள்ள புறஊதா அடுக்கு இல்லாத %d கண்ணி (es)"
-
-
-msgid "%d duplicates found in %d mesh(es), mirror may be incomplete"
-msgstr "%d மெச் (es) இல் காணப்படும் %d நகல்கள், கண்ணாடி முழுமையடையாது"
 
 
 msgid "No camera found"
@@ -112020,40 +111890,16 @@ msgid "Other object has no shape key"
 msgstr "மற்ற பொருளுக்கு வடிவ விசை இல்லை"
 
 
-msgid "Object: %s, Mesh: '%s' has no UVs"
-msgstr "பொருள்: %s, கண்ணி: ' %s' க்கு புறஊதா இல்லை"
-
-
 msgid "Active camera is not in this scene"
 msgstr "செயலில் உள்ள கேமரா இந்த காட்சியில் இல்லை"
-
-
-msgid "Skipping '%s', not a mesh"
-msgstr "'%s' ஐத் தவிர்த்து, ஒரு கண்ணி அல்ல"
-
-
-msgid "Skipping '%s', vertex count differs"
-msgstr "'%s' ஐத் தவிர்த்து, வெர்டெக்ச் எண்ணிக்கை வேறுபடுகிறது"
 
 
 msgid "Expected one other selected mesh object to copy from"
 msgstr "தேர்ந்தெடுக்கப்பட்ட மற்றொரு கண்ணி பொருள் நகலெடுக்க எதிர்பார்க்கப்படுகிறது"
 
 
-msgid "No animation data to convert on object: %r"
-msgstr "பொருளை மாற்ற அனிமேசன் தரவு இல்லை: %ஆர்"
-
-
 msgid "Modifiers cannot be added to object: "
 msgstr "மாற்றியமைப்பாளர்களை பொருளில் சேர்க்க முடியாது: "
-
-
-msgid "Object: %s, Mesh: '%s' has %d loops (for %d faces), expected %d"
-msgstr "பொருள்: %s, கண்ணி: ' %s' %d சுழல்கள் ( %d முகங்களுக்கு), எதிர்பார்க்கப்படும் %d"
-
-
-msgid "Could not add a new UV map to object '%s' (Mesh '%s')"
-msgstr "புதிய புறஊதா வரைபடத்தை '%s' (கண்ணி '%s') க்கு சேர்க்க முடியவில்லை"
 
 
 msgid "No objects with bound-box selected"
@@ -112092,10 +111938,6 @@ msgid "Built without Fluid modifier"
 msgstr "திரவ மாற்றியமைப்பாளர் இல்லாமல் கட்டப்பட்டது"
 
 
-msgid "Object %r already has a particle system"
-msgstr "பொருள் %r ஏற்கனவே ஒரு துகள் அமைப்பைக் கொண்டுள்ளது"
-
-
 msgid "Set Hair Curve Profile"
 msgstr "முடி வளைவு சுயவிவரத்தை அமைக்கவும்"
 
@@ -112116,10 +111958,6 @@ msgid "New Preset"
 msgstr "புதிய முன்னமைவு"
 
 
-msgid "Unknown file type: %r"
-msgstr "தெரியாத கோப்பு வகை: %r"
-
-
 msgid "Failed to create presets path"
 msgstr "முன்னமைவு பாதையை உருவாக்கத் தவறிவிட்டது"
 
@@ -112128,32 +111966,12 @@ msgid "Unable to remove default presets"
 msgstr "இயல்புநிலை முன்னமைவுகளை அகற்ற முடியவில்லை"
 
 
-msgid "Unable to remove preset: %r"
-msgstr "முன்னமைவை அகற்ற முடியவில்லை: %r"
-
-
 msgid "Failed to execute the preset: "
 msgstr "முன்னமைவை இயக்கத் தவறிவிட்டது: "
 
 
 msgid "No other objects selected"
 msgstr "வேறு எந்த பொருளும் தேர்ந்தெடுக்கப்படவில்லை"
-
-
-msgid "File %r not found"
-msgstr "கோப்பு %r கிடைக்கவில்லை"
-
-
-msgid ""
-"Couldn't run external animation player with command %r\n"
-"%s"
-msgstr ""
-"கட்டளை %r உடன் வெளிப்புற அனிமேசன் பிளேயரை இயக்க முடியவில்லை \n"
-" %s"
-
-
-msgid "Added fade animation to %d %s"
-msgstr "%d %s க்கு மங்கலான அனிமேசன் சேர்க்கப்பட்டது"
 
 
 msgid "Select 2 sound strips"
@@ -112188,28 +112006,8 @@ msgid "Failed to get add-ons path"
 msgstr "துணை நிரல்கள் பாதையைப் பெறுவதில் தோல்வி"
 
 
-msgid "Modules Installed (%s) from %r into %r"
-msgstr "%r இலிருந்து %r ஆக நிறுவப்பட்ட பகுதிகள் ( %s)"
-
-
-msgid "Add-on path %r could not be found"
-msgstr "கூடுதல் பாதை %r ஐக் கண்டுபிடிக்க முடியவில்லை"
-
-
-msgid "Expected a zip-file %r"
-msgstr "ஒரு சிப்-கோப்பு %r என்று எதிர்பார்க்கப்படுகிறது"
-
-
-msgid "Template Installed (%s) from %r into %r"
-msgstr "%r இலிருந்து %r ஆக வார்ப்புரு நிறுவப்பட்டது ( %s)"
-
-
 msgid "Failed to create Studio Light path"
 msgstr "ச்டுடியோ லைட் பாதையை உருவாக்கத் தவறிவிட்டது"
-
-
-msgid "StudioLight Installed %r into %r"
-msgstr "ச்டுடியோலைட் %r இல் %r இல் நிறுவப்பட்டது"
 
 
 msgid "Failed to get Studio Light path"
@@ -112220,32 +112018,8 @@ msgid "Warning, file already exists. Overwrite existing file?"
 msgstr "எச்சரிக்கை, கோப்பு ஏற்கனவே உள்ளது. இருக்கும் கோப்பை மேலெழுதவா?"
 
 
-msgid "Installing keymap failed: %s"
-msgstr "கீமாப்பை நிறுவுவது தோல்வியுற்றது: %s"
-
-
-msgid "This script was written Blender version %d.%d.%d and might not function (correctly), though it is enabled"
-msgstr "இந்த கைஉரை கலப்பான் பதிப்பு%d.%d.%d மற்றும் இது இயக்கப்பட்டிருந்தாலும் (சரியாக) செயல்படாது (சரியாக) எழுதப்பட்டது"
-
-
-msgid "File already installed to %r"
-msgstr "கோப்பு ஏற்கனவே %r க்கு நிறுவப்பட்டுள்ளது"
-
-
-msgid "Source file is in the add-on search path: %r"
-msgstr "மூல கோப்பு கூடுதல் தேடல் பாதையில் உள்ளது: %r"
-
-
 msgid "ZIP packaged incorrectly; __init__.py should be in a directory, not at top-level"
 msgstr "சிப் தவறாக தொகுக்கப்பட்டது; __init__.py ஒரு கோப்பகத்தில் இருக்க வேண்டும், மேல் மட்டத்தில் அல்ல"
-
-
-msgid "Remove Add-on: %r?"
-msgstr "சேர்க்கையை அகற்று: %r?"
-
-
-msgid "Path: %r"
-msgstr "பாதை: %ஆர்"
 
 
 msgid "Active face must be a quad"
@@ -112289,24 +112063,8 @@ msgid "Licensed under the GNU General Public License"
 msgstr "குனு பொது பொது உரிமத்தின் கீழ் உரிமம் பெற்றது"
 
 
-msgid "%s: %s"
-msgstr "%s: %s"
-
-
-msgid "Nothing to operate on: %s[ ].%s"
-msgstr "செயல்பட எதுவும் இல்லை: %s []. %s"
-
-
 msgid "File path was not set"
 msgstr "கோப்பு பாதை அமைக்கப்படவில்லை"
-
-
-msgid "File '%s' not found"
-msgstr "கோப்பு '%s' கிடைக்கவில்லை"
-
-
-msgid "No reference available %r, Update info in 'rna_manual_reference.py' or callback to bpy.utils.manual_map()"
-msgstr "குறிப்பு இல்லை %r, 'rna_manual_reference.py' இல் செய்தி புதுப்பிக்கவும் அல்லது bpy.utils.manual_map ()"
 
 
 msgid "Direct execution not supported"
@@ -112331,10 +112089,6 @@ msgstr "தரவை மேலெழுத பண்புகளைச் சே
 
 msgid "Cannot remove properties from override data"
 msgstr "மேலெழுதும் தரவிலிருந்து பண்புகளை அகற்ற முடியாது"
-
-
-msgid "Tool %r not found for space %r"
-msgstr "கருவி %r விண்வெளி %r க்கு கிடைக்கவில்லை"
 
 
 msgctxt "Operator"
@@ -112388,10 +112142,6 @@ msgstr "சேர்க்க ..."
 
 msgid "Assign"
 msgstr "ஒதுக்க"
-
-
-msgid "Operator not found: bpy.ops.%s"
-msgstr "ஆபரேட்டர் காணப்படவில்லை: bpy.ops.%s"
 
 
 msgid "Bug"
@@ -112526,10 +112276,6 @@ msgid "User Communities"
 msgstr "பயனர் சமூகங்கள்"
 
 
-msgid "Non boolean value found: %s[ ].%s"
-msgstr "பூலியன் அல்லாத மதிப்பு கண்டறியப்பட்டது: %s[ ].%s"
-
-
 msgid "Python evaluation failed: "
 msgstr "பைதான் மதிப்பீடு தோல்வியடைந்தது: "
 
@@ -112554,26 +112300,6 @@ msgid "Strip From"
 msgstr "இருந்து துண்டு"
 
 
-msgid "Rename %d %s"
-msgstr "%d %s -ஐ மறுபெயரிடு"
-
-
-msgid "Version: %s"
-msgstr "பதிப்பு: %s"
-
-
-msgid "Date: %s %s"
-msgstr "தேதி: %s %s"
-
-
-msgid "Hash: %s"
-msgstr "ஆச்: %s"
-
-
-msgid "Branch: %s"
-msgstr "கிளை: %s"
-
-
 msgid " (delta)"
 msgstr " (டெல்டா)"
 
@@ -112588,14 +112314,6 @@ msgstr "தொகுப்பு(கள்)"
 
 msgid "Invalid regular expression (find): "
 msgstr "தவறான வழக்கமான வெளிப்பாடு (கண்டுபிடி): "
-
-
-msgid "Windowing Environment: %s"
-msgstr "windowing சூழல்: %s"
-
-
-msgid "Type \"%s\" cannot be found"
-msgstr "\"%s\" வகை கண்டுபிடிக்க முடியாது"
 
 
 msgid "Material(s)"
@@ -113468,10 +113186,6 @@ msgid "Unlocked"
 msgstr "திறக்கப்பட்டது"
 
 
-msgid "Frame: %d (%s)"
-msgstr "சட்டகம்: %d (%s)"
-
-
 msgid "Stroke Color"
 msgstr "வீச்சு நிறம்"
 
@@ -113588,10 +113302,6 @@ msgid "Transparency Overlap"
 msgstr "வெளிப்படைத்தன்மை ஒன்றுடன் ஒன்று"
 
 
-msgid "Raytraced Refraction"
-msgstr "கதிர்வீச்சு ஒளிவிலகல்"
-
-
 msgctxt "Operator"
 msgid "Lock Unselected"
 msgstr "பூட்டு தேர்ந்தெடுக்கப்படவில்லை"
@@ -113690,14 +113400,6 @@ msgstr "துண்டு பெயர்"
 
 msgid "Buffer"
 msgstr "இடையக"
-
-
-msgid "Custom (%.4g fps)"
-msgstr "தனிப்பயன் (%.4g fps)"
-
-
-msgid "%.4g fps"
-msgstr "%.4g பஒநொ"
 
 
 msgid "Mask Mapping"
@@ -113953,18 +113655,6 @@ msgid "Display percentage makes dynamics inaccurate without baking"
 msgstr "காட்சி விழுக்காடு பேக்கிங் இல்லாமல் இயக்கவியலை துல்லியமற்றதாக்குகிறது"
 
 
-msgid "Iterations: %d .. %d (avg. %d)"
-msgstr "மறு செய்கைகள்: %d .. %d (சராசரி. %d)"
-
-
-msgid "Error: %.5f .. %.5f (avg. %.5f)"
-msgstr "பிழை: %.5f .. %.5f (சராசரி. %.5f)"
-
-
-msgid "Spacing: %g"
-msgstr "இடைவெளி: %g"
-
-
 msgid "Not yet functional"
 msgstr "இன்னும் செயல்படவில்லை"
 
@@ -113977,10 +113667,6 @@ msgstr "அனைத்தையும் இணைக்கவும்"
 msgctxt "Operator"
 msgid "Disconnect All"
 msgstr "அனைத்தையும் துண்டிக்கவும்"
-
-
-msgid "%d fluid particles for this frame"
-msgstr "இந்த சட்டகத்திற்கான %d திரவத் துகள்கள்"
 
 
 msgid "Speed Multiplier"
@@ -114917,11 +114603,6 @@ msgstr "டைம்கோட் இன்டெக்ச்"
 
 
 msgctxt "Operator"
-msgid "Zoom"
-msgstr "பெரிதாக்கு"
-
-
-msgctxt "Operator"
 msgid "Set Wall"
 msgstr "சுவர் அமைக்கவும்"
 
@@ -114968,17 +114649,8 @@ msgid "Set Keyframe B"
 msgstr "கீஃப்ரேம் b ஐ அமைக்கவும்"
 
 
-msgid "Average Error: %.2f px"
-msgstr "சராசரி பிழை: %.2f px"
-
-
 msgid "Tracks for Rotation/Scale"
 msgstr "சுழற்சி / அளவிற்கான தடங்கள்"
-
-
-msgctxt "Operator"
-msgid "View Fit"
-msgstr "பொருத்தம் காண்க"
 
 
 msgctxt "Operator"
@@ -114994,14 +114666,6 @@ msgstr "தடங்களைத் திறக்கவும்"
 msgctxt "Operator"
 msgid "Frame All Fit"
 msgstr "பிரேம் ஆல் ஃபிட்"
-
-
-msgid "Zoom %d:%d"
-msgstr "பெரிதாக்கு %d:%d"
-
-
-msgid "Solve error: %.2f px"
-msgstr "பிழையைத் தீர்க்க: %.2f px"
 
 
 msgctxt "Operator"
@@ -115456,6 +115120,11 @@ msgstr "டெசிமேட் (அனுமதிக்கப்பட்ட 
 
 
 msgctxt "Operator"
+msgid "Zoom Region..."
+msgstr "சூம் மண்டலம்..."
+
+
+msgctxt "Operator"
 msgid "Less"
 msgstr "குறைந்த"
 
@@ -115509,13 +115178,13 @@ msgid "Modified Edges"
 msgstr "மாற்றியமைக்கப்பட்ட விளிம்புகள்"
 
 
-msgid "Show Same Material"
-msgstr "அதே மூலப்பொருளைக் காட்டு"
-
-
 msgctxt "Operator"
 msgid "Render Slot Cycle Next"
 msgstr "வழங்குதல் ச்லாட் சுழற்சி அடுத்து"
+
+
+msgid "Show Same Material"
+msgstr "அதே மூலப்பொருளைக் காட்டு"
 
 
 msgctxt "Operator"
@@ -115981,10 +115650,6 @@ msgid "Backdrop Zoom Out"
 msgstr "பின்னணி பெரிதாக்கு"
 
 
-msgid "Slot %d"
-msgstr "ச்லாட் %d"
-
-
 msgid "Closed by Default"
 msgstr "இயல்புநிலையாக மூடப்பட்டது"
 
@@ -116279,10 +115944,6 @@ msgid "Strip Volume"
 msgstr "துண்டு தொகுதி"
 
 
-msgid "%14s"
-msgstr "%14s"
-
-
 msgid "Position X"
 msgstr "நிலை ஃச்"
 
@@ -116525,10 +116186,6 @@ msgid "Resolutions"
 msgstr "தீர்மானங்கள்"
 
 
-msgid "Fractional Preview Zoom"
-msgstr "பின்ன முன்னோட்டம் பெரிதாக்கு"
-
-
 msgctxt "Operator"
 msgid "Change Scene..."
 msgstr "காட்சியை மாற்று..."
@@ -116590,14 +116247,6 @@ msgstr "திறக்கவும்"
 
 msgid "Pack"
 msgstr "கட்டு"
-
-
-msgid "Original frame range: %d-%d (%d)"
-msgstr "அசல் பிரேம் வரம்பு: %d-%d (%d)"
-
-
-msgid "%.2f"
-msgstr "%.2f"
 
 
 msgid "Hz"
@@ -116730,14 +116379,6 @@ msgid "Text: Internal"
 msgstr "உரை: அகம்"
 
 
-msgid "File: *%s (unsaved)"
-msgstr "கோப்பு: *%s (சேமிக்கப்படாதது)"
-
-
-msgid "File: %s"
-msgstr "கோப்பு: %s"
-
-
 msgctxt "Operator"
 msgid "Move Marker"
 msgstr "மார்க்கரை நகர்த்தவும்"
@@ -116817,40 +116458,8 @@ msgid "Taper Start"
 msgstr "டேப்பர் ச்டார்ட்"
 
 
-msgid ""
-"%s\n"
-"• %s toggles snap while dragging.\n"
-"• %s toggles dragging from the center.\n"
-"• %s toggles fixed aspect"
-msgstr ""
-"%s\n"
-"• இழுக்கும்போது %s நிலைமாற்று ச்னேப்.\n"
-"• மையத்திலிருந்து இழுத்துச் செல்லும் %s நிலைமாற்றுகள்.\n"
-"• %s நிலைமாற்றுகிறது நிலையான நற்பொருத்தம்"
-
-
 msgid "Depth:"
 msgstr "ஆழம்:"
-
-
-msgid "Weight: %.3f"
-msgstr "எடை: %.3f"
-
-
-msgid ""
-"Measure distance and angles.\n"
-"• %s anywhere for new measurement.\n"
-"• Drag ruler segment to measure an angle.\n"
-"• %s to remove the active ruler.\n"
-"• Ctrl while dragging to snap.\n"
-"• Shift while dragging to measure surface thickness"
-msgstr ""
-"தூரம் மற்றும் கோணங்களை அளவிடவும்.\n"
-"• புதிய அளவீட்டிற்கு %s எங்கும்.\n"
-"• ஒரு கோணத்தை அளவிட அளவுகோல் பகுதியை இழுக்கவும்.\n"
-"• செயலில் உள்ள ஆட்சியாளரை அகற்ற %s.\n"
-"• ச்னாப் செய்ய இழுக்கும்போது ctrl.\n"
-"• மேற்பரப்பு தடிமனை அளவிட இழுக்கும்போது மாற்றவும்"
 
 
 msgid "Style Start"
@@ -117115,11 +116724,6 @@ msgstr "முனை சிட்டை"
 
 msgid "NLA Strip Name"
 msgstr "nla துண்டு பெயர்"
-
-
-msgctxt "Operator"
-msgid "Load Factory %s Settings"
-msgstr "சுமை தொழிற்சாலை %s அமைப்புகள்"
 
 
 msgid "Auto-Save Preferences"
@@ -117513,10 +117117,6 @@ msgid "Missing script files"
 msgstr "கைஉரை கோப்புகளைக் காணவில்லை"
 
 
-msgid "No custom %s configured"
-msgstr "தனிப்பயன் %s கட்டமைக்கப்படவில்லை"
-
-
 msgid "Enable Cycles Render Engine add-on to use Cycles"
 msgstr "சுழற்சிகளைப் பயன்படுத்த என்சின் கூடுதல் வழங்க சுழற்சிகளை இயக்கவும்"
 
@@ -117569,18 +117169,6 @@ msgid "User:"
 msgstr "பயனர்:"
 
 
-msgid "Load Factory %s Preferences"
-msgstr "தொழிற்சாலை %s விருப்பங்களை ஏற்றவும்"
-
-
-msgid "Color Set %d"
-msgstr "வண்ண தொகுப்பு %d"
-
-
-msgid "Color %d"
-msgstr "வண்ண %d"
-
-
 msgctxt "Operator"
 msgid "Documentation"
 msgstr "ஆவணம்"
@@ -117629,11 +117217,6 @@ msgstr "செயலில் உள்ள கேமரா"
 msgctxt "Operator"
 msgid "Orbit Opposite"
 msgstr "எதிர்"
-
-
-msgctxt "Operator"
-msgid "Zoom Region..."
-msgstr "சூம் மண்டலம்..."
 
 
 msgctxt "Operator"
@@ -119347,10 +118930,6 @@ msgid "To 3D Cursor"
 msgstr "3d கர்சருக்கு"
 
 
-msgid "Compositor not supported on this platform"
-msgstr "இந்த மேடையில் இசையமைப்பாளர் ஆதரிக்கவில்லை"
-
-
 msgid "Fade Inactive Geometry"
 msgstr "செயலற்ற வடிவவியலை மங்கச் செய்யுங்கள்"
 
@@ -119803,10 +119382,6 @@ msgid "<No ID pointer>"
 msgstr "<ஐடி சுட்டிக்காட்டி இல்லை>"
 
 
-msgid "<Missing ID block>"
-msgstr "<காணாமல் போன ஐடி தொகுதி>"
-
-
 msgid "No F-Curve to add keyframes to"
 msgstr "கீஃப்ரேம்களைச் சேர்க்க எஃப்-வளைவும் இல்லை"
 
@@ -119829,18 +119404,6 @@ msgstr "கொடுக்கப்பட்ட ஐடியுக்கு ஆ�
 
 msgid "Failed to insert keys on F-Curve with path '%s[%d]', ensure that it is not locked or sampled, and try removing F-Modifiers"
 msgstr "எஃப்-வளைவில் விசைகளைச் செருகுவதில் தோல்வி '%s [%d]', அது பூட்டப்படவில்லை அல்லது மாதிரி செய்யப்படவில்லை என்பதை உறுதிசெய்து, எஃப்-மாற்றியமைப்பாளர்களை அகற்ற முயற்சிக்கவும்"
-
-
-msgid "No ID block to insert keyframe in (path = %s)"
-msgstr "கீஃப்ரேமை (பாதை = %s) செருக ஐடி தொகுதி இல்லை"
-
-
-msgid "'%s' on %s is not editable"
-msgstr "%s இல் %s 'திருத்தக்கூடியது அல்ல"
-
-
-msgid "Could not insert keyframe, as this type does not support animation data (ID = %s, path = %s)"
-msgstr "இந்த வகை அனிமேசன் தரவை ஆதரிக்காததால், கீஃப்ரேமை செருக முடியவில்லை (ஐடி = %s, பாதை = %s)"
 
 
 msgid "Could not delete keyframe, as RNA path is invalid for the given ID (ID = %s, path = %s)"
@@ -120303,6 +119866,10 @@ msgstr "பசை_எழுதுகோல்கள்"
 
 msgid "grease_pencils_v3"
 msgstr "பசை_எழுதுகோல்_ப3"
+
+
+msgid "Slot %d"
+msgstr "ச்லாட் %d"
 
 
 msgid "Cannot pack multiview images from raw data currently..."
@@ -122361,10 +121928,6 @@ msgid "Node group must have a group output node"
 msgstr "முனை குழுவில் குழு வெளியீட்டு முனை இருக்க வேண்டும்"
 
 
-msgid "Data-block inputs are unsupported"
-msgstr "தரவு-தொகுதி உள்ளீடுகள் ஆதரிக்கப்படவில்லை"
-
-
 msgid "Node group's first output must be a geometry"
 msgstr "நோட் குழுவின் முதல் வெளியீடு ஒரு வடிவவியலாக இருக்க வேண்டும்"
 
@@ -122883,6 +122446,10 @@ msgstr "தெரியாத சொத்து"
 msgctxt "WindowManager"
 msgid "Search"
 msgstr "தேடல்"
+
+
+msgid "%s: %s"
+msgstr "%s: %s"
 
 
 msgid "Non-Keyboard Shortcut"
@@ -126257,6 +125824,10 @@ msgid "UV map or surface attachment is invalid"
 msgstr "புறஊதா வரைபடம் அல்லது மேற்பரப்பு இணைப்பு தவறானது"
 
 
+msgid "Active group is locked, aborting"
+msgstr "செயலில் உள்ள குழு பூட்டப்பட்டுள்ளது, கருக்கலைப்பு செய்கிறது"
+
+
 msgid "PaintCurve"
 msgstr "பெயிண்ட் கார்வ்"
 
@@ -126347,10 +125918,6 @@ msgstr "வெர்டெக்ச் குழு தரவு இல்லை
 
 msgid "No vertex groups found"
 msgstr "வெர்டெக்ச் குழுக்கள் எதுவும் கிடைக்கவில்லை"
-
-
-msgid "Active group is locked, aborting"
-msgstr "செயலில் உள்ள குழு பூட்டப்பட்டுள்ளது, கருக்கலைப்பு செய்கிறது"
 
 
 msgid "No active vertex group for painting, aborting"
@@ -126667,6 +126234,10 @@ msgstr "சட்டகம்: %d / %d"
 
 msgid "Frame: - / %d"
 msgstr "சட்டகம்: - / %d"
+
+
+msgid "File: %s"
+msgstr "கோப்பு: %s"
 
 
 msgid "unsupported movie clip format"
@@ -127608,10 +127179,6 @@ msgstr ""
 
 msgid "The internal clipboard is empty"
 msgstr "உள் கிளிப்போர்டு காலியாக உள்ளது"
-
-
-msgid "Some nodes references could not be restored, will be left empty"
-msgstr "சில முனைகள் குறிப்புகளை மீட்டெடுக்க முடியவில்லை, காலியாக விடப்படும்"
 
 
 msgid "Cannot add node %s into node tree %s: %s"
@@ -130046,24 +129613,8 @@ msgid "An exception occurred invoking USD hook '%s'"
 msgstr "யு.எச்.டி ஊக் '%s'"
 
 
-msgid "%s: Error: Couldn't get input socket %s for node %s"
-msgstr "%s: பிழை: முனை %s க்கு உள்ளீட்டு சாக்கெட் %s பெற முடியவில்லை"
-
-
-msgid "%s: Couldn't create SH_NODE_MAPPING for node input %s"
-msgstr "%s: முனை உள்ளீடு %s க்கு sh_node_mapping ஐ உருவாக்க முடியவில்லை"
-
-
 msgid "Unsupported type %s for mesh data"
 msgstr "கண்ணி தரவுக்கு ஆதரிக்கப்படாத வகை %s"
-
-
-msgid "Unsupported domain for mesh data type %s"
-msgstr "மெச் தரவு வகை %s க்கான ஆதரிக்கப்படாத டொமைன்"
-
-
-msgid "Unable to get array values for primvar %s"
-msgstr "ப்ரிம்வார் %s க்கான வரிசை மதிப்புகளைப் பெற முடியவில்லை"
 
 
 msgid "USD Import: can't cast attribute '%s' to array"
@@ -130078,12 +129629,28 @@ msgid "USD Import: couldn't add color attribute '%s'"
 msgstr "யு.எச்.டி இறக்குமதி: வண்ண பண்புக்கூறு '%s' ஐ சேர்க்க முடியவில்லை"
 
 
+msgid "%s: Error: Couldn't get input socket %s for node %s"
+msgstr "%s: பிழை: முனை %s க்கு உள்ளீட்டு சாக்கெட் %s பெற முடியவில்லை"
+
+
+msgid "%s: Couldn't create SH_NODE_MAPPING for node input %s"
+msgstr "%s: முனை உள்ளீடு %s க்கு sh_node_mapping ஐ உருவாக்க முடியவில்லை"
+
+
+msgid "Unsupported domain for mesh data type %s"
+msgstr "மெச் தரவு வகை %s க்கான ஆதரிக்கப்படாத டொமைன்"
+
+
 msgid "USD Import: UV attribute value '%s' count inconsistent with interpolation type"
 msgstr "usd இறக்குமதி: புறஊதா பண்புக்கூறு மதிப்பு '%s' எண்ணிக்கை இடைக்கணிப்பு வகைக்கு முரணானது"
 
 
 msgid "USD Import: couldn't add UV attribute '%s'"
 msgstr "யு.எச்.டி இறக்குமதி: புறஊதா பண்புக்கூறு '%s' ஐ சேர்க்க முடியவில்லை"
+
+
+msgid "Unable to get array values for primvar %s"
+msgstr "ப்ரிம்வார் %s க்கான வரிசை மதிப்புகளைப் பெற முடியவில்லை"
 
 
 msgid "Generic primvar %s: invalid type %s"
