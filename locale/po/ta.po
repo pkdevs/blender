@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Alpha (b'3a5389d5abe0')\n"
+"Project-Id-Version: Blender 4.2.0 Alpha (b'9a3c7290a9c1')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-29 07:27+0000\n"
+"POT-Creation-Date: 2024-05-06 10:38+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -597,6 +597,10 @@ msgstr "மாற்றும் பயன்முறையில் இரு�
 
 msgid "Animation"
 msgstr "இயங்குபடம்"
+
+
+msgid "New"
+msgstr "புதிய"
 
 
 msgid "Drivers"
@@ -25776,6 +25780,10 @@ msgid "Texture Slots"
 msgstr "அமைப்பு இடங்கள்"
 
 
+msgid "Thickness Mode"
+msgstr "தடிமன் பயன்முறை"
+
+
 msgid "Backface Culling"
 msgstr "பேக்ஃபேச் கலிங்"
 
@@ -35568,10 +35576,6 @@ msgid "Retiming"
 msgstr "மறுபிரவேசம்"
 
 
-msgid "Cache"
-msgstr "கேச்"
-
-
 msgid "Texture Specials"
 msgstr "அமைப்பு சிறப்பு"
 
@@ -35590,6 +35594,10 @@ msgstr "திறந்த நிழல் மொழி"
 
 msgid "Python"
 msgstr "பைதான்"
+
+
+msgid "Cache"
+msgstr "கேச்"
 
 
 msgid "Blender"
@@ -37075,10 +37083,6 @@ msgstr "முக வலிமையை அமைக்க வேண்டும
 
 msgid "Do not set face strength"
 msgstr "முக வலிமையை அமைக்க வேண்டாம்"
-
-
-msgid "New"
-msgstr "புதிய"
 
 
 msgid "Set face strength on new faces only"
@@ -40036,10 +40040,6 @@ msgstr "வாசலை ஒன்றிணைக்கவும்"
 
 msgid "Distance within which degenerated geometry is merged"
 msgstr "சீரழிந்த வடிவியல் ஒன்றிணைக்கப்படும் தூரம்"
-
-
-msgid "Thickness Mode"
-msgstr "தடிமன் பயன்முறை"
 
 
 msgid "Selects the used thickness algorithm"
@@ -44085,6 +44085,10 @@ msgid "Hue/Saturation/Value"
 msgstr "சாயல்/செறிவு/மதிப்பு"
 
 
+msgid "Apply a color transformation in the HSV color model"
+msgstr "எச்.எச்.வி வண்ண மாதிரியில் வண்ண மாற்றத்தைப் பயன்படுத்துங்கள்"
+
+
 msgid "ID Mask"
 msgstr "ஐடி முகமூடி"
 
@@ -44403,6 +44407,10 @@ msgstr "இயக்க மங்கலானது"
 
 msgid "Use multi-sampled motion blur of the mask"
 msgstr "முகமூடியின் பல மாதிரி இயக்க மங்கலைப் பயன்படுத்தவும்"
+
+
+msgid "Perform math operations"
+msgstr "கணித செயல்பாடுகளைச் செய்யுங்கள்"
 
 
 msgctxt "NodeTree"
@@ -44795,6 +44803,10 @@ msgid "Distortion to use to filter image"
 msgstr "படத்தை வடிகட்ட பயன்படுத்த விலகல்"
 
 
+msgid "Generate a normal vector and a dot product"
+msgstr "ஒரு சாதாரண திசையன் மற்றும் புள்ளி தயாரிப்பை உருவாக்குங்கள்"
+
+
 msgid "File Output"
 msgstr "கோப்பு வெளியீடு"
 
@@ -44865,6 +44877,10 @@ msgstr "நேராக"
 
 msgid "Convert premultiplied to straight"
 msgstr "முன்கூட்டியே நேராக மாற்றவும்"
+
+
+msgid "A color picker"
+msgstr "ஒரு வண்ண தேர்வாளர்"
 
 
 msgid "RGB to BW"
@@ -45139,6 +45155,10 @@ msgid "Wrap all pixels on both axes"
 msgstr "அனைத்து பிக்சல்களையும் இரண்டு அச்சுகளிலும் மடிக்கவும்"
 
 
+msgid "Map values to colors with the use of a gradient"
+msgstr "ஒரு சாய்வு பயன்பாட்டுடன் வண்ணங்களுக்கு வரைபட மதிப்புகள்"
+
+
 msgid "Vector Blur"
 msgstr "திசையன் மங்கலானது"
 
@@ -45169,38 +45189,6 @@ msgstr "ஒரு பிக்சலுக்கான குறைந்தப�
 
 msgid "Interpolate between frames in a Bézier curve, rather than linearly"
 msgstr "ஒரு பெசியர் வளைவில் பிரேம்களுக்கு இடையில் இடைக்கணிப்பு, நேரியல் அல்லாமல்"
-
-
-msgid "Tile Order"
-msgstr "ஓடு வரிசை"
-
-
-msgid "Tile order"
-msgstr "ஓடு வரிசை"
-
-
-msgid "Expand from center"
-msgstr "மையத்திலிருந்து விரிவாக்குங்கள்"
-
-
-msgid "Random tiles"
-msgstr "சீரற்ற ஓடுகள்"
-
-
-msgid "Bottom Up"
-msgstr "கீழே"
-
-
-msgid "Expand from bottom"
-msgstr "கீழே இருந்து விரிவாக்குங்கள்"
-
-
-msgid "Rule of Thirds"
-msgstr "மூன்றில் ஒரு விதி"
-
-
-msgid "Expand from 9 places"
-msgstr "9 இடங்களிலிருந்து விரிவாக்குங்கள்"
 
 
 msgid "Z Combine"
@@ -46534,12 +46522,12 @@ msgid "Select from multiple inputs by name"
 msgstr "பெயரால் பல உள்ளீடுகளிலிருந்து தேர்ந்தெடுக்கவும்"
 
 
-msgid "Enum Definition"
-msgstr "enum வரையறை"
+msgid "Active Item"
+msgstr "செயலில் உள்ள உருப்படி"
 
 
-msgid "Definition of enum items"
-msgstr "enum உருப்படிகளின் வரையறை"
+msgid "Active item"
+msgstr "செயலில் உள்ள உருப்படி"
 
 
 msgid "Merge by Distance"
@@ -48039,10 +48027,6 @@ msgstr ""
 " குறிப்பு: பட அமைப்புகளில் வெளிப்படைத்தன்மை இயக்கப்பட்டால் மட்டுமே ஓல்டவுட் சேடர் ஆல்பாவை உருவாக்க முடியும்"
 
 
-msgid "Apply a color transformation in the HSV color model"
-msgstr "எச்.எச்.வி வண்ண மாதிரியில் வண்ண மாற்றத்தைப் பயன்படுத்துங்கள்"
-
-
 msgid "Invert a color, producing a negative"
 msgstr "ஒரு வண்ணத்தை தலைகீழாக மாற்றி, எதிர்மறையை உருவாக்குகிறது"
 
@@ -48143,10 +48127,6 @@ msgid "Transform a unit normal vector. Location is ignored"
 msgstr "ஒரு அலகு சாதாரண திசையன் மாற்றவும். இடம் புறக்கணிக்கப்படுகிறது"
 
 
-msgid "Perform math operations"
-msgstr "கணித செயல்பாடுகளைச் செய்யுங்கள்"
-
-
 msgid "Mix values by a factor"
 msgstr "மதிப்புகளை ஒரு காரணியால் கலக்கவும்"
 
@@ -48201,10 +48181,6 @@ msgstr "இரண்டு சேடர்களை ஒன்றாக கலக
 
 msgid "Retrieve geometric information about the current shading point"
 msgstr "தற்போதைய நிழல் புள்ளி பற்றிய வடிவியல் தகவல்களை மீட்டெடுக்கவும்"
-
-
-msgid "Generate a normal vector and a dot product"
-msgstr "ஒரு சாதாரண திசையன் மற்றும் புள்ளி தயாரிப்பை உருவாக்குங்கள்"
 
 
 msgid "Generate a perturbed normal from an RGB normal map image. Typically used for faking highly detailed surfaces"
@@ -48337,10 +48313,6 @@ msgstr "புள்ளி செய்தி"
 
 msgid "Retrieve information about points in a point cloud"
 msgstr "புள்ளிகள் பற்றிய தகவல்களை ஒரு புள்ளி மேகக்கட்டத்தில் மீட்டெடுக்கவும்"
-
-
-msgid "A color picker"
-msgstr "ஒரு வண்ண தேர்வாளர்"
 
 
 msgid "Apply color corrections for each color channel"
@@ -48597,10 +48569,6 @@ msgstr "உள்ளீட்டு திசையனின் அடிப்�
 
 msgid "IES Texture"
 msgstr "அதாவது அமைப்பு"
-
-
-msgid "Used to match real world lights with IES files, which store the directional intensity distribution of light sources"
-msgstr "உண்மையான உலக விளக்குகளை ies கோப்புகளுடன் பொருத்தப் பயன்படுகிறது, இது ஒளி மூலங்களின் திசை தீவிர விநியோகத்தை சேமிக்கிறது"
 
 
 msgid "IES light path"
@@ -49160,18 +49128,6 @@ msgid "UV coordinates to be used for mapping"
 msgstr "மேப்பிங் செய்ய பயன்படுத்த வேண்டிய புறஊதா ஆயத்தொலைவுகள்"
 
 
-msgid "Map values to colors with the use of a gradient"
-msgstr "ஒரு சாய்வு பயன்பாட்டுடன் வண்ணங்களுக்கு வரைபட மதிப்புகள்"
-
-
-msgid "Used to Input numerical values to other nodes in the tree"
-msgstr "மரத்தின் பிற முனைகளுக்கு எண் மதிப்புகளை உள்ளிட பயன்படுகிறது"
-
-
-msgid "Map an input vectors to curves, used to fine-tune the interpolation of the input"
-msgstr "உள்ளீட்டு திசையன்களை வளைவுகளுக்கு வரைபடமாக்குகிறது, இது உள்ளீட்டின் இடைக்கணிப்பை நன்றாக வடிவமைக்கப் பயன்படுகிறது"
-
-
 msgid "Displace the surface along an arbitrary direction"
 msgstr "மேற்பரப்பை தன்னிச்சையான திசையில் இடமாற்றம் செய்யுங்கள்"
 
@@ -49512,26 +49468,6 @@ msgid "Value to Normal"
 msgstr "இயல்பான மதிப்பு"
 
 
-msgid "Definition of an enumeration for nodes"
-msgstr "முனைகளுக்கான கணக்கீட்டின் வரையறை"
-
-
-msgid "Active Item"
-msgstr "செயலில் உள்ள உருப்படி"
-
-
-msgid "Active item"
-msgstr "செயலில் உள்ள உருப்படி"
-
-
-msgid "Enum Definition Items"
-msgstr "enum வரையறை உருப்படிகள்"
-
-
-msgid "Collection of items that make up an enum"
-msgstr "ஒரு enum ஐ உருவாக்கும் பொருட்களின் தொகுப்பு"
-
-
 msgid "Enum Item"
 msgstr "enum உருப்படி"
 
@@ -49658,6 +49594,14 @@ msgstr "முனை இணைப்புகள்"
 
 msgid "Collection of Node Links"
 msgstr "முனை இணைப்புகளின் தொகுப்பு"
+
+
+msgid "Enum Definition Items"
+msgstr "enum வரையறை உருப்படிகள்"
+
+
+msgid "Collection of items that make up an enum"
+msgstr "ஒரு enum ஐ உருவாக்கும் பொருட்களின் தொகுப்பு"
 
 
 msgid "Output File Slot"
@@ -67561,26 +67505,14 @@ msgid "Add Bake Item"
 msgstr "சுட்டுக்கொள்ளும் உருப்படியைச் சேர்க்கவும்"
 
 
-msgid "Add a bake item to the bake node"
-msgstr "சுட்டுக்கொள்ளும் முனையில் சுட்டுக்கொள்ளும் உருப்படியைச் சேர்க்கவும்"
-
-
 msgctxt "Operator"
 msgid "Move Bake Item"
 msgstr "சுட்டுக்கொள்ள உருப்படியை நகர்த்தவும்"
 
 
-msgid "Move a bake item up or down in the list"
-msgstr "பட்டியலில் ஒரு சுட்டுக்கொள்ளும் உருப்படியை மேலே அல்லது கீழ் நகர்த்தவும்"
-
-
 msgctxt "Operator"
 msgid "Remove Bake Item"
 msgstr "சுட்டுக்கொள்ளும் உருப்படியை அகற்று"
-
-
-msgid "Remove a bake item from the bake node"
-msgstr "சுட்டுக்கொள்ளும் முனையிலிருந்து சுட்டுக்கொள்ளும் உருப்படியை அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -67725,33 +67657,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட முனை�
 
 
 msgctxt "Operator"
-msgid "Add Item"
-msgstr "உருப்படியைச் சேர்க்கவும்"
-
-
-msgid "Add an enum item to the definition"
-msgstr "வரையறைக்கு ஒரு enum உருப்படியைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Move Item"
-msgstr "உருப்படியை நகர்த்தவும்"
-
-
-msgid "Remove the selected enum item from the definition"
-msgstr "தேர்ந்தெடுக்கப்பட்ட enum உருப்படியை வரையறையிலிருந்து அகற்றவும்"
-
-
-msgid "Move up or down"
-msgstr "மேலே அல்லது கீழ்நோக்கி நகர்த்தவும்"
-
-
-msgctxt "Operator"
-msgid "Remove Item"
-msgstr "உருப்படியை அகற்று"
-
-
-msgctxt "Operator"
 msgid "Find Node"
 msgstr "முனை கண்டுபிடிக்க"
 
@@ -67839,16 +67744,18 @@ msgid "Toggle hiding of selected nodes"
 msgstr "தேர்ந்தெடுக்கப்பட்ட முனைகளை மறைத்து மாற்றவும்"
 
 
-msgid "Add an item to the index switch"
-msgstr "குறியீட்டு சுவிட்சில் ஒரு உருப்படியைச் சேர்க்கவும்"
+msgctxt "Operator"
+msgid "Add Item"
+msgstr "உருப்படியைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Remove Item"
+msgstr "உருப்படியை அகற்று"
 
 
 msgid "Remove an item from the index switch"
 msgstr "குறியீட்டு சுவிட்சிலிருந்து ஒரு உருப்படியை அகற்று"
-
-
-msgid "Index of item to remove"
-msgstr "அகற்ற உருப்படியின் அட்டவணை"
 
 
 msgctxt "Operator"
@@ -68152,33 +68059,6 @@ msgstr "உள்ளீட்டு முனையின் அடுக்க�
 
 
 msgctxt "Operator"
-msgid "Add Repeat Item"
-msgstr "மீண்டும் மீண்டும் உருப்படியைச் சேர்க்கவும்"
-
-
-msgid "Add a repeat item to the repeat zone"
-msgstr "மீண்டும் மீண்டும் மண்டலத்தில் மீண்டும் மீண்டும் உருப்படியைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Move Repeat Item"
-msgstr "மீண்டும் மீண்டும் உருப்படியை நகர்த்தவும்"
-
-
-msgid "Move a repeat item up or down in the list"
-msgstr "பட்டியலில் மீண்டும் மீண்டும் அல்லது கீழ் மீண்டும் உருப்படியை நகர்த்தவும்"
-
-
-msgctxt "Operator"
-msgid "Remove Repeat Item"
-msgstr "மீண்டும் மீண்டும் உருப்படியை அகற்று"
-
-
-msgid "Remove a repeat item from the repeat zone"
-msgstr "மீண்டும் மீண்டும் மண்டலத்திலிருந்து மீண்டும் உருப்படியை அகற்றவும்"
-
-
-msgctxt "Operator"
 msgid "Resize Node"
 msgstr "விதை முனை"
 
@@ -68274,33 +68154,6 @@ msgstr "கைஉரை முனை புதுப்பிப்பு"
 
 msgid "Update shader script node with new sockets and options from the script"
 msgstr "புதிய சாக்கெட்டுகள் மற்றும் ச்கிரிப்டிலிருந்து விருப்பங்களுடன் சேடர் கைஉரை முனையை புதுப்பிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add State Item"
-msgstr "மாநில உருப்படியைச் சேர்க்கவும்"
-
-
-msgid "Add a state item to the simulation zone"
-msgstr "உருவகப்படுத்துதல் மண்டலத்தில் ஒரு மாநில உருப்படியைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Move State Item"
-msgstr "மாநில உருப்படியை நகர்த்தவும்"
-
-
-msgid "Move a simulation state item up or down in the list"
-msgstr "ஒரு உருவகப்படுத்துதல் நிலை உருப்படியை பட்டியலில் மேலே அல்லது கீழ் நகர்த்தவும்"
-
-
-msgctxt "Operator"
-msgid "Remove State Item"
-msgstr "மாநில உருப்படியை அகற்று"
-
-
-msgid "Remove a state item from the simulation zone"
-msgstr "உருவகப்படுத்துதல் மண்டலத்திலிருந்து ஒரு மாநில உருப்படியை அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -72950,10 +72803,6 @@ msgid "Mask Box Gesture"
 msgstr "முகமூடி பெட்டி சைகை"
 
 
-msgid "Add mask within the box as you move the brush"
-msgstr "நீங்கள் தூரிகையை நகர்த்தும்போது பெட்டியில் முகமூடியைச் சேர்க்கவும்"
-
-
 msgid "Set mask to the level specified by the 'value' property"
 msgstr "'மதிப்பு' சொத்து மூலம் குறிப்பிடப்பட்ட நிலைக்கு முகமூடியை அமைக்கவும்"
 
@@ -72988,17 +72837,9 @@ msgid "Mask Lasso Gesture"
 msgstr "முகமூடி லச்சோ சைகை"
 
 
-msgid "Add mask within the lasso as you move the brush"
-msgstr "நீங்கள் தூரிகையை நகர்த்தும்போது லாசோவுக்குள் முகமூடியைச் சேர்க்கவும்"
-
-
 msgctxt "Operator"
 msgid "Mask Line Gesture"
 msgstr "முகமூடி வரி சைகை"
-
-
-msgid "Add mask to the right of a line as you move the brush"
-msgstr "நீங்கள் தூரிகையை நகர்த்தும்போது ஒரு வரியின் வலதுபுறத்தில் முகமூடியைச் சேர்க்கவும்"
 
 
 msgctxt "Operator"
@@ -76424,10 +76265,6 @@ msgid "Face Set Box Gesture"
 msgstr "முகம் தொகுப்பு பெட்டி சைகை"
 
 
-msgid "Add face set within the box as you move the brush"
-msgstr "நீங்கள் தூரிகையை நகர்த்தும்போது பெட்டியில் முகம் தொகுப்பைச் சேர்க்கவும்"
-
-
 msgctxt "Operator"
 msgid "Face Sets Visibility"
 msgstr "முகம் தெரிவுநிலையை அமைக்கிறது"
@@ -76509,10 +76346,6 @@ msgstr "மறைக்கப்பட்ட வடிவவியலுக்�
 msgctxt "Operator"
 msgid "Face Set Lasso Gesture"
 msgstr "முகம் செட் லச்சோ சைகை"
-
-
-msgid "Add face set within the lasso as you move the brush"
-msgstr "நீங்கள் தூரிகையை நகர்த்தும்போது லாசோவுக்குள் முகம் தொகுப்பைச் சேர்க்கவும்"
 
 
 msgctxt "Operator"
@@ -77050,10 +76883,6 @@ msgid "Trim Box Gesture"
 msgstr "பெட்டி சைகையை ஒழுங்கமைக்கவும்"
 
 
-msgid "Trims the mesh within the box as you move the brush"
-msgstr "நீங்கள் தூரிகையை நகர்த்தும்போது பெட்டியின் உள்ளே கண்ணி ஒழுங்கமைக்கிறது"
-
-
 msgid "Extrude Mode"
 msgstr "எக்ச்ட்ரூட் பயன்முறை"
 
@@ -77105,10 +76934,6 @@ msgstr "டிரிம்மிங் வடிவத்தின் பரி�
 msgctxt "Operator"
 msgid "Trim Lasso Gesture"
 msgstr "லாசோ சைகை டிரிம்"
-
-
-msgid "Trims the mesh within the lasso as you move the brush"
-msgstr "நீங்கள் தூரிகையை நகர்த்தும்போது லாசோவுக்குள் கண்ணி ஒழுங்கமைக்கிறது"
 
 
 msgid "Grab UVs"
@@ -82604,10 +82429,6 @@ msgid "Validate Meshes"
 msgstr "மெச்களை சரிபார்க்கவும்"
 
 
-msgid "Check imported mesh objects for invalid data (slow)"
-msgstr "தவறான தரவுகளுக்கு இறக்குமதி செய்யப்பட்ட கண்ணி பொருள்களை சரிபார்க்கவும் (மெதுவாக)"
-
-
 msgctxt "Operator"
 msgid "Append"
 msgstr "சேர்க்கவும்"
@@ -84804,10 +84625,6 @@ msgid "Validate Mesh"
 msgstr "மெச் சரிபார்க்கவும்"
 
 
-msgid "Validate and correct imported mesh (slow)"
-msgstr "இறக்குமதி செய்யப்பட்ட கண்ணி (மெதுவாக) சரிபார்த்து சரிசெய்யவும்"
-
-
 msgctxt "Operator"
 msgid "Save System Info"
 msgstr "கணினி தகவலை சேமிக்கவும்"
@@ -86693,10 +86510,6 @@ msgid "Backdrop"
 msgstr "பின்னணி"
 
 
-msgid "Bake Items"
-msgstr "சுட்டுக்கொள்ளும் உருப்படிகள்"
-
-
 msgid "Modes"
 msgstr "முறைகள்"
 
@@ -86707,10 +86520,6 @@ msgstr "ச்லாட்"
 
 msgid "Predefined node color"
 msgstr "முன் வரையறுக்கப்பட்ட முனை நிறம்"
-
-
-msgid "Simulation State"
-msgstr "உருவகப்படுத்துதல் நிலை"
 
 
 msgctxt "Operator"
@@ -94865,14 +94674,6 @@ msgid "Display fill strokes in the viewport"
 msgstr "வியூபோர்ட்டில் நிரப்பு வீச்சுகள்"
 
 
-msgid "Simplify Shadows"
-msgstr "நிழல்களை எளிதாக்குங்கள்"
-
-
-msgid "Resolution percentage of shadows in viewport"
-msgstr "வியூபோர்ட்டில் நிழல்களின் தீர்மானம் விழுக்காடு"
-
-
 msgid "Simplify Subdivision"
 msgstr "துணைப்பிரிவை எளிதாக்குங்கள்"
 
@@ -97803,46 +97604,6 @@ msgid "All strips, recursively including those inside metastrips"
 msgstr "அனைத்து கீற்றுகளும், மேவுஉரிகளுக்குள் உள்ளவர்கள் உட்பட மீண்டும் மீண்டும்"
 
 
-msgid "Show Cache"
-msgstr "கேச் காட்டு"
-
-
-msgid "Visualize cached images on the timeline"
-msgstr "காலவரிசையில் தற்காலிக சேமிப்பு படங்களை காட்சிப்படுத்துங்கள்"
-
-
-msgid "Composite Images"
-msgstr "கூட்டு படங்கள்"
-
-
-msgid "Visualize cached composite images"
-msgstr "தற்காலிக சேமிப்பு கலப்பு படங்களை காட்சிப்படுத்துங்கள்"
-
-
-msgid "Final Images"
-msgstr "இறுதி படங்கள்"
-
-
-msgid "Visualize cached complete frames"
-msgstr "தற்காலிக சேமிப்பு முழுமையான பிரேம்களைக் காட்சிப்படுத்துங்கள்"
-
-
-msgid "Preprocessed Images"
-msgstr "முன் செயலாக்கப்பட்ட படங்கள்"
-
-
-msgid "Visualize cached pre-processed images"
-msgstr "தற்காலிக சேமிப்பு முன் பதப்படுத்தப்பட்ட படங்களை காட்சிப்படுத்துங்கள்"
-
-
-msgid "Raw Images"
-msgstr "மூல படங்கள்"
-
-
-msgid "Visualize cached raw images"
-msgstr "தற்காலிக சேமிப்பு மூல படங்களை காட்சிப்படுத்துங்கள்"
-
-
 msgid "Show Overlay"
 msgstr "மேலடுக்கைக் காட்டு"
 
@@ -98181,6 +97942,46 @@ msgstr "ஃச் அச்சில் அளவுகோல்"
 
 msgid "Scale along Y axis"
 msgstr "ஒய் அச்சில் அளவிடவும்"
+
+
+msgid "Show Cache"
+msgstr "கேச் காட்டு"
+
+
+msgid "Visualize cached images on the timeline"
+msgstr "காலவரிசையில் தற்காலிக சேமிப்பு படங்களை காட்சிப்படுத்துங்கள்"
+
+
+msgid "Composite Images"
+msgstr "கூட்டு படங்கள்"
+
+
+msgid "Visualize cached composite images"
+msgstr "தற்காலிக சேமிப்பு கலப்பு படங்களை காட்சிப்படுத்துங்கள்"
+
+
+msgid "Final Images"
+msgstr "இறுதி படங்கள்"
+
+
+msgid "Visualize cached complete frames"
+msgstr "தற்காலிக சேமிப்பு முழுமையான பிரேம்களைக் காட்சிப்படுத்துங்கள்"
+
+
+msgid "Preprocessed Images"
+msgstr "முன் செயலாக்கப்பட்ட படங்கள்"
+
+
+msgid "Visualize cached pre-processed images"
+msgstr "தற்காலிக சேமிப்பு முன் பதப்படுத்தப்பட்ட படங்களை காட்சிப்படுத்துங்கள்"
+
+
+msgid "Raw Images"
+msgstr "மூல படங்கள்"
+
+
+msgid "Visualize cached raw images"
+msgstr "தற்காலிக சேமிப்பு மூல படங்களை காட்சிப்படுத்துங்கள்"
 
 
 msgid "Preview Overlay Settings"
@@ -100725,6 +100526,10 @@ msgid "Sequence editor space data"
 msgstr "வரிசை ஆசிரியர் விண்வெளி தரவு"
 
 
+msgid "Settings for display of overlays"
+msgstr "மேலடுக்குகளின் காட்சிக்கான அமைப்புகள்"
+
+
 msgid "Display Channel"
 msgstr "காட்சி சேனல்"
 
@@ -100779,10 +100584,6 @@ msgstr "தற்போதைய சட்டகத்தை மட்டும�
 
 msgid "Channels of the preview to display"
 msgstr "காண்பிக்க முன்னோட்டத்தின் சேனல்கள்"
-
-
-msgid "Settings for display of overlays"
-msgstr "மேலடுக்குகளின் காட்சிக்கான அமைப்புகள்"
 
 
 msgid "No display"
@@ -121339,6 +121140,10 @@ msgid "Unselectable bone in chain"
 msgstr "சங்கிலியில் தேர்ந்தெடுக்க முடியாத எலும்பு"
 
 
+msgid "Create"
+msgstr "உருவாக்கு"
+
+
 msgid "Bone collection with index %d not found on Armature %s"
 msgstr "குறியீட்டு %d உடன் எலும்பு சேகரிப்பு ஆர்மேச்சர் %s இல் காணப்படவில்லை"
 
@@ -124541,10 +124346,6 @@ msgstr "பொருள் '%s', தரவு '%s' ஏற்கனவே மு�
 
 msgid "Move to New Collection"
 msgstr "புதிய சேகரிப்புக்கு செல்லுங்கள்"
-
-
-msgid "Create"
-msgstr "உருவாக்கு"
 
 
 msgid "Clear motion paths of selected objects"
@@ -130665,10 +130466,6 @@ msgid "Unable to create item with this socket type"
 msgstr "இந்த சாக்கெட் வகையுடன் உருப்படியை உருவாக்க முடியவில்லை"
 
 
-msgid "Unable to create enum item"
-msgstr "enum உருப்படியை உருவாக்க முடியவில்லை"
-
-
 msgid "Registering node tree class: '%s' is too long, maximum length is %d"
 msgstr "முனை மரம் வகுப்பைப் பதிவுசெய்தல்: ' %s' மிக நீளமானது, அதிகபட்ச நீளம் %d"
 
@@ -132142,6 +131939,10 @@ msgid "Layer Count"
 msgstr "அடுக்கு எண்ணிக்கை"
 
 
+msgid "Bake Items"
+msgstr "சுட்டுக்கொள்ளும் உருப்படிகள்"
+
+
 msgid "Data-Block References"
 msgstr "தரவு-தொகுதி குறிப்புகள்"
 
@@ -133564,6 +133365,10 @@ msgstr "வளைவுகள் ஒரு பொருளை மட்டும
 
 msgid "Shade Smooth"
 msgstr "நிழல் மென்மையானது"
+
+
+msgid "Simulation State"
+msgstr "உருவகப்படுத்துதல் நிலை"
 
 
 msgid "Baked %d - %d"
