@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Alpha (b'9fd37cf31b2d')\n"
+"Project-Id-Version: Blender 4.2.0 Alpha (b'a367cf664e0d')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-05-21 07:23+0000\n"
+"POT-Creation-Date: 2024-05-27 12:52+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -19301,6 +19301,10 @@ msgid "Grid scale"
 msgstr "கட்ட அளவு"
 
 
+msgid "Local Matrix"
+msgstr "உள்ளக அணி"
+
+
 msgid "Translation"
 msgstr "மொழிபெயர்ப்பு"
 
@@ -26818,10 +26822,6 @@ msgstr "உள்ளீட்டு அணி"
 
 msgid "Matrix access to location, rotation and scale (including deltas), before constraints and parenting are applied"
 msgstr "கட்டுப்பாடுகள் மற்றும் பெற்றோருக்கு முன், இருப்பிடம், சுழற்சி மற்றும் அளவிற்கான மேட்ரிக்ச் அணுகல் (டெல்டாச் உட்பட)"
-
-
-msgid "Local Matrix"
-msgstr "உள்ளக அணி"
 
 
 msgid ""
@@ -40096,18 +40096,6 @@ msgstr "முக்கோண மாற்றி"
 
 msgid "Triangulate Mesh"
 msgstr "முக்கோண கண்ணி"
-
-
-msgid "Keep Normals"
-msgstr "இயல்புநிலைகளை வைத்திருங்கள்"
-
-
-msgid ""
-"Try to preserve custom normals.\n"
-"Warning: Depending on chosen triangulation method, shading may not be fully preserved, \"Fixed\" method usually gives the best result here"
-msgstr ""
-"தனிப்பயன் இயல்புகளை பாதுகாக்க முயற்சிக்கவும். \n"
-" எச்சரிக்கை: தேர்ந்தெடுக்கப்பட்ட முக்கோண முறையைப் பொறுத்து, நிழல் முழுமையாக பாதுகாக்கப்படாமல் போகலாம், \"நிலையான\" முறை பொதுவாக இங்கே சிறந்த முடிவை அளிக்கிறது"
 
 
 msgid "Minimum Vertices"
@@ -56347,10 +56335,6 @@ msgid "Export cameras"
 msgstr "ஏற்றுமதி கேமராக்கள்"
 
 
-msgid "Keep for compatibility only"
-msgstr "பொருந்தக்கூடிய தன்மைக்கு மட்டும் வைத்திருங்கள்"
-
-
 msgid "Legal rights and conditions for the model"
 msgstr "மாதிரிக்கான சட்ட உரிமைகள் மற்றும் நிபந்தனைகள்"
 
@@ -61824,6 +61808,14 @@ msgid "Flip the image vertically"
 msgstr "படத்தை செங்குத்தாக புரட்டவும்"
 
 
+msgid "Filepath used for importing the file"
+msgstr "கோப்பை இறக்குமதி செய்ய filepath பயன்படுத்தப்படுகிறது"
+
+
+msgid "Relative Paths"
+msgstr "உறவினர் பாதைகள்"
+
+
 msgctxt "Operator"
 msgid "Invert Channels"
 msgstr "தலைகீழ் சேனல்கள்"
@@ -62285,10 +62277,6 @@ msgstr "பி.வி.எச் இறக்குமதி"
 
 msgid "Load a BVH motion capture file"
 msgstr "பி.வி.எச் மோசன் பிடிப்பு கோப்பை ஏற்றவும்"
-
-
-msgid "Filepath used for importing the file"
-msgstr "கோப்பை இறக்குமதி செய்ய filepath பயன்படுத்தப்படுகிறது"
 
 
 msgid "Starting frame for the animation"
@@ -73619,10 +73607,6 @@ msgid "Save custom studio light from the studio light editor settings"
 msgstr "ச்டுடியோ லைட் திருத்தி அமைப்புகளிலிருந்து தனிப்பயன் ச்டுடியோ ஒளியை சேமிக்கவும்"
 
 
-msgid "Show light preferences"
-msgstr "ஒளி விருப்பங்களைக் காட்டு"
-
-
 msgctxt "Operator"
 msgid "Uninstall Studio Light"
 msgstr "ச்டுடியோ லைட் நிறுவல் நீக்குதல்"
@@ -81713,11 +81697,6 @@ msgid "Clear the recent files list"
 msgstr "அண்மைக் கால கோப்புகள் பட்டியலை அழிக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Export COLLADA"
-msgstr "கொலாடா ஏற்றுமதி"
-
-
 msgid "Save a Collada file"
 msgstr "ஒரு கொலாடா கோப்பை சேமிக்கவும்"
 
@@ -82028,11 +82007,6 @@ msgstr "ஒரே தரவிலிருந்து பல பொருள்
 
 msgid "Copy textures to same folder where the .dae file is exported"
 msgstr ".dae கோப்பு ஏற்றுமதி செய்யப்படும் அதே கோப்புறையில் அமைப்புகளை நகலெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Import COLLADA"
-msgstr "கொலாடாவை இறக்குமதி செய்யுங்கள்"
 
 
 msgid "Load a Collada file"
@@ -83896,10 +83870,6 @@ msgstr "அமைப்புகளை மேலெழுதும்"
 
 msgid "Overwrite existing files when exporting textures"
 msgstr "அமைப்புகளை ஏற்றுமதி செய்யும் போது இருக்கும் கோப்புகளை மேலெழுதவும்"
-
-
-msgid "Relative Paths"
-msgstr "உறவினர் பாதைகள்"
 
 
 msgid "Use relative paths to reference external files (i.e. textures, volumes) in USD, otherwise use absolute paths"
@@ -85820,10 +85790,6 @@ msgstr "மறைமுக விளக்குகள்"
 
 msgid "Denoising"
 msgstr "டெனோயிங்"
-
-
-msgid "Horizon Scan"
-msgstr "அடிவான ச்கேன்"
 
 
 msgid "Raytracing"
@@ -92721,10 +92687,6 @@ msgstr "திரை-பாதை தடிமன்"
 
 msgid "Surface thickness used to detect intersection when using screen-tracing"
 msgstr "ச்கிரீன்-ட்ரேசிங் பயன்படுத்தும் போது குறுக்குவெட்டைக் கண்டறிய மேற்பரப்பு தடிமன் பயன்படுத்தப்படுகிறது"
-
-
-msgid "Maximum roughness to use the tracing pipeline for. Higher roughness surfaces will use horizon scan. A value of 1 will disable horizon scan"
-msgstr "தடமறிதல் குழாய்வழியைப் பயன்படுத்த அதிகபட்ச கடினத்தன்மை. அதிக கடினத்தன்மை மேற்பரப்புகள் ஒரைசன் ச்கேன் பயன்படுத்தும். 1 இன் மதிப்பு அடிவான ச்கேன் முடக்கும்"
 
 
 msgid "Enable noise reduction techniques for raytraced effects"
@@ -103249,6 +103211,14 @@ msgid "Unified Paint Settings"
 msgstr "ஒருங்கிணைந்த வண்ணப்பூச்சு அமைப்புகள்"
 
 
+msgid "Only Endpoints"
+msgstr "இறுதிப் புள்ளிகள் மட்டுமே"
+
+
+msgid "Only use the first and last parts of the stroke for snapping"
+msgstr "பக்கவாதத்தின் முதல் மற்றும் கடைசி பகுதிகளை மட்டுமே பயன்படுத்தவும்"
+
+
 msgid "Weight Paint Auto-Normalize"
 msgstr "எடை வண்ணப்பூச்சு தானாக இயல்பாக்குதல்"
 
@@ -103287,14 +103257,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட வீச்�
 
 msgid "Only sculpt selected stroke points between other strokes"
 msgstr "சிற்பம் மற்ற வீச்சுகள் இடையே தேர்ந்தெடுக்கப்பட்ட வீச்சு புள்ளிகள் மட்டுமே"
-
-
-msgid "Only Endpoints"
-msgstr "இறுதிப் புள்ளிகள் மட்டுமே"
-
-
-msgid "Only use the first and last parts of the stroke for snapping"
-msgstr "பக்கவாதத்தின் முதல் மற்றும் கடைசி பகுதிகளை மட்டுமே பயன்படுத்தவும்"
 
 
 msgid "Compact List"
@@ -108439,26 +108401,6 @@ msgstr "தொடர்"
 
 
 msgctxt "WindowManager"
-msgid "Sequencer Tool: Tweak"
-msgstr "சீக்வென்சர் கருவி: மாற்றங்கள்"
-
-
-msgctxt "WindowManager"
-msgid "Sequencer Tool: Tweak (fallback)"
-msgstr "சீக்வென்சர் கருவி: மாற்றங்கள் (குறைவடையும்)"
-
-
-msgctxt "WindowManager"
-msgid "Sequencer Tool: Select Box"
-msgstr "சீக்வென்சர் கருவி: பெட்டியைத் தேர்ந்தெடுக்கவும்"
-
-
-msgctxt "WindowManager"
-msgid "Sequencer Tool: Select Box (fallback)"
-msgstr "சீக்வென்சர் கருவி: பெட்டியைத் தேர்ந்தெடுக்கவும் (குறைவடையும்)"
-
-
-msgctxt "WindowManager"
 msgid "Sequencer Tool: Blade"
 msgstr "சீக்வென்சர் கருவி: பிளேட்"
 
@@ -109696,13 +109638,13 @@ msgstr "போச் புரட்டப்பட்டது"
 
 
 msgctxt "Operator"
-msgid "Blend Pose"
-msgstr "போச் கலக்கவும்"
+msgid "Toggle Asset Shelf"
+msgstr "சொத்து அலமாரியை மாற்றவும்"
 
 
 msgctxt "Operator"
-msgid "Toggle Asset Shelf"
-msgstr "சொத்து அலமாரியை மாற்றவும்"
+msgid "Blend Pose"
+msgstr "போச் கலக்கவும்"
 
 
 msgid "Action %s marked Fake User to prevent loss"
@@ -110199,6 +110141,14 @@ msgstr "பட எடிட்டரைத் தொடங்க முடிய
 
 msgid "Context incorrect, image not found"
 msgstr "சூழல் தவறானது, படம் காணப்படவில்லை"
+
+
+msgid "Position:"
+msgstr "நிலை:"
+
+
+msgid "Orientation:"
+msgstr "நோக்குநிலை:"
 
 
 msgid "No camera found"
@@ -112529,16 +112479,16 @@ msgid "Refraction"
 msgstr "ஒளிவிலகல்"
 
 
+msgid "Rays"
+msgstr "கதிர்கள்"
+
+
 msgid "Cascade Size"
 msgstr "அடுக்கு அளவு"
 
 
 msgid "Tracing"
 msgstr "தடமறிதல்"
-
-
-msgid "Rays"
-msgstr "கதிர்கள்"
 
 
 msgid "Volume Shadows"
@@ -114772,10 +114722,6 @@ msgid "Depth:"
 msgstr "ஆழம்:"
 
 
-msgid "Orientation:"
-msgstr "நோக்குநிலை:"
-
-
 msgid "Style Start"
 msgstr "பாணி ச்டார்ட்"
 
@@ -114938,11 +114884,6 @@ msgstr "பொது"
 msgctxt "Operator"
 msgid "Load Factory Blender Settings"
 msgstr "சுமை தொழிற்சாலை கலப்பான் அமைப்புகள்"
-
-
-msgctxt "Operator"
-msgid "Collada (.dae)"
-msgstr "கொலாடா (.dae)"
 
 
 msgctxt "Operator"
@@ -124355,10 +124296,6 @@ msgstr "கோப்பு பாதை:"
 
 msgid "Track is locked"
 msgstr "டிராக் பூட்டப்பட்டுள்ளது"
-
-
-msgid "Position:"
-msgstr "நிலை:"
 
 
 msgid "X:"
