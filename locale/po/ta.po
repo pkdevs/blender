@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
+"Project-Id-Version: Blender 4.2.0 Beta (b'b143cc1885ef')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-10 10:16+0000\n"
+"POT-Creation-Date: 2020-01-01 00:00+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -401,6 +401,22 @@ msgstr "gltfpack பைனரிக்கு பாதை"
 
 msgid "Displays glTF Material Output node in Shader Editor (Menu Add > Output)"
 msgstr "சேடர் திருத்தியில் சி.எல்.டி.எஃப் மூலப்பொருள் வெளியீட்டு முனையைக் காட்டுகிறது (மெனு சேர்> வெளியீடு)"
+
+
+msgid "Always"
+msgstr "எப்போதும்"
+
+
+msgid "Never"
+msgstr "ஒருபோதும்"
+
+
+msgid "Center"
+msgstr "நடுவண்"
+
+
+msgid "Bottom"
+msgstr "கீழே"
 
 
 msgid "Fribidi Library"
@@ -4225,10 +4241,6 @@ msgid "How many times the Density brush tries to add a new curve"
 msgstr "அடர்த்தி தூரிகை எத்தனை மடங்கு புதிய வளைவைச் சேர்க்க முயற்சிக்கிறது"
 
 
-msgid "Density Mode"
-msgstr "அடர்த்தி பயன்முறை"
-
-
 msgid "Determines whether the brush adds or removes curves"
 msgstr "தூரிகை வளைவுகளைச் சேர்க்கிறதா அல்லது நீக்குகிறதா என்பதை தீர்மானிக்கிறது"
 
@@ -4237,10 +4249,16 @@ msgid "Either add or remove curves depending on the minimum distance of the curv
 msgstr "கர்சரின் கீழ் வளைவுகளின் குறைந்தபட்ச தூரத்தைப் பொறுத்து வளைவுகளைச் சேர்க்கவும் அல்லது அகற்றவும்"
 
 
+msgctxt "Operator"
+msgid "Add"
+msgstr "கூட்டு"
+
+
 msgid "Add new curves between existing curves, taking the minimum distance into account"
 msgstr "இருக்கும் வளைவுகளுக்கு இடையில் புதிய வளைவுகளைச் சேர்க்கவும், குறைந்தபட்ச தூரத்தை கணக்கில் எடுத்துக் கொள்ளுங்கள்"
 
 
+msgctxt "Operator"
 msgid "Remove"
 msgstr "அகற்று"
 
@@ -5471,10 +5489,6 @@ msgstr "இடது"
 
 msgid "Right"
 msgstr "வலது"
-
-
-msgid "Center"
-msgstr "நடுவண்"
 
 
 msgid "Pole Merge Start Angle"
@@ -8441,10 +8455,6 @@ msgstr "இயக்கப்பட்ட சுழற்சி வரம்ப�
 
 msgid "Rotation range on which pivoting should occur"
 msgstr "முன்னிலைப்படுத்தல் ஏற்பட வேண்டிய சுழற்சி வரம்பு"
-
-
-msgid "Always"
-msgstr "எப்போதும்"
 
 
 msgid "Use the pivot point in every rotation"
@@ -14728,10 +14738,6 @@ msgstr "குமிழி துகள் அமைப்பை உருவா
 
 msgid "Enable collisions with back domain border"
 msgstr "பின் டொமைன் எல்லையுடன் மோதல்களை இயக்கவும்"
-
-
-msgid "Bottom"
-msgstr "கீழே"
 
 
 msgid "Enable collisions with bottom domain border"
@@ -25412,14 +25418,6 @@ msgid "True if this material has grease pencil data"
 msgstr "இந்த மூலப்பொருள் பசை எழுதுகோல் தரவு இருந்தால் உண்மை"
 
 
-msgid "Light Probe Volume Single Sided"
-msgstr "ஒளி ஆய்வு தொகுதி ஒற்றை பக்க"
-
-
-msgid "Consider material single sided for light probe volume capture. Additionally helps rejecting probes inside the object to avoid light leaks"
-msgstr "ஒளி ஆய்வு தொகுதி பிடிப்புக்கு மூலப்பொருள் ஒற்றை பக்கத்தைக் கவனியுங்கள். ஒளி கசிவுகளைத் தவிர்க்க மூலப்பொருளுக்குள் ஆய்வை நிராகரிக்கும் கூடுதல் உதவி"
-
-
 msgid "Line Color"
 msgstr "வரி நிறம்"
 
@@ -25654,6 +25652,10 @@ msgstr "பேக்ஃபேச் கலிங்"
 
 msgid "Use back face culling to hide the back side of faces"
 msgstr "முகங்களின் பின்புறத்தை மறைக்க பின்புற முகத்தை பயன்படுத்தவும்"
+
+
+msgid "Consider material single sided for light probe volume capture. Additionally helps rejecting probes inside the object to avoid light leaks"
+msgstr "ஒளி ஆய்வு தொகுதி பிடிப்புக்கு மூலப்பொருள் ஒற்றை பக்கத்தைக் கவனியுங்கள். ஒளி கசிவுகளைத் தவிர்க்க மூலப்பொருளுக்குள் ஆய்வை நிராகரிக்கும் கூடுதல் உதவி"
 
 
 msgid "Shadow Backface Culling"
@@ -26058,10 +26060,6 @@ msgstr "திருத்துதல் செய்யும் போது,
 
 msgid "While editing, update metaball without polygonization"
 msgstr "திருத்துதல் செய்யும் போது, பலகோணமயமாக்கல் இல்லாமல் வளர்சிதை மாற்றத்தைப் புதுப்பிக்கவும்"
-
-
-msgid "Never"
-msgstr "ஒருபோதும்"
 
 
 msgid "While editing, don't update metaball at all"
@@ -35207,11 +35205,6 @@ msgid "Area"
 msgstr "பரப்பு"
 
 
-msgctxt "Operator"
-msgid "Add"
-msgstr "கூட்டு"
-
-
 msgid "Attribute Specials"
 msgstr "பண்புக்கூறு சிறப்பு"
 
@@ -35522,6 +35515,11 @@ msgstr "இயக்கப்பட்ட முறைகள்"
 
 msgid "Names"
 msgstr "பெயர்கள்"
+
+
+msgctxt "Operator"
+msgid "Parent"
+msgstr "பெற்றோர்"
 
 
 msgid "Bone Roll"
@@ -56928,16 +56926,6 @@ msgstr "அதே ஐடியுடன் இருக்கும் துண
 
 
 msgctxt "Operator"
-msgid "Refresh All"
-msgstr "அனைத்தையும் புதுப்பி"
-
-
-msgctxt "Operator"
-msgid "Check for Updates"
-msgstr "புதுப்பிப்புகளை சரிபார்க்கவும்"
-
-
-msgctxt "Operator"
 msgid "Automatically Pack Resources"
 msgstr "தானாகவே வளங்களை பொதி செய்யுங்கள்"
 
@@ -60693,6 +60681,10 @@ msgstr "கீஃப்ரேம்களை அழிக்கவும்"
 
 msgid "Decimate F-Curves by removing keyframes that influence the curve shape the least"
 msgstr "வளைவு வடிவத்தை பாதிக்கும் கீஃப்ரேம்களை அகற்றுவதன் மூலம் எஃப்-வளைவுகளை அழிக்கவும்"
+
+
+msgid "Remove"
+msgstr "அகற்று"
 
 
 msgid "The ratio of remaining keyframes after the operation"
@@ -67120,6 +67112,26 @@ msgstr "ஒரு முனை வண்ண முன்னமைவைச் �
 
 msgid "Copy color to all selected nodes"
 msgstr "தேர்ந்தெடுக்கப்பட்ட அனைத்து முனைகளுக்கும் வண்ணத்தை நகலெடுக்கவும்"
+
+
+msgid "Overlay Mode"
+msgstr "மேலடுக்கு முறை"
+
+
+msgid "Current"
+msgstr "நடப்பு"
+
+
+msgid "Exponent"
+msgstr "அடுக்கு"
+
+
+msgid "Fraction"
+msgstr "பின்னம்"
+
+
+msgid "Wrap"
+msgstr "மடக்கு"
 
 
 msgctxt "Operator"
@@ -75580,10 +75592,6 @@ msgid "Applies a filter to modify the current mask"
 msgstr "தற்போதைய முகமூடியை மாற்ற ஒரு வடிப்பானைப் பயன்படுத்துகிறது"
 
 
-msgid "Use a automatic number of iterations based on the number of vertices of the sculpt"
-msgstr "சிற்பத்தின் செங்குத்துகளின் எண்ணிக்கையின் அடிப்படையில் தானியங்கி எண்ணிக்கையிலான மறு செய்கைகளைப் பயன்படுத்தவும்"
-
-
 msgid "Filter that is going to be applied to the mask"
 msgstr "முகமூடியில் பயன்படுத்தப்படவிருக்கும் வடிகட்டி"
 
@@ -78650,139 +78658,6 @@ msgstr "செயலில் உள்ள பொத்தானின் இட
 
 
 msgctxt "Operator"
-msgid "Edit Translation"
-msgstr "மொழிபெயர்ப்பைத் திருத்து"
-
-
-msgid "Translate the label and tooltip of the given property"
-msgstr "கொடுக்கப்பட்ட சொத்தின் சிட்டை மற்றும் உதவிக்குறிப்பை மொழிபெயர்க்கவும்"
-
-
-msgid "Label of the control"
-msgstr "கட்டுப்பாட்டின் சிட்டை"
-
-
-msgid "Flags about the label of the button"
-msgstr "பொத்தானின் சிட்டை பற்றிய கொடிகள்"
-
-
-msgid "Message is marked as fuzzy in po file"
-msgstr "po கோப்பில் செய்தி தெளிவில்லாமல் குறிக்கப்பட்டுள்ளது"
-
-
-msgid "Some error occurred with this message"
-msgstr "இந்த செய்தியுடன் சில பிழை ஏற்பட்டது"
-
-
-msgid "Tip of the control"
-msgstr "கட்டுப்பாட்டின் உதவிக்குறிப்பு"
-
-
-msgid "Flags about the tip of the button"
-msgstr "பொத்தானின் நுனி பற்றிய கொடிகள்"
-
-
-msgid "Remove all local translation files, to be able to use the system ones again"
-msgstr "கணினியை மீண்டும் பயன்படுத்த, அனைத்து உள்ளக மொழிபெயர்ப்பு கோப்புகளையும் அகற்று"
-
-
-msgid "Label of the enum item of the control, if any"
-msgstr "கட்டுப்பாட்டின் enum உருப்படியின் சிட்டை, ஏதேனும் இருந்தால்"
-
-
-msgid "Flags about the RNA enum item label of the button"
-msgstr "பொத்தானின் ஆர்என்ஏ எனும் உருப்படி சிட்டை பற்றிய கொடிகள்"
-
-
-msgid "Tip of the enum item of the control, if any"
-msgstr "கட்டுப்பாட்டின் enum உருப்படியின் முனை, ஏதேனும் இருந்தால்"
-
-
-msgid "Flags about the RNA enum item tip of the button"
-msgstr "பொத்தானின் ஆர்என்ஏ எனும் உருப்படி முனை பற்றிய கொடிகள்"
-
-
-msgid "Current (translated) language"
-msgstr "தற்போதைய (மொழிபெயர்க்கப்பட்ட) மொழி"
-
-
-msgid "Original label of the control"
-msgstr "கட்டுப்பாட்டின் அசல் சிட்டை"
-
-
-msgid "Original tip of the control"
-msgstr "கட்டுப்பாட்டின் அசல் முனை"
-
-
-msgid "Original label of the enum item of the control, if any"
-msgstr "கட்டுப்பாட்டின் enum உருப்படியின் அசல் சிட்டை, ஏதேனும் இருந்தால்"
-
-
-msgid "Original tip of the enum item of the control, if any"
-msgstr "கட்டுப்பாட்டின் enum உருப்படியின் அசல் முனை, ஏதேனும் இருந்தால்"
-
-
-msgid "Original RNA-defined label of the control, if any"
-msgstr "கட்டுப்பாட்டின் அசல் ஆர்என்ஏ-வரையறுக்கப்பட்ட சிட்டை, ஏதேனும் இருந்தால்"
-
-
-msgid "Original RNA-defined tip of the control, if any"
-msgstr "அசல் ஆர்என்ஏ-வரையறுக்கப்பட்ட கட்டுப்பாட்டின் முனை, ஏதேனும் இருந்தால்"
-
-
-msgid "Path to the matching po file"
-msgstr "பொருந்தக்கூடிய po கோப்பிற்கான பாதை"
-
-
-msgid "RNA context for label"
-msgstr "லேபிளுக்கான ஆர்என்ஏ சூழல்"
-
-
-msgid "Identifier of the RNA enum item, if any"
-msgstr "ஆர்என்ஏ enum உருப்படியின் அடையாளங்காட்டி, ஏதேனும் இருந்தால்"
-
-
-msgid "RNA-defined label of the control, if any"
-msgstr "கட்டுப்பாட்டின் ஆர்என்ஏ-வரையறுக்கப்பட்ட சிட்டை, ஏதேனும் இருந்தால்"
-
-
-msgid "Flags about the RNA-defined label of the button"
-msgstr "பொத்தானின் ஆர்என்ஏ வரையறுக்கப்பட்ட சிட்டை பற்றிய கொடிகள்"
-
-
-msgid "Identifier of the RNA property, if any"
-msgstr "ஆர்என்ஏ சொத்தின் அடையாளங்காட்டி, ஏதேனும் இருந்தால்"
-
-
-msgid "Identifier of the RNA struct, if any"
-msgstr "ஆர்என்ஏ கட்டமைப்பின் அடையாளங்காட்டி, ஏதேனும் இருந்தால்"
-
-
-msgid "RNA-defined tip of the control, if any"
-msgstr "கட்டுப்பாட்டின் ஆர்என்ஏ-வரையறுக்கப்பட்ட முனை, ஏதேனும் இருந்தால்"
-
-
-msgid "Flags about the RNA-defined tip of the button"
-msgstr "பொத்தானின் ஆர்என்ஏ-வரையறுக்கப்பட்ட முனை பற்றிய கொடிகள்"
-
-
-msgid "Stats from opened po"
-msgstr "திறந்த po இலிருந்து புள்ளிவிவரங்கள்"
-
-
-msgid "Try to rebuild mo file, and refresh Blender's UI"
-msgstr "mo கோப்பை மீண்டும் உருவாக்க முயற்சிக்கவும், கலப்பானின் இடைமுகம் ஐ புதுப்பிக்கவும்"
-
-
-msgid "Update po file, try to rebuild mo file, and refresh Blender's UI"
-msgstr "po கோப்பைப் புதுப்பிக்கவும், mo கோப்பை மீண்டும் உருவாக்க முயற்சிக்கவும், கலப்பானின் இடைமுகம் ஐப் புதுப்பிக்கவும்"
-
-
-msgid "Edit i18n in current language for the active button"
-msgstr "செயலில் உள்ள பொத்தானுக்கு தற்போதைய மொழியில் ஐ18ன் ஐத் திருத்தவும்"
-
-
-msgctxt "Operator"
 msgid "Eyedropper"
 msgstr "கண்"
 
@@ -78959,15 +78834,6 @@ msgstr "ஐ18ன் பணி களஞ்சியத்தை தூய்ம�
 
 msgid "Clean up i18n working repository (po files)"
 msgstr "ஐ18ன் வேலை களஞ்சியத்தை தூய்மை செய்யுங்கள் (po கோப்புகள்)"
-
-
-msgctxt "Operator"
-msgid "Edit Translation Update Mo"
-msgstr "மொழிபெயர்ப்பு புதுப்பிப்பு mo"
-
-
-msgid "Try to \"compile\" given po file into relevant blender.mo file"
-msgstr "கொடுக்கப்பட்ட po கோப்பை தொடர்புடைய கலப்பான்.மோ கோப்பில் \"தொகுக்க\" முயற்சிக்கவும்"
 
 
 msgctxt "Operator"
@@ -79665,10 +79531,6 @@ msgstr "விளிம்பைப் பெருக்க இருக்க�
 
 msgid "Just add the margin, ignoring any UV scale"
 msgstr "எந்த புறஊதா அளவையும் புறக்கணித்து விளிம்பைச் சேர்க்கவும்"
-
-
-msgid "Fraction"
-msgstr "பின்னம்"
 
 
 msgid "Specify a precise fraction of final UV output"
@@ -81997,10 +81859,6 @@ msgstr "சூழல் எனம் சுழற்சி"
 
 msgid "Toggle a context value"
 msgstr "சூழல் மதிப்பை மாற்றவும்"
-
-
-msgid "Wrap"
-msgstr "மடக்கு"
 
 
 msgid "Wrap back to the first/last values"
@@ -94532,32 +94390,8 @@ msgid "Method of anti-aliasing when rendering 3d viewport"
 msgstr "3 டி வியூபோர்ட்டை வழங்கும்போது ஆன்டிசிங் எதிர்ப்பு முறை"
 
 
-msgid "Maximum intensity a bloom pixel can have (0 to disable)"
-msgstr "அதிகபட்ச தீவிரம் ஒரு பூக்கும் படப்புள்ளி இருக்க முடியும் (முடக்க 0)"
-
-
-msgid "Color applied to the bloom effect"
-msgstr "பூக்கும் விளைவுக்கு வண்ணம் பயன்படுத்தப்படுகிறது"
-
-
-msgid "Blend factor"
-msgstr "கலப்பு காரணி"
-
-
 msgid "Knee"
 msgstr "முழங்கால்"
-
-
-msgid "Makes transition between under/over-threshold gradual"
-msgstr "கீழ்/ஓவர்-த்ரெசோல்ட் படிப்படியாக மாற்றத்தை ஏற்படுத்துகிறது"
-
-
-msgid "Bloom spread distance"
-msgstr "ப்ளூம் பரவல் தூரம்"
-
-
-msgid "Filters out pixels under this level of brightness"
-msgstr "இந்த அளவிலான பிரகாசத்தின் கீழ் பிக்சல்களை வெளியேற்றுகிறது"
 
 
 msgid "Denoise Amount"
@@ -94902,10 +94736,6 @@ msgstr "ரெண்டரிங்கிற்கான பிக்சலு�
 
 msgid "Number of samples, unlimited if 0"
 msgstr "மாதிரிகளின் எண்ணிக்கை, 0 என்றால் வரம்பற்றது"
-
-
-msgid "High brightness pixels generate a glowing effect"
-msgstr "உயர் ஒளி படப்புள்ளிகள் ஒளிரும் விளைவை உருவாக்குகின்றன"
 
 
 msgid "High Quality Slight Defocus"
@@ -97616,10 +97446,6 @@ msgid "Display white edges"
 msgstr "வெள்ளை விளிம்புகளைக் காண்பி"
 
 
-msgid "Overlay Mode"
-msgstr "மேலடுக்கு முறை"
-
-
 msgid "Overlay mode of rasterized mask"
 msgstr "ராச்டரைச் முகமூடியின் மேலடுக்கு முறை"
 
@@ -97798,14 +97624,6 @@ msgstr "கடைசி செயல்பாட்டை சரிசெய்�
 
 msgid "Toolbar"
 msgstr "கருவிப்பட்டி"
-
-
-msgid "Show Seconds"
-msgstr "விநாடிகளைக் காட்டு"
-
-
-msgid "Show timing in seconds not frames"
-msgstr "பிரேம்கள் அல்ல நொடிகளில் நேரத்தைக் காட்டு"
 
 
 msgid "Show Stable"
@@ -99174,10 +98992,6 @@ msgstr "குறிப்பு"
 
 msgid "Show reference frame only"
 msgstr "குறிப்பு சட்டத்தை மட்டும் காட்டு"
-
-
-msgid "Current"
-msgstr "நடப்பு"
 
 
 msgid "Show current frame only"
@@ -104990,10 +104804,6 @@ msgid "View Layer settings for EEVEE"
 msgstr "eevee க்கான அடுக்கு அமைப்புகளைக் காண்க"
 
 
-msgid "Deliver bloom pass"
-msgstr "ப்ளூம் மொழி வழங்கவும்"
-
-
 msgid "Deliver alpha blended surfaces in a separate pass"
 msgstr "ஆல்பா கலப்பு மேற்பரப்புகளை ஒரு தனி பாசில் வழங்கவும்"
 
@@ -108795,6 +108605,10 @@ msgid "Warning"
 msgstr "எச்சரிக்கை"
 
 
+msgid "name"
+msgstr "பெயர்"
+
+
 msgctxt "Operator"
 msgid "Documentation"
 msgstr "ஆவணம்"
@@ -110572,11 +110386,6 @@ msgstr "அச்சுகள்"
 
 
 msgctxt "Operator"
-msgid "Remove"
-msgstr "அகற்று"
-
-
-msgctxt "Operator"
 msgid "Remove Unused"
 msgstr "பயன்படுத்தப்படாததை அகற்றவும்"
 
@@ -111261,11 +111070,6 @@ msgstr "குழந்தை வளர்ப்பு:"
 
 
 msgctxt "Operator"
-msgid "Parent"
-msgstr "பெற்றோர்"
-
-
-msgctxt "Operator"
 msgid "Clear"
 msgstr "தெளிவான"
 
@@ -111313,12 +111117,12 @@ msgid "Invert"
 msgstr "புரட்டு"
 
 
-msgid "Render Method"
-msgstr "render முறை"
-
-
 msgid "Light Probe Volume"
 msgstr "ஒளி ஆய்வு தொகுதி"
+
+
+msgid "Render Method"
+msgstr "render முறை"
 
 
 msgid "Intersection"
@@ -112016,10 +111820,6 @@ msgid "Particle Life Maximum"
 msgstr "துகள் ஆயுள் அதிகபட்சம்"
 
 
-msgid "Exponent"
-msgstr "அடுக்கு"
-
-
 msgid "Surface Tension"
 msgstr "பரப்பு இழுவிசை"
 
@@ -112409,10 +112209,6 @@ msgstr "அறியப்படாத துணை நிரல்கள்"
 
 msgid "category"
 msgstr "வகை"
-
-
-msgid "name"
-msgstr "பெயர்"
 
 
 msgid "Display Thin"
@@ -113859,6 +113655,11 @@ msgstr "அமைப்பு"
 msgctxt "Operator"
 msgid "Rebuild"
 msgstr "மீண்டும் கட்டியெழுப்ப"
+
+
+msgctxt "Operator"
+msgid "Refresh All"
+msgstr "அனைத்தையும் புதுப்பி"
 
 
 msgctxt "Operator"
@@ -120634,20 +120435,12 @@ msgid "Active button not found"
 msgstr "செயலில் பொத்தான் கிடைக்கவில்லை"
 
 
-msgid "Please set your Preferences' 'Translation Branches Directory' path to a valid directory"
-msgstr "உங்கள் விருப்பங்களின் 'மொழிபெயர்ப்பு கிளைகள் அடைவு' பாதையை செல்லுபடியாகும் கோப்பகத்திற்கு அமைக்கவும்"
-
-
 msgid "Could not compute a valid data path"
 msgstr "செல்லுபடியாகும் தரவு பாதையை கணக்கிட முடியவில்லை"
 
 
 msgid "Failed to create the override operation"
 msgstr "மேலெழுதும் செயல்பாட்டை உருவாக்கத் தவறிவிட்டது"
-
-
-msgid "Could not find operator '%s'! Please enable ui_translate add-on in the User Preferences"
-msgstr "ஆபரேட்டர் '%s' கண்டுபிடிக்க முடியவில்லை! பயனர் விருப்பங்களில் ui_translate துணை நிரலை இயக்கவும்"
 
 
 msgid "%d items"
