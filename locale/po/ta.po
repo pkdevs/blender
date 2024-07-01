@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'37e2a27bdddc')\n"
+"Project-Id-Version: Blender 4.2.0 Beta (b'78330522d2ae')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-24 08:56+0000\n"
+"POT-Creation-Date: 2024-07-01 09:24+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -15212,24 +15212,12 @@ msgid "Temperature difference to ambient temperature"
 msgstr "சுற்றுப்புற வெப்பநிலைக்கு வெப்பநிலை வேறுபாடு"
 
 
-msgid "Mapping"
-msgstr "விவரணையாக்கம்"
-
-
 msgid "Texture mapping type"
 msgstr "அமைப்பு மேப்பிங் வகை"
 
 
-msgid "Generated"
-msgstr "உருவாக்கப்பட்டது"
-
-
 msgid "Generated coordinates centered to flow object"
 msgstr "ஃப்ளோ பொருளுக்கு மையமாக உருவாக்கப்பட்ட ஆயத்தொகுப்புகள்"
-
-
-msgid "UV"
-msgstr "புறஊதா"
 
 
 msgid "Use UV layer for texture coordinates"
@@ -15914,6 +15902,10 @@ msgstr "நடுக்கம்"
 
 msgid "A filler or baked keyframe for keying on ones, or some other purpose as needed"
 msgstr "ஒரு நிரப்பு அல்லது வேகவைத்த கீஃப்ரேம், அல்லது தேவைக்கேற்ப வேறு சில நோக்கங்கள்"
+
+
+msgid "Generated"
+msgstr "உருவாக்கப்பட்டது"
 
 
 msgid "Frame is selected for editing in the Dope Sheet"
@@ -19708,6 +19700,10 @@ msgid "Armature data-block containing a hierarchy of bones, usually used for rig
 msgstr "எலும்புகளின் வரிசைமுறையைக் கொண்ட ஆர்மேச்சர் டேட்டா-பிளாக், பொதுவாக எழுத்துக்களை மோசடி செய்ய பயன்படுத்தப்படுகிறது"
 
 
+msgid "Feature Set"
+msgstr "நற்பொருத்தம் தொகுப்பு"
+
+
 msgid "Animation data for this data-block"
 msgstr "இந்த தரவு-தடுப்புக்கான அனிமேசன் தரவு"
 
@@ -19814,6 +19810,10 @@ msgstr "பெற்றோர் வால் முதல் குழந்த
 
 msgid "Draw the relationship line from the parent head to the child head"
 msgstr "பெற்றோர் தலையிலிருந்து குழந்தை தலைக்கு உறவு வரியை வரையவும்"
+
+
+msgid "Theme"
+msgstr "கருப்பொருள்"
 
 
 msgid "Display Axes"
@@ -24446,20 +24446,12 @@ msgid "Where the image comes from"
 msgstr "படம் எங்கிருந்து வருகிறது"
 
 
-msgid "Single Image"
-msgstr "ஒற்றை படம்"
-
-
 msgid "Single image file"
 msgstr "ஒற்றை பட கோப்பு"
 
 
 msgid "Multiple image files, as a sequence"
 msgstr "பல படக் கோப்புகள், ஒரு வரிசையாக"
-
-
-msgid "Movie"
-msgstr "படம்"
 
 
 msgid "Movie file"
@@ -24470,16 +24462,8 @@ msgid "Generated image"
 msgstr "உருவாக்கப்பட்ட படம்"
 
 
-msgid "Viewer"
-msgstr "பார்வையாளர்"
-
-
 msgid "Compositing node viewer"
 msgstr "முனை பார்வையாளர்"
-
-
-msgid "UDIM Tiles"
-msgstr "udim ஓடுகள்"
 
 
 msgid "Tiled UDIM image texture"
@@ -33711,6 +33695,10 @@ msgid "Invert the fade-out direction of the linear mapping"
 msgstr "நேரியல் மேப்பிங்கின் மங்கலான திசையை தலைகீழாக மாற்றவும்"
 
 
+msgid "Mapping"
+msgstr "விவரணையாக்கம்"
+
+
 msgid "Select the mapping type"
 msgstr "மேப்பிங் வகையைத் தேர்ந்தெடுக்கவும்"
 
@@ -35182,6 +35170,10 @@ msgstr "கூடுதல் சேர்க்கவும்"
 
 msgid "Select Linked"
 msgstr "இணைக்கப்பட்டதைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "UV"
+msgstr "புறஊதா"
 
 
 msgid "Align"
@@ -44953,6 +44945,10 @@ msgid "Interpolate between frames in a Bézier curve, rather than linearly"
 msgstr "ஒரு பெசியர் வளைவில் பிரேம்களுக்கு இடையில் இடைக்கணிப்பு, நேரியல் அல்லாமல்"
 
 
+msgid "Viewer"
+msgstr "பார்வையாளர்"
+
+
 msgid "Z Combine"
 msgstr "சட் இணைக்கவும்"
 
@@ -52007,6 +52003,10 @@ msgid "Reveal all bones hidden in Edit Mode"
 msgstr "திருத்து பயன்முறையில் மறைக்கப்பட்ட அனைத்து எலும்புகளையும் வெளிப்படுத்துங்கள்"
 
 
+msgid "(undocumented operator)"
+msgstr "(ஆவணமற்ற ஆபரேட்டர்)"
+
+
 msgctxt "Operator"
 msgid "Clear Roll"
 msgstr "தெளிவான ரோல்"
@@ -53522,10 +53522,6 @@ msgstr "லாசோ தேர்வைப் பயன்படுத்தி 
 msgctxt "Operator"
 msgid "Set Active Clip"
 msgstr "செயலில் உள்ள கிளிப்பை அமைக்கவும்"
-
-
-msgid "(undocumented operator)"
-msgstr "(ஆவணமற்ற ஆபரேட்டர்)"
 
 
 msgctxt "Operator"
@@ -67114,6 +67110,10 @@ msgid "Copy color to all selected nodes"
 msgstr "தேர்ந்தெடுக்கப்பட்ட அனைத்து முனைகளுக்கும் வண்ணத்தை நகலெடுக்கவும்"
 
 
+msgid "Option"
+msgstr "விருப்பம்"
+
+
 msgid "Overlay Mode"
 msgstr "மேலடுக்கு முறை"
 
@@ -69561,6 +69561,11 @@ msgstr "நூலகத்தை மீறுங்கள்"
 
 msgid "Reset the selected local overrides to their linked references values"
 msgstr "தேர்ந்தெடுக்கப்பட்ட உள்ளக மேலெழுதல்களை அவற்றின் இணைக்கப்பட்ட குறிப்புகள் மதிப்புகளுக்கு மீட்டமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "New"
+msgstr "புதிய"
 
 
 msgctxt "Operator"
@@ -73111,6 +73116,10 @@ msgid "Reveal all bones hidden in Pose Mode"
 msgstr "போச் பயன்முறையில் மறைக்கப்பட்ட அனைத்து எலும்புகளையும் வெளிப்படுத்துங்கள்"
 
 
+msgid "Property Name"
+msgstr "சொத்தின் பெயர்"
+
+
 msgctxt "Operator"
 msgid "Clear Pose Rotation"
 msgstr "தெளிவான போச் சுழற்சி"
@@ -74906,10 +74915,6 @@ msgid "Editing"
 msgstr "திருத்துதல்"
 
 
-msgid "Extensions"
-msgstr "நீட்டிப்புகள்"
-
-
 msgid "Keymap"
 msgstr "கீமாப்"
 
@@ -76243,14 +76248,6 @@ msgid "After removing the Strip, delete the associated data also"
 msgstr "துண்டுகளை அகற்றிய பின், தொடர்புடைய தரவையும் நீக்கவும்"
 
 
-msgid "Use Retiming Data"
-msgstr "தரவை மறுபரிசீலனை செய்யுங்கள்"
-
-
-msgid "Operate on retiming data instead of strips"
-msgstr "கீற்றுகளுக்கு பதிலாக தரவை மறுபரிசீலனை செய்வதில் செயல்படுங்கள்"
-
-
 msgid "Duplicate the selected strips"
 msgstr "தேர்ந்தெடுக்கப்பட்ட கீற்றுகளை நகலெடுக்கவும்"
 
@@ -76720,6 +76717,11 @@ msgstr "காலவரிசை சட்டகம்"
 
 msgid "Frame where key will be added"
 msgstr "விசை சேர்க்கப்படும் இடத்தில் சட்டகம்"
+
+
+msgctxt "Operator"
+msgid "Delete Retiming Keys"
+msgstr "ரீடைமிங் கீகளை நீக்கு"
 
 
 msgctxt "Operator"
@@ -82785,10 +82787,6 @@ msgid "Allow the property to be overridden when the data-block is linked"
 msgstr "தரவு-தொகுதி இணைக்கப்படும்போது சொத்தை மீற அனுமதிக்கவும்"
 
 
-msgid "Property Name"
-msgstr "சொத்தின் பெயர்"
-
-
 msgid "Property name edit"
 msgstr "சொத்து பெயர் திருத்து"
 
@@ -84427,6 +84425,10 @@ msgid "Detect image slots from the material"
 msgstr "மூலப்பொருளிலிருந்து பட இடங்களைக் கண்டறியவும்"
 
 
+msgid "Single Image"
+msgstr "ஒற்றை படம்"
+
+
 msgid "Set image for texture painting directly"
 msgstr "அமைப்பு ஓவியத்திற்கான படத்தை நேரடியாக அமைக்கவும்"
 
@@ -85044,11 +85046,6 @@ msgid "Snapping"
 msgstr "ச்னாப்பிங்"
 
 
-msgctxt "ID"
-msgid "Displacement"
-msgstr "இடம்பெயர்வு"
-
-
 msgid "Advanced Filter"
 msgstr "மேம்பட்ட வடிகட்டி"
 
@@ -85213,6 +85210,10 @@ msgstr "டைலிங்"
 
 msgid "Texture Mask"
 msgstr "அமைப்பு முகமூடி"
+
+
+msgid "UDIM Tiles"
+msgstr "udim ஓடுகள்"
 
 
 msgid "Histogram"
@@ -85693,6 +85694,10 @@ msgid "Prototypes"
 msgstr "முன்மாதிரிகள்"
 
 
+msgid "Extensions"
+msgstr "நீட்டிப்புகள்"
+
+
 msgid "Repositories"
 msgstr "களஞ்சியங்கள்"
 
@@ -85875,10 +85880,6 @@ msgstr "எண் புலம்"
 
 msgid "Value Slider"
 msgstr "மதிப்பு ச்லைடர்"
-
-
-msgid "Option"
-msgstr "விருப்பம்"
 
 
 msgid "Pie Menu"
@@ -87703,10 +87704,6 @@ msgstr "உலகளாவிய விருப்பத்தேர்வு�
 
 msgid "Active Section"
 msgstr "செயலில் உள்ள பிரிவு"
-
-
-msgid "Active section of the preferences shown in the user interface"
-msgstr "பயனர் இடைமுகத்தில் காட்டப்பட்டுள்ள விருப்பங்களின் செயலில் உள்ள பிரிவு"
 
 
 msgid "Application Template"
@@ -91306,10 +91303,6 @@ msgid "Add ambient occlusion to diffuse surfaces"
 msgstr "பரவலான மேற்பரப்புகளுக்கு சுற்றுப்புற இடையூறைச் சேர்க்கவும்"
 
 
-msgid "Feature Set"
-msgstr "நற்பொருத்தம் தொகுப்பு"
-
-
 msgid "Feature set to use for rendering"
 msgstr "ரெண்டரிங்கிற்கு பயன்படுத்த நற்பொருத்தம் அமைக்கப்பட்டுள்ளது"
 
@@ -92264,6 +92257,10 @@ msgstr "தொகுதி ரேமார்ச் படி அளவு வ�
 
 msgid "Step size when raymarching volume for lighting computation"
 msgstr "லைட்டிங் கணக்கீட்டிற்கான ரேமார்ச்சிங் தொகுதி போது படி அளவு"
+
+
+msgid "Widget"
+msgstr "விட்செட்"
 
 
 msgid "Selected UV Element"
@@ -94740,10 +94737,6 @@ msgstr "சத்தத்தை அகற்ற கிட்டத்தட்�
 
 msgid "Jitter Camera"
 msgstr "நடுக்கம் கேமரா"
-
-
-msgid "Jitter camera position to create accurate blurring using render samples"
-msgstr "வழங்குதல் மாதிரிகளைப் பயன்படுத்தி துல்லியமான மங்கலை உருவாக்க நடுக்கம் கேமரா நிலை"
 
 
 msgid "Enable ambient occlusion to simulate medium scale indirect shadowing"
@@ -100493,10 +100486,6 @@ msgid "Use global coordinates for the texture coordinates"
 msgstr "அமைப்பு ஒருங்கிணைப்புகளுக்கு உலகளாவிய ஆயத்தொலைவுகளைப் பயன்படுத்தவும்"
 
 
-msgid "Along stroke"
-msgstr "வீச்சு"
-
-
 msgid "Use stroke length for texture coordinates"
 msgstr "அமைப்பு ஒருங்கிணைப்புகளுக்கு வீச்சு நீளத்தைப் பயன்படுத்தவும்"
 
@@ -100619,10 +100608,6 @@ msgstr "அமைப்பு ஒருங்கிணைப்புகளு�
 
 msgid "Use UV coordinates for texture coordinates"
 msgstr "அமைப்பு ஒருங்கிணைப்புகளுக்கு புறஊதா ஆயத்தொலைவுகளைப் பயன்படுத்தவும்"
-
-
-msgid "Strand / Particle"
-msgstr "ச்ட்ராண்ட் / துகள்"
 
 
 msgid "Use normalized strand texture coordinate (1D) or particle age (X) and trail position (Y)"
@@ -104640,10 +104625,6 @@ msgid "Wire Color Type"
 msgstr "கம்பி வண்ண வகை"
 
 
-msgid "Theme"
-msgstr "கருப்பொருள்"
-
-
 msgid "Show scene wireframes with the theme's wire color"
 msgstr "கருப்பொருள் கம்பி நிறத்துடன் காட்சி வயர்ஃப்ரேம்களைக் காட்டு"
 
@@ -105243,10 +105224,6 @@ msgstr "பெயிண்ட் கேன்வாசைப் பயன்ப�
 
 msgid "Does this tool use a painting canvas"
 msgstr "இந்த கருவி ஓவிய கேன்வாசைப் பயன்படுத்துகிறதா"
-
-
-msgid "Widget"
-msgstr "விட்செட்"
 
 
 msgid "Lighting for a World data-block"
@@ -109303,6 +109280,49 @@ msgid "Deselected bones from %s"
 msgstr "%s இலிருந்து அனுப்பப்பட்ட எலும்புகள்"
 
 
+msgid "Description:"
+msgstr "விளக்கம்:"
+
+
+msgid "Internet:"
+msgstr "இணையதளம்:"
+
+
+msgid "Author:"
+msgstr "நூலாசிரியர்:"
+
+
+msgid "Version:"
+msgstr "பதிப்பு:"
+
+
+msgid "Warning:"
+msgstr "எச்சரிக்கை:"
+
+
+msgctxt "Operator"
+msgid "Documentation"
+msgstr "ஆவணம்"
+
+
+msgid "File:"
+msgstr "கோப்பு:"
+
+
+msgctxt "Operator"
+msgid "Apply"
+msgstr "இடு"
+
+
+msgid "Options:"
+msgstr "விருப்பதேர்வு:"
+
+
+msgctxt "Operator"
+msgid "Action"
+msgstr "செயல்"
+
+
 msgid "Save to PO File"
 msgstr "po கோப்பில் சேமிக்கவும்"
 
@@ -109551,11 +109571,6 @@ msgstr "மீட்டமை"
 msgctxt "WindowManager"
 msgid "Add New"
 msgstr "புதிதாக சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "New"
-msgstr "புதிய"
 
 
 msgctxt "Operator"
@@ -110027,10 +110042,6 @@ msgstr "மேம்பாட்டு பொருள்"
 
 msgid "The donation program to support maintenance and improvements"
 msgstr "பராமரிப்பு மற்றும் மேம்பாடுகளை ஆதரிப்பதற்கான நன்கொடை திட்டம்"
-
-
-msgid "blender.org"
-msgstr "கலப்பான்.நிறுவ"
 
 
 msgid "Blender's official web-site"
@@ -112529,10 +112540,6 @@ msgid "Filter by Type:"
 msgstr "வகை வாரியாக வடிகட்டவும்:"
 
 
-msgid "Options:"
-msgstr "விருப்பதேர்வு:"
-
-
 msgid "Snap To"
 msgstr "க்கு ச்னாப் செய்யவும்"
 
@@ -113225,11 +113232,6 @@ msgstr "முழுத்திரை பரப்பை நிலைமாற�
 
 
 msgctxt "Operator"
-msgid "Action"
-msgstr "செயல்"
-
-
-msgctxt "Operator"
 msgid "Transition"
 msgstr "மாற்றம்"
 
@@ -113716,11 +113718,6 @@ msgstr "பாதை / கோப்புகளை மாற்று"
 msgctxt "Operator"
 msgid "Swap Data"
 msgstr "இடமாற்று தரவு"
-
-
-msgctxt "Operator"
-msgid "Delete Retiming Keys"
-msgstr "ரீடைமிங் கீகளை நீக்கு"
 
 
 msgctxt "Operator"
@@ -114920,41 +114917,12 @@ msgid "Missing script files"
 msgstr "கைஉரை கோப்புகளைக் காணவில்லை"
 
 
-msgid "Description:"
-msgstr "விளக்கம்:"
-
-
 msgid "Location:"
 msgstr "இடம்:"
 
 
-msgid "File:"
-msgstr "கோப்பு:"
-
-
-msgid "Author:"
-msgstr "நூலாசிரியர்:"
-
-
-msgid "Version:"
-msgstr "பதிப்பு:"
-
-
-msgid "Warning:"
-msgstr "எச்சரிக்கை:"
-
-
-msgid "Internet:"
-msgstr "இணையதளம்:"
-
-
 msgid "User:"
 msgstr "பயனர்:"
-
-
-msgctxt "Operator"
-msgid "Documentation"
-msgstr "ஆவணம்"
 
 
 msgctxt "Operator"
@@ -117085,11 +117053,6 @@ msgstr "பல வண்ணப்பூச்சு"
 msgctxt "Operator"
 msgid "Quick Edit"
 msgstr "விரைவான திருத்து"
-
-
-msgctxt "Operator"
-msgid "Apply"
-msgstr "இடு"
 
 
 msgctxt "Operator"
@@ -121132,6 +121095,11 @@ msgid "New"
 msgstr "புதிய"
 
 
+msgctxt "PaintCurve"
+msgid "New"
+msgstr "புதிய"
+
+
 msgctxt "ParticleSettings"
 msgid "New"
 msgstr "புதிய"
@@ -121173,11 +121141,6 @@ msgstr "புதிய"
 
 
 msgctxt "World"
-msgid "New"
-msgstr "புதிய"
-
-
-msgctxt "PaintCurve"
 msgid "New"
 msgstr "புதிய"
 
@@ -125942,10 +125905,6 @@ msgid "Undo History"
 msgstr "வரலாற்றை செயல்தவிர்க்கவும்"
 
 
-msgid "Remove all files in \"{}\"."
-msgstr "எல்லா கோப்புகளையும் \"{}\" இல் அகற்று."
-
-
 msgid "Remove, local files not found."
 msgstr "அகற்று, உள்ளக கோப்புகள் கிடைக்கவில்லை."
 
@@ -128520,6 +128479,10 @@ msgstr "ஒரு குவிந்த மோதல் வடிவம் ச�
 
 msgid "Rigidbody world was not properly initialized, need to step the simulation first"
 msgstr "ரிகிட்போடி உலகம் சரியாக துவக்கப்படவில்லை, முதலில் உருவகப்படுத்துதலை அடியெடுத்து வைக்க வேண்டும்"
+
+
+msgid "Movie"
+msgstr "படம்"
 
 
 msgid "Use the scene orientation"
