@@ -69,7 +69,6 @@ static void calc_faces(const Sculpt &sd,
   const MutableSpan<float> factors = tls.factors;
   fill_factor_from_hide_and_mask(mesh, verts, factors);
   filter_region_clip_factors(ss, orig_data.positions, factors);
-
   if (brush.flag & BRUSH_FRONTFACE) {
     calc_front_face(cache.view_normal, orig_data.normals, factors);
   }
@@ -118,7 +117,6 @@ static void calc_grids(const Sculpt &sd,
   const MutableSpan<float> factors = tls.factors;
   fill_factor_from_hide_and_mask(subdiv_ccg, grids, factors);
   filter_region_clip_factors(ss, orig_data.positions, factors);
-
   if (brush.flag & BRUSH_FRONTFACE) {
     calc_front_face(cache.view_normal, orig_data.normals, factors);
   }
@@ -168,7 +166,6 @@ static void calc_bmesh(const Sculpt &sd,
   const MutableSpan<float> factors = tls.factors;
   fill_factor_from_hide_and_mask(*ss.bm, verts, factors);
   filter_region_clip_factors(ss, orig_positions, factors);
-
   if (brush.flag & BRUSH_FRONTFACE) {
     calc_front_face(cache.view_normal, orig_normals, factors);
   }
