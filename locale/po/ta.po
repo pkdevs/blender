@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'78330522d2ae')\n"
+"Project-Id-Version: Blender 4.2.0 Beta (b'987b781412f1')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-07-01 09:24+0000\n"
+"POT-Creation-Date: 2024-07-08 18:33+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -35002,6 +35002,10 @@ msgid "Keyframe Insert Pie"
 msgstr "கீஃப்ரேம் செருகும் பை"
 
 
+msgid "Basic"
+msgstr "அடிப்படை"
+
+
 msgid "Bone Collection Specials"
 msgstr "எலும்பு சேகரிப்பு சிறப்பு"
 
@@ -45347,10 +45351,6 @@ msgid "Instances of objects or collections"
 msgstr "பொருள்கள் அல்லது சேகரிப்புகளின் நிகழ்வுகள்"
 
 
-msgid "Grease Pencil component containing layers and curves data"
-msgstr "அடுக்குகள் மற்றும் வளைவுகள் தரவைக் கொண்ட பசை எழுதுகோல் கூறு"
-
-
 msgid "Attribute Statistic"
 msgstr "பண்புக்கூறு புள்ளிவிவரம்"
 
@@ -47523,10 +47523,6 @@ msgstr "உங்கள் விருப்பத்தின் நிறத�
 
 msgid "Principled BSDF"
 msgstr "கொள்கை ரீதியான பி.எச்.டி.எஃப்"
-
-
-msgid "Physically-based, easy-to-use shader for rendering surface materials, based on the Disney principled model also known as the \"PBR\" shader"
-msgstr "\"பிபிஆர்\" சேடர் என்றும் அழைக்கப்படும் டிச்னி கொள்கை ரீதியான மாதிரியை அடிப்படையாகக் கொண்டு, மேற்பரப்பு மூலப்பொருட்களை வழங்குவதற்கான உடல் அடிப்படையிலான, பயன்படுத்த எளிதான சேடர்"
 
 
 msgid "Subsurface Method"
@@ -108570,8 +108566,25 @@ msgid "Mesh Filter Modal Map"
 msgstr "கண்ணி வடிகட்டி மாதிரி வரைபடம்"
 
 
+msgid "Multiple add-ons with the same name found!"
+msgstr "அதே பெயருடன் பல துணை நிரல்கள் காணப்படுகின்றன!"
+
+
+msgid "Delete one of each pair to resolve:"
+msgstr "தீர்க்க ஒவ்வொரு சோடியிலும் ஒன்றை நீக்கு:"
+
+
+msgctxt "Operator"
+msgid "None"
+msgstr "எதுவுமில்லை"
+
+
 msgid "Warning"
 msgstr "எச்சரிக்கை"
+
+
+msgid ":"
+msgstr ":"
 
 
 msgctxt "Operator"
@@ -111099,11 +111112,6 @@ msgstr "செதில் இறகு"
 msgctxt "Operator"
 msgid "Hide Unselected"
 msgstr "தேர்ந்தெடுக்கப்படாததை மறை"
-
-
-msgctxt "Operator"
-msgid "None"
-msgstr "எதுவுமில்லை"
 
 
 msgctxt "Operator"
@@ -114885,14 +114893,6 @@ msgid "Fly/Walk"
 msgstr "பறக்க/நடை"
 
 
-msgid "Multiple add-ons with the same name found!"
-msgstr "அதே பெயருடன் பல துணை நிரல்கள் காணப்படுகின்றன!"
-
-
-msgid "Delete one of each pair to resolve:"
-msgstr "தீர்க்க ஒவ்வொரு சோடியிலும் ஒன்றை நீக்கு:"
-
-
 msgid "Enable Cycles Render Engine add-on to use Cycles"
 msgstr "சுழற்சிகளைப் பயன்படுத்த என்சின் கூடுதல் வழங்க சுழற்சிகளை இயக்கவும்"
 
@@ -114907,10 +114907,6 @@ msgstr "கலப்பு கோப்புகளுடன் இணைக்�
 
 msgid "Error (see console)"
 msgstr "பிழை (கன்சோலைப் பார்க்கவும்)"
-
-
-msgid ":"
-msgstr ":"
 
 
 msgid "Missing script files"
@@ -118593,10 +118589,6 @@ msgid "Compositor node tree has undefined nodes or sockets!"
 msgstr "இசையமைப்பாளர் முனை மரம் வரையறுக்கப்படாத முனைகள் அல்லது சாக்கெட்டுகளைக் கொண்டுள்ளது!"
 
 
-msgid "Basic"
-msgstr "அடிப்படை"
-
-
 msgid "GpencilMode"
 msgstr "gpencilmode"
 
@@ -120476,6 +120468,14 @@ msgid "Redo"
 msgstr "மீண்டும்செய்"
 
 
+msgid "OK"
+msgstr "சரி"
+
+
+msgid "Cancel"
+msgstr "ரத்துசெய்"
+
+
 msgid "Menu \"%s\" not found"
 msgstr "பட்டியல் \"%s\" கிடைக்கவில்லை"
 
@@ -121352,10 +121352,6 @@ msgstr "கோளம்"
 msgctxt "Mesh"
 msgid "Icosphere"
 msgstr "ஐகோச்பியர்"
-
-
-msgid "Cancel"
-msgstr "ரத்துசெய்"
 
 
 msgid "Outer"
@@ -123582,10 +123578,6 @@ msgstr "டைன்டோபோ விவரம் அளவை மாற்ற
 
 msgid "Warning!"
 msgstr "எச்சரிக்கை!"
-
-
-msgid "OK"
-msgstr "சரி"
 
 
 msgid "Attribute Data Detected"
@@ -132908,22 +132900,6 @@ msgid "Video Editing"
 msgstr "காணொளி தொகுப்பாக்கம்"
 
 
-msgid "VR Scene Inspection"
-msgstr "வி.ஆர் காட்சி ஆய்வு"
-
-
-msgid "View the viewport with virtual reality glasses (head-mounted displays)"
-msgstr "மெய்நிகர் ரியாலிட்டி கண்ணாடிகளுடன் (தலையில் பொருத்தப்பட்ட காட்சிகள்) காட்சியைக் காண்க"
-
-
-msgid "Copy Global Transform"
-msgstr "உலகளாவிய உருமாற்றத்தை நகலெடுக்கவும்"
-
-
-msgid "Pose Library based on the asset system."
-msgstr "சொத்து அமைப்பின் அடிப்படையில் நூலகத்தை போச் செய்யுங்கள்."
-
-
 msgid "BioVision Motion Capture (BVH) format"
 msgstr "பயோவிசன் மோசன் கேப்சர் (பி.வி.எச்) வடிவம்"
 
@@ -132932,12 +132908,52 @@ msgid "Import-Export BVH from armature objects"
 msgstr "ஆர்மேச்சர் பொருட்களிலிருந்து இறக்குமதி-ஏற்றுமதி பி.வி.எச்"
 
 
+msgid "Copy Global Transform"
+msgstr "உலகளாவிய உருமாற்றத்தை நகலெடுக்கவும்"
+
+
+msgid "Cycles Render Engine"
+msgstr "சுழற்சிகள் இயந்திரத்தை வழங்குகின்றன"
+
+
+msgid "Cycles renderer integration"
+msgstr "சுழற்சிகள் ரெண்டரர் ஒருங்கிணைப்பு"
+
+
 msgid "FBX format"
 msgstr "fbx வடிவம்"
 
 
 msgid "FBX IO meshes, UVs, vertex colors, materials, textures, cameras, lamps and actions"
 msgstr "fbx io மெச்கள், புறஊதாஎச், வெர்டெக்ச் வண்ணங்கள், மூலப்பொருட்கள், கட்டமைப்புகள், கேமராக்கள், விளக்குகள் மற்றும் செயல்கள்"
+
+
+msgid "glTF 2.0 format"
+msgstr "gltf 2.0 வடிவம்"
+
+
+msgid "Import-Export as glTF 2.0"
+msgstr "இறக்குமதி-ஏற்றுமதி gltf 2.0 ஆக"
+
+
+msgid "Hydra Storm render engine"
+msgstr "ஐட்ரா புயல் வழங்குதல் எஞ்சின்"
+
+
+msgid "USD's high performance rasterizing renderer"
+msgstr "யு.எச்.டி.யின் உயர் செயல்திறன் ராச்டரைசிங் ரெண்டரர்"
+
+
+msgid "Manage UI translations"
+msgstr "இடைமுகம் மொழிபெயர்ப்புகளை நிர்வகிக்கவும்"
+
+
+msgid "Allows managing UI translations directly from Blender (update main .po files, update scripts' translations, etc.)"
+msgstr "இடைமுகம் மொழிபெயர்ப்புகளை கலப்பானிலிருந்து நேரடியாக நிர்வகிக்க அனுமதிக்கிறது (மெயின் .po கோப்புகளை புதுப்பிக்கவும், கைஉரைகளின் மொழிபெயர்ப்புகளைப் புதுப்பிக்கவும்)"
+
+
+msgid "Pose Library based on the asset system."
+msgstr "சொத்து அமைப்பின் அடிப்படையில் நூலகத்தை போச் செய்யுங்கள்."
 
 
 msgid "Scalable Vector Graphics (SVG) 1.1 format"
@@ -132956,36 +132972,12 @@ msgid "Export the UV layout as a 2D graphic"
 msgstr "புறஊதா தளவமைப்பை 2 டி கிராஃபிக் என ஏற்றுமதி செய்யுங்கள்"
 
 
-msgid "glTF 2.0 format"
-msgstr "gltf 2.0 வடிவம்"
+msgid "VR Scene Inspection"
+msgstr "வி.ஆர் காட்சி ஆய்வு"
 
 
-msgid "Import-Export as glTF 2.0"
-msgstr "இறக்குமதி-ஏற்றுமதி gltf 2.0 ஆக"
-
-
-msgid "Cycles Render Engine"
-msgstr "சுழற்சிகள் இயந்திரத்தை வழங்குகின்றன"
-
-
-msgid "Cycles renderer integration"
-msgstr "சுழற்சிகள் ரெண்டரர் ஒருங்கிணைப்பு"
-
-
-msgid "Hydra Storm render engine"
-msgstr "ஐட்ரா புயல் வழங்குதல் எஞ்சின்"
-
-
-msgid "USD's high performance rasterizing renderer"
-msgstr "யு.எச்.டி.யின் உயர் செயல்திறன் ராச்டரைசிங் ரெண்டரர்"
-
-
-msgid "Manage UI translations"
-msgstr "இடைமுகம் மொழிபெயர்ப்புகளை நிர்வகிக்கவும்"
-
-
-msgid "Allows managing UI translations directly from Blender (update main .po files, update scripts' translations, etc.)"
-msgstr "இடைமுகம் மொழிபெயர்ப்புகளை கலப்பானிலிருந்து நேரடியாக நிர்வகிக்க அனுமதிக்கிறது (மெயின் .po கோப்புகளை புதுப்பிக்கவும், கைஉரைகளின் மொழிபெயர்ப்புகளைப் புதுப்பிக்கவும்)"
+msgid "View the viewport with virtual reality glasses (head-mounted displays)"
+msgstr "மெய்நிகர் ரியாலிட்டி கண்ணாடிகளுடன் (தலையில் பொருத்தப்பட்ட காட்சிகள்) காட்சியைக் காண்க"
 
 
 msgid "All Add-ons"
