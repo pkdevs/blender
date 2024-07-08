@@ -18,7 +18,6 @@ namespace blender::nodes::node_geo_import_stl {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::String>("Path")
-      .default_value("")
       .subtype(PROP_FILEPATH)
       .hide_label()
       .description("Path to a STL file");
