@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Release Candidate (b'988bf2b88f3b')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'de443e038c4e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-07-15 07:57+0000\n"
-"PO-Revision-Date: 2024-07-14 16:44+0000\n"
+"POT-Creation-Date: 2024-07-22 07:23+0000\n"
+"PO-Revision-Date: 2024-07-22 07:24+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -57,6 +57,10 @@ msgstr "AOV-ების სია"
 
 msgid "Collection of AOVs"
 msgstr "AOV-ების კოლექცია"
+
+
+msgid "F-Curves"
+msgstr "F-წირები"
 
 
 msgid "Action F-Curves"
@@ -243,6 +247,38 @@ msgid "Collection of action groups"
 msgstr "ქმედებათა ჯგუფების კოლექცია"
 
 
+msgid "Influence"
+msgstr "ზეგავლენა"
+
+
+msgid "Mix Mode"
+msgstr "შერევის რეჟიმი"
+
+
+msgid "Replace"
+msgstr "ჩანაცვლება"
+
+
+msgid "Offset"
+msgstr "აცდენა"
+
+
+msgid "Add"
+msgstr "დამატება"
+
+
+msgid "Subtract"
+msgstr "გამოკლება"
+
+
+msgid "Multiply"
+msgstr "გამრავლება"
+
+
+msgid "Strips"
+msgstr "ლენტები"
+
+
 msgid "Action Pose Markers"
 msgstr "ქმედების პოზის მარკერები"
 
@@ -265,6 +301,18 @@ msgstr "აქტიური პოზის მარკერის ინდ
 
 msgid "Index of active pose marker"
 msgstr "აქტიური პოზის მარკერის ინდექსი"
+
+
+msgid "Active"
+msgstr "აქტიური"
+
+
+msgid "Show Expanded"
+msgstr "განვრცობილის ჩვენება"
+
+
+msgid "Keyframe"
+msgstr "საკვანძო ფაზა"
 
 
 msgid "Add-on"
@@ -575,10 +623,6 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "მეთოდი, რომელიც გამოიყენება აქტიური ქმედებისა და NLA სტეკის შედეგების კომბინირებისათვის"
 
 
-msgid "Replace"
-msgstr "ჩანაცვლება"
-
-
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "ლენტის სიდიდეები ანაცვლებს აკუმულირებულ შედეგებს ზეგავლენის მიერ დადგენილი რაოდენობით"
 
@@ -591,24 +635,12 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "ლენტის სიდიდეები კომბინირდება აკუმულირებულ შედეგებთან მიმატების, გამრავლების, ან კვატერნიონების წარმოქმნის გამოყენებით, გააჩნია არხის ტიპს"
 
 
-msgid "Add"
-msgstr "დამატება"
-
-
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "ლენტის შეწონილი შედეგი ემატება აკუმულირებულ შედეგებს"
 
 
-msgid "Subtract"
-msgstr "გამოკლება"
-
-
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "ლენტის შეწონილი შედეგი გამოაკლდება აკუმულირებულ შედეგებს"
-
-
-msgid "Multiply"
-msgstr "გამრავლება"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -653,6 +685,10 @@ msgstr "ქმედების ზეგავლენა"
 
 msgid "Amount the Active Action contributes to the result of the NLA stack"
 msgstr "აქტიური ქმედების წვლილის რაოდენობა NLA სტეკის შედეგში"
+
+
+msgid "None"
+msgstr "არავითარი"
 
 
 msgid "Tweak Mode Action Storage"
@@ -1975,6 +2011,14 @@ msgid "Active attribute"
 msgstr "აქტიური ატრიბუტი"
 
 
+msgid "Active Attribute Index"
+msgstr "აქტიური ატრიბუტის ინდექსი"
+
+
+msgid "Active attribute index"
+msgstr "აქტიური ატრიბუტის ინდექსი"
+
+
 msgid "Active Color"
 msgstr "აქტიური ფერი"
 
@@ -1997,14 +2041,6 @@ msgstr "აქტიური ფერის ატრიბუტი"
 
 msgid "The name of the active color attribute for display and editing"
 msgstr "აქტიური ფერის ატრიბუტის სახელი საჩვენებლად და დასარედაქტირებლად"
-
-
-msgid "Active Attribute Index"
-msgstr "აქტიური ატრიბუტის ინდექსი"
-
-
-msgid "Active attribute index"
-msgstr "აქტიური ატრიბუტის ინდექსი"
 
 
 msgid "Default Color Attribute"
@@ -2169,10 +2205,6 @@ msgstr "გადავლის ფილტრი"
 
 msgid "Passes to include in the active baking pass"
 msgstr "რომელი გავლები უნდა შევიდეს აქტიურ ცხობის გადავლაში"
-
-
-msgid "None"
-msgstr "არავითარი"
 
 
 msgid "Emit"
@@ -4565,10 +4597,6 @@ msgid "Preselected mode when using this brush"
 msgstr "წინასწარ შერჩეული რეჟიმი ამ ფუნჯის გამოყენებისას"
 
 
-msgid "Active"
-msgstr "აქტიური"
-
-
 msgid "Use current mode"
 msgstr "მიმდინარე რეჟიმის გამოყენება"
 
@@ -4848,120 +4876,6 @@ msgid "Threshold to consider color transparent for filling"
 msgstr "მიჯნა, რომლის მიღმაც შემავსებელი ფერი გამჭვირვალედ ითვლება"
 
 
-msgid "Grease Pencil Icon"
-msgstr "Grease Pencil-ის ხატულა"
-
-
-msgid "Pencil"
-msgstr "ფანქარი"
-
-
-msgid "Pen"
-msgstr "კალამი"
-
-
-msgid "Ink"
-msgstr "მელანი"
-
-
-msgid "Ink Noise"
-msgstr "მელნის ხმაური"
-
-
-msgid "Block"
-msgstr "დაბლოკვა"
-
-
-msgid "Marker"
-msgstr "მარკერი"
-
-
-msgid "Airbrush"
-msgstr "აეროგრაფი"
-
-
-msgid "Chisel"
-msgstr "საჭრეთელი"
-
-
-msgid "Fill"
-msgstr "შევსება"
-
-
-msgid "Eraser Soft"
-msgstr "რბილი საშლელი"
-
-
-msgid "Eraser Hard"
-msgstr "მაგარი საშლელი"
-
-
-msgid "Eraser Stroke"
-msgstr "საშლელის მონასმი"
-
-
-msgctxt "GPencil"
-msgid "Grease Pencil Icon"
-msgstr "Grease Pencil-ის ხატულა"
-
-
-msgctxt "GPencil"
-msgid "Smooth"
-msgstr "გლუვი"
-
-
-msgctxt "GPencil"
-msgid "Thickness"
-msgstr "სისქე"
-
-
-msgctxt "GPencil"
-msgid "Strength"
-msgstr "სიძლიერე"
-
-
-msgctxt "GPencil"
-msgid "Randomize"
-msgstr "გაშემთხვევითება"
-
-
-msgctxt "GPencil"
-msgid "Grab"
-msgstr "ბღაუჭა"
-
-
-msgctxt "GPencil"
-msgid "Push"
-msgstr "მიწოლა"
-
-
-msgctxt "GPencil"
-msgid "Twist"
-msgstr "მოგრეხვა"
-
-
-msgctxt "GPencil"
-msgid "Pinch"
-msgstr "ჩქმეტა"
-
-
-msgctxt "GPencil"
-msgid "Clone"
-msgstr "კლონირება"
-
-
-msgid "Draw"
-msgstr "დახატვა"
-
-
-msgid "Blur"
-msgstr "გაბუნდოვნება"
-
-
-msgid "Smear"
-msgstr "გათხიპნა"
-
-
 msgid "Hardness"
 msgstr "სიმკვეთრე"
 
@@ -4997,10 +4911,6 @@ msgstr "მოხაზულობის მონასმის სისქ�
 msgctxt "Brush"
 msgid "Jitter"
 msgstr "რყევა"
-
-
-msgid "Jitter factor for new strokes"
-msgstr "რყევის კოეფიციენტი ახალი მონასმებისათვის"
 
 
 msgctxt "Amount"
@@ -5126,14 +5036,6 @@ msgstr "მონასმების შეჯახება"
 
 msgid "Check if extend lines collide with strokes"
 msgstr "შეამოწმე, ეჯახება თუ არა განვრცობილი ხაზები მონასმებს"
-
-
-msgid "Default Eraser"
-msgstr "ნაგულისხმები საშლელი"
-
-
-msgid "Use this brush when enable eraser with fast switch key"
-msgstr "გამოიყენე ეს ფუნჯი სწრაფი გადართვის კლავიშით საშლელის ჩართვისას"
 
 
 msgid "Affect Position"
@@ -5306,6 +5208,10 @@ msgstr "მონასმი"
 
 msgid "Vertex Color affects to Stroke only"
 msgstr "წვეროების ფერი ზემოქმედებს მხოლოდ მონასმებზე"
+
+
+msgid "Fill"
+msgstr "შევსება"
 
 
 msgid "Vertex Color affects to Fill only"
@@ -5496,10 +5402,6 @@ msgid "In a local override camera, whether this background image comes from the 
 msgstr "ლოკალურ უკუგდების კამერაში, ეს ფონური გამოსახულება ბმულით დაკავშირებული მიმართვის კამერიდან მოდის, თუ ლოკალურია უკუგდებასთან მიმართებაში"
 
 
-msgid "Offset"
-msgstr "აცდენა"
-
-
 msgid "Rotation"
 msgstr "ბრუნვა"
 
@@ -5522,10 +5424,6 @@ msgstr "ფონის გამოსახულების ჩვენე�
 
 msgid "Show this image as background"
 msgstr "ამ გამოსახულების ფონად ჩვენება"
-
-
-msgid "Show Expanded"
-msgstr "განვრცობილის ჩვენება"
 
 
 msgid "Show the details in the user interface"
@@ -6864,6 +6762,18 @@ msgid "Do not perform any color transform on display, use old non-color managed 
 msgstr "არ ჩაატარო არანაირი ფერის გარდაქმნა მონიტორზე, ასახვისთვის გამოიყენე არა-ფერული ტექნიკა"
 
 
+msgid "Temperature"
+msgstr "ტემპერატურა"
+
+
+msgid "Tint"
+msgstr "შეფერილობა"
+
+
+msgid "White Point"
+msgstr "თეთრი წერტილი"
+
+
 msgid "Color Mapping"
 msgstr "ფერების დატანა"
 
@@ -7135,10 +7045,6 @@ msgstr "ბრუნვის შეცდომა"
 
 msgid "Amount of residual error in radians for constraints that work on orientation"
 msgstr "რეზიდუალური შეცდომის ოდენობა რადიანებში ბორკილებისთვის, რომლებიც ორიენტაციაზე მუშაობენ"
-
-
-msgid "Influence"
-msgstr "ზეგავლენა"
 
 
 msgid "Amount of influence constraint will have on the final solution"
@@ -7515,10 +7421,6 @@ msgstr "მინიმუმი"
 
 msgid "Minimum value for target channel range"
 msgstr "მინიმალური მნიშვნელობა სამიზნე არხის დიაპაზონისთვის"
-
-
-msgid "Mix Mode"
-msgstr "შერევის რეჟიმი"
 
 
 msgid "Specify how existing transformations and the action channels are combined"
@@ -12777,14 +12679,6 @@ msgid "Amplitude of the noise - the amount that it modifies the underlying curve
 msgstr "ხმაურის ამპლიტუდა - რაოდენობა, რომლითაც იგი ამოდიფიცირებს ძირითად წირს"
 
 
-msgid "Python F-Modifier"
-msgstr "პითონის F-მოდიფიკატორი"
-
-
-msgid "Perform user-defined operation on the modified F-Curve"
-msgstr "ჩაატარე მომხმარებლის მიერ განსაზღვრული ოპერაცია მოდიფიცირებულ F-წირზე"
-
-
 msgid "Stepped Interpolation F-Modifier"
 msgstr "საფეხუროვანი ინტერპოლაციის F-მოდიფიკატორი"
 
@@ -13341,10 +13235,6 @@ msgid "Show Armature data-blocks"
 msgstr "აჩვენე არმატურის მონაცემთა ბლოკები"
 
 
-msgid "Show Brushes data-blocks"
-msgstr "აჩვენე ფუნჯების მონაცემთა ბლოკები"
-
-
 msgid "Show Cache File data-blocks"
 msgstr "აჩვენე ქეშის ფაილის მონაცემთა ბლოკები"
 
@@ -13463,6 +13353,10 @@ msgstr "აჩვენე სამუშაო სივრცის მონ
 
 msgid "Show Action data-blocks"
 msgstr "აჩვენე ქმედების მონაცემთა ბლოკები"
+
+
+msgid "Show Brushes data-blocks"
+msgstr "აჩვენე ფუნჯების მონაცემთა ბლოკები"
 
 
 msgid "Show Collection data-blocks"
@@ -16233,10 +16127,6 @@ msgid "Type of keyframe"
 msgstr "საკვანძო კადრის ტიპი"
 
 
-msgid "Keyframe"
-msgstr "საკვანძო ფაზა"
-
-
 msgid "Normal keyframe, e.g. for key poses"
 msgstr "ნორმალური საკვანძო კადრი, მაგ.: საკვანძო პოზებისთვის"
 
@@ -17608,10 +17498,6 @@ msgstr "ცვლილებების გამოყენება მო�
 
 msgid "Opacity of the strokes"
 msgstr "მონასმების გაუმჭვირვალობა"
-
-
-msgid "Tint"
-msgstr "შეფერილობა"
 
 
 msgid "Tint strokes with new color"
@@ -19700,6 +19586,30 @@ msgid "Grid scale"
 msgstr "ცხრილის მასშტაბი"
 
 
+msgid "Local Matrix"
+msgstr "ლოკალური მატრიცა"
+
+
+msgid "Translation"
+msgstr "თარგმანი"
+
+
+msgid "Grease Pencil Mask Layers"
+msgstr "Grease Pencil-ის ნიღბის შრეები"
+
+
+msgid "Collection of grease pencil masking layers"
+msgstr "Grease Pencil-ის შენიღბვის შრეების კოლექცია"
+
+
+msgid "Active Layer Mask Index"
+msgstr "აქტიური შრის ნიღბის ინდექსი"
+
+
+msgid "Active index in layer mask array"
+msgstr "აქტიური ინდექსი შრის ნიღბის მასივში"
+
+
 msgid "Grease Pencil Layers"
 msgstr "Grease Pencil-ის შრეები"
 
@@ -19728,22 +19638,6 @@ msgid "Note/Layer to add annotation strokes to"
 msgstr "შენიშვნა/შრე, რომელზეც უნდა დაემატოს ანოტაციის მონასმები"
 
 
-msgid "Grease Pencil Mask Layers"
-msgstr "Grease Pencil-ის ნიღბის შრეები"
-
-
-msgid "Collection of grease pencil masking layers"
-msgstr "Grease Pencil-ის შენიღბვის შრეების კოლექცია"
-
-
-msgid "Active Layer Mask Index"
-msgstr "აქტიური შრის ნიღბის ინდექსი"
-
-
-msgid "Active index in layer mask array"
-msgstr "აქტიური ინდექსი შრის ნიღბის მასივში"
-
-
 msgid "Time Modifier Segment"
 msgstr "დროის მოდიფიკატორის სეგმენტი"
 
@@ -19770,6 +19664,10 @@ msgstr "საწყისი კადრი"
 
 msgid "First frame of the segment"
 msgstr "სეგმენტის პირველი კადრი"
+
+
+msgid "Active Grease Pencil layer"
+msgstr "Grease Pencil-ის აქტიური შრე"
 
 
 msgid "Editor header containing UI elements"
@@ -20087,10 +19985,6 @@ msgid "The combined frame range of all F-Curves within this action"
 msgstr "ყველა F-წირის კადრების კომბინირებული დიაპაზონი ამ ქმედებაში"
 
 
-msgid "F-Curves"
-msgstr "F-წირები"
-
-
 msgid "The individual F-Curves that make up the action"
 msgstr "ინდივიდუალური F-წირები, რომლებიც ამ ქმედებას შეადგენენ"
 
@@ -20126,6 +20020,10 @@ msgstr "ID-ის ძირეული ტიპი"
 
 msgid "Type of ID block that action can be used on - DO NOT CHANGE UNLESS YOU KNOW WHAT YOU ARE DOING"
 msgstr "ID ბლოკის ტიპი, რომელზეც ქმედება შეიძლება იქნას გამოყენებული - არ შეცვალო, თუ ზუსტად არ იცი რას აკეთებ"
+
+
+msgid "Layers"
+msgstr "შრეები"
 
 
 msgid "Pose Markers"
@@ -21002,11 +20900,6 @@ msgstr "წირების ძერწვის ანაწყობებ�
 
 
 msgctxt "Curves"
-msgid "Curves Sculpt Tool"
-msgstr "წირების ძერწვის ხელსაწყო"
-
-
-msgctxt "Curves"
 msgid "Paint Selection"
 msgstr "ხატვა მონიშნულზე"
 
@@ -21172,40 +21065,80 @@ msgstr "თითოეული მონასმის სემპლზე 
 
 
 msgctxt "GPencil"
-msgid "Grease Pencil Sculpt Paint Tool"
-msgstr "Grease Pencil-ის საძერწი სახატავი ხელსაწყო"
+msgid "Smooth"
+msgstr "გლუვი"
 
 
 msgid "Smooth stroke points"
 msgstr "მონასმის წერტილების დაგლუვება"
 
 
+msgctxt "GPencil"
+msgid "Thickness"
+msgstr "სისქე"
+
+
 msgid "Adjust thickness of strokes"
 msgstr "მონასმების სისქის დარეგულირება"
+
+
+msgctxt "GPencil"
+msgid "Strength"
+msgstr "სიძლიერე"
 
 
 msgid "Adjust color strength of strokes"
 msgstr "მონასმების ფერის სიძლიერის დარეგულირება"
 
 
+msgctxt "GPencil"
+msgid "Randomize"
+msgstr "გაშემთხვევითება"
+
+
 msgid "Introduce jitter/randomness into strokes"
 msgstr "რყევის/შემთხვევითობის შემოტანა მონასმებში"
+
+
+msgctxt "GPencil"
+msgid "Grab"
+msgstr "ბღაუჭა"
 
 
 msgid "Translate the set of points initially within the brush circle"
 msgstr "წერტილების ნაკრების თავდაპირველი გადაადგილება ფუნჯის წრის ფარგლებში"
 
 
+msgctxt "GPencil"
+msgid "Push"
+msgstr "მიწოლა"
+
+
 msgid "Move points out of the way, as if combing them"
 msgstr "წერტილები გზიდან ჩამოიცილე, ვარცხნის მსგავსად"
+
+
+msgctxt "GPencil"
+msgid "Twist"
+msgstr "მოგრეხვა"
 
 
 msgid "Rotate points around the midpoint of the brush"
 msgstr "აბრუნე წერტილები ფუნჯის შუაგულის გარშემო"
 
 
+msgctxt "GPencil"
+msgid "Pinch"
+msgstr "ჩქმეტა"
+
+
 msgid "Pull points towards the midpoint of the brush"
 msgstr "მოქაჩე წერტილები ფუნჯის შუაგულისკენ"
+
+
+msgctxt "GPencil"
+msgid "Clone"
+msgstr "კლონირება"
 
 
 msgid "Paste copies of the strokes stored on the internal clipboard"
@@ -21214,11 +21147,6 @@ msgstr "ჩასვი შიდა გაცვლის ბუფერში
 
 msgid "Gpencil Settings"
 msgstr "Gpencil-ის ანაწყობები"
-
-
-msgctxt "Brush"
-msgid "Grease Pencil Draw Tool"
-msgstr "Grease Pencil-ის ხატვის ხელსაწყო"
 
 
 msgctxt "Brush"
@@ -21257,12 +21185,16 @@ msgid "The brush is of type used for tinting strokes"
 msgstr "ფუნჯი მონასმების შეფერვისთვის გამოყენებული ტიპისაა"
 
 
-msgid "Grease Pencil Vertex Paint Tool"
-msgstr "Grease Pencil-ის წვეროთა მოხატვის ხელსაწყო"
+msgid "Draw"
+msgstr "დახატვა"
 
 
 msgid "Paint a color on stroke points"
 msgstr "დახატე ფერი მონასმის წერტილებზე"
+
+
+msgid "Blur"
+msgstr "გაბუნდოვნება"
 
 
 msgid "Smooth out the colors of adjacent stroke points"
@@ -21273,16 +21205,16 @@ msgid "Smooth out colors with the average color under the brush"
 msgstr "გაათანაბრე ფერები ფუნჯის ქვეშ მყოფი საშუალო ფერით"
 
 
+msgid "Smear"
+msgstr "გათხიპნა"
+
+
 msgid "Smudge colors by grabbing and dragging them"
 msgstr "გადღაბნე ფერები ჩაბღაუჭებითა და გადათრევით"
 
 
 msgid "Replace the color of stroke points that already have a color applied"
 msgstr "ჩაანაცვლე მონასმის იმ წერტილების ფერი, რომლებზეც ფერი უკვე გამოყენებულია"
-
-
-msgid "Grease Pencil Weight Paint Tool"
-msgstr "Grease Pencil-ის წონათა სახატავი ხელსაწყო"
 
 
 msgid "Paint weight in active vertex group"
@@ -21339,11 +21271,6 @@ msgstr "ფუნჯის ხატულის მისამართი"
 
 msgid "File path to brush icon"
 msgstr "ფუნჯის ხატულიანი ფაილის მისამართი"
-
-
-msgctxt "Brush"
-msgid "Image Paint Tool"
-msgstr "გამოსახულების სახატავი ხელსაწყო"
 
 
 msgctxt "Brush"
@@ -21634,11 +21561,6 @@ msgstr "Z სიბრტყე"
 
 
 msgctxt "Brush"
-msgid "Sculpt Tool"
-msgstr "საძერწი ხელსაწყო"
-
-
-msgctxt "Brush"
 msgid "Draw Sharp"
 msgstr "მკვეთრად დახატვა"
 
@@ -21877,6 +21799,10 @@ msgstr "იძლევა ცალი წერტილის ფრთხი
 
 msgid "Limit brush application to the distance specified by spacing"
 msgstr "შეზღუდე ფუნჯის გამოყენება დაშორების მიერ განსაზღვრული მანძილით"
+
+
+msgid "Airbrush"
+msgstr "აეროგრაფი"
 
 
 msgid "Keep applying paint effect while holding mouse (spray)"
@@ -22451,16 +22377,8 @@ msgid "Use pressure to modulate wet persistence"
 msgstr "ზეწოლის გამოყენება სველი სიმტკიცის მოდულაციისთვის"
 
 
-msgid "Vertex Paint Tool"
-msgstr "წვეროთა სახატავი ხელსაწყო"
-
-
 msgid "Vertex weight when brush is applied"
 msgstr "წვეროს წონა ფუნჯის გამოყენებისას"
-
-
-msgid "Weight Paint Tool"
-msgstr "წონის სახატავი ხელსაწყო"
 
 
 msgid "Wet Mix"
@@ -24566,10 +24484,6 @@ msgid "Grease Pencil weight paint"
 msgstr "Grease Pencil-ის წონის ხატვა"
 
 
-msgid "Layers"
-msgstr "შრეები"
-
-
 msgid "Onion Opacity"
 msgstr "კალკის გაუმჭვირვალობა"
 
@@ -24740,6 +24654,10 @@ msgstr "ზედაპირის აცდენა"
 
 msgid "Offset amount when drawing in surface mode"
 msgstr "აცდენის რაოდენობა ზედაპირის რეჟიმში ხატვის დროს"
+
+
+msgid "Grease Pencil data-block"
+msgstr "Grease Pencil-ის მონაცემთა ბლოკი"
 
 
 msgid "Image data-block referencing an external or packed image"
@@ -27005,10 +26923,6 @@ msgid "Grease Pencil Data"
 msgstr "Grease Pencil-ის მონაცემები"
 
 
-msgid "Grease Pencil data-block"
-msgstr "Grease Pencil-ის მონაცემთა ბლოკი"
-
-
 msgid "Interface"
 msgstr "ინტერფეისი"
 
@@ -27623,10 +27537,6 @@ msgstr "შემავალი მატრიცა"
 
 msgid "Matrix access to location, rotation and scale (including deltas), before constraints and parenting are applied"
 msgstr "მატრიცა მდებარეობაზე, ბრუნვასა და მასშტაბზე წვდომისთვის (დელტების ჩათვლით), ბორკილებისა და დაქვემდებარების გამოყენებამდე"
-
-
-msgid "Local Matrix"
-msgstr "ლოკალური მატრიცა"
 
 
 msgid ""
@@ -31452,14 +31362,6 @@ msgstr "აქტიური დანამატი"
 
 msgid "Active Add-on in the Workspace Add-ons filter"
 msgstr "აქტიური დანამატი სამუშაო სივრცის დანამატების ფილტრში"
-
-
-msgid "Active Pose Asset"
-msgstr "აქტიური პოზის აქტივი"
-
-
-msgid "Per workspace index of the active pose asset"
-msgstr "აქტიური პოზის აქტივის ინდექსი ყოველ სამუშაო სივრცეში"
 
 
 msgid "Active asset library to show in the UI, not used by the Asset Browser (which has its own active asset library)"
@@ -36215,6 +36117,10 @@ msgid "Channel"
 msgstr "არხი"
 
 
+msgid "Marker"
+msgstr "მარკერი"
+
+
 msgid "Snap"
 msgstr "მიკვრა"
 
@@ -36347,6 +36253,10 @@ msgstr "დაარეგულირე"
 
 msgid "Keying"
 msgstr "ჩასოლვა"
+
+
+msgid "Import"
+msgstr "იმპორტი"
 
 
 msgid "Layout"
@@ -36604,10 +36514,6 @@ msgid "External Data"
 msgstr "გარე მონაცემები"
 
 
-msgid "Import"
-msgstr "იმპორტი"
-
-
 msgid "New File"
 msgstr "ახალი ფაილი"
 
@@ -36664,6 +36570,10 @@ msgid "Active Repository"
 msgstr "აქტიური საცავი"
 
 
+msgid "Active Extension Repository"
+msgstr "აქტიური გაფართოების საცავი"
+
+
 msgid "Remove Extension Repository"
 msgstr "მოაცილე გაფართოებების საცავი"
 
@@ -36706,10 +36616,6 @@ msgstr "ჩართე-გამორთე ძვლის პარამე
 
 msgid "Brush Specials"
 msgstr "სპეციალურად ფუნჯებისთვის"
-
-
-msgid "Enabled Modes"
-msgstr "ჩართული რეჟიმები"
 
 
 msgid "Names"
@@ -37054,6 +36960,10 @@ msgid "Mesh Loop Triangle"
 msgstr "მეშის მარყუჟის სამკუთხედი"
 
 
+msgid "Tessellated triangle in a Mesh data-block"
+msgstr "მოზაიკური სამკუთხედი მეშის მონაცემთა ბლოკში"
+
+
 msgid "Triangle Area"
 msgstr "სამკუთხედის ფართობი"
 
@@ -37092,6 +37002,10 @@ msgstr "მეშის იმ წახნაგის ინდექსი, �
 
 msgid "Split Normals"
 msgstr "გახლიჩე ნორმალები"
+
+
+msgid "Local space unit length split normal vectors of the face corners of this triangle"
+msgstr "ამ სამკუთხედის წახნაგების კუთხეთა ლოკალური სივრცის ერთეულებიანი სიგრძის გახლეჩილი ნორმალების ვექტორები"
 
 
 msgid "Indices of triangle vertices"
@@ -37198,6 +37112,26 @@ msgid "Root"
 msgstr "ფესვი"
 
 
+msgid "Mesh Visualize Statistics"
+msgstr "მეშის ვიზუალიზაციის სტატისტიკა"
+
+
+msgid "Distort Max"
+msgstr "მაქს. გამრუდება"
+
+
+msgid "Maximum angle to display"
+msgstr "მაქსიმალური კუთხე ასახვისთვის"
+
+
+msgid "Distort Min"
+msgstr "მინ. გამრუდება"
+
+
+msgid "Minimum angle to display"
+msgstr "მინიმალური კუთხე ასახვისთვის"
+
+
 msgid "Sharpness Max"
 msgstr "მაქს. სიმკვეთრე"
 
@@ -37224,6 +37158,10 @@ msgstr "მინიმუმი სისქის გასაზომად"
 
 msgid "Samples"
 msgstr "სემპლები"
+
+
+msgid "Number of samples to test per face"
+msgstr "ყოველ წახნაგზე დასატესტი სინჯების რიცხვი"
 
 
 msgid "Type of data to visualize/check"
@@ -37430,6 +37368,14 @@ msgid "Persistent UID"
 msgstr "მუდმივი UID"
 
 
+msgid "Uniquely identifies the modifier within the modifier stack that it is part of"
+msgstr "უნიკალურად აიდენტიფიცირებს მოდიფიკატორს იმ მოდიფიკატორთა სტეკში, რომლის ნაწილიცაა იგი"
+
+
+msgid "On Cage"
+msgstr "გალიაზე"
+
+
 msgid "Data Transfer"
 msgstr "მონაცემთა გადატანა"
 
@@ -37506,6 +37452,14 @@ msgid "Set the vertex group weights based on the distance to another target obje
 msgstr "დააყენე წვეროთა ჯგუფის წონები სხვა სამიზნე ობიექტამდე მანძილის მიხედვით"
 
 
+msgid "Change hue/saturation/value of the strokes"
+msgstr "შეცვალე მონასმების ელფერი/სიხასხასე/მნიშვნელობა"
+
+
+msgid "Tint the color of the strokes"
+msgstr "შეფერე მონასმების ფერი"
+
+
 msgid "Change the opacity of the strokes"
 msgstr "შეცვალე მონასმების გაუმჭვირვალობა"
 
@@ -37548,6 +37502,10 @@ msgstr "მულტიგარჩევადობა"
 
 msgid "Remesh"
 msgstr "აგებულების გარდასახვა"
+
+
+msgid "Generate new mesh topology based on the current shape"
+msgstr "წარმოქმენი ახალი მეშის ტოპოლოგია ახლანდელი ფორმის საფუძველზე"
 
 
 msgid "Screw"
@@ -37594,6 +37552,10 @@ msgid "Weld"
 msgstr "შედუღება"
 
 
+msgid "Find groups of vertices closer than dist and merge them together"
+msgstr "იპოვე ამ მანძილზე უფრო ახლა მყოფი წვეროთა ჯგუფები და შერწყი"
+
+
 msgid "Wireframe"
 msgstr "მავთულბადე"
 
@@ -37612,6 +37574,10 @@ msgstr "გრიზ ფენსილის აგების მოდიფ
 
 msgid "Grease Pencil length modifier"
 msgstr "გრიზ ფენსილის სიგრძის მოდიფიკატორი"
+
+
+msgid "Generate Line Art from scene geometries"
+msgstr "წარმოქმენი ლაინ არტი სცენის გეომეტრიებისგან"
 
 
 msgid "Mirror strokes"
@@ -37636,6 +37602,10 @@ msgstr "დაადეფორმირე ფორმა არმატუ�
 
 msgid "Cast"
 msgstr "ყალიბი"
+
+
+msgid "Shift the shape towards a predefined primitive"
+msgstr "წაანაცვლე ფორმა წინასწარ განსაზღვრული პრიმიტივისკენ"
 
 
 msgid "Bend the mesh using a curve object"
@@ -38558,12 +38528,24 @@ msgid "Transfer all vertex groups used by deform bones"
 msgstr "გადაიტანე წვეროთა ყველა ჯგუფი გამიყენებუკი დეფორმირების ძვლების მიერ"
 
 
+msgid "Copy from nearest corner of nearest face"
+msgstr "დააკოპირე უახლოესი წახნაგის უახლოესი კუთხიდან"
+
+
 msgid "Nearest Face Interpolated"
 msgstr "უახლოესი წახნაგი ინტერპოლირებული"
 
 
+msgid "Copy from interpolated corners of the nearest source face"
+msgstr "დააკოპირე უახლოესი წყაროს წახნაგის ინტერპოლირებული კუთხეებიდან"
+
+
 msgid "Projected Face Interpolated"
 msgstr "პროეცირებული წახნაგი ინტერპოლირებული"
+
+
+msgid "Copy from interpolated corners of the source face hit by corner normal projection"
+msgstr "დააკოპირე კუთხის ნორმალის პროექციამოხვედრილი წყაროს წახნაგის წახნაგიდან"
 
 
 msgid "Max Distance"
@@ -38576,6 +38558,10 @@ msgstr "მაქსიმალური დაშვებული მან�
 
 msgid "How to affect destination elements with source values"
 msgstr "როგორ იმოქმედოს წყაროს მნიშვნელობებმა დანიშნულების ელემენტებზე"
+
+
+msgid "Overwrite all elements' data"
+msgstr "გადააწერე ყველა ელემენტის მონაცემებს"
 
 
 msgid "Above Threshold"
@@ -39153,6 +39139,10 @@ msgid "Cache Modifier"
 msgstr "ქეშის მოდიფიკატორი"
 
 
+msgid "Cache Mesh"
+msgstr "ქეშის მეში"
+
+
 msgid "MDD"
 msgstr "MDD"
 
@@ -39285,6 +39275,10 @@ msgid "Merge vertices within the merge threshold"
 msgstr "შერწყი წვეროები შერწყმის მიჯნის ფარგლებში"
 
 
+msgid "Mirror U"
+msgstr "სარკე U-ზე"
+
+
 msgid "Mirror V"
 msgstr "გაასარკისებურე V"
 
@@ -39325,6 +39319,10 @@ msgid "Optimal Display"
 msgstr "ოპტიმალური ასახვა"
 
 
+msgid "Total Levels"
+msgstr "ჯამში დონეები"
+
+
 msgid "Use Creases"
 msgstr "გამოიყენე ნაკეცები"
 
@@ -39335,6 +39333,10 @@ msgstr "გამოძერწე ძირითადი მეში"
 
 msgid "UV Smooth"
 msgstr "UV დაგლუვება"
+
+
+msgid "Keep Boundaries"
+msgstr "შეინარჩუნე საზღვრები"
 
 
 msgid "Nodes Modifier"
@@ -39987,6 +39989,10 @@ msgid "Vertical scale (only used for camera projectors)"
 msgstr "შვეული მასშტაბი (გამოიყენება მხოლოდ კამერის პროექტორებისთვის)"
 
 
+msgid "UVWarp Modifier"
+msgstr "UVდაბრეცვის მოდიფიკატორი"
+
+
 msgid "U-Axis"
 msgstr "U-ღერძი"
 
@@ -40054,6 +40060,14 @@ msgid "Remove Threshold"
 msgstr "მოაცილე მიჯნა"
 
 
+msgid "Group Add"
+msgstr "ჯგუფს დაამატე"
+
+
+msgid "Group Remove"
+msgstr "ჯგუფიდან ამოიღე"
+
+
 msgid "Vertex Set"
 msgstr "წვეროთა ჯგუფი"
 
@@ -40072,6 +40086,14 @@ msgstr "გადანაცვლების სიძლიერე"
 
 msgid "Grid Name"
 msgstr "ცხრილის სახელი"
+
+
+msgid "Warp Modifier"
+msgstr "დაბრეცვის მოდიფიკატორი"
+
+
+msgid "Warp modifier"
+msgstr "დაბრეცვის მოდიფიკატორი"
 
 
 msgid "Wave Modifier"
@@ -40354,6 +40376,10 @@ msgid "Proxy Render Size"
 msgstr "პროექსი რენდერის ზომა"
 
 
+msgid "Render Undistorted"
+msgstr "დაარენდერე გაუმრუდებლად"
+
+
 msgid "Tracks"
 msgstr "ბილიკები"
 
@@ -40569,6 +40595,10 @@ msgstr "გამოიყენე მწვანე არხი"
 
 msgid "Normalize"
 msgstr "დაანორმალიზირე"
+
+
+msgid "Keyframe Selection"
+msgstr "საკვანძო ფაზების მონიშვნა"
 
 
 msgid "Interpolate"
@@ -42868,6 +42898,18 @@ msgid "Geometry to Instance"
 msgstr "გეომეტრია ინსტანციად"
 
 
+msgid "Primary"
+msgstr "პირველადი"
+
+
+msgid "Secondary"
+msgstr "მეორეხარისხოვანი"
+
+
+msgid "Arrow"
+msgstr "ისარი"
+
+
 msgid "Image Info"
 msgstr "გამოსახულების ინფო"
 
@@ -43169,6 +43211,10 @@ msgid "Pattern Mode"
 msgstr "ფაქტურის რეჟიმი"
 
 
+msgid "Wildcard"
+msgstr "დროებითი ცვლადი"
+
+
 msgid "Repeat Output"
 msgstr "შედეგის გამეორება"
 
@@ -43219,6 +43265,10 @@ msgstr "ინტერპოლაციის რეჟიმი"
 
 msgid "Nearest Neighbor"
 msgstr "უახლოესი მეზობელი"
+
+
+msgid "Trilinear"
+msgstr "სამწრფივი"
 
 
 msgid "Triquadratic"
@@ -44012,10 +44062,6 @@ msgid "Air"
 msgstr "ჰაერი"
 
 
-msgid "Density of air molecules"
-msgstr "ჰაერის მოლეკულების სიმჭიდროვე"
-
-
 msgid "Altitude"
 msgstr "სიმაღლე"
 
@@ -44028,10 +44074,6 @@ msgid "Dust"
 msgstr "მტვერი"
 
 
-msgid "Density of dust molecules and water droplets"
-msgstr "მტვრის მოლეკულებისა და წყლის წვეთების სიმჭიდროვე"
-
-
 msgid "Ground Albedo"
 msgstr "მიწის ალბედო"
 
@@ -44042,10 +44084,6 @@ msgstr "მიწის ფერი, რომელიც მკრთალ�
 
 msgid "Ozone"
 msgstr "ოზონი"
-
-
-msgid "Density of ozone layer"
-msgstr "ოზონის შრის სიმკვრივე"
 
 
 msgid "Sky Type"
@@ -45628,6 +45666,14 @@ msgstr "ქამანდით მონიშვნა"
 
 msgid "Select keyframe points using lasso selection"
 msgstr "მონიშნე საკვანძო კადრის წერტილები ქამანდით მონიშვნით"
+
+
+msgid "Higher values gives a smoother stroke"
+msgstr "უფრო მაღალი სიდიდეები უფრო გლუვ მონასმს იძლევა"
+
+
+msgid "Stabilize Stroke"
+msgstr "დაასტაბილურე მონასმი"
 
 
 msgctxt "Operator"
@@ -47237,22 +47283,20 @@ msgid "Move boid state up in the list"
 msgstr "აწიე ბოიდის მდგომარეობა სიაში"
 
 
-msgctxt "Operator"
-msgid "Add Brush"
-msgstr "დაამატე ფუნჯი"
+msgid "Asset Library Identifier"
+msgstr "აქტივების ბიბლიოთეკის იდენტიფიკატორი"
 
 
-msgid "Add brush by mode type"
-msgstr "დაამატე ფუნჯი რეჟიმის ტიპის მიხედვით"
+msgid "Asset Library Type"
+msgstr "აქტივების ბიბლიოთეკის ტიპი"
 
 
-msgctxt "Operator"
-msgid "Add Drawing Brush"
-msgstr "დაამატე სახატავი ფუნჯი"
+msgid "Relative Asset Identifier"
+msgstr "შეფარდებითი აქტივის იდენტიფიკატორი"
 
 
-msgid "Add brush for Grease Pencil"
-msgstr "დაამატე ფუნჯი Grease Pencil-ისთვის"
+msgid "Enable Multi-View"
+msgstr "ჩართე მრავალ-ხედი"
 
 
 msgctxt "Operator"
@@ -47285,15 +47329,6 @@ msgstr "მრგვალი"
 
 
 msgctxt "Operator"
-msgid "Reset Brush"
-msgstr "ფუნჯის პირველსახე"
-
-
-msgid "Return brush to defaults based on current tool"
-msgstr "დააბრუნე ფუნჯს ნაგულისმები იერსახე მიმდინარე ხელსაწყოზე დაყრდნობით"
-
-
-msgctxt "Operator"
 msgid "Scale Sculpt/Paint Brush Size"
 msgstr "დაამასშტაბირე საძერწი/სახატავი ფუნჯის ზომა"
 
@@ -47322,18 +47357,6 @@ msgstr "ტრაფარეტული ფუნჯის მართვა"
 
 msgid "Control the stencil brush"
 msgstr "მართე ტრაფარეტული ფუნჯი"
-
-
-msgid "Translation"
-msgstr "თარგმანი"
-
-
-msgid "Primary"
-msgstr "პირველადი"
-
-
-msgid "Secondary"
-msgstr "მეორეხარისხოვანი"
 
 
 msgid "Modify Mask Stencil"
@@ -47832,10 +47855,6 @@ msgstr "გახსენი კლიპი"
 
 msgid "Load a sequence of frames or a movie file"
 msgstr "ჩატვირთე კადრების თანამიმდევრობა, ან ვიდეო ფაილი"
-
-
-msgid "Enable Multi-View"
-msgstr "ჩართე მრავალ-ხედი"
 
 
 msgid "Automatically determine sort method for files"
@@ -51749,24 +51768,36 @@ msgid "Execute a node group on geometry"
 msgstr "გაუშვი კვანძთა ჯგუფი გეომეტრიაზე"
 
 
-msgid "Asset Library Identifier"
-msgstr "აქტივების ბიბლიოთეკის იდენტიფიკატორი"
+msgid "3D Cursor Position"
+msgstr "3გ კურსორის პოზიცია"
 
 
-msgid "Asset Library Type"
-msgstr "აქტივების ბიბლიოთეკის ტიპი"
+msgid "3D Cursor Rotation"
+msgstr "3გ კურსორის ბრუნვა"
 
 
 msgid "Name of the data-block to use by the operator"
 msgstr "ოპერატორის მიერ გამოსაყენებელი მონაცემთა ბლოკის სახელი"
 
 
-msgid "Relative Asset Identifier"
-msgstr "შეფარდებითი აქტივის იდენტიფიკატორი"
+msgid "Region Size"
+msgstr "მონაკვეთის ზომა"
 
 
 msgid "Session UID of the data-block to use by the operator"
 msgstr "ოპერატორის მიერ გამოსაყენებელი მონაცემთა ბლოკის სესიის UID"
+
+
+msgid "Viewport Is Perspective"
+msgstr "სარკმელი პერსპექტივაა"
+
+
+msgid "Viewport Projection Transform"
+msgstr "სარკმლის პროეცირების გარდაქმნა"
+
+
+msgid "Viewport View Transform"
+msgstr "სარკმლის ხედის გარდაქმნა"
 
 
 msgctxt "Operator"
@@ -51839,10 +51870,6 @@ msgid "Don't use any arrow/style in corner"
 msgstr "არ გამოიყენო კუთხეზე არცერთი ისარი/სტილი"
 
 
-msgid "Arrow"
-msgstr "ისარი"
-
-
 msgid "Use closed arrow style"
 msgstr "გამოიყენე დახურული ისრის სტილი"
 
@@ -51903,16 +51930,8 @@ msgid "Stabilizer Stroke Factor"
 msgstr "დამასტაბილირებელი მონასმის კოეფიციენტი"
 
 
-msgid "Higher values gives a smoother stroke"
-msgstr "უფრო მაღალი სიდიდეები უფრო გლუვ მონასმს იძლევა"
-
-
 msgid "Stabilizer Stroke Radius"
 msgstr "დამასტაბილირებელი მონასმის რადიუსი"
-
-
-msgid "Stabilize Stroke"
-msgstr "დაასტაბილურე მონასმი"
 
 
 msgid "Helper to draw smooth and clean lines. Press Shift for an invert effect (even if this option is not active)"
@@ -52037,14 +52056,6 @@ msgstr "ჩასვი ცარიელი კადრი მიმდინ
 
 msgid "Create blank frame in all layers, not only active"
 msgstr "შექმენი ცარიელი კადრი არა მხოლოდ აქტიურ, არამედ ყველა შრეში"
-
-
-msgid "Reset brush to default parameters"
-msgstr "დააბრუნე ფუნჯი ნაგულისხმებ პარამეტრებზე"
-
-
-msgid "Delete all mode brushes and recreate a default set"
-msgstr "წაშალე რეჟიმის ყველა ფუნჯი და ხელახლა შექმენი ნაგულისხმები ნაკრები"
 
 
 msgctxt "Operator"
@@ -52576,10 +52587,6 @@ msgstr "ელასტიკური"
 msgctxt "Operator"
 msgid "Active Layer"
 msgstr "აქტიური შრე"
-
-
-msgid "Active Grease Pencil layer"
-msgstr "Grease Pencil-ის აქტიური შრე"
 
 
 msgctxt "Operator"
@@ -54531,6 +54538,11 @@ msgid "Extrude the selected points"
 msgstr "ამოიყვანე მონიშნული წერტილები"
 
 
+msgctxt "Operator"
+msgid "Delete Duplicate Frames"
+msgstr "წაშალე დუბლიკატი კადრები"
+
+
 msgid "Insert a blank frame on the current scene frame"
 msgstr "ჩასვი ცარიელი კადრი მიმდინარე სცენის კადრში"
 
@@ -54850,25 +54862,6 @@ msgid "Paste new image from the clipboard"
 msgstr "ჩასვი ახალი გამოსახულება გაცვლის ბუფერიდან"
 
 
-msgid "Blend Mode for Transparent Faces"
-msgstr "შერევის რეჟიმი გამჭვირვალე წახნაგებისთვის"
-
-
-msgctxt "Material"
-msgid "Blend"
-msgstr "შეზავება"
-
-
-msgctxt "Material"
-msgid "Clip"
-msgstr "მოკვეცე"
-
-
-msgctxt "Material"
-msgid "Hashed"
-msgstr "ჰეშირებული"
-
-
 msgid "Emission Strength"
 msgstr "გამოცემის სიძლიერე"
 
@@ -54897,6 +54890,10 @@ msgid "Use relative file paths"
 msgstr "გამოიყენე ფაილთა ფარდობითი მისამართები"
 
 
+msgid "Render Method"
+msgstr "რენდერის მეთოდი"
+
+
 msgid "Principled"
 msgstr "პრინციპული"
 
@@ -54907,16 +54904,6 @@ msgstr "პრინციპული იერფერი"
 
 msgid "Shadeless"
 msgstr "უფერული"
-
-
-msgctxt "Material"
-msgid "Shadow Mode"
-msgstr "ჩრდილის რეჟიმი"
-
-
-msgctxt "Material"
-msgid "None"
-msgstr "არავითარი"
 
 
 msgid "Use backface culling to hide the back side of faces"
@@ -54934,10 +54921,6 @@ msgstr "დააყენე შავი, ან თეთრი წერტ�
 
 msgid "Black Point"
 msgstr "შავი წერტილი"
-
-
-msgid "White Point"
-msgstr "თეთრი წერტილი"
 
 
 msgctxt "Operator"
@@ -59956,6 +59939,10 @@ msgid "Arctangent Mode"
 msgstr "არკტანგენსის რეჟიმი"
 
 
+msgid "Arctan2"
+msgstr "არკტან.2"
+
+
 msgid "Hyperbolic Sine"
 msgstr "ჰიპერბოლური სინუსი"
 
@@ -60890,16 +60877,12 @@ msgid "Curve from Mesh or Text objects"
 msgstr "წირი მეშიდან, ან ტექსტური ობიექტიდან"
 
 
-msgid "Mesh from Curve, Surface, Metaball, or Text objects"
-msgstr "მეში წირის, ზედაპირის, მეტაბურთის, ან ტექსტის ობიექტებისგან"
+msgid "Curves from evaluated curve data"
+msgstr "წირები წირის შეფასებული მონაცემებიდან"
 
 
 msgid "Grease Pencil from Curve or Mesh objects"
 msgstr "Grease Pencil წირიდან, ან მეშის ობიექტებიდან"
-
-
-msgid "Curves from evaluated curve data"
-msgstr "წირები წირის შეფასებული მონაცემებიდან"
 
 
 msgctxt "Operator"
@@ -62970,10 +62953,6 @@ msgid "Clear Shape Keys"
 msgstr "გაწმინდე ფორმის სოლები"
 
 
-msgid "Clear weights for all shape keys"
-msgstr "გაწმინდე ფორმის ყველა სოლის წონა"
-
-
 msgid "Change the lock state of all shape keys of active object"
 msgstr "შეცვალე აქტიური ობიექტის ფორმის ყველა სოლის ბლოკირების მდგომარეობა"
 
@@ -64142,14 +64121,6 @@ msgid "Library Operation"
 msgstr "ბიბლიოთეკის ოპერაცია"
 
 
-msgid ""
-"Delete this library and all its items.\n"
-"Warning: No undo"
-msgstr ""
-"წაშალე ეს ბიბლიოთეკა და მისი ყველა საგანი.\n"
-"ფრთხილად: არაა გაუქმებადი"
-
-
 msgid "Relocate"
 msgstr "შეცვალე მდებარეობა"
 
@@ -64540,47 +64511,6 @@ msgstr "გაცვალე ფერები"
 
 msgid "Swap primary and secondary brush colors"
 msgstr "გაცვალე ფუნჯის პირველადი და მეორეხარისხოვანი ფერები"
-
-
-msgctxt "Operator"
-msgid "Brush Select"
-msgstr "მონიშნე ფუნჯი"
-
-
-msgid "Select a paint mode's brush by tool type"
-msgstr "მონიშნე ხატვის რეჟიმის ფუნჯი ხელსაწყოს ტიპის მიხედვით"
-
-
-msgid "Create Missing"
-msgstr "შექმენი უპოვნელი"
-
-
-msgid "If the requested brush type does not exist, create a new brush"
-msgstr "თუ მოთხოვნილი ფუნჯის ტიპი არ არსებობს, შექმენი ახალი ფუნჯი"
-
-
-msgid "Paint Selection"
-msgstr "ხატვა მონიშნულზე"
-
-
-msgid "Comb"
-msgstr "სავარცხელი"
-
-
-msgid "Grow / Shrink"
-msgstr "ზრდა / შეკუმშვა"
-
-
-msgid "Puff"
-msgstr "აფუება"
-
-
-msgid "Clone"
-msgstr "კლონირება"
-
-
-msgid "Toggle between two brushes rather than cycling"
-msgstr "გადართე ორი ფუნჯს შორის, ციკლირების მაგივრად"
 
 
 msgid "Change selection for all faces"
@@ -68848,10 +68778,6 @@ msgid "Replace Selection"
 msgstr "ჩაანაცვლე მონიშნული"
 
 
-msgid "Replace the current selection"
-msgstr "ჩაანაცვლე მიმდინარე მონიშვნა"
-
-
 msgctxt "Operator"
 msgid "Export Subtitles"
 msgstr "სუბტიტრების ექსპორტი"
@@ -69089,14 +69015,6 @@ msgid "Load sound with the movie"
 msgstr "დაუკარი ხმა ვიდეოსთან ერთად"
 
 
-msgid "Use Movie Framerate"
-msgstr "გამოიყენე ვიდეოს კადრების სიხშირე"
-
-
-msgid "Use framerate from the movie to keep sound and video in sync"
-msgstr "გამოიყენე კადრების სიხშირე ვიდეოდან, რათა შეინარჩუნო ხმისა და ვიდეოს სინქრონი"
-
-
 msgctxt "Operator"
 msgid "Add MovieClip Strip"
 msgstr "დაამატე ვიდეოკლიპის ლენტი"
@@ -69321,10 +69239,6 @@ msgstr "მონიშნე აქტიური ლენტის გვე
 
 msgid "Linked Time"
 msgstr "დაკავშირებული დრო"
-
-
-msgid "Select other strips at the same time"
-msgstr "მონიშნე ერთდროული სხვა ლენტები"
 
 
 msgid "Side of Frame"
@@ -69824,34 +69738,6 @@ msgstr "ბიტური სიხშირე კბიტ./წმ-ში"
 
 msgid "File format"
 msgstr "ფაილის ფორმატი"
-
-
-msgid "ac3"
-msgstr "ac3"
-
-
-msgid "flac"
-msgstr "flac"
-
-
-msgid "mkv"
-msgstr "mkv"
-
-
-msgid "mp2"
-msgstr "mp2"
-
-
-msgid "mp3"
-msgstr "mp3"
-
-
-msgid "ogg"
-msgstr "ogg"
-
-
-msgid "wav"
-msgstr "wav"
 
 
 msgid "16-bit signed"
@@ -72119,6 +72005,11 @@ msgstr "არეალი 3გ"
 msgctxt "Mesh"
 msgid "Object"
 msgstr "ობიექტი"
+
+
+msgctxt "Mesh"
+msgid "Winding"
+msgstr "გრაგნილი"
 
 
 msgctxt "Mesh"
@@ -75935,10 +75826,6 @@ msgid "Size of packed file in bytes"
 msgstr "ალაგებული ფაილის ზომა ბაიტებში"
 
 
-msgid "Active Brush"
-msgstr "აქტიური ფუნჯი"
-
-
 msgid "Editable cavity curve"
 msgstr "ჩაღრმავების რედაქტირებადი წირი"
 
@@ -75985,10 +75872,6 @@ msgstr "მიჯრა Z"
 
 msgid "Tile along Z axis"
 msgstr "მიჯრით გაამწკრივე Z ღერძზე"
-
-
-msgid "Paint Tool Slots"
-msgstr "სახატავი ხელსაწყოს სლოტები"
 
 
 msgid "Mask painting according to mesh geometry cavity"
@@ -76343,10 +76226,6 @@ msgid "Source to select canvas from"
 msgstr "წყარო, რომლიდანაც უნდა შეირჩეს ტილო"
 
 
-msgid "Paint Tool Slot"
-msgstr "სახატავი ხელსაწყოს სლოტი"
-
-
 msgid "Palette Color"
 msgstr "პალიტრის ფერი"
 
@@ -76656,6 +76535,10 @@ msgid "OpenVDB File"
 msgstr "გახსენი OpenVDB ფაილი"
 
 
+msgid "Slot"
+msgstr "სლოტი"
+
+
 msgid "Create Pose Asset"
 msgstr "შექმენი პოზის აქტივი"
 
@@ -76810,31 +76693,6 @@ msgid "Grab"
 msgstr "ჩავლება"
 
 
-msgctxt "Operator"
-msgid "Draw"
-msgstr "დახატვა"
-
-
-msgctxt "Operator"
-msgid "Soften"
-msgstr "შერბილება"
-
-
-msgctxt "Operator"
-msgid "Smear"
-msgstr "გათხიპნა"
-
-
-msgctxt "Operator"
-msgid "Clone"
-msgstr "კლონირება"
-
-
-msgctxt "Operator"
-msgid "Mask"
-msgstr "ნიღაბი"
-
-
 msgid "Tiling"
 msgstr "მიჯრით"
 
@@ -76881,10 +76739,6 @@ msgstr "ფონი"
 
 msgid "Modes"
 msgstr "რეჟიმები"
-
-
-msgid "Slot"
-msgstr "სლოტი"
 
 
 msgid "Predefined node color"
@@ -77107,6 +76961,10 @@ msgid "Show options for the properties editor"
 msgstr "აჩვენე ვარიანტები თვისებათა რედაქტორისთვის"
 
 
+msgid "White Balance"
+msgstr "თეთრი ბალანსი"
+
+
 msgid "Indirect Lighting"
 msgstr "ირიბი განათება"
 
@@ -77217,10 +77075,6 @@ msgstr "პროქსის ანაწყობები"
 
 msgid "Sequencer Overlays"
 msgstr "სეკვენსერის გადაფარებები"
-
-
-msgid "Strips"
-msgstr "ლენტები"
 
 
 msgid "Waveforms"
@@ -77531,10 +77385,6 @@ msgid "Toolbar Item"
 msgstr "ხელსაწყოების ზოლის საგანი"
 
 
-msgid "Strip Colors"
-msgstr "ლენტების ფერები"
-
-
 msgid "Text Style"
 msgstr "ტექსტის სტილი"
 
@@ -77709,6 +77559,11 @@ msgstr "წიბოს მორღვევა"
 
 
 msgctxt "Operator"
+msgid "Draw"
+msgstr "დახატვა"
+
+
+msgctxt "Operator"
 msgid "Radius"
 msgstr "რადიუსი"
 
@@ -77720,6 +77575,11 @@ msgstr "გაფართოვე, ან შეკუმშე წირი�
 msgctxt "Operator"
 msgid "Select Text"
 msgstr "ტექსტის მონიშნვა"
+
+
+msgctxt "Operator"
+msgid "Interpolate"
+msgstr "ინტერპოლაცია"
 
 
 msgctxt "Operator"
@@ -77768,121 +77628,6 @@ msgstr "წონა"
 
 msgid "Weight hair particles"
 msgstr "მიანიჭე თმის ნაწილაკებს წონა"
-
-
-msgctxt "Operator"
-msgid "Draw Sharp"
-msgstr "მკვეთრად დახატვა"
-
-
-msgctxt "Operator"
-msgid "Clay"
-msgstr "თიხა"
-
-
-msgctxt "Operator"
-msgid "Clay Strips"
-msgstr "თიხის ზოლები"
-
-
-msgctxt "Operator"
-msgid "Clay Thumb"
-msgstr "ცერი თიხაზე"
-
-
-msgctxt "Operator"
-msgid "Layer"
-msgstr "შრე"
-
-
-msgctxt "Operator"
-msgid "Blob"
-msgstr "დაბუშტვა"
-
-
-msgctxt "Operator"
-msgid "Crease"
-msgstr "ნაკეცი"
-
-
-msgctxt "Operator"
-msgid "Flatten"
-msgstr "დაბრტყელება"
-
-
-msgctxt "Operator"
-msgid "Scrape"
-msgstr "ფხეკა"
-
-
-msgctxt "Operator"
-msgid "Multi-plane Scrape"
-msgstr "მრავალსიბრტყიანი ფხეკა"
-
-
-msgctxt "Operator"
-msgid "Elastic Deform"
-msgstr "ელასტიური დეფორმირება"
-
-
-msgctxt "Operator"
-msgid "Snake Hook"
-msgstr "გველსაჭერი"
-
-
-msgctxt "Operator"
-msgid "Thumb"
-msgstr "ცერი"
-
-
-msgctxt "Operator"
-msgid "Pose"
-msgstr "პოზირება"
-
-
-msgctxt "Operator"
-msgid "Nudge"
-msgstr "ბიძგება"
-
-
-msgctxt "Operator"
-msgid "Slide Relax"
-msgstr "გაცურებით მოშვება"
-
-
-msgctxt "Operator"
-msgid "Boundary"
-msgstr "ზღვარი"
-
-
-msgctxt "Operator"
-msgid "Cloth"
-msgstr "ქსოვილი"
-
-
-msgctxt "Operator"
-msgid "Simplify"
-msgstr "გამარტივება"
-
-
-msgctxt "Operator"
-msgid "Draw Face Sets"
-msgstr "წახნაგთა წყებების დახატვა"
-
-
-msgctxt "Operator"
-msgid "Multires Displacement Eraser"
-msgstr "მულტირეზ. გადაადგილების საშლელი"
-
-
-msgctxt "Operator"
-msgid "Multires Displacement Smear"
-msgstr "მულტირეზ. გადაადგილების გათხიპნა"
-
-
-msgctxt "Operator"
-msgid "Paint"
-msgstr "დახატე"
 
 
 msgctxt "Operator"
@@ -77986,26 +77731,6 @@ msgstr "ფერის ფილტრი"
 
 
 msgctxt "Operator"
-msgid "Thickness"
-msgstr "სისქე"
-
-
-msgctxt "Operator"
-msgid "Strength"
-msgstr "სიძლიერე"
-
-
-msgctxt "Operator"
-msgid "Blur"
-msgstr "გააბუნდოვანე"
-
-
-msgctxt "Operator"
-msgid "Average"
-msgstr "საშუალო"
-
-
-msgctxt "Operator"
 msgid "Gradient"
 msgstr "გრადიენტი"
 
@@ -78021,18 +77746,8 @@ msgstr "ნიმუში წვეროთა ჯგუფიდან"
 
 
 msgctxt "Operator"
-msgid "Erase"
-msgstr "წაშლა"
-
-
-msgctxt "Operator"
 msgid "Cutter"
 msgstr "საჭრელი"
-
-
-msgctxt "Operator"
-msgid "Tint"
-msgstr "შეფერილობა"
 
 
 msgctxt "Operator"
@@ -78065,11 +77780,6 @@ msgid "Circle"
 msgstr "წრე"
 
 
-msgctxt "Operator"
-msgid "Interpolate"
-msgstr "ინტერპოლაცია"
-
-
 msgid "Expand or contract the radius of the selected points"
 msgstr "გააფართოვე, ან შეკუმშე მონიშნული წერტილების რადიუსი"
 
@@ -78077,26 +77787,6 @@ msgstr "გააფართოვე, ან შეკუმშე მონ�
 msgctxt "Operator"
 msgid "Transform Fill"
 msgstr "შევსების გარდაქმნა"
-
-
-msgctxt "Operator"
-msgid "Paint Selection"
-msgstr "მოხატე მონიშნული"
-
-
-msgctxt "Operator"
-msgid "Density"
-msgstr "სისქე"
-
-
-msgctxt "Operator"
-msgid "Grow / Shrink"
-msgstr "გაზარდე / შეკუმშე"
-
-
-msgctxt "Operator"
-msgid "Slide"
-msgstr "გააცურე"
 
 
 msgid "Clone from Paint Slot"
@@ -78405,6 +78095,14 @@ msgstr "ასახე ნაწილაკები"
 
 msgid "Display actual particles"
 msgstr "ასახე ნამდვილი ნაწილაკები"
+
+
+msgid "Comb"
+msgstr "სავარცხელი"
+
+
+msgid "Puff"
+msgstr "აფუება"
 
 
 msgid "Auto Velocity"
@@ -79704,10 +79402,6 @@ msgid "Enable some extra fields in the Asset Browser to aid in debugging"
 msgstr "ჩართე რამდენიმე ექსტრა ველი აქტივთა ბრაუზერში ხარვეზების აღმოფხვრაში დასახმარებლად"
 
 
-msgid "New Animation Data-block"
-msgstr "ანიმაციის ახალი მონაცემთა ბლოკი"
-
-
 msgid "No Asset Indexing"
 msgstr "აქტივების ინდექსირების გარეშე"
 
@@ -79742,10 +79436,6 @@ msgstr "გაფართოებების ხარვეზების �
 
 msgid "Extra debugging information & developer support utilities for extensions"
 msgstr "დამატებითი ინფორმაცია ხარვეზების აღმოსაფხვრელად და სადეველოპერო მხარდაჭერის უტილიტები გაფართოებებისთვის"
-
-
-msgid "Grease Pencil 3.0"
-msgstr "Grease Pencil 3.0"
 
 
 msgid "New Curves Tools"
@@ -81438,10 +81128,6 @@ msgid "Camera Distance"
 msgstr "კამერის დაშორება"
 
 
-msgid "Temperature"
-msgstr "ტემპერატურა"
-
-
 msgid "Euler Angles"
 msgstr "ეილერის კუთხეები"
 
@@ -81754,10 +81440,6 @@ msgstr "შეინახე განხმაურების მახა�
 
 msgid "Debug Sample Count"
 msgstr "ხარვეზების აღმოფხვრის სემპლების სათვალავი"
-
-
-msgid "Number of samples/camera rays per pixel"
-msgstr "სემპლების/კამერის სხივების რაოდენობა თითო პიქსელზე"
 
 
 msgid "Use Denoising"
@@ -86232,10 +85914,6 @@ msgid "Mute expanded settings for the modifier"
 msgstr "ჩაახშე განვრცობილი ანაწყობები მოდიფიკატორისთვის"
 
 
-msgid "White Balance"
-msgstr "თეთრი ბალანსი"
-
-
 msgid "Bright/contrast modifier data for sequence strip"
 msgstr "სიკაშკაშე/კონტრასტის მოდიფიკატორის მონაცემები თანამიმდევრობის ლენტისთვის"
 
@@ -88124,14 +87802,6 @@ msgstr "დაარედაქტირე ტექსტურის კვ�
 
 msgid "Node tree type to display and edit"
 msgstr "კვანძოვანი ხის ტიპი ასახვისა და რედაქტირებისთვის"
-
-
-msgid "Auto Render"
-msgstr "ავტო-რენდერი"
-
-
-msgid "Re-render and composite changed layers on 3D edits"
-msgstr "ხელახლა დაარენდერე და დააკომპოზიტირე შეცვლილი შრეები 3გ რედაქტირებებზე"
 
 
 msgid "Space Outliner"
@@ -91363,10 +91033,6 @@ msgid "Widget Style"
 msgstr "ვიჯეტის სტილი"
 
 
-msgid "Widget Label Style"
-msgstr "ვიჯეტის იარლიყის სტილი"
-
-
 msgid "Theme Text Editor"
 msgstr "თემის ტექსტური რედაქტორი"
 
@@ -92485,10 +92151,6 @@ msgstr "მიაკარი აქტიურს"
 
 msgid "Snap onto itself only if enabled (edit mode only)"
 msgstr "მიაკარი საკუთარ თავს მხოლოდ მაშინ, როცა ჩართულია (მხოლოდ რედაქტირების რეჟიმისთვის)"
-
-
-msgid "Snap to strip edges or current frame"
-msgstr "მიაკარი ლენტების კიდეებს, ამ მიმდინარე კადრს"
 
 
 msgid "Absolute Time Snap"
@@ -98362,6 +98024,10 @@ msgid "URL: {:s}"
 msgstr "URL: {:s}"
 
 
+msgid "Path: {:s}"
+msgstr "მისამართი: {:s}"
+
+
 msgid "Unable to install a directory"
 msgstr "დირექტორიის დაყენება შეუძლებელია"
 
@@ -98687,10 +98353,6 @@ msgid "Requires Apple Silicon with macOS %s or newer"
 msgstr "საჭიროებს Apple Silicon-ს macOS %s-ით, ან უფრო ახალს"
 
 
-msgid "or AMD with macOS %s or newer"
-msgstr "ან AMD-ს macOS %s-ით, ან უფრო ახალის"
-
-
 msgid "    %s or newer"
 msgstr "    %s-ს, ან უფრო ახალს"
 
@@ -98757,6 +98419,10 @@ msgstr "ინდექსები"
 
 msgid "Pipeline"
 msgstr "მილსადენი"
+
+
+msgid "Focus on Object"
+msgstr "ფოკუსირდი ობიექტზე"
 
 
 msgid "Geometry Offset"
@@ -98977,6 +98643,10 @@ msgstr "დააოპტიმიზირე ანიმაციები"
 
 msgid "Extra Animations"
 msgstr "დამატებითი ანიმაციები"
+
+
+msgid "gltfpack"
+msgstr "gltfpack"
 
 
 msgctxt "Operator"
@@ -101352,10 +101022,6 @@ msgid "Control Rotation"
 msgstr "აკონტროლე ბრუნვა"
 
 
-msgid "Focus on Object"
-msgstr "ფოკუსირდი ობიექტზე"
-
-
 msgctxt "Operator"
 msgid "Add Image"
 msgstr "დაამატე გამოსახულება"
@@ -101782,17 +101448,17 @@ msgstr "წაშალე დაუმაგრებელი წერტი�
 
 
 msgctxt "Operator"
-msgid "Delete Duplicate Frames"
-msgstr "წაშალე დუბლიკატი კადრები"
-
-
-msgctxt "Operator"
 msgid "Recalculate Geometry"
 msgstr "ხელახლა გამოთვალე გეომეტრია"
 
 
 msgid "Show Only on Keyframed"
 msgstr "აჩვენე მხოლოდ დაგასაღებებულ კადრ(ებ)ზე"
+
+
+msgctxt "Operator"
+msgid "Erase"
+msgstr "წაშლა"
 
 
 msgctxt "Operator"
@@ -101942,10 +101608,6 @@ msgid "Light Probe Volume"
 msgstr "სინათლის ზონდის მოცულობა"
 
 
-msgid "Render Method"
-msgstr "რენდერის მეთოდი"
-
-
 msgid "Intersection"
 msgstr "გადაკვეთა"
 
@@ -101974,21 +101636,6 @@ msgstr "ჩაკეტე მოუნიშნავი"
 msgctxt "Operator"
 msgid "Lock Unused"
 msgstr "ჩაკეტე გამოუყენებელი"
-
-
-msgctxt "Operator"
-msgid "Convert Materials to Color Attribute"
-msgstr "დააკონვერტირე მასალები ფერის ატრიბუტად"
-
-
-msgctxt "Operator"
-msgid "Extract Palette from Color Attribute"
-msgstr "გამოიტანე პალიტრა ფერის ატრიბუტიდან"
-
-
-msgctxt "Operator"
-msgid "Merge Similar"
-msgstr "გააერთიანე მსგავსი"
 
 
 msgctxt "Operator"
@@ -102088,6 +101735,10 @@ msgstr "წახნაგების ნაკრებთა ზღვარ�
 
 msgid "Cavity (inverted)"
 msgstr "ღრმული (შექცეული)"
+
+
+msgid "Sculpt Curves"
+msgstr "დაძერწე წირები"
 
 
 msgid "Edge to Edge"
@@ -102506,6 +102157,11 @@ msgstr "გადანაცვლების ტიპი"
 
 msgid "Color Layer"
 msgstr "ფერის შრე"
+
+
+msgctxt "Operator"
+msgid "Add Brush"
+msgstr "დაამატე ფუნჯი"
 
 
 msgid "Wave Clamp"
@@ -103361,6 +103017,11 @@ msgstr "ჩასვი შეტრიალებული"
 msgctxt "Operator"
 msgid "Extend"
 msgstr "განავრცე"
+
+
+msgctxt "Operator"
+msgid "Slide"
+msgstr "გააცურე"
 
 
 msgctxt "Operator"
@@ -104635,10 +104296,6 @@ msgid "Strip Offset Start"
 msgstr "ლენტის აცდენის დაწყება"
 
 
-msgid "Tracker"
-msgstr "ტრეკერი"
-
-
 msgid "Resolutions"
 msgstr "გარჩევადობები"
 
@@ -104655,6 +104312,11 @@ msgstr "სცენის შეცვლა..."
 msgctxt "Operator"
 msgid "Clip"
 msgstr "კლიპი"
+
+
+msgctxt "Operator"
+msgid "Mask"
+msgstr "ნიღაბი"
 
 
 msgctxt "Operator"
@@ -104907,24 +104569,12 @@ msgid "    Operator"
 msgstr "    ოპერატორი"
 
 
-msgid "Drag:"
-msgstr "გათრევა:"
-
-
 msgid "Unable to find toolbar group"
 msgstr "ხელსაწყოთა ზოლის ჯგუფი ვერ მოიძებნა"
 
 
 msgid "Taper Start"
 msgstr "დაავიწროვე დასაწყისი"
-
-
-msgid "Depth:"
-msgstr "სიღრმე:"
-
-
-msgid "Orientation:"
-msgstr "ორიენტაცია:"
 
 
 msgid "Weight: {:.3f}"
@@ -104959,10 +104609,6 @@ msgid "Intersections"
 msgstr "გადაკვეთები"
 
 
-msgid "Angle Snapping Increment"
-msgstr "კუთხეებზე მიკვრის ნამატი"
-
-
 msgid ""
 "Measure distance and angles.\n"
 "• {:s} anywhere for new measurement.\n"
@@ -104981,6 +104627,18 @@ msgstr ""
 
 msgid "Annotation:"
 msgstr "ანოტაცია:"
+
+
+msgid ""
+"Use multiple operators in an interactive way to add, delete, or move geometry.\n"
+"• {:s} - Add geometry by moving the cursor close to an element.\n"
+"• {:s} - Extrude edges by moving the cursor.\n"
+"• {:s} - Delete mesh element"
+msgstr ""
+"ინტერაქტიულად გამოიყენე რამდენიმე ოპერატორი გეომეტრიის დასამატებლად, წასაშლელად, ან გადასაადგილებლად.\n"
+"• {:s} - დაამატე გეომეტრია ელემენტთან კურსორის მიახლოებით.\n"
+"• {:s} - ამოიყვანე წიბოები კურსორის გამოძრავებით.\n"
+"• {:s} - წაშალე მეშის ელემენტი"
 
 
 msgid "Add cube to mesh interactively"
@@ -105104,13 +104762,13 @@ msgstr "დაბრუნდი წინაზე"
 
 
 msgctxt "Operator"
-msgid "Save Incremental"
-msgstr "შეინახე მზარდი"
+msgid "Save Copy..."
+msgstr "შეინახე ასლი..."
 
 
 msgctxt "Operator"
-msgid "Save Copy..."
-msgstr "შეინახე ასლი..."
+msgid "Save Incremental"
+msgstr "შეინახე მზარდი"
 
 
 msgctxt "Operator"
@@ -105457,10 +105115,6 @@ msgstr "ჩრდილის აცდენა X"
 
 msgid "Panel Title"
 msgstr "პანელის სათაური"
-
-
-msgid "Widget Label"
-msgstr "ვიჯეტის იარლიყი"
 
 
 msgid "Temporary Files"
@@ -106113,10 +105767,6 @@ msgid "Copy UV Maps"
 msgstr "დააკოპირე UV რუკები"
 
 
-msgid "Sculpt Curves"
-msgstr "დაძერწე წირები"
-
-
 msgctxt "Operator"
 msgid "Add New Group"
 msgstr "დაამატე ახალი ჯგუფი"
@@ -106728,6 +106378,11 @@ msgstr "დაადუბლირე აქტიური საგასა�
 
 
 msgctxt "Operator"
+msgid "Simplify"
+msgstr "გამარტივება"
+
+
+msgctxt "Operator"
 msgid "Set Caps"
 msgstr "დააყენე მთავრულობა"
 
@@ -106957,11 +106612,6 @@ msgstr "სჲუზენი"
 msgctxt "Operator"
 msgid "Point Cloud"
 msgstr "წერტილების ღრუბელი"
-
-
-msgctxt "Operator"
-msgid "Grease Pencil"
-msgstr "გრიზ ფენსილი"
 
 
 msgctxt "Operator"
@@ -107461,6 +107111,10 @@ msgid "Only in Multiframe"
 msgstr "მხოლოდ მრავალკადრიანში"
 
 
+msgid "Material Name"
+msgstr "მასალის სახელი"
+
+
 msgctxt "Operator"
 msgid "Reproject"
 msgstr "ხელახალი პროეცირება"
@@ -107601,10 +107255,6 @@ msgstr "მოიცავი დაურედაქტირებელი"
 
 msgid "Custom Location"
 msgstr "მორგებული მდებარეობა"
-
-
-msgid "Material Name"
-msgstr "მასალის სახელი"
 
 
 msgctxt "Operator"
@@ -107911,10 +107561,6 @@ msgid "Ignore Transparent"
 msgstr "გამჭვირვალობის იგნორირება"
 
 
-msgid "Binding"
-msgstr "მიჯაჭვა"
-
-
 msgid "handle"
 msgstr "სახელური"
 
@@ -107933,10 +107579,6 @@ msgstr "შინაგანი სახელი"
 
 msgid "%sAction"
 msgstr "%sქმედება"
-
-
-msgid "Could not insert {:d} key(s) for unknown reasons."
-msgstr "{:d} სოლი ვერ ჩაისვა უცნობი მიზეზებით."
 
 
 msgid "Could not create {:d} F-Curve(s). This can happen when only inserting to available F-Curves."
@@ -107997,6 +107639,10 @@ msgstr "დოკუმენტები"
 
 msgid "armatures"
 msgstr "არმატურები"
+
+
+msgid "Saved \"%s\""
+msgstr "შენახული \"%s\""
 
 
 msgid "Attribute name cannot be empty"
@@ -108251,11 +107897,6 @@ msgstr "ზედაპირი"
 msgctxt "Action"
 msgid "var"
 msgstr "var"
-
-
-msgctxt "Action"
-msgid "Python"
-msgstr "Python"
 
 
 msgctxt "Action"
@@ -108905,6 +108546,14 @@ msgstr "მილიწამები"
 
 msgid "Microseconds"
 msgstr "მიკროწამები"
+
+
+msgid "Arcminutes"
+msgstr "მინუტები"
+
+
+msgid "Arcseconds"
+msgstr "სეკუნდები"
 
 
 msgid "Gigawatts"
@@ -110597,12 +110246,12 @@ msgid "Curve: "
 msgstr "წირი: "
 
 
-msgid "Failed to set value"
-msgstr "მნიშვნელობა ვერ დაყენდა"
-
-
 msgid "Could not resolve path '%s'"
 msgstr "მისამართი '%s' ვერ მოინახა"
+
+
+msgid "Failed to set value"
+msgstr "მნიშვნელობა ვერ დაყენდა"
 
 
 msgid "Property from path '%s' is not a float"
@@ -111015,6 +110664,10 @@ msgid "HSVA"
 msgstr "HSVA"
 
 
+msgid "Movie"
+msgstr "ვიდეო"
+
+
 msgctxt "Operator"
 msgid "Click"
 msgstr "დააწკაპუნე"
@@ -111185,10 +110838,6 @@ msgid "Sort By:"
 msgstr "დალაგების პრინციპი:"
 
 
-msgid "Choose %s data-block to be assigned to this user"
-msgstr "აირჩიე %s მონაცემთა ბლოკი ამ მომხმარებლისთვის მისაკუთვნებლად"
-
-
 msgid "Indirect library data-block, cannot be made local, Shift + Click to create a library override hierarchy"
 msgstr "არაპირდაპირი ბიბლიოთეკის მონაცემთა ბლოკი, Shift + დაწკაპუნება ბიბლიოთეკის უკუგდების იერარქიის შესაქმნელად"
 
@@ -111287,14 +110936,6 @@ msgstr "დააწკაპუნე და გახსენი ინფო
 
 msgid "Show in Info Log"
 msgstr "აჩვენე ინფოს ჟურნალში"
-
-
-msgid ""
-"File saved by newer Blender\n"
-"(%s), expect loss of data"
-msgstr ""
-"ფაილი უფრო ახალ Blender-შია შენახული\n"
-"(%s), მოსალოდნელია მონაცემების დაკარგვა"
 
 
 msgid "Browse Scene to be linked"
@@ -111889,10 +111530,6 @@ msgstr "მეშ(ებ)ს ფორმის სოლები არ აქ
 
 msgid "Active mesh does not have shape keys"
 msgstr "აქტიურ მეშს ფორმის სოლები არ აქვს"
-
-
-msgid "No edges are selected to operate on"
-msgstr "ოპერირებისთვის მონიშნული წიბოები არ არის"
 
 
 msgid "Selection not supported in object mode"
@@ -112816,8 +112453,8 @@ msgid "Too many potential root collections (%d) for the override hierarchy, plea
 msgstr "უკუგდების იერარქიისთვის მეტისმეტად ბევრი პოტენციური ძირეული კოლექციაა (%d), თუ შეიძლება, ამის ნაცვლად გამოიყენე მონახაზი"
 
 
-msgid "Move the mouse to change the voxel size. CTRL: Relative Scale, SHIFT: Precision Mode, ENTER/LMB: Confirm Size, ESC/RMB: Cancel"
-msgstr "ვოქსელის ზომის შესაცვლელად გაამოძრავე თაგვი. CTRL: შეფარდებითი მასშტაბი, SHIFT: სიზუსტის რეჟიმი, ENTER/მარცხენა კლავიში: დაადასტურე ზომა, ESC/მარჯვენა კლავიში: გაუქმება"
+msgid "Precision Mode"
+msgstr "სიზუსტის რეჟიმი"
 
 
 msgid "Voxel remesher cannot run with a voxel size of 0.0"
@@ -113456,10 +113093,6 @@ msgid "A narrow horizontal area interferes with this operation"
 msgstr "ვიწრო თარაზული არეალი ამ ოპერაციას ხელს უშლის"
 
 
-msgid "Join Areas"
-msgstr "შეაერთე არეალები"
-
-
 msgid "Swap Areas"
 msgstr "გაცვალე არეალები"
 
@@ -113498,10 +113131,6 @@ msgstr "შეატრიალე ზევით"
 
 msgid "Flip to Bottom"
 msgstr "შეატრიალე ქვევით"
-
-
-msgid "Blender Preferences"
-msgstr "Blender-ის სასურველი პარამეტრები"
 
 
 msgid "Blender Drivers Editor"
@@ -113625,6 +113254,10 @@ msgid "Duplicate Current"
 msgstr "დაადუბლირე მიმდინარე"
 
 
+msgid "File not found '%s'"
+msgstr "ფაილი ვერ მოიძებნა '%s'"
+
+
 msgid "Original surface mesh is empty"
 msgstr "ორიგინალი ზედაპირის მეში ცარიელია"
 
@@ -113647,6 +113280,14 @@ msgstr "წირებს ზედაპირზე მიმაგრებ�
 
 msgid "UV map or surface attachment is invalid"
 msgstr "UV რუკა, ან ზედაპირზე მიმაგრება უვარგისია"
+
+
+msgid "ON"
+msgstr "ON"
+
+
+msgid "OFF"
+msgstr "OFF"
 
 
 msgid "No Grease Pencil frame to draw weight on"
@@ -114430,10 +114071,6 @@ msgid "No F-Modifiers to paste"
 msgstr "ჩასასმელი F-მოდიფიკატორები არ არის"
 
 
-msgid "File not found '%s'"
-msgstr "ფაილი ვერ მოიძებნა '%s'"
-
-
 msgid "Euler Rotation F-Curve has invalid index (ID='%s', Path='%s', Index=%d)"
 msgstr "ეილერის ბრუნვის F-წირს უვარგისი ინდექსი აქვს (ID='%s', მისამართი='%s', ინდექსი=%d)"
 
@@ -114740,6 +114377,10 @@ msgstr "დაკვრის მასშტაბირება"
 
 msgid "Active Strip Name"
 msgstr "აქტიური ლენტის სახელი"
+
+
+msgid "Temp-Meta"
+msgstr "დროებითი-მეტა"
 
 
 msgid "No active track(s) to add strip to, select an existing track or add one before trying again"
@@ -116262,10 +115903,6 @@ msgid "Set Snap Base"
 msgstr "დააყენე მიკვრის ფუძე"
 
 
-msgid "Precision Mode"
-msgstr "სიზუსტის რეჟიმი"
-
-
 msgid "Edge Slide: "
 msgstr "წიბოს გაცურება: "
 
@@ -117126,10 +116763,6 @@ msgid "Driver '%s[%d]' already exists"
 msgstr "დრაივერი '%s[%d]' უკვე არსებობს"
 
 
-msgid "Data-block '%s' does not have an Action, cannot set binding handle"
-msgstr "მონაცემთა ბლოკ '%s'-ს ქმედება არ გააჩნია, მიჯაჭვის ბერკეტი ვერ დაყენდება"
-
-
 msgid "Invalid context for keying set"
 msgstr "უვარგისი კონტექსტი ჩასოლვის ნაკრებისთვის"
 
@@ -117974,10 +117607,6 @@ msgid "Invalid index %d for B-Bone segments of '%s'!"
 msgstr "უვარგისი ინდექსი %d '%s'-ის დ-ძვლის სეგმენტებისთვის!"
 
 
-msgid "Movie"
-msgstr "ვიდეო"
-
-
 msgid "Use the scene orientation"
 msgstr "გამოიყენე სცენის ორიენტაცია"
 
@@ -118720,6 +118349,10 @@ msgid "Output Attributes"
 msgstr "შედეგის ატრიბუტები"
 
 
+msgid "Manage"
+msgstr "მართე"
+
+
 msgid "Cannot load the baked data"
 msgstr "გამომცხვარი მონაცემების ჩატვირთვა შეუძლებელია"
 
@@ -119073,8 +118706,16 @@ msgid "The node tree must be the compositing node tree of any scene in the file"
 msgstr "კვანძოვანი ხე უნდა იყოს კომპოზიტირების კვანძოვანი ხე ფაილის ნებისმიერ სცენაში"
 
 
+msgid "Pick"
+msgstr "ამოირჩიე"
+
+
 msgid "Bokeh Type:"
 msgstr "ბოკეს ტიპი:"
+
+
+msgid "Prefilter:"
+msgstr "წინასწარი ფილტრი:"
 
 
 msgid "Disabled, CPU with SSE4.2 is required"
@@ -119129,6 +118770,10 @@ msgid "Render passes not supported in the Viewport compositor"
 msgstr "სარკმლის კომპოზიტორში რენდერის გავლები მხარდაჭერილი არაა"
 
 
+msgid "Dispersion"
+msgstr "დისპერსია"
+
+
 msgid "From Min"
 msgstr "მინიმუმიდან"
 
@@ -119147,6 +118792,18 @@ msgstr "გასწორება"
 
 msgid "Dot"
 msgstr "წერტილი"
+
+
+msgid "Degr"
+msgstr "გრად."
+
+
+msgid "Cb"
+msgstr "Cb"
+
+
+msgid "Cr"
+msgstr "Cr"
 
 
 msgctxt "Color"
@@ -119172,6 +118829,10 @@ msgstr "Y"
 msgctxt "Color"
 msgid "U"
 msgstr "U"
+
+
+msgid "Val"
+msgstr "მნიშვნ."
 
 
 msgid "Not a geometry node tree"
@@ -119236,6 +118897,10 @@ msgstr "შეყვანილ სტრიქონში საპოვნ�
 
 msgid "The string to replace each match with"
 msgstr "სტრიქონი, რომლითაც უნდა ჩანაცვლდეს თითოეული დამთხვევა"
+
+
+msgid "Decimals"
+msgstr "ათწილადები"
 
 
 msgid "Geometry Node Editor"
@@ -121886,16 +121551,6 @@ msgstr "აუდიო"
 
 
 msgctxt "Sequence"
-msgid "Sub"
-msgstr "გამოკლება"
-
-
-msgctxt "Sequence"
-msgid "Mul"
-msgstr "გამრავლება"
-
-
-msgctxt "Sequence"
 msgid "Multicam"
 msgstr "მრავალკამერიანი"
 
@@ -122177,10 +121832,6 @@ msgid "Cannot save blend file, path \"%s\" is not writable"
 msgstr "blend ფაილის შენახვა შეუძლებელია, მისამართი '%s' ჩაუწერადია"
 
 
-msgid "Saved \"%s\""
-msgstr "შენახული \"%s\""
-
-
 msgid "Can't read alternative start-up file: \"%s\""
 msgstr "ალტერნატიული გაშვების ფაილის: \"%s\" წაკითხვა შეუძლებელია"
 
@@ -122255,14 +121906,6 @@ msgstr "dbl-"
 
 msgid "drag-"
 msgstr "გათრევა-"
-
-
-msgid "ON"
-msgstr "ON"
-
-
-msgid "OFF"
-msgstr "OFF"
 
 
 msgid "Set Debug Value"
