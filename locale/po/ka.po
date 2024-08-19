@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Alpha (b'1c98cdbc5267')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'976062c771b5')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-10 16:31+0000\n"
-"PO-Revision-Date: 2024-08-06 10:56+0000\n"
+"POT-Creation-Date: 2024-08-19 11:18+0000\n"
+"PO-Revision-Date: 2024-08-18 12:56+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -16247,6 +16247,14 @@ msgid "Freehand curves defining the sketch on this frame"
 msgstr "თავისუფალი მოსმის წირები, რომლებიც განსაზღვრავენ ჩანახატს ამ კადრში"
 
 
+msgid "Annotation Frames"
+msgstr "ანოტაციის ჩარჩოები"
+
+
+msgid "Collection of annotation frames"
+msgstr "ანოტაციის ჩარჩოების კოლექცია"
+
+
 msgid "Grease Pencil Interpolate Settings"
 msgstr "Grease Pencil-ის ინტერპოლაციის ანაწყობები"
 
@@ -17765,8 +17773,16 @@ msgid "Is Layered Action"
 msgstr "შრეებიანი ქმედებაა"
 
 
+msgid "Return whether this is a layered Action. An empty Action considered as both a 'layered' and a 'layered' Action."
+msgstr "დააბრუნე, არის თუ არა ეს შრეებიანი ქმედება. ცარიელი ქმედება 'შრეებიან\" ქმედებადაც ითვლება და 'ძველებურადაც'."
+
+
 msgid "Is Legacy Action"
 msgstr "ძველებური ქმედებაა"
+
+
+msgid "Return whether this is a legacy Action. Legacy Actions have no layers or slots. An empty Action considered as both a 'legacy' and a 'layered' Action."
+msgstr "დააბრუნე, არის თუ არა ეს ძველებური ქმედება. ძველებურ ქმედებებს შრეები და სლოტები არ გააჩნია. ცარიელი ქმედება 'ძველებურ' ქმედებადაც ითვლება და 'შრეებიანადაც'."
 
 
 msgid "Is Empty"
@@ -20332,6 +20348,10 @@ msgstr "კამერის ლინზის შვეული მხედ
 
 msgid "List of background images"
 msgstr "ფონის გამოსახულებების სია"
+
+
+msgid "Cylinder Radius"
+msgstr "ცილინდრის რადიუსი"
 
 
 msgid "Radius of the virtual cylinder"
@@ -43513,6 +43533,10 @@ msgid "Import OBJ"
 msgstr "დააიმპორტირე OBJ"
 
 
+msgid "Import PLY"
+msgstr "დააიმპორტირე PLY"
+
+
 msgid "Import STL"
 msgstr "დააიმპორტირე STL"
 
@@ -51790,6 +51814,11 @@ msgstr "მომხმარებლის საცავი"
 
 msgid "The user repository to install extensions into"
 msgstr "მომხმარებლის საცავი გაფართოებების ჩასაინსტალირებლად"
+
+
+msgctxt "Operator"
+msgid "Mark Package"
+msgstr "აღნიშნე შეკვრა"
 
 
 msgctxt "Operator"
@@ -81313,6 +81342,14 @@ msgstr "ავტომატურად გამოიყენე ვიზ�
 
 msgid "Experimental features"
 msgstr "ექსპერიმენტალური მახასიათებლები"
+
+
+msgid "CPU Compositor"
+msgstr "CPU კომპოზიტორი"
+
+
+msgid "Enable the new CPU compositor"
+msgstr "გაააქტიურე ახალი CPU კომპოზიტორი"
 
 
 msgid "No Override Auto Resync"
@@ -113188,10 +113225,6 @@ msgid "Add to linking collection"
 msgstr "დაამატე დაკავშირების კოლექციას"
 
 
-msgid "Double click to rename"
-msgstr "ორჯერ დააწკაპუნე სახელის გადასარქმევად"
-
-
 msgid "Hide filtering options"
 msgstr "დამალე გაფილტვრის ვარიანტები"
 
@@ -113310,6 +113343,14 @@ msgstr "გამოიყენე წინასწარი კონფი�
 
 msgid "Sort By:"
 msgstr "დალაგების პრინციპი:"
+
+
+msgid "Split/Dock"
+msgstr "გაყოფა/ჩამაგრება"
+
+
+msgid "Split/Join"
+msgstr "გახლიჩე/შეაერთე"
 
 
 msgid "Duplicate into Window"
@@ -115613,6 +115654,14 @@ msgstr "ვიწრო თარაზული არეალი ამ ო�
 
 msgid "Select Area"
 msgstr "მონიშნე არეალი"
+
+
+msgid "Select Split"
+msgstr "მონიშნე გახლეჩა"
+
+
+msgid "Select Location"
+msgstr "მონიშნე მდებარეობა"
 
 
 msgid "Join Up"
@@ -119216,6 +119265,14 @@ msgid "Incomplete built-in keying set, appears to be missing type info"
 msgstr "ჩასოლვის არასრული ჩაშენებული ნაკრები, როგორც ჩანს, ტიპის შესახებ ინფორმაცია აკლია"
 
 
+msgid "Layer not found in annotation data"
+msgstr "ანოტაციის მონაცემებში შრე ვერ მოიძებნა"
+
+
+msgid "Frame already exists on this frame number %d"
+msgstr "ამ ნომერ %d კადრზე უკვე არსებობს კადრი"
+
+
 msgid "Cannot make a bone collection a descendant of itself"
 msgstr "ძვალთა კოლექცია თავისი თავის შთამომავალი ვერ გახდება"
 
@@ -122136,6 +122193,14 @@ msgstr "გამორთულია, Blender-ი კომპილირე�
 
 msgid "Path to a OBJ file"
 msgstr "OBJ ფაილის მისამართი"
+
+
+msgid "Disabled, Blender was compiled without PLY I/O"
+msgstr "გათიშულია, Blender დაკომპილირდა PLY I/O-ის გარეშე"
+
+
+msgid "Path to a PLY file"
+msgstr "SPLY ფაილის მისამართი"
 
 
 msgid "Disabled, Blender was compiled without STL I/O"
