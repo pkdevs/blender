@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Alpha (b'976062c771b5')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'205d95107e6e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-19 11:18+0000\n"
+"POT-Creation-Date: 2024-08-26 09:41+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -80525,6 +80525,14 @@ msgid "Scale of the final strokes"
 msgstr "இறுதி பக்கங்களின் அளவு"
 
 
+msgid "Scene Unit"
+msgstr "காட்சி அலகு"
+
+
+msgid "Apply current scene's unit (as defined by unit scale) to imported data"
+msgstr "இறக்குமதி செய்யப்பட்ட தரவுகளுக்கு தற்போதைய காட்சியின் அலகு (அலகு அளவால் வரையறுக்கப்பட்டுள்ளது) பயன்படுத்தவும்"
+
+
 msgctxt "Operator"
 msgid "Reload Library"
 msgstr "நூலகத்தை மீண்டும் ஏற்றவும்"
@@ -80962,14 +80970,6 @@ msgstr "தனிப்பயன் வெர்டெக்ச் பண்ப�
 
 msgid "Merges vertices by distance"
 msgstr "செங்குத்துகளை தூரத்தால் இணைக்கவும்"
-
-
-msgid "Scene Unit"
-msgstr "காட்சி அலகு"
-
-
-msgid "Apply current scene's unit (as defined by unit scale) to imported data"
-msgstr "இறக்குமதி செய்யப்பட்ட தரவுகளுக்கு தற்போதைய காட்சியின் அலகு (அலகு அளவால் வரையறுக்கப்பட்டுள்ளது) பயன்படுத்தவும்"
 
 
 msgctxt "Operator"
@@ -122071,10 +122071,6 @@ msgstr "'%s' கொடுக்கப்பட்ட பாதை os-invalid, �
 
 msgid "Could not create new folder: %s"
 msgstr "புதிய கோப்புறையை உருவாக்க முடியவில்லை: %s"
-
-
-msgid "Could not delete file or directory: %s"
-msgstr "கோப்பு அல்லது கோப்பகத்தை நீக்க முடியவில்லை: %s"
 
 
 msgid "More than one item is selected"

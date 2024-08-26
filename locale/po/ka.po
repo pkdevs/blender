@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Alpha (b'976062c771b5')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'205d95107e6e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-19 11:18+0000\n"
-"PO-Revision-Date: 2024-08-18 12:56+0000\n"
+"POT-Creation-Date: 2024-08-26 09:41+0000\n"
+"PO-Revision-Date: 2024-08-25 03:56+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -56107,6 +56107,15 @@ msgstr "დახატე წონა მონასმის წერტი
 
 
 msgctxt "Operator"
+msgid "Invert Weight"
+msgstr "შეაქციე წონა"
+
+
+msgid "Invert the weight of active vertex group"
+msgstr "შეაქციე აქტიური წვეროთა ჯგუფის წონა"
+
+
+msgctxt "Operator"
 msgid "Add Render Slot"
 msgstr "დაამატე რენდერის სლოტი"
 
@@ -56181,6 +56190,10 @@ msgstr "გამოიყენე ფაილთა ფარდობით�
 
 msgid "Render Method"
 msgstr "რენდერის მეთოდი"
+
+
+msgid "Allows for grayscale hashed transparency, and compatible with render passes and ray-tracing. Also known as deferred rendering."
+msgstr "უშვებს ნაცრისფერი სკალის ჰეშირებულ გამჭვირვალობას და თავსებადია რენდერის გადავლებსა და სხივების მიდევნებასთან. ასევე ცნობილია, როგორც დაყოვნებული დარენდერება."
 
 
 msgid "Principled"
@@ -75725,6 +75738,14 @@ msgid "Scale of the final strokes"
 msgstr "საბოლოო მონასმების მასშტაბი"
 
 
+msgid "Scene Unit"
+msgstr "სცენის ერთეული"
+
+
+msgid "Apply current scene's unit (as defined by unit scale) to imported data"
+msgstr "გამოიყენე მიმდინარე სცენის ერთეული (როგორც განსაზღვრულია ერთეულის მასშტაბის მიერ) იმპორტირებულ მონაცემებზე"
+
+
 msgctxt "Operator"
 msgid "Add Theme"
 msgstr "დაამატე თემა"
@@ -76157,14 +76178,6 @@ msgstr "დააიმპორტირე წვეროთა მორგ�
 
 msgid "Merges vertices by distance"
 msgstr "შერწყამს წვეროებს მანძილის მიხედვით"
-
-
-msgid "Scene Unit"
-msgstr "სცენის ერთეული"
-
-
-msgid "Apply current scene's unit (as defined by unit scale) to imported data"
-msgstr "გამოიყენე მიმდინარე სცენის ერთეული (როგორც განსაზღვრულია ერთეულის მასშტაბის მიერ) იმპორტირებულ მონაცემებზე"
 
 
 msgctxt "Operator"
@@ -116413,10 +116426,6 @@ msgid "Could not create new folder: %s"
 msgstr "ახალი საქაღალდე ვერ შეიქმნა: %s"
 
 
-msgid "Could not delete file or directory: %s"
-msgstr "ფაილი, ან დირექტორია ვერ წაიშალა: %s"
-
-
 msgid "More than one item is selected"
 msgstr "მონიშნულია ერთზე მეტი საგანი"
 
@@ -123539,10 +123548,6 @@ msgstr "გარდატეხის ინდექსის (IOR) რეგ�
 
 msgid "Tint dielectric reflection at normal incidence for artistic control, and metallic reflection at near-grazing incidence to simulate complex index of refraction"
 msgstr "შეფერე დიელექტრიკული ანარეკლი ნორმალის ვარდნილთან მხატვრული სახის კონტროლისთვის, და ლითონური ანარეკლი განაპირა არესთან, რათა დაასიმულირო გარდატეხის ინდექსი"
-
-
-msgid "Amount of anisotropy for specular reflection. Higher values give elongated highlights along the tangent direction; negative values give highlights shaped perpendicular to the tangent direction"
-msgstr "ანიზოტროპიის ოდენობა სპეკულარული ანარეკლისთვის. მაღალი მნიშვნელობები უფრო წაგრძელებულ შუქციმებს იძლევა მხების მიმართულებაზე; უარყოფითი მნიშვნელობები მხების მიმართულების მართობული ფორმის შუქციმებს იძლევა"
 
 
 msgid "Rotates the direction of anisotropy, with 1.0 going full circle"
