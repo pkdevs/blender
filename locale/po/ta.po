@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Alpha (b'205d95107e6e')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'b5ea3beaf93b')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-26 09:41+0000\n"
+"POT-Creation-Date: 2024-09-02 14:03+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -1457,10 +1457,6 @@ msgstr "சொத்து நூலகம்"
 
 msgid "Choose the asset library to display assets from"
 msgstr "சொத்துக்களைக் காட்ட சொத்து நூலகத்தைத் தேர்வுசெய்க"
-
-
-msgid "All"
-msgstr "அனைத்தும்"
 
 
 msgid "Show assets from all of the listed asset libraries"
@@ -4477,6 +4473,10 @@ msgstr "தலைகீழ் பரப்பை நிரப்பவும்"
 
 msgid "Mode to draw boundary limits"
 msgstr "எல்லை வரம்புகளை வரைய முறை"
+
+
+msgid "All"
+msgstr "அனைத்தும்"
 
 
 msgid "Use both visible strokes and edit lines as fill boundary limits"
@@ -31838,6 +31838,222 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Show/Hide"
+msgstr "காட்டு/மறைக்க"
+
+
+msgid "Clean Up"
+msgstr "தூய்மை செய்"
+
+
+msgid "Special Characters"
+msgstr "சிறப்பு எழுத்துக்கள்"
+
+
+msgid "Kerning"
+msgstr "கெர்னிங்"
+
+
+msgid "Names"
+msgstr "பெயர்கள்"
+
+
+msgid "Bone Roll"
+msgstr "எலும்பு ரோல்"
+
+
+msgid "Generate Weights"
+msgstr "எடைகளை உருவாக்குங்கள்"
+
+
+msgid "Assign Material"
+msgstr "மூலப்பொருள் ஒதுக்க"
+
+
+msgid "Pivot Point"
+msgstr "பிவோட் புள்ளி"
+
+
+msgid "Snap"
+msgstr "ச்னாப்"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
+
+
+msgid "Mask Edit"
+msgstr "முகமூடி திருத்து"
+
+
+msgid "Automasking"
+msgstr "ஆட்டோமேச்கிங்"
+
+
+msgid "Face Sets Edit"
+msgstr "முகம் தொகுப்புகள் திருத்து"
+
+
+msgid "Vertex Group Locks"
+msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
+
+
+msgid "Mirror"
+msgstr "கண்ணாடி"
+
+
+msgid "UV Mapping"
+msgstr "புறஊதா மேப்பிங்"
+
+
+msgid "Local View"
+msgstr "உள்ளக பார்வை"
+
+
+msgid "Viewpoint"
+msgstr "பார்வை"
+
+
+msgid "Navigation"
+msgstr "வழிசெலுத்தல்"
+
+
+msgid "Align View"
+msgstr "பார்வையை சீரமைக்கவும்"
+
+
+msgid "Align View to Active"
+msgstr "செயலில் பார்வையை சீரமைக்கவும்"
+
+
+msgid "View Regions"
+msgstr "மண்டலங்களைக் காண்க"
+
+
+msgid "Select More/Less"
+msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select Similar"
+msgstr "ஒத்ததைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select All by Trait"
+msgstr "அனைத்தையும் பண்பின் மூலம் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select Linked"
+msgstr "இணைக்கப்பட்டதைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select Loops"
+msgstr "சுழல்களைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Add Image"
+msgstr "படத்தைச் சேர்க்கவும்"
+
+
+msgid "Relations"
+msgstr "உறவுகள்"
+
+
+msgid "Rigid Body"
+msgstr "கடினமான உடல்"
+
+
+msgid "Apply"
+msgstr "இடு"
+
+
+msgid "Track"
+msgstr "டிராக்"
+
+
+msgid "Quick Effects"
+msgstr "விரைவான விளைவுகள்"
+
+
+msgid "Asset"
+msgstr "சொத்து"
+
+
+msgid "Make Single User"
+msgstr "ஒற்றை பயனரை உருவாக்குங்கள்"
+
+
+msgid "Convert"
+msgstr "மாற்றவும்"
+
+
+msgid "Link/Transfer Data"
+msgstr "இணைப்பு/பரிமாற்ற தரவு"
+
+
+msgid "Hooks"
+msgstr "கொக்கிகள்"
+
+
+msgid "Sculpt Set Pivot"
+msgstr "சிற்பம் செட் பிவோட்"
+
+
+msgid "Face Sets Init"
+msgstr "முகம் தொடங்குகிறது"
+
+
+msgid "Random Mask"
+msgstr "சீரற்ற முகமூடி"
+
+
+msgid "Clear Transform"
+msgstr "தெளிவான உருமாற்றம்"
+
+
+msgid "In-Betweens"
+msgstr "இன்-பெட்வீன்ச்"
+
+
+msgid "Propagate"
+msgstr "பிரச்சாரம்"
+
+
+msgid "Bone Collections"
+msgstr "எலும்பு வசூல்"
+
+
+msgid "Toggle Bone Options"
+msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
+
+
+msgid "Enable Bone Options"
+msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
+
+
+msgid "Disable Bone Options"
+msgstr "எலும்பு விருப்பங்களை முடக்கு"
+
+
+msgid "Mesh Select Mode"
+msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Face Data"
+msgstr "முகத்தை முகம்"
+
+
+msgid "Select by Face Strength"
+msgstr "முக வலிமையால் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Set Face Strength"
+msgstr "முக வலிமையை அமைக்கவும்"
+
+
+msgid "Merge"
+msgstr "ஒன்றிணைக்கவும்"
+
+
 msgid "Keyframe Insert Pie"
 msgstr "கீஃப்ரேம் செருகும் பை"
 
@@ -31848,14 +32064,6 @@ msgstr "அடிப்படை"
 
 msgid "Bone Collection Specials"
 msgstr "எலும்பு சேகரிப்பு சிறப்பு"
-
-
-msgid "Bone Collections"
-msgstr "எலும்பு வசூல்"
-
-
-msgid "Asset"
-msgstr "சொத்து"
 
 
 msgid "Catalog"
@@ -31873,10 +32081,6 @@ msgstr "கிளிப்"
 
 msgid "Marker Settings"
 msgstr "மார்க்கர் அமைப்புகள்"
-
-
-msgid "Pivot Point"
-msgstr "பிவோட் புள்ளி"
 
 
 msgid "Plane Track Image Specials"
@@ -31907,24 +32111,12 @@ msgid "Rotation Track Specials"
 msgstr "சுழற்சி டிராக் ச்பெசல்கள்"
 
 
-msgid "Track"
-msgstr "டிராக்"
-
-
-msgid "Clean Up"
-msgstr "தூய்மை செய்"
-
-
 msgid "Track Motion"
 msgstr "டிராக் மோசன்"
 
 
 msgid "Refine"
 msgstr "சுத்திகரிக்க"
-
-
-msgid "Show/Hide"
-msgstr "காட்டு/மறைக்க"
 
 
 msgid "Context Menu"
@@ -31972,10 +32164,6 @@ msgid "Marker"
 msgstr "மார்க்கர்"
 
 
-msgid "Snap"
-msgstr "ச்னாப்"
-
-
 msgid "Bookmarks Specials"
 msgstr "புக்மார்க்ச் சிறப்பு"
 
@@ -32020,24 +32208,12 @@ msgid "Add Extra"
 msgstr "கூடுதல் சேர்க்கவும்"
 
 
-msgid "Select Linked"
-msgstr "இணைக்கப்பட்டதைத் தேர்ந்தெடுக்கவும்"
-
-
 msgid "UV"
 msgstr "புறஊதா"
 
 
 msgid "Align"
 msgstr "சீரமைத்தல்"
-
-
-msgid "Merge"
-msgstr "ஒன்றிணைக்கவும்"
-
-
-msgid "Mirror"
-msgstr "கண்ணாடி"
 
 
 msgid "UV Select Mode"
@@ -32200,14 +32376,6 @@ msgid "Sequencer"
 msgstr "தொடர்"
 
 
-msgid "Apply"
-msgstr "இடு"
-
-
-msgid "Navigation"
-msgstr "வழிசெலுத்தல்"
-
-
 msgid "Sequencer Preview"
 msgstr "சீக்வென்சர் முன்னோட்டம்"
 
@@ -32353,28 +32521,8 @@ msgid "Save & Load"
 msgstr "சேமிக்கவும் ஏற்றவும்"
 
 
-msgid "Assign Material"
-msgstr "மூலப்பொருள் ஒதுக்க"
-
-
-msgid "Disable Bone Options"
-msgstr "எலும்பு விருப்பங்களை முடக்கு"
-
-
-msgid "Enable Bone Options"
-msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
-
-
-msgid "Toggle Bone Options"
-msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
-
-
 msgid "Brush Specials"
 msgstr "தூரிகை சிறப்பு"
-
-
-msgid "Names"
-msgstr "பெயர்கள்"
 
 
 msgctxt "Operator"
@@ -32382,161 +32530,13 @@ msgid "Parent"
 msgstr "பெற்றோர்"
 
 
-msgid "Bone Roll"
-msgstr "எலும்பு ரோல்"
-
-
-msgid "Select More/Less"
-msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
-
-
-msgid "Special Characters"
-msgstr "சிறப்பு எழுத்துக்கள்"
-
-
-msgid "Kerning"
-msgstr "கெர்னிங்"
-
-
-msgid "Face Data"
-msgstr "முகத்தை முகம்"
-
-
-msgid "Select by Face Strength"
-msgstr "முக வலிமையால் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Set Face Strength"
-msgstr "முக வலிமையை அமைக்கவும்"
-
-
-msgid "Select All by Trait"
-msgstr "அனைத்தையும் பண்பின் மூலம் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select Loops"
-msgstr "சுழல்களைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Mesh Select Mode"
-msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select Similar"
-msgstr "ஒத்ததைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Face Sets Init"
-msgstr "முகம் தொடங்குகிறது"
-
-
-msgid "Generate Weights"
-msgstr "எடைகளை உருவாக்குங்கள்"
-
-
-msgid "Hooks"
-msgstr "கொக்கிகள்"
-
-
-msgid "Add Image"
-msgstr "படத்தைச் சேர்க்கவும்"
-
-
-msgid "Link/Transfer Data"
-msgstr "இணைப்பு/பரிமாற்ற தரவு"
-
-
-msgid "Make Single User"
-msgstr "ஒற்றை பயனரை உருவாக்குங்கள்"
-
-
-msgid "Convert"
-msgstr "மாற்றவும்"
-
-
-msgid "Quick Effects"
-msgstr "விரைவான விளைவுகள்"
-
-
-msgid "Relations"
-msgstr "உறவுகள்"
-
-
-msgid "Rigid Body"
-msgstr "கடினமான உடல்"
-
-
 msgctxt "Constraint"
 msgid "Track"
 msgstr "மின்தடம்"
 
 
-msgid "Vertex Group Locks"
-msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
-
-
-msgid "Propagate"
-msgstr "பிரச்சாரம்"
-
-
-msgid "In-Betweens"
-msgstr "இன்-பெட்வீன்ச்"
-
-
-msgid "Clear Transform"
-msgstr "தெளிவான உருமாற்றம்"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
-
-
-msgid "Random Mask"
-msgstr "சீரற்ற முகமூடி"
-
-
-msgid "Automasking"
-msgstr "ஆட்டோமேச்கிங்"
-
-
-msgid "Face Sets Edit"
-msgstr "முகம் தொகுப்புகள் திருத்து"
-
-
-msgid "Mask Edit"
-msgstr "முகமூடி திருத்து"
-
-
-msgid "Sculpt Set Pivot"
-msgstr "சிற்பம் செட் பிவோட்"
-
-
 msgid "Clone Layer"
 msgstr "நகலி லேயர்"
-
-
-msgid "UV Mapping"
-msgstr "புறஊதா மேப்பிங்"
-
-
-msgid "Align View"
-msgstr "பார்வையை சீரமைக்கவும்"
-
-
-msgid "Align View to Active"
-msgstr "செயலில் பார்வையை சீரமைக்கவும்"
-
-
-msgid "Local View"
-msgstr "உள்ளக பார்வை"
-
-
-msgid "View Regions"
-msgstr "மண்டலங்களைக் காண்க"
-
-
-msgid "Viewpoint"
-msgstr "பார்வை"
 
 
 msgid "Landmark Controls"
@@ -45852,6 +45852,10 @@ msgid "Generate a mesh on the \"surface\" of a volume"
 msgstr "ஒரு தொகுதியின் \"மேற்பரப்பில்\" ஒரு கண்ணி உருவாக்கவும்"
 
 
+msgid "Warning"
+msgstr "எச்சரிக்கை"
+
+
 msgctxt "NodeTree"
 msgid "Frame"
 msgstr "சட்டகம்"
@@ -48610,10 +48614,6 @@ msgid "Object Base"
 msgstr "பொருள் அடிப்படை"
 
 
-msgid "An object instance in a render layer"
-msgstr "வழங்குதல் லேயரில் ஒரு பொருள் நிகழ்வு"
-
-
 msgid "Object this base links to"
 msgstr "இந்த அடிப்படை இணைப்புகளை எதிர்க்கவும்"
 
@@ -48720,6 +48720,1914 @@ msgstr "பொருள் சேடர் விளைவுகள்"
 
 msgid "Collection of object effects"
 msgstr "பொருள் விளைவுகளின் சேகரிப்பு"
+
+
+msgctxt "Operator"
+msgid "Add Material Variant"
+msgstr "மூலப்பொருள் மாறுபாடு சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Display Variant"
+msgstr "காட்சி மாறுபாடு"
+
+
+msgctxt "Operator"
+msgid "Assign To Variant"
+msgstr "மாறுபாட்டிற்கு ஒதுக்குங்கள்"
+
+
+msgctxt "Operator"
+msgid "Assign as Original"
+msgstr "அசலாக ஒதுக்கவும்"
+
+
+msgid "Mark actions with no F-Curves for deletion after save and reload of file preserving \"action libraries\""
+msgstr "\"செயல் நூலகங்களை\" பாதுகாக்கும் கோப்பை சேமித்து மீண்டும் ஏற்றப்பட்ட பிறகு நீக்குவதற்கு எஃப்-வளைவுகள் இல்லாத செயல்களைக் குறிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Clear Useless Actions"
+msgstr "பயனற்ற செயல்களை அழிக்கவும்"
+
+
+msgid "Export Keying Set to a Python script"
+msgstr "பைதான் ச்கிரிப்டுக்கு அமைக்கப்பட்ட கீயிங் கீயிங்"
+
+
+msgctxt "Operator"
+msgid "Export Keying Set..."
+msgstr "ஏற்றுமதி கீயிங் தொகுப்பு ..."
+
+
+msgid "Update f-curves/drivers affecting Transform constraints (use it with files from 2.70 and earlier)"
+msgstr "உருமாற்றக் கட்டுப்பாடுகளை பாதிக்கும் எஃப்-வளைவுகள்/இயக்கிகளைப் புதுப்பிக்கவும் (2.70 மற்றும் அதற்கு முந்தைய கோப்புகளுடன் இதைப் பயன்படுத்தவும்)"
+
+
+msgctxt "Operator"
+msgid "Update Animated Transform Constraints"
+msgstr "அனிமேசன் உருமாற்றக் கட்டுப்பாடுகளைப் புதுப்பிக்கவும்"
+
+
+msgid "Remove all bone collections that have neither bones nor children. This is done recursively, so bone collections that only have unused children are also removed"
+msgstr "எலும்புகளோ குழந்தைகளோ இல்லாத அனைத்து எலும்பு சேகரிப்புகளையும் அகற்றவும். இது மீண்டும் மீண்டும் செய்யப்படுகிறது, எனவே பயன்படுத்தப்படாத குழந்தைகளை மட்டுமே கொண்ட எலும்பு சேகரிப்புகள் அகற்றப்படுகின்றன"
+
+
+msgctxt "Operator"
+msgid "Remove Unused Bone Collections"
+msgstr "பயன்படுத்தப்படாத எலும்பு சேகரிப்புகளை அகற்றவும்"
+
+
+msgid "Show all bone collections"
+msgstr "அனைத்து எலும்பு சேகரிப்புகளையும் காட்டு"
+
+
+msgctxt "Operator"
+msgid "Show All"
+msgstr "அனைத்தையும் காட்டு"
+
+
+msgid "Clear the 'solo' setting on all bone collections"
+msgstr "அனைத்து எலும்பு சேகரிப்புகளிலும் 'தனி' அமைப்பை அழிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Un-solo All"
+msgstr "அன்-சோலோ அனைவருமே"
+
+
+msgid "Copy the bone color of the active bone to all selected bones"
+msgstr "செயலில் உள்ள எலும்பின் எலும்பு நிறத்தை தேர்ந்தெடுக்கப்பட்ட அனைத்து எலும்புகளுக்கும் நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Copy Colors to Selected"
+msgstr "தேர்ந்தெடுக்கப்பட்ட வண்ணங்களை நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Assign Action"
+msgstr "செயலை ஒதுக்கு"
+
+
+msgid "Open the blend file that contains the active asset"
+msgstr "செயலில் உள்ள சொத்துக்களைக் கொண்ட கலப்பு கோப்பைத் திறக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Open Blend File"
+msgstr "கலப்பு கோப்பைத் திறக்கவும்"
+
+
+msgid "Add a new keyword tag to the active asset"
+msgstr "செயலில் உள்ள சொத்தில் புதிய முக்கிய குறிச்சொல்லைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Asset Tag"
+msgstr "சொத்து குறிச்சொல்லைச் சேர்க்கவும்"
+
+
+msgid "Remove an existing keyword tag from the active asset"
+msgstr "செயலில் உள்ள சொத்திலிருந்து ஏற்கனவே உள்ள முக்கிய குறிச்சொல்லை அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Remove Asset Tag"
+msgstr "சொத்து குறிச்சொல்லை அகற்று"
+
+
+msgid "Add or remove a Camera Preset"
+msgstr "கேமரா முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Camera Preset"
+msgstr "கேமரா முன்னமைவு சேர்க்கவும்"
+
+
+msgid "Add or remove a Safe Areas Preset"
+msgstr "பாதுகாப்பான பகுதிகளைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Safe Area Preset"
+msgstr "பாதுகாப்பான பரப்பு முன்னமைவு சேர்க்கவும்"
+
+
+msgid "Create vertex cloud using coordinates of reconstructed tracks"
+msgstr "புனரமைக்கப்பட்ட தடங்களின் ஒருங்கிணைப்புகளைப் பயன்படுத்தி வெர்டெக்ச் கிளவுட்டை உருவாக்கவும்"
+
+
+msgctxt "Operator"
+msgid "3D Markers to Mesh"
+msgstr "கண்ணி 3 டி குறிப்பான்கள்"
+
+
+msgid "Add or remove a Tracking Camera Intrinsics Preset"
+msgstr "கண்காணிப்பு கேமரா உள்ளார்ந்த முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgid "Create F-Curves for object which will copy object's movement caused by this constraint"
+msgstr "இந்த கட்டுப்பாட்டால் ஏற்படும் பொருளின் இயக்கத்தை நகலெடுக்கும் பொருளுக்கு எஃப்-வளைவுகளை உருவாக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Constraint to F-Curve"
+msgstr "எஃப்-வளைவுக்கு தடை"
+
+
+msgid "Delete movie clip proxy files from the hard drive"
+msgstr "வன்விலிருந்து மூவி கிளிப் பதிலாள் கோப்புகளை நீக்கு"
+
+
+msgctxt "Operator"
+msgid "Delete Proxy"
+msgstr "ப்ராக்சியை நீக்கு"
+
+
+msgid "Filter tracks which has weirdly looking spikes in motion curves"
+msgstr "இயக்க வளைவுகளில் கூர்முனைகளை வித்தியாசமாகப் பார்க்கும் தடங்களை வடிகட்டவும்"
+
+
+msgctxt "Operator"
+msgid "Filter Tracks"
+msgstr "தடங்களை வடிகட்டவும்"
+
+
+msgctxt "Operator"
+msgid "Set Active Clip"
+msgstr "செயலில் உள்ள கிளிப்பை அமைக்கவும்"
+
+
+msgid "Set current movie clip as a camera background in 3D Viewport (works only when a 3D Viewport is visible)"
+msgstr "தற்போதைய மூவி கிளிப்பை 3 டி வியூபோர்ட்டில் கேமரா பின்னணியாக அமைக்கவும் (3 டி வியூபோர்ட் தெரியும் போது மட்டுமே வேலை செய்கிறது)"
+
+
+msgctxt "Operator"
+msgid "Set as Background"
+msgstr "பின்னணியாக அமைக்கவும்"
+
+
+msgid "Prepare scene for compositing 3D objects into this footage"
+msgstr "இந்த காட்சிகளில் 3d பொருள்களைத் தொகுப்பதற்கான காட்சியைத் தயாரிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Setup Tracking Scene"
+msgstr "அமைவு கண்காணிப்பு காட்சி"
+
+
+msgid "Add or remove a Clip Track Color Preset"
+msgstr "கிளிப் டிராக் வண்ண முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Track Color Preset"
+msgstr "ட்ராக் கலர் முன்னமைவு சேர்க்கவும்"
+
+
+msgid "Copy tracking settings from active track to default settings"
+msgstr "கண்காணிப்பு அமைப்புகளை செயலில் தடத்திலிருந்து இயல்புநிலை அமைப்புகளுக்கு நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Track Settings as Default"
+msgstr "அமைப்புகளை இயல்புநிலையாகக் கண்காணிக்கவும்"
+
+
+msgid "Copy tracking settings from active track to selected tracks"
+msgstr "கண்காணிப்பு அமைப்புகளை ஆக்டிவ் டிராக்கிலிருந்து தேர்ந்தெடுக்கப்பட்ட தடங்களுக்கு நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Copy Track Settings"
+msgstr "டிராக் அமைப்புகளை நகலெடுக்கவும்"
+
+
+msgid "Create an Empty object which will be copying movement of active track"
+msgstr "செயலில் உள்ள பாதையின் இயக்கத்தை நகலெடுக்கும் ஒரு வெற்று பொருளை உருவாக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Link Empty to Track"
+msgstr "கண்காணிக்க காலியாக இணைப்பு"
+
+
+msgid "Add or remove a motion tracking settings preset"
+msgstr "முன்னமைக்கப்பட்ட ஒரு இயக்க கண்காணிப்பு அமைப்புகளைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Tracking Settings Preset"
+msgstr "கண்காணிப்பு அமைப்புகள் முன்னமைக்கப்பட்டவை"
+
+
+msgid "Add or remove a Cloth Preset"
+msgstr "ஒரு துணி முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Cloth Preset"
+msgstr "துணி முன்னமைவு சேர்க்கவும்"
+
+
+msgid "Evaluate the namespace up until the cursor and give a list of options or complete the name if there is only one"
+msgstr "கர்சர் வரை பெயர்வெளியை மதிப்பிட்டு, விருப்பங்களின் பட்டியலைக் கொடுங்கள் அல்லது ஒன்று இருந்தால் பெயரை முடிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Console Autocomplete"
+msgstr "கன்சோல் தன்னியக்கவியல்"
+
+
+msgid "Print a message when the terminal initializes"
+msgstr "முனையம் துவக்கும்போது ஒரு செய்தியை அச்சிடுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Console Banner"
+msgstr "கன்சோல் பேனர்"
+
+
+msgid "Copy the console contents for use in a script"
+msgstr "கைஉரைடில் பயன்படுத்த கன்சோல் உள்ளடக்கங்களை நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Copy to Clipboard (as Script)"
+msgstr "கிளிப்போர்டுக்கு நகலெடுக்கவும் (ச்கிரிப்டாக)"
+
+
+msgid "Execute the current console line as a Python expression"
+msgstr "தற்போதைய கன்சோல் வரியை பைதான் வெளிப்பாடாக இயக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Console Execute"
+msgstr "கன்சோல் செயல்படுத்தவும்"
+
+
+msgid "Set the current language for this console"
+msgstr "இந்த கன்சோலுக்கான தற்போதைய மொழியை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Console Language"
+msgstr "கன்சோல் மொழி"
+
+
+msgid "Add a target to the constraint"
+msgstr "தடைக்கு ஒரு இலக்கைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Target"
+msgstr "இலக்கைச் சேர்க்கவும்"
+
+
+msgid "Set the influence of this constraint to zero while trying to maintain the object's transformation. Other active constraints can still influence the final transformation"
+msgstr "பொருளின் மாற்றத்தை பராமரிக்க முயற்சிக்கும்போது இந்த கட்டுப்பாட்டின் செல்வாக்கை பூச்சியமாக அமைக்கவும். பிற செயலில் உள்ள தடைகள் இன்னும் இறுதி மாற்றத்தை பாதிக்கும்"
+
+
+msgctxt "Operator"
+msgid "Disable and Keep Transform"
+msgstr "முடக்கு மற்றும் உருமாற்றத்தை வைக்கவும்"
+
+
+msgid "Normalize weights of all target bones"
+msgstr "அனைத்து இலக்கு எலும்புகளின் எடையை இயல்பாக்குங்கள்"
+
+
+msgctxt "Operator"
+msgid "Normalize Weights"
+msgstr "எடைகளை இயல்பாக்குங்கள்"
+
+
+msgid "Remove the target from the constraint"
+msgstr "கட்டுப்பாட்டிலிருந்து இலக்கை அகற்று"
+
+
+msgctxt "Operator"
+msgid "Remove Target"
+msgstr "இலக்கை அகற்று"
+
+
+msgid "Denoise rendered animation sequence using current scene and view layer settings. Requires denoising data passes and output to OpenEXR multilayer files"
+msgstr "தற்போதைய காட்சி மற்றும் பார்வை அடுக்கு அமைப்புகளைப் பயன்படுத்தி டெனோயிச் அனிமேசன் வரிசையை வழங்கியது. openexr மல்டிலேயர் கோப்புகளுக்கு தரவு பாச்கள் மற்றும் வெளியீட்டை டெனோயிங் செய்ய வேண்டும்"
+
+
+msgctxt "Operator"
+msgid "Denoise Animation"
+msgstr "டெனோயிச் அனிமேசன்"
+
+
+msgid "Combine OpenEXR multi-layer images rendered with different sample ranges into one image with reduced noise"
+msgstr "வெவ்வேறு மாதிரி வரம்புகளுடன் வழங்கப்பட்ட openexr மல்டி-லேயர் படங்களை ஒரு படமாக குறைத்த சத்தத்துடன் இணைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Merge Images"
+msgstr "படங்களை ஒன்றிணைக்கவும்"
+
+
+msgid "Enable nodes on a material, world or light"
+msgstr "ஒரு மூலப்பொருள், உலகம் அல்லது ஒளியில் முனைகளை இயக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Use Nodes"
+msgstr "முனைகளைப் பயன்படுத்துங்கள்"
+
+
+msgid "Save a BVH motion capture file from an armature"
+msgstr "ஒரு ஆர்மேச்சரிலிருந்து பி.வி.எச் மோசன் பிடிப்பு கோப்பை சேமிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Export BVH"
+msgstr "ஏற்றுமதி பி.வி.எச்"
+
+
+msgid "Write a FBX file"
+msgstr "ஒரு fbx கோப்பை எழுதுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Export FBX"
+msgstr "fbx ஏற்றுமதி"
+
+
+msgid "Export scene as glTF 2.0 file"
+msgstr "gltf 2.0 கோப்பாக காட்சியை ஏற்றுமதி செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Export glTF 2.0"
+msgstr "gltf 2.0 ஏற்றுமதி"
+
+
+msgid "Add or remove a Fluid Preset"
+msgstr "ஒரு திரவ முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Fluid Preset"
+msgstr "திரவ முன்னமைவைச் சேர்க்கவும்"
+
+
+msgid "Switch tint colors"
+msgstr "சாயல் வண்ணங்களை மாற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Flip Colors"
+msgstr "வண்ணங்களை புரட்டவும்"
+
+
+msgid "Edit image in an external application"
+msgstr "வெளிப்புற பயன்பாட்டில் படத்தைத் திருத்தவும்"
+
+
+msgctxt "Operator"
+msgid "Image Edit Externally"
+msgstr "படத் திருத்து வெளிப்புறமாக"
+
+
+msgid "Project edited image back onto the object"
+msgstr "திட்டம் திருத்தப்பட்ட படத்தை மீண்டும் பொருளின் மீது"
+
+
+msgctxt "Operator"
+msgid "Project Apply"
+msgstr "திட்ட பொருந்தும்"
+
+
+msgid "Edit a snapshot of the 3D Viewport in an external image editor"
+msgstr "வெளிப்புற பட திருத்தியில் 3d வியாபோர்ட்டின் ச்னாப்சாட்டைத் திருத்தவும்"
+
+
+msgctxt "Operator"
+msgid "Project Edit"
+msgstr "திட்டத் திருத்து"
+
+
+msgid "Load a BVH motion capture file"
+msgstr "பி.வி.எச் மோசன் பிடிப்பு கோப்பை ஏற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Import BVH"
+msgstr "பி.வி.எச் இறக்குமதி"
+
+
+msgid "Load a SVG file"
+msgstr "ஒரு எச்விசி கோப்பை ஏற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Import SVG"
+msgstr "இறக்குமதி எச்விசி"
+
+
+msgid "Load a FBX file"
+msgstr "ஒரு fbx கோப்பை ஏற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Import FBX"
+msgstr "fbx ஐ இறக்குமதி செய்க"
+
+
+msgid "Load a glTF 2.0 file"
+msgstr "ஒரு gltf 2.0 கோப்பை ஏற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Import glTF 2.0"
+msgstr "gltf 2.0 ஐ இறக்குமதி செய்க"
+
+
+msgid "Copy mirror UV coordinates on the X axis based on a mirrored mesh"
+msgstr "பிரதிபலித்த கண்ணி அடிப்படையில் ஃச் அச்சில் கண்ணாடி புறஊதா ஆயங்களை நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Copy Mirrored UV Coords"
+msgstr "நகலெடுக்கப்பட்ட புறஊதா கால்களை நகலெடுக்கவும்"
+
+
+msgid "Construct a torus mesh"
+msgstr "டோரச் கண்ணி கட்டவும்"
+
+
+msgctxt "Operator"
+msgid "Add Torus"
+msgstr "டோரச் சேர்க்கவும்"
+
+
+msgid "Select the next element (using selection order)"
+msgstr "அடுத்த உறுப்பைத் தேர்ந்தெடுக்கவும் (தேர்வு வரிசையைப் பயன்படுத்தி)"
+
+
+msgctxt "Operator"
+msgid "Select Next Element"
+msgstr "அடுத்த உறுப்பைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select the previous element (using selection order)"
+msgstr "முந்தைய உறுப்பைத் தேர்ந்தெடுக்கவும் (தேர்வு வரிசையைப் பயன்படுத்தி)"
+
+
+msgctxt "Operator"
+msgid "Select Previous Element"
+msgstr "முந்தைய உறுப்பைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Bake all selected objects location/scale/rotation animation to an action"
+msgstr "தேர்ந்தெடுக்கப்பட்ட அனைத்து பொருள்களையும் ஒரு செயலுக்கு சுட்டுக்கொள்ளுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Bake Action"
+msgstr "சுட்டுக்கொள்ளும் நடவடிக்கை"
+
+
+msgid "Add a node to the active tree"
+msgstr "செயலில் உள்ள மரத்தில் ஒரு முனை சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Node"
+msgstr "முனை சேர்க்கவும்"
+
+
+msgid "Add a repeat zone that allows executing nodes a dynamic number of times"
+msgstr "முனைகளை இயக்க அனுமதிக்கும் மீண்டும் மீண்டும் மண்டலத்தைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Repeat Zone"
+msgstr "மீண்டும் மீண்டும் மண்டலத்தைச் சேர்க்கவும்"
+
+
+msgid "Add simulation zone input and output nodes to the active tree"
+msgstr "செயலில் உள்ள மரத்தில் உருவகப்படுத்துதல் மண்டல உள்ளீடு மற்றும் வெளியீட்டு முனைகளைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Simulation Zone"
+msgstr "உருவகப்படுத்துதல் மண்டலத்தைச் சேர்க்கவும்"
+
+
+msgid "Toggle collapsed nodes and hide unused sockets"
+msgstr "சரிந்த முனைகளை மாற்றி, பயன்படுத்தப்படாத சாக்கெட்டுகளை மறைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Collapse and Hide Unused Sockets"
+msgstr "பயன்படுத்தப்படாத சாக்கெட்டுகளை வீழ்த்தி மறைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "glTF Material Output"
+msgstr "gltf மூலப்பொருள் வெளியீடு"
+
+
+msgid "Add a copy of the active item to the interface"
+msgstr "செயலில் உள்ள உருப்படியின் நகலை இடைமுகத்தில் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Duplicate Item"
+msgstr "நகல் உருப்படி"
+
+
+msgid "Add a new item to the interface"
+msgstr "இடைமுகத்தில் புதிய உருப்படியைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "New Item"
+msgstr "புதிய பொருள்"
+
+
+msgid "Remove active item from the interface"
+msgstr "இடைமுகத்திலிருந்து செயலில் உள்ள உருப்படியை அகற்று"
+
+
+msgctxt "Operator"
+msgid "Remove Item"
+msgstr "உருப்படியை அகற்று"
+
+
+msgid "Create a new geometry node group and assign it to the active modifier"
+msgstr "ஒரு புதிய வடிவியல் முனை குழுவை உருவாக்கி, செயலில் மாற்றியமைப்பிற்கு ஒதுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Assign New Geometry Node Group"
+msgstr "புதிய வடிவியல் முனை குழுவை ஒதுக்குங்கள்"
+
+
+msgid "Create a new geometry node group for a tool"
+msgstr "ஒரு கருவிக்கு புதிய வடிவியல் முனை குழுவை உருவாக்கவும்"
+
+
+msgctxt "Operator"
+msgid "New Geometry Node Tool Group"
+msgstr "புதிய வடிவியல் முனை கருவி குழு"
+
+
+msgid "Create a new modifier with a new geometry node group"
+msgstr "புதிய வடிவியல் முனை குழுவுடன் புதிய மாற்றியமைப்பை உருவாக்கவும்"
+
+
+msgctxt "Operator"
+msgid "New Geometry Node Modifier"
+msgstr "புதிய வடிவியல் முனை மாற்றி"
+
+
+msgid "Add or remove a Node Color Preset"
+msgstr "ஒரு முனை வண்ண முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Node Color Preset"
+msgstr "முனை வண்ண முன்னமைவு சேர்க்கவும்"
+
+
+msgid "Go to parent node tree"
+msgstr "பெற்றோர் முனை மரத்திற்குச் செல்லுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Parent Node Tree"
+msgstr "பெற்றோர் முனை மரம்"
+
+
+msgctxt "Operator"
+msgid "Add Modifier"
+msgstr "மாற்றியமைப்பாளரைச் சேர்க்கவும்"
+
+
+msgid "Align objects"
+msgstr "பொருள்களை சீரமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Align Objects"
+msgstr "பொருள்களை சீரமைக்கவும்"
+
+
+msgid "Convert object animation for normal transforms to delta transforms"
+msgstr "இயல்பான மாற்றங்களுக்கான பொருள் அனிமேசனை டெல்டா உருமாற்றங்களுக்கு மாற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Animated Transforms to Deltas"
+msgstr "அனிமேசன் மாற்றங்கள் டெல்டாசுக்கு"
+
+
+msgid "Assign the current values of custom properties as their defaults, for use as part of the rest pose state in NLA track mixing"
+msgstr "தனிப்பயன் பண்புகளின் தற்போதைய மதிப்புகளை அவற்றின் இயல்புநிலையாக ஒதுக்குங்கள், என்எல்ஏ டிராக் கலவையில் மீதமுள்ள ஒரு பகுதியாக பயன்படுத்த"
+
+
+msgctxt "Operator"
+msgid "Assign Custom Property Values as Default"
+msgstr "தனிப்பயன் சொத்து மதிப்புகளை இயல்புநிலையாக ஒதுக்குங்கள்"
+
+
+msgctxt "Operator"
+msgid "Copy Global Transform"
+msgstr "உலகளாவிய உருமாற்றத்தை நகலெடுக்கவும்"
+
+
+msgid "Move inputs and outputs from in the modifier to a new node group"
+msgstr "மாற்றியமைப்பில் இருந்து புதிய முனை குழுவிற்கு உள்ளீடுகள் மற்றும் வெளியீடுகளை நகர்த்தவும்"
+
+
+msgctxt "Operator"
+msgid "Move to Nodes"
+msgstr "முனைகளுக்கு நகர்த்தவும்"
+
+
+msgid "Reveal all render objects by setting the hide render flag"
+msgstr "மறை வழங்குதல் கொடியை அமைப்பதன் மூலம் அனைத்து வழங்குதல் பொருட்களையும் வெளிப்படுத்துங்கள்"
+
+
+msgctxt "Operator"
+msgid "Clear All Restrict Render"
+msgstr "அனைத்தையும் கட்டுப்படுத்துங்கள்"
+
+
+msgid "Set offset used for collection instances based on cursor position"
+msgstr "கர்சர் நிலையின் அடிப்படையில் சேகரிப்பு நிகழ்வுகளுக்கு பயன்படுத்தப்படும் ஆஃப்செட்டை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Set Offset from Cursor"
+msgstr "கர்சரிலிருந்து ஆஃப்செட் அமைக்கவும்"
+
+
+msgid "Set offset used for collection instances based on the active object position"
+msgstr "செயலில் உள்ள பொருள் நிலையின் அடிப்படையில் சேகரிப்பு நிகழ்வுகளுக்கு பயன்படுத்தப்படும் ஆஃப்செட்டை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Set Offset from Object"
+msgstr "பொருளிலிருந்து ஆஃப்செட் அமைக்கவும்"
+
+
+msgid "Set cursor position to the offset used for collection instances"
+msgstr "சேகரிப்பு நிகழ்வுகளுக்குப் பயன்படுத்தப்படும் ஆஃப்செட்டுக்கு கர்சர் நிலையை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Set Cursor to Offset"
+msgstr "கர்சரை ஈடுசெய்ய அமைக்கவும்"
+
+
+msgid "Hide unselected render objects of same type as active by setting the hide render flag"
+msgstr "மறைக்கப்படாத வழங்குதல் கொடியை அமைப்பதன் மூலம் செயலில் உள்ள அதே வகையின் தேர்வு செய்யப்படாத வழங்குதல் பொருள்களை மறைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Restrict Render Unselected"
+msgstr "வழங்குதல் தேர்வு செய்யப்படாமல் கட்டுப்படுத்துங்கள்"
+
+
+msgid "Transfer UV Maps from active to selected objects (needs matching geometry)"
+msgstr "புறஊதா வரைபடங்களை செயலில் இருந்து தேர்ந்தெடுக்கப்பட்ட பொருள்களுக்கு மாற்றவும் (பொருந்தும் வடிவியல் தேவை)"
+
+
+msgctxt "Operator"
+msgid "Transfer UV Maps"
+msgstr "uv வரைபடங்களை மாற்றவும்"
+
+
+msgid "Convert objects into instanced faces"
+msgstr "பொருட்களை நிறுவப்பட்ட முகங்களாக மாற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Make Instance Face"
+msgstr "உதாரணமாக முகம் செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Paste Global Transform"
+msgstr "உலகளாவிய உருமாற்றத்தை ஒட்டவும்"
+
+
+msgid "Make selected objects explode"
+msgstr "தேர்ந்தெடுக்கப்பட்ட பொருள்கள் வெடிக்கச் செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Quick Explode"
+msgstr "விரைவான வெடிப்பு"
+
+
+msgid "Add a fur setup to the selected objects"
+msgstr "தேர்ந்தெடுக்கப்பட்ட பொருள்களுக்கு ஒரு ஃபர் அமைப்பைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Quick Fur"
+msgstr "விரைவான ஃபர்"
+
+
+msgid "Make selected objects liquid"
+msgstr "தேர்ந்தெடுக்கப்பட்ட பொருள்களை திரவமாக்குங்கள்"
+
+
+msgctxt "Operator"
+msgid "Quick Liquid"
+msgstr "விரைவான திரவ"
+
+
+msgid "Use selected objects as smoke emitters"
+msgstr "தேர்ந்தெடுக்கப்பட்ட பொருட்களை புகை உமிழ்ப்பவர்களாக பயன்படுத்தவும்"
+
+
+msgctxt "Operator"
+msgid "Quick Smoke"
+msgstr "விரைவான புகை"
+
+
+msgid "Randomize objects location, rotation, and scale"
+msgstr "பொருள்களின் இருப்பிடம், சுழற்சி மற்றும் அளவிலான சீரற்றவை"
+
+
+msgctxt "Operator"
+msgid "Randomize Transform"
+msgstr "உருமாற்றத்தை சீரற்றதாக்குங்கள்"
+
+
+msgctxt "Operator"
+msgid "New"
+msgstr "புதிய"
+
+
+msgid "Select the active camera"
+msgstr "செயலில் உள்ள கேமராவைத் தேர்ந்தெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Select Camera"
+msgstr "கேமராவைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select object relative to the active object's position in the hierarchy"
+msgstr "வரிசைமுறையில் செயலில் உள்ள பொருளின் நிலைக்கு தொடர்புடைய பொருளைத் தேர்ந்தெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Select Hierarchy"
+msgstr "வரிசைமுறையைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select objects matching a naming pattern"
+msgstr "பெயரிடும் வடிவத்துடன் பொருந்தக்கூடிய பொருள்களைத் தேர்ந்தெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Select Pattern"
+msgstr "வடிவத்தைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Copy the active shape key of another selected object to this one"
+msgstr "தேர்ந்தெடுக்கப்பட்ட மற்றொரு பொருளின் செயலில் உள்ள வடிவ விசையை இதில் நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Transfer Shape Key"
+msgstr "வடிவ விசையை மாற்றவும்"
+
+
+msgid "Sets a Subdivision Surface level (1 to 5)"
+msgstr "ஒரு துணைப்பிரிவு மேற்பரப்பு அளவை அமைக்கிறது (1 முதல் 5 வரை)"
+
+
+msgctxt "Operator"
+msgid "Subdivision Set"
+msgstr "உட்பிரிவு தொகுப்பு"
+
+
+msgid "Convert normal object transforms to delta transforms, any existing delta transforms will be included as well"
+msgstr "சாதாரண பொருள் மாற்றங்களை டெல்டா உருமாற்றங்களுக்கு மாற்றவும், தற்போதுள்ள எந்த டெல்டா மாற்றங்களும் சேர்க்கப்படும்"
+
+
+msgctxt "Operator"
+msgid "Transforms to Deltas"
+msgstr "டெல்டாக்களுக்கு மாற்றுகிறது"
+
+
+msgid "Generate a dirt map gradient based on cavity"
+msgstr "குழியின் அடிப்படையில் ஒரு அழுக்கு வரைபட சாய்வை உருவாக்குங்கள்"
+
+
+msgctxt "Operator"
+msgid "Dirty Vertex Colors"
+msgstr "அழுக்கு வெர்டெக்ச் வண்ணங்கள்"
+
+
+msgid "Add or remove a Hair Dynamics Preset"
+msgstr "முடி இயக்கவியல் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Hair Dynamics Preset"
+msgstr "முடி இயக்கவியல் முன்னமைவு சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Convert Legacy Pose Library"
+msgstr "மரபு போச் நூலகத்தை மாற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Copy Pose as Asset"
+msgstr "நகல் போச் சொத்தாக"
+
+
+msgctxt "Operator"
+msgid "Create Pose Asset"
+msgstr "போச் சொத்தை உருவாக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Paste as New Asset"
+msgstr "புதிய சொத்தாக ஒட்டவும்"
+
+
+msgctxt "Operator"
+msgid "Select Bones"
+msgstr "எலும்புகளைத் தேர்ந்தெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Restore Previous Action"
+msgstr "முந்தைய செயலை மீட்டெடுக்கவும்"
+
+
+msgid "Display information and preferences for this add-on"
+msgstr "இந்த துணை நிரலுக்கான செய்தி மற்றும் விருப்பங்களைக் காண்பி"
+
+
+msgid "Install an add-on"
+msgstr "ஒரு துணை நிரலை நிறுவவும்"
+
+
+msgctxt "Operator"
+msgid "Install Add-on"
+msgstr "துணை நிரலை நிறுவவும்"
+
+
+msgid "Scan add-on directories for new modules"
+msgstr "புதிய பகுதிகளுக்கான கூடுதல் கோப்பகங்களை ச்கேன் செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Refresh"
+msgstr "புதுப்பிப்பு"
+
+
+msgid "Delete the add-on from the file system"
+msgstr "கோப்பு முறைமையிலிருந்து சேர்க்கையை நீக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Remove Add-on"
+msgstr "துணை நிரலை அகற்று"
+
+
+msgid "Show add-on preferences"
+msgstr "கூடுதல் விருப்பங்களைக் காட்டு"
+
+
+msgid "Install an application template"
+msgstr "பயன்பாட்டு வார்ப்புருவை நிறுவவும்"
+
+
+msgctxt "Operator"
+msgid "Install Template from File..."
+msgstr "கோப்பிலிருந்து வார்ப்புருவை நிறுவவும் ..."
+
+
+msgid "Copy settings from previous version"
+msgstr "முந்தைய பதிப்பிலிருந்து அமைப்புகளை நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Copy Previous Settings"
+msgstr "முந்தைய அமைப்புகளை நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Activate Keyconfig"
+msgstr "keyconfig ஐ செயல்படுத்தவும்"
+
+
+msgid "Export key configuration to a Python script"
+msgstr "முக்கிய உள்ளமைவை பைதான் ச்கிரிப்டுக்கு ஏற்றுமதி செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Export Key Configuration..."
+msgstr "ஏற்ற ஏற்ற உள்ளமைவு ..."
+
+
+msgid "Import key configuration from a Python script"
+msgstr "பைதான் ச்கிரிப்டிலிருந்து முக்கிய உள்ளமைவை இறக்குமதி செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Import Key Configuration..."
+msgstr "முக்கிய உள்ளமைவை இறக்குமதி செய்யுங்கள் ..."
+
+
+msgid "Remove key config"
+msgstr "முக்கிய கட்டமைப்பை அகற்று"
+
+
+msgctxt "Operator"
+msgid "Remove Key Config"
+msgstr "முக்கிய கட்டமைப்பை அகற்று"
+
+
+msgid "Test key configuration for conflicts"
+msgstr "மோதல்களுக்கான முக்கிய உள்ளமைவை சோதிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Test Key Configuration for Conflicts"
+msgstr "மோதல்களுக்கான முக்கிய உள்ளமைவை சோதிக்கவும்"
+
+
+msgid "Add key map item"
+msgstr "முக்கிய வரைபட உருப்படியைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Key Map Item"
+msgstr "முக்கிய வரைபட உருப்படியைச் சேர்க்கவும்"
+
+
+msgid "Remove key map item"
+msgstr "முக்கிய வரைபட உருப்படியை அகற்று"
+
+
+msgctxt "Operator"
+msgid "Remove Key Map Item"
+msgstr "முக்கிய வரைபட உருப்படியை அகற்று"
+
+
+msgid "Restore key map item"
+msgstr "முக்கிய வரைபட உருப்படியை மீட்டெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Restore Key Map Item"
+msgstr "முக்கிய வரைபட உருப்படியை மீட்டெடுக்கவும்"
+
+
+msgid "Restore key map(s)"
+msgstr "முக்கிய வரைபடங்களை மீட்டமைக்கவும்)"
+
+
+msgctxt "Operator"
+msgid "Restore Key Map(s)"
+msgstr "முக்கிய வரைபடங்களை மீட்டமைக்கவும்)"
+
+
+msgctxt "Operator"
+msgid "Add Python Script Directory"
+msgstr "பைதான் கைஉரை அடைவு சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Remove Python Script Directory"
+msgstr "பைதான் கைஉரை கோப்பகத்தை அகற்று"
+
+
+msgid "Copy Studio Light settings to the Studio Light editor"
+msgstr "ச்டுடியோ லைட் அமைப்புகளை ச்டுடியோ லைட் திருத்திக்கு நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Copy Studio Light Settings"
+msgstr "ச்டுடியோ லைட் அமைப்புகளை நகலெடுக்கவும்"
+
+
+msgid "Install a user defined light"
+msgstr "பயனர் வரையறுக்கப்பட்ட ஒளியை நிறுவவும்"
+
+
+msgctxt "Operator"
+msgid "Install Light"
+msgstr "ஒளியை நிறுவவும்"
+
+
+msgid "Save custom studio light from the studio light editor settings"
+msgstr "ச்டுடியோ லைட் திருத்தி அமைப்புகளிலிருந்து தனிப்பயன் ச்டுடியோ ஒளியை சேமிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Save Custom Studio Light"
+msgstr "தனிப்பயன் ச்டுடியோ ஒளியை சேமிக்கவும்"
+
+
+msgid "Delete Studio Light"
+msgstr "ச்டுடியோ ஒளியை நீக்கு"
+
+
+msgctxt "Operator"
+msgid "Uninstall Studio Light"
+msgstr "ச்டுடியோ லைட் நிறுவல் நீக்குதல்"
+
+
+msgid "Load and apply a Blender XML theme file"
+msgstr "கலப்பான் எக்ச்எம்எல் கருப்பொருள் கோப்பை ஏற்றவும் பயன்படுத்தவும்"
+
+
+msgctxt "Operator"
+msgid "Install Theme..."
+msgstr "கருப்பொருள் நிறுவவும் ..."
+
+
+msgid "Add an Integrator Preset"
+msgstr "ஒரு ஒருங்கிணைப்பாளர் முன்னமைவைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Integrator Preset"
+msgstr "ஒருங்கிணைப்பாளர் முன்னமைவைச் சேர்க்கவும்"
+
+
+msgid "Add an Performance Preset"
+msgstr "செயல்திறன் முன்னமைவைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Performance Preset"
+msgstr "செயல்திறன் முன்னமைவைச் சேர்க்கவும்"
+
+
+msgid "Add a Sampling Preset"
+msgstr "மாதிரி முன்னமைவைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Sampling Preset"
+msgstr "மாதிரி முன்னமைவைச் சேர்க்கவும்"
+
+
+msgid "Add a Viewport Sampling Preset"
+msgstr "வியூபோர்ட் மாதிரி முன்னமைவைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Viewport Sampling Preset"
+msgstr "வியாபோர்ட் மாதிரி முன்னமைவைச் சேர்க்கவும்"
+
+
+msgid "Add or remove an EEVEE ray-tracing preset"
+msgstr "ஒரு ஈவி ரே-ட்ரேசிங் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Raytracing Preset"
+msgstr "ரெய்ட்ரேசிங் முன்னமைவைச் சேர்க்கவும்"
+
+
+msgid "Play back rendered frames/movies using an external player"
+msgstr "வெளிப்புற பிளேயரைப் பயன்படுத்தி பிரேம்கள்/திரைப்படங்களை மீண்டும் இயக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Play Rendered Animation"
+msgstr "அனிமேசன் பிரிக்கப்பட்ட அனிமேசன்"
+
+
+msgid "Add or remove a Render Preset"
+msgstr "வழங்குதல் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Render Preset"
+msgstr "வழங்குதல் முன்னமைவு சேர்க்கவும்"
+
+
+msgid "Bake rigid body transformations of selected objects to keyframes"
+msgstr "தேர்ந்தெடுக்கப்பட்ட பொருட்களின் கடுமையான உடல் மாற்றங்களை கீஃப்ரேம்களுக்கு சுட்டுக்கொள்ளுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Bake to Keyframes"
+msgstr "கீஃப்ரேம்களை சுட்டுக்கொள்ளுங்கள்"
+
+
+msgid "Create rigid body constraints between selected rigid bodies"
+msgstr "தேர்ந்தெடுக்கப்பட்ட கடுமையான உடல்களுக்கு இடையில் கடுமையான உடல் தடைகளை உருவாக்குங்கள்"
+
+
+msgctxt "Operator"
+msgid "Connect Rigid Bodies"
+msgstr "கடினமான உடல்களை இணைக்கவும்"
+
+
+msgid "Copy Rigid Body settings from active object to selected"
+msgstr "செயலில் உள்ள பொருளிலிருந்து தேர்ந்தெடுக்கப்பட்ட கடினமான உடல் அமைப்புகளை நகலெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Copy Rigid Body Settings"
+msgstr "கடுமையான உடல் அமைப்புகளை நகலெடுக்கவும்"
+
+
+msgid "Add the data paths to the Freestyle Edge Mark property of selected edges to the active keying set"
+msgstr "தேர்ந்தெடுக்கப்பட்ட விளிம்புகளின் ஃப்ரீபாணி எட்ச் மார்க் சொத்தில் தரவு பாதைகளை செயலில் உள்ள கீயிங் தொகுப்பில் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Edge Marks to Keying Set"
+msgstr "கீயிங் தொகுப்பில் விளிம்பு மதிப்பெண்களைச் சேர்க்கவும்"
+
+
+msgid "Add the data paths to the Freestyle Face Mark property of selected polygons to the active keying set"
+msgstr "தேர்ந்தெடுக்கப்பட்ட பலகோணங்களின் ஃப்ரீபாணி ஃபேச் மார்க் சொத்தில் தரவு பாதைகளை செயலில் உள்ள கீயிங் தொகுப்பில் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Face Marks to Keying Set"
+msgstr "கீயிங் தொகுப்பில் முக அடையாளங்களைச் சேர்க்கவும்"
+
+
+msgid "Fill the Range Min/Max entries by the min/max distance between selected mesh objects and the source object (either a user-specified object or the active camera)"
+msgstr "தேர்ந்தெடுக்கப்பட்ட கண்ணி பொருள்களுக்கும் மூலப் பொருளுக்கும் இடையிலான நிமிடம்/அதிகபட்ச தூரத்தால் (பயனர் குறிப்பிட்ட பொருள் அல்லது செயலில் உள்ள கேமரா) வரம்பு மின்/அதிகபட்ச உள்ளீடுகளை நிரப்பவும்"
+
+
+msgctxt "Operator"
+msgid "Fill Range by Selection"
+msgstr "தேர்வு மூலம் வரம்பை நிரப்பவும்"
+
+
+msgid "Open a style module file"
+msgstr "ஒரு பாணி பகுதி கோப்பைத் திறக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Open Style Module File"
+msgstr "திறந்த பாணி பகுதி கோப்பு"
+
+
+msgid "Refresh list of actions"
+msgstr "செயல்களின் பட்டியலைப் புதுப்பிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Refresh action list"
+msgstr "செயல் பட்டியலைப் புதுப்பிக்கவும்"
+
+
+msgid "Add or remove grease pencil brush preset"
+msgstr "பசை எழுதுகோல் தூரிகை முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Grease Pencil Brush Preset"
+msgstr "பசை எழுதுகோல் தூரிகை முன்னமைவு சேர்க்கவும்"
+
+
+msgid "Add or remove grease pencil material preset"
+msgstr "பசை எழுதுகோல் மூலப்பொருள் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Grease Pencil Material Preset"
+msgstr "பசை எழுதுகோல் மூலப்பொருள் முன்னமைவு சேர்க்கவும்"
+
+
+msgid "Load a preset"
+msgstr "முன்னமைவை ஏற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Execute a Python Preset"
+msgstr "பைதான் முன்னமைவை இயக்கவும்"
+
+
+msgid "Do cross-fading volume animation of two selected sound strips"
+msgstr "தேர்ந்தெடுக்கப்பட்ட இரண்டு ஒலி கீற்றுகளின் குறுக்கு மங்கலான தொகுதி அனிமேசனைச் செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Crossfade Sounds"
+msgstr "கிராச்ஃபேட் ஒலிகள்"
+
+
+msgid "Deinterlace all selected movie sources"
+msgstr "தேர்ந்தெடுக்கப்பட்ட அனைத்து திரைப்பட ஆதாரங்களும்"
+
+
+msgctxt "Operator"
+msgid "Deinterlace Movies"
+msgstr "deinterlace திரைப்படங்கள்"
+
+
+msgid "Adds or updates a fade animation for either visual or audio strips"
+msgstr "காட்சி அல்லது ஆடியோ கீற்றுகளுக்கு மங்கலான அனிமேசனைச் சேர்க்கிறது அல்லது புதுப்பிக்கிறது"
+
+
+msgctxt "Operator"
+msgid "Add Fades"
+msgstr "மங்கல்களைச் சேர்க்கவும்"
+
+
+msgid "Removes fade animation from selected sequences"
+msgstr "தேர்ந்தெடுக்கப்பட்ட காட்சிகளிலிருந்து மங்கலான அனிமேசனை நீக்குகிறது"
+
+
+msgctxt "Operator"
+msgid "Clear Fades"
+msgstr "தெளிவான மங்கல்கள்"
+
+
+msgid "Split multicam strip and select camera"
+msgstr "மல்டிகாம் துண்டு பிரித்து கேமராவைத் தேர்ந்தெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Split Multicam"
+msgstr "மல்டிகாம் பிரிக்கவும்"
+
+
+msgid "Turn on or off pinning"
+msgstr "பின்னிங் இயக்கவும் அல்லது அணைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Toggle Pin"
+msgstr "முள் மாற்றவும்"
+
+
+msgid "Add or remove a Text Editor Preset"
+msgstr "உரை திருத்தி முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Add Text Editor Preset"
+msgstr "உரை திருத்தி முன்னமைவைச் சேர்க்கவும்"
+
+
+msgid "Add an entry to the list after the current active item"
+msgstr "தற்போதைய செயலில் உள்ள உருப்படியுக்குப் பிறகு பட்டியலில் ஒரு உள்ளீட்டைச் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Entry"
+msgstr "உள்ளீட்டைச் சேர்க்கவும்"
+
+
+msgid "Move an entry in the list up or down"
+msgstr "பட்டியலில் ஒரு நுழைவை மேலே அல்லது கீழ் நகர்த்தவும்"
+
+
+msgctxt "Operator"
+msgid "Move Entry"
+msgstr "நுழைவு நகர்த்தவும்"
+
+
+msgid "Remove the selected entry from the list"
+msgstr "பட்டியலிலிருந்து தேர்ந்தெடுக்கப்பட்ட நுழைவை அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Remove Selected Entry"
+msgstr "தேர்ந்தெடுக்கப்பட்ட நுழைவை அகற்று"
+
+
+msgid "Export given add-on's translation data as PO files"
+msgstr "கொடுக்கப்பட்ட கூடுதல் மொழிபெயர்ப்பு தரவை po கோப்புகளாக ஏற்றுமதி செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "I18n Add-on Export"
+msgstr "ஐ18ன் கூடுதல் ஏற்றுமதி"
+
+
+msgid "Import given add-on's translation data from PO files"
+msgstr "po கோப்புகளிலிருந்து கொடுக்கப்பட்ட கூடுதல் மொழிபெயர்ப்பு தரவை இறக்குமதி செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "I18n Add-on Import"
+msgstr "ஐ18ன் கூடுதல் இறக்குமதி"
+
+
+msgid "Wrapper operator which will invoke given op after setting its module_name"
+msgstr "ரேப்பர் ஆபரேட்டர் அதன் பகுதி_பெயரை அமைத்த பிறகு கொடுக்கப்பட்ட op ஐ அழைக்கும்"
+
+
+msgctxt "Operator"
+msgid "Update I18n Add-on"
+msgstr "ஐ18ன் கூடுதலைப் புதுப்பிக்கவும்"
+
+
+msgid "Update given add-on's translation data (found as a py tuple in the add-on's source code)"
+msgstr "கொடுக்கப்பட்ட கூடுதல் மொழிபெயர்ப்பு தரவைப் புதுப்பிக்கவும் (கூடுதல் மூலக் குறியீட்டில் ஒரு பை டப்பிள் எனக் காணப்படுகிறது)"
+
+
+msgid "Clean up i18n working repository (po files)"
+msgstr "ஐ18ன் வேலை களஞ்சியத்தை தூய்மை செய்யுங்கள் (po கோப்புகள்)"
+
+
+msgctxt "Operator"
+msgid "Clean up I18n Work Repository"
+msgstr "ஐ18ன் பணி களஞ்சியத்தை தூய்மை செய்யுங்கள்"
+
+
+msgid "Load translations' settings from a persistent JSon file"
+msgstr "தொடர்ச்சியான சாதொபொகு கோப்பிலிருந்து மொழிபெயர்ப்புகளின் அமைப்புகளை ஏற்றவும்"
+
+
+msgctxt "Operator"
+msgid "I18n Load Settings"
+msgstr "ஐ18ன் சுமை அமைப்புகள்"
+
+
+msgid "Save translations' settings in a persistent JSon file"
+msgstr "தொடர்ச்சியான சாதொபொகு கோப்பில் மொழிபெயர்ப்புகளின் அமைப்புகளைச் சேமிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "I18n Save Settings"
+msgstr "ஐ18ன் அமைப்புகளை சேமிக்கவும்"
+
+
+msgid "Update i18n data (po files) in Blender source code repository"
+msgstr "கலப்பான் மூலக் குறியீடு களஞ்சியத்தில் ஐ18ன் தரவைப் புதுப்பிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Update I18n Blender Repository"
+msgstr "ஐ18ன் கலப்பான் களஞ்சியத்தைப் புதுப்பிக்கவும்"
+
+
+msgid "Init settings for i18n files update operators"
+msgstr "ஐ18ன் கோப்புகளுக்கான தொடக்க அமைப்புகள் ஆபரேட்டர்களைப் புதுப்பிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Init I18n Update Settings"
+msgstr "init ஐ18ன் புதுப்பிப்பு அமைப்புகள்"
+
+
+msgid "(De)select (or invert selection of) all languages for i18n files update operators"
+msgstr "ஐ18ன் கோப்புகளின் புதுப்பிப்பு ஆபரேட்டர்களுக்கான அனைத்து மொழிகளையும் தேர்ந்தெடு (அல்லது தலைகீழாக) தேர்ந்தெடுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Init I18n Update Select Languages"
+msgstr "init ஐ18ன் புதுப்பிப்பு மொழிகளைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Create or extend a 'i18n_info.txt' Text datablock"
+msgstr "'i18n_info.txt' உரை தரவு பிளாக்கை உருவாக்கவும் அல்லது நீட்டிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Update I18n Statistics"
+msgstr "ஐ18ன் புள்ளிவிவரங்களைப் புதுப்பிக்கவும்"
+
+
+msgid "Update i18n working repository (po files)"
+msgstr "ஐ18ன் பணி களஞ்சியத்தை புதுப்பிக்கவும் (po கோப்புகள்)"
+
+
+msgctxt "Operator"
+msgid "Update I18n Work Repository"
+msgstr "ஐ18ன் பணி களஞ்சியத்தைப் புதுப்பிக்கவும்"
+
+
+msgid "Align the UV island's rotation"
+msgstr "புறஊதா தீவின் சுழற்சியை சீரமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Align Rotation"
+msgstr "சுழற்சியை சீரமைக்கவும்"
+
+
+msgid "Export UV layout to file"
+msgstr "தாக்கல் செய்ய புறஊதா தளவமைப்பை ஏற்றுமதி செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Export UV Layout"
+msgstr "புறஊதா தளவமைப்பு ஏற்றுமதி"
+
+
+msgid "Follow UVs from active quads along continuous face loops"
+msgstr "தொடர்ச்சியான முக சுழல்களுடன் செயலில் உள்ள குவாட்களிலிருந்து uv களைப் பின்தொடரவும்"
+
+
+msgctxt "Operator"
+msgid "Follow Active Quads"
+msgstr "செயலில் உள்ள குவாட்சைப் பின்தொடரவும்"
+
+
+msgid "Pack each face's UVs into the UV bounds"
+msgstr "ஒவ்வொரு முகத்தின் uv களையும் புறஊதா எல்லைகளில் பேக் செய்யுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Lightmap Pack"
+msgstr "லைட்மேப் பேக்"
+
+
+msgid "Randomize the UV island's location, rotation, and scale"
+msgstr "புறஊதா தீவின் இருப்பிடம், சுழற்சி மற்றும் அளவை சீரற்றதாக்குங்கள்"
+
+
+msgctxt "Operator"
+msgid "Randomize"
+msgstr "சீரற்ற"
+
+
+msgctxt "Operator"
+msgid "New Camera from VR Landmark"
+msgstr "வி.ஆர் லேண்ட்மார்க்கிலிருந்து புதிய கேமரா"
+
+
+msgctxt "Operator"
+msgid "Scene Camera to VR Landmark"
+msgstr "வி.ஆர் லேண்ட்மார்க்குக்கு காட்சி கேமரா"
+
+
+msgctxt "Operator"
+msgid "Cursor to VR Landmark"
+msgstr "வி.ஆர் லேண்ட்மார்க் முதல் கர்சர்"
+
+
+msgid "Extrude each individual face separately along local normals"
+msgstr "ஒவ்வொரு தனிப்பட்ட முகத்தையும் உள்ளக இயல்புகளுடன் தனித்தனியாக வெளியேற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Extrude Individual and Move"
+msgstr "தனிநபரை வெளியேற்றி நகர்த்தவும்"
+
+
+msgid "Extrude manifold region along normals"
+msgstr "இயல்பான பன்மடங்கு மண்டலம்"
+
+
+msgctxt "Operator"
+msgid "Extrude Manifold Along Normals"
+msgstr "இயல்பான பன்மடங்கு பன்மடங்கு"
+
+
+msgid "Extrude region together along the average normal"
+msgstr "சராசரி இயல்புடன் ஒன்றாக மண்டலம்"
+
+
+msgctxt "Operator"
+msgid "Extrude and Move on Normals"
+msgstr "எக்ச்ட்ரூட் மற்றும் இயல்பான மீது நகர்த்தவும்"
+
+
+msgid "Extrude region together along local normals"
+msgstr "உள்ளக இயல்புடன் ஒன்றாக மண்டலம்"
+
+
+msgctxt "Operator"
+msgid "Extrude and Move on Individual Normals"
+msgstr "எக்ச்ட்ரூட் மற்றும் தனிப்பட்ட இயல்புகளை நகர்த்தவும்"
+
+
+msgid "Set the current transform gizmo"
+msgstr "தற்போதைய உருமாற்ற கிச்மோவை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Transform Gizmo Set"
+msgstr "கிச்மோ தொகுப்பை மாற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Update Custom VR Landmark"
+msgstr "தனிப்பயன் விஆர் மைல்கல் புதுப்பிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Camera and VR Landmark from Session"
+msgstr "அமர்விலிருந்து கேமரா மற்றும் வி.ஆர் மைல்கல் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Activate VR Landmark"
+msgstr "வி.ஆர் லேண்ட்மார்க் செயல்படுத்தவும்"
+
+
+msgctxt "Operator"
+msgid "Add VR Landmark"
+msgstr "வி.ஆர் லேண்ட்மார்க் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add VR Landmark from Camera"
+msgstr "கேமராவிலிருந்து வி.ஆர் மைல்கல் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add VR Landmark from Session"
+msgstr "அமர்விலிருந்து வி.ஆர் மைல்கல் சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Remove VR Landmark"
+msgstr "வி.ஆர் மைல்கல்லை அகற்றவும்"
+
+
+msgid "Rename multiple items at once"
+msgstr "பல பொருட்களை ஒரே நேரத்தில் மறுபெயரிடுங்கள்"
+
+
+msgctxt "Operator"
+msgid "Batch Rename"
+msgstr "தொகுதி மறுபெயரிடுதல்"
+
+
+msgid "Check and fix all strings in current .blend file to be valid UTF-8 Unicode (needed for some old, 2.4x area files)"
+msgstr "செல்லுபடியாகும் utf-8 யூனிகோடாக இருக்க தற்போதைய .கலப்பு கோப்பில் உள்ள அனைத்து சரங்களையும் சரிபார்த்து சரிசெய்யவும் (சில பழைய, 2.4x பரப்பு கோப்புகளுக்கு தேவை)"
+
+
+msgctxt "Operator"
+msgid "Validate .blend strings"
+msgstr ".கலப்பு சரங்களை சரிபார்க்க"
+
+
+msgid "Set boolean values for a collection of items"
+msgstr "உருப்படிகளின் சேகரிப்புக்கு பூலியன் மதிப்புகளை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Context Collection Boolean Set"
+msgstr "சூழல் சேகரிப்பு பூலியன் தொகுப்பு"
+
+
+msgid "Set a context array value (useful for cycling the active mesh edit mode)"
+msgstr "சூழல் வரிசை மதிப்பை அமைக்கவும் (செயலில் உள்ள மெச் திருத்து பயன்முறையை சைக்கிள் ஓட்டுவதற்கு பயனுள்ளதாக இருக்கும்)"
+
+
+msgctxt "Operator"
+msgid "Context Array Cycle"
+msgstr "சூழல் வரிசை சுழற்சி"
+
+
+msgid "Toggle a context value"
+msgstr "சூழல் மதிப்பை மாற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Context Enum Cycle"
+msgstr "சூழல் எனம் சுழற்சி"
+
+
+msgid "Set a context value (useful for cycling active material, shape keys, groups, etc.)"
+msgstr "ஒரு சூழல் மதிப்பை அமைக்கவும் (சைக்கிள் ஓட்டுதல் செயலில் உள்ள மூலப்பொருள், வடிவ விசைகள், குழுக்கள் போன்றவை பயனுள்ளவை)"
+
+
+msgctxt "Operator"
+msgid "Context Int Cycle"
+msgstr "சூழல் எண்ணாக சுழற்சி"
+
+
+msgctxt "Operator"
+msgid "Context Enum Menu"
+msgstr "சூழல் enum பட்டியல்"
+
+
+msgid "Adjust arbitrary values with mouse input"
+msgstr "சுட்டி உள்ளீட்டுடன் தன்னிச்சையான மதிப்புகளை சரிசெய்யவும்"
+
+
+msgctxt "Operator"
+msgid "Context Modal Mouse"
+msgstr "சூழல் மாதிரி சுட்டி"
+
+
+msgctxt "Operator"
+msgid "Context Enum Pie"
+msgstr "சூழல் enum pie"
+
+
+msgid "Scale a float context value"
+msgstr "மிதவை சூழல் மதிப்பை அளவிடவும்"
+
+
+msgctxt "Operator"
+msgid "Context Scale Float"
+msgstr "சூழல் அளவிலான மிதவை"
+
+
+msgid "Scale an int context value"
+msgstr "ஒரு எண்ணாக சூழல் மதிப்பை அளவிடவும்"
+
+
+msgctxt "Operator"
+msgid "Context Scale Int"
+msgstr "சூழல் அளவுகோல் இன்ட்"
+
+
+msgid "Set a context value"
+msgstr "சூழல் மதிப்பை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Context Set Boolean"
+msgstr "சூழல் பூலியன்"
+
+
+msgctxt "Operator"
+msgid "Context Set Enum"
+msgstr "சூழல் அமைக்க"
+
+
+msgctxt "Operator"
+msgid "Context Set Float"
+msgstr "சூழல் அமைக்கப்பட்ட மிதவை"
+
+
+msgid "Set a context value to an ID data-block"
+msgstr "ஐடி தரவு-தொகுதிக்கு சூழல் மதிப்பை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Set Library ID"
+msgstr "நூலக ஐடியை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Context Set"
+msgstr "சூழல் தொகுப்பு"
+
+
+msgctxt "Operator"
+msgid "Context Set String"
+msgstr "சூழல் தொகுப்பு சரம்"
+
+
+msgctxt "Operator"
+msgid "Context Set Value"
+msgstr "சூழல் அமைக்கப்பட்ட மதிப்பு"
+
+
+msgctxt "Operator"
+msgid "Context Toggle"
+msgstr "சூழல் மாறுகிறது"
+
+
+msgctxt "Operator"
+msgid "Context Toggle Values"
+msgstr "சூழல் மதிப்புகளை மாற்றவும்"
+
+
+msgid "Open online reference docs in a web browser"
+msgstr "வலை உலாவியில் நிகழ்நிலை குறிப்பு ஆவணங்களைத் திறக்கவும்"
+
+
+msgctxt "Operator"
+msgid "View Documentation"
+msgstr "ஆவணங்களைக் காண்க"
+
+
+msgid "Load online manual"
+msgstr "நிகழ்நிலை கையேட்டை ஏற்றவும்"
+
+
+msgctxt "Operator"
+msgid "View Manual"
+msgstr "கையேட்டைக் காண்க"
+
+
+msgctxt "Operator"
+msgid "Handle dropped .blend file"
+msgstr "கைப்பிடி கைவிடப்பட்டது .கலப்பு கோப்பு"
+
+
+msgid "List all the operators in a text-block, useful for scripting"
+msgstr "அனைத்து ஆபரேட்டர்களையும் ஒரு உரை-தொகுதியில் பட்டியலிடுங்கள், இது கைஉரைடுக்கு பயனுள்ளதாக இருக்கும்"
+
+
+msgctxt "Operator"
+msgid "Operator Cheat Sheet"
+msgstr "ஆபரேட்டர் ஏமாற்றுத் தாள்"
+
+
+msgctxt "Operator"
+msgid "Operator Enum Pie"
+msgstr "ஆபரேட்டர் எனம் பை"
+
+
+msgid "Add or remove an Operator Preset"
+msgstr "ஒரு ஆபரேட்டர் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Operator Preset"
+msgstr "ஆபரேட்டர் முன்னமைவு"
+
+
+msgid "Remove outdated operator properties from presets that may cause problems"
+msgstr "சிக்கல்களை ஏற்படுத்தக்கூடிய முன்னமைவுகளிலிருந்து காலாவதியான ஆபரேட்டர் பண்புகளை அகற்றவும்"
+
+
+msgctxt "Operator"
+msgid "Clean Up Operator Presets"
+msgstr "ஆபரேட்டர் முன்னமைவுகளை தூய்மை செய்யுங்கள்"
+
+
+msgid "Disable add-on for workspace"
+msgstr "பணியிடத்திற்கான துணை நிரலை முடக்கு"
+
+
+msgctxt "Operator"
+msgid "Disable Add-on"
+msgstr "துணை நிரலை முடக்கு"
+
+
+msgid "Enable add-on for workspace"
+msgstr "பணியிடத்திற்கான சேர்க்கையை இயக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Enable Add-on"
+msgstr "கூடுதல் சேர்க்கவும்"
+
+
+msgid "Open a path in a file browser"
+msgstr "கோப்பு உலாவியில் ஒரு பாதையைத் திறக்கவும்"
+
+
+msgid "Clear selected .blend file's previews"
+msgstr "தேர்ந்தெடுக்கப்பட்ட .கலப்பு கலப்பான் கோப்பு முன்னோட்டத்தை அழிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Batch-Clear Previews"
+msgstr "தொகுதி-தெளிவான முன்னோட்டங்கள்"
+
+
+msgid "Generate selected .blend file's previews"
+msgstr "தேர்ந்தெடுக்கப்பட்ட .கலப்பு கலப்பான் கோப்பு முன்னோட்டத்தை உருவாக்குங்கள்"
+
+
+msgctxt "Operator"
+msgid "Batch-Generate Previews"
+msgstr "தொகுதி-உருவாக்கும் முன்னோட்டங்கள்"
+
+
+msgid "Add your own property to the data-block"
+msgstr "தரவு-தொகுதிக்கு உங்கள் சொந்த சொத்தை சேர்க்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Property"
+msgstr "சொத்து சேர்க்கவும்"
+
+
+msgid "Jump to a different tab inside the properties editor"
+msgstr "பண்புகள் திருத்திக்குள் வேறு தாவலுக்குச் செல்லவும்"
+
+
+msgid "Change a custom property's type, or adjust how it is displayed in the interface"
+msgstr "தனிப்பயன் சொத்தின் வகையை மாற்றவும் அல்லது இடைமுகத்தில் அது எவ்வாறு காட்டப்படும் என்பதை சரிசெய்யவும்"
+
+
+msgctxt "Operator"
+msgid "Edit Property"
+msgstr "சொத்தை திருத்தவும்"
+
+
+msgid "Edit the value of a custom property"
+msgstr "தனிப்பயன் சொத்தின் மதிப்பைத் திருத்தவும்"
+
+
+msgctxt "Operator"
+msgid "Edit Property Value"
+msgstr "சொத்து மதிப்பைத் திருத்தவும்"
+
+
+msgid "Internal use (edit a property data_path)"
+msgstr "உள் பயன்பாடு (ஒரு சொத்து தரவு_பாத் திருத்து)"
+
+
+msgctxt "Operator"
+msgid "Remove Property"
+msgstr "சொத்தை அகற்று"
+
+
+msgid "Generate system information, saved into a text file"
+msgstr "கணினி தகவல்களை உருவாக்கி, உரை கோப்பில் சேமிக்கப்படுகிறது"
+
+
+msgctxt "Operator"
+msgid "Save System Info"
+msgstr "கணினி தகவலை சேமிக்கவும்"
+
+
+msgid "Set the tool by name (for key-maps)"
+msgstr "கருவியை பெயரால் அமைக்கவும் (விசை-வரைபடங்களுக்கு)"
+
+
+msgctxt "Operator"
+msgid "Set Tool by Name"
+msgstr "பெயரால் கருவியை அமைக்கவும்"
+
+
+msgid "Set the tool by index (for key-maps)"
+msgstr "கருவியை குறியீட்டால் அமைக்கவும் (விசை-வரைபடங்களுக்கு)"
+
+
+msgctxt "Operator"
+msgid "Set Tool by Index"
+msgstr "குறியீட்டால் கருவியை அமைக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Toolbar"
+msgstr "கருவிப்பட்டி"
+
+
+msgctxt "Operator"
+msgid "Fallback Tool Pie Menu"
+msgstr "குறைவடையும் கருவி பை பட்டியல்"
+
+
+msgid "Leader key like functionality for accessing tools"
+msgstr "கருவிகளை அணுகுவதற்கான செயல்பாடு போன்ற தலைவர் விசை"
+
+
+msgctxt "Operator"
+msgid "Toolbar Prompt"
+msgstr "கருவிப்பட்டி வரியில்"
+
+
+msgid "Open a website in the web browser"
+msgstr "வலை உலாவியில் ஒரு வலைத்தளத்தைத் திறக்கவும்"
+
+
+msgid "Open a preset website in the web browser"
+msgstr "வலை உலாவியில் முன்னமைக்கப்பட்ட வலைத்தளத்தைத் திறக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Open Preset Website"
+msgstr "முன்னமைக்கப்பட்ட வலைத்தளத்தைத் திறக்கவும்"
 
 
 msgid "Operator Options"
@@ -49742,15 +51650,6 @@ msgid "Reset viewable area to show the selected channels"
 msgstr "தேர்ந்தெடுக்கப்பட்ட சேனல்களைக் காட்ட பார்க்கக்கூடிய பரப்பை மீட்டமைக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Clear Useless Actions"
-msgstr "பயனற்ற செயல்களை அழிக்கவும்"
-
-
-msgid "Mark actions with no F-Curves for deletion after save and reload of file preserving \"action libraries\""
-msgstr "\"செயல் நூலகங்களை\" பாதுகாக்கும் கோப்பை சேமித்து மீண்டும் ஏற்றப்பட்ட பிறகு நீக்குவதற்கு எஃப்-வளைவுகள் இல்லாத செயல்களைக் குறிக்கவும்"
-
-
 msgid "Only Unused"
 msgstr "பயன்படுத்தப்படாதது மட்டுமே"
 
@@ -49936,15 +51835,6 @@ msgid "Add a new (empty) keying set to the active Scene"
 msgstr "செயலில் உள்ள காட்சியில் புதிய (வெற்று) கீயிங் தொகுப்பைச் சேர்க்கவும்"
 
 
-msgctxt "Operator"
-msgid "Export Keying Set..."
-msgstr "ஏற்றுமதி கீயிங் தொகுப்பு ..."
-
-
-msgid "Export Keying Set to a Python script"
-msgstr "பைதான் ச்கிரிப்டுக்கு அமைக்கப்பட்ட கீயிங் கீயிங்"
-
-
 msgid "Filter folders"
 msgstr "கோப்புறைகளை வடிகட்டவும்"
 
@@ -50040,15 +51930,6 @@ msgstr "தொடக்க சட்டகத்தை அமைக்கவு�
 
 msgid "Set the current frame as the preview or scene start frame"
 msgstr "தற்போதைய சட்டத்தை முன்னோட்டம் அல்லது காட்சி தொடக்க சட்டமாக அமைக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Update Animated Transform Constraints"
-msgstr "அனிமேசன் உருமாற்றக் கட்டுப்பாடுகளைப் புதுப்பிக்கவும்"
-
-
-msgid "Update f-curves/drivers affecting Transform constraints (use it with files from 2.70 and earlier)"
-msgstr "உருமாற்றக் கட்டுப்பாடுகளை பாதிக்கும் எஃப்-வளைவுகள்/இயக்கிகளைப் புதுப்பிக்கவும் (2.70 மற்றும் அதற்கு முந்தைய கோப்புகளுடன் இதைப் பயன்படுத்தவும்)"
 
 
 msgid "Convert to Radians"
@@ -50309,30 +52190,12 @@ msgstr "செயலில் உள்ள எலும்பு சேகரி
 
 
 msgctxt "Operator"
-msgid "Remove Unused Bone Collections"
-msgstr "பயன்படுத்தப்படாத எலும்பு சேகரிப்புகளை அகற்றவும்"
-
-
-msgid "Remove all bone collections that have neither bones nor children. This is done recursively, so bone collections that only have unused children are also removed"
-msgstr "எலும்புகளோ குழந்தைகளோ இல்லாத அனைத்து எலும்பு சேகரிப்புகளையும் அகற்றவும். இது மீண்டும் மீண்டும் செய்யப்படுகிறது, எனவே பயன்படுத்தப்படாத குழந்தைகளை மட்டுமே கொண்ட எலும்பு சேகரிப்புகள் அகற்றப்படுகின்றன"
-
-
-msgctxt "Operator"
 msgid "Select Bones of Bone Collection"
 msgstr "எலும்பு சேகரிப்பின் எலும்புகளைத் தேர்ந்தெடுக்கவும்"
 
 
 msgid "Select bones in active Bone Collection"
 msgstr "செயலில் எலும்பு சேகரிப்பில் எலும்புகளைத் தேர்ந்தெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Show All"
-msgstr "அனைத்தையும் காட்டு"
-
-
-msgid "Show all bone collections"
-msgstr "அனைத்து எலும்பு சேகரிப்புகளையும் காட்டு"
 
 
 msgctxt "Operator"
@@ -50359,24 +52222,6 @@ msgstr "இந்த எலும்பு சேகரிப்பிலிர�
 
 msgid "Name of the bone to unassign from the collection; empty to use the active bone"
 msgstr "சேகரிப்பிலிருந்து ஒதுக்கப்படுவதற்கு எலும்பின் பெயர்; செயலில் உள்ள எலும்பைப் பயன்படுத்த காலியாக உள்ளது"
-
-
-msgctxt "Operator"
-msgid "Un-solo All"
-msgstr "அன்-சோலோ அனைவருமே"
-
-
-msgid "Clear the 'solo' setting on all bone collections"
-msgstr "அனைத்து எலும்பு சேகரிப்புகளிலும் 'தனி' அமைப்பை அழிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Copy Colors to Selected"
-msgstr "தேர்ந்தெடுக்கப்பட்ட வண்ணங்களை நகலெடுக்கவும்"
-
-
-msgid "Copy the bone color of the active bone to all selected bones"
-msgstr "செயலில் உள்ள எலும்பின் எலும்பு நிறத்தை தேர்ந்தெடுக்கப்பட்ட அனைத்து எலும்புகளுக்கும் நகலெடுக்கவும்"
 
 
 msgid "Copy Bone colors from the active bone to all selected bones"
@@ -50601,11 +52446,6 @@ msgid "Toggle selection status of all bones"
 msgstr "அனைத்து எலும்புகளின் தேர்வு நிலையை மாற்றவும்"
 
 
-msgctxt "Operator"
-msgid "Select Hierarchy"
-msgstr "வரிசைமுறையைத் தேர்ந்தெடுக்கவும்"
-
-
 msgid "Select immediate parent/children of selected bones"
 msgstr "தேர்ந்தெடுக்கப்பட்ட எலும்புகளின் உடனடி பெற்றோர்/குழந்தைகளைத் தேர்ந்தெடுக்கவும்"
 
@@ -50765,11 +52605,6 @@ msgstr "-x to +x"
 
 msgid "+X to -X"
 msgstr "+x முதல் -x வரை"
-
-
-msgctxt "Operator"
-msgid "Assign Action"
-msgstr "செயலை ஒதுக்கு"
 
 
 msgid "Set this pose Action as active Action on the active Object"
@@ -51014,33 +52849,6 @@ msgstr "ஒற்றை சொத்தாக குறிக்கவும்"
 
 msgid "Enable easier reuse of a data-block through the Asset Browser, with the help of customizable metadata (like previews, descriptions and tags)"
 msgstr "தனிப்பயனாக்கக்கூடிய மேவுடேட்டாவின் உதவியுடன் (முன்னோட்டங்கள், விளக்கங்கள் மற்றும் குறிச்சொற்கள் போன்றவை) சொத்து உலாவி வழியாக தரவு-தொகுப்பை எளிதாக மறுபயன்பாடு செய்யுங்கள்)"
-
-
-msgctxt "Operator"
-msgid "Open Blend File"
-msgstr "கலப்பு கோப்பைத் திறக்கவும்"
-
-
-msgid "Open the blend file that contains the active asset"
-msgstr "செயலில் உள்ள சொத்துக்களைக் கொண்ட கலப்பு கோப்பைத் திறக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Asset Tag"
-msgstr "சொத்து குறிச்சொல்லைச் சேர்க்கவும்"
-
-
-msgid "Add a new keyword tag to the active asset"
-msgstr "செயலில் உள்ள சொத்தில் புதிய முக்கிய குறிச்சொல்லைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Remove Asset Tag"
-msgstr "சொத்து குறிச்சொல்லை அகற்று"
-
-
-msgid "Remove an existing keyword tag from the active asset"
-msgstr "செயலில் உள்ள சொத்திலிருந்து ஏற்கனவே உள்ள முக்கிய குறிச்சொல்லை அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -51338,15 +53146,6 @@ msgid "Update objects paths list with new data from the archive"
 msgstr "காப்பகத்திலிருந்து புதிய தரவுகளுடன் பொருள்களின் பாதைகள் பட்டியலைப் புதுப்பிக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Add Camera Preset"
-msgstr "கேமரா முன்னமைவு சேர்க்கவும்"
-
-
-msgid "Add or remove a Camera Preset"
-msgstr "கேமரா முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
-
-
 msgid "Name of the preset, used to make the path name"
 msgstr "முன்னமைவின் பெயர், பாதை பெயரை உருவாக்க பயன்படுகிறது"
 
@@ -51357,15 +53156,6 @@ msgstr "குவிய நீளத்தை சேர்க்கவும்"
 
 msgid "Include focal length into the preset"
 msgstr "முன்னமைவில் குவிய நீளத்தை சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Safe Area Preset"
-msgstr "பாதுகாப்பான பரப்பு முன்னமைவு சேர்க்கவும்"
-
-
-msgid "Add or remove a Safe Areas Preset"
-msgstr "பாதுகாப்பான பகுதிகளைச் சேர்க்கவும் அல்லது அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -51444,19 +53234,6 @@ msgstr "அசல் தடங்களை வைத்திருங்கள�
 
 
 msgctxt "Operator"
-msgid "3D Markers to Mesh"
-msgstr "கண்ணி 3 டி குறிப்பான்கள்"
-
-
-msgid "Create vertex cloud using coordinates of reconstructed tracks"
-msgstr "புனரமைக்கப்பட்ட தடங்களின் ஒருங்கிணைப்புகளைப் பயன்படுத்தி வெர்டெக்ச் கிளவுட்டை உருவாக்கவும்"
-
-
-msgid "Add or remove a Tracking Camera Intrinsics Preset"
-msgstr "கண்காணிப்பு கேமரா உள்ளார்ந்த முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
-
-
-msgctxt "Operator"
 msgid "Clean Tracks"
 msgstr "தூய்மையான தடங்கள்"
 
@@ -51528,15 +53305,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட அனைத�
 
 
 msgctxt "Operator"
-msgid "Constraint to F-Curve"
-msgstr "எஃப்-வளைவுக்கு தடை"
-
-
-msgid "Create F-Curves for object which will copy object's movement caused by this constraint"
-msgstr "இந்த கட்டுப்பாட்டால் ஏற்படும் பொருளின் இயக்கத்தை நகலெடுக்கும் பொருளுக்கு எஃப்-வளைவுகளை உருவாக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Copy Tracks"
 msgstr "டிராக்குகளை நகலெடுக்கவும்"
 
@@ -51574,15 +53342,6 @@ msgstr "மார்க்கரை நீக்கு"
 
 msgid "Delete marker for current frame from selected tracks"
 msgstr "தேர்ந்தெடுக்கப்பட்ட தடங்களிலிருந்து தற்போதைய சட்டத்திற்கான மார்க்கரை நீக்கு"
-
-
-msgctxt "Operator"
-msgid "Delete Proxy"
-msgstr "ப்ராக்சியை நீக்கு"
-
-
-msgid "Delete movie clip proxy files from the hard drive"
-msgstr "வன்விலிருந்து மூவி கிளிப் பதிலாள் கோப்புகளை நீக்கு"
 
 
 msgctxt "Operator"
@@ -51687,15 +53446,6 @@ msgstr "தற்போதுள்ள தேர்வை அழிப்பத�
 
 msgid "Mouse location to select channel"
 msgstr "சேனலைத் தேர்ந்தெடுக்க சுட்டி இருப்பிடம்"
-
-
-msgctxt "Operator"
-msgid "Filter Tracks"
-msgstr "தடங்களை வடிகட்டவும்"
-
-
-msgid "Filter tracks which has weirdly looking spikes in motion curves"
-msgstr "இயக்க வளைவுகளில் கூர்முனைகளை வித்தியாசமாகப் பார்க்கும் தடங்களை வடிகட்டவும்"
 
 
 msgid "Track Threshold"
@@ -52069,11 +53819,6 @@ msgstr "லாசோ தேர்வைப் பயன்படுத்தி 
 
 
 msgctxt "Operator"
-msgid "Set Active Clip"
-msgstr "செயலில் உள்ள கிளிப்பை அமைக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Set Axis"
 msgstr "அச்சு அமை"
 
@@ -52177,24 +53922,6 @@ msgstr "அமைக்க கீஃப்ரேம்"
 
 
 msgctxt "Operator"
-msgid "Set as Background"
-msgstr "பின்னணியாக அமைக்கவும்"
-
-
-msgid "Set current movie clip as a camera background in 3D Viewport (works only when a 3D Viewport is visible)"
-msgstr "தற்போதைய மூவி கிளிப்பை 3 டி வியூபோர்ட்டில் கேமரா பின்னணியாக அமைக்கவும் (3 டி வியூபோர்ட் தெரியும் போது மட்டுமே வேலை செய்கிறது)"
-
-
-msgctxt "Operator"
-msgid "Setup Tracking Scene"
-msgstr "அமைவு கண்காணிப்பு காட்சி"
-
-
-msgid "Prepare scene for compositing 3D objects into this footage"
-msgstr "இந்த காட்சிகளில் 3d பொருள்களைத் தொகுப்பதற்கான காட்சியைத் தயாரிக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Slide Marker"
 msgstr "ச்லைடு மார்க்கர்"
 
@@ -52280,15 +54007,6 @@ msgstr "மொழிபெயர்ப்பு உறுதிப்படு�
 
 
 msgctxt "Operator"
-msgid "Add Track Color Preset"
-msgstr "ட்ராக் கலர் முன்னமைவு சேர்க்கவும்"
-
-
-msgid "Add or remove a Clip Track Color Preset"
-msgstr "கிளிப் டிராக் வண்ண முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
-
-
-msgctxt "Operator"
 msgid "Copy Color"
 msgstr "வண்ணத்தை நகலெடுக்கவும்"
 
@@ -52315,33 +54033,6 @@ msgstr "ஒற்றை படத்தை விட பட வரிசைய�
 
 
 msgctxt "Operator"
-msgid "Track Settings as Default"
-msgstr "அமைப்புகளை இயல்புநிலையாகக் கண்காணிக்கவும்"
-
-
-msgid "Copy tracking settings from active track to default settings"
-msgstr "கண்காணிப்பு அமைப்புகளை செயலில் தடத்திலிருந்து இயல்புநிலை அமைப்புகளுக்கு நகலெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Copy Track Settings"
-msgstr "டிராக் அமைப்புகளை நகலெடுக்கவும்"
-
-
-msgid "Copy tracking settings from active track to selected tracks"
-msgstr "கண்காணிப்பு அமைப்புகளை ஆக்டிவ் டிராக்கிலிருந்து தேர்ந்தெடுக்கப்பட்ட தடங்களுக்கு நகலெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Link Empty to Track"
-msgstr "கண்காணிக்க காலியாக இணைப்பு"
-
-
-msgid "Create an Empty object which will be copying movement of active track"
-msgstr "செயலில் உள்ள பாதையின் இயக்கத்தை நகலெடுக்கும் ஒரு வெற்று பொருளை உருவாக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Add Tracking Object"
 msgstr "கண்காணிப்பு பொருளைச் சேர்க்கவும்"
 
@@ -52357,15 +54048,6 @@ msgstr "கண்காணிப்பு பொருளை அகற்று"
 
 msgid "Remove object for tracking"
 msgstr "கண்காணிப்பதற்கான பொருளை அகற்று"
-
-
-msgctxt "Operator"
-msgid "Add Tracking Settings Preset"
-msgstr "கண்காணிப்பு அமைப்புகள் முன்னமைக்கப்பட்டவை"
-
-
-msgid "Add or remove a motion tracking settings preset"
-msgstr "முன்னமைக்கப்பட்ட ஒரு இயக்க கண்காணிப்பு அமைப்புகளைச் சேர்க்கவும் அல்லது அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -52481,15 +54163,6 @@ msgstr "சூம் விகிதம், 1.0 என்பது 1: 1, அத�
 
 
 msgctxt "Operator"
-msgid "Add Cloth Preset"
-msgstr "துணி முன்னமைவு சேர்க்கவும்"
-
-
-msgid "Add or remove a Cloth Preset"
-msgstr "ஒரு துணி முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
-
-
-msgctxt "Operator"
 msgid "Create New Collection"
 msgstr "புதிய தொகுப்பை உருவாக்கவும்"
 
@@ -52556,24 +54229,6 @@ msgstr "எல்லா சேகரிப்புகளிலிருந்�
 
 
 msgctxt "Operator"
-msgid "Console Autocomplete"
-msgstr "கன்சோல் தன்னியக்கவியல்"
-
-
-msgid "Evaluate the namespace up until the cursor and give a list of options or complete the name if there is only one"
-msgstr "கர்சர் வரை பெயர்வெளியை மதிப்பிட்டு, விருப்பங்களின் பட்டியலைக் கொடுங்கள் அல்லது ஒன்று இருந்தால் பெயரை முடிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Console Banner"
-msgstr "கன்சோல் பேனர்"
-
-
-msgid "Print a message when the terminal initializes"
-msgstr "முனையம் துவக்கும்போது ஒரு செய்தியை அச்சிடுங்கள்"
-
-
-msgctxt "Operator"
 msgid "Clear All"
 msgstr "அனைத்தையும் அழி"
 
@@ -52625,15 +54280,6 @@ msgstr "நகலெடுத்த பிறகு தேர்வை நீக
 
 
 msgctxt "Operator"
-msgid "Copy to Clipboard (as Script)"
-msgstr "கிளிப்போர்டுக்கு நகலெடுக்கவும் (ச்கிரிப்டாக)"
-
-
-msgid "Copy the console contents for use in a script"
-msgstr "கைஉரைடில் பயன்படுத்த கன்சோல் உள்ளடக்கங்களை நகலெடுக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Delete"
 msgstr "அழி"
 
@@ -52660,15 +54306,6 @@ msgstr "அடுத்த சொல்"
 
 msgid "Previous Word"
 msgstr "முந்தைய சொல்"
-
-
-msgctxt "Operator"
-msgid "Console Execute"
-msgstr "கன்சோல் செயல்படுத்தவும்"
-
-
-msgid "Execute the current console line as a Python expression"
-msgstr "தற்போதைய கன்சோல் வரியை பைதான் வெளிப்பாடாக இயக்கவும்"
 
 
 msgctxt "Operator"
@@ -52734,15 +54371,6 @@ msgstr "செருகவும்"
 
 msgid "Insert text at cursor position"
 msgstr "கர்சர் நிலையில் உரையைச் செருகவும்"
-
-
-msgctxt "Operator"
-msgid "Console Language"
-msgstr "கன்சோல் மொழி"
-
-
-msgid "Set the current language for this console"
-msgstr "இந்த கன்சோலுக்கான தற்போதைய மொழியை அமைக்கவும்"
 
 
 msgctxt "Python console"
@@ -52837,15 +54465,6 @@ msgstr "வரி தொடக்கத்திலிருந்து 4 இ�
 
 
 msgctxt "Operator"
-msgid "Add Target"
-msgstr "இலக்கைச் சேர்க்கவும்"
-
-
-msgid "Add a target to the constraint"
-msgstr "தடைக்கு ஒரு இலக்கைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
 msgid "Apply Constraint"
 msgstr "கட்டுப்பாட்டைப் பயன்படுத்துங்கள்"
 
@@ -52928,15 +54547,6 @@ msgstr "கட்டுப்பாட்டு அடுக்கிலிர�
 
 
 msgctxt "Operator"
-msgid "Disable and Keep Transform"
-msgstr "முடக்கு மற்றும் உருமாற்றத்தை வைக்கவும்"
-
-
-msgid "Set the influence of this constraint to zero while trying to maintain the object's transformation. Other active constraints can still influence the final transformation"
-msgstr "பொருளின் மாற்றத்தை பராமரிக்க முயற்சிக்கும்போது இந்த கட்டுப்பாட்டின் செல்வாக்கை பூச்சியமாக அமைக்கவும். பிற செயலில் உள்ள தடைகள் இன்னும் இறுதி மாற்றத்தை பாதிக்கும்"
-
-
-msgctxt "Operator"
 msgid "Auto Animate Path"
 msgstr "ஆட்டோ அனிமேட் பாதை"
 
@@ -52993,30 +54603,12 @@ msgid "Move constraint up in constraint stack"
 msgstr "கட்டுப்பாட்டு அடுக்கில் கட்டுப்பாட்டை நகர்த்தவும்"
 
 
-msgctxt "Operator"
-msgid "Normalize Weights"
-msgstr "எடைகளை இயல்பாக்குங்கள்"
-
-
-msgid "Normalize weights of all target bones"
-msgstr "அனைத்து இலக்கு எலும்புகளின் எடையை இயல்பாக்குங்கள்"
-
-
 msgid "Clear inverse correction for Object Solver constraint"
 msgstr "பொருள் தீர்வி கட்டுப்பாட்டுக்கு தலைகீழ் திருத்தம்"
 
 
 msgid "Set inverse correction for Object Solver constraint"
 msgstr "பொருள் தீர்வி கட்டுப்பாட்டுக்கு தலைகீழ் திருத்தம் அமைக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Remove Target"
-msgstr "இலக்கை அகற்று"
-
-
-msgid "Remove the target from the constraint"
-msgstr "கட்டுப்பாட்டிலிருந்து இலக்கை அகற்று"
 
 
 msgctxt "Operator"
@@ -53923,15 +55515,6 @@ msgid "Location to add new vertex at"
 msgstr "புதிய வெர்டெக்சைச் சேர்க்க இடம்"
 
 
-msgctxt "Operator"
-msgid "Denoise Animation"
-msgstr "டெனோயிச் அனிமேசன்"
-
-
-msgid "Denoise rendered animation sequence using current scene and view layer settings. Requires denoising data passes and output to OpenEXR multilayer files"
-msgstr "தற்போதைய காட்சி மற்றும் பார்வை அடுக்கு அமைப்புகளைப் பயன்படுத்தி டெனோயிச் அனிமேசன் வரிசையை வழங்கியது. openexr மல்டிலேயர் கோப்புகளுக்கு தரவு பாச்கள் மற்றும் வெளியீட்டை டெனோயிங் செய்ய வேண்டும்"
-
-
 msgid "Input Filepath"
 msgstr "உள்ளீட்டு filepath"
 
@@ -53948,30 +55531,12 @@ msgid "If not specified, renders will be denoised in-place"
 msgstr "குறிப்பிடப்படாவிட்டால், ரெண்டர்கள் இடத்தில் மறுக்கப்படும்"
 
 
-msgctxt "Operator"
-msgid "Merge Images"
-msgstr "படங்களை ஒன்றிணைக்கவும்"
-
-
-msgid "Combine OpenEXR multi-layer images rendered with different sample ranges into one image with reduced noise"
-msgstr "வெவ்வேறு மாதிரி வரம்புகளுடன் வழங்கப்பட்ட openexr மல்டி-லேயர் படங்களை ஒரு படமாக குறைத்த சத்தத்துடன் இணைக்கவும்"
-
-
 msgid "File path for image to merge"
 msgstr "படம் ஒன்றிணைக்க கோப்பு பாதை"
 
 
 msgid "File path for merged image"
 msgstr "இணைக்கப்பட்ட படத்திற்கான கோப்பு பாதை"
-
-
-msgctxt "Operator"
-msgid "Use Nodes"
-msgstr "முனைகளைப் பயன்படுத்துங்கள்"
-
-
-msgid "Enable nodes on a material, world or light"
-msgstr "ஒரு மூலப்பொருள், உலகம் அல்லது ஒளியில் முனைகளை இயக்கவும்"
 
 
 msgctxt "Operator"
@@ -54143,15 +55708,6 @@ msgid "Undo and redo previous action"
 msgstr "முந்தைய செயலை செயல்தவிர்க்கவும் மீண்டும் செய்யவும்"
 
 
-msgctxt "Operator"
-msgid "Export BVH"
-msgstr "ஏற்றுமதி பி.வி.எச்"
-
-
-msgid "Save a BVH motion capture file from an armature"
-msgstr "ஒரு ஆர்மேச்சரிலிருந்து பி.வி.எச் மோசன் பிடிப்பு கோப்பை சேமிக்கவும்"
-
-
 msgid "Filepath used for exporting the file"
 msgstr "கோப்பை ஏற்றுமதி செய்ய filepath பயன்படுத்தப்படுகிறது"
 
@@ -54234,15 +55790,6 @@ msgstr "euler (zyx)"
 
 msgid "Convert rotations to euler ZYX"
 msgstr "சுழற்சிகளை யூலர் சைக்சாக மாற்றவும்"
-
-
-msgctxt "Operator"
-msgid "Export FBX"
-msgstr "fbx ஏற்றுமதி"
-
-
-msgid "Write a FBX file"
-msgstr "ஒரு fbx கோப்பை எழுதுங்கள்"
 
 
 msgid "Add Leaf Bones"
@@ -54703,15 +56250,6 @@ msgstr "புலப்படும் பொருள்கள்"
 
 msgid "Export visible objects only"
 msgstr "புலப்படும் பொருள்களை மட்டுமே ஏற்றுமதி செய்யுங்கள்"
-
-
-msgctxt "Operator"
-msgid "Export glTF 2.0"
-msgstr "gltf 2.0 ஏற்றுமதி"
-
-
-msgid "Export scene as glTF 2.0 file"
-msgstr "gltf 2.0 கோப்பாக காட்சியை ஏற்றுமதி செய்யுங்கள்"
 
 
 msgid "Filter Actions"
@@ -56153,15 +57691,6 @@ msgstr "இடைநிறுத்தம் சுட்டுக்கொள�
 
 msgid "Pause Bake"
 msgstr "இடைநிறுத்தம் சுட்டுக்கொள்ளுங்கள்"
-
-
-msgctxt "Operator"
-msgid "Add Fluid Preset"
-msgstr "திரவ முன்னமைவைச் சேர்க்கவும்"
-
-
-msgid "Add or remove a Fluid Preset"
-msgstr "ஒரு திரவ முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -58663,15 +60192,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட பக்க�
 
 
 msgctxt "Operator"
-msgid "Flip Colors"
-msgstr "வண்ணங்களை புரட்டவும்"
-
-
-msgid "Switch tint colors"
-msgstr "சாயல் வண்ணங்களை மாற்றவும்"
-
-
-msgctxt "Operator"
 msgid "Trace Image to Grease Pencil"
 msgstr "பென்சிலுக்கு கிரீச் செய்ய படத்தைக் கண்டறியவும்"
 
@@ -60199,15 +61719,6 @@ msgstr "தலைகீழாக சுழற்சி"
 
 
 msgctxt "Operator"
-msgid "Image Edit Externally"
-msgstr "படத் திருத்து வெளிப்புறமாக"
-
-
-msgid "Edit image in an external application"
-msgstr "வெளிப்புற பயன்பாட்டில் படத்தைத் திருத்தவும்"
-
-
-msgctxt "Operator"
 msgid "Browse Image"
 msgstr "படத்தை உலாவுக"
 
@@ -60360,24 +61871,6 @@ msgstr "படத்தை பொதி செய்யுங்கள்"
 
 msgid "Pack an image as embedded data into the .blend file"
 msgstr ".கலப்பு கோப்பில் உட்பொதிக்கப்பட்ட தரவுகளாக ஒரு படத்தை அடைக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Project Apply"
-msgstr "திட்ட பொருந்தும்"
-
-
-msgid "Project edited image back onto the object"
-msgstr "திட்டம் திருத்தப்பட்ட படத்தை மீண்டும் பொருளின் மீது"
-
-
-msgctxt "Operator"
-msgid "Project Edit"
-msgstr "திட்டத் திருத்து"
-
-
-msgid "Edit a snapshot of the 3D Viewport in an external image editor"
-msgstr "வெளிப்புற பட திருத்தியில் 3d வியாபோர்ட்டின் ச்னாப்சாட்டைத் திருத்தவும்"
 
 
 msgctxt "Operator"
@@ -60695,15 +62188,6 @@ msgid "Set zoom ratio of the view"
 msgstr "பார்வையின் சூம் விகிதத்தை அமைக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Import BVH"
-msgstr "பி.வி.எச் இறக்குமதி"
-
-
-msgid "Load a BVH motion capture file"
-msgstr "பி.வி.எச் மோசன் பிடிப்பு கோப்பை ஏற்றவும்"
-
-
 msgid "Starting frame for the animation"
 msgstr "அனிமேசனுக்கான தொடக்க சட்டகம்"
 
@@ -60742,24 +62226,6 @@ msgstr "அளவிலான எஃப்பிஎச்"
 
 msgid "Scale the framerate from the BVH to the current scenes, otherwise each BVH frame maps directly to a Blender frame"
 msgstr "பிவிஎச் முதல் தற்போதைய காட்சிகளுக்கு பிரேம்ரேட்டை அளவிடவும், இல்லையெனில் ஒவ்வொரு பிவிஎச் பிரேம் வரைபடங்களையும் நேரடியாக ஒரு கலப்பான் சட்டகத்திற்கு"
-
-
-msgctxt "Operator"
-msgid "Import SVG"
-msgstr "இறக்குமதி எச்விசி"
-
-
-msgid "Load a SVG file"
-msgstr "ஒரு எச்விசி கோப்பை ஏற்றவும்"
-
-
-msgctxt "Operator"
-msgid "Import FBX"
-msgstr "fbx ஐ இறக்குமதி செய்க"
-
-
-msgid "Load a FBX file"
-msgstr "ஒரு fbx கோப்பை ஏற்றவும்"
 
 
 msgid "Animation Offset"
@@ -60896,15 +62362,6 @@ msgstr "உட்பிரிவு தரவு"
 
 msgid "Import FBX subdivision information as subdivision surface modifiers"
 msgstr "fbx துணைப்பிரிவு தகவல்களை உட்பிரிவு மேற்பரப்பு மாற்றிகளாக இறக்குமதி செய்யுங்கள்"
-
-
-msgctxt "Operator"
-msgid "Import glTF 2.0"
-msgstr "gltf 2.0 ஐ இறக்குமதி செய்க"
-
-
-msgid "Load a glTF 2.0 file"
-msgstr "ஒரு gltf 2.0 கோப்பை ஏற்றவும்"
 
 
 msgid "Bone Dir"
@@ -62233,10 +63690,6 @@ msgid "Extrude Region and Move"
 msgstr "மண்டலம் மற்றும் நகர்த்து"
 
 
-msgid "Extrude region together along the average normal"
-msgstr "சராசரி இயல்புடன் ஒன்றாக மண்டலம்"
-
-
 msgid "Extrude Context"
 msgstr "எக்ச்ட்ரூட் சூழல்"
 
@@ -62277,10 +63730,6 @@ msgid "Extrude Individual Faces and Move"
 msgstr "தனிப்பட்ட முகங்களை வெளியேற்றி நகர்த்தவும்"
 
 
-msgid "Extrude each individual face separately along local normals"
-msgstr "ஒவ்வொரு தனிப்பட்ட முகத்தையும் உள்ளக இயல்புகளுடன் தனித்தனியாக வெளியேற்றவும்"
-
-
 msgid "Extrude Individual Faces"
 msgstr "தனிப்பட்ட முகங்களை வெளியேற்றும்"
 
@@ -62318,10 +63767,6 @@ msgstr "எக்ச்ட்ரூட் மண்டலம் மற்று�
 msgctxt "Operator"
 msgid "Extrude Region and Shrink/Fatten"
 msgstr "எக்ச்ட்ரூட் மண்டலம் மற்றும் சுருக்கம்/கொழுப்பு"
-
-
-msgid "Extrude region together along local normals"
-msgstr "உள்ளக இயல்புடன் ஒன்றாக மண்டலம்"
 
 
 msgctxt "Operator"
@@ -62412,15 +63857,6 @@ msgstr "முகங்களில் விளிம்புகளை வெ�
 
 msgid "Weld loose edges into faces (splitting them into new faces)"
 msgstr "தளர்வான விளிம்புகளை முகங்களில் வெல்ட் செய்யுங்கள் (அவற்றை புதிய முகங்களாகப் பிரித்தல்)"
-
-
-msgctxt "Operator"
-msgid "Copy Mirrored UV Coords"
-msgstr "நகலெடுக்கப்பட்ட புறஊதா கால்களை நகலெடுக்கவும்"
-
-
-msgid "Copy mirror UV coordinates on the X axis based on a mirrored mesh"
-msgstr "பிரதிபலித்த கண்ணி அடிப்படையில் ஃச் அச்சில் கண்ணாடி புறஊதா ஆயங்களை நகலெடுக்கவும்"
 
 
 msgid "Axis Direction"
@@ -63403,15 +64839,6 @@ msgid "Construct a filled planar mesh with 4 vertices"
 msgstr "நிரப்பப்பட்ட பிளானர் கண்ணி 4 செங்குத்துகளுடன் உருவாக்குங்கள்"
 
 
-msgctxt "Operator"
-msgid "Add Torus"
-msgstr "டோரச் சேர்க்கவும்"
-
-
-msgid "Construct a torus mesh"
-msgstr "டோரச் கண்ணி கட்டவும்"
-
-
 msgid "Exterior Radius"
 msgstr "வெளிப்புற ஆரம்"
 
@@ -63761,15 +65188,6 @@ msgstr "ஆரம்ப தேர்வோடு இணைக்கப்பட�
 
 
 msgctxt "Operator"
-msgid "Select Next Element"
-msgstr "அடுத்த உறுப்பைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select the next element (using selection order)"
-msgstr "அடுத்த உறுப்பைத் தேர்ந்தெடுக்கவும் (தேர்வு வரிசையைப் பயன்படுத்தி)"
-
-
-msgctxt "Operator"
 msgid "Select Non-Manifold"
 msgstr "பன்மடங்கு அல்லாத என்பதைத் தேர்ந்தெடுக்கவும்"
 
@@ -63808,15 +65226,6 @@ msgstr "கம்பி விளிம்புகள்"
 
 msgid "Deselect every Nth element starting from the active vertex, edge or face"
 msgstr "செயலில் உள்ள வெர்டெக்ச், எட்ச் அல்லது முகத்திலிருந்து தொடங்கும் ஒவ்வொரு nth உறுப்புகளையும் தேர்வு செய்யவும்"
-
-
-msgctxt "Operator"
-msgid "Select Previous Element"
-msgstr "முந்தைய உறுப்பைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select the previous element (using selection order)"
-msgstr "முந்தைய உறுப்பைத் தேர்ந்தெடுக்கவும் (தேர்வு வரிசையைப் பயன்படுத்தி)"
 
 
 msgid "Randomly select vertices"
@@ -64504,15 +65913,6 @@ msgid "Apply scaling of selected strips to their referenced Actions"
 msgstr "தேர்ந்தெடுக்கப்பட்ட கீற்றுகளின் அளவிடுதல் அவற்றின் குறிப்பிடப்பட்ட செயல்களுக்கு பயன்படுத்துங்கள்"
 
 
-msgctxt "Operator"
-msgid "Bake Action"
-msgstr "சுட்டுக்கொள்ளும் நடவடிக்கை"
-
-
-msgid "Bake all selected objects location/scale/rotation animation to an action"
-msgstr "தேர்ந்தெடுக்கப்பட்ட அனைத்து பொருள்களையும் ஒரு செயலுக்கு சுட்டுக்கொள்ளுங்கள்"
-
-
 msgctxt "Action"
 msgid "Bake Data"
 msgstr "தரவு சுட்டுக்கொள்ளவும்"
@@ -64965,15 +66365,6 @@ msgid "Add a material node to the current node editor"
 msgstr "தற்போதைய முனை திருத்தியில் மூலப்பொருள் முனையைச் சேர்க்கவும்"
 
 
-msgctxt "Operator"
-msgid "Add Node"
-msgstr "முனை சேர்க்கவும்"
-
-
-msgid "Add a node to the active tree"
-msgstr "செயலில் உள்ள மரத்தில் ஒரு முனை சேர்க்கவும்"
-
-
 msgid "Settings to be applied on the newly created node"
 msgstr "புதிதாக உருவாக்கப்பட்ட முனையில் பயன்படுத்தப்பட வேண்டிய அமைப்புகள்"
 
@@ -64999,15 +66390,6 @@ msgid "Add an object info node to the current node editor"
 msgstr "தற்போதைய முனை திருத்தியில் ஒரு பொருள் செய்தி முனையைச் சேர்க்கவும்"
 
 
-msgctxt "Operator"
-msgid "Add Repeat Zone"
-msgstr "மீண்டும் மீண்டும் மண்டலத்தைச் சேர்க்கவும்"
-
-
-msgid "Add a repeat zone that allows executing nodes a dynamic number of times"
-msgstr "முனைகளை இயக்க அனுமதிக்கும் மீண்டும் மீண்டும் மண்டலத்தைச் சேர்க்கவும்"
-
-
 msgid "Offset of nodes from the cursor when added"
 msgstr "சேர்க்கும்போது கர்சரிலிருந்து முனைகளின் ஆஃப்செட்"
 
@@ -65019,15 +66401,6 @@ msgstr "reroute ஐச் சேர்க்கவும்"
 
 msgid "Add a reroute node"
 msgstr "reroute முனையைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Simulation Zone"
-msgstr "உருவகப்படுத்துதல் மண்டலத்தைச் சேர்க்கவும்"
-
-
-msgid "Add simulation zone input and output nodes to the active tree"
-msgstr "செயலில் உள்ள மரத்தில் உருவகப்படுத்துதல் மண்டல உள்ளீடு மற்றும் வெளியீட்டு முனைகளைச் சேர்க்கவும்"
 
 
 msgctxt "Operator"
@@ -65109,15 +66482,6 @@ msgstr "உள் கிளிப்போர்டில் இருந்த�
 
 msgid "The 2D view location for the center of the new nodes, or unchanged if not set"
 msgstr "புதிய முனைகளின் மையத்திற்கான 2 டி பார்வை இடம், அல்லது அமைக்கப்படாவிட்டால் மாறாது"
-
-
-msgctxt "Operator"
-msgid "Collapse and Hide Unused Sockets"
-msgstr "பயன்படுத்தப்படாத சாக்கெட்டுகளை வீழ்த்தி மறைக்கவும்"
-
-
-msgid "Toggle collapsed nodes and hide unused sockets"
-msgstr "சரிந்த முனைகளை மாற்றி, பயன்படுத்தப்படாத சாக்கெட்டுகளை மறைக்கவும்"
 
 
 msgctxt "Operator"
@@ -65240,11 +66604,6 @@ msgid "Search for a node by name and focus and select it"
 msgstr "பெயர் மற்றும் கவனம் செலுத்துவதன் மூலம் ஒரு முனையைத் தேடி அதைத் தேர்ந்தெடுக்கவும்"
 
 
-msgctxt "Operator"
-msgid "glTF Material Output"
-msgstr "gltf மூலப்பொருள் வெளியீடு"
-
-
 msgid "Add a node to the active tree for glTF export"
 msgstr "gltf ஏற்றுமதிக்கு செயலில் உள்ள மரத்தில் ஒரு முனை சேர்க்கவும்"
 
@@ -65324,11 +66683,6 @@ msgid "Add Item"
 msgstr "உருப்படியைச் சேர்க்கவும்"
 
 
-msgctxt "Operator"
-msgid "Remove Item"
-msgstr "உருப்படியை அகற்று"
-
-
 msgid "Remove an item from the index switch"
 msgstr "குறியீட்டு சுவிட்சிலிருந்து ஒரு உருப்படியை அகற்று"
 
@@ -65342,30 +66696,8 @@ msgid "Automatically offset nodes on insertion"
 msgstr "செருகலில் முனைகளை தானாக ஈடுசெய்யவும்"
 
 
-msgctxt "Operator"
-msgid "Duplicate Item"
-msgstr "நகல் உருப்படி"
-
-
-msgid "Add a copy of the active item to the interface"
-msgstr "செயலில் உள்ள உருப்படியின் நகலை இடைமுகத்தில் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "New Item"
-msgstr "புதிய பொருள்"
-
-
-msgid "Add a new item to the interface"
-msgstr "இடைமுகத்தில் புதிய உருப்படியைச் சேர்க்கவும்"
-
-
 msgid "Type of the item to create"
 msgstr "உருவாக்க உருப்படியின் வகை"
-
-
-msgid "Remove active item from the interface"
-msgstr "இடைமுகத்திலிருந்து செயலில் உள்ள உருப்படியை அகற்று"
 
 
 msgctxt "Operator"
@@ -65510,33 +66842,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட முனை�
 
 
 msgctxt "Operator"
-msgid "Assign New Geometry Node Group"
-msgstr "புதிய வடிவியல் முனை குழுவை ஒதுக்குங்கள்"
-
-
-msgid "Create a new geometry node group and assign it to the active modifier"
-msgstr "ஒரு புதிய வடிவியல் முனை குழுவை உருவாக்கி, செயலில் மாற்றியமைப்பிற்கு ஒதுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "New Geometry Node Tool Group"
-msgstr "புதிய வடிவியல் முனை கருவி குழு"
-
-
-msgid "Create a new geometry node group for a tool"
-msgstr "ஒரு கருவிக்கு புதிய வடிவியல் முனை குழுவை உருவாக்கவும்"
-
-
-msgctxt "Operator"
-msgid "New Geometry Node Modifier"
-msgstr "புதிய வடிவியல் முனை மாற்றி"
-
-
-msgid "Create a new modifier with a new geometry node group"
-msgstr "புதிய வடிவியல் முனை குழுவுடன் புதிய மாற்றியமைப்பை உருவாக்கவும்"
-
-
-msgctxt "Operator"
 msgid "New Node Tree"
 msgstr "புதிய முனை மரம்"
 
@@ -65547,15 +66852,6 @@ msgstr "புதிய முனை மரத்தை உருவாக்க
 
 msgid "Tree Type"
 msgstr "மர வகை"
-
-
-msgctxt "Operator"
-msgid "Add Node Color Preset"
-msgstr "முனை வண்ண முன்னமைவு சேர்க்கவும்"
-
-
-msgid "Add or remove a Node Color Preset"
-msgstr "ஒரு முனை வண்ண முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
 
 
 msgid "Copy color to all selected nodes"
@@ -65760,15 +67056,6 @@ msgid "Move and Attach"
 msgstr "நகர்த்தவும் இணைக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Parent Node Tree"
-msgstr "பெற்றோர் முனை மரம்"
-
-
-msgid "Go to parent node tree"
-msgstr "பெற்றோர் முனை மரத்திற்குச் செல்லுங்கள்"
-
-
 msgid "Resize view so you can see all nodes"
 msgstr "மறுஅளவிடுங்கள், எனவே நீங்கள் எல்லா முனைகளையும் காணலாம்"
 
@@ -65795,11 +67082,6 @@ msgid "Add an object to the scene"
 msgstr "காட்சியில் ஒரு பொருளைச் சேர்க்கவும்"
 
 
-msgctxt "Operator"
-msgid "Add Modifier"
-msgstr "மாற்றியமைப்பாளரைச் சேர்க்கவும்"
-
-
 msgid "Add named object"
 msgstr "பெயரிடப்பட்ட பொருளைச் சேர்க்கவும்"
 
@@ -65822,15 +67104,6 @@ msgstr "y- ஒருங்கிணைப்பு (திரை இடம்) �
 
 msgid "Duplicate object but not object data, linking to the original data"
 msgstr "நகல் பொருள் ஆனால் பொருள் தரவு அல்ல, அசல் தரவுடன் இணைகிறது"
-
-
-msgctxt "Operator"
-msgid "Align Objects"
-msgstr "பொருள்களை சீரமைக்கவும்"
-
-
-msgid "Align objects"
-msgstr "பொருள்களை சீரமைக்கவும்"
 
 
 msgid "Align to axis"
@@ -65890,30 +67163,12 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட பொரு�
 
 
 msgctxt "Operator"
-msgid "Animated Transforms to Deltas"
-msgstr "அனிமேசன் மாற்றங்கள் டெல்டாசுக்கு"
-
-
-msgid "Convert object animation for normal transforms to delta transforms"
-msgstr "இயல்பான மாற்றங்களுக்கான பொருள் அனிமேசனை டெல்டா உருமாற்றங்களுக்கு மாற்றவும்"
-
-
-msgctxt "Operator"
 msgid "Add Armature"
 msgstr "ஆர்மேச்சரைச் சேர்க்கவும்"
 
 
 msgid "Add an armature object to the scene"
 msgstr "காட்சிக்கு ஒரு ஆர்மேச்சர் பொருளைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Assign Custom Property Values as Default"
-msgstr "தனிப்பயன் சொத்து மதிப்புகளை இயல்புநிலையாக ஒதுக்குங்கள்"
-
-
-msgid "Assign the current values of custom properties as their defaults, for use as part of the rest pose state in NLA track mixing"
-msgstr "தனிப்பயன் பண்புகளின் தற்போதைய மதிப்புகளை அவற்றின் இயல்புநிலையாக ஒதுக்குங்கள், என்எல்ஏ டிராக் கலவையில் மீதமுள்ள ஒரு பகுதியாக பயன்படுத்த"
 
 
 msgid "Process bone properties"
@@ -66150,11 +67405,6 @@ msgstr "மதிப்பிடப்பட்ட வளைவு தரவு�
 
 msgid "Grease Pencil from Curve or Mesh objects"
 msgstr "வளைவு அல்லது கண்ணி பொருள்களிலிருந்து பசை எழுதுகோல்"
-
-
-msgctxt "Operator"
-msgid "Copy Global Transform"
-msgstr "உலகளாவிய உருமாற்றத்தை நகலெடுக்கவும்"
 
 
 msgid "Copies the matrix of the currently active object or pose bone to the clipboard. Uses world-space matrices"
@@ -66462,15 +67712,6 @@ msgstr "உள்ளீட்டு பெயர்"
 
 
 msgctxt "Operator"
-msgid "Move to Nodes"
-msgstr "முனைகளுக்கு நகர்த்தவும்"
-
-
-msgid "Move inputs and outputs from in the modifier to a new node group"
-msgstr "மாற்றியமைப்பில் இருந்து புதிய முனை குழுவிற்கு உள்ளீடுகள் மற்றும் வெளியீடுகளை நகர்த்தவும்"
-
-
-msgctxt "Operator"
 msgid "Add Grease Pencil"
 msgstr "பசை எழுதுகோல் சேர்க்கவும்"
 
@@ -66574,15 +67815,6 @@ msgstr "தெரிவுநிலையை மாற்றவும்"
 
 
 msgctxt "Operator"
-msgid "Clear All Restrict Render"
-msgstr "அனைத்தையும் கட்டுப்படுத்துங்கள்"
-
-
-msgid "Reveal all render objects by setting the hide render flag"
-msgstr "மறை வழங்குதல் கொடியை அமைப்பதன் மூலம் அனைத்து வழங்குதல் பொருட்களையும் வெளிப்படுத்துங்கள்"
-
-
-msgctxt "Operator"
 msgid "Show Hidden Objects"
 msgstr "மறைக்கப்பட்ட பொருட்களைக் காட்டு"
 
@@ -66680,42 +67912,6 @@ msgstr "கண்ணி மீது பாதிக்கப்பட்ட ச
 
 
 msgctxt "Operator"
-msgid "Set Offset from Cursor"
-msgstr "கர்சரிலிருந்து ஆஃப்செட் அமைக்கவும்"
-
-
-msgid "Set offset used for collection instances based on cursor position"
-msgstr "கர்சர் நிலையின் அடிப்படையில் சேகரிப்பு நிகழ்வுகளுக்கு பயன்படுத்தப்படும் ஆஃப்செட்டை அமைக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Set Offset from Object"
-msgstr "பொருளிலிருந்து ஆஃப்செட் அமைக்கவும்"
-
-
-msgid "Set offset used for collection instances based on the active object position"
-msgstr "செயலில் உள்ள பொருள் நிலையின் அடிப்படையில் சேகரிப்பு நிகழ்வுகளுக்கு பயன்படுத்தப்படும் ஆஃப்செட்டை அமைக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Set Cursor to Offset"
-msgstr "கர்சரை ஈடுசெய்ய அமைக்கவும்"
-
-
-msgid "Set cursor position to the offset used for collection instances"
-msgstr "சேகரிப்பு நிகழ்வுகளுக்குப் பயன்படுத்தப்படும் ஆஃப்செட்டுக்கு கர்சர் நிலையை அமைக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Restrict Render Unselected"
-msgstr "வழங்குதல் தேர்வு செய்யப்படாமல் கட்டுப்படுத்துங்கள்"
-
-
-msgid "Hide unselected render objects of same type as active by setting the hide render flag"
-msgstr "மறைக்கப்படாத வழங்குதல் கொடியை அமைப்பதன் மூலம் செயலில் உள்ள அதே வகையின் தேர்வு செய்யப்படாத வழங்குதல் பொருள்களை மறைக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Join"
 msgstr "சேர"
 
@@ -66731,15 +67927,6 @@ msgstr "வடிவங்களாக சேரவும்"
 
 msgid "Copy the current resulting shape of another selected object to this one"
 msgstr "தேர்ந்தெடுக்கப்பட்ட மற்றொரு பொருளின் தற்போதைய வடிவத்தை இதில் நகலெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Transfer UV Maps"
-msgstr "uv வரைபடங்களை மாற்றவும்"
-
-
-msgid "Transfer UV Maps from active to selected objects (needs matching geometry)"
-msgstr "புறஊதா வரைபடங்களை செயலில் இருந்து தேர்ந்தெடுக்கப்பட்ட பொருள்களுக்கு மாற்றவும் (பொருந்தும் வடிவியல் தேவை)"
 
 
 msgctxt "Operator"
@@ -66950,15 +68137,6 @@ msgstr "தெளிவான டெல்டா"
 
 msgid "Clear delta location in addition to clearing the normal location transform"
 msgstr "சாதாரண இருப்பிட உருமாற்றத்தை அழிப்பதோடு கூடுதலாக டெல்டா இருப்பிடத்தை அழிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Make Instance Face"
-msgstr "உதாரணமாக முகம் செய்யுங்கள்"
-
-
-msgid "Convert objects into instanced faces"
-msgstr "பொருட்களை நிறுவப்பட்ட முகங்களாக மாற்றவும்"
 
 
 msgctxt "Operator"
@@ -67637,11 +68815,6 @@ msgid "Remove the selected particle system"
 msgstr "தேர்ந்தெடுக்கப்பட்ட துகள் அமைப்பை அகற்று"
 
 
-msgctxt "Operator"
-msgid "Paste Global Transform"
-msgstr "உலகளாவிய உருமாற்றத்தை ஒட்டவும்"
-
-
 msgid "Pastes the matrix from the clipboard to the currently active pose bone or object. Uses world-space matrices"
 msgstr "கிளிப்போர்டிலிருந்து தற்போது செயலில் உள்ள போச் எலும்பு அல்லது பொருளுக்கு மேட்ரிக்சை ஒட்டுகிறது. உலக-விண்வெளி மெட்ரிக்குகளைப் பயன்படுத்துகிறது"
 
@@ -67857,15 +69030,6 @@ msgid "Try to preserve sharp features on the mesh"
 msgstr "கண்ணி மீது கூர்மையான அம்சங்களை பாதுகாக்க முயற்சிக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Quick Explode"
-msgstr "விரைவான வெடிப்பு"
-
-
-msgid "Make selected objects explode"
-msgstr "தேர்ந்தெடுக்கப்பட்ட பொருள்கள் வெடிக்கச் செய்யுங்கள்"
-
-
 msgid "Number of Pieces"
 msgstr "துண்டுகளின் எண்ணிக்கை"
 
@@ -67880,15 +69044,6 @@ msgstr "வெடிக்கும் நடை"
 
 msgid "Outwards Velocity"
 msgstr "வெளிப்புற விரைவு"
-
-
-msgctxt "Operator"
-msgid "Quick Fur"
-msgstr "விரைவான ஃபர்"
-
-
-msgid "Add a fur setup to the selected objects"
-msgstr "தேர்ந்தெடுக்கப்பட்ட பொருள்களுக்கு ஒரு ஃபர் அமைப்பைச் சேர்க்கவும்"
 
 
 msgid "Apply Hair Guides"
@@ -67907,30 +69062,12 @@ msgid "View Percentage"
 msgstr "சதவீதத்தைக் காண்க"
 
 
-msgctxt "Operator"
-msgid "Quick Liquid"
-msgstr "விரைவான திரவ"
-
-
-msgid "Make selected objects liquid"
-msgstr "தேர்ந்தெடுக்கப்பட்ட பொருள்களை திரவமாக்குங்கள்"
-
-
 msgid "Render Liquid Objects"
 msgstr "திரவ பொருள்களை வழங்கவும்"
 
 
 msgid "Keep the liquid objects visible during rendering"
 msgstr "வழங்குதல் போது திரவ பொருட்களைத் தெரியும்"
-
-
-msgctxt "Operator"
-msgid "Quick Smoke"
-msgstr "விரைவான புகை"
-
-
-msgid "Use selected objects as smoke emitters"
-msgstr "தேர்ந்தெடுக்கப்பட்ட பொருட்களை புகை உமிழ்ப்பவர்களாக பயன்படுத்தவும்"
 
 
 msgid "Render Smoke Objects"
@@ -67947,15 +69084,6 @@ msgstr "புகை நடை"
 
 msgid "Smoke & Fire"
 msgstr "புகை & தீ"
-
-
-msgctxt "Operator"
-msgid "Randomize Transform"
-msgstr "உருமாற்றத்தை சீரற்றதாக்குங்கள்"
-
-
-msgid "Randomize objects location, rotation, and scale"
-msgstr "பொருள்களின் இருப்பிடம், சுழற்சி மற்றும் அளவிலான சீரற்றவை"
 
 
 msgid "Maximum distance the objects can spread over each axis"
@@ -68024,11 +69152,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட உள்ள�
 
 
 msgctxt "Operator"
-msgid "New"
-msgstr "புதிய"
-
-
-msgctxt "Operator"
 msgid "Clear Rotation"
 msgstr "தெளிவான சுழற்சி"
 
@@ -68060,15 +69183,6 @@ msgstr "வகை மூலம் தேர்ந்தெடுக்கவு�
 
 msgid "Select all visible objects that are of a type"
 msgstr "ஒரு வகையைச் சேர்ந்த அனைத்து புலப்படும் பொருட்களையும் தேர்ந்தெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Select Camera"
-msgstr "கேமராவைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select the active camera"
-msgstr "செயலில் உள்ள கேமராவைத் தேர்ந்தெடுக்கவும்"
 
 
 msgid "Select all visible objects grouped by various properties"
@@ -68107,10 +69221,6 @@ msgid "Matching light types"
 msgstr "பொருந்தும் ஒளி வகைகள்"
 
 
-msgid "Select object relative to the active object's position in the hierarchy"
-msgstr "வரிசைமுறையில் செயலில் உள்ள பொருளின் நிலைக்கு தொடர்புடைய பொருளைத் தேர்ந்தெடுக்கவும்"
-
-
 msgid "Direction to select in the hierarchy"
 msgstr "வரிசைமுறையில் தேர்ந்தெடுக்க திசை"
 
@@ -68141,15 +69251,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட பொரு�
 
 msgid "Select connected parent/child objects"
 msgstr "இணைக்கப்பட்ட பெற்றோர்/குழந்தை பொருள்களைத் தேர்ந்தெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Select Pattern"
-msgstr "வடிவத்தைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select objects matching a naming pattern"
-msgstr "பெயரிடும் வடிவத்துடன் பொருந்தக்கூடிய பொருள்களைத் தேர்ந்தெடுக்கவும்"
 
 
 msgid "Case Sensitive"
@@ -68452,15 +69553,6 @@ msgid "Resets the timing for absolute shape keys"
 msgstr "முழுமையான வடிவ விசைகளுக்கான நேரத்தை மீட்டமைக்கிறது"
 
 
-msgctxt "Operator"
-msgid "Transfer Shape Key"
-msgstr "வடிவ விசையை மாற்றவும்"
-
-
-msgid "Copy the active shape key of another selected object to this one"
-msgstr "தேர்ந்தெடுக்கப்பட்ட மற்றொரு பொருளின் செயலில் உள்ள வடிவ விசையை இதில் நகலெடுக்கவும்"
-
-
 msgid "Transformation Mode"
 msgstr "உருமாற்ற முறை"
 
@@ -68593,15 +69685,6 @@ msgid "Add a speaker object to the scene"
 msgstr "காட்சிக்கு ஒரு பேச்சாளர் பொருளைச் சேர்க்கவும்"
 
 
-msgctxt "Operator"
-msgid "Subdivision Set"
-msgstr "உட்பிரிவு தொகுப்பு"
-
-
-msgid "Sets a Subdivision Surface level (1 to 5)"
-msgstr "ஒரு துணைப்பிரிவு மேற்பரப்பு அளவை அமைக்கிறது (1 முதல் 5 வரை)"
-
-
 msgid "Apply the subdivision surface level as an offset relative to the current level"
 msgstr "தற்போதைய நிலைக்கு ஒப்பிடும்போது துணைப்பிரிவு மேற்பரப்பு அளவை ஆஃப்செட்டாகப் பயன்படுத்துங்கள்"
 
@@ -68728,15 +69811,6 @@ msgstr "அமர்வு uuid"
 
 msgid "Session UUID of the object to place (uses the active object when this and 'name' are unset)"
 msgstr "இடத்திற்கு பொருளின் அமர்வு uuid (இது மற்றும் 'பெயர்' அமைக்கப்படும்போது செயலில் உள்ள பொருளைப் பயன்படுத்துகிறது)"
-
-
-msgctxt "Operator"
-msgid "Transforms to Deltas"
-msgstr "டெல்டாக்களுக்கு மாற்றுகிறது"
-
-
-msgid "Convert normal object transforms to delta transforms, any existing delta transforms will be included as well"
-msgstr "சாதாரண பொருள் மாற்றங்களை டெல்டா உருமாற்றங்களுக்கு மாற்றவும், தற்போதுள்ள எந்த டெல்டா மாற்றங்களும் சேர்க்கப்படும்"
 
 
 msgid "Which transforms to transfer"
@@ -70470,15 +71544,6 @@ msgid "Select Vertices connected to existing selection"
 msgstr "இருக்கும் தேர்வுடன் இணைக்கப்பட்ட செங்குத்துகளைத் தேர்ந்தெடுக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Dirty Vertex Colors"
-msgstr "அழுக்கு வெர்டெக்ச் வண்ணங்கள்"
-
-
-msgid "Generate a dirt map gradient based on cavity"
-msgstr "குழியின் அடிப்படையில் ஒரு அழுக்கு வரைபட சாய்வை உருவாக்குங்கள்"
-
-
 msgid "Blur Iterations"
 msgstr "மங்கலான மறு செய்கைகள்"
 
@@ -70889,15 +71954,6 @@ msgid "Undo all edition performed on the particle system"
 msgstr "துகள் அமைப்பில் நிகழ்த்தப்படும் அனைத்து பதிப்பையும் செயல்தவிர்க்கவும்"
 
 
-msgctxt "Operator"
-msgid "Add Hair Dynamics Preset"
-msgstr "முடி இயக்கவியல் முன்னமைவு சேர்க்கவும்"
-
-
-msgid "Add or remove a Hair Dynamics Preset"
-msgstr "முடி இயக்கவியல் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
-
-
 msgid "Hide selected particles"
 msgstr "தேர்ந்தெடுக்கப்பட்ட துகள்களை மறைக்கவும்"
 
@@ -71115,11 +72171,6 @@ msgid "Blend the given Pose Action to the rig"
 msgstr "கொடுக்கப்பட்ட போச் செயலை ரிக்கில் கலக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Convert Legacy Pose Library"
-msgstr "மரபு போச் நூலகத்தை மாற்றவும்"
-
-
 msgid "Create a pose asset for each pose marker in this legacy pose library data-block"
 msgstr "இந்த மரபில் ஒவ்வொரு போச் மார்க்கருக்கும் ஒரு போச் சொத்தை உருவாக்கவும் நூலக தரவு-தடுப்பு"
 
@@ -71128,18 +72179,8 @@ msgid "Create a pose asset for each pose marker in the current action"
 msgstr "தற்போதைய செயலில் ஒவ்வொரு போச் மார்க்கருக்கும் ஒரு போச் சொத்தை உருவாக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Copy Pose as Asset"
-msgstr "நகல் போச் சொத்தாக"
-
-
 msgid "Create a new pose asset on the clipboard, to be pasted into an Asset Browser"
 msgstr "கிளிப்போர்டில் ஒரு புதிய போச் சொத்தை உருவாக்கவும், ஒரு சொத்து உலாவியில் ஒட்ட வேண்டும்"
-
-
-msgctxt "Operator"
-msgid "Create Pose Asset"
-msgstr "போச் சொத்தை உருவாக்கவும்"
 
 
 msgid "Create a new Action that contains the pose of the selected bones, and mark it as Asset. The asset will be stored in the current blend file"
@@ -71154,27 +72195,12 @@ msgid "Pose Name"
 msgstr "பெயர்"
 
 
-msgctxt "Operator"
-msgid "Paste as New Asset"
-msgstr "புதிய சொத்தாக ஒட்டவும்"
-
-
 msgid "Paste the Asset that was previously copied using Copy As Asset"
 msgstr "முன்னர் நகலை சொத்தாகப் பயன்படுத்தி நகலெடுக்கப்பட்ட சொத்தை ஒட்டவும்"
 
 
-msgctxt "Operator"
-msgid "Select Bones"
-msgstr "எலும்புகளைத் தேர்ந்தெடுக்கவும்"
-
-
 msgid "Select those bones that are used in this pose"
 msgstr "இந்த போசில் பயன்படுத்தப்படும் எலும்புகளைத் தேர்ந்தெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Restore Previous Action"
-msgstr "முந்தைய செயலை மீட்டெடுக்கவும்"
 
 
 msgid "Switch back to the previous Action, after creating a pose asset"
@@ -71636,60 +72662,16 @@ msgid "Module name of the add-on to enable"
 msgstr "செயல்படுத்த கூடுதல் பகுதி பெயர்"
 
 
-msgid "Display information and preferences for this add-on"
-msgstr "இந்த துணை நிரலுக்கான செய்தி மற்றும் விருப்பங்களைக் காண்பி"
-
-
 msgid "Module name of the add-on to expand"
 msgstr "விரிவாக்க துணை நிரலின் பகுதி பெயர்"
-
-
-msgctxt "Operator"
-msgid "Install Add-on"
-msgstr "துணை நிரலை நிறுவவும்"
-
-
-msgid "Install an add-on"
-msgstr "ஒரு துணை நிரலை நிறுவவும்"
 
 
 msgid "Target Path"
 msgstr "இலக்கு பாதை"
 
 
-msgctxt "Operator"
-msgid "Refresh"
-msgstr "புதுப்பிப்பு"
-
-
-msgid "Scan add-on directories for new modules"
-msgstr "புதிய பகுதிகளுக்கான கூடுதல் கோப்பகங்களை ச்கேன் செய்யுங்கள்"
-
-
-msgctxt "Operator"
-msgid "Remove Add-on"
-msgstr "துணை நிரலை அகற்று"
-
-
-msgid "Delete the add-on from the file system"
-msgstr "கோப்பு முறைமையிலிருந்து சேர்க்கையை நீக்கவும்"
-
-
 msgid "Module name of the add-on to remove"
 msgstr "அகற்றுவதற்கு கூடுதல் பகுதி பெயர்"
-
-
-msgid "Show add-on preferences"
-msgstr "கூடுதல் விருப்பங்களைக் காட்டு"
-
-
-msgctxt "Operator"
-msgid "Install Template from File..."
-msgstr "கோப்பிலிருந்து வார்ப்புருவை நிறுவவும் ..."
-
-
-msgid "Install an application template"
-msgstr "பயன்பாட்டு வார்ப்புருவை நிறுவவும்"
 
 
 msgid "Remove existing template with the same ID"
@@ -71742,15 +72724,6 @@ msgstr "ஆட்டோ-பரிசோதனையிலிருந்து �
 
 
 msgctxt "Operator"
-msgid "Copy Previous Settings"
-msgstr "முந்தைய அமைப்புகளை நகலெடுக்கவும்"
-
-
-msgid "Copy settings from previous version"
-msgstr "முந்தைய பதிப்பிலிருந்து அமைப்புகளை நகலெடுக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Add Extension Repository"
 msgstr "நீட்டிப்பு களஞ்சியத்தைச் சேர்க்கவும்"
 
@@ -71796,35 +72769,12 @@ msgid "Remove an extension repository"
 msgstr "நீட்டிப்பு களஞ்சியத்தை அகற்று"
 
 
-msgctxt "Operator"
-msgid "Activate Keyconfig"
-msgstr "keyconfig ஐ செயல்படுத்தவும்"
-
-
-msgctxt "Operator"
-msgid "Export Key Configuration..."
-msgstr "ஏற்ற ஏற்ற உள்ளமைவு ..."
-
-
-msgid "Export key configuration to a Python script"
-msgstr "முக்கிய உள்ளமைவை பைதான் ச்கிரிப்டுக்கு ஏற்றுமதி செய்யுங்கள்"
-
-
 msgid "All Keymaps"
 msgstr "அனைத்து கீமாப்களும்"
 
 
 msgid "Write all keymaps (not just user modified)"
 msgstr "எல்லா கீமாப்களையும் எழுதுங்கள் (பயனர் மாற்றியமைக்கப்படவில்லை)"
-
-
-msgctxt "Operator"
-msgid "Import Key Configuration..."
-msgstr "முக்கிய உள்ளமைவை இறக்குமதி செய்யுங்கள் ..."
-
-
-msgid "Import key configuration from a Python script"
-msgstr "பைதான் ச்கிரிப்டிலிருந்து முக்கிய உள்ளமைவை இறக்குமதி செய்யுங்கள்"
 
 
 msgid "Keep Original"
@@ -71835,42 +72785,6 @@ msgid "Keep original file after copying to configuration folder"
 msgstr "உள்ளமைவு கோப்புறையில் நகலெடுத்த பிறகு அசல் கோப்பை வைத்திருங்கள்"
 
 
-msgctxt "Operator"
-msgid "Remove Key Config"
-msgstr "முக்கிய கட்டமைப்பை அகற்று"
-
-
-msgid "Remove key config"
-msgstr "முக்கிய கட்டமைப்பை அகற்று"
-
-
-msgctxt "Operator"
-msgid "Test Key Configuration for Conflicts"
-msgstr "மோதல்களுக்கான முக்கிய உள்ளமைவை சோதிக்கவும்"
-
-
-msgid "Test key configuration for conflicts"
-msgstr "மோதல்களுக்கான முக்கிய உள்ளமைவை சோதிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Key Map Item"
-msgstr "முக்கிய வரைபட உருப்படியைச் சேர்க்கவும்"
-
-
-msgid "Add key map item"
-msgstr "முக்கிய வரைபட உருப்படியைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Remove Key Map Item"
-msgstr "முக்கிய வரைபட உருப்படியை அகற்று"
-
-
-msgid "Remove key map item"
-msgstr "முக்கிய வரைபட உருப்படியை அகற்று"
-
-
 msgid "Item Identifier"
 msgstr "உருப்படி அடையாளங்காட்டி"
 
@@ -71879,26 +72793,8 @@ msgid "Identifier of the item to remove"
 msgstr "அகற்ற உருப்படியின் அடையாளங்காட்டி"
 
 
-msgctxt "Operator"
-msgid "Restore Key Map Item"
-msgstr "முக்கிய வரைபட உருப்படியை மீட்டெடுக்கவும்"
-
-
-msgid "Restore key map item"
-msgstr "முக்கிய வரைபட உருப்படியை மீட்டெடுக்கவும்"
-
-
 msgid "Identifier of the item to restore"
 msgstr "மீட்டமைக்க உருப்படியின் அடையாளங்காட்டி"
-
-
-msgctxt "Operator"
-msgid "Restore Key Map(s)"
-msgstr "முக்கிய வரைபடங்களை மீட்டமைக்கவும்)"
-
-
-msgid "Restore key map(s)"
-msgstr "முக்கிய வரைபடங்களை மீட்டமைக்கவும்)"
 
 
 msgid "Restore all keymaps to default"
@@ -71914,40 +72810,12 @@ msgid "Reset to the default theme colors"
 msgstr "இயல்புநிலை கருப்பொருள் வண்ணங்களுக்கு மீட்டமைக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Add Python Script Directory"
-msgstr "பைதான் கைஉரை அடைவு சேர்க்கவும்"
-
-
 msgid "Filter Folders"
 msgstr "கோப்புறைகளை வடிகட்டவும்"
 
 
-msgctxt "Operator"
-msgid "Remove Python Script Directory"
-msgstr "பைதான் கைஉரை கோப்பகத்தை அகற்று"
-
-
 msgid "Index of the script directory to remove"
 msgstr "அகற்ற கைஉரை கோப்பகத்தின் அட்டவணை"
-
-
-msgctxt "Operator"
-msgid "Copy Studio Light Settings"
-msgstr "ச்டுடியோ லைட் அமைப்புகளை நகலெடுக்கவும்"
-
-
-msgid "Copy Studio Light settings to the Studio Light editor"
-msgstr "ச்டுடியோ லைட் அமைப்புகளை ச்டுடியோ லைட் திருத்திக்கு நகலெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Install Light"
-msgstr "ஒளியை நிறுவவும்"
-
-
-msgid "Install a user defined light"
-msgstr "பயனர் வரையறுக்கப்பட்ட ஒளியை நிறுவவும்"
 
 
 msgid "MatCap"
@@ -71968,33 +72836,6 @@ msgstr "ச்டுடியோ"
 
 msgid "Install custom Studio Lights"
 msgstr "தனிப்பயன் ச்டுடியோ விளக்குகளை நிறுவவும்"
-
-
-msgctxt "Operator"
-msgid "Save Custom Studio Light"
-msgstr "தனிப்பயன் ச்டுடியோ ஒளியை சேமிக்கவும்"
-
-
-msgid "Save custom studio light from the studio light editor settings"
-msgstr "ச்டுடியோ லைட் திருத்தி அமைப்புகளிலிருந்து தனிப்பயன் ச்டுடியோ ஒளியை சேமிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Uninstall Studio Light"
-msgstr "ச்டுடியோ லைட் நிறுவல் நீக்குதல்"
-
-
-msgid "Delete Studio Light"
-msgstr "ச்டுடியோ ஒளியை நீக்கு"
-
-
-msgctxt "Operator"
-msgid "Install Theme..."
-msgstr "கருப்பொருள் நிறுவவும் ..."
-
-
-msgid "Load and apply a Blender XML theme file"
-msgstr "கலப்பான் எக்ச்எம்எல் கருப்பொருள் கோப்பை ஏற்றவும் பயன்படுத்தவும்"
 
 
 msgid "Remove existing theme file if exists"
@@ -72074,51 +72915,6 @@ msgstr "தற்போதைய தற்காலிக சேமிப்ப�
 
 
 msgctxt "Operator"
-msgid "Add Integrator Preset"
-msgstr "ஒருங்கிணைப்பாளர் முன்னமைவைச் சேர்க்கவும்"
-
-
-msgid "Add an Integrator Preset"
-msgstr "ஒரு ஒருங்கிணைப்பாளர் முன்னமைவைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Performance Preset"
-msgstr "செயல்திறன் முன்னமைவைச் சேர்க்கவும்"
-
-
-msgid "Add an Performance Preset"
-msgstr "செயல்திறன் முன்னமைவைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Sampling Preset"
-msgstr "மாதிரி முன்னமைவைச் சேர்க்கவும்"
-
-
-msgid "Add a Sampling Preset"
-msgstr "மாதிரி முன்னமைவைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Viewport Sampling Preset"
-msgstr "வியாபோர்ட் மாதிரி முன்னமைவைச் சேர்க்கவும்"
-
-
-msgid "Add a Viewport Sampling Preset"
-msgstr "வியூபோர்ட் மாதிரி முன்னமைவைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Raytracing Preset"
-msgstr "ரெய்ட்ரேசிங் முன்னமைவைச் சேர்க்கவும்"
-
-
-msgid "Add or remove an EEVEE ray-tracing preset"
-msgstr "ஒரு ஈவி ரே-ட்ரேசிங் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
-
-
-msgctxt "Operator"
 msgid "Viewport Render"
 msgstr "வியூபோர்ட் வழங்குதல்"
 
@@ -72157,24 +72953,6 @@ msgstr "படத்தை எழுதுங்கள்"
 
 msgid "Save the rendered image to the output path (used only when animation is disabled)"
 msgstr "வழங்கப்பட்ட படத்தை வெளியீட்டு பாதையில் சேமிக்கவும் (அனிமேசன் முடக்கப்பட்டால் மட்டுமே பயன்படுத்தப்படுகிறது)"
-
-
-msgctxt "Operator"
-msgid "Play Rendered Animation"
-msgstr "அனிமேசன் பிரிக்கப்பட்ட அனிமேசன்"
-
-
-msgid "Play back rendered frames/movies using an external player"
-msgstr "வெளிப்புற பிளேயரைப் பயன்படுத்தி பிரேம்கள்/திரைப்படங்களை மீண்டும் இயக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Render Preset"
-msgstr "வழங்குதல் முன்னமைவு சேர்க்கவும்"
-
-
-msgid "Add or remove a Render Preset"
-msgstr "வழங்குதல் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -72231,24 +73009,6 @@ msgstr "வழங்குதல் காட்சியைக் காட்�
 
 msgid "Toggle show render view"
 msgstr "வழங்குதல் பார்வையை மாற்றவும்"
-
-
-msgctxt "Operator"
-msgid "Bake to Keyframes"
-msgstr "கீஃப்ரேம்களை சுட்டுக்கொள்ளுங்கள்"
-
-
-msgid "Bake rigid body transformations of selected objects to keyframes"
-msgstr "தேர்ந்தெடுக்கப்பட்ட பொருட்களின் கடுமையான உடல் மாற்றங்களை கீஃப்ரேம்களுக்கு சுட்டுக்கொள்ளுங்கள்"
-
-
-msgctxt "Operator"
-msgid "Connect Rigid Bodies"
-msgstr "கடினமான உடல்களை இணைக்கவும்"
-
-
-msgid "Create rigid body constraints between selected rigid bodies"
-msgstr "தேர்ந்தெடுக்கப்பட்ட கடுமையான உடல்களுக்கு இடையில் கடுமையான உடல் தடைகளை உருவாக்குங்கள்"
 
 
 msgid "Type of generated constraint"
@@ -72421,15 +73181,6 @@ msgstr "பொருளிலிருந்து கடுமையான உ�
 
 
 msgctxt "Operator"
-msgid "Copy Rigid Body Settings"
-msgstr "கடுமையான உடல் அமைப்புகளை நகலெடுக்கவும்"
-
-
-msgid "Copy Rigid Body settings from active object to selected"
-msgstr "செயலில் உள்ள பொருளிலிருந்து தேர்ந்தெடுக்கப்பட்ட கடினமான உடல் அமைப்புகளை நகலெடுக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Add Rigid Bodies"
 msgstr "கடினமான உடல்களைச் சேர்க்கவும்"
 
@@ -72508,24 +73259,6 @@ msgstr "செயலில் உள்ள காட்சியை நீக்
 
 
 msgctxt "Operator"
-msgid "Add Edge Marks to Keying Set"
-msgstr "கீயிங் தொகுப்பில் விளிம்பு மதிப்பெண்களைச் சேர்க்கவும்"
-
-
-msgid "Add the data paths to the Freestyle Edge Mark property of selected edges to the active keying set"
-msgstr "தேர்ந்தெடுக்கப்பட்ட விளிம்புகளின் ஃப்ரீபாணி எட்ச் மார்க் சொத்தில் தரவு பாதைகளை செயலில் உள்ள கீயிங் தொகுப்பில் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Face Marks to Keying Set"
-msgstr "கீயிங் தொகுப்பில் முக அடையாளங்களைச் சேர்க்கவும்"
-
-
-msgid "Add the data paths to the Freestyle Face Mark property of selected polygons to the active keying set"
-msgstr "தேர்ந்தெடுக்கப்பட்ட பலகோணங்களின் ஃப்ரீபாணி ஃபேச் மார்க் சொத்தில் தரவு பாதைகளை செயலில் உள்ள கீயிங் தொகுப்பில் சேர்க்கவும்"
-
-
-msgctxt "Operator"
 msgid "Add Alpha Transparency Modifier"
 msgstr "ஆல்பா வெளிப்படைத்தன்மை மாற்றியமைப்பைச் சேர்க்கவும்"
 
@@ -72541,15 +73274,6 @@ msgstr "வரி வண்ண மாற்றியைச் சேர்க்
 
 msgid "Add a line color modifier to the line style associated with the active lineset"
 msgstr "செயலில் உள்ள கோடுகளுடன் தொடர்புடைய வரி பாணியில் ஒரு வரி வண்ண மாற்றியமைப்பைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Fill Range by Selection"
-msgstr "தேர்வு மூலம் வரம்பை நிரப்பவும்"
-
-
-msgid "Fill the Range Min/Max entries by the min/max distance between selected mesh objects and the source object (either a user-specified object or the active camera)"
-msgstr "தேர்ந்தெடுக்கப்பட்ட கண்ணி பொருள்களுக்கும் மூலப் பொருளுக்கும் இடையிலான நிமிடம்/அதிகபட்ச தூரத்தால் (பயனர் குறிப்பிட்ட பொருள் அல்லது செயலில் உள்ள கேமரா) வரம்பு மின்/அதிகபட்ச உள்ளீடுகளை நிரப்பவும்"
 
 
 msgid "Name of the modifier to work on"
@@ -72682,15 +73406,6 @@ msgid "Direction to move the chosen style module towards"
 msgstr "தேர்ந்தெடுக்கப்பட்ட பாணி பகுதியை நோக்கி நகர்த்துவதற்கான திசை"
 
 
-msgctxt "Operator"
-msgid "Open Style Module File"
-msgstr "திறந்த பாணி பகுதி கோப்பு"
-
-
-msgid "Open a style module file"
-msgstr "ஒரு பாணி பகுதி கோப்பைத் திறக்கவும்"
-
-
 msgid "Make internal"
 msgstr "உள் செய்யுங்கள்"
 
@@ -72724,33 +73439,6 @@ msgstr "வரி தடிமன் மாற்றி சேர்க்கவ
 
 msgid "Add a line thickness modifier to the line style associated with the active lineset"
 msgstr "செயலில் உள்ள கோடுகளுடன் தொடர்புடைய வரி பாணியில் ஒரு வரி தடிமன் மாற்றியமைப்பைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Refresh action list"
-msgstr "செயல் பட்டியலைப் புதுப்பிக்கவும்"
-
-
-msgid "Refresh list of actions"
-msgstr "செயல்களின் பட்டியலைப் புதுப்பிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Grease Pencil Brush Preset"
-msgstr "பசை எழுதுகோல் தூரிகை முன்னமைவு சேர்க்கவும்"
-
-
-msgid "Add or remove grease pencil brush preset"
-msgstr "பசை எழுதுகோல் தூரிகை முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
-
-
-msgctxt "Operator"
-msgid "Add Grease Pencil Material Preset"
-msgstr "பசை எழுதுகோல் மூலப்பொருள் முன்னமைவு சேர்க்கவும்"
-
-
-msgid "Add or remove grease pencil material preset"
-msgstr "பசை எழுதுகோல் மூலப்பொருள் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -73341,15 +74029,6 @@ msgstr "சுழற்சி பணியிடம்"
 
 msgid "Cycle through workspaces"
 msgstr "பணியிடங்கள் மூலம் சுழற்சி"
-
-
-msgctxt "Operator"
-msgid "Execute a Python Preset"
-msgstr "பைதான் முன்னமைவை இயக்கவும்"
-
-
-msgid "Load a preset"
-msgstr "முன்னமைவை ஏற்றவும்"
 
 
 msgid "Menu ID Name"
@@ -74625,26 +75304,8 @@ msgid "Copy the selected strips to the internal clipboard"
 msgstr "தேர்ந்தெடுக்கப்பட்ட கீற்றுகளை உள் கிளிப்போர்டுக்கு நகலெடுக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Crossfade Sounds"
-msgstr "கிராச்ஃபேட் ஒலிகள்"
-
-
-msgid "Do cross-fading volume animation of two selected sound strips"
-msgstr "தேர்ந்தெடுக்கப்பட்ட இரண்டு ஒலி கீற்றுகளின் குறுக்கு மங்கலான தொகுதி அனிமேசனைச் செய்யுங்கள்"
-
-
 msgid "Cursor location in normalized preview coordinates"
 msgstr "இயல்பாக்கப்பட்ட முன்னோட்ட ஆயத்தொகுதிகளில் கர்சர் இருப்பிடம்"
-
-
-msgctxt "Operator"
-msgid "Deinterlace Movies"
-msgstr "deinterlace திரைப்படங்கள்"
-
-
-msgid "Deinterlace all selected movie sources"
-msgstr "தேர்ந்தெடுக்கப்பட்ட அனைத்து திரைப்பட ஆதாரங்களும்"
 
 
 msgid "Delete selected strips from the sequencer"
@@ -74734,15 +75395,6 @@ msgid "Export .srt file containing text strips"
 msgstr "உரை கீற்றுகளைக் கொண்ட .srt கோப்பை ஏற்றுமதி செய்யுங்கள்"
 
 
-msgctxt "Operator"
-msgid "Add Fades"
-msgstr "மங்கல்களைச் சேர்க்கவும்"
-
-
-msgid "Adds or updates a fade animation for either visual or audio strips"
-msgstr "காட்சி அல்லது ஆடியோ கீற்றுகளுக்கு மங்கலான அனிமேசனைச் சேர்க்கிறது அல்லது புதுப்பிக்கிறது"
-
-
 msgid "Fade Duration"
 msgstr "மங்கலான காலம்"
 
@@ -74797,15 +75449,6 @@ msgstr "தற்போதைய சட்டத்திற்கு"
 
 msgid "Fade from the start of sequences under the time cursor to the current frame"
 msgstr "நேரக் கர்சரின் கீழ் காட்சிகளின் தொடக்கத்திலிருந்து தற்போதைய சட்டகத்திற்கு மங்கிவிடும்"
-
-
-msgctxt "Operator"
-msgid "Clear Fades"
-msgstr "தெளிவான மங்கல்கள்"
-
-
-msgid "Removes fade animation from selected sequences"
-msgstr "தேர்ந்தெடுக்கப்பட்ட காட்சிகளிலிருந்து மங்கலான அனிமேசனை நீக்குகிறது"
 
 
 msgctxt "Operator"
@@ -75486,15 +76129,6 @@ msgid "Split at position of the cursor instead of current frame"
 msgstr "தற்போதைய சட்டகத்திற்கு பதிலாக கர்சரின் நிலையில் பிரிக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Split Multicam"
-msgstr "மல்டிகாம் பிரிக்கவும்"
-
-
-msgid "Split multicam strip and select camera"
-msgstr "மல்டிகாம் துண்டு பிரித்து கேமராவைத் தேர்ந்தெடுக்கவும்"
-
-
 msgid "Set a color tag for the selected strips"
 msgstr "தேர்ந்தெடுக்கப்பட்ட கீற்றுகளுக்கு வண்ண குறிச்சொல்லை அமைக்கவும்"
 
@@ -75941,15 +76575,6 @@ msgstr "விதிகளிலிருந்து வரிசை வடி�
 
 
 msgctxt "Operator"
-msgid "Toggle Pin"
-msgstr "முள் மாற்றவும்"
-
-
-msgid "Turn on or off pinning"
-msgstr "பின்னிங் இயக்கவும் அல்லது அணைக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Add Surface Circle"
 msgstr "மேற்பரப்பு வட்டத்தை சேர்க்கவும்"
 
@@ -76037,15 +76662,6 @@ msgstr "அமைப்பு ச்லாட் அமைப்புகளை 
 
 msgid "Copy the texture settings and nodes"
 msgstr "அமைப்பு அமைப்புகள் மற்றும் முனைகளை நகலெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Text Editor Preset"
-msgstr "உரை திருத்தி முன்னமைவைச் சேர்க்கவும்"
-
-
-msgid "Add or remove a Text Editor Preset"
-msgstr "உரை திருத்தி முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -76818,11 +77434,6 @@ msgid "Slide a vertex along a mesh"
 msgstr "ஒரு கண்ணி வழியாக ஒரு வெர்டெக்சை ச்லைடு செய்யுங்கள்"
 
 
-msgctxt "Operator"
-msgid "Randomize"
-msgstr "சீரற்ற"
-
-
 msgid "Randomize vertices"
 msgstr "செங்குத்துகளை சீரற்றதாக்குங்கள்"
 
@@ -76864,39 +77475,12 @@ msgid "Amount to warp about the cursor"
 msgstr "கர்சரைப் பற்றி போரிடுவதற்கான தொகை"
 
 
-msgctxt "Operator"
-msgid "Add Entry"
-msgstr "உள்ளீட்டைச் சேர்க்கவும்"
-
-
-msgid "Add an entry to the list after the current active item"
-msgstr "தற்போதைய செயலில் உள்ள உருப்படியுக்குப் பிறகு பட்டியலில் ஒரு உள்ளீட்டைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Move Entry"
-msgstr "நுழைவு நகர்த்தவும்"
-
-
-msgid "Move an entry in the list up or down"
-msgstr "பட்டியலில் ஒரு நுழைவை மேலே அல்லது கீழ் நகர்த்தவும்"
-
-
 msgid "UP"
 msgstr "மேலே"
 
 
 msgid "DOWN"
 msgstr "கீழ்"
-
-
-msgctxt "Operator"
-msgid "Remove Selected Entry"
-msgstr "தேர்ந்தெடுக்கப்பட்ட நுழைவை அகற்று"
-
-
-msgid "Remove the selected entry from the list"
-msgstr "பட்டியலிலிருந்து தேர்ந்தெடுக்கப்பட்ட நுழைவை அகற்றவும்"
 
 
 msgctxt "Operator"
@@ -77137,15 +77721,6 @@ msgid "Sample a data-block from the 3D View to store in a property"
 msgstr "ஒரு சொத்தில் சேமிக்க 3d பார்வையில் இருந்து தரவு-தொகுதியை மாதிரி செய்யுங்கள்"
 
 
-msgctxt "Operator"
-msgid "I18n Add-on Export"
-msgstr "ஐ18ன் கூடுதல் ஏற்றுமதி"
-
-
-msgid "Export given add-on's translation data as PO files"
-msgstr "கொடுக்கப்பட்ட கூடுதல் மொழிபெயர்ப்பு தரவை po கோப்புகளாக ஏற்றுமதி செய்யுங்கள்"
-
-
 msgid "Add-on to process"
 msgstr "செயலாக்க கூடுதல்"
 
@@ -77166,24 +77741,6 @@ msgid "Update existing po files, if any, instead of overwriting them"
 msgstr "தற்போதுள்ள po கோப்புகளை ஏதேனும் இருந்தால், அவற்றை மேலெழுததற்கு பதிலாக புதுப்பிக்கவும்"
 
 
-msgctxt "Operator"
-msgid "I18n Add-on Import"
-msgstr "ஐ18ன் கூடுதல் இறக்குமதி"
-
-
-msgid "Import given add-on's translation data from PO files"
-msgstr "po கோப்புகளிலிருந்து கொடுக்கப்பட்ட கூடுதல் மொழிபெயர்ப்பு தரவை இறக்குமதி செய்யுங்கள்"
-
-
-msgctxt "Operator"
-msgid "Update I18n Add-on"
-msgstr "ஐ18ன் கூடுதலைப் புதுப்பிக்கவும்"
-
-
-msgid "Wrapper operator which will invoke given op after setting its module_name"
-msgstr "ரேப்பர் ஆபரேட்டர் அதன் பகுதி_பெயரை அமைத்த பிறகு கொடுக்கப்பட்ட op ஐ அழைக்கும்"
-
-
 msgid "Operator Name"
 msgstr "ஆபரேட்டர் பெயர்"
 
@@ -77192,66 +77749,8 @@ msgid "Name (id) of the operator to invoke"
 msgstr "அழைக்க ஆபரேட்டரின் பெயர் (ஐடி)"
 
 
-msgid "Update given add-on's translation data (found as a py tuple in the add-on's source code)"
-msgstr "கொடுக்கப்பட்ட கூடுதல் மொழிபெயர்ப்பு தரவைப் புதுப்பிக்கவும் (கூடுதல் மூலக் குறியீட்டில் ஒரு பை டப்பிள் எனக் காணப்படுகிறது)"
-
-
-msgctxt "Operator"
-msgid "Clean up I18n Work Repository"
-msgstr "ஐ18ன் பணி களஞ்சியத்தை தூய்மை செய்யுங்கள்"
-
-
-msgid "Clean up i18n working repository (po files)"
-msgstr "ஐ18ன் வேலை களஞ்சியத்தை தூய்மை செய்யுங்கள் (po கோப்புகள்)"
-
-
-msgctxt "Operator"
-msgid "I18n Load Settings"
-msgstr "ஐ18ன் சுமை அமைப்புகள்"
-
-
-msgid "Load translations' settings from a persistent JSon file"
-msgstr "தொடர்ச்சியான சாதொபொகு கோப்பிலிருந்து மொழிபெயர்ப்புகளின் அமைப்புகளை ஏற்றவும்"
-
-
 msgid "Path to the saved settings file"
 msgstr "சேமித்த அமைப்புகள் கோப்பிற்கான பாதை"
-
-
-msgctxt "Operator"
-msgid "I18n Save Settings"
-msgstr "ஐ18ன் அமைப்புகளை சேமிக்கவும்"
-
-
-msgid "Save translations' settings in a persistent JSon file"
-msgstr "தொடர்ச்சியான சாதொபொகு கோப்பில் மொழிபெயர்ப்புகளின் அமைப்புகளைச் சேமிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Update I18n Blender Repository"
-msgstr "ஐ18ன் கலப்பான் களஞ்சியத்தைப் புதுப்பிக்கவும்"
-
-
-msgid "Update i18n data (po files) in Blender source code repository"
-msgstr "கலப்பான் மூலக் குறியீடு களஞ்சியத்தில் ஐ18ன் தரவைப் புதுப்பிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Init I18n Update Settings"
-msgstr "init ஐ18ன் புதுப்பிப்பு அமைப்புகள்"
-
-
-msgid "Init settings for i18n files update operators"
-msgstr "ஐ18ன் கோப்புகளுக்கான தொடக்க அமைப்புகள் ஆபரேட்டர்களைப் புதுப்பிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Init I18n Update Select Languages"
-msgstr "init ஐ18ன் புதுப்பிப்பு மொழிகளைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "(De)select (or invert selection of) all languages for i18n files update operators"
-msgstr "ஐ18ன் கோப்புகளின் புதுப்பிப்பு ஆபரேட்டர்களுக்கான அனைத்து மொழிகளையும் தேர்ந்தெடு (அல்லது தலைகீழாக) தேர்ந்தெடுக்கவும்"
 
 
 msgid "Invert Selection"
@@ -77268,24 +77767,6 @@ msgstr "அனைத்தையும் தெரிவுசெய்"
 
 msgid "Select all if True, else deselect all"
 msgstr "உண்மையாக இருந்தால் அனைத்தையும் தேர்ந்தெடுக்கவும், இல்லையெனில் அனைத்தையும் தேர்வு செய்யவும்"
-
-
-msgctxt "Operator"
-msgid "Update I18n Statistics"
-msgstr "ஐ18ன் புள்ளிவிவரங்களைப் புதுப்பிக்கவும்"
-
-
-msgid "Create or extend a 'i18n_info.txt' Text datablock"
-msgstr "'i18n_info.txt' உரை தரவு பிளாக்கை உருவாக்கவும் அல்லது நீட்டிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Update I18n Work Repository"
-msgstr "ஐ18ன் பணி களஞ்சியத்தைப் புதுப்பிக்கவும்"
-
-
-msgid "Update i18n working repository (po files)"
-msgstr "ஐ18ன் பணி களஞ்சியத்தை புதுப்பிக்கவும் (po கோப்புகள்)"
 
 
 msgid "Skip POT"
@@ -77487,15 +77968,6 @@ msgid "Align UV vertices on a horizontal line"
 msgstr "கிடைமட்ட கோட்டில் புறஊதா செங்குத்துகளை சீரமைக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Align Rotation"
-msgstr "சுழற்சியை சீரமைக்கவும்"
-
-
-msgid "Align the UV island's rotation"
-msgstr "புறஊதா தீவின் சுழற்சியை சீரமைக்கவும்"
-
-
 msgid "Axis to align to"
 msgstr "இணைவு"
 
@@ -77672,15 +78144,6 @@ msgid "Separate projections by islands isolated by seams"
 msgstr "சீம்களால் தனிமைப்படுத்தப்பட்ட தீவுகளின் தனி கணிப்புகள்"
 
 
-msgctxt "Operator"
-msgid "Export UV Layout"
-msgstr "புறஊதா தளவமைப்பு ஏற்றுமதி"
-
-
-msgid "Export UV layout to file"
-msgstr "தாக்கல் செய்ய புறஊதா தளவமைப்பை ஏற்றுமதி செய்யுங்கள்"
-
-
 msgid "All UVs"
 msgstr "அனைத்து uv களும்"
 
@@ -77762,15 +78225,6 @@ msgid "Dimensions of the exported file"
 msgstr "ஏற்றுமதி செய்யப்பட்ட கோப்பின் பரிமாணங்கள்"
 
 
-msgctxt "Operator"
-msgid "Follow Active Quads"
-msgstr "செயலில் உள்ள குவாட்சைப் பின்தொடரவும்"
-
-
-msgid "Follow UVs from active quads along continuous face loops"
-msgstr "தொடர்ச்சியான முக சுழல்களுடன் செயலில் உள்ள குவாட்களிலிருந்து uv களைப் பின்தொடரவும்"
-
-
 msgid "Edge Length Mode"
 msgstr "விளிம்பு நீள பயன்முறை"
 
@@ -77793,15 +78247,6 @@ msgstr "நீள சராசரி"
 
 msgid "Hide (un)selected UV vertices"
 msgstr "மறைக்க (ஐ.நா) தேர்ந்தெடுக்கப்பட்ட புறஊதா செங்குத்துகள்"
-
-
-msgctxt "Operator"
-msgid "Lightmap Pack"
-msgstr "லைட்மேப் பேக்"
-
-
-msgid "Pack each face's UVs into the UV bounds"
-msgstr "ஒவ்வொரு முகத்தின் uv களையும் புறஊதா எல்லைகளில் பேக் செய்யுங்கள்"
 
 
 msgid "Pack Quality"
@@ -78087,10 +78532,6 @@ msgstr "கேமரா மண்டலத்திற்கு uv களை வ
 
 msgid "Use orthographic projection"
 msgstr "ஆர்த்தோகிராஃபிக் திட்டத்தைப் பயன்படுத்தவும்"
-
-
-msgid "Randomize the UV island's location, rotation, and scale"
-msgstr "புறஊதா தீவின் இருப்பிடம், சுழற்சி மற்றும் அளவை சீரற்றதாக்குங்கள்"
 
 
 msgid "Maximum rotation"
@@ -78577,11 +79018,6 @@ msgid "Zoom Factor Y"
 msgstr "சூம் காரணி ஒய்"
 
 
-msgctxt "Operator"
-msgid "New Camera from VR Landmark"
-msgstr "வி.ஆர் லேண்ட்மார்க்கிலிருந்து புதிய கேமரா"
-
-
 msgid "Create a new Camera from the selected VR Landmark"
 msgstr "தேர்ந்தெடுக்கப்பட்ட வி.ஆர் லேண்ட்மார்க்கிலிருந்து புதிய கேமராவை உருவாக்கவும்"
 
@@ -78619,11 +79055,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட கேமர�
 
 msgid "Move the camera so selected objects are framed"
 msgstr "கேமராவை நகர்த்தவும், எனவே தேர்ந்தெடுக்கப்பட்ட பொருள்கள் கட்டமைக்கப்படுகின்றன"
-
-
-msgctxt "Operator"
-msgid "Scene Camera to VR Landmark"
-msgstr "வி.ஆர் லேண்ட்மார்க்குக்கு காட்சி கேமரா"
 
 
 msgid "Position the scene camera at the selected landmark"
@@ -78689,11 +79120,6 @@ msgid "Project onto the surface"
 msgstr "மேற்பரப்பில் திட்டம்"
 
 
-msgctxt "Operator"
-msgid "Cursor to VR Landmark"
-msgstr "வி.ஆர் லேண்ட்மார்க் முதல் கர்சர்"
-
-
 msgid "Move the 3D Cursor to the selected VR Landmark"
 msgstr "3 டி கர்சரை தேர்ந்தெடுக்கப்பட்ட வி.ஆர் மைல்கல்லுக்கு நகர்த்தவும்"
 
@@ -78724,32 +79150,8 @@ msgid "Drop a world into the scene"
 msgstr "ஒரு உலகத்தை காட்சிக்கு விடுங்கள்"
 
 
-msgctxt "Operator"
-msgid "Extrude Individual and Move"
-msgstr "தனிநபரை வெளியேற்றி நகர்த்தவும்"
-
-
-msgctxt "Operator"
-msgid "Extrude Manifold Along Normals"
-msgstr "இயல்பான பன்மடங்கு பன்மடங்கு"
-
-
-msgid "Extrude manifold region along normals"
-msgstr "இயல்பான பன்மடங்கு மண்டலம்"
-
-
-msgctxt "Operator"
-msgid "Extrude and Move on Normals"
-msgstr "எக்ச்ட்ரூட் மற்றும் இயல்பான மீது நகர்த்தவும்"
-
-
 msgid "Dissolves adjacent faces and intersects new geometry"
 msgstr "அருகிலுள்ள முகங்களை கரைத்து புதிய வடிவவியலை வெட்டுகிறது"
-
-
-msgctxt "Operator"
-msgid "Extrude and Move on Individual Normals"
-msgstr "எக்ச்ட்ரூட் மற்றும் தனிப்பட்ட இயல்புகளை நகர்த்தவும்"
 
 
 msgctxt "Operator"
@@ -79085,20 +79487,6 @@ msgid "Transparent scene display. Allow selecting through items"
 msgstr "வெளிப்படையான காட்சி காட்சி. உருப்படிகளைத் தேர்ந்தெடுக்க அனுமதிக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Transform Gizmo Set"
-msgstr "கிச்மோ தொகுப்பை மாற்றவும்"
-
-
-msgid "Set the current transform gizmo"
-msgstr "தற்போதைய உருமாற்ற கிச்மோவை அமைக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Update Custom VR Landmark"
-msgstr "தனிப்பயன் விஆர் மைல்கல் புதுப்பிக்கவும்"
-
-
 msgid "Update the selected landmark from the current viewer pose in the VR session"
 msgstr "வி.ஆர் அமர்வில் தற்போதைய பார்வையாளர் போசிலிருந்து தேர்ந்தெடுக்கப்பட்ட அடையாளத்தைப் புதுப்பிக்கவும்"
 
@@ -79386,54 +79774,24 @@ msgid "Move the view to the selection center"
 msgstr "பார்வையை தேர்வு மையத்திற்கு நகர்த்தவும்"
 
 
-msgctxt "Operator"
-msgid "Add Camera and VR Landmark from Session"
-msgstr "அமர்விலிருந்து கேமரா மற்றும் வி.ஆர் மைல்கல் சேர்க்கவும்"
-
-
 msgid "Create a new Camera and VR Landmark from the viewer pose of the running VR session and select it"
 msgstr "இயங்கும் வி.ஆர் அமர்வின் பார்வையாளர் போசிலிருந்து ஒரு புதிய கேமரா மற்றும் வி.ஆர் மைல்கல்லை உருவாக்கி அதைத் தேர்ந்தெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Activate VR Landmark"
-msgstr "வி.ஆர் லேண்ட்மார்க் செயல்படுத்தவும்"
 
 
 msgid "Change to the selected VR landmark from the list"
 msgstr "பட்டியலிலிருந்து தேர்ந்தெடுக்கப்பட்ட வி.ஆர் மைல்கல்லுக்கு மாற்றவும்"
 
 
-msgctxt "Operator"
-msgid "Add VR Landmark"
-msgstr "வி.ஆர் லேண்ட்மார்க் சேர்க்கவும்"
-
-
 msgid "Add a new VR landmark to the list and select it"
 msgstr "பட்டியலில் ஒரு புதிய வி.ஆர் மைல்கல்லைச் சேர்த்து அதைத் தேர்ந்தெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add VR Landmark from Camera"
-msgstr "கேமராவிலிருந்து வி.ஆர் மைல்கல் சேர்க்கவும்"
 
 
 msgid "Add a new VR landmark from the active camera object to the list and select it"
 msgstr "செயலில் உள்ள கேமரா பொருளிலிருந்து ஒரு புதிய வி.ஆர் மைல்கல்லைச் சேர்த்து பட்டியலில் சேர்த்து தேர்ந்தெடுக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Add VR Landmark from Session"
-msgstr "அமர்விலிருந்து வி.ஆர் மைல்கல் சேர்க்கவும்"
-
-
 msgid "Add VR landmark from the viewer pose of the running VR session to the list and select it"
 msgstr "இயங்கும் வி.ஆர் அமர்வின் பார்வையாளர் போசிலிருந்து வி.ஆர் மைல்கல்லைச் சேர்த்து பட்டியலில் சேர்த்து அதைத் தேர்ந்தெடுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Remove VR Landmark"
-msgstr "வி.ஆர் மைல்கல்லை அகற்றவும்"
 
 
 msgid "Delete the selected VR landmark from the list"
@@ -79745,15 +80103,6 @@ msgid "Localize all appended data, including those indirectly linked from other 
 msgstr "பிற நூலகங்களிலிருந்து மறைமுகமாக இணைக்கப்பட்டவை உட்பட அனைத்து சேர்க்கப்பட்ட தரவுகளையும் உள்ளூர்மயமாக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Batch Rename"
-msgstr "தொகுதி மறுபெயரிடுதல்"
-
-
-msgid "Rename multiple items at once"
-msgstr "பல பொருட்களை ஒரே நேரத்தில் மறுபெயரிடுங்கள்"
-
-
 msgid "Type of data to rename"
 msgstr "மறுபெயரிட தரவு வகை"
 
@@ -79768,15 +80117,6 @@ msgstr "வரிசை கீற்றுகள்"
 
 msgid "Action Clips"
 msgstr "செயல் கிளிப்புகள்"
-
-
-msgctxt "Operator"
-msgid "Validate .blend strings"
-msgstr ".கலப்பு சரங்களை சரிபார்க்க"
-
-
-msgid "Check and fix all strings in current .blend file to be valid UTF-8 Unicode (needed for some old, 2.4x area files)"
-msgstr "செல்லுபடியாகும் utf-8 யூனிகோடாக இருக்க தற்போதைய .கலப்பு கோப்பில் உள்ள அனைத்து சரங்களையும் சரிபார்த்து சரிசெய்யவும் (சில பழைய, 2.4x பரப்பு கோப்புகளுக்கு தேவை)"
 
 
 msgctxt "Operator"
@@ -80187,30 +80527,12 @@ msgid "When searching Bone Chains disregard chains of length below this value"
 msgstr "எலும்பு சங்கிலிகளைத் தேடும்போது இந்த மதிப்புக்கு கீழே நீளத்தின் சங்கிலிகளை புறக்கணிக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Context Collection Boolean Set"
-msgstr "சூழல் சேகரிப்பு பூலியன் தொகுப்பு"
-
-
-msgid "Set boolean values for a collection of items"
-msgstr "உருப்படிகளின் சேகரிப்புக்கு பூலியன் மதிப்புகளை அமைக்கவும்"
-
-
 msgid "The data path from each iterable to the value (int or float)"
 msgstr "ஒவ்வொன்றிலிருந்தும் தரவு பாதை மதிப்புக்கு (எண்ணாக அல்லது மிதவை)"
 
 
 msgid "The data path relative to the context, must point to an iterable"
 msgstr "சூழலுடன் தொடர்புடைய தரவு பாதை, ஒரு கடிதத்தை சுட்டிக்காட்ட வேண்டும்"
-
-
-msgctxt "Operator"
-msgid "Context Array Cycle"
-msgstr "சூழல் வரிசை சுழற்சி"
-
-
-msgid "Set a context array value (useful for cycling the active mesh edit mode)"
-msgstr "சூழல் வரிசை மதிப்பை அமைக்கவும் (செயலில் உள்ள மெச் திருத்து பயன்முறையை சைக்கிள் ஓட்டுவதற்கு பயனுள்ளதாக இருக்கும்)"
 
 
 msgid "Context Attributes"
@@ -80225,40 +80547,8 @@ msgid "Cycle backwards"
 msgstr "பின்னோக்கி சுழற்சி"
 
 
-msgctxt "Operator"
-msgid "Context Enum Cycle"
-msgstr "சூழல் எனம் சுழற்சி"
-
-
-msgid "Toggle a context value"
-msgstr "சூழல் மதிப்பை மாற்றவும்"
-
-
 msgid "Wrap back to the first/last values"
 msgstr "முதல்/கடைசி மதிப்புகளுக்கு திரும்பவும்"
-
-
-msgctxt "Operator"
-msgid "Context Int Cycle"
-msgstr "சூழல் எண்ணாக சுழற்சி"
-
-
-msgid "Set a context value (useful for cycling active material, shape keys, groups, etc.)"
-msgstr "ஒரு சூழல் மதிப்பை அமைக்கவும் (சைக்கிள் ஓட்டுதல் செயலில் உள்ள மூலப்பொருள், வடிவ விசைகள், குழுக்கள் போன்றவை பயனுள்ளவை)"
-
-
-msgctxt "Operator"
-msgid "Context Enum Menu"
-msgstr "சூழல் enum பட்டியல்"
-
-
-msgctxt "Operator"
-msgid "Context Modal Mouse"
-msgstr "சூழல் மாதிரி சுட்டி"
-
-
-msgid "Adjust arbitrary values with mouse input"
-msgstr "சுட்டி உள்ளீட்டுடன் தன்னிச்சையான மதிப்புகளை சரிசெய்யவும்"
 
 
 msgid "Header Text"
@@ -80277,31 +80567,8 @@ msgid "Invert the mouse input"
 msgstr "சுட்டி உள்ளீட்டை தலைகீழாக மாற்றவும்"
 
 
-msgctxt "Operator"
-msgid "Context Enum Pie"
-msgstr "சூழல் enum pie"
-
-
-msgctxt "Operator"
-msgid "Context Scale Float"
-msgstr "சூழல் அளவிலான மிதவை"
-
-
-msgid "Scale a float context value"
-msgstr "மிதவை சூழல் மதிப்பை அளவிடவும்"
-
-
 msgid "Assign value"
 msgstr "மதிப்பை ஒதுக்க"
-
-
-msgctxt "Operator"
-msgid "Context Scale Int"
-msgstr "சூழல் அளவுகோல் இன்ட்"
-
-
-msgid "Scale an int context value"
-msgstr "ஒரு எண்ணாக சூழல் மதிப்பை அளவிடவும்"
 
 
 msgid "Always Step"
@@ -80312,73 +80579,20 @@ msgid "Always adjust the value by a minimum of 1 when 'value' is not 1.0"
 msgstr "'மதிப்பு' 1.0 இல்லாதபோது எப்போதும் மதிப்பை குறைந்தபட்சம் 1 ஆல் சரிசெய்யவும்"
 
 
-msgctxt "Operator"
-msgid "Context Set Boolean"
-msgstr "சூழல் பூலியன்"
-
-
-msgid "Set a context value"
-msgstr "சூழல் மதிப்பை அமைக்கவும்"
-
-
 msgid "Assignment value"
 msgstr "ஒதுக்கீட்டு மதிப்பு"
-
-
-msgctxt "Operator"
-msgid "Context Set Enum"
-msgstr "சூழல் அமைக்க"
 
 
 msgid "Assignment value (as a string)"
 msgstr "ஒதுக்கீட்டு மதிப்பு (ஒரு சரமாக)"
 
 
-msgctxt "Operator"
-msgid "Context Set Float"
-msgstr "சூழல் அமைக்கப்பட்ட மிதவை"
-
-
 msgid "Apply relative to the current value (delta)"
 msgstr "தற்போதைய மதிப்புடன் (டெல்டா) ஒப்பிடுகையில் பயன்படுத்துங்கள்"
 
 
-msgctxt "Operator"
-msgid "Set Library ID"
-msgstr "நூலக ஐடியை அமைக்கவும்"
-
-
-msgid "Set a context value to an ID data-block"
-msgstr "ஐடி தரவு-தொகுதிக்கு சூழல் மதிப்பை அமைக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Context Set"
-msgstr "சூழல் தொகுப்பு"
-
-
-msgctxt "Operator"
-msgid "Context Set String"
-msgstr "சூழல் தொகுப்பு சரம்"
-
-
-msgctxt "Operator"
-msgid "Context Set Value"
-msgstr "சூழல் அமைக்கப்பட்ட மதிப்பு"
-
-
-msgctxt "Operator"
-msgid "Context Toggle"
-msgstr "சூழல் மாறுகிறது"
-
-
 msgid "Optionally override the context with a module"
 msgstr "ஒரு பகுதி மூலம் சூழலை விருப்பமாக மேலெழுதவும்"
-
-
-msgctxt "Operator"
-msgid "Context Toggle Values"
-msgstr "சூழல் மதிப்புகளை மாற்றவும்"
 
 
 msgid "Toggle enum"
@@ -80398,26 +80612,8 @@ msgid "Debug Value"
 msgstr "பிழைத்திருத்த மதிப்பு"
 
 
-msgctxt "Operator"
-msgid "View Documentation"
-msgstr "ஆவணங்களைக் காண்க"
-
-
-msgid "Open online reference docs in a web browser"
-msgstr "வலை உலாவியில் நிகழ்நிலை குறிப்பு ஆவணங்களைத் திறக்கவும்"
-
-
 msgid "Doc ID"
 msgstr "டாக் ஐடி"
-
-
-msgctxt "Operator"
-msgid "View Manual"
-msgstr "கையேட்டைக் காண்க"
-
-
-msgid "Load online manual"
-msgstr "நிகழ்நிலை கையேட்டை ஏற்றவும்"
 
 
 msgctxt "Operator"
@@ -80427,11 +80623,6 @@ msgstr "நிகழ்நிலை கையேட்டைக் காண்�
 
 msgid "View a context based online manual in a web browser"
 msgstr "வலை உலாவியில் சூழல் அடிப்படையிலான நிகழ்நிலை கையேட்டைக் காண்க"
-
-
-msgctxt "Operator"
-msgid "Handle dropped .blend file"
-msgstr "கைப்பிடி கைவிடப்பட்டது .கலப்பு கோப்பு"
 
 
 msgctxt "Operator"
@@ -80828,26 +81019,12 @@ msgstr ".கலப்பு கோப்பை தானாகவே கைஉ�
 
 
 msgctxt "Operator"
-msgid "Operator Cheat Sheet"
-msgstr "ஆபரேட்டர் ஏமாற்றுத் தாள்"
-
-
-msgid "List all the operators in a text-block, useful for scripting"
-msgstr "அனைத்து ஆபரேட்டர்களையும் ஒரு உரை-தொகுதியில் பட்டியலிடுங்கள், இது கைஉரைடுக்கு பயனுள்ளதாக இருக்கும்"
-
-
-msgctxt "Operator"
 msgid "Restore Operator Defaults"
 msgstr "ஆபரேட்டர் இயல்புநிலைகளை மீட்டமை"
 
 
 msgid "Set the active operator to its default values"
 msgstr "செயலில் உள்ள ஆபரேட்டரை அதன் இயல்புநிலை மதிப்புகளுக்கு அமைக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Operator Enum Pie"
-msgstr "ஆபரேட்டர் எனம் பை"
 
 
 msgid "Operator name (in Python as string)"
@@ -80858,48 +81035,8 @@ msgid "Property name (as a string)"
 msgstr "சொத்து பெயர் (ஒரு சரமாக)"
 
 
-msgctxt "Operator"
-msgid "Operator Preset"
-msgstr "ஆபரேட்டர் முன்னமைவு"
-
-
-msgid "Add or remove an Operator Preset"
-msgstr "ஒரு ஆபரேட்டர் முன்னமைவைச் சேர்க்கவும் அல்லது அகற்றவும்"
-
-
-msgctxt "Operator"
-msgid "Clean Up Operator Presets"
-msgstr "ஆபரேட்டர் முன்னமைவுகளை தூய்மை செய்யுங்கள்"
-
-
-msgid "Remove outdated operator properties from presets that may cause problems"
-msgstr "சிக்கல்களை ஏற்படுத்தக்கூடிய முன்னமைவுகளிலிருந்து காலாவதியான ஆபரேட்டர் பண்புகளை அகற்றவும்"
-
-
-msgctxt "Operator"
-msgid "Disable Add-on"
-msgstr "துணை நிரலை முடக்கு"
-
-
-msgid "Disable add-on for workspace"
-msgstr "பணியிடத்திற்கான துணை நிரலை முடக்கு"
-
-
 msgid "UI Tag"
 msgstr "இடைமுகம் குறிச்சொல்"
-
-
-msgctxt "Operator"
-msgid "Enable Add-on"
-msgstr "கூடுதல் சேர்க்கவும்"
-
-
-msgid "Enable add-on for workspace"
-msgstr "பணியிடத்திற்கான சேர்க்கையை இயக்கவும்"
-
-
-msgid "Open a path in a file browser"
-msgstr "கோப்பு உலாவியில் ஒரு பாதையைத் திறக்கவும்"
 
 
 msgctxt "Operator"
@@ -80972,15 +81109,6 @@ msgid "Merges vertices by distance"
 msgstr "செங்குத்துகளை தூரத்தால் இணைக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Batch-Clear Previews"
-msgstr "தொகுதி-தெளிவான முன்னோட்டங்கள்"
-
-
-msgid "Clear selected .blend file's previews"
-msgstr "தேர்ந்தெடுக்கப்பட்ட .கலப்பு கலப்பான் கோப்பு முன்னோட்டத்தை அழிக்கவும்"
-
-
 msgid "Save Backups"
 msgstr "காப்புப்பிரதிகளைச் சேமிக்கவும்"
 
@@ -81015,15 +81143,6 @@ msgstr "நம்பகமான கலப்பு கோப்புகள்"
 
 msgid "Enable Python evaluation for selected files"
 msgstr "தேர்ந்தெடுக்கப்பட்ட கோப்புகளுக்கான பைதான் மதிப்பீட்டை இயக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Batch-Generate Previews"
-msgstr "தொகுதி-உருவாக்கும் முன்னோட்டங்கள்"
-
-
-msgid "Generate selected .blend file's previews"
-msgstr "தேர்ந்தெடுக்கப்பட்ட .கலப்பு கலப்பான் கோப்பு முன்னோட்டத்தை உருவாக்குங்கள்"
 
 
 msgid "Root path of all files listed in `files` collection"
@@ -81108,15 +81227,6 @@ msgid "Ensure data-block previews are available and up-to-date (to be saved in .
 msgstr "தரவு-தொகுதி முன்னோட்டங்கள் கிடைக்கின்றன மற்றும் புதுப்பித்த நிலையில் உள்ளன என்பதை உறுதிப்படுத்தவும் (.கலப்பு கோப்பில் சேமிக்கப்பட வேண்டும், மூலப்பொருட்கள், கட்டமைப்புகள் போன்ற சில வகைகளுக்கு மட்டுமே)"
 
 
-msgctxt "Operator"
-msgid "Add Property"
-msgstr "சொத்து சேர்க்கவும்"
-
-
-msgid "Add your own property to the data-block"
-msgstr "தரவு-தொகுதிக்கு உங்கள் சொந்த சொத்தை சேர்க்கவும்"
-
-
 msgid "Property Edit"
 msgstr "சொத்து திருத்து"
 
@@ -81125,21 +81235,8 @@ msgid "Property data_path edit"
 msgstr "சொத்து தரவு_பாத் திருத்து"
 
 
-msgid "Jump to a different tab inside the properties editor"
-msgstr "பண்புகள் திருத்திக்குள் வேறு தாவலுக்குச் செல்லவும்"
-
-
 msgid "Context"
 msgstr "சூழல்"
-
-
-msgctxt "Operator"
-msgid "Edit Property"
-msgstr "சொத்தை திருத்தவும்"
-
-
-msgid "Change a custom property's type, or adjust how it is displayed in the interface"
-msgstr "தனிப்பயன் சொத்தின் வகையை மாற்றவும் அல்லது இடைமுகத்தில் அது எவ்வாறு காட்டப்படும் என்பதை சரிசெய்யவும்"
 
 
 msgid "Array Length"
@@ -81226,26 +81323,8 @@ msgid "Limits the Property Value slider to a range, values outside the range mus
 msgstr "சொத்து மதிப்பு ச்லைடரை ஒரு வரம்பிற்கு கட்டுப்படுத்துகிறது, வரம்பிற்கு வெளியே உள்ள மதிப்புகள் எண்ணிக்கையில் உள்ளிடப்பட வேண்டும்"
 
 
-msgctxt "Operator"
-msgid "Edit Property Value"
-msgstr "சொத்து மதிப்பைத் திருத்தவும்"
-
-
-msgid "Edit the value of a custom property"
-msgstr "தனிப்பயன் சொத்தின் மதிப்பைத் திருத்தவும்"
-
-
 msgid "Value for custom property types that can only be edited as a Python expression"
 msgstr "பைதான் வெளிப்பாடாக மட்டுமே திருத்தக்கூடிய தனிப்பயன் சொத்து வகைகளுக்கான மதிப்பு"
-
-
-msgctxt "Operator"
-msgid "Remove Property"
-msgstr "சொத்தை அகற்று"
-
-
-msgid "Internal use (edit a property data_path)"
-msgstr "உள் பயன்பாடு (ஒரு சொத்து தரவு_பாத் திருத்து)"
 
 
 msgctxt "Operator"
@@ -81786,24 +81865,6 @@ msgid "Validate Mesh"
 msgstr "மெச் சரிபார்க்கவும்"
 
 
-msgctxt "Operator"
-msgid "Save System Info"
-msgstr "கணினி தகவலை சேமிக்கவும்"
-
-
-msgid "Generate system information, saved into a text file"
-msgstr "கணினி தகவல்களை உருவாக்கி, உரை கோப்பில் சேமிக்கப்படுகிறது"
-
-
-msgctxt "Operator"
-msgid "Set Tool by Name"
-msgstr "பெயரால் கருவியை அமைக்கவும்"
-
-
-msgid "Set the tool by name (for key-maps)"
-msgstr "கருவியை பெயரால் அமைக்கவும் (விசை-வரைபடங்களுக்கு)"
-
-
 msgid "Set Fallback"
 msgstr "குறைவடையும்"
 
@@ -81824,15 +81885,6 @@ msgid "Identifier of the tool"
 msgstr "கருவியின் அடையாளங்காட்டி"
 
 
-msgctxt "Operator"
-msgid "Set Tool by Index"
-msgstr "குறியீட்டால் கருவியை அமைக்கவும்"
-
-
-msgid "Set the tool by index (for key-maps)"
-msgstr "கருவியை குறியீட்டால் அமைக்கவும் (விசை-வரைபடங்களுக்கு)"
-
-
 msgid "Set the fallback tool instead of the primary"
 msgstr "முதன்மைக்கு பதிலாக குறைவடையும் கருவியை அமைக்கவும்"
 
@@ -81845,40 +81897,8 @@ msgid "Index in Toolbar"
 msgstr "கருவிப்பட்டியில் குறியீட்டு"
 
 
-msgctxt "Operator"
-msgid "Toolbar"
-msgstr "கருவிப்பட்டி"
-
-
-msgctxt "Operator"
-msgid "Fallback Tool Pie Menu"
-msgstr "குறைவடையும் கருவி பை பட்டியல்"
-
-
-msgctxt "Operator"
-msgid "Toolbar Prompt"
-msgstr "கருவிப்பட்டி வரியில்"
-
-
-msgid "Leader key like functionality for accessing tools"
-msgstr "கருவிகளை அணுகுவதற்கான செயல்பாடு போன்ற தலைவர் விசை"
-
-
-msgid "Open a website in the web browser"
-msgstr "வலை உலாவியில் ஒரு வலைத்தளத்தைத் திறக்கவும்"
-
-
 msgid "URL to open"
 msgstr "திறக்க முகவரி"
-
-
-msgctxt "Operator"
-msgid "Open Preset Website"
-msgstr "முன்னமைக்கப்பட்ட வலைத்தளத்தைத் திறக்கவும்"
-
-
-msgid "Open a preset website in the web browser"
-msgstr "வலை உலாவியில் முன்னமைக்கப்பட்ட வலைத்தளத்தைத் திறக்கவும்"
 
 
 msgid "Site"
@@ -83072,6 +83092,130 @@ msgid "Panel containing UI elements"
 msgstr "இடைமுகம் கூறுகளைக் கொண்ட குழு"
 
 
+msgid "Active Tool"
+msgstr "செயலில் உள்ள கருவி"
+
+
+msgid "View Lock"
+msgstr "பூட்டைக் காண்க"
+
+
+msgid "Selectability & Visibility"
+msgstr "தேர்ந்தெடுக்கும் தன்மை மற்றும் தெரிவுநிலை"
+
+
+msgid "Wire Color"
+msgstr "கம்பி நிறம்"
+
+
+msgid "Shadow Settings"
+msgstr "நிழல் அமைப்புகள்"
+
+
+msgid "SSAO Settings"
+msgstr "ssao அமைப்புகள்"
+
+
+msgid "Render Pass"
+msgstr "பாச் வழங்குதல்"
+
+
+msgid "Compositor"
+msgstr "தொகுப்பாளர்"
+
+
+msgid "Overlays"
+msgstr "மேலடுக்குகள்"
+
+
+msgid "Guides"
+msgstr "வழிகாட்டிகள்"
+
+
+msgid "Viewer Node"
+msgstr "பார்வையாளர் முனை"
+
+
+msgid "Motion Tracking"
+msgstr "இயக்க கண்காணிப்பு"
+
+
+msgid "Mesh Edit Mode"
+msgstr "கண்ணி திருத்து பயன்முறை"
+
+
+msgid "Measurement"
+msgstr "அளவீட்டு"
+
+
+msgid "Curve Edit Mode"
+msgstr "வளைவு திருத்து பயன்முறை"
+
+
+msgid "Snapping"
+msgstr "ச்னாப்பிங்"
+
+
+msgid "Transform Orientations"
+msgstr "உருமாறும் நோக்குநிலைகள்"
+
+
+msgid "Stroke Placement"
+msgstr "வீச்சு வேலை வாய்ப்பு"
+
+
+msgid "Drawing Plane"
+msgstr "வரைதல் வானூர்தி"
+
+
+msgid "Quad View"
+msgstr "குவாட் பார்வை"
+
+
+msgid "Onion Skin"
+msgstr "வெங்காய தோல்"
+
+
+msgid "Stereoscopy"
+msgstr "ச்டீரியோச்கோபி"
+
+
+msgid "Multi Frame"
+msgstr "பல சட்டகம்"
+
+
+msgid "Curve Editing"
+msgstr "வளைவு திருத்துதல்"
+
+
+msgid "Auto-masking"
+msgstr "ஆட்டோ-மாசிங்"
+
+
+msgid "Auto-Masking"
+msgstr "ஆட்டோ-மாசிங்"
+
+
+msgid "Curves Sculpt Add Curve Options"
+msgstr "வளைவுகள் சிற்பம் வளைவு விருப்பங்களைச் சேர்க்கவும்"
+
+
+msgid "Curves Sculpt Parameter Falloff"
+msgstr "வளைவுகள் சிற்பம் அளவுரு வீழ்ச்சி"
+
+
+msgid "Curves Grow/Shrink Scaling"
+msgstr "வளைவுகள் வளரும்/சுருக்கவும்"
+
+
+msgid "Viewport Debug"
+msgstr "வியூபோர்ட் பிழைத்திருத்தம்"
+
+
+msgid "VR"
+msgstr "வி.ஆர்"
+
+
 msgid "Chain Scaling"
 msgstr "சங்கிலி அளவிடுதல்"
 
@@ -83301,10 +83445,6 @@ msgid "Acceleration Structure"
 msgstr "முடுக்கம் அமைப்பு"
 
 
-msgid "Compositor"
-msgstr "தொகுப்பாளர்"
-
-
 msgid "Final Render"
 msgstr "இறுதி வழங்கல்"
 
@@ -83315,10 +83455,6 @@ msgstr "நூல்கள்"
 
 msgid "Path Guiding"
 msgstr "பாதை வழிகாட்டுதல்"
-
-
-msgid "Render Pass"
-msgstr "பாச் வழங்குதல்"
 
 
 msgid "Mist Pass"
@@ -83343,10 +83479,6 @@ msgstr "கலவை வழிகாட்டிகள்"
 
 msgid "Center-Cut Safe Areas"
 msgstr "மைய-கட் பாதுகாப்பான பகுதிகள்"
-
-
-msgid "Stereoscopy"
-msgstr "ச்டீரியோச்கோபி"
 
 
 msgid "Texture Space"
@@ -83405,10 +83537,6 @@ msgid "Filters"
 msgstr "வடிப்பான்கள்"
 
 
-msgid "Snapping"
-msgstr "ச்னாப்பிங்"
-
-
 msgid "Advanced Filter"
 msgstr "மேம்பட்ட வடிகட்டி"
 
@@ -83436,18 +83564,6 @@ msgstr "அமைப்புகளை வடிகட்டவும்"
 
 msgid "Fluid Presets"
 msgstr "திரவ முன்னமைவுகள்"
-
-
-msgid "Active Tool"
-msgstr "செயலில் உள்ள கருவி"
-
-
-msgid "Overlays"
-msgstr "மேலடுக்குகள்"
-
-
-msgid "Guides"
-msgstr "வழிகாட்டிகள்"
 
 
 msgid "Clone from Image/UV Map"
@@ -83909,10 +84025,6 @@ msgid "Keyframing Settings"
 msgstr "கீஃப்ரேமிங் அமைப்புகள்"
 
 
-msgid "Onion Skin"
-msgstr "வெங்காய தோல்"
-
-
 msgid "Cache Settings"
 msgstr "கேச் அமைப்புகள்"
 
@@ -84264,88 +84376,12 @@ msgid "Mirror Options"
 msgstr "கண்ணாடி விருப்பங்கள்"
 
 
-msgid "Curves Sculpt Add Curve Options"
-msgstr "வளைவுகள் சிற்பம் வளைவு விருப்பங்களைச் சேர்க்கவும்"
-
-
-msgid "Curves Grow/Shrink Scaling"
-msgstr "வளைவுகள் வளரும்/சுருக்கவும்"
-
-
-msgid "Curves Sculpt Parameter Falloff"
-msgstr "வளைவுகள் சிற்பம் அளவுரு வீழ்ச்சி"
-
-
 msgid "Brush Presets"
 msgstr "முன்னமைவுகளை துலக்கவும்"
 
 
-msgid "Curve Editing"
-msgstr "வளைவு திருத்துதல்"
-
-
-msgid "Drawing Plane"
-msgstr "வரைதல் வானூர்தி"
-
-
-msgid "Multi Frame"
-msgstr "பல சட்டகம்"
-
-
-msgid "Stroke Placement"
-msgstr "வீச்சு வேலை வாய்ப்பு"
-
-
-msgid "Auto-masking"
-msgstr "ஆட்டோ-மாசிங்"
-
-
 msgid "Masking"
 msgstr "மறைத்தல்"
-
-
-msgid "Selectability & Visibility"
-msgstr "தேர்ந்தெடுக்கும் தன்மை மற்றும் தெரிவுநிலை"
-
-
-msgid "Curve Edit Mode"
-msgstr "வளைவு திருத்து பயன்முறை"
-
-
-msgid "Mesh Edit Mode"
-msgstr "கண்ணி திருத்து பயன்முறை"
-
-
-msgid "Measurement"
-msgstr "அளவீட்டு"
-
-
-msgid "Motion Tracking"
-msgstr "இயக்க கண்காணிப்பு"
-
-
-msgid "Viewer Node"
-msgstr "பார்வையாளர் முனை"
-
-
-msgid "Quad View"
-msgstr "குவாட் பார்வை"
-
-
-msgid "Auto-Masking"
-msgstr "ஆட்டோ-மாசிங்"
-
-
-msgid "Wire Color"
-msgstr "கம்பி நிறம்"
-
-
-msgid "Shadow Settings"
-msgstr "நிழல் அமைப்புகள்"
-
-
-msgid "SSAO Settings"
-msgstr "ssao அமைப்புகள்"
 
 
 msgid "Stencil Mask"
@@ -84646,22 +84682,6 @@ msgstr "வடிவத்திற்கு துகள்களை வெட�
 
 msgid "Pose Options"
 msgstr "விருப்பங்கள்"
-
-
-msgid "Transform Orientations"
-msgstr "உருமாறும் நோக்குநிலைகள்"
-
-
-msgid "View Lock"
-msgstr "பூட்டைக் காண்க"
-
-
-msgid "Viewport Debug"
-msgstr "வியூபோர்ட் பிழைத்திருத்தம்"
-
-
-msgid "VR"
-msgstr "வி.ஆர்"
 
 
 msgid "Action Maps"
@@ -95799,15 +95819,6 @@ msgid "Show graph view for active element"
 msgstr "செயலில் உள்ள உறுப்புக்கான வரைபடக் காட்சியைக் காட்டு"
 
 
-msgctxt "MovieClip"
-msgid "Dopesheet"
-msgstr "dopesheet"
-
-
-msgid "Dopesheet view for tracking data"
-msgstr "தரவைக் கண்காணிப்பதற்கான dopesheet பார்வை"
-
-
 msgid "Space Console"
 msgstr "விண்வெளி கன்சோல்"
 
@@ -102032,10 +102043,6 @@ msgid "Show the Face Orientation Overlay"
 msgstr "முகம் நோக்குநிலை மேலடுக்கைக் காட்டு"
 
 
-msgid "Highlight selected faces"
-msgstr "தேர்ந்தெடுக்கப்பட்ட முகங்களை முன்னிலைப்படுத்தவும்"
-
-
 msgid "Fade Inactive Objects"
 msgstr "செயலற்ற பொருள்களை மங்கச் செய்யுங்கள்"
 
@@ -106681,10 +106688,6 @@ msgid "None"
 msgstr "எதுவுமில்லை"
 
 
-msgid "Warning"
-msgstr "எச்சரிக்கை"
-
-
 msgid ":"
 msgstr ":"
 
@@ -107224,28 +107227,8 @@ msgstr "செயல் வடிகட்டி"
 
 
 msgctxt "Operator"
-msgid "Display Variant"
-msgstr "காட்சி மாறுபாடு"
-
-
-msgctxt "Operator"
-msgid "Assign To Variant"
-msgstr "மாறுபாட்டிற்கு ஒதுக்குங்கள்"
-
-
-msgctxt "Operator"
 msgid "Reset To Original"
 msgstr "அசல் மீட்டமை"
-
-
-msgctxt "Operator"
-msgid "Assign as Original"
-msgstr "அசலாக ஒதுக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Material Variant"
-msgstr "மூலப்பொருள் மாறுபாடு சேர்க்கவும்"
 
 
 msgid "No glTF Animation"
@@ -114184,11 +114167,6 @@ msgstr "அடுத்த தொகுதி"
 msgctxt "Operator"
 msgid "Empty"
 msgstr "வெறுமை"
-
-
-msgctxt "Operator"
-msgid "Suzanne"
-msgstr "சுசேன்"
 
 
 msgctxt "Operator"
@@ -124601,10 +124579,6 @@ msgstr "மேலெழுதப்பட்ட நூலகத் தரவி�
 
 msgid "Data-block does not support previews"
 msgstr "தரவு-தொகுதி முன்னோட்டங்களை ஆதரிக்காது"
-
-
-msgid "Can't generate automatic preview for node group"
-msgstr "முனை குழுவிற்கு தானியங்கி முன்னோட்டத்தை உருவாக்க முடியாது"
 
 
 msgid "Numeric input evaluation"
