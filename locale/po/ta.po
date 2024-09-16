@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Alpha (b'b5ea3beaf93b')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'd52d70324d18')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-09-02 14:03+0000\n"
+"POT-Creation-Date: 2024-09-16 11:03+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -17207,10 +17207,6 @@ msgid "Clone Image"
 msgstr "நகலி படம்"
 
 
-msgid "Image for clone tool"
-msgstr "நகலி கருவிக்கான படம்"
-
-
 msgid "Clone Offset"
 msgstr "நகலி ஆஃப்செட்"
 
@@ -17850,10 +17846,6 @@ msgstr "கடினத்தன்மையில் அழுத்தத்�
 
 msgid "Invert to Scrape or Fill"
 msgstr "துடைக்க அல்லது நிரப்ப தலைகீழ்"
-
-
-msgid "Use Scrape or Fill tool when inverting this brush instead of inverting its displacement direction"
-msgstr "இந்த தூரிகையை அதன் இடப்பெயர்ச்சி திசையை தலைகீழாக மாற்றும்போது ச்க்ராப் அல்லது ஃபில் கருவியைப் பயன்படுத்தவும்"
 
 
 msgid "Invert Pressure for Wet Mix"
@@ -31838,12 +31830,56 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Bone Collections"
+msgstr "எலும்பு வசூல்"
+
+
+msgid "Names"
+msgstr "பெயர்கள்"
+
+
 msgid "Show/Hide"
 msgstr "காட்டு/மறைக்க"
 
 
+msgid "Apply"
+msgstr "இடு"
+
+
+msgid "Toggle Bone Options"
+msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
+
+
+msgid "Enable Bone Options"
+msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
+
+
+msgid "Disable Bone Options"
+msgstr "எலும்பு விருப்பங்களை முடக்கு"
+
+
+msgid "Mesh Select Mode"
+msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Face Data"
+msgstr "முகத்தை முகம்"
+
+
+msgid "Select by Face Strength"
+msgstr "முக வலிமையால் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Set Face Strength"
+msgstr "முக வலிமையை அமைக்கவும்"
+
+
 msgid "Clean Up"
 msgstr "தூய்மை செய்"
+
+
+msgid "Merge"
+msgstr "ஒன்றிணைக்கவும்"
 
 
 msgid "Special Characters"
@@ -31852,10 +31888,6 @@ msgstr "சிறப்பு எழுத்துக்கள்"
 
 msgid "Kerning"
 msgstr "கெர்னிங்"
-
-
-msgid "Names"
-msgstr "பெயர்கள்"
 
 
 msgid "Bone Roll"
@@ -31962,10 +31994,6 @@ msgid "Rigid Body"
 msgstr "கடினமான உடல்"
 
 
-msgid "Apply"
-msgstr "இடு"
-
-
 msgid "Track"
 msgstr "டிராக்"
 
@@ -32016,42 +32044,6 @@ msgstr "இன்-பெட்வீன்ச்"
 
 msgid "Propagate"
 msgstr "பிரச்சாரம்"
-
-
-msgid "Bone Collections"
-msgstr "எலும்பு வசூல்"
-
-
-msgid "Toggle Bone Options"
-msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
-
-
-msgid "Enable Bone Options"
-msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
-
-
-msgid "Disable Bone Options"
-msgstr "எலும்பு விருப்பங்களை முடக்கு"
-
-
-msgid "Mesh Select Mode"
-msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Face Data"
-msgstr "முகத்தை முகம்"
-
-
-msgid "Select by Face Strength"
-msgstr "முக வலிமையால் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Set Face Strength"
-msgstr "முக வலிமையை அமைக்கவும்"
-
-
-msgid "Merge"
-msgstr "ஒன்றிணைக்கவும்"
 
 
 msgid "Keyframe Insert Pie"
@@ -34109,6 +34101,10 @@ msgstr "ஒன்றுடன் ஒன்று தவிர்க்க அக
 
 msgid "Vertex group name"
 msgstr "வெர்டெக்ச் குழு பெயர்"
+
+
+msgid "Vertex Weight"
+msgstr "வெர்டெக்ச் எடை"
 
 
 msgid "Vertex Mesh Method"
@@ -47160,10 +47156,6 @@ msgstr "வண்ணத்திற்கு பயன்படுத்த வ�
 
 msgid "Vertex color layer"
 msgstr "வெர்டெக்ச் வண்ண அடுக்கு"
-
-
-msgid "Vertex Weight"
-msgstr "வெர்டெக்ச் எடை"
 
 
 msgid "Vertex group weight"
@@ -61632,6 +61624,11 @@ msgstr "துணைப்பிரிவு வீச்சு"
 
 
 msgctxt "Operator"
+msgid "Normalize All Vertex Groups"
+msgstr "அனைத்து வெர்டெக்ச் குழுக்களையும் இயல்பாக்குங்கள்"
+
+
+msgctxt "Operator"
 msgid "Add Render Slot"
 msgstr "வழங்குதல் ச்லாட்டைச் சேர்க்கவும்"
 
@@ -70052,11 +70049,6 @@ msgstr "செயலில் உள்ள வெர்டெக்ச் கு
 
 
 msgctxt "Operator"
-msgid "Normalize All Vertex Groups"
-msgstr "அனைத்து வெர்டெக்ச் குழுக்களையும் இயல்பாக்குங்கள்"
-
-
-msgctxt "Operator"
 msgid "Quantize Vertex Weights"
 msgstr "வெர்டெக்ச் எடையை அளவிடுங்கள்"
 
@@ -75105,22 +75097,6 @@ msgid "Change Effect Input"
 msgstr "விளைவு உள்ளீட்டை மாற்றவும்"
 
 
-msgid "The effect inputs to swap"
-msgstr "இடமாற்றம் செய்ய விளைவு உள்ளீடுகள்"
-
-
-msgid "A → B"
-msgstr "ஒரு → பி"
-
-
-msgid "B → C"
-msgstr "பி. சி"
-
-
-msgid "A → C"
-msgstr "ஒரு → சி"
-
-
 msgctxt "Operator"
 msgid "Change Effect Type"
 msgstr "விளைவு வகையை மாற்றவும்"
@@ -76322,10 +76298,6 @@ msgstr "2 சீக்வென்சர் கீற்றுகளை மா�
 msgctxt "Operator"
 msgid "Swap Inputs"
 msgstr "உள்ளீடுகளை மாற்றவும்"
-
-
-msgid "Swap the first two inputs for the effect strip"
-msgstr "விளைவு துண்டுக்கு முதல் இரண்டு உள்ளீடுகளை மாற்றவும்"
 
 
 msgctxt "Operator"
@@ -84605,8 +84577,8 @@ msgstr "மாதிரி வெர்டெக்ச் குழு"
 
 
 msgctxt "Operator"
-msgid "Cutter"
-msgstr "கட்டர்"
+msgid "Trim"
+msgstr "ஒழுங்கமைக்கவும்"
 
 
 msgctxt "Operator"
@@ -84637,6 +84609,11 @@ msgstr "பெட்டி"
 msgctxt "Operator"
 msgid "Circle"
 msgstr "வட்டம்"
+
+
+msgctxt "Operator"
+msgid "Cutter"
+msgstr "கட்டர்"
 
 
 msgid "Expand or contract the radius of the selected points"
@@ -86449,10 +86426,6 @@ msgid "Overlay Next"
 msgstr "அடுத்து மேலடுக்கு"
 
 
-msgid "Enable the new Overlay codebase, requires restart"
-msgstr "புதிய மேலடுக்கு கோட்பேசை இயக்கவும், மறுதொடக்கம் தேவை"
-
-
 msgid "No Override Auto Resync"
 msgstr "ஆட்டோ மறுசீரமைப்பு இல்லை"
 
@@ -87513,10 +87486,6 @@ msgstr "உலோகம்"
 
 msgid "Use Metal backend"
 msgstr "உலோக பின்தளத்தில் பயன்படுத்தவும்"
-
-
-msgid "Vulkan"
-msgstr "வல்கன்"
 
 
 msgid "Use Vulkan backend"
@@ -106221,146 +106190,6 @@ msgstr "கிளிப் டோப்சீட் திருத்தி"
 
 
 msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Curve Edit Mode"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் வளைவு திருத்து பயன்முறை"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Edit Mode"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் திருத்து பயன்முறை"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Paint (Draw brush)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் பெயிண்ட் (டிரா பிரச்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Paint (Fill)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் பெயிண்ட் (நிரப்பு)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Paint (Erase)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் பெயிண்ட் (அழிக்கவும்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Paint (Tint)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் பெயிண்ட் (சாயல்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Paint Mode"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் பெயிண்ட் பயன்முறை"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt Mode"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் பயன்முறை"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt (Smooth)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் (மென்மையானது)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt (Thickness)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் (தடிமன்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt (Strength)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் (வலிமை)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt (Grab)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் (கிராப்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt (Push)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் (புச்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt (Twist)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் (திருப்பம்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt (Pinch)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் (பிஞ்ச்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt (Randomize)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் (சீரற்றது)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt (Clone)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் சிற்பம் (குளோன்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Weight Mode"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் எடை முறை"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Weight (Draw)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் எடை (வரைய)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Weight (Blur)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் எடை (மங்கலானது)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Weight (Average)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் எடை (சராசரி)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Weight (Smear)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் எடை (ச்மியர்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Vertex Mode"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் வெர்டெக்ச் பயன்முறை"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Vertex (Draw)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் வெர்டெக்ச் (டிரா)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Vertex (Blur)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் வெர்டெக்ச் (மங்கலானது)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Vertex (Average)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் வெர்டெக்ச் (சராசரி)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Vertex (Smear)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் வெர்டெக்ச் (ச்மியர்)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Vertex (Replace)"
-msgstr "பசை எழுதுகோல் ச்ட்ரோக் வெர்டெக்ச் (மாற்றவும்)"
-
-
-msgctxt "WindowManager"
 msgid "Mask Editing"
 msgstr "முகமூடி திருத்துதல்"
 
@@ -111021,11 +110850,6 @@ msgid "Shortest Path"
 msgstr "குறுகிய பாதை"
 
 
-msgctxt "Image"
-msgid "New"
-msgstr "புதிய"
-
-
 msgctxt "Operator"
 msgid "Save All Images"
 msgstr "அனைத்து படங்களையும் சேமிக்கவும்"
@@ -112109,11 +111933,6 @@ msgstr "செயலில் உள்ள பார்வையாளர் ம
 
 msgid "Invalid id"
 msgstr "செல்லாத ஐடி"
-
-
-msgctxt "Text"
-msgid "Wrap"
-msgstr "மடி"
 
 
 msgctxt "Text"
@@ -113898,11 +113717,6 @@ msgstr "தகவமைப்பு"
 
 
 msgctxt "Operator"
-msgid "Trim"
-msgstr "ஒழுங்கமைக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Outline"
 msgstr "அவுட்லைன்"
 
@@ -115571,10 +115385,6 @@ msgid "ID / Index"
 msgstr "ஐடி / குறியீட்டு"
 
 
-msgid "\"{}\" from {}"
-msgstr "{} இலிருந்து \"{}\""
-
-
 msgid "GP_Layer"
 msgstr "gp_layer"
 
@@ -117030,24 +116840,8 @@ msgid "Bone collection with index %d not found on Armature %s"
 msgstr "குறியீட்டு %d உடன் எலும்பு சேகரிப்பு ஆர்மேச்சர் %s இல் காணப்படவில்லை"
 
 
-msgid "Bone collection %s is not editable, maybe add an override on the armature?"
-msgstr "எலும்பு சேகரிப்பு %s திருத்தக்கூடியவை அல்ல, ஆர்மேச்சரில் ஒரு மேலெழுதலைச் சேர்க்கலாமா?"
-
-
 msgid "No object found to operate on"
 msgstr "செயல்பட எந்த பொருளும் இல்லை"
-
-
-msgid "Cannot add bone collections to a linked Armature without an override"
-msgstr "எலும்பு சேகரிப்புகளை மேலெழுதாமல் இணைக்கப்பட்ட ஆர்மெச்சரில் சேர்க்க முடியாது"
-
-
-msgid "Cannot add bone collections to a linked Armature with a system override; explicitly create an override on the Armature"
-msgstr "இணைக்கப்பட்ட ஆர்மேச்சரில் எலும்பு சேகரிப்புகளை ஒரு அமைப்பு மேலெழுதலுடன் சேர்க்க முடியாது; வெளிப்படையாக ஆர்மேச்சரில் ஒரு மேலெழுதலை உருவாக்கவும்"
-
-
-msgid "Cannot update a linked Armature with a system override; explicitly create an override on the Armature"
-msgstr "கணினி மேலெழுதலுடன் இணைக்கப்பட்ட ஆர்மேச்சரை புதுப்பிக்க முடியாது; வெளிப்படையாக ஆர்மேச்சரில் ஒரு மேலெழுதலை உருவாக்கவும்"
 
 
 msgid "Armature has no active bone collection, select one first"
@@ -117064,10 +116858,6 @@ msgstr "எலும்பு சேகரிப்புகளை ஒரு ஆ
 
 msgid "Cannot edit bone collections on linked Armatures without override"
 msgstr "இணைக்கப்பட்ட ஆயுதங்களில் எலும்பு சேகரிப்புகளை மீறாமல் திருத்த முடியாது"
-
-
-msgid "Cannot edit bone collections on a linked Armature with a system override; explicitly create an override on the Armature"
-msgstr "இணைக்கப்பட்ட ஆர்மேச்சரில் எலும்பு சேகரிப்புகளை ஒரு அமைப்பு மேலெழுதலுடன் திருத்த முடியாது; வெளிப்படையாக ஆர்மேச்சரில் ஒரு மேலெழுதலை உருவாக்கவும்"
 
 
 msgid "Linked bone collections are not editable"
@@ -119038,6 +118828,11 @@ msgstr "புதிய"
 
 
 msgctxt "GPencil"
+msgid "New"
+msgstr "புதிய"
+
+
+msgctxt "Image"
 msgid "New"
 msgstr "புதிய"
 
@@ -123480,10 +123275,6 @@ msgid "Cannot apply effects to audio sequence strips"
 msgstr "ஆடியோ வரிசை கீற்றுகளுக்கு விளைவுகளைப் பயன்படுத்த முடியாது"
 
 
-msgid "Cannot apply effect to more than 3 sequence strips"
-msgstr "3 க்கும் மேற்பட்ட வரிசை கீற்றுகளுக்கு விளைவைப் பயன்படுத்த முடியாது"
-
-
 msgid "At least one selected sequence strip is needed"
 msgstr "குறைந்தது ஒரு தேர்ந்தெடுக்கப்பட்ட வரிசை துண்டு தேவை"
 
@@ -126155,20 +125946,12 @@ msgid "Sequences.new_effect: effect takes 2 input sequences"
 msgstr "வரிசைமுறைகள். நியூ_பெக்ட்: விளைவு 2 உள்ளீட்டு காட்சிகளை எடுக்கும்"
 
 
-msgid "Sequences.new_effect: effect takes 3 input sequences"
-msgstr "வரிசைமுறைகள். நியூ_பெக்ட்: விளைவு 3 உள்ளீட்டு காட்சிகளை எடுக்கும்"
-
-
 msgid "SequenceElements.pop: cannot pop the last element"
 msgstr "வரிசைமுறைகள். போப்: கடைசி உறுப்பை பாப் செய்ய முடியாது"
 
 
 msgid "SequenceElements.pop: index out of range"
 msgstr "ceventelements.pop: வரம்பிற்கு வெளியே குறியீட்டு"
-
-
-msgid "Sequences.new_effect: effect expects more than 3 inputs (%d, should never happen!)"
-msgstr "வரிசைமுறைகள். நியூ_பெக்ட்: விளைவு 3 க்கும் மேற்பட்ட உள்ளீடுகளை எதிர்பார்க்கிறது (%d, ஒருபோதும் நடக்கக்கூடாது!)"
 
 
 msgid "Sequence '%s' not in scene '%s'"
@@ -129057,8 +128840,8 @@ msgid "Number of voxels in the Z axis"
 msgstr "சட் அச்சில் வோக்சல்களின் எண்ணிக்கை"
 
 
-msgid "{} node"
-msgstr "{} முனை"
+msgid "\"{}\" from {}"
+msgstr "{} இலிருந்து \"{}\""
 
 
 msgid "Group '{}' ({})"
@@ -129845,14 +129628,6 @@ msgstr "சூழலில் 'சாளரத்தை' காணவில்�
 
 msgid "Trusted Source [Untrusted Path]"
 msgstr "நம்பகமான மூல [நம்பத்தகாத பாதை]"
-
-
-msgid "Remove all items from the recent files list"
-msgstr "அண்மைக் கால கோப்புகள் பட்டியலிலிருந்து அனைத்து உருப்படிகளையும் அகற்று"
-
-
-msgid "Remove All"
-msgstr "அனைத்து நீக்க"
 
 
 msgid "Allow Execution"
