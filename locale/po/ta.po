@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'6039cb17e63e')\n"
+"Project-Id-Version: Blender 4.3.0 Beta (b'89e3ab2a4533')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-10-07 09:15+0000\n"
+"POT-Creation-Date: 2024-10-14 08:43+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -31830,30 +31830,6 @@ msgid "Snap"
 msgstr "ச்னாப்"
 
 
-msgid "Proportional Editing Falloff"
-msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
-
-
-msgid "Mask Edit"
-msgstr "முகமூடி திருத்து"
-
-
-msgid "Automasking"
-msgstr "ஆட்டோமேச்கிங்"
-
-
-msgid "Face Sets Edit"
-msgstr "முகம் தொகுப்புகள் திருத்து"
-
-
-msgid "Vertex Group Locks"
-msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
-
-
-msgid "Mirror"
-msgstr "கண்ணாடி"
-
-
 msgid "UV Mapping"
 msgstr "புறஊதா மேப்பிங்"
 
@@ -31958,6 +31934,10 @@ msgid "Hooks"
 msgstr "கொக்கிகள்"
 
 
+msgid "Vertex Group Locks"
+msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
+
+
 msgid "Sculpt Set Pivot"
 msgstr "சிற்பம் செட் பிவோட்"
 
@@ -32036,6 +32016,26 @@ msgstr "எலும்பு ரோல்"
 
 msgid "Pivot Point"
 msgstr "பிவோட் புள்ளி"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
+
+
+msgid "Mask Edit"
+msgstr "முகமூடி திருத்து"
+
+
+msgid "Automasking"
+msgstr "ஆட்டோமேச்கிங்"
+
+
+msgid "Face Sets Edit"
+msgstr "முகம் தொகுப்புகள் திருத்து"
+
+
+msgid "Mirror"
+msgstr "கண்ணாடி"
 
 
 msgid "Keyframe Insert Pie"
@@ -58198,19 +58198,6 @@ msgstr "புதிய சிறுகுறிப்பு தரவு-தட
 
 
 msgctxt "Operator"
-msgid "Insert Blank Frame"
-msgstr "வெற்று சட்டத்தை செருகவும்"
-
-
-msgid "Insert a blank frame on the current frame (all subsequently existing frames, if any, are shifted right by one frame)"
-msgstr "தற்போதைய சட்டகத்தில் ஒரு வெற்று சட்டத்தை செருகவும் (பின்னர் தற்போதுள்ள பிரேம்கள் ஏதேனும் இருந்தால், ஒரு சட்டகத்தால் சரியாக மாற்றப்படும்)"
-
-
-msgid "Create blank frame in all layers, not only active"
-msgstr "செயலில் மட்டுமல்லாமல், அனைத்து அடுக்குகளிலும் வெற்று சட்டத்தை உருவாக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Annotation Unlink"
 msgstr "சிறுகுறிப்பு இணைக்கப்படவில்லை"
 
@@ -59293,6 +59280,11 @@ msgstr "வீச்சுகள் மூலம் உருவாகும் 
 msgctxt "Operator"
 msgid "Delete Duplicate Frames"
 msgstr "நகல் பிரேம்களை நீக்கு"
+
+
+msgctxt "Operator"
+msgid "Insert Blank Frame"
+msgstr "வெற்று சட்டத்தை செருகவும்"
 
 
 msgid "Insert a blank frame on the current scene frame"
@@ -79490,10 +79482,6 @@ msgid "Export strokes with fill enabled"
 msgstr "நிரப்பப்பட்ட வீச்சுகள்"
 
 
-msgid "Export strokes with constant thickness"
-msgstr "நிலையான தடிமன் கொண்ட வீச்சுகள்"
-
-
 msgctxt "Operator"
 msgid "Export to SVG"
 msgstr "எச்விசிக்கு ஏற்றுமதி"
@@ -79505,10 +79493,6 @@ msgstr "எச்விசிக்கு பசை எழுதுகோல் 
 
 msgid "Clip Camera"
 msgstr "கிளிப் கேமரா"
-
-
-msgid "Clip drawings to camera size when export in camera view"
-msgstr "கேமரா பார்வையில் ஏற்றுமதி செய்யும் போது கேமரா அளவிற்கு வரைபடங்களை கிளிப் செய்யுங்கள்"
 
 
 msgid "Import SVG into grease pencil"
@@ -81895,66 +81879,6 @@ msgid "Panel containing UI elements"
 msgstr "இடைமுகம் கூறுகளைக் கொண்ட குழு"
 
 
-msgid "Active Tool"
-msgstr "செயலில் உள்ள கருவி"
-
-
-msgid "View Lock"
-msgstr "பூட்டைக் காண்க"
-
-
-msgid "Selectability & Visibility"
-msgstr "தேர்ந்தெடுக்கும் தன்மை மற்றும் தெரிவுநிலை"
-
-
-msgid "Wire Color"
-msgstr "கம்பி நிறம்"
-
-
-msgid "Shadow Settings"
-msgstr "நிழல் அமைப்புகள்"
-
-
-msgid "SSAO Settings"
-msgstr "ssao அமைப்புகள்"
-
-
-msgid "Render Pass"
-msgstr "பாச் வழங்குதல்"
-
-
-msgid "Compositor"
-msgstr "தொகுப்பாளர்"
-
-
-msgid "Overlays"
-msgstr "மேலடுக்குகள்"
-
-
-msgid "Guides"
-msgstr "வழிகாட்டிகள்"
-
-
-msgid "Viewer Node"
-msgstr "பார்வையாளர் முனை"
-
-
-msgid "Motion Tracking"
-msgstr "இயக்க கண்காணிப்பு"
-
-
-msgid "Mesh Edit Mode"
-msgstr "கண்ணி திருத்து பயன்முறை"
-
-
-msgid "Measurement"
-msgstr "அளவீட்டு"
-
-
-msgid "Curve Edit Mode"
-msgstr "வளைவு திருத்து பயன்முறை"
-
-
 msgid "Snapping"
 msgstr "ச்னாப்பிங்"
 
@@ -81969,6 +81893,10 @@ msgstr "வீச்சு வேலை வாய்ப்பு"
 
 msgid "Drawing Plane"
 msgstr "வரைதல் வானூர்தி"
+
+
+msgid "Guides"
+msgstr "வழிகாட்டிகள்"
 
 
 msgid "Quad View"
@@ -82007,8 +81935,64 @@ msgid "Viewport Debug"
 msgstr "வியூபோர்ட் பிழைத்திருத்தம்"
 
 
+msgid "Curve Edit Mode"
+msgstr "வளைவு திருத்து பயன்முறை"
+
+
 msgid "VR"
 msgstr "வி.ஆர்"
+
+
+msgid "Active Tool"
+msgstr "செயலில் உள்ள கருவி"
+
+
+msgid "View Lock"
+msgstr "பூட்டைக் காண்க"
+
+
+msgid "Selectability & Visibility"
+msgstr "தேர்ந்தெடுக்கும் தன்மை மற்றும் தெரிவுநிலை"
+
+
+msgid "Wire Color"
+msgstr "கம்பி நிறம்"
+
+
+msgid "Shadow Settings"
+msgstr "நிழல் அமைப்புகள்"
+
+
+msgid "SSAO Settings"
+msgstr "ssao அமைப்புகள்"
+
+
+msgid "Render Pass"
+msgstr "பாச் வழங்குதல்"
+
+
+msgid "Compositor"
+msgstr "தொகுப்பாளர்"
+
+
+msgid "Overlays"
+msgstr "மேலடுக்குகள்"
+
+
+msgid "Viewer Node"
+msgstr "பார்வையாளர் முனை"
+
+
+msgid "Motion Tracking"
+msgstr "இயக்க கண்காணிப்பு"
+
+
+msgid "Mesh Edit Mode"
+msgstr "கண்ணி திருத்து பயன்முறை"
+
+
+msgid "Measurement"
+msgstr "அளவீட்டு"
 
 
 msgid "Chain Scaling"
@@ -116153,40 +116137,12 @@ msgid "Active region not set"
 msgstr "செயலில் உள்ள மண்டலம் அமைக்கப்படவில்லை"
 
 
-msgid "Skin_Light"
-msgstr "தோல்_ஒளி"
-
-
-msgid "Skin_Shadow"
-msgstr "தோல்_நிழல்"
-
-
-msgid "Eyes"
-msgstr "கண்கள்"
-
-
-msgid "Pupils"
-msgstr "மாணவர்கள்"
-
-
-msgid "Grey"
-msgstr "சாம்பல்"
-
-
 msgid "Nowhere for grease pencil data to go"
 msgstr "பசை எழுதுகோல் தரவு செல்ல எங்கும் இல்லை"
 
 
 msgid "Cannot delete locked layers"
 msgstr "பூட்டிய அடுக்குகளை நீக்க முடியாது"
-
-
-msgid "Apply all rotations before join objects"
-msgstr "பொருள்களில் சேருவதற்கு முன் அனைத்து சுழற்சிகளையும் பயன்படுத்துங்கள்"
-
-
-msgid "Active object is not a selected grease pencil"
-msgstr "செயலில் உள்ள பொருள் தேர்ந்தெடுக்கப்பட்ட பசை எழுதுகோல் அல்ல"
 
 
 msgid "No grease pencil data"
@@ -116197,12 +116153,24 @@ msgid "No active frame to delete"
 msgstr "நீக்க செயலில் உள்ள சட்டகம் இல்லை"
 
 
+msgid "Grey"
+msgstr "சாம்பல்"
+
+
 msgid "Skin_light"
 msgstr "தோல்_ஒளி"
 
 
 msgid "Skin_shadow"
 msgstr "தோல்_நிழல்"
+
+
+msgid "Eyes"
+msgstr "கண்கள்"
+
+
+msgid "Pupils"
+msgstr "மாணவர்கள்"
 
 
 msgid "Material '%s' could not be found"
@@ -116233,6 +116201,10 @@ msgid "No Grease Pencil frame to draw on"
 msgstr "வரைய பசை எழுதுகோல் சட்டகம் இல்லை"
 
 
+msgid "Active object is not a selected grease pencil"
+msgstr "செயலில் உள்ள பொருள் தேர்ந்தெடுக்கப்பட்ட பசை எழுதுகோல் அல்ல"
+
+
 msgid "'%s' Layer is locked"
 msgstr "'%s' அடுக்கு பூட்டப்பட்டுள்ளது"
 
@@ -116259,10 +116231,6 @@ msgstr "மதிப்பை அமைப்பதில் தோல்வி"
 
 msgid "Property from path '%s' is not a float"
 msgstr "பாதையின் '%s' இலிருந்து சொத்து ஒரு மிதவை அல்ல"
-
-
-msgid "LMB: Stroke - Shift: Fill - Shift+Ctrl: Stroke + Fill"
-msgstr "எல்எம்பி: ச்ட்ரோக் - சிப்ட்: ஃபில் - சிப்ட் + சிடிஆர்எல்: ச்ட்ரோக் + நிரப்பு"
 
 
 msgid "Press a key"
@@ -117920,10 +117888,6 @@ msgstr "எடிட்மோட் ஆர்மேச்சரை உருவ�
 
 msgid "Converting some non-editable object/object data, enforcing 'Keep Original' option to True"
 msgstr "சில திருத்தப்படாத பொருள்/பொருள் தரவை மாற்றுவது, 'அசல்' விருப்பத்தை உண்மைக்கு அமல்படுத்துதல்"
-
-
-msgid "Convert Surfaces to Grease Pencil is not supported"
-msgstr "பசை எழுதுகோலுக்கு மேற்பரப்புகளை மாற்றவும் ஆதரிக்கப்படவில்லை"
 
 
 msgid "Object not found"
@@ -124216,10 +124180,6 @@ msgstr "பொருள் '%s' மதிப்பீடு செய்யப�
 
 msgid "Object '%s' could not create internal data for finding nearest point"
 msgstr "பொருள் '%s' அருகிலுள்ள புள்ளியைக் கண்டுபிடிப்பதற்கான உள் தரவை உருவாக்க முடியவில்லை"
-
-
-msgid "Object '%s' is not valid for this operation! Only curves are supported"
-msgstr "இந்த செயல்பாட்டிற்கு பொருள் '%s' செல்லுபடியாகாது! வளைவுகள் மட்டுமே ஆதரிக்கப்படுகின்றன"
 
 
 msgid "Palette '%s' does not contain color given"
