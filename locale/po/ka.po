@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Beta (b'1c8669f8c9c1')\n"
+"Project-Id-Version: Blender 4.3.0 Release Candidate (b'7dfe47164a63')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-11-11 09:42+0000\n"
-"PO-Revision-Date: 2024-11-08 18:56+0000\n"
+"POT-Creation-Date: 2024-11-18 11:20+0000\n"
+"PO-Revision-Date: 2024-11-18 08:29+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.7.2"
+"X-Generator: Weblate 5.8.3"
 
 
 msgid "Shader AOV"
@@ -33774,16 +33774,52 @@ msgid "Editor menu containing buttons"
 msgstr "რედაქტორის მენიუ, რომელიც ღილაკებს შეიცავს"
 
 
+msgid "Mirror"
+msgstr "გასარკისებურება"
+
+
+msgid "Snap"
+msgstr "მიკვრა"
+
+
+msgid "UV Mapping"
+msgstr "UV დატანა"
+
+
+msgid "Local View"
+msgstr "ლოკალური ხედი"
+
+
+msgid "Viewpoint"
+msgstr "თვალთახედვა"
+
+
+msgid "Navigation"
+msgstr "ნავიგაცია"
+
+
+msgid "Align View"
+msgstr "ხედის მისადაგება"
+
+
+msgid "Align View to Active"
+msgstr "მიუსადაგე ხედი აქტიურს"
+
+
+msgid "View Regions"
+msgstr "ხედის არეალები"
+
+
+msgid "Select More/Less"
+msgstr "მეტის/ნაკლების მონიშნვა"
+
+
 msgid "Select Similar"
 msgstr "მსგავსის მონიშნვა"
 
 
 msgid "Select All by Trait"
 msgstr "ყველას მონიშნვა თვისებით"
-
-
-msgid "Select More/Less"
-msgstr "მეტის/ნაკლების მონიშნვა"
 
 
 msgid "Select Linked"
@@ -33938,10 +33974,6 @@ msgid "Pivot Point"
 msgstr "ბრუნვის ცენტრი"
 
 
-msgid "Snap"
-msgstr "მიკვრა"
-
-
 msgid "Proportional Editing Falloff"
 msgstr "პროპორციული რედაქტირების მილევა"
 
@@ -33956,38 +33988,6 @@ msgstr "ავტომატური შენიღბვა"
 
 msgid "Face Sets Edit"
 msgstr "წახნაგების ნაკრებთა რედაქტირება"
-
-
-msgid "Mirror"
-msgstr "გასარკისებურება"
-
-
-msgid "UV Mapping"
-msgstr "UV დატანა"
-
-
-msgid "Local View"
-msgstr "ლოკალური ხედი"
-
-
-msgid "Viewpoint"
-msgstr "თვალთახედვა"
-
-
-msgid "Navigation"
-msgstr "ნავიგაცია"
-
-
-msgid "Align View"
-msgstr "ხედის მისადაგება"
-
-
-msgid "Align View to Active"
-msgstr "მიუსადაგე ხედი აქტიურს"
-
-
-msgid "View Regions"
-msgstr "ხედის არეალები"
 
 
 msgid "Keyframe Insert Pie"
@@ -44436,8 +44436,16 @@ msgid "Final render output"
 msgstr "საბოლოო გამომავალი რენდერი"
 
 
+msgid "Colors are treated alpha premultiplied, or colors output straight (alpha gets set to 1)"
+msgstr "ფერები ან განიხილება წინასწარგამრავლებული ალფას მქონედ, ან პირდაპირ გამოიტანება (ალფა 1-ზე დაყენდება)"
+
+
 msgid "Convert Colorspace"
 msgstr "დააკონვერტირე ფერის სივრცე"
+
+
+msgid "Convert between color spaces"
+msgstr "დააკონვერტირე ფერის სხვადასხვა სივრცეებზე"
 
 
 msgid "From"
@@ -44458,6 +44466,14 @@ msgstr "გამოტანილი გამოსახულების �
 
 msgid "Corner Pin"
 msgstr "კუთხის ჩამაგრება"
+
+
+msgid "Plane warp transformation using explicit corner values"
+msgstr "სიბრტყის დაბრეცის გარდაქმნა კუთხეთა ცხადი მნიშვნელობების გამოყენებით"
+
+
+msgid "Crops image to a smaller region, either making the cropped area transparent or resizing the image"
+msgstr "ჩამოჭრის გამოსახულებას უფრო მცირე მონაკვეთად, ან ჩამოჭრილი არეალის გამჭვირვალედ ქცევის, ან გამოსახულების ზომის შეცვლის მეშვეობით"
 
 
 msgid "X2"
@@ -44496,12 +44512,28 @@ msgid "Deprecated. Use Cryptomatte Node instead"
 msgstr "არარეკომენდირებულია. ამის ნაცვლად გამოიყენე კრიპტოკაშეს კვანძი"
 
 
+msgid "Add object or material to matte, by picking a color from the Pick output"
+msgstr "დაამატე კაშეს ობიექტი, ან მასალა, ამორჩევის გამონატანიდან ფერის არჩევის მეშვეობით"
+
+
 msgid "Matte Objects"
 msgstr "კაშეს ობიექტები"
 
 
+msgid "List of object and material crypto IDs to include in matte"
+msgstr "სია ობიექტებისა და მასალების კრიპტო ID-ებისა, რომელთაც კაშე უნდა შეიცავდეს"
+
+
+msgid "Remove object or material from matte, by picking a color from the Pick output"
+msgstr "მოაცილე კაშედან ობიექტი, ან მასალა, ამორჩევის გამონატანიდან ფერის არჩევის გზით"
+
+
 msgid "Cryptomatte"
 msgstr "კრიპტოკაშე"
+
+
+msgid "Generate matte for individual objects and materials using Cryptomatte render passes"
+msgstr "წარმოქმენი კაშე ინდივიდუალური ობიექტებისთვისა და მასალებისთვის, კრიპტოკაშეს რენდერის გადავლების გამოყენებით"
 
 
 msgid "Mattes"
@@ -44548,6 +44580,18 @@ msgid "Use Asset layer"
 msgstr "გამოიყენე აქტივის შრე"
 
 
+msgid "Where the Cryptomatte passes are loaded from"
+msgstr "საიდან იტვირთება კრიპტოკაშეს გადავლები"
+
+
+msgid "Use Cryptomatte passes from a render"
+msgstr "გამოიყენე კრიპტოკაშეს გადავლები რენდერიდან"
+
+
+msgid "Use Cryptomatte passes from an image"
+msgstr "გამოიყენე კრიპტოკაშეს გადავლები გამოსახულებიდან"
+
+
 msgid "Auto-Refresh"
 msgstr "ავტო-განახლება"
 
@@ -44556,16 +44600,32 @@ msgid "RGB Curves"
 msgstr "RGB წირები"
 
 
+msgid "Perform level adjustments on each color channel of an image"
+msgstr "ჩაატარე დონის რეგულირებები გამოსახულების ფერთა თითოეულ არხზე"
+
+
 msgid "Vector Curves"
 msgstr "ვექტორული წირები"
+
+
+msgid "Map input vector components with curves"
+msgstr "გადაანაწილე შენატანი ვექტორული კომპონენტები წირებით"
 
 
 msgid "Compositor Custom Group"
 msgstr "კომპოზიტორის მორგებული ჯგუფი"
 
 
+msgid "Custom Compositor Group Node for Python nodes"
+msgstr "კომპოზიტორის მორგებული ჯგუფის კვანძი Python-ის კვანძებისთვის"
+
+
 msgid "Directional Blur"
 msgstr "მიმართულებითი გაბუნდოვნება"
+
+
+msgid "Blur an image along a direction"
+msgstr "გადღაბნე გამოსახულება კონკრეტული მიმართულებით"
 
 
 msgid "Center X"
@@ -44582,6 +44642,10 @@ msgstr "დაბზრიალება"
 
 msgid "Defocus"
 msgstr "დეფოკუსირება"
+
+
+msgid "Bokeh shape rotation offset"
+msgstr "ბოკეს ფორმის ბრუნვის აცდენა"
 
 
 msgid "Bokeh Type"
@@ -51788,6 +51852,21 @@ msgstr "დააყენე მიმდინარე გარდაქმ�
 msgctxt "Operator"
 msgid "Transform Gizmo Set"
 msgstr "გარდაქმნის გიზმოს დაყენება"
+
+
+msgctxt "Operator"
+msgid "Activate VR Landmark"
+msgstr "გაააქტიურე ვ. რ.-ის ორიენტირი"
+
+
+msgctxt "Operator"
+msgid "Add VR Landmark"
+msgstr "დაამატე ვ. რ.-ის ორიენტირი"
+
+
+msgctxt "Operator"
+msgid "Remove VR Landmark"
+msgstr "მოაცილე ვ. რ.-ის ორიენტირი"
 
 
 msgid "Rename multiple items at once"
@@ -79237,6 +79316,11 @@ msgid "Weld selected UV vertices together"
 msgstr "შეადუღე UV წვეროები ერთად"
 
 
+msgctxt "Operator"
+msgid "View Edge Pan"
+msgstr "ხედის კიდით პანორამირება"
+
+
 msgid "Delta X"
 msgstr "დელტა X"
 
@@ -80412,6 +80496,11 @@ msgstr "მენიუს სახელი"
 
 
 msgctxt "Operator"
+msgid "Call Pie Menu"
+msgstr "გამოიძახე სექტორული მენიუ"
+
+
+msgctxt "Operator"
 msgid "Call Panel"
 msgstr "გამოიძახე პანელი"
 
@@ -80624,6 +80713,10 @@ msgstr "მოიცავი ფორმის სოლები"
 
 msgid "Export all Shape Keys from Mesh Objects"
 msgstr "დააექსპორტირე ფორმის ყველა სოლი მეშის ობიექტებიდან"
+
+
+msgid "Keep Bind Info"
+msgstr "დატოვე მიჯაჭვის ინფორმაცია"
 
 
 msgid "All Keyed Curves"
@@ -83448,6 +83541,38 @@ msgid "Panel containing UI elements"
 msgstr "პანელი, რომელიც UI-ს ელემენტებს შეიცავს"
 
 
+msgid "Measurement"
+msgstr "გაზომვა"
+
+
+msgid "Curve Edit Mode"
+msgstr "წირის რედაქტირების რეჟიმი"
+
+
+msgid "Snapping"
+msgstr "მიკვრა"
+
+
+msgid "Transform Orientations"
+msgstr "გარდაქმნების ორიენტაციები"
+
+
+msgid "Stroke Placement"
+msgstr "მონასმის განთავსება"
+
+
+msgid "Drawing Plane"
+msgstr "სახატავი სიბრტყე"
+
+
+msgid "glTF Variants"
+msgstr "glTF ნაირსახეობები"
+
+
+msgid "glTF Material Variants"
+msgstr "glTF მასალის ნაირსახეობები"
+
+
 msgid "Guides"
 msgstr "ნიშნულები"
 
@@ -83472,12 +83597,12 @@ msgid "Multi Frame"
 msgstr "მრავალკადრიანი"
 
 
-msgid "glTF Variants"
-msgstr "glTF ნაირსახეობები"
+msgid "glTF"
+msgstr "glTF"
 
 
-msgid "glTF Material Variants"
-msgstr "glTF მასალის ნაირსახეობები"
+msgid "glTF Animations"
+msgstr "glTF ანიმაციები"
 
 
 msgid "Auto-Masking"
@@ -83486,14 +83611,6 @@ msgstr "ავტომატური შენიღბვა"
 
 msgid "Viewport Debug"
 msgstr "სარკმლის ხარვეზების აღმოფხვრა"
-
-
-msgid "glTF"
-msgstr "glTF"
-
-
-msgid "glTF Animations"
-msgstr "glTF ანიმაციები"
 
 
 msgid "VR"
@@ -83550,30 +83667,6 @@ msgstr "მოძრაობის თვალის დევნება"
 
 msgid "Mesh Edit Mode"
 msgstr "მეშის რედაქტირების რეჟიმი"
-
-
-msgid "Measurement"
-msgstr "გაზომვა"
-
-
-msgid "Curve Edit Mode"
-msgstr "წირის რედაქტირების რეჟიმი"
-
-
-msgid "Snapping"
-msgstr "მიკვრა"
-
-
-msgid "Transform Orientations"
-msgstr "გარდაქმნების ორიენტაციები"
-
-
-msgid "Stroke Placement"
-msgstr "მონასმის განთავსება"
-
-
-msgid "Drawing Plane"
-msgstr "სახატავი სიბრტყე"
 
 
 msgid "Chain Scaling"
@@ -118306,6 +118399,18 @@ msgid "Total files %d | Changed %d | Failed %d"
 msgstr "ჯამში %d ფაილი | შეიცვალა %d | წარუმატებელი %d"
 
 
+msgid "Path '%s' not found, from linked data-block '%s' (from library '%s')"
+msgstr "მისამართი '%s' ვერ მოიძებნა, მონაცემთა დაკავშირებული ბლოკიდან '%s' (ბიბლიოთეკიდან '%s')"
+
+
+msgid "Path '%s' not found, from local data-block '%s'"
+msgstr "მისამართი '%s' ვერ მოიძებნა, მონაცემთა ლოკალური ბლოკიდან '%s'"
+
+
+msgid "Path '%s' not found (no known owner data-block)"
+msgstr "მისამართი '%s' ვერ მოიძებნა (მფლობელი მონაცემთა ბლოკი ცნობილი არაა)"
+
+
 msgid "No missing files"
 msgstr "დაკარგული ფაილები არ არის"
 
@@ -119518,6 +119623,14 @@ msgid "Failed to read blend file '%s': %s"
 msgstr "blend ფაილის '%s': %s წაკითხვა ვერ მოხერხდა"
 
 
+msgid "Cannot read blend file '%s', incomplete header, may be from a newer version of Blender"
+msgstr "blend ფაილი '%s' წაკითხული ვერ იქნა, დაუსრულებელი სათაური აქვს, შესაძლოა, ბლენდერის უფრო ახალი ვერსიიდან"
+
+
+msgid "Failed to read file '%s', not a blend file"
+msgstr "ფაილის '%s' წაკითხვა ვერ მოხერხდა, blend ფაილი არაა"
+
+
 msgid "Unable to read '%s': %s"
 msgstr "'%s': %s-ის წაკითხვა ვერ მოხერხდა"
 
@@ -119718,6 +119831,10 @@ msgid "Error: Too many lights in the scene."
 msgstr "შეცდომა: მეტისმეტად ბევრი სინათლეა სცენაში."
 
 
+msgid "Warning: Could not allocate light probes volume pool of {} MB, using {} MB instead."
+msgstr "ფრთხილად: სინათლის ზონდების მოცულობის {} მბ.-იანი არის ალოკაცია ვერ მოხერხდა, მის ნაცვლად {} მბ. გამოიყენება."
+
+
 msgid "Irradiance Atlas texture could not be created"
 msgstr "გამოსხივების ატლასის ტექსტურა ვერ შეიქმნა"
 
@@ -119776,6 +119893,10 @@ msgstr "შეცდომა: ჩრდილის ზედმეტი გ�
 
 msgid "Error: Reached max shadow updates."
 msgstr "შეცდომა: მიღწეულია ჩრდილის განახლებების მაქსიმუმი."
+
+
+msgid "Warning: Volume rendering data could not be allocated. Now using a resolution of 1:{} instead of 1:{}."
+msgstr "ფრთხილად: მოცულობის დარენდერების მონაცემთა ალოკაცია ვერ მოხერხდა. ახლა გამოიყენება გარჩევადობა 1:{} და არა 1:{}."
 
 
 msgid "GpencilMode"
@@ -121095,6 +121216,10 @@ msgstr "გამოცხობილი მონასმები გას�
 
 msgid "No active object, or active object isn't a Grease Pencil object"
 msgstr "აქტიური ობიექტი არ არის, ან აქტიური ობიექტი გრიზ ფენსილის ობიექტი არაა"
+
+
+msgid "{}: confirm, {}: cancel, {}: panning, Shift: align"
+msgstr "{}: დაადასტურე, {}: გააუქმე, {}: დააპანორამირე, Shift: გაასწორე"
 
 
 msgid ", {}/{}: adjust subdivisions: {}"
