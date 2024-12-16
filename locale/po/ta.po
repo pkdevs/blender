@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'cfa63bfefa5b')\n"
+"Project-Id-Version: Blender 4.4.0 Alpha (b'2eb53ba3b21b')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-09 09:50+0000\n"
+"POT-Creation-Date: 2024-12-16 09:31+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -13574,6 +13574,30 @@ msgid "Select the file format to be used for caching volumetric data"
 msgstr "வால்யூமெட்ரிக் தரவை கேச் செய்ய பயன்படுத்த வேண்டிய கோப்பு வடிவமைப்பைத் தேர்ந்தெடுக்கவும்"
 
 
+msgid "Uni Cache"
+msgstr "யூனி கேச்"
+
+
+msgid "Uni file format (.uni)"
+msgstr "uni கோப்பு வடிவம் (.uni)"
+
+
+msgid "OpenVDB"
+msgstr "திறந்தவிடிபி"
+
+
+msgid "OpenVDB file format (.vdb)"
+msgstr "திறந்தவிடிபி கோப்பு வடிவம் (.vdb)"
+
+
+msgid "Raw Cache"
+msgstr "மூல கேச்"
+
+
+msgid "Raw file format (.raw)"
+msgstr "மூல கோப்பு வடிவம் (.raw)"
+
+
 msgid "Cache directory"
 msgstr "கேச் அடைவு"
 
@@ -19965,10 +19989,6 @@ msgstr "செயலில் உரை பெட்டி"
 
 msgid "Horizontal Alignment"
 msgstr "கிடைமட்ட சீரமைப்பு"
-
-
-msgid "Text horizontal alignment from the object center"
-msgstr "பொருள் மையத்திலிருந்து கிடைமட்ட சீரமைப்பு உரை"
 
 
 msgid "Align text to the left"
@@ -48510,26 +48530,6 @@ msgid "Collection of object effects"
 msgstr "பொருள் விளைவுகளின் சேகரிப்பு"
 
 
-msgctxt "Operator"
-msgid "Add Material Variant"
-msgstr "மூலப்பொருள் மாறுபாடு சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Display Variant"
-msgstr "காட்சி மாறுபாடு"
-
-
-msgctxt "Operator"
-msgid "Assign To Variant"
-msgstr "மாறுபாட்டிற்கு ஒதுக்குங்கள்"
-
-
-msgctxt "Operator"
-msgid "Assign as Original"
-msgstr "அசலாக ஒதுக்கவும்"
-
-
 msgid "Mark actions with no F-Curves for deletion after save and reload of file preserving \"action libraries\""
 msgstr "\"செயல் நூலகங்களை\" பாதுகாக்கும் கோப்பை சேமித்து மீண்டும் ஏற்றப்பட்ட பிறகு நீக்குவதற்கு எஃப்-வளைவுகள் இல்லாத செயல்களைக் குறிக்கவும்"
 
@@ -56847,15 +56847,6 @@ msgstr "பட்டியலில் முதலிடம்"
 
 msgid "Bottom of the list"
 msgstr "பட்டியலின் கீழே"
-
-
-msgctxt "Operator"
-msgid "Cancel File Load"
-msgstr "கோப்பு சுமை ரத்துசெய்"
-
-
-msgid "Cancel loading of selected file"
-msgstr "தேர்ந்தெடுக்கப்பட்ட கோப்பை ஏற்றுவதை ரத்துசெய்"
 
 
 msgctxt "Operator"
@@ -66103,11 +66094,6 @@ msgid "Maintain parent child relationships"
 msgstr "பெற்றோர் குழந்தை உறவுகளை பராமரிக்கவும்"
 
 
-msgctxt "Operator"
-msgid "Toggle Edit Mode"
-msgstr "திருத்து பயன்முறையை மாற்றவும்"
-
-
 msgid "Toggle object's edit mode"
 msgstr "பொருளின் திருத்து பயன்முறையை மாற்றவும்"
 
@@ -70004,11 +69990,6 @@ msgstr "வெளியீட்டு காட்சி நிறத்தை 
 
 msgid "Add to Palette"
 msgstr "தட்டில் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Texture Paint Toggle"
-msgstr "அமைப்பு வண்ணப்பூச்சு மாற்று"
 
 
 msgid "Toggle texture paint mode in 3D view"
@@ -81596,14 +81577,6 @@ msgid "Panel containing UI elements"
 msgstr "இடைமுகம் கூறுகளைக் கொண்ட குழு"
 
 
-msgid "Overlays"
-msgstr "மேலடுக்குகள்"
-
-
-msgid "Guides"
-msgstr "வழிகாட்டிகள்"
-
-
 msgid "Viewer Node"
 msgstr "பார்வையாளர் முனை"
 
@@ -81638,6 +81611,10 @@ msgstr "வீச்சு வேலை வாய்ப்பு"
 
 msgid "Drawing Plane"
 msgstr "வரைதல் வானூர்தி"
+
+
+msgid "Guides"
+msgstr "வழிகாட்டிகள்"
 
 
 msgid "Quad View"
@@ -81710,6 +81687,10 @@ msgstr "பாச் வழங்குதல்"
 
 msgid "Compositor"
 msgstr "தொகுப்பாளர்"
+
+
+msgid "Overlays"
+msgstr "மேலடுக்குகள்"
 
 
 msgid "Chain Scaling"
@@ -105320,8 +105301,28 @@ msgstr "செயல் வடிகட்டி"
 
 
 msgctxt "Operator"
+msgid "Display Variant"
+msgstr "காட்சி மாறுபாடு"
+
+
+msgctxt "Operator"
+msgid "Assign To Variant"
+msgstr "மாறுபாட்டிற்கு ஒதுக்குங்கள்"
+
+
+msgctxt "Operator"
 msgid "Reset To Original"
 msgstr "அசல் மீட்டமை"
+
+
+msgctxt "Operator"
+msgid "Assign as Original"
+msgstr "அசலாக ஒதுக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Add Material Variant"
+msgstr "மூலப்பொருள் மாறுபாடு சேர்க்கவும்"
 
 
 msgid "No glTF Animation"
@@ -109332,11 +109333,6 @@ msgstr "சட்டகத்திலிருந்து அகற்று"
 
 
 msgctxt "Operator"
-msgid "Insert Into Group"
-msgstr "குழுவில் நுழைக்கவும்"
-
-
-msgctxt "Operator"
 msgid "Mute"
 msgstr "ஊமையான"
 
@@ -109403,6 +109399,11 @@ msgstr "இணைப்புகளை உருவாக்கி மாற்�
 
 
 msgctxt "Operator"
+msgid "Insert Into Group"
+msgstr "குழுவில் நுழைக்கவும்"
+
+
+msgctxt "Operator"
 msgid "Node Preview"
 msgstr "முனை முன்னோட்டம்"
 
@@ -109420,11 +109421,6 @@ msgstr "கண்டுபிடி..."
 msgctxt "Operator"
 msgid "Link to Viewer"
 msgstr "பார்வையாளருக்கான இணைப்பு"
-
-
-msgctxt "Operator"
-msgid "Exit Group"
-msgstr "குழுவிலிருந்து வெளியேறு"
 
 
 msgctxt "Operator"
@@ -109452,6 +109448,11 @@ msgstr "பின்னணி பெரிதாக்கு"
 msgctxt "Operator"
 msgid "Backdrop Zoom Out"
 msgstr "பின்னணி பெரிதாக்கு"
+
+
+msgctxt "Operator"
+msgid "Exit Group"
+msgstr "குழுவிலிருந்து வெளியேறு"
 
 
 msgid "Closed by Default"
@@ -114420,14 +114421,6 @@ msgstr "எட்ச்-மோதிரங்கள் இணைக்கப்�
 
 msgid "color_index is invalid"
 msgstr "color_index தவறானது"
-
-
-msgid "Compositing | Initializing execution"
-msgstr "கலப்பு | சாவுஒறுப்பு துவக்குதல்"
-
-
-msgid "Compositing | Operation %i-%li"
-msgstr "கலப்பு | செயல்பாடு %i- %li"
 
 
 msgid "Compositor node tree has cyclic links!"
@@ -122835,30 +122828,6 @@ msgid "Object file format (.obj)"
 msgstr "பொருள் கோப்பு வடிவம் (.obj)"
 
 
-msgid "Uni Cache"
-msgstr "யூனி கேச்"
-
-
-msgid "Uni file format (.uni)"
-msgstr "uni கோப்பு வடிவம் (.uni)"
-
-
-msgid "OpenVDB"
-msgstr "திறந்தவிடிபி"
-
-
-msgid "OpenVDB file format (.vdb)"
-msgstr "திறந்தவிடிபி கோப்பு வடிவம் (.vdb)"
-
-
-msgid "Raw Cache"
-msgstr "மூல கேச்"
-
-
-msgid "Raw file format (.raw)"
-msgstr "மூல கோப்பு வடிவம் (.raw)"
-
-
 msgid "Uni file format"
 msgstr "uni கோப்பு வடிவம்"
 
@@ -128125,10 +128094,6 @@ msgstr "வி.ஆர் காட்சி ஆய்வு"
 
 msgid "View the viewport with virtual reality glasses (head-mounted displays)"
 msgstr "மெய்நிகர் ரியாலிட்டி கண்ணாடிகளுடன் (தலையில் பொருத்தப்பட்ட காட்சிகள்) காட்சியைக் காண்க"
-
-
-msgid "All Add-ons"
-msgstr "அனைத்து துணை நிரல்களும்"
 
 
 msgid "All Add-ons Installed by User"

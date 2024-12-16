@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'cfa63bfefa5b')\n"
+"Project-Id-Version: Blender 4.4.0 Alpha (b'2eb53ba3b21b')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-09 09:50+0000\n"
+"POT-Creation-Date: 2024-12-16 09:31+0000\n"
 "PO-Revision-Date: 2024-09-26 13:56+0000\n"
 "Last-Translator: Sarfaraz Baig <iamsarfarazbaig@gmail.com>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -14112,6 +14112,30 @@ msgid "Select the file format to be used for caching volumetric data"
 msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﭧﯿﻣﺭﺎﻓ ﻞﺋﺎﻓ ﯽﻟﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮓﻨﺸﯿﮐ ﺎﭩﯾﮈ ﮎﺮﭩﯿﻣﻮﯿﻟﺍﻭ"
 
 
+msgid "Uni Cache"
+msgstr "ﮯﺸﯿﮐ ﯽﻧﻮﯾ"
+
+
+msgid "Uni file format (.uni)"
+msgstr "Uni ﭧﯿﻣﺭﺎﻓ ﻞﺋﺎﻓ (.uni)"
+
+
+msgid "OpenVDB"
+msgstr "ﯽﺑ ﯼﮈ ﯼﻭ ﻦﭘﻭﺍ"
+
+
+msgid "OpenVDB file format (.vdb)"
+msgstr "OpenVDB ﭧﯿﻣﺭﺎﻓ ﻞﺋﺎﻓ (.vdb)"
+
+
+msgid "Raw Cache"
+msgstr "ﺶﯿﮐ ﻡﺎﺧ"
+
+
+msgid "Raw file format (.raw)"
+msgstr "(raw.) ﻞﮑﺷ ﯽﮐ ﻞﺋﺎﻓ ﻡﺎﺧ"
+
+
 msgid "Cache directory"
 msgstr "ﯼﺮﭩﮑﯾﺮﺋﺍﮈ ﺶﯿﮐ"
 
@@ -21076,10 +21100,6 @@ msgstr "ﺲﮐﺎﺑ ﭧﺴﮑﯿﭨ ﻝﺎﻌﻓ"
 
 msgid "Horizontal Alignment"
 msgstr "ﮪﺪﯿﺳ ﯽﻘﻓﺍ"
-
-
-msgid "Text horizontal alignment from the object center"
-msgstr "ﮪﺪﯿﺳ ﯽﻘﻓﺍ ﯽﮐ ﻦﺘﻣ ﮯﺳ ﺰﮐﺮﻣ ﮯﮐ ﺰﯿﭼ"
 
 
 msgid "Align text to the left"
@@ -51729,61 +51749,6 @@ msgid "Collection of object effects"
 msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﺕﺍﺮﺛﺍ ﺰﯿﭼ"
 
 
-msgctxt "Operator"
-msgid "Add Material Variant"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﻢﺴﻗ ﯽﮐ ﺩﺍﻮﻣ"
-
-
-msgctxt "Operator"
-msgid "Remove Variant"
-msgstr "۔ﮟﯾﺩ ﺎﭩﮨ ﻮﮐ ﺮﯿﻐﺘﻣ"
-
-
-msgctxt "Operator"
-msgid "Display Variant"
-msgstr "ﭧﻨﯾﺮﯾﻭ ﮯﻠﭙﺳﮈ"
-
-
-msgctxt "Operator"
-msgid "Assign To Variant"
-msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﻮﮐ ﺮﯿﻐﺘﻣ"
-
-
-msgctxt "Operator"
-msgid "Reset to Original"
-msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﯼﺭ ﺮﭘ ﻞﺻﺍ"
-
-
-msgctxt "Operator"
-msgid "Assign as Original"
-msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﻞﺻﺍ"
-
-
-msgctxt "Operator"
-msgid "Add new Slot"
-msgstr "ﭦﻼ﻿ﺳ ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺎﯿﻧ"
-
-
-msgctxt "Operator"
-msgid "Assign Material To Variant"
-msgstr "۔ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺩﺍﻮﻣ ﻮﮐ ﺮﯿﻐﺘﻣ"
-
-
-msgctxt "Operator"
-msgid "Remove a variant Slot"
-msgstr "۔ﮟﯾﺩ ﺎﭩﮨ ﻮﮐ ﭦﻼ﻿ﺳ ﭧﻨﯾﺮﯾﻭ ﮏﯾﺍ"
-
-
-msgctxt "Operator"
-msgid "Apply glTF animation"
-msgstr "ﯼﺮﯾﺬﭘ ﺖﮐﺮﺣ glTF ﮟﯿﺋﺎﮕﻟ"
-
-
-msgctxt "Operator"
-msgid "Operator"
-msgstr "ﺮﭩﯾﺮﭘﺁ"
-
-
 msgid "Mark actions with no F-Curves for deletion after save and reload of file preserving \"action libraries\""
 msgstr "\\ﮞﻮﯾﺮﯾﺮﺒﺋﻻ﻿ ﻡﺍﺪﻗﺍ  ﮟﯾﺮﮐ ﺩﺯ ﻥﺎﺸﻧ ﻮﮐ ﻝﺎﻤﻋﺍ ﮯﮐ ﮟﯿﻤﺧ-ﻑ ﺮﯿﻐﺑ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻑﺬﺣ ﺪﻌﺑ ﮯﮐ ﮯﻧﺮﮐ ﮈﻮﻟ ﮦﺭﺎﺑﻭﺩ ﺭﻭﺍ ﮯﻧﺮﮐ ﻅﻮﻔﺤﻣ ﻮﮐ ﻞﺋﺎﻓ"
 
@@ -54064,10 +54029,6 @@ msgstr "i18n ﮟﯿﻠﺋﺎﻓ ﻮﭘ) ﮟﯾﺮﮐ ﭧﯾﮈ ﭖﺍ ﻮﮐ ﯼ
 msgctxt "Operator"
 msgid "Update I18n Work Repository"
 msgstr "I18n ﮟﯾﺮﮐ ﭧﯾﮈ ﭖﺍ ﻮﮐ ﯼﺮﭨﺯﻮﭙﯾﺭ ﮎﺭﻭ"
-
-
-msgid "Add an entry to the list"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺝﺍﺭﺪﻧﺍ ﮏﯾﺍ ﮟﯿﻣ ﺖﺳﺮﮩﻓ"
 
 
 msgid "Align the UV island's rotation"
@@ -61397,15 +61358,6 @@ msgstr "ﺮﭘﻭﺍ ﮯﺳ ﺐﺳ ﮟﯿﻣ ﺖﺳﺮﮩﻓ"
 
 msgid "Bottom of the list"
 msgstr "ﮯﭽﯿﻧ ﮯﮐ ﺖﺳﺮﮩﻓ"
-
-
-msgctxt "Operator"
-msgid "Cancel File Load"
-msgstr "ﮟﯾﺮﮐ ﺥﻮﺴﻨﻣ ﮈﻮﻟ ﻞﺋﺎﻓ"
-
-
-msgid "Cancel loading of selected file"
-msgstr "ﮟﯾﺮﮐ ﺥﻮﺴﻨﻣ ﮓﻧﮈﻮﻟ ﯽﮐ ﻞﺋﺎﻓ ﺐﺨﺘﻨﻣ"
 
 
 msgctxt "Operator"
@@ -71865,11 +71817,6 @@ msgid "Maintain parent child relationships"
 msgstr "ﮟﯿﮭﮐﺭ ﺭﺍﺮﻗﺮﺑ ﻮﮐ ﺕﺎﻘﻠﻌﺗ ﮯﮐ ﮞﻮﭽﺑ ﮯﮐ ﻦﯾﺪﻟﺍﻭ"
 
 
-msgctxt "Operator"
-msgid "Toggle Edit Mode"
-msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺭﻮﻃ ﻢﯿﻣﺮﺗ"
-
-
 msgid "Toggle object's edit mode"
 msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺭﻮﻃ ﭦﮉﯾﺍ ﮯﮐ ﺰﯿﭼ"
 
@@ -75989,11 +75936,6 @@ msgstr "ﮧﻧﻮﻤﻧ ﺎﮐ ﮓﻧﺭ ﮯﻧﺎﮭﮐﺩ ﭧﭘ ﭦﺅﺁ"
 
 msgid "Add to Palette"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﮟﯿﻣ ﭧﯿﻠﯿﭘ"
-
-
-msgctxt "Operator"
-msgid "Texture Paint Toggle"
-msgstr "ﻞﮔﻮﭨ ﭧﻨﯿﭘ ﺮﭽﺴﮑﯿﭨ"
 
 
 msgid "Toggle texture paint mode in 3D view"
@@ -82889,6 +82831,10 @@ msgid "Reset this property's value to its default value"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﯼﺭ ﺮﭘ ﻮﯿﻠﯾﻭ ﭧﻟﺎﻔﯾﮈ ﯽﮐ ﺱﺍ ﻮﮐ ﻮﯿﻠﯾﻭ ﯽﮐ ﯽﭨﺮﭘﺍﺮﭘ ﺱﺍ"
 
 
+msgid "Add an entry to the list"
+msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺝﺍﺭﺪﻧﺍ ﮏﯾﺍ ﮟﯿﻣ ﺖﺳﺮﮩﻓ"
+
+
 msgctxt "Operator"
 msgid "Unset Property"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﺮﯿﻏ ﻮﮐ ﯽﭨﺮﭘﺍﺮﭘ"
@@ -88500,14 +88446,6 @@ msgid "Panel containing UI elements"
 msgstr "UI ﻞﻨﯿﭘ ﻞﻤﺘﺸﻣ ﺮﭘ ﺮﺻﺎﻨﻋ"
 
 
-msgid "Overlays"
-msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
-
-
-msgid "Guides"
-msgstr "ﺯﮉﯿﺋﺎﮔ"
-
-
 msgid "Viewer Node"
 msgstr "ﮈﻮﻧ ﺮﻇﺎﻧ"
 
@@ -88542,6 +88480,10 @@ msgstr "ﭧﻨﻤﺴﯿﻠﭘ ﮎﻭﺮﭩﺳﺍ"
 
 msgid "Drawing Plane"
 msgstr "ﻦﯿﻠﭘ ﮓﻨﺋﺍﺭﮈ"
+
+
+msgid "Guides"
+msgstr "ﺯﮉﯿﺋﺎﮔ"
 
 
 msgid "Quad View"
@@ -88626,6 +88568,10 @@ msgstr "ﺱﺎﭘ ﺭﮉﻨﯾﺭ"
 
 msgid "Compositor"
 msgstr "ﺮﭩﯾﺯﻮﭙﻤﮐ"
+
+
+msgid "Overlays"
+msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
 
 
 msgid "Chain Scaling"
@@ -91997,14 +91943,6 @@ msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺪﯿﻠﮐ ﯼﺮﺼﺑ ﺩ�
 
 msgid "Experimental features"
 msgstr "ﺕﺎﯿﺻﻮﺼﺧ ﯽﺗﺎﺑﺮﺠﺗ"
-
-
-msgid "CPU Compositor"
-msgstr "CPU ﺮﭩﯾﺯﻮﭙﻤﮐ"
-
-
-msgid "Enable the new CPU compositor"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺮﭩﯾﺯﻮﭙﻤﮐ CPU ﮯﺌﻧ"
 
 
 msgid "No Override Auto Resync"
@@ -98182,14 +98120,6 @@ msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﻠﺑ ﺖﮐﺮﺣ  ﻦﯿﺳ 3D 
 
 msgid "Use multiple views in the scene"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮮﺭﺎﻈﻧ ﺩﺪﻌﺘﻣ ﮟﯿﻣ ﺮﻈﻨﻣ"
-
-
-msgid "Use New CPU Compositor"
-msgstr "Use New CPU ﺮﭩﯾﺯﻮﭙﻤﮐ"
-
-
-msgid "Use the new CPU compositor implementation"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺫﺎﻔﻧ ﮯﮐ ﺮﭩﯾﺯﻮﭙﻤﮐ CPU ﮯﺌﻧ"
 
 
 msgid "Overwrite existing files while rendering"
@@ -114904,8 +114834,28 @@ msgstr "ﺮﭩﻠﻓ ﻡﺍﺪﻗﺍ"
 
 
 msgctxt "Operator"
+msgid "Display Variant"
+msgstr "ﭧﻨﯾﺮﯾﻭ ﮯﻠﭙﺳﮈ"
+
+
+msgctxt "Operator"
+msgid "Assign To Variant"
+msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﻮﮐ ﺮﯿﻐﺘﻣ"
+
+
+msgctxt "Operator"
 msgid "Reset To Original"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﯼﺭ ﺮﭘ ﻞﺻﺍ"
+
+
+msgctxt "Operator"
+msgid "Assign as Original"
+msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﻞﺻﺍ"
+
+
+msgctxt "Operator"
+msgid "Add Material Variant"
+msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﻢﺴﻗ ﯽﮐ ﺩﺍﻮﻣ"
 
 
 msgid "No glTF Animation"
@@ -120246,11 +120196,6 @@ msgstr "ﮟﯾﺩ ﺎﭩﮨ ﮯﺳ ﻢﯾﺮﻓ"
 
 
 msgctxt "Operator"
-msgid "Insert Into Group"
-msgstr "ﮟﯾﺮﮐ ﻞﺧﺍﺩ ﮟﯿﻣ ﮦﻭﺮﮔ"
-
-
-msgctxt "Operator"
 msgid "Mute"
 msgstr "ﺵﻮﻣﺎﺧ"
 
@@ -120277,10 +120222,6 @@ msgstr "ﺲﮑﯾﺍ ﻦﺸﮑﯿﺟﻭﺮﭘ"
 msgctxt "Operator"
 msgid "Fit"
 msgstr "ﭧﻓ"
-
-
-msgid "Experimental CPU Implementation"
-msgstr "ﺫﺎﻔﻧ ﺎﮐ CPU ﯽﺗﺎﺑﺮﺠﺗ"
 
 
 msgid "Node Editor Overlays"
@@ -120329,6 +120270,11 @@ msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﺭﻭﺍ ﮟﯿﺋﺎﻨﺑ ﺲﮑﻨﻟ"
 
 
 msgctxt "Operator"
+msgid "Insert Into Group"
+msgstr "ﮟﯾﺮﮐ ﻞﺧﺍﺩ ﮟﯿﻣ ﮦﻭﺮﮔ"
+
+
+msgctxt "Operator"
 msgid "Node Preview"
 msgstr "ﻮﯾﻮﯾﺮﭘ  ﺎﮐ ﮈﻮﻧ"
 
@@ -120346,11 +120292,6 @@ msgstr "...ﮟﯾﺮﮐ ﺵﻼ﻿ﺗ"
 msgctxt "Operator"
 msgid "Link to Viewer"
 msgstr "ﮏﻨﻟ ﮯﺳ ﺮﻇﺎﻧ"
-
-
-msgctxt "Operator"
-msgid "Exit Group"
-msgstr "ﮟﯿﻠﮑﻧ ﺮﮨﺎﺑ ﮯﺳ ﮦﻭﺮﮔ"
 
 
 msgctxt "Operator"
@@ -120378,6 +120319,11 @@ msgstr "ﻥﺍ ﻡﻭﺯ ﭖﺍﺭﮈ ﮏﯿﺑ"
 msgctxt "Operator"
 msgid "Backdrop Zoom Out"
 msgstr "ﭦﺅﺁ ﻡﻭﺯ ﭖﺍﺭﮈ ﮏﯿﺑ"
+
+
+msgctxt "Operator"
+msgid "Exit Group"
+msgstr "ﮟﯿﻠﮑﻧ ﺮﮨﺎﺑ ﮯﺳ ﮦﻭﺮﮔ"
 
 
 msgid "Closed by Default"
@@ -124407,18 +124353,6 @@ msgid "Saved \"%s\""
 msgstr "\"%s‬‪\" ﺎﯿﮔ ﺎﯿﮐ ﻅﻮﻔﺤﻣ"
 
 
-msgid "Unable to create builtin attribute in edit mode"
-msgstr "ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺎﻨﺑ ﺏﺎﺴﺘﻧﺍ ﻥﺍ ﭧﻠﺑ ﮟﯿﻣ ﮈﻮﻣ ﻢﯿﻣﺮﺗ"
-
-
-msgid "Domain unsupported for \"id\" attribute"
-msgstr "ﮯﮨ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﺮﯿﻏ ﮯﯿﻟ ﮯﮐ ﻒﺻﻭ \"id\" ﻦﯿﻣﻭﮈ"
-
-
-msgid "Type unsupported for \"id\" attribute"
-msgstr "\"id\" ﮟﯾﺮﮐ ﭗﺋﺎﭨ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﺮﯿﻏ ﮯﯿﻟ ﮯﮐ ﻒﺻﻭ"
-
-
 msgid "Attribute name cannot be empty"
 msgstr "ﺎﺘﮑﺳ ﻮﮨ ﮟﯿﮩﻧ ﯽﻟﺎﺧ ﻡﺎﻧ ﺎﮐ ﺏﺎﺴﺘﻧﺍ"
 
@@ -125865,14 +125799,6 @@ msgstr "ﮟﯿﮨ ﮟﯿﮩﻧ ﮏﻠﺴﻨﻣ ﮯﻘﻠﺣ ﮯﮐ ﮮﺭﺎﻨ�
 
 msgid "color_index is invalid"
 msgstr "ﮯﮨ ﻂﻠﻏ ﺖﺳﺮﮩﻓ_ﮓﻧﺭ"
-
-
-msgid "Compositing | Initializing execution"
-msgstr "ﮯﮨ ﺎﮨﺭ ﺮﮐ ﻉﻭﺮﺷ ﺪﻣﺁﺭﺩ ﻞﻤﻋ | ﮓﻨﭨﺯﻮﭙﻤﮐ"
-
-
-msgid "Compositing | Operation %i-%li"
-msgstr "i-‪%l‬i% ﻦﺸﯾﺮﭘﺁ | ﮓﻨﭨﺯﻮﭙﻤﮐ"
 
 
 msgid "Compositor node tree has cyclic links!"
@@ -135737,30 +135663,6 @@ msgid "Object file format (.obj)"
 msgstr "(obj.) ﭧﯿﻣﺭﺎﻓ ﻞﺋﺎﻓ ﺰﯿﭼ"
 
 
-msgid "Uni Cache"
-msgstr "ﮯﺸﯿﮐ ﯽﻧﻮﯾ"
-
-
-msgid "Uni file format (.uni)"
-msgstr "Uni ﭧﯿﻣﺭﺎﻓ ﻞﺋﺎﻓ (.uni)"
-
-
-msgid "OpenVDB"
-msgstr "ﯽﺑ ﯼﮈ ﯼﻭ ﻦﭘﻭﺍ"
-
-
-msgid "OpenVDB file format (.vdb)"
-msgstr "OpenVDB ﭧﯿﻣﺭﺎﻓ ﻞﺋﺎﻓ (.vdb)"
-
-
-msgid "Raw Cache"
-msgstr "ﺶﯿﮐ ﻡﺎﺧ"
-
-
-msgid "Raw file format (.raw)"
-msgstr "(raw.) ﻞﮑﺷ ﯽﮐ ﻞﺋﺎﻓ ﻡﺎﺧ"
-
-
 msgid "Uni file format"
 msgstr "ﭧﯿﻣﺭﺎﻓ ﻞﺋﺎﻓ ﯽﻧﻮﯾ"
 
@@ -142470,10 +142372,6 @@ msgstr "VR ﮧﻨﺋﺎﻌﻣ ﺎﮐﻮﯾﻭ"
 
 msgid "View the viewport with virtual reality glasses (head-mounted displays)"
 msgstr "(ﮯﻠﭙﺳﮈ ﮉﭩﻧﻭﺎﻣ ﮉﯿﮨ) ﮟﯿﮭﮑﯾﺩ ﭦﺭﻮﭘ ﻮﯾﻭ ﮫﺗﺎﺳ ﮯﮐ ﮞﻮﺸﯿﺷ ﯽﭩﻠﯿﺋﺭ ﻞﺋﻮﭼﺭﻭ"
-
-
-msgid "All Add-ons"
-msgstr "ﺰﻧﺁ ﮉﯾﺍ ﻡﺎﻤﺗ"
 
 
 msgid "All Add-ons Installed by User"
