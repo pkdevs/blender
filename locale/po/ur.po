@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'2eb53ba3b21b')\n"
+"Project-Id-Version: Blender 4.4.0 Alpha (b'159424053bc2')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-16 09:31+0000\n"
+"POT-Creation-Date: 2024-12-23 13:35+0000\n"
 "PO-Revision-Date: 2024-09-26 13:56+0000\n"
 "Last-Translator: Sarfaraz Baig <iamsarfarazbaig@gmail.com>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -17164,6 +17164,38 @@ msgstr "Grease Pencil ﮦﻭﺮﮔ ﮧﮩﺗ ﯽﮐ"
 
 msgid "Group of Grease Pencil layers"
 msgstr "Grease Pencil ﭖﻭﺮﮔ ﺎﮐ ﮞﻮﺗﺮﭘ"
+
+
+msgid "Color tag 1"
+msgstr "1 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
+
+
+msgid "Color tag 2"
+msgstr "2 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
+
+
+msgid "Color tag 3"
+msgstr "3 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
+
+
+msgid "Color tag 4"
+msgstr "4 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
+
+
+msgid "Color tag 5"
+msgstr "5 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
+
+
+msgid "Color tag 6"
+msgstr "6 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
+
+
+msgid "Color tag 7"
+msgstr "7 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
+
+
+msgid "Color tag 8"
+msgstr "8 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
 
 
 msgid "Set layer group visibility"
@@ -43076,14 +43108,6 @@ msgid "Static Type"
 msgstr "ﻢﺴﻗ ﺪﻣﺎﺟ"
 
 
-msgid "Node type (deprecated, use with care)"
-msgstr "(ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮫﺗﺎﺳ ﮯﮐ ﻁﺎﯿﺘﺣﺍ ،ﮦﺩﻮﺳﺮﻓ) ﻢﺴﻗ ﯽﮐ ﮈﻮﻧ"
-
-
-msgid "Custom Node"
-msgstr "ﮈﻮﻧ ﺕﺭﻭﺮﺿ ﺐﺴﺣ"
-
-
 msgid "Custom color of the node body"
 msgstr "ﮓﻧﺭ ﺎﮐ ﯽﺿﺮﻣ ﯽﻨﭘﺍ ﺎﮐ ﯼﮈﺎﺑ ﮈﻮﻧ"
 
@@ -43138,10 +43162,6 @@ msgstr "ﮟﯿﺋﺎﮭﮐﺩ ﺖﺧﺎﺳ"
 
 msgid "Display node in viewport textured shading mode"
 msgstr "ﮈﻮﻧ ﮯﻧﺎﮭﮐﺩ ﮟﯿﻣ ﺭﻮﻃ ﺖﮕﻧﺭ  ﮈ ﺖﺧﺎﺳ ﭦﺭﻮﭘﻮﯾﻭ"
-
-
-msgid "Node type (deprecated, use bl_static_type or bl_idname for the actual identifier string)"
-msgstr "(ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ bl_idname ﺎﯾ bl_static_type ﮯﯿﻟ ﮯﮐ ﮓﻧﺮﭩﺳ ﮦﺪﻨﻨﮐ ﺖﺧﺎﻨﺷ ﻞﺻﺍ ،ﮦﺩﻮﺳﺮﻓ) ﻢﺴﻗ ﯽﮐ ﮈﻮﻧ"
 
 
 msgid "Use custom color for the node"
@@ -63935,38 +63955,6 @@ msgid "Set Default icon"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﻦﮑﯿﺋﺁ ﭧﻟﺎﻔﯾﮈ"
 
 
-msgid "Color tag 1"
-msgstr "1 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
-
-
-msgid "Color tag 2"
-msgstr "2 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
-
-
-msgid "Color tag 3"
-msgstr "3 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
-
-
-msgid "Color tag 4"
-msgstr "4 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
-
-
-msgid "Color tag 5"
-msgstr "5 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
-
-
-msgid "Color tag 6"
-msgstr "6 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
-
-
-msgid "Color tag 7"
-msgstr "7 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
-
-
-msgid "Color tag 8"
-msgstr "8 ﮓﯿﭨ ﻦﯿﮕﻧﺭ"
-
-
 msgctxt "Operator"
 msgid "Remove Layer Group"
 msgstr "ﮦﻭﺮﮔ ﮟﯾﺩ ﺎﭩﮨ ﻮﮐ ﺕﺮﭘ"
@@ -81215,6 +81203,11 @@ msgstr "۔ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﭧﭘ ﻥﺍ ﻭﺩ ﮯﮐ ﯽﭩ
 
 
 msgctxt "Operator"
+msgid "Deselect All"
+msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﺮﯿﻏ ﻮﮐ ﯽﮭﺒﺳ"
+
+
+msgctxt "Operator"
 msgid "Unlock Strips"
 msgstr "ﮟﯾﺮﮐ ﻞﻔﻘﻣ ﺮﯿﻏ ﻮﮐ ﺲﭘﺮﭩﺳ"
 
@@ -88446,6 +88439,14 @@ msgid "Panel containing UI elements"
 msgstr "UI ﻞﻨﯿﭘ ﻞﻤﺘﺸﻣ ﺮﭘ ﺮﺻﺎﻨﻋ"
 
 
+msgid "Overlays"
+msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
+
+
+msgid "Guides"
+msgstr "ﺯﮉﯿﺋﺎﮔ"
+
+
 msgid "Viewer Node"
 msgstr "ﮈﻮﻧ ﺮﻇﺎﻧ"
 
@@ -88480,10 +88481,6 @@ msgstr "ﭧﻨﻤﺴﯿﻠﭘ ﮎﻭﺮﭩﺳﺍ"
 
 msgid "Drawing Plane"
 msgstr "ﻦﯿﻠﭘ ﮓﻨﺋﺍﺭﮈ"
-
-
-msgid "Guides"
-msgstr "ﺯﮉﯿﺋﺎﮔ"
 
 
 msgid "Quad View"
@@ -88568,10 +88565,6 @@ msgstr "ﺱﺎﭘ ﺭﮉﻨﯾﺭ"
 
 msgid "Compositor"
 msgstr "ﺮﭩﯾﺯﻮﭙﻤﮐ"
-
-
-msgid "Overlays"
-msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
 
 
 msgid "Chain Scaling"
@@ -91947,10 +91940,6 @@ msgstr "ﺕﺎﯿﺻﻮﺼﺧ ﯽﺗﺎﺑﺮﺠﺗ"
 
 msgid "No Override Auto Resync"
 msgstr "No ﮟﯾﺮﮐ ﮉﯿﺋﺍﺭ ﺭﻭﻭﺍ ﻮﮐ ﮏﻨﺳ ﯼﺭ ﻮﭨﺁ"
-
-
-msgid "Disable library overrides automatic resync detection and process on file load (can be useful to help fixing broken files)"
-msgstr "(ﮯﮨ ﺎﺘﮑﺳ ﻮﮨ ﺪﯿﻔﻣ ﮯﯿﻟ ﮯﮐ ﺩﺪﻣ ﮟﯿﻣ ﮯﻧﺮﮐ ﮏﯿﮭﭨ ﻮﮐ ﮞﻮﻠﺋﺎﻓ ﯽﺋﻮﮨ ﯽﭨﻮﭨ) ﮯﮨ ﺎﺗﺮﮐ ﮉﯿﺋﺍﺭ ﺭﻭﻭﺍ ﻮﮐ ﻞﻤﻋ ﺭﻭﺍ ﮯﻧﺎﮕﻟ ﮧﺘﭘ ﺎﮐ ﯼﺮﯾﺬﭘ ﺖﻘﺑﺎﻄﻣ ﮦﺭﺎﺑﻭﺩ ﮯﺳ ﮯﻘﯾﺮﻃ ﺭﺎﮐ ﺩﻮﺧ ﺮﭘ ﮈﻮﻟ ﻞﺋﺎﻓ ﺎﻧﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﻮﮐ ﯼﺮﯾﺮﺒﺋﻻ﻿"
 
 
 msgid "Asset Debug Info"
@@ -111099,19 +111088,6 @@ msgid "Action when 'Space' is pressed"
 msgstr "ﮯﮨ ﺎﺗﺎﺟ ﺎﯾﺎﺑﺩ ﻮﮐ 'ﺲﯿﭙﺳﺍ' ﺐﺟ ﻡﺍﺪﻗﺍ"
 
 
-msgid "Toggle animation playback ('Shift-Space' for Tools)"
-msgstr "('ﺲﯿﭙﺳﺍ ﭧﻔﺷ' ﮯﯿﻟ ﮯﮐ ﺰﻟﻮﭨ) ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﮏﯿﺑ ﮯﻠﭘ ﺕﺎﯿﮐﺮﺣ"
-
-
-msgid ""
-"Open the popup tool-bar\n"
-"When 'Space' is held and used as a modifier:\n"
-"• Pressing the tools binding key switches to it immediately.\n"
-"• Dragging the cursor over a tool and releasing activates it (like a pie menu).\n"
-"For Play use 'Shift-Space'"
-msgstr "۔ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ 'ﺲﯿﭙﺳﺍ ﭧﻔﺷ' ﮯﯿﻟ ﮯﮐ ﮯﻠﭘ n ۔(ﻮﻨﯿﻣ ﯽﺋﺎﭘ ﮯﺴﯿﺟ) ﮯﮨ ﺎﺘﯾﺩ ﺮﮐ ﻮﻟﺎﭼ ﮯﺳﺍ ﺮﮑﭩﯿﺴﮭﮔ ﻮﮐ ﺮﺳﺮﮐ ﺮﭘﻭﺍ ﮯﮐ ﮯﻟﺁ ﯽﺴﮐ •n۔ﺎﻧﺎﺑﺩ ﻮﮐ ﺰﻟﻮﭨ ﮯﻟﺍﻭ ﮯﻧﮌﻮﺟ ﮯﺳ ﺱﺍ ﺮﭘ ﺭﻮﻃ ﯼﺭﻮﻓ ﻮﮐ ﺰﭽﺋﻮﺳ ﯼﺪﯿﻠﮐ •n:ﮟﯿﻟﻮﮭﮐ ﺭﺎﺑ ﻝﻮﭨ ﭖﺍ ﭖﺎﭘ ﻮﺗ ﮯﮨ ﺎﺗﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮯﺳﺍ ﺭﻭﺍ ﮯﮨ ﺎﺗﺎﺟ ﺍﮍﮑﭘ 'ﺲﯿﭙﺳﺍ' ﺐﺟ"
-
-
 msgid "Search"
 msgstr "ﮟﯾﺮﮐ ﺵﻼ﻿ﺗ"
 
@@ -115874,11 +115850,6 @@ msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻉﻭﺮﺷ"
 msgctxt "Operator"
 msgid "Reset Settings"
 msgstr "ﮟﯾﺩ ﺐﯿﺗﺮﺗ ﮦﺭﺎﺑﻭﺩ ﻮﮐ ﺕﺎﺒﯿﺗﺮﺗ"
-
-
-msgctxt "Operator"
-msgid "Deselect All"
-msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﺮﯿﻏ ﻮﮐ ﯽﮭﺒﺳ"
 
 
 msgctxt "Operator"
@@ -125509,50 +125480,6 @@ msgid "worlds"
 msgstr "ﺎﯿﻧﺩ"
 
 
-msgid "Error writing frame"
-msgstr "ﯽﺑﺍﺮﺧ ﮟﯿﻣ ﮯﻨﮭﮑﻟ ﻢﯾﺮﻓ"
-
-
-msgid "No valid formats found"
-msgstr "ﮯﻠﻣ ﮟﯿﮩﻧ ﺲﭩﯿﻣﺭﺎﻓ ﺖﺳﺭﺩ ﯽﺋﻮﮐ"
-
-
-msgid "Can't allocate FFmpeg format context"
-msgstr "FFmpeg ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﺺﺘﺨﻣ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ ﭧﯿﻣﺭﺎﻓ"
-
-
-msgid "Render width has to be 720 pixels for DV!"
-msgstr "!ﮯﯿﮨﺎﭼ ﯽﻧﻮﮨ ﺰﻠﺴﮑﭘ 720 ﯽﺋﺍﮌﻮﭼ ﯽﮐ ﺭﮉﻨﯾﺭ ﮯﯿﻟ ﮯﮐ ﯼﻭ ﯼﮈ"
-
-
-msgid "Render height has to be 480 pixels for DV-NTSC!"
-msgstr "DV-NTSC ﮯﯿﮨﺎﭼ ﯽﻧﻮﮨ ﺰﻠﺴﮑﭘ 480 ﯽﺋﺎﭽﻧﻭﺍ ﯽﮐ ﺭﮉﻨﯾﺭ ﮯﯿﻟ ﮯﮐ!"
-
-
-msgid "Render height has to be 576 pixels for DV-PAL!"
-msgstr "DV-PAL ﮯﯿﮨﺎﭼ ﯽﻧﻮﮨ ﺰﻠﺴﮑﭘ 576 ﯽﺋﺎﭽﻧﻭﺍ ﯽﮐ ﺭﮉﻨﯾﺭ ﮯﯿﻟ ﮯﮐ!"
-
-
-msgid "FFmpeg only supports 48khz / stereo audio for DV!"
-msgstr "FFmpeg ﻑﺮﺻ DV 48 ﮯﯿﻟ ﮯﮐkhz / ﮯﮨ ﺎﺗﺮﮐ ﭦﺭﻮﭙﺳ ﻮﮐ ﻮﯾﮈﺁ ﻮﯾﺮﯿﭩﺳ!"
-
-
-msgid "Error initializing video stream"
-msgstr "ﯽﺑﺍﺮﺧ ﮟﯿﻣ ﮯﻧﺮﮐ ﻉﻭﺮﺷ ﮧﻠﺴﻠﺳ ﻮﯾﮉﯾﻭ"
-
-
-msgid "Error initializing audio stream"
-msgstr "ﯽﺑﺍﺮﺧ ﮟﯿﻣ ﮯﻧﺮﮐ ﻉﻭﺮﺷ ﮧﻠﺴﻠﺳ ﻮﯾﮈﺁ"
-
-
-msgid "Could not open file for writing"
-msgstr "ﯽﮑﺳ ﻝﻮﮭﮐ ﮟﯿﮩﻧ ﻞﺋﺎﻓ ﮯﯿﻟ ﮯﮐ ﮯﻨﮭﮑﻟ"
-
-
-msgid "Could not initialize streams, probably unsupported codec combination"
-msgstr "ﮧﻋﻮﻤﺠﻣ ﮏﯾﮈﻮﮐ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﺮﯿﻏ ﺪﯾﺎﺷ ،ﺎﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻉﻭﺮﺷ ﻮﮐ ﺰﻤﯾﺮﭩﺳﺍ"
-
-
 msgid "Library database with null library data-block pointer!"
 msgstr "null ﺲﯿﺑ ﺎﭩﯾﮈ ﯼﺮﯾﺮﺒﺋﻻ﻿ ﮫﺗﺎﺳ ﮯﮐ ﺮﭩﻨﺋﺍﻮﭘ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ ﯼﺮﯾﺮﺒﺋﻻ﻿!"
 
@@ -134697,6 +134624,50 @@ msgid "Freestyle: Stroke rendering"
 msgstr "ﮓﻧﺭﮉﻨﯾﺭ ﮎﻭﺮﭩﺳﺍ :ﻞﺋﺎﭩﺳﺍ ﯼﺮﻓ"
 
 
+msgid "Error writing frame"
+msgstr "ﯽﺑﺍﺮﺧ ﮟﯿﻣ ﮯﻨﮭﮑﻟ ﻢﯾﺮﻓ"
+
+
+msgid "No valid formats found"
+msgstr "ﮯﻠﻣ ﮟﯿﮩﻧ ﺲﭩﯿﻣﺭﺎﻓ ﺖﺳﺭﺩ ﯽﺋﻮﮐ"
+
+
+msgid "Can't allocate FFmpeg format context"
+msgstr "FFmpeg ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﺺﺘﺨﻣ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ ﭧﯿﻣﺭﺎﻓ"
+
+
+msgid "Render width has to be 720 pixels for DV!"
+msgstr "!ﮯﯿﮨﺎﭼ ﯽﻧﻮﮨ ﺰﻠﺴﮑﭘ 720 ﯽﺋﺍﮌﻮﭼ ﯽﮐ ﺭﮉﻨﯾﺭ ﮯﯿﻟ ﮯﮐ ﯼﻭ ﯼﮈ"
+
+
+msgid "Render height has to be 480 pixels for DV-NTSC!"
+msgstr "DV-NTSC ﮯﯿﮨﺎﭼ ﯽﻧﻮﮨ ﺰﻠﺴﮑﭘ 480 ﯽﺋﺎﭽﻧﻭﺍ ﯽﮐ ﺭﮉﻨﯾﺭ ﮯﯿﻟ ﮯﮐ!"
+
+
+msgid "Render height has to be 576 pixels for DV-PAL!"
+msgstr "DV-PAL ﮯﯿﮨﺎﭼ ﯽﻧﻮﮨ ﺰﻠﺴﮑﭘ 576 ﯽﺋﺎﭽﻧﻭﺍ ﯽﮐ ﺭﮉﻨﯾﺭ ﮯﯿﻟ ﮯﮐ!"
+
+
+msgid "FFmpeg only supports 48khz / stereo audio for DV!"
+msgstr "FFmpeg ﻑﺮﺻ DV 48 ﮯﯿﻟ ﮯﮐkhz / ﮯﮨ ﺎﺗﺮﮐ ﭦﺭﻮﭙﺳ ﻮﮐ ﻮﯾﮈﺁ ﻮﯾﺮﯿﭩﺳ!"
+
+
+msgid "Error initializing video stream"
+msgstr "ﯽﺑﺍﺮﺧ ﮟﯿﻣ ﮯﻧﺮﮐ ﻉﻭﺮﺷ ﮧﻠﺴﻠﺳ ﻮﯾﮉﯾﻭ"
+
+
+msgid "Error initializing audio stream"
+msgstr "ﯽﺑﺍﺮﺧ ﮟﯿﻣ ﮯﻧﺮﮐ ﻉﻭﺮﺷ ﮧﻠﺴﻠﺳ ﻮﯾﮈﺁ"
+
+
+msgid "Could not open file for writing"
+msgstr "ﯽﮑﺳ ﻝﻮﮭﮐ ﮟﯿﮩﻧ ﻞﺋﺎﻓ ﮯﯿﻟ ﮯﮐ ﮯﻨﮭﮑﻟ"
+
+
+msgid "Could not initialize streams, probably unsupported codec combination"
+msgstr "ﮧﻋﻮﻤﺠﻣ ﮏﯾﮈﻮﮐ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﺮﯿﻏ ﺪﯾﺎﺷ ،ﺎﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻉﻭﺮﺷ ﻮﮐ ﺰﻤﯾﺮﭩﺳﺍ"
+
+
 msgid "Alembic Export: Unable to find collection '%s'"
 msgstr "ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﺵﻼ﻿ﺗ '%s‬‪' ﮧﻋﻮﻤﺠﻣ :ﭦﺭﻮﭙﺴﮑﯾﺍ ﮏﺒﻤﯿﻟﺍ"
 
@@ -136034,18 +136005,6 @@ msgstr "ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺎﻨﺑ ﻞﻨﯿﭘ"
 
 msgid "Unable to copy item"
 msgstr "ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﯽﭘﺎﮐ ﻢﭩﺋﺁ"
-
-
-msgid "CustomGroup"
-msgstr "ﮦﻭﺮﮔ ﻢﭩﺴﮐ"
-
-
-msgid "Custom Group Node"
-msgstr "ﮈﻮﻧ ﮦﻭﺮﮔ ﮯﮐ ﯽﺿﺮﻣ ﯽﻨﭘﺍ"
-
-
-msgid "UNDEFINED"
-msgstr "ﮧﻨﯿﻌﺘﻣ ﺮﯿﻏ"
 
 
 msgctxt "NodeTree"
@@ -141120,11 +141079,6 @@ msgstr "ﻥﺯﺍﻮﺗ ﻦﯿﮕﻧﺭ"
 
 
 msgctxt "Sequence"
-msgid "White Balance"
-msgstr "ﺲﻨﻠﯿﺑ ﭧﺋﺍﻭ"
-
-
-msgctxt "Sequence"
 msgid "Curves"
 msgstr "ﮟﯿﻤﺧ"
 
@@ -141137,6 +141091,11 @@ msgstr "ﺖﺳﺭﺩ ﻮﯿﮨ"
 msgctxt "Sequence"
 msgid "Brightness/Contrast"
 msgstr "ﭧﺳﺍﺮﭩﻨﮐ / ﮏﻤﭼ"
+
+
+msgctxt "Sequence"
+msgid "White Balance"
+msgstr "ﺲﻨﻠﯿﺑ ﭧﺋﺍﻭ"
 
 
 msgctxt "Sequence"
