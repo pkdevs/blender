@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'159424053bc2')\n"
+"Project-Id-Version: Blender 4.4.0 Alpha (b'eb39d81afa00')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-23 13:35+0000\n"
+"POT-Creation-Date: 2024-12-30 14:46+0000\n"
 "PO-Revision-Date: 2024-09-26 13:56+0000\n"
 "Last-Translator: Sarfaraz Baig <iamsarfarazbaig@gmail.com>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -34243,6 +34243,11 @@ msgid "Parent"
 msgstr "ﻦﯾﺪﻟﺍﻭ"
 
 
+msgctxt "Operator"
+msgid "Empty"
+msgstr "ﯽﻟﺎﺧ"
+
+
 msgctxt "Constraint"
 msgid "Track"
 msgstr "ﮏﯾﺮﭨ"
@@ -44369,6 +44374,18 @@ msgstr "Denoise ﮞﻮﮨ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ
 
 msgid "Prefilter noisy guiding passes before denoising image. Improves quality when guiding passes are noisy using extra processing time."
 msgstr "ﮟﯿﮨ ﮯﺗﺮﮐ ﺭﻮﺷ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺖﻗﻭ ﮓﻨﺴﯿﺳﻭﺮﭘ ﯽﻓﺎﺿﺍ ﺰﺳﺎﭘ ﮓﻧﮉﯿﺋﺎﮔ ﺐﺟ ﮯﮨ ﺎﺗﺎﻨﺑ ﺮﺘﮩﺑ ﻮﮐ ﺭﺎﯿﻌﻣ ﮯﮨ ﯽﺗﺎﺟ ﺭﺰﮔ ﮯﻠﮩﭘ ﮯﺳ ﮯﻧﺮﮐ ﺩﺮﺘﺴﻣ ﻮﮐ ﺮﯾﻮﺼﺗ ﮓﻧﮉﯿﺋﺎﮔ ﯽﻟﺍﻭ ﺭﻮﺷ ﺮﭩﻠﻓ ﯼﺮﭘ"
+
+
+msgid "High quality"
+msgstr "ﺭﺎﯿﻌﻣ ﯽٰﻠﻋﺍ"
+
+
+msgid "Balanced"
+msgstr "ﻥﺯﺍﻮﺘﻣ"
+
+
+msgid "Balanced between performance and quality"
+msgstr "ﻥﺯﺍﻮﺘﻣ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﺭﺎﯿﻌﻣ ﺭﻭﺍ ﯽﮔﺩﺮﮐﺭﺎﮐ"
 
 
 msgid "HDR"
@@ -88439,6 +88456,22 @@ msgid "Panel containing UI elements"
 msgstr "UI ﻞﻨﯿﭘ ﻞﻤﺘﺸﻣ ﺮﭘ ﺮﺻﺎﻨﻋ"
 
 
+msgid "Shadow Settings"
+msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻭﮉﯿﺷ"
+
+
+msgid "SSAO Settings"
+msgstr "SSAO ﺕﺎﺒﯿﺗﺮﺗ"
+
+
+msgid "Render Pass"
+msgstr "ﺱﺎﭘ ﺭﮉﻨﯾﺭ"
+
+
+msgid "Compositor"
+msgstr "ﺮﭩﯾﺯﻮﭙﻤﮐ"
+
+
 msgid "Overlays"
 msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
 
@@ -88549,22 +88582,6 @@ msgstr "ﺖﯿﺋﺮﻣ ﺭﻭﺍ ﺏﺎﺨﺘﻧﺍ"
 
 msgid "Wire Color"
 msgstr "ﮓﻧﺭ ﺎﮐ ﺭﺎﺗ"
-
-
-msgid "Shadow Settings"
-msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻭﮉﯿﺷ"
-
-
-msgid "SSAO Settings"
-msgstr "SSAO ﺕﺎﺒﯿﺗﺮﺗ"
-
-
-msgid "Render Pass"
-msgstr "ﺱﺎﭘ ﺭﮉﻨﯾﺭ"
-
-
-msgid "Compositor"
-msgstr "ﺮﭩﯾﺯﻮﭙﻤﮐ"
 
 
 msgid "Chain Scaling"
@@ -95081,18 +95098,6 @@ msgstr "ﺭﺎﯿﻌﻣ ﺎﻧﺮﮐ ﺭﺎﮑﻧﺍ"
 
 msgid "Overall denoising quality when using OpenImageDenoise"
 msgstr "OpenImageDenoise ﺮﭘ ﺭﻮﻃ ﯽﻋﻮﻤﺠﻣ ﺖﻗﻭ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ denoising ﺭﺎﯿﻌﻣ"
-
-
-msgid "High quality"
-msgstr "ﺭﺎﯿﻌﻣ ﯽٰﻠﻋﺍ"
-
-
-msgid "Balanced"
-msgstr "ﻥﺯﺍﻮﺘﻣ"
-
-
-msgid "Balanced between performance and quality"
-msgstr "ﻥﺯﺍﻮﺘﻣ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﺭﺎﯿﻌﻣ ﺭﻭﺍ ﯽﮔﺩﺮﮐﺭﺎﮐ"
 
 
 msgid "High performance"
@@ -123127,11 +123132,6 @@ msgstr "ﮎﻼ﻿ﺑ ﻼ﻿ﮭﭽﭘ"
 msgctxt "Operator"
 msgid "Next Block"
 msgstr "ﮎﻼ﻿ﺑ ﻼ﻿ﮔﺍ"
-
-
-msgctxt "Operator"
-msgid "Empty"
-msgstr "ﯽﻟﺎﺧ"
 
 
 msgctxt "Operator"
