@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'eb39d81afa00')\n"
+"Project-Id-Version: Blender 4.4.0 Alpha (b'96c6f543ecc7')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-30 14:46+0000\n"
+"POT-Creation-Date: 2025-01-06 10:26+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -44101,10 +44101,6 @@ msgid "Whether to update left and right handles"
 msgstr "இடது மற்றும் வலது கைப்பிடிகளைப் புதுப்பிக்க வேண்டுமா"
 
 
-msgid "Curve Spiral"
-msgstr "வளைவு சுழல்"
-
-
 msgid "Generate a poly spline in a spiral shape"
 msgstr "சுழல் வடிவத்தில் பாலி ச்ப்லைனை உருவாக்குங்கள்"
 
@@ -80405,6 +80401,30 @@ msgid "Export current scene in a USD archive"
 msgstr "தற்போதைய காட்சியை அமெரிக்க டாலர் காப்பகத்தில் ஏற்றுமதி செய்யுங்கள்"
 
 
+msgid "Meters"
+msgstr "மீட்டர்"
+
+
+msgid "Kilometers"
+msgstr "கிலோமீட்டர்"
+
+
+msgid "Centimeters"
+msgstr "சென்டிமீட்டர்"
+
+
+msgid "Inches"
+msgstr "அங்குலங்கள்"
+
+
+msgid "Feet"
+msgstr "அடி"
+
+
+msgid "Yards"
+msgstr "கெசம்"
+
+
 msgid "Use Settings for"
 msgstr "அமைப்புகளைப் பயன்படுத்தவும்"
 
@@ -104994,10 +105014,6 @@ msgid "BVH"
 msgstr "பி.வி.எச்"
 
 
-msgid "Module Debug"
-msgstr "தொகுதி பிழைத்திருத்தம்"
-
-
 msgid "Viewport BVH"
 msgstr "வியூபோர்ட் பி.வி.எச்"
 
@@ -105072,6 +105088,10 @@ msgstr "வெளியேற்றம்"
 
 msgid "Clear Image"
 msgstr "படத்தை அழிக்கவும்"
+
+
+msgid "Module Debug"
+msgstr "தொகுதி பிழைத்திருத்தம்"
 
 
 msgid "Cycles built without Embree support"
@@ -113777,10 +113797,6 @@ msgid "Original Mode"
 msgstr "அசல் பயன்முறை"
 
 
-msgid "Kilometers"
-msgstr "கிலோமீட்டர்"
-
-
 msgid "100 Meters"
 msgstr "100 மீட்டர்"
 
@@ -113789,16 +113805,8 @@ msgid "10 Meters"
 msgstr "10 மீட்டர்"
 
 
-msgid "Meters"
-msgstr "மீட்டர்"
-
-
 msgid "10 Centimeters"
 msgstr "10 சென்டிமீட்டர்"
-
-
-msgid "Centimeters"
-msgstr "சென்டிமீட்டர்"
 
 
 msgid "Micrometers"
@@ -113823,18 +113831,6 @@ msgstr "ஃபர்லாங்ச்"
 
 msgid "Chains"
 msgstr "சங்கிலிகள்"
-
-
-msgid "Yards"
-msgstr "கெசம்"
-
-
-msgid "Feet"
-msgstr "அடி"
-
-
-msgid "Inches"
-msgstr "அங்குலங்கள்"
 
 
 msgid "Thou"
@@ -118161,10 +118157,6 @@ msgid "Fluid: Could not use default cache directory '%s', please define a valid 
 msgstr "திரவம்: இயல்புநிலை கேச் அடைவு '%s' ஐப் பயன்படுத்த முடியவில்லை, தயவுசெய்து செல்லுபடியாகும் கேச் பாதையை கைமுறையாக வரையறுக்கவும்"
 
 
-msgid "Fluid: %s complete! (%.2f)"
-msgstr "திரவம்: %s முடிந்தது! (%.2f)"
-
-
 msgid "Fluid: %s failed: %s"
 msgstr "திரவம்: %s தோல்வியுற்றன: %s"
 
@@ -121905,10 +121897,6 @@ msgstr "சிப்ட் - துல்லியமாக வைத்தி�
 
 msgid " | [Ctrl] - Increments active"
 msgstr " | [ctrl] - செயலில் அதிகரிக்கிறது"
-
-
-msgid " | Ctrl - Hold for 10% increments"
-msgstr " | கட்டுப்பாடு - 10% அதிகரிப்புகளை வைத்திருங்கள்"
 
 
 msgid "Unpack File"

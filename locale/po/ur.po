@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'eb39d81afa00')\n"
+"Project-Id-Version: Blender 4.4.0 Alpha (b'96c6f543ecc7')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-30 14:46+0000\n"
+"POT-Creation-Date: 2025-01-06 10:26+0000\n"
 "PO-Revision-Date: 2024-09-26 13:56+0000\n"
 "Last-Translator: Sarfaraz Baig <iamsarfarazbaig@gmail.com>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -46826,10 +46826,6 @@ msgid "Whether to update left and right handles"
 msgstr "ﮯﮨ ﺎﻧﺮﮐ ﭧﯾﮈ ﭖﺍ ﻮﮐ ﺰﻟﮉﻨﯿﮨ ﮟﯿﺋﺍﺩ ﺭﻭﺍ ﮟﯿﺋﺎﺑ ﺎﯾﺁ"
 
 
-msgid "Curve Spiral"
-msgstr "ﻞﭘﺮﺳ  ﻢﺧ"
-
-
 msgid "Generate a poly spline in a spiral shape"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﻦﺋﻼ﻿ﭙﺳﺍ ﯽﻟﻮﭘ ﮟﯿﻣ ﻞﮑﺷ ﻞﭘﺮﺳ ﮏﯾﺍ"
 
@@ -87030,6 +87026,30 @@ msgid "Convert orientation axis to a different convention to match other applica
 msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﮟﯿﻣ ﻦﺸﻧﻮﻨﮐ ﻒﻠﺘﺨﻣ ﮏﯾﺍ ﻮﮐ ﺭﻮﺤﻣ ﮯﮐ ﺖﯿﻔﻗﺍﻭ ﮯﯿﻟ ﮯﮐ ﮯﻨﻠﻣ ﮯﺳ ﺰﻨﺸﯿﮐ ﯽﻠﭙﯾﺍ ﺮﮕﯾﺩ"
 
 
+msgid "Meters"
+msgstr "ﺮﭩﯿﻣ"
+
+
+msgid "Kilometers"
+msgstr "ﺮﭩﯿﻣﻮﻠﮐ"
+
+
+msgid "Centimeters"
+msgstr "ﺮﭩﯿﻣ ﯽﭩﻨﯿﺳ"
+
+
+msgid "Inches"
+msgstr "ﭻﻧﺍ"
+
+
+msgid "Feet"
+msgstr "ﮞﺅﺎﭘ"
+
+
+msgid "Yards"
+msgstr "ﺰﮔ"
+
+
 msgid "Convert World Material"
 msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﺩﺍﻮﻣ ﯽﻤﻟﺎﻋ"
 
@@ -114504,10 +114524,6 @@ msgid "BVH"
 msgstr "ﭻﯾﺍ ﯼﻭ ﯽﺑ"
 
 
-msgid "Module Debug"
-msgstr "ﮓﺒﯾﮈ ﮧﻧﻮﻤﻧ"
-
-
 msgid "Viewport BVH"
 msgstr "BVH ﭦﺭﻮﭘ ﻮﯾﻭ"
 
@@ -114582,6 +114598,10 @@ msgstr "ﺝﺍﺮﺧﺍ"
 
 msgid "Clear Image"
 msgstr "ﮟﯾﺮﮐ ﻑﺎﺻ ﺮﯾﻮﺼﺗ"
+
+
+msgid "Module Debug"
+msgstr "ﮓﺒﯾﮈ ﮧﻧﻮﻤﻧ"
 
 
 msgid "Cycles built without Embree support"
@@ -125120,10 +125140,6 @@ msgid "Original Mode"
 msgstr "ﮈﻮﻣ ﻞﺻﺍ"
 
 
-msgid "Kilometers"
-msgstr "ﺮﭩﯿﻣﻮﻠﮐ"
-
-
 msgid "100 Meters"
 msgstr "ﺮﭩﯿﻣ 100"
 
@@ -125132,16 +125148,8 @@ msgid "10 Meters"
 msgstr "ﺮﭩﯿﻣ 10"
 
 
-msgid "Meters"
-msgstr "ﺮﭩﯿﻣ"
-
-
 msgid "10 Centimeters"
 msgstr "ﺮﭩﯿﻣ ﯽﭩﻨﯿﺳ 10"
-
-
-msgid "Centimeters"
-msgstr "ﺮﭩﯿﻣ ﯽﭩﻨﯿﺳ"
 
 
 msgid "Micrometers"
@@ -125166,18 +125174,6 @@ msgstr "ﮓﻧﻻ﻿ﺮﻓ"
 
 msgid "Chains"
 msgstr "ﮟﯾﺮﯿﺠﻧﺯ"
-
-
-msgid "Yards"
-msgstr "ﺰﮔ"
-
-
-msgid "Feet"
-msgstr "ﮞﺅﺎﭘ"
-
-
-msgid "Inches"
-msgstr "ﭻﻧﺍ"
 
 
 msgid "Thou"
@@ -130109,10 +130105,6 @@ msgid "Fluid: Could not use default cache directory '%s', please define a valid 
 msgstr "ﮟﯾﺮﮐ ﺖﺣﺎﺿﻭ ﯽﮐ ﮧﺘﺳﺍﺭ ﺶﯿﮐ ﺖﺳﺭﺩ ﮏﯾﺍ ﺮﭘ ﺭﻮﻃ ﯽﺘﺳﺩ ﻡﺮﮐ ﮦﺍﺮﺑ ،ﯽﮑﺳ ﻮﮨ ﮟﯿﮩﻧ ﻝﺎﻤﻌﺘﺳﺍ '%s‬‪' ﯼﺮﭩﮐﺮﺋﺍﮈ ﺶﯿﮐ ﭧﻟﺎﻔﯾﮈ :ﮉﺋﻮﻠﻓ"
 
 
-msgid "Fluid: %s complete! (%.2f)"
-msgstr "(%.2f‬‪) !ﻞﻤﮑﻣ %s‬‪ :ﻝﺎﯿﺳ"
-
-
 msgid "Fluid: %s failed: %s"
 msgstr "‬%s‪ :ﻡﺎﮐﺎﻧ %s‬‪ :ﻝﺎﯿﺳ"
 
@@ -134469,10 +134461,6 @@ msgstr "ﻭﮍﮑﭘ ﮯﯿﻟ ﮯﮐ ﯽﮕﺘﺳﺭﺩ - ﭧﻔﺷ"
 
 msgid " | [Ctrl] - Increments active"
 msgstr " | [Ctrl] - ﻝﺎﻌﻓ ﮧﻓﺎﺿﺍ"
-
-
-msgid " | Ctrl - Hold for 10% increments"
-msgstr " | Ctrl - 10% ﮟﯾﺮﮐ ﮉﻟﻮﮨ ﮯﯿﻟ ﮯﮐ ﮧﻓﺎﺿﺍ"
 
 
 msgid "Unpack File"
