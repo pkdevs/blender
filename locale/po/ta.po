@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'efff379ea583')\n"
+"Project-Id-Version: Blender 4.4.0 Alpha (b'5c1749f7b7d3')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-27 10:58+0000\n"
+"POT-Creation-Date: 2025-02-03 14:39+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -23617,10 +23617,6 @@ msgid "Display the object's name"
 msgstr "பொருளின் பெயரைக் காண்பி"
 
 
-msgid "Shape Key Lock"
-msgstr "விசை பூட்டு வடிவ"
-
-
 msgid "Only show the active shape key at full value"
 msgstr "செயலில் உள்ள வடிவ விசையை முழு மதிப்பில் மட்டுமே காண்பி"
 
@@ -31481,16 +31477,20 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Metaball"
+msgstr "வளர்சிதை மாற்ற"
+
+
+msgid "Show/Hide"
+msgstr "காட்டு/மறைக்க"
+
+
 msgid "Names"
 msgstr "பெயர்கள்"
 
 
 msgid "Bone Roll"
 msgstr "எலும்பு ரோல்"
-
-
-msgid "Show/Hide"
-msgstr "காட்டு/மறைக்க"
 
 
 msgid "Clean Up"
@@ -31579,10 +31579,6 @@ msgstr "சுழல்களைத் தேர்ந்தெடுக்க�
 
 msgid "Assign Material"
 msgstr "மூலப்பொருள் ஒதுக்க"
-
-
-msgid "Metaball"
-msgstr "வளர்சிதை மாற்ற"
 
 
 msgid "Light"
@@ -41038,28 +41034,12 @@ msgid "Channel Key"
 msgstr "சேனல் விசை"
 
 
-msgid "RGB color space"
-msgstr "rgb வண்ண இடம்"
-
-
-msgid "HSV color space"
-msgstr "hsv வண்ண இடம்"
-
-
 msgid "YUV"
 msgstr "yuv"
 
 
-msgid "YUV color space"
-msgstr "yuv வண்ண இடம்"
-
-
 msgid "YCbCr"
 msgstr "ycbcr"
-
-
-msgid "YCbCr color space"
-msgstr "ycbcr வண்ண இடம்"
 
 
 msgid "Limit by this channel's value"
@@ -41482,26 +41462,6 @@ msgid "Mode of color processing"
 msgstr "வண்ண செயலாக்க முறை"
 
 
-msgid "Use RGB color processing"
-msgstr "rgb வண்ண செயலாக்கத்தைப் பயன்படுத்தவும்"
-
-
-msgid "Use HSV color processing"
-msgstr "hsv வண்ண செயலாக்கத்தைப் பயன்படுத்தவும்"
-
-
-msgid "Use HSL color processing"
-msgstr "hsl வண்ண செயலாக்கத்தைப் பயன்படுத்தவும்"
-
-
-msgid "Use YCbCr color processing"
-msgstr "ycbcr வண்ண செயலாக்கத்தைப் பயன்படுத்தவும்"
-
-
-msgid "Use YUV color processing"
-msgstr "yuv வண்ண செயலாக்கத்தைப் பயன்படுத்தவும்"
-
-
 msgid "Color space used for YCbCrA processing"
 msgstr "ycbcra செயலாக்கத்திற்கு பயன்படுத்தப்படும் வண்ண இடம்"
 
@@ -41861,6 +41821,10 @@ msgstr "இறகு"
 
 msgid "Distance Key"
 msgstr "தூர விசை"
+
+
+msgid "RGB color space"
+msgstr "rgb வண்ண இடம்"
 
 
 msgid "YCbCr suppression"
@@ -43049,40 +43013,16 @@ msgid "Use relative (fraction of input image size) values to define translation"
 msgstr "மொழிபெயர்ப்பை வரையறுக்க உறவினர் (உள்ளீட்டு பட அளவின் பின்னம்) மதிப்புகளைப் பயன்படுத்தவும்"
 
 
-msgid "Wrapping"
-msgstr "போர்த்தி"
-
-
-msgid "Wrap image on a specific axis"
-msgstr "ஒரு குறிப்பிட்ட அச்சில் படத்தை மடிக்கவும்"
-
-
-msgid "No wrapping on X and Y"
-msgstr "ஃச் மற்றும் ஒய் இல் மடக்குதல் இல்லை"
-
-
 msgid "X Axis"
 msgstr "ஃச் அச்சு"
-
-
-msgid "Wrap all pixels on the X axis"
-msgstr "ஃச் அச்சில் அனைத்து பிக்சல்களையும் மடிக்கவும்"
 
 
 msgid "Y Axis"
 msgstr "ஒய் அச்சு"
 
 
-msgid "Wrap all pixels on the Y axis"
-msgstr "அனைத்து பிக்சல்களையும் ஒய் அச்சில் மடிக்கவும்"
-
-
 msgid "Both Axes"
 msgstr "இரண்டு அச்சுகளும்"
-
-
-msgid "Wrap all pixels on both axes"
-msgstr "அனைத்து பிக்சல்களையும் இரண்டு அச்சுகளிலும் மடிக்கவும்"
 
 
 msgid "Map values to colors with the use of a gradient"
@@ -64360,6 +64300,22 @@ msgid "Add a collection info node to the current node editor"
 msgstr "தற்போதைய முனை திருத்தியில் சேகரிப்பு செய்தி முனையைச் சேர்க்கவும்"
 
 
+msgid "Source color"
+msgstr "மூல நிறம்"
+
+
+msgid "Gamma Corrected"
+msgstr "காமா சரி செய்யப்பட்டது"
+
+
+msgid "The source color is gamma corrected"
+msgstr "மூல நிறம் காமா சரி செய்யப்பட்டது"
+
+
+msgid "Has Alpha"
+msgstr "ஆல்பா உள்ளது"
+
+
 msgctxt "Operator"
 msgid "Add File Node"
 msgstr "கோப்பு முனையைச் சேர்க்கவும்"
@@ -75614,18 +75570,6 @@ msgid "Drop colors to buttons"
 msgstr "பொத்தான்களுக்கு வண்ணங்களை விடுங்கள்"
 
 
-msgid "Source color"
-msgstr "மூல நிறம்"
-
-
-msgid "Gamma Corrected"
-msgstr "காமா சரி செய்யப்பட்டது"
-
-
-msgid "The source color is gamma corrected"
-msgstr "மூல நிறம் காமா சரி செய்யப்பட்டது"
-
-
 msgctxt "Operator"
 msgid "Drop Material in Material slots"
 msgstr "மூலப்பொருள் இடங்களில் மூலப்பொருள் கைவிடவும்"
@@ -81080,10 +81024,6 @@ msgstr "சிதைவை மட்டும் பயன்படுத்த�
 
 msgid "Use only deformation modifiers (temporary disable all constructive modifiers except multi-resolution)"
 msgstr "சிதைவு மாற்றியமைப்பாளர்களை மட்டும் பயன்படுத்தவும் (பல தெளிவுத்திறனைத் தவிர அனைத்து ஆக்கபூர்வமான மாற்றிகளையும் தற்காலிகமாக முடக்கு)"
-
-
-msgid "UV Sculpting"
-msgstr "புறஊதா சிற்பம்"
 
 
 msgid "Properties of vertex and weight paint mode"
@@ -99284,6 +99224,10 @@ msgid "Enable this light in solid shading mode"
 msgstr "திட நிழல் பயன்முறையில் இந்த ஒளியை இயக்கவும்"
 
 
+msgid "UV Sculpting"
+msgstr "புறஊதா சிற்பம்"
+
+
 msgid "Group of vertices, used for armature deform and other purposes"
 msgstr "செங்குத்துகளின் குழு, ஆர்மேச்சர் சிதைவு மற்றும் பிற நோக்கங்களுக்காகப் பயன்படுத்தப்படுகிறது"
 
@@ -114177,48 +114121,8 @@ msgid "Sliding-Tool"
 msgstr "நெகிழ்-கருவி"
 
 
-msgid "[X]/Y/Z axis only (X to clear)"
-msgstr "[x]/y/z அச்சு மட்டும் (x அழிக்க)"
-
-
-msgid "X/[Y]/Z axis only (Y to clear)"
-msgstr "x/[y]/z அச்சு மட்டும் (y அழிக்க)"
-
-
-msgid "X/Y/[Z] axis only (Z to clear)"
-msgstr "x/y/[z] அச்சு மட்டும் (z அழிக்க)"
-
-
-msgid "X/Y/Z = Axis Constraint"
-msgstr "x/y/z = அச்சு கட்டுப்பாடு"
-
-
-msgid "[G]/R/S/B/C - Location only (G to clear) | %s"
-msgstr "[g]/r/s/b/c - இருப்பிடம் மட்டும் (g அழிக்க) | %s"
-
-
-msgid "G/[R]/S/B/C - Rotation only (R to clear) | %s"
-msgstr "g/[r]/s/b/c - சுழற்சி மட்டும் (r to அழிக்க) | %s"
-
-
-msgid "G/R/[S]/B/C - Scale only (S to clear) | %s"
-msgstr "g/r/[s]/b/c - அளவுகோல் மட்டும் (களை அழிக்க) | %s"
-
-
-msgid "G/R/S/[B]/C - Bendy Bone properties only (B to clear) | %s"
-msgstr "g/r/s/[b]/c - வளைந்த எலும்பு பண்புகள் மட்டும் (b அழிக்க) | %s"
-
-
-msgid "G/R/S/B/[C] - Custom Properties only (C to clear) | %s"
-msgstr "g/r/s/b/[c] - தனிப்பயன் பண்புகள் மட்டும் (c அழிக்க) | %s"
-
-
-msgid "G/R/S/B/C - Limit to Transform/Property Set"
-msgstr "g/r/s/b/c - உருமாற்றம்/சொத்து தொகுப்புக்கான வரம்பு"
-
-
-msgid "[H] - Toggle bone visibility"
-msgstr "[h] - எலும்பு தெரிவுநிலையை மாற்றவும்"
+msgid "Cancel"
+msgstr "ரத்துசெய்"
 
 
 msgid "No keyframes to slide between"
@@ -114696,10 +114600,6 @@ msgstr "அடுக்கு ஏற்கனவே சேர்க்கப்�
 
 msgid "Unable to find layer to add"
 msgstr "சேர்க்க அடுக்கு கண்டுபிடிக்க முடியவில்லை"
-
-
-msgid "Cancel"
-msgstr "ரத்துசெய்"
 
 
 msgid "Could not resolve path '%s'"
@@ -117948,14 +117848,6 @@ msgid "UV map or surface attachment is invalid"
 msgstr "புறஊதா வரைபடம் அல்லது மேற்பரப்பு இணைப்பு தவறானது"
 
 
-msgid "ON"
-msgstr "ஆன்"
-
-
-msgid "OFF"
-msgstr "அணை"
-
-
 msgid "Active group is locked, aborting"
 msgstr "செயலில் உள்ள குழு பூட்டப்பட்டுள்ளது, கருக்கலைப்பு செய்கிறது"
 
@@ -118962,30 +118854,6 @@ msgstr "இயக்கிகள் நீக்கப்படவில்ல�
 
 msgid "Deleted %u drivers"
 msgstr "நீக்கப்பட்டது %u இயக்கிகள்"
-
-
-msgid "Decimate Keyframes"
-msgstr "கீஃப்ரேம்களை அழிக்கவும்"
-
-
-msgid "Shear Keys"
-msgstr "வெட்டு விசைகள்"
-
-
-msgid "D - Toggle Direction"
-msgstr "டி - திசையை மாற்றவும்"
-
-
-msgid "[D] - Scale From Right End"
-msgstr "[டி] - வலது முனையிலிருந்து அளவு"
-
-
-msgid "[D] - Scale From Left End"
-msgstr "[d] - இடது முனையிலிருந்து அளவு"
-
-
-msgid "Scale from Neighbor Keys"
-msgstr "அண்டை விசைகளிலிருந்து அளவு"
 
 
 msgid "Decimate F-Curves by specifying how much they can deviate from the original curve"
@@ -123224,8 +123092,8 @@ msgid "Clipping"
 msgstr "கிளிப்பிங்"
 
 
-msgid "Level Viewport"
-msgstr "நிலை காட்சியகம்"
+msgid "Levels Viewport"
+msgstr "நிலைகள் காட்சியகம்"
 
 
 msgid "Unsubdivide"
@@ -123433,10 +123301,6 @@ msgstr "உள் பிழை: சுழல்கள் வரிசை தவ�
 
 msgid "Adaptive Subdivision"
 msgstr "தகவமைப்பு துணைப்பிரிவு"
-
-
-msgid "Levels Viewport"
-msgstr "நிலைகள் காட்சியகம்"
 
 
 msgid "Final Scale: Render %.2f px, Viewport %.2f px"
@@ -123763,10 +123627,6 @@ msgstr "அதிகபட்சம்"
 
 msgid "Offset Y"
 msgstr "ஆஃப்செட் ஒய்"
-
-
-msgid "Undistortion"
-msgstr "விரோதம்"
 
 
 msgid "Dot"
@@ -124492,10 +124352,6 @@ msgstr "மேலே"
 
 msgid "Values larger than the threshold are inside the generated mesh"
 msgstr "வாசலை விட பெரிய மதிப்புகள் உருவாக்கப்பட்ட கண்ணிக்குள் உள்ளன"
-
-
-msgid "Has Alpha"
-msgstr "ஆல்பா உள்ளது"
 
 
 msgid "Frame Count"
@@ -126468,6 +126324,14 @@ msgstr "டிபிஎல்-"
 
 msgid "drag-"
 msgstr "இழுவை-"
+
+
+msgid "ON"
+msgstr "ஆன்"
+
+
+msgid "OFF"
+msgstr "அணை"
 
 
 msgid "unsupported format"

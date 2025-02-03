@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'efff379ea583')\n"
+"Project-Id-Version: Blender 4.4.0 Alpha (b'5c1749f7b7d3')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-27 10:58+0000\n"
+"POT-Creation-Date: 2025-02-03 14:39+0000\n"
 "PO-Revision-Date: 2024-09-26 13:56+0000\n"
 "Last-Translator: Sarfaraz Baig <iamsarfarazbaig@gmail.com>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -25097,10 +25097,6 @@ msgid "Display the object's name"
 msgstr "ﮟﯿﺋﺎﮭﮐﺩ ﻡﺎﻧ ﺎﮐ ﺰﯿﭼ"
 
 
-msgid "Shape Key Lock"
-msgstr "ﻞﮑﺷ ﯽﮐ ﻻ﻿ﺎﺗ ﯼﺪﯿﻠﮐ"
-
-
 msgid "Only show the active shape key at full value"
 msgstr "ﮟﯿﺋﺎﮭﮐﺩ ﺮﭘ ﺭﺪﻗ ﯼﺭﻮﭘ ﻮﮐ ﺪﯿﻠﮐ ﯽﮐ ﻞﮑﺷ ﻝﺎﻌﻓ ﻑﺮﺻ"
 
@@ -33210,16 +33206,20 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
+msgid "Metaball"
+msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
+
+
+msgid "Show/Hide"
+msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
+
+
 msgid "Names"
 msgstr "ﻡﺎﻧ"
 
 
 msgid "Bone Roll"
 msgstr "ﻝﻭﺭ ﻥﻮﺑ"
-
-
-msgid "Show/Hide"
-msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
 
 
 msgid "Clean Up"
@@ -33308,10 +33308,6 @@ msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﺲﭘﻮﻟ"
 
 msgid "Assign Material"
 msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺩﺍﻮﻣ"
-
-
-msgid "Metaball"
-msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
 
 
 msgid "Light"
@@ -43249,28 +43245,12 @@ msgid "Create matte based on differences in color channels"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﭧﯿﻣ ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﻕﺮﻓ ﮟﯿﻣ ﺰﻠﻨﯿﭼ ﻦﯿﮕﻧﺭ"
 
 
-msgid "RGB color space"
-msgstr "ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ ﯽﺒﯿﺟﺭﺁ"
-
-
-msgid "HSV color space"
-msgstr "HSV ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ"
-
-
 msgid "YUV"
 msgstr "Y ﯼﻭﻮﯾ"
 
 
-msgid "YUV color space"
-msgstr "Y ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ  ﯼﻭﻮﯾ"
-
-
 msgid "YCbCr"
 msgstr "YCbCr"
-
-
-msgid "YCbCr color space"
-msgstr "YCbCr ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ"
 
 
 msgctxt "Color"
@@ -43775,26 +43755,6 @@ msgid "Mode of color processing"
 msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ ﮓﻧﺭ"
 
 
-msgid "Use RGB color processing"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮓﻨﺴﯿﺳﻭﺮﭘ ﮓﻧﺭ ﯽﺒﯿﺟﺭﺁ"
-
-
-msgid "Use HSV color processing"
-msgstr "HSV ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ ﮓﻧﺭ"
-
-
-msgid "Use HSL color processing"
-msgstr "HSL ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ ﮓﻧﺭ"
-
-
-msgid "Use YCbCr color processing"
-msgstr "YCbCr ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ ﮓﻧﺭ"
-
-
-msgid "Use YUV color processing"
-msgstr "Y ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ ﮓﻧﺭ  ﯼﻭﻮﯾ"
-
-
 msgid "Color space used for YCbCrA processing"
 msgstr "YCbCrA ﮧﮕﺟ ﻦﯿﮕﻧﺭ ﯽﻟﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ"
 
@@ -44238,6 +44198,10 @@ msgstr "ﺪﯿﻠﮐ ﯽﺗﻼ﻿ﺻﺎﻓ"
 
 msgid "Create matte based on 3D distance between colors"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﭧﯿﻣ ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﮯﻠﺻﺎﻓ 3D ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﮞﻮﮕﻧﺭ"
+
+
+msgid "RGB color space"
+msgstr "ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ ﯽﺒﯿﺟﺭﺁ"
 
 
 msgid "YCbCr suppression"
@@ -45638,40 +45602,16 @@ msgid "Use relative (fraction of input image size) values to define translation"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮟﯾﺭﺪﻗ (ﮧﺼﺣ ﺎﮐ ﺰﺋﺎﺳ ﺞﯿﻣﺍ ﭧﭘ ﻥﺍ) ﺭﺍﺩ ﮧﺘﺷﺭ ﮯﯿﻟ ﮯﮐ ﺖﺣﺎﺿﻭ ﯽﮐ ﮧﻤﺟﺮﺗ"
 
 
-msgid "Wrapping"
-msgstr "ﺎﻨﭩﯿﭙﻟ"
-
-
-msgid "Wrap image on a specific axis"
-msgstr "ﮟﯿﭩﯿﭙﻟ ﺮﭘ ﺭﻮﺤﻣ ﺹﻮﺼﺨﻣ ﮏﯾﺍ ﻮﮐ ﺮﯾﻮﺼﺗ"
-
-
-msgid "No wrapping on X and Y"
-msgstr "X ﺭﻭﺍ Y ﮟﯿﮩﻧ ﮓﻨﭙﯾﺭ ﯽﺋﻮﮐ ﺮﭘ"
-
-
 msgid "X Axis"
 msgstr "ﺭﻮﺤﻣ ﺲﮑﯾﺍ"
-
-
-msgid "Wrap all pixels on the X axis"
-msgstr "ﮟﯿﭩﯿﭙﻟ ﺮﭘ ﺭﻮﺤﻣ X ﻮﮐ ﺰﻠﺴﮑﭘ ﻡﺎﻤﺗ"
 
 
 msgid "Y Axis"
 msgstr "Y ﺭﻮﺤﻣ"
 
 
-msgid "Wrap all pixels on the Y axis"
-msgstr "ﮟﯾﺩ ﭧﯿﭙﻟ ﺮﭘ ﺭﻮﺤﻣ Y ﻮﮐ ﺰﻠﺴﮑﭘ ﻡﺎﻤﺗ"
-
-
 msgid "Both Axes"
 msgstr "ﺭﻮﺤﻣ ﮞﻮﻧﻭﺩ"
-
-
-msgid "Wrap all pixels on both axes"
-msgstr "ﮟﯾﺩ ﭧﯿﭙﻟ ﺮﭘ ﮞﻭﺭﻮﺤﻣ ﮞﻮﻧﻭﺩ ﻮﮐ ﺰﻠﺴﮑﭘ ﻡﺎﻤﺗ"
 
 
 msgid "Map values to colors with the use of a gradient"
@@ -69423,6 +69363,22 @@ msgid "Add a collection info node to the current node editor"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﮈﻮﻧ ﺕﺎﻣﻮﻠﻌﻣ ﮧﻋﻮﻤﺠﻣ ﮏﯾﺍ ﮟﯿﻣ ﺮﭩﯾﮉﯾﺍ ﮈﻮﻧ ﮦﺩﻮﺟﻮﻣ"
 
 
+msgid "Source color"
+msgstr "ﮓﻧﺭ ﺎﮐ ﺬﺧﺎﻣ"
+
+
+msgid "Gamma Corrected"
+msgstr "ﺎﯿﮐ ﺖﺳﺭﺩ ﮯﻧ ﺎﻣﺎﮔ"
+
+
+msgid "The source color is gamma corrected"
+msgstr "ﮯﮨ ﺎﯿﮔ ﺎﯿﮐ ﺖﺳﺭﺩ ﺎﻣﺎﮔ ﮓﻧﺭ ﺎﮐ ﺬﺧﺎﻣ"
+
+
+msgid "Has Alpha"
+msgstr "ﮯﮨ ﺎﻔﻟﺍ"
+
+
 msgctxt "Operator"
 msgid "Add File Node"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﮈﻮﻧ ﻞﺋﺎﻓ"
@@ -81951,18 +81907,6 @@ msgid "Drop colors to buttons"
 msgstr "ﮟﯾﮌﻮﮭﭼ ﺮﭘ ﮞﻮﻨﭩﺑ ﻮﮐ ﮞﻮﮕﻧﺭ"
 
 
-msgid "Source color"
-msgstr "ﮓﻧﺭ ﺎﮐ ﺬﺧﺎﻣ"
-
-
-msgid "Gamma Corrected"
-msgstr "ﺎﯿﮐ ﺖﺳﺭﺩ ﮯﻧ ﺎﻣﺎﮔ"
-
-
-msgid "The source color is gamma corrected"
-msgstr "ﮯﮨ ﺎﯿﮔ ﺎﯿﮐ ﺖﺳﺭﺩ ﺎﻣﺎﮔ ﮓﻧﺭ ﺎﮐ ﺬﺧﺎﻣ"
-
-
 msgctxt "Operator"
 msgid "Drop Material in Material slots"
 msgstr "ﮟﯿﻟﺍﮈ ﻞﯾﺮﭩﯿﻣ ﮟﯿﻣ ﺲﭨﻼ﻿ﺳ ﻞﯾﺮﯿﭩﻣ"
@@ -86472,10 +86416,6 @@ msgid "Yards"
 msgstr "ﺰﮔ"
 
 
-msgid "Convert World Material"
-msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﺩﺍﻮﻣ ﯽﻤﻟﺎﻋ"
-
-
 msgid "Convert the world material to a USD dome light. Currently works for simple materials, consisting of an environment texture connected to a background shader, with an optional vector multiply of the texture color"
 msgstr "ﮯﮨ ﺎﺗﻮﮨ ﺏﺮﺿ ﺮﭩﮑﯾﻭ ﯼﺭﺎﯿﺘﺧﺍ ﺎﮐ ﮓﻧﺭ ﮯﮐ ﺖﺧﺎﺳ ﮟﯿﻣ ﺲﺟ ،ﮯﮨ ﯽﺗﻮﮨ ﺖﺧﺎﺳ ﯽﮐ ﻝﻮﺣﺎﻣ ﮏﻠﺴﻨﻣ ﮯﺳ ﺭﮉﯿﺷ ﮉﻧﺅﺍﺮﮔ ﮏﯿﺑ ﮟﯿﻣ ﺲﺟ ،ﮯﮨ ﺎﺗﺮﮐ ﻡﺎﮐ ﮯﯿﻟ ﮯﮐ ﺩﺍﻮﻣ ﮦﺩﺎﺳ ﻝﺎﺤﻟﺍ ﯽﻓ ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﮟﯿﻣ ﭧﺋﻻ﻿ ﻡﻭﮈ USD ﻮﮐ ﺩﺍﻮﻣ ﯽﻤﻟﺎﻋ"
 
@@ -86795,10 +86735,6 @@ msgstr "ﮟﯿﺋﺎﻨﺑ ﮧﻋﻮﻤﺠﻣ"
 
 msgid "Add all imported objects to a new collection"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﮟﯿﻣ ﮧﻋﻮﻤﺠﻣ ﮯﺌﻧ ﮏﯾﺍ ﻮﮐ ءﺎﯿﺷﺍ ﮦﺪﺷ ﺪﻣﺁﺭﺩ ﻡﺎﻤﺗ"
-
-
-msgid "Create World Material"
-msgstr "ﮟﯿﺋﺎﻨﺑ ﺩﺍﻮﻣ ﯽﻤﻟﺎﻋ"
 
 
 msgid "Convert the first discovered USD dome light to a world background shader"
@@ -87804,14 +87740,6 @@ msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﻡﺭﺎﻔﯾﮈ ﻑﺮﺻ"
 
 msgid "Use only deformation modifiers (temporary disable all constructive modifiers except multi-resolution)"
 msgstr "(ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﺮﭘ ﺭﻮﻃ ﯽﺿﺭﺎﻋ ﻮﮐ ﮞﻭﺭﺎﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﯼﺮﯿﻤﻌﺗ ﻡﺎﻤﺗ ﮦﻭﻼ﻿ﻋ ﮯﮐ ﻦﺷﻮﻟﻭﺰﯾﺭ ﯽﭩﻠﻣ) ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﺋﺎﻔﯾﮈﻮﻣ ﻦﺸﯿﻣﺭﺎﻔﯾﮈ ﻑﺮﺻ"
-
-
-msgid "UV Sculpting"
-msgstr "ﯼﺯﺎﺳ ﮧﻤﺴﺠﻣ  ﯼﻭﻮﯾ"
-
-
-msgid "Strength Curve"
-msgstr "ﺮﮐﻭ ﺖﻗﺎﻃ"
 
 
 msgid "Properties of vertex and weight paint mode"
@@ -107856,6 +107784,14 @@ msgid "Enable this light in solid shading mode"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﮟﯿﻣ ﺭﻮﻃ ﺖﮕﻧﺭ  ﺱﻮﮭﭨ ﻮﮐ ﯽﻨﺷﻭﺭ ﺱﺍ"
 
 
+msgid "UV Sculpting"
+msgstr "ﯼﺯﺎﺳ ﮧﻤﺴﺠﻣ  ﯼﻭﻮﯾ"
+
+
+msgid "Strength Curve"
+msgstr "ﺮﮐﻭ ﺖﻗﺎﻃ"
+
+
 msgid "Group of vertices, used for armature deform and other purposes"
 msgstr "ﮯﮨ ﺎﺗﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﺪﺻﺎﻘﻣ ﺮﮕﯾﺩ ﺭﻭﺍ ﻡﺭﺎﻔﯾﮈ ﺮﭽﻣﺭﺁ ﻮﺟ ،ﮦﻭﺮﮔ ﺎﮐ ﮞﻮﯿﭨﻮﭼ"
 
@@ -125478,48 +125414,8 @@ msgid "Sliding-Tool"
 msgstr "ﻝﻮﭨ ﮓﻧﮉﯿﺋﻼ﻿ﺳ"
 
 
-msgid "[X]/Y/Z axis only (X to clear)"
-msgstr "(ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻑﺎﺻ X) ﺭﻮﺤﻣ X]/Y/Z] ﻑﺮﺻ"
-
-
-msgid "X/[Y]/Z axis only (Y to clear)"
-msgstr "(Y ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻑﺎﺻ) ﺭﻮﺤﻣ X/[Y]/Z ﻑﺮﺻ"
-
-
-msgid "X/Y/[Z] axis only (Z to clear)"
-msgstr "(ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻑﺎﺻ Z) ﺭﻮﺤﻣ [X/Y/[Z ﻑﺮﺻ"
-
-
-msgid "X/Y/Z = Axis Constraint"
-msgstr "X/Y/Z = ﯼﺪﻨﺑﺎﭘ ﯽﮐ ﺭﻮﺤﻣ"
-
-
-msgid "[G]/R/S/B/C - Location only (G to clear) | %s"
-msgstr "[G]/R/S/B/C - ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻑﺎﺻ ﯽﺟ) ﻡﺎﻘﻣ ﻑﺮﺻ) | ‪%s‬"
-
-
-msgid "G/[R]/S/B/C - Rotation only (R to clear) | %s"
-msgstr "G/[R]/S/B/C - ﺅﺎﻤﮭﮔ ﻑﺮﺻ (R ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻑﺎﺻ) | ‪%s‬"
-
-
-msgid "G/R/[S]/B/C - Scale only (S to clear) | %s"
-msgstr "G/R/[S]/B/C - ﮧﻧﺎﻤﯿﭘ ﻑﺮﺻ (S ﺎﻧﺮﮐ ﻑﺎﺻ) | ‪%s‬"
-
-
-msgid "G/R/S/[B]/C - Bendy Bone properties only (B to clear) | %s"
-msgstr "G/R/S/[B]/C - ﺕﺎﯿﺻﻮﺼﺧ ﯽﮐ ﻥﻮﺑ ﯼﮉﻨﯿﺑ ﻑﺮﺻ (B ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻑﺎﺻ) | ‪%s‬"
-
-
-msgid "G/R/S/B/[C] - Custom Properties only (C to clear) | %s"
-msgstr "G/R/S/B/[C] - ﺰﯿﭨﺮﭘﺍﺮﭘ ﺕﺭﻭﺮﺿ ﺐﺴﺣ ﻑﺮﺻ (C to Clear) | ‪%s‬"
-
-
-msgid "G/R/S/B/C - Limit to Transform/Property Set"
-msgstr "G/R/S/B/C - ﺪﺣ ﯽﮐ ﭧﯿﺳ ﯽﭨﺮﭘﺍﺮﭘ/ﻡﺭﺎﻔﺴﻧﺍﺮﭨ"
-
-
-msgid "[H] - Toggle bone visibility"
-msgstr "[H] - ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺖﯿﺋﺮﻣ ﯽﮐ ﮞﻮﯾﮉﮨ"
+msgid "Cancel"
+msgstr "ﮟﯾﺮﮐ ﺥﻮﺴﻨﻣ"
 
 
 msgid "No keyframes to slide between"
@@ -126081,10 +125977,6 @@ msgstr "ﮟﯿﮨ ﮯﮨﺭ ﺮﮐ ﻑﺎﺻ ﮎﻭﺮﭩﺳ ﮉﮑﯿﺑ"
 
 msgid "No active object, or active object isn't a Grease Pencil object"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﭧﮑﯿﺠﺑﺁ ﻞﺴﻨﭘ ﺲﯾﺮﮔ ﭧﮑﯿﺠﺑﺁ ﻮﭩﮑﯾﺍ ﺎﯾ ،ﭧﮑﯿﺠﺑﺁ ﻮﭩﮑﯾﺍ ﯽﺋﻮﮐ"
-
-
-msgid "Cancel"
-msgstr "ﮟﯾﺮﮐ ﺥﻮﺴﻨﻣ"
 
 
 msgid "Active Vertex Group is locked"
@@ -129791,18 +129683,6 @@ msgid "UV map or surface attachment is invalid"
 msgstr "ﮯﮨ ﻂﻠﻏ ﮧﮑﻠﺴﻨﻣ ﺎﮐ ﺢﻄﺳ ﺎﯾ ﮧﺸﻘﻧ  ﯼﻭﻮﯾ"
 
 
-msgid "Fill: ESC/RMB cancel, LMB Fill, MMB Adjust Extension, S: Switch Mode, D: Stroke Collision | Mode: {}, Collision {}, Length: {:.3f}"
-msgstr "{3f.:} :ﯽﺋﺎﺒﻤﻟ ,{} ﺅﺍﺮﮑﭨ ,{} :ﮈﻮﻣ | ﺅﺍﺮﮑﭨ ﮎﻭﺮﭩﺳﺍ :D ,ﮈﻮﻣ ﮟﯾﺮﮐ ﭻﺋﻮﺳ :S ,ﻊﯿﺳﻮﺗ ﮟﯾﺮﮐ ﭧﺴﺟﮉﯾﺍ MMB ,ﺎﻧﺮﮭﺑ LMB ,ﮟﯾﺮﮐ ﺥﻮﺴﻨﻣ ESC/RMB :ﺎﻧﺮﮭﺑ"
-
-
-msgid "ON"
-msgstr "ﻥﺁ"
-
-
-msgid "OFF"
-msgstr "ﻑﺁ"
-
-
 msgid "No Grease Pencil frame to draw weight on"
 msgstr "ﮟﯿﮩﻧ ﻢﯾﺮﻓ Grease Penci ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻨﭽﻨﯿﮭﮐ ﻥﺯﻭ"
 
@@ -130873,42 +130753,6 @@ msgstr "ﺍﻮﮨ ﮟﯿﮩﻧ ﻑﺬﺣ ﺭﻮﯿﺋﺍﺭﮈ ﯽﺋﻮﮐ"
 
 msgid "Deleted %u drivers"
 msgstr "%u ﺎﯿﮔ ﺎﯾﺩ ﺮﮐ ﻑﺬﺣ ﻮﮐ ﺯﺭﻮﯿﺋﺍﺭﮈ"
-
-
-msgid "Decimate Keyframes"
-msgstr "ﺰﻤﯾﺮﻓ ﯽﮐ ﭧﯿﻤﯿﺴﯾﮈ"
-
-
-msgid "[TAB] - Modify Sharpness"
-msgstr "[TAB] - ﺖﺳﺎﻔﻧ ﮟﯾﺮﮐ ﻢﯿﻣﺮﺗ"
-
-
-msgid "[TAB] - Modify Curve Bend"
-msgstr "[TAB] - ﮌﻮﻣ  ﻢﺧ  ﮟﯾﺮﮐ ﻢﯿﻣﺮﺗ"
-
-
-msgid "Ease Keys"
-msgstr "ﮞﺎﯿﺑﺎﭼ ﯽﻧﺎﺳﺁ"
-
-
-msgid "Shear Keys"
-msgstr "ﺰﯿﮐ ﺮﺌﯿﺷ"
-
-
-msgid "D - Toggle Direction"
-msgstr "D - ﺖﻤﺳ ﮟﯾﺮﮐ ﻞﮔﻮﭨ"
-
-
-msgid "[D] - Scale From Right End"
-msgstr "[D] - ﮯﺳ ﮟﯿﺋﺍﺩ ﮧﻧﺎﻤﯿﭘ End"
-
-
-msgid "[D] - Scale From Left End"
-msgstr "[D] - ﮯﺳ ﮟﯿﺋﺎﺑ ﮧﻧﺎﻤﯿﭘ End"
-
-
-msgid "Scale from Neighbor Keys"
-msgstr "ﮞﺎﯿﺑﺎﭼ ﯽﺳﻭﮍﭘ ﮯﺳ ﮧﻧﺎﻤﯿﭘ"
 
 
 msgid "Decimate F-Curves by specifying how much they can deviate from the original curve"
@@ -136166,8 +136010,8 @@ msgid "Clipping"
 msgstr "ﺎﻨﺷﺍﺮﺗ"
 
 
-msgid "Level Viewport"
-msgstr "ﭦﺭﻮﭘ ﻮﯾﻭ ﻝﻮﯿﻟ"
+msgid "Levels Viewport"
+msgstr "ﭦﺭﻮﭘ ﻮﯾﻭ ﺰﻟﻮﯿﻟ"
 
 
 msgid "Unsubdivide"
@@ -136379,10 +136223,6 @@ msgstr "u% ﮯﺋﺎﺠﺑ ﯽﮐ u% :ﺰﺋﺎﺳ ﻂﻠﻏ loops array :ﯽﺑ
 
 msgid "Adaptive Subdivision"
 msgstr "ﻢﯿﺴﻘﺗ ﯽﻠﯾﺫ ﯽﻟﻮﮑﻧﺍ"
-
-
-msgid "Levels Viewport"
-msgstr "ﭦﺭﻮﭘ ﻮﯾﻭ ﺰﻟﻮﯿﻟ"
 
 
 msgid "Final Scale: Render %.2f px, Viewport %.2f px"
@@ -136749,10 +136589,6 @@ msgstr "ﻮﮐ ﺲﮑﯿﻣ"
 
 msgid "Offset Y"
 msgstr "Y ﭧﯿﺴﻓﺁ"
-
-
-msgid "Undistortion"
-msgstr "ﺎﻧﺮﮐ ﺦﺴﻣ ﺮﯿﻏ"
 
 
 msgid "Dot"
@@ -137700,10 +137536,6 @@ msgstr "ﮟﯿﺋﺎﻨﺑ ﻝﺎﺜﻣ ﻢﺧ ﮦﺪﺤﯿﻠﻋ ﮯﯿﻟ ﮯ�
 
 msgid "Values larger than the threshold are inside the generated mesh"
 msgstr "ﮟﯿﮨ ﺭﺪﻧﺍ ﮯﮐ ﻝﺎﺟ ﮦﺩﺮﮐ ﺭﺎﯿﺗ ﮟﯾﺭﺪﻗ ﯼﮍﺑ ﮯﺳ ﺪﺣ"
-
-
-msgid "Has Alpha"
-msgstr "ﮯﮨ ﺎﻔﻟﺍ"
 
 
 msgid "Frame Count"
@@ -140365,6 +140197,14 @@ msgstr "-ﻞﯾﺍ ﯽﺑ ﯼﮈ"
 
 msgid "drag-"
 msgstr "-ﮟﯿﭩﯿﺴﮭﮔ"
+
+
+msgid "ON"
+msgstr "ﻥﺁ"
+
+
+msgid "OFF"
+msgstr "ﻑﺁ"
 
 
 msgid "Set Debug Value"
