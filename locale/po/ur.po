@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'5c1749f7b7d3')\n"
+"Project-Id-Version: Blender 4.4.0 Beta (b'aad0bd21487d')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-03 14:39+0000\n"
+"POT-Creation-Date: 2025-02-10 15:22+0000\n"
 "PO-Revision-Date: 2024-09-26 13:56+0000\n"
 "Last-Translator: Sarfaraz Baig <iamsarfarazbaig@gmail.com>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -61,6 +61,10 @@ msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮟﯾﺭﺪﻗ ﺡ ﺍ"
 
 msgid "F-Curves"
 msgstr "ﮟﯿﻤﺧ-ﻑ"
+
+
+msgid "Slot"
+msgstr "ﭦﻼ﻿ﺳ"
 
 
 msgid "Action F-Curves"
@@ -245,34 +249,6 @@ msgstr "ﮦﻭﺮﮔ ﻡﺍﺪﻗﺍ"
 
 msgid "Collection of action groups"
 msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮦﻭﺮﮔ ﻡﺍﺪﻗﺍ"
-
-
-msgid "Influence"
-msgstr "ﺎﻧﻮﮨ ﺯﺍﺪﻧﺍ ﺮﺛﺍ"
-
-
-msgid "Mix Mode"
-msgstr "ﮈﻮﻣ ﺲﮑﻣ"
-
-
-msgid "Replace"
-msgstr "ﮟﯾﺩ ﻝﺪﺑ"
-
-
-msgid "Offset"
-msgstr "ﭧﯿﺴﻓﺁ"
-
-
-msgid "Add"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ"
-
-
-msgid "Subtract"
-msgstr "ﮟﯿﺋﺎﭩﮭﮔ"
-
-
-msgid "Multiply"
-msgstr "ﺏﺮﺿ"
 
 
 msgid "Strips"
@@ -818,6 +794,10 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "ﮧﻘﯾﺮﻃ ﺎﺗﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﻼ﻿ﻣ ﮫﺗﺎﺳ ﮯﮐ ﮯﺠﯿﺘﻧ ﮯﮐ ﮏﯿﭩﺳﺍ NLA ﻮﮐ ﮯﺠﯿﺘﻧ ﮯﮐ ﻡﺍﺪﻗﺍ ﻝﺎﻌﻓ"
 
 
+msgid "Replace"
+msgstr "ﮟﯾﺩ ﻝﺪﺑ"
+
+
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "ﮟﯿﮨ ﯽﺘﯾﺩ ﻝﺪﺑ ﮯﺳ ﻢﻗﺭ ﮦﺩﺮﮐ ﻥﺎﯿﺑ ﮧﻌﯾﺭﺫ ﮯﮐ ﺥﻮﺳﺭ ﻭ ﺮﺛﺍ ﻮﮐ ﺞﺋﺎﺘﻧ ﮦﺪﺷ ﻊﻤﺟ ﮟﯾﺭﺪﻗ ﯽﮐ ﯽﭩﭘ"
 
@@ -830,12 +810,24 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "ﮯﮨ ﺎﺗﺎﺟ ﺍﮌﻮﺟ ﮫﺗﺎﺳ ﮯﮐ ﺞﺋﺎﺘﻧ ﮦﺪﺷ ﻊﻤﺟ ﮯﮐﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺐﺳﺎﻨﻣ ﺎﮐ ﯽﺿﺎﯾﺮﯾﮍﮐﻮﭼﺎﯾ ،ﺏﺮﺿ ،ﯽﻓﺎﺿﺍ ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﻢﺴﻗ ﯽﮐ ﻞﻨﯿﭼ ﻮﮐ ﮞﻭﺭﺪﻗ ﯽﮐ ﯽﭩﭘ"
 
 
+msgid "Add"
+msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ"
+
+
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "ﮯﮨ ﺎﺗﺎﺟ ﺎﯿﮐ ﻞﻣﺎﺷ ﮟﯿﻣ ﺞﺋﺎﺘﻧ ﮦﺪﺷ ﻊﻤﺟ ﮧﺠﯿﺘﻧ ﯽﻧﺯﻭ ﺎﮐ ﯽﭩﭘ"
 
 
+msgid "Subtract"
+msgstr "ﮟﯿﺋﺎﭩﮭﮔ"
+
+
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "ﮯﮨ ﺎﺗﺎﺟ ﺎﯾﺩ ﺎﭩﮨ ﮯﺳ ﺞﺋﺎﺘﻧ ﮦﺪﺷ ﻊﻤﺟ ﮧﺠﯿﺘﻧ ﯽﻧﺯﻭ ﺎﮐ ﯽﭩﭘ"
+
+
+msgid "Multiply"
+msgstr "ﺏﺮﺿ"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -5388,6 +5380,10 @@ msgid "In a local override camera, whether this background image comes from the 
 msgstr "ﻮﮨ ﯽﻣﺎﻘﻣ ﮯﯿﻟ ﮯﮐ ﮉﯿﺋﺍﺭ ﺭﻭﻭﺍ ﺎﯾ ،ﻮﮨ ﯽﺋﺁ ﮯﺳ ﮮﺮﻤﯿﮐ ﮯﻟﺍﻭ ﮧﻟﺍﻮﺣ ﮏﻠﺴﻨﻣ ﺮﯾﻮﺼﺗ ﯽﮐﻮﯾﻭ ﺲﭘ ﮧﯾ ﮯﮨﺎﭼ ،ﮟﯿﻣ ﮮﺮﻤﯿﮐ ﮉﯿﺋﺍﺭ ﺭﻭﻭﺍ ﯽﻣﺎﻘﻣ"
 
 
+msgid "Offset"
+msgstr "ﭧﯿﺴﻓﺁ"
+
+
 msgid "Rotation"
 msgstr "ﺵﺩﺮﮔ"
 
@@ -7053,6 +7049,10 @@ msgid "Amount of residual error in radians for constraints that work on orientat
 msgstr "ﺭﺍﺪﻘﻣ ﯽﮐ ﯽﻄﻠﻏ ﺎﯾﺎﻘﺑ ﮟﯿﻣ ﺰﻨﯾﮉﯾﺭ ﮯﯿﻟ ﮯﮐ ﮞﻮﭨﻭﺎﮐﺭ ﯽﻟﺍﻭ ﮯﻧﺮﮐ ﻡﺎﮐ ﺮﭘ ﯼﺪﻨﺑ ﺖﻤﺳ"
 
 
+msgid "Influence"
+msgstr "ﺎﻧﻮﮨ ﺯﺍﺪﻧﺍ ﺮﺛﺍ"
+
+
 msgid "Amount of influence constraint will have on the final solution"
 msgstr "ﯽﮔﻮﮨ ﺮﭘ ﻞﺣ ﯽﻤﺘﺣ ﺭﺍﺪﻘﻣ ﯽﮐ ﭦﻭﺎﮐﺭ ﯽﮐ ﺥﻮﺳﺭ ﻭ ﺮﺛﺍ"
 
@@ -7427,6 +7427,10 @@ msgstr "ﻢﮐ ﺯﺍ ﻢﮐ"
 
 msgid "Minimum value for target channel range"
 msgstr "ﺭﺪﻗ ﻢﮐ ﺯﺍ ﻢﮐ ﮯﯿﻟ ﮯﮐ ﺪﺣ ﯽﮐ ﻞﻨﯿﭼ ﻑﺪﮨ"
+
+
+msgid "Mix Mode"
+msgstr "ﮈﻮﻣ ﺲﮑﻣ"
 
 
 msgid "Specify how existing transformations and the action channels are combined"
@@ -33206,12 +33210,28 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
-msgid "Metaball"
-msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
-
-
 msgid "Show/Hide"
 msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
+
+
+msgid "Clean Up"
+msgstr "ﯽﺋﺎﻔﺻ"
+
+
+msgid "Special Characters"
+msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
+
+
+msgid "Kerning"
+msgstr "ﮓﻨﻧﺮﮐ"
+
+
+msgid "Text"
+msgstr "ﻦﺘﻣ"
+
+
+msgid "Metaball"
+msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
 
 
 msgid "Names"
@@ -33220,10 +33240,6 @@ msgstr "ﻡﺎﻧ"
 
 msgid "Bone Roll"
 msgstr "ﻝﻭﺭ ﻥﻮﺑ"
-
-
-msgid "Clean Up"
-msgstr "ﯽﺋﺎﻔﺻ"
 
 
 msgid "Pivot Point"
@@ -33424,18 +33440,6 @@ msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
 
 msgid "Merge"
 msgstr "ﺎﻧﺮﮐ ﻢﺿ"
-
-
-msgid "Special Characters"
-msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
-
-
-msgid "Kerning"
-msgstr "ﮓﻨﻧﺮﮐ"
-
-
-msgid "Text"
-msgstr "ﻦﺘﻣ"
 
 
 msgid "Keyframe Insert Pie"
@@ -52917,11 +52921,6 @@ msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﯼﺮﯾﺮﺒﺋﻻ﻿ ﺯﺍﺪ�
 msgctxt "Operator"
 msgid "Copy Pose as Asset"
 msgstr "ﮟﯾﺮﮐ ﯽﭘﺎﮐ ﮧﺛﺎﺛﺍ ﺭﻮﻄﺑ ﻮﮐ ﺯﻮﭘ"
-
-
-msgctxt "Operator"
-msgid "Create Pose Asset"
-msgstr "ﮟﯿﺋﺎﻨﺑ ﮧﺛﺎﺛﺍ ﺯﻮﭘ"
 
 
 msgctxt "Operator"
@@ -76044,10 +76043,6 @@ msgid "Create a new pose asset on the clipboard, to be pasted into an Asset Brow
 msgstr "ﮟﯿﺋﺎﻨﺑ ﮧﺛﺎﺛﺍ ﺯﺍﺪﻧﺍ ﺎﯿﻧ ﮏﯾﺍ ﺮﭘ ﮈﺭﻮﺑ ﭗﻠﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮞﺎﭙﺴﭼ ﮟﯿﻣ ﺭﺯﺅﺍﺮﺑ ﮧﺛﺎﺛﺍ"
 
 
-msgid "Create a new Action that contains the pose of the selected bones, and mark it as Asset. The asset will be stored in the current blend file"
-msgstr "ﺎﮔ ﮯﺋﺎﺟ ﺎﯿﮐ ﻅﻮﻔﺤﻣ ﮟﯿﻣ ﻞﺋﺎﻓ ﺐﮐﺮﻣ ﮦﺩﻮﺟﻮﻣ ﮧﺛﺎﺛﺍ ﮟﯾﺮﮐ ﺩﺯ ﻥﺎﺸﻧ ﺭﻮﻄﺑ ﮯﮐ Asset ﮯﺳﺍ ﺭﻭﺍ ،ﻮﮨ ﺯﺍﺪﻧﺍ ﺎﮐ ﮞﻮﯾﮉﮨ ﺐﺨﺘﻨﻣ ﮟﯿﻣ ﺲﺟ ﮟﯿﺋﺎﻨﺑ ﻡﺍﺪﻗﺍ ﺎﯿﻧ ﮏﯾﺍ"
-
-
 msgid "Activate New Action"
 msgstr "ﮟﯾﺮﮐ ﻮﻟﺎﭼ ﻮﮐ ﯽﺋﺍﻭﺭﺭﺎﮐ ﯽﺌﻧ"
 
@@ -87854,6 +87849,10 @@ msgid "Transform Orientations"
 msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﺖﯿﻔﻗﺍﻭ"
 
 
+msgid "glTF Material Variants"
+msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
+
+
 msgid "Stroke Placement"
 msgstr "ﭧﻨﻤﺴﯿﻠﭘ ﮎﻭﺮﭩﺳﺍ"
 
@@ -87878,8 +87877,8 @@ msgid "Multi Frame"
 msgstr "ﻢﯾﺮﻓ ﯽﭩﻠﻣ"
 
 
-msgid "glTF Material Variants"
-msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
+msgid "glTF Animations"
+msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
 
 
 msgid "Auto-Masking"
@@ -87900,10 +87899,6 @@ msgstr "ﺎﻧﮍﮑﺳ/ﺎﻨﮬﮍﺑ  ﮟﯿﻤﺧ"
 
 msgid "Viewport Debug"
 msgstr "ﮓﺒﯾﮈ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgid "glTF Animations"
-msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
 
 
 msgid "VR"
@@ -88233,10 +88228,6 @@ msgstr "ﺲﮑﺑ ﭧﺴﮑﯿﭨ"
 
 msgid "OpenVDB File"
 msgstr "ﻞﺋﺎﻓ ﯽﺑ ﯼﮈ ﯼﻭ ﻦﭘﻭﺍ"
-
-
-msgid "Slot"
-msgstr "ﭦﻼ﻿ﺳ"
 
 
 msgid "Create Pose Asset"
@@ -91866,10 +91857,6 @@ msgstr "ﺭﻮﺤﻣ (Z) ﻝﻭﺭ ﺎﭩﻟﺍ"
 
 msgid "Overall sensitivity of the 3D Mouse for panning"
 msgstr "ﺖﯿﺳﺎﺴﺣ ﯽﻋﻮﻤﺠﻣ ﯽﮐ ﺱﺅﺎﻣ 3D ﮯﯿﻟ ﮯﮐ ﮓﻨﻨﯿﭘ"
-
-
-msgid "Show Navigation Guide"
-msgstr "ﮟﯿﺋﺎﮭﮐﺩ ﮉﯿﺋﺎﮔ ﻦﺸﯿﮕﯾﻮﯿﻧ"
 
 
 msgid "Display the center and axis during rotation"
@@ -114244,6 +114231,11 @@ msgstr "ﮟﯿﺋﺎﮕﻟ ﺮﮐ ﭧﻠﭘ ﺯﻮﭘ"
 
 
 msgctxt "Operator"
+msgid "Remove Selected Bones"
+msgstr "ﮞﺎﯾﮉﮨ ﺐﺨﺘﻨﻣ ﮟﯾﺩ ﺎﭩﮨ"
+
+
+msgctxt "Operator"
 msgid "Blend Pose"
 msgstr "ﺯﻮﭘ ﮉﻨﯿﻠﺑ"
 
@@ -114251,10 +114243,6 @@ msgstr "ﺯﻮﭘ ﮉﻨﯿﻠﺑ"
 msgctxt "Operator"
 msgid "Blend Pose Flipped"
 msgstr "ﺎﭩﻠﭘ ﺯﻮﭘ ﮉﻨﯿﻠﺑ"
-
-
-msgid "Action %s marked Fake User to prevent loss"
-msgstr "ﺎﯿﮐ ﺩﺯ ﻥﺎﺸﻧ ﻮﮐ ﻑﺭﺎﺻ ﯽﻠﻌﺟ ﮯﻧ %s‬‪ ﯽﺋﺍﻭﺭﺭﺎﮐ ﮯﯿﻟ ﮯﮐ ﮯﻨﮐﻭﺭ ﻮﮐ ﻥﺎﺼﻘﻧ"
 
 
 msgid "Pose Asset copied, use Paste As New Asset in any Asset Browser to paste"
@@ -114273,18 +114261,6 @@ msgid "Converted %d poses to pose assets"
 msgstr "‪%d‬ ﺎﯿﮔ ﺎﯾﺩ ﺮﮐ ﻞﯾﺪﺒﺗ ﮟﯿﻣ ﮞﻮﺛﺎﺛﺍ ﺯﺍﺪﻧﺍ ﻮﮐ ﺯﺍﺪﻧﺍ"
 
 
-msgid "An active armature object in pose mode is needed"
-msgstr "ﮯﮨ ﺕﺭﻭﺮﺿ ﯽﮐ ﭧﮑﯿﺠﺑﺁ ﺮﭽﯿﻣﺭﺁ ﻝﺎﻌﻓ ﮏﯾﺍ ﮟﯿﻣ ﮈﻮﻣ ﺯﻮﭘ"
-
-
-msgid "Asset Browser must be set to the Current File library"
-msgstr "ﮯﮨ ﯼﺭﻭﺮﺿ ﺎﻧﻮﮨ ﭧﯿﺳ ﺮﭘ ﯼﺮﯾﺮﺒﺋﻻ﻿ ﻞﺋﺎﻓ ﮦﺩﻮﺟﻮﻣ ﺎﮐ ﺭﺯﺅﺍﺮﺑ ﮧﺛﺎﺛﺍ"
-
-
-msgid "No keyframes were found for this pose"
-msgstr "ﮯﻠﻣ ﮟﯿﮩﻧ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﺯﺍﺪﻧﺍ ﺱﺍ"
-
-
 msgid "No animation data found to create asset from"
 msgstr "ﻼ﻿ﻣ ﮟﯿﮩﻧ ﺎﭩﯾﮈ ﺕﺎﯿﮐﺮﺣ  ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﻨﺑ ﮧﺛﺎﺛﺍ ﮯﺳ"
 
@@ -114295,6 +114271,10 @@ msgstr "ﮟﯾﺮﮐ ﭦﺭﻮﭘﺭ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﮓﺑ ﮏﯾﺍ �
 
 msgid "Current editor is not an asset browser"
 msgstr "ﺭﺯﺅﺍﺮﺑ ﮧﺛﺎﺛﺍ is not an ﺮﭩﯾﮉﯾﺍ ﭧﻧﺮﮐ"
+
+
+msgid "Asset Browser must be set to the Current File library"
+msgstr "ﮯﮨ ﯼﺭﻭﺮﺿ ﺎﻧﻮﮨ ﭧﯿﺳ ﺮﭘ ﯼﺮﯾﺮﺒﺋﻻ﻿ ﻞﺋﺎﻓ ﮦﺩﻮﺟﻮﻣ ﺎﮐ ﺭﺯﺅﺍﺮﺑ ﮧﺛﺎﺛﺍ"
 
 
 msgid "Clipboard is empty"
@@ -116233,11 +116213,6 @@ msgstr "ﮞﺎﯾﮉﮨ ﺐﺨﺘﻨﻣ ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ"
 
 
 msgctxt "Operator"
-msgid "Remove Selected Bones"
-msgstr "ﮞﺎﯾﮉﮨ ﺐﺨﺘﻨﻣ ﮟﯾﺩ ﺎﭩﮨ"
-
-
-msgctxt "Operator"
 msgid "Deselect Bones"
 msgstr "ﮞﺎﯾﮉﮨ ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﺮﯿﻏ"
 
@@ -116488,14 +116463,6 @@ msgid "Only Axis Aligned"
 msgstr "ﮏﻠﺴﻨﻣ ﮯﺳ ﺭﻮﺤﻣ ﻑﺮﺻ"
 
 
-msgid "Keyframes Before"
-msgstr "ﺰﻤﯾﺮﻓ ﯽﮐ ﮯﻠﮩﭘ ﮯﺳ ﺱﺍ"
-
-
-msgid "Keyframes After"
-msgstr "ﺪﻌﺑ ﮯﮐ ﺰﻤﯾﺮﻓ ﯽﮐ"
-
-
 msgid "Stroke Thickness"
 msgstr "ﯽﺋﺎﭨﻮﻣ ﮎﻭﺮﭩﺳﺍ"
 
@@ -116551,6 +116518,14 @@ msgstr "ﮟﯾﺮﮐ ﯽﭘﺎﮐ ﮟﯿﻣ ﺐﺨﺘﻨﻣ ﻮﮐ ﮞﻮﺗﺮ�
 msgctxt "Operator"
 msgid "Delete Group"
 msgstr "ﮦﻭﺮﮔ ﮟﯾﺮﮐ ﻑﺬﺣ"
+
+
+msgid "Keyframes Before"
+msgstr "ﺰﻤﯾﺮﻓ ﯽﮐ ﮯﻠﮩﭘ ﮯﺳ ﺱﺍ"
+
+
+msgid "Keyframes After"
+msgstr "ﺪﻌﺑ ﮯﮐ ﺰﻤﯾﺮﻓ ﯽﮐ"
 
 
 msgid "Interpolation U"
@@ -124816,6 +124791,18 @@ msgid "Workbench"
 msgstr "ﭻﻨﯿﺑ ﮎﺭﻭ"
 
 
+msgid "Create"
+msgstr "ﮟﯿﺋﺎﻨﺑ"
+
+
+msgid "Failed to load asset library"
+msgstr "ﯼﺮﯾﺮﺒﺋﻻ﻿ ﮧﺛﺎﺛﺍ ﻡﺎﮐﺎﻧ ﮟﯿﻣ ﮯﻧﺮﮐ ﮈﻮﻟ ،"
+
+
+msgid "Asset blend file is not editable"
+msgstr "ﻦﯾﻭﺪﺗ ﻞﺑﺎﻗ is not ﻞﺋﺎﻓ ﮉﻨﯿﻠﺑ ﮧﺛﺎﺛﺍ"
+
+
 msgid "NLA Strip Controls"
 msgstr "NLA ﺰﻟﻭﺮﭩﻨﮐ ﯽﭩﭘ"
 
@@ -125248,10 +125235,6 @@ msgstr "ﯼﮉﮨ ﮦﺪﺷ ﺐﺨﺘﻨﻣ ﺮﯿﻏ ﮟﯿﻣ ﺮﯿﺠﻧﺯ"
 
 msgid "Move to New Bone Collection"
 msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮞﻮﯾﮉﮨ to New ﮟﯾﺮﮐ ﻞﻘﺘﻨﻣ"
-
-
-msgid "Create"
-msgstr "ﮟﯿﺋﺎﻨﺑ"
 
 
 msgid "Bone collection with index %d not found on Armature %s"
@@ -125919,14 +125902,6 @@ msgid "The object has only one layer"
 msgstr "ﮯﮨ ﺕﺮﭘ ﮏﯾﺍ ﻑﺮﺻ ﮟﯿﻣ ﭧﮑﯿﺠﺑﺁ"
 
 
-msgid "No active Grease Pencil layer"
-msgstr "ﮯﮨ ﮟﯿﮩﻧ ﺕﺮﭘ ﻞﺴﻨﭘ ﯽﺋﺎﻨﮑﭼ ﻝﺎﻌﻓ ﯽﺋﻮﮐ"
-
-
-msgid "Active layer is locked or hidden"
-msgstr "ﮯﮨ ﮦﺪﯿﺷﻮﭘ ﺎﯾ ﻞﻔﻘﻣ ﺕﺮﭘ ﻝﺎﻌﻓ"
-
-
 msgid "No Grease Pencil frame to draw on"
 msgstr "ﮟﯿﮩﻧ ﻢﯾﺮﻓ ﻞﺴﻨﭘ ﺲﯾﺮﮔ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻨﭽﻨﯿﮭﮐ"
 
@@ -125977,6 +125952,14 @@ msgstr "ﮟﯿﮨ ﮯﮨﺭ ﺮﮐ ﻑﺎﺻ ﮎﻭﺮﭩﺳ ﮉﮑﯿﺑ"
 
 msgid "No active object, or active object isn't a Grease Pencil object"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﭧﮑﯿﺠﺑﺁ ﻞﺴﻨﭘ ﺲﯾﺮﮔ ﭧﮑﯿﺠﺑﺁ ﻮﭩﮑﯾﺍ ﺎﯾ ،ﭧﮑﯿﺠﺑﺁ ﻮﭩﮑﯾﺍ ﯽﺋﻮﮐ"
+
+
+msgid "No active Grease Pencil layer"
+msgstr "ﮯﮨ ﮟﯿﮩﻧ ﺕﺮﭘ ﻞﺴﻨﭘ ﯽﺋﺎﻨﮑﭼ ﻝﺎﻌﻓ ﯽﺋﻮﮐ"
+
+
+msgid "Active layer is locked or hidden"
+msgstr "ﮯﮨ ﮦﺪﯿﺷﻮﭘ ﺎﯾ ﻞﻔﻘﻣ ﺕﺮﭘ ﻝﺎﻌﻓ"
 
 
 msgid "Active Vertex Group is locked"
@@ -129619,10 +129602,6 @@ msgid "Unable to activate brush, wrong object mode"
 msgstr "ﮈﻮﻣ ﭧﮑﯿﺠﺑﺁ ﻂﻠﻏ ،ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﻮﻟﺎﭼ ﻮﮐ ﺵﺮﺑ"
 
 
-msgid "Failed to load asset library"
-msgstr "ﯼﺮﯾﺮﺒﺋﻻ﻿ ﮧﺛﺎﺛﺍ ﻡﺎﮐﺎﻧ ﮟﯿﻣ ﮯﻧﺮﮐ ﮈﻮﻟ ،"
-
-
 msgid "Unable to activate just-saved brush asset"
 msgstr "ﮯﮨ ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﻮﻟﺎﭼ ﻮﮐ ﮧﺛﺎﺛﺍ ﺵﺮﺑ ﮦﺩﺮﮐ ﻅﻮﻔﺤﻣ ﯽﮭﺑﺍ"
 
@@ -129641,10 +129620,6 @@ msgstr "ﻦﯾﻭﺪﺗ ﻞﺑﺎﻗ is not ﯼﺮﯾﺮﺒﺋﻻ﻿ ﮧﺛﺎ�
 
 msgid "Asset file is not editable"
 msgstr "ﻦﯾﻭﺪﺗ ﻞﺑﺎﻗ is not ﻞﺋﺎﻓ ﮧﺛﺎﺛﺍ"
-
-
-msgid "Asset blend file is not editable"
-msgstr "ﻦﯾﻭﺪﺗ ﻞﺑﺎﻗ is not ﻞﺋﺎﻓ ﮉﻨﯿﻠﺑ ﮧﺛﺎﺛﺍ"
 
 
 msgid "Original surface mesh is empty"
@@ -130881,10 +130856,6 @@ msgstr "ﮯﮨ ﯽﺌﮔ ﯽﮐ ﮟﯿﮩﻧ ﻞﯾﺪﺒﺗ ﺮﯾﻮﺼﺗ ﯽ
 
 msgid "Images cannot be copied while rendering"
 msgstr "ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﯽﭘﺎﮐ ﻮﮐ ﺮﯾﻭﺎﺼﺗ ﻥﺍﺭﻭﺩ ﮯﮐ ﮓﻧﺭﮉﻨﯾﺭ"
-
-
-msgid "Packing movies or image sequences not supported"
-msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﺎﻧﺮﮐ ﮏﯿﭘ ﻮﮐ ﮯﻠﺴﻠﺳ ﯼﺮﯾﻮﺼﺗ ﺎﯾ ﮞﻮﻤﻠﻓ"
 
 
 msgid "Image is not editable"
@@ -139022,14 +138993,6 @@ msgstr "(ﮯﮨ ﯼﺭﺩﺮﮭﮐ ﺮﭘ ﺭﻮﻃ ﻞﻤﮑﻣ 1.0 ،ﮯﮨ �
 
 msgid "Blend between diffuse surface and subsurface scattering. Typically should be zero or one (either fully diffuse or subsurface)"
 msgstr "(ﻦﯿﻣﺯ ﺮﯾﺯ ﺎﯾ ﺍﻮﮨ ﻼ﻿ﯿﮭﭘ ﺮﭘ ﺭﻮﻃ ﻞﻤﮑﻣ ﻮﺗ ﺎﯾ) ﮯﺌﮨﺎﭼ ﺎﻧﻮﮨ ﮏﯾﺍ ﺎﯾ ﺮﻔﺻ ﺮﭘ ﺭﻮﻃ ﻡﺎﻋ ﺐﮐﺮﻣ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﮯﻧﺮﮭﮑﺑ ﮯﮐ ﺢﻄﺳ ﯽﻠﯾﺫ ﺭﻭﺍ ﺢﻄﺳ ﺍﻮﮨ ﻼ﻿ﯿﮭﭘ"
-
-
-msgid "Scattering radius to use for subsurface component (multiplied with Scale)"
-msgstr "(ﺏﺮﺿ ﮫﺗﺎﺳ ﮯﮐ ﮧﻧﺎﻤﯿﭘ ) ﺱﺍﺩﺭ ﮯﺋﻮﮨ ﮮﺮﮭﮑﺑ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ءﺍﺰﺟﺍ ﮯﮐ ﺢﻄﺳ ﯽﻠﯾﺫ"
-
-
-msgid "Scale of the subsurface scattering (multiplied with Radius)"
-msgstr "(ﺏﺮﺿ ﮯﺳ ﺱﺍﺩﺭ) ﮧﻧﺎﻤﯿﭘ ﺎﮐ ﮯﻧﺮﮭﮑﺑ ﮯﮐ ﺢﻄﺳ ﯽﻠﯾﺫ"
 
 
 msgid "Index of Refraction (IOR) used for rays that enter the subsurface component"

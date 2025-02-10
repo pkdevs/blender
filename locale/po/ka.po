@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'5c1749f7b7d3')\n"
+"Project-Id-Version: Blender 4.4.0 Beta (b'aad0bd21487d')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-03 14:39+0000\n"
-"PO-Revision-Date: 2025-01-29 12:21+0000\n"
+"POT-Creation-Date: 2025-02-10 15:22+0000\n"
+"PO-Revision-Date: 2025-02-03 23:56+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -81,6 +81,10 @@ msgstr "F-წირთა დაჯგუფებები"
 
 msgid "Groupings of F-Curves for display purposes, in e.g. the dopesheet and graph editor"
 msgstr "F-წირების დაჯგუფებები ასახვისთვის, მაგ.: საექსპოზიციო ფურცელსა და გრაფიკების რედაქტორში"
+
+
+msgid "Slot"
+msgstr "სლოტი"
 
 
 msgid "Collection of F-Curves for a specific action slot, on a specific strip"
@@ -287,62 +291,6 @@ msgid "Action Layer"
 msgstr "ქმედების შრე"
 
 
-msgid "Influence"
-msgstr "ზეგავლენა"
-
-
-msgid "How much of this layer is used when blending into the lower layers"
-msgstr "ამ შრის რა ოდენობა გამოიყენება ქვედა შრეებთან შეზავებისას"
-
-
-msgid "Mix Mode"
-msgstr "შერევის რეჟიმი"
-
-
-msgid "How animation of this layer is blended into the lower layers"
-msgstr "როგორ შეზავდება ამ შრის ანიმაცია ქვედა შრეებთან"
-
-
-msgid "Replace"
-msgstr "ჩანაცვლება"
-
-
-msgid "Channels in this layer override the same channels from underlying layers"
-msgstr "ამ შრის არხები უკუაგდებს ქვეშ მდებარე შრეების იმავე არხებს"
-
-
-msgid "Offset"
-msgstr "აცდენა"
-
-
-msgid "Channels in this layer are added to underlying layers as sequential operations"
-msgstr "ამ შრის არხები ემატება ქვეშ მდებარე შრეეს, თანმიმდევრულ ოპერაციებად"
-
-
-msgid "Add"
-msgstr "მიმატება"
-
-
-msgid "Channels in this layer are added to underlying layers on a per-channel basis"
-msgstr "ამ შრის არხები ემატება ქვეშ მდებარე შრეებს თითო არხის პრინციპით"
-
-
-msgid "Subtract"
-msgstr "გამოკლება"
-
-
-msgid "Channels in this layer are subtracted to underlying layers on a per-channel basis"
-msgstr "ამ შრის არხები გამოაკლდება ქვეშ მდებარე შრეებს თითო არხის პრინციპით"
-
-
-msgid "Multiply"
-msgstr "გამრავლება"
-
-
-msgid "Channels in this layer are multiplied with underlying layers on a per-channel basis"
-msgstr "ამ შრის არხები მრავლდება ქვეშ მდებარე შრეებზე თითო არხის პრინციპით"
-
-
 msgid "Strips"
 msgstr "ლენტები"
 
@@ -442,6 +390,10 @@ msgstr "სლოტის განვრცობილი მდგომა�
 msgctxt "ID"
 msgid "Target ID Type"
 msgstr "სასურველი ID-ს ტიპი"
+
+
+msgid "Type of data-block that this slot is intended to animate; can be set when 'UNSPECIFIED' but is otherwise read-only"
+msgstr "მონაცემთა ბლოკის ტიპი, რომლის ანიმირებაც უნდა მოახდინოს ამ სლოტმა; შესაძლებელია \"დაუზუსტებელზე' დაყენება, მაგრამ სხვა მხრივ არარედაქტირებადია"
 
 
 msgctxt "ID"
@@ -996,6 +948,10 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "მეთოდი, რომელიც გამოიყენება აქტიური ქმედებისა და NLA სტეკის შედეგების კომბინირებისათვის"
 
 
+msgid "Replace"
+msgstr "ჩანაცვლება"
+
+
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "ლენტის სიდიდეები ანაცვლებს აკუმულირებულ შედეგებს ზეგავლენის მიერ დადგენილი რაოდენობით"
 
@@ -1008,12 +964,24 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "ლენტის სიდიდეები კომბინირდება აკუმულირებულ შედეგებთან მიმატების, გამრავლების, ან კვატერნიონების წარმოქმნის გამოყენებით, გააჩნია არხის ტიპს"
 
 
+msgid "Add"
+msgstr "მიმატება"
+
+
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "ლენტის შეწონილი შედეგი ემატება აკუმულირებულ შედეგებს"
 
 
+msgid "Subtract"
+msgstr "გამოკლება"
+
+
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "ლენტის შეწონილი შედეგი გამოაკლდება აკუმულირებულ შედეგებს"
+
+
+msgid "Multiply"
+msgstr "გამრავლება"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -5872,6 +5840,10 @@ msgid "In a local override camera, whether this background image comes from the 
 msgstr "ლოკალურ უკუგდების კამერაში, ეს ფონური გამოსახულება ბმულით დაკავშირებული მიმართვის კამერიდან მოდის, თუ ლოკალურია უკუგდებასთან მიმართებაში"
 
 
+msgid "Offset"
+msgstr "აცდენა"
+
+
 msgid "Rotation"
 msgstr "ბრუნვა"
 
@@ -7537,6 +7509,10 @@ msgid "Amount of residual error in radians for constraints that work on orientat
 msgstr "რეზიდუალური შეცდომის ოდენობა რადიანებში ბორკილებისთვის, რომლებიც ორიენტაციაზე მუშაობენ"
 
 
+msgid "Influence"
+msgstr "ზეგავლენა"
+
+
 msgid "Amount of influence constraint will have on the final solution"
 msgstr "იმ ზეგავლენის ოდენობა, რომელიც ბორკილს ექნება საბოლოო ამონახსენზე"
 
@@ -7927,6 +7903,10 @@ msgstr "მინიმუმი"
 
 msgid "Minimum value for target channel range"
 msgstr "მინიმალური მნიშვნელობა სამიზნე არხის დიაპაზონისთვის"
+
+
+msgid "Mix Mode"
+msgstr "შერევის რეჟიმი"
 
 
 msgid "Specify how existing transformations and the action channels are combined"
@@ -13791,11 +13771,11 @@ msgstr "აჩვენე სინათლის ზონდის მონ
 
 
 msgid "Freestyle Linestyles"
-msgstr "ხაზების თავისუფალი სტილები"
+msgstr "Freestyle-ის ხაზების სტილები"
 
 
 msgid "Show Freestyle's Line Style data-blocks"
-msgstr "აჩვენე თავისუფალი სტილის მქონე ხაზის სტილის მონაცემთა ბლოკები"
+msgstr "აჩვენე Freestyle-ის ხაზის სტილის მონაცემთა ბლოკები"
 
 
 msgid "Show Mask data-blocks"
@@ -14079,7 +14059,7 @@ msgstr "აჩვენე სცენები"
 
 
 msgid "Show materials, node-trees, textures and Freestyle's line-styles"
-msgstr "აჩვენე მასალები, კვანძოვანი ხეები, ტექსტურები და თავისუფალი სტილის ხაზ-სტილები"
+msgstr "აჩვენე მასალები, კვანძოვანი ხეები, ტექსტურები და Freestyle-ის ხაზ-სტილები"
 
 
 msgid "Directory"
@@ -16139,7 +16119,7 @@ msgstr "კოლექცია"
 
 
 msgid "Freestyle Line Set"
-msgstr "თავისუფალი სტილის ხაზთა ნაკრები"
+msgstr "Freestyle-ის ხაზთა ნაკრები"
 
 
 msgid "Line set for associating lines and style parameters"
@@ -16403,7 +16383,7 @@ msgstr "მონიშნე ნაკეცის წიბოები (ო�
 
 
 msgid "Select edge marks (edges annotated by Freestyle edge marks)"
-msgstr "მონიშნე წიბოთა ნიშნები (წიბოები, რომლებიც ანოტირებულია თავისუფალი სტილის წიბოების ნიშნებით)"
+msgstr "მონიშნე წიბოთა ნიშნები (წიბოები, რომლებიც ანოტირებულია Freestyle-ის წიბოების ნიშნებით)"
 
 
 msgid "Select external contours (outer silhouettes of occluding and occluded objects)"
@@ -16459,7 +16439,7 @@ msgstr "მონიშნე ნაკვთური წიბოები რ
 
 
 msgid "Freestyle Module"
-msgstr "თავისუფალი სტილის მოდული"
+msgstr "Freestyle-ის მოდული"
 
 
 msgid "Style module configuration for specifying a style module"
@@ -16491,11 +16471,11 @@ msgstr "სტილის მოდულების სია (რომე�
 
 
 msgid "Freestyle Settings"
-msgstr "თავისუფალი სტილის ანაწყობები"
+msgstr "Freestyle-ის ანაწყობები"
 
 
 msgid "Freestyle settings for a ViewLayer data-block"
-msgstr "თავისუფალი სტილის ანაწყობები ხედშრის მონაცემთა ბლოკისათვის"
+msgstr "Freestyle-ის ანაწყობები ხედშრის მონაცემთა ბლოკისათვის"
 
 
 msgid "As Render Pass"
@@ -16503,7 +16483,7 @@ msgstr "როგორც რენდერის გადავლა"
 
 
 msgid "Renders Freestyle output to a separate pass instead of overlaying it on the Combined pass"
-msgstr "თავისუფალი სტილის შედეგს ცალკე გადავლაში არენდერებს, ნაცვლად იმისა, რომ კომბინირებულ გადავლას გადააფაროს"
+msgstr "Freestyle-ის შედეგს ცალკე გადავლაში არენდერებს, ნაცვლად იმისა, რომ კომბინირებულ გადავლას გადააფაროს"
 
 
 msgid "Crease Angle"
@@ -16531,7 +16511,7 @@ msgstr "კონტროლის რეჟიმი"
 
 
 msgid "Select the Freestyle control mode"
-msgstr "მონიშნე თავისუფალი სტილის კონტროლის რეჟიმი"
+msgstr "მონიშნე Freestyle-ის კონტროლის რეჟიმი"
 
 
 msgid "Python Scripting"
@@ -22110,11 +22090,11 @@ msgstr "ძერწვისას გამოიყენე ზედაპ�
 
 
 msgid "Freestyle Line Style"
-msgstr "ხაზის თავისუფალი სტილი"
+msgstr "Freestyle-ის ხაზის სტილი"
 
 
 msgid "Freestyle line style, reusable by multiple line sets"
-msgstr "ხაზის თავისუფალი სტილი, მრავალჯერ გამოყენებადი სხვადასხვა ხაზთა ნაკრებებისთვის"
+msgstr "Freestyle-ის ხაზის სტილი, მრავალჯერ გამოყენებადი სხვადასხვა ხაზთა ნაკრებებისთვის"
 
 
 msgid "Active Texture"
@@ -24216,7 +24196,7 @@ msgstr "ხაზის ფერი"
 
 
 msgid "Line color used for Freestyle line rendering"
-msgstr "თავისუფალი სტილის ხაზის რენდერისთვის გამოყენებული ხაზის ფერი"
+msgstr "Freestyle-ის ხაზის რენდერისთვის გამოყენებული ხაზის ფერი"
 
 
 msgid "Line Priority"
@@ -25969,6 +25949,10 @@ msgstr "სახელის ასახვა"
 
 msgid "Display the object's name"
 msgstr "ასახე ობიექტის სახელი"
+
+
+msgid "Solo Active Shape Key"
+msgstr "აქტიური ფორმის სოლის გამოცალკევება"
 
 
 msgid "Only show the active shape key at full value"
@@ -29367,14 +29351,6 @@ msgstr "საზოგადოება"
 
 msgid "Maintained by community developers"
 msgstr "მომსახურებას უწევენ საზოგადოების წევრი დეველოპერები"
-
-
-msgid "Testing"
-msgstr "ტესტირება"
-
-
-msgid "Newly contributed scripts (excluded from release builds)"
-msgstr "ახლად შემოტანილი სკრიპტები (რელიზის კონფიგურაციებში არ შესული)"
 
 
 msgid "Addon Tags"
@@ -34305,12 +34281,28 @@ msgid "Editor menu containing buttons"
 msgstr "რედაქტორის მენიუ, რომელიც ღილაკებს შეიცავს"
 
 
-msgid "Metaball"
-msgstr "მეტაბურთი"
-
-
 msgid "Show/Hide"
 msgstr "ჩვენება/დამალვა"
+
+
+msgid "Clean Up"
+msgstr "გასუფთავება"
+
+
+msgid "Special Characters"
+msgstr "სპეციალური ასონიშნები"
+
+
+msgid "Kerning"
+msgstr "ასოთშორისი ინტერვალი"
+
+
+msgid "Text"
+msgstr "ტექსტი"
+
+
+msgid "Metaball"
+msgstr "მეტაბურთი"
 
 
 msgid "Names"
@@ -34319,10 +34311,6 @@ msgstr "სახელები"
 
 msgid "Bone Roll"
 msgstr "ძვლის ტრიალი"
-
-
-msgid "Clean Up"
-msgstr "გასუფთავება"
 
 
 msgid "Pivot Point"
@@ -34523,18 +34511,6 @@ msgstr "წახნაგის სიძლიერის დაყენე�
 
 msgid "Merge"
 msgstr "შერწყმა"
-
-
-msgid "Special Characters"
-msgstr "სპეციალური ასონიშნები"
-
-
-msgid "Kerning"
-msgstr "ასოთშორისი ინტერვალი"
-
-
-msgid "Text"
-msgstr "ტექსტი"
 
 
 msgid "Keyframe Insert Pie"
@@ -35226,11 +35202,11 @@ msgstr "მკვეთრი წიბო შეფერადებისთ�
 
 
 msgid "Freestyle Edge Mark"
-msgstr "თავისუფალი სტილის წიბოს ნიშანი"
+msgstr "Freestyle-ის წიბოს ნიშანი"
 
 
 msgid "Edge mark for Freestyle line rendering"
-msgstr "წიბოს ნიშანი თავისუფალი სტილის ხაზის რენდერისთვის"
+msgstr "წიბოს ნიშანი Freestyle-ის ხაზის რენდერისთვის"
 
 
 msgid "Seam"
@@ -35470,11 +35446,11 @@ msgstr "ლოკალური სივრცის ერთეულის 
 
 
 msgid "Freestyle Face Mark"
-msgstr "თავისუფალი სტილის წახნაგის აღნიშვნა"
+msgstr "Freestyle-ის წახნაგის აღნიშვნა"
 
 
 msgid "Face mark for Freestyle line rendering"
-msgstr "წახნაგის აღმნიშვნელი თავისუფალი სტილის ხაზების დასარენდერებლად"
+msgstr "წახნაგის აღმნიშვნელი Freestyle-ის ხაზების დასარენდერებლად"
 
 
 msgid "Mesh Polygons"
@@ -37242,11 +37218,11 @@ msgstr "გადაიტანე დაცერობების წონ�
 
 
 msgid "Freestyle"
-msgstr "თავისუფალი სტილი"
+msgstr "Freestyle"
 
 
 msgid "Transfer Freestyle edge mark"
-msgstr "გადაიტანე თავისუფალი სტილის წიბოთა აღნიშვნა"
+msgstr "გადაიტანე Freestyle-ის წიბოთა აღნიშვნა"
 
 
 msgid "Face Corner Data Types"
@@ -37290,11 +37266,11 @@ msgstr "გადაიტანე ბრტყელი/გლუვი აღ
 
 
 msgid "Freestyle Mark"
-msgstr "თავისუფალი სტილის ნიშანი"
+msgstr "Freestyle-ის ნიშანი"
 
 
 msgid "Transfer Freestyle face mark"
-msgstr "გადაიტანე თავისუფალი სტილის წახნაგის აღნიშვნა"
+msgstr "გადაიტანე Freestyle-ის წახნაგის აღნიშვნა"
 
 
 msgid "Vertex Data Types"
@@ -38984,7 +38960,7 @@ msgstr "წიბოს ნიშნის გამოყენება"
 
 
 msgid "Generate strokes from Freestyle marked edges"
-msgstr "წარმოქმენი მონასმები თავისუფალი სტილისად აღნიშნული წიბოებისგან"
+msgstr "წარმოქმენი მონასმები Freestyle-ისად აღნიშნული წიბოებისგან"
 
 
 msgid "Handle Overlapping Edges"
@@ -39000,7 +38976,7 @@ msgstr "წახნაგების ნიშნების გაფილ�
 
 
 msgid "Filter feature lines using Freestyle face marks"
-msgstr "გაფილტრე ნაკვთების ხაზები თავისუფალი სტილის წახნაგთა აღნიშვნების გამოყენებით"
+msgstr "გაფილტრე ნაკვთების ხაზები Freestyle-ის წახნაგთა აღნიშვნების გამოყენებით"
 
 
 msgid "Boundaries"
@@ -44490,12 +44466,28 @@ msgid "Create matte based on differences in color channels"
 msgstr "შექმენი კაშე ფერთა არხებს შორის სხვაობის მიხედვით"
 
 
+msgid "RGB (Red, Green, Blue) color space"
+msgstr "RGB (წითელიო, მწვანე, ლურჯი) ფერის სივრცე"
+
+
+msgid "HSV (Hue, Saturation, Value) color space"
+msgstr "HSV (ელფერი, სიხასხასე, მნიშვნელობა) ფერის სივრცე"
+
+
 msgid "YUV"
 msgstr "YUV"
 
 
+msgid "YUV (Y - luma, U V - chroma) color space"
+msgstr "YUV (Y - ლუმა, U V - ქრომატული) ფერის სივრცე"
+
+
 msgid "YCbCr"
 msgstr "YCbCr"
+
+
+msgid "YCbCr (Y - luma, Cb - blue-difference chroma, Cr - red-difference chroma) color space"
+msgstr "YCbCr (Y - ლუმა, Cb - ლურჯი-სხვაობის ქრომატული მნიშვნელობა, Cr - წითელი-სხვაობის ქრომატული მნიშვნელობა) ფერის სივრცე"
 
 
 msgctxt "Color"
@@ -45019,6 +45011,26 @@ msgstr "დააკომბინირე გამოსახულებ�
 
 msgid "Mode of color processing"
 msgstr "ფერის დამუშავების რეჟიმი"
+
+
+msgid "Use RGB (Red, Green, Blue) color processing"
+msgstr "გამოიყენე RGB (წითელი, მწვანე, ლურჯი) ფერის დამუშავება"
+
+
+msgid "Use HSV (Hue, Saturation, Value) color processing"
+msgstr "გამოიყენე HSV (ელფერი, სიხასხასე, მნიშვნელობა) ფერის დამუშავება"
+
+
+msgid "Use HSL (Hue, Saturation, Lightness) color processing"
+msgstr "გამოიყენე HSL (ელფერი, სიხასხასე, სიბაცე) ფერის დამუშავება"
+
+
+msgid "Use YCbCr (Y - luma, Cb - blue-difference chroma, Cr - red-difference chroma) color processing"
+msgstr "გამოიყენე YCbCr (Y - ლუმა, Cb - ლურჯი-სხვაობის ქრომატული მნიშვნელობა, Cr - წითელი-სხვაობის ქრომატული მნიშვნელობა) ფერის დამუშავება"
+
+
+msgid "Use YUV (Y - luma, U V - chroma) color processing"
+msgstr "გამოიყენე YUV (Y - ლუმა, U V - ქრომატული) ფერის დამუშავება"
 
 
 msgid "Color space used for YCbCrA processing"
@@ -46948,16 +46960,36 @@ msgid "Use relative (fraction of input image size) values to define translation"
 msgstr "გამოიყენე შეფარდებითი (შენატანი გამოსახულების ზომის წილადი) მნიშვნელობები გადაადგილების განსასაზღვრად"
 
 
+msgid "Repeats image on a specific axis"
+msgstr "იმეორებს გამოსახულებას კონკრეტულ ღერძზე"
+
+
+msgid "No repeating"
+msgstr "გამეორების გარეშე"
+
+
 msgid "X Axis"
 msgstr "X ღერძი"
+
+
+msgid "Repeats on the X axis"
+msgstr "იმეორებს X ღერძზე"
 
 
 msgid "Y Axis"
 msgstr "Y ღერძი"
 
 
+msgid "Repeats on the Y axis"
+msgstr "იმეორებს Y ღერძზე"
+
+
 msgid "Both Axes"
 msgstr "ორივე ღერძი"
+
+
+msgid "Repeats on both axes"
+msgstr "იმეორებს ორივე ღერძზე"
 
 
 msgid "Map values to colors with the use of a gradient"
@@ -54286,6 +54318,19 @@ msgid "Parent Node Tree"
 msgstr "მშობელი კვანძოვანი ხე"
 
 
+msgid "Activate a specific compositor viewer node using 1,2,..,9 keys"
+msgstr "გაააქტიურე კომპოზიტორის კონკრეტული მაჩვენებლის კვანძი 1,2,..,9 კლავიშების გამოყენებით"
+
+
+msgctxt "Operator"
+msgid "Fast Preview"
+msgstr "სწრაფი გადახედვა"
+
+
+msgid "Create a compositor viewer shortcut for the selected node by pressing ctrl+1,2,..9"
+msgstr "შექმენი კომპოზიტორის მაჩვენებლის მალსახმობი მონიშნული კვანძისთვის ctrl+1,2,..9-ის დაჭერით"
+
+
 msgctxt "Operator"
 msgid "Add Modifier"
 msgstr "მოდიფიკატორის დამატება"
@@ -54598,11 +54643,6 @@ msgstr "ძველებური პოზათა ბიბლიოთე�
 msgctxt "Operator"
 msgid "Copy Pose as Asset"
 msgstr "პოზის კოპირება აქტივად"
-
-
-msgctxt "Operator"
-msgid "Create Pose Asset"
-msgstr "პოზის აქტივის შექმნა"
 
 
 msgctxt "Operator"
@@ -55087,7 +55127,7 @@ msgstr "გადაიტანე შ.კ.-ის ანიმაცია პ
 
 
 msgid "Add the data paths to the Freestyle Edge Mark property of selected edges to the active keying set"
-msgstr "დაამატე მონიშნული წიბოების თავისუფალი სტილის წიბოს თვისების მონაცემთა მისამართები აქტიურ ჩასოლვის ნაკრებში"
+msgstr "დაამატე მონიშნული წიბოების Freestyle-ის წიბოს თვისების მონაცემთა მისამართები აქტიურ ჩასოლვის ნაკრებში"
 
 
 msgctxt "Operator"
@@ -55096,7 +55136,7 @@ msgstr "წიბოს აღნიშვნების დამატებ�
 
 
 msgid "Add the data paths to the Freestyle Face Mark property of selected polygons to the active keying set"
-msgstr "დაამატე მონიშნული წიბოების თავისუფალი სტილის წახნაგის თვისების მონაცემთა მისამართები აქტიურ ჩასოლვის ნაკრებში"
+msgstr "დაამატე მონიშნული წიბოების Freestyle-ის წახნაგის თვისების მონაცემთა მისამართები აქტიურ ჩასოლვის ნაკრებში"
 
 
 msgctxt "Operator"
@@ -69521,20 +69561,20 @@ msgstr "გაასრიალე წიბოთა მარყუჟი მ
 
 msgctxt "Operator"
 msgid "Mark Freestyle Edge"
-msgstr "თავისუფალი სტილის წიბოს აღნიშვნა"
+msgstr "Freestyle-ის წიბოს აღნიშვნა"
 
 
 msgid "(Un)mark selected edges as Freestyle feature edges"
-msgstr "აღნიშნე წიბოები/გააუქმე წიბოების აღნიშვნა თავისუფალი სტილის ნაკვთების წიბოებად"
+msgstr "აღნიშნე წიბოები/გააუქმე წიბოების აღნიშვნა Freestyle-ის ნაკვთების წიბოებად"
 
 
 msgctxt "Operator"
 msgid "Mark Freestyle Face"
-msgstr "თავისუფალი სტილის წახნაგის აღნიშვნა"
+msgstr "Freestyle-ის წახნაგის აღნიშვნა"
 
 
 msgid "(Un)mark selected faces for exclusion from Freestyle feature edge detection"
-msgstr "აღნიშნე წახნაგები/გააუქმე წიბოების აღნიშვნა თავისუფალი სტილის ნაკვთების წიბოთა აღმოჩენიდან გამოსარიცხად"
+msgstr "აღნიშნე წახნაგები/გააუქმე წიბოების აღნიშვნა Freestyle-ის ნაკვთების წიბოთა აღმოჩენიდან გამოსარიცხად"
 
 
 msgctxt "Operator"
@@ -70576,7 +70616,7 @@ msgstr "სიმკვეთრე"
 
 msgctxt "Mesh"
 msgid "Freestyle Edge Marks"
-msgstr "თავისუფალი სტილის წიბოთა აღნიშვნები"
+msgstr "Freestyle-ის წიბოთა აღნიშვნები"
 
 
 msgctxt "Mesh"
@@ -70611,7 +70651,7 @@ msgstr "ბრტყელი/გლუვი"
 
 msgctxt "Mesh"
 msgid "Freestyle Face Marks"
-msgstr "თავისუფალი სტილის წახნაგის აღნიშვნები"
+msgstr "Freestyle-ის წახნაგის აღნიშვნები"
 
 
 msgctxt "Operator"
@@ -70695,7 +70735,7 @@ msgstr "ტეგი ცერობი"
 
 
 msgid "Tag Freestyle Edge Mark"
-msgstr "ტეგი თავისუფალი სტილის წიბოს ნიშანი"
+msgstr "ტეგი Freestyle-ის წიბოს ნიშანი"
 
 
 msgid "Face Stepping"
@@ -71588,6 +71628,15 @@ msgid "Add a collection info node to the current node editor"
 msgstr "დაამატე კოლექციის ინფოს კვანძი მიმდინარე კვანძების რედაქტორს"
 
 
+msgctxt "Operator"
+msgid "Add Color"
+msgstr "ფერის დამატება"
+
+
+msgid "Add a color node to the current node editor"
+msgstr "დაამატე ფერის კვანძი მიმდინარე კვანძების რედაქტორს"
+
+
 msgid "Source color"
 msgstr "წყაროს ფერი"
 
@@ -71602,6 +71651,10 @@ msgstr "წყაროს ფერი გამა კორექტირე
 
 msgid "Has Alpha"
 msgstr "აქვს ალფა"
+
+
+msgid "The source color contains an Alpha component"
+msgstr "წყაროს ფერი ალფა კომპონენტს შეიცავს"
 
 
 msgctxt "Operator"
@@ -72958,6 +73011,14 @@ msgid "Set the boundaries for viewer operations"
 msgstr "დააყენე საზღვრები დამთვალიერებლის ოპერაციებისთვის"
 
 
+msgid "Viewer Index"
+msgstr "მაჩვენებლის ინდექსი"
+
+
+msgid "Index corresponding to the shortcut, e.g. number key 1 corresponds to index 1 etc.."
+msgstr "მალსახმობის შესატყვისი ინდექსი, მაგ.: ციფრ 1-ის კლავიში შეესაბამება ინდექსს 1 და ა.შ."
+
+
 msgctxt "Operator"
 msgid "Add Object"
 msgstr "ობიექტის დამატება"
@@ -73328,14 +73389,6 @@ msgstr "ობიექტის ტიპი, რომლადაც უნ�
 
 msgid "Curve from Mesh or Text objects"
 msgstr "წირი მეშიდან, ან ტექსტური ობიექტიდან"
-
-
-msgid "Mesh from Curve, Surface, Metaball, Text, or Point Cloud objects"
-msgstr "მეში წირის, ზედაპირის, მეტაბურთის, ტექსტის, ან წერტილთა ღრუბლის ობიექტებისგან"
-
-
-msgid "Point Cloud from Mesh objects"
-msgstr "წერტილთა ღრუბელი მეშის ობიექტებისგან"
 
 
 msgid "Curves from evaluated curve data"
@@ -78463,10 +78516,6 @@ msgid "Create a new pose asset on the clipboard, to be pasted into an Asset Brow
 msgstr "შექმენი ახალი პოზის აქტივი გაცვლის ბუფერში, რათა აქტივების ბრაუზერში ჩაისვას"
 
 
-msgid "Create a new Action that contains the pose of the selected bones, and mark it as Asset. The asset will be stored in the current blend file"
-msgstr "შექმენი ახალი ქმედება, რომელიც მოიცავს მონიშნული ძვლების პოზას, და აღნიშნე იგი აქტივად. აქტივი შეინახება მიმდინარე blend ფაილში"
-
-
 msgid "Activate New Action"
 msgstr "ახალი ქმედების აქტივაცია"
 
@@ -79888,7 +79937,7 @@ msgstr "ამოიღე მოდიფიკატორი მოდიფ�
 
 msgctxt "Operator"
 msgid "Add Freestyle Module"
-msgstr "თავისუფალი სტილის მოდულის დამატება"
+msgstr "Freestyle-ის მოდულის დამატება"
 
 
 msgid "Add a style module into the list of modules"
@@ -79897,7 +79946,7 @@ msgstr "დაამატე სტილის მოდული მოდუ
 
 msgctxt "Operator"
 msgid "Move Freestyle Module"
-msgstr "თავისუფალი სტილის მოდულის გადატანა"
+msgstr "Freestyle-ის მოდულის გადატანა"
 
 
 msgid "Change the position of the style module within in the list of style modules"
@@ -79918,7 +79967,7 @@ msgstr "აქციე მოდულის ფაილი შიდად �
 
 msgctxt "Operator"
 msgid "Remove Freestyle Module"
-msgstr "თავისუფალი სტილის მოდულის მოცილება"
+msgstr "Freestyle-ის მოდულის მოცილება"
 
 
 msgid "Remove the style module from the stack"
@@ -79927,11 +79976,11 @@ msgstr "მოაცილე სტილის მოდული სტეკ
 
 msgctxt "Operator"
 msgid "Create Freestyle Stroke Material"
-msgstr "თავისუფალი სტილის მონასმის მასალის შექმნა"
+msgstr "Freestyle-ის მონასმის მასალის შექმნა"
 
 
 msgid "Create Freestyle stroke material for testing"
-msgstr "შექმენი თავისუფალი სტილის მონასმის მასალა ტესტირებისთვის"
+msgstr "შექმენი Freestyle-ის მონასმის მასალა ტესტირებისთვის"
 
 
 msgctxt "Operator"
@@ -89155,6 +89204,10 @@ msgid "Specify a custom scene meters per unit value"
 msgstr "დაადგინე მორგებული სიდიდე სცენის მეტრ ერთეულში"
 
 
+msgid "World Dome Light"
+msgstr "სამყაროს თაღის განათება"
+
+
 msgid "Convert the world material to a USD dome light. Currently works for simple materials, consisting of an environment texture connected to a background shader, with an optional vector multiply of the texture color"
 msgstr "დააკონვერტირე სამყაროს მასალა USD-ს თაღოვან განათებად. ამჟამად მყშაობს მარტივ მატერიალებზე, რომლებიც შედგება ფონის იერფერთან დაკავშირებულ გარემოს ტექსტურისგან, ტექსტურის ფერის არასავალდებულო ვექტორული გამრავლებით"
 
@@ -90727,6 +90780,14 @@ msgid "Transform Orientations"
 msgstr "გარდაქმნების ორიენტაციები"
 
 
+msgid "glTF Variants"
+msgstr "glTF ნაირსახეობები"
+
+
+msgid "glTF Material Variants"
+msgstr "glTF მასალის ნაირსახეობები"
+
+
 msgid "Stroke Placement"
 msgstr "მონასმის განთავსება"
 
@@ -90755,12 +90816,12 @@ msgid "Multi Frame"
 msgstr "მრავალკადრიანი"
 
 
-msgid "glTF Variants"
-msgstr "glTF ნაირსახეობები"
+msgid "glTF"
+msgstr "glTF"
 
 
-msgid "glTF Material Variants"
-msgstr "glTF მასალის ნაირსახეობები"
+msgid "glTF Animations"
+msgstr "glTF ანიმაციები"
 
 
 msgid "Auto-Masking"
@@ -90781,14 +90842,6 @@ msgstr "წირების ზრდა/კუმშვა მასშტა
 
 msgid "Viewport Debug"
 msgstr "სარკმლის ხარვეზების აღმოფხვრა"
-
-
-msgid "glTF"
-msgstr "glTF"
-
-
-msgid "glTF Animations"
-msgstr "glTF ანიმაციები"
 
 
 msgid "VR"
@@ -91133,10 +91186,6 @@ msgid "OpenVDB File"
 msgstr "OpenVDB ფაილის გახსნა"
 
 
-msgid "Slot"
-msgstr "სლოტი"
-
-
 msgid "Create Pose Asset"
 msgstr "პოზის აქტივის შექმნა"
 
@@ -91333,7 +91382,7 @@ msgstr "ტალღის ფორმა"
 
 
 msgid "Freestyle Line"
-msgstr "თავისუფალი სტილის ხაზი"
+msgstr "Freestyle-ის ხაზი"
 
 
 msgid "Material settings"
@@ -92473,7 +92522,7 @@ msgstr "სინათლე"
 
 
 msgid "Freestyle Animation"
-msgstr "თავისუფალი სტილის ანიმაცია"
+msgstr "Freestyle-ის ანიმაცია"
 
 
 msgid "Edge Detection"
@@ -92489,19 +92538,19 @@ msgstr "წახნაგის ნიშნები"
 
 
 msgid "Freestyle Alpha"
-msgstr "თავისუფალი სტილის ალფა"
+msgstr "Freestyle-ის ალფა"
 
 
 msgid "Freestyle Color"
-msgstr "თავისუფალი სტილის ფერი"
+msgstr "Freestyle-ის ფერი"
 
 
 msgid "Freestyle Geometry"
-msgstr "თავისუფალი სტილის გეომეტრია"
+msgstr "Freestyle-ის გეომეტრია"
 
 
 msgid "Freestyle Strokes"
-msgstr "თავისუფალი სტილის მონასმები"
+msgstr "Freestyle-ის მონასმები"
 
 
 msgid "Splitting"
@@ -92513,11 +92562,11 @@ msgstr "ფაქტურის გახლეჩა"
 
 
 msgid "Freestyle Texture"
-msgstr "თავისუფალი სტილის ტექსტურა"
+msgstr "Freestyle-ის ტექსტურა"
 
 
 msgid "Freestyle Thickness"
-msgstr "თავისუფალი სტილის სისქე"
+msgstr "Freestyle-ის სისქე"
 
 
 msgid "Filter Add-ons"
@@ -94850,10 +94899,6 @@ msgstr "დაგვერდების (Z) ღერძის შექცე
 
 msgid "Overall sensitivity of the 3D Mouse for panning"
 msgstr "3გ თაგვის ზოგადი სენსიტიურობა პანორამირებისთვის"
-
-
-msgid "Show Navigation Guide"
-msgstr "ნავიგაციის მიმმართველის ჩვენება"
 
 
 msgid "Display the center and axis during rotation"
@@ -100284,7 +100329,7 @@ msgstr "ხაზის სისქის რეჟიმი"
 
 
 msgid "Line thickness mode for Freestyle line drawing"
-msgstr "ხაზის სისქის რეჟიმი თავისუფალი სტილის ხაზის დასახაზად"
+msgstr "ხაზის სისქის რეჟიმი Freestyle-ის ხაზის დასახაზად"
 
 
 msgid "Specify unit line thickness in pixels"
@@ -100616,11 +100661,11 @@ msgstr "დაამატე ფაილის ფორმატის გა
 
 
 msgid "Use Freestyle"
-msgstr "თავისუფალი სტილის გამოყენება"
+msgstr "Freestyle-ის გამოყენება"
 
 
 msgid "Draw stylized strokes using Freestyle"
-msgstr "დახატე სტილიზებული მონასმები თავისუფალი სტილის გამოყენებით"
+msgstr "დახატე სტილიზებული მონასმები Freestyle-ის გამოყენებით"
 
 
 msgid "Use high quality tangent space at the cost of lower performance"
@@ -111692,19 +111737,19 @@ msgstr "აჩვენე მიწის სიბრტყის ბადე
 
 
 msgid "Display Freestyle Edge Marks"
-msgstr "თავისუფალი სტილის წიბოს ნიშნების ასახვა"
+msgstr "Freestyle-ის წიბოს ნიშნების ასახვა"
 
 
 msgid "Display Freestyle edge marks, used with the Freestyle renderer"
-msgstr "ასახე თავისუფალი სტილის წიბოს ნიშნები, გამოყენებული თავისუფალი სტილის დამარენდერებელთან"
+msgstr "ასახე Freestyle-ის წიბოს ნიშნები, გამოყენებული თავისუფალი სტილის დამარენდერებელთან"
 
 
 msgid "Display Freestyle Face Marks"
-msgstr "თავისუფალი სტილის წახნაგის ნიშნების ასახვა"
+msgstr "Freestyle-ის წახნაგის ნიშნების ასახვა"
 
 
 msgid "Display Freestyle face marks, used with the Freestyle renderer"
-msgstr "ასახე თავისუფალი სტილის წახნაგის ნიშნები, გამოყენებული თავისუფალი სტილის დამარენდერებელთან"
+msgstr "ასახე Freestyle-ის წახნაგის ნიშნები, გამოყენებული თავისუფალი სტილის დამარენდერებელთან"
 
 
 msgid "Light Colors"
@@ -115018,6 +115063,16 @@ msgstr "დაყოფის კლება"
 
 
 msgctxt "WindowManager"
+msgid "Change Radius"
+msgstr "რადიუსის შეცვლა"
+
+
+msgctxt "WindowManager"
+msgid "Change Opacity"
+msgstr "გაუმჭვირვალობის შეცვლა"
+
+
+msgctxt "WindowManager"
 msgid "Knife Tool Modal Map"
 msgstr "დანის ხელსაწყოს მოდალური რუკა"
 
@@ -116590,6 +116645,56 @@ msgid "Collide Extensions"
 msgstr "გაფართოებების შეჯახება"
 
 
+msgctxt "WindowManager"
+msgid "Generic Gizmo"
+msgstr "ზოგადი გიზმო"
+
+
+msgctxt "WindowManager"
+msgid "Generic Gizmo Drag"
+msgstr "ზოგადი გიზმოს გათრევა"
+
+
+msgctxt "WindowManager"
+msgid "Generic Gizmo Click Drag"
+msgstr "ზოგადი გიზმოს დაწკაპუნება და გათრევა"
+
+
+msgctxt "WindowManager"
+msgid "Generic Gizmo Maybe Drag"
+msgstr "ზოგადი გიზმოს შესაძლო გათრევა"
+
+
+msgctxt "WindowManager"
+msgid "Generic Gizmo Select"
+msgstr "ზოგადი გიზმოს მონიშვნა"
+
+
+msgctxt "WindowManager"
+msgid "Generic Gizmo Tweak Modal Map"
+msgstr "ზოგადი გიზმოს გადაკეთების მოდალური რუკა"
+
+
+msgctxt "WindowManager"
+msgid "Enable Precision"
+msgstr "სიზუსტის ჩართვა"
+
+
+msgctxt "WindowManager"
+msgid "Disable Precision"
+msgstr "სიზუსტის გათიშვა"
+
+
+msgctxt "WindowManager"
+msgid "Enable Snap"
+msgstr "მიკვრის ჩართვა"
+
+
+msgctxt "WindowManager"
+msgid "Disable Snap"
+msgstr "მიკვრის გათიშვა"
+
+
 msgid "Checking for Extension Updates"
 msgstr "მოწმდება გაფართოების განახლებები"
 
@@ -118059,6 +118164,11 @@ msgstr "შეტრიალებული პოზის გამოყე�
 
 
 msgctxt "Operator"
+msgid "Remove Selected Bones"
+msgstr "მონიშნული ძვლების მოცილება"
+
+
+msgctxt "Operator"
 msgid "Blend Pose"
 msgstr "შეზავებული პოზა"
 
@@ -118066,10 +118176,6 @@ msgstr "შეზავებული პოზა"
 msgctxt "Operator"
 msgid "Blend Pose Flipped"
 msgstr "შეტრიალებული შეზავებული პოზა"
-
-
-msgid "Action %s marked Fake User to prevent loss"
-msgstr "ქმედება %s ყალბ მომხმარებლადაა აღნიშნული დანაკარგის ტავიდან ასაცილებლად"
 
 
 msgid "Pose Asset copied, use Paste As New Asset in any Asset Browser to paste"
@@ -118088,18 +118194,6 @@ msgid "Converted %d poses to pose assets"
 msgstr "%d პოზა დაკონვერტირდა პოზების აქტივებად"
 
 
-msgid "An active armature object in pose mode is needed"
-msgstr "საჭიროა არმატურის აქტიური ობიექტი პოზირების რეჟიმში"
-
-
-msgid "Asset Browser must be set to the Current File library"
-msgstr "აქტივთა ბრაუზერი ამჟამინდელ ფაილთა ბიბლიოთეკაზე უნდა იყოს დაყენებული"
-
-
-msgid "No keyframes were found for this pose"
-msgstr "ამ პოზისთვის საკვანძო ფაზები ვერ მოიძებნა"
-
-
 msgid "No animation data found to create asset from"
 msgstr "აქტივის შესაქმნელად საანიმაციო მონაცემები ვერ მოიძებნა"
 
@@ -118110,6 +118204,10 @@ msgstr "მოულოდნელი ნულზე მეტი მომხ
 
 msgid "Current editor is not an asset browser"
 msgstr "მიმდინარე რედაქტორს არ აქვს აქტივების ბრაუზერი"
+
+
+msgid "Asset Browser must be set to the Current File library"
+msgstr "აქტივთა ბრაუზერი ამჟამინდელ ფაილთა ბიბლიოთეკაზე უნდა იყოს დაყენებული"
 
 
 msgid "Clipboard is empty"
@@ -119186,6 +119284,22 @@ msgid "{:d} duplicates found in {:d} mesh(es), mirror may be incomplete"
 msgstr "ნაპოვნია {:d} დუბლიკატი {:d} მეშში, შეიძლება, სარკისებური ანარეკლი არასრული იყოს"
 
 
+msgid "Assigned shortcut {:d} to {:s}"
+msgstr "მალსახმობი {:d} მიეკუთვნა {:s}-ს"
+
+
+msgid "Select a node to assign a shortcut"
+msgstr "მონიშნე კვანძიმ, რომელსაც მალსახმობი უნდა მიეკუთვნოს"
+
+
+msgid "Unable to set shortcut, selected node is not a viewer node or does not support viewing"
+msgstr "მალსახმობის დაყენება შეუძლებელია, მონიშნული კვანძი მაჩვენებელი კვანძი არაა, ან ჩვენების მხარდაჭერა არ აქვს"
+
+
+msgid "Shortcut {:d} is not assigned to a Viewer node yet"
+msgstr "მალსახმობი {:d} ჯერჯერობით არაა მაჩვენებელ კვანძს მიკუთვნებული"
+
+
 msgid "Node has no attribute {:s}"
 msgstr "კვანძს არა აქვს ატრიბუტი {:s}"
 
@@ -120096,11 +120210,6 @@ msgstr "მონიშნული ძვლების მიკუთვნ�
 
 
 msgctxt "Operator"
-msgid "Remove Selected Bones"
-msgstr "მონიშნული ძვლების მოცილება"
-
-
-msgctxt "Operator"
 msgid "Deselect Bones"
 msgstr "ძვლების მონიშვნის გაუქმება"
 
@@ -120351,26 +120460,6 @@ msgid "Only Axis Aligned"
 msgstr "მხოლოდ ღერძის სწორება"
 
 
-msgid "View in Render"
-msgstr "დათვალიერება რენდერში"
-
-
-msgid "Thickness Scale"
-msgstr "სისქის მასშტაბირება"
-
-
-msgid "Edit Line Color"
-msgstr "ხაზის ფერის რედაქტირება"
-
-
-msgid "Keyframes Before"
-msgstr "წინა საკვანძო ფაზები"
-
-
-msgid "Keyframes After"
-msgstr "მომდევნო საკვანძო ფაზები"
-
-
 msgid "Stroke Thickness"
 msgstr "მონასმის სისქე"
 
@@ -120435,6 +120524,14 @@ msgstr "ყველა შრის კოპირება მონიშნ
 msgctxt "Operator"
 msgid "Delete Group"
 msgstr "ჯგუფის წაშლა"
+
+
+msgid "Keyframes Before"
+msgstr "წინა საკვანძო ფაზები"
+
+
+msgid "Keyframes After"
+msgstr "მომდევნო საკვანძო ფაზები"
 
 
 msgid "Interpolation U"
@@ -126872,12 +126969,12 @@ msgstr "წახნაგების წაშლა"
 
 msgctxt "Operator"
 msgid "Clear Freestyle Edge"
-msgstr "წიბოს თავისუფალი სტილის აღნიშვნის გასუფთავება"
+msgstr "წიბოს Freestyle-ის აღნიშვნის გასუფთავება"
 
 
 msgctxt "Operator"
 msgid "Clear Freestyle Face"
-msgstr "წახნაგის თავისუფალი სტილის აღნიშვნის გასუფთავება"
+msgstr "წახნაგის Freestyle-ის აღნიშვნის გასუფთავება"
 
 
 msgid "Specular Lighting"
@@ -129016,6 +129113,18 @@ msgid "Workbench"
 msgstr "Workbench"
 
 
+msgid "Create"
+msgstr "შექმნა"
+
+
+msgid "Failed to load asset library"
+msgstr "აქტივთა ბიბლიოთეკის ჩატვირთვა წარუმატებელია"
+
+
+msgid "Asset blend file is not editable"
+msgstr "აქტივის blend ფაილი არარედაქტირებადია"
+
+
 msgid "NLA Strip Controls"
 msgstr "NLA ლენტის კონტროლი"
 
@@ -129486,10 +129595,6 @@ msgid "Move to New Bone Collection"
 msgstr "გადატანა ძვალთა ახალ კოლექციაში"
 
 
-msgid "Create"
-msgstr "შექმნა"
-
-
 msgid "Bone collection with index %d not found on Armature %s"
 msgstr "ძვალთა კოლექცია ინდექსით %d არმატურაში %s ვერ მოიძებნა"
 
@@ -129664,6 +129769,18 @@ msgstr "გაცურების-ხელსაწყო"
 
 msgid "Cancel"
 msgstr "გაუქმება"
+
+
+msgid "Axis Constraint"
+msgstr "ღერძის ბორკილი"
+
+
+msgid "Axis Only"
+msgstr "მხოლოდ ღერძი"
+
+
+msgid "Bone Visibility"
+msgstr "ძვლის ხილულობა"
 
 
 msgid "No keyframes to slide between"
@@ -130179,14 +130296,6 @@ msgid "The object has only one layer"
 msgstr "ობიექტს მხოლოდ ერთი შრე აქვს"
 
 
-msgid "No active Grease Pencil layer"
-msgstr "გრიზ ფენსილის აქტიური შრე არ არსებობს"
-
-
-msgid "Active layer is locked or hidden"
-msgstr "აქტიური შრე დაბლოკილია, ან დამალული"
-
-
 msgid "No Grease Pencil frame to draw on"
 msgstr "გრიზ ფენსილის სახატავი კადრი არ არის"
 
@@ -130261,6 +130370,14 @@ msgstr "ქვედანაყოფები"
 
 msgid "Grab"
 msgstr "ბღაუჭა"
+
+
+msgid "No active Grease Pencil layer"
+msgstr "გრიზ ფენსილის აქტიური შრე არ არსებობს"
+
+
+msgid "Active layer is locked or hidden"
+msgstr "აქტიური შრე დაბლოკილია, ან დამალული"
 
 
 msgid "Active Vertex Group is locked"
@@ -131464,6 +131581,14 @@ msgid "Show Hidden Region"
 msgstr "დამალული მონაკვეთის ჩვენება"
 
 
+msgid "Active object has negative scale"
+msgstr "აქტიურ ობიექტს უარყოფითი მასშტაბი აქვს"
+
+
+msgid "Active object has non-uniform scale"
+msgstr "აქტიურ ობიექტს არაერთგვაროვანი მასშტაბი აქვს"
+
+
 msgid "Click to open the info editor"
 msgstr "დააწკაპუნე და გახსენი ინფო რედაქტორი"
 
@@ -132220,6 +132345,10 @@ msgstr "ლაინარტი"
 
 msgid "Cannot create editmode armature"
 msgstr "რედაქტირების რეჟიმის არმატურის შექმნა შეუძლებელია"
+
+
+msgid "Image objects can only be added in Object Mode"
+msgstr "გამოსახულების ობიექტების დამატება მხოლოდ ობიექტის რეჟიმში შეიძლება"
 
 
 msgid "Converting some non-editable object/object data, enforcing 'Keep Original' option to True"
@@ -134084,10 +134213,6 @@ msgid "Unable to activate brush, wrong object mode"
 msgstr "ფუნჯის აქტივაცია შეუძლებელია, ობიექტის არასწორი რეჟიმი"
 
 
-msgid "Failed to load asset library"
-msgstr "აქტივთა ბიბლიოთეკის ჩატვირთვა წარუმატებელია"
-
-
 msgid "Unable to activate just-saved brush asset"
 msgstr "ახლახანს შენახული ფუნჯის აქტივის აქტივაცია შეუძლებელია"
 
@@ -134106,10 +134231,6 @@ msgstr "აქტივების ბიბლიოთეკა არარ�
 
 msgid "Asset file is not editable"
 msgstr "აქტივის ფაილი არარედაქტირებადია"
-
-
-msgid "Asset blend file is not editable"
-msgstr "აქტივის blend ფაილი არარედაქტირებადია"
 
 
 msgid "Original surface mesh is empty"
@@ -135244,6 +135365,14 @@ msgid "Deleted %u drivers"
 msgstr "წაიშალა %u დრაივერი"
 
 
+msgid "Modify Sharpness"
+msgstr "სიმკვეთრის მოდიფიცირება"
+
+
+msgid "Modify Curve Bend"
+msgstr "წირის მოღუნვის მოდიფიცირება"
+
+
 msgid "Decimate F-Curves by specifying how much they can deviate from the original curve"
 msgstr "დაადეციმირე F-წირები იმის მითითებით, თუ რამდენად შეუძლიათ გადაიხარონ ორიგინალი წირისგან"
 
@@ -135374,10 +135503,6 @@ msgstr "გამოსახულებები არ შეცვლილ�
 
 msgid "Images cannot be copied while rendering"
 msgstr "რენდერის დროს გამოსახულებები ვერ დაკოპირდება"
-
-
-msgid "Packing movies or image sequences not supported"
-msgstr "ვიდეოების, ან გამოსახულებათა თანამიმდევრობების შეფუთვა მხარდაუჭერელია"
 
 
 msgid "Image is not editable"
@@ -135754,6 +135879,14 @@ msgstr "ნიღბის კვანძი ვერ დაემატა"
 
 msgid "Could not add material"
 msgstr "მასალა ვერ დაემატა"
+
+
+msgid "Could not add a color node"
+msgstr "ფერის კვანძი ვერ დაემატა"
+
+
+msgid "Could not find node color socket"
+msgstr "კვანძის ფერის ბუდე ვერ მოიძებნა"
 
 
 msgid ""
@@ -136465,7 +136598,7 @@ msgstr "მასალას '%s' დაკავშირებული ო�
 
 
 msgid "Cannot unlink texture '%s'. It's not clear which Freestyle line style it should be unlinked from, there's no Freestyle line style as parent in the Outliner tree"
-msgstr "ტექსტურის '%s' კავშირი ვერ გაწყდება. გაურკვეველია, თავისუფალი სტილის რომელ ხაზის სტილთან უნდა გაუწყდეს კავშირი, მონახაზის ხეში მშობლად მითითებული თავისუფალი სტილის ხაზის სტილი არაა"
+msgstr "ტექსტურის '%s' კავშირი ვერ გაწყდება. გაურკვეველია, Freestyle-ის რომელ ხაზის სტილთან უნდა გაუწყდეს კავშირი, მონახაზის ხეში მშობლად მითითებული Freestyle-ის ხაზის სტილი არაა"
 
 
 msgid "Cannot unlink collection '%s'. It's not clear which scene, collection or instance empties it should be unlinked from, there's no scene, collection or instance empties as parent in the Outliner tree"
@@ -137328,6 +137461,14 @@ msgid "Gizmos hidden in this view"
 msgstr "ამ ხედში დამალული გიზმოები"
 
 
+msgid "Up/Down"
+msgstr "ზევით/ქვევით"
+
+
+msgid "Free Look"
+msgstr "თავისუფალი მიმოხედვა"
+
+
 msgid "Cannot navigate a camera from an external library or non-editable override"
 msgstr "გარე ბიბლიოთეკიდან, ან არარედაქტირებადი უკუგდებიდან კამერის ნავიგაცია შეუძლებელია"
 
@@ -137342,6 +137483,22 @@ msgstr "ბორკილებიანი ობიექტის ფრე�
 
 msgid "Cannot dolly when the view offset is locked"
 msgstr "როცა ხედის აცდენა დაბლოკილია, ურიკით მოძრაობა შეუძლებელია"
+
+
+msgid "Local Up/Down"
+msgstr "ლოკალური ზევით/ქვევით"
+
+
+msgid "Jump"
+msgstr "ნახტომი"
+
+
+msgid "Teleport"
+msgstr "ტელეპორტირება"
+
+
+msgid "Z Axis Correction"
+msgstr "Z ღერძის შესწორება"
 
 
 msgid "Cannot navigate when the view offset is locked"
@@ -137650,6 +137807,10 @@ msgstr "მიწოლა/მოქაჩვა: %s%s %s"
 
 msgid "Push/Pull: %.4f%s %s"
 msgstr "მიწოლა/მოქაჩვა: %.4f%s %s"
+
+
+msgid "Transform is set to only affect location"
+msgstr "გარდაქმნა დაყენებულია ისე, რომ მხოლოდ მდებარეობაზე მოახდინოს გავლენა"
 
 
 msgid "Rotation is not supported in the Dope Sheet Editor"
@@ -138019,15 +138180,15 @@ msgstr "გადაძრობამ ვერ მოახერხა %d-დ
 
 
 msgid "Freestyle: Mesh loading"
-msgstr "თავისუფალი სტილი: მეშის ჩატვირთვა"
+msgstr "Freestyle: მეშის ჩატვირთვა"
 
 
 msgid "Freestyle: View map creation"
-msgstr "თავისუფალი სტილი: ხედის რუკის შექმნა"
+msgstr "Freestyleი: ხედის რუკის შექმნა"
 
 
 msgid "Freestyle: Stroke rendering"
-msgstr "თავისუფალი სტილი: მონასმის რენდერი"
+msgstr "Freestyle: მონასმის რენდერი"
 
 
 msgid "Error writing frame"
@@ -138760,10 +138921,6 @@ msgstr "ქმედებების სლოტთა ასახული 
 
 msgid "Action slot identifiers should be at least three characters"
 msgstr "ქმედებების სლოტთა იდენტიფიკატორები სულ ცოტა, სამი სიმბოლოსგან უნდა შედგებოდეს"
-
-
-msgid "Action slot identifier set with unexpected prefix \"%s\" (expected \"%s\")."
-msgstr "ქმედების სლოტის სახელი დაყენებულია მოულოდნელი პრეფიქსით \"%s\" (მოსალოდნელი იყო \"%s\")."
 
 
 msgid "Only armature objects are supported"
@@ -144107,14 +144264,6 @@ msgid "Blend between diffuse surface and subsurface scattering. Typically should
 msgstr "დიფუზიური ზედაპირისა და ზედაპირქვეშა გაბნევის შეზავება. როგორც წესი, უნდა იყოს ნული, ან ერთი (მთლიანად დიფუზია, ან ზედაპირქვეშა)"
 
 
-msgid "Scattering radius to use for subsurface component (multiplied with Scale)"
-msgstr "ზედაპირქვეშა კომპონენტისთვის გამოსაყენებელი გაფანტვის რადიუსი (გამრავლებული მასშტაბზე)"
-
-
-msgid "Scale of the subsurface scattering (multiplied with Radius)"
-msgstr "ზედაპირქვეშა გაბნევის მასშტაბი (გამრავლებული რადიუსზე)"
-
-
 msgid "Index of Refraction (IOR) used for rays that enter the subsurface component"
 msgstr "გარდატეხის ინდექსი (IOR გამოყენებული სხივებისთვის, რომლებიც ზედაპირქვეშა კომპონენტში აღწევენ"
 
@@ -146210,10 +146359,6 @@ msgstr "Scalable Vector Graphics (SVG) 1.1 ფორმატი"
 
 msgid "Import SVG as curves"
 msgstr "SVG-ის იმპორტი წირებად"
-
-
-msgid "Subclasses Error"
-msgstr "ქვეკლასის შეცდომა"
 
 
 msgid "UV Layout"
