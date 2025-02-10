@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Alpha (b'5c1749f7b7d3')\n"
+"Project-Id-Version: Blender 4.4.0 Beta (b'aad0bd21487d')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-03 14:39+0000\n"
+"POT-Creation-Date: 2025-02-10 15:22+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -61,6 +61,10 @@ msgstr "aov களின் சேகரிப்பு"
 
 msgid "F-Curves"
 msgstr "எஃப்-வளைவுகள்"
+
+
+msgid "Slot"
+msgstr "ச்லாட்"
 
 
 msgid "Action F-Curves"
@@ -245,34 +249,6 @@ msgstr "செயல் குழுக்கள்"
 
 msgid "Collection of action groups"
 msgstr "செயல் குழுக்களின் தொகுப்பு"
-
-
-msgid "Influence"
-msgstr "செல்வாக்கு"
-
-
-msgid "Mix Mode"
-msgstr "கலவை முறை"
-
-
-msgid "Replace"
-msgstr "மாற்றவும்"
-
-
-msgid "Offset"
-msgstr "ஈடுசெய்யும்"
-
-
-msgid "Add"
-msgstr "சேர்க்க"
-
-
-msgid "Subtract"
-msgstr "கழிக்க"
-
-
-msgid "Multiply"
-msgstr "பெருக்க"
 
 
 msgid "Strips"
@@ -750,6 +726,10 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "செயலில் செயலின் முடிவை என்எல்ஏ அடுக்கின் விளைவாக இணைக்கப் பயன்படுத்தப்படுகிறது"
 
 
+msgid "Replace"
+msgstr "மாற்றவும்"
+
+
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "உரி மதிப்புகள் திரட்டப்பட்ட முடிவுகளை செல்வாக்கால் குறிப்பிடப்பட்ட அளவு மூலம் மாற்றுகின்றன"
 
@@ -762,12 +742,24 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "சேனல் வகையின் அடிப்படையில் கூட்டல், பெருக்கல் அல்லது குவாட்டர்னியன் கணிதத்தைப் பயன்படுத்தி சரியான முறையில் பயன்படுத்துவதன் மூலம் உரி மதிப்புகள் திரட்டப்பட்ட முடிவுகளுடன் இணைக்கப்படுகின்றன"
 
 
+msgid "Add"
+msgstr "சேர்க்க"
+
+
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "உரிபின் எடையுள்ள முடிவு திரட்டப்பட்ட முடிவுகளில் சேர்க்கப்படுகிறது"
 
 
+msgid "Subtract"
+msgstr "கழிக்க"
+
+
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "உரிபின் எடையுள்ள முடிவு திரட்டப்பட்ட முடிவுகளிலிருந்து அகற்றப்படுகிறது"
+
+
+msgid "Multiply"
+msgstr "பெருக்க"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -5079,6 +5071,10 @@ msgid "In a local override camera, whether this background image comes from the 
 msgstr "உள்ளக மேலெழுத கேமராவில், இந்த பின்னணி படம் இணைக்கப்பட்ட குறிப்பு கேமராவிலிருந்து வந்ததா, அல்லது மேலெழுதலுக்கு உள்ளக"
 
 
+msgid "Offset"
+msgstr "ஈடுசெய்யும்"
+
+
 msgid "Rotation"
 msgstr "சுழற்சி"
 
@@ -6676,6 +6672,10 @@ msgid "Amount of residual error in radians for constraints that work on orientat
 msgstr "நோக்குநிலையில் செயல்படும் தடைகளுக்கு ரேடியன்களில் எஞ்சியிருக்கும் பிழையின் அளவு"
 
 
+msgid "Influence"
+msgstr "செல்வாக்கு"
+
+
 msgid "Amount of influence constraint will have on the final solution"
 msgstr "இறுதி தீர்வில் செல்வாக்கு கட்டுப்பாட்டின் அளவு இருக்கும்"
 
@@ -7046,6 +7046,10 @@ msgstr "குறைந்தபட்சம்"
 
 msgid "Minimum value for target channel range"
 msgstr "இலக்கு சேனல் வரம்பிற்கான குறைந்தபட்ச மதிப்பு"
+
+
+msgid "Mix Mode"
+msgstr "கலவை முறை"
 
 
 msgid "Specify how existing transformations and the action channels are combined"
@@ -31477,12 +31481,28 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
-msgid "Metaball"
-msgstr "வளர்சிதை மாற்ற"
-
-
 msgid "Show/Hide"
 msgstr "காட்டு/மறைக்க"
+
+
+msgid "Clean Up"
+msgstr "தூய்மை செய்"
+
+
+msgid "Special Characters"
+msgstr "சிறப்பு எழுத்துக்கள்"
+
+
+msgid "Kerning"
+msgstr "கெர்னிங்"
+
+
+msgid "Text"
+msgstr "உரை"
+
+
+msgid "Metaball"
+msgstr "வளர்சிதை மாற்ற"
 
 
 msgid "Names"
@@ -31491,10 +31511,6 @@ msgstr "பெயர்கள்"
 
 msgid "Bone Roll"
 msgstr "எலும்பு ரோல்"
-
-
-msgid "Clean Up"
-msgstr "தூய்மை செய்"
 
 
 msgid "Pivot Point"
@@ -31691,18 +31707,6 @@ msgstr "முக வலிமையை அமைக்கவும்"
 
 msgid "Merge"
 msgstr "ஒன்றிணைக்கவும்"
-
-
-msgid "Special Characters"
-msgstr "சிறப்பு எழுத்துக்கள்"
-
-
-msgid "Kerning"
-msgstr "கெர்னிங்"
-
-
-msgid "Text"
-msgstr "உரை"
 
 
 msgid "Keyframe Insert Pie"
@@ -48986,11 +48990,6 @@ msgstr "மரபு போச் நூலகத்தை மாற்றவு
 msgctxt "Operator"
 msgid "Copy Pose as Asset"
 msgstr "நகல் போச் சொத்தாக"
-
-
-msgctxt "Operator"
-msgid "Create Pose Asset"
-msgstr "போச் சொத்தை உருவாக்கவும்"
 
 
 msgctxt "Operator"
@@ -70198,10 +70197,6 @@ msgid "Create a new pose asset on the clipboard, to be pasted into an Asset Brow
 msgstr "கிளிப்போர்டில் ஒரு புதிய போச் சொத்தை உருவாக்கவும், ஒரு சொத்து உலாவியில் ஒட்ட வேண்டும்"
 
 
-msgid "Create a new Action that contains the pose of the selected bones, and mark it as Asset. The asset will be stored in the current blend file"
-msgstr "தேர்ந்தெடுக்கப்பட்ட எலும்புகளின் போசைக் கொண்ட ஒரு புதிய செயலை உருவாக்கி, அதை சொத்தாகக் குறிக்கவும். தற்போதைய கலப்பு கோப்பில் சொத்து சேமிக்கப்படும்"
-
-
 msgid "Activate New Action"
 msgstr "புதிய செயலை செயல்படுத்தவும்"
 
@@ -81483,10 +81478,6 @@ msgid "OpenVDB File"
 msgstr "திறந்தவிடிபி கோப்பு"
 
 
-msgid "Slot"
-msgstr "ச்லாட்"
-
-
 msgid "Create Pose Asset"
 msgstr "போச் சொத்தை உருவாக்கவும்"
 
@@ -84940,10 +84931,6 @@ msgstr "தலைகீழ் ரோல் (z) அச்சு"
 
 msgid "Overall sensitivity of the 3D Mouse for panning"
 msgstr "பனிங்கிற்கான 3d சுட்டியின் ஒட்டுமொத்த உணர்திறன்"
-
-
-msgid "Show Navigation Guide"
-msgstr "வழிசெலுத்தல் வழிகாட்டியைக் காட்டு"
 
 
 msgid "Display the center and axis during rotation"
@@ -104588,12 +104575,13 @@ msgstr "போச் புரட்டப்பட்டது"
 
 
 msgctxt "Operator"
+msgid "Remove Selected Bones"
+msgstr "தேர்ந்தெடுக்கப்பட்ட எலும்புகளை அகற்றவும்"
+
+
+msgctxt "Operator"
 msgid "Blend Pose"
 msgstr "போச் கலக்கவும்"
-
-
-msgid "Action %s marked Fake User to prevent loss"
-msgstr "நடவடிக்கை %s இழப்பைத் தடுக்க போலி பயனரைக் குறித்தன"
 
 
 msgid "Pose Asset copied, use Paste As New Asset in any Asset Browser to paste"
@@ -104608,18 +104596,6 @@ msgid "Converted %d poses to pose assets"
 msgstr "மாற்றப்பட்ட %d சொத்துக்களுக்கு போச் கொடுக்கிறது"
 
 
-msgid "An active armature object in pose mode is needed"
-msgstr "போச் பயன்முறையில் செயலில் உள்ள ஆர்மேச்சர் பொருள் தேவை"
-
-
-msgid "Asset Browser must be set to the Current File library"
-msgstr "சொத்து உலாவி தற்போதைய கோப்பு நூலகத்திற்கு அமைக்கப்பட வேண்டும்"
-
-
-msgid "No keyframes were found for this pose"
-msgstr "இந்த போசுக்கு கீஃப்ரேம்கள் எதுவும் காணப்படவில்லை"
-
-
 msgid "No animation data found to create asset from"
 msgstr "அனிமேசன் தரவு எதுவும் சொத்தை உருவாக்க கிடைக்கவில்லை"
 
@@ -104630,6 +104606,10 @@ msgstr "சொத்துக்கான எதிர்பாராத பூ�
 
 msgid "Current editor is not an asset browser"
 msgstr "தற்போதைய ஆசிரியர் ஒரு சொத்து உலாவி அல்ல"
+
+
+msgid "Asset Browser must be set to the Current File library"
+msgstr "சொத்து உலாவி தற்போதைய கோப்பு நூலகத்திற்கு அமைக்கப்பட வேண்டும்"
 
 
 msgid "Clipboard is empty"
@@ -105718,11 +105698,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட எலும�
 
 
 msgctxt "Operator"
-msgid "Remove Selected Bones"
-msgstr "தேர்ந்தெடுக்கப்பட்ட எலும்புகளை அகற்றவும்"
-
-
-msgctxt "Operator"
 msgid "Deselect Bones"
 msgstr "எலும்புகளைத் தேர்வுநீக்கவும்"
 
@@ -105951,14 +105926,6 @@ msgid "Only Axis Aligned"
 msgstr "அச்சு மட்டுமே சீரமைக்கப்பட்டது"
 
 
-msgid "Keyframes Before"
-msgstr "கீஃப்ரேம்கள் முன்"
-
-
-msgid "Keyframes After"
-msgstr "கீஃப்ரேம்கள் பிறகு"
-
-
 msgid "Stroke Thickness"
 msgstr "வீச்சு தடிமன்"
 
@@ -106009,6 +105976,14 @@ msgstr "தேர்ந்தெடுத்த அடுக்கை நகல�
 msgctxt "Operator"
 msgid "Copy All Layers to Selected"
 msgstr "அனைத்து அடுக்குகளையும் தேர்ந்தெடுத்த நகலெடுக்கவும்"
+
+
+msgid "Keyframes Before"
+msgstr "கீஃப்ரேம்கள் முன்"
+
+
+msgid "Keyframes After"
+msgstr "கீஃப்ரேம்கள் பிறகு"
 
 
 msgid "Interpolation U"
@@ -113587,6 +113562,10 @@ msgid "Workbench"
 msgstr "பணிப்பெண்"
 
 
+msgid "Create"
+msgstr "உருவாக்கு"
+
+
 msgid "NLA Strip Controls"
 msgstr "என்எல்ஏ துண்டு கட்டுப்பாடுகள்"
 
@@ -113979,10 +113958,6 @@ msgstr "பிரிக்கப்பட்ட எலும்புகள்"
 
 msgid "Unselectable bone in chain"
 msgstr "சங்கிலியில் தேர்ந்தெடுக்க முடியாத எலும்பு"
-
-
-msgid "Create"
-msgstr "உருவாக்கு"
 
 
 msgid "Bone collection with index %d not found on Armature %s"
@@ -114574,14 +114549,6 @@ msgid "The object has only one layer"
 msgstr "பொருளுக்கு ஒரு அடுக்கு மட்டுமே உள்ளது"
 
 
-msgid "No active Grease Pencil layer"
-msgstr "செயலில் பசை எழுதுகோல் அடுக்கு இல்லை"
-
-
-msgid "Active layer is locked or hidden"
-msgstr "செயலில் அடுக்கு பூட்டப்பட்டுள்ளது அல்லது மறைக்கப்பட்டுள்ளது"
-
-
 msgid "No Grease Pencil frame to draw on"
 msgstr "வரைய பசை எழுதுகோல் சட்டகம் இல்லை"
 
@@ -114600,6 +114567,14 @@ msgstr "அடுக்கு ஏற்கனவே சேர்க்கப்�
 
 msgid "Unable to find layer to add"
 msgstr "சேர்க்க அடுக்கு கண்டுபிடிக்க முடியவில்லை"
+
+
+msgid "No active Grease Pencil layer"
+msgstr "செயலில் பசை எழுதுகோல் அடுக்கு இல்லை"
+
+
+msgid "Active layer is locked or hidden"
+msgstr "செயலில் அடுக்கு பூட்டப்பட்டுள்ளது அல்லது மறைக்கப்பட்டுள்ளது"
 
 
 msgid "Could not resolve path '%s'"
@@ -118970,10 +118945,6 @@ msgstr "படங்கள் எதுவும் மாற்றப்பட�
 
 msgid "Images cannot be copied while rendering"
 msgstr "வழங்குதல் போது படங்களை நகலெடுக்க முடியாது"
-
-
-msgid "Packing movies or image sequences not supported"
-msgstr "திரைப்படங்கள் அல்லது பட காட்சிகளை பொதி செய்வது ஆதரிக்கப்படவில்லை"
 
 
 msgid "Unpacking movies or image sequences not supported"
@@ -125589,14 +125560,6 @@ msgstr "சீன் டின்ட்"
 
 msgid "Blend between diffuse surface and subsurface scattering. Typically should be zero or one (either fully diffuse or subsurface)"
 msgstr "பரவலான மேற்பரப்பு மற்றும் மேற்பரப்பு சிதறல் ஆகியவற்றுக்கு இடையில் கலக்கவும். பொதுவாக பூச்சியமாக அல்லது ஒன்று (முழுமையாக பரவுகிறது அல்லது மேற்பரப்பு) இருக்க வேண்டும்"
-
-
-msgid "Scattering radius to use for subsurface component (multiplied with Scale)"
-msgstr "மேற்பரப்பு கூறுக்கு பயன்படுத்த சிதறல் ஆரம் (அளவோடு பெருக்கப்படுகிறது)"
-
-
-msgid "Scale of the subsurface scattering (multiplied with Radius)"
-msgstr "மேற்பரப்பு சிதறலின் அளவு (ஆரம் பெருக்கப்படுகிறது)"
 
 
 msgid "Tint dielectric reflection at normal incidence for artistic control, and metallic reflection at near-grazing incidence to simulate complex index of refraction"
