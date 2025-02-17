@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Beta (b'aad0bd21487d')\n"
+"Project-Id-Version: Blender 4.4.0 Beta (b'ed5b077f929a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-10 15:22+0000\n"
-"PO-Revision-Date: 2025-02-03 23:56+0000\n"
+"POT-Creation-Date: 2025-02-17 14:06+0000\n"
+"PO-Revision-Date: 2025-02-16 09:56+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -85,6 +85,10 @@ msgstr "F-წირების დაჯგუფებები ასახ�
 
 msgid "Slot"
 msgstr "სლოტი"
+
+
+msgid "The Slot that the Channelbag's animation data is for"
+msgstr "სლოტი, რომლისთვისაცაა განკჯუთვნილი არხების შეკვრის ანიმაცია"
 
 
 msgid "Collection of F-Curves for a specific action slot, on a specific strip"
@@ -4778,6 +4782,14 @@ msgstr "აქვს სიმტკიცე"
 
 msgid "Has Pinch Factor"
 msgstr "აქვს ჩქმეტის კოეფიციენტი"
+
+
+msgid "Has Plane Depth"
+msgstr "აქვს სიბრტყის სიღრმე"
+
+
+msgid "Has Plane Height"
+msgstr "აქვს სიბრტყის სიმაღლე"
 
 
 msgid "Has Plane Offset"
@@ -19618,6 +19630,34 @@ msgid "Active paint curve"
 msgstr "აქტიური დასახატი წირი"
 
 
+msgid "The maximum distance below the plane for affected vertices. Increasing the depth affects vertices farther below the plane."
+msgstr "სიბრტყის ქვეშა მაქსიმალური მანძილი გავლენის ქვეშ მყოფი წვეროებისთვის. სიღრმის ზრდა ზემოქმედებს ამ სიბრტყის ქვემოთ მდებარე წვეროებზე."
+
+
+msgid "The maximum distance above the plane for affected vertices. Increasing the height affects vertices farther above the plane."
+msgstr "სიბრტყის ზემოთ მაქსიმალური მანძილი გავლენის ქვეშ მყოფი წვეროებისთვის. სიმაღლის ზრდა ზემოქმედებს სიბრტყის ზემოთ მდებარე წვეროებზე."
+
+
+msgid "Inversion Mode"
+msgstr "შექცევის რეჟიმი"
+
+
+msgid "Invert Displacement"
+msgstr "გადანაცვლების შექცევა"
+
+
+msgid "Displace the vertices away from the plane."
+msgstr "გადაანაცვლე წვეროები სიბრტყიდან მოშორებით."
+
+
+msgid "Swap Height and Depth"
+msgstr "სიმაღლისა და სიღრმის გაცვლა"
+
+
+msgid "Swap the roles of Height and Depth."
+msgstr "გაცვალე სიმაღლისა და სიღრმის როლები."
+
+
 msgid "Plane Offset"
 msgstr "სიბრტყის აცდენა"
 
@@ -19792,6 +19832,11 @@ msgstr "ფხეკა"
 
 
 msgctxt "Brush"
+msgid "Plane"
+msgstr "სიბრტყე"
+
+
+msgctxt "Brush"
 msgid "Multi-plane Scrape"
 msgstr "მრავალსიბრტყიანი ფხეკა"
 
@@ -19936,6 +19981,22 @@ msgstr "მთელ მეშს ამოდიფიცირებს რე
 
 msgid "Spacing between brush daubs as a percentage of brush diameter"
 msgstr "დაშორება ფუნჯის წაცხებებს შორის ფუნჯის დიამეტრის პროცენტებში"
+
+
+msgid "Stabilize Normal"
+msgstr "ნორმალის დასტაბილურება"
+
+
+msgid "Stabilize the orientation of the brush plane."
+msgstr "დაასტაბილურე ფუნჯის სიბრტყის ორიენტაცია."
+
+
+msgid "Stabilize Plane"
+msgstr "სიბრტყის დასტაბილურება"
+
+
+msgid "Stabilize the center of the brush plane."
+msgstr "დაასტაბილურე ფუნჯის სიბრტყის ცენტრი."
 
 
 msgid "Stencil Dimensions"
@@ -34281,68 +34342,12 @@ msgid "Editor menu containing buttons"
 msgstr "რედაქტორის მენიუ, რომელიც ღილაკებს შეიცავს"
 
 
-msgid "Show/Hide"
-msgstr "ჩვენება/დამალვა"
-
-
-msgid "Clean Up"
-msgstr "გასუფთავება"
-
-
-msgid "Special Characters"
-msgstr "სპეციალური ასონიშნები"
-
-
-msgid "Kerning"
-msgstr "ასოთშორისი ინტერვალი"
-
-
-msgid "Text"
-msgstr "ტექსტი"
-
-
-msgid "Metaball"
-msgstr "მეტაბურთი"
-
-
-msgid "Names"
-msgstr "სახელები"
-
-
-msgid "Bone Roll"
-msgstr "ძვლის ტრიალი"
-
-
-msgid "Pivot Point"
-msgstr "ბრუნვის ცენტრი"
+msgid "Mirror"
+msgstr "გასარკისებურება"
 
 
 msgid "Snap"
 msgstr "მიკვრა"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "პროპორციული რედაქტირების მილევა"
-
-
-msgid "Mask Edit"
-msgstr "ნიღბის რედაქტირება"
-
-
-msgid "Automasking"
-msgstr "ავტომატური შენიღბვა"
-
-
-msgid "Face Sets Edit"
-msgstr "წახნაგების ნაკრებთა რედაქტირება"
-
-
-msgid "Vertex Group Locks"
-msgstr "წვეროთა ჯგუფების ბლოკები"
-
-
-msgid "Mirror"
-msgstr "გასარკისებურება"
 
 
 msgid "UV Mapping"
@@ -34397,6 +34402,10 @@ msgid "Assign Material"
 msgstr "მასალის მიკუთვნება"
 
 
+msgid "Metaball"
+msgstr "მეტაბურთი"
+
+
 msgid "Light"
 msgstr "სინათლე"
 
@@ -34429,6 +34438,14 @@ msgid "Quick Effects"
 msgstr "სწრაფი ეფექტები"
 
 
+msgid "Show/Hide"
+msgstr "ჩვენება/დამალვა"
+
+
+msgid "Clean Up"
+msgstr "გასუფთავება"
+
+
 msgid "Asset"
 msgstr "აქტივი"
 
@@ -34447,6 +34464,10 @@ msgstr "მონაცემების ბმულით დაკავშ�
 
 msgid "Hooks"
 msgstr "კაუჭები"
+
+
+msgid "Vertex Group Locks"
+msgstr "წვეროთა ჯგუფების ბლოკები"
 
 
 msgid "Trim/Add"
@@ -34481,6 +34502,10 @@ msgid "Bone Collections"
 msgstr "ძვლების კოლექციები"
 
 
+msgid "Names"
+msgstr "სახელები"
+
+
 msgid "Toggle Bone Options"
 msgstr "ძვლის პარამეტრების ვარიანტები"
 
@@ -34511,6 +34536,42 @@ msgstr "წახნაგის სიძლიერის დაყენე�
 
 msgid "Merge"
 msgstr "შერწყმა"
+
+
+msgid "Special Characters"
+msgstr "სპეციალური ასონიშნები"
+
+
+msgid "Kerning"
+msgstr "ასოთშორისი ინტერვალი"
+
+
+msgid "Text"
+msgstr "ტექსტი"
+
+
+msgid "Bone Roll"
+msgstr "ძვლის ტრიალი"
+
+
+msgid "Pivot Point"
+msgstr "ბრუნვის ცენტრი"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "პროპორციული რედაქტირების მილევა"
+
+
+msgid "Mask Edit"
+msgstr "ნიღბის რედაქტირება"
+
+
+msgid "Automasking"
+msgstr "ავტომატური შენიღბვა"
+
+
+msgid "Face Sets Edit"
+msgstr "წახნაგების ნაკრებთა რედაქტირება"
 
 
 msgid "Keyframe Insert Pie"
@@ -35135,6 +35196,10 @@ msgstr "ცარიელი"
 msgctxt "Constraint"
 msgid "Track"
 msgstr "მეთვალყურე"
+
+
+msgid "Modify Pose Asset"
+msgstr "პოზის აქტივის მოდიფიცირება"
 
 
 msgid "Rigify"
@@ -61258,7 +61323,7 @@ msgstr "აღადგინე გაუქმებული წინა ქ
 
 msgctxt "Operator"
 msgid "Undo"
-msgstr "ბრძანების გაუქმება"
+msgstr "ქმედების გაუქმება"
 
 
 msgid "Undo previous action"
@@ -65126,6 +65191,15 @@ msgstr "წაშალე მონიშნული მონასმებ�
 
 
 msgctxt "Operator"
+msgid "Delete Breakdown Frames"
+msgstr "შუალა კადრების წაშლა"
+
+
+msgid "Remove breakdown frames generated by interpolating between two Grease Pencil frames"
+msgstr "მოაცილე გრიზ ფენსილის ორ კადრს შორის ინტერპოლაციით წარმოქმნილი შუალა კადრები"
+
+
+msgctxt "Operator"
 msgid "Delete Frame"
 msgstr "კადრის წაშლა"
 
@@ -65869,6 +65943,14 @@ msgstr "ჩასმა უკან"
 
 msgid "Add pasted strokes behind all strokes"
 msgstr "ჩაამატე ჩასმული მონასმები ყველა მონასმის უკან"
+
+
+msgid "Paste to Active"
+msgstr "აქტიურში ჩასმა"
+
+
+msgid "Paste by Layer"
+msgstr "შრით ჩასმა"
 
 
 msgctxt "Operator"
@@ -73391,6 +73473,10 @@ msgid "Curve from Mesh or Text objects"
 msgstr "წირი მეშიდან, ან ტექსტური ობიექტიდან"
 
 
+msgid "Mesh from Curve, Surface, Metaball, or Text objects"
+msgstr "მეში წირის, ზედაპირის, მეტაბურთის, ან ტექსტის, ან ობიექტებისგან"
+
+
 msgid "Curves from evaluated curve data"
 msgstr "წირები წირის შეფასებული მონაცემებიდან"
 
@@ -78496,6 +78582,60 @@ msgstr "როცა ეს ჩართულია, პოზა X-ღერ�
 
 
 msgctxt "Operator"
+msgid "Delete Pose Asset"
+msgstr "პოზის აქტივის წაშლა"
+
+
+msgid "Delete the selected Pose Asset"
+msgstr "წაშალე მონიშნული პოზის აქტივი"
+
+
+msgctxt "Operator"
+msgid "Modify Pose Asset"
+msgstr "პოზის აქტივის მოდიფიცირება"
+
+
+msgid "Update the selected pose asset in the asset library from the currently selected bones. The mode defines how the asset is updated"
+msgstr "განაახლე აქტივთა ბიბლიოთეკაში მდებარე მონიშნული პოზის აქტივი ამჟამად მონიშნული ძვლებიდან. რეჟიმი განსაზღვრავს, თუ როგორ განახლდება აქტივი"
+
+
+msgid "Overwrite Mode"
+msgstr "გადაწერის რეჟიმი"
+
+
+msgid "Specify which parts of the pose asset are overwritten"
+msgstr "დააზუსტე, პოზის აქტივის რომელ ნაწილებს გადაეწეროს"
+
+
+msgid "Update existing channels in the pose asset but don't remove or add any channels"
+msgstr "განაახლე არსებული არხები პოზის აქტივში, ოღონ არხებს ნურც მოაცილებ და ნურც დაამატებ"
+
+
+msgid "Replace with Selection"
+msgstr "მონიშნულით ჩანაცვლება"
+
+
+msgid "Completely replace all channels in the pose asset with the current selection"
+msgstr "მთლიანად ჩაანაცვლე პოზის აქტივის ყველა არხი ამჟამად მონიშნულით"
+
+
+msgid "Add Selected Bones"
+msgstr "მონიშნული ძვლების დამატება"
+
+
+msgid "Add channels of the selection to the pose asset. Existing channels will be updated"
+msgstr "დაამატე მონიშნულის არხები პოზის აქტივს. არსებული არხები განახლდება"
+
+
+msgid "Remove Selected Bones"
+msgstr "მონიშნული ძვლების მოცილება"
+
+
+msgid "Remove channels of the selection from the pose asset"
+msgstr "მოაცილე მონიშნულის არხები პოზის აქტივიდან"
+
+
+msgctxt "Operator"
 msgid "Blend Pose Asset"
 msgstr "პოზის აქტივის შეზავება"
 
@@ -78516,12 +78656,33 @@ msgid "Create a new pose asset on the clipboard, to be pasted into an Asset Brow
 msgstr "შექმენი ახალი პოზის აქტივი გაცვლის ბუფერში, რათა აქტივების ბრაუზერში ჩაისვას"
 
 
+msgctxt "Operator"
+msgid "Create Pose Asset..."
+msgstr "პოზის აქტივის შექმნა..."
+
+
+msgid "Create a new asset from the selected bones in the scene"
+msgstr "შექმენი ახალი აქტივი სცენაში მონიშნული ძვლებისგან"
+
+
 msgid "Activate New Action"
 msgstr "ახალი ქმედების აქტივაცია"
 
 
+msgid "This property is deprecated and will be removed in the future"
+msgstr "ეს თვისება არარეკომენდირებულია და მომავალში მოცილდება"
+
+
+msgid "Asset library used to store the new pose"
+msgstr "აქტივთა ბიბლიოთეკა, რომელიც ახალი პოზის შესანახად გამოიყენება"
+
+
 msgid "Pose Name"
 msgstr "პოზის სახელი"
+
+
+msgid "Name for the new pose asset"
+msgstr "სახელი ახალი პოზის აქტივისთვის"
 
 
 msgid "Paste the Asset that was previously copied using Copy As Asset"
@@ -90708,10 +90869,6 @@ msgid "Panel containing UI elements"
 msgstr "პანელი, რომელიც UI-ს ელემენტებს შეიცავს"
 
 
-msgid "Active Tool"
-msgstr "აქტიური ხელსაწყო"
-
-
 msgid "View Lock"
 msgstr "ხედის დაბლოკვა"
 
@@ -90780,14 +90937,6 @@ msgid "Transform Orientations"
 msgstr "გარდაქმნების ორიენტაციები"
 
 
-msgid "glTF Variants"
-msgstr "glTF ნაირსახეობები"
-
-
-msgid "glTF Material Variants"
-msgstr "glTF მასალის ნაირსახეობები"
-
-
 msgid "Stroke Placement"
 msgstr "მონასმის განთავსება"
 
@@ -90816,12 +90965,12 @@ msgid "Multi Frame"
 msgstr "მრავალკადრიანი"
 
 
-msgid "glTF"
-msgstr "glTF"
+msgid "glTF Variants"
+msgstr "glTF ნაირსახეობები"
 
 
-msgid "glTF Animations"
-msgstr "glTF ანიმაციები"
+msgid "glTF Material Variants"
+msgstr "glTF მასალის ნაირსახეობები"
 
 
 msgid "Auto-Masking"
@@ -90844,12 +90993,24 @@ msgid "Viewport Debug"
 msgstr "სარკმლის ხარვეზების აღმოფხვრა"
 
 
+msgid "glTF"
+msgstr "glTF"
+
+
+msgid "glTF Animations"
+msgstr "glTF ანიმაციები"
+
+
 msgid "VR"
 msgstr "ვ.რ."
 
 
 msgid "VR Info"
 msgstr "ვ.რ.-ის ინფო"
+
+
+msgid "Active Tool"
+msgstr "აქტიური ხელსაწყო"
 
 
 msgid "Chain Scaling"
@@ -94857,6 +95018,18 @@ msgid "Keep horizon level while flying with 3D Mouse"
 msgstr "3გ თაგვით ფრენისას დაბლოკე ჰორიზონტის დონე"
 
 
+msgid "Auto sets the orbit center dynamically. When the complete model is in view, the center of volume of the whole model is used as the rotation point. When you move closer, the orbit center will be set on an object close to your center of the view."
+msgstr "ავტომატური ორბიტის ცენტრს დინამიკურად აყენებს. როცა მოდელი ხედში სრულად ჩანს, ბრუნვის წერტილად მთელი მოდელის მოცულობის ცენტრი გამოიყენება. მიახლოებისას ორბიტის ცენტრი შენი ხედის ცენტრთან ახლოს მდებარე ობიექტზე დაყენდება."
+
+
+msgid "Use Selected Items"
+msgstr "მონიშნული საგნების გამოყენება"
+
+
+msgid "Use selected item forces the orbit center to only take the currently selected objects into account."
+msgstr "მონიშნული საგნის გამოყენება აიძულებს ორბიტის ცენტრს, მხოლოდ მონიშნული ობიექტები გაითვალისწინოს."
+
+
 msgid "Orbit Sensitivity"
 msgstr "ორბიტირების მგრძნობიარობა"
 
@@ -94901,8 +95074,20 @@ msgid "Overall sensitivity of the 3D Mouse for panning"
 msgstr "3გ თაგვის ზოგადი სენსიტიურობა პანორამირებისთვის"
 
 
+msgid "Show Orbit Axis Guide"
+msgstr "ორბიტის ღერძის ნიშნულის ჩვენება"
+
+
 msgid "Display the center and axis during rotation"
 msgstr "ბრუნვისას ასახე ცენტრი და ღერძი"
+
+
+msgid "Show Orbit Center Guide"
+msgstr "ორბიტის ცენტრის ნიშნულის ჩვენება"
+
+
+msgid "Display the orbit center during rotation"
+msgstr "ბრუნვისას ასახე ორბიტის ცენტრი"
 
 
 msgid "NDOF View Navigate"
@@ -115079,7 +115264,7 @@ msgstr "დანის ხელსაწყოს მოდალური რ
 
 msgctxt "WindowManager"
 msgid "Undo"
-msgstr "ბრძანების გაუქმება"
+msgstr "ქმედების გაუქმება"
 
 
 msgctxt "WindowManager"
@@ -118161,6 +118346,16 @@ msgstr "პოზის გამოყენება"
 msgctxt "Operator"
 msgid "Apply Pose Flipped"
 msgstr "შეტრიალებული პოზის გამოყენება"
+
+
+msgctxt "Operator"
+msgid "Adjust Pose Asset"
+msgstr "პოზის აქტივის რეგულირება"
+
+
+msgctxt "Operator"
+msgid "Add Selected Bones"
+msgstr "მონიშნული ძვლების დამატება"
 
 
 msgctxt "Operator"
@@ -124958,6 +125153,18 @@ msgid "Invert Wheel Zoom Direction"
 msgstr "გორგოლაჭის ზუმის მიმართულების შექცევა"
 
 
+msgid "Show Guides"
+msgstr "ნიშნულების ჩვენება"
+
+
+msgid "Orbit Axis"
+msgstr "ორბიტირების ღერძი"
+
+
+msgid "Orbit Center"
+msgstr "ორბიტის ცენტრი"
+
+
 msgid "Fly/Walk"
 msgstr "ფრენა/სიარული"
 
@@ -126570,7 +126777,7 @@ msgstr "ვექტორის ჩასმა"
 
 msgctxt "Operator"
 msgid "Reset Vectors"
-msgstr "ვექტორების პირველსახის დაბრუნებ"
+msgstr "ვექტორების პირველსახის დაბრუნება"
 
 
 msgctxt "Operator"
@@ -126771,6 +126978,11 @@ msgstr "აქტიური შრის დამალვა"
 msgctxt "Operator"
 msgid "Hide Inactive Layers"
 msgstr "არააქტიური შრეების დამალვა"
+
+
+msgctxt "Operator"
+msgid "Paste by Layer"
+msgstr "ჩასმა შრის მიხედვით"
 
 
 msgctxt "Operator"
@@ -129117,8 +129329,36 @@ msgid "Create"
 msgstr "შექმნა"
 
 
+msgid "Delete Pose Asset"
+msgstr "პოზის აქტივის წაშლა"
+
+
+msgid "Permanently delete pose asset blend file? This cannot be undone."
+msgstr "სამუდამოდ წაშალე პოზის აქტივის blend ფაილი. ეს ქმედება ვერ გაუქმდება."
+
+
+msgid "The asset is local to the file. Deleting it will just clear the asset status."
+msgstr "აქტივი ლოკალურია ფაილის ფარგლებში. მისი წაშლა მხოლოდ აქტივის სტატუსს წაშლის."
+
+
 msgid "Failed to load asset library"
 msgstr "აქტივთა ბიბლიოთეკის ჩატვირთვა წარუმატებელია"
+
+
+msgid "No name set"
+msgstr "სახელი დაუყენებელია"
+
+
+msgid "Unexpected library type. Failed to create pose asset"
+msgstr "ბიბლიოთეკის მოულოდნელი ტიპი. პოზის აქტივი ვერ შეიქმნა"
+
+
+msgid "Pose assets can only be modified from Pose Mode"
+msgstr "პოზის აქტივების მოდიფიცირება მხოლოდ პოზირების რეჟიმში შეიძლება"
+
+
+msgid "Action is not editable"
+msgstr "ქმედება არარედაქტირებადია"
 
 
 msgid "Asset blend file is not editable"
@@ -130296,8 +130536,20 @@ msgid "The object has only one layer"
 msgstr "ობიექტს მხოლოდ ერთი შრე აქვს"
 
 
+msgid "No active Grease Pencil layer to paste into"
+msgstr "ჩასასმელად გრიზ ფენსილის აქტიური შრე არ არსებობს"
+
+
+msgid "Active layer is not editable"
+msgstr "აქტიური შრე არარედაქტირებადია"
+
+
 msgid "No Grease Pencil frame to draw on"
 msgstr "გრიზ ფენსილის სახატავი კადრი არ არის"
+
+
+msgid "Couldn't find matching layer, pasting into active layer"
+msgstr "შესაბამისი შრე ვერ მოიძებნა, აქტიურ შრეში ჩაისმება"
 
 
 msgid "Active object is not a selected Grease Pencil"
@@ -130834,7 +131086,7 @@ msgstr "მნიშვნელობა"
 
 
 msgid "Redo"
-msgstr "მოქმედების აღდგენა"
+msgstr "ქმედების აღდგენა"
 
 
 msgid "OK"
@@ -131749,6 +132001,10 @@ msgid "PBR Extensions"
 msgstr "PBR გაფართოებები"
 
 
+msgid "File exported successfully"
+msgstr "ფაილი წარმატებით დაექსპორტდა"
+
+
 msgid "ASCII"
 msgstr "ASCII"
 
@@ -131895,7 +132151,7 @@ msgstr "გაჩერება"
 
 
 msgid "Undo"
-msgstr "ბრძანების გაუქმება"
+msgstr "ქმედების გაუქმება"
 
 
 msgid "Pan View"
@@ -135601,6 +135857,10 @@ msgid "No packed file"
 msgstr "შეფუთული ფაილები არ არის"
 
 
+msgid "Data-block using this packed file is not editable"
+msgstr "მონაცემთა ბლოკი, რომელიც ამ შეფუთულ ფაილს იყენებს, არარედაქტირებადია"
+
+
 msgid "Cannot set relative paths with an unsaved blend file"
 msgstr "შეფარდებითი მისამართების დაყენება შეუნახავი blend ფაილით შეუძლებელია"
 
@@ -138921,6 +139181,10 @@ msgstr "ქმედებების სლოტთა ასახული 
 
 msgid "Action slot identifiers should be at least three characters"
 msgstr "ქმედებების სლოტთა იდენტიფიკატორები სულ ცოტა, სამი სიმბოლოსგან უნდა შედგებოდეს"
+
+
+msgid "Attempted to set slot identifier to \"%s\", but the type prefix doesn't match the slot's 'target_id_type' \"%s\". Setting to \"%s\" instead."
+msgstr "იყო სლოტის იდენტიფიკატორის \"%s\"-ზე დაყენების მცდელობა, მაგრამ ტიპის წინსართი სლოტის 'target_id_type' \"%s\"-ს არ ემთხვევა. \"%s\"-ზე დაყენდება."
 
 
 msgid "Only armature objects are supported"
@@ -144264,6 +144528,14 @@ msgid "Blend between diffuse surface and subsurface scattering. Typically should
 msgstr "დიფუზიური ზედაპირისა და ზედაპირქვეშა გაბნევის შეზავება. როგორც წესი, უნდა იყოს ნული, ან ერთი (მთლიანად დიფუზია, ან ზედაპირქვეშა)"
 
 
+msgid "Scattering radius per color channel (RGB), multiplied with Scale"
+msgstr "გაბნევის რადიუსი ფერის თითო არხზე (RGB), გამრავლებული მასშტაბზე"
+
+
+msgid "Scale factor of the subsurface scattering radius"
+msgstr "ზედაპირქვეშა გაბნევის რადიუსის მასშტაბის კოეფიციენტი"
+
+
 msgid "Index of Refraction (IOR) used for rays that enter the subsurface component"
 msgstr "გარდატეხის ინდექსი (IOR გამოყენებული სხივებისთვის, რომლებიც ზედაპირქვეშა კომპონენტში აღწევენ"
 
@@ -146375,6 +146647,10 @@ msgstr "VR სცენის ინსპექცია"
 
 msgid "View the viewport with virtual reality glasses (head-mounted displays)"
 msgstr "დაათვალიერე სარკმელი ვირტუალური რეალობის სათვალით (თავზე ჩამოსაცმელი ეკრანებით)"
+
+
+msgid "All Add-ons"
+msgstr "ყველა დანამატი"
 
 
 msgid "All Add-ons Installed by User"
