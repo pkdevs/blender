@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Beta (b'ed5b077f929a')\n"
+"Project-Id-Version: Blender 4.4.0 Beta (b'63c460d93d55')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-17 14:06+0000\n"
-"PO-Revision-Date: 2025-02-16 09:56+0000\n"
+"POT-Creation-Date: 2025-02-24 09:56+0000\n"
+"PO-Revision-Date: 2025-02-24 09:56+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -109,10 +109,6 @@ msgstr "ქმედების თითოეული სლოტისთ�
 
 msgid "Action F-Curves"
 msgstr "ქმედებათა F-წირები"
-
-
-msgid "Collection of action F-Curves"
-msgstr "ქმედებათა F-წირების კოლექცია"
 
 
 msgid "Action Group"
@@ -1349,7 +1345,7 @@ msgstr "სივრცეები"
 
 
 msgid "Spaces contained in this area, the first being the active space (NOTE: Useful for example to restore a previously used 3D view space in a certain area to get the old view orientation)"
-msgstr "სივრცეები, რომლებსაც ეს არე მოიცავს, მათგან პირველი აქტიური სივრცეა (შენიშვნა: გამოგადგებათ, მაგალითად, უწინ გამოყენებული 3გ ხედის სივრცის აღდგენაში, ხედის ძველი ორიენტაციის დასაბრუნებლად)"
+msgstr "სივრცეები, რომლებსაც ეს არე მოიცავს, მათგან პირველი აქტიური სივრცეა (შენიშვნა: გამოგადგებათ, მაგალითად, უწინ გამოყენებული 3D ხედის სივრცის აღდგენაში, ხედის ძველი ორიენტაციის დასაბრუნებლად)"
 
 
 msgid "Editor Type"
@@ -1365,11 +1361,11 @@ msgstr "ცარიელი"
 
 
 msgid "3D Viewport"
-msgstr "3გ სარკმელი"
+msgstr "3D სარკმელი"
 
 
 msgid "Manipulate objects in a 3D environment"
-msgstr "ობიექტების მანიპულირება 3გ გარემოში"
+msgstr "ობიექტების მანიპულირება 3D გარემოში"
 
 
 msgid "UV/Image Editor"
@@ -1922,7 +1918,7 @@ msgstr "ვექტორი"
 
 
 msgid "3D vector with floating-point values"
-msgstr "3გ ვექტორი წილადნიშნა სიდიდეებით"
+msgstr "3D ვექტორი წილადნიშნა სიდიდეებით"
 
 
 msgid "RGBA color with 32-bit floating-point values"
@@ -1954,11 +1950,11 @@ msgstr "ჭეშმარიტი, ან მცდარი"
 
 
 msgid "2D Vector"
-msgstr "2გ ვექტორი"
+msgstr "2D ვექტორი"
 
 
 msgid "2D vector with floating-point values"
-msgstr "2გ ვექტორი წილადნიშნა სიდიდეებით"
+msgstr "2D ვექტორი წილადნიშნა სიდიდეებით"
 
 
 msgid "8-Bit Integer"
@@ -1970,7 +1966,7 @@ msgstr "შედარებით მცირე მთელი რიცხ
 
 
 msgid "2D 16-Bit Integer Vector"
-msgstr "2გ 16-ბიტიანი მთელი რიცხვის ვექტორი"
+msgstr "2D 16-ბიტიანი მთელი რიცხვის ვექტორი"
 
 
 msgid "16-bit signed integer vector"
@@ -1978,7 +1974,7 @@ msgstr "16-ბიტიანი ნიშნიანი მთელი რი
 
 
 msgid "2D Integer Vector"
-msgstr "2გ მთელი რიცხვის ვექტორი"
+msgstr "2D მთელი რიცხვის ვექტორი"
 
 
 msgid "32-bit signed integer vector"
@@ -2114,7 +2110,7 @@ msgstr "წილადნიშნა2 ატრიბუტი"
 
 
 msgid "Geometry attribute that stores floating-point 2D vectors"
-msgstr "გეომეტრიის ატრიბუტი რომელიც ინახავს წილადნიშნა 2გ ვექტორებს"
+msgstr "გეომეტრიის ატრიბუტი რომელიც ინახავს წილადნიშნა 2D ვექტორებს"
 
 
 msgid "4x4 Matrix Attribute"
@@ -2146,15 +2142,15 @@ msgstr "წილადნიშნა ვექტორის ატრიბ�
 
 
 msgid "Geometry attribute that stores floating-point 3D vectors"
-msgstr "გეომეტრიის ატრიბუტი, რომელიც ინახავს წილადნიშნა 3გ ვექტორებს"
+msgstr "გეომეტრიის ატრიბუტი, რომელიც ინახავს წილადნიშნა 3D ვექტორებს"
 
 
 msgid "2D Integer Vector Attribute"
-msgstr "2გ მთელ რიცხვიანი ატრიბუტი"
+msgstr "2D მთელ რიცხვიანი ატრიბუტი"
 
 
 msgid "Geometry attribute that stores 2D integer vectors"
-msgstr "გეომეტრიის ატრიბუტი, რომელიც ინახავს 2გ მთელ სიდიდეებს"
+msgstr "გეომეტრიის ატრიბუტი, რომელიც ინახავს 2D მთელ სიდიდეებს"
 
 
 msgid "Integer Attribute"
@@ -2174,7 +2170,7 @@ msgstr "გეომეტრიის ატრიბუტი, რომელ
 
 
 msgid "2D 16-Bit Integer Vector Attribute"
-msgstr "2გ 16-ბიტიანი მთელ რიცხვიანი ატრიბუტი"
+msgstr "2D 16-ბიტიანი მთელ რიცხვიანი ატრიბუტი"
 
 
 msgid "String Attribute"
@@ -2662,7 +2658,7 @@ msgstr "გადახრა"
 
 
 msgid "Tilt in 3D View"
-msgstr "გადახრა 3გ ხედში"
+msgstr "გადახრა 3D ხედში"
 
 
 msgid "Weight"
@@ -5762,7 +5758,7 @@ msgstr "ფონური გამოსახულება"
 
 
 msgid "Image and settings for display in the 3D View background"
-msgstr "გამოსახულება და ანაწყობები 3გ ხედის ფონისთვის"
+msgstr "გამოსახულება და ანაწყობები 3D ხედის ფონისთვის"
 
 
 msgid "Opacity"
@@ -8689,11 +8685,11 @@ msgstr "ვიდეოს ასადევნებელი კვალი"
 
 
 msgid "3D Position"
-msgstr "3გ პოზიცია"
+msgstr "3D პოზიცია"
 
 
 msgid "Use 3D position of track to parent to"
-msgstr "მისაშვილებლად გამოიყენე თვალის დევნების 3გ პოზიცია"
+msgstr "მისაშვილებლად გამოიყენე თვალის დევნების 3D პოზიცია"
 
 
 msgid "Undistort"
@@ -8701,7 +8697,7 @@ msgstr "გამრუდების მოცილება"
 
 
 msgid "Parent to undistorted position of 2D track"
-msgstr "მიაშვილე 2გ თვალის დევნების გაუმრუდებელ პოზიციას"
+msgstr "მიაშვილე 2D თვალის დევნების გაუმრუდებელ პოზიციას"
 
 
 msgid "Kinematic Constraint"
@@ -10614,7 +10610,7 @@ msgstr "უსაფრთხო არეები"
 
 
 msgid "Safe areas used in 3D view and the sequencer"
-msgstr "3გ ხედსა და სეკვენსერში გამოყენებული უსაფრთხო არეები"
+msgstr "3D ხედსა და სეკვენსერში გამოყენებული უსაფრთხო არეები"
 
 
 msgid "Action Safe Margins"
@@ -13611,11 +13607,11 @@ msgstr "მუდმივი ძალა ძალის ობიექტი
 
 
 msgid "2D"
-msgstr "2გ"
+msgstr "2D"
 
 
 msgid "Apply force only in 2D"
-msgstr "გამოიყენე ძალა მხოლოდ 2გ-ში"
+msgstr "გამოიყენე ძალა მხოლოდ 2D-ში"
 
 
 msgid "Force gets absorbed by collision objects"
@@ -14383,7 +14379,7 @@ msgstr "მოცულობის გაფილტრვა"
 
 
 msgid "Show 3D volume files"
-msgstr "აჩვენე 3გ მოცულობის ფაილები"
+msgstr "აჩვენე 3D მოცულობის ფაილები"
 
 
 msgid "Library Browser"
@@ -14463,11 +14459,11 @@ msgstr "წილადნიშნა2 ატრიბუტის მნიშ
 
 
 msgid "2D Vector value in geometry attribute"
-msgstr "2გ ვექტორული მნიშვნელობა გეომეტრიის ატრიბუტში"
+msgstr "2D ვექტორული მნიშვნელობა გეომეტრიის ატრიბუტში"
 
 
 msgid "2D vector"
-msgstr "2გ ვექტორი"
+msgstr "2D ვექტორი"
 
 
 msgid "Matrix Attribute Value"
@@ -14503,7 +14499,7 @@ msgstr "ვექტორული მნიშვნელობა გეო�
 
 
 msgid "3D vector"
-msgstr "3გ ვექტორი"
+msgstr "3D ვექტორი"
 
 
 msgid "Read-Only Vector"
@@ -16923,7 +16919,7 @@ msgstr "დააპროეცირე მონასმები Z-ში �
 
 
 msgid "Align strokes to current 3D cursor orientation"
-msgstr "გაუსწორე მონასმები 3გ კურსორის მიმდინარე ორიენტაციას"
+msgstr "გაუსწორე მონასმები 3D კურსორის მიმდინარე ორიენტაციას"
 
 
 msgid "Custom curve to control falloff of brush effect by Grease Pencil frames"
@@ -17153,7 +17149,7 @@ msgstr "ვარიანტები ამ ოპერატორის ტ
 
 
 msgid "Use in 3D viewport"
-msgstr "3გ სარკმელში გამოყენება"
+msgstr "3D სარკმელში გამოყენება"
 
 
 msgid "Scale to respect zoom (otherwise zoom independent display size)"
@@ -17161,7 +17157,7 @@ msgstr "დაამასშტაბირე ზუმის ანგარ�
 
 
 msgid "Depth 3D"
-msgstr "3გ სიღრმე"
+msgstr "3D სიღრმე"
 
 
 msgid "Supports culled depth by other objects in the view"
@@ -18111,10 +18107,6 @@ msgid "The combined frame range of all F-Curves within this action"
 msgstr "ყველა F-წირის კადრების კომბინირებული დიაპაზონი ამ ქმედებაში"
 
 
-msgid "The individual F-Curves that make up the action"
-msgstr "ინდივიდუალური F-წირები, რომლებიც ამ ქმედებას შეადგენენ"
-
-
 msgid "The end frame of the manually set intended playback range"
 msgstr "ხელით დაყენებული სასურველი დაკვრის დიაპაზონის ბოლო კადრი"
 
@@ -18135,17 +18127,9 @@ msgid "Groups"
 msgstr "ჯგუფები"
 
 
-msgid "Convenient groupings of F-Curves"
-msgstr "F-წირების მოსახერხებელი დაჯგუფებები"
-
-
 msgctxt "ID"
 msgid "ID Root Type"
 msgstr "ID-ის ძირეული ტიპი"
-
-
-msgid "Type of ID block that action can be used on - DO NOT CHANGE UNLESS YOU KNOW WHAT YOU ARE DOING"
-msgstr "ID ბლოკის ტიპი, რომელზეც ქმედება შეიძლება იქნას გამოყენებული - არ შეცვალო, თუ ზუსტად არ იცი რას აკეთებ"
 
 
 msgid "Is Layered Action"
@@ -18158,10 +18142,6 @@ msgstr "დააბრუნე პასუხი, არის თუ არ�
 
 msgid "Is Legacy Action"
 msgstr "თუა ძველებური ქმედება"
-
-
-msgid "Return whether this is a legacy Action. Legacy Actions have no layers or slots. An empty Action considered as both a 'legacy' and a 'layered' Action."
-msgstr "დააბრუნე პასუხი, არის თუ არა ეს ძველებური ქმედება. ძველებურ ქმედებებს შრეები და სლოტები არ გააჩნია. ცარიელი ქმედება 'ძველებურ' ქმედებადაც ითვლება და 'შრეებიანადაც'."
 
 
 msgid "Is Empty"
@@ -18257,7 +18237,7 @@ msgstr "ჯოხი"
 
 
 msgid "Display bones as simple 2D lines with dots"
-msgstr "ასახე ძვლები მარტივ, წერტილებიან 2გ ხაზებად"
+msgstr "ასახე ძვლები მარტივ, წერტილებიან 2D ხაზებად"
 
 
 msgid "B-Bone"
@@ -18822,26 +18802,6 @@ msgid "Brush's capabilities"
 msgstr "ფუნჯის შესაძლებლობები"
 
 
-msgid "Clone Alpha"
-msgstr "კლონის ალფა"
-
-
-msgid "Opacity of clone image display"
-msgstr "კლონი გამოსახულების ასახვის გაუმჭვირვალობა"
-
-
-msgid "Clone Image"
-msgstr "კლონის გამოსახულება"
-
-
-msgid "Image for clone brushes"
-msgstr "გამოსახულება კლონირების ფუნჯებისთვის"
-
-
-msgid "Clone Offset"
-msgstr "კლონის აცდენა"
-
-
 msgid "Soft Body Plasticity"
 msgstr "რბილი სხეულის პლასტიკურობა"
 
@@ -19218,7 +19178,7 @@ msgstr "პროეცირებული"
 
 
 msgid "Apply brush influence in a 2D circle, projected from the view"
-msgstr "გამოიყენე ფუნჯის ზეგავლენა 2გ წრეში, პროეცირებული ხედიდან"
+msgstr "გამოიყენე ფუნჯის ზეგავლენა 2D წრეში, პროეცირებული ხედიდან"
 
 
 msgid "Fill Threshold"
@@ -20867,7 +20827,7 @@ msgstr "კამერის მოკვეცის ახლო მანძ
 
 
 msgid "Apparent size of the Camera object in the 3D View"
-msgstr "კამერის ობიექტის თვალსაჩინო ზომა 3გ სარკმელში"
+msgstr "კამერის ობიექტის თვალსაჩინო ზომა 3D სარკმელში"
 
 
 msgid "Depth Of Field"
@@ -21123,7 +21083,7 @@ msgstr "ფონური გამოსახულებების ას�
 
 
 msgid "Display reference images behind objects in the 3D View"
-msgstr "ასახე მითითების გამოსახულებები ობიექტების უკან 3გ ხედში"
+msgstr "ასახე მითითების გამოსახულებები ობიექტების უკან 3D ხედში"
 
 
 msgid "Display center composition guide inside the camera view"
@@ -21575,7 +21535,7 @@ msgstr "ზომები"
 
 
 msgid "Select 2D or 3D curve type"
-msgstr "წირის 2გ, ანდ 3გ ტიპის არჩევა"
+msgstr "წირის 2D, ან 3D ტიპის არჩევა"
 
 
 msgid "Clamp the Z axis of the curve"
@@ -21703,7 +21663,7 @@ msgstr "მოგრეხვის მეთოდი"
 
 
 msgid "The type of tilt calculation for 3D Curves"
-msgstr "გადახრის გამოთვლის ტიპი 3გ წირებისთვის"
+msgstr "გადახრის გამოთვლის ტიპი 3D წირებისთვის"
 
 
 msgid "Z-Up"
@@ -22191,19 +22151,19 @@ msgstr "ალფა გამჭვირვალობის მოდიფ�
 
 
 msgid "Max 2D Angle"
-msgstr "მაქს. 2გ კუთხე"
+msgstr "მაქს. 2D კუთხე"
 
 
 msgid "Maximum 2D angle for splitting chains"
-msgstr "მაქსიმალური 2გ კუთხე ჯაჭვების გასაწყვეტად"
+msgstr "მაქსიმალური 2D კუთხე ჯაჭვების გასაწყვეტად"
 
 
 msgid "Min 2D Angle"
-msgstr "მინ. 2გ კუთხე"
+msgstr "მინ. 2D კუთხე"
 
 
 msgid "Minimum 2D angle for splitting chains"
-msgstr "მინიმალური 2გ კუთხე ჯაჭვების გასაწყვეტად"
+msgstr "მინიმალური 2D კუთხე ჯაჭვების გასაწყვეტად"
 
 
 msgid "Caps"
@@ -22383,19 +22343,19 @@ msgstr "ჯაჭვისთვის გამოთვლილი მნი�
 
 
 msgid "Max 2D Length"
-msgstr "მაქს. 2გ სიგრძე"
+msgstr "მაქს. 2D სიგრძე"
 
 
 msgid "Maximum curvilinear 2D length for the selection of chains"
-msgstr "მაქსიმალური მრუდწირული 2გ სიგრძე ნარჩევი ჯაჭვებისთვის"
+msgstr "მაქსიმალური მრუდწირული 2D სიგრძე ნარჩევი ჯაჭვებისთვის"
 
 
 msgid "Min 2D Length"
-msgstr "მინ. 2გ სიგრძე"
+msgstr "მინ. 2D სიგრძე"
 
 
 msgid "Minimum curvilinear 2D length for the selection of chains"
-msgstr "მინიმალური მრუდწირული 2გ სიგრძე ნარჩევი ჯაჭვებისთვის"
+msgstr "მინიმალური მრუდწირული 2D სიგრძე ნარჩევი ჯაჭვებისთვის"
 
 
 msgid "If true, chains of feature edges are split at material boundaries"
@@ -22467,11 +22427,11 @@ msgstr "დაახარისხე კამერიდან დაშო�
 
 
 msgid "2D Length"
-msgstr "2გ სიგრძე"
+msgstr "2D სიგრძე"
 
 
 msgid "Sort by curvilinear 2D length (longer lines lie on top of shorter lines)"
-msgstr "დაახარისხე მრუდწირული 2გ სიგრძის მიხედვით (უფრო გრძელი ხაზები უფრო მოკლე ხაზების ზემოდანაა)"
+msgstr "დაახარისხე მრუდწირული 2D სიგრძის მიხედვით (უფრო გრძელი ხაზები უფრო მოკლე ხაზების ზემოდანაა)"
 
 
 msgid "Projected X"
@@ -22559,7 +22519,7 @@ msgstr "წყვეტის სიგრძე"
 
 
 msgid "Curvilinear 2D length for chain splitting"
-msgstr "მრუდწირული 2გ სიგრძე ჯაჭვის წყვეტისთვის"
+msgstr "მრუდწირული 2D სიგრძე ჯაჭვის წყვეტისთვის"
 
 
 msgid "Texture slots defining the mapping and influence of textures"
@@ -22619,19 +22579,19 @@ msgstr "რიცხვი 0-სა (შიგნით) და 1-ს (გარ
 
 
 msgid "Use Max 2D Angle"
-msgstr "მაქს. 2გ კუთხის გამოყენება"
+msgstr "მაქს. 2D კუთხის გამოყენება"
 
 
 msgid "Split chains at points with angles larger than the maximum 2D angle"
-msgstr "გაწყვიტე ჯაჭვები იმ წერტილებთან, რომლებსაც მაქსიმალურ 2გ კუთხეზე უფრო დიდი კუთხეები აქვს"
+msgstr "გაწყვიტე ჯაჭვები იმ წერტილებთან, რომლებსაც მაქსიმალურ 2D კუთხეზე უფრო დიდი კუთხეები აქვს"
 
 
 msgid "Use Min 2D Angle"
-msgstr "მინ. 2გ კუთხის გამოყენება"
+msgstr "მინ. 2D კუთხის გამოყენება"
 
 
 msgid "Split chains at points with angles smaller than the minimum 2D angle"
-msgstr "გაწყვიტე ჯაჭვები იმ წერტილებთან, რომლებსაც მინიმალურ 2გ კუთხეზე უფრო მცირე კუთხეები აქვს"
+msgstr "გაწყვიტე ჯაჭვები იმ წერტილებთან, რომლებსაც მინიმალურ 2D კუთხეზე უფრო მცირე კუთხეები აქვს"
 
 
 msgid "Use Chain Count"
@@ -22659,19 +22619,19 @@ msgstr "ჩართე, ან გათიშე წყვეტილი ხ�
 
 
 msgid "Use Max 2D Length"
-msgstr "მაქს. 2გ სიგრძის გამოყენება"
+msgstr "მაქს. 2D სიგრძის გამოყენება"
 
 
 msgid "Enable the selection of chains by a maximum 2D length"
-msgstr "ჩართე ჯაჭვების მონიშვნა მაქსიმალური 2გ სიგრძის მიხედვით"
+msgstr "ჩართე ჯაჭვების მონიშვნა მაქსიმალური 2D სიგრძის მიხედვით"
 
 
 msgid "Use Min 2D Length"
-msgstr "მინ. 2გ სიგრძის გამოყენება"
+msgstr "მინ. 2D სიგრძის გამოყენება"
 
 
 msgid "Enable the selection of chains by a minimum 2D length"
-msgstr "ჩართე ჯაჭვების მონიშვნა მინიმალური 2გ სიგრძის მიხედვით"
+msgstr "ჩართე ჯაჭვების მონიშვნა მინიმალური 2D სიგრძის მიხედვით"
 
 
 msgid "Use Nodes"
@@ -22703,7 +22663,7 @@ msgstr "სიგრძის წყვეტის გამოყენებ�
 
 
 msgid "Enable chain splitting by curvilinear 2D length"
-msgstr "ჩართე ჯაჭვის წყვეტა მრუდწირული 2გ სიგრძის მიხედვით"
+msgstr "ჩართე ჯაჭვის წყვეტა მრუდწირული 2D სიგრძის მიხედვით"
 
 
 msgid "Use Split Pattern"
@@ -22801,11 +22761,11 @@ msgstr "მონასმთა სიღრმის თანმიმდე�
 
 
 msgid "Defines how the strokes are ordered in 3D space (for objects not displayed 'In Front')"
-msgstr "განსაზღვრავს, თუ რა თანმიმდევრობით ლაგდება მონასმები 3გ სივრცეში (ობიექტებისთვის, რომლებიც 'წინ' არ აისახება)"
+msgstr "განსაზღვრავს, თუ რა თანმიმდევრობით ლაგდება მონასმები 3D სივრცეში (ობიექტებისთვის, რომლებიც 'წინ' არ აისახება)"
 
 
 msgid "2D Layers"
-msgstr "2გ შრეები"
+msgstr "2D შრეები"
 
 
 msgid "Display strokes using Grease Pencil layers to define order"
@@ -22813,11 +22773,11 @@ msgstr "ასახე მონასმები თანმიმდევ�
 
 
 msgid "3D Location"
-msgstr "3გ მდებარეობა"
+msgstr "3D მდებარეობა"
 
 
 msgid "Display strokes using real 3D position in 3D space"
-msgstr "ასახე მონასმები ნამდვილი 3გ პოზიციის გამოყენებით 3გ სივრცეში"
+msgstr "ასახე მონასმები ნამდვილი 3D პოზიციის გამოყენებით 3გ სივრცეში"
 
 
 msgid "Auto-Lock Layers"
@@ -23125,7 +23085,7 @@ msgstr "გამოსახულებას ერთზე მეტი ხ
 
 
 msgid "Stereo 3D"
-msgstr "სტერეო 3გ"
+msgstr "სტერეო 3D"
 
 
 msgid "Image has left and right views"
@@ -23244,7 +23204,7 @@ msgstr "გამოსახულების მიჯრილი UDIM ტ�
 
 
 msgid "Stereo 3D Format"
-msgstr "სტერეო 3გ ფორმატი"
+msgstr "სტერეო 3D ფორმატი"
 
 
 msgid "Settings for stereo 3d"
@@ -23715,7 +23675,7 @@ msgstr "კონუსის ჩვენება"
 
 
 msgid "Display transparent cone in 3D view to visualize which objects are contained in it"
-msgstr "ასახე გამჭვირვალე კონუსი 3გ ხედში იმის ვიზუალიზაციისთვის, თუ რომელ ობიექტებს მოიცავს იგი"
+msgstr "ასახე გამჭვირვალე კონუსი 3D ხედში იმის ვიზუალიზაციისთვის, თუ რომელ ობიექტებს მოიცავს იგი"
 
 
 msgid "Spot Blend"
@@ -23824,7 +23784,7 @@ msgstr "შეაქციე ხილულობის კოლექცი�
 
 
 msgid "Show the clipping distances in the 3D view"
-msgstr "აჩვენე მოკვეცის მანძილები 3გ ხედში"
+msgstr "აჩვენე მოკვეცის მანძილები 3D ხედში"
 
 
 msgid "Display Data (Deprecated)"
@@ -23836,7 +23796,7 @@ msgstr "არარეკომენდირებულია, ამის 
 
 
 msgid "Show the influence volume in the 3D view"
-msgstr "აჩვენე ზეგავლენის მოცულობა 3გ ხედში"
+msgstr "აჩვენე ზეგავლენის მოცულობა 3D ხედში"
 
 
 msgid "Type of light probe"
@@ -23932,7 +23892,7 @@ msgstr "პარალაქსი"
 
 
 msgid "Show the parallax correction volume in the 3D view"
-msgstr "აჩვენე პარალაქსის შემასწორებელი მოცულობა 3გ ხედში"
+msgstr "აჩვენე პარალაქსის შემასწორებელი მოცულობა 3D ხედში"
 
 
 msgid "Use Custom Parallax"
@@ -24893,7 +24853,7 @@ msgstr "სარკმლის ზომა"
 
 
 msgid "Polygonization resolution in the 3D viewport"
-msgstr "გამრავალკუთხედების გარჩევადობა 3გ სარკმელში"
+msgstr "გამრავალკუთხედების გარჩევადობა 3D სარკმელში"
 
 
 msgid "Influence of metaball elements"
@@ -25353,7 +25313,7 @@ msgstr "ობიექტის ასახვა"
 
 
 msgid "Object display settings for 3D viewport"
-msgstr "ობიექტის ასახვის ანაწყობები 3გ სარკმლისთვის"
+msgstr "ობიექტის ასახვის ანაწყობები 3D სარკმლისთვის"
 
 
 msgid "Display Bounds Type"
@@ -25909,7 +25869,7 @@ msgstr "ღერძის კუთხე"
 
 
 msgid "Axis Angle (W+XYZ), defines a rotation around some axis defined by 3D-Vector"
-msgstr "ღერძის კუთხე (W+XYZ), განსაზღვრავს ბრუნვას 3გ ვექტორით განსაზღვრული რომელიმე ღერძის გარშემო"
+msgstr "ღერძის კუთხე (W+XYZ), განსაზღვრავს ბრუნვას 3D ვექტორით განსაზღვრული რომელიმე ღერძის გარშემო"
 
 
 msgid "Quaternion Rotation"
@@ -26080,7 +26040,7 @@ msgstr "კამერის მშობლის ბლოკი"
 
 
 msgid "View Lock 3D viewport camera transformation affects the object's parent instead"
-msgstr "3გ სარკმლის კამერის გარდაქმნის დაბლოკვა ხედში ზემოქმედებს ობიექტის მშობელზე"
+msgstr "3D სარკმლის კამერის გარდაქმნის დაბლოკვა ხედში ზემოქმედებს ობიექტის მშობელზე"
 
 
 msgid "Dynamic Topology Sculpting"
@@ -26482,7 +26442,7 @@ msgstr "ასახვა"
 
 
 msgid "Percentage of particles to display in 3D view"
-msgstr "3გ ხედში ასასახი ნაწილაკების პროცენტული რაოდენობა"
+msgstr "3D ხედში ასასახი ნაწილაკების პროცენტული რაოდენობა"
 
 
 msgid "Size of particles on viewport"
@@ -26744,7 +26704,7 @@ msgstr "ხაზის კუდის სიგრძე"
 
 
 msgid "Boids 2D"
-msgstr "ბოიდები 2გ"
+msgstr "ბოიდები 2D"
 
 
 msgid "Constrain boids to a surface"
@@ -27553,7 +27513,7 @@ msgstr "სცენის ძირეული კოლექცია, რ�
 
 
 msgid "3D Cursor"
-msgstr "3გ კურსორი"
+msgstr "3D კურსორი"
 
 
 msgid "Cycles Render Settings"
@@ -27577,7 +27537,7 @@ msgstr "სცენის ასახვა"
 
 
 msgid "Scene display settings for 3D viewport"
-msgstr "სცენის ასახვის ანაწყობები 3გ სარკმელში"
+msgstr "სცენის ასახვის ანაწყობები 3D სარკმელში"
 
 
 msgid "Display Settings"
@@ -27653,7 +27613,7 @@ msgstr "ანოტაციები"
 
 
 msgid "Grease Pencil data-block used for annotations in the 3D view"
-msgstr "გრიზ ფენსილის მონაცემთა ბლოკები გამოყენებული ანოტაციებისთვის 3გ ხედში"
+msgstr "გრიზ ფენსილის მონაცემთა ბლოკები გამოყენებული ანოტაციებისთვის 3D ხედში"
 
 
 msgid "Grease Pencil settings for the scene"
@@ -27966,7 +27926,7 @@ msgstr "მიჰყევი მიმდინარე კადრს რე
 
 
 msgid "All 3D Viewports"
-msgstr "ყველა 3გ სარკმელი"
+msgstr "ყველა 3D სარკმელი"
 
 
 msgid "Animation Editors"
@@ -27998,7 +27958,7 @@ msgstr "ელცხრილის რედაქტორები"
 
 
 msgid "Top-Left 3D Editor"
-msgstr "ზედა-მარცხენა 3გ რედაქტორი"
+msgstr "ზედა-მარცხენა 3D რედაქტორი"
 
 
 msgid "Sound data-block referencing an external or packed sound file"
@@ -28050,7 +28010,7 @@ msgstr "თუ ფაილი რამოდენიმე აუდიო �
 
 
 msgid "Speaker data-block for 3D audio speaker objects"
-msgstr "სპიკერის მონაცემთა ბლოკი 3გ აუდიო სპიკერის ობიექტებისთვის"
+msgstr "სპიკერის მონაცემთა ბლოკი 3D აუდიო სპიკერის ობიექტებისთვის"
 
 
 msgid "Attenuation"
@@ -29262,11 +29222,11 @@ msgstr "ვექტორული შრიფტი ტექსტური 
 
 
 msgid "Volume data-block for 3D volume grids"
-msgstr "მოცულობის მონაცემთა ბლოკი 3გ მოცულობის ბადეებისთვის"
+msgstr "მოცულობის მონაცემთა ბლოკი 3D მოცულობის ბადეებისთვის"
 
 
 msgid "Volume display settings for 3D viewport"
-msgstr "მოცულობის ასახვის ანაწყობები 3გ სარკმლისთვის"
+msgstr "მოცულობის ასახვის ანაწყობები 3D სარკმლისთვის"
 
 
 msgid "Volume file used by this Volume data-block"
@@ -29290,11 +29250,11 @@ msgstr "ბადეები"
 
 
 msgid "3D volume grids"
-msgstr "3გ მოცულობის ბადეები"
+msgstr "3D მოცულობის ბადეები"
 
 
 msgid "Volume render settings for 3D viewport"
-msgstr "მოცულობის სარენდერო ანაწყობები 3გ სარკმლისთვის"
+msgstr "მოცულობის სარენდერო ანაწყობები 3D სარკმლისთვის"
 
 
 msgctxt "Sequence"
@@ -30315,7 +30275,7 @@ msgstr "ხარისხი გამოსახულების ფორ�
 
 
 msgid "Settings for stereo 3D"
-msgstr "ანაწყობები სტერეო 3გ-სთვის"
+msgstr "ანაწყობები სტერეო 3D-სთვის"
 
 
 msgid "Compression mode for TIFF"
@@ -30519,11 +30479,11 @@ msgstr "საგნისთვის გამოყენებული თ�
 
 
 msgid "2D Integer Vector Attribute Value"
-msgstr "2გ მთელ რიცხვიანი ვექტორული ატრიბუტის მნიშვნელობა"
+msgstr "2D მთელ რიცხვიანი ვექტორული ატრიბუტის მნიშვნელობა"
 
 
 msgid "2D value in geometry attribute"
-msgstr "2გ მნიშვნელობა გეომეტრიის ატრიბუტში"
+msgstr "2D მნიშვნელობა გეომეტრიის ატრიბუტში"
 
 
 msgid "Integer Attribute Value"
@@ -33035,7 +32995,7 @@ msgstr "მოდიფიკატორის ტიპი"
 
 
 msgid "Curvature 3D"
-msgstr "3გ სიმრუდე"
+msgstr "3D სიმრუდე"
 
 
 msgid "Distance from Object"
@@ -33067,7 +33027,7 @@ msgstr "მინიმალური დახრილობის კუთ�
 
 
 msgid "Alpha transparency based on the radial curvature of 3D mesh surfaces"
-msgstr "ალფა გამჭვირვალობა დაფუძნებული 3გ მეშის ზედაპირების რადიალურ სიმრუდეზე"
+msgstr "ალფა გამჭვირვალობა დაფუძნებული 3D მეშის ზედაპირების რადიალურ სიმრუდეზე"
 
 
 msgid "Max Curvature"
@@ -33211,7 +33171,7 @@ msgstr "შეცვალე ხაზის ფერი საფუძვე
 
 
 msgid "Change line color based on the radial curvature of 3D mesh surfaces"
-msgstr "შეცვალე ხაზის ფერი 3გ მეშის ზედაპირის რადიალურ სიმრუდეზე დაყრდნობით"
+msgstr "შეცვალე ხაზის ფერი 3D მეშის ზედაპირის რადიალურ სიმრუდეზე დაყრდნობით"
 
 
 msgid "Change line color based on the distance from the camera"
@@ -33247,7 +33207,7 @@ msgstr "ძირითადი ტიპი მონასმის გეო
 
 
 msgid "2D Offset"
-msgstr "2გ აცდენა"
+msgstr "2D აცდენა"
 
 
 msgid "Add two-dimensional offsets to stroke backbone geometry"
@@ -33263,7 +33223,7 @@ msgstr "გადანაცვლება, რომელიც ედებ
 
 
 msgid "2D Transform"
-msgstr "2გ გარდაქმნა"
+msgstr "2D გარდაქმნა"
 
 
 msgid "Backbone Stretcher"
@@ -33287,7 +33247,7 @@ msgstr "პერლინის ხმაური 1გ"
 
 
 msgid "Perlin Noise 2D"
-msgstr "პერლინის ხმაური 2გ"
+msgstr "პერლინის ხმაური 2D"
 
 
 msgid "Polygonization"
@@ -33355,7 +33315,7 @@ msgstr "შტრიხის წერტილის პარამეტრ�
 
 
 msgid "Absolute 2D Point"
-msgstr "აბსოლუტური 2გ წერტილი"
+msgstr "აბსოლუტური 2D წერტილი"
 
 
 msgid "Pivot in terms of the stroke point parameter u (0 <= u <= 1)"
@@ -33367,7 +33327,7 @@ msgstr "ბრუნვის ცენტრი X"
 
 
 msgid "2D X coordinate of the absolute pivot"
-msgstr "აბსოლუტური ბრუნვის ღერძის 2გ X კოორდინატი"
+msgstr "აბსოლუტური ბრუნვის ღერძის 2D X კოორდინატი"
 
 
 msgid "Pivot Y"
@@ -33375,7 +33335,7 @@ msgstr "ბრუნვის ცენტრი Y"
 
 
 msgid "2D Y coordinate of the absolute pivot"
-msgstr "აბსოლუტური ბრუნვის ღერძის 2გ Y კოორდინატი"
+msgstr "აბსოლუტური ბრუნვის ღერძის 2D Y კოორდინატი"
 
 
 msgid "Scaling factor that is applied along the X axis"
@@ -33673,7 +33633,7 @@ msgstr "მინიმალური სისქე"
 
 
 msgid "Line thickness based on the radial curvature of 3D mesh surfaces"
-msgstr "ხაზის სისქე 3გ მეშის ზედაპირების რადიალური სიმრუდის საფუძველზე"
+msgstr "ხაზის სისქე 3D მეშის ზედაპირების რადიალური სიმრუდის საფუძველზე"
 
 
 msgid "Change line thickness based on the distance from the camera"
@@ -35052,7 +35012,7 @@ msgstr "ტექსტურის სპეც. ხელსაწყოებ
 
 
 msgid "Text to 3D Object"
-msgstr "ტექსტი 3გ ობიექტად"
+msgstr "ტექსტი 3D ობიექტად"
 
 
 msgid "Templates"
@@ -35427,7 +35387,7 @@ msgstr "ამ სამკუთხედის წახნაგების 
 
 
 msgid "Smooth"
-msgstr "გლუვი"
+msgstr "დაგლუვება"
 
 
 msgid "Indices of triangle vertices"
@@ -36267,7 +36227,7 @@ msgstr "დააგლუვე მეში მომიჯნავე წა
 
 
 msgid "Smooth Corrective"
-msgstr "გლუვი შემასწორებელი"
+msgstr "დაგლუვება შემასწორებელი"
 
 
 msgid "Smooth the mesh while still preserving the volume"
@@ -36275,7 +36235,7 @@ msgstr "დააგლუვე მეში და თან შეინა�
 
 
 msgid "Smooth Laplacian"
-msgstr "გლუვი ლაპლასის"
+msgstr "დაგლუვება ლაპლასის"
 
 
 msgid "Reduce the noise on a mesh surface with minimal changes to its shape"
@@ -41602,7 +41562,7 @@ msgstr "დაყოფის ზედაპირის მოდიფიკ�
 
 
 msgid "Number of subdivisions to perform in the 3D viewport"
-msgstr "3გ სარკმელში შესაქმნელი ქვედანაყოფების რიცხვი"
+msgstr "3D სარკმელში შესაქმნელი ქვედანაყოფების რიცხვი"
 
 
 msgid "Number of subdivisions to perform when rendering"
@@ -41846,15 +41806,15 @@ msgstr "ობიექტისკენ"
 
 
 msgid "2D Offset for the warp"
-msgstr "2გ აცდენა დაბრეცისთვის"
+msgstr "2D აცდენა დაბრეცისთვის"
 
 
 msgid "2D Rotation for the warp"
-msgstr "2გ ბრუნვა დაბრეცისთვის"
+msgstr "2D ბრუნვა დაბრეცისთვის"
 
 
 msgid "2D Scale for the warp"
-msgstr "2გ მასშტაბირება დაბრეცისთვის"
+msgstr "2D მასშტაბირება დაბრეცისთვის"
 
 
 msgid "WeightVG Edit Modifier"
@@ -43586,7 +43546,7 @@ msgstr "ვიდეოს თვალის დევნების სტა
 
 
 msgid "2D stabilization based on tracking markers"
-msgstr "2გ სტაბილიზაცია თვალის დევნების მარკერებზე დაყრდნობით"
+msgstr "2D სტაბილიზაცია თვალის დევნების მარკერებზე დაყრდნობით"
 
 
 msgid "Active Rotation Track Index"
@@ -43670,7 +43630,7 @@ msgstr "ბრუნვის ბილიკები"
 
 
 msgid "Collection of tracks used for 2D stabilization (translation)"
-msgstr "2გ სტაბილიზაციისთვის (გადაადგილების) კვლების კოლექცია"
+msgstr "2D სტაბილიზაციისთვის (გადაადგილების) კვლების კოლექცია"
 
 
 msgid "Maximal Scale"
@@ -43718,11 +43678,11 @@ msgstr "გადაადგილების ბილიკები"
 
 
 msgid "Use 2D Stabilization"
-msgstr "2გ სტაბილიზაცის გამოყენება"
+msgstr "2D სტაბილიზაცის გამოყენება"
 
 
 msgid "Use 2D stabilization for footage"
-msgstr "გამოიყენე ვიდეოსთვის 2გ სტაბილიზაცია"
+msgstr "გამოიყენე ვიდეოსთვის 2D სტაბილიზაცია"
 
 
 msgid "Autoscale"
@@ -43770,7 +43730,7 @@ msgstr "ამ კვალიდან რეკონსტრუირებ�
 
 
 msgid "Color of the track in the Movie Clip Editor and the 3D viewport after a solve"
-msgstr "კვალის ფერი ვიდეო კლიპების რედაქტორსა და 3გ სარკმელში ამოხსნის შემდეგ"
+msgstr "კვალის ფერი ვიდეო კლიპების რედაქტორსა და 3D სარკმელში ამოხსნის შემდეგ"
 
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
@@ -43862,7 +43822,7 @@ msgstr "სტაბ. წონა"
 
 
 msgid "Influence of this track on 2D stabilization"
-msgstr "ამ კვალის ზეგავლენა 2გ სტაბილიზაციაზე"
+msgstr "ამ კვალის ზეგავლენა 2D სტაბილიზაციაზე"
 
 
 msgid "Active track in this tracking data object. Deprecated, use objects[name].tracks.active"
@@ -45327,7 +45287,7 @@ msgstr "დეფოკუსირება"
 
 
 msgid "Apply depth of field in 2D, using a Z depth map or mask"
-msgstr "გამოიყენე სიმკვეთრის სიღრმე 2გ-ში, Z სიღრმის რუკის, ან ნიღბის მეშვეობით"
+msgstr "გამოიყენე სიმკვეთრის სიღრმე 2D-ში, Z სიღრმის რუკის, ან ნიღბის მეშვეობით"
 
 
 msgid "Bokeh shape rotation offset"
@@ -45552,7 +45512,7 @@ msgstr "მანძილით ამოჭრა"
 
 
 msgid "Create matte based on 3D distance between colors"
-msgstr "შექმენი კაშე ფერთა შორის 3გ მანძილზე დაყრდნობით"
+msgstr "შექმენი კაშე ფერთა შორის 3D მანძილზე დაყრდნობით"
 
 
 msgid "RGB color space"
@@ -46826,11 +46786,11 @@ msgstr "დააკომბინირე ორი გამოსახუ�
 
 
 msgid "Stabilize 2D"
-msgstr "2გ სტაბილიზაცია"
+msgstr "2D სტაბილიზაცია"
 
 
 msgid "Stabilize footage using 2D stabilization motion tracking settings"
-msgstr "დაასტაბილურე ჩანაწერი 2გ სტაბილიზაციის მოძრაობის ადევნების ანაწყობებით"
+msgstr "დაასტაბილურე ჩანაწერი 2D სტაბილიზაციის მოძრაობის ადევნების ანაწყობებით"
 
 
 msgid "Method to use to filter stabilization"
@@ -46878,7 +46838,7 @@ msgstr "ხედის გადამრთველი"
 
 
 msgid "Combine the views (left and right) into a single stereo 3D output"
-msgstr "შეაერთე ხედები (მარცხენა და მარჯვენა) ერთ სტერეო 3გ-იან ნაწარმად"
+msgstr "შეაერთე ხედები (მარცხენა და მარჯვენა) ერთ სტერეო 3D-იან ნაწარმად"
 
 
 msgid "Generate texture pattern from texture datablock"
@@ -47070,7 +47030,7 @@ msgstr "ვექტორული გაბუნდოვნება"
 
 
 msgid "Uses the vector speed render pass to blur the image pixels in 2D"
-msgstr "იყენებს ვექტორული სისწრაფის რენდერის გადავლას გამოსახულების პიქსელების გასაბუნდოვნებლად 2გ-ში"
+msgstr "იყენებს ვექტორული სისწრაფის რენდერის გადავლას გამოსახულების პიქსელების გასაბუნდოვნებლად 2D-ში"
 
 
 msgid "Blur Factor"
@@ -47675,7 +47635,7 @@ msgstr "დაამატე მთელ რიცხვიანი მნი
 
 
 msgid "Add 3D vector values"
-msgstr "დაამატე 3გ ვექტორის მნიშვნელობები"
+msgstr "დაამატე 3D ვექტორის მნიშვნელობები"
 
 
 msgid "Multiply transformation matrices"
@@ -47903,7 +47863,7 @@ msgstr "ბეზიეს სეგმენტი"
 
 
 msgid "Generate a 2D Bézier spline from the given control points and handles"
-msgstr "წამორქმენი 2გ ბეზიეს წირი მოცემული სამართავი წერტილებისა და სახელურებისგან"
+msgstr "წამორქმენი 2D ბეზიეს წირი მოცემული სამართავი წერტილებისა და სახელურებისგან"
 
 
 msgid "Method used to determine control handles"
@@ -49255,6 +49215,14 @@ msgid "Generate a poly spline for each input spline"
 msgstr "წარმოქმენი პოლი სფლაინი თითოეული შემავალი სფლაინისთვის"
 
 
+msgid "Keep Last Segment"
+msgstr "ბოლო სეგმენტის დატოვება"
+
+
+msgid "Don't collapse a curves to single points if they are shorter than the given length. The collapsing behavior exists for compatibility reasons."
+msgstr "ნუ ჩაშლი წირებს თითო წერტილებად, თუ მოცემულ სიგრძეზე უფრო მოკლეებია. ჩაშლის ქცევა თავსებადობისთვის არსებობს."
+
+
 msgid "How to specify the amount of samples"
 msgstr "როგორ იქნას ნიმუშების რაოდენობა მითითებული"
 
@@ -49788,7 +49756,7 @@ msgstr "გადაერთე ორ შენატანს შორის
 
 
 msgid "The scene's 3D cursor location and rotation"
-msgstr "სცენის 3გ კურსორის მდებარეობა და ბრუნვა"
+msgstr "სცენის 3D კურსორის მდებარეობა და ბრუნვა"
 
 
 msgid "Active element indices of the edited geometry, for tool execution"
@@ -49924,7 +49892,7 @@ msgstr "კუთხეზე დაფუძნებული"
 
 
 msgid "This method gives a good 2D representation of a mesh"
-msgstr "ეს მეთოდი მეშის კარგ 2გ წარმოჩენას იძლევა"
+msgstr "ეს მეთოდი მეშის კარგ 2D წარმოჩენას იძლევა"
 
 
 msgid "Conformal"
@@ -49956,7 +49924,7 @@ msgstr "სარკმლის გარდაქმნა"
 
 
 msgid "Retrieve the view direction and location of the 3D viewport"
-msgstr "ამოიღე 3გ სარკმლის ხედის მიმართულება და მდებარეობა"
+msgstr "ამოიღე 3D სარკმლის ხედის მიმართულება და მდებარეობა"
 
 
 msgid "Volume Cube"
@@ -51137,11 +51105,11 @@ msgstr "შესაფასებელი გაბორის ხმაუ�
 
 
 msgid "Use the 2D vector (X, Y) as input. The Z component is ignored."
-msgstr "შენატანად გამოიყენე 2გ ვექტორი (X, Y). Z კომპონენტი იგნორირდება."
+msgstr "შენატანად გამოიყენე 2D ვექტორი (X, Y). Z კომპონენტი იგნორირდება."
 
 
 msgid "Use the 3D vector (X, Y, Z) as input"
-msgstr "გამოიყენე 3გ ვექტორი (X, Y, Z) შენატანად"
+msgstr "გამოიყენე 3D ვექტორი (X, Y, Z) შენატანად"
 
 
 msgid "Gradient Texture"
@@ -51190,7 +51158,7 @@ msgstr "პროექცია"
 
 
 msgid "Method to project 2D image on object with a 3D texture vector"
-msgstr "2გ გამოსახულების 3გ ტექსტურის ვექტორით ობიექტზე პროეცირების მეთოდი"
+msgstr "2D გამოსახულების 3D ტექსტურის ვექტორით ობიექტზე პროეცირების მეთოდი"
 
 
 msgctxt "Image"
@@ -52608,7 +52576,7 @@ msgstr "კვანძის ვექტორის ბუდე"
 
 
 msgid "3D vector socket of a node"
-msgstr "3გ ვექტორის ბუდე კვანძში"
+msgstr "3D ვექტორის ბუდე კვანძში"
 
 
 msgid "Virtual Node Socket"
@@ -53056,7 +53024,7 @@ msgstr "ობიექტის აქტიური ბორკილი"
 
 
 msgid "Object cast shadows in the 3D viewport"
-msgstr "ობიექტს აქვს ჩრდილები 3გ სარკმელში"
+msgstr "ობიექტს აქვს ჩრდილები 3D სარკმელში"
 
 
 msgid "Object Light Linking"
@@ -53441,7 +53409,7 @@ msgstr "შექმენი წვეროთა ღრუბელი რე
 
 msgctxt "Operator"
 msgid "3D Markers to Mesh"
-msgstr "3გ მარკერები მეშად"
+msgstr "3D მარკერები მეშად"
 
 
 msgid "Add or remove a Tracking Camera Intrinsics Preset"
@@ -53481,7 +53449,7 @@ msgstr "აქტიური კლიპის დაყენება"
 
 
 msgid "Set current movie clip as a camera background in 3D Viewport (works only when a 3D Viewport is visible)"
-msgstr "დააყენე მიმდინარე ვიდეო კლიპი კამერის ფონად 3გ სარკმელში (მუშაობს მხოლოდ მაშინ, როცა 3გ სარკმელი ჩანს)"
+msgstr "დააყენე მიმდინარე ვიდეო კლიპი კამერის ფონად 3D სარკმელში (მუშაობს მხოლოდ მაშინ, როცა 3D სარკმელი ჩანს)"
 
 
 msgctxt "Operator"
@@ -53490,7 +53458,7 @@ msgstr "ფონად დაყენება"
 
 
 msgid "Prepare scene for compositing 3D objects into this footage"
-msgstr "მოამზადე სცენა 3გ ობიექტების ამ ჩანაწერში კომპოზიტირებისთვის"
+msgstr "მოამზადე სცენა 3D ობიექტების ამ ჩანაწერში კომპოზიტირებისთვის"
 
 
 msgctxt "Operator"
@@ -53960,7 +53928,7 @@ msgstr "პროექციის დადება"
 
 
 msgid "Edit a snapshot of the 3D Viewport in an external image editor"
-msgstr "დაარედაქტირე სარკმლის ანაბეჭდი 3გ სარკმელში, გამოსახულების გარეგან რედაქტორში"
+msgstr "დაარედაქტირე სარკმლის ანაბეჭდი 3D სარკმელში, გამოსახულების გარეგან რედაქტორში"
 
 
 msgctxt "Operator"
@@ -57503,7 +57471,7 @@ msgstr "ძვლის დამატება"
 
 
 msgid "Add a new bone located at the 3D cursor"
-msgstr "დაამატე 3გ კურსორთან მდებარე ახალი ძვალი"
+msgstr "დაამატე 3D კურსორთან მდებარე ახალი ძვალი"
 
 
 msgid "Name of the newly created bone"
@@ -57780,7 +57748,7 @@ msgstr "სახსართა შორის შევსება"
 
 
 msgid "Add bone between selected joint(s) and/or 3D cursor"
-msgstr "დაამატე ძვალი მონიშნულ სახსარ(ებ)სა და/ან 3გ კურსორს შორის"
+msgstr "დაამატე ძვალი მონიშნულ სახსარ(ებ)სა და/ან 3D კურსორს შორის"
 
 
 msgctxt "Operator"
@@ -58055,7 +58023,7 @@ msgstr "მოახლიჩე მონიშნული ძვლები 
 
 msgctxt "Operator"
 msgid "Subdivide"
-msgstr "დაყავი"
+msgstr "დაყოფა"
 
 
 msgid "Break selected bones into chains of smaller bones"
@@ -58892,11 +58860,11 @@ msgstr "შექმენი ახალი სიბრტყის კვა
 
 msgctxt "Operator"
 msgid "Set 2D Cursor"
-msgstr "2გ კურსორის დაყენება"
+msgstr "2D კურსორის დაყენება"
 
 
 msgid "Set 2D cursor location"
-msgstr "დააყენე 2გ კურსორის მდებარეობა"
+msgstr "დააყენე 2D კურსორის მდებარეობა"
 
 
 msgid "Cursor location in normalized clip coordinates"
@@ -59413,7 +59381,7 @@ msgstr "ამოსავალი წერტილის დაყენე�
 
 
 msgid "Set active marker as origin by moving camera (or its parent if present) in 3D space"
-msgstr "დააყენე აქტიური მარკერი ამოსავალ წერტილად კამერის (ან მისი მშობლის, თუ არსებობს) 3გ სივრცეში მოძრაობის საშუალებით"
+msgstr "დააყენე აქტიური მარკერი ამოსავალ წერტილად კამერის (ან მისი მშობლის, თუ არსებობს) 3D სივრცეში მოძრაობის საშუალებით"
 
 
 msgid "Use Median"
@@ -59430,7 +59398,7 @@ msgstr "სიბრტყის დაყენება"
 
 
 msgid "Set plane based on 3 selected bundles by moving camera (or its parent if present) in 3D space"
-msgstr "დააყენე სიბრტყე 3 მონიშნულ შეკვრაზე დაყრდნობით კამერის (ან, არსებობის შემთხვევაში, მისი მშობლის) მოძრაობის მეშვეობით 3გ სივრცეში"
+msgstr "დააყენე სიბრტყე 3 მონიშნულ შეკვრაზე დაყრდნობით კამერის (ან, არსებობის შემთხვევაში, მისი მშობლის) მოძრაობის მეშვეობით 3D სივრცეში"
 
 
 msgid "Plane to be used for orientation"
@@ -59526,7 +59494,7 @@ msgstr "სტაბილიზაციის კვლების დამ�
 
 
 msgid "Add selected tracks to 2D translation stabilization"
-msgstr "დაამატე მონიშნული კვლები 2გ გადაადგილების სტაბილიზაციას"
+msgstr "დაამატე მონიშნული კვლები 2D გადაადგილების სტაბილიზაციას"
 
 
 msgctxt "Operator"
@@ -59544,7 +59512,7 @@ msgstr "ბრუნვის სტაბილიზაციის კვლ�
 
 
 msgid "Add selected tracks to 2D rotation stabilization"
-msgstr "დაამატე მონიშნული კვლები 2გ ბრუნვის სტაბილიზაციას"
+msgstr "დაამატე მონიშნული კვლები 2D ბრუნვის სტაბილიზაციას"
 
 
 msgctxt "Operator"
@@ -59654,7 +59622,7 @@ msgstr "NDOF პანორამირება/ზუმი"
 
 
 msgid "Use a 3D mouse device to pan/zoom the view"
-msgstr "გამოიყენე 3გ თაგვის მოწყობილობა ხედში პანორამირებისთვის/ზუმისთვის"
+msgstr "გამოიყენე 3D თაგვის მოწყობილობა ხედში პანორამირებისთვის/ზუმისთვის"
 
 
 msgctxt "Operator"
@@ -60249,7 +60217,7 @@ msgstr "გაუსწორე ახალი ობიექტი ხედ
 
 
 msgid "Use the 3D cursor orientation for the new object"
-msgstr "ახალი ობიექტისთვის გამოიყენე 3გ კურსორის ორიენტაცია"
+msgstr "ახალი ობიექტისთვის გამოიყენე 3D კურსორის ორიენტაცია"
 
 
 msgid "Enter Edit Mode"
@@ -60360,7 +60328,7 @@ msgstr "შეცდომის მანძილის ზღურბლი 
 
 
 msgid "Curve 2D"
-msgstr "წირი 2გ"
+msgstr "წირი 2D"
 
 
 msgid "Copy selected points or curves"
@@ -63946,11 +63914,11 @@ msgstr "გაუშვი კვანძთა ჯგუფი გეომე
 
 
 msgid "3D Cursor Position"
-msgstr "3გ კურსორის პოზიცია"
+msgstr "3D კურსორის პოზიცია"
 
 
 msgid "3D Cursor Rotation"
-msgstr "3გ კურსორის ბრუნვა"
+msgstr "3D კურსორის ბრუნვა"
 
 
 msgid "Mouse coordinates in region space"
@@ -65042,7 +65010,7 @@ msgstr "გადააპროეცირე მონასმები ი�
 
 
 msgid "Reproject the strokes using the orientation of 3D cursor"
-msgstr "გადააპროეცირე მონასმები 3გ კურსორის ორიენტაციის მეშვეობით"
+msgstr "გადააპროეცირე მონასმები 3D კურსორის ორიენტაციის მეშვეობით"
 
 
 msgid "Step between generated frames"
@@ -66050,7 +66018,7 @@ msgstr "მონასმების გადაპროეცირებ�
 
 
 msgid "Reproject the selected strokes from the current viewpoint as if they had been newly drawn (e.g. to fix problems from accidental 3D cursor movement or accidental viewport changes, or for matching deforming geometry)"
-msgstr "გადააპროეცირე მონიშნული მონასმები მიმდინარე თვალთახედვიდან, თითქოს ახლად დაიხატა (მაგ.: 3გ კურსორის შემთხვევითი გამოძრავების, ან სარკმლის შემთხვევითი ცვლილებების პრობლემების აღმოსაფხვრელად, ან დეფორმირებად გეომეტრიას დასამთხვევად)"
+msgstr "გადააპროეცირე მონიშნული მონასმები მიმდინარე თვალთახედვიდან, თითქოს ახლად დაიხატა (მაგ.: 3D კურსორის შემთხვევითი გამოძრავების, ან სარკმლის შემთხვევითი ცვლილებების პრობლემების აღმოსაფხვრელად, ან დეფორმირებად გეომეტრიას დასამთხვევად)"
 
 
 msgid "Keep original strokes and create a copy before reprojecting"
@@ -67436,7 +67404,7 @@ msgstr "კურსორი ცენტრალურ ხედთან"
 
 
 msgid "Set 2D Cursor To Center View location"
-msgstr "დააყენე 2გ კურსორი ხედის ცენტრალურ მდებარეობაზე"
+msgstr "დააყენე 2D კურსორი ხედის ცენტრალურ მდებარეობაზე"
 
 
 msgctxt "Operator"
@@ -67471,11 +67439,11 @@ msgstr "ზუმით დაშორება"
 
 
 msgid "Zoom in the image (centered around 2D cursor)"
-msgstr "ზუმით მოაახლოვე გამოსახულება (ცენტრირებული 2გ კურსორის ირგვლივ)"
+msgstr "ზუმით მოაახლოვე გამოსახულება (ცენტრირებული 2D კურსორის ირგვლივ)"
 
 
 msgid "Zoom out the image (centered around 2D cursor)"
-msgstr "ზუმით დააშორე გამოსახულება (ცენტრირებული 2გ კურსორის ირგვლივ)"
+msgstr "ზუმით დააშორე გამოსახულება (ცენტრირებული 2D კურსორის ირგვლივ)"
 
 
 msgid "Set zoom ratio of the view"
@@ -70018,7 +69986,7 @@ msgstr "პროპორციული რედაქტირება"
 
 
 msgid "Projected (2D)"
-msgstr "პროეცირებული (2გ)"
+msgstr "პროეცირებული (2D)"
 
 
 msgctxt "Operator"
@@ -70421,7 +70389,7 @@ msgstr "გაუსწორე გარდაქმნის ღერძე�
 
 
 msgid "Align the transformation axes to the 3D cursor"
-msgstr "გაუსწორე გარდაქმნის ღერძები 3გ კურსორს"
+msgstr "გაუსწორე გარდაქმნის ღერძები 3D კურსორს"
 
 
 msgid "Align the transformation axes to the object's parent space"
@@ -70921,7 +70889,7 @@ msgstr "კურსორის მანძილი"
 
 
 msgid "Sort selected elements from nearest to farthest from 3D cursor"
-msgstr "დაალაგე მონიშნული ელემენტები უახლოესიდან უშორესამდე 3გ კურსორიდან"
+msgstr "დაალაგე მონიშნული ელემენტები უახლოესიდან უშორესამდე 3D კურსორიდან"
 
 
 msgid "Sort selected faces from smallest to greatest material index"
@@ -71915,7 +71883,7 @@ msgstr "ასვი კვანძები შიდა გაცვლის
 
 
 msgid "The 2D view location for the center of the new nodes, or unchanged if not set"
-msgstr "2გ ხედის მდებარეობა ახალი კვანძების ცენტრისთვის, ანდა, თუ დაუყენებელია, უცვლელი იყოს"
+msgstr "2D ხედის მდებარეობა ახალი კვანძების ცენტრისთვის, ანდა, თუ დაუყენებელია, უცვლელი იყოს"
 
 
 msgid "Connect active node to the active output node of the node tree"
@@ -73179,7 +73147,7 @@ msgstr "გამოიყენე სცენის პირველსა�
 
 
 msgid "Use the 3D cursor as the position for the selected objects to align to"
-msgstr "გამოიყენე 3გ კურსორი მონიშნული ობიექტებისთვის სწორების პოზიციად"
+msgstr "გამოიყენე 3D კურსორი მონიშნული ობიექტებისთვის სწორების პოზიციად"
 
 
 msgid "Use the selected objects as the position for the selected objects to align to"
@@ -74885,7 +74853,7 @@ msgstr "გაასუფთავე ობიექტის ამოსა�
 
 
 msgid "Set the object's origin, by either moving the data, or set to center of data, or use 3D cursor"
-msgstr "დააყენე ობიექტის ამოსავალი წერტილი, მონაცემთა გადაადგილების, ან მონაცემთა შუაგულში დაყენებით, ან გამოიყენე 3გ კურსორი"
+msgstr "დააყენე ობიექტის ამოსავალი წერტილი, მონაცემთა გადაადგილების, ან მონაცემთა შუაგულში დაყენებით, ან გამოიყენე 3D კურსორი"
 
 
 msgid "Median Center"
@@ -74913,11 +74881,11 @@ msgstr "გამოთვალე გეომეტრიის ცენტ�
 
 
 msgid "Origin to 3D Cursor"
-msgstr "ამოსავალი წერტილი 3გ კურსორთან"
+msgstr "ამოსავალი წერტილი 3D კურსორთან"
 
 
 msgid "Move object origin to position of the 3D cursor"
-msgstr "გადააადგილე ობიექტის ამოსავალი წერტილი 3გ კურსორის პოზიციაზე"
+msgstr "გადააადგილე ობიექტის ამოსავალი წერტილი 3D კურსორის პოზიციაზე"
 
 
 msgid "Origin to Center of Mass (Surface)"
@@ -77760,7 +77728,7 @@ msgstr "გამოსახულება ხედიდან"
 
 
 msgid "Make an image from biggest 3D view for reprojection"
-msgstr "შექმენი გამოსახულება გადაპროეცირებისთვის უდიდესი 3გ ხედიდან"
+msgstr "შექმენი გამოსახულება გადაპროეცირებისთვის უდიდესი 3D ხედიდან"
 
 
 msgid "Name of the file"
@@ -77868,7 +77836,7 @@ msgstr "ტექსტურის ხატვის რეჟიმი"
 
 
 msgid "Toggle texture paint mode in 3D view"
-msgstr "გადართე ტექსტურის ხატვის რეჟიმი 3გ ხედში"
+msgstr "გადართე ტექსტურის ხატვის რეჟიმი 3D ხედში"
 
 
 msgid "Change selection for all vertices"
@@ -78016,7 +77984,7 @@ msgstr "წვეროთა მოხატვის რეჟიმი"
 
 
 msgid "Toggle the vertex paint mode in 3D view"
-msgstr "გადართე წვეროთა მოხატვის რეჟიმი 3გ ხედში"
+msgstr "გადართე წვეროთა მოხატვის რეჟიმი 3D ხედში"
 
 
 msgctxt "Operator"
@@ -78114,11 +78082,11 @@ msgstr "წონის ხატვის რეჟიმი"
 
 
 msgid "Toggle weight paint mode in 3D view"
-msgstr "გადართე წონის ხატვის რეჟიმი 3გ ხედში"
+msgstr "გადართე წონის ხატვის რეჟიმი 3D ხედში"
 
 
 msgid "Use the mouse to sample a weight in the 3D view"
-msgstr "გამოიყენე თაგვი 3გ სარკმელში წონის ნიმუშის ასაღებად"
+msgstr "გამოიყენე თაგვი 3D სარკმელში წონის ნიმუშის ასაღებად"
 
 
 msgctxt "Operator"
@@ -79628,7 +79596,7 @@ msgstr "ხედის კონტექსტი"
 
 
 msgid "Use the current 3D view for rendering, else use scene settings"
-msgstr "რენდერისთვის გამოიყენე მიმდინარე 3გ ხედი, სხვა შემთხვევაში გამოიყენე სცენის ანაწყობები"
+msgstr "რენდერისთვის გამოიყენე მიმდინარე 3D ხედი, სხვა შემთხვევაში გამოიყენე სცენის ანაწყობები"
 
 
 msgid "Write Image"
@@ -79661,11 +79629,11 @@ msgstr "სცენა დასარენდერებლად, თუ �
 
 
 msgid "Use 3D Viewport"
-msgstr "3გ სარკმლის გამოყენება"
+msgstr "3D სარკმლის გამოყენება"
 
 
 msgid "When inside a 3D viewport, use layers and camera of the viewport"
-msgstr "3გ სარკმლის შიგნით გამოიყენე სარკმლის შრეები და კამერა"
+msgstr "3D სარკმლის შიგნით გამოიყენე სარკმლის შრეები და კამერა"
 
 
 msgctxt "Operator"
@@ -81768,7 +81736,7 @@ msgstr "ძერწვის რეჟიმი"
 
 
 msgid "Toggle sculpt mode in 3D view"
-msgstr "გადართე ძერწვის რეჟიმი 3გ ხედში"
+msgstr "გადართე ძერწვის რეჟიმი 3D ხედში"
 
 
 msgctxt "Operator"
@@ -81981,7 +81949,7 @@ msgstr "მოშვებისთვის გამოიყენე HC მ�
 
 
 msgid "Use Geometry (cotangent) relaxation, making UVs follow the underlying 3D geometry"
-msgstr "გამოიყენე გეომეტრიული (კოტანგენსური) მოშვება, რითაც UV-ებს აიძულებ, თავიანთ 3გ გეომეტრიას მიჰყვნენ"
+msgstr "გამოიყენე გეომეტრიული (კოტანგენსური) მოშვება, რითაც UV-ებს აიძულებ, თავიანთ 3D გეომეტრიას მიჰყვნენ"
 
 
 msgctxt "Operator"
@@ -84034,11 +84002,11 @@ msgstr "დაიწყე ტექსტის ძიება"
 
 msgctxt "Operator"
 msgid "To 3D Object"
-msgstr "3გ ობიექტად"
+msgstr "3D ობიექტად"
 
 
 msgid "Create 3D text object from active text data-block"
-msgstr "შექმენი 3გ ტექსტის ობიექტი აქტიური ტექსტის მონაცემთა ბლოკისგან"
+msgstr "შექმენი 3D ტექსტის ობიექტი აქტიური ტექსტის მონაცემთა ბლოკისგან"
 
 
 msgid "Split Lines"
@@ -84079,7 +84047,7 @@ msgstr "გარდაქმნის ორიენტაცია"
 
 
 msgid "Bend selected items between the 3D cursor and the mouse"
-msgstr "დახარე მონიშნული საგნები 3გ კურსორსა და თაგვს შორის"
+msgstr "დახარე მონიშნული საგნები 3D კურსორსა და თაგვს შორის"
 
 
 msgid "Center Override"
@@ -84395,7 +84363,7 @@ msgstr "კიდეების პანორამირება"
 
 
 msgid "Enable edge panning in 2D view"
-msgstr "ჩართე წიბოს პანორამირება 2გ ხედში"
+msgstr "ჩართე წიბოს პანორამირება 2D ხედში"
 
 
 msgctxt "Operator"
@@ -84431,7 +84399,7 @@ msgstr "გადახრა"
 
 
 msgid "Tilt selected control vertices of 3D curve"
-msgstr "გადახარე 3გ წირის მონიშნული საკონტროლო წერტილები"
+msgstr "გადახარე 3D წირის მონიშნული საკონტროლო წერტილები"
 
 
 msgctxt "Operator"
@@ -84683,7 +84651,7 @@ msgstr "საპიპეტე ძვალი"
 
 
 msgid "Sample a bone from the 3D View or the Outliner to store in a property"
-msgstr "აიღე ძვლის ნიმუში 3გ ხედიდან, ან მონახაზიდან და შეინახე თვისებაში"
+msgstr "აიღე ძვლის ნიმუში 3D ხედიდან, ან მონახაზიდან და შეინახე თვისებაში"
 
 
 msgctxt "Operator"
@@ -84723,7 +84691,7 @@ msgstr "პიპეტის სიღრმე"
 
 
 msgid "Sample depth from the 3D view"
-msgstr "აიღე სიღრმის ნიმუში 3გ ხედში"
+msgstr "აიღე სიღრმის ნიმუში 3D ხედში"
 
 
 msgctxt "Operator"
@@ -84798,7 +84766,7 @@ msgstr "პიპეტის მონაცემთა ბლოკი"
 
 
 msgid "Sample a data-block from the 3D View to store in a property"
-msgstr "აიღე მონაცემთა ბლოკის ნიმუში 3გ ხედიდან და შეინახე თვისებაში"
+msgstr "აიღე მონაცემთა ბლოკის ნიმუში 3D ხედიდან და შეინახე თვისებაში"
 
 
 msgid "Add-on to process"
@@ -85091,7 +85059,7 @@ msgstr "კუნძულების მასშტაბის გასა�
 
 
 msgid "Average the size of separate UV islands, based on their area in 3D space"
-msgstr "გაასაშუალოვე ცალკეული UV კუნძულების ზომები 3გ სივრცეში მათი ფართობის მიხედვით"
+msgstr "გაასაშუალოვე ცალკეული UV კუნძულების ზომები 3D სივრცეში მათი ფართობის მიხედვით"
 
 
 msgid "Scale U and V independently"
@@ -85186,7 +85154,7 @@ msgstr "ხედი ეკვატორზე"
 
 
 msgid "3D view is on the equator"
-msgstr "3გ ხედი ეკვატორზეა"
+msgstr "3D ხედი ეკვატორზეა"
 
 
 msgid "View on Poles"
@@ -85194,7 +85162,7 @@ msgstr "ხედი პოლუსებზე"
 
 
 msgid "3D view is on the poles"
-msgstr "3გ ხედი პოლუსებზეა"
+msgstr "3D ხედი პოლუსებზეა"
 
 
 msgid "Align to Object"
@@ -85573,7 +85541,7 @@ msgstr "აქტიური UDIM"
 
 
 msgid "Pack islands to active UDIM image tile or UDIM grid tile where 2D cursor is located"
-msgstr "ჩაარიგე კუნძულები აქტიურ UDIM გამოსახულების ფილაში, ან UDIM ბადის იმ ფილაში, სადაც 2გ კურსორი მდებარეობს"
+msgstr "ჩაარიგე კუნძულები აქტიურ UDIM გამოსახულების ფილაში, ან UDIM ბადის იმ ფილაში, სადაც 2D კურსორი მდებარეობს"
 
 
 msgid "Original bounding box"
@@ -85616,7 +85584,7 @@ msgstr "პროეცირება ხედიდან"
 
 
 msgid "Project the UV vertices of the mesh as seen in current 3D view"
-msgstr "დააპროეცირე მეშის UV წვეროები, როგორც ჩანს მიმდინარე 3გ ხედში"
+msgstr "დააპროეცირე მეშის UV წვეროები, როგორც ჩანს მიმდინარე 3D ხედში"
 
 
 msgid "Camera Bounds"
@@ -85823,12 +85791,12 @@ msgstr "ჩამაგრებული"
 
 msgctxt "Mesh"
 msgid "Length 3D"
-msgstr "სიგრძე 3გ"
+msgstr "სიგრძე 3D"
 
 
 msgctxt "Mesh"
 msgid "Area 3D"
-msgstr "არე 3გ"
+msgstr "არე 3D"
 
 
 msgctxt "Mesh"
@@ -86139,12 +86107,12 @@ msgstr "გააცოცე ხედი თაგვის დაწკაპ
 
 msgctxt "Operator"
 msgid "Smooth View 2D"
-msgstr "თანაბარი 2გ ხედი"
+msgstr "თანაბარი 2D ხედი"
 
 
 msgctxt "Operator"
 msgid "Zoom 2D View"
-msgstr "2გ ხედის დაზუმვა"
+msgstr "2D ხედის დაზუმვა"
 
 
 msgid "Zoom Factor X"
@@ -86240,11 +86208,11 @@ msgstr "გადააკოპირე მონიშნული ობი�
 
 msgctxt "Operator"
 msgid "Set 3D Cursor"
-msgstr "3გ კურსორის დაყენება"
+msgstr "3D კურსორის დაყენება"
 
 
 msgid "Set the location of the 3D cursor"
-msgstr "დააყენე 3გ კურსორის მდებარეობა"
+msgstr "დააყენე 3D კურსორის მდებარეობა"
 
 
 msgid "Preset viewpoint to use"
@@ -86276,7 +86244,7 @@ msgstr "დააპროეცირე ზედაპირზე"
 
 
 msgid "Move the 3D Cursor to the selected VR Landmark"
-msgstr "გადააადგილე 3გ კურსორი მონიშნული ვ. რ. ორიენტირთან"
+msgstr "გადააადგილე 3D კურსორი მონიშნული ვ. რ. ორიენტირთან"
 
 
 msgctxt "Operator"
@@ -86400,7 +86368,7 @@ msgstr "ხედის NDOF გარდაქმნა"
 
 
 msgid "Pan and rotate the view with the 3D mouse"
-msgstr "დააპანორამირე და აბრუნე ხედი 3გ თაგვით"
+msgstr "დააპანორამირე და აბრუნე ხედი 3D თაგვით"
 
 
 msgctxt "Operator"
@@ -86409,7 +86377,7 @@ msgstr "ხედის NDOF ორბიტირება"
 
 
 msgid "Orbit the view using the 3D mouse"
-msgstr "დააორბიტირე ხედი 3გ თაგვით"
+msgstr "დააორბიტირე ხედი 3D თაგვით"
 
 
 msgctxt "Operator"
@@ -86418,7 +86386,7 @@ msgstr "ხედის NDOF ორბიტირება ზუმთან �
 
 
 msgid "Orbit and zoom the view using the 3D mouse"
-msgstr "დააორბიტირე და დაზუმე ხედი 3გ თაგვით"
+msgstr "დააორბიტირე და დაზუმე ხედი 3D თაგვით"
 
 
 msgctxt "Operator"
@@ -86427,7 +86395,7 @@ msgstr "ხედის NDOF პანორამირება"
 
 
 msgid "Pan the view with the 3D mouse"
-msgstr "დააპანორამირე ხედი 3გ თაგვით"
+msgstr "დააპანორამირე ხედი 3D თაგვით"
 
 
 msgctxt "Operator"
@@ -86548,7 +86516,7 @@ msgstr "კურსორის მიკვრა აქტიურზე"
 
 
 msgid "Snap 3D cursor to the active item"
-msgstr "მიაკარი 3გ კურსორი აქტიურ საგანს"
+msgstr "მიაკარი 3D კურსორი აქტიურ საგანს"
 
 
 msgctxt "Operator"
@@ -86557,7 +86525,7 @@ msgstr "კურსორის მიკვრა სამყაროს ა
 
 
 msgid "Snap 3D cursor to the world origin"
-msgstr "მიაკარი 3გ კურსორი სამყაროს ამოსავალ წერტილს"
+msgstr "მიაკარი 3D კურსორი სამყაროს ამოსავალ წერტილს"
 
 
 msgctxt "Operator"
@@ -86566,7 +86534,7 @@ msgstr "კურსორის მიკვრა ბადეზე"
 
 
 msgid "Snap 3D cursor to the nearest grid division"
-msgstr "მიაკარი 3გ კურსორი კოორდინატთა ბადის უახლოეს დანაყოფს"
+msgstr "მიაკარი 3D კურსორი კოორდინატთა ბადის უახლოეს დანაყოფს"
 
 
 msgctxt "Operator"
@@ -86575,7 +86543,7 @@ msgstr "კურსორის მიკვრა მონიშნულზ�
 
 
 msgid "Snap 3D cursor to the middle of the selected item(s)"
-msgstr "მიაკარი 3გ კურსორი მონიშნული ელემენტ(ებ)ის შუაგულს"
+msgstr "მიაკარი 3D კურსორი მონიშნული ელემენტ(ებ)ის შუაგულს"
 
 
 msgctxt "Operator"
@@ -86588,7 +86556,7 @@ msgstr "მიაკარი მონიშნული საგან(ებ
 
 
 msgid "Snap selected item(s) to the 3D cursor"
-msgstr "მიაკარი მონიშნული საგან(ებ)ი 3გ კურსორს"
+msgstr "მიაკარი მონიშნული საგან(ებ)ი 3D კურსორს"
 
 
 msgid "If the selection should be snapped as a whole or by each object center"
@@ -86614,7 +86582,7 @@ msgstr "შეფერადების ტიპის გადართვ�
 
 
 msgid "Toggle shading type in 3D viewport"
-msgstr "გადართე შეფერადების ტიპი 3გ სარკმელში"
+msgstr "გადართე შეფერადების ტიპი 3D სარკმელში"
 
 
 msgid "Shading type to toggle"
@@ -89073,11 +89041,11 @@ msgstr "მენიუ, რომელშიც უნდა მოიძე�
 
 msgctxt "Operator"
 msgid "Set Stereo 3D"
-msgstr "სტერეო 3გ-ის დაყენება"
+msgstr "სტერეო 3D-ის დაყენება"
 
 
 msgid "Toggle 3D stereo support for current window (or change the display mode)"
-msgstr "გადართე 3გ სტერეოს მხარდაჭერა ამჟამინდელი ფანჯრისთვის (ან შეცვალე ასახვის რეჟიმი)"
+msgstr "გადართე 3D სტერეოს მხარდაჭერა ამჟამინდელი ფანჯრისთვის (ან შეცვალე ასახვის რეჟიმი)"
 
 
 msgid "Anaglyph Type"
@@ -89109,7 +89077,7 @@ msgstr "ინტერლეისი"
 
 
 msgid "Render views for left and right eyes interlaced in a single image (3D-ready monitor is required)"
-msgstr "დაარენდერე ხედები მარცხენა და მარჯვენა თვალებისთვის ერთ გამოსახულებაში გარიგითობრივებულად (3გ-ისთვის მზა მონიტორი აუცილებელია)"
+msgstr "დაარენდერე ხედები მარცხენა და მარჯვენა თვალებისთვის ერთ გამოსახულებაში გარიგითობრივებულად (3D-ისთვის მზა მონიტორი აუცილებელია)"
 
 
 msgid "Time Sequential"
@@ -90529,8 +90497,24 @@ msgid "Image used as canvas"
 msgstr "ტილოდ გამოყენებული გამოსახულება"
 
 
+msgid "Clone Alpha"
+msgstr "კლონის ალფა"
+
+
+msgid "Opacity of clone image display"
+msgstr "კლონი გამოსახულების ასახვის გაუმჭვირვალობა"
+
+
+msgid "Clone Image"
+msgstr "კლონის გამოსახულება"
+
+
 msgid "Image used as clone source"
 msgstr "კლონირების წყაროდ გამოყენებული გამოსახულება"
+
+
+msgid "Clone Offset"
+msgstr "კლონის აცდენა"
 
 
 msgid "Dither"
@@ -90642,7 +90626,7 @@ msgstr "რუკის კლონირება"
 
 
 msgid "Use another UV map as clone source, otherwise use the 3D cursor as the source"
-msgstr "კლონის წყაროდ გამოიყენე სხვა UV რუკა, სხვა შემთხვევაში წყაროდ გამოიყენე 3გ კურსორი"
+msgstr "კლონის წყაროდ გამოიყენე სხვა UV რუკა, სხვა შემთხვევაში წყაროდ გამოიყენე 3D კურსორი"
 
 
 msgid "Paint most on faces pointing towards the view"
@@ -90869,6 +90853,10 @@ msgid "Panel containing UI elements"
 msgstr "პანელი, რომელიც UI-ს ელემენტებს შეიცავს"
 
 
+msgid "Active Tool"
+msgstr "აქტიური ხელსაწყო"
+
+
 msgid "View Lock"
 msgstr "ხედის დაბლოკვა"
 
@@ -91009,10 +90997,6 @@ msgid "VR Info"
 msgstr "ვ.რ.-ის ინფო"
 
 
-msgid "Active Tool"
-msgstr "აქტიური ხელსაწყო"
-
-
 msgid "Chain Scaling"
 msgstr "ჯაჭვის მასშტაბირება"
 
@@ -91054,7 +91038,7 @@ msgstr "კამერის წინასწარი კონფიგუ�
 
 
 msgid "2D Cursor"
-msgstr "2გ კურსორი"
+msgstr "2D კურსორი"
 
 
 msgid "Footage"
@@ -91094,7 +91078,7 @@ msgstr "სტაბილიზაცია"
 
 
 msgid "2D Stabilization"
-msgstr "2გ სტაბილიზაცია"
+msgstr "2D სტაბილიზაცია"
 
 
 msgid "Solve"
@@ -92096,7 +92080,7 @@ msgstr "ორბიტირება და პანორამირებ�
 
 
 msgid "3D Mouse Settings"
-msgstr "3გ თაგვის ანაწყობები"
+msgstr "3D თაგვის ანაწყობები"
 
 
 msgid "Save Preferences"
@@ -94141,7 +94125,7 @@ msgstr "ობიექტის სწორება"
 
 
 msgid "The default alignment for objects added from a 3D viewport menu"
-msgstr "ნაგულისხმები გასწორება 3გ სარკმლის მენიუდან დამატებული ობიექტებისთვის"
+msgstr "ნაგულისხმები გასწორება 3D სარკმლის მენიუდან დამატებული ობიექტებისთვის"
 
 
 msgid "Align newly added objects to the world coordinate system"
@@ -94149,11 +94133,11 @@ msgstr "გაუსწორე ახალდამატებული ო�
 
 
 msgid "Align newly added objects to the active 3D view orientation"
-msgstr "გაუსწორე ახალდამატებული ობიექტები აქტიური 3გ ხედის ორიენტაციას"
+msgstr "გაუსწორე ახალდამატებული ობიექტები აქტიური 3D ხედის ორიენტაციას"
 
 
 msgid "Align newly added objects to the 3D Cursor's rotation"
-msgstr "გაუსწორე ახალდამატებული ობიექტები 3გ კურსორის ბრუნვას"
+msgstr "გაუსწორე ახალდამატებული ობიექტები 3D კურსორის ბრუნვას"
 
 
 msgid "Sculpt/Paint Overlay Color"
@@ -94999,7 +94983,7 @@ msgstr "შვეულმფრენის რეჟიმი"
 
 
 msgid "Device up/down directly controls the Z position of the 3D viewport"
-msgstr "მოწყობილობის ზევით/ქვევით პირდაპირ აკონტროლებს 3გ სარკმლის Z პოზიციას"
+msgstr "მოწყობილობის ზევით/ქვევით პირდაპირ აკონტროლებს 3D სარკმლის Z პოზიციას"
 
 
 msgid "Lock Camera Pan/Zoom"
@@ -95015,7 +94999,7 @@ msgstr "ჰორიზონტის დაბლოკვა"
 
 
 msgid "Keep horizon level while flying with 3D Mouse"
-msgstr "3გ თაგვით ფრენისას დაბლოკე ჰორიზონტის დონე"
+msgstr "3D თაგვით ფრენისას დაბლოკე ჰორიზონტის დონე"
 
 
 msgid "Auto sets the orbit center dynamically. When the complete model is in view, the center of volume of the whole model is used as the rotation point. When you move closer, the orbit center will be set on an object close to your center of the view."
@@ -95035,7 +95019,7 @@ msgstr "ორბიტირების მგრძნობიარობ�
 
 
 msgid "Overall sensitivity of the 3D Mouse for orbiting"
-msgstr "3გ თაგვის ზოგადი მგრძნობიარობა ორბიტირებისთვის"
+msgstr "3D თაგვის ზოგადი მგრძნობიარობა ორბიტირებისთვის"
 
 
 msgid "Y/Z Swap Axis"
@@ -95071,7 +95055,7 @@ msgstr "დაგვერდების (Z) ღერძის შექცე
 
 
 msgid "Overall sensitivity of the 3D Mouse for panning"
-msgstr "3გ თაგვის ზოგადი სენსიტიურობა პანორამირებისთვის"
+msgstr "3D თაგვის ზოგადი სენსიტიურობა პანორამირებისთვის"
 
 
 msgid "Show Orbit Axis Guide"
@@ -95279,7 +95263,7 @@ msgstr "ზუმით მიახლოვება თაგვის პო
 
 
 msgid "Zoom in towards the mouse pointer's position in the 3D view, rather than the 2D window center"
-msgstr "ზუმით მიუახლოვდი თაგვის ისრის პოზიციას 3გ ხედში, 2გ ფანჯრის ცენტრის მაგივრად"
+msgstr "ზუმით მიუახლოვდი თაგვის ისრის პოზიციას 3D ხედში, 2D ფანჯრის ცენტრის მაგივრად"
 
 
 msgid "Orbit Method"
@@ -95575,7 +95559,7 @@ msgstr "ალფას მოკვეცა"
 
 
 msgid "Clip alpha below this threshold in the 3D textured view"
-msgstr "მოკვეცე ალფა ამ მიჯნის ქვემოთ 3გ ტექსტურირებულ ხედში"
+msgstr "მოკვეცე ალფა ამ მიჯნის ქვემოთ 3D ტექსტურირებულ ხედში"
 
 
 msgid "GL Texture Limit"
@@ -95643,11 +95627,11 @@ msgstr "ავტომატურად აირჩიე მეთოდი 
 
 
 msgid "2D Texture"
-msgstr "2გ ტექსტურა"
+msgstr "2D ტექსტურა"
 
 
 msgid "Use CPU for display transform and display image with 2D texture"
-msgstr "დისპლეის გარდაქმნისთვის გამოიყენე CPU და ასახე გამოსახულება 2გ ტექსტურით"
+msgstr "დისპლეის გარდაქმნისთვის გამოიყენე CPU და ასახე გამოსახულება 2D ტექსტურით"
 
 
 msgid "GLSL"
@@ -95655,7 +95639,7 @@ msgstr "GLSL"
 
 
 msgid "Use GLSL shaders for display transform and display image with 2D texture"
-msgstr "დისპლეის გარდაქმნისთვის გამოიყენე GLSL იერფერები და ასახე გამოსახულება 2გ ტექსტურით"
+msgstr "დისპლეის გარდაქმნისთვის გამოიყენე GLSL იერფერები და ასახე გამოსახულება 2D ტექსტურით"
 
 
 msgid "Is Microsoft Store Install"
@@ -95867,7 +95851,7 @@ msgstr "GPU-ს სიღრმით არჩევა"
 
 
 msgid "When making a selection in 3D View, use the GPU depth buffer to ensure the frontmost object is selected first"
-msgstr "3გ ხედში მონიშვნის გაკეთებისას გამოიყენე GPU სიღრმის ბუფერი, რათა დარწმუნდე, რომ მოწინავე ობიექტი პირველი მოინიშნება"
+msgstr "3D ხედში მონიშვნის გაკეთებისას გამოიყენე GPU სიღრმის ბუფერი, რათა დარწმუნდე, რომ მოწინავე ობიექტი პირველი მოინიშნება"
 
 
 msgid "Use Disk Cache"
@@ -96159,7 +96143,7 @@ msgstr "მინი ღერძების ტიპი"
 
 
 msgid "Show small rotating 3D axes in the top right corner of the 3D viewport"
-msgstr "აჩვენე პატარა მბრუნავი 3გ ღერძები 3გ სარკმლის ზედა მარჯვენა კუთხეში"
+msgstr "აჩვენე პატარა მბრუნავი 3D ღერძები 3გ სარკმლის ზედა მარჯვენა კუთხეში"
 
 
 msgid "Simple Axes"
@@ -96303,7 +96287,7 @@ msgstr "ნავიგაციის კონტროლერები"
 
 
 msgid "Show navigation controls in 2D and 3D views which do not have scroll bars"
-msgstr "აჩვენე ნავიგაციის კონტროლები 2გ და 3გ ხედებში, რომლებსაც გადაადგილების ზოლები არ აქვს"
+msgstr "აჩვენე ნავიგაციის კონტროლები 2D და 3D ხედებში, რომლებსაც გადაადგილების ზოლები არ აქვს"
 
 
 msgid "Display Object Info"
@@ -96575,11 +96559,11 @@ msgstr "ჩართე ფერთა დიაპაზონი გამო
 
 
 msgid "2D View Minimum Grid Spacing"
-msgstr "2გ ხედში ბადის მინიმალური დაშორება"
+msgstr "2D ხედში ბადის მინიმალური დაშორება"
 
 
 msgid "Minimum number of pixels between each gridline in 2D Viewports"
-msgstr "პიქსელების მინიმალური რიცხვი 2გ სარკმელებში ბადის ყველა ხაზს შორის"
+msgstr "პიქსელების მინიმალური რიცხვი 2D სარკმელებში ბადის ყველა ხაზს შორის"
 
 
 msgid "Zoom Keyframes"
@@ -97284,11 +97268,11 @@ msgstr "დაარენდერე წირები ბრტყელ ლ
 
 
 msgid "3D Curves"
-msgstr "3გ წირები"
+msgstr "3D წირები"
 
 
 msgid "Render curves as circular 3D geometry, for accurate results when viewing closely"
-msgstr "დაარენდერე, როგორც წრიული 3გ გეომეტრია, ახლოდან დათვალიერებისას აკურატული შედეგებისთვის"
+msgstr "დაარენდერე, როგორც წრიული 3D გეომეტრია, ახლოდან დათვალიერებისას აკურატული შედეგებისთვის"
 
 
 msgid "Number of subdivisions used in Cardinal curve intersection (power of 2)"
@@ -98466,7 +98450,7 @@ msgstr "სარკმელში განხმაურების გა�
 
 
 msgid "Denoise the image in the 3D viewport"
-msgstr "განახმაურე გამოსახულება 3გ სარკმელში"
+msgstr "განახმაურე გამოსახულება 3D სარკმელში"
 
 
 msgid "Use Sample Subset"
@@ -98522,7 +98506,7 @@ msgstr "გლობალურად დაარეგულირე დე�
 
 
 msgid "Render pass to show in the 3D Viewport"
-msgstr "3გ სარკმელში საჩვენებელი რენდერის გადავლა"
+msgstr "3D სარკმელში საჩვენებელი რენდერის გადავლა"
 
 
 msgid "Show the Combined Render pass"
@@ -99982,11 +99966,11 @@ msgstr "ამ მონაკვეთის ტიპი"
 
 
 msgid "View2D"
-msgstr "ხედი2გ"
+msgstr "ხედი2D"
 
 
 msgid "2D view of the region"
-msgstr "მონაკვეთის 2გ ხედი"
+msgstr "მონაკვეთის 2D ხედი"
 
 
 msgid "Region width"
@@ -100002,11 +99986,11 @@ msgstr "მონაკვეთის თარაზული მდება�
 
 
 msgid "3D View Region"
-msgstr "3გ ხედის მონაკვეთი"
+msgstr "3D ხედის მონაკვეთი"
 
 
 msgid "3D View region data"
-msgstr "3გ ხედის მონაკვეთის მონაცემები"
+msgstr "3D ხედის მონაკვეთის მონაცემები"
 
 
 msgid "Clip Planes"
@@ -100866,7 +100850,7 @@ msgstr "რენდერის დროს ინტერფეისის 
 
 
 msgid "Use multi-sampled 3D scene motion blur"
-msgstr "გამოიყენე მულტისემპლირებული 3გ სცენის მოძრაობის გადღაბნა"
+msgstr "გამოიყენე მულტისემპლირებული 3D სცენის მოძრაობის გადღაბნა"
 
 
 msgid "Use multiple views in the scene"
@@ -102462,7 +102446,7 @@ msgstr "სცენის რენდერის ხედი"
 
 
 msgid "Render viewpoint for 3D stereo and multiview rendering"
-msgstr "რენდერის თვალთახედვის წერტილი 3გ სტერეოსა და მრავალხედიანი რენდერისთვის"
+msgstr "რენდერის თვალთახედვის წერტილი 3D სტერეოსა და მრავალხედიანი რენდერისთვის"
 
 
 msgid "Camera Suffix"
@@ -102913,7 +102897,7 @@ msgstr "მედიანური ცენტრი"
 
 
 msgid "Pivot around the 2D cursor"
-msgstr "აბრუნე 2გ კურსორის გარშემო"
+msgstr "აბრუნე 2D კურსორის გარშემო"
 
 
 msgid "Individual Origins"
@@ -103410,7 +103394,7 @@ msgstr "წერტილი ფორმის სოლში"
 
 
 msgid "2D 16-Bit Integer Vector Attribute Value"
-msgstr "2გ 16-იანი მთელ რიცხვიანი ვექტორული ატრიბუტის მნიშვნელობა"
+msgstr "2D 16-იანი მთელ რიცხვიანი ვექტორული ატრიბუტის მნიშვნელობა"
 
 
 msgid "Simulation Item"
@@ -103771,11 +103755,11 @@ msgstr "რასტრირებული ნიღბის გადაფ�
 
 
 msgid "2D Cursor Location"
-msgstr "2გ კურსორის მდებარეობა"
+msgstr "2D კურსორის მდებარეობა"
 
 
 msgid "2D cursor location for this view"
-msgstr "2გ კურსორის მდებარეობა ამ ხედისთვის"
+msgstr "2D კურსორის მდებარეობა ამ ხედისთვის"
 
 
 msgid "Lock to Selection"
@@ -103883,7 +103867,7 @@ msgstr "შეკვრების ჩვენება"
 
 
 msgid "Show projection of 3D markers into footage"
-msgstr "აჩვენე ჩანაწერში 3გ მარკერების პროექცია"
+msgstr "აჩვენე ჩანაწერში 3D მარკერების პროექცია"
 
 
 msgid "Show Disabled"
@@ -104374,7 +104358,7 @@ msgstr "კურსორის X-მნიშვნელობა"
 
 
 msgid "Graph Editor 2D-Value cursor - X-Value component"
-msgstr "გრაფიკების რედაქტორის 2გ-მნიშვნელობის კურსორი - X-მნიშვნელობის კომპონენტი"
+msgstr "გრაფიკების რედაქტორის 2D-მნიშვნელობის კურსორი - X-მნიშვნელობის კომპონენტი"
 
 
 msgid "Cursor Y-Value"
@@ -104382,7 +104366,7 @@ msgstr "კურსორის Y-მნიშვნელობა"
 
 
 msgid "Graph Editor 2D-Value cursor - Y-Value component"
-msgstr "გრაფიკების რედაქტორის 2გ-მნიშვნელობის კურსორი - Y-მნიშვნელობის კომპონენტი"
+msgstr "გრაფიკების რედაქტორის 2D-მნიშვნელობის კურსორი - Y-მნიშვნელობის კომპონენტი"
 
 
 msgid "Has Ghost Curves"
@@ -104394,7 +104378,7 @@ msgstr "გრაფიკების რედაქტორის ინს�
 
 
 msgid "Edit animation/keyframes displayed as 2D curves"
-msgstr "2გ წირებად ასახული ანიმაციის/საკვანძო ფაზების დამუშავება"
+msgstr "2D წირებად ასახული ანიმაციის/საკვანძო ფაზების დამუშავება"
 
 
 msgid "Edit drivers"
@@ -104410,7 +104394,7 @@ msgstr "კურსორის ჩვენება"
 
 
 msgid "Show 2D cursor"
-msgstr "აჩვენე 2გ კურსორი"
+msgstr "აჩვენე 2D კურსორი"
 
 
 msgid "Show Extrapolation"
@@ -104514,7 +104498,7 @@ msgstr "UV-ის რედაქტირება მეშის რედა
 
 
 msgid "2D image painting mode"
-msgstr "2გ გამოსახულების ხატვის რეჟიმი"
+msgstr "2D გამოსახულების ხატვის რეჟიმი"
 
 
 msgid "Mask editing"
@@ -104534,7 +104518,7 @@ msgstr "ბრუნვის/მასშტაბირების ამო�
 
 
 msgid "Pivot around the 3D cursor"
-msgstr "აბრუნე 3გ კურსორის გარშემო"
+msgstr "აბრუნე 3D კურსორის გარშემო"
 
 
 msgid "Pivot around active object"
@@ -104590,7 +104574,7 @@ msgstr "სტერეოს ჩვენება"
 
 
 msgid "Display the image in Stereo 3D"
-msgstr "ასახე გამოსახულება სტერეო 3გ-ში"
+msgstr "ასახე გამოსახულება სტერეო 3D-ში"
 
 
 msgid "Show UV Editor"
@@ -105707,11 +105691,11 @@ msgstr "ხაზების რაოდენობა, რომელიც
 
 
 msgid "3D View Space"
-msgstr "3გ ხედის სივრცე"
+msgstr "3D ხედის სივრცე"
 
 
 msgid "3D View space data"
-msgstr "3გ ხედის სივრცის მონაცემები"
+msgstr "3D ხედის სივრცის მონაცემები"
 
 
 msgid "Active camera used in this view (when unlocked from the scene's active camera)"
@@ -105719,11 +105703,11 @@ msgstr "ამ ხედში გამოყენებული აქტი
 
 
 msgid "3D View far clipping distance"
-msgstr "3გ ხედის მოკვეცის შორი მანძილი"
+msgstr "3D ხედის მოკვეცის შორი მანძილი"
 
 
 msgid "3D View near clipping distance (perspective view only)"
-msgstr "3გ ხედის მოკვეცის ახლო მანძილი (მხოლოდ პერსპექტივულ ხედში)"
+msgstr "3D ხედის მოკვეცის ახლო მანძილი (მხოლოდ პერსპექტივულ ხედში)"
 
 
 msgid "Visibility Icon"
@@ -105747,7 +105731,7 @@ msgstr "მიბლოკვა ძვალზე"
 
 
 msgid "3D View center is locked to this bone's position"
-msgstr "3გ ხედის ცენტრი მიბლოკილია ამ ძვლის პოზიციაზე"
+msgstr "3D ხედის ცენტრი მიბლოკილია ამ ძვლის პოზიციაზე"
 
 
 msgid "Lock Camera to View"
@@ -105763,7 +105747,7 @@ msgstr "მიბლოკვა კურსორზე"
 
 
 msgid "3D View center is locked to the cursor's position"
-msgstr "3გ ხედის ცენტრი მიბლოკილია კურსორის პოზიციაზე"
+msgstr "3D ხედის ცენტრი მიბლოკილია კურსორის პოზიციაზე"
 
 
 msgid "Lock to Object"
@@ -105771,7 +105755,7 @@ msgstr "მიბლოკვა ობიექტზე"
 
 
 msgid "3D View center is locked to this object's position"
-msgstr "3გ ხედის ცენტრი მიბლოკილია ამ ობიექტის პოზიციაზე"
+msgstr "3D ხედის ცენტრი მიბლოკილია ამ ობიექტის პოზიციაზე"
 
 
 msgid "Mirror VR Session"
@@ -105779,19 +105763,19 @@ msgstr "ვ.რ. სესიის გასარკისებურებ�
 
 
 msgid "Synchronize the viewer perspective of virtual reality sessions with this 3D viewport"
-msgstr "დაასინქრონირე მაჩვენებლის პერსპექტივა ვირტუალური რეალობის სესიისა ან 3გ სარკმლით"
+msgstr "დაასინქრონირე მაჩვენებლის პერსპექტივა ვირტუალური რეალობის სესიისა ან 3D სარკმლით"
 
 
 msgid "Settings for display of overlays in the 3D viewport"
-msgstr "ანაწყობები გადაფარებების ასახვისთვის 3გ სარკმელში"
+msgstr "ანაწყობები გადაფარებების ასახვისთვის 3D სარკმელში"
 
 
 msgid "3D Region"
-msgstr "3გ რეგიონი"
+msgstr "3D რეგიონი"
 
 
 msgid "3D region for this space. When the space is in quad view, the camera region"
-msgstr "3გ რეგიონი ამ სივრცისთვის. როცა სივრცე ოთხმაგ ხედზეა, კამერის რეგიონი"
+msgstr "3D რეგიონი ამ სივრცისთვის. როცა სივრცე ოთხმაგ ხედზეა, კამერის რეგიონი"
 
 
 msgid "Quad View Regions"
@@ -105799,11 +105783,11 @@ msgstr "ოთხმაგი ხედის რეგიონები"
 
 
 msgid "3D regions (the third one defines quad view settings, the fourth one is same as 'region_3d')"
-msgstr "2გ რეგიონები (მესამე განსაზღვრავს ოთხმაგი ხედის ანაწყობებს, მეოთხე იგივეა, რაც 'region_3d')"
+msgstr "3D რეგიონები (მესამე განსაზღვრავს ოთხმაგი ხედის ანაწყობებს, მეოთხე იგივეა, რაც 'region_3d')"
 
 
 msgid "Settings for shading in the 3D viewport"
-msgstr "ანაწყობები 3გ სარკმელში შეფერადებისთვის"
+msgstr "ანაწყობები 3D სარკმელში შეფერადებისთვის"
 
 
 msgid "Show 3D Marker Names"
@@ -106039,11 +106023,11 @@ msgstr "აჩვენე მარცხენა და მარჯვენ
 
 
 msgid "Show the stereo 3D convergence plane"
-msgstr "აჩვენე სტერეო 3გ კონვერგენციის სიბრტყე"
+msgstr "აჩვენე სტერეო 3D კონვერგენციის სიბრტყე"
 
 
 msgid "Show the stereo 3D frustum volume"
-msgstr "აჩვენე სტერეო 3გ წაკვეთილი პირამიდის მოცულობა"
+msgstr "აჩვენე სტერეო 3D წაკვეთილი პირამიდის მოცულობა"
 
 
 msgid "Show Viewer"
@@ -106055,7 +106039,7 @@ msgstr "ასახე არაფინალური გეომეტრ�
 
 
 msgid "3D"
-msgstr "3გ"
+msgstr "3D"
 
 
 msgid "Plane Alpha"
@@ -106241,11 +106225,11 @@ msgstr "დახრის კუთხე"
 
 
 msgid "Angular distortion between UV and 3D angles"
-msgstr "კუთხური გამრუდება UV-სა და 3გ კუთხეებს შორის"
+msgstr "კუთხური გამრუდება UV-სა და 3D კუთხეებს შორის"
 
 
 msgid "Area distortion between UV and 3D faces"
-msgstr "სივრცის გამრუდება UV-სა და 3გ წახნაგებს შორის"
+msgstr "სივრცის გამრუდება UV-სა და 3D წახნაგებს შორის"
 
 
 msgid "Display style for UV edges"
@@ -106341,7 +106325,7 @@ msgstr "გაწელვის ასახვა"
 
 
 msgid "Display faces colored according to the difference in shape between UVs and their 3D coordinates (blue for low distortion, red for high distortion)"
-msgstr "ასახე წახნაგები ფორმით განსხვავების მიხედვით გაფერადებულად UV-ებსა და მათ 3გ კოორდინატებს შორის (ლურჯი დაბალი გამრუდებისთვის, წითელი მაღალი გამრუდებისთვის)"
+msgstr "ასახე წახნაგები ფორმით განსხვავების მიხედვით გაფერადებულად UV-ებსა და მათ 3D კოორდინატებს შორის (ლურჯი დაბალი გამრუდებისთვის, წითელი მაღალი გამრუდებისთვის)"
 
 
 msgid "Display Texture Paint UVs"
@@ -106469,7 +106453,7 @@ msgstr "გადახრის ინტერპოლაცია"
 
 
 msgid "The type of tilt interpolation for 3D, Bézier curves"
-msgstr "გადახრის ინტერპოლაციის ტიპი 3გ, ბეზიეს წირებისთვის"
+msgstr "გადახრის ინტერპოლაციის ტიპი 3D, ბეზიეს წირებისთვის"
 
 
 msgid "The interpolation type for this curve element"
@@ -106593,7 +106577,7 @@ msgstr "წილადნიშნა მნიშვნელობა"
 
 
 msgid "2D Vector Value"
-msgstr "2გ ვექტორული მნიშვნელობა"
+msgstr "2D ვექტორული მნიშვნელობა"
 
 
 msgid "Vector Value"
@@ -106613,11 +106597,11 @@ msgstr "ტექსტური მნიშვნელობა"
 
 
 msgid "Stereo 3D Display"
-msgstr "სტერეო 3გ დისპლეი"
+msgstr "სტერეო 3D დისპლეი"
 
 
 msgid "Settings for stereo 3D display"
-msgstr "ანაწყობები სტერეო 3გ დისპლეისთვის"
+msgstr "ანაწყობები სტერეო 3D დისპლეისთვის"
 
 
 msgid "Stereo Output"
@@ -107393,11 +107377,11 @@ msgstr "კადრები წამში"
 
 
 msgid "Stabilize 2D Clip"
-msgstr "2გ კლიპის დასტაბილურება"
+msgstr "2D კლიპის დასტაბილურება"
 
 
 msgid "Use the 2D stabilized version of the clip"
-msgstr "გამოიყენე კლიპის 2გ დასტაბილურებული ვერსია"
+msgstr "გამოიყენე კლიპის 2D დასტაბილურებული ვერსია"
 
 
 msgid "Undistort Clip"
@@ -107449,7 +107433,7 @@ msgstr "შენატანის ტიპი გამოსაყენე�
 
 
 msgid "Use the Scene's 3D camera as input"
-msgstr "შენატანისთვის გამოიყენე სცენის 3გ კამერა"
+msgstr "შენატანისთვის გამოიყენე სცენის 3D კამერა"
 
 
 msgid "Use the Scene's Sequencer timeline as input"
@@ -108958,7 +108942,7 @@ msgstr "ფონის ტიპი"
 
 
 msgid "Type of background in the 3D viewport"
-msgstr "ფონის ტიპი 3გ სარკმელში"
+msgstr "ფონის ტიპი 3D სარკმელში"
 
 
 msgid "Single Color"
@@ -109990,11 +109974,11 @@ msgstr "ტექსტის ჩასასმელი კურსორი�
 
 
 msgid "Theme 3D Viewport"
-msgstr "3გ სარკმლის თემა"
+msgstr "3D სარკმლის თემა"
 
 
 msgid "Theme settings for the 3D viewport"
-msgstr "თემის ანაწყობები 3გ სარკმლისთვის"
+msgstr "თემის ანაწყობები 3D სარკმლისთვის"
 
 
 msgid "The color for things after the current frame (for onion skinning, motion paths, etc.)"
@@ -110279,7 +110263,7 @@ msgstr "დროის ნაბიჯი"
 
 
 msgid "Stroke Placement (2D View)"
-msgstr "მონასმის განთავსება (2გ ხედი)"
+msgstr "მონასმის განთავსება (2D ხედი)"
 
 
 msgid "Stick stroke to the image"
@@ -110291,15 +110275,15 @@ msgstr "მიამაგრე მონასმი ხედს"
 
 
 msgid "Annotation Stroke Placement (3D View)"
-msgstr "ანოტაციის მონასმის განთავსება (3გ ხედი)"
+msgstr "ანოტაციის მონასმის განთავსება (3D ხედი)"
 
 
 msgid "How annotation strokes are orientated in 3D space"
-msgstr "როგორ ორიენტირდება ანოტაციის მონასმები 3გ სივრცეში"
+msgstr "როგორ ორიენტირდება ანოტაციის მონასმები 3D სივრცეში"
 
 
 msgid "Draw stroke at 3D cursor location"
-msgstr "დახატე მონასმი 3გ კურსორის მდებარეობის ადგილას"
+msgstr "დახატე მონასმი 3D კურსორის მდებარეობის ადგილას"
 
 
 msgid "Stick stroke to surfaces"
@@ -110355,7 +110339,7 @@ msgstr "მონიშვნის რეჟიმი"
 
 
 msgid "Stroke Placement (3D View)"
-msgstr "მონასმის განთავსება (3გ ხედი)"
+msgstr "მონასმის განთავსება (3D ხედი)"
 
 
 msgid "Draw stroke at Object origin"
@@ -110456,7 +110440,7 @@ msgstr "კურსორის განთავსებისას გა�
 
 
 msgid "Start placing on the surface, using the 3D cursor position as a fallback"
-msgstr "დაიწყე განთავსება ზედაპირზე, 3გ კურსორის პოზიცია გამოიყენება სათადარიგოდ"
+msgstr "დაიწყე განთავსება ზედაპირზე, 3D კურსორის პოზიცია გამოიყენება სათადარიგოდ"
 
 
 msgid "Cursor Plane"
@@ -110464,7 +110448,7 @@ msgstr "კურსორის სიბრტყე"
 
 
 msgid "Start placement using a point projected onto the orientation axis at the 3D cursor position"
-msgstr "დაიწყე განთავსება 3გ კურსორის პოზიციაზე მდებარე საორიენტაციო ღერძზე პროეცირებული წერტილის გამოყენებით"
+msgstr "დაიწყე განთავსება 3D კურსორის პოზიციაზე მდებარე საორიენტაციო ღერძზე პროეცირებული წერტილის გამოყენებით"
 
 
 msgid "Cursor View"
@@ -110472,7 +110456,7 @@ msgstr "კურსორის ხედი"
 
 
 msgid "Start placement using a point projected onto the view plane at the 3D cursor position"
-msgstr "დაიწყე განთავსება 3გ კურსორის პოზიციაზე მდებარე ხედის სიბრტყეზე პროეცირებული წერტილის გამოყენებით"
+msgstr "დაიწყე განთავსება 3D კურსორის პოზიციაზე მდებარე ხედის სიბრტყეზე პროეცირებული წერტილის გამოყენებით"
 
 
 msgid "Use the surface normal (using the transform orientation as a fallback)"
@@ -110505,7 +110489,7 @@ msgstr "ბრუნვის ინკრემენტი"
 
 
 msgid "Angle used for rotation increments in 2D editors"
-msgstr "2გ რედაქტორებში ბრუნვის ინკრემენტებად გამოყენებული კუთხე"
+msgstr "2D რედაქტორებში ბრუნვის ინკრემენტებად გამოყენებული კუთხე"
 
 
 msgid "Rotation Precision Increment"
@@ -110513,15 +110497,15 @@ msgstr "ბრუნვის სიზუსტის ინკრემენ�
 
 
 msgid "Precision angle used for rotation increments in 2D editors"
-msgstr "2გ რედაქტორებში ბრუნვის ინკრემენტებად გამოყენებული სიზუსტის კუთხე"
+msgstr "2D რედაქტორებში ბრუნვის ინკრემენტებად გამოყენებული სიზუსტის კუთხე"
 
 
 msgid "Angle used for rotation increments in 3D editors"
-msgstr "3გ რედაქტორებში ბრუნვის ინკრემენტებად გამოყენებული კუთხე"
+msgstr "3D რედაქტორებში ბრუნვის ინკრემენტებად გამოყენებული კუთხე"
 
 
 msgid "Precision angle used for rotation increments in 3D editors"
-msgstr "3გ რედაქტორებში ბრუნვის ინკრემენტებად გამოყენებული სიზუსტის კუთხე"
+msgstr "3D რედაქტორებში ბრუნვის ინკრემენტებად გამოყენებული სიზუსტის კუთხე"
 
 
 msgctxt "Unit"
@@ -111602,7 +111586,7 @@ msgstr "აქტიური ინდექსი წვეროთა ჯგ
 
 
 msgid "Scroll and zoom for a 2D region"
-msgstr "გადაფურცვლა და ზუმი 2გ მონაკვეთისთვის"
+msgstr "გადაფურცვლა და ზუმი 2D მონაკვეთისთვის"
 
 
 msgid "Transform Matrix"
@@ -111614,11 +111598,11 @@ msgstr "მატრიცა, რომელიც აკომბინირ
 
 
 msgid "3D rotation"
-msgstr "3გ ბრუნვა"
+msgstr "3D ბრუნვა"
 
 
 msgid "3D View Overlay Settings"
-msgstr "3გ ხედის გადაფარების ანაწყობები"
+msgstr "3D ხედის გადაფარების ანაწყობები"
 
 
 msgid "Bone Wireframe Opacity"
@@ -111690,7 +111674,7 @@ msgstr "ბადის მასშტაბი"
 
 
 msgid "Multiplier for the distance between 3D View grid lines"
-msgstr "3გ ხედსა და ბადის ხაზებს შორის მანძილის მამრავლი"
+msgstr "3D ხედსა და ბადის ხაზებს შორის მანძილის მამრავლი"
 
 
 msgid "Grid Scale Unit"
@@ -111714,7 +111698,7 @@ msgstr "ნორმალების ეკრანული ზომა"
 
 
 msgid "Screen size for normals in the 3D view"
-msgstr "ეკრანული ზომა ნორმალებისთვის 3გ ხედში"
+msgstr "ეკრანული ზომა ნორმალებისთვის 3D ხედში"
 
 
 msgid "Normal Size"
@@ -111722,7 +111706,7 @@ msgstr "ნორმალების ზომა"
 
 
 msgid "Display size for normals in the 3D view"
-msgstr "ასახვის ზომა ნორმალებისთვის 3გ ხედში"
+msgstr "ასახვის ზომა ნორმალებისთვის 3D ხედში"
 
 
 msgid "Retopology Offset"
@@ -111794,11 +111778,11 @@ msgstr "კამერის პასპარტუს ჩვენება"
 
 
 msgid "Show 3D Cursor"
-msgstr "3გ კურსორის ჩვენება"
+msgstr "3D კურსორის ჩვენება"
 
 
 msgid "Display 3D Cursor Overlay"
-msgstr "3გ კურსორის გადაფარების ასახვა"
+msgstr "3D კურსორის გადაფარების ასახვა"
 
 
 msgid "Draw Normals"
@@ -111806,7 +111790,7 @@ msgstr "ნორმალების დახატვა"
 
 
 msgid "Display 3D curve normals in editmode"
-msgstr "ასახე 3გ წირის ნორმალები რედაქტირების რეჟიმში"
+msgstr "ასახე 3D წირის ნორმალები რედაქტირების რეჟიმში"
 
 
 msgid "Display Bevel Weights"
@@ -112214,7 +112198,7 @@ msgstr "მუდმივი ეკრანული ზომის ნორ
 
 
 msgid "Keep size of normals constant in relation to 3D view"
-msgstr "შეინარჩუნე ნორმალების მუდმივი ზომა 3გ ხედთან მიმართებაში"
+msgstr "შეინარჩუნე ნორმალების მუდმივი ზომა 3D ხედთან მიმართებაში"
 
 
 msgid "Vertex Opacity"
@@ -112262,7 +112246,7 @@ msgstr "ძვლის მონიშვნისთვის გამოს�
 
 
 msgid "3D View Shading Settings"
-msgstr "3გ ხედის შეფერადების ანაწყობები"
+msgstr "3D ხედის შეფერადების ანაწყობები"
 
 
 msgid "Shader AOV Name"
@@ -112612,7 +112596,7 @@ msgstr "სარკმლის შეფერადება"
 
 
 msgid "Method to display/shade objects in the 3D View"
-msgstr "3გ ხედში ობიექტების ასახვის/შეფერადების მეთოდი"
+msgstr "3D ხედში ობიექტების ასახვის/შეფერადების მეთოდი"
 
 
 msgid "When to preview the compositor output inside the viewport"
@@ -112908,7 +112892,7 @@ msgstr "მოცულობის ასახვა"
 
 
 msgid "Volume object display settings for 3D viewport"
-msgstr "მოცულობითი ობიექტის ასახვის ანაწყობები 3გ სარკმლისთვის"
+msgstr "მოცულობითი ობიექტის ასახვის ანაწყობები 3D სარკმლისთვის"
 
 
 msgid "Thickness of volume display in the viewport"
@@ -112972,7 +112956,7 @@ msgstr "მოცულობის ბადე"
 
 
 msgid "3D volume grid"
-msgstr "3გ მოცულობის ბადე"
+msgstr "3D მოცულობის ბადე"
 
 
 msgid "Number of dimensions of the grid data type"
@@ -113040,7 +113024,7 @@ msgstr "წილადნიშნა ვექტორი"
 
 
 msgid "3D float vector"
-msgstr "3გ ვექტორი წილადნიშნებით"
+msgstr "3D ვექტორი წილადნიშნებით"
 
 
 msgctxt "Volume"
@@ -113049,7 +113033,7 @@ msgstr "ორმაგი ვექტორი"
 
 
 msgid "3D double vector"
-msgstr "3გ ორმაგი ვექტორი"
+msgstr "3D ორმაგი ვექტორი"
 
 
 msgctxt "Volume"
@@ -113058,7 +113042,7 @@ msgstr "მთელიანი ვექტორი"
 
 
 msgid "3D integer vector"
-msgstr "3გ მთელ რიცხვებიანი ვექტორი"
+msgstr "3D მთელ რიცხვებიანი ვექტორი"
 
 
 msgctxt "Volume"
@@ -113641,15 +113625,15 @@ msgstr "წილადნიშნა ქმედება, რომელი
 
 
 msgid "Vector2D"
-msgstr "ვექტორი2გ"
+msgstr "ვექტორი2D"
 
 
 msgid "2D float vector action, representing a thumbstick or trackpad"
-msgstr "2გ წილადნიშნა ვექტორის ქმედება, რომელიც ჯოისტიკს, ან სენსორულ პანელს წარმოადგენს"
+msgstr "2D წილადნიშნა ვექტორის ქმედება, რომელიც ჯოისტიკს, ან სენსორულ პანელს წარმოადგენს"
 
 
 msgid "3D pose action, representing a controller's location and rotation"
-msgstr "3გ პოზის ქმედება, რომელიც წარმოადგენს კონტროლერის მდებარეობასა და ბრუნვას"
+msgstr "3D პოზის ქმედება, რომელიც წარმოადგენს კონტროლერის მდებარეობასა და ბრუნვას"
 
 
 msgid "Vibration"
@@ -113757,7 +113741,7 @@ msgstr "წილადნიშნას მიჯნა"
 
 
 msgid "Input threshold for float/2D vector actions"
-msgstr "შენატანის მიჯნა წილადნიშნა/2გ ვექტორიანი ქმედებებისთვის"
+msgstr "შენატანის მიჯნა წილადნიშნა/2D ვექტორიანი ქმედებებისთვის"
 
 
 msgid "XR action values corresponding to type"
@@ -114158,7 +114142,7 @@ msgstr "Alt-ით ნავიგაცია გარდაქმნისა
 
 
 msgid "During transformations, use Alt to navigate in the 3D View. Note that if disabled, hotkeys for Proportional Editing, Automatic Constraints, and Auto IK Chain Length will require holding Alt"
-msgstr "გარდაქმნების დროს 3გ ხედში ნავიგაციისთვის გამოიყენე Alt. გაითვალისწინე, რომ თუ გათიშულია, პროპორციული რედაქტირების, ავტომატური ბორკილებისა და ავტომატური შ.კ. ჯაჭვის სიგრძის ცხელი კლავიშები Alt-ის დაჭერას მოითხოვს"
+msgstr "გარდაქმნების დროს 3D ხედში ნავიგაციისთვის გამოიყენე Alt. გაითვალისწინე, რომ თუ გათიშულია, პროპორციული რედაქტირების, ავტომატური ბორკილებისა და ავტომატური შ.კ. ჯაჭვის სიგრძის ცხელი კლავიშები Alt-ის დაჭერას მოითხოვს"
 
 
 msgid "Alt Tool Access"
@@ -114196,9 +114180,9 @@ msgstr ""
 "გათრევისას გაააქტიურე სექტორული მენიუები,\n"
 "რაც საშუალებას იმავე კლავიშზე დაჭერით მეორეული ქმედების მიღების საშუალებას იძლევა.\n"
 "\n"
-"• 3გ ხედში Tab-ზე დაჭერით გადაირთვება რედაქტირების რეჟიმი, გათრევა იძახებს რეჟიმის მენიუს.\n"
-"• 3გ ხედში Z-ის დაჭერა გადართავს მავთულბადეს, ხატვის რეჟიმებისთვის გაათრიე.\n"
-"• 3გ ხედში ტილდა ააქტიურებს პირველ პირში ნავიგაციას, ხედის ღერძებისთვის გაათრიე"
+"• 3D ხედში Tab-ზე დაჭერით გადაირთვება რედაქტირების რეჟიმი, გათრევა იძახებს რეჟიმის მენიუს.\n"
+"• 3D ხედში Z-ის დაჭერა გადართავს მავთულბადეს, ხატვის რეჟიმებისთვის გაათრიე.\n"
+"• 3D ხედში ტილდა ააქტიურებს პირველ პირში ნავიგაციას, ხედის ღერძებისთვის გაათრიე"
 
 
 msgid "Region Toggle Pie"
@@ -114238,7 +114222,7 @@ msgstr "Alt-თაგვის შუა ღილკის გათრევ�
 
 
 msgid "Action when Alt-MMB dragging in the 3D viewport"
-msgstr "ქმედება 3გ სარკმელში Alt-თაგვის შუა კლავიშით გათრევის დროს"
+msgstr "ქმედება 3D სარკმელში Alt-თაგვის შუა კლავიშით გათრევის დროს"
 
 
 msgid "Set the view axis where each mouse direction maps to an axis relative to the current orientation"
@@ -114299,12 +114283,12 @@ msgstr "მონაკვეთის კონტექსტური მე�
 
 msgctxt "WindowManager"
 msgid "View2D"
-msgstr "ხედი2გ"
+msgstr "ხედი2D"
 
 
 msgctxt "WindowManager"
 msgid "View2D Buttons List"
-msgstr "ხედი2გ-ის ღილაკების სია"
+msgstr "ხედი2D-ის ღილაკების სია"
 
 
 msgctxt "WindowManager"
@@ -114314,7 +114298,7 @@ msgstr "მომხმარებლის ინტერფეისი"
 
 msgctxt "WindowManager"
 msgid "3D View"
-msgstr "3გ ხედი"
+msgstr "3D ხედი"
 
 
 msgctxt "WindowManager"
@@ -114324,92 +114308,92 @@ msgstr "ობიექტის რეჟიმი"
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Tweak"
-msgstr "3გ ხედის ხელსაწყო: გადაკეთება"
+msgstr "3D ხედის ხელსაწყო: გადაკეთება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Tweak (fallback)"
-msgstr "3გ ხედის ხელსაწყო: გადაკეთება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: გადაკეთება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Select Box"
-msgstr "3გ ხედის ხელსაწყო: მომნიშვნელი მართკუთხედი"
+msgstr "3D ხედის ხელსაწყო: მომნიშვნელი მართკუთხედი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Select Box (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მომნიშვნელი მართკუთხედი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მომნიშვნელი მართკუთხედი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Select Circle"
-msgstr "3გ ხედის ხელსაწყო: მომნიშვნელი წრეწირი"
+msgstr "3D ხედის ხელსაწყო: მომნიშვნელი წრეწირი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Select Circle (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მომნიშვნელი წრეწირი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მომნიშვნელი წრეწირი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Select Lasso"
-msgstr "3გ ხედის ხელსაწყო: მომნიშვნელი ქამანდი"
+msgstr "3D ხედის ხელსაწყო: მომნიშვნელი ქამანდი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Select Lasso (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მომნიშვნელი ქამანდი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მომნიშვნელი ქამანდი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Cursor"
-msgstr "3გ ხედის ხელსაწყო: კურსორი"
+msgstr "3D ხედის ხელსაწყო: კურსორი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Cursor (fallback)"
-msgstr "3გ ხედის ხელსაწყო: კურსორი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: კურსორი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Move"
-msgstr "3გ ხედის ხელსაწყო: გადაადგილება"
+msgstr "3D ხედის ხელსაწყო: გადაადგილება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Move (fallback)"
-msgstr "3გ ხედის ხელსაწყო: გადაადგილება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: გადაადგილება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Rotate"
-msgstr "3გ ხედის ხელსაწყო: ბრუნვა"
+msgstr "3D ხედის ხელსაწყო: ბრუნვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Rotate (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ბრუნვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ბრუნვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Scale"
-msgstr "3გ ხედის ხელსაწყო: მასშტაბი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მასშტაბი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Scale (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მასშტაბი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მასშტაბი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Transform"
-msgstr "3გ ხედის ხელსაწყო: გარდაქმნა"
+msgstr "3D ხედის ხელსაწყო: გარდაქმნა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Transform (fallback)"
-msgstr "3გ ხედის ხელსაწყო: გარდაქმნა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: გარდაქმნა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
@@ -114454,22 +114438,22 @@ msgstr "საზოგადო ხელსაწყო: საშლელი
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Measure"
-msgstr "3გ ხედის ხელსაწყო: საზომი"
+msgstr "3D ხედის ხელსაწყო: საზომი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Measure (fallback)"
-msgstr "3გ ხედის ხელსაწყო: საზომი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: საზომი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Object, Add Primitive"
-msgstr "3გ ხედის ხელსაწყო: ობიექტი, პრიმიტივის დამატება"
+msgstr "3D ხედის ხელსაწყო: ობიექტი, პრიმიტივის დამატება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Object, Add Primitive (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ობიექტი, პრიმიტივის დამატება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ობიექტი, პრიმიტივის დამატება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
@@ -114479,232 +114463,232 @@ msgstr "მეში"
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude Region"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, მონაკვეთის ამოყვანა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, მონაკვეთის ამოყვანა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude Region (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, მონაკვეთის ამოყვანა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, მონაკვეთის ამოყვანა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude Manifold"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, მრავალსახეობის ამოყვანა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, მრავალსახეობის ამოყვანა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude Manifold (fallback)"
-msgstr "3გ ხელსაწყო: მეშის რედაქტირება, მრავალსახეობის ამოყვანა (სათადარიგო)"
+msgstr "3D ხელსაწყო: მეშის რედაქტირება, მრავალსახეობის ამოყვანა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude Along Normals"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, ამოყვანა ნორმალების გასწვრივ"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, ამოყვანა ნორმალების გასწვრივ"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude Along Normals (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, ამოყვანა ნორმალების გასწვრივ (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, ამოყვანა ნორმალების გასწვრივ (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude Individual"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, ინდივიდუალური ამოყვანა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, ინდივიდუალური ამოყვანა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude Individual (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, ინდივიდუალური ამოყვანა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, ინდივიდუალური ამოყვანა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude to Cursor"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, კურსორთან ამოყვანა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, კურსორთან ამოყვანა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Extrude to Cursor (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, კურსორთან ამოყვანა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, კურსორთან ამოყვანა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Inset Faces"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წახნაგების ჩასმა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წახნაგების ჩასმა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Inset Faces (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წახნაგების ჩასმა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წახნაგების ჩასმა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Bevel"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, დაცერობება"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, დაცერობება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Bevel (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, დაცერობება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, დაცერობება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Loop Cut"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, მარყუჟის კვეთა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, მარყუჟის კვეთა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Loop Cut (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, მარყუჟის კვეთა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, მარყუჟის კვეთა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Offset Edge Loop Cut"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წიბოთა კვეთილი მარყუჟის აცდენა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წიბოთა კვეთილი მარყუჟის აცდენა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Offset Edge Loop Cut (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წიბოთა კვეთილი მარყუჟის აცდენა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წიბოთა კვეთილი მარყუჟის აცდენა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Knife"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, დანა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, დანა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Knife (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, დანა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, დანა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Bisect"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, ორად გაყოფა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, ორად გაყოფა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Bisect (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, ორად გაყოფა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, ორად გაყოფა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Poly Build"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, პოლი აგება"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, პოლი აგება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Poly Build (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, პოლი აგება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, პოლი აგება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Spin"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, დაბზრიალება"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, დაბზრიალება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Spin (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, დაბზრიალება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, დაბზრიალება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Smooth"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, დაგლუვება"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, დაგლუვება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Smooth (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, დაგლუვება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, დაგლუვება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Randomize"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, გაშემთხვევითება"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, გაშემთხვევითება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Randomize (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, გაშემთხვევითება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, გაშემთხვევითება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Edge Slide"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წიბოს გაცურება"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წიბოს გაცურება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Edge Slide (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წიბოს გაცურება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წიბოს გაცურება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Vertex Slide"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წვეროს გაცურება"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წვეროს გაცურება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Vertex Slide (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წვეროს გაცურება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წვეროს გაცურება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Shrink/Fatten"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, შეკუმშვა/გაბერვა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, შეკუმშვა/გაბერვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Shrink/Fatten (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, შეკუმშვა/გაბერვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, შეკუმშვა/გაბერვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Push/Pull"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, მიწოლა/მოქაჩვა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, მიწოლა/მოქაჩვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Push/Pull (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, მიწოლა/მოქაჩვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, მიწოლა/მოქაჩვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Shear"
-msgstr "3გ ხედის ხელსაწყო: ძვრა"
+msgstr "3D ხედის ხელსაწყო: ძვრა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Shear (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძვრა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძვრა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, To Sphere"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, სფეროდ"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, სფეროდ"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, To Sphere (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, სფეროდ (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, სფეროდ (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Rip Region"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, მონაკვეთის მორღვევა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, მონაკვეთის მორღვევა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Rip Region (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, მონაკვეთის მორღვევა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, მონაკვეთის მორღვევა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Rip Edge"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წიბოს მორღვევა"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წიბოს მორღვევა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Mesh, Rip Edge (fallback)"
-msgstr "3გ ხედის ხელსაწყო: მეშის რედაქტირება, წიბოს მორღვევა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: მეშის რედაქტირება, წიბოს მორღვევა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
@@ -114714,72 +114698,72 @@ msgstr "წირი"
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Draw"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, დახაზვა"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, დახაზვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Draw (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, დახაზვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, დახაზვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Curve Pen"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, წირის კალამი"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, წირის კალამი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Curve Pen (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, წირის კალამი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, წირის კალამი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Extrude"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, ამოყვანა"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, ამოყვანა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Extrude (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, ამოყვანა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, ამოყვანა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Extrude to Cursor"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, ამოყვანა კურსორამდე"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, ამოყვანა კურსორამდე"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Extrude to Cursor (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, ამოყვანა კურსორამდე (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, ამოყვანა კურსორამდე (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Radius"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, რადიუსი"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, რადიუსი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Radius (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, რადიუსი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, რადიუსი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Tilt"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, გადახრა"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, გადახრა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Tilt (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, გადახრა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, გადახრა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Randomize"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, გაშემთხვევითება"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, გაშემთხვევითება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Curve, Randomize (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წირის რედაქტირება, გაშემთხვევითება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წირის რედაქტირება, გაშემთხვევითება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
@@ -114794,52 +114778,52 @@ msgstr "არმატურა"
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Roll"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, ტრიალი"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, ტრიალი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Roll (fallback)"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, ტრიალი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, ტრიალი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Bone Size"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, ძვლის ზომა"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, ძვლის ზომა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Bone Size (fallback)"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, ძვლის ზომა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, ძვლის ზომა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Bone Envelope"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, ძვლის გარსი"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, ძვლის გარსი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Bone Envelope (fallback)"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, ძვლის გარსი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, ძვლის გარსი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Extrude"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, ამოყვანა"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, ამოყვანა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Extrude (fallback)"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, ამოყვანა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, ამოყვანა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Extrude to Cursor"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, კურსორთან ამოყვანა"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, კურსორთან ამოყვანა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Armature, Extrude to Cursor (fallback)"
-msgstr "3გ ხედის ხელსაწყო: არმატურის რედაქტირება, კურსორთან ამოყვანა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: არმატურის რედაქტირება, კურსორთან ამოყვანა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
@@ -114859,12 +114843,12 @@ msgstr "შრიფტი"
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Text, Select Text"
-msgstr "3გ ხედის ხელსაწყო: ტექსტის რედაქტირება, ტექსტის მონიშვნა"
+msgstr "3D ხედის ხელსაწყო: ტექსტის რედაქტირება, ტექსტის მონიშვნა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Edit Text, Select Text (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ტექსტის რედაქტირება, ტექსტის მონიშვნა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ტექსტის რედაქტირება, ტექსტის მონიშვნა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
@@ -114879,32 +114863,32 @@ msgstr "პოზირება"
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Pose, Breakdowner"
-msgstr "3გ ხედის ხელსაწყო: პოზირება, გამასაშუალოებელი"
+msgstr "3D ხედის ხელსაწყო: პოზირება, გამასაშუალოებელი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Pose, Breakdowner (fallback)"
-msgstr "3გ ხედის ხელსაწყო: პოზირება, გამასაშუალოებელი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: პოზირება, გამასაშუალოებელი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Pose, Push"
-msgstr "3გ ხედის ხელსაწყო: პოზირება, მიწოლა"
+msgstr "3D ხედის ხელსაწყო: პოზირება, მიწოლა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Pose, Push (fallback)"
-msgstr "3გ ხედის ხელსაწყო: პოზირება, მიწოლა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: პოზირება, მიწოლა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Pose, Relax"
-msgstr "3გ ხედის ხელსაწყო: პოზირება, მოშვება"
+msgstr "3D ხედის ხელსაწყო: პოზირება, მოშვება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Pose, Relax (fallback)"
-msgstr "3გ ხედის ხელსაწყო: პოზირება, მოშვება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: პოზირება, მოშვება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
@@ -114919,32 +114903,32 @@ msgstr "წონის ხატვა"
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Paint Weight, Gradient"
-msgstr "3გ ხედის ხელსაწყო: წონის ხატვა, გრადიენტი"
+msgstr "3D ხედის ხელსაწყო: წონის ხატვა, გრადიენტი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Paint Weight, Gradient (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წონის ხატვა, გრადიენტი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წონის ხატვა, გრადიენტი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Paint Weight, Sample Weight"
-msgstr "3გ ხედის ხელსაწყო: წონის ხატვა, წონის ნიმუშის აღება"
+msgstr "3D ხედის ხელსაწყო: წონის ხატვა, წონის ნიმუშის აღება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Paint Weight, Sample Weight (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წონის ხატვა, წონის ნიმუშის აღება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წონის ხატვა, წონის ნიმუშის აღება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Paint Weight, Sample Vertex Group"
-msgstr "3გ ხედის ხელსაწყო: წონის ხატვა, წვეროთა ჯგუფის ნიმუშის აღება"
+msgstr "3D ხედის ხელსაწყო: წონის ხატვა, წვეროთა ჯგუფის ნიმუშის აღება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Paint Weight, Sample Vertex Group (fallback)"
-msgstr "3გ ხედის ხელსაწყო: წონის ხატვა, წვეროთა ჯგუფის ნიმუშის აღება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: წონის ხატვა, წვეროთა ჯგუფის ნიმუშის აღება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
@@ -114969,222 +114953,222 @@ msgstr "ძერწვა"
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Mask"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, მართკუთხა შენიღბვა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, მართკუთხა შენიღბვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Mask (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, მართკუთხა შენიღბვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, მართკუთხა შენიღბვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Mask"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ქამანდით მონიშვნა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ქამანდით მონიშვნა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Mask (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ქამანდით შენიღბვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ქამანდით შენიღბვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Mask"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ხაზით შენიღბვა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ხაზით შენიღბვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Mask (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ხაზით შენიღბვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ხაზით შენიღბვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Mask"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, პოლიხაზით შენიღბვა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, პოლიხაზით შენიღბვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Mask (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, პოლიხაზით შენიღბვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, პოლიხაზით შენიღბვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Hide"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, მართკუთხედით დამალვა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, მართკუთხედით დამალვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Hide (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, მართკუთხედით დამალვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, მართკუთხედით დამალვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Hide"
-msgstr "3გ ხედის ხელსაწყო: ქამანდით დამალვა"
+msgstr "3D ხედის ხელსაწყო: ქამანდით დამალვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Hide (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ქამანდით დამალვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ქამანდით დამალვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Hide"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ხაზით დამალვა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ხაზით დამალვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Hide (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ხაზით დამალვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ხაზით დამალვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Hide"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, პოლიხაზით დამალვა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, პოლიხაზით დამალვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Hide (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, პოლიხაზით დამალვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, პოლიხაზით დამალვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Face Set"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ოთხკუთხა მონიშვნით"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ოთხკუთხა მონიშვნით"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Face Set (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ოთხკუთხა მონიშვნით (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ოთხკუთხა მონიშვნით (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Face Set"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ქამანდით"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ქამანდით"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Face Set (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ქამანდით (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ქამანდით (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Face Set"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგების ნაკრების ხაზით"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგების ნაკრების ხაზით"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Face Set (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ხაზით (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები ხაზით (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Face Set"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები პოლიხაზით"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები პოლიხაზით"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Face Set (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები პოლიხაზით (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგთა ნაკრები პოლიხაზით (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Trim"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, მართკუთხედით მოკრეჭა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, მართკუთხედით მოკრეჭა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Trim (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, მართკუთხედით მოკრეჭა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, მართკუთხედით მოკრეჭა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Trim"
-msgstr "3გ ხედის ხელსაწყო: ქამანდით მოკრეჭა"
+msgstr "3D ხედის ხელსაწყო: ქამანდით მოკრეჭა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Trim (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ქამანდით მოკრეჭა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ქამანდით მოკრეჭა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Trim"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ხაზით მოკრეჭა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ხაზით მოკრეჭა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Trim (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ხაზით მოკრეჭა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ხაზით მოკრეჭა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Trim"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, პოლიხაზით მოკრეჭა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, პოლიხაზით მოკრეჭა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Trim (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, პოლიხაზით მოკრეჭა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, პოლიხაზით მოკრეჭა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Project"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ხაზის პროეცირება"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ხაზის პროეცირება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Project (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ხაზის პროეცირება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ხაზის პროეცირება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Mesh Filter"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, მეშის ფილტრი"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, მეშის ფილტრი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Mesh Filter (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, მეშის ფილტრი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, მეშის ფილტრი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Cloth Filter"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ქსოვილის ფილტრი"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ქსოვილის ფილტრი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Cloth Filter (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ქსოვილის ფილტრი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ქსოვილის ფილტრი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Color Filter"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ფერის ფილტრი"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ფერის ფილტრი"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Color Filter (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ფერის ფილტრი (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ფერის ფილტრი (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Face Set Edit"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგების ნაკრების რედაქტირება"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგების ნაკრების რედაქტირება"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Face Set Edit (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, წახნაგების ნაკრების რედაქტირება (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, წახნაგების ნაკრების რედაქტირება (სათადარიგო)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Mask by Color"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ფერის მიხედვით შენიღბვა"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ფერის მიხედვით შენიღბვა"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Mask by Color (fallback)"
-msgstr "3გ ხედის ხელსაწყო: ძერწვა, ფერის მიხედვით შენიღბვა (სათადარიგო)"
+msgstr "3D ხედის ხელსაწყო: ძერწვა, ფერის მიხედვით შენიღბვა (სათადარიგო)"
 
 
 msgctxt "WindowManager"
@@ -115408,11 +115392,11 @@ msgstr "გამოიყენე ამჟამად რედაქტი�
 
 msgctxt "WindowManager"
 msgid "Set and Use 3D Cursor"
-msgstr "3გ კურსორის დაყენება და გამოყენება"
+msgstr "3D კურსორის დაყენება და გამოყენება"
 
 
 msgid "Set new 3D cursor position and use it"
-msgstr "დააყენე 3გ კურსორის ახალი პოზიცია და გამოიყენე"
+msgstr "დააყენე 3D კურსორის ახალი პოზიცია და გამოიყენე"
 
 
 msgctxt "WindowManager"
@@ -115719,7 +115703,7 @@ msgstr "ობიექტი არამოდალური"
 
 msgctxt "WindowManager"
 msgid "View3D Placement Modal"
-msgstr "ხედი3გ-ის განთავსება მოდალური"
+msgstr "ხედი3D-ს განთავსება მოდალური"
 
 
 msgctxt "WindowManager"
@@ -115754,7 +115738,7 @@ msgstr "ბრუნვის ცენტრის დაცენტრებ�
 
 msgctxt "WindowManager"
 msgid "View3D Walk Modal"
-msgstr "ხედი3გ-ში სიარული მოდალური"
+msgstr "ხედი3D-ში სიარული მოდალური"
 
 
 msgctxt "WindowManager"
@@ -115944,7 +115928,7 @@ msgstr "შეამცირე ნახტომის სიმაღლე"
 
 msgctxt "WindowManager"
 msgid "View3D Fly Modal"
-msgstr "ხედი3გ-ის ფრენა მოდალური"
+msgstr "ხედი3D-ის ფრენა მოდალური"
 
 
 msgctxt "WindowManager"
@@ -115992,7 +115976,7 @@ msgstr "ბრუნვა (გამორთული)"
 
 msgctxt "WindowManager"
 msgid "View3D Rotate Modal"
-msgstr "ხედი3გ ბრუნვა მოდალური"
+msgstr "ხედი3D-ს ბრუნვა მოდალური"
 
 
 msgctxt "WindowManager"
@@ -116017,7 +116001,7 @@ msgstr "მოძრაობაზე გადასვლა"
 
 msgctxt "WindowManager"
 msgid "View3D Move Modal"
-msgstr "ხედი3გ-ის მოძრაობა მოდალური"
+msgstr "ხედი3D-ს მოძრაობა მოდალური"
 
 
 msgctxt "WindowManager"
@@ -116027,17 +116011,17 @@ msgstr "ბრუნვაზე გადასვლა"
 
 msgctxt "WindowManager"
 msgid "View3D Zoom Modal"
-msgstr "ხედი3გ-ის ზუმი მოდალური"
+msgstr "ხედი3D-ს ზუმი მოდალური"
 
 
 msgctxt "WindowManager"
 msgid "View3D Dolly Modal"
-msgstr "ხედი3გ-ის ურიკით მოძრაობა მოდალური"
+msgstr "ხედი3D-ს ურიკით მოძრაობა მოდალური"
 
 
 msgctxt "WindowManager"
 msgid "3D View Generic"
-msgstr "3გ ხედი საზოგადო"
+msgstr "3D ხედი საზოგადო"
 
 
 msgctxt "WindowManager"
@@ -116512,7 +116496,7 @@ msgstr "ანიმაციის არხები"
 
 msgctxt "WindowManager"
 msgid "View3D Gesture Circle"
-msgstr "3გ-ხედის წრის ჟესტი"
+msgstr "ხედი3D-ს წრის ჟესტი"
 
 
 msgctxt "WindowManager"
@@ -118149,7 +118133,7 @@ msgstr "ამ მასალის მქონე ობიექტებზ
 
 
 msgid "View3D not found, cannot run operator"
-msgstr "3გ ხედი არ მოიძებნა, ოპერატორის გაშვება შეუძლებელია"
+msgstr "3D ხედი არ მოიძებნა, ოპერატორის გაშვება შეუძლებელია"
 
 
 msgid "Node {} deleted"
@@ -119208,7 +119192,7 @@ msgstr "მონიშნა თაგვის ღილაკით"
 
 
 msgid "3D View"
-msgstr "3გ ხედი"
+msgstr "3D ხედი"
 
 
 msgid "Grave Accent / Tilde Action"
@@ -122433,7 +122417,7 @@ msgstr "სარკმლის გიზმოები"
 
 
 msgid "3D Markers"
-msgstr "3გ მარკერები"
+msgstr "3D მარკერები"
 
 
 msgid "Display Aspect Ratio"
@@ -124078,7 +124062,7 @@ msgstr "ნაგულისხმები ქრობა"
 
 
 msgid "2D Stabilized Clip"
-msgstr "სტაბილიზირებული 2გ კლიპი"
+msgstr "სტაბილიზირებული 2D კლიპი"
 
 
 msgid "Undistorted Clip"
@@ -124951,7 +124935,7 @@ msgstr "კადრების სიხშირე დაკვრისა�
 
 
 msgid "3D Viewport Axes"
-msgstr "3გ სარკმლის ღერძები"
+msgstr "3D სარკმლის ღერძები"
 
 
 msgid "Smooth Wires"
@@ -126995,7 +126979,7 @@ msgstr "რენტგენის გადართვა"
 
 
 msgid "To 3D Cursor"
-msgstr "3გ კურსორს"
+msgstr "3Dკურსორს"
 
 
 msgid "Camera Guides"
@@ -127689,10 +127673,6 @@ msgid "\"%s\" is using Action \"%s\", which does not have a slot with identifier
 msgstr "\"%s\" იყენებს ქმედებას \"%s\", რომელსაც არ აქვს სლოტი იდენტიფიკატორით \"%s\", ან \"%s\". ხელით მიაკუთვნე სწორი ქმედების სლოტი \"%s\"-ს."
 
 
-msgid "Legacy action \"%s\" is assigned to \"%s\", which does not match the action's id_root \"%s\". The action has been upgraded to a slotted action with slot \"%s\" with an id_type \"%s\", which has also been assigned to \"%s\" despite this type mismatch. This likely indicates something odd about the blend file."
-msgstr "ძველებური ქმედება \"%s\" მიკუთვნებულია \"%s\"-ზე, რომელიც არ ემთხვევა ქმედების id_root-ს \"%s\". ქმედება დააფგრეიდდა სლოტიან ქმედებაზე სლოტით \"%s\" id_type-ით \"%s\", რომელიც ასევე მიეკუთვნა \"%s\"-ს მიუხედავად იმისა, რომ ტიპი არ ემთხვევა. ეს სავარაუდოდ ნიშნავს, რომ blend ფაილს რაღაც უცნაური სჭირს."
-
-
 msgid "Named Layer node"
 msgstr "სახელდებული შრის კვანძი"
 
@@ -128010,7 +127990,7 @@ msgstr "4 4-ზე წილადნიშნა მატრიცა"
 
 
 msgid "2D 16-Bit Integer"
-msgstr "2გ 16-ბიტიანი მთელი რიცხვი"
+msgstr "2D 16-ბიტიანი მთელი რიცხვი"
 
 
 msgid "Recast"
@@ -129094,7 +129074,7 @@ msgstr "%s შეიცავს მოცულობის იერფერ�
 
 
 msgid "2D_Animation"
-msgstr "2გ_ანიმაცია"
+msgstr "2D_ანიმაცია"
 
 
 msgid "Sculpting"
@@ -130309,7 +130289,7 @@ msgstr "ზედაპირი"
 
 
 msgid "Unable to access 3D viewport"
-msgstr "3გ სარკმელზე წვდომა ვერ განხორციელდა"
+msgstr "3D სარკმელზე წვდომა ვერ განხორციელდა"
 
 
 msgid "The \"stroke\" cannot be empty"
@@ -130657,7 +130637,7 @@ msgstr "ამორჩეული ძვალი არ ეკუთვნი
 
 
 msgid "Selection is not a bone. Armature needs to be in Pose Mode or Edit Mode to pick in the 3D Viewport"
-msgstr "მონიშნული საგანი ძვალი არაა. 3გ სარკმელში ასარჩევად არმატურა ან პოზირების რეჟიმში უნდა იყოს, ან რედაქტირებისაში"
+msgstr "მონიშნული საგანი ძვალი არაა. 3D სარკმელში ასარჩევად არმატურა ან პოზირების რეჟიმში უნდა იყოს, ან რედაქტირებისაში"
 
 
 msgid "Selection is not a bone"
@@ -130665,7 +130645,7 @@ msgstr "მონიშნული არაა ძვალი"
 
 
 msgid "Can only pick from the 3D viewport or the outliner"
-msgstr "არჩევა შესაძლებელია მხოლოდ 3გ სარკმლიდან, ან მონახაზიდან"
+msgstr "არჩევა შესაძლებელია მხოლოდ 3D სარკმლიდან, ან მონახაზიდან"
 
 
 msgid "Drag to continue sampling, release when done"
@@ -131954,7 +131934,7 @@ msgstr "ექსპორტის ვარიანტები"
 
 
 msgid "Unable to find valid 3D View area"
-msgstr "ვარგისი 3გ ხედის არეს პოვნა შეუძლებელია"
+msgstr "ვარგისი 3D ხედის არეს პოვნა შეუძლებელია"
 
 
 msgid "Unable to export SVG"
@@ -132295,7 +132275,7 @@ msgstr "ბრუნვის ცენტრის გამოყენებ�
 
 
 msgid "Set and use 3D cursor"
-msgstr "დააყენე და გამოიყენე 3გ კურსორი"
+msgstr "დააყენე და გამოიყენე 3D კურსორი"
 
 
 msgid "Select and use mesh item"
@@ -134064,11 +134044,11 @@ msgstr "უდრეკი სხეულის სამყაროს ფი
 
 
 msgid "3D Local View "
-msgstr "3გ ლოკალური ხედი "
+msgstr "3D ლოკალური ხედი "
 
 
 msgid "3D View "
-msgstr "3გ ხედი "
+msgstr "3D ხედი "
 
 
 msgid "Frame:"
@@ -134665,7 +134645,7 @@ msgstr "ვარგისი, შეფასებული მეშის �
 
 
 msgid "No 3D viewport found to create image from"
-msgstr "3გ სარკმელი, რომლიდანაც გამოსახულება უნდა შეიქმნას, არ არსებობს"
+msgstr "3D სარკმელი, რომლიდანაც გამოსახულება უნდა შეიქმნას, არ არსებობს"
 
 
 msgid "Failed to create OpenGL off-screen buffer: %s"
@@ -134753,7 +134733,7 @@ msgstr "აქტიური ფუნჯი არ შეიცავს ა�
 
 
 msgid "Texture mapping not set to 3D, results may be unpredictable"
-msgstr "ტექსტურის დატანა 3გ-ზე არაა დაყენებული, შედეგები შეიძლება, გაუთვალისწინებელი იყოს"
+msgstr "ტექსტურის დატანა 3D-ზე არაა დაყენებული, შედეგები შეიძლება, გაუთვალისწინებელი იყოს"
 
 
 msgid "non-triangle face"
@@ -136593,7 +136573,7 @@ msgid ""
 "Restrict visibility in the 3D View\n"
 " • Shift to set children"
 msgstr ""
-"შეზღუდე ხილულობა 3გ ხედში\n"
+"შეზღუდე ხილულობა 3D ხედში\n"
 " • Shift შვილობილების დასაყენებლად"
 
 
@@ -136601,12 +136581,12 @@ msgid ""
 "Restrict selection in the 3D View\n"
 " • Shift to set children"
 msgstr ""
-"შეზღუდე მონიშვნა 3გ ხედში\n"
+"შეზღუდე მონიშვნა 3D ხედში\n"
 " • Shift შვილობილების დასაყენებლად"
 
 
 msgid "Restrict visibility in the 3D View"
-msgstr "შეზღუდე ხილულობა 3გ ხედში"
+msgstr "შეზღუდე ხილულობა 3D ხედში"
 
 
 msgid "Restrict editing of strokes and keyframes in this layer"
@@ -137191,6 +137171,26 @@ msgstr "არცერთი სოლი, ან ლენტი არაა 
 
 msgid "This strip type cannot be retimed"
 msgstr "ამ ლენტის ტიპის დროში ხელახალი განაწილება შეუძლებელია"
+
+
+msgctxt "Operator"
+msgid "Select (Unconnected)"
+msgstr "მონიშვნა (დაუკავშირებელი)"
+
+
+msgctxt "Operator"
+msgid "Select (Linked Time)"
+msgstr "მონიშვნა (დაკავშირებული დრო)"
+
+
+msgctxt "Operator"
+msgid "Select (Linked Handle)"
+msgstr "მონიშვნა (დაკავშირებული სახელური)"
+
+
+msgctxt "Operator"
+msgid "Select (Side of Frame)"
+msgstr "მონიშვნა (ჩარჩოს გვერდი)"
 
 
 msgid "No active sequence!"
@@ -138170,7 +138170,7 @@ msgstr "Alt or (C)ჩაჭერა: %s"
 
 
 msgid "Create Orientation's 'use' parameter only valid in a 3DView context"
-msgstr "შექმენი ორიენტაციის 'use' პარამეტრი, ვარგისი მხოლოდ 3გ ხედის კონტექსტში"
+msgstr "შექმენი ორიენტაციის 'use' პარამეტრი, ვარგისი მხოლოდ 3D ხედის კონტექსტში"
 
 
 msgid "Unable to create orientation"
@@ -140738,7 +140738,7 @@ msgstr "მანიპულატორის ტიპი '%s' უცნო�
 
 
 msgid "GizmoType '%s' is for a 3D gizmo-group. The 'draw_select' callback is set where only 'test_select' will be used."
-msgstr "გიზმოს ტიპი '%s' 3გ გიზმო-ჯგუფისთვისაა. გამოძახება 'draw_select' ყენდება, სადაც მხოლოდ 'test_select' იქნება გამოყენებული."
+msgstr "გიზმოს ტიპი '%s' 3D გიზმო-ჯგუფისთვისაა. გამოძახება 'draw_select' ყენდება, სადაც მხოლოდ 'test_select' იქნება გამოყენებული."
 
 
 msgid "%s area type does not support gizmos"
@@ -142953,7 +142953,7 @@ msgstr "თუ ჭეშმარიტია, ნამდვილი გი�
 
 
 msgid "Local rotation of the gizmo. Only used if the local transforms are used in the 3D view"
-msgstr "გიზმოს ლოკალური ბრუნვა. გამოიყენება მხოლოდ მაშინ, როცა ლოკალური გარდაქმნები გამოიყენება 3გ ხედში"
+msgstr "გიზმოს ლოკალური ბრუნვა. გამოიყენება მხოლოდ მაშინ, როცა ლოკალური გარდაქმნები გამოიყენება 3D ხედში"
 
 
 msgid "Layers as Instances"
@@ -144061,11 +144061,11 @@ msgstr "ზედაპირის ლიმიტი"
 
 
 msgid "The location of the scene's 3D cursor, in the local space of the modified object"
-msgstr "სცენის 3გ კურსორის მდებარეობა, მოდიფიცირებული ობიექტის ლოკალური სივრცეში"
+msgstr "სცენის 3D კურსორის მდებარეობა, მოდიფიცირებული ობიექტის ლოკალური სივრცეში"
 
 
 msgid "The rotation of the scene's 3D cursor, in the local space of the modified object"
-msgstr "სცენის 3გ კურსორის ბრუნვა, მოდიფიცირებული ობიექტის ლოკალურ სივრცეში"
+msgstr "სცენის 3D კურსორის ბრუნვა, მოდიფიცირებული ობიექტის ლოკალურ სივრცეში"
 
 
 msgid "Index of the active element in the specified domain"
@@ -144121,7 +144121,7 @@ msgstr "ფერის გადაფარების გარეშე"
 
 
 msgid "Rotation values can only be displayed with the text overlay in the 3D view"
-msgstr "ბრუნვის მნიშვნელობების ასახვა შეიძლება მხოლოდ ტექსტის გადაფარებით 3გ სარკმელში"
+msgstr "ბრუნვის მნიშვნელობების ასახვა შეიძლება მხოლოდ ტექსტის გადაფარებით 3D სარკმელში"
 
 
 msgid "Is Orthographic"
@@ -145008,7 +145008,7 @@ msgstr ""
 
 
 msgid "The coordinates at which Gabor noise will be evaluated. The Z component is ignored in the 2D case"
-msgstr "კოორდინატები, რომლებზეც მოხდება გაბორის ხმაურის გამოთვლა. 2გ შემთხვევაში Z კომპონენტი იგნორირებულია"
+msgstr "კოორდინატები, რომლებზეც მოხდება გაბორის ხმაურის გამოთვლა. 2D შემთხვევაში Z კომპონენტი იგნორირებულია"
 
 
 msgid "The scale of the Gabor noise"
@@ -145725,6 +145725,10 @@ msgid "Cannot save blend file, path \"%s\" is not writable"
 msgstr "blend ფაილის შენახვა შეუძლებელია, მისამართი '%s' ჩაუწერადია"
 
 
+msgid "Cannot save blend file, path \"%s\" is a directory"
+msgstr "blend ფაილის შენახვა შეუძლებელია, მისამართი '%s' დირექტორიაა"
+
+
 msgid "Can't read alternative start-up file: \"%s\""
 msgstr "ალტერნატიული გაშვების ფაილის: \"%s\" წაკითხვა შეუძლებელია"
 
@@ -145946,7 +145950,7 @@ msgstr "მეტის გაგება"
 
 
 msgid "Set Stereo 3D"
-msgstr "სტერეო 3გ-ის დაყენება"
+msgstr "სტერეო 3D-ს დაყენება"
 
 
 msgid "Failed to create a window without quad-buffer support, you may experience flickering"
@@ -145970,7 +145974,7 @@ msgstr "თანმიმდევრული ასახვის მეთ�
 
 
 msgid "Stereo 3D Mode requires the window to be fullscreen"
-msgstr "სტერეო 3გ რეჟიმი საჭიროებს ფანჯრის სრულ ეკრანზე გაშლას"
+msgstr "სტერეო 3D რეჟიმი საჭიროებს ფანჯრის სრულ ეკრანზე გაშლას"
 
 
 msgid "(Unsaved)"
@@ -146467,12 +146471,12 @@ msgstr "ახლო სიბრტყე"
 
 msgctxt "WorkSpace"
 msgid "2D Animation"
-msgstr "2გ ანიმაცია"
+msgstr "2D ანიმაცია"
 
 
 msgctxt "WorkSpace"
 msgid "2D Full Canvas"
-msgstr "2გ სრული ტილო"
+msgstr "2D სრული ტილო"
 
 
 msgctxt "WorkSpace"
@@ -146638,7 +146642,7 @@ msgstr "UV განლაგება"
 
 
 msgid "Export the UV layout as a 2D graphic"
-msgstr "UV განლაგების ექსპორტი 2გ გრაფიკად"
+msgstr "UV განლაგების ექსპორტი 2D გრაფიკად"
 
 
 msgid "VR Scene Inspection"
@@ -146663,7 +146667,7 @@ msgstr "იმპორტ-ექსპორტი"
 
 msgctxt "Preferences"
 msgid "3D View"
-msgstr "3გ ხედი"
+msgstr "3D ხედი"
 
 
 msgctxt "Preferences"

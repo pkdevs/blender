@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Beta (b'ed5b077f929a')\n"
+"Project-Id-Version: Blender 4.4.0 Beta (b'63c460d93d55')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-17 14:06+0000\n"
+"POT-Creation-Date: 2025-02-24 09:56+0000\n"
 "PO-Revision-Date: 2024-09-26 13:56+0000\n"
 "Last-Translator: Sarfaraz Baig <iamsarfarazbaig@gmail.com>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -69,10 +69,6 @@ msgstr "ﭦﻼ﻿ﺳ"
 
 msgid "Action F-Curves"
 msgstr "ﮟﯿﻤﺧ-ﻑ ﻡﺍﺪﻗﺍ"
-
-
-msgid "Collection of action F-Curves"
-msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮟﯿﻤﺧ-ﻒﯾﺍ ﻡﺍﺪﻗﺍ"
 
 
 msgid "Action Group"
@@ -17438,10 +17434,6 @@ msgid "The combined frame range of all F-Curves within this action"
 msgstr "ﺞﻨﯾﺭ ﻢﯾﺮﻓ ﮧﮐﺮﺘﺸﻣ ﯽﮐ ﮟﯿﻤﺧ-ﻑ ﻡﺎﻤﺗ ﺭﺪﻧﺍ ﮯﮐ ﻡﺍﺪﻗﺍ ﺱﺍ"
 
 
-msgid "The individual F-Curves that make up the action"
-msgstr "ﮟﯿﮨ ﮯﺗﺎﻨﺑ ﻞﻤﻋ ﻮﺟ ﮟﯿﻤﺧ-ﻑ ﯼﺩﺍﺮﻔﻧﺍ"
-
-
 msgid "The end frame of the manually set intended playback range"
 msgstr "ﻢﯾﺮﻓ ﯼﺮﺧﺁ ﺎﮐ ﺞﻨﯾﺭ ﮏﯿﺑ ﮯﻠﭘ ﮧﺑﻮﻠﻄﻣ ﮦﺪﺷ ﮯﻃ ﺮﭘ ﺭﻮﻃ ﯽﺘﺳﺩ"
 
@@ -17462,17 +17454,9 @@ msgid "Groups"
 msgstr "ﮦﻭﺮﮔ"
 
 
-msgid "Convenient groupings of F-Curves"
-msgstr "ﯼﺪﻨﺑ ﮦﻭﺮﮔ ﻥﺎﺳﺁ ﯽﮐ ﮟﯿﻤﺧ-ﻑ"
-
-
 msgctxt "ID"
 msgid "ID Root Type"
 msgstr "ID ﻢﺴﻗ ﯽﮐ ﭦﻭﺭ"
-
-
-msgid "Type of ID block that action can be used on - DO NOT CHANGE UNLESS YOU KNOW WHAT YOU ARE DOING"
-msgstr "ID ﮟﯿﮨ ﮯﮨﺭ ﺮﮐ ﺎﯿﮐ ﭖﺁ ﮧﮐ ﮞﻮﮨ ﮯﺘﻧﺎﺟ ﮧﻧ ﮧﯾ ﭖﺁ ﮧﮐ ﮏﺗ ﺐﺟ ﮟﯾﺮﮐ ﮧﻧ ﻞﯾﺪﺒﺗ - ﮯﮨ ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﯽﺋﺍﻭﺭﺭﺎﮐ ﺮﭘ ﺲﺟ ﻢﺴﻗ ﯽﮐ ﮎﻼ﻿ﺑ"
 
 
 msgid "Layers"
@@ -18115,26 +18099,6 @@ msgstr "ﭧﯿﺴﻓﺁ ﺎﮐ ﻞﺻﺍ ﯼﺭﮉﻧﺅﺎﺑ ﮟﯿﻣ ﮯﻠ�
 
 msgid "Brush's capabilities"
 msgstr "ﮟﯿﺘﯿﺣﻼ﻿ﺻ ﯽﮐ ﺵﺮﺑ"
-
-
-msgid "Clone Alpha"
-msgstr "ﺎﻔﻟﺍ ﻥﻮﻠﮐ"
-
-
-msgid "Opacity of clone image display"
-msgstr "ﻦﭘﻻ﻿ﺪﻨﮬﺩ ﯽﮐ ﮯﻧﺎﮭﮐﺩ ﺞﯿﻣﺍ ﻥﻮﻠﮐ"
-
-
-msgid "Clone Image"
-msgstr "ﺞﯿﻣﺍ ﻥﻮﻠﮐ"
-
-
-msgid "Image for clone brushes"
-msgstr "ﺮﯾﻮﺼﺗ ﮯﯿﻟ ﮯﮐ ﺵﺮﺑ ﻥﻮﻠﮐ"
-
-
-msgid "Clone Offset"
-msgstr "ﭧﯿﺴﻓﺁ ﻥﻮﻠﮐ"
 
 
 msgid "Soft Body Plasticity"
@@ -87441,8 +87405,24 @@ msgid "Image used as canvas"
 msgstr "ﺮﯾﻮﺼﺗ ﯽﻟﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﺱﻮﻨﯿﮐ"
 
 
+msgid "Clone Alpha"
+msgstr "ﺎﻔﻟﺍ ﻥﻮﻠﮐ"
+
+
+msgid "Opacity of clone image display"
+msgstr "ﻦﭘﻻ﻿ﺪﻨﮬﺩ ﯽﮐ ﮯﻧﺎﮭﮐﺩ ﺞﯿﻣﺍ ﻥﻮﻠﮐ"
+
+
+msgid "Clone Image"
+msgstr "ﺞﯿﻣﺍ ﻥﻮﻠﮐ"
+
+
 msgid "Image used as clone source"
 msgstr "ﺮﯾﻮﺼﺗ ﯽﻟﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﺬﺧﺎﻣ ﻥﻮﻠﮐ"
+
+
+msgid "Clone Offset"
+msgstr "ﭧﯿﺴﻓﺁ ﻥﻮﻠﮐ"
 
 
 msgid "Dither"
@@ -87781,6 +87761,10 @@ msgid "Panel containing UI elements"
 msgstr "UI ﻞﻨﯿﭘ ﻞﻤﺘﺸﻣ ﺮﭘ ﺮﺻﺎﻨﻋ"
 
 
+msgid "Active Tool"
+msgstr "ﻝﻮﭨ ﻝﺎﻌﻓ"
+
+
 msgid "View Lock"
 msgstr "ﮟﯿﮭﮑﯾﺩ ﮎﻻ﻿"
 
@@ -87903,10 +87887,6 @@ msgstr "ﺭﺁ ﯼﻭ"
 
 msgid "VR Info"
 msgstr "VR ﺕﺎﻣﻮﻠﻌﻣ"
-
-
-msgid "Active Tool"
-msgstr "ﻝﻮﭨ ﻝﺎﻌﻓ"
 
 
 msgid "Chain Scaling"
