@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Beta (b'63c460d93d55')\n"
+"Project-Id-Version: Blender 4.4.0 Beta (b'1a72a0f22cde')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-24 09:56+0000\n"
+"POT-Creation-Date: 2025-03-03 09:33+0000\n"
 "PO-Revision-Date: 2024-09-26 13:56+0000\n"
 "Last-Translator: Sarfaraz Baig <iamsarfarazbaig@gmail.com>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -580,10 +580,6 @@ msgstr "ﮟﯿﺋﺎﻨﺑ ﮧﮕﺟ ﺪﯾﺰﻣ ﮯﯿﻟ ﮯﮐ ﮯﻧﻮﮨ 
 
 msgid "HIP RT (Experimental)"
 msgstr "HIP RT (ﯽﺗﺎﺑﺮﺠﺗ)"
-
-
-msgid "HIP RT enables AMD hardware ray tracing on RDNA2 and above, with shader fallback on older cards. This feature is experimental and some scenes may render incorrectly"
-msgstr "HIP RT ﮫﺗﺎﺳ ﮯﮐ ﮏﯿﺑ ﻝﺎﻔﺘﮕﻧﺭ ﺮﭘ ﺯﮈﺭﺎﮐ ﮯﻧﺍﺮﭘ RDNA2 ﺮﭘ ﺮﭘﻭﺍ ﮯﺳ ﺱﺍ ﺭﻭﺍ AMD ﮟﯿﮨ ﮯﺘﮑﺳ ﺮﮐ ﺶﯿﭘ ﮯﺳ ﮯﻘﯾﺮﻃ ﻂﻠﻏ ﺮﻇﺎﻨﻣ ﮫﭽﮐ ﺭﻭﺍ ﮯﮨ ﯽﺗﺎﺑﺮﺠﺗ ﺖﯿﺻﻮﺼﺧ ﮧﯾ ﮯﮨ ﺎﺗﺎﻨﺑ ﻞﺑﺎﻗ ﻮﮐ ﮓﻨﺴﯾﺮﭨ ﮮﺭ ﺮﺌﯾﻭﮈﺭﺎﮨ"
 
 
 msgid "Embree on GPU"
@@ -28253,11 +28249,6 @@ msgid "Sequence playback mode"
 msgstr "ﮈﻮﻣ ﮏﯿﺑ ﮯﻠﭘ ﺐﯿﺗﺮﺗ"
 
 
-msgctxt "Sequence"
-msgid "Clip"
-msgstr "ﭗﻠﮐ"
-
-
 msgid "Hide frames outside the specified frame range"
 msgstr "ﮟﯿﺋﺎﭙﮭﭼ ﺮﮨﺎﺑ ﮯﺳ ﺞﻨﯾﺭ ﻢﯾﺮﻓ ﺹﻮﺼﺨﻣ ﻮﮐ ﻢﯾﺮﻓ"
 
@@ -33174,12 +33165,68 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
-msgid "Mirror"
-msgstr "ﮧﻨﯿﺋﺁ"
+msgid "Show/Hide"
+msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
+
+
+msgid "Special Characters"
+msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
+
+
+msgid "Kerning"
+msgstr "ﮓﻨﻧﺮﮐ"
+
+
+msgid "Text"
+msgstr "ﻦﺘﻣ"
+
+
+msgid "Metaball"
+msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
+
+
+msgid "Names"
+msgstr "ﻡﺎﻧ"
+
+
+msgid "Bone Roll"
+msgstr "ﻝﻭﺭ ﻥﻮﺑ"
+
+
+msgid "Clean Up"
+msgstr "ﯽﺋﺎﻔﺻ"
+
+
+msgid "Pivot Point"
+msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
 
 
 msgid "Snap"
 msgstr "ﭗﯿﻨﺳ"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "ﻑﺁ ﻝﺎﻓ ﺮﺋﺎﻔﯾﮈﻮﻣ ﺐﺳﺎﻨﺘﻣ"
+
+
+msgid "Mask Edit"
+msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﮏﺳﺎﻣ"
+
+
+msgid "Automasking"
+msgstr "ﮓﻨﮑﺳﺎﻣﻮﭨﺁ"
+
+
+msgid "Face Sets Edit"
+msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﯿﺳ ﮯﮐ ﮮﺮﮩﭼ"
+
+
+msgid "Vertex Group Locks"
+msgstr "ﮎﻻ﻿ ﮦﻭﺮﮔ ﺲﮑﯿﭨﺭﻭ"
+
+
+msgid "Mirror"
+msgstr "ﮧﻨﯿﺋﺁ"
 
 
 msgid "UV Mapping"
@@ -33234,10 +33281,6 @@ msgid "Assign Material"
 msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺩﺍﻮﻣ"
 
 
-msgid "Metaball"
-msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
-
-
 msgid "Light"
 msgstr "ﯽﻨﺷﻭﺭ"
 
@@ -33270,14 +33313,6 @@ msgid "Quick Effects"
 msgstr "ﺕﺍﺮﺛﺍ ﯼﺭﻮﻓ"
 
 
-msgid "Show/Hide"
-msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
-
-
-msgid "Clean Up"
-msgstr "ﯽﺋﺎﻔﺻ"
-
-
 msgid "Asset"
 msgstr "ﮧﺛﺎﺛﺍ"
 
@@ -33296,10 +33331,6 @@ msgstr "ﮟﯾﺮﮐ ﻞﻘﺘﻨﻣ/ﮏﻨﻟ ﻮﮐ ﺎﭩﯾﮈ"
 
 msgid "Hooks"
 msgstr "ﮯﭩﻧﺎﮐ"
-
-
-msgid "Vertex Group Locks"
-msgstr "ﮎﻻ﻿ ﮦﻭﺮﮔ ﺲﮑﯿﭨﺭﻭ"
 
 
 msgid "Trim/Add"
@@ -33334,10 +33365,6 @@ msgid "Bone Collections"
 msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮞﻮﯾﮉﮨ"
 
 
-msgid "Names"
-msgstr "ﻡﺎﻧ"
-
-
 msgid "Toggle Bone Options"
 msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
 
@@ -33368,42 +33395,6 @@ msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
 
 msgid "Merge"
 msgstr "ﺎﻧﺮﮐ ﻢﺿ"
-
-
-msgid "Special Characters"
-msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
-
-
-msgid "Kerning"
-msgstr "ﮓﻨﻧﺮﮐ"
-
-
-msgid "Text"
-msgstr "ﻦﺘﻣ"
-
-
-msgid "Bone Roll"
-msgstr "ﻝﻭﺭ ﻥﻮﺑ"
-
-
-msgid "Pivot Point"
-msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "ﻑﺁ ﻝﺎﻓ ﺮﺋﺎﻔﯾﮈﻮﻣ ﺐﺳﺎﻨﺘﻣ"
-
-
-msgid "Mask Edit"
-msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﮏﺳﺎﻣ"
-
-
-msgid "Automasking"
-msgstr "ﮓﻨﮑﺳﺎﻣﻮﭨﺁ"
-
-
-msgid "Face Sets Edit"
-msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﯿﺳ ﮯﮐ ﮮﺮﮩﭼ"
 
 
 msgid "Keyframe Insert Pie"
@@ -63945,6 +63936,10 @@ msgid "Set all stroke points to same opacity"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﺮﭘ ﻦﭘﻻ﻿ﺪﻨﮬﺩ ﯽﮨ ﮏﯾﺍ ﻮﮐ ﺲﭩﻨﺋﺍﻮﭘ ﮎﻭﺮﭩﺳﺍ ﻡﺎﻤﺗ"
 
 
+msgid "Fill Opacity"
+msgstr "ﮟﯾﺮﮭﺑ ﻮﮐ ﻦﭘﻻ﻿ﺪﻨﮬﺩ"
+
+
 msgctxt "Operator"
 msgid "Set Uniform Thickness"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﯽﺋﺎﭨﻮﻣ ﮞﺎﺴﮑﯾ"
@@ -82508,10 +82503,6 @@ msgid "Exports UVs from the modified mesh"
 msgstr "ﮯﮨ ﺎﺗﺮﮐ ﺪﻣﺁﺮﺑ s ﯼﻭﻮﯾ  ﮯﺳ ﻝﺎﺟ ﮦﺪﺷ ﻢﯿﻣﺮﺗ"
 
 
-msgid "Fill Opacity"
-msgstr "ﮟﯾﺮﮭﺑ ﻮﮐ ﻦﭘﻻ﻿ﺪﻨﮬﺩ"
-
-
 msgid "Set amount of opacity for exported UV layout"
 msgstr "ﮟﯾﺮﮐ ﺭﺮﻘﻣ ﺭﺍﺪﻘﻣ ﯽﮐ ﻦﭘﻻ﻿ﺪﻨﮬﺩ ﮯﯿﻟ ﮯﮐ ﭦﺅﺁ ﮯﻠﯾﻭ ﻮﯿﮨﺪﺷ ﺪﻣﺁﺮﺑ"
 
@@ -87785,6 +87776,10 @@ msgid "SSAO Settings"
 msgstr "SSAO ﺕﺎﺒﯿﺗﺮﺗ"
 
 
+msgid "glTF Material Variants"
+msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
+
+
 msgid "Render Pass"
 msgstr "ﺱﺎﭘ ﺭﮉﻨﯾﺭ"
 
@@ -87821,6 +87816,10 @@ msgid "Curve Edit Mode"
 msgstr "ﮈﻮﻣ ﺎﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﻢﺧ"
 
 
+msgid "glTF Animations"
+msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
+
+
 msgid "Snapping"
 msgstr "ﮓﻨﭙﯿﻨﺳ"
 
@@ -87853,10 +87852,6 @@ msgid "Multi Frame"
 msgstr "ﻢﯾﺮﻓ ﯽﭩﻠﻣ"
 
 
-msgid "glTF Material Variants"
-msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
-
-
 msgid "Auto-Masking"
 msgstr "ﮓﻨﮑﺳﺎﻣ ﻮﭨﺁ"
 
@@ -87875,10 +87870,6 @@ msgstr "ﺎﻧﮍﮑﺳ/ﺎﻨﮬﮍﺑ  ﮟﯿﻤﺧ"
 
 msgid "Viewport Debug"
 msgstr "ﮓﺒﯾﮈ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgid "glTF Animations"
-msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
 
 
 msgid "VR"
@@ -103193,6 +103184,11 @@ msgstr "ﻢﻠﻓ"
 
 
 msgctxt "Sequence"
+msgid "Clip"
+msgstr "ﭗﻠﮐ"
+
+
+msgctxt "Sequence"
 msgid "Mask"
 msgstr "ﮏﺳﺎﻣ"
 
@@ -113399,10 +113395,6 @@ msgid "and NVIDIA driver version %s or newer"
 msgstr "ﺮﺗ ﺪﯾﺪﺟ ﺎﯾ %s‬‪ ﻥﮊﺭﻭ ﺭﻮﯿﺋﺍﺭﮈ NVIDIA ﺭﻭﺍ"
 
 
-msgid "and AMD Radeon Pro %s driver or newer"
-msgstr "ﺮﺗ ﺪﯾﺪﺟ ﺎﯾ ﺭﻮﯿﺋﺍﺭﮈ AMD Radeon Pro ‪%s‬ ﺭﻭﺍ"
-
-
 msgid "Requires Intel GPU with Xe-HPG architecture"
 msgstr "Xe-HPG ﮫﺗﺎﺳ ﮯﮐ ﺮﯿﻤﻌﺗ ﻦﻓ Intel GPU ﮯﮨ ﺕﺭﻭﺮﺿ ﯽﮐ"
 
@@ -114991,10 +114983,6 @@ msgstr "ﮟﯿﮨ ﯽﺘﮑﺳﻮﮨ ﻢﮨﺍ ﮏﯾﺍ ﺕﺎﺒﯿﺗﺮﺗ �
 
 msgid "performance impact!"
 msgstr "!ﺮﺛﺍ ﺎﮐ ﯽﮔﺩﺮﮐﺭﺎﮐ"
-
-
-msgid "Built without VR/OpenXR features"
-msgstr "VR/OpenXR ﮯﮨ ﺎﯿﮔ ﺎﯾﺎﻨﺑ ﺮﯿﻐﺑ ﮯﮐ ﺕﺎﯿﺻﻮﺼﺧ"
 
 
 msgid "Start VR Session"
@@ -126252,10 +126240,6 @@ msgid "OS"
 msgstr "OS"
 
 
-msgid "Home"
-msgstr "Home"
-
-
 msgid "Esc"
 msgstr "Esc"
 
@@ -130407,6 +130391,10 @@ msgstr "ﮒﻼ﻿ﭩﯿﮐ ﮧﺛﺎﺛﺍ"
 
 msgid "Date Modified"
 msgstr "ﺦﯾﺭﺎﺗ ﯽﮐ ﻢﯿﻣﺮﺗ"
+
+
+msgid "Home"
+msgstr "Home"
 
 
 msgid "Desktop"

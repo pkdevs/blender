@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Beta (b'63c460d93d55')\n"
+"Project-Id-Version: Blender 4.4.0 Beta (b'1a72a0f22cde')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-24 09:56+0000\n"
-"PO-Revision-Date: 2025-02-24 09:56+0000\n"
+"POT-Creation-Date: 2025-03-03 09:33+0000\n"
+"PO-Revision-Date: 2025-02-25 08:56+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.9.2"
+"X-Generator: Weblate 5.10.1"
 
 
 msgid "Shader AOV"
@@ -109,6 +109,10 @@ msgstr "ქმედების თითოეული სლოტისთ�
 
 msgid "Action F-Curves"
 msgstr "ქმედებათა F-წირები"
+
+
+msgid "Collection of action F-Curves. Note that this is a legacy API that is unaware of action slots, and will only consider the F-Curves for this action's first slot"
+msgstr "ქმედებათა F-წირების კოლექცია. გაითვალისწინე, რომ ესაა ძველებური API, რომელიც ქმედებათა სლოტებს არ აღიქვამს და მხედველობაში მიიღებს მხოლოდ F-წირებს ამ ქმედების პირველი სლოტისთვის"
 
 
 msgid "Action Group"
@@ -738,10 +742,6 @@ msgstr "მონახე დიდი სცენებისათვის 
 
 msgid "HIP RT (Experimental)"
 msgstr "HIP RT (ექსპერიმენტალური)"
-
-
-msgid "HIP RT enables AMD hardware ray tracing on RDNA2 and above, with shader fallback on older cards. This feature is experimental and some scenes may render incorrectly"
-msgstr "HIP RT რთავს AMD მოწყობილობით სხივების მიდევნებას RDNA2-ზე და ზემოთ, არარეკომენდირებულ ბარათებზე სათადარიგო იერფერით. ეს მახასიათებელი ექსპერიმენტალურია და ზოგიერთი სცენა შესაძლოა, არასწორად დარენდერდეს"
 
 
 msgid "Embree on GPU"
@@ -18107,6 +18107,10 @@ msgid "The combined frame range of all F-Curves within this action"
 msgstr "ყველა F-წირის კადრების კომბინირებული დიაპაზონი ამ ქმედებაში"
 
 
+msgid "Legacy API, for backward compatibility with code that does not handle slotted actions yet. This collection contains the F-Curves for the action's first slot"
+msgstr "ძველებური API, უკუთავსებადობისთვის კოდთან, რომელიც სლოტებში მოთავსებულ ქმედებებს ჯერ არ ამუშავებს. ეს კოლექცია შეიცავს F-წირებს, ქმედების პირველი სლოტისთვის"
+
+
 msgid "The end frame of the manually set intended playback range"
 msgstr "ხელით დაყენებული სასურველი დაკვრის დიაპაზონის ბოლო კადრი"
 
@@ -18127,9 +18131,17 @@ msgid "Groups"
 msgstr "ჯგუფები"
 
 
+msgid "Legacy API, for backward compatibility with code that does not handle slotted actions yet. This collection contains the F-Curve groups for the action's first slot"
+msgstr "ძველებური API, უკუთავსებადობისთვის კოდთან, რომელიც სლოტებიან ქმედებებს ჯერ არ ამუშავებას. ეს კოლექცია შეიცავს F-წირთა ჯგუფებს ქმედების პირველი სლოტისთვის"
+
+
 msgctxt "ID"
 msgid "ID Root Type"
 msgstr "ID-ის ძირეული ტიპი"
+
+
+msgid "Legacy API, for backward compatibility with code that does not handle slotted actions yet. Type of data-block that the action's first slot can be used on. Do not change unless you know what you are doing"
+msgstr "ძველებური API, უკუტავსებადობისთვის კოდთან, რომელიც სლოტიან ქმედებებს ჯერ არ ამუშავებს. მონაცემთა ბლოკების ტიპი, რომელზეც ქმედების პირველი სლოტი იქნება გამოყენებული. თუ ზუსტად არ იცი, რას აკეთებ, ნუ შეცვლი"
 
 
 msgid "Is Layered Action"
@@ -18142,6 +18154,10 @@ msgstr "დააბრუნე პასუხი, არის თუ არ�
 
 msgid "Is Legacy Action"
 msgstr "თუა ძველებური ქმედება"
+
+
+msgid "Return whether this is a legacy Action. Legacy Actions have no layers or slots. An empty Action considered as both a 'legacy' and a 'layered' Action. Since Blender 4.4 actions are automatically updated to layered actions, and thus this will only return True when the action is empty"
+msgstr "დააბრუნე ინფორმაცია, არის თუ არა ეს ძველებური ქმედება. ძველებურ ქმედებებს შრეები და სლოტები არ გააჩნია. ცარიელი ქმედება 'ძველებურადაც' ითვლება და 'შრეებიანადაც'. Blender 4.4-იდან მოყოლებული, ქმედებები ავტომატურად განახლდა და გარდაიქმნა შრეებიან ქმედებებად, შესაბამისად, მნიშვნელობა ჭეშმარიტი მხოლოდ მაშინ დაბრუნდება, თუ ქმედება ცარიელია"
 
 
 msgid "Is Empty"
@@ -29257,45 +29273,20 @@ msgid "Volume render settings for 3D viewport"
 msgstr "მოცულობის სარენდერო ანაწყობები 3D სარკმლისთვის"
 
 
-msgctxt "Sequence"
-msgid "Sequence Mode"
-msgstr "თანამიმდევრობის რეჟიმი"
-
-
 msgid "Sequence playback mode"
 msgstr "თანამიმდევრობის დაკვრის რეჟიმი"
-
-
-msgctxt "Sequence"
-msgid "Clip"
-msgstr "კლიპი"
 
 
 msgid "Hide frames outside the specified frame range"
 msgstr "დამალე კადრები კადრთა მითითებულ დიაპაზონს მიღმა"
 
 
-msgctxt "Sequence"
-msgid "Extend"
-msgstr "განვრცობა"
-
-
 msgid "Repeat the start frame before, and the end frame after the frame range"
 msgstr "გაიმეორე კადრთა დიაპაზონის წინა საწყისი და მომდევნო დამასრულებელი კადრები"
 
 
-msgctxt "Sequence"
-msgid "Repeat"
-msgstr "გამეორება"
-
-
 msgid "Cycle the frames in the sequence"
 msgstr "ციკლურად გაიარე თანამიმდევრობის კადრებში"
-
-
-msgctxt "Sequence"
-msgid "Ping-Pong"
-msgstr "პინგ-პონგი"
 
 
 msgid "Repeat the frames, reversing the playback direction every other cycle"
@@ -34302,12 +34293,68 @@ msgid "Editor menu containing buttons"
 msgstr "რედაქტორის მენიუ, რომელიც ღილაკებს შეიცავს"
 
 
-msgid "Mirror"
-msgstr "გასარკისებურება"
+msgid "Show/Hide"
+msgstr "ჩვენება/დამალვა"
+
+
+msgid "Special Characters"
+msgstr "სპეციალური ასონიშნები"
+
+
+msgid "Kerning"
+msgstr "ასოთშორისი ინტერვალი"
+
+
+msgid "Text"
+msgstr "ტექსტი"
+
+
+msgid "Metaball"
+msgstr "მეტაბურთი"
+
+
+msgid "Names"
+msgstr "სახელები"
+
+
+msgid "Bone Roll"
+msgstr "ძვლის ტრიალი"
+
+
+msgid "Clean Up"
+msgstr "გასუფთავება"
+
+
+msgid "Pivot Point"
+msgstr "ბრუნვის ცენტრი"
 
 
 msgid "Snap"
 msgstr "მიკვრა"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "პროპორციული რედაქტირების მილევა"
+
+
+msgid "Mask Edit"
+msgstr "ნიღბის რედაქტირება"
+
+
+msgid "Automasking"
+msgstr "ავტომატური შენიღბვა"
+
+
+msgid "Face Sets Edit"
+msgstr "წახნაგების ნაკრებთა რედაქტირება"
+
+
+msgid "Vertex Group Locks"
+msgstr "წვეროთა ჯგუფების ბლოკები"
+
+
+msgid "Mirror"
+msgstr "გასარკისებურება"
 
 
 msgid "UV Mapping"
@@ -34362,10 +34409,6 @@ msgid "Assign Material"
 msgstr "მასალის მიკუთვნება"
 
 
-msgid "Metaball"
-msgstr "მეტაბურთი"
-
-
 msgid "Light"
 msgstr "სინათლე"
 
@@ -34398,14 +34441,6 @@ msgid "Quick Effects"
 msgstr "სწრაფი ეფექტები"
 
 
-msgid "Show/Hide"
-msgstr "ჩვენება/დამალვა"
-
-
-msgid "Clean Up"
-msgstr "გასუფთავება"
-
-
 msgid "Asset"
 msgstr "აქტივი"
 
@@ -34424,10 +34459,6 @@ msgstr "მონაცემების ბმულით დაკავშ�
 
 msgid "Hooks"
 msgstr "კაუჭები"
-
-
-msgid "Vertex Group Locks"
-msgstr "წვეროთა ჯგუფების ბლოკები"
 
 
 msgid "Trim/Add"
@@ -34462,10 +34493,6 @@ msgid "Bone Collections"
 msgstr "ძვლების კოლექციები"
 
 
-msgid "Names"
-msgstr "სახელები"
-
-
 msgid "Toggle Bone Options"
 msgstr "ძვლის პარამეტრების ვარიანტები"
 
@@ -34496,42 +34523,6 @@ msgstr "წახნაგის სიძლიერის დაყენე�
 
 msgid "Merge"
 msgstr "შერწყმა"
-
-
-msgid "Special Characters"
-msgstr "სპეციალური ასონიშნები"
-
-
-msgid "Kerning"
-msgstr "ასოთშორისი ინტერვალი"
-
-
-msgid "Text"
-msgstr "ტექსტი"
-
-
-msgid "Bone Roll"
-msgstr "ძვლის ტრიალი"
-
-
-msgid "Pivot Point"
-msgstr "ბრუნვის ცენტრი"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "პროპორციული რედაქტირების მილევა"
-
-
-msgid "Mask Edit"
-msgstr "ნიღბის რედაქტირება"
-
-
-msgid "Automasking"
-msgstr "ავტომატური შენიღბვა"
-
-
-msgid "Face Sets Edit"
-msgstr "წახნაგების ნაკრებთა რედაქტირება"
 
 
 msgid "Keyframe Insert Pie"
@@ -66199,6 +66190,10 @@ msgid "Set all stroke points to same opacity"
 msgstr "დააყენე მონასმის ყველა წერტილი ერთსა და იმავე გაუმჭვირვალობაზე"
 
 
+msgid "Fill Opacity"
+msgstr "შევსების გაუმჭვირვალობა"
+
+
 msgctxt "Operator"
 msgid "Set Uniform Thickness"
 msgstr "ერთგვაროვანი სისქე დაყენება"
@@ -85274,10 +85269,6 @@ msgid "Exports UVs from the modified mesh"
 msgstr "აექსპორტირებს UV-ებს მოდიფიცირებული მეშიდან"
 
 
-msgid "Fill Opacity"
-msgstr "შევსების გაუმჭვირვალობა"
-
-
 msgid "Set amount of opacity for exported UV layout"
 msgstr "დააყენე გაუმჭვირვალობის ოდენობა ექსპორტირებული UV განლაგებისთვის"
 
@@ -90877,6 +90868,14 @@ msgid "SSAO Settings"
 msgstr "SSAO ანაწყობები"
 
 
+msgid "glTF Variants"
+msgstr "glTF ნაირსახეობები"
+
+
+msgid "glTF Material Variants"
+msgstr "glTF მასალის ნაირსახეობები"
+
+
 msgid "Render Pass"
 msgstr "რენდერის გადავლა"
 
@@ -90917,6 +90916,14 @@ msgid "Curves Edit Mode"
 msgstr "წირების რედაქტირების რეჟიმი"
 
 
+msgid "glTF"
+msgstr "glTF"
+
+
+msgid "glTF Animations"
+msgstr "glTF ანიმაციები"
+
+
 msgid "Snapping"
 msgstr "მიკვრა"
 
@@ -90953,14 +90960,6 @@ msgid "Multi Frame"
 msgstr "მრავალკადრიანი"
 
 
-msgid "glTF Variants"
-msgstr "glTF ნაირსახეობები"
-
-
-msgid "glTF Material Variants"
-msgstr "glTF მასალის ნაირსახეობები"
-
-
 msgid "Auto-Masking"
 msgstr "ავტომატური შენიღბვა"
 
@@ -90979,14 +90978,6 @@ msgstr "წირების ზრდა/კუმშვა მასშტა
 
 msgid "Viewport Debug"
 msgstr "სარკმლის ხარვეზების აღმოფხვრა"
-
-
-msgid "glTF"
-msgstr "glTF"
-
-
-msgid "glTF Animations"
-msgstr "glTF ანიმაციები"
 
 
 msgid "VR"
@@ -106761,6 +106752,11 @@ msgstr "ფილმი"
 
 
 msgctxt "Sequence"
+msgid "Clip"
+msgstr "კლიპი"
+
+
+msgctxt "Sequence"
 msgid "Mask"
 msgstr "ნიღაბი"
 
@@ -117493,10 +117489,6 @@ msgid "Requires AMD GPU with RDNA architecture"
 msgstr "საჭიროებს AMD GPU-ს RDNA არქიტექტურით"
 
 
-msgid "and AMD Radeon Pro %s driver or newer"
-msgstr "და AMD Radeon Pro %s დრაივერს, ან უფრო ახალს"
-
-
 msgid "Requires Intel GPU with Xe-HPG architecture"
 msgstr "საჭიროებს Intel GPU-ს Xe-HPG არქიტექტურით"
 
@@ -119128,10 +119120,6 @@ msgstr "აქ მდებარე ანაწყობებს შესა
 
 msgid "performance impact!"
 msgstr "შესრულების ზეგავლენა!"
-
-
-msgid "Built without VR/OpenXR features"
-msgstr "აგებულია VR/OpenXR მახასიათებლების გარეშე"
 
 
 msgid "Start VR Session"
@@ -126463,6 +126451,11 @@ msgstr "პროეცირება ხედიდან (ფარგლე
 
 
 msgctxt "Operator"
+msgid "Frame Last Stroke"
+msgstr "ბოლო მონასმის დაჩარჩოვება"
+
+
+msgctxt "Operator"
 msgid "Viewport Render Animation"
 msgstr "ანიმაციის რენდერი სარკმელში"
 
@@ -127048,11 +127041,6 @@ msgstr "წირის ფორმა"
 msgctxt "View3D"
 msgid "Mix"
 msgstr "შერევა"
-
-
-msgctxt "Operator"
-msgid "Frame Last Stroke"
-msgstr "ბოლო მონასმის დაჩარჩოვება"
 
 
 msgctxt "Operator"
@@ -129189,6 +129177,10 @@ msgid "Error: Too many AOVs"
 msgstr "შეცდომა: მეტისმეტად ბევრი AOV"
 
 
+msgid "Required render size ({}px) is larger than reported texture size limit ({}px)."
+msgstr "რენდერის აუცილებელი ზომა ({}px) აღემატება ტექსტურის ზომის გადმოცემულ ლიმიტს ({}px)."
+
+
 msgid "Errors during render. See the System Console for more info."
 msgstr "შეცდომები დარენდერების დროს. მეტი ინფორმაციისთვის იხილე სისტემური კონსოლი."
 
@@ -130958,10 +130950,6 @@ msgid "OS"
 msgstr "OS"
 
 
-msgid "Home"
-msgstr "შინ"
-
-
 msgid "Esc"
 msgstr "Esc"
 
@@ -132587,6 +132575,10 @@ msgid "Image objects can only be added in Object Mode"
 msgstr "გამოსახულების ობიექტების დამატება მხოლოდ ობიექტის რეჟიმში შეიძლება"
 
 
+msgid "No editable objects to convert"
+msgstr "დასაკონვერტირებელი რედაქტირებადი ობიექტები არ არის"
+
+
 msgid "Converting some non-editable object/object data, enforcing 'Keep Original' option to True"
 msgstr "ზოგიერთი არარედაქტირებადი ობიექტი/ობიექტის მონაცემების კონვერტირება, ვარიანტის 'შეინარჩუნე ორიგინალი' იძულებით დაყენება ჭეშმარიტზე"
 
@@ -134135,6 +134127,10 @@ msgid "Unable to remove material slot in edit mode"
 msgstr "რედაქტირების რეჟიმში მასალის სლოტის მოხსნა შეუძლებელია"
 
 
+msgid "Can't bake light probe while rendering"
+msgstr "რენდერის დროს სინათლის ზონდის ცხობა შეუძლებელია"
+
+
 msgid "No active lineset and associated line style to manipulate the modifier"
 msgstr "ხაზთა აქტიური ნაკრები და ხაზის ასოცირებული სტილი მოდიფიკატორის მანიპულირებისთვის არ არსებობს"
 
@@ -135298,6 +135294,10 @@ msgstr "აქტივების კატალოგები"
 
 msgid "Date Modified"
 msgstr "მოდიფიცირების თარიღი"
+
+
+msgid "Home"
+msgstr "შინ"
 
 
 msgid "Desktop"
@@ -139173,6 +139173,10 @@ msgstr "F-წირის ქმედებათა ჯგუფი '%s' ქ�
 
 msgid "Timeline marker '%s' not found in action '%s'"
 msgstr "დროის ზოლის მარკერი '%s' ქმედებაში '%s' ვერ მოიძებნა"
+
+
+msgid "Assign action \"%s\" to \"%s\" before calling this function"
+msgstr "ამ ფუნქციის გამოძახებამდე მიაკუთვნე ქმედება \"%s\" \"%s\"-ს"
 
 
 msgid "Action slot display names cannot be empty"
