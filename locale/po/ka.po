@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Beta (b'1a72a0f22cde')\n"
+"Project-Id-Version: Blender 4.4.0 Beta (b'eceb81b21fa3')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-03 09:33+0000\n"
-"PO-Revision-Date: 2025-02-25 08:56+0000\n"
+"POT-Creation-Date: 2025-03-10 09:31+0000\n"
+"PO-Revision-Date: 2025-03-07 20:56+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -742,6 +742,10 @@ msgstr "მონახე დიდი სცენებისათვის 
 
 msgid "HIP RT (Experimental)"
 msgstr "HIP RT (ექსპერიმენტალური)"
+
+
+msgid "HIP RT enables AMD hardware ray tracing on RDNA2 and above. This feature is experimental and some scenes may render incorrectly"
+msgstr "HIP RT რთავს AMD მოწყობილობით სხივების მიდევნებას RDNA2-ზე და ზემოთ. ეს მახასიათებელი ექსპერიმენტალურია და ზოგიერთი სცენა შესაძლოა, არასწორად დარენდერდეს"
 
 
 msgid "Embree on GPU"
@@ -5005,7 +5009,7 @@ msgstr "ფუნჯის სისქის შემცირება ამ
 
 
 msgid "Aspect"
-msgstr "თანაფარდობა"
+msgstr "პროპორცია"
 
 
 msgid "Mode"
@@ -14631,7 +14635,7 @@ msgstr "შეცვალე სიმულაციის ქეშის ტ
 
 
 msgid "Replay"
-msgstr "გამეორება"
+msgstr "თავიდან დაკვრა"
 
 
 msgid "Use the timeline to bake the scene"
@@ -22885,7 +22889,7 @@ msgstr "გამოსახულების ბიტური სიღრ�
 
 
 msgid "Display Aspect"
-msgstr "ასახვის თანაფარდობა"
+msgstr "ასახვის პროპორცია"
 
 
 msgid "Display Aspect for this image, does not affect rendering"
@@ -29273,20 +29277,45 @@ msgid "Volume render settings for 3D viewport"
 msgstr "მოცულობის სარენდერო ანაწყობები 3D სარკმლისთვის"
 
 
+msgctxt "Volume"
+msgid "Sequence Mode"
+msgstr "თანამიმდევრობის რეჟიმი"
+
+
 msgid "Sequence playback mode"
 msgstr "თანამიმდევრობის დაკვრის რეჟიმი"
+
+
+msgctxt "Volume"
+msgid "Clip"
+msgstr "მოკვეცა"
 
 
 msgid "Hide frames outside the specified frame range"
 msgstr "დამალე კადრები კადრთა მითითებულ დიაპაზონს მიღმა"
 
 
+msgctxt "Volume"
+msgid "Extend"
+msgstr "განვრცობა"
+
+
 msgid "Repeat the start frame before, and the end frame after the frame range"
 msgstr "გაიმეორე კადრთა დიაპაზონის წინა საწყისი და მომდევნო დამასრულებელი კადრები"
 
 
+msgctxt "Volume"
+msgid "Repeat"
+msgstr "გამეორება"
+
+
 msgid "Cycle the frames in the sequence"
 msgstr "ციკლურად გაიარე თანამიმდევრობის კადრებში"
+
+
+msgctxt "Volume"
+msgid "Ping-Pong"
+msgstr "პინგპონგი"
 
 
 msgid "Repeat the frames, reversing the playback direction every other cycle"
@@ -33955,6 +33984,42 @@ msgid "Aligned Single"
 msgstr "მწყობრი ცალი"
 
 
+msgid "Selection status of the control point. (Deprecated: use Select Control Point instead)"
+msgstr "სამართავი წერილის მონიშნულობის სტატუსი. (არარეკომენდირებულია: ამის ნაცვლად გამოიყენე სამართავი წერტილის მონიშვნა)"
+
+
+msgid "Select Control Point"
+msgstr "სამართავი წერტილის მონიშვნა"
+
+
+msgid "Selection status of the control point"
+msgstr "სამართავი წერტილის მონიშნულობის სტატუსი"
+
+
+msgid "Select Left Handle"
+msgstr "მარცხენა სახელურის მონიშვნა"
+
+
+msgid "Selection status of the left handle"
+msgstr "მარცხენა სახელურის მონიშნულობის სტატუსი"
+
+
+msgid "Select Right Handle"
+msgstr "მარჯვენა სახელურის მონიშვნა"
+
+
+msgid "Selection status of the right handle"
+msgstr "მარჯვენა სახელურის მონიშნულობის სტატუსი"
+
+
+msgid "Select Aligned Single Handle"
+msgstr "გასწორებული ცალი სახელურის მონიშვნა"
+
+
+msgid "Selection status of the Aligned Single handle"
+msgstr "გასწორებული ცალი სახელურის მონიშნულობის სტატუსი"
+
+
 msgid "Weight of the point"
 msgstr "წერტილის წონა"
 
@@ -34297,30 +34362,6 @@ msgid "Show/Hide"
 msgstr "ჩვენება/დამალვა"
 
 
-msgid "Special Characters"
-msgstr "სპეციალური ასონიშნები"
-
-
-msgid "Kerning"
-msgstr "ასოთშორისი ინტერვალი"
-
-
-msgid "Text"
-msgstr "ტექსტი"
-
-
-msgid "Metaball"
-msgstr "მეტაბურთი"
-
-
-msgid "Names"
-msgstr "სახელები"
-
-
-msgid "Bone Roll"
-msgstr "ძვლის ტრიალი"
-
-
 msgid "Clean Up"
 msgstr "გასუფთავება"
 
@@ -34409,6 +34450,10 @@ msgid "Assign Material"
 msgstr "მასალის მიკუთვნება"
 
 
+msgid "Metaball"
+msgstr "მეტაბურთი"
+
+
 msgid "Light"
 msgstr "სინათლე"
 
@@ -34493,6 +34538,10 @@ msgid "Bone Collections"
 msgstr "ძვლების კოლექციები"
 
 
+msgid "Names"
+msgstr "სახელები"
+
+
 msgid "Toggle Bone Options"
 msgstr "ძვლის პარამეტრების ვარიანტები"
 
@@ -34523,6 +34572,22 @@ msgstr "წახნაგის სიძლიერის დაყენე�
 
 msgid "Merge"
 msgstr "შერწყმა"
+
+
+msgid "Special Characters"
+msgstr "სპეციალური ასონიშნები"
+
+
+msgid "Kerning"
+msgstr "ასოთშორისი ინტერვალი"
+
+
+msgid "Text"
+msgstr "ტექსტი"
+
+
+msgid "Bone Roll"
+msgstr "ძვლის ტრიალი"
 
 
 msgid "Keyframe Insert Pie"
@@ -41713,7 +41778,7 @@ msgstr "UV პროეცირების მოდიფიკატორ�
 
 
 msgid "Aspect X"
-msgstr "X ასპექტი"
+msgstr "X პროპორცია"
 
 
 msgid "Horizontal aspect ratio (only used for camera projectors)"
@@ -41721,7 +41786,7 @@ msgstr "თარაზული პროპორციული თანა�
 
 
 msgid "Aspect Y"
-msgstr "Y ასპექტი"
+msgstr "Y პროპორცია"
 
 
 msgid "Vertical aspect ratio (only used for camera projectors)"
@@ -44274,7 +44339,7 @@ msgstr "გააბუნდოვანე გამოსახულებ�
 
 
 msgid "Aspect Correction"
-msgstr "თანაფარდობის შესწორება"
+msgstr "პროპორციის შესწორება"
 
 
 msgid "Type of aspect correction to use"
@@ -66192,6 +66257,10 @@ msgstr "დააყენე მონასმის ყველა წერ
 
 msgid "Fill Opacity"
 msgstr "შევსების გაუმჭვირვალობა"
+
+
+msgid "Stroke Opacity"
+msgstr "მონასმის გაუმჭვირვალობა"
 
 
 msgctxt "Operator"
@@ -90868,14 +90937,6 @@ msgid "SSAO Settings"
 msgstr "SSAO ანაწყობები"
 
 
-msgid "glTF Variants"
-msgstr "glTF ნაირსახეობები"
-
-
-msgid "glTF Material Variants"
-msgstr "glTF მასალის ნაირსახეობები"
-
-
 msgid "Render Pass"
 msgstr "რენდერის გადავლა"
 
@@ -90916,12 +90977,12 @@ msgid "Curves Edit Mode"
 msgstr "წირების რედაქტირების რეჟიმი"
 
 
-msgid "glTF"
-msgstr "glTF"
+msgid "glTF Variants"
+msgstr "glTF ნაირსახეობები"
 
 
-msgid "glTF Animations"
-msgstr "glTF ანიმაციები"
+msgid "glTF Material Variants"
+msgstr "glTF მასალის ნაირსახეობები"
 
 
 msgid "Snapping"
@@ -90950,6 +91011,14 @@ msgstr "ოთხმაგი ხედი"
 
 msgid "Onion Skin"
 msgstr "კალკი"
+
+
+msgid "glTF"
+msgstr "glTF"
+
+
+msgid "glTF Animations"
+msgstr "glTF ანიმაციები"
 
 
 msgid "Stereoscopy"
@@ -117489,6 +117558,14 @@ msgid "Requires AMD GPU with RDNA architecture"
 msgstr "საჭიროებს AMD GPU-ს RDNA არქიტექტურით"
 
 
+msgid "and AMD Adrenalin driver %s or newer"
+msgstr "და AMD Adrenalin დრაივერს %s, ან უფრო ახალს"
+
+
+msgid "or AMD Radeon Pro %s driver or newer"
+msgstr "და AMD Radeon Pro %s დრაივერს, ან უფრო ახალს"
+
+
 msgid "Requires Intel GPU with Xe-HPG architecture"
 msgstr "საჭიროებს Intel GPU-ს Xe-HPG არქიტექტურით"
 
@@ -119543,6 +119620,14 @@ msgid "No objects with bound-box selected"
 msgstr "შემომსაზღვრელ ჩარჩოიანი ობიექტები მონიშნული არაა"
 
 
+msgid "Smoke Domain"
+msgstr "კვამლის სამოქმედო არეალი"
+
+
+msgid "Liquid Domain"
+msgstr "სითხის სამოქმედო არეალი"
+
+
 msgid "Select at least one mesh object"
 msgstr "მონიშნე ერთი მეშის ობიექტი მაინც"
 
@@ -119575,6 +119660,14 @@ msgid "Built without Fluid modifier"
 msgstr "აგებულია დენადი ნივთიერების მოდიფიკატორის გარეშე"
 
 
+msgid "Smoke Domain Material"
+msgstr "კვამლის სამოქმედო არეალის მასალა"
+
+
+msgid "Liquid Domain Material"
+msgstr "სითხის სამოქმედო არეალის მასალა"
+
+
 msgid "Object {!r} already has a particle system"
 msgstr "ობიექტს {!r} უკვე აქვს ნაწილაკთა სისტემა"
 
@@ -119587,12 +119680,20 @@ msgid "Interpolate Hair Curves"
 msgstr "თმის წირების ინტერპოლაცია"
 
 
+msgid "Explode Fade"
+msgstr "აფეთქების ქრობა"
+
+
 msgid "Hair Curves Noise"
 msgstr "თმის წირების ხმაური"
 
 
 msgid "Frizz Hair Curves"
 msgstr "თმის წირების აწეწვა"
+
+
+msgid "Explode fade"
+msgstr "აფეთქების ქრობა"
 
 
 msgid "New Preset"
@@ -119709,10 +119810,6 @@ msgstr "ფრთხილად, ფაილი უკვე არსებ�
 
 msgid "Installing keymap failed: {:s}"
 msgstr "კლავიშრუკის დაინსტალირება წარუმატებელია: {:s}"
-
-
-msgid "This script was written Blender version {:d}.{:d}.{:d} and might not function (correctly), though it is enabled"
-msgstr "ეს სკრიპტი დაწერილია Blender-ის ვერსიაში {:d}.{:d}.{:d} და შეიძლება, (სწორად) არ ფუნქციონირებდეს, თუმცა, ჩართულია"
 
 
 msgid "File already installed to {!r}"
@@ -137350,7 +137447,7 @@ msgstr "ნახე '%s' ტექსტურ რედაქტორში"
 
 
 msgid "Clear Recent Files List..."
-msgstr "გაასუფთავე ბოლოდროინდელი ფაილების სია..."
+msgstr "ბოლოდროინდელი ფაილების სიის გასუფთავება..."
 
 
 msgid "No Recent Files"
@@ -141583,6 +141680,11 @@ msgstr "U ღერძი"
 
 msgid "UVWarp"
 msgstr "UVდაბრეცა"
+
+
+msgctxt "Modifier"
+msgid "To"
+msgstr "-მდე"
 
 
 msgid "Sample Radius"
