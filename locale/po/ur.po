@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Beta (b'eceb81b21fa3')\n"
+"Project-Id-Version: Blender 4.4.0 Release Candidate (b'f896f7ffc32a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-10 09:31+0000\n"
+"POT-Creation-Date: 2025-03-17 16:18+0000\n"
 "PO-Revision-Date: 2024-09-26 13:56+0000\n"
 "Last-Translator: Sarfaraz Baig <iamsarfarazbaig@gmail.com>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -576,10 +576,6 @@ msgstr "ﮟﯾﺮﮐ ﻢﯿﺴﻘﺗ ﯼﺭﻮﻤﯿﻣ ﺮﭘ ﺕﻻ﻿ﺁ ﻡ�
 
 msgid "Make more room for large scenes to fit by distributing memory across interconnected devices (e.g. via NVLink) rather than duplicating it"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﮧﮕﺟ ﺪﯾﺰﻣ ﮯﯿﻟ ﮯﮐ ﮯﻧﻮﮨ ﭧﻓ ﮯﮐ ﺮﻇﺎﻨﻣ ﮮﮍﺑ ﮯﮐﺮﮐ ﻢﯿﺴﻘﺗ ﮯﺋﺎﺠﺑ ﯽﮐ ﮯﻧﺮﮐ ﻞﻘﻧ ﻮﮐ ﯼﺭﻮﻤﯿﻣ ﮟﯿﻣ (ﮯﻌﯾﺭﺫ ﮯﮐ NVLink ﻼً﻿ﺜﻣ) ﺕﻻ﻿ﺁ ﮯﺋﻮﮨ ﮮﮍﺟ ﮯﺳ ﮮﺮﺳﻭﺩ ﮏﯾﺍ"
-
-
-msgid "HIP RT (Experimental)"
-msgstr "HIP RT (ﯽﺗﺎﺑﺮﺠﺗ)"
 
 
 msgid "Embree on GPU"
@@ -33165,14 +33161,6 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
-msgid "Show/Hide"
-msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
-
-
-msgid "Clean Up"
-msgstr "ﯽﺋﺎﻔﺻ"
-
-
 msgid "Pivot Point"
 msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
 
@@ -33291,6 +33279,14 @@ msgstr "ﮏﯾﺮﭨ"
 
 msgid "Quick Effects"
 msgstr "ﺕﺍﺮﺛﺍ ﯼﺭﻮﻓ"
+
+
+msgid "Show/Hide"
+msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
+
+
+msgid "Clean Up"
+msgstr "ﯽﺋﺎﻔﺻ"
 
 
 msgid "Asset"
@@ -87812,16 +87808,16 @@ msgid "Curve Edit Mode"
 msgstr "ﮈﻮﻣ ﺎﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﻢﺧ"
 
 
-msgid "glTF Material Variants"
-msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
-
-
 msgid "Snapping"
 msgstr "ﮓﻨﭙﯿﻨﺳ"
 
 
 msgid "Transform Orientations"
 msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﺖﯿﻔﻗﺍﻭ"
+
+
+msgid "glTF Material Variants"
+msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
 
 
 msgid "Stroke Placement"
@@ -87840,16 +87836,16 @@ msgid "Onion Skin"
 msgstr "ﺪﻠﺟ ﯽﮐ ﺯﺎﯿﭘ"
 
 
-msgid "glTF Animations"
-msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
-
-
 msgid "Stereoscopy"
 msgstr "ﯽﭘﻮﮑﺳﻮﯾﺮﯿﭩﺳ"
 
 
 msgid "Multi Frame"
 msgstr "ﻢﯾﺮﻓ ﯽﭩﻠﻣ"
+
+
+msgid "glTF Animations"
+msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
 
 
 msgid "Auto-Masking"
@@ -126399,10 +126395,6 @@ msgid "Expression: {}"
 msgstr "{} :ﺭﺎﮩﻇﺍ"
 
 
-msgid "Library: {}"
-msgstr "{} :ﯼﺮﯾﺮﺒﺋﻻ﻿"
-
-
 msgid "Disabled: {}"
 msgstr "{} :ﻝﺎﻌﻓ ﺮﯿﻏ"
 
@@ -129223,10 +129215,6 @@ msgstr "(ﮟﯿﮩﻧ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ ﻞﯾﺍ ﯽﺟ ﻦﭘﻭ�
 
 msgid "Scene has no camera"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮦﺮﻤﯿﮐ ﯽﺋﻮﮐ ﮟﯿﻣ ﻦﯿﺳ"
-
-
-msgid "Movie format unsupported"
-msgstr "ﮯﮨ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﺮﯿﻏ ﭧﯿﻣﺭﺎﻓ ﯼﻭﻮﻣ"
 
 
 msgid "Failed to create OpenGL off-screen buffer, %s"
