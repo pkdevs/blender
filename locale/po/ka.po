@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Beta (b'eceb81b21fa3')\n"
+"Project-Id-Version: Blender 4.4.0 Release Candidate (b'f896f7ffc32a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-10 09:31+0000\n"
-"PO-Revision-Date: 2025-03-07 20:56+0000\n"
+"POT-Creation-Date: 2025-03-17 16:18+0000\n"
+"PO-Revision-Date: 2025-03-17 12:56+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -738,14 +738,6 @@ msgstr "გაანაწილე მეხსიერება მოწყ�
 
 msgid "Make more room for large scenes to fit by distributing memory across interconnected devices (e.g. via NVLink) rather than duplicating it"
 msgstr "მონახე დიდი სცენებისათვის მეტი ადგილი მეხსიერების ურთიერთდაკავშირებულ მოწყობილებებს შორის განაწილებით (მაგ.: NVLink-ით) და არა დუბლირებით"
-
-
-msgid "HIP RT (Experimental)"
-msgstr "HIP RT (ექსპერიმენტალური)"
-
-
-msgid "HIP RT enables AMD hardware ray tracing on RDNA2 and above. This feature is experimental and some scenes may render incorrectly"
-msgstr "HIP RT რთავს AMD მოწყობილობით სხივების მიდევნებას RDNA2-ზე და ზემოთ. ეს მახასიათებელი ექსპერიმენტალურია და ზოგიერთი სცენა შესაძლოა, არასწორად დარენდერდეს"
 
 
 msgid "Embree on GPU"
@@ -34358,14 +34350,6 @@ msgid "Editor menu containing buttons"
 msgstr "რედაქტორის მენიუ, რომელიც ღილაკებს შეიცავს"
 
 
-msgid "Show/Hide"
-msgstr "ჩვენება/დამალვა"
-
-
-msgid "Clean Up"
-msgstr "გასუფთავება"
-
-
 msgid "Pivot Point"
 msgstr "ბრუნვის ცენტრი"
 
@@ -34484,6 +34468,14 @@ msgstr "თვალის დევნება"
 
 msgid "Quick Effects"
 msgstr "სწრაფი ეფექტები"
+
+
+msgid "Show/Hide"
+msgstr "ჩვენება/დამალვა"
+
+
+msgid "Clean Up"
+msgstr "გასუფთავება"
 
 
 msgid "Asset"
@@ -62899,7 +62891,7 @@ msgstr "ჩართე, ან გათიშე ყველა ტეგი"
 
 msgctxt "Operator"
 msgid "Automatically Pack Resources"
-msgstr "ავტომატურად შეფუთე რესურსები"
+msgstr "რესურსების ავტომატური შეფუთვა"
 
 
 msgid "Automatically pack all external files into the .blend file"
@@ -63459,7 +63451,7 @@ msgstr "ჩაწერე ფაილი ორიგინალ მდებ
 
 msgctxt "Operator"
 msgid "Unpack Linked Libraries"
-msgstr "ბმულით დაკავშირებული ბიბლიოთეკების ამოლაგება"
+msgstr "დაკავშირებული ბიბლიოთეკების ამოლაგება"
 
 
 msgid "Restore all packed linked data-blocks to their original locations"
@@ -90977,20 +90969,20 @@ msgid "Curves Edit Mode"
 msgstr "წირების რედაქტირების რეჟიმი"
 
 
-msgid "glTF Variants"
-msgstr "glTF ნაირსახეობები"
-
-
-msgid "glTF Material Variants"
-msgstr "glTF მასალის ნაირსახეობები"
-
-
 msgid "Snapping"
 msgstr "მიკვრა"
 
 
 msgid "Transform Orientations"
 msgstr "გარდაქმნების ორიენტაციები"
+
+
+msgid "glTF Variants"
+msgstr "glTF ნაირსახეობები"
+
+
+msgid "glTF Material Variants"
+msgstr "glTF მასალის ნაირსახეობები"
 
 
 msgid "Stroke Placement"
@@ -91013,20 +91005,20 @@ msgid "Onion Skin"
 msgstr "კალკი"
 
 
-msgid "glTF"
-msgstr "glTF"
-
-
-msgid "glTF Animations"
-msgstr "glTF ანიმაციები"
-
-
 msgid "Stereoscopy"
 msgstr "სტერეოსკოპია"
 
 
 msgid "Multi Frame"
 msgstr "მრავალკადრიანი"
+
+
+msgid "glTF"
+msgstr "glTF"
+
+
+msgid "glTF Animations"
+msgstr "glTF ანიმაციები"
 
 
 msgid "Auto-Masking"
@@ -119812,6 +119804,10 @@ msgid "Installing keymap failed: {:s}"
 msgstr "კლავიშრუკის დაინსტალირება წარუმატებელია: {:s}"
 
 
+msgid "This script was written for Blender version {:d}.{:d}.{:d} and might not function (correctly), though it is enabled"
+msgstr "ეს სკრიპტი დაწერილია Blender-ის ვერსიისთვის {:d}.{:d}.{:d} და შეიძლება, (სწორად) არ ფუნქციონირებდეს, თუმცა, ჩართულია"
+
+
 msgid "File already installed to {!r}"
 msgstr "ფაილი უკვე დაინსტალირებულია {!r}-ში"
 
@@ -124562,7 +124558,7 @@ msgstr "აპლიკაციის შაბლონის დაინს�
 
 msgctxt "Operator"
 msgid "Purge Unused Data..."
-msgstr "გამოუყენებელი მონაცემების გამოყენება..."
+msgstr "გამოუყენებელი მონაცემების წმენდა..."
 
 
 msgctxt "Operator"
@@ -124642,7 +124638,7 @@ msgstr "ისტორიის გამეორება..."
 
 msgctxt "Operator"
 msgid "Menu Search..."
-msgstr "ძიება მენიუში..."
+msgstr "მენიუს ძიება..."
 
 
 msgctxt "Operator"
@@ -129888,6 +129884,14 @@ msgid "%d bones aligned to bone '%s'"
 msgstr "%d ძვალი გასწორდა ძვალთან '%s' მიმართებაში"
 
 
+msgid "New bone name collides with an existing vertex group name, vertex group names are unchanged."
+msgstr "ძვლის ახალი სახელი კონფლიქტში მოდის წვეროთა არსებული ჯგუფის სახელთან, წვეროთა ჯგუფების სახელები უცვლელია."
+
+
+msgid "%s (%s::%s)"
+msgstr "%s (%s::%s)"
+
+
 msgid "Active object is not a selected armature"
 msgstr "აქტიური ობიექტი მონიშნული არმატურა არაა"
 
@@ -130042,6 +130046,10 @@ msgstr "პოზის შეტრიალება"
 
 msgid "Pose lib is only for armatures in pose mode"
 msgstr "პოზების ბიბლიოთეკა მხოლოდ პოზირების რეჟიმში მყოფი არმატურებისთვისაა"
+
+
+msgid "This pose asset is empty, and thus has no pose"
+msgstr "პოზის ეს აქტივი ცარიელია, შესაბამისად, პოზა არ აქვს"
 
 
 msgid "Internal pose library error, canceling operator"
@@ -131208,10 +131216,6 @@ msgstr "რადიანები: {}"
 
 msgid "Expression: {}"
 msgstr "გამოსახულება: {}"
-
-
-msgid "Library: {}"
-msgstr "ბიბლიოთეკა: {}"
 
 
 msgid "Disabled: {}"
@@ -132884,6 +132888,10 @@ msgid "Cage object \"%s\" not found in evaluated scene, it may be hidden"
 msgstr "გალიის ობიექტი \"%s\" შეფასებულ სცენაში ვერ მოიძებნა, შესაძლოა, დამალულია"
 
 
+msgid "No UV map found in the evaluated object \"%s\""
+msgstr "გამოთვლილ ობიექტში \"%s\" UV რუკა ნაპოვნი არაა"
+
+
 msgid "Object \"%s\" not found in evaluated scene, it may be hidden"
 msgstr "ობიექტი \"%s\" შეფასებულ სცენაში ვერ მოიძებნა, შესაძლოა, დამალულია"
 
@@ -133780,6 +133788,10 @@ msgid "Vertex group is locked"
 msgstr "წვეროთა ჯგუფი დაბლოკილია"
 
 
+msgid "No meshes with vertex groups found"
+msgstr "წვეროთა ჯგუფებიანი მეშები ნაპოვნი არაა"
+
+
 msgid "%d vertex weights limited"
 msgstr "%d წვეროთა წონები შეზღუდულია"
 
@@ -134174,10 +134186,6 @@ msgstr "OpenGL რენდერის გამოყენება ფონ
 
 msgid "Scene has no camera"
 msgstr "სცენას კამერა არ აქვს"
-
-
-msgid "Movie format unsupported"
-msgstr "ვიდეო ფორმატი მხარდაუჭერელია"
 
 
 msgid "Failed to create OpenGL off-screen buffer, %s"

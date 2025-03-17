@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.4.0 Beta (b'eceb81b21fa3')\n"
+"Project-Id-Version: Blender 4.4.0 Release Candidate (b'f896f7ffc32a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-10 09:31+0000\n"
+"POT-Creation-Date: 2025-03-17 16:18+0000\n"
 "PO-Revision-Date: 2024-04-14 09:42+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -576,10 +576,6 @@ msgstr "பல்வேறு சாதனங்கள் முழுதும�
 
 msgid "Make more room for large scenes to fit by distributing memory across interconnected devices (e.g. via NVLink) rather than duplicating it"
 msgstr "பெரிய காட்சிகள் பொருந்தக்கூடிய வகையில் அதிக இடத்தை உருவாக்குங்கள்"
-
-
-msgid "HIP RT (Experimental)"
-msgstr "hip rt (பரிசோதனைக்குரியது)"
 
 
 msgid "Embree on GPU"
@@ -31440,14 +31436,6 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
-msgid "Show/Hide"
-msgstr "காட்டு/மறைக்க"
-
-
-msgid "Clean Up"
-msgstr "தூய்மை செய்"
-
-
 msgid "Pivot Point"
 msgstr "பிவோட் புள்ளி"
 
@@ -31566,6 +31554,14 @@ msgstr "டிராக்"
 
 msgid "Quick Effects"
 msgstr "விரைவான விளைவுகள்"
+
+
+msgid "Show/Hide"
+msgstr "காட்டு/மறைக்க"
+
+
+msgid "Clean Up"
+msgstr "தூய்மை செய்"
 
 
 msgid "Asset"
@@ -114974,10 +114970,6 @@ msgid "Expression: {}"
 msgstr "வெளிப்பாடு: {}"
 
 
-msgid "Library: {}"
-msgstr "நூலகம்: {}"
-
-
 msgid "Disabled: {}"
 msgstr "முடக்கப்பட்டது: {}"
 
@@ -117492,10 +117484,6 @@ msgstr "பின்னணி பயன்முறையில் opengl ரெ
 
 msgid "Scene has no camera"
 msgstr "காட்சிக்கு கேமரா இல்லை"
-
-
-msgid "Movie format unsupported"
-msgstr "திரைப்பட வடிவம் ஆதரிக்கப்படவில்லை"
 
 
 msgid "Failed to create OpenGL off-screen buffer, %s"
