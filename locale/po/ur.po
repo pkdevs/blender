@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'e1163bf1330a')\n"
+"Project-Id-Version: Blender 4.5.0 Alpha (b'b6372b3af3f7')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-14 10:01+0000\n"
+"POT-Creation-Date: 2025-04-21 07:54+0000\n"
 "PO-Revision-Date: 2025-04-14 08:53+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -33081,12 +33081,52 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
-msgid "Select All by Trait"
-msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﯽﮭﺒﺳ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺖﯿﺻﻮﺼﺧ"
+msgid "Mirror"
+msgstr "ﮧﻨﯿﺋﺁ"
+
+
+msgid "Snap"
+msgstr "ﭗﯿﻨﺳ"
+
+
+msgid "UV Mapping"
+msgstr "ﮓﻨﭙﯿﻣ ﯼﻭﻮﯾ"
+
+
+msgid "Local View"
+msgstr "ﺮﻈﻨﻣ ﯽﻣﺎﻘﻣ"
+
+
+msgid "Viewpoint"
+msgstr "ﺮﻈﻧ ﮧﻄﻘﻧ"
+
+
+msgid "Navigation"
+msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
+
+
+msgid "Align View"
+msgstr "ﮟﯿﮭﮑﯾﺩ ﮟﯿﻣ ﮪﺪﯿﺳ"
+
+
+msgid "Align View to Active"
+msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﮟﯿﻣ ﻝﺎﻌﻓ ﻮﮐ ﺮﻈﻨﻣ"
+
+
+msgid "View Regions"
+msgstr "ﮟﯿﮭﮑﯾﺩ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ"
 
 
 msgid "Select More/Less"
 msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻢﮐ/ﮦﺩﺎﯾﺯ"
+
+
+msgid "Select Similar"
+msgstr "ﮟﯾﺮﮐ ﺏﺎﺨﺘﻧﺍ ﺎﮐ ﺡﺮﻃ ﯽﺳﺍ"
+
+
+msgid "Select All by Trait"
+msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﯽﮭﺒﺳ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺖﯿﺻﻮﺼﺧ"
 
 
 msgid "Select Linked"
@@ -33257,10 +33297,6 @@ msgid "Pivot Point"
 msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
 
 
-msgid "Snap"
-msgstr "ﭗﯿﻨﺳ"
-
-
 msgid "Proportional Editing Falloff"
 msgstr "ﻑﺁ ﻝﺎﻓ ﺮﺋﺎﻔﯾﮈﻮﻣ ﺐﺳﺎﻨﺘﻣ"
 
@@ -33275,42 +33311,6 @@ msgstr "ﮓﻨﮑﺳﺎﻣﻮﭨﺁ"
 
 msgid "Face Sets Edit"
 msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﯿﺳ ﮯﮐ ﮮﺮﮩﭼ"
-
-
-msgid "Mirror"
-msgstr "ﮧﻨﯿﺋﺁ"
-
-
-msgid "UV Mapping"
-msgstr "ﮓﻨﭙﯿﻣ ﯼﻭﻮﯾ"
-
-
-msgid "Local View"
-msgstr "ﺮﻈﻨﻣ ﯽﻣﺎﻘﻣ"
-
-
-msgid "Viewpoint"
-msgstr "ﺮﻈﻧ ﮧﻄﻘﻧ"
-
-
-msgid "Navigation"
-msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
-
-
-msgid "Align View"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﮟﯿﻣ ﮪﺪﯿﺳ"
-
-
-msgid "Align View to Active"
-msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﮟﯿﻣ ﻝﺎﻌﻓ ﻮﮐ ﺮﻈﻨﻣ"
-
-
-msgid "View Regions"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ"
-
-
-msgid "Select Similar"
-msgstr "ﮟﯾﺮﮐ ﺏﺎﺨﺘﻧﺍ ﺎﮐ ﺡﺮﻃ ﯽﺳﺍ"
 
 
 msgid "Keyframe Insert Pie"
@@ -42871,20 +42871,8 @@ msgid "Contrast Limit"
 msgstr "ﺪﺣ ﯽﮐ ﭧﺳﺍﺮﭩﻨﮐ"
 
 
-msgid "How much to eliminate spurious edges to avoid artifacts (the larger value makes less active; the value 2.0, for example, means discard a detected edge if there is a neighboring edge that has 2.0 times bigger contrast than the current one)"
-msgstr "(ﮟﯾﺩ ﺮﮐ ﻊﺋﺎﺿ ﻮﮐ ﮮﺭﺎﻨﮐ ﻼ﻿ﭼ ﮧﺘﭘ ﮧﮐ ﮯﮨ ﺐﻠﻄﻣ ﺎﮐ ﺱﺍ ﻮﺗ ﮯﮨ ﭧﺳﺍﺮﭩﻨﮐ ﺍﮍﺑ ﺎﻨﮔ 2.0 ﮯﺳ ﮦﺩﻮﺟﻮﻣ ﮟﯿﻣ ﺲﺟ ﮯﮨ ﮦﺭﺎﻨﮐ ﯽﺳﻭﮍﭘ ﯽﺋﻮﮐ ﺮﮔﺍ ،ﺮﭘ ﺭﻮﻃ ﮯﮐ ﻝﺎﺜﻣ ،2.0 ﺭﺪﻗ ؛ﮯﮨ ﯽﺗﺮﮐ ﻝﺎﻌﻓ ﻢﮐ ﺭﺪﻗ ﯼﮍﺑ) ﮯﮨ ﺎﻧﺮﮐ ﻢﺘﺧ ﺎﻨﺘﮐ ﻮﮐ ﮞﻭﺭﺎﻨﮐ ﯽﻠﻌﺟ ﮯﯿﻟ ﮯﮐ ﮯﻨﭽﺑ ﮯﺳ ﮯﻧﻮﻤﻧ"
-
-
 msgid "Corner Rounding"
 msgstr "ﮓﻧﮉﻧﺅﺍﺭ ﺮﻧﺭﺎﮐ"
-
-
-msgid "How much sharp corners will be rounded"
-msgstr "ﮯﮔ ﮞﻮﮨ ﻝﻮﮔ ﮯﻧﻮﮐ ﺰﯿﺗ ﮯﻨﺘﮐ"
-
-
-msgid "Threshold to detect edges (smaller threshold makes more sensitive detection)"
-msgstr "(ﮯﮨ ﯽﺗﺎﻨﺑ ﺖﺧﺎﻨﺷ ﺱﺎﺴﺣ ﮦﺩﺎﯾﺯ ﺪﺣ ﯽﭨﻮﮭﭼ) ﺪﺣ ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﮕﻟ ﮧﺘﭘ ﺎﮐ ﮞﻭﺭﺎﻨﮐ"
 
 
 msgid "Bilateral Blur"
@@ -43990,16 +43978,8 @@ msgid "Smooth areas of an image in which noise is noticeable, while leaving comp
 msgstr "ﺎﻧﮌﻮﮭﭼ ﺎﺗﻮﮭﭼﺍ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ ﮦﺪﯿﭽﯿﭙﮩﮑﺒﺟ ،ﮯﮨ ﮞﺎﯾﺎﻤﻧ ﺭﻮﺷ ﮟﯿﻣ ﻦﺟ ﮯﻗﻼ﻿ﻋ ﺭﺍﻮﻤﮨ ﮯﮐ ﺮﯾﻮﺼﺗ ﮏﯾﺍ"
 
 
-msgid "Threshold for detecting pixels to despeckle"
-msgstr "ﺪﺣ ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﮕﻟ ﮧﺘﭘ ﺎﮐ ﺰﻠﺴﮑﭘ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻞﮑﯿﭙﺴﯾﮈ"
-
-
 msgid "Neighbor"
 msgstr "ﯽﺳﻭﮍﭘ"
-
-
-msgid "Threshold for the number of neighbor pixels that must match"
-msgstr "ﮯﯿﮨﺎﭼ ﯽﻧﻮﮨ ﻞﺛﺎﻤﻣ ﻮﺟ ﺪﺣ ﮯﯿﻟ ﮯﮐ ﺩﺍﺪﻌﺗ ﯽﮐ ﺰﻠﺴﮑﭘ ﯽﺳﻭﮍﭘ"
 
 
 msgid "Difference Key"
@@ -44026,17 +44006,9 @@ msgid "Expand and shrink masks"
 msgstr "ﮟﯾﮍﮑﺳ ﺭﻭﺍ ﮟﯿﺋﻼ﻿ﯿﮭﭘ ﻮﮐ ﮏﺳﺎﻣ"
 
 
-msgid "Distance to grow/shrink (number of iterations)"
-msgstr "(ﺩﺍﺪﻌﺗ ﯽﮐ ﮦﺩﺎﻋﺍ) ﮧﻠﺻﺎﻓ ﺎﮐ ﮯﻧﮍﮑﺳ/ﮯﻨﮬﮍﺑ"
-
-
 msgctxt "Image"
 msgid "Edge"
 msgstr "ﮦﺭﺎﻨﮐ"
-
-
-msgid "Edge to inset"
-msgstr "ﮮﺭﺎﻨﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﭧﯿﺴﻧﺍ"
 
 
 msgid "Growing/shrinking mode"
@@ -44307,10 +44279,6 @@ msgid "Extend borders of an image into transparent or masked regions"
 msgstr "ﮟﯿﺋﻼ﻿ﯿﮭﭘ ﮟﯿﻣ ﮞﻮﻗﻼ﻿ﻋ ﺵﻮﭘ ﺏﺎﻘﻧ ﺎﯾ ﻑﺎﻔﺷ ﻮﮐ ﮞﻭﺪﺣﺮﺳ ﯽﮐ ﺮﯾﻮﺼﺗ ﯽﺴﮐ"
 
 
-msgid "Distance to inpaint (number of iterations)"
-msgstr "(ﺩﺍﺪﻌﺗ ﯽﮐ ﮞﻮﯿﺋﺍﺮﮨﻭﺩ) ﮧﻠﺻﺎﻓ ﮯﺳ ﭧﻨﯿﭘ"
-
-
 msgid "Invert Color"
 msgstr "ﮓﻧﺭ ﺎﭩﻟﺍ"
 
@@ -44436,28 +44404,12 @@ msgid "Eccentricity"
 msgstr "ﻦﭘ ﯽﮑﻨﺳ"
 
 
-msgid "Controls how directional the filter is. 0 means the filter is completely omnidirectional while 2 means it is maximally directed along the edges of the image."
-msgstr ".ﮫﺗﺎﺳ ﮫﺗﺎﺳ ﮯﮐ ﮞﻭﺭﺎﻨﮐ ﮯﮐ ﺮﯾﻮﺼﺗﮯﮨ ﮧﺘﻓﺎﯾ ﺖﯾﺍﺪﮨ ﮦﺩﺎﯾﺯ ﮯﺳ ﮦﺩﺎﯾﺯ ﮧﯾ ﮧﮐ ﮯﮨ ﺐﻠﻄﻣ ﺎﮐ 2 ﮧﮑﺒﺟ ﯽﺘﮩﺟ ﮧﻤﮨ ﺮﭘ ﺭﻮﻃ ﻞﻤﮑﻣﮯﮨ ﺮﭩﻠﻓ ﮯﮨ ﺐﻠﻄﻣ ﺎﮐ 0 ﮯﮨ ﮏﻤﺗﺎﺷﺩ ﺎﻨﺘﮐ ﺮﭩﻠﻓ ﮧﮐ ﮯﮨ ﺎﺗﺮﮐ ﻝﻭﺮﭩﻨﮐ"
-
-
-msgid "Controls the sharpness of the filter. 0 means completely smooth while 1 means completely sharp."
-msgstr "ﮯﮨ ﺰﯿﺗ ﺮﭘ ﺭﻮﻃ ﻞﻤﮑﻣ ﺐﻠﻄﻣ ﺎﮐ 1 ﮧﮑﺒﺟﮯﮨ ﺭﺍﻮﻤﮨ ﺮﭘ ﺭﻮﻃ ﻞﻤﮑﻣ ﺐﻠﻄﻣ ﺎﮐ 0 ﮯﮨ ﺎﺗﺮﮐ ﻝﻭﺮﭩﻨﮐ ﻮﮐ ﺖﺳﺎﻔﻧ ﯽﮐ ﺮﭩﻠﻓ"
-
-
 msgid "Uniformity"
 msgstr "ﺖﯿﻧﺎﺴﮑﯾ"
 
 
-msgid "Controls the uniformity of the direction of the filter. Higher values produces more uniform directions."
-msgstr "ﮟﯿﮨ ﯽﺗﺮﮐ ﺍﺪﯿﭘ ﮟﯿﺘﻤﺳ ﮞﺎﺴﮑﯾ ﮦﺩﺎﯾﺯ ﺭﺍﺪﻗﺎﯿﻠﻋﺍ ﮯﮨ ﺎﺗﺮﮐ ﻝﻭﺮﭩﻨﮐ ﻮﮐ ﺖﯿﻧﺎﺴﮑﯾ ﯽﮐ ﺖﻤﺳ ﯽﮐ ﺮﭩﻠﻓ"
-
-
 msgid "High Precision"
 msgstr "ﻖﻠﻌﺘﻣ ﮯﺳ ﺖﺤﺻ ﯽﻠﻋﺍ"
-
-
-msgid "Uses a more precise but slower method. Use if the output contains undesirable noise."
-msgstr ".ﮯﮨ ﻞﻤﺘﺸﻣ ﺮﭘ ﺭﻮﺷ ﮦﺪﯾﺪﻨﺴﭘﺎﻨﭩﭘ ﭦﺅﺁ ﺮﮔﺍ ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﮨ ﺎﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮧﻘﯾﺮﻃ ﺖﺴﺳ ﻦﮑﯿﻟ ﺖﺳﺭﺩ ﮦﺩﺎﯾﺯ"
 
 
 msgid "Variation of Kuwahara filter to use"
@@ -44595,16 +44547,8 @@ msgid "Input mask from a mask datablock, created in the image editor"
 msgstr "ﮯﮨ ﺎﯿﮔ ﺎﯾﺎﻨﺑ ﮟﯿﻣ ﺮﭩﯾﮉﯾﺍ ﺞﯿﻣﺍ ،ﮏﺳﺎﻣ ﭧﭘ ﻥﺍ ﮯﺳ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ ﮏﺳﺎﻣ ﮏﯾﺍ"
 
 
-msgid "Number of motion blur samples"
-msgstr "ﺩﺍﺪﻌﺗ ﯽﮐ ﮞﻮﻧﻮﻤﻧ ﺮﻠﺑ ﺖﮐﺮﺣ"
-
-
 msgid "Shutter"
 msgstr "ﺮﭩﺷ"
-
-
-msgid "Exposure for motion blur as a factor of FPS"
-msgstr "FPS ﺶﺋﺎﻤﻧ ﯽﮐ ﺮﻠﺑ ﺖﮐﺮﺣ  ﺮﭘ ﺭﻮﻃ ﮯﮐ ﺮﺼﻨﻋ ﮏﯾﺍ ﮯﮐ"
 
 
 msgid "Size Source"
@@ -44631,16 +44575,8 @@ msgid "Pixel size scaled by scene percentage"
 msgstr "ﺎﭨﻮﮭﭼ ﺰﺋﺎﺳ ﺎﮐ ﻞﺴﮑﭘ ﮯﺳ ﺏﺎﺴﺣ ﮯﮐ ﺪﺼﯿﻓ ﮯﮐ ﺮﻈﻨﻣ"
 
 
-msgid "Use feather information from the mask"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺕﺎﻣﻮﻠﻌﻣ ﯽﮐ ﮞﻮﮭﮑﻨﭘ ﮯﺳ ﮏﺳﺎﻣ"
-
-
 msgid "Motion Blur"
 msgstr "ﺮﻠﺑ ﺖﮐﺮﺣ"
-
-
-msgid "Use multi-sampled motion blur of the mask"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﻠﺑ ﺖﮐﺮﺣ  ﻞﭙﻤﯿﺳ ﯽﭩﻠﻣ ﺎﮐ ﮏﺳﺎﻣ"
 
 
 msgid "Perform math operations"
@@ -45109,12 +45045,20 @@ msgid "Pixel Size"
 msgstr "ﺰﺋﺎﺳ ﻞﺴﮑﭘ"
 
 
-msgid "Pixel size of the output image"
-msgstr "ﺮﯾﻮﺼﺗ ﭧﭘ ﭦﺅﺁ of the ﺰﺋﺎﺳ ﻞﺴﮑﭘ"
-
-
 msgid "Plane Track Deform"
 msgstr "ﻡﺭﺎﻔﯾﮈ ﮏﯾﺮﭨ ﻦﯿﻠﭘ"
+
+
+msgid "Number of motion blur samples"
+msgstr "ﺩﺍﺪﻌﺗ ﯽﮐ ﮞﻮﻧﻮﻤﻧ ﺮﻠﺑ ﺖﮐﺮﺣ"
+
+
+msgid "Exposure for motion blur as a factor of FPS"
+msgstr "FPS ﺶﺋﺎﻤﻧ ﯽﮐ ﺮﻠﺑ ﺖﮐﺮﺣ  ﺮﭘ ﺭﻮﻃ ﮯﮐ ﺮﺼﻨﻋ ﮏﯾﺍ ﮯﮐ"
+
+
+msgid "Use multi-sampled motion blur of the mask"
+msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﻠﺑ ﺖﮐﺮﺣ  ﻞﭙﻤﯿﺳ ﯽﭩﻠﻣ ﺎﮐ ﮏﺳﺎﻣ"
 
 
 msgid "Posterize"
@@ -45297,10 +45241,6 @@ msgid "Switch between two images using a checkbox"
 msgstr "ﮟﯾﺮﮐ ﭻﺋﻮﺳ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﺮﯾﻭﺎﺼﺗ ﻭﺩ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺲﮐﺎﺑ ﮏﯿﭼ"
 
 
-msgid "Off: first socket, On: second socket"
-msgstr "ﭧﮐﺎﺳ ﺍﺮﺳﻭﺩ :ﻥﺁ ،ﭧﮐﺎﺳ ﻼ﻿ﮩﭘ :ﻑﺁ"
-
-
 msgid "Switch View"
 msgstr "ﻮﯾﻭ ﭻﺋﻮﺳ"
 
@@ -45339,34 +45279,6 @@ msgstr "ﻞﮑﺷ ﯼﺮﮨﺎﻇ ﯽﮐ ﺞﻨﯾﺭ ﮎﺮﺤﺘﻣ ﯽﻠﻋ�
 
 msgid "Adaptation"
 msgstr "ﺖﻘﻓﺍﻮﻣ"
-
-
-msgid "If 0, global; if 1, based on pixel intensity"
-msgstr "ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﺕﺪﺷ ﯽﮐ ﻞﺴﮑﭘ ،1 ﺮﮔﺍ ؛ﯽﻤﻟﺎﻋ ،0 ﺮﮔﺍ"
-
-
-msgid "Set to 0 to use estimate from input image"
-msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﺮﭘ 0 ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮧﻨﯿﻤﺨﺗ ﮯﺳ ﺞﯿﻣﺍ ﭧﭘ ﻥﺍ"
-
-
-msgid "If 0, same for all channels; if 1, each independent"
-msgstr "ﺩﺍﺯﺁ ﮏﯾﺍ ﺮﮨ ،1 ﺮﮔﺍ ؛ﮞﺎﺴﮑﯾ ﮯﯿﻟ ﮯﮐ ﺰﻠﻨﯿﭼ ﻡﺎﻤﺗ ،0 ﺮﮔﺍ"
-
-
-msgid "If not used, set to 1"
-msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﺮﭘ 1 ﻮﺗ ﻮﮨ ﮧﻧ ﻝﺎﻤﻌﺘﺳﺍ ﺮﮔﺍ"
-
-
-msgid "If less than zero, darkens image; otherwise, makes it brighter"
-msgstr "ﮯﮨ ﺎﺗﺎﻨﺑ ﻦﺷﻭﺭ ﮧﯾ ،ﮟﯿﻣ ﺕﺭﻮﺻ ﯼﺮﺳﻭﺩ ﮯﮨ ﺎﺘﯾﺩ ﺮﮐ ﺍﺮﮩﮔ ﻮﮐ ﺮﯾﻮﺼﺗ ﻮﺗ ﻮﮨ ﻢﮐ ﮯﺳ ﺮﻔﺻ ﺮﮔﺍ"
-
-
-msgid "The value the average luminance is mapped to"
-msgstr "ﮯﮨ ﺎﯿﮔ ﺎﯾﺎﻨﺑ ﮧﺸﻘﻧ ﺎﮐ ﯽﻨﺷﻭﺭ ﻂﺳﻭﺍ ﺮﭘ ﺲﺟ ﺭﺪﻗ ﮦﻭ"
-
-
-msgid "Normally always 1, but can be used as an extra control to alter the brightness curve"
-msgstr "ﮯﮨ ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﻝﻭﺮﭩﻨﮐ ﯽﻓﺎﺿﺍ ﮏﯾﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﻞﺑ ﮏﻤﭼ ﻦﮑﯿﻟ ،1 ﮧﺸﯿﻤﮨ ﺮﭘ ﺭﻮﻃ ﻡﺎﻋ"
 
 
 msgid "Tonemap Type"
@@ -45485,28 +45397,12 @@ msgid "Blur Factor"
 msgstr "ﺮﭩﮑﯿﻓ ﺮﻠﺑ"
 
 
-msgid "Scaling factor for motion vectors (actually, 'shutter speed', in frames)"
-msgstr "(ﮟﯿﻣ ﮞﻮﻤﯾﺮﻓ ،'ﮉﯿﭙﺳ ﺮﭩﺷ' ،ﻞﺻﺍﺭﺩ) ﺮﭩﮑﯿﻓ ﮓﻨﻠﯿﮑﺳﺍ  ﮯﯿﻟ ﮯﮐ ﺮﭩﮑﯾﻭ ﺖﮐﺮﺣ"
-
-
 msgid "Max Speed"
 msgstr "ﺭﺎﺘﻓﺭ ﮦﺩﺎﯾﺯ ﮯﺳ ﮦﺩﺎﯾﺯ"
 
 
-msgid "Maximum speed, or zero for none"
-msgstr "ﮟﯿﮩﻧ ﺮﻔﺻ ﮯﯿﻟ ﮯﮐ ﯽﺴﮐ ﺎﯾ ،ﺭﺎﺘﻓﺭ ﮦﺩﺎﯾﺯ ﮯﺳ ﮦﺩﺎﯾﺯ"
-
-
 msgid "Min Speed"
 msgstr "ﺭﺎﺘﻓﺭ ﻢﮐ ﮯﺳ ﻢﮐ"
-
-
-msgid "Minimum speed for a pixel to be blurred (used to separate background from foreground)"
-msgstr "(ﮯﮨ ﺎﺗﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮓﻟﺍ ﻮﮐﻮﯾﻭ ﺲﭘ ﮯﺳﻮﯾﻭ ﺶﯿﭘ) ﺭﺎﺘﻓﺭ ﻢﮐ ﺯﺍ ﻢﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻻ﻿ﺪﻨﮬﺩ ﻮﮐ ﻞﺴﮑﭘ ﮏﯾﺍ"
-
-
-msgid "Interpolate between frames in a Bézier curve, rather than linearly"
-msgstr "ﺮﭘ ﺭﻮﻃ ﯼﺮﯿﮑﻠںﯾﺮﮐ ﭧﯿﻟﻮﭘﺮﭩﻧﺍ ﮯﺋﺎﺠﺑ ﯽﮐ ﮟﯿﻤﺧ Bézier ﮏﯾﺍ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﮞﻮﻤﯾﺮﻓ"
 
 
 msgid "Viewer"
@@ -45525,16 +45421,8 @@ msgid "Combine two images using depth maps"
 msgstr "ﮟﯾﺮﮐ ﺎﺠﮑﯾ ﻮﮐ ﺮﯾﻭﺎﺼﺗ ﻭﺩ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﮞﻮﺸﻘﻧ ﮯﮐ ﯽﺋﺍﺮﮩﮔ"
 
 
-msgid "Take alpha channel into account when doing the Z operation"
-msgstr "Z ﮟﯿﮭﮐﺭ ﺮﻈﻧﺪﻣ ﻮﮐ ﻞﻨﯿﭼ ﺎﻔﻟﺍ ﺖﻗﻭ ﮯﺗﺮﮐ ﻦﺸﯾﺮﭘﺁ"
-
-
 msgid "Anti-Alias Z"
 msgstr "ﮉﯾﺯ ﺱﺎﯿﻟﺍ ﯽﭩﻨﯾﺍ"
-
-
-msgid "Anti-alias the z-buffer to try to avoid artifacts, mostly useful for Blender renders"
-msgstr "ﺪﯿﻔﻣ ﮯﯿﻟ ﮯﮐ ﺯﺭﮉﻨﯾﺭ ﺭﮉﻨﯿﻠﺑ ﺮﺗ ﮦﺩﺎﯾﺯ ،ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺶﺷﻮﮐ ﯽﮐ ﮯﻨﭽﺑ ﮯﺳ ﮯﻧﻮﻤﻧ ﺮﻔﺑ ﮉﯾﺯ ﺱﺎﯿﻟﺍ ﯽﭩﻨﯾﺍ"
 
 
 msgid "Function Node"
@@ -84912,6 +84800,14 @@ msgid "Operator that allows file handlers to receive file drops"
 msgstr "ﮯﮨ ﺎﺘﯾﺩ ﺕﺯﺎﺟﺍ ﯽﮐ ﮯﻧﺮﮐ ﻝﻮﺻﻭ ﺲﭘﺍﺭﮈ ﻞﺋﺎﻓ ﻮﮐ ﺯﺮﻟﮉﻨﯿﮨ ﻞﺋﺎﻓ ﻮﺟ ﺮﭩﯾﺮﭘﺁ"
 
 
+msgid "Vertex colors in the file are in sRGB color space"
+msgstr "ﮟﯿﮨ ﮟﯿﻣ ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ sRGB ﮓﻧﺭ ﯼﺩﻮﻤﻋ ﮟﯿﻣ ﻞﺋﺎﻓ"
+
+
+msgid "Vertex colors in the file are in linear color space"
+msgstr "ﮟﯿﮨ ﮟﯿﻣ ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ ﯼﺮﯿﮑﻟ ﮓﻧﺭ ﯼﺩﻮﻤﻋ ﮟﯿﻣ ﻞﺋﺎﻓ"
+
+
 msgctxt "Operator"
 msgid "Export to PDF"
 msgstr "ﮟﯾﺮﮐ ﭦﺭﻮﭙﺴﮑﯾﺍ ﮟﯿﻣ ﻒﯾﺍ ﯼﮈ ﯽﭘ"
@@ -85333,14 +85229,6 @@ msgstr "ﮟﯾﺮﮐ ﺪﻣﺁﺮﺑ ﮓﻧﺭ ﺲﮑﯿﭨﺭﻭ"
 
 msgid "Do not import/export color attributes"
 msgstr "ﮟﯾﺮﮐ ﮧﻧ ﺪﻣﺁﺮﺑ/ﺪﻣﺁﺭﺩ ﻮﮐ ﺕﺎﯿﺻﻮﺼﺧ ﯽﮐ ﮓﻧﺭ"
-
-
-msgid "Vertex colors in the file are in sRGB color space"
-msgstr "ﮟﯿﮨ ﮟﯿﻣ ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ sRGB ﮓﻧﺭ ﯼﺩﻮﻤﻋ ﮟﯿﻣ ﻞﺋﺎﻓ"
-
-
-msgid "Vertex colors in the file are in linear color space"
-msgstr "ﮟﯿﮨ ﮟﯿﻣ ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ ﯼﺮﯿﮑﻟ ﮓﻧﺭ ﯼﺩﻮﻤﻋ ﮟﯿﻣ ﻞﺋﺎﻓ"
 
 
 msgid "Export Vertex Normals"
@@ -87611,6 +87499,34 @@ msgid "Panel containing UI elements"
 msgstr "UI ﻞﻨﯿﭘ ﻞﻤﺘﺸﻣ ﺮﭘ ﺮﺻﺎﻨﻋ"
 
 
+msgid "Mesh Edit Mode"
+msgstr "ﮈﻮﻣ ﭧﯾﮉﯾﺍ ﺶﯿﻣ"
+
+
+msgid "Measurement"
+msgstr "ﺶﺋﺎﻤﯿﭘ"
+
+
+msgid "Curve Edit Mode"
+msgstr "ﮈﻮﻣ ﺎﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﻢﺧ"
+
+
+msgid "Snapping"
+msgstr "ﮓﻨﭙﯿﻨﺳ"
+
+
+msgid "Transform Orientations"
+msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﺖﯿﻔﻗﺍﻭ"
+
+
+msgid "Stroke Placement"
+msgstr "ﭧﻨﻤﺴﯿﻠﭘ ﮎﻭﺮﭩﺳﺍ"
+
+
+msgid "Drawing Plane"
+msgstr "ﻦﯿﻠﭘ ﮓﻨﺋﺍﺭﮈ"
+
+
 msgid "Guides"
 msgstr "ﺯﮉﯿﺋﺎﮔ"
 
@@ -87635,6 +87551,10 @@ msgid "Auto-Masking"
 msgstr "ﮓﻨﮑﺳﺎﻣ ﻮﭨﺁ"
 
 
+msgid "Motion Tracking"
+msgstr "ﮓﻨﮑﯾﺮﭨ ﺖﮐﺮﺣ"
+
+
 msgid "Curves Sculpt Add Curve Options"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺕﺍﺭﺎﯿﺘﺧﺍ ﻢﺴﺠﻣ ﮯﮐ ﻢﺴﺠﻣ ﮟﯿﻤﺧ"
 
@@ -87649,10 +87569,6 @@ msgstr "ﺎﻧﮍﮑﺳ/ﺎﻨﮬﮍﺑ  ﮟﯿﻤﺧ"
 
 msgid "Viewport Debug"
 msgstr "ﮓﺒﯾﮈ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgid "Drawing Plane"
-msgstr "ﻦﯿﻠﭘ ﮓﻨﺋﺍﺭﮈ"
 
 
 msgid "VR"
@@ -87713,34 +87629,6 @@ msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
 
 msgid "Viewer Node"
 msgstr "ﮈﻮﻧ ﺮﻇﺎﻧ"
-
-
-msgid "Motion Tracking"
-msgstr "ﮓﻨﮑﯾﺮﭨ ﺖﮐﺮﺣ"
-
-
-msgid "Mesh Edit Mode"
-msgstr "ﮈﻮﻣ ﭧﯾﮉﯾﺍ ﺶﯿﻣ"
-
-
-msgid "Measurement"
-msgstr "ﺶﺋﺎﻤﯿﭘ"
-
-
-msgid "Curve Edit Mode"
-msgstr "ﮈﻮﻣ ﺎﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﻢﺧ"
-
-
-msgid "Snapping"
-msgstr "ﮓﻨﭙﯿﻨﺳ"
-
-
-msgid "Transform Orientations"
-msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﺖﯿﻔﻗﺍﻭ"
-
-
-msgid "Stroke Placement"
-msgstr "ﭧﻨﻤﺴﯿﻠﭘ ﮎﻭﺮﭩﺳﺍ"
 
 
 msgid "Chain Scaling"
@@ -91168,14 +91056,6 @@ msgstr "ﺰﻟﻮﭨ  ﻢﺧ  ﮯﺌﻧ"
 
 msgid "Enable additional features for the new curves data block"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺕﺎﯿﺻﻮﺼﺧ ﯽﻓﺎﺿﺍ ﮯﯿﻟ ﮯﮐ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ  ﻢﺧ  ﮯﺌﻧ"
-
-
-msgid "New Point Cloud Type"
-msgstr "ﻢﺴﻗ ﯽﮐ ﮈﺅﻼ﻿ﮐ ﭧﻨﺋﺍﻮﭘ ﯽﺌﻧ"
-
-
-msgid "Enable the new point cloud type in the ui"
-msgstr "UI ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﻢﺴﻗ ﯽﮐ ﮈﺅﻼ﻿ﮐ ﭧﻨﺋﺍﻮﭘ ﮯﺌﻧ ﮟﯿﻣ"
 
 
 msgid "New Volume Nodes"
@@ -103866,6 +103746,34 @@ msgstr "ﺮﺋﺎﻔﯾﮈﻮﻣ ﻦﺸﮑﯾﺮﮐ ﻮﯿﮨ ﮯﯿﻟ ﮯﮐ �
 
 msgid "Tone mapping modifier"
 msgstr "ﺮﺋﺎﻔﯾﮈﻮﻣ ﮓﻨﭙﯿﻣ ﻥﻮﭨ"
+
+
+msgid "If 0, global; if 1, based on pixel intensity"
+msgstr "ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﺕﺪﺷ ﯽﮐ ﻞﺴﮑﭘ ،1 ﺮﮔﺍ ؛ﯽﻤﻟﺎﻋ ،0 ﺮﮔﺍ"
+
+
+msgid "Set to 0 to use estimate from input image"
+msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﺮﭘ 0 ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮧﻨﯿﻤﺨﺗ ﮯﺳ ﺞﯿﻣﺍ ﭧﭘ ﻥﺍ"
+
+
+msgid "If 0, same for all channels; if 1, each independent"
+msgstr "ﺩﺍﺯﺁ ﮏﯾﺍ ﺮﮨ ،1 ﺮﮔﺍ ؛ﮞﺎﺴﮑﯾ ﮯﯿﻟ ﮯﮐ ﺰﻠﻨﯿﭼ ﻡﺎﻤﺗ ،0 ﺮﮔﺍ"
+
+
+msgid "If not used, set to 1"
+msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﺮﭘ 1 ﻮﺗ ﻮﮨ ﮧﻧ ﻝﺎﻤﻌﺘﺳﺍ ﺮﮔﺍ"
+
+
+msgid "If less than zero, darkens image; otherwise, makes it brighter"
+msgstr "ﮯﮨ ﺎﺗﺎﻨﺑ ﻦﺷﻭﺭ ﮧﯾ ،ﮟﯿﻣ ﺕﺭﻮﺻ ﯼﺮﺳﻭﺩ ﮯﮨ ﺎﺘﯾﺩ ﺮﮐ ﺍﺮﮩﮔ ﻮﮐ ﺮﯾﻮﺼﺗ ﻮﺗ ﻮﮨ ﻢﮐ ﮯﺳ ﺮﻔﺻ ﺮﮔﺍ"
+
+
+msgid "The value the average luminance is mapped to"
+msgstr "ﮯﮨ ﺎﯿﮔ ﺎﯾﺎﻨﺑ ﮧﺸﻘﻧ ﺎﮐ ﯽﻨﺷﻭﺭ ﻂﺳﻭﺍ ﺮﭘ ﺲﺟ ﺭﺪﻗ ﮦﻭ"
+
+
+msgid "Normally always 1, but can be used as an extra control to alter the brightness curve"
+msgstr "ﮯﮨ ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﻝﻭﺮﭩﻨﮐ ﯽﻓﺎﺿﺍ ﮏﯾﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﻞﺑ ﮏﻤﭼ ﻦﮑﯿﻟ ،1 ﮧﺸﯿﻤﮨ ﺮﭘ ﺭﻮﻃ ﻡﺎﻋ"
 
 
 msgid "Tone mapping algorithm"
@@ -119049,11 +118957,6 @@ msgstr "ﻝﺎﺜﻣ ﯽﮐ ﺮﻈﻨﻣ"
 
 
 msgctxt "Operator"
-msgid "ID Data"
-msgstr "ID ﺎﭩﯾﮈ"
-
-
-msgctxt "Operator"
 msgid "Paste Data-Blocks"
 msgstr "ﮟﯾﺮﮐ ﮞﺎﭙﺴﭼ ﺲﮐﻼ﻿ﺑ ﺎﭩﯾﮈ"
 
@@ -120885,6 +120788,11 @@ msgstr "ﯽﻟﺎﺧ"
 
 
 msgctxt "Operator"
+msgid "Point Cloud"
+msgstr "ﮈﺅﻼ﻿ﮐ ﭧﻨﺋﺍﻮﭘ"
+
+
+msgctxt "Operator"
 msgid "Speaker"
 msgstr "ﺮﮑﯿﭙﺳ"
 
@@ -121792,11 +121700,6 @@ msgstr "ﮎﻼ﻿ﺑ ﻼ﻿ﮭﭽﭘ"
 msgctxt "Operator"
 msgid "Next Block"
 msgstr "ﮎﻼ﻿ﺑ ﻼ﻿ﮔﺍ"
-
-
-msgctxt "Operator"
-msgid "Point Cloud"
-msgstr "ﮈﺅﻼ﻿ﮐ ﭧﻨﺋﺍﻮﭘ"
 
 
 msgctxt "Operator"
@@ -135876,6 +135779,10 @@ msgid "Core Matte"
 msgstr "ﭧﯿﻣ ﺭﻮﮐ"
 
 
+msgid "Uses a more precise but slower method. Use if the output contains undesirable noise."
+msgstr ".ﮯﮨ ﻞﻤﺘﺸﻣ ﺮﭘ ﺭﻮﺷ ﮦﺪﯾﺪﻨﺴﭘﺎﻨﭩﭘ ﭦﺅﺁ ﺮﮔﺍ ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﮨ ﺎﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮧﻘﯾﺮﻃ ﺖﺴﺳ ﻦﮑﯿﻟ ﺖﺳﺭﺩ ﮦﺩﺎﯾﺯ"
+
+
 msgid "Dispersion"
 msgstr "ﯼﺯﺎﺑ"
 
@@ -135898,6 +135805,10 @@ msgstr "ﮏﺗ ﭧﻨﻣ"
 
 msgid "To Max"
 msgstr "ﻮﮐ ﺲﮑﯿﻣ"
+
+
+msgid "Use feather information from the mask"
+msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺕﺎﻣﻮﻠﻌﻣ ﯽﮐ ﮞﻮﮭﮑﻨﭘ ﮯﺳ ﮏﺳﺎﻣ"
 
 
 msgid "Offset Y"
@@ -140527,10 +140438,6 @@ msgstr "ﻥﻮﻓﻭﺮﮑﺋﺎﻣ"
 
 msgid "network"
 msgstr "ﮎﺭﻭ ﭧﯿﻧ"
-
-
-msgid "English (English)"
-msgstr "(ﯼﺰﯾﺮﮕﻧﺍ) ﯼﺰﯾﺮﮕﻧﺍ"
 
 
 msgid "Japanese (日本語)"

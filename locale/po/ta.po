@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'e1163bf1330a')\n"
+"Project-Id-Version: Blender 4.5.0 Alpha (b'b6372b3af3f7')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-14 10:01+0000\n"
+"POT-Creation-Date: 2025-04-21 07:54+0000\n"
 "PO-Revision-Date: 2025-04-14 08:49+0000\n"
 "Last-Translator: saran <saranmurugappan2020@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -34382,12 +34382,52 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
-msgid "Select All by Trait"
-msgstr "அனைத்தையும் பண்பின் மூலம் தேர்ந்தெடுக்கவும்"
+msgid "Mirror"
+msgstr "கண்ணாடி"
+
+
+msgid "Snap"
+msgstr "ச்னாப்"
+
+
+msgid "UV Mapping"
+msgstr "புறஊதா மேப்பிங்"
+
+
+msgid "Local View"
+msgstr "உள்ளக பார்வை"
+
+
+msgid "Viewpoint"
+msgstr "பார்வை"
+
+
+msgid "Navigation"
+msgstr "வழிசெலுத்தல்"
+
+
+msgid "Align View"
+msgstr "பார்வையை சீரமைக்கவும்"
+
+
+msgid "Align View to Active"
+msgstr "செயலில் பார்வையை சீரமைக்கவும்"
+
+
+msgid "View Regions"
+msgstr "மண்டலங்களைக் காண்க"
 
 
 msgid "Select More/Less"
 msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select Similar"
+msgstr "ஒத்ததைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select All by Trait"
+msgstr "அனைத்தையும் பண்பின் மூலம் தேர்ந்தெடுக்கவும்"
 
 
 msgid "Select Linked"
@@ -34558,10 +34598,6 @@ msgid "Pivot Point"
 msgstr "பிவோட் புள்ளி"
 
 
-msgid "Snap"
-msgstr "ச்னாப்"
-
-
 msgid "Proportional Editing Falloff"
 msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
 
@@ -34576,42 +34612,6 @@ msgstr "ஆட்டோமேச்கிங்"
 
 msgid "Face Sets Edit"
 msgstr "முகம் தொகுப்புகள் திருத்து"
-
-
-msgid "Mirror"
-msgstr "கண்ணாடி"
-
-
-msgid "UV Mapping"
-msgstr "புறஊதா மேப்பிங்"
-
-
-msgid "Local View"
-msgstr "உள்ளக பார்வை"
-
-
-msgid "Viewpoint"
-msgstr "பார்வை"
-
-
-msgid "Navigation"
-msgstr "வழிசெலுத்தல்"
-
-
-msgid "Align View"
-msgstr "பார்வையை சீரமைக்கவும்"
-
-
-msgid "Align View to Active"
-msgstr "செயலில் பார்வையை சீரமைக்கவும்"
-
-
-msgid "View Regions"
-msgstr "மண்டலங்களைக் காண்க"
-
-
-msgid "Select Similar"
-msgstr "ஒத்ததைத் தேர்ந்தெடுக்கவும்"
 
 
 msgid "Keyframe Insert Pie"
@@ -44322,20 +44322,8 @@ msgid "Contrast Limit"
 msgstr "மாறுபட்ட வரம்பு"
 
 
-msgid "How much to eliminate spurious edges to avoid artifacts (the larger value makes less active; the value 2.0, for example, means discard a detected edge if there is a neighboring edge that has 2.0 times bigger contrast than the current one)"
-msgstr "கலைப்பொருட்களைத் தவிர்ப்பதற்கு மோசமான விளிம்புகளை அகற்றுவது எவ்வளவு (பெரிய மதிப்பு குறைவாக சுறுசுறுப்பாக செயல்படுகிறது; மதிப்பு 2.0, எடுத்துக்காட்டாக, தற்போதையதை விட 2.0 மடங்கு பெரிய மாறுபாட்டைக் கொண்ட அண்டை விளிம்பில் இருந்தால் கண்டறியப்பட்ட விளிம்பை நிராகரிக்கவும்)"
-
-
 msgid "Corner Rounding"
 msgstr "மூலையில் ரவுண்டிங்"
-
-
-msgid "How much sharp corners will be rounded"
-msgstr "எவ்வளவு கூர்மையான மூலைகள் வட்டமிடப்படும்"
-
-
-msgid "Threshold to detect edges (smaller threshold makes more sensitive detection)"
-msgstr "விளிம்புகளைக் கண்டறிவதற்கான வாசல் (சிறிய வாசல் அதிக உணர்திறன் கண்டறிதலை செய்கிறது)"
 
 
 msgid "Bilateral Blur"
@@ -45522,16 +45510,8 @@ msgid "Smooth areas of an image in which noise is noticeable, while leaving comp
 msgstr "சிக்கலான பகுதிகளைத் தீண்டாமல் விட்டுவிடுகையில், ஒலி கவனிக்கக்கூடிய ஒரு படத்தின் மென்மையான பகுதிகள்"
 
 
-msgid "Threshold for detecting pixels to despeckle"
-msgstr "பிக்சல்களை வெறுக்கத்தக்கதாகக் கண்டறிவதற்கான நுழைவு"
-
-
 msgid "Neighbor"
 msgstr "அண்டை"
-
-
-msgid "Threshold for the number of neighbor pixels that must match"
-msgstr "பொருந்த வேண்டிய அண்டை பிக்சல்களின் எண்ணிக்கைக்கான நுழைவு"
 
 
 msgid "Difference Key"
@@ -45558,17 +45538,9 @@ msgid "Expand and shrink masks"
 msgstr "முகமூடிகளை விரிவுபடுத்தி சுருக்கவும்"
 
 
-msgid "Distance to grow/shrink (number of iterations)"
-msgstr "வளர/சுருங்குவதற்கான தூரம் (மறு செய்கைகளின் எண்ணிக்கை)"
-
-
 msgctxt "Image"
 msgid "Edge"
 msgstr "விளிம்பு"
-
-
-msgid "Edge to inset"
-msgstr "செருகுவதற்கு விளிம்பு"
 
 
 msgid "Growing/shrinking mode"
@@ -45883,10 +45855,6 @@ msgid "Extend borders of an image into transparent or masked regions"
 msgstr "ஒரு படத்தின் எல்லைகளை வெளிப்படையான அல்லது முகமூடி அணிந்த பகுதிகளாக நீட்டிக்கவும்"
 
 
-msgid "Distance to inpaint (number of iterations)"
-msgstr "உள்ளார்ந்த தூரம் (மறு செய்கைகளின் எண்ணிக்கை)"
-
-
 msgid "Invert Color"
 msgstr "வண்ணத்தை தலைகீழ்"
 
@@ -46012,28 +45980,12 @@ msgid "Eccentricity"
 msgstr "விசித்திரத்தன்மை"
 
 
-msgid "Controls how directional the filter is. 0 means the filter is completely omnidirectional while 2 means it is maximally directed along the edges of the image."
-msgstr "வடிகட்டி எவ்வளவு திசை கொண்டது என்பதைக் கட்டுப்படுத்துகிறது. 0 என்றால் வடிகட்டி முற்றிலும் எல்லாம் வல்லமையுள்ளது, 2 என்றால் அது படத்தின் விளிம்புகளுடன் அதிகபட்சமாக இயக்கப்படுகிறது."
-
-
-msgid "Controls the sharpness of the filter. 0 means completely smooth while 1 means completely sharp."
-msgstr "வடிகட்டியின் கூர்மையை கட்டுப்படுத்துகிறது. 0 என்பது முற்றிலும் மென்மையானது, 1 என்றால் முற்றிலும் கூர்மையானது."
-
-
 msgid "Uniformity"
 msgstr "சீரான தன்மை"
 
 
-msgid "Controls the uniformity of the direction of the filter. Higher values produces more uniform directions."
-msgstr "வடிகட்டியின் திசையின் சீரான தன்மையைக் கட்டுப்படுத்துகிறது. அதிக மதிப்புகள் அதிக சீரான திசைகளை உருவாக்குகின்றன."
-
-
 msgid "High Precision"
 msgstr "அதிக துல்லியம்"
-
-
-msgid "Uses a more precise but slower method. Use if the output contains undesirable noise."
-msgstr "மிகவும் துல்லியமான ஆனால் மெதுவான முறையைப் பயன்படுத்துகிறது. வெளியீட்டில் விரும்பத்தகாத ஒலி இருந்தால் பயன்படுத்தவும்."
 
 
 msgid "Variation of Kuwahara filter to use"
@@ -46171,16 +46123,8 @@ msgid "Input mask from a mask datablock, created in the image editor"
 msgstr "பட எடிட்டரில் உருவாக்கப்பட்ட முகமூடி தரவு பிளாக்கிலிருந்து உள்ளீட்டு முகமூடி"
 
 
-msgid "Number of motion blur samples"
-msgstr "இயக்க மங்கலான மாதிரிகளின் எண்ணிக்கை"
-
-
 msgid "Shutter"
 msgstr "சட்டர்"
-
-
-msgid "Exposure for motion blur as a factor of FPS"
-msgstr "fps இன் காரணியாக இயக்க மங்கலுக்கான வெளிப்பாடு"
 
 
 msgid "Size Source"
@@ -46207,16 +46151,8 @@ msgid "Pixel size scaled by scene percentage"
 msgstr "படப்புள்ளி அளவு காட்சி சதவீதத்தால் அளவிடப்படுகிறது"
 
 
-msgid "Use feather information from the mask"
-msgstr "முகமூடியிலிருந்து இறகு தகவல்களைப் பயன்படுத்தவும்"
-
-
 msgid "Motion Blur"
 msgstr "இயக்க மங்கலானது"
-
-
-msgid "Use multi-sampled motion blur of the mask"
-msgstr "முகமூடியின் பல மாதிரி இயக்க மங்கலைப் பயன்படுத்தவும்"
 
 
 msgid "Perform math operations"
@@ -46685,16 +46621,24 @@ msgid "Pixel Size"
 msgstr "படப்புள்ளி அளவு"
 
 
-msgid "Pixel size of the output image"
-msgstr "வெளியீட்டு படத்தின் படப்புள்ளி அளவு"
-
-
 msgid "Plane Track Deform"
 msgstr "விமான பாதையில் சிதைவு"
 
 
 msgid "Replace flat planes in footage by another image, detected by plane tracks from motion tracking"
 msgstr "மோசன் கண்காணிப்பிலிருந்து விமான தடங்களால் கண்டறியப்பட்ட மற்றொரு படத்தின் மூலம் தட்டையான விமானங்களை காட்சிகளில் மாற்றவும்"
+
+
+msgid "Number of motion blur samples"
+msgstr "இயக்க மங்கலான மாதிரிகளின் எண்ணிக்கை"
+
+
+msgid "Exposure for motion blur as a factor of FPS"
+msgstr "fps இன் காரணியாக இயக்க மங்கலுக்கான வெளிப்பாடு"
+
+
+msgid "Use multi-sampled motion blur of the mask"
+msgstr "முகமூடியின் பல மாதிரி இயக்க மங்கலைப் பயன்படுத்தவும்"
 
 
 msgid "Posterize"
@@ -46893,10 +46837,6 @@ msgid "Switch between two images using a checkbox"
 msgstr "தேர்வுப்பெட்டியைப் பயன்படுத்தி இரண்டு படங்களுக்கு இடையில் மாறவும்"
 
 
-msgid "Off: first socket, On: second socket"
-msgstr "ஆஃப்: முதல் சாக்கெட், ஆன்: இரண்டாவது சாக்கெட்"
-
-
 msgid "Switch View"
 msgstr "பார்வை சுவிட்ச்"
 
@@ -46935,34 +46875,6 @@ msgstr "உயர் மாறும் வரம்பின் தோற்ற
 
 msgid "Adaptation"
 msgstr "தழுவல்"
-
-
-msgid "If 0, global; if 1, based on pixel intensity"
-msgstr "0, குளோபல்; 1 என்றால், படப்புள்ளி தீவிரத்தின் அடிப்படையில்"
-
-
-msgid "Set to 0 to use estimate from input image"
-msgstr "உள்ளீட்டு படத்திலிருந்து மதிப்பீட்டைப் பயன்படுத்த 0 என அமைக்கவும்"
-
-
-msgid "If 0, same for all channels; if 1, each independent"
-msgstr "0 என்றால், எல்லா சேனல்களுக்கும் ஒரே மாதிரியானது; 1 என்றால், ஒவ்வொன்றும் சுயாதீனமானவை"
-
-
-msgid "If not used, set to 1"
-msgstr "பயன்படுத்தப்படாவிட்டால், 1 ஆக அமைக்கவும்"
-
-
-msgid "If less than zero, darkens image; otherwise, makes it brighter"
-msgstr "பூச்சியத்தை விட குறைவாக இருந்தால், படத்தை கருமையாக்குகிறது; இல்லையெனில், அதை பிரகாசமாக்குகிறது"
-
-
-msgid "The value the average luminance is mapped to"
-msgstr "சராசரி ஒளிரும் மதிப்பு வரைபடமாக்கப்படுகிறது"
-
-
-msgid "Normally always 1, but can be used as an extra control to alter the brightness curve"
-msgstr "பொதுவாக எப்போதும் 1, ஆனால் பிரகாச வளைவை மாற்ற கூடுதல் கட்டுப்பாட்டாக பயன்படுத்தலாம்"
 
 
 msgid "Tonemap Type"
@@ -47101,28 +47013,12 @@ msgid "Blur Factor"
 msgstr "மங்கலான காரணி"
 
 
-msgid "Scaling factor for motion vectors (actually, 'shutter speed', in frames)"
-msgstr "இயக்க திசையன்களுக்கான அளவிடுதல் காரணி (உண்மையில், 'சட்டர் வேகம்', பிரேம்களில்)"
-
-
 msgid "Max Speed"
 msgstr "அதிகபட்ச விரைவு"
 
 
-msgid "Maximum speed, or zero for none"
-msgstr "அதிகபட்ச விரைவு, அல்லது எதுவுமில்லை"
-
-
 msgid "Min Speed"
 msgstr "குறைந்தபட்ச விரைவு"
-
-
-msgid "Minimum speed for a pixel to be blurred (used to separate background from foreground)"
-msgstr "ஒரு பிக்சலுக்கான குறைந்தபட்ச விரைவு மங்கலானது (பின்னணியில் இருந்து பின்னணியைப் பிரிக்கப் பயன்படுகிறது)"
-
-
-msgid "Interpolate between frames in a Bézier curve, rather than linearly"
-msgstr "ஒரு பெசியர் வளைவில் பிரேம்களுக்கு இடையில் இடைக்கணிப்பு, நேரியல் அல்லாமல்"
 
 
 msgid "Viewer"
@@ -47141,16 +47037,8 @@ msgid "Combine two images using depth maps"
 msgstr "ஆழமான வரைபடங்களைப் பயன்படுத்தி இரண்டு படங்களை இணைக்கவும்"
 
 
-msgid "Take alpha channel into account when doing the Z operation"
-msgstr "சட் செயல்பாட்டைச் செய்யும்போது ஆல்பா சேனலை கணக்கில் எடுத்துக் கொள்ளுங்கள்"
-
-
 msgid "Anti-Alias Z"
 msgstr "அலியாச் எதிர்ப்பு சட்"
-
-
-msgid "Anti-alias the z-buffer to try to avoid artifacts, mostly useful for Blender renders"
-msgstr "கலைப்பொருட்களைத் தவிர்க்க முயற்சிக்க எதிர்ப்பு ஆயாச் இசட்-பஃபர், பெரும்பாலும் கலப்பான் ரெண்டர்களுக்கு பயனுள்ளதாக இருக்கும்"
 
 
 msgid "Function Node"
@@ -88186,6 +88074,14 @@ msgid "Operator that allows file handlers to receive file drops"
 msgstr "கோப்பு கையாளுபவர்களை கோப்பு சொட்டுகளைப் பெற அனுமதிக்கும் ஆபரேட்டர்"
 
 
+msgid "Vertex colors in the file are in sRGB color space"
+msgstr "கோப்பில் உள்ள வெர்டெக்ச் வண்ணங்கள் srgb வண்ண இடத்தில் உள்ளன"
+
+
+msgid "Vertex colors in the file are in linear color space"
+msgstr "கோப்பில் உள்ள வெர்டெக்ச் வண்ணங்கள் நேரியல் வண்ண இடத்தில் உள்ளன"
+
+
 msgctxt "Operator"
 msgid "Export to PDF"
 msgstr "pdf க்கு ஏற்றுமதி"
@@ -88643,14 +88539,6 @@ msgstr "வெர்டெக்ச் வண்ணங்களை ஏற்ற�
 
 msgid "Do not import/export color attributes"
 msgstr "வண்ண பண்புகளை இறக்குமதி செய்ய வேண்டாம்/ஏற்றுமதி செய்ய வேண்டாம்"
-
-
-msgid "Vertex colors in the file are in sRGB color space"
-msgstr "கோப்பில் உள்ள வெர்டெக்ச் வண்ணங்கள் srgb வண்ண இடத்தில் உள்ளன"
-
-
-msgid "Vertex colors in the file are in linear color space"
-msgstr "கோப்பில் உள்ள வெர்டெக்ச் வண்ணங்கள் நேரியல் வண்ண இடத்தில் உள்ளன"
 
 
 msgid "Export Vertex Normals"
@@ -91112,6 +91000,38 @@ msgid "Panel containing UI elements"
 msgstr "இடைமுகம் கூறுகளைக் கொண்ட குழு"
 
 
+msgid "Mesh Edit Mode"
+msgstr "கண்ணி திருத்து பயன்முறை"
+
+
+msgid "Measurement"
+msgstr "அளவீட்டு"
+
+
+msgid "Curve Edit Mode"
+msgstr "வளைவு திருத்து பயன்முறை"
+
+
+msgid "Curves Edit Mode"
+msgstr "வளைவுகள் திருத்து பயன்முறை"
+
+
+msgid "Snapping"
+msgstr "ச்னாப்பிங்"
+
+
+msgid "Transform Orientations"
+msgstr "உருமாறும் நோக்குநிலைகள்"
+
+
+msgid "Stroke Placement"
+msgstr "வீச்சு வேலை வாய்ப்பு"
+
+
+msgid "Drawing Plane"
+msgstr "வரைதல் வானூர்தி"
+
+
 msgid "Guides"
 msgstr "வழிகாட்டிகள்"
 
@@ -91140,6 +91060,10 @@ msgid "Auto-Masking"
 msgstr "ஆட்டோ-மாசிங்"
 
 
+msgid "Motion Tracking"
+msgstr "இயக்க கண்காணிப்பு"
+
+
 msgid "Curves Sculpt Add Curve Options"
 msgstr "வளைவுகள் சிற்பம் வளைவு விருப்பங்களைச் சேர்க்கவும்"
 
@@ -91154,10 +91078,6 @@ msgstr "வளைவுகள் வளரும்/சுருக்கவு�
 
 msgid "Viewport Debug"
 msgstr "வியூபோர்ட் பிழைத்திருத்தம்"
-
-
-msgid "Drawing Plane"
-msgstr "வரைதல் வானூர்தி"
 
 
 msgid "VR"
@@ -91226,38 +91146,6 @@ msgstr "மேலடுக்குகள்"
 
 msgid "Viewer Node"
 msgstr "பார்வையாளர் முனை"
-
-
-msgid "Motion Tracking"
-msgstr "இயக்க கண்காணிப்பு"
-
-
-msgid "Mesh Edit Mode"
-msgstr "கண்ணி திருத்து பயன்முறை"
-
-
-msgid "Measurement"
-msgstr "அளவீட்டு"
-
-
-msgid "Curve Edit Mode"
-msgstr "வளைவு திருத்து பயன்முறை"
-
-
-msgid "Curves Edit Mode"
-msgstr "வளைவுகள் திருத்து பயன்முறை"
-
-
-msgid "Snapping"
-msgstr "ச்னாப்பிங்"
-
-
-msgid "Transform Orientations"
-msgstr "உருமாறும் நோக்குநிலைகள்"
-
-
-msgid "Stroke Placement"
-msgstr "வீச்சு வேலை வாய்ப்பு"
 
 
 msgid "Import Settings"
@@ -94781,14 +94669,6 @@ msgstr "புதிய வளைவுகள் கருவிகள்"
 
 msgid "Enable additional features for the new curves data block"
 msgstr "புதிய வளைவுகள் தரவுத் தொகுதிக்கான கூடுதல் அம்சங்களை இயக்கவும்"
-
-
-msgid "New Point Cloud Type"
-msgstr "புதிய புள்ளி மேக வகை"
-
-
-msgid "Enable the new point cloud type in the ui"
-msgstr "இடைமுகம் இல் புதிய புள்ளி மேக வகையை இயக்கவும்"
 
 
 msgid "New Volume Nodes"
@@ -107985,6 +107865,34 @@ msgid "Tone mapping modifier"
 msgstr "டோன் மேப்பிங் மாற்றியமைப்பாளர்"
 
 
+msgid "If 0, global; if 1, based on pixel intensity"
+msgstr "0, குளோபல்; 1 என்றால், படப்புள்ளி தீவிரத்தின் அடிப்படையில்"
+
+
+msgid "Set to 0 to use estimate from input image"
+msgstr "உள்ளீட்டு படத்திலிருந்து மதிப்பீட்டைப் பயன்படுத்த 0 என அமைக்கவும்"
+
+
+msgid "If 0, same for all channels; if 1, each independent"
+msgstr "0 என்றால், எல்லா சேனல்களுக்கும் ஒரே மாதிரியானது; 1 என்றால், ஒவ்வொன்றும் சுயாதீனமானவை"
+
+
+msgid "If not used, set to 1"
+msgstr "பயன்படுத்தப்படாவிட்டால், 1 ஆக அமைக்கவும்"
+
+
+msgid "If less than zero, darkens image; otherwise, makes it brighter"
+msgstr "பூச்சியத்தை விட குறைவாக இருந்தால், படத்தை கருமையாக்குகிறது; இல்லையெனில், அதை பிரகாசமாக்குகிறது"
+
+
+msgid "The value the average luminance is mapped to"
+msgstr "சராசரி ஒளிரும் மதிப்பு வரைபடமாக்கப்படுகிறது"
+
+
+msgid "Normally always 1, but can be used as an extra control to alter the brightness curve"
+msgstr "பொதுவாக எப்போதும் 1, ஆனால் பிரகாச வளைவை மாற்ற கூடுதல் கட்டுப்பாட்டாக பயன்படுத்தலாம்"
+
+
 msgid "Tone mapping algorithm"
 msgstr "டோன் மேப்பிங் வழிமுறை"
 
@@ -119593,10 +119501,6 @@ msgid "Assigned shortcut {:d} to {:s}"
 msgstr "ஒதுக்கப்பட்ட குறுக்குவழி {:d} முதல் {:s}"
 
 
-msgid "Only boolean sockets are supported"
-msgstr "பூலியன் சாக்கெட்டுகள் மட்டுமே ஆதரிக்கப்படுகின்றன"
-
-
 msgid "Socket must be in a panel"
 msgstr "சாக்கெட் ஒரு குழுவில் இருக்க வேண்டும்"
 
@@ -123805,11 +123709,6 @@ msgstr "காட்சிக்கு நிகழ்வு"
 
 
 msgctxt "Operator"
-msgid "ID Data"
-msgstr "ஐடி தரவு"
-
-
-msgctxt "Operator"
 msgid "Paste Data-Blocks"
 msgstr "தரவு-தொகுதிகளை ஒட்டவும்"
 
@@ -125725,6 +125624,11 @@ msgstr "வெறுமை"
 
 
 msgctxt "Operator"
+msgid "Point Cloud"
+msgstr "புள்ளி முகில்"
+
+
+msgctxt "Operator"
 msgid "Speaker"
 msgstr "அவைத்தலைவர்"
 
@@ -126656,11 +126560,6 @@ msgstr "முந்தைய தொகுதி"
 msgctxt "Operator"
 msgid "Next Block"
 msgstr "அடுத்த தொகுதி"
-
-
-msgctxt "Operator"
-msgid "Point Cloud"
-msgstr "புள்ளி முகில்"
 
 
 msgctxt "Operator"
@@ -141680,6 +141579,10 @@ msgid "Core Matte"
 msgstr "கோர் மேட்"
 
 
+msgid "Uses a more precise but slower method. Use if the output contains undesirable noise."
+msgstr "மிகவும் துல்லியமான ஆனால் மெதுவான முறையைப் பயன்படுத்துகிறது. வெளியீட்டில் விரும்பத்தகாத ஒலி இருந்தால் பயன்படுத்தவும்."
+
+
 msgid "Dispersion"
 msgstr "சிதறல்"
 
@@ -141702,6 +141605,10 @@ msgstr "மணித்துளி"
 
 msgid "To Max"
 msgstr "அதிகபட்சம்"
+
+
+msgid "Use feather information from the mask"
+msgstr "முகமூடியிலிருந்து இறகு தகவல்களைப் பயன்படுத்தவும்"
 
 
 msgid "Offset Y"
@@ -146693,10 +146600,6 @@ msgstr "ஒலிவாங்கி"
 
 msgid "network"
 msgstr "பிணையம்"
-
-
-msgid "English (English)"
-msgstr "ஆங்கிலம் (ஆங்கிலம்)"
 
 
 msgid "Japanese (日本語)"
