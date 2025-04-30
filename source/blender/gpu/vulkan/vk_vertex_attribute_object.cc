@@ -11,7 +11,7 @@
 #include "vk_shader_interface.hh"
 #include "vk_vertex_buffer.hh"
 
-#include "BLI_array.hh"
+#include "BLI_bit_vector.hh"
 #include "BLI_math_vector_types.hh"
 
 namespace blender::gpu {
@@ -56,28 +56,20 @@ VKVertexAttributeObject &VKVertexAttributeObject::operator=(const VKVertexAttrib
 void VKVertexAttributeObject::bind(
     render_graph::VKVertexBufferBindings &r_vertex_buffer_bindings) const
 {
-  /* TODO: VBOs and Buffers can share the same setup and can also split the buffers from the
-   * offsets so we don't need to loop. */
-  const bool use_vbos = !vbos.is_empty();
-  Array<bool> visited_bindings(bindings.size());
-  visited_bindings.fill(false);
+  BitVector visited_bindings(bindings.size());
 
   const VKBuffer &dummy = VKBackend::get().device.dummy_buffer;
   for (VkVertexInputAttributeDescription attribute : attributes) {
     if (visited_bindings[attribute.binding]) {
       continue;
     }
-    visited_bindings[attribute.binding] = true;
+    visited_bindings[attribute.binding].set(true);
 
     VkBuffer buffer = dummy.vk_handle();
     VkDeviceSize offset = 0;
 
-    if (use_vbos && attribute.binding < vbos.size()) {
-      BLI_assert(vbos[attribute.binding]);
-      buffer = vbos[attribute.binding]->vk_handle();
-    }
-    else if (!use_vbos && attribute.binding < buffers.size()) {
-      buffer = buffers[attribute.binding].buffer.vk_handle();
+    if (attribute.binding < buffers.size()) {
+      buffer = buffers[attribute.binding].buffer;
       offset = buffers[attribute.binding].offset;
     }
 
@@ -85,15 +77,6 @@ void VKVertexAttributeObject::bind(
     r_vertex_buffer_bindings.offset[attribute.binding] = offset;
     r_vertex_buffer_bindings.buffer_count = max_ii(r_vertex_buffer_bindings.buffer_count,
                                                    attribute.binding + 1);
-  }
-}
-
-void VKVertexAttributeObject::ensure_vbos_uploaded() const
-{
-  for (VKVertexBuffer *vbo : vbos) {
-    if (vbo) {
-      vbo->upload();
-    }
   }
 }
 
@@ -152,40 +135,40 @@ static uint32_t to_binding_location_len(const GPUVertAttr &attribute)
 static uint32_t to_binding_location_len(const shader::Type type)
 {
   switch (type) {
-    case shader::Type::FLOAT:
-    case shader::Type::VEC2:
-    case shader::Type::VEC3:
-    case shader::Type::VEC4:
-    case shader::Type::UINT:
-    case shader::Type::UVEC2:
-    case shader::Type::UVEC3:
-    case shader::Type::UVEC4:
-    case shader::Type::INT:
-    case shader::Type::IVEC2:
-    case shader::Type::IVEC3:
-    case shader::Type::IVEC4:
-    case shader::Type::BOOL:
-    case shader::Type::VEC3_101010I2:
-    case shader::Type::UCHAR:
-    case shader::Type::UCHAR2:
-    case shader::Type::UCHAR3:
-    case shader::Type::UCHAR4:
-    case shader::Type::CHAR:
-    case shader::Type::CHAR2:
-    case shader::Type::CHAR3:
-    case shader::Type::CHAR4:
-    case shader::Type::SHORT:
-    case shader::Type::SHORT2:
-    case shader::Type::SHORT3:
-    case shader::Type::SHORT4:
-    case shader::Type::USHORT:
-    case shader::Type::USHORT2:
-    case shader::Type::USHORT3:
-    case shader::Type::USHORT4:
+    case shader::Type::float_t:
+    case shader::Type::float2_t:
+    case shader::Type::float3_t:
+    case shader::Type::float4_t:
+    case shader::Type::uint_t:
+    case shader::Type::uint2_t:
+    case shader::Type::uint3_t:
+    case shader::Type::uint4_t:
+    case shader::Type::int_t:
+    case shader::Type::int2_t:
+    case shader::Type::int3_t:
+    case shader::Type::int4_t:
+    case shader::Type::bool_t:
+    case shader::Type::float3_10_10_10_2_t:
+    case shader::Type::uchar_t:
+    case shader::Type::uchar2_t:
+    case shader::Type::uchar3_t:
+    case shader::Type::uchar4_t:
+    case shader::Type::char_t:
+    case shader::Type::char2_t:
+    case shader::Type::char3_t:
+    case shader::Type::char4_t:
+    case shader::Type::short_t:
+    case shader::Type::short2_t:
+    case shader::Type::short3_t:
+    case shader::Type::short4_t:
+    case shader::Type::ushort_t:
+    case shader::Type::ushort2_t:
+    case shader::Type::ushort3_t:
+    case shader::Type::ushort4_t:
       return 1;
-    case shader::Type::MAT3:
+    case shader::Type::float3x3_t:
       return 3;
-    case shader::Type::MAT4:
+    case shader::Type::float4x4_t:
       return 4;
   }
 
@@ -233,9 +216,7 @@ void VKVertexAttributeObject::update_bindings(VKImmediate &immediate)
   const VKShaderInterface &interface = unwrap(unwrap(immediate.shader))->interface_get();
   AttributeMask occupied_attributes = 0;
 
-  VKBufferWithOffset immediate_buffer = {*immediate.active_resource(),
-                                         immediate.subbuffer_offset_get()};
-
+  VKBufferWithOffset immediate_buffer = immediate.active_buffer();
   update_bindings(immediate.vertex_format_converter.device_format_get(),
                   nullptr,
                   &immediate_buffer,
@@ -262,18 +243,24 @@ void VKVertexAttributeObject::update_bindings(const GPUVertFormat &vertex_format
     return;
   }
 
-  uint32_t offset = 0;
+  /* Interleaved offset is added to the buffer binding. Attribute offsets are hardware
+   * restricted (ref: VUID-VkVertexInputAttributeDescription-offset-00622). */
+  uint32_t buffer_offset = 0;
+  uint32_t attribute_offset = 0;
   uint32_t stride = vertex_format.stride;
+
+  bool add_vbo = false;
 
   for (uint32_t attribute_index = 0; attribute_index < vertex_format.attr_len; attribute_index++) {
     const GPUVertAttr &attribute = vertex_format.attrs[attribute_index];
     if (vertex_format.deinterleaved) {
-      offset += ((attribute_index == 0) ? 0 : vertex_format.attrs[attribute_index - 1].size) *
-                vertex_len;
+      buffer_offset += ((attribute_index == 0) ? 0 :
+                                                 vertex_format.attrs[attribute_index - 1].size) *
+                       vertex_len;
       stride = attribute.size;
     }
     else {
-      offset = attribute.offset;
+      attribute_offset = attribute.offset;
     }
 
     for (uint32_t name_index = 0; name_index < attribute.name_len; name_index++) {
@@ -295,7 +282,7 @@ void VKVertexAttributeObject::update_bindings(const GPUVertFormat &vertex_format
         VkVertexInputAttributeDescription attribute_description = {};
         attribute_description.binding = binding;
         attribute_description.location = shader_input->location + location_offset;
-        attribute_description.offset = offset + location_offset * sizeof(float4);
+        attribute_description.offset = attribute_offset + location_offset * sizeof(float4);
         attribute_description.format = to_vk_format(
             static_cast<GPUVertCompType>(attribute.comp_type),
             attribute.size,
@@ -309,13 +296,20 @@ void VKVertexAttributeObject::update_bindings(const GPUVertFormat &vertex_format
                                                            VK_VERTEX_INPUT_RATE_VERTEX;
         bindings.append(vk_binding_descriptor);
         if (vertex_buffer) {
-          vbos.append(vertex_buffer);
+          add_vbo = true;
+          vertex_buffer->upload();
+          buffers.append({vertex_buffer->vk_handle(), buffer_offset});
         }
         if (immediate_vertex_buffer) {
           buffers.append(*immediate_vertex_buffer);
         }
       }
     }
+  }
+
+  if (add_vbo) {
+    BLI_assert(vertex_buffer != nullptr);
+    vbos.append(vertex_buffer);
   }
 }
 
@@ -328,8 +322,7 @@ void VKVertexAttributeObject::update_bindings(const GPUVertFormat &vertex_format
 void VKVertexAttributeObject::debug_print() const
 {
   std::cout << __FILE__ << "::" << __func__ << "\n";
-  Array<bool> visited_bindings(bindings.size());
-  visited_bindings.fill(false);
+  BitVector visited_bindings(bindings.size());
 
   for (VkVertexInputAttributeDescription attribute : attributes) {
     std::cout << " - attribute(binding=" << attribute.binding
@@ -339,24 +332,13 @@ void VKVertexAttributeObject::debug_print() const
       std::cout << " WARNING: Already bound\n";
       continue;
     }
-    visited_bindings[attribute.binding] = true;
+    visited_bindings[attribute.binding].set(true);
 
-    /* Bind VBOS from batches. */
-    if (!vbos.is_empty()) {
-      if (attribute.binding < vbos.size()) {
-        std::cout << " Attach to VBO [" << vbos[attribute.binding] << "]\n";
-      }
-      else {
-        std::cout << " WARNING: Attach to dummy\n";
-      }
+    if (attribute.binding < vbos.size()) {
+      std::cout << " Attach to Buffer\n";
     }
-    else if (!buffers.is_empty()) {
-      if (attribute.binding < vbos.size()) {
-        std::cout << " Attach to ImmediateModeVBO\n";
-      }
-      else {
-        std::cout << " WARNING: Attach to dummy\n";
-      }
+    else {
+      std::cout << " WARNING: Attach to dummy\n";
     }
   }
 }

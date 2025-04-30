@@ -7,14 +7,10 @@
  * \ingroup bke
  * \brief Blender kernel action and pose functionality.
  */
-#ifndef __cplusplus
-#  error This is a C++ only header.
-#endif
 
 #include "BLI_compiler_attrs.h"
 #include "BLI_function_ref.hh"
-
-#include "DNA_listBase.h"
+#include "BLI_span.hh"
 
 struct BlendDataReader;
 struct BlendLibReader;
@@ -35,6 +31,25 @@ struct bPose;
 struct bPoseChannel;
 struct bPoseChannel_Runtime;
 
+namespace blender::animrig {
+
+/**
+ * Action slot handle type.
+ *
+ * An identifier of slots within an action that is guaranteed to be unique
+ * within that action and is guaranteed not to change for a slot.
+ *
+ * NOTE: keep this type in sync with `ActionSlot::handle` in the action DNA
+ * types. We redefine it here rather than making a type alias to avoid bringing
+ * in the entirety of DNA_action_types.h for everything that includes this
+ * header.
+ *
+ * \see `ActionSlot::handle`
+ */
+using slot_handle_t = int32_t;
+
+}  // namespace blender::animrig
+
 /* Action Lib Stuff ----------------- */
 
 /* Allocate a new bAction with the given name */
@@ -43,32 +58,9 @@ bAction *BKE_action_add(Main *bmain, const char name[]);
 /* Action API ----------------- */
 
 /**
- * Calculate the extents of given action.
- */
-void BKE_action_frame_range_calc(const bAction *act,
-                                 bool include_modifiers,
-                                 float *r_start,
-                                 float *r_end) ATTR_NONNULL(3, 4);
-
-/**
- * Retrieve the intended playback frame range, using the manually set range if available,
- * or falling back to scanning F-Curves for their first & last frames otherwise.
- */
-void BKE_action_frame_range_get(const bAction *act, float *r_start, float *r_end)
-    ATTR_NONNULL(2, 3);
-
-/**
- * Check if the given action has any keyframes.
- */
-bool BKE_action_has_motion(const bAction *act, int32_t action_slot_handle) ATTR_WARN_UNUSED_RESULT;
-
-/**
- * Is the action configured as cyclic.
- */
-bool BKE_action_is_cyclic(const bAction *act) ATTR_WARN_UNUSED_RESULT;
-
-/**
  * Remove all fcurves from the action.
+ *
+ * \note This function only supports legacy Actions.
  */
 void BKE_action_fcurves_clear(bAction *act);
 
@@ -76,11 +68,15 @@ void BKE_action_fcurves_clear(bAction *act);
 
 /**
  * Get the active action-group for an Action.
+ *
+ * \note This function supports both legacy and layered Actions.
  */
 bActionGroup *get_active_actiongroup(bAction *act) ATTR_WARN_UNUSED_RESULT;
 
 /**
  * Make the given Action-Group the active one.
+ *
+ * \note This function supports both legacy and layered Actions.
  */
 void set_active_action_group(bAction *act, bActionGroup *agrp, short select);
 
@@ -106,6 +102,8 @@ void action_group_colors_set_from_posebone(bActionGroup *grp, const bPoseChannel
 
 /**
  * Add a new action group with the given name to the action>
+ *
+ * \note This function ONLY works on legacy Actions, not on layered Actions.
  */
 bActionGroup *action_groups_add_new(bAction *act, const char name[]);
 
@@ -113,41 +111,40 @@ bActionGroup *action_groups_add_new(bAction *act, const char name[]);
  * Add given channel into (active) group
  * - assumes that channel is not linked to anything anymore
  * - always adds at the end of the group
+ *
+ * \note This function ONLY works on legacy Actions, not on layered Actions.
  */
 void action_groups_add_channel(bAction *act, bActionGroup *agrp, FCurve *fcurve);
 
 /**
  * Remove the given channel from all groups.
+ *
+ * \note This function ONLY works on legacy Actions, not on layered Actions.
  */
 void action_groups_remove_channel(bAction *act, FCurve *fcu);
 
 /**
- * Recongroup channel pointers.
+ * Reconstruct channel pointers.
  * Assumes that the groups referred to by the FCurves are already in act->groups.
  * Reorders the main channel list to match group order.
+ *
+ * \note This function ONLY works on legacy Actions, not on layered Actions.
  */
 void BKE_action_groups_reconstruct(bAction *act);
 
 /**
  * Find a group with the given name.
+ *
+ * \note This function supports only legacy Actions.
  */
 bActionGroup *BKE_action_group_find_name(bAction *act, const char name[]);
 
 /**
  * Clear all 'temp' flags on all groups.
+ *
+ * \note This function supports both legacy and layered Actions.
  */
 void action_groups_clear_tempflags(bAction *act);
-
-/**
- * Return whether the action has one unique point in time keyed.
- *
- * This is mostly for the pose library, which will have different behavior depending on whether an
- * Action corresponds to a "pose" (one keyframe) or "animation snippet" (multiple keyframes).
- *
- * \return `false` when there is no keyframe at all or keys on different points in time, `true`
- * when exactly one point in time is keyed.
- */
-bool BKE_action_has_single_frame(const bAction *act) ATTR_WARN_UNUSED_RESULT;
 
 /* Pose API ----------------- */
 
@@ -338,6 +335,7 @@ void what_does_obaction(Object *ob,
                         Object *workob,
                         bPose *pose,
                         bAction *act,
+                        int32_t action_slot_handle,
                         char groupname[],
                         const AnimationEvalContext *anim_eval_context) ATTR_NONNULL(1, 2);
 
@@ -365,11 +363,28 @@ void BKE_pose_blend_read_after_liblink(BlendLibReader *reader, Object *ob, bPose
 
 /* `action_mirror.cc` */
 
-void BKE_action_flip_with_pose(bAction *act, Object *ob_arm) ATTR_NONNULL(1, 2);
+/**
+ * Flip the action so it can be applied as a mirror. Only data of slots that are related to the
+ * given objects is mirrored.
+ */
+void BKE_action_flip_with_pose(bAction *act, blender::Span<Object *> objects) ATTR_NONNULL(1);
 
 namespace blender::bke {
 
 using FoundFCurveCallback = blender::FunctionRef<void(FCurve *fcurve, const char *bone_name)>;
-void BKE_action_find_fcurves_with_bones(const bAction *action, FoundFCurveCallback callback);
+using FoundFCurveCallbackConst =
+    blender::FunctionRef<void(const FCurve *fcurve, const char *bone_name)>;
+
+/**
+ * Calls `callback` for every fcurve in an action slot that targets any bone.
+ *
+ * \param slot_handle: only FCurves from the given action slot are visited.
+ */
+void BKE_action_find_fcurves_with_bones(bAction *action,
+                                        blender::animrig::slot_handle_t slot_handle,
+                                        FoundFCurveCallback callback);
+void BKE_action_find_fcurves_with_bones(const bAction *action,
+                                        blender::animrig::slot_handle_t slot_handle,
+                                        FoundFCurveCallbackConst callback);
 
 };  // namespace blender::bke

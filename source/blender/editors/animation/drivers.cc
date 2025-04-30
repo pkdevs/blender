@@ -12,11 +12,11 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_listbase.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_anim_types.h"
-#include "DNA_texture_types.h"
 
 #include "BKE_anim_data.hh"
 #include "BKE_context.hh"
@@ -106,8 +106,7 @@ FCurve *alloc_driver_fcurve(const char rna_path[],
 
   if (!ELEM(creation_mode, DRIVER_FCURVE_LOOKUP_ONLY, DRIVER_FCURVE_EMPTY)) {
     /* add some new driver data */
-    fcu->driver = static_cast<ChannelDriver *>(
-        MEM_callocN(sizeof(ChannelDriver), "ChannelDriver"));
+    fcu->driver = MEM_callocN<ChannelDriver>("ChannelDriver");
 
     /* F-Modifier or Keyframes? */
     if (creation_mode == DRIVER_FCURVE_GENERATOR) {
@@ -866,7 +865,7 @@ static const EnumPropertyItem *driver_mapping_type_itemf(bContext *C,
   const EnumPropertyItem *input = prop_driver_create_mapping_types;
   EnumPropertyItem *item = nullptr;
 
-  PointerRNA ptr = {nullptr};
+  PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   int index;
 
@@ -903,7 +902,7 @@ static const EnumPropertyItem *driver_mapping_type_itemf(bContext *C,
 
 static bool add_driver_button_poll(bContext *C)
 {
-  PointerRNA ptr = {nullptr};
+  PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   int index;
   bool driven, special;
@@ -926,9 +925,9 @@ static bool add_driver_button_poll(bContext *C)
 
 /* Wrapper for creating a driver without knowing what the targets will be yet
  * (i.e. "manual/add later"). */
-static int add_driver_button_none(bContext *C, wmOperator *op, short mapping_type)
+static wmOperatorStatus add_driver_button_none(bContext *C, wmOperator *op, short mapping_type)
 {
-  PointerRNA ptr = {nullptr};
+  PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   int index;
   int success = 0;
@@ -959,7 +958,7 @@ static int add_driver_button_none(bContext *C, wmOperator *op, short mapping_typ
   return OPERATOR_CANCELLED;
 }
 
-static int add_driver_button_menu_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus add_driver_button_menu_exec(bContext *C, wmOperator *op)
 {
   short mapping_type = RNA_enum_get(op->ptr, "mapping_type");
   if (ELEM(mapping_type, CREATEDRIVER_MAPPING_NONE, CREATEDRIVER_MAPPING_NONE_ALL)) {
@@ -978,7 +977,9 @@ static int add_driver_button_menu_exec(bContext *C, wmOperator *op)
 }
 
 /* Show menu or create drivers */
-static int add_driver_button_menu_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus add_driver_button_menu_invoke(bContext *C,
+                                                      wmOperator *op,
+                                                      const wmEvent * /*event*/)
 {
   PropertyRNA *prop;
 
@@ -1022,9 +1023,11 @@ static void UNUSED_FUNCTION(ANIM_OT_driver_button_add_menu)(wmOperatorType *ot)
 
 /* Add Driver Button Operator ------------------------ */
 
-static int add_driver_button_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus add_driver_button_invoke(bContext *C,
+                                                 wmOperator *op,
+                                                 const wmEvent * /*event*/)
 {
-  PointerRNA ptr = {nullptr};
+  PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   int index;
 
@@ -1075,9 +1078,9 @@ void ANIM_OT_driver_button_add(wmOperatorType *ot)
 
 /* Remove Driver Button Operator ------------------------ */
 
-static int remove_driver_button_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus remove_driver_button_exec(bContext *C, wmOperator *op)
 {
-  PointerRNA ptr = {nullptr};
+  PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   bool changed = false;
   int index;
@@ -1126,9 +1129,9 @@ void ANIM_OT_driver_button_remove(wmOperatorType *ot)
 
 /* Edit Driver Button Operator ------------------------ */
 
-static int edit_driver_button_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus edit_driver_button_exec(bContext *C, wmOperator *op)
 {
-  PointerRNA ptr = {nullptr};
+  PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   int index;
 
@@ -1159,9 +1162,9 @@ void ANIM_OT_driver_button_edit(wmOperatorType *ot)
 
 /* Copy Driver Button Operator ------------------------ */
 
-static int copy_driver_button_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus copy_driver_button_exec(bContext *C, wmOperator *op)
 {
-  PointerRNA ptr = {nullptr};
+  PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   bool changed = false;
   int index;
@@ -1198,9 +1201,9 @@ void ANIM_OT_copy_driver_button(wmOperatorType *ot)
 
 /* Paste Driver Button Operator ------------------------ */
 
-static int paste_driver_button_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus paste_driver_button_exec(bContext *C, wmOperator *op)
 {
-  PointerRNA ptr = {nullptr};
+  PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   bool changed = false;
   int index;

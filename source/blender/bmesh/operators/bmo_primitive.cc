@@ -8,6 +8,8 @@
  * Primitive shapes.
  */
 
+#include <algorithm>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_base_safe.h"
@@ -1137,9 +1139,7 @@ void BM_mesh_calc_uvs_sphere(BMesh *bm, const short oflag, const int cd_loop_uv_
     }
     BM_ITER_ELEM_INDEX (l, &iter2, f, BM_LOOPS_OF_FACE, loop_index) {
       float *luv = BM_ELEM_CD_GET_FLOAT_P(l, cd_loop_uv_offset);
-      if (luv[0] < minx) {
-        minx = luv[0];
-      }
+      minx = std::min(luv[0], minx);
     }
   }
 
@@ -1156,7 +1156,7 @@ void BM_mesh_calc_uvs_sphere(BMesh *bm, const short oflag, const int cd_loop_uv_
 
 void bmo_create_monkey_exec(BMesh *bm, BMOperator *op)
 {
-  BMVert **tv = static_cast<BMVert **>(MEM_mallocN(sizeof(*tv) * monkeynv * 2, "tv"));
+  BMVert **tv = MEM_malloc_arrayN<BMVert *>(monkeynv * 2, "tv");
   float mat[4][4];
   int i;
 

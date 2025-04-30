@@ -12,6 +12,7 @@
 
 #include "BLI_function_ref.hh"
 #include "BLI_iterator.h"
+#include "BLI_set.hh"
 #include "BLI_utildefines.h"
 
 #include "DEG_depsgraph.hh"
@@ -90,20 +91,45 @@ ViewLayer *DEG_get_evaluated_view_layer(const Depsgraph *graph);
 
 /** Get evaluated version of object for given original one. */
 Object *DEG_get_evaluated_object(const Depsgraph *depsgraph, Object *object);
+const Object *DEG_get_evaluated_object(const Depsgraph *depsgraph, const Object *object);
 
 /** Get evaluated version of given ID data-block. */
 ID *DEG_get_evaluated_id(const Depsgraph *depsgraph, ID *id);
+const ID *DEG_get_evaluated_id(const Depsgraph *depsgraph, const ID *id);
+
+template<typename T> T *DEG_get_evaluated(const Depsgraph *depsgraph, T *id)
+{
+  static_assert(blender::dna::is_ID_v<T>);
+  return reinterpret_cast<T *>(DEG_get_evaluated_id(depsgraph, reinterpret_cast<ID *>(id)));
+}
+
+template<typename T> const T *DEG_get_evaluated(const Depsgraph *depsgraph, const T *id)
+{
+  static_assert(blender::dna::is_ID_v<T>);
+  return reinterpret_cast<const T *>(
+      DEG_get_evaluated_id(depsgraph, reinterpret_cast<const ID *>(id)));
+}
 
 /** Get evaluated version of data pointed to by RNA pointer */
 void DEG_get_evaluated_rna_pointer(const Depsgraph *depsgraph,
                                    PointerRNA *ptr,
                                    PointerRNA *r_ptr_eval);
 
-/** Get original version of object for given evaluated one. */
-Object *DEG_get_original_object(Object *object);
-
 /** Get original version of given evaluated ID data-block. */
 ID *DEG_get_original_id(ID *id);
+const ID *DEG_get_original_id(const ID *id);
+
+template<typename T> T *DEG_get_original(T *id)
+{
+  static_assert(blender::dna::is_ID_v<T>);
+  return reinterpret_cast<T *>(DEG_get_original_id(reinterpret_cast<ID *>(id)));
+}
+
+template<typename T> const T *DEG_get_original(const T *id)
+{
+  static_assert(blender::dna::is_ID_v<T>);
+  return reinterpret_cast<const T *>(DEG_get_original_id(reinterpret_cast<const ID *>(id)));
+}
 
 /**
  * Get the depsgraph that owns the given ID. This is efficient because the depsgraph is cached on
@@ -199,6 +225,12 @@ struct DEGObjectIterSettings {
    * geometry for the viewer path included in the iterator.
    */
   const ViewerPath *viewer_path;
+
+  /**
+   * If not empty, the iterator should only return objects that are in this list (or their
+   * instances are in it). Pointers in this span should be the original data-block.
+   */
+  blender::Set<const Object *> *included_objects;
 };
 
 /**

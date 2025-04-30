@@ -96,113 +96,113 @@ static const char *to_string(const Interpolation &interp)
 static const char *to_string(const Type &type)
 {
   switch (type) {
-    case Type::FLOAT:
+    case Type::float_t:
       return "float";
-    case Type::VEC2:
+    case Type::float2_t:
       return "vec2";
-    case Type::VEC3:
+    case Type::float3_t:
       return "vec3";
-    case Type::VEC4:
+    case Type::float4_t:
       return "vec4";
-    case Type::MAT3:
+    case Type::float3x3_t:
       return "mat3";
-    case Type::MAT4:
+    case Type::float4x4_t:
       return "mat4";
-    case Type::UINT:
+    case Type::uint_t:
       return "uint";
-    case Type::UVEC2:
+    case Type::uint2_t:
       return "uvec2";
-    case Type::UVEC3:
+    case Type::uint3_t:
       return "uvec3";
-    case Type::UVEC4:
+    case Type::uint4_t:
       return "uvec4";
-    case Type::INT:
+    case Type::int_t:
       return "int";
-    case Type::IVEC2:
+    case Type::int2_t:
       return "ivec2";
-    case Type::IVEC3:
+    case Type::int3_t:
       return "ivec3";
-    case Type::IVEC4:
+    case Type::int4_t:
       return "ivec4";
-    case Type::BOOL:
+    case Type::bool_t:
       return "bool";
     /* Alias special types. */
-    case Type::UCHAR:
-    case Type::USHORT:
+    case Type::uchar_t:
+    case Type::ushort_t:
       return "uint";
-    case Type::UCHAR2:
-    case Type::USHORT2:
+    case Type::uchar2_t:
+    case Type::ushort2_t:
       return "uvec2";
-    case Type::UCHAR3:
-    case Type::USHORT3:
+    case Type::uchar3_t:
+    case Type::ushort3_t:
       return "uvec3";
-    case Type::UCHAR4:
-    case Type::USHORT4:
+    case Type::uchar4_t:
+    case Type::ushort4_t:
       return "uvec4";
-    case Type::CHAR:
-    case Type::SHORT:
+    case Type::char_t:
+    case Type::short_t:
       return "int";
-    case Type::CHAR2:
-    case Type::SHORT2:
+    case Type::char2_t:
+    case Type::short2_t:
       return "ivec2";
-    case Type::CHAR3:
-    case Type::SHORT3:
+    case Type::char3_t:
+    case Type::short3_t:
       return "ivec3";
-    case Type::CHAR4:
-    case Type::SHORT4:
+    case Type::char4_t:
+    case Type::short4_t:
       return "ivec4";
-    case Type::VEC3_101010I2:
+    case Type::float3_10_10_10_2_t:
       return "vec3";
   }
   BLI_assert_unreachable();
   return "unknown";
 }
 
-static Type to_component_type(const Type &type)
+static Type UNUSED_FUNCTION(to_component_type)(const Type &type)
 {
   switch (type) {
-    case Type::FLOAT:
-    case Type::VEC2:
-    case Type::VEC3:
-    case Type::VEC4:
-    case Type::MAT3:
-    case Type::MAT4:
-      return Type::FLOAT;
-    case Type::UINT:
-    case Type::UVEC2:
-    case Type::UVEC3:
-    case Type::UVEC4:
-      return Type::UINT;
-    case Type::INT:
-    case Type::IVEC2:
-    case Type::IVEC3:
-    case Type::IVEC4:
-    case Type::BOOL:
-      return Type::INT;
+    case Type::float_t:
+    case Type::float2_t:
+    case Type::float3_t:
+    case Type::float4_t:
+    case Type::float3x3_t:
+    case Type::float4x4_t:
+      return Type::float_t;
+    case Type::uint_t:
+    case Type::uint2_t:
+    case Type::uint3_t:
+    case Type::uint4_t:
+      return Type::uint_t;
+    case Type::int_t:
+    case Type::int2_t:
+    case Type::int3_t:
+    case Type::int4_t:
+    case Type::bool_t:
+      return Type::int_t;
     /* Alias special types. */
-    case Type::UCHAR:
-    case Type::UCHAR2:
-    case Type::UCHAR3:
-    case Type::UCHAR4:
-    case Type::USHORT:
-    case Type::USHORT2:
-    case Type::USHORT3:
-    case Type::USHORT4:
-      return Type::UINT;
-    case Type::CHAR:
-    case Type::CHAR2:
-    case Type::CHAR3:
-    case Type::CHAR4:
-    case Type::SHORT:
-    case Type::SHORT2:
-    case Type::SHORT3:
-    case Type::SHORT4:
-      return Type::INT;
-    case Type::VEC3_101010I2:
-      return Type::FLOAT;
+    case Type::uchar_t:
+    case Type::uchar2_t:
+    case Type::uchar3_t:
+    case Type::uchar4_t:
+    case Type::ushort_t:
+    case Type::ushort2_t:
+    case Type::ushort3_t:
+    case Type::ushort4_t:
+      return Type::uint_t;
+    case Type::char_t:
+    case Type::char2_t:
+    case Type::char3_t:
+    case Type::char4_t:
+    case Type::short_t:
+    case Type::short2_t:
+    case Type::short3_t:
+    case Type::short4_t:
+      return Type::int_t;
+    case Type::float3_10_10_10_2_t:
+      return Type::float_t;
   }
   BLI_assert_unreachable();
-  return Type::FLOAT;
+  return Type::float_t;
 }
 
 static const char *to_string(const eGPUTextureFormat &type)
@@ -328,30 +328,30 @@ static void print_image_type(std::ostream &os,
                              const ShaderCreateInfo::Resource::BindType bind_type)
 {
   switch (type) {
-    case ImageType::INT_BUFFER:
-    case ImageType::INT_1D:
-    case ImageType::INT_1D_ARRAY:
-    case ImageType::INT_2D:
-    case ImageType::INT_2D_ARRAY:
-    case ImageType::INT_3D:
-    case ImageType::INT_CUBE:
-    case ImageType::INT_CUBE_ARRAY:
-    case ImageType::INT_2D_ATOMIC:
-    case ImageType::INT_2D_ARRAY_ATOMIC:
-    case ImageType::INT_3D_ATOMIC:
+    case ImageType::IntBuffer:
+    case ImageType::Int1D:
+    case ImageType::Int1DArray:
+    case ImageType::Int2D:
+    case ImageType::Int2DArray:
+    case ImageType::Int3D:
+    case ImageType::IntCube:
+    case ImageType::IntCubeArray:
+    case ImageType::AtomicInt2D:
+    case ImageType::AtomicInt2DArray:
+    case ImageType::AtomicInt3D:
       os << "i";
       break;
-    case ImageType::UINT_BUFFER:
-    case ImageType::UINT_1D:
-    case ImageType::UINT_1D_ARRAY:
-    case ImageType::UINT_2D:
-    case ImageType::UINT_2D_ARRAY:
-    case ImageType::UINT_3D:
-    case ImageType::UINT_CUBE:
-    case ImageType::UINT_CUBE_ARRAY:
-    case ImageType::UINT_2D_ATOMIC:
-    case ImageType::UINT_2D_ARRAY_ATOMIC:
-    case ImageType::UINT_3D_ATOMIC:
+    case ImageType::UintBuffer:
+    case ImageType::Uint1D:
+    case ImageType::Uint1DArray:
+    case ImageType::Uint2D:
+    case ImageType::Uint2DArray:
+    case ImageType::Uint3D:
+    case ImageType::UintCube:
+    case ImageType::UintCubeArray:
+    case ImageType::AtomicUint2D:
+    case ImageType::AtomicUint2DArray:
+    case ImageType::AtomicUint3D:
       os << "u";
       break;
     default:
@@ -366,52 +366,52 @@ static void print_image_type(std::ostream &os,
   }
 
   switch (type) {
-    case ImageType::FLOAT_BUFFER:
-    case ImageType::INT_BUFFER:
-    case ImageType::UINT_BUFFER:
+    case ImageType::FloatBuffer:
+    case ImageType::IntBuffer:
+    case ImageType::UintBuffer:
       os << "Buffer";
       break;
-    case ImageType::FLOAT_1D:
-    case ImageType::FLOAT_1D_ARRAY:
-    case ImageType::INT_1D:
-    case ImageType::INT_1D_ARRAY:
-    case ImageType::UINT_1D:
-    case ImageType::UINT_1D_ARRAY:
+    case ImageType::Float1D:
+    case ImageType::Float1DArray:
+    case ImageType::Int1D:
+    case ImageType::Int1DArray:
+    case ImageType::Uint1D:
+    case ImageType::Uint1DArray:
       os << "1D";
       break;
-    case ImageType::FLOAT_2D:
-    case ImageType::FLOAT_2D_ARRAY:
-    case ImageType::INT_2D:
-    case ImageType::INT_2D_ARRAY:
-    case ImageType::INT_2D_ATOMIC:
-    case ImageType::INT_2D_ARRAY_ATOMIC:
-    case ImageType::UINT_2D:
-    case ImageType::UINT_2D_ARRAY:
-    case ImageType::UINT_2D_ATOMIC:
-    case ImageType::UINT_2D_ARRAY_ATOMIC:
-    case ImageType::SHADOW_2D:
-    case ImageType::SHADOW_2D_ARRAY:
-    case ImageType::DEPTH_2D:
-    case ImageType::DEPTH_2D_ARRAY:
+    case ImageType::Float2D:
+    case ImageType::Float2DArray:
+    case ImageType::Int2D:
+    case ImageType::Int2DArray:
+    case ImageType::AtomicInt2D:
+    case ImageType::AtomicInt2DArray:
+    case ImageType::Uint2D:
+    case ImageType::Uint2DArray:
+    case ImageType::AtomicUint2D:
+    case ImageType::AtomicUint2DArray:
+    case ImageType::Shadow2D:
+    case ImageType::Shadow2DArray:
+    case ImageType::Depth2D:
+    case ImageType::Depth2DArray:
       os << "2D";
       break;
-    case ImageType::FLOAT_3D:
-    case ImageType::INT_3D:
-    case ImageType::UINT_3D:
-    case ImageType::INT_3D_ATOMIC:
-    case ImageType::UINT_3D_ATOMIC:
+    case ImageType::Float3D:
+    case ImageType::Int3D:
+    case ImageType::Uint3D:
+    case ImageType::AtomicInt3D:
+    case ImageType::AtomicUint3D:
       os << "3D";
       break;
-    case ImageType::FLOAT_CUBE:
-    case ImageType::FLOAT_CUBE_ARRAY:
-    case ImageType::INT_CUBE:
-    case ImageType::INT_CUBE_ARRAY:
-    case ImageType::UINT_CUBE:
-    case ImageType::UINT_CUBE_ARRAY:
-    case ImageType::SHADOW_CUBE:
-    case ImageType::SHADOW_CUBE_ARRAY:
-    case ImageType::DEPTH_CUBE:
-    case ImageType::DEPTH_CUBE_ARRAY:
+    case ImageType::FloatCube:
+    case ImageType::FloatCubeArray:
+    case ImageType::IntCube:
+    case ImageType::IntCubeArray:
+    case ImageType::UintCube:
+    case ImageType::UintCubeArray:
+    case ImageType::ShadowCube:
+    case ImageType::ShadowCubeArray:
+    case ImageType::DepthCube:
+    case ImageType::DepthCubeArray:
       os << "Cube";
       break;
     default:
@@ -419,20 +419,20 @@ static void print_image_type(std::ostream &os,
   }
 
   switch (type) {
-    case ImageType::FLOAT_1D_ARRAY:
-    case ImageType::FLOAT_2D_ARRAY:
-    case ImageType::FLOAT_CUBE_ARRAY:
-    case ImageType::INT_1D_ARRAY:
-    case ImageType::INT_2D_ARRAY:
-    case ImageType::INT_CUBE_ARRAY:
-    case ImageType::UINT_1D_ARRAY:
-    case ImageType::UINT_2D_ARRAY:
-    case ImageType::UINT_2D_ARRAY_ATOMIC:
-    case ImageType::UINT_CUBE_ARRAY:
-    case ImageType::SHADOW_2D_ARRAY:
-    case ImageType::SHADOW_CUBE_ARRAY:
-    case ImageType::DEPTH_2D_ARRAY:
-    case ImageType::DEPTH_CUBE_ARRAY:
+    case ImageType::Float1DArray:
+    case ImageType::Float2DArray:
+    case ImageType::FloatCubeArray:
+    case ImageType::Int1DArray:
+    case ImageType::Int2DArray:
+    case ImageType::IntCubeArray:
+    case ImageType::Uint1DArray:
+    case ImageType::Uint2DArray:
+    case ImageType::AtomicUint2DArray:
+    case ImageType::UintCubeArray:
+    case ImageType::Shadow2DArray:
+    case ImageType::ShadowCubeArray:
+    case ImageType::Depth2DArray:
+    case ImageType::DepthCubeArray:
       os << "Array";
       break;
     default:
@@ -440,10 +440,10 @@ static void print_image_type(std::ostream &os,
   }
 
   switch (type) {
-    case ImageType::SHADOW_2D:
-    case ImageType::SHADOW_2D_ARRAY:
-    case ImageType::SHADOW_CUBE:
-    case ImageType::SHADOW_CUBE_ARRAY:
+    case ImageType::Shadow2D:
+    case ImageType::Shadow2DArray:
+    case ImageType::ShadowCube:
+    case ImageType::ShadowCubeArray:
       os << "Shadow";
       break;
     default:
@@ -454,13 +454,13 @@ static void print_image_type(std::ostream &os,
 
 static std::ostream &print_qualifier(std::ostream &os, const Qualifier &qualifiers)
 {
-  if (bool(qualifiers & Qualifier::NO_RESTRICT) == false) {
+  if (bool(qualifiers & Qualifier::no_restrict) == false) {
     os << "restrict ";
   }
-  if (bool(qualifiers & Qualifier::READ) == false) {
+  if (bool(qualifiers & Qualifier::read) == false) {
     os << "writeonly ";
   }
-  if (bool(qualifiers & Qualifier::WRITE) == false) {
+  if (bool(qualifiers & Qualifier::write) == false) {
     os << "readonly ";
   }
   return os;
@@ -598,7 +598,13 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
     print_resource_alias(ss, res);
   }
   ss << "\n/* Push Constants. */\n";
+  int location = 0;
   for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
+    /* See #131227: Work around legacy Intel bug when using layout locations. */
+    if (!info.specialization_constants_.is_empty()) {
+      ss << "layout(location = " << location << ") ";
+      location += std::max(1, uniform.array_size);
+    }
     ss << "uniform " << to_string(uniform.type) << " " << uniform.name;
     if (uniform.array_size > 0) {
       ss << "[" << uniform.array_size << "]";
@@ -627,16 +633,16 @@ std::string GLShader::constants_declare() const
     const SpecializationConstant::Value &value = constants.values[constant_index];
 
     switch (constant_type) {
-      case Type::INT:
+      case Type::int_t:
         ss << "const int " << name << "=" << std::to_string(value.i) << ";\n";
         break;
-      case Type::UINT:
+      case Type::uint_t:
         ss << "const uint " << name << "=" << std::to_string(value.u) << "u;\n";
         break;
-      case Type::BOOL:
+      case Type::bool_t:
         ss << "const bool " << name << "=" << (value.u ? "true" : "false") << ";\n";
         break;
-      case Type::FLOAT:
+      case Type::float_t:
         /* Use uint representation to allow exact same bit pattern even if NaN. */
         ss << "const float " << name << "= uintBitsToFloat(" << std::to_string(value.u) << "u);\n";
         break;
@@ -685,12 +691,25 @@ std::string GLShader::vertex_interface_declare(const ShaderCreateInfo &info) con
   for (const StageInterfaceInfo *iface : info.vertex_out_interfaces_) {
     print_interface(ss, "out", *iface);
   }
-  if (!GLContext::layered_rendering_support && bool(info.builtins_ & BuiltinBits::LAYER)) {
-    ss << "out int gpu_Layer;\n";
+  const bool has_geometry_stage = do_geometry_shader_injection(&info) ||
+                                  !info.geometry_source_.is_empty();
+  const bool do_layer_output = bool(info.builtins_ & BuiltinBits::LAYER);
+  const bool do_viewport_output = bool(info.builtins_ & BuiltinBits::VIEWPORT_INDEX);
+  if (has_geometry_stage) {
+    if (do_layer_output) {
+      ss << "out int gpu_Layer;\n";
+    }
+    if (do_viewport_output) {
+      ss << "out int gpu_ViewportIndex;\n";
+    }
   }
-  if (!GLContext::layered_rendering_support && bool(info.builtins_ & BuiltinBits::VIEWPORT_INDEX))
-  {
-    ss << "out int gpu_ViewportIndex;\n";
+  else {
+    if (do_layer_output) {
+      ss << "#define gpu_Layer gl_Layer\n";
+    }
+    if (do_viewport_output) {
+      ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
+    }
   }
   if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
     if (!GLContext::native_barycentric_support) {
@@ -725,11 +744,10 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
   for (const StageInterfaceInfo *iface : in_interfaces) {
     print_interface(ss, "in", *iface);
   }
-  if (!GLContext::layered_rendering_support && bool(info.builtins_ & BuiltinBits::LAYER)) {
+  if (bool(info.builtins_ & BuiltinBits::LAYER)) {
     ss << "#define gpu_Layer gl_Layer\n";
   }
-  if (!GLContext::layered_rendering_support && bool(info.builtins_ & BuiltinBits::VIEWPORT_INDEX))
-  {
+  if (bool(info.builtins_ & BuiltinBits::VIEWPORT_INDEX)) {
     ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
   }
   if (bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD)) {
@@ -737,7 +755,6 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
       ss << "flat in vec4 gpu_pos[3];\n";
       ss << "smooth in vec3 gpu_BaryCoord;\n";
       ss << "noperspective in vec3 gpu_BaryCoordNoPersp;\n";
-      ss << "#define gpu_position_at_vertex(v) gpu_pos[v]\n";
     }
     else if (epoxy_has_gl_extension("GL_AMD_shader_explicit_vertex_parameter")) {
       /* NOTE(fclem): This won't work with geometry shader. Hopefully, we don't need geometry
@@ -756,11 +773,6 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
       ss << "  return bary.xyz;\n";
       ss << "}\n";
       ss << "\n";
-      ss << "vec4 gpu_position_at_vertex(int v) {\n";
-      ss << "  if (interpolateAtVertexAMD(gpu_pos, 0) == gpu_pos_flat) { v = (v + 2) % 3; }\n";
-      ss << "  if (interpolateAtVertexAMD(gpu_pos, 2) == gpu_pos_flat) { v = (v + 1) % 3; }\n";
-      ss << "  return interpolateAtVertexAMD(gpu_pos, v);\n";
-      ss << "}\n";
 
       pre_main += "  gpu_BaryCoord = stable_bary_(gl_BaryCoordSmoothAMD);\n";
       pre_main += "  gpu_BaryCoordNoPersp = stable_bary_(gl_BaryCoordNoPerspAMD);\n";
@@ -788,28 +800,15 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
       /* IMPORTANT: We assume that the frame-buffer will be layered or not based on the layer
        * built-in flag. */
       bool is_layered_fb = bool(info.builtins_ & BuiltinBits::LAYER);
+      bool is_layered_input = ELEM(
+          input.img_type, ImageType::Uint2DArray, ImageType::Int2DArray, ImageType::Float2DArray);
 
-      /* Start with invalid value to detect failure cases. */
-      ImageType image_type = ImageType::FLOAT_BUFFER;
-      switch (to_component_type(input.type)) {
-        case Type::FLOAT:
-          image_type = is_layered_fb ? ImageType::FLOAT_2D_ARRAY : ImageType::FLOAT_2D;
-          break;
-        case Type::INT:
-          image_type = is_layered_fb ? ImageType::INT_2D_ARRAY : ImageType::INT_2D;
-          break;
-        case Type::UINT:
-          image_type = is_layered_fb ? ImageType::UINT_2D_ARRAY : ImageType::UINT_2D;
-          break;
-        default:
-          break;
-      }
       /* Declare image. */
       using Resource = ShaderCreateInfo::Resource;
       /* NOTE(fclem): Using the attachment index as resource index might be problematic as it might
        * collide with other resources. */
       Resource res(Resource::BindType::SAMPLER, input.index);
-      res.sampler.type = image_type;
+      res.sampler.type = input.img_type;
       res.sampler.sampler = GPUSamplerState::default_sampler();
       res.sampler.name = image_name;
       print_resource(ss, res, false);
@@ -817,8 +816,13 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
       char swizzle[] = "xyzw";
       swizzle[to_component_count(input.type)] = '\0';
 
-      std::string texel_co = (is_layered_fb) ? "ivec3(gl_FragCoord.xy, gpu_Layer)" :
-                                               "ivec2(gl_FragCoord.xy)";
+      std::string texel_co = (is_layered_input) ?
+                                 ((is_layered_fb)  ? "ivec3(gl_FragCoord.xy, gpu_Layer)" :
+                                                     /* This should fetch the attached layer.
+                                                      * But this is not simple to set. For now
+                                                      * assume it is always the first layer. */
+                                                     "ivec3(gl_FragCoord.xy, 0)") :
+                                 "ivec2(gl_FragCoord.xy)";
 
       std::stringstream ss_pre;
       /* Populate the global before main using imageLoad. */
@@ -931,10 +935,8 @@ std::string GLShader::workaround_geometry_shader_source_create(
 {
   std::stringstream ss;
 
-  const bool do_layer_workaround = !GLContext::layered_rendering_support &&
-                                   bool(info.builtins_ & BuiltinBits::LAYER);
-  const bool do_viewport_workaround = !GLContext::layered_rendering_support &&
-                                      bool(info.builtins_ & BuiltinBits::VIEWPORT_INDEX);
+  const bool do_layer_output = bool(info.builtins_ & BuiltinBits::LAYER);
+  const bool do_viewport_output = bool(info.builtins_ & BuiltinBits::VIEWPORT_INDEX);
   const bool do_barycentric_workaround = !GLContext::native_barycentric_support &&
                                          bool(info.builtins_ & BuiltinBits::BARYCENTRIC_COORD);
 
@@ -948,12 +950,13 @@ std::string GLShader::workaround_geometry_shader_source_create(
 
   ss << geometry_layout_declare(info_modified);
   ss << geometry_interface_declare(info_modified);
-  if (do_layer_workaround) {
+  if (do_layer_output) {
     ss << "in int gpu_Layer[];\n";
   }
-  if (do_viewport_workaround) {
+  if (do_viewport_output) {
     ss << "in int gpu_ViewportIndex[];\n";
   }
+
   if (do_barycentric_workaround) {
     ss << "flat out vec4 gpu_pos[3];\n";
     ss << "smooth out vec3 gpu_BaryCoord;\n";
@@ -963,12 +966,6 @@ std::string GLShader::workaround_geometry_shader_source_create(
 
   ss << "void main()\n";
   ss << "{\n";
-  if (do_layer_workaround) {
-    ss << "  gl_Layer = gpu_Layer[0];\n";
-  }
-  if (do_viewport_workaround) {
-    ss << "  gl_ViewportIndex = gpu_ViewportIndex[0];\n";
-  }
   if (do_barycentric_workaround) {
     ss << "  gpu_pos[0] = gl_in[0].gl_Position;\n";
     ss << "  gpu_pos[1] = gl_in[1].gl_Position;\n";
@@ -986,13 +983,19 @@ std::string GLShader::workaround_geometry_shader_source_create(
       ss << " vec3(" << int(i == 0) << ", " << int(i == 1) << ", " << int(i == 2) << ");\n";
     }
     ss << "  gl_Position = gl_in[" << i << "].gl_Position;\n";
+    if (do_layer_output) {
+      ss << "  gl_Layer = gpu_Layer[" << i << "];\n";
+    }
+    if (do_viewport_output) {
+      ss << "  gl_ViewportIndex = gpu_ViewportIndex[" << i << "];\n";
+    }
     ss << "  EmitVertex();\n";
   }
   ss << "}\n";
   return ss.str();
 }
 
-bool GLShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info)
+bool GLShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info) const
 {
   BuiltinBits builtins = info->builtins_;
   if (!GLContext::native_barycentric_support && bool(builtins & BuiltinBits::BARYCENTRIC_COORD)) {
@@ -1013,92 +1016,80 @@ bool GLShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info
 /** \name Shader stage creation
  * \{ */
 
-static const char *glsl_patch_default_get()
+static StringRefNull glsl_patch_default_get()
 {
   /** Used for shader patching. Init once. */
-  static std::string patch;
-  if (!patch.empty()) {
-    return patch.c_str();
-  }
+  static std::string patch = []() {
+    std::stringstream ss;
+    /* Version need to go first. */
+    if (epoxy_gl_version() >= 43) {
+      ss << "#version 430\n";
+    }
+    else {
+      ss << "#version 330\n";
+    }
 
-  std::stringstream ss;
-  /* Version need to go first. */
-  if (epoxy_gl_version() >= 43) {
+    /* Enable extensions for features that are not part of our base GLSL version
+     * don't use an extension for something already available! */
+    if (GLContext::shader_draw_parameters_support) {
+      ss << "#extension GL_ARB_shader_draw_parameters : enable\n";
+      ss << "#define GPU_ARB_shader_draw_parameters\n";
+      ss << "#define gpu_BaseInstance gl_BaseInstanceARB\n";
+    }
+    if (GLContext::layered_rendering_support) {
+      ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
+    }
+    if (GLContext::native_barycentric_support) {
+      ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
+    }
+    if (GLContext::framebuffer_fetch_support) {
+      ss << "#extension GL_EXT_shader_framebuffer_fetch: enable\n";
+    }
+    if (GPU_stencil_export_support()) {
+      ss << "#extension GL_ARB_shader_stencil_export: enable\n";
+      ss << "#define GPU_ARB_shader_stencil_export\n";
+    }
+
+    /* Fallbacks. */
+    if (!GLContext::shader_draw_parameters_support) {
+      ss << "uniform int gpu_BaseInstance;\n";
+    }
+
+    /* Vulkan GLSL compatibility. */
+    ss << "#define gpu_InstanceIndex (gl_InstanceID + gpu_BaseInstance)\n";
+    ss << "#define gpu_EmitVertex EmitVertex\n";
+
+    /* Array compatibility. */
+    ss << "#define gpu_Array(_type) _type[]\n";
+
+    /* GLSL Backend Lib. */
+    ss << datatoc_glsl_shader_defines_glsl;
+
+    return ss.str();
+  }();
+  return patch;
+}
+
+static StringRefNull glsl_patch_compute_get()
+{
+  /** Used for shader patching. Init once. */
+  static std::string patch = []() {
+    std::stringstream ss;
+    /* Version need to go first. */
     ss << "#version 430\n";
-  }
-  else {
-    ss << "#version 330\n";
-  }
+    ss << "#extension GL_ARB_compute_shader :enable\n";
 
-  /* Enable extensions for features that are not part of our base GLSL version
-   * don't use an extension for something already available! */
-  if (GLContext::shader_draw_parameters_support) {
-    ss << "#extension GL_ARB_shader_draw_parameters : enable\n";
-    ss << "#define GPU_ARB_shader_draw_parameters\n";
-    ss << "#define gpu_BaseInstance gl_BaseInstanceARB\n";
-  }
-  if (GLContext::layered_rendering_support) {
-    ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
-    ss << "#define gpu_Layer gl_Layer\n";
-    ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
-  }
-  if (GLContext::native_barycentric_support) {
-    ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
-  }
-  if (GLContext::framebuffer_fetch_support) {
-    ss << "#extension GL_EXT_shader_framebuffer_fetch: enable\n";
-  }
-  if (GPU_stencil_export_support()) {
-    ss << "#extension GL_ARB_shader_stencil_export: enable\n";
-    ss << "#define GPU_ARB_shader_stencil_export\n";
-  }
+    /* Array compatibility. */
+    ss << "#define gpu_Array(_type) _type[]\n";
 
-  /* Fallbacks. */
-  if (!GLContext::shader_draw_parameters_support) {
-    ss << "uniform int gpu_BaseInstance;\n";
-  }
+    ss << datatoc_glsl_shader_defines_glsl;
 
-  /* Vulkan GLSL compatibility. */
-  ss << "#define gpu_InstanceIndex (gl_InstanceID + gpu_BaseInstance)\n";
-  ss << "#define gpu_EmitVertex EmitVertex\n";
-
-  /* Array compatibility. */
-  ss << "#define gpu_Array(_type) _type[]\n";
-
-  /* Derivative sign can change depending on implementation. */
-  ss << "#define DFDX_SIGN " << std::setprecision(2) << GLContext::derivative_signs[0] << "\n";
-  ss << "#define DFDY_SIGN " << std::setprecision(2) << GLContext::derivative_signs[1] << "\n";
-
-  /* GLSL Backend Lib. */
-  ss << datatoc_glsl_shader_defines_glsl;
-
-  patch = ss.str();
-  return patch.c_str();
+    return ss.str();
+  }();
+  return patch;
 }
 
-static const char *glsl_patch_compute_get()
-{
-  /** Used for shader patching. Init once. */
-  static std::string patch;
-  if (!patch.empty()) {
-    return patch.c_str();
-  }
-
-  std::stringstream ss;
-  /* Version need to go first. */
-  ss << "#version 430\n";
-  ss << "#extension GL_ARB_compute_shader :enable\n";
-
-  /* Array compatibility. */
-  ss << "#define gpu_Array(_type) _type[]\n";
-
-  ss << datatoc_glsl_shader_defines_glsl;
-
-  patch = ss.str();
-  return patch.c_str();
-}
-
-const char *GLShader::glsl_patch_get(GLenum gl_stage)
+StringRefNull GLShader::glsl_patch_get(GLenum gl_stage)
 {
   if (gl_stage == GL_COMPUTE_SHADER) {
     return glsl_patch_compute_get();
@@ -1107,12 +1098,12 @@ const char *GLShader::glsl_patch_get(GLenum gl_stage)
 }
 
 GLuint GLShader::create_shader_stage(GLenum gl_stage,
-                                     MutableSpan<const char *> sources,
+                                     MutableSpan<StringRefNull> sources,
                                      GLSources &gl_sources)
 {
   /* Patch the shader sources to include specialization constants. */
   std::string constants_source;
-  Vector<const char *> recreated_sources;
+  Vector<StringRefNull> recreated_sources;
   const bool has_specialization_constants = !constants.types.is_empty();
   if (has_specialization_constants) {
     constants_source = constants_declare();
@@ -1124,7 +1115,7 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage,
 
   /* Patch the shader code using the first source slot. */
   sources[SOURCES_INDEX_VERSION] = glsl_patch_get(gl_stage);
-  sources[SOURCES_INDEX_SPECIALIZATION_CONSTANTS] = constants_source.c_str();
+  sources[SOURCES_INDEX_SPECIALIZATION_CONSTANTS] = constants_source;
 
   if (async_compilation_) {
     gl_sources[SOURCES_INDEX_VERSION].source = std::string(sources[SOURCES_INDEX_VERSION]);
@@ -1151,7 +1142,7 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage,
     }
 
     debug_source += "\n\n----------" + source_type + "----------\n\n";
-    for (const char *source : sources) {
+    for (StringRefNull source : sources) {
       debug_source.append(source);
     }
   }
@@ -1167,7 +1158,11 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage,
     return 0;
   }
 
-  glShaderSource(shader, sources.size(), sources.data(), nullptr);
+  Array<const char *, 16> c_str_sources(sources.size());
+  for (const int i : sources.index_range()) {
+    c_str_sources[i] = sources[i].c_str();
+  }
+  glShaderSource(shader, c_str_sources.size(), c_str_sources.data(), nullptr);
   glCompileShader(shader);
 
   GLint status;
@@ -1204,7 +1199,7 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage,
 }
 
 void GLShader::update_program_and_sources(GLSources &stage_sources,
-                                          MutableSpan<const char *> sources)
+                                          MutableSpan<StringRefNull> sources)
 {
   const bool store_sources = !constants.types.is_empty() || async_compilation_;
   if (store_sources && stage_sources.is_empty()) {
@@ -1214,28 +1209,28 @@ void GLShader::update_program_and_sources(GLSources &stage_sources,
   init_program();
 }
 
-void GLShader::vertex_shader_from_glsl(MutableSpan<const char *> sources)
+void GLShader::vertex_shader_from_glsl(MutableSpan<StringRefNull> sources)
 {
   update_program_and_sources(vertex_sources_, sources);
   program_active_->vert_shader = this->create_shader_stage(
       GL_VERTEX_SHADER, sources, vertex_sources_);
 }
 
-void GLShader::geometry_shader_from_glsl(MutableSpan<const char *> sources)
+void GLShader::geometry_shader_from_glsl(MutableSpan<StringRefNull> sources)
 {
   update_program_and_sources(geometry_sources_, sources);
   program_active_->geom_shader = this->create_shader_stage(
       GL_GEOMETRY_SHADER, sources, geometry_sources_);
 }
 
-void GLShader::fragment_shader_from_glsl(MutableSpan<const char *> sources)
+void GLShader::fragment_shader_from_glsl(MutableSpan<StringRefNull> sources)
 {
   update_program_and_sources(fragment_sources_, sources);
   program_active_->frag_shader = this->create_shader_stage(
       GL_FRAGMENT_SHADER, sources, fragment_sources_);
 }
 
-void GLShader::compute_shader_from_glsl(MutableSpan<const char *> sources)
+void GLShader::compute_shader_from_glsl(MutableSpan<StringRefNull> sources)
 {
   update_program_and_sources(compute_sources_, sources);
   program_active_->compute_shader = this->create_shader_stage(
@@ -1250,10 +1245,10 @@ bool GLShader::finalize(const shader::ShaderCreateInfo *info)
 
   if (info && do_geometry_shader_injection(info)) {
     std::string source = workaround_geometry_shader_source_create(*info);
-    Vector<const char *> sources;
+    Vector<StringRefNull> sources;
     sources.append("version");
     sources.append("/* Specialization Constants. */\n");
-    sources.append(source.c_str());
+    sources.append(source);
     geometry_shader_from_glsl(sources);
   }
 
@@ -1275,7 +1270,7 @@ bool GLShader::post_finalize(const shader::ShaderCreateInfo *info)
   async_compilation_ = false;
 
   GLuint program_id = program_get();
-  if (info != nullptr && info->legacy_resource_location_ == false) {
+  if (info != nullptr) {
     interface = new GLShaderInterface(program_id, *info);
   }
   else {
@@ -1302,59 +1297,6 @@ void GLShader::unbind()
 #ifndef NDEBUG
   glUseProgram(0);
 #endif
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Transform feedback
- *
- * TODO(fclem): Should be replaced by compute shaders.
- * \{ */
-
-void GLShader::transform_feedback_names_set(Span<const char *> name_list,
-                                            const eGPUShaderTFBType geom_type)
-{
-  glTransformFeedbackVaryings(
-      program_get(), name_list.size(), name_list.data(), GL_INTERLEAVED_ATTRIBS);
-  transform_feedback_type_ = geom_type;
-}
-
-bool GLShader::transform_feedback_enable(blender::gpu::VertBuf *buf_)
-{
-  if (transform_feedback_type_ == GPU_SHADER_TFB_NONE) {
-    return false;
-  }
-
-  GLVertBuf *buf = static_cast<GLVertBuf *>(buf_);
-
-  if (buf->vbo_id_ == 0) {
-    buf->bind();
-  }
-
-  BLI_assert(buf->vbo_id_ != 0);
-
-  glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, buf->vbo_id_);
-
-  switch (transform_feedback_type_) {
-    case GPU_SHADER_TFB_POINTS:
-      glBeginTransformFeedback(GL_POINTS);
-      break;
-    case GPU_SHADER_TFB_LINES:
-      glBeginTransformFeedback(GL_LINES);
-      break;
-    case GPU_SHADER_TFB_TRIANGLES:
-      glBeginTransformFeedback(GL_TRIANGLES);
-      break;
-    default:
-      return false;
-  }
-  return true;
-}
-
-void GLShader::transform_feedback_disable()
-{
-  glEndTransformFeedback();
 }
 
 /** \} */
@@ -1414,21 +1356,9 @@ void GLShader::uniform_int(int location, int comp_len, int array_size, const int
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name GPUVertFormat from Shader
- * \{ */
-
-int GLShader::program_handle_get() const
-{
-  BLI_assert(program_active_);
-  return program_active_->program_id;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Sources
  * \{ */
-GLSource::GLSource(const char *other)
+GLSource::GLSource(StringRefNull other)
 {
   if (!gpu_shader_dependency_get_filename_from_source_string(other).is_empty()) {
     source = "";
@@ -1436,19 +1366,19 @@ GLSource::GLSource(const char *other)
   }
   else {
     source = other;
-    source_ref = nullptr;
+    source_ref = std::nullopt;
   }
 }
 
-GLSources &GLSources::operator=(Span<const char *> other)
+GLSources &GLSources::operator=(Span<StringRefNull> other)
 {
   clear();
   reserve(other.size());
 
-  for (const char *other_source : other) {
+  for (StringRefNull other_source : other) {
     /* Don't store empty string as compilers can optimize these away and result in pointing to a
      * string that isn't c-str compliant anymore. */
-    if (other_source[0] == '\0') {
+    if (other_source.is_empty()) {
       continue;
     }
     append(GLSource(other_source));
@@ -1457,17 +1387,17 @@ GLSources &GLSources::operator=(Span<const char *> other)
   return *this;
 }
 
-Vector<const char *> GLSources::sources_get() const
+Vector<StringRefNull> GLSources::sources_get() const
 {
-  Vector<const char *> result;
+  Vector<StringRefNull> result;
   result.reserve(size());
 
   for (const GLSource &source : *this) {
     if (source.source_ref) {
-      result.append(source.source_ref);
+      result.append(*source.source_ref);
     }
     else {
-      result.append(source.source.c_str());
+      result.append(source.source);
     }
   }
   return result;
@@ -1478,7 +1408,7 @@ std::string GLSources::to_string() const
   std::string result;
   for (const GLSource &source : *this) {
     if (source.source_ref) {
-      result.append(source.source_ref);
+      result.append(*source.source_ref);
     }
     else {
       result.append(source.source);
@@ -1550,9 +1480,8 @@ bool GLShader::check_link_status()
   if (!status) {
     char log[5000];
     glGetProgramInfoLog(program_id, sizeof(log), nullptr, log);
-    Span<const char *> sources = {debug_source.c_str()};
     GLLogParser parser;
-    print_log(sources, log, "Linking", true, &parser);
+    print_log({debug_source}, log, "Linking", true, &parser);
   }
 
   return bool(status);
@@ -1588,7 +1517,7 @@ GLuint GLShader::program_get()
 
   program_active_ = &program_cache_.lookup_or_add_default(constants.values);
   if (!program_active_->program_id) {
-    MutableSpan<const char *> no_sources;
+    MutableSpan<StringRefNull> no_sources;
     if (!vertex_sources_.is_empty()) {
       program_active_->vert_shader = create_shader_stage(
           GL_VERTEX_SHADER, no_sources, vertex_sources_);

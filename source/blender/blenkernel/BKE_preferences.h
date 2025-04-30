@@ -2,15 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma once
-
 /** \file
  * \ingroup bke
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#pragma once
 
 #include "BLI_compiler_attrs.h"
 #include "BLI_sys_types.h"
@@ -20,6 +16,21 @@ struct UserDef;
 struct bUserExtensionRepo;
 struct bUserAssetLibrary;
 struct bUserAssetShelfSettings;
+
+/* -------------------------------------------------------------------- */
+/** \name Preferences File
+ * \{ */
+
+namespace blender::bke::preferences {
+
+/**
+ * Return true if a preferences file exists for this Blender version.
+ */
+bool exists();
+
+}  // namespace blender::bke::preferences
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Assert Libraries
@@ -166,7 +177,3 @@ bool BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(UserDef *u
                                                                       const char *catalog_path);
 
 /** \} */
-
-#ifdef __cplusplus
-}
-#endif

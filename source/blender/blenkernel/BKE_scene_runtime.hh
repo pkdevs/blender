@@ -2,11 +2,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
 #include "BLI_map.hh"
 #include "BLI_timeit.hh"
 #include "BLI_utility_mixins.hh"
+
+#include "DNA_node_types.h"
 
 struct Depsgraph;
 

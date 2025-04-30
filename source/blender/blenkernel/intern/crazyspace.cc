@@ -15,6 +15,8 @@
 #include "BLI_linklist.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
+#include "BLI_math_vector_types.hh"
+#include "BLI_span.hh"
 #include "BLI_utildefines.h"
 
 #include "BKE_crazyspace.hh"
@@ -417,8 +419,7 @@ void BKE_crazyspace_build_sculpt(Depsgraph *depsgraph,
       deformmats.fill(blender::float3x3::identity());
     }
 
-    blender::Array<blender::float3, 0> deformedVerts = deformcos;
-    blender::Array<blender::float3, 0> origVerts = deformedVerts;
+    blender::Array<blender::float3, 0> origVerts = deformcos;
     float(*quats)[4];
     int i, deformed = 0;
     VirtualModifierData virtual_modifier_data;
@@ -447,14 +448,14 @@ void BKE_crazyspace_build_sculpt(Depsgraph *depsgraph,
           mesh_eval = BKE_mesh_copy_for_eval(*mesh);
         }
 
-        mti->deform_verts(md, &mectx, mesh_eval, deformedVerts);
+        mti->deform_verts(md, &mectx, mesh_eval, deformcos);
         deformed = 1;
       }
     }
 
-    quats = static_cast<float(*)[4]>(MEM_mallocN(mesh->verts_num * sizeof(*quats), "crazy quats"));
+    quats = MEM_malloc_arrayN<float[4]>(size_t(mesh->verts_num), "crazy quats");
 
-    BKE_crazyspace_set_quats_mesh(mesh, origVerts, deformedVerts, quats);
+    BKE_crazyspace_set_quats_mesh(mesh, origVerts, deformcos, quats);
 
     for (i = 0; i < mesh->verts_num; i++) {
       float qmat[3][3], tmat[3][3];
@@ -511,41 +512,40 @@ void BKE_crazyspace_api_eval(Depsgraph *depsgraph,
 
 void BKE_crazyspace_api_displacement_to_deformed(Object *object,
                                                  ReportList *reports,
-                                                 int vertex_index,
+                                                 int vert,
                                                  const float displacement[3],
                                                  float r_displacement_deformed[3])
 {
-  if (vertex_index < 0 || vertex_index >= object->runtime->crazyspace_deform_imats.size()) {
+  if (vert < 0 || vert >= object->runtime->crazyspace_deform_imats.size()) {
     BKE_reportf(reports,
                 RPT_ERROR,
                 "Invalid vertex index %d (expected to be within 0 to %d range)",
-                vertex_index,
+                vert,
                 int(object->runtime->crazyspace_deform_imats.size()));
     return;
   }
 
-  mul_v3_m3v3(r_displacement_deformed,
-              object->runtime->crazyspace_deform_imats[vertex_index].ptr(),
-              displacement);
+  mul_v3_m3v3(
+      r_displacement_deformed, object->runtime->crazyspace_deform_imats[vert].ptr(), displacement);
 }
 
 void BKE_crazyspace_api_displacement_to_original(Object *object,
                                                  ReportList *reports,
-                                                 int vertex_index,
+                                                 int vert,
                                                  const float displacement_deformed[3],
                                                  float r_displacement[3])
 {
-  if (vertex_index < 0 || vertex_index >= object->runtime->crazyspace_deform_imats.size()) {
+  if (vert < 0 || vert >= object->runtime->crazyspace_deform_imats.size()) {
     BKE_reportf(reports,
                 RPT_ERROR,
                 "Invalid vertex index %d (expected to be within 0 to %d range)",
-                vertex_index,
+                vert,
                 int(object->runtime->crazyspace_deform_imats.size()));
     return;
   }
 
   float mat[3][3];
-  if (!invert_m3_m3(mat, object->runtime->crazyspace_deform_imats[vertex_index].ptr())) {
+  if (!invert_m3_m3(mat, object->runtime->crazyspace_deform_imats[vert].ptr())) {
     copy_v3_v3(r_displacement, displacement_deformed);
     return;
   }
@@ -620,7 +620,7 @@ GeometryDeformation get_evaluated_curves_deformation(const Object *ob_eval, cons
 GeometryDeformation get_evaluated_curves_deformation(const Depsgraph &depsgraph,
                                                      const Object &ob_orig)
 {
-  const Object *ob_eval = DEG_get_evaluated_object(&depsgraph, const_cast<Object *>(&ob_orig));
+  const Object *ob_eval = DEG_get_evaluated_object(&depsgraph, &ob_orig);
   return get_evaluated_curves_deformation(ob_eval, ob_orig);
 }
 
@@ -633,7 +633,7 @@ GeometryDeformation get_evaluated_grease_pencil_drawing_deformation(const Object
   const GreasePencil &grease_pencil_orig = *static_cast<const GreasePencil *>(ob_orig.data);
 
   const Span<const bke::greasepencil::Layer *> layers_orig = grease_pencil_orig.layers();
-  const bke::greasepencil::Layer &layer_orig = *grease_pencil_orig.layer(layer_index);
+  const bke::greasepencil::Layer &layer_orig = grease_pencil_orig.layer(layer_index);
   const bke::greasepencil::Drawing *drawing_orig = grease_pencil_orig.get_drawing_at(layer_orig,
                                                                                      frame);
   if (drawing_orig == nullptr) {
@@ -652,6 +652,8 @@ GeometryDeformation get_evaluated_grease_pencil_drawing_deformation(const Object
     return deformation;
   }
 
+  bool has_deformed_positions = false;
+
   /* If there are edit hints, use the positions of those. */
   if (geometry_eval->has<GeometryComponentEditData>()) {
     const GeometryComponentEditData &edit_component_eval =
@@ -663,11 +665,17 @@ GeometryDeformation get_evaluated_grease_pencil_drawing_deformation(const Object
       BLI_assert(edit_hints->drawing_hints->size() == layers_orig.size());
       const GreasePencilDrawingEditHints &drawing_hints =
           edit_hints->drawing_hints.value()[layer_index];
-      if (const std::optional<Span<float3>> positions = drawing_hints.positions()) {
-        deformation.positions = *positions;
-        return deformation;
+      if (drawing_hints.positions()) {
+        deformation.positions = *drawing_hints.positions();
+        has_deformed_positions = true;
+      }
+      if (drawing_hints.deform_mats.has_value()) {
+        deformation.deform_mats = *drawing_hints.deform_mats;
       }
     }
+  }
+  if (has_deformed_positions) {
+    return deformation;
   }
 
   /* Otherwise use the positions of the evaluated drawing if the number of points match. */
@@ -680,10 +688,12 @@ GeometryDeformation get_evaluated_grease_pencil_drawing_deformation(const Object
         const bke::greasepencil::Layer &layer_eval = *layers_eval[layer_index];
         if (const bke::greasepencil::Drawing *drawing_eval = grease_pencil_eval->get_drawing_at(
                 layer_eval, frame))
+        {
           if (drawing_eval->strokes().points_num() == drawing_orig->strokes().points_num()) {
             deformation.positions = drawing_eval->strokes().positions();
-            return deformation;
+            has_deformed_positions = true;
           }
+        }
       }
     }
   }
@@ -696,7 +706,7 @@ GeometryDeformation get_evaluated_grease_pencil_drawing_deformation(const Depsgr
                                                                     const int layer_index,
                                                                     const int frame)
 {
-  const Object *ob_eval = DEG_get_evaluated_object(&depsgraph, const_cast<Object *>(&ob_orig));
+  const Object *ob_eval = DEG_get_evaluated_object(&depsgraph, &ob_orig);
   return get_evaluated_grease_pencil_drawing_deformation(ob_eval, ob_orig, layer_index, frame);
 }
 

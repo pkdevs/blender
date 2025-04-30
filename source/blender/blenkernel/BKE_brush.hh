@@ -22,6 +22,7 @@ struct ImBuf;
 struct ImagePool;
 struct Main;
 struct MTex;
+struct Paint;
 struct Scene;
 struct UnifiedPaintSettings;
 
@@ -50,9 +51,20 @@ void BKE_brush_init_gpencil_settings(Brush *brush);
 
 void BKE_brush_init_curves_sculpt_settings(Brush *brush);
 
-Brush *BKE_brush_first_search(Main *bmain, eObjectMode ob_mode);
+/**
+ * Tag a linked brush as having changed settings so an indicator can be displayed to the user,
+ * showing that the brush settings differ from the state of the imported brush asset. Call
+ * every time a user visible change to the brush is done.
+ *
+ * Since this is meant to indicate brushes that are known to differ from the linked source file,
+ * tagging is only performed for linked brushes. File local brushes are normal data-blocks that get
+ * saved with the file, and don't need special attention by the user.
+ *
+ * For convenience, null may be passed for \a brush.
+ */
+void BKE_brush_tag_unsaved_changes(Brush *brush);
 
-void BKE_brush_sculpt_reset(Brush *brush);
+Brush *BKE_brush_first_search(Main *bmain, eObjectMode ob_mode);
 
 void BKE_brush_jitter_pos(const Scene &scene,
                           const Brush &brush,
@@ -130,9 +142,11 @@ ImBuf *BKE_brush_gen_radial_control_imbuf(Brush *br, bool secondary, bool displa
 
 /* Unified strength size and color. */
 
-const float *BKE_brush_color_get(const Scene *scene, const Brush *brush);
-const float *BKE_brush_secondary_color_get(const Scene *scene, const Brush *brush);
-void BKE_brush_color_set(Scene *scene, Brush *brush, const float color[3]);
+const float *BKE_brush_color_get(const Scene *scene, const Paint *paint, const Brush *brush);
+const float *BKE_brush_secondary_color_get(const Scene *scene,
+                                           const Paint *paint,
+                                           const Brush *brush);
+void BKE_brush_color_set(Scene *scene, const Paint *paint, Brush *brush, const float color[3]);
 
 int BKE_brush_size_get(const Scene *scene, const Brush *brush);
 void BKE_brush_size_set(Scene *scene, Brush *brush, int size);
@@ -151,8 +165,6 @@ void BKE_brush_input_samples_set(const Scene *scene, Brush *brush, int value);
 bool BKE_brush_use_locked_size(const Scene *scene, const Brush *brush);
 bool BKE_brush_use_alpha_pressure(const Brush *brush);
 bool BKE_brush_use_size_pressure(const Brush *brush);
-
-bool BKE_brush_sculpt_has_secondary_color(const Brush *brush);
 
 /**
  * Scale unprojected radius to reflect a change in the brush's 2D size.
@@ -175,3 +187,36 @@ bool BKE_brush_has_cube_tip(const Brush *brush, PaintMode paint_mode);
 
 /* debugging only */
 void BKE_brush_debug_print_state(Brush *br);
+
+/* -------------------------------------------------------------------- */
+/** \name Brush Capabilities
+ * Common boolean checks used during both brush evaluation and in UI drawing
+ * via BrushCapabilities inside rna_brush.cc.
+ * \{ */
+
+namespace blender::bke::brush {
+bool supports_accumulate(const Brush &brush);
+bool supports_topology_rake(const Brush &brush);
+bool supports_auto_smooth(const Brush &brush);
+bool supports_height(const Brush &brush);
+bool supports_plane_height(const Brush &brush);
+bool supports_plane_depth(const Brush &brush);
+bool supports_jitter(const Brush &brush);
+bool supports_normal_weight(const Brush &brush);
+bool supports_rake_factor(const Brush &brush);
+bool supports_persistence(const Brush &brush);
+bool supports_pinch_factor(const Brush &brush);
+bool supports_plane_offset(const Brush &brush);
+bool supports_random_texture_angle(const Brush &brush);
+bool supports_sculpt_plane(const Brush &brush);
+bool supports_color(const Brush &brush);
+bool supports_secondary_cursor_color(const Brush &brush);
+bool supports_smooth_stroke(const Brush &brush);
+bool supports_space_attenuation(const Brush &brush);
+bool supports_strength_pressure(const Brush &brush);
+bool supports_inverted_direction(const Brush &brush);
+bool supports_gravity(const Brush &brush);
+bool supports_tilt(const Brush &brush);
+}  // namespace blender::bke::brush
+
+/** \} */

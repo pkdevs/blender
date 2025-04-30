@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Alpha (b'b5ea3beaf93b')\n"
+"Project-Id-Version: Blender 4.5.0 Alpha (b'1f4cae0c4623')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-09-02 14:03+0000\n"
-"PO-Revision-Date: 2023-11-14 19:14+0000\n"
+"POT-Creation-Date: 2025-04-28 09:32+0000\n"
+"PO-Revision-Date: 2025-04-14 08:31+0000\n"
 "Last-Translator: Lee YeonJoo <yzoo2@naver.com>\n"
 "Language-Team: Korean <https://translate.blender.org/projects/blender-ui/ui/ko/>\n"
 "Language: ko\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 5.0.1"
+"X-Generator: Weblate 5.10.1"
 
 
 msgid "Shader AOV"
@@ -63,12 +63,12 @@ msgid "F-Curves"
 msgstr "F-커브"
 
 
+msgid "Slot"
+msgstr "슬롯"
+
+
 msgid "Action F-Curves"
 msgstr "액션 F-커브"
-
-
-msgid "Collection of action F-Curves"
-msgstr "액션 F-커브의 컬렉션"
 
 
 msgid "Action Group"
@@ -243,34 +243,6 @@ msgid "Collection of action groups"
 msgstr "액션 그룹의 컬렉션"
 
 
-msgid "Influence"
-msgstr "영향"
-
-
-msgid "Mix Mode"
-msgstr "조합 모드"
-
-
-msgid "Replace"
-msgstr "바꾸기"
-
-
-msgid "Offset"
-msgstr "오프셋"
-
-
-msgid "Add"
-msgstr "추가"
-
-
-msgid "Subtract"
-msgstr "빼기"
-
-
-msgid "Multiply"
-msgstr "곱하기"
-
-
 msgid "Strips"
 msgstr "스트립"
 
@@ -305,6 +277,176 @@ msgstr "활성"
 
 msgid "Show Expanded"
 msgstr "확장된 항목을 표시"
+
+
+msgctxt "ID"
+msgid "Action"
+msgstr "액션"
+
+
+msgctxt "ID"
+msgid "Armature"
+msgstr "아마튜어"
+
+
+msgctxt "ID"
+msgid "Brush"
+msgstr "브러시"
+
+
+msgctxt "ID"
+msgid "Cache File"
+msgstr "캐시 파일"
+
+
+msgctxt "ID"
+msgid "Camera"
+msgstr "카메라"
+
+
+msgctxt "ID"
+msgid "Collection"
+msgstr "컬렉션"
+
+
+msgctxt "ID"
+msgid "Curve"
+msgstr "커브"
+
+
+msgctxt "ID"
+msgid "Font"
+msgstr "폰트"
+
+
+msgctxt "ID"
+msgid "Grease Pencil"
+msgstr "그리스 펜슬"
+
+
+msgctxt "ID"
+msgid "Image"
+msgstr "이미지"
+
+
+msgctxt "ID"
+msgid "Key"
+msgstr "키"
+
+
+msgctxt "ID"
+msgid "Lattice"
+msgstr "래티스"
+
+
+msgctxt "ID"
+msgid "Library"
+msgstr "라이브러리"
+
+
+msgctxt "ID"
+msgid "Light"
+msgstr "라이트"
+
+
+msgctxt "ID"
+msgid "Light Probe"
+msgstr "라이트 프로브"
+
+
+msgctxt "ID"
+msgid "Line Style"
+msgstr "라인 스타일"
+
+
+msgctxt "ID"
+msgid "Mask"
+msgstr "마스크"
+
+
+msgctxt "ID"
+msgid "Material"
+msgstr "매테리얼"
+
+
+msgctxt "ID"
+msgid "Mesh"
+msgstr "메쉬"
+
+
+msgctxt "ID"
+msgid "Metaball"
+msgstr "메타볼"
+
+
+msgctxt "ID"
+msgid "Movie Clip"
+msgstr "무비 클립"
+
+
+msgctxt "ID"
+msgid "Node Tree"
+msgstr "노드 트리"
+
+
+msgctxt "ID"
+msgid "Object"
+msgstr "오브젝트"
+
+
+msgctxt "ID"
+msgid "Paint Curve"
+msgstr "페인트 커브"
+
+
+msgctxt "ID"
+msgid "Palette"
+msgstr "팔레트"
+
+
+msgctxt "ID"
+msgid "Particle"
+msgstr "파티클"
+
+
+msgctxt "ID"
+msgid "Scene"
+msgstr "씬"
+
+
+msgctxt "ID"
+msgid "Sound"
+msgstr "사운드"
+
+
+msgctxt "ID"
+msgid "Speaker"
+msgstr "스피커"
+
+
+msgctxt "ID"
+msgid "Text"
+msgstr "텍스트"
+
+
+msgctxt "ID"
+msgid "Texture"
+msgstr "텍스처"
+
+
+msgctxt "ID"
+msgid "Window Manager"
+msgstr "창 관리자"
+
+
+msgctxt "ID"
+msgid "Workspace"
+msgstr "작업공간"
+
+
+msgctxt "ID"
+msgid "World"
+msgstr "월드"
 
 
 msgid "Keyframe"
@@ -451,6 +593,10 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "NLA 스택의 결과와 함께 활성 액선의 결과를 컴포지팅하기 위해 사용된 방법"
 
 
+msgid "Replace"
+msgstr "바꾸기"
+
+
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "스트립 값은 누적 결과를 영향력을 기반으로 지정된 양에 의해 대체합니다"
 
@@ -463,12 +609,24 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "스트립 값은 채널 유형에 따라 더하기, 곱하기 또는 쿼터니언 수학을 적절하게 사용하여 누적 결과와 결합됩니다"
 
 
+msgid "Add"
+msgstr "추가"
+
+
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "스트립의 가중된 결과는 누적된 결과로 추가됨"
 
 
+msgid "Subtract"
+msgstr "빼기"
+
+
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "스트립의 가중된 결과는 누적된 결과에서 제거됨"
+
+
+msgid "Multiply"
+msgstr "곱하기"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -965,176 +1123,6 @@ msgstr "저작권"
 
 msgid "Description"
 msgstr "설명"
-
-
-msgctxt "ID"
-msgid "Action"
-msgstr "액션"
-
-
-msgctxt "ID"
-msgid "Armature"
-msgstr "아마튜어"
-
-
-msgctxt "ID"
-msgid "Brush"
-msgstr "브러시"
-
-
-msgctxt "ID"
-msgid "Cache File"
-msgstr "캐시 파일"
-
-
-msgctxt "ID"
-msgid "Camera"
-msgstr "카메라"
-
-
-msgctxt "ID"
-msgid "Collection"
-msgstr "컬렉션"
-
-
-msgctxt "ID"
-msgid "Curve"
-msgstr "커브"
-
-
-msgctxt "ID"
-msgid "Font"
-msgstr "폰트"
-
-
-msgctxt "ID"
-msgid "Grease Pencil"
-msgstr "그리스 펜슬"
-
-
-msgctxt "ID"
-msgid "Image"
-msgstr "이미지"
-
-
-msgctxt "ID"
-msgid "Key"
-msgstr "키"
-
-
-msgctxt "ID"
-msgid "Lattice"
-msgstr "래티스"
-
-
-msgctxt "ID"
-msgid "Library"
-msgstr "라이브러리"
-
-
-msgctxt "ID"
-msgid "Light"
-msgstr "라이트"
-
-
-msgctxt "ID"
-msgid "Light Probe"
-msgstr "라이트 프로브"
-
-
-msgctxt "ID"
-msgid "Line Style"
-msgstr "라인 스타일"
-
-
-msgctxt "ID"
-msgid "Mask"
-msgstr "마스크"
-
-
-msgctxt "ID"
-msgid "Material"
-msgstr "매테리얼"
-
-
-msgctxt "ID"
-msgid "Mesh"
-msgstr "메쉬"
-
-
-msgctxt "ID"
-msgid "Metaball"
-msgstr "메타볼"
-
-
-msgctxt "ID"
-msgid "Movie Clip"
-msgstr "무비 클립"
-
-
-msgctxt "ID"
-msgid "Node Tree"
-msgstr "노드 트리"
-
-
-msgctxt "ID"
-msgid "Object"
-msgstr "오브젝트"
-
-
-msgctxt "ID"
-msgid "Paint Curve"
-msgstr "페인트 커브"
-
-
-msgctxt "ID"
-msgid "Palette"
-msgstr "팔레트"
-
-
-msgctxt "ID"
-msgid "Particle"
-msgstr "파티클"
-
-
-msgctxt "ID"
-msgid "Scene"
-msgstr "씬"
-
-
-msgctxt "ID"
-msgid "Sound"
-msgstr "사운드"
-
-
-msgctxt "ID"
-msgid "Speaker"
-msgstr "스피커"
-
-
-msgctxt "ID"
-msgid "Text"
-msgstr "텍스트"
-
-
-msgctxt "ID"
-msgid "Texture"
-msgstr "텍스처"
-
-
-msgctxt "ID"
-msgid "Window Manager"
-msgstr "창 관리자"
-
-
-msgctxt "ID"
-msgid "Workspace"
-msgstr "작업공간"
-
-
-msgctxt "ID"
-msgid "World"
-msgstr "월드"
 
 
 msgid "Custom"
@@ -1937,10 +1925,6 @@ msgid "Main Grease Pencils"
 msgstr "매인 그리스 팬슬"
 
 
-msgid "Collection of grease pencils"
-msgstr "그리스 팬슬의 컬렉션"
-
-
 msgid "Main Images"
 msgstr "메인 이미지"
 
@@ -2139,6 +2123,11 @@ msgstr "매인 월드"
 
 msgid "Collection of worlds"
 msgstr "월드의 컬렉션"
+
+
+msgctxt "ID"
+msgid "ID Type"
+msgstr "ID 유형"
 
 
 msgid "Blender RNA"
@@ -3135,10 +3124,6 @@ msgid "Grease Pencil Brush Settings"
 msgstr "그리스 펜슬 브러시 설정"
 
 
-msgid "Settings for grease pencil brush"
-msgstr "그리스 팬슬 브러시를 위한 설정"
-
-
 msgid "Active Smooth"
 msgstr "활성 스무스"
 
@@ -3219,14 +3204,6 @@ msgid "Amount of erasing for thickness"
 msgstr "두께에 대한 소거 양"
 
 
-msgid "Direction"
-msgstr "방향"
-
-
-msgid "Normal"
-msgstr "노멀"
-
-
 msgid "Mode to draw boundary limits"
 msgstr "경계 제한을 그리는 모드"
 
@@ -3253,10 +3230,6 @@ msgstr "라인을 편집"
 
 msgid "Use edit lines as fill boundary limits"
 msgstr "채우기 경계 제한으로 편집 라인을 사용"
-
-
-msgid "Radius"
-msgstr "반경"
 
 
 msgid "Precision"
@@ -3577,6 +3550,10 @@ msgstr "이미지 유저"
 
 msgid "Parameters defining which layer, pass and frame of the image is displayed"
 msgstr "이미지의 레이어, 패스 및 프레임을 정의하는 매개 변수"
+
+
+msgid "Offset"
+msgstr "오프셋"
 
 
 msgid "Rotation"
@@ -4587,16 +4564,8 @@ msgid "Exposure"
 msgstr "노출"
 
 
-msgid "Exposure (stops) applied before display transform"
-msgstr "디스플레이 변환 전에 적용된 노출 (중지)"
-
-
 msgid "Gamma"
 msgstr "감마"
-
-
-msgid "Amount of gamma modification applied after display transform"
-msgstr "디스플레이 변환 후에 적용된 감마 수정의 보정의 양"
 
 
 msgid "Look"
@@ -4894,6 +4863,10 @@ msgstr "위치에서 작동하는 제약들에 대해 블렌더 공간 단위의
 
 msgid "Amount of residual error in radians for constraints that work on orientation"
 msgstr "오리엔테이션에서 작동하는 제약들에 대해 라디안 단위의 예측 오차의 양"
+
+
+msgid "Influence"
+msgstr "영향"
 
 
 msgid "Amount of influence constraint will have on the final solution"
@@ -5230,6 +5203,10 @@ msgstr "최소치"
 
 msgid "Minimum value for target channel range"
 msgstr "대상 채널 범위에 대한 최소의 값"
+
+
+msgid "Mix Mode"
+msgstr "조합 모드"
 
 
 msgid "Specify how existing transformations and the action channels are combined"
@@ -5688,16 +5665,8 @@ msgid "Copy the scale of the target"
 msgstr "대상의 축적을 복사"
 
 
-msgid "Power"
-msgstr "파워"
-
-
 msgid "Raise the target's scale to the specified power"
 msgstr "대상의 축적을 지정된 힘까지 올립니다"
-
-
-msgid "Additive"
-msgstr "가산적"
 
 
 msgid "Use addition instead of multiplication to combine scale (2.7 compatibility)"
@@ -6307,46 +6276,6 @@ msgstr "상대적인 오프셋을 사용"
 
 msgid "Offset will be an absolute point in space instead of relative to the target"
 msgstr "오프셋은 대상과 관련이 없는 공간의 절대 지점이 됩니다"
-
-
-msgid "Python Constraint"
-msgstr "Python 제약"
-
-
-msgid "Use Python script for constraint evaluation"
-msgstr "제약 평가를 위해 Python 스크립트를 사용"
-
-
-msgid "Script Error"
-msgstr "스크립트 오류"
-
-
-msgid "The linked Python script has thrown an error"
-msgstr "연결된 Python 스크립트 오류가 발생했습니다"
-
-
-msgid "Number of Targets"
-msgstr "대상의 수"
-
-
-msgid "Target Objects"
-msgstr "대상 오브젝트"
-
-
-msgid "Script"
-msgstr "스크립트"
-
-
-msgid "The text object that contains the Python script"
-msgstr "Python 스크립트를 포함하는 텍스트 오브젝트"
-
-
-msgid "Use Targets"
-msgstr "대상을 사용"
-
-
-msgid "Use the targets indicated in the constraint panel"
-msgstr "제약 패널에서 지정된 대상을 사용"
 
 
 msgid "Shrinkwrap Constraint"
@@ -7113,14 +7042,6 @@ msgid "Extrapolate the curve or extend it horizontally"
 msgstr "수평으로 확장된 또는 커브를 외삽법"
 
 
-msgid "Horizontal"
-msgstr "수평"
-
-
-msgid "Extrapolated"
-msgstr "외삽됨"
-
-
 msgid "Tone"
 msgstr "톤"
 
@@ -7275,6 +7196,10 @@ msgstr "첫 번째 만"
 
 msgid "Use the start of the stroke for the depth"
 msgstr "깊이에 대해 스트로크의 시작을 사용"
+
+
+msgid "Radius"
+msgstr "반경"
 
 
 msgid "Profile Path editor used to build a profile path"
@@ -7927,11 +7852,6 @@ msgstr "사용하는 속성에 대한 RNA 경로 (ID 블럭에서)"
 
 msgid "ID-block that the specific property used can be found from (id_type property must be set first)"
 msgstr "사용된 특정 속성을 찾을 수 있는 ID 블록 (id_type 속성을 먼저 설정해야 함)"
-
-
-msgctxt "ID"
-msgid "ID Type"
-msgstr "ID 유형"
 
 
 msgid "Type of ID-block that can be used"
@@ -9171,6 +9091,10 @@ msgid "Disables video output, for audio-only renders"
 msgstr "오디오 전용 렌더의 경우 비디오 출력을 비활성화합니다"
 
 
+msgid "H.264"
+msgstr "H.264"
+
+
 msgid "DNxHD"
 msgstr "DNxHD"
 
@@ -9181,10 +9105,6 @@ msgstr "FFmpeg 비디오 코덱 # 1"
 
 msgid "Flash Video"
 msgstr "플래시 비디오"
-
-
-msgid "H.264"
-msgstr "H.264"
 
 
 msgid "HuffYUV"
@@ -9263,6 +9183,10 @@ msgid "Recommended for fast encoding"
 msgstr "빠른 인코딩에 권장됨"
 
 
+msgid "Profile"
+msgstr "단면"
+
+
 msgid "Container"
 msgstr "컨테이너"
 
@@ -9275,20 +9199,20 @@ msgid "MPEG-4"
 msgstr "MPEG-4"
 
 
-msgid "Ogg"
-msgstr "Ogg"
-
-
 msgid "Matroska"
 msgstr "마트로스카"
+
+
+msgid "WebM"
+msgstr "WebM"
 
 
 msgid "Flash"
 msgstr "플래시"
 
 
-msgid "WebM"
-msgstr "WebM"
+msgid "Ogg"
+msgstr "Ogg"
 
 
 msgid "Keyframe Interval"
@@ -9648,6 +9572,10 @@ msgid "Constant factor to offset time by for function"
 msgstr "함수에 의해 시간을 오프셋하는 상수 팩터"
 
 
+msgid "Additive"
+msgstr "가산적"
+
+
 msgid "Values generated by this modifier are applied on top of the existing values instead of overwriting them"
 msgstr "이 모디파이어로 생성된 값은 기존 값 대신 겹쳐 쓰지 않고 적용됩니다"
 
@@ -9720,6 +9648,10 @@ msgid "Amount of fine level detail present in the noise"
 msgstr "노이즈에서 정밀한 디테일 레벨 존재의 양"
 
 
+msgid "Lacunarity"
+msgstr "소란반자"
+
+
 msgid "Time offset for the noise effect"
 msgstr "노이즈 이펙트에 대한 시간 옵셋"
 
@@ -9730,6 +9662,10 @@ msgstr "위상"
 
 msgid "A random seed for the noise effect"
 msgstr "노이즈 이펙트에 대한 랜덤 씨드"
+
+
+msgid "Roughness"
+msgstr "거칠기"
 
 
 msgid "Scaling (in time) of the noise"
@@ -11172,10 +11108,6 @@ msgid "Adapt simulation resolution and size to fluid"
 msgstr "적응 시뮬레이션 해상도 및 유체에 크기"
 
 
-msgid "Use Adaptive Time Steps"
-msgstr "적응형 시간 단계를 사용"
-
-
 msgid "Bubble"
 msgstr "버블"
 
@@ -11556,6 +11488,10 @@ msgid "Multiplier of source velocity passed to fluid (source velocity is non-zer
 msgstr "소스 속도의 승수가 유체로 전달됨 (오브젝트가 움직이는 경우에만 소스 속도가 0이 아님)"
 
 
+msgid "Normal"
+msgstr "노멀"
+
+
 msgid "Amount of normal directional velocity"
 msgstr "노멀 지향성의 속도의 양"
 
@@ -11564,16 +11500,28 @@ msgid "Amount of random velocity"
 msgstr "랜덤 속도의 양"
 
 
+msgid "Socket Type"
+msgstr "소켓 유형"
+
+
+msgid "Menu"
+msgstr "메뉴"
+
+
+msgid "Collection"
+msgstr "컬렉션"
+
+
+msgid "Bundle"
+msgstr "번들"
+
+
 msgid "Freestyle Line Set"
 msgstr "프리스타일 라인 설정"
 
 
 msgid "Line set for associating lines and style parameters"
 msgstr "관련 라인과 스타일의 매개 변수에 대한 라인 설정"
-
-
-msgid "Collection"
-msgstr "컬렉션"
 
 
 msgid "A collection of objects based on which feature edges are selected"
@@ -12582,40 +12530,60 @@ msgid "Grease Pencil Frame"
 msgstr "그리스 펜슬 프레임"
 
 
-msgid "Breakdown"
-msgstr "브렉다운"
-
-
-msgid "Moving Hold"
-msgstr "이동 보류"
-
-
 msgid "A keyframe that is part of a moving hold"
 msgstr "이동 보류의 일부인 키 프레임"
-
-
-msgid "Extreme"
-msgstr "익스트림"
 
 
 msgid "An 'extreme' pose, or some other purpose as needed"
 msgstr "'극단적인' 포즈 또는 필요한 다른 용도"
 
 
-msgid "Jitter"
-msgstr "지터"
-
-
 msgid "A filler or baked keyframe for keying on ones, or some other purpose as needed"
 msgstr "필렛이나 베이크된 키 프레임으로 키잉하거나 필요에 따라 다른 용도로 사용할 수 있습니다"
 
 
-msgid "Generated"
-msgstr "생성됨"
-
-
 msgid "Grease Pencil Frames"
 msgstr "그리스 펜슬 프레임"
+
+
+msgid "Active Layer Index"
+msgstr "활성 레이어 인덱스"
+
+
+msgid "Active Note"
+msgstr "활성 노트"
+
+
+msgid "Note/Layer to add annotation strokes to"
+msgstr "주석 스트로크를 추가 할 노트/레이어"
+
+
+msgid "Regular"
+msgstr "정규"
+
+
+msgid "Apply offset in usual animation direction"
+msgstr "일반적인 애니메이션 방향으로 오프셋을 적용"
+
+
+msgid "Reverse"
+msgstr "반전"
+
+
+msgid "Apply offset in reverse animation direction"
+msgstr "역방향 애니메이션 방향으로 오프셋을 적용"
+
+
+msgid "Repeat"
+msgstr "반복"
+
+
+msgid "Frame Start"
+msgstr "프레임 시작"
+
+
+msgid "Display onion skins before and after the current frame"
+msgstr "현재 프레임 앞뒤에 어니언 스킨을 표시"
 
 
 msgid "Grease Pencil Layer"
@@ -12628,10 +12596,6 @@ msgstr "혼합 모드"
 
 msgid "Blend mode"
 msgstr "혼합 모드"
-
-
-msgid "Regular"
-msgstr "정규"
 
 
 msgid "Hard Light"
@@ -12662,48 +12626,12 @@ msgid "Translation"
 msgstr "옮기기"
 
 
-msgid "Display onion skins before and after the current frame"
-msgstr "현재 프레임 앞뒤에 어니언 스킨을 표시"
-
-
 msgid "ViewLayer"
 msgstr "뷰 레이어"
 
 
 msgid "Only include Layer in this View Layer render output (leave blank to include always)"
 msgstr "이 뷰 레이어 렌더 출력에만 레이어를 포함 (항상 비워 두십시오)"
-
-
-msgid "Active Layer Index"
-msgstr "활성 레이어 인덱스"
-
-
-msgid "Active Note"
-msgstr "활성 노트"
-
-
-msgid "Note/Layer to add annotation strokes to"
-msgstr "주석 스트로크를 추가 할 노트/레이어"
-
-
-msgid "Apply offset in usual animation direction"
-msgstr "일반적인 애니메이션 방향으로 오프셋을 적용"
-
-
-msgid "Reverse"
-msgstr "반전"
-
-
-msgid "Apply offset in reverse animation direction"
-msgstr "역방향 애니메이션 방향으로 오프셋을 적용"
-
-
-msgid "Repeat"
-msgstr "반복"
-
-
-msgid "Frame Start"
-msgstr "프레임 시작"
 
 
 msgid "Grease Pencil Layers"
@@ -12746,84 +12674,9 @@ msgid "Base type for data-blocks, defining a unique name, linking from other lib
 msgstr "고유한 이름을 정의하고 다른 라이브러리 및 가비지 컬렉션에서 연결하는 데이터-블록에 대한 기본 유형"
 
 
-msgid "Brush"
-msgstr "브러시"
-
-
-msgid "Font"
-msgstr "폰트"
-
-
-msgid "Key"
-msgstr "키"
-
-
-msgid "Lattice"
-msgstr "래티스"
-
-
-msgid "Library"
-msgstr "라이브러리"
-
-
-msgid "Light"
-msgstr "라이트"
-
-
-msgid "Light Probe"
-msgstr "라이트 프로브"
-
-
-msgid "Mask"
-msgstr "마스크"
-
-
-msgid "Mesh"
-msgstr "메쉬"
-
-
-msgid "Metaball"
-msgstr "메타볼"
-
-
-msgid "Node Tree"
-msgstr "노드 트리"
-
-
-msgid "Paint Curve"
-msgstr "페인트 커브"
-
-
-msgid "Palette"
-msgstr "팔레트"
-
-
-msgid "Particle"
-msgstr "파티클"
-
-
-msgid "Sound"
-msgstr "사운드"
-
-
-msgid "Speaker"
-msgstr "스피커"
-
-
-msgid "Text"
-msgstr "텍스트"
-
-
-msgid "Window Manager"
-msgstr "창 관리자"
-
-
-msgid "Workspace"
-msgstr "작업공간"
-
-
-msgid "World"
-msgstr "월드"
+msgctxt "ID"
+msgid "Type"
+msgstr "유형"
 
 
 msgid "Editable"
@@ -12844,6 +12697,10 @@ msgstr "Is 간접"
 
 msgid "Is this ID block linked indirectly"
 msgstr "이 ID 블록은 간접적으로 연결되어 있음"
+
+
+msgid "Library"
+msgstr "라이브러리"
 
 
 msgid "Library file the data-block is linked from"
@@ -12902,10 +12759,6 @@ msgid "A collection of F-Curves for animation"
 msgstr "에니메이션에 대한 F-커브의 컬렉션"
 
 
-msgid "The individual F-Curves that make up the action"
-msgstr "액션을 구성하는 개별 F-커브"
-
-
 msgid "Frame Range"
 msgstr "프레임 범위"
 
@@ -12914,17 +12767,9 @@ msgid "Groups"
 msgstr "그룹"
 
 
-msgid "Convenient groupings of F-Curves"
-msgstr "F-커브의 편의 그룹핑"
-
-
 msgctxt "ID"
 msgid "ID Root Type"
 msgstr "ID 루트 유형"
-
-
-msgid "Type of ID block that action can be used on - DO NOT CHANGE UNLESS YOU KNOW WHAT YOU ARE DOING"
-msgstr "액션을 사용할 수있는 ID 블록의 유형 - 수행중인 액션을 알지 못하면 변경하지 마십시오"
 
 
 msgid "Layers"
@@ -13235,50 +13080,6 @@ msgid "Brush's capabilities"
 msgstr "브러시의 기능"
 
 
-msgid "Clone Alpha"
-msgstr "클론 알파"
-
-
-msgid "Opacity of clone image display"
-msgstr "클론 이미지 표시의 투명도"
-
-
-msgid "Clone Image"
-msgstr "클론 이미지"
-
-
-msgid "Image for clone tool"
-msgstr "클론 도구에 대한 이미지"
-
-
-msgid "Clone Offset"
-msgstr "클론 오프셋"
-
-
-msgid "Deformation"
-msgstr "변형"
-
-
-msgid "Push"
-msgstr "밀기"
-
-
-msgid "Inflate"
-msgstr "팽창"
-
-
-msgid "Grab"
-msgstr "잡기"
-
-
-msgid "Expand"
-msgstr "확장"
-
-
-msgid "Snake Hook"
-msgstr "스네이크 후크"
-
-
 msgid "Local"
 msgstr "로컬"
 
@@ -13339,6 +13140,41 @@ msgid "Editable falloff curve"
 msgstr "편집 가능한 커브 감소"
 
 
+msgctxt "Curve"
+msgid "Smooth"
+msgstr "스무스"
+
+
+msgctxt "Curve"
+msgid "Sphere"
+msgstr "구체"
+
+
+msgctxt "Curve"
+msgid "Root"
+msgstr "루트"
+
+
+msgctxt "Curve"
+msgid "Sharp"
+msgstr "샤프"
+
+
+msgctxt "Curve"
+msgid "Linear"
+msgstr "선형"
+
+
+msgctxt "Curve"
+msgid "Inverse Square"
+msgstr "제곱 반전"
+
+
+msgctxt "Curve"
+msgid "Constant"
+msgstr "상수"
+
+
 msgid "Dash Ratio"
 msgstr "대시 비율"
 
@@ -13353,6 +13189,10 @@ msgstr "대시 길이"
 
 msgid "Length of a dash cycle measured in stroke samples"
 msgstr "스트로크 샘플에서 측정된 대시 사이클의 길이"
+
+
+msgid "Direction"
+msgstr "방향"
 
 
 msgid "Add effect of brush"
@@ -13495,10 +13335,6 @@ msgid "Invert to Scrape or Fill"
 msgstr "스크랩 또는 채우기로 반전"
 
 
-msgid "Use Scrape or Fill tool when inverting this brush instead of inverting its displacement direction"
-msgstr "이 브러시를 뒤집을 때 변위 방향을 바꾸지 않고 스크랩 또는 칠 도구를 사용"
-
-
 msgid "Jitter the position of the brush while painting"
 msgstr "페인팅 할 때 브러시의 위치를 지터"
 
@@ -13513,6 +13349,10 @@ msgstr "지터 유닛"
 
 msgid "Jitter in screen space or relative to brush size"
 msgstr "화면 공간의 지터 또는 브러시 크기와 관련"
+
+
+msgid "Brush"
+msgstr "브러시"
 
 
 msgid "Mask Stencil Dimensions"
@@ -13559,6 +13399,10 @@ msgid "Normal Weight"
 msgstr "노멀 웨이트"
 
 
+msgid "Paint Curve"
+msgstr "페인트 커브"
+
+
 msgid "Plane Offset"
 msgstr "평면 오프셋"
 
@@ -13573,6 +13417,10 @@ msgstr "평면 다듬기"
 
 msgid "If a vertex is further away from offset plane than this, then it is not affected"
 msgstr "버텍스가 이 오프셋 평면에서 멀리 떨어져 있으면 영향을 받지 않습니다"
+
+
+msgid "Deformation"
+msgstr "변형"
 
 
 msgid "Pose Origin Offset"
@@ -13663,10 +13511,6 @@ msgid "Radius of the brush in pixels"
 msgstr "픽셀 단위 브러시의 반경"
 
 
-msgid "Pinch"
-msgstr "핀치"
-
-
 msgid "Laplacian"
 msgstr "라플라시안"
 
@@ -13715,44 +13559,20 @@ msgid "How powerful the effect of the brush is when applied"
 msgstr "브러쉬 이펙트가 적용될 때 얼마나 강력한지 정합니다"
 
 
-msgid "Stroke Method"
-msgstr "스트로크 메서드"
-
-
-msgid "Dots"
-msgstr "도트"
-
-
 msgid "Apply paint on each mouse move step"
 msgstr "각 마우스 이동 단계에서 페인트를 적용"
-
-
-msgid "Drag Dot"
-msgstr "드래그 도트"
 
 
 msgid "Allows a single dot to be carefully positioned"
 msgstr "단일 도트를 신중하게 배치할 수 있습니다"
 
 
-msgid "Space"
-msgstr "공간"
-
-
 msgid "Limit brush application to the distance specified by spacing"
 msgstr "간격으로 지정된 거리만큼 브러시 적용을 제한합니다"
 
 
-msgid "Airbrush"
-msgstr "에어브러시"
-
-
 msgid "Keep applying paint effect while holding mouse (spray)"
 msgstr "마우스를 누른 상태에서 페인트 이펙트 적용을 유지 (스프레이)"
-
-
-msgid "Anchored"
-msgstr "정착"
 
 
 msgid "Keep the brush anchored to the initial location"
@@ -13807,12 +13627,20 @@ msgid "Space daubs according to surface orientation instead of screen space"
 msgstr "씬 공간 대신 표면 오리엔테이션에 따라 공간을 바꿉니다"
 
 
+msgid "Airbrush"
+msgstr "에어브러시"
+
+
 msgid "Affect Alpha"
 msgstr "알파에 영향을 줍니다"
 
 
 msgid "When this is disabled, lock alpha while painting"
 msgstr "이 기능이 비활성화되면 그림을 그릴 때 알파를 잠급니다"
+
+
+msgid "Anchored"
+msgstr "정착"
 
 
 msgid "Cavity Mask"
@@ -13937,10 +13765,6 @@ msgstr "잠긴 상태에서 스트로크가 시작된 표면의 평면 오리진
 
 msgid "Smooths the edges of the strokes"
 msgstr "스트로크의 에지를를 부드럽게합니다"
-
-
-msgid "Use this brush in grease pencil drawing mode"
-msgstr "그리스 펜슬 그리기 모드에서 이 브러시 사용합니다"
 
 
 msgid "Use this brush in texture paint mode"
@@ -14191,6 +14015,10 @@ msgid "Camera near clipping distance"
 msgstr "카메라 근거리 클리핑 거리"
 
 
+msgid "Use internal text data-block"
+msgstr "내부 텍스트 데이터 블록을 사용"
+
+
 msgid "Apparent size of the Camera object in the 3D View"
 msgstr "3D 뷰에서 카메라 오브젝트의 외관상 크기"
 
@@ -14313,6 +14141,10 @@ msgstr "센서를 내부 뷰 각도의 이미지 및 필드에 맞추는 메서�
 
 msgid "Fit to the sensor width or height depending on image resolution"
 msgstr "이미지 해상도에 따라 센서의 폭 또는 높이에 맞추기"
+
+
+msgid "Horizontal"
+msgstr "수평"
 
 
 msgid "Fit to the sensor width"
@@ -14565,10 +14397,6 @@ msgstr "시작 매핑 유형"
 
 msgid "Round"
 msgstr "둥근"
-
-
-msgid "Profile"
-msgstr "단면"
 
 
 msgid "Bevel Object"
@@ -14845,6 +14673,10 @@ msgstr "커브에 대한 텍스트"
 
 msgid "Curve deforming text object"
 msgstr "커브 변형 텍스트 오브젝트"
+
+
+msgid "Font"
+msgstr "폰트"
 
 
 msgid "Font Bold"
@@ -15223,6 +15055,10 @@ msgid "If true, chains of feature edges are split at material boundaries"
 msgstr "True일 경우, 특색 에지들의 체인은 매테리얼 경계에서 분할"
 
 
+msgid "Node Tree"
+msgstr "노드 트리"
+
+
 msgid "Node tree for node-based shaders"
 msgstr "노드 기반 셰이더에 대한 노드 트리"
 
@@ -15563,10 +15399,6 @@ msgid "Change fade opacity of displayed onion frames"
 msgstr "표시된 어니언 프레임의 페이드 불투명도를 변경합니다"
 
 
-msgid "Filter by Type"
-msgstr "유형별 필터"
-
-
 msgid "Type of keyframe (for filtering)"
 msgstr "키 프레임의 유형 (필터링 용)"
 
@@ -15601,10 +15433,6 @@ msgstr "스트로크 깊이 순서"
 
 msgid "2D Layers"
 msgstr "2D 레이어"
-
-
-msgid "Display strokes using grease pencil layers to define order"
-msgstr "윤곽을 정의하기 위해 그리스 펜슬 레이어를 사용하여 스트로크를 표시합니다"
 
 
 msgid "3D Location"
@@ -16189,52 +16017,12 @@ msgid "Directional area Light"
 msgstr "지향성 영역 라이트"
 
 
-msgid "Contact Shadow Bias"
-msgstr "접촉 섀도우 성향"
-
-
-msgid "Bias to avoid self shadowing"
-msgstr "자기 섀도우를 피하는 성향"
-
-
-msgid "Contact Shadow Distance"
-msgstr "접촉 섀도우 거리"
-
-
-msgid "World space distance in which to search for screen space occluder"
-msgstr "화면 공간 폐색를 검색 할 월드 공간 거리"
-
-
-msgid "Contact Shadow Thickness"
-msgstr "접촉 섀도우 두께"
-
-
-msgid "Pixel thickness used to detect occlusion"
-msgstr "폐색을 감지하는 데 사용되는 픽셀 두께"
-
-
-msgid "Shadow Buffer Bias"
-msgstr "섀도우 버퍼 성향"
-
-
-msgid "Bias for reducing self shadowing"
-msgstr "자기 섀도우를 줄이기 위한 성향"
-
-
 msgid "Shadow Buffer Clip Start"
 msgstr "섀도우 버퍼 클립 시작"
 
 
 msgid "Shadow map clip start, below which objects will not generate shadows"
 msgstr "섀도우맵 클립 시작, 그 아래에 오브젝트는 섀도우를 생성하지 않음"
-
-
-msgid "Shadow Color"
-msgstr "섀도우 컬러"
-
-
-msgid "Color of shadows cast by the light"
-msgstr "라이트에 의해 드리우는 섀도우의 컬러"
 
 
 msgid "Shadow Soft Size"
@@ -16271,10 +16059,6 @@ msgstr "크기 Y"
 
 msgid "Size of the area of the area light in the Y direction for rectangle shapes"
 msgstr "직사각형 셰이프의 Y 방향 에서 영역 라이트의 영역의 크기"
-
-
-msgid "Contact Shadow"
-msgstr "접촉 섀도우"
 
 
 msgid "Point Light"
@@ -16589,16 +16373,8 @@ msgid "Grease Pencil Settings"
 msgstr "그리스 펜슬 설정"
 
 
-msgid "Grease pencil color settings for material"
-msgstr "매테리얼의 그리스 펜슬 컬러 설정"
-
-
 msgid "Is Grease Pencil"
 msgstr "Is 그리스 펜슬"
-
-
-msgid "True if this material has grease pencil data"
-msgstr "만약 이 매테리얼에 그리스 펜슬 데이터가 있으면 True입니다"
 
 
 msgid "Line Color"
@@ -16673,44 +16449,8 @@ msgid "Refraction Depth"
 msgstr "굴절 깊이"
 
 
-msgid "Roughness"
-msgstr "거칠기"
-
-
 msgid "Roughness of the material"
 msgstr "매테리얼의 거칠기"
-
-
-msgid "Shadow Mode"
-msgstr "섀도우 모드"
-
-
-msgid "Shadow mapping method"
-msgstr "섀도우 매핑 메서드"
-
-
-msgid "Material will cast no shadow"
-msgstr "매테리얼은 섀도우를 캐스트하지 않습니다"
-
-
-msgid "Opaque"
-msgstr "불투명"
-
-
-msgid "Material will cast shadows without transparency"
-msgstr "투명도가없는 매테리얼로 섀도우가 생깁니다"
-
-
-msgid "Alpha Clip"
-msgstr "알파 클립"
-
-
-msgid "Alpha Hashed"
-msgstr "알파 해시드"
-
-
-msgid "Use noise to dither the binary visibility and use filtering to reduce the noise"
-msgstr "노이즈를 사용하여 바이너리 가시성을 떨어트리고 필터링을 사용하여 노이즈를 줄입니다"
 
 
 msgid "Show Backface"
@@ -17065,10 +16805,6 @@ msgid "Global scene frame number at which this movie starts playing (affects all
 msgstr "이 무비이 재생되기 시작하는 글로벌 씬 프레임 번호 (클립과 관련된 모든 데이터에 영향을 줌)"
 
 
-msgid "Grease pencil data for this movie clip"
-msgstr "이 무비 클립의 그리스 펜슬 데이터"
-
-
 msgid "Where the clip comes from"
 msgstr "다음에서 어디에 클립 제공"
 
@@ -17121,16 +16857,24 @@ msgid "Matte"
 msgstr "매트"
 
 
+msgid "Script"
+msgstr "스크립트"
+
+
 msgid "Shader"
 msgstr "셰이더"
 
 
-msgid "Grease Pencil Data"
-msgstr "그리스 펜슬 데이터"
+msgid "Pattern"
+msgstr "패턴"
 
 
 msgid "Interface"
 msgstr "인터페이스"
+
+
+msgid "Grease Pencil Data"
+msgstr "그리스 펜슬 데이터"
 
 
 msgid "Links"
@@ -17183,6 +16927,10 @@ msgstr "모디파이어"
 
 msgid "Tool"
 msgstr "도구"
+
+
+msgid "Mesh"
+msgstr "메쉬"
 
 
 msgid "Shader Node Tree"
@@ -17645,6 +17393,10 @@ msgid "The object is parented to an object"
 msgstr "오브젝트가 오브젝트에 부모 역할을 합니다"
 
 
+msgid "Lattice"
+msgstr "래티스"
+
+
 msgid "The object is parented to a lattice"
 msgstr "오브젝트가 레디스에 부모 역할을 합니다"
 
@@ -17841,10 +17593,6 @@ msgid "Display the object's name"
 msgstr "오브젝트의 이름을 표시"
 
 
-msgid "Shape Key Lock"
-msgstr "셰이프 키를 잠금"
-
-
 msgid "Display Texture Space"
 msgstr "텍스처 공간을 표시"
 
@@ -17867,11 +17615,6 @@ msgstr "소프트 바디 설정"
 
 msgid "Settings for soft body simulation"
 msgstr "소프트 바디 시뮬레이션에 대한 설정"
-
-
-msgctxt "ID"
-msgid "Type"
-msgstr "유형"
 
 
 msgctxt "ID"
@@ -18148,14 +17891,6 @@ msgid "Display Color"
 msgstr "표시 컬러"
 
 
-msgid "Rendered"
-msgstr "렌더리드"
-
-
-msgid "Cross"
-msgstr "교차"
-
-
 msgid "Display"
 msgstr "표시"
 
@@ -18404,10 +18139,6 @@ msgid "Material slot used for rendering particles"
 msgstr "파티클을 렌더링하는 데 사용되는 매테리얼 슬롯"
 
 
-msgid "Dummy"
-msgstr "모형"
-
-
 msgid "Let the surface normal give the particle a starting velocity"
 msgstr "표면의 노멀이 파티클에게 시작 속도를 부여하게 합니다"
 
@@ -18426,6 +18157,10 @@ msgstr "오브젝트 속도"
 
 msgid "Let the object give the particle a starting velocity"
 msgstr "오브젝트가 파티클에게 시작 속도를 부여합니다"
+
+
+msgid "Particle"
+msgstr "파티클"
 
 
 msgid "Let the target particle give the particle a starting velocity"
@@ -19108,10 +18843,6 @@ msgid "Show Subframe"
 msgstr "하위 프레임을 표시"
 
 
-msgid "Show current scene subframe and allow set it using interface tools"
-msgstr "현재 씬 하위 프레임을 표시하고 인터페이스 도구를 사용하여 설정할 수 있습니다"
-
-
 msgid "Sync Mode"
 msgstr "동기화 모드"
 
@@ -19352,6 +19083,10 @@ msgstr "피치"
 
 msgid "Playback pitch of the sound"
 msgstr "사운드의 재생 피치"
+
+
+msgid "Sound"
+msgstr "사운드"
 
 
 msgid "Sound data-block used by this speaker"
@@ -20046,24 +19781,12 @@ msgid "Marble Texture"
 msgstr "마블 택스처"
 
 
-msgid "Pattern"
-msgstr "패턴"
-
-
 msgid "Use soft marble"
 msgstr "소프트 마블을 사용"
 
 
-msgid "Sharp"
-msgstr "샤프"
-
-
 msgid "Use more clearly defined marble"
 msgstr "더 명확하게 정의된 대리석을 사용"
-
-
-msgid "Sharper"
-msgstr "샤프터"
 
 
 msgid "Use very clearly defined marble"
@@ -20120,10 +19843,6 @@ msgstr "이득"
 
 msgid "The gain multiplier"
 msgstr "이득 배율"
-
-
-msgid "Lacunarity"
-msgstr "소란반자"
 
 
 msgid "Gap between successive frequencies"
@@ -20200,10 +19919,6 @@ msgstr "노이즈 텍스처"
 
 msgid "Stucci Texture"
 msgstr "스투치 텍스처"
-
-
-msgid "Plastic"
-msgstr "플라스틱"
 
 
 msgid "Use standard stucci"
@@ -20362,32 +20077,16 @@ msgid "Wood Texture"
 msgstr "나무 텍스처"
 
 
-msgid "Bands"
-msgstr "밴드"
-
-
 msgid "Use standard wood texture in bands"
 msgstr "대역에서 표준 나무 질감을 사용"
-
-
-msgid "Rings"
-msgstr "링"
 
 
 msgid "Use wood texture in rings"
 msgstr "링에 나무 택스처를 사용"
 
 
-msgid "Band Noise"
-msgstr "밴드 노이즈"
-
-
 msgid "Add noise to standard wood"
 msgstr "표준 나무에 노이즈를 추가"
-
-
-msgid "Ring Noise"
-msgstr "링 노이즈"
 
 
 msgid "Add noise to rings"
@@ -20404,6 +20103,10 @@ msgstr "텍스트 오브젝트에 대한 벡터 폰트"
 
 msgid "Offset the number of the frame to use in the animation"
 msgstr "에니메이션에서 사용하는 프레임의 번호를 오프셋"
+
+
+msgid "Window Manager"
+msgstr "창 관리자"
 
 
 msgid "Window manager data-block defining open windows and other user interface data"
@@ -20440,6 +20143,10 @@ msgstr "커뮤니티"
 
 msgid "Maintained by community developers"
 msgstr "커뮤니티 개발자에 의해 관리"
+
+
+msgid "Filter by Type"
+msgstr "유형별 필터"
 
 
 msgid "Add-ons"
@@ -20480,6 +20187,10 @@ msgstr "창"
 
 msgid "Open windows"
 msgstr "창을 열기"
+
+
+msgid "Workspace"
+msgstr "작업공간"
 
 
 msgid "Workspace data-block, defining the working environment for the user"
@@ -20878,28 +20589,16 @@ msgid "Codec"
 msgstr "코덱"
 
 
-msgid "Codec settings for OpenEXR"
-msgstr "OpenEXR에 대한 코덱 설정"
+msgid "No compression"
+msgstr "압축 없음"
+
+
+msgid "DWAA (lossy)"
+msgstr "DWAA (손실)"
 
 
 msgid "Pxr24 (lossy)"
 msgstr "Pxr24 (손실)"
-
-
-msgid "ZIP (lossless)"
-msgstr "ZIP (무손실)"
-
-
-msgid "PIZ (lossless)"
-msgstr "PIZ (무손실)"
-
-
-msgid "RLE (lossless)"
-msgstr "RLE(무손실)"
-
-
-msgid "ZIPS (lossless)"
-msgstr "ZIPS (무손실)"
 
 
 msgid "B44 (lossy)"
@@ -20908,10 +20607,6 @@ msgstr "B44 (손실)"
 
 msgid "B44A (lossy)"
 msgstr "B44A (손실)"
-
-
-msgid "DWAA (lossy)"
-msgstr "DWAA (손실)"
 
 
 msgid "File format to save the rendered images as"
@@ -21547,11 +21242,6 @@ msgstr "Return"
 
 msgid "Enter"
 msgstr "Enter"
-
-
-msgctxt "UI_Events_KeyMaps"
-msgid "Spacebar"
-msgstr "Spacebar"
 
 
 msgctxt "UI_Events_KeyMaps"
@@ -23691,54 +23381,24 @@ msgid "Falloff"
 msgstr "감소"
 
 
-msgctxt "Curve"
-msgid "Smooth"
-msgstr "스무스"
-
-
 msgid "Smooth falloff"
 msgstr "스무스 감소"
-
-
-msgctxt "Curve"
-msgid "Sphere"
-msgstr "구체"
 
 
 msgid "Spherical falloff"
 msgstr "구형 감소"
 
 
-msgctxt "Curve"
-msgid "Root"
-msgstr "루트"
-
-
 msgid "Root falloff"
 msgstr "루트 감소"
-
-
-msgctxt "Curve"
-msgid "Inverse Square"
-msgstr "제곱 반전"
 
 
 msgid "Inverse Square falloff"
 msgstr "제곱 감소를 반전"
 
 
-msgctxt "Curve"
-msgid "Sharp"
-msgstr "샤프"
-
-
 msgid "Sharp falloff"
 msgstr "샤프 감소"
-
-
-msgctxt "Curve"
-msgid "Linear"
-msgstr "선형"
 
 
 msgid "Linear falloff"
@@ -24081,6 +23741,10 @@ msgid "Draw strokes using a continuous line"
 msgstr "연속 라인을 사용하여 스트로크를 그리기"
 
 
+msgid "Dots"
+msgstr "도트"
+
+
 msgid "Draw strokes using separated dots"
 msgstr "구분된 도트를 사용하여 스트로크를 그리기"
 
@@ -24145,6 +23809,10 @@ msgid "Disable stencil and overlap self intersections with alpha materials"
 msgstr "알파 매테리얼과 함께 스텐실 비활성화 및 자체 겹침"
 
 
+msgid "Mask"
+msgstr "마스크"
+
+
 msgid "Material slot in an object"
 msgstr "오브젝트에 매테리얼 슬롯"
 
@@ -24161,12 +23829,68 @@ msgid "Material slot name"
 msgstr "매테리얼 슬롯 이름"
 
 
+msgid "Sculpt Set Pivot"
+msgstr "스컬프트 설정 피벗"
+
+
 msgid "Show/Hide"
 msgstr "표시/숨기기"
 
 
+msgid "Clear Transform"
+msgstr "변환을 지우기"
+
+
+msgid "In-Betweens"
+msgstr "사이에서"
+
+
+msgid "Propagate"
+msgstr "전파"
+
+
+msgid "Names"
+msgstr "이름"
+
+
+msgid "Apply"
+msgstr "적용"
+
+
+msgid "Toggle Bone Options"
+msgstr "본 옵션을 토글"
+
+
+msgid "Enable Bone Options"
+msgstr "본 옵션을 사용"
+
+
+msgid "Disable Bone Options"
+msgstr "본 옵션을 사용 중지"
+
+
+msgid "Mesh Select Mode"
+msgstr "메쉬 선택 모드"
+
+
+msgid "Face Data"
+msgstr "페이스 데이터"
+
+
+msgid "Select by Face Strength"
+msgstr "페이스 강도로 선택"
+
+
+msgid "Set Face Strength"
+msgstr "페이스 강도를 설정"
+
+
 msgid "Clean Up"
 msgstr "정리"
+
+
+msgid "Merge"
+msgstr "병합"
 
 
 msgid "Special Characters"
@@ -24177,20 +23901,16 @@ msgid "Kerning"
 msgstr "자간"
 
 
-msgid "Names"
-msgstr "이름"
+msgid "Text"
+msgstr "텍스트"
+
+
+msgid "Metaball"
+msgstr "메타볼"
 
 
 msgid "Bone Roll"
 msgstr "본 롤"
-
-
-msgid "Generate Weights"
-msgstr "웨이트를 생성"
-
-
-msgid "Assign Material"
-msgstr "매테리얼을 할당"
 
 
 msgid "Pivot Point"
@@ -24261,6 +23981,18 @@ msgid "Select Loops"
 msgstr "루프를 선택"
 
 
+msgid "Assign Material"
+msgstr "매테리얼을 할당"
+
+
+msgid "Light"
+msgstr "라이트"
+
+
+msgid "Light Probe"
+msgstr "라이트 프로브"
+
+
 msgid "Add Image"
 msgstr "이미지를 추가"
 
@@ -24271,10 +24003,6 @@ msgstr "관계"
 
 msgid "Rigid Body"
 msgstr "리지드 바디"
-
-
-msgid "Apply"
-msgstr "적용"
 
 
 msgid "Track"
@@ -24295,54 +24023,6 @@ msgstr "싱글 유저를 만들기"
 
 msgid "Hooks"
 msgstr "후크"
-
-
-msgid "Sculpt Set Pivot"
-msgstr "스컬프트 설정 피벗"
-
-
-msgid "Clear Transform"
-msgstr "변환을 지우기"
-
-
-msgid "In-Betweens"
-msgstr "사이에서"
-
-
-msgid "Propagate"
-msgstr "전파"
-
-
-msgid "Toggle Bone Options"
-msgstr "본 옵션을 토글"
-
-
-msgid "Enable Bone Options"
-msgstr "본 옵션을 사용"
-
-
-msgid "Disable Bone Options"
-msgstr "본 옵션을 사용 중지"
-
-
-msgid "Mesh Select Mode"
-msgstr "메쉬 선택 모드"
-
-
-msgid "Face Data"
-msgstr "페이스 데이터"
-
-
-msgid "Select by Face Strength"
-msgstr "페이스 강도로 선택"
-
-
-msgid "Set Face Strength"
-msgstr "페이스 강도를 설정"
-
-
-msgid "Merge"
-msgstr "병합"
 
 
 msgid "Basic"
@@ -24406,6 +24086,10 @@ msgid "Channel"
 msgstr "채널"
 
 
+msgid "Key"
+msgstr "키"
+
+
 msgid "Marker"
 msgstr "마커"
 
@@ -24418,20 +24102,17 @@ msgid "Files"
 msgstr "파일"
 
 
-msgid "Layer Specials"
-msgstr "레이어 지정"
-
-
 msgid "Material Specials"
 msgstr "매테리얼 지정"
 
 
-msgid "Move to Layer"
-msgstr "레이어로 이동"
-
-
+msgctxt "Operator"
 msgid "Smooth"
 msgstr "스무스"
+
+
+msgid "Move to Layer"
+msgstr "레이어로 이동"
 
 
 msgid "UV"
@@ -24676,6 +24357,10 @@ msgid "Loose"
 msgstr "루즈"
 
 
+msgid "Sharp"
+msgstr "샤프"
+
+
 msgid "Freestyle Edge Mark"
 msgstr "프리스타일 에지 마크"
 
@@ -24802,6 +24487,10 @@ msgstr "폴리곤"
 
 msgid "Split Normals"
 msgstr "분할 노멀"
+
+
+msgid "Smooth"
+msgstr "스무스"
 
 
 msgid "Indices of triangle vertices"
@@ -25326,6 +25015,10 @@ msgstr "여러 스트로크"
 
 msgid "Simplify stroke reducing number of points"
 msgstr "포인트 수를 줄이면서 스트로크를 단순화합니다"
+
+
+msgid "Subdivide"
+msgstr "섭디비젼"
 
 
 msgid "Deform the shape using an armature object"
@@ -25874,6 +25567,10 @@ msgstr "겹치지 않도록 폭을 클램프"
 
 msgid "Vertex group name"
 msgstr "버텍스 그룹 이름"
+
+
+msgid "Vertex Weight"
+msgstr "버텍스 웨이트"
 
 
 msgid "Vertex Mesh Method"
@@ -26716,6 +26413,10 @@ msgid "Material value that gives no displacement"
 msgstr "변위를 제공하지 않는 매테리얼 값"
 
 
+msgid "Space"
+msgstr "공간"
+
+
 msgid "Direction is defined in local coordinates"
 msgstr "방향은 로컬 좌표로 정의됩니다"
 
@@ -26944,16 +26645,8 @@ msgid "Maximum number of frames that the build effect can run for (unless anothe
 msgstr "다음에 대해 빌드 효과를 실행할 수있는 최대 프레임 수 (이 시간이 지나기 전에 다른 GP 키 프레임이 발생하지 않는 한)"
 
 
-msgid "Sequential"
-msgstr "순차"
-
-
 msgid "Strokes appear/disappear one after the other, but only a single one changes at a time"
 msgstr "스트로크가 차례로 나타나거나 사라지며, 한 번에 하나씩 만 변경됩니다"
-
-
-msgid "Concurrent"
-msgstr "동시에 발생"
 
 
 msgid "Multiple strokes appear/disappear at once"
@@ -27043,11 +26736,6 @@ msgid "Curve"
 msgstr "커브"
 
 
-msgctxt "Curve"
-msgid "Constant"
-msgstr "상수"
-
-
 msgid "Reverse the transformation between this object and its target"
 msgstr "이 오브젝트와 그 대상 사이의 변환을 뒤집습니다"
 
@@ -27090,10 +26778,6 @@ msgstr "단계"
 
 msgid "Overscan"
 msgstr "오버스캔"
-
-
-msgid "Shaded"
-msgstr "셰이드"
 
 
 msgid "Boundaries"
@@ -28096,6 +27780,10 @@ msgid "Use offset from the particle object in the instance object"
 msgstr "인스턴스 오브젝트에서 파티클 오브젝트의 오프셋을 사용합니다"
 
 
+msgid "World"
+msgstr "월드"
+
+
 msgid "Use world space offset in the instance object"
 msgstr "인스턴스 오브젝트에서 월드 공간 오프셋을 사용합니다"
 
@@ -28151,10 +27839,6 @@ msgstr "리메쉬 모디파이어"
 
 msgid "Generate a new surface with regular topology that follows the shape of the input mesh"
 msgstr "입력 메쉬의 모양을 따르는 일반 토폴로지로 새 표면을 생성"
-
-
-msgid "Blocks"
-msgstr "블록"
 
 
 msgid "Output a blocky surface with no smoothing"
@@ -30074,10 +29758,6 @@ msgid "Use Mask"
 msgstr "마스크를 사용"
 
 
-msgid "Use a grease pencil data-block as a mask to use only specified areas of pattern when tracking"
-msgstr "트래킹 할 때 패턴의 지정된 영역 만을 사용하는 마스크로 그리스 팬슬 데이터 블럭을 사용"
-
-
 msgid "Normalize"
 msgstr "노멀라이즈"
 
@@ -30290,10 +29970,6 @@ msgid "Average error of re-projection"
 msgstr "재투영의 평균 오류"
 
 
-msgid "Bundle"
-msgstr "번들"
-
-
 msgid "Position of bundle reconstructed from this track"
 msgstr "이 트랙에서 복원된 번들의 위치"
 
@@ -30304,10 +29980,6 @@ msgstr "솔브된 후 무비 클립 에디터 및 3D 뷰포트에서 트랙의 �
 
 msgid "Minimal value of correlation between matched pattern and reference that is still treated as successful tracking"
 msgstr "성공적인 트래킹 으로 간주되는 일치 패턴과 참조간의 상관 관계 최소값"
-
-
-msgid "Grease pencil data for this track"
-msgstr "이 트랙에 대한 그리스 펜슬 데이터"
 
 
 msgid "Has Bundle"
@@ -30610,14 +30282,6 @@ msgid "Static Type"
 msgstr "정적 유형"
 
 
-msgid "Node type (deprecated, use with care)"
-msgstr "노드 유형 (더 이상 사용되지 않음,주의해서 사용)"
-
-
-msgid "Custom Node"
-msgstr "커스텀 노드"
-
-
 msgid "Custom color of the node body"
 msgstr "노드 바디의 커스텀 컬러"
 
@@ -30668,10 +30332,6 @@ msgstr "미리보기를 표시"
 
 msgid "Show Texture"
 msgstr "텍스처를 표시"
-
-
-msgid "Node type (deprecated, use bl_static_type or bl_idname for the actual identifier string)"
-msgstr "노드 유형 (더 이상 사용되지 않음, 실제 식별자 문자열에 bl_static_type 또는 bl_idname 사용)"
 
 
 msgid "Use custom color for the node"
@@ -30770,40 +30430,20 @@ msgid "Bokeh Image"
 msgstr "보케 이미지"
 
 
-msgid "Angle of the bokeh"
-msgstr "보케의 각도"
-
-
 msgid "Catadioptric"
 msgstr "반사 굴절"
-
-
-msgid "Level of catadioptric of the bokeh"
-msgstr "보케의 반사 굴절에 레벨"
 
 
 msgid "Flaps"
 msgstr "플랩"
 
 
-msgid "Number of flaps"
-msgstr "플랩의 수"
-
-
 msgid "Rounding"
 msgstr "반올림"
 
 
-msgid "Level of rounding of the bokeh"
-msgstr "보케의 반올림에 레벨"
-
-
 msgid "Lens Shift"
 msgstr "렌즈 교대"
-
-
-msgid "Shift of the lens components"
-msgstr "렌즈 부품의 시프트"
 
 
 msgid "Box Mask"
@@ -30846,10 +30486,6 @@ msgid "Channel Key"
 msgstr "채널 키"
 
 
-msgid "RGB color space"
-msgstr "RGB 컬러 공간"
-
-
 msgid "YCbCr"
 msgstr "YCbCr"
 
@@ -30860,10 +30496,6 @@ msgstr "이 채널의 값으로 제한"
 
 msgid "High"
 msgstr "높은"
-
-
-msgid "Values higher than this setting are 100% opaque"
-msgstr "이 설정보다 높은 값은 100% 불투명합니다"
 
 
 msgid "Algorithm"
@@ -30886,10 +30518,6 @@ msgid "Low"
 msgstr "낮은"
 
 
-msgid "Values lower than this setting are 100% keyed"
-msgstr "이 설정보다 낮은 값은 100% 키됩니다"
-
-
 msgid "Channel used to determine matte"
 msgstr "매트을 결정하는 사용된 채널"
 
@@ -30898,36 +30526,16 @@ msgid "Chroma Key"
 msgstr "크로마 키"
 
 
-msgid "Alpha falloff"
-msgstr "알파 감소"
-
-
 msgid "Lift"
 msgstr "상승"
-
-
-msgid "Alpha lift"
-msgstr "알파 상승"
 
 
 msgid "Shadow Adjust"
 msgstr "섀도우 조절하기"
 
 
-msgid "Adjusts the brightness of any shadows captured"
-msgstr "캡처된 섀도우의 밝기를 조정합니다"
-
-
-msgid "Tolerance below which colors will be considered as exact matches"
-msgstr "컬러이 정확한 일치로 간주되는 허용 오차"
-
-
 msgid "Acceptance"
 msgstr "수락"
-
-
-msgid "Tolerance for a color to be considered a keying color"
-msgstr "키잉 컬러으로 간주되는 컬러의 허용 오차"
 
 
 msgid "Color Balance"
@@ -31166,10 +30774,6 @@ msgid "H"
 msgstr "H"
 
 
-msgid "Hue tolerance for colors to be considered a keying color"
-msgstr "키잉 컬러으로 간주되는 컬러의 색조 허용 오차"
-
-
 msgid "S"
 msgstr "S"
 
@@ -31178,40 +30782,8 @@ msgid "Color Spill"
 msgstr "컬러 스필"
 
 
-msgid "Scale limit by value"
-msgstr "값으로 축적 제한"
-
-
-msgid "Blue spillmap scale"
-msgstr "블루 스필맵 축적"
-
-
-msgid "Green spillmap scale"
-msgstr "그린 스필맵 축적"
-
-
-msgid "Red spillmap scale"
-msgstr "레드 스필맵 축적"
-
-
 msgid "Unspill"
 msgstr "언스필"
-
-
-msgid "Compensate all channels (differently) by hand"
-msgstr "핸드로 모든 채널을 (다르게) 보완"
-
-
-msgid "Combine HSVA"
-msgstr "결합 HSVA"
-
-
-msgid "Combine RGBA"
-msgstr "결합 RGBA"
-
-
-msgid "Combine YCbCrA"
-msgstr "결합 YCbCrA"
 
 
 msgid "ITU 601"
@@ -31220,10 +30792,6 @@ msgstr "ITU 601"
 
 msgid "ITU 709"
 msgstr "ITU 709"
-
-
-msgid "Combine YUVA"
-msgstr "결합 YUVA"
 
 
 msgid "Combine XYZ"
@@ -31244,6 +30812,14 @@ msgstr "다음으로"
 
 msgid "Corner Pin"
 msgstr "코너 핀"
+
+
+msgid "Interpolation method"
+msgstr "보간 방법"
+
+
+msgid "Anisotropic"
+msgstr "비등방성"
 
 
 msgid "X2"
@@ -31442,6 +31018,10 @@ msgid "Denoise"
 msgstr "디노이즈"
 
 
+msgid "High quality"
+msgstr "높은 품질"
+
+
 msgid "HDR"
 msgstr "HDR"
 
@@ -31454,40 +31034,16 @@ msgid "Despeckle"
 msgstr "얼룩 제거"
 
 
-msgid "Threshold for detecting pixels to despeckle"
-msgstr "얼룩을 제거하기 위해 픽셀을 검출하는 임계 값"
-
-
 msgid "Neighbor"
 msgstr "인접"
-
-
-msgid "Threshold for the number of neighbor pixels that must match"
-msgstr "일치하는 이웃 픽셀의 개수에 대한 임계 값"
 
 
 msgid "Difference Key"
 msgstr "차이 키"
 
 
-msgid "Color distances below this additional threshold are partially keyed"
-msgstr "이 추가적인 임계 값 아래에 컬러 거리는 부분적으로 키됨"
-
-
-msgid "Color distances below this threshold are keyed"
-msgstr "이 임계 값 아래에 컬러 거리는 키됨"
-
-
 msgid "Dilate/Erode"
 msgstr "팽창/침식"
-
-
-msgid "Distance to grow/shrink (number of iterations)"
-msgstr "성장/축소하는 거리 (반복의 수)"
-
-
-msgid "Edge to inset"
-msgstr "인셋하는 에지"
 
 
 msgid "Growing/shrinking mode"
@@ -31500,6 +31056,10 @@ msgstr "패더"
 
 msgid "Distance Key"
 msgstr "거리 키"
+
+
+msgid "RGB color space"
+msgstr "RGB 컬러 공간"
 
 
 msgid "Double Edge Mask"
@@ -31606,28 +31166,12 @@ msgid "Flip X & Y"
 msgstr "뒤집기 X & Y"
 
 
-msgid "Glare"
-msgstr "글레어"
-
-
 msgid "Angle Offset"
 msgstr "각도 오프셋"
 
 
-msgid "Streak angle offset"
-msgstr "연속 각도 오프셋"
-
-
 msgid "Color Modulation"
 msgstr "컬러 변조"
-
-
-msgid "Amount of Color Modulation, modulates colors of streaks and ghosts for a spectral dispersion effect"
-msgstr "컬러 변조의 양, 스펙트럼 분산 이펙트에 대한 줄무늬 및 고스트의 컬러를 조절"
-
-
-msgid "Streak fade-out factor"
-msgstr "연속 페이드 아웃 팩터"
 
 
 msgid "Glare Type"
@@ -31654,32 +31198,8 @@ msgid "Simple Star"
 msgstr "심플 스타"
 
 
-msgid "-1 is original image only, 0 is exact 50/50 mix, 1 is processed image only"
-msgstr "-1은 원본 이미지 만, 0은 정확히 50/50 조합, 1은 처리된 이미지 만"
-
-
 msgid "If not set to high quality, the effect will be applied to a low-res copy of the source image"
 msgstr "고화질로 설정하지 않으면 효과가 원본 이미지의 저해상도 사본에 적용됩니다"
-
-
-msgid "Glow/glare size (not actual size; relative to initial size of bright area of pixels)"
-msgstr "글로우/글레어 크기 (실제 크기 없음; 픽셀 중 밝은 영역의 초기 크기를 기준)"
-
-
-msgid "Total number of streaks"
-msgstr "줄무늬의 전체 수"
-
-
-msgid "The glare filter will only be applied to pixels brighter than this value"
-msgstr "글레어 필터는 이 값보다 더 밝은 픽셀에 적용됨"
-
-
-msgid "Rotate 45"
-msgstr "45도를 회전"
-
-
-msgid "Simple star filter: add 45 degree rotation offset"
-msgstr "심플 스타 필터: 45도 회전 오프셋을 추가"
 
 
 msgid "Hue Correct"
@@ -31690,14 +31210,6 @@ msgid "ID Mask"
 msgstr "ID 마스크"
 
 
-msgid "Pass index number to convert to alpha"
-msgstr "알파로 변환할 인덱스 번호를 패스"
-
-
-msgid "Apply an anti-aliasing filter to the mask"
-msgstr "마스크에 안티앨리어싱 필터를 적용"
-
-
 msgid "Straight Alpha Output"
 msgstr "직선 알파 출력"
 
@@ -31706,80 +31218,40 @@ msgid "Inpaint"
 msgstr "인페인트"
 
 
-msgid "Distance to inpaint (number of iterations)"
-msgstr "인페인트에 거리 (반복의 수)"
-
-
 msgid "Post Blur"
 msgstr "포스트 블러"
-
-
-msgid "Matte blur size which applies after clipping and dilate/eroding"
-msgstr "클리핑 및 확장/침식 후에 적용되는 매트 흐림 크기"
 
 
 msgid "Pre Blur"
 msgstr "프리 블러"
 
 
-msgid "Chroma pre-blur size which applies before running keyer"
-msgstr "키어를 실행하기 전에 적용되는 크로마 사전 블러 크기"
-
-
 msgid "Clip Black"
 msgstr "클립 블랙"
-
-
-msgid "Value of non-scaled matte pixel which considers as fully background pixel"
-msgstr "완전히 배경 픽셀로 고려하는 비 조정 매트 픽셀의 값"
 
 
 msgid "Clip White"
 msgstr "클립 화이트"
 
 
-msgid "Value of non-scaled matte pixel which considers as fully foreground pixel"
-msgstr "완전히 전경 픽셀로 고려하는 비 조정 매트 픽셀의 값"
-
-
 msgid "Despill Balance"
 msgstr "디스필 밸런스"
-
-
-msgid "Balance between non-key colors used to detect amount of key color to be removed"
-msgstr "제거할 키 컬러의 양을 감지하는 데 사용되는 키가 아닌 컬러 간의 균형"
 
 
 msgid "Despill Factor"
 msgstr "디스필 팩터"
 
 
-msgid "Factor of despilling screen color from image"
-msgstr "이미지에서 디스필링 화면 컬러의 팩터"
-
-
 msgid "Edge Kernel Radius"
 msgstr "에지 커널 반경"
-
-
-msgid "Radius of kernel used to detect whether pixel belongs to edge"
-msgstr "픽셀이 에지에 속하는지 여부를 감지하는 데 사용되는 커널 반경"
 
 
 msgid "Edge Kernel Tolerance"
 msgstr "에지 커널 허용 오차"
 
 
-msgid "Tolerance to pixels inside kernel which are treating as belonging to the same plane"
-msgstr "같은 평면에 속하는 것으로 간주하는 커널 내부의 픽셀에 대한 허용 오차"
-
-
 msgid "Feather Distance"
 msgstr "페더 거리"
-
-
-msgid "Distance to grow/shrink the feather"
-msgstr "패더를 축소/성장하는 거리"
 
 
 msgctxt "Curve"
@@ -31789,10 +31261,6 @@ msgstr "페더 감소"
 
 msgid "Screen Balance"
 msgstr "화면 밸런스"
-
-
-msgid "Balance between two non-primary channels primary channel is comparing against"
-msgstr "기본 채널이과 비 기본 채널 둘 사이의 균형이 비교 대상"
 
 
 msgid "Keying Screen"
@@ -31805,10 +31273,6 @@ msgstr "트래킹 오브젝트"
 
 msgid "Eccentricity"
 msgstr "이심율"
-
-
-msgid "Anisotropic"
-msgstr "비등방성"
 
 
 msgid "Lens Distortion"
@@ -31863,6 +31327,14 @@ msgid "Luminance Key"
 msgstr "휘도 키"
 
 
+msgid "Values higher than this setting are 100% opaque"
+msgstr "이 설정보다 높은 값은 100% 불투명합니다"
+
+
+msgid "Values lower than this setting are 100% keyed"
+msgstr "이 설정보다 낮은 값은 100% 키됩니다"
+
+
 msgid "Map Range"
 msgstr "맵 범위"
 
@@ -31883,16 +31355,8 @@ msgid "Use Minimum"
 msgstr "최소치를 사용"
 
 
-msgid "Number of motion blur samples"
-msgstr "모션 블러 샘플의 수"
-
-
 msgid "Shutter"
 msgstr "셔터"
-
-
-msgid "Exposure for motion blur as a factor of FPS"
-msgstr "FPS의 요소로 모션 블러에 대한 노출"
 
 
 msgid "Size Source"
@@ -31919,16 +31383,8 @@ msgid "Pixel size scaled by scene percentage"
 msgstr "씬 비율에 따라 축적 조정된 픽셀 크기"
 
 
-msgid "Use feather information from the mask"
-msgstr "마스크에서 페더 정보를 사용"
-
-
 msgid "Motion Blur"
 msgstr "모션 블러"
-
-
-msgid "Use multi-sampled motion blur of the mask"
-msgstr "마스크의 멀티 샘플리드 모션 블러를 사용"
 
 
 msgid "A + B"
@@ -32175,22 +31631,6 @@ msgid "Coordinate space to scale relative to"
 msgstr "다음으로 상대적인 축적에 좌표 공간"
 
 
-msgid "Separate HSVA"
-msgstr "분리 HSVA"
-
-
-msgid "Separate RGBA"
-msgstr "분리 RGBA"
-
-
-msgid "Separate YCbCrA"
-msgstr "분리 YCbCrA"
-
-
-msgid "Separate YUVA"
-msgstr "분리 YUVA"
-
-
 msgid "Separate XYZ"
 msgstr "분리 XYZ"
 
@@ -32205,10 +31645,6 @@ msgstr "안정화 2D"
 
 msgid "Method to use to filter stabilization"
 msgstr "필터 안정화에 사용하는 메서드"
-
-
-msgid "Invert stabilization to re-introduce motion to the frame"
-msgstr "프레임에 모션을 다시 끼워 넣는 안정화를 반전"
 
 
 msgid "Sun Beams"
@@ -32227,10 +31663,6 @@ msgid "Switch"
 msgstr "전환"
 
 
-msgid "Off: first socket, On: second socket"
-msgstr "Off: 첫 번째 소켓, On: 두 번째 소켓"
-
-
 msgid "Node Output"
 msgstr "노드 출력"
 
@@ -32245,34 +31677,6 @@ msgstr "톤맵"
 
 msgid "Adaptation"
 msgstr "적응"
-
-
-msgid "If 0, global; if 1, based on pixel intensity"
-msgstr "0의 경우, 글로벌;1의 경우 ,픽셀 강도에 따라"
-
-
-msgid "Set to 0 to use estimate from input image"
-msgstr "입력 이미지에서 예상 사용에 0으로 설정"
-
-
-msgid "If 0, same for all channels; if 1, each independent"
-msgstr "0이면 모든 채널에서 동일; 1 인 경우 각각 독립"
-
-
-msgid "If not used, set to 1"
-msgstr "사용하지 않을 경우, 1로 설정"
-
-
-msgid "If less than zero, darkens image; otherwise, makes it brighter"
-msgstr "제로보다 작은 경우, 어두운 이미지; 그렇지 않으면, 밝게 만들기"
-
-
-msgid "The value the average luminance is mapped to"
-msgstr "평균 휘도가 다음으로 매핑되는 값"
-
-
-msgid "Normally always 1, but can be used as an extra control to alter the brightness curve"
-msgstr "일반적으로 항상 1 이지만 밝기 커브를 변경하는 추가 컨트롤로 사용할 수 있습니다"
 
 
 msgid "Tonemap Type"
@@ -32339,40 +31743,16 @@ msgid "Use relative (fraction of input image size) values to define translation"
 msgstr "상대적인 (입력 이미지 크기의 소수) 값을 사용하여 옮기기을 정의"
 
 
-msgid "Wrapping"
-msgstr "감싸기"
-
-
-msgid "Wrap image on a specific axis"
-msgstr "지정된 축에 이미지를 감싸기"
-
-
-msgid "No wrapping on X and Y"
-msgstr "X 및 Y에 감싸기가 없음"
-
-
 msgid "X Axis"
 msgstr "X 축"
-
-
-msgid "Wrap all pixels on the X axis"
-msgstr "X 축에 있는 모든 픽셀을 감싸기"
 
 
 msgid "Y Axis"
 msgstr "Y 축"
 
 
-msgid "Wrap all pixels on the Y axis"
-msgstr "Y 축에 있는 모든 픽셀을 감싸기"
-
-
 msgid "Both Axes"
 msgstr "양쪽 축"
-
-
-msgid "Wrap all pixels on both axes"
-msgstr "두 축 에있는 모든 픽셀을 감싸기"
 
 
 msgid "Vector Blur"
@@ -32383,24 +31763,12 @@ msgid "Blur Factor"
 msgstr "블러 팩터"
 
 
-msgid "Scaling factor for motion vectors (actually, 'shutter speed', in frames)"
-msgstr "모션 벡터에 대한 축적 조정 팩터 (프레임에서 실제, '셔터 속력')"
-
-
 msgid "Max Speed"
 msgstr "최대 속력"
 
 
-msgid "Maximum speed, or zero for none"
-msgstr "최대의 속력, 또는 없음 제로"
-
-
 msgid "Min Speed"
 msgstr "최소 속력"
-
-
-msgid "Minimum speed for a pixel to be blurred (used to separate background from foreground)"
-msgstr "픽셀을 블러하는 최소 속력 (배경을 전경에서 분리하는 데 사용)"
 
 
 msgid "Viewer"
@@ -32415,20 +31783,12 @@ msgid "Anti-Alias Z"
 msgstr "안티앨리어스 Z"
 
 
-msgid "Anti-alias the z-buffer to try to avoid artifacts, mostly useful for Blender renders"
-msgstr "Z 버퍼를 안티 앨리어싱하여 부자연스러운 결과를 피하려고 시도, 블렌더 렌더에 주로 유용합니다"
-
-
 msgid "Equal"
 msgstr "동일한"
 
 
 msgid "Compare"
 msgstr "비교"
-
-
-msgid "Menu"
-msgstr "메뉴"
 
 
 msgid "Dot Product"
@@ -32509,6 +31869,14 @@ msgstr "오브젝트 정보"
 
 msgid "Z Up"
 msgstr "Z 위쪽"
+
+
+msgid "Tangent Space"
+msgstr "탄젠트 공간"
+
+
+msgid "Unknown"
+msgstr "알 수 없는"
 
 
 msgid "Selection"
@@ -32712,14 +32080,6 @@ msgid "Min Max"
 msgstr "최소 최대"
 
 
-msgid "Combine HSV"
-msgstr "결합 HSV"
-
-
-msgid "Combine RGB"
-msgstr "결합 RGB"
-
-
 msgid "Shader Custom Group"
 msgstr "셰이더 커스텀 그룹"
 
@@ -32796,20 +32156,12 @@ msgid "Transform a texture by inverse mapping the texture coordinate"
 msgstr "텍스처 좌표를 반전 매핑으로 텍스처를 변환"
 
 
-msgid "MixRGB"
-msgstr "RGB 조합"
-
-
 msgid "Mix Shader"
 msgstr "조합 셰이더"
 
 
 msgid "Space of the input normal"
 msgstr "입력 노멀의 공간"
-
-
-msgid "Tangent Space"
-msgstr "탄젠트 공간"
 
 
 msgid "Tangent space normal mapping"
@@ -32916,10 +32268,6 @@ msgid "Script Source"
 msgstr "스크립트 소스"
 
 
-msgid "Use internal text data-block"
-msgstr "내부 텍스트 데이터 블록을 사용"
-
-
 msgid "Use external .osl or .oso file"
 msgstr "외부 .osl 또는 .oso 파일을 사용"
 
@@ -32936,20 +32284,8 @@ msgid "Automatically update the shader when the .osl file changes (external scri
 msgstr ".osl 파일이 변경되면 자동으로 셰이더를 업데이트합니다 (외부 스크립트 만 해당)"
 
 
-msgid "Separate HSV"
-msgstr "분리 HSV"
-
-
-msgid "Separate RGB"
-msgstr "분리 RGB"
-
-
 msgid "Shader to RGB"
 msgstr "셰이더를 RGB로 변환"
-
-
-msgid "Squeeze Value"
-msgstr "압착 값"
 
 
 msgid "Subsurface Scattering"
@@ -33192,10 +32528,6 @@ msgid "Vertex color layer"
 msgstr "버텍스 컬러 레이어"
 
 
-msgid "Vertex Weight"
-msgstr "버텍스 웨이트"
-
-
 msgid "Vertex group weight"
 msgstr "버텍스 그룹 웨이트"
 
@@ -33324,8 +32656,16 @@ msgid "Wave Type"
 msgstr "웨이브 유형"
 
 
+msgid "Bands"
+msgstr "밴드"
+
+
 msgid "Use standard wave texture in bands"
 msgstr "대역에서 표준 웨이브 텍스처를 사용"
+
+
+msgid "Rings"
+msgstr "링"
 
 
 msgid "Use wave texture in rings"
@@ -33472,24 +32812,16 @@ msgid "Checker"
 msgstr "체커"
 
 
-msgid "Curve Time"
-msgstr "커브 시간"
+msgid "Separate RGBA"
+msgstr "분리 RGBA"
 
 
 msgid "Parameters defining the image duration, offset and related settings"
 msgstr "이미지 기간을 정의하는 매개 변수, 오프셋 및 관련 설정"
 
 
-msgid "Mix RGB"
-msgstr "RGB를 조합"
-
-
 msgid "Value to Normal"
 msgstr "값을 노멀로 변환"
-
-
-msgid "Socket Type"
-msgstr "소켓 유형"
 
 
 msgid "Node Inputs"
@@ -34439,6 +33771,16 @@ msgid "Add Hair Dynamics Preset"
 msgstr "헤어 역학 프리셋을 추가"
 
 
+msgctxt "Operator"
+msgid "Disable Add-on"
+msgstr "애드온을 사용 중지"
+
+
+msgctxt "Operator"
+msgid "Enable Add-on"
+msgstr "애드온을 사용"
+
+
 msgid "Display information and preferences for this add-on"
 msgstr "이 애드온에 대한 환경 설정및 정보를 표시"
 
@@ -34682,10 +34024,6 @@ msgstr "그리이스 펜슬 브러시 프리셋을 추가 또는 제거"
 msgctxt "Operator"
 msgid "Add Grease Pencil Brush Preset"
 msgstr "그리스 펜슬 브러시 프리셋을 추가"
-
-
-msgid "Add or remove grease pencil material preset"
-msgstr "그리이스 펜슬 매테리얼 프리셋을 추가 또는 제거"
 
 
 msgctxt "Operator"
@@ -35044,16 +34382,6 @@ msgid "Operator Preset"
 msgstr "작업자 프리셋"
 
 
-msgctxt "Operator"
-msgid "Disable Add-on"
-msgstr "애드온을 사용 중지"
-
-
-msgctxt "Operator"
-msgid "Enable Add-on"
-msgstr "애드온을 사용"
-
-
 msgid "Open a path in a file browser"
 msgstr "파일 브라우저에서 경로를 열기"
 
@@ -35386,6 +34714,26 @@ msgstr "키 프레임 유형 설정"
 
 msgid "Set type of keyframe for the selected keyframes"
 msgstr "선택된 키 프레임에 키 프레임의 유형 설정"
+
+
+msgid "Breakdown"
+msgstr "브렉다운"
+
+
+msgid "Moving Hold"
+msgstr "이동 보류"
+
+
+msgid "Extreme"
+msgstr "익스트림"
+
+
+msgid "Jitter"
+msgstr "지터"
+
+
+msgid "Generated"
+msgstr "생성됨"
 
 
 msgctxt "Operator"
@@ -37869,15 +37217,6 @@ msgid "Export"
 msgstr "내보내기"
 
 
-msgctxt "Operator"
-msgid "Add Selected to Active Collection"
-msgstr "활성 컬렉션에 선택된 항목을 추가"
-
-
-msgid "Add the object to an object collection that contains the active object"
-msgstr "활성 오브젝트를 포함하는 오브젝트 컬렉션에 오브젝트를 추가"
-
-
 msgid "The collection to add other selected objects to"
 msgstr "다른 선택된 오브젝트를 다음으로 추가하는 콜렉션"
 
@@ -38287,9 +37626,18 @@ msgid "(De)select all control points"
 msgstr "모든 컨트롤 포인트를 선택(취소)"
 
 
+msgid "Deselect linked control points rather than selecting them"
+msgstr "연결된 컨트롤 포인트를 선택하는 대신 선택 해제"
+
+
 msgctxt "Operator"
 msgid "Select Random"
 msgstr "랜덤 선택"
+
+
+msgctxt "Operator"
+msgid "Separate"
+msgstr "분리"
 
 
 msgctxt "Operator"
@@ -38394,6 +37742,10 @@ msgstr "커브를 복제"
 
 msgid "Init"
 msgstr "Init"
+
+
+msgid "Dummy"
+msgstr "모형"
 
 
 msgid "Resize"
@@ -38550,10 +37902,6 @@ msgid "Select all control points linked to already selected ones"
 msgstr "이미 선택된 컨트롤 포인트에 연결된 모든 컨트롤 포인트을 선택합니다"
 
 
-msgid "Deselect linked control points rather than selecting them"
-msgstr "연결된 컨트롤 포인트를 선택하는 대신 선택 해제"
-
-
 msgctxt "Operator"
 msgid "Select Next"
 msgstr "다음을 선택"
@@ -38610,10 +37958,6 @@ msgid "Select Control Point Row"
 msgstr "컨트롤 포인트 행을 선택"
 
 
-msgid "Select a row of control points including active one"
-msgstr "활성 하나를 포함하여 컨트롤 포인트의 행을 선택"
-
-
 msgid "Select similar curve points by property type"
 msgstr "속성 유형으로 비슷한 커브 포인트를 선택"
 
@@ -38624,11 +37968,6 @@ msgstr "더 큰"
 
 msgid "Less"
 msgstr "더 적게"
-
-
-msgctxt "Operator"
-msgid "Separate"
-msgstr "분리"
 
 
 msgid "Separate selected points from connected unselected points into a new object"
@@ -38655,11 +37994,6 @@ msgstr "스무스로 셰이딩을 설정"
 
 msgid "Select shortest path between two selections"
 msgstr "두 선택 사이의 최단 경로를 선택"
-
-
-msgctxt "Operator"
-msgid "Smooth"
-msgstr "스무스"
 
 
 msgid "Flatten angles of selected points"
@@ -39387,44 +38721,20 @@ msgid "Legal rights and conditions for the model"
 msgstr "모델에 대한 법적 권리와 조건"
 
 
-msgid "Generic quantization bits"
-msgstr "일반 양자화 비트"
-
-
-msgid "Draco mesh compression"
-msgstr "드레코 메쉬 압축"
-
-
 msgid "Compress mesh using Draco"
 msgstr "드레코를 사용하여 메쉬를 압축"
-
-
-msgid "Compression level"
-msgstr "압축 레벨"
 
 
 msgid "Compression level (0 = most speed, 6 = most compression, higher values currently not supported)"
 msgstr "압축 레벨 (0 = 가장 빠른 속도, 6 = 대부분의 압축, 현재 지원되지 않는 높은 값)"
 
 
-msgid "Normal quantization bits"
-msgstr "노멀 양자화 비트"
-
-
 msgid "Quantization bits for normal values (0 = no quantization)"
 msgstr "노멀 값의 양자화 비트 (0 = 양자화 없음)"
 
 
-msgid "Position quantization bits"
-msgstr "위치 양자화 비트"
-
-
 msgid "Quantization bits for position values (0 = no quantization)"
 msgstr "위치 값의 양자화 비트 (0 = 양자화 없음)"
-
-
-msgid "Texcoord quantization bits"
-msgstr "텍스코디 양자화 비트"
 
 
 msgid "Quantization bits for texture coordinate values (0 = no quantization)"
@@ -39455,12 +38765,20 @@ msgid "JPEG Format (.jpg)"
 msgstr "JPEG 포멧 (.jpg)"
 
 
+msgid "Keep Original"
+msgstr "원본을 유지"
+
+
 msgid "Punctual Lights"
 msgstr "지키는 라이트"
 
 
 msgid "Export directional, point, and spot lights. Uses \"KHR_lights_punctual\" glTF extension"
 msgstr "방향, 포인트 및 스폿 라이트를 내 보냅니다. \"KHR_lights_punctual\" glTF 확장자 사용"
+
+
+msgid "Log Level"
+msgstr "로그 레벨"
 
 
 msgid "Export shape keys (morph targets)"
@@ -39613,15 +38931,6 @@ msgstr "목록의 맨 위로"
 
 msgid "Bottom of the list"
 msgstr "목록의 맨 아래로"
-
-
-msgctxt "Operator"
-msgid "Cancel File Load"
-msgstr "파일 불러오기를 취소"
-
-
-msgid "Cancel loading of selected file"
-msgstr "선택된 파일의 불러오기를 취소"
 
 
 msgctxt "Operator"
@@ -40274,24 +39583,6 @@ msgstr "활성 기즈모를 트윅"
 
 
 msgctxt "Operator"
-msgid "Delete Active Frame"
-msgstr "활성 프레임을 삭제"
-
-
-msgid "Delete the active frame for the active Grease Pencil Layer"
-msgstr "활성화된 그리스 팬슬 레이어의 활성 프레임을 삭제"
-
-
-msgctxt "Operator"
-msgid "Delete All Active Frames"
-msgstr "모든 활성 프레임을 삭제"
-
-
-msgid "Delete the active frame(s) of all editable Grease Pencil layers"
-msgstr "모든 편집 그리스 펜슬 레이어의 활성 프레임(들)을 삭제"
-
-
-msgctxt "Operator"
 msgid "Annotation Draw"
 msgstr "주석 그리기"
 
@@ -40344,179 +39635,9 @@ msgid "Wait for first click instead of painting immediately"
 msgstr "즉시 페인트 하는 대신 첫 번째 클릭을 대기"
 
 
-msgid "Projection Type"
-msgstr "투영 유형"
-
-
-msgid "Reproject the strokes using the X-Z plane"
-msgstr "X-Z 평면을 사용하여 획을 재투사"
-
-
-msgid "Side"
-msgstr "사이드"
-
-
-msgid "Reproject the strokes using the Y-Z plane"
-msgstr "Y-Z 평면을 사용하여 획을 재투사"
-
-
-msgid "Reproject the strokes using the X-Y plane"
-msgstr "X-Y 평면을 사용하여 획을 재투사"
-
-
-msgid "Reproject the strokes to end up on the same plane, as if drawn from the current viewpoint using 'Cursor' Stroke Placement"
-msgstr "'커서' 스트로크 배치를 사용하여 현재 관측점에서 그려진 것처럼 스트로크가 동일한 평면에서 끝나도록 다시 투사합니다"
-
-
-msgid "Reproject the strokes using the orientation of 3D cursor"
-msgstr "3D 커서의 방향을 사용하여 스트로크를 재투사"
-
-
 msgctxt "Operator"
-msgid "Insert Blank Frame"
-msgstr "빈 프레임을 삽입"
-
-
-msgid "Insert a blank frame on the current frame (all subsequently existing frames, if any, are shifted right by one frame)"
-msgstr "현재 프레임에 빈 프레임을 삽입 (만약 기존 프레임이 있다면 삽입한 프레임 이후의 모든 프레임을 한 프레임 만큼 오른쪽으로 이동합니다)"
-
-
-msgid "Create blank frame in all layers, not only active"
-msgstr "활성 상태가 아닌 모든 레이어에 빈 프레임을 만듭니다"
-
-
-msgctxt "Operator"
-msgid "Convert Grease Pencil"
-msgstr "그리스 펜슬을 변환"
-
-
-msgid "Convert the active Grease Pencil layer to a new Curve Object"
-msgstr "새로운 커브 오브젝트로 활성 그리스 펜슬 레이어를 변환"
-
-
-msgid "The end frame of the path control curve (if Realtime is not set)"
-msgstr "경로 제어 커브의 종료 프레임 (실시간이 설정되지 않은 경우)"
-
-
-msgid "The duration of evaluation of the path control curve"
-msgstr "경로 제어 커브의 평가 지속"
-
-
-msgid "Gap Duration"
-msgstr "격차 지속"
-
-
-msgid "Custom Gap mode: (Average) length of gaps, in frames (Note: Realtime value, will be scaled if Realtime is not set)"
-msgstr "커스텀 간격 모드: (평균) 간격, 프레임단위 (참고: 실시간 값은 실시간이 설정되지 않은 경우 조정)"
-
-
-msgid "Gap Randomness"
-msgstr "격차 랜덤성"
-
-
-msgid "Custom Gap mode: Number of frames that gap lengths can vary"
-msgstr "커스텀 간격 모드: 간격 길이가 다를 수 있는 프레임의 수"
-
-
-msgid "Multiplier for the points' radii (set from stroke width)"
-msgstr "포인트의 반경에 대한 배율 (스트로크 폭에서 설정)"
-
-
-msgid "Custom Gap mode: Random generator seed"
-msgstr "커스텀 격차 모드: 렌덤 발생기 씨드"
-
-
-msgid "The start frame of the path control curve"
-msgstr "경로 제어 커브의 시작 프레임"
-
-
-msgid "Timing Mode"
-msgstr "타이밍 모드"
-
-
-msgid "How to use timing data stored in strokes"
-msgstr "스트로크에 저장된 타이밍 데이터를 사용하는 방법"
-
-
-msgid "No Timing"
-msgstr "타이밍 없음"
-
-
-msgid "Ignore timing"
-msgstr "타이밍을 무시"
-
-
-msgid "Simple linear timing"
-msgstr "심플 선형 타이밍"
-
-
-msgid "Use the original timing, gaps included"
-msgstr "원본 타이밍을 사용, 간격 포함됨"
-
-
-msgid "Custom Gaps"
-msgstr "커스텀 간격"
-
-
-msgid "Use the original timing, but with custom gap lengths (in frames)"
-msgstr "원래의 타이밍을 사용하지만 커스텀 간격 길이 (프레임 단위)"
-
-
-msgid "Which type of curve to convert to"
-msgstr "다음으로 변환하는 커브의 유형"
-
-
-msgid "Animation path"
-msgstr "애니메이션 경로"
-
-
-msgid "Polygon Curve"
-msgstr "폴리곤 커브"
-
-
-msgid "Link Strokes"
-msgstr "스트로크를 연결"
-
-
-msgid "Whether to link strokes with zero-radius sections of curves"
-msgstr "커브의 반지름이 0인 부분과 스트로크를 연결할지 여부"
-
-
-msgid "Normalize Weight"
-msgstr "웨이트를 노멀라이즈"
-
-
-msgid "Normalize weight (set from stroke width)"
-msgstr "웨이트를 노멀라이즈 (스트로크 폭에서 설정)"
-
-
-msgid "Whether the path control curve reproduces the drawing in realtime, starting from Start Frame"
-msgstr "경로 제어 커브이 시작 프레임에서 시작하여 실시간으로 그리기를 재생하는지 여부"
-
-
-msgid "Has Valid Timing"
-msgstr "유효한 타이밍이 있음"
-
-
-msgid "Whether the converted Grease Pencil layer has valid timing data (internal use)"
-msgstr "변환된 그리스 펜슬 레이어에 유효한 타이밍 데이터가 있는지 여부 (내부 사용)"
-
-
-msgid "Convert 2.7x grease pencil files to 2.80"
-msgstr "2.7x 그리스 펜슬 파일을 2.80로 변환"
-
-
-msgid "Convert to Annotations"
-msgstr "주석으로 변환"
-
-
-msgctxt "Operator"
-msgid "Copy Strokes"
-msgstr "스트로크를 복사"
-
-
-msgid "Copy selected Grease Pencil points and strokes"
-msgstr "선택된 그리스 펜슬 포인트 및 스트로크를 복사"
+msgid "Delete Active Frame"
+msgstr "활성 프레임을 삭제"
 
 
 msgctxt "Operator"
@@ -40526,1102 +39647,6 @@ msgstr "주석 연결을 해제"
 
 msgid "Unlink active Annotation data-block"
 msgstr "활성 주석 데이터 블록의 연결을 해제"
-
-
-msgid "Delete selected Grease Pencil strokes, vertices, or frames"
-msgstr "선택한 그리스 펜슬 스트로크, 버텍스 또는 프레임을 삭제"
-
-
-msgid "Method used for deleting Grease Pencil data"
-msgstr "그리스 펜슬 데이터를 삭제에 대해 사용된 메서드"
-
-
-msgid "Delete selected points and split strokes into segments"
-msgstr "선택한 포인트 및 분할 스트로크를 부분으로 삭제합니다"
-
-
-msgid "Delete selected strokes"
-msgstr "선택된 스트로크를 삭제"
-
-
-msgid "Delete active frame"
-msgstr "활성 프레임을 삭제"
-
-
-msgctxt "Operator"
-msgid "Dissolve"
-msgstr "디졸브"
-
-
-msgid "Delete selected points without splitting strokes"
-msgstr "스트로크를 분할하지 않고 선택한 포인트를 삭제합니다"
-
-
-msgid "Dissolve selected points"
-msgstr "선택한 포인트를 디졸브"
-
-
-msgid "Dissolve points between selected points"
-msgstr "선택한 포인트 사이의 포인트를 디졸브합니다"
-
-
-msgid "Dissolve all unselected points"
-msgstr "선택되지 않은 모든 포인트들을 디졸브합니다"
-
-
-msgctxt "Operator"
-msgid "Grease Pencil Draw"
-msgstr "그리스 펜슬 그리기"
-
-
-msgid "No Fill Areas"
-msgstr "채우기 영역이 없음"
-
-
-msgid "Disable fill to use stroke as fill boundary"
-msgstr "채우기를 사용하지 않고 채우기 경계로 스트로크를 사용"
-
-
-msgid "No Straight lines"
-msgstr "직선이 없음"
-
-
-msgid "Disable key for straight lines"
-msgstr "직선에 키를 사용 안함"
-
-
-msgid "Speed guide angle"
-msgstr "속력 가이드 각도"
-
-
-msgid "Erase Grease Pencil strokes"
-msgstr "그리스 펜슬 스트로크를 지우기"
-
-
-msgctxt "Operator"
-msgid "Duplicate Strokes"
-msgstr "스트로크를 복제"
-
-
-msgid "Duplicate the selected Grease Pencil strokes"
-msgstr "선택된 그리스 펜슬 스트로크를 복제"
-
-
-msgid "Make copies of the selected Grease Pencil strokes and move them"
-msgstr "선택한 그리스 퍈슬 스트로크를 복사하여 이동"
-
-
-msgid "Duplicate Strokes"
-msgstr "스트로크를 복제"
-
-
-msgctxt "Operator"
-msgid "Strokes Edit Mode Toggle"
-msgstr "스트로크 에디트 모드 토글"
-
-
-msgid "Enter/Exit edit mode for Grease Pencil strokes"
-msgstr "그리스 펜슬 스트로크에 대한 에디트 모드를 들어가기/나가기"
-
-
-msgid "Return to Previous Mode"
-msgstr "이전 모드로 돌아 가기"
-
-
-msgid "Return to previous mode"
-msgstr "이전 모드로 돌아 가기"
-
-
-msgid "Only Selected"
-msgstr "선택된 항목 만"
-
-
-msgctxt "Operator"
-msgid "Extrude Stroke Points"
-msgstr "스트로크 포인트를 돌출"
-
-
-msgid "Extrude the selected Grease Pencil points"
-msgstr "선택한 그리스 펜슬 포인트를 돌출시킵니다"
-
-
-msgid "Extrude selected points and move them"
-msgstr "선택된 포인트를 돌출하고 그것들을 이동"
-
-
-msgid "Extrude Stroke Points"
-msgstr "스트로크 포인트를 돌출"
-
-
-msgctxt "Operator"
-msgid "Grease Pencil Fill"
-msgstr "그리스 팬슬 채우기"
-
-
-msgid "Fill with color the shape formed by strokes"
-msgstr "스트로크로 형성된 셰이프를 채우기"
-
-
-msgid "Draw on Back"
-msgstr "뒤쪽에 그리기"
-
-
-msgid "All Frames"
-msgstr "모든 프레임"
-
-
-msgctxt "Operator"
-msgid "Clean Fill Boundaries"
-msgstr "채우기 경계를 지우기"
-
-
-msgid "Remove 'no fill' boundary strokes"
-msgstr "'채우기 없음'경계선을 제거"
-
-
-msgid "Active Frame Only"
-msgstr "활성 프레임 만"
-
-
-msgid "Clean active frame only"
-msgstr "활성 프레임 만 지우기"
-
-
-msgid "Clean all frames in all layers"
-msgstr "모든 레이어의 모든 프레임을 지웁니다"
-
-
-msgctxt "Operator"
-msgid "Clean Loose Points"
-msgstr "루즈 포인트를 청소"
-
-
-msgid "Remove loose points"
-msgstr "루즈 포인트를 제거"
-
-
-msgid "Limit"
-msgstr "제한"
-
-
-msgid "Number of points to consider stroke as loose"
-msgstr "윤곽 스트로크를 루즈로 고려하는 포인트의 수"
-
-
-msgctxt "Operator"
-msgid "Duplicate Frame"
-msgstr "프레임을 복제"
-
-
-msgid "Make a copy of the active Grease Pencil Frame"
-msgstr "활성 그리스 펜슬 프레임의 사본을 만듭니다"
-
-
-msgid "Duplicate frame in active layer only"
-msgstr "활성 레이어에서만 프레임을 복제"
-
-
-msgid "Duplicate active frames in all layers"
-msgstr "모든 레이어에서 활성 프레임을 복제"
-
-
-msgctxt "Operator"
-msgid "Generate Automatic Weights"
-msgstr "자동 웨이트를 생성"
-
-
-msgid "Generate automatic weights for armatures (requires armature modifier)"
-msgstr "아마튜어에 대한 자동 웨이트를 생성 (아마튜어 모디파이어 필요)"
-
-
-msgid "Armature to use"
-msgstr "사용할 마아튜어"
-
-
-msgid "Decay"
-msgstr "부식"
-
-
-msgid "Factor to reduce influence depending of distance to bone axis"
-msgstr "본 축과의 거리에 따른 영향을 줄이는 펙터"
-
-
-msgid "Empty Groups"
-msgstr "엠프티 그룹"
-
-
-msgid "Automatic Weights"
-msgstr "자동 웨이트"
-
-
-msgid "Ratio between bone length and influence radius"
-msgstr "본 길이와 영향 반경 사이의 비율"
-
-
-msgctxt "Operator"
-msgid "Rotate Guide Angle"
-msgstr "회전 가이드 각도"
-
-
-msgid "Rotate guide angle"
-msgstr "회전 가이드 각도"
-
-
-msgid "Guide angle"
-msgstr "가이드 각도"
-
-
-msgid "Increment angle"
-msgstr "증가 각도"
-
-
-msgctxt "Operator"
-msgid "Hide Layer(s)"
-msgstr "레이어(들)을 숨기기"
-
-
-msgid "Hide selected/unselected Grease Pencil layers"
-msgstr "선택/선택되지 않은 그리스 펜슬 레이어를 숨기기"
-
-
-msgid "Hide unselected rather than selected layers"
-msgstr "선택된 레이어 대신 선택 선택되지 않은 레이어를 숨기기"
-
-
-msgctxt "Operator"
-msgid "Grease Pencil Interpolation"
-msgstr "그리스 펜슬 보간"
-
-
-msgid "Interpolate grease pencil strokes between frames"
-msgstr "프레임 사이 그리스 펜슬 스트로크를 보간"
-
-
-msgid "Confirm on Release"
-msgstr "릴리즈에 대한 확인"
-
-
-msgid "Bias factor for which frame has more influence on the interpolated strokes"
-msgstr "프레임이 보간된 스트로크에 더 많은 영향을 미치는 경향 계수"
-
-
-msgid "Remove breakdown frames generated by interpolating between two Grease Pencil frames"
-msgstr "두 개의 그리스 펜슬 프레임 사이를 보간하여 생성된 브렉다운 프레임을 제거"
-
-
-msgctxt "Operator"
-msgid "Interpolate Sequence"
-msgstr "보간 시퀀스"
-
-
-msgid "Generate 'in-betweens' to smoothly interpolate between Grease Pencil frames"
-msgstr "그리스 펜슬 프레임 사이를 부드럽게 보간하기 위해 '사이에서' 생성"
-
-
-msgid "Which ends of the segment between the preceding and following grease pencil frames easing interpolation is applied to"
-msgstr "앞뒤 그리이스 펜슬 프레임 완화 보간 사이 부분의 끝이 다음에 적용됩니다"
-
-
-msgid "Easing type is chosen automatically based on what the type of interpolation used (e.g. 'Ease In' for transitional types, and 'Ease Out' for dynamic effects)"
-msgstr "완화 유형은 사용된 보간 유형에 따라 자동으로 선택됩니다 (예: 과도기 유형의 경우 '완화', 동적 효과의 경우 '완화')"
-
-
-msgid "Interpolation method to use the next time 'Interpolate Sequence' is run"
-msgstr "보간 메서드를 사용하여 다음 번에 '보간 시퀀스'가 실행됩니다"
-
-
-msgid "Custom interpolation defined using a curve map"
-msgstr "커브 맵을 사용하여 정의된 커스텀 보간법"
-
-
-msgctxt "Operator"
-msgid "Add New Layer"
-msgstr "새로운 레이어를 추가"
-
-
-msgid "Add new layer or note for the active data-block"
-msgstr "활성 데이터 블록에 대해 새 레이어 또는 메모를 추가합니다"
-
-
-msgctxt "Operator"
-msgid "Change Layer"
-msgstr "레이어를 변경"
-
-
-msgid "Change active Grease Pencil layer"
-msgstr "활성 그리스 펜슬 레이어를 변경"
-
-
-msgctxt "Operator"
-msgid "Duplicate Layer"
-msgstr "레이어를 복제"
-
-
-msgid "Make a copy of the active Grease Pencil layer"
-msgstr "활성 그리스 펜슬 레이어의 복사를 만들기"
-
-
-msgctxt "Operator"
-msgid "Duplicate Layer to New Object"
-msgstr "레이어를 새 오브젝트로 복제"
-
-
-msgctxt "Operator"
-msgid "Isolate Layer"
-msgstr "레이어를 분리"
-
-
-msgid "Toggle whether the active layer is the only one that can be edited and/or visible"
-msgstr "활성 레이어가 편집 및/또는 표시 가능한 유일한 레이어인지 여부를 토글"
-
-
-msgid "Affect Visibility"
-msgstr "가시성에 주는 영향"
-
-
-msgid "In addition to toggling the editability, also affect the visibility"
-msgstr "편집 가능성을 전환하는 것 외에도 가시성에 영향을 줍니다"
-
-
-msgctxt "Operator"
-msgid "Remove Mask Layer"
-msgstr "마스크 레이어를 제거"
-
-
-msgctxt "Operator"
-msgid "Merge Down"
-msgstr "아래로 병합"
-
-
-msgctxt "Operator"
-msgid "Move Grease Pencil Layer"
-msgstr "그리스 펜슬 레이어를 이동"
-
-
-msgid "Move the active Grease Pencil layer up/down in the list"
-msgstr "목록에서 활성 그리스 펜슬 레이어를 위/아래로 움직입니다"
-
-
-msgctxt "Operator"
-msgid "Remove Layer"
-msgstr "레이어를 제거"
-
-
-msgid "Remove active Grease Pencil layer"
-msgstr "그리스 펜슬 레이어를 제거"
-
-
-msgctxt "Operator"
-msgid "Lock All Layers"
-msgstr "모든 레이어를 잠금"
-
-
-msgid "Lock all Grease Pencil layers to prevent them from being accidentally modified"
-msgstr "그리스 팬슬 레이어를 실수로 수정하지 않도록 모두 잠금"
-
-
-msgctxt "Operator"
-msgid "Disable Unused Layer Colors"
-msgstr "사용하지 않는 레이어 컬러를 사용하지 않도록 설정"
-
-
-msgid "Lock and hide any color not used in any layer"
-msgstr "모든 계층에서 사용되지 않는 컬러를 숨기 및 잠금"
-
-
-msgid "Hide unselected rather than selected colors"
-msgstr "선택된 컬러 대신 선택되지 않은 컬러를 숨기기"
-
-
-msgid "Unselect strokes"
-msgstr "스트로크 선택을 취소"
-
-
-msgctxt "Operator"
-msgid "Move Strokes to Layer"
-msgstr "스트로크를 레이어로 이동"
-
-
-msgid "Move selected strokes to another layer"
-msgstr "선택한 스트로크를 다른 레이어로 이동"
-
-
-msgctxt "Operator"
-msgid "Strokes Paint Mode Toggle"
-msgstr "스트로크 페인트 모드 토글"
-
-
-msgid "Enter/Exit paint mode for Grease Pencil strokes"
-msgstr "그리스 펜슬 스트로크의 페인트 모드를 들어가기/나가기"
-
-
-msgctxt "Operator"
-msgid "Paste Strokes"
-msgstr "스트로크를 붙여 넣기"
-
-
-msgid "Paste previously copied strokes to active layer or to original layer"
-msgstr "이전에 복사한 라인을 활성 레이어 또는 원래 레이어에 붙여 넣기"
-
-
-msgid "Paste to Active"
-msgstr "활성으로 붙여 넣기"
-
-
-msgid "Paste by Layer"
-msgstr "레이어로 붙여 넣기"
-
-
-msgid "Type of shape"
-msgstr "셰이프의 유형"
-
-
-msgid "Polyline"
-msgstr "폴리라인"
-
-
-msgctxt "Operator"
-msgid "Reproject Strokes"
-msgstr "재투사 스트로크"
-
-
-msgid "Reproject the selected strokes from the current viewpoint as if they had been newly drawn (e.g. to fix problems from accidental 3D cursor movement or accidental viewport changes, or for matching deforming geometry)"
-msgstr "새로 그려진 것처럼 현재 뷰포트에서 선택한 스트로크를 다시 투사합니다 (예 : 실수로 3D 커서 이동 또는 우발적 인 뷰포트 변경으로 인한 문제 해결 또는 변형 형상 일치를 위해)"
-
-
-msgid "Reproject the strokes on to the scene geometry, as if drawn using 'Surface' placement"
-msgstr "'표면' 배치를 사용하여 그려진 것처럼 씬 지오메트리에 획을 다시 투사합니다"
-
-
-msgctxt "Operator"
-msgid "All"
-msgstr "모두"
-
-
-msgctxt "Operator"
-msgid "Rotate"
-msgstr "회전"
-
-
-msgctxt "Operator"
-msgid "Scale"
-msgstr "축적"
-
-
-msgctxt "Operator"
-msgid "Show All Layers"
-msgstr "모든 레이어를 표시"
-
-
-msgid "Show all Grease Pencil layers"
-msgstr "모든 그리스 펜슬 레이어를 표시"
-
-
-msgctxt "Operator"
-msgid "Stroke Sculpt"
-msgstr "스트로크 스컬프트"
-
-
-msgid "Apply tweaks to strokes by painting over the strokes"
-msgstr "스트로크를 페인팅하여 스트로크에 트퀵을 적용"
-
-
-msgid "Enter a mini 'sculpt-mode' if enabled, otherwise, exit after drawing a single stroke"
-msgstr "사용 가능한 경우 미니 '스컬프트 모드'를 입력하고, 그렇지 않으면 단일 스트로크를 그릴 때 종료"
-
-
-msgctxt "Operator"
-msgid "Strokes Sculpt Mode Toggle"
-msgstr "스트로크 스컬프트 모드 토글"
-
-
-msgid "Enter/Exit sculpt mode for Grease Pencil strokes"
-msgstr "그리스 펜슬 스트로크의 스컬프트 모드를 들어가기/나가기"
-
-
-msgid "Select Grease Pencil strokes and/or stroke points"
-msgstr "그리스 펜슬 스트로크 및/또는 스트로크 포인트를 선택"
-
-
-msgid "Entire Strokes"
-msgstr "전체의 스트로크"
-
-
-msgid "Select entire strokes instead of just the nearest stroke vertex"
-msgstr "가장 가까운 스트로크 버텍스 대신 전체 스트로크를 선택"
-
-
-msgid "Mouse location"
-msgstr "마우스 위치"
-
-
-msgctxt "Operator"
-msgid "(De)select All Strokes"
-msgstr "모든 스트로크를 선택(취소)"
-
-
-msgid "Change selection of all Grease Pencil strokes currently visible"
-msgstr "현재 볼 수 있는 모든 그리스 펜슬 스트로크의 선택을 변경"
-
-
-msgctxt "Operator"
-msgid "Alternated"
-msgstr "대체됨"
-
-
-msgid "Select alternative points in same strokes as already selected points"
-msgstr "이미 선택된 포인트와 동일한 선에서 대체 포인트를 선택"
-
-
-msgid "Unselect Ends"
-msgstr "종료 선택을 취소"
-
-
-msgid "Do not select the first and last point of the stroke"
-msgstr "스트로크의 첫 번째 포인트와 마지막 포인트를 선택하지 마십시오"
-
-
-msgid "Select Grease Pencil strokes within a rectangular region"
-msgstr "직사각형의 지역 내에서 그리스 팬슬 스트로크를 선택"
-
-
-msgid "Intersect existing selection"
-msgstr "기존 선택을 교차"
-
-
-msgid "Select Grease Pencil strokes using brush selection"
-msgstr "브러시 선택을 사용하여 그리스 펜슬 스트로크를 선택"
-
-
-msgctxt "Operator"
-msgid "Select First"
-msgstr "처음을 선택"
-
-
-msgid "Select first point in Grease Pencil strokes"
-msgstr "그리스 펜슬 스트로크에서 첫 번째 포인트를 선택"
-
-
-msgid "Extend selection instead of deselecting all other selected points"
-msgstr "다른 모든 선택 포인트를 선택 해제하는 대신 선택 영역을 확장"
-
-
-msgid "Selected Strokes Only"
-msgstr "선택된 스트로크 만"
-
-
-msgid "Only select the first point of strokes that already have points selected"
-msgstr "이미 선택된 포인트가 있는 스트로크의 첫 번째 포인트 만 선택"
-
-
-msgid "Select all strokes with similar characteristics"
-msgstr "유사한 특성을 가진 모든 스트로크를 선택"
-
-
-msgid "Shared layers"
-msgstr "공유된 레이어"
-
-
-msgid "Shared materials"
-msgstr "공유 매테리얼"
-
-
-msgctxt "Operator"
-msgid "Lasso Select Strokes"
-msgstr "스트로크를 올가미 선택"
-
-
-msgid "Select Grease Pencil strokes using lasso selection"
-msgstr "올가미 선택을 사용하여 그리스 펜슬 스트로크를 선택"
-
-
-msgctxt "Operator"
-msgid "Select Last"
-msgstr "마지막을 선택"
-
-
-msgid "Select last point in Grease Pencil strokes"
-msgstr "그리스 펜슬 스트로크에서 마지막 포인트를 선택"
-
-
-msgid "Only select the last point of strokes that already have points selected"
-msgstr "이미 선택된 포인트가 있는 스트로크의 마지막 포인트 만 선택"
-
-
-msgid "Shrink sets of selected Grease Pencil points"
-msgstr "선택된 그리스 펜슬 포인트의 수축 설정"
-
-
-msgid "Select all points in same strokes as already selected points"
-msgstr "이미 선택된 포인트와 동일한 스트로크에서 모든 포인트를 선택"
-
-
-msgid "Grow sets of selected Grease Pencil points"
-msgstr "선택된 그리스 펜슬 포인트의 성장 설정"
-
-
-msgid "Hide/Unhide selected points for Grease Pencil strokes setting alpha factor"
-msgstr "그리스 팬슬 스트로크 설정 알파 팩터에 대해 선택된 포인트를 숨기기/숨기기 해제"
-
-
-msgctxt "Operator"
-msgid "Select Mode Toggle"
-msgstr "선택 모드 토글"
-
-
-msgid "Set selection mode for Grease Pencil strokes"
-msgstr "그리스 펜슬 스트로크의 선택 모드를 설정"
-
-
-msgid "Select Mode"
-msgstr "선택 모드"
-
-
-msgid "Select mode"
-msgstr "선택 모드"
-
-
-msgctxt "Operator"
-msgid "Set active material"
-msgstr "활성 매테리얼을 설정"
-
-
-msgid "Set the selected stroke material as the active material"
-msgstr "선택한 스트로크 매테리얼를 활성 매테리얼로 설정"
-
-
-msgctxt "Operator"
-msgid "Snap Cursor to Selected Points"
-msgstr "커서를 선택한 포인트에 스냅"
-
-
-msgid "Snap cursor to center of selected points"
-msgstr "커서를 선택한 포인트의 중심에 스냅"
-
-
-msgctxt "Operator"
-msgid "Snap Selection to Cursor"
-msgstr "선택을 커서에 스냅"
-
-
-msgid "Snap selected points/strokes to the cursor"
-msgstr "선택한 포인트/스트로크를 커서에 스냅"
-
-
-msgid "With Offset"
-msgstr "오프셋과 함께"
-
-
-msgid "Offset the entire stroke instead of selected points only"
-msgstr "선택한 포인트 대신 전체 스트로크를 오프셋합니다"
-
-
-msgctxt "Operator"
-msgid "Snap Selection to Grid"
-msgstr "선택을 격자에 스냅"
-
-
-msgid "Snap selected points to the nearest grid points"
-msgstr "선택된 포인트를 가장 가까운 격자 포인트에 스냅"
-
-
-msgctxt "Operator"
-msgid "Apply Stroke Thickness"
-msgstr "스트로크 두께를 적용"
-
-
-msgid "Apply the thickness change of the layer to its strokes"
-msgstr "레이어의 두께 변경을 스트로크에 적용합니다"
-
-
-msgctxt "Operator"
-msgid "Arrange Stroke"
-msgstr "스트로크를 정렬"
-
-
-msgid "Bring to Front"
-msgstr "앞쪽으로 가져오기"
-
-
-msgid "Bring Forward"
-msgstr "앞으로 가져오기"
-
-
-msgid "Send Backward"
-msgstr "뒤로 보내기"
-
-
-msgid "Send to Back"
-msgstr "뒤쪽으로 보내기"
-
-
-msgctxt "Operator"
-msgid "Set Caps Mode"
-msgstr "캡 모드를 설정"
-
-
-msgid "Both"
-msgstr "양쪽"
-
-
-msgid "Set as default rounded"
-msgstr "기본 둥근으로 설정"
-
-
-msgctxt "Operator"
-msgid "Change Stroke Color"
-msgstr "스트로크 컬러를 변경"
-
-
-msgid "Move selected strokes to active material"
-msgstr "선택한 스트로크를 활성 매테리얼로 이동"
-
-
-msgid "Name of the material"
-msgstr "매테리얼의 이름"
-
-
-msgctxt "Operator"
-msgid "Stroke Cutter"
-msgstr "스트로크 커터"
-
-
-msgid "Select section and cut"
-msgstr "섹션 선택 및 잘라 내기"
-
-
-msgctxt "Operator"
-msgid "Set Cyclical State"
-msgstr "순환 상태를 설정"
-
-
-msgid "Create Geometry"
-msgstr "지오메트리를 생성"
-
-
-msgid "Create new geometry for closing stroke"
-msgstr "스트로크을 닫기 위한 새로운 지오메트리를 생성"
-
-
-msgctxt "Operator"
-msgid "Flip Stroke"
-msgstr "스트로크를 뒤집기"
-
-
-msgid "Change direction of the points of the selected strokes"
-msgstr "선택한 스트로크 포인트의 방향을 변경"
-
-
-msgctxt "Operator"
-msgid "Join Strokes"
-msgstr "스트로크를 합치기"
-
-
-msgid "Join selected strokes (optionally as new stroke)"
-msgstr "선택한 스트로크를 합치기 (새 스트로크로 선택적)"
-
-
-msgid "Leave Gaps"
-msgstr "간격을 두기"
-
-
-msgid "Leave gaps between joined strokes instead of linking them"
-msgstr "결합된 스트로크와 연결된 스트로크 사이에 간격"
-
-
-msgid "Join"
-msgstr "합치기"
-
-
-msgid "Join and Copy"
-msgstr "합치기 및 복사"
-
-
-msgctxt "Operator"
-msgid "Merge Strokes"
-msgstr "스트로크를 병합"
-
-
-msgid "Create a new stroke with the selected stroke points"
-msgstr "선택한 스트로크 포인트를 사용하여 새 스트로크를 생성"
-
-
-msgid "Additive Drawing"
-msgstr "가산으로 그리기"
-
-
-msgid "Add to previous drawing"
-msgstr "이전 그리기에 추가"
-
-
-msgid "Draw new stroke below all previous strokes"
-msgstr "이전의 모든 스트로크 아래에 새로운 스트로크을 그립니다"
-
-
-msgid "Dissolve Points"
-msgstr "포인트를 디졸브"
-
-
-msgid "Dissolve old selected points"
-msgstr "예전에 선택된 포인트를 디졸브"
-
-
-msgid "Delete Strokes"
-msgstr "스트로크를 삭제"
-
-
-msgid "Delete old selected strokes"
-msgstr "예전에 선택한 스트로크를 삭제"
-
-
-msgid "Close new stroke"
-msgstr "새 스트로크를 닫기"
-
-
-msgctxt "Operator"
-msgid "Merge by Distance"
-msgstr "거리로 병합"
-
-
-msgid "Merge points by distance"
-msgstr "거리별로 포인트를 병합"
-
-
-msgid "Use whole stroke, not only selected points"
-msgstr "선택한 포인트 뿐만 아니라 전체 스트로크를 사용"
-
-
-msgctxt "Operator"
-msgid "Sample Stroke"
-msgstr "샘플 스트로크"
-
-
-msgid "Sample stroke points to predefined segment length"
-msgstr "사전 정의된 세그먼트 길이로 샘플 스트로크 포인트"
-
-
-msgctxt "Operator"
-msgid "Separate Strokes"
-msgstr "스트로크를 분리"
-
-
-msgid "Separate the selected strokes or layer in a new grease pencil object"
-msgstr "선택한 스트로크 또는 레이어를 새 그리스 팬슬 오브젝트로 분리합니다"
-
-
-msgid "Selected Points"
-msgstr "선택된 포인트"
-
-
-msgid "Separate the selected points"
-msgstr "선택한 포인트를 분리"
-
-
-msgid "Selected Strokes"
-msgstr "선택한 스트로크"
-
-
-msgid "Separate the selected strokes"
-msgstr "선택한 스트로크 분리"
-
-
-msgid "Separate the strokes of the current layer"
-msgstr "현재 레이어의 스트로크를 분리"
-
-
-msgctxt "Operator"
-msgid "Simplify Stroke"
-msgstr "스트로크를 단순화"
-
-
-msgctxt "Operator"
-msgid "Simplify Fixed Stroke"
-msgstr "고정된 스트로크를 단순화"
-
-
-msgid "Number of simplify steps"
-msgstr "단순화 단계의 수"
-
-
-msgctxt "Operator"
-msgid "Smooth Stroke"
-msgstr "스무스 스트로크"
-
-
-msgid "Smooth selected strokes"
-msgstr "선택한 스트로크 부드럽게하기"
-
-
-msgid "Smooth only selected points in the stroke"
-msgstr "스트로크에서 선택된 포인트 만 부드럽게 처리합니다"
-
-
-msgctxt "Operator"
-msgid "Split Strokes"
-msgstr "스트로크를 분할"
-
-
-msgid "Split selected points as new stroke on same frame"
-msgstr "선택한 프레임을 동일한 프레임에서 새로운 스트로크로 분할합니다"
-
-
-msgctxt "Operator"
-msgid "Subdivide Stroke"
-msgstr "스트로크를 섭디비젼"
-
-
-msgid "Subdivide between continuous selected points of the stroke adding a point half way between them"
-msgstr "스트로크의 연속 선택된 포인트 사이에서 세분화하여 포인트를 중간에 추가합니다"
-
-
-msgctxt "Operator"
-msgid "Trim Stroke"
-msgstr "스트로크를 다듬기"
-
-
-msgid "Trim selected stroke to first loop or intersection"
-msgstr "선택한 스트로크을 첫 번째 루프 또는 교차로 다듬기"
-
-
-msgctxt "Operator"
-msgid "Unlock All Layers"
-msgstr "모든 레이어를 잠금 해제"
-
-
-msgid "Unlock all Grease Pencil layers so that they can be edited"
-msgstr "그리스 팬슬 레이어를 모두 잠금 해제하여 편집 가능"
-
-
-msgid "Adjust vertex color brightness/contrast"
-msgstr "버텍스 컬러 밝기/대비를 조정"
-
-
-msgid "Adjust vertex color HSV values"
-msgstr "버텍스 컬러 HSV 값을 조정"
-
-
-msgctxt "Operator"
-msgid "Vertex Paint Invert"
-msgstr "버텍스 페인트 반전"
-
-
-msgid "Invert RGB values"
-msgstr "RGB 값을 반전"
-
-
-msgctxt "Operator"
-msgid "Vertex Paint Levels"
-msgstr "버텍스 페인트 레벨"
-
-
-msgid "Adjust levels of vertex colors"
-msgstr "버텍스 컬러의 레벨을 조정"
-
-
-msgid "Value to multiply colors by"
-msgstr "다음으로 컬러를 곱하는 값"
-
-
-msgid "Value to add to colors"
-msgstr "컬러으로 추가하는 값"
-
-
-msgctxt "Operator"
-msgid "Assign to Vertex Group"
-msgstr "버텍스 그룹에 할당"
-
-
-msgid "Assign the selected vertices to the active vertex group"
-msgstr "활성 버텍스 그룹에 선택된 버텍스를 할당"
-
-
-msgctxt "Operator"
-msgid "Deselect Vertex Group"
-msgstr "버텍스 그룹을 선택 해제"
-
-
-msgid "Deselect all selected vertices assigned to the active vertex group"
-msgstr "활성 버텍스 그룹에 할당된 모든 선택된 버텍스를 선택 해제"
-
-
-msgctxt "Operator"
-msgid "Invert Vertex Group"
-msgstr "버텍스 그룹을 반전"
-
-
-msgid "Invert weights to the active vertex group"
-msgstr "활성 버텍스 그룹으로 웨이트를 반전합니다"
-
-
-msgctxt "Operator"
-msgid "Normalize Vertex Group"
-msgstr "버텍스 그룹를 노멀라이즈"
-
-
-msgid "Normalize weights to the active vertex group"
-msgstr "활성 버텍스 그룹으로 웨이트를 노멀라이즈합니다"
-
-
-msgctxt "Operator"
-msgid "Normalize All Vertex Group"
-msgstr "모든 버텍스 그룹을 노멀라이즈"
-
-
-msgid "Normalize all weights of all vertex groups, so that for each vertex, the sum of all weights is 1.0"
-msgstr "모든 버텍스 그룹의 모든 웨이트를 노멀라이즈하여 각 버텍스에 대해 모든 웨이트의 합이 1.0이 되도록 합니다"
-
-
-msgid "Lock Active"
-msgstr "활성을 잠금"
-
-
-msgid "Keep the values of the active group while normalizing others"
-msgstr "다른 대상을 노멀라이즈할 때 활성 그룹의 값을 유지"
-
-
-msgctxt "Operator"
-msgid "Remove from Vertex Group"
-msgstr "버텍스 그룹에서 제거"
-
-
-msgid "Remove the selected vertices from active or all vertex group(s)"
-msgstr "활성 또는 모든 버텍스 그룹(들)에서 선택한 버텍스를 제거"
-
-
-msgctxt "Operator"
-msgid "Select Vertex Group"
-msgstr "버텍스 그룹을 선택"
-
-
-msgid "Select all the vertices assigned to the active vertex group"
-msgstr "활성 버텍스 그룹에 할당된 모든 버텍스를 선택"
-
-
-msgctxt "Operator"
-msgid "Smooth Vertex Group"
-msgstr "스무스 버텍스 그룹"
-
-
-msgid "Smooth weights to the active vertex group"
-msgstr "활성 버텍스 그룹에 웨이트를 부드럽게합니다"
-
-
-msgctxt "Operator"
-msgid "Weight Paint Sample Weight"
-msgstr "웨이트 페인트 샘플 웨이트"
-
-
-msgid "Use the mouse to sample a weight in the 3D view"
-msgstr "3D 뷰에 웨이트를 샘플링하기 위해 마우스를 사용"
-
-
-msgctxt "Operator"
-msgid "Strokes Weight Mode Toggle"
-msgstr "스트로크 웨이트 모드 토글"
-
-
-msgid "Enter/Exit weight paint mode for Grease Pencil strokes"
-msgstr "그리스 펜슬 스트로크의 웨이트 페인트 모드를 들어가기/나가기"
 
 
 msgctxt "Operator"
@@ -41665,10 +39690,6 @@ msgstr "키 프레임을 결정"
 
 msgid "Decimate F-Curves by removing keyframes that influence the curve shape the least"
 msgstr "커브 셰이프에 가장 영향을 미치는 키 프레임을 제거하여 F-커브를 데시메이트"
-
-
-msgid "Remove"
-msgstr "제거"
 
 
 msgid "Which mode to use for decimation"
@@ -41732,6 +39753,14 @@ msgstr "기존 목록의 끝에 추가하는 대신 기존 드라이버 변수�
 
 msgid "Flatten"
 msgstr "평평하게"
+
+
+msgid "Side"
+msgstr "사이드"
+
+
+msgid "Both"
+msgstr "양쪽"
 
 
 msgctxt "Operator"
@@ -41932,8 +39961,33 @@ msgid "Reset viewable area to show selected keyframe range"
 msgstr "선택된 키 프레임 범위를 표시하는 가시 영역을 재설정"
 
 
-msgid "Stroke Mode"
-msgstr "스트로크 모드"
+msgid "Projection Type"
+msgstr "투영 유형"
+
+
+msgid "Reproject the strokes using the X-Z plane"
+msgstr "X-Z 평면을 사용하여 획을 재투사"
+
+
+msgid "Reproject the strokes using the Y-Z plane"
+msgstr "Y-Z 평면을 사용하여 획을 재투사"
+
+
+msgid "Reproject the strokes using the X-Y plane"
+msgstr "X-Y 평면을 사용하여 획을 재투사"
+
+
+msgid "Reproject the strokes to end up on the same plane, as if drawn from the current viewpoint using 'Cursor' Stroke Placement"
+msgstr "'커서' 스트로크 배치를 사용하여 현재 관측점에서 그려진 것처럼 스트로크가 동일한 평면에서 끝나도록 다시 투사합니다"
+
+
+msgid "Reproject the strokes using the orientation of 3D cursor"
+msgstr "3D 커서의 방향을 사용하여 스트로크를 재투사"
+
+
+msgctxt "Operator"
+msgid "Grease Pencil Draw"
+msgstr "그리스 펜슬 그리기"
 
 
 msgid "Action taken when a paint stroke is made"
@@ -41944,6 +39998,11 @@ msgid "Apply brush normally"
 msgstr "노멀로 브러시를 적용"
 
 
+msgctxt "Operator"
+msgid "Invert"
+msgstr "반전"
+
+
 msgid "Invert action of brush for duration of stroke"
 msgstr "스트로크의 지속에 대한 브러시의 작업을 반전"
 
@@ -41952,12 +40011,305 @@ msgid "Switch brush to smooth mode for duration of stroke"
 msgstr "스트로크의 지속에 대해 스무스 모드로 브러시를 전환"
 
 
+msgctxt "Operator"
+msgid "Erase"
+msgstr "지우기"
+
+
+msgid "Set as default rounded"
+msgstr "기본 둥근으로 설정"
+
+
 msgid "Flat"
 msgstr "플랫"
 
 
+msgctxt "Operator"
+msgid "Clean Loose Points"
+msgstr "루즈 포인트를 청소"
+
+
+msgid "Remove loose points"
+msgstr "루즈 포인트를 제거"
+
+
+msgid "Limit"
+msgstr "제한"
+
+
+msgid "Number of points to consider stroke as loose"
+msgstr "윤곽 스트로크를 루즈로 고려하는 포인트의 수"
+
+
+msgctxt "Operator"
+msgid "Copy Strokes"
+msgstr "스트로크를 복사"
+
+
+msgctxt "Operator"
+msgid "Set Cyclical State"
+msgstr "순환 상태를 설정"
+
+
+msgctxt "Operator"
+msgid "Dissolve"
+msgstr "디졸브"
+
+
+msgid "Delete selected points without splitting strokes"
+msgstr "스트로크를 분할하지 않고 선택한 포인트를 삭제합니다"
+
+
+msgid "Dissolve selected points"
+msgstr "선택한 포인트를 디졸브"
+
+
+msgid "Dissolve points between selected points"
+msgstr "선택한 포인트 사이의 포인트를 디졸브합니다"
+
+
+msgid "Dissolve all unselected points"
+msgstr "선택되지 않은 모든 포인트들을 디졸브합니다"
+
+
+msgctxt "Operator"
+msgid "Duplicate Strokes"
+msgstr "스트로크를 복제"
+
+
+msgid "Make copies of the selected Grease Pencil strokes and move them"
+msgstr "선택한 그리스 퍈슬 스트로크를 복사하여 이동"
+
+
+msgctxt "Operator"
+msgid "Extrude Stroke Points"
+msgstr "스트로크 포인트를 돌출"
+
+
+msgid "Extrude selected points and move them"
+msgstr "선택된 포인트를 돌출하고 그것들을 이동"
+
+
+msgid "Extrude Stroke Points"
+msgstr "스트로크 포인트를 돌출"
+
+
+msgctxt "Operator"
+msgid "Grease Pencil Fill"
+msgstr "그리스 팬슬 채우기"
+
+
+msgid "Fill with color the shape formed by strokes"
+msgstr "스트로크로 형성된 셰이프를 채우기"
+
+
+msgctxt "Operator"
+msgid "Insert Blank Frame"
+msgstr "빈 프레임을 삽입"
+
+
+msgctxt "Operator"
+msgid "Grease Pencil Interpolation"
+msgstr "그리스 펜슬 보간"
+
+
+msgid "Bias factor for which frame has more influence on the interpolated strokes"
+msgstr "프레임이 보간된 스트로크에 더 많은 영향을 미치는 경향 계수"
+
+
+msgctxt "Operator"
+msgid "Interpolate Sequence"
+msgstr "보간 시퀀스"
+
+
+msgid "Generate 'in-betweens' to smoothly interpolate between Grease Pencil frames"
+msgstr "그리스 펜슬 프레임 사이를 부드럽게 보간하기 위해 '사이에서' 생성"
+
+
+msgid "Interpolation method to use the next time 'Interpolate Sequence' is run"
+msgstr "보간 메서드를 사용하여 다음 번에 '보간 시퀀스'가 실행됩니다"
+
+
+msgid "Custom interpolation defined using a curve map"
+msgstr "커브 맵을 사용하여 정의된 커스텀 보간법"
+
+
+msgid "Join and Copy"
+msgstr "합치기 및 복사"
+
+
+msgid "Join"
+msgstr "합치기"
+
+
+msgctxt "Operator"
+msgid "Add New Layer"
+msgstr "새로운 레이어를 추가"
+
+
+msgctxt "Operator"
+msgid "Duplicate Layer"
+msgstr "레이어를 복제"
+
+
+msgid "Make a copy of the active Grease Pencil layer"
+msgstr "활성 그리스 펜슬 레이어의 복사를 만들기"
+
+
+msgctxt "Operator"
+msgid "Duplicate Layer to New Object"
+msgstr "레이어를 새 오브젝트로 복제"
+
+
+msgid "All Frames"
+msgstr "모든 프레임"
+
+
+msgctxt "Operator"
+msgid "Hide Layer(s)"
+msgstr "레이어(들)을 숨기기"
+
+
+msgid "Hide selected/unselected Grease Pencil layers"
+msgstr "선택/선택되지 않은 그리스 펜슬 레이어를 숨기기"
+
+
+msgid "Hide unselected rather than selected layers"
+msgstr "선택된 레이어 대신 선택 선택되지 않은 레이어를 숨기기"
+
+
+msgid "Affect Visibility"
+msgstr "가시성에 주는 영향"
+
+
+msgctxt "Operator"
+msgid "Lock All Layers"
+msgstr "모든 레이어를 잠금"
+
+
+msgid "Lock all Grease Pencil layers to prevent them from being accidentally modified"
+msgstr "그리스 팬슬 레이어를 실수로 수정하지 않도록 모두 잠금"
+
+
+msgctxt "Operator"
+msgid "Remove Mask Layer"
+msgstr "마스크 레이어를 제거"
+
+
+msgctxt "Operator"
+msgid "Merge"
+msgstr "병합"
+
+
+msgctxt "Operator"
+msgid "Remove Layer"
+msgstr "레이어를 제거"
+
+
+msgctxt "Operator"
+msgid "Show All Layers"
+msgstr "모든 레이어를 표시"
+
+
+msgid "Show all Grease Pencil layers"
+msgstr "모든 그리스 펜슬 레이어를 표시"
+
+
+msgid "In addition to toggling the editability, also affect the visibility"
+msgstr "편집 가능성을 전환하는 것 외에도 가시성에 영향을 줍니다"
+
+
+msgid "Unselect strokes"
+msgstr "스트로크 선택을 취소"
+
+
+msgid "Move selected strokes to another layer"
+msgstr "선택한 스트로크를 다른 레이어로 이동"
+
+
+msgctxt "Operator"
+msgid "Strokes Paint Mode Toggle"
+msgstr "스트로크 페인트 모드 토글"
+
+
+msgid "Enter/Exit paint mode for Grease Pencil strokes"
+msgstr "그리스 펜슬 스트로크의 페인트 모드를 들어가기/나가기"
+
+
+msgid "Return to Previous Mode"
+msgstr "이전 모드로 돌아 가기"
+
+
+msgid "Return to previous mode"
+msgstr "이전 모드로 돌아 가기"
+
+
+msgctxt "Operator"
+msgid "Paste Strokes"
+msgstr "스트로크를 붙여 넣기"
+
+
+msgid "Type of shape"
+msgstr "셰이프의 유형"
+
+
+msgid "Polyline"
+msgstr "폴리라인"
+
+
+msgid "Bring to Front"
+msgstr "앞쪽으로 가져오기"
+
+
+msgid "Bring Forward"
+msgstr "앞으로 가져오기"
+
+
+msgid "Send Backward"
+msgstr "뒤로 보내기"
+
+
+msgid "Send to Back"
+msgstr "뒤쪽으로 보내기"
+
+
+msgctxt "Operator"
+msgid "Reproject Strokes"
+msgstr "재투사 스트로크"
+
+
+msgid "Reproject the selected strokes from the current viewpoint as if they had been newly drawn (e.g. to fix problems from accidental 3D cursor movement or accidental viewport changes, or for matching deforming geometry)"
+msgstr "새로 그려진 것처럼 현재 뷰포트에서 선택한 스트로크를 다시 투사합니다 (예 : 실수로 3D 커서 이동 또는 우발적 인 뷰포트 변경으로 인한 문제 해결 또는 변형 형상 일치를 위해)"
+
+
+msgid "Reproject the strokes on to the scene geometry, as if drawn using 'Surface' placement"
+msgstr "'표면' 배치를 사용하여 그려진 것처럼 씬 지오메트리에 획을 다시 투사합니다"
+
+
+msgctxt "Operator"
+msgid "Strokes Sculpt Mode Toggle"
+msgstr "스트로크 스컬프트 모드 토글"
+
+
+msgid "Enter/Exit sculpt mode for Grease Pencil strokes"
+msgstr "그리스 펜슬 스트로크의 스컬프트 모드를 들어가기/나가기"
+
+
+msgctxt "Operator"
+msgid "(De)select All Strokes"
+msgstr "모든 스트로크를 선택(취소)"
+
+
+msgid "Select all strokes with similar characteristics"
+msgstr "유사한 특성을 가진 모든 스트로크를 선택"
+
+
 msgid "By Material"
 msgstr "매테리얼로"
+
+
+msgid "Set the selected stroke material as the active material"
+msgstr "선택한 스트로크 매테리얼를 활성 매테리얼로 설정"
 
 
 msgctxt "Operator"
@@ -41975,6 +40327,188 @@ msgstr "모든 스트로크 포인트를 선택"
 
 msgid "Select all stroke points between other strokes"
 msgstr "각 스트로크 사이의 모든 스트로크 포인트 선택"
+
+
+msgid "Fill Opacity"
+msgstr "채우기 불투명도"
+
+
+msgctxt "Operator"
+msgid "Snap Cursor to Selected Points"
+msgstr "커서를 선택한 포인트에 스냅"
+
+
+msgid "Snap cursor to center of selected points"
+msgstr "커서를 선택한 포인트의 중심에 스냅"
+
+
+msgctxt "Operator"
+msgid "Snap Selection to Cursor"
+msgstr "선택을 커서에 스냅"
+
+
+msgid "Snap selected points/strokes to the cursor"
+msgstr "선택한 포인트/스트로크를 커서에 스냅"
+
+
+msgid "With Offset"
+msgstr "오프셋과 함께"
+
+
+msgid "Offset the entire stroke instead of selected points only"
+msgstr "선택한 포인트 대신 전체 스트로크를 오프셋합니다"
+
+
+msgctxt "Operator"
+msgid "Snap Selection to Grid"
+msgstr "선택을 격자에 스냅"
+
+
+msgid "Snap selected points to the nearest grid points"
+msgstr "선택된 포인트를 가장 가까운 격자 포인트에 스냅"
+
+
+msgid "Name of the material"
+msgstr "매테리얼의 이름"
+
+
+msgctxt "Operator"
+msgid "Merge by Distance"
+msgstr "거리로 병합"
+
+
+msgid "Merge points by distance"
+msgstr "거리별로 포인트를 병합"
+
+
+msgid "Use whole stroke, not only selected points"
+msgstr "선택한 포인트 뿐만 아니라 전체 스트로크를 사용"
+
+
+msgctxt "Operator"
+msgid "Simplify Stroke"
+msgstr "스트로크를 단순화"
+
+
+msgctxt "Operator"
+msgid "Smooth Stroke"
+msgstr "스무스 스트로크"
+
+
+msgid "Smooth selected strokes"
+msgstr "선택한 스트로크 부드럽게하기"
+
+
+msgctxt "Operator"
+msgid "Subdivide Stroke"
+msgstr "스트로크를 섭디비젼"
+
+
+msgid "Subdivide between continuous selected points of the stroke adding a point half way between them"
+msgstr "스트로크의 연속 선택된 포인트 사이에서 세분화하여 포인트를 중간에 추가합니다"
+
+
+msgid "Selected Points"
+msgstr "선택된 포인트"
+
+
+msgid "Smooth only selected points in the stroke"
+msgstr "스트로크에서 선택된 포인트 만 부드럽게 처리합니다"
+
+
+msgid "Change direction of the points of the selected strokes"
+msgstr "선택한 스트로크 포인트의 방향을 변경"
+
+
+msgid "Mouse cursor style to use during the modal operator"
+msgstr "모달 작업자에서 사용할 마우스 커서 스타일"
+
+
+msgid "X End"
+msgstr "X 종료"
+
+
+msgid "X Start"
+msgstr "X 시작"
+
+
+msgid "Y End"
+msgstr "Y 종료"
+
+
+msgid "Y Start"
+msgstr "Y 시작"
+
+
+msgid "Adjust vertex color brightness/contrast"
+msgstr "버텍스 컬러 밝기/대비를 조정"
+
+
+msgid "Adjust vertex color HSV values"
+msgstr "버텍스 컬러 HSV 값을 조정"
+
+
+msgctxt "Operator"
+msgid "Vertex Paint Invert"
+msgstr "버텍스 페인트 반전"
+
+
+msgid "Invert RGB values"
+msgstr "RGB 값을 반전"
+
+
+msgctxt "Operator"
+msgid "Vertex Paint Levels"
+msgstr "버텍스 페인트 레벨"
+
+
+msgid "Adjust levels of vertex colors"
+msgstr "버텍스 컬러의 레벨을 조정"
+
+
+msgid "Value to multiply colors by"
+msgstr "다음으로 컬러를 곱하는 값"
+
+
+msgid "Value to add to colors"
+msgstr "컬러으로 추가하는 값"
+
+
+msgctxt "Operator"
+msgid "Normalize Vertex Group"
+msgstr "버텍스 그룹를 노멀라이즈"
+
+
+msgctxt "Operator"
+msgid "Normalize All Vertex Groups"
+msgstr "모든 버텍스 그룹을 노멀라이즈"
+
+
+msgid "Lock Active"
+msgstr "활성을 잠금"
+
+
+msgid "Keep the values of the active group while normalizing others"
+msgstr "다른 대상을 노멀라이즈할 때 활성 그룹의 값을 유지"
+
+
+msgctxt "Operator"
+msgid "Smooth Vertex Group"
+msgstr "스무스 버텍스 그룹"
+
+
+msgctxt "Operator"
+msgid "Weight Paint Sample Weight"
+msgstr "웨이트 페인트 샘플 웨이트"
+
+
+msgctxt "Operator"
+msgid "Strokes Weight Mode Toggle"
+msgstr "스트로크 웨이트 모드 토글"
+
+
+msgid "Enter/Exit weight paint mode for Grease Pencil strokes"
+msgstr "그리스 펜슬 스트로크의 웨이트 페인트 모드를 들어가기/나가기"
 
 
 msgctxt "Operator"
@@ -42213,26 +40747,6 @@ msgstr "샘플 라인"
 
 msgid "Sample a line and show it in Scope panels"
 msgstr "라인 샘플 및 범위 패널에 표시"
-
-
-msgid "Mouse cursor style to use during the modal operator"
-msgstr "모달 작업자에서 사용할 마우스 커서 스타일"
-
-
-msgid "X End"
-msgstr "X 종료"
-
-
-msgid "X Start"
-msgstr "X 시작"
-
-
-msgid "Y End"
-msgstr "Y 종료"
-
-
-msgid "Y Start"
-msgstr "Y 시작"
 
 
 msgctxt "Operator"
@@ -42558,10 +41072,6 @@ msgstr "노멀 데이터를 사용"
 
 msgid "Flat Shading"
 msgstr "플랫 셰이딩"
-
-
-msgid "Log Level"
-msgstr "로그 레벨"
 
 
 msgctxt "Operator"
@@ -43151,6 +41661,10 @@ msgid "Controls profile shape (0.5 = round)"
 msgstr "단면 셰이프를 컨트롤 (0.5 = 둥근)"
 
 
+msgid "Confirm on Release"
+msgstr "릴리즈에 대한 확인"
+
+
 msgid "Segments for curved edge"
 msgstr "커브 에지의 부분"
 
@@ -43239,10 +41753,6 @@ msgstr "에지 루프를 브릿지"
 
 msgid "Create a bridge of faces between two or more selected edge loops"
 msgstr "두 개 이상의 선택된 에지 루프 사이에 페이스의 브릿지를 만듭니다"
-
-
-msgid "Interpolation method"
-msgstr "보간 방법"
 
 
 msgid "Blend Path"
@@ -44012,6 +42522,10 @@ msgid "Cut new topology"
 msgstr "새로운 토폴로지를 잘라내기"
 
 
+msgid "Only Selected"
+msgstr "선택된 항목 만"
+
+
 msgid "Only cut selected geometry"
 msgstr "선택된 지모메트리 만 절단"
 
@@ -44135,11 +42649,6 @@ msgstr "선택된 에지를 샤프로 마크(취소)"
 
 msgid "Consider vertices instead of edges to select which edges to (un)tag as sharp"
 msgstr "에지 대신에 버텍스를 고려하여 예리하게 표시(취소)할 에지를 선택"
-
-
-msgctxt "Operator"
-msgid "Merge"
-msgstr "병합"
 
 
 msgid "Merge selected vertices"
@@ -44836,15 +43345,6 @@ msgid "Aligned Axis"
 msgstr "정렬된 축"
 
 
-msgctxt "Operator"
-msgid "Select Faces by Sides"
-msgstr "측면으로 페이스를 선택"
-
-
-msgid "Number of Vertices"
-msgstr "버텍스의 수"
-
-
 msgid "Type of comparison to make"
 msgstr "만드는 비교의 유형"
 
@@ -44855,6 +43355,15 @@ msgstr "다음으로 동일한"
 
 msgid "Not Equal To"
 msgstr "다음으로 같지 않음"
+
+
+msgctxt "Operator"
+msgid "Select Faces by Sides"
+msgstr "측면으로 페이스를 선택"
+
+
+msgid "Number of Vertices"
+msgstr "버텍스의 수"
 
 
 msgctxt "Operator"
@@ -44921,6 +43430,10 @@ msgstr "에지 선택 모드"
 
 msgid "Face selection mode"
 msgstr "페이스 선택 모드"
+
+
+msgid "Expand"
+msgstr "확장"
 
 
 msgid "Select more vertices, edges or faces connected to initial selection"
@@ -45265,15 +43778,6 @@ msgstr "중간 버텍스를 축 중심에 스냅"
 
 
 msgctxt "Operator"
-msgid "Tris to Quads"
-msgstr "페이스을 사각병합"
-
-
-msgid "Join triangles into quads"
-msgstr "삼각형을 사각병합"
-
-
-msgctxt "Operator"
 msgid "Un-Subdivide"
 msgstr "언섭디비젼"
 
@@ -45461,10 +43965,6 @@ msgstr "오브젝트 변환을 베이크"
 
 msgid "Clear Constraints"
 msgstr "제약을 지우기"
-
-
-msgid "Remove all constraints from keyed object/bones, and do 'visual' keying"
-msgstr "키가 있는 오브젝트/본에서 모든 제약을 제거하고 '시각' 키잉을 합니다"
 
 
 msgid "Clear Parents"
@@ -45752,13 +44252,20 @@ msgid "Reset viewable area to show selected strips range"
 msgstr "선택된 스트립 범위를 표시하는 가시 영역을 재설정"
 
 
-msgctxt "Operator"
-msgid "Add File Node"
-msgstr "파일 노드를 추가"
+msgid "Settings to be applied on the newly created node"
+msgstr "새로 생성된 노드에 적용하는 설정"
 
 
-msgid "Add a file node to the current node editor"
-msgstr "현재 노드 에디터에 파일 노드를 추가"
+msgid "Start transform operator after inserting the node"
+msgstr "노드를 삽입한 이후에 작업자를 변환 시작"
+
+
+msgid "Source color"
+msgstr "소스 컬러"
+
+
+msgid "Gamma Corrected"
+msgstr "감마 보정됨"
 
 
 msgctxt "Operator"
@@ -45770,20 +44277,12 @@ msgid "Add a mask node to the current node editor"
 msgstr "현재 노드 에디터에 마스크 노드를 추가"
 
 
-msgid "Settings to be applied on the newly created node"
-msgstr "새로 생성된 노드에 적용하는 설정"
-
-
 msgid "Node Type"
 msgstr "노드 유형"
 
 
 msgid "Node type"
 msgstr "노드 유형"
-
-
-msgid "Start transform operator after inserting the node"
-msgstr "노드를 삽입한 이후에 작업자를 변환 시작"
 
 
 msgctxt "Operator"
@@ -46119,18 +44618,6 @@ msgid "Current"
 msgstr "현재"
 
 
-msgid "Exponent"
-msgstr "지수"
-
-
-msgid "Fraction"
-msgstr "분수"
-
-
-msgid "Wrap"
-msgstr "감싸기"
-
-
 msgctxt "Operator"
 msgid "Toggle Node Options"
 msgstr "노드 옵션을 토글"
@@ -46205,6 +44692,10 @@ msgstr "노드를 크기 조정"
 
 msgid "Select the node under the cursor"
 msgstr "커서 아래의 노드를 선택"
+
+
+msgid "Mouse location"
+msgstr "마우스 위치"
 
 
 msgid "Socket Select"
@@ -46716,10 +45207,6 @@ msgid "Add a Grease Pencil object to the scene"
 msgstr "씬에 그리스 팬슬 오브젝트를 추가합니다"
 
 
-msgid "Create an empty grease pencil object"
-msgstr "엠프티 그리스 펜슬 오브젝트를 생성"
-
-
 msgid "Create a simple stroke with basic colors"
 msgstr "기본 컬러로 간단한 스트로크를 생성"
 
@@ -46727,15 +45214,6 @@ msgstr "기본 컬러로 간단한 스트로크를 생성"
 msgctxt "Operator"
 msgid "Monkey"
 msgstr "원숭이"
-
-
-msgid "Construct a Suzanne grease pencil object"
-msgstr "수잔 그리스 펜슬 오브젝트를 만들기"
-
-
-msgctxt "Operator"
-msgid "Hide Collection"
-msgstr "컬렉션을 숨기기"
 
 
 msgid "Show only objects in collection (Shift to extend)"
@@ -48068,6 +46546,15 @@ msgstr "활성 오브젝트에 새로운 버텍스 그룹을 추가"
 
 
 msgctxt "Operator"
+msgid "Assign to Vertex Group"
+msgstr "버텍스 그룹에 할당"
+
+
+msgid "Assign the selected vertices to the active vertex group"
+msgstr "활성 버텍스 그룹에 선택된 버텍스를 할당"
+
+
+msgctxt "Operator"
 msgid "Assign to New Group"
 msgstr "새로운 그룹에 할당"
 
@@ -48103,6 +46590,20 @@ msgstr "선택된 버텍스 그룹을 복사"
 
 msgid "Replace vertex groups of selected objects by vertex groups of active object"
 msgstr "선택한 오브젝트의 버텍스 그룹을 활성 오브젝트의 버텍스 그룹으로 대체합니다"
+
+
+msgctxt "Operator"
+msgid "Deselect Vertex Group"
+msgstr "버텍스 그룹을 선택 해제"
+
+
+msgid "Deselect all selected vertices assigned to the active vertex group"
+msgstr "활성 버텍스 그룹에 할당된 모든 선택된 버텍스를 선택 해제"
+
+
+msgctxt "Operator"
+msgid "Invert Vertex Group"
+msgstr "버텍스 그룹을 반전"
 
 
 msgid "Invert active vertex group's weights"
@@ -48214,9 +46715,8 @@ msgid "Normalize weights of the active vertex group, so that the highest ones ar
 msgstr "활성 버택스 그룹의 웨이트를 노멀라이즈하여 최고점이 1.0이 되도록 합니다"
 
 
-msgctxt "Operator"
-msgid "Normalize All Vertex Groups"
-msgstr "모든 버텍스 그룹을 노멀라이즈"
+msgid "Normalize all weights of all vertex groups, so that for each vertex, the sum of all weights is 1.0"
+msgstr "모든 버텍스 그룹의 모든 웨이트를 노멀라이즈하여 각 버텍스에 대해 모든 웨이트의 합이 1.0이 되도록 합니다"
 
 
 msgctxt "Operator"
@@ -48253,12 +46753,30 @@ msgid "Remove all unlocked vertex groups"
 msgstr "잠금 해제된 모든 버텍스 그룹을 제거"
 
 
+msgctxt "Operator"
+msgid "Remove from Vertex Group"
+msgstr "버텍스 그룹에서 제거"
+
+
+msgid "Remove the selected vertices from active or all vertex group(s)"
+msgstr "활성 또는 모든 버텍스 그룹(들)에서 선택한 버텍스를 제거"
+
+
 msgid "Remove from all groups"
 msgstr "모든 그룹에서 제거"
 
 
 msgid "Clear the active group"
 msgstr "활성 그룹을 지우기"
+
+
+msgctxt "Operator"
+msgid "Select Vertex Group"
+msgstr "버텍스 그룹을 선택"
+
+
+msgid "Select all the vertices assigned to the active vertex group"
+msgstr "활성 버텍스 그룹에 할당된 모든 버텍스를 선택"
 
 
 msgctxt "Operator"
@@ -48492,6 +47010,11 @@ msgstr "뷰 레이어에서 사용 중지"
 
 msgid "Exclude collection from the active view layer"
 msgstr "활성 뷰 레이어에서 컬렉션을 제외"
+
+
+msgctxt "Operator"
+msgid "Hide Collection"
+msgstr "컬렉션을 숨기기"
 
 
 msgid "Hide the collection in this view layer"
@@ -49287,11 +47810,6 @@ msgid "Add to Palette"
 msgstr "팔레트에 추가"
 
 
-msgctxt "Operator"
-msgid "Texture Paint Toggle"
-msgstr "텍스처 페인트 토글"
-
-
 msgid "Toggle texture paint mode in 3D view"
 msgstr "3D 뷰에서 텍스처 페인트 모드를 토글"
 
@@ -49437,6 +47955,10 @@ msgid "Toggle weight paint mode in 3D view"
 msgstr "3D 뷰에서 웨이트 페인트 모드를 토글"
 
 
+msgid "Use the mouse to sample a weight in the 3D view"
+msgstr "3D 뷰에 웨이트를 샘플링하기 위해 마우스를 사용"
+
+
 msgctxt "Operator"
 msgid "Weight Paint Sample Group"
 msgstr "웨이트 페인트 샘플 그룹"
@@ -49471,6 +47993,10 @@ msgstr "팔레트 컬러를 삭제"
 
 msgid "Remove active color from palette"
 msgstr "팔레트에서 활성 컬러를 제거"
+
+
+msgid "Palette"
+msgstr "팔레트"
 
 
 msgctxt "Operator"
@@ -50207,10 +48733,6 @@ msgstr "모든 키 맵"
 
 msgid "Write all keymaps (not just user modified)"
 msgstr "모든 키맵을 작성 (사용자가 수정 한 것이 아닙니다)"
-
-
-msgid "Keep Original"
-msgstr "원본을 유지"
 
 
 msgid "Keep original file after copying to configuration folder"
@@ -51322,6 +49844,11 @@ msgstr "핀치"
 
 
 msgctxt "Operator"
+msgid "Scale"
+msgstr "축적"
+
+
+msgctxt "Operator"
 msgid "Detail Flood Fill"
 msgstr "디테일 플러드 채우기"
 
@@ -51542,10 +50069,6 @@ msgid "Change Effect Input"
 msgstr "이팩트 입력을 변경"
 
 
-msgid "The effect inputs to swap"
-msgstr "교환하는 이펙트 입력"
-
-
 msgctxt "Operator"
 msgid "Change Effect Type"
 msgstr "이팩트 유형을 변경"
@@ -51616,10 +50139,6 @@ msgstr "곱하기"
 
 msgid "Multiply effect strip type"
 msgstr "곱하기 이펙트 스트립 유형"
-
-
-msgid "Alpha Over Drop effect strip type"
-msgstr "알파 오버 드롭 이펙트 스트립 유형"
 
 
 msgctxt "Sequence"
@@ -51944,10 +50463,6 @@ msgid "Reassign the inputs for the effect strip"
 msgstr "이펙트 스트립에 대한 입력을 다시 할당"
 
 
-msgid "Rebuild all selected proxies and timecode indices using the job system"
-msgstr "작업 시스템을 사용하여 선택한 모든 프록시와 타임 코드 인덱스를 재작성"
-
-
 msgctxt "Operator"
 msgid "Refresh Sequencer"
 msgstr "시퀀서를 새로 고침"
@@ -52245,8 +50760,9 @@ msgid "Swap Inputs"
 msgstr "입력을 교환"
 
 
-msgid "Swap the first two inputs for the effect strip"
-msgstr "이펙트 스트립에 대한 처음 두 입력을 교환"
+msgctxt "Operator"
+msgid "Deselect All"
+msgstr "모두 선택 해제"
 
 
 msgctxt "Operator"
@@ -52696,15 +51212,6 @@ msgstr "입력하는 동안 덮어쓰기를 토글"
 
 
 msgctxt "Operator"
-msgid "Refresh PyConstraints"
-msgstr "Py제약을 새로 고침"
-
-
-msgid "Refresh all pyconstraints"
-msgstr "모든 Py제약을 새로 고침"
-
-
-msgctxt "Operator"
 msgid "Reload"
 msgstr "다시 불러오기"
 
@@ -53042,6 +51549,11 @@ msgid "Edit Texture Space"
 msgstr "텍스처 공간을 편집"
 
 
+msgctxt "Operator"
+msgid "Rotate"
+msgstr "회전"
+
+
 msgid "Rotate selected items"
 msgstr "선택된 항목을 회전"
 
@@ -53261,14 +51773,6 @@ msgstr "드롭 컬러"
 
 msgid "Drop colors to buttons"
 msgstr "버튼에 컬러를 드롭"
-
-
-msgid "Source color"
-msgstr "소스 컬러"
-
-
-msgid "Gamma Corrected"
-msgstr "감마 보정됨"
 
 
 msgctxt "Operator"
@@ -53574,10 +52078,6 @@ msgid "Clip UV coordinates to bounds after unwrapping"
 msgstr "펼치기 이후 경계에 UV 좌표를 클립합니다"
 
 
-msgid "Map UVs taking image aspect ratio into account"
-msgstr "이미지 측면 비율을 고려한 UV 매핑"
-
-
 msgid "Cube Size"
 msgstr "큐브 크기"
 
@@ -53651,6 +52151,10 @@ msgid "Align according to object transform"
 msgstr "오브젝트 변환에 따라 정렬"
 
 
+msgid "Pinch"
+msgstr "핀치"
+
+
 msgid "Radius of the sphere or cylinder"
 msgstr "구체 또는 실린더의 반경"
 
@@ -53689,10 +52193,6 @@ msgstr "비트 맵 이미지의 UV 레이아웃을 내보내기"
 
 msgid "Exports UVs from the modified mesh"
 msgstr "수정된 메쉬에서 UV를 내보내기"
-
-
-msgid "Fill Opacity"
-msgstr "채우기 불투명도"
 
 
 msgid "Set amount of opacity for exported UV layout"
@@ -53787,6 +52287,10 @@ msgstr "아일랜드를 포장"
 
 msgid "Space between islands"
 msgstr "아일랜드 사이 공간"
+
+
+msgid "Fraction"
+msgstr "분수"
 
 
 msgctxt "Operator"
@@ -54449,6 +52953,10 @@ msgid "Select items using box selection"
 msgstr "박스 선택을 사용하여 항목을 선택합니다"
 
 
+msgid "Intersect existing selection"
+msgstr "기존 선택을 교차"
+
+
 msgid "Select items using circle selection"
 msgstr "원형 선택을 사용하여 항목을 선택합니다"
 
@@ -54559,6 +53067,10 @@ msgstr "솔리드 셰이딩을 토글"
 
 msgid "Material Preview"
 msgstr "매테리얼 미리보기"
+
+
+msgid "Rendered"
+msgstr "렌더리드"
 
 
 msgid "Toggle rendered shading"
@@ -54984,14 +53496,6 @@ msgid "Type of data to rename"
 msgstr "이름을 바꿀 데이터 유형"
 
 
-msgid "Grease Pencils"
-msgstr "그리스 펜슬"
-
-
-msgid "Sequence Strips"
-msgstr "시퀀스 스트립"
-
-
 msgctxt "Operator"
 msgid "Call Menu"
 msgstr "메뉴 호출"
@@ -55017,6 +53521,10 @@ msgstr "호출 패널"
 
 msgid "Keep Open"
 msgstr "열기를 유지"
+
+
+msgid "Remove"
+msgstr "제거"
 
 
 msgid "Save a Collada file"
@@ -55349,6 +53857,10 @@ msgstr "컨텍스트 속성"
 
 msgid "Cycle backwards"
 msgstr "사이클 뒤로"
+
+
+msgid "Wrap"
+msgstr "감싸기"
 
 
 msgid "Wrap back to the first/last values"
@@ -56299,8 +54811,24 @@ msgid "Image used as canvas"
 msgstr "캔버스로 사용된 이미지"
 
 
+msgid "Clone Alpha"
+msgstr "클론 알파"
+
+
+msgid "Opacity of clone image display"
+msgstr "클론 이미지 표시의 투명도"
+
+
+msgid "Clone Image"
+msgstr "클론 이미지"
+
+
 msgid "Image used as clone source"
 msgstr "클론 소스로 사용된 이미지"
+
+
+msgid "Clone Offset"
+msgstr "클론 오프셋"
 
 
 msgid "Dither"
@@ -56575,10 +55103,6 @@ msgid "Use only deformation modifiers (temporary disable all constructive modifi
 msgstr "변형 모디파이어 만을 사용 (멀티리솔루션를 제외한 모든 구조적인 모디파이어를 임시로 사용 중지)"
 
 
-msgid "UV Sculpting"
-msgstr "UV 스컬프트하기"
-
-
 msgid "Properties of vertex and weight paint mode"
 msgstr "버텍스 및 웨이트 페인트 모드의 속성"
 
@@ -56629,6 +55153,10 @@ msgstr "섀도우 설정"
 
 msgid "SSAO Settings"
 msgstr "SSAO 설정"
+
+
+msgid "Cavity"
+msgstr "캐비티"
 
 
 msgid "Render Pass"
@@ -56711,16 +55239,16 @@ msgid "2D Cursor"
 msgstr "2D 커서"
 
 
+msgid "Footage"
+msgstr "푸티지"
+
+
 msgid "Predefined tracking camera intrinsics"
 msgstr "미리 정의된 트래킹 카메라 내장"
 
 
 msgid "Clip Display"
 msgstr "클립 디스플레이"
-
-
-msgid "Footage"
-msgstr "푸티지"
 
 
 msgid "Footage Settings"
@@ -56875,14 +55403,6 @@ msgid "Custom Distance"
 msgstr "커스텀 거리"
 
 
-msgid "Cascaded Shadow Map"
-msgstr "계단식 섀도우 맵"
-
-
-msgid "Contact Shadows"
-msgstr "접촉 섀도우"
-
-
 msgid "Composition Guides"
 msgstr "구성 가이드"
 
@@ -56925,10 +55445,6 @@ msgstr "이펙트"
 
 msgid "Text Boxes"
 msgstr "텍스트 박스"
-
-
-msgid "Slot"
-msgstr "슬롯"
 
 
 msgid "Filters"
@@ -57037,6 +55553,11 @@ msgstr "립 지역"
 msgctxt "Operator"
 msgid "Grab"
 msgstr "잡기"
+
+
+msgctxt "Operator"
+msgid "Mask"
+msgstr "마스크"
 
 
 msgid "Tiling"
@@ -57288,32 +55809,12 @@ msgid "White Balance"
 msgstr "화이트 밸런스"
 
 
-msgid "Indirect Lighting"
-msgstr "간접 라이트닝"
-
-
 msgid "Denoising"
 msgstr "노이즈 제거"
 
 
 msgid "Shadows"
 msgstr "섀도우"
-
-
-msgid "Screen Space Reflections"
-msgstr "화면 공간 반사"
-
-
-msgid "Volumetrics"
-msgstr "볼륨메트릭"
-
-
-msgid "Volumetric Lighting"
-msgstr "볼륨메트릭 라이트닝"
-
-
-msgid "Volumetric Shadows"
-msgstr "볼륨메트릭 섀도우"
 
 
 msgid "Encoding"
@@ -57526,6 +56027,10 @@ msgid "Icon Colors"
 msgstr "아이콘 컬러"
 
 
+msgid "Shaded"
+msgstr "셰이드"
+
+
 msgid "Styles"
 msgstr "스타일"
 
@@ -57675,6 +56180,11 @@ msgstr "보간"
 
 
 msgctxt "Operator"
+msgid "Gradient"
+msgstr "그라디언트"
+
+
+msgctxt "Operator"
 msgid "Comb"
 msgstr "빗"
 
@@ -57743,11 +56253,6 @@ msgstr "메쉬 필터"
 
 
 msgctxt "Operator"
-msgid "Gradient"
-msgstr "그라디언트"
-
-
-msgctxt "Operator"
 msgid "Sample Weight"
 msgstr "샘플 웨이트"
 
@@ -57758,8 +56263,13 @@ msgstr "샘플 버텍스 그룹"
 
 
 msgctxt "Operator"
-msgid "Cutter"
-msgstr "커터"
+msgid "Box"
+msgstr "박스"
+
+
+msgctxt "Operator"
+msgid "Circle"
+msgstr "원형"
 
 
 msgctxt "Operator"
@@ -57783,17 +56293,8 @@ msgstr "커브"
 
 
 msgctxt "Operator"
-msgid "Box"
-msgstr "박스"
-
-
-msgctxt "Operator"
-msgid "Circle"
-msgstr "원형"
-
-
-msgid "Expand or contract the radius of the selected points"
-msgstr "선택한 포인트의 반지름을 확장 또는 축소"
+msgid "Trim"
+msgstr "다듬기"
 
 
 msgid "Clone from Paint Slot"
@@ -58018,14 +56519,6 @@ msgstr "파티클을 표시"
 
 msgid "Display actual particles"
 msgstr "실제 파티클을 표시"
-
-
-msgid "Comb"
-msgstr "빗"
-
-
-msgid "Puff"
-msgstr "퍼프"
 
 
 msgid "Auto Velocity"
@@ -58546,10 +57039,6 @@ msgstr "피직스 시뮬레이션을 위한 활성 포인트 캐시"
 
 msgid "Cache Compression"
 msgstr "캐시 압축"
-
-
-msgid "No compression"
-msgstr "압축 없음"
 
 
 msgid "Lite"
@@ -59556,10 +58045,6 @@ msgid "Overall sensitivity of the 3D Mouse for panning"
 msgstr "패닝에 대한 3D 마우스의 전반적인 감도"
 
 
-msgid "Show Navigation Guide"
-msgstr "네비게이션 가이드를 표시"
-
-
 msgid "Display the center and axis during rotation"
 msgstr "회전하는 동안 중심과 축을 표시"
 
@@ -59922,6 +58407,10 @@ msgstr "GL 텍스처 제한"
 
 msgid "Limit the texture size to save graphics memory"
 msgstr "그래픽 메모리를 절약하기 위하여 텍스처 크기를 제한"
+
+
+msgid "Device"
+msgstr "장치"
 
 
 msgid "Image Display Method"
@@ -60364,10 +58853,6 @@ msgid "Developer Extras"
 msgstr "개발자 추가 정보"
 
 
-msgid "Show options for developers (edit source in context menu, geometry indices)"
-msgstr "개발자를 위한 옵션 표시 (컨텍스트 메뉴의 소스 편집, 지오메트리 인덱스)"
-
-
 msgid "Use transform gizmos by default"
 msgstr "기본적으로 변형 기즈모를 사용"
 
@@ -60572,10 +59057,6 @@ msgid "Base"
 msgstr "베이스"
 
 
-msgid "Password"
-msgstr "패스워드"
-
-
 msgid "ID Property Group"
 msgstr "ID 속성 그룹"
 
@@ -60604,18 +59085,6 @@ msgid "Find"
 msgstr "찾기"
 
 
-msgid "Strip Characters"
-msgstr "스트립 문자"
-
-
-msgid "Digits"
-msgstr "숫자"
-
-
-msgid "Punctuation"
-msgstr "구두"
-
-
 msgid "Strip Part"
 msgstr "스트립 부분"
 
@@ -60634,6 +59103,10 @@ msgstr "이름을 설정"
 
 msgid "Set a new name or prefix/suffix the existing one"
 msgstr "새 이름을 설정하거나 기존 접두사/접미사를 설정합니다"
+
+
+msgid "Strip Characters"
+msgstr "스트립 문자"
 
 
 msgid "Strip leading/trailing text from the name"
@@ -60930,14 +59403,6 @@ msgstr "BVH 공간 분할을 사용: 빌더 시간은 증가, 빠른 렌더링"
 
 msgid "Albedo"
 msgstr "알베도"
-
-
-msgid "High quality"
-msgstr "높은 품질"
-
-
-msgid "Device"
-msgstr "장치"
 
 
 msgid "Device to use for rendering"
@@ -62128,22 +60593,6 @@ msgid "Sequencer Preview Shading"
 msgstr "시퀀서 미리보기 셰이딩"
 
 
-msgid "Display the object as wire edges"
-msgstr "와이어 에지로 오브젝트를 표시합니다"
-
-
-msgid "Display in solid mode"
-msgstr "솔리드 모드로 표시"
-
-
-msgid "Display in Material Preview mode"
-msgstr "매테리얼 미리보기 모드로 표시"
-
-
-msgid "Display render preview"
-msgstr "렌더 미리보기를 표시합니다"
-
-
 msgid "Simplify Child Particles"
 msgstr "자식 파티클을 단순화"
 
@@ -63332,10 +61781,6 @@ msgid "Method of anti-aliasing when rendering 3d viewport"
 msgstr "3D 뷰포트를 렌더링 할 때 앨리어싱 제거 방법"
 
 
-msgid "Knee"
-msgstr "굽은 구조"
-
-
 msgid "Max Size"
 msgstr "최대 크기"
 
@@ -63356,14 +61801,6 @@ msgid "Trace Precision"
 msgstr "추적 정밀도"
 
 
-msgid "Cubemap Display Size"
-msgstr "큐브맵 표시 크기"
-
-
-msgid "Size of the cubemap spheres to debug captured light"
-msgstr "캡처된 라이트를 디버그하기 위한 큐브 맵 구체의 크기"
-
-
 msgid "Cubemap Size"
 msgstr "큐브맵 크기"
 
@@ -63372,44 +61809,8 @@ msgid "Size of every cubemaps"
 msgstr "모든 큐브 맵의 크기"
 
 
-msgid "Filter Quality"
-msgstr "필터 품질"
-
-
-msgid "Take more samples during cubemap filtering to remove artifacts"
-msgstr "큐브 맵 필터링 중에 더 많은 샘플을 가져와 부자연스러움을 제거합니다"
-
-
 msgid "Clamp Glossy"
 msgstr "광택을 클램프"
-
-
-msgid "Irradiance Display Size"
-msgstr "방사 조도 표시 크기"
-
-
-msgid "Size of the irradiance sample spheres to debug captured light"
-msgstr "포착된 빛을 디버그하기 위한 방사 샘플 구체의 크기"
-
-
-msgid "Irradiance Smoothing"
-msgstr "방사 조도 스무딩"
-
-
-msgid "Show Cubemap Cache"
-msgstr "큐브맵 캐시를 표시합니다"
-
-
-msgid "Display captured cubemaps in the viewport"
-msgstr "뷰포트에 캡쳐된 큐브 맵을 표시"
-
-
-msgid "Show Irradiance Cache"
-msgstr "방사 조도 캐시를 표시합니다"
-
-
-msgid "Display irradiance samples in the viewport"
-msgstr "뷰포트에 방사 조도 샘플을 표시"
 
 
 msgid "Irradiance Visibility Size"
@@ -63422,10 +61823,6 @@ msgstr "각 방사 조도 샘플에 적용된 그림자지도의 크기"
 
 msgid "Distance of object that contribute to the ambient occlusion effect"
 msgstr "주변 폐색 효과에 기여하는 대상의 거리"
-
-
-msgid "Factor for ambient occlusion blending"
-msgstr "주변 폐색 블렌딩에 대한 팩터"
 
 
 msgid "Precision of the horizon search"
@@ -63448,46 +61845,6 @@ msgid "Percentage of render size to add as overscan to the internal render buffe
 msgstr "내부 렌더 버퍼에 오버스캔으로 추가 할 렌더 크기의 백분율"
 
 
-msgid "Directional Shadows Resolution"
-msgstr "방향성 섀도우 해상도"
-
-
-msgid "Cube Shadows Resolution"
-msgstr "큐브 섀도우 해상도"
-
-
-msgid "Edge Fading"
-msgstr "에지 페이딩"
-
-
-msgid "Screen percentage used to fade the SSR"
-msgstr "SSR을 페이드하는 데 사용되는 화면 비율"
-
-
-msgid "Max Roughness"
-msgstr "최대 거칠기"
-
-
-msgid "Do not raytrace reflections for roughness above this value"
-msgstr "이 값보다 큰 거칠기에 대한 반사를 광선 추적하지 마십시오"
-
-
-msgid "Pixel thickness used to detect intersection"
-msgstr "교차점을 감지하는 데 사용되는 픽셀 두께"
-
-
-msgid "Jitter Threshold"
-msgstr "지터 임계 값"
-
-
-msgid "Rotate samples that are below this threshold"
-msgstr "이 임계 값보다 낮은 샘플을 회전"
-
-
-msgid "Number of samples to compute the scattering effect"
-msgstr "산란 효과를 계산하기위한 샘플의 수"
-
-
 msgid "Render Samples"
 msgstr "렌더 샘플"
 
@@ -63500,52 +61857,8 @@ msgid "Enable ambient occlusion to simulate medium scale indirect shadowing"
 msgstr "중간 정도의 간접적인 섀도우를 시뮬레이트하기 위해 주변 폐색을 활성화"
 
 
-msgid "Bent Normals"
-msgstr "구부러진 노멀"
-
-
-msgid "Compute main non occluded direction to sample the environment"
-msgstr "환경을 샘플링하기 위해 주요 비 폐색 방향을 계산합니다"
-
-
-msgid "Bounces Approximation"
-msgstr "바운스 근사치"
-
-
-msgid "An approximation to simulate light bounces giving less occlusion on brighter objects"
-msgstr "밝은 바운스를 시뮬레이트하는 근사는 더 밝은 오브젝트에서 더 적은 폐색을 제공합니다"
-
-
 msgid "Internally render past the image border to avoid screen-space effects disappearing"
 msgstr "공간 공간 이펙트가 사라지지 않도록 내부적으로 이미지 테두리를 렌더링합니다"
-
-
-msgid "Soft Shadows"
-msgstr "소프트 섀도우"
-
-
-msgid "Randomize shadowmaps origin to create soft shadows"
-msgstr "섀도우 맵 원본을 무작위로 만들어 부드러운 그림자를 만듭니다"
-
-
-msgid "Enable screen space reflection"
-msgstr "화면 공간 반사를 사용"
-
-
-msgid "Half Res Trace"
-msgstr "절반 해상도 추적"
-
-
-msgid "Raytrace at a lower resolution"
-msgstr "해상도가 낮은 레이 트레이스"
-
-
-msgid "Screen Space Refractions"
-msgstr "화면 공간 반사"
-
-
-msgid "Enable screen space Refractions"
-msgstr "화면 공간 굴절을 사용합니다"
 
 
 msgid "Viewport Denoising"
@@ -63556,12 +61869,8 @@ msgid "Denoise image using temporal reprojection (can leave some ghosting)"
 msgstr "일시적인 재투영을 사용한 디노이즈 이미지 (일부 고스트를 남길 수 있음)"
 
 
-msgid "Enable scene light interactions with volumetrics"
-msgstr "볼륨메트릭과 라이트 라이트 상호 작용을 사용"
-
-
-msgid "Generate shadows from volumetric material (Very expensive)"
-msgstr "볼륨메트릭 매테리얼로 섀도우를 생성 (매우 고사양)"
+msgid "Volumetric Shadows"
+msgstr "볼륨메트릭 섀도우"
 
 
 msgid "End distance of the volumetric effect"
@@ -63676,760 +61985,6 @@ msgid "YCbCr (ITU 709)"
 msgstr "YCbCr (ITU 709)"
 
 
-msgid "Sequence strip in the sequence editor"
-msgstr "시퀀스 에디터에서 시퀀스 스트립"
-
-
-msgid "Blend Opacity"
-msgstr "혼합 불투명도"
-
-
-msgid "Percentage of how much the strip's colors affect other strips"
-msgstr "스트립의 컬러이 다른 스트립에 미치는 영향의 비율"
-
-
-msgid "Method for controlling how the strip combines with other strips"
-msgstr "스트립이 다른 스트립과 결합하는 방법을 제어하는 메서드"
-
-
-msgid "Alpha Under"
-msgstr "알파 언더"
-
-
-msgid "Gamma Cross"
-msgstr "감마 교차"
-
-
-msgid "Over Drop"
-msgstr "오버 드롭"
-
-
-msgid "Y position of the sequence strip"
-msgstr "시퀀스 스트립의 Y 위치"
-
-
-msgid "Effect Fader Position"
-msgstr "이펙트 페이더 위치"
-
-
-msgid "Custom fade value"
-msgstr "커스텀 페이드 값"
-
-
-msgid "The length of the contents of this strip before the handles are applied"
-msgstr "핸들이 적용된 이전에 이 스트립의 콘텐츠 길이"
-
-
-msgid "The length of the contents of this strip after the handles are applied"
-msgstr "핸들이 적용된 이후에 이 스트립의 콘텐츠 길이"
-
-
-msgid "End frame displayed in the sequence editor after offsets are applied"
-msgstr "오프셋이 적용된 이후에 시퀀스 에디터에 표시되는 종료 프레임"
-
-
-msgid "Start frame displayed in the sequence editor after offsets are applied, setting this is equivalent to moving the handle, not the actual start frame"
-msgstr "오프셋이 적용된 후 시퀀스 에디터에 표시된 프레임 시작, 실제 시작 프레임이 아니라 핸들을 이동하는 것과 같습니다"
-
-
-msgid "End Offset"
-msgstr "종료 오프셋"
-
-
-msgid "X position where the strip begins"
-msgstr "스트립이 시작되는 X 위치"
-
-
-msgid "Lock strip so that it cannot be transformed"
-msgstr "스트립을 변형할 수 없도록 잠금"
-
-
-msgid "Modifiers affecting this strip"
-msgstr "이 스트립에 영향을 미치는 모디파이어"
-
-
-msgid "Disable strip so that it cannot be viewed in the output"
-msgstr "출력물에서 볼 수 없도록 스트립을 해제"
-
-
-msgid "Override Cache Settings"
-msgstr "캐시 설정을 재정의"
-
-
-msgid "Override global cache settings"
-msgstr "글로벌 캐시 설정을 재정의"
-
-
-msgid "Left Handle Selected"
-msgstr "왼쪽 핸들 선택됨"
-
-
-msgid "Right Handle Selected"
-msgstr "오른쪽 핸들 선택됨"
-
-
-msgctxt "Sequence"
-msgid "Image"
-msgstr "이미지"
-
-
-msgctxt "Sequence"
-msgid "Meta"
-msgstr "메타"
-
-
-msgctxt "Sequence"
-msgid "Scene"
-msgstr "씬"
-
-
-msgctxt "Sequence"
-msgid "Movie"
-msgstr "무비"
-
-
-msgctxt "Sequence"
-msgid "Clip"
-msgstr "클립"
-
-
-msgctxt "Sequence"
-msgid "Mask"
-msgstr "마스크"
-
-
-msgctxt "Sequence"
-msgid "Sound"
-msgstr "사운드"
-
-
-msgctxt "Sequence"
-msgid "Cross"
-msgstr "교차"
-
-
-msgctxt "Sequence"
-msgid "Over Drop"
-msgstr "오버 드롭"
-
-
-msgid "Cache Composite"
-msgstr "캐쉬 컴포지트"
-
-
-msgid "Cache intermediate composited images, for faster tweaking of stacked strips at the cost of memory usage"
-msgstr "스택된 스트립의 빠른 조정을 위해 메모리 사용 비용으로 중간 컴포지트된 이미지를 캐시합니다"
-
-
-msgid "Cache Raw"
-msgstr "캐시 Raw"
-
-
-msgid "Cache raw images read from disk, for faster tweaking of strip parameters at the cost of memory usage"
-msgstr "디스크에서 읽은 원본 이미지를 캐시하여 메모리 비용으로 사용하여 스트립 매개 변수를 빠르게 조정할 수 있습니다"
-
-
-msgid "Use Default Fade"
-msgstr "기본 페이드를 사용"
-
-
-msgid "Use Linear Modifiers"
-msgstr "선형 모디파이어 사용"
-
-
-msgid "Calculate modifiers in linear space instead of sequencer's space"
-msgstr "시퀀서의 공간의 대신 선형 공간에서 모디파이어를 계산"
-
-
-msgid "Effect Sequence"
-msgstr "이펙트 시퀀스"
-
-
-msgid "Sequence strip applying an effect on the images created by other strips"
-msgstr "다른 스트립으로 생성된 이미지에 이펙트를 적용하는 시퀀스 스트립"
-
-
-msgid "Representation of alpha information in the RGBA pixels"
-msgstr "RGBA 픽셀에서 알파 정보의 표현"
-
-
-msgid "RGB channels in transparent pixels are unaffected by the alpha channel"
-msgstr "투명 픽셀에서 RGB 채널은 알파 채널로 영향을 주지 않음"
-
-
-msgid "RGB channels in transparent pixels are multiplied by the alpha channel"
-msgstr "투명 픽셀에서 RGB 채널은 알파 채널로 곱해짐"
-
-
-msgid "Multiply Colors"
-msgstr "컬러를 곱하기"
-
-
-msgid "Adjust the intensity of the input's color"
-msgstr "입력 컬러의 강도를 조정"
-
-
-msgid "Strobe"
-msgstr "스트로브"
-
-
-msgid "Only display every nth frame"
-msgstr "메번 N 번째 프레임 만을 표시"
-
-
-msgid "Remove fields from video movies"
-msgstr "비디오 무비에서 필드를 제거"
-
-
-msgid "Flip on the X axis"
-msgstr "X 축에 뒤집기"
-
-
-msgid "Flip on the Y axis"
-msgstr "Y 축에 뒤집기"
-
-
-msgid "Convert Float"
-msgstr "실수를 변환"
-
-
-msgid "Convert input to float data"
-msgstr "실수 데이터에 입력을 변환"
-
-
-msgid "Reverse Frames"
-msgstr "프레임을 반전"
-
-
-msgid "Reverse frame order"
-msgstr "프레임 순서를 반전"
-
-
-msgid "Add Sequence"
-msgstr "시퀀스를 추가"
-
-
-msgid "Input 1"
-msgstr "입력 1"
-
-
-msgid "First input for the effect strip"
-msgstr "이펙트 스트립에 대한 첫 번째 입력"
-
-
-msgid "Input 2"
-msgstr "입력 2"
-
-
-msgid "Second input for the effect strip"
-msgstr "이펙트 스트립에 대한 두 번째의 입력"
-
-
-msgid "Adjustment Layer Sequence"
-msgstr "레이어 시퀀스를 조정"
-
-
-msgid "Sequence strip to perform filter adjustments to layers below"
-msgstr "아래 레이어에 필터 조정을 수행하는 시퀀스 스트립"
-
-
-msgid "Animation End Offset"
-msgstr "애니메이션 종료 오프셋"
-
-
-msgid "Animation end offset (trim end)"
-msgstr "애니메이션 종료 오프셋 (다듬기 종료)"
-
-
-msgid "Animation Start Offset"
-msgstr "애니메이션 시작 오프셋"
-
-
-msgid "Animation start offset (trim start)"
-msgstr "애니메이션 시작 오프셋 (다듬기 시작)"
-
-
-msgid "Alpha Over Sequence"
-msgstr "알파 오버 시퀀스"
-
-
-msgid "Alpha Under Sequence"
-msgstr "알파 언더 시퀀스"
-
-
-msgid "Color Mix Sequence"
-msgstr "컬러 조합 시퀀스"
-
-
-msgid "Color Sequence"
-msgstr "컬러 시퀀스"
-
-
-msgid "Sequence strip creating an image filled with a single color"
-msgstr "단일 컬러로 채워진 이미지를 만드는 시퀀스 스트립"
-
-
-msgid "Effect Strip color"
-msgstr "이펙트 스트립 컬러"
-
-
-msgid "Cross Sequence"
-msgstr "교차 시퀀스"
-
-
-msgid "Gamma Cross Sequence"
-msgstr "감마 교차 시퀀스"
-
-
-msgid "Gaussian Blur Sequence"
-msgstr "가우시안 블러 시퀀스"
-
-
-msgid "Sequence strip creating a gaussian blur"
-msgstr "가우시안 블러를 만드는 시퀀스 스트립"
-
-
-msgid "Size of the blur along X axis"
-msgstr "X 축을 따라 블러의 크기"
-
-
-msgid "Size of the blur along Y axis"
-msgstr "Y 축을 따라 블러의 크기"
-
-
-msgid "Glow Sequence"
-msgstr "글로우 시퀀스"
-
-
-msgid "Sequence strip creating a glow effect"
-msgstr "글로우 이펙트를 만드는 시퀀스 스트립"
-
-
-msgid "Blur Distance"
-msgstr "블러 거리"
-
-
-msgid "Radius of glow effect"
-msgstr "글로우 이펙트의 반경"
-
-
-msgid "Boost Factor"
-msgstr "부스트 팩터"
-
-
-msgid "Brightness multiplier"
-msgstr "밝기 배율"
-
-
-msgid "Brightness limit of intensity"
-msgstr "강도의 밝기 제한"
-
-
-msgid "Accuracy of the blur effect"
-msgstr "블러 이펙트의 정확도"
-
-
-msgid "Minimum intensity to trigger a glow"
-msgstr "글로우를 트리거하는 최소의 강도"
-
-
-msgid "Only Boost"
-msgstr "부스트 만"
-
-
-msgid "Show the glow buffer only"
-msgstr "글로우 버퍼 만 표시"
-
-
-msgid "Multicam Select Sequence"
-msgstr "멀티캠 선택 시퀀스"
-
-
-msgid "Sequence strip to perform multicam editing"
-msgstr "멀티캠 편집을 실행하는 시퀀스 스트립"
-
-
-msgid "Multicam Source Channel"
-msgstr "멀티캠 소스 채널"
-
-
-msgid "Multiply Sequence"
-msgstr "시퀀스를 곱하기"
-
-
-msgid "Over Drop Sequence"
-msgstr "오버 드롭 시퀀스"
-
-
-msgid "SpeedControl Sequence"
-msgstr "속력 컨트롤 시퀀스"
-
-
-msgid "Sequence strip to control the speed of other strips"
-msgstr "다른 스트립의 속력를 컨트롤하는 시퀀스 스트립"
-
-
-msgid "Multiply the current speed of the sequence with this number or remap current frame to this frame"
-msgstr "시퀀스의 현재 속력에 이 숫자를 곱하거나 현재 프레임을 이 프레임으로 다시 맵"
-
-
-msgid "Subtract Sequence"
-msgstr "시퀀스 빼기"
-
-
-msgid "Text Sequence"
-msgstr "텍스트 시퀀스"
-
-
-msgid "Sequence strip creating text"
-msgstr "텍스트를 만드는 시퀀스 스트립"
-
-
-msgid "Align X"
-msgstr "정렬 X"
-
-
-msgid "Align the text along the X axis, relative to the text bounds"
-msgstr "텍스트 경계를 기준으로 X 축을 따라 텍스트를 정렬"
-
-
-msgid "Align Y"
-msgstr "정렬 Y"
-
-
-msgid "Align the text along the Y axis, relative to the text bounds"
-msgstr "텍스트 경계를 기준으로 Y 축을 따라 텍스트를 정렬"
-
-
-msgid "Text color"
-msgstr "텍스트 컬러"
-
-
-msgid "Size of the text"
-msgstr "텍스트의 크기"
-
-
-msgid "Location of the text"
-msgstr "텍스트의 위치"
-
-
-msgid "Outline Color"
-msgstr "윤곽선 컬러"
-
-
-msgid "Outline Width"
-msgstr "윤곽선 폭"
-
-
-msgid "Text that will be displayed"
-msgstr "표시되는 텍스트"
-
-
-msgid "Display shadow behind text"
-msgstr "텍스트뒤 그림자를 표시합니다"
-
-
-msgid "Wrap Width"
-msgstr "줄 바꾸기 폭"
-
-
-msgid "Word wrap width as factor, zero disables"
-msgstr "팩터로 단어 줄 바꾸기 폭, 제로 비활성화"
-
-
-msgid "Transform Sequence"
-msgstr "변환 시퀀스"
-
-
-msgid "Sequence strip applying affine transformations to other strips"
-msgstr "다른 스트립에 아핀 변환을 적용하는 시퀀스 스트립"
-
-
-msgid "Method to determine how missing pixels are created"
-msgstr "누락된 픽셀 생성 방법을 결정하는 메서드"
-
-
-msgid "Bilinear interpolation"
-msgstr "이중선형 보간"
-
-
-msgid "Bicubic interpolation"
-msgstr "바이큐빅 보간"
-
-
-msgid "Degrees to rotate the input"
-msgstr "입력 회전 각도"
-
-
-msgid "Amount to scale the input in the X axis"
-msgstr "X 축으로 입력 축적을 조정하는 양"
-
-
-msgid "Amount to scale the input in the Y axis"
-msgstr "Y 축으로 입력 축적을 조정하는 양"
-
-
-msgid "Translate X"
-msgstr "옮기기 X"
-
-
-msgid "Amount to move the input on the X axis"
-msgstr "X 축으로 입력 이동하는 양"
-
-
-msgid "Translate Y"
-msgstr "옮기기 Y"
-
-
-msgid "Amount to move the input on the Y axis"
-msgstr "Y 축으로 입력 이동하는 양"
-
-
-msgid "Translation Unit"
-msgstr "옮기기 단위"
-
-
-msgid "Unit of measure to translate the input"
-msgstr "입력을 옮기는 측정 단위"
-
-
-msgid "Scale uniformly, preserving aspect ratio"
-msgstr "균일하게 축적, 종횡비를 유지"
-
-
-msgid "Wipe Sequence"
-msgstr "웨이프 시퀀스"
-
-
-msgid "Sequence strip creating a wipe transition"
-msgstr "웨이프 전환을 만드는 시퀀스 스트립"
-
-
-msgid "Blur Width"
-msgstr "블러 폭"
-
-
-msgctxt "Sequence"
-msgid "Transition Type"
-msgstr "전환 유형"
-
-
-msgctxt "Sequence"
-msgid "Single"
-msgstr "싱글"
-
-
-msgctxt "Sequence"
-msgid "Double"
-msgstr "더블"
-
-
-msgctxt "Sequence"
-msgid "Iris"
-msgstr "Iris"
-
-
-msgctxt "Sequence"
-msgid "Clock"
-msgstr "클릭"
-
-
-msgid "Sequence strip to load one or more images"
-msgstr "하나 또는 더 많은 이미지들 불러오는 시퀀스 스트립"
-
-
-msgid "Mask Sequence"
-msgstr "마스크 시퀀스"
-
-
-msgid "Sequence strip to load a video from a mask"
-msgstr "마스크에서 비디오를 불러오는 시퀀스 스트립"
-
-
-msgid "Mask that this sequence uses"
-msgstr "이 시퀀스가 사용하는 마스크"
-
-
-msgid "Meta Sequence"
-msgstr "메타 시퀀스"
-
-
-msgid "Sequence strip to group other strips as a single sequence strip"
-msgstr "싱글 시퀀스 스트립으로 다른 스트립을 그룹하는 시퀀스 스트립"
-
-
-msgid "Sequences"
-msgstr "시퀀스"
-
-
-msgid "MovieClip Sequence"
-msgstr "무비 클립 시퀀스"
-
-
-msgid "Sequence strip to load a video from the clip editor"
-msgstr "클립 에디터에서 비디오를 가져오는 시퀀스 스트립"
-
-
-msgid "Frames per second"
-msgstr "초당 프레임"
-
-
-msgid "Stabilize 2D Clip"
-msgstr "안정화 2D 클립"
-
-
-msgid "Use the 2D stabilized version of the clip"
-msgstr "클립의 2D 안정화된 버전을 사용"
-
-
-msgid "Undistort Clip"
-msgstr "클립을 왜곡취소"
-
-
-msgid "Use the undistorted version of the clip"
-msgstr "클립의 왜곡 안된 버전을 사용"
-
-
-msgid "Movie Sequence"
-msgstr "무비 시퀀스"
-
-
-msgid "Sequence strip to load a video"
-msgstr "비디오를 불러오는 시퀀스 스트립"
-
-
-msgid "Stream Index"
-msgstr "흐름 인덱스"
-
-
-msgid "For files with several movie streams, use the stream with the given index"
-msgstr "여러 무비 스트립이 있는 파일의 경우 지정된 인덱스가 있는 스트립을 사용"
-
-
-msgid "Mode to load movie views"
-msgstr "무비 뷰를 불러오는 모드"
-
-
-msgid "Scene Sequence"
-msgstr "씬 시퀀스"
-
-
-msgid "Scene that this sequence uses"
-msgstr "이 시퀀스가 사용하는 씬"
-
-
-msgid "Camera Override"
-msgstr "카메라 재정의"
-
-
-msgid "Input type to use for the Scene strip"
-msgstr "씬 스트립에 사용할 입력 유형"
-
-
-msgid "Use the Scene's 3D camera as input"
-msgstr "씬의 3D 카메라를 입력으로 사용"
-
-
-msgid "Use the Scene's Sequencer timeline as input"
-msgstr "씬의 시퀀서 타임 라인을 입력으로 사용"
-
-
-msgid "Playback volume of the sound"
-msgstr "소리의 재생 볼륨"
-
-
-msgid "Sound Sequence"
-msgstr "사운드 시퀀스"
-
-
-msgid "Sequence strip defining a sound to be played over a period of time"
-msgstr "일정 시간 동안 재생할 사운드를 정의하는 시퀀스 스트립"
-
-
-msgid "Playback panning of the sound (only for Mono sources)"
-msgstr "사운드의 재생 패닝 (모노 소스에만 해당)"
-
-
-msgid "Display Waveform"
-msgstr "파형을 표시"
-
-
-msgid "Display the audio waveform inside the strip"
-msgstr "스트립 안에 오디오 파형을 표시"
-
-
-msgid "Sound data-block used by this sequence"
-msgstr "이 시퀀스로 사용되는 사운드 데이터 블록"
-
-
-msgid "Sequence Color Balance Data"
-msgstr "시퀀스 컬러 균형 데이터"
-
-
-msgid "Color balance gain (highlights)"
-msgstr "컬러 균형 이득 (강조)"
-
-
-msgid "Color balance gamma (midtones)"
-msgstr "컬러 균형 감마 (중간톤)"
-
-
-msgid "Inverse Gain"
-msgstr "이득을 반전"
-
-
-msgid "Inverse Gamma"
-msgstr "감마를 반전"
-
-
-msgid "Invert the gamma color"
-msgstr "감마 컬러를 반전"
-
-
-msgid "Inverse Lift"
-msgstr "반전 상승"
-
-
-msgid "Invert the lift color"
-msgstr "상승 컬러를 반전"
-
-
-msgid "Color balance lift (shadows)"
-msgstr "컬러 균형 상승 (섀도우)"
-
-
-msgid "Sequence Color Balance"
-msgstr "시퀀스 컬러 균형"
-
-
-msgid "Color balance parameters for a sequence strip"
-msgstr "시퀀스 스트립에 대한 컬러 균형 매개 변수"
-
-
-msgid "Sequence Crop"
-msgstr "시퀀스 자르기"
-
-
-msgid "Cropping parameters for a sequence strip"
-msgstr "시퀀스 스트립에 대한 매개 변수를 자르기"
-
-
-msgid "Number of pixels to crop from the right side"
-msgstr "오른쪽에서 자르는 픽셀의 수"
-
-
-msgid "Number of pixels to crop from the top"
-msgstr "상단에서 자르는 픽셀의 수"
-
-
-msgid "Number of pixels to crop from the left side"
-msgstr "왼쪽에서 자르는 픽셀의 수"
-
-
-msgid "Number of pixels to crop from the bottom"
-msgstr "하단에서 자르는 픽셀의 수"
-
-
 msgid "Sequence editing data for a Scene data-block"
 msgstr "씬 데이터 블록에 대한 시퀀스 편집 데이터"
 
@@ -64474,24 +62029,28 @@ msgid "Store proxies using project directory"
 msgstr "프로젝트 디렉토리를 사용하여 프록시를 저장"
 
 
-msgid "Top-level strips only"
-msgstr "최상위 스트립 만"
-
-
-msgid "All Sequences"
-msgstr "모든 시퀀스"
-
-
-msgid "All strips, recursively including those inside metastrips"
-msgstr "모든 스트립, 반복적으로 메타 스트립 내부의 것을 포함"
-
-
 msgid "Show Overlay"
 msgstr "오버레이를 표시"
 
 
 msgid "Partial overlay on top of the sequencer with a frame offset"
 msgstr "프레임 오프셋을 사용하여 시퀀서 상단에 부분 오버레이"
+
+
+msgid "Top-level strips only"
+msgstr "최상위 스트립 만"
+
+
+msgid "All strips, recursively including those inside metastrips"
+msgstr "모든 스트립, 반복적으로 메타 스트립 내부의 것을 포함"
+
+
+msgid "Cache Composite"
+msgstr "캐쉬 컴포지트"
+
+
+msgid "Cache intermediate composited images, for faster tweaking of stacked strips at the cost of memory usage"
+msgstr "스택된 스트립의 빠른 조정을 위해 메모리 사용 비용으로 중간 컴포지트된 이미지를 캐시합니다"
 
 
 msgid "Cache Final"
@@ -64502,212 +62061,16 @@ msgid "Cache final image for each frame"
 msgstr "각 프레임의 최종 이미지를 캐시"
 
 
+msgid "Cache Raw"
+msgstr "캐시 Raw"
+
+
+msgid "Cache raw images read from disk, for faster tweaking of strip parameters at the cost of memory usage"
+msgstr "디스크에서 읽은 원본 이미지를 캐시하여 메모리 비용으로 사용하여 스트립 매개 변수를 빠르게 조정할 수 있습니다"
+
+
 msgid "Overlay Lock"
 msgstr "오버레이 잠금"
-
-
-msgid "Sequence Element"
-msgstr "시퀀스 요소"
-
-
-msgid "Sequence strip data for a single frame"
-msgstr "싱글 프레임의 시퀀스 스트립 데이터"
-
-
-msgid "Name of the source file"
-msgstr "소스 파일의 이름"
-
-
-msgid "Orig Height"
-msgstr "오링 높이"
-
-
-msgid "Original image height"
-msgstr "원본 이미지의 높이"
-
-
-msgid "Orig Width"
-msgstr "오링 폭"
-
-
-msgid "Original image width"
-msgstr "원본 이미지 폭"
-
-
-msgid "Collection of SequenceElement"
-msgstr "시퀀스 요소의 컬렉션"
-
-
-msgid "Modifier for sequence strip"
-msgstr "시퀀스 스트립에 대한 모디파이어"
-
-
-msgid "Mask ID used as mask input for the modifier"
-msgstr "모디파이어에 대한 마스크 입력으로 사용된 마스크 ID"
-
-
-msgid "Mask Strip"
-msgstr "마스크 스트립"
-
-
-msgid "Strip used as mask input for the modifier"
-msgstr "수정을 위해 마스크 입력으로 사용할 스트립"
-
-
-msgid "Mask Input Type"
-msgstr "마스크 입력 유형"
-
-
-msgid "Type of input data used for mask"
-msgstr "마스크에 대한 사용된 입력 데이터의 유형"
-
-
-msgid "Use sequencer strip as mask input"
-msgstr "마스크 입력으로 시퀀서 스트립을 사용"
-
-
-msgid "Use mask ID as mask input"
-msgstr "마스크 입력으로 마스크 ID를 사용"
-
-
-msgid "Mask Time"
-msgstr "마스크 시간"
-
-
-msgid "Time to use for the Mask animation"
-msgstr "마스크 애니메이션에 사용하는 시간"
-
-
-msgid "Mask animation is offset to start of strip"
-msgstr "마스크 애니메이션은 스트립의 시작에 오프셋"
-
-
-msgid "Mask animation is in sync with scene frame"
-msgstr "마스크 애니메이션은 씬 프레임과 함께 동기화에"
-
-
-msgid "Mute this modifier"
-msgstr "이 모디파이어를 음소거"
-
-
-msgid "Mute expanded settings for the modifier"
-msgstr "모디파이어에 대한 확장된 설정을 음소거"
-
-
-msgid "Tone Map"
-msgstr "톤맵"
-
-
-msgid "Bright/contrast modifier data for sequence strip"
-msgstr "시퀀스 스트립에 대한 밝기/대비 모디파이어 데이터"
-
-
-msgid "Adjust the luminosity of the colors"
-msgstr "컬러의 밝기를 조정"
-
-
-msgid "Adjust the difference in luminosity between pixels"
-msgstr "픽셀 사이의 광도 차이를 조정"
-
-
-msgid "Color balance modifier for sequence strip"
-msgstr "시퀀스 스트립에 대한 컬러 밸런스 수정"
-
-
-msgid "Multiply the intensity of each pixel"
-msgstr "각 픽셀의 강도를 곱하기"
-
-
-msgid "RGB curves modifier for sequence strip"
-msgstr "시퀀스 스트립의 RGB커브 모디파이어"
-
-
-msgid "Hue correction modifier for sequence strip"
-msgstr "시퀀스 스트립에 대한 색조 보정 모디파이어"
-
-
-msgid "Tone mapping modifier"
-msgstr "톤 매핑 모디파이어"
-
-
-msgid "Tone mapping algorithm"
-msgstr "톤 매핑 알고리즘"
-
-
-msgid "White balance modifier for sequence strip"
-msgstr "시퀀스 스트립에 대한 화이트 밸런스 모디파이어"
-
-
-msgid "White Value"
-msgstr "화이트 값"
-
-
-msgid "This color defines white in the strip"
-msgstr "스트립에서 흰색을 정의하는 컬러"
-
-
-msgid "Strip Modifiers"
-msgstr "스트립 모디파이어"
-
-
-msgid "Collection of strip modifiers"
-msgstr "스트립 모디파이어의 컬렉션"
-
-
-msgid "Sequence Proxy"
-msgstr "시퀀스 프록시"
-
-
-msgid "Proxy parameters for a sequence strip"
-msgstr "시퀀스 스트립에 대한 프록시 매개 변수"
-
-
-msgid "Build 100% proxy resolution"
-msgstr "빌드 100% 프록시 해상도"
-
-
-msgid "Build 25% proxy resolution"
-msgstr "빌드 25% 프록시 해상도"
-
-
-msgid "Build 50% proxy resolution"
-msgstr "빌드 50% 프록시 해상도"
-
-
-msgid "Build 75% proxy resolution"
-msgstr "빌드 75% 프록시 해상도"
-
-
-msgid "Location of custom proxy file"
-msgstr "커스텀 프록시 파일의 위치"
-
-
-msgid "Method for reading the inputs timecode"
-msgstr "입력 타임 코드를 읽는 메서드"
-
-
-msgid "Overwrite existing proxy files when building"
-msgstr "빌딩 할 때 기존 프록시 파일을 덮어 쓰기"
-
-
-msgid "Use a custom directory to store data"
-msgstr "데이터를 저장하는 커스텀 디렉토리를 사용"
-
-
-msgid "Proxy Custom File"
-msgstr "프록시 커스텀 파일"
-
-
-msgid "Use a custom file to read proxy data from"
-msgstr "다음에서 프록시 데이터를 읽는 커스텀 파일을 사용"
-
-
-msgid "Sequence Transform"
-msgstr "시퀀스 변환"
-
-
-msgid "Transform parameters for a sequence strip"
-msgstr "시퀀스 스트립에 대한 매개 변수를 변환"
 
 
 msgid "Show Cache"
@@ -64788,14 +62151,6 @@ msgstr "2D 커서 주위에 피벗"
 
 msgid "Individual Origins"
 msgstr "개별 오리진"
-
-
-msgid "Collection of Sequences"
-msgstr "시퀀스의 컬렉션"
-
-
-msgid "Effect affecting the grease pencil object"
-msgstr "그리스 팬슬 오브젝트에 영향을 미치는 효과"
 
 
 msgid "Effect name"
@@ -65008,6 +62363,10 @@ msgstr "웨이브의 위상 이동"
 
 msgid "Rotation around center or object"
 msgstr "중심이나 오브젝트 주위에 회전"
+
+
+msgid "Shadow Color"
+msgstr "섀도우 컬러"
 
 
 msgid "Color used for Shadow"
@@ -65300,6 +62659,10 @@ msgstr "당기기"
 
 msgid "Edge spring stiffness when longer than rest length"
 msgstr "휴식 길이보다 더 길게 할 때 에지 스프링 강성"
+
+
+msgid "Push"
+msgstr "밀기"
 
 
 msgid "Edge spring stiffness when shorter than rest length"
@@ -66080,10 +63443,6 @@ msgid "Display Z-buffer associated with image (mapped from camera clip start to 
 msgstr "이미지와 관련된 Z 버퍼를 표시 (카메라 클립 시작부터 끝까지 매핑됨)"
 
 
-msgid "Grease pencil data for this space"
-msgstr "이 공간의 그리스 펜슬 데이터"
-
-
 msgid "View the image"
 msgstr "이미지를 보기"
 
@@ -66390,6 +63749,14 @@ msgstr "라인 스타일에서 텍스처 노드를 편집"
 
 msgid "Node tree type to display and edit"
 msgstr "표시 및 편집하는 노드 트리 유형"
+
+
+msgid "Shader Editor"
+msgstr "셰이더 에디터"
+
+
+msgid "Texture Node Editor"
+msgstr "텍스처 노드 에디터"
 
 
 msgid "Space Outliner"
@@ -67084,6 +64451,10 @@ msgid "Gizmo to adjust location"
 msgstr "기즈모로 위치를 조정합니다"
 
 
+msgid "Speaker"
+msgstr "스피커"
+
+
 msgid "Show Reconstruction"
 msgstr "복원을 표시"
 
@@ -67228,10 +64599,6 @@ msgid "Display faces colored according to the difference in shape between UVs an
 msgstr "UV와 3D 좌표 간의 모양 차이에 따라 페이스를 표시합니다 (파란색은 왜곡이 적고 빨간색은 왜곡이 심함)"
 
 
-msgid "Display Texture Paint UVs"
-msgstr "텍스처 페인트 UV를 표시"
-
-
 msgid "Tile Grid Shape"
 msgstr "타일 그리드 셰이프"
 
@@ -67374,6 +64741,847 @@ msgstr "압착된 프레임"
 
 msgid "Combine both views in a squeezed image"
 msgstr "압착된 이미지에서 보기를 둘 다 결합"
+
+
+msgid "Sequence strip in the sequence editor"
+msgstr "시퀀스 에디터에서 시퀀스 스트립"
+
+
+msgid "Blend Opacity"
+msgstr "혼합 불투명도"
+
+
+msgid "Percentage of how much the strip's colors affect other strips"
+msgstr "스트립의 컬러이 다른 스트립에 미치는 영향의 비율"
+
+
+msgid "Method for controlling how the strip combines with other strips"
+msgstr "스트립이 다른 스트립과 결합하는 방법을 제어하는 메서드"
+
+
+msgid "Cross"
+msgstr "교차"
+
+
+msgid "Alpha Under"
+msgstr "알파 언더"
+
+
+msgid "Gamma Cross"
+msgstr "감마 교차"
+
+
+msgid "Y position of the sequence strip"
+msgstr "시퀀스 스트립의 Y 위치"
+
+
+msgid "Effect Fader Position"
+msgstr "이펙트 페이더 위치"
+
+
+msgid "Custom fade value"
+msgstr "커스텀 페이드 값"
+
+
+msgid "The length of the contents of this strip before the handles are applied"
+msgstr "핸들이 적용된 이전에 이 스트립의 콘텐츠 길이"
+
+
+msgid "The length of the contents of this strip after the handles are applied"
+msgstr "핸들이 적용된 이후에 이 스트립의 콘텐츠 길이"
+
+
+msgid "End frame displayed in the sequence editor after offsets are applied"
+msgstr "오프셋이 적용된 이후에 시퀀스 에디터에 표시되는 종료 프레임"
+
+
+msgid "Start frame displayed in the sequence editor after offsets are applied, setting this is equivalent to moving the handle, not the actual start frame"
+msgstr "오프셋이 적용된 후 시퀀스 에디터에 표시된 프레임 시작, 실제 시작 프레임이 아니라 핸들을 이동하는 것과 같습니다"
+
+
+msgid "End Offset"
+msgstr "종료 오프셋"
+
+
+msgid "X position where the strip begins"
+msgstr "스트립이 시작되는 X 위치"
+
+
+msgid "Lock strip so that it cannot be transformed"
+msgstr "스트립을 변형할 수 없도록 잠금"
+
+
+msgid "Modifiers affecting this strip"
+msgstr "이 스트립에 영향을 미치는 모디파이어"
+
+
+msgid "Disable strip so that it cannot be viewed in the output"
+msgstr "출력물에서 볼 수 없도록 스트립을 해제"
+
+
+msgid "Override Cache Settings"
+msgstr "캐시 설정을 재정의"
+
+
+msgid "Override global cache settings"
+msgstr "글로벌 캐시 설정을 재정의"
+
+
+msgid "Left Handle Selected"
+msgstr "왼쪽 핸들 선택됨"
+
+
+msgid "Right Handle Selected"
+msgstr "오른쪽 핸들 선택됨"
+
+
+msgctxt "Sequence"
+msgid "Image"
+msgstr "이미지"
+
+
+msgctxt "Sequence"
+msgid "Meta"
+msgstr "메타"
+
+
+msgctxt "Sequence"
+msgid "Scene"
+msgstr "씬"
+
+
+msgctxt "Sequence"
+msgid "Movie"
+msgstr "무비"
+
+
+msgctxt "Sequence"
+msgid "Clip"
+msgstr "클립"
+
+
+msgctxt "Sequence"
+msgid "Mask"
+msgstr "마스크"
+
+
+msgctxt "Sequence"
+msgid "Sound"
+msgstr "사운드"
+
+
+msgctxt "Sequence"
+msgid "Cross"
+msgstr "교차"
+
+
+msgid "Use Default Fade"
+msgstr "기본 페이드를 사용"
+
+
+msgid "Use Linear Modifiers"
+msgstr "선형 모디파이어 사용"
+
+
+msgid "Calculate modifiers in linear space instead of sequencer's space"
+msgstr "시퀀서의 공간의 대신 선형 공간에서 모디파이어를 계산"
+
+
+msgid "Sequence strip applying an effect on the images created by other strips"
+msgstr "다른 스트립으로 생성된 이미지에 이펙트를 적용하는 시퀀스 스트립"
+
+
+msgid "Representation of alpha information in the RGBA pixels"
+msgstr "RGBA 픽셀에서 알파 정보의 표현"
+
+
+msgid "RGB channels in transparent pixels are unaffected by the alpha channel"
+msgstr "투명 픽셀에서 RGB 채널은 알파 채널로 영향을 주지 않음"
+
+
+msgid "RGB channels in transparent pixels are multiplied by the alpha channel"
+msgstr "투명 픽셀에서 RGB 채널은 알파 채널로 곱해짐"
+
+
+msgid "Multiply Colors"
+msgstr "컬러를 곱하기"
+
+
+msgid "Adjust the intensity of the input's color"
+msgstr "입력 컬러의 강도를 조정"
+
+
+msgid "Strobe"
+msgstr "스트로브"
+
+
+msgid "Only display every nth frame"
+msgstr "메번 N 번째 프레임 만을 표시"
+
+
+msgid "Remove fields from video movies"
+msgstr "비디오 무비에서 필드를 제거"
+
+
+msgid "Flip on the X axis"
+msgstr "X 축에 뒤집기"
+
+
+msgid "Flip on the Y axis"
+msgstr "Y 축에 뒤집기"
+
+
+msgid "Convert Float"
+msgstr "실수를 변환"
+
+
+msgid "Convert input to float data"
+msgstr "실수 데이터에 입력을 변환"
+
+
+msgid "Reverse Frames"
+msgstr "프레임을 반전"
+
+
+msgid "Reverse frame order"
+msgstr "프레임 순서를 반전"
+
+
+msgid "Input 1"
+msgstr "입력 1"
+
+
+msgid "First input for the effect strip"
+msgstr "이펙트 스트립에 대한 첫 번째 입력"
+
+
+msgid "Input 2"
+msgstr "입력 2"
+
+
+msgid "Second input for the effect strip"
+msgstr "이펙트 스트립에 대한 두 번째의 입력"
+
+
+msgid "Sequence strip to perform filter adjustments to layers below"
+msgstr "아래 레이어에 필터 조정을 수행하는 시퀀스 스트립"
+
+
+msgid "Animation End Offset"
+msgstr "애니메이션 종료 오프셋"
+
+
+msgid "Animation end offset (trim end)"
+msgstr "애니메이션 종료 오프셋 (다듬기 종료)"
+
+
+msgid "Animation Start Offset"
+msgstr "애니메이션 시작 오프셋"
+
+
+msgid "Animation start offset (trim start)"
+msgstr "애니메이션 시작 오프셋 (다듬기 시작)"
+
+
+msgid "Sequence strip creating an image filled with a single color"
+msgstr "단일 컬러로 채워진 이미지를 만드는 시퀀스 스트립"
+
+
+msgid "Effect Strip color"
+msgstr "이펙트 스트립 컬러"
+
+
+msgid "Cross Sequence"
+msgstr "교차 시퀀스"
+
+
+msgid "Sequence strip creating a gaussian blur"
+msgstr "가우시안 블러를 만드는 시퀀스 스트립"
+
+
+msgid "Size of the blur along X axis"
+msgstr "X 축을 따라 블러의 크기"
+
+
+msgid "Size of the blur along Y axis"
+msgstr "Y 축을 따라 블러의 크기"
+
+
+msgid "Sequence strip creating a glow effect"
+msgstr "글로우 이펙트를 만드는 시퀀스 스트립"
+
+
+msgid "Blur Distance"
+msgstr "블러 거리"
+
+
+msgid "Radius of glow effect"
+msgstr "글로우 이펙트의 반경"
+
+
+msgid "Boost Factor"
+msgstr "부스트 팩터"
+
+
+msgid "Brightness multiplier"
+msgstr "밝기 배율"
+
+
+msgid "Brightness limit of intensity"
+msgstr "강도의 밝기 제한"
+
+
+msgid "Accuracy of the blur effect"
+msgstr "블러 이펙트의 정확도"
+
+
+msgid "Minimum intensity to trigger a glow"
+msgstr "글로우를 트리거하는 최소의 강도"
+
+
+msgid "Only Boost"
+msgstr "부스트 만"
+
+
+msgid "Show the glow buffer only"
+msgstr "글로우 버퍼 만 표시"
+
+
+msgid "Sequence strip to perform multicam editing"
+msgstr "멀티캠 편집을 실행하는 시퀀스 스트립"
+
+
+msgid "Multicam Source Channel"
+msgstr "멀티캠 소스 채널"
+
+
+msgid "Sequence strip to control the speed of other strips"
+msgstr "다른 스트립의 속력를 컨트롤하는 시퀀스 스트립"
+
+
+msgid "Multiply the current speed of the sequence with this number or remap current frame to this frame"
+msgstr "시퀀스의 현재 속력에 이 숫자를 곱하거나 현재 프레임을 이 프레임으로 다시 맵"
+
+
+msgid "Text Strip"
+msgstr "텍스트 스트립"
+
+
+msgid "Sequence strip creating text"
+msgstr "텍스트를 만드는 시퀀스 스트립"
+
+
+msgid "Align X"
+msgstr "정렬 X"
+
+
+msgid "Text color"
+msgstr "텍스트 컬러"
+
+
+msgid "Size of the text"
+msgstr "텍스트의 크기"
+
+
+msgid "Location of the text"
+msgstr "텍스트의 위치"
+
+
+msgid "Outline Color"
+msgstr "윤곽선 컬러"
+
+
+msgid "Outline Width"
+msgstr "윤곽선 폭"
+
+
+msgid "Text that will be displayed"
+msgstr "표시되는 텍스트"
+
+
+msgid "Display shadow behind text"
+msgstr "텍스트뒤 그림자를 표시합니다"
+
+
+msgid "Wrap Width"
+msgstr "줄 바꾸기 폭"
+
+
+msgid "Word wrap width as factor, zero disables"
+msgstr "팩터로 단어 줄 바꾸기 폭, 제로 비활성화"
+
+
+msgid "Sequence strip applying affine transformations to other strips"
+msgstr "다른 스트립에 아핀 변환을 적용하는 시퀀스 스트립"
+
+
+msgid "Method to determine how missing pixels are created"
+msgstr "누락된 픽셀 생성 방법을 결정하는 메서드"
+
+
+msgid "Bilinear interpolation"
+msgstr "이중선형 보간"
+
+
+msgid "Bicubic interpolation"
+msgstr "바이큐빅 보간"
+
+
+msgid "Degrees to rotate the input"
+msgstr "입력 회전 각도"
+
+
+msgid "Amount to scale the input in the X axis"
+msgstr "X 축으로 입력 축적을 조정하는 양"
+
+
+msgid "Amount to scale the input in the Y axis"
+msgstr "Y 축으로 입력 축적을 조정하는 양"
+
+
+msgid "Translate X"
+msgstr "옮기기 X"
+
+
+msgid "Amount to move the input on the X axis"
+msgstr "X 축으로 입력 이동하는 양"
+
+
+msgid "Translate Y"
+msgstr "옮기기 Y"
+
+
+msgid "Amount to move the input on the Y axis"
+msgstr "Y 축으로 입력 이동하는 양"
+
+
+msgid "Translation Unit"
+msgstr "옮기기 단위"
+
+
+msgid "Unit of measure to translate the input"
+msgstr "입력을 옮기는 측정 단위"
+
+
+msgid "Scale uniformly, preserving aspect ratio"
+msgstr "균일하게 축적, 종횡비를 유지"
+
+
+msgid "Sequence strip creating a wipe transition"
+msgstr "웨이프 전환을 만드는 시퀀스 스트립"
+
+
+msgid "Blur Width"
+msgstr "블러 폭"
+
+
+msgctxt "Sequence"
+msgid "Transition Type"
+msgstr "전환 유형"
+
+
+msgctxt "Sequence"
+msgid "Single"
+msgstr "싱글"
+
+
+msgctxt "Sequence"
+msgid "Double"
+msgstr "더블"
+
+
+msgctxt "Sequence"
+msgid "Iris"
+msgstr "Iris"
+
+
+msgctxt "Sequence"
+msgid "Clock"
+msgstr "클릭"
+
+
+msgid "Image Strip"
+msgstr "이미지 스트립"
+
+
+msgid "Sequence strip to load one or more images"
+msgstr "하나 또는 더 많은 이미지들 불러오는 시퀀스 스트립"
+
+
+msgid "Mask Strip"
+msgstr "마스크 스트립"
+
+
+msgid "Sequence strip to load a video from a mask"
+msgstr "마스크에서 비디오를 불러오는 시퀀스 스트립"
+
+
+msgid "Mask that this sequence uses"
+msgstr "이 시퀀스가 사용하는 마스크"
+
+
+msgid "Meta Strip"
+msgstr "메타 스트립"
+
+
+msgid "Sequence strip to group other strips as a single sequence strip"
+msgstr "싱글 시퀀스 스트립으로 다른 스트립을 그룹하는 시퀀스 스트립"
+
+
+msgid "Sequence strip to load a video from the clip editor"
+msgstr "클립 에디터에서 비디오를 가져오는 시퀀스 스트립"
+
+
+msgid "Frames per second"
+msgstr "초당 프레임"
+
+
+msgid "Stabilize 2D Clip"
+msgstr "안정화 2D 클립"
+
+
+msgid "Use the 2D stabilized version of the clip"
+msgstr "클립의 2D 안정화된 버전을 사용"
+
+
+msgid "Undistort Clip"
+msgstr "클립을 왜곡취소"
+
+
+msgid "Use the undistorted version of the clip"
+msgstr "클립의 왜곡 안된 버전을 사용"
+
+
+msgid "Sequence strip to load a video"
+msgstr "비디오를 불러오는 시퀀스 스트립"
+
+
+msgid "Stream Index"
+msgstr "흐름 인덱스"
+
+
+msgid "For files with several movie streams, use the stream with the given index"
+msgstr "여러 무비 스트립이 있는 파일의 경우 지정된 인덱스가 있는 스트립을 사용"
+
+
+msgid "Mode to load movie views"
+msgstr "무비 뷰를 불러오는 모드"
+
+
+msgid "Scene Strip"
+msgstr "씬 스트립"
+
+
+msgid "Scene that this sequence uses"
+msgstr "이 시퀀스가 사용하는 씬"
+
+
+msgid "Camera Override"
+msgstr "카메라 재정의"
+
+
+msgid "Input type to use for the Scene strip"
+msgstr "씬 스트립에 사용할 입력 유형"
+
+
+msgid "Use the Scene's 3D camera as input"
+msgstr "씬의 3D 카메라를 입력으로 사용"
+
+
+msgid "Use the Scene's Sequencer timeline as input"
+msgstr "씬의 시퀀서 타임 라인을 입력으로 사용"
+
+
+msgid "Playback volume of the sound"
+msgstr "소리의 재생 볼륨"
+
+
+msgid "Sequence strip defining a sound to be played over a period of time"
+msgstr "일정 시간 동안 재생할 사운드를 정의하는 시퀀스 스트립"
+
+
+msgid "Playback panning of the sound (only for Mono sources)"
+msgstr "사운드의 재생 패닝 (모노 소스에만 해당)"
+
+
+msgid "Display Waveform"
+msgstr "파형을 표시"
+
+
+msgid "Display the audio waveform inside the strip"
+msgstr "스트립 안에 오디오 파형을 표시"
+
+
+msgid "Sound data-block used by this sequence"
+msgstr "이 시퀀스로 사용되는 사운드 데이터 블록"
+
+
+msgid "Color balance gain (highlights)"
+msgstr "컬러 균형 이득 (강조)"
+
+
+msgid "Color balance gamma (midtones)"
+msgstr "컬러 균형 감마 (중간톤)"
+
+
+msgid "Inverse Gain"
+msgstr "이득을 반전"
+
+
+msgid "Inverse Gamma"
+msgstr "감마를 반전"
+
+
+msgid "Invert the gamma color"
+msgstr "감마 컬러를 반전"
+
+
+msgid "Inverse Lift"
+msgstr "반전 상승"
+
+
+msgid "Invert the lift color"
+msgstr "상승 컬러를 반전"
+
+
+msgid "Color balance lift (shadows)"
+msgstr "컬러 균형 상승 (섀도우)"
+
+
+msgid "Color balance parameters for a sequence strip"
+msgstr "시퀀스 스트립에 대한 컬러 균형 매개 변수"
+
+
+msgid "Cropping parameters for a sequence strip"
+msgstr "시퀀스 스트립에 대한 매개 변수를 자르기"
+
+
+msgid "Number of pixels to crop from the right side"
+msgstr "오른쪽에서 자르는 픽셀의 수"
+
+
+msgid "Number of pixels to crop from the top"
+msgstr "상단에서 자르는 픽셀의 수"
+
+
+msgid "Number of pixels to crop from the left side"
+msgstr "왼쪽에서 자르는 픽셀의 수"
+
+
+msgid "Number of pixels to crop from the bottom"
+msgstr "하단에서 자르는 픽셀의 수"
+
+
+msgid "Sequence strip data for a single frame"
+msgstr "싱글 프레임의 시퀀스 스트립 데이터"
+
+
+msgid "Name of the source file"
+msgstr "소스 파일의 이름"
+
+
+msgid "Orig Height"
+msgstr "오링 높이"
+
+
+msgid "Original image height"
+msgstr "원본 이미지의 높이"
+
+
+msgid "Orig Width"
+msgstr "오링 폭"
+
+
+msgid "Original image width"
+msgstr "원본 이미지 폭"
+
+
+msgid "Modifier for sequence strip"
+msgstr "시퀀스 스트립에 대한 모디파이어"
+
+
+msgid "Mask ID used as mask input for the modifier"
+msgstr "모디파이어에 대한 마스크 입력으로 사용된 마스크 ID"
+
+
+msgid "Strip used as mask input for the modifier"
+msgstr "수정을 위해 마스크 입력으로 사용할 스트립"
+
+
+msgid "Mask Input Type"
+msgstr "마스크 입력 유형"
+
+
+msgid "Type of input data used for mask"
+msgstr "마스크에 대한 사용된 입력 데이터의 유형"
+
+
+msgid "Use sequencer strip as mask input"
+msgstr "마스크 입력으로 시퀀서 스트립을 사용"
+
+
+msgid "Use mask ID as mask input"
+msgstr "마스크 입력으로 마스크 ID를 사용"
+
+
+msgid "Mask Time"
+msgstr "마스크 시간"
+
+
+msgid "Time to use for the Mask animation"
+msgstr "마스크 애니메이션에 사용하는 시간"
+
+
+msgid "Mask animation is offset to start of strip"
+msgstr "마스크 애니메이션은 스트립의 시작에 오프셋"
+
+
+msgid "Mask animation is in sync with scene frame"
+msgstr "마스크 애니메이션은 씬 프레임과 함께 동기화에"
+
+
+msgid "Mute this modifier"
+msgstr "이 모디파이어를 음소거"
+
+
+msgid "Mute expanded settings for the modifier"
+msgstr "모디파이어에 대한 확장된 설정을 음소거"
+
+
+msgid "Tone Map"
+msgstr "톤맵"
+
+
+msgid "Bright/contrast modifier data for sequence strip"
+msgstr "시퀀스 스트립에 대한 밝기/대비 모디파이어 데이터"
+
+
+msgid "Adjust the luminosity of the colors"
+msgstr "컬러의 밝기를 조정"
+
+
+msgid "Adjust the difference in luminosity between pixels"
+msgstr "픽셀 사이의 광도 차이를 조정"
+
+
+msgid "Color balance modifier for sequence strip"
+msgstr "시퀀스 스트립에 대한 컬러 밸런스 수정"
+
+
+msgid "Multiply the intensity of each pixel"
+msgstr "각 픽셀의 강도를 곱하기"
+
+
+msgid "RGB curves modifier for sequence strip"
+msgstr "시퀀스 스트립의 RGB커브 모디파이어"
+
+
+msgid "Hue correction modifier for sequence strip"
+msgstr "시퀀스 스트립에 대한 색조 보정 모디파이어"
+
+
+msgid "Tone mapping modifier"
+msgstr "톤 매핑 모디파이어"
+
+
+msgid "If 0, global; if 1, based on pixel intensity"
+msgstr "0의 경우, 글로벌;1의 경우 ,픽셀 강도에 따라"
+
+
+msgid "Set to 0 to use estimate from input image"
+msgstr "입력 이미지에서 예상 사용에 0으로 설정"
+
+
+msgid "If 0, same for all channels; if 1, each independent"
+msgstr "0이면 모든 채널에서 동일; 1 인 경우 각각 독립"
+
+
+msgid "If not used, set to 1"
+msgstr "사용하지 않을 경우, 1로 설정"
+
+
+msgid "If less than zero, darkens image; otherwise, makes it brighter"
+msgstr "제로보다 작은 경우, 어두운 이미지; 그렇지 않으면, 밝게 만들기"
+
+
+msgid "The value the average luminance is mapped to"
+msgstr "평균 휘도가 다음으로 매핑되는 값"
+
+
+msgid "Normally always 1, but can be used as an extra control to alter the brightness curve"
+msgstr "일반적으로 항상 1 이지만 밝기 커브를 변경하는 추가 컨트롤로 사용할 수 있습니다"
+
+
+msgid "Tone mapping algorithm"
+msgstr "톤 매핑 알고리즘"
+
+
+msgid "White balance modifier for sequence strip"
+msgstr "시퀀스 스트립에 대한 화이트 밸런스 모디파이어"
+
+
+msgid "White Value"
+msgstr "화이트 값"
+
+
+msgid "This color defines white in the strip"
+msgstr "스트립에서 흰색을 정의하는 컬러"
+
+
+msgid "Strip Modifiers"
+msgstr "스트립 모디파이어"
+
+
+msgid "Collection of strip modifiers"
+msgstr "스트립 모디파이어의 컬렉션"
+
+
+msgid "Proxy parameters for a sequence strip"
+msgstr "시퀀스 스트립에 대한 프록시 매개 변수"
+
+
+msgid "Build 100% proxy resolution"
+msgstr "빌드 100% 프록시 해상도"
+
+
+msgid "Build 25% proxy resolution"
+msgstr "빌드 25% 프록시 해상도"
+
+
+msgid "Build 50% proxy resolution"
+msgstr "빌드 50% 프록시 해상도"
+
+
+msgid "Build 75% proxy resolution"
+msgstr "빌드 75% 프록시 해상도"
+
+
+msgid "Location of custom proxy file"
+msgstr "커스텀 프록시 파일의 위치"
+
+
+msgid "Method for reading the inputs timecode"
+msgstr "입력 타임 코드를 읽는 메서드"
+
+
+msgid "Overwrite existing proxy files when building"
+msgstr "빌딩 할 때 기존 프록시 파일을 덮어 쓰기"
+
+
+msgid "Use a custom directory to store data"
+msgstr "데이터를 저장하는 커스텀 디렉토리를 사용"
+
+
+msgid "Proxy Custom File"
+msgstr "프록시 커스텀 파일"
+
+
+msgid "Use a custom file to read proxy data from"
+msgstr "다음에서 프록시 데이터를 읽는 커스텀 파일을 사용"
+
+
+msgid "Transform parameters for a sequence strip"
+msgstr "시퀀스 스트립에 대한 매개 변수를 변환"
 
 
 msgid "Studio Light"
@@ -68532,28 +66740,12 @@ msgid "Draw Action"
 msgstr "액션을 그리기"
 
 
-msgid "Image Strip"
-msgstr "이미지 스트립"
-
-
-msgid "Meta Strip"
-msgstr "메타 스트립"
-
-
 msgid "Clip Strip"
 msgstr "클립 스트립"
 
 
 msgid "Preview Background"
 msgstr "미리보기 배경"
-
-
-msgid "Scene Strip"
-msgstr "씬 스트립"
-
-
-msgid "Text Strip"
-msgstr "텍스트 스트립"
 
 
 msgid "Theme Space Settings"
@@ -68706,10 +66898,6 @@ msgstr "사용자 인터페이스 요소에 대한 테마 설정"
 
 msgid "Editor Outline"
 msgstr "에디터 윤곽선"
-
-
-msgid "Color of the outline of the editors and their round corners"
-msgstr "에디터 윤곽선과 그 둥근 모서리의 컬러"
 
 
 msgid "Gizmo A"
@@ -69136,6 +67324,10 @@ msgid "Settings for stroke sculpting tools and brushes"
 msgstr "스트로크 도구 및 브러시에 대한 설정"
 
 
+msgid "Select Mode"
+msgstr "선택 모드"
+
+
 msgid "Stroke Placement (3D View)"
 msgstr "스트로크 배치 (3D 뷰)"
 
@@ -69162,10 +67354,6 @@ msgstr "첫 번째 포인트와 마지막 포인트에 스냅하고 보간합니
 
 msgid "Snap to first point"
 msgstr "첫 번째 포인트에 스냅"
-
-
-msgid "New Keyframe Type"
-msgstr "새로운 키 프레임 유형"
 
 
 msgid "Type of keyframes to create when inserting keyframes"
@@ -69223,34 +67411,6 @@ msgstr "가까운 마커에 스냅"
 
 msgid "Snap Element"
 msgstr "스냅 요소"
-
-
-msgid "Snap Node Element"
-msgstr "노드 요소를 스냅"
-
-
-msgid "Node X"
-msgstr "노드 X"
-
-
-msgid "Snap to left/right node border"
-msgstr "왼쪽/오른쪽 노드 경계에 스냅"
-
-
-msgid "Node Y"
-msgstr "노드 Y"
-
-
-msgid "Snap to top/bottom node border"
-msgstr "위쪽/아래쪽 노드 경계에 스냅"
-
-
-msgid "Node X / Y"
-msgstr "노드 X / Y"
-
-
-msgid "Snap to any node border"
-msgstr "노드의 경계에 스냅"
 
 
 msgid "Snap Target"
@@ -69821,6 +67981,10 @@ msgid "Color of the light's specular highlight"
 msgstr "라이트 반사 강조의 컬러"
 
 
+msgid "UV Sculpting"
+msgstr "UV 스컬프트하기"
+
+
 msgid "Group of vertices, used for armature deform and other purposes"
 msgstr "버텍스의 그룹, 아마튜어 변형 및 기타 목적을 위해 사용"
 
@@ -70225,10 +68389,6 @@ msgid "Use Grid"
 msgstr "격자를 사용"
 
 
-msgid "Display a grid over grease pencil paper"
-msgstr "그리스 팬슬 종이 위에 격자를 표시"
-
-
 msgid "Lines Only"
 msgstr "라인 만"
 
@@ -70397,10 +68557,6 @@ msgid "Darkness of shadows"
 msgstr "섀도우의 어두움"
 
 
-msgid "Cavity"
-msgstr "캐비티"
-
-
 msgid "Show Cavity"
 msgstr "캐비티을 표시합니다. (주변 폐색과 유사한 효과)"
 
@@ -70491,14 +68647,6 @@ msgstr "월드 공간 라이트닝"
 
 msgid "Make the lighting fixed and not follow the camera"
 msgstr "조명을 고정시키고 카메라를 따르지 않도록 만들기"
-
-
-msgid "X-Ray Alpha"
-msgstr "X-Ray 알파"
-
-
-msgid "Amount of alpha to use"
-msgstr "사용할 알파의 양"
 
 
 msgid "View layer"
@@ -70659,6 +68807,10 @@ msgstr "도구 모드"
 
 msgid "Lighting for a World data-block"
 msgstr "월드 데이터 블록에 대한 라이트닝"
+
+
+msgid "Factor for ambient occlusion blending"
+msgstr "주변 폐색 블렌딩에 대한 팩터"
 
 
 msgid "Length of rays, defines how far away other faces give occlusion effect"
@@ -71013,11 +69165,6 @@ msgstr "NLA 일반"
 
 
 msgctxt "WindowManager"
-msgid "Timeline"
-msgstr "타임라인"
-
-
-msgctxt "WindowManager"
 msgid "Image"
 msgstr "이미지"
 
@@ -71078,18 +69225,8 @@ msgstr "노드 일반"
 
 
 msgctxt "WindowManager"
-msgid "SequencerCommon"
-msgstr "시퀀서 공통"
-
-
-msgctxt "WindowManager"
 msgid "Sequencer"
 msgstr "시퀀서"
-
-
-msgctxt "WindowManager"
-msgid "SequencerPreview"
-msgstr "시퀀서 미리보기"
 
 
 msgctxt "WindowManager"
@@ -71150,41 +69287,6 @@ msgstr "클립 그래프 에디터"
 msgctxt "WindowManager"
 msgid "Clip Dopesheet Editor"
 msgstr "클립 도프시트 에디터"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Edit Mode"
-msgstr "그리스 펜슬 스트로크 에디트 모드"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Paint (Draw brush)"
-msgstr "그리스 펜슬 스트로크 페인트 (브러쉬 그리기)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Paint (Fill)"
-msgstr "그리스 펜슬 스트로크 페인트 (채우기)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Paint (Erase)"
-msgstr "그리스 펜슬 스트로크 페인트 (지우게)"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Paint Mode"
-msgstr "그리이스 펜슬 스트로크 페인트 모드"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Sculpt Mode"
-msgstr "그리이스 펜슬 스트로크 스컬프트 모드"
-
-
-msgctxt "WindowManager"
-msgid "Grease Pencil Stroke Weight Mode"
-msgstr "그리이스 펜슬 스트로크 웨이트 모드"
 
 
 msgctxt "WindowManager"
@@ -71258,6 +69360,11 @@ msgstr "동일한 이름을 가진 복수의 애드온이 있습니다!"
 
 msgid "Delete one of each pair to resolve:"
 msgstr "리솔브에 각 쌍 중 하나를 삭제:"
+
+
+msgctxt "Operator"
+msgid "All"
+msgstr "모두"
 
 
 msgctxt "Operator"
@@ -71474,66 +69581,6 @@ msgid "Options:"
 msgstr "옵션:"
 
 
-msgid "Save to PO File"
-msgstr "PO 파일로 저장"
-
-
-msgid "Rebuild MO File"
-msgstr "MO 파일 다시 작성"
-
-
-msgid "Erase Local MO files"
-msgstr "로컬 MO 파일을 지우기"
-
-
-msgid "invoke() needs to be called before execute()"
-msgstr "invoke ()를 execute () 전에 호출해야합니다"
-
-
-msgid "    RNA Path: bpy.types."
-msgstr "    RNA 경로: bpy.types."
-
-
-msgid "    RNA Context: "
-msgstr "    RNA 컨텍스트: "
-
-
-msgid "Labels:"
-msgstr "레이블:"
-
-
-msgid "Tool Tips:"
-msgstr "도구 팁:"
-
-
-msgid "Button Label:"
-msgstr "버튼 레이블:"
-
-
-msgid "RNA Label:"
-msgstr "RNA 레이블:"
-
-
-msgid "Enum Item Label:"
-msgstr "열거 항목 레이블:"
-
-
-msgid "Button Tip:"
-msgstr "버튼 팁:"
-
-
-msgid "RNA Tip:"
-msgstr "RNA 팁:"
-
-
-msgid "Enum Item Tip:"
-msgstr "열거 항목 팁:"
-
-
-msgid "Could not write to po file ({})"
-msgstr "po 파일에 작성할 수 없음 ({})"
-
-
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
 msgstr "경고: 추가 기능이 비활성화 되면 환경 설정이 손실 됩니다. 설정을 유지하려면 \"영구 저장\"을 사용해야 합니다!"
 
@@ -71576,11 +69623,6 @@ msgstr "UI 번역 애드온의 사용자 설정을 편집 하세요"
 msgctxt "Operator"
 msgid "Reset Settings"
 msgstr "설정을 재설정"
-
-
-msgctxt "Operator"
-msgid "Deselect All"
-msgstr "모두 선택 해제"
 
 
 msgctxt "Operator"
@@ -71675,10 +69717,6 @@ msgstr "위치"
 msgctxt "Operator"
 msgid "Rotation"
 msgstr "회전"
-
-
-msgid "Unknown"
-msgstr "알 수 없는"
 
 
 msgid "Frame Numbers"
@@ -71879,29 +69917,12 @@ msgid "Offset X"
 msgstr "오프셋 X"
 
 
-msgid "Endpoint"
-msgstr "종료 포인트"
-
-
-msgid "Interpolation Tilt"
-msgstr "보간 틸트"
-
-
-msgctxt "Operator"
-msgid "Lock All"
-msgstr "모두 잠금"
+msgid "Stroke Thickness"
+msgstr "스트로크 두께"
 
 
 msgid "Autolock Inactive Layers"
 msgstr "비활성 레이어를 자동 잠금"
-
-
-msgid "Thickness Scale"
-msgstr "두께 축적"
-
-
-msgid "Edit Line Color"
-msgstr "라인 컬러를 편집"
 
 
 msgctxt "Operator"
@@ -71910,28 +69931,13 @@ msgstr "기타를 숨기기"
 
 
 msgctxt "Operator"
-msgid "New Layer"
-msgstr "새로운 레이어"
+msgid "Lock All"
+msgstr "모두 잠금"
 
 
 msgctxt "Operator"
-msgid "Assign to Active Group"
-msgstr "활성 그룹에 할당"
-
-
-msgctxt "Operator"
-msgid "Remove from Active Group"
-msgstr "활성 그룹에서 제거"
-
-
-msgctxt "Operator"
-msgid "Select Points"
-msgstr "포인트를 선택"
-
-
-msgctxt "Operator"
-msgid "Deselect Points"
-msgstr "포인트를 선택 해제"
+msgid "Merge Down"
+msgstr "아래로 병합"
 
 
 msgid "Keyframes Before"
@@ -71942,26 +69948,16 @@ msgid "Keyframes After"
 msgstr "키 프레임 이후"
 
 
-msgctxt "Operator"
-msgid "Remove Active Group"
-msgstr "활성 그룹을 제거"
-
-
-msgctxt "Operator"
-msgid "Remove All Groups"
-msgstr "모든 그룹을 제거"
-
-
 msgid "Interpolation U"
 msgstr "보간 U"
 
 
-msgid "Clipping Start"
-msgstr "클리핑 시작"
-
-
 msgid "Clipping Offset"
 msgstr "클리핑 오프셋"
+
+
+msgid "Clipping Start"
+msgstr "클리핑 시작"
 
 
 msgid "Bleed Bias"
@@ -72082,6 +70078,11 @@ msgstr "스트로크 배치:"
 
 
 msgctxt "Operator"
+msgid "New Layer"
+msgstr "새로운 레이어"
+
+
+msgctxt "Operator"
 msgid "Selection to Grid"
 msgstr "선택을 격자에 스냅"
 
@@ -72102,31 +70103,16 @@ msgstr "커서를 격자에 스냅"
 
 
 msgctxt "Operator"
-msgid "Delete Active Keyframes (All Layers)"
-msgstr "활성 키 프레임을 삭제 (모든 레이어)"
-
-
-msgctxt "Operator"
-msgid "Delete Loose Points"
-msgstr "루즈 포인트를 삭제"
-
-
-msgid "Stroke Thickness"
-msgstr "스트로크 두께"
-
-
-msgctxt "Operator"
-msgid "Erase"
-msgstr "지우기"
-
-
-msgctxt "Operator"
 msgid "Poly"
 msgstr "폴리"
 
 
 msgid "Display Cursor"
 msgstr "커서를 표시"
+
+
+msgid "Data Source:"
+msgstr "데이터 소스:"
 
 
 msgctxt "Operator"
@@ -72145,17 +70131,8 @@ msgstr "활성 키 프레임을 삭제 (활성 레이어)"
 
 
 msgctxt "Operator"
-msgid "Boundary Strokes"
-msgstr "경계 스트로크"
-
-
-msgctxt "Operator"
-msgid "Boundary Strokes all Frames"
-msgstr "모든 프레임을 경계 스트로크"
-
-
-msgid "Data Source:"
-msgstr "데이터 소스:"
+msgid "Delete Active Keyframes (All Layers)"
+msgstr "활성 키 프레임을 삭제 (모든 레이어)"
 
 
 msgid "Show Fill Color While Drawing"
@@ -72240,11 +70217,6 @@ msgstr "페더 축적"
 msgctxt "Operator"
 msgid "Hide Unselected"
 msgstr "비 선택된 항목을 숨기기"
-
-
-msgctxt "Operator"
-msgid "Invert"
-msgstr "반전"
 
 
 msgctxt "Operator"
@@ -72469,6 +70441,10 @@ msgstr "랜덤 크기"
 
 msgid "Parting not available with virtual parents"
 msgstr "가상 부모와 함께 사용할 수없는 가르기"
+
+
+msgid "Endpoint"
+msgstr "종료 포인트"
 
 
 msgid "Randomize Amplitude"
@@ -72804,6 +70780,10 @@ msgid "Particle Life Maximum"
 msgstr "파티클 수명 최대"
 
 
+msgid "Exponent"
+msgstr "지수"
+
+
 msgid "Surface Tension"
 msgstr "표면 장력"
 
@@ -72949,26 +70929,6 @@ msgstr "단계 크기 최소"
 
 msgid "Auto-Step"
 msgstr "자동-단계"
-
-
-msgid "Light Clamping"
-msgstr "라이트 클램핑"
-
-
-msgid "Refraction"
-msgstr "굴절"
-
-
-msgid "Cascade Size"
-msgstr "캐스케이드 크기"
-
-
-msgid "Diffuse Occlusion"
-msgstr "확산 폐색"
-
-
-msgid "Irradiance Size"
-msgstr "방사 조도 크기"
 
 
 msgid "Max Child Particles"
@@ -73379,16 +71339,6 @@ msgstr "그리스 펜슬 오브젝트"
 
 
 msgctxt "Operator"
-msgid "Push Down"
-msgstr "아래로 밀기"
-
-
-msgctxt "Operator"
-msgid "Stash"
-msgstr "제외"
-
-
-msgctxt "Operator"
 msgid "Box Select (Axis Range)"
 msgstr "박스 선택 (축 범위)"
 
@@ -73595,11 +71545,6 @@ msgstr "연결됨"
 msgctxt "Operator"
 msgid "Shortest Path"
 msgstr "최단 경로"
-
-
-msgctxt "Image"
-msgid "New"
-msgstr "새로운"
 
 
 msgctxt "Operator"
@@ -73932,11 +71877,6 @@ msgid "Instance to Scene"
 msgstr "씬으로 인스턴스"
 
 
-msgctxt "Operator"
-msgid "ID Data"
-msgstr "ID 데이터"
-
-
 msgid "Object Contents"
 msgstr "오브젝트 내용"
 
@@ -74223,11 +72163,6 @@ msgstr "클립"
 
 
 msgctxt "Operator"
-msgid "Mask"
-msgstr "마스크"
-
-
-msgctxt "Operator"
 msgid "Clear Fade"
 msgstr "페이드를 제거"
 
@@ -74381,6 +72316,10 @@ msgstr "마커를 씬에 복제..."
 msgctxt "Operator"
 msgid "Duplicate Marker to Scene"
 msgstr "마커를 씬에 복제"
+
+
+msgid "New Keyframe Type"
+msgstr "새로운 키 프레임 유형"
 
 
 msgid "Layered Recording"
@@ -75332,48 +73271,8 @@ msgstr "뼈를 디졸브"
 
 
 msgctxt "Operator"
-msgid "Fixed"
-msgstr "고정됨"
-
-
-msgctxt "Operator"
-msgid "Adaptive"
-msgstr "적응형"
-
-
-msgctxt "Operator"
-msgid "Trim"
-msgstr "다듬기"
-
-
-msgctxt "Operator"
-msgid "Set as Active Material"
-msgstr "활성 매테리얼로 설정"
-
-
-msgctxt "Operator"
-msgid "Close"
-msgstr "닫기"
-
-
-msgctxt "Operator"
-msgid "Toggle Caps"
-msgstr "캡을 토글"
-
-
-msgctxt "Operator"
 msgid "Insert Blank Keyframe (Active Layer)"
 msgstr "빈 키 프레임을 삽입 (활성 레이어)"
-
-
-msgctxt "Operator"
-msgid "Duplicate Active Keyframe (Active Layer)"
-msgstr "활성 키 프레임을 복제 (활성 레이어)"
-
-
-msgctxt "Operator"
-msgid "Simplify"
-msgstr "단순화"
 
 
 msgctxt "Operator"
@@ -75739,28 +73638,13 @@ msgstr "롤을 설정"
 
 
 msgctxt "Operator"
-msgid "With Empty Groups"
-msgstr "빈 그룹과 함께"
-
-
-msgctxt "Operator"
-msgid "With Automatic Weights"
-msgstr "자동 웨이트와 함께"
-
-
-msgctxt "Operator"
-msgid "Paste by Layer"
-msgstr "레이어로 붙여 넣기"
-
-
-msgctxt "Operator"
 msgid "Insert Blank Keyframe (All Layers)"
 msgstr "빈 키 프레임을 삽입 (모든 레이어)"
 
 
 msgctxt "Operator"
-msgid "Duplicate Active Keyframe (All Layers)"
-msgstr "활성 키 프레임을 복제 (모든 레이어)"
+msgid "Duplicate Active Keyframe (Active Layer)"
+msgstr "활성 키 프레임을 복제 (활성 레이어)"
 
 
 msgctxt "Operator"
@@ -75773,16 +73657,17 @@ msgid "Hide Inactive Layers"
 msgstr "비활성 레이어를 숨기기"
 
 
+msgctxt "Operator"
+msgid "Close"
+msgstr "닫기"
+
+
 msgid "Toggle X-Ray"
 msgstr "X-Ray를 토글"
 
 
 msgid "Marker Names"
 msgstr "마커 이름"
-
-
-msgid "Developer"
-msgstr "개발자"
 
 
 msgid "Fade Geometry"
@@ -75793,6 +73678,16 @@ msgid "Reference Point"
 msgstr "참조 포인트"
 
 
+msgctxt "Operator"
+msgid "Simplify"
+msgstr "단순화"
+
+
+msgctxt "Operator"
+msgid "Set as Active Material"
+msgstr "활성 매테리얼로 설정"
+
+
 msgid "Multiframe"
 msgstr "멀티프레임"
 
@@ -75800,6 +73695,25 @@ msgstr "멀티프레임"
 msgctxt "Operator"
 msgid "Frame Selected (Quad View)"
 msgstr "선택한 프레임 (쿼드 뷰)"
+
+
+msgctxt "Operator"
+msgid "Assign to Active Group"
+msgstr "활성 그룹에 할당"
+
+
+msgctxt "Operator"
+msgid "Remove Active Group"
+msgstr "활성 그룹을 제거"
+
+
+msgctxt "Operator"
+msgid "Remove All Groups"
+msgstr "모든 그룹을 제거"
+
+
+msgid "Inflate"
+msgstr "팽창"
 
 
 msgid "Sharpen"
@@ -75850,18 +73764,24 @@ msgid "Specular Lighting"
 msgstr "반사 라이트닝"
 
 
+msgid "Ridge"
+msgstr "능선"
+
+
+msgid "Valley"
+msgstr "계곡"
+
+
+msgid "Screen Space"
+msgstr "화면 공간"
+
+
 msgid "Custom Location"
 msgstr "커스텀 위치"
 
 
-msgctxt "Operator"
-msgid "Dissolve Between"
-msgstr "사이를 디졸브"
-
-
-msgctxt "Operator"
-msgid "Dissolve Unselected"
-msgstr "비선택을 디졸브"
+msgid "Interpolation Tilt"
+msgstr "보간 틸트"
 
 
 msgctxt "Operator"
@@ -75872,6 +73792,11 @@ msgstr "B본 축적"
 msgctxt "Operator"
 msgid "Camera Lens Scale"
 msgstr "카메라 렌즈 축적"
+
+
+msgctxt "Operator"
+msgid "Remove from Active Group"
+msgstr "활성 그룹에서 제거"
 
 
 msgctxt "Operator"
@@ -75902,24 +73827,8 @@ msgid "DOF Distance (Pick)"
 msgstr "DOF 거리 (선택)"
 
 
-msgid "Ridge"
-msgstr "능선"
-
-
-msgid "Valley"
-msgstr "계곡"
-
-
-msgid "Screen Space"
-msgstr "화면 공간"
-
-
 msgid "No object selected, using cursor"
 msgstr "커서를 사용하여 오브젝트를 선택하지 않았습니다"
-
-
-msgid "Layer:"
-msgstr "레이어:"
 
 
 msgid "Affect Only"
@@ -76006,6 +73915,10 @@ msgid "Add UVs"
 msgstr "UV를 추가"
 
 
+msgid "Cannot change action, as it is still being edited in NLA"
+msgstr "NLA에서 여전히 편집중이므로 작업을 변경할 수 없습니다"
+
+
 msgid "<No ID pointer>"
 msgstr "<No ID pointer>"
 
@@ -76046,12 +73959,8 @@ msgid "Not clearing all keyframes from locked F-Curve '%s' for %s '%s'"
 msgstr "잠긴 F-커브 '%s'에서 모든 키 프레임을 지우지 않음, %s '%s'에 대해"
 
 
-msgid "No AnimData to set action on"
-msgstr "다음에 액션을 설정하는 AnimData가 없음"
-
-
-msgid "Cannot change action, as it is still being edited in NLA"
-msgstr "NLA에서 여전히 편집중이므로 작업을 변경할 수 없습니다"
+msgid "Skipping path in keying set, as it has no ID (KS = '%s', path = '%s[%d]')"
+msgstr "ID가 없기 때문에 키잉 설정에서 경로를 건너 뜁니다 (KS = '%s', path = '%s[%d]')"
 
 
 msgid "Could not set action '%s' onto ID '%s', as it does not have suitably rooted paths for this purpose"
@@ -76106,8 +74015,8 @@ msgid "Lib Reload: Replacing all references to old data-block '%s' by reloaded o
 msgstr "Lib 다시 불러오기: 이전 데이터 블록 '%s'에 대한 모든 참조를 다시 불러온 블록으로 대체하는 데 실패, 이전 유저 (남은 유저 %d 명)는 보관해야 하고 '%s'으로 이름이 변경되었습니다"
 
 
-msgid "Path '%s' not found"
-msgstr "경로 '%s' 찾을 수 없습니다"
+msgid "Total files %d | Changed %d | Failed %d"
+msgstr "전체 파일 %d | 바뀜 %d | 실패됨 %d"
 
 
 msgid "Could not find '%s' in '%s'"
@@ -76116,10 +74025,6 @@ msgstr "'%s'를 다음 '%s'에서 찾을 수 없습니다"
 
 msgid "Path '%s' cannot be made absolute"
 msgstr "경로 '%s' 는 절대 경로로 만들 수 없습니다"
-
-
-msgid "Total files %d | Changed %d | Failed %d"
-msgstr "전체 파일 %d | 바뀜 %d | 실패됨 %d"
 
 
 msgid "Scene Collection"
@@ -76144,10 +74049,6 @@ msgstr "Col"
 
 msgid "Int"
 msgstr "정수"
-
-
-msgid "TexturedCol"
-msgstr "택스처화 Col"
 
 
 msgid "Recast"
@@ -76224,6 +74125,14 @@ msgid "var"
 msgstr "var"
 
 
+msgid "Untitled"
+msgstr "Untitled"
+
+
+msgid "True Normal"
+msgstr "True 노멀"
+
+
 msgid "GP_Layer"
 msgstr "GP_Layer"
 
@@ -76286,10 +74195,6 @@ msgstr "서프"
 
 msgid "Mball"
 msgstr "Mball"
-
-
-msgid "GPencil"
-msgstr "그리스 펜슬"
 
 
 msgid "No new files have been packed"
@@ -76429,42 +74334,6 @@ msgid "Original Mode"
 msgstr "원본 모드"
 
 
-msgid "Error writing frame"
-msgstr "프레임 쓰는 중 오류"
-
-
-msgid "No valid formats found"
-msgstr "올바른 형식을 찾을 수 없음"
-
-
-msgid "Render width has to be 720 pixels for DV!"
-msgstr "DV를 위해서는 렌더 폭은 720 픽셀이어야 합니다!"
-
-
-msgid "Render height has to be 480 pixels for DV-NTSC!"
-msgstr "DV-NTSC를 위해서는 렌더 높이는 480 픽셀이어야 합니다!"
-
-
-msgid "Render height has to be 576 pixels for DV-PAL!"
-msgstr "DV-PAL를 위해서는 렌더 높이는 576 픽셀이어야 합니다!"
-
-
-msgid "Error initializing video stream"
-msgstr "비디오 스트림 초기화 오류"
-
-
-msgid "Error initializing audio stream"
-msgstr "오디오 스트림 초기화 오류"
-
-
-msgid "Could not open file for writing"
-msgstr "작성하기 위해 파일을 열 수 없습니다"
-
-
-msgid "Could not initialize streams, probably unsupported codec combination"
-msgstr "스트림을 초기화 할 수 없음, 지원되지 않는 코덱 조합 일 수 있습니다"
-
-
 msgid "ID %s is in local database while being linked from library %s!"
 msgstr "ID %s은 라이브러리 %s에서 링크되는 동안 로컬 데이터베이스에 있습니다!"
 
@@ -76529,10 +74398,6 @@ msgid "Failed to read blend file '%s': %s"
 msgstr "blend 파일 '%s'을 읽지 못했습니다: %s"
 
 
-msgid "Failed to read blend file '%s', not a blend file"
-msgstr "Blend 파일 '%s' 을 읽기 실패, Blend 파일이 아님"
-
-
 msgid "Unable to read '%s': %s"
 msgstr "'%s'을 읽을 수 없음: %s"
 
@@ -76555,10 +74420,6 @@ msgstr "숨겨진 %d"
 
 msgid "Eevee material conversion problem. Error in console"
 msgstr "Eevee 매테리얼 변환 문제. 콘솔에서 오류"
-
-
-msgid "Untitled"
-msgstr "Untitled"
 
 
 msgid "Unable to make version backup: filename too short"
@@ -76629,14 +74490,6 @@ msgid "Edge-rings are not connected"
 msgstr "연속되는 에지 링이 존재하지 않음"
 
 
-msgid "GpencilMode"
-msgstr "그리스모드"
-
-
-msgid "Select ID"
-msgstr "ID를 선택"
-
-
 msgid "Workbench"
 msgstr "Workbench"
 
@@ -76683,6 +74536,10 @@ msgstr "시간 재매핑없이 액션을 표시 (고정 해제시)"
 
 msgid "Can't edit this property from a linked data-block"
 msgstr "재정의 데이터 블록에서 이 속성을 편집할 수 없습니다"
+
+
+msgid "No active object"
+msgstr "활성 오브젝트가 없음"
 
 
 msgid "<invalid>"
@@ -76861,10 +74718,6 @@ msgid "Property added to Keying Set: '%s'"
 msgstr "키잉 설정으로 추가된 속성: '%s'"
 
 
-msgid "Skipping path in keying set, as it has no ID (KS = '%s', path = '%s[%d]')"
-msgstr "ID가 없기 때문에 키잉 설정에서 경로를 건너 뜁니다 (KS = '%s', path = '%s[%d]')"
-
-
 msgid "No region view3d available"
 msgstr "이용 가능한 지역 뷰3D 없음"
 
@@ -76949,44 +74802,8 @@ msgid "Sliding-Tool"
 msgstr "슬라이딩 도구"
 
 
-msgid "[X]/Y/Z axis only (X to clear)"
-msgstr "[X]/Y/Z축 만 (X 지우기)"
-
-
-msgid "X/[Y]/Z axis only (Y to clear)"
-msgstr "X/[Y]/Z축 만 (Y 지우기)"
-
-
-msgid "X/Y/[Z] axis only (Z to clear)"
-msgstr "X/Y/[Z]축 만 (Z 지우기)"
-
-
-msgid "X/Y/Z = Axis Constraint"
-msgstr "X/Y/Z = 축 제약"
-
-
-msgid "[G]/R/S/B/C - Location only (G to clear) | %s"
-msgstr "[G]/R/S/B/C - 위치 만 (G 지우기) | %s"
-
-
-msgid "G/[R]/S/B/C - Rotation only (R to clear) | %s"
-msgstr "G/[R]/S/B/C - 회전 만 (R 지우기) | %s"
-
-
-msgid "G/R/[S]/B/C - Scale only (S to clear) | %s"
-msgstr "G/R/[S]/B/C - 축적 만 (S 지우기) | %s"
-
-
-msgid "G/R/S/[B]/C - Bendy Bone properties only (B to clear) | %s"
-msgstr "G/R/S/[B]/C - 벤디 본 속성 만 (B 지우기) | %s"
-
-
-msgid "G/R/S/B/[C] - Custom Properties only (C to clear) | %s"
-msgstr "G/R/S/B/[C] - 사용자 정의 등록 정보 만 (C 지우기) | %s"
-
-
-msgid "G/R/S/B/C - Limit to Transform/Property Set"
-msgstr "G/R/S/B/C - 변형/속성 설정으로 제한"
+msgid "Cancel"
+msgstr "취소"
 
 
 msgid "No keyframes to slide between"
@@ -77151,26 +74968,6 @@ msgid "File too long %s"
 msgstr "파일이 너무 깁니다 %s"
 
 
-msgid "Annotation Create Poly: LMB click to place next stroke vertex | ESC/Enter to end  (or click outside this area)"
-msgstr "주석 생성 폴리: LMB 클릭하여 다음 스트로크 버택스 배치 | 끝내려면 ESC/Enter 누르기 (또는 이 영역 바깥을 클릭)"
-
-
-msgid "Annotation Eraser: Hold and drag LMB or RMB to erase | ESC/Enter to end  (or click outside this area)"
-msgstr "주석 지우개: LMB 또는 RMB을 길게 드래그하여 지우기 | 끝내려면 ESC/Enter를 누르기 (또는 이 영역 바깥을 클릭)"
-
-
-msgid "Annotation Line Draw: Hold and drag LMB to draw | ESC/Enter to end  (or click outside this area)"
-msgstr "주석 라인 그리기: LMB을 누르고 끌어 끌기 | 끝내려면 ESC/Enter를 누르기 (또는 이 영역 바깥을 클릭)"
-
-
-msgid "Annotation Freehand Draw: Hold and drag LMB to draw | E/ESC/Enter to end  (or click outside this area)"
-msgstr "주석 자유형 그리기: LMB을 누르고 드래그하여 그리기 | 끝내려면 E/ESC/Enter를 누르기 (또는 이 영역 바깥을 클릭)"
-
-
-msgid "Annotation Session: ESC/Enter to end   (or click outside this area)"
-msgstr "주석 세션: 끝내려면 ESC/Enter를 누르기 (또는 이 영역 외부를 클릭)"
-
-
 msgid "Cannot paint stroke"
 msgstr "스트로크를 그릴 수 없습니다"
 
@@ -77179,176 +74976,24 @@ msgid "Nothing to erase"
 msgstr "지울 내용이 없음"
 
 
-msgid "Annotation operator is already active"
-msgstr "주석 작업자가 이미 활성화되었습니다"
-
-
 msgid "Active region not set"
 msgstr "활성 지역이 설정되지 않음"
-
-
-msgid "No Armature object in the view layer"
-msgstr "뷰 레이어에 아마튜어 오브젝트가 없습니다"
-
-
-msgid "No Grease Pencil data to work on"
-msgstr "다음에서 작동하는 그리스 펜슬 데이터가 없음"
-
-
-msgid "Current Grease Pencil strokes have no valid timing data, most timing options will be hidden!"
-msgstr "현재 그리스 펜슬 스트로크에는 유효한 타이밍 데이터가 없으므로 대부분의 타이밍 옵션이 숨겨집니다!"
-
-
-msgid "Nowhere for grease pencil data to go"
-msgstr "이동할 그리스 펜슬 데이터가 없음"
 
 
 msgid "Cannot delete locked layers"
 msgstr "잠긴 레이어를 삭제 할 수 없습니다"
 
 
-msgid "No active layer to isolate"
-msgstr "분리하는 활성 레이어가 없음"
-
-
-msgid "No layers to merge"
-msgstr "병합하는 레이어가 없음"
-
-
-msgid "Current Vertex Group is locked"
-msgstr "현재 버텍스 그룹이 잠김"
-
-
-msgid "Apply all rotations before join objects"
-msgstr "오브젝트를 결합하기 전에 모든 회전을 적용"
-
-
-msgid "Active object is not a selected grease pencil"
-msgstr "활성 오브젝트가 선택된 그리스 연필이 아닙니다"
-
-
-msgid "No active color to isolate"
-msgstr "분리하는 활성 컬러이 없음"
-
-
-msgid "No Grease Pencil data"
-msgstr "그리스 펜슬 데이터가 없음"
-
-
-msgid "Cannot change to non-existent layer (index = %d)"
-msgstr "존재하지 않는 레이어로 변경할 수 없습니다 (인덱스 = %d)"
-
-
-msgid "No active GP data"
-msgstr "활성 GP 데이터가 없음"
-
-
-msgid "No strokes to paste, select and copy some points before trying again"
-msgstr "붙여 넣기 할 스트로크가 없음, 다시 시도하기 전에 몇 일부 포인트를 선택하고 복사하십시오"
-
-
-msgid "No grease pencil data"
-msgstr "그리스 펜슬 데이터가 없음"
-
-
 msgid "No active frame to delete"
 msgstr "삭제하는 활성 프레임이 없음"
-
-
-msgid "No active frame(s) to delete"
-msgstr "삭제하는 활성 프레임(들)이 없음"
-
-
-msgid "Cannot separate an object with one layer only"
-msgstr "한 레이어 만 오브젝트를 분리 할 수 없습니다"
 
 
 msgid "Nothing selected"
 msgstr "아무 것도 선택되지 않음"
 
 
-msgid "No active area"
-msgstr "활성 영역 없음"
-
-
-msgid "There is no layer number %d"
-msgstr "레이어 번호 %d이 없습니다"
-
-
-msgid "Active region not valid for filling operator"
-msgstr "활성 지역이 채우기 작업자에 유효하지 않습니다"
-
-
-msgid "GPencil Interpolation: "
-msgstr "GPencil 보간: "
-
-
-msgid "ESC/RMB to cancel, Enter/LMB to confirm, WHEEL/MOVE to adjust factor"
-msgstr "취소하려면 ESC/RMB, 확인하려면 Enter/LMB 입력, WHEEL/MOVE로 요소 조정"
-
-
-msgid "Custom interpolation curve does not exist"
-msgstr "커스텀 보간 커브이 없습니다"
-
-
-msgid "Expected current frame to be a breakdown"
-msgstr "브렉다운이 예상되는 현재 프레임"
-
-
-msgid "Grease Pencil Erase Session: Hold and drag LMB or RMB to erase | ESC/Enter to end  (or click outside this area)"
-msgstr "그리스 펜슬 지우기 세션: LMB 또는 RMB를 누른 상태에서 드래그로 지우기 | ESC/Enter로 종료 (또는 이 영역 외부를 클릭)"
-
-
-msgid "Grease Pencil Line Session: Hold and drag LMB to draw | ESC/Enter to end  (or click outside this area)"
-msgstr "그리스 펜슬 라인 세션: LMB를 누른 상태에서 드래그로 그리기 | ESC/Enter로 종료 (또는 이 영역 외부를 클릭)"
-
-
-msgid "Grease Pencil Guides: LMB click and release to place reference point | Esc/RMB to cancel"
-msgstr "그리스 연필 가이드: LMB 클릭하여 놓으면 참조 포인트 배치 | Esc/RMB 취소"
-
-
-msgid "Grease Pencil Freehand Session: Hold and drag LMB to draw | M key to flip guide | O key to move reference point"
-msgstr "그리스 팬슬 자유형 세션: LMB을 누르고 드래그하여 그리기 | M키 가이드 뒤집기 | O키 기준점 이동"
-
-
-msgid "Grease Pencil Freehand Session: Hold and drag LMB to draw"
-msgstr "그리스 펜슬 자유형 세션: LMB을 누르고 드래그하여 그리기"
-
-
-msgid "Grease Pencil Session: ESC/Enter to end (or click outside this area)"
-msgstr "그리스 펜슬 세션: 끝내려면 ESC/Enter (또는 이 영역 바깥을 클릭하십시오)"
-
-
 msgid "Active layer is locked or hidden"
 msgstr "활성 레이어가 잠겨 있거나 숨겨져 있습니다"
-
-
-msgid "Nothing to erase or all layers locked"
-msgstr "지우거나 모든 레이어를 잠글 수 없음"
-
-
-msgid "Grease Pencil operator is already active"
-msgstr "그리스 펜슬 작업자는 이미 활성"
-
-
-msgid "Grease Pencil has no active paint tool"
-msgstr "그리스 펜슬에 활성 페인트 도구가 없습니다"
-
-
-msgid "Primitives can only be added in Draw or Edit modes"
-msgstr "프리미티브는 그리기 또는 에디트 모드에서만 추가 할 수 있습니다"
-
-
-msgid "Primitives cannot be added as active layer is locked or hidden"
-msgstr "활성 레이어가 잠겨 있거나 숨겨져 있으므로 프리미티브를 추가 할 수 없습니다"
-
-
-msgid "GPencil Sculpt: %s Stroke  | LMB to paint | RMB/Escape to Exit | Ctrl to Invert Action | Wheel Up/Down for Size  | Shift-Wheel Up/Down for Strength"
-msgstr "그리스 펜슬 스컬프트: %s 스트로크 | LMB로 페인트 | RMB/Esc로 종료 | Ctrl로 액션을 반전 | 휠 Up/Down으로 크기 조절 | Shift-휠 Up/Down으로 강도 조절"
-
-
-msgid "Copy some strokes to the clipboard before using the Clone brush to paste copies of them"
-msgstr "클론 브러시를 사용하여 사본을 붙여 넣기 전에 클립 보드에 일부 스트로크를 복사"
 
 
 msgid "Could not resolve path '%s'"
@@ -77361,10 +75006,6 @@ msgstr "값을 설정하지 못함"
 
 msgid "Property from path '%s' is not a float"
 msgstr "경로 '%s'에서 속성이 실수가 아님"
-
-
-msgid "LMB: Stroke - Shift: Fill - Shift+Ctrl: Stroke + Fill"
-msgstr "LMB: 스트로크 - Shift: 채우기 - Shift+Ctrl: 스트로크 + 체우기"
 
 
 msgid "%s: %s"
@@ -77558,20 +75199,12 @@ msgid "Lightness"
 msgstr "밝게"
 
 
-msgid "Hex triplet for color (#RRGGBB)"
-msgstr "컬러의 핵스 코드 (#RRGGBB)"
-
-
 msgid "Redo"
 msgstr "다시 실행"
 
 
 msgid "OK"
 msgstr "OK"
-
-
-msgid "Cancel"
-msgstr "취소"
 
 
 msgid "Menu \"%s\" not found"
@@ -77608,18 +75241,6 @@ msgid "Drag"
 msgstr "드래그"
 
 
-msgid "ID-Block:"
-msgstr "ID-블록:"
-
-
-msgid "No Properties"
-msgstr "속성이 없음"
-
-
-msgid "More..."
-msgstr "더 많이..."
-
-
 msgid "Flip Color Ramp"
 msgstr "컬러 램프를 뒤집기"
 
@@ -77642,6 +75263,18 @@ msgstr "컬러 램프를 재설정"
 
 msgid "Pos"
 msgstr "Pos"
+
+
+msgid "Add a new color stop to the color ramp"
+msgstr "컬러 램프에 새로운 컬러 정지를 추가"
+
+
+msgid "Delete the active position"
+msgstr "활성 위치를 삭제"
+
+
+msgid "Choose active color stop"
+msgstr "활성 컬러 지점를 선택하기"
 
 
 msgid "Use Clipping"
@@ -77680,34 +75313,6 @@ msgid "Reset Curve"
 msgstr "커브 초기화"
 
 
-msgid "Support Loops"
-msgstr "루프를 지원"
-
-
-msgid "Anim Player"
-msgstr "Anim 플레이어"
-
-
-msgid "Swap Areas"
-msgstr "영역을 교환"
-
-
-msgid "Reset operator defaults"
-msgstr "작업자 기본 값을 재설정"
-
-
-msgid "Add a new color stop to the color ramp"
-msgstr "컬러 램프에 새로운 컬러 정지를 추가"
-
-
-msgid "Delete the active position"
-msgstr "활성 위치를 삭제"
-
-
-msgid "Choose active color stop"
-msgstr "활성 컬러 지점를 선택하기"
-
-
 msgid "Zoom in"
 msgstr "줌 확대"
 
@@ -77736,12 +75341,8 @@ msgid "Toggle Profile Clipping"
 msgstr "프로필 클리핑을 토글"
 
 
-msgid "Stop this job"
-msgstr "이 직업을 중지"
-
-
-msgid "Stop animation playback"
-msgstr "애니메이션 재생 중지"
+msgid "ID-Block:"
+msgstr "ID-블록:"
 
 
 msgid "Browse Scene to be linked"
@@ -77868,22 +75469,6 @@ msgid "Browse ID data to be linked"
 msgstr "연결할 ID 데이터를 찾아보기"
 
 
-msgid "Can't edit external library data"
-msgstr "외부 라이브러리 데이터를 편집 할 수 없습니다"
-
-
-msgid "Today"
-msgstr "오늘"
-
-
-msgid "Yesterday"
-msgstr "어제"
-
-
-msgid "Modified"
-msgstr "수정됨"
-
-
 msgctxt "Action"
 msgid "New"
 msgstr "새로운"
@@ -77915,6 +75500,11 @@ msgstr "새로운"
 
 
 msgctxt "GPencil"
+msgid "New"
+msgstr "새로운"
+
+
+msgctxt "Image"
 msgid "New"
 msgstr "새로운"
 
@@ -77992,6 +75582,50 @@ msgstr "새로운"
 msgctxt "World"
 msgid "New"
 msgstr "새로운"
+
+
+msgid "No Properties"
+msgstr "속성이 없음"
+
+
+msgid "More..."
+msgstr "더 많이..."
+
+
+msgid "Reset operator defaults"
+msgstr "작업자 기본 값을 재설정"
+
+
+msgid "Today"
+msgstr "오늘"
+
+
+msgid "Yesterday"
+msgstr "어제"
+
+
+msgid "Modified"
+msgstr "수정됨"
+
+
+msgid "Anim Player"
+msgstr "Anim 플레이어"
+
+
+msgid "Stop this job"
+msgstr "이 직업을 중지"
+
+
+msgid "Stop animation playback"
+msgstr "애니메이션 재생 중지"
+
+
+msgid "Swap Areas"
+msgstr "영역을 교환"
+
+
+msgid "Can't edit external library data"
+msgstr "외부 라이브러리 데이터를 편집 할 수 없습니다"
 
 
 msgid "Unable to determine ABC sequence length"
@@ -78079,14 +75713,6 @@ msgid "Outer"
 msgstr "바깥"
 
 
-msgid "LMB: Click and drag to draw cut line"
-msgstr "LMB: 잘라내는 라인을 그릴때 클릭 및 드래그"
-
-
-msgid "LMB: Release to confirm cut line"
-msgstr "LMB: 잘라내는 라인을 확인할 때 해제"
-
-
 msgid "Selected edges/faces required"
 msgstr "선택된 에지/페이스 필요한"
 
@@ -78145,10 +75771,6 @@ msgstr "선택된 페이스 지역이 없음"
 
 msgid "No matching face regions found"
 msgstr "일치하는 페이스 지역을 찾을 수 없음"
-
-
-msgid "Does not work in face selection mode"
-msgstr "페이스 선택 모드에서 작동하지 않음"
 
 
 msgid "This operator requires an active vertex (last selected)"
@@ -78342,10 +75964,6 @@ msgid "Cannot create editmode armature"
 msgstr "에디트 모드에서 아마튜어를 만들 수 없습니다"
 
 
-msgid "Not implemented"
-msgstr "구현되지 않음"
-
-
 msgid "Object not found"
 msgstr "오브젝트를 찾을 수 없습니다"
 
@@ -78356,10 +75974,6 @@ msgstr "이 데이터는 에디트 모드에서 합치기를 지원하지 않습
 
 msgid "Cannot edit external library data"
 msgstr "외부 라이브러리 데이터를 편집 할 수 없습니다"
-
-
-msgid "This data does not support joining in this mode"
-msgstr "이 데이터는이 모드에서의 합치기를 지원하지 않습니다"
 
 
 msgid "Cannot delete indirectly linked object '%s'"
@@ -78690,18 +76304,6 @@ msgid "Applied modifier was not first, result may not be as expected"
 msgstr "적용된 모디파이어는 맨 첫 번째가 아닙니다. 결과는 예상과 다를 수 있습니다"
 
 
-msgid "Reshape can work only with higher levels of subdivisions"
-msgstr "섭디비젼의 높은 레벨에서만 작동하는 리셰이프"
-
-
-msgid "Second selected mesh object required to copy shape from"
-msgstr "다음에서 셰이프 복사에 필요한 두 번째 선택된 메쉬 오브젝트"
-
-
-msgid "Objects do not have the same number of vertices"
-msgstr "오브젝트는 버텍스의 수가 동일하지 않음"
-
-
 msgid "Modifier is disabled"
 msgstr "모디파이어를 사용할 수 없습니다"
 
@@ -78720,6 +76322,18 @@ msgstr "메쉬 '%s' 는 스킨 버텍스 데이터가 없음"
 
 msgid "This modifier operation is not allowed from Edit mode"
 msgstr "이 모디파이어 조작은 에디트 모드에서 허용되지 않습니다"
+
+
+msgid "Reshape can work only with higher levels of subdivisions"
+msgstr "섭디비젼의 높은 레벨에서만 작동하는 리셰이프"
+
+
+msgid "Second selected mesh object required to copy shape from"
+msgstr "다음에서 셰이프 복사에 필요한 두 번째 선택된 메쉬 오브젝트"
+
+
+msgid "Objects do not have the same number of vertices"
+msgstr "오브젝트는 버텍스의 수가 동일하지 않음"
 
 
 msgid "Set Parent To"
@@ -78790,10 +76404,6 @@ msgid "Select Collection"
 msgstr "컬렉션을 선택"
 
 
-msgid "No active object"
-msgstr "활성 오브젝트가 없음"
-
-
 msgid "Use another Keying Set, as the active one depends on the currently selected objects or cannot find any targets due to unsuitable context"
 msgstr "활성 키가 현재 선택된 오브젝트에 의존하거나 부적절한 컨텍스트로 인해 대상을 찾을 수 없으므로 다른 키잉 설정를 사용하십시오"
 
@@ -78820,10 +76430,6 @@ msgstr "오브젝트는 변환하는 데이터가 없음"
 
 msgid "Cannot apply to a multi user armature"
 msgstr "다중 유저 아마튜어로 적용 할 수 없습니다"
-
-
-msgid "Grease Pencil Object does not support this set origin option"
-msgstr "그리스 팬슬 오브젝트가 이 오리진 설정 옵션을 지원하지 않습니다"
 
 
 msgid "Area Lights can only have scale applied: \"%s\""
@@ -79094,6 +76700,10 @@ msgid "Plaster"
 msgstr "석고"
 
 
+msgid "Plastic"
+msgstr "플라스틱"
+
+
 msgid "Polystyrene"
 msgstr "폴리스티렌"
 
@@ -79148,10 +76758,6 @@ msgstr "배경 모드에서 OpenGL 렌더를 사용할 수 없습니다. (OpenGL
 
 msgid "Scene has no camera"
 msgstr "씬에 카메라가 없음"
-
-
-msgid "Movie format unsupported"
-msgstr "무비 포맷 지원되지 않음"
 
 
 msgid "Failed to create OpenGL off-screen buffer, %s"
@@ -79339,16 +76945,16 @@ msgid "File not found '%s'"
 msgstr "파일을 찾을 수 없는 '%s'"
 
 
-msgid "ON"
-msgstr "ON"
-
-
-msgid "OFF"
-msgstr "OFF"
-
-
 msgid "Active group is locked, aborting"
 msgstr "활성 그룹은 잠김, 중단"
+
+
+msgid "GPencil Interpolation: "
+msgstr "GPencil 보간: "
+
+
+msgid "ESC/RMB to cancel, Enter/LMB to confirm, WHEEL/MOVE to adjust factor"
+msgstr "취소하려면 ESC/RMB, 확인하려면 Enter/LMB 입력, WHEEL/MOVE로 요소 조정"
 
 
 msgid "Sample color for %s"
@@ -79495,14 +77101,6 @@ msgid "Active Keyframe"
 msgstr "활성 키 프레임"
 
 
-msgid "Action must have at least one keyframe or F-Modifier"
-msgstr "액션은 적어도 하나의 키 프레임 또는 F-모디파이어가 있어야 합니다"
-
-
-msgid "Action has already been stashed"
-msgstr "액션은 이미 제외되어 있습니다"
-
-
 msgid "Could not find current NLA Track"
 msgstr "현재 NLA 트랙을 찾을 수 없습니다"
 
@@ -79519,16 +77117,16 @@ msgid "Keyframe pasting is not available for mask mode"
 msgstr "키 프레임 붙여 넣기는 마스크 모드를 이용 할 수 없음"
 
 
-msgid "Keyframe pasting is not available for grease pencil or mask mode"
-msgstr "그리스 펜슬 또는 마스크 모드에서는 키 프레임 붙여 넣기를 사용할 수 없습니다"
-
-
 msgid "No selected F-Curves to paste into"
 msgstr "다음으로 붙여 넣기 하는 선택된 F-커브가 없음"
 
 
 msgid "Insert Keyframes is not yet implemented for this mode"
 msgstr "이 모드에 대한 키 프레임 삽입은 아직 구현되지 않음"
+
+
+msgid "Not implemented"
+msgstr "구현되지 않음"
 
 
 msgid "Not implemented for Masks"
@@ -79697,10 +77295,6 @@ msgstr "열 수있는 파일이 선택되지 않음"
 
 msgid "Cannot read '%s': %s"
 msgstr "'%s'를 읽을 수 없음: %s"
-
-
-msgid "Use LMB click to define location where place the marker"
-msgstr "마커를 두는 곳 위치를 정의할 때 LMB 클릭을 사용"
 
 
 msgid "No active track to join to"
@@ -79968,10 +77562,6 @@ msgid "Missing %s%s%s component(s) of euler rotation for ID='%s' and RNA-Path='%
 msgstr "오일러 회전의 누락된 %s%s%s 구성 요소(들), ID = '%s' 및 RNA 경로 = '%s'에 대한"
 
 
-msgid "Decimate Keyframes"
-msgstr "키 프레임을 데시메이트"
-
-
 msgid "Discard"
 msgstr "포기"
 
@@ -80058,14 +77648,6 @@ msgstr "저장된 %s"
 
 msgid "can't save image while rendering"
 msgstr "렌더링하는 동안 이미지를 저장할 수 없습니다"
-
-
-msgid "Unpack 1 File"
-msgstr "1 파일을 포장 해제"
-
-
-msgid "Unpack %d Files"
-msgstr "%d 파일을 포장 해제"
 
 
 msgid "No packed files to unpack"
@@ -80306,30 +77888,6 @@ msgstr "마스크를 찾을 수 없습니다"
 
 msgid "File '%s' could not be loaded"
 msgstr "파일 '%s'을 불러올 수 없습니다"
-
-
-msgid "Please select all related strips"
-msgstr "관련 스트립을 모두 선택하십시오"
-
-
-msgid "Cannot apply effects to audio sequence strips"
-msgstr "오디오 시퀀스 스트립에 이펙트를 적용 할 수 없습니다"
-
-
-msgid "Cannot apply effect to more than 3 sequence strips"
-msgstr "3개 이상의 시퀀스 스트립에 효과를 적용할 수 없습니다"
-
-
-msgid "At least one selected sequence strip is needed"
-msgstr "적어도 하나의 선택된 시퀀스 스트립이 필요"
-
-
-msgid "2 selected sequence strips are needed"
-msgstr "2 선택된 시퀀스 스트립가 필요함"
-
-
-msgid "TODO: in what cases does this happen?"
-msgstr "TODO: 어떤 경우에 이런 일이 발생합니까?"
 
 
 msgid "No valid inputs to swap"
@@ -81133,10 +78691,6 @@ msgid "Cannot split selection when sync selection is enabled"
 msgstr "동기화 선택이 활성화된 경우 선택 영역을 분할할 수 없습니다"
 
 
-msgid "Mode(TAB) %s, (S)nap %s, (M)idpoints %s, (L)imit %.2f (Alt Wheel adjust) %s, Switch (I)sland, shift select vertices"
-msgstr "모드(TAB) %s, 스냅(S) %s, 중간지점(M) %s, 제한(L) %.2f (Alt 휠 조정) %s, 아아일랜드 전환(I), shift 버텍스 선택"
-
-
 msgid "Minimize Stretch. Blend %.2f"
 msgstr "늘이기를 최소화. 혼합 %.2f"
 
@@ -81169,9 +78723,40 @@ msgid "Freestyle: Stroke rendering"
 msgstr "프리스타일: 스트로크 렌더링"
 
 
-msgctxt "Action"
-msgid "Group"
-msgstr "그룹"
+msgid "Error writing frame"
+msgstr "프레임 쓰는 중 오류"
+
+
+msgid "No valid formats found"
+msgstr "올바른 형식을 찾을 수 없음"
+
+
+msgid "Render width has to be 720 pixels for DV!"
+msgstr "DV를 위해서는 렌더 폭은 720 픽셀이어야 합니다!"
+
+
+msgid "Render height has to be 480 pixels for DV-NTSC!"
+msgstr "DV-NTSC를 위해서는 렌더 높이는 480 픽셀이어야 합니다!"
+
+
+msgid "Render height has to be 576 pixels for DV-PAL!"
+msgstr "DV-PAL를 위해서는 렌더 높이는 576 픽셀이어야 합니다!"
+
+
+msgid "Error initializing video stream"
+msgstr "비디오 스트림 초기화 오류"
+
+
+msgid "Error initializing audio stream"
+msgstr "오디오 스트림 초기화 오류"
+
+
+msgid "Could not open file for writing"
+msgstr "작성하기 위해 파일을 열 수 없습니다"
+
+
+msgid "Could not initialize streams, probably unsupported codec combination"
+msgstr "스트림을 초기화 할 수 없음, 지원되지 않는 코덱 조합 일 수 있습니다"
 
 
 msgid "Index out of range"
@@ -81699,52 +79284,12 @@ msgid "Style module '%s' could not be removed"
 msgstr "스타일 모듈 '%s'을 제거할 수 없습니다"
 
 
-msgid "Sequence type does not support modifiers"
-msgstr "시퀀스 유형은 모디파이어를 지원하지 않음"
-
-
 msgid "Modifier was not found in the stack"
 msgstr "스택에서 모디파이어를 찾을 수 없습니다"
 
 
-msgid "Sequences.new_sound: unable to open sound file"
-msgstr "Sequences.new_image: 사운드 파일을 열 수 없습니다"
-
-
 msgid "Blender compiled without Audaspace support"
 msgstr "Audaspace 지원 없이 블렌더 컴파일됨"
-
-
-msgid "Sequences.new_effect: end frame not set"
-msgstr "Sequences.new_effect: 종료 프레임이 설정되지 않았습니다"
-
-
-msgid "Sequences.new_effect: effect takes 1 input sequence"
-msgstr "Sequences.new_effect: 이펙트는 1개의 입력 시퀀스를 취합니다"
-
-
-msgid "Sequences.new_effect: effect takes 2 input sequences"
-msgstr "Sequences.new_effect: 이펙트는 2개의 입력 시퀀스를 취합니다"
-
-
-msgid "Sequences.new_effect: effect takes 3 input sequences"
-msgstr "Sequences.new_effect: 이펙트는 3개의 입력 시퀀스를 취합니다"
-
-
-msgid "SequenceElements.pop: cannot pop the last element"
-msgstr "SequenceElements.pop: 마지막 요소를 팝할 수 없습니다"
-
-
-msgid "SequenceElements.pop: index out of range"
-msgstr "SequenceElements.pop: 인덱스가 범위를 벗어났습니다"
-
-
-msgid "Sequences.new_effect: effect expects more than 3 inputs (%d, should never happen!)"
-msgstr "Sequences.new_effect: 이펙트는 3개 이상의 입력을 필요로 합니다 (%d, 결코 일어나지 않아야 합니다!)."
-
-
-msgid "Sequence '%s' not in scene '%s'"
-msgstr "시퀀스 '%s' 가 '%s' 씬에 없습니다"
 
 
 msgid "Sound not packed"
@@ -81855,10 +79400,6 @@ msgid "Settings are inside the Physics tab"
 msgstr "설정은 피직스 탭 안에 있습니다"
 
 
-msgid "Subdivide"
-msgstr "섭디비젼"
-
-
 msgid "Coverage"
 msgstr "적용 범위"
 
@@ -81891,6 +79432,34 @@ msgid "Bright"
 msgstr "밝기"
 
 
+msgid "Layer:"
+msgstr "레이어:"
+
+
+msgid "Glare"
+msgstr "글레어"
+
+
+msgid "Streak fade-out factor"
+msgstr "연속 페이드 아웃 팩터"
+
+
+msgid "Use feather information from the mask"
+msgstr "마스크에서 페더 정보를 사용"
+
+
+msgid "Use multi-sampled motion blur of the mask"
+msgstr "마스크의 멀티 샘플리드 모션 블러를 사용"
+
+
+msgid "Number of motion blur samples"
+msgstr "모션 블러 샘플의 수"
+
+
+msgid "Exposure for motion blur as a factor of FPS"
+msgstr "FPS의 요소로 모션 블러에 대한 노출"
+
+
 msgid "Dot"
 msgstr "도트"
 
@@ -81917,10 +79486,6 @@ msgstr "에지 크리스"
 
 msgid "Rotate islands for best fit"
 msgstr "최상의 맞추기에 대해 아일랜드를 회전"
-
-
-msgid "Shader Editor"
-msgstr "셰이더 에디터"
 
 
 msgid "AO"
@@ -82013,10 +79578,6 @@ msgstr "클리어 코트 거칠기"
 
 msgid "Clear Coat Normal"
 msgstr "클리어 코트 노멀"
-
-
-msgid "True Normal"
-msgstr "True 노멀"
 
 
 msgid "Incoming"
@@ -82163,10 +79724,6 @@ msgid "Patterns"
 msgstr "패턴"
 
 
-msgid "Texture Node Editor"
-msgstr "텍스처 노드 에디터"
-
-
 msgid "Bricks 1"
 msgstr "벽돌 1"
 
@@ -82273,11 +79830,6 @@ msgstr "컬러 균형"
 
 
 msgctxt "Sequence"
-msgid "White Balance"
-msgstr "화이트 밸런스"
-
-
-msgctxt "Sequence"
 msgid "Curves"
 msgstr "커브"
 
@@ -82285,6 +79837,11 @@ msgstr "커브"
 msgctxt "Sequence"
 msgid "Hue Correct"
 msgstr "색조 보정"
+
+
+msgctxt "Sequence"
+msgid "White Balance"
+msgstr "화이트 밸런스"
 
 
 msgctxt "Sequence"
@@ -82428,6 +79985,14 @@ msgid "dbl-"
 msgstr "dbl-"
 
 
+msgid "ON"
+msgstr "ON"
+
+
+msgid "OFF"
+msgstr "OFF"
+
+
 msgid "unsupported format"
 msgstr "지원되지 않는 형식"
 
@@ -82564,20 +80129,12 @@ msgid "Pose Library"
 msgstr "포즈 라이브러리"
 
 
-msgid "All Add-ons"
-msgstr "모든 애드온"
-
-
 msgid "All Add-ons Installed by User"
 msgstr "사용자에 의해 설치된 모든 애드온"
 
 
 msgid "Import-Export"
 msgstr "가져오기-내보내기"
-
-
-msgid "English (English)"
-msgstr "영어 (English)"
 
 
 msgid "Japanese (日本語)"

@@ -7,10 +7,10 @@
  * \ingroup wm
  */
 
-#include "BLI_compiler_attrs.h"
-
+struct Brush;
 struct IDProperty;
 struct Main;
+struct Paint;
 struct PointerRNA;
 struct Scene;
 struct ScrArea;
@@ -34,7 +34,9 @@ struct wmWindow;
  */
 #define WM_TOOLSYSTEM_SPACE_MASK_MODE_FROM_SPACE ((1 << SPACE_IMAGE) | (1 << SPACE_SEQ))
 
-/* Values that define a category of active tool. */
+/**
+ * Values that define a category of active tool.
+ */
 struct bToolKey {
   int space_type;
   int mode;
@@ -50,6 +52,15 @@ bToolRef *WM_toolsystem_ref_set_by_id(bContext *C, const char *name);
 
 bToolRef_Runtime *WM_toolsystem_runtime_from_context(const bContext *C);
 bToolRef_Runtime *WM_toolsystem_runtime_find(WorkSpace *workspace, const bToolKey *tkey);
+
+/**
+ * Activate the brush through the tool system. This will call #BKE_paint_brush_set() with \a brush,
+ * but it will also switch to the tool appropriate for this brush type (if necessary) and update
+ * the current tool-brush references to remember the last used brush for that tool.
+ *
+ * \return True if the brush was successfully activated.
+ */
+bool WM_toolsystem_activate_brush_and_tool(bContext *C, Paint *paint, Brush *brush);
 
 void WM_toolsystem_unlink(bContext *C, WorkSpace *workspace, const bToolKey *tkey);
 void WM_toolsystem_refresh(const bContext *C, WorkSpace *workspace, const bToolKey *tkey);
@@ -95,6 +106,7 @@ void WM_toolsystem_update_from_context(
  * For paint modes to support non-brush tools.
  */
 bool WM_toolsystem_active_tool_is_brush(const bContext *C);
+bool WM_toolsystem_active_tool_has_custom_cursor(const bContext *C);
 
 /** Follow #wmMsgNotifyFn spec. */
 void WM_toolsystem_do_msg_notify_tag_refresh(bContext *C,

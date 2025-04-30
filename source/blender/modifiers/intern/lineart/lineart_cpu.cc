@@ -8,17 +8,14 @@
 
 #include <algorithm>
 
-#include "MOD_lineart.h"
+#include "MOD_lineart.hh"
 
 #include "BLI_listbase.h"
-#include "BLI_math_base.hh"
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_rotation.h"
-#include "BLI_math_vector.hh"
 #include "BLI_sort.hh"
-#include "BLI_string.h"
 #include "BLI_task.h"
 #include "BLI_time.h"
 #include "BLI_utildefines.h"
@@ -32,12 +29,10 @@
 #include "BKE_deform.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_global.hh"
-#include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
-#include "BKE_grease_pencil_legacy_convert.hh"
 #include "BKE_lib_id.hh"
-#include "BKE_material.h"
+#include "BKE_material.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
 #include "BKE_scene.hh"
@@ -46,7 +41,6 @@
 
 #include "DNA_camera_types.h"
 #include "DNA_collection_types.h"
-#include "DNA_gpencil_legacy_types.h"
 #include "DNA_light_types.h"
 #include "DNA_material_types.h"
 #include "DNA_meshdata_types.h"
@@ -62,9 +56,7 @@
 
 #include "GEO_join_geometries.hh"
 
-#include "lineart_intern.h"
-
-#include <algorithm> /* For `min/max`. */
+#include "lineart_intern.hh"
 
 using blender::float3;
 using blender::int3;
@@ -384,8 +376,7 @@ static void lineart_bounding_area_line_add(LineartBoundingArea *ba, LineartEdge 
     return;
   }
   if (ba->line_count >= ba->max_line_count) {
-    LineartEdge **new_array = static_cast<LineartEdge **>(
-        MEM_malloc_arrayN(ba->max_line_count * 2, sizeof(LineartEdge *), __func__));
+    LineartEdge **new_array = MEM_malloc_arrayN<LineartEdge *>(ba->max_line_count * 2, __func__);
     memcpy(new_array, ba->linked_lines, sizeof(LineartEdge *) * ba->max_line_count);
     ba->max_line_count *= 2;
     MEM_freeN(ba->linked_lines);
@@ -480,8 +471,7 @@ static void lineart_occlusion_worker(TaskPool *__restrict /*pool*/, LineartRende
 void lineart_main_occlusion_begin(LineartData *ld)
 {
   int thread_count = ld->thread_count;
-  LineartRenderTaskInfo *rti = static_cast<LineartRenderTaskInfo *>(
-      MEM_callocN(sizeof(LineartRenderTaskInfo) * thread_count, __func__));
+  LineartRenderTaskInfo *rti = MEM_calloc_arrayN<LineartRenderTaskInfo>(thread_count, __func__);
   int i;
 
   TaskPool *tp = BLI_task_pool_create(nullptr, TASK_PRIORITY_HIGH);
@@ -1750,8 +1740,8 @@ void lineart_add_edge_to_array(LineartPendingEdges *pe, LineartEdge *e)
       pe->max = 1000;
     }
 
-    LineartEdge **new_array = static_cast<LineartEdge **>(
-        MEM_mallocN(sizeof(LineartEdge *) * pe->max * 2, "LineartPendingEdges array"));
+    LineartEdge **new_array = MEM_malloc_arrayN<LineartEdge *>(size_t(pe->max) * 2,
+                                                               "LineartPendingEdges array");
     if (LIKELY(pe->array)) {
       memcpy(new_array, pe->array, sizeof(LineartEdge *) * pe->max);
       MEM_freeN(pe->array);
@@ -1777,8 +1767,8 @@ void lineart_finalize_object_edge_array_reserve(LineartPendingEdges *pe, int cou
   }
 
   pe->max = count;
-  LineartEdge **new_array = static_cast<LineartEdge **>(
-      MEM_mallocN(sizeof(LineartEdge *) * pe->max, "LineartPendingEdges array final"));
+  LineartEdge **new_array = MEM_malloc_arrayN<LineartEdge *>(size_t(pe->max),
+                                                             "LineartPendingEdges array final");
   pe->array = new_array;
 }
 
@@ -1941,10 +1931,10 @@ static void lineart_sort_adjacent_items(LineartAdjacentEdge *ai, int length)
 static LineartEdgeNeighbor *lineart_build_edge_neighbor(Mesh *mesh, int total_edges)
 {
   /* Because the mesh is triangulated, so `mesh->edges_num` should be reliable? */
-  LineartAdjacentEdge *adj_e = static_cast<LineartAdjacentEdge *>(
-      MEM_mallocN(sizeof(LineartAdjacentEdge) * total_edges, "LineartAdjacentEdge arr"));
-  LineartEdgeNeighbor *edge_nabr = static_cast<LineartEdgeNeighbor *>(
-      MEM_mallocN(sizeof(LineartEdgeNeighbor) * total_edges, "LineartEdgeNeighbor arr"));
+  LineartAdjacentEdge *adj_e = MEM_malloc_arrayN<LineartAdjacentEdge>(size_t(total_edges),
+                                                                      "LineartAdjacentEdge arr");
+  LineartEdgeNeighbor *edge_nabr = MEM_malloc_arrayN<LineartEdgeNeighbor>(
+      size_t(total_edges), "LineartEdgeNeighbor arr");
 
   TaskParallelSettings en_settings;
   BLI_parallel_range_settings_defaults(&en_settings);
@@ -2057,8 +2047,8 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
       ((usage == OBJECT_LRT_NO_INTERSECTION) ? LRT_ELEMENT_NO_INTERSECTION : 0));
 
   /* Note this memory is not from pool, will be deleted after culling. */
-  LineartTriangleAdjacent *tri_adj = static_cast<LineartTriangleAdjacent *>(MEM_callocN(
-      sizeof(LineartTriangleAdjacent) * corner_tris.size(), "LineartTriangleAdjacent"));
+  LineartTriangleAdjacent *tri_adj = MEM_calloc_arrayN<LineartTriangleAdjacent>(
+      size_t(corner_tris.size()), "LineartTriangleAdjacent");
   /* Link is minimal so we use pool anyway. */
   BLI_spin_lock(&la_data->lock_task);
   lineart_list_append_pointer_pool_thread(
@@ -2161,8 +2151,7 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
     /* Only identifying floating edges at this point because other edges has been taken care of
      * inside #lineart_identify_corner_tri_feature_edges function. */
     const LooseEdgeCache &loose_edges = mesh->loose_edges();
-    loose_data.loose_array = static_cast<int *>(
-        MEM_malloc_arrayN(loose_edges.count, sizeof(int), __func__));
+    loose_data.loose_array = MEM_malloc_arrayN<int>(size_t(loose_edges.count), __func__);
     if (loose_edges.count > 0) {
       loose_data.loose_count = 0;
       for (const int64_t edge_i : IndexRange(mesh->edges_num)) {
@@ -2440,9 +2429,12 @@ static bool lineart_geometry_check_visible(double model_view_proj[4][4],
   if (!use_mesh) {
     return false;
   }
-  const Bounds<float3> bounds = *use_mesh->bounds_min_max();
+  const std::optional<Bounds<float3>> bounds = use_mesh->bounds_min_max();
+  if (!bounds.has_value()) {
+    return false;
+  }
   BoundBox bb;
-  BKE_boundbox_init_from_minmax(&bb, bounds.min, bounds.max);
+  BKE_boundbox_init_from_minmax(&bb, bounds.value().min, bounds.value().max);
 
   double co[8][4];
   double tmp[3];
@@ -2515,7 +2507,7 @@ static void lineart_object_load_single_instance(LineartData *ld,
     }
   }
   else {
-    use_mesh = BKE_mesh_new_from_object(depsgraph, ob, true, true);
+    use_mesh = BKE_mesh_new_from_object(depsgraph, ob, true, true, true);
   }
 
   /* In case we still can not get any mesh geometry data from the object, same as above. */
@@ -2540,7 +2532,7 @@ static void lineart_object_load_single_instance(LineartData *ld,
   copy_m4d_m4(obi->normal, imat);
 
   obi->original_me = use_mesh;
-  obi->original_ob = (ref_ob->id.orig_id ? (Object *)ref_ob->id.orig_id : (Object *)ref_ob);
+  obi->original_ob = (ref_ob->id.orig_id ? (Object *)ref_ob->id.orig_id : ref_ob);
   obi->original_ob_eval = DEG_get_evaluated_object(depsgraph, obi->original_ob);
   lineart_geometry_load_assign_thread(olti, obi, thread_count, use_mesh->faces_num);
 }
@@ -2551,7 +2543,8 @@ void lineart_main_load_geometries(Depsgraph *depsgraph,
                                   LineartData *ld,
                                   bool allow_duplicates,
                                   bool do_shadow_casting,
-                                  ListBase *shadow_elns)
+                                  ListBase *shadow_elns,
+                                  blender::Set<const Object *> *included_objects)
 {
   double proj[4][4], view[4][4], result[4][4];
   float inv[4][4];
@@ -2561,7 +2554,7 @@ void lineart_main_load_geometries(Depsgraph *depsgraph,
     float sensor = BKE_camera_sensor_size(cam->sensor_fit, cam->sensor_x, cam->sensor_y);
     int fit = BKE_camera_sensor_fit(cam->sensor_fit, ld->w, ld->h);
     double asp = (double(ld->w) / double(ld->h));
-    if (cam->type == CAM_PERSP) {
+    if (ELEM(cam->type, CAM_PERSP, CAM_PANO, CAM_CUSTOM)) {
       if (fit == CAMERA_SENSOR_FIT_VERT && asp > 1) {
         sensor *= asp;
       }
@@ -2574,6 +2567,10 @@ void lineart_main_load_geometries(Depsgraph *depsgraph,
     else if (cam->type == CAM_ORTHO) {
       const double w = cam->ortho_scale / 2;
       lineart_matrix_ortho_44d(proj, -w, w, -w / asp, w / asp, cam->clip_start, cam->clip_end);
+    }
+    else {
+      BLI_assert(!"Unsupported camera type in lineart_main_load_geometries");
+      unit_m4_db(proj);
     }
 
     invert_m4_m4(inv, ld->conf.cam_obmat);
@@ -2615,9 +2612,8 @@ void lineart_main_load_geometries(Depsgraph *depsgraph,
   DEGObjectIterSettings deg_iter_settings = {nullptr};
   deg_iter_settings.depsgraph = depsgraph;
   deg_iter_settings.flags = flags;
+  deg_iter_settings.included_objects = included_objects;
 
-  /* XXX(@Yiming): Temporary solution, this iterator is technically unsafe to use *during*
-   * depsgraph evaluation, see D14997 for detailed explanations. */
   DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob) {
 
     obindex++;
@@ -3327,8 +3323,8 @@ static void lineart_add_isec_thread(LineartIsecThread *th,
 {
   if (th->current == th->max) {
 
-    LineartIsecSingle *new_array = static_cast<LineartIsecSingle *>(
-        MEM_mallocN(sizeof(LineartIsecSingle) * th->max * 2, "LineartIsecSingle"));
+    LineartIsecSingle *new_array = MEM_malloc_arrayN<LineartIsecSingle>(size_t(th->max) * 2,
+                                                                        "LineartIsecSingle");
     memcpy(new_array, th->array, sizeof(LineartIsecSingle) * th->max);
     th->max *= 2;
     MEM_freeN(th->array);
@@ -3394,8 +3390,7 @@ static bool lineart_schedule_new_triangle_task(LineartIsecThread *th)
  */
 static void lineart_init_isec_thread(LineartIsecData *d, LineartData *ld, int thread_count)
 {
-  d->threads = static_cast<LineartIsecThread *>(
-      MEM_callocN(sizeof(LineartIsecThread) * thread_count, "LineartIsecThread arr"));
+  d->threads = MEM_calloc_arrayN<LineartIsecThread>(thread_count, "LineartIsecThread arr");
   d->ld = ld;
   d->thread_count = thread_count;
 
@@ -3405,8 +3400,7 @@ static void lineart_init_isec_thread(LineartIsecData *d, LineartData *ld, int th
 
   for (int i = 0; i < thread_count; i++) {
     LineartIsecThread *it = &d->threads[i];
-    it->array = static_cast<LineartIsecSingle *>(
-        MEM_mallocN(sizeof(LineartIsecSingle) * 100, "LineartIsecSingle arr"));
+    it->array = MEM_malloc_arrayN<LineartIsecSingle>(100, "LineartIsecSingle arr");
     it->max = 100;
     it->current = 0;
     it->thread_id = i;
@@ -3576,18 +3570,9 @@ void MOD_lineart_destroy_render_data_v3(GreasePencilLineartModifierData *lmd)
   }
 }
 
-void MOD_lineart_destroy_render_data(LineartGpencilModifierData *lmd_legacy)
-{
-  GreasePencilLineartModifierData lmd;
-  greasepencil::convert::lineart_wrap_v3(lmd_legacy, &lmd);
-  MOD_lineart_destroy_render_data_v3(&lmd);
-  greasepencil::convert::lineart_unwrap_v3(lmd_legacy, &lmd);
-}
-
 LineartCache *MOD_lineart_init_cache()
 {
-  LineartCache *lc = static_cast<LineartCache *>(
-      MEM_callocN(sizeof(LineartCache), "Lineart Cache"));
+  LineartCache *lc = MEM_callocN<LineartCache>("Lineart Cache");
   return lc;
 }
 
@@ -3607,8 +3592,7 @@ static LineartData *lineart_create_render_buffer_v3(Scene *scene,
                                                     Object *active_camera,
                                                     LineartCache *lc)
 {
-  LineartData *ld = static_cast<LineartData *>(
-      MEM_callocN(sizeof(LineartData), "Line Art render buffer"));
+  LineartData *ld = MEM_callocN<LineartData>("Line Art render buffer");
   lmd->cache = lc;
   lmd->la_data_ptr = ld;
   lc->all_enabled_edge_types = lmd->edge_types_override;
@@ -3809,10 +3793,9 @@ void lineart_main_bounding_area_make_initial(LineartData *ld)
       /* Init linked_triangles array. */
       ba->max_triangle_count = LRT_TILE_SPLITTING_TRIANGLE_LIMIT;
       ba->max_line_count = LRT_TILE_EDGE_COUNT_INITIAL;
-      ba->linked_triangles = static_cast<LineartTriangle **>(
-          MEM_callocN(sizeof(LineartTriangle *) * ba->max_triangle_count, "ba_linked_triangles"));
-      ba->linked_lines = static_cast<LineartEdge **>(
-          MEM_callocN(sizeof(LineartEdge *) * ba->max_line_count, "ba_linked_lines"));
+      ba->linked_triangles = MEM_calloc_arrayN<LineartTriangle *>(ba->max_triangle_count,
+                                                                  "ba_linked_triangles");
+      ba->linked_lines = MEM_calloc_arrayN<LineartEdge *>(ba->max_line_count, "ba_linked_lines");
 
       BLI_spin_init(&ba->lock);
     }
@@ -4054,10 +4037,9 @@ static void lineart_bounding_area_split(LineartData *ld,
   for (int i = 0; i < 4; i++) {
     ba[i].max_triangle_count = LRT_TILE_SPLITTING_TRIANGLE_LIMIT;
     ba[i].max_line_count = LRT_TILE_EDGE_COUNT_INITIAL;
-    ba[i].linked_triangles = static_cast<LineartTriangle **>(
-        MEM_callocN(sizeof(LineartTriangle *) * ba[i].max_triangle_count, "ba_linked_triangles"));
-    ba[i].linked_lines = static_cast<LineartEdge **>(
-        MEM_callocN(sizeof(LineartEdge *) * ba[i].max_line_count, "ba_linked_lines"));
+    ba[i].linked_triangles = MEM_calloc_arrayN<LineartTriangle *>(ba[i].max_triangle_count,
+                                                                  "ba_linked_triangles");
+    ba[i].linked_lines = MEM_calloc_arrayN<LineartEdge *>(ba[i].max_line_count, "ba_linked_lines");
     BLI_spin_init(&ba[i].lock);
   }
 
@@ -4350,8 +4332,8 @@ static void lineart_clear_linked_edges_recursive(LineartData *ld, LineartBoundin
   }
   root_ba->line_count = 0;
   root_ba->max_line_count = 128;
-  root_ba->linked_lines = static_cast<LineartEdge **>(
-      MEM_callocN(sizeof(LineartEdge *) * root_ba->max_line_count, "cleared lineart edges"));
+  root_ba->linked_lines = MEM_calloc_arrayN<LineartEdge *>(root_ba->max_line_count,
+                                                           "cleared lineart edges");
 }
 void lineart_main_clear_linked_edges(LineartData *ld)
 {
@@ -4408,8 +4390,8 @@ static void lineart_main_remove_unused_lines_recursive(LineartBoundingArea *ba,
     return;
   }
 
-  LineartEdge **new_array = static_cast<LineartEdge **>(
-      MEM_callocN(sizeof(LineartEdge *) * usable_count, "cleaned lineart edge array"));
+  LineartEdge **new_array = MEM_calloc_arrayN<LineartEdge *>(usable_count,
+                                                             "cleaned lineart edge array");
 
   int new_i = 0;
   for (int i = 0; i < ba->line_count; i++) {
@@ -4466,12 +4448,8 @@ static bool lineart_get_triangle_bounding_areas(
   if ((*rowend) >= ld->qtree.count_y) {
     (*rowend) = ld->qtree.count_y - 1;
   }
-  if ((*colbegin) < 0) {
-    (*colbegin) = 0;
-  }
-  if ((*rowbegin) < 0) {
-    (*rowbegin) = 0;
-  }
+  *colbegin = std::max(*colbegin, 0);
+  *rowbegin = std::max(*rowbegin, 0);
 
   return true;
 }
@@ -4539,12 +4517,8 @@ LineartBoundingArea *MOD_lineart_get_parent_bounding_area(LineartData *ld, doubl
   if (row >= ld->qtree.count_y) {
     row = ld->qtree.count_y - 1;
   }
-  if (col < 0) {
-    col = 0;
-  }
-  if (row < 0) {
-    row = 0;
-  }
+  col = std::max(col, 0);
+  row = std::max(row, 0);
 
   return &ld->qtree.initials[row * ld->qtree.count_x + col];
 }
@@ -4555,12 +4529,8 @@ static LineartBoundingArea *lineart_get_bounding_area(LineartData *ld, double x,
   double sp_w = ld->qtree.tile_width, sp_h = ld->qtree.tile_height;
   int c = int((x + 1.0) / sp_w);
   int r = ld->qtree.count_y - int((y + 1.0) / sp_h) - 1;
-  if (r < 0) {
-    r = 0;
-  }
-  if (c < 0) {
-    c = 0;
-  }
+  r = std::max(r, 0);
+  c = std::max(c, 0);
   if (r >= ld->qtree.count_y) {
     r = ld->qtree.count_y - 1;
   }
@@ -5101,13 +5071,18 @@ bool MOD_lineart_compute_feature_lines_v3(Depsgraph *depsgraph,
   /* Get view vector before loading geometries, because we detect feature lines there. */
   lineart_main_get_view_vector(ld);
 
+  LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime *>(lmd.runtime);
+  blender::Set<const Object *> *included_objects = runtime ? &runtime->object_dependencies :
+                                                             nullptr;
+
   lineart_main_load_geometries(depsgraph,
                                scene,
                                lineart_camera,
                                ld,
                                lmd.calculation_flags & MOD_LINEART_ALLOW_DUPLI_OBJECTS,
                                false,
-                               shadow_elns);
+                               shadow_elns,
+                               included_objects);
 
   if (shadow_generated) {
     lineart_main_transform_and_add_shadow(ld, shadow_veln, shadow_eeln);
@@ -5229,326 +5204,10 @@ bool MOD_lineart_compute_feature_lines_v3(Depsgraph *depsgraph,
   return true;
 }
 
-bool MOD_lineart_compute_feature_lines(Depsgraph *depsgraph,
-                                       LineartGpencilModifierData *lmd_legacy,
-                                       LineartCache **cached_result,
-                                       bool enable_stroke_depth_offset)
-{
-  bool ret = false;
-  GreasePencilLineartModifierData lmd;
-  greasepencil::convert::lineart_wrap_v3(lmd_legacy, &lmd);
-  ret = MOD_lineart_compute_feature_lines_v3(
-      depsgraph, lmd, cached_result, enable_stroke_depth_offset);
-  greasepencil::convert::lineart_unwrap_v3(lmd_legacy, &lmd);
-  return ret;
-}
-
-static void lineart_gpencil_generate(LineartCache *cache,
-                                     Depsgraph *depsgraph,
-                                     Object *gpencil_object,
-                                     float (*gp_obmat_inverse)[4],
-                                     bGPDlayer * /*gpl*/,
-                                     bGPDframe *gpf,
-                                     int level_start,
-                                     int level_end,
-                                     int material_nr,
-                                     Object *source_object,
-                                     Collection *source_collection,
-                                     int types,
-                                     uchar mask_switches,
-                                     uchar material_mask_bits,
-                                     uchar intersection_mask,
-                                     int16_t thickness,
-                                     float opacity,
-                                     uchar shaodow_selection,
-                                     uchar silhouette_mode,
-                                     const char *source_vgname,
-                                     const char *vgname,
-                                     int modifier_flags,
-                                     int modifier_calculation_flags)
-{
-  if (cache == nullptr) {
-    if (G.debug_value == 4000) {
-      printf("nullptr Lineart cache!\n");
-    }
-    return;
-  }
-
-  int stroke_count = 0;
-  int color_idx = 0;
-
-  Object *orig_ob = nullptr;
-  if (source_object) {
-    orig_ob = source_object->id.orig_id ? (Object *)source_object->id.orig_id : source_object;
-  }
-
-  Collection *orig_col = nullptr;
-  if (source_collection) {
-    orig_col = source_collection->id.orig_id ? (Collection *)source_collection->id.orig_id :
-                                               source_collection;
-  }
-
-  /* (!orig_col && !orig_ob) means the whole scene is selected. */
-
-  int enabled_types = cache->all_enabled_edge_types;
-  bool invert_input = modifier_calculation_flags & MOD_LINEART_INVERT_SOURCE_VGROUP;
-  bool match_output = modifier_calculation_flags & MOD_LINEART_MATCH_OUTPUT_VGROUP;
-  bool inverse_silhouette = modifier_flags & MOD_LINEART_INVERT_SILHOUETTE_FILTER;
-
-  LISTBASE_FOREACH (LineartEdgeChain *, ec, &cache->chains) {
-
-    if (ec->picked) {
-      continue;
-    }
-    if (!(ec->type & (types & enabled_types))) {
-      continue;
-    }
-    if (ec->level > level_end || ec->level < level_start) {
-      continue;
-    }
-    if (orig_ob && orig_ob != ec->object_ref) {
-      continue;
-    }
-    if (orig_col && ec->object_ref) {
-      if (BKE_collection_has_object_recursive_instanced(orig_col, (Object *)ec->object_ref)) {
-        if (modifier_flags & MOD_LINEART_INVERT_COLLECTION) {
-          continue;
-        }
-      }
-      else {
-        if (!(modifier_flags & MOD_LINEART_INVERT_COLLECTION)) {
-          continue;
-        }
-      }
-    }
-    if (mask_switches & MOD_LINEART_MATERIAL_MASK_ENABLE) {
-      if (mask_switches & MOD_LINEART_MATERIAL_MASK_MATCH) {
-        if (ec->material_mask_bits != material_mask_bits) {
-          continue;
-        }
-      }
-      else {
-        if (!(ec->material_mask_bits & material_mask_bits)) {
-          continue;
-        }
-      }
-    }
-    if (ec->type & MOD_LINEART_EDGE_FLAG_INTERSECTION) {
-      if (mask_switches & MOD_LINEART_INTERSECTION_MATCH) {
-        if (ec->intersection_mask != intersection_mask) {
-          continue;
-        }
-      }
-      else {
-        if ((intersection_mask) && !(ec->intersection_mask & intersection_mask)) {
-          continue;
-        }
-      }
-    }
-    if (shaodow_selection) {
-      if (ec->shadow_mask_bits != LRT_SHADOW_MASK_UNDEFINED) {
-        /* TODO(@Yiming): Give a behavior option for how to display undefined shadow info. */
-        if (shaodow_selection == LINEART_SHADOW_FILTER_ILLUMINATED &&
-            !(ec->shadow_mask_bits & LRT_SHADOW_MASK_ILLUMINATED))
-        {
-          continue;
-        }
-        if (shaodow_selection == LINEART_SHADOW_FILTER_SHADED &&
-            !(ec->shadow_mask_bits & LRT_SHADOW_MASK_SHADED))
-        {
-          continue;
-        }
-        if (shaodow_selection == LINEART_SHADOW_FILTER_ILLUMINATED_ENCLOSED_SHAPES) {
-          uint32_t test_bits = ec->shadow_mask_bits & LRT_SHADOW_TEST_SHAPE_BITS;
-          if ((test_bits != LRT_SHADOW_MASK_ILLUMINATED) &&
-              (test_bits != (LRT_SHADOW_MASK_SHADED | LRT_SHADOW_MASK_ILLUMINATED_SHAPE)))
-          {
-            continue;
-          }
-        }
-      }
-    }
-    if (silhouette_mode && (ec->type & (MOD_LINEART_EDGE_FLAG_CONTOUR))) {
-      bool is_silhouette = false;
-      if (orig_col) {
-        if (!ec->silhouette_backdrop) {
-          is_silhouette = true;
-        }
-        else if (!BKE_collection_has_object_recursive_instanced(orig_col, ec->silhouette_backdrop))
-        {
-          is_silhouette = true;
-        }
-      }
-      else {
-        if ((!orig_ob) && (!ec->silhouette_backdrop)) {
-          is_silhouette = true;
-        }
-      }
-
-      if ((silhouette_mode == LINEART_SILHOUETTE_FILTER_INDIVIDUAL || orig_ob) &&
-          ec->silhouette_backdrop != ec->object_ref)
-      {
-        is_silhouette = true;
-      }
-
-      if (inverse_silhouette) {
-        is_silhouette = !is_silhouette;
-      }
-      if (!is_silhouette) {
-        continue;
-      }
-    }
-
-    /* Preserved: If we ever do asynchronous generation, this picked flag should be set here. */
-    // ec->picked = 1;
-
-    const int count = MOD_lineart_chain_count(ec);
-    if (count < 2) {
-      continue;
-    }
-
-    bGPDstroke *gps = BKE_gpencil_stroke_add(gpf, color_idx, count, thickness, false);
-
-    int i;
-    LISTBASE_FOREACH_INDEX (LineartEdgeChainItem *, eci, &ec->chain, i) {
-      bGPDspoint *point = &gps->points[i];
-      mul_v3_m4v3(&point->x, gp_obmat_inverse, eci->gpos);
-      point->pressure = 1.0f;
-      point->strength = opacity;
-    }
-
-    BKE_gpencil_dvert_ensure(gps);
-    gps->mat_nr = max_ii(material_nr, 0);
-
-    if (source_vgname && vgname) {
-      Object *eval_ob = DEG_get_evaluated_object(depsgraph, ec->object_ref);
-      int gpdg = -1;
-      if (match_output || (gpdg = BKE_object_defgroup_name_index(gpencil_object, vgname)) >= 0) {
-        if (eval_ob && eval_ob->type == OB_MESH) {
-          int dindex = 0;
-          Mesh *mesh = BKE_object_get_evaluated_mesh(eval_ob);
-          MDeformVert *dvert = mesh->deform_verts_for_write().data();
-          if (dvert) {
-            LISTBASE_FOREACH (bDeformGroup *, db, &mesh->vertex_group_names) {
-              if ((!source_vgname) || strstr(db->name, source_vgname) == db->name) {
-                if (match_output) {
-                  gpdg = BKE_object_defgroup_name_index(gpencil_object, db->name);
-                  if (gpdg < 0) {
-                    continue;
-                  }
-                }
-                int sindex = 0, vindex;
-                LISTBASE_FOREACH (LineartEdgeChainItem *, eci, &ec->chain) {
-                  vindex = eci->index;
-                  if (vindex >= mesh->verts_num) {
-                    break;
-                  }
-                  MDeformWeight *mdw = BKE_defvert_ensure_index(&dvert[vindex], dindex);
-                  MDeformWeight *gdw = BKE_defvert_ensure_index(&gps->dvert[sindex], gpdg);
-
-                  float use_weight = mdw->weight;
-                  if (invert_input) {
-                    use_weight = 1 - use_weight;
-                  }
-                  gdw->weight = std::max(use_weight, gdw->weight);
-
-                  sindex++;
-                }
-              }
-              dindex++;
-            }
-          }
-        }
-      }
-    }
-
-    if (G.debug_value == 4000) {
-      BKE_gpencil_stroke_set_random_color(gps);
-    }
-    BKE_gpencil_stroke_geometry_update(static_cast<bGPdata *>(gpencil_object->data), gps);
-    stroke_count++;
-  }
-
-  if (G.debug_value == 4000) {
-    printf("LRT: Generated %d strokes.\n", stroke_count);
-  }
-}
-
-typedef struct LineartChainWriteInfo {
+struct LineartChainWriteInfo {
   LineartEdgeChain *chain;
   int point_count;
-} LineartChainWriteInfo;
-
-void MOD_lineart_gpencil_generate(LineartCache *cache,
-                                  Depsgraph *depsgraph,
-                                  Object *ob,
-                                  bGPDlayer *gpl,
-                                  bGPDframe *gpf,
-                                  int8_t source_type,
-                                  void *source_reference,
-                                  int level_start,
-                                  int level_end,
-                                  int mat_nr,
-                                  int16_t edge_types,
-                                  uchar mask_switches,
-                                  uchar material_mask_bits,
-                                  uchar intersection_mask,
-                                  int16_t thickness,
-                                  float opacity,
-                                  uchar shadow_selection,
-                                  uchar silhouette_mode,
-                                  const char *source_vgname,
-                                  const char *vgname,
-                                  int modifier_flags,
-                                  int modifier_calculation_flags)
-{
-
-  if (!gpl || !gpf || !ob) {
-    return;
-  }
-
-  Object *source_object = nullptr;
-  Collection *source_collection = nullptr;
-  int16_t use_types = edge_types;
-  if (source_type == LINEART_SOURCE_OBJECT) {
-    if (!source_reference) {
-      return;
-    }
-    source_object = (Object *)source_reference;
-  }
-  else if (source_type == LINEART_SOURCE_COLLECTION) {
-    if (!source_reference) {
-      return;
-    }
-    source_collection = (Collection *)source_reference;
-  }
-
-  float gp_obmat_inverse[4][4];
-  invert_m4_m4(gp_obmat_inverse, ob->object_to_world().ptr());
-  lineart_gpencil_generate(cache,
-                           depsgraph,
-                           ob,
-                           gp_obmat_inverse,
-                           gpl,
-                           gpf,
-                           level_start,
-                           level_end,
-                           mat_nr,
-                           source_object,
-                           source_collection,
-                           use_types,
-                           mask_switches,
-                           material_mask_bits,
-                           intersection_mask,
-                           thickness,
-                           opacity,
-                           shadow_selection,
-                           silhouette_mode,
-                           source_vgname,
-                           vgname,
-                           modifier_flags,
-                           modifier_calculation_flags);
-}
+};
 
 void MOD_lineart_gpencil_generate_v3(const LineartCache *cache,
                                      const blender::float4x4 &inverse_mat,
@@ -5629,7 +5288,7 @@ void MOD_lineart_gpencil_generate_v3(const LineartCache *cache,
       continue;
     }
     if (orig_col && ec->object_ref) {
-      if (BKE_collection_has_object_recursive_instanced(orig_col, (Object *)ec->object_ref)) {
+      if (BKE_collection_has_object_recursive_instanced(orig_col, ec->object_ref)) {
         if (modifier_flags & MOD_LINEART_INVERT_COLLECTION) {
           continue;
         }
@@ -5779,13 +5438,15 @@ void MOD_lineart_gpencil_generate_v3(const LineartCache *cache,
       int point_i = i + up_to_point;
       point_positions[point_i] = blender::math::transform_point(inverse_mat, float3(eci->gpos));
       point_radii.span[point_i] = thickness / 2.0f;
-      point_opacities.span[point_i] = opacity;
+      if (point_opacities) {
+        point_opacities.span[point_i] = opacity;
+      }
 
       if (src_deform_group >= 0) {
-        int vindex;
-        vindex = eci->index;
-        if (vindex >= src_mesh->verts_num) {
-          break;
+        const int64_t vindex = eci->index - cwi.chain->index_offset;
+        if (UNLIKELY(vindex >= src_mesh->verts_num)) {
+          vgroup_weights.span[point_i] = 0;
+          continue;
         }
         MDeformWeight *mdw = BKE_defvert_ensure_index(&src_dvert[vindex], src_deform_group);
 
@@ -5796,6 +5457,8 @@ void MOD_lineart_gpencil_generate_v3(const LineartCache *cache,
     stroke_materials.span[chain_i] = max_ii(mat_nr, 0);
     up_to_point += cwi.point_count;
   }
+  vgroup_weights.finish();
+
   offsets[writer.index_range().last() + 1] = up_to_point;
 
   SpanAttributeWriter<bool> stroke_cyclic = attributes.lookup_or_add_for_write_span<bool>(

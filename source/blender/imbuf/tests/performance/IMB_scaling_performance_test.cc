@@ -23,10 +23,11 @@ static constexpr int DST_LARGER_Y = int(SRC_Y * 2.13f);
 
 static ImBuf *create_src_image(bool use_float)
 {
-  ImBuf *img = IMB_allocImBuf(SRC_X, SRC_Y, 32, use_float ? IB_rectfloat : IB_rect);
+  ImBuf *img = IMB_allocImBuf(SRC_X, SRC_Y, 32, use_float ? IB_float_data : IB_byte_data);
   if (use_float) {
+    const size_t img_pixel_count = IMB_get_pixel_count(img);
     float *pix = img->float_buffer.data;
-    for (int i = 0; i < img->x * img->y; i++) {
+    for (size_t i = 0; i < img_pixel_count; i++) {
       pix[0] = i * 0.1f;
       pix[1] = i * 2.1f;
       pix[2] = i * 0.01f;
@@ -35,8 +36,9 @@ static ImBuf *create_src_image(bool use_float)
     }
   }
   else {
+    const size_t img_pixel_count = IMB_get_pixel_count(img);
     uchar *pix = img->byte_buffer.data;
-    for (int i = 0; i < img->x * img->y; i++) {
+    for (size_t i = 0; i < img_pixel_count; i++) {
       pix[0] = i & 0xFF;
       pix[1] = (i * 3) & 0xFF;
       pix[2] = (i + 12345) & 0xFF;
@@ -53,9 +55,9 @@ static void imb_scale_via_transform(ImBuf *&src,
                                     eIMBInterpolationFilterMode filter)
 {
   ImBuf *dst = IMB_allocImBuf(width, height, src->planes, src->flags);
-  float4x4 matrix = math::from_scale<float4x4>(
-      float4(float(src->x) / dst->x, float(src->y) / dst->y, 1.0f, 1.0f));
-  IMB_transform(src, dst, IMB_TRANSFORM_MODE_REGULAR, filter, matrix.ptr(), nullptr);
+  float3x3 matrix = math::from_scale<float3x3>(
+      float3(float(src->x) / dst->x, float(src->y) / dst->y, 1.0f));
+  IMB_transform(src, dst, IMB_TRANSFORM_MODE_REGULAR, filter, matrix, nullptr);
   IMB_freeImBuf(src);
   src = dst;
 }

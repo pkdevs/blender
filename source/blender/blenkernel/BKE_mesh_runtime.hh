@@ -9,6 +9,9 @@
  * This file contains access functions for the Mesh.runtime struct.
  */
 
+#include "BLI_math_vector_types.hh"
+#include "BLI_span.hh"
+
 struct BMEditMesh;
 struct CustomData_MeshMasks;
 struct Depsgraph;
@@ -80,8 +83,6 @@ Mesh *mesh_create_eval_no_deform_render(Depsgraph *depsgraph,
                                         const Scene *scene,
                                         Object *ob,
                                         const CustomData_MeshMasks *dataMask);
-
-void mesh_eval_to_meshkey(const Mesh *me_deformed, Mesh *mesh, KeyBlock *kb);
 
 }  // namespace blender::bke
 

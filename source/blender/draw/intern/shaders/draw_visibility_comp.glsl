@@ -7,11 +7,11 @@
  */
 /* TODO(fclem): This could be augmented by a 2 pass occlusion culling system. */
 
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
-#pragma BLENDER_REQUIRE(common_math_lib.glsl)
-#pragma BLENDER_REQUIRE(common_intersect_lib.glsl)
+#include "draw_view_info.hh"
 
-shared uint shared_result;
+#include "draw_intersect_lib.glsl"
+
+COMPUTE_SHADER_CREATE_INFO(draw_visibility_compute)
 
 void mask_visibility_bit(uint view_id)
 {
@@ -42,7 +42,7 @@ void main()
                                            bounds._inner_sphere_radius);
 
     for (drw_view_id = 0u; drw_view_id < uint(view_len); drw_view_id++) {
-      if (drw_view_culling.bound_sphere.w == -1.0) {
+      if (drw_view_culling().bound_sphere.w == -1.0f) {
         /* View disabled. */
         mask_visibility_bit(drw_view_id);
       }
@@ -62,7 +62,7 @@ void main()
   else {
     /* Culling is disabled, but we need to mask the bits for disabled views. */
     for (drw_view_id = 0u; drw_view_id < uint(view_len); drw_view_id++) {
-      if (drw_view_culling.bound_sphere.w == -1.0) {
+      if (drw_view_culling().bound_sphere.w == -1.0f) {
         /* View disabled. */
         mask_visibility_bit(drw_view_id);
       }

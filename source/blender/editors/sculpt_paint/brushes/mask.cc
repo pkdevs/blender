@@ -2,28 +2,29 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "editors/sculpt_paint/brushes/types.hh"
+#include "editors/sculpt_paint/brushes/brushes.hh"
 
 #include "DNA_brush_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_pbvh.hh"
+#include "BKE_attribute.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
 
-#include "BLI_array.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_math_vector.hh"
 #include "BLI_span.hh"
-#include "BLI_task.h"
 
 #include "editors/sculpt_paint/mesh_brush_common.hh"
 #include "editors/sculpt_paint/paint_intern.hh"
 #include "editors/sculpt_paint/paint_mask.hh"
+#include "editors/sculpt_paint/sculpt_automask.hh"
 #include "editors/sculpt_paint/sculpt_intern.hh"
 
-namespace blender::ed::sculpt_paint {
+#include "bmesh.hh"
+
+namespace blender::ed::sculpt_paint::brushes {
 inline namespace mask_cc {
 
 struct LocalData {
@@ -33,13 +34,6 @@ struct LocalData {
   Vector<float> current_masks;
   Vector<float> new_masks;
 };
-
-BLI_NOINLINE static void invert_mask(const MutableSpan<float> masks)
-{
-  for (float &mask : masks) {
-    mask = 1.0f - mask;
-  }
-}
 
 BLI_NOINLINE static void apply_factors(const float strength,
                                        const Span<float> current_masks,
@@ -67,7 +61,7 @@ static void calc_faces(const Depsgraph &depsgraph,
                        const Span<float3> vert_normals,
                        const bke::pbvh::MeshNode &node,
                        Object &object,
-                       Mesh &mesh,
+                       const Span<bool> hide_vert,
                        LocalData &tls,
                        const MutableSpan<float> mask)
 {
@@ -78,7 +72,7 @@ static void calc_faces(const Depsgraph &depsgraph,
 
   tls.factors.resize(verts.size());
   const MutableSpan<float> factors = tls.factors;
-  fill_factor_from_hide(mesh, verts, factors);
+  fill_factor_from_hide(hide_vert, verts, factors);
   filter_region_clip_factors(ss, positions, verts, factors);
   if (brush.flag & BRUSH_FRONTFACE) {
     calc_front_face(cache.view_normal_symm, vert_normals, verts, factors);
@@ -102,7 +96,7 @@ static void calc_faces(const Depsgraph &depsgraph,
   tls.current_masks = tls.new_masks;
   const MutableSpan<float> current_masks = tls.current_masks;
   if (strength > 0.0f) {
-    invert_mask(current_masks);
+    mask::invert_mask(current_masks);
   }
   apply_factors(strength, current_masks, factors, new_masks);
   clamp_mask(new_masks);
@@ -150,7 +144,7 @@ static void calc_grids(const Depsgraph &depsgraph,
   tls.current_masks = tls.new_masks;
   const MutableSpan<float> current_masks = tls.current_masks;
   if (strength > 0.0f) {
-    invert_mask(current_masks);
+    mask::invert_mask(current_masks);
   }
   apply_factors(strength, current_masks, factors, new_masks);
   clamp_mask(new_masks);
@@ -198,7 +192,7 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   tls.current_masks = tls.new_masks;
   const MutableSpan<float> current_masks = tls.current_masks;
   if (strength > 0.0f) {
-    invert_mask(current_masks);
+    mask::invert_mask(current_masks);
   }
   apply_factors(strength, current_masks, factors, new_masks);
   clamp_mask(new_masks);
@@ -230,43 +224,50 @@ void do_mask_brush(const Depsgraph &depsgraph,
 
       bke::SpanAttributeWriter<float> mask = attributes.lookup_or_add_for_write_span<float>(
           ".sculpt_mask", bke::AttrDomain::Point);
+      const VArraySpan hide_vert = *attributes.lookup<bool>(".hide_vert", bke::AttrDomain::Point);
 
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_faces(depsgraph,
-                     brush,
-                     bstrength,
-                     positions,
-                     vert_normals,
-                     nodes[i],
-                     object,
-                     mesh,
-                     tls,
-                     mask.span);
-        });
+        calc_faces(depsgraph,
+                   brush,
+                   bstrength,
+                   positions,
+                   vert_normals,
+                   nodes[i],
+                   object,
+                   hide_vert,
+                   tls,
+                   mask.span);
+        bke::pbvh::node_update_mask_mesh(mask.span, nodes[i]);
       });
       mask.finish();
       break;
     }
     case blender::bke::pbvh::Type::Grids: {
+      SubdivCCG &subdiv_ccg = *ss.subdiv_ccg;
+      const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
+      MutableSpan<float> masks = subdiv_ccg.masks;
       MutableSpan<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
-        node_mask.slice(range).foreach_index(
-            [&](const int i) { calc_grids(depsgraph, object, brush, bstrength, nodes[i], tls); });
+        calc_grids(depsgraph, object, brush, bstrength, nodes[i], tls);
+        bke::pbvh::node_update_mask_grids(key, masks, nodes[i]);
       });
       break;
     }
     case blender::bke::pbvh::Type::BMesh: {
+      const int mask_offset = CustomData_get_offset_named(
+          &ss.bm->vdata, CD_PROP_FLOAT, ".sculpt_mask");
       MutableSpan<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
-        node_mask.slice(range).foreach_index(
-            [&](const int i) { calc_bmesh(depsgraph, object, brush, bstrength, nodes[i], tls); });
+        calc_bmesh(depsgraph, object, brush, bstrength, nodes[i], tls);
+        bke::pbvh::node_update_mask_bmesh(mask_offset, nodes[i]);
       });
       break;
     }
   }
+  pbvh.tag_masks_changed(node_mask);
 }
-}  // namespace blender::ed::sculpt_paint
+
+}  // namespace blender::ed::sculpt_paint::brushes

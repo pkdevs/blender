@@ -10,7 +10,6 @@
 
 #include <algorithm>
 #include <cfloat>
-#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
@@ -19,9 +18,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_bounds.hh"
+#include "BLI_bounds_types.hh"
 #include "BLI_listbase.h"
-#include "BLI_range.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_anim_types.h"
@@ -101,9 +99,7 @@ struct AnimKeylist {
     BLI_listbase_clear(&this->runtime.list_wrapper);
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("editors:AnimKeylist")
-#endif
 };
 
 AnimKeylist *ED_keylist_create()
@@ -118,7 +114,7 @@ void ED_keylist_free(AnimKeylist *keylist)
   delete keylist;
 }
 
-static void ED_keylist_convert_key_columns_to_array(AnimKeylist *keylist)
+static void keylist_convert_key_columns_to_array(AnimKeylist *keylist)
 {
   size_t index;
   LISTBASE_FOREACH_INDEX (ActKeyColumn *, key, &keylist->key_columns, index) {
@@ -126,7 +122,7 @@ static void ED_keylist_convert_key_columns_to_array(AnimKeylist *keylist)
   }
 }
 
-static void ED_keylist_runtime_update_key_column_next_prev(AnimKeylist *keylist)
+static void keylist_runtime_update_key_column_next_prev(AnimKeylist *keylist)
 {
   for (size_t index = 0; index < keylist->column_len; index++) {
     const bool is_first = (index == 0);
@@ -138,7 +134,7 @@ static void ED_keylist_runtime_update_key_column_next_prev(AnimKeylist *keylist)
   }
 }
 
-static void ED_keylist_runtime_init_listbase(AnimKeylist *keylist)
+static void keylist_runtime_init_listbase(AnimKeylist *keylist)
 {
   if (ED_keylist_is_empty(keylist)) {
     BLI_listbase_clear(&keylist->runtime.list_wrapper);
@@ -149,22 +145,22 @@ static void ED_keylist_runtime_init_listbase(AnimKeylist *keylist)
   keylist->runtime.list_wrapper.last = &keylist->runtime.key_columns[keylist->column_len - 1];
 }
 
-static void ED_keylist_runtime_init(AnimKeylist *keylist)
+static void keylist_runtime_init(AnimKeylist *keylist)
 {
   BLI_assert(!keylist->is_runtime_initialized);
 
   keylist->runtime.key_columns = blender::Array<ActKeyColumn>(keylist->column_len);
 
   /* Convert linked list to array to support fast searching. */
-  ED_keylist_convert_key_columns_to_array(keylist);
+  keylist_convert_key_columns_to_array(keylist);
   /* Ensure that the array can also be used as a listbase for external usages. */
-  ED_keylist_runtime_update_key_column_next_prev(keylist);
-  ED_keylist_runtime_init_listbase(keylist);
+  keylist_runtime_update_key_column_next_prev(keylist);
+  keylist_runtime_init_listbase(keylist);
 
   keylist->is_runtime_initialized = true;
 }
 
-static void ED_keylist_reset_last_accessed(AnimKeylist *keylist)
+static void keylist_reset_last_accessed(AnimKeylist *keylist)
 {
   BLI_assert(!keylist->is_runtime_initialized);
   keylist->last_accessed_column.reset();
@@ -175,11 +171,10 @@ void ED_keylist_prepare_for_direct_access(AnimKeylist *keylist)
   if (keylist->is_runtime_initialized) {
     return;
   }
-  ED_keylist_runtime_init(keylist);
+  keylist_runtime_init(keylist);
 }
 
-static const ActKeyColumn *ED_keylist_find_lower_bound(const AnimKeylist *keylist,
-                                                       const float cfra)
+static const ActKeyColumn *keylist_find_lower_bound(const AnimKeylist *keylist, const float cfra)
 {
   BLI_assert(!ED_keylist_is_empty(keylist));
   const ActKeyColumn *begin = std::begin(keylist->runtime.key_columns);
@@ -194,8 +189,7 @@ static const ActKeyColumn *ED_keylist_find_lower_bound(const AnimKeylist *keylis
   return found_column;
 }
 
-static const ActKeyColumn *ED_keylist_find_upper_bound(const AnimKeylist *keylist,
-                                                       const float cfra)
+static const ActKeyColumn *keylist_find_upper_bound(const AnimKeylist *keylist, const float cfra)
 {
   BLI_assert(!ED_keylist_is_empty(keylist));
   const ActKeyColumn *begin = std::begin(keylist->runtime.key_columns);
@@ -219,7 +213,7 @@ const ActKeyColumn *ED_keylist_find_exact(const AnimKeylist *keylist, const floa
     return nullptr;
   }
 
-  const ActKeyColumn *found_column = ED_keylist_find_lower_bound(keylist, cfra);
+  const ActKeyColumn *found_column = keylist_find_lower_bound(keylist, cfra);
 
   const ActKeyColumn *end = std::end(keylist->runtime.key_columns);
   if (found_column == end) {
@@ -240,7 +234,7 @@ const ActKeyColumn *ED_keylist_find_next(const AnimKeylist *keylist, const float
     return nullptr;
   }
 
-  const ActKeyColumn *found_column = ED_keylist_find_upper_bound(keylist, cfra);
+  const ActKeyColumn *found_column = keylist_find_upper_bound(keylist, cfra);
 
   const ActKeyColumn *end = std::end(keylist->runtime.key_columns);
   if (found_column == end) {
@@ -259,7 +253,7 @@ const ActKeyColumn *ED_keylist_find_prev(const AnimKeylist *keylist, const float
   }
 
   const ActKeyColumn *end = std::end(keylist->runtime.key_columns);
-  const ActKeyColumn *found_column = ED_keylist_find_lower_bound(keylist, cfra);
+  const ActKeyColumn *found_column = keylist_find_lower_bound(keylist, cfra);
 
   if (found_column == end) {
     /* Nothing found, return the last item. */
@@ -271,7 +265,7 @@ const ActKeyColumn *ED_keylist_find_prev(const AnimKeylist *keylist, const float
 }
 
 const ActKeyColumn *ED_keylist_find_any_between(const AnimKeylist *keylist,
-                                                const Range2f frame_range)
+                                                const Bounds<float> frame_range)
 {
   BLI_assert_msg(keylist->is_runtime_initialized,
                  "ED_keylist_prepare_for_direct_access needs to be called before searching.");
@@ -280,7 +274,7 @@ const ActKeyColumn *ED_keylist_find_any_between(const AnimKeylist *keylist,
     return nullptr;
   }
 
-  const ActKeyColumn *column = ED_keylist_find_lower_bound(keylist, frame_range.min);
+  const ActKeyColumn *column = keylist_find_lower_bound(keylist, frame_range.min);
   const ActKeyColumn *end = std::end(keylist->runtime.key_columns);
   if (column == end) {
     return nullptr;
@@ -331,7 +325,7 @@ static void keylist_first_last(const AnimKeylist *keylist,
   }
 }
 
-bool ED_keylist_all_keys_frame_range(const AnimKeylist *keylist, Range2f *r_frame_range)
+bool ED_keylist_all_keys_frame_range(const AnimKeylist *keylist, Bounds<float> *r_frame_range)
 {
   BLI_assert(r_frame_range);
 
@@ -348,7 +342,7 @@ bool ED_keylist_all_keys_frame_range(const AnimKeylist *keylist, Range2f *r_fram
   return true;
 }
 
-bool ED_keylist_selected_keys_frame_range(const AnimKeylist *keylist, Range2f *r_frame_range)
+bool ED_keylist_selected_keys_frame_range(const AnimKeylist *keylist, Bounds<float> *r_frame_range)
 {
   BLI_assert(r_frame_range);
 
@@ -458,8 +452,7 @@ static eKeyframeExtremeDrawOpts bezt_extreme_type(const BezTripleChain *chain)
 /* New node callback used for building ActKeyColumns from BezTripleChain */
 static ActKeyColumn *nalloc_ak_bezt(void *data)
 {
-  ActKeyColumn *ak = static_cast<ActKeyColumn *>(
-      MEM_callocN(sizeof(ActKeyColumn), "ActKeyColumn"));
+  ActKeyColumn *ak = MEM_callocN<ActKeyColumn>("ActKeyColumn");
   const BezTripleChain *chain = static_cast<const BezTripleChain *>(data);
   const BezTriple *bezt = chain->cur;
 
@@ -516,8 +509,7 @@ static void nupdate_ak_bezt(ActKeyColumn *ak, void *data)
 /* New node callback used for building ActKeyColumns from GPencil frames */
 static ActKeyColumn *nalloc_ak_cel(void *data)
 {
-  ActKeyColumn *ak = static_cast<ActKeyColumn *>(
-      MEM_callocN(sizeof(ActKeyColumn), "ActKeyColumnCel"));
+  ActKeyColumn *ak = MEM_callocN<ActKeyColumn>("ActKeyColumnCel");
   GreasePencilCel &cel = *static_cast<GreasePencilCel *>(data);
 
   /* Store settings based on state of BezTriple */
@@ -558,8 +550,7 @@ static void nupdate_ak_cel(ActKeyColumn *ak, void *data)
 /* New node callback used for building ActKeyColumns from GPencil frames. */
 static ActKeyColumn *nalloc_ak_gpframe(void *data)
 {
-  ActKeyColumn *ak = static_cast<ActKeyColumn *>(
-      MEM_callocN(sizeof(ActKeyColumn), "ActKeyColumnGPF"));
+  ActKeyColumn *ak = MEM_callocN<ActKeyColumn>("ActKeyColumnGPF");
   const bGPDframe *gpf = (bGPDframe *)data;
 
   /* store settings based on state of BezTriple */
@@ -580,7 +571,7 @@ static ActKeyColumn *nalloc_ak_gpframe(void *data)
 /* Node updater callback used for building ActKeyColumns from GPencil frames. */
 static void nupdate_ak_gpframe(ActKeyColumn *ak, void *data)
 {
-  bGPDframe *gpf = (bGPDframe *)data;
+  bGPDframe *gpf = static_cast<bGPDframe *>(data);
 
   /* Set selection status and 'touched' status. */
   if (gpf->flag & GP_FRAME_SELECT) {
@@ -601,8 +592,7 @@ static void nupdate_ak_gpframe(ActKeyColumn *ak, void *data)
 /* New node callback used for building ActKeyColumns from GPencil frames */
 static ActKeyColumn *nalloc_ak_masklayshape(void *data)
 {
-  ActKeyColumn *ak = static_cast<ActKeyColumn *>(
-      MEM_callocN(sizeof(ActKeyColumn), "ActKeyColumnGPF"));
+  ActKeyColumn *ak = MEM_callocN<ActKeyColumn>("ActKeyColumnGPF");
   const MaskLayerShape *masklay_shape = (const MaskLayerShape *)data;
 
   /* Store settings based on state of BezTriple. */
@@ -618,7 +608,7 @@ static ActKeyColumn *nalloc_ak_masklayshape(void *data)
 /* Node updater callback used for building ActKeyColumns from GPencil frames */
 static void nupdate_ak_masklayshape(ActKeyColumn *ak, void *data)
 {
-  MaskLayerShape *masklay_shape = (MaskLayerShape *)data;
+  MaskLayerShape *masklay_shape = static_cast<MaskLayerShape *>(data);
 
   /* Set selection status and 'touched' status. */
   if (masklay_shape->flag & MASK_SHAPE_SELECT) {
@@ -632,9 +622,9 @@ static void nupdate_ak_masklayshape(ActKeyColumn *ak, void *data)
 using KeylistCreateColumnFunction = std::function<ActKeyColumn *(void *userdata)>;
 using KeylistUpdateColumnFunction = std::function<void(ActKeyColumn *, void *)>;
 
-/* `ED_keylist_find_neighbor_front_to_back` is called before the runtime can be initialized so we
+/* `keylist_find_neighbor_front_to_back` is called before the runtime can be initialized so we
  * cannot use bin searching. */
-static ActKeyColumn *ED_keylist_find_neighbor_front_to_back(ActKeyColumn *cursor, float cfra)
+static ActKeyColumn *keylist_find_neighbor_front_to_back(ActKeyColumn *cursor, float cfra)
 {
   while (cursor->next && cursor->next->cfra <= cfra) {
     cursor = cursor->next;
@@ -642,9 +632,9 @@ static ActKeyColumn *ED_keylist_find_neighbor_front_to_back(ActKeyColumn *cursor
   return cursor;
 }
 
-/* `ED_keylist_find_neighbor_back_to_front` is called before the runtime can be initialized so we
+/* `keylist_find_neighbor_back_to_front` is called before the runtime can be initialized so we
  * cannot use bin searching. */
-static ActKeyColumn *ED_keylist_find_neighbor_back_to_front(ActKeyColumn *cursor, float cfra)
+static ActKeyColumn *keylist_find_neighbor_back_to_front(ActKeyColumn *cursor, float cfra)
 {
   while (cursor->prev && cursor->prev->cfra >= cfra) {
     cursor = cursor->prev;
@@ -653,14 +643,14 @@ static ActKeyColumn *ED_keylist_find_neighbor_back_to_front(ActKeyColumn *cursor
 }
 
 /*
- * `ED_keylist_find_exact_or_neighbor_column` is called before the runtime can be initialized so
+ * `keylist_find_exact_or_neighbor_column` is called before the runtime can be initialized so
  * we cannot use bin searching.
  *
  * This function is called to add or update columns in the keylist.
  * Typically columns are sorted by frame number so keeping track of the last_accessed_column
  * reduces searching.
  */
-static ActKeyColumn *ED_keylist_find_exact_or_neighbor_column(AnimKeylist *keylist, float cfra)
+static ActKeyColumn *keylist_find_exact_or_neighbor_column(AnimKeylist *keylist, float cfra)
 {
   BLI_assert(!keylist->is_runtime_initialized);
   if (ED_keylist_is_empty(keylist)) {
@@ -672,10 +662,10 @@ static ActKeyColumn *ED_keylist_find_exact_or_neighbor_column(AnimKeylist *keyli
   if (!is_cfra_eq(cursor->cfra, cfra)) {
     const bool walking_direction_front_to_back = cursor->cfra <= cfra;
     if (walking_direction_front_to_back) {
-      cursor = ED_keylist_find_neighbor_front_to_back(cursor, cfra);
+      cursor = keylist_find_neighbor_front_to_back(cursor, cfra);
     }
     else {
-      cursor = ED_keylist_find_neighbor_back_to_front(cursor, cfra);
+      cursor = keylist_find_neighbor_back_to_front(cursor, cfra);
     }
   }
 
@@ -683,11 +673,11 @@ static ActKeyColumn *ED_keylist_find_exact_or_neighbor_column(AnimKeylist *keyli
   return cursor;
 }
 
-static void ED_keylist_add_or_update_column(AnimKeylist *keylist,
-                                            float cfra,
-                                            KeylistCreateColumnFunction create_func,
-                                            KeylistUpdateColumnFunction update_func,
-                                            void *userdata)
+static void keylist_add_or_update_column(AnimKeylist *keylist,
+                                         float cfra,
+                                         KeylistCreateColumnFunction create_func,
+                                         KeylistUpdateColumnFunction update_func,
+                                         void *userdata)
 {
   BLI_assert_msg(
       !keylist->is_runtime_initialized,
@@ -701,7 +691,7 @@ static void ED_keylist_add_or_update_column(AnimKeylist *keylist,
     return;
   }
 
-  ActKeyColumn *nearest = ED_keylist_find_exact_or_neighbor_column(keylist, cfra);
+  ActKeyColumn *nearest = keylist_find_exact_or_neighbor_column(keylist, cfra);
   if (is_cfra_eq(nearest->cfra, cfra)) {
     update_func(nearest, userdata);
   }
@@ -727,7 +717,7 @@ static void add_bezt_to_keycolumns_list(AnimKeylist *keylist, BezTripleChain *be
   }
 
   float cfra = bezt->cur->vec[1][0];
-  ED_keylist_add_or_update_column(keylist, cfra, nalloc_ak_bezt, nupdate_ak_bezt, bezt);
+  keylist_add_or_update_column(keylist, cfra, nalloc_ak_bezt, nupdate_ak_bezt, bezt);
 }
 
 /* Add the given GPencil Frame to the given 'list' of Keyframes */
@@ -738,7 +728,7 @@ static void add_gpframe_to_keycolumns_list(AnimKeylist *keylist, bGPDframe *gpf)
   }
 
   float cfra = gpf->framenum;
-  ED_keylist_add_or_update_column(keylist, cfra, nalloc_ak_gpframe, nupdate_ak_gpframe, gpf);
+  keylist_add_or_update_column(keylist, cfra, nalloc_ak_gpframe, nupdate_ak_gpframe, gpf);
 }
 
 /* Add the given MaskLayerShape Frame to the given 'list' of Keyframes */
@@ -749,7 +739,7 @@ static void add_masklay_to_keycolumns_list(AnimKeylist *keylist, MaskLayerShape 
   }
 
   float cfra = masklay_shape->frame;
-  ED_keylist_add_or_update_column(
+  keylist_add_or_update_column(
       keylist, cfra, nalloc_ak_masklayshape, nupdate_ak_masklayshape, masklay_shape);
 }
 
@@ -842,7 +832,7 @@ static void add_bezt_to_keyblocks_list(AnimKeylist *keylist, BezTriple *bezt, co
       if (is_cfra_lt(bezt[1].vec[1][0], bezt[0].vec[1][0])) {
         /* Backtrack to find the right location. */
         if (is_cfra_lt(bezt[1].vec[1][0], col->cfra)) {
-          ActKeyColumn *newcol = ED_keylist_find_exact_or_neighbor_column(keylist, col->cfra);
+          ActKeyColumn *newcol = keylist_find_exact_or_neighbor_column(keylist, col->cfra);
 
           BLI_assert(newcol);
           BLI_assert(newcol->cfra == col->cfra);
@@ -946,8 +936,7 @@ void summary_to_keylist(bAnimContext *ac,
 
   /* Get F-Curves to take keyframes from. */
   const eAnimFilter_Flags filter = ANIMFILTER_DATA_VISIBLE;
-  ANIM_animdata_filter(
-      ac, &anim_data, filter, ac->data, static_cast<eAnimCont_Types>(ac->datatype));
+  ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
@@ -958,8 +947,12 @@ void summary_to_keylist(bAnimContext *ac,
      * there isn't really any benefit at all from including them. - Aligorith */
     switch (ale->datatype) {
       case ALE_FCURVE:
-        fcurve_to_keylist(
-            ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range);
+        fcurve_to_keylist(ale->adt,
+                          static_cast<FCurve *>(ale->data),
+                          keylist,
+                          saction_flag,
+                          range,
+                          ANIM_nla_mapping_allowed(ale));
         break;
       case ALE_MASKLAY:
         mask_to_keylist(ac->ads, static_cast<MaskLayer *>(ale->data), keylist);
@@ -974,6 +967,58 @@ void summary_to_keylist(bAnimContext *ac,
       default:
         break;
     }
+  }
+
+  ANIM_animdata_freelist(&anim_data);
+}
+
+void action_slot_summary_to_keylist(bAnimContext *ac,
+                                    ID *animated_id,
+                                    animrig::Action &action,
+                                    const animrig::slot_handle_t slot_handle,
+                                    AnimKeylist *keylist,
+                                    const int /* eSAction_Flag */ saction_flag,
+                                    blender::float2 range)
+{
+  /* TODO: downstream code depends on this being non-null (see e.g.
+   * `ANIM_animfilter_action_slot()` and `animfilter_fcurves_span()`). Either
+   * change this parameter to be a reference, or modify the downstream code to
+   * not assume that it's non-null and do something reasonable when it is null. */
+  BLI_assert(animated_id);
+
+  if (!ac) {
+    return;
+  }
+
+  animrig::Slot *slot = action.slot_for_handle(slot_handle);
+  if (!slot) {
+    /* In the Dope Sheet mode of the Dope Sheet, an _Action_ channel actually shows the _Slot_ keys
+     * in its summary line. When there are animated NLA control curves, that Action channel is also
+     * shown, even when there is no slot assigned. So this function needs to be able to handle the
+     * "no slot" case as valid. It just doesn't produce any keys.
+     *
+     * Also see `build_channel_keylist()` in `keyframes_draw.cc`. */
+    return;
+  }
+
+  ListBase anim_data = {nullptr, nullptr};
+
+  /* Get F-Curves to take keyframes from. */
+  const eAnimFilter_Flags filter = ANIMFILTER_DATA_VISIBLE;
+  ANIM_animfilter_action_slot(ac, &anim_data, action, *slot, filter, animated_id);
+
+  LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
+    /* As of the writing of this code, Actions ultimately only contain FCurves.
+     * If/when that changes in the future, this may need to be updated. */
+    if (ale->datatype != ALE_FCURVE) {
+      continue;
+    }
+    fcurve_to_keylist(ale->adt,
+                      static_cast<FCurve *>(ale->data),
+                      keylist,
+                      saction_flag,
+                      range,
+                      ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1007,12 +1052,16 @@ void scene_to_keylist(bDopeSheet *ads,
   /* Get F-Curves to take keyframes from. */
   const eAnimFilter_Flags filter = ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FCURVESONLY;
 
-  ANIM_animdata_filter(
-      &ac, &anim_data, filter, ac.data, static_cast<eAnimCont_Types>(ac.datatype));
+  ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range);
+    fcurve_to_keylist(ale->adt,
+                      static_cast<FCurve *>(ale->data),
+                      keylist,
+                      saction_flag,
+                      range,
+                      ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1048,12 +1097,16 @@ void ob_to_keylist(bDopeSheet *ads,
 
   /* Get F-Curves to take keyframes from. */
   const eAnimFilter_Flags filter = ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FCURVESONLY;
-  ANIM_animdata_filter(
-      &ac, &anim_data, filter, ac.data, static_cast<eAnimCont_Types>(ac.datatype));
+  ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, range);
+    fcurve_to_keylist(ale->adt,
+                      static_cast<FCurve *>(ale->data),
+                      keylist,
+                      saction_flag,
+                      range,
+                      ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1083,13 +1136,16 @@ void cachefile_to_keylist(bDopeSheet *ads,
   /* Get F-Curves to take keyframes from. */
   ListBase anim_data = {nullptr, nullptr};
   const eAnimFilter_Flags filter = ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FCURVESONLY;
-  ANIM_animdata_filter(
-      &ac, &anim_data, filter, ac.data, static_cast<eAnimCont_Types>(ac.datatype));
+  ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
 
   /* Loop through each F-Curve, grabbing the keyframes. */
   LISTBASE_FOREACH (const bAnimListElem *, ale, &anim_data) {
-    fcurve_to_keylist(
-        ale->adt, static_cast<FCurve *>(ale->data), keylist, saction_flag, {-FLT_MAX, FLT_MAX});
+    fcurve_to_keylist(ale->adt,
+                      static_cast<FCurve *>(ale->data),
+                      keylist,
+                      saction_flag,
+                      {-FLT_MAX, FLT_MAX},
+                      ANIM_nla_mapping_allowed(ale));
   }
 
   ANIM_animdata_freelist(&anim_data);
@@ -1118,14 +1174,22 @@ void fcurve_to_keylist(AnimData *adt,
                        FCurve *fcu,
                        AnimKeylist *keylist,
                        const int saction_flag,
-                       blender::float2 range)
+                       blender::float2 range,
+                       const bool use_nla_remapping)
 {
+  /* This is not strictly necessary because `ANIM_nla_mapping_apply_fcurve()`
+   * will just not do remapping if `adt` is null. Nevertheless, saying that you
+   * want NLA remapping to be performed while not passing an `adt` (needed for
+   * NLA remapping) almost certainly indicates a mistake somewhere. */
+  BLI_assert_msg(!(use_nla_remapping && adt == nullptr),
+                 "Cannot perform NLA time remapping without an adt.");
+
   if (!fcu || fcu->totvert == 0 || !fcu->bezt) {
     return;
   }
-  ED_keylist_reset_last_accessed(keylist);
+  keylist_reset_last_accessed(keylist);
 
-  if (adt) {
+  if (use_nla_remapping) {
     ANIM_nla_mapping_apply_fcurve(adt, fcu, false, false);
   }
 
@@ -1185,7 +1249,7 @@ void fcurve_to_keylist(AnimData *adt,
         keylist, &fcu->bezt[index_bounds.min], (index_bounds.max + 1) - index_bounds.min);
   }
 
-  if (adt) {
+  if (use_nla_remapping) {
     ANIM_nla_mapping_apply_fcurve(adt, fcu, true, false);
   }
 }
@@ -1206,30 +1270,17 @@ void action_group_to_keylist(AnimData *adt,
       if (fcu->grp != agrp) {
         break;
       }
-      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range);
+      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range, true);
     }
     return;
   }
 
   /* Layered actions. */
-  animrig::ChannelBag channel_bag = agrp->channel_bag->wrap();
-  Span<FCurve *> fcurves = channel_bag.fcurves().slice(agrp->fcurve_range_start,
-                                                       agrp->fcurve_range_length);
+  animrig::Channelbag &channelbag = agrp->channelbag->wrap();
+  Span<FCurve *> fcurves = channelbag.fcurves().slice(agrp->fcurve_range_start,
+                                                      agrp->fcurve_range_length);
   for (FCurve *fcurve : fcurves) {
-    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range);
-  }
-}
-
-void action_slot_to_keylist(AnimData *adt,
-                            animrig::Action &action,
-                            const animrig::slot_handle_t slot_handle,
-                            AnimKeylist *keylist,
-                            const int saction_flag,
-                            blender::float2 range)
-{
-  BLI_assert(GS(action.id.name) == ID_AC);
-  for (FCurve *fcurve : fcurves_for_action_slot(action, slot_handle)) {
-    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range);
+    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range, true);
   }
 }
 
@@ -1248,7 +1299,7 @@ void action_to_keylist(AnimData *adt,
   /* TODO: move this into fcurves_for_action_slot(). */
   if (action.is_action_legacy()) {
     LISTBASE_FOREACH (FCurve *, fcu, &action.curves) {
-      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range);
+      fcurve_to_keylist(adt, fcu, keylist, saction_flag, range, true);
     }
     return;
   }
@@ -1257,7 +1308,10 @@ void action_to_keylist(AnimData *adt,
    * Assumption: the animation is bound to adt->slot_handle. This assumption will break when we
    * have things like reference strips, where the strip can reference another slot handle.
    */
-  action_slot_to_keylist(adt, action, adt->slot_handle, keylist, saction_flag, range);
+  BLI_assert(adt);
+  for (FCurve *fcurve : fcurves_for_action_slot(action, adt->slot_handle)) {
+    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range, true);
+  }
 }
 
 void gpencil_to_keylist(bDopeSheet *ads, bGPdata *gpd, AnimKeylist *keylist, const bool active)
@@ -1310,7 +1364,7 @@ void grease_pencil_cels_to_keylist(AnimData * /*adt*/,
     cel.frame = item.value;
 
     float cfra = float(item.key);
-    ED_keylist_add_or_update_column(
+    keylist_add_or_update_column(
         keylist, cfra, nalloc_ak_cel, nupdate_ak_cel, static_cast<void *>(&cel));
   }
 }
@@ -1341,7 +1395,7 @@ void gpl_to_keylist(bDopeSheet * /*ads*/, bGPDlayer *gpl, AnimKeylist *keylist)
     return;
   }
 
-  ED_keylist_reset_last_accessed(keylist);
+  keylist_reset_last_accessed(keylist);
   /* Although the frames should already be in an ordered list,
    * they are not suitable for displaying yet. */
   LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
@@ -1356,7 +1410,7 @@ void mask_to_keylist(bDopeSheet * /*ads*/, MaskLayer *masklay, AnimKeylist *keyl
   if (!masklay || !keylist) {
     return;
   }
-  ED_keylist_reset_last_accessed(keylist);
+  keylist_reset_last_accessed(keylist);
   LISTBASE_FOREACH (MaskLayerShape *, masklay_shape, &masklay->splines_shapes) {
     add_masklay_to_keycolumns_list(keylist, masklay_shape);
   }

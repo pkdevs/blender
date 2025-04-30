@@ -45,7 +45,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "transform_space", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
+  uiItemR(layout, ptr, "transform_space", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -54,7 +54,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   const bool transform_space_relative = (storage.transform_space ==
                                          GEO_NODE_TRANSFORM_SPACE_RELATIVE);
 
-  Object *object = params.get_input<Object *>("Object");
+  Object *object = params.extract_input<Object *>("Object");
 
   const Object *self_object = params.self_object();
   if (object == nullptr) {
@@ -103,8 +103,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
   /* Compare by `orig_id` because objects may be copied into separate depsgraphs. */
-  if (DEG_get_original_id(&object->id) == DEG_get_original_id(const_cast<ID *>(&self_object->id)))
-  {
+  if (DEG_get_original(object) == DEG_get_original(self_object)) {
     params.error_message_add(
         NodeWarningType::Error,
         params.user_data()->call_data->operator_data ?
@@ -137,7 +136,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   GeometrySet geometry_set;
-  if (params.get_input<bool>("As Instance")) {
+  if (params.extract_input<bool>("As Instance")) {
     std::unique_ptr<bke::Instances> instances = std::make_unique<bke::Instances>();
     const int handle = instances->add_reference(*object);
     if (transform_space_relative) {
@@ -161,7 +160,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeGeometryObjectInfo *data = MEM_cnew<NodeGeometryObjectInfo>(__func__);
+  NodeGeometryObjectInfo *data = MEM_callocN<NodeGeometryObjectInfo>(__func__);
   data->transform_space = GEO_NODE_TRANSFORM_SPACE_ORIGINAL;
   node->storage = data;
 }
@@ -199,14 +198,18 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_OBJECT_INFO, "Object Info", NODE_CLASS_INPUT);
+  geo_node_type_base(&ntype, "GeometryNodeObjectInfo", GEO_NODE_OBJECT_INFO);
+  ntype.ui_name = "Object Info";
+  ntype.ui_description = "Retrieve information from an object";
+  ntype.enum_name_legacy = "OBJECT_INFO";
+  ntype.nclass = NODE_CLASS_INPUT;
   ntype.initfunc = node_node_init;
   blender::bke::node_type_storage(
-      &ntype, "NodeGeometryObjectInfo", node_free_standard_storage, node_copy_standard_storage);
+      ntype, "NodeGeometryObjectInfo", node_free_standard_storage, node_copy_standard_storage);
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
   ntype.declare = node_declare;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

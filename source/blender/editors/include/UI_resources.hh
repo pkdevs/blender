@@ -8,8 +8,7 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
-#include "BLI_utildefines.h"
+#include "BLI_assert.h"
 
 struct bTheme;
 
@@ -40,7 +39,14 @@ BLI_STATIC_ASSERT(sizeof(BIFIconID_Static) <= sizeof(BIFIconID),
 #define TH_UNDEFINED -1
 
 enum ThemeColorID {
+  TH_NONE,
+  TH_BLACK,
+  TH_WHITE,
   TH_REDALERT,
+  TH_ERROR,
+  TH_WARNING,
+  TH_INFO,
+  TH_SUCCESS,
 
   TH_THEMEUI,
   /* Common colors among spaces. */
@@ -57,7 +63,6 @@ enum ThemeColorID {
   TH_TAB_OUTLINE,
 
   TH_HEADER,
-  TH_HEADER_ACTIVE,
   TH_HEADER_TEXT,
   TH_HEADER_TEXT_HI,
 
@@ -196,6 +201,8 @@ enum ThemeColorID {
 
   TH_NODE_ZONE_SIMULATION,
   TH_NODE_ZONE_REPEAT,
+  TH_NODE_ZONE_FOREACH_GEOMETRY_ELEMENT,
+  TH_NODE_ZONE_CLOSURE,
   TH_SIMULATED_FRAMES,
 
   TH_CONSOLE_OUTPUT,
@@ -219,6 +226,8 @@ enum ThemeColorID {
   TH_SEQ_COLOR,
   TH_SEQ_ACTIVE,
   TH_SEQ_SELECTED,
+  TH_SEQ_TEXT_CURSOR,
+  TH_SEQ_SELECTED_TEXT,
 
   TH_EDGE_SHARP,
   TH_EDITMESH_ACTIVE,
@@ -318,6 +327,8 @@ enum ThemeColorID {
   TH_WIDGET_TEXT_SELECTION,
   TH_WIDGET_TEXT_HIGHLIGHT,
   TH_EDITOR_OUTLINE,
+  TH_EDITOR_OUTLINE_ACTIVE,
+  TH_EDITOR_BORDER,
 
   TH_TRANSPARENT_CHECKER_PRIMARY,
   TH_TRANSPARENT_CHECKER_SECONDARY,
@@ -338,11 +349,8 @@ enum ThemeColorID {
 
   TH_INFO_SELECTED,
   TH_INFO_SELECTED_TEXT,
-  TH_INFO_ERROR,
   TH_INFO_ERROR_TEXT,
-  TH_INFO_WARNING,
   TH_INFO_WARNING_TEXT,
-  TH_INFO_INFO,
   TH_INFO_INFO_TEXT,
   TH_INFO_DEBUG,
   TH_INFO_DEBUG_TEXT,
@@ -462,16 +470,16 @@ bool UI_GetIconThemeColor4ubv(int colorid, unsigned char col[4]);
 /**
  * Shade a 3 byte color (same as UI_GetColorPtrBlendShade3ubv with 0.0 factor).
  */
-void UI_GetColorPtrShade3ubv(const unsigned char cp[3], unsigned char col[3], int offset);
+void UI_GetColorPtrShade3ubv(const unsigned char cp[3], int offset, unsigned char r_col[3]);
 
 /**
  * Get a 3 byte color, blended and shaded between two other char color pointers.
  */
 void UI_GetColorPtrBlendShade3ubv(const unsigned char cp1[3],
                                   const unsigned char cp2[3],
-                                  unsigned char col[3],
                                   float fac,
-                                  int offset);
+                                  int offset,
+                                  unsigned char r_col[3]);
 
 /**
  * Sets the font color
@@ -510,4 +518,4 @@ int UI_ThemeMenuShadowWidth();
  */
 const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid);
 
-void UI_make_axis_color(const unsigned char src_col[3], unsigned char dst_col[3], char axis);
+void UI_make_axis_color(const unsigned char col[3], char axis, unsigned char r_col[3]);

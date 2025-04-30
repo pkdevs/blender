@@ -15,8 +15,6 @@
 #include "BKE_geometry_set_instances.hh"
 #include "BKE_instances.hh"
 
-#include "BLT_translation.hh"
-
 namespace blender::bke {
 
 InstanceReference::InstanceReference(GeometrySet geometry_set)
@@ -60,6 +58,16 @@ void InstanceReference::count_memory(MemoryCounter &memory) const
       break;
     }
   }
+}
+
+AttributeAccessor Instances::attributes() const
+{
+  return AttributeAccessor(this, instance_attribute_accessor_functions());
+}
+
+MutableAttributeAccessor Instances::attributes_for_write()
+{
+  return MutableAttributeAccessor(this, instance_attribute_accessor_functions());
 }
 
 static void convert_collection_to_instances(const Collection &collection,
@@ -131,6 +139,12 @@ bool operator==(const InstanceReference &a, const InstanceReference &b)
   return a.type_ == b.type_ && a.data_ == b.data_;
 }
 
+uint64_t InstanceReference::hash() const
+{
+  const uint64_t geometry_hash = geometry_set_ ? geometry_set_->hash() : 0;
+  return get_default_hash(geometry_hash, type_, data_);
+}
+
 Instances::Instances()
 {
   CustomData_reset(&attributes_);
@@ -157,7 +171,7 @@ Instances::Instances(const Instances &other)
 
 Instances::~Instances()
 {
-  CustomData_free(&attributes_, instances_num_);
+  CustomData_free(&attributes_);
 }
 
 Instances &Instances::operator=(const Instances &other)

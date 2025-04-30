@@ -90,7 +90,7 @@ static void deform_drawing(const ModifierData &md,
   const auto &mmd = reinterpret_cast<const GreasePencilThickModifierData &>(md);
 
   bke::CurvesGeometry &curves = drawing.strokes_for_write();
-  if (curves.points_num() == 0) {
+  if (curves.is_empty()) {
     return;
   }
 
@@ -103,9 +103,8 @@ static void deform_drawing(const ModifierData &md,
 
   MutableSpan<float> radii = drawing.radii_for_write();
   const OffsetIndices points_by_curve = curves.points_by_curve();
-  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  const VArray<float> vgroup_weights = *attributes.lookup_or_default<float>(
-      mmd.influence.vertex_group_name, bke::AttrDomain::Point, 1.0f);
+  const VArray<float> vgroup_weights = modifier::greasepencil::get_influence_vertex_weights(
+      curves, mmd.influence);
   const bool is_normalized = (mmd.flag & MOD_GREASE_PENCIL_THICK_NORMALIZE) != 0;
   const bool is_inverted = ((mmd.flag & MOD_GREASE_PENCIL_THICK_WEIGHT_FACTOR) == 0) &&
                            ((mmd.influence.flag & GREASE_PENCIL_INFLUENCE_INVERT_VERTEX_GROUP) !=
@@ -181,22 +180,22 @@ static void panel_draw(const bContext *C, Panel *panel)
 
   uiLayoutSetPropSep(layout, true);
 
-  uiItemR(layout, ptr, "use_uniform_thickness", UI_ITEM_NONE, nullptr, ICON_NONE);
+  uiItemR(layout, ptr, "use_uniform_thickness", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   if (RNA_boolean_get(ptr, "use_uniform_thickness")) {
-    uiItemR(layout, ptr, "thickness", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiItemR(layout, ptr, "thickness", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
   else {
     const bool is_weighted = !RNA_boolean_get(ptr, "use_weight_factor");
-    uiLayout *row = uiLayoutRow(layout, true);
+    uiLayout *row = &layout->row(true);
     uiLayoutSetActive(row, is_weighted);
-    uiItemR(row, ptr, "thickness_factor", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiLayout *sub = uiLayoutRow(row, true);
+    uiItemR(row, ptr, "thickness_factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    uiLayout *sub = &row->row(true);
     uiLayoutSetActive(sub, true);
     uiItemR(row, ptr, "use_weight_factor", UI_ITEM_NONE, "", ICON_MOD_VERTEX_WEIGHT);
   }
 
   if (uiLayout *influence_panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_influence_panel", "Influence"))
+          C, layout, ptr, "open_influence_panel", IFACE_("Influence")))
   {
     modifier::greasepencil::draw_layer_filter_settings(C, influence_panel, ptr);
     modifier::greasepencil::draw_material_filter_settings(C, influence_panel, ptr);

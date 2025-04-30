@@ -38,20 +38,22 @@
 #  include "io_utils.hh"
 
 static const EnumPropertyItem ply_vertex_colors_mode[] = {
-    {PLY_VERTEX_COLOR_NONE, "NONE", 0, "None", "Do not import/export color attributes"},
-    {PLY_VERTEX_COLOR_SRGB,
+    {int(ePLYVertexColorMode::None), "NONE", 0, "None", "Do not import/export color attributes"},
+    {int(ePLYVertexColorMode::sRGB),
      "SRGB",
      0,
      "sRGB",
      "Vertex colors in the file are in sRGB color space"},
-    {PLY_VERTEX_COLOR_LINEAR,
+    {int(ePLYVertexColorMode::Linear),
      "LINEAR",
      0,
      "Linear",
      "Vertex colors in the file are in linear color space"},
     {0, nullptr, 0, nullptr, nullptr}};
 
-static int wm_ply_export_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus wm_ply_export_invoke(bContext *C,
+                                             wmOperator *op,
+                                             const wmEvent * /*event*/)
 {
   ED_fileselect_ensure_default_filepath(C, op, ".ply");
 
@@ -59,13 +61,13 @@ static int wm_ply_export_invoke(bContext *C, wmOperator *op, const wmEvent * /*e
   return OPERATOR_RUNNING_MODAL;
 }
 
-static int wm_ply_export_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus wm_ply_export_exec(bContext *C, wmOperator *op)
 {
   if (!RNA_struct_property_is_set_ex(op->ptr, "filepath", false)) {
     BKE_report(op->reports, RPT_ERROR, "No filepath given");
     return OPERATOR_CANCELLED;
   }
-  PLYExportParams export_params{};
+  PLYExportParams export_params;
   export_params.file_base_for_tests[0] = '\0';
   RNA_string_get(op->ptr, "filepath", export_params.filepath);
   export_params.blen_filepath = CTX_data_main(C)->filepath;
@@ -87,8 +89,13 @@ static int wm_ply_export_exec(bContext *C, wmOperator *op)
 
   export_params.reports = op->reports;
 
-  PLY_export(C, &export_params);
+  PLY_export(C, export_params);
 
+  if (BKE_reports_contain(op->reports, RPT_ERROR)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  BKE_report(op->reports, RPT_INFO, "File exported successfully");
   return OPERATOR_FINISHED;
 }
 
@@ -101,26 +108,26 @@ static void wm_ply_export_draw(bContext *C, wmOperator *op)
   uiLayoutSetPropDecorate(layout, false);
 
   if (uiLayout *panel = uiLayoutPanel(C, layout, "PLY_export_general", false, IFACE_("General"))) {
-    uiLayout *col = uiLayoutColumn(panel, false);
+    uiLayout *col = &panel->column(false);
 
-    uiLayout *sub = uiLayoutColumnWithHeading(col, false, IFACE_("Format"));
+    uiLayout *sub = &col->column(false, IFACE_("Format"));
     uiItemR(sub, ptr, "ascii_format", UI_ITEM_NONE, IFACE_("ASCII"), ICON_NONE);
 
     /* The Selection only options only make sense when using regular export. */
     if (CTX_wm_space_file(C)) {
-      sub = uiLayoutColumnWithHeading(col, false, IFACE_("Include"));
+      sub = &col->column(false, IFACE_("Include"));
       uiItemR(
           sub, ptr, "export_selected_objects", UI_ITEM_NONE, IFACE_("Selection Only"), ICON_NONE);
     }
 
-    uiItemR(col, ptr, "global_scale", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiItemR(col, ptr, "global_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     uiItemR(col, ptr, "forward_axis", UI_ITEM_NONE, IFACE_("Forward Axis"), ICON_NONE);
     uiItemR(col, ptr, "up_axis", UI_ITEM_NONE, IFACE_("Up Axis"), ICON_NONE);
   }
 
   if (uiLayout *panel = uiLayoutPanel(C, layout, "PLY_export_geometry", false, IFACE_("Geometry")))
   {
-    uiLayout *col = uiLayoutColumn(panel, false);
+    uiLayout *col = &panel->column(false);
 
     uiItemR(col, ptr, "export_uv", UI_ITEM_NONE, IFACE_("UV Coordinates"), ICON_NONE);
     uiItemR(col, ptr, "export_normals", UI_ITEM_NONE, IFACE_("Vertex Normals"), ICON_NONE);
@@ -219,7 +226,7 @@ void WM_OT_ply_export(wmOperatorType *ot)
   RNA_def_enum(ot->srna,
                "export_colors",
                ply_vertex_colors_mode,
-               PLY_VERTEX_COLOR_SRGB,
+               int(ePLYVertexColorMode::sRGB),
                "Export Vertex Colors",
                "Export vertex color attributes");
   RNA_def_boolean(ot->srna,
@@ -245,9 +252,9 @@ void WM_OT_ply_export(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
-static int wm_ply_import_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus wm_ply_import_exec(bContext *C, wmOperator *op)
 {
-  PLYImportParams params{};
+  PLYImportParams params;
   params.forward_axis = eIOAxis(RNA_enum_get(op->ptr, "forward_axis"));
   params.up_axis = eIOAxis(RNA_enum_get(op->ptr, "up_axis"));
   params.use_scene_unit = RNA_boolean_get(op->ptr, "use_scene_unit");
@@ -266,7 +273,7 @@ static int wm_ply_import_exec(bContext *C, wmOperator *op)
   }
   for (const auto &path : paths) {
     STRNCPY(params.filepath, path.c_str());
-    PLY_import(C, &params);
+    PLY_import(C, params);
   };
 
   Scene *scene = CTX_data_scene(C);
@@ -284,17 +291,17 @@ static void ui_ply_import_settings(const bContext *C, uiLayout *layout, PointerR
   uiLayoutSetPropDecorate(layout, false);
 
   if (uiLayout *panel = uiLayoutPanel(C, layout, "PLY_import_general", false, IFACE_("General"))) {
-    uiLayout *col = uiLayoutColumn(panel, false);
-    uiItemR(col, ptr, "global_scale", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiItemR(col, ptr, "use_scene_unit", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiItemR(col, ptr, "forward_axis", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiItemR(col, ptr, "up_axis", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiLayout *col = &panel->column(false);
+    uiItemR(col, ptr, "global_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    uiItemR(col, ptr, "use_scene_unit", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    uiItemR(col, ptr, "forward_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    uiItemR(col, ptr, "up_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
   if (uiLayout *panel = uiLayoutPanel(C, layout, "PLY_import_options", false, IFACE_("Options"))) {
-    uiLayout *col = uiLayoutColumn(panel, false);
-    uiItemR(col, ptr, "merge_verts", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiItemR(col, ptr, "import_colors", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiLayout *col = &panel->column(false);
+    uiItemR(col, ptr, "merge_verts", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    uiItemR(col, ptr, "import_colors", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
@@ -340,7 +347,7 @@ void WM_OT_ply_import(wmOperatorType *ot)
   RNA_def_enum(ot->srna,
                "import_colors",
                ply_vertex_colors_mode,
-               PLY_VERTEX_COLOR_SRGB,
+               int(ePLYVertexColorMode::sRGB),
                "Vertex Colors",
                "Import vertex color attributes");
   RNA_def_boolean(

@@ -8,20 +8,19 @@
 
 #pragma once
 
+#include "BLI_map.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 
 #include "GPU_shader.hh"
+#include "GPU_worker.hh"
 #include "gpu_shader_create_info.hh"
 #include "gpu_shader_interface.hh"
 
-#include "BLI_map.hh"
-
-#include <mutex>
+#include <deque>
 #include <string>
 
-namespace blender {
-namespace gpu {
+namespace blender::gpu {
 
 class GPULogParser;
 class Context;
@@ -45,6 +44,8 @@ class Shader {
  public:
   /** Uniform & attribute locations for shader. */
   ShaderInterface *interface = nullptr;
+  /** Bit-set indicating the frame-buffer color attachments that this shader writes to. */
+  uint16_t fragment_output_bits = 0;
 
   /**
    * Specialization constants as a Struct-of-Arrays. Allow simpler comparison and reset.
@@ -65,6 +66,10 @@ class Shader {
     bool is_dirty;
   } constants;
 
+  /* WORKAROUND: True if this shader is a polyline shader and needs an appropriate setup to render.
+   * Eventually, in the future, we should modify the user code instead of relying on such hacks. */
+  bool is_polyline = false;
+
  protected:
   /** For debugging purpose. */
   char name[64];
@@ -83,21 +88,16 @@ class Shader {
    * `GPU_shader_batch`. Backends that use the `ShaderCompilerGeneric` can ignore it. */
   virtual void init(const shader::ShaderCreateInfo &info, bool is_batch_compilation) = 0;
 
-  virtual void vertex_shader_from_glsl(MutableSpan<const char *> sources) = 0;
-  virtual void geometry_shader_from_glsl(MutableSpan<const char *> sources) = 0;
-  virtual void fragment_shader_from_glsl(MutableSpan<const char *> sources) = 0;
-  virtual void compute_shader_from_glsl(MutableSpan<const char *> sources) = 0;
+  virtual void vertex_shader_from_glsl(MutableSpan<StringRefNull> sources) = 0;
+  virtual void geometry_shader_from_glsl(MutableSpan<StringRefNull> sources) = 0;
+  virtual void fragment_shader_from_glsl(MutableSpan<StringRefNull> sources) = 0;
+  virtual void compute_shader_from_glsl(MutableSpan<StringRefNull> sources) = 0;
   virtual bool finalize(const shader::ShaderCreateInfo *info = nullptr) = 0;
   /* Pre-warms PSOs using parent shader's cached PSO descriptors. Limit specifies maximum PSOs to
    * warm. If -1, compiles all PSO permutations in parent shader.
    *
    * See `GPU_shader_warm_cache(..)` in `GPU_shader.hh` for more information. */
   virtual void warm_cache(int limit) = 0;
-
-  virtual void transform_feedback_names_set(Span<const char *> name_list,
-                                            eGPUShaderTFBType geom_type) = 0;
-  virtual bool transform_feedback_enable(VertBuf *) = 0;
-  virtual void transform_feedback_disable() = 0;
 
   virtual void bind() = 0;
   virtual void unbind() = 0;
@@ -116,24 +116,17 @@ class Shader {
   virtual std::string geometry_layout_declare(const shader::ShaderCreateInfo &info) const = 0;
   virtual std::string compute_layout_declare(const shader::ShaderCreateInfo &info) const = 0;
 
-  /* DEPRECATED: Kept only because of BGL API. */
-  virtual int program_handle_get() const = 0;
-
-  /* Only used by SSBO Vertex fetch. */
-  virtual bool get_uses_ssbo_vertex_fetch() const = 0;
-  virtual int get_ssbo_vertex_fetch_output_num_verts() const = 0;
-
-  inline const char *const name_get() const
+  StringRefNull name_get() const
   {
     return name;
   }
 
-  inline void parent_set(Shader *parent)
+  void parent_set(Shader *parent)
   {
     parent_shader_ = parent;
   }
 
-  inline Shader *parent_get() const
+  Shader *parent_get() const
   {
     return parent_shader_;
   }
@@ -143,7 +136,7 @@ class Shader {
   static void set_framebuffer_srgb_target(int use_srgb_to_linear);
 
  protected:
-  void print_log(Span<const char *> sources,
+  void print_log(Span<StringRefNull> sources,
                  const char *log,
                  const char *stage,
                  bool error,
@@ -174,7 +167,7 @@ class ShaderCompiler {
   };
 
  public:
-  virtual ~ShaderCompiler(){};
+  virtual ~ShaderCompiler() = default;
 
   Shader *compile(const shader::ShaderCreateInfo &info, bool is_batch_compilation);
 
@@ -185,7 +178,7 @@ class ShaderCompiler {
   virtual SpecializationBatchHandle precompile_specializations(
       Span<ShaderSpecialization> /*specializations*/)
   {
-    /* No-op.*/
+    /* No-op. */
     return 0;
   };
 
@@ -196,24 +189,30 @@ class ShaderCompiler {
   };
 };
 
-/* Generic (fully synchronous) implementation for backends that don't implement their own
- * ShaderCompiler. Used by Vulkan and Metal. */
+/* Generic implementation used as fallback. */
 class ShaderCompilerGeneric : public ShaderCompiler {
  private:
   struct Batch {
     Vector<Shader *> shaders;
     Vector<const shader::ShaderCreateInfo *> infos;
-    bool is_ready = false;
+    std::atomic_bool is_ready = false;
   };
-  BatchHandle next_batch_handle = 1;
-  Map<BatchHandle, Batch> batches;
+  BatchHandle next_batch_handle_ = 1;
+  Map<BatchHandle, std::unique_ptr<Batch>> batches_;
+  std::mutex mutex_;
+
+  std::deque<Batch *> compilation_queue_;
+  std::unique_ptr<GPUWorker> compilation_thread_;
+
+  void run_thread();
 
  public:
-  virtual ~ShaderCompilerGeneric() override;
+  ShaderCompilerGeneric();
+  ~ShaderCompilerGeneric() override;
 
-  virtual BatchHandle batch_compile(Span<const shader::ShaderCreateInfo *> &infos) override;
-  virtual bool batch_is_ready(BatchHandle handle) override;
-  virtual Vector<Shader *> batch_finalize(BatchHandle &handle) override;
+  BatchHandle batch_compile(Span<const shader::ShaderCreateInfo *> &infos) override;
+  bool batch_is_ready(BatchHandle handle) override;
+  Vector<Shader *> batch_finalize(BatchHandle &handle) override;
 };
 
 enum class Severity {
@@ -232,7 +231,6 @@ struct LogCursor {
 
 struct GPULogItem {
   LogCursor cursor;
-  bool source_base_row = false;
   Severity severity = Severity::Unknown;
 };
 
@@ -260,8 +258,7 @@ class GPULogParser {
 void printf_begin(Context *ctx);
 void printf_end(Context *ctx);
 
-}  // namespace gpu
-}  // namespace blender
+}  // namespace blender::gpu
 
 /* XXX do not use it. Special hack to use OCIO with batch API. */
 GPUShader *immGetShader();

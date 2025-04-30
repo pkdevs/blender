@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
 #include "DNA_listBase.h"
 
 struct ImBuf;
 struct OCIO_ConstCPUProcessorRc;
-typedef struct OCIO_ConstCPUProcessorRc *OCIO_ConstCPUProcessorRcPtr;
+using OCIO_ConstCPUProcessorRcPtr = struct OCIO_ConstCPUProcessorRc *;
 
 extern float imbuf_luma_coefficients[3];
 extern float imbuf_scene_linear_to_xyz[3][3];
@@ -107,8 +106,6 @@ ColorSpace *colormanage_colorspace_get_indexed(int index);
 ColorManagedLook *colormanage_look_add(const char *name, const char *process_space, bool is_noop);
 ColorManagedLook *colormanage_look_get_named(const char *name);
 ColorManagedLook *colormanage_look_get_indexed(int index);
-
-void colorspace_set_default_role(char *colorspace, int size, int role);
 
 void colormanage_imbuf_set_default_spaces(ImBuf *ibuf);
 void colormanage_imbuf_make_linear(ImBuf *ibuf, const char *from_colorspace);

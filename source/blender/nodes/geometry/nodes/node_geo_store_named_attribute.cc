@@ -17,8 +17,6 @@
 #include "NOD_rna_define.hh"
 #include "NOD_socket_search_link.hh"
 
-#include "RNA_enum_types.hh"
-
 #include "node_geometry_util.hh"
 
 #include <fmt/format.h>
@@ -29,19 +27,21 @@ NODE_STORAGE_FUNCS(NodeGeometryStoreNamedAttribute)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+  b.add_default_layout();
   const bNode *node = b.node_or_null();
 
   b.add_input<decl::Geometry>("Geometry");
+  b.add_output<decl::Geometry>("Geometry").propagate_all().align_with_previous();
   b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
-  b.add_input<decl::String>("Name").is_attribute_name();
+  b.add_input<decl::String>("Name").is_attribute_name().hide_label();
 
   if (node != nullptr) {
     const NodeGeometryStoreNamedAttribute &storage = node_storage(*node);
     const eCustomDataType data_type = eCustomDataType(storage.data_type);
     b.add_input(data_type, "Value").field_on_all();
   }
-
-  b.add_output<decl::Geometry>("Geometry").propagate_all();
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -54,7 +54,7 @@ static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeGeometryStoreNamedAttribute *data = MEM_cnew<NodeGeometryStoreNamedAttribute>(__func__);
+  NodeGeometryStoreNamedAttribute *data = MEM_callocN<NodeGeometryStoreNamedAttribute>(__func__);
   data->data_type = CD_PROP_FLOAT;
   data->domain = int8_t(AttrDomain::Point);
   node->storage = data;
@@ -170,7 +170,8 @@ static void node_geo_exec(GeoNodeExecParams params)
     const char *type_name = nullptr;
     RNA_enum_name_from_value(rna_enum_attribute_type_items, data_type, &type_name);
     const std::string message = fmt::format(
-        TIP_("Failed to write to attribute \"{}\" with domain \"{}\" and type \"{}\""),
+        fmt::runtime(
+            TIP_("Failed to write to attribute \"{}\" with domain \"{}\" and type \"{}\"")),
         name,
         TIP_(domain_name),
         TIP_(type_name));
@@ -209,19 +210,23 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  geo_node_type_base(
-      &ntype, GEO_NODE_STORE_NAMED_ATTRIBUTE, "Store Named Attribute", NODE_CLASS_ATTRIBUTE);
-  blender::bke::node_type_storage(&ntype,
+  geo_node_type_base(&ntype, "GeometryNodeStoreNamedAttribute", GEO_NODE_STORE_NAMED_ATTRIBUTE);
+  ntype.ui_name = "Store Named Attribute";
+  ntype.ui_description =
+      "Store the result of a field on a geometry as an attribute with the specified name";
+  ntype.enum_name_legacy = "STORE_NAMED_ATTRIBUTE";
+  ntype.nclass = NODE_CLASS_ATTRIBUTE;
+  blender::bke::node_type_storage(ntype,
                                   "NodeGeometryStoreNamedAttribute",
                                   node_free_standard_storage,
                                   node_copy_standard_storage);
-  blender::bke::node_type_size(&ntype, 140, 100, 700);
+  blender::bke::node_type_size(ntype, 140, 100, 700);
   ntype.initfunc = node_init;
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = node_gather_link_searches;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

@@ -2,9 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/**
- * Based on Chromium's build_config.h, governed by a BSD-style license,
- * with tweaks and extensions needed for the Blender project. */
+/** \file
+ * \ingroup bli
+ *
+ * Based on Chromium's `build_config.h`, governed by a BSD-style license,
+ * with tweaks and extensions needed for the Blender project.
+ */
 
 /**
  * Compile-time detection of compiler and hardware platform configuration.
@@ -267,7 +270,7 @@
  *   http://msdn.microsoft.com/en-us/library/b0084kay.aspx
  *   http://www.agner.org/optimize/calling_conventions.pdf
  *
- *   or with gcc, run: "echo | gcc -E -dM -"
+ *   or with GCC, run: `echo | gcc -E -dM -`
  * \{ */
 
 #if defined(_M_X64) || defined(__x86_64__)
@@ -337,6 +340,23 @@
 #    define ARCH_CPU_32_BITS 1
 #    define ARCH_CPU_BIG_ENDIAN 1
 #  endif
+#elif defined(__riscv)
+#  define ARCH_CPU_RISCV_FAMILY 1
+#  if defined(__LP128__)
+#    define ARCH_CPU_RISCV128 1
+#    define ARCH_CPU_128_BITS 1
+#  elif defined(__LP64__)
+#    define ARCH_CPU_RISCV64 1
+#    define ARCH_CPU_64_BITS 1
+#  else
+#    define ARCH_CPU_RISCV32 1
+#    define ARCH_CPU_32_BITS 1
+#  endif
+#  if (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#    define ARCH_CPU_LITTLE_ENDIAN 1
+#  else
+#    define ARCH_CPU_BIG_ENDIAN 1
+#  endif
 #else
 #  error Please add support for your architecture in BLI_build_config.h
 #endif
@@ -357,6 +377,9 @@
 #if !defined(ARCH_CPU_64_BITS)
 #  define ARCH_CPU_64_BITS 0
 #endif
+#if !defined(ARCH_CPU_128_BITS)
+#  define ARCH_CPU_128_BITS 0
+#endif
 
 #if !defined(ARCH_CPU_X86_FAMILY)
 #  define ARCH_CPU_X86_FAMILY 0
@@ -372,6 +395,9 @@
 #endif
 #if !defined(ARCH_CPU_S390_FAMILY)
 #  define ARCH_CPU_S390_FAMILY 0
+#endif
+#if !defined(ARCH_CPU_RISCV_FAMILY)
+#  define ARCH_CPU_RISCV_FAMILY 0
 #endif
 
 #if !defined(ARCH_CPU_ARM64)
@@ -406,6 +432,15 @@
 #endif
 #if !defined(ARCH_CPU_X86_64)
 #  define ARCH_CPU_X86_64 0
+#endif
+#if !defined(ARCH_CPU_RISCV32)
+#  define ARCH_CPU_RISCV32 0
+#endif
+#if !defined(ARCH_CPU_RISCV64)
+#  define ARCH_CPU_RISCV64 0
+#endif
+#if !defined(ARCH_CPU_RISCV128)
+#  define ARCH_CPU_RISCV128 0
 #endif
 
 /** \} */

@@ -4,15 +4,9 @@
 
 set(INC
   ..
-  ../../blenkernel
-  ../../blenloader
-  ../../blentranslation
   ../../editors/include
-  ../../gpu
-  ../../imbuf
   ../../imbuf/intern/oiio
   ../../makesrna
-  ../../windowmanager
   ../../../../intern/mantaflow/extern
   ../../../../intern/opencolorio
   # RNA_prototypes.hh
@@ -42,6 +36,7 @@ set(SRC
   bpy_capi_utils.cc
   bpy_cli_command.cc
   bpy_driver.cc
+  bpy_geometry_set.cc
   bpy_gizmo_wrap.cc
   bpy_interface.cc
   bpy_interface_atexit.cc
@@ -70,62 +65,67 @@ set(SRC
   bpy_traceback.cc
   bpy_utils_previews.cc
   bpy_utils_units.cc
-  stubs.cc
 
-  bpy.h
-  bpy_app.h
-  bpy_app_alembic.h
-  bpy_app_build_options.h
-  bpy_app_ffmpeg.h
-  bpy_app_handlers.h
-  bpy_app_icons.h
-  bpy_app_ocio.h
-  bpy_app_oiio.h
-  bpy_app_opensubdiv.h
-  bpy_app_openvdb.h
-  bpy_app_sdl.h
-  bpy_app_timers.h
-  bpy_app_translations.h
-  bpy_app_usd.h
-  bpy_capi_utils.h
-  bpy_cli_command.h
-  bpy_driver.h
-  bpy_gizmo_wrap.h
-  bpy_intern_string.h
-  bpy_library.h
-  bpy_msgbus.h
-  bpy_operator.h
-  bpy_operator_wrap.h
-  bpy_path.h
-  bpy_props.h
-  bpy_rna.h
-  bpy_rna_anim.h
-  bpy_rna_callback.h
-  bpy_rna_context.h
-  bpy_rna_data.h
-  bpy_rna_driver.h
-  bpy_rna_gizmo.h
-  bpy_rna_id_collection.h
-  bpy_rna_operator.h
-  bpy_rna_text.h
-  bpy_rna_types_capi.h
-  bpy_rna_ui.h
-  bpy_traceback.h
-  bpy_utils_previews.h
-  bpy_utils_units.h
-  ../BPY_extern.h
-  ../BPY_extern_clog.h
-  ../BPY_extern_python.h
-  ../BPY_extern_run.h
+  bpy.hh
+  bpy_app.hh
+  bpy_app_alembic.hh
+  bpy_app_build_options.hh
+  bpy_app_ffmpeg.hh
+  bpy_app_handlers.hh
+  bpy_app_icons.hh
+  bpy_app_ocio.hh
+  bpy_app_oiio.hh
+  bpy_app_opensubdiv.hh
+  bpy_app_openvdb.hh
+  bpy_app_sdl.hh
+  bpy_app_timers.hh
+  bpy_app_translations.hh
+  bpy_app_usd.hh
+  bpy_capi_utils.hh
+  bpy_cli_command.hh
+  bpy_driver.hh
+  bpy_geometry_set.hh
+  bpy_gizmo_wrap.hh
+  bpy_intern_string.hh
+  bpy_library.hh
+  bpy_msgbus.hh
+  bpy_operator.hh
+  bpy_operator_wrap.hh
+  bpy_path.hh
+  bpy_props.hh
+  bpy_rna.hh
+  bpy_rna_anim.hh
+  bpy_rna_callback.hh
+  bpy_rna_context.hh
+  bpy_rna_data.hh
+  bpy_rna_driver.hh
+  bpy_rna_gizmo.hh
+  bpy_rna_id_collection.hh
+  bpy_rna_operator.hh
+  bpy_rna_text.hh
+  bpy_rna_types_capi.hh
+  bpy_rna_ui.hh
+  bpy_traceback.hh
+  bpy_utils_previews.hh
+  bpy_utils_units.hh
+  ../BPY_extern.hh
+  ../BPY_extern_clog.hh
+  ../BPY_extern_python.hh
+  ../BPY_extern_run.hh
 )
 
 set(LIB
+  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::blenloader
+  PRIVATE bf::blentranslation
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_editor_animation
   bf_editor_interface
   bf_editor_space_api
+  PRIVATE bf::gpu
+  PRIVATE bf::imbuf
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::animrig
@@ -133,11 +133,16 @@ set(LIB
 
   ${PYTHON_LINKFLAGS}
   ${PYTHON_LIBRARIES}
+  PRIVATE bf::windowmanager
 )
 
-# only to check if buildinfo is available
+# Only to check if `buildinfo` is available.
 if(WITH_BUILDINFO)
   add_definitions(-DBUILD_DATE)
+endif()
+
+if(WITH_INSTALL_PORTABLE)
+  add_definitions(-DWITH_INSTALL_PORTABLE)
 endif()
 
 if(WITH_PYTHON_MODULE)
@@ -196,10 +201,6 @@ if(WITH_CODEC_SNDFILE)
   add_definitions(-DWITH_SNDFILE)
 endif()
 
-if(WITH_COMPOSITOR_CPU)
-  add_definitions(-DWITH_COMPOSITOR_CPU)
-endif()
-
 if(WITH_CYCLES)
   list(APPEND INC
     ../../../../intern/cycles/blender
@@ -226,19 +227,19 @@ if(WITH_FREESTYLE)
 endif()
 
 if(WITH_IMAGE_CINEON)
-  add_definitions(-DWITH_CINEON)
+  add_definitions(-DWITH_IMAGE_CINEON)
 endif()
 
 if(WITH_IMAGE_OPENEXR)
-  add_definitions(-DWITH_OPENEXR)
+  add_definitions(-DWITH_IMAGE_OPENEXR)
 endif()
 
 if(WITH_IMAGE_OPENJPEG)
-  add_definitions(-DWITH_OPENJPEG)
+  add_definitions(-DWITH_IMAGE_OPENJPEG)
 endif()
 
-if(WITH_WEBP)
-  add_definitions(-DWITH_WEBP)
+if(WITH_IMAGE_WEBP)
+  add_definitions(-DWITH_IMAGE_WEBP)
 endif()
 
 if(WITH_INPUT_NDOF)
@@ -261,19 +262,9 @@ if(WITH_SDL)
   list(APPEND INC_SYS
     ${SDL_INCLUDE_DIR}
   )
-  if(WITH_SDL_DYNLOAD)
-    list(APPEND INC
-      ../../../../extern/sdlew/include
-    )
-    list(APPEND LIB
-      extern_sdlew
-    )
-    add_definitions(-DWITH_SDL_DYNLOAD)
-  else()
-    list(APPEND LIB
-      ${SDL_LIBRARY}
-    )
-  endif()
+  list(APPEND LIB
+    ${SDL_LIBRARY}
+  )
   add_definitions(-DWITH_SDL)
 endif()
 
@@ -323,6 +314,10 @@ endif()
 
 if(WITH_IO_STL)
   add_definitions(-DWITH_IO_STL)
+endif()
+
+if(WITH_IO_FBX)
+  add_definitions(-DWITH_IO_FBX)
 endif()
 
 if(WITH_IO_GREASE_PENCIL)

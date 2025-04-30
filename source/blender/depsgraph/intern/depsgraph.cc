@@ -10,13 +10,9 @@
 
 #include "intern/depsgraph.hh" /* own include */
 
-#include <algorithm>
 #include <cstring>
+#include <type_traits>
 
-#include "MEM_guardedalloc.h"
-
-#include "BLI_console.h"
-#include "BLI_hash.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_global.hh"
@@ -29,7 +25,6 @@
 #include "intern/depsgraph_physics.hh"
 #include "intern/depsgraph_registry.hh"
 #include "intern/depsgraph_relation.hh"
-#include "intern/depsgraph_update.hh"
 
 #include "intern/eval/deg_eval_copy_on_write.h"
 
@@ -63,7 +58,8 @@ Depsgraph::Depsgraph(Main *bmain, Scene *scene, ViewLayer *view_layer, eEvaluati
       is_evaluating(false),
       is_render_pipeline_depsgraph(false),
       use_editors_update(false),
-      update_count(0)
+      update_count(0),
+      sync_writeback(DEG_EVALUATE_SYNC_WRITEBACK_NO)
 {
   BLI_spin_init(&lock);
   memset(id_type_updated, 0, sizeof(id_type_updated));
@@ -194,8 +190,14 @@ Relation *Depsgraph::add_new_relation(Node *from, Node *to, const char *descript
   }
 #endif
 
-  /* Create new relation, and add it to the graph. */
-  rel = new Relation(from, to, description);
+  /* Create new relation, and add it to the graph. The type must be trivially destructible for
+   * `.release()` to be okay. If it weren't, we could store the relations with #destruct_ptr on
+   * either the `inlinks` or `outlinks`. But since so many #Relation structs are allocated, it's
+   * probably better for it be a simple type anyway. */
+  static_assert(std::is_trivially_destructible_v<Relation>);
+  rel = this->build_allocator.construct<Relation>(from, to, description).release();
+  from->outlinks.append(rel);
+  to->inlinks.append(rel);
   rel->flag |= flags;
   return rel;
 }
@@ -237,6 +239,9 @@ void Depsgraph::clear_all_nodes()
   clear_id_nodes();
   delete time_source;
   time_source = nullptr;
+  /* Memory used by the build allocator is now unused. Rebuild it from scratch. */
+  std::destroy_at(&this->build_allocator);
+  new (&this->build_allocator) LinearAllocator<>();
 }
 
 ID *Depsgraph::get_cow_id(const ID *id_orig) const

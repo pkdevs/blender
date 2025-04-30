@@ -9,17 +9,19 @@
 #include "kernel/types.h"
 
 #include "kernel/integrator/state.h"
+#include "kernel/util/profiler.h"
 
-#include "kernel/util/profiling.h"
+#include "util/color.h"
+#include "util/texture.h"
 
 CCL_NAMESPACE_BEGIN
 
-/* Not actually used, just a NULL pointer that gets passed everywhere, which we
+/* Not actually used, just a nullptr pointer that gets passed everywhere, which we
  * hope gets optimized out by the compiler. */
 struct KernelGlobalsGPU {
   int unused[1];
 };
-typedef ccl_global const KernelGlobalsGPU *ccl_restrict KernelGlobals;
+using KernelGlobals = const ccl_global KernelGlobalsGPU *ccl_restrict;
 
 /* Launch parameters */
 struct KernelParamsOptiX {
@@ -27,6 +29,10 @@ struct KernelParamsOptiX {
   const int *path_index_array;
   float *render_buffer;
   int offset;
+
+  /* Init kernel arguments */
+  int num_tiles;
+  int max_tile_work_size;
 
   /* Global scene data and textures */
   KernelData data;

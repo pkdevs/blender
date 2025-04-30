@@ -17,7 +17,7 @@
 #  include "BLI_winstuff.h"
 #endif
 #include "BLI_fileops.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 
@@ -41,6 +41,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "ED_asset.hh"
 #include "ED_userpref.hh"
 
 #include "MEM_guardedalloc.h"
@@ -49,7 +50,7 @@
 /** \name Reset Default Theme Operator
  * \{ */
 
-static int preferences_reset_default_theme_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus preferences_reset_default_theme_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
   UI_theme_init_default();
@@ -80,10 +81,9 @@ static void PREFERENCES_OT_reset_default_theme(wmOperatorType *ot)
 /** \name Add Auto-Execution Path Operator
  * \{ */
 
-static int preferences_autoexec_add_exec(bContext * /*C*/, wmOperator * /*op*/)
+static wmOperatorStatus preferences_autoexec_add_exec(bContext * /*C*/, wmOperator * /*op*/)
 {
-  bPathCompare *path_cmp = static_cast<bPathCompare *>(
-      MEM_callocN(sizeof(bPathCompare), "bPathCompare"));
+  bPathCompare *path_cmp = MEM_callocN<bPathCompare>("bPathCompare");
   BLI_addtail(&U.autoexec_paths, path_cmp);
   U.runtime.is_dirty = true;
   return OPERATOR_FINISHED;
@@ -106,7 +106,7 @@ static void PREFERENCES_OT_autoexec_path_add(wmOperatorType *ot)
 /** \name Remove Auto-Execution Path Operator
  * \{ */
 
-static int preferences_autoexec_remove_exec(bContext * /*C*/, wmOperator *op)
+static wmOperatorStatus preferences_autoexec_remove_exec(bContext * /*C*/, wmOperator *op)
 {
   const int index = RNA_int_get(op->ptr, "index");
   bPathCompare *path_cmp = static_cast<bPathCompare *>(BLI_findlink(&U.autoexec_paths, index));
@@ -136,7 +136,7 @@ static void PREFERENCES_OT_autoexec_path_remove(wmOperatorType *ot)
 /** \name Add Asset Library Operator
  * \{ */
 
-static int preferences_asset_library_add_exec(bContext * /*C*/, wmOperator *op)
+static wmOperatorStatus preferences_asset_library_add_exec(bContext *C, wmOperator *op)
 {
   char *path = RNA_string_get_alloc(op->ptr, "directory", nullptr, 0, nullptr);
   char dirname[FILE_MAXFILE];
@@ -152,14 +152,15 @@ static int preferences_asset_library_add_exec(bContext * /*C*/, wmOperator *op)
 
   /* There's no dedicated notifier for the Preferences. */
   WM_main_add_notifier(NC_WINDOW, nullptr);
+  blender::ed::asset::list::clear_all_library(C);
 
   MEM_freeN(path);
   return OPERATOR_FINISHED;
 }
 
-static int preferences_asset_library_add_invoke(bContext *C,
-                                                wmOperator *op,
-                                                const wmEvent * /*event*/)
+static wmOperatorStatus preferences_asset_library_add_invoke(bContext *C,
+                                                             wmOperator *op,
+                                                             const wmEvent * /*event*/)
 {
   if (!RNA_struct_property_is_set(op->ptr, "directory")) {
     WM_event_add_fileselect(C, op);
@@ -204,7 +205,7 @@ static bool preferences_asset_library_remove_poll(bContext *C)
   return true;
 }
 
-static int preferences_asset_library_remove_exec(bContext * /*C*/, wmOperator *op)
+static wmOperatorStatus preferences_asset_library_remove_exec(bContext *C, wmOperator *op)
 {
   const int index = RNA_int_get(op->ptr, "index");
   bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(
@@ -219,6 +220,7 @@ static int preferences_asset_library_remove_exec(bContext * /*C*/, wmOperator *o
   CLAMP(U.active_asset_library, 0, count_remaining - 1);
   U.runtime.is_dirty = true;
 
+  blender::ed::asset::list::clear_all_library(C);
   /* Trigger refresh for the Asset Browser. */
   WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
 
@@ -266,7 +268,7 @@ static const char *preferences_extension_repo_default_name_from_type(
   return "";
 }
 
-static int preferences_extension_repo_add_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus preferences_extension_repo_add_exec(bContext *C, wmOperator *op)
 {
   const bUserExtensionRepoAddType repo_type = bUserExtensionRepoAddType(
       RNA_enum_get(op->ptr, "type"));
@@ -376,7 +378,8 @@ static int preferences_extension_repo_add_exec(bContext *C, wmOperator *op)
   U.runtime.is_dirty = true;
 
   {
-    PointerRNA new_repo_ptr = RNA_pointer_create(nullptr, &RNA_UserExtensionRepo, new_repo);
+    PointerRNA new_repo_ptr = RNA_pointer_create_discrete(
+        nullptr, &RNA_UserExtensionRepo, new_repo);
     PointerRNA *pointers[] = {&new_repo_ptr};
 
     BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);
@@ -397,7 +400,9 @@ static int preferences_extension_repo_add_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int preferences_extension_repo_add_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus preferences_extension_repo_add_invoke(bContext *C,
+                                                              wmOperator *op,
+                                                              const wmEvent *event)
 {
   const bUserExtensionRepoAddType repo_type = bUserExtensionRepoAddType(
       RNA_enum_get(op->ptr, "type"));
@@ -427,8 +432,8 @@ static void preferences_extension_repo_add_ui(bContext * /*C*/, wmOperator *op)
 
   switch (repo_type) {
     case bUserExtensionRepoAddType::Remote: {
-      uiItemR(layout, op->ptr, "remote_url", UI_ITEM_R_IMMEDIATE, nullptr, ICON_NONE);
-      uiItemR(layout, op->ptr, "use_sync_on_startup", UI_ITEM_NONE, nullptr, ICON_NONE);
+      uiItemR(layout, op->ptr, "remote_url", UI_ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
+      uiItemR(layout, op->ptr, "use_sync_on_startup", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
       uiItemS_ex(layout, 0.2f, LayoutSeparatorType::Line);
 
@@ -437,27 +442,27 @@ static void preferences_extension_repo_add_ui(bContext * /*C*/, wmOperator *op)
                                  ICON_LOCKED :
                                  ICON_UNLOCKED;
 
-      uiLayout *row = uiLayoutRowWithHeading(layout, true, IFACE_("Authentication"));
-      uiItemR(row, op->ptr, "use_access_token", UI_ITEM_NONE, nullptr, ICON_NONE);
-      uiLayout *col = uiLayoutRow(layout, false);
+      uiLayout *row = &layout->row(true, IFACE_("Authentication"));
+      uiItemR(row, op->ptr, "use_access_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      uiLayout *col = &layout->row(false);
       uiLayoutSetActive(col, use_access_token);
       /* Use "immediate" flag to refresh the icon. */
-      uiItemR(col, op->ptr, "access_token", UI_ITEM_R_IMMEDIATE, nullptr, token_icon);
+      uiItemR(col, op->ptr, "access_token", UI_ITEM_R_IMMEDIATE, std::nullopt, token_icon);
 
       uiItemS_ex(layout, 0.2f, LayoutSeparatorType::Line);
 
       break;
     }
     case bUserExtensionRepoAddType::Local: {
-      uiItemR(layout, op->ptr, "name", UI_ITEM_R_IMMEDIATE, nullptr, ICON_NONE);
+      uiItemR(layout, op->ptr, "name", UI_ITEM_R_IMMEDIATE, std::nullopt, ICON_NONE);
       break;
     }
   }
 
-  uiItemR(layout, op->ptr, "use_custom_directory", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiLayout *col = uiLayoutRow(layout, false);
+  uiItemR(layout, op->ptr, "use_custom_directory", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  uiLayout *col = &layout->row(false);
   uiLayoutSetActive(col, RNA_boolean_get(ptr, "use_custom_directory"));
-  uiItemR(col, op->ptr, "custom_directory", UI_ITEM_NONE, nullptr, ICON_NONE);
+  uiItemR(col, op->ptr, "custom_directory", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
@@ -477,7 +482,7 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
        "REMOTE",
        ICON_INTERNET,
        "Add Remote Repository",
-       "Add a repository referencing an remote repository "
+       "Add a repository referencing a remote repository "
        "with support for listing and updating extensions"},
       {int(bUserExtensionRepoAddType::Local),
        "LOCAL",
@@ -602,9 +607,9 @@ static bool preferences_extension_repo_remove_poll(bContext *C)
   return true;
 }
 
-static int preferences_extension_repo_remove_invoke(bContext *C,
-                                                    wmOperator *op,
-                                                    const wmEvent * /*event*/)
+static wmOperatorStatus preferences_extension_repo_remove_invoke(bContext *C,
+                                                                 wmOperator *op,
+                                                                 const wmEvent * /*event*/)
 {
   const int index = RNA_int_get(op->ptr, "index");
   bool remove_files = RNA_boolean_get(op->ptr, "remove_files");
@@ -656,7 +661,7 @@ static int preferences_extension_repo_remove_invoke(bContext *C,
       C, op, nullptr, message.c_str(), confirm_text, ALERT_ICON_WARNING, true);
 }
 
-static int preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
 {
   const int index = RNA_int_get(op->ptr, "index");
   bool remove_files = RNA_boolean_get(op->ptr, "remove_files");
@@ -774,7 +779,9 @@ static void PREFERENCES_OT_extension_repo_remove(wmOperatorType *ot)
 /** \name Drop Extension Operator
  * \{ */
 
-static int preferences_extension_url_drop_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus preferences_extension_url_drop_invoke(bContext *C,
+                                                              wmOperator *op,
+                                                              const wmEvent *event)
 {
   char *url = RNA_string_get_alloc(op->ptr, "url", nullptr, 0, nullptr);
   const bool url_is_file = STRPREFIX(url, "file://");
@@ -793,7 +800,7 @@ static int preferences_extension_url_drop_invoke(bContext *C, wmOperator *op, co
   }
 
   wmOperatorType *ot = WM_operatortype_find(idname_external, true);
-  int retval;
+  wmOperatorStatus retval;
   if (ot) {
     PointerRNA props_ptr;
     WM_operator_properties_create_ptr(&props_ptr, ot);
@@ -866,7 +873,7 @@ static bool associate_blend(bool do_register, bool all_users, char **r_error_msg
 }
 #endif
 
-static int associate_blend_exec(bContext * /*C*/, wmOperator *op)
+static wmOperatorStatus associate_blend_exec(bContext * /*C*/, wmOperator *op)
 {
 #ifdef __APPLE__
   UNUSED_VARS(op);
@@ -915,7 +922,7 @@ static void PREFERENCES_OT_associate_blend(wmOperatorType *ot)
   ot->poll = associate_blend_poll;
 }
 
-static int unassociate_blend_exec(bContext * /*C*/, wmOperator *op)
+static wmOperatorStatus unassociate_blend_exec(bContext * /*C*/, wmOperator *op)
 {
 #ifdef __APPLE__
   UNUSED_VARS(op);

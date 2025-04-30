@@ -12,7 +12,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
 #include "BLI_listbase.h"
 #include "BLI_math_bits.h"
 #include "BLI_string.h"
@@ -33,7 +32,7 @@
 #include "GPU_context.hh"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern.hh"
 #endif
 
 #include "IMB_imbuf_types.hh"
@@ -57,6 +56,7 @@ ListBase R_engines = {nullptr, nullptr};
 void RE_engines_init()
 {
   DRW_engines_register();
+  DRW_module_init();
 }
 
 void RE_engines_exit()
@@ -64,6 +64,7 @@ void RE_engines_exit()
   RenderEngineType *type, *next;
 
   DRW_engines_free();
+  DRW_module_exit();
 
   for (type = static_cast<RenderEngineType *>(R_engines.first); type; type = next) {
     next = type->next;
@@ -82,9 +83,6 @@ void RE_engines_exit()
 
 void RE_engines_register(RenderEngineType *render_type)
 {
-  if (render_type->draw_engine) {
-    DRW_engine_register(render_type->draw_engine);
-  }
   BLI_addtail(&R_engines, render_type);
 }
 
@@ -122,7 +120,7 @@ bool RE_engine_supports_alembic_procedural(const RenderEngineType *render_type, 
 
 RenderEngine *RE_engine_create(RenderEngineType *type)
 {
-  RenderEngine *engine = MEM_cnew<RenderEngine>("RenderEngine");
+  RenderEngine *engine = MEM_callocN<RenderEngine>("RenderEngine");
   engine->type = type;
 
   BLI_mutex_init(&engine->update_render_passes_mutex);
@@ -137,14 +135,27 @@ static void engine_depsgraph_free(RenderEngine *engine)
     /* Need GPU context since this might free GPU buffers. */
     const bool use_gpu_context = (engine->type->flag & RE_USE_GPU_CONTEXT);
     if (use_gpu_context) {
-      DRW_render_context_enable(engine->re);
+      /* This function can be called on the main thread before RenderEngine is destroyed.
+       * In this case, just bind the main draw context to gather the deleted GPU buffers.
+       * Binding the same GPU context as the render engine is not needed (see #129019). */
+      if (BLI_thread_is_main()) {
+        DRW_gpu_context_enable();
+      }
+      else {
+        DRW_render_context_enable(engine->re);
+      }
     }
 
     DEG_graph_free(engine->depsgraph);
     engine->depsgraph = nullptr;
 
     if (use_gpu_context) {
-      DRW_render_context_disable(engine->re);
+      if (BLI_thread_is_main()) {
+        DRW_gpu_context_disable();
+      }
+      else {
+        DRW_render_context_disable(engine->re);
+      }
     }
   }
 }
@@ -180,7 +191,7 @@ static RenderResult *render_result_from_bake(
   }
 
   /* Create render result with specified size. */
-  RenderResult *rr = MEM_cnew<RenderResult>(__func__);
+  RenderResult *rr = MEM_callocN<RenderResult>(__func__);
 
   rr->rectx = w;
   rr->recty = h;
@@ -189,8 +200,10 @@ static RenderResult *render_result_from_bake(
   rr->tilerect.xmax = x + w;
   rr->tilerect.ymax = y + h;
 
+  BKE_scene_ppm_get(&engine->re->r, rr->ppm);
+
   /* Add single baking render layer. */
-  RenderLayer *rl = MEM_cnew<RenderLayer>("bake render layer");
+  RenderLayer *rl = MEM_callocN<RenderLayer>("bake render layer");
   STRNCPY(rl->name, layername);
   rl->rectx = w;
   rl->recty = h;
@@ -836,6 +849,16 @@ bool RE_bake_engine(Render *re,
 
 /* Render */
 
+static bool possibly_using_gpu_compositor(const Render *re)
+{
+  if (re->r.compositor_device != SCE_COMPOSITOR_DEVICE_GPU) {
+    return false;
+  }
+
+  const Scene *scene = re->pipeline_scene_eval;
+  return (scene->nodetree && scene->use_nodes && (scene->r.scemode & R_DOCOMP));
+}
+
 static void engine_render_view_layer(Render *re,
                                      RenderEngine *engine,
                                      ViewLayer *view_layer_iter,
@@ -860,7 +883,9 @@ static void engine_render_view_layer(Render *re,
     if (use_gpu_context) {
       DRW_render_context_enable(engine->re);
     }
-    else if (engine->has_grease_pencil && use_grease_pencil && G.background) {
+    else if (G.background && ((engine->has_grease_pencil && use_grease_pencil) ||
+                              possibly_using_gpu_compositor(re)))
+    {
       /* Workaround for specific NVidia drivers which crash on Linux when OptiX context is
        * initialized prior to OpenGL context. This affects driver versions 545.29.06, 550.54.14,
        * and 550.67 running on kernel 6.8.
@@ -1059,12 +1084,14 @@ bool RE_engine_render(Render *re, bool do_all)
 
   if (type->render) {
     FOREACH_VIEW_LAYER_TO_RENDER_BEGIN (re, view_layer_iter) {
-      engine_render_view_layer(re, engine, view_layer_iter, true, true);
+      const bool use_grease_pencil = (view_layer_iter->layflag & SCE_LAY_GREASE_PENCIL) != 0;
+      engine_render_view_layer(re, engine, view_layer_iter, true, use_grease_pencil);
 
       /* If render passes are not allocated the render engine deferred final pixels write for
        * later. Need to defer the grease pencil for until after the engine has written the
        * render result to Blender. */
-      delay_grease_pencil = engine->has_grease_pencil && !re->result->passes_allocated;
+      delay_grease_pencil = use_grease_pencil && engine->has_grease_pencil &&
+                            !re->result->passes_allocated;
 
       if (RE_engine_test_break(engine)) {
         break;
@@ -1080,6 +1107,10 @@ bool RE_engine_render(Render *re, bool do_all)
   /* Perform delayed grease pencil rendering. */
   if (delay_grease_pencil) {
     FOREACH_VIEW_LAYER_TO_RENDER_BEGIN (re, view_layer_iter) {
+      const bool use_grease_pencil = (view_layer_iter->layflag & SCE_LAY_GREASE_PENCIL) != 0;
+      if (!use_grease_pencil) {
+        continue;
+      }
       engine_render_view_layer(re, engine, view_layer_iter, false, true);
       if (RE_engine_test_break(engine)) {
         break;

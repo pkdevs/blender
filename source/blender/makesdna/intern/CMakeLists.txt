@@ -2,13 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# message(STATUS "Configuring makesdna")
-
 set(INC
   PUBLIC ..
   PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
   ../../blenlib
   ../../imbuf
+  ../../imbuf/movie
 )
 
 set(INC_SYS
@@ -19,11 +18,12 @@ set(LIB
   PRIVATE bf::intern::atomic
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::dependencies::optional::tbb
+  PRIVATE bf::extern::fmtlib
 )
 
 add_definitions(-DWITH_DNA_GHASH)
 
-# Needed for `mallocn.c`.
+# Needed for `mallocn.cc`.
 if(HAVE_MALLOC_STATS_H)
   add_definitions(-DHAVE_MALLOC_STATS_H)
 endif()
@@ -43,27 +43,27 @@ file(GENERATE OUTPUT ${dna_header_include_file} CONTENT "${DNA_INCLUDE_TEXT}")
 file(GENERATE OUTPUT ${dna_header_string_file} CONTENT "${DNA_FILE_LIST}")
 
 # -----------------------------------------------------------------------------
-# Build makesdna executable
+# Build `makesdna` executable.
 
-# Subset of blenlib used by makesdna.
+# Subset of `blenlib` used by `makesdna`.
 set(BLENLIB_SRC
-  ../../blenlib/intern/BLI_assert.c
-  ../../blenlib/intern/BLI_ghash.c
+  ../../blenlib/intern/BLI_assert.cc
+  ../../blenlib/intern/BLI_ghash.cc
   ../../blenlib/intern/BLI_ghash_utils.cc
-  ../../blenlib/intern/BLI_linklist.c
-  ../../blenlib/intern/BLI_memarena.c
-  ../../blenlib/intern/BLI_mempool.c
-  ../../blenlib/intern/endian_switch.c
+  ../../blenlib/intern/BLI_linklist.cc
+  ../../blenlib/intern/BLI_memarena.cc
+  ../../blenlib/intern/BLI_mempool.cc
+  ../../blenlib/intern/endian_switch.cc
   ../../blenlib/intern/listbase.cc
-  ../../blenlib/intern/string.c
+  ../../blenlib/intern/string.cc
 
-  # Dependency of BLI_ghash.c
+  # Dependency of BLI_ghash.cc
   ../../blenlib/intern/hash_mm2a.cc
 
-  # Dependencies of BLI_mempool.c when ASAN is enabled.
-  ../../blenlib/intern/gsqueue.c
+  # Dependencies of BLI_mempool.cc when ASAN is enabled.
+  ../../blenlib/intern/gsqueue.cc
   ../../blenlib/intern/threads.cc
-  ../../blenlib/intern/time.c
+  ../../blenlib/intern/time.cc
 )
 
 set(SRC
@@ -74,14 +74,14 @@ set(SRC
   ${dna_header_string_file}
 )
 
-# BLI_mempool.c needs these files for ThreadMutex when
+# BLI_mempool.cc needs these files for ThreadMutex when
 # compiling in address sanitizer mode.
 if(WITH_COMPILER_ASAN)
   list(APPEND SRC
   )
 endif()
 
-# SRC_DNA_INC is defined in the parent dir
+# `SRC_DNA_INC` is defined in the parent directory.
 
 add_cc_flags_custom_test(makesdna)
 
@@ -98,18 +98,18 @@ if(WIN32 AND NOT UNIX)
   endif()
 endif()
 
-# Output dna.c
+# Output dna.cc
 add_custom_command(
   OUTPUT
-    ${CMAKE_CURRENT_BINARY_DIR}/dna.c
+    ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
     ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
-    ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.c
+    ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
   COMMAND
     ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
     "$<TARGET_FILE:makesdna>"
-    ${CMAKE_CURRENT_BINARY_DIR}/dna.c
+    ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
     ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
-    ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.c
+    ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
     ${CMAKE_SOURCE_DIR}/source/blender/makesdna/
   DEPENDS makesdna
 )
@@ -121,8 +121,8 @@ set(SRC
   dna_defaults.c
   dna_genfile.cc
   dna_utils.cc
-  ${CMAKE_CURRENT_BINARY_DIR}/dna.c
-  ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.c
+  ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
   ${SRC_DNA_INC}
 
   ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
@@ -131,9 +131,9 @@ set(SRC
 )
 
 set_source_files_properties(
-  ${CMAKE_CURRENT_BINARY_DIR}/dna.c
+  ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
   ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
-  ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.c
+  ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
   PROPERTIES GENERATED TRUE
 )
 

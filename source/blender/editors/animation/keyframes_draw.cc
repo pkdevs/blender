@@ -13,8 +13,10 @@
 #include "MEM_guardedalloc.h"
 
 #include "BKE_grease_pencil.hh"
+#include "BKE_library.hh"
 
 #include "BLI_listbase.h"
+#include "BLI_math_vector.h"
 #include "BLI_rect.h"
 
 #include "DNA_anim_types.h"
@@ -30,6 +32,7 @@
 #include "UI_resources.hh"
 #include "UI_view2d.hh"
 
+#include "ED_anim_api.hh"
 #include "ED_keyframes_draw.hh"
 #include "ED_keyframes_keylist.hh"
 
@@ -409,11 +412,17 @@ struct ChannelListElement {
   eSAction_Flag saction_flag;
   bool channel_locked;
 
+  /* Currently only used for F-Curve channels, because some should be nla
+   * remapped but not others. All other channel types ignore this, as it's clear
+   * from the type whether they should be nla remapped or not. */
+  bool use_nla_remapping;
+
   /* TODO: check which of these can be put into a `union`: */
   bAnimContext *ac;
   bDopeSheet *ads;
   Scene *sce;
   Object *ob;
+  ID *animated_id; /* The ID that adt (below) belongs to. */
   AnimData *adt;
   FCurve *fcu;
   bAction *act;
@@ -442,22 +451,41 @@ static void build_channel_keylist(ChannelListElement *elem, blender::float2 rang
       break;
     }
     case ChannelType::FCURVE: {
-      fcurve_to_keylist(elem->adt, elem->fcu, elem->keylist, elem->saction_flag, range);
+      fcurve_to_keylist(
+          elem->adt, elem->fcu, elem->keylist, elem->saction_flag, range, elem->use_nla_remapping);
       break;
     }
     case ChannelType::ACTION_LAYERED: {
-      action_to_keylist(elem->adt, elem->act, elem->keylist, elem->saction_flag, range);
+      /* This is only called for action summaries in the Dope-sheet, *not* the
+       * Action Editor. Therefore despite the name `ACTION_LAYERED`, this is
+       * only used to show a *single slot* of the action: the slot used by the
+       * ID the action is listed under.
+       *
+       * Thus we use the same function as the `ChannelType::ACTION_SLOT` case
+       * below because in practice the only distinction between these cases is
+       * where they get the slot from. In this case, we get it from `elem`'s
+       * ADT. */
+      BLI_assert(elem->act);
+      BLI_assert(elem->adt);
+      action_slot_summary_to_keylist(elem->ac,
+                                     elem->animated_id,
+                                     elem->act->wrap(),
+                                     elem->adt->slot_handle,
+                                     elem->keylist,
+                                     elem->saction_flag,
+                                     range);
       break;
     }
     case ChannelType::ACTION_SLOT: {
       BLI_assert(elem->act);
       BLI_assert(elem->action_slot);
-      action_slot_to_keylist(elem->adt,
-                             elem->act->wrap(),
-                             elem->action_slot->handle,
-                             elem->keylist,
-                             elem->saction_flag,
-                             range);
+      action_slot_summary_to_keylist(elem->ac,
+                                     elem->animated_id,
+                                     elem->act->wrap(),
+                                     elem->action_slot->handle,
+                                     elem->keylist,
+                                     elem->saction_flag,
+                                     range);
       break;
     }
     case ChannelType::ACTION_LEGACY: {
@@ -479,6 +507,9 @@ static void build_channel_keylist(ChannelListElement *elem, blender::float2 rang
       break;
     }
     case ChannelType::GREASE_PENCIL_DATA: {
+      if (elem->ac->datatype != ANIMCONT_GPENCIL && elem->adt) {
+        action_to_keylist(elem->adt, elem->adt->action, elem->keylist, elem->saction_flag, range);
+      }
       grease_pencil_data_block_to_keylist(
           elem->adt, elem->grease_pencil, elem->keylist, elem->saction_flag, false);
       break;
@@ -528,7 +559,7 @@ struct ChannelDrawList {
 
 ChannelDrawList *ED_channel_draw_list_create()
 {
-  return static_cast<ChannelDrawList *>(MEM_callocN(sizeof(ChannelDrawList), __func__));
+  return MEM_callocN<ChannelDrawList>(__func__);
 }
 
 static void channel_list_build_keylists(ChannelDrawList *channel_list, blender::float2 range)
@@ -638,8 +669,7 @@ static ChannelListElement *channel_list_add_element(ChannelDrawList *channel_lis
                                                     float yscale_fac,
                                                     eSAction_Flag saction_flag)
 {
-  ChannelListElement *draw_elem = static_cast<ChannelListElement *>(
-      MEM_callocN(sizeof(ChannelListElement), __func__));
+  ChannelListElement *draw_elem = MEM_callocN<ChannelListElement>(__func__);
   BLI_addtail(&channel_list->channels, draw_elem);
   draw_elem->type = elem_type;
   draw_elem->keylist = ED_keylist_create();
@@ -692,7 +722,7 @@ void ED_add_object_channel(ChannelDrawList *channel_list,
 }
 
 void ED_add_fcurve_channel(ChannelDrawList *channel_list,
-                           AnimData *adt,
+                           bAnimListElem *ale,
                            FCurve *fcu,
                            float ypos,
                            float yscale_fac,
@@ -700,36 +730,41 @@ void ED_add_fcurve_channel(ChannelDrawList *channel_list,
 {
   const bool locked = (fcu->flag & FCURVE_PROTECTED) ||
                       ((fcu->grp) && (fcu->grp->flag & AGRP_PROTECTED)) ||
-                      ((adt && adt->action) &&
-                       (!ID_IS_EDITABLE(adt->action) || ID_IS_OVERRIDE_LIBRARY(adt->action)));
+                      ((ale->adt && ale->adt->action) &&
+                       (!ID_IS_EDITABLE(ale->adt->action) ||
+                        ID_IS_OVERRIDE_LIBRARY(ale->adt->action)));
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::FCURVE, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->animated_id = ale->id;
+  draw_elem->adt = ale->adt;
   draw_elem->fcu = fcu;
   draw_elem->channel_locked = locked;
+  draw_elem->use_nla_remapping = ANIM_nla_mapping_allowed(ale);
 }
 
 void ED_add_action_group_channel(ChannelDrawList *channel_list,
-                                 AnimData *adt,
+                                 bAnimListElem *ale,
                                  bActionGroup *agrp,
                                  float ypos,
                                  float yscale_fac,
                                  int saction_flag)
 {
   bool locked = (agrp->flag & AGRP_PROTECTED) ||
-                ((adt && adt->action) &&
-                 (!ID_IS_EDITABLE(adt->action) || ID_IS_OVERRIDE_LIBRARY(adt->action)));
+                ((ale->adt && ale->adt->action) &&
+                 (!ID_IS_EDITABLE(ale->adt->action) || ID_IS_OVERRIDE_LIBRARY(ale->adt->action)));
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::ACTION_GROUP, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->animated_id = ale->id;
+  draw_elem->adt = ale->adt;
   draw_elem->agrp = agrp;
   draw_elem->channel_locked = locked;
 }
 
 void ED_add_action_layered_channel(ChannelDrawList *channel_list,
-                                   AnimData *adt,
+                                   bAnimContext *ac,
+                                   bAnimListElem *ale,
                                    bAction *action,
                                    const float ypos,
                                    const float yscale_fac,
@@ -743,13 +778,16 @@ void ED_add_action_layered_channel(ChannelDrawList *channel_list,
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::ACTION_LAYERED, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->ac = ac;
+  draw_elem->animated_id = ale->id;
+  draw_elem->adt = ale->adt;
   draw_elem->act = action;
   draw_elem->channel_locked = locked;
 }
 
 void ED_add_action_slot_channel(ChannelDrawList *channel_list,
-                                AnimData *adt,
+                                bAnimContext *ac,
+                                bAnimListElem *ale,
                                 animrig::Action &action,
                                 animrig::Slot &slot,
                                 const float ypos,
@@ -761,35 +799,37 @@ void ED_add_action_slot_channel(ChannelDrawList *channel_list,
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::ACTION_SLOT, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->ac = ac;
+  draw_elem->animated_id = ale->id;
+  draw_elem->adt = ale->adt;
   draw_elem->act = &action;
   draw_elem->action_slot = &slot;
   draw_elem->channel_locked = locked;
 }
 
 void ED_add_action_channel(ChannelDrawList *channel_list,
-                           AnimData *adt,
+                           bAnimListElem *ale,
                            bAction *act,
                            float ypos,
                            float yscale_fac,
                            int saction_flag)
 {
-#ifdef WITH_ANIM_BAKLAVA
   BLI_assert(!act || act->wrap().is_action_legacy());
-#endif
 
   const bool locked = (act && (!ID_IS_EDITABLE(act) || ID_IS_OVERRIDE_LIBRARY(act)));
   saction_flag &= ~SACTION_SHOW_EXTREMES;
 
   ChannelListElement *draw_elem = channel_list_add_element(
       channel_list, ChannelType::ACTION_LEGACY, ypos, yscale_fac, eSAction_Flag(saction_flag));
-  draw_elem->adt = adt;
+  draw_elem->animated_id = ale->id;
+  draw_elem->adt = ale->adt;
   draw_elem->act = act;
   draw_elem->channel_locked = locked;
 }
 
 void ED_add_grease_pencil_datablock_channel(ChannelDrawList *channel_list,
-                                            bDopeSheet * /*ads*/,
+                                            bAnimContext *ac,
+                                            bAnimListElem *ale,
                                             const GreasePencil *grease_pencil,
                                             const float ypos,
                                             const float yscale_fac,
@@ -800,7 +840,13 @@ void ED_add_grease_pencil_datablock_channel(ChannelDrawList *channel_list,
                                                            ypos,
                                                            yscale_fac,
                                                            eSAction_Flag(saction_flag));
+  /* GreasePencil properties can be animated via an Action, so the GP-related
+   * animation data is not limited to GP drawings. */
+  draw_elem->animated_id = ale->id;
+  draw_elem->adt = ale->adt;
+  draw_elem->act = ale->adt ? ale->adt->action : nullptr;
   draw_elem->grease_pencil = grease_pencil;
+  draw_elem->ac = ac;
 }
 
 void ED_add_grease_pencil_cels_channel(ChannelDrawList *channel_list,

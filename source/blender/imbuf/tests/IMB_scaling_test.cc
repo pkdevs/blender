@@ -11,7 +11,7 @@ namespace blender::imbuf::tests {
 
 static ImBuf *create_6x2_test_image()
 {
-  ImBuf *img = IMB_allocImBuf(6, 2, 32, IB_rect);
+  ImBuf *img = IMB_allocImBuf(6, 2, 32, IB_byte_data);
   uchar4 *col = reinterpret_cast<uchar4 *>(img->byte_buffer.data);
 
   /* Source pixels are spelled out in 2x2 blocks below:
@@ -37,7 +37,7 @@ static ImBuf *create_6x2_test_image()
 
 static ImBuf *create_6x2_test_image_fl(int channels)
 {
-  ImBuf *img = IMB_allocImBuf(6, 2, 32, IB_rectfloat);
+  ImBuf *img = IMB_allocImBuf(6, 2, 32, IB_float_data);
   img->channels = channels;
   float *col = img->float_buffer.data;
 
@@ -127,7 +127,7 @@ TEST(imbuf_scaling, bilinear_2x_smaller)
 {
   ImBuf *res = scale_2x_smaller(false, false);
   const uchar4 *got = reinterpret_cast<uchar4 *>(res->byte_buffer.data);
-  /* Note: IMB_transform results in (191, 128, 64, 255), <same>,
+  /* NOTE: #IMB_transform results in (191, 128, 64, 255), <same>,
    * (55, 50, 48, 254) i.e. different rounding. */
   EXPECT_EQ(uint4(got[0]), uint4(191, 127, 63, 255));
   EXPECT_EQ(uint4(got[1]), uint4(133, 55, 31, 16));

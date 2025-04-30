@@ -7,15 +7,12 @@
  * \ingroup bke
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct Main;
 struct Text;
 struct TextLine;
 
 #include "BLI_compiler_attrs.h"
+#include "BLI_sys_types.h"
 
 /**
  * \note caller must handle `compiled` member.
@@ -63,7 +60,7 @@ char *txt_to_buf(struct Text *text, size_t *r_buf_strlen)
     ATTR_NONNULL(1, 2) ATTR_WARN_UNUSED_RESULT ATTR_RETURNS_NONNULL;
 void txt_clean_text(struct Text *text);
 void txt_order_cursors(struct Text *text, bool reverse);
-int txt_find_string(struct Text *text, const char *findstr, int wrap, int match_case);
+bool txt_find_string(struct Text *text, const char *findstr, int wrap, int match_case);
 bool txt_has_sel(const struct Text *text);
 int txt_get_span(const struct TextLine *from, const struct TextLine *to);
 void txt_move_up(struct Text *text, bool sel);
@@ -130,9 +127,16 @@ bool text_check_identifier_nodigit(char ch);
 bool text_check_whitespace(char ch);
 int text_find_identifier_start(const char *str, int i);
 
-/* EVIL: defined in `bpy_interface.cc`. */
+/* -------------------------------------------------------------------- */
+/** \name Character Classification
+ *
+ * Defined in `bpy_interface.cc` (not ideal).
+ * \{ */
+
 extern int text_check_identifier_unicode(unsigned int ch);
 extern int text_check_identifier_nodigit_unicode(unsigned int ch);
+
+/** \} */
 
 enum {
   TXT_MOVE_LINE_UP = -1,
@@ -150,7 +154,3 @@ char *txt_to_buf_for_undo(struct Text *text, size_t *r_buf_len)
  * Decode a buffer from #txt_to_buf_for_undo.
  */
 void txt_from_buf_for_undo(struct Text *text, const char *buf, size_t buf_len) ATTR_NONNULL(1, 2);
-
-#ifdef __cplusplus
-}
-#endif

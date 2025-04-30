@@ -34,9 +34,9 @@ class TEXT_HT_header(Header):
         row.template_ID(st, "text", new="text.new", unlink="text.unlink", open="text.open")
 
         if text:
-            is_osl = text.name.endswith((".osl", ".osl"))
+            is_osl = text.name.endswith((".osl", ".oso"))
             if is_osl:
-                row.operator("node.shader_script_update", text="", icon='FILE_REFRESH')
+                row.operator("text.update_shader", text="", icon='FILE_REFRESH')
             else:
                 row = layout.row()
                 row.active = is_syntax_highlight_supported
@@ -169,12 +169,13 @@ class TEXT_PT_find(Panel):
         layout.separator()
 
         # settings
-        row = layout.row(align=True)
+        layout.use_property_split = True
+        col = layout.column(heading="Search")
         if not st.text:
-            row.active = False
-        row.prop(st, "use_match_case", text="Case", text_ctxt=i18n_contexts.id_text, toggle=True)
-        row.prop(st, "use_find_wrap", text="Wrap", text_ctxt=i18n_contexts.id_text, toggle=True)
-        row.prop(st, "use_find_all", text="All", toggle=True)
+            col.active = False
+        col.prop(st, "use_match_case", text="Match Case")
+        col.prop(st, "use_find_wrap", text="Wrap Around")
+        col.prop(st, "use_find_all", text="All Data-Blocks")
 
 
 class TEXT_MT_view_navigation(Menu):

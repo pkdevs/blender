@@ -11,9 +11,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
+#include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
+#include "BLI_string.h"
 #include "BLI_string_utils.hh"
 
 #include "BKE_armature.hh"
@@ -276,7 +277,7 @@ void armature_select_mirrored_ex(bArmature *arm, const int flag)
   /* Select mirrored bones */
   if (arm->flag & ARM_MIRROR_EDIT) {
     LISTBASE_FOREACH (EditBone *, curBone, arm->edbo) {
-      if (ANIM_bonecoll_is_visible_editbone(arm, curBone)) {
+      if (EBONE_VISIBLE(arm, curBone)) {
         if (curBone->flag & flag) {
           EditBone *ebone_mirr = ED_armature_ebone_get_mirrored(arm->edbo, curBone);
           if (ebone_mirr) {
@@ -303,7 +304,7 @@ void armature_tag_select_mirrored(bArmature *arm)
   /* Select mirrored bones */
   if (arm->flag & ARM_MIRROR_EDIT) {
     LISTBASE_FOREACH (EditBone *, curBone, arm->edbo) {
-      if (ANIM_bonecoll_is_visible_editbone(arm, curBone)) {
+      if (EBONE_VISIBLE(arm, curBone)) {
         if (curBone->flag & (BONE_SELECTED | BONE_ROOTSEL | BONE_TIPSEL)) {
           EditBone *ebone_mirr = ED_armature_ebone_get_mirrored(arm->edbo, curBone);
           if (ebone_mirr && (ebone_mirr->flag & BONE_SELECTED) == 0) {
@@ -342,7 +343,7 @@ void ED_armature_ebone_transform_mirror_update(bArmature *arm, EditBone *ebo, bo
    * eg. from 3d viewport. */
 
   /* no layer check, correct mirror is more important */
-  if (!check_select || ebo->flag & (BONE_TIPSEL | BONE_ROOTSEL)) {
+  if (!check_select || (EBONE_VISIBLE(arm, ebo) && (ebo->flag & (BONE_TIPSEL | BONE_ROOTSEL)))) {
     EditBone *eboflip = ED_armature_ebone_get_mirrored(arm->edbo, ebo);
     if (eboflip) {
       /* We assume X-axis flipping for now. */
@@ -445,7 +446,7 @@ static EditBone *make_boneList_recursive(ListBase *edbo,
   EditBone *eBoneTest = nullptr;
 
   LISTBASE_FOREACH (Bone *, curBone, bones) {
-    eBone = static_cast<EditBone *>(MEM_callocN(sizeof(EditBone), "make_editbone"));
+    eBone = MEM_callocN<EditBone>("make_editbone");
     eBone->temp.bone = curBone;
 
     /* Copy relevant data from bone to eBone
@@ -676,7 +677,7 @@ void ED_armature_from_edit(Main *bmain, bArmature *arm)
 
   /* Copy the bones from the edit-data into the armature. */
   LISTBASE_FOREACH (EditBone *, eBone, arm->edbo) {
-    newBone = static_cast<Bone *>(MEM_callocN(sizeof(Bone), "bone"));
+    newBone = MEM_callocN<Bone>("bone");
     eBone->temp.bone = newBone; /* Associate the real Bones with the EditBones */
 
     STRNCPY(newBone->name, eBone->name);
@@ -730,7 +731,7 @@ void ED_armature_from_edit(Main *bmain, bArmature *arm)
     newBone->color = eBone->color;
 
     LISTBASE_FOREACH (BoneCollectionReference *, ref, &eBone->bone_collections) {
-      BoneCollectionReference *newBoneRef = MEM_cnew<BoneCollectionReference>(
+      BoneCollectionReference *newBoneRef = MEM_dupallocN<BoneCollectionReference>(
           "ED_armature_from_edit", *ref);
       BLI_addtail(&newBone->runtime.collections, newBoneRef);
     }
@@ -805,7 +806,7 @@ void ED_armature_edit_free(bArmature *arm)
 void ED_armature_to_edit(bArmature *arm)
 {
   ED_armature_edit_free(arm);
-  arm->edbo = static_cast<ListBase *>(MEM_callocN(sizeof(ListBase), "edbo armature"));
+  arm->edbo = MEM_callocN<ListBase>("edbo armature");
   arm->act_edbone = make_boneList(arm->edbo, &arm->bonebase, arm->act_bone);
 }
 

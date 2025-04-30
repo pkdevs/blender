@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(OIDN_EXTRA_ARGS
+  -DCMAKE_BUILD_TYPE=Release
   -DOIDN_APPS=OFF
   -DTBB_ROOT=${LIBDIR}/tbb
   -DISPC_EXECUTABLE=${LIBDIR}/ispc/bin/ispc
@@ -21,18 +22,22 @@ else()
     -DLEVEL_ZERO_ROOT=${LIBDIR}/level-zero
   )
 
-  # x64 platforms support SyCL, ARM64 don't
-  if(NOT BLENDER_PLATFORM_WINDOWS_ARM)
+  # x64 platforms support SyCL and HIP, ARM64 doesn't
+  if(NOT BLENDER_PLATFORM_ARM)
     set(OIDN_EXTRA_ARGS
       ${OIDN_EXTRA_ARGS}
       -DOIDN_DEVICE_SYCL=ON
       -DOIDN_DEVICE_SYCL_AOT=OFF
       -DOIDN_DEVICE_CUDA=ON
       -DOIDN_DEVICE_HIP=ON)
+  elseif(UNIX)
+    set(OIDN_EXTRA_ARGS
+      ${OIDN_EXTRA_ARGS}
+      -DOIDN_DEVICE_CUDA=ON)
   endif()
 endif()
 
-if(WIN32 AND NOT BLENDER_PLATFORM_WINDOWS_ARM)
+if(WIN32 AND NOT BLENDER_PLATFORM_ARM)
   set(OIDN_EXTRA_ARGS
     ${OIDN_EXTRA_ARGS}
     -DTBB_DEBUG_LIBRARY=${LIBDIR}/tbb/lib/tbb.lib
@@ -48,7 +53,7 @@ if(WIN32 AND NOT BLENDER_PLATFORM_WINDOWS_ARM)
     -DCMAKE_EXE_LINKER_FLAGS=-L"${LIBDIR}/dpcpp/lib"
   )
 else()
-  if(NOT (APPLE OR BLENDER_PLATFORM_WINDOWS_ARM))
+  if(NOT (APPLE OR WIN32 OR BLENDER_PLATFORM_ARM))
     set(OIDN_EXTRA_ARGS
       ${OIDN_EXTRA_ARGS}
       -DCMAKE_CXX_COMPILER=${LIBDIR}/dpcpp/bin/clang++
@@ -62,7 +67,10 @@ endif()
 set(ODIN_PATCH_COMMAND
   ${PATCH_CMD} --verbose -p 1 -N -d
   ${BUILD_DIR}/openimagedenoise/src/external_openimagedenoise <
-  ${PATCH_DIR}/oidn.diff
+  ${PATCH_DIR}/oidn.diff &&
+  ${PATCH_CMD} --verbose -p 1 -N -d
+  ${BUILD_DIR}/openimagedenoise/src/external_openimagedenoise <
+  ${PATCH_DIR}/oidn_blackwell.diff
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -71,6 +79,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(ODIN_PATCH_COMMAND ${ODIN_PATCH_COMMAND} &&
     sed -i "s/(attrib\\.memoryType)/(attrib.type)/g"
     ${BUILD_DIR}/openimagedenoise/src/external_openimagedenoise/devices/hip/hip_device.cpp
+  )
+endif()
+
+if(WIN32 AND BLENDER_PLATFORM_ARM)
+  set(ODIN_PATCH_COMMAND ${ODIN_PATCH_COMMAND} &&
+    ${PATCH_CMD} --verbose -p 1 -N -d
+    ${BUILD_DIR}/openimagedenoise/src/external_openimagedenoise <
+    ${PATCH_DIR}/oidn_disable_dependentload.diff
   )
 endif()
 
@@ -99,7 +115,7 @@ add_dependencies(
   external_python
 )
 
-if(UNIX AND NOT APPLE)
+if(NOT (APPLE OR WIN32 OR BLENDER_PLATFORM_ARM))
   add_dependencies(
     external_openimagedenoise
     external_dpcpp
@@ -107,7 +123,7 @@ if(UNIX AND NOT APPLE)
   )
 endif()
 
-if(NOT APPLE)
+if(NOT (APPLE OR BLENDER_PLATFORM_ARM))
   add_dependencies(
     external_openimagedenoise
     external_level-zero

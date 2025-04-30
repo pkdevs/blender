@@ -20,10 +20,14 @@
  * - `BKE_main_` should be used for functions in that file.
  */
 
+#include <array>
+
 #include "DNA_listBase.h"
 
 #include "BLI_compiler_attrs.h"
 #include "BLI_sys_types.h"
+
+#include "BKE_lib_query.hh" /* For LibraryForeachIDCallbackFlag. */
 
 struct BLI_mempool;
 struct BlendThumbnail;
@@ -51,60 +55,75 @@ struct MainIDRelationsEntryItem {
   MainIDRelationsEntryItem *next;
 
   union {
-    /* For `from_ids` list, a user of the hashed ID. */
+    /** For `from_ids` list, a user of the hashed ID. */
     ID *from;
-    /* For `to_ids` list, an ID used by the hashed ID. */
+    /** For `to_ids` list, an ID used by the hashed ID. */
     ID **to;
   } id_pointer;
-  /* Session uid of the `id_pointer`. */
+  /** Session uid of the `id_pointer`. */
   uint session_uid;
 
-  int usage_flag; /* Using IDWALK_ enums, defined in BKE_lib_query.hh */
+  /** Using IDWALK_ enums, defined in BKE_lib_query.hh */
+  LibraryForeachIDCallbackFlag usage_flag;
 };
 
 struct MainIDRelationsEntry {
-  /* Linked list of IDs using that ID. */
+  /** Linked list of IDs using that ID. */
   MainIDRelationsEntryItem *from_ids;
-  /* Linked list of IDs used by that ID. */
+  /** Linked list of IDs used by that ID. */
   MainIDRelationsEntryItem *to_ids;
 
-  /* Session uid of the ID matching that entry. */
+  /** Session UID of the ID matching that entry. */
   uint session_uid;
 
-  /* Runtime tags, users should ensure those are reset after usage. */
+  /** Runtime tags, users should ensure those are reset after usage. */
   uint tags;
 };
 
 /** #MainIDRelationsEntry.tags */
 enum eMainIDRelationsEntryTags {
-  /* Generic tag marking the entry as to be processed. */
+  /** Generic tag marking the entry as to be processed. */
   MAINIDRELATIONS_ENTRY_TAGS_DOIT = 1 << 0,
 
-  /* Generic tag marking the entry as processed in the `to` direction (i.e. the IDs used by this
-   * item have been processed). */
+  /**
+   * Generic tag marking the entry as processed in the `to` direction
+   * (i.e. the IDs used by this item have been processed).
+   */
   MAINIDRELATIONS_ENTRY_TAGS_PROCESSED_TO = 1 << 4,
-  /* Generic tag marking the entry as processed in the `from` direction (i.e. the IDs using this
-   * item have been processed). */
+  /**
+   * Generic tag marking the entry as processed in the `from` direction
+   * (i.e. the IDs using this item have been processed).
+   */
   MAINIDRELATIONS_ENTRY_TAGS_PROCESSED_FROM = 1 << 5,
-  /* Generic tag marking the entry as processed. */
+  /** Generic tag marking the entry as processed. */
   MAINIDRELATIONS_ENTRY_TAGS_PROCESSED = MAINIDRELATIONS_ENTRY_TAGS_PROCESSED_TO |
                                          MAINIDRELATIONS_ENTRY_TAGS_PROCESSED_FROM,
 
-  /* Generic tag marking the entry as being processed in the `to` direction (i.e. the IDs used by
-   * this item are being processed). Useful for dependency loops detection and handling. */
+  /**
+   * Generic tag marking the entry as being processed in the `to` direction
+   * (i.e. the IDs used by this item are being processed).
+   * Useful for dependency loops detection and handling.
+   */
   MAINIDRELATIONS_ENTRY_TAGS_INPROGRESS_TO = 1 << 8,
-  /* Generic tag marking the entry as being processed in the `from` direction (i.e. the IDs using
-   * this item are being processed). Useful for dependency loops detection and handling. */
+  /**
+   * Generic tag marking the entry as being processed in the `from` direction
+   * (i.e. the IDs using this item are being processed).
+   * Useful for dependency loops detection and handling.
+   */
   MAINIDRELATIONS_ENTRY_TAGS_INPROGRESS_FROM = 1 << 9,
-  /* Generic tag marking the entry as being processed. Useful for dependency loops detection and
-   * handling. */
+  /**
+   * Generic tag marking the entry as being processed.
+   * Useful for dependency loops detection and handling.
+   */
   MAINIDRELATIONS_ENTRY_TAGS_INPROGRESS = MAINIDRELATIONS_ENTRY_TAGS_INPROGRESS_TO |
                                           MAINIDRELATIONS_ENTRY_TAGS_INPROGRESS_FROM,
 };
 
 struct MainIDRelations {
-  /* Mapping from an ID pointer to all of its parents (IDs using it) and children (IDs it uses).
-   * Values are `MainIDRelationsEntry` pointers. */
+  /**
+   * Mapping from an ID pointer to all of its parents (IDs using it) and children (IDs it uses).
+   * Values are `MainIDRelationsEntry` pointers.
+   */
   GHash *relations_from_pointers;
   /* NOTE: we could add more mappings when needed (e.g. from session uid?). */
 
@@ -115,7 +134,7 @@ struct MainIDRelations {
 };
 
 enum {
-  /* Those bmain relations include pointers/usages from editors. */
+  /** Those bmain relations include pointers/usages from editors. */
   MAINIDRELATIONS_INCLUDE_UI = 1 << 0,
 };
 
@@ -136,7 +155,8 @@ struct Main {
   char filepath[1024];               /* 1024 = FILE_MAX */
   short versionfile, subversionfile; /* see BLENDER_FILE_VERSION, BLENDER_FILE_SUBVERSION */
   short minversionfile, minsubversionfile;
-  /** The currently opened .blend file was written from a newer version of Blender, and has forward
+  /**
+   * The currently opened .blend file was written from a newer version of Blender, and has forward
    * compatibility issues (data loss).
    *
    * \note In practice currently this is only based on the version numbers, in the future it
@@ -204,9 +224,24 @@ struct Main {
    */
   bool is_action_slot_to_id_map_dirty;
 
+  /**
+   * The blend-file thumbnail. If set, it will show as image preview of the blend-file in the
+   * system's file-browser.
+   */
   BlendThumbnail *blen_thumb;
 
+  /**
+   * The library matching the current Main.
+   *
+   * Typically `nullptr` (for the `G_MAIN` representing the currently opened blend-file).
+   *
+   * Mainly set and used during the blend-file read/write process when 'split' Mains are used to
+   * isolate and process all linked IDs from a single library.
+   */
   Library *curlib;
+
+  /* List bases for all ID types, containing all IDs for the current #Main. */
+
   ListBase scenes;
   ListBase libraries;
   ListBase objects;
@@ -219,7 +254,8 @@ struct Main {
   ListBase lattices;
   ListBase lights;
   ListBase cameras;
-  ListBase ipo; /* Deprecated (only for versioning). */
+  /** Deprecated (only for versioning). */
+  ListBase ipo;
   ListBase shapekeys;
   ListBase worlds;
   ListBase screens;
@@ -236,8 +272,10 @@ struct Main {
   ListBase particles;
   ListBase palettes;
   ListBase paintcurves;
-  ListBase wm;       /* Singleton (exception). */
-  ListBase gpencils; /* Legacy Grease Pencil. */
+  /** Singleton (exception). */
+  ListBase wm;
+  /** Legacy Grease Pencil. */
+  ListBase gpencils;
   ListBase grease_pencils;
   ListBase movieclips;
   ListBase masks;
@@ -265,8 +303,10 @@ struct Main {
   /** Used for efficient calculations of unique names. */
   UniqueName_Map *name_map;
 
-  /* Used for efficient calculations of unique names. Covers all names in current Main, including
-   * linked data ones. */
+  /**
+   * Used for efficient calculations of unique names. Covers all names in current Main, including
+   * linked data ones.
+   */
   UniqueName_Map *name_map_global;
 
   MainLock *lock;
@@ -278,7 +318,7 @@ struct Main {
  * \note Always generate a non-global Main, use #BKE_blender_globals_main_replace to put a newly
  * created one in `G_MAIN`.
  */
-Main *BKE_main_new(void);
+Main *BKE_main_new();
 /**
  * Initialize a Main data-base.
  *
@@ -292,16 +332,16 @@ void BKE_main_init(Main &bmain);
  * This is similar to a call to #BKE_main_destroy followed by #BKE_main_init, however the internal
  * #Main::lock is kept unchanged, and the #Main::is_global_main flag is not reset to `true` either.
  *
- * \note: Unlike #BKE_main_free, only process the given \a bmain, without handling any potential
+ * \note Unlike #BKE_main_free, only process the given \a bmain, without handling any potential
  * other linked Main.
  */
 void BKE_main_clear(Main &bmain);
 /**
  * Clear and free all data in given \a bmain, but does not free \a bmain itself.
  *
- * \note: In most cases, #BKE_main_free should be used instead of this function.
+ * \note In most cases, #BKE_main_free should be used instead of this function.
  *
- * \note: Unlike #BKE_main_free, only process the given \a bmain, without handling any potential
+ * \note Unlike #BKE_main_free, only process the given \a bmain, without handling any potential
  * other linked Main.
  */
 void BKE_main_destroy(Main &bmain);
@@ -317,19 +357,26 @@ struct MainMergeReport {
 
   /** Number of IDs from source Main that have been moved into destination Main. */
   int num_merged_ids = 0;
-  /** Number of (non-library) IDs from source Main that were expected to have a matching ID in
-   * destination Main, but did not. These have not been moved, and their usages have been remapped
-   * to null. */
+  /**
+   * Number of (non-library) IDs from source Main that were expected
+   * to have a matching ID in destination Main, but did not.
+   * These have not been moved, and their usages have been remapped to null.
+   */
   int num_unknown_ids = 0;
-  /** Number of (non-library) IDs from source Main that already had a matching ID in destination
-   * Main. */
+  /**
+   * Number of (non-library) IDs from source Main that already had a matching ID
+   * in destination Main.
+   */
   int num_remapped_ids = 0;
-  /** Number of Library IDs from source Main that already had a matching Library ID in destination
-   * Main. */
+  /**
+   * Number of Library IDs from source Main that already had a matching Library ID
+   * in destination Main.
+   */
   int num_remapped_libraries = 0;
 };
 
-/** Merge the content of `bmain_src` into `bmain_dst`.
+/**
+ * Merge the content of `bmain_src` into `bmain_dst`.
  *
  * In case of collision (ID from same library with same name), the existing ID in `bmain_dst` is
  * kept, the one from `bmain_src` is left in its original Main, and its usages in `bmain_dst` (from
@@ -343,7 +390,8 @@ struct MainMergeReport {
  * they are dropped, their usages are remapped to null, and a warning is printed.
  *
  * Since `bmain_src` is either empty or contains left-over IDs with (likely) invalid ID
- * relationships and other potential issues after the merge, it is always freed. */
+ * relationships and other potential issues after the merge, it is always freed.
+ */
 void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &reports);
 
 /**
@@ -458,6 +506,21 @@ void BKE_main_library_weak_reference_remove_item(
     const char *library_id_name,
     ID *old_id) ATTR_NONNULL();
 
+/**
+ * Find local ID with weak library reference matching library and ID name.
+ * For cases where creating a full MainLibraryWeakReferenceMap is unnecessary.
+ */
+ID *BKE_main_library_weak_reference_find(Main *bmain,
+                                         const char *library_filepath,
+                                         const char *library_id_name);
+
+/**
+ * Add library weak reference to ID, referencing the specified library and ID name.
+ * For cases where creating a full MainLibraryWeakReferenceMap is unnecessary.*/
+void BKE_main_library_weak_reference_add(ID *local_id,
+                                         const char *library_filepath,
+                                         const char *library_id_name);
+
 /* *** Generic utils to loop over whole Main database. *** */
 
 #define FOREACH_MAIN_LISTBASE_ID_BEGIN(_lb, _id) \
@@ -473,8 +536,8 @@ void BKE_main_library_weak_reference_remove_item(
 
 #define FOREACH_MAIN_LISTBASE_BEGIN(_bmain, _lb) \
   { \
-    ListBase *_lbarray[INDEX_ID_MAX]; \
-    int _i = set_listbasepointers((_bmain), _lbarray); \
+    MainListsArray _lbarray = BKE_main_lists_get(*(_bmain)); \
+    size_t _i = _lbarray.size(); \
     while (_i--) { \
       (_lb) = _lbarray[_i];
 
@@ -503,6 +566,18 @@ void BKE_main_library_weak_reference_remove_item(
   FOREACH_MAIN_LISTBASE_END; \
   } \
   ((void)0)
+
+/**
+ * Generates a raw .blend file thumbnail data from a raw image buffer.
+ *
+ * \param bmain: If not NULL, also store generated data in this Main.
+ * \param rect: RGBA image buffer.
+ * \param size: The size of `rect`.
+ * \return The generated .blend file raw thumbnail data.
+ */
+BlendThumbnail *BKE_main_thumbnail_from_buffer(Main *bmain,
+                                               const uint8_t *rect,
+                                               const int size[2]);
 
 /**
  * Generates a raw .blend file thumbnail data from given image.
@@ -542,20 +617,19 @@ const char *BKE_main_blendfile_path_from_global();
  */
 ListBase *which_libbase(Main *bmain, short type);
 
-// #define INDEX_ID_MAX 41
+/** Subtracting 1, because #INDEX_ID_NULL is ignored here. */
+using MainListsArray = std::array<ListBase *, INDEX_ID_MAX - 1>;
+
 /**
- * Put the pointers to all the #ListBase structs in given `bmain` into the `*lb[INDEX_ID_MAX]`
- * array, and return the number of those for convenience.
+ * Returns the pointers to all the #ListBase structs in given `bmain`.
  *
  * This is useful for generic traversal of all the blocks in a #Main (by traversing all the lists
  * in turn), without worrying about block types.
  *
- * \param lb: Array of lists #INDEX_ID_MAX in length.
- *
  * \note The order of each ID type #ListBase in the array is determined by the `INDEX_ID_<IDTYPE>`
  * enum definitions in `DNA_ID.h`. See also the #FOREACH_MAIN_ID_BEGIN macro in `BKE_main.hh`
  */
-int set_listbasepointers(Main *bmain, ListBase *lb[]);
+MainListsArray BKE_main_lists_get(Main &bmain);
 
 #define MAIN_VERSION_FILE_ATLEAST(main, ver, subver) \
   ((main)->versionfile > (ver) || \
@@ -570,8 +644,8 @@ int set_listbasepointers(Main *bmain, ListBase *lb[]);
    ((main)->versionfile == (ver) && (main)->subversionfile <= (subver)))
 
 #define LIBRARY_VERSION_FILE_ATLEAST(lib, ver, subver) \
-  ((lib)->runtime.versionfile > (ver) || \
-   ((lib)->runtime.versionfile == (ver) && (lib)->runtime.subversionfile >= (subver)))
+  ((lib)->runtime->versionfile > (ver) || \
+   ((lib)->runtime->versionfile == (ver) && (lib)->runtime->subversionfile >= (subver)))
 
 /**
  * The size of thumbnails (optionally) stored in the `.blend` files header.

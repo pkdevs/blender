@@ -51,6 +51,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Int>("Group ID", "Group Index")
       .supports_field()
+      .hide_value()
       .description("An index used to group values together for multiple separate accumulations");
 
   if (node != nullptr) {
@@ -76,7 +77,7 @@ static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeAccumulateField *data = MEM_cnew<NodeAccumulateField>(__func__);
+  NodeAccumulateField *data = MEM_callocN<NodeAccumulateField>(__func__);
   data->data_type = CD_PROP_FLOAT;
   data->domain = int16_t(AttrDomain::Point);
   node->storage = data;
@@ -99,7 +100,7 @@ static std::optional<eCustomDataType> node_type_from_other_socket(const bNodeSoc
     case SOCK_MATRIX:
       return CD_PROP_FLOAT4X4;
     default:
-      return {};
+      return std::nullopt;
   }
 }
 
@@ -184,8 +185,8 @@ class AccumulateFieldInput final : public bke::GeometryFieldInput {
                        Field<int> group_index,
                        AccumulationMode accumulation_mode)
       : bke::GeometryFieldInput(input.cpp_type(), "Accumulation"),
-        input_(input),
-        group_index_(group_index),
+        input_(std::move(input)),
+        group_index_(std::move(group_index)),
         source_domain_(source_domain),
         accumulation_mode_(accumulation_mode)
   {
@@ -292,8 +293,8 @@ class TotalFieldInput final : public bke::GeometryFieldInput {
  public:
   TotalFieldInput(const AttrDomain source_domain, GField input, Field<int> group_index)
       : bke::GeometryFieldInput(input.cpp_type(), "Total Value"),
-        input_(input),
-        group_index_(group_index),
+        input_(std::move(input)),
+        group_index_(std::move(group_index)),
         source_domain_(source_domain)
   {
   }
@@ -426,16 +427,21 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
-
-  geo_node_type_base(&ntype, GEO_NODE_ACCUMULATE_FIELD, "Accumulate Field", NODE_CLASS_CONVERTER);
+  geo_node_type_base(&ntype, "GeometryNodeAccumulateField", GEO_NODE_ACCUMULATE_FIELD);
+  ntype.ui_name = "Accumulate Field";
+  ntype.ui_description =
+      "Add the values of an evaluated field together and output the running total for each "
+      "element";
+  ntype.enum_name_legacy = "ACCUMULATE_FIELD";
+  ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.initfunc = node_init;
   ntype.draw_buttons = node_layout;
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = node_gather_link_searches;
   blender::bke::node_type_storage(
-      &ntype, "NodeAccumulateField", node_free_standard_storage, node_copy_standard_storage);
-  blender::bke::node_register_type(&ntype);
+      ntype, "NodeAccumulateField", node_free_standard_storage, node_copy_standard_storage);
+  blender::bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

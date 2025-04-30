@@ -8,7 +8,6 @@
 
 #include "DNA_object_types.h"
 
-#include "RNA_access.hh"
 #include "RNA_define.hh"
 
 #include "rna_internal.hh"
@@ -181,7 +180,7 @@ void rna_def_object_type_visibility_flags_common(StructRNA *srna,
       {"Grease Pencil",
        (1 << OB_GREASE_PENCIL),
        {"show_object_viewport_grease_pencil", "show_object_select_grease_pencil"},
-       {"Show grease pencil objects", "Allow selection of grease pencil objects"}},
+       {"Show Grease Pencil objects", "Allow selection of Grease Pencil objects"}},
       {"Camera",
        (1 << OB_CAMERA),
        {"show_object_viewport_camera", "show_object_select_camera"},

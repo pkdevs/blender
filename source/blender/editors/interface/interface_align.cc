@@ -376,10 +376,10 @@ void ui_block_align_calc(uiBlock *block, const ARegion *region)
   /* First loop: we count number of buttons belonging to an align group,
    * and clear their align flag.
    * Tabs get some special treatment here, they get aligned to region border. */
-  LISTBASE_FOREACH (uiBut *, but, &block->buttons) {
+  for (const std::unique_ptr<uiBut> &but : block->buttons) {
     /* special case: tabs need to be aligned to a region border, drawflag tells which one */
     if (but->type == UI_BTYPE_TAB) {
-      ui_block_align_but_to_region(but, region);
+      ui_block_align_but_to_region(but.get(), region);
     }
     else {
       /* Clear old align flags. */
@@ -404,16 +404,15 @@ void ui_block_align_calc(uiBlock *block, const ARegion *region)
     butal_array = butal_array_buf;
   }
   else {
-    butal_array = static_cast<ButAlign *>(
-        MEM_mallocN(sizeof(*butal_array) * num_buttons, __func__));
+    butal_array = MEM_malloc_arrayN<ButAlign>(num_buttons, __func__);
   }
   memset(butal_array, 0, sizeof(*butal_array) * size_t(num_buttons));
 
   /* Second loop: we initialize our ButAlign data for each button. */
   butal = butal_array;
-  LISTBASE_FOREACH (uiBut *, but, &block->buttons) {
+  for (const std::unique_ptr<uiBut> &but : block->buttons) {
     if (but->alignnr != 0) {
-      butal->but = but;
+      butal->but = but.get();
       butal->borders[LEFT] = &but->rect.xmin;
       butal->borders[RIGHT] = &but->rect.xmax;
       butal->borders[DOWN] = &but->rect.ymin;

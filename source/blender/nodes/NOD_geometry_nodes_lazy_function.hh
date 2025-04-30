@@ -30,6 +30,7 @@
 
 #include "BLI_compute_context.hh"
 #include "BLI_math_quaternion_types.hh"
+#include "BLI_multi_value_map.hh"
 
 #include "BKE_bake_items.hh"
 #include "BKE_node_tree_zones.hh"
@@ -42,6 +43,7 @@ namespace blender::nodes {
 
 using lf::LazyFunction;
 using mf::MultiFunction;
+using ReferenceSetIndex = int;
 
 /** The structs in here describe the different possible behaviors of a simulation input node. */
 namespace sim_input {
@@ -150,10 +152,10 @@ class GeoNodesBakeParams {
 struct GeoNodesSideEffectNodes {
   MultiValueMap<ComputeContextHash, const lf::FunctionNode *> nodes_by_context;
   /**
-   * The repeat zone is identified by the compute context of the parent and the identifier of the
-   * repeat output node.
+   * The repeat/foreach zone is identified by the compute context of the parent and the identifier
+   * of the repeat output node.
    */
-  MultiValueMap<std::pair<ComputeContextHash, int32_t>, int> iterations_by_repeat_zone;
+  MultiValueMap<std::pair<ComputeContextHash, int32_t>, int> iterations_by_iteration_zone;
 };
 
 /**
@@ -350,7 +352,7 @@ struct GeometryNodeLazyFunctionGraphMapping {
   /* Indexed by #bNodeSocket::index_in_all_outputs. */
   Array<int> lf_input_index_for_output_bsocket_usage;
   /* Indexed by #bNodeSocket::index_in_all_outputs. */
-  Array<int> lf_input_index_for_attribute_propagation_to_output;
+  Array<int> lf_input_index_for_reference_set_for_output;
   /* Indexed by #bNodeSocket::index_in_tree. */
   Array<int> lf_index_by_bsocket;
 };
@@ -384,7 +386,7 @@ struct GeometryNodesGroupFunction {
     struct {
       IndexRange range;
       Vector<int> geometry_outputs;
-    } attributes_to_propagate;
+    } references_to_propagate;
   } inputs;
 
   struct {
@@ -414,6 +416,7 @@ struct GeometryNodesLazyFunctionGraphInfo {
    * The actual lazy-function graph.
    */
   lf::Graph graph;
+  Map<int, const lf::Graph *> debug_zone_body_graphs;
   /**
    * Mappings between the lazy-function graph and the #bNodeTree.
    */
@@ -448,6 +451,10 @@ std::unique_ptr<LazyFunction> get_warning_node_lazy_function(const bNode &node);
  * type is used for both.
  */
 void set_default_remaining_node_outputs(lf::Params &params, const bNode &node);
+void set_default_value_for_output_socket(lf::Params &params,
+                                         const int lf_index,
+                                         const bNodeSocket &bsocket);
+void construct_socket_default_value(const bke::bNodeSocketType &stype, void *r_value);
 
 std::string make_anonymous_attribute_socket_inspection_string(const bNodeSocket &socket);
 std::string make_anonymous_attribute_socket_inspection_string(StringRef node_name,
@@ -457,6 +464,7 @@ struct FoundNestedNodeID {
   int id;
   bool is_in_simulation = false;
   bool is_in_loop = false;
+  bool is_in_closure = false;
 };
 
 std::optional<FoundNestedNodeID> find_nested_node_id(const GeoNodesLFUserData &user_data,
@@ -469,5 +477,178 @@ std::optional<FoundNestedNodeID> find_nested_node_id(const GeoNodesLFUserData &u
  */
 const GeometryNodesLazyFunctionGraphInfo *ensure_geometry_nodes_lazy_function_graph(
     const bNodeTree &btree);
+
+/**
+ * Utility to measure the time that is spend in a specific compute context during geometry nodes
+ * evaluation.
+ */
+class ScopedComputeContextTimer {
+ private:
+  lf::Context &context_;
+  geo_eval_log::TimePoint start_;
+
+ public:
+  ScopedComputeContextTimer(lf::Context &entered_context) : context_(entered_context)
+  {
+    start_ = geo_eval_log::Clock::now();
+  }
+
+  ~ScopedComputeContextTimer()
+  {
+    const geo_eval_log::TimePoint end = geo_eval_log::Clock::now();
+    auto &user_data = static_cast<GeoNodesLFUserData &>(*context_.user_data);
+    auto &local_user_data = static_cast<GeoNodesLFLocalUserData &>(*context_.local_user_data);
+    if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data))
+    {
+      tree_logger->execution_time += (end - start_);
+    }
+  }
+};
+
+/**
+ * Utility to measure the time that is spend in a specific node during geometry nodes evaluation.
+ */
+class ScopedNodeTimer {
+ private:
+  const lf::Context &context_;
+  const bNode &node_;
+  geo_eval_log::TimePoint start_;
+
+ public:
+  ScopedNodeTimer(const lf::Context &context, const bNode &node) : context_(context), node_(node)
+  {
+    start_ = geo_eval_log::Clock::now();
+  }
+
+  ~ScopedNodeTimer()
+  {
+    const geo_eval_log::TimePoint end = geo_eval_log::Clock::now();
+    auto &user_data = static_cast<GeoNodesLFUserData &>(*context_.user_data);
+    auto &local_user_data = static_cast<GeoNodesLFLocalUserData &>(*context_.local_user_data);
+    if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data))
+    {
+      tree_logger->node_execution_times.append(*tree_logger->allocator,
+                                               {node_.identifier, start_, end});
+    }
+  }
+};
+
+bool should_log_socket_values_for_context(const GeoNodesLFUserData &user_data,
+                                          const ComputeContextHash hash);
+
+/**
+ * Computes the logical or of the inputs and supports short-circuit evaluation (i.e. if the first
+ * input is true already, the other inputs are not checked).
+ */
+class LazyFunctionForLogicalOr : public lf::LazyFunction {
+ public:
+  LazyFunctionForLogicalOr(const int inputs_num);
+
+  void execute_impl(lf::Params &params, const lf::Context &context) const override;
+};
+
+struct ZoneFunctionIndices {
+  struct {
+    Vector<int> main;
+    Vector<int> border_links;
+    Vector<int> output_usages;
+    Map<ReferenceSetIndex, int> reference_sets;
+  } inputs;
+  struct {
+    Vector<int> main;
+    Vector<int> border_link_usages;
+    Vector<int> input_usages;
+  } outputs;
+};
+
+struct ZoneBuildInfo {
+  /** The lazy function that contains the zone. */
+  const LazyFunction *lazy_function = nullptr;
+
+  /** Information about what the various inputs and outputs of the lazy-function are. */
+  ZoneFunctionIndices indices;
+};
+
+/**
+ * Contains the lazy-function for the "body" of a zone. It contains all the nodes inside of the
+ * zone. The "body" function is wrapped by another lazy-function which represents the zone as a
+ * hole. The wrapper function might invoke the zone body multiple times (like for repeat zones).
+ */
+struct ZoneBodyFunction {
+  const LazyFunction *function = nullptr;
+  ZoneFunctionIndices indices;
+};
+
+LazyFunction &build_repeat_zone_lazy_function(ResourceScope &scope,
+                                              const bNodeTree &btree,
+                                              const bke::bNodeTreeZone &zone,
+                                              ZoneBuildInfo &zone_info,
+                                              const ZoneBodyFunction &body_fn);
+
+LazyFunction &build_foreach_geometry_element_zone_lazy_function(ResourceScope &scope,
+                                                                const bNodeTree &btree,
+                                                                const bke::bNodeTreeZone &zone,
+                                                                ZoneBuildInfo &zone_info,
+                                                                const ZoneBodyFunction &body_fn);
+
+LazyFunction &build_closure_zone_lazy_function(ResourceScope &scope,
+                                               const bNodeTree &btree,
+                                               const bke::bNodeTreeZone &zone,
+                                               ZoneBuildInfo &zone_info,
+                                               const ZoneBodyFunction &body_fn);
+
+struct EvaluateClosureFunctionIndices {
+  struct {
+    Vector<int> main;
+    Vector<int> output_usages;
+    Map<int, int> reference_set_by_output;
+  } inputs;
+  struct {
+    Vector<int> main;
+    Vector<int> input_usages;
+  } outputs;
+};
+
+struct EvaluateClosureFunction {
+  const LazyFunction *lazy_function = nullptr;
+  EvaluateClosureFunctionIndices indices;
+};
+
+EvaluateClosureFunction build_evaluate_closure_node_lazy_function(ResourceScope &scope,
+                                                                  const bNode &bnode);
+
+void initialize_zone_wrapper(const bke::bNodeTreeZone &zone,
+                             ZoneBuildInfo &zone_info,
+                             const ZoneBodyFunction &body_fn,
+                             bool expose_all_reference_sets,
+                             Vector<lf::Input> &r_inputs,
+                             Vector<lf::Output> &r_outputs);
+
+std::string zone_wrapper_input_name(const ZoneBuildInfo &zone_info,
+                                    const bke::bNodeTreeZone &zone,
+                                    const Span<lf::Input> inputs,
+                                    const int lf_socket_i);
+
+std::string zone_wrapper_output_name(const ZoneBuildInfo &zone_info,
+                                     const bke::bNodeTreeZone &zone,
+                                     const Span<lf::Output> outputs,
+                                     const int lf_socket_i);
+
+/**
+ * Performs implicit conversion between socket types. Returns false if the conversion is not
+ * possible. In that case, r_to_value is left uninitialized.
+ */
+[[nodiscard]] bool implicitly_convert_socket_value(const bke::bNodeSocketType &from_type,
+                                                   const void *from_value,
+                                                   const bke::bNodeSocketType &to_type,
+                                                   void *r_to_value);
+
+/**
+ * Builds a lazy-function that can convert between socket types. Returns null if the conversion is
+ * never possible.
+ */
+const LazyFunction *build_implicit_conversion_lazy_function(const bke::bNodeSocketType &from_type,
+                                                            const bke::bNodeSocketType &to_type,
+                                                            ResourceScope &scope);
 
 }  // namespace blender::nodes

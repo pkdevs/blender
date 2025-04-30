@@ -7,10 +7,6 @@
  *
  * Extend upon CPython's API, filling in some gaps, these functions use PyC_
  * prefix to distinguish them apart from CPython.
- *
- * \note
- * This module should only depend on CPython, however it currently uses
- * BLI_string_utf8() for unicode conversion.
  */
 
 /* Future-proof, See https://docs.python.org/3/c-api/arg.html#strings-and-buffers */
@@ -21,22 +17,23 @@
 
 #include "BLI_utildefines.h" /* for bool */
 
-#include "py_capi_utils.h"
+#include "py_capi_utils.hh"
 
-#include "python_utildefines.h"
+#include "python_utildefines.hh"
 
 #ifndef MATH_STANDALONE
 #  include "MEM_guardedalloc.h"
 
 #  include "BLI_string.h"
-
-/* Only for #BLI_strncpy_wchar_from_utf8,
- * should replace with Python functions but too late in release now. */
-#  include "BLI_string_utf8.h"
 #endif
 
 #ifdef _WIN32
 #  include "BLI_math_base.h" /* isfinite() */
+#endif
+
+#if PY_VERSION_HEX < 0x030d0000 /* <3.13 */
+#  define PyLong_AsInt _PyLong_AsInt
+#  define PyUnicode_CompareWithASCIIString _PyUnicode_EqualToASCIIString
 #endif
 
 /* -------------------------------------------------------------------- */
@@ -874,10 +871,12 @@ static void pyc_exception_buffer_handle_system_exit()
   if (!PyErr_ExceptionMatches(PyExc_SystemExit)) {
     return;
   }
-  /* Inspecting, follow Python's logic in #_Py_HandleSystemExit & treat as a regular exception. */
+/* Inspecting, follow Python's logic in #_Py_HandleSystemExit & treat as a regular exception. */
+#  if 0 /* FIXME: */
   if (_Py_GetConfig()->inspect) {
     return;
   }
+#  endif
 
   /* NOTE(@ideasman42): A `SystemExit` exception will exit immediately (unless inspecting).
    * So print the error and exit now. Without this #PyErr_Display shows the error stack-trace
@@ -1124,9 +1123,8 @@ PyObject *PyC_DefaultNameSpace(const char *filename)
    * In this case an identifier is typically used that is surrounded by angle-brackets.
    * It's mainly helpful for the UI and messages to show *something*. */
   PyModule_AddObject(mod_main, "__file__", PyC_UnicodeFromBytes(filename));
+  PyModule_AddObjectRef(mod_main, "__builtins__", builtins);
 
-  PyModule_AddObject(mod_main, "__builtins__", builtins);
-  Py_INCREF(builtins); /* AddObject steals a reference */
   return PyModule_GetDict(mod_main);
 }
 
@@ -1231,7 +1229,7 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
         PyErr_Print();
         PyErr_Clear();
 
-        PyList_SET_ITEM(values, i, Py_INCREF_RET(Py_None)); /* hold user */
+        PyList_SET_ITEM(values, i, Py_NewRef(Py_None)); /* hold user */
 
         sizes[i] = 0;
       }
@@ -1425,11 +1423,6 @@ int PyC_FlagSet_ToBitfield(const PyC_FlagSet *items,
   /* set of enum items, concatenate all values with OR */
   int ret, flag = 0;
 
-  /* set looping */
-  Py_ssize_t pos = 0;
-  Py_ssize_t hash = 0;
-  PyObject *key;
-
   if (!PySet_Check(value)) {
     PyErr_Format(PyExc_TypeError,
                  "%.200s expected a set, not %.200s",
@@ -1440,22 +1433,32 @@ int PyC_FlagSet_ToBitfield(const PyC_FlagSet *items,
 
   *r_value = 0;
 
-  while (_PySet_NextEntry(value, &pos, &key, &hash)) {
-    const char *param = PyUnicode_AsUTF8(key);
+  if (PySet_GET_SIZE(value) > 0) {
+    PyObject *it = PyObject_GetIter(value);
+    PyObject *key;
+    while ((key = PyIter_Next(it))) {
+      /* Borrow from the set. */
+      Py_DECREF(key);
 
-    if (param == nullptr) {
-      PyErr_Format(PyExc_TypeError,
-                   "%.200s set must contain strings, not %.200s",
-                   error_prefix,
-                   Py_TYPE(key)->tp_name);
+      const char *param = PyUnicode_AsUTF8(key);
+      if (param == nullptr) {
+        PyErr_Format(PyExc_TypeError,
+                     "%.200s set must contain strings, not %.200s",
+                     error_prefix,
+                     Py_TYPE(key)->tp_name);
+        break;
+      }
+
+      if (PyC_FlagSet_ValueFromID(items, param, &ret, error_prefix) < 0) {
+        break;
+      }
+
+      flag |= ret;
+    }
+    Py_DECREF(it);
+    if (key != nullptr) {
       return -1;
     }
-
-    if (PyC_FlagSet_ValueFromID(items, param, &ret, error_prefix) < 0) {
-      return -1;
-    }
-
-    flag |= ret;
   }
 
   *r_value = flag;
@@ -1611,8 +1614,8 @@ bool PyC_RunString_AsStringAndSize(const char *imports[],
       ok = false;
     }
     else {
-      char *val_alloc = static_cast<char *>(MEM_mallocN(val_len + 1, __func__));
-      memcpy(val_alloc, val, val_len + 1);
+      char *val_alloc = MEM_malloc_arrayN<char>(size_t(val_len) + 1, __func__);
+      memcpy(val_alloc, val, (size_t(val_len) + 1) * sizeof(*val_alloc));
       *r_value = val_alloc;
       *r_value_size = val_len;
       ok = true;
@@ -1655,8 +1658,8 @@ bool PyC_RunString_AsStringAndSizeOrNone(const char *imports[],
         ok = false;
       }
       else {
-        char *val_alloc = static_cast<char *>(MEM_mallocN(val_len + 1, __func__));
-        memcpy(val_alloc, val, val_len + 1);
+        char *val_alloc = MEM_malloc_arrayN<char>(size_t(val_len) + 1, __func__);
+        memcpy(val_alloc, val, (size_t(val_len) + 1) * sizeof(val_alloc));
         *r_value = val_alloc;
         *r_value_size = val_len;
         ok = true;
@@ -1685,6 +1688,46 @@ bool PyC_RunString_AsStringOrNone(const char *imports[],
 #endif /* #ifndef MATH_STANDALONE */
 
 /* -------------------------------------------------------------------- */
+/** \name Std Files Flush
+ *
+ * \{ */
+
+void PyC_StdFilesFlush()
+{
+  /* This is ported from CPython's internal #flush_std_files (2025-03-31). The code is a bit
+   * different because the original code uses some internal APIs.
+   *
+   * This is approximately equivalent to:
+   * \code{.py}
+   * try:
+   *     sys.stdout.flush()
+   *     sys.stderr.flush()
+   * except Exception:
+   *     pass
+   * \endcode
+   */
+  PyObject *py_flush = PyUnicode_FromString("flush");
+  BLI_assert(py_flush);
+  for (const char *name : {"stdout", "stderr"}) {
+    PyObject *py_file = PySys_GetObject(name);
+    if (!py_file) {
+      PyErr_Clear();
+      continue;
+    }
+    PyObject *py_flush_retval = PyObject_CallMethodNoArgs(py_file, py_flush);
+    if (py_flush_retval) {
+      Py_DECREF(py_flush_retval);
+    }
+    else {
+      PyErr_Clear();
+    }
+  }
+  Py_DECREF(py_flush);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Int Conversion
  *
  * \note Python doesn't provide overflow checks for specific bit-widths.
@@ -1692,9 +1735,10 @@ bool PyC_RunString_AsStringOrNone(const char *imports[],
  * \{ */
 
 /* Compiler optimizes out redundant checks. */
-#ifdef __GNUC__
-#  pragma warning(push)
+#if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Wtype-limits"
+
 #endif
 
 /* #PyLong_AsUnsignedLong, unlike #PyLong_AsLong, does not fall back to calling #PyNumber_Index
@@ -1725,7 +1769,7 @@ static ulong pyc_Long_AsUnsignedLong(PyObject *value)
 
 int PyC_Long_AsBool(PyObject *value)
 {
-  const int test = _PyLong_AsInt(value);
+  const int test = PyLong_AsInt(value);
   if (UNLIKELY(test == -1 && PyErr_Occurred())) {
     return -1;
   }
@@ -1738,7 +1782,7 @@ int PyC_Long_AsBool(PyObject *value)
 
 int8_t PyC_Long_AsI8(PyObject *value)
 {
-  const int test = _PyLong_AsInt(value);
+  const int test = PyLong_AsInt(value);
   if (UNLIKELY(test == -1 && PyErr_Occurred())) {
     return -1;
   }
@@ -1751,7 +1795,7 @@ int8_t PyC_Long_AsI8(PyObject *value)
 
 int16_t PyC_Long_AsI16(PyObject *value)
 {
-  const int test = _PyLong_AsInt(value);
+  const int test = PyLong_AsInt(value);
   if (UNLIKELY(test == -1 && PyErr_Occurred())) {
     return -1;
   }
@@ -1829,8 +1873,8 @@ uint64_t PyC_Long_AsU64(PyObject *value)
   return to_return;
 }
 
-#ifdef __GNUC__
-#  pragma warning(pop)
+#if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic pop
 #endif
 
 /** \} */

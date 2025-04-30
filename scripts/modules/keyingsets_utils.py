@@ -16,6 +16,7 @@ __all__ = (
     "RKS_ITER_selected_bones",
     "RKS_ITER_selected_item",
     "RKS_GEN_available",
+    "RKS_GEN_custom_props",
     "RKS_GEN_location",
     "RKS_GEN_rotation",
     "RKS_GEN_scaling",
@@ -23,6 +24,8 @@ __all__ = (
 )
 
 import bpy
+
+from bpy_extras import anim_utils
 
 ###########################
 # General Utilities
@@ -116,7 +119,11 @@ def RKS_GEN_available(_ksi, _context, ks, data):
 
     # for each F-Curve, include a path to key it
     # NOTE: we don't need to set the group settings here
-    for fcu in adt.action.fcurves:
+    cbag = anim_utils.action_get_channelbag_for_slot(adt.action, adt.action_slot)
+    if not cbag:
+        return
+
+    for fcu in cbag.fcurves:
         if basePath:
             if basePath in fcu.data_path:
                 ks.paths.add(id_block, fcu.data_path, index=fcu.array_index)

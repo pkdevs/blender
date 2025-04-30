@@ -34,7 +34,6 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
 
 #include "BKE_object.hh"
 
@@ -116,7 +115,7 @@ View3DCameraControl *ED_view3d_cameracontrol_acquire(Depsgraph *depsgraph,
 {
   View3DCameraControl *vctrl;
 
-  vctrl = static_cast<View3DCameraControl *>(MEM_callocN(sizeof(View3DCameraControl), __func__));
+  vctrl = MEM_callocN<View3DCameraControl>(__func__);
 
   /* Store context */
   vctrl->ctx_scene = scene;

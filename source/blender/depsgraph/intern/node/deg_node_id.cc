@@ -8,23 +8,16 @@
 
 #include "intern/node/deg_node_id.hh"
 
-#include <cstdio>
-#include <cstring> /* required for STREQ later on. */
-
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_ID.h"
-#include "DNA_anim_types.h"
 
 #include "BKE_lib_id.hh"
-
-#include "DEG_depsgraph.hh"
 
 #include "intern/eval/deg_eval_copy_on_write.h"
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_factory.hh"
-#include "intern/node/deg_node_time.hh"
 
 namespace blender::deg {
 
@@ -40,20 +33,6 @@ const char *linkedStateAsString(eDepsNode_LinkedState_Type linked_state)
   }
   BLI_assert_msg(0, "Unhandled linked state, should never happen.");
   return "UNKNOWN";
-}
-
-IDNode::ComponentIDKey::ComponentIDKey(NodeType type, const char *name) : type(type), name(name) {}
-
-bool IDNode::ComponentIDKey::operator==(const ComponentIDKey &other) const
-{
-  return type == other.type && STREQ(name, other.name);
-}
-
-uint64_t IDNode::ComponentIDKey::hash() const
-{
-  const int type_as_int = int(type);
-  return BLI_ghashutil_combine_hash(BLI_ghashutil_uinthash(type_as_int),
-                                    BLI_ghashutil_strhash_p(name));
 }
 
 void IDNode::init(const ID *id, const char * /*subdata*/)
@@ -94,7 +73,7 @@ void IDNode::init_copy_on_write(Depsgraph &depsgraph, ID *id_cow_hint)
     }
   }
   else if (deg_eval_copy_is_needed(id_orig)) {
-    id_cow = (ID *)BKE_libblock_alloc_notest(GS(id_orig->name));
+    id_cow = BKE_libblock_alloc_notest(GS(id_orig->name));
     DEG_COW_PRINT(
         "Create shallow copy for %s: id_orig=%p id_cow=%p\n", id_orig->name, id_orig, id_cow);
     deg_tag_eval_copy_id(depsgraph, id_cow, id_orig);
@@ -133,23 +112,23 @@ void IDNode::destroy()
   id_orig = nullptr;
 }
 
-string IDNode::identifier() const
+std::string IDNode::identifier() const
 {
   char orig_ptr[24], cow_ptr[24];
   SNPRINTF(orig_ptr, "%p", id_orig);
   SNPRINTF(cow_ptr, "%p", id_cow);
-  return string(nodeTypeAsString(type)) + " : " + name + " (orig: " + orig_ptr +
+  return std::string(nodeTypeAsString(type)) + " : " + name + " (orig: " + orig_ptr +
          ", eval: " + cow_ptr + ", is_visible_on_build " +
          (is_visible_on_build ? "true" : "false") + ")";
 }
 
-ComponentNode *IDNode::find_component(NodeType type, const char *name) const
+ComponentNode *IDNode::find_component(NodeType type, const StringRef name) const
 {
   ComponentIDKey key(type, name);
   return components.lookup_default(key, nullptr);
 }
 
-ComponentNode *IDNode::add_component(NodeType type, const char *name)
+ComponentNode *IDNode::add_component(NodeType type, const StringRef name)
 {
   ComponentNode *comp_node = find_component(type, name);
   if (!comp_node) {
@@ -158,7 +137,7 @@ ComponentNode *IDNode::add_component(NodeType type, const char *name)
     comp_node = (ComponentNode *)factory->create_node(this->id_orig, "", name);
 
     /* Register. */
-    ComponentIDKey key(type, comp_node->name.c_str());
+    ComponentIDKey key(type, comp_node->name);
     components.add_new(key, comp_node);
     comp_node->owner = this;
   }

@@ -5,13 +5,14 @@
 /** \file
  * \ingroup gpu
  */
-#include "vk_context.hh"
-#include "vk_debug.hh"
+
+#include "GPU_debug.hh"
 
 #include "vk_backend.hh"
+#include "vk_context.hh"
+#include "vk_debug.hh"
 #include "vk_framebuffer.hh"
 #include "vk_immediate.hh"
-#include "vk_memory.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_state_manager.hh"
@@ -21,20 +22,16 @@
 
 namespace blender::gpu {
 
-VKContext::VKContext(void *ghost_window, void *ghost_context, VKThreadData &thread_data)
-    : thread_data_(thread_data), render_graph(thread_data_.render_graph)
+VKContext::VKContext(void *ghost_window, void *ghost_context)
 {
   ghost_window_ = ghost_window;
   ghost_context_ = ghost_context;
 
   state_manager = new VKStateManager();
-  imm = new VKImmediate();
 
   back_left = new VKFrameBuffer("back_left");
   front_left = new VKFrameBuffer("front_left");
   active_fb = back_left;
-
-  compiler = new ShaderCompilerGeneric();
 }
 
 VKContext::~VKContext()
@@ -45,29 +42,28 @@ VKContext::~VKContext()
     GPU_texture_free(surface_texture_);
     surface_texture_ = nullptr;
   }
+  free_resources();
   VKBackend::get().device.context_unregister(*this);
 
-  delete imm;
   imm = nullptr;
-
-  delete compiler;
 }
 
-void VKContext::sync_backbuffer()
+void VKContext::sync_backbuffer(bool cycle_resource_pool)
 {
-  VKDevice &device = VKBackend::get().device;
   if (ghost_window_) {
     GHOST_VulkanSwapChainData swap_chain_data = {};
     GHOST_GetVulkanSwapChainFormat((GHOST_WindowHandle)ghost_window_, &swap_chain_data);
-    if (assign_if_different(thread_data_.resource_pool_index, swap_chain_data.swap_chain_index)) {
-      thread_data_.resource_pool_index = swap_chain_data.swap_chain_index;
-      VKResourcePool &resource_pool = thread_data_.resource_pool_get();
-      resource_pool.discard_pool.destroy_discarded_resources(device);
-      resource_pool.reset();
-      resource_pool.discard_pool.move_data(device.orphaned_data);
+    VKThreadData &thread_data = thread_data_.value().get();
+    if (cycle_resource_pool) {
+      thread_data.resource_pool_next();
+      VKResourcePool &resource_pool = thread_data.resource_pool_get();
+      imm = &resource_pool.immediate;
     }
 
-    const bool reset_framebuffer = swap_chain_format_ != swap_chain_data.format ||
+    const bool reset_framebuffer = swap_chain_format_.format !=
+                                       swap_chain_data.surface_format.format ||
+                                   swap_chain_format_.colorSpace !=
+                                       swap_chain_data.surface_format.colorSpace ||
                                    vk_extent_.width != swap_chain_data.extent.width ||
                                    vk_extent_.height != swap_chain_data.extent.height;
     if (reset_framebuffer) {
@@ -78,13 +74,14 @@ void VKContext::sync_backbuffer()
         GPU_texture_free(surface_texture_);
         surface_texture_ = nullptr;
       }
-      surface_texture_ = GPU_texture_create_2d("back-left",
-                                               swap_chain_data.extent.width,
-                                               swap_chain_data.extent.height,
-                                               1,
-                                               to_gpu_format(swap_chain_data.format),
-                                               GPU_TEXTURE_USAGE_ATTACHMENT,
-                                               nullptr);
+      surface_texture_ = GPU_texture_create_2d(
+          "back-left",
+          swap_chain_data.extent.width,
+          swap_chain_data.extent.height,
+          1,
+          to_gpu_format(swap_chain_data.surface_format.format),
+          GPU_TEXTURE_USAGE_ATTACHMENT,
+          nullptr);
 
       back_left->attachment_set(GPU_FB_COLOR_ATTACHMENT0,
                                 GPU_ATTACHMENT_TEXTURE(surface_texture_));
@@ -93,15 +90,10 @@ void VKContext::sync_backbuffer()
 
       back_left->bind(false);
 
-      swap_chain_format_ = swap_chain_data.format;
+      swap_chain_format_ = swap_chain_data.surface_format;
       vk_extent_ = swap_chain_data.extent;
     }
   }
-#if 0
-  else (is_background) {
-    discard all orphaned data
-  }
-#endif
 }
 
 void VKContext::activate()
@@ -109,27 +101,55 @@ void VKContext::activate()
   /* Make sure no other context is already bound to this thread. */
   BLI_assert(is_active_ == false);
 
+  VKDevice &device = VKBackend::get().device;
+  VKThreadData &thread_data = device.current_thread_data();
+  thread_data_ = std::reference_wrapper<VKThreadData>(thread_data);
+
+  if (!render_graph_.has_value()) {
+    render_graph_ = std::reference_wrapper<render_graph::VKRenderGraph>(
+        *device.render_graph_new());
+    for (const StringRef &group : debug_stack) {
+      debug_group_begin(std::string(group).c_str(), 0);
+    }
+  }
+
+  imm = &thread_data.resource_pool_get().immediate;
+
   is_active_ = true;
 
-  sync_backbuffer();
+  sync_backbuffer(false);
 
   immActivate();
 }
 
 void VKContext::deactivate()
 {
-  rendering_end();
+  flush_render_graph(RenderGraphFlushFlags(0));
   immDeactivate();
+  imm = nullptr;
+  thread_data_.reset();
+
   is_active_ = false;
 }
 
 void VKContext::begin_frame() {}
 
-void VKContext::end_frame() {}
+void VKContext::end_frame()
+{
+  VKDevice &device = VKBackend::get().device;
+  device.orphaned_data.destroy_discarded_resources(device);
+}
 
-void VKContext::flush() {}
+void VKContext::flush()
+{
+  flush_render_graph(RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
+}
 
-void VKContext::flush_render_graph()
+TimelineValue VKContext::flush_render_graph(RenderGraphFlushFlags flags,
+                                            VkPipelineStageFlags wait_dst_stage_mask,
+                                            VkSemaphore wait_semaphore,
+                                            VkSemaphore signal_semaphore,
+                                            VkFence signal_fence)
 {
   if (has_active_framebuffer()) {
     VKFrameBuffer &framebuffer = *active_framebuffer_get();
@@ -137,10 +157,35 @@ void VKContext::flush_render_graph()
       framebuffer.rendering_end(*this);
     }
   }
-  render_graph.submit();
+  descriptor_set_get().upload_descriptor_sets();
+  descriptor_pools_get().discard(*this);
+  VKDevice &device = VKBackend::get().device;
+  TimelineValue timeline = device.render_graph_submit(
+      &render_graph_.value().get(),
+      discard_pool,
+      bool(flags & RenderGraphFlushFlags::SUBMIT),
+      bool(flags & RenderGraphFlushFlags::WAIT_FOR_COMPLETION),
+      wait_dst_stage_mask,
+      wait_semaphore,
+      signal_semaphore,
+      signal_fence);
+  render_graph_.reset();
+  if (bool(flags & RenderGraphFlushFlags::RENEW_RENDER_GRAPH)) {
+    render_graph_ = std::reference_wrapper<render_graph::VKRenderGraph>(
+        *device.render_graph_new());
+    for (const StringRef &group : debug_stack) {
+      debug_group_begin(std::string(group).c_str(), 0);
+    }
+  }
+  return timeline;
 }
 
 void VKContext::finish() {}
+
+ShaderCompiler *VKContext::get_compiler()
+{
+  return &VKBackend::get().shader_compiler;
+}
 
 void VKContext::memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb)
 {
@@ -154,12 +199,12 @@ void VKContext::memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb)
 
 VKDescriptorPools &VKContext::descriptor_pools_get()
 {
-  return thread_data_.resource_pool_get().descriptor_pools;
+  return thread_data_.value().get().resource_pool_get().descriptor_pools;
 }
 
 VKDescriptorSetTracker &VKContext::descriptor_set_get()
 {
-  return thread_data_.resource_pool_get().descriptor_set;
+  return thread_data_.value().get().resource_pool_get().descriptor_set;
 }
 
 VKStateManager &VKContext::state_manager_get() const
@@ -235,7 +280,6 @@ void VKContext::update_pipeline_data(GPUPrimType primitive,
                                      render_graph::VKPipelineData &r_pipeline_data)
 {
   VKShader &vk_shader = unwrap(*shader);
-  BLI_assert(vk_shader.is_graphics_shader());
   VKFrameBuffer &framebuffer = *active_framebuffer_get();
   update_pipeline_data(
       vk_shader,
@@ -246,7 +290,6 @@ void VKContext::update_pipeline_data(GPUPrimType primitive,
 void VKContext::update_pipeline_data(render_graph::VKPipelineData &r_pipeline_data)
 {
   VKShader &vk_shader = unwrap(*shader);
-  BLI_assert(vk_shader.is_compute_shader());
   update_pipeline_data(vk_shader, vk_shader.ensure_and_get_compute_pipeline(), r_pipeline_data);
 }
 
@@ -262,34 +305,23 @@ void VKContext::update_pipeline_data(VKShader &vk_shader,
   r_pipeline_data.push_constants_size = 0;
   const VKPushConstants::Layout &push_constants_layout =
       vk_shader.interface_get().push_constants_layout_get();
-  vk_shader.push_constants.update(*this);
   if (push_constants_layout.storage_type_get() == VKPushConstants::StorageType::PUSH_CONSTANTS) {
     r_pipeline_data.push_constants_size = push_constants_layout.size_in_bytes();
     r_pipeline_data.push_constants_data = vk_shader.push_constants.data();
-  }
-
-  /* When using the push constant fallback we need to add a read access dependency to the uniform
-   * buffer after the buffer has been updated.
-   * NOTE: this alters the context instance variable `access_info_` which isn't clear from the API.
-   */
-  if (push_constants_layout.storage_type_get() == VKPushConstants::StorageType::UNIFORM_BUFFER) {
-    access_info_.buffers.append(
-        {vk_shader.push_constants.uniform_buffer_get()->vk_handle(), VK_ACCESS_UNIFORM_READ_BIT});
   }
 
   /* Update descriptor set. */
   r_pipeline_data.vk_descriptor_set = VK_NULL_HANDLE;
   if (vk_shader.has_descriptor_set()) {
     VKDescriptorSetTracker &descriptor_set = descriptor_set_get();
-    descriptor_set.update(*this);
-    r_pipeline_data.vk_descriptor_set = descriptor_set.active_descriptor_set()->vk_handle();
+    descriptor_set.update_descriptor_set(*this, access_info_);
+    r_pipeline_data.vk_descriptor_set = descriptor_set.vk_descriptor_set;
   }
 }
 
-render_graph::VKResourceAccessInfo &VKContext::update_and_get_access_info()
+render_graph::VKResourceAccessInfo &VKContext::reset_and_get_access_info()
 {
   access_info_.reset();
-  state_manager_get().apply_bindings(*this, access_info_);
   return access_info_;
 }
 
@@ -315,7 +347,9 @@ void VKContext::swap_buffers_post_callback()
 
 void VKContext::swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &swap_chain_data)
 {
-  VKFrameBuffer &framebuffer = *unwrap(back_left);
+  GPU_debug_group_begin("BackBuffer.Blit");
+
+  VKFrameBuffer &framebuffer = *unwrap(active_fb);
   VKTexture *color_attachment = unwrap(unwrap(framebuffer.color_tex(0)));
 
   render_graph::VKBlitImageNode::CreateInfo blit_image = {};
@@ -324,7 +358,7 @@ void VKContext::swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &swap_c
   blit_image.filter = VK_FILTER_NEAREST;
 
   VkImageBlit &region = blit_image.region;
-  region.srcOffsets[0] = {0, color_attachment->height_get() - 1, 0};
+  region.srcOffsets[0] = {0, color_attachment->height_get(), 0};
   region.srcOffsets[1] = {color_attachment->width_get(), 0, 1};
   region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   region.srcSubresource.mipLevel = 0;
@@ -343,15 +377,24 @@ void VKContext::swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &swap_c
    * chain image as device resources. When we move towards GPU swap chain synchronization we need
    * to keep track of the swap chain image between frames. */
   VKDevice &device = VKBackend::get().device;
-  device.resources.add_image(swap_chain_data.image,
-                             1,
-                             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                             render_graph::ResourceOwner::SWAP_CHAIN,
-                             "SwapchainImage");
+  device.resources.add_image(swap_chain_data.image, 1, "SwapchainImage");
 
   framebuffer.rendering_end(*this);
+  flush_render_graph(RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
+
+  render_graph::VKRenderGraph &render_graph = this->render_graph();
   render_graph.add_node(blit_image);
-  render_graph.submit_for_present(swap_chain_data.image);
+  GPU_debug_group_end();
+  render_graph::VKSynchronizationNode::CreateInfo synchronization = {};
+  synchronization.vk_image = swap_chain_data.image;
+  synchronization.vk_image_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  synchronization.vk_image_aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+  render_graph.add_node(synchronization);
+  flush_render_graph(RenderGraphFlushFlags::SUBMIT | RenderGraphFlushFlags::RENEW_RENDER_GRAPH,
+                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                     swap_chain_data.acquire_semaphore,
+                     swap_chain_data.present_semaphore,
+                     swap_chain_data.submission_fence);
 
   device.resources.remove_image(swap_chain_data.image);
 #if 0
@@ -361,7 +404,99 @@ void VKContext::swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &swap_c
 
 void VKContext::swap_buffers_post_handler()
 {
-  sync_backbuffer();
+  sync_backbuffer(true);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name OpenXR
+ * \{ */
+
+void VKContext::openxr_acquire_framebuffer_image_callback(GHOST_VulkanOpenXRData *openxr_data)
+{
+  VKContext *context = VKContext::get();
+  BLI_assert(context);
+  context->openxr_acquire_framebuffer_image_handler(*openxr_data);
+}
+
+void VKContext::openxr_release_framebuffer_image_callback(GHOST_VulkanOpenXRData *openxr_data)
+{
+  VKContext *context = VKContext::get();
+  BLI_assert(context);
+  context->openxr_release_framebuffer_image_handler(*openxr_data);
+}
+
+void VKContext::openxr_acquire_framebuffer_image_handler(GHOST_VulkanOpenXRData &openxr_data)
+{
+  VKFrameBuffer &framebuffer = *unwrap(active_fb);
+  VKTexture *color_attachment = unwrap(unwrap(framebuffer.color_tex(0)));
+  openxr_data.extent.width = color_attachment->width_get();
+  openxr_data.extent.height = color_attachment->height_get();
+
+  /* Determine the data format for data transfer. */
+  const eGPUTextureFormat device_format = color_attachment->device_format_get();
+  eGPUDataFormat data_format = GPU_DATA_HALF_FLOAT;
+  if (ELEM(device_format, GPU_RGBA8)) {
+    data_format = GPU_DATA_UBYTE;
+  }
+
+  switch (openxr_data.data_transfer_mode) {
+    case GHOST_kVulkanXRModeCPU:
+      openxr_data.cpu.image_data = color_attachment->read(0, data_format);
+      break;
+
+    case GHOST_kVulkanXRModeFD: {
+      flush_render_graph(RenderGraphFlushFlags::SUBMIT |
+                         RenderGraphFlushFlags::WAIT_FOR_COMPLETION |
+                         RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
+      VKMemoryExport exported_memory = color_attachment->export_memory(
+          VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT);
+      openxr_data.gpu.image_handle = exported_memory.handle;
+      openxr_data.gpu.image_format = to_vk_format(color_attachment->device_format_get());
+      openxr_data.gpu.memory_size = exported_memory.memory_size;
+      openxr_data.gpu.memory_offset = exported_memory.memory_offset;
+      break;
+    }
+
+    case GHOST_kVulkanXRModeWin32: {
+      flush_render_graph(RenderGraphFlushFlags::SUBMIT |
+                         RenderGraphFlushFlags::WAIT_FOR_COMPLETION |
+                         RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
+      VKMemoryExport exported_memory = color_attachment->export_memory(
+          VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT);
+      openxr_data.gpu.image_handle = exported_memory.handle;
+      openxr_data.gpu.image_format = to_vk_format(color_attachment->device_format_get());
+      openxr_data.gpu.memory_size = exported_memory.memory_size;
+      openxr_data.gpu.memory_offset = exported_memory.memory_offset;
+      break;
+    }
+  }
+}
+
+void VKContext::openxr_release_framebuffer_image_handler(GHOST_VulkanOpenXRData &openxr_data)
+{
+  switch (openxr_data.data_transfer_mode) {
+    case GHOST_kVulkanXRModeCPU:
+      MEM_freeN(openxr_data.cpu.image_data);
+      openxr_data.cpu.image_data = nullptr;
+      break;
+
+    case GHOST_kVulkanXRModeFD:
+      /* Nothing to do as import of the handle by the XrInstance removes the ownership of the
+       * handle. Ref
+       * https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_fd.html#_issues
+       */
+      break;
+
+    case GHOST_kVulkanXRModeWin32:
+#ifdef _WIN32
+      /* Exported handle isn't consumed during import and should be freed after use. */
+      CloseHandle(HANDLE(openxr_data.gpu.image_handle));
+      openxr_data.gpu.image_handle = 0;
+#endif
+      break;
+  }
 }
 
 /** \} */

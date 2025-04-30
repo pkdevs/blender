@@ -17,7 +17,7 @@
 #include <cstddef>
 
 #include "BLI_linklist.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
@@ -32,21 +32,19 @@
 
 #include "BLO_readfile.hh"
 
-#include "MEM_guardedalloc.h"
+#include "bpy_capi_utils.hh"
+#include "bpy_library.hh"
 
-#include "bpy_capi_utils.h"
-#include "bpy_library.h"
-
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_compat.h"
-#include "../generic/python_utildefines.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_compat.hh"
+#include "../generic/python_utildefines.hh"
 
 /* nifty feature. swap out strings for RNA data */
 #define USE_RNA_DATABLOCKS
 
 #ifdef USE_RNA_DATABLOCKS
 #  include "RNA_access.hh"
-#  include "bpy_rna.h"
+#  include "bpy_rna.hh"
 #endif
 
 struct BPy_Library {
@@ -76,9 +74,14 @@ static PyObject *bpy_lib_enter(BPy_Library *self);
 static PyObject *bpy_lib_exit(BPy_Library *self, PyObject *args);
 static PyObject *bpy_lib_dir(BPy_Library *self);
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-function-type"
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
 #endif
 
 static PyMethodDef bpy_lib_methods[] = {
@@ -88,8 +91,12 @@ static PyMethodDef bpy_lib_methods[] = {
     {nullptr} /* sentinel */
 };
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 static void bpy_lib_dealloc(BPy_Library *self)
@@ -166,7 +173,7 @@ PyDoc_STRVAR(
     "   Each object has attributes matching bpy.data which are lists of strings to be linked.\n"
     "\n"
     "   :arg filepath: The path to a blend file.\n"
-    "   :type filepath: string or bytes\n"
+    "   :type filepath: str | bytes\n"
     "   :arg link: When False reference to the original file is lost.\n"
     "   :type link: bool\n"
     "   :arg relative: When True the path is stored relative to the open blend file.\n"
@@ -185,7 +192,7 @@ PyDoc_STRVAR(
 static PyObject *bpy_lib_load(BPy_PropertyRNA *self, PyObject *args, PyObject *kw)
 {
   Main *bmain_base = CTX_data_main(BPY_context_get());
-  Main *bmain = static_cast<Main *>(self->ptr.data); /* Typically #G_MAIN */
+  Main *bmain = static_cast<Main *>(self->ptr->data); /* Typically #G_MAIN */
   BPy_Library *ret;
   PyC_UnicodeAsBytesAndSize_Data filepath_data = {nullptr};
   bool is_rel = false, is_link = false, use_assets_only = false;
@@ -447,7 +454,7 @@ static bool bpy_lib_exit_lapp_context_items_cb(BlendfileLinkAppendContext *lapp_
 
     bpy_lib_exit_warn_idname(data.py_library, idcode_name_plural, item_idname);
 
-    py_item = Py_INCREF_RET(Py_None);
+    py_item = Py_NewRef(Py_None);
   }
 
   PyList_SET_ITEM(data.py_list, py_list_index, py_item);
@@ -519,13 +526,15 @@ static PyObject *bpy_lib_exit(BPy_Library *self, PyObject * /*args*/)
 
 #ifdef USE_RNA_DATABLOCKS
         /* We can replace the item immediately with `None`. */
-        PyObject *py_item = Py_INCREF_RET(Py_None);
+        PyObject *py_item = Py_NewRef(Py_None);
         PyList_SET_ITEM(ls, i, py_item);
         Py_DECREF(item_src);
 #endif
       }
     }
   }
+
+  BKE_blendfile_link_append_context_init_done(lapp_context);
 
   BKE_blendfile_link(lapp_context, nullptr);
   if (do_append) {
@@ -534,6 +543,8 @@ static PyObject *bpy_lib_exit(BPy_Library *self, PyObject * /*args*/)
   else if (create_liboverrides) {
     BKE_blendfile_override(lapp_context, self->liboverride_flags, nullptr);
   }
+
+  BKE_blendfile_link_append_context_finalize(lapp_context);
 
 /* If enabled, replace named items in given lists by the final matching new ID pointer. */
 #ifdef USE_RNA_DATABLOCKS
@@ -584,9 +595,14 @@ static PyObject *bpy_lib_dir(BPy_Library *self)
   return PyDict_Keys(self->dict);
 }
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-function-type"
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
 #endif
 
 PyMethodDef BPY_library_load_method_def = {
@@ -596,8 +612,12 @@ PyMethodDef BPY_library_load_method_def = {
     bpy_lib_load_doc,
 };
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 int BPY_library_load_type_ready()

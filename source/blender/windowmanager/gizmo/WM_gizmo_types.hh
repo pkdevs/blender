@@ -13,12 +13,14 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
 #include "DNA_listBase.h"
 
+#include "RNA_types.hh"
+
+struct IDProperty;
 struct wmGizmo;
 struct wmGizmoType;
 struct wmGizmoGroup;
@@ -281,6 +283,10 @@ struct wmGizmo {
 
   IDProperty *properties;
 
+  /* TODO: Once wmGizmo itself gets an actual constructor, this can most likely become a
+   * `blender::Array`, since length is defined by the gizmo type. */
+  blender::Vector<wmGizmoProperty, 0> target_properties;
+
   /** Redraw tag. */
   bool do_draw;
 
@@ -288,26 +294,24 @@ struct wmGizmo {
   union {
     float f;
   } temp;
-
-  /* Over alloc target_properties after #wmGizmoType::struct_size. */
 };
 
 /** Similar to #PropertyElemRNA, but has an identifier. */
 struct wmGizmoProperty {
-  const wmGizmoPropertyType *type;
+  const wmGizmoPropertyType *type = nullptr;
 
-  PointerRNA ptr;
-  PropertyRNA *prop;
-  int index;
+  PointerRNA ptr = PointerRNA_NULL;
+  PropertyRNA *prop = nullptr;
+  int index = -1;
 
   /* Optional functions for converting to/from RNA. */
   struct {
-    wmGizmoPropertyFnGet value_get_fn;
-    wmGizmoPropertyFnSet value_set_fn;
-    wmGizmoPropertyFnRangeGet range_get_fn;
-    wmGizmoPropertyFnFree free_fn;
-    void *user_data;
-  } custom_func;
+    wmGizmoPropertyFnGet value_get_fn = nullptr;
+    wmGizmoPropertyFnSet value_set_fn = nullptr;
+    wmGizmoPropertyFnRangeGet range_get_fn = nullptr;
+    wmGizmoPropertyFnFree free_fn = nullptr;
+    void *user_data = nullptr;
+  } custom_func = {};
 };
 
 struct wmGizmoPropertyType {
@@ -339,7 +343,7 @@ struct wmGizmoType {
 
   const char *idname; /* #MAX_NAME. */
 
-  /** Set to 'sizeof(wmGizmo)' or larger for instances of this type,
+  /** Set to `sizeof(wmGizmo)` or larger for instances of this type,
    * use so we can cast to other types without the hassle of a custom-data pointer. */
   uint struct_size;
 

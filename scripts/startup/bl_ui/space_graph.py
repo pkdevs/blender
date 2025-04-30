@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from bpy.types import Header, Menu, Panel
+from bpy.app.translations import contexts as i18n_contexts
 from bl_ui.space_dopesheet import (
     DopesheetFilterPopoverBase,
     dopesheet_filter,
@@ -50,12 +51,20 @@ class GRAPH_HT_header(Header):
         layout.prop(st, "pivot_point", icon_only=True)
 
         row = layout.row(align=True)
-        row.prop(tool_settings, "use_snap_anim", text="")
-        sub = row.row(align=True)
-        sub.popover(
-            panel="GRAPH_PT_snapping",
-            text="",
-        )
+        if context.space_data.mode == 'DRIVERS':
+            row.prop(tool_settings, "use_snap_driver", text="")
+            sub = row.row(align=True)
+            sub.popover(
+                panel="GRAPH_PT_driver_snapping",
+                text="",
+            )
+        else:
+            row.prop(tool_settings, "use_snap_anim", text="")
+            sub = row.row(align=True)
+            sub.popover(
+                panel="GRAPH_PT_snapping",
+                text="",
+            )
 
         row = layout.row(align=True)
         row.prop(tool_settings, "use_proportional_fcurve", text="", icon_only=True)
@@ -121,6 +130,18 @@ class GRAPH_PT_snapping(Panel):
         col.prop(tool_settings, "snap_anim_element", expand=True)
         if tool_settings.snap_anim_element != 'MARKER':
             col.prop(tool_settings, "use_snap_time_absolute")
+
+
+class GRAPH_PT_driver_snapping(Panel):
+    bl_space_type = 'GRAPH_EDITOR'
+    bl_region_type = 'HEADER'
+    bl_label = "Snapping"
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        tool_settings = context.tool_settings
+        col.prop(tool_settings, "use_snap_driver_absolute")
 
 
 class GRAPH_MT_editor_menus(Menu):
@@ -334,6 +355,7 @@ class GRAPH_MT_key_density(Menu):
 
 class GRAPH_MT_key_blending(Menu):
     bl_label = "Blend"
+    bl_translation_context = i18n_contexts.operator_default
 
     def draw(self, _context):
         layout = self.layout
@@ -354,6 +376,7 @@ class GRAPH_MT_key_blending(Menu):
 
 class GRAPH_MT_key_smoothing(Menu):
     bl_label = "Smooth"
+    bl_translation_context = i18n_contexts.operator_default
 
     def draw(self, _context):
         layout = self.layout
@@ -537,6 +560,7 @@ classes = (
     GRAPH_MT_view_pie,
     GRAPH_PT_filters,
     GRAPH_PT_snapping,
+    GRAPH_PT_driver_snapping,
 )
 
 if __name__ == "__main__":  # only for live edit.

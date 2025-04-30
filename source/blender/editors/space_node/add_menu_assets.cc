@@ -187,7 +187,7 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
     PointerRNA op_ptr;
     uiItemFullO(layout,
                 "NODE_OT_add_group_asset",
-                IFACE_(asset->get_name().c_str()),
+                IFACE_(asset->get_name()),
                 ICON_NONE,
                 nullptr,
                 WM_OP_INVOKE_REGION_WIN,
@@ -227,7 +227,7 @@ static void node_add_unassigned_assets_draw(const bContext *C, Menu *menu)
     PointerRNA op_ptr;
     uiItemFullO(menu->layout,
                 "NODE_OT_add_group_asset",
-                IFACE_(asset->get_name().c_str()),
+                IFACE_(asset->get_name()),
                 ICON_NONE,
                 nullptr,
                 WM_OP_INVOKE_REGION_WIN,
@@ -252,7 +252,7 @@ static void add_root_catalogs_draw(const bContext *C, Menu *menu)
   const bool loading_finished = all_loading_finished();
 
   asset::AssetItemTree &tree = *snode.runtime->assets_for_menu;
-  if (tree.catalogs.is_empty() && loading_finished) {
+  if (tree.catalogs.is_empty() && loading_finished && tree.unassigned_assets.is_empty()) {
     return;
   }
 
@@ -324,7 +324,7 @@ void ui_template_node_asset_menu_items(uiLayout &layout,
   if (!item) {
     return;
   }
-  uiLayout *col = uiLayoutColumn(&layout, false);
+  uiLayout *col = &layout.column(false);
   uiLayoutSetContextString(col, "asset_catalog_path", item->catalog_path().str());
   uiItemMContents(col, "NODE_MT_node_add_catalog_assets");
 }

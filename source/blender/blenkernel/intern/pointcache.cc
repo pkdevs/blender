@@ -25,7 +25,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_ID.h"
-#include "DNA_collection_types.h"
 #include "DNA_dynamicpaint_types.h"
 #include "DNA_fluid_types.h"
 #include "DNA_modifier_types.h"
@@ -34,11 +33,13 @@
 #include "DNA_particle_types.h"
 #include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_space_types.h"
 
-#include "BLI_blenlib.h"
-#include "BLI_endian_switch.h"
+#include "BLI_fileops.h"
+#include "BLI_listbase.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_time.h"
 #include "BLI_utildefines.h"
@@ -48,10 +49,12 @@
 #include "BKE_appdir.hh"
 #include "BKE_cloth.hh"
 #include "BKE_collection.hh"
+#include "BKE_duplilist.hh"
 #include "BKE_dynamicpaint.h"
 #include "BKE_fluid.h"
 #include "BKE_global.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
@@ -160,8 +163,7 @@ static int ptcache_basic_header_write(PTCacheFile *pf)
 }
 static void ptcache_add_extra_data(PTCacheMem *pm, uint type, uint count, void *data)
 {
-  PTCacheExtra *extra = static_cast<PTCacheExtra *>(
-      MEM_callocN(sizeof(PTCacheExtra), "Point cache: extra data descriptor"));
+  PTCacheExtra *extra = MEM_callocN<PTCacheExtra>("Point cache: extra data descriptor");
 
   extra->type = type;
   extra->totdata = count;
@@ -336,7 +338,7 @@ static void ptcache_particle_read(
 
   if (old_data) {
     /* old format cache */
-    memcpy(&pa->state, old_data, sizeof(ParticleKey));
+    pa->state = *reinterpret_cast<const ParticleKey *>(old_data);
     return;
   }
 
@@ -419,9 +421,9 @@ static void ptcache_particle_interpolate(int index,
     return;
   }
 
-  memcpy(keys + 1, &pa->state, sizeof(ParticleKey));
+  keys[1] = pa->state;
   if (old_data) {
-    memcpy(keys + 2, old_data, sizeof(ParticleKey));
+    keys[2] = *reinterpret_cast<const ParticleKey *>(old_data);
   }
   else {
     BKE_ptcache_make_particle_key(keys + 2, 0, data, cfra2);
@@ -1245,7 +1247,7 @@ void BKE_ptcache_ids_from_object(ListBase *lb, Object *ob, Scene *scene, int dup
 {
   lb->first = lb->last = nullptr;
   foreach_object_ptcache(scene, ob, duplis, [&](PTCacheID &pid, ModifierData * /*md*/) -> bool {
-    PTCacheID *own_pid = static_cast<PTCacheID *>(MEM_mallocN(sizeof(PTCacheID), "PTCacheID"));
+    PTCacheID *own_pid = MEM_mallocN<PTCacheID>("PTCacheID");
     *own_pid = pid;
     BLI_addtail(lb, own_pid);
     return true;
@@ -1313,7 +1315,7 @@ static int ptcache_path(PTCacheID *pid, char dirname[MAX_PTCACHE_PATH])
   const char *blendfile_path = BKE_main_blendfile_path_from_global();
   Library *lib = (pid->owner_id) ? pid->owner_id->lib : nullptr;
   const char *blendfile_path_lib = (lib && (pid->cache->flag & PTCACHE_IGNORE_LIBPATH) == 0) ?
-                                       lib->runtime.filepath_abs :
+                                       lib->runtime->filepath_abs :
                                        blendfile_path;
 
   if (pid->cache->flag & PTCACHE_EXTERNAL) {
@@ -1486,7 +1488,7 @@ static PTCacheFile *ptcache_file_open(PTCacheID *pid, int mode, int cfra)
     return nullptr;
   }
 
-  pf = static_cast<PTCacheFile *>(MEM_mallocN(sizeof(PTCacheFile), "PTCacheFile"));
+  pf = MEM_mallocN<PTCacheFile>("PTCacheFile");
   pf->fp = fp;
   pf->old_format = 0;
   pf->frame = cfra;
@@ -1510,7 +1512,7 @@ static int ptcache_file_compressed_read(PTCacheFile *pf, uchar *result, uint len
   size_t out_len = len;
 #endif
   uchar *in;
-  uchar *props = static_cast<uchar *>(MEM_callocN(sizeof(char[16]), "tmp"));
+  uchar *props = MEM_calloc_arrayN<uchar>(16, "tmp");
 
   ptcache_file_read(pf, &compressed, 1, sizeof(uchar));
   if (compressed) {
@@ -1521,7 +1523,7 @@ static int ptcache_file_compressed_read(PTCacheFile *pf, uchar *result, uint len
       /* do nothing */
     }
     else {
-      in = (uchar *)MEM_callocN(sizeof(uchar) * in_len, "pointcache_compressed_buffer");
+      in = MEM_calloc_arrayN<uchar>(in_len, "pointcache_compressed_buffer");
       ptcache_file_read(pf, in, in_len, sizeof(uchar));
 #ifdef WITH_LZO
       if (compressed == 1) {
@@ -1555,7 +1557,7 @@ static int ptcache_file_compressed_write(
   int r = 0;
   uchar compressed = 0;
   size_t out_len = 0;
-  uchar *props = static_cast<uchar *>(MEM_callocN(sizeof(char[16]), "tmp"));
+  uchar *props = MEM_calloc_arrayN<uchar>(16, "tmp");
   size_t sizeOfIt = 5;
 
   (void)mode; /* unused when building w/o compression */
@@ -1950,7 +1952,7 @@ static PTCacheMem *ptcache_disk_frame_to_mem(PTCacheID *pid, int cfra)
   }
 
   if (!error) {
-    pm = static_cast<PTCacheMem *>(MEM_callocN(sizeof(PTCacheMem), "Pointcache mem"));
+    pm = MEM_callocN<PTCacheMem>("Pointcache mem");
 
     pm->totpoint = pf->totpoint;
     pm->data_types = pf->data_types;
@@ -1986,8 +1988,7 @@ static PTCacheMem *ptcache_disk_frame_to_mem(PTCacheID *pid, int cfra)
     uint extratype = 0;
 
     while (ptcache_file_read(pf, &extratype, 1, sizeof(uint))) {
-      PTCacheExtra *extra = static_cast<PTCacheExtra *>(
-          MEM_callocN(sizeof(PTCacheExtra), "Pointcache extradata"));
+      PTCacheExtra *extra = MEM_callocN<PTCacheExtra>("Pointcache extradata");
 
       extra->type = extratype;
 
@@ -2419,7 +2420,7 @@ static int ptcache_write(PTCacheID *pid, int cfra, int overwrite)
   int totpoint = pid->totpoint(pid->calldata, cfra);
   int i, error = 0;
 
-  pm = static_cast<PTCacheMem *>(MEM_callocN(sizeof(PTCacheMem), "Pointcache mem"));
+  pm = MEM_callocN<PTCacheMem>("Pointcache mem");
 
   pm->totpoint = pid->totwrite(pid->calldata, cfra);
   pm->data_types = cfra ? pid->data_types : pid->info_types;
@@ -2822,8 +2823,8 @@ void BKE_ptcache_id_time(
     uint end = cache->endframe;
 
     cache->cached_frames_len = cache->endframe - cache->startframe + 1;
-    cache->cached_frames = static_cast<char *>(
-        MEM_callocN(sizeof(char) * cache->cached_frames_len, "cached frames array"));
+    cache->cached_frames = MEM_calloc_arrayN<char>(cache->cached_frames_len,
+                                                   "cached frames array");
 
     if (pid->cache->flag & PTCACHE_DISK_CACHE) {
       /* mode is same as fopen's modes */
@@ -3020,7 +3021,7 @@ PointCache *BKE_ptcache_add(ListBase *ptcaches)
 {
   PointCache *cache;
 
-  cache = static_cast<PointCache *>(MEM_callocN(sizeof(PointCache), "PointCache"));
+  cache = MEM_callocN<PointCache>("PointCache");
   cache->startframe = 1;
   cache->endframe = 250;
   cache->step = 1;

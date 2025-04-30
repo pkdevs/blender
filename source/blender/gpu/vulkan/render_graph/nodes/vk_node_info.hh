@@ -42,6 +42,7 @@ enum class VKNodeType {
   FILL_BUFFER,
   RESET_QUERY_POOL,
   SYNCHRONIZATION,
+  UPDATE_BUFFER,
   UPDATE_MIPMAPS,
 };
 
@@ -113,6 +114,9 @@ BLI_INLINE std::ostream &operator<<(std::ostream &os, const VKNodeType node_type
       break;
     case VKNodeType::SYNCHRONIZATION:
       os << "SYNCHRONIZATION";
+      break;
+    case VKNodeType::UPDATE_BUFFER:
+      os << "UPDATE_BUFFER";
       break;
     case VKNodeType::UPDATE_MIPMAPS:
       os << "UPDATE_MIPMAPS";
@@ -187,7 +191,8 @@ class VKNodeInfo : public NonCopyable {
    * This function must be implemented by all node classes. But due to cyclic inclusion of header
    * files it is implemented as a template function.
    */
-  template<typename Node> static void set_node_data(Node &node, const CreateInfo &create_info);
+  template<typename Node, typename Storage>
+  static void set_node_data(Node &node, Storage &storage, const CreateInfo &create_info);
 
   /**
    * Extract read/write resource dependencies from `create_info` and add them to `node_links`.

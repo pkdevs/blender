@@ -8,10 +8,12 @@ namespace blender::nodes::node_geo_set_id_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
   b.add_input<decl::Geometry>("Geometry");
+  b.add_output<decl::Geometry>("Geometry").propagate_all().align_with_previous();
   b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
   b.add_input<decl::Int>("ID").implicit_field_on_all(implicit_field_inputs::index);
-  b.add_output<decl::Geometry>("Geometry").propagate_all();
 }
 
 static void set_id_in_component(GeometryComponent &component,
@@ -75,10 +77,15 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_SET_ID, "Set ID", NODE_CLASS_GEOMETRY);
+  geo_node_type_base(&ntype, "GeometryNodeSetID", GEO_NODE_SET_ID);
+  ntype.ui_name = "Set ID";
+  ntype.ui_description =
+      "Set the id attribute on the input geometry, mainly used internally for randomizing";
+  ntype.enum_name_legacy = "SET_ID";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

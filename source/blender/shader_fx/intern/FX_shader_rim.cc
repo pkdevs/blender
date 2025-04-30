@@ -6,8 +6,6 @@
  * \ingroup shader_fx
  */
 
-#include <cstdio>
-
 #include "DNA_screen_types.h"
 #include "DNA_shader_fx_types.h"
 
@@ -52,12 +50,12 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   uiLayoutSetPropSep(layout, true);
 
-  uiItemR(layout, ptr, "rim_color", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "mask_color", UI_ITEM_NONE, nullptr, ICON_NONE);
+  uiItemR(layout, ptr, "rim_color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  uiItemR(layout, ptr, "mask_color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   uiItemR(layout, ptr, "mode", UI_ITEM_NONE, IFACE_("Blend Mode"), ICON_NONE);
 
   /* Add the X, Y labels manually because offset is a #PROP_PIXEL. */
-  col = uiLayoutColumn(layout, true);
+  col = &layout->column(true);
   PropertyRNA *prop = RNA_struct_find_property(ptr, "offset");
   uiItemFullR(col, ptr, prop, 0, 0, UI_ITEM_NONE, IFACE_("Offset X"), ICON_NONE);
   uiItemFullR(col, ptr, prop, 1, 0, UI_ITEM_NONE, IFACE_("Y"), ICON_NONE);
@@ -75,12 +73,12 @@ static void blur_panel_draw(const bContext * /*C*/, Panel *panel)
   uiLayoutSetPropSep(layout, true);
 
   /* Add the X, Y labels manually because blur is a #PROP_PIXEL. */
-  col = uiLayoutColumn(layout, true);
+  col = &layout->column(true);
   PropertyRNA *prop = RNA_struct_find_property(ptr, "blur");
   uiItemFullR(col, ptr, prop, 0, 0, UI_ITEM_NONE, IFACE_("Blur X"), ICON_NONE);
   uiItemFullR(col, ptr, prop, 1, 0, UI_ITEM_NONE, IFACE_("Y"), ICON_NONE);
 
-  uiItemR(layout, ptr, "samples", UI_ITEM_NONE, nullptr, ICON_NONE);
+  uiItemR(layout, ptr, "samples", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void panel_register(ARegionType *region_type)

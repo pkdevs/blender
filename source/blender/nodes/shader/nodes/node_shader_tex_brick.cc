@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <algorithm>
+
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
@@ -44,7 +46,7 @@ static void sh_node_tex_brick_declare(NodeDeclarationBuilder &b)
       .default_value(0.02f)
       .no_muted_links()
       .description(
-          "Size of the filling between the bricks (known as “mortar”). "
+          "Size of the filling between the bricks (known as \"mortar\"). "
           "0 means no mortar");
   b.add_input<decl::Float>("Mortar Smooth")
       .min(0.0f)
@@ -63,13 +65,13 @@ static void sh_node_tex_brick_declare(NodeDeclarationBuilder &b)
       .max(100.0f)
       .default_value(0.5f)
       .no_muted_links()
-      .description("Ratio of brick’s width relative to the texture scale");
+      .description("Ratio of brick's width relative to the texture scale");
   b.add_input<decl::Float>("Row Height")
       .min(0.01f)
       .max(100.0f)
       .default_value(0.25f)
       .no_muted_links()
-      .description("Ratio of brick’s row height relative to the texture scale");
+      .description("Ratio of brick's row height relative to the texture scale");
   b.add_output<decl::Color>("Color");
   b.add_output<decl::Float>("Fac");
 }
@@ -78,7 +80,7 @@ static void node_shader_buts_tex_brick(uiLayout *layout, bContext * /*C*/, Point
 {
   uiLayout *col;
 
-  col = uiLayoutColumn(layout, true);
+  col = &layout->column(true);
   uiItemR(col,
           ptr,
           "offset",
@@ -88,7 +90,7 @@ static void node_shader_buts_tex_brick(uiLayout *layout, bContext * /*C*/, Point
   uiItemR(
       col, ptr, "offset_frequency", UI_ITEM_R_SPLIT_EMPTY_NAME, IFACE_("Frequency"), ICON_NONE);
 
-  col = uiLayoutColumn(layout, true);
+  col = &layout->column(true);
   uiItemR(col, ptr, "squash", UI_ITEM_R_SPLIT_EMPTY_NAME, IFACE_("Squash"), ICON_NONE);
   uiItemR(
       col, ptr, "squash_frequency", UI_ITEM_R_SPLIT_EMPTY_NAME, IFACE_("Frequency"), ICON_NONE);
@@ -96,7 +98,7 @@ static void node_shader_buts_tex_brick(uiLayout *layout, bContext * /*C*/, Point
 
 static void node_shader_init_tex_brick(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeTexBrick *tex = MEM_cnew<NodeTexBrick>(__func__);
+  NodeTexBrick *tex = MEM_callocN<NodeTexBrick>(__func__);
   BKE_texture_mapping_default(&tex->base.tex_mapping, TEXMAP_TYPE_POINT);
   BKE_texture_colormapping_default(&tex->base.color_mapping);
 
@@ -206,7 +208,7 @@ class BrickFunction : public mf::MultiFunction {
 
     const float tint = clamp_f(
         brick_noise((rownum << 16) + (bricknum & 0xFFFF)) + bias, 0.0f, 1.0f);
-    float min_dist = std::min(std::min(x, y), std::min(brick_width - x, row_height - y));
+    float min_dist = std::min({x, y, brick_width - x, row_height - y});
 
     float mortar;
     if (min_dist >= mortar_size) {
@@ -299,15 +301,19 @@ void register_node_type_sh_tex_brick()
 
   static blender::bke::bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_TEX_BRICK, "Brick Texture", NODE_CLASS_TEXTURE);
+  common_node_type_base(&ntype, "ShaderNodeTexBrick", SH_NODE_TEX_BRICK);
+  ntype.ui_name = "Brick Texture";
+  ntype.ui_description = "Generate a procedural texture producing bricks";
+  ntype.enum_name_legacy = "TEX_BRICK";
+  ntype.nclass = NODE_CLASS_TEXTURE;
   ntype.declare = file_ns::sh_node_tex_brick_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_tex_brick;
-  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::Middle);
+  blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Middle);
   ntype.initfunc = file_ns::node_shader_init_tex_brick;
   blender::bke::node_type_storage(
-      &ntype, "NodeTexBrick", node_free_standard_storage, node_copy_standard_storage);
+      ntype, "NodeTexBrick", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::node_shader_gpu_tex_brick;
   ntype.build_multi_function = file_ns::sh_node_brick_build_multi_function;
 
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }

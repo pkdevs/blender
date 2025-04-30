@@ -57,7 +57,8 @@ class TOPBAR_HT_upper_bar(Header):
             window, "view_layer",
             scene, "view_layers",
             new="scene.view_layer_add",
-            unlink="scene.view_layer_remove")
+            unlink="scene.view_layer_remove",
+        )
 
 
 class TOPBAR_PT_tool_settings_extra(Panel):
@@ -100,79 +101,6 @@ class TOPBAR_PT_tool_fallback(Panel):
         if tool_settings.workspace_tool_type == 'FALLBACK':
             tool = context.tool
             ToolSelectPanelHelper.draw_active_tool_fallback(context, layout, tool)
-
-
-class TOPBAR_PT_gpencil_layers(Panel):
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'HEADER'
-    bl_label = "Layers"
-    bl_ui_units_x = 14
-
-    @classmethod
-    def poll(cls, context):
-        if context.gpencil_data is None:
-            return False
-
-        ob = context.object
-        if ob is not None and ob.type == 'GPENCIL':
-            return True
-
-        return False
-
-    def draw(self, context):
-        layout = self.layout
-        gpd = context.gpencil_data
-
-        # Grease Pencil data...
-        if (gpd is None) or (not gpd.layers):
-            layout.operator("gpencil.layer_add", text="New Layer")
-        else:
-            self.draw_layers(context, layout, gpd)
-
-    def draw_layers(self, context, layout, gpd):
-        row = layout.row()
-
-        col = row.column()
-        layer_rows = 10
-        col.template_list(
-            "GPENCIL_UL_layer", "", gpd, "layers", gpd.layers, "active_index",
-            rows=layer_rows, sort_reverse=True, sort_lock=True,
-        )
-
-        gpl = context.active_gpencil_layer
-        if gpl:
-            srow = col.row(align=True)
-            srow.prop(gpl, "blend_mode", text="Blend")
-
-            srow = col.row(align=True)
-            srow.prop(gpl, "opacity", text="Opacity", slider=True)
-            srow.prop(gpl, "use_mask_layer", text="", icon='CLIPUV_DEHLT' if gpl.use_mask_layer else 'CLIPUV_HLT')
-
-            srow = col.row(align=True)
-            srow.prop(gpl, "use_lights", text="Lights")
-
-        col = row.column()
-
-        sub = col.column(align=True)
-        sub.operator("gpencil.layer_add", icon='ADD', text="")
-        sub.operator("gpencil.layer_remove", icon='REMOVE', text="")
-
-        gpl = context.active_gpencil_layer
-        if gpl:
-            sub.menu("GPENCIL_MT_layer_context_menu", icon='DOWNARROW_HLT', text="")
-
-            if len(gpd.layers) > 1:
-                col.separator()
-
-                sub = col.column(align=True)
-                sub.operator("gpencil.layer_move", icon='TRIA_UP', text="").type = 'UP'
-                sub.operator("gpencil.layer_move", icon='TRIA_DOWN', text="").type = 'DOWN'
-
-                col.separator()
-
-                sub = col.column(align=True)
-                sub.operator("gpencil.layer_isolate", icon='HIDE_OFF', text="").affect_visibility = True
-                sub.operator("gpencil.layer_isolate", icon='LOCKED', text="").affect_visibility = False
 
 
 class TOPBAR_MT_editor_menus(Menu):
@@ -372,8 +300,9 @@ class TOPBAR_MT_file_defaults(Menu):
 
         if app_template:
             layout.label(
-                text=iface_(bpy.path.display_name(app_template, has_ext=False),
-                            i18n_contexts.id_workspace), translate=False)
+                text=iface_(bpy.path.display_name(app_template, has_ext=False), i18n_contexts.id_workspace),
+                translate=False,
+            )
 
         layout.operator("wm.save_homefile")
         if app_template:
@@ -443,6 +372,9 @@ class TOPBAR_MT_file_import(Menu):
             self.layout.operator("wm.ply_import", text="Stanford PLY (.ply)")
         if bpy.app.build_options.io_stl:
             self.layout.operator("wm.stl_import", text="STL (.stl)")
+
+        if bpy.app.build_options.io_fbx:
+            self.layout.operator("wm.fbx_import", text="FBX (.fbx) (experimental)")
 
 
 class TOPBAR_MT_file_export(Menu):
@@ -758,7 +690,7 @@ class TOPBAR_PT_name(Panel):
         found = False
         if space_type == 'SEQUENCE_EDITOR':
             layout.label(text="Sequence Strip Name")
-            item = context.active_sequence_strip
+            item = context.active_strip
             if item:
                 row = row_with_icon(layout, 'SEQUENCE')
                 row.prop(item, "name", text="")
@@ -864,6 +796,31 @@ class TOPBAR_PT_name_marker(Panel):
         row.prop(marker, "name", text="")
 
 
+class TOPBAR_PT_grease_pencil_layers(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'HEADER'
+    bl_label = "Layers"
+    bl_ui_units_x = 14
+
+    @classmethod
+    def poll(cls, context):
+        object = context.object
+        if object is None:
+            return False
+        if object.type != 'GREASEPENCIL':
+            return False
+
+        return True
+
+    def draw(self, context):
+        from .properties_data_grease_pencil import DATA_PT_grease_pencil_layers
+
+        layout = self.layout
+        grease_pencil = context.object.data
+
+        DATA_PT_grease_pencil_layers.draw_settings(layout, grease_pencil)
+
+
 classes = (
     TOPBAR_HT_upper_bar,
     TOPBAR_MT_file_context_menu,
@@ -887,10 +844,10 @@ classes = (
     TOPBAR_MT_help,
     TOPBAR_PT_tool_fallback,
     TOPBAR_PT_tool_settings_extra,
-    TOPBAR_PT_gpencil_layers,
     TOPBAR_PT_gpencil_primitive,
     TOPBAR_PT_name,
     TOPBAR_PT_name_marker,
+    TOPBAR_PT_grease_pencil_layers,
 )
 
 if __name__ == "__main__":  # only for live edit.

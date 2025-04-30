@@ -16,10 +16,6 @@
 #include "BLI_compiler_compat.h"
 #include "BLI_sys_types.h" /* for bool */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define _GHASH_INTERNAL_ATTR
 #ifndef GHASH_INTERNAL_API
 #  ifdef __GNUC__
@@ -332,7 +328,7 @@ BLI_INLINE bool BLI_ghashIterator_done(const GHashIterator *ghi)
 
 /* -------------------------------------------------------------------- */
 /** \name GSet Types
- * A 'set' implementation (unordered collection of unique elements).
+ * A "set" implementation (unordered collection of unique elements).
  *
  * Internally this is a 'GHash' without any keys,
  * which is why this API's are in the same header & source file.
@@ -642,7 +638,3 @@ GSet *BLI_gset_int_new_ex(const char *info,
 GSet *BLI_gset_int_new(const char *info) ATTR_MALLOC ATTR_WARN_UNUSED_RESULT;
 
 /** \} */
-
-#ifdef __cplusplus
-}
-#endif

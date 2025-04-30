@@ -17,8 +17,6 @@
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "BKE_mesh.hh"
-
 #include "GEO_mesh_selection.hh"
 
 #include "NOD_rna_define.hh"
@@ -29,7 +27,11 @@ namespace blender::nodes::node_geo_scale_elements_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+  b.add_default_layout();
   b.add_input<decl::Geometry>("Geometry").supported_type(GeometryComponent::Type::Mesh);
+  b.add_output<decl::Geometry>("Geometry").propagate_all().align_with_previous();
   b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
   b.add_input<decl::Float>("Scale", "Scale").default_value(1.0f).min(0.0f).field_on_all();
   b.add_input<decl::Vector>("Center")
@@ -38,12 +40,18 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(
           "Origin of the scaling for each element. If multiple elements are connected, their "
           "center is averaged");
-  b.add_input<decl::Vector>("Axis")
-      .default_value({1.0f, 0.0f, 0.0f})
-      .field_on_all()
-      .description("Direction in which to scale the element")
-      .make_available([](bNode &node) { node.custom2 = GEO_NODE_SCALE_ELEMENTS_SINGLE_AXIS; });
-  b.add_output<decl::Geometry>("Geometry").propagate_all();
+  auto &axis = b.add_input<decl::Vector>("Axis")
+                   .default_value({1.0f, 0.0f, 0.0f})
+                   .field_on_all()
+                   .description("Direction in which to scale the element")
+                   .make_available(
+                       [](bNode &node) { node.custom2 = GEO_NODE_SCALE_ELEMENTS_SINGLE_AXIS; });
+
+  const bNode *node = b.node_or_null();
+  if (node != nullptr) {
+    const GeometryNodeScaleElementsMode mode = GeometryNodeScaleElementsMode(node->custom2);
+    axis.available(mode == GEO_NODE_SCALE_ELEMENTS_SINGLE_AXIS);
+  }
 };
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -56,20 +64,6 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   node->custom1 = int16_t(AttrDomain::Face);
   node->custom2 = GEO_NODE_SCALE_ELEMENTS_UNIFORM;
-}
-
-static void node_update(bNodeTree *ntree, bNode *node)
-{
-  bNodeSocket *geometry_socket = static_cast<bNodeSocket *>(node->inputs.first);
-  bNodeSocket *selection_socket = geometry_socket->next;
-  bNodeSocket *scale_float_socket = selection_socket->next;
-  bNodeSocket *center_socket = scale_float_socket->next;
-  bNodeSocket *axis_socket = center_socket->next;
-
-  const GeometryNodeScaleElementsMode mode = GeometryNodeScaleElementsMode(node->custom2);
-  const bool use_single_axis = mode == GEO_NODE_SCALE_ELEMENTS_SINGLE_AXIS;
-
-  bke::node_set_socket_availability(ntree, axis_socket, use_single_axis);
 }
 
 static Array<int> create_reverse_offsets(const Span<int> indices, const int items_num)
@@ -145,7 +139,7 @@ static Array<int> reverse_indices_in_groups(const Span<int> group_indices,
    * atomically by many threads in parallel. `calloc` can be measurably faster than a parallel fill
    * of zero. Alternatively the offsets could be copied and incremented directly, but the cost of
    * the copy is slightly higher than the cost of `calloc`. */
-  int *counts = MEM_cnew_array<int>(size_t(offsets.size()), __func__);
+  int *counts = MEM_calloc_arrayN<int>(offsets.size(), __func__);
   BLI_SCOPED_DEFER([&]() { MEM_freeN(counts); })
   Array<int> results(group_indices.size());
   threading::parallel_for(group_indices.index_range(), 1024, [&](const IndexRange range) {
@@ -191,7 +185,7 @@ template<typename T> static T gather_mean(const VArray<T> &values, const Span<in
 
   T value;
   devirtualize_varray(values, [&](const auto values) {
-    const auto accumulator = threading::parallel_reduce<MeanAccumulator>(
+    const auto accumulator = threading::parallel_deterministic_reduce<MeanAccumulator>(
         indices.index_range(),
         2048,
         MeanAccumulator(T(), 0),
@@ -572,13 +566,16 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_SCALE_ELEMENTS, "Scale Elements", NODE_CLASS_GEOMETRY);
+  geo_node_type_base(&ntype, "GeometryNodeScaleElements", GEO_NODE_SCALE_ELEMENTS);
+  ntype.ui_name = "Scale Elements";
+  ntype.ui_description = "Scale groups of connected edges and faces";
+  ntype.enum_name_legacy = "SCALE_ELEMENTS";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
   ntype.draw_buttons = node_layout;
   ntype.initfunc = node_init;
-  ntype.updatefunc = node_update;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

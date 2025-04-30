@@ -24,8 +24,21 @@ set(LIB
 # See: `make icons_geom` and the script `./release/datafiles/blender_icons_geom_update.py`.
 set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   # BEGIN ICON_GEOM_NAMES
+  brush.generic
   brush.gpencil_draw.erase
   brush.gpencil_draw.fill
+  brush.paint_texture.clone
+  brush.paint_texture.soften
+  brush.paint_texture.smear
+  brush.paint_texture.fill
+  brush.paint_texture.mask
+  brush.paint_vertex.average
+  brush.paint_vertex.blur
+  brush.paint_vertex.replace
+  brush.paint_vertex.smear
+  brush.paint_weight.average
+  brush.paint_weight.blur
+  brush.paint_weight.smear
   brush.particle.add
   brush.particle.comb
   brush.particle.cut
@@ -33,7 +46,12 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   brush.particle.puff
   brush.particle.smooth
   brush.particle.weight
+  brush.sculpt.displacement_eraser
+  brush.sculpt.displacement_smear
+  brush.sculpt.draw_face_sets
+  brush.sculpt.mask
   brush.sculpt.paint
+  brush.sculpt.simplify
   brush.uv_sculpt.grab
   brush.uv_sculpt.pinch
   brush.uv_sculpt.relax
@@ -47,6 +65,9 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   ops.curve.pen
   ops.curve.radius
   ops.curve.vertex_random
+  ops.curves.sculpt_add
+  ops.curves.sculpt_delete
+  ops.curves.sculpt_density
   ops.generic.cursor
   ops.generic.select
   ops.generic.select_box
@@ -69,7 +90,11 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   ops.gpencil.primitive_line
   ops.gpencil.primitive_polyline
   ops.gpencil.radius
-  ops.gpencil.stroke_cutter
+  ops.gpencil.sculpt_average
+  ops.gpencil.sculpt_blur
+  ops.gpencil.sculpt_clone
+  ops.gpencil.sculpt_smear
+  ops.gpencil.stroke_trim
   ops.gpencil.transform_fill
   ops.mesh.bevel
   ops.mesh.bisect
@@ -209,6 +234,8 @@ if(WITH_BLENDER)
       cancel
       cancel_large
       center_only
+      char_notdef
+      char_replacement
       checkbox_dehlt
       checkbox_hlt
       checkmark
@@ -373,8 +400,10 @@ if(WITH_BLENDER)
       gp_select_strokes
       graph
       greasepencil
+      greasepencil_layer_group
       grid
       grip
+      grip_v
       group
       group_bone
       group_uvs
@@ -432,7 +461,7 @@ if(WITH_BLENDER)
       keyframe
       keyframe_hlt
       keyingset
-	    key_backspace
+      key_backspace
       key_backspace_filled
       key_command
       key_command_filled
@@ -613,6 +642,7 @@ if(WITH_BLENDER)
       normals_face
       normals_vertex
       normals_vertex_face
+      not_found
       object_data
       object_datamode
       object_hidden
@@ -701,6 +731,7 @@ if(WITH_BLENDER)
       preferences
       preset
       preset_new
+      preview_loading
       preview_range
       prev_keyframe
       properties
@@ -932,7 +963,6 @@ if(WITH_BLENDER)
     # Blend files.
     data_to_c_simple(../../../../release/datafiles/preview.blend SRC)
     data_to_c_simple(../../../../release/datafiles/preview_grease_pencil.blend SRC)
-    data_to_c_simple(../../../../release/datafiles/preview_grease_pencil_legacy.blend SRC)
 
     # Images.
     data_to_c_simple(../../../../release/datafiles/splash.png SRC)

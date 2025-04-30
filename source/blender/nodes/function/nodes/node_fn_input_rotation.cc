@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_math_euler.hh"
-#include "BLI_math_quaternion.hh"
 
 #include "NOD_socket_search_link.hh"
 
@@ -21,7 +20,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiLayout *col = uiLayoutColumn(layout, true);
+  uiLayout *col = &layout->column(true);
   uiItemR(col, ptr, "rotation_euler", UI_ITEM_R_EXPAND, "", ICON_NONE);
 }
 
@@ -38,7 +37,7 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeInputRotation *data = MEM_cnew<NodeInputRotation>(__func__);
+  NodeInputRotation *data = MEM_callocN<NodeInputRotation>(__func__);
   node->storage = data;
 }
 
@@ -46,14 +45,17 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, FN_NODE_INPUT_ROTATION, "Rotation", 0);
+  fn_node_type_base(&ntype, "FunctionNodeInputRotation", FN_NODE_INPUT_ROTATION);
+  ntype.ui_name = "Rotation";
+  ntype.enum_name_legacy = "INPUT_ROTATION";
+  ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
   blender::bke::node_type_storage(
-      &ntype, "NodeInputRotation", node_free_standard_storage, node_copy_standard_storage);
+      ntype, "NodeInputRotation", node_free_standard_storage, node_copy_standard_storage);
   ntype.build_multi_function = node_build_multi_function;
   ntype.draw_buttons = node_layout;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -6,13 +6,9 @@
 
 #pragma once
 
-#if EMBREE_MAJOR_VERSION >= 4
-#  include <embree4/rtcore_ray.h>
-#  include <embree4/rtcore_scene.h>
-#else
-#  include <embree3/rtcore_ray.h>
-#  include <embree3/rtcore_scene.h>
-#endif
+#include <embree4/rtcore_geometry.h>
+#include <embree4/rtcore_ray.h>
+#include <embree4/rtcore_scene.h>
 
 #ifdef __KERNEL_ONEAPI__
 #  include "kernel/device/oneapi/compat.h"
@@ -29,12 +25,10 @@
 #include "kernel/integrator/state_util.h"
 #include "kernel/sample/lcg.h"
 
-#include "util/vector.h"
-
 CCL_NAMESPACE_BEGIN
 
-#if INTEGRATOR_SHADOW_ISECT_SIZE < 256
-using numhit_t = uint8_t;
+#ifdef __KERNEL_ONEAPI__
+using numhit_t = uint16_t;
 #else
 using numhit_t = uint32_t;
 #endif
@@ -52,106 +46,45 @@ using numhit_t = uint32_t;
 
 #define EMBREE_IS_HAIR(x) (x & 1)
 
-#if EMBREE_MAJOR_VERSION < 4
-#  define rtcGetGeometryUserDataFromScene(scene, id) \
-    (rtcGetGeometryUserData(rtcGetGeometry(scene, id)))
-#endif
-
 /* Intersection context. */
 
-struct CCLFirstHitContext
-#if EMBREE_MAJOR_VERSION >= 4
-    : public RTCRayQueryContext
-#endif
-{
+struct CCLFirstHitContext : public RTCRayQueryContext {
   KernelGlobals kg;
   /* For avoiding self intersections */
   const Ray *ray;
 };
 
-struct CCLShadowContext
-#if EMBREE_MAJOR_VERSION >= 4
-    : public RTCRayQueryContext
-#endif
-{
-#if EMBREE_MAJOR_VERSION >= 4
+struct CCLShadowContext : public RTCRayQueryContext {
   KernelGlobals kg;
   const Ray *ray;
-#endif
   IntegratorShadowState isect_s;
   float throughput;
   float max_t;
   bool opaque_hit;
-  numhit_t max_hits;
-  numhit_t num_hits;
+  numhit_t max_transparent_hits;
+  numhit_t num_transparent_hits;
   numhit_t num_recorded_hits;
 };
 
-struct CCLLocalContext
-#if EMBREE_MAJOR_VERSION >= 4
-    : public RTCRayQueryContext
-#endif
-{
-#if EMBREE_MAJOR_VERSION >= 4
+struct CCLLocalContext : public RTCRayQueryContext {
   KernelGlobals kg;
   const Ray *ray;
   numhit_t max_hits;
-#endif
   int local_object_id;
   LocalIntersection *local_isect;
   uint *lcg_state;
   bool is_sss;
 };
 
-struct CCLVolumeContext
-#if EMBREE_MAJOR_VERSION >= 4
-    : public RTCRayQueryContext
-#endif
-{
-#if EMBREE_MAJOR_VERSION >= 4
+struct CCLVolumeContext : public RTCRayQueryContext {
   KernelGlobals kg;
   const Ray *ray;
-#  ifdef __VOLUME_RECORD_ALL__
+#ifdef __VOLUME_RECORD_ALL__
   numhit_t max_hits;
-#  endif
-  numhit_t num_hits;
 #endif
+  numhit_t num_hits;
   Intersection *vol_isect;
 };
-
-#if EMBREE_MAJOR_VERSION < 4
-struct CCLIntersectContext : public RTCIntersectContext,
-                             public CCLFirstHitContext,
-                             public CCLShadowContext,
-                             public CCLLocalContext,
-                             public CCLVolumeContext {
-  typedef enum {
-    RAY_REGULAR = 0,
-    RAY_SHADOW_ALL = 1,
-    RAY_LOCAL = 2,
-    RAY_SSS = 3,
-    RAY_VOLUME_ALL = 4,
-  } RayType;
-
-  RayType type;
-
-  CCLIntersectContext(KernelGlobals kg_, RayType type_)
-  {
-    kg = kg_;
-    type = type_;
-    ray = NULL;
-    max_hits = numhit_t(1);
-    num_hits = numhit_t(0);
-    num_recorded_hits = numhit_t(0);
-    throughput = 1.0f;
-    opaque_hit = false;
-    isect_s = NULL;
-    local_isect = NULL;
-    local_object_id = -1;
-    lcg_state = NULL;
-  }
-};
-#endif
 
 /* Utilities. */
 
@@ -254,7 +187,7 @@ ccl_device_inline void kernel_embree_convert_sss_hit(KernelGlobals kg,
                                                      const RTCRay *ray,
                                                      const RTCHit *hit,
                                                      Intersection *isect,
-                                                     int object,
+                                                     const int object,
                                                      const intptr_t prim_offset)
 {
   isect->u = hit->u;
@@ -278,15 +211,11 @@ ccl_device_forceinline void kernel_embree_filter_intersection_func_impl(
   assert(args->N == 1);
 
   RTCHit *hit = (RTCHit *)args->hit;
-#if EMBREE_MAJOR_VERSION >= 4
   CCLFirstHitContext *ctx = (CCLFirstHitContext *)(args->context);
-#else
-  CCLIntersectContext *ctx = (CCLIntersectContext *)(args->context);
-#endif
 #ifdef __KERNEL_ONEAPI__
   KernelGlobalsGPU *kg = nullptr;
 #else
-  const KernelGlobalsCPU *kg = ctx->kg;
+  const ThreadKernelGlobalsCPU *kg = ctx->kg;
 #endif
   const Ray *cray = ctx->ray;
 
@@ -318,15 +247,11 @@ ccl_device_forceinline void kernel_embree_filter_occluded_shadow_all_func_impl(
 
   const RTCRay *ray = (RTCRay *)args->ray;
   RTCHit *hit = (RTCHit *)args->hit;
-#if EMBREE_MAJOR_VERSION >= 4
   CCLShadowContext *ctx = (CCLShadowContext *)(args->context);
-#else
-  CCLIntersectContext *ctx = (CCLIntersectContext *)(args->context);
-#endif
 #ifdef __KERNEL_ONEAPI__
   KernelGlobalsGPU *kg = nullptr;
 #else
-  const KernelGlobalsCPU *kg = ctx->kg;
+  const ThreadKernelGlobalsCPU *kg = ctx->kg;
 #endif
   const Ray *cray = ctx->ray;
 
@@ -345,14 +270,27 @@ ccl_device_forceinline void kernel_embree_filter_occluded_shadow_all_func_impl(
   }
 #endif
 
-  /* If no transparent shadows or max number of hits exceeded, all light is blocked. */
+  /* If no transparent shadows, all light is blocked. */
   const int flags = intersection_get_shader_flags(kg, current_isect.prim, current_isect.type);
-  if (!(flags & (SD_HAS_TRANSPARENT_SHADOW)) || ctx->num_hits >= ctx->max_hits) {
+  if ((flags & SD_HAS_TRANSPARENT_SHADOW) == 0) {
     ctx->opaque_hit = true;
     return;
   }
 
-  ++ctx->num_hits;
+  if (intersection_skip_shadow_already_recoded(
+          kg, ctx->isect_s, current_isect.object, current_isect.prim, ctx->num_recorded_hits))
+  {
+    *args->valid = 0;
+    return;
+  }
+
+  /* Only count transparent bounces, volume bounds bounces are counted during shading. */
+  ctx->num_transparent_hits += !(flags & SD_HAS_ONLY_VOLUME);
+  if (ctx->num_transparent_hits > ctx->max_transparent_hits) {
+    /* Max number of hits exceeded. */
+    ctx->opaque_hit = true;
+    return;
+  }
 
   /* Always use baked shadow transparency for curves. */
   if (current_isect.type & PRIMITIVE_CURVE) {
@@ -381,7 +319,7 @@ ccl_device_forceinline void kernel_embree_filter_occluded_shadow_all_func_impl(
   /* This tells Embree to continue tracing. */
   *args->valid = 0;
 
-  const numhit_t max_record_hits = min(ctx->max_hits, numhit_t(INTEGRATOR_SHADOW_ISECT_SIZE));
+  const numhit_t max_record_hits = numhit_t(INTEGRATOR_SHADOW_ISECT_SIZE);
   /* If the maximum number of hits was reached, replace the furthest intersection
    * with a closer one so we get the N closest intersections. */
   if (isect_index >= max_record_hits) {
@@ -432,15 +370,11 @@ ccl_device_forceinline void kernel_embree_filter_occluded_local_func_impl(
 
   const RTCRay *ray = (RTCRay *)args->ray;
   RTCHit *hit = (RTCHit *)args->hit;
-#if EMBREE_MAJOR_VERSION >= 4
   CCLLocalContext *ctx = (CCLLocalContext *)(args->context);
-#else
-  CCLIntersectContext *ctx = (CCLIntersectContext *)(args->context);
-#endif
 #ifdef __KERNEL_ONEAPI__
   KernelGlobalsGPU *kg = nullptr;
 #else
-  const KernelGlobalsCPU *kg = ctx->kg;
+  const ThreadKernelGlobalsCPU *kg = ctx->kg;
 #endif
   const Ray *cray = ctx->ray;
 
@@ -535,15 +469,11 @@ ccl_device_forceinline void kernel_embree_filter_occluded_volume_all_func_impl(
 
   const RTCRay *ray = (RTCRay *)args->ray;
   RTCHit *hit = (RTCHit *)args->hit;
-#if EMBREE_MAJOR_VERSION >= 4
   CCLVolumeContext *ctx = (CCLVolumeContext *)(args->context);
-#else
-  CCLIntersectContext *ctx = (CCLIntersectContext *)(args->context);
-#endif
 #ifdef __KERNEL_ONEAPI__
   KernelGlobalsGPU *kg = nullptr;
 #else
-  const KernelGlobalsCPU *kg = ctx->kg;
+  const ThreadKernelGlobalsCPU *kg = ctx->kg;
 #endif
   const Ray *cray = ctx->ray;
 
@@ -579,78 +509,6 @@ ccl_device_forceinline void kernel_embree_filter_occluded_volume_all_func_impl(
   }
 #endif
 }
-
-#if EMBREE_MAJOR_VERSION < 4
-ccl_device_forceinline void kernel_embree_filter_occluded_func(
-    const RTCFilterFunctionNArguments *args)
-{
-  /* Current implementation in Cycles assumes only single-ray intersection queries. */
-  assert(args->N == 1);
-
-  CCLIntersectContext *ctx = (CCLIntersectContext *)(args->context);
-
-  switch (ctx->type) {
-    case CCLIntersectContext::RAY_SHADOW_ALL:
-      kernel_embree_filter_occluded_shadow_all_func_impl(args);
-      break;
-    case CCLIntersectContext::RAY_LOCAL:
-    case CCLIntersectContext::RAY_SSS:
-      kernel_embree_filter_occluded_local_func_impl(args);
-      break;
-    case CCLIntersectContext::RAY_VOLUME_ALL:
-      kernel_embree_filter_occluded_volume_all_func_impl(args);
-      break;
-
-    case CCLIntersectContext::RAY_REGULAR:
-    default:
-      /* We should never reach this point, because
-       * REGULAR intersection is handled in intersection filter. */
-      kernel_assert(false);
-      break;
-  }
-}
-
-ccl_device void kernel_embree_filter_func_backface_cull(const RTCFilterFunctionNArguments *args)
-{
-  const RTCRay *ray = (RTCRay *)args->ray;
-  RTCHit *hit = (RTCHit *)args->hit;
-
-  /* Always ignore back-facing intersections. */
-  if (dot(make_float3(ray->dir_x, ray->dir_y, ray->dir_z),
-          make_float3(hit->Ng_x, hit->Ng_y, hit->Ng_z)) > 0.0f)
-  {
-    *args->valid = 0;
-    return;
-  }
-
-  CCLIntersectContext *ctx = ((CCLIntersectContext *)args->context);
-  const KernelGlobalsCPU *kg = ctx->kg;
-  const Ray *cray = ctx->ray;
-
-  if (kernel_embree_is_self_intersection(
-          kg, hit, cray, reinterpret_cast<intptr_t>(args->geometryUserPtr)))
-  {
-    *args->valid = 0;
-  }
-}
-
-ccl_device void kernel_embree_filter_occluded_func_backface_cull(
-    const RTCFilterFunctionNArguments *args)
-{
-  const RTCRay *ray = (RTCRay *)args->ray;
-  RTCHit *hit = (RTCHit *)args->hit;
-
-  /* Always ignore back-facing intersections. */
-  if (dot(make_float3(ray->dir_x, ray->dir_y, ray->dir_z),
-          make_float3(hit->Ng_x, hit->Ng_y, hit->Ng_z)) > 0.0f)
-  {
-    *args->valid = 0;
-    return;
-  }
-
-  kernel_embree_filter_occluded_func(args);
-}
-#endif
 
 #ifdef __KERNEL_ONEAPI__
 /* Static wrappers so we can call the callbacks from out side the ONEAPIKernelContext class */
@@ -700,54 +558,43 @@ kernel_embree_filter_occluded_volume_all_func_static(const RTCFilterFunctionNArg
     ONEAPIKernelContext::kernel_embree_filter_occluded_volume_all_func_static
 #else
 #  define kernel_embree_filter_intersection_func kernel_embree_filter_intersection_func_impl
-#  if EMBREE_MAJOR_VERSION >= 4
-#    define kernel_embree_filter_occluded_shadow_all_func \
-      kernel_embree_filter_occluded_shadow_all_func_impl
-#    define kernel_embree_filter_occluded_local_func kernel_embree_filter_occluded_local_func_impl
-#    define kernel_embree_filter_occluded_volume_all_func \
-      kernel_embree_filter_occluded_volume_all_func_impl
-#  endif
+#  define kernel_embree_filter_occluded_shadow_all_func \
+    kernel_embree_filter_occluded_shadow_all_func_impl
+#  define kernel_embree_filter_occluded_local_func kernel_embree_filter_occluded_local_func_impl
+#  define kernel_embree_filter_occluded_volume_all_func \
+    kernel_embree_filter_occluded_volume_all_func_impl
 #endif
 
 /* Scene intersection. */
 
 ccl_device_intersect bool kernel_embree_intersect(KernelGlobals kg,
-                                                  ccl_private const Ray *ray,
+                                                  const ccl_private Ray *ray,
                                                   const uint visibility,
                                                   ccl_private Intersection *isect)
 {
   isect->t = ray->tmax;
-#if EMBREE_MAJOR_VERSION >= 4
   CCLFirstHitContext ctx;
   rtcInitRayQueryContext(&ctx);
-#  ifdef __KERNEL_ONEAPI__
-  /* NOTE(sirgienko): Cycles GPU back-ends passes NULL to KernelGlobals and
+#ifdef __KERNEL_ONEAPI__
+  /* NOTE(sirgienko): Cycles GPU back-ends passes nullptr to KernelGlobals and
    * uses global device allocation (CUDA, Optix, HIP) or passes all needed data
    * as a class context (Metal, oneAPI). So we need to pass this context here
    * in order to have an access to it later in Embree filter functions on GPU. */
   ctx.kg = (KernelGlobals)this;
-#  else
-  ctx.kg = kg;
-#  endif
 #else
-  CCLIntersectContext ctx(kg, CCLIntersectContext::RAY_REGULAR);
-  rtcInitIntersectContext(&ctx);
+  ctx.kg = kg;
 #endif
 
   RTCRayHit ray_hit;
   ctx.ray = ray;
   kernel_embree_setup_rayhit(*ray, ray_hit, visibility);
 
-#if EMBREE_MAJOR_VERSION >= 4
   RTCIntersectArguments args;
   rtcInitIntersectArguments(&args);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(kernel_embree_filter_intersection_func);
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
   args.context = &ctx;
   rtcIntersect1(kernel_data.device_bvh, &ray_hit, &args);
-#else
-  rtcIntersect1(kernel_data.device_bvh, &ctx, &ray_hit);
-#endif
   if (ray_hit.hit.geomID == RTC_INVALID_GEOMETRY_ID ||
       ray_hit.hit.primID == RTC_INVALID_GEOMETRY_ID)
   {
@@ -760,30 +607,24 @@ ccl_device_intersect bool kernel_embree_intersect(KernelGlobals kg,
 
 #ifdef __BVH_LOCAL__
 ccl_device_intersect bool kernel_embree_intersect_local(KernelGlobals kg,
-                                                        ccl_private const Ray *ray,
+                                                        const ccl_private Ray *ray,
                                                         ccl_private LocalIntersection *local_isect,
-                                                        int local_object,
+                                                        const int local_object,
                                                         ccl_private uint *lcg_state,
-                                                        int max_hits)
+                                                        const int max_hits)
 {
   const bool has_bvh = !(kernel_data_fetch(object_flag, local_object) &
                          SD_OBJECT_TRANSFORM_APPLIED);
-#  if EMBREE_MAJOR_VERSION >= 4
   CCLLocalContext ctx;
   rtcInitRayQueryContext(&ctx);
-#    ifdef __KERNEL_ONEAPI__
-  /* NOTE(sirgienko): Cycles GPU back-ends passes NULL to KernelGlobals and
+#  ifdef __KERNEL_ONEAPI__
+  /* NOTE(sirgienko): Cycles GPU back-ends passes nullptr to KernelGlobals and
    * uses global device allocation (CUDA, Optix, HIP) or passes all needed data
    * as a class context (Metal, oneAPI). So we need to pass this context here
    * in order to have an access to it later in Embree filter functions on GPU. */
   ctx.kg = (KernelGlobals)this;
-#    else
-  ctx.kg = kg;
-#    endif
 #  else
-  CCLIntersectContext ctx(kg,
-                          has_bvh ? CCLIntersectContext::RAY_SSS : CCLIntersectContext::RAY_LOCAL);
-  rtcInitIntersectContext(&ctx);
+  ctx.kg = kg;
 #  endif
   ctx.is_sss = has_bvh;
   ctx.lcg_state = lcg_state;
@@ -797,13 +638,11 @@ ccl_device_intersect bool kernel_embree_intersect_local(KernelGlobals kg,
   RTCRay rtc_ray;
   kernel_embree_setup_ray(*ray, rtc_ray, PATH_RAY_ALL_VISIBILITY);
 
-#  if EMBREE_MAJOR_VERSION >= 4
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(kernel_embree_filter_occluded_local_func);
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
   args.context = &ctx;
-#  endif
 
   /* If this object has its own BVH, use it. */
   if (has_bvh) {
@@ -828,19 +667,11 @@ ccl_device_intersect bool kernel_embree_intersect_local(KernelGlobals kg,
                                                                local_object * 2);
     kernel_assert(scene);
     if (scene) {
-#  if EMBREE_MAJOR_VERSION >= 4
       rtcOccluded1(scene, &rtc_ray, &args);
-#  else
-      rtcOccluded1(scene, &ctx, &rtc_ray);
-#  endif
     }
   }
   else {
-#  if EMBREE_MAJOR_VERSION >= 4
     rtcOccluded1(kernel_data.device_bvh, &rtc_ray, &args);
-#  else
-    rtcOccluded1(kernel_data.device_bvh, &ctx, &rtc_ray);
-#  endif
   }
 
   /* rtcOccluded1 sets tfar to -inf if a hit was found. */
@@ -851,38 +682,32 @@ ccl_device_intersect bool kernel_embree_intersect_local(KernelGlobals kg,
 #ifdef __SHADOW_RECORD_ALL__
 ccl_device_intersect bool kernel_embree_intersect_shadow_all(KernelGlobals kg,
                                                              IntegratorShadowState state,
-                                                             ccl_private const Ray *ray,
-                                                             uint visibility,
-                                                             uint max_hits,
+                                                             const ccl_private Ray *ray,
+                                                             const uint visibility,
+                                                             const uint max_transparent_hits,
                                                              ccl_private uint *num_recorded_hits,
                                                              ccl_private float *throughput)
 {
-#  if EMBREE_MAJOR_VERSION >= 4
   CCLShadowContext ctx;
   rtcInitRayQueryContext(&ctx);
-#    ifdef __KERNEL_ONEAPI__
-  /* NOTE(sirgienko): Cycles GPU back-ends passes NULL to KernelGlobals and
+#  ifdef __KERNEL_ONEAPI__
+  /* NOTE(sirgienko): Cycles GPU back-ends passes nullptr to KernelGlobals and
    * uses global device allocation (CUDA, Optix, HIP) or passes all needed data
    * as a class context (Metal, oneAPI). So we need to pass this context here
    * in order to have an access to it later in Embree filter functions on GPU. */
   ctx.kg = (KernelGlobals)this;
-#    else
-  ctx.kg = kg;
-#    endif
 #  else
-  CCLIntersectContext ctx(kg, CCLIntersectContext::RAY_SHADOW_ALL);
-  rtcInitIntersectContext(&ctx);
+  ctx.kg = kg;
 #  endif
-  ctx.num_hits = ctx.num_recorded_hits = numhit_t(0);
+  ctx.num_transparent_hits = ctx.num_recorded_hits = numhit_t(0);
   ctx.throughput = 1.0f;
   ctx.opaque_hit = false;
   ctx.isect_s = state;
-  ctx.max_hits = numhit_t(max_hits);
+  ctx.max_transparent_hits = numhit_t(max_transparent_hits);
   ctx.max_t = ray->tmax;
   ctx.ray = ray;
   RTCRay rtc_ray;
   kernel_embree_setup_ray(*ray, rtc_ray, visibility);
-#  if EMBREE_MAJOR_VERSION >= 4
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(
@@ -890,9 +715,6 @@ ccl_device_intersect bool kernel_embree_intersect_shadow_all(KernelGlobals kg,
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
   args.context = &ctx;
   rtcOccluded1(kernel_data.device_bvh, &rtc_ray, &args);
-#  else
-  rtcOccluded1(kernel_data.device_bvh, &ctx, &rtc_ray);
-#  endif
 
   *num_recorded_hits = ctx.num_recorded_hits;
   *throughput = ctx.throughput;
@@ -902,28 +724,23 @@ ccl_device_intersect bool kernel_embree_intersect_shadow_all(KernelGlobals kg,
 
 #ifdef __VOLUME__
 ccl_device_intersect uint kernel_embree_intersect_volume(KernelGlobals kg,
-                                                         ccl_private const Ray *ray,
+                                                         const ccl_private Ray *ray,
                                                          ccl_private Intersection *isect,
 #  ifdef __VOLUME_RECORD_ALL__
                                                          const uint max_hits,
 #  endif
                                                          const uint visibility)
 {
-#  if EMBREE_MAJOR_VERSION >= 4
   CCLVolumeContext ctx;
   rtcInitRayQueryContext(&ctx);
-#    ifdef __KERNEL_ONEAPI__
-  /* NOTE(sirgienko) Cycles GPU back-ends passes NULL to KernelGlobals and
+#  ifdef __KERNEL_ONEAPI__
+  /* NOTE(sirgienko) Cycles GPU back-ends passes nullptr to KernelGlobals and
    * uses global device allocation (CUDA, Optix, HIP) or passes all needed data
    * as a class context (Metal, oneAPI). So we need to pass this context here
    * in order to have an access to it later in Embree filter functions on GPU. */
   ctx.kg = (KernelGlobals)this;
-#    else
-  ctx.kg = kg;
-#    endif
 #  else
-  CCLIntersectContext ctx(kg, CCLIntersectContext::RAY_VOLUME_ALL);
-  rtcInitIntersectContext(&ctx);
+  ctx.kg = kg;
 #  endif
   ctx.vol_isect = isect;
 #  ifdef __VOLUME_RECORD_ALL__
@@ -933,7 +750,6 @@ ccl_device_intersect uint kernel_embree_intersect_volume(KernelGlobals kg,
   ctx.ray = ray;
   RTCRay rtc_ray;
   kernel_embree_setup_ray(*ray, rtc_ray, visibility);
-#  if EMBREE_MAJOR_VERSION >= 4
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(
@@ -941,9 +757,6 @@ ccl_device_intersect uint kernel_embree_intersect_volume(KernelGlobals kg,
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
   args.context = &ctx;
   rtcOccluded1(kernel_data.device_bvh, &rtc_ray, &args);
-#  else
-  rtcOccluded1(kernel_data.device_bvh, &ctx, &rtc_ray);
-#  endif
   return ctx.num_hits;
 }
 #endif

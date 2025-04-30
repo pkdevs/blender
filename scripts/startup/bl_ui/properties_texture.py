@@ -73,7 +73,6 @@ class TEXTURE_PT_preview(TextureButtonsPanel, Panel):
     bl_label = "Preview"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -107,7 +106,6 @@ class TEXTURE_PT_context(TextureButtonsPanel, Panel):
     bl_options = {'HIDE_HEADER'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -151,7 +149,6 @@ class TEXTURE_PT_node(TextureButtonsPanel, Panel):
     bl_context = "texture"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -185,7 +182,6 @@ class TEXTURE_PT_clouds(TextureTypePanel, Panel):
     tex_type = 'CLOUDS'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -222,7 +218,6 @@ class TEXTURE_PT_wood(TextureTypePanel, Panel):
     tex_type = 'WOOD'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -264,7 +259,6 @@ class TEXTURE_PT_marble(TextureTypePanel, Panel):
     tex_type = 'MARBLE'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -303,7 +297,6 @@ class TEXTURE_PT_magic(TextureTypePanel, Panel):
     tex_type = 'MAGIC'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -327,7 +320,6 @@ class TEXTURE_PT_blend(TextureTypePanel, Panel):
     tex_type = 'BLEND'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -354,7 +346,6 @@ class TEXTURE_PT_stucci(TextureTypePanel, Panel):
     tex_type = 'STUCCI'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -390,7 +381,6 @@ class TEXTURE_PT_image(TextureTypePanel, Panel):
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -407,7 +397,6 @@ class TEXTURE_PT_image_settings(TextureTypePanel, Panel):
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -440,7 +429,6 @@ class TEXTURE_PT_image_sampling(TextureTypePanel, Panel):
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -475,7 +463,6 @@ class TEXTURE_PT_image_alpha(TextureTypePanel, Panel):
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -503,7 +490,6 @@ class TEXTURE_PT_image_mapping(TextureTypePanel, Panel):
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -560,7 +546,6 @@ class TEXTURE_PT_image_mapping_crop(TextureTypePanel, Panel):
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -587,7 +572,6 @@ class TEXTURE_PT_musgrave(TextureTypePanel, Panel):
     tex_type = 'MUSGRAVE'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -637,7 +621,6 @@ class TEXTURE_PT_voronoi(TextureTypePanel, Panel):
     tex_type = 'VORONOI'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -675,7 +658,6 @@ class TEXTURE_PT_voronoi_feature_weights(TextureTypePanel, Panel):
     tex_type = 'VORONOI'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -701,7 +683,6 @@ class TEXTURE_PT_distortednoise(TextureTypePanel, Panel):
     tex_type = 'DISTORTED_NOISE'
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -731,7 +712,6 @@ class TEXTURE_PT_distortednoise(TextureTypePanel, Panel):
 class TextureSlotPanel(TextureButtonsPanel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -748,7 +728,6 @@ class TEXTURE_PT_mapping(TextureSlotPanel, Panel):
     bl_label = "Mapping"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -821,7 +800,6 @@ class TEXTURE_PT_influence(TextureSlotPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -908,7 +886,6 @@ class TEXTURE_PT_colors(TextureButtonsPanel, TextureColorsPoll, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -942,7 +919,6 @@ class TEXTURE_PT_colors_ramp(TextureButtonsPanel, TextureColorsPoll, Panel):
     bl_parent_id = "TEXTURE_PT_colors"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -973,6 +949,7 @@ class TEXTURE_PT_animation(TextureButtonsPanel, PropertiesAnimationMixin, Proper
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
+        layout.use_property_decorate = False
 
         texture = context.texture
 
@@ -983,7 +960,7 @@ class TEXTURE_PT_animation(TextureButtonsPanel, PropertiesAnimationMixin, Proper
         if texture_user := context.texture_user:
             texture_user_id = texture_user.id_data
             col = layout.column(align=True)
-            # I (Sybren) tested with particle settings, and then this just shows
+            # NOTE(@sybren): I tested with particle settings, and then this just shows
             # "Particle Settings". If there are other users of Texture data-blocks
             # still around, and this produces unwanted results, let's adjust.
             col.label(text=texture_user_id.bl_rna.name)
@@ -1002,7 +979,6 @@ class TEXTURE_PT_animation(TextureButtonsPanel, PropertiesAnimationMixin, Proper
 class TEXTURE_PT_custom_props(TextureButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }

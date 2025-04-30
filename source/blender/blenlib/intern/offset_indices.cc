@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #include "BLI_array_utils.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_task.hh"
@@ -92,6 +96,31 @@ void gather_group_sizes(const OffsetIndices<int> offsets,
           }
         });
       });
+}
+
+int sum_group_sizes(const OffsetIndices<int> offsets, const Span<int> indices)
+{
+  int count = 0;
+  for (const int i : indices) {
+    count += offsets[i].size();
+  }
+  return count;
+}
+
+int sum_group_sizes(const OffsetIndices<int> offsets, const IndexMask &mask)
+{
+  int count = 0;
+  mask.foreach_segment_optimized([&](const auto segment) {
+    if constexpr (std::is_same_v<std::decay_t<decltype(segment)>, IndexRange>) {
+      count += offsets[segment].size();
+    }
+    else {
+      for (const int64_t i : segment) {
+        count += offsets[i].size();
+      }
+    }
+  });
+  return count;
 }
 
 OffsetIndices<int> gather_selected_offsets(const OffsetIndices<int> src_offsets,

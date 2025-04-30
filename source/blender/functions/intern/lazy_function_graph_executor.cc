@@ -41,15 +41,14 @@
  * starts again.
  */
 
+#include <atomic>
 #include <mutex>
-#include <sstream>
 
-#include "BLI_compute_context.hh"
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_function_ref.hh"
+#include "BLI_stack.hh"
 #include "BLI_task.h"
 #include "BLI_task.hh"
-#include "BLI_timeit.hh"
 
 #include "FN_lazy_function_graph_executor.hh"
 
@@ -659,7 +658,7 @@ class Executor {
   {
     const OutputSocket &socket = *self_.graph_inputs_[graph_input_index];
     const CPPType &type = socket.type();
-    void *buffer = local_data.allocator->allocate(type.size(), type.alignment());
+    void *buffer = local_data.allocator->allocate(type);
     type.move_construct(input_data, buffer);
     this->forward_value_to_linked_inputs(socket, {type, buffer}, current_task, local_data);
   }
@@ -911,7 +910,7 @@ class Executor {
             self_.logger_->log_socket_value(input_socket, {type, default_value}, local_context);
           }
           BLI_assert(input_state.value == nullptr);
-          input_state.value = allocator.allocate(type.size(), type.alignment());
+          input_state.value = allocator.allocate(type);
           type.copy_construct(default_value, input_state.value);
           input_state.was_ready_for_execution = true;
         }
@@ -1173,7 +1172,7 @@ class Executor {
               value_to_forward = {};
             }
             else {
-              void *buffer = local_data.allocator->allocate(type.size(), type.alignment());
+              void *buffer = local_data.allocator->allocate(type);
               type.copy_construct(value_to_forward.get(), buffer);
               this->forward_value_to_input(locked_node, input_state, {type, buffer}, current_task);
             }
@@ -1368,7 +1367,7 @@ class GraphExecutorLFParams final : public Params {
     if (output_state.value == nullptr) {
       LinearAllocator<> &allocator = *this->get_local_data().allocator;
       const CPPType &type = node_.output(index).type();
-      output_state.value = allocator.allocate(type.size(), type.alignment());
+      output_state.value = allocator.allocate(type);
     }
     return output_state.value;
   }
@@ -1461,6 +1460,19 @@ inline void Executor::execute_node(const FunctionNode &node,
 }
 
 GraphExecutor::GraphExecutor(const Graph &graph,
+                             const Logger *logger,
+                             const SideEffectProvider *side_effect_provider,
+                             const NodeExecuteWrapper *node_execute_wrapper)
+    : GraphExecutor(graph,
+                    Vector<const GraphInputSocket *>(graph.graph_inputs()),
+                    Vector<const GraphOutputSocket *>(graph.graph_outputs()),
+                    logger,
+                    side_effect_provider,
+                    node_execute_wrapper)
+{
+}
+
+GraphExecutor::GraphExecutor(const Graph &graph,
                              Vector<const GraphInputSocket *> graph_inputs,
                              Vector<const GraphOutputSocket *> graph_outputs,
                              const Logger *logger,
@@ -1475,6 +1487,8 @@ GraphExecutor::GraphExecutor(const Graph &graph,
       side_effect_provider_(side_effect_provider),
       node_execute_wrapper_(node_execute_wrapper)
 {
+  debug_name_ = graph.name().c_str();
+
   /* The graph executor can handle partial execution when there are still missing inputs. */
   allow_missing_requested_inputs_ = true;
 

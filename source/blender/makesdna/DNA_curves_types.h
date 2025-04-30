@@ -10,9 +10,8 @@
 
 #include "DNA_ID.h"
 #include "DNA_customdata_types.h"
-#include "DNA_object_types.h"
+#include "DNA_listBase.h"
 
-#include "BLI_listbase.h"
 #include "BLI_utildefines.h"
 
 #ifdef __cplusplus
@@ -75,6 +74,7 @@ typedef enum KnotsMode {
   NURBS_KNOT_MODE_ENDPOINT = 1,
   NURBS_KNOT_MODE_BEZIER = 2,
   NURBS_KNOT_MODE_ENDPOINT_BEZIER = 3,
+  NURBS_KNOT_MODE_CUSTOM = 4,
 } KnotsMode;
 
 /** Method used to calculate the normals of a curve's evaluated points. */
@@ -143,12 +143,25 @@ typedef struct CurvesGeometry {
   /** The active index in the #vertex_group_names list. */
   int vertex_group_active_index;
 
+  /** Set to -1 when none is active. */
   int attributes_active_index;
 
   /**
    * Runtime data for curves, stored as a pointer to allow defining this as a C++ class.
    */
   CurvesGeometryRuntimeHandle *runtime;
+
+  /**
+   * Knot values for NURBS curves with NURBS_KNOT_MODE_CUSTOM mode.
+   * Array is allocated with bke::CurvesGeometry::nurbs_custom_knots_update_size() or
+   * bke::CurvesGeometry::nurbs_custom_knots_resize().
+   * Indexed with bke::CurvesGeometry::nurbs_custom_knots_by_curve().
+   */
+  float *custom_knots;
+
+  int custom_knot_num;
+
+  char _pad[4];
 
 #ifdef __cplusplus
   blender::bke::CurvesGeometry &wrap();
@@ -203,6 +216,10 @@ typedef struct Curves {
    * domain.
    */
   char *surface_uv_map;
+
+  /* Distance to keep the curves away from the surface. */
+  float surface_collision_distance;
+  char _pad2[4];
 
   /* Draw cache to store data used for viewport drawing. */
   void *batch_cache;

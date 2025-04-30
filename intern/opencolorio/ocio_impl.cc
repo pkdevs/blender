@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <cassert>
+#include <cmath>
+#include <cstring>
 #include <iostream>
-#include <math.h>
-#include <sstream>
-#include <string.h>
 
 #ifdef _MSC_VER
 #  pragma warning(push)
@@ -31,7 +30,7 @@ using namespace OCIO_NAMESPACE;
 #if !defined(WITH_ASSERT_ABORT)
 #  define OCIO_abort()
 #else
-#  include <stdlib.h>
+#  include <cstdlib>
 #  define OCIO_abort() abort()
 #endif
 
@@ -55,7 +54,7 @@ static void OCIO_reportException(Exception &exception)
   OCIO_reportError(exception.what());
 }
 
-OCIO_ConstConfigRcPtr *OCIOImpl::getCurrentConfig(void)
+OCIO_ConstConfigRcPtr *OCIOImpl::getCurrentConfig()
 {
   ConstConfigRcPtr *config = MEM_new<ConstConfigRcPtr>(__func__);
 
@@ -72,7 +71,7 @@ OCIO_ConstConfigRcPtr *OCIOImpl::getCurrentConfig(void)
 
   MEM_delete(config);
 
-  return NULL;
+  return nullptr;
 }
 
 void OCIOImpl::setCurrentConfig(const OCIO_ConstConfigRcPtr *config)
@@ -85,7 +84,7 @@ void OCIOImpl::setCurrentConfig(const OCIO_ConstConfigRcPtr *config)
   }
 }
 
-OCIO_ConstConfigRcPtr *OCIOImpl::configCreateFromEnv(void)
+OCIO_ConstConfigRcPtr *OCIOImpl::configCreateFromEnv()
 {
   ConstConfigRcPtr *config = MEM_new<ConstConfigRcPtr>(__func__);
 
@@ -102,7 +101,7 @@ OCIO_ConstConfigRcPtr *OCIOImpl::configCreateFromEnv(void)
 
   MEM_delete(config);
 
-  return NULL;
+  return nullptr;
 }
 
 OCIO_ConstConfigRcPtr *OCIOImpl::configCreateFromFile(const char *filename)
@@ -122,12 +121,12 @@ OCIO_ConstConfigRcPtr *OCIOImpl::configCreateFromFile(const char *filename)
 
   MEM_delete(config);
 
-  return NULL;
+  return nullptr;
 }
 
 void OCIOImpl::configRelease(OCIO_ConstConfigRcPtr *config)
 {
-  MEM_delete((ConstConfigRcPtr *)config);
+  MEM_delete(reinterpret_cast<ConstConfigRcPtr *>(config));
 }
 
 int OCIOImpl::configGetNumColorSpaces(OCIO_ConstConfigRcPtr *config)
@@ -151,7 +150,7 @@ const char *OCIOImpl::configGetColorSpaceNameByIndex(OCIO_ConstConfigRcPtr *conf
     OCIO_reportException(exception);
   }
 
-  return NULL;
+  return nullptr;
 }
 
 OCIO_ConstColorSpaceRcPtr *OCIOImpl::configGetColorSpace(OCIO_ConstConfigRcPtr *config,
@@ -172,7 +171,7 @@ OCIO_ConstColorSpaceRcPtr *OCIOImpl::configGetColorSpace(OCIO_ConstConfigRcPtr *
 
   MEM_delete(cs);
 
-  return NULL;
+  return nullptr;
 }
 
 int OCIOImpl::configGetIndexForColorSpace(OCIO_ConstConfigRcPtr *config, const char *name)
@@ -187,6 +186,22 @@ int OCIOImpl::configGetIndexForColorSpace(OCIO_ConstConfigRcPtr *config, const c
   return -1;
 }
 
+const char *OCIOImpl::getColorSpaceFromFilepath(OCIO_ConstConfigRcPtr *config,
+                                                const char *filepath)
+{
+  ConstConfigRcPtr &cfg = *(ConstConfigRcPtr *)config;
+
+  /* If Blender specific default_byte or default_float roles exist, don't use the
+   * default rule which can't distinguish between these two cases automatically. */
+  if (cfg->filepathOnlyMatchesDefaultRule(filepath) &&
+      (cfg->hasRole(OCIO_ROLE_DEFAULT_BYTE) || cfg->hasRole(OCIO_ROLE_DEFAULT_FLOAT)))
+  {
+    return nullptr;
+  }
+
+  return cfg->getColorSpaceFromFilepath(filepath);
+}
+
 const char *OCIOImpl::configGetDefaultDisplay(OCIO_ConstConfigRcPtr *config)
 {
   try {
@@ -196,7 +211,7 @@ const char *OCIOImpl::configGetDefaultDisplay(OCIO_ConstConfigRcPtr *config)
     OCIO_reportException(exception);
   }
 
-  return NULL;
+  return nullptr;
 }
 
 int OCIOImpl::configGetNumDisplays(OCIO_ConstConfigRcPtr *config)
@@ -220,7 +235,7 @@ const char *OCIOImpl::configGetDisplay(OCIO_ConstConfigRcPtr *config, int index)
     OCIO_reportException(exception);
   }
 
-  return NULL;
+  return nullptr;
 }
 
 const char *OCIOImpl::configGetDefaultView(OCIO_ConstConfigRcPtr *config, const char *display)
@@ -232,7 +247,7 @@ const char *OCIOImpl::configGetDefaultView(OCIO_ConstConfigRcPtr *config, const 
     OCIO_reportException(exception);
   }
 
-  return NULL;
+  return nullptr;
 }
 
 int OCIOImpl::configGetNumViews(OCIO_ConstConfigRcPtr *config, const char *display)
@@ -256,7 +271,7 @@ const char *OCIOImpl::configGetView(OCIO_ConstConfigRcPtr *config, const char *d
     OCIO_reportException(exception);
   }
 
-  return NULL;
+  return nullptr;
 }
 
 const char *OCIOImpl::configGetDisplayColorSpaceName(OCIO_ConstConfigRcPtr *config,
@@ -275,7 +290,7 @@ const char *OCIOImpl::configGetDisplayColorSpaceName(OCIO_ConstConfigRcPtr *conf
     OCIO_reportException(exception);
   }
 
-  return NULL;
+  return nullptr;
 }
 
 void OCIOImpl::configGetDefaultLumaCoefs(OCIO_ConstConfigRcPtr *config, float *rgb)
@@ -372,7 +387,7 @@ const char *OCIOImpl::configGetLookNameByIndex(OCIO_ConstConfigRcPtr *config, in
     OCIO_reportException(exception);
   }
 
-  return NULL;
+  return nullptr;
 }
 
 OCIO_ConstLookRcPtr *OCIOImpl::configGetLook(OCIO_ConstConfigRcPtr *config, const char *name)
@@ -392,7 +407,7 @@ OCIO_ConstLookRcPtr *OCIOImpl::configGetLook(OCIO_ConstConfigRcPtr *config, cons
 
   MEM_delete(look);
 
-  return NULL;
+  return nullptr;
 }
 
 const char *OCIOImpl::lookGetProcessSpace(OCIO_ConstLookRcPtr *look)
@@ -402,7 +417,7 @@ const char *OCIOImpl::lookGetProcessSpace(OCIO_ConstLookRcPtr *look)
 
 void OCIOImpl::lookRelease(OCIO_ConstLookRcPtr *look)
 {
-  MEM_delete((ConstLookRcPtr *)look);
+  MEM_delete(reinterpret_cast<ConstLookRcPtr *>(look));
 }
 
 int OCIOImpl::colorSpaceIsInvertible(OCIO_ConstColorSpaceRcPtr *cs_)
@@ -521,7 +536,7 @@ void OCIOImpl::colorSpaceIsBuiltin(OCIO_ConstConfigRcPtr *config_,
 
 void OCIOImpl::colorSpaceRelease(OCIO_ConstColorSpaceRcPtr *cs)
 {
-  MEM_delete((ConstColorSpaceRcPtr *)cs);
+  MEM_delete(reinterpret_cast<ConstColorSpaceRcPtr *>(cs));
 }
 
 OCIO_ConstProcessorRcPtr *OCIOImpl::configGetProcessorWithNames(OCIO_ConstConfigRcPtr *config,
@@ -543,12 +558,12 @@ OCIO_ConstProcessorRcPtr *OCIOImpl::configGetProcessorWithNames(OCIO_ConstConfig
 
   MEM_delete(processor);
 
-  return 0;
+  return nullptr;
 }
 
 void OCIOImpl::processorRelease(OCIO_ConstProcessorRcPtr *processor)
 {
-  MEM_delete(processor);
+  MEM_delete(reinterpret_cast<ConstProcessorRcPtr *>(processor));
 }
 
 OCIO_ConstCPUProcessorRcPtr *OCIOImpl::processorGetCPUProcessor(
@@ -656,7 +671,7 @@ void OCIOImpl::cpuProcessorApplyRGBA_predivide(OCIO_ConstCPUProcessorRcPtr *cpu_
 
 void OCIOImpl::cpuProcessorRelease(OCIO_ConstCPUProcessorRcPtr *cpu_processor)
 {
-  MEM_delete(cpu_processor);
+  MEM_delete(reinterpret_cast<ConstCPUProcessorRcPtr *>(cpu_processor));
 }
 
 const char *OCIOImpl::colorSpaceGetName(OCIO_ConstColorSpaceRcPtr *cs)
@@ -793,7 +808,7 @@ OCIO_ConstProcessorRcPtr *OCIOImpl::createDisplayProcessor(OCIO_ConstConfigRcPtr
   }
 
   MEM_delete(p);
-  return NULL;
+  return nullptr;
 }
 
 OCIO_PackedImageDesc *OCIOImpl::createOCIO_PackedImageDesc(float *data,
@@ -805,15 +820,15 @@ OCIO_PackedImageDesc *OCIOImpl::createOCIO_PackedImageDesc(float *data,
                                                            long yStrideBytes)
 {
   try {
-    void *mem = MEM_mallocN(sizeof(PackedImageDesc), __func__);
-    PackedImageDesc *id = new (mem) PackedImageDesc(data,
-                                                    width,
-                                                    height,
-                                                    numChannels,
-                                                    BIT_DEPTH_F32,
-                                                    chanStrideBytes,
-                                                    xStrideBytes,
-                                                    yStrideBytes);
+    PackedImageDesc *id = MEM_new<PackedImageDesc>(__func__,
+                                                   data,
+                                                   width,
+                                                   height,
+                                                   numChannels,
+                                                   BIT_DEPTH_F32,
+                                                   chanStrideBytes,
+                                                   xStrideBytes,
+                                                   yStrideBytes);
 
     return (OCIO_PackedImageDesc *)id;
   }
@@ -821,20 +836,20 @@ OCIO_PackedImageDesc *OCIOImpl::createOCIO_PackedImageDesc(float *data,
     OCIO_reportException(exception);
   }
 
-  return NULL;
+  return nullptr;
 }
 
 void OCIOImpl::OCIO_PackedImageDescRelease(OCIO_PackedImageDesc *id)
 {
-  MEM_delete((PackedImageDesc *)id);
+  MEM_delete(reinterpret_cast<PackedImageDesc *>(id));
 }
 
-const char *OCIOImpl::getVersionString(void)
+const char *OCIOImpl::getVersionString()
 {
   return GetVersion();
 }
 
-int OCIOImpl::getVersionHex(void)
+int OCIOImpl::getVersionHex()
 {
   return GetVersionHex();
 }

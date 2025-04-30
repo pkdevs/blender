@@ -11,14 +11,14 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "DNA_listBase.h"
 #include "DNA_screen_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
+#include "BLI_string.h"
+#include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
 
 #include "RNA_access.hh"
@@ -57,6 +57,7 @@ static void event_ids_from_flag(char *str,
     }
   }
   ofs += BLI_strncpy_rlen(str + ofs, "}", str_maxncpy - ofs);
+  UNUSED_VARS(ofs); /* Quiet warning. */
 }
 
 static void event_ids_from_type_and_value(const short type,
@@ -90,6 +91,8 @@ void WM_event_print(const wmEvent *event)
           {"CTRL", KM_CTRL},
           {"ALT", KM_ALT},
           {"OS", KM_OSKEY},
+          {"HYPER", KM_HYPER},
+
       };
       event_ids_from_flag(
           modifier_id, sizeof(modifier_id), flag_data, ARRAY_SIZE(flag_data), event->modifier);
@@ -132,11 +135,27 @@ void WM_event_print(const wmEvent *event)
     if (ISNDOF(event->type)) {
       const wmNDOFMotionData *ndof = static_cast<const wmNDOFMotionData *>(event->customdata);
       if (event->type == NDOF_MOTION) {
-        printf(", ndof: rot: (%.4f %.4f %.4f), tx: (%.4f %.4f %.4f), dt: %.4f, progress: %d",
+        const char *ndof_progress = unknown;
+
+#  define CASE_NDOF_PROGRESS(id) \
+    case P_##id: { \
+      ndof_progress = STRINGIFY(id); \
+      break; \
+    }
+        switch (ndof->progress) {
+          CASE_NDOF_PROGRESS(NOT_STARTED);
+          CASE_NDOF_PROGRESS(STARTING);
+          CASE_NDOF_PROGRESS(IN_PROGRESS);
+          CASE_NDOF_PROGRESS(FINISHING);
+          CASE_NDOF_PROGRESS(FINISHED);
+        }
+#  undef CASE_NDOF_PROGRESS
+
+        printf(", ndof: rot: (%.4f %.4f %.4f), tx: (%.4f %.4f %.4f), dt: %.4f, progress: %s",
                UNPACK3(ndof->rvec),
                UNPACK3(ndof->tvec),
                ndof->dt,
-               ndof->progress);
+               ndof_progress);
       }
       else {
         /* NDOF buttons printed already. */
@@ -387,6 +406,14 @@ int WM_event_drag_threshold(const wmEvent *event)
      * The `event->type` would include #MOUSEMOVE which is always the case when dragging
      * and does not help us know which threshold to use. */
     if (WM_event_is_tablet(event)) {
+      /* Decrease threshold as pen pressure is increased. */
+      if (event->tablet.pressure > 0.0f && event->tablet.pressure < 1.0f) {
+        /* Pressure 0 results in max threshold, pressure 0.5 and above results in 0 pixels. */
+        const float bias = 1.0f - std::min(event->tablet.pressure * 2.0f, 1.0f);
+        drag_threshold = std::max(int(bias * float(U.drag_threshold_tablet)), 0);
+        /* Return without multiplying by resolution scale. */
+        return drag_threshold;
+      }
       drag_threshold = U.drag_threshold_tablet;
     }
     else {
@@ -613,14 +640,13 @@ int WM_event_absolute_delta_y(const wmEvent *event)
  * \{ */
 
 #ifdef WITH_INPUT_IME
-/**
- * Most OS's use `Ctrl+Space` / `OsKey+Space` to switch IME,
- * so don't type in the space character.
- *
- * \note Shift is excluded from this check since it prevented typing `Shift+Space`, see: #85517.
- */
 bool WM_event_is_ime_switch(const wmEvent *event)
 {
+  /* Most OS's use `Ctrl+Space` / `OsKey+Space` to switch IME,
+   * so don't type in the space character.
+   *
+   * NOTE: Shift is excluded from this check since it prevented typing `Shift+Space`, see: #85517.
+   */
   return (event->val == KM_PRESS) && (event->type == EVT_SPACEKEY) &&
          (event->modifier & (KM_CTRL | KM_OSKEY | KM_ALT));
 }

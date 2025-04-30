@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "GPU_capabilities.hh"
 #include "gpu_backend.hh"
 
 #include "BLI_vector.hh"
@@ -17,9 +18,9 @@
 #endif
 
 #include "gl_batch.hh"
+#include "gl_compilation_subprocess.hh"
 #include "gl_compute.hh"
 #include "gl_context.hh"
-#include "gl_drawlist.hh"
 #include "gl_framebuffer.hh"
 #include "gl_index_buffer.hh"
 #include "gl_query.hh"
@@ -39,7 +40,7 @@ class GLBackend : public GPUBackend {
   renderdoc::api::Renderdoc renderdoc_;
 #endif
 
-  GLShaderCompiler compiler_;
+  ShaderCompiler *compiler_;
 
  public:
   GLBackend()
@@ -55,10 +56,21 @@ class GLBackend : public GPUBackend {
     GLBackend::platform_exit();
   }
 
+  void init_resources() override
+  {
+    if (GPU_use_parallel_compilation()) {
+      compiler_ = new GLShaderCompiler();
+    }
+    else {
+      compiler_ = new ShaderCompilerGeneric();
+    }
+  };
+
   void delete_resources() override
   {
     /* Delete any resources with context active. */
     GLTexture::samplers_free();
+    delete compiler_;
   }
 
   static GLBackend *get()
@@ -66,9 +78,9 @@ class GLBackend : public GPUBackend {
     return static_cast<GLBackend *>(GPUBackend::get());
   }
 
-  GLShaderCompiler *get_compiler()
+  ShaderCompiler *get_compiler()
   {
-    return &compiler_;
+    return compiler_;
   }
 
   void samplers_update() override
@@ -84,11 +96,6 @@ class GLBackend : public GPUBackend {
   Batch *batch_alloc() override
   {
     return new GLBatch();
-  };
-
-  DrawList *drawlist_alloc(int list_length) override
-  {
-    return new GLDrawList(list_length);
   };
 
   Fence *fence_alloc() override
@@ -165,10 +172,17 @@ class GLBackend : public GPUBackend {
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, 0);
   }
 
+  void shader_cache_dir_clear_old() override
+  {
+#if BLI_SUBPROCESS_SUPPORT
+    GL_shader_cache_dir_clear_old();
+#endif
+  }
+
   /* Render Frame Coordination */
   void render_begin() override{};
   void render_end() override{};
-  void render_step() override{};
+  void render_step(bool /*force_resource_release*/) override{};
 
   bool debug_capture_begin(const char *title);
   void debug_capture_end();

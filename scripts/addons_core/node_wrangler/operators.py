@@ -493,58 +493,6 @@ class NWAddAttrNode(Operator, NWBase):
         return {'FINISHED'}
 
 
-class NWFrameSelected(Operator, NWBase):
-    bl_idname = "node.nw_frame_selected"
-    bl_label = "Frame Selected"
-    bl_translation_context = i18n_contexts.id_nodetree
-    bl_description = "Add a frame node and parent the selected nodes to it"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    label_prop: StringProperty(
-        name='Label',
-        description='The visual name of the frame node',
-        default=' '
-    )
-    use_custom_color_prop: BoolProperty(
-        name="Custom Color",
-        description="Use custom color for the frame node",
-        default=False
-    )
-    color_prop: FloatVectorProperty(
-        name="Color",
-        description="The color of the frame node",
-        default=(0.604, 0.604, 0.604),
-        min=0, max=1, step=1, precision=3,
-        subtype='COLOR_GAMMA', size=3
-    )
-
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(self, 'label_prop')
-        layout.prop(self, 'use_custom_color_prop')
-        col = layout.column()
-        col.active = self.use_custom_color_prop
-        col.prop(self, 'color_prop', text="")
-
-    def execute(self, context):
-        nodes, links = get_nodes_links(context)
-        selected = []
-        for node in nodes:
-            if node.select:
-                selected.append(node)
-
-        bpy.ops.node.add_node(type='NodeFrame')
-        frm = nodes.active
-        frm.label = self.label_prop
-        frm.use_custom_color = self.use_custom_color_prop
-        frm.color = self.color_prop
-
-        for node in selected:
-            node.parent = frm
-
-        return {'FINISHED'}
-
-
 class NWReloadImages(Operator):
     bl_idname = "node.nw_reload_images"
     bl_label = "Reload Images"
@@ -592,6 +540,7 @@ class NWMergeNodes(Operator, NWBase):
 
     mode: EnumProperty(
         name="Mode",
+        translation_context=i18n_contexts.id_nodetree,
         description="All possible blend types, boolean operations and math operations",
         items=blend_types + [op for op in geo_combine_operations if op not in blend_types] + [op for op in operations if op not in blend_types],
     )
@@ -1000,6 +949,7 @@ class NWBatchChangeNodes(Operator, NWBase):
     )
     operation: EnumProperty(
         name="Operation",
+        translation_context=i18n_contexts.id_nodetree,
         items=operations + navs,
     )
 
@@ -2226,60 +2176,6 @@ class NWAddSequence(Operator, NWBase, ImportHelper):
         return {'FINISHED'}
 
 
-class NWAddMultipleImages(Operator, NWBase, ImportHelper):
-    """Add multiple images at once"""
-    bl_idname = 'node.nw_add_multiple_images'
-    bl_label = 'Open Selected Images'
-    bl_options = {'REGISTER', 'UNDO'}
-    directory: StringProperty(
-        subtype="DIR_PATH"
-    )
-    files: CollectionProperty(
-        type=bpy.types.OperatorFileListElement,
-        options={'HIDDEN', 'SKIP_SAVE'}
-    )
-
-    @classmethod
-    def poll(cls, context):
-        return (nw_check(cls, context)
-                and nw_check_space_type(cls, context, {'ShaderNodeTree', 'CompositorNodeTree'}))
-
-    def execute(self, context):
-        nodes, links = get_nodes_links(context)
-
-        xloc, yloc = context.region.view2d.region_to_view(context.area.width / 2, context.area.height / 2)
-
-        if context.space_data.node_tree.type == 'SHADER':
-            node_type = "ShaderNodeTexImage"
-        elif context.space_data.node_tree.type == 'COMPOSITING':
-            node_type = "CompositorNodeImage"
-
-        new_nodes = []
-        for f in self.files:
-            fname = f.name
-
-            node = nodes.new(node_type)
-            new_nodes.append(node)
-            node.label = fname
-            node.hide = True
-            node.location.x = xloc
-            node.location.y = yloc
-            yloc -= 40
-
-            img = bpy.data.images.load(self.directory + fname)
-            node.image = img
-
-        # shift new nodes up to center of tree
-        list_size = new_nodes[0].location.y - new_nodes[-1].location.y
-        for node in nodes:
-            if node in new_nodes:
-                node.select = True
-                node.location.y += (list_size / 2)
-            else:
-                node.select = False
-        return {'FINISHED'}
-
-
 class NWSaveViewer(bpy.types.Operator, ExportHelper):
     """Save the current viewer node to an image file"""
     bl_idname = "node.nw_save_viewer"
@@ -2327,11 +2223,13 @@ class NWSaveViewer(bpy.types.Operator, ExportHelper):
                 '.tif': 'TIFF'}
             basename, ext = path.splitext(fp)
             old_render_format = context.scene.render.image_settings.file_format
+            old_tree_type = context.space_data.tree_type
             context.scene.render.image_settings.file_format = formats[self.filename_ext]
             context.area.type = "IMAGE_EDITOR"
             context.area.spaces[0].image = bpy.data.images['Viewer Node']
             context.area.spaces[0].image.save_render(fp)
             context.area.type = "NODE_EDITOR"
+            context.space_data.tree_type = old_tree_type
             context.scene.render.image_settings.file_format = old_render_format
             return {'FINISHED'}
 
@@ -2448,7 +2346,6 @@ classes = (
     NWSwapLinks,
     NWResetBG,
     NWAddAttrNode,
-    NWFrameSelected,
     NWReloadImages,
     NWMergeNodes,
     NWBatchChangeNodes,
@@ -2468,7 +2365,6 @@ classes = (
     NWMakeLink,
     NWCallInputsMenu,
     NWAddSequence,
-    NWAddMultipleImages,
     NWSaveViewer,
     NWResetNodes,
 )

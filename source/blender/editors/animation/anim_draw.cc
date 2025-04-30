@@ -15,7 +15,9 @@
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
 
+#include "BLI_listbase.h"
 #include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_rect.h"
 #include "BLI_utildefines.h"
 
@@ -207,44 +209,61 @@ void ANIM_draw_action_framerange(
 /* *************************************************** */
 /* NLA-MAPPING UTILITIES (required for drawing and also editing keyframes). */
 
-AnimData *ANIM_nla_mapping_get(bAnimContext *ac, bAnimListElem *ale)
+bool ANIM_nla_mapping_allowed(const bAnimListElem *ale)
 {
-  /* sanity checks */
-  if (ac == nullptr) {
-    return nullptr;
-  }
+  /* Historically, there was another check in the code that this function replaced:
+   * if (!ELEM(ac->datatype,
+   *           ANIMCONT_ACTION,
+   *           ANIMCONT_SHAPEKEY,
+   *           ANIMCONT_DOPESHEET,
+   *           ANIMCONT_FCURVES,
+   *           ANIMCONT_NLA,
+   *           ANIMCONT_CHANNEL,
+   *           ANIMCONT_TIMELINE))
+   * {
+   *   ... prevent NLA-remapping ...
+   * }
+   *
+   * I (Sybren) suspect that this was actually hiding some animation type check. When that code was
+   * written, I think there was no GreasePencil data showing in the regular Dope Sheet editor.
+   */
 
-  /* abort if rendering - we may get some race condition issues... */
-  if (G.is_rendering) {
-    return nullptr;
+  switch (ale->type) {
+    case ANIMTYPE_NLACURVE:
+      /* NLA Control Curves occur on NLA strips,
+       * and shouldn't be subjected to this kind of mapping. */
+      return false;
+    case ANIMTYPE_FCURVE: {
+      /* The F-Curve data of a driver should never get NLA-remapped. */
+      FCurve *fcurve = static_cast<FCurve *>(ale->key_data);
+      return !fcurve->driver;
+    }
+    case ANIMTYPE_DSGPENCIL:
+    case ANIMTYPE_GPLAYER:
+    case ANIMTYPE_GREASE_PENCIL_DATABLOCK:
+    case ANIMTYPE_GREASE_PENCIL_LAYER_GROUP:
+    case ANIMTYPE_GREASE_PENCIL_LAYER:
+      /* Grease Pencil doesn't use the NLA, so don't bother remapping. */
+      return false;
+    case ANIMTYPE_MASKDATABLOCK:
+    case ANIMTYPE_MASKLAYER:
+      /* I (Sybren) don't _think_ masks can use the NLA. */
+      return false;
+    default:
+      /* NLA time remapping is the default behavior, and only should be
+       * prohibited for the above types. */
+      return true;
   }
+}
 
-  /* apart from strictly keyframe-related contexts, this shouldn't even happen */
-  /* XXX: nla and channel here may not be necessary... */
-  if (!ELEM(ac->datatype,
-            ANIMCONT_ACTION,
-            ANIMCONT_SHAPEKEY,
-            ANIMCONT_DOPESHEET,
-            ANIMCONT_FCURVES,
-            ANIMCONT_NLA,
-            ANIMCONT_CHANNEL,
-            ANIMCONT_TIMELINE))
-  {
-    return nullptr;
+float ANIM_nla_tweakedit_remap(bAnimListElem *ale,
+                               const float cframe,
+                               const eNlaTime_ConvertModes mode)
+{
+  if (!ANIM_nla_mapping_allowed(ale)) {
+    return cframe;
   }
-
-  /* handling depends on the type of animation-context we've got */
-  if (!ale) {
-    return nullptr;
-  }
-
-  /* NLA Control Curves occur on NLA strips,
-   * and shouldn't be subjected to this kind of mapping. */
-  if (ale->type == ANIMTYPE_NLACURVE) {
-    return nullptr;
-  }
-
-  return ale->adt;
+  return BKE_nla_tweakedit_remap(ale->adt, cframe, mode);
 }
 
 /* ------------------- */
@@ -254,7 +273,7 @@ AnimData *ANIM_nla_mapping_get(bAnimContext *ac, bAnimListElem *ale)
 static short bezt_nlamapping_restore(KeyframeEditData *ked, BezTriple *bezt)
 {
   /* AnimData block providing scaling is stored in 'data', only_keys option is stored in i1 */
-  AnimData *adt = (AnimData *)ked->data;
+  AnimData *adt = static_cast<AnimData *>(ked->data);
   short only_keys = short(ked->i1);
 
   /* adjust BezTriple handles only if allowed to */
@@ -273,7 +292,7 @@ static short bezt_nlamapping_restore(KeyframeEditData *ked, BezTriple *bezt)
 static short bezt_nlamapping_apply(KeyframeEditData *ked, BezTriple *bezt)
 {
   /* AnimData block providing scaling is stored in 'data', only_keys option is stored in i1 */
-  AnimData *adt = (AnimData *)ked->data;
+  AnimData *adt = static_cast<AnimData *>(ked->data);
   short only_keys = short(ked->i1);
 
   /* adjust BezTriple handles only if allowed to */
@@ -314,13 +333,24 @@ void ANIM_nla_mapping_apply_fcurve(AnimData *adt, FCurve *fcu, bool restore, boo
   ANIM_fcurve_keyframes_loop(&ked, fcu, nullptr, map_cb, nullptr);
 }
 
+void ANIM_nla_mapping_apply_if_needed_fcurve(bAnimListElem *ale,
+                                             FCurve *fcu,
+                                             const bool restore,
+                                             const bool only_keys)
+{
+  if (!ANIM_nla_mapping_allowed(ale)) {
+    return;
+  }
+  ANIM_nla_mapping_apply_fcurve(ale->adt, fcu, restore, only_keys);
+}
+
 /* *************************************************** */
 /* UNITS CONVERSION MAPPING (required for drawing and editing keyframes) */
 
 short ANIM_get_normalization_flags(SpaceLink *space_link)
 {
   if (space_link->spacetype == SPACE_GRAPH) {
-    SpaceGraph *sipo = (SpaceGraph *)space_link;
+    SpaceGraph *sipo = reinterpret_cast<SpaceGraph *>(space_link);
     bool use_normalization = (sipo->flag & SIPO_NORMALIZE) != 0;
     bool freeze_normalization = (sipo->flag & SIPO_NORMALIZE_FREEZE) != 0;
     return use_normalization ? (ANIM_UNITCONV_NORMALIZE |
@@ -577,7 +607,7 @@ static bool find_prev_next_keyframes(bContext *C, int *r_nextfra, int *r_prevfra
 
   cfranext = cfraprev = float(scene->r.cfra);
 
-  /* seed up dummy dopesheet context with flags to perform necessary filtering */
+  /* Seed up dummy dope-sheet context with flags to perform necessary filtering. */
   if ((scene->flag & SCE_KEYS_NO_SELONLY) == 0) {
     /* only selected channels are included */
     ads.filterflag |= ADS_FILTER_ONLYSEL;
@@ -598,7 +628,7 @@ static bool find_prev_next_keyframes(bContext *C, int *r_nextfra, int *r_prevfra
   }
   ED_keylist_prepare_for_direct_access(keylist);
 
-  /* TODO(jbakker): Keylists are ordered, no need to do any searching at all. */
+  /* TODO(jbakker): Key-lists are ordered, no need to do any searching at all. */
   /* find matching keyframe in the right direction */
   do {
     aknext = ED_keylist_find_next(keylist, cfranext);

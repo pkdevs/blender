@@ -7,6 +7,7 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.h"
 #include "BLI_ordered_edge.hh"
+#include "BLI_rect.h"
 
 #include "pbvh_uv_islands.hh"
 
@@ -26,7 +27,7 @@ static void uv_edge_append_to_uv_vertices(UVEdge &uv_edge)
 static void uv_primitive_append_to_uv_edges(UVPrimitive &uv_primitive)
 {
   for (UVEdge *uv_edge : uv_primitive.edges) {
-    uv_edge->uv_primitives.append_non_duplicates(&uv_primitive);
+    uv_edge->uv_primitive_indices.append_non_duplicates(uv_primitive.primitive_i);
   }
 }
 
@@ -246,8 +247,8 @@ static Vector<int> connecting_mesh_primitive_indices(const UVVertex &uv_vertex)
 {
   Vector<int> primitives_around_uv_vertex;
   for (const UVEdge *uv_edge : uv_vertex.uv_edges) {
-    for (const UVPrimitive *uv_primitive : uv_edge->uv_primitives) {
-      primitives_around_uv_vertex.append_non_duplicates(uv_primitive->primitive_i);
+    for (const int uv_primitive_index : uv_edge->uv_primitive_indices) {
+      primitives_around_uv_vertex.append_non_duplicates(uv_primitive_index);
     }
   }
   return primitives_around_uv_vertex;
@@ -295,7 +296,7 @@ bool UVEdge::has_same_vertices(const int2 &edge) const
 
 bool UVEdge::is_border_edge() const
 {
-  return uv_primitives.size() == 1;
+  return uv_primitive_indices.size() == 1;
 }
 
 UVVertex *UVEdge::get_other_uv_vertex(const int vertex)
@@ -364,7 +365,7 @@ UVEdge *UVIsland::lookup_or_create(const UVEdge &edge)
 
   uv_edges.append(edge);
   UVEdge *result = &uv_edges.last();
-  result->uv_primitives.clear();
+  result->uv_primitive_indices.clear();
   return result;
 }
 
@@ -379,7 +380,7 @@ void UVIsland::append(const UVPrimitive &primitive)
     uv_edge_template.vertices[1] = lookup_or_create(*other_edge->vertices[1]);
     new_prim_ptr->edges[i] = lookup_or_create(uv_edge_template);
     uv_edge_append_to_uv_vertices(*new_prim_ptr->edges[i]);
-    new_prim_ptr->edges[i]->uv_primitives.append(new_prim_ptr);
+    new_prim_ptr->edges[i]->uv_primitive_indices.append(new_prim_ptr->primitive_i);
   }
 }
 
@@ -436,7 +437,7 @@ static UVPrimitive *add_primitive(const MeshData &mesh_data,
     UVEdge *uv_edge = uv_island.lookup_or_create(uv_edge_template);
     uv_primitive_ptr->edges.append(uv_edge);
     uv_edge_append_to_uv_vertices(*uv_edge);
-    uv_edge->uv_primitives.append(uv_primitive_ptr);
+    uv_edge->uv_primitive_indices.append(uv_primitive_ptr->primitive_i);
   }
   return uv_primitive_ptr;
 }
@@ -850,7 +851,7 @@ static int find_fill_primitive(const MeshData &mesh_data, UVBorderCorner &corner
   if (corner.first->get_uv_vertex(0) == corner.second->get_uv_vertex(1)) {
     return -1;
   }
-  UVVertex *shared_vert = corner.second->get_uv_vertex(0);
+  const UVVertex *shared_vert = corner.second->get_uv_vertex(0);
   for (const int edge_i : mesh_data.vert_to_edge_map[shared_vert->vertex]) {
     const int2 &edge = mesh_data.edges[edge_i];
     if (corner.first->edge->has_same_vertices(edge)) {
@@ -1309,10 +1310,10 @@ bool UVPrimitive::has_shared_edge(const UVPrimitive &other) const
   return false;
 }
 
-bool UVPrimitive::has_shared_edge(const MeshData &mesh_data, const int primitive_i) const
+bool UVPrimitive::has_shared_edge(const MeshData &mesh_data, const int other_triangle_index) const
 {
   for (const UVEdge *uv_edge : edges) {
-    const int3 &tri = mesh_data.corner_tris[primitive_i];
+    const int3 &tri = mesh_data.corner_tris[other_triangle_index];
     int loop_1 = tri[2];
     for (int i = 0; i < 3; i++) {
       int loop_2 = tri[i];

@@ -9,11 +9,13 @@
 #  include "BKE_appdir.hh"
 #  include "BLI_fileops.hh"
 #  include "BLI_hash.hh"
-#  include "BLI_path_util.h"
+#  include "BLI_path_utils.hh"
+#  include "BLI_threads.h"
 #  include "CLG_log.h"
 #  include "GHOST_C-api.h"
 #  include "GPU_context.hh"
 #  include "GPU_init_exit.hh"
+#  include "gpu_capabilities_private.hh"
 #  include <iostream>
 #  include <string>
 
@@ -153,6 +155,10 @@ void GPU_compilation_subprocess_run(const char *subprocess_name)
 #  endif
 
   CLG_init();
+  BLI_threadapi_init();
+
+  /* Prevent the ShaderCompiler from spawning extra threads/contexts, we don't need them. */
+  GCaps.use_main_context_workaround = true;
 
   std::string name = subprocess_name;
   SharedMemory shared_mem(name, compilation_subprocess_shared_memory_size, false);
@@ -167,6 +173,7 @@ void GPU_compilation_subprocess_run(const char *subprocess_name)
 
   GHOST_SystemHandle ghost_system = GHOST_CreateSystemBackground();
   BLI_assert(ghost_system);
+  GPU_backend_ghost_system_set(ghost_system);
   GHOST_GPUSettings gpu_settings = {0};
   gpu_settings.context_type = GHOST_kDrawingContextTypeOpenGL;
   GHOST_ContextHandle ghost_context = GHOST_CreateGPUContext(ghost_system, gpu_settings);
@@ -283,7 +290,8 @@ void GPU_compilation_subprocess_run(const char *subprocess_name)
   GHOST_DisposeSystem(ghost_system);
 }
 
-void GPU_shader_cache_dir_clear_old()
+namespace blender::gpu {
+void GL_shader_cache_dir_clear_old()
 {
   std::string cache_dir = cache_dir_get();
 
@@ -302,5 +310,6 @@ void GPU_shader_cache_dir_clear_old()
   }
   BLI_filelist_free(entries, dir_len);
 }
+}  // namespace blender::gpu
 
 #endif

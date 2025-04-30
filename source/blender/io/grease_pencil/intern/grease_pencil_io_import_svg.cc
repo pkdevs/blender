@@ -13,7 +13,7 @@
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.hh"
 #include "BLI_offset_indices.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
@@ -23,8 +23,6 @@
 #include "DNA_grease_pencil_types.h"
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
-
-#include "GEO_resample_curves.hh"
 
 #include "ED_grease_pencil.hh"
 
@@ -146,7 +144,7 @@ static IndexRange extend_curves_geometry(bke::CurvesGeometry &curves, const NSVG
 
   const IndexRange new_curves_range = {old_curves_num, new_points_by_curve.size()};
   const int curves_num = new_curves_range.one_after_last();
-  const int points_num = new_points_by_curve.total_size();
+  const int points_num = new_points_by_curve.total_size() + old_points_num;
 
   Array<int> new_offsets(curves_num + 1);
   if (old_curves_num > 0) {
@@ -181,9 +179,10 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
   bke::SpanAttributeWriter<int> materials = attributes.lookup_or_add_for_write_span<int>(
       "material_index", bke::AttrDomain::Curve);
+  MutableSpan<bool> cyclic = curves.cyclic_for_write();
+
   bke::SpanAttributeWriter fill_colors = attributes.lookup_or_add_for_write_span<ColorGeometry4f>(
       "fill_color", bke::AttrDomain::Curve);
-  MutableSpan<bool> cyclic = curves.cyclic_for_write();
   bke::SpanAttributeWriter<float> fill_opacities = attributes.lookup_or_add_for_write_span<float>(
       "fill_opacity", bke::AttrDomain::Curve);
 
@@ -202,8 +201,12 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
 
   materials.span.slice(curves_range).fill(material_index);
   const ColorGeometry4f shape_color = convert_svg_color(shape.fill);
-  fill_colors.span.slice(curves_range).fill(shape_color);
-  fill_opacities.span.slice(curves_range).fill(shape_color.a);
+  if (fill_colors) {
+    fill_colors.span.slice(curves_range).fill(shape_color);
+  }
+  if (fill_opacities) {
+    fill_opacities.span.slice(curves_range).fill(shape_color.a);
+  }
 
   int curve_index = curves_range.start();
   for (NSVGpath *path = shape.paths; path; path = path->next) {
@@ -234,8 +237,12 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
       radii.span[point_index] = shape.strokeWidth * path_width_scale;
 
       const ColorGeometry4f point_color = convert_svg_color(shape.stroke);
-      vertex_colors.span[point_index] = point_color;
-      point_opacities.span[point_index] = point_color.a;
+      if (vertex_colors) {
+        vertex_colors.span[point_index] = point_color;
+      }
+      if (point_opacities) {
+        point_opacities.span[point_index] = point_color.a;
+      }
     }
 
     ++curve_index;

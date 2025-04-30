@@ -4,20 +4,16 @@
 
 set(INC
   ../include
-  ../../blenkernel
-  ../../blentranslation
-  ../../bmesh
   ../../io/alembic
   ../../io/collada
   ../../io/common
-  ../../io/gpencil_legacy
+  ../../io/fbx
   ../../io/grease_pencil
   ../../io/ply
   ../../io/stl
   ../../io/usd
   ../../io/wavefront_obj
   ../../makesrna
-  ../../windowmanager
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -30,9 +26,7 @@ set(SRC
   io_cache.cc
   io_collada.cc
   io_drop_import_file.cc
-  io_gpencil_legacy_export.cc
-  io_gpencil_legacy_import.cc
-  io_gpencil_legacy_utils.cc
+  io_fbx_ops.cc
   io_grease_pencil.cc
   io_obj.cc
   io_ops.cc
@@ -45,7 +39,7 @@ set(SRC
   io_cache.hh
   io_collada.hh
   io_drop_import_file.hh
-  io_gpencil_legacy.hh
+  io_fbx_ops.hh
   io_grease_pencil.hh
   io_obj.hh
   io_ops.hh
@@ -56,13 +50,16 @@ set(SRC
 )
 
 set(LIB
-  bf_blenkernel
+  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::blentranslation
+  PRIVATE bf::bmesh
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::extern::fmtlib
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::intern::clog
+  PRIVATE bf::windowmanager
 )
 
 if(WITH_OPENCOLLADA)
@@ -93,9 +90,15 @@ if(WITH_IO_STL)
   add_definitions(-DWITH_IO_STL)
 endif()
 
+if(WITH_IO_FBX)
+  list(APPEND LIB
+    bf_io_fbx
+  )
+  add_definitions(-DWITH_IO_FBX)
+endif()
+
 if(WITH_IO_GREASE_PENCIL)
   list(APPEND LIB
-    bf_io_gpencil_legacy
     bf_io_grease_pencil
   )
   add_definitions(-DWITH_IO_GREASE_PENCIL)

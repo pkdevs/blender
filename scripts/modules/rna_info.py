@@ -4,6 +4,15 @@
 
 # classes for extracting info from blenders internal classes
 
+__all__ = (
+    "BuildRNAInfo",
+    "InfoFunctionRNA",
+    "InfoOperatorRNA",
+    "InfoPropertyRNA",
+    "InfoStructRNA",
+    "rna_id_ignore",
+)
+
 import bpy
 
 # use to strip python paths
@@ -187,7 +196,7 @@ class InfoStructRNA:
         import types
         functions = []
         for identifier, attr in self._get_py_visible_attrs():
-            # Methods may be python wrappers to C functions.
+            # Methods may be Python wrappers to C-API functions.
             ok = False
             if (attr_func := getattr(attr, "__func__", None)) is not None:
                 if type(attr_func) == types.FunctionType:
@@ -203,7 +212,7 @@ class InfoStructRNA:
         import types
         functions = []
         for identifier, attr in self._get_py_visible_attrs():
-            # Methods may be python wrappers to C functions.
+            # Methods may be Python wrappers to C-API functions.
             ok = False
             if (attr_func := getattr(attr, "__func__", None)) is not None:
                 if type(attr_func) == types.BuiltinFunctionType:
@@ -268,6 +277,7 @@ class InfoPropertyRNA:
         "is_required",
         "is_readonly",
         "is_never_none",
+        "is_path_supports_blend_relative",
     )
     global_lookup = {}
 
@@ -292,6 +302,7 @@ class InfoPropertyRNA:
         self.is_readonly = rna_prop.is_readonly
         self.is_never_none = rna_prop.is_never_none
         self.is_argument_optional = rna_prop.is_argument_optional
+        self.is_path_supports_blend_relative = rna_prop.is_path_supports_blend_relative
 
         self.type = rna_prop.type.lower()
         fixed_type = getattr(rna_prop, "fixed_type", "")
@@ -381,11 +392,13 @@ class InfoPropertyRNA:
         """
         :arg enum_descr_override: Optionally override items for enum.
            Otherwise expand the literal items.
-        :type enum_descr_override: string or None when unset.
+        :type enum_descr_override: str | None
         """
         type_str = ""
         if self.fixed_type is None:
             type_str += self.type
+            if self.type == "string" and self.subtype == "BYTE_STRING":
+                type_str = "byte string"
             if self.array_length:
                 if self.array_dimensions[1] != 0:
                     dimension_str = " of {:s} items".format(
@@ -459,13 +472,16 @@ class InfoPropertyRNA:
             if not self.is_required:
                 type_info.append("optional")
             if self.is_argument_optional:
-                type_info.append("optional argument")
+                type_info.append("optional for registration")
         else:  # readonly is only useful for self's, not args
             if self.is_readonly:
                 type_info.append("readonly")
 
         if self.is_never_none:
             type_info.append("never None")
+
+        if self.is_path_supports_blend_relative:
+            type_info.append("blend relative ``//`` prefix supported")
 
         if type_info:
             type_str += ", ({:s})".format(", ".join(type_info))
@@ -645,7 +661,7 @@ def BuildRNAInfo():
     def base_id(rna_struct):
         try:
             return rna_struct.base.identifier
-        except:
+        except AttributeError:
             return ""  # invalid id
 
     # structs = [(base_id(rna_struct), rna_struct.identifier, rna_struct) for rna_struct in bpy.doc.structs.values()]

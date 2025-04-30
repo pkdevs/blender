@@ -11,8 +11,6 @@
 
 #include <Python.h>
 
-#include "BLI_utildefines.h"
-
 #include "GPU_capabilities.hh"
 
 #include "gpu_py.hh"
@@ -247,7 +245,7 @@ PyDoc_STRVAR(
     "   Get supported extensions in the current context.\n"
     "\n"
     "   :return: Extensions.\n"
-    "   :rtype: tuple of string\n");
+    "   :rtype: tuple[str]\n");
 static PyObject *pygpu_extensions_get(PyObject * /*self*/)
 {
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
@@ -385,9 +383,14 @@ static PyObject *pygpu_max_work_group_size_get(PyObject * /*self*/, PyObject *ar
 /** \name Module
  * \{ */
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-function-type"
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
 #endif
 
 static PyMethodDef pygpu_capabilities__tp_methods[] = {
@@ -469,8 +472,12 @@ static PyMethodDef pygpu_capabilities__tp_methods[] = {
     {nullptr, nullptr, 0, nullptr},
 };
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 PyDoc_STRVAR(

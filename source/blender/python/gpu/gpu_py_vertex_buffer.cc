@@ -13,11 +13,8 @@
 
 #include "GPU_vertex_buffer.hh"
 
-#include "MEM_guardedalloc.h"
-
-#include "../generic/py_capi_utils.h"
-#include "../generic/python_compat.h"
-#include "../generic/python_utildefines.h"
+#include "../generic/py_capi_utils.hh"
+#include "../generic/python_compat.hh"
 
 #include "gpu_py.hh"
 #include "gpu_py_vertex_buffer.hh" /* own include */
@@ -270,9 +267,10 @@ PyDoc_STRVAR(
     "   Insert data into the buffer for a single attribute.\n"
     "\n"
     "   :arg id: Either the name or the id of the attribute.\n"
-    "   :type id: int or str\n"
-    "   :arg data: Sequence of data that should be stored in the buffer\n"
-    "   :type data: sequence of floats, ints, vectors or matrices\n");
+    "   :type id: int | str\n"
+    "   :arg data: Buffer or sequence of data that should be stored in the buffer\n"
+    "   :type data: Buffer | "
+    "Sequence[float] | Sequence[int] | Sequence[Sequence[float]] | Sequence[Sequence[int]]\n");
 static PyObject *pygpu_vertbuf_attr_fill(BPyGPUVertBuf *self, PyObject *args, PyObject *kwds)
 {
   PyObject *data;
@@ -317,9 +315,14 @@ static PyObject *pygpu_vertbuf_attr_fill(BPyGPUVertBuf *self, PyObject *args, Py
   Py_RETURN_NONE;
 }
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-function-type"
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
 #endif
 
 static PyMethodDef pygpu_vertbuf__tp_methods[] = {
@@ -330,8 +333,12 @@ static PyMethodDef pygpu_vertbuf__tp_methods[] = {
     {nullptr, nullptr, 0, nullptr},
 };
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 static void pygpu_vertbuf__tp_dealloc(BPyGPUVertBuf *self)

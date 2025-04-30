@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_array_utils.hh"
+
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_instances.hh"
@@ -78,55 +80,56 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   const bke::AttributeAccessor grease_pencil_attributes = grease_pencil->attributes();
   bke::MutableAttributeAccessor instances_attributes = instances->attributes_for_write();
-  grease_pencil_attributes.for_all(
-      [&](const StringRef attribute_id, const AttributeMetaData &meta_data) {
-        if (ELEM(attribute_id, "opacity")) {
-          return true;
-        }
-        const GAttributeReader src_attribute = grease_pencil_attributes.lookup(attribute_id);
-        if (!src_attribute) {
-          return true;
-        }
-        if (src_attribute.varray.is_span() && src_attribute.sharing_info) {
-          /* Try reusing existing attribute array. */
-          instances_attributes.add(
-              attribute_id,
-              AttrDomain::Instance,
-              meta_data.data_type,
-              bke::AttributeInitShared{src_attribute.varray.get_internal_span().data(),
-                                       *src_attribute.sharing_info});
-          return true;
-        }
-        if (!instances_attributes.add(attribute_id,
-                                      AttrDomain::Instance,
-                                      meta_data.data_type,
-                                      bke::AttributeInitConstruct()))
-        {
-          return true;
-        }
-        bke::GSpanAttributeWriter dst_attribute = instances_attributes.lookup_for_write_span(
-            attribute_id);
-        array_utils::gather(src_attribute.varray, layer_selection, dst_attribute.span);
-        dst_attribute.finish();
-        return true;
-      });
+  grease_pencil_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (ELEM(iter.name, "opacity")) {
+      return;
+    }
+    if (iter.data_type == CD_PROP_STRING) {
+      return;
+    }
+    const GAttributeReader src_attribute = iter.get();
+    if (!src_attribute) {
+      return;
+    }
+    if (src_attribute.varray.is_span() && src_attribute.sharing_info) {
+      /* Try reusing existing attribute array. */
+      instances_attributes.add(
+          iter.name,
+          AttrDomain::Instance,
+          iter.data_type,
+          bke::AttributeInitShared{src_attribute.varray.get_internal_span().data(),
+                                   *src_attribute.sharing_info});
+      return;
+    }
+    if (!instances_attributes.add(
+            iter.name, AttrDomain::Instance, iter.data_type, bke::AttributeInitConstruct()))
+    {
+      return;
+    }
+    bke::GSpanAttributeWriter dst_attribute = instances_attributes.lookup_for_write_span(
+        iter.name);
+    array_utils::gather(src_attribute.varray, layer_selection, dst_attribute.span);
+    dst_attribute.finish();
+  });
 
   {
     /* Manually propagate "opacity" data, because it's not a layer attribute on grease pencil
      * yet. */
-    SpanAttributeWriter<float> opacity_attribute =
-        instances_attributes.lookup_or_add_for_write_only_span<float>("opacity",
-                                                                      AttrDomain::Instance);
-    layer_selection.foreach_index([&](const int layer_i, const int instance_i) {
-      opacity_attribute.span[instance_i] = grease_pencil->layer(layer_i)->opacity;
-    });
-    opacity_attribute.finish();
+    if (SpanAttributeWriter<float> opacity_attribute =
+            instances_attributes.lookup_or_add_for_write_only_span<float>("opacity",
+                                                                          AttrDomain::Instance))
+    {
+      layer_selection.foreach_index([&](const int layer_i, const int instance_i) {
+        opacity_attribute.span[instance_i] = grease_pencil->layer(layer_i).opacity;
+      });
+      opacity_attribute.finish();
+    }
   }
 
   GeometrySet curves_geometry = GeometrySet::from_instances(instances);
   curves_geometry.name = std::move(grease_pencil_geometry.name);
 
-  const bool layers_as_instances = params.get_input<bool>("Layers as Instances");
+  const bool layers_as_instances = params.extract_input<bool>("Layers as Instances");
   if (!layers_as_instances) {
     geometry::RealizeInstancesOptions options;
     const NodeAttributeFilter attribute_filter = params.get_attribute_filter("Curves");
@@ -140,13 +143,16 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(
-      &ntype, GEO_NODE_GREASE_PENCIL_TO_CURVES, "Grease Pencil to Curves", NODE_CLASS_GEOMETRY);
+  geo_node_type_base(&ntype, "GeometryNodeGreasePencilToCurves", GEO_NODE_GREASE_PENCIL_TO_CURVES);
+  ntype.ui_name = "Grease Pencil to Curves";
+  ntype.ui_description = "Convert Grease Pencil layers into curve instances";
+  ntype.enum_name_legacy = "GREASE_PENCIL_TO_CURVES";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  bke::node_type_size(&ntype, 160, 100, 320);
+  bke::node_type_size(ntype, 160, 100, 320);
 
-  bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

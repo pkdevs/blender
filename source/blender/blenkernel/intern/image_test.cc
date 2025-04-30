@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_listbase.h"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
+#include "BKE_appdir.hh"
 #include "BKE_global.hh"
 #include "BKE_idtype.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_main.hh"
 
 #include "MEM_guardedalloc.h"
@@ -18,6 +19,7 @@
 #include "testing/testing.h"
 #include "gmock/gmock.h"
 
+#include "IMB_imbuf.hh"
 #include "IMB_moviecache.hh"
 
 #include "DNA_image_types.h"
@@ -242,6 +244,8 @@ class ImageTest : public ::testing::Test {
 
   void SetUp() override
   {
+    BKE_appdir_init();
+    IMB_init();
     IMB_moviecache_init();
 
     bmain_ = BKE_main_new();
@@ -254,11 +258,13 @@ class ImageTest : public ::testing::Test {
     G_MAIN = nullptr;
 
     IMB_moviecache_destruct();
+    IMB_exit();
+    BKE_appdir_exit();
   }
 
   Image *load_image(const char *path)
   {
-    const std::string asset_dir = blender::tests::flags_test_asset_dir().c_str();
+    const std::string asset_dir = blender::tests::flags_test_asset_dir();
     return BKE_image_load(bmain_, (asset_dir + SEP_STR + "imbuf_io" + SEP_STR + path).c_str());
   }
 

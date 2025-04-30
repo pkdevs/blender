@@ -8,6 +8,8 @@
 
 #include "DNA_curve_types.h"
 
+#include "BLI_dial_2d.h"
+#include "BLI_listbase.h"
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_rotation.h"
@@ -207,7 +209,8 @@ static eViewOpsFlag navigate_pivot_get(bContext *C,
     negate_v3_v3(fallback_depth_pt, static_cast<RegionView3D *>(region->regiondata)->ofs);
 
     if (!ED_view3d_has_depth_buffer_updated(depsgraph, v3d)) {
-      ED_view3d_depth_override(depsgraph, region, v3d, nullptr, V3D_DEPTH_NO_GPENCIL, nullptr);
+      ED_view3d_depth_override(
+          depsgraph, region, v3d, nullptr, V3D_DEPTH_NO_GPENCIL, true, nullptr);
     }
 
     const bool is_set = ED_view3d_autodist(region, v3d, event->mval, r_pivot, fallback_depth_pt);
@@ -353,8 +356,7 @@ void ViewOpsData::init_navigation(bContext *C,
     ED_view3d_win_to_vector(region, mval, this->init.mousevec);
 
     {
-      int event_xy_offset[2];
-      add_v2_v2v2_int(event_xy_offset, event->xy, this->init.event_xy_offset);
+      int2 event_xy_offset = int2(event->xy) + this->init.event_xy_offset;
 
       /* For rotation with trackball rotation. */
       calctrackballvec(&region->winrct, event_xy_offset, this->init.trackvec);
@@ -384,7 +386,10 @@ void ViewOpsData::end_navigation(bContext *C)
     WM_event_timer_remove(CTX_wm_manager(C), this->timer->win, this->timer);
   }
 
-  MEM_SAFE_FREE(this->init.dial);
+  if (this->init.dial) {
+    BLI_dial_free(this->init.dial);
+    this->init.dial = nullptr;
+  }
 
   /* Need to redraw because drawing code uses RV3D_NAVIGATING to draw
    * faster while navigation operator runs. */
@@ -404,10 +409,10 @@ struct ViewOpsData_Utility : ViewOpsData {
   ListBase keymap_items;
 
   /* Used by #ED_view3d_navigation_do. */
-  bool is_modal_event;
+  bool is_modal_event = false;
 
   ViewOpsData_Utility(bContext *C, const wmKeyMapItem *kmi_merge = nullptr)
-      : ViewOpsData(), keymap_items(), is_modal_event(false)
+      : ViewOpsData(), keymap_items()
   {
     this->init_context(C);
 
@@ -431,17 +436,26 @@ struct ViewOpsData_Utility : ViewOpsData {
 
       wmKeyMapItem *kmi_cpy = WM_keymap_add_item_copy(&keymap_tmp, kmi);
       if (kmi_merge) {
-        if (kmi_merge->shift == 1 || ELEM(kmi_merge->type, EVT_RIGHTSHIFTKEY, EVT_LEFTSHIFTKEY)) {
-          kmi_cpy->shift = 1;
+        if (kmi_merge->shift == KM_MOD_HELD ||
+            ELEM(kmi_merge->type, EVT_RIGHTSHIFTKEY, EVT_LEFTSHIFTKEY))
+        {
+          kmi_cpy->shift = KM_MOD_HELD;
         }
-        if (kmi_merge->ctrl == 1 || ELEM(kmi_merge->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY)) {
-          kmi_cpy->ctrl = 1;
+        if (kmi_merge->ctrl == KM_MOD_HELD ||
+            ELEM(kmi_merge->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY))
+        {
+          kmi_cpy->ctrl = KM_MOD_HELD;
         }
-        if (kmi_merge->alt == 1 || ELEM(kmi_merge->type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY)) {
-          kmi_cpy->alt = 1;
+        if (kmi_merge->alt == KM_MOD_HELD ||
+            ELEM(kmi_merge->type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY))
+        {
+          kmi_cpy->alt = KM_MOD_HELD;
         }
-        if (kmi_merge->oskey == 1 || ELEM(kmi_merge->type, EVT_OSKEY)) {
-          kmi_cpy->oskey = 1;
+        if (kmi_merge->oskey == KM_MOD_HELD || ELEM(kmi_merge->type, EVT_OSKEY)) {
+          kmi_cpy->oskey = KM_MOD_HELD;
+        }
+        if (kmi_merge->hyper == KM_MOD_HELD || ELEM(kmi_merge->type, EVT_HYPER)) {
+          kmi_cpy->hyper = KM_MOD_HELD;
         }
         if (!ISKEYMODIFIER(kmi_merge->type)) {
           kmi_cpy->keymodifier = kmi_merge->type;
@@ -467,9 +481,7 @@ struct ViewOpsData_Utility : ViewOpsData {
     WM_keyconfig_update_suppress_end();
   }
 
-#ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("ViewOpsData_Utility")
-#endif
 };
 
 static bool view3d_navigation_poll_impl(bContext *C, const char viewlock)
@@ -532,12 +544,12 @@ static eV3D_OpEvent view3d_navigate_event(ViewOpsData *vod, const wmEvent *event
   return VIEW_PASS;
 }
 
-static int view3d_navigation_invoke_generic(bContext *C,
-                                            ViewOpsData *vod,
-                                            const wmEvent *event,
-                                            PointerRNA *ptr,
-                                            const ViewOpsType *nav_type,
-                                            const float dyn_ofs_override[3])
+static wmOperatorStatus view3d_navigation_invoke_generic(bContext *C,
+                                                         ViewOpsData *vod,
+                                                         const wmEvent *event,
+                                                         PointerRNA *ptr,
+                                                         const ViewOpsType *nav_type,
+                                                         const float dyn_ofs_override[3])
 {
   if (!nav_type->init_fn) {
     return OPERATOR_CANCELLED;
@@ -554,14 +566,15 @@ static int view3d_navigation_invoke_generic(bContext *C,
   return nav_type->init_fn(C, vod, event, ptr);
 }
 
-int view3d_navigate_invoke_impl(bContext *C,
-                                wmOperator *op,
-                                const wmEvent *event,
-                                const ViewOpsType *nav_type)
+wmOperatorStatus view3d_navigate_invoke_impl(bContext *C,
+                                             wmOperator *op,
+                                             const wmEvent *event,
+                                             const ViewOpsType *nav_type)
 {
   ViewOpsData *vod = new ViewOpsData();
   vod->init_context(C);
-  int ret = view3d_navigation_invoke_generic(C, vod, event, op->ptr, nav_type, nullptr);
+  wmOperatorStatus ret = view3d_navigation_invoke_generic(
+      C, vod, event, op->ptr, nav_type, nullptr);
   op->customdata = (void *)vod;
 
   if (ret == OPERATOR_RUNNING_MODAL) {
@@ -595,7 +608,14 @@ bool view3d_zoom_or_dolly_poll(bContext *C)
   return view3d_navigation_poll_impl(C, RV3D_LOCK_ZOOM_AND_DOLLY);
 }
 
-int view3d_navigate_modal_fn(bContext *C, wmOperator *op, const wmEvent *event)
+bool view3d_zoom_or_dolly_or_rotation_poll(bContext *C)
+{
+  /* This combination of flags is needed for the dolly operator,
+   * see code-comments there for details. */
+  return view3d_navigation_poll_impl(C, RV3D_LOCK_ZOOM_AND_DOLLY | RV3D_LOCK_ROTATION);
+}
+
+wmOperatorStatus view3d_navigate_modal_fn(bContext *C, wmOperator *op, const wmEvent *event)
 {
   ViewOpsData *vod = static_cast<ViewOpsData *>(op->customdata);
 
@@ -608,7 +628,7 @@ int view3d_navigate_modal_fn(bContext *C, wmOperator *op, const wmEvent *event)
     return view3d_navigation_invoke_generic(C, vod, event, op->ptr, vod->nav_type, nullptr);
   }
 
-  int ret = vod->nav_type->apply_fn(C, vod, event_code, event->xy);
+  wmOperatorStatus ret = vod->nav_type->apply_fn(C, vod, event_code, event->xy);
 
   if ((ret & OPERATOR_RUNNING_MODAL) == 0) {
     if (ret & OPERATOR_FINISHED) {
@@ -793,11 +813,21 @@ bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
   View3D *v3d = CTX_wm_view3d(C);
   BKE_view_layer_synced_ensure(scene_eval, view_layer_eval);
   Object *ob_act_eval = BKE_view_layer_active_object_get(view_layer_eval);
-  Object *ob_act = DEG_get_original_object(ob_act_eval);
+  Object *ob_act = DEG_get_original(ob_act_eval);
 
   if (ob_act && (ob_act->mode & OB_MODE_ALL_PAINT) &&
       /* with weight-paint + pose-mode, fall through to using calculateTransformCenter */
       ((ob_act->mode & OB_MODE_WEIGHT_PAINT) && BKE_object_pose_armature_get(ob_act)) == 0)
+  {
+    BKE_paint_stroke_get_average(scene, ob_act_eval, lastofs);
+    is_set = true;
+  }
+  else if (ob_act && ELEM(ob_act->mode,
+                          OB_MODE_SCULPT_CURVES,
+                          OB_MODE_PAINT_GREASE_PENCIL,
+                          OB_MODE_SCULPT_GREASE_PENCIL,
+                          OB_MODE_VERTEX_GREASE_PENCIL,
+                          OB_MODE_WEIGHT_GREASE_PENCIL))
   {
     BKE_paint_stroke_get_average(scene, ob_act_eval, lastofs);
     is_set = true;
@@ -845,7 +875,7 @@ bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
   }
   else {
     /* If there's no selection, `lastofs` is unmodified and last value since static. */
-    is_set = ED_transform_calc_pivot_pos(C, V3D_AROUND_CENTER_MEDIAN, lastofs);
+    is_set = blender::ed::transform::calc_pivot_pos(C, V3D_AROUND_CENTER_MEDIAN, lastofs);
   }
 
   copy_v3_v3(r_dyn_ofs, lastofs);
@@ -879,9 +909,6 @@ void viewops_data_free(bContext *C, ViewOpsData *vod)
 /** \name Generic View Operator Utilities
  * \{ */
 
-/**
- * \param align_to_quat: When not nullptr, set the axis relative to this rotation.
- */
 void axis_set_view(bContext *C,
                    View3D *v3d,
                    ARegion *region,
@@ -931,7 +958,7 @@ void axis_set_view(bContext *C,
   else if (rv3d->persp == RV3D_CAMOB) {
     rv3d->persp = perspo;
   }
-  if ((rv3d->persp != orig_persp)) {
+  if (rv3d->persp != orig_persp) {
     ED_region_tag_redraw(region);
   }
 
@@ -1089,7 +1116,7 @@ bool ED_view3d_navigation_do(bContext *C,
     event = &event_tmp;
   }
 
-  int op_return = OPERATOR_CANCELLED;
+  wmOperatorStatus op_return = OPERATOR_CANCELLED;
 
   ViewOpsData_Utility *vod_intern = static_cast<ViewOpsData_Utility *>(vod);
   if (vod_intern->is_modal_event) {

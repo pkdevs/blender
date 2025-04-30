@@ -8,8 +8,6 @@
  * Functions to evaluate mesh tangents.
  */
 
-#include <climits>
-
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_geom.h"
@@ -26,7 +24,7 @@
 
 #include "mikktspace.hh"
 
-#include "BLI_strict_flags.h" /* Keep last. */
+#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
 
 using blender::float2;
 using blender::float3;
@@ -201,7 +199,19 @@ struct SGLSLMeshToTangent {
 #else
     tri = &corner_tris[face_num];
 #endif
+
+    /* Safe to suppress since the way `face_as_quad_map` is used
+     * prevents out-of-bounds reads on the 4th component of the `int3`. */
+#ifdef __GNUC__
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
+
     return uint(tri[int(vert_num)]);
+
+#ifdef __GNUC__
+#  pragma GCC diagnostic pop
+#endif
   }
 
   mikk::float3 GetPosition(const uint face_num, const uint vert_num)
@@ -391,12 +401,10 @@ void BKE_mesh_calc_loop_tangent_step_0(const CustomData *loopData,
 
 void BKE_mesh_calc_loop_tangent_ex(const Span<float3> vert_positions,
                                    const OffsetIndices<int> faces,
-                                   const int *corner_verts,
-                                   const int3 *corner_tris,
-                                   const int *corner_tri_faces,
-                                   const uint corner_tris_len,
+                                   const Span<int> corner_verts,
+                                   const Span<int3> corner_tris,
+                                   const Span<int> corner_tri_faces,
                                    const Span<bool> sharp_faces,
-
                                    const CustomData *loopdata,
                                    bool calc_active_tangent,
                                    const char (*tangent_names)[MAX_CUSTOMDATA_LAYER_NAME],
@@ -459,13 +467,13 @@ void BKE_mesh_calc_loop_tangent_ex(const Span<float3> vert_positions,
     int *face_as_quad_map = nullptr;
 
     /* map faces to quads */
-    if (corner_tris_len != uint(faces.size())) {
+    if (corner_tris.size() != faces.size()) {
       /* Over allocate, since we don't know how many ngon or quads we have. */
 
       /* Map fake face index to corner_tris. */
-      face_as_quad_map = static_cast<int *>(MEM_mallocN(sizeof(int) * corner_tris_len, __func__));
+      face_as_quad_map = MEM_malloc_arrayN<int>(size_t(corner_tris.size()), __func__);
       int k, j;
-      for (k = 0, j = 0; j < int(corner_tris_len); k++, j++) {
+      for (k = 0, j = 0; j < int(corner_tris.size()); k++, j++) {
         face_as_quad_map[k] = j;
         /* step over all quads */
         if (faces[corner_tri_faces[j]].size() == 4) {
@@ -475,12 +483,12 @@ void BKE_mesh_calc_loop_tangent_ex(const Span<float3> vert_positions,
       num_face_as_quad_map = k;
     }
     else {
-      num_face_as_quad_map = int(corner_tris_len);
+      num_face_as_quad_map = int(corner_tris.size());
     }
 #endif
 
     /* Calculation */
-    if (corner_tris_len != 0) {
+    if (corner_tris.size() != 0) {
       TaskPool *task_pool = BLI_task_pool_create(nullptr, TASK_PRIORITY_HIGH);
 
       tangent_mask_curr = 0;
@@ -491,7 +499,7 @@ void BKE_mesh_calc_loop_tangent_ex(const Span<float3> vert_positions,
         int index = CustomData_get_layer_index_n(loopdata_out, CD_TANGENT, n);
         BLI_assert(n < MAX_MTFACE);
         SGLSLMeshToTangent *mesh2tangent = &data_array[n];
-        mesh2tangent->numTessFaces = int(corner_tris_len);
+        mesh2tangent->numTessFaces = int(corner_tris.size());
 #ifdef USE_TRI_DETECT_QUADS
         mesh2tangent->face_as_quad_map = face_as_quad_map;
         mesh2tangent->num_face_as_quad_map = num_face_as_quad_map;
@@ -499,9 +507,9 @@ void BKE_mesh_calc_loop_tangent_ex(const Span<float3> vert_positions,
         mesh2tangent->positions = vert_positions;
         mesh2tangent->vert_normals = vert_normals;
         mesh2tangent->faces = faces;
-        mesh2tangent->corner_verts = corner_verts;
-        mesh2tangent->corner_tris = corner_tris;
-        mesh2tangent->tri_faces = corner_tri_faces;
+        mesh2tangent->corner_verts = corner_verts.data();
+        mesh2tangent->corner_tris = corner_tris.data();
+        mesh2tangent->tri_faces = corner_tri_faces.data();
         mesh2tangent->sharp_faces = sharp_faces;
         /* NOTE: we assume we do have tessellated loop normals at this point
          * (in case it is object-enabled), have to check this is valid. */
@@ -585,10 +593,9 @@ void BKE_mesh_calc_loop_tangents(Mesh *mesh_eval,
   short tangent_mask = 0;
   BKE_mesh_calc_loop_tangent_ex(mesh_eval->vert_positions(),
                                 mesh_eval->faces(),
-                                mesh_eval->corner_verts().data(),
-                                corner_tris.data(),
-                                mesh_eval->corner_tri_faces().data(),
-                                uint(corner_tris.size()),
+                                mesh_eval->corner_verts(),
+                                corner_tris,
+                                mesh_eval->corner_tri_faces(),
                                 sharp_face,
                                 &mesh_eval->corner_data,
                                 calc_active_tangent,

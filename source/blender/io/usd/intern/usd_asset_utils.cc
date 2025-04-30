@@ -9,6 +9,8 @@
 #include <pxr/usd/ar/packageUtils.h>
 #include <pxr/usd/ar/resolver.h>
 #include <pxr/usd/ar/writableAsset.h>
+#include <pxr/usd/usd/common.h>
+#include <pxr/usd/usd/stage.h>
 
 #include "BKE_appdir.hh"
 #include "BKE_idprop.hh"
@@ -16,7 +18,7 @@
 #include "BKE_report.hh"
 
 #include "BLI_fileops.hh"
-#include "BLI_path_util.h"
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 #include "BLI_string_utils.hh"
 
@@ -24,17 +26,17 @@
 
 #include <string_view>
 
-static const char UDIM_PATTERN[] = "<UDIM>";
-static const char UDIM_PATTERN2[] = "%3CUDIM%3E";
+namespace blender::io::usd {
+
+constexpr char UDIM_PATTERN[] = "<UDIM>";
+constexpr char UDIM_PATTERN2[] = "%3CUDIM%3E";
 
 /* Maximum range of UDIM tiles, per the
  * UsdPreviewSurface specifications.  See
  * https://graphics.pixar.com/usd/release/spec_usdpreviewsurface.html#texture-reader
  */
-static const int UDIM_START_TILE = 1001;
-static const int UDIM_END_TILE = 1100;
-
-namespace blender::io::usd {
+constexpr int UDIM_START_TILE = 1001;
+constexpr int UDIM_END_TILE = 1100;
 
 /**
  * The following is copied from `_SplitUdimPattern()` in
@@ -125,10 +127,10 @@ static std::string copy_udim_asset_to_directory(const char *src_path,
    * of a directory using the USD resolver, we must take a brute force approach.  We iterate
    * over the allowed range of tile indices and copy any tiles that exist.  The USDPreviewSurface
    * specification stipulates "a maximum of ten tiles in the U direction" and that
-   * "the tiles must be within the range [1001, 1099]". See
+   * "the tiles must be within the range [1001, 1100] (as of specification version 2.5)". See
    * https://graphics.pixar.com/usd/release/spec_usdpreviewsurface.html#texture-reader
    */
-  for (int i = UDIM_START_TILE; i < UDIM_END_TILE; ++i) {
+  for (int i = UDIM_START_TILE; i <= UDIM_END_TILE; ++i) {
     const std::string src_udim = splitPath.first + std::to_string(i) + splitPath.second;
     if (asset_exists(src_udim.c_str())) {
       copy_asset_to_directory(src_udim.c_str(), dest_dir_path, name_collision_mode, reports);
@@ -354,7 +356,7 @@ std::string get_export_textures_dir(const pxr::UsdStageRefPtr stage)
   pxr::SdfLayerHandle layer = stage->GetRootLayer();
 
   if (layer->IsAnonymous()) {
-    WM_reportf(
+    WM_global_reportf(
         RPT_WARNING, "%s: Can't generate a textures directory path for anonymous stage", __func__);
     return "";
   }
@@ -362,7 +364,7 @@ std::string get_export_textures_dir(const pxr::UsdStageRefPtr stage)
   const pxr::ArResolvedPath &stage_path = layer->GetResolvedPath();
 
   if (stage_path.empty()) {
-    WM_reportf(RPT_WARNING, "%s: Can't get resolved path for stage", __func__);
+    WM_global_reportf(RPT_WARNING, "%s: Can't get resolved path for stage", __func__);
     return "";
   }
 
@@ -394,7 +396,7 @@ bool should_import_asset(const std::string &path)
     return true;
   }
 
-  if (is_udim_path(path) && parent_dir_exists_on_file_system(path.c_str())) {
+  if (is_udim_path(path) && parent_dir_exists_on_file_system(path)) {
     return false;
   }
 
@@ -501,7 +503,7 @@ void ensure_usd_source_path_prop(const std::string &path, ID *id)
     return;
   }
 
-  const char *prop_name = "usd_source_path";
+  const StringRef prop_name = "usd_source_path";
 
   if (IDP_GetPropertyFromGroup(idgroup, prop_name)) {
     return;
@@ -529,7 +531,7 @@ std::string get_usd_source_path(ID *id)
     return "";
   }
 
-  const char *prop_name = "usd_source_path";
+  const StringRef prop_name = "usd_source_path";
   const IDProperty *prop = IDP_GetPropertyFromGroup(idgroup, prop_name);
   if (!prop) {
     return "";
@@ -568,8 +570,7 @@ std::string get_relative_path(const std::string &path, const std::string &anchor
     return rel_path + 2;
   }
 
-  /* if we got here, the paths may be URIs or files on on the
-   * file system. */
+  /* If we got here, the paths may be URIs or files on the file system. */
 
   /* We don't have a library to compute relative paths for URIs
    * so we use the standard file-system calls to do so. This
@@ -619,9 +620,7 @@ std::string get_relative_path(const std::string &path, const std::string &anchor
   STRNCPY(result_path, resolved_path.c_str());
   BLI_path_rel(result_path, anchor_parent_dir);
 
-  if ((result_path[0] != '\0') && (BLI_strnlen(result_path, FILE_MAX) > 2) &&
-      (result_path[0] == '/') && (result_path[1] == '/'))
-  {
+  if (BLI_path_is_rel(result_path)) {
     /* Strip the Blender relative path marker, and set paths to Unix-style. */
     BLI_string_replace_char(result_path, '\\', '/');
     return std::string(result_path + 2);
@@ -643,10 +642,10 @@ void USD_path_abs(char *path, const char *basepath, bool for_import)
         BLI_strncpy(path, path_str.c_str(), FILE_MAX);
         return;
       }
-      WM_reportf(RPT_ERROR,
-                 "In %s: resolved path %s exceeds path buffer length.",
-                 __func__,
-                 path_str.c_str());
+      WM_global_reportf(RPT_ERROR,
+                        "In %s: resolved path %s exceeds path buffer length.",
+                        __func__,
+                        path_str.c_str());
     }
   }
 

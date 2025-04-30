@@ -8,17 +8,15 @@
  * Internal and external APIs for #AssetShelfSettings.
  */
 
-#include <type_traits>
-
 #include "AS_asset_catalog_path.hh"
 
 #include "DNA_screen_types.h"
+#include "DNA_userdef_types.h"
 
 #include "BLO_read_write.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_string.h"
-#include "BLI_string_ref.hh"
 
 #include "BKE_asset.hh"
 #include "BKE_preferences.h"
@@ -29,10 +27,7 @@
 using namespace blender;
 using namespace blender::ed::asset;
 
-AssetShelfSettings::AssetShelfSettings()
-{
-  memset(this, 0, sizeof(*this));
-}
+AssetShelfSettings::AssetShelfSettings() = default;
 
 AssetShelfSettings::AssetShelfSettings(const AssetShelfSettings &other)
 {
@@ -43,8 +38,6 @@ AssetShelfSettings &AssetShelfSettings::operator=(const AssetShelfSettings &othe
 {
   /* Start with a shallow copy. */
   memcpy(this, &other, sizeof(AssetShelfSettings));
-
-  next = prev = nullptr;
 
   if (active_catalog_path) {
     active_catalog_path = BLI_strdup(other.active_catalog_path);

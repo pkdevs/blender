@@ -17,7 +17,7 @@
 
 #include "UI_resources.hh"
 
-#include "UI_interface_c.hh"
+#include "UI_interface_c.hh"  // IWYU pragma: export
 
 namespace blender::nodes::geo_eval_log {
 struct GeometryAttributeInfo;
@@ -85,11 +85,15 @@ void context_path_add_generic(Vector<ContextPathItem> &path,
 
 void template_breadcrumbs(uiLayout &layout, Span<ContextPathItem> context_path);
 
-void attribute_search_add_items(StringRefNull str,
+void attribute_search_add_items(StringRef str,
                                 bool can_create_attribute,
                                 Span<const nodes::geo_eval_log::GeometryAttributeInfo *> infos,
                                 uiSearchItems *items,
                                 bool is_first);
+void grease_pencil_layer_search_add_items(StringRef str,
+                                          Span<const std::string *> layer_names,
+                                          uiSearchItems &items,
+                                          bool is_first);
 
 bool asset_shelf_popover_invoke(bContext &C,
                                 blender::StringRef asset_shelf_idname,
@@ -273,6 +277,8 @@ void UI_list_filter_and_sort_items(uiList *ui_list,
 
 /**
  * Override this for all available view types.
+ * \param idname: Used for restoring persistent state of this view, potentially written to files.
+ * Must not be longer than #BKE_ST_MAXNAME (including 0 terminator).
  */
 blender::ui::AbstractGridView *UI_block_add_view(
     uiBlock &block,

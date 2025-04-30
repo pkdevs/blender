@@ -16,7 +16,7 @@ PathTraceDisplay::PathTraceDisplay(unique_ptr<DisplayDriver> driver) : driver_(s
 
 void PathTraceDisplay::reset(const BufferParams &buffer_params, const bool reset_rendering)
 {
-  thread_scoped_lock lock(mutex_);
+  const thread_scoped_lock lock(mutex_);
 
   params_.full_offset = make_int2(buffer_params.full_x + buffer_params.window_x,
                                   buffer_params.full_y + buffer_params.window_y);
@@ -39,7 +39,7 @@ void PathTraceDisplay::mark_texture_updated()
  * Update procedure.
  */
 
-bool PathTraceDisplay::update_begin(int texture_width, int texture_height)
+bool PathTraceDisplay::update_begin(const int texture_width, const int texture_height)
 {
   DCHECK(!update_state_.is_active);
 
@@ -53,7 +53,7 @@ bool PathTraceDisplay::update_begin(int texture_width, int texture_height)
    * potential deadlocks due to locks held by the subclass. */
   DisplayDriver::Params params;
   {
-    thread_scoped_lock lock(mutex_);
+    const thread_scoped_lock lock(mutex_);
     params = params_;
     texture_state_.size = make_int2(texture_width, texture_height);
   }
@@ -91,8 +91,11 @@ int2 PathTraceDisplay::get_texture_size() const
  * Texture update from CPU buffer.
  */
 
-void PathTraceDisplay::copy_pixels_to_texture(
-    const half4 *rgba_pixels, int texture_x, int texture_y, int pixels_width, int pixels_height)
+void PathTraceDisplay::copy_pixels_to_texture(const half4 *rgba_pixels,
+                                              const int texture_x,
+                                              const int texture_y,
+                                              const int pixels_width,
+                                              const int pixels_height)
 {
   DCHECK(update_state_.is_active);
 
@@ -183,7 +186,12 @@ void PathTraceDisplay::unmap_texture_buffer()
  * Graphics interoperability.
  */
 
-DisplayDriver::GraphicsInterop PathTraceDisplay::graphics_interop_get()
+GraphicsInteropDevice PathTraceDisplay::graphics_interop_get_device()
+{
+  return driver_->graphics_interop_get_device();
+}
+
+GraphicsInteropBuffer PathTraceDisplay::graphics_interop_get_buffer()
 {
   DCHECK(!texture_buffer_state_.is_mapped);
   DCHECK(update_state_.is_active);
@@ -191,18 +199,18 @@ DisplayDriver::GraphicsInterop PathTraceDisplay::graphics_interop_get()
   if (texture_buffer_state_.is_mapped) {
     LOG(ERROR)
         << "Attempt to use graphics interoperability mode while the texture buffer is mapped.";
-    return DisplayDriver::GraphicsInterop();
+    return GraphicsInteropBuffer();
   }
 
   if (!update_state_.is_active) {
     LOG(ERROR) << "Attempt to use graphics interoperability outside of PathTraceDisplay update.";
-    return DisplayDriver::GraphicsInterop();
+    return GraphicsInteropBuffer();
   }
 
   /* Assume that interop will write new values to the texture. */
   mark_texture_updated();
 
-  return driver_->graphics_interop_get();
+  return driver_->graphics_interop_get_buffer();
 }
 
 void PathTraceDisplay::graphics_interop_activate()
@@ -233,7 +241,7 @@ bool PathTraceDisplay::draw()
   bool is_outdated;
 
   {
-    thread_scoped_lock lock(mutex_);
+    const thread_scoped_lock lock(mutex_);
     params = params_;
     is_outdated = texture_state_.is_outdated;
   }

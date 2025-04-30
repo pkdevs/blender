@@ -14,6 +14,7 @@
 #include "BLI_sys_types.h"
 
 struct ReportList;
+struct Mesh;
 
 /**
  * Compute simplified tangent space normals, i.e.
@@ -27,7 +28,7 @@ void BKE_mesh_calc_loop_tangent_single_ex(const float (*vert_positions)[3],
                                           const int *corner_verts,
                                           float (*r_looptangent)[4],
                                           const float (*corner_normals)[3],
-                                          const float (*loopuv)[2],
+                                          const float (*loop_uvs)[2],
                                           int numLoops,
                                           blender::OffsetIndices<int> faces,
                                           ReportList *reports);
@@ -48,12 +49,10 @@ void BKE_mesh_calc_loop_tangent_single(Mesh *mesh,
  */
 void BKE_mesh_calc_loop_tangent_ex(blender::Span<blender::float3> vert_positions,
                                    blender::OffsetIndices<int> faces,
-                                   const int *corner_verts,
-                                   const blender::int3 *corner_tris,
-                                   const int *corner_tri_faces,
-                                   uint corner_tris_len,
-                                   const blender::Span<bool> sharp_faces,
-
+                                   blender::Span<int> corner_verts,
+                                   blender::Span<blender::int3> corner_tris,
+                                   blender::Span<int> corner_tri_faces,
+                                   blender::Span<bool> sharp_faces,
                                    const CustomData *loopdata,
                                    bool calc_active_tangent,
                                    const char (*tangent_names)[MAX_CUSTOMDATA_LAYER_NAME],

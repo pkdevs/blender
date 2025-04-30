@@ -6,15 +6,17 @@
  * \ingroup edobj
  */
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_dynstr.h"
+#include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
+#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.hh"
@@ -34,6 +36,7 @@
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_layer.hh"
+#include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_object.hh"
 #include "BKE_report.hh"
@@ -44,7 +47,7 @@
 #include "DEG_depsgraph_query.hh"
 
 #ifdef WITH_PYTHON
-#  include "BPY_extern.h"
+#  include "BPY_extern.hh"
 #endif
 
 #include "WM_api.hh"
@@ -60,6 +63,7 @@
 #include "ED_screen.hh"
 
 #include "ANIM_action.hh"
+#include "ANIM_action_legacy.hh"
 #include "ANIM_animdata.hh"
 
 #include "UI_interface.hh"
@@ -147,99 +151,6 @@ bConstraint *constraint_active_get(Object *ob)
 {
   return BKE_constraints_active_get(constraint_active_list(ob));
 }
-
-/** \} */
-
-/* ------------------------------------------------------------------- */
-/** \name PyConstraints (Unused)
- * \{ */
-
-#ifdef WITH_PYTHON
-
-/* this callback sets the text-file to be used for selected menu item */
-static void validate_pyconstraint_cb(Main *bmain, void *arg1, void *arg2)
-{
-  bPythonConstraint *data = static_cast<bPythonConstraint *>(arg1);
-  Text *text = nullptr;
-  int index = *((int *)arg2);
-  int i;
-
-  /* exception for no script */
-  if (index) {
-    /* innovative use of a for...loop to search */
-    for (text = static_cast<Text *>(bmain->texts.first), i = 1; text && index != i;
-         i++, text = static_cast<Text *>(text->id.next))
-    {
-      /* pass */
-    }
-  }
-  data->text = text;
-}
-
-/* this returns a string for the list of usable pyconstraint script names */
-static char *buildmenu_pyconstraints(Main *bmain, Text *con_text, int *pyconindex)
-{
-  DynStr *pupds = BLI_dynstr_new();
-  Text *text;
-  char *str;
-  char buf[64];
-  int i;
-
-  /* add title first */
-  STRNCPY(buf, "Scripts: %t|[None]%x0|");
-  BLI_dynstr_append(pupds, buf);
-
-  /* init active-index first */
-  if (con_text == nullptr) {
-    *pyconindex = 0;
-  }
-
-  /* loop through markers, adding them */
-  for (text = static_cast<Text *>(bmain->texts.first), i = 1; text;
-       i++, text = static_cast<Text *>(text->id.next))
-  {
-    /* this is important to ensure that right script is shown as active */
-    if (text == con_text) {
-      *pyconindex = i;
-    }
-
-    /* only include valid pyconstraint scripts */
-    if (BPY_is_pyconstraint(text)) {
-      BLI_dynstr_append(pupds, text->id.name + 2);
-
-      SNPRINTF(buf, "%%x%d", i);
-      BLI_dynstr_append(pupds, buf);
-
-      if (text->id.next) {
-        BLI_dynstr_append(pupds, "|");
-      }
-    }
-  }
-
-  /* convert to normal MEM_malloc'd string */
-  str = BLI_dynstr_get_cstring(pupds);
-  BLI_dynstr_free(pupds);
-
-  return str;
-}
-#endif /* WITH_PYTHON */
-
-#if 0 /* UNUSED, until pyconstraints are added back. */
-/* this callback gets called when the 'refresh' button of a pyconstraint gets pressed */
-static void update_pyconstraint_cb(void *arg1, void *arg2)
-{
-#  ifndef WITH_PYTHON
-  (void)arg1; /* unused */
-  (void)arg2; /* unused */
-#  else
-  Object *owner = (Object *)arg1;
-  bConstraint *con = (bConstraint *)arg2;
-  if (owner && con) {
-    BPY_pyconstraint_update(owner, con);
-  }
-#  endif /* WITH_PYTHON */
-}
-#endif   /* UNUSED */
 
 /** \} */
 
@@ -357,10 +268,23 @@ static void test_constraint(
       /* must have action */
       con->flag |= CONSTRAINT_DISABLE;
     }
-    else if (data->act->idroot != ID_OB) {
-      /* only object-rooted actions can be used */
-      data->act = nullptr;
-      con->flag |= CONSTRAINT_DISABLE;
+    else {
+      if (animrig::legacy::action_treat_as_legacy(*data->act)) {
+        if (!ELEM(data->act->idroot, ID_OB, 0)) {
+          /* Only object-rooted actions can be used. */
+          data->act = nullptr;
+          con->flag |= CONSTRAINT_DISABLE;
+        }
+      }
+      else {
+        /* The slot was assigned, so assume that it is suitable to animate the
+         * owner (only suitable slots appear in the drop-down). */
+        animrig::Action &action = data->act->wrap();
+        animrig::Slot *slot = action.slot_for_handle(data->action_slot_handle);
+        if (!slot) {
+          con->flag |= CONSTRAINT_DISABLE;
+        }
+      }
     }
 
     /* Skip target checking if we're not using it */
@@ -713,7 +637,7 @@ static void edit_constraint_report_property(wmOperatorType *ot)
 static bool edit_constraint_invoke_properties(bContext *C,
                                               wmOperator *op,
                                               const wmEvent *event,
-                                              int *r_retval)
+                                              wmOperatorStatus *r_retval)
 {
   PointerRNA ptr = CTX_data_pointer_get_type(C, "constraint", &RNA_Constraint);
   Object *ob = (ptr.owner_id) ? (Object *)ptr.owner_id : context_active_object(C);
@@ -767,6 +691,9 @@ static bool edit_constraint_invoke_properties(bContext *C,
     }
   }
 
+  if (r_retval != nullptr) {
+    *r_retval = OPERATOR_CANCELLED;
+  }
   return false;
 }
 
@@ -811,7 +738,7 @@ static bConstraint *edit_constraint_property_get(bContext *C, wmOperator *op, Ob
  * For Stretch-To & Limit-Distance constraints.
  * \{ */
 
-static int stretchto_reset_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus stretchto_reset_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
@@ -831,7 +758,9 @@ static int stretchto_reset_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int stretchto_reset_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus stretchto_reset_invoke(bContext *C,
+                                               wmOperator *op,
+                                               const wmEvent * /*event*/)
 {
   if (edit_constraint_invoke_properties(C, op, nullptr, nullptr)) {
     return stretchto_reset_exec(C, op);
@@ -866,7 +795,7 @@ void CONSTRAINT_OT_stretchto_reset(wmOperatorType *ot)
  * For Limit-Distance constraint.
  * \{ */
 
-static int limitdistance_reset_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus limitdistance_reset_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
@@ -886,7 +815,9 @@ static int limitdistance_reset_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int limitdistance_reset_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus limitdistance_reset_invoke(bContext *C,
+                                                   wmOperator *op,
+                                                   const wmEvent * /*event*/)
 {
   if (edit_constraint_invoke_properties(C, op, nullptr, nullptr)) {
     return limitdistance_reset_exec(C, op);
@@ -938,7 +869,7 @@ static void force_evaluation_if_constraint_disabled(bContext *C, Object *ob, bCo
 }
 
 /* ChildOf Constraint - set inverse callback */
-static int childof_set_inverse_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus childof_set_inverse_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
@@ -964,7 +895,9 @@ static int childof_set_inverse_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int childof_set_inverse_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus childof_set_inverse_invoke(bContext *C,
+                                                   wmOperator *op,
+                                                   const wmEvent * /*event*/)
 {
   if (edit_constraint_invoke_properties(C, op, nullptr, nullptr)) {
     return childof_set_inverse_exec(C, op);
@@ -992,7 +925,7 @@ void CONSTRAINT_OT_childof_set_inverse(wmOperatorType *ot)
 }
 
 /* ChildOf Constraint - clear inverse callback */
-static int childof_clear_inverse_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus childof_clear_inverse_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
@@ -1013,7 +946,9 @@ static int childof_clear_inverse_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int childof_clear_inverse_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus childof_clear_inverse_invoke(bContext *C,
+                                                     wmOperator *op,
+                                                     const wmEvent * /*event*/)
 {
   if (edit_constraint_invoke_properties(C, op, nullptr, nullptr)) {
     return childof_clear_inverse_exec(C, op);
@@ -1046,7 +981,7 @@ void CONSTRAINT_OT_childof_clear_inverse(wmOperatorType *ot)
 /** \name Follow Path Constraint (Auto Animate Path Operator)
  * \{ */
 
-static int followpath_path_animate_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus followpath_path_animate_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
@@ -1070,12 +1005,12 @@ static int followpath_path_animate_exec(bContext *C, wmOperator *op)
     Curve *cu = (Curve *)data->tar->data;
 
     if (ELEM(nullptr, cu->adt, cu->adt->action) ||
-        (BKE_fcurve_find(&cu->adt->action->curves, "eval_time", 0) == nullptr))
+        (animrig::fcurve_find_in_assigned_slot(*cu->adt, {"eval_time", 0}) == nullptr))
     {
       /* create F-Curve for path animation */
       act = animrig::id_action_ensure(bmain, &cu->id);
       PointerRNA id_ptr = RNA_id_pointer_create(&cu->id);
-      fcu = animrig::action_fcurve_ensure(bmain, act, nullptr, &id_ptr, {"eval_time", 0});
+      fcu = animrig::action_fcurve_ensure_ex(bmain, act, nullptr, &id_ptr, {"eval_time", 0});
 
       /* standard vertical range - 1:1 = 100 frames */
       standardRange = 100.0f;
@@ -1091,7 +1026,7 @@ static int followpath_path_animate_exec(bContext *C, wmOperator *op)
     PropertyRNA *prop;
 
     /* get RNA pointer to constraint's "offset_factor" property - to build RNA path */
-    PointerRNA ptr = RNA_pointer_create(&ob->id, &RNA_FollowPathConstraint, con);
+    PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, &RNA_FollowPathConstraint, con);
     prop = RNA_struct_find_property(&ptr, "offset_factor");
 
     const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop);
@@ -1100,7 +1035,7 @@ static int followpath_path_animate_exec(bContext *C, wmOperator *op)
     /* create F-Curve for constraint */
     act = animrig::id_action_ensure(bmain, &ob->id);
     PointerRNA id_ptr = RNA_id_pointer_create(&ob->id);
-    fcu = animrig::action_fcurve_ensure(bmain, act, nullptr, &id_ptr, {path->c_str(), 0});
+    fcu = animrig::action_fcurve_ensure_ex(bmain, act, nullptr, &id_ptr, {path->c_str(), 0});
 
     /* standard vertical range - 0.0 to 1.0 */
     standardRange = 1.0f;
@@ -1132,7 +1067,9 @@ static int followpath_path_animate_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int followpath_path_animate_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus followpath_path_animate_invoke(bContext *C,
+                                                       wmOperator *op,
+                                                       const wmEvent * /*event*/)
 {
   /* hook up invoke properties for figuring out which constraint we're dealing with */
   if (edit_constraint_invoke_properties(C, op, nullptr, nullptr)) {
@@ -1185,7 +1122,7 @@ void CONSTRAINT_OT_followpath_path_animate(wmOperatorType *ot)
 /** \name Object Solver Constraint (Set Inverse Operator)
  * \{ */
 
-static int objectsolver_set_inverse_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus objectsolver_set_inverse_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
@@ -1212,7 +1149,9 @@ static int objectsolver_set_inverse_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int objectsolver_set_inverse_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus objectsolver_set_inverse_invoke(bContext *C,
+                                                        wmOperator *op,
+                                                        const wmEvent * /*event*/)
 {
   if (edit_constraint_invoke_properties(C, op, nullptr, nullptr)) {
     return objectsolver_set_inverse_exec(C, op);
@@ -1245,7 +1184,7 @@ void CONSTRAINT_OT_objectsolver_set_inverse(wmOperatorType *ot)
 /** \name Object Solver Constraint (Clear Inverse Operator)
  * \{ */
 
-static int objectsolver_clear_inverse_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus objectsolver_clear_inverse_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
@@ -1266,9 +1205,9 @@ static int objectsolver_clear_inverse_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int objectsolver_clear_inverse_invoke(bContext *C,
-                                             wmOperator *op,
-                                             const wmEvent * /*event*/)
+static wmOperatorStatus objectsolver_clear_inverse_invoke(bContext *C,
+                                                          wmOperator *op,
+                                                          const wmEvent * /*event*/)
 {
   if (edit_constraint_invoke_properties(C, op, nullptr, nullptr)) {
     return objectsolver_clear_inverse_exec(C, op);
@@ -1428,7 +1367,7 @@ void constraint_copy_for_pose(Main *bmain, Object *ob_dst, bPoseChannel *pchan, 
 /** \name Delete Constraint Operator
  * \{ */
 
-static int constraint_delete_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus constraint_delete_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
@@ -1465,9 +1404,9 @@ static int constraint_delete_exec(bContext *C, wmOperator *op)
   return OPERATOR_CANCELLED;
 }
 
-static int constraint_delete_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus constraint_delete_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  int retval;
+  wmOperatorStatus retval;
   if (!edit_constraint_invoke_properties(C, op, event, &retval)) {
     return OPERATOR_CANCELLED;
   }
@@ -1498,7 +1437,7 @@ void CONSTRAINT_OT_delete(wmOperatorType *ot)
 /** \name Apply Constraint Operator
  * \{ */
 
-static int constraint_apply_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus constraint_apply_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -1564,9 +1503,9 @@ static int constraint_apply_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int constraint_apply_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus constraint_apply_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  int retval;
+  wmOperatorStatus retval;
   if (!edit_constraint_invoke_properties(C, op, event, &retval)) {
     return OPERATOR_CANCELLED;
   }
@@ -1597,7 +1536,7 @@ void CONSTRAINT_OT_apply(wmOperatorType *ot)
 /** \name Copy Constraint Operator
  * \{ */
 
-static int constraint_copy_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus constraint_copy_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
@@ -1649,9 +1588,9 @@ static int constraint_copy_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int constraint_copy_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus constraint_copy_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  int retval;
+  wmOperatorStatus retval;
   if (!edit_constraint_invoke_properties(C, op, event, &retval)) {
     return OPERATOR_CANCELLED;
   }
@@ -1682,7 +1621,7 @@ void CONSTRAINT_OT_copy(wmOperatorType *ot)
 /** \name Copy Constraint To Selected Operator
  * \{ */
 
-static int constraint_copy_to_selected_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus constraint_copy_to_selected_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *obact = context_active_object(C);
@@ -1751,9 +1690,11 @@ static int constraint_copy_to_selected_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int constraint_copy_to_selected_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus constraint_copy_to_selected_invoke(bContext *C,
+                                                           wmOperator *op,
+                                                           const wmEvent *event)
 {
-  int retval;
+  wmOperatorStatus retval;
   if (!edit_constraint_invoke_properties(C, op, event, &retval)) {
     return retval;
   }
@@ -1834,7 +1775,7 @@ void CONSTRAINT_OT_copy_to_selected(wmOperatorType *ot)
 /** \name Move Down Constraint Operator
  * \{ */
 
-static int constraint_move_down_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus constraint_move_down_exec(bContext *C, wmOperator *op)
 {
   Object *ob = context_active_object(C);
   bConstraint *con = edit_constraint_property_get(C, op, ob, 0);
@@ -1856,9 +1797,11 @@ static int constraint_move_down_exec(bContext *C, wmOperator *op)
   return OPERATOR_CANCELLED;
 }
 
-static int constraint_move_down_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus constraint_move_down_invoke(bContext *C,
+                                                    wmOperator *op,
+                                                    const wmEvent *event)
 {
-  int retval;
+  wmOperatorStatus retval;
   if (edit_constraint_invoke_properties(C, op, event, &retval)) {
     return constraint_move_down_exec(C, op);
   }
@@ -1890,7 +1833,7 @@ void CONSTRAINT_OT_move_down(wmOperatorType *ot)
 /** \name Move Up Constraint Operator
  * \{ */
 
-static int constraint_move_up_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus constraint_move_up_exec(bContext *C, wmOperator *op)
 {
   Object *ob = context_active_object(C);
   bConstraint *con = edit_constraint_property_get(C, op, ob, 0);
@@ -1912,9 +1855,11 @@ static int constraint_move_up_exec(bContext *C, wmOperator *op)
   return OPERATOR_CANCELLED;
 }
 
-static int constraint_move_up_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus constraint_move_up_invoke(bContext *C,
+                                                  wmOperator *op,
+                                                  const wmEvent *event)
 {
-  int retval;
+  wmOperatorStatus retval;
   if (edit_constraint_invoke_properties(C, op, event, &retval)) {
     return constraint_move_up_exec(C, op);
   }
@@ -1944,15 +1889,13 @@ void CONSTRAINT_OT_move_up(wmOperatorType *ot)
 /** \name Move Constraint To Index Operator
  * \{ */
 
-static int constraint_move_to_index_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus constraint_move_to_index_exec(bContext *C, wmOperator *op)
 {
   Object *ob = context_active_object(C);
   bConstraint *con = edit_constraint_property_get(C, op, ob, 0);
 
   int new_index = RNA_int_get(op->ptr, "index");
-  if (new_index < 0) {
-    new_index = 0;
-  }
+  new_index = std::max(new_index, 0);
 
   if (con) {
     constraint_move_to_index(ob, con, new_index);
@@ -1965,9 +1908,11 @@ static int constraint_move_to_index_exec(bContext *C, wmOperator *op)
   return OPERATOR_CANCELLED;
 }
 
-static int constraint_move_to_index_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus constraint_move_to_index_invoke(bContext *C,
+                                                        wmOperator *op,
+                                                        const wmEvent *event)
 {
-  int retval;
+  wmOperatorStatus retval;
   if (edit_constraint_invoke_properties(C, op, event, &retval)) {
     return constraint_move_to_index_exec(C, op);
   }
@@ -2008,7 +1953,7 @@ void CONSTRAINT_OT_move_to_index(wmOperatorType *ot)
 /** \name Clear Pose Constraints Operator
  * \{ */
 
-static int pose_constraints_clear_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus pose_constraints_clear_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
   Object *prev_ob = nullptr;
@@ -2047,7 +1992,7 @@ void POSE_OT_constraints_clear(wmOperatorType *ot)
   ot->poll = ED_operator_object_active_local_editable_posemode_exclusive;
 }
 
-static int object_constraints_clear_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus object_constraints_clear_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
 
@@ -2091,7 +2036,7 @@ void OBJECT_OT_constraints_clear(wmOperatorType *ot)
 /** \name Copy Pose Constraints Operator
  * \{ */
 
-static int pose_constraint_copy_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus pose_constraint_copy_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   bPoseChannel *pchan = CTX_data_active_pose_bone(C);
@@ -2150,7 +2095,7 @@ void POSE_OT_constraints_copy(wmOperatorType *ot)
 /** \name Copy Object Constraints Operator
  * \{ */
 
-static int object_constraint_copy_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus object_constraint_copy_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
   Object *obact = context_active_object(C);
@@ -2348,7 +2293,7 @@ static bool get_new_constraint_target(
 }
 
 /* used by add constraint operators to add the constraint required */
-static int constraint_add_exec(
+static wmOperatorStatus constraint_add_exec(
     bContext *C, wmOperator *op, Object *ob, ListBase *list, int type, const bool setTarget)
 {
   Main *bmain = CTX_data_main(C);
@@ -2402,34 +2347,6 @@ static int constraint_add_exec(
     }
   }
 
-  /* Do type-specific tweaking to the constraint settings. */
-  switch (type) {
-    case CONSTRAINT_TYPE_PYTHON: /* FIXME: this code is not really valid anymore */
-    {
-#ifdef WITH_PYTHON
-      char *menustr;
-      int scriptint = 0;
-      /* popup a list of usable scripts */
-      menustr = buildmenu_pyconstraints(bmain, nullptr, &scriptint);
-      // scriptint = pupmenu(menustr); /* XXX */
-      MEM_freeN(menustr);
-
-      /* only add constraint if a script was chosen */
-      if (scriptint) {
-        /* add constraint */
-        validate_pyconstraint_cb(bmain, con->data, &scriptint);
-
-        /* make sure target allowance is set correctly */
-        BPY_pyconstraint_update(ob, con);
-      }
-#endif
-      break;
-    }
-
-    default:
-      break;
-  }
-
   /* make sure all settings are valid - similar to above checks, but sometimes can be wrong */
   object_test_constraints(bmain, ob);
 
@@ -2457,7 +2374,7 @@ static int constraint_add_exec(
 /* ------------------ */
 
 /* dummy operator callback */
-static int object_constraint_add_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus object_constraint_add_exec(bContext *C, wmOperator *op)
 {
   Object *ob = context_active_object(C);
   int type = RNA_enum_get(op->ptr, "type");
@@ -2479,7 +2396,7 @@ static int object_constraint_add_exec(bContext *C, wmOperator *op)
 }
 
 /* dummy operator callback */
-static int pose_constraint_add_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus pose_constraint_add_exec(bContext *C, wmOperator *op)
 {
   Object *ob = BKE_object_pose_armature_get(context_active_object(C));
   int type = RNA_enum_get(op->ptr, "type");
@@ -2630,7 +2547,7 @@ void POSE_OT_constraint_add_with_targets(wmOperatorType *ot)
 /* TODO: should these be here, or back in `editors/armature/poseobject.c` again? */
 
 /* present menu with options + validation for targets to use */
-static int pose_ik_add_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus pose_ik_add_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
   Object *ob = BKE_object_pose_armature_get(CTX_data_active_object(C));
   bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
@@ -2691,7 +2608,7 @@ static int pose_ik_add_invoke(bContext *C, wmOperator *op, const wmEvent * /*eve
 }
 
 /* call constraint_add_exec() to add the IK constraint */
-static int pose_ik_add_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus pose_ik_add_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
   const bool with_targets = RNA_boolean_get(op->ptr, "with_targets");
@@ -2733,7 +2650,7 @@ void POSE_OT_ik_add(wmOperatorType *ot)
  * Remove IK constraints from selected bones.
  * \{ */
 
-static int pose_ik_clear_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus pose_ik_clear_exec(bContext *C, wmOperator * /*op*/)
 {
   Object *prev_ob = nullptr;
 
@@ -2746,7 +2663,7 @@ static int pose_ik_clear_exec(bContext *C, wmOperator * /*op*/)
     for (con = static_cast<bConstraint *>(pchan->constraints.first); con; con = next) {
       next = con->next;
       if (con->type == CONSTRAINT_TYPE_KINEMATIC) {
-        BKE_constraint_remove(&pchan->constraints, con);
+        BKE_constraint_remove_ex(&pchan->constraints, ob, con);
       }
     }
     pchan->constflag &= ~(PCHAN_HAS_IK | PCHAN_HAS_NO_TARGET);

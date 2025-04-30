@@ -4,7 +4,6 @@
 
 set(INC
   .
-  ../../source/blender/gpu
   ../../source/blender/gpu/intern
 )
 
@@ -24,6 +23,7 @@ set(SRC
 set(LIB
   PRIVATE bf::blenlib
   PRIVATE bf::dna
+  PRIVATE bf::gpu
   PRIVATE bf::intern::guardedalloc
 )
 
@@ -48,15 +48,6 @@ if(WITH_OPENCOLORIO)
     ${OPENCOLORIO_LIBRARIES}
   )
 
-  if(WIN32)
-    list(APPEND INC_SYS
-      ${BOOST_INCLUDE_DIR}
-    )
-    list(APPEND LIB
-      ${BOOST_LIBRARIES}
-    )
-  endif()
-
   set(GLSL_SRC
     gpu_shader_display_transform_vert.glsl
     gpu_shader_display_transform_frag.glsl
@@ -66,7 +57,7 @@ if(WITH_OPENCOLORIO)
 
   set(GLSL_C)
   foreach(GLSL_FILE ${GLSL_SRC})
-    data_to_c_simple(${GLSL_FILE} GLSL_C STRIP_LEADING_C_COMMENTS)
+    glsl_to_c(${GLSL_FILE} GLSL_C)
   endforeach()
 
   blender_add_lib(bf_ocio_shaders "${GLSL_C}" "" "" "")
@@ -76,15 +67,20 @@ if(WITH_OPENCOLORIO)
   )
 
   set(GLSL_SOURCE_CONTENT "")
+  set(GLSL_METADATA_CONTENT "")
   foreach(GLSL_FILE ${GLSL_SRC})
     get_filename_component(GLSL_FILE_NAME ${GLSL_FILE} NAME)
     string(REPLACE "." "_" GLSL_FILE_NAME_UNDERSCORES ${GLSL_FILE_NAME})
-    string(APPEND GLSL_SOURCE_CONTENT "SHADER_SOURCE\(datatoc_${GLSL_FILE_NAME_UNDERSCORES}, \"${GLSL_FILE_NAME}\", \"${GLSL_FILE}\"\)\n")
+    string(APPEND GLSL_SOURCE_CONTENT "SHADER_SOURCE\(${GLSL_FILE_NAME_UNDERSCORES}, \"${GLSL_FILE_NAME}\", \"${GLSL_FILE}\"\)\n")
+    string(APPEND GLSL_METADATA_CONTENT "#include \"${GLSL_FILE}.hh\"\n")
   endforeach()
 
   set(glsl_source_list_file "${CMAKE_CURRENT_BINARY_DIR}/glsl_ocio_source_list.h")
   file(GENERATE OUTPUT ${glsl_source_list_file} CONTENT "${GLSL_SOURCE_CONTENT}")
   list(APPEND SRC ${glsl_source_list_file})
+  set(glsl_metadata_list_file "${CMAKE_CURRENT_BINARY_DIR}/glsl_ocio_metadata_list.hh")
+  file(GENERATE OUTPUT ${glsl_metadata_list_file} CONTENT "${GLSL_METADATA_CONTENT}")
+  list(APPEND SRC ${glsl_metadata_list_file})
   list(APPEND INC ${CMAKE_CURRENT_BINARY_DIR})
 
   target_include_directories(bf_ocio_shaders PUBLIC ${CMAKE_CURRENT_BINARY_DIR})

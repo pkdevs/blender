@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_array_utils.hh"
+
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_instances.hh"
@@ -32,7 +34,7 @@ static GreasePencil *curves_to_grease_pencil_with_one_layer(
 {
   bke::CurvesGeometry curves = curves_id.geometry.wrap();
 
-  const bke::CurvesFieldContext field_context{curves, AttrDomain::Curve};
+  const bke::CurvesFieldContext field_context{curves_id, AttrDomain::Curve};
   FieldEvaluator evaluator{field_context, curves.curves_num()};
   evaluator.set_selection(selection_field);
   evaluator.evaluate();
@@ -42,16 +44,16 @@ static GreasePencil *curves_to_grease_pencil_with_one_layer(
   curves.remove_curves(curves_to_delete, attribute_filter);
 
   GreasePencil *grease_pencil = BKE_grease_pencil_new_nomain();
-  bke::greasepencil::Layer &layer = grease_pencil->add_layer(layer_name);
-  bke::greasepencil::Drawing *drawing = grease_pencil->insert_frame(
-      layer, grease_pencil->runtime->eval_frame);
-  BLI_assert(drawing);
-  drawing->strokes_for_write() = std::move(curves);
+  grease_pencil->add_layers_with_empty_drawings_for_eval(1);
+  bke::greasepencil::Layer &layer = grease_pencil->layer(0);
+  layer.set_name(layer_name);
+  bke::greasepencil::Drawing &drawing = *grease_pencil->get_eval_drawing(layer);
+  drawing.strokes_for_write() = std::move(curves);
 
   /* Transfer materials. */
   const int materials_num = curves_id.totcol;
   grease_pencil->material_array_num = materials_num;
-  grease_pencil->material_array = MEM_cnew_array<Material *>(materials_num, __func__);
+  grease_pencil->material_array = MEM_calloc_arrayN<Material *>(materials_num, __func__);
   initialized_copy_n(curves_id.mat, materials_num, grease_pencil->material_array);
 
   return grease_pencil;
@@ -85,16 +87,14 @@ static GreasePencil *curve_instances_to_grease_pencil_layers(
   GreasePencil *grease_pencil = BKE_grease_pencil_new_nomain();
 
   VectorSet<Material *> all_materials;
-
+  grease_pencil->add_layers_with_empty_drawings_for_eval(layer_num);
   instance_selection.foreach_index([&](const int instance_i) {
     const bke::InstanceReference &reference = references[reference_handles[instance_i]];
 
-    bke::greasepencil::Layer &layer = grease_pencil->add_layer(reference.name());
-    grease_pencil->insert_frame(layer, grease_pencil->runtime->eval_frame);
+    bke::greasepencil::Layer &layer = grease_pencil->layer(instance_i);
+    bke::greasepencil::Drawing &drawing = *grease_pencil->get_eval_drawing(layer);
+    layer.set_name(reference.name());
     layer.set_local_transform(transforms[instance_i]);
-
-    bke::greasepencil::Drawing *drawing = grease_pencil->get_eval_drawing(layer);
-    BLI_assert(drawing);
 
     GeometrySet instance_geometry;
     reference.to_geometry_set(instance_geometry);
@@ -103,7 +103,7 @@ static GreasePencil *curve_instances_to_grease_pencil_layers(
       return;
     }
 
-    bke::CurvesGeometry &strokes = drawing->strokes_for_write();
+    bke::CurvesGeometry &strokes = drawing.strokes_for_write();
     strokes = instance_curves->geometry.wrap();
 
     Vector<int> new_material_indices;
@@ -124,50 +124,46 @@ static GreasePencil *curve_instances_to_grease_pencil_layers(
   });
 
   grease_pencil->material_array_num = all_materials.size();
-  grease_pencil->material_array = MEM_cnew_array<Material *>(all_materials.size(), __func__);
+  grease_pencil->material_array = MEM_calloc_arrayN<Material *>(all_materials.size(), __func__);
   initialized_copy_n(all_materials.data(), all_materials.size(), grease_pencil->material_array);
 
   const bke::AttributeAccessor instances_attributes = instances.attributes();
   bke::MutableAttributeAccessor grease_pencil_attributes = grease_pencil->attributes_for_write();
-  instances_attributes.for_all([&](const StringRef attribute_id,
-                                   const AttributeMetaData &meta_data) {
-    if (instances_attributes.is_builtin(attribute_id) &&
-        !grease_pencil_attributes.is_builtin(attribute_id))
-    {
-      return true;
+  instances_attributes.foreach_attribute([&](const AttributeIter &iter) {
+    if (iter.is_builtin && !grease_pencil_attributes.is_builtin(iter.name)) {
+      return;
     }
-    if (ELEM(attribute_id, "opacity")) {
-      return true;
+    if (iter.data_type == CD_PROP_STRING) {
+      return;
     }
-    if (attribute_filter.allow_skip(attribute_id)) {
-      return true;
+    if (ELEM(iter.name, "opacity")) {
+      return;
     }
-    const GAttributeReader src_attribute = instances_attributes.lookup(attribute_id);
-    if (!src_attribute) {
-      return true;
+    if (attribute_filter.allow_skip(iter.name)) {
+      return;
     }
+    const GAttributeReader src_attribute = iter.get();
     if (instance_selection.size() == instances_num && src_attribute.varray.is_span() &&
         src_attribute.sharing_info)
     {
       /* Try reusing existing attribute array. */
       grease_pencil_attributes.add(
-          attribute_id,
+          iter.name,
           AttrDomain::Layer,
-          meta_data.data_type,
+          iter.data_type,
           bke::AttributeInitShared{src_attribute.varray.get_internal_span().data(),
                                    *src_attribute.sharing_info});
-      return true;
+      return;
     }
     if (!grease_pencil_attributes.add(
-            attribute_id, AttrDomain::Layer, meta_data.data_type, bke::AttributeInitConstruct()))
+            iter.name, AttrDomain::Layer, iter.data_type, bke::AttributeInitConstruct()))
     {
-      return true;
+      return;
     }
     bke::GSpanAttributeWriter dst_attribute = grease_pencil_attributes.lookup_for_write_span(
-        attribute_id);
+        iter.name);
     array_utils::gather(src_attribute.varray, instance_selection, dst_attribute.span);
     dst_attribute.finish();
-    return true;
   });
 
   {
@@ -176,7 +172,7 @@ static GreasePencil *curve_instances_to_grease_pencil_layers(
     const VArray<float> opacities = *instances_attributes.lookup_or_default<float>(
         "opacity", AttrDomain::Instance, 1.0f);
     instance_selection.foreach_index([&](const int instance_i, const int layer_i) {
-      grease_pencil->layer(layer_i)->opacity = opacities[instance_i];
+      grease_pencil->layer(layer_i).opacity = opacities[instance_i];
     });
   }
 
@@ -224,13 +220,16 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(
-      &ntype, GEO_NODE_CURVES_TO_GREASE_PENCIL, "Curves to Grease Pencil", NODE_CLASS_GEOMETRY);
+  geo_node_type_base(&ntype, "GeometryNodeCurvesToGreasePencil", GEO_NODE_CURVES_TO_GREASE_PENCIL);
+  ntype.ui_name = "Curves to Grease Pencil";
+  ntype.ui_description = "Convert the curves in each top-level instance into Grease Pencil layer";
+  ntype.enum_name_legacy = "CURVES_TO_GREASE_PENCIL";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  bke::node_type_size(&ntype, 160, 100, 320);
+  bke::node_type_size(ntype, 160, 100, 320);
 
-  bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

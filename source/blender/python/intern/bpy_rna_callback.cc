@@ -11,8 +11,8 @@
 
 #include <Python.h>
 
-#include "../generic/py_capi_rna.h"
-#include "../generic/python_utildefines.h"
+#include "../generic/py_capi_rna.hh"
+#include "../generic/python_utildefines.hh"
 
 #include "DNA_space_types.h"
 
@@ -26,11 +26,11 @@
 
 #include "ED_space_api.hh"
 
-#include "BPY_extern.h" /* For public API. */
+#include "BPY_extern.hh" /* For public API. */
 
-#include "bpy_capi_utils.h"
-#include "bpy_rna.h"
-#include "bpy_rna_callback.h" /* Own include. */
+#include "bpy_capi_utils.hh"
+#include "bpy_rna.hh"
+#include "bpy_rna_callback.hh" /* Own include. */
 
 /* Use this to stop other capsules from being mis-used. */
 static const char *rna_capsual_id = "RNA_HANDLE";
@@ -46,10 +46,10 @@ static const EnumPropertyItem region_draw_mode_items[] = {
 
 static void cb_region_draw(const bContext *C, ARegion * /*region*/, void *customdata)
 {
-  PyObject *cb_func, *cb_args, *result;
   PyGILState_STATE gilstate;
-
   bpy_context_set((bContext *)C, &gilstate);
+
+  PyObject *cb_func, *cb_args, *result;
 
   cb_func = PyTuple_GET_ITEM((PyObject *)customdata, 1);
   cb_args = PyTuple_GET_ITEM((PyObject *)customdata, 2);
@@ -80,13 +80,13 @@ static PyObject *PyC_Tuple_CopySized(PyObject *src, int len_dst)
   return dst;
 }
 
-static void cb_wm_cursor_draw(bContext *C, int x, int y, void *customdata)
+static void cb_wm_cursor_draw(
+    bContext *C, int x, int y, float /*x_tilt*/, float /*y_tilt*/, void *customdata)
 {
-  PyObject *cb_func, *cb_args, *result;
   PyGILState_STATE gilstate;
+  bpy_context_set(C, &gilstate);
 
-  bpy_context_set((bContext *)C, &gilstate);
-
+  PyObject *cb_func, *cb_args, *result;
   cb_func = PyTuple_GET_ITEM((PyObject *)customdata, 1);
   cb_args = PyTuple_GET_ITEM((PyObject *)customdata, 2);
 
@@ -110,7 +110,7 @@ static void cb_wm_cursor_draw(bContext *C, int x, int y, void *customdata)
     PyErr_Clear();
   }
 
-  bpy_context_clear((bContext *)C, &gilstate);
+  bpy_context_clear(C, &gilstate);
 }
 
 #if 0
@@ -354,7 +354,7 @@ PyObject *pyrna_callback_classmethod_add(PyObject * /*self*/, PyObject *args)
    * This reference is decremented in #BPY_callback_screen_free and #BPY_callback_wm_free. */
   Py_INCREF(args);
 
-  PyObject *ret = PyCapsule_New((void *)handle, rna_capsual_id, nullptr);
+  PyObject *ret = PyCapsule_New(handle, rna_capsual_id, nullptr);
 
   /* Store 'args' in context as well for simple access. */
   PyCapsule_SetDestructor(ret, cb_rna_capsule_destructor);
@@ -471,19 +471,12 @@ PyObject *pyrna_callback_classmethod_remove(PyObject * /*self*/, PyObject *args)
 
 static void cb_customdata_free(void *customdata)
 {
+  PyGILState_STATE gilstate = PyGILState_Ensure();
+
   PyObject *tuple = static_cast<PyObject *>(customdata);
-  bool use_gil = true; /* !PyC_IsInterpreterActive(); */
-
-  PyGILState_STATE gilstate;
-  if (use_gil) {
-    gilstate = PyGILState_Ensure();
-  }
-
   Py_DECREF(tuple);
 
-  if (use_gil) {
-    PyGILState_Release(gilstate);
-  }
+  PyGILState_Release(gilstate);
 }
 
 void BPY_callback_screen_free(ARegionType *art)

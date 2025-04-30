@@ -7,10 +7,7 @@
  */
 #include "sculpt_dyntopo.hh"
 
-#include <cmath>
 #include <cstdlib>
-
-#include "MEM_guardedalloc.h"
 
 #include "BLT_translation.hh"
 
@@ -22,8 +19,8 @@
 #include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_particle.h"
-#include "BKE_pbvh_api.hh"
 #include "BKE_pointcache.h"
 #include "BKE_scene.hh"
 
@@ -173,7 +170,7 @@ void disable_with_undo(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &
     /* May be false in background mode. */
     const bool use_undo = G.background ? (ED_undo_stack_get() != nullptr) : true;
     if (use_undo) {
-      undo::push_begin_ex(ob, "Dynamic topology disable");
+      undo::push_begin_ex(scene, ob, "Dynamic topology disable");
       undo::push_node(depsgraph, ob, nullptr, undo::Type::DyntopoEnd);
     }
     disable(bmain, depsgraph, scene, ob, nullptr);
@@ -183,14 +180,14 @@ void disable_with_undo(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &
   }
 }
 
-static void enable_with_undo(Main &bmain, Depsgraph &depsgraph, Object &ob)
+static void enable_with_undo(Main &bmain, Depsgraph &depsgraph, const Scene &scene, Object &ob)
 {
   SculptSession &ss = *ob.sculpt;
   if (ss.bm == nullptr) {
     /* May be false in background mode. */
     const bool use_undo = G.background ? (ED_undo_stack_get() != nullptr) : true;
     if (use_undo) {
-      undo::push_begin_ex(ob, "Dynamic topology enable");
+      undo::push_begin_ex(scene, ob, "Dynamic topology enable");
     }
     enable_ex(bmain, depsgraph, ob);
     if (use_undo) {
@@ -200,7 +197,7 @@ static void enable_with_undo(Main &bmain, Depsgraph &depsgraph, Object &ob)
   }
 }
 
-static int sculpt_dynamic_topology_toggle_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus sculpt_dynamic_topology_toggle_exec(bContext *C, wmOperator * /*op*/)
 {
   Main &bmain = *CTX_data_main(C);
   Depsgraph &depsgraph = *CTX_data_ensure_evaluated_depsgraph(C);
@@ -214,7 +211,7 @@ static int sculpt_dynamic_topology_toggle_exec(bContext *C, wmOperator * /*op*/)
     disable_with_undo(bmain, depsgraph, scene, ob);
   }
   else {
-    enable_with_undo(bmain, depsgraph, ob);
+    enable_with_undo(bmain, depsgraph, scene, ob);
   }
 
   WM_cursor_wait(false);
@@ -223,7 +220,7 @@ static int sculpt_dynamic_topology_toggle_exec(bContext *C, wmOperator * /*op*/)
   return OPERATOR_FINISHED;
 }
 
-static int dyntopo_warning_popup(bContext *C, wmOperatorType *ot, enum WarnFlag flag)
+static wmOperatorStatus dyntopo_warning_popup(bContext *C, wmOperatorType *ot, enum WarnFlag flag)
 {
   uiPopupMenu *pup = UI_popup_menu_begin(C, IFACE_("Warning!"), ICON_ERROR);
   uiLayout *layout = UI_popup_menu_layout(pup);
@@ -317,9 +314,9 @@ WarnFlag check_attribute_warning(Scene &scene, Object &ob)
   return flag;
 }
 
-static int sculpt_dynamic_topology_toggle_invoke(bContext *C,
-                                                 wmOperator *op,
-                                                 const wmEvent * /*event*/)
+static wmOperatorStatus sculpt_dynamic_topology_toggle_invoke(bContext *C,
+                                                              wmOperator *op,
+                                                              const wmEvent * /*event*/)
 {
   Object &ob = *CTX_data_active_object(C);
   SculptSession &ss = *ob.sculpt;

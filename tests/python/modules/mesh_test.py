@@ -407,7 +407,7 @@ class MeshTest(ABC):
 
         if result_mesh == "Same":
             result_codes['Mesh Comparison'] = (True, result_mesh)
-        elif allow_index_change and result_mesh == "The meshes are the same up to a change of indices":
+        elif allow_index_change and result_mesh == "The geometries are the same up to a change of indices":
             result_codes['Mesh Comparison'] = (True, result_mesh)
         else:
             result_codes['Mesh Comparison'] = (False, result_mesh)
@@ -740,7 +740,7 @@ class BlendFileTest(MeshTest):
     """
 
     def __init__(self, test_object_name, exp_object_name, threshold=None):
-        super().__init__(test_object_name, exp_object_name, threshold)
+        super().__init__(test_object_name, exp_object_name, threshold=threshold)
         if bpy.data.objects[test_object_name].get("allow_index_change"):
             self.allow_index_change = True
 

@@ -13,6 +13,7 @@
 #include "BKE_mesh.hh"
 
 #include "ED_transform_snap_object_context.hh"
+#include "ED_view3d.hh"
 
 #include "transform_snap_object.hh"
 
@@ -22,7 +23,7 @@
 #  endif
 #endif
 
-using namespace blender;
+namespace blender::ed::transform {
 
 /* -------------------------------------------------------------------- */
 /** \name Snap Object Data
@@ -30,14 +31,15 @@ using namespace blender;
 
 static void snap_object_data_mesh_get(const Mesh *mesh_eval,
                                       bool skip_hidden,
-                                      BVHTreeFromMesh *r_treedata)
+                                      bke::BVHTreeFromMesh *r_treedata)
 {
   /* The BVHTree from corner_tris is always required. */
-  BKE_bvhtree_from_mesh_get(r_treedata,
-                            mesh_eval,
-                            skip_hidden ? BVHTREE_FROM_CORNER_TRIS_NO_HIDDEN :
-                                          BVHTREE_FROM_CORNER_TRIS,
-                            4);
+  if (skip_hidden) {
+    *r_treedata = mesh_eval->bvh_corner_tris_no_hidden();
+  }
+  else {
+    *r_treedata = mesh_eval->bvh_corner_tris();
+  }
 }
 
 /** \} */
@@ -55,15 +57,15 @@ static void mesh_corner_tris_raycast_backface_culling_cb(void *userdata,
                                                          const BVHTreeRay *ray,
                                                          BVHTreeRayHit *hit)
 {
-  const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
-  const blender::Span<blender::float3> positions = data->vert_positions;
+  const bke::BVHTreeFromMesh *data = (bke::BVHTreeFromMesh *)userdata;
+  const Span<float3> positions = data->vert_positions;
   const int3 &tri = data->corner_tris[index];
   const float *vtri_co[3] = {
       positions[data->corner_verts[tri[0]]],
       positions[data->corner_verts[tri[1]]],
       positions[data->corner_verts[tri[2]]],
   };
-  float dist = bvhtree_ray_tri_intersection(ray, hit->dist, UNPACK3(vtri_co));
+  float dist = bke::bvhtree_ray_tri_intersection(ray, hit->dist, UNPACK3(vtri_co));
 
   if (dist >= 0 && dist < hit->dist) {
     float no[3];
@@ -97,8 +99,8 @@ static bool raycastMesh(SnapObjectContext *sctx,
   /* Local scale in normal direction. */
   ray_normal_local = math::normalize_and_get_length(ray_normal_local, local_scale);
 
-  const bool is_in_front = sctx->runtime.params.use_occlusion_test &&
-                           (ob_eval->dtx & OB_DRAW_IN_FRONT) != 0;
+  const bool is_in_front = (sctx->runtime.params.occlusion_test == SNAP_OCCLUSION_AS_SEEM) &&
+                           (ob_eval->dtx & OB_DRAW_IN_FRONT);
   const float depth_max = is_in_front ? sctx->ret.ray_depth_max_in_front : sctx->ret.ray_depth_max;
   local_depth = depth_max;
   if (local_depth != BVH_RAYCAST_DIST_MAX) {
@@ -128,10 +130,10 @@ static bool raycastMesh(SnapObjectContext *sctx,
     len_diff = 0.0f;
   }
 
-  BVHTreeFromMesh treedata;
+  bke::BVHTreeFromMesh treedata;
   snap_object_data_mesh_get(mesh_eval, use_hide, &treedata);
 
-  const blender::Span<int> tri_faces = mesh_eval->corner_tri_faces();
+  const Span<int> tri_faces = mesh_eval->corner_tri_faces();
 
   if (treedata.tree == nullptr) {
     return retval;
@@ -195,7 +197,7 @@ static bool nearest_world_mesh(SnapObjectContext *sctx,
                                const float4x4 &obmat,
                                bool use_hide)
 {
-  BVHTreeFromMesh treedata;
+  bke::BVHTreeFromMesh treedata;
   snap_object_data_mesh_get(mesh_eval, use_hide, &treedata);
   if (treedata.tree == nullptr) {
     return false;
@@ -245,7 +247,7 @@ class SnapData_Mesh : public SnapData {
 
   void get_edge_verts_index(const int index, int r_v_index[2]) override
   {
-    const blender::int2 &edge = this->edges[index];
+    const int2 &edge = this->edges[index];
     r_v_index[0] = edge[0];
     r_v_index[1] = edge[1];
   }
@@ -372,14 +374,14 @@ eSnapMode snap_polygon_mesh(SnapObjectContext *sctx,
   nearest.index = -1;
   nearest.dist_sq = sctx->ret.dist_px_sq;
 
-  const blender::IndexRange face = mesh_eval->faces()[face_index];
+  const IndexRange face = mesh_eval->faces()[face_index];
 
   if (snap_to_flag &
       (SCE_SNAP_TO_EDGE | SCE_SNAP_TO_EDGE_MIDPOINT | SCE_SNAP_TO_EDGE_PERPENDICULAR))
   {
-    /* We return 'Snap to Edge' even if the intent is 'Snap to Edge Midpoitnt' or 'Snap to Edge
-     * Perpendicular'. This avoids complexity. These snap points will be tested in
-     * `snap_edge_points`. */
+    /* We return "Snap to Edge" even if the intent is "Snap to Edge Midpoint" or
+     * "Snap to Edge Perpendicular".
+     * This avoids complexity. These snap points will be tested in `snap_edge_points`. */
     elem = SCE_SNAP_TO_EDGE;
     BLI_assert(nearest2d.edges != nullptr);
     const int *face_edges = &nearest2d.corner_edges[face.start()];
@@ -472,26 +474,22 @@ static eSnapMode snapMesh(SnapObjectContext *sctx,
     return SCE_SNAP_TO_NONE;
   }
 
-  BVHTreeFromMesh treedata, treedata_dummy;
+  bke::BVHTreeFromMesh treedata;
   snap_object_data_mesh_get(mesh_eval, skip_hidden, &treedata);
 
-  BVHTree *bvhtree[2] = {nullptr};
-  bvhtree[0] = BKE_bvhtree_from_mesh_get(&treedata_dummy,
-                                         mesh_eval,
-                                         skip_hidden ? BVHTREE_FROM_LOOSEEDGES_NO_HIDDEN :
-                                                       BVHTREE_FROM_LOOSEEDGES,
-                                         2);
-  BLI_assert(treedata_dummy.cached);
+  const BVHTree *bvhtree[2] = {nullptr};
+  bvhtree[0] = skip_hidden ? mesh_eval->bvh_loose_no_hidden_edges().tree :
+                             mesh_eval->bvh_loose_edges().tree;
   if (snap_to & SCE_SNAP_TO_POINT) {
-    bvhtree[1] = BKE_bvhtree_from_mesh_get(&treedata_dummy,
-                                           mesh_eval,
-                                           skip_hidden ? BVHTREE_FROM_LOOSEVERTS_NO_HIDDEN :
-                                                         BVHTREE_FROM_LOOSEVERTS,
-                                           2);
-    BLI_assert(treedata_dummy.cached);
+    bvhtree[1] = skip_hidden ? mesh_eval->bvh_loose_no_hidden_verts().tree :
+                               mesh_eval->bvh_loose_verts().tree;
   }
 
-  nearest2d.clip_planes_enable(sctx, ob_eval);
+  /* #XRAY_ENABLED can return false even with the XRAY flag enabled, this happens because the
+   * alpha is 1.0 in this case. But even with the alpha being 1.0, the edit mesh is still not
+   * occluded. */
+  const bool skip_occlusion_plane = is_editmesh && XRAY_FLAG_ENABLED(sctx->runtime.v3d);
+  nearest2d.clip_planes_enable(sctx, ob_eval, skip_occlusion_plane);
 
   BVHTreeNearest nearest{};
   nearest.index = -1;
@@ -552,8 +550,7 @@ static eSnapMode snapMesh(SnapObjectContext *sctx,
       elem = SCE_SNAP_TO_EDGE;
     }
   }
-  else {
-    BLI_assert(snap_to & SCE_SNAP_TO_EDGE_ENDPOINT);
+  else if (snap_to & SCE_SNAP_TO_EDGE_ENDPOINT) {
     if (bvhtree[0]) {
       /* Snap to loose edges verts. */
       BLI_bvhtree_find_nearest_projected(
@@ -630,3 +627,5 @@ eSnapMode snap_object_mesh(SnapObjectContext *sctx,
 
   return SCE_SNAP_TO_NONE;
 }
+
+}  // namespace blender::ed::transform

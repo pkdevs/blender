@@ -7,17 +7,11 @@
  */
 
 #include <cerrno>
-#include <cstdio>
 #include <cstdlib>
 
 #include "DNA_ID.h"
-#include "DNA_modifier_types.h"
-#include "DNA_object_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_utildefines.h"
-
-#include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
@@ -37,14 +31,15 @@
 #  include "BKE_grease_pencil.hh"
 #  include "BKE_icons.h"
 #  include "BKE_idtype.hh"
-#  include "BKE_image.h"
+#  include "BKE_image.hh"
 #  include "BKE_lattice.hh"
 #  include "BKE_lib_remap.hh"
 #  include "BKE_light.h"
 #  include "BKE_lightprobe.h"
 #  include "BKE_linestyle.h"
+#  include "BKE_main_invariants.hh"
 #  include "BKE_mask.h"
-#  include "BKE_material.h"
+#  include "BKE_material.hh"
 #  include "BKE_mball.hh"
 #  include "BKE_mesh.hh"
 #  include "BKE_movieclip.h"
@@ -99,7 +94,7 @@
 #  include "BLT_translation.hh"
 
 #  ifdef WITH_PYTHON
-#    include "BPY_extern.h"
+#    include "BPY_extern.hh"
 #  endif
 
 #  include "WM_api.hh"
@@ -129,7 +124,7 @@ static void rna_Main_ID_remove(Main *bmain,
   }
   if (do_unlink) {
     BKE_id_delete(bmain, id);
-    RNA_POINTER_INVALIDATE(id_ptr);
+    id_ptr->invalidate();
     /* Force full redraw, mandatory to avoid crashes when running this from UI... */
     WM_main_add_notifier(NC_WINDOW, nullptr);
   }
@@ -138,7 +133,7 @@ static void rna_Main_ID_remove(Main *bmain,
                      (do_ui_user ? 0 : LIB_ID_FREE_NO_UI_USER);
     /* Still using ID flags here, this is in-between commit anyway... */
     BKE_id_free_ex(bmain, id, flag, true);
-    RNA_POINTER_INVALIDATE(id_ptr);
+    id_ptr->invalidate();
   }
   else {
     BKE_reportf(
@@ -156,12 +151,12 @@ static Camera *rna_Main_cameras_new(Main *bmain, const char *name)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  ID *id = static_cast<ID *>(BKE_camera_add(bmain, safe_name));
-  id_us_min(id);
+  Camera *camera = BKE_camera_add(bmain, safe_name);
+  id_us_min(&camera->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
-  return (Camera *)id;
+  return camera;
 }
 
 static Scene *rna_Main_scenes_new(Main *bmain, const char *name)
@@ -242,7 +237,7 @@ static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char
   ob = BKE_object_add_only_object(bmain, type, safe_name);
 
   ob->data = data;
-  BKE_object_materials_test(bmain, ob, static_cast<ID *>(ob->data));
+  BKE_object_materials_sync_length(bmain, ob, static_cast<ID *>(ob->data));
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
 
@@ -293,7 +288,7 @@ static bNodeTree *rna_Main_nodetree_new(Main *bmain, const char *name, int type)
   blender::bke::bNodeTreeType *typeinfo = rna_node_tree_type_from_enum(type);
   if (typeinfo) {
     bNodeTree *ntree = blender::bke::node_tree_add_tree(bmain, safe_name, typeinfo->idname);
-    ED_node_tree_propagate_change(nullptr, bmain, ntree);
+    BKE_main_ensure_invariants(*bmain);
 
     id_us_min(&ntree->id);
     return ntree;
@@ -549,7 +544,7 @@ static Speaker *rna_Main_speakers_new(Main *bmain, const char *name)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  Speaker *speaker = static_cast<Speaker *>(BKE_speaker_add(bmain, safe_name));
+  Speaker *speaker = BKE_speaker_add(bmain, safe_name);
   id_us_min(&speaker->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -728,7 +723,7 @@ static LightProbe *rna_Main_lightprobe_new(Main *bmain, const char *name, int ty
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  LightProbe *probe = static_cast<LightProbe *>(BKE_lightprobe_add(bmain, safe_name));
+  LightProbe *probe = BKE_lightprobe_add(bmain, safe_name);
 
   BKE_lightprobe_type_set(probe, type);
 
@@ -757,8 +752,7 @@ static GreasePencil *rna_Main_grease_pencils_new(Main *bmain, const char *name)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  GreasePencil *grease_pencil = static_cast<GreasePencil *>(
-      BKE_grease_pencil_add(bmain, safe_name));
+  GreasePencil *grease_pencil = BKE_grease_pencil_add(bmain, safe_name);
   id_us_min(&grease_pencil->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -771,7 +765,7 @@ static Curves *rna_Main_hair_curves_new(Main *bmain, const char *name)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  Curves *curves = static_cast<Curves *>(BKE_curves_add(bmain, safe_name));
+  Curves *curves = BKE_curves_add(bmain, safe_name);
   id_us_min(&curves->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -784,7 +778,7 @@ static PointCloud *rna_Main_pointclouds_new(Main *bmain, const char *name)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  PointCloud *pointcloud = static_cast<PointCloud *>(BKE_pointcloud_add(bmain, safe_name));
+  PointCloud *pointcloud = BKE_pointcloud_add(bmain, safe_name);
   id_us_min(&pointcloud->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -797,7 +791,7 @@ static Volume *rna_Main_volumes_new(Main *bmain, const char *name)
   char safe_name[MAX_ID_NAME - 2];
   rna_idname_validate(name, safe_name);
 
-  Volume *volume = static_cast<Volume *>(BKE_volume_add(bmain, safe_name));
+  Volume *volume = BKE_volume_add(bmain, safe_name);
   id_us_min(&volume->id);
 
   WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
@@ -868,7 +862,7 @@ void RNA_api_main(StructRNA * /*srna*/)
   RNA_def_function_ui_description(func, "Add a new image");
   parm = RNA_def_string_file_path(
       func, "filepath", nullptr, 0, "", "File path to load image from");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_parameter_flags(parm, PROP_PATH_SUPPORTS_BLEND_RELATIVE, PARM_REQUIRED);
   parm = RNA_def_pointer(func, "image", "Image", "", "New image");
   RNA_def_function_return(func, parm);
 #  endif
@@ -1015,12 +1009,12 @@ void RNA_def_main_materials(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "create_gpencil_data", "rna_Main_materials_gpencil_data");
-  RNA_def_function_ui_description(func, "Add grease pencil material settings");
+  RNA_def_function_ui_description(func, "Add Grease Pencil material settings");
   parm = RNA_def_pointer(func, "material", "Material", "", "Material");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 
   func = RNA_def_function(srna, "remove_gpencil_data", "rna_Main_materials_gpencil_remove");
-  RNA_def_function_ui_description(func, "Remove grease pencil material settings");
+  RNA_def_function_ui_description(func, "Remove Grease Pencil material settings");
   parm = RNA_def_pointer(func, "material", "Material", "", "Material");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 
@@ -1050,11 +1044,6 @@ void RNA_def_main_node_groups(BlenderRNA *brna, PropertyRNA *cprop)
   FunctionRNA *func;
   PropertyRNA *parm;
 
-  static const EnumPropertyItem dummy_items[] = {
-      {0, "DUMMY", 0, "", ""},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
   RNA_def_property_srna(cprop, "BlendDataNodeTrees");
   srna = RNA_def_struct(brna, "BlendDataNodeTrees", nullptr);
   RNA_def_struct_sdna(srna, "Main");
@@ -1064,9 +1053,10 @@ void RNA_def_main_node_groups(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Add a new node tree to the main database");
   parm = RNA_def_string(func, "name", "NodeGroup", 0, "", "New name for the data-block");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_enum(func, "type", dummy_items, 0, "Type", "The type of node_group to add");
+  parm = RNA_def_enum(
+      func, "type", rna_enum_dummy_DEFAULT_items, 0, "Type", "The type of node_group to add");
   RNA_def_property_enum_funcs(parm, nullptr, nullptr, "rna_Main_nodetree_type_itemf");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_parameter_flags(parm, PROP_ENUM_NO_CONTEXT, PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "tree", "NodeTree", "", "New node tree data-block");
   RNA_def_function_return(func, parm);
@@ -1308,7 +1298,7 @@ void RNA_def_main_images(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Load a new image into the main database");
   parm = RNA_def_string_file_path(
       func, "filepath", "File Path", 0, "", "Path of the file to load");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_parameter_flags(parm, PROP_PATH_SUPPORTS_BLEND_RELATIVE, PARM_REQUIRED);
   RNA_def_boolean(func,
                   "check_existing",
                   false,
@@ -1484,7 +1474,7 @@ void RNA_def_main_fonts(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Load a new font into the main database");
   parm = RNA_def_string_file_path(
       func, "filepath", "File Path", 0, "", "path of the font to load");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_parameter_flags(parm, PROP_PATH_SUPPORTS_BLEND_RELATIVE, PARM_REQUIRED);
   RNA_def_boolean(func,
                   "check_existing",
                   false,
@@ -1596,7 +1586,7 @@ void RNA_def_main_brushes(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   func = RNA_def_function(srna, "create_gpencil_data", "rna_Main_brush_gpencil_data");
-  RNA_def_function_ui_description(func, "Add grease pencil brush settings");
+  RNA_def_function_ui_description(func, "Add Grease Pencil brush settings");
   parm = RNA_def_pointer(func, "brush", "Brush", "", "Brush");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 }
@@ -1760,7 +1750,7 @@ void RNA_def_main_texts(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Add a new text to the main database from a file");
   parm = RNA_def_string_file_path(
       func, "filepath", "Path", FILE_MAX, "", "path for the data-block");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_parameter_flags(parm, PROP_PATH_SUPPORTS_BLEND_RELATIVE, PARM_REQUIRED);
   parm = RNA_def_boolean(
       func, "internal", false, "Make internal", "Make text file internal after loading");
   /* return type */
@@ -1788,7 +1778,7 @@ void RNA_def_main_sounds(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Add a new sound to the main database from a file");
   parm = RNA_def_string_file_path(
       func, "filepath", "Path", FILE_MAX, "", "path for the data-block");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_parameter_flags(parm, PROP_PATH_SUPPORTS_BLEND_RELATIVE, PARM_REQUIRED);
   RNA_def_boolean(func,
                   "check_existing",
                   false,
@@ -2066,37 +2056,37 @@ void RNA_def_main_grease_pencil(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_property_srna(cprop, "BlendDataGreasePencilsV3");
   srna = RNA_def_struct(brna, "BlendDataGreasePencilsV3", nullptr);
   RNA_def_struct_sdna(srna, "Main");
-  RNA_def_struct_ui_text(srna, "Main Grease Pencils", "Collection of grease pencils");
+  RNA_def_struct_ui_text(srna, "Main Grease Pencils", "Collection of Grease Pencils");
 
   func = RNA_def_function(srna, "tag", "rna_Main_grease_pencils_tag");
   parm = RNA_def_boolean(func, "value", false, "Value", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   func = RNA_def_function(srna, "new", "rna_Main_grease_pencils_new");
-  RNA_def_function_ui_description(func, "Add a new grease pencil datablock to the main database");
+  RNA_def_function_ui_description(func, "Add a new Grease Pencil datablock to the main database");
   parm = RNA_def_string(func, "name", "GreasePencil", 0, "", "New name for the data-block");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(
-      func, "grease_pencil", "GreasePencilv3", "", "New grease pencil data-block");
+      func, "grease_pencil", "GreasePencilv3", "", "New Grease Pencil data-block");
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   RNA_def_function_ui_description(func,
-                                  "Remove a grease pencil instance from the current blendfile");
+                                  "Remove a Grease Pencil instance from the current blendfile");
   parm = RNA_def_pointer(func, "grease_pencil", "GreasePencilv3", "", "Grease Pencil to remove");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   RNA_def_boolean(
-      func, "do_unlink", true, "", "Unlink all usages of this grease pencil before deleting it");
+      func, "do_unlink", true, "", "Unlink all usages of this Grease Pencil before deleting it");
   RNA_def_boolean(func,
                   "do_id_user",
                   true,
                   "",
-                  "Decrement user counter of all datablocks used by this grease pencil");
+                  "Decrement user counter of all datablocks used by this Grease Pencil");
   RNA_def_boolean(
-      func, "do_ui_user", true, "", "Make sure interface does not reference this grease pencil");
+      func, "do_ui_user", true, "", "Make sure interface does not reference this Grease Pencil");
 }
 
 void RNA_def_main_movieclips(BlenderRNA *brna, PropertyRNA *cprop)
@@ -2140,7 +2130,7 @@ void RNA_def_main_movieclips(BlenderRNA *brna, PropertyRNA *cprop)
       "behavior with multiple movie-clips using the same file may incorrectly generate proxies)");
   parm = RNA_def_string_file_path(
       func, "filepath", "Path", FILE_MAX, "", "path for the data-block");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_parameter_flags(parm, PROP_PATH_SUPPORTS_BLEND_RELATIVE, PARM_REQUIRED);
   RNA_def_boolean(func,
                   "check_existing",
                   false,

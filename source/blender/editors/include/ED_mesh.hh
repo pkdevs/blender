@@ -12,6 +12,8 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 
+#include "DNA_windowmanager_enums.h"
+
 struct ARegion;
 struct BMBVHTree;
 struct BMEdge;
@@ -25,6 +27,7 @@ struct BMeshNormalsUpdate_Params;
 struct Base;
 struct Depsgraph;
 struct KeyBlock;
+struct Main;
 struct MDeformVert;
 struct Mesh;
 struct Object;
@@ -173,12 +176,12 @@ UvVertMap *BM_uv_vert_map_create(BMesh *bm, bool use_select);
 void EDBM_flag_enable_all(BMEditMesh *em, char hflag);
 void EDBM_flag_disable_all(BMEditMesh *em, char hflag);
 
-bool BMBVH_EdgeVisible(BMBVHTree *tree,
-                       BMEdge *e,
-                       Depsgraph *depsgraph,
-                       ARegion *region,
-                       View3D *v3d,
-                       Object *obedit);
+bool BMBVH_EdgeVisible(const BMBVHTree *tree,
+                       const BMEdge *e,
+                       const Depsgraph *depsgraph,
+                       const ARegion *region,
+                       const View3D *v3d,
+                       const Object *obedit);
 
 void EDBM_project_snap_verts(
     bContext *C, Depsgraph *depsgraph, ARegion *region, Object *obedit, BMEditMesh *em);
@@ -514,8 +517,10 @@ void EDBM_redo_state_free(BMBackup *backup) ATTR_NONNULL(1);
 
 /* `meshtools.cc` */
 
-int ED_mesh_join_objects_exec(bContext *C, wmOperator *op);
-int ED_mesh_shapes_join_objects_exec(bContext *C, wmOperator *op);
+wmOperatorStatus ED_mesh_join_objects_exec(bContext *C, wmOperator *op);
+wmOperatorStatus ED_mesh_shapes_join_objects_exec(bContext *C,
+                                                  bool ensure_keys_exist,
+                                                  ReportList *reports);
 
 /* mirror lookup api */
 
@@ -571,6 +576,11 @@ bool ED_mesh_pick_face(bContext *C, Object *ob, const int mval[2], uint dist_px,
  */
 bool ED_mesh_pick_face_vert(
     bContext *C, Object *ob, const int mval[2], uint dist_px, uint *r_index);
+/**
+ * Used for paint face loop selection which needs to get closest edge even though in face select
+ * mode. Changes the select_buffer context to edge selection for this.
+ */
+bool ED_mesh_pick_edge(bContext *C, Object *ob, const int mval[2], uint dist_px, uint *r_index);
 
 MDeformVert *ED_mesh_active_dvert_get_em(Object *ob, BMVert **r_eve);
 MDeformVert *ED_mesh_active_dvert_get_ob(Object *ob, int *r_index);

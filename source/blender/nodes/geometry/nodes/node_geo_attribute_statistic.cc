@@ -92,7 +92,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     for (const StringRefNull name :
          {"Mean", "Median", "Sum", "Min", "Max", "Range", "Standard Deviation", "Variance"})
     {
-      params.add_item(IFACE_(name.c_str()), [node_type, name, type](LinkSearchOpParams &params) {
+      params.add_item(IFACE_(name), [node_type, name, type](LinkSearchOpParams &params) {
         bNode &node = params.add_node(node_type);
         node.custom1 = *type;
         params.update_and_connect_available_socket(node, name);
@@ -103,7 +103,25 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 
 template<typename T> static T compute_sum(const Span<T> data)
 {
-  return std::accumulate(data.begin(), data.end(), T());
+  /* Explicitly splitting work into chunks for a couple of reasons:
+   * - Improve numerical stability. While there are even more stable algorithms (e.g. Kahan
+   *   summation), they also add more complexity to the hot code path. So far, this simple approach
+   *   seems to solve the common issues people run into.
+   * - Support computing the sum using multiple threads.
+   * - Ensure deterministic results even with floating point numbers.
+   */
+  constexpr int64_t chunk_size = 1024;
+  const int64_t chunks_num = divide_ceil_ul(data.size(), chunk_size);
+  Array<T> partial_sums(chunks_num);
+  threading::parallel_for(partial_sums.index_range(), 1, [&](const IndexRange range) {
+    for (const int64_t i : range) {
+      const int64_t start = i * chunk_size;
+      const Span<T> chunk = data.slice_safe(start, chunk_size);
+      const T partial_sum = std::accumulate(chunk.begin(), chunk.end(), T());
+      partial_sums[i] = partial_sum;
+    }
+  });
+  return std::accumulate(partial_sums.begin(), partial_sums.end(), T());
 }
 
 static float compute_variance(const Span<float> data, const float mean)
@@ -138,17 +156,17 @@ static float median_of_sorted_span(const Span<float> data)
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.get_input<GeometrySet>("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   const bNode &node = params.node();
   const eCustomDataType data_type = eCustomDataType(node.custom1);
   const AttrDomain domain = AttrDomain(node.custom2);
   Vector<const GeometryComponent *> components = geometry_set.get_components();
 
-  const Field<bool> selection_field = params.get_input<Field<bool>>("Selection");
+  const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
 
   switch (data_type) {
     case CD_PROP_FLOAT: {
-      const Field<float> input_field = params.get_input<Field<float>>("Attribute");
+      const Field<float> input_field = params.extract_input<Field<float>>("Attribute");
       Vector<float> data;
       for (const GeometryComponent *component : components) {
         const std::optional<AttributeAccessor> attributes = component->attributes();
@@ -226,7 +244,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     }
     case CD_PROP_FLOAT3: {
-      const Field<float3> input_field = params.get_input<Field<float3>>("Attribute");
+      const Field<float3> input_field = params.extract_input<Field<float3>>("Attribute");
       Vector<float3> data;
       for (const GeometryComponent *component : components) {
         const std::optional<AttributeAccessor> attributes = component->attributes();
@@ -363,16 +381,18 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
-
-  geo_node_type_base(
-      &ntype, GEO_NODE_ATTRIBUTE_STATISTIC, "Attribute Statistic", NODE_CLASS_ATTRIBUTE);
-
+  geo_node_type_base(&ntype, "GeometryNodeAttributeStatistic", GEO_NODE_ATTRIBUTE_STATISTIC);
+  ntype.ui_name = "Attribute Statistic";
+  ntype.ui_description =
+      "Calculate statistics about a data set from a field evaluated on a geometry";
+  ntype.enum_name_legacy = "ATTRIBUTE_STATISTIC";
+  ntype.nclass = NODE_CLASS_ATTRIBUTE;
   ntype.initfunc = node_init;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;
   ntype.gather_link_search_ops = node_gather_link_searches;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

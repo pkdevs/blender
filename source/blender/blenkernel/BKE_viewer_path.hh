@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
 /**
@@ -33,7 +37,7 @@ class IDRemapper;
 }
 
 enum ViewerPathEqualFlag {
-  VIEWER_PATH_EQUAL_FLAG_IGNORE_REPEAT_ITERATION = (1 << 0),
+  VIEWER_PATH_EQUAL_FLAG_IGNORE_ITERATION = (1 << 0),
 };
 
 void BKE_viewer_path_init(ViewerPath *viewer_path);
@@ -55,6 +59,9 @@ GroupNodeViewerPathElem *BKE_viewer_path_elem_new_group_node();
 SimulationZoneViewerPathElem *BKE_viewer_path_elem_new_simulation_zone();
 ViewerNodeViewerPathElem *BKE_viewer_path_elem_new_viewer_node();
 RepeatZoneViewerPathElem *BKE_viewer_path_elem_new_repeat_zone();
+ForeachGeometryElementZoneViewerPathElem *BKE_viewer_path_elem_new_foreach_geometry_element_zone();
+EvaluateClosureNodeViewerPathElem *BKE_viewer_path_elem_new_evaluate_closure();
+
 ViewerPathElem *BKE_viewer_path_elem_copy(const ViewerPathElem *src);
 bool BKE_viewer_path_elem_equal(const ViewerPathElem *a,
                                 const ViewerPathElem *b,

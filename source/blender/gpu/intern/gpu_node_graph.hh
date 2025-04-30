@@ -10,13 +10,11 @@
 
 #pragma once
 
-#include "DNA_customdata_types.h"
 #include "DNA_listBase.h"
 
 #include "BLI_ghash.h"
 
 #include "GPU_material.hh"
-#include "GPU_shader.hh"
 
 struct GPUNode;
 struct GPUOutput;
@@ -99,7 +97,10 @@ struct GPUNodeLink {
     /* GPU_NODE_LINK_IMAGE_BLENDER */
     GPUMaterialTexture *texture;
     /* GPU_NODE_LINK_DIFFERENTIATE_FLOAT_FN */
-    const char *function_name;
+    struct {
+      const char *function_name;
+      float filter_width;
+    } differentiate_float;
   };
 };
 

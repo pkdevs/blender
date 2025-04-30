@@ -21,13 +21,15 @@
 #  include "GHOST_ContextVK.hh"
 #endif
 
-#include <Cocoa/Cocoa.h>
-#include <Metal/Metal.h>
-#include <QuartzCore/QuartzCore.h>
+#import <Cocoa/Cocoa.h>
+#import <Metal/Metal.h>
+#import <QuartzCore/QuartzCore.h>
 
 #include <sys/sysctl.h>
 
-#pragma mark Blender window delegate object
+/* --------------------------------------------------------------------
+ * Blender window delegate object.
+ */
 
 @interface BlenderWindowDelegate : NSObject <NSWindowDelegate>
 
@@ -234,7 +236,7 @@
 
 - (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender
 {
-  NSPoint mouseLocation = [sender draggingLocation];
+  const NSPoint mouseLocation = [sender draggingLocation];
 
   m_systemCocoa->handleDraggingEvent(GHOST_kEventDraggingUpdated,
                                      m_draggedObjectType,
@@ -254,10 +256,10 @@
 
 - (BOOL)prepareForDragOperation:(id<NSDraggingInfo>)sender
 {
-  if (m_windowCocoa->canAcceptDragOperation())
+  if (m_windowCocoa->canAcceptDragOperation()) {
     return YES;
-  else
-    return NO;
+  }
+  return NO;
 }
 
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender
@@ -268,14 +270,12 @@
 
     switch (m_draggedObjectType) {
       case GHOST_kDragnDropTypeBitmap: {
-        if ([NSImage canInitWithPasteboard:draggingPBoard]) {
-          NSImage *droppedImg = [[[NSImage alloc] initWithPasteboard:draggingPBoard] autorelease];
-          data = droppedImg;  // [draggingPBoard dataForType:NSPasteboardTypeTIFF];
-        }
-        else {
+        if (![NSImage canInitWithPasteboard:draggingPBoard]) {
           return NO;
         }
-
+        /* Caller must [release] the returned data in this case. */
+        NSImage *droppedImg = [[NSImage alloc] initWithPasteboard:draggingPBoard];
+        data = droppedImg;
         break;
       }
       case GHOST_kDragnDropTypeFilenames:
@@ -315,7 +315,9 @@
 #undef COCOA_VIEW_CLASS
 #undef COCOA_VIEW_BASE_CLASS
 
-#pragma mark initialization / finalization
+/* --------------------------------------------------------------------
+ * Initialization / Finalization.
+ */
 
 GHOST_WindowCocoa::GHOST_WindowCocoa(GHOST_SystemCocoa *systemCocoa,
                                      const char *title,
@@ -328,16 +330,18 @@ GHOST_WindowCocoa::GHOST_WindowCocoa(GHOST_SystemCocoa *systemCocoa,
                                      const bool stereoVisual,
                                      bool is_debug,
                                      bool is_dialog,
-                                     GHOST_WindowCocoa *parentWindow)
+                                     GHOST_WindowCocoa *parentWindow,
+                                     const GHOST_GPUDevice &preferred_device)
     : GHOST_Window(width, height, state, stereoVisual, false),
       m_openGLView(nil),
       m_metalView(nil),
       m_metalLayer(nil),
       m_systemCocoa(systemCocoa),
-      m_customCursor(0),
+      m_customCursor(nullptr),
       m_immediateDraw(false),
       m_debug_context(is_debug),
-      m_is_dialog(is_dialog)
+      m_is_dialog(is_dialog),
+      m_preferred_device(preferred_device)
 {
   m_fullScreen = false;
 
@@ -503,6 +507,10 @@ GHOST_WindowCocoa::~GHOST_WindowCocoa()
   }
 }
 
+/* --------------------------------------------------------------------
+ * Accessors.
+ */
+
 bool GHOST_WindowCocoa::getValid() const
 {
   NSView *view = (m_openGLView) ? m_openGLView : m_metalView;
@@ -543,24 +551,48 @@ std::string GHOST_WindowCocoa::getTitle() const
 GHOST_TSuccess GHOST_WindowCocoa::setPath(const char *filepath)
 {
   GHOST_ASSERT(getValid(), "GHOST_WindowCocoa::setAssociatedFile(): window invalid");
-  GHOST_TSuccess success = GHOST_kSuccess;
 
   @autoreleasepool {
-    NSString *associatedFileName = [[NSString alloc] initWithCString:filepath
-                                                            encoding:NSUTF8StringEncoding];
-    @try
-    {
-      m_window.representedFilename = associatedFileName;
-    }
-    @catch (NSException *e)
-    {
-      printf("\nInvalid file path given for window");
-      success = GHOST_kFailure;
-    }
+    NSString *associatedFileName = [[[NSString alloc] initWithCString:filepath
+                                                             encoding:NSUTF8StringEncoding]
+        autorelease];
 
-    [associatedFileName release];
+    m_window.representedFilename = associatedFileName;
   }
-  return success;
+
+  return GHOST_kSuccess;
+}
+
+GHOST_TSuccess GHOST_WindowCocoa::applyWindowDecorationStyle()
+{
+  @autoreleasepool {
+    if (m_windowDecorationStyleFlags & GHOST_kDecorationColoredTitleBar) {
+      const float *background_color = m_windowDecorationStyleSettings.colored_titlebar_bg_color;
+
+      /* Title-bar background color. */
+      m_window.backgroundColor = [NSColor colorWithRed:background_color[0]
+                                                 green:background_color[1]
+                                                  blue:background_color[2]
+                                                 alpha:1.0];
+
+      /* Title-bar foreground color.
+       * Use the value component of the title-bar background's HSV representation to determine
+       * whether we should use the macOS dark or light title-bar text appearance. With values below
+       * 0.5 considered as dark themes, and values above 0.5 considered as light themes.
+       */
+      const float hsv_v = MAX(background_color[0], MAX(background_color[1], background_color[2]));
+
+      const NSAppearanceName win_appearance = hsv_v > 0.5 ? NSAppearanceNameVibrantLight :
+                                                            NSAppearanceNameVibrantDark;
+
+      m_window.appearance = [NSAppearance appearanceNamed:win_appearance];
+      m_window.titlebarAppearsTransparent = YES;
+    }
+    else {
+      m_window.titlebarAppearsTransparent = NO;
+    }
+  }
+  return GHOST_kSuccess;
 }
 
 void GHOST_WindowCocoa::getWindowBounds(GHOST_Rect &bounds) const
@@ -569,7 +601,6 @@ void GHOST_WindowCocoa::getWindowBounds(GHOST_Rect &bounds) const
 
   @autoreleasepool {
     const NSRect screenSize = m_window.screen.visibleFrame;
-
     const NSRect rect = m_window.frame;
 
     bounds.m_b = screenSize.size.height - (rect.origin.y - screenSize.origin.y);
@@ -608,7 +639,7 @@ GHOST_TSuccess GHOST_WindowCocoa::setClientWidth(uint32_t width)
     GHOST_Rect cBnds;
     getClientBounds(cBnds);
 
-    if (((uint32_t)cBnds.getWidth()) != width) {
+    if ((uint32_t(cBnds.getWidth())) != width) {
       const NSSize size = {(CGFloat)width, (CGFloat)cBnds.getHeight()};
       [m_window setContentSize:size];
     }
@@ -624,7 +655,7 @@ GHOST_TSuccess GHOST_WindowCocoa::setClientHeight(uint32_t height)
     GHOST_Rect cBnds;
     getClientBounds(cBnds);
 
-    if (((uint32_t)cBnds.getHeight()) != height) {
+    if ((uint32_t(cBnds.getHeight())) != height) {
       const NSSize size = {(CGFloat)cBnds.getWidth(), (CGFloat)height};
       [m_window setContentSize:size];
     }
@@ -637,9 +668,9 @@ GHOST_TSuccess GHOST_WindowCocoa::setClientSize(uint32_t width, uint32_t height)
   GHOST_ASSERT(getValid(), "GHOST_WindowCocoa::setClientSize(): window invalid");
 
   @autoreleasepool {
-    GHOST_Rect cBnds, wBnds;
+    GHOST_Rect cBnds;
     getClientBounds(cBnds);
-    if ((((uint32_t)cBnds.getWidth()) != width) || (((uint32_t)cBnds.getHeight()) != height)) {
+    if (((uint32_t(cBnds.getWidth())) != width) || ((uint32_t(cBnds.getHeight())) != height)) {
       const NSSize size = {(CGFloat)width, (CGFloat)height};
       [m_window setContentSize:size];
     }
@@ -738,7 +769,7 @@ NSScreen *GHOST_WindowCocoa::getScreen()
 }
 
 /* called for event, when window leaves monitor to another */
-void GHOST_WindowCocoa::setNativePixelSize(void)
+void GHOST_WindowCocoa::setNativePixelSize()
 {
   NSView *view = (m_openGLView) ? m_openGLView : m_metalView;
   const NSRect backingBounds = [view convertRectToBacking:[view bounds]];
@@ -746,7 +777,7 @@ void GHOST_WindowCocoa::setNativePixelSize(void)
   GHOST_Rect rect;
   getClientBounds(rect);
 
-  m_nativePixelSize = (float)backingBounds.size.width / (float)rect.getWidth();
+  m_nativePixelSize = float(backingBounds.size.width) / float(rect.getWidth());
 }
 
 /**
@@ -770,7 +801,7 @@ GHOST_TSuccess GHOST_WindowCocoa::setState(GHOST_TWindowState state)
         break;
 
       case GHOST_kWindowStateFullScreen: {
-        NSUInteger masks = m_window.styleMask;
+        const NSUInteger masks = m_window.styleMask;
 
         if (!(masks & NSWindowStyleMaskFullScreen)) {
           [m_window toggleFullScreen:nil];
@@ -780,7 +811,7 @@ GHOST_TSuccess GHOST_WindowCocoa::setState(GHOST_TWindowState state)
       case GHOST_kWindowStateNormal:
       default:
         @autoreleasepool {
-          NSUInteger masks = m_window.styleMask;
+          const NSUInteger masks = m_window.styleMask;
 
           if (masks & NSWindowStyleMaskFullScreen) {
             /* Lion style full-screen. */
@@ -831,14 +862,17 @@ GHOST_TSuccess GHOST_WindowCocoa::setOrder(GHOST_TWindowOrder order)
   return GHOST_kSuccess;
 }
 
-#pragma mark Drawing context
+/* --------------------------------------------------------------------
+ * Drawing context.
+ */
 
 GHOST_Context *GHOST_WindowCocoa::newDrawingContext(GHOST_TDrawingContextType type)
 {
   switch (type) {
 #ifdef WITH_VULKAN_BACKEND
     case GHOST_kDrawingContextTypeVulkan: {
-      GHOST_Context *context = new GHOST_ContextVK(m_wantStereoVisual, m_metalLayer, 1, 2, true);
+      GHOST_Context *context = new GHOST_ContextVK(
+          m_wantStereoVisual, m_metalLayer, 1, 2, true, m_preferred_device);
       if (context->initializeDrawingContext()) {
         return context;
       }
@@ -865,7 +899,9 @@ GHOST_Context *GHOST_WindowCocoa::newDrawingContext(GHOST_TDrawingContextType ty
   }
 }
 
-#pragma mark invalidate
+/* --------------------------------------------------------------------
+ * Invalidate.
+ */
 
 GHOST_TSuccess GHOST_WindowCocoa::invalidate()
 {
@@ -878,7 +914,9 @@ GHOST_TSuccess GHOST_WindowCocoa::invalidate()
   return GHOST_kSuccess;
 }
 
-#pragma mark Progress bar
+/* --------------------------------------------------------------------
+ * Progress bar.
+ */
 
 GHOST_TSuccess GHOST_WindowCocoa::setProgressBar(float progress)
 {
@@ -940,14 +978,16 @@ GHOST_TSuccess GHOST_WindowCocoa::endProgressBar()
   return GHOST_kSuccess;
 }
 
-#pragma mark Cursor handling
+/* --------------------------------------------------------------------
+ * Cursor handling.
+ */
 
 static NSCursor *getImageCursor(GHOST_TStandardCursor shape, NSString *name, NSPoint hotspot)
 {
-  static NSCursor *cursors[(int)GHOST_kStandardCursorNumCursors] = {0};
-  static bool loaded[(int)GHOST_kStandardCursorNumCursors] = {false};
+  static NSCursor *cursors[GHOST_kStandardCursorNumCursors] = {nullptr};
+  static bool loaded[GHOST_kStandardCursorNumCursors] = {false};
 
-  const int index = (int)shape;
+  const int index = int(shape);
   if (!loaded[index]) {
     /* Load image from file in application Resources folder. */
     @autoreleasepool {
@@ -962,6 +1002,12 @@ static NSCursor *getImageCursor(GHOST_TStandardCursor shape, NSString *name, NSP
 
   return cursors[index];
 }
+
+/* busyButClickableCursor is an undocumented NSCursor API, but
+ * has been in use since at least OS X 10.4 and through 10.9. */
+@interface NSCursor (Undocumented)
++ (NSCursor *)busyButClickableCursor;
+@end
 
 NSCursor *GHOST_WindowCocoa::getStandardCursor(GHOST_TStandardCursor shape) const
 {
@@ -1006,6 +1052,11 @@ NSCursor *GHOST_WindowCocoa::getStandardCursor(GHOST_TStandardCursor shape) cons
         return [NSCursor pointingHandCursor];
       case GHOST_kStandardCursorDefault:
         return [NSCursor arrowCursor];
+      case GHOST_kStandardCursorWait:
+        if ([NSCursor respondsToSelector:@selector(busyButClickableCursor)]) {
+          return [NSCursor busyButClickableCursor];
+        }
+        return nullptr;
       case GHOST_kStandardCursorKnife:
         return getImageCursor(shape, @"knife.pdf", NSMakePoint(6, 24));
       case GHOST_kStandardCursorEraser:

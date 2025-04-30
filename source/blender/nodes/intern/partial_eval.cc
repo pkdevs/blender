@@ -7,14 +7,14 @@
 #include "NOD_partial_eval.hh"
 
 #include "BKE_compute_contexts.hh"
-#include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 
 namespace blender::nodes::partial_eval {
 
 bool is_supported_value_node(const bNode &node)
 {
-  return ELEM(node.type,
+  return ELEM(node.type_legacy,
               SH_NODE_VALUE,
               FN_NODE_INPUT_VECTOR,
               FN_NODE_INPUT_BOOL,
@@ -105,7 +105,7 @@ struct NodeInContextDownstreamComparator {
 
 void eval_downstream(
     const Span<SocketInContext> initial_sockets,
-    ResourceScope &scope,
+    bke::ComputeContextCache &compute_context_cache,
     FunctionRef<void(const NodeInContext &ctx_node,
                      Vector<const bNodeSocket *> &r_outputs_to_propagate)> evaluate_node_fn,
     FunctionRef<bool(const SocketInContext &ctx_from, const SocketInContext &ctx_to)>
@@ -135,7 +135,7 @@ void eval_downstream(
         if (group_tree->has_available_link_cycle()) {
           return;
         }
-        const auto &group_context = scope.construct<bke::GroupNodeComputeContext>(
+        const auto &group_context = compute_context_cache.for_group_node(
             ctx_group_node_input.context, node, node.owner_tree());
         const int socket_index = ctx_group_node_input.socket->index();
         /* Forward the value to every group input node. */
@@ -198,6 +198,13 @@ void eval_downstream(
         forward_output({context, &node.output_socket(0)});
       }
     }
+    else if (node.is_muted()) {
+      for (const bNodeLink &link : node.internal_links()) {
+        if (propagate_value_fn({context, link.fromsock}, {context, link.tosock})) {
+          forward_output({context, link.tosock});
+        }
+      }
+    }
     else if (node.is_group()) {
       const bNodeTree *group = reinterpret_cast<const bNodeTree *>(node.id);
       if (!group) {
@@ -211,7 +218,7 @@ void eval_downstream(
       if (!group_output) {
         continue;
       }
-      const ComputeContext &group_context = scope.construct<bke::GroupNodeComputeContext>(
+      const ComputeContext &group_context = compute_context_cache.for_group_node(
           context, node, node.owner_tree());
       /* Propagate the values from the group output node to the outputs of the group node and
        * continue forwarding them from there. */
@@ -240,7 +247,7 @@ void eval_downstream(
 
 UpstreamEvalTargets eval_upstream(
     const Span<SocketInContext> initial_sockets,
-    ResourceScope &scope,
+    bke::ComputeContextCache &compute_context_cache,
     FunctionRef<void(const NodeInContext &ctx_node,
                      Vector<const bNodeSocket *> &r_modified_inputs)> evaluate_node_fn,
     FunctionRef<bool(const SocketInContext &ctx_from, const SocketInContext &ctx_to)>
@@ -277,7 +284,7 @@ UpstreamEvalTargets eval_upstream(
     if (!group_output) {
       return;
     }
-    const ComputeContext &group_context = scope.construct<bke::GroupNodeComputeContext>(
+    const ComputeContext &group_context = compute_context_cache.for_group_node(
         context, group_node, group_node.owner_tree());
     propagate_value_fn(
         ctx_output_socket,
@@ -372,6 +379,13 @@ UpstreamEvalTargets eval_upstream(
     else if (node.is_reroute()) {
       propagate_value_fn({context, &node.output_socket(0)}, {context, &node.input_socket(0)});
       forward_input({context, &node.input_socket(0)});
+    }
+    else if (node.is_muted()) {
+      for (const bNodeLink &link : node.internal_links()) {
+        if (propagate_value_fn({context, link.tosock}, {context, link.fromsock})) {
+          forward_input({context, link.fromsock});
+        }
+      }
     }
     else if (node.is_group()) {
       /* Once we get here, the nodes within the group have all been evaluated already and the

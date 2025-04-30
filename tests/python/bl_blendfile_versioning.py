@@ -3,6 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ./blender.bin --background --python tests/python/bl_blendfile_versioning.py ..
+
+# WARNING(@ideasman42): some blend files causes the tests to fail (seemingly) at random (on Linux & macOS at least).
+# Take care when adding new files as they may break on other platforms, frequently but not on every execution.
+#
+# This needs to be investigated!
+
+__all__ = (
+    "main",
+)
+
 import os
 import platform
 import sys
@@ -48,19 +58,6 @@ class TestBlendFileOpenAllTestFiles(TestHelper):
         # Directories to exclude relative to `./tests/data/`.
         self.excluded_dirs = ()
 
-        if platform.system() == "Darwin":
-            # NOTE(@ideasman42):
-            # - `x86_64` fails often.
-            # - `arm64` can succeed but is unreliable enough to keep disabled.
-            # Keep both disabled.
-            self.excluded_dirs = (
-                *self.excluded_dirs,
-                # The assert in `BKE_libblock_alloc_in_lib` often fails:
-                # `BLI_assert(bmain->is_locked_for_linking == false || ELEM(type, ID_WS, ID_GR, ID_NT))`.
-                # This needs to be investigated.
-                "io_tests/blend_big_endian/",
-            )
-
         assert all(p.endswith("/") for p in self.excluded_dirs)
         self.excluded_dirs = tuple(p.replace("/", os.sep) for p in self.excluded_dirs)
 
@@ -86,11 +83,12 @@ class TestBlendFileOpenAllTestFiles(TestHelper):
         slice_stride_base = total_len // slice_range
         slice_stride_remain = total_len % slice_range
 
-        def gen_indices(i): return (
-            (i * (slice_stride_base + 1))
-            if i < slice_stride_remain else
-            (slice_stride_remain * (slice_stride_base + 1)) + ((i - slice_stride_remain) * slice_stride_base)
-        )
+        def gen_indices(i):
+            return (
+                (i * (slice_stride_base + 1))
+                if i < slice_stride_remain else
+                (slice_stride_remain * (slice_stride_base + 1)) + ((i - slice_stride_remain) * slice_stride_base)
+            )
         slice_indices = [(gen_indices(i), gen_indices(i + 1)) for i in range(slice_range)]
         return slice_indices[slice_index]
 
@@ -109,7 +107,7 @@ class TestBlendFileOpenAllTestFiles(TestHelper):
             if self.skip_path_check(bfp):
                 continue
             if not self.args.is_quiet:
-                print(f"Trying to open {bfp}")
+                print(f"Trying to open {bfp}", flush=True)
             bpy.ops.wm.read_homefile(use_empty=True, use_factory_startup=True)
             bpy.ops.wm.open_mainfile(filepath=bfp, load_ui=False)
 
@@ -122,11 +120,11 @@ class TestBlendFileOpenAllTestFiles(TestHelper):
             with bpy.data.libraries.load(bfp, link=do_link) as (lib_in, lib_out):
                 if len(lib_in.collections):
                     if not self.args.is_quiet:
-                        print(f"Trying to {operation_name} {bfp}/Collection/{lib_in.collections[0]}")
+                        print(f"Trying to {operation_name} {bfp}/Collection/{lib_in.collections[0]}", flush=True)
                     lib_out.collections.append(lib_in.collections[0])
                 elif len(lib_in.objects):
                     if not self.args.is_quiet:
-                        print(f"Trying to {operation_name} {bfp}/Object/{lib_in.objects[0]}")
+                        print(f"Trying to {operation_name} {bfp}/Object/{lib_in.objects[0]}", flush=True)
                     lib_out.objects.append(lib_in.objects[0])
 
     def test_link(self):

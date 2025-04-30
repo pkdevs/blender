@@ -6,6 +6,11 @@
 #include <optional>
 #include <string>
 
+#include "BLI_array.hh"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_math_vector_types.hh"
+#include "BLI_span.hh"
+
 /** \file
  * \ingroup bke
  */
@@ -19,10 +24,6 @@ struct Main;
 struct Mesh;
 struct Object;
 
-/**
- * Free (or release) any data used by this shape-key (does not free the key itself).
- */
-void BKE_key_free_data(Key *key);
 void BKE_key_free_nolib(Key *key);
 Key *BKE_key_add(Main *bmain, ID *id);
 /**
@@ -76,6 +77,10 @@ KeyBlock *BKE_keyblock_from_object(Object *ob);
 KeyBlock *BKE_keyblock_from_object_reference(Object *ob);
 
 KeyBlock *BKE_keyblock_add(Key *key, const char *name);
+
+/** Add a copy of the source key-block with a copy of its data array. */
+KeyBlock *BKE_keyblock_duplicate(Key *key, KeyBlock *kb_src);
+
 /**
  * \note sorting is a problematic side effect in some cases,
  * better only do this explicitly by having its own function,
@@ -124,7 +129,8 @@ void BKE_keyblock_convert_to_curve(KeyBlock *kb, Curve *cu, ListBase *nurb);
 
 void BKE_keyblock_update_from_mesh(const Mesh *mesh, KeyBlock *kb);
 void BKE_keyblock_convert_from_mesh(const Mesh *mesh, const Key *key, KeyBlock *kb);
-void BKE_keyblock_convert_to_mesh(const KeyBlock *kb, float (*vert_positions)[3], int totvert);
+void BKE_keyblock_convert_to_mesh(const KeyBlock *kb,
+                                  blender::MutableSpan<blender::float3> vert_positions);
 
 /**
  * Computes normals (vertices, faces and/or loops ones) of given mesh for given shape key.
@@ -140,13 +146,6 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
                                     float (*r_vert_normals)[3],
                                     float (*r_face_normals)[3],
                                     float (*r_loop_normals)[3]);
-
-void BKE_keyblock_update_from_vertcos(const Object *ob, KeyBlock *kb, const float (*vertCos)[3]);
-void BKE_keyblock_convert_from_vertcos(const Object *ob, KeyBlock *kb, const float (*vertCos)[3]);
-float (*BKE_keyblock_convert_to_vertcos(const Object *ob, const KeyBlock *kb))[3];
-
-/** RAW coordinates offsets. */
-void BKE_keyblock_update_from_offset(const Object *ob, KeyBlock *kb, const float (*ofs)[3]);
 
 /* other management */
 
@@ -170,7 +169,7 @@ bool BKE_keyblock_is_basis(const Key *key, int index);
  * Returns a newly allocated array containing true for every key that has this one as basis.
  * If none are found, returns null.
  */
-bool *BKE_keyblock_get_dependent_keys(const Key *key, int index);
+std::optional<blender::Array<bool>> BKE_keyblock_get_dependent_keys(const Key *key, int index);
 
 /* -------------------------------------------------------------------- */
 /** \name Key-Block Data Access
@@ -179,22 +178,27 @@ bool *BKE_keyblock_get_dependent_keys(const Key *key, int index);
 /**
  * \param shape_index: The index to use or all (when -1).
  */
-void BKE_keyblock_data_get_from_shape(const Key *key, float (*arr)[3], int shape_index);
-void BKE_keyblock_data_get(const Key *key, float (*arr)[3]);
+void BKE_keyblock_data_get_from_shape(const Key *key,
+                                      blender::MutableSpan<blender::float3> arr,
+                                      int shape_index);
+void BKE_keyblock_data_get(const Key *key, blender::MutableSpan<blender::float3> arr);
 
 /**
  * Set the data to all key-blocks (or shape_index if != -1).
  */
 void BKE_keyblock_data_set_with_mat4(Key *key,
                                      int shape_index,
-                                     const float (*coords)[3],
-                                     const float mat[4][4]);
+                                     blender::Span<blender::float3> coords,
+                                     const blender::float4x4 &transform);
 /**
  * Set the data for all key-blocks (or shape_index if != -1),
  * transforming by \a mat.
  */
-void BKE_keyblock_curve_data_set_with_mat4(
-    Key *key, const ListBase *nurb, int shape_index, const void *data, const float mat[4][4]);
+void BKE_keyblock_curve_data_set_with_mat4(Key *key,
+                                           const ListBase *nurb,
+                                           int shape_index,
+                                           const void *data,
+                                           const blender::float4x4 &transform);
 /**
  * Set the data for all key-blocks (or shape_index if != -1).
  */

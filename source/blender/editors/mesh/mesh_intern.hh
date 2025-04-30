@@ -43,8 +43,8 @@ struct ViewLayer;
 bool EDBM_op_callf(BMEditMesh *em, wmOperator *op, const char *fmt, ...);
 bool EDBM_op_call_and_selectf(BMEditMesh *em,
                               wmOperator *op,
-                              const char *select_slot,
-                              bool select_replace,
+                              const char *select_slot_out,
+                              bool select_extend,
                               const char *fmt,
                               ...);
 /**
@@ -207,6 +207,7 @@ void MESH_OT_shortest_path_pick(wmOperatorType *ot);
 void MESH_OT_select_linked(wmOperatorType *ot);
 void MESH_OT_select_linked_pick(wmOperatorType *ot);
 void MESH_OT_select_face_by_sides(wmOperatorType *ot);
+void MESH_OT_select_by_pole_count(wmOperatorType *ot);
 void MESH_OT_select_loose(wmOperatorType *ot);
 void MESH_OT_select_mirror(wmOperatorType *ot);
 void MESH_OT_select_more(wmOperatorType *ot);

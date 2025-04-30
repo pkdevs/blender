@@ -14,7 +14,6 @@
 #include "DNA_object_types.h"
 
 #include "BLI_math_base.h"
-#include "BLI_span.hh"
 #include "BLI_utildefines.h"
 
 #include "BKE_idtype.hh"
@@ -104,7 +103,7 @@ void BKE_lightprobe_type_set(LightProbe *probe, const short lightprobe_type)
   }
 }
 
-void *BKE_lightprobe_add(Main *bmain, const char *name)
+LightProbe *BKE_lightprobe_add(Main *bmain, const char *name)
 {
   LightProbe *probe;
 
@@ -140,7 +139,7 @@ static void lightprobe_grid_cache_frame_blend_read(BlendDataReader *reader,
           cache->data_layout, LIGHTPROBE_CACHE_ADAPTIVE_RESOLUTION, LIGHTPROBE_CACHE_UNIFORM_GRID))
   {
     /* Do not try to read data from incompatible layout. Clear all pointers. */
-    memset(cache, 0, sizeof(*cache));
+    *cache = LightProbeGridCacheFrame{};
     return;
   }
 
@@ -205,8 +204,8 @@ template<typename DataT, typename T> static void spherical_harmonic_copy(T &dst,
 
 LightProbeGridCacheFrame *BKE_lightprobe_grid_cache_frame_create()
 {
-  LightProbeGridCacheFrame *cache = static_cast<LightProbeGridCacheFrame *>(
-      MEM_callocN(sizeof(LightProbeGridCacheFrame), "LightProbeGridCacheFrame"));
+  LightProbeGridCacheFrame *cache = MEM_callocN<LightProbeGridCacheFrame>(
+      "LightProbeGridCacheFrame");
   return cache;
 }
 
@@ -246,8 +245,7 @@ void BKE_lightprobe_cache_create(Object *object)
 {
   BLI_assert(object->lightprobe_cache == nullptr);
 
-  object->lightprobe_cache = static_cast<LightProbeObjectCache *>(
-      MEM_callocN(sizeof(LightProbeObjectCache), "LightProbeObjectCache"));
+  object->lightprobe_cache = MEM_callocN<LightProbeObjectCache>("LightProbeObjectCache");
 }
 
 LightProbeObjectCache *BKE_lightprobe_cache_copy(LightProbeObjectCache *src_cache)

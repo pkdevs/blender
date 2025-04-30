@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "render_graph/nodes/vk_pipeline_data.hh"
 #include "render_graph/vk_resource_access_info.hh"
 #include "vk_node_info.hh"
 
@@ -19,6 +20,7 @@ namespace blender::gpu::render_graph {
 struct VKDrawData {
   VKPipelineData pipeline_data;
   VKVertexBufferBindings vertex_buffers;
+  VKViewportData viewport_data;
   uint32_t vertex_count;
   uint32_t instance_count;
   uint32_t first_vertex;
@@ -44,10 +46,12 @@ class VKDrawNode : public VKNodeInfo<VKNodeType::DRAW,
    * (`VK*Data`/`VK*CreateInfo`) types can be included in the same header file as the logic. The
    * actual node data (`VKRenderGraphNode` includes all header files.)
    */
-  template<typename Node> static void set_node_data(Node &node, const CreateInfo &create_info)
+  template<typename Node, typename Storage>
+  static void set_node_data(Node &node, Storage &storage, const CreateInfo &create_info)
   {
-    node.draw = create_info.node_data;
-    vk_pipeline_data_copy(node.draw.pipeline_data, create_info.node_data.pipeline_data);
+    node.storage_index = storage.draw.append_and_get_index(create_info.node_data);
+    vk_pipeline_data_copy(storage.draw[node.storage_index].pipeline_data,
+                          create_info.node_data.pipeline_data);
   }
 
   /**
@@ -69,6 +73,8 @@ class VKDrawNode : public VKNodeInfo<VKNodeType::DRAW,
                       Data &data,
                       VKBoundPipelines &r_bound_pipelines) override
   {
+    vk_pipeline_viewport_set_commands(
+        command_buffer, data.viewport_data, r_bound_pipelines.graphics.viewport_state);
     vk_pipeline_data_build_commands(command_buffer,
                                     data.pipeline_data,
                                     r_bound_pipelines.graphics.pipeline,

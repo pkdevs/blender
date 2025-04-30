@@ -13,10 +13,6 @@
 
 struct SDNA;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * DNAstr contains the prebuilt SDNA structure defining the layouts of the types
  * used by this version of Blender. It is defined in a file dna.c, which is
@@ -153,7 +149,7 @@ void DNA_struct_switch_endian(const struct SDNA *sdna, int struct_index, char *d
  * Constructs and returns an array of byte flags with one element for each struct in oldsdna,
  * indicating how it compares to newsdna.
  */
-const char *DNA_struct_get_compareflags(const struct SDNA *sdna, const struct SDNA *newsdna);
+const char *DNA_struct_get_compareflags(const struct SDNA *oldsdna, const struct SDNA *newsdna);
 /**
  * \param reconstruct_info: Information preprocessed by #DNA_reconstruct_info_create.
  * \param old_struct_index: Index of struct info within oldsdna.
@@ -253,8 +249,4 @@ void DNA_sdna_alias_data_ensure_structs_map(struct SDNA *sdna);
 #  define DNA_struct_exists(sdna, str) DNA_struct_exists_with_alias(sdna, str)
 #  define DNA_struct_member_exists(sdna, stype, vartype, name) \
     DNA_struct_member_exists_with_alias(sdna, stype, vartype, name)
-#endif
-
-#ifdef __cplusplus
-}
 #endif

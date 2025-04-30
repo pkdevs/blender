@@ -17,17 +17,18 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_assert.h"
-#include "BLI_color.hh"
 #include "BLI_math_vector_types.hh"
 
+#include "BKE_anonymous_attribute_id.hh"
 #include "BKE_attribute.hh"
 #include "BKE_customdata.hh"
 #include "BKE_lib_id.hh"
-#include "BKE_material.h"
+#include "BKE_material.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_object.hh"
 #include "BKE_report.hh"
+#include "BKE_subdiv.hh"
 
 #include "bmesh.hh"
 #include "bmesh_tools.hh"
@@ -35,14 +36,11 @@
 #include "DEG_depsgraph.hh"
 
 #include "DNA_key_types.h"
+#include "DNA_material_types.h"
 #include "DNA_modifier_types.h"
 
 #include "CLG_log.h"
 static CLG_LogRef LOG = {"io.usd"};
-
-namespace usdtokens {
-static const pxr::TfToken Anim("Anim", pxr::TfToken::Immortal);
-}  // namespace usdtokens
 
 namespace blender::io::usd {
 
@@ -154,58 +152,47 @@ void USDGenericMeshWriter::write_custom_data(const Object *obj,
   const StringRef active_uvmap_name = CustomData_get_render_layer_name(&mesh->corner_data,
                                                                        CD_PROP_FLOAT2);
 
-  attributes.for_all([&](const StringRef attribute_id, const bke::AttributeMetaData &meta_data) {
+  attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     /* Skip "internal" Blender properties and attributes processed elsewhere.
      * Skip edge domain because USD doesn't have a good conversion for them. */
-    if (attribute_id[0] == '.' || bke::attribute_name_is_anonymous(attribute_id) ||
-        meta_data.domain == bke::AttrDomain::Edge ||
-        ELEM(attribute_id, "position", "material_index", "velocity", "crease_vert"))
+    if (iter.name[0] == '.' || bke::attribute_name_is_anonymous(iter.name) ||
+        iter.domain == bke::AttrDomain::Edge ||
+        ELEM(iter.name, "position", "material_index", "velocity", "crease_vert", "custom_normal"))
     {
-      return true;
+      return;
     }
 
     if ((usd_export_context_.export_params.export_armatures ||
          usd_export_context_.export_params.export_shapekeys) &&
-        attribute_id.rfind("skel:") == 0)
+        iter.name.rfind("skel:") == 0)
     {
       /* If we're exporting armatures or shape keys to UsdSkel, we skip any
        * attributes that have names with the "skel:" namespace, to avoid possible
        * conflicts. Such attribute might have been previously imported into Blender
        * from USD, but can no longer be considered valid. */
-      return true;
+      return;
     }
 
     if (usd_export_context_.export_params.export_armatures &&
-        is_armature_modifier_bone_name(*obj, attribute_id.data(), usd_export_context_.depsgraph))
+        is_armature_modifier_bone_name(*obj, iter.name, usd_export_context_.depsgraph))
     {
       /* This attribute is likely a vertex group for the armature modifier,
        * and it may conflict with skinning data that will be written to
        * the USD mesh, so we skip it.  Such vertex groups will instead be
        * handled in #export_deform_verts(). */
-      return true;
+      return;
     }
 
     /* UV Data. */
-    if (meta_data.domain == bke::AttrDomain::Corner && meta_data.data_type == CD_PROP_FLOAT2) {
+    if (iter.domain == bke::AttrDomain::Corner && iter.data_type == CD_PROP_FLOAT2) {
       if (usd_export_context_.export_params.export_uvmaps) {
-        this->write_uv_data(mesh, usd_mesh, attribute_id, active_uvmap_name);
-      }
-    }
-
-    /* Color data. */
-    else if (ELEM(meta_data.domain, bke::AttrDomain::Corner, bke::AttrDomain::Point) &&
-             ELEM(meta_data.data_type, CD_PROP_BYTE_COLOR, CD_PROP_COLOR))
-    {
-      if (usd_export_context_.export_params.export_mesh_colors) {
-        this->write_color_data(mesh, usd_mesh, attribute_id, meta_data);
+        this->write_uv_data(usd_mesh, iter, active_uvmap_name);
       }
     }
 
     else {
-      this->write_generic_data(mesh, usd_mesh, attribute_id, meta_data);
+      this->write_generic_data(mesh, usd_mesh, iter);
     }
-
-    return true;
   });
 }
 
@@ -228,49 +215,45 @@ static std::optional<pxr::TfToken> convert_blender_domain_to_usd(
 
 void USDGenericMeshWriter::write_generic_data(const Mesh *mesh,
                                               const pxr::UsdGeomMesh &usd_mesh,
-                                              const StringRef attribute_id,
-                                              const bke::AttributeMetaData &meta_data)
+                                              const bke::AttributeIter &attr)
 {
-  /* Varying type depends on original domain. */
-  const std::optional<pxr::TfToken> pv_interp = convert_blender_domain_to_usd(meta_data.domain);
+  const pxr::TfToken pv_name(
+      make_safe_name(attr.name, usd_export_context_.export_params.allow_unicode));
+  const bool use_color3f_type = pv_name == usdtokens::displayColor;
+  const std::optional<pxr::TfToken> pv_interp = convert_blender_domain_to_usd(attr.domain);
   const std::optional<pxr::SdfValueTypeName> pv_type = convert_blender_type_to_usd(
-      meta_data.data_type);
+      attr.data_type, use_color3f_type);
 
   if (!pv_interp || !pv_type) {
     BKE_reportf(reports(),
                 RPT_WARNING,
                 "Mesh '%s', Attribute '%s' (domain %d, type %d) cannot be converted to USD",
-                &mesh->id.name[2],
-                attribute_id.data(),
-                int8_t(meta_data.domain),
-                meta_data.data_type);
+                BKE_id_name(mesh->id),
+                attr.name.c_str(),
+                int8_t(attr.domain),
+                attr.data_type);
     return;
   }
 
-  const GVArray attribute = *mesh->attributes().lookup(
-      attribute_id, meta_data.domain, meta_data.data_type);
+  const GVArray attribute = *attr.get();
   if (attribute.is_empty()) {
     return;
   }
 
   const pxr::UsdTimeCode timecode = get_export_time_code();
-  const pxr::TfToken pv_name(
-      make_safe_name(attribute_id, usd_export_context_.export_params.allow_unicode));
   const pxr::UsdGeomPrimvarsAPI pv_api = pxr::UsdGeomPrimvarsAPI(usd_mesh);
 
   pxr::UsdGeomPrimvar pv_attr = pv_api.CreatePrimvar(pv_name, *pv_type, *pv_interp);
 
   copy_blender_attribute_to_primvar(
-      attribute, meta_data.data_type, timecode, pv_attr, usd_value_writer_);
+      attribute, attr.data_type, timecode, pv_attr, usd_value_writer_);
 }
 
-void USDGenericMeshWriter::write_uv_data(const Mesh *mesh,
-                                         const pxr::UsdGeomMesh &usd_mesh,
-                                         const StringRef attribute_id,
+void USDGenericMeshWriter::write_uv_data(const pxr::UsdGeomMesh &usd_mesh,
+                                         const bke::AttributeIter &attr,
                                          const StringRef active_uvmap_name)
 {
-  const VArray<float2> buffer = *mesh->attributes().lookup<float2>(attribute_id,
-                                                                   bke::AttrDomain::Corner);
+  const VArray<float2> buffer = *attr.get<float2>(bke::AttrDomain::Corner);
   if (buffer.is_empty()) {
     return;
   }
@@ -278,9 +261,9 @@ void USDGenericMeshWriter::write_uv_data(const Mesh *mesh,
   /* Optionally rename active UV map to "st", to follow USD conventions
    * and better work with MaterialX shader nodes. */
   const StringRef name = usd_export_context_.export_params.rename_uvmaps &&
-                                 active_uvmap_name == attribute_id ?
+                                 active_uvmap_name == attr.name ?
                              "st" :
-                             attribute_id;
+                             attr.name;
 
   const pxr::UsdTimeCode timecode = get_export_time_code();
   const pxr::TfToken pv_name(
@@ -293,41 +276,6 @@ void USDGenericMeshWriter::write_uv_data(const Mesh *mesh,
   copy_blender_buffer_to_primvar<float2, pxr::GfVec2f>(buffer, timecode, pv_uv, usd_value_writer_);
 }
 
-void USDGenericMeshWriter::write_color_data(const Mesh *mesh,
-                                            const pxr::UsdGeomMesh &usd_mesh,
-                                            const StringRef attribute_id,
-                                            const bke::AttributeMetaData &meta_data)
-{
-  const VArray<ColorGeometry4f> buffer = *mesh->attributes().lookup<ColorGeometry4f>(
-      attribute_id, meta_data.domain);
-  if (buffer.is_empty()) {
-    return;
-  }
-
-  const pxr::UsdTimeCode timecode = get_export_time_code();
-  const pxr::TfToken pv_name(
-      make_safe_name(attribute_id, usd_export_context_.export_params.allow_unicode));
-  const pxr::UsdGeomPrimvarsAPI pv_api = pxr::UsdGeomPrimvarsAPI(usd_mesh);
-
-  /* Varying type depends on original domain. */
-  const pxr::TfToken pv_interp = meta_data.domain == bke::AttrDomain::Corner ?
-                                     pxr::UsdGeomTokens->faceVarying :
-                                     pxr::UsdGeomTokens->vertex;
-
-  pxr::UsdGeomPrimvar colors_pv = pv_api.CreatePrimvar(
-      pv_name, pxr::SdfValueTypeNames->Color4fArray, pv_interp);
-
-  switch (meta_data.domain) {
-    case bke::AttrDomain::Corner:
-    case bke::AttrDomain::Point:
-      copy_blender_buffer_to_primvar<ColorGeometry4f, pxr::GfVec4f>(
-          buffer, timecode, colors_pv, usd_value_writer_);
-      break;
-    default:
-      BLI_assert_msg(0, "Invalid type for mesh color data.");
-  }
-}
-
 void USDGenericMeshWriter::free_export_mesh(Mesh *mesh)
 {
   BKE_id_free(nullptr, mesh);
@@ -337,7 +285,7 @@ struct USDMeshData {
   pxr::VtArray<pxr::GfVec3f> points;
   pxr::VtIntArray face_vertex_counts;
   pxr::VtIntArray face_indices;
-  Map<short, pxr::VtIntArray> face_groups;
+  MaterialFaceGroups face_groups;
 
   /* The length of this array specifies the number of creases on the surface. Each element gives
    * the number of (must be adjacent) vertices in each crease, whose indices are linearly laid out
@@ -349,8 +297,8 @@ struct USDMeshData {
   pxr::VtIntArray crease_vertex_indices;
   /* The per-crease or per-edge sharpness for all creases (Usd.Mesh.SHARPNESS_INFINITE for a
    * perfectly sharp crease). Since 'creaseLengths' encodes the number of vertices in each crease,
-   * the number of elements in this array will be either 'len(creaseLengths)' or the sum over all X
-   * of '(creaseLengths[X] - 1)'. Note that while the RI spec allows each crease to have either a
+   * the number of elements in this array will be either `len(creaseLengths)` or the sum over all X
+   * of `(creaseLengths[X] - 1)`. Note that while the RI spec allows each crease to have either a
    * single sharpness or a value per-edge, USD will encode either a single sharpness per crease on
    * a mesh, or sharpness's for all edges making up the creases on a mesh. */
   pxr::VtFloatArray crease_sharpnesses;
@@ -377,22 +325,6 @@ void USDGenericMeshWriter::write_mesh(HierarchyContext &context,
   /* Ensure data exists if currently in edit mode. */
   BKE_mesh_wrapper_ensure_mdata(mesh);
   get_geometry_data(mesh, usd_mesh_data);
-
-  if (usd_export_context_.export_params.use_instancing && context.is_instance()) {
-    if (!mark_as_instance(context, usd_mesh.GetPrim())) {
-      return;
-    }
-
-    /* The material path will be of the form </_materials/{material name}>, which is outside the
-     * sub-tree pointed to by ref_path. As a result, the referenced data is not allowed to point
-     * out of its own sub-tree. It does work when we override the material with exactly the same
-     * path, though. */
-    if (usd_export_context_.export_params.export_materials) {
-      assign_materials(context, usd_mesh, usd_mesh_data.face_groups);
-    }
-
-    return;
-  }
 
   pxr::UsdAttribute attr_points = usd_mesh.CreatePointsAttr(pxr::VtValue(), true);
   pxr::UsdAttribute attr_face_vertex_counts = usd_mesh.CreateFaceVertexCountsAttr(pxr::VtValue(),
@@ -466,6 +398,8 @@ void USDGenericMeshWriter::write_mesh(HierarchyContext &context,
     write_normals(mesh, usd_mesh);
   }
 
+  this->author_extent(usd_mesh, mesh->bounds_min_max(), timecode);
+
   /* TODO(Sybren): figure out what happens when the face groups change. */
   if (frame_has_been_written_) {
     return;
@@ -477,14 +411,6 @@ void USDGenericMeshWriter::write_mesh(HierarchyContext &context,
 
   if (usd_export_context_.export_params.export_materials) {
     assign_materials(context, usd_mesh, usd_mesh_data.face_groups);
-  }
-
-  /* Blender grows its bounds cache to cover animated meshes, so only author once. */
-  if (const std::optional<Bounds<float3>> bounds = mesh->bounds_min_max()) {
-    pxr::VtArray<pxr::GfVec3f> extent{
-        pxr::GfVec3f{bounds->min[0], bounds->min[1], bounds->min[2]},
-        pxr::GfVec3f{bounds->max[0], bounds->max[1], bounds->max[2]}};
-    usd_mesh.CreateExtentAttr().Set(extent);
   }
 }
 
@@ -604,17 +530,14 @@ static void get_edge_creases(const Mesh *mesh, USDMeshData &usd_mesh_data)
   const VArraySpan creases(*attribute);
   const Span<int2> edges = mesh->edges();
   for (const int i : edges.index_range()) {
-    const float crease = creases[i];
-    if (crease == 0.0f) {
-      continue;
+    const float crease = std::clamp(creases[i], 0.0f, 1.0f);
+
+    if (crease != 0.0f) {
+      usd_mesh_data.crease_vertex_indices.push_back(edges[i][0]);
+      usd_mesh_data.crease_vertex_indices.push_back(edges[i][1]);
+      usd_mesh_data.crease_lengths.push_back(2);
+      usd_mesh_data.crease_sharpnesses.push_back(bke::subdiv::crease_to_sharpness(crease));
     }
-
-    const float sharpness = crease >= 1.0f ? pxr::UsdGeomMesh::SHARPNESS_INFINITE : crease;
-
-    usd_mesh_data.crease_vertex_indices.push_back(edges[i][0]);
-    usd_mesh_data.crease_vertex_indices.push_back(edges[i][1]);
-    usd_mesh_data.crease_lengths.push_back(2);
-    usd_mesh_data.crease_sharpnesses.push_back(sharpness);
   }
 }
 
@@ -628,12 +551,11 @@ static void get_vert_creases(const Mesh *mesh, USDMeshData &usd_mesh_data)
   }
   const VArraySpan creases(*attribute);
   for (const int i : creases.index_range()) {
-    const float crease = creases[i];
+    const float crease = std::clamp(creases[i], 0.0f, 1.0f);
 
-    if (crease > 0.0f) {
-      const float sharpness = crease >= 1.0f ? pxr::UsdGeomMesh::SHARPNESS_INFINITE : crease;
+    if (crease != 0.0f) {
       usd_mesh_data.corner_indices.push_back(i);
-      usd_mesh_data.corner_sharpnesses.push_back(sharpness);
+      usd_mesh_data.corner_sharpnesses.push_back(bke::subdiv::crease_to_sharpness(crease));
     }
   }
 }
@@ -715,7 +637,7 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
     auto subset_material_api = pxr::UsdShadeMaterialBindingAPI(subset_prim);
     subset_material_api.Bind(usd_material);
     /* Apply the #MaterialBindingAPI applied schema, as required by USD. */
-    subset_material_api.Apply(subset_prim);
+    pxr::UsdShadeMaterialBindingAPI::Apply(subset_prim);
   }
 }
 
@@ -834,7 +756,7 @@ void USDMeshWriter::init_skinned_mesh(const HierarchyContext &context)
     return;
   }
 
-  Vector<std::string> bone_names;
+  Vector<StringRef> bone_names;
   get_armature_bone_names(
       arm_obj, usd_export_context_.export_params.only_deform_bones, bone_names);
 
@@ -926,7 +848,8 @@ Mesh *USDMeshWriter::get_export_mesh(Object *object_eval, bool &r_needsfree)
     /* We must export the skinned mesh in its rest pose.  We therefore
      * return the pre-modified mesh, so that the armature modifier isn't
      * applied. */
-    return BKE_object_get_pre_modified_mesh(object_eval);
+    /* TODO: Store the "needs free" mesh in a separate variable. */
+    return const_cast<Mesh *>(BKE_object_get_pre_modified_mesh(object_eval));
   }
 
   /* Return the fully evaluated mesh. */

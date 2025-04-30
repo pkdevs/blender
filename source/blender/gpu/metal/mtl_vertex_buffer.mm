@@ -26,7 +26,7 @@ void MTLVertBuf::acquire_data()
     data_ = nullptr;
   }
   else {
-    data_ = (uchar *)MEM_mallocN(sizeof(uchar) * this->size_alloc_get(), __func__);
+    data_ = MEM_malloc_arrayN<uchar>(this->size_alloc_get(), __func__);
   }
 }
 
@@ -60,7 +60,7 @@ void MTLVertBuf::release_data()
 
 void MTLVertBuf::duplicate_data(VertBuf *dst_)
 {
-  BLI_assert(MTLContext::get() != NULL);
+  BLI_assert(MTLContext::get() != nullptr);
   MTLVertBuf *src = this;
   MTLVertBuf *dst = static_cast<MTLVertBuf *>(dst_);
 

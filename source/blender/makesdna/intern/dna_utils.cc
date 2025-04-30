@@ -84,10 +84,10 @@ uint DNA_member_id_offset_start(const char *member_full)
   return elem_full_offset;
 }
 
-uint DNA_member_id_offset_end(const char *member_full)
+uint DNA_member_id_offset_end(const char *member_full_trimmed)
 {
   uint elem_full_offset = 0;
-  while (is_identifier(member_full[elem_full_offset])) {
+  while (is_identifier(member_full_trimmed[elem_full_offset])) {
     elem_full_offset++;
   }
   return elem_full_offset;
@@ -260,8 +260,7 @@ void DNA_alias_maps(enum eDNA_RenameDir version_dir, GHash **r_type_map, GHash *
     GHash *member_map = BLI_ghash_new_ex(
         strhash_pair_p, strhash_pair_cmp, __func__, ARRAY_SIZE(member_data));
     for (int i = 0; i < ARRAY_SIZE(member_data); i++) {
-      const char **str_pair = static_cast<const char **>(
-          MEM_mallocN(sizeof(char *) * 2, __func__));
+      const char **str_pair = MEM_malloc_arrayN<const char *>(2, __func__);
       str_pair[0] = static_cast<const char *>(
           BLI_ghash_lookup_default(type_map_local, member_data[i][0], (void *)member_data[i][0]));
       str_pair[1] = member_data[i][elem_key];

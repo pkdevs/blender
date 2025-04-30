@@ -12,12 +12,15 @@
 struct SubsurfModifierData;
 
 namespace blender::bke {
-struct AttributeMetaData;
+class AttributeIter;
 }  // namespace blender::bke
 
 namespace blender::io::usd {
 
 struct USDMeshData;
+
+/* Mapping from material slot number to array of face indices with that material. */
+using MaterialFaceGroups = Map<short, pxr::VtArray<int>>;
 
 /* Writer for USD geometry. Does not assume the object is a mesh object. */
 class USDGenericMeshWriter : public USDAbstractWriter {
@@ -25,16 +28,13 @@ class USDGenericMeshWriter : public USDAbstractWriter {
   USDGenericMeshWriter(const USDExporterContext &ctx);
 
  protected:
-  virtual bool is_supported(const HierarchyContext *context) const override;
-  virtual void do_write(HierarchyContext &context) override;
+  bool is_supported(const HierarchyContext *context) const override;
+  void do_write(HierarchyContext &context) override;
 
   virtual Mesh *get_export_mesh(Object *object_eval, bool &r_needsfree) = 0;
   virtual void free_export_mesh(Mesh *mesh);
 
  private:
-  /* Mapping from material slot number to array of face indices with that material. */
-  using MaterialFaceGroups = Map<short, pxr::VtIntArray>;
-
   void write_mesh(HierarchyContext &context, Mesh *mesh, const SubsurfModifierData *subsurfData);
   pxr::TfToken get_subdiv_scheme(const SubsurfModifierData *subsurfData);
   void write_subdiv(const pxr::TfToken &subdiv_scheme,
@@ -50,16 +50,10 @@ class USDGenericMeshWriter : public USDAbstractWriter {
   void write_custom_data(const Object *obj, const Mesh *mesh, const pxr::UsdGeomMesh &usd_mesh);
   void write_generic_data(const Mesh *mesh,
                           const pxr::UsdGeomMesh &usd_mesh,
-                          const StringRef attribute_id,
-                          const bke::AttributeMetaData &meta_data);
-  void write_uv_data(const Mesh *mesh,
-                     const pxr::UsdGeomMesh &usd_mesh,
-                     const StringRef attribute_id,
-                     const StringRef active_uvmap_name);
-  void write_color_data(const Mesh *mesh,
-                        const pxr::UsdGeomMesh &usd_mesh,
-                        const StringRef attribute_id,
-                        const bke::AttributeMetaData &meta_data);
+                          const bke::AttributeIter &attr);
+  void write_uv_data(const pxr::UsdGeomMesh &usd_mesh,
+                     const bke::AttributeIter &attr,
+                     StringRef active_uvmap_name);
 };
 
 class USDMeshWriter : public USDGenericMeshWriter {
@@ -70,9 +64,9 @@ class USDMeshWriter : public USDGenericMeshWriter {
   USDMeshWriter(const USDExporterContext &ctx);
 
  protected:
-  virtual void do_write(HierarchyContext &context) override;
+  void do_write(HierarchyContext &context) override;
 
-  virtual Mesh *get_export_mesh(Object *object_eval, bool &r_needsfree) override;
+  Mesh *get_export_mesh(Object *object_eval, bool &r_needsfree) override;
 
   /**
    * Determine whether we should write skinned mesh or blend shape data

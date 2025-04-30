@@ -2,35 +2,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_attribute.hh"
-#include "BKE_curves.hh"
-#include "BKE_material.h"
+#include "BLI_bounds.hh"
 #include "BLI_color.hh"
-#include "BLI_math_matrix.hh"
-#include "BLI_offset_indices.hh"
 #include "BLI_string.h"
-#include "BLI_task.hh"
 #include "BLI_vector.hh"
-#include "BLI_virtual_array.hh"
 
+#include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 
-#include "DNA_material_types.h"
 #include "DNA_object_types.h"
+#include "DNA_scene_types.h"
 
 #include "DEG_depsgraph_query.hh"
-#include "DNA_view3d_types.h"
 
 #include "GEO_resample_curves.hh"
-
-#include "ED_grease_pencil.hh"
-#include "ED_view3d.hh"
 
 #include "grease_pencil_io_intern.hh"
 
 #include <fmt/core.h>
 #include <fmt/format.h>
-#include <numeric>
 #include <optional>
 #include <pugixml.hpp>
 
@@ -165,7 +155,7 @@ void SVGExporter::export_grease_pencil_objects(pugi::xml_node node, const int fr
       clip_node.append_attribute("id").set_value(
           ("clip-path" + std::to_string(frame_number)).c_str());
 
-      write_rect(clip_node, 0, 0, render_rect_.size().x, render_rect_.size().y, 0.0f, "#000000");
+      write_rect(clip_node, 0, 0, camera_rect_.size().x, camera_rect_.size().y, 0.0f, "#000000");
     }
 
     pugi::xml_node frame_node = node.append_child("g");
@@ -185,7 +175,7 @@ void SVGExporter::export_grease_pencil_objects(pugi::xml_node node, const int fr
     ob_node.append_attribute("id").set_value(obtxt);
 
     /* Use evaluated version to get strokes with modifiers. */
-    Object *ob_eval = DEG_get_evaluated_object(context_.depsgraph, const_cast<Object *>(ob));
+    const Object *ob_eval = DEG_get_evaluated_object(context_.depsgraph, ob);
     BLI_assert(ob_eval->type == OB_GREASE_PENCIL);
     const GreasePencil *grease_pencil_eval = static_cast<const GreasePencil *>(ob_eval->data);
 
@@ -205,7 +195,26 @@ void SVGExporter::export_grease_pencil_objects(pugi::xml_node node, const int fr
       pugi::xml_node layer_node = ob_node.append_child("g");
       layer_node.append_attribute("id").set_value(layer->name().c_str());
 
-      export_grease_pencil_layer(layer_node, *ob_eval, *layer, *drawing);
+      const bke::CurvesGeometry &curves = drawing->strokes();
+      /* TODO: Instead of converting all the other curve types to poly curves, export them directly
+       * as curve paths to the SVG. */
+      if (curves.has_curve_with_type(
+              {CURVE_TYPE_CATMULL_ROM, CURVE_TYPE_BEZIER, CURVE_TYPE_NURBS}))
+      {
+        IndexMaskMemory memory;
+        const IndexMask non_poly_selection = curves.indices_for_curve_type(CURVE_TYPE_POLY, memory)
+                                                 .complement(curves.curves_range(), memory);
+
+        Drawing export_drawing;
+        export_drawing.strokes_for_write() = geometry::resample_to_evaluated(curves,
+                                                                             non_poly_selection);
+        export_drawing.tag_topology_changed();
+
+        export_grease_pencil_layer(layer_node, *ob_eval, *layer, export_drawing);
+      }
+      else {
+        export_grease_pencil_layer(layer_node, *ob_eval, *layer, *drawing);
+      }
     }
   }
 }
@@ -274,8 +283,16 @@ pugi::xml_node SVGExporter::write_main_node()
   main_node.append_attribute("y").set_value("0px");
   main_node.append_attribute("xmlns").set_value("http://www.w3.org/2000/svg");
 
-  std::string width = std::to_string(render_rect_.size().x);
-  std::string height = std::to_string(render_rect_.size().y);
+  std::string width, height;
+
+  if (camera_persmat_) {
+    width = std::to_string(camera_rect_.size().x);
+    height = std::to_string(camera_rect_.size().y);
+  }
+  else {
+    width = std::to_string(screen_rect_.size().x);
+    height = std::to_string(screen_rect_.size().y);
+  }
 
   main_node.append_attribute("width").set_value((width + "px").c_str());
   main_node.append_attribute("height").set_value((height + "px").c_str());
@@ -298,8 +315,14 @@ pugi::xml_node SVGExporter::write_polygon(pugi::xml_node node,
     }
     /* SVG has inverted Y axis. */
     const float2 screen_co = this->project_to_screen(transform, positions[i]);
-    txt.append(std::to_string(screen_co.x) + "," +
-               std::to_string(render_rect_.size().y - screen_co.y));
+    if (camera_persmat_) {
+      txt.append(std::to_string(screen_co.x) + "," +
+                 std::to_string(camera_rect_.size().y - screen_co.y));
+    }
+    else {
+      txt.append(std::to_string(screen_co.x) + "," +
+                 std::to_string(screen_rect_.size().y - screen_co.y));
+    }
   }
 
   element_node.append_attribute("points").set_value(txt.c_str());
@@ -326,8 +349,14 @@ pugi::xml_node SVGExporter::write_polyline(pugi::xml_node node,
     }
     /* SVG has inverted Y axis. */
     const float2 screen_co = this->project_to_screen(transform, positions[i]);
-    txt.append(std::to_string(screen_co.x) + "," +
-               std::to_string(render_rect_.size().y - screen_co.y));
+    if (camera_persmat_) {
+      txt.append(std::to_string(screen_co.x) + "," +
+                 std::to_string(camera_rect_.size().y - screen_co.y));
+    }
+    else {
+      txt.append(std::to_string(screen_co.x) + "," +
+                 std::to_string(screen_rect_.size().y - screen_co.y));
+    }
   }
 
   element_node.append_attribute("points").set_value(txt.c_str());
@@ -349,8 +378,14 @@ pugi::xml_node SVGExporter::write_path(pugi::xml_node node,
     }
     const float2 screen_co = this->project_to_screen(transform, positions[i]);
     /* SVG has inverted Y axis. */
-    txt.append(std::to_string(screen_co.x) + "," +
-               std::to_string(render_rect_.size().y - screen_co.y));
+    if (camera_persmat_) {
+      txt.append(std::to_string(screen_co.x) + "," +
+                 std::to_string(camera_rect_.size().y - screen_co.y));
+    }
+    else {
+      txt.append(std::to_string(screen_co.x) + "," +
+                 std::to_string(screen_rect_.size().y - screen_co.y));
+    }
   }
   /* Close patch (cyclic). */
   if (cyclic) {

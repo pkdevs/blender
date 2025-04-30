@@ -8,8 +8,10 @@
 #ifdef WITH_OPTIX
 
 #  include "device/cuda/device_impl.h"
-#  include "device/optix/util.h"
+#  include "device/optix/util.h"  // IWYU pragma: keep
 #  include "kernel/osl/globals.h"
+
+#  include "util/task.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -34,6 +36,7 @@ enum {
   PG_RGEN_EVAL_DISPLACE,
   PG_RGEN_EVAL_BACKGROUND,
   PG_RGEN_EVAL_CURVE_SHADOW_TRANSPARENCY,
+  PG_RGEN_INIT_FROM_CAMERA,
   PG_MISS,
   PG_HITD, /* Default hit group. */
   PG_HITS, /* __SHADOW_RECORD_ALL__ hit group. */
@@ -65,9 +68,9 @@ struct SbtRecord {
 
 class OptiXDevice : public CUDADevice {
  public:
-  OptixDeviceContext context = NULL;
+  OptixDeviceContext context = nullptr;
 
-  OptixModule optix_module = NULL; /* All necessary OptiX kernels are in one module. */
+  OptixModule optix_module = nullptr; /* All necessary OptiX kernels are in one module. */
   OptixModule builtin_modules[2] = {};
   OptixPipeline pipelines[NUM_PIPELINES] = {};
   OptixProgramGroup groups[NUM_PROGRAM_GROUPS] = {};
@@ -80,6 +83,7 @@ class OptiXDevice : public CUDADevice {
   OSLGlobals osl_globals;
   vector<OptixModule> osl_modules;
   vector<OptixProgramGroup> osl_groups;
+  OptixModule osl_camera_module = nullptr;
 #  endif
 
  private:
@@ -89,11 +93,17 @@ class OptiXDevice : public CUDADevice {
 
  public:
   OptiXDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless);
-  ~OptiXDevice();
+  ~OptiXDevice() override;
 
   BVHLayoutMask get_bvh_layout_mask(uint /*kernel_features*/) const override;
 
   string compile_kernel_get_common_cflags(const uint kernel_features);
+
+  void create_optix_module(TaskPool &pool,
+                           OptixModuleCompileOptions &module_options,
+                           string &ptx_data,
+                           OptixModule &module,
+                           OptixResult &failure_reason);
 
   bool load_kernels(const uint kernel_features) override;
 
@@ -109,13 +119,13 @@ class OptiXDevice : public CUDADevice {
   void release_bvh(BVH *bvh) override;
   void free_bvh_memory_delayed();
 
-  void const_copy_to(const char *name, void *host, size_t size) override;
+  void const_copy_to(const char *name, void *host, const size_t size) override;
 
-  void update_launch_params(size_t offset, void *data, size_t data_size);
+  void update_launch_params(const size_t offset, void *data, const size_t data_size);
 
-  virtual unique_ptr<DeviceQueue> gpu_queue_create() override;
+  unique_ptr<DeviceQueue> gpu_queue_create() override;
 
-  void *get_cpu_osl_memory() override;
+  OSLGlobals *get_cpu_osl_memory() override;
 };
 
 CCL_NAMESPACE_END

@@ -78,6 +78,7 @@ _km_hierarchy = [
             _km_expand_from_toolsystem('VIEW_3D', 'EDIT_TEXT'),
         ]),
         ('Grease Pencil', 'EMPTY', 'WINDOW', []),
+        ('Point Cloud', 'EMPTY', 'WINDOW', []),
         ('Pose', 'EMPTY', 'WINDOW', [
             _km_expand_from_toolsystem('VIEW_3D', 'POSE'),
         ]),
@@ -141,7 +142,6 @@ _km_hierarchy = [
         ('NLA Tracks', 'NLA_EDITOR', 'WINDOW', []),
         ('NLA Generic', 'NLA_EDITOR', 'WINDOW', []),
     ]),
-    ('Timeline', 'TIMELINE', 'WINDOW', []),
 
     ('Image', 'IMAGE_EDITOR', 'WINDOW', [
         # Image (reverse order, UVEdit before Image).
@@ -165,12 +165,20 @@ _km_hierarchy = [
 
     ('Node Editor', 'NODE_EDITOR', 'WINDOW', [
         ('Node Generic', 'NODE_EDITOR', 'WINDOW', []),
+        ('Node Tool: Tweak', 'NODE_EDITOR', 'WINDOW', []),
+        ('Node Tool: Tweak (fallback)', 'NODE_EDITOR', 'WINDOW', []),
+        ('Node Tool: Select Box', 'NODE_EDITOR', 'WINDOW', []),
+        ('Node Tool: Select Box (fallback)', 'NODE_EDITOR', 'WINDOW', []),
+        ('Node Tool: Select Lasso', 'NODE_EDITOR', 'WINDOW', []),
+        ('Node Tool: Select Lasso (fallback)', 'NODE_EDITOR', 'WINDOW', []),
+        ('Node Tool: Select Circle', 'NODE_EDITOR', 'WINDOW', []),
+        ('Node Tool: Select Circle (fallback)', 'NODE_EDITOR', 'WINDOW', []),
     ]),
-    ('SequencerCommon', 'SEQUENCE_EDITOR', 'WINDOW', [
+    ('Video Sequence Editor', 'SEQUENCE_EDITOR', 'WINDOW', [
         ('Sequencer', 'SEQUENCE_EDITOR', 'WINDOW', [
             _km_expand_from_toolsystem('SEQUENCE_EDITOR', 'SEQUENCER'),
         ]),
-        ('SequencerPreview', 'SEQUENCE_EDITOR', 'WINDOW', [
+        ('Preview', 'SEQUENCE_EDITOR', 'WINDOW', [
             _km_expand_from_toolsystem('SEQUENCE_EDITOR', 'PREVIEW'),
         ]),
     ]),
@@ -194,43 +202,15 @@ _km_hierarchy = [
         ('Clip Dopesheet Editor', 'CLIP_EDITOR', 'WINDOW', []),
     ]),
 
-    ('Grease Pencil', 'EMPTY', 'WINDOW', [  # grease pencil stuff (per region)
-        #('Grease Pencil Stroke Curve Edit Mode', 'EMPTY', 'WINDOW', []),  # Legacy
-        #('Grease Pencil Stroke Edit Mode', 'EMPTY', 'WINDOW', []), # Legacy
-        #('Grease Pencil Stroke Paint (Draw brush)', 'EMPTY', 'WINDOW', []), # Legacy
-        #('Grease Pencil Stroke Paint (Fill)', 'EMPTY', 'WINDOW', []), # Legacy
-        #('Grease Pencil Stroke Paint (Erase)', 'EMPTY', 'WINDOW', []), # Legacy
-        #('Grease Pencil Stroke Paint (Tint)', 'EMPTY', 'WINDOW', []), # Legacy
-        #('Grease Pencil Stroke Paint Mode', 'EMPTY', 'WINDOW', []), # Legacy
-        #('Grease Pencil Stroke Sculpt Mode', 'EMPTY', 'WINDOW', []), # Legacy
-        #('Grease Pencil Stroke Sculpt (Smooth)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Sculpt (Thickness)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Sculpt (Strength)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Sculpt (Grab)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Sculpt (Push)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Sculpt (Twist)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Sculpt (Pinch)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Sculpt (Randomize)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Sculpt (Clone)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Weight Mode', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Weight (Draw)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Weight (Blur)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Weight (Average)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Weight (Smear)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Vertex Mode', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Vertex (Draw)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Vertex (Blur)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Vertex (Average)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Vertex (Smear)', 'EMPTY', 'WINDOW', []),
-        #('Grease Pencil Stroke Vertex (Replace)', 'EMPTY', 'WINDOW', []),
-        # Grease Pencil v3
+    ('Grease Pencil', 'EMPTY', 'WINDOW', [
+        # Grease Pencil
         ('Grease Pencil Paint Mode', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Brush Stroke', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Edit Mode', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Sculpt Mode', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Weight Paint', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Vertex Paint', 'EMPTY', 'WINDOW', []),
-        # Grease Pencil v3 Fill Tool
+        # Grease Pencil Fill Tool
         ('Grease Pencil Fill Tool', 'EMPTY', 'WINDOW', []),
     ]),
     ('Mask Editing', 'EMPTY', 'WINDOW', []),
@@ -250,6 +230,14 @@ _km_hierarchy = [
     ('Eyedropper ColorRamp PointSampling Map', 'EMPTY', 'WINDOW', []),
     ('Mesh Filter Modal Map', 'EMPTY', 'WINDOW', []),
 
-    # Grease Pencil v3 Fill Tool
+    # Grease Pencil Fill Tool
     ('Fill Tool Modal Map', 'EMPTY', 'WINDOW', []),
+
+    ('Generic Gizmo', 'EMPTY', 'WINDOW', [
+        ('Generic Gizmo Drag', 'EMPTY', 'WINDOW', []),
+        ('Generic Gizmo Click Drag', 'EMPTY', 'WINDOW', []),
+        ('Generic Gizmo Maybe Drag', 'EMPTY', 'WINDOW', []),
+        ('Generic Gizmo Select', 'EMPTY', 'WINDOW', []),
+        ('Generic Gizmo Tweak Modal Map', 'EMPTY', 'WINDOW', []),
+    ]),
 ]

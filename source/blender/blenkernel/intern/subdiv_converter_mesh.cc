@@ -10,8 +10,6 @@
 
 #include <cstring>
 
-#include "BLI_utildefines.h"
-
 #include "BKE_attribute.hh"
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
@@ -103,12 +101,6 @@ static bool specifies_full_topology(const OpenSubdiv_Converter * /*converter*/)
   return false;
 }
 
-static int get_num_faces(const OpenSubdiv_Converter *converter)
-{
-  ConverterStorage *storage = static_cast<ConverterStorage *>(converter->user_data);
-  return storage->mesh->faces_num;
-}
-
 static int get_num_edges(const OpenSubdiv_Converter *converter)
 {
   ConverterStorage *storage = static_cast<ConverterStorage *>(converter->user_data);
@@ -119,12 +111,6 @@ static int get_num_vertices(const OpenSubdiv_Converter *converter)
 {
   ConverterStorage *storage = static_cast<ConverterStorage *>(converter->user_data);
   return storage->num_manifold_vertices;
-}
-
-static int get_num_face_vertices(const OpenSubdiv_Converter *converter, int manifold_face_index)
-{
-  ConverterStorage *storage = static_cast<ConverterStorage *>(converter->user_data);
-  return storage->faces[manifold_face_index].size();
 }
 
 static void get_face_vertices(const OpenSubdiv_Converter *converter,
@@ -208,8 +194,8 @@ static void precalc_uv_layer(const OpenSubdiv_Converter *converter, const int la
   const float limit[2] = {STD_UV_CONNECT_LIMIT, STD_UV_CONNECT_LIMIT};
   /* Initialize memory required for the operations. */
   if (storage->loop_uv_indices == nullptr) {
-    storage->loop_uv_indices = static_cast<int *>(
-        MEM_malloc_arrayN(mesh->corners_num, sizeof(int), "loop uv vertex index"));
+    storage->loop_uv_indices = MEM_malloc_arrayN<int>(size_t(mesh->corners_num),
+                                                      "loop uv vertex index");
   }
   UvVertMap *uv_vert_map = BKE_mesh_uv_vert_map_create(storage->faces,
                                                        nullptr,
@@ -275,11 +261,9 @@ static void init_functions(OpenSubdiv_Converter *converter)
   converter->getFVarLinearInterpolation = get_fvar_linear_interpolation;
   converter->specifiesFullTopology = specifies_full_topology;
 
-  converter->getNumFaces = get_num_faces;
   converter->getNumEdges = get_num_edges;
   converter->getNumVertices = get_num_vertices;
 
-  converter->getNumFaceVertices = get_num_face_vertices;
   converter->getFaceVertices = get_face_vertices;
   converter->getFaceEdges = nullptr;
 
@@ -312,12 +296,11 @@ static void initialize_manifold_index_array(const BitSpan not_used_map,
 {
   int *indices = nullptr;
   if (r_indices != nullptr) {
-    indices = static_cast<int *>(MEM_malloc_arrayN(num_elements, sizeof(int), "manifold indices"));
+    indices = MEM_malloc_arrayN<int>(size_t(num_elements), "manifold indices");
   }
   int *indices_reverse = nullptr;
   if (r_indices_reverse != nullptr) {
-    indices_reverse = static_cast<int *>(
-        MEM_malloc_arrayN(num_elements, sizeof(int), "manifold indices reverse"));
+    indices_reverse = MEM_malloc_arrayN<int>(size_t(num_elements), "manifold indices reverse");
   }
   int offset = 0;
   for (int i = 0; i < num_elements; i++) {
@@ -400,6 +383,7 @@ void converter_init_for_mesh(OpenSubdiv_Converter *converter,
                              const Settings *settings,
                              const Mesh *mesh)
 {
+  converter->faces = mesh->faces();
   init_functions(converter);
   init_user_data(converter, settings, mesh);
 }

@@ -54,7 +54,7 @@ class USDShapeReader : public USDGeomReader {
                  const USDImportParams &import_params,
                  const ImportSettings &settings);
 
-  void create_object(Main *bmain, double /*motionSampleTime*/) override;
+  void create_object(Main *bmain) override;
   void read_object_data(Main *bmain, double motionSampleTime) override;
   void read_geometry(bke::GeometrySet & /*geometry_set*/,
                      USDMeshReadParams /*params*/,
@@ -64,8 +64,7 @@ class USDShapeReader : public USDGeomReader {
    * This assumes mesh_from_prim() has been called.  */
   bool is_time_varying();
 
-  virtual bool topology_changed(const Mesh * /*existing_mesh*/,
-                                double /*motionSampleTime*/) override
+  bool topology_changed(const Mesh * /*existing_mesh*/, double /*motionSampleTime*/) override
   {
     return false;
   };

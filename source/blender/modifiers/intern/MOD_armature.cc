@@ -88,7 +88,7 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
     /* If not using envelopes,
      * create relations to individual bones for more rigging flexibility. */
     if ((amd->deformflag & ARM_DEF_ENVELOPE) == 0 && (amd->object->pose != nullptr) &&
-        ELEM(ctx->object->type, OB_MESH, OB_LATTICE, OB_GPENCIL_LEGACY))
+        ELEM(ctx->object->type, OB_MESH, OB_LATTICE))
     {
       /* If neither vertex groups nor envelopes are used, the modifier has no bone dependencies. */
       if ((amd->deformflag & ARM_DEF_VGROUP) != 0) {
@@ -215,14 +215,14 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   uiLayoutSetPropSep(layout, true);
 
-  uiItemR(layout, ptr, "object", UI_ITEM_NONE, nullptr, ICON_NONE);
-  modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", nullptr);
+  uiItemR(layout, ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
 
-  col = uiLayoutColumn(layout, true);
-  uiItemR(col, ptr, "use_deform_preserve_volume", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, ptr, "use_multi_modifier", UI_ITEM_NONE, nullptr, ICON_NONE);
+  col = &layout->column(true);
+  uiItemR(col, ptr, "use_deform_preserve_volume", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  uiItemR(col, ptr, "use_multi_modifier", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  col = uiLayoutColumnWithHeading(layout, true, IFACE_("Bind To"));
+  col = &layout->column(true, IFACE_("Bind To"));
   uiItemR(col, ptr, "use_vertex_groups", UI_ITEM_NONE, IFACE_("Vertex Groups"), ICON_NONE);
   uiItemR(col, ptr, "use_bone_envelopes", UI_ITEM_NONE, IFACE_("Bone Envelopes"), ICON_NONE);
 

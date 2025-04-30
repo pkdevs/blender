@@ -71,6 +71,10 @@ void view3d_depths_rect_create(ARegion *region, rcti *rect, ViewDepths *r_d);
  */
 float view3d_depth_near(ViewDepths *d);
 
+/* view3d_dropboxes.cc */
+
+void view3d_dropboxes();
+
 /* view3d_select.cc */
 
 void VIEW3D_OT_select(wmOperatorType *ot);
@@ -171,7 +175,7 @@ Object *ED_view3d_cameracontrol_object_get(View3DCameraControl *vctrl);
  * Calculates the bounding box corners (min and max) for \a obedit.
  * The returned values are in global space.
  */
-bool ED_view3d_minmax_verts(Object *obedit, float min[3], float max[3]);
+bool ED_view3d_minmax_verts(const Scene *scene, Object *obedit, float min[3], float max[3]);
 
 void VIEW3D_OT_snap_selected_to_grid(wmOperatorType *ot);
 void VIEW3D_OT_snap_selected_to_cursor(wmOperatorType *ot);
@@ -226,3 +230,6 @@ void VIEW3D_GGT_placement(wmGizmoGroupType *gzgt);
 extern uchar view3d_camera_border_hack_col[3];
 extern bool view3d_camera_border_hack_test;
 #endif
+
+/* view3d_navigate_smoothview.cc */
+void view3d_smooth_free(RegionView3D *rv3d);

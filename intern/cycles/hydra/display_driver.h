@@ -17,12 +17,14 @@ HDCYCLES_NAMESPACE_OPEN_SCOPE
 class HdCyclesDisplayDriver final : public CCL_NS::DisplayDriver {
  public:
   HdCyclesDisplayDriver(HdCyclesSession *renderParam, Hgi *hgi);
-  ~HdCyclesDisplayDriver();
+  ~HdCyclesDisplayDriver() override;
 
  private:
   void next_tile_begin() override;
 
-  bool update_begin(const Params &params, int texture_width, int texture_height) override;
+  bool update_begin(const Params &params,
+                    const int texture_width,
+                    const int texture_height) override;
   void update_end() override;
 
   void flush() override;
@@ -30,7 +32,8 @@ class HdCyclesDisplayDriver final : public CCL_NS::DisplayDriver {
   CCL_NS::half4 *map_texture_buffer() override;
   void unmap_texture_buffer() override;
 
-  GraphicsInterop graphics_interop_get() override;
+  GraphicsInteropDevice graphics_interop_get_device() override;
+  GraphicsInteropBuffer graphics_interop_get_buffer() override;
 
   void graphics_interop_activate() override;
   void graphics_interop_deactivate() override;

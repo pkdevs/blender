@@ -8,13 +8,16 @@
 
 #include "GEO_realize_instances.hh"
 
-#include "UI_resources.hh"
+#include "FN_multi_function_builder.hh"
 
 namespace blender::nodes::node_geo_realize_instances_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
   b.add_input<decl::Geometry>("Geometry");
+  b.add_output<decl::Geometry>("Geometry").propagate_all().align_with_previous();
   b.add_input<decl::Bool>("Selection")
       .default_value(true)
       .hide_value()
@@ -28,7 +31,6 @@ static void node_declare(NodeDeclarationBuilder &b)
           "of the Depth input");
   b.add_input<decl::Int>("Depth").default_value(0).min(0).field_on_all().description(
       "Number of levels of nested instances to realize for each top-level instance");
-  b.add_output<decl::Geometry>("Geometry").propagate_all();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -88,10 +90,14 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_REALIZE_INSTANCES, "Realize Instances", NODE_CLASS_GEOMETRY);
+  geo_node_type_base(&ntype, "GeometryNodeRealizeInstances", GEO_NODE_REALIZE_INSTANCES);
+  ntype.ui_name = "Realize Instances";
+  ntype.ui_description = "Convert instances into real geometry data";
+  ntype.enum_name_legacy = "REALIZE_INSTANCES";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

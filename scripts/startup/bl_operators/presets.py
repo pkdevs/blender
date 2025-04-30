@@ -53,7 +53,7 @@ def _call_preset_cb(fn, context, filepath, *, deprecated="4.2"):
 
     try:
         fn(*args)
-    except BaseException as ex:
+    except Exception as ex:
         print("Internal error running", fn, str(ex))
 
 
@@ -185,25 +185,26 @@ class AddPresetBase:
                             # to simple lists to repr()
                             try:
                                 value = value[:]
-                            except BaseException:
+                            except Exception:
                                 pass
 
                             file_preset.write("{:s} = {!r}\n".format(rna_path_step, value))
 
-                    file_preset = open(filepath, "w", encoding="utf-8")
-                    file_preset.write("import bpy\n")
+                    with open(filepath, "w", encoding="utf-8") as file_preset:
+                        file_preset.write("import bpy\n")
 
-                    if hasattr(self, "preset_defines"):
-                        for rna_path in self.preset_defines:
-                            exec(rna_path)
-                            file_preset.write("{:s}\n".format(rna_path))
-                        file_preset.write("\n")
+                        namespace_globals = {"bpy": bpy}
+                        namespace_locals = {}
 
-                    for rna_path in self.preset_values:
-                        value = eval(rna_path)
-                        rna_recursive_attr_expand(value, rna_path, 1)
+                        if hasattr(self, "preset_defines"):
+                            for rna_path in self.preset_defines:
+                                exec(rna_path, namespace_globals, namespace_locals)
+                                file_preset.write("{:s}\n".format(rna_path))
+                            file_preset.write("\n")
 
-                    file_preset.close()
+                        for rna_path in self.preset_values:
+                            value = eval(rna_path, namespace_globals, namespace_locals)
+                            rna_recursive_attr_expand(value, rna_path, 1)
 
             preset_menu_class.bl_label = bpy.path.display_name(filename)
 
@@ -230,7 +231,7 @@ class AddPresetBase:
                     self.remove(context, filepath)
                 else:
                     os.remove(filepath)
-            except BaseException as ex:
+            except Exception as ex:
                 self.report({'ERROR'}, rpt_("Unable to remove preset: {!r}").format(ex))
                 import traceback
                 traceback.print_exc()
@@ -288,7 +289,7 @@ class ExecutePreset(Operator):
         if ext == ".py":
             try:
                 bpy.utils.execfile(filepath)
-            except BaseException as ex:
+            except Exception as ex:
                 self.report({'ERROR'}, "Failed to execute the preset: " + repr(ex))
 
         elif ext == ".xml":
@@ -691,7 +692,7 @@ class SavePresetInterfaceTheme(AddPresetBase, Operator):
         preset_menu_class = getattr(bpy.types, self.preset_menu)
         try:
             rna_xml.xml_file_write(context, filepath, preset_menu_class.preset_xml_map)
-        except BaseException as ex:
+        except Exception as ex:
             self.report({'ERROR'}, "Unable to overwrite preset: {:s}".format(str(ex)))
             import traceback
             traceback.print_exc()
@@ -755,7 +756,8 @@ class RemovePresetKeyconfig(AddPresetBase, Operator):
             return {'CANCELLED'}
 
         return context.window_manager.invoke_confirm(
-            self, event, title="Remove Keymap Configuration", confirm_text="Delete")
+            self, event, title="Remove Keymap Configuration", confirm_text="Delete",
+        )
 
 
 class AddPresetOperator(AddPresetBase, Operator):
@@ -891,9 +893,6 @@ class WM_OT_operator_presets_cleanup(Operator):
                 "WM_OT_alembic_import",
                 "WM_OT_collada_export",
                 "WM_OT_collada_import",
-                "WM_OT_gpencil_export_svg",
-                "WM_OT_gpencil_export_pdf",
-                "WM_OT_gpencil_import_svg",
                 "WM_OT_obj_export",
                 "WM_OT_obj_import",
                 "WM_OT_ply_export",
@@ -949,7 +948,7 @@ class AddPresetGpencilBrush(AddPresetBase, Operator):
 
 
 class AddPresetGpencilMaterial(AddPresetBase, Operator):
-    """Add or remove grease pencil material preset"""
+    """Add or remove Grease Pencil material preset"""
     bl_idname = "scene.gpencil_material_preset_add"
     bl_label = "Add Grease Pencil Material Preset"
     preset_menu = "MATERIAL_PT_gpencil_material_presets"

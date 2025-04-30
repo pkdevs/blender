@@ -16,7 +16,11 @@ else()
     set(LIBDIR_NATIVE_ABI ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_NAME})
 
     # Path to precompiled libraries with known glibc 2.28 ABI.
-    set(LIBDIR_GLIBC228_ABI ${CMAKE_SOURCE_DIR}/lib/linux_x64)
+    if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
+      set(LIBDIR_GLIBC228_ABI ${CMAKE_SOURCE_DIR}/lib/linux_arm64)
+    else()
+      set(LIBDIR_GLIBC228_ABI ${CMAKE_SOURCE_DIR}/lib/linux_x64)
+    endif()
 
     # Choose the best suitable libraries.
     if(EXISTS ${LIBDIR_NATIVE_ABI})
@@ -91,11 +95,6 @@ if(DEFINED LIBDIR)
   include(platform_old_libs_update)
 
   set(WITH_STATIC_LIBS ON)
-  # OpenMP usually can't be statically linked into shared libraries,
-  # due to not being compiled with position independent code.
-  if(NOT WITH_PYTHON_MODULE)
-    set(WITH_OPENMP_STATIC ON)
-  endif()
   set(Boost_NO_BOOST_CMAKE ON)
   set(Boost_ROOT ${LIBDIR}/boost)
   set(BOOST_LIBRARYDIR ${LIBDIR}/boost/lib)
@@ -134,8 +133,10 @@ find_package_wrapper(Epoxy REQUIRED)
 # find_package_wrapper(TIFF REQUIRED)
 find_package(TIFF)
 # CMake 3.28.1 defines this, it doesn't seem to be used, hide by default in the UI.
-if(DEFINED tiff_DIR)
-  mark_as_advanced(tiff_DIR)
+# NOTE(@ideasman42): this doesn't seem to be important,
+# on my system it's not-found even when the TIFF library is.
+if(DEFINED Tiff_DIR)
+  mark_as_advanced(Tiff_DIR)
 endif()
 
 if(WITH_VULKAN_BACKEND)
@@ -270,26 +271,21 @@ if(WITH_OPENAL)
 endif()
 
 if(WITH_SDL)
-  if(WITH_SDL_DYNLOAD)
-    set(SDL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern/sdlew/include/SDL2")
-    set(SDL_LIBRARY)
+  find_package_wrapper(SDL2)
+  if(SDL2_FOUND)
+    # Use same names for both versions of SDL until we move to 2.x.
+    set(SDL_INCLUDE_DIR "${SDL2_INCLUDE_DIR}")
+    set(SDL_LIBRARY "${SDL2_LIBRARY}")
+    set(SDL_FOUND "${SDL2_FOUND}")
   else()
-    find_package_wrapper(SDL2)
-    if(SDL2_FOUND)
-      # Use same names for both versions of SDL until we move to 2.x.
-      set(SDL_INCLUDE_DIR "${SDL2_INCLUDE_DIR}")
-      set(SDL_LIBRARY "${SDL2_LIBRARY}")
-      set(SDL_FOUND "${SDL2_FOUND}")
-    else()
-      find_package_wrapper(SDL)
-    endif()
-    mark_as_advanced(
-      SDL_INCLUDE_DIR
-      SDL_LIBRARY
-    )
-    # unset(SDLMAIN_LIBRARY CACHE)
-    set_and_warn_library_found("SDL" SDL_FOUND WITH_SDL)
+    find_package_wrapper(SDL)
   endif()
+  mark_as_advanced(
+    SDL_INCLUDE_DIR
+    SDL_LIBRARY
+  )
+  # unset(SDLMAIN_LIBRARY CACHE)
+  set_and_warn_library_found("SDL" SDL_FOUND WITH_SDL)
 endif()
 
 # Codecs
@@ -340,19 +336,6 @@ endif()
 if(WITH_OPENCOLLADA)
   find_package_wrapper(OpenCOLLADA)
   if(OPENCOLLADA_FOUND)
-    if(WITH_STATIC_LIBS)
-      # PCRE is bundled with OpenCollada without headers, so can't use
-      # find_package reliably to detect it.
-      # NOTE: newer fork no longer depends on PCRE: see !122270.
-      if(EXISTS ${LIBDIR}/opencollada/lib/libpcre.a)
-        set(PCRE_LIBRARIES ${LIBDIR}/opencollada/lib/libpcre.a)
-      else()
-        # Quiet warnings.
-        set(PCRE_LIBRARIES)
-      endif()
-    else()
-      find_package_wrapper(PCRE)
-    endif()
     find_package_wrapper(XML2)
   else()
     set_and_warn_library_found("OpenCollada" OPENCOLLADA_FOUND WITH_OPENCOLLADA)
@@ -382,7 +365,7 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
       set(OSL_ROOT ${CYCLES_OSL})
     endif()
   endif()
-  find_package_wrapper(OSL)
+  find_package_wrapper(OSL 1.13.4)
   set_and_warn_library_found("OSL" OSL_FOUND WITH_CYCLES_OSL)
 
   if(OSL_FOUND)
@@ -423,9 +406,9 @@ if(DEFINED LIBDIR)
     ${SYCL_ROOT_DIR}/lib/libsycl.so.*
     ${SYCL_ROOT_DIR}/lib/libpi_*.so
     ${SYCL_ROOT_DIR}/lib/libur_*.so
+    ${SYCL_ROOT_DIR}/lib/libur_*.so.*
   )
   list(FILTER _sycl_runtime_libraries EXCLUDE REGEX ".*\.py")
-  list(REMOVE_ITEM _sycl_runtime_libraries "${SYCL_ROOT_DIR}/lib/libpi_opencl.so")
   list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
   unset(_sycl_runtime_libraries)
 endif()
@@ -463,6 +446,18 @@ if(WITH_MATERIALX)
 endif()
 add_bundled_libraries(materialx/lib)
 
+# With Blender 4.4 libraries there is no more Boost. But Linux distros may have
+# older versions of libs like USD with a header dependency on Boost, so can't
+# remove this entirely yet.
+if(WITH_BOOST)
+  if(DEFINED LIBDIR AND NOT EXISTS "${LIBDIR}/boost")
+    set(WITH_BOOST OFF)
+    set(BOOST_LIBRARIES)
+    set(BOOST_PYTHON_LIBRARIES)
+    set(BOOST_INCLUDE_DIR)
+  endif()
+endif()
+
 if(WITH_BOOST)
   # uses in build instructions to override include and library variables
   if(NOT BOOST_CUSTOM)
@@ -470,23 +465,10 @@ if(WITH_BOOST)
       set(Boost_USE_STATIC_LIBS OFF)
     endif()
     set(Boost_USE_MULTITHREADED ON)
-    set(__boost_packages filesystem regex thread date_time)
-    if(WITH_CYCLES AND WITH_CYCLES_OSL)
-      if(NOT (${OSL_LIBRARY_VERSION_MAJOR} EQUAL "1" AND ${OSL_LIBRARY_VERSION_MINOR} LESS "6"))
-        list(APPEND __boost_packages wave)
-      else()
-      endif()
-    endif()
-    if(WITH_INTERNATIONAL)
-      list(APPEND __boost_packages locale)
-    endif()
-    if(WITH_OPENVDB)
-      list(APPEND __boost_packages iostreams)
-    endif()
+    set(__boost_packages)
     if(WITH_USD AND USD_PYTHON_SUPPORT)
       list(APPEND __boost_packages python${PYTHON_VERSION_NO_DOTS})
     endif()
-    list(APPEND __boost_packages system)
     set(Boost_NO_WARN_NEW_VERSIONS ON)
     find_package(Boost 1.48 COMPONENTS ${__boost_packages})
     if(NOT Boost_FOUND)
@@ -497,27 +479,17 @@ if(WITH_BOOST)
       find_package(Boost 1.48 COMPONENTS ${__boost_packages})
     endif()
     unset(__boost_packages)
-    if(Boost_USE_STATIC_LIBS AND WITH_BOOST_ICU)
-      find_package(IcuLinux)
-    endif()
     mark_as_advanced(Boost_DIR)  # why doesn't boost do this?
     mark_as_advanced(Boost_INCLUDE_DIR)  # why doesn't boost do this?
   endif()
 
-  # Boost Python is separate to avoid linking Python into tests that don't need it.
-  set(BOOST_LIBRARIES ${Boost_LIBRARIES})
+  # Boost Python is the only library Blender directly depends on, though USD headers.
   if(WITH_USD AND USD_PYTHON_SUPPORT)
     set(BOOST_PYTHON_LIBRARIES ${Boost_PYTHON${PYTHON_VERSION_NO_DOTS}_LIBRARY})
-    list(REMOVE_ITEM BOOST_LIBRARIES ${BOOST_PYTHON_LIBRARIES})
   endif()
   set(BOOST_INCLUDE_DIR ${Boost_INCLUDE_DIRS})
   set(BOOST_LIBPATH ${Boost_LIBRARY_DIRS})
   set(BOOST_DEFINITIONS "-DBOOST_ALL_NO_LIB")
-
-  if(Boost_USE_STATIC_LIBS AND WITH_BOOST_ICU)
-    find_package(IcuLinux)
-    list(APPEND BOOST_LIBRARIES ${ICU_LIBRARIES})
-  endif()
 endif()
 add_bundled_libraries(boost/lib)
 
@@ -546,7 +518,7 @@ endif()
 add_bundled_libraries(opencolorio/lib)
 
 if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
-  find_package(Embree 3.8.0 REQUIRED)
+  find_package(Embree 4.0.0 REQUIRED)
 endif()
 add_bundled_libraries(embree/lib)
 
@@ -591,6 +563,10 @@ add_bundled_libraries(opensubdiv/lib)
 
 if(WITH_TBB)
   find_package_wrapper(TBB)
+  if(TBB_FOUND)
+    get_target_property(TBB_LIBRARIES TBB::tbb LOCATION)
+    get_target_property(TBB_INCLUDE_DIRS TBB::tbb INTERFACE_INCLUDE_DIRECTORIES)
+  endif()
   set_and_warn_library_found("TBB" TBB_FOUND WITH_TBB)
 endif()
 add_bundled_libraries(tbb/lib)
@@ -615,6 +591,16 @@ if(WITH_HARU)
   set_and_warn_library_found("Haru" HARU_FOUND WITH_HARU)
 endif()
 
+if(WITH_MANIFOLD)
+  if(WITH_LIBS_PRECOMPILED OR WITH_STRICT_BUILD_OPTIONS)
+    find_package(manifold REQUIRED)
+  else()
+    # This isn't a common system library, so disable if it's not found.
+    find_package(manifold)
+    set_and_warn_library_found("MANIFOLD" MANIFOLD_FOUND WITH_MANIFOLD)
+  endif()
+endif()
+
 if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
   find_package_wrapper(openpgl)
   mark_as_advanced(openpgl_DIR)
@@ -633,6 +619,8 @@ endif()
 if(DEFINED LIBDIR)
   without_system_libs_end()
 endif()
+
+add_bundled_libraries(hiprt/lib)
 
 # ----------------------------------------------------------------------------
 # Build and Link Flags
@@ -716,6 +704,13 @@ endif()
 if(WITH_PULSEAUDIO)
   find_package_wrapper(Pulse)
   set_and_warn_library_found("PulseAudio" PULSE_FOUND WITH_PULSEAUDIO)
+endif()
+
+# PipeWire is intended to use the system library.
+if(WITH_PIPEWIRE)
+  find_package(PkgConfig)
+  pkg_check_modules(PIPEWIRE libpipewire-0.3>=1.1.0)
+  set_and_warn_library_found("PipeWire" PIPEWIRE_FOUND WITH_PIPEWIRE)
 endif()
 
 # Audio IO
@@ -874,19 +869,6 @@ if(WITH_GHOST_X11)
     endif()
   endif()
 
-  if(WITH_X11_XF86VMODE)
-    # XXX, why doesn't cmake make this available?
-    find_library(X11_Xxf86vmode_LIB Xxf86vm   ${X11_LIB_SEARCH_PATH})
-    mark_as_advanced(X11_Xxf86vmode_LIB)
-    if(NOT X11_Xxf86vmode_LIB)
-      message(
-        FATAL_ERROR
-        "libXxf86vm not found. "
-        "Disable WITH_X11_XF86VMODE if you want to build without"
-      )
-    endif()
-  endif()
-
   if(WITH_X11_XFIXES)
     if(NOT X11_Xfixes_LIB)
       message(
@@ -1009,7 +991,7 @@ if(CMAKE_COMPILER_IS_GNUCC)
     unset(LD_VERSION)
   endif()
 
-# CLang is the same as GCC for now.
+  # CLang is the same as GCC for now.
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
   set(PLATFORM_CFLAGS "-pipe -fPIC -funsigned-char -fno-strict-aliasing -ffp-contract=off")
 
@@ -1055,7 +1037,7 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
     unset(LLD_BIN)
   endif()
 
-# Intel C++ Compiler
+  # Intel C++ Compiler
 elseif(CMAKE_C_COMPILER_ID STREQUAL "Intel")
   # think these next two are broken
   find_program(XIAR xiar)

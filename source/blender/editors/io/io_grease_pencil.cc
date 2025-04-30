@@ -8,7 +8,7 @@
 
 #ifdef WITH_IO_GREASE_PENCIL
 
-#  include "BLI_path_util.h"
+#  include "BLI_path_utils.hh"
 #  include "BLI_string.h"
 
 #  include "DNA_space_types.h"
@@ -124,7 +124,7 @@ static bool grease_pencil_import_svg_check(bContext * /*C*/, wmOperator *op)
   return false;
 }
 
-static int grease_pencil_import_svg_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus grease_pencil_import_svg_exec(bContext *C, wmOperator *op)
 {
   using blender::io::grease_pencil::ImportParams;
   using blender::io::grease_pencil::IOContext;
@@ -177,9 +177,9 @@ static void grease_pencil_import_svg_draw(bContext * /*C*/, wmOperator *op)
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
   uiLayout *box = uiLayoutBox(layout);
-  uiLayout *col = uiLayoutColumn(box, false);
-  uiItemR(col, op->ptr, "resolution", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, op->ptr, "scale", UI_ITEM_NONE, nullptr, ICON_NONE);
+  uiLayout *col = &box->column(false);
+  uiItemR(col, op->ptr, "resolution", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  uiItemR(col, op->ptr, "scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static bool grease_pencil_import_svg_poll(bContext *C)
@@ -196,7 +196,7 @@ static bool grease_pencil_import_svg_poll(bContext *C)
 void WM_OT_grease_pencil_import_svg(wmOperatorType *ot)
 {
   ot->name = "Import SVG as Grease Pencil";
-  ot->description = "Import SVG into grease pencil";
+  ot->description = "Import SVG into Grease Pencil";
   ot->idname = "WM_OT_grease_pencil_import_svg";
 
   ot->invoke = blender::ed::io::filesel_drop_import_invoke;
@@ -265,7 +265,9 @@ static bool grease_pencil_export_svg_check(bContext * /*C*/, wmOperator *op)
   return false;
 }
 
-static int grease_pencil_export_svg_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus grease_pencil_export_svg_invoke(bContext *C,
+                                                        wmOperator *op,
+                                                        const wmEvent * /*event*/)
 {
   ED_fileselect_ensure_default_filepath(C, op, ".svg");
 
@@ -274,7 +276,7 @@ static int grease_pencil_export_svg_invoke(bContext *C, wmOperator *op, const wm
   return OPERATOR_RUNNING_MODAL;
 }
 
-static int grease_pencil_export_svg_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus grease_pencil_export_svg_exec(bContext *C, wmOperator *op)
 {
   using blender::io::grease_pencil::ExportParams;
   using blender::io::grease_pencil::IOContext;
@@ -338,21 +340,21 @@ static void grease_pencil_export_svg_draw(bContext * /*C*/, wmOperator *op)
 
   box = uiLayoutBox(layout);
 
-  row = uiLayoutRow(box, false);
+  row = &box->row(false);
   uiItemL(row, IFACE_("Scene Options"), ICON_NONE);
 
-  row = uiLayoutRow(box, false);
-  uiItemR(row, op->ptr, "selected_object_type", UI_ITEM_NONE, nullptr, ICON_NONE);
+  row = &box->row(false);
+  uiItemR(row, op->ptr, "selected_object_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   box = uiLayoutBox(layout);
-  row = uiLayoutRow(box, false);
+  row = &box->row(false);
   uiItemL(row, IFACE_("Export Options"), ICON_NONE);
 
-  uiLayout *col = uiLayoutColumn(box, false);
-  uiItemR(col, op->ptr, "stroke_sample", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, op->ptr, "use_fill", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, op->ptr, "use_uniform_width", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, op->ptr, "use_clip_camera", UI_ITEM_NONE, nullptr, ICON_NONE);
+  uiLayout *col = &box->column(false);
+  uiItemR(col, op->ptr, "stroke_sample", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  uiItemR(col, op->ptr, "use_fill", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  uiItemR(col, op->ptr, "use_uniform_width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  uiItemR(col, op->ptr, "use_clip_camera", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static bool grease_pencil_export_svg_poll(bContext *C)
@@ -369,7 +371,7 @@ static bool grease_pencil_export_svg_poll(bContext *C)
 void WM_OT_grease_pencil_export_svg(wmOperatorType *ot)
 {
   ot->name = "Export to SVG";
-  ot->description = "Export grease pencil to SVG";
+  ot->description = "Export Grease Pencil to SVG";
   ot->idname = "WM_OT_grease_pencil_export_svg";
 
   ot->invoke = blender::ed::io::grease_pencil_export_svg_invoke;
@@ -422,7 +424,9 @@ static bool grease_pencil_export_pdf_check(bContext * /*C*/, wmOperator *op)
   return false;
 }
 
-static int grease_pencil_export_pdf_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus grease_pencil_export_pdf_invoke(bContext *C,
+                                                        wmOperator *op,
+                                                        const wmEvent * /*event*/)
 {
   ED_fileselect_ensure_default_filepath(C, op, ".pdf");
 
@@ -431,7 +435,7 @@ static int grease_pencil_export_pdf_invoke(bContext *C, wmOperator *op, const wm
   return OPERATOR_RUNNING_MODAL;
 }
 
-static int grease_pencil_export_pdf_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus grease_pencil_export_pdf_exec(bContext *C, wmOperator *op)
 {
   using blender::io::grease_pencil::ExportParams;
   using blender::io::grease_pencil::IOContext;
@@ -495,26 +499,26 @@ static void ui_gpencil_export_pdf_settings(uiLayout *layout, PointerRNA *imfptr)
 
   box = uiLayoutBox(layout);
 
-  row = uiLayoutRow(box, false);
+  row = &box->row(false);
   uiItemL(row, IFACE_("Scene Options"), ICON_NONE);
 
-  row = uiLayoutRow(box, false);
-  uiItemR(row, imfptr, "selected_object_type", UI_ITEM_NONE, nullptr, ICON_NONE);
+  row = &box->row(false);
+  uiItemR(row, imfptr, "selected_object_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   box = uiLayoutBox(layout);
-  row = uiLayoutRow(box, false);
+  row = &box->row(false);
   uiItemL(row, IFACE_("Export Options"), ICON_NONE);
 
-  col = uiLayoutColumn(box, false);
-  sub = uiLayoutColumn(col, true);
+  col = &box->column(false);
+  sub = &col->column(true);
   uiItemR(sub, imfptr, "frame_mode", UI_ITEM_NONE, IFACE_("Frame"), ICON_NONE);
 
   uiLayoutSetPropSep(box, true);
 
-  sub = uiLayoutColumn(col, true);
-  uiItemR(sub, imfptr, "stroke_sample", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(sub, imfptr, "use_fill", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(sub, imfptr, "use_uniform_width", UI_ITEM_NONE, nullptr, ICON_NONE);
+  sub = &col->column(true);
+  uiItemR(sub, imfptr, "stroke_sample", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  uiItemR(sub, imfptr, "use_fill", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  uiItemR(sub, imfptr, "use_uniform_width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void grease_pencil_export_pdf_draw(bContext * /*C*/, wmOperator *op)
@@ -536,7 +540,7 @@ static bool grease_pencil_export_pdf_poll(bContext *C)
 void WM_OT_grease_pencil_export_pdf(wmOperatorType *ot)
 {
   ot->name = "Export to PDF";
-  ot->description = "Export grease pencil to PDF";
+  ot->description = "Export Grease Pencil to PDF";
   ot->idname = "WM_OT_grease_pencil_export_pdf";
 
   ot->invoke = blender::ed::io::grease_pencil_export_pdf_invoke;

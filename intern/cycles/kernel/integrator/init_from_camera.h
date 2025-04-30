@@ -10,18 +10,18 @@
 #include "kernel/film/light_passes.h"
 
 #include "kernel/integrator/path_state.h"
-#include "kernel/integrator/shadow_catcher.h"
 
+#include "kernel/integrator/state_util.h"
 #include "kernel/sample/pattern.h"
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device_inline void integrate_camera_sample(KernelGlobals kg,
-                                               const int sample,
-                                               const int x,
-                                               const int y,
-                                               const uint rng_pixel,
-                                               ccl_private Ray *ray)
+ccl_device_inline Spectrum integrate_camera_sample(KernelGlobals kg,
+                                                   const int sample,
+                                                   const int x,
+                                                   const int y,
+                                                   const uint rng_pixel,
+                                                   ccl_private Ray *ray)
 {
   /* Filter sampling. */
   const float2 rand_filter = (sample == 0) ? make_float2(0.5f, 0.5f) :
@@ -45,7 +45,7 @@ ccl_device_inline void integrate_camera_sample(KernelGlobals kg,
   const float2 rand_lens = make_float2(rand_time_lens.y, rand_time_lens.z);
 
   /* Generate camera ray. */
-  camera_sample(kg, x, y, rand_filter, rand_time, rand_lens, ray);
+  return camera_sample(kg, x, y, rand_filter, rand_time, rand_lens, ray);
 }
 
 /* Return false to indicate that this pixel is finished.
@@ -53,7 +53,7 @@ ccl_device_inline void integrate_camera_sample(KernelGlobals kg,
  * that the pixel did converge. */
 ccl_device bool integrator_init_from_camera(KernelGlobals kg,
                                             IntegratorState state,
-                                            ccl_global const KernelWorkTile *ccl_restrict tile,
+                                            const ccl_global KernelWorkTile *ccl_restrict tile,
                                             ccl_global float *render_buffer,
                                             const int x,
                                             const int y,
@@ -80,20 +80,18 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
   /* Initialize random number seed for path. */
   const uint rng_pixel = path_rng_pixel_init(kg, sample, x, y);
 
-  {
-    /* Generate camera ray. */
-    Ray ray;
-    integrate_camera_sample(kg, sample, x, y, rng_pixel, &ray);
-    if (ray.tmax == 0.0f) {
-      return true;
-    }
-
-    /* Write camera ray to state. */
-    integrator_state_write_ray(state, &ray);
+  /* Generate camera ray. */
+  Ray ray;
+  Spectrum T = integrate_camera_sample(kg, sample, x, y, rng_pixel, &ray);
+  if (is_zero(T)) {
+    return true;
   }
 
+  /* Write camera ray to state. */
+  integrator_state_write_ray(state, &ray);
+
   /* Initialize path state for path integration. */
-  path_state_init_integrator(kg, state, sample, rng_pixel);
+  path_state_init_integrator(kg, state, sample, rng_pixel, T);
 
   /* Continue with intersect_closest kernel, optionally initializing volume
    * stack before that if the camera may be inside a volume. */

@@ -6,28 +6,27 @@
  * \ingroup edsculpt
  */
 
-#include <cstddef>
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_ghash.h"
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
-#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "IMB_interp.hh"
 
 #include "DNA_brush_types.h"
-#include "DNA_customdata_types.h"
-#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_paint.hh"
 #include "BKE_report.hh"
@@ -49,7 +48,7 @@
 #include "paint_mask.hh"
 #include "sculpt_intern.hh"
 
-static int brush_scale_size_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus brush_scale_size_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
   Paint *paint = BKE_paint_get_active_from_context(C);
@@ -58,7 +57,7 @@ static int brush_scale_size_exec(bContext *C, wmOperator *op)
 
   /* Grease Pencil brushes in Paint mode do not use unified size. */
   const bool use_unified_size = !(brush && brush->gpencil_settings &&
-                                  brush->ob_mode == OB_MODE_PAINT_GPENCIL_LEGACY);
+                                  brush->ob_mode == OB_MODE_PAINT_GREASE_PENCIL);
 
   if (brush) {
     /* Pixel radius. */
@@ -80,6 +79,7 @@ static int brush_scale_size_exec(bContext *C, wmOperator *op)
       }
       else {
         brush->size = max_ii(size, 1);
+        BKE_brush_tag_unsaved_changes(brush);
       }
     }
 
@@ -89,15 +89,14 @@ static int brush_scale_size_exec(bContext *C, wmOperator *op)
                                                BKE_brush_unprojected_radius_get(scene, brush) :
                                                brush->unprojected_radius);
 
-      if (unprojected_radius < 0.001f) { /* XXX magic number */
-        unprojected_radius = 0.001f;
-      }
+      unprojected_radius = std::max(unprojected_radius, 0.001f);
 
       if (use_unified_size) {
         BKE_brush_unprojected_radius_set(scene, brush, unprojected_radius);
       }
       else {
         brush->unprojected_radius = unprojected_radius;
+        BKE_brush_tag_unsaved_changes(brush);
       }
     }
 
@@ -125,7 +124,7 @@ static void BRUSH_OT_scale_size(wmOperatorType *ot)
 
 /* Palette operators */
 
-static int palette_new_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus palette_new_exec(bContext *C, wmOperator * /*op*/)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Main *bmain = CTX_data_main(C);
@@ -165,7 +164,7 @@ static bool palette_poll(bContext *C)
   return false;
 }
 
-static int palette_color_add_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus palette_color_add_exec(bContext *C, wmOperator * /*op*/)
 {
   Scene *scene = CTX_data_scene(C);
   Paint *paint = BKE_paint_get_active_from_context(C);
@@ -183,9 +182,10 @@ static int palette_color_add_exec(bContext *C, wmOperator * /*op*/)
              PaintMode::Texture2D,
              PaintMode::Vertex,
              PaintMode::Sculpt,
-             PaintMode::GPencil))
+             PaintMode::GPencil,
+             PaintMode::VertexGPencil))
     {
-      copy_v3_v3(color->rgb, BKE_brush_color_get(scene, brush));
+      copy_v3_v3(color->rgb, BKE_brush_color_get(scene, paint, brush));
       color->value = 0.0;
     }
     else if (mode == PaintMode::Weight) {
@@ -211,7 +211,7 @@ static void PALETTE_OT_color_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static int palette_color_delete_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus palette_color_delete_exec(bContext *C, wmOperator * /*op*/)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Palette *palette = paint->palette;
@@ -253,7 +253,7 @@ static bool palette_extract_img_poll(bContext *C)
   return false;
 }
 
-static int palette_extract_img_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus palette_extract_img_exec(bContext *C, wmOperator *op)
 {
   const int threshold = RNA_int_get(op->ptr, "threshold");
 
@@ -319,11 +319,11 @@ static void PALETTE_OT_extract_from_image(wmOperatorType *ot)
 
   /* properties */
   prop = RNA_def_int(ot->srna, "threshold", 1, 1, 1, "Threshold", "", 1, 1);
-  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
 /* Sort Palette color by Hue and Saturation. */
-static int palette_sort_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus palette_sort_exec(bContext *C, wmOperator *op)
 {
   const int type = RNA_enum_get(op->ptr, "type");
 
@@ -340,7 +340,7 @@ static int palette_sort_exec(bContext *C, wmOperator *op)
   const int totcol = BLI_listbase_count(&palette->colors);
 
   if (totcol > 0) {
-    color_array = MEM_cnew_array<tPaletteColorHSV>(totcol, __func__);
+    color_array = MEM_calloc_arrayN<tPaletteColorHSV>(totcol, __func__);
     /* Put all colors in an array. */
     int t = 0;
     LISTBASE_FOREACH (PaletteColor *, color, &palette->colors) {
@@ -419,7 +419,7 @@ static void PALETTE_OT_sort(wmOperatorType *ot)
 }
 
 /* Move colors in palette. */
-static int palette_color_move_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus palette_color_move_exec(bContext *C, wmOperator *op)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Palette *palette = paint->palette;
@@ -465,7 +465,7 @@ static void PALETTE_OT_color_move(wmOperatorType *ot)
 }
 
 /* Join Palette swatches. */
-static int palette_join_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus palette_join_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Paint *paint = BKE_paint_get_active_from_context(C);
@@ -598,7 +598,7 @@ static void stencil_set_target(StencilControlData *scd)
   scd->init_angle = atan2f(mdiff[1], mdiff[0]);
 }
 
-static int stencil_control_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus stencil_control_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *br = BKE_paint_brush(paint);
@@ -618,7 +618,7 @@ static int stencil_control_invoke(bContext *C, wmOperator *op, const wmEvent *ev
     }
   }
 
-  scd = static_cast<StencilControlData *>(MEM_mallocN(sizeof(StencilControlData), __func__));
+  scd = MEM_mallocN<StencilControlData>(__func__);
   scd->mask = mask;
   scd->br = br;
 
@@ -668,6 +668,7 @@ static void stencil_control_calculate(StencilControlData *scd, const int mval[2]
       CLAMP(scd->pos_target[1],
             -scd->dim_target[1] + PIXEL_MARGIN,
             scd->area_size[1] + scd->dim_target[1] - PIXEL_MARGIN);
+      BKE_brush_tag_unsaved_changes(scd->br);
 
       break;
     case STENCIL_SCALE: {
@@ -684,6 +685,7 @@ static void stencil_control_calculate(StencilControlData *scd, const int mval[2]
       }
       clamp_v2(mdiff, 5.0f, 10000.0f);
       copy_v2_v2(scd->dim_target, mdiff);
+      BKE_brush_tag_unsaved_changes(scd->br);
       break;
     }
     case STENCIL_ROTATE: {
@@ -698,18 +700,19 @@ static void stencil_control_calculate(StencilControlData *scd, const int mval[2]
         angle -= float(2 * M_PI);
       }
       *scd->rot_target = angle;
+      BKE_brush_tag_unsaved_changes(scd->br);
       break;
     }
   }
 #undef PIXEL_MARGIN
 }
 
-static int stencil_control_modal(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus stencil_control_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   StencilControlData *scd = static_cast<StencilControlData *>(op->customdata);
 
   if (event->type == scd->launch_event && event->val == KM_RELEASE) {
-    MEM_freeN(op->customdata);
+    MEM_freeN(scd);
     WM_event_add_notifier(C, NC_WINDOW, nullptr);
     return OPERATOR_FINISHED;
   }
@@ -806,12 +809,12 @@ static void BRUSH_OT_stencil_control(wmOperatorType *ot)
 
   PropertyRNA *prop;
   prop = RNA_def_enum(ot->srna, "mode", stencil_control_items, STENCIL_TRANSLATE, "Tool", "");
-  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
   prop = RNA_def_enum(ot->srna, "texmode", stencil_texture_items, STENCIL_PRIMARY, "Tool", "");
-  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
-static int stencil_fit_image_aspect_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus stencil_fit_image_aspect_exec(bContext *C, wmOperator *op)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *br = BKE_paint_brush(paint);
@@ -860,6 +863,7 @@ static int stencil_fit_image_aspect_exec(bContext *C, wmOperator *op)
       br->stencil_dimension[0] = fabsf(factor * aspx);
       br->stencil_dimension[1] = fabsf(factor * aspy);
     }
+    BKE_brush_tag_unsaved_changes(br);
   }
 
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
@@ -888,7 +892,7 @@ static void BRUSH_OT_stencil_fit_image_aspect(wmOperatorType *ot)
       ot->srna, "mask", false, "Modify Mask Stencil", "Modify either the primary or mask stencil");
 }
 
-static int stencil_reset_transform_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus stencil_reset_transform_exec(bContext *C, wmOperator *op)
 {
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *br = BKE_paint_brush(paint);
@@ -917,6 +921,7 @@ static int stencil_reset_transform_exec(bContext *C, wmOperator *op)
     br->mtex.rot = 0;
   }
 
+  BKE_brush_tag_unsaved_changes(br);
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
 
   return OPERATOR_FINISHED;
@@ -992,7 +997,7 @@ void ED_operatortypes_paint()
   WM_operatortype_append(BRUSH_OT_asset_edit_metadata);
   WM_operatortype_append(BRUSH_OT_asset_load_preview);
   WM_operatortype_append(BRUSH_OT_asset_delete);
-  WM_operatortype_append(BRUSH_OT_asset_update);
+  WM_operatortype_append(BRUSH_OT_asset_save);
   WM_operatortype_append(BRUSH_OT_asset_revert);
 
   /* image */

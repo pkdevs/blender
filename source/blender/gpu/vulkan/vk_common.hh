@@ -10,20 +10,30 @@
 
 #include <typeinfo>
 
+#ifdef _WIN32
+#  include "BLI_winstuff.h"
+#endif
+
 #ifdef __APPLE__
 #  include <MoltenVK/vk_mvk_moltenvk.h>
 #else
 #  include <vulkan/vulkan.h>
+#  ifdef _WIN32
+#    include <vulkan/vulkan_win32.h>
+#  endif
 #endif
 
 #include "vk_mem_alloc.h"
 
 #include "GPU_index_buffer.hh"
+#include "GPU_state.hh"
 #include "gpu_query.hh"
 #include "gpu_shader_create_info.hh"
 #include "gpu_texture_private.hh"
 
 namespace blender::gpu {
+
+using TimelineValue = uint64_t;
 
 /**
  * Based on the usage of an Image View a different image view type should be created.

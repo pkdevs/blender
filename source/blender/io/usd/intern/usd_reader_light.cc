@@ -20,7 +20,7 @@
 
 namespace blender::io::usd {
 
-void USDLightReader::create_object(Main *bmain, const double /*motionSampleTime*/)
+void USDLightReader::create_object(Main *bmain)
 {
   Light *blight = BKE_light_add(bmain, name_.c_str());
 
@@ -33,10 +33,6 @@ void USDLightReader::read_object_data(Main *bmain, const double motionSampleTime
   Light *blight = (Light *)object_->data;
 
   if (blight == nullptr) {
-    return;
-  }
-
-  if (!prim_) {
     return;
   }
 

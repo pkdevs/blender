@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "BLI_cpp_type.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
@@ -34,7 +35,7 @@ template<typename Allocator = GuardedAllocator> class LinearAllocator : NonCopya
 
   /* Buffers larger than that are not packed together with smaller allocations to avoid wasting
    * memory. */
-  constexpr static inline int64_t large_buffer_threshold = 4096;
+  constexpr static int64_t large_buffer_threshold = 4096;
 
  public:
 #ifdef BLI_DEBUG_LINEAR_ALLOCATOR_SIZE
@@ -99,6 +100,12 @@ template<typename Allocator = GuardedAllocator> class LinearAllocator : NonCopya
     return static_cast<T *>(this->allocate(sizeof(T), alignof(T)));
   }
 
+  /** Same as above but uses a runtime #CPPType. */
+  void *allocate(const CPPType &type)
+  {
+    return this->allocate(type.size, type.alignment);
+  }
+
   /**
    * Allocate a memory buffer that can hold T array with the given size.
    *
@@ -108,6 +115,12 @@ template<typename Allocator = GuardedAllocator> class LinearAllocator : NonCopya
   {
     T *array = static_cast<T *>(this->allocate(sizeof(T) * size, alignof(T)));
     return MutableSpan<T>(array, size);
+  }
+
+  /** Same as above but uses a runtime #CPPType. */
+  void *allocate_array(const CPPType &type, const int64_t size)
+  {
+    return this->allocate(type.size * size, type.alignment);
   }
 
   /**
@@ -161,7 +174,7 @@ template<typename Allocator = GuardedAllocator> class LinearAllocator : NonCopya
   {
     const int64_t alloc_size = str.size() + 1;
     char *buffer = static_cast<char *>(this->allocate(alloc_size, 1));
-    str.copy(buffer, alloc_size);
+    str.copy_unsafe(buffer);
     return StringRefNull(static_cast<const char *>(buffer));
   }
 

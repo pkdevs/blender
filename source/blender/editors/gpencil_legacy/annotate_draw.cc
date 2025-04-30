@@ -8,16 +8,13 @@
 
 #include <cfloat>
 #include <cmath>
-#include <cstddef>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-
-#include "MEM_guardedalloc.h"
 
 #include "BLI_sys_types.h"
 
 #include "BLI_listbase.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_gpencil_legacy_types.h"
@@ -707,9 +704,7 @@ static void annotation_draw_data_layers(
     /* Check if may need to draw the active stroke cache, only if this layer is the active layer
      * that is being edited. (Stroke buffer is currently stored in gp-data)
      */
-    if (ED_gpencil_session_active() && (gpl->flag & GP_LAYER_ACTIVE) &&
-        (gpf->flag & GP_FRAME_PAINT))
-    {
+    if ((gpl->flag & GP_LAYER_ACTIVE) && (gpf->flag & GP_FRAME_PAINT)) {
       /* Buffer stroke needs to be drawn with a different line-style
        * to help differentiate them from normal strokes.
        *
@@ -913,7 +908,7 @@ void ED_annotation_draw_view3d(
    * deal with the camera border, otherwise map the coords to the camera border. */
   if ((rv3d->persp == RV3D_CAMOB) && !(G.f & G_FLAG_RENDER_VIEWPORT)) {
     rctf rectf;
-    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, &rectf, true); /* no shift */
+    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, true, &rectf);
 
     offsx = round_fl_to_int(rectf.xmin);
     offsy = round_fl_to_int(rectf.ymin);

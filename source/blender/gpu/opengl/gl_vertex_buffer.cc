@@ -22,7 +22,7 @@ void GLVertBuf::acquire_data()
 
   /* Discard previous data if any. */
   MEM_SAFE_FREE(data_);
-  data_ = (uchar *)MEM_mallocN(sizeof(uchar) * this->size_alloc_get(), __func__);
+  data_ = MEM_malloc_arrayN<uchar>(this->size_alloc_get(), __func__);
 }
 
 void GLVertBuf::resize_data()
@@ -94,6 +94,7 @@ void GLVertBuf::bind()
   if (flag & GPU_VERTBUF_DATA_DIRTY) {
     vbo_size_ = this->size_used_get();
 
+    /* This is fine on some systems but will crash on others. */
     BLI_assert(vbo_size_ != 0);
     /* Orphan the vbo to avoid sync then upload data. */
     glBufferData(GL_ARRAY_BUFFER, ceil_to_multiple_ul(vbo_size_, 16), nullptr, to_gl(usage_));

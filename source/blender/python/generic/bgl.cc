@@ -14,23 +14,24 @@
 
 #include <Python.h>
 
-#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "MEM_guardedalloc.h"
 
 #include "GPU_context.hh"
-#include "GPU_state.hh"
 
-#include "py_capi_utils.h"
-
-#include "BKE_global.hh"
+#include "py_capi_utils.hh"
 
 #include <epoxy/gl.h>
 
-#include "bgl.h"
+#include <algorithm>
 
 #include "CLG_log.h"
+
+/* Forward declare API's defines here. */
+#define USE_BGL_DEPRECATED_API
+#include "bgl.hh" /* Own include. */
+#undef USE_BGL_DEPRECATED_API
 
 static CLG_LogRef LOG = {"bgl"};
 
@@ -612,9 +613,14 @@ static PyObject *Buffer_dimensions(Buffer *self, void * /*arg*/)
   return list;
 }
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-function-type"
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
 #endif
 
 static PyMethodDef Buffer_methods[] = {
@@ -622,8 +628,12 @@ static PyMethodDef Buffer_methods[] = {
     {nullptr, nullptr, 0, nullptr},
 };
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 static PyGetSetDef Buffer_getseters[] = {
@@ -691,8 +701,7 @@ static Buffer *BGL_MakeBuffer_FromData(
   Py_XINCREF(parent);
   buffer->parent = parent;
   buffer->ndimensions = ndimensions;
-  buffer->dimensions = static_cast<int *>(
-      MEM_mallocN(ndimensions * sizeof(int), "Buffer dimensions"));
+  buffer->dimensions = MEM_malloc_arrayN<int>(size_t(ndimensions), "Buffer dimensions");
   memcpy(buffer->dimensions, dimensions, ndimensions * sizeof(int));
   buffer->type = type;
   buffer->buf.asvoid = buf;
@@ -909,15 +918,9 @@ static PyObject *Buffer_slice(Buffer *self, Py_ssize_t begin, Py_ssize_t end)
 {
   PyObject *list;
 
-  if (begin < 0) {
-    begin = 0;
-  }
-  if (end > self->dimensions[0]) {
-    end = self->dimensions[0];
-  }
-  if (begin > end) {
-    begin = end;
-  }
+  begin = std::max<Py_ssize_t>(begin, 0);
+  end = std::min<Py_ssize_t>(end, self->dimensions[0]);
+  begin = std::min(begin, end);
 
   list = PyList_New(end - begin);
 
@@ -968,15 +971,9 @@ static int Buffer_ass_slice(Buffer *self, Py_ssize_t begin, Py_ssize_t end, PyOb
   int err = 0;
   Py_ssize_t count;
 
-  if (begin < 0) {
-    begin = 0;
-  }
-  if (end > self->dimensions[0]) {
-    end = self->dimensions[0];
-  }
-  if (begin > end) {
-    begin = end;
-  }
+  begin = std::max<Py_ssize_t>(begin, 0);
+  end = std::min<Py_ssize_t>(end, self->dimensions[0]);
+  begin = std::min(begin, end);
 
   if (!PySequence_Check(seq)) {
     PyErr_Format(PyExc_TypeError,
@@ -2675,10 +2672,11 @@ PyObject *BPyInit_bgl()
               "'bgl' imported without an OpenGL backend. Please update your add-ons to use the "
               "'gpu' module.");
   }
+#else
+  UNUSED_VARS(LOG);
 #endif
 
-  PyModule_AddObject(submodule, "Buffer", (PyObject *)&BGL_bufferType);
-  Py_INCREF((PyObject *)&BGL_bufferType);
+  PyModule_AddObjectRef(submodule, "Buffer", (PyObject *)&BGL_bufferType);
 
   init_bgl_version_1_0_methods(submodule, dict);
   init_bgl_version_1_1_methods(submodule, dict);

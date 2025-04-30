@@ -9,8 +9,9 @@
 #pragma once
 
 #include "BLI_compiler_attrs.h"
-#include "BLI_listbase.h"
 #include "BLI_span.hh"
+
+#include "DNA_windowmanager_enums.h"
 
 struct Base;
 struct Bone;
@@ -133,7 +134,7 @@ void ED_keymap_armature(wmKeyConfig *keyconf);
 /**
  * Join armature exec is exported for use in object->join objects operator.
  */
-int ED_armature_join_objects_exec(bContext *C, wmOperator *op);
+wmOperatorStatus ED_armature_join_objects_exec(bContext *C, wmOperator *op);
 
 /* `armature_select.cc` */
 
@@ -340,3 +341,7 @@ void ED_mesh_deform_bind_callback(Object *object,
                                   float *vertexcos,
                                   int verts_num,
                                   float cagemat[4][4]);
+
+EditBone *ED_armature_pick_ebone(bContext *C, const int xy[2], bool findunsel, Base **r_base);
+bPoseChannel *ED_armature_pick_pchan(bContext *C, const int xy[2], bool findunsel, Base **r_base);
+Bone *ED_armature_pick_bone(bContext *C, const int xy[2], bool findunsel, Base **r_base);

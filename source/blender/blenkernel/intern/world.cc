@@ -6,7 +6,6 @@
  * \ingroup bke
  */
 
-#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
@@ -46,8 +45,6 @@
 static void world_free_data(ID *id)
 {
   World *wrld = (World *)id;
-
-  DRW_drawdata_free(id);
 
   /* is no lib link block, but world extension */
   if (wrld->nodetree) {
@@ -112,7 +109,6 @@ static void world_copy_data(Main *bmain,
   }
 
   BLI_listbase_clear(&wrld_dst->gpumaterial);
-  BLI_listbase_clear((ListBase *)&wrld_dst->drawdata);
 
   if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0) {
     BKE_previewimg_id_copy(&wrld_dst->id, &wrld_src->id);
@@ -157,16 +153,10 @@ static void world_blend_write(BlendWriter *writer, ID *id, const void *id_addres
 
   /* nodetree is integral part of world, no libdata */
   if (wrld->nodetree) {
-    BLO_Write_IDBuffer *temp_embedded_id_buffer = BLO_write_allocate_id_buffer();
-    BLO_write_init_id_buffer_from_id(
-        temp_embedded_id_buffer, &wrld->nodetree->id, BLO_write_is_undo(writer));
-    BLO_write_struct_at_address(writer,
-                                bNodeTree,
-                                wrld->nodetree,
-                                BLO_write_get_id_buffer_temp_id(temp_embedded_id_buffer));
+    BLO_Write_IDBuffer temp_embedded_id_buffer{wrld->nodetree->id, writer};
+    BLO_write_struct_at_address(writer, bNodeTree, wrld->nodetree, temp_embedded_id_buffer.get());
     blender::bke::node_tree_blend_write(
-        writer, (bNodeTree *)BLO_write_get_id_buffer_temp_id(temp_embedded_id_buffer));
-    BLO_write_destroy_id_buffer(&temp_embedded_id_buffer);
+        writer, reinterpret_cast<bNodeTree *>(temp_embedded_id_buffer.get()));
   }
 
   BKE_previewimg_blend_write(writer, wrld->preview);

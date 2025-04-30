@@ -18,9 +18,7 @@
 
 #include "BLI_utildefines.h"
 
-#include "../mathutils/mathutils.h"
-
-#include "../generic/py_capi_utils.h"
+#include "../mathutils/mathutils.hh"
 
 #define USE_GPU_PY_MATRIX_API
 #include "GPU_matrix.hh"
@@ -170,9 +168,14 @@ enum {
 static PyObject *pygpu_matrix_stack_context_enter(BPyGPU_MatrixStackContext *self);
 static PyObject *pygpu_matrix_stack_context_exit(BPyGPU_MatrixStackContext *self, PyObject *args);
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-function-type"
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
 #endif
 
 static PyMethodDef pygpu_matrix_stack_context__tp_methods[] = {
@@ -181,8 +184,12 @@ static PyMethodDef pygpu_matrix_stack_context__tp_methods[] = {
     {nullptr},
 };
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 static PyTypeObject PyGPUMatrixStackContext_Type = {
@@ -370,8 +377,8 @@ PyDoc_STRVAR(
     "\n"
     "   Scale the current stack matrix.\n"
     "\n"
-    "   :arg scale: Scale the current stack matrix.\n"
-    "   :type scale: sequence of 2 or 3 floats\n");
+    "   :arg scale: Scale the current stack matrix with 2 or 3 floats.\n"
+    "   :type scale: Sequence[float]\n");
 static PyObject *pygpu_matrix_scale(PyObject * /*self*/, PyObject *value)
 {
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
@@ -419,8 +426,8 @@ PyDoc_STRVAR(
     "\n"
     "   Scale the current stack matrix.\n"
     "\n"
-    "   :arg offset: Translate the current stack matrix.\n"
-    "   :type offset: sequence of 2 or 3 floats\n");
+    "   :arg offset: Translate the current stack matrix with 2 or 3 floats.\n"
+    "   :type offset: Sequence[float]\n");
 static PyObject *pygpu_matrix_translate(PyObject * /*self*/, PyObject *value)
 {
   float offset[3];
@@ -581,9 +588,14 @@ static PyObject *pygpu_matrix_get_normal_matrix(PyObject * /*self*/)
 /** \name Module
  * \{ */
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-function-type"
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
 #endif
 
 static PyMethodDef pygpu_matrix__tp_methods[] = {
@@ -655,8 +667,12 @@ static PyMethodDef pygpu_matrix__tp_methods[] = {
     {nullptr, nullptr, 0, nullptr},
 };
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 PyDoc_STRVAR(

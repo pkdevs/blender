@@ -9,10 +9,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_path_util.h"
-#include "BLI_utildefines.h"
+#include "BLI_path_utils.hh"
 
-#include "RNA_access.hh"
 #include "RNA_define.hh"
 
 #include "rna_internal.hh"
@@ -86,7 +84,7 @@ static void rna_Main_filepath_set(PointerRNA *ptr, const char *value)
     static void rna_Main_##_listbase_name##_begin(CollectionPropertyIterator *iter, \
                                                   PointerRNA *ptr) \
     { \
-      rna_iterator_listbase_begin(iter, &((Main *)ptr->data)->_listbase_name, nullptr); \
+      rna_iterator_listbase_begin(iter, ptr, &((Main *)ptr->data)->_listbase_name, nullptr); \
     }
 
 RNA_MAIN_LISTBASE_FUNCS_DEF(actions)

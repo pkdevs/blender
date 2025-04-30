@@ -3,7 +3,7 @@ import bpy
 
 def write_some_data(context, filepath, use_some_setting):
     print("running write_some_data...")
-    f = open(filepath, 'w', encoding='utf-8')
+    f = open(filepath, "w", encoding='utf-8')
     f.write("Hello World {:s}".format(use_some_setting))
     f.close()
 
@@ -19,7 +19,7 @@ from bpy.types import Operator
 
 class ExportSomeData(Operator, ExportHelper):
     """This appears in the tooltip of the operator and in the generated docs"""
-    bl_idname = "export_test.some_data"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_idname = "export_test.some_data"  # Important since its how bpy.ops.import_test.some_data is constructed.
     bl_label = "Export Some Data"
 
     # ExportHelper mix-in class uses this.
@@ -72,5 +72,5 @@ def unregister():
 if __name__ == "__main__":
     register()
 
-    # test call
+    # Test call.
     bpy.ops.export_test.some_data('INVOKE_DEFAULT')

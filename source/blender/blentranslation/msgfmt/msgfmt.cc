@@ -49,9 +49,9 @@ enum eSectionType {
 };
 
 struct Message {
-  std::string ctxt = "";
-  std::string id = "";
-  std::string str = "";
+  std::string ctxt;
+  std::string id;
+  std::string str;
 
   bool is_fuzzy = false;
 };
@@ -127,13 +127,8 @@ static char *generate(blender::Map<std::string, std::string> &messages, size_t *
     blender::StringRef value;
 
     Item(const MapItem &other) : key(other.key), value(other.value) {}
-    Item(const Item &other) : key(other.key), value(other.value) {}
-    Item &operator=(const Item &other)
-    {
-      this->key = other.key;
-      this->value = other.value;
-      return *this;
-    }
+    Item(const Item &other) = default;
+    Item &operator=(const Item &other) = default;
   };
   const uint32_t num_keys = messages.size();
 
@@ -142,9 +137,11 @@ static char *generate(blender::Map<std::string, std::string> &messages, size_t *
   for (const auto message_items_iter : messages.items()) {
     items.append(Item(message_items_iter));
   }
-  std::sort(items.begin(), items.end(), [](Item &a, Item &b) -> bool { return a.key < b.key; });
+  std::sort(items.begin(), items.end(), [](const Item &a, const Item &b) -> bool {
+    return a.key < b.key;
+  });
 
-  Offset *offsets = MEM_cnew_array<Offset>(num_keys, __func__);
+  Offset *offsets = MEM_calloc_arrayN<Offset>(num_keys, __func__);
   uint32_t tot_keys_len = 0;
   uint32_t tot_vals_len = 0;
 
@@ -152,7 +149,7 @@ static char *generate(blender::Map<std::string, std::string> &messages, size_t *
     Offset &off = offsets[i];
 
     /* For each string, we need size and file offset.
-     * Each string is nullptr terminated; the nullptr does not count into the size. */
+     * Each string is null terminated; the null does not count into the size. */
     off.key_offset = tot_keys_len;
     off.key_len = uint32_t(items[i].key.size());
     tot_keys_len += off.key_len + 1;
@@ -173,7 +170,7 @@ static char *generate(blender::Map<std::string, std::string> &messages, size_t *
 
   /* Final buffer representing the binary MO file. */
   *r_output_size = valstart + tot_vals_len;
-  char *output = MEM_cnew_array<char>(*r_output_size, __func__);
+  char *output = MEM_calloc_arrayN<char>(*r_output_size, __func__);
   char *h = output;
   char *ik = output + idx_keystart;
   char *iv = output + idx_valstart;

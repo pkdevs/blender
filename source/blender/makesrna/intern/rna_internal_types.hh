@@ -11,9 +11,12 @@
 #include <optional>
 #include <string>
 
+#include "BLI_vector_set.hh"
+
 #include "DNA_listBase.h"
 
 #include "RNA_access.hh"
+#include "RNA_define.hh"
 #include "RNA_types.hh"
 
 struct BlenderRNA;
@@ -126,7 +129,7 @@ using PropEnumSetFuncEx = void (*)(PointerRNA *ptr, PropertyRNA *prop, int value
 
 /** Structure storing all needed data to process all three kinds of RNA properties. */
 struct PropertyRNAOrID {
-  PointerRNA ptr;
+  PointerRNA *ptr;
 
   /**
    * The PropertyRNA passed as parameter, used to generate that structure's content:
@@ -260,9 +263,9 @@ struct RNAPropertyOverrideApplyContext {
   bool do_insert = false;
 
   /** Main RNA data and property pointers. */
-  PointerRNA ptr_dst = {0};
-  PointerRNA ptr_src = {0};
-  PointerRNA ptr_storage = {0};
+  PointerRNA ptr_dst = {};
+  PointerRNA ptr_src = {};
+  PointerRNA ptr_storage = {};
   PropertyRNA *prop_dst = nullptr;
   PropertyRNA *prop_src = nullptr;
   PropertyRNA *prop_storage = nullptr;
@@ -273,9 +276,9 @@ struct RNAPropertyOverrideApplyContext {
   int len_storage = 0;
 
   /** Items, for RNA collections. */
-  PointerRNA ptr_item_dst = {0};
-  PointerRNA ptr_item_src = {0};
-  PointerRNA ptr_item_storage = {0};
+  PointerRNA ptr_item_dst = {};
+  PointerRNA ptr_item_src = {};
+  PointerRNA ptr_item_storage = {};
 
   /** LibOverride data. */
   IDOverrideLibrary *liboverride = nullptr;
@@ -286,11 +289,15 @@ struct RNAPropertyOverrideApplyContext {
 };
 using RNAPropOverrideApply = bool (*)(Main *bmain, RNAPropertyOverrideApplyContext &rnaapply_ctx);
 
+struct PropertyRNAIdentifierGetter {
+  blender::StringRef operator()(const PropertyRNA *prop) const;
+};
+
 /* Container - generic abstracted container of RNA properties */
 struct ContainerRNA {
   void *next, *prev;
 
-  struct GHash *prophash;
+  blender::CustomIDVectorSet<PropertyRNA *, PropertyRNAIdentifierGetter> *prop_lookup_set;
   ListBase properties;
 };
 
@@ -383,6 +390,11 @@ struct PropertyRNA {
    * (in a pointer array at the moment, may later be a tuple) */
   void *py_data;
 };
+
+inline blender::StringRef PropertyRNAIdentifierGetter::operator()(const PropertyRNA *prop) const
+{
+  return prop->identifier;
+}
 
 /* internal flags WARNING! 16bits only! */
 enum PropertyFlagIntern {
@@ -491,6 +503,12 @@ struct StringPropertyRNA {
   StringPropertySearchFunc search;
   eStringPropertySearchFlag search_flag;
 
+  /**
+   * Used for strings which are #PROP_FILEPATH to have a default filter when opening a file
+   * browser.
+   */
+  StringPropertyPathFilterFunc path_filter;
+
   int maxlength; /* includes string terminator! */
 
   const char *defaultvalue;
@@ -548,8 +566,12 @@ struct StructRNA {
   /* unique identifier, keep after 'cont' */
   const char *identifier;
 
-  /** Python type, this is a subtype of #pyrna_struct_Type
-   * but used so each struct can have its own type which is useful for subclassing RNA. */
+  /**
+   * Python type, this is a sub-type of #pyrna_struct_Type
+   * but used so each struct can have its own type which is useful for subclassing RNA.
+   *
+   * Owns a reference so the value isn't freed by Python.
+   */
   void *py_type;
   void *blender_type;
 

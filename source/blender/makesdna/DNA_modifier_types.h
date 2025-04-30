@@ -12,6 +12,7 @@
 
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
+#include "DNA_packedFile_types.h"
 #include "DNA_session_uid_types.h"
 
 #ifdef __cplusplus
@@ -19,11 +20,17 @@
 
 namespace blender {
 struct NodesModifierRuntime;
+namespace bke {
+struct BVHTreeFromMesh;
 }
+}  // namespace blender
 using NodesModifierRuntimeHandle = blender::NodesModifierRuntime;
+using BVHTreeFromMeshHandle = blender::bke::BVHTreeFromMesh;
 #else
 typedef struct NodesModifierRuntimeHandle NodesModifierRuntimeHandle;
+typedef struct BVHTreeFromMeshHandle BVHTreeFromMeshHandle;
 #endif
+struct LineartModifierRuntime;
 
 /* WARNING ALERT! TYPEDEF VALUES ARE WRITTEN IN FILES! SO DO NOT CHANGE!
  * (ONLY ADD NEW ITEMS AT THE END)
@@ -954,7 +961,7 @@ typedef struct SurfaceModifierData_Runtime {
   struct Mesh *mesh;
 
   /** Bounding volume hierarchy of the mesh faces. */
-  struct BVHTreeFromMesh *bvhtree;
+  BVHTreeFromMeshHandle *bvhtree;
 
   int cfra_prev, verts_num;
 
@@ -997,6 +1004,7 @@ typedef enum {
 typedef enum {
   eBooleanModifierSolver_Float = 0,
   eBooleanModifierSolver_Mesh_Arr = 1,
+  eBooleanModifierSolver_Manifold = 2,
 } BooleanModifierSolver;
 
 /** #BooleanModifierData.flag */
@@ -2101,6 +2109,12 @@ enum {
   MOD_MESHCACHE_PLAY_EVAL = 1,
 };
 
+enum {
+  MOD_MESHCACHE_FLIP_AXIS_X = 1 << 0,
+  MOD_MESHCACHE_FLIP_AXIS_Y = 1 << 1,
+  MOD_MESHCACHE_FLIP_AXIS_Z = 1 << 2,
+};
+
 typedef struct LaplacianDeformModifierData {
   ModifierData modifier;
   /** #MAX_VGROUP_NAME. */
@@ -2371,7 +2385,8 @@ enum {
 };
 
 #define MOD_MESHSEQ_READ_ALL \
-  (MOD_MESHSEQ_READ_VERT | MOD_MESHSEQ_READ_POLY | MOD_MESHSEQ_READ_UV | MOD_MESHSEQ_READ_COLOR)
+  (MOD_MESHSEQ_READ_VERT | MOD_MESHSEQ_READ_POLY | MOD_MESHSEQ_READ_UV | MOD_MESHSEQ_READ_COLOR | \
+   MOD_MESHSEQ_READ_ATTRIBUTES)
 
 typedef struct NodesModifierSettings {
   /* This stores data that is passed into the node group. */
@@ -2403,6 +2418,33 @@ typedef struct NodesModifierDataBlock {
   char _pad[4];
 } NodesModifierDataBlock;
 
+typedef struct NodesModifierBakeFile {
+  const char *name;
+  /* May be null if the file is empty. */
+  PackedFile *packed_file;
+
+#ifdef __cplusplus
+  blender::Span<std::byte> data() const
+  {
+    if (this->packed_file) {
+      return blender::Span{static_cast<const std::byte *>(this->packed_file->data),
+                           this->packed_file->size};
+    }
+    return {};
+  }
+#endif
+} NodesModifierBakeFile;
+
+/**
+ * A packed bake. The format is the same as if the bake was stored on disk.
+ */
+typedef struct NodesModifierPackedBake {
+  int meta_files_num;
+  int blob_files_num;
+  NodesModifierBakeFile *meta_files;
+  NodesModifierBakeFile *blob_files;
+} NodesModifierPackedBake;
+
 typedef struct NodesModifierBake {
   /** An id that references a nested node in the node tree. Also see #bNestedNodeRef. */
   int id;
@@ -2410,7 +2452,9 @@ typedef struct NodesModifierBake {
   uint32_t flag;
   /** #NodesModifierBakeMode. */
   uint8_t bake_mode;
-  char _pad[7];
+  /** #NodesModifierBakeTarget. */
+  int8_t bake_target;
+  char _pad[6];
   /**
    * Directory where the baked data should be stored. This is only used when
    * `NODES_MODIFIER_BAKE_CUSTOM_PATH` is set.
@@ -2433,6 +2477,10 @@ typedef struct NodesModifierBake {
   int data_blocks_num;
   int active_data_block;
   NodesModifierDataBlock *data_blocks;
+  NodesModifierPackedBake *packed;
+
+  void *_pad2;
+  int64_t bake_size;
 } NodesModifierBake;
 
 typedef struct NodesModifierPanel {
@@ -2451,10 +2499,25 @@ typedef enum NodesModifierBakeFlag {
   NODES_MODIFIER_BAKE_CUSTOM_PATH = 1 << 1,
 } NodesModifierBakeFlag;
 
+typedef enum NodesModifierBakeTarget {
+  NODES_MODIFIER_BAKE_TARGET_INHERIT = 0,
+  NODES_MODIFIER_BAKE_TARGET_PACKED = 1,
+  NODES_MODIFIER_BAKE_TARGET_DISK = 2,
+} NodesModifierBakeTarget;
+
 typedef enum NodesModifierBakeMode {
   NODES_MODIFIER_BAKE_MODE_ANIMATION = 0,
   NODES_MODIFIER_BAKE_MODE_STILL = 1,
 } NodesModifierBakeMode;
+
+typedef enum GeometryNodesModifierPanel {
+  NODES_MODIFIER_PANEL_OUTPUT_ATTRIBUTES = 0,
+  NODES_MODIFIER_PANEL_MANAGE = 1,
+  NODES_MODIFIER_PANEL_BAKE = 2,
+  NODES_MODIFIER_PANEL_NAMED_ATTRIBUTES = 3,
+  NODES_MODIFIER_PANEL_BAKE_DATA_BLOCKS = 4,
+  NODES_MODIFIER_PANEL_WARNINGS = 5,
+} GeometryNodesModifierPanel;
 
 typedef struct NodesModifierData {
   ModifierData modifier;
@@ -2466,8 +2529,10 @@ typedef struct NodesModifierData {
   char *bake_directory;
   /** NodesModifierFlag. */
   int8_t flag;
+  /** #NodesModifierBakeTarget. */
+  int8_t bake_target;
 
-  char _pad[3];
+  char _pad[2];
   int bakes_num;
   NodesModifierBake *bakes;
 
@@ -3168,6 +3233,9 @@ typedef struct GreasePencilLineartModifierData {
 
   /* Keep a pointer to the render buffer so we can call destroy from #ModifierData. */
   struct LineartData *la_data_ptr;
+
+  /* Points to a `LineartModifierRuntime`, which includes the object dependency list. */
+  struct LineartModifierRuntime *runtime;
 } GreasePencilLineartModifierData;
 
 typedef struct GreasePencilArmatureModifierData {

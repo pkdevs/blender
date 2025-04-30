@@ -1,16 +1,18 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Alpha (b'b5ea3beaf93b')\n"
+"Project-Id-Version: Blender 4.5.0 Alpha (b'1f4cae0c4623')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-09-02 14:03+0000\n"
-"PO-Revision-Date: \n"
-"Last-Translator: Yudhir Khanal <yudhir.khanal@gmail.com>\n"
-"Language-Team: Yudhir\n"
+"POT-Creation-Date: 2025-04-28 09:32+0000\n"
+"PO-Revision-Date: 2025-04-14 08:32+0000\n"
+"Last-Translator: Anonymous <noreply@weblate.org>\n"
+"Language-Team: Nepali <https://translate.blender.org/projects/blender-ui/ui/ne/>\n"
 "Language: ne\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 5.10.1\n"
 "X-Poedit-Bookmarks: 167,6662,21,-1,-1,3821,-1,-1,1898,-1\n"
 "X-Poedit-Country: NEPAL\n"
 "X-Poedit-Language: Nepali\n"
@@ -105,10 +107,6 @@ msgid "Local Location"
 msgstr "Local स्थान"
 
 
-msgid "Direction"
-msgstr "दिशा "
-
-
 msgid "Rotation"
 msgstr "घुमाव"
 
@@ -161,6 +159,10 @@ msgid "Reverse"
 msgstr "उल्टो"
 
 
+msgid "Direction"
+msgstr "दिशा "
+
+
 msgid "Path"
 msgstr "ठेगाना (पथ)"
 
@@ -171,6 +173,10 @@ msgstr "कम"
 
 msgid "Max"
 msgstr "अधिक "
+
+
+msgid "Pattern"
+msgstr "बुट्टा"
 
 
 msgid "Lock Rotation"
@@ -191,10 +197,6 @@ msgstr "देखाउन"
 
 msgid "Stiffness"
 msgstr "कडापन"
-
-
-msgid "Pattern"
-msgstr "बुट्टा"
 
 
 msgid "Names"
@@ -350,10 +352,6 @@ msgid "Limit"
 msgstr "हद"
 
 
-msgid "Remove"
-msgstr "हटाउने"
-
-
 msgctxt "Operator"
 msgid "Delete Edge Loop"
 msgstr "धार चक्र "
@@ -480,6 +478,10 @@ msgstr "रुपान्तरण"
 msgctxt "Operator"
 msgid "Align"
 msgstr "पंक्तिबद्ध पार"
+
+
+msgid "Remove"
+msgstr "हटाउने"
 
 
 msgid "Property Edit"

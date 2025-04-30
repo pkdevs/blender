@@ -273,7 +273,7 @@ void VolumeGridData::ensure_grid_loaded() const
     loaded_grid.grid = openvdb::FloatGrid::create();
   }
   BLI_assert(loaded_grid.grid);
-  BLI_assert(loaded_grid.grid.unique());
+  BLI_assert(loaded_grid.grid.use_count() == 1);
 
   if (!loaded_grid.tree_sharing_info) {
     BLI_assert(loaded_grid.grid->isTreeUnique());
@@ -385,29 +385,29 @@ VolumeTreeAccessToken::~VolumeTreeAccessToken()
   token_.reset();
   if (grid) {
     /* Unload immediately when the value is not used anymore. However, the tree may still be cached
-     * at a deeper level and thus usually does not have to be loaded from disk again.*/
+     * at a deeper level and thus usually does not have to be loaded from disk again. */
     grid->unload_tree_if_possible();
   }
 }
 
 #endif /* WITH_OPENVDB */
 
-std::string get_name(const VolumeGridData &volume_grid)
+std::string get_name(const VolumeGridData &grid)
 {
 #ifdef WITH_OPENVDB
-  return volume_grid.name();
+  return grid.name();
 #else
-  UNUSED_VARS(volume_grid);
+  UNUSED_VARS(grid);
   return "density";
 #endif
 }
 
-VolumeGridType get_type(const VolumeGridData &volume_grid)
+VolumeGridType get_type(const VolumeGridData &grid)
 {
 #ifdef WITH_OPENVDB
-  return volume_grid.grid_type();
+  return grid.grid_type();
 #else
-  UNUSED_VARS(volume_grid);
+  UNUSED_VARS(grid);
   return VOLUME_GRID_UNKNOWN;
 #endif
 }

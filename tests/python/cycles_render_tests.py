@@ -20,6 +20,8 @@ BLOCKLIST_ALL = [
     "hair_instancer_uv.blend",
     "principled_hair_directcoloring.blend",
     "visibility_particles.blend",
+    # Temporarily blocked for 4.4 lib upgrade, due to PNG alpha minor difference.
+    "image_log_osl.blend",
 ]
 
 # Blocklist that disables OSL specific tests for configurations that do not support OSL backend.
@@ -50,55 +52,38 @@ BLOCKLIST_OSL = [
     'image_alpha_ignore.blend',
     'image_log.blend',
     'image_non_color.blend',
-    # Along with differences in image sampling, UDIM in OSL doesn't respect extrapolation settings
-    # This has been reported in 124847 for further investigation
     'image_mapping_udim.blend',
-    # OSL handles bump + displacement differently from SVM. There are OSL variants of these tests
-    'both_displacement.blend',
-    'bump_with_displacement.blend',
-    # Ray portal test uses bump + displacement
-    'ray_portal.blend',
     # TODO: Tests that need investigating into why they're failing, and how to fix that.
     # Noise differences due to Principled BSDF mixing/layering used in some of these scenes
     'render_passes_.*.blend',
-    # Noise differences in Principled BSDF mixing/layering
-    'principled_.*.blend',
 ]
 
 BLOCKLIST_OPTIX = [
     # Ray intersection precision issues
-    'T50164.blend',
-    'T43865.blend',
+    'big_triangles_50164.blend',
+    'big_plane_43865.blend',
 ]
 
 BLOCKLIST_OPTIX_OSL = [
-    # OPTIX OSL doesn't support trace function needed for AO and bevel
-    'bake_bevel.blend',
+    # OptiX OSL does support AO or Bevel
     'ambient_occlusion.*.blend',
+    'bake_bevel.blend',
     'bevel.blend',
+    'principled_bsdf_bevel_emission_137420.blend',
+    # OptiX OSL doesn't support the trace function
     'osl_trace_shader.blend',
-    # The Volumetric noise texture is different for some reason
-    'principled_absorption.blend',
-    # Dicing tests use wireframe node which doesn't appear to be supported in OptiX
+    # The 3D texture doesn't have the right mappings
+    'point_density_.*_object.blend',
+    # Dicing tests use wireframe node which doesn't appear to be supported with OptiX OSL
     'dicing_camera.blend',
     'offscreen_dicing.blend',
     'panorama_dicing.blend',
-    # Bump evaluation is not implemented yet. See 104276
-    'compare_bump.blend',
-    'both_displacement.blend',
-    'bump_with_displacement.blend',
-    'ray_portal.blend',
-    # TODO: Investigate every other failing case and add them here.
-    # Note: Many tests are failing due to CUDA errors. Some of these are driver issues that NVIDIA is currently looking into.
-    #
-    # Currently failing tests that aren't in this list are:
-    # ray_portal*.blend - CUDA error
-    # image_mapping_udim*.blend - Can't load UDIM from disk? But can load UDIM if it's packed, but doesn't seem to use it properly.
-    # points_volume.blend - CUDA error
-    # principled_emission_alpha.blend - CUDA error related to connected inputs. Probably the same as 122779
-    # point_density_*_object - Object scale doesn't appear to be appplied to texture
-    # All the other tests mentioned in BLOCKLIST_OSL (E.g. Principled BSDF tests having noise differences)
+    # The mapping of the UDIM texture is incorrect. Need to investigate why.
+    'image_mapping_udim_packed.blend',
+    # Error during rendering. Need to investigate why.
+    'points_volume.blend',
 ]
+
 
 BLOCKLIST_METAL = []
 
@@ -114,22 +99,22 @@ if platform.system() == "Darwin":
 BLOCKLIST_GPU = [
     # Uninvestigated differences with GPU.
     'image_log.blend',
-    'T40964.blend',
-    'T45609.blend',
+    'glass_mix_40964.blend',
+    'filter_glossy_refraction_45609.blend',
     'smoke_color.blend',
     'bevel_mblur.blend',
     # Inconsistency between Embree and Hair primitive on GPU.
     'denoise_hair.blend',
     'hair_basemesh_intercept.blend',
     'hair_instancer_uv.blend',
-    'hair_length_info.blend',
+    'hair_info.blend',
     'hair_particle_random.blend',
     "hair_transmission.blend",
     'principled_hair_.*.blend',
     'transparent_shadow_hair.*.blend',
     "microfacet_hair_orientation.blend",
     # Inconsistent handling of overlapping objects.
-    "T41143.blend",
+    "sobol_uniform_41143.blend",
     "visibility_particles.blend",
     # No path guiding on GPU.
     "guiding*.blend",
@@ -138,16 +123,28 @@ BLOCKLIST_GPU = [
 
 class CyclesReport(render_report.Report):
     def __init__(self, title, output_dir, oiiotool, device=None, blocklist=[], osl=False):
-        super().__init__(title, output_dir, oiiotool, device=device, blocklist=blocklist)
+        # Split device name in format "<device_type>[-<RT>]" into individual
+        # tokens, setting the RT suffix to an empty string if its not specified.
+        self.device, suffix = (device.split("-") + [""])[:2]
+        self.use_hwrt = (suffix == "RT")
         self.osl = osl
-        if osl:
-            self.title += " OSL"
+
+        variation = self.device
+        if suffix:
+            variation += ' ' + suffix
+        if self.osl:
+            variation += ' OSL'
+
+        super().__init__(title, output_dir, oiiotool, variation, blocklist)
 
     def _get_render_arguments(self, arguments_cb, filepath, base_output_filepath):
-        return arguments_cb(filepath, base_output_filepath, self.osl)
+        return arguments_cb(filepath, base_output_filepath, self.use_hwrt, self.osl)
+
+    def _get_arguments_suffix(self):
+        return ['--', '--cycles-device', self.device] if self.device else []
 
 
-def get_arguments(filepath, output_filepath, osl=False):
+def get_arguments(filepath, output_filepath, use_hwrt=False, osl=False):
     dirname = os.path.dirname(filepath)
     basedir = os.path.dirname(dirname)
     subject = os.path.basename(dirname)
@@ -174,6 +171,17 @@ def get_arguments(filepath, output_filepath, osl=False):
     if spp_multiplier:
         args.extend(["--python-expr", f"import bpy; bpy.context.scene.cycles.samples *= {spp_multiplier}"])
 
+    cycles_pref = "bpy.context.preferences.addons['cycles'].preferences"
+    use_hwrt_bool_value = "True" if use_hwrt else "False"
+    use_hwrt_on_off_value = "'ON'" if use_hwrt else "'OFF'"
+    args.extend([
+        "--python-expr",
+        (f"import bpy;"
+         f"{cycles_pref}.use_hiprt = {use_hwrt_bool_value};"
+         f"{cycles_pref}.use_oneapirt = {use_hwrt_bool_value};"
+         f"{cycles_pref}.metalrt = {use_hwrt_on_off_value}")
+    ])
+
     if osl:
         args.extend(["--python-expr", "import bpy; bpy.context.scene.cycles.shading_system = True"])
 
@@ -188,14 +196,16 @@ def get_arguments(filepath, output_filepath, osl=False):
 
 
 def create_argparse():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-blender", nargs="+")
-    parser.add_argument("-testdir", nargs=1)
-    parser.add_argument("-outdir", nargs=1)
-    parser.add_argument("-oiiotool", nargs=1)
-    parser.add_argument("-device", nargs=1)
-    parser.add_argument("-blocklist", nargs="*", default=[])
-    parser.add_argument("-osl", default=False, action='store_true')
+    parser = argparse.ArgumentParser(
+        description="Run test script for each blend file in TESTDIR, comparing the render result with known output."
+    )
+    parser.add_argument("--blender", required=True)
+    parser.add_argument("--testdir", required=True)
+    parser.add_argument("--outdir", required=True)
+    parser.add_argument("--oiiotool", required=True)
+    parser.add_argument("--device", required=True)
+    parser.add_argument("--blocklist", nargs="*", default=[])
+    parser.add_argument("--osl", default=False, action='store_true')
     parser.add_argument('--batch', default=False, action='store_true')
     return parser
 
@@ -204,11 +214,7 @@ def main():
     parser = create_argparse()
     args = parser.parse_args()
 
-    blender = args.blender[0]
-    test_dir = args.testdir[0]
-    oiiotool = args.oiiotool[0]
-    output_dir = args.outdir[0]
-    device = args.device[0]
+    device = args.device
 
     blocklist = BLOCKLIST_ALL
     if device != 'CPU':
@@ -224,7 +230,7 @@ def main():
     if args.osl:
         blocklist += BLOCKLIST_OSL
 
-    report = CyclesReport('Cycles', output_dir, oiiotool, device, blocklist, args.osl)
+    report = CyclesReport('Cycles', args.outdir, args.oiiotool, device, blocklist, args.osl)
     report.set_pixelated(True)
     report.set_reference_dir("cycles_renders")
     if device == 'CPU':
@@ -240,12 +246,20 @@ def main():
     # OSL tests:
     # Blackbody is slightly different between SVM and OSL.
     # Microfacet hair renders slightly differently, and fails on Windows and Linux with OSL
+    #
+    # both_displacement.blend has slight differences between Linux and other platforms.
 
-    test_dir_name = Path(test_dir).name
-    if (test_dir_name in {'motion_blur', 'integrator'}) or ((args.osl) and (test_dir_name in {'shader', 'hair'})):
+    test_dir_name = Path(args.testdir).name
+    if (test_dir_name in {'motion_blur', 'integrator', "displacement"}) or \
+       ((args.osl) and (test_dir_name in {'shader', 'hair'})):
         report.set_fail_threshold(0.032)
 
-    ok = report.run(test_dir, blender, get_arguments, batch=args.batch)
+    # Layer mixing is different between SVM and OSL, so a few tests have
+    # noticably different noise causing OSL Principled BSDF tests to fail.
+    if ((args.osl) and (test_dir_name == 'principled_bsdf')):
+        report.set_fail_threshold(0.06)
+
+    ok = report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
 
     sys.exit(not ok)
 

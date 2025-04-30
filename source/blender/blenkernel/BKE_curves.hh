@@ -10,7 +10,6 @@
  */
 
 #include "BLI_bounds_types.hh"
-#include "BLI_generic_virtual_array.hh"
 #include "BLI_implicit_sharing_ptr.hh"
 #include "BLI_index_mask_fwd.hh"
 #include "BLI_math_matrix_types.hh"
@@ -32,9 +31,13 @@ namespace blender::bke {
 class AttributeAccessor;
 class MutableAttributeAccessor;
 enum class AttrDomain : int8_t;
+struct AttributeAccessorFunctions;
 }  // namespace blender::bke
 namespace blender::bke::bake {
 struct BakeMaterialsList;
+}
+namespace blender {
+class GVArray;
 }
 
 namespace blender::bke {
@@ -71,6 +74,9 @@ class CurvesGeometryRuntime {
   /** Implicit sharing user count for #CurvesGeometry::curve_offsets. */
   const ImplicitSharingInfo *curve_offsets_sharing_info = nullptr;
 
+  /** Implicit sharing user count for #CurvesGeometry::custom_knots. */
+  const ImplicitSharingInfo *custom_knots_sharing_info = nullptr;
+
   /**
    * The cached number of curves with each type. Unlike other caches here, this is not computed
    * lazily, since it is needed so often and types are not adjusted much anyway.
@@ -101,6 +107,7 @@ class CurvesGeometryRuntime {
    * See #SharedCache comments.
    */
   mutable SharedCache<Bounds<float3>> bounds_cache;
+  mutable SharedCache<Bounds<float3>> bounds_with_radius_cache;
 
   /**
    * Cache of lengths along each evaluated curve for each evaluated point. If a curve is
@@ -114,6 +121,15 @@ class CurvesGeometryRuntime {
 
   /** Normal direction vectors for each evaluated point. */
   mutable SharedCache<Vector<float3>> evaluated_normal_cache;
+
+  /** The maximum of the "material_index" attribute. */
+  mutable SharedCache<std::optional<int>> max_material_index_cache;
+
+  /**
+   * Offsets of custom knots in #CurvesGeometry::custom_knots for each curve in #CurvesGeometry.
+   * For curves with no custom knots next offset value stays the same.
+   */
+  mutable SharedCache<Vector<int>> custom_knot_offsets_cache;
 
   /** Stores weak references to material data blocks. */
   std::unique_ptr<bake::BakeMaterialsList> bake_materials;
@@ -158,6 +174,11 @@ class CurvesGeometry : public ::CurvesGeometry {
    * The number of curves in the data-block.
    */
   int curves_num() const;
+  /**
+   * Return true if there are no curves in the geometry.
+   */
+  bool is_empty() const;
+
   IndexRange points_range() const;
   IndexRange curves_range() const;
 
@@ -207,6 +228,9 @@ class CurvesGeometry : public ::CurvesGeometry {
 
   Span<float3> positions() const;
   MutableSpan<float3> positions_for_write();
+
+  VArray<float> radius() const;
+  MutableSpan<float> radius_for_write();
 
   /** Whether the curve loops around to connect to itself, on the curve domain. */
   VArray<bool> cyclic() const;
@@ -281,6 +305,38 @@ class CurvesGeometry : public ::CurvesGeometry {
   MutableSpan<float2> surface_uv_coords_for_write();
 
   /**
+   * Custom knots for NURBS curves with knots mode #NURBS_KNOT_MODE_CUSTOM.
+   */
+  Span<float> nurbs_custom_knots() const;
+  MutableSpan<float> nurbs_custom_knots_for_write();
+
+  /**
+   * The offsets of every curve into arrays on #CurvesGeometry::nurbs_custom_knots.
+   * Curves with knot mode other than #NURBS_KNOT_MODE_CUSTOM will have zero sized #IndexRange.
+   */
+  OffsetIndices<int> nurbs_custom_knots_by_curve() const;
+
+  /**
+   * Builds mask of NURBS curves with knot mode #NURBS_KNOT_MODE_CUSTOM.
+   */
+  IndexMask nurbs_custom_knot_curves(IndexMaskMemory &memory) const;
+
+  bool nurbs_has_custom_knots() const;
+
+  /**
+   * Resizes custom knots array depending on topological data.
+   * Depends on curve offsets, knot modes, orders and cyclic data.
+   * Used to resize internal knots array before writing knots.
+   */
+  void nurbs_custom_knots_update_size();
+
+  /**
+   * Resizes custom knots array. Used when knots number is known in advance and knot values are set
+   * together with topological data.
+   */
+  void nurbs_custom_knots_resize(int knots_num);
+
+  /**
    * Vertex group data, encoded as an array of indices and weights for every vertex.
    * \warning: May be empty.
    */
@@ -290,9 +346,16 @@ class CurvesGeometry : public ::CurvesGeometry {
   /**
    * The largest and smallest position values of evaluated points.
    */
-  std::optional<Bounds<float3>> bounds_min_max() const;
+  std::optional<Bounds<float3>> bounds_min_max(bool use_radius = true) const;
 
   void count_memory(MemoryCounter &memory) const;
+
+  /**
+   * Get the largest material index used by the geometry or `nullopt` if there are none.
+   * The returned value is clamped between 0 and MAXMAT even if the stored material indices may be
+   * out of that range.
+   */
+  std::optional<int> material_index_max() const;
 
  private:
   /* --------------------------------------------------------------------
@@ -388,6 +451,8 @@ class CurvesGeometry : public ::CurvesGeometry {
    * this in #finish() calls.
    */
   void tag_radii_changed();
+  /** Call after changing the "material_index" attribute. */
+  void tag_material_index_changed();
 
   void translate(const float3 &translation);
   void transform(const float4x4 &matrix);
@@ -660,6 +725,11 @@ void calculate_auto_handles(bool cyclic,
                             MutableSpan<float3> positions_left,
                             MutableSpan<float3> positions_right);
 
+void calculate_aligned_handles(const IndexMask &selection,
+                               Span<float3> positions,
+                               Span<float3> align_by,
+                               MutableSpan<float3> align);
+
 /**
  * Change the handles of a single control point, aligning any aligned (#BEZIER_HANDLE_ALIGN)
  * handles on the other side of the control point.
@@ -794,6 +864,15 @@ int calculate_evaluated_num(
 int knots_num(int points_num, int8_t order, bool cyclic);
 
 /**
+ * Copies custom knots into given `MutableSpan`.
+ * Adds `order - 1` length tail for cyclic curves.
+ */
+void copy_custom_knots(const int8_t order,
+                       const bool cyclic,
+                       Span<float> custom_knots,
+                       MutableSpan<float> knots);
+
+/**
  * Calculate the knots for a curve given its properties, based on built-in standards defined by
  * #KnotsMode.
  *
@@ -874,6 +953,16 @@ inline int CurvesGeometry::points_num() const
 inline int CurvesGeometry::curves_num() const
 {
   return this->curve_num;
+}
+inline bool CurvesGeometry::nurbs_has_custom_knots() const
+{
+  return this->custom_knot_num != 0;
+}
+inline bool CurvesGeometry::is_empty() const
+{
+  /* Each curve must have at least one point. */
+  BLI_assert((this->curve_num == 0) == (this->point_num == 0));
+  return this->curve_num == 0;
 }
 inline IndexRange CurvesGeometry::points_range() const
 {
@@ -1005,6 +1094,8 @@ inline float3 calculate_vector_handle(const float3 &point, const float3 &next_po
 }  // namespace bezier
 
 /** \} */
+
+const AttributeAccessorFunctions &get_attribute_accessor_functions();
 
 }  // namespace curves
 

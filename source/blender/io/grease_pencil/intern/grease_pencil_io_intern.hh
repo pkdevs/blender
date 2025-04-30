@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_bounds.hh"
+#include "BLI_bounds_types.hh"
 #include "BLI_color.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_math_matrix_types.hh"
@@ -58,7 +58,9 @@ class GreasePencilExporter {
 
   /* Camera projection matrix, only available with an active camera. */
   std::optional<float4x4> camera_persmat_;
-  blender::Bounds<float2> render_rect_;
+  blender::Bounds<float2> camera_rect_;
+  float2 camera_fac_;
+  blender::Bounds<float2> screen_rect_;
 
  public:
   GreasePencilExporter(const IOContext &context, const ExportParams &params);

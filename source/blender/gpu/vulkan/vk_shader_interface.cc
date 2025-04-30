@@ -9,8 +9,25 @@
 #include "vk_shader_interface.hh"
 #include "vk_backend.hh"
 #include "vk_context.hh"
+#include "vk_state_manager.hh"
 
 namespace blender::gpu {
+
+static VKBindType to_bind_type(shader::ShaderCreateInfo::Resource::BindType bind_type)
+{
+  switch (bind_type) {
+    case shader::ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
+      return VKBindType::UNIFORM_BUFFER;
+    case shader::ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
+      return VKBindType::STORAGE_BUFFER;
+    case shader::ShaderCreateInfo::Resource::BindType::SAMPLER:
+      return VKBindType::SAMPLER;
+    case shader::ShaderCreateInfo::Resource::BindType::IMAGE:
+      return VKBindType::IMAGE;
+  }
+  BLI_assert_unreachable();
+  return VKBindType::UNIFORM_BUFFER;
+}
 
 void VKShaderInterface::init(const shader::ShaderCreateInfo &info)
 {
@@ -46,14 +63,12 @@ void VKShaderInterface::init(const shader::ShaderCreateInfo &info)
         break;
     }
   }
-
-  /* Sub-pass inputs are read as samplers.
-   * In future this can change depending on extensions that will be supported. */
+  const VKDevice &device = VKBackend::get().device;
+  const bool supports_local_read = device.extensions_get().dynamic_rendering_local_read;
   uniform_len_ += info.subpass_inputs_.size();
 
   /* Reserve 1 uniform buffer for push constants fallback. */
   size_t names_size = info.interface_names_size_;
-  const VKDevice &device = VKBackend::get().device;
   const VKPushConstants::StorageType push_constants_storage_type =
       VKPushConstants::Layout::determine_storage_type(info, device);
   if (push_constants_storage_type == VKPushConstants::StorageType::UNIFORM_BUFFER) {
@@ -63,8 +78,7 @@ void VKShaderInterface::init(const shader::ShaderCreateInfo &info)
   names_size += info.subpass_inputs_.size() * SUBPASS_FALLBACK_NAME_LEN;
 
   int32_t input_tot_len = attr_len_ + ubo_len_ + uniform_len_ + ssbo_len_ + constant_len_;
-  inputs_ = static_cast<ShaderInput *>(
-      MEM_calloc_arrayN(input_tot_len, sizeof(ShaderInput), __func__));
+  inputs_ = MEM_calloc_arrayN<ShaderInput>(input_tot_len, __func__);
   ShaderInput *input = inputs_;
 
   name_buffer_ = (char *)MEM_mallocN(names_size, "name_buffer");
@@ -178,24 +192,21 @@ void VKShaderInterface::init(const shader::ShaderCreateInfo &info)
   init_descriptor_set_layout_info(info, resources_len, all_resources, push_constants_storage_type);
 
   /* Update the descriptor set locations, bind types and access masks. */
-  descriptor_set_locations_ = Array<VKDescriptorSet::Location>(resources_len);
-  descriptor_set_locations_.fill(-1);
-  descriptor_set_bind_types_ = Array<shader::ShaderCreateInfo::Resource::BindType>(resources_len);
-  descriptor_set_bind_types_.fill(shader::ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER);
-  access_masks_ = Array<VkAccessFlags>(resources_len);
-  access_masks_.fill(VK_ACCESS_NONE);
-  arrayed_ = Array<VKImageViewArrayed>(resources_len);
-  arrayed_.fill(VKImageViewArrayed::DONT_CARE);
+  resource_bindings_ = Array<VKResourceBinding>(resources_len);
+  resource_bindings_.fill({});
 
   uint32_t descriptor_set_location = 0;
   for (const ShaderCreateInfo::SubpassIn &subpass_in : info.subpass_inputs_) {
-    const ShaderInput *input = shader_input_get(
-        shader::ShaderCreateInfo::Resource::BindType::SAMPLER, subpass_in.index);
-    BLI_assert(STREQ(input_name_get(input), SUBPASS_FALLBACK_NAME));
+    const ShaderInput *input = supports_local_read ?
+                                   texture_get(subpass_in.index) :
+                                   shader_input_get(
+                                       shader::ShaderCreateInfo::Resource::BindType::SAMPLER,
+                                       subpass_in.index);
     BLI_assert(input);
+    BLI_assert(STREQ(input_name_get(input), SUBPASS_FALLBACK_NAME));
     descriptor_set_location_update(input,
                                    descriptor_set_location++,
-                                   shader::ShaderCreateInfo::Resource::BindType::SAMPLER,
+                                   VKBindType::INPUT_ATTACHMENT,
                                    std::nullopt,
                                    VKImageViewArrayed::DONT_CARE);
   }
@@ -205,41 +216,43 @@ void VKShaderInterface::init(const shader::ShaderCreateInfo &info)
     VKImageViewArrayed arrayed = VKImageViewArrayed::DONT_CARE;
     if (res.bind_type == ShaderCreateInfo::Resource::BindType::IMAGE) {
       arrayed = ELEM(res.image.type,
-                     shader::ImageType::FLOAT_1D_ARRAY,
-                     shader::ImageType::FLOAT_2D_ARRAY,
-                     shader::ImageType::FLOAT_CUBE_ARRAY,
-                     shader::ImageType::INT_1D_ARRAY,
-                     shader::ImageType::INT_2D_ARRAY,
-                     shader::ImageType::INT_CUBE_ARRAY,
-                     shader::ImageType::UINT_1D_ARRAY,
-                     shader::ImageType::UINT_2D_ARRAY,
-                     shader::ImageType::UINT_CUBE_ARRAY,
-                     shader::ImageType::UINT_2D_ARRAY_ATOMIC,
-                     shader::ImageType::INT_2D_ARRAY_ATOMIC) ?
+                     shader::ImageType::Float1DArray,
+                     shader::ImageType::Float2DArray,
+                     shader::ImageType::FloatCubeArray,
+                     shader::ImageType::Int1DArray,
+                     shader::ImageType::Int2DArray,
+                     shader::ImageType::IntCubeArray,
+                     shader::ImageType::Uint1DArray,
+                     shader::ImageType::Uint2DArray,
+                     shader::ImageType::UintCubeArray,
+                     shader::ImageType::AtomicUint2DArray,
+                     shader::ImageType::AtomicInt2DArray) ?
                     VKImageViewArrayed::ARRAYED :
                     VKImageViewArrayed::NOT_ARRAYED;
     }
     else if (res.bind_type == ShaderCreateInfo::Resource::BindType::SAMPLER) {
       arrayed = ELEM(res.sampler.type,
-                     shader::ImageType::FLOAT_1D_ARRAY,
-                     shader::ImageType::FLOAT_2D_ARRAY,
-                     shader::ImageType::FLOAT_CUBE_ARRAY,
-                     shader::ImageType::INT_1D_ARRAY,
-                     shader::ImageType::INT_2D_ARRAY,
-                     shader::ImageType::INT_CUBE_ARRAY,
-                     shader::ImageType::UINT_1D_ARRAY,
-                     shader::ImageType::UINT_2D_ARRAY,
-                     shader::ImageType::UINT_CUBE_ARRAY,
-                     shader::ImageType::SHADOW_2D_ARRAY,
-                     shader::ImageType::SHADOW_CUBE_ARRAY,
-                     shader::ImageType::DEPTH_2D_ARRAY,
-                     shader::ImageType::DEPTH_CUBE_ARRAY,
-                     shader::ImageType::UINT_2D_ARRAY_ATOMIC,
-                     shader::ImageType::INT_2D_ARRAY_ATOMIC) ?
+                     shader::ImageType::Float1DArray,
+                     shader::ImageType::Float2DArray,
+                     shader::ImageType::FloatCubeArray,
+                     shader::ImageType::Int1DArray,
+                     shader::ImageType::Int2DArray,
+                     shader::ImageType::IntCubeArray,
+                     shader::ImageType::Uint1DArray,
+                     shader::ImageType::Uint2DArray,
+                     shader::ImageType::UintCubeArray,
+                     shader::ImageType::Shadow2DArray,
+                     shader::ImageType::ShadowCubeArray,
+                     shader::ImageType::Depth2DArray,
+                     shader::ImageType::DepthCubeArray,
+                     shader::ImageType::AtomicUint2DArray,
+                     shader::ImageType::AtomicInt2DArray) ?
                     VKImageViewArrayed::ARRAYED :
                     VKImageViewArrayed::NOT_ARRAYED;
     }
-    descriptor_set_location_update(input, descriptor_set_location++, res.bind_type, res, arrayed);
+
+    const VKBindType bind_type = to_bind_type(res.bind_type);
+    descriptor_set_location_update(input, descriptor_set_location++, bind_type, res, arrayed);
   }
 
   /* Post initializing push constants. */
@@ -250,7 +263,7 @@ void VKShaderInterface::init(const shader::ShaderCreateInfo &info)
     const ShaderInput *push_constant_input = ubo_get(PUSH_CONSTANTS_FALLBACK_NAME);
     descriptor_set_location_update(push_constant_input,
                                    push_constants_fallback_location,
-                                   shader::ShaderCreateInfo::Resource::UNIFORM_BUFFER,
+                                   VKBindType::UNIFORM_BUFFER,
                                    std::nullopt,
                                    VKImageViewArrayed::DONT_CARE);
   }
@@ -268,24 +281,22 @@ static int32_t shader_input_index(const ShaderInput *shader_inputs,
 void VKShaderInterface::descriptor_set_location_update(
     const ShaderInput *shader_input,
     const VKDescriptorSet::Location location,
-    const shader::ShaderCreateInfo::Resource::BindType bind_type,
+    const VKBindType bind_type,
     std::optional<const shader::ShaderCreateInfo::Resource> resource,
     VKImageViewArrayed arrayed)
 {
   BLI_assert_msg(resource.has_value() ||
-                     ELEM(bind_type,
-                          shader::ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER,
-                          shader::ShaderCreateInfo::Resource::BindType::SAMPLER),
+                     ELEM(bind_type, VKBindType::UNIFORM_BUFFER, VKBindType::INPUT_ATTACHMENT),
                  "Incorrect parameters, when no resource is given, it must be the uniform buffer "
-                 "for storing push constants or sampler for subpasses.");
-  BLI_assert_msg(!resource.has_value() || resource->bind_type == bind_type,
+                 "for storing push constants or input attachment for subpass inputs.");
+  BLI_assert_msg(!resource.has_value() || to_bind_type(resource->bind_type) == bind_type,
                  "Incorrect parameter, bind types do not match.");
 
+  const VKDevice &device = VKBackend::get().device;
+  const bool supports_local_read = device.extensions_get().dynamic_rendering_local_read;
+
   int32_t index = shader_input_index(inputs_, shader_input);
-  BLI_assert(descriptor_set_locations_[index].binding == -1);
-  descriptor_set_locations_[index] = location;
-  descriptor_set_bind_types_[index] = bind_type;
-  arrayed_[index] = arrayed;
+  BLI_assert(resource_bindings_[index].binding == -1);
 
   VkAccessFlags vk_access_flags = VK_ACCESS_NONE;
   if (resource.has_value()) {
@@ -295,19 +306,19 @@ void VKShaderInterface::descriptor_set_location_update(
         break;
 
       case shader::ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER:
-        if (bool(resource->storagebuf.qualifiers & shader::Qualifier::READ) == true) {
+        if (bool(resource->storagebuf.qualifiers & shader::Qualifier::read) == true) {
           vk_access_flags |= VK_ACCESS_SHADER_READ_BIT;
         }
-        if (bool(resource->storagebuf.qualifiers & shader::Qualifier::WRITE) == true) {
+        if (bool(resource->storagebuf.qualifiers & shader::Qualifier::write) == true) {
           vk_access_flags |= VK_ACCESS_SHADER_WRITE_BIT;
         }
         break;
 
       case shader::ShaderCreateInfo::Resource::BindType::IMAGE:
-        if (bool(resource->image.qualifiers & shader::Qualifier::READ) == true) {
+        if (bool(resource->image.qualifiers & shader::Qualifier::read) == true) {
           vk_access_flags |= VK_ACCESS_SHADER_READ_BIT;
         }
-        if (bool(resource->image.qualifiers & shader::Qualifier::WRITE) == true) {
+        if (bool(resource->image.qualifiers & shader::Qualifier::write) == true) {
           vk_access_flags |= VK_ACCESS_SHADER_WRITE_BIT;
         }
         break;
@@ -317,27 +328,28 @@ void VKShaderInterface::descriptor_set_location_update(
         break;
     };
   }
-  else if (bind_type == shader::ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER) {
+  else if (bind_type == VKBindType::UNIFORM_BUFFER) {
     vk_access_flags |= VK_ACCESS_UNIFORM_READ_BIT;
   }
-  else if (bind_type == shader::ShaderCreateInfo::Resource::BindType::SAMPLER) {
-    vk_access_flags |= VK_ACCESS_SHADER_READ_BIT;
+  else if (bind_type == VKBindType::INPUT_ATTACHMENT) {
+    vk_access_flags |= supports_local_read ? VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+                                                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT :
+                                             VK_ACCESS_SHADER_READ_BIT;
   }
-  access_masks_[index] = vk_access_flags;
+
+  VKResourceBinding &resource_binding = resource_bindings_[index];
+  resource_binding.bind_type = bind_type;
+  resource_binding.binding = shader_input->binding;
+  resource_binding.location = location;
+  resource_binding.arrayed = arrayed;
+  resource_binding.access_mask = vk_access_flags;
 }
 
-const VKDescriptorSet::Location VKShaderInterface::descriptor_set_location(
+const VKResourceBinding &VKShaderInterface::resource_binding_info(
     const ShaderInput *shader_input) const
 {
   int32_t index = shader_input_index(inputs_, shader_input);
-  return descriptor_set_locations_[index];
-}
-
-const shader::ShaderCreateInfo::Resource::BindType VKShaderInterface::descriptor_set_bind_type(
-    const ShaderInput *shader_input) const
-{
-  int32_t index = shader_input_index(inputs_, shader_input);
-  return descriptor_set_bind_types_[index];
+  return resource_bindings_[index];
 }
 
 const VKDescriptorSet::Location VKShaderInterface::descriptor_set_location(
@@ -345,7 +357,7 @@ const VKDescriptorSet::Location VKShaderInterface::descriptor_set_location(
 {
   const ShaderInput *shader_input = shader_input_get(resource);
   BLI_assert(shader_input);
-  return descriptor_set_location(shader_input);
+  return resource_binding_info(shader_input).location;
 }
 
 const std::optional<VKDescriptorSet::Location> VKShaderInterface::descriptor_set_location(
@@ -355,40 +367,11 @@ const std::optional<VKDescriptorSet::Location> VKShaderInterface::descriptor_set
   if (shader_input == nullptr) {
     return std::nullopt;
   }
-  if (descriptor_set_bind_type(shader_input) != bind_type) {
+  const VKResourceBinding &resource_binding = resource_binding_info(shader_input);
+  if (resource_binding.bind_type != to_bind_type(bind_type)) {
     return std::nullopt;
   }
-  return descriptor_set_location(shader_input);
-}
-
-const VkAccessFlags VKShaderInterface::access_mask(const ShaderInput *shader_input) const
-{
-  int32_t index = shader_input_index(inputs_, shader_input);
-  return access_masks_[index];
-}
-
-const VkAccessFlags VKShaderInterface::access_mask(
-    const shader::ShaderCreateInfo::Resource::BindType &bind_type, int binding) const
-{
-  const ShaderInput *shader_input = shader_input_get(bind_type, binding);
-  if (shader_input == nullptr) {
-    return VK_ACCESS_NONE;
-  }
-  if (descriptor_set_bind_type(shader_input) != bind_type) {
-    return VK_ACCESS_NONE;
-  }
-  return access_mask(shader_input);
-}
-
-const VKImageViewArrayed VKShaderInterface::arrayed(
-    const shader::ShaderCreateInfo::Resource::BindType &bind_type, int binding) const
-{
-  const ShaderInput *shader_input = shader_input_get(bind_type, binding);
-  if (shader_input == nullptr) {
-    return VKImageViewArrayed::DONT_CARE;
-  }
-  int32_t index = shader_input_index(inputs_, shader_input);
-  return arrayed_[index];
+  return resource_binding.location;
 }
 
 const ShaderInput *VKShaderInterface::shader_input_get(
@@ -424,14 +407,27 @@ void VKShaderInterface::init_descriptor_set_layout_info(
     VKPushConstants::StorageType push_constants_storage)
 {
   BLI_assert(descriptor_set_layout_info_.bindings.is_empty());
+  const VKExtensions &extensions = VKBackend::get().device.extensions_get();
+  const bool supports_local_read = extensions.dynamic_rendering_local_read;
+
   descriptor_set_layout_info_.bindings.reserve(resources_len);
-  descriptor_set_layout_info_.vk_shader_stage_flags =
-      info.compute_source_.is_empty() && info.compute_source_generated.empty() ?
-          VK_SHADER_STAGE_ALL_GRAPHICS :
-          VK_SHADER_STAGE_COMPUTE_BIT;
+  if (!(info.compute_source_.is_empty() && info.compute_source_generated.empty())) {
+    descriptor_set_layout_info_.vk_shader_stage_flags = VK_SHADER_STAGE_COMPUTE_BIT;
+  }
+  else if (supports_local_read && !info.subpass_inputs_.is_empty()) {
+    descriptor_set_layout_info_.vk_shader_stage_flags = VK_SHADER_STAGE_FRAGMENT_BIT;
+  }
+  else {
+    descriptor_set_layout_info_.vk_shader_stage_flags = VK_SHADER_STAGE_ALL_GRAPHICS;
+  }
   for (int index : IndexRange(info.subpass_inputs_.size())) {
     UNUSED_VARS(index);
-    descriptor_set_layout_info_.bindings.append(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    // TODO: clean up remove negation.
+    descriptor_set_layout_info_.bindings.append_n_times(
+        !extensions.dynamic_rendering            ? VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT :
+        !extensions.dynamic_rendering_local_read ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
+                                                   VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+        info.subpass_inputs_.size());
   }
   for (const shader::ShaderCreateInfo::Resource &res : all_resources) {
     descriptor_set_layout_info_.bindings.append(to_vk_descriptor_type(res));

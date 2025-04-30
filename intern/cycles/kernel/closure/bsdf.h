@@ -11,6 +11,7 @@
 #include "kernel/closure/bsdf_phong_ramp.h"
 #include "kernel/closure/bsdf_diffuse_ramp.h"
 #include "kernel/closure/bsdf_microfacet.h"
+#include "kernel/closure/bsdf_burley.h"
 #include "kernel/closure/bsdf_sheen.h"
 #include "kernel/closure/bsdf_transparent.h"
 #include "kernel/closure/bsdf_ray_portal.h"
@@ -19,15 +20,13 @@
 #include "kernel/closure/bsdf_hair.h"
 #include "kernel/closure/bsdf_principled_hair_chiang.h"
 #include "kernel/closure/bsdf_principled_hair_huang.h"
-#include "kernel/closure/bssrdf.h"
-#include "kernel/closure/volume.h"
 // clang-format on
 
 CCL_NAMESPACE_BEGIN
 
 /* Returns the square of the roughness of the closure if it has roughness,
  * 0 for singular closures and 1 otherwise. */
-ccl_device_inline float bsdf_get_specular_roughness_squared(ccl_private const ShaderClosure *sc)
+ccl_device_inline float bsdf_get_specular_roughness_squared(const ccl_private ShaderClosure *sc)
 {
   if (CLOSURE_IS_BSDF_SINGULAR(sc->type)) {
     return 0.0f;
@@ -41,7 +40,7 @@ ccl_device_inline float bsdf_get_specular_roughness_squared(ccl_private const Sh
   return 1.0f;
 }
 
-ccl_device_inline float bsdf_get_roughness_pass_squared(ccl_private const ShaderClosure *sc)
+ccl_device_inline float bsdf_get_roughness_pass_squared(const ccl_private ShaderClosure *sc)
 {
   if (sc->type == CLOSURE_BSDF_OREN_NAYAR_ID) {
     ccl_private OrenNayarBsdf *bsdf = (ccl_private OrenNayarBsdf *)sc;
@@ -58,24 +57,24 @@ ccl_device_inline float bsdf_get_roughness_pass_squared(ccl_private const Shader
   return bsdf_get_specular_roughness_squared(sc);
 }
 
-/* An additional term to smooth illumination on grazing angles when using bump mapping.
- * Based on "Taming the Shadow Terminator" by Matt Jen-Yuan Chiang,
- * Yining Karl Li and Brent Burley. */
-ccl_device_inline float bump_shadowing_term(int shader_flag, float3 Ng, float3 N, float3 I)
+/* An additional term to smooth illumination on grazing angles when using bump mapping
+ * based on "A Microfacet-Based Shadowing Function to Solve the Bump Terminator Problem"
+ * by Alejandro Conty Estevez, Pascal Lecocq, and Clifford Stein. It preserves detail
+ * close to the shadow terminator, and doesn't "wash out" intermediate bumps using a
+ * Cook-Torrance GGX function for shading. */
+ccl_device_inline float bump_shadowing_term(const int shader_flag,
+                                            float3 Ng,
+                                            const float3 N,
+                                            float3 I)
 {
+  const float cosNgI = dot(Ng, I);
+  const float cosNgN = dot(Ng, N);
   const float cosNI = dot(N, I);
-  if (cosNI < 0.0f) {
-    Ng = -Ng;
-  }
-  float g = safe_divide(dot(Ng, I), cosNI * dot(Ng, N));
 
-  /* If the incoming light is on the unshadowed side, return full brightness. */
-  if (g >= 1.0f) {
-    return 1.0f;
-  }
-
-  /* If the incoming light points away from the surface, return black. */
-  if (g < 0.0f) {
+  /* dot(Ng, I) * dot(Ng, N) tells us if I and N are on the same side of the actual geometry.
+   * If incoming(I) and normal(N) are on the same side we reject refractions, dot(N, I) < 0.
+   * If they are on different sides we reject reflections, dot(N, I) > 0. */
+  if (cosNgI * cosNgN * cosNI < 0.0f) {
     return 0.0f;
   }
 
@@ -84,9 +83,22 @@ ccl_device_inline float bump_shadowing_term(int shader_flag, float3 Ng, float3 N
     return 1.0f;
   }
 
+  /* Get absolute incoming and shader normal deviation from geometric normal, then clamp. */
+  const float cos_i = fabsf(cosNgI);
+  const float cos_d = fabsf(cosNgN);
+  if (cos_d >= 1.0f || cos_i >= 1.0f) {
+    return 1.0f;
+  }
+  if (cos_i < 1e-6f) {
+    return 0.0f;
+  }
+
+  /* Get GGX shading values for final smoothing. */
+  const float tan2_d = 1.0f / sqr(cos_d) - 1.0f;
+  const float bump_alpha2 = saturatef(0.125f * tan2_d);
+
   /* Return smoothed value to avoid discontinuity at perpendicular angle. */
-  float g2 = sqr(g);
-  return -g2 * g + g2 + g;
+  return bsdf_G<MicrofacetType::GGX>(bump_alpha2, cos_i);
 }
 
 ccl_device_inline float shift_cos_in(float cos_in, const float frequency_multiplier)
@@ -101,14 +113,14 @@ ccl_device_inline float shift_cos_in(float cos_in, const float frequency_multipl
   return val;
 }
 
-ccl_device_inline bool bsdf_is_transmission(ccl_private const ShaderClosure *sc, const float3 wo)
+ccl_device_inline bool bsdf_is_transmission(const ccl_private ShaderClosure *sc, const float3 wo)
 {
   return dot(sc->N, wo) < 0.0f;
 }
 
 ccl_device_inline int bsdf_sample(KernelGlobals kg,
                                   ccl_private ShaderData *sd,
-                                  ccl_private const ShaderClosure *sc,
+                                  const ccl_private ShaderClosure *sc,
                                   const int path_flag,
                                   const float3 rand,
                                   ccl_private Spectrum *eval,
@@ -123,7 +135,7 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
   *pdf = 0.f;
   int label = LABEL_NONE;
   const float3 Ng = (sd->type & PRIMITIVE_CURVE) ? sc->N : sd->Ng;
-  const float2 rand_xy = float3_to_float2(rand);
+  const float2 rand_xy = make_float2(rand);
 
   switch (sc->type) {
     case CLOSURE_BSDF_DIFFUSE_ID:
@@ -138,6 +150,11 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
       *eta = 1.0f;
       break;
 #  ifdef __OSL__
+    case CLOSURE_BSDF_BURLEY_ID:
+      label = bsdf_burley_sample(sc, Ng, sd->wi, rand_xy, eval, wo, pdf);
+      *sampled_roughness = one_float2();
+      *eta = 1.0f;
+      break;
     case CLOSURE_BSDF_PHONG_RAMP_ID:
       label = bsdf_phong_ramp_sample(sc, Ng, sd->wi, rand_xy, eval, wo, pdf, sampled_roughness);
       *eta = 1.0f;
@@ -228,7 +245,7 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
 
   /* Test if BSDF sample should be treated as transparent for background. */
   if (label & LABEL_TRANSMIT) {
-    float threshold_squared = kernel_data.background.transparent_roughness_squared_threshold;
+    const float threshold_squared = kernel_data.background.transparent_roughness_squared_threshold;
 
     if (threshold_squared >= 0.0f && !(label & LABEL_DIFFUSE)) {
       if (bsdf_get_specular_roughness_squared(sc) <= threshold_squared) {
@@ -260,7 +277,7 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
 }
 
 ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
-                                          ccl_private const ShaderClosure *sc,
+                                          const ccl_private ShaderClosure *sc,
                                           const float3 wo,
                                           ccl_private float2 *roughness,
                                           ccl_private float *eta)
@@ -279,8 +296,12 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
       *eta = 1.0f;
       break;
 #  ifdef __OSL__
+    case CLOSURE_BSDF_BURLEY_ID:
+      *roughness = one_float2();
+      *eta = 1.0f;
+      break;
     case CLOSURE_BSDF_PHONG_RAMP_ID:
-      alpha = phong_ramp_exponent_to_roughness(((ccl_private const PhongRampBsdf *)sc)->exponent);
+      alpha = phong_ramp_exponent_to_roughness(((const ccl_private PhongRampBsdf *)sc)->exponent);
       *roughness = make_float2(alpha, alpha);
       *eta = 1.0f;
       break;
@@ -304,13 +325,13 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
     case CLOSURE_BSDF_MICROFACET_BECKMANN_ID:
     case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
     case CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID: {
-      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
+      const ccl_private MicrofacetBsdf *bsdf = (const ccl_private MicrofacetBsdf *)sc;
       *roughness = make_float2(bsdf->alpha_x, bsdf->alpha_y);
       *eta = (bsdf_is_transmission(sc, wo)) ? bsdf->ior : 1.0f;
       break;
     }
     case CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID: {
-      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
+      const ccl_private MicrofacetBsdf *bsdf = (const ccl_private MicrofacetBsdf *)sc;
       *roughness = make_float2(bsdf->alpha_x, bsdf->alpha_y);
       *eta = 1.0f;
       break;
@@ -364,7 +385,7 @@ ccl_device_inline void bsdf_roughness_eta(const KernelGlobals kg,
 }
 
 ccl_device_inline int bsdf_label(const KernelGlobals kg,
-                                 ccl_private const ShaderClosure *sc,
+                                 const ccl_private ShaderClosure *sc,
                                  const float3 wo)
 {
   /* For curves use the smooth normal, particularly for ribbons the geometric
@@ -382,6 +403,9 @@ ccl_device_inline int bsdf_label(const KernelGlobals kg,
       label = LABEL_REFLECT | LABEL_DIFFUSE;
       break;
 #  ifdef __OSL__
+    case CLOSURE_BSDF_BURLEY_ID:
+      label = LABEL_REFLECT | LABEL_DIFFUSE;
+      break;
     case CLOSURE_BSDF_PHONG_RAMP_ID:
       label = LABEL_REFLECT | LABEL_GLOSSY;
       break;
@@ -404,7 +428,7 @@ ccl_device_inline int bsdf_label(const KernelGlobals kg,
     case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID:
     case CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID: {
-      ccl_private const MicrofacetBsdf *bsdf = (ccl_private const MicrofacetBsdf *)sc;
+      const ccl_private MicrofacetBsdf *bsdf = (const ccl_private MicrofacetBsdf *)sc;
       label = ((bsdf_is_transmission(sc, wo)) ? LABEL_TRANSMIT : LABEL_REFLECT) |
               ((bsdf_microfacet_eval_flag(bsdf)) ? LABEL_GLOSSY : LABEL_SINGULAR);
       break;
@@ -429,10 +453,12 @@ ccl_device_inline int bsdf_label(const KernelGlobals kg,
       break;
 #  ifdef __PRINCIPLED_HAIR__
     case CLOSURE_BSDF_HAIR_CHIANG_ID:
-      if (bsdf_is_transmission(sc, wo))
+      if (bsdf_is_transmission(sc, wo)) {
         label = LABEL_TRANSMIT | LABEL_GLOSSY;
-      else
+      }
+      else {
         label = LABEL_REFLECT | LABEL_GLOSSY;
+      }
       break;
     case CLOSURE_BSDF_HAIR_HUANG_ID:
       label = LABEL_REFLECT | LABEL_GLOSSY;
@@ -449,7 +475,7 @@ ccl_device_inline int bsdf_label(const KernelGlobals kg,
 
   /* Test if BSDF sample should be treated as transparent for background. */
   if (label & LABEL_TRANSMIT) {
-    float threshold_squared = kernel_data.background.transparent_roughness_squared_threshold;
+    const float threshold_squared = kernel_data.background.transparent_roughness_squared_threshold;
 
     if (threshold_squared >= 0.0f) {
       if (bsdf_get_specular_roughness_squared(sc) <= threshold_squared) {
@@ -468,7 +494,7 @@ ccl_device_inline
     Spectrum
     bsdf_eval(KernelGlobals kg,
               ccl_private ShaderData *sd,
-              ccl_private const ShaderClosure *sc,
+              const ccl_private ShaderClosure *sc,
               const float3 wo,
               ccl_private float *pdf)
 {
@@ -484,6 +510,9 @@ ccl_device_inline
       eval = bsdf_oren_nayar_eval(sc, sd->wi, wo, pdf);
       break;
 #  ifdef __OSL__
+    case CLOSURE_BSDF_BURLEY_ID:
+      eval = bsdf_burley_eval(sc, sd->wi, wo, pdf);
+      break;
     case CLOSURE_BSDF_PHONG_RAMP_ID:
       eval = bsdf_phong_ramp_eval(sc, sd->wi, wo, pdf);
       break;
@@ -570,7 +599,7 @@ ccl_device_inline
   return eval;
 }
 
-ccl_device void bsdf_blur(KernelGlobals kg, ccl_private ShaderClosure *sc, float roughness)
+ccl_device void bsdf_blur(KernelGlobals kg, ccl_private ShaderClosure *sc, const float roughness)
 {
   /* TODO: do we want to blur volume closures? */
 #if defined(__SVM__) || defined(__OSL__)
@@ -602,8 +631,8 @@ ccl_device void bsdf_blur(KernelGlobals kg, ccl_private ShaderClosure *sc, float
 }
 
 ccl_device_inline Spectrum bsdf_albedo(KernelGlobals kg,
-                                       ccl_private const ShaderData *sd,
-                                       ccl_private const ShaderClosure *sc,
+                                       const ccl_private ShaderData *sd,
+                                       const ccl_private ShaderClosure *sc,
                                        const bool reflection,
                                        const bool transmission)
 {
@@ -620,7 +649,7 @@ ccl_device_inline Spectrum bsdf_albedo(KernelGlobals kg,
 #if defined(__SVM__) || defined(__OSL__)
   if (CLOSURE_IS_BSDF_MICROFACET(sc->type)) {
     albedo *= bsdf_microfacet_estimate_albedo(
-        kg, sd, (ccl_private const MicrofacetBsdf *)sc, reflection, transmission);
+        kg, sd, (const ccl_private MicrofacetBsdf *)sc, reflection, transmission);
   }
 #  ifdef __PRINCIPLED_HAIR__
   else if (sc->type == CLOSURE_BSDF_HAIR_CHIANG_ID) {

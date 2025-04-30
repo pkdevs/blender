@@ -102,12 +102,13 @@ static void mesh_render_data_vert_flag(const MeshRenderData &mr,
 
 static const GPUVertFormat &get_edit_data_format()
 {
-  static GPUVertFormat format = {0};
-  if (format.attr_len == 0) {
+  static const GPUVertFormat format = []() {
+    GPUVertFormat format{};
     /* WARNING: Adjust #EditLoopData struct accordingly. */
     GPU_vertformat_attr_add(&format, "data", GPU_COMP_U8, 4, GPU_FETCH_INT);
     GPU_vertformat_alias_add(&format, "flag");
-  }
+    return format;
+  }();
   return format;
 }
 
@@ -221,18 +222,19 @@ static void extract_edit_data_bm(const MeshRenderData &mr, MutableSpan<EditLoopD
   });
 }
 
-void extract_edit_data(const MeshRenderData &mr, gpu::VertBuf &vbo)
+gpu::VertBufPtr extract_edit_data(const MeshRenderData &mr)
 {
-  GPU_vertbuf_init_with_format(vbo, get_edit_data_format());
+  gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(get_edit_data_format()));
   const int size = mr.corners_num + mr.loose_indices_num;
-  GPU_vertbuf_data_alloc(vbo, size);
-  MutableSpan vbo_data = vbo.data<EditLoopData>();
-  if (mr.extract_type == MR_EXTRACT_MESH) {
+  GPU_vertbuf_data_alloc(*vbo, size);
+  MutableSpan vbo_data = vbo->data<EditLoopData>();
+  if (mr.extract_type == MeshExtractType::Mesh) {
     extract_edit_data_mesh(mr, vbo_data);
   }
   else {
     extract_edit_data_bm(mr, vbo_data);
   }
+  return vbo;
 }
 
 static void extract_edit_subdiv_data_mesh(const MeshRenderData &mr,
@@ -377,20 +379,20 @@ static void extract_edit_subdiv_data_bm(const MeshRenderData &mr,
   });
 }
 
-void extract_edit_data_subdiv(const MeshRenderData &mr,
-                              const DRWSubdivCache &subdiv_cache,
-                              gpu::VertBuf &vbo)
+gpu::VertBufPtr extract_edit_data_subdiv(const MeshRenderData &mr,
+                                         const DRWSubdivCache &subdiv_cache)
 {
-  GPU_vertbuf_init_with_format(vbo, get_edit_data_format());
+  gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(get_edit_data_format()));
   const int size = subdiv_full_vbo_size(mr, subdiv_cache);
-  GPU_vertbuf_data_alloc(vbo, size);
-  MutableSpan vbo_data = vbo.data<EditLoopData>();
-  if (mr.extract_type == MR_EXTRACT_MESH) {
+  GPU_vertbuf_data_alloc(*vbo, size);
+  MutableSpan vbo_data = vbo->data<EditLoopData>();
+  if (mr.extract_type == MeshExtractType::Mesh) {
     extract_edit_subdiv_data_mesh(mr, subdiv_cache, vbo_data);
   }
   else {
     extract_edit_subdiv_data_bm(mr, subdiv_cache, vbo_data);
   }
+  return vbo;
 }
 
 }  // namespace blender::draw

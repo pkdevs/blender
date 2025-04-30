@@ -13,6 +13,10 @@
 #include "DNA_listBase.h"
 #include "DNA_vec_types.h"
 
+#ifdef __cplusplus
+#  include <optional>
+#endif
+
 /** Used in `readfile.cc` and `editfont.cc`. */
 #define MAXTEXTBOX 256
 
@@ -315,6 +319,11 @@ typedef struct Curve {
   char _pad3[7];
 
   void *batch_cache;
+
+#ifdef __cplusplus
+  /** Get the largest material index used by the curves or `nullopt` if there are none. */
+  std::optional<int> material_index_max() const;
+#endif
 } Curve;
 
 #define CURVE_VFONT_ANY(cu) ((cu)->vfont), ((cu)->vfontb), ((cu)->vfonti), ((cu)->vfontbi)
@@ -441,6 +450,7 @@ enum {
   CU_NURB_CYCLIC = 1 << 0,
   CU_NURB_ENDPOINT = 1 << 1,
   CU_NURB_BEZIER = 1 << 2,
+  CU_NURB_CUSTOM = 1 << 3,
 };
 
 #define CU_ACT_NONE -1

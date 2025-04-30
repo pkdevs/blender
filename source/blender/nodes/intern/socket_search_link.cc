@@ -23,12 +23,17 @@ void GatherLinkSearchOpParams::add_item(std::string socket_name,
                                         SocketLinkOperation::LinkSocketFn fn,
                                         const int weight)
 {
-
   std::string name = fmt::format("{}{} " UI_MENU_ARROW_SEP " {}",
                                  IFACE_(node_type_.ui_name),
                                  node_type_.deprecation_notice ? IFACE_(" (Deprecated)") : "",
                                  socket_name);
+  this->add_item_full_name(std::move(name), std::move(fn), weight);
+}
 
+void GatherLinkSearchOpParams::add_item_full_name(std::string name,
+                                                  SocketLinkOperation::LinkSocketFn fn,
+                                                  int weight)
+{
   items_.append({std::move(name), std::move(fn), weight});
 }
 
@@ -67,7 +72,7 @@ void LinkSearchOpParams::connect_available_socket(bNode &new_node, StringRef soc
     BLI_assert_unreachable();
     return;
   }
-  bke::node_add_link(&node_tree, &new_node, new_node_socket, &node, &socket);
+  bke::node_add_link(node_tree, new_node, *new_node_socket, node, socket);
   if (in_out == SOCK_OUT) {
     /* If the old socket already contained a value, then transfer it to a new one, from
      * which this value will get there. */
@@ -78,7 +83,7 @@ void LinkSearchOpParams::connect_available_socket(bNode &new_node, StringRef soc
 bNode &LinkSearchOpParams::add_node(StringRef idname)
 {
   std::string idname_str = idname;
-  bNode *node = bke::node_add_node(&C, &node_tree, idname_str.c_str());
+  bNode *node = bke::node_add_node(&C, node_tree, idname_str.c_str());
   BLI_assert(node != nullptr);
   added_nodes_.append(node);
   return *node;
@@ -134,7 +139,7 @@ void search_link_ops_for_declarations(GatherLinkSearchOpParams &params,
      * sockets. */
     const int weight = (&socket == main_socket) ? 0 : -1 - i;
     params.add_item(
-        IFACE_(socket.name.c_str()),
+        IFACE_(socket.name),
         [&node_type, &socket](LinkSearchOpParams &params) {
           bNode &node = params.add_node(node_type);
           socket.make_available(node);

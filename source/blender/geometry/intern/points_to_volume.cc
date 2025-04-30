@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_matrix.hh"
+#include "BLI_math_base.hh"
 
 #include "BKE_volume.hh"
 #include "BKE_volume_grid.hh"
@@ -101,10 +101,10 @@ bke::VolumeGridData *fog_volume_grid_add_from_points(Volume *volume,
   openvdb::tools::sdfToFogVolume(*new_grid);
 
   /* Take the desired density into account. */
-  openvdb::tools::foreach (new_grid->beginValueOn(),
-                           [&](const openvdb::FloatGrid::ValueOnIter &iter) {
-                             iter.modifyValue([&](float &value) { value *= density; });
-                           });
+  openvdb::tools::foreach(new_grid->beginValueOn(),
+                          [&](const openvdb::FloatGrid::ValueOnIter &iter) {
+                            iter.modifyValue([&](float &value) { value *= density; });
+                          });
 
   return BKE_volume_grid_add_vdb(*volume, name, std::move(new_grid));
 }

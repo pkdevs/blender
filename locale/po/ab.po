@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.3.0 Alpha (b'b5ea3beaf93b')\n"
+"Project-Id-Version: Blender 4.5.0 Alpha (b'1f4cae0c4623')\n"
 "Report-Msgid-Bugs-To: \n"
-"PO-Revision-Date: 2024-04-29 13:23+0000\n"
+"PO-Revision-Date: 2025-04-14 08:08+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Abkhazian <https://translate.blender.org/projects/blender-ui/ui/ab/>\n"
 "Language: ab\n"
@@ -11,24 +11,12 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.0.1\n"
+"X-Generator: Weblate 5.10.1\n"
 "\"POT-Creation-Date: 2019-02-25 20:41:30"
 
 
 msgid "Select"
 msgstr "Алхра"
-
-
-msgid "Add"
-msgstr "Ацҵара"
-
-
-msgid "Subtract"
-msgstr "Ацхра"
-
-
-msgid "Empty"
-msgstr "Аҭацәы"
 
 
 msgctxt "ID"
@@ -69,6 +57,18 @@ msgstr "Метампыл"
 msgctxt "ID"
 msgid "Speaker"
 msgstr "Абжьы Ахыҵхырҭа"
+
+
+msgid "Add"
+msgstr "Ацҵара"
+
+
+msgid "Subtract"
+msgstr "Ацхра"
+
+
+msgid "Empty"
+msgstr "Аҭацәы"
 
 
 msgid "Edge"
@@ -163,6 +163,10 @@ msgid "Group"
 msgstr "Агәыԥ"
 
 
+msgid "Roughness"
+msgstr "Аџьаџьара"
+
+
 msgid "Cone"
 msgstr "Аконус"
 
@@ -183,32 +187,8 @@ msgid "Window"
 msgstr "Аԥенџьыр"
 
 
-msgid "Lattice"
-msgstr "Аҭыџьеихац"
-
-
 msgid "Library"
 msgstr "Ашәҟәыԥхьарҭа"
-
-
-msgid "Light"
-msgstr "Алашара"
-
-
-msgid "Mesh"
-msgstr "Аҿарҧага"
-
-
-msgid "Metaball"
-msgstr "Метампыл"
-
-
-msgid "Speaker"
-msgstr "Абжьы Ахыҵхырҭа"
-
-
-msgid "Text"
-msgstr "Аҳәоу"
 
 
 msgid "Local"
@@ -233,16 +213,16 @@ msgid "Cube"
 msgstr "Акуб"
 
 
-msgid "Roughness"
-msgstr "Аџьаџьара"
-
-
 msgid "Specular"
 msgstr "Ацырцырра"
 
 
 msgid "Edit"
 msgstr "Аиҭакра"
+
+
+msgid "Mesh"
+msgstr "Аҿарҧага"
 
 
 msgid "Circle"
@@ -273,6 +253,10 @@ msgid "Texture Paint"
 msgstr "Атекстура Ашәра"
 
 
+msgid "Lattice"
+msgstr "Аҭыџьеихац"
+
+
 msgctxt "ID"
 msgid "Empty"
 msgstr "Аҭацәы"
@@ -280,6 +264,18 @@ msgstr "Аҭацәы"
 
 msgid "3D Cursor"
 msgstr "3Д Ахырхага"
+
+
+msgid "Text"
+msgstr "Аҳәоу"
+
+
+msgid "Metaball"
+msgstr "Метампыл"
+
+
+msgid "Light"
+msgstr "Алашара"
 
 
 msgid "Marker"
@@ -313,11 +309,6 @@ msgstr "Аҿыц"
 msgctxt "Operator"
 msgid "Add Circle"
 msgstr "Ацҵара Аицыгьежь"
-
-
-msgctxt "Operator"
-msgid "Scale"
-msgstr "Ашәага"
 
 
 msgctxt "Operator"
@@ -385,6 +376,11 @@ msgid "New"
 msgstr "Аҿыц"
 
 
+msgctxt "Operator"
+msgid "Scale"
+msgstr "Ашәага"
+
+
 msgctxt "Sequence"
 msgid "Text"
 msgstr "Аҳәоу"
@@ -403,14 +399,18 @@ msgid "Circle"
 msgstr "Аицыгьежь"
 
 
-msgctxt "Sequence"
-msgid "Image"
-msgstr "Асахьанҵа"
-
-
 msgctxt "MovieClip"
 msgid "View"
 msgstr "Аԥшра"
+
+
+msgid "Speaker"
+msgstr "Абжьы Ахыҵхырҭа"
+
+
+msgctxt "Sequence"
+msgid "Image"
+msgstr "Асахьанҵа"
 
 
 msgctxt "WindowManager"
@@ -446,11 +446,6 @@ msgstr "Аҭыԥ"
 msgctxt "Operator"
 msgid "Rotation"
 msgstr "Агьежьра"
-
-
-msgctxt "Image"
-msgid "New"
-msgstr "Аҿыц"
 
 
 msgctxt "Operator"
@@ -544,6 +539,11 @@ msgstr "Аҿыц"
 
 
 msgctxt "GPencil"
+msgid "New"
+msgstr "Аҿыц"
+
+
+msgctxt "Image"
 msgid "New"
 msgstr "Аҿыц"
 
@@ -701,9 +701,4 @@ msgstr "Аԥшра"
 
 msgid "cursor"
 msgstr "Ахырхага"
-
-
-msgctxt "Action"
-msgid "Group"
-msgstr "Агәыԥ"
 

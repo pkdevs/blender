@@ -34,9 +34,11 @@
 
 #include "BLI_compiler_attrs.h"
 #include "BLI_set.hh"
+#include "BLI_string_ref.hh"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
+#include "DNA_ID.h"
 #include "DNA_userdef_enums.h"
 
 struct BlendWriter;
@@ -57,7 +59,7 @@ size_t BKE_libblock_get_alloc_info(short type, const char **r_name);
  * Allocates and returns memory of the right size for the specified block type,
  * initialized to zero.
  */
-void *BKE_libblock_alloc_notest(short type) ATTR_WARN_UNUSED_RESULT;
+ID *BKE_libblock_alloc_notest(short type) ATTR_WARN_UNUSED_RESULT;
 /**
  * Allocates and returns an ID block of the specified type, with the specified name
  * (adjusted as necessary to ensure uniqueness), and appended to the specified list.
@@ -151,29 +153,39 @@ void *BKE_id_new_nomain(short type, const char *name);
  */
 enum {
   /* *** Generic options (should be handled by all ID types copying, ID creation, etc.). *** */
-  /** Create data-block outside of any main database -
-   * similar to 'localize' functions of materials etc. */
+  /**
+   * Create data-block outside of any main database -
+   * similar to 'localize' functions of materials etc.
+   */
   LIB_ID_CREATE_NO_MAIN = 1 << 0,
-  /** Do not affect user refcount of data-blocks used by new one
+  /**
+   * Do not affect user reference-count of data-blocks used by new one
    * (which also gets zero user-count then).
-   * Implies LIB_ID_CREATE_NO_MAIN. */
+   * Implies LIB_ID_CREATE_NO_MAIN.
+   */
   LIB_ID_CREATE_NO_USER_REFCOUNT = 1 << 1,
-  /** Assume given 'newid' already points to allocated memory for whole data-block
+  /**
+   * Assume given `newid` already points to allocated memory for whole data-block
    * (ID + data) - USE WITH CAUTION!
-   * Implies LIB_ID_CREATE_NO_MAIN. */
+   * Implies LIB_ID_CREATE_NO_MAIN.
+   */
   LIB_ID_CREATE_NO_ALLOCATE = 1 << 2,
 
   /** Do not tag new ID for update in depsgraph. */
   LIB_ID_CREATE_NO_DEG_TAG = 1 << 8,
 
-  /** Very similar to #LIB_ID_CREATE_NO_MAIN, and should never be used with it (typically combined
+  /**
+   * Very similar to #LIB_ID_CREATE_NO_MAIN, and should never be used with it (typically combined
    * with #LIB_ID_CREATE_LOCALIZE or #LIB_ID_COPY_LOCALIZE in fact).
    * It ensures that IDs created with it will get the #ID_TAG_LOCALIZED tag, and uses some
-   * specific code in some copy cases (mostly for node trees). */
+   * specific code in some copy cases (mostly for node trees).
+   */
   LIB_ID_CREATE_LOCAL = 1 << 9,
 
-  /** Create for the depsgraph, when set #ID_TAG_COPIED_ON_EVAL must be set.
-   * Internally this is used to share some pointers instead of duplicating them. */
+  /**
+   * Create for the depsgraph, when set #ID_TAG_COPIED_ON_EVAL must be set.
+   * Internally this is used to share some pointers instead of duplicating them.
+   */
   LIB_ID_COPY_SET_COPIED_ON_WRITE = 1 << 10,
 
   /* *** Specific options to some ID types or usages. *** */
@@ -188,8 +200,10 @@ enum {
   LIB_ID_COPY_NO_ANIMDATA = 1 << 19,
   /** Do not copy id->override_library, used by ID data-block override routines. */
   LIB_ID_COPY_NO_LIB_OVERRIDE = 1 << 21,
-  /** When copying local sub-data (like constraints or modifiers), do not set their "library
-   * override local data" flag. */
+  /**
+   * When copying local sub-data (like constraints or modifiers), do not set their "library
+   * override local data" flag.
+   */
   LIB_ID_COPY_NO_LIB_OVERRIDE_LOCAL_DATA_FLAG = 1 << 22,
 
   /* *** XXX Hackish/not-so-nice specific behaviors needed for some corner cases. *** */
@@ -220,22 +234,22 @@ enum {
                          LIB_ID_COPY_NO_LIB_OVERRIDE,
 };
 
-void BKE_libblock_copy_ex(Main *bmain, const ID *id, ID **r_newid, int orig_flag);
+void BKE_libblock_copy_ex(Main *bmain, const ID *id, ID **new_id_p, int orig_flag);
 /**
  * Same as #BKE_libblock_copy_ex, but allows copying data into a library, and not as local data
  * only.
  *
  * \param owner_library: the Library to 'assign' the newly created ID to. Use `nullptr` to make ID
- * not use any library (i.e. become a local ID). Use std::nullopt for default behavior (i.e.
+ * not use any library (i.e. become a local ID). Use #std::nullopt for default behavior (i.e.
  * behavior of the #BKE_libblock_copy_ex function).
  * \param new_owner_id: When copying an embedded ID, the owner ID of the new copy. Should be
- * `nullptr` for regular ID copying, or in case the owner ID is not (yet) known.
+ * `nullopt` for regular ID copying, or in case the owner ID is not (yet) known.
  */
 void BKE_libblock_copy_in_lib(Main *bmain,
                               std::optional<Library *> owner_library,
                               const ID *id,
-                              const ID *new_owner_id,
-                              ID **r_newid,
+                              std::optional<const ID *> new_owner_id,
+                              ID **new_id_p,
                               int orig_flag);
 
 /**
@@ -255,14 +269,92 @@ void *BKE_libblock_copy(Main *bmain, const ID *id) ATTR_WARN_UNUSED_RESULT ATTR_
  */
 void BKE_id_move_to_same_lib(Main &bmain, ID &id, const ID &owner_id);
 
+/** How to handle ID rename in case requested name is already used by another ID. */
+enum class IDNewNameMode {
+  /**
+   * Never rename another existing ID if the target name is already in use. The renamed ID will get
+   * a name modified with a numerical suffix instead.
+   */
+  RenameExistingNever = 0,
+  /**
+   * Always rename another existing ID if the target name is already in use. The renamed ID will
+   * get the requested unmodified name.
+   */
+  RenameExistingAlways = 1,
+  /**
+   * Only rename another existing ID if the target name is already in use, when the current name of
+   * the renamed ID has the same root as the other ID name (i.e. they have the same name, besides
+   * the numeric suffix).
+   * E.g. Assuming there is already an existing ID named `Object`:
+   *   - Renaming `Object.001` to `Object`: rename to `Object`, the existing `Object` ID is renamed
+   *     to e.g. `Object.001`
+   *   - Renaming `Cube` to `Object`: rename to `Object.001`,  the existing `Object` ID is not
+   *     renamed.
+   */
+  RenameExistingSameRoot = 2,
+};
+
+/** Information about how an ID rename went on. */
+struct IDNewNameResult {
+  /** How the renaming went on. */
+  enum class Action {
+    /** ID was not renamed, because requested new name was already the ID's name. */
+    UNCHANGED = 0,
+    /**
+     * ID was not renamed, because requested new name would collide with another existing ID's
+     * name, and the first available unique name is already current ID's name.
+     */
+    UNCHANGED_COLLISION = 1,
+    /** Successfully renamed, without any collision with another ID's name. */
+    RENAMED_NO_COLLISION = 2,
+    /**
+     * Successfully renamed, requested new name was adjusted to avoid collision with another ID.
+     */
+    RENAMED_COLLISION_ADJUSTED = 3,
+    /**
+     * Successfully renamed, requested new name was enforced onto given ID, and another ID had to
+     * be renamed to avoid name collision.
+     */
+    RENAMED_COLLISION_FORCED = 4,
+  } action = Action::UNCHANGED;
+
+  /**
+   * The colliding ID, if any.
+   *
+   * \warning Currently will be `nullptr` in #RENAMED_COLLISION_ADJUSTED case, for performance
+   * reasons (avoid an ID lookup by name) when doing 'standard' #RenameExistingNever renames.
+   */
+  ID *other_id = nullptr;
+};
+
 /**
  * Sets the name of a block to name, suitably adjusted for uniqueness.
+ *
+ * \return true if the name of the ID was actually modified.
  */
-void BKE_libblock_rename(Main *bmain, ID *id, const char *name) ATTR_NONNULL();
+IDNewNameResult BKE_libblock_rename(Main &bmain,
+                                    ID &id,
+                                    blender::StringRefNull name,
+                                    const IDNewNameMode mode = IDNewNameMode::RenameExistingNever);
 
-ID *BKE_libblock_find_name(Main *bmain, short type, const char *name) ATTR_WARN_UNUSED_RESULT
-    ATTR_NONNULL();
+/**
+ * Like #BKE_libblock_rename, but also performs additional higher-level updates like depsgraph
+ * tagging when renaming Meta-ball objects, etc.
+ *
+ * \return true if the name of the ID was actually modified.
+ */
+IDNewNameResult BKE_id_rename(Main &bmain,
+                              ID &id,
+                              blender::StringRefNull name,
+                              const IDNewNameMode mode = IDNewNameMode::RenameExistingNever);
+
+ID *BKE_libblock_find_name(Main *bmain,
+                           short type,
+                           const char *name,
+                           const std::optional<Library *> lib = std::nullopt)
+    ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 ID *BKE_libblock_find_session_uid(Main *bmain, short type, uint32_t session_uid);
+ID *BKE_libblock_find_session_uid(Main *bmain, uint32_t session_uid);
 ID *BKE_libblock_find_name_and_library(Main *bmain,
                                        short type,
                                        const char *name,
@@ -277,14 +369,17 @@ ID *BKE_libblock_find_name_and_library_filepath(Main *bmain,
  * See also eDupli_ID_Flags for options controlling what kind of IDs to duplicate.
  */
 enum eLibIDDuplicateFlags {
-  /** This call to a duplicate function is part of another call for some parent ID.
+  /**
+   * This call to a duplicate function is part of another call for some parent ID.
    * Therefore, this sub-process should not clear `newid` pointers, nor handle remapping itself.
    * NOTE: In some cases (like Object one), the duplicate function may be called on the root ID
    * with this flag set, as remapping and/or other similar tasks need to be handled by the caller.
    */
   LIB_ID_DUPLICATE_IS_SUBPROCESS = 1 << 0,
-  /** This call is performed on a 'root' ID, and should therefore perform some decisions regarding
-   * sub-IDs (dependencies), check for linked vs. locale data, etc. */
+  /**
+   * This call is performed on a 'root' ID, and should therefore perform some decisions regarding
+   * sub-IDs (dependencies), check for linked vs. locale data, etc.
+   */
   LIB_ID_DUPLICATE_IS_ROOT_ID = 1 << 1,
 };
 
@@ -299,7 +394,7 @@ enum {
   /** Do not try to remove freed ID from given Main (passed Main may be NULL). */
   LIB_ID_FREE_NO_MAIN = 1 << 0,
   /**
-   * Do not affect user refcount of data-blocks used by freed one.
+   * Do not affect user reference-count of data-blocks used by freed one.
    * Implies LIB_ID_FREE_NO_MAIN.
    */
   LIB_ID_FREE_NO_USER_REFCOUNT = 1 << 1,
@@ -318,8 +413,15 @@ enum {
   LIB_ID_FREE_NO_NAMEMAP_REMOVE = 1 << 10,
 };
 
+/**
+ * Low-level ID freeing functions.
+ *
+ * \note These functions do NOT cover embedded IDs. Those are managed by the
+ * owning ID, and are typically allocated/freed from the IDType callbacks.
+ */
 void BKE_libblock_free_datablock(ID *id, int flag) ATTR_NONNULL();
 void BKE_libblock_free_data(ID *id, bool do_id_user) ATTR_NONNULL();
+void BKE_libblock_free_runtime_data(ID *id) ATTR_NONNULL();
 
 /**
  * In most cases #BKE_id_free_ex handles this, when lower level functions are called directly
@@ -512,29 +614,29 @@ bool BKE_id_copy_is_allowed(const ID *id);
  *
  * \param bmain: Main database, may be NULL only if LIB_ID_CREATE_NO_MAIN is specified.
  * \param id: Source data-block.
- * \param r_newid: Pointer to new (copied) ID pointer, may be NULL.
+ * \param new_id_p: Pointer to new (copied) ID pointer, may be NULL.
  * Used to allow copying into already allocated memory.
  * \param flag: Set of copy options, see `DNA_ID.h` enum for details
  * (leave to zero for default, full copy).
  * \return NULL when copying that ID type is not supported, the new copy otherwise.
  */
-ID *BKE_id_copy_ex(Main *bmain, const ID *id, ID **r_newid, int flag);
+ID *BKE_id_copy_ex(Main *bmain, const ID *id, ID **new_id_p, int flag);
 /**
- * Enable coying non-local data into libraries.
+ * Enable copying non-local data into libraries.
  *
  * See #BKE_id_copy_ex for details.
  *
  * \param owner_library: the Library to 'assign' the newly created ID to. Use `nullptr` to make ID
- * not use any library (i.e. become a local ID). Use std::nullopt for default behavior (i.e.
+ * not use any library (i.e. become a local ID). Use #std::nullopt for default behavior (i.e.
  * behavior of the #BKE_id_copy_ex function).
  * \param new_owner_id: When copying an embedded ID, the owner ID of the new copy. Should be
- * `nullptr` for regular ID copying, or in case the owner ID is not (yet) known.
+ * `nullopt` for regular ID copying, or in case the owner ID is not (yet) known.
  */
 struct ID *BKE_id_copy_in_lib(Main *bmain,
                               std::optional<Library *> owner_library,
                               const ID *id,
-                              const ID *new_owner_id,
-                              ID **r_newid,
+                              std::optional<const ID *> new_owner_id,
+                              ID **new_id_p,
                               int flag);
 /**
  * Invoke the appropriate copy method for the block and return the new id as result.
@@ -618,14 +720,14 @@ void BKE_lib_id_expand_local(Main *bmain, ID *id, int flags);
  * \param do_linked_data: if true, also ensure a unique name in case the given ID is linked
  * (otherwise, just ensure that it is properly sorted).
  *
- * \return true if the ID's name has been modified (either from given `name` parameter, or because
- * its current name was colliding with another existing ID).
+ * \return How renaming went on, see #IDNewNameResult for details.
  */
-bool BKE_id_new_name_validate(Main *bmain,
-                              ListBase *lb,
-                              ID *id,
-                              const char *newname,
-                              bool do_linked_data) ATTR_NONNULL(1, 2, 3);
+IDNewNameResult BKE_id_new_name_validate(Main &bmain,
+                                         ListBase &lb,
+                                         ID &id,
+                                         const char *newname,
+                                         IDNewNameMode mode,
+                                         bool do_linked_data);
 
 /**
  * Pull an ID out of a library (make it local). Only call this for IDs that
@@ -674,7 +776,7 @@ void BKE_main_lib_objects_recalc_all(Main *bmain);
 void BKE_main_id_repair_duplicate_names_listbase(Main *bmain, ListBase *lb);
 
 #define MAX_ID_FULL_NAME (64 + 64 + 3 + 1)         /* 64 is MAX_ID_NAME - 2 */
-#define MAX_ID_FULL_NAME_UI (MAX_ID_FULL_NAME + 3) /* Adds 'keycode' two letters at beginning. */
+#define MAX_ID_FULL_NAME_UI (MAX_ID_FULL_NAME + 3) /* Adds `keycode` two letters at beginning. */
 /**
  * Generate full name of the data-block (without ID code, but with library if any).
  *
@@ -706,6 +808,18 @@ void BKE_id_full_name_ui_prefix_get(char name[MAX_ID_FULL_NAME_UI],
                                     int *r_prefix_len);
 
 /**
+ * Get the name (without type prefix) of the ID.
+ */
+inline const char *BKE_id_name(const ID &id)
+{
+  return id.name + 2;
+}
+inline char *BKE_id_name(ID &id)
+{
+  return id.name + 2;
+}
+
+/**
  * Generate a concatenation of ID name (including two-chars type code) and its lib name, if any.
  *
  * \return A unique allocated string key for any ID in the whole Main database.
@@ -734,6 +848,8 @@ void BKE_library_make_local(Main *bmain,
 void BKE_id_tag_set_atomic(ID *id, int tag);
 void BKE_id_tag_clear_atomic(ID *id, int tag);
 
+/** Check that given ID pointer actually is in given `bmain`. */
+bool BKE_id_is_in_main(Main *bmain, ID *id);
 /**
  * Check that given ID pointer actually is in G_MAIN.
  * Main intended use is for debug asserts in places we cannot easily get rid of #G_MAIN.

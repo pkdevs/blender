@@ -2,24 +2,23 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "editors/sculpt_paint/brushes/types.hh"
+#include "editors/sculpt_paint/brushes/brushes.hh"
 
 #include "BLI_enumerable_thread_specific.hh"
+#include "BLI_math_geom.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_task.h"
 
 #include "DNA_brush_types.h"
 #include "DNA_object_types.h"
 
 #include "BKE_brush.hh"
-#include "BKE_ccg.hh"
 #include "BKE_mesh.hh"
 #include "BKE_paint.hh"
-#include "BKE_pbvh_api.hh"
+#include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
 
 #include "GPU_immediate.hh"
@@ -31,14 +30,20 @@
 #include <cstdlib>
 
 #include "editors/sculpt_paint/mesh_brush_common.hh"
+#include "editors/sculpt_paint/sculpt_automask.hh"
 #include "editors/sculpt_paint/sculpt_intern.hh"
 
-namespace blender::ed::sculpt_paint {
+namespace blender::ed::sculpt_paint::brushes {
 
 struct ScrapeSampleData {
   std::array<float3, 2> area_cos;
   std::array<float3, 2> area_nos;
   std::array<int, 2> area_count;
+
+  bool has_samples() const
+  {
+    return area_count[0] != 0 && area_count[1] != 0;
+  }
 };
 
 struct LocalData {
@@ -131,20 +136,20 @@ static void sample_node_surface_mesh(const Depsgraph &depsgraph,
                                      const float4x4 &mat,
                                      const Span<float3> vert_positions,
                                      const Span<float3> vert_normals,
+                                     const MeshAttributeData &attribute_data,
                                      const bke::pbvh::MeshNode &node,
                                      ScrapeSampleData &sample,
                                      LocalData &tls)
 {
   const SculptSession &ss = *object.sculpt;
   const StrokeCache &cache = *ss.cache;
-  const Mesh &mesh = *static_cast<Mesh *>(object.data);
 
   const Span<int> verts = node.verts();
   const MutableSpan positions = gather_data_mesh(vert_positions, verts, tls.positions);
 
   tls.factors.resize(verts.size());
   const MutableSpan<float> factors = tls.factors;
-  fill_factor_from_hide_and_mask(mesh, verts, factors);
+  fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
   filter_region_clip_factors(ss, positions, factors);
   if (brush.flag & BRUSH_FRONTFACE) {
     calc_front_face(cache.view_normal_symm, vert_normals, verts, factors);
@@ -261,20 +266,29 @@ static void sample_node_surface_bmesh(const Depsgraph &depsgraph,
   accumulate_samples(positions, local_positions, normals, factors, sample);
 }
 
-static ScrapeSampleData sample_surface(const Depsgraph &depsgraph,
-                                       const Object &object,
-                                       const Brush &brush,
-                                       const float4x4 &mat,
-                                       const IndexMask &node_mask)
+/**
+ * Samples and partitions the underlying mesh data to aggregate position and normal data based on
+ * positive and negative brush local x-axis positions.
+ *
+ * \returns an empty optional to indicate that no samples were taken.
+ */
+static std::optional<ScrapeSampleData> sample_surface(const Depsgraph &depsgraph,
+                                                      const Object &object,
+                                                      const Brush &brush,
+                                                      const float4x4 &mat,
+                                                      const IndexMask &node_mask)
 {
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   threading::EnumerableThreadSpecific<LocalData> all_tls;
+  ScrapeSampleData result = {};
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
+      Mesh &mesh = *static_cast<Mesh *>(object.data);
+      const MeshAttributeData attribute_data(mesh);
       const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       const Span<float3> positions_eval = bke::pbvh::vert_positions_eval(depsgraph, object);
       const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, object);
-      return threading::parallel_reduce(
+      result = threading::parallel_reduce(
           node_mask.index_range(),
           1,
           ScrapeSampleData{},
@@ -287,6 +301,7 @@ static ScrapeSampleData sample_surface(const Depsgraph &depsgraph,
                                        mat,
                                        positions_eval,
                                        vert_normals,
+                                       attribute_data,
                                        nodes[i],
                                        sample,
                                        tls);
@@ -298,7 +313,7 @@ static ScrapeSampleData sample_surface(const Depsgraph &depsgraph,
     }
     case bke::pbvh::Type::Grids: {
       const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      return threading::parallel_reduce(
+      result = threading::parallel_reduce(
           node_mask.index_range(),
           1,
           ScrapeSampleData{},
@@ -314,7 +329,7 @@ static ScrapeSampleData sample_surface(const Depsgraph &depsgraph,
     }
     case bke::pbvh::Type::BMesh: {
       const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      return threading::parallel_reduce(
+      result = threading::parallel_reduce(
           node_mask.index_range(),
           1,
           ScrapeSampleData{},
@@ -329,8 +344,8 @@ static ScrapeSampleData sample_surface(const Depsgraph &depsgraph,
       break;
     }
   }
-  BLI_assert_unreachable();
-  return {};
+
+  return result.has_samples() ? std::make_optional(result) : std::nullopt;
 }
 
 static void calc_faces(const Depsgraph &depsgraph,
@@ -340,23 +355,22 @@ static void calc_faces(const Depsgraph &depsgraph,
                        const std::array<float4, 2> &scrape_planes,
                        const float angle,
                        const float strength,
-                       const Span<float3> positions_eval,
                        const Span<float3> vert_normals,
+                       const MeshAttributeData &attribute_data,
                        const bke::pbvh::MeshNode &node,
                        Object &object,
                        LocalData &tls,
-                       const MutableSpan<float3> positions_orig)
+                       const PositionDeformData &position_data)
 {
   SculptSession &ss = *object.sculpt;
   const StrokeCache &cache = *ss.cache;
-  Mesh &mesh = *static_cast<Mesh *>(object.data);
 
   const Span<int> verts = node.verts();
-  const MutableSpan positions = gather_data_mesh(positions_eval, verts, tls.positions);
+  const MutableSpan positions = gather_data_mesh(position_data.eval, verts, tls.positions);
 
   tls.factors.resize(verts.size());
   const MutableSpan<float> factors = tls.factors;
-  fill_factor_from_hide_and_mask(mesh, verts, factors);
+  fill_factor_from_hide_and_mask(attribute_data.hide_vert, attribute_data.mask, verts, factors);
   filter_region_clip_factors(ss, positions, factors);
   if (brush.flag & BRUSH_FRONTFACE) {
     calc_front_face(cache.view_normal_symm, vert_normals, verts, factors);
@@ -391,7 +405,8 @@ static void calc_faces(const Depsgraph &depsgraph,
   scale_factors(factors, strength);
   scale_translations(translations, factors);
 
-  write_translations(depsgraph, sd, object, positions_eval, verts, translations, positions_orig);
+  clip_and_lock_translations(sd, ss, position_data.eval, verts, translations);
+  position_data.deform(translations, verts);
 }
 
 static void calc_grids(const Depsgraph &depsgraph,
@@ -522,19 +537,17 @@ void do_multiplane_scrape_brush(const Depsgraph &depsgraph,
 
   const bool flip = (ss.cache->bstrength < 0.0f);
   const float radius = flip ? -ss.cache->radius : ss.cache->radius;
-  const float offset = SCULPT_brush_plane_offset_get(sd, ss);
+  const float offset = brush_plane_offset_get(brush, ss);
   const float displace = -radius * offset;
 
-  float3 area_no_sp;
-  float3 area_co;
-  calc_brush_plane(depsgraph, brush, object, node_mask, area_no_sp, area_co);
+  float3 sculpt_plane_normal;
+  float3 area_position;
+  calc_brush_plane(depsgraph, brush, object, node_mask, sculpt_plane_normal, area_position);
 
-  float3 area_no;
+  float3 area_normal = sculpt_plane_normal;
+  /* Ignore brush settings and recalculate the area normal. */
   if (brush.sculpt_plane != SCULPT_DISP_DIR_AREA || (brush.flag & BRUSH_ORIGINAL_NORMAL)) {
-    area_no = calc_area_normal(depsgraph, brush, object, node_mask).value_or(float3(0));
-  }
-  else {
-    area_no = area_no_sp;
+    area_normal = calc_area_normal(depsgraph, brush, object, node_mask).value_or(float3(0));
   }
 
   /* Delay the first daub because grab delta is not setup. */
@@ -547,13 +560,13 @@ void do_multiplane_scrape_brush(const Depsgraph &depsgraph,
     return;
   }
 
-  area_co = area_no_sp * ss.cache->scale * displace;
+  area_position += area_normal * ss.cache->scale * displace;
 
   /* Init brush local space matrix. */
   float4x4 mat = float4x4::identity();
-  mat.x_axis() = math::cross(area_no, ss.cache->grab_delta_symm);
-  mat.y_axis() = math::cross(area_no, mat.x_axis());
-  mat.z_axis() = area_no;
+  mat.x_axis() = math::cross(area_normal, ss.cache->grab_delta_symm);
+  mat.y_axis() = math::cross(area_normal, mat.x_axis());
+  mat.z_axis() = area_normal;
   mat.location() = ss.cache->location_symm;
   /* NOTE: #math::normalize behaves differently for some reason. */
   normalize_m4(mat.ptr());
@@ -568,21 +581,27 @@ void do_multiplane_scrape_brush(const Depsgraph &depsgraph,
 
   if (brush.flag2 & BRUSH_MULTIPLANE_SCRAPE_DYNAMIC) {
     /* Sample the individual normal and area center of the areas at both sides of the cursor. */
-    const ScrapeSampleData sample = sample_surface(depsgraph, object, brush, mat, node_mask);
+    const std::optional<ScrapeSampleData> sample = sample_surface(
+        depsgraph, object, brush, mat, node_mask);
+    if (!sample) {
+      return;
+    }
+
+    BLI_assert(sample->has_samples());
 
     /* Use the plane centers to check if we are sculpting along a concave or convex edge. */
     const std::array<float3, 2> sampled_plane_co{
-        sample.area_cos[0] * 1.0f / float(sample.area_count[0]),
-        sample.area_cos[1] * 1.0f / float(sample.area_count[1])};
+        sample->area_cos[0] * 1.0f / float(sample->area_count[0]),
+        sample->area_cos[1] * 1.0f / float(sample->area_count[1])};
     const float3 mid_co = math::midpoint(sampled_plane_co[0], sampled_plane_co[1]);
 
     /* Calculate the scrape planes angle based on the sampled normals. */
     const std::array<float3, 2> sampled_plane_normals{
-        math::normalize(sample.area_nos[0] * 1.0f / float(sample.area_count[0])),
-        math::normalize(sample.area_nos[1] * 1.0f / float(sample.area_count[1]))};
+        math::normalize(sample->area_nos[0] * 1.0f / float(sample->area_count[0])),
+        math::normalize(sample->area_nos[1] * 1.0f / float(sample->area_count[1]))};
 
     float sampled_angle = angle_v3v3(sampled_plane_normals[0], sampled_plane_normals[1]);
-    const std::array<float3, 2> sampled_cv{area_no, ss.cache->location_symm - mid_co};
+    const std::array<float3, 2> sampled_cv{area_normal, ss.cache->location_symm - mid_co};
 
     sampled_angle += DEG2RADF(brush.multiplane_scrape_angle) * ss.cache->pressure;
 
@@ -597,7 +616,7 @@ void do_multiplane_scrape_brush(const Depsgraph &depsgraph,
       sampled_angle = 0.0f;
     }
     else {
-      area_co = ss.cache->location_symm;
+      area_position = ss.cache->location_symm;
     }
 
     /* Interpolate between the previous and new sampled angles to avoid artifacts when if angle
@@ -607,7 +626,7 @@ void do_multiplane_scrape_brush(const Depsgraph &depsgraph,
   }
   else {
     /* Standard mode: Scrape with the brush property fixed angle. */
-    area_co = ss.cache->location_symm;
+    area_position = ss.cache->location_symm;
     ss.cache->multiplane_scrape_angle = brush.multiplane_scrape_angle;
     if (flip) {
       ss.cache->multiplane_scrape_angle *= -1.0f;
@@ -622,90 +641,90 @@ void do_multiplane_scrape_brush(const Depsgraph &depsgraph,
 
   std::array<float4, 2> multiplane_scrape_planes;
 
-  mul_v3_mat3_m4v3(plane_no, mat.ptr(), area_no);
+  mul_v3_mat3_m4v3(plane_no, mat.ptr(), area_normal);
   rotate_v3_v3v3fl(
       plane_no_rot, plane_no, y_axis, DEG2RADF(-ss.cache->multiplane_scrape_angle * 0.5f));
   mul_v3_mat3_m4v3(plane_no, mat_inv.ptr(), plane_no_rot);
   normalize_v3(plane_no);
-  plane_from_point_normal_v3(multiplane_scrape_planes[1], area_co, plane_no);
+  plane_from_point_normal_v3(multiplane_scrape_planes[1], area_position, plane_no);
 
-  mul_v3_mat3_m4v3(plane_no, mat.ptr(), area_no);
+  mul_v3_mat3_m4v3(plane_no, mat.ptr(), area_normal);
   rotate_v3_v3v3fl(
       plane_no_rot, plane_no, y_axis, DEG2RADF(ss.cache->multiplane_scrape_angle * 0.5f));
   mul_v3_mat3_m4v3(plane_no, mat_inv.ptr(), plane_no_rot);
   normalize_v3(plane_no);
-  plane_from_point_normal_v3(multiplane_scrape_planes[0], area_co, plane_no);
+  plane_from_point_normal_v3(multiplane_scrape_planes[0], area_position, plane_no);
 
   const float strength = std::abs(ss.cache->bstrength);
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
-      MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       Mesh &mesh = *static_cast<Mesh *>(object.data);
-      const Span<float3> positions_eval = bke::pbvh::vert_positions_eval(depsgraph, object);
+      const MeshAttributeData attribute_data(mesh);
+      MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
+      const PositionDeformData position_data(depsgraph, object);
       const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, object);
-      MutableSpan<float3> positions_orig = mesh.vert_positions_for_write();
-      threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
-        for (const int i : range) {
-          calc_faces(depsgraph,
-                     sd,
-                     brush,
-                     mat,
-                     multiplane_scrape_planes,
-                     ss.cache->multiplane_scrape_angle,
-                     strength,
-                     positions_eval,
-                     vert_normals,
-                     nodes[i],
-                     object,
-                     tls,
-                     positions_orig);
-          BKE_pbvh_node_mark_positions_update(nodes[i]);
-        }
+        calc_faces(depsgraph,
+                   sd,
+                   brush,
+                   mat,
+                   multiplane_scrape_planes,
+                   ss.cache->multiplane_scrape_angle,
+                   strength,
+                   vert_normals,
+                   attribute_data,
+                   nodes[i],
+                   object,
+                   tls,
+                   position_data);
+        bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
       });
       break;
     }
     case bke::pbvh::Type::Grids: {
+      SubdivCCG &subdiv_ccg = *object.sculpt->subdiv_ccg;
+      MutableSpan<float3> positions = subdiv_ccg.positions;
       MutableSpan<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_grids(depsgraph,
-                     sd,
-                     brush,
-                     mat,
-                     multiplane_scrape_planes,
-                     ss.cache->multiplane_scrape_angle,
-                     strength,
-                     nodes[i],
-                     object,
-                     tls);
-        });
+        calc_grids(depsgraph,
+                   sd,
+                   brush,
+                   mat,
+                   multiplane_scrape_planes,
+                   ss.cache->multiplane_scrape_angle,
+                   strength,
+                   nodes[i],
+                   object,
+                   tls);
+        bke::pbvh::update_node_bounds_grids(subdiv_ccg.grid_area, positions, nodes[i]);
       });
       break;
     }
     case bke::pbvh::Type::BMesh: {
       MutableSpan<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-      threading::parallel_for(node_mask.index_range(), 1, [&](const IndexRange range) {
+      node_mask.foreach_index(GrainSize(1), [&](const int i) {
         LocalData &tls = all_tls.local();
-        node_mask.slice(range).foreach_index([&](const int i) {
-          calc_bmesh(depsgraph,
-                     sd,
-                     brush,
-                     mat,
-                     multiplane_scrape_planes,
-                     ss.cache->multiplane_scrape_angle,
-                     strength,
-                     nodes[i],
-                     object,
-                     tls);
-        });
+        calc_bmesh(depsgraph,
+                   sd,
+                   brush,
+                   mat,
+                   multiplane_scrape_planes,
+                   ss.cache->multiplane_scrape_angle,
+                   strength,
+                   nodes[i],
+                   object,
+                   tls);
+        bke::pbvh::update_node_bounds_bmesh(nodes[i]);
       });
       break;
     }
   }
+  pbvh.tag_positions_changed(node_mask);
+  pbvh.flush_bounds_to_parents();
 }
 
 void multiplane_scrape_preview_draw(const uint gpuattr,
@@ -776,4 +795,4 @@ void multiplane_scrape_preview_draw(const uint gpuattr,
   immEnd();
 }
 
-}  // namespace blender::ed::sculpt_paint
+}  // namespace blender::ed::sculpt_paint::brushes

@@ -19,16 +19,6 @@ struct Image;
 struct MTex;
 struct Material;
 
-typedef struct BrushClone {
-  /** Image for clone tool. */
-  struct Image *image;
-  /** Offset of clone image from canvas. */
-  float offset[2];
-  /** Transparency for drawing of clone image. */
-  float alpha;
-  char _pad[4];
-} BrushClone;
-
 typedef struct BrushGpencilSettings {
   /** Amount of smoothing to apply to newly created strokes. */
   float draw_smoothfac;
@@ -166,12 +156,15 @@ typedef struct BrushCurvesSculptSettings {
 
 /** Max number of propagation steps for automasking settings. */
 #define AUTOMASKING_BOUNDARY_EDGES_MAX_PROPAGATION_STEPS 20
+/**
+ * \note Any change to members that is user visible and that may make the brush differ from the one
+ * saved in the asset library should be followed by a #BKE_brush_tag_unsaved_changes() call.
+ */
 typedef struct Brush {
   DNA_DEFINE_CXX_METHODS(Brush)
 
   ID id;
 
-  struct BrushClone clone;
   /** Falloff curve. */
   struct CurveMapping *curve;
   struct MTex mtex;
@@ -264,7 +257,11 @@ typedef struct Brush {
   /** Source for fill brush color gradient application. */
   char gradient_fill_mode;
 
-  char _pad0;
+  /**
+   * Tag to indicate to the user that the brush has been changed since being imported. Only set for
+   * brushes that are actually imported (must have #ID.lib set). Runtime only.
+   */
+  char has_unsaved_changes;
 
   /** Projection shape (sphere, circle). */
   char falloff_shape;
@@ -290,7 +287,7 @@ typedef struct Brush {
   char gpencil_weight_brush_type;
   /** Active curves sculpt brush type (#eBrushCurvesSculptType). */
   char curves_sculpt_brush_type;
-  char _pad1[6];
+  char _pad1[2];
 
   float autosmooth_factor;
 
@@ -307,6 +304,13 @@ typedef struct Brush {
   float plane_trim;
   /** Affectable height of brush (layer height for layer tool, i.e.). */
   float height;
+
+  /* Plane Brush */
+  float plane_height;
+  float plane_depth;
+  float stabilize_normal;
+  float stabilize_plane;
+  int plane_inversion_mode;
 
   float texture_sample_bias;
 

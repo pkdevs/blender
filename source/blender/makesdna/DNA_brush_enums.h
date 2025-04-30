@@ -263,6 +263,11 @@ typedef enum eBrushSnakeHookDeformType {
   BRUSH_SNAKE_HOOK_DEFORM_ELASTIC = 1,
 } eBrushSnakeHookDeformType;
 
+typedef enum eBrushPlaneInversionMode {
+  BRUSH_PLANE_INVERT_DISPLACEMENT = 0,
+  BRUSH_PLANE_SWAP_HEIGHT_AND_DEPTH = 1,
+} eBrushPlaneInversionMode;
+
 /** #Gpencilsettings.Vertex_mode */
 typedef enum eGp_Vertex_Mode {
   /* Affect to Stroke only. */
@@ -420,10 +425,14 @@ typedef enum eBrushSculptType {
   SCULPT_BRUSH_TYPE_INFLATE = 4,
   SCULPT_BRUSH_TYPE_GRAB = 5,
   SCULPT_BRUSH_TYPE_LAYER = 6,
+#ifdef DNA_DEPRECATED_ALLOW
   SCULPT_BRUSH_TYPE_FLATTEN = 7,
+#endif
   SCULPT_BRUSH_TYPE_CLAY = 8,
+#ifdef DNA_DEPRECATED_ALLOW
   SCULPT_BRUSH_TYPE_FILL = 9,
   SCULPT_BRUSH_TYPE_SCRAPE = 10,
+#endif
   SCULPT_BRUSH_TYPE_NUDGE = 11,
   SCULPT_BRUSH_TYPE_THUMB = 12,
   SCULPT_BRUSH_TYPE_SNAKE_HOOK = 13,
@@ -446,6 +455,7 @@ typedef enum eBrushSculptType {
   SCULPT_BRUSH_TYPE_BOUNDARY = 30,
   SCULPT_BRUSH_TYPE_DISPLACEMENT_ERASER = 31,
   SCULPT_BRUSH_TYPE_DISPLACEMENT_SMEAR = 32,
+  SCULPT_BRUSH_TYPE_PLANE = 33,
 } eBrushSculptType;
 
 /* Brush.curves_sculpt_brush_type. */
@@ -462,27 +472,6 @@ typedef enum eBrushCurvesSculptType {
   CURVES_SCULPT_BRUSH_TYPE_DENSITY = 9,
   CURVES_SCULPT_BRUSH_TYPE_SLIDE = 10,
 } eBrushCurvesSculptType;
-
-/** When #BRUSH_ACCUMULATE is used */
-#define SCULPT_BRUSH_TYPE_HAS_ACCUMULATE(t) \
-  ELEM(t, \
-       SCULPT_BRUSH_TYPE_DRAW, \
-       SCULPT_BRUSH_TYPE_DRAW_SHARP, \
-       SCULPT_BRUSH_TYPE_SLIDE_RELAX, \
-       SCULPT_BRUSH_TYPE_CREASE, \
-       SCULPT_BRUSH_TYPE_BLOB, \
-       SCULPT_BRUSH_TYPE_INFLATE, \
-       SCULPT_BRUSH_TYPE_CLAY, \
-       SCULPT_BRUSH_TYPE_CLAY_STRIPS, \
-       SCULPT_BRUSH_TYPE_CLAY_THUMB, \
-       SCULPT_BRUSH_TYPE_ROTATE, \
-       SCULPT_BRUSH_TYPE_SCRAPE, \
-       SCULPT_BRUSH_TYPE_FLATTEN)
-
-#define SCULPT_BRUSH_TYPE_HAS_NORMAL_WEIGHT(t) \
-  ELEM(t, SCULPT_BRUSH_TYPE_GRAB, SCULPT_BRUSH_TYPE_SNAKE_HOOK, SCULPT_BRUSH_TYPE_ELASTIC_DEFORM)
-
-#define SCULPT_BRUSH_TYPE_HAS_RAKE(t) ELEM(t, SCULPT_BRUSH_TYPE_SNAKE_HOOK)
 
 #define SCULPT_BRUSH_TYPE_HAS_DYNTOPO(t) \
   (ELEM(t, /* These brushes, as currently coded, cannot support dynamic topology */ \
@@ -504,16 +493,6 @@ typedef enum eBrushCurvesSculptType {
         /* These brushes could handle dynamic topology, \ \
          * but user feedback indicates it's better not to */ \
         SCULPT_BRUSH_TYPE_SMOOTH, \
-        SCULPT_BRUSH_TYPE_MASK) == 0)
-
-#define SCULPT_BRUSH_TYPE_HAS_TOPOLOGY_RAKE(t) \
-  (ELEM(t, /* These brushes, as currently coded, cannot support topology rake. */ \
-        SCULPT_BRUSH_TYPE_GRAB, \
-        SCULPT_BRUSH_TYPE_ROTATE, \
-        SCULPT_BRUSH_TYPE_THUMB, \
-        SCULPT_BRUSH_TYPE_DRAW_SHARP, \
-        SCULPT_BRUSH_TYPE_DISPLACEMENT_ERASER, \
-        SCULPT_BRUSH_TYPE_SLIDE_RELAX, \
         SCULPT_BRUSH_TYPE_MASK) == 0)
 
 /** #Brush.image_brush_type */

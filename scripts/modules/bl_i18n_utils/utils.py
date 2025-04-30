@@ -4,6 +4,16 @@
 
 # Some misc utilities...
 
+__all__ = (
+    "I18n",
+    "I18nMessage",
+    "I18nMessages",
+    "enable_addons",
+    "find_best_isocode_matches",
+    "get_po_files_from_dir",
+    "list_po_dir",
+)
+
 import collections
 import os
 import platform
@@ -16,7 +26,6 @@ from bl_i18n_utils import (
     settings,
     utils_rtl,
 )
-from typing import Dict
 
 
 ##### Misc Utils #####
@@ -66,10 +75,11 @@ def locale_explode(locale):
     m = _locale_explode_re.match(locale)
     if m:
         lang, country, variant = m.groups()
-        return (lang, country, variant,
-                "%s_%s" % (lang, country) if country else None,
-                "%s@%s" % (lang, variant) if variant else None)
-
+        return (
+            lang, country, variant,
+            "{:s}_{:s}".format(lang, country) if country else None,
+            "{:s}@{:s}".format(lang, variant) if variant else None
+        )
     try:
         import bpy.app.translations as bpy_translations
         assert ret == bpy_translations.locale_explode(locale)
@@ -82,19 +92,20 @@ def locale_explode(locale):
 def locale_match(loc1, loc2):
     """
     Return:
-        -n if loc1 is a subtype of loc2 (e.g. 'fr_FR' is a subtype of 'fr').
+        -n if loc1 is a subtype of loc2 (e.g. ``fr_FR`` is a subtype of ``fr``).
         +n if loc2 is a subtype of loc1.
-        n becomes smaller when both locales are more similar (e.g. (sr, sr_SR) are more similar than (sr, sr_SR@latin)).
+        n becomes smaller when both locales are more similar
+        ... (e.g. (``sr, sr_SR``) are more similar than (``sr, sr_SR@latin``)).
         0 if they are exactly the same.
         ... (Ellipsis) if they cannot match!
-    Note: We consider that 'sr_SR@latin' is a subtype of 'sr@latin', 'sr_SR' and 'sr', but 'sr_SR' and 'sr@latin' won't
-          match (will return ...)!
+    Note: We consider that ``sr_SR@latin`` is a subtype of ``sr@latin``, ``sr_SR`` and ``sr``,
+          but ``sr_SR`` and ``sr@latin`` won't match (will return ...)!
     Note: About similarity, diff in variants are more important than diff in countries, currently here are the cases:
-            (sr, sr_SR)             -> 1
-            (sr@latin, sr_SR@latin) -> 1
-            (sr, sr@latin)          -> 2
-            (sr_SR, sr_SR@latin)    -> 2
-            (sr, sr_SR@latin)       -> 3
+            (``sr, sr_SR``)             -> 1
+            (``sr@latin, sr_SR@latin``) -> 1
+            (``sr, sr@latin``)          -> 2
+            (``sr_SR, sr_SR@latin``)    -> 2
+            (``sr, sr_SR@latin``)       -> 3
     """
     if loc1 == loc2:
         return 0
@@ -239,7 +250,7 @@ def enable_addons(addons=None, support=None, disable=False, check_only=False):
                         continue
                     print("    Enabling module ", addon_module_name)
                     bpy.ops.preferences.addon_enable(module=addon_module_name)
-            except BaseException as ex:  # XXX TEMP WORKAROUND
+            except Exception as ex:  # XXX TEMP WORKAROUND
                 print(ex)
 
         # XXX There are currently some problems with bpy/rna...
@@ -1210,7 +1221,7 @@ class I18nMessages:
         """
         Update or create a single PO file (specified by a filepath) from the given POT `I18nMessages` data.
 
-        Callback usable in a context where Blender specific modules (like `bpy`) are not available.
+        Callback usable in a context where Blender specific modules (like ``bpy``) are not available.
         """
         import sys
         sys.stdout.reconfigure(encoding="utf-8")
@@ -1230,7 +1241,7 @@ class I18nMessages:
         """
         Cleanup a single PO file (specified by a filepath).
 
-        Callback usable in a context where Blender specific modules (like `bpy`) are not available.
+        Callback usable in a context where Blender specific modules (like ``bpy``) are not available.
         """
         import sys
         sys.stdout.reconfigure(encoding="utf-8")
@@ -1250,7 +1261,7 @@ class I18nMessages:
         """
         Cleanup and write a single PO file (specified by a filepath) into the relevant Blender source 'compact' PO file.
 
-        Callback usable in a context where Blender specific modules (like `bpy`) are not available.
+        Callback usable in a context where Blender specific modules (like ``bpy``) are not available.
         """
         import sys
         sys.stdout.reconfigure(encoding="utf-8")
@@ -1270,7 +1281,7 @@ class I18nMessages:
                        "Cleaned up {} commented messages.\n".format(lng['name'], lng['uid'], po.clean_commented()) +
                        ("Errors in this po, solved as best as possible!\n\t" + "\n\t".join(errs) if errs else ""))
         if lng['uid'] in settings.IMPORT_LANGUAGES_RTL:
-            if platform.system not in {'Linux'}:
+            if platform.system() not in {'Linux'}:
                 reports.append("Skipping RtL processing of {} language ({}), "
                                "this is only supported on Linux currently.".format(lng['name'], lng['uid']))
             else:
@@ -1334,7 +1345,7 @@ class I18n:
 
     def __init__(self, kind=None, src=None, langs=set(), settings=settings):
         self.settings = settings
-        self.trans: Dict[str, I18nMessages] = {}
+        self.trans: dict[str, I18nMessages] = {}
         self.src = {}  # Should have the same keys as self.trans (plus PARSER_PY_ID for py file)!
         self.dst = self._dst  # A callable that transforms src_path into dst_path!
         if kind and src:
@@ -1432,7 +1443,7 @@ class I18n:
         """
         txts = []
         if os.path.isdir(src):
-            for root, dnames, fnames in os.walk(src):
+            for root, _dnames, fnames in os.walk(src):
                 for fname in fnames:
                     if not fname.endswith(".py"):
                         continue

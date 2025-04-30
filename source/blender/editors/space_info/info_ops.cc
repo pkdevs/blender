@@ -6,24 +6,22 @@
  * \ingroup spinfo
  */
 
-#include <cstdio>
 #include <cstring>
+#include <fmt/format.h>
 
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
-#include "BLI_utildefines.h"
-
 #include "BLT_translation.hh"
 
 #include "BKE_bpath.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_packedFile.hh"
 #include "BKE_report.hh"
@@ -43,7 +41,7 @@
 /** \name Pack Blend File Libraries Operator
  * \{ */
 
-static int pack_libraries_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus pack_libraries_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
 
@@ -68,7 +66,7 @@ void FILE_OT_pack_libraries(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static int unpack_libraries_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus unpack_libraries_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
 
@@ -85,7 +83,9 @@ static int unpack_libraries_exec(bContext *C, wmOperator *op)
 /** \name Unpack Blend File Libraries Operator
  * \{ */
 
-static int unpack_libraries_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus unpack_libraries_invoke(bContext *C,
+                                                wmOperator *op,
+                                                const wmEvent * /*event*/)
 {
   return WM_operator_confirm_ex(C,
                                 op,
@@ -117,7 +117,7 @@ void FILE_OT_unpack_libraries(wmOperatorType *ot)
 /** \name Toggle Auto-Pack Operator
  * \{ */
 
-static int autopack_toggle_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus autopack_toggle_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
 
@@ -152,16 +152,18 @@ void FILE_OT_autopack_toggle(wmOperatorType *ot)
 /** \name Pack All Operator
  * \{ */
 
-static int pack_all_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus pack_all_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
 
   BKE_packedfile_pack_all(bmain, op->reports, true);
 
+  WM_main_add_notifier(NC_WINDOW, nullptr);
+
   return OPERATOR_FINISHED;
 }
 
-static int pack_all_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus pack_all_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
   Main *bmain = CTX_data_main(C);
   Image *ima;
@@ -233,7 +235,7 @@ static const EnumPropertyItem unpack_all_method_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int unpack_all_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus unpack_all_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   ePF_FileStatus method = ePF_FileStatus(RNA_enum_get(op->ptr, "method"));
@@ -244,34 +246,29 @@ static int unpack_all_exec(bContext *C, wmOperator *op)
     WM_cursor_wait(false);
   }
   G.fileflags &= ~G_FILE_AUTOPACK;
+  WM_main_add_notifier(NC_WINDOW, nullptr);
 
   return OPERATOR_FINISHED;
 }
 
-static int unpack_all_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus unpack_all_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
   Main *bmain = CTX_data_main(C);
   uiPopupMenu *pup;
   uiLayout *layout;
-  char title[64];
-  int count = 0;
 
-  count = BKE_packedfile_count_all(bmain);
+  const PackedFileCount count = BKE_packedfile_count_all(bmain);
 
-  if (!count) {
+  if (count.total() == 0) {
     BKE_report(op->reports, RPT_WARNING, "No packed files to unpack");
     G.fileflags &= ~G_FILE_AUTOPACK;
     return OPERATOR_CANCELLED;
   }
 
-  if (count == 1) {
-    STRNCPY_UTF8(title, IFACE_("Unpack 1 File"));
-  }
-  else {
-    SNPRINTF(title, IFACE_("Unpack %d Files"), count);
-  }
+  const std::string title = fmt::format(
+      fmt::runtime(IFACE_("Unpack - Files: {}, Bakes: {}")), count.individual_files, count.bakes);
 
-  pup = UI_popup_menu_begin(C, title, ICON_NONE);
+  pup = UI_popup_menu_begin(C, title.c_str(), ICON_NONE);
   layout = UI_popup_menu_layout(pup);
 
   uiLayoutSetOperatorContext(layout, WM_OP_EXEC_DEFAULT);
@@ -328,7 +325,7 @@ static const EnumPropertyItem unpack_item_method_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int unpack_item_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus unpack_item_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   ID *id;
@@ -344,6 +341,11 @@ static int unpack_item_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  if (!ID_IS_EDITABLE(id)) {
+    BKE_report(op->reports, RPT_WARNING, "Data-block using this packed file is not editable");
+    return OPERATOR_CANCELLED;
+  }
+
   if (method != PF_KEEP) {
     WM_cursor_wait(true);
     BKE_packedfile_id_unpack(bmain, id, op->reports, method); /* XXX PF_ASK can't work here */
@@ -355,7 +357,7 @@ static int unpack_item_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int unpack_item_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus unpack_item_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
   uiPopupMenu *pup;
   uiLayout *layout;
@@ -412,7 +414,7 @@ void FILE_OT_unpack_item(wmOperatorType *ot)
 /** \name Make Paths Relative Operator
  * \{ */
 
-static int make_paths_relative_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus make_paths_relative_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   const char *blendfile_path = BKE_main_blendfile_path(bmain);
@@ -422,7 +424,9 @@ static int make_paths_relative_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  BKE_bpath_relative_convert(bmain, blendfile_path, op->reports);
+  BPathSummary summary;
+  BKE_bpath_relative_convert(bmain, blendfile_path, op->reports, &summary);
+  BKE_bpath_summary_report(summary, op->reports);
 
   /* redraw everything so any changed paths register */
   WM_main_add_notifier(NC_WINDOW, nullptr);
@@ -450,7 +454,7 @@ void FILE_OT_make_paths_relative(wmOperatorType *ot)
 /** \name Make Paths Absolute Operator
  * \{ */
 
-static int make_paths_absolute_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus make_paths_absolute_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   const char *blendfile_path = BKE_main_blendfile_path(bmain);
@@ -460,7 +464,9 @@ static int make_paths_absolute_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  BKE_bpath_absolute_convert(bmain, blendfile_path, op->reports);
+  BPathSummary summary;
+  BKE_bpath_absolute_convert(bmain, blendfile_path, op->reports, &summary);
+  BKE_bpath_summary_report(summary, op->reports);
 
   /* redraw everything so any changed paths register */
   WM_main_add_notifier(NC_WINDOW, nullptr);
@@ -488,7 +494,7 @@ void FILE_OT_make_paths_absolute(wmOperatorType *ot)
 /** \name Report Missing Files Operator
  * \{ */
 
-static int report_missing_files_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus report_missing_files_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
 
@@ -520,21 +526,23 @@ void FILE_OT_report_missing_files(wmOperatorType *ot)
 /** \name Find Missing Files Operator
  * \{ */
 
-static int find_missing_files_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus find_missing_files_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   const char *searchpath = RNA_string_get_alloc(op->ptr, "directory", nullptr, 0, nullptr);
   const bool find_all = RNA_boolean_get(op->ptr, "find_all");
 
   BKE_bpath_missing_files_find(bmain, searchpath, op->reports, find_all);
-  MEM_freeN((void *)searchpath);
+  MEM_freeN(searchpath);
   /* Redraw sequencer since media presence cache might have changed. */
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
 
   return OPERATOR_FINISHED;
 }
 
-static int find_missing_files_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus find_missing_files_invoke(bContext *C,
+                                                  wmOperator *op,
+                                                  const wmEvent * /*event*/)
 {
   /* XXX file open button text "Find Missing Files" */
   WM_event_add_fileselect(C, op);
@@ -588,7 +596,9 @@ void FILE_OT_find_missing_files(wmOperatorType *ot)
 #define FLASH_TIMEOUT 1.0f
 #define COLLAPSE_TIMEOUT 0.25f
 
-static int update_reports_display_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
+static wmOperatorStatus update_reports_display_invoke(bContext *C,
+                                                      wmOperator * /*op*/,
+                                                      const wmEvent *event)
 {
   ReportList *reports = CTX_wm_reports(C);
   Report *report;

@@ -7,7 +7,7 @@ but for this it is require to define the following properties:
 
 .. code-block:: python
 
-    directory: StringProperty(subtype='FILE_PATH')
+    directory: StringProperty(subtype='DIR_PATH')
     files: CollectionProperty(type=bpy.types.OperatorFileListElement)
 
 This ``directory`` and ``files`` properties now will be used by the
@@ -29,7 +29,7 @@ class ShaderScriptImport(bpy.types.Operator, ImportHelper):
     This Operator can import multiple .txt files, we need following directory and files
     properties that the file handler will use to set files path data
     """
-    directory: bpy.props.StringProperty(subtype='FILE_PATH', options={'SKIP_SAVE', 'HIDDEN'})
+    directory: bpy.props.StringProperty(subtype='DIR_PATH', options={'SKIP_SAVE', 'HIDDEN'})
     files: bpy.props.CollectionProperty(type=bpy.types.OperatorFileListElement, options={'SKIP_SAVE', 'HIDDEN'})
 
     """Allow the user to select if the node's label is set or not"""
@@ -37,10 +37,12 @@ class ShaderScriptImport(bpy.types.Operator, ImportHelper):
 
     @classmethod
     def poll(cls, context):
-        return (context.region and context.region.type == 'WINDOW'
-                and context.area and context.area.ui_type == 'ShaderNodeTree'
-                and context.object and context.object.type == 'MESH'
-                and context.material)
+        return (
+            context.region and context.region.type == 'WINDOW' and
+            context.area and context.area.ui_type == 'ShaderNodeTree' and
+            context.object and context.object.type == 'MESH' and
+            context.material
+        )
 
     def execute(self, context):
         """ The directory property need to be set. """
@@ -62,7 +64,7 @@ class ShaderScriptImport(bpy.types.Operator, ImportHelper):
                 text_node.filepath = filepath
                 text_node.location = Vector((x, y))
 
-                # Set the node's title to the file name
+                # Set the node's title to the file name.
                 if self.set_label:
                     text_node.label = file.name
 
@@ -70,14 +72,12 @@ class ShaderScriptImport(bpy.types.Operator, ImportHelper):
                 y -= 20.0
         return {'FINISHED'}
 
-    """
-    Use ImportHelper's invoke_popup() to handle the invocation so that this operator's properties
-    are shown in a popup. This allows the user to configure additional settings on the operator like
-    the `set_label` property. Consider having a draw() method on the operator in order to layout the
-    properties in the UI appropriately.
-
-    If filepath information is not provided the file select window will be invoked instead.
-    """
+    # Use ImportHelper's invoke_popup() to handle the invocation so that this operator's properties
+    # are shown in a popup. This allows the user to configure additional settings on the operator like
+    # the `set_label` property. Consider having a draw() method on the operator in order to layout the
+    # properties in the UI appropriately.
+    #
+    # If filepath information is not provided the file select window will be invoked instead.
 
     def invoke(self, context, event):
         return self.invoke_popup(context)
@@ -91,8 +91,10 @@ class SHADER_FH_script_import(bpy.types.FileHandler):
 
     @classmethod
     def poll_drop(cls, context):
-        return (context.region and context.region.type == 'WINDOW'
-                and context.area and context.area.ui_type == 'ShaderNodeTree')
+        return (
+            context.region and context.region.type == 'WINDOW' and
+            context.area and context.area.ui_type == 'ShaderNodeTree'
+        )
 
 
 bpy.utils.register_class(ShaderScriptImport)

@@ -121,7 +121,6 @@ void bmo_dissolve_faces_exec(BMesh *bm, BMOperator *op)
 {
   BMOIter oiter;
   BMFace *f;
-  BMFace *act_face = bm->act_face;
   BMWalker regwalker;
 
   const bool use_verts = BMO_slot_bool_get(op->slots_in, "use_verts");
@@ -189,20 +188,32 @@ void bmo_dissolve_faces_exec(BMesh *bm, BMOperator *op)
   for (Vector<BMFace *> &faces : regions) {
     const int64_t faces_len = faces.size();
 
-    BMFace *f_new = BM_faces_join(bm, faces.data(), faces_len, true);
-    if (f_new != nullptr) {
-      /* Maintain the active face. */
-      if (act_face && bm->act_face == nullptr) {
-        bm->act_face = f_new;
-      }
+    BMFace *f_double;
+
+    BMFace *f_new = BM_faces_join(bm, faces.data(), faces_len, true, &f_double);
+
+    if (LIKELY(f_new)) {
+
+      /* All the joined faces are gone and the fresh f_new represents their union. */
       totface_target -= faces_len - 1;
 
-      /* If making the new face failed (e.g. overlapping test)
-       * un-mark the original faces for deletion. */
+      if (UNLIKELY(f_double)) {
+        /* `BM_faces_join()` succeeded, but there is a double. Keep the pre-existing face
+         * and retain its custom-data. Remove the newly made merge result.  */
+        BM_face_kill(bm, f_new);
+        totface_target -= 1;
+        f_new = f_double;
+      }
+
+      /* Un-mark the joined face to ensure it is not garbage collected later. */
       BMO_face_flag_disable(bm, f_new, FACE_ORIG);
+
+      /* Mark the joined face so it can be added to the selection later. */
       BMO_face_flag_enable(bm, f_new, FACE_NEW);
     }
     else {
+      /* `BM_faces_join()` failed. */
+
       /* NOTE: prior to 3.0 this raised an error: "Could not create merged face".
        * Change behavior since it's not useful to fail entirely when a single face-group
        * can't be merged into one face. Continue with other face groups instead.
@@ -242,7 +253,6 @@ void bmo_dissolve_faces_exec(BMesh *bm, BMOperator *op)
 void bmo_dissolve_edges_exec(BMesh *bm, BMOperator *op)
 {
   // BMOperator fop;
-  BMFace *act_face = bm->act_face;
   BMOIter eiter;
   BMIter iter;
   BMEdge *e, *e_next;
@@ -273,12 +283,17 @@ void bmo_dissolve_edges_exec(BMesh *bm, BMOperator *op)
   }
 
   if (use_verts) {
-    BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-      BMO_vert_flag_set(bm, v, VERT_MARK, !BM_vert_is_edge_pair(v));
+
+    /* Mark all verts that are candidates to be dissolved. */
+    BMO_ITER (e, &eiter, op->slots_in, "edges", BM_EDGE) {
+      BMO_vert_flag_enable(bm, e->v1, VERT_MARK);
+      BMO_vert_flag_enable(bm, e->v2, VERT_MARK);
     }
   }
 
   /* tag all verts/edges connected to faces */
+  /* Any element tagged with xxx_ISGC is an edge or vert of a face that borders an edge to be
+   * dissolved, and it could end up being cleaned up after a face merge has made it irrelevant. */
   BMO_ITER (e, &eiter, op->slots_in, "edges", BM_EDGE) {
     BMFace *f_pair[2];
     if (BM_edge_face_pair(e, &f_pair[0], &f_pair[1])) {
@@ -294,41 +309,31 @@ void bmo_dissolve_edges_exec(BMesh *bm, BMOperator *op)
     }
   }
 
+  /* Merge any face pairs that straddle a selected edge. */
   BMO_ITER (e, &eiter, op->slots_in, "edges", BM_EDGE) {
     BMLoop *l_a, *l_b;
     if (BM_edge_loop_pair(e, &l_a, &l_b)) {
-      BMFace *f_new;
-
-      /* join faces */
-      f_new = BM_faces_join_pair(bm, l_a, l_b, false);
-      if (f_new && BM_face_find_double(f_new)) {
-        BM_face_kill(bm, f_new);
-        f_new = nullptr;
-      }
-
-      if (f_new) {
-        /* maintain active face */
-        if (act_face && bm->act_face == nullptr) {
-          bm->act_face = f_new;
-        }
-      }
+      BM_faces_join_pair(bm, l_a, l_b, false, nullptr);
     }
   }
 
-  /* Cleanup geometry (#BM_faces_join_pair, but it removes geometry we're looping on)
-   * so do this in a separate pass instead. */
+  /* Cleanup geometry. Remove any edges that are garbage collectible and that have became
+   * irrelevant (no loops) because of face merges. */
   BM_ITER_MESH_MUTABLE (e, e_next, &iter, bm, BM_EDGES_OF_MESH) {
     if ((e->l == nullptr) && BMO_edge_flag_test(bm, e, EDGE_ISGC)) {
       BM_edge_kill(bm, e);
     }
   }
+
+  /* Cleanup geometry. Remove any verts that are garbage collectible and that have became
+   * isolated verts (no edges) because of edge dissolves. */
   BM_ITER_MESH_MUTABLE (v, v_next, &iter, bm, BM_VERTS_OF_MESH) {
     if ((v->e == nullptr) && BMO_vert_flag_test(bm, v, VERT_ISGC)) {
       BM_vert_kill(bm, v);
     }
   }
-  /* done with cleanup */
 
+  /* If dissolving verts, then evaluate each VERT_MARK vert. */
   if (use_verts) {
     BM_ITER_MESH_MUTABLE (v, v_next, &iter, bm, BM_VERTS_OF_MESH) {
       if (BMO_vert_flag_test(bm, v, VERT_MARK)) {
@@ -346,7 +351,6 @@ void bmo_dissolve_verts_exec(BMesh *bm, BMOperator *op)
   BMIter iter;
   BMVert *v, *v_next;
   BMEdge *e, *e_next;
-  BMFace *act_face = bm->act_face;
 
   const bool use_face_split = BMO_slot_bool_get(op->slots_in, "use_face_split");
   const bool use_boundary_tear = BMO_slot_bool_get(op->slots_in, "use_boundary_tear");
@@ -411,25 +415,16 @@ void bmo_dissolve_verts_exec(BMesh *bm, BMOperator *op)
   BMO_ITER (v, &oiter, op->slots_in, "verts", BM_VERT) {
     BMIter itersub;
 
+    /* Merge across every edge that touches `v`. This does a `BM_faces_join_pair()` for each edge.
+     * There may be a possible performance improvement available here, for high valence verts.
+     * Collecting a list of 20 faces and performing a single `BM_faces_join` would almost certainly
+     * more performant than doing 19 separate `BM_faces_join_pair()` of 2 faces each in sequence.
+     * Low valence verts would need benchmarking, to check that such a change isn't harmful. */
     if (!BMO_vert_flag_test(bm, v, VERT_MARK_PAIR)) {
       BM_ITER_ELEM (e, &itersub, v, BM_EDGES_OF_VERT) {
         BMLoop *l_a, *l_b;
         if (BM_edge_loop_pair(e, &l_a, &l_b)) {
-          BMFace *f_new;
-
-          /* join faces */
-          f_new = BM_faces_join_pair(bm, l_a, l_b, false);
-          if (f_new && BM_face_find_double(f_new)) {
-            BM_face_kill(bm, f_new);
-            f_new = nullptr;
-          }
-
-          if (f_new) {
-            /* maintain active face */
-            if (act_face && bm->act_face == nullptr) {
-              bm->act_face = f_new;
-            }
-          }
+          BM_faces_join_pair(bm, l_a, l_b, false, nullptr);
         }
       }
     }

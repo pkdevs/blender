@@ -6,21 +6,17 @@
  * \ingroup RNA
  */
 
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 
-#include "BLI_math_matrix.h"
-#include "BLI_utildefines.h"
-
 #include "RNA_define.hh"
-
-#include "DNA_object_types.h"
 
 /* #include "BLI_sys_types.h" */
 
 #include "rna_internal.hh" /* own include */
+
+using namespace blender;
 
 #ifdef RNA_RUNTIME
 
@@ -33,7 +29,9 @@
 #  include "DNA_anim_types.h"
 
 #  include "BLI_ghash.h"
+#  include "BLI_math_matrix.h"
 
+#  include "ANIM_action.hh"
 #  include "ANIM_pose.hh"
 
 static float rna_PoseBone_do_envelope(bPoseChannel *chan, const float vec[3])
@@ -127,7 +125,7 @@ static void rna_Pose_apply_pose_from_action(ID *pose_owner,
   Object *pose_owner_ob = (Object *)pose_owner;
 
   AnimationEvalContext anim_eval_context = {CTX_data_depsgraph_pointer(C), evaluation_time};
-  blender::animrig::pose_apply_action_selected_bones(pose_owner_ob, action, &anim_eval_context);
+  animrig::pose_apply_action({pose_owner_ob}, action->wrap(), &anim_eval_context, 1.0);
 
   /* Do NOT tag with ID_RECALC_ANIMATION, as that would overwrite the just-applied pose. */
   DEG_id_tag_update(pose_owner, ID_RECALC_GEOMETRY);
@@ -144,8 +142,7 @@ static void rna_Pose_blend_pose_from_action(ID *pose_owner,
   Object *pose_owner_ob = (Object *)pose_owner;
 
   AnimationEvalContext anim_eval_context = {CTX_data_depsgraph_pointer(C), evaluation_time};
-  blender::animrig::pose_apply_action_blend(
-      pose_owner_ob, action, &anim_eval_context, blend_factor);
+  animrig::pose_apply_action({pose_owner_ob}, action->wrap(), &anim_eval_context, blend_factor);
 
   /* Do NOT tag with ID_RECALC_ANIMATION, as that would overwrite the just-applied pose. */
   DEG_id_tag_update(pose_owner, ID_RECALC_GEOMETRY);
@@ -155,8 +152,12 @@ static void rna_Pose_blend_pose_from_action(ID *pose_owner,
 static void rna_Pose_backup_create(ID *pose_owner, bAction *action)
 {
   BLI_assert(GS(pose_owner->name) == ID_OB);
+  if (!action || action->wrap().slot_array_num == 0) {
+    /* A pose asset without slots has no data, this usually doesn't happen but can happen by
+     * tagging an empty action as a pose asset. */
+    return;
+  }
   Object *pose_owner_ob = (Object *)pose_owner;
-
   BKE_pose_backup_create_on_object(pose_owner_ob, action);
 }
 
@@ -218,24 +219,24 @@ void RNA_api_pose(StructRNA *srna)
                                   "pose of selected bones, or all bones if none are selected.");
   parm = RNA_def_pointer(func, "action", "Action", "Action", "The Action containing the pose");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_float(func,
-                       "blend_factor",
-                       1.0f,
-                       0.0f,
-                       1.0f,
-                       "Blend Factor",
-                       "How much the given Action affects the final pose",
-                       0.0f,
-                       1.0f);
-  parm = RNA_def_float(func,
-                       "evaluation_time",
-                       0.0f,
-                       -FLT_MAX,
-                       FLT_MAX,
-                       "Evaluation Time",
-                       "Time at which the given action is evaluated to obtain the pose",
-                       -FLT_MAX,
-                       FLT_MAX);
+  RNA_def_float(func,
+                "blend_factor",
+                1.0f,
+                0.0f,
+                1.0f,
+                "Blend Factor",
+                "How much the given Action affects the final pose",
+                0.0f,
+                1.0f);
+  RNA_def_float(func,
+                "evaluation_time",
+                0.0f,
+                -FLT_MAX,
+                FLT_MAX,
+                "Evaluation Time",
+                "Time at which the given action is evaluated to obtain the pose",
+                -FLT_MAX,
+                FLT_MAX);
 
   func = RNA_def_function(srna, "backup_create", "rna_Pose_backup_create");
   RNA_def_function_ui_description(
