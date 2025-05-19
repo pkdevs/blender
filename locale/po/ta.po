@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'a7d2b7850ef2')\n"
+"Project-Id-Version: Blender 4.5.0 Alpha (b'd87e0ecb614e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-05 08:47+0000\n"
+"POT-Creation-Date: 2025-05-19 11:37+0000\n"
 "PO-Revision-Date: 2025-04-27 12:52+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -4258,6 +4258,46 @@ msgstr "இந்த எலும்பின் குழந்தைகளா�
 
 msgid "Bone Collections that contain this bone"
 msgstr "இந்த எலும்பைக் கொண்ட எலும்பு சேகரிப்புகள்"
+
+
+msgid "Display Type"
+msgstr "காட்சி வகை"
+
+
+msgid "Octahedral"
+msgstr "ஆக்டோஎட்ரல்"
+
+
+msgid "Stick"
+msgstr "குச்சி"
+
+
+msgid "Display bones as simple 2D lines with dots"
+msgstr "எலும்புகளை புள்ளிகளுடன் எளிய 2 டி வரிகளாகக் காண்பிக்கவும்"
+
+
+msgid "B-Bone"
+msgstr "பி-எலும்பு"
+
+
+msgid "Display bones as boxes, showing subdivision and B-Splines"
+msgstr "எலும்புகளை பெட்டிகளாகக் காண்பி, துணைப்பிரிவு மற்றும் பி-ச்ப்லைன் ஆகியவற்றைக் காட்டுகிறது"
+
+
+msgid "Envelope"
+msgstr "உறை"
+
+
+msgid "Display bones as extruded spheres, showing deformation influence volume"
+msgstr "எலும்புகளை வெளியேற்றப்பட்ட கோளங்களாகக் காண்பி, சிதைவு செல்வாக்கு அளவைக் காட்டுகிறது"
+
+
+msgid "Wire"
+msgstr "கம்பி"
+
+
+msgid "Display bones as thin wires, showing subdivision and B-Splines"
+msgstr "எலும்புகளை மெல்லிய கம்பிகளாகக் காண்பி, துணைப்பிரிவு மற்றும் பி-ச்ப்லைன்களைக் காட்டுகிறது"
 
 
 msgid "Envelope Deform Distance"
@@ -15683,10 +15723,6 @@ msgid "Simulate fluids with high viscosity using a special solver"
 msgstr "ஒரு சிறப்பு தீர்வைப் பயன்படுத்தி அதிக பாகுத்தன்மையுடன் திரவங்களை உருவகப்படுத்துங்கள்"
 
 
-msgid "Display Type"
-msgstr "காட்சி வகை"
-
-
 msgid "Needle"
 msgstr "ஊசி"
 
@@ -18292,44 +18328,8 @@ msgid "List of all bone collections of the armature"
 msgstr "ஆர்மேச்சரின் அனைத்து எலும்பு சேகரிப்புகளின் பட்டியல்"
 
 
-msgid "Octahedral"
-msgstr "ஆக்டோஎட்ரல்"
-
-
 msgid "Display bones as octahedral shape (default)"
 msgstr "எலும்புகளை ஆக்டோஎட்ரல் வடிவமாகக் காண்பிக்கவும் (இயல்புநிலை)"
-
-
-msgid "Stick"
-msgstr "குச்சி"
-
-
-msgid "Display bones as simple 2D lines with dots"
-msgstr "எலும்புகளை புள்ளிகளுடன் எளிய 2 டி வரிகளாகக் காண்பிக்கவும்"
-
-
-msgid "B-Bone"
-msgstr "பி-எலும்பு"
-
-
-msgid "Display bones as boxes, showing subdivision and B-Splines"
-msgstr "எலும்புகளை பெட்டிகளாகக் காண்பி, துணைப்பிரிவு மற்றும் பி-ச்ப்லைன் ஆகியவற்றைக் காட்டுகிறது"
-
-
-msgid "Envelope"
-msgstr "உறை"
-
-
-msgid "Display bones as extruded spheres, showing deformation influence volume"
-msgstr "எலும்புகளை வெளியேற்றப்பட்ட கோளங்களாகக் காண்பி, சிதைவு செல்வாக்கு அளவைக் காட்டுகிறது"
-
-
-msgid "Wire"
-msgstr "கம்பி"
-
-
-msgid "Display bones as thin wires, showing subdivision and B-Splines"
-msgstr "எலும்புகளை மெல்லிய கம்பிகளாகக் காண்பி, துணைப்பிரிவு மற்றும் பி-ச்ப்லைன்களைக் காட்டுகிறது"
 
 
 msgid "Edit Bones"
@@ -34457,16 +34457,52 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Mirror"
+msgstr "கண்ணாடி"
+
+
+msgid "Snap"
+msgstr "ச்னாப்"
+
+
+msgid "UV Mapping"
+msgstr "புறஊதா மேப்பிங்"
+
+
+msgid "Local View"
+msgstr "உள்ளக பார்வை"
+
+
+msgid "Viewpoint"
+msgstr "பார்வை"
+
+
+msgid "Navigation"
+msgstr "வழிசெலுத்தல்"
+
+
+msgid "Align View"
+msgstr "பார்வையை சீரமைக்கவும்"
+
+
+msgid "Align View to Active"
+msgstr "செயலில் பார்வையை சீரமைக்கவும்"
+
+
+msgid "View Regions"
+msgstr "மண்டலங்களைக் காண்க"
+
+
+msgid "Select More/Less"
+msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
+
+
 msgid "Select Similar"
 msgstr "ஒத்ததைத் தேர்ந்தெடுக்கவும்"
 
 
 msgid "Select All by Trait"
 msgstr "அனைத்தையும் பண்பின் மூலம் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select More/Less"
-msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
 
 
 msgid "Select Linked"
@@ -34637,10 +34673,6 @@ msgid "Pivot Point"
 msgstr "பிவோட் புள்ளி"
 
 
-msgid "Snap"
-msgstr "ச்னாப்"
-
-
 msgid "Proportional Editing Falloff"
 msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
 
@@ -34655,38 +34687,6 @@ msgstr "ஆட்டோமேச்கிங்"
 
 msgid "Face Sets Edit"
 msgstr "முகம் தொகுப்புகள் திருத்து"
-
-
-msgid "Mirror"
-msgstr "கண்ணாடி"
-
-
-msgid "UV Mapping"
-msgstr "புறஊதா மேப்பிங்"
-
-
-msgid "Local View"
-msgstr "உள்ளக பார்வை"
-
-
-msgid "Viewpoint"
-msgstr "பார்வை"
-
-
-msgid "Navigation"
-msgstr "வழிசெலுத்தல்"
-
-
-msgid "Align View"
-msgstr "பார்வையை சீரமைக்கவும்"
-
-
-msgid "Align View to Active"
-msgstr "செயலில் பார்வையை சீரமைக்கவும்"
-
-
-msgid "View Regions"
-msgstr "மண்டலங்களைக் காண்க"
 
 
 msgid "Keyframe Insert Pie"
@@ -44510,10 +44510,6 @@ msgid "Extend bounds of the input image to fully fit blurred image"
 msgstr "மங்கலான படத்தை முழுமையாக பொருத்த உள்ளீட்டு படத்தின் வரம்புகளை நீட்டிக்கவும்"
 
 
-msgid "Apply filter on gamma corrected values"
-msgstr "காமா திருத்தப்பட்ட மதிப்புகளில் வடிகட்டியைப் பயன்படுத்துங்கள்"
-
-
 msgid "Use relative (percent) values to define blur radius"
 msgstr "மங்கலான ஆரம் வரையறுக்க உறவினர் (சதவீதம்) மதிப்புகளைப் பயன்படுத்தவும்"
 
@@ -44532,10 +44528,6 @@ msgstr "டிஃபோகசைப் போன்ற ஒரு பொக்க
 
 msgid "Max Blur"
 msgstr "அதிகபட்ச மங்கலானது"
-
-
-msgid "Blur limit, maximum CoC radius"
-msgstr "மங்கலான வரம்பு, அதிகபட்ச coc ஆரம்"
 
 
 msgid "Bokeh Image"
@@ -45297,6 +45289,10 @@ msgid "Bokeh shape rotation offset"
 msgstr "பொக்கே வடிவ சுழற்சி ஆஃப்செட்"
 
 
+msgid "Blur limit, maximum CoC radius"
+msgstr "மங்கலான வரம்பு, அதிகபட்ச coc ஆரம்"
+
+
 msgid "Bokeh Type"
 msgstr "பொக்கே வகை"
 
@@ -45355,10 +45351,6 @@ msgstr "செயலில் உள்ள கேமராவைத் தேர
 
 msgid "Gamma Correction"
 msgstr "காமா திருத்தம்"
-
-
-msgid "Enable gamma correction before and after main process"
-msgstr "முக்கிய செயல்முறைக்கு முன்னும் பின்னும் காமா திருத்தத்தை இயக்கவும்"
 
 
 msgid "Use Z-Buffer"
@@ -46622,14 +46614,6 @@ msgstr "சுழற்சியை வடிகட்ட பயன்படு�
 
 msgid "Change the size of the image"
 msgstr "படத்தின் அளவை மாற்றவும்"
-
-
-msgid "Offset image horizontally (factor of image size)"
-msgstr "ஆஃப்செட் படம் கிடைமட்டமாக (பட அளவின் காரணி)"
-
-
-msgid "Offset image vertically (factor of image size)"
-msgstr "ஆஃப்செட் படத்தை செங்குத்தாக (பட அளவின் காரணி)"
 
 
 msgid "Coordinate space to scale relative to"
@@ -52125,30 +52109,6 @@ msgid "Absorb light as it passes through the volume"
 msgstr "ஒளியை அளவிடும்போது அதை உறிஞ்சவும்"
 
 
-msgid "Volume Info"
-msgstr "தொகுதி செய்தி"
-
-
-msgid "Read volume data attributes from volume grids"
-msgstr "தொகுதி கட்டங்களிலிருந்து தொகுதி தரவு பண்புகளைப் படியுங்கள்"
-
-
-msgid "Principled Volume"
-msgstr "கொள்கை ரீதியான தொகுதி"
-
-
-msgid "Combine all volume shading components into a single easy to use node"
-msgstr "அனைத்து தொகுதி நிழல் கூறுகளையும் ஒற்றை பயன்படுத்த எளிதான முனையாக இணைக்கவும்"
-
-
-msgid "Volume Scatter"
-msgstr "தொகுதி சிதறல்"
-
-
-msgid "Scatter light as it passes through the volume, often used to add fog to a scene"
-msgstr "ஒரு காட்சியில் மூடுபனியைச் சேர்க்க பெரும்பாலும் பயன்படுத்தப்படும் அளவைக் கடந்து செல்லும்போது சிதறல் ஒளி"
-
-
 msgid "Phase function for the scattered light"
 msgstr "சிதறிய ஒளிக்கான கட்ட செயல்பாடு"
 
@@ -52191,6 +52151,30 @@ msgstr "மை"
 
 msgid "Approximation of Mie scattering in water droplets, used for scattering in clouds and fog"
 msgstr "மேகங்கள் மற்றும் மூடுபனியில் சிதறுவதற்குப் பயன்படுத்தப்படும் நீர் துளிகளில் மை சிதறலின் தோராயமானது"
+
+
+msgid "Volume Info"
+msgstr "தொகுதி செய்தி"
+
+
+msgid "Read volume data attributes from volume grids"
+msgstr "தொகுதி கட்டங்களிலிருந்து தொகுதி தரவு பண்புகளைப் படியுங்கள்"
+
+
+msgid "Principled Volume"
+msgstr "கொள்கை ரீதியான தொகுதி"
+
+
+msgid "Combine all volume shading components into a single easy to use node"
+msgstr "அனைத்து தொகுதி நிழல் கூறுகளையும் ஒற்றை பயன்படுத்த எளிதான முனையாக இணைக்கவும்"
+
+
+msgid "Volume Scatter"
+msgstr "தொகுதி சிதறல்"
+
+
+msgid "Scatter light as it passes through the volume, often used to add fog to a scene"
+msgstr "ஒரு காட்சியில் மூடுபனியைச் சேர்க்க பெரும்பாலும் பயன்படுத்தப்படும் அளவைக் கடந்து செல்லும்போது சிதறல் ஒளி"
 
 
 msgid "Convert a wavelength value to an RGB value"
@@ -69429,43 +69413,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட முகங�
 
 
 msgctxt "Operator"
-msgid "Face Set Extract"
-msgstr "முகம் தொகுப்பு சாறு"
-
-
-msgid "Create a new mesh object from the selected Face Set"
-msgstr "தேர்ந்தெடுக்கப்பட்ட முக தொகுப்பிலிருந்து புதிய கண்ணி பொருளை உருவாக்கவும்"
-
-
-msgid "Add Boundary Loop"
-msgstr "எல்லை வளையத்தைச் சேர்க்கவும்"
-
-
-msgid "Add an extra edge loop to better preserve the shape when applying a subdivision surface modifier"
-msgstr "ஒரு துணைப்பிரிவு மேற்பரப்பு மாற்றியமைப்பைப் பயன்படுத்தும்போது வடிவத்தை சிறப்பாகப் பாதுகாக்க கூடுதல் விளிம்பு வளையத்தைச் சேர்க்கவும்"
-
-
-msgid "Extract as Solid"
-msgstr "திடமாக பிரித்தெடுக்கவும்"
-
-
-msgid "Extract the mask as a solid object with a solidify modifier"
-msgstr "ஒரு திடமான மாற்றியமைப்புடன் ஒரு திடமான பொருளாக முகமூடியைப் பிரித்தெடுக்கவும்"
-
-
-msgid "Project to Sculpt"
-msgstr "சிற்பத்திற்கான திட்டம்"
-
-
-msgid "Project the extracted mesh into the original sculpt"
-msgstr "பிரித்தெடுக்கப்பட்ட கண்ணி அசல் சிற்பத்திற்குள் திட்டமிடவும்"
-
-
-msgid "Smooth iterations applied to the extracted mesh"
-msgstr "பிரித்தெடுக்கப்பட்ட கண்ணிக்கு மென்மையான மறு செய்கைகள் பயன்படுத்தப்படுகின்றன"
-
-
-msgctxt "Operator"
 msgid "Weld Edges into Faces"
 msgstr "முகங்களில் விளிம்புகளை வெல்ட்"
 
@@ -70118,44 +70065,6 @@ msgstr "ஆஃப்செட் எட்ச் லூப் ச்லைடு
 
 msgid "Offset Edge Loop"
 msgstr "ஆஃப்செட் எட்ச் லூப்"
-
-
-msgctxt "Operator"
-msgid "Mask Extract"
-msgstr "முகமூடி சாறு"
-
-
-msgid "Create a new mesh object from the current paint mask"
-msgstr "தற்போதைய வண்ணப்பூச்சு முகமூடியிலிருந்து புதிய கண்ணி பொருளை உருவாக்கவும்"
-
-
-msgid "Minimum mask value to consider the vertex valid to extract a face from the original mesh"
-msgstr "அசல் மெசிலிருந்து ஒரு முகத்தை பிரித்தெடுக்க வெர்டெக்ச் செல்லுபடியாகும் என்பதை கருத்தில் கொள்ள குறைந்தபட்ச முகமூடி மதிப்பு"
-
-
-msgctxt "Operator"
-msgid "Mask Slice"
-msgstr "முகமூடி துண்டு"
-
-
-msgid "Slices the paint mask from the mesh"
-msgstr "கண்ணி இருந்து வண்ணப்பூச்சு முகமூடியை துண்டிக்கிறது"
-
-
-msgid "Fill Holes"
-msgstr "துளைகளை நிரப்பவும்"
-
-
-msgid "Fill holes after slicing the mask"
-msgstr "முகமூடியை வெட்டிய பின் துளைகளை நிரப்பவும்"
-
-
-msgid "Slice to New Object"
-msgstr "புதிய பொருளுக்கு நறுக்கவும்"
-
-
-msgid "Create a new object from the sliced mask"
-msgstr "வெட்டப்பட்ட முகமூடியிலிருந்து ஒரு புதிய பொருளை உருவாக்கவும்"
 
 
 msgctxt "Operator"
@@ -72439,6 +72348,10 @@ msgstr "முனைகளில் சேரவும்"
 
 msgid "Attach selected nodes to a new common frame"
 msgstr "தேர்ந்தெடுக்கப்பட்ட முனைகளை புதிய பொதுவான சட்டத்துடன் இணைக்கவும்"
+
+
+msgid "Open a predefined panel"
+msgstr "முன் வரையறுக்கப்பட்ட பேனலைத் திறக்கவும்"
 
 
 msgctxt "Operator"
@@ -81599,6 +81512,43 @@ msgstr "மறைக்கப்பட்ட வடிவவியலுக்�
 
 
 msgctxt "Operator"
+msgid "Face Set Extract"
+msgstr "முகம் தொகுப்பு சாறு"
+
+
+msgid "Create a new mesh object from the selected Face Set"
+msgstr "தேர்ந்தெடுக்கப்பட்ட முக தொகுப்பிலிருந்து புதிய கண்ணி பொருளை உருவாக்கவும்"
+
+
+msgid "Add Boundary Loop"
+msgstr "எல்லை வளையத்தைச் சேர்க்கவும்"
+
+
+msgid "Add an extra edge loop to better preserve the shape when applying a subdivision surface modifier"
+msgstr "ஒரு துணைப்பிரிவு மேற்பரப்பு மாற்றியமைப்பைப் பயன்படுத்தும்போது வடிவத்தை சிறப்பாகப் பாதுகாக்க கூடுதல் விளிம்பு வளையத்தைச் சேர்க்கவும்"
+
+
+msgid "Extract as Solid"
+msgstr "திடமாக பிரித்தெடுக்கவும்"
+
+
+msgid "Extract the mask as a solid object with a solidify modifier"
+msgstr "ஒரு திடமான மாற்றியமைப்புடன் ஒரு திடமான பொருளாக முகமூடியைப் பிரித்தெடுக்கவும்"
+
+
+msgid "Project to Sculpt"
+msgstr "சிற்பத்திற்கான திட்டம்"
+
+
+msgid "Project the extracted mesh into the original sculpt"
+msgstr "பிரித்தெடுக்கப்பட்ட கண்ணி அசல் சிற்பத்திற்குள் திட்டமிடவும்"
+
+
+msgid "Smooth iterations applied to the extracted mesh"
+msgstr "பிரித்தெடுக்கப்பட்ட கண்ணிக்கு மென்மையான மறு செய்கைகள் பயன்படுத்தப்படுகின்றன"
+
+
+msgctxt "Operator"
 msgid "Face Set Lasso Gesture"
 msgstr "முகம் செட் லச்சோ சைகை"
 
@@ -82052,6 +82002,44 @@ msgstr "பி.வி.எச்"
 
 msgid "Recalculate the sculpt BVH to improve performance"
 msgstr "செயல்திறனை மேம்படுத்த சிற்பம் பி.வி.எச்"
+
+
+msgctxt "Operator"
+msgid "Mask Extract"
+msgstr "முகமூடி சாறு"
+
+
+msgid "Create a new mesh object from the current paint mask"
+msgstr "தற்போதைய வண்ணப்பூச்சு முகமூடியிலிருந்து புதிய கண்ணி பொருளை உருவாக்கவும்"
+
+
+msgid "Minimum mask value to consider the vertex valid to extract a face from the original mesh"
+msgstr "அசல் மெசிலிருந்து ஒரு முகத்தை பிரித்தெடுக்க வெர்டெக்ச் செல்லுபடியாகும் என்பதை கருத்தில் கொள்ள குறைந்தபட்ச முகமூடி மதிப்பு"
+
+
+msgctxt "Operator"
+msgid "Mask Slice"
+msgstr "முகமூடி துண்டு"
+
+
+msgid "Slices the paint mask from the mesh"
+msgstr "கண்ணி இருந்து வண்ணப்பூச்சு முகமூடியை துண்டிக்கிறது"
+
+
+msgid "Fill Holes"
+msgstr "துளைகளை நிரப்பவும்"
+
+
+msgid "Fill holes after slicing the mask"
+msgstr "முகமூடியை வெட்டிய பின் துளைகளை நிரப்பவும்"
+
+
+msgid "Slice to New Object"
+msgstr "புதிய பொருளுக்கு நறுக்கவும்"
+
+
+msgid "Create a new object from the sliced mask"
+msgstr "வெட்டப்பட்ட முகமூடியிலிருந்து ஒரு புதிய பொருளை உருவாக்கவும்"
 
 
 msgctxt "Operator"
@@ -87752,10 +87740,6 @@ msgid "Call Panel"
 msgstr "அழைப்பு குழு"
 
 
-msgid "Open a predefined panel"
-msgstr "முன் வரையறுக்கப்பட்ட பேனலைத் திறக்கவும்"
-
-
 msgid "Keep Open"
 msgstr "திறந்த நிலையில் இருங்கள்"
 
@@ -91038,10 +91022,6 @@ msgid "Detail Percentage"
 msgstr "விவரம் விழுக்காடு"
 
 
-msgid "Maximum edge length for dynamic topology sculpting (in brush percenage)"
-msgstr "மாறும் டோபாலசி சிற்பத்திற்கான அதிகபட்ச விளிம்பு நீளம் (zbrush சதவீதத்தில்)"
-
-
 msgid "Detail Refine Method"
 msgstr "விவரம் சுத்திகரிப்பு முறை"
 
@@ -91234,6 +91214,42 @@ msgid "Panel containing UI elements"
 msgstr "இடைமுகம் கூறுகளைக் கொண்ட குழு"
 
 
+msgid "Viewer Node"
+msgstr "பார்வையாளர் முனை"
+
+
+msgid "Motion Tracking"
+msgstr "இயக்க கண்காணிப்பு"
+
+
+msgid "Mesh Edit Mode"
+msgstr "கண்ணி திருத்து பயன்முறை"
+
+
+msgid "Measurement"
+msgstr "அளவீட்டு"
+
+
+msgid "Curve Edit Mode"
+msgstr "வளைவு திருத்து பயன்முறை"
+
+
+msgid "Curves Edit Mode"
+msgstr "வளைவுகள் திருத்து பயன்முறை"
+
+
+msgid "Snapping"
+msgstr "ச்னாப்பிங்"
+
+
+msgid "Transform Orientations"
+msgstr "உருமாறும் நோக்குநிலைகள்"
+
+
+msgid "Stroke Placement"
+msgstr "வீச்சு வேலை வாய்ப்பு"
+
+
 msgid "Drawing Plane"
 msgstr "வரைதல் வானூர்தி"
 
@@ -91282,10 +91298,6 @@ msgid "Viewport Debug"
 msgstr "வியூபோர்ட் பிழைத்திருத்தம்"
 
 
-msgid "Stroke Placement"
-msgstr "வீச்சு வேலை வாய்ப்பு"
-
-
 msgid "VR"
 msgstr "வி.ஆர்"
 
@@ -91322,10 +91334,6 @@ msgid "Selectability & Visibility"
 msgstr "தேர்ந்தெடுக்கும் தன்மை மற்றும் தெரிவுநிலை"
 
 
-msgid "Wire Color"
-msgstr "கம்பி நிறம்"
-
-
 msgid "Shadow Settings"
 msgstr "நிழல் அமைப்புகள்"
 
@@ -91348,38 +91356,6 @@ msgstr "தொகுப்பாளர்"
 
 msgid "Overlays"
 msgstr "மேலடுக்குகள்"
-
-
-msgid "Viewer Node"
-msgstr "பார்வையாளர் முனை"
-
-
-msgid "Motion Tracking"
-msgstr "இயக்க கண்காணிப்பு"
-
-
-msgid "Mesh Edit Mode"
-msgstr "கண்ணி திருத்து பயன்முறை"
-
-
-msgid "Measurement"
-msgstr "அளவீட்டு"
-
-
-msgid "Curve Edit Mode"
-msgstr "வளைவு திருத்து பயன்முறை"
-
-
-msgid "Curves Edit Mode"
-msgstr "வளைவுகள் திருத்து பயன்முறை"
-
-
-msgid "Snapping"
-msgstr "ச்னாப்பிங்"
-
-
-msgid "Transform Orientations"
-msgstr "உருமாறும் நோக்குநிலைகள்"
 
 
 msgid "Import Settings"
@@ -92298,10 +92274,6 @@ msgstr "அலைவடிவங்கள்"
 
 msgid "Sequencer Snapping"
 msgstr "சீக்வென்சர் ச்னாப்பிங்"
-
-
-msgid "Strip Cache"
-msgstr "உரி கேச்"
 
 
 msgid "Strip Proxy & Timecode"
@@ -94941,14 +94913,6 @@ msgid "Use texture painting in Sculpt Mode"
 msgstr "சிற்பம் பயன்முறையில் அமைப்பு ஓவியத்தைப் பயன்படுத்தவும்"
 
 
-msgid "Sculpt Mode Tilt Support"
-msgstr "சிற்பம் பயன்முறை சாய்ந்த உதவி"
-
-
-msgid "Support for pen tablet tilt events in Sculpt Mode"
-msgstr "சிற்பம் பயன்முறையில் பேனா டேப்லெட் சாய்ந்த நிகழ்வுகளுக்கான உதவி"
-
-
 msgid "Shader Node Previews"
 msgstr "சேடர் முனை முன்னோட்டங்கள்"
 
@@ -96091,42 +96055,6 @@ msgid "Maximum number of lines to store for the console buffer"
 msgstr "கன்சோல் இடையகத்தை சேமிக்க அதிகபட்ச வரிகளின் எண்ணிக்கை"
 
 
-msgid "Disk Cache Compression Level"
-msgstr "வட்டு கேச் சுருக்க நிலை"
-
-
-msgid "Smaller compression will result in larger files, but less decoding overhead"
-msgstr "சிறிய சுருக்கமானது பெரிய கோப்புகளை ஏற்படுத்தும், ஆனால் குறைந்த டிகோடிங் மேல்நிலை"
-
-
-msgid "Requires fast storage, but uses minimum CPU resources"
-msgstr "வேகமான சேமிப்பு தேவை, ஆனால் குறைந்தபட்ச சிபியு வளங்களைப் பயன்படுத்துகிறது"
-
-
-msgid "Doesn't require fast storage and uses less CPU resources"
-msgstr "வேகமான சேமிப்பு தேவையில்லை மற்றும் குறைந்த சிபியு வளங்களைப் பயன்படுத்துகிறது"
-
-
-msgid "Works on slower storage devices and uses most CPU resources"
-msgstr "மெதுவான சேமிப்பக சாதனங்களில் வேலை செய்கிறது மற்றும் பெரும்பாலான சிபியு வளங்களைப் பயன்படுத்துகிறது"
-
-
-msgid "Disk Cache Directory"
-msgstr "வட்டு கேச் அடைவு"
-
-
-msgid "Override default directory"
-msgstr "இயல்புநிலை கோப்பகத்தை மேலெழுதவும்"
-
-
-msgid "Disk Cache Limit"
-msgstr "வட்டு கேச் வரம்பு"
-
-
-msgid "Disk cache limit (in gigabytes)"
-msgstr "வட்டு கேச் வரம்பு (சிகாபைட்டில்)"
-
-
 msgid "Proxy Setup"
 msgstr "பதிலாள் அமைப்பு"
 
@@ -96233,14 +96161,6 @@ msgstr "சிபியு ஆழம் எடுக்கும்"
 
 msgid "When making a selection in 3D View, use the GPU depth buffer to ensure the frontmost object is selected first"
 msgstr "3d பார்வையில் ஒரு தேர்வு செய்யும்போது, முதல் பொருள் முதலில் தேர்ந்தெடுக்கப்பட்டிருப்பதை உறுதிப்படுத்த gpu ஆழமான இடையகத்தைப் பயன்படுத்தவும்"
-
-
-msgid "Use Disk Cache"
-msgstr "வட்டு தற்காலிக சேமிப்பைப் பயன்படுத்தவும்"
-
-
-msgid "Store cached images to disk"
-msgstr "தற்காலிக சேமிப்பு படங்களை வட்டில் சேமிக்கவும்"
 
 
 msgid "Edit Studio Light"
@@ -103033,28 +102953,12 @@ msgid "All strips, recursively including those inside metastrips"
 msgstr "அனைத்து கீற்றுகளும், மேவுஉரிகளுக்குள் உள்ளவர்கள் உட்பட மீண்டும் மீண்டும்"
 
 
-msgid "Cache Composite"
-msgstr "கேச் கலப்பு"
-
-
-msgid "Cache intermediate composited images, for faster tweaking of stacked strips at the cost of memory usage"
-msgstr "நினைவக பயன்பாட்டு செலவில் அடுக்கப்பட்ட கீற்றுகளை விரைவாக மாற்றுவதற்காக, இடைநிலை தொகுக்கப்பட்ட படங்களை கேச்"
-
-
 msgid "Cache Final"
 msgstr "கேச் இறுதி"
 
 
 msgid "Cache final image for each frame"
 msgstr "ஒவ்வொரு சட்டத்திற்கும் இறுதிப் படத்தைத் தற்காலிக சேமிப்பு"
-
-
-msgid "Cache Preprocessed"
-msgstr "கேச் முன் செயலாக்கப்பட்டது"
-
-
-msgid "Cache preprocessed images, for faster tweaking of effects at the cost of memory usage"
-msgstr "நினைவக பயன்பாட்டு செலவில் விளைவுகளை விரைவாக மாற்றுவதற்காக, முன் செயலாக்கப்பட்ட படங்களை கேச்"
 
 
 msgid "Cache Raw"
@@ -103097,28 +103001,12 @@ msgid "Visualize cached images on the timeline"
 msgstr "காலவரிசையில் தற்காலிக சேமிப்பு படங்களை காட்சிப்படுத்துங்கள்"
 
 
-msgid "Composite Images"
-msgstr "கூட்டு படங்கள்"
-
-
-msgid "Visualize cached composite images"
-msgstr "தற்காலிக சேமிப்பு கலப்பு படங்களை காட்சிப்படுத்துங்கள்"
-
-
 msgid "Final Images"
 msgstr "இறுதி படங்கள்"
 
 
 msgid "Visualize cached complete frames"
 msgstr "தற்காலிக சேமிப்பு முழுமையான பிரேம்களைக் காட்சிப்படுத்துங்கள்"
-
-
-msgid "Preprocessed Images"
-msgstr "முன் செயலாக்கப்பட்ட படங்கள்"
-
-
-msgid "Visualize cached pre-processed images"
-msgstr "தற்காலிக சேமிப்பு முன் பதப்படுத்தப்பட்ட படங்களை காட்சிப்படுத்துங்கள்"
 
 
 msgid "Raw Images"
@@ -105795,14 +105683,6 @@ msgid "Scene size"
 msgstr "காட்சி அளவு"
 
 
-msgid "Use Backdrop"
-msgstr "பின்னணியைப் பயன்படுத்தவும்"
-
-
-msgid "Display result under strips"
-msgstr "கீற்றுகளின் கீழ் காட்சி முடிவு"
-
-
 msgid "Display Frames"
 msgstr "பிரேம்களைக் காண்பி"
 
@@ -107135,14 +107015,6 @@ msgstr "இந்த துண்டுகளை பாதிக்கும் 
 
 msgid "Disable strip so that it cannot be viewed in the output"
 msgstr "துண்டுகளை முடக்கு, இதனால் அதை வெளியீட்டில் பார்க்க முடியாது"
-
-
-msgid "Override Cache Settings"
-msgstr "கேச் அமைப்புகளை மேலெழுதவும்"
-
-
-msgid "Override global cache settings"
-msgstr "உலகளாவிய கேச் அமைப்புகளை மீறவும்"
 
 
 msgid "Left Handle Selected"
@@ -109872,6 +109744,10 @@ msgstr "திசையன் முனை"
 
 msgid "Wires"
 msgstr "கம்பிகள்"
+
+
+msgid "Wire Color"
+msgstr "கம்பி நிறம்"
 
 
 msgid "Wire Select"
@@ -112737,11 +112613,6 @@ msgid "Use the world for background color"
 msgstr "பின்னணி நிறத்திற்கு உலகைப் பயன்படுத்துங்கள்"
 
 
-msgctxt "View3D"
-msgid "Viewport"
-msgstr "வியூபோர்ட்"
-
-
 msgid "Use a custom color limited to this viewport only"
 msgstr "இந்த காட்சியகத்திற்கு மட்டுப்படுத்தப்பட்ட தனிப்பயன் வண்ணத்தைப் பயன்படுத்தவும்"
 
@@ -112795,10 +112666,6 @@ msgstr "குழி பள்ளத்தாக்குகளுக்கா�
 
 msgid "Show material color"
 msgstr "மூலப்பொருள் நிறத்தைக் காட்டு"
-
-
-msgid "Show scene in a single color"
-msgstr "காட்சியை ஒரே வண்ணத்தில் காட்டு"
 
 
 msgid "Show object color"
@@ -113550,14 +113417,6 @@ msgstr "தொகுதி பொருள் வழங்கும் அமை
 
 msgid "Specify volume data precision. Lower values reduce memory consumption at the cost of detail."
 msgstr "தொகுதி தரவு துல்லியத்தைக் குறிப்பிடவும். குறைந்த மதிப்புகள் விவரங்களின் செலவில் நினைவக நுகர்வு குறைக்கின்றன."
-
-
-msgid "Full float (Use 32 bit for all data)"
-msgstr "முழு மிதவை (எல்லா தரவிற்கும் 32 பிட் பயன்படுத்தவும்)"
-
-
-msgid "Half float (Use 16 bit for all data)"
-msgstr "அரை மிதவை (எல்லா தரவிற்கும் 16 பிட் பயன்படுத்தவும்)"
 
 
 msgid "Variable"
@@ -117106,6 +116965,11 @@ msgstr "விகிதாசார செல்வாக்கைக் கு�
 
 
 msgctxt "WindowManager"
+msgid "Adjust Proportional Influence"
+msgstr "விகிதாசார செல்வாக்கை சரிசெய்யவும்"
+
+
+msgctxt "WindowManager"
 msgid "Increase Max AutoIK Chain Length"
 msgstr "அதிகபட்ச ஆட்டோயிக் சங்கிலி நீளத்தை அதிகரிக்கவும்"
 
@@ -117113,11 +116977,6 @@ msgstr "அதிகபட்ச ஆட்டோயிக் சங்கில�
 msgctxt "WindowManager"
 msgid "Decrease Max AutoIK Chain Length"
 msgstr "அதிகபட்ச ஆட்டோயிக் சங்கிலி நீளத்தைக் குறைக்கவும்"
-
-
-msgctxt "WindowManager"
-msgid "Adjust Proportional Influence"
-msgstr "விகிதாசார செல்வாக்கை சரிசெய்யவும்"
 
 
 msgctxt "WindowManager"
@@ -122275,10 +122134,6 @@ msgid "Upres Factor"
 msgstr "upres காரணி"
 
 
-msgid "Use Speed Vectors"
-msgstr "வேக திசையன்களைப் பயன்படுத்துங்கள்"
-
-
 msgid "Mesh Generator"
 msgstr "மெச் செனரேட்டர்"
 
@@ -122327,10 +122182,6 @@ msgid "Velocity Source"
 msgstr "திசைவேகம் மூலம்"
 
 
-msgid "Is Resumable"
-msgstr "மீண்டும் தொடங்கக்கூடியது"
-
-
 msgid "Resolution Divisions"
 msgstr "தீர்மானப் பிரிவுகள்"
 
@@ -122365,10 +122216,6 @@ msgstr "வழிகாட்டி பெற்றோர்"
 
 msgid "Enable Guides first! Defaulting to Fluid Velocity"
 msgstr "முதலில் வழிகாட்டிகளை இயக்கு! திரவ வேகத்திற்கு இயல்புநிலை"
-
-
-msgid "Using Scene Gravity"
-msgstr "காட்சி ஈர்ப்பு விசையைப் பயன்படுத்துதல்"
 
 
 msgid "Empty Space"
@@ -123311,10 +123158,6 @@ msgstr "சொத்து விவரங்கள்"
 
 msgid "When Linking"
 msgstr "இணைக்கும்போது"
-
-
-msgid "When Appendind"
-msgstr "பின்னல் போது"
 
 
 msgctxt "Operator"
@@ -124356,10 +124199,6 @@ msgid "Raw"
 msgstr "சமைக்கப்படாத"
 
 
-msgid "Preprocessed"
-msgstr "முன் பதப்படுத்தப்பட்டது"
-
-
 msgid "Storage"
 msgstr "சேமிப்பகம்"
 
@@ -124380,10 +124219,6 @@ msgstr "ச்னாப் டு உரிச்"
 msgctxt "Operator"
 msgid "Set Preview Range to Strips"
 msgstr "முன்னோட்ட வரம்பை கீற்றுகளாக அமைக்கவும்"
-
-
-msgid "Preview as Backdrop"
-msgstr "பின்னணியாக முன்னோட்டம்"
 
 
 msgid "Preview During Transform"
@@ -125412,10 +125247,6 @@ msgstr "உருட்டல் கோடுகள் கன்சோல்"
 
 msgid "Garbage Collection Rate"
 msgstr "குப்பை சேகரிப்பு வீதம்"
-
-
-msgid "Cache Limit"
-msgstr "கேச் வரம்பு"
 
 
 msgid "Text Info Overlay"
@@ -127861,6 +127692,26 @@ msgid "Distance Min"
 msgstr "தூரம் மணித்துளி"
 
 
+msgctxt "Operator"
+msgid "Edit Metadata..."
+msgstr "மெட்டாடேட்டாவைத் திருத்து ..."
+
+
+msgctxt "Operator"
+msgid "Edit Preview Image..."
+msgstr "முன்னோட்ட படத்தைத் திருத்து ..."
+
+
+msgctxt "Operator"
+msgid "Save Changes to Asset"
+msgstr "சொத்தில் மாற்றங்களைச் சேமிக்கவும்"
+
+
+msgctxt "Operator"
+msgid "Revert to Asset"
+msgstr "சொத்துக்கு திரும்பவும்"
+
+
 msgid "Affect Only"
 msgstr "மட்டுமே பாதிக்கிறது"
 
@@ -127940,26 +127791,6 @@ msgstr "நகல் சொத்து ..."
 msgctxt "Operator"
 msgid "Delete Asset"
 msgstr "சொத்தை நீக்கு"
-
-
-msgctxt "Operator"
-msgid "Edit Metadata..."
-msgstr "மெட்டாடேட்டாவைத் திருத்து ..."
-
-
-msgctxt "Operator"
-msgid "Edit Preview Image..."
-msgstr "முன்னோட்ட படத்தைத் திருத்து ..."
-
-
-msgctxt "Operator"
-msgid "Save Changes to Asset"
-msgstr "சொத்தில் மாற்றங்களைச் சேமிக்கவும்"
-
-
-msgctxt "Operator"
-msgid "Revert to Asset"
-msgstr "சொத்துக்கு திரும்பவும்"
 
 
 msgctxt "Operator"
@@ -136450,10 +136281,6 @@ msgid "Adding node groups isn't supported for custom (Python defined) node trees
 msgstr "முனை குழுக்களைச் சேர்ப்பது தனிப்பயன் (பைதான் வரையறுக்கப்பட்ட) முனை மரங்களுக்கு ஆதரிக்கப்படவில்லை"
 
 
-msgid "Invalid Link"
-msgstr "தவறான இணைப்பு"
-
-
 msgid "{} (Menu)"
 msgstr "{} (மெனு)"
 
@@ -139914,10 +139741,6 @@ msgstr "தடைகளின் நிலை தொகுப்பு பிர
 
 msgid "Mini"
 msgstr "மினி"
-
-
-msgid "Mini float (Use 8 bit where possible, otherwise use 16 bit)"
-msgstr "மினி மிதவை (சாத்தியமான இடங்களில் 8 பிட்டைப் பயன்படுத்தவும், இல்லையெனில் 16 பிட் பயன்படுத்தவும்)"
 
 
 msgid "Emit fluid from mesh surface or volume"
@@ -143552,10 +143375,6 @@ msgstr ""
 ", \\r, \" அல்லது \\ ஆக இருக்கக் கூடாது"
 
 
-msgid "Disabled, Blender was compiled without CSV I/O"
-msgstr "முடக்கப்பட்ட, சி.எச்.வி I/O இல்லாமல் பிளெண்டர் தொகுக்கப்பட்டது"
-
-
 msgid "Delimiter"
 msgstr "பிரிப்பான்"
 
@@ -145759,26 +145578,6 @@ msgid "No mesh in active object"
 msgstr "செயலில் உள்ள பொருளில் கண்ணி இல்லை"
 
 
-msgid "Density Attribute"
-msgstr "அடர்த்தி பண்புக்கூறு"
-
-
-msgid "Absorption Color"
-msgstr "உறிஞ்சுதல் நிறம்"
-
-
-msgid "Blackbody Intensity"
-msgstr "பிளாக் பாடி தீவிரம்"
-
-
-msgid "Blackbody Tint"
-msgstr "பிளாக் பாடி டின்ட்"
-
-
-msgid "Temperature Attribute"
-msgstr "வெப்பநிலை பண்புக்கூறு"
-
-
 msgid "Backscatter"
 msgstr "பேக்ச்கேட்டர்"
 
@@ -145801,6 +145600,26 @@ msgstr "பின்னோக்கி சிதறடிக்கப்பட�
 
 msgid "Diameter of the water droplets, in micrometers"
 msgstr "மைக்ரோமீட்டர்களில், நீர் துளிகளின் விட்டம்"
+
+
+msgid "Density Attribute"
+msgstr "அடர்த்தி பண்புக்கூறு"
+
+
+msgid "Absorption Color"
+msgstr "உறிஞ்சுதல் நிறம்"
+
+
+msgid "Blackbody Intensity"
+msgstr "பிளாக் பாடி தீவிரம்"
+
+
+msgid "Blackbody Tint"
+msgstr "பிளாக் பாடி டின்ட்"
+
+
+msgid "Temperature Attribute"
+msgstr "வெப்பநிலை பண்புக்கூறு"
 
 
 msgid "Patterns"
