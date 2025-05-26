@@ -786,6 +786,10 @@ if(WITH_GHOST_WAYLAND)
   set_and_warn_library_found("xkbcommon" xkbcommon_FOUND WITH_GHOST_WAYLAND)
 
   if(WITH_GHOST_WAYLAND)
+    if(WITH_GHOST_WAYLAND_DBUS)
+      pkg_check_modules(dbus REQUIRED dbus-1)
+    endif()
+
     if(WITH_GHOST_WAYLAND_LIBDECOR)
       if(_use_system_wayland)
         pkg_check_modules(libdecor libdecor-0>=0.1)
@@ -794,6 +798,10 @@ if(WITH_GHOST_WAYLAND)
         set(libdecor_FOUND ON)
       endif()
       set_and_warn_library_found("libdecor" libdecor_FOUND WITH_GHOST_WAYLAND_LIBDECOR)
+    endif()
+
+    if(WITH_GHOST_WAYLAND_DBUS)
+      add_definitions(-DWITH_GHOST_WAYLAND_DBUS)
     endif()
 
     if(WITH_GHOST_WAYLAND_LIBDECOR)
