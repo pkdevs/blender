@@ -381,8 +381,7 @@ if(UNIX AND NOT (APPLE OR HAIKU))
     mark_as_advanced(WITH_GHOST_WAYLAND_LIBDECOR)
 
     option(WITH_GHOST_WAYLAND_DBUS "\
-Optionally build with DBUS support (used for Cursor themes). \
-May hang on startup systems where DBUS is not used."
+Optionally build with DBUS support (used for themes). \
       OFF
     )
     mark_as_advanced(WITH_GHOST_WAYLAND_DBUS)

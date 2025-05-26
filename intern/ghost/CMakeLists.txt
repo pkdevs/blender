@@ -338,7 +338,6 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       intern/GHOST_WindowWayland.cc
 
       intern/GHOST_SystemWayland.hh
-      intern/GHOST_WaylandCursorSettings.hh
       intern/GHOST_WaylandUtils.hh
       intern/GHOST_WindowWayland.hh
     )
