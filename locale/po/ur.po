@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'd87e0ecb614e')\n"
+"Project-Id-Version: Blender 4.5.0 Alpha (b'ba454989554a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-19 11:37+0000\n"
+"POT-Creation-Date: 2025-05-26 07:36+0000\n"
 "PO-Revision-Date: 2025-04-14 08:53+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -9098,10 +9098,6 @@ msgid "Target Z"
 msgstr "Z ﭧﮔﺭﺎﭨ"
 
 
-msgid "Target's Z axis, not World Z axis, will constraint the Up direction"
-msgstr "ﺎﮔ ﮯﮐﻭﺭ ﻮﮐ ﺖﻤﺳ ﯽﮐ ﺮﭘﻭﺍ ،ﮟﯿﮩﻧ ﺭﻮﺤﻣ Z ﮉﻟﺭﻭ ،ﺭﻮﺤﻣ Z ﺎﮐ ﻑﺪﮨ"
-
-
 msgid "Transform Cache Constraint"
 msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﯼﺪﻨﺑﺎﭘ ﯽﮐ ﮯﺸﯿﮐ"
 
@@ -15379,10 +15375,6 @@ msgstr "ﺩﺍﺪﻌﺗ ﯽﮐ ﮞﻮﻧﻮﻤﻧ ﯽﻓﺎﺿﺍ ﮯﻟﺍﻭ �
 
 msgid "Surface Emission"
 msgstr "ﺝﺍﺮﺧﺍ ﺎﮐ ﺢﻄﺳ"
-
-
-msgid "Controls fluid emission from the mesh surface (higher value results in emission further away from the mesh surface"
-msgstr "ﮯﮨ ﺎﺗﻮﮨ ﺝﺍﺮﺧﺍ ﺭﻭﺩ ﺪﯾﺰﻣ ﮯﺳ ﺢﻄﺳ ﻝﺎﺟ ﮟﯿﻣ ﮯﺠﯿﺘﻧ ﮯﮐ ﺭﺪﻗ ﮦﺩﺎﯾﺯ) ﮯﮨ ﺎﺗﺮﮐ ﻝﻭﺮﭩﻨﮐ ﻮﮐ ﺝﺍﺮﺧﺍ ﮯﮐ ﻝﺎﯿﺳ ﮯﺳ ﺢﻄﺳ ﺶﯿﻣ"
 
 
 msgid "Temperature Difference"
@@ -22486,6 +22478,10 @@ msgid "Node tree for node based lights"
 msgstr "ﯼﺮﭨ ﮈﻮﻧ ﮯﯿﻟ ﮯﮐ ﺲﭩﺋﻻ﻿ ﯽﻨﺒﻣ ﺮﭘ ﮈﻮﻧ"
 
 
+msgid "Normalize"
+msgstr "ﺎﻧﺎﻨﺑ ﻝﻮﻤﻌﻣ"
+
+
 msgid "Specular Factor"
 msgstr "ﺮﭩﮑﯿﻓ ﺮﻟﻮﮑﯿﭙﺳ"
 
@@ -22578,10 +22574,6 @@ msgstr "ﯽﻨﺷﻭﺭ ﯽﮐ ﮯﻗﻼ﻿ﻋ ﮏﻤﺗﺎﺷﺩ"
 msgctxt "Light"
 msgid "Power"
 msgstr "ﺖﻗﺎﻃ"
-
-
-msgid "Light energy emitted over the entire area of the light in all directions"
-msgstr "ﮯﮨ ﯽﺗﻮﮨ ﺝﺭﺎﺧ ﺮﭘ ﮯﻗﻼ﻿ﻋ ﮮﺭﻮﭘ ﮯﮐ ﯽﻨﺷﻭﺭ ﮟﯿﻣ ﮞﻮﺘﻤﺳ ﻡﺎﻤﺗ ﯽﺋﺎﻧﺍﻮﺗ ﯽﮐ ﯽﻨﺷﻭﺭ"
 
 
 msgid "Shadow Buffer Clip Start"
@@ -22694,10 +22686,6 @@ msgstr "ﭧﺋﻻ﻿ ﭦﺎﭙﺳﺍ"
 
 msgid "Directional cone Light"
 msgstr "ﯽﻨﺷﻭﺭ ﯽﻃﻭﺮﺨﻣ ﮏﻤﺗﺎﺷﺩ"
-
-
-msgid "The energy this light would emit over its entire area if it wasn't limited by the spot angle"
-msgstr "ﻮﮨ ﮧﻧ ﺩﻭﺪﺤﻣ ﮯﺳ ﻞﮕﻨﯾﺍ ﭦﺎﭙﺳ ﮧﯾ ﺮﮔﺍ ﯽﮔ ﮮﺮﮐ ﺝﺭﺎﺧ ﮟﯿﻣ ﮯﻗﻼ﻿ﻋ ﮮﺭﻮﭘ ﮯﻨﭘﺍ ﯽﻨﺷﻭﺭ ﮧﯾ ﻮﺟ ﯽﺋﺎﻧﺍﻮﺗ"
 
 
 msgid "Show Cone"
@@ -41924,10 +41912,6 @@ msgid "Reconstructed"
 msgstr "ﻮﻧ ﺮﯿﻤﻌﺗ"
 
 
-msgid "Is tracking data contains valid reconstruction information"
-msgstr "ﮟﯿﮨ ﻞﻣﺎﺷ ﺕﺎﻣﻮﻠﻌﻣ ﺖﺳﺭﺩ ﯽﮐ ﻮﻧ ﺮﯿﻤﻌﺗ ﮟﯿﻣ ﺎﭩﯾﮈ ﮓﻨﮑﯾﺮﭨ ﺎﯿﮐ"
-
-
 msgid "Movie tracking settings"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﮓﻨﮑﯾﺮﭨ ﯼﻭﻮﻣ"
 
@@ -42174,10 +42158,6 @@ msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﻞﻨﯿﭼ ﻦﯾﺮﮔ ﮯﺳ ﺞ�
 
 msgid "Use Mask"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﮏﺳﺎﻣ"
-
-
-msgid "Normalize"
-msgstr "ﺎﻧﺎﻨﺑ ﻝﻮﻤﻌﻣ"
 
 
 msgid "Normalize light intensities while tracking (slower)"
@@ -43152,64 +43132,28 @@ msgid "Chromatic adaption from a different white point"
 msgstr "ﺖﻘﻓﺍﻮﻣ ﻦﯿﮕﻧﺭ ﮯﺳ ﮧﻄﻘﻧ ﺪﯿﻔﺳ ﻒﻠﺘﺨﻣ ﮏﯾﺍ"
 
 
-msgid "Correction for highlights"
-msgstr "ﺢﯿﺤﺼﺗ ﮯﯿﻟ ﮯﮐ ﮞﻮﯿﮑﻠﮭﺟ"
-
-
-msgid "Correction for midtones"
-msgstr "ﺢﯿﺤﺼﺗ ﮯﯿﻟ ﮯﮐ ﺰﻧﻮﭨ ﮉﻣ"
-
-
 msgid "Input Temperature"
 msgstr "ﺕﺭﺍﺮﺣ ﮧﺟﺭﺩ ﭧﭘ ﻥﺍ"
-
-
-msgid "Color temperature of the input's white point"
-msgstr "ﺕﺭﺍﺮﺣ ﮧﺟﺭﺩ ﮓﻧﺭ ﺎﮐ ﭧﻨﺋﺍﻮﭘ ﺪﯿﻔﺳ ﮯﮐ ﭧﭘ ﻥﺍ"
 
 
 msgid "Input Tint"
 msgstr "ﺖﮕﻧﺭ ﭧﭘ ﻥﺍ"
 
 
-msgid "Color tint of the input's white point (the default of 10 matches daylight)"
-msgstr "(ﯽﻨﺷﻭﺭ ﯽﮐ ﻥﺪﮨﺪﺷ ﮯﻃ ﺎﮐ ﮞﻮﭽﯿﻣ 10) ﭧﻨﭨ ﮓﻧﺭ ﺎﮐ ﭧﻨﺋﺍﻮﭘ ﺪﯿﻔﺳ ﮯﮐ ﭧﭘ ﻥﺍ"
-
-
 msgid "Input White Point"
 msgstr "ﭧﻨﺋﺍﻮﭘ ﭧﺋﺍﻭ ﭧﭘ ﻥﺍ"
-
-
-msgid "Correction for shadows"
-msgstr "ﺡﻼ﻿ﺻﺍ ﮯﯿﻟ ﮯﮐ ﮯﺋﺎﺳ"
-
-
-msgid "Correction for entire tonal range"
-msgstr "ﺢﯿﺤﺼﺗ ﮯﯿﻟ ﮯﮐ ﺞﻨﯾﺭ ﻞﻧﻮﭨ ﯼﺭﻮﭘ"
 
 
 msgid "Basis"
 msgstr "ﺩﺎﯿﻨﺑ"
 
 
-msgid "Support negative color by using this as the RGB basis"
-msgstr "ﮟﯾﺮﮐ ﺖﯾﺎﻤﺣ ﯽﮐ ﮓﻧﺭ ﯽﻔﻨﻣ ﮯﮐﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﺩﺎﯿﻨﺑ ﯽﺑ ﯽﺟ ﺭﺁ ﮯﺳﺍ"
-
-
 msgid "Output Temperature"
 msgstr "ﺕﺭﺍﺮﺣ ﮧﺟﺭﺩ ﭧﭘ ﭦﺅﺁ"
 
 
-msgid "Color temperature of the output's white point"
-msgstr "ﺕﺭﺍﺮﺣ ﮧﺟﺭﺩ ﮓﻧﺭ ﺎﮐ ﭧﻨﺋﺍﻮﭘ ﺪﯿﻔﺳ ﮯﮐ ﭧﭘ ﭦﺅﺁ"
-
-
 msgid "Output Tint"
 msgstr "ﺖﮕﻧﺭ ﭧﭘ ﭦﺅﺁ"
-
-
-msgid "Color tint of the output's white point (the default of 10 matches daylight)"
-msgstr "(ﯽﻨﺷﻭﺭ ﯽﮐ ﻥﺪﮨﺪﺷ ﮯﻃ ﺎﮐ ﮞﻮﭽﯿﻣ 10) ﭧﻨﭨ ﺮﻠﮐ ﺎﮐ ﭧﻨﺋﺍﻮﭘ ﺪﯿﻔﺳ ﮯﮐ ﭧﭘ ﭦﺅﺁ"
 
 
 msgid "Output White Point"
@@ -43478,10 +43422,6 @@ msgstr "X1"
 
 msgid "Y1"
 msgstr "Y1"
-
-
-msgid "Use relative values to crop image"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺭﺍﺪﻗﺍ ﮧﻘﻠﻌﺘﻣ ﮯﯿﻟ ﮯﮐ ﮯﻨﺷﺍﺮﺗ ﻮﮐ ﺮﯾﻮﺼﺗ"
 
 
 msgid "Crop Image Size"
@@ -43947,6 +43887,10 @@ msgstr "Y ﺭﻭﺍ X ﮟﯿﺋﺎﭩﻠﭘ"
 
 msgid "Apply gamma correction"
 msgstr "ﺢﯿﺤﺼﺗ ﺎﻣﺎﮔ ﮟﯿﺋﺎﮕﻟ"
+
+
+msgid "Glare"
+msgstr "ﺪﻧﻮﭼﺎﮑﭼ"
 
 
 msgid "Add lens flares, fog and glows around bright parts of the image"
@@ -44815,6 +44759,10 @@ msgid "Input render passes from a scene render"
 msgstr "ﺭﮉﻨﯾﺭ ﺮﻈﻨﻣ a ﮯﺳ ﺰﺳﺎﭘ ﺭﮉﻨﯾﺭ ﭧﭘ ﻥﺍ"
 
 
+msgid "Greater"
+msgstr "ﺮﺗ ﻢﯿﻈﻋ"
+
+
 msgid "Rotate"
 msgstr "ﮟﯿﺋﺎﻤﮭﮔ"
 
@@ -45039,10 +44987,6 @@ msgid "Offset an image"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﻑﺁ ﻮﮐ ﺮﯾﻮﺼﺗ ﮏﯾﺍ"
 
 
-msgid "Use relative (fraction of input image size) values to define translation"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮟﯾﺭﺪﻗ (ﮧﺼﺣ ﺎﮐ ﺰﺋﺎﺳ ﺞﯿﻣﺍ ﭧﭘ ﻥﺍ) ﺭﺍﺩ ﮧﺘﺷﺭ ﮯﯿﻟ ﮯﮐ ﺖﺣﺎﺿﻭ ﯽﮐ ﮧﻤﺟﺮﺗ"
-
-
 msgid "X Axis"
 msgstr "ﺭﻮﺤﻣ ﺲﮑﯾﺍ"
 
@@ -45183,20 +45127,20 @@ msgid "Axis Angle to Rotation"
 msgstr "ﮧﯾﻭﺍﺯ ﺭﻮﺤﻣ ﺎﮐ ﺵﺩﺮﮔ"
 
 
-msgid "Boolean Math"
-msgstr "ﯽﺿﺎﯾﺭ ﻦﯿﻟﻮﺑ"
-
-
 msgid "And"
 msgstr "ﺭﻭﺍ"
 
 
-msgid "True when both inputs are true"
-msgstr "ﮞﻮﮨ ﺖﺳﺭﺩ ﭧﭘ ﻥﺍ ﮞﻮﻧﻭﺩ ﺐﺟ ﺖﺳﺭﺩ"
-
-
 msgid "Or"
 msgstr "ﺎﯾ"
+
+
+msgid "Boolean Math"
+msgstr "ﯽﺿﺎﯾﺭ ﻦﯿﻟﻮﺑ"
+
+
+msgid "True when both inputs are true"
+msgstr "ﮞﻮﮨ ﺖﺳﺭﺩ ﭧﭘ ﻥﺍ ﮞﻮﻧﻭﺩ ﺐﺟ ﺖﺳﺭﺩ"
 
 
 msgid "True when at least one input is true"
@@ -50414,6 +50358,34 @@ msgid "Input to use when the socket is unconnected. Requires \"Hide Value\"."
 msgstr "\"ﺭﺪﻗﮯﮨ ﺕﺭﻭﺮﺿ ﯽﮐ \"ﮟﯿﺋﺎﭙﮭﭼ\" ﭧﭘ ﻥﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﮯﻧﻮﮨ ﮏﻠﺴﻨﻣ ﺮﯿﻏ ﮯﮐ ﭧﮐﺎﺳ"
 
 
+msgid "The node socket's default value"
+msgstr "ﺭﺪﻗ ﭧﻟﺎﻔﯾﮈ ﯽﮐ ﭧﮐﺎﺳ ﮈﻮﻧ"
+
+
+msgid "The index from the context"
+msgstr "ﺲﮑﯾﮉﻧﺍ ﮯﺳ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ"
+
+
+msgid "ID or Index"
+msgstr "ID ﮧﯾﺭﺎﺷﺍ ﺎﯾ"
+
+
+msgid "The \"id\" attribute if available, otherwise the index"
+msgstr "ﮧﯾﺭﺎﺷﺍ ﺮﮕﯾﺩ ﺕﺭﻮﺼﺑ ،ﻒﺻﻭ \"id\" ﻮﺗ ﻮﮨ ﺏﺎﯿﺘﺳﺩ ﺮﮔﺍ"
+
+
+msgid "The geometry's normal direction"
+msgstr "ﺖﻤﺳ ﻡﺎﻋ ﯽﮐ ﯼﺮﭩﯿﻣﻮﯿﺟ"
+
+
+msgid "The position from the context"
+msgstr "ﻦﺸﯾﺯﻮﭘ ﮯﺳ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ"
+
+
+msgid "Transformation of each instance from the geometry context"
+msgstr "ﯽﻠﯾﺪﺒﺗ ﯽﮐ ﻝﺎﺜﻣ ﮏﯾﺍ ﺮﮨ ﮯﺳ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ ﯼﺮﭩﯿﻣﻮﯿﺟ"
+
+
 msgid "Socket description"
 msgstr "ﻞﯿﺼﻔﺗ ﯽﮐ ﭧﮐﺎﺳ"
 
@@ -51914,10 +51886,6 @@ msgstr "ﺲﭩﭘ ﭦﺅﺁ ﺎﻧﺮﮐ ﮓﻟﺍ"
 msgctxt "Operator"
 msgid "Change Factor"
 msgstr "ﻞﻣﺎﻋ ﯽﻠﯾﺪﺒﺗ"
-
-
-msgid "Connect two nodes without clicking a specific socket (automatically determined"
-msgstr "ﮦﺪﺷ ﮯﻃ ﺩﻮﺨﺑ ﺩﻮﺧ)ﮟﯾﮌﻮﺟ ﻮﮐ ﺱﮈﻮﻧ ﻭﺩ ﺮﯿﻐﺑ ﮯﯿﮐ ﮏﻠﮐ ﺮﭘ ﭧﮐﺎﺳ ﺹﻮﺼﺨﻣ ﯽﺴﮐ"
 
 
 msgctxt "Operator"
@@ -55887,6 +55855,14 @@ msgid "Enable easier reuse of a data-block through the Asset Browser, with the h
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮦﺭﺎﺑﻭﺩ ﻥﺎﺳﺁ ﮯﮐ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ ﮯﻌﯾﺭﺫ ﮯﮐ ﺭﺯﺅﺍﺮﺑ ﮧﺛﺎﺛﺍ ،ﮯﺳ ﺩﺪﻣ ﯽﮐ (ﺰﮕﯿﭨ ﺭﻭﺍ ﻞﯿﺼﻔﺗ ،ﻮﯾﻮﯾﺮﭘ  ﮯﺴﯿﺟ) ﺎﭩﯾﮈ ﺎﭩﯿﻣ ﺕﺭﻭﺮﺿ ﺐﺴﺣ"
 
 
+msgid "Point 1"
+msgstr "1 ﭧﻨﺋﺍﻮﭘ"
+
+
+msgid "Point 2"
+msgstr "2 ﭧﻨﺋﺍﻮﭘ"
+
+
 msgctxt "Operator"
 msgid "Add Boid Rule"
 msgstr "Boid ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﻝﻮﺻﺍ"
@@ -58561,10 +58537,6 @@ msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﺭﺎﻄﻗ ﭧﻨﺋﺍﻮﭘ ﻝ�
 
 msgid "Select similar curve points by property type"
 msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﺲﭩﻨﺋﺍﻮﭘ ﻞﺑ ﮯﺘﻠﺟ ﮯﺘﻠﻣ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﻢﺴﻗ ﯽﮐ ﯽﭨﺮﭘﺍﺮﭘ"
-
-
-msgid "Greater"
-msgstr "ﺮﺗ ﻢﯿﻈﻋ"
 
 
 msgid "Less"
@@ -75847,6 +75819,10 @@ msgid "All bones affected by active Keying Set"
 msgstr "ﮞﺎﯾﮉﮨ ﻡﺎﻤﺗ ﺮﺛﺎﺘﻣ ﮯﺳ ﭧﯿﺳ ﮓﻨﯿﻠﮐ ﻝﺎﻌﻓ"
 
 
+msgid "Parents"
+msgstr "ﻦﯾﺪﻟﺍﻭ"
+
+
 msgctxt "Operator"
 msgid "Select Connected"
 msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﮏﻠﺴﻨﻣ"
@@ -83935,10 +83911,6 @@ msgid "Export COLLADA (Legacy)"
 msgstr "(Legacy) ﮟﯾﺮﮐ ﺪﻣﺁﺮﺑ ﺍﮈﻻ﻿ﻮﮐ"
 
 
-msgid "Save a Collada file"
-msgstr "ﮟﯾﺮﮐ ﻅﻮﻔﺤﻣ ﻮﮐ ﻞﺋﺎﻓ ﺍﮉﻟﻮﮐ"
-
-
 msgid "Only Selected UV Map"
 msgstr "ﮧﺸﻘﻨﯾﻭ ﻮﯿﺒﺨﺘﻨﻣ ﻑﺮﺻ"
 
@@ -84254,10 +84226,6 @@ msgstr "ﮯﮨ ﯽﺗﻮﮨ ﭦﺭﻮﭙﺴﮑﯾﺍ ﻞﺋﺎﻓ dae. ﮞﺎﮩ
 msgctxt "Operator"
 msgid "Import COLLADA (Legacy)"
 msgstr "(Legacy) ﮟﯾﺮﮐ ﺪﻣﺁﺭﺩ ﺍﮈﻻ﻿ﻮﮐ"
-
-
-msgid "Load a Collada file"
-msgstr "ﮟﯾﺮﮐ ﮈﻮﻟ ﻞﺋﺎﻓ ﺍﮈﻻ﻿ﻮﮐ"
 
 
 msgid "Auto Connect"
@@ -86863,10 +86831,6 @@ msgid "Bleed"
 msgstr "ﺎﻧﺎﮩﺑ ﻥﻮﺧ"
 
 
-msgid "Extend paint beyond the faces UVs to reduce seams (in pixels, slower)"
-msgstr "(ﮧﺘﺴﮨﺁ ،ﮟﯿﻣ ﺰﻠﺴﮑﭘ) ﮟﯿﺋﺎﮬﮍﺑ ﮯﮔﺁ ﮯﺳ s ﯼﻭﻮﯾ  ﮯﮐ ﮮﺮﮩﭼ ﻮﮐ ﭧﻨﯿﭘ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻢﮐ ﻮﮐ ﻥﻮﯿﺳ"
-
-
 msgid "Stencil Color"
 msgstr "ﮓﻧﺭ ﺎﮐ ﻞﺴﻨﯿﭩﺳ"
 
@@ -87119,6 +87083,14 @@ msgid "Panel containing UI elements"
 msgstr "UI ﻞﻨﯿﭘ ﻞﻤﺘﺸﻣ ﺮﭘ ﺮﺻﺎﻨﻋ"
 
 
+msgid "Overlays"
+msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
+
+
+msgid "Guides"
+msgstr "ﺯﮉﯿﺋﺎﮔ"
+
+
 msgid "Viewer Node"
 msgstr "ﮈﻮﻧ ﺮﻇﺎﻧ"
 
@@ -87155,10 +87127,6 @@ msgid "Drawing Plane"
 msgstr "ﻦﯿﻠﭘ ﮓﻨﺋﺍﺭﮈ"
 
 
-msgid "Guides"
-msgstr "ﺯﮉﯿﺋﺎﮔ"
-
-
 msgid "Quad View"
 msgstr "ﻮﯾﻭﺍﮍﮐﻮﭼ"
 
@@ -87173,6 +87141,10 @@ msgstr "ﯽﭘﻮﮑﺳﻮﯾﺮﯿﭩﺳ"
 
 msgid "Multi Frame"
 msgstr "ﻢﯾﺮﻓ ﯽﭩﻠﻣ"
+
+
+msgid "Compositor"
+msgstr "ﺮﭩﯾﺯﻮﭙﻤﮐ"
 
 
 msgid "Auto-Masking"
@@ -87237,14 +87209,6 @@ msgstr "ﺎﮩﮔ"
 
 msgid "Render Pass"
 msgstr "ﺱﺎﭘ ﺭﮉﻨﯾﺭ"
-
-
-msgid "Compositor"
-msgstr "ﺮﭩﯾﺯﻮﭙﻤﮐ"
-
-
-msgid "Overlays"
-msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
 
 
 msgid "Chain Scaling"
@@ -90724,10 +90688,6 @@ msgstr "ﺰﯾﺮﭨﺯﻮﭙﯾﺭ ﻦﺸﻨﯿﭩﺴﮑﯾﺍ"
 
 msgid "Online Access"
 msgstr "ﯽﺋﺎﺳﺭ ﻦﺋﻻ﻿ ﻥﺁ"
-
-
-msgid "The user has been shown the \"Online Access\" prompt and make a choice"
-msgstr "ﮟﯾﺮﮐ ﺏﺎﺨﺘﻧﺍ ﺭﻭﺍ ﮯﮨ ﺎﯿﮔ ﺎﯾﺎﮭﮐﺩ ﭧﭙﻣﺍﺮﭘ \"ﯽﺋﺎﺳﺭ ﻦﺋﻻ﻿ ﻥﺁ\" ﻮﮐ ﻑﺭﺎﺻ"
 
 
 msgid "Active Asset Library"
@@ -101108,18 +101068,6 @@ msgid "Attribute domain to display"
 msgstr "ﮟﯾﺮﮐ ﺏﻮﺴﻨﻣ ﻮﮐ ﻦﯿﻣﻭﮈ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺮﮨﺎﻇ"
 
 
-msgid "Columns"
-msgstr "ﻢﻟﺎﮐ"
-
-
-msgid "Persistent data associated with spreadsheet columns"
-msgstr "ﺎﭩﯾﮈ ﻞﻘﺘﺴﻣ ﮧﺘﺴﺑﺍﻭ ﮯﺳ ﮞﻮﻤﻟﺎﮐ ﭧﯿﺷﮉﯾﺮﭙﺳﺍ"
-
-
-msgid "Display Context Path Collapsed"
-msgstr "ﺎﯿﮔ ﮍﮑﺳ ﮧﺘﺳﺍﺭ ﺎﮐ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ ﮯﻠﭙﺳﮈ"
-
-
 msgid "Geometry Component"
 msgstr "ﻭﺰﺟ ﺎﮐ ﯼﺮﭩﯿﻣﻮﯿﺟ"
 
@@ -101740,6 +101688,14 @@ msgid "Display overlays like UV Maps and Metadata"
 msgstr "ﺎﭩﯾﮈٰ ﺎﭩﯿﻣ ﺭﻭﺍﮯﺸﻘﻧ ﯼﻭ ﻮﯾﮯﺴﯿﺟ ﮟﯾﺮﮐ ﮯﻧﺎﮭﮐﺩ ﺰﯿﻟﺭﻭﻭﺍ"
 
 
+msgid "Text Info"
+msgstr "ﺕﺎﻣﻮﻠﻌﻣ ﯽﮐ ﻦﺘﻣ"
+
+
+msgid "Display overlay text"
+msgstr "ﮟﯾﺮﮐ ﮯﻧﺎﮭﮐﺩ ﭧﺴﮑﯿﭨ ﮯﻟﺭﻭﻭﺍ"
+
+
 msgid "Get the node tree path as a string"
 msgstr "ﮟﯾﺮﮐ ﻞﺻﺎﺣ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﮓﻧﺮﭩﺳ ﻮﮐ ﮧﺘﺳﺍﺭ ﯼﺮﭨ ﮈﻮﻧ"
 
@@ -102204,6 +102160,10 @@ msgstr "ﻮﯿﻠﯾﻭ ﺮﺠﯿﭩﻧﺍ ﭧﺑ 8"
 
 msgid "Text Value"
 msgstr "ﺭﺪﻗ ﯽﮐ ﻦﺘﻣ"
+
+
+msgid "Columns"
+msgstr "ﻢﻟﺎﮐ"
 
 
 msgid "Stereo 3D Display"
@@ -103050,6 +103010,18 @@ msgstr "ﮟﯾﺩ ﭧﻟﺍ ﮓﻧﺭ ﺎﮐ ﻥﺍﻮﻠﮬﮈ"
 
 msgid "Color balance lift (shadows)"
 msgstr "(ﮯﺋﺎﺳ) ﭧﻔﻟ ﺲﻨﻠﯿﺑ ﺮﻠﮐ"
+
+
+msgid "Correction for entire tonal range"
+msgstr "ﺢﯿﺤﺼﺗ ﮯﯿﻟ ﮯﮐ ﺞﻨﯾﺭ ﻞﻧﻮﭨ ﯼﺭﻮﭘ"
+
+
+msgid "Correction for midtones"
+msgstr "ﺢﯿﺤﺼﺗ ﮯﯿﻟ ﮯﮐ ﺰﻧﻮﭨ ﮉﻣ"
+
+
+msgid "Correction for highlights"
+msgstr "ﺢﯿﺤﺼﺗ ﮯﯿﻟ ﮯﮐ ﮞﻮﯿﮑﻠﮭﺟ"
 
 
 msgid "Color balance parameters for a sequence strip"
@@ -105979,6 +105951,10 @@ msgid "Number of steps to break transformation into for face nearest snapping"
 msgstr "ﺩﺍﺪﻌﺗ ﯽﮐ ﺕﺎﻣﺍﺪﻗﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﮌﻮﺗ ﻮﮐ ﯽﻠﯾﺪﺒﺗ ﮯﯿﻟ ﮯﮐ ﮓﻨﭙﯿﻨﺳ ﻦﯾﺮﺗ ﺐﯾﺮﻗ ﮯﮐ ﮮﺮﮩﭼ"
 
 
+msgid "Snap to Strips"
+msgstr "ﺲﭘﺮﭩﺳ ﻮﭨ ﭗﯿﻨﺳﺍ"
+
+
 msgid "Snap Target"
 msgstr "ﭧﮔﺭﺎﭨ ﭗﯿﻨﺳ"
 
@@ -107411,10 +107387,6 @@ msgstr "ﮟﯿﺋﺎﮭﮐﺩ ﺕﺎﻣﻮﻠﻌﻣ ﯽﺗﺎﯾﺭﺎﻤﺷ ﮟ
 
 msgid "Show Text"
 msgstr "ﮟﯿﺋﺎﮭﮐﺩ ﻦﺘﻣ"
-
-
-msgid "Display overlay text"
-msgstr "ﮟﯾﺮﮐ ﮯﻧﺎﮭﮐﺩ ﭧﺴﮑﯿﭨ ﮯﻟﺭﻭﻭﺍ"
 
 
 msgid "Display Vertex Normals"
@@ -118587,10 +118559,6 @@ msgid "Muted Strips"
 msgstr "ﺲﭘﺮﭩﺳ ﺵﻮﻣﺎﺧ"
 
 
-msgid "Snap to Strips"
-msgstr "ﺲﭘﺮﭩﺳ ﻮﭨ ﭗﯿﻨﺳﺍ"
-
-
 msgctxt "Operator"
 msgid "Set Preview Range to Strips"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﺮﭘ ﺲﭘﺮﭩﺳ ﻮﮐ ﺪﺣ ﯽﮐ ﻮﯾﻮﯾﺮﭘ"
@@ -118880,18 +118848,6 @@ msgstr "ﻮﭨ ﭧﮐ"
 
 msgid "Two or more channels are needed below this strip"
 msgstr "ﮯﮨ ﺕﺭﻭﺮﺿ ﯽﮐ ﺰﻠﻨﯿﭼ ﮦﺩﺎﯾﺯ ﺎﯾ ﻭﺩ ﮯﭽﯿﻧ ﮯﮐ ﯽﭩﭘ ﺱﺍ"
-
-
-msgid "No active context"
-msgstr "ﮟﯿﮩﻧ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ ﻝﺎﻌﻓ ﯽﺋﻮﮐ"
-
-
-msgid "No active viewer node"
-msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮈﻮﻧ ﺮﻇﺎﻧ ﻝﺎﻌﻓ ﯽﺋﻮﮐ"
-
-
-msgid "Invalid id"
-msgstr "ﯼﮈ ﯽﺋﺁ ﻂﻠﻏ"
 
 
 msgid "All Data-Blocks"
@@ -119267,11 +119223,6 @@ msgstr "ﮟﯾﺮﮐ ﮈﻮﻟ ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﺭﮉﻨﯿﻠﺑ �
 
 
 msgctxt "Operator"
-msgid "Collada (.dae) (Legacy)"
-msgstr "(dae) (Legacy.) ﺍﮉﻟﻮﮐ"
-
-
-msgctxt "Operator"
 msgid "Alembic (.abc)"
 msgstr "(abc.) ﮏﺒﻤﯿﻟﺍ"
 
@@ -119299,6 +119250,11 @@ msgstr "(PLY (.ply ﮈﺭﻮﻔﻨﯿﭩﺳ"
 msgctxt "Operator"
 msgid "STL (.stl)"
 msgstr "STL (.stl)"
+
+
+msgctxt "Operator"
+msgid "Collada (.dae) (Legacy)"
+msgstr "(dae) (Legacy.) ﺍﮉﻟﻮﮐ"
 
 
 msgctxt "Operator"
@@ -120924,10 +120880,6 @@ msgid "Floor"
 msgstr "ﺵﺮﻓ"
 
 
-msgid "Text Info"
-msgstr "ﺕﺎﻣﻮﻠﻌﻣ ﯽﮐ ﻦﺘﻣ"
-
-
 msgid "Statistics"
 msgstr "ﺕﺎﯾﺭﺎﻤﺷ"
 
@@ -121992,10 +121944,6 @@ msgstr "ﮟﯾﺮﮐ ﺮﺛﺎﺘﻣ ﻑﺮﺻ"
 
 msgid "Locations"
 msgstr "ﺕﺎﻣﺎﻘﻣ"
-
-
-msgid "Parents"
-msgstr "ﻦﯾﺪﻟﺍﻭ"
 
 
 msgid "Refine Method"
@@ -125922,10 +125870,6 @@ msgid "Samples Transform"
 msgstr "ﻡﺭﺎﻔﺴﻧﺍﺮﭨ ﮯﻧﻮﻤﻧ"
 
 
-msgid "Close"
-msgstr "ﺪﻨﺑ"
-
-
 msgid "Use Schema"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﻤﯿﮑﺳﺍ"
 
@@ -126173,6 +126117,10 @@ msgstr "GMP ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺭﻮﻟﻮ�
 
 msgid "No intersections found"
 msgstr "ﻼ﻿ﻣ ﮟﯿﮩﻧ ﺰﻨﺸﮑﯿﺳﺮﭩﻧﺍ ﯽﺋﻮﮐ"
+
+
+msgid "Close"
+msgstr "ﺪﻨﺑ"
 
 
 msgid "Stop"
@@ -126453,10 +126401,6 @@ msgstr "ﮯﮨ ﮟﯿﮩﻧ ﻝﺎﺟ ﺐﺨﺘﻨﻣ ﮯﺷ ﻝﺎﻌﻓ"
 
 msgid "No mesh data to join"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﺎﭩﯾﮈ ﻝﺎﺟ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﻮﮨ ﻞﻣﺎﺷ"
-
-
-msgid "Selected meshes must have equal numbers of vertices"
-msgstr "ﮯﮨ ﯼﺭﻭﺮﺿ ﺎﻧﻮﮨ ﯼﺩﻮﻤﻋ ﮟﯿﻣ ﺩﺍﺪﻌﺗ ﯼﻭﺎﺴﻣ ﮟﯿﻣ ﮞﻮﻟﺎﺟ ﺐﺨﺘﻨﻣ"
 
 
 msgid "No additional selected meshes with equal vertex count to join"
@@ -128347,10 +128291,6 @@ msgstr "ﮯﮨ ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﻮﻟﺎﭼ ﻮﮐ ﮧﺛﺎﺛ
 
 msgid "File not found '%s'"
 msgstr "ﯽﻠﻣ ﮟﯿﮩﻧ '%s‬‪' ﻞﺋﺎﻓ"
-
-
-msgid "No asset library available to save to"
-msgstr "No ﮯﮨ ﺏﺎﯿﺘﺳﺩ ﯼﺮﯾﺮﺒﺋﻻ﻿ ﮧﺛﺎﺛﺍ to ﮟﯾﺮﮐ ﻅﻮﻔﺤﻣ to"
 
 
 msgid "Asset library is not editable"
@@ -133287,34 +133227,6 @@ msgid "Registering node socket class: '%s' is too long, maximum length is %d"
 msgstr "ﮯﮨ %d‬‪ ﯽﺋﺎﺒﻤﻟ ﮦﺩﺎﯾﺯ ﮯﺳ ﮦﺩﺎﯾﺯ ،ﮯﮨ ﺎﺒﻤﻟ ﺖﮩﺑ '%s‬‪' :ﺝﺍﺭﺪﻧﺍ ﺎﮐ ﺱﻼ﻿ﮐ ﭧﮐﺎﺳ ﮈﻮﻧ"
 
 
-msgid "The node socket's default value"
-msgstr "ﺭﺪﻗ ﭧﻟﺎﻔﯾﮈ ﯽﮐ ﭧﮐﺎﺳ ﮈﻮﻧ"
-
-
-msgid "The index from the context"
-msgstr "ﺲﮑﯾﮉﻧﺍ ﮯﺳ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ"
-
-
-msgid "ID or Index"
-msgstr "ID ﮧﯾﺭﺎﺷﺍ ﺎﯾ"
-
-
-msgid "The \"id\" attribute if available, otherwise the index"
-msgstr "ﮧﯾﺭﺎﺷﺍ ﺮﮕﯾﺩ ﺕﺭﻮﺼﺑ ،ﻒﺻﻭ \"id\" ﻮﺗ ﻮﮨ ﺏﺎﯿﺘﺳﺩ ﺮﮔﺍ"
-
-
-msgid "The geometry's normal direction"
-msgstr "ﺖﻤﺳ ﻡﺎﻋ ﯽﮐ ﯼﺮﭩﯿﻣﻮﯿﺟ"
-
-
-msgid "The position from the context"
-msgstr "ﻦﺸﯾﺯﻮﭘ ﮯﺳ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ"
-
-
-msgid "Transformation of each instance from the geometry context"
-msgstr "ﯽﻠﯾﺪﺒﺗ ﯽﮐ ﻝﺎﺜﻣ ﮏﯾﺍ ﺮﮨ ﮯﺳ ﻕﺎﺒﺳ ﻭ ﻕﺎﯿﺳ ﯼﺮﭩﯿﻣﻮﯿﺟ"
-
-
 msgid "Parent is not part of the interface"
 msgstr "ﮟﯿﮨ ﮟﯿﮩﻧ ﮧﺼﺣ ﺎﮐ ﺲﯿﻓﺮﭩﻧﺍ ﻦﯾﺪﻟﺍﻭ"
 
@@ -134633,24 +134545,8 @@ msgid "Disabled, built without OpenSubdiv"
 msgstr "ﺎﯿﮔ ﺎﯾﺎﻨﺑ ﺮﯿﻐﺑ ﮯﮐ ﻮﯾﮈ ﺐﺳ ﻦﭘﻭﺍ ،ﻝﺎﻌﻓ ﺮﯿﻏ"
 
 
-msgid "Bake Path"
-msgstr "ﮧﺘﺳﺍﺭ ﺎﻧﺎﮑﭘ"
-
-
-msgid "Output Attributes"
-msgstr "ﻑﺎﺻﻭﺍ ﭧﭘ ﭦﺅﺁ"
-
-
-msgid "Manage"
-msgstr "ﮟﯾﺮﮐ ﻡﺎﻈﺘﻧﺍ"
-
-
 msgid "Cannot load the baked data"
 msgstr "ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﮈﻮﻟ ﺎﭩﯾﮈ ﮉﮑﯿﺑ"
-
-
-msgid "No named attributes used"
-msgstr "ﮯﺌﮔ ﮯﯿﮐ ﮟﯿﮩﻧ ﻝﺎﻤﻌﺘﺳﺍ ﻑﺎﺻﻭﺍ ﺩﺰﻣﺎﻧ ﯽﺋﻮﮐ"
 
 
 msgid "Missing property for input socket \"%s\""
@@ -135002,6 +134898,26 @@ msgid "Despill Channel:"
 msgstr ":ﻞﻨﯿﭼ ﻞﭙﺴﯾﮈ"
 
 
+msgid "Correction for shadows"
+msgstr "ﺡﻼ﻿ﺻﺍ ﮯﯿﻟ ﮯﮐ ﮯﺋﺎﺳ"
+
+
+msgid "Color temperature of the input's white point"
+msgstr "ﺕﺭﺍﺮﺣ ﮧﺟﺭﺩ ﮓﻧﺭ ﺎﮐ ﭧﻨﺋﺍﻮﭘ ﺪﯿﻔﺳ ﮯﮐ ﭧﭘ ﻥﺍ"
+
+
+msgid "Color tint of the input's white point (the default of 10 matches daylight)"
+msgstr "(ﯽﻨﺷﻭﺭ ﯽﮐ ﻥﺪﮨﺪﺷ ﮯﻃ ﺎﮐ ﮞﻮﭽﯿﻣ 10) ﭧﻨﭨ ﮓﻧﺭ ﺎﮐ ﭧﻨﺋﺍﻮﭘ ﺪﯿﻔﺳ ﮯﮐ ﭧﭘ ﻥﺍ"
+
+
+msgid "Color temperature of the output's white point"
+msgstr "ﺕﺭﺍﺮﺣ ﮧﺟﺭﺩ ﮓﻧﺭ ﺎﮐ ﭧﻨﺋﺍﻮﭘ ﺪﯿﻔﺳ ﮯﮐ ﭧﭘ ﭦﺅﺁ"
+
+
+msgid "Color tint of the output's white point (the default of 10 matches daylight)"
+msgstr "(ﯽﻨﺷﻭﺭ ﯽﮐ ﻥﺪﮨﺪﺷ ﮯﻃ ﺎﮐ ﮞﻮﭽﯿﻣ 10) ﭧﻨﭨ ﺮﻠﮐ ﺎﮐ ﭧﻨﺋﺍﻮﭘ ﺪﯿﻔﺳ ﮯﮐ ﭧﭘ ﭦﺅﺁ"
+
+
 msgid "Master"
 msgstr "ﺮﭩﺳﺎﻣ"
 
@@ -135116,10 +135032,6 @@ msgstr ":ﭧﯿﻣﺭﺎﻓ"
 
 msgid "Disabled, built without FFTW"
 msgstr "ﺎﯿﮔ ﺎﯾﺎﻨﺑ ﺮﯿﻐﺑ ﮯﮐ FFTW ،ﻝﺎﻌﻓ ﺮﯿﻏ"
-
-
-msgid "Glare"
-msgstr "ﺪﻧﻮﭼﺎﮑﭼ"
 
 
 msgid "Streak fade-out factor"
@@ -135693,14 +135605,6 @@ msgstr "ﺖﺒﺴﻧ ﮯﮐ ﮧﻄﻘﻧ ﯽﻣﺎﺘﺘﺧﺍ ،ﮟﯿﻣ ﺭ�
 
 msgid "Position of the end control point of the curve"
 msgstr "ﻡﺎﻘﻣ  ﯽﮐ ﭧﻨﺋﺍﻮﭘ ﻝﻭﺮﭩﻨﮐ ﯽﻣﺎﺘﺘﺧﺍ ﮯﮐ ﻢﺧ"
-
-
-msgid "Point 1"
-msgstr "1 ﭧﻨﺋﺍﻮﭘ"
-
-
-msgid "Point 2"
-msgstr "2 ﭧﻨﺋﺍﻮﭘ"
 
 
 msgid "Point 3"
@@ -137290,6 +137194,22 @@ msgstr "Y ﺩﺍﺪﻌﺗ ﯽﮐ ﺰﻠﺴﮐﻭﻭ ﮟﯿﻣ ﺭﻮﺤﻣ"
 
 msgid "Number of voxels in the Z axis"
 msgstr "Z ﺩﺍﺪﻌﺗ ﯽﮐ ﺰﻠﺴﮐﻭﻭ ﮟﯿﻣ ﺭﻮﺤﻣ"
+
+
+msgid "Bake Path"
+msgstr "ﮧﺘﺳﺍﺭ ﺎﻧﺎﮑﭘ"
+
+
+msgid "Output Attributes"
+msgstr "ﻑﺎﺻﻭﺍ ﭧﭘ ﭦﺅﺁ"
+
+
+msgid "Manage"
+msgstr "ﮟﯾﺮﮐ ﻡﺎﻈﺘﻧﺍ"
+
+
+msgid "No named attributes used"
+msgstr "ﮯﺌﮔ ﮯﯿﮐ ﮟﯿﮩﻧ ﻝﺎﻤﻌﺘﺳﺍ ﻑﺎﺻﻭﺍ ﺩﺰﻣﺎﻧ ﯽﺋﻮﮐ"
 
 
 msgid "\"{}\" from {}"
