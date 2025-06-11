@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'e91e8eef41aa')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'798f85a7108f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-03 09:10+0000\n"
+"POT-Creation-Date: 2025-06-11 11:13+0000\n"
 "PO-Revision-Date: 2025-04-14 08:53+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -33079,6 +33079,14 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
+msgid "Show/Hide"
+msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
+
+
+msgid "Clean Up"
+msgstr "ﯽﺋﺎﻔﺻ"
+
+
 msgid "Special Characters"
 msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
 
@@ -33095,20 +33103,12 @@ msgid "Metaball"
 msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
 
 
-msgid "Show/Hide"
-msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
-
-
 msgid "Names"
 msgstr "ﻡﺎﻧ"
 
 
 msgid "Bone Roll"
 msgstr "ﻝﻭﺭ ﻥﻮﺑ"
-
-
-msgid "Clean Up"
-msgstr "ﯽﺋﺎﻔﺻ"
 
 
 msgid "Pivot Point"
@@ -33139,176 +33139,176 @@ msgid "Vertex Group Locks"
 msgstr "ﮎﻻ﻿ ﮦﻭﺮﮔ ﺲﮑﯿﭨﺭﻭ"
 
 
-msgid "Mirror"
-msgstr "ﮧﻨﯿﺋﺁ"
-
-
-msgid "UV Mapping"
-msgstr "ﮓﻨﭙﯿﻣ ﯼﻭﻮﯾ"
-
-
-msgid "Local View"
-msgstr "ﺮﻈﻨﻣ ﯽﻣﺎﻘﻣ"
-
-
-msgid "Viewpoint"
-msgstr "ﺮﻈﻧ ﮧﻄﻘﻧ"
-
-
-msgid "Navigation"
-msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
-
-
-msgid "Align View"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﮟﯿﻣ ﮪﺪﯿﺳ"
-
-
-msgid "Align View to Active"
-msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﮟﯿﻣ ﻝﺎﻌﻓ ﻮﮐ ﺮﻈﻨﻣ"
-
-
-msgid "View Regions"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ"
-
-
-msgid "Select More/Less"
-msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻢﮐ/ﮦﺩﺎﯾﺯ"
-
-
-msgid "Select Similar"
-msgstr "ﮟﯾﺮﮐ ﺏﺎﺨﺘﻧﺍ ﺎﮐ ﺡﺮﻃ ﯽﺳﺍ"
-
-
-msgid "Select All by Trait"
-msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﯽﮭﺒﺳ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺖﯿﺻﻮﺼﺧ"
-
-
-msgid "Select Linked"
-msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﮉﮑﻨﻟ"
-
-
-msgid "Select Loops"
-msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﺲﭘﻮﻟ"
-
-
-msgid "Assign Material"
-msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺩﺍﻮﻣ"
-
-
-msgid "Light"
-msgstr "ﯽﻨﺷﻭﺭ"
-
-
-msgid "Light Probe"
-msgstr "ﺏﻭﺮﭘ ﭧﺋﻻ﻿"
-
-
-msgid "Add Image"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﯾﻮﺼﺗ"
-
-
-msgid "Relations"
-msgstr "ﮯﺘﺷﺭ"
-
-
-msgid "Rigid Body"
-msgstr "ﻢﺴﺟ ﺖﺨﺳ"
-
-
-msgid "Apply"
-msgstr "ﮟﯿﺋﺎﮕﻟ"
-
-
-msgid "Track"
-msgstr "ﮏﯾﺮﭨ"
-
-
-msgid "Quick Effects"
-msgstr "ﺕﺍﺮﺛﺍ ﯼﺭﻮﻓ"
-
-
-msgid "Asset"
-msgstr "ﮧﺛﺎﺛﺍ"
-
-
-msgid "Make Single User"
-msgstr "ﮟﯿﺋﺎﻨﺑ ﻑﺭﺎﺻ ﻞﮕﻨﺳ"
-
-
-msgid "Convert"
-msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ"
-
-
-msgid "Link/Transfer Data"
-msgstr "ﮟﯾﺮﮐ ﻞﻘﺘﻨﻣ/ﮏﻨﻟ ﻮﮐ ﺎﭩﯾﮈ"
-
-
-msgid "Hooks"
-msgstr "ﮯﭩﻧﺎﮐ"
-
-
-msgid "Trim/Add"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ/ﻡﺮﭨ"
-
-
-msgid "Sculpt Set Pivot"
-msgstr "ﭦﻮﯿﭘ ﭧﯿﺳ ﮧﻤﺴﺠﻣ"
-
-
-msgid "Face Sets Init"
-msgstr "ﭧﻧﺍ ﺲﭩﯿﺳ ﺲﯿﻓ"
-
-
-msgid "Random Mask"
-msgstr "ﮏﺳﺎﻣ ﺐﯿﺗﺮﺗ ﮯﺑ"
-
-
-msgid "Clear Transform"
-msgstr "ﻡﺭﺎﻔﺴﻧﺍﺮﭨ  ﺕﺮﭘ ﮎ"
-
-
-msgid "In-Betweens"
-msgstr "ﮟﯿﻣ ﻥﺎﯿﻣﺭﺩ"
-
-
-msgid "Propagate"
-msgstr "ﺎﻧﺮﮐ ﻎﯿﻠﺒﺗ"
-
-
-msgid "Bone Collections"
-msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮞﻮﯾﮉﮨ"
-
-
-msgid "Toggle Bone Options"
-msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
-
-
-msgid "Enable Bone Options"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
-
-
-msgid "Disable Bone Options"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
-
-
-msgid "Mesh Select Mode"
-msgstr "ﮈﻮﻣ ﭧﮑﯿﻠﺳ ﺶﯿﻣ"
-
-
-msgid "Face Data"
-msgstr "ﺎﭩﯾﮈ ﺎﮐ ﮮﺮﮩﭼ"
+msgid "Set Face Strength"
+msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
 
 
 msgid "Select by Face Strength"
 msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
 
 
-msgid "Set Face Strength"
-msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
+msgid "Hooks"
+msgstr "ﮯﭩﻧﺎﮐ"
+
+
+msgid "Link/Transfer Data"
+msgstr "ﮟﯾﺮﮐ ﻞﻘﺘﻨﻣ/ﮏﻨﻟ ﻮﮐ ﺎﭩﯾﮈ"
+
+
+msgid "Convert"
+msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ"
+
+
+msgid "Relations"
+msgstr "ﮯﺘﺷﺭ"
+
+
+msgid "Add Image"
+msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﯾﻮﺼﺗ"
 
 
 msgid "Merge"
 msgstr "ﺎﻧﺮﮐ ﻢﺿ"
+
+
+msgid "Light Probe"
+msgstr "ﺏﻭﺮﭘ ﭧﺋﻻ﻿"
+
+
+msgid "Face Data"
+msgstr "ﺎﭩﯾﮈ ﺎﮐ ﮮﺮﮩﭼ"
+
+
+msgid "Light"
+msgstr "ﯽﻨﺷﻭﺭ"
+
+
+msgid "Make Single User"
+msgstr "ﮟﯿﺋﺎﻨﺑ ﻑﺭﺎﺻ ﻞﮕﻨﺳ"
+
+
+msgid "Asset"
+msgstr "ﮧﺛﺎﺛﺍ"
+
+
+msgid "Mesh Select Mode"
+msgstr "ﮈﻮﻣ ﭧﮑﯿﻠﺳ ﺶﯿﻣ"
+
+
+msgid "Quick Effects"
+msgstr "ﺕﺍﺮﺛﺍ ﯼﺭﻮﻓ"
+
+
+msgid "Disable Bone Options"
+msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
+
+
+msgid "Enable Bone Options"
+msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
+
+
+msgid "Track"
+msgstr "ﮏﯾﺮﭨ"
+
+
+msgid "Toggle Bone Options"
+msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
+
+
+msgid "Apply"
+msgstr "ﮟﯿﺋﺎﮕﻟ"
+
+
+msgid "Assign Material"
+msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺩﺍﻮﻣ"
+
+
+msgid "Rigid Body"
+msgstr "ﻢﺴﺟ ﺖﺨﺳ"
+
+
+msgid "Propagate"
+msgstr "ﺎﻧﺮﮐ ﻎﯿﻠﺒﺗ"
+
+
+msgid "Local View"
+msgstr "ﺮﻈﻨﻣ ﯽﻣﺎﻘﻣ"
+
+
+msgid "Select More/Less"
+msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻢﮐ/ﮦﺩﺎﯾﺯ"
+
+
+msgid "Bone Collections"
+msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮞﻮﯾﮉﮨ"
+
+
+msgid "In-Betweens"
+msgstr "ﮟﯿﻣ ﻥﺎﯿﻣﺭﺩ"
+
+
+msgid "Clear Transform"
+msgstr "ﻡﺭﺎﻔﺴﻧﺍﺮﭨ  ﺕﺮﭘ ﮎ"
+
+
+msgid "Select Loops"
+msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﺲﭘﻮﻟ"
+
+
+msgid "Select Linked"
+msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﮉﮑﻨﻟ"
+
+
+msgid "Select All by Trait"
+msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﯽﮭﺒﺳ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺖﯿﺻﻮﺼﺧ"
+
+
+msgid "Select Similar"
+msgstr "ﮟﯾﺮﮐ ﺏﺎﺨﺘﻧﺍ ﺎﮐ ﺡﺮﻃ ﯽﺳﺍ"
+
+
+msgid "View Regions"
+msgstr "ﮟﯿﮭﮑﯾﺩ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ"
+
+
+msgid "Align View to Active"
+msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﮟﯿﻣ ﻝﺎﻌﻓ ﻮﮐ ﺮﻈﻨﻣ"
+
+
+msgid "Align View"
+msgstr "ﮟﯿﮭﮑﯾﺩ ﮟﯿﻣ ﮪﺪﯿﺳ"
+
+
+msgid "Navigation"
+msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
+
+
+msgid "Viewpoint"
+msgstr "ﺮﻈﻧ ﮧﻄﻘﻧ"
+
+
+msgid "UV Mapping"
+msgstr "ﮓﻨﭙﯿﻣ ﯼﻭﻮﯾ"
+
+
+msgid "Mirror"
+msgstr "ﮧﻨﯿﺋﺁ"
+
+
+msgid "Random Mask"
+msgstr "ﮏﺳﺎﻣ ﺐﯿﺗﺮﺗ ﮯﺑ"
+
+
+msgid "Face Sets Init"
+msgstr "ﭧﻧﺍ ﺲﭩﯿﺳ ﺲﯿﻓ"
+
+
+msgid "Sculpt Set Pivot"
+msgstr "ﭦﻮﯿﭘ ﭧﯿﺳ ﮧﻤﺴﺠﻣ"
+
+
+msgid "Trim/Add"
+msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ/ﻡﺮﭨ"
 
 
 msgid "Keyframe Insert Pie"
@@ -65888,10 +65888,6 @@ msgid "Dissolve Vertices"
 msgstr "ﮟﯾﺮﮐ ﻞﯿﻠﺤﺗ ﻮﮐ ﯼﺩﻮﻤﻋ"
 
 
-msgid "Dissolve remaining vertices"
-msgstr "ﮟﯾﺮﮐ ﻞﯿﻠﺤﺗ ﻮﮐ ﮞﻮﯿﭨﻮﭼ ﯽﻗﺎﺑ"
-
-
 msgctxt "Operator"
 msgid "Dissolve Faces"
 msgstr "ﮟﯾﺮﮐ ﻞﯿﻠﺤﺗ ﻮﮐ ﮞﻭﺮﮩﭼ"
@@ -90991,20 +90987,12 @@ msgid "Device up/down directly controls the Z position of the 3D viewport"
 msgstr "ﮯﮨ ﯽﺗﺮﮐ ﻝﻭﺮﭩﻨﮐ ﺖﺳﺍﺭ ﮦﺍﺮﺑ ﻮﮐ  ﻡﺎﻘﻣ  Z ﯽﮐ ﭦﺭﻮﭘ ﻮﯾﻭ 3D ﮯﭽﯿﻧ/ﺮﭘﻭﺍ ﺲﺋﺍﻮﯾﮈ"
 
 
-msgid "Lock Camera Pan/Zoom"
-msgstr "ﮟﯾﺮﮐ ﮎﻻ﻿ ﻡﻭﺯ/ﻦﯿﭘ ﮦﺮﻤﯿﮐ"
-
-
 msgid "Pan/zoom the camera view instead of leaving the camera view when orbiting"
 msgstr "ﮟﯾﺮﮐ ﻡﻭﺯ/ﻦﯿﭘ ﻮﮐ ﻮﯾﻭ ﮦﺮﻤﯿﮐ ﮯﺋﺎﺠﺑ ﮯﮐ ﮯﻧﮌﻮﮭﭼ ﻮﯾﻭ ﮦﺮﻤﯿﮐ ﺖﻗﻭ ﮯﺗﺎﮕﻟ ﺮﮑﭼ"
 
 
-msgid "Lock Horizon"
-msgstr "ﻥﺰﺋﺍﺭﻮﮨ ﮎﻻ﻿"
-
-
-msgid "Keep horizon level while flying with 3D Mouse"
-msgstr "3D ﮟﯿﮭﮐﺭ ﺢﻄﺳ ﯽﮐ ﻖﻓﺍ ﺖﻗﻭ ﮯﺗﺮﮐ ﺯﺍﻭﺮﭘ ﮫﺗﺎﺳ ﮯﮐ ﺱﺅﺎﻣ"
+msgid "NDOF View Navigate"
+msgstr "NDOF ﮟﯾﺮﮐ ﭧﯿﮕﯾﻮﯿﻧ ﻮﯾﻭ"
 
 
 msgid "Orbit Sensitivity"
@@ -91013,14 +91001,6 @@ msgstr "ﺖﯿﺳﺎﺴﺣ ﯽﮐ ﺭﺍﺪﻣ"
 
 msgid "Overall sensitivity of the 3D Mouse for orbiting"
 msgstr "ﺖﯿﺳﺎﺴﺣ ﯽﻋﻮﻤﺠﻣ ﯽﮐ ﺱﺅﺎﻣ 3D ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﮕﻟ ﺮﮑﭼ"
-
-
-msgid "Y/Z Swap Axis"
-msgstr "Y/Z ﺲﺴﮑﯾﺍ ﭗﯾﻮﺳ"
-
-
-msgid "Pan using up/down on the device (otherwise forward/backward)"
-msgstr "(ﮯﮭﭽﯿﭘ/ﮯﮔﺁ ﺮﮕﯾﺩ ﺕﺭﻮﺼﺑ) ﮟﯾﺮﮐ ﻦﯿﭘ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﮯﭽﯿﻧ/ﺮﭘﻭﺍ ﺮﭘ ﺲﺋﺍﻮﯾﮈ"
 
 
 msgid "Invert X Axis"
@@ -91053,50 +91033,6 @@ msgstr "ﺖﯿﺳﺎﺴﺣ ﯽﻋﻮﻤﺠﻣ ﯽﮐ ﺱﺅﺎﻣ 3D ﮯﯿﻟ �
 
 msgid "Display the center and axis during rotation"
 msgstr "ﮟﯿﺋﺎﮭﮐﺩ ﺭﻮﺤﻣ ﺭﻭﺍ ﺰﮐﺮﻣ ﻥﺍﺭﻭﺩ ﮯﮐ ﺵﺩﺮﮔ"
-
-
-msgid "NDOF View Navigate"
-msgstr "NDOF ﮟﯾﺮﮐ ﭧﯿﮕﯾﻮﯿﻧ ﻮﯾﻭ"
-
-
-msgid "Navigation style in the viewport"
-msgstr "ﺯﺍﺪﻧﺍ ﺎﮐ ﻦﺸﯿﮕﯾﻮﯿﻧ ﮟﯿﻣ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgid "Use full 6 degrees of freedom by default"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﯼﺩﺍﺯﺁ ﯼﺮﮔﮈ 6 ﻞﻤﮑﻣ ﺮﭘ ﺭﻮﻃ ﮦﺪﺷ ﮯﻃ"
-
-
-msgid "Orbit about the view center by default"
-msgstr "ﺭﺍﺪﻣ ﮟﯿﻣ ﮮﺭﺎﺑ ﮯﮐ ﺮﭩﻨﯿﺳ ﻮﯾﻭ ﺮﭘ ﺭﻮﻃ ﮦﺪﺷ ﮯﻃ"
-
-
-msgid "NDOF View Rotation"
-msgstr "NDOF ﺵﺩﺮﮔﻮﯾﻭ"
-
-
-msgid "Rotation style in the viewport"
-msgstr "ﺯﺍﺪﻧﺍ ﺎﮐ ﺵﺩﺮﮔ ﮟﯿﻣ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgid "Turntable"
-msgstr "ﻞﺒﯿﭩﻧﺮﭨ"
-
-
-msgid "Use turntable style rotation in the viewport"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺵﺩﺮﮔ ﯽﮐ ﺯﺮﻃ ﻞﺒﯿﭨ ﻥﺮﭨ ﮟﯿﻣ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgid "Use trackball style rotation in the viewport"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺵﺩﺮﮔ ﯽﮐ ﺯﺮﻃ ﻝﺎﺑ ﮏﯾﺮﭨ ﮟﯿﻣ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgid "Invert Zoom"
-msgstr "ﮟﯾﺮﮐ ﺎﭩﻟﺍ ﻮﮐ ﻡﻭﺯ"
-
-
-msgid "Zoom using opposite direction"
-msgstr "ﮟﯾﺮﮐ ﻡﻭﺯ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺖﻤﺳ ﻒﻟﺎﺨﻣ"
 
 
 msgid "Softness"
@@ -91253,6 +91189,10 @@ msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﺭﺍﺪﻣ"
 
 msgid "Orbit method in the viewport"
 msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﺭﺍﺪﻣ ﮟﯿﻣ ﭦﺭﻮﭘ ﻮﯾﻭ"
+
+
+msgid "Turntable"
+msgstr "ﻞﺒﯿﭩﻧﺮﭨ"
 
 
 msgid "Turntable keeps the Z-axis upright while orbiting"
@@ -91633,14 +91573,6 @@ msgstr "ﮓﻧﺭ ﯽﻄﯿﺤﻣ"
 
 msgid "Color of the ambient light that uniformly lit the scene"
 msgstr "ﮯﮨ ﺎﺗﺮﮐ ﻦﺷﻭﺭ ﻮﮐﻮﯾﻭ ﺮﭘ ﺭﻮﻃ ﮞﺎﺴﮑﯾ ﻮﺟ ﮓﻧﺭ ﺎﮐ ﯽﻨﺷﻭﺭ ﯽﻄﯿﺤﻣ"
-
-
-msgid "Max Shader Compilation Subprocesses"
-msgstr "ﺰﺴﯿﺳﻭﺮﭘ ﺐﺳ ﻦﺸﯿﻠﭙﻤﮐ ﺭﮉﯿﺷ ﺲﮑﯿﻣ"
-
-
-msgid "Max number of parallel shader compilation subprocesses, clamped at the max threads supported by the CPU (requires restarting Blender for changes to take effect). Setting it to 0 disables subprocess shader compilation."
-msgstr "ﮯﮨ ﺎﺗﺎﺟ ﻮﮨ ﻝﺎﻌﻓ ﺮﯿﻏ ﻦﺸﯿﻠﭙﻤﮐ ﺭﮉﯿﺷ ﺲﯿﺳﻭﺮﭘ ﺐﺳ ﮯﺳ ﮯﻧﺮﮐ ﭧﯿﺳ ﺮﭘ 0 ﮯﺳﺍ (ﮯﮨ ﺕﺭﻭﺮﺿ ﯽﮐ ﮯﻧﺮﮐ ﻉﻭﺮﺷ ﮦﺭﺎﺑﻭﺩ ﻮﮐ ﺭﮉﻨﯿﻠﺑ ﮯﯿﻟ ﮯﮐ ﮯﻧﺁ ﮟﯿﻣ ﺮﺛﺍ ﮯﮐ ﮞﻮﯿﻠﯾﺪﺒﺗ) ﮯﮨ ﯽﺌﮔ ﯽﮐ ﺪﻨﺑ ﺮﭘ ﺯﮉﯾﺮﮭﺗ ﮦﺩﺎﯾﺯ ﮯﺳ ﮦﺩﺎﯾﺯ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﮯﻌﯾﺭﺫ ﮯﮐ CPU ،ﺩﺍﺪﻌﺗ ﮦﺩﺎﯾﺯ ﮯﺳ ﮦﺩﺎﯾﺯ ﯽﮐ ﺰﺴﯿﺳﻭﺮﭘ ﺐﺳ ﻦﺸﯿﻠﺋﺎﭙﻤﮐ ﺭﮉﯿﺷ ﯼﺯﺍﻮﺘﻣ"
 
 
 msgid "Memory Cache Limit"
@@ -114259,12 +114191,12 @@ msgid "No animation data to convert on object: {!r}"
 msgstr "{r!} :ﮟﯿﮩﻧ ﺎﭩﯾﮈ ﺕﺎﯿﮐﺮﺣ  ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻞﯾﺪﺒﺗ ﺮﭘ ﭧﮑﯿﺠﺑﺁ"
 
 
-msgid "Modifiers cannot be added to object: "
-msgstr " :ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻞﻣﺎﺷ ﮟﯿﻣ ﺽﺍﺮﺘﻋﺍ ﻮﮐ ﮞﻮﻟﺍﻭ ﮯﻧﺮﮐ ﻢﯿﻣﺮﺗ"
-
-
 msgid "Object: {:s}, Mesh: '{:s}' has {:d} loops (for {:d} faces), expected {:d}"
 msgstr "{d:} ﻊﻗﻮﺘﻣ ،(ﮯﯿﻟ ﮯﮐ ﮞﻭﺮﮩﭼ {d:}) ﮟﯿﮨ ﺲﭘﻮﻟ {d:} ﮟﯿﻣ '{s:}' :ﺶﯿﻣ ،{s:} :ﭧﮑﯿﺠﺑﺁ"
+
+
+msgid "Modifiers cannot be added to object: "
+msgstr " :ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻞﻣﺎﺷ ﮟﯿﻣ ﺽﺍﺮﺘﻋﺍ ﻮﮐ ﮞﻮﻟﺍﻭ ﮯﻧﺮﮐ ﻢﯿﻣﺮﺗ"
 
 
 msgid "Object {!r} already has {!r} F-Curve(s). Remove these before trying again"
@@ -119512,22 +119444,6 @@ msgid "Zoom Method"
 msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﻡﻭﺯ"
 
 
-msgid "Pan Sensitivity"
-msgstr "ﺖﯿﺳﺎﺴﺣ ﯽﮐ ﻦﯿﭘ"
-
-
-msgid "Swap Y and Z Axes"
-msgstr "Y ﺭﻭﺍ Z ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﮞﻭﺭﻮﺤﻣ"
-
-
-msgid "Invert Axis Pan"
-msgstr "ﮟﯾﺩ ﭧﻟﺍ ﻮﮐ ﻦﯿﭘ ﺲﺴﮑﯾﺍ"
-
-
-msgid "Invert Pan Axis"
-msgstr "ﮟﯾﺩ ﭧﻟﺍ ﻮﮐ ﺲﺴﮑﯾﺍ ﻦﯿﭘ"
-
-
 msgctxt "Operator"
 msgid "Remove Repository"
 msgstr "ﮟﯾﺩ ﺎﭩﮨ ﻮﮐ ﯼﺮﭨﺯﻮﭙﯾﺭ"
@@ -119605,8 +119521,16 @@ msgid "Invert Wheel Zoom Direction"
 msgstr "ﮟﯾﺩ ﭧﻟﺍ ﻮﮐ ﺖﻤﺳ ﯽﮐ ﻡﻭﺯ ﻞﯿﮨﻭ"
 
 
-msgid "Fly/Walk"
-msgstr "ﺎﻨﻠﭼ/ﺎﻧﮌﺍ"
+msgid "Lock Horizon"
+msgstr "ﻥﺰﺋﺍﺭﻮﮨ ﮎﻻ﻿"
+
+
+msgid "Pan Sensitivity"
+msgstr "ﺖﯿﺳﺎﺴﺣ ﯽﮐ ﻦﯿﭘ"
+
+
+msgid "Invert Pan Axis"
+msgstr "ﮟﯾﺩ ﭧﻟﺍ ﻮﮐ ﺲﺴﮑﯾﺍ ﻦﯿﭘ"
 
 
 msgctxt "Operator"
@@ -123506,10 +123430,6 @@ msgstr "!ﮟﯿﮨ ﻂﺑﺍﻭﺭ ﯽﺗﺍﺮﮑﭼ ﮯﮐ ﯼﺮﭨ ﮈﻮﻧ
 
 msgid "Compositor node tree has undefined nodes or sockets!"
 msgstr "!ﮟﯿﮨ ﭧﮐﺎﺳ ﺎﯾ ﺱﮈﻮﻧ ﮧﻨﯿﻌﺘﻣ ﺮﯿﻏ ﮟﯿﻣ ﯼﺮﭨ ﮈﻮﻧ ﺮﭩﯾﺯﻮﭙﻤﮐ"
-
-
-msgid "Increasing Preferences > System > Max Shader Compilation Subprocesses may improve compilation time."
-msgstr "۔ﮯﮨ ﺎﺘﮑﺳ ﺎﻨﺑ ﺮﺘﮩﺑ ﻮﮐ ﺖﻗﻭ ﮯﮐ ﻒﯿﻟﺎﺗ ﻞﻤﻋ ﯽﻠﯾﺫ ﻦﺸﯿﻠﭙﻤﮐ ﺭﮉﯿﺷ ﺲﮑﯿﻣ < ﻢﭩﺴﺳ < ﮧﻓﺎﺿﺍ ﮟﯿﻣ ﺕﺎﺤﯿﺟﺮﺗ"
 
 
 msgid "Error: Too many lights in the scene."
@@ -130061,10 +129981,6 @@ msgstr "ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻞﻣﺎﺷ ﮧﻋﻮﻤﺠ�
 
 msgid "No active collection"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮧﻋﻮﻤﺠﻣ ﻝﺎﻌﻓ ﯽﺋﻮﮐ"
-
-
-msgid "Can't duplicate the master collection"
-msgstr "ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻞﻘﻧ ﻮﮐ ﻦﺸﮑﯿﻠﮐ ﺮﭩﺳﺎﻣ"
 
 
 msgid "Could not find a valid parent collection for the new duplicate, it won't be linked to any view layer"
@@ -139587,222 +139503,6 @@ msgstr "ﻥﻮﻓﻭﺮﮑﺋﺎﻣ"
 
 msgid "network"
 msgstr "ﮎﺭﻭ ﭧﯿﻧ"
-
-
-msgid "Japanese (日本語)"
-msgstr "(日本語) ﯽﻧﺎﭘﺎﺟ"
-
-
-msgid "Dutch (Nederlands)"
-msgstr "(ﺯﮉﻨﯿﻟﺭﺪﯿﻧ) ﭺﮈ"
-
-
-msgid "Italian (Italiano)"
-msgstr "(ﯼﻮﻟﺎﻃﺍ) ﯼﻮﻟﺎﻃﺍ"
-
-
-msgid "German (Deutsch)"
-msgstr "(Deutsch) ﻦﻣﺮﺟ"
-
-
-msgid "Finnish (Suomi)"
-msgstr "(Suomi) ﺶﯿﻨﯿﻓ"
-
-
-msgid "Swedish (Svenska)"
-msgstr "(Svenska) ﺵﮉﯾﻮﺳ"
-
-
-msgid "French (Français)"
-msgstr "(FranÃ§ais) ﯽﺴﯿﺴﻧﺍﺮﻓ"
-
-
-msgid "Spanish (Español)"
-msgstr "(Español) ﯼﻮﻧﺎﭙﺴﮨ"
-
-
-msgid "Catalan (Català)"
-msgstr "Catalan (Catalan)"
-
-
-msgid "Czech (Čeština)"
-msgstr "Czech (Čeština)"
-
-
-msgid "Portuguese (Português)"
-msgstr "Portuguese (Português)"
-
-
-msgid "Simplified Chinese (简体中文)"
-msgstr "Simplified Chinese (简体中文)"
-
-
-msgid "Traditional Chinese (繁體中文)"
-msgstr "Traditional Chinese (繁體中文)"
-
-
-msgid "Russian (Русский)"
-msgstr "Russian (Русский)"
-
-
-msgid "Croatian (Hrvatski)"
-msgstr "Croatian (Hrvatski)"
-
-
-msgid "Serbian (Српски)"
-msgstr "Serbian (Српски)"
-
-
-msgid "Ukrainian (Українська)"
-msgstr "Ukrainian (Українська)"
-
-
-msgid "Polish (Polski)"
-msgstr "Polish (Polski)"
-
-
-msgid "Romanian (Român)"
-msgstr "Romanian (Român)"
-
-
-msgid "Arabic (ﺔﻴﺑﺮﻌﻟﺍ)"
-msgstr "Arabic (ﺍﻟﻌﺮﺑﻴﺔ)"
-
-
-msgid "Bulgarian (Български)"
-msgstr "Bulgarian (Български)"
-
-
-msgid "Greek (Ελληνικά)"
-msgstr "Greek (Ελληνικά)"
-
-
-msgid "Korean (한국어)"
-msgstr "Korean (한국어)"
-
-
-msgid "Nepali (नेपाली)"
-msgstr "Nepali (नेपाली)"
-
-
-msgid "Persian (ﯽﺳﺭﺎﻓ)"
-msgstr "Persian (ﻓﺎﺭﺳﯽ)"
-
-
-msgid "Indonesian (Bahasa indonesia)"
-msgstr "(ﻥﺎﺑﺯ ﻦﯿﺸﯿﻧﻭﮉﻧﺍ) ﯽﺋﺎﯿﺸﯿﻧﻭﮉﻧﺍ"
-
-
-msgid "Serbian Latin (Srpski latinica)"
-msgstr "(Srpski latinica) ﯽﻨﯿﻃﻻ﻿ ﯽﺋﺎﯿﺑﺮﺳ"
-
-
-msgid "Kyrgyz (Кыргыз тили)"
-msgstr "Kyrgyz (Кыргыз тили)"
-
-
-msgid "Turkish (Türkçe)"
-msgstr "Turkish (Türkçe)"
-
-
-msgid "Hungarian (Magyar)"
-msgstr "Hungarian (Magyar)"
-
-
-msgid "Brazilian Portuguese (Português do Brasil)"
-msgstr "Brazilian Portuguese (Português do Brasil)"
-
-
-msgid "Hebrew (תירִבְעִ)"
-msgstr "Hebrew (עִבְרִית)"
-
-
-msgid "Estonian (Eesti keel)"
-msgstr "Estonian (Eesti keel)"
-
-
-msgid "Esperanto (Esperanto)"
-msgstr "Esperanto (Esperanto)"
-
-
-msgid "Amharic (አማርኛ)"
-msgstr "Amharic (አማርኛ)"
-
-
-msgid "Uzbek (Oʻzbek)"
-msgstr "Uzbek (Oʻzbek)"
-
-
-msgid "Uzbek Cyrillic (Ўзбек)"
-msgstr "Uzbek Cyrillic (Ўзбек)"
-
-
-msgid "Hindi (हिन्दी)"
-msgstr "Hindi (हिन्दी)"
-
-
-msgid "Vietnamese (Tiếng Việt)"
-msgstr "Vietnamese (Tiếng Việt)"
-
-
-msgid "Basque (Euskara)"
-msgstr "Basque (Euskara)"
-
-
-msgid "Hausa (Hausa)"
-msgstr "Hausa (Hausa)"
-
-
-msgid "Kazakh (Қазақша)"
-msgstr "Kazakh (Қазақша)"
-
-
-msgid "Abkhaz (Аԥсуа бызшәа)"
-msgstr "Abkhaz (Аԥсуа бызшәа)"
-
-
-msgid "Thai (ภาษาไทย)"
-msgstr "Thai (ภาษาไทย)"
-
-
-msgid "Slovak (Slovenčina)"
-msgstr "Slovak (Slovenčina)"
-
-
-msgid "Georgian (ქართული)"
-msgstr "Georgian (ქართული)"
-
-
-msgid "Tamil (தமிழ்)"
-msgstr "Tamil (தமிழ்)"
-
-
-msgid "Khmer (ខ្មែរ)"
-msgstr "Khmer (ខ្មែរ)"
-
-
-msgid "Swahili (Kiswahili)"
-msgstr "Swahili (Kiswahili)"
-
-
-msgid "Belarusian (беларуску)"
-msgstr "(беларуску) ﯽﺳﻭﺭﻼ﻿ﯿﺑ"
-
-
-msgid "Danish (Dansk)"
-msgstr "(ﮏﺴﻧﺍﮈ) ﺶﻨﯾﮈ"
-
-
-msgid "Slovenian (Slovenščina)"
-msgstr "(Slovenščina) ﯽﺋﺎﯿﻨﯾﻭﻮﻠﺳ"
-
-
-msgid "Complete"
-msgstr "ﻞﻤﮑﻣ"
-
-
-msgid "In Progress"
-msgstr "ﮯﮨ ﯼﺭﺎﺟ"
 
 
 msgid "Add & Subtract"
