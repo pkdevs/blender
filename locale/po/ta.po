@@ -1,11 +1,11 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'e91e8eef41aa')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'798f85a7108f')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-03 09:10+0000\n"
-"PO-Revision-Date: 2025-06-01 15:01+0000\n"
-"Last-Translator: Dinesh <ddineah0@gmail.com>\n"
+"POT-Creation-Date: 2025-06-11 11:13+0000\n"
+"PO-Revision-Date: 2025-06-10 01:57+0000\n"
+"Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
 "Language: ta\n"
 "MIME-Version: 1.0\n"
@@ -29018,7 +29018,7 @@ msgstr "மிரர் ஃச்"
 
 
 msgid "Mirror the image repetition on the X direction"
-msgstr "ஃச் திசையில் பட மறுபடியும் மறுபடியும் பிரதிபலிக்கவும்"
+msgstr "ஃச் திசையில் பட மறுபடியும் பிரதிபலிக்கு"
 
 
 msgid "Mirror Y"
@@ -29026,7 +29026,7 @@ msgstr "மிரர் ஒய்"
 
 
 msgid "Mirror the image repetition on the Y direction"
-msgstr "ஒய் திசையில் பட மறுபடியும் மறுபடியும் பிரதிபலிக்கவும்"
+msgstr "ஒய் திசையில் பட மறுபடியும் பிரதிபலி"
 
 
 msgid "Normal Map"
@@ -29579,14 +29579,6 @@ msgstr "சமூக"
 
 msgid "Maintained by community developers"
 msgstr "சமூக உருவாக்குநர்களால் பராமரிக்கப்படுகிறது"
-
-
-msgid "Testing"
-msgstr "சோதனை"
-
-
-msgid "Newly contributed scripts (excluded from release builds)"
-msgstr "புதிதாக பங்களித்த ச்கிரிப்ட்கள் (வெளியீட்டு உருவாக்கங்களிலிருந்து விலக்கப்பட்டுள்ளது)"
 
 
 msgid "Addon Tags"
@@ -34596,6 +34588,14 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Show/Hide"
+msgstr "காட்டு/மறைக்க"
+
+
+msgid "Clean Up"
+msgstr "தூய்மை செய்"
+
+
 msgid "Special Characters"
 msgstr "சிறப்பு எழுத்துக்கள்"
 
@@ -34612,20 +34612,12 @@ msgid "Metaball"
 msgstr "வளர்சிதை மாற்ற"
 
 
-msgid "Show/Hide"
-msgstr "காட்டு/மறைக்க"
-
-
 msgid "Names"
 msgstr "பெயர்கள்"
 
 
 msgid "Bone Roll"
 msgstr "எலும்பு ரோல்"
-
-
-msgid "Clean Up"
-msgstr "தூய்மை செய்"
 
 
 msgid "Pivot Point"
@@ -34656,176 +34648,176 @@ msgid "Vertex Group Locks"
 msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
 
 
-msgid "Mirror"
-msgstr "கண்ணாடி"
-
-
-msgid "UV Mapping"
-msgstr "புறஊதா மேப்பிங்"
-
-
-msgid "Local View"
-msgstr "உள்ளக பார்வை"
-
-
-msgid "Viewpoint"
-msgstr "பார்வை"
-
-
-msgid "Navigation"
-msgstr "வழிசெலுத்தல்"
-
-
-msgid "Align View"
-msgstr "பார்வையை சீரமைக்கவும்"
-
-
-msgid "Align View to Active"
-msgstr "செயலில் பார்வையை சீரமைக்கவும்"
-
-
-msgid "View Regions"
-msgstr "மண்டலங்களைக் காண்க"
-
-
-msgid "Select More/Less"
-msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select Similar"
-msgstr "ஒத்ததைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select All by Trait"
-msgstr "அனைத்தையும் பண்பின் மூலம் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select Linked"
-msgstr "இணைக்கப்பட்டதைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select Loops"
-msgstr "சுழல்களைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Assign Material"
-msgstr "மூலப்பொருள் ஒதுக்க"
-
-
-msgid "Light"
-msgstr "ஒளி"
-
-
-msgid "Light Probe"
-msgstr "ஒளி ஆய்வு"
-
-
-msgid "Add Image"
-msgstr "படத்தைச் சேர்க்கவும்"
-
-
-msgid "Relations"
-msgstr "உறவுகள்"
-
-
-msgid "Rigid Body"
-msgstr "கடினமான உடல்"
-
-
-msgid "Apply"
-msgstr "இடு"
-
-
-msgid "Track"
-msgstr "டிராக்"
-
-
-msgid "Quick Effects"
-msgstr "விரைவான விளைவுகள்"
-
-
-msgid "Asset"
-msgstr "சொத்து"
-
-
-msgid "Make Single User"
-msgstr "ஒற்றை பயனரை உருவாக்குங்கள்"
-
-
-msgid "Convert"
-msgstr "மாற்றவும்"
-
-
-msgid "Link/Transfer Data"
-msgstr "இணைப்பு/பரிமாற்ற தரவு"
-
-
-msgid "Hooks"
-msgstr "கொக்கிகள்"
-
-
-msgid "Trim/Add"
-msgstr "டிரிம்/சேர்"
-
-
-msgid "Sculpt Set Pivot"
-msgstr "சிற்பம் செட் பிவோட்"
-
-
-msgid "Face Sets Init"
-msgstr "முகம் தொடங்குகிறது"
-
-
-msgid "Random Mask"
-msgstr "சீரற்ற முகமூடி"
-
-
-msgid "Clear Transform"
-msgstr "தெளிவான உருமாற்றம்"
-
-
-msgid "In-Betweens"
-msgstr "இன்-பெட்வீன்ச்"
-
-
-msgid "Propagate"
-msgstr "பிரச்சாரம்"
-
-
-msgid "Bone Collections"
-msgstr "எலும்பு வசூல்"
-
-
-msgid "Toggle Bone Options"
-msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
-
-
-msgid "Enable Bone Options"
-msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
-
-
-msgid "Disable Bone Options"
-msgstr "எலும்பு விருப்பங்களை முடக்கு"
-
-
-msgid "Mesh Select Mode"
-msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Face Data"
-msgstr "முகத்தை முகம்"
+msgid "Set Face Strength"
+msgstr "முக வலிமையை அமைக்கவும்"
 
 
 msgid "Select by Face Strength"
 msgstr "முக வலிமையால் தேர்ந்தெடுக்கவும்"
 
 
-msgid "Set Face Strength"
-msgstr "முக வலிமையை அமைக்கவும்"
+msgid "Hooks"
+msgstr "கொக்கிகள்"
+
+
+msgid "Link/Transfer Data"
+msgstr "இணைப்பு/பரிமாற்ற தரவு"
+
+
+msgid "Convert"
+msgstr "மாற்றவும்"
+
+
+msgid "Relations"
+msgstr "உறவுகள்"
+
+
+msgid "Add Image"
+msgstr "படத்தைச் சேர்க்கவும்"
 
 
 msgid "Merge"
 msgstr "ஒன்றிணைக்கவும்"
+
+
+msgid "Light Probe"
+msgstr "ஒளி ஆய்வு"
+
+
+msgid "Face Data"
+msgstr "முகத்தை முகம்"
+
+
+msgid "Light"
+msgstr "ஒளி"
+
+
+msgid "Make Single User"
+msgstr "ஒற்றை பயனரை உருவாக்குங்கள்"
+
+
+msgid "Asset"
+msgstr "சொத்து"
+
+
+msgid "Mesh Select Mode"
+msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Quick Effects"
+msgstr "விரைவான விளைவுகள்"
+
+
+msgid "Disable Bone Options"
+msgstr "எலும்பு விருப்பங்களை முடக்கு"
+
+
+msgid "Enable Bone Options"
+msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
+
+
+msgid "Track"
+msgstr "டிராக்"
+
+
+msgid "Toggle Bone Options"
+msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
+
+
+msgid "Apply"
+msgstr "இடு"
+
+
+msgid "Assign Material"
+msgstr "மூலப்பொருள் ஒதுக்க"
+
+
+msgid "Rigid Body"
+msgstr "கடினமான உடல்"
+
+
+msgid "Propagate"
+msgstr "பிரச்சாரம்"
+
+
+msgid "Local View"
+msgstr "உள்ளக பார்வை"
+
+
+msgid "Select More/Less"
+msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
+
+
+msgid "Bone Collections"
+msgstr "எலும்பு வசூல்"
+
+
+msgid "In-Betweens"
+msgstr "இன்-பெட்வீன்ச்"
+
+
+msgid "Clear Transform"
+msgstr "தெளிவான உருமாற்றம்"
+
+
+msgid "Select Loops"
+msgstr "சுழல்களைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select Linked"
+msgstr "இணைக்கப்பட்டதைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select All by Trait"
+msgstr "அனைத்தையும் பண்பின் மூலம் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Select Similar"
+msgstr "ஒத்ததைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "View Regions"
+msgstr "மண்டலங்களைக் காண்க"
+
+
+msgid "Align View to Active"
+msgstr "செயலில் பார்வையை சீரமைக்கவும்"
+
+
+msgid "Align View"
+msgstr "பார்வையை சீரமைக்கவும்"
+
+
+msgid "Navigation"
+msgstr "வழிசெலுத்தல்"
+
+
+msgid "Viewpoint"
+msgstr "பார்வை"
+
+
+msgid "UV Mapping"
+msgstr "புறஊதா மேப்பிங்"
+
+
+msgid "Mirror"
+msgstr "கண்ணாடி"
+
+
+msgid "Random Mask"
+msgstr "சீரற்ற முகமூடி"
+
+
+msgid "Face Sets Init"
+msgstr "முகம் தொடங்குகிறது"
+
+
+msgid "Sculpt Set Pivot"
+msgstr "சிற்பம் செட் பிவோட்"
+
+
+msgid "Trim/Add"
+msgstr "டிரிம்/சேர்"
 
 
 msgid "Keyframe Insert Pie"
@@ -35196,7 +35188,7 @@ msgstr "முனை ரேங்க்லர்"
 
 
 msgid "Switch Type to..."
-msgstr "வகை வகை ..."
+msgstr "வகைக்கு மாறு..."
 
 
 msgid "Light Linking Specials"
@@ -35753,7 +35745,7 @@ msgstr "இந்த முகத்தின் முதல் வளையத
 
 
 msgid "Loop Total"
-msgstr "மொத்த மொத்த"
+msgstr "மொத்த சுழல்"
 
 
 msgid "Number of loops used by this face"
@@ -37401,7 +37393,7 @@ msgstr "மோதல் மாற்றியமைப்பாளர்"
 
 
 msgid "Collision modifier defining modifier stack position used for collision"
-msgstr "மோதல் மாற்றியமைக்கும் மாற்றியமைக்கும் மாற்றியமைக்கும் அடுக்கு நிலை"
+msgstr "மோதலுக்குப் பயன்படுத்தப்படும் மாற்றியமைப்பான் அடுக்கு நிலையை வரையறுக்கும் மோதல் மாற்றி"
 
 
 msgid "Settings"
@@ -39483,7 +39475,7 @@ msgstr "செயலில் உள்ள கேமராவுக்கு ப
 
 
 msgid "Match Output"
-msgstr "பொருந்தும் பொருந்தும்"
+msgstr "பொருந்தும் வெளியீடு"
 
 
 msgid "Match output vertex group based on name"
@@ -69878,10 +69870,6 @@ msgid "Dissolve Vertices"
 msgstr "செங்குத்துகளை கரைக்கவும்"
 
 
-msgid "Dissolve remaining vertices"
-msgstr "மீதமுள்ள செங்குத்துகளை கரைக்கவும்"
-
-
 msgctxt "Operator"
 msgid "Dissolve Faces"
 msgstr "முகங்களை கரைக்கவும்"
@@ -74498,14 +74486,6 @@ msgstr "மாற்ற வேண்டிய பொருளின் வகை
 
 msgid "Curve from Mesh or Text objects"
 msgstr "கண்ணி அல்லது உரை பொருள்களிலிருந்து வளைவு"
-
-
-msgid "Mesh from Curve, Surface, Metaball, Text, or Point Cloud objects"
-msgstr "வளைவு, மேற்பரப்பு, வளர்சிதை மாற்ற, உரை அல்லது புள்ளி மேகப் பொருள்களிலிருந்து கண்ணி"
-
-
-msgid "Point Cloud from Mesh objects"
-msgstr "கண்ணி பொருள்களிலிருந்து புள்ளி முகில்"
 
 
 msgid "Curves from evaluated curve data"
@@ -96250,32 +96230,16 @@ msgid "Device up/down directly controls the Z position of the 3D viewport"
 msgstr "சாதனம் மேல்/கீழ் 3d காட்சியின் சட் நிலையை நேரடியாகக் கட்டுப்படுத்துகிறது"
 
 
-msgid "Lock Camera Pan/Zoom"
-msgstr "பூட்டு கேமரா பான்/சூம்"
-
-
 msgid "Pan/zoom the camera view instead of leaving the camera view when orbiting"
 msgstr "சுற்றும் போது கேமரா காட்சியை விட்டு வெளியேறுவதற்குப் பதிலாக கேமரா காட்சியை பான்/பெரிதாக்கவும்"
 
 
-msgid "Lock Horizon"
-msgstr "பதிவு அடிவானம்"
-
-
-msgid "Keep horizon level while flying with 3D Mouse"
-msgstr "3d சுட்டியுடன் பறக்கும் போது அடிவான அளவை வைத்திருங்கள்"
+msgid "NDOF View Navigate"
+msgstr "ndof பார்வை செல்லவும்"
 
 
 msgid "Auto sets the orbit center dynamically. When the complete model is in view, the center of volume of the whole model is used as the rotation point. When you move closer, the orbit center will be set on an object close to your center of the view."
 msgstr "ஆட்டோ சுற்றுப்பாதை மையத்தை மாறும் வகையில் அமைக்கிறது. முழுமையான மாதிரி பார்வையில் இருக்கும்போது, முழு மாதிரியின் அளவின் நடுவண் சுழற்சி புள்ளியாகப் பயன்படுத்தப்படுகிறது. நீங்கள் நெருக்கமாக செல்லும்போது, உங்கள் பார்வையின் மையத்திற்கு நெருக்கமான ஒரு பொருளில் சுற்றுப்பாதை நடுவண் அமைக்கப்படும்."
-
-
-msgid "Use Selected Items"
-msgstr "தேர்ந்தெடுக்கப்பட்ட பொருட்களைப் பயன்படுத்தவும்"
-
-
-msgid "Use selected item forces the orbit center to only take the currently selected objects into account."
-msgstr "தேர்ந்தெடுக்கப்பட்ட உருப்படியைப் பயன்படுத்தவும் தற்போது தேர்ந்தெடுக்கப்பட்ட பொருட்களை மட்டுமே கணக்கில் கொண்டு செல்ல சுற்றுப்பாதை மையத்தை கட்டாயப்படுத்துகிறது."
 
 
 msgid "Orbit Sensitivity"
@@ -96284,14 +96248,6 @@ msgstr "சுற்றுப்பாதை உணர்திறன்"
 
 msgid "Overall sensitivity of the 3D Mouse for orbiting"
 msgstr "சுற்றுவதற்கான 3d சுட்டியின் ஒட்டுமொத்த உணர்திறன்"
-
-
-msgid "Y/Z Swap Axis"
-msgstr "y/z இடமாற்று அச்சு"
-
-
-msgid "Pan using up/down on the device (otherwise forward/backward)"
-msgstr "சாதனத்தில் மேல்/கீழ் பயன்படுத்தும் பான் (இல்லையெனில் முன்னோக்கி/பின்னோக்கி)"
 
 
 msgid "Invert X Axis"
@@ -96338,48 +96294,8 @@ msgid "Display the orbit center during rotation"
 msgstr "சுழற்சியின் போது சுற்றுப்பாதை மையத்தைக் காண்பி"
 
 
-msgid "NDOF View Navigate"
-msgstr "ndof பார்வை செல்லவும்"
-
-
-msgid "Navigation style in the viewport"
-msgstr "காட்சியமைப்பில் வழிசெலுத்தல் நடை"
-
-
-msgid "Use full 6 degrees of freedom by default"
-msgstr "இயல்புநிலையாக முழு 6 டிகிரி சுதந்திரத்தைப் பயன்படுத்தவும்"
-
-
-msgid "Orbit about the view center by default"
-msgstr "இயல்புநிலையாக பார்வை மையத்தைப் பற்றி சுற்றுப்பாதை"
-
-
-msgid "NDOF View Rotation"
-msgstr "ndof பார்வை சுழற்சி"
-
-
-msgid "Rotation style in the viewport"
-msgstr "காட்சியமைப்பில் சுழற்சி நடை"
-
-
-msgid "Turntable"
-msgstr "டர்ன்டபிள்"
-
-
-msgid "Use turntable style rotation in the viewport"
-msgstr "காட்சியமைப்பில் டர்ன்டபிள் பாணி சுழற்சியைப் பயன்படுத்தவும்"
-
-
-msgid "Use trackball style rotation in the viewport"
-msgstr "வியூபோர்ட்டில் டிராக்பால் பாணி சுழற்சியைப் பயன்படுத்தவும்"
-
-
-msgid "Invert Zoom"
-msgstr "சூம் தலைகீழ்"
-
-
-msgid "Zoom using opposite direction"
-msgstr "எதிர் திசையைப் பயன்படுத்தி பெரிதாக்கு"
+msgid "Up/Down"
+msgstr "மேலே/கீழ்"
 
 
 msgid "Softness"
@@ -96536,6 +96452,10 @@ msgstr "சுற்றுப்பாதை முறை"
 
 msgid "Orbit method in the viewport"
 msgstr "காட்சியமைப்பில் சுற்றுப்பாதை முறை"
+
+
+msgid "Turntable"
+msgstr "டர்ன்டபிள்"
 
 
 msgid "Turntable keeps the Z-axis upright while orbiting"
@@ -96928,14 +96848,6 @@ msgstr "சுற்றுப்புற நிறம்"
 
 msgid "Color of the ambient light that uniformly lit the scene"
 msgstr "காட்சியை ஒரே மாதிரியாக ஏற்றும் சுற்றுப்புற ஒளியின் நிறம்"
-
-
-msgid "Max Shader Compilation Subprocesses"
-msgstr "மேக்ச் சேடர் தொகுப்பு துணை செயலாக்கங்கள்"
-
-
-msgid "Max number of parallel shader compilation subprocesses, clamped at the max threads supported by the CPU (requires restarting Blender for changes to take effect). Setting it to 0 disables subprocess shader compilation."
-msgstr "சிபியு ஆல் ஆதரிக்கப்படும் அதிகபட்ச நூல்களில் பிணைக்கப்பட்டுள்ள இணை சேடர் தொகுப்பு துணை செயலாக்கங்களின் அதிகபட்ச எண்ணிக்கை (மாற்றங்கள் நடைமுறைக்கு வருவதற்கு மறுதொடக்கம் செய்ய வேண்டும்). அதை 0 ஆக அமைப்பது துணை செயலாக்க சேடர் தொகுப்பை முடக்குகிறது."
 
 
 msgid "Memory Cache Limit"
@@ -121001,12 +120913,12 @@ msgid "No animation data to convert on object: {!r}"
 msgstr "பொருளை மாற்ற அனிமேசன் தரவு இல்லை: {! R}"
 
 
-msgid "Modifiers cannot be added to object: "
-msgstr "மாற்றியமைப்பாளர்களை பொருளில் சேர்க்க முடியாது: "
-
-
 msgid "Object: {:s}, Mesh: '{:s}' has {:d} loops (for {:d} faces), expected {:d}"
 msgstr "பொருள்: {:s}, கண்ணி: '{:s}' {:d} சுழல்கள் ({:d} முகங்களுக்கு), எதிர்பார்க்கப்படும் {:d}"
+
+
+msgid "Modifiers cannot be added to object: "
+msgstr "மாற்றியமைப்பாளர்களை பொருளில் சேர்க்க முடியாது: "
 
 
 msgid "Object {!r} already has {!r} F-Curve(s). Remove these before trying again"
@@ -126536,22 +126448,6 @@ msgid "Zoom Method"
 msgstr "சூம் முறை"
 
 
-msgid "Pan Sensitivity"
-msgstr "பான் உணர்திறன்"
-
-
-msgid "Swap Y and Z Axes"
-msgstr "ஒய் மற்றும் சட் அச்சுகளை மாற்றவும்"
-
-
-msgid "Invert Axis Pan"
-msgstr "தலைகீழ் அச்சு பான்"
-
-
-msgid "Invert Pan Axis"
-msgstr "தலைகீழ் பான் அச்சு"
-
-
 msgctxt "Operator"
 msgid "Remove Repository"
 msgstr "களஞ்சியத்தை அகற்று"
@@ -126633,20 +126529,24 @@ msgid "Invert Wheel Zoom Direction"
 msgstr "தலைகீழ் சக்கர சூம் திசை"
 
 
-msgid "Show Guides"
-msgstr "வழிகாட்டிகளைக் காட்டு"
-
-
-msgid "Orbit Axis"
-msgstr "சுற்றுப்பாதை அச்சு"
+msgid "Lock Horizon"
+msgstr "பதிவு அடிவானம்"
 
 
 msgid "Orbit Center"
 msgstr "சுற்றுப்பாதை நடுவண்"
 
 
-msgid "Fly/Walk"
-msgstr "பறக்க/நடை"
+msgid "Orbit Axis"
+msgstr "சுற்றுப்பாதை அச்சு"
+
+
+msgid "Pan Sensitivity"
+msgstr "பான் உணர்திறன்"
+
+
+msgid "Invert Pan Axis"
+msgstr "தலைகீழ் பான் அச்சு"
 
 
 msgctxt "Operator"
@@ -130655,10 +130555,6 @@ msgstr "ஈவி என்சின் சேடர்களை தொகுத
 
 msgid "Compiling shaders ({} remaining)"
 msgstr "சேடர்களை தொகுக்கும் ({} மீதமுள்ள)"
-
-
-msgid "Increasing Preferences > System > Max Shader Compilation Subprocesses may improve compilation time."
-msgstr "அதிகரிக்கும் விருப்பத்தேர்வுகள்> கணினி> அதிகபட்ச சேடர் தொகுப்பு துணை செயலாக்கங்கள் தொகுப்பு நேரத்தை மேம்படுத்தலாம்."
 
 
 msgid "Optimizing shaders ({} remaining)"
@@ -137912,10 +137808,6 @@ msgid "No active collection"
 msgstr "செயலில் சேகரிப்பு இல்லை"
 
 
-msgid "Can't duplicate the master collection"
-msgstr "மாச்டர் சேகரிப்பை நகலெடுக்க முடியாது"
-
-
 msgid "Could not find a valid parent collection for the new duplicate, it won't be linked to any view layer"
 msgstr "புதிய நகலுக்கான சரியான பெற்றோர் சேகரிப்பைக் கண்டுபிடிக்க முடியவில்லை, இது எந்த பார்வை அடுக்குடனும் இணைக்கப்படாது"
 
@@ -139182,10 +139074,6 @@ msgstr "தற்போதைய பயன்முறையில் எக்�
 
 msgid "Gizmos hidden in this view"
 msgstr "இந்த பார்வையில் கிச்மோச் மறைக்கப்பட்டுள்ளது"
-
-
-msgid "Up/Down"
-msgstr "மேலே/கீழ்"
 
 
 msgid "Free Look"
@@ -149120,238 +149008,6 @@ msgstr "ஒலிவாங்கி"
 
 msgid "network"
 msgstr "பிணையம்"
-
-
-msgid "American English (American English)"
-msgstr "அமெரிக்க ஆங்கிலம் (அமெரிக்கன் ஆங்கிலம்)"
-
-
-msgid "Japanese (日本語)"
-msgstr "சப்பானிய (日本語)"
-
-
-msgid "Dutch (Nederlands)"
-msgstr "டச்சு (நெடெர்லாண்ட்ச்)"
-
-
-msgid "Italian (Italiano)"
-msgstr "இத்தாலியன் (இத்தாலியன்)"
-
-
-msgid "German (Deutsch)"
-msgstr "செர்மன் (டாய்ச்)"
-
-
-msgid "Finnish (Suomi)"
-msgstr "ஃபின்னிச் (சுயோமி)"
-
-
-msgid "Swedish (Svenska)"
-msgstr "ச்வீடிச் (ச்வென்ச்கா)"
-
-
-msgid "French (Français)"
-msgstr "பிரஞ்சு (ஃபிரான்சிச்)"
-
-
-msgid "Spanish (Español)"
-msgstr "ச்பானிச் (எச்பானோல்)"
-
-
-msgid "Catalan (Català)"
-msgstr "கற்றலான் (அட்டவணை)"
-
-
-msgid "Czech (Čeština)"
-msgstr "செக் (čeština)"
-
-
-msgid "Portuguese (Português)"
-msgstr "போர்த்துகீசியம் (போர்த்துகச்)"
-
-
-msgid "Simplified Chinese (简体中文)"
-msgstr "எளிமைப்படுத்தப்பட்ட சீன (简体)"
-
-
-msgid "Traditional Chinese (繁體中文)"
-msgstr "பாரம்பரிய சீன (繁體)"
-
-
-msgid "Russian (Русский)"
-msgstr "ரச்ய (русский)"
-
-
-msgid "Croatian (Hrvatski)"
-msgstr "குரோசிய (அர்வாட்ச்கி)"
-
-
-msgid "Serbian (Српски)"
-msgstr "செர்பியன் (српски)"
-
-
-msgid "Ukrainian (Українська)"
-msgstr "உக்ரேனிய (українська)"
-
-
-msgid "Polish (Polski)"
-msgstr "பாலிச் (போல்கி)"
-
-
-msgid "Romanian (Român)"
-msgstr "ருமேனிய (ரோமன்)"
-
-
-msgid "Arabic (ﺔﻴﺑﺮﻌﻟﺍ)"
-msgstr "அரபு (ﺔﻴﺑﺮﻌﻟﺍ)"
-
-
-msgid "Bulgarian (Български)"
-msgstr "பல்கேரியன் (български)"
-
-
-msgid "Greek (Ελληνικά)"
-msgstr "கிரேக்கம் (ελληνικά)"
-
-
-msgid "Korean (한국어)"
-msgstr "கொரிய (한국어)"
-
-
-msgid "Nepali (नेपाली)"
-msgstr "நேபாளி (नेपाली)"
-
-
-msgid "Persian (ﯽﺳﺭﺎﻓ)"
-msgstr "பாரசீக (ﯽﺳﺭﺎﻓ)"
-
-
-msgid "Indonesian (Bahasa indonesia)"
-msgstr "இந்தோனேசிய (பஆசா இந்தோனேசியா)"
-
-
-msgid "Serbian Latin (Srpski latinica)"
-msgstr "செர்பிய லத்தீன் (எச்ஆர்பிச்கி லத்தீன்)"
-
-
-msgid "Kyrgyz (Кыргыз тили)"
-msgstr "கிர்கிசு (கிர்கிசு மொழி)"
-
-
-msgid "Turkish (Türkçe)"
-msgstr "துருக்கிய (டர்கே)"
-
-
-msgid "Hungarian (Magyar)"
-msgstr "அங்கேரிய (மாகியார்)"
-
-
-msgid "Brazilian Portuguese (Português do Brasil)"
-msgstr "பிரேசிலிய போர்த்துகீசியம் (போர்த்துக்கள் பிரேசில் செய்கின்றன)"
-
-
-msgid "Hebrew (תירִבְעִ)"
-msgstr "எபிரேய (תירִבְעִ)"
-
-
-msgid "Estonian (Eesti keel)"
-msgstr "எச்டோனிய (ஈச்டி கீல்)"
-
-
-msgid "Esperanto (Esperanto)"
-msgstr "எச்பெராண்டோ (எச்பெராண்டோ)"
-
-
-msgid "Amharic (አማርኛ)"
-msgstr "அம்ஆரிக் (አማርኛ)"
-
-
-msgid "Uzbek (Oʻzbek)"
-msgstr "uzbek (oʻzbek)"
-
-
-msgid "Uzbek Cyrillic (Ўзбек)"
-msgstr "உச்பெக் சிரிலிக் (ўзбек)"
-
-
-msgid "Hindi (हिन्दी)"
-msgstr "இந்தி (हिन्दी)"
-
-
-msgid "Vietnamese (Tiếng Việt)"
-msgstr "வியட்நாமிய (tiếng việt)"
-
-
-msgid "Basque (Euskara)"
-msgstr "பாச்க் (யூச்காரா)"
-
-
-msgid "Hausa (Hausa)"
-msgstr "அவுசா (அவுசா)"
-
-
-msgid "Kazakh (Қазақша)"
-msgstr "கசாக் (қазақша)"
-
-
-msgid "Abkhaz (Аԥсуа бызшәа)"
-msgstr "அப்காச்(аԥсуа бызшәа)"
-
-
-msgid "Thai (ภาษาไทย)"
-msgstr "தாய் (ภาษาไทย)"
-
-
-msgid "Slovak (Slovenčina)"
-msgstr "ச்லோவாக் (ச்லோவெனினா)"
-
-
-msgid "Georgian (ქართული)"
-msgstr "சார்சியன் (ქართული)"
-
-
-msgid "Tamil (தமிழ்)"
-msgstr "தமிழ் (தமிழ்)"
-
-
-msgid "Khmer (ខ្មែរ)"
-msgstr "கெமர் (ខ្មែរ)"
-
-
-msgid "Swahili (Kiswahili)"
-msgstr "சுவாஇலி (கிச்வாஇலி)"
-
-
-msgid "Belarusian (беларуску)"
-msgstr "பெலாரூசியன் (беларуску)"
-
-
-msgid "Danish (Dansk)"
-msgstr "டேனிச் (டான்ச்க்)"
-
-
-msgid "Slovenian (Slovenščina)"
-msgstr "ச்லோவேனியன் (ச்லோவேனியன்)"
-
-
-msgid "Urdu (وُدرُا)"
-msgstr "உருது (திர்ஆம்)"
-
-
-msgid "Lithuanian (Lietuviškai)"
-msgstr "லிதுவேனியன் (லிதுவேனியன்)"
-
-
-msgid "British English (British English)"
-msgstr "பிரிட்டிச் ஆங்கிலம் (பிரிட்டிச் ஆங்கிலம்)"
-
-
-msgid "Complete"
-msgstr "முழுமை"
-
-
-msgid "In Progress"
-msgstr "முன்னேற்றத்தில் உள்ளது"
 
 
 msgid "Add & Subtract"
