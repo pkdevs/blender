@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Beta (b'798f85a7108f')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'6ccdb8c06e27')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-11 11:13+0000\n"
-"PO-Revision-Date: 2025-06-11 08:58+0000\n"
+"POT-Creation-Date: 2025-06-16 10:45+0000\n"
+"PO-Revision-Date: 2025-06-14 06:59+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -5538,6 +5538,10 @@ msgstr "მხოლოდ ობიექტის აქტიური შრ
 
 msgid "Auto-Remove Fill Guides"
 msgstr "შევსების ნიშნულების ავტომატურად წაშლა"
+
+
+msgid "Automatically remove fill guide strokes after fill operation"
+msgstr "შევსების ოპერაციის შემდეგ ავტომატურად მოაცილე შევსების მიმმართველი მონასმები"
 
 
 msgid "Strokes Collision"
@@ -19511,6 +19515,10 @@ msgid "Hue Jitter"
 msgstr "ელფერის რყევა"
 
 
+msgid "Color jitter effect on hue"
+msgstr "ფერის რყევის ეფექტი ელფერზე"
+
+
 msgid "Brush Icon Filepath"
 msgstr "ფუნჯის ხატულის მისამართი"
 
@@ -19824,6 +19832,10 @@ msgstr "ინტერვალი აეროგრაფის შტრი�
 
 msgid "Saturation Jitter"
 msgstr "სიხასხასის რყევა"
+
+
+msgid "Color jitter effect on saturation"
+msgstr "ფერის რყევის ეფექტი სიხასხასეზე"
 
 
 msgid "Sculpt Plane"
@@ -20341,6 +20353,14 @@ msgid "Handle each pixel color as individual vector for displacement (area plane
 msgstr "ყოველი პიქსელის ფერს ისე მოეპყარი, როგორც ინდივიდუალურ ვექტორს გადანაცვლებისთვის (მხოლოდ არეს სიბრტყის დატანასთან)"
 
 
+msgid "Use Color Jitter"
+msgstr "ფერის რყევის გამოყენება"
+
+
+msgid "Jitter brush color"
+msgstr "დაადე ფუნჯის ფერს რყევა"
+
+
 msgid "Connected Only"
 msgstr "მხოლოდ დაკავშირებული"
 
@@ -20703,6 +20723,10 @@ msgstr "ზეწოლის გამოყენება სველი ს
 
 msgid "Value Jitter"
 msgstr "მნიშვნელობის რყევა"
+
+
+msgid "Color jitter effect on value"
+msgstr "ფერის რყევის ეფექტი მნიშვნელობაზე"
 
 
 msgid "Vertex weight when brush is applied"
@@ -34604,12 +34628,12 @@ msgid "Editor menu containing buttons"
 msgstr "რედაქტორის მენიუ, რომელიც ღილაკებს შეიცავს"
 
 
-msgid "Show/Hide"
-msgstr "ჩვენება/დამალვა"
-
-
 msgid "Clean Up"
 msgstr "გასუფთავება"
+
+
+msgid "Show/Hide"
+msgstr "ჩვენება/დამალვა"
 
 
 msgid "Special Characters"
@@ -34634,6 +34658,10 @@ msgstr "სახელები"
 
 msgid "Bone Roll"
 msgstr "ძვლის ტრიალი"
+
+
+msgid "Merge"
+msgstr "შერწყმა"
 
 
 msgid "Pivot Point"
@@ -34690,10 +34718,6 @@ msgstr "ურთიერთდამოკიდებულებები"
 
 msgid "Add Image"
 msgstr "გამოსახულების დამატება"
-
-
-msgid "Merge"
-msgstr "შერწყმა"
 
 
 msgid "Light Probe"
@@ -44151,8 +44175,16 @@ msgid "NDOF Motion Data"
 msgstr "NDOF მოძრაობის მონაცემები"
 
 
+msgid "NDOF motion data for window manager events"
+msgstr "NDOF მოძრაობის ინფორმაცია ფანჯრების მენეჯერის მოვლენებისთვის"
+
+
 msgid "Progress"
 msgstr "პროგრესი"
+
+
+msgid "Indicates the gesture phase"
+msgstr "მიუთითებს ჟესტის ფაზას"
 
 
 msgid "Starting"
@@ -44161,6 +44193,10 @@ msgstr "საწყის ეტაპზე"
 
 msgid "In progress"
 msgstr "დამუშავებაშია"
+
+
+msgid "Finishing"
+msgstr "მთავრდება"
 
 
 msgid "NLA Strip"
@@ -53155,6 +53191,10 @@ msgstr "ბუდის შემავალი მნიშვნელობ�
 
 msgid "Unique identifier for mapping sockets"
 msgstr "უნიკალური იდენტიფიკატორი ბუდეთა რუკაზე დასატანად"
+
+
+msgid "Inactive"
+msgstr "არააქტიური"
 
 
 msgid "Linked"
@@ -66792,6 +66832,11 @@ msgstr "გადაიტანე მონიშნული ახალ შ
 
 msgid "Target Grease Pencil Layer"
 msgstr "გრიზ ფენსილის სამიზნე შრე"
+
+
+msgctxt "Operator"
+msgid "Outline"
+msgstr "მოხაზულობა"
 
 
 msgctxt "Operator"
@@ -117818,6 +117863,11 @@ msgstr "წვეროს/წიბოს გაცურება"
 
 
 msgctxt "WindowManager"
+msgid "Trackball"
+msgstr "ბურთულიანი მანიპულატორი"
+
+
+msgctxt "WindowManager"
 msgid "Resize"
 msgstr "ზომის შეცვლა"
 
@@ -133605,18 +133655,6 @@ msgid "Delete selected objects?"
 msgstr "წავშალო მონიშნული ობიექტები?"
 
 
-msgid "None of the objects are compatible of conversion to"
-msgstr "არცერთი ობიექტი არაა კონვერტაციისთვის თავსებადი"
-
-
-msgid "The selection included"
-msgstr "მითვლილი მონიშვნა"
-
-
-msgid "object(s) types which don't support conversion to"
-msgstr "ობიექტ(ებ)ის ტიპები, რომლებსაც არ გააჩნია კონვერტაციის მხარდაჭერა"
-
-
 msgid "SoundTrack"
 msgstr "საუნდთრექი"
 
@@ -133800,14 +133838,6 @@ msgstr "ობიექტს '%s' არ აქვს გრიზ ფენს
 
 msgid "Object '%s' has no evaluated curves data"
 msgstr "ობიექტს '%s' არ აქვს გამოთვლილი წირების მონაცემები"
-
-
-msgid "%s \"%s\""
-msgstr "%s \"%s\""
-
-
-msgid "%s %d %s \"%s\""
-msgstr "%s %d %s \"%s\""
 
 
 msgid "Cannot edit object '%s' as it is used by override collections"
@@ -134754,10 +134784,6 @@ msgstr ""
 "შეიქმნას ერთი მომხმარებელი და მერე იქნას გარდაქმნები გამოყენებული?"
 
 
-msgid "have non-invertable transformation matrix, not applying transform."
-msgstr "შეუქცევადი გარდაქმნის მატრიცა, გარდაქმნა არ გამოიყენება."
-
-
 msgid "Objects have no data to transform"
 msgstr "ობიექტს არ აქვს მონაცემები გარდაქმნისთვის"
 
@@ -134788,10 +134814,6 @@ msgstr "ტექსტურ ობიექტებზე მხოლოდ 
 
 msgid "Area Lights can only have scale applied: \"%s\""
 msgstr "არეალურ სინათლეებზე მხოლოდ მასშტაბის გამოყენება შეიძლება: \"%s\""
-
-
-msgid "%s \"%s\" %s"
-msgstr "%s \"%s\" %s"
 
 
 msgid "%i object(s) not centered, %i changed:"
