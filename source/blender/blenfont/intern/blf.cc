@@ -14,7 +14,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <mutex>
 
 #include <ft2build.h>
 
@@ -49,7 +48,7 @@ FontBLF *global_font[BLF_MAX_FONT] = {nullptr};
 int blf_mono_font = -1;
 int blf_mono_font_render = -1;
 
-static std::mutex g_blf_load_mutex;
+static blender::Mutex g_blf_load_mutex;
 
 static FontBLF *blf_get(int fontid)
 {
@@ -591,10 +590,6 @@ void BLF_draw(int fontid, const char *str, const size_t str_len, ResultBLF *r_in
   FontBLF *font = blf_get(fontid);
 
   if (font) {
-
-    /* Avoid bgl usage to corrupt BLF drawing. */
-    GPU_bgl_end();
-
     blf_draw_gpu__start(font);
     if (font->flags & BLF_WORD_WRAP) {
       blf_font_draw__wrap(font, str, str_len, r_info);
@@ -636,8 +631,6 @@ void BLF_draw_svg_icon(uint icon_id,
 #ifndef WITH_HEADLESS
   FontBLF *font = global_font[0];
   if (font) {
-    /* Avoid bgl usage to corrupt BLF drawing. */
-    GPU_bgl_end();
     blf_draw_gpu__start(font);
     blf_draw_svg_icon(font, icon_id, x, y, size, color, outline_alpha, multicolor, edit_source_cb);
     blf_draw_gpu__end(font);
@@ -948,7 +941,8 @@ void BLF_shadow_offset(int fontid, int x, int y)
   }
 }
 
-void BLF_buffer(int fontid, float *fbuf, uchar *cbuf, int w, int h, ColorManagedDisplay *display)
+void BLF_buffer(
+    int fontid, float *fbuf, uchar *cbuf, int w, int h, const ColorManagedDisplay *display)
 {
   FontBLF *font = blf_get(fontid);
 

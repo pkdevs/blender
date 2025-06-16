@@ -66,7 +66,12 @@ struct GPUViewport {
   GPUTexture *depth_tx;
   /** Compositing framebuffer for stereo viewport. */
   GPUFrameBuffer *stereo_comp_fb;
-  /** Overlay framebuffer for drawing outside of DRW module. */
+  /** Color render and overlay frame-buffers for drawing outside of DRW module.
+   * The render framebuffer is expected to be in the linear space and viewport will perform color
+   * management on it to bring it to the display space.
+   * The overlay frame-buffer is expected to be in the display space and viewport does not do any
+   * color management on it. */
+  GPUFrameBuffer *render_fb;
   GPUFrameBuffer *overlay_fb;
 
   /* Color management. */
@@ -178,6 +183,7 @@ static void gpu_viewport_textures_create(GPUViewport *viewport)
 static void gpu_viewport_textures_free(GPUViewport *viewport)
 {
   GPU_FRAMEBUFFER_FREE_SAFE(viewport->stereo_comp_fb);
+  GPU_FRAMEBUFFER_FREE_SAFE(viewport->render_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(viewport->overlay_fb);
 
   for (int i = 0; i < 2; i++) {
@@ -287,7 +293,7 @@ void GPU_viewport_stereo_composite(GPUViewport *viewport, Stereo3dFormat *stereo
       });
 
   GPUVertFormat *vert_format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(vert_format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(vert_format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   GPU_framebuffer_bind(viewport->stereo_comp_fb);
   GPU_matrix_push();
   GPU_matrix_push_projection();
@@ -348,9 +354,9 @@ static const GPUVertFormat &gpu_viewport_batch_format()
   if (g_viewport.format.attr_len == 0) {
     GPUVertFormat *format = &g_viewport.format;
     g_viewport.attr_id.pos = GPU_vertformat_attr_add(
-        format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
     g_viewport.attr_id.tex_coord = GPU_vertformat_attr_add(
-        format, "texCoord", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        format, "texCoord", blender::gpu::VertAttrType::SFLOAT_32_32);
   }
   return g_viewport.format;
 }
@@ -589,6 +595,17 @@ GPUTexture *GPU_viewport_overlay_texture(GPUViewport *viewport, int view)
 GPUTexture *GPU_viewport_depth_texture(GPUViewport *viewport)
 {
   return viewport->depth_tx;
+}
+
+GPUFrameBuffer *GPU_viewport_framebuffer_render_get(GPUViewport *viewport)
+{
+  GPU_framebuffer_ensure_config(
+      &viewport->render_fb,
+      {
+          GPU_ATTACHMENT_TEXTURE(viewport->depth_tx),
+          GPU_ATTACHMENT_TEXTURE(viewport->color_render_tx[viewport->active_view]),
+      });
+  return viewport->render_fb;
 }
 
 GPUFrameBuffer *GPU_viewport_framebuffer_overlay_get(GPUViewport *viewport)

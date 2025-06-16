@@ -233,6 +233,10 @@ struct ProjStrokeHandle {
    * we can assume at least the first is set while painting. */
   ProjPaintState *ps_views[8];
 
+  /* Store initial starting points for perlin noise on the beginning of each stroke when using
+   * color jitter. */
+  std::optional<blender::float3> initial_hsv_jitter;
+
   int ps_views_tot;
   int symmetry_flags;
 
@@ -3759,7 +3763,7 @@ static void proj_paint_state_viewport_init(ProjPaintState *ps, const char symmet
       invert_m4_m4(viewinv, viewmat);
     }
     else if (ps->source == PROJ_SRC_IMAGE_CAM) {
-      Object *cam_ob_eval = DEG_get_evaluated_object(ps->depsgraph, ps->scene->camera);
+      Object *cam_ob_eval = DEG_get_evaluated(ps->depsgraph, ps->scene->camera);
       CameraParams params;
 
       /* viewmat & viewinv */
@@ -4043,7 +4047,7 @@ static bool proj_paint_state_mesh_eval_init(const bContext *C, ProjPaintState *p
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Object *ob = ps->ob;
 
-  const Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
+  const Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
   ps->mesh_eval = BKE_object_get_evaluated_mesh(ob_eval);
   if (!ps->mesh_eval) {
     return false;
@@ -5769,6 +5773,7 @@ static void paint_proj_stroke_ps(const bContext * /*C*/,
     paint_brush_color_get(scene,
                           paint,
                           brush,
+                          ps_handle->initial_hsv_jitter,
                           false,
                           ps->mode == BRUSH_STROKE_INVERT,
                           distance,
@@ -5864,7 +5869,7 @@ static void project_state_init(bContext *C, Object *ob, ProjPaintState *ps, int 
     }
 
     /* disable for 3d mapping also because painting on mirrored mesh can create "stripes" */
-    ps->do_masking = paint_use_opacity_masking(brush);
+    ps->do_masking = paint_use_opacity_masking(scene, ps->paint, brush);
     ps->is_texbrush = (brush->mtex.tex && ps->brush_type == IMAGE_PAINT_BRUSH_TYPE_DRAW) ? true :
                                                                                            false;
     ps->is_maskbrush = (brush->mask_mtex.tex) ? true : false;
@@ -5955,9 +5960,13 @@ void *paint_proj_new_stroke(bContext *C, Object *ob, const float mouse[2], int m
   ToolSettings *settings = scene->toolsettings;
   char symmetry_flag_views[BOUNDED_ARRAY_TYPE_SIZE<decltype(ps_handle->ps_views)>()] = {0};
 
-  ps_handle = MEM_callocN<ProjStrokeHandle>("ProjStrokeHandle");
+  ps_handle = MEM_new<ProjStrokeHandle>("ProjStrokeHandle");
   ps_handle->scene = scene;
   ps_handle->brush = BKE_paint_brush(&settings->imapaint.paint);
+
+  if (BKE_brush_color_jitter_get_settings(scene, &settings->imapaint.paint, ps_handle->brush)) {
+    ps_handle->initial_hsv_jitter = seed_hsv_jitter();
+  }
 
   if (mode == BRUSH_STROKE_INVERT) {
     /* Bypass regular stroke logic. */
@@ -6045,7 +6054,7 @@ fail:
   for (int i = 0; i < ps_handle->ps_views_tot; i++) {
     MEM_delete(ps_handle->ps_views[i]);
   }
-  MEM_freeN(ps_handle);
+  MEM_delete(ps_handle);
   return nullptr;
 }
 
@@ -6075,7 +6084,7 @@ void paint_proj_stroke_done(void *ps_handle_p)
   Scene *scene = ps_handle->scene;
 
   if (ps_handle->is_clone_cursor_pick) {
-    MEM_freeN(ps_handle);
+    MEM_delete(ps_handle);
     return;
   }
 
@@ -6223,7 +6232,7 @@ void PAINT_OT_project_image(wmOperatorType *ot)
   ot->idname = "PAINT_OT_project_image";
   ot->description = "Project an edited render from the active camera back onto the object";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = WM_enum_search_invoke;
   ot->exec = texture_paint_camera_project_exec;
 
@@ -6359,7 +6368,7 @@ void PAINT_OT_image_from_view(wmOperatorType *ot)
   ot->idname = "PAINT_OT_image_from_view";
   ot->description = "Make an image from biggest 3D view for reprojection";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = texture_paint_image_from_view_exec;
   ot->poll = texture_paint_image_from_view_poll;
 
@@ -6576,7 +6585,7 @@ static const char *proj_paint_color_attribute_create(wmOperator *op, Object &ob)
     RNA_string_get(op->ptr, "name", name);
     RNA_float_get_array(op->ptr, "color", color);
     domain = bke::AttrDomain(RNA_enum_get(op->ptr, "domain"));
-    type = (eCustomDataType)RNA_enum_get(op->ptr, "data_type");
+    type = eCustomDataType(RNA_enum_get(op->ptr, "data_type"));
   }
 
   Mesh *mesh = static_cast<Mesh *>(ob.data);
@@ -6800,6 +6809,7 @@ static bool proj_paint_add_slot(bContext *C, wmOperator *op)
 
     DEG_id_tag_update(&ntree->id, 0);
     DEG_id_tag_update(&ma->id, ID_RECALC_SHADING);
+    DEG_relations_tag_update(bmain);
     ED_area_tag_redraw(CTX_wm_area(C));
 
     ED_paint_proj_mesh_data_check(*scene, *ob, nullptr, nullptr, nullptr, nullptr);
@@ -6870,32 +6880,32 @@ static void texture_paint_add_texture_paint_slot_ui(bContext *C, wmOperator *op)
 
   if (ob->mode == OB_MODE_SCULPT) {
     slot_type = (ePaintCanvasSource)RNA_enum_get(op->ptr, "slot_type");
-    uiItemR(layout, op->ptr, "slot_type", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+    layout->prop(op->ptr, "slot_type", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
   }
 
-  uiItemR(layout, op->ptr, "name", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout->prop(op->ptr, "name", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   switch (slot_type) {
     case PAINT_CANVAS_SOURCE_IMAGE: {
       uiLayout *col = &layout->column(true);
-      uiItemR(col, op->ptr, "width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      uiItemR(col, op->ptr, "height", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      col->prop(op->ptr, "width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      col->prop(op->ptr, "height", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-      uiItemR(layout, op->ptr, "alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      uiItemR(layout, op->ptr, "generated_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-      uiItemR(layout, op->ptr, "float", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      layout->prop(op->ptr, "alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      layout->prop(op->ptr, "generated_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      layout->prop(op->ptr, "float", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       break;
     }
     case PAINT_CANVAS_SOURCE_COLOR_ATTRIBUTE:
-      uiItemR(layout, op->ptr, "domain", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
-      uiItemR(layout, op->ptr, "data_type", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+      layout->prop(op->ptr, "domain", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+      layout->prop(op->ptr, "data_type", UI_ITEM_R_EXPAND, std::nullopt, ICON_NONE);
       break;
     case PAINT_CANVAS_SOURCE_MATERIAL:
       BLI_assert_unreachable();
       break;
   }
 
-  uiItemR(layout, op->ptr, "color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout->prop(op->ptr, "color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 #define IMA_DEF_NAME N_("Untitled")
@@ -6917,7 +6927,7 @@ void PAINT_OT_add_texture_paint_slot(wmOperatorType *ot)
   ot->description = "Add a paint slot";
   ot->idname = "PAINT_OT_add_texture_paint_slot";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = texture_paint_add_texture_paint_slot_invoke;
   ot->exec = texture_paint_add_texture_paint_slot_exec;
   ot->poll = ED_operator_object_active_editable_mesh;
@@ -7019,7 +7029,7 @@ void PAINT_OT_add_simple_uvs(wmOperatorType *ot)
   ot->description = "Add cube map UVs on mesh";
   ot->idname = "PAINT_OT_add_simple_uvs";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = add_simple_uvs_exec;
   ot->poll = add_simple_uvs_poll;
 

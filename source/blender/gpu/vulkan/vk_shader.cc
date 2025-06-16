@@ -519,9 +519,11 @@ void VKShader::init(const shader::ShaderCreateInfo &info, bool is_batch_compilat
 
 VKShader::~VKShader()
 {
+  VKDevice &device = VKBackend::get().device;
   VKDiscardPool &discard_pool = VKDiscardPool::discard_pool_get();
 
   if (vk_pipeline_layout != VK_NULL_HANDLE) {
+    device.pipelines.discard(discard_pool, vk_pipeline_layout);
     discard_pool.discard_pipeline_layout(vk_pipeline_layout);
     vk_pipeline_layout = VK_NULL_HANDLE;
   }
@@ -533,15 +535,29 @@ void VKShader::build_shader_module(MutableSpan<StringRefNull> sources,
                                    shaderc_shader_kind stage,
                                    VKShaderModule &r_shader_module)
 {
-  BLI_assert_msg(ELEM(stage,
-                      shaderc_vertex_shader,
-                      shaderc_geometry_shader,
-                      shaderc_fragment_shader,
-                      shaderc_compute_shader),
-                 "Only forced ShaderC shader kinds are supported.");
   r_shader_module.is_ready = false;
   const VKDevice &device = VKBackend::get().device;
-  sources[SOURCES_INDEX_VERSION] = device.glsl_patch_get();
+  const char *source_patch = nullptr;
+
+  switch (stage) {
+    case shaderc_vertex_shader:
+      source_patch = device.glsl_vertex_patch_get();
+      break;
+    case shaderc_geometry_shader:
+      source_patch = device.glsl_geometry_patch_get();
+      break;
+    case shaderc_fragment_shader:
+      source_patch = device.glsl_fragment_patch_get();
+      break;
+    case shaderc_compute_shader:
+      source_patch = device.glsl_compute_patch_get();
+      break;
+    default:
+      BLI_assert_msg(0, "Only forced ShaderC shader kinds are supported.");
+      break;
+  }
+
+  sources[SOURCES_INDEX_VERSION] = source_patch;
   r_shader_module.combined_sources = combine_sources(sources);
   if (!use_batch_compilation_) {
     VKShaderCompiler::compile_module(*this, stage, r_shader_module);
@@ -601,7 +617,7 @@ bool VKShader::finalize(const shader::ShaderCreateInfo *info)
   if (!finalize_descriptor_set_layouts(device, vk_interface)) {
     return false;
   }
-  if (!finalize_pipeline_layout(device.vk_handle(), vk_interface)) {
+  if (!finalize_pipeline_layout(device, vk_interface)) {
     return false;
   }
 
@@ -629,7 +645,9 @@ bool VKShader::finalize_post()
    * step for graphical shaders.
    */
   if (result && is_compute_shader_) {
-    ensure_and_get_compute_pipeline();
+    /* This is only done for the first shader compilation (not specialization).
+     * Give the default constants. */
+    ensure_and_get_compute_pipeline(*constants);
   }
   return result;
 }
@@ -664,7 +682,7 @@ bool VKShader::is_ready() const
   return compilation_finished;
 }
 
-bool VKShader::finalize_pipeline_layout(VkDevice vk_device,
+bool VKShader::finalize_pipeline_layout(VKDevice &device,
                                         const VKShaderInterface &shader_interface)
 {
   const uint32_t layout_count = vk_descriptor_set_layout_ == VK_NULL_HANDLE ? 0 : 1;
@@ -687,11 +705,13 @@ bool VKShader::finalize_pipeline_layout(VkDevice vk_device,
     pipeline_info.pPushConstantRanges = &push_constant_range;
   }
 
-  if (vkCreatePipelineLayout(vk_device, &pipeline_info, nullptr, &vk_pipeline_layout) !=
+  if (vkCreatePipelineLayout(device.vk_handle(), &pipeline_info, nullptr, &vk_pipeline_layout) !=
       VK_SUCCESS)
   {
     return false;
   };
+
+  debug::object_label(vk_pipeline_layout, name_get());
 
   return true;
 }
@@ -714,8 +734,12 @@ bool VKShader::finalize_descriptor_set_layouts(VKDevice &vk_device,
   return vk_descriptor_set_layout_ != VK_NULL_HANDLE;
 }
 
-void VKShader::bind()
+void VKShader::bind(const shader::SpecializationConstants *constants_state)
 {
+  VKContext *ctx = VKContext::get();
+  /* Copy constants state. */
+  ctx->specialization_constants_set(constants_state);
+
   /* Intentionally empty. Binding of the pipeline are done just before drawing/dispatching.
    * See #VKPipeline.update_and_bind */
 }
@@ -756,6 +780,25 @@ std::string VKShader::resources_declare(const shader::ShaderCreateInfo &info) co
          * isn't supported during global const initialization. */
         ss << "uint " << sc.name << "_uint=" << std::to_string(sc.value.u) << "u;\n";
         ss << "#define " << sc.name << " uintBitsToFloat(" << sc.name << "_uint)\n";
+        break;
+      default:
+        BLI_assert_unreachable();
+        break;
+    }
+  }
+
+  ss << "\n/* Compilation Constants (pass-through). */\n";
+  for (const CompilationConstant &sc : info.compilation_constants_) {
+    ss << "const ";
+    switch (sc.type) {
+      case Type::int_t:
+        ss << "int " << sc.name << "=" << std::to_string(sc.value.i) << ";\n";
+        break;
+      case Type::uint_t:
+        ss << "uint " << sc.name << "=" << std::to_string(sc.value.u) << "u;\n";
+        break;
+      case Type::bool_t:
+        ss << "bool " << sc.name << "=" << (sc.value.u ? "true" : "false") << ";\n";
         break;
       default:
         BLI_assert_unreachable();
@@ -1276,7 +1319,8 @@ bool VKShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info
 
 /** \} */
 
-VkPipeline VKShader::ensure_and_get_compute_pipeline()
+VkPipeline VKShader::ensure_and_get_compute_pipeline(
+    const shader::SpecializationConstants &constants_state)
 {
   BLI_assert(is_compute_shader_);
   BLI_assert(compute_module.vk_shader_module != VK_NULL_HANDLE);
@@ -1284,12 +1328,12 @@ VkPipeline VKShader::ensure_and_get_compute_pipeline()
 
   /* Early exit when no specialization constants are used and the vk_pipeline_base_ is already
    * valid. This would handle most cases. */
-  if (constants.values.is_empty() && vk_pipeline_base_ != VK_NULL_HANDLE) {
+  if (constants_state.values.is_empty() && vk_pipeline_base_ != VK_NULL_HANDLE) {
     return vk_pipeline_base_;
   }
 
   VKComputeInfo compute_info = {};
-  compute_info.specialization_constants.extend(constants.values);
+  compute_info.specialization_constants.extend(constants_state.values);
   compute_info.vk_shader_module = compute_module.vk_shader_module;
   compute_info.vk_pipeline_layout = vk_pipeline_layout;
 
@@ -1298,6 +1342,7 @@ VkPipeline VKShader::ensure_and_get_compute_pipeline()
   VkPipeline vk_pipeline = device.pipelines.get_or_create_compute_pipeline(
       compute_info, is_static_shader_, vk_pipeline_base_);
   if (vk_pipeline_base_ == VK_NULL_HANDLE) {
+    debug::object_label(vk_pipeline, name_get());
     vk_pipeline_base_ = vk_pipeline;
   }
   return vk_pipeline;
@@ -1306,7 +1351,8 @@ VkPipeline VKShader::ensure_and_get_compute_pipeline()
 VkPipeline VKShader::ensure_and_get_graphics_pipeline(GPUPrimType primitive,
                                                       VKVertexAttributeObject &vao,
                                                       VKStateManager &state_manager,
-                                                      VKFrameBuffer &framebuffer)
+                                                      VKFrameBuffer &framebuffer,
+                                                      SpecializationConstants &constants_state)
 {
   BLI_assert(!is_compute_shader_);
   BLI_assert_msg(
@@ -1317,7 +1363,7 @@ VkPipeline VKShader::ensure_and_get_graphics_pipeline(GPUPrimType primitive,
 
   /* TODO: Graphics info should be cached in VKContext and only the changes should be applied. */
   VKGraphicsInfo graphics_info = {};
-  graphics_info.specialization_constants.extend(constants.values);
+  graphics_info.specialization_constants.extend(constants_state.values);
   graphics_info.vk_pipeline_layout = vk_pipeline_layout;
 
   graphics_info.vertex_in.vk_topology = to_vk_primitive_topology(primitive);
@@ -1348,6 +1394,7 @@ VkPipeline VKShader::ensure_and_get_graphics_pipeline(GPUPrimType primitive,
   VkPipeline vk_pipeline = device.pipelines.get_or_create_graphics_pipeline(
       graphics_info, is_static_shader_, vk_pipeline_base_);
   if (vk_pipeline_base_ == VK_NULL_HANDLE) {
+    debug::object_label(vk_pipeline, name_get());
     vk_pipeline_base_ = vk_pipeline;
   }
   return vk_pipeline;

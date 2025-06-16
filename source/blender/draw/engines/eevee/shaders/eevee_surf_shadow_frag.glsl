@@ -21,7 +21,7 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_surf_shadow_atomic)
 #endif
 
 #include "draw_view_lib.glsl"
-#include "eevee_nodetree_lib.glsl"
+#include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_sampling_lib.glsl"
 #include "eevee_shadow_tilemap_lib.glsl"
 #include "eevee_surf_lib.glsl"
@@ -43,7 +43,7 @@ void main()
     ndc_depth = 1.0f;
 #else
 #  define discard_result \
-    discard; \
+    gpu_discard_fragment(); \
     return;
 #endif
 

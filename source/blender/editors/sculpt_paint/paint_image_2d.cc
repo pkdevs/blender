@@ -12,6 +12,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_brush_types.h"
+#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 
@@ -78,6 +79,10 @@ struct BrushPainter {
   const Paint *paint;
   Brush *brush;
 
+  /* Store initial starting points for perlin noise on the beginning of each stroke when using
+   * color jitter. */
+  std::optional<blender::float3> initial_hsv_jitter;
+
   bool firsttouch; /* first paint op */
 
   ImagePool *pool;   /* image pool */
@@ -140,11 +145,14 @@ static BrushPainter *brush_painter_2d_new(Scene *scene,
                                           Brush *brush,
                                           bool invert)
 {
-  BrushPainter *painter = MEM_callocN<BrushPainter>(__func__);
+  BrushPainter *painter = MEM_new<BrushPainter>(__func__);
 
   painter->brush = brush;
   painter->scene = scene;
   painter->paint = paint;
+  if (BKE_brush_color_jitter_get_settings(scene, paint, brush)) {
+    painter->initial_hsv_jitter = seed_hsv_jitter();
+  }
   painter->firsttouch = true;
   painter->cache_invert = invert;
 
@@ -377,7 +385,7 @@ static ImBuf *brush_painter_imbuf_new(
   BrushPainterCache *cache = &tile->cache;
 
   const char *display_device = scene->display_settings.display_device;
-  ColorManagedDisplay *display = IMB_colormanagement_display_get_named(display_device);
+  const ColorManagedDisplay *display = IMB_colormanagement_display_get_named(display_device);
 
   rctf tex_mapping = painter->tex_mapping;
   ImagePool *pool = painter->pool;
@@ -397,6 +405,7 @@ static ImBuf *brush_painter_imbuf_new(
     paint_brush_color_get(scene,
                           paint,
                           brush,
+                          painter->initial_hsv_jitter,
                           use_color_correction,
                           cache->invert,
                           distance,
@@ -468,7 +477,7 @@ static void brush_painter_imbuf_update(BrushPainter *painter,
   BrushPainterCache *cache = &tile->cache;
 
   const char *display_device = scene->display_settings.display_device;
-  ColorManagedDisplay *display = IMB_colormanagement_display_get_named(display_device);
+  const ColorManagedDisplay *display = IMB_colormanagement_display_get_named(display_device);
 
   rctf tex_mapping = painter->tex_mapping;
   ImagePool *pool = painter->pool;
@@ -486,8 +495,16 @@ static void brush_painter_imbuf_update(BrushPainter *painter,
 
   /* get brush color */
   if (brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_DRAW) {
-    paint_brush_color_get(
-        scene, paint, brush, use_color_correction, cache->invert, 0.0f, 1.0f, display, brush_rgb);
+    paint_brush_color_get(scene,
+                          paint,
+                          brush,
+                          painter->initial_hsv_jitter,
+                          use_color_correction,
+                          cache->invert,
+                          0.0f,
+                          1.0f,
+                          display,
+                          brush_rgb);
   }
   else {
     brush_rgb[0] = 1.0f;
@@ -710,10 +727,12 @@ static void brush_painter_2d_refresh_cache(ImagePaintState *s,
 
   bool do_random = false;
   bool do_partial_update = false;
-  bool update_color = ((brush->flag & BRUSH_USE_GRADIENT) && (ELEM(brush->gradient_stroke_mode,
-                                                                   BRUSH_GRADIENT_SPACING_REPEAT,
-                                                                   BRUSH_GRADIENT_SPACING_CLAMP) ||
-                                                              (cache->last_pressure != pressure)));
+  bool update_color = ((brush->flag & BRUSH_USE_GRADIENT) &&
+                       (ELEM(brush->gradient_stroke_mode,
+                             BRUSH_GRADIENT_SPACING_REPEAT,
+                             BRUSH_GRADIENT_SPACING_CLAMP) ||
+                        (cache->last_pressure != pressure))) ||
+                      BKE_brush_color_jitter_get_settings(scene, painter->paint, brush);
   float tex_rotation = -brush->mtex.rot;
   float mask_rotation = -brush->mask_mtex.rot;
 
@@ -1419,7 +1438,7 @@ static int paint_2d_op(void *state,
   return 1;
 }
 
-static int paint_2d_canvas_set(ImagePaintState *s)
+static int paint_2d_canvas_set(ImagePaintState *s, const Paint *paint)
 {
   /* set clone canvas */
   if (s->brush_type == IMAGE_PAINT_BRUSH_TYPE_CLONE) {
@@ -1444,7 +1463,7 @@ static int paint_2d_canvas_set(ImagePaintState *s)
   }
 
   /* set masking */
-  s->do_masking = paint_use_opacity_masking(s->brush);
+  s->do_masking = paint_use_opacity_masking(s->scene, paint, s->brush);
 
   return 1;
 }
@@ -1647,7 +1666,7 @@ void *paint_2d_new_stroke(bContext *C, wmOperator *op, int mode)
     s->tiles[tile_idx].uv_origin[1] = ((tile->tile_number - 1001) / 10);
   }
 
-  if (!paint_2d_canvas_set(s)) {
+  if (!paint_2d_canvas_set(s, paint)) {
     MEM_freeN(s->tiles);
 
     MEM_freeN(s);
@@ -1713,7 +1732,7 @@ void paint_2d_stroke_done(void *ps)
   for (int i = 0; i < s->num_tiles; i++) {
     brush_painter_cache_2d_free(&s->tiles[i].cache);
   }
-  MEM_freeN(s->painter);
+  MEM_delete(s->painter);
   MEM_freeN(s->tiles);
   paint_brush_exit_tex(s->brush);
 
@@ -1839,15 +1858,14 @@ void paint_2d_bucket_fill(const bContext *C,
   }
 
   do_float = (ibuf->float_buffer.data != nullptr);
-  /* first check if our image is float. If it is not we should correct the color to
-   * be in gamma space. strictly speaking this is not correct, but blender does not paint
-   * byte images in linear space */
+  /* First check if our image is float. If it is we should correct the color to be in linear space.
+   */
   if (!do_float) {
-    linearrgb_to_srgb_uchar3((uchar *)&color_b, color);
+    rgb_float_to_uchar((uchar *)&color_b, color);
     *(((char *)&color_b) + 3) = strength * 255;
   }
   else {
-    copy_v3_v3(color_f, color);
+    srgb_to_linearrgb_v3_v3(color_f, color);
     color_f[3] = strength;
   }
 

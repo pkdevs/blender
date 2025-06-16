@@ -59,10 +59,12 @@ set(SRC
   nodes/node_composite_flip.cc
   nodes/node_composite_gamma.cc
   nodes/node_composite_glare.cc
+  nodes/node_composite_group_input.cc
   nodes/node_composite_hue_sat_val.cc
   nodes/node_composite_huecorrect.cc
   nodes/node_composite_id_mask.cc
   nodes/node_composite_image.cc
+  nodes/node_composite_image_coordinates.cc
   nodes/node_composite_image_info.cc
   nodes/node_composite_inpaint.cc
   nodes/node_composite_invert.cc
@@ -72,12 +74,10 @@ set(SRC
   nodes/node_composite_lensdist.cc
   nodes/node_composite_levels.cc
   nodes/node_composite_luma_matte.cc
-  nodes/node_composite_map_range.cc
   nodes/node_composite_map_uv.cc
   nodes/node_composite_map_value.cc
   nodes/node_composite_mask.cc
   nodes/node_composite_math.cc
-  nodes/node_composite_mixrgb.cc
   nodes/node_composite_movieclip.cc
   nodes/node_composite_moviedistortion.cc
   nodes/node_composite_normal.cc
@@ -86,6 +86,7 @@ set(SRC
   nodes/node_composite_planetrackdeform.cc
   nodes/node_composite_posterize.cc
   nodes/node_composite_premulkey.cc
+  nodes/node_composite_relative_to_pixel.cc
   nodes/node_composite_rgb.cc
   nodes/node_composite_rotate.cc
   nodes/node_composite_scale.cc
@@ -108,16 +109,13 @@ set(SRC
   nodes/node_composite_transform.cc
   nodes/node_composite_translate.cc
   nodes/node_composite_val_to_rgb.cc
-  nodes/node_composite_value.cc
   nodes/node_composite_vec_blur.cc
   nodes/node_composite_viewer.cc
   nodes/node_composite_zcombine.cc
 
-  node_composite_register.cc
   node_composite_tree.cc
   node_composite_util.cc
 
-  node_composite_register.hh
   node_composite_util.hh
 )
 
@@ -135,11 +133,19 @@ set(LIB
   bf_compositor
   PRIVATE bf::render
   PRIVATE bf::windowmanager
+  PRIVATE bf::dependencies::optional::opencolorio
 )
 
-if(WITH_OPENCOLORIO)
-  add_definitions(-DWITH_OCIO)
-endif()
+add_node_discovery(
+  bf_nodes_compositor_generated
+  "${SRC}"
+  ${CMAKE_CURRENT_BINARY_DIR}/register_compositor_nodes.cc
+  register_compositor_nodes
+)
+
+list(APPEND LIB
+  bf_nodes_compositor_generated
+)
 
 if(WITH_IMAGE_OPENEXR)
   add_definitions(-DWITH_IMAGE_OPENEXR)
@@ -170,6 +176,7 @@ if(WITH_FFTW3)
 endif()
 
 blender_add_lib(bf_nodes_composite "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+target_link_libraries(bf_nodes_compositor_generated bf_nodes_composite)
 
 blender_set_target_unity_build(bf_nodes_composite 10)
 

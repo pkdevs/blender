@@ -168,13 +168,13 @@ BLI_STATIC_ASSERT(MOTIONPATH_VERT_SEL == (1u << 0), "Ensure value is sync");
 BLI_STATIC_ASSERT(MOTIONPATH_VERT_KEY == (1u << 1), "Ensure value is sync");
 #endif
 
-/* All colors in this struct are converted to display linear RGB colorspace. */
+/* All colors in this struct are converted to display linear RGB color-space. */
 struct ThemeColors {
   /* UBOs data needs to be 16 byte aligned (size of float4) */
   float4 wire;
   float4 wire_edit;
   float4 active_object; /* "active" is reserved keyword in GLSL. */
-  float4 select;
+  float4 object_select; /* "select" is defined as a macro for GLSL. */
   float4 library_select;
   float4 library;
   float4 transform;

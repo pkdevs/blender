@@ -60,15 +60,21 @@ struct GHOST_ContextVK_WindowInfo {
 
 struct GHOST_FrameDiscard {
   std::vector<VkSwapchainKHR> swapchains;
+  std::vector<VkSemaphore> semaphores;
 
-  void destroy(VkDevice vk_device)
-  {
-    while (!swapchains.empty()) {
-      VkSwapchainKHR vk_swapchain = swapchains.back();
-      swapchains.pop_back();
-      vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
-    }
-  }
+  void destroy(VkDevice vk_device);
+};
+
+struct GHOST_SwapchainImage {
+  /** Swap-chain image (owned by the swapchain). */
+  VkImage vk_image = VK_NULL_HANDLE;
+
+  /**
+   * Semaphore for presenting; being signaled when the swap chain image is ready to be presented.
+   */
+  VkSemaphore present_semaphore = VK_NULL_HANDLE;
+
+  void destroy(VkDevice vk_device);
 };
 
 struct GHOST_Frame {
@@ -79,24 +85,20 @@ struct GHOST_Frame {
   VkFence submission_fence = VK_NULL_HANDLE;
   /** Semaphore for acquiring; being signaled when the swap chain image is ready to be updated. */
   VkSemaphore acquire_semaphore = VK_NULL_HANDLE;
-  /**
-   * Semaphore for presenting; being signaled when the swap chain image is ready to be presented.
-   */
-  VkSemaphore present_semaphore = VK_NULL_HANDLE;
 
   GHOST_FrameDiscard discard_pile;
 
-  void destroy(VkDevice vk_device)
-  {
-    vkDestroyFence(vk_device, submission_fence, nullptr);
-    submission_fence = VK_NULL_HANDLE;
-    vkDestroySemaphore(vk_device, acquire_semaphore, nullptr);
-    acquire_semaphore = VK_NULL_HANDLE;
-    vkDestroySemaphore(vk_device, present_semaphore, nullptr);
-    present_semaphore = VK_NULL_HANDLE;
-    discard_pile.destroy(vk_device);
-  }
+  void destroy(VkDevice vk_device);
 };
+
+/**
+ * The number of frames that GHOST manages.
+ *
+ * This must be kept in sync with any frame-aligned resources in the
+ * Vulkan backend. Notably, VKThreadData::resource_pools_count must
+ * match this value.
+ */
+constexpr static uint32_t GHOST_FRAMES_IN_FLIGHT = 5;
 
 class GHOST_ContextVK : public GHOST_Context {
   friend class GHOST_XrGraphicsBindingVulkan;
@@ -235,7 +237,7 @@ class GHOST_ContextVK : public GHOST_Context {
   /* For display only. */
   VkSurfaceKHR m_surface;
   VkSwapchainKHR m_swapchain;
-  std::vector<VkImage> m_swapchain_images;
+  std::vector<GHOST_SwapchainImage> m_swapchain_images;
   std::vector<GHOST_Frame> m_frame_data;
   uint64_t m_render_frame;
   uint64_t m_image_count;
@@ -251,5 +253,6 @@ class GHOST_ContextVK : public GHOST_Context {
 
   const char *getPlatformSpecificSurfaceExtension() const;
   GHOST_TSuccess recreateSwapchain();
+  GHOST_TSuccess initializeFrameData();
   GHOST_TSuccess destroySwapchain();
 };

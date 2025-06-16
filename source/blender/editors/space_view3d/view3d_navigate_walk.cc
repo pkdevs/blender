@@ -352,24 +352,24 @@ static void drawWalkPixel(const bContext * /*C*/, ARegion *region, void *arg)
   /* Draws an aim/cross in the center. */
   WalkInfo *walk = static_cast<WalkInfo *>(arg);
 
-  const int outter_length = 24;
-  const int inner_length = 14;
-  int xoff, yoff;
+  const float outer_length = 24.0f;
+  const float inner_length = 14.0f;
+  float xoff, yoff;
   rctf viewborder;
 
   if (ED_view3d_cameracontrol_object_get(walk->v3d_camera_control)) {
     ED_view3d_calc_camera_border(
         walk->scene, walk->depsgraph, region, walk->v3d, walk->rv3d, false, &viewborder);
-    xoff = int(viewborder.xmin + BLI_rctf_size_x(&viewborder) * 0.5f);
-    yoff = int(viewborder.ymin + BLI_rctf_size_y(&viewborder) * 0.5f);
+    xoff = viewborder.xmin + BLI_rctf_size_x(&viewborder) * 0.5f;
+    yoff = viewborder.ymin + BLI_rctf_size_y(&viewborder) * 0.5f;
   }
   else {
-    xoff = walk->region->winx / 2;
-    yoff = walk->region->winy / 2;
+    xoff = float(walk->region->winx) / 2.0f;
+    yoff = float(walk->region->winy) / 2.0f;
   }
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -378,20 +378,20 @@ static void drawWalkPixel(const bContext * /*C*/, ARegion *region, void *arg)
   immBegin(GPU_PRIM_LINES, 8);
 
   /* North. */
-  immVertex2i(pos, xoff, yoff + inner_length);
-  immVertex2i(pos, xoff, yoff + outter_length);
+  immVertex2f(pos, xoff, yoff + inner_length);
+  immVertex2f(pos, xoff, yoff + outer_length);
 
   /* East. */
-  immVertex2i(pos, xoff + inner_length, yoff);
-  immVertex2i(pos, xoff + outter_length, yoff);
+  immVertex2f(pos, xoff + inner_length, yoff);
+  immVertex2f(pos, xoff + outer_length, yoff);
 
   /* South. */
-  immVertex2i(pos, xoff, yoff - inner_length);
-  immVertex2i(pos, xoff, yoff - outter_length);
+  immVertex2f(pos, xoff, yoff - inner_length);
+  immVertex2f(pos, xoff, yoff - outer_length);
 
   /* West. */
-  immVertex2i(pos, xoff - inner_length, yoff);
-  immVertex2i(pos, xoff - outter_length, yoff);
+  immVertex2f(pos, xoff - inner_length, yoff);
+  immVertex2f(pos, xoff - outer_length, yoff);
 
   immEnd();
   immUnbindProgram();
@@ -1441,7 +1441,7 @@ static void walkApply_ndof(bContext *C, WalkInfo *walk, bool is_confirm)
   Object *lock_ob = ED_view3d_cameracontrol_object_get(walk->v3d_camera_control);
   bool has_translate, has_rotate;
 
-  view3d_ndof_fly(walk->ndof,
+  view3d_ndof_fly(*walk->ndof,
                   walk->v3d,
                   walk->rv3d,
                   walk->is_slow,
@@ -1565,6 +1565,7 @@ static wmOperatorStatus walk_modal(bContext *C, wmOperator *op, const wmEvent *e
 {
   bool do_draw = false;
   WalkInfo *walk = static_cast<WalkInfo *>(op->customdata);
+  ARegion *region = walk->region;
   View3D *v3d = walk->v3d;
   RegionView3D *rv3d = walk->rv3d;
   Object *walk_object = ED_view3d_cameracontrol_object_get(walk->v3d_camera_control);
@@ -1583,9 +1584,11 @@ static wmOperatorStatus walk_modal(bContext *C, wmOperator *op, const wmEvent *e
   }
   else
 #endif /* WITH_INPUT_NDOF */
+  {
     if (event->type == TIMER && event->customdata == walk->timer) {
       walkApply(C, walk, false);
     }
+  }
 
   do_draw |= walk->redraw;
 
@@ -1610,7 +1613,7 @@ static wmOperatorStatus walk_modal(bContext *C, wmOperator *op, const wmEvent *e
 
     /* Too frequent, commented with `NDOF_WALK_DRAW_TOOMUCH` for now. */
     // puts("redraw!");
-    ED_region_tag_redraw(CTX_wm_region(C));
+    ED_region_tag_redraw(region);
   }
   return exit_code;
 }

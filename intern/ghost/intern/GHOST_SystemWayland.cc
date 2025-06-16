@@ -1013,10 +1013,11 @@ struct GWL_SeatIME {
    */
   wl_surface *surface_window = nullptr;
   GHOST_TEventImeData event_ime_data = {
-      /*result_len*/ nullptr,
-      /*composite_len*/ nullptr,
-      /*result*/ nullptr,
-      /*composite*/ nullptr,
+      /** Storage for #GHOST_TEventImeData::result (the result of the `commit_string` callback). */
+      /*result*/ "",
+      /** Storage for #GHOST_TEventImeData::composite (the result of the `preedit_string`
+         callback). */
+      /*composite*/ "",
       /*cursor_position*/ -1,
       /*target_start*/ -1,
       /*target_end*/ -1,
@@ -1028,11 +1029,6 @@ struct GWL_SeatIME {
    * (an IME popup may be showing however this isn't known).
    */
   bool has_preedit = false;
-
-  /** Storage for #GHOST_TEventImeData::result (the result of the `commit_string` callback). */
-  std::string result;
-  /** Storage for #GHOST_TEventImeData::composite (the result of the `preedit_string` callback). */
-  std::string composite;
 
   /** #zwp_text_input_v3_listener::commit_string was called with a null text argument. */
   bool result_is_null = false;
@@ -1373,22 +1369,17 @@ static void gwl_seat_ime_full_reset(GWL_Seat *seat)
 
 static void gwl_seat_ime_result_reset(GWL_Seat *seat)
 {
-  seat->ime.result.clear();
-  seat->ime.result_is_null = false;
-
   GHOST_TEventImeData &event_ime_data = seat->ime.event_ime_data;
-  event_ime_data.result_len = nullptr;
-  event_ime_data.result = nullptr;
+  event_ime_data.result.clear();
+  seat->ime.result_is_null = false;
 }
 
 static void gwl_seat_ime_preedit_reset(GWL_Seat *seat)
 {
-  seat->ime.composite.clear();
-  seat->ime.composite_is_null = false;
 
   GHOST_TEventImeData &event_ime_data = seat->ime.event_ime_data;
-  event_ime_data.composite_len = nullptr;
-  event_ime_data.composite = nullptr;
+  event_ime_data.composite.clear();
+  seat->ime.composite_is_null = false;
 
   event_ime_data.cursor_position = -1;
   event_ime_data.target_start = -1;
@@ -1497,19 +1488,35 @@ struct GWL_Display {
    * seat which prevents events from any other seat.
    *
    * NOTE(@ideasman42): This could be extended and developed further extended to support
-   * an active seat per window (for e.g.), basic support is sufficient for now as currently isn't
-   * a widely used feature.
+   * an active seat per window (for example), basic support is sufficient for now as currently
+   * isn't a widely used feature.
    */
   int seats_active_index = 0;
+
+  /**
+   * When true, running without any windows.
+   * Wayland is only used to access the GPU.
+   *
+   * \note In general logic should not diverge too much in background mode,
+   * so as to avoid maintaining multiple code-paths however some logic can be skipped
+   * such as libraries for showing window decorations and threaded event handling.
+   */
+  bool background = false;
 
   /* Threaded event handling. */
 #ifdef USE_EVENT_BACKGROUND_THREAD
   /**
    * Run a thread that consumes events in the background.
    * Use `pthread` because `std::thread` leaks memory.
+   *
+   * Not set when `background == true`.
    */
   pthread_t events_pthread = 0;
-  /** Use to exit the event reading loop. */
+  /**
+   * Use to exit the event reading loop.
+   *
+   * Not set when `background == true`.
+   */
   bool events_pthread_is_active = false;
 
   /**
@@ -1542,9 +1549,11 @@ struct GWL_Display {
 static void gwl_display_destroy(GWL_Display *display)
 {
 #ifdef USE_EVENT_BACKGROUND_THREAD
-  if (display->events_pthread) {
-    ghost_wl_display_lock_without_input(display->wl.display, display->system->server_mutex);
-    display->events_pthread_is_active = false;
+  if (!display->background) {
+    if (display->events_pthread) {
+      ghost_wl_display_lock_without_input(display->wl.display, display->system->server_mutex);
+      display->events_pthread_is_active = false;
+    }
   }
 #endif
 
@@ -1588,9 +1597,11 @@ static void gwl_display_destroy(GWL_Display *display)
 #endif
 
 #ifdef USE_EVENT_BACKGROUND_THREAD
-  if (display->events_pthread) {
-    gwl_display_event_thread_destroy(display);
-    display->system->server_mutex->unlock();
+  if (!display->background) {
+    if (display->events_pthread) {
+      gwl_display_event_thread_destroy(display);
+      display->system->server_mutex->unlock();
+    }
   }
 
   /* Important to remove after the seats which may have key repeat timers active. */
@@ -1697,7 +1708,7 @@ using GWL_RegistryHandler_UpdateFn = void (*)(GWL_Display *display,
  * Remove callback for object registry.
  * \param display: The display which holes a reference to the global object.
  * \param user_data: Optional reference to a sub element of `display`,
- * use for outputs or seats for e.g. when the display may hold multiple references.
+ * use for outputs or seats, for example when the display may hold multiple references.
  * \param on_exit: Enabled when freeing on exit.
  * When true the consistency of references between objects should be kept valid.
  * Otherwise it can be assumed that all objects will be freed and none will be used again,
@@ -1857,13 +1868,13 @@ static void gwl_registry_entry_remove_all(GWL_Display *display)
  *
  * \param interface_slot_exclude: Skip updating slots of this type.
  * Note that while harmless dependencies only exist between different types,
- * so there is no reason to update all other outputs that an output was removed (for e.g.).
+ * so there is no reason to update all other outputs that an output was removed (for example).
  * Pass as -1 to update all slots.
  *
  * NOTE(@ideasman42): Updating all other items on a single change is typically worth avoiding.
  * In practice this isn't a problem as so there are so few elements in `display->registry_entry`,
  * so few use update functions and adding/removal at runtime is rarely called (plugging/unplugging)
- * hardware for e.g. So while it's possible to store dependency links to avoid unnecessary
+ * hardware for example So while it's possible to store dependency links to avoid unnecessary
  * looping over data - it ends up being a non issue.
  */
 static void gwl_registry_entry_update_all(GWL_Display *display, const int interface_slot_exclude)
@@ -2001,7 +2012,8 @@ static void ghost_wl_display_report_error(wl_display *display)
    * So in practice re-connecting to the display server isn't an option.
    *
    * Exit since leaving the process open will simply flood the output and do nothing.
-   * Although as the process is in a valid state, auto-save for e.g. is possible, see: #100855. */
+   * Although as the process is in a valid state, auto-save for example is possible, see: #100855.
+   */
   ::exit(-1);
 }
 
@@ -2018,9 +2030,9 @@ bool ghost_wl_display_report_error_if_set(wl_display *display)
 #ifdef __GNUC__
 static void ghost_wayland_log_handler(const char *msg, va_list arg)
     __attribute__((format(printf, 1, 0)));
+static void ghost_wayland_log_handler_background(const char *msg, va_list arg)
+    __attribute__((format(printf, 1, 0)));
 #endif
-
-static bool ghost_wayland_log_handler_is_background = false;
 
 /**
  * Callback for WAYLAND to run when there is an error.
@@ -2030,15 +2042,6 @@ static bool ghost_wayland_log_handler_is_background = false;
  */
 static void ghost_wayland_log_handler(const char *msg, va_list arg)
 {
-  /* This is fine in background mode, we will try to fall back to headless GPU context.
-   * Happens when render farm process runs without user login session. */
-  if (ghost_wayland_log_handler_is_background &&
-      (strstr(msg, "error: XDG_RUNTIME_DIR not set in the environment") ||
-       strstr(msg, "error: XDG_RUNTIME_DIR is invalid or not set in the environment")))
-  {
-    return;
-  }
-
   fprintf(stderr, "GHOST/Wayland: ");
   vfprintf(stderr, msg, arg); /* Includes newline. */
 
@@ -2048,10 +2051,23 @@ static void ghost_wayland_log_handler(const char *msg, va_list arg)
   }
 }
 
+/** A wrapper for #ghost_wayland_log_handler to be used when running in the background. */
+static void ghost_wayland_log_handler_background(const char *msg, va_list arg)
+{
+  /* This is fine in background mode, we will try to fall back to headless GPU context.
+   * Happens when render farm process runs without user login session. */
+  if (strstr(msg, "error: XDG_RUNTIME_DIR not set in the environment") ||
+      strstr(msg, "error: XDG_RUNTIME_DIR is invalid or not set in the environment"))
+  {
+    return;
+  }
+  ghost_wayland_log_handler(msg, arg);
+}
+
 #if defined(WITH_GHOST_X11) && defined(WITH_GHOST_WAYLAND_LIBDECOR)
 /**
  * Check if the system is running X11.
- * This is not intended to be a fool-proof check (the `DISPLAY` is not validated for e.g.).
+ * This is not intended to be a fool-proof check (the `DISPLAY` is not validated for example).
  * Just check `DISPLAY` is set and not-empty.
  */
 static bool ghost_wayland_is_x11_available()
@@ -2351,7 +2367,7 @@ static std::vector<std::string_view> gwl_clipboard_uri_ranges(const char *data_b
 {
   std::vector<std::string_view> uris;
   const char file_proto[] = "file://";
-  /* NOTE: some applications CRLF (`\r\n`) GTK3 for e.g. & others don't `pcmanfm-qt`.
+  /* NOTE: some applications CRLF (`\r\n`) GTK3 for example & others don't `pcmanfm-qt`.
    * So support both, once `\n` is found, strip the preceding `\r` if found. */
   const char lf = '\n';
 
@@ -2660,7 +2676,7 @@ static ssize_t read_exhaustive(const int fd, void *data, size_t nbytes)
 
 /**
  * Read from `fd` into a buffer which is returned.
- * Use for files where seeking to determine the final size isn't supported (pipes for e.g.).
+ * Use for files where seeking to determine the final size isn't supported (pipes for example).
  *
  * \return the buffer or null on failure.
  * On failure `errno` will be set.
@@ -4110,13 +4126,19 @@ static void pointer_handle_frame(void *data, wl_pointer * /*wl_pointer*/)
           }
 
           /* Done evaluating scroll input, generate the events. */
-
-          /* Discrete X axis currently unsupported. */
           if (ps.discrete_xy[0] || ps.discrete_xy[1]) {
+            if (ps.discrete_xy[0]) {
+              seat->system->pushEvent_maybe_pending(new GHOST_EventWheel(
+                  ps.has_event_ms ? ps.event_ms : seat->system->getMilliSeconds(),
+                  win,
+                  GHOST_kEventWheelAxisHorizontal,
+                  ps.discrete_xy[0]));
+            }
             if (ps.discrete_xy[1]) {
               seat->system->pushEvent_maybe_pending(new GHOST_EventWheel(
                   ps.has_event_ms ? ps.event_ms : seat->system->getMilliSeconds(),
                   win,
+                  GHOST_kEventWheelAxisVertical,
                   -ps.discrete_xy[1]));
             }
             ps.discrete_xy[0] = 0;
@@ -4482,7 +4504,7 @@ static const zwp_pointer_gesture_pinch_v1_listener gesture_pinch_listener = {
  * \note In both Gnome-Shell & KDE this gesture isn't emitted at time of writing,
  * instead, high resolution 2D #wl_pointer_listener.axis data is generated which works well.
  * There may be some situations where WAYLAND compositors generate this gesture
- * (swiping with 3+ fingers, for e.g.). So keep this to allow logging & testing gestures.
+ * (swiping with 3+ fingers, for example). So keep this to allow logging & testing gestures.
  * \{ */
 
 #ifdef ZWP_POINTER_GESTURE_SWIPE_V1_INTERFACE
@@ -4949,7 +4971,10 @@ static void tablet_tool_handle_frame(void *data,
         }
         case GWL_TabletTool_EventTypes::Wheel: {
           seat->system->pushEvent_maybe_pending(
-              new GHOST_EventWheel(event_ms, win, -tablet_tool->frame_pending.wheel.clicks));
+              new GHOST_EventWheel(event_ms,
+                                   win,
+                                   GHOST_kEventWheelAxisVertical,
+                                   -tablet_tool->frame_pending.wheel.clicks));
           break;
         }
       }
@@ -5343,14 +5368,27 @@ static bool xkb_compose_state_feed_and_get_utf8(
         const int utf8_buf_compose_len = xkb_compose_state_get_utf8(
             compose_state, utf8_buf_compose, sizeof(utf8_buf_compose));
         if (utf8_buf_compose_len > 0) {
-          memcpy(r_utf8_buf, utf8_buf_compose, utf8_buf_compose_len);
+          if (utf8_buf_compose_len > sizeof(GHOST_TEventKeyData::utf8_buf)) {
+            /* TODO(@ideasman42): keyboard events in GHOST only support a single character.
+             *
+             * - In the case XKB compose enters multiple code-points only the first will be used.
+             *
+             * - Besides supporting multiple characters per key input,
+             *   one possible solution would be to generate an IME event.
+             *
+             * - In practice I'm not sure how common these are.
+             *   So far no bugs have been reported about this.
+             */
+            CLOG_WARN(LOG, "key (compose_size=%d) exceeds the maximum size", utf8_buf_compose_len);
+          }
+          memcpy(r_utf8_buf, utf8_buf_compose, sizeof(GHOST_TEventKeyData::utf8_buf));
           handled = true;
         }
         break;
       }
       case XKB_COMPOSE_CANCELLED: {
         /* NOTE(@ideasman42): QT & GTK ignore these events as well as not inputting any text
-         * so `<Compose><Backspace>` for e.g. causes a cancel and *not* back-space.
+         * so `<Compose><Backspace>` for example causes a cancel and *not* back-space.
          * This isn't supported under GHOST at the moment.
          * The key-event could also be ignored but this means tracking held state of
          * keys wont work properly, so don't do any input and pass in the key-symbol. */
@@ -5745,6 +5783,9 @@ static const zwp_primary_selection_source_v1_listener primary_selection_source_l
 #ifdef WITH_INPUT_IME
 
 class GHOST_EventIME : public GHOST_Event {
+ protected:
+  GHOST_TEventImeData event_ime_data;
+
  public:
   /**
    * Constructor.
@@ -5752,10 +5793,16 @@ class GHOST_EventIME : public GHOST_Event {
    * \param type: The type of key event.
    * \param key: The key code of the key.
    */
-  GHOST_EventIME(uint64_t msec, GHOST_TEventType type, GHOST_IWindow *window, void *customdata)
+  GHOST_EventIME(uint64_t msec,
+                 GHOST_TEventType type,
+                 GHOST_IWindow *window,
+                 const GHOST_TEventImeData *customdata)
       : GHOST_Event(msec, type, window)
   {
-    this->m_data = customdata;
+    /* Make sure that we keep a copy of the IME input. Otherwise it might get lost
+     * because we overwrite it before it can be read in Blender. (See #137346). */
+    this->event_ime_data = *customdata;
+    this->m_data = &this->event_ime_data;
   }
 };
 
@@ -5819,9 +5866,7 @@ static void text_input_handle_preedit_string(void *data,
 
   seat->ime.composite_is_null = (text == nullptr);
   if (!seat->ime.composite_is_null) {
-    seat->ime.composite = text;
-    seat->ime.event_ime_data.composite = (void *)seat->ime.composite.c_str();
-    seat->ime.event_ime_data.composite_len = (void *)seat->ime.composite.size();
+    seat->ime.event_ime_data.composite = text;
 
     seat->ime.event_ime_data.cursor_position = cursor_begin;
     seat->ime.event_ime_data.target_start = cursor_begin;
@@ -5838,11 +5883,9 @@ static void text_input_handle_commit_string(void *data,
   CLOG_INFO(LOG, 2, "commit_string (text=\"%s\")", text ? text : "<null>");
 
   GWL_Seat *seat = static_cast<GWL_Seat *>(data);
-  seat->ime.result = text ? text : "";
   seat->ime.result_is_null = (text == nullptr);
-  seat->ime.event_ime_data.result = (void *)seat->ime.result.c_str();
-  seat->ime.event_ime_data.result_len = (void *)seat->ime.result.size();
-  seat->ime.event_ime_data.cursor_position = seat->ime.result.size();
+  seat->ime.event_ime_data.result = text ? text : "";
+  seat->ime.event_ime_data.cursor_position = seat->ime.event_ime_data.result.size();
 
   seat->ime.has_commit_string_callback = true;
 }
@@ -6257,7 +6300,7 @@ static void xdg_output_handle_logical_size(void *data,
   CLOG_INFO(LOG, 2, "logical_size [%d, %d]", width, height);
 
   GWL_Output *output = static_cast<GWL_Output *>(data);
-  if (output->size_logical[0] != 0 && output->size_logical[1] != 0) {
+  if (output->size_native[0] != 0 && output->size_native[1] != 0) {
     /* Original comment from SDL. */
     /* FIXME(@flibit): GNOME has a bug where the logical size does not account for
      * scale, resulting in bogus viewport sizes.
@@ -6265,9 +6308,8 @@ static void xdg_output_handle_logical_size(void *data,
      * Until this is fixed, validate that _some_ kind of scaling is being
      * done (we can't match exactly because fractional scaling can't be
      * detected otherwise), then override if necessary. */
-    if ((output->size_logical[0] == width) &&
-        (output->scale_fractional == (1 * FRACTIONAL_DENOMINATOR)))
-    {
+    int width_native = output->size_native[(output->transform & WL_OUTPUT_TRANSFORM_90) ? 1 : 0];
+    if ((width_native == width) && (output->scale_fractional == (1 * FRACTIONAL_DENOMINATOR))) {
       GHOST_PRINT("xdg_output scale did not match, overriding with wl_output scale\n");
 
 #ifdef USE_GNOME_CONFINE_HACK
@@ -6373,13 +6415,6 @@ static void output_handle_mode(void *data,
   GWL_Output *output = static_cast<GWL_Output *>(data);
   output->size_native[0] = width;
   output->size_native[1] = height;
-
-  /* Don't rotate this yet, `wl-output` coordinates are transformed in
-   * handle_done and `xdg-output` coordinates are pre-transformed. */
-  if (!output->has_size_logical) {
-    output->size_logical[0] = width;
-    output->size_logical[1] = height;
-  }
 }
 
 /**
@@ -6396,7 +6431,7 @@ static void output_handle_done(void *data, wl_output * /*wl_output*/)
 
   GWL_Output *output = static_cast<GWL_Output *>(data);
   int32_t size_native[2] = {UNPACK2(output->size_native)};
-  if (ELEM(output->transform, WL_OUTPUT_TRANSFORM_90, WL_OUTPUT_TRANSFORM_270)) {
+  if (output->transform & WL_OUTPUT_TRANSFORM_90) {
     std::swap(size_native[0], size_native[1]);
   }
 
@@ -7333,6 +7368,7 @@ static const wl_registry_listener registry_listener = {
 static void *gwl_display_event_thread_fn(void *display_voidp)
 {
   GWL_Display *display = static_cast<GWL_Display *>(display_voidp);
+  GHOST_ASSERT(!display->background, "Foreground only");
   const int fd = wl_display_get_fd(display->wl.display);
   while (display->events_pthread_is_active) {
     /* Wait for an event, this thread is dedicated to event handling. */
@@ -7355,18 +7391,20 @@ static void *gwl_display_event_thread_fn(void *display_voidp)
 /* Event reading thread. */
 static void gwl_display_event_thread_create(GWL_Display *display)
 {
+  GHOST_ASSERT(!display->background, "Foreground only");
   GHOST_ASSERT(display->events_pthread == 0, "Only call once");
   display->events_pending.reserve(events_pending_default_size);
   display->events_pthread_is_active = true;
   pthread_create(&display->events_pthread, nullptr, gwl_display_event_thread_fn, display);
   /* Application logic should take priority, this only ensures events don't accumulate when busy
-   * which typically takes a while (5+ seconds of frantic mouse motion for e.g.). */
+   * which typically takes a while (5+ seconds of frantic mouse motion for example). */
   pthread_set_min_priority(display->events_pthread);
   pthread_detach(display->events_pthread);
 }
 
 static void gwl_display_event_thread_destroy(GWL_Display *display)
 {
+  GHOST_ASSERT(!display->background, "Foreground only");
   pthread_cancel(display->events_pthread);
 }
 
@@ -7389,11 +7427,13 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
 #endif
       display_(new GWL_Display)
 {
-  ghost_wayland_log_handler_is_background = background;
-  wl_log_set_handler_client(ghost_wayland_log_handler);
+  wl_log_set_handler_client(background ? ghost_wayland_log_handler_background :
+                                         ghost_wayland_log_handler);
 
   display_->system = this;
+  display_->background = background;
   /* Connect to the Wayland server. */
+
   display_->wl.display = wl_display_connect(nullptr);
   if (!display_->wl.display) {
     display_destroy_and_free_all();
@@ -7444,7 +7484,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
     /* Ignore windowing requirements when running in background mode,
      * as it doesn't make sense to fall back to X11 because of windowing functionality
      * in background mode, also LIBDECOR is crashing in background mode `blender -b -f 1`
-     * for e.g. while it could be fixed, requiring the library at all makes no sense. */
+     * for example while it could be fixed, requiring the library at all makes no sense. */
     if (background) {
       libdecor_required = false;
     }
@@ -7488,8 +7528,6 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
     }
   }
   else
-#else
-  (void)background;
 #endif
   {
     const GWL_XDG_Decor_System &decor = *display_->xdg_decor;
@@ -7506,8 +7544,16 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
   wl_display_roundtrip(display_->wl.display);
 
 #ifdef USE_EVENT_BACKGROUND_THREAD
-  gwl_display_event_thread_create(display_);
-
+  /* There is no need for an event handling thread in background mode
+   * because there no polling for user input. */
+  if (background) {
+    GHOST_ASSERT(display_->events_pthread_is_active == false, "Expected to be false");
+  }
+  else {
+    gwl_display_event_thread_create(display_);
+  }
+  /* Could be null in background mode, however there are enough
+   * references to this that it's safer to create it. */
   display_->ghost_timer_manager = new GHOST_TimerManager();
 #endif
 }
@@ -7556,7 +7602,7 @@ bool GHOST_SystemWayland::processEvents(bool waitForEvent)
     }
   }
 
-  {
+  if (!display_->background) {
     std::lock_guard lock{display_->events_pending_mutex};
     for (const GHOST_IEvent *event : display_->events_pending) {
 
@@ -8320,7 +8366,7 @@ void GHOST_SystemWayland::getMainDisplayDimensions(uint32_t &width, uint32_t &he
     /* We assume first output as main. */
     const GWL_Output *output = display_->outputs[0];
     int32_t size_native[2] = {UNPACK2(output->size_native)};
-    if (ELEM(output->transform, WL_OUTPUT_TRANSFORM_90, WL_OUTPUT_TRANSFORM_270)) {
+    if (output->transform & WL_OUTPUT_TRANSFORM_90) {
       std::swap(size_native[0], size_native[1]);
     }
     width = uint32_t(size_native[0]);
@@ -8344,7 +8390,7 @@ void GHOST_SystemWayland::getAllDisplayDimensions(uint32_t &width, uint32_t &hei
         xy[0] = output->position_logical[0];
         xy[1] = output->position_logical[1];
       }
-      if (ELEM(output->transform, WL_OUTPUT_TRANSFORM_90, WL_OUTPUT_TRANSFORM_270)) {
+      if (output->transform & WL_OUTPUT_TRANSFORM_90) {
         std::swap(size_native[0], size_native[1]);
       }
       xy_min[0] = std::min(xy_min[0], xy[0]);
@@ -8692,7 +8738,7 @@ GHOST_TSuccess GHOST_SystemWayland::cursor_shape_custom_set(const uint8_t *bitma
     cursor->custom_scale = std::max(1, (output_scale * custom_size) / target_size);
     /* It would make more sense to adjust the buffer size instead of the scale.
      * In practice with custom cursors of 16x16, 24x24 & 32x32 its only likely to cause
-     * problems with odd-scaling (HI-DPI scale of 300% or 500% for e.g.).
+     * problems with odd-scaling (HI-DPI scale of 300% or 500% for example).
      * In these cases the custom cursor will be a little too large. */
     while ((cursor->custom_scale > 1) &&
            !((sizex % cursor->custom_scale) == 0 && (sizey % cursor->custom_scale) == 0))
@@ -8775,7 +8821,7 @@ GHOST_TCapabilityFlag GHOST_SystemWayland::getCapabilities() const
            * and it's not even requirement - so we can't rely on this feature being supported.
            *
            * Instead of assuming this is not supported, the graphics card driver could be inspected
-           * (enable for NVIDIA for e.g.), but the advantage in supporting this is minimal.
+           * (enable for NVIDIA for example), but the advantage in supporting this is minimal.
            * In practice it means an off-screen buffer is used to redraw the window for the
            * screen-shot and eye-dropper sampling logic, both operations where the overhead
            * is negligible. */
@@ -8980,7 +9026,7 @@ zwp_pointer_gestures_v1 *GHOST_SystemWayland::wp_pointer_gestures_get()
 /* This value is expected to match the base name of the `.desktop` file. see #101805.
  *
  * NOTE: the XDG desktop-entry-spec defines that this should follow the "reverse DNS" convention.
- * For e.g. `org.blender.Blender` - however the `.desktop` file distributed with Blender is
+ * For example `org.blender.Blender` - however the `.desktop` file distributed with Blender is
  * simply called `blender.desktop`, so the it's important to follow that name.
  * Other distributions such as SNAP & FLATPAK may need to change this value #101779.
  * Currently there isn't a way to configure this, we may want to support that. */
@@ -9230,6 +9276,7 @@ uint64_t GHOST_SystemWayland::ms_from_input_time(const uint32_t timestamp_as_uin
 GHOST_TSuccess GHOST_SystemWayland::pushEvent_maybe_pending(const GHOST_IEvent *event)
 {
 #ifdef USE_EVENT_BACKGROUND_THREAD
+  GHOST_ASSERT(!display_->background, "Foreground only");
   if (main_thread_id != std::this_thread::get_id()) {
     std::lock_guard lock{display_->events_pending_mutex};
     display_->events_pending.push_back(event);

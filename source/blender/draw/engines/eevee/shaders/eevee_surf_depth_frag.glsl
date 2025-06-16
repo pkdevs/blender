@@ -14,7 +14,7 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_surf_depth)
 
 #include "draw_curves_lib.glsl"
 #include "draw_view_lib.glsl"
-#include "eevee_nodetree_lib.glsl"
+#include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_sampling_lib.glsl"
 #include "eevee_surf_lib.glsl"
 #include "eevee_transparency_lib.glsl"
@@ -50,7 +50,7 @@ void main()
 
   float transparency = average(g_transmittance);
   if (transparency > threshold) {
-    discard;
+    gpu_discard_fragment();
     return;
   }
 #endif
@@ -60,7 +60,7 @@ void main()
    * This would in turn create a discrepancy between the pre-pass depth and the G-buffer depth
    * which exhibits missing pixels data. */
   if (clip_interp.clip_distance > 0.0f) {
-    discard;
+    gpu_discard_fragment();
     return;
   }
 #endif

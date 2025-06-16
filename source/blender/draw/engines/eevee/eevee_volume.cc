@@ -31,7 +31,7 @@ void VolumeModule::init()
   int tile_size = clamp_i(scene_eval->eevee.volumetric_tile_size, 1, 16);
 
   int3 tex_size;
-  /* Try to match resolution setting but fallback to lower resolution
+  /* Try to match resolution setting but fall back to lower resolution
    * if it doesn't fit the hardware limits. */
   for (; tile_size <= 16; tile_size *= 2) {
     /* Find Froxel Texture resolution. */
@@ -99,9 +99,14 @@ void VolumeModule::object_sync(const ObjectHandle &ob_handle)
   }
 }
 
+bool VolumeModule::will_enable() const
+{
+  return inst_.world.has_volume() || !current_objects_.is_empty();
+}
+
 void VolumeModule::end_sync()
 {
-  enabled_ = inst_.world.has_volume() || !current_objects_.is_empty();
+  enabled_ = will_enable();
 
   const Scene *scene_eval = inst_.scene;
 
@@ -228,7 +233,7 @@ void VolumeModule::end_sync()
 
   eGPUTextureUsage front_depth_usage = GPU_TEXTURE_USAGE_SHADER_READ |
                                        GPU_TEXTURE_USAGE_ATTACHMENT;
-  front_depth_tx_.ensure_2d(GPU_DEPTH24_STENCIL8, data_.tex_size.xy(), front_depth_usage);
+  front_depth_tx_.ensure_2d(GPU_DEPTH32F_STENCIL8, data_.tex_size.xy(), front_depth_usage);
   occupancy_fb_.ensure(GPU_ATTACHMENT_TEXTURE(front_depth_tx_));
 
   bool created = false;

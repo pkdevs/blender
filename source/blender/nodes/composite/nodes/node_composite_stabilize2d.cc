@@ -66,7 +66,7 @@ static void node_composit_buts_stabilize2d(uiLayout *layout, bContext *C, Pointe
     return;
   }
 
-  uiItemR(layout, ptr, "filter_type", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  layout->prop(ptr, "filter_type", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 }
 
 using namespace blender::compositor;
@@ -114,6 +114,7 @@ class Stabilize2DOperation : public NodeOperation {
         return Interpolation::Nearest;
       case CMP_NODE_INTERPOLATION_BILINEAR:
         return Interpolation::Bilinear;
+      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
       case CMP_NODE_INTERPOLATION_BICUBIC:
         return Interpolation::Bicubic;
     }
@@ -140,7 +141,7 @@ static NodeOperation *get_compositor_operation(Context &context, DNode node)
 
 }  // namespace blender::nodes::node_composite_stabilize2d_cc
 
-void register_node_type_cmp_stabilize2d()
+static void register_node_type_cmp_stabilize2d()
 {
   namespace file_ns = blender::nodes::node_composite_stabilize2d_cc;
 
@@ -158,3 +159,4 @@ void register_node_type_cmp_stabilize2d()
 
   blender::bke::node_register_type(ntype);
 }
+NOD_REGISTER_NODE(register_node_type_cmp_stabilize2d)

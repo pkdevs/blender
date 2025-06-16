@@ -27,6 +27,7 @@
 
 #include "NOD_geometry_nodes_log.hh"
 #include "NOD_multi_function.hh"
+#include "NOD_nested_node_id.hh"
 
 #include "BLI_compute_context.hh"
 #include "BLI_math_quaternion_types.hh"
@@ -207,6 +208,7 @@ struct GeoNodesOperatorData {
   int active_point_index = -1;
   int active_edge_index = -1;
   int active_face_index = -1;
+  int active_layer_index = -1;
 };
 
 struct GeoNodesCallData {
@@ -218,7 +220,7 @@ struct GeoNodesCallData {
    * Optional logger that keeps track of data generated during evaluation to allow for better
    * debugging afterwards.
    */
-  geo_eval_log::GeoModifierLog *eval_log = nullptr;
+  geo_eval_log::GeoNodesLog *eval_log = nullptr;
   /**
    * Optional injected behavior for simulations.
    */
@@ -258,9 +260,9 @@ struct GeoNodesCallData {
 };
 
 /**
- * Custom user data that is passed to every geometry nodes related lazy-function evaluation.
+ * Custom user data that can be passed to every geometry nodes related evaluation.
  */
-struct GeoNodesLFUserData : public lf::UserData {
+struct GeoNodesUserData : public fn::UserData {
   /**
    * Data provided by the root caller of geometry nodes.
    */
@@ -275,10 +277,10 @@ struct GeoNodesLFUserData : public lf::UserData {
    */
   bool log_socket_values = true;
 
-  destruct_ptr<lf::LocalUserData> get_local(LinearAllocator<> &allocator) override;
+  destruct_ptr<fn::LocalUserData> get_local(LinearAllocator<> &allocator) override;
 };
 
-struct GeoNodesLFLocalUserData : public lf::LocalUserData {
+struct GeoNodesLocalUserData : public fn::LocalUserData {
  private:
   /**
    * Thread-local logger for the current node tree in the current compute context. It is only
@@ -287,13 +289,13 @@ struct GeoNodesLFLocalUserData : public lf::LocalUserData {
   mutable std::optional<geo_eval_log::GeoTreeLogger *> tree_logger_;
 
  public:
-  GeoNodesLFLocalUserData(GeoNodesLFUserData & /*user_data*/) {}
+  GeoNodesLocalUserData(GeoNodesUserData & /*user_data*/) {}
 
   /**
    * Get the current tree logger. This method is not thread-safe, each thread is supposed to have
    * a separate logger.
    */
-  geo_eval_log::GeoTreeLogger *try_get_tree_logger(const GeoNodesLFUserData &user_data) const
+  geo_eval_log::GeoTreeLogger *try_get_tree_logger(const GeoNodesUserData &user_data) const
   {
     if (!tree_logger_.has_value()) {
       this->ensure_tree_logger(user_data);
@@ -302,7 +304,7 @@ struct GeoNodesLFLocalUserData : public lf::LocalUserData {
   }
 
  private:
-  void ensure_tree_logger(const GeoNodesLFUserData &user_data) const;
+  void ensure_tree_logger(const GeoNodesUserData &user_data) const;
 };
 
 /**
@@ -460,14 +462,7 @@ std::string make_anonymous_attribute_socket_inspection_string(const bNodeSocket 
 std::string make_anonymous_attribute_socket_inspection_string(StringRef node_name,
                                                               StringRef socket_name);
 
-struct FoundNestedNodeID {
-  int id;
-  bool is_in_simulation = false;
-  bool is_in_loop = false;
-  bool is_in_closure = false;
-};
-
-std::optional<FoundNestedNodeID> find_nested_node_id(const GeoNodesLFUserData &user_data,
+std::optional<FoundNestedNodeID> find_nested_node_id(const GeoNodesUserData &user_data,
                                                      const int node_id);
 
 /**
@@ -496,8 +491,8 @@ class ScopedComputeContextTimer {
   ~ScopedComputeContextTimer()
   {
     const geo_eval_log::TimePoint end = geo_eval_log::Clock::now();
-    auto &user_data = static_cast<GeoNodesLFUserData &>(*context_.user_data);
-    auto &local_user_data = static_cast<GeoNodesLFLocalUserData &>(*context_.local_user_data);
+    auto &user_data = static_cast<GeoNodesUserData &>(*context_.user_data);
+    auto &local_user_data = static_cast<GeoNodesLocalUserData &>(*context_.local_user_data);
     if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data))
     {
       tree_logger->execution_time += (end - start_);
@@ -523,8 +518,8 @@ class ScopedNodeTimer {
   ~ScopedNodeTimer()
   {
     const geo_eval_log::TimePoint end = geo_eval_log::Clock::now();
-    auto &user_data = static_cast<GeoNodesLFUserData &>(*context_.user_data);
-    auto &local_user_data = static_cast<GeoNodesLFLocalUserData &>(*context_.local_user_data);
+    auto &user_data = static_cast<GeoNodesUserData &>(*context_.user_data);
+    auto &local_user_data = static_cast<GeoNodesLocalUserData &>(*context_.local_user_data);
     if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data))
     {
       tree_logger->node_execution_times.append(*tree_logger->allocator,
@@ -533,7 +528,7 @@ class ScopedNodeTimer {
   }
 };
 
-bool should_log_socket_values_for_context(const GeoNodesLFUserData &user_data,
+bool should_log_socket_values_for_context(const GeoNodesUserData &user_data,
                                           const ComputeContextHash hash);
 
 /**
@@ -650,5 +645,15 @@ std::string zone_wrapper_output_name(const ZoneBuildInfo &zone_info,
 const LazyFunction *build_implicit_conversion_lazy_function(const bke::bNodeSocketType &from_type,
                                                             const bke::bNodeSocketType &to_type,
                                                             ResourceScope &scope);
+
+/**
+ * Report an error from a multi-function evaluation within a Geometry Nodes evaluation.
+ *
+ * NOTE: Currently, this the error is only actually reported under limited circumstances. It's
+ * still safe to call this function from any multi-function though.
+ */
+void report_from_multi_function(const mf::Context &context,
+                                NodeWarningType type,
+                                std::string message);
 
 }  // namespace blender::nodes

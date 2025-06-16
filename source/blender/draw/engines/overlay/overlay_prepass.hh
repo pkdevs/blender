@@ -39,6 +39,7 @@ class ImagePrepass : Overlay {
     ps_.init();
     ps_.state_set(DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_ALWAYS);
     ps_.shader_set(res.shaders->mesh_edit_depth.get());
+    ps_.push_constant("retopology_offset", 0.0f);
     ps_.draw(res.shapes.image_quad.get());
   }
 
@@ -146,8 +147,7 @@ class Prepass : Overlay {
             /* Case where the render engine should have rendered it, but we need to draw it for
              * selection purpose. */
             if (handle.raw == 0u) {
-              handle = manager.resource_handle_for_psys(ob_ref,
-                                                        DRW_particles_dupli_matrix_get(ob_ref));
+              handle = manager.resource_handle_for_psys(ob_ref, ob_ref.particles_matrix());
             }
 
             select::ID select_id = use_material_slot_selection_ ?
@@ -168,7 +168,7 @@ class Prepass : Overlay {
 
   void sculpt_sync(Manager &manager, const ObjectRef &ob_ref, Resources &res)
   {
-    ResourceHandle handle = manager.resource_handle_for_sculpt(ob_ref);
+    ResourceHandle handle = manager.unique_handle_for_sculpt(ob_ref);
 
     for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, SCULPT_BATCH_DEFAULT)) {
       select::ID select_id = use_material_slot_selection_ ?

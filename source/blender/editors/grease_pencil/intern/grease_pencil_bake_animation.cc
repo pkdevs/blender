@@ -77,19 +77,21 @@ static Vector<Object *> get_bake_targets(bContext &C, Depsgraph &depsgraph, Scen
   Vector<Object *> bake_targets;
   Object *active_object = CTX_data_active_object(&C);
 
+  DupliList duplilist;
+
   if (active_object->type == OB_GREASE_PENCIL) {
     bake_targets.append(active_object);
   }
   else if (active_object->type == OB_EMPTY) {
-    ListBase *lb = object_duplilist(&depsgraph, &scene, active_object);
-    LISTBASE_FOREACH (DupliObject *, duplicate_object, lb) {
-      if (duplicate_object->ob->type != OB_GREASE_PENCIL) {
+    object_duplilist(&depsgraph, &scene, active_object, nullptr, duplilist);
+    for (DupliObject &duplicate_object : duplilist) {
+      if (duplicate_object.ob->type != OB_GREASE_PENCIL) {
         continue;
       }
 
-      bake_targets.append(duplicate_object->ob);
+      bake_targets.append(duplicate_object.ob);
     }
-    free_object_duplilist(lb);
+    duplilist.clear();
   }
 
   CTX_DATA_BEGIN (&C, Object *, object, selected_objects) {
@@ -101,15 +103,15 @@ static Vector<Object *> get_bake_targets(bContext &C, Depsgraph &depsgraph, Scen
       bake_targets.append(object);
     }
     else if (object->type == OB_EMPTY) {
-      ListBase *lb = object_duplilist(&depsgraph, &scene, active_object);
-      LISTBASE_FOREACH (DupliObject *, duplicate_object, lb) {
-        if (duplicate_object->ob->type != OB_GREASE_PENCIL) {
+      object_duplilist(&depsgraph, &scene, active_object, nullptr, duplilist);
+      for (DupliObject &duplicate_object : duplilist) {
+        if (duplicate_object.ob->type != OB_GREASE_PENCIL) {
           continue;
         }
 
-        bake_targets.append(duplicate_object->ob);
+        bake_targets.append(duplicate_object.ob);
       }
-      free_object_duplilist(lb);
+      duplilist.clear();
     }
   }
   CTX_DATA_END;
@@ -170,7 +172,7 @@ static wmOperatorStatus bake_grease_pencil_animation_exec(bContext *C, wmOperato
   WM_cursor_wait(true);
 
   GreasePencil &target = *static_cast<GreasePencil *>(target_object->data);
-  Object *target_object_eval = DEG_get_evaluated_object(&depsgraph, target_object);
+  Object *target_object_eval = DEG_get_evaluated(&depsgraph, target_object);
 
   std::optional<Set<int>> keyframes;
   if (only_selected) {
@@ -192,7 +194,7 @@ static wmOperatorStatus bake_grease_pencil_animation_exec(bContext *C, wmOperato
     BKE_scene_graph_update_for_newframe(&depsgraph);
 
     for (Object *source_object : bake_targets) {
-      Object *source_object_eval = DEG_get_evaluated_object(&depsgraph, source_object);
+      Object *source_object_eval = DEG_get_evaluated(&depsgraph, source_object);
       GreasePencil &source_eval_grease_pencil = *static_cast<GreasePencil *>(
           source_object_eval->data);
       const float4x4 to_target = source_object_eval->object_to_world() * target_imat;

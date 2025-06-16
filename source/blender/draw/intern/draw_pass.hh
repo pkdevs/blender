@@ -50,6 +50,7 @@
 #include "GPU_debug.hh"
 #include "GPU_index_buffer.hh"
 #include "GPU_material.hh"
+#include "GPU_pass.hh"
 
 #include "DRW_gpu_wrapper.hh"
 
@@ -58,8 +59,6 @@
 #include "draw_manager.hh"
 #include "draw_shader_shared.hh"
 #include "draw_state.hh"
-
-#include "intern/gpu_codegen.hh"
 
 #include <cstdint>
 #include <sstream>
@@ -244,7 +243,9 @@ class PassBase {
    * push_constant() call will use its interface.
    * IMPORTANT: Assumes material is compiled and can be used (no compilation error).
    */
-  void material_set(Manager &manager, GPUMaterial *material);
+  void material_set(Manager &manager,
+                    GPUMaterial *material,
+                    bool deferred_texture_loading = false);
 
   /**
    * Record a draw call.
@@ -467,6 +468,12 @@ class PassBase {
    */
   command::Undetermined &create_command(command::Type type);
 
+  /**
+   * Make sure the shader specialization constants are already compiled.
+   * This avoid stalling the real submission call because of specialization.
+   */
+  void warm_shader_specialization(command::RecordingState &state) const;
+
   void submit(command::RecordingState &state) const;
 
   bool has_generated_commands() const
@@ -679,6 +686,61 @@ template<class T> inline PassBase<T> &PassBase<T>::sub(const char *name)
   return sub_passes_[index];
 }
 
+template<class T>
+void PassBase<T>::warm_shader_specialization(command::RecordingState &state) const
+{
+  GPU_debug_group_begin("warm_shader_specialization");
+  GPU_debug_group_begin(this->debug_name);
+
+  for (const command::Header &header : headers_) {
+    switch (header.type) {
+      default:
+      case Type::None:
+        break;
+      case Type::SubPass:
+        sub_passes_[header.index].warm_shader_specialization(state);
+        break;
+      case command::Type::FramebufferBind:
+        break;
+      case command::Type::SubPassTransition:
+        break;
+      case command::Type::ShaderBind:
+        commands_[header.index].shader_bind.execute(state);
+        break;
+      case command::Type::ResourceBind:
+        break;
+      case command::Type::PushConstant:
+        break;
+      case command::Type::SpecializeConstant:
+        commands_[header.index].specialize_constant.execute(state);
+        break;
+      case command::Type::Draw:
+        break;
+      case command::Type::DrawMulti:
+        break;
+      case command::Type::DrawIndirect:
+        break;
+      case command::Type::Dispatch:
+        break;
+      case command::Type::DispatchIndirect:
+        break;
+      case command::Type::Barrier:
+        break;
+      case command::Type::Clear:
+        break;
+      case command::Type::ClearMulti:
+        break;
+      case command::Type::StateSet:
+        break;
+      case command::Type::StencilSet:
+        break;
+    }
+  }
+
+  GPU_debug_group_end();
+  GPU_debug_group_end();
+}
+
 template<class T> void PassBase<T>::submit(command::RecordingState &state) const
 {
   if (headers_.is_empty()) {
@@ -711,7 +773,7 @@ template<class T> void PassBase<T>::submit(command::RecordingState &state) const
         commands_[header.index].push_constant.execute(state);
         break;
       case command::Type::SpecializeConstant:
-        commands_[header.index].specialize_constant.execute();
+        commands_[header.index].specialize_constant.execute(state);
         break;
       case command::Type::Draw:
         commands_[header.index].draw.execute(state);
@@ -1056,7 +1118,10 @@ inline void PassBase<T>::subpass_transition(GPUAttachmentState depth_attachment,
                                                                  color_states[7]}};
 }
 
-template<class T> inline void PassBase<T>::material_set(Manager &manager, GPUMaterial *material)
+template<class T>
+inline void PassBase<T>::material_set(Manager &manager,
+                                      GPUMaterial *material,
+                                      bool deferred_texture_loading)
 {
   GPUPass *gpupass = GPU_material_get_pass(material);
   shader_set(GPU_pass_shader_get(gpupass));
@@ -1068,15 +1133,31 @@ template<class T> inline void PassBase<T>::material_set(Manager &manager, GPUMat
       /* Image */
       const bool use_tile_mapping = tex->tiled_mapping_name[0];
       ImageUser *iuser = tex->iuser_available ? &tex->iuser : nullptr;
-      ImageGPUTextures gputex = BKE_image_get_gpu_material_texture(
-          tex->ima, iuser, use_tile_mapping);
 
-      manager.acquire_texture(gputex.texture);
-      bind_texture(tex->sampler_name, gputex.texture, tex->sampler_state);
+      ImageGPUTextures gputex;
+      if (deferred_texture_loading) {
+        gputex = BKE_image_get_gpu_material_texture_try(tex->ima, iuser, use_tile_mapping);
+      }
+      else {
+        gputex = BKE_image_get_gpu_material_texture(tex->ima, iuser, use_tile_mapping);
+      }
 
-      if (gputex.tile_mapping) {
-        manager.acquire_texture(gputex.tile_mapping);
-        bind_texture(tex->tiled_mapping_name, gputex.tile_mapping, tex->sampler_state);
+      if (*gputex.texture == nullptr) {
+        /* Texture not yet loaded. Register a reference inside the draw pass.
+         * The texture will be acquired once it is created. */
+        bind_texture(tex->sampler_name, gputex.texture, tex->sampler_state);
+        if (gputex.tile_mapping) {
+          bind_texture(tex->tiled_mapping_name, gputex.tile_mapping, tex->sampler_state);
+        }
+      }
+      else {
+        /* Texture is loaded. Acquire. */
+        manager.acquire_texture(*gputex.texture);
+        bind_texture(tex->sampler_name, *gputex.texture, tex->sampler_state);
+        if (gputex.tile_mapping) {
+          manager.acquire_texture(*gputex.tile_mapping);
+          bind_texture(tex->tiled_mapping_name, *gputex.tile_mapping, tex->sampler_state);
+        }
       }
     }
     else if (tex->colorband) {

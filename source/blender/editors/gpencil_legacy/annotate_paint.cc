@@ -1716,21 +1716,24 @@ static void annotation_paint_cleanup(tGPsdata *p)
 /* ------------------------------- */
 
 /* Helper callback for drawing the cursor itself */
-static void annotation_draw_eraser(
-    bContext * /*C*/, int x, int y, float /*x_tilt*/, float /*y_tilt*/, void *p_ptr)
+static void annotation_draw_eraser(bContext * /*C*/,
+                                   const blender::int2 &xy,
+                                   const blender::float2 & /*tilt*/,
+                                   void *p_ptr)
 {
   tGPsdata *p = (tGPsdata *)p_ptr;
 
   if (p->paintmode == GP_PAINTMODE_ERASER) {
     GPUVertFormat *format = immVertexFormat();
-    const uint shdr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    const uint shdr_pos = GPU_vertformat_attr_add(
+        format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
     GPU_line_smooth(true);
     GPU_blend(GPU_BLEND_ALPHA);
 
     immUniformColor4ub(255, 100, 100, 20);
-    imm_draw_circle_fill_2d(shdr_pos, x, y, p->radius, 40);
+    imm_draw_circle_fill_2d(shdr_pos, xy[0], xy[1], p->radius, 40);
 
     immUnbindProgram();
 
@@ -1746,8 +1749,8 @@ static void annotation_draw_eraser(
     immUniform1f("udash_factor", 0.5f);
 
     imm_draw_circle_wire_2d(shdr_pos,
-                            x,
-                            y,
+                            xy.x,
+                            xy.y,
                             p->radius,
                             /* XXX Dashed shader gives bad results with sets of small segments
                              * currently, temp hack around the issue. :( */
@@ -1777,8 +1780,10 @@ static void annotation_draw_toggle_eraser_cursor(tGPsdata *p, short enable)
                                                p);
   }
 }
-static void annotation_draw_stabilizer(
-    bContext *C, int x, int y, float /*x_tilt*/, float /*y_tilt*/, void *p_ptr)
+static void annotation_draw_stabilizer(bContext *C,
+                                       const blender::int2 &xy,
+                                       const blender::float2 & /*tilt*/,
+                                       void *p_ptr)
 {
   ARegion *region = CTX_wm_region(C);
   tGPsdata *p = (tGPsdata *)p_ptr;
@@ -1791,7 +1796,7 @@ static void annotation_draw_stabilizer(
   const tGPspoint *pt = &points[totpoints - 1];
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   GPU_line_smooth(true);
   GPU_blend(GPU_BLEND_ALPHA);
@@ -1804,18 +1809,18 @@ static void annotation_draw_stabilizer(
 
   /* Inner Ring: Color from UI panel */
   immUniformColor4f(color[0], color[1], color[2], 0.8f);
-  imm_draw_circle_wire_2d(pos, x, y, radius, 40);
+  imm_draw_circle_wire_2d(pos, xy.x, xy.y, radius, 40);
 
   /* Outer Ring: Dark color for contrast on light backgrounds (e.g. gray on white) */
   mul_v3_v3fl(darkcolor, color, 0.40f);
   immUniformColor4f(darkcolor[0], darkcolor[1], darkcolor[2], 0.8f);
-  imm_draw_circle_wire_2d(pos, x, y, radius + 1, 40);
+  imm_draw_circle_wire_2d(pos, xy.x, xy.y, radius + 1, 40);
 
   /* Rope Simple. */
   immUniformColor4f(color[0], color[1], color[2], 0.8f);
   immBegin(GPU_PRIM_LINES, 2);
   immVertex2f(pos, pt->m_xy[0] + region->winrct.xmin, pt->m_xy[1] + region->winrct.ymin);
-  immVertex2f(pos, x, y);
+  immVertex2fv(pos, blender::float2(xy));
   immEnd();
 
   /* Returns back all GPU settings */
@@ -2758,7 +2763,7 @@ void GPENCIL_OT_annotate(wmOperatorType *ot)
   ot->idname = "GPENCIL_OT_annotate";
   ot->description = "Make annotations on the active data";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = annotation_draw_exec;
   ot->invoke = annotation_draw_invoke;
   ot->modal = annotation_draw_modal;

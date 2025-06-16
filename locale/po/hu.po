@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'1f4cae0c4623')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'6ccdb8c06e27')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-28 09:32+0000\n"
+"POT-Creation-Date: 2025-06-16 10:45+0000\n"
 "PO-Revision-Date: 2025-04-14 08:24+0000\n"
 "Last-Translator: Balázs Füvesi <fuvesib@gmail.com>\n"
 "Language-Team: Hungarian <https://translate.blender.org/projects/blender-ui/ui/hu/>\n"
@@ -1066,6 +1066,10 @@ msgstr "Egyenes"
 
 msgid "Children"
 msgstr "Gyermek"
+
+
+msgid "Wire"
+msgstr "Drótváz"
 
 
 msgid "Length"
@@ -2695,10 +2699,6 @@ msgid "Target Z"
 msgstr "Célobjektum Z"
 
 
-msgid "Target's Z axis, not World Z axis, will constraint the Up direction"
-msgstr "A felfelé írány kényszerítése a célobjektum Z-tengelye által"
-
-
 msgid "From Maximum X"
 msgstr "Maximum X-től"
 
@@ -4039,10 +4039,6 @@ msgstr "Csoportok"
 
 msgid "Layers"
 msgstr "Rétegek"
-
-
-msgid "Wire"
-msgstr "Drótváz"
 
 
 msgid "Exclusion"
@@ -6589,20 +6585,12 @@ msgid "Mask"
 msgstr "Maszk"
 
 
-msgid "Show/Hide"
-msgstr "Mutat/Rejt"
-
-
-msgid "Apply"
-msgstr "Elfogadás"
-
-
 msgid "Clean Up"
 msgstr "Tisztítás"
 
 
-msgid "Merge"
-msgstr "Összefésülés"
+msgid "Show/Hide"
+msgstr "Mutat/Rejt"
 
 
 msgid "Text"
@@ -6613,36 +6601,44 @@ msgid "Metaball"
 msgstr "Meta test"
 
 
-msgid "Mirror"
-msgstr "Tükrözés"
-
-
-msgid "Local View"
-msgstr "Helyi nézet"
-
-
-msgid "Navigation"
-msgstr "Navigáció"
-
-
-msgid "Align View"
-msgstr "Nézet igazítása"
-
-
-msgid "Light"
-msgstr "Fényforrás"
+msgid "Merge"
+msgstr "Összefésülés"
 
 
 msgid "Relations"
 msgstr "Kapcsolatok"
 
 
-msgid "Rigid Body"
-msgstr "Szilárd test"
+msgid "Light"
+msgstr "Fényforrás"
 
 
 msgid "Track"
 msgstr "Nyom"
+
+
+msgid "Apply"
+msgstr "Elfogadás"
+
+
+msgid "Rigid Body"
+msgstr "Szilárd test"
+
+
+msgid "Local View"
+msgstr "Helyi nézet"
+
+
+msgid "Align View"
+msgstr "Nézet igazítása"
+
+
+msgid "Navigation"
+msgstr "Navigáció"
+
+
+msgid "Mirror"
+msgstr "Tükrözés"
 
 
 msgctxt "MovieClip"
@@ -9180,6 +9176,10 @@ msgstr "Egységek"
 
 msgid "Markers"
 msgstr "Markerek"
+
+
+msgid "Starting"
+msgstr "Induló"
 
 
 msgid "Blending"
@@ -12016,11 +12016,6 @@ msgstr "Alfa takarás"
 
 
 msgctxt "Sequence"
-msgid "Gamma Cross"
-msgstr "Gamma keresztezés"
-
-
-msgctxt "Sequence"
 msgid "Multiply"
 msgstr "Többszörözés"
 
@@ -12675,10 +12670,6 @@ msgid "Remove"
 msgstr "Eltávolítás"
 
 
-msgid "Save a Collada file"
-msgstr "Collada fájl mentése"
-
-
 msgid "Only export deforming bones with armatures"
 msgstr "Csak a deformáló csontok exportálása a csontvázzal"
 
@@ -12741,10 +12732,6 @@ msgstr "Sokszorosított objektumok helyettesítése azonos adatból"
 
 msgid "Copy textures to same folder where the .dae file is exported"
 msgstr "Textúrák másolása ugyanabba a mappába, ahova a .dae fájl"
-
-
-msgid "Load a Collada file"
-msgstr "Egy Collada fájl megnyitása"
 
 
 msgid "Import Units"
@@ -13457,22 +13444,6 @@ msgid "Overall sensitivity of the 3D Mouse for panning"
 msgstr "Általános érzékenysége a 3D-s egérnek pásztázáskor"
 
 
-msgid "Rotation style in the viewport"
-msgstr "Forgatás stílusa a 3D nézetben"
-
-
-msgid "Turntable"
-msgstr "Forgókorong"
-
-
-msgid "Use turntable style rotation in the viewport"
-msgstr "Forgókorong stílus használata a nézet forgatásához"
-
-
-msgid "Use trackball style rotation in the viewport"
-msgstr "Hanyattegér stílus használata a nézet forgatásához"
-
-
 msgid "Auto Perspective"
 msgstr "Automatikus perspektíva"
 
@@ -13515,6 +13486,10 @@ msgstr "Kijelölés használata a nézetforgatás középpontjaként"
 
 msgid "Zoom in towards the mouse pointer's position in the 3D view, rather than the 2D window center"
 msgstr "Zoomolás az egérmutató pozíciója felé 3D Nézetben, inkább mint a 2D-s ablak közepe felé"
+
+
+msgid "Turntable"
+msgstr "Forgókorong"
 
 
 msgid "Axis of mouse movement to zoom in or out on"
@@ -13847,10 +13822,6 @@ msgstr "Csak másodperc"
 
 msgid "Direct conversion of frame numbers to seconds"
 msgstr "A képkockák közvetlen konvertálása másodpercekké"
-
-
-msgid "Open menu buttons and pulldowns automatically when the mouse is hovering"
-msgstr "Menügombok és lenyílómenük kinyitása automatikusan, az egér fölé mozgatásával"
 
 
 msgid "Translate Interface"
@@ -14652,11 +14623,6 @@ msgid "Sound"
 msgstr "Hang"
 
 
-msgctxt "Sequence"
-msgid "Cross"
-msgstr "Keresztezés"
-
-
 msgid "Representation of alpha information in the RGBA pixels"
 msgstr "Az alfa információ ábrázolása az RGBA pixelekben"
 
@@ -15073,6 +15039,10 @@ msgid "Add & Replace"
 msgstr "Hozzáadás és Csere"
 
 
+msgid "Snap to Strips"
+msgstr "Sávokhoz csapás"
+
+
 msgid "Automatic keyframe insertion using active Keying Set only"
 msgstr "Automatikus kulcskockázás kizárólag a Kulcsozási készlet alapján"
 
@@ -15428,11 +15398,6 @@ msgstr "Markerek"
 msgctxt "WindowManager"
 msgid "Animation"
 msgstr "Animáció"
-
-
-msgctxt "WindowManager"
-msgid "TrackBall"
-msgstr "Hanyattegér"
 
 
 msgctxt "Operator"
@@ -15947,10 +15912,6 @@ msgid "Movie"
 msgstr "Videó"
 
 
-msgid "Snap to Strips"
-msgstr "Sávokhoz csapás"
-
-
 msgctxt "Operator"
 msgid "Left"
 msgstr "Bal"
@@ -15974,16 +15935,6 @@ msgstr "Szöveg"
 msgctxt "Operator"
 msgid "Scene..."
 msgstr "Jelenet..."
-
-
-msgctxt "Operator"
-msgid "Cross"
-msgstr "Keresztezés"
-
-
-msgctxt "Operator"
-msgid "Gamma Cross"
-msgstr "Gamma keresztezés"
 
 
 msgctxt "Operator"
@@ -17126,10 +17077,6 @@ msgid "Please select two strips"
 msgstr "Két sáv kijelölése szükséges"
 
 
-msgid "No active sequence!"
-msgstr "Nincs aktív szekvencia!"
-
-
 msgid "No Recent Files"
 msgstr "Nincsenek legutóbb használt fájlok"
 
@@ -17395,144 +17342,4 @@ msgstr "Minden felhasználó által telepített kiegészítő"
 
 msgid "Import-Export"
 msgstr "Importálás-Exportálás"
-
-
-msgid "Japanese (日本語)"
-msgstr "Japán (日本語)"
-
-
-msgid "Italian (Italiano)"
-msgstr "Olasz (Italiano)"
-
-
-msgid "German (Deutsch)"
-msgstr "Német (Deutsch)"
-
-
-msgid "Finnish (Suomi)"
-msgstr "Finn (Suomi)"
-
-
-msgid "Swedish (Svenska)"
-msgstr "Svéd (Svenska)"
-
-
-msgid "French (Français)"
-msgstr "Francia (Français)"
-
-
-msgid "Spanish (Español)"
-msgstr "Spanyol (Español)"
-
-
-msgid "Catalan (Català)"
-msgstr "Katalán (Català)"
-
-
-msgid "Portuguese (Português)"
-msgstr "Portugál (Português)"
-
-
-msgid "Simplified Chinese (简体中文)"
-msgstr "Egyszerűsített Kínai (简体中文)"
-
-
-msgid "Traditional Chinese (繁體中文)"
-msgstr "Hagyományos Kínai (繁體中文)"
-
-
-msgid "Russian (Русский)"
-msgstr "Orosz (Русский)"
-
-
-msgid "Croatian (Hrvatski)"
-msgstr "Horvát (Hrvatski)"
-
-
-msgid "Serbian (Српски)"
-msgstr "Szerb (Српски)"
-
-
-msgid "Polish (Polski)"
-msgstr "Lengyel (Polski)"
-
-
-msgid "Romanian (Român)"
-msgstr "Román (Român)"
-
-
-msgid "Arabic (ﺔﻴﺑﺮﻌﻟﺍ)"
-msgstr "Arab (ﺔﻴﺑﺮﻌﻟﺍ)"
-
-
-msgid "Bulgarian (Български)"
-msgstr "Bolgár (Български)"
-
-
-msgid "Greek (Ελληνικά)"
-msgstr "Görög (Ελληνικά)"
-
-
-msgid "Nepali (नेपाली)"
-msgstr "Nepáli (नेपाली)"
-
-
-msgid "Persian (ﯽﺳﺭﺎﻓ)"
-msgstr "Perzsa (ﯽﺳﺭﺎﻓ)"
-
-
-msgid "Indonesian (Bahasa indonesia)"
-msgstr "Indonéz (Bahasa indonesia)"
-
-
-msgid "Serbian Latin (Srpski latinica)"
-msgstr "Szerb Latin (Srpski latinica)"
-
-
-msgid "Kyrgyz (Кыргыз тили)"
-msgstr "Kirgíz (Кыргыз тили)"
-
-
-msgid "Turkish (Türkçe)"
-msgstr "Török (Türkçe)"
-
-
-msgid "Hungarian (Magyar)"
-msgstr "Magyar (Magyar)"
-
-
-msgid "Brazilian Portuguese (Português do Brasil)"
-msgstr "Brazil portugál (Português do Brasil)"
-
-
-msgid "Hebrew (תירִבְעִ)"
-msgstr "Héber (תירִבְעִ)"
-
-
-msgid "Esperanto (Esperanto)"
-msgstr "Eszperantó (Esperanto)"
-
-
-msgid "Amharic (አማርኛ)"
-msgstr "Amhara (አማርኛ)"
-
-
-msgid "Uzbek (Oʻzbek)"
-msgstr "Üzbég (Oʻzbek)"
-
-
-msgid "Uzbek Cyrillic (Ўзбек)"
-msgstr "Üzbég, cirilbetűs (Ўзбек)"
-
-
-msgid "Complete"
-msgstr "Teljes"
-
-
-msgid "In Progress"
-msgstr "Folyamatban"
-
-
-msgid "Starting"
-msgstr "Induló"
 

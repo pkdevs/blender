@@ -23,14 +23,13 @@ void SphereProbeModule::init()
      * there are other light probes in the scene. */
     update_probes_next_sample_ = DEG_id_type_any_exists(instance_.depsgraph, ID_LP);
   }
+  update_probes_this_sample_ = update_probes_next_sample_;
 
   do_display_draw_ = false;
 }
 
 void SphereProbeModule::begin_sync()
 {
-  update_probes_this_sample_ = update_probes_next_sample_;
-
   LightProbeModule &light_probes = instance_.light_probes;
   SphereProbeData &world_data = *static_cast<SphereProbeData *>(&light_probes.world_sphere_);
   {
@@ -344,7 +343,8 @@ void SphereProbeModule::viewport_draw(View &view, GPUFrameBuffer *view_fb)
 
   viewport_display_ps_.init();
   viewport_display_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH |
-                                 DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_CULL_BACK);
+                                 DRW_STATE_CLIP_CONTROL_UNIT_RANGE |
+                                 instance_.film.depth.test_state | DRW_STATE_CULL_BACK);
   viewport_display_ps_.framebuffer_set(&view_fb);
   viewport_display_ps_.shader_set(instance_.shaders.static_shader_get(DISPLAY_PROBE_SPHERE));
   viewport_display_ps_.bind_resources(*this);

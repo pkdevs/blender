@@ -27,6 +27,7 @@
 
 #include "ED_armature.hh"
 
+#include "ANIM_armature.hh"
 #include "ANIM_bone_collections.hh"
 
 #include "armature_intern.hh"
@@ -107,6 +108,9 @@ void bone_free(bArmature *arm, EditBone *bone)
 
   if (bone->prop) {
     IDP_FreeProperty(bone->prop);
+  }
+  if (bone->system_properties) {
+    IDP_FreeProperty(bone->system_properties);
   }
 
   /* Clear references from other edit bones. */
@@ -277,7 +281,7 @@ void armature_select_mirrored_ex(bArmature *arm, const int flag)
   /* Select mirrored bones */
   if (arm->flag & ARM_MIRROR_EDIT) {
     LISTBASE_FOREACH (EditBone *, curBone, arm->edbo) {
-      if (EBONE_VISIBLE(arm, curBone)) {
+      if (blender::animrig::bone_is_visible_editbone(arm, curBone)) {
         if (curBone->flag & flag) {
           EditBone *ebone_mirr = ED_armature_ebone_get_mirrored(arm->edbo, curBone);
           if (ebone_mirr) {
@@ -304,7 +308,7 @@ void armature_tag_select_mirrored(bArmature *arm)
   /* Select mirrored bones */
   if (arm->flag & ARM_MIRROR_EDIT) {
     LISTBASE_FOREACH (EditBone *, curBone, arm->edbo) {
-      if (EBONE_VISIBLE(arm, curBone)) {
+      if (blender::animrig::bone_is_visible_editbone(arm, curBone)) {
         if (curBone->flag & (BONE_SELECTED | BONE_ROOTSEL | BONE_TIPSEL)) {
           EditBone *ebone_mirr = ED_armature_ebone_get_mirrored(arm->edbo, curBone);
           if (ebone_mirr && (ebone_mirr->flag & BONE_SELECTED) == 0) {
@@ -343,7 +347,9 @@ void ED_armature_ebone_transform_mirror_update(bArmature *arm, EditBone *ebo, bo
    * eg. from 3d viewport. */
 
   /* no layer check, correct mirror is more important */
-  if (!check_select || (EBONE_VISIBLE(arm, ebo) && (ebo->flag & (BONE_TIPSEL | BONE_ROOTSEL)))) {
+  if (!check_select || (blender::animrig::bone_is_visible_editbone(arm, ebo) &&
+                        (ebo->flag & (BONE_TIPSEL | BONE_ROOTSEL))))
+  {
     EditBone *eboflip = ED_armature_ebone_get_mirrored(arm->edbo, ebo);
     if (eboflip) {
       /* We assume X-axis flipping for now. */
@@ -456,6 +462,7 @@ static EditBone *make_boneList_recursive(ListBase *edbo,
     STRNCPY(eBone->name, curBone->name);
     eBone->flag = curBone->flag;
     eBone->inherit_scale_mode = curBone->inherit_scale_mode;
+    eBone->drawtype = curBone->drawtype;
 
     /* fix selection flags */
     if (eBone->flag & BONE_SELECTED) {
@@ -518,6 +525,9 @@ static EditBone *make_boneList_recursive(ListBase *edbo,
 
     if (curBone->prop) {
       eBone->prop = IDP_CopyProperty(curBone->prop);
+    }
+    if (curBone->system_properties) {
+      eBone->system_properties = IDP_CopyProperty(curBone->system_properties);
     }
 
     BLI_addtail(edbo, eBone);
@@ -687,6 +697,7 @@ void ED_armature_from_edit(Main *bmain, bArmature *arm)
 
     newBone->flag = eBone->flag;
     newBone->inherit_scale_mode = eBone->inherit_scale_mode;
+    newBone->drawtype = eBone->drawtype;
 
     if (eBone == arm->act_edbone) {
       /* Don't change active selection, this messes up separate which uses
@@ -738,6 +749,9 @@ void ED_armature_from_edit(Main *bmain, bArmature *arm)
 
     if (eBone->prop) {
       newBone->prop = IDP_CopyProperty(eBone->prop);
+    }
+    if (eBone->system_properties) {
+      newBone->system_properties = IDP_CopyProperty(eBone->system_properties);
     }
   }
 
@@ -792,6 +806,9 @@ void ED_armature_edit_free(bArmature *arm)
         if (eBone->prop) {
           IDP_FreeProperty(eBone->prop);
         }
+        if (eBone->system_properties) {
+          IDP_FreeProperty(eBone->system_properties);
+        }
         BLI_freelistN(&eBone->bone_collections);
       }
 
@@ -826,6 +843,9 @@ void ED_armature_ebone_listbase_free(ListBase *lb, const bool do_id_user)
     if (ebone->prop) {
       IDP_FreeProperty_ex(ebone->prop, do_id_user);
     }
+    if (ebone->system_properties) {
+      IDP_FreeProperty_ex(ebone->system_properties, do_id_user);
+    }
 
     BLI_freelistN(&ebone->bone_collections);
 
@@ -844,6 +864,10 @@ void ED_armature_ebone_listbase_copy(ListBase *lb_dst, ListBase *lb_src, const b
     if (ebone_dst->prop) {
       ebone_dst->prop = IDP_CopyProperty_ex(ebone_dst->prop,
                                             do_id_user ? 0 : LIB_ID_CREATE_NO_USER_REFCOUNT);
+    }
+    if (ebone_dst->system_properties) {
+      ebone_dst->system_properties = IDP_CopyProperty_ex(
+          ebone_dst->system_properties, do_id_user ? 0 : LIB_ID_CREATE_NO_USER_REFCOUNT);
     }
     ebone_src->temp.ebone = ebone_dst;
     BLI_addtail(lb_dst, ebone_dst);

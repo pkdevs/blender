@@ -468,7 +468,7 @@ class edit_generators:
         """
 
         # Not default because there are times when the literal sizes don't represent extra dimensions on an array,
-        # where making this edit would be misleading as it would indicate a matrix (for e.g.) when a vector is intended.
+        # where making this edit would be misleading as it would indicate a matrix e.g. when a vector is intended.
         is_default = False
 
         @staticmethod
@@ -1974,7 +1974,7 @@ def run_edits_on_directory(
     # needed for when arguments are referenced relatively
     os.chdir(build_dir)
 
-    # Weak, but we probably don't want to handle extern.
+    # Weak, but we probably don't want to handle `./extern/`.
     # this limit could be removed.
     source_paths = (
         os.path.join("intern", "ghost"),

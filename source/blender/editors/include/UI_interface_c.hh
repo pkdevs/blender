@@ -313,6 +313,9 @@ enum {
 
 #define UI_PANEL_CATEGORY_MARGIN_WIDTH (U.widget_unit * 1.0f)
 
+/* Minimum width for a panel showing only category tabs. */
+#define UI_PANEL_CATEGORY_MIN_WIDTH 26.0f
+
 /* Both these margins should be ignored if the panel doesn't show a background (check
  * #UI_panel_should_show_background()). */
 #define UI_PANEL_MARGIN_X (U.widget_unit * 0.4f)
@@ -332,10 +335,9 @@ enum {
   /** Prevent the button to show any tool-tip. */
   UI_BUT_NO_TOOLTIP = 1 << 4,
   /**
-   * Show a quick tool-tip label, that is, a short tool-tip that appears faster than the full one
-   * and only shows the label. After a short delay the full tool-tip is shown if any.
+   * See #UI_but_func_quick_tooltip_set.
    */
-  UI_BUT_HAS_TOOLTIP_LABEL = 1 << 5,
+  UI_BUT_HAS_QUICK_TOOLTIP = 1 << 5,
   /** Do not add the usual horizontal padding for text drawing. */
   UI_BUT_NO_TEXT_PADDING = 1 << 6,
   /** Do not add the usual padding around preview image drawing, use the size of the button. */
@@ -680,9 +682,9 @@ void UI_block_interaction_set(uiBlock *block, uiBlockInteraction_CallbackData *c
 
 /* `interface_query.cc` */
 
-bool UI_but_has_tooltip_label(const uiBut *but);
+bool UI_but_has_quick_tooltip(const uiBut *but);
 bool UI_but_is_tool(const uiBut *but);
-/* file selectors are exempt from utf-8 checks */
+/** File selectors are exempt from UTF8 checks. */
 bool UI_but_is_utf8(const uiBut *but);
 #define UI_but_is_decorator(but) ((but)->type == UI_BTYPE_DECORATOR)
 
@@ -1048,7 +1050,7 @@ void UI_but_color_set(uiBut *but, const uchar color[4]);
 /**
  * Set at hint that describes the expected value when empty.
  */
-void UI_but_placeholder_set(uiBut *but, const char *placeholder_text) ATTR_NONNULL(1);
+void UI_but_placeholder_set(uiBut *but, blender::StringRef placeholder_text);
 
 /**
  * Special button case, only draw it when used actively, for outliner etc.
@@ -1188,7 +1190,7 @@ uiBut *uiDefButBitC(uiBlock *block,
 uiBut *uiDefButR(uiBlock *block,
                  int type,
                  int retval,
-                 std::optional<blender::StringRefNull> str,
+                 std::optional<blender::StringRef> str,
                  int x,
                  int y,
                  short width,
@@ -1202,7 +1204,7 @@ uiBut *uiDefButR(uiBlock *block,
 uiBut *uiDefButR_prop(uiBlock *block,
                       int type,
                       int retval,
-                      std::optional<blender::StringRefNull> str,
+                      std::optional<blender::StringRef> str,
                       int x,
                       int y,
                       short width,
@@ -1399,6 +1401,19 @@ uiBut *uiDefIconTextButI(uiBlock *block,
                          float min,
                          float max,
                          std::optional<blender::StringRef> tip);
+uiBut *uiDefIconTextButS(uiBlock *block,
+                         int type,
+                         int retval,
+                         int icon,
+                         blender::StringRef str,
+                         int x,
+                         int y,
+                         short width,
+                         short height,
+                         short *poin,
+                         float min,
+                         float max,
+                         std::optional<blender::StringRef> tip);
 uiBut *uiDefIconTextButR(uiBlock *block,
                          int type,
                          int retval,
@@ -1418,7 +1433,7 @@ uiBut *uiDefIconTextButR_prop(uiBlock *block,
                               int type,
                               int retval,
                               int icon,
-                              std::optional<blender::StringRefNull> str,
+                              std::optional<blender::StringRef> str,
                               int x,
                               int y,
                               short width,
@@ -1675,7 +1690,7 @@ uiBut *uiDefAutoButR(uiBlock *block,
                      PointerRNA *ptr,
                      PropertyRNA *prop,
                      int index,
-                     std::optional<blender::StringRefNull> name,
+                     std::optional<blender::StringRef> name,
                      int icon,
                      int x,
                      int y,
@@ -1771,11 +1786,20 @@ void UI_but_func_search_set_listen(uiBut *but, uiButSearchListenFn listen_fn);
 void UI_but_func_search_set_sep_string(uiBut *but, const char *search_sep_string);
 void UI_but_func_search_set_results_are_suggestions(uiBut *but, bool value);
 
+#define UI_SEARCHBOX_BOUNDS (6.0f * UI_SCALE_FAC)
+#define UI_SEARCHBOX_TRIA_H (12.0f * UI_SCALE_FAC)
 /**
  * Height in pixels, it's using hard-coded values still.
  */
 int UI_searchbox_size_y();
 int UI_searchbox_size_x();
+/**
+ * Guess a good width for the search box based on the searchable items.
+ *
+ * \note When used with a menu that does full refreshes, it might be beneficial to cache this size
+ * because recomputing it is potentially expensive.
+ */
+int UI_searchbox_size_x_guess(const bContext *C, const uiButSearchUpdateFn update_fn, void *arg);
 /**
  * Check if a string is in an existing search box.
  */
@@ -1841,11 +1865,15 @@ void UI_but_menu_disable_hover_open(uiBut *but);
 
 void UI_but_func_tooltip_set(uiBut *but, uiButToolTipFunc func, void *arg, uiFreeArgFunc free_arg);
 /**
- * Enable a custom quick tooltip label. That is, a short tooltip that appears faster than the full
- * one and only shows the label string returned by \a func. After a short delay the full tooltip is
- * shown, including the same label.
+ * Enable a tooltip that appears faster than the usual tooltip. If the button has both a quick and
+ * a normal tooltip, the quick one is shown first, and expanded to the full one after the usual
+ * tooltip delay. Quick tooltips are useful in cases like:
+ * - A button doesn't show a label to save space but the label is still relevant. Show the label as
+ *   quick tooltip in that case (like the name of tools in a compact, icon only tool-shelf).
+ * - The only purpose of a button is to display this tooltip (like a warning icon with the warning
+ *   text in the tooltip).
  */
-void UI_but_func_tooltip_label_set(uiBut *but, std::function<std::string(const uiBut *but)> func);
+void UI_but_func_quick_tooltip_set(uiBut *but, std::function<std::string(const uiBut *but)> func);
 
 enum uiTooltipStyle {
   UI_TIP_STYLE_NORMAL = 0, /* Regular text. */
@@ -2589,27 +2617,6 @@ void uiTemplateColormanagedViewSettings(uiLayout *layout,
 int uiTemplateRecentFiles(uiLayout *layout, int rows);
 void uiTemplateFileSelectPath(uiLayout *layout, bContext *C, FileSelectParams *params);
 
-enum {
-  UI_TEMPLATE_ASSET_DRAW_NO_NAMES = (1 << 0),
-  UI_TEMPLATE_ASSET_DRAW_NO_FILTER = (1 << 1),
-  UI_TEMPLATE_ASSET_DRAW_NO_LIBRARY = (1 << 2),
-};
-void uiTemplateAssetView(uiLayout *layout,
-                         const bContext *C,
-                         const char *list_id,
-                         PointerRNA *asset_library_dataptr,
-                         const char *asset_library_propname,
-                         PointerRNA *assets_dataptr,
-                         const char *assets_propname,
-                         PointerRNA *active_dataptr,
-                         const char *active_propname,
-                         const blender::ed::asset::AssetFilterSettings *filter_settings,
-                         int display_flags,
-                         const char *activate_opname,
-                         PointerRNA *r_activate_op_properties,
-                         const char *drag_opname,
-                         PointerRNA *r_drag_op_properties);
-
 namespace blender::ui {
 
 void template_asset_shelf_popover(
@@ -2634,24 +2641,14 @@ void uiTemplateNodeInputs(uiLayout *layout, bContext *C, PointerRNA *ptr);
 
 void uiTemplateCollectionExporters(uiLayout *layout, bContext *C);
 
+namespace blender::ed::object::shapekey {
+void template_tree(uiLayout *layout, bContext *C);
+}
 /**
  * \return: True if the list item with unfiltered, unordered index \a item_idx is visible given the
  *          current filter settings.
  */
 bool UI_list_item_index_is_filtered_visible(const struct uiList *ui_list, int item_idx);
-
-/**
- * \return An RNA pointer for the operator properties.
- */
-PointerRNA *UI_list_custom_activate_operator_set(uiList *ui_list,
-                                                 blender::StringRefNull opname,
-                                                 bool create_properties);
-/**
- * \return An RNA pointer for the operator properties.
- */
-PointerRNA *UI_list_custom_drag_operator_set(uiList *ui_list,
-                                             blender::StringRefNull opname,
-                                             bool create_properties);
 
 /* UI Operators */
 struct uiDragColorHandle {
@@ -2895,27 +2892,17 @@ void UI_butstore_register(uiButStore *bs_handle, uiBut **but_p);
 bool UI_butstore_register_update(uiBlock *block, uiBut *but_dst, const uiBut *but_src);
 void UI_butstore_unregister(uiButStore *bs_handle, uiBut **but_p);
 
-/**
- * A version of #WM_key_event_operator_string that's limited to UI elements.
- *
- * This supports showing shortcuts in context-menus (for example),
- * for actions that can also be activated using shortcuts while the cursor is over the button.
- * Without this those shortcuts aren't discoverable for users.
- */
-std::optional<std::string> UI_key_event_operator_string(const bContext *C,
-                                                        blender::StringRefNull opname,
-                                                        IDProperty *properties,
-                                                        bool is_strict);
-
 /* ui_interface_region_tooltip.c */
 
 /**
- * \param is_label: When true, show a small tip that only shows the name, otherwise show the full
- *                  tooltip.
+ * \param is_quick_tip: See #UI_but_func_quick_tooltip_set for what a quick tooltip is.
  */
-ARegion *UI_tooltip_create_from_button(bContext *C, ARegion *butregion, uiBut *but, bool is_label);
+ARegion *UI_tooltip_create_from_button(bContext *C,
+                                       ARegion *butregion,
+                                       uiBut *but,
+                                       bool is_quick_tip);
 ARegion *UI_tooltip_create_from_button_or_extra_icon(
-    bContext *C, ARegion *butregion, uiBut *but, uiButExtraOpIcon *extra_icon, bool is_label);
+    bContext *C, ARegion *butregion, uiBut *but, uiButExtraOpIcon *extra_icon, bool is_quick_tip);
 ARegion *UI_tooltip_create_from_gizmo(bContext *C, wmGizmo *gz);
 void UI_tooltip_free(bContext *C, bScreen *screen, ARegion *region);
 
@@ -2933,7 +2920,7 @@ ARegion *UI_tooltip_create_from_search_item_generic(bContext *C,
 
 /* How long before a tool-tip shows. */
 #define UI_TOOLTIP_DELAY 0.5
-#define UI_TOOLTIP_DELAY_LABEL 0.2
+#define UI_TOOLTIP_DELAY_QUICK 0.2
 
 /* Float precision helpers */
 

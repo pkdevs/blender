@@ -151,9 +151,9 @@ void OSLManager::device_update_post(Device *device,
 {
   /* Create the camera shader. */
   if (need_update() && !scene->camera->script_name.empty()) {
-    if (progress.get_cancel())
+    if (progress.get_cancel()) {
       return;
-
+    }
     foreach_osl_device(device, [this, scene](Device *sub_device, OSLGlobals *og) {
       OSL::ShadingSystem *ss = get_shading_system(sub_device);
 
@@ -353,7 +353,7 @@ void OSLManager::shading_system_init()
       OSLRenderServices *services = util_aligned_new<OSLRenderServices>(get_texture_system(),
                                                                         device_type);
 #  ifdef _WIN32
-      /* Annoying thing, Cycles stores paths in UTF-8 codepage, so it can
+      /* Annoying thing, Cycles stores paths in UTF8 code-page, so it can
        * operate with file paths with any character. This requires to use wide
        * char functions, but OSL uses old fashioned ANSI functions which means:
        *

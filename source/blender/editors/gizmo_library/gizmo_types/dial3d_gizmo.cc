@@ -112,7 +112,7 @@ static void dial_geom_draw(const float color[4],
 
   GPUVertFormat *format = immVertexFormat();
   /* NOTE(Metal): Prefer using 3D coordinates with 3D shader, even if rendering 2D gizmo's. */
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
 
   if (clip_plane) {
     immBindBuiltinProgram(filled ? GPU_SHADER_3D_CLIPPED_UNIFORM_COLOR :
@@ -154,7 +154,7 @@ static void dial_geom_draw(const float color[4],
     float viewport[4];
     GPU_viewport_size_get_f(viewport);
     immUniform2fv("viewportSize", &viewport[2]);
-    immUniform1f("lineWidth", line_width * U.pixelsize);
+    immUniform1f("lineWidth", line_width);
 
     if (arc_partial_angle == 0.0f) {
       imm_draw_circle_wire_3d(pos, 0.0f, 0.0f, 1.0f, DIAL_RESOLUTION);
@@ -191,7 +191,8 @@ static void dial_ghostarc_draw_helpline(const float angle,
   GPU_matrix_push();
   GPU_matrix_rotate_3f(RAD2DEGF(angle), 0.0f, 0.0f, -1.0f);
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
@@ -220,7 +221,8 @@ static void dial_ghostarc_draw_incremental_angle(const float incremental_angle,
                                                  const float angle_delta)
 {
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
 
   immUniformColor3f(1.0f, 1.0f, 1.0f);
@@ -264,7 +266,7 @@ static void dial_ghostarc_draw(const float angle_ofs,
 {
   const float width_inner = DIAL_WIDTH;
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* Avoid artifacts by drawing the main arc over the span of one rotation only. */
@@ -454,7 +456,9 @@ static void dial_draw_intern(
   params.arc_partial_angle = arc_partial_angle;
   params.arc_inner_factor = arc_inner_factor;
   params.clip_plane = clip_plane;
-  dial_3d_draw_util(matrix_final, gz->line_width, color, select, &params);
+
+  const float line_width = (gz->line_width * U.pixelsize) + WM_gizmo_select_bias(select);
+  dial_3d_draw_util(matrix_final, line_width, color, select, &params);
 }
 
 static void gizmo_dial_draw_select(const bContext *C, wmGizmo *gz, int select_id)
@@ -673,7 +677,7 @@ static void GIZMO_GT_dial_3d(wmGizmoType *gzt)
   /* identifiers */
   gzt->idname = "GIZMO_GT_dial_3d";
 
-  /* api callbacks */
+  /* API callbacks. */
   gzt->draw = gizmo_dial_draw;
   gzt->draw_select = gizmo_dial_draw_select;
   gzt->setup = gizmo_dial_setup;

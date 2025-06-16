@@ -205,6 +205,9 @@ static float3 prop_dist_loc_get(const TransDataContainer *tc,
 
 /**
  * Distance calculated from not-selected vertex to nearest selected vertex.
+ * If the #transdata_check_local_islands() check succeeds, this will also change
+ * the TransData center and axismtx of unselected points to the center and axismtx of the closest
+ * point found (for proportional editing around individual origins).
  */
 static void set_prop_dist(TransInfo *t, const bool with_dist)
 {
@@ -284,6 +287,7 @@ static void set_prop_dist(TransInfo *t, const bool with_dist)
         if (td_index != -1) {
           td->rdist = nearest.dist;
           if (use_island) {
+            /* Use center and axismtx of closest point found. */
             copy_v3_v3(td->center, td_table[td_index]->center);
             copy_m3_m3(td->axismtx, td_table[td_index]->axismtx);
           }
@@ -753,18 +757,35 @@ static void init_proportional_edit(TransInfo *t)
                   &TransConvertType_MeshVertCData))
     {
       if (t->flag & T_PROP_CONNECTED) {
-        /* Already calculated by transform_convert_mesh_connectivity_distance. */
+        /* Already calculated by #transform_convert_mesh_connectivity_distance. */
       }
       else {
         set_prop_dist(t, false);
       }
     }
     else if (t->data_type == &TransConvertType_MeshUV && t->flag & T_PROP_CONNECTED) {
-      /* Already calculated by uv_set_connectivity_distance. */
+      /* Already calculated by #uv_set_connectivity_distance. */
     }
-    else if (ELEM(t->data_type, &TransConvertType_Curve, &curves::TransConvertType_Curves)) {
-      BLI_assert(t->obedit_type == OB_CURVES_LEGACY || t->obedit_type == OB_CURVES);
-      set_prop_dist(t, false);
+    else if (t->data_type == &TransConvertType_Curve) {
+      BLI_assert(t->obedit_type == OB_CURVES_LEGACY);
+      if (t->flag & T_PROP_CONNECTED) {
+        /* Already calculated by #calc_distanceCurveVerts. */
+      }
+      else {
+        set_prop_dist(t, false);
+      }
+    }
+    else if (ELEM(t->data_type,
+                  &curves::TransConvertType_Curves,
+                  &greasepencil::TransConvertType_GreasePencil))
+    {
+      BLI_assert(t->obedit_type == OB_CURVES || t->obedit_type == OB_GREASE_PENCIL);
+      if (t->flag & T_PROP_CONNECTED) {
+        /* Already calculated by #calculate_curve_point_distances_for_proportional_editing. */
+      }
+      else {
+        set_prop_dist(t, false);
+      }
     }
     else {
       set_prop_dist(t, true);
@@ -1196,7 +1217,7 @@ void animrecord_check_state(TransInfo *t, ID *id)
         /* Only push down if action is more than 1-2 frames long. */
         const float2 frame_range = adt->action->wrap().get_frame_range_of_keys(true);
         if (frame_range[1] > frame_range[0] + 2.0f) {
-          /* TODO: call BKE_nla_action_pushdown() instead?  */
+          /* TODO: call #BKE_nla_action_pushdown() instead? */
 
           /* Add a new NLA strip to the track, which references the active action + slot. */
           NlaStrip *strip = BKE_nlastack_add_strip({*id, *adt}, ID_IS_OVERRIDE_LIBRARY(id));

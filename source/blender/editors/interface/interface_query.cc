@@ -152,9 +152,9 @@ bool UI_but_is_tool(const uiBut *but)
   return false;
 }
 
-bool UI_but_has_tooltip_label(const uiBut *but)
+bool UI_but_has_quick_tooltip(const uiBut *but)
 {
-  return (but->drawflag & UI_BUT_HAS_TOOLTIP_LABEL) != 0;
+  return (but->drawflag & UI_BUT_HAS_QUICK_TOOLTIP) != 0;
 }
 
 int ui_but_icon(const uiBut *but)
@@ -457,17 +457,6 @@ static bool ui_list_contains_row(const uiBut *listbox_but, const uiBut *listrow_
   BLI_assert(listrow_but->type == UI_BTYPE_LISTROW);
   /* The list box and its rows have the same RNA data (active data pointer/prop). */
   return ui_but_rna_equals(listbox_but, listrow_but);
-}
-
-static bool ui_but_is_listbox_with_row(const uiBut *but, const void *customdata)
-{
-  const uiBut *row_but = static_cast<const uiBut *>(customdata);
-  return (but->type == UI_BTYPE_LISTBOX) && ui_list_contains_row(but, row_but);
-}
-
-uiBut *ui_list_find_from_row(const ARegion *region, const uiBut *row_but)
-{
-  return ui_but_find(region, ui_but_is_listbox_with_row, row_but);
 }
 
 static bool ui_but_is_listrow(const uiBut *but, const void * /*customdata*/)

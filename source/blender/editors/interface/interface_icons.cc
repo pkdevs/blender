@@ -276,13 +276,16 @@ static void vicon_keytype_draw_wrapper(const float x,
 
   GPUVertFormat *format = immVertexFormat();
   KeyframeShaderBindings sh_bindings;
-  sh_bindings.pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-  sh_bindings.size_id = GPU_vertformat_attr_add(format, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  sh_bindings.pos_id = GPU_vertformat_attr_add(
+      format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+  sh_bindings.size_id = GPU_vertformat_attr_add(
+      format, "size", blender::gpu::VertAttrType::SFLOAT_32);
   sh_bindings.color_id = GPU_vertformat_attr_add(
-      format, "color", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+      format, "color", blender::gpu::VertAttrType::UNORM_8_8_8_8);
   sh_bindings.outline_color_id = GPU_vertformat_attr_add(
-      format, "outlineColor", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
-  sh_bindings.flags_id = GPU_vertformat_attr_add(format, "flags", GPU_COMP_U32, 1, GPU_FETCH_INT);
+      format, "outlineColor", blender::gpu::VertAttrType::UNORM_8_8_8_8);
+  sh_bindings.flags_id = GPU_vertformat_attr_add(
+      format, "flags", blender::gpu::VertAttrType::UINT_32);
 
   GPU_program_point_size(true);
   immBindBuiltinProgram(GPU_SHADER_KEYFRAME_SHAPE);
@@ -421,21 +424,21 @@ static void vicon_colorset_draw(int index, int x, int y, int w, int h, float /*a
   const int c = x + w;
 
   uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* XXX: Include alpha into this... */
   /* normal */
   immUniformColor3ubv(cs->solid);
-  immRecti(pos, x, y, a, y + h);
+  immRectf(pos, x, y, a, y + h);
 
   /* selected */
   immUniformColor3ubv(cs->select);
-  immRecti(pos, a, y, b, y + h);
+  immRectf(pos, a, y, b, y + h);
 
   /* active */
   immUniformColor3ubv(cs->active);
-  immRecti(pos, b, y, c, y + h);
+  immRectf(pos, b, y, c, y + h);
 
   immUnbindProgram();
 }
@@ -655,11 +658,11 @@ static void vicon_gplayer_color_draw(Icon *icon, int x, int y, int w, int h)
    * However, UI_draw_roundbox_aa() draws the colors too dark, so can't be used.
    */
   uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   immUniformColor3fv(gpl->color);
-  immRecti(pos, x, y, x + w - 1, y + h - 1);
+  immRectf(pos, x, y, x + w - 1, y + h - 1);
 
   immUnbindProgram();
 }
@@ -857,6 +860,10 @@ static void init_event_icons()
   INIT_EVENT_ICON(ICON_EVENT_EQUAL, EVT_EQUALKEY, KM_ANY);
   INIT_EVENT_ICON(ICON_EVENT_LEFTBRACKET, EVT_LEFTBRACKETKEY, KM_ANY);
   INIT_EVENT_ICON(ICON_EVENT_RIGHTBRACKET, EVT_RIGHTBRACKETKEY, KM_ANY);
+
+  INIT_EVENT_ICON(ICON_EVENT_PAD_PAN, MOUSEPAN, KM_ANY);
+  INIT_EVENT_ICON(ICON_EVENT_PAD_ROTATE, MOUSEROTATE, KM_ANY);
+  INIT_EVENT_ICON(ICON_EVENT_PAD_ZOOM, MOUSEZOOM, KM_ANY);
 
   INIT_EVENT_ICON(ICON_EVENT_F13, EVT_F13KEY, KM_ANY);
   INIT_EVENT_ICON(ICON_EVENT_F14, EVT_F14KEY, KM_ANY);
@@ -1725,6 +1732,8 @@ static void icon_draw_size(float x,
                                                  btheme->tui.icon_border_intensity :
                                                  0.3f) :
                                             0.0f;
+    outline_intensity *= alpha;
+
     float color[4];
     if (icon_id == ICON_NOT_FOUND) {
       UI_GetThemeColor4fv(TH_ERROR, color);

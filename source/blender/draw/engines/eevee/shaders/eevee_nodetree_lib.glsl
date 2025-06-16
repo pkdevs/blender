@@ -596,15 +596,6 @@ float2 bsdf_lut(float cos_theta, float roughness, float ior, bool do_multiscatte
   return float2(reflectance.r, transmittance.r);
 }
 
-#ifdef EEVEE_MATERIAL_STUBS
-#  define attrib_load()
-#  define nodetree_displacement() float3(0.0f)
-#  define nodetree_surface(closure_rand) Closure(0)
-#  define nodetree_volume() Closure(0)
-#  define nodetree_thickness() 0.1f
-#  define thickness_mode 1.0f
-#endif
-
 #ifdef GPU_VERTEX_SHADER
 #  define closure_to_rgba(a) float4(0.0f)
 #endif
@@ -621,7 +612,7 @@ float2 bsdf_lut(float cos_theta, float roughness, float ior, bool do_multiscatte
 /* Return new shading normal. */
 float3 displacement_bump()
 {
-#  if defined(GPU_FRAGMENT_SHADER) && !defined(MAT_GEOM_CURVES)
+#  if !defined(MAT_GEOM_CURVES)
   /* This is the filter width for automatic displacement + bump mapping, which is fixed.
    * NOTE: keep the same as default bump node filter width. */
   constexpr float bump_filter_width = 0.1f;
@@ -629,8 +620,8 @@ float3 displacement_bump()
   float2 dHd;
   dF_branch(dot(nodetree_displacement(), g_data.N + dF_impl(g_data.N)), bump_filter_width, dHd);
 
-  float3 dPdx = dFdx(g_data.P);
-  float3 dPdy = dFdy(g_data.P);
+  float3 dPdx = gpu_dfdx(g_data.P);
+  float3 dPdy = gpu_dfdy(g_data.P);
 
   /* Get surface tangents from normal. */
   float3 Rx = cross(dPdy, g_data.N);
@@ -745,7 +736,7 @@ float texture_lod_bias_get()
  * \{ */
 
 /* Point clouds and curves are not compatible with volume grids.
- * They will fallback to their own attributes loading. */
+ * They will fall back to their own attributes loading. */
 #if defined(MAT_VOLUME) && !defined(MAT_GEOM_CURVES) && !defined(MAT_GEOM_POINTCLOUD)
 #  if defined(VOLUME_INFO_LIB) && !defined(MAT_GEOM_WORLD)
 /* We could just check for GRID_ATTRIBUTES but this avoids for header dependency. */

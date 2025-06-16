@@ -20,14 +20,12 @@
 #include "BLI_utildefines.h"
 
 #include "DNA_genfile.h"
-#include "DNA_sdna_types.h"
 
 #include "BKE_asset.hh"
 #include "BKE_idtype.hh"
 #include "BKE_main.hh"
 #include "BKE_preview_image.hh"
 
-#include "BLO_blend_defs.hh"
 #include "BLO_readfile.hh"
 
 #include "readfile.hh"
@@ -90,6 +88,9 @@ LinkNode *BLO_blendhandle_get_datablock_names(BlendHandle *bh,
   for (bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
     if (bhead->code == ofblocktype) {
       const char *idname = blo_bhead_id_name(fd, bhead);
+      if (!idname) {
+        continue;
+      }
       if (use_assets_only && blo_bhead_id_asset_data_address(fd, bhead) == nullptr) {
         continue;
       }
@@ -125,7 +126,11 @@ LinkNode *BLO_blendhandle_get_datablock_info(BlendHandle *bh,
     if (bhead->code == ofblocktype) {
       BHead *id_bhead = bhead;
 
-      const char *name = blo_bhead_id_name(fd, bhead) + 2;
+      const char *idname = blo_bhead_id_name(fd, bhead);
+      if (!idname) {
+        continue;
+      }
+      const char *name = idname + 2;
       AssetMetaData *asset_meta_data = blo_bhead_id_asset_data_address(fd, bhead);
 
       const bool is_asset = asset_meta_data != nullptr;
@@ -244,7 +249,7 @@ PreviewImage *BLO_blendhandle_get_preview_for_id(BlendHandle *bh,
     }
     else if (bhead->code == ofblocktype) {
       const char *idname = blo_bhead_id_name(fd, bhead);
-      if (STREQ(&idname[2], name)) {
+      if (idname && STREQ(&idname[2], name)) {
         looking = true;
       }
     }

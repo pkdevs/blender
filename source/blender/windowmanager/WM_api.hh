@@ -1548,6 +1548,11 @@ wmDrag *WM_drag_data_create(
  */
 void WM_event_start_prepared_drag(bContext *C, wmDrag *drag);
 void WM_event_drag_image(wmDrag *drag, const ImBuf *imb, float scale);
+/**
+ * Overrides the `drag.poin` event to include all selected files in the space file where the event
+ * started.
+ */
+void WM_event_drag_path_override_poin_data_with_space_file_paths(const bContext *, wmDrag *drag);
 void WM_event_drag_preview_icon(wmDrag *drag, int icon_id);
 void WM_drag_free(wmDrag *drag);
 void WM_drag_data_free(eWM_DragDataType dragtype, void *poin);
@@ -1889,7 +1894,7 @@ void WM_draw_cb_exit(wmWindow *win, void *handle);
  * because drawing relies on the event system & depsgraph preparing data for display.
  * An explicit call to draw is error prone since it may attempt to show stale data.
  *
- * With some rare exceptions which require a redraw (screen-shot & sample screen color for e.g.)
+ * With some rare exceptions which require a redraw (e.g. screen-shot & sample screen color)
  * explicitly redrawing should be avoided, see: #92704, #93950, #97627 & #98462.
  */
 void WM_redraw_windows(bContext *C);
@@ -1904,7 +1909,7 @@ void WM_draw_region_free(ARegion *region);
 GPUViewport *WM_draw_region_get_viewport(ARegion *region);
 GPUViewport *WM_draw_region_get_bound_viewport(ARegion *region);
 
-void WM_main_playanim(int argc, const char **argv);
+int WM_main_playanim(int argc, const char **argv);
 
 /**
  * Debugging only, convenience function to write on crash.
@@ -2006,11 +2011,13 @@ int WM_userdef_event_map(int kmitype);
 int WM_userdef_event_type_from_keymap_type(int kmitype);
 
 #ifdef WITH_INPUT_NDOF
-void WM_event_ndof_pan_get(const wmNDOFMotionData *ndof, float r_pan[3], bool use_zoom);
-void WM_event_ndof_rotate_get(const wmNDOFMotionData *ndof, float r_rot[3]);
+blender::float3 WM_event_ndof_translation_get_for_navigation(const wmNDOFMotionData &ndof);
+blender::float3 WM_event_ndof_rotation_get_for_navigation(const wmNDOFMotionData &ndof);
+blender::float3 WM_event_ndof_translation_get(const wmNDOFMotionData &ndof);
+blender::float3 WM_event_ndof_rotation_get(const wmNDOFMotionData &ndof);
 
-float WM_event_ndof_to_axis_angle(const wmNDOFMotionData *ndof, float axis[3]);
-void WM_event_ndof_to_quat(const wmNDOFMotionData *ndof, float q[4]);
+float WM_event_ndof_to_axis_angle(const wmNDOFMotionData &ndof, float axis[3]);
+void WM_event_ndof_to_quat(const wmNDOFMotionData &ndof, float q[4]);
 #endif /* WITH_INPUT_NDOF */
 
 #ifdef WITH_XR_OPENXR

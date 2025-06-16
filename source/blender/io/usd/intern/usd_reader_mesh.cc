@@ -28,8 +28,12 @@
 #include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_ordered_edge.hh"
+#include "BLI_set.hh"
 #include "BLI_span.hh"
+#include "BLI_task.hh"
 #include "BLI_vector_set.hh"
+
+#include "BLT_translation.hh"
 
 #include "DNA_customdata_types.h"
 #include "DNA_material_types.h"
@@ -46,6 +50,8 @@
 #include <pxr/usd/usdShade/materialBindingAPI.h>
 #include <pxr/usd/usdShade/tokens.h>
 #include <pxr/usd/usdSkel/bindingAPI.h>
+
+#include <fmt/core.h>
 
 #include <algorithm>
 
@@ -253,7 +259,7 @@ bool USDMeshReader::topology_changed(const Mesh *existing_mesh, const double mot
          face_indices_.size() != existing_mesh->corners_num;
 }
 
-void USDMeshReader::read_mpolys(Mesh *mesh) const
+bool USDMeshReader::read_faces(Mesh *mesh) const
 {
   MutableSpan<int> face_offsets = mesh->face_offsets_for_write();
   MutableSpan<int> corner_verts = mesh->corner_verts_for_write();
@@ -281,7 +287,50 @@ void USDMeshReader::read_mpolys(Mesh *mesh) const
     }
   }
 
+  /* Check for faces with duplicate vertex indices. These will require a mesh validate to fix. */
+  const OffsetIndices<int> faces = mesh->faces();
+  const bool all_faces_ok = threading::parallel_reduce(
+      faces.index_range(),
+      1024,
+      true,
+      [&](const IndexRange part, const bool ok_so_far) {
+        bool current_faces_ok = ok_so_far;
+        if (ok_so_far) {
+          for (const int i : part) {
+            const IndexRange face_range = faces[i];
+            const Set<int, 32> used_verts(corner_verts.slice(face_range));
+            current_faces_ok = current_faces_ok && used_verts.size() == face_range.size();
+          }
+        }
+        return current_faces_ok;
+      },
+      std::logical_and<>());
+
+  /* If we detect bad faces it would be unsafe to continue beyond this point without first
+   * performing a destructive validate. Any operation requiring mesh connectivity information can
+   * assert or crash if the problem isn't addressed. Performing the check here, before most of the
+   * data has been loaded, unfortunately means any remaining data will be lost. */
+  if (!all_faces_ok) {
+    if (is_initial_load_) {
+      const char *message = N_(
+          "Invalid face data detected for mesh '%s'. Automatic correction will be used, but some "
+          "data will most likely be lost");
+      const std::string prim_path = this->prim_path().GetAsString();
+      BKE_reportf(this->reports(), RPT_WARNING, message, prim_path.c_str());
+      CLOG_WARN(&LOG, message, prim_path.c_str());
+    }
+    BKE_mesh_validate(mesh, false, false);
+  }
+
   bke::mesh_calc_edges(*mesh, false, false);
+
+  /* It's possible that the number of faces, indices, and verts remain the same but the topology
+   * itself is different. Until finer-grained topology detection can be implemented, always tag the
+   * mesh as needing updated topology mappings. Without this, a time varying mesh could trigger
+   * undefined behavior. */
+  mesh->tag_topology_changed();
+
+  return all_faces_ok;
 }
 
 void USDMeshReader::read_uv_data_primvar(Mesh *mesh,
@@ -414,14 +463,15 @@ void USDMeshReader::read_vertex_creases(Mesh *mesh, const double motionSampleTim
 
   /* It is fine to have fewer indices than vertices, but never the other way other. */
   if (usd_corner_indices.size() > mesh->verts_num) {
-    CLOG_WARN(&LOG, "Too many vertex creases for mesh %s", prim_path_.GetAsString().c_str());
+    CLOG_WARN(
+        &LOG, "Too many vertex creases for mesh %s", this->prim_path().GetAsString().c_str());
     return;
   }
 
   if (usd_corner_indices.size() != usd_corner_sharpnesses.size()) {
     CLOG_WARN(&LOG,
               "Vertex crease and sharpness count mismatch for mesh %s",
-              prim_path_.GetAsString().c_str());
+              this->prim_path().GetAsString().c_str());
     return;
   }
 
@@ -461,7 +511,7 @@ void USDMeshReader::read_edge_creases(Mesh *mesh, const double motionSampleTime)
   if (usd_crease_lengths.size() != usd_crease_sharpness.size()) {
     CLOG_WARN(&LOG,
               "Edge crease and sharpness count mismatch for mesh %s",
-              prim_path_.GetAsString().c_str());
+              this->prim_path().GetAsString().c_str());
     return;
   }
 
@@ -499,14 +549,14 @@ void USDMeshReader::read_edge_creases(Mesh *mesh, const double motionSampleTime)
       CLOG_WARN(&LOG,
                 "Edge crease length %d is invalid for mesh %s",
                 length,
-                prim_path_.GetAsString().c_str());
+                this->prim_path().GetAsString().c_str());
       break;
     }
 
     if (index_start + length > crease_indices.size()) {
       CLOG_WARN(&LOG,
                 "Edge crease lengths are out of bounds for mesh %s",
-                prim_path_.GetAsString().c_str());
+                this->prim_path().GetAsString().c_str());
       break;
     }
 
@@ -556,7 +606,7 @@ void USDMeshReader::process_normals_vertex_varying(Mesh *mesh)
   if (normals_.size() != mesh->verts_num) {
     CLOG_WARN(&LOG,
               "Vertex varying normals count mismatch for mesh '%s'",
-              prim_path_.GetAsString().c_str());
+              this->prim_path().GetAsString().c_str());
     return;
   }
 
@@ -573,7 +623,8 @@ void USDMeshReader::process_normals_face_varying(Mesh *mesh) const
 
   /* Check for normals count mismatches to prevent crashes. */
   if (normals_.size() != mesh->corners_num) {
-    CLOG_WARN(&LOG, "Loop normal count mismatch for mesh '%s'", prim_path_.GetAsString().c_str());
+    CLOG_WARN(
+        &LOG, "Loop normal count mismatch for mesh '%s'", this->prim_path().GetAsString().c_str());
     return;
   }
 
@@ -608,8 +659,9 @@ void USDMeshReader::process_normals_uniform(Mesh *mesh) const
 
   /* Check for normals count mismatches to prevent crashes. */
   if (normals_.size() != mesh->faces_num) {
-    CLOG_WARN(
-        &LOG, "Uniform normal count mismatch for mesh '%s'", prim_path_.GetAsString().c_str());
+    CLOG_WARN(&LOG,
+              "Uniform normal count mismatch for mesh '%s'",
+              this->prim_path().GetAsString().c_str());
     return;
   }
 
@@ -643,7 +695,9 @@ void USDMeshReader::read_mesh_sample(ImportSettings *settings,
   }
 
   if (new_mesh || (settings->read_flag & MOD_MESHSEQ_READ_POLY) != 0) {
-    read_mpolys(mesh);
+    if (!read_faces(mesh)) {
+      return;
+    }
     read_edge_creases(mesh, motionSampleTime);
 
     if (normal_interpolation_ == pxr::UsdGeomTokens->faceVarying) {

@@ -638,6 +638,11 @@ static int id_copy_libmanagement_cb(LibraryIDLinkCallbackData *cb_data)
       BLI_assert(cb_data->self_id->tag & ID_TAG_NO_MAIN);
       id_us_plus_no_lib(id);
     }
+    else if (ID_IS_LINKED(cb_data->owner_id)) {
+      /* Do not mark copied ID as directly linked, if its current user is also linked data (which
+       * is now fairly common when using 'copy_in_lib' feature). */
+      id_us_plus_no_lib(id);
+    }
     else {
       id_us_plus(id);
     }
@@ -851,7 +856,7 @@ ID *BKE_id_copy_for_use_in_bmain(Main *bmain, const ID *id)
   /* Shape keys reference on evaluated ID is preserved to keep driver paths available, but the key
    * data is likely to be invalid now due to modifiers, so clear the shape key reference avoiding
    * any possible shape corruption. */
-  if (DEG_is_evaluated_id(id)) {
+  if (DEG_is_evaluated(id)) {
     Key **key_p = BKE_key_from_id_p(newid);
     if (key_p) {
       *key_p = nullptr;
@@ -938,6 +943,8 @@ static void id_swap(Main *bmain,
     /* Exception: IDProperties. */
     id_a->properties = id_b_back.properties;
     id_b->properties = id_a_back.properties;
+    id_a->system_properties = id_b_back.system_properties;
+    id_b->system_properties = id_a_back.system_properties;
     /* Exception: recalc flags. */
     id_a->recalc = id_b_back.recalc;
     id_b->recalc = id_a_back.recalc;
@@ -1604,6 +1611,9 @@ void BKE_libblock_copy_in_lib(Main *bmain,
   if (id->properties) {
     new_id->properties = IDP_CopyProperty_ex(id->properties, copy_data_flag);
   }
+  if (id->system_properties) {
+    new_id->system_properties = IDP_CopyProperty_ex(id->system_properties, copy_data_flag);
+  }
 
   /* This is never duplicated, only one existing ID should have a given weak ref to library/ID. */
   new_id->library_weak_reference = nullptr;
@@ -1898,8 +1908,8 @@ IDNewNameResult BKE_id_new_name_validate(Main &bmain,
     STRNCPY_UTF8(name, DATA_(BKE_idtype_idcode_to_name(GS(id.name))));
   }
   else {
-    /* disallow non utf8 chars,
-     * the interface checks for this but new ID's based on file names don't */
+    /* Disallow non UTF8 chars,
+     * the interface checks for this but new ID's based on file names don't. */
     BLI_str_utf8_invalid_strip(name, strlen(name));
   }
 
@@ -2443,7 +2453,7 @@ char *BKE_id_to_unique_string_key(const ID *id)
     return BLI_strdup(id->name);
   }
 
-  /* Prefix with an ascii character in the range of 32..96 (visible)
+  /* Prefix with an ASCII character in the range of 32..96 (visible)
    * this ensures we can't have a library ID pair that collide.
    * Where 'LIfooOBbarOBbaz' could be ('LIfoo, OBbarOBbaz') or ('LIfooOBbar', 'OBbaz'). */
   const char ascii_len = strlen(BKE_id_name(id->lib->id)) + 32;
@@ -2527,6 +2537,10 @@ static bool id_order_compare(ID *a, ID *b)
   int *order_a = id_order_get(a);
   int *order_b = id_order_get(b);
 
+  /* In practice either both or neither are set,
+   * failing to do this would result in a logically invalid sort function, see #137712. */
+  BLI_assert((order_a && order_b) || (!order_a && !order_b));
+
   if (order_a && order_b) {
     if (*order_a < *order_b) {
       return true;
@@ -2608,6 +2622,8 @@ void BKE_id_blend_write(BlendWriter *writer, ID *id)
   if (id->properties && !ELEM(GS(id->name), ID_WM)) {
     IDP_BlendWrite(writer, id->properties);
   }
+  /* Never write system_properties in Blender 4.5, will be reset to `nullptr` by reading code (by
+   * the matching call to #BLO_read_struct). */
 
   BKE_animdata_blend_write(writer, id);
 

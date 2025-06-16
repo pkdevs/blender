@@ -27,7 +27,10 @@ static void cmp_node_sunbeams_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Color>("Image").default_value({1.0f, 1.0f, 1.0f, 1.0f});
   b.add_input<decl::Vector>("Source")
       .subtype(PROP_FACTOR)
-      .default_value({0.5f, 0.5f, 0.0f})
+      .dimensions(2)
+      .default_value({0.5f, 0.5f})
+      .min(0.0f)
+      .max(1.0f)
       .description(
           "The position of the source of the rays in normalized coordinates. 0 means lower left "
           "corner and 1 means upper right corner")
@@ -43,14 +46,6 @@ static void cmp_node_sunbeams_declare(NodeDeclarationBuilder &b)
       .compositor_expects_single_value();
 
   b.add_output<decl::Color>("Image");
-}
-
-static void init(bNodeTree * /*ntree*/, bNode *node)
-{
-  /* All members are deprecated and needn't be set, but the data is still allocated for forward
-   * compatibility. */
-  NodeSunBeams *data = MEM_callocN<NodeSunBeams>(__func__);
-  node->storage = data;
 }
 
 using namespace blender::compositor;
@@ -175,7 +170,7 @@ static NodeOperation *get_compositor_operation(Context &context, DNode node)
 
 }  // namespace blender::nodes::node_composite_sunbeams_cc
 
-void register_node_type_cmp_sunbeams()
+static void register_node_type_cmp_sunbeams()
 {
   namespace file_ns = blender::nodes::node_composite_sunbeams_cc;
 
@@ -187,10 +182,8 @@ void register_node_type_cmp_sunbeams()
   ntype.enum_name_legacy = "SUNBEAMS";
   ntype.nclass = NODE_CLASS_OP_FILTER;
   ntype.declare = file_ns::cmp_node_sunbeams_declare;
-  ntype.initfunc = file_ns::init;
-  blender::bke::node_type_storage(
-      ntype, "NodeSunBeams", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
   blender::bke::node_register_type(ntype);
 }
+NOD_REGISTER_NODE(register_node_type_cmp_sunbeams)

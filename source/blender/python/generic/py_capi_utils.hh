@@ -39,7 +39,7 @@ PyObject *PyC_ExceptionBuffer() ATTR_WARN_UNUSED_RESULT ATTR_RETURNS_NONNULL;
 /**
  * A version of #PyC_ExceptionBuffer that returns the last exception only.
  *
- * Useful for error messages from evaluating numeric expressions for e.g.
+ * Useful for error messages from evaluating numeric expressions for example
  * where a full multi-line stack-trace isn't needed and doesn't format well in the status-bar.
  */
 PyObject *PyC_ExceptionBuffer_Simple() ATTR_WARN_UNUSED_RESULT ATTR_RETURNS_NONNULL;
@@ -157,7 +157,7 @@ struct PyC_UnicodeAsBytesAndSize_Data {
  * \param p: Pointer to #PyC_UnicodeAsBytes_Data.
  *
  * \note The Python API docs reference `PyUnicode_FSConverter` however this does not support
- * paths which non utf-8 encoding, see: #111033.
+ * paths which non UTF8 encoding, see: #111033.
  */
 int PyC_ParseUnicodeAsBytesAndSize(PyObject *o, void *p);
 /** A version of #PyC_ParseUnicodeAsBytesAndSize that accepts None. */

@@ -24,7 +24,6 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_endian_switch.h"
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
 #include "BLI_math_color.h"
@@ -69,6 +68,7 @@
 
 #include "ANIM_action.hh"
 #include "ANIM_action_legacy.hh"
+#include "ANIM_armature.hh"
 #include "ANIM_bone_collections.hh"
 #include "ANIM_bonecolor.hh"
 #include "ANIM_versioning.hh"
@@ -133,7 +133,7 @@ static void action_copy_data(Main * /*bmain*/,
 
   /* Duplicate the lists of groups and markers. */
   BLI_duplicatelist(&action_dst.groups, &action_src.groups);
-  BLI_duplicatelist(&action_dst.markers, &action_src.markers);
+  BKE_copy_time_markers(action_dst.markers, action_src.markers, flag);
 
   /* Copy F-Curves, fixing up the links as we go. */
   BLI_listbase_clear(&action_dst.curves);
@@ -572,9 +572,7 @@ static void action_blend_write(BlendWriter *writer, ID *id, const void *id_addre
     BLO_write_struct(writer, bActionGroup, grp);
   }
 
-  LISTBASE_FOREACH (TimeMarker *, marker, &action.markers) {
-    BLO_write_struct(writer, TimeMarker, marker);
-  }
+  BKE_time_markers_blend_write(writer, action.markers);
 
   BKE_previewimg_blend_write(writer, action.preview);
 }
@@ -672,12 +670,11 @@ static void read_slots(BlendDataReader *reader, animrig::Action &action)
   for (int i = 0; i < action.slot_array_num; i++) {
     BLO_read_struct(reader, ActionSlot, &action.slot_array[i]);
 
-    /* Undo generic endian switching, as the ID type values are not numerically the same between
-     * little and big endian machines. Due to the way they are defined, they are always in the same
-     * byte order, regardless of hardware/platform endianness. */
-    if (BLO_read_requires_endian_switch(reader)) {
-      BLI_endian_switch_int16(&action.slot_array[i]->idtype);
-    }
+    /* NOTE: this is endianness-sensitive. */
+    /* In case of required endian switching, this code would have to undo the generic endian
+     * switching, as the ID type values are not numerically the same between little and big endian
+     * machines. Due to the way they are defined, they are always in the same byte order,
+     * regardless of hardware/platform endianness. */
 
     action.slot_array[i]->wrap().blend_read_post();
   }
@@ -687,12 +684,10 @@ static void action_blend_read_data(BlendDataReader *reader, ID *id)
 {
   animrig::Action &action = reinterpret_cast<bAction *>(id)->wrap();
 
-  /* Undo generic endian switching (careful, only the two least significant bytes of the int32 must
-   * be swapped back here, since this value is actually an int16). */
-  if (BLO_read_requires_endian_switch(reader)) {
-    bAction *act = reinterpret_cast<bAction *>(id);
-    BLI_endian_switch_int16(reinterpret_cast<short *>(&act->idroot));
-  }
+  /* NOTE: this is endianness-sensitive. */
+  /* In case of required endianness switching, this code would need to undo the generic endian
+   * switching (careful, only the two least significant bytes of the int32 must be swapped back
+   * here, since this value is actually an int16). */
 
   read_strip_keyframe_data_array(reader, action);
   read_layers(reader, action);
@@ -732,7 +727,7 @@ static void action_blend_read_data(BlendDataReader *reader, ID *id)
     }
   }
 
-  BLO_read_struct_list(reader, TimeMarker, &action.markers);
+  BKE_time_markers_blend_read(reader, action.markers);
 
   /* End of reading legacy data. */
 
@@ -765,7 +760,7 @@ static AssetTypeInfo AssetType_AC = {
 }  // namespace blender::bke
 
 IDTypeInfo IDType_ID_AC = {
-    /*id_code*/ ID_AC,
+    /*id_code*/ bAction::id_type,
     /*id_filter*/ FILTER_ID_AC,
 
     /* This value will be set dynamically in `BKE_idtype_init()` to only include
@@ -804,7 +799,7 @@ bAction *BKE_action_add(Main *bmain, const char name[])
 {
   bAction *act;
 
-  act = static_cast<bAction *>(BKE_id_new(bmain, ID_AC, name));
+  act = BKE_id_new<bAction>(bmain, name);
 
   return act;
 }
@@ -1232,13 +1227,17 @@ bPoseChannel *BKE_pose_channel_active_or_first_selected(Object *ob)
   }
 
   bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
-  if (pchan && (pchan->bone->flag & BONE_SELECTED) && PBONE_VISIBLE(arm, pchan->bone)) {
+  if (pchan && (pchan->bone->flag & BONE_SELECTED) &&
+      blender::animrig::bone_is_visible_pchan(arm, pchan))
+  {
     return pchan;
   }
 
   LISTBASE_FOREACH (bPoseChannel *, pchan, &ob->pose->chanbase) {
     if (pchan->bone != nullptr) {
-      if ((pchan->bone->flag & BONE_SELECTED) && PBONE_VISIBLE(arm, pchan->bone)) {
+      if ((pchan->bone->flag & BONE_SELECTED) &&
+          blender::animrig::bone_is_visible_pchan(arm, pchan))
+      {
         return pchan;
       }
     }
@@ -1336,6 +1335,9 @@ void BKE_pose_copy_data_ex(bPose **dst,
 
     if (pchan->prop) {
       pchan->prop = IDP_CopyProperty_ex(pchan->prop, flag);
+    }
+    if (pchan->system_properties) {
+      pchan->system_properties = IDP_CopyProperty_ex(pchan->system_properties, flag);
     }
 
     pchan->draw_data = nullptr; /* Drawing cache, no need to copy. */
@@ -1534,6 +1536,10 @@ void BKE_pose_channel_free_ex(bPoseChannel *pchan, bool do_id_user)
     IDP_FreeProperty_ex(pchan->prop, do_id_user);
     pchan->prop = nullptr;
   }
+  if (pchan->system_properties) {
+    IDP_FreeProperty_ex(pchan->system_properties, do_id_user);
+    pchan->system_properties = nullptr;
+  }
 
   /* Cached data, for new draw manager rendering code. */
   MEM_SAFE_FREE(pchan->draw_data);
@@ -1661,12 +1667,20 @@ void BKE_pose_channel_copy_data(bPoseChannel *pchan, const bPoseChannel *pchan_f
 
   /* id-properties */
   if (pchan->prop) {
-    /* unlikely but possible it exists */
+    /* Unlikely, but possible that it exists. */
     IDP_FreeProperty(pchan->prop);
     pchan->prop = nullptr;
   }
   if (pchan_from->prop) {
     pchan->prop = IDP_CopyProperty(pchan_from->prop);
+  }
+  if (pchan->system_properties) {
+    /* Unlikely, but possible that it exists. */
+    IDP_FreeProperty(pchan->system_properties);
+    pchan->system_properties = nullptr;
+  }
+  if (pchan_from->system_properties) {
+    pchan->system_properties = IDP_CopyProperty(pchan_from->system_properties);
   }
 
   /* custom shape */
@@ -2071,6 +2085,8 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose, bArmature *arm)
     if (chan->prop) {
       IDP_BlendWrite(writer, chan->prop);
     }
+    /* Never write system_properties in Blender 4.5, will be reset to `nullptr` by reading code (by
+     * the matching call to #BLO_read_struct). */
 
     BKE_constraint_blend_write(writer, &chan->constraints);
 
@@ -2135,6 +2151,8 @@ void BKE_pose_blend_read_data(BlendDataReader *reader, ID *id_owner, bPose *pose
 
     BLO_read_struct(reader, IDProperty, &pchan->prop);
     IDP_BlendDataRead(reader, &pchan->prop);
+    BLO_read_struct(reader, IDProperty, &pchan->system_properties);
+    IDP_BlendDataRead(reader, &pchan->system_properties);
 
     BLO_read_struct(reader, bMotionPath, &pchan->mpath);
     if (pchan->mpath) {

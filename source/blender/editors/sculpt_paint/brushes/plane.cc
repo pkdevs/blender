@@ -77,7 +77,7 @@ static void calc_local_positions(const float4x4 &mat,
  * the z-distances are divided by `height`, effectively scaling the
  * z-distances so that a vertex of local coordinates
  * `(0, 0, height)` has a z-distance of 1.
- .
+ *
  * When `height` is 0, the local distances are set to 1. In object space, this is
  * equivalent to setting the distances equal to the radius, resulting in
  * a falloff strength of 0 (no displacement).
@@ -231,6 +231,7 @@ static void calc_faces(const Depsgraph &depsgraph,
   tls.distances.resize(verts.size());
   const MutableSpan<float> distances = tls.distances;
   calc_local_distances(height, depth, local_positions, distances);
+  filter_distances_with_radius(1.0f, distances, factors);
 
   apply_hardness_to_distances(1.0f, cache.hardness, distances);
   BKE_brush_calc_curve_factors(
@@ -284,6 +285,7 @@ static void calc_grids(const Depsgraph &depsgraph,
   tls.distances.resize(positions.size());
   const MutableSpan<float> distances = tls.distances;
   calc_local_distances(height, depth, local_positions, distances);
+  filter_distances_with_radius(1.0f, distances, factors);
 
   apply_hardness_to_distances(1.0f, cache.hardness, distances);
   BKE_brush_calc_curve_factors(
@@ -335,6 +337,7 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   tls.distances.resize(positions.size());
   const MutableSpan<float> distances = tls.distances;
   calc_local_distances(height, depth, local_positions, distances);
+  filter_distances_with_radius(1.0f, distances, factors);
 
   apply_hardness_to_distances(1.0f, cache.hardness, distances);
   BKE_brush_calc_curve_factors(

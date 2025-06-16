@@ -181,7 +181,7 @@ static const EnumPropertyItem *dt_layers_select_src_itemf(bContext *C,
   }
   else if (data_type == DT_TYPE_UV) {
     const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-    const Object *ob_src_eval = DEG_get_evaluated_object(depsgraph, ob_src);
+    const Object *ob_src_eval = DEG_get_evaluated(depsgraph, ob_src);
     const Mesh *mesh_eval = BKE_object_get_evaluated_mesh_no_subsurf(ob_src_eval);
     if (!mesh_eval) {
       RNA_enum_item_end(&item, &totitem);
@@ -201,7 +201,7 @@ static const EnumPropertyItem *dt_layers_select_src_itemf(bContext *C,
   }
   else if (data_type & DT_TYPE_VCOL_ALL) {
     const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-    const Object *ob_src_eval = DEG_get_evaluated_object(depsgraph, ob_src);
+    const Object *ob_src_eval = DEG_get_evaluated(depsgraph, ob_src);
     const Mesh *mesh_eval = BKE_object_get_evaluated_mesh_no_subsurf(ob_src_eval);
     if (!mesh_eval) {
       RNA_enum_item_end(&item, &totitem);
@@ -486,6 +486,8 @@ static wmOperatorStatus data_transfer_exec(bContext *C, wmOperator *op)
 
   data_transfer_exec_preprocess_objects(C, op, ob_src, &ctx_objects, reverse_transfer);
 
+  int invalid_count = 0;
+
   for (const PointerRNA &ptr : ctx_objects) {
     Object *ob_dst = static_cast<Object *>(ptr.data);
 
@@ -494,10 +496,10 @@ static wmOperatorStatus data_transfer_exec(bContext *C, wmOperator *op)
     }
 
     if (data_transfer_exec_is_object_valid(op, ob_src, ob_dst, reverse_transfer)) {
-      Object *ob_src_eval = DEG_get_evaluated_object(depsgraph, ob_src);
+      Object *ob_src_eval = DEG_get_evaluated(depsgraph, ob_src);
 
       if (space_transform) {
-        Object *ob_dst_eval = DEG_get_evaluated_object(depsgraph, ob_dst);
+        Object *ob_dst_eval = DEG_get_evaluated(depsgraph, ob_dst);
         BLI_SPACE_TRANSFORM_SETUP(space_transform, ob_dst_eval, ob_src_eval);
       }
 
@@ -527,6 +529,9 @@ static wmOperatorStatus data_transfer_exec(bContext *C, wmOperator *op)
         changed = true;
       }
     }
+    else {
+      invalid_count++;
+    }
 
     if (reverse_transfer) {
       std::swap(ob_src, ob_dst);
@@ -536,6 +541,11 @@ static wmOperatorStatus data_transfer_exec(bContext *C, wmOperator *op)
   if (changed) {
     DEG_relations_tag_update(CTX_data_main(C));
     WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, nullptr);
+  }
+
+  if (invalid_count > 0) {
+    BKE_reportf(
+        op->reports, RPT_WARNING, "Failed to transfer mesh data to %d objects", invalid_count);
   }
 
 #if 0 /* TODO */
@@ -841,7 +851,7 @@ static wmOperatorStatus datalayout_transfer_exec(bContext *C, wmOperator *op)
       return OPERATOR_CANCELLED;
     }
 
-    Object *ob_src_eval = DEG_get_evaluated_object(depsgraph, ob_src);
+    Object *ob_src_eval = DEG_get_evaluated(depsgraph, ob_src);
 
     BKE_object_data_transfer_layout(depsgraph,
                                     ob_src_eval,
@@ -872,7 +882,7 @@ static wmOperatorStatus datalayout_transfer_exec(bContext *C, wmOperator *op)
       layers_select_dst[fromto_idx] = layers_dst;
     }
 
-    Object *ob_src_eval = DEG_get_evaluated_object(depsgraph, ob_src);
+    Object *ob_src_eval = DEG_get_evaluated(depsgraph, ob_src);
 
     data_transfer_exec_preprocess_objects(C, op, ob_src, &ctx_objects, false);
 

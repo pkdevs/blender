@@ -360,6 +360,30 @@ static void generate_specialization_constant_declarations(const shader::ShaderCr
   }
 }
 
+static void generate_compilation_constant_declarations(const shader::ShaderCreateInfo *info,
+                                                       std::stringstream &ss)
+{
+  for (const CompilationConstant &cc : info->compilation_constants_) {
+    std::string value;
+    std::string value_define;
+    switch (cc.type) {
+      case Type::uint_t:
+        value = std::to_string(cc.value.u);
+        break;
+      case Type::int_t:
+        value = std::to_string(cc.value.i);
+        break;
+      case Type::bool_t:
+        value = cc.value.u ? "true" : "false";
+        value_define = std::to_string(cc.value.u);
+        break;
+      default:
+        BLI_assert_unreachable();
+    }
+    ss << "constant " << cc.type << " " << cc.name << " = " << value << ";\n";
+  }
+}
+
 bool MTLShader::generate_msl_from_glsl(const shader::ShaderCreateInfo *info)
 {
   /* Verify if create-info is available.
@@ -399,6 +423,7 @@ bool MTLShader::generate_msl_from_glsl(const shader::ShaderCreateInfo *info)
    * from GLSL to MSL. Also include additional GPU defines for
    * optional high-level feature support. */
   std::string msl_defines_string = "#define GPU_ARB_shader_draw_parameters 1\n";
+  msl_defines_string += "#define GPU_ARB_clip_control 1\n";
 
   /* NOTE(Metal): textureGather appears to not function correctly on non-Apple-silicon GPUs.
    * Manifests as selection outlines not showing up (#103412). Disable texture gather if
@@ -498,6 +523,10 @@ bool MTLShader::generate_msl_from_glsl(const shader::ShaderCreateInfo *info)
   /* Generate specialization constants. */
   generate_specialization_constant_declarations(info, ss_vertex);
   generate_specialization_constant_declarations(info, ss_fragment);
+
+  /* Generate compilation constants. */
+  generate_compilation_constant_declarations(info, ss_vertex);
+  generate_compilation_constant_declarations(info, ss_fragment);
 
   /*** Generate VERTEX Stage ***/
   /* Conditional defines. */
@@ -869,6 +898,7 @@ bool MTLShader::generate_msl_from_glsl_compute(const shader::ShaderCreateInfo *i
   ss_compute << "#line " STRINGIFY(__LINE__) " \"" __FILE__ "\"" << std::endl;
 
   ss_compute << "#define GPU_ARB_shader_draw_parameters 1\n";
+  ss_compute << "#define GPU_ARB_clip_control 1\n";
   if (bool(info->builtins_ & BuiltinBits::TEXTURE_ATOMIC) &&
       MTLBackend::get_capabilities().supports_texture_atomics)
   {
@@ -876,6 +906,7 @@ bool MTLShader::generate_msl_from_glsl_compute(const shader::ShaderCreateInfo *i
   }
 
   generate_specialization_constant_declarations(info, ss_compute);
+  generate_compilation_constant_declarations(info, ss_compute);
 
   /* Conditional defines. */
   if (msl_iface.use_argument_buffer_for_samplers()) {

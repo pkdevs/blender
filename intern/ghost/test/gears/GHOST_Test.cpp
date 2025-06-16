@@ -459,7 +459,7 @@ bool Application::processEvent(const GHOST_IEvent *event)
 #endif
     case GHOST_kEventWheel: {
       GHOST_TEventWheelData *wheelData = (GHOST_TEventWheelData *)event->getData();
-      if (wheelData->z > 0) {
+      if (wheelData->value > 0) {
         view_rotz += 5.f;
       }
       else {
@@ -643,17 +643,20 @@ int main(int /*argc*/, char ** /*argv*/)
                           "SOFTWARE\\NVIDIA Corporation\\Global\\Stereo3D\\StereoEnable",
                           KEY_ALL_ACCESS);
 
-    if (lresult == ERROR_SUCCESS)
+    if (lresult == ERROR_SUCCESS) {
       printf("Successfully opened key\n");
+    }
 #  if 0
     lresult = regkey.QueryValue(&keyValue, "StereoEnable");
-    if (lresult == ERROR_SUCCESS)
+    if (lresult == ERROR_SUCCESS) {
       printf("Successfully queried key\n");
+    }
 #  endif
     lresult = regkey.SetValue(
         HKEY_LOCAL_MACHINE, "SOFTWARE\\NVIDIA Corporation\\Global\\Stereo3D\\StereoEnable", "1");
-    if (lresult == ERROR_SUCCESS)
+    if (lresult == ERROR_SUCCESS) {
       printf("Successfully set value for key\n");
+    }
     regkey.Close();
     if (lresult == ERROR_SUCCESS) {
       printf("Successfully closed key\n");

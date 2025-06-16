@@ -383,7 +383,7 @@ static void menu_items_from_all_operators(bContext *C, MenuSearch_Data *data)
       char uiname[256];
       WM_operator_py_idname(idname_as_py, ot->idname);
 
-      SNPRINTF(uiname, "%s " UI_MENU_ARROW_SEP "%s", idname_as_py, ot_ui_name);
+      SNPRINTF(uiname, "%s " UI_MENU_ARROW_SEP " %s", idname_as_py, ot_ui_name);
 
       item.drawwstr_full = scope.allocator().copy_string(uiname);
       item.drawstr = ot_ui_name;
@@ -414,6 +414,15 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
 {
   blender::Map<MenuType *, const char *> menu_display_name_map;
   const uiStyle *style = UI_style_get_dpi();
+
+  const bContextStore *old_context_store = CTX_store_get(C);
+  BLI_SCOPED_DEFER([&]() { CTX_store_set(C, old_context_store); });
+  bContextStore context_store;
+  if (old_context_store) {
+    context_store = *old_context_store;
+  }
+  context_store.entries.append({"is_menu_search", true});
+  CTX_store_set(C, &context_store);
 
   /* Convert into non-ui structure. */
   MenuSearch_Data *data = MEM_new<MenuSearch_Data>(__func__);
@@ -664,7 +673,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
       if (current_menu.context.has_value()) {
         uiLayoutContextCopy(layout, &*current_menu.context);
       }
-      uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_REGION_WIN);
+      layout->operator_context_set(WM_OP_INVOKE_REGION_WIN);
       UI_menutype_draw(C, mt, layout);
 
       UI_block_end(C, block);
@@ -710,7 +719,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
             bool drawstr_is_empty = false;
             if (drawstr_sep != nullptr) {
               BLI_assert(str_buf.size() == 0);
-              /* Detect empty string, fallback to menu name. */
+              /* Detect empty string, fall back to menu name. */
               const char *drawstr = but->drawstr.c_str();
               int drawstr_len = drawstr_sep - but->drawstr.c_str();
               if (UNLIKELY(drawstr_len == 0)) {
@@ -761,7 +770,7 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
 
           UI_block_flag_enable(sub_block, UI_BLOCK_SHOW_SHORTCUT_ALWAYS);
 
-          uiLayoutSetOperatorContext(sub_layout, WM_OP_INVOKE_REGION_WIN);
+          sub_layout->operator_context_set(WM_OP_INVOKE_REGION_WIN);
 
           /* If this is a panel, check it's poll function succeeds before drawing.
            * otherwise draw(..) may be called in an unsupported context and crash, see: #130744.

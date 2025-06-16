@@ -120,8 +120,8 @@ bool ED_object_get_active_image(Object *ob,
                                 const bNode **r_node,
                                 const bNodeTree **r_ntree)
 {
-  Material *ma = DEG_is_evaluated_object(ob) ? BKE_object_material_get_eval(ob, mat_nr) :
-                                               BKE_object_material_get(ob, mat_nr);
+  Material *ma = DEG_is_evaluated(ob) ? BKE_object_material_get_eval(ob, mat_nr) :
+                                        BKE_object_material_get(ob, mat_nr);
   bNodeTree *ntree = (ma && ma->use_nodes) ? ma->nodetree : nullptr;
   bNode *node = (ntree) ? bke::node_get_active_texture(*ntree) : nullptr;
 
@@ -204,7 +204,7 @@ void ED_uvedit_foreach_uv(const Scene *scene,
                           FunctionRef<void(float[2])> user_fn)
 {
   /* Check selection for quick return. */
-  const bool synced_selection = (scene->toolsettings->uv_flag & UV_SYNC_SELECTION) != 0;
+  const bool synced_selection = (scene->toolsettings->uv_flag & UV_FLAG_SYNC_SELECT) != 0;
   if (synced_selection && bm->totvertsel == (selected ? 0 : bm->totvert)) {
     return;
   }
@@ -621,7 +621,7 @@ static void UV_OT_align(wmOperatorType *ot)
   ot->idname = "UV_OT_align";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_align_exec;
   ot->poll = ED_operator_uvedit;
 
@@ -938,7 +938,7 @@ static void UV_OT_remove_doubles(wmOperatorType *ot)
   ot->idname = "UV_OT_remove_doubles";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_remove_doubles_exec;
   ot->poll = ED_operator_uvedit;
 
@@ -981,7 +981,7 @@ static void UV_OT_weld(wmOperatorType *ot)
   ot->idname = "UV_OT_weld";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_weld_exec;
   ot->poll = ED_operator_uvedit;
 }
@@ -1070,7 +1070,7 @@ static void UV_OT_snap_cursor(wmOperatorType *ot)
   ot->idname = "UV_OT_snap_cursor";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_snap_cursor_exec;
   ot->poll = ED_operator_uvedit_space_image; /* requires space image */
 
@@ -1255,7 +1255,7 @@ static void UV_OT_snap_selected(wmOperatorType *ot)
   ot->idname = "UV_OT_snap_selected";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_snap_selection_exec;
   ot->poll = ED_operator_uvedit_space_image;
 
@@ -1280,7 +1280,7 @@ static wmOperatorStatus uv_pin_exec(bContext *C, wmOperator *op)
   const ToolSettings *ts = scene->toolsettings;
   const bool clear = RNA_boolean_get(op->ptr, "clear");
   const bool invert = RNA_boolean_get(op->ptr, "invert");
-  const bool synced_selection = (ts->uv_flag & UV_SYNC_SELECTION) != 0;
+  const bool synced_selection = (ts->uv_flag & UV_FLAG_SYNC_SELECT) != 0;
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
       scene, view_layer, nullptr);
@@ -1349,7 +1349,7 @@ static void UV_OT_pin(wmOperatorType *ot)
   ot->idname = "UV_OT_pin";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_pin_exec;
   ot->poll = ED_operator_uvedit;
 
@@ -1400,6 +1400,7 @@ static wmOperatorStatus uv_hide_exec(bContext *C, wmOperator *op)
   const ToolSettings *ts = scene->toolsettings;
   const bool swap = RNA_boolean_get(op->ptr, "unselected");
   const bool use_face_center = (ts->uv_selectmode == UV_SELECT_FACE);
+  const bool use_select_linked = ED_uvedit_select_island_check(ts);
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
       scene, view_layer, nullptr);
@@ -1410,7 +1411,7 @@ static wmOperatorStatus uv_hide_exec(bContext *C, wmOperator *op)
     BMLoop *l;
     BMIter iter, liter;
 
-    if (ts->uv_flag & UV_SYNC_SELECTION) {
+    if (ts->uv_flag & UV_FLAG_SYNC_SELECT) {
       /* Pass. */
     }
     else {
@@ -1421,7 +1422,7 @@ static wmOperatorStatus uv_hide_exec(bContext *C, wmOperator *op)
     }
     const BMUVOffsets offsets = BM_uv_map_offsets_get(em->bm);
 
-    if (ts->uv_flag & UV_SYNC_SELECTION) {
+    if (ts->uv_flag & UV_FLAG_SYNC_SELECT) {
       if (EDBM_mesh_hide(em, swap)) {
         Mesh *mesh = static_cast<Mesh *>(ob->data);
         EDBMUpdate_Params params = {0};
@@ -1487,7 +1488,7 @@ static wmOperatorStatus uv_hide_exec(bContext *C, wmOperator *op)
               BM_face_select_set(em->bm, efa, false);
               break;
             }
-            if (ts->uv_selectmode == UV_SELECT_ISLAND) {
+            if (use_select_linked) {
               BM_face_select_set(em->bm, efa, false);
               break;
             }
@@ -1550,7 +1551,7 @@ static void UV_OT_hide(wmOperatorType *ot)
   ot->idname = "UV_OT_hide";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_hide_exec;
   ot->poll = ED_operator_uvedit;
 
@@ -1583,7 +1584,7 @@ static wmOperatorStatus uv_reveal_exec(bContext *C, wmOperator *op)
     BMLoop *l;
     BMIter iter, liter;
 
-    if (ts->uv_flag & UV_SYNC_SELECTION) {
+    if (ts->uv_flag & UV_FLAG_SYNC_SELECT) {
       /* Pass. */
     }
     else {
@@ -1600,7 +1601,7 @@ static wmOperatorStatus uv_reveal_exec(bContext *C, wmOperator *op)
      * visibility checks internally. Current implementation handles each case separately. */
 
     /* call the mesh function if we are in mesh sync sel */
-    if (ts->uv_flag & UV_SYNC_SELECTION) {
+    if (ts->uv_flag & UV_FLAG_SYNC_SELECT) {
       if (EDBM_mesh_reveal(em, select)) {
         Mesh *mesh = static_cast<Mesh *>(ob->data);
         EDBMUpdate_Params params = {0};
@@ -1702,7 +1703,7 @@ static void UV_OT_reveal(wmOperatorType *ot)
   ot->idname = "UV_OT_reveal";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_reveal_exec;
   ot->poll = ED_operator_uvedit;
 
@@ -1763,7 +1764,7 @@ static void UV_OT_cursor_set(wmOperatorType *ot)
   ot->description = "Set 2D cursor location";
   ot->idname = "UV_OT_cursor_set";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_set_2d_cursor_exec;
   ot->invoke = uv_set_2d_cursor_invoke;
   ot->poll = ED_space_image_cursor_poll;
@@ -1870,7 +1871,7 @@ static void UV_OT_seams_from_islands(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_seams_from_islands_exec;
   ot->poll = ED_operator_uvedit;
 
@@ -1895,7 +1896,7 @@ static wmOperatorStatus uv_mark_seam_exec(bContext *C, wmOperator *op)
   BMIter iter, liter;
 
   const bool flag_set = !RNA_boolean_get(op->ptr, "clear");
-  const bool synced_selection = (ts->uv_flag & UV_SYNC_SELECTION) != 0;
+  const bool synced_selection = (ts->uv_flag & UV_FLAG_SYNC_SELECT) != 0;
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
       scene, view_layer, nullptr);
@@ -1949,19 +1950,13 @@ static wmOperatorStatus uv_mark_seam_invoke(bContext *C, wmOperator *op, const w
   pup = UI_popup_menu_begin(C, IFACE_("Edges"), ICON_NONE);
   layout = UI_popup_menu_layout(pup);
 
-  uiLayoutSetOperatorContext(layout, WM_OP_EXEC_DEFAULT);
-  uiItemBooleanO(layout,
-                 CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Mark Seam"),
-                 ICON_NONE,
-                 op->type->idname,
-                 "clear",
-                 false);
-  uiItemBooleanO(layout,
-                 CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Clear Seam"),
-                 ICON_NONE,
-                 op->type->idname,
-                 "clear",
-                 true);
+  layout->operator_context_set(WM_OP_EXEC_DEFAULT);
+  PointerRNA op_ptr = layout->op(
+      op->type->idname, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Mark Seam"), ICON_NONE);
+  RNA_boolean_set(&op_ptr, "clear", false);
+  op_ptr = layout->op(
+      op->type->idname, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Clear Seam"), ICON_NONE);
+  RNA_boolean_set(&op_ptr, "clear", true);
 
   UI_popup_menu_end(C, pup);
 
@@ -1978,7 +1973,7 @@ static void UV_OT_mark_seam(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_mark_seam_exec;
   ot->invoke = uv_mark_seam_invoke;
   ot->poll = ED_operator_uvedit;

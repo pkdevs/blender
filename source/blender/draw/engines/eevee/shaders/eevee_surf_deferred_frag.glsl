@@ -21,7 +21,7 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_cryptomatte_out)
 #include "draw_view_lib.glsl"
 #include "eevee_ambient_occlusion_lib.glsl"
 #include "eevee_gbuffer_lib.glsl"
-#include "eevee_nodetree_lib.glsl"
+#include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_sampling_lib.glsl"
 #include "eevee_surf_lib.glsl"
 
@@ -121,8 +121,9 @@ void main()
   out_gbuf_normal = gbuf.N[0];
 
   /* Output remaining closures using image store. */
-  for (int layer = GBUF_CLOSURE_FB_LAYER_COUNT; layer < GBUFFER_DATA_MAX && layer < gbuf.data_len;
-       layer++)
+  [[gpu::unroll(6)]] for (int layer = GBUF_CLOSURE_FB_LAYER_COUNT;
+                          layer < GBUFFER_DATA_MAX && layer < gbuf.data_len;
+                          layer++)
   {
     /* NOTE: The image view start at layer GBUF_CLOSURE_FB_LAYER_COUNT so all destination layer is
      * `layer - GBUF_CLOSURE_FB_LAYER_COUNT`. */
@@ -130,9 +131,9 @@ void main()
                    int3(out_texel, layer - GBUF_CLOSURE_FB_LAYER_COUNT),
                    gbuf.data[layer]);
   }
-  for (int layer = GBUF_NORMAL_FB_LAYER_COUNT;
-       layer < GBUFFER_NORMAL_MAX && layer < gbuf.normal_len;
-       layer++)
+  [[gpu::unroll(4)]] for (int layer = GBUF_NORMAL_FB_LAYER_COUNT;
+                          layer < GBUFFER_NORMAL_MAX && layer < gbuf.normal_len;
+                          layer++)
   {
     /* NOTE: The image view start at layer GBUF_NORMAL_FB_LAYER_COUNT so all destination layer is
      * `layer - GBUF_NORMAL_FB_LAYER_COUNT`. */

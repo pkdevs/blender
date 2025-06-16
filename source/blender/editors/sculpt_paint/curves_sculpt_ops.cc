@@ -469,15 +469,15 @@ static void select_random_ui(bContext * /*C*/, wmOperator *op)
 {
   uiLayout *layout = op->layout;
 
-  uiItemR(layout, op->ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(layout, op->ptr, "constant_per_curve", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(layout, op->ptr, "partial", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout->prop(op->ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout->prop(op->ptr, "constant_per_curve", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout->prop(op->ptr, "partial", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   if (RNA_boolean_get(op->ptr, "partial")) {
-    uiItemR(layout, op->ptr, "min", UI_ITEM_R_SLIDER, IFACE_("Min"), ICON_NONE);
+    layout->prop(op->ptr, "min", UI_ITEM_R_SLIDER, IFACE_("Min"), ICON_NONE);
   }
   else {
-    uiItemR(layout, op->ptr, "probability", UI_ITEM_R_SLIDER, IFACE_("Probability"), ICON_NONE);
+    layout->prop(op->ptr, "probability", UI_ITEM_R_SLIDER, IFACE_("Probability"), ICON_NONE);
   }
 }
 
@@ -912,8 +912,10 @@ static int calculate_points_per_side(bContext *C, MinDistanceEditData &op_data)
   return std::min(300, needed_points);
 }
 
-static void min_distance_edit_draw(
-    bContext *C, int /*x*/, int /*y*/, float /*x_tilt*/, float /*y_tilt*/, void *customdata)
+static void min_distance_edit_draw(bContext *C,
+                                   const blender::int2 & /*xy*/,
+                                   const blender::float2 & /*tilt*/,
+                                   void *customdata)
 {
   Scene *scene = CTX_data_scene(C);
   MinDistanceEditData &op_data = *static_cast<MinDistanceEditData *>(customdata);
@@ -963,9 +965,12 @@ static void min_distance_edit_draw(
 
   GPUVertFormat *format3d = immVertexFormat();
 
-  const uint pos3d = GPU_vertformat_attr_add(format3d, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  const uint col3d = GPU_vertformat_attr_add(format3d, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-  const uint siz3d = GPU_vertformat_attr_add(format3d, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  const uint pos3d = GPU_vertformat_attr_add(
+      format3d, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
+  const uint col3d = GPU_vertformat_attr_add(
+      format3d, "color", blender::gpu::VertAttrType::SFLOAT_32_32_32_32);
+  const uint siz3d = GPU_vertformat_attr_add(
+      format3d, "size", blender::gpu::VertAttrType::SFLOAT_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR);
   GPU_program_point_size(true);
@@ -1007,7 +1012,7 @@ static void min_distance_edit_draw(
   GPU_matrix_translate_2f(float(op_data.initial_mouse.x), float(op_data.initial_mouse.y));
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos2d = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos2d = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -1028,7 +1033,7 @@ static wmOperatorStatus min_distance_edit_invoke(bContext *C, wmOperator *op, co
   Object &curves_ob_orig = *CTX_data_active_object(C);
   Curves &curves_id_orig = *static_cast<Curves *>(curves_ob_orig.data);
   Object &surface_ob_orig = *curves_id_orig.surface;
-  Object *surface_ob_eval = DEG_get_evaluated_object(depsgraph, &surface_ob_orig);
+  Object *surface_ob_eval = DEG_get_evaluated(depsgraph, &surface_ob_orig);
   if (surface_ob_eval == nullptr) {
     return OPERATOR_CANCELLED;
   }

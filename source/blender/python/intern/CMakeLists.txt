@@ -8,7 +8,6 @@ set(INC
   ../../imbuf/intern/oiio
   ../../makesrna
   ../../../../intern/mantaflow/extern
-  ../../../../intern/opencolorio
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -130,6 +129,7 @@ set(LIB
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::animrig
   bf_python_gpu
+  PRIVATE bf::imbuf::opencolorio
 
   ${PYTHON_LINKFLAGS}
   ${PYTHON_LIBRARIES}
@@ -300,10 +300,6 @@ if(WITH_MOD_FLUID)
   add_definitions(-DWITH_FLUID)
 endif()
 
-if(WITH_OPENCOLLADA)
-  add_definitions(-DWITH_COLLADA)
-endif()
-
 if(WITH_IO_WAVEFRONT_OBJ)
   add_definitions(-DWITH_IO_WAVEFRONT_OBJ)
 endif()
@@ -326,10 +322,6 @@ endif()
 
 if(WITH_ALEMBIC)
   add_definitions(-DWITH_ALEMBIC)
-endif()
-
-if(WITH_OPENCOLORIO)
-  add_definitions(-DWITH_OCIO)
 endif()
 
 if(WITH_OPENVDB)
@@ -381,6 +373,10 @@ if(WITH_HYDRA)
     bf_render_hydra
   )
   add_definitions(-DWITH_HYDRA)
+endif()
+
+if(WITH_EXPERIMENTAL_FEATURES)
+  add_definitions(-DWITH_EXPERIMENTAL_FEATURES)
 endif()
 
 blender_add_lib(bf_python "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

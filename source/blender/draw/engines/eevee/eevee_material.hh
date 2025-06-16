@@ -129,10 +129,10 @@ static inline uint64_t shader_uuid_from_material_type(
     eMaterialThickness thickness_type = MAT_THICKNESS_SPHERE,
     char blend_flags = 0)
 {
-  BLI_assert(displacement_type < (1 << 1));
-  BLI_assert(thickness_type < (1 << 1));
-  BLI_assert(geometry_type < (1 << 4));
-  BLI_assert(pipeline_type < (1 << 4));
+  BLI_assert(int64_t(displacement_type) < (1 << 1));
+  BLI_assert(int64_t(thickness_type) < (1 << 1));
+  BLI_assert(int64_t(geometry_type) < (1 << 4));
+  BLI_assert(int64_t(pipeline_type) < (1 << 4));
   uint64_t transparent_shadows = blend_flags & MA_BL_TRANSPARENT_SHADOW ? 1 : 0;
 
   uint64_t uuid;
@@ -352,8 +352,13 @@ class MaterialModule {
  public:
   ::Material *diffuse_mat;
   ::Material *metallic_mat;
+  ::Material *default_surface;
+  ::Material *default_volume;
+
+  ::Material *material_override = nullptr;
 
   int64_t queued_shaders_count = 0;
+  int64_t queued_textures_count = 0;
   int64_t queued_optimize_shaders_count = 0;
 
  private:
@@ -368,11 +373,17 @@ class MaterialModule {
 
   ::Material *error_mat_;
 
+  uint64_t gpu_pass_last_update_ = 0;
+  uint64_t gpu_pass_next_update_ = 0;
+
+  Vector<GPUMaterialTexture *> texture_loading_queue_;
+
  public:
   MaterialModule(Instance &inst);
   ~MaterialModule();
 
   void begin_sync();
+  void end_sync();
 
   /**
    * Returned Material references are valid until the next call to this function or material_get().
@@ -383,6 +394,16 @@ class MaterialModule {
    * material_array_get().
    */
   Material &material_get(Object *ob, bool has_motion, int mat_nr, eMaterialGeometry geometry_type);
+
+  /* Request default materials and return DEFAULT_MATERIALS if they are compiled. */
+  ShaderGroups default_materials_load_async()
+  {
+    return default_materials_load(false);
+  }
+  ShaderGroups default_materials_wait_ready()
+  {
+    return default_materials_load(true);
+  }
 
  private:
   Material &material_sync(Object *ob,
@@ -397,6 +418,11 @@ class MaterialModule {
                                  eMaterialPipeline pipeline_type,
                                  eMaterialGeometry geometry_type,
                                  eMaterialProbe probe_capture = MAT_PROBE_NONE);
+
+  /* Push unloaded texture used by this material to the texture loading queue. */
+  void queue_texture_loading(GPUMaterial *material);
+
+  ShaderGroups default_materials_load(bool block_until_ready = false);
 };
 
 /** \} */

@@ -12,6 +12,7 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 #include "BLI_task.hh"
 
 #include "GPU_capabilities.hh"
@@ -265,7 +266,7 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
       case VBOType::Attr14:
       case VBOType::Attr15: {
         const int8_t attr_index = int8_t(vbos_to_create[i]) - int8_t(VBOType::Attr0);
-        created_vbos[i] = extract_attribute(mr, cache.attr_used.requests[attr_index]);
+        created_vbos[i] = extract_attribute(mr, cache.attr_used[attr_index]);
         break;
       }
       case VBOType::AttrViewer:
@@ -273,6 +274,9 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
         break;
       case VBOType::VertexNormal:
         created_vbos[i] = extract_vert_normals(mr);
+        break;
+      case VBOType::PaintOverlayFlag:
+        created_vbos[i] = extract_paint_overlay_flags(mr);
         break;
     }
   });
@@ -400,11 +404,19 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
         face_dot_position_vbo,
         vbos_to_create.contains(VBOType::FaceDotNormal) ? &face_dot_normal_vbo : nullptr,
         face_dot_ibo);
-    buffers.vbos.add_new(VBOType::FaceDotPosition, std::move(face_dot_position_vbo));
+    if (vbos_to_create.contains(VBOType::FaceDotPosition)) {
+      buffers.vbos.add_new(VBOType::FaceDotPosition, std::move(face_dot_position_vbo));
+    }
     if (face_dot_normal_vbo) {
       buffers.vbos.add_new(VBOType::FaceDotNormal, std::move(face_dot_normal_vbo));
     }
-    buffers.ibos.add_new(IBOType::FaceDots, std::move(face_dot_ibo));
+    if (ibos_to_create.contains(IBOType::FaceDots)) {
+      buffers.ibos.add_new(IBOType::FaceDots, std::move(face_dot_ibo));
+    }
+  }
+  if (vbos_to_create.contains(VBOType::PaintOverlayFlag)) {
+    buffers.vbos.add_new(VBOType::PaintOverlayFlag,
+                         extract_paint_overlay_flags_subdiv(mr, subdiv_cache));
   }
   if (ibos_to_create.contains(IBOType::LinesPaintMask)) {
     buffers.ibos.add_new(IBOType::LinesPaintMask,
@@ -449,8 +461,8 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
   for (const int8_t i : IndexRange(GPU_MAX_ATTR)) {
     const VBOType request = VBOType(int8_t(VBOType::Attr0) + i);
     if (vbos_to_create.contains(request)) {
-      buffers.vbos.add_new(
-          request, extract_attribute_subdiv(mr, subdiv_cache, cache.attr_used.requests[i]));
+      buffers.vbos.add_new(request,
+                           extract_attribute_subdiv(mr, subdiv_cache, cache.attr_used[i]));
     }
   }
 }

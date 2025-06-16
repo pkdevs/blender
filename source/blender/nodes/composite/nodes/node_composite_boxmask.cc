@@ -33,13 +33,15 @@ static void cmp_node_boxmask_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>("Value").subtype(PROP_FACTOR).default_value(1.0f).min(0.0f).max(1.0f);
   b.add_input<decl::Vector>("Position")
       .subtype(PROP_FACTOR)
-      .default_value({0.5f, 0.5f, 0.0f})
+      .dimensions(2)
+      .default_value({0.5f, 0.5f})
       .min(-0.5f)
       .max(1.5f)
       .compositor_expects_single_value();
   b.add_input<decl::Vector>("Size")
       .subtype(PROP_FACTOR)
-      .default_value({0.2f, 0.1f, 0.0f})
+      .dimensions(2)
+      .default_value({0.2f, 0.1f})
       .min(0.0f)
       .max(1.0f)
       .compositor_expects_single_value();
@@ -48,17 +50,9 @@ static void cmp_node_boxmask_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Float>("Mask");
 }
 
-static void node_composit_init_boxmask(bNodeTree * /*ntree*/, bNode *node)
-{
-  /* All members are deprecated and needn't be set, but the data is still allocated for forward
-   * compatibility. */
-  NodeBoxMask *data = MEM_callocN<NodeBoxMask>(__func__);
-  node->storage = data;
-}
-
 static void node_composit_buts_boxmask(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "mask_type", UI_ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  layout->prop(ptr, "mask_type", UI_ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
 }
 
 using namespace blender::compositor;
@@ -257,18 +251,14 @@ class BoxMaskOperation : public NodeOperation {
 
   float2 get_location()
   {
-    return math::clamp(
-        this->get_input("Position").get_single_value_default(float3(0.5f, 0.5f, 0.0f)).xy(),
-        float2(-0.5f),
-        float2(1.5f));
+    return this->get_input("Position").get_single_value_default(float3(0.5f, 0.5f, 0.0f)).xy();
   }
 
   float2 get_size()
   {
-    return math::clamp(
-        this->get_input("Size").get_single_value_default(float3(0.2f, 0.1f, 0.0f)).xy(),
+    return math::max(
         float2(0.0f),
-        float2(1.0f));
+        this->get_input("Size").get_single_value_default(float3(0.2f, 0.1f, 0.0f)).xy());
   }
 
   float get_angle()
@@ -284,7 +274,7 @@ static NodeOperation *get_compositor_operation(Context &context, DNode node)
 
 }  // namespace blender::nodes::node_composite_boxmask_cc
 
-void register_node_type_cmp_boxmask()
+static void register_node_type_cmp_boxmask()
 {
   namespace file_ns = blender::nodes::node_composite_boxmask_cc;
 
@@ -297,10 +287,8 @@ void register_node_type_cmp_boxmask()
   ntype.nclass = NODE_CLASS_MATTE;
   ntype.declare = file_ns::cmp_node_boxmask_declare;
   ntype.draw_buttons = file_ns::node_composit_buts_boxmask;
-  ntype.initfunc = file_ns::node_composit_init_boxmask;
-  blender::bke::node_type_storage(
-      ntype, "NodeBoxMask", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
   blender::bke::node_register_type(ntype);
 }
+NOD_REGISTER_NODE(register_node_type_cmp_boxmask)

@@ -14,7 +14,9 @@
 #include <array>
 #include <string>
 
+#include "BLI_mutex.hh"
 #include "BLI_string_ref.hh"
+
 #include "DRW_render.hh"
 #include "GPU_material.hh"
 #include "GPU_shader.hh"
@@ -169,8 +171,8 @@ enum eShaderType {
 class ShaderModule {
  private:
   std::array<StaticShader, MAX_SHADER_TYPE> shaders_;
-  BatchHandle compilation_handle_ = 0;
-  std::mutex mutex_;
+
+  Mutex mutex_;
 
   class SpecializationsKey {
    private:
@@ -179,14 +181,19 @@ class ShaderModule {
    public:
     SpecializationsKey(int render_buffers_shadow_id,
                        int shadow_ray_count,
-                       int shadow_ray_step_count)
+                       int shadow_ray_step_count,
+                       bool use_split_indirect,
+                       bool use_lightprobe_eval)
     {
       BLI_assert(render_buffers_shadow_id >= -1);
-      BLI_assert(shadow_ray_count >= 1 || shadow_ray_count <= 4);
-      BLI_assert(shadow_ray_step_count >= 1 || shadow_ray_step_count <= 16);
+      BLI_assert(shadow_ray_count >= 1 && shadow_ray_count <= 4);
+      BLI_assert(shadow_ray_step_count >= 1 && shadow_ray_step_count <= 16);
+      BLI_assert(uint64_t(use_split_indirect) >= 0 && uint64_t(use_split_indirect) <= 1);
       hash_value_ = render_buffers_shadow_id + 1;
       hash_value_ = (hash_value_ << 2) | (shadow_ray_count - 1);
       hash_value_ = (hash_value_ << 4) | (shadow_ray_step_count - 1);
+      hash_value_ = (hash_value_ << 1) | uint64_t(use_split_indirect);
+      hash_value_ = (hash_value_ << 1) | uint64_t(use_lightprobe_eval);
     }
 
     uint64_t hash() const
@@ -218,33 +225,36 @@ class ShaderModule {
   ShaderModule();
   ~ShaderModule();
 
-  bool static_shaders_are_ready(bool block_until_ready);
+  /* Trigger async compilation for the given shaders groups. */
+  ShaderGroups static_shaders_load_async(ShaderGroups request_bits)
+  {
+    return static_shaders_load(request_bits, false);
+  }
+  /* Wait for async compilation to finish for the given shaders groups.
+   * If shaders are not scheduled to async compile, this will do blocking compilation. */
+  ShaderGroups static_shaders_wait_ready(ShaderGroups request_bits)
+  {
+    return static_shaders_load(request_bits, true);
+  }
+
   bool request_specializations(bool block_until_ready,
                                int render_buffers_shadow_id,
                                int shadow_ray_count,
-                               int shadow_ray_step_count);
+                               int shadow_ray_step_count,
+                               bool use_split_indirect,
+                               bool use_lightprobe_eval);
 
   GPUShader *static_shader_get(eShaderType shader_type);
-  GPUMaterial *material_default_shader_get(eMaterialPipeline pipeline_type,
-                                           eMaterialGeometry geometry_type);
   GPUMaterial *material_shader_get(::Material *blender_mat,
                                    bNodeTree *nodetree,
                                    eMaterialPipeline pipeline_type,
                                    eMaterialGeometry geometry_type,
-                                   bool deferred_compilation);
+                                   bool deferred_compilation,
+                                   ::Material *default_mat);
   GPUMaterial *world_shader_get(::World *blender_world,
                                 bNodeTree *nodetree,
-                                eMaterialPipeline pipeline_type);
-
-  /**
-   * Variation to compile a material only with a `nodetree`. Caller needs to maintain the list of
-   * materials and call GPU_material_free on it to update the material.
-   */
-  GPUMaterial *material_shader_get(const char *name,
-                                   ListBase &materials,
-                                   bNodeTree *nodetree,
-                                   eMaterialPipeline pipeline_type,
-                                   eMaterialGeometry geometry_type);
+                                eMaterialPipeline pipeline_type,
+                                bool deferred_compilation);
 
   void material_create_info_amend(GPUMaterial *mat, GPUCodegenOutput *codegen);
 
@@ -254,6 +264,7 @@ class ShaderModule {
 
  private:
   const char *static_shader_create_info_name_get(eShaderType shader_type);
+  ShaderGroups static_shaders_load(ShaderGroups request_bits, bool block_until_ready);
 };
 
 }  // namespace blender::eevee

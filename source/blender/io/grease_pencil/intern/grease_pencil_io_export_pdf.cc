@@ -50,23 +50,10 @@ class PDFExporter : public GreasePencilExporter {
   bool write_to_file(StringRefNull filepath);
 };
 
-static bool is_selected_frame(const GreasePencil &grease_pencil, const int frame_number)
-{
-  for (const bke::greasepencil::Layer *layer : grease_pencil.layers()) {
-    if (layer->is_visible()) {
-      const GreasePencilFrame *frame = layer->frames().lookup_ptr(frame_number);
-      if ((frame != nullptr) && frame->is_selected()) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 bool PDFExporter::export_scene(Scene &scene, StringRefNull filepath)
 {
   bool result = false;
-  Object &ob_eval = *DEG_get_evaluated_object(context_.depsgraph, params_.object);
+  Object &ob_eval = *DEG_get_evaluated(context_.depsgraph, params_.object);
 
   if (!create_document()) {
     return false;
@@ -88,7 +75,7 @@ bool PDFExporter::export_scene(Scene &scene, StringRefNull filepath)
         const int orig_frame = scene.r.cfra;
         for (int frame_number = scene.r.sfra; frame_number <= scene.r.efra; frame_number++) {
           GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob_eval.data);
-          if (only_selected && !is_selected_frame(grease_pencil, frame_number)) {
+          if (only_selected && !this->is_selected_frame(grease_pencil, frame_number)) {
             continue;
           }
 
@@ -125,7 +112,7 @@ void PDFExporter::export_grease_pencil_objects(const int frame_number)
     const Object *ob = info.object;
 
     /* Use evaluated version to get strokes with modifiers. */
-    const Object *ob_eval = DEG_get_evaluated_object(context_.depsgraph, ob);
+    const Object *ob_eval = DEG_get_evaluated(context_.depsgraph, ob);
     BLI_assert(ob_eval->type == OB_GREASE_PENCIL);
     const GreasePencil *grease_pencil_eval = static_cast<const GreasePencil *>(ob_eval->data);
 

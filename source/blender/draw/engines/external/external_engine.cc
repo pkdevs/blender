@@ -111,8 +111,7 @@ class Prepass {
         /* Case where the render engine should have rendered it, but we need to draw it for
          * selection purpose. */
         if (handle.raw == 0u) {
-          handle = manager.resource_handle_for_psys(ob_ref,
-                                                    DRW_particles_dupli_matrix_get(ob_ref));
+          handle = manager.resource_handle_for_psys(ob_ref, ob_ref.particles_matrix());
         }
 
         gpu::Batch *geom = DRW_cache_particles_get_hair(ob, psys, nullptr);
@@ -124,7 +123,7 @@ class Prepass {
 
   void sculpt_sync(Manager &manager, const ObjectRef &ob_ref)
   {
-    ResourceHandle handle = manager.resource_handle_for_sculpt(ob_ref);
+    ResourceHandle handle = manager.unique_handle_for_sculpt(ob_ref);
 
     for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, SCULPT_BATCH_DEFAULT)) {
       mesh_ps_->draw(batch.batch, handle);
@@ -203,7 +202,7 @@ class Instance : public DrawEngine {
   void init() final
   {
     draw_ctx = DRW_context_get();
-    do_prepass = DRW_gpencil_engine_needed(draw_ctx->depsgraph, draw_ctx->v3d);
+    do_prepass = DRW_gpencil_engine_needed_viewport(draw_ctx->depsgraph, draw_ctx->v3d);
   }
 
   void begin_sync() final
@@ -259,8 +258,6 @@ class Instance : public DrawEngine {
     /* Render result draw. */
     const RenderEngineType *type = render_engine->type;
     type->view_draw(render_engine, draw_ctx->evil_C, draw_ctx->depsgraph);
-
-    GPU_bgl_end();
 
     GPU_matrix_pop();
     GPU_matrix_pop_projection();
@@ -363,7 +360,6 @@ class Instance : public DrawEngine {
     GPU_matrix_pop_projection();
 
     blender::draw::command::StateSet::set();
-    GPU_bgl_end();
 
     RE_engine_draw_release(re);
   }

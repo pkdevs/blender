@@ -47,7 +47,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "operation", UI_ITEM_NONE, "", ICON_NONE);
+  layout->prop(ptr, "operation", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
@@ -101,8 +101,8 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   if (params.in_out() == SOCK_IN) {
-    if (params.node_tree().typeinfo->validate_link(
-            static_cast<eNodeSocketDatatype>(params.other_socket().type), SOCK_STRING))
+    if (params.node_tree().typeinfo->validate_link(eNodeSocketDatatype(params.other_socket().type),
+                                                   SOCK_STRING))
     {
       for (const EnumPropertyItem *item = rna_enum_node_match_string_items;
            item->identifier != nullptr;

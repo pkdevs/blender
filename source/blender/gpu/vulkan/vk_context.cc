@@ -45,6 +45,8 @@ VKContext::~VKContext()
   free_resources();
   VKBackend::get().device.context_unregister(*this);
 
+  this->process_frame_timings();
+
   imm = nullptr;
 }
 
@@ -108,8 +110,13 @@ void VKContext::activate()
   if (!render_graph_.has_value()) {
     render_graph_ = std::reference_wrapper<render_graph::VKRenderGraph>(
         *device.render_graph_new());
+    /* Recreate the debug group stack for the new graph.
+     * Note: there is no associated `debug_group_end` as the graph groups
+     * are implicitly closed on submission. */
     for (const StringRef &group : debug_stack) {
-      debug_group_begin(std::string(group).c_str(), 0);
+      std::string str_group = group;
+      render_graph_.value().get().debug_group_begin(str_group.c_str(),
+                                                    debug::get_debug_group_color(str_group));
     }
   }
 
@@ -138,6 +145,7 @@ void VKContext::end_frame()
 {
   VKDevice &device = VKBackend::get().device;
   device.orphaned_data.destroy_discarded_resources(device);
+  this->process_frame_timings();
 }
 
 void VKContext::flush()
@@ -157,9 +165,11 @@ TimelineValue VKContext::flush_render_graph(RenderGraphFlushFlags flags,
       framebuffer.rendering_end(*this);
     }
   }
-  descriptor_set_get().upload_descriptor_sets();
-  descriptor_pools_get().discard(*this);
   VKDevice &device = VKBackend::get().device;
+  descriptor_set_get().upload_descriptor_sets();
+  if (!device.extensions_get().descriptor_buffer) {
+    descriptor_pools_get().discard(*this);
+  }
   TimelineValue timeline = device.render_graph_submit(
       &render_graph_.value().get(),
       discard_pool,
@@ -173,19 +183,19 @@ TimelineValue VKContext::flush_render_graph(RenderGraphFlushFlags flags,
   if (bool(flags & RenderGraphFlushFlags::RENEW_RENDER_GRAPH)) {
     render_graph_ = std::reference_wrapper<render_graph::VKRenderGraph>(
         *device.render_graph_new());
+    /* Recreate the debug group stack for the new graph.
+     * Note: there is no associated `debug_group_end` as the graph groups
+     * are implicitly closed on submission. */
     for (const StringRef &group : debug_stack) {
-      debug_group_begin(std::string(group).c_str(), 0);
+      std::string str_group = group;
+      render_graph_.value().get().debug_group_begin(str_group.c_str(),
+                                                    debug::get_debug_group_color(str_group));
     }
   }
   return timeline;
 }
 
 void VKContext::finish() {}
-
-ShaderCompiler *VKContext::get_compiler()
-{
-  return &VKBackend::get().shader_compiler;
-}
 
 void VKContext::memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb)
 {
@@ -281,16 +291,24 @@ void VKContext::update_pipeline_data(GPUPrimType primitive,
 {
   VKShader &vk_shader = unwrap(*shader);
   VKFrameBuffer &framebuffer = *active_framebuffer_get();
-  update_pipeline_data(
-      vk_shader,
-      vk_shader.ensure_and_get_graphics_pipeline(primitive, vao, state_manager_get(), framebuffer),
-      r_pipeline_data);
+
+  /* Override size of point shader when GPU_point size < 0 */
+  const float point_size = state_manager_get().mutable_state.point_size;
+  if (primitive == GPU_PRIM_POINTS && point_size < 0.0) {
+    GPU_shader_uniform_1f(wrap(shader), "size", -point_size);
+  }
+
+  update_pipeline_data(vk_shader,
+                       vk_shader.ensure_and_get_graphics_pipeline(
+                           primitive, vao, state_manager_get(), framebuffer, constants_state_),
+                       r_pipeline_data);
 }
 
 void VKContext::update_pipeline_data(render_graph::VKPipelineData &r_pipeline_data)
 {
   VKShader &vk_shader = unwrap(*shader);
-  update_pipeline_data(vk_shader, vk_shader.ensure_and_get_compute_pipeline(), r_pipeline_data);
+  update_pipeline_data(
+      vk_shader, vk_shader.ensure_and_get_compute_pipeline(constants_state_), r_pipeline_data);
 }
 
 void VKContext::update_pipeline_data(VKShader &vk_shader,
@@ -314,8 +332,7 @@ void VKContext::update_pipeline_data(VKShader &vk_shader,
   r_pipeline_data.vk_descriptor_set = VK_NULL_HANDLE;
   if (vk_shader.has_descriptor_set()) {
     VKDescriptorSetTracker &descriptor_set = descriptor_set_get();
-    descriptor_set.update_descriptor_set(*this, access_info_);
-    r_pipeline_data.vk_descriptor_set = descriptor_set.vk_descriptor_set;
+    descriptor_set.update_descriptor_set(*this, access_info_, r_pipeline_data);
   }
 }
 
@@ -355,19 +372,18 @@ void VKContext::swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &swap_c
   render_graph::VKBlitImageNode::CreateInfo blit_image = {};
   blit_image.src_image = color_attachment->vk_image_handle();
   blit_image.dst_image = swap_chain_data.image;
-  blit_image.filter = VK_FILTER_NEAREST;
+  blit_image.filter = VK_FILTER_LINEAR;
 
   VkImageBlit &region = blit_image.region;
-  region.srcOffsets[0] = {0, color_attachment->height_get(), 0};
-  region.srcOffsets[1] = {color_attachment->width_get(), 0, 1};
+  region.srcOffsets[0] = {0, 0, 0};
+  region.srcOffsets[1] = {color_attachment->width_get(), color_attachment->height_get(), 1};
   region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   region.srcSubresource.mipLevel = 0;
   region.srcSubresource.baseArrayLayer = 0;
   region.srcSubresource.layerCount = 1;
 
-  region.dstOffsets[0] = {0, 0, 0};
-  region.dstOffsets[1] = {
-      int32_t(swap_chain_data.extent.width), int32_t(swap_chain_data.extent.height), 1};
+  region.dstOffsets[0] = {0, int32_t(swap_chain_data.extent.height), 0};
+  region.dstOffsets[1] = {int32_t(swap_chain_data.extent.width), 0, 1};
   region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   region.dstSubresource.mipLevel = 0;
   region.dstSubresource.baseArrayLayer = 0;
@@ -405,6 +421,13 @@ void VKContext::swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &swap_c
 void VKContext::swap_buffers_post_handler()
 {
   sync_backbuffer(true);
+}
+
+void VKContext::specialization_constants_set(
+    const shader::SpecializationConstants *constants_state)
+{
+  constants_state_ = (constants_state != nullptr) ? *constants_state :
+                                                    shader::SpecializationConstants{};
 }
 
 /** \} */
@@ -450,12 +473,16 @@ void VKContext::openxr_acquire_framebuffer_image_handler(GHOST_VulkanOpenXRData 
       flush_render_graph(RenderGraphFlushFlags::SUBMIT |
                          RenderGraphFlushFlags::WAIT_FOR_COMPLETION |
                          RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
-      VKMemoryExport exported_memory = color_attachment->export_memory(
-          VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT);
-      openxr_data.gpu.image_handle = exported_memory.handle;
-      openxr_data.gpu.image_format = to_vk_format(color_attachment->device_format_get());
-      openxr_data.gpu.memory_size = exported_memory.memory_size;
-      openxr_data.gpu.memory_offset = exported_memory.memory_offset;
+      if (openxr_data.gpu.vk_image_blender != color_attachment->vk_image_handle()) {
+        VKMemoryExport exported_memory = color_attachment->export_memory(
+            VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT);
+        openxr_data.gpu.image_handle = exported_memory.handle;
+        openxr_data.gpu.new_handle = true;
+        openxr_data.gpu.image_format = to_vk_format(color_attachment->device_format_get());
+        openxr_data.gpu.memory_size = exported_memory.memory_size;
+        openxr_data.gpu.memory_offset = exported_memory.memory_offset;
+        openxr_data.gpu.vk_image_blender = color_attachment->vk_image_handle();
+      }
       break;
     }
 
@@ -463,12 +490,16 @@ void VKContext::openxr_acquire_framebuffer_image_handler(GHOST_VulkanOpenXRData 
       flush_render_graph(RenderGraphFlushFlags::SUBMIT |
                          RenderGraphFlushFlags::WAIT_FOR_COMPLETION |
                          RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
-      VKMemoryExport exported_memory = color_attachment->export_memory(
-          VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT);
-      openxr_data.gpu.image_handle = exported_memory.handle;
-      openxr_data.gpu.image_format = to_vk_format(color_attachment->device_format_get());
-      openxr_data.gpu.memory_size = exported_memory.memory_size;
-      openxr_data.gpu.memory_offset = exported_memory.memory_offset;
+      if (openxr_data.gpu.vk_image_blender != color_attachment->vk_image_handle()) {
+        VKMemoryExport exported_memory = color_attachment->export_memory(
+            VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT);
+        openxr_data.gpu.image_handle = exported_memory.handle;
+        openxr_data.gpu.new_handle = true;
+        openxr_data.gpu.image_format = to_vk_format(color_attachment->device_format_get());
+        openxr_data.gpu.memory_size = exported_memory.memory_size;
+        openxr_data.gpu.memory_offset = exported_memory.memory_offset;
+        openxr_data.gpu.vk_image_blender = color_attachment->vk_image_handle();
+      }
       break;
     }
   }
@@ -491,9 +522,11 @@ void VKContext::openxr_release_framebuffer_image_handler(GHOST_VulkanOpenXRData 
 
     case GHOST_kVulkanXRModeWin32:
 #ifdef _WIN32
-      /* Exported handle isn't consumed during import and should be freed after use. */
-      CloseHandle(HANDLE(openxr_data.gpu.image_handle));
-      openxr_data.gpu.image_handle = 0;
+      if (openxr_data.gpu.new_handle) {
+        /* Exported handle isn't consumed during import and should be freed after use. */
+        CloseHandle(HANDLE(openxr_data.gpu.image_handle));
+        openxr_data.gpu.image_handle = 0;
+      }
 #endif
       break;
   }

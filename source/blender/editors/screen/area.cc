@@ -84,7 +84,7 @@ static void region_draw_emboss(const ARegion *region, const rcti *scirct, int si
   UI_GetThemeColor3fv(TH_EDITOR_BORDER, color);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformColor4fv(color);
 
@@ -237,7 +237,7 @@ static void draw_azone_arrow(float x1, float y1, float x2, float y2, AZEdge edge
   }
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
 
   GPU_blend(GPU_BLEND_ALPHA);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -548,7 +548,7 @@ void ED_region_do_draw(bContext *C, ARegion *region)
   if (G.debug_value == 888) {
     GPU_blend(GPU_BLEND_ALPHA);
     GPUVertFormat *format = immVertexFormat();
-    uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     RandomNumberGenerator rng = RandomNumberGenerator::from_random_seed();
     immUniformColor4f(rng.get_float(), rng.get_float(), rng.get_float(), 0.1f);
@@ -579,7 +579,7 @@ void ED_region_do_draw(bContext *C, ARegion *region)
       float color[4] = {0.0f, 0.0f, 0.0f, 0.8f};
       UI_GetThemeColor3fv(TH_EDITOR_BORDER, color);
       GPUVertFormat *format = immVertexFormat();
-      uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
       immUniformColor4fv(color);
       GPU_line_width(1.0f);
@@ -1107,8 +1107,10 @@ static bool region_background_is_transparent(const ScrArea *area, const ARegion 
 
 static void region_azone_edge(const ScrArea *area, AZone *az, const ARegion *region)
 {
-  const bool is_header = RGN_TYPE_IS_HEADER_ANY(region->regiontype);
-  const bool transparent = !is_header && region->overlap &&
+  /* Narrow regions like headers need a smaller hit-space that
+   * does not interfere with content. */
+  const bool is_narrow = RGN_TYPE_IS_HEADER_ANY(region->regiontype);
+  const bool transparent = !is_narrow && region->overlap &&
                            region_background_is_transparent(area, region);
 
   /* Only scale the padding inside the region, not outside. */
@@ -1116,8 +1118,8 @@ static void region_azone_edge(const ScrArea *area, AZone *az, const ARegion *reg
                        (BLI_rcti_size_y(&region->v2d.mask) + 1);
 
   /* Different padding inside and outside the region. */
-  const int pad_out = (is_header ? 2.0f : 3.0f) * UI_SCALE_FAC;
-  const int pad_in = (is_header ? 1.0f : (transparent ? 8.0f : 4.0f)) * UI_SCALE_FAC / aspect;
+  const int pad_out = (is_narrow ? 2.0f : 3.0f) * UI_SCALE_FAC;
+  const int pad_in = (is_narrow ? 1.0f : (transparent ? 8.0f : 4.0f)) * UI_SCALE_FAC / aspect;
 
   switch (az->edge) {
     case AE_TOP_TO_BOTTOMRIGHT:
@@ -1187,7 +1189,9 @@ static void region_azone_tab_plus(ScrArea *area, AZone *az, ARegion *region)
   BLI_rcti_init(&az->rect, az->x1, az->x2, az->y1, az->y2);
 }
 
-static bool region_azone_edge_poll(const ARegion *region, const bool is_fullscreen)
+static bool region_azone_edge_poll(const ScrArea *area,
+                                   const ARegion *region,
+                                   const bool is_fullscreen)
 {
   if (region->flag & RGN_FLAG_POLL_FAILED) {
     return false;
@@ -1206,6 +1210,10 @@ static bool region_azone_edge_poll(const ARegion *region, const bool is_fullscre
     return false;
   }
   if (!is_hidden && ELEM(region->regiontype, RGN_TYPE_HEADER, RGN_TYPE_TOOL_HEADER)) {
+    return false;
+  }
+  if (!is_hidden && region->regiontype == RGN_TYPE_NAV_BAR && area->spacetype == SPACE_PROPERTIES)
+  {
     return false;
   }
 
@@ -1227,7 +1235,7 @@ static void region_azone_edge_init(ScrArea *area,
 {
   const bool is_hidden = (region->flag & (RGN_FLAG_HIDDEN | RGN_FLAG_TOO_SMALL));
 
-  if (!region_azone_edge_poll(region, is_fullscreen)) {
+  if (!region_azone_edge_poll(area, region, is_fullscreen)) {
     return;
   }
 
@@ -1803,7 +1811,11 @@ static void region_rect_recursive(
 
 static void area_calc_totrct(const bScreen *screen, ScrArea *area, const rcti *window_rect)
 {
-  short px = short(std::max(float(U.border_width) * UI_SCALE_FAC, UI_SCALE_FAC));
+  /* Padding around each area, except at window edges. */
+  const short px = short(std::max(float(U.border_width) * UI_SCALE_FAC, UI_SCALE_FAC));
+
+  /* Padding at window edges. */
+  const short px_edge = int(UI_SCALE_FAC * 2.0f);
 
   area->totrct.xmin = area->v1->vec.x;
   area->totrct.xmax = area->v4->vec.x;
@@ -1811,18 +1823,12 @@ static void area_calc_totrct(const bScreen *screen, ScrArea *area, const rcti *w
   area->totrct.ymax = area->v2->vec.y;
 
   /* Scale down totrct by the border size on all sides not at window edges. */
-  if (!ED_area_is_global(area) && screen->state != SCREENFULL &&
-      !(screen->temp && BLI_listbase_is_single(&screen->areabase)))
+  if (!ED_area_is_global(area) && screen->state != SCREENFULL && !(screen->temp) &&
+      !BLI_listbase_is_single(&screen->areabase))
   {
-    if (area->totrct.xmin > window_rect->xmin) {
-      area->totrct.xmin += px;
-    }
-    if (area->totrct.xmax < (window_rect->xmax - 1)) {
-      area->totrct.xmax -= px;
-    }
-    if (area->totrct.ymin > window_rect->ymin) {
-      area->totrct.ymin += px;
-    }
+    area->totrct.xmin += (area->totrct.xmin > window_rect->xmin) ? px : px_edge;
+    area->totrct.xmax -= (area->totrct.xmax < (window_rect->xmax - 1)) ? px : px_edge;
+    area->totrct.ymin += (area->totrct.ymin > window_rect->ymin) ? px : px_edge;
 
     if (area->totrct.ymax < (window_rect->ymax - 1)) {
       area->totrct.ymax -= px;
@@ -1830,6 +1836,9 @@ static void area_calc_totrct(const bScreen *screen, ScrArea *area, const rcti *w
     else if (!BLI_listbase_is_single(&screen->areabase) || screen->state == SCREENMAXIMIZED) {
       /* Small gap below Top Bar. */
       area->totrct.ymax -= U.pixelsize;
+    }
+    else {
+      area->totrct.ymax -= px_edge;
     }
   }
   /* Although the following asserts are correct they lead to a very unstable Blender.
@@ -2786,6 +2795,8 @@ void ED_area_prevspace(bContext *C, ScrArea *area)
   SpaceLink *prevspace = sl ? area_get_prevspace(area) : nullptr;
 
   if (prevspace) {
+    /* Specify that we want last-used if there are subtypes. */
+    area->butspacetype_subtype = -1;
     ED_area_newspace(C, area, prevspace->spacetype, false);
     /* We've exited the space, so it can't be considered temporary anymore. */
     sl->link_flag &= ~SPACE_FLAG_TYPE_TEMPORARY;
@@ -2934,7 +2945,7 @@ static void ed_panel_draw(const bContext *C,
                                     0,
                                     style);
 
-    uiLayoutSetOperatorContext(panel->layout, op_context);
+    panel->layout->operator_context_set(op_context);
 
     pt->draw_header_preset(C, panel);
 
@@ -2967,7 +2978,7 @@ static void ed_panel_draw(const bContext *C,
           block, UI_LAYOUT_HORIZONTAL, UI_LAYOUT_HEADER, labelx, labely, UI_UNIT_Y, 1, 0, style);
     }
 
-    uiLayoutSetOperatorContext(panel->layout, op_context);
+    panel->layout->operator_context_set(op_context);
 
     pt->draw_header(C, panel);
 
@@ -3006,7 +3017,7 @@ static void ed_panel_draw(const bContext *C,
         0,
         style);
 
-    uiLayoutSetOperatorContext(panel->layout, op_context);
+    panel->layout->operator_context_set(op_context);
 
     pt->draw(C, panel);
 
@@ -3366,6 +3377,16 @@ void ED_region_panels_draw(const bContext *C, ARegion *region)
     mask.xmax -= round_fl_to_int(UI_view2d_scale_get_x(&region->v2d) *
                                  UI_PANEL_CATEGORY_MARGIN_WIDTH);
   }
+
+  /* Hide scrollbars below a threshold. */
+  const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
+                       (BLI_rcti_size_y(&region->v2d.mask) + 1);
+  int min_width = UI_panel_category_is_visible(region) ? 60.0f * UI_SCALE_FAC / aspect :
+                                                         40.0f * UI_SCALE_FAC / aspect;
+  if (BLI_rcti_size_x(&region->winrct) <= min_width) {
+    v2d->scroll &= ~(V2D_SCROLL_HORIZONTAL | V2D_SCROLL_VERTICAL);
+  }
+
   UI_view2d_scrollers_draw(v2d, use_mask ? &mask : nullptr);
 }
 
@@ -3579,7 +3600,7 @@ void ED_region_header_layout(const bContext *C, ARegion *region)
         block, UI_LAYOUT_HORIZONTAL, UI_LAYOUT_HEADER, xco, yco, buttony, 1, 0, style);
 
     if (buttony_scale != 1.0f) {
-      uiLayoutSetScaleY(layout, buttony_scale);
+      layout->scale_y_set(buttony_scale);
     }
 
     Header header = {nullptr};
@@ -3588,7 +3609,7 @@ void ED_region_header_layout(const bContext *C, ARegion *region)
       header.layout = layout;
       ht->draw(C, &header);
       if (ht->next) {
-        uiItemS(layout);
+        layout->separator();
       }
 
       /* for view2d */
@@ -3829,10 +3850,10 @@ void ED_region_info_draw_multiline(ARegion *region,
 
   GPU_blend(GPU_BLEND_ALPHA);
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformColor4fv(fill_color);
-  immRecti(pos, rect.xmin, rect.ymin, rect.xmax + 1, rect.ymax + 1);
+  immRectf(pos, rect.xmin, rect.ymin, rect.xmax + 1, rect.ymax + 1);
   immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);
 
@@ -3877,8 +3898,8 @@ static void metadata_panel_draw_field(const char *field, const char *value, void
 {
   MetadataPanelDrawContext *ctx = (MetadataPanelDrawContext *)ctx_v;
   uiLayout *row = &ctx->layout->row(false);
-  uiItemL(row, field, ICON_NONE);
-  uiItemL(row, value, ICON_NONE);
+  row->label(field, ICON_NONE);
+  row->label(value, ICON_NONE);
 }
 
 void ED_region_image_metadata_panel_draw(ImBuf *ibuf, uiLayout *layout)
@@ -3896,7 +3917,7 @@ void ED_region_grid_draw(ARegion *region, float zoomx, float zoomy, float x0, fl
   UI_view2d_view_to_region(&region->v2d, x0 + 1.0f, y0 + 1.0f, &x2, &y2);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
 
   float gridcolor[4];
   UI_GetThemeColor4fv(TH_GRID, gridcolor);
@@ -3935,8 +3956,9 @@ void ED_region_grid_draw(ARegion *region, float zoomx, float zoomy, float x0, fl
 
   if (count_fine > 0) {
     GPU_vertformat_clear(format);
-    pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    uint color = GPU_vertformat_attr_add(format, "color", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
+    uint color = GPU_vertformat_attr_add(
+        format, "color", blender::gpu::VertAttrType::SFLOAT_32_32_32);
 
     immBindBuiltinProgram(GPU_SHADER_3D_FLAT_COLOR);
     immBegin(GPU_PRIM_LINES, 4 * count_fine + 4 * count_large);
@@ -4050,10 +4072,10 @@ void ED_region_cache_draw_background(ARegion *region)
   const int region_bottom = rect_visible->ymin;
 
   uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+      immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformColor4ub(128, 128, 255, 64);
-  immRecti(pos, 0, region_bottom, region->winx, region_bottom + 8 * UI_SCALE_FAC);
+  immRectf(pos, 0, region_bottom, region->winx, region_bottom + 8 * UI_SCALE_FAC);
   immUnbindProgram();
 }
 
@@ -4102,7 +4124,7 @@ void ED_region_cache_draw_cached_segments(
     const int region_bottom = rect_visible->ymin;
 
     uint pos = GPU_vertformat_attr_add(
-        immVertexFormat(), "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
+        immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformColor4ub(128, 128, 255, 128);
 
@@ -4110,7 +4132,7 @@ void ED_region_cache_draw_cached_segments(
       float x1 = float(points[a * 2] - sfra) / (efra - sfra + 1) * region->winx;
       float x2 = float(points[a * 2 + 1] - sfra + 1) / (efra - sfra + 1) * region->winx;
 
-      immRecti(pos, x1, region_bottom, x2, region_bottom + 8 * UI_SCALE_FAC);
+      immRectf(pos, x1, region_bottom, x2, region_bottom + 8 * UI_SCALE_FAC);
       /* TODO(merwin): use primitive restart to draw multiple rects more efficiently */
     }
 

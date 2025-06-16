@@ -95,27 +95,15 @@ void VKVertexAttributeObject::update_bindings(const VKContext &context, VKBatch 
   for (int v = 0; v < GPU_BATCH_INST_VBO_MAX_LEN; v++) {
     VKVertexBuffer *vbo = batch.instance_buffer_get(v);
     if (vbo) {
-      vbo->device_format_ensure();
-      update_bindings(vbo->device_format_get(),
-                      vbo,
-                      nullptr,
-                      vbo->vertex_len,
-                      interface,
-                      occupied_attributes,
-                      true);
+      update_bindings(
+          vbo->format, vbo, nullptr, vbo->vertex_len, interface, occupied_attributes, true);
     }
   }
   for (int v = 0; v < GPU_BATCH_VBO_MAX_LEN; v++) {
     VKVertexBuffer *vbo = batch.vertex_buffer_get(v);
     if (vbo) {
-      vbo->device_format_ensure();
-      update_bindings(vbo->device_format_get(),
-                      vbo,
-                      nullptr,
-                      vbo->vertex_len,
-                      interface,
-                      occupied_attributes,
-                      false);
+      update_bindings(
+          vbo->format, vbo, nullptr, vbo->vertex_len, interface, occupied_attributes, false);
     }
   }
 
@@ -128,7 +116,7 @@ void VKVertexAttributeObject::update_bindings(const VKContext &context, VKBatch 
 /* Determine the number of binding location the given attribute uses. */
 static uint32_t to_binding_location_len(const GPUVertAttr &attribute)
 {
-  return ceil_division(attribute.comp_len, 4u);
+  return ceil_division(attribute.type.comp_len(), 4);
 }
 
 /* Determine the number of binding location the given type uses. */
@@ -217,7 +205,7 @@ void VKVertexAttributeObject::update_bindings(VKImmediate &immediate)
   AttributeMask occupied_attributes = 0;
 
   VKBufferWithOffset immediate_buffer = immediate.active_buffer();
-  update_bindings(immediate.vertex_format_converter.device_format_get(),
+  update_bindings(immediate.vertex_format,
                   nullptr,
                   &immediate_buffer,
                   immediate.vertex_len,
@@ -254,10 +242,11 @@ void VKVertexAttributeObject::update_bindings(const GPUVertFormat &vertex_format
   for (uint32_t attribute_index = 0; attribute_index < vertex_format.attr_len; attribute_index++) {
     const GPUVertAttr &attribute = vertex_format.attrs[attribute_index];
     if (vertex_format.deinterleaved) {
-      buffer_offset += ((attribute_index == 0) ? 0 :
-                                                 vertex_format.attrs[attribute_index - 1].size) *
+      buffer_offset += ((attribute_index == 0) ?
+                            0 :
+                            vertex_format.attrs[attribute_index - 1].type.size()) *
                        vertex_len;
-      stride = attribute.size;
+      stride = attribute.type.size();
     }
     else {
       attribute_offset = attribute.offset;
@@ -284,9 +273,7 @@ void VKVertexAttributeObject::update_bindings(const GPUVertFormat &vertex_format
         attribute_description.location = shader_input->location + location_offset;
         attribute_description.offset = attribute_offset + location_offset * sizeof(float4);
         attribute_description.format = to_vk_format(
-            static_cast<GPUVertCompType>(attribute.comp_type),
-            attribute.size,
-            static_cast<GPUVertFetchMode>(attribute.fetch_mode));
+            attribute.type.comp_type(), attribute.type.size(), attribute.type.fetch_mode());
         attributes.append(attribute_description);
 
         VkVertexInputBindingDescription vk_binding_descriptor = {};

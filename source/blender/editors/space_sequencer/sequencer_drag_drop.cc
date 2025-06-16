@@ -221,18 +221,18 @@ static float update_overlay_strip_position_data(bContext *C, const int mval[2])
 
   /* Check if there is a strip that would intersect with the new strip(s). */
   coords->is_intersecting = false;
-  Strip dummy_seq{};
-  seq::strip_channel_set(&dummy_seq, coords->channel);
-  dummy_seq.start = coords->start_frame;
-  dummy_seq.len = coords->strip_len;
-  dummy_seq.speed_factor = 1.0f;
-  dummy_seq.media_playback_rate = coords->playback_rate;
-  dummy_seq.flag = SEQ_AUTO_PLAYBACK_RATE;
+  Strip dummy_strip{};
+  seq::strip_channel_set(&dummy_strip, coords->channel);
+  dummy_strip.start = coords->start_frame;
+  dummy_strip.len = coords->strip_len;
+  dummy_strip.speed_factor = 1.0f;
+  dummy_strip.media_playback_rate = coords->playback_rate;
+  dummy_strip.flag = SEQ_AUTO_PLAYBACK_RATE;
   Editing *ed = seq::editing_ensure(scene);
 
   for (int i = 0; i < coords->channel_len && !coords->is_intersecting; i++) {
-    coords->is_intersecting = seq::transform_test_overlap(scene, ed->seqbasep, &dummy_seq);
-    seq::strip_channel_set(&dummy_seq, dummy_seq.machine + 1);
+    coords->is_intersecting = seq::transform_test_overlap(scene, ed->seqbasep, &dummy_strip);
+    seq::strip_channel_set(&dummy_strip, dummy_strip.channel + 1);
   }
 
   return strip_len;
@@ -260,6 +260,7 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
     RNA_int_set(drop->ptr, "frame_start", g_drop_coords.start_frame);
     RNA_int_set(drop->ptr, "channel", g_drop_coords.channel);
     RNA_boolean_set(drop->ptr, "overlap_shuffle_override", true);
+    RNA_boolean_set(drop->ptr, "skip_locked_or_muted_channels", false);
   }
   else {
     /* We are dropped inside the preview region. Put the strip on top of the
@@ -276,7 +277,7 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
     /* Get the top most strip channel that is in view. */
     int max_channel = -1;
     for (Strip *strip : strips) {
-      max_channel = max_ii(strip->machine, max_channel);
+      max_channel = max_ii(strip->channel, max_channel);
     }
 
     if (max_channel != -1) {
@@ -358,7 +359,7 @@ static void get_drag_path(const bContext *C, wmDrag *drag, char r_path[FILE_MAX]
   }
 }
 
-static void draw_seq_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, const int xy[2])
+static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, const int xy[2])
 {
   SeqDropCoords *coords = &g_drop_coords;
   if (!coords->in_use) {
@@ -437,12 +438,12 @@ static void draw_seq_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, cons
     strip_color[3] = 204;
     data.col_outline = color_pack(strip_color);
 
-    const bool use_thin_handle = (U.sequencer_editor_flag & USER_SEQ_ED_SIMPLE_TWEAKING) != 0;
-    const float handle_size = use_thin_handle ? 5.0f : 8.0f;
+    /* Taken from strip_handle_draw_size_get(). */
+    const float handle_size = pixelx * (5.0f * U.pixelsize);
 
     /* Calculate height needed for drawing text on strip. */
     float text_margin_y = y2 - min_ff(0.40f, 20 * UI_SCALE_FAC * pixely);
-    float text_margin_x = 2.0f * (pixelx * handle_size) * U.pixelsize;
+    float text_margin_x = 2.0f * handle_size;
 
     rctf rect;
     rect.xmin = x1 + text_margin_x;
@@ -547,7 +548,7 @@ static void prefetch_data_fn(void *custom_data, wmJobWorkerStatus * /*worker_sta
 #endif
   }
 
-  char colorspace[64] = "\0"; /* 64 == MAX_COLORSPACE_NAME length. */
+  char colorspace[/*MAX_COLORSPACE_NAME*/ 64] = "\0";
   MovieReader *anim = openanim(job_data->path, IB_byte_data, 0, colorspace);
 
   if (anim != nullptr) {
@@ -666,7 +667,7 @@ static void sequencer_dropboxes_add_to_lb(ListBase *lb)
   drop = WM_dropbox_add(
       lb, "SEQUENCER_OT_image_strip_add", image_drop_poll, sequencer_drop_copy, nullptr, nullptr);
   drop->draw_droptip = nop_draw_droptip_fn;
-  drop->draw_in_view = draw_seq_in_view;
+  drop->draw_in_view = draw_strip_in_view;
   drop->on_enter = image_drop_on_enter;
   drop->on_exit = sequencer_drop_on_exit;
 
@@ -675,7 +676,7 @@ static void sequencer_dropboxes_add_to_lb(ListBase *lb)
   drop = WM_dropbox_add(
       lb, "SEQUENCER_OT_movie_strip_add", movie_drop_poll, sequencer_drop_copy, nullptr, nullptr);
   drop->draw_droptip = nop_draw_droptip_fn;
-  drop->draw_in_view = draw_seq_in_view;
+  drop->draw_in_view = draw_strip_in_view;
   drop->on_enter = movie_drop_on_enter;
   drop->on_exit = sequencer_drop_on_exit;
 
@@ -684,7 +685,7 @@ static void sequencer_dropboxes_add_to_lb(ListBase *lb)
   drop = WM_dropbox_add(
       lb, "SEQUENCER_OT_sound_strip_add", sound_drop_poll, sequencer_drop_copy, nullptr, nullptr);
   drop->draw_droptip = nop_draw_droptip_fn;
-  drop->draw_in_view = draw_seq_in_view;
+  drop->draw_in_view = draw_strip_in_view;
   drop->on_enter = sound_drop_on_enter;
   drop->on_exit = sequencer_drop_on_exit;
 }

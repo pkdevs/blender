@@ -621,6 +621,15 @@ static short ok_bezier_selected(KeyframeEditData * /*ked*/, BezTriple *bezt)
   return 0;
 }
 
+static short ok_bezier_selected_key(KeyframeEditData * /*ked*/, BezTriple *bezt)
+{
+  /* This macro checks the beztriple key (f2) selection. */
+  if (BEZT_ISSEL_IDX(bezt, 1)) {
+    return KEYFRAME_OK_KEY;
+  }
+  return 0;
+}
+
 static short ok_bezier_value(KeyframeEditData *ked, BezTriple *bezt)
 {
   /* Value is stored in f1 property:
@@ -791,8 +800,11 @@ KeyframeEditFunc ANIM_editkeyframes_ok(short mode)
       /* only if bezt falls within the specified frame range (floats) */
       return ok_bezier_framerange;
     case BEZT_OK_SELECTED:
-      /* only if bezt is selected (self) */
+      /* only if bezt is selected (any of f1, f2, f3) */
       return ok_bezier_selected;
+    case BEZT_OK_SELECTED_KEY:
+      /* only if bezt is selected (f2 is enough) */
+      return ok_bezier_selected_key;
     case BEZT_OK_VALUE:
       /* only if bezt value matches (float) */
       return ok_bezier_value;
@@ -844,10 +856,19 @@ short bezt_calc_average(KeyframeEditData *ked, BezTriple *bezt)
 short bezt_to_cfraelem(KeyframeEditData *ked, BezTriple *bezt)
 {
   /* only if selected */
-  if (bezt->f2 & SELECT) {
-    CfraElem *ce = MEM_callocN<CfraElem>("cfraElem");
-    BLI_addtail(&ked->list, ce);
+  if ((bezt->f2 & SELECT) == 0) {
+    return 0;
+  }
 
+  CfraElem *ce = MEM_callocN<CfraElem>("cfraElem");
+  BLI_addtail(&ked->list, ce);
+
+  /* bAnimListElem so we can do NLA mapping, we want the cfra to be in "global" time */
+  bAnimListElem *ale = static_cast<bAnimListElem *>(ked->data);
+  if (ale != nullptr) {
+    ce->cfra = ANIM_nla_tweakedit_remap(ale, bezt->vec[1][0], NLATIME_CONVERT_MAP);
+  }
+  else {
     ce->cfra = bezt->vec[1][0];
   }
 

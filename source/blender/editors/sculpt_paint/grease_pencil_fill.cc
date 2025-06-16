@@ -770,7 +770,7 @@ static bke::CurvesGeometry process_image(Image &ima,
 /** \} */
 
 constexpr const char *attr_material_index = "material_index";
-constexpr const char *attr_is_boundary = "is_boundary";
+constexpr const char *attr_is_fill_guide = ".is_fill_guide";
 
 static IndexMask get_visible_boundary_strokes(const Object &object,
                                               const DrawingInfo &info,
@@ -779,8 +779,8 @@ static IndexMask get_visible_boundary_strokes(const Object &object,
 {
   const bke::CurvesGeometry &strokes = info.drawing.strokes();
   const bke::AttributeAccessor attributes = strokes.attributes();
-  const VArray<int> materials = *attributes.lookup<int>(attr_material_index,
-                                                        bke::AttrDomain::Curve);
+  const VArray<int> materials = *attributes.lookup_or_default<int>(
+      attr_material_index, bke::AttrDomain::Curve, 0);
 
   auto is_visible_curve = [&](const int curve_i) {
     /* Check if stroke can be drawn. */
@@ -803,15 +803,15 @@ static IndexMask get_visible_boundary_strokes(const Object &object,
 
   /* On boundary layers only boundary strokes are rendered. */
   if (is_boundary_layer) {
-    const VArray<bool> boundary_strokes = *attributes.lookup_or_default<bool>(
-        attr_is_boundary, bke::AttrDomain::Curve, false);
+    const VArray<bool> fill_guides = *attributes.lookup_or_default<bool>(
+        attr_is_fill_guide, bke::AttrDomain::Curve, false);
 
     return IndexMask::from_predicate(
         strokes.curves_range(), GrainSize(512), memory, [&](const int curve_i) {
           if (!is_visible_curve(curve_i)) {
             return false;
           }
-          const bool is_boundary_stroke = boundary_strokes[curve_i];
+          const bool is_boundary_stroke = fill_guides[curve_i];
           return is_boundary_stroke;
         });
   }
@@ -885,10 +885,10 @@ static std::optional<Bounds<float2>> get_boundary_bounds(const ARegion &region,
     const VArray<float> radii = info.drawing.radii();
     const bke::CurvesGeometry &strokes = info.drawing.strokes();
     const bke::AttributeAccessor attributes = strokes.attributes();
-    const VArray<int> materials = *attributes.lookup<int>(attr_material_index,
-                                                          bke::AttrDomain::Curve);
+    const VArray<int> materials = *attributes.lookup_or_default<int>(
+        attr_material_index, bke::AttrDomain::Curve, 0);
     const VArray<bool> is_boundary_stroke = *attributes.lookup_or_default<bool>(
-        "is_boundary", bke::AttrDomain::Curve, false);
+        attr_is_fill_guide, bke::AttrDomain::Curve, false);
 
     IndexMaskMemory curve_mask_memory;
     const IndexMask curve_mask = get_visible_boundary_strokes(
@@ -950,8 +950,7 @@ static auto fit_strokes_to_view(const ViewContext &view_context,
       return std::make_tuple(float2(1.0f), float2(0.0f), min_image_size, float3x3::identity());
 
     case FillToolFitMethod::FitToView: {
-      const Object &object_eval = *DEG_get_evaluated_object(view_context.depsgraph,
-                                                            view_context.obact);
+      const Object &object_eval = *DEG_get_evaluated(view_context.depsgraph, view_context.obact);
       /* Zoom and offset based on bounds, to fit all strokes within the render. */
       const std::optional<Bounds<float2>> boundary_bounds = get_boundary_bounds(
           *view_context.region,
@@ -1065,8 +1064,8 @@ static Image *render_strokes(const ViewContext &view_context,
     const bke::CurvesGeometry &strokes = info.drawing.strokes();
     const bke::AttributeAccessor attributes = strokes.attributes();
     const VArray<float> opacities = info.drawing.opacities();
-    const VArray<int> materials = *attributes.lookup<int>(attr_material_index,
-                                                          bke::AttrDomain::Curve);
+    const VArray<int> materials = *attributes.lookup_or_default<int>(
+        attr_material_index, bke::AttrDomain::Curve, 0);
 
     IndexMaskMemory curve_mask_memory;
     const IndexMask curve_mask = get_visible_boundary_strokes(
@@ -1133,7 +1132,7 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
   Object &object = *view_context.obact;
 
   BLI_assert(object.type == OB_GREASE_PENCIL);
-  const Object &object_eval = *DEG_get_evaluated_object(&depsgraph, &object);
+  const Object &object_eval = *DEG_get_evaluated(&depsgraph, &object);
 
   /* Zoom and offset based on bounds, to fit all strokes within the render. */
   const bool uniform_zoom = true;

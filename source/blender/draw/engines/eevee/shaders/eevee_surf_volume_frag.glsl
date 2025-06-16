@@ -20,7 +20,7 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_surf_volume)
 
 /* Needed includes for shader nodes. */
 #include "eevee_attributes_volume_lib.glsl"
-#include "eevee_nodetree_lib.glsl"
+#include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_occupancy_lib.glsl"
 #include "eevee_sampling_lib.glsl"
 
@@ -126,7 +126,7 @@ void main()
 #endif
 
 #ifndef MAT_GEOM_WORLD
-  OccupancyBits occupancy;
+  occupancy::Bits occupancy;
   for (int j = 0; j < 8; j++) {
     occupancy.bits[j] = imageLoad(occupancy_img, int3(froxel.xy, j)).r;
   }

@@ -14,9 +14,6 @@
 
 #include "BlenderStrokeRenderer.h"
 
-using namespace std;
-using namespace Freestyle;
-
 #include "MEM_guardedalloc.h"
 
 #include "DNA_collection_types.h"
@@ -49,6 +46,9 @@ using namespace Freestyle;
 #include "pipeline.hh"
 
 #include "FRS_freestyle.h"
+
+using namespace std;
+using namespace Freestyle;
 
 FreestyleGlobals g_freestyle;
 
@@ -612,7 +612,7 @@ void FRS_do_stroke_rendering(Render *re, ViewLayer *view_layer)
    * Objects are transformed into camera coordinate system, therefore the camera position
    * is zero and the modelview matrix is the identity matrix. */
   Object *ob_camera_orig = RE_GetCamera(re);
-  Object *ob_camera_eval = DEG_get_evaluated_object(depsgraph, ob_camera_orig);
+  Object *ob_camera_eval = DEG_get_evaluated(depsgraph, ob_camera_orig);
   zero_v3(g_freestyle.viewpoint);
   unit_m4(g_freestyle.mv);
   RE_GetCameraWindow(re, ob_camera_eval, g_freestyle.proj);

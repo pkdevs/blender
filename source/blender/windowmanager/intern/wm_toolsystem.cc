@@ -29,6 +29,7 @@
 #include "BKE_asset_edit.hh"
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_idprop.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
@@ -211,6 +212,12 @@ static const char *brush_type_identifier_get(const int brush_type, const PaintMo
 static bool brush_type_matches_active_tool(bContext *C, const int brush_type)
 {
   const bToolRef *active_tool = toolsystem_active_tool_from_context_or_view3d(C);
+
+  if (active_tool->runtime == nullptr) {
+    /* Should only ever be null in background mode. */
+    BLI_assert(G.background);
+    return false;
+  }
 
   if (!(active_tool->runtime->flag & TOOLREF_FLAG_USE_BRUSHES)) {
     return false;
@@ -922,7 +929,7 @@ bToolRef *WM_toolsystem_ref_set_by_id_ex(
     return nullptr;
   }
 
-/* Some contexts use the current space type (image editor for e.g.),
+/* Some contexts use the current space type (e.g. image editor),
  * ensure this is set correctly or there is no area. */
 #ifndef NDEBUG
   /* Exclude this check for some space types where the space type isn't used. */
@@ -981,7 +988,7 @@ static void toolsystem_ref_set_by_brush_type(bContext *C, const char *brush_type
     return;
   }
 
-/* Some contexts use the current space type (image editor for e.g.),
+/* Some contexts use the current space type (e.g. image editor),
  * ensure this is set correctly or there is no area. */
 #ifndef NDEBUG
   /* Exclude this check for some space types where the space type isn't used. */
@@ -1235,7 +1242,7 @@ static IDProperty *idprops_ensure_named_group(IDProperty *group, const char *idn
   if ((prop == nullptr) || (prop->type != IDP_GROUP)) {
     prop = blender::bke::idprop::create_group(__func__).release();
     STRNCPY(prop->name, idname);
-    IDP_ReplaceInGroup_ex(group, prop, nullptr);
+    IDP_ReplaceInGroup_ex(group, prop, nullptr, 0);
   }
   return prop;
 }

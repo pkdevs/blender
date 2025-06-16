@@ -31,6 +31,7 @@
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_scene_runtime.hh"
+#include "BKE_screen.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
@@ -641,32 +642,67 @@ void ED_node_shader_default(const bContext *C, ID *id)
 
 void ED_node_composit_default(const bContext *C, Scene *sce)
 {
+  Main *bmain = CTX_data_main(C);
+
   /* but lets check it anyway */
-  if (sce->nodetree) {
+  if (sce->compositing_node_group) {
     if (G.debug & G_DEBUG) {
       printf("error in composite initialize\n");
     }
     return;
   }
 
-  sce->nodetree = blender::bke::node_tree_add_tree_embedded(
-      nullptr, &sce->id, "Compositing Nodetree", ntreeType_Composite->idname);
+  sce->compositing_node_group = blender::bke::node_tree_add_tree(
+      bmain, DATA_("Compositing Node Tree"), ntreeType_Composite->idname);
 
-  bNode *out = blender::bke::node_add_static_node(C, *sce->nodetree, CMP_NODE_COMPOSITE);
-  out->location[0] = 200.0f;
-  out->location[1] = 200.0f;
+  ED_node_composit_default_init(C, sce->compositing_node_group);
 
-  bNode *in = blender::bke::node_add_static_node(C, *sce->nodetree, CMP_NODE_R_LAYERS);
-  in->location[0] = -200.0f;
-  in->location[1] = 200.0f;
-  blender::bke::node_set_active(*sce->nodetree, *in);
+  BKE_ntree_update_after_single_tree_change(*bmain, *sce->compositing_node_group);
+}
 
-  /* Links from color to color. */
-  bNodeSocket *fromsock = (bNodeSocket *)in->outputs.first;
-  bNodeSocket *tosock = (bNodeSocket *)out->inputs.first;
-  blender::bke::node_add_link(*sce->nodetree, *in, *fromsock, *out, *tosock);
+void ED_node_composit_default_init(const bContext *C, bNodeTree *ntree)
+{
+  BLI_assert(ntree != nullptr && ntree->type == NTREE_COMPOSIT);
+  BLI_assert(BLI_listbase_count(&ntree->nodes) == 0);
 
-  BKE_ntree_update_after_single_tree_change(*CTX_data_main(C), *sce->nodetree);
+  bNode *composite = blender::bke::node_add_static_node(C, *ntree, CMP_NODE_COMPOSITE);
+  composite->location[0] = 200.0f;
+  composite->location[1] = 0.0f;
+
+  bNode *in = blender::bke::node_add_static_node(C, *ntree, CMP_NODE_R_LAYERS);
+  in->location[0] = -150.0f - in->width;
+  in->location[1] = 0.0f;
+  blender::bke::node_set_active(*ntree, *in);
+
+  bNode *reroute = blender::bke::node_add_static_node(C, *ntree, NODE_REROUTE);
+  reroute->location[0] = 100.0f;
+  reroute->location[1] = -35.0f;
+
+  bNode *viewer = blender::bke::node_add_static_node(C, *ntree, CMP_NODE_VIEWER);
+  viewer->location[0] = 200.0f;
+  viewer->location[1] = -60.0f;
+
+  /* Viewer and Composite nodes are linked to Render Layer's output image socket through a reroute
+   * node. */
+  blender::bke::node_add_link(*ntree,
+                              *in,
+                              *(bNodeSocket *)in->outputs.first,
+                              *reroute,
+                              *(bNodeSocket *)reroute->inputs.first);
+
+  blender::bke::node_add_link(*ntree,
+                              *reroute,
+                              *(bNodeSocket *)reroute->outputs.first,
+                              *composite,
+                              *(bNodeSocket *)composite->inputs.first);
+
+  blender::bke::node_add_link(*ntree,
+                              *reroute,
+                              *(bNodeSocket *)reroute->outputs.first,
+                              *viewer,
+                              *(bNodeSocket *)viewer->inputs.first);
+
+  BKE_ntree_update_after_single_tree_change(*CTX_data_main(C), *ntree);
 }
 
 void ED_node_texture_default(const bContext *C, Tex *tex)
@@ -737,7 +773,9 @@ void snode_set_context(const bContext &C)
   if (snode->nodetree != ntree || snode->id != id || snode->from != from ||
       (snode->treepath.last == nullptr && ntree))
   {
-    ED_node_tree_start(snode, ntree, id, from);
+    ScrArea *area = CTX_wm_area(&C);
+    ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
+    ED_node_tree_start(region, snode, ntree, id, from);
   }
 }
 
@@ -1175,7 +1213,7 @@ void NODE_OT_resize(wmOperatorType *ot)
   ot->idname = "NODE_OT_resize";
   ot->description = "Resize a node";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = node_resize_invoke;
   ot->modal = node_resize_modal;
   ot->poll = ED_operator_node_active;
@@ -1312,7 +1350,7 @@ bNodeSocket *node_find_indicated_socket(SpaceNode &snode,
     }
     if (in_out & SOCK_IN) {
       for (bNodeSocket *sock : node->input_sockets()) {
-        if (!node->is_socket_icon_drawn(*sock)) {
+        if (!sock->is_icon_visible()) {
           continue;
         }
         const float2 location = sock->runtime->location;
@@ -1330,7 +1368,7 @@ bNodeSocket *node_find_indicated_socket(SpaceNode &snode,
     }
     if (in_out & SOCK_OUT) {
       for (bNodeSocket *sock : node->output_sockets()) {
-        if (!node->is_socket_icon_drawn(*sock)) {
+        if (!sock->is_icon_visible()) {
           continue;
         }
         const float2 location = sock->runtime->location;
@@ -1569,7 +1607,7 @@ void NODE_OT_duplicate(wmOperatorType *ot)
   ot->description = "Duplicate selected nodes";
   ot->idname = "NODE_OT_duplicate";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = node_duplicate_exec;
   ot->poll = ED_operator_node_editable;
 
@@ -1643,7 +1681,7 @@ wmOperatorStatus node_render_changed_exec(bContext *C, wmOperator * /*op*/)
    * All the nodes are using same render result, so there is no need to do
    * anything smart about check how exactly scene is used. */
   bNode *node = nullptr;
-  for (bNode *node_iter : sce->nodetree->all_nodes()) {
+  for (bNode *node_iter : sce->compositing_node_group->all_nodes()) {
     if (node_iter->id == (ID *)sce) {
       node = node_iter;
       break;
@@ -2077,7 +2115,7 @@ void NODE_OT_delete(wmOperatorType *ot)
   ot->description = "Remove selected nodes";
   ot->idname = "NODE_OT_delete";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = node_delete_exec;
   ot->poll = ED_operator_node_editable;
 
@@ -2124,7 +2162,7 @@ void NODE_OT_delete_reconnect(wmOperatorType *ot)
   ot->description = "Remove nodes and reconnect nodes as if deletion was muted";
   ot->idname = "NODE_OT_delete_reconnect";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = node_delete_reconnect_exec;
   ot->poll = ED_operator_node_editable;
 
@@ -2354,7 +2392,7 @@ void NODE_OT_node_copy_color(wmOperatorType *ot)
   ot->description = "Copy color to all selected nodes";
   ot->idname = "NODE_OT_node_copy_color";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = node_copy_color_exec;
   ot->poll = ED_operator_node_editable;
 
@@ -2432,7 +2470,7 @@ void NODE_OT_shader_script_update(wmOperatorType *ot)
   ot->description = "Update shader script node with new sockets and options from the script";
   ot->idname = "NODE_OT_shader_script_update";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = node_shader_script_update_exec;
   ot->poll = node_shader_script_update_poll;
 
@@ -2525,7 +2563,7 @@ void NODE_OT_viewer_border(wmOperatorType *ot)
   ot->description = "Set the boundaries for viewer operations";
   ot->idname = "NODE_OT_viewer_border";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = WM_gesture_box_invoke;
   ot->exec = viewer_border_exec;
   ot->modal = WM_gesture_box_modal;
@@ -2558,7 +2596,7 @@ void NODE_OT_clear_viewer_border(wmOperatorType *ot)
   ot->description = "Clear the boundaries for viewer operations";
   ot->idname = "NODE_OT_clear_viewer_border";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = clear_viewer_border_exec;
   ot->poll = composite_node_active;
 

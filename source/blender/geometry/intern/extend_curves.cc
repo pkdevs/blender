@@ -243,9 +243,9 @@ bke::CurvesGeometry extend_curves(bke::CurvesGeometry &src_curves,
   bke::CurvesGeometry dst_curves;
 
   if (!follow_curvature) {
-    /* Use the old curves when extending straight when no new points are added.  */
+    /* Use the old curves when extending straight when no new points are added. */
     dst_curves = std::move(src_curves);
-    /* Enable affected curves for #extend_curves_straight().  */
+    /* Enable affected curves for #extend_curves_straight(). */
     index_mask::masked_fill<int>(start_points, 1, selection);
     index_mask::masked_fill<int>(end_points, 1, selection);
   }
@@ -360,7 +360,10 @@ bke::CurvesGeometry extend_curves(bke::CurvesGeometry &src_curves,
       }
     }
   });
-
+  if (src_curves.nurbs_has_custom_knots()) {
+    bke::curves::nurbs::update_custom_knot_modes(
+        dst_curves.curves_range(), NURBS_KNOT_MODE_NORMAL, NURBS_KNOT_MODE_NORMAL, dst_curves);
+  }
   return dst_curves;
 }
 

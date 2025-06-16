@@ -13,6 +13,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
@@ -260,12 +261,12 @@ static void strip_convert_transform_crop_lb(const Scene *scene,
                                             const eSpaceSeq_Proxy_RenderSize render_size)
 {
 
-  LISTBASE_FOREACH (Strip *, seq, lb) {
-    if (!ELEM(seq->type, STRIP_TYPE_SOUND_RAM, STRIP_TYPE_SOUND_HD)) {
-      strip_convert_transform_crop(scene, seq, render_size);
+  LISTBASE_FOREACH (Strip *, strip, lb) {
+    if (!ELEM(strip->type, STRIP_TYPE_SOUND_RAM, STRIP_TYPE_SOUND_HD)) {
+      strip_convert_transform_crop(scene, strip, render_size);
     }
-    if (seq->type == STRIP_TYPE_META) {
-      strip_convert_transform_crop_lb(scene, &seq->seqbase, render_size);
+    if (strip->type == STRIP_TYPE_META) {
+      strip_convert_transform_crop_lb(scene, &strip->seqbase, render_size);
     }
   }
 }
@@ -346,12 +347,12 @@ static void strip_convert_transform_crop_lb_2(const Scene *scene,
                                               const eSpaceSeq_Proxy_RenderSize render_size)
 {
 
-  LISTBASE_FOREACH (Strip *, seq, lb) {
-    if (!ELEM(seq->type, STRIP_TYPE_SOUND_RAM, STRIP_TYPE_SOUND_HD)) {
-      strip_convert_transform_crop_2(scene, seq, render_size);
+  LISTBASE_FOREACH (Strip *, strip, lb) {
+    if (!ELEM(strip->type, STRIP_TYPE_SOUND_RAM, STRIP_TYPE_SOUND_HD)) {
+      strip_convert_transform_crop_2(scene, strip, render_size);
     }
-    if (seq->type == STRIP_TYPE_META) {
-      strip_convert_transform_crop_lb_2(scene, &seq->seqbase, render_size);
+    if (strip->type == STRIP_TYPE_META) {
+      strip_convert_transform_crop_lb_2(scene, &strip->seqbase, render_size);
     }
   }
 }
@@ -367,25 +368,26 @@ static void seq_update_meta_disp_range(Scene *scene)
   LISTBASE_FOREACH_BACKWARD (MetaStack *, ms, &ed->metastack) {
     /* Update ms->disp_range from meta. */
     if (ms->disp_range[0] == ms->disp_range[1]) {
-      ms->disp_range[0] = blender::seq::time_left_handle_frame_get(scene, ms->parseq);
-      ms->disp_range[1] = blender::seq::time_right_handle_frame_get(scene, ms->parseq);
+      ms->disp_range[0] = blender::seq::time_left_handle_frame_get(scene, ms->parent_strip);
+      ms->disp_range[1] = blender::seq::time_right_handle_frame_get(scene, ms->parent_strip);
     }
 
     /* Update meta strip endpoints. */
-    blender::seq::time_left_handle_frame_set(scene, ms->parseq, ms->disp_range[0]);
-    blender::seq::time_right_handle_frame_set(scene, ms->parseq, ms->disp_range[1]);
+    blender::seq::time_left_handle_frame_set(scene, ms->parent_strip, ms->disp_range[0]);
+    blender::seq::time_right_handle_frame_set(scene, ms->parent_strip, ms->disp_range[1]);
 
     /* Recalculate effects using meta strip. */
-    LISTBASE_FOREACH (Strip *, seq, ms->oldbasep) {
-      if (seq->seq2) {
-        seq->start = seq->startdisp = max_ii(seq->seq1->startdisp, seq->seq2->startdisp);
-        seq->enddisp = min_ii(seq->seq1->enddisp, seq->seq2->enddisp);
+    LISTBASE_FOREACH (Strip *, strip, ms->oldbasep) {
+      if (strip->input2) {
+        strip->start = strip->startdisp = max_ii(strip->input1->startdisp,
+                                                 strip->input2->startdisp);
+        strip->enddisp = min_ii(strip->input1->enddisp, strip->input2->enddisp);
       }
     }
 
     /* Ensure that active seqbase points to active meta strip seqbase. */
     MetaStack *active_ms = blender::seq::meta_stack_active_get(ed);
-    blender::seq::seqbase_active_set(ed, &active_ms->parseq->seqbase);
+    blender::seq::active_seqbase_set(ed, &active_ms->parent_strip->seqbase);
   }
 }
 
@@ -781,16 +783,6 @@ static void do_versions_291_fcurve_handles_limit(FCurve *fcu)
     madd_v2_v2v2fl(bezt->vec[2], v1, delta1, -factor); /* vec[2] = v1 - factor * delta1 */
     /* Next key-frame's left handle: */
     madd_v2_v2v2fl(nextbezt->vec[0], v4, delta2, -factor); /* vec[0] = v4 - factor * delta2 */
-  }
-}
-
-static void do_versions_strip_cache_settings_recursive(const ListBase *seqbase)
-{
-  LISTBASE_FOREACH (Strip *, seq, seqbase) {
-    seq->cache_flag = 0;
-    if (seq->type == STRIP_TYPE_META) {
-      do_versions_strip_cache_settings_recursive(&seq->seqbase);
-    }
   }
 }
 
@@ -1191,7 +1183,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
 
     /* PointCloud attributes. */
     LISTBASE_FOREACH (PointCloud *, pointcloud, &bmain->pointclouds) {
-      do_versions_point_attributes(&pointcloud->pdata);
+      do_versions_point_attributes(&pointcloud->pdata_legacy);
     }
 
     /* Show outliner mode column by default. */
@@ -1400,7 +1392,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
           switch (sl->spacetype) {
             case SPACE_IMAGE: {
               SpaceImage *sima = (SpaceImage *)sl;
-              sima->flag &= ~(SI_FLAG_UNUSED_20);
+              sima->flag &= ~SI_FLAG_UNUSED_20;
               break;
             }
           }
@@ -1497,7 +1489,7 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
 
     /* PointCloud attributes names. */
     LISTBASE_FOREACH (PointCloud *, pointcloud, &bmain->pointclouds) {
-      do_versions_point_attribute_names(&pointcloud->pdata);
+      do_versions_point_attribute_names(&pointcloud->pdata_legacy);
     }
 
     /* Cryptomatte render pass */
@@ -1649,7 +1641,6 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
         continue;
       }
       ed->cache_flag = (SEQ_CACHE_STORE_RAW | SEQ_CACHE_STORE_FINAL_OUT);
-      do_versions_strip_cache_settings_recursive(&ed->seqbase);
     }
   }
 
@@ -1947,20 +1938,6 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
             SpaceNode *snode = (SpaceNode *)sl;
             LISTBASE_FOREACH (bNodeTreePath *, path, &snode->treepath) {
               STRNCPY(path->display_name, path->node_name);
-            }
-          }
-        }
-      }
-    }
-
-    /* Consolidate node and final evaluation modes. */
-    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
-      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-          if (sl->spacetype == SPACE_SPREADSHEET) {
-            SpaceSpreadsheet *sspreadsheet = (SpaceSpreadsheet *)sl;
-            if (sspreadsheet->object_eval_state == 2) {
-              sspreadsheet->object_eval_state = SPREADSHEET_OBJECT_EVAL_STATE_EVALUATED;
             }
           }
         }

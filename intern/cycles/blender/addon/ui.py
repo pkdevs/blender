@@ -978,23 +978,6 @@ class CYCLES_RENDER_PT_filter(CyclesButtonsPanel, Panel):
         sub.active = scene.cycles.use_denoising
 
 
-class CYCLES_RENDER_PT_override(CyclesButtonsPanel, Panel):
-    bl_label = "Override"
-    bl_options = {'DEFAULT_CLOSED'}
-    bl_context = "view_layer"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-
-        view_layer = context.view_layer
-
-        layout.prop(view_layer, "material_override")
-        layout.prop(view_layer, "world_override")
-        layout.prop(view_layer, "samples")
-
-
 class CYCLES_RENDER_PT_passes(CyclesButtonsPanel, Panel):
     bl_label = "Passes"
     bl_context = "view_layer"
@@ -1524,7 +1507,6 @@ class CYCLES_LIGHT_PT_light(CyclesButtonsPanel, Panel):
         layout = self.layout
 
         light = context.light
-        clamp = light.cycles
 
         if self.bl_space_type == 'PROPERTIES':
             layout.row().prop(light, "type", expand=True)
@@ -1534,14 +1516,40 @@ class CYCLES_LIGHT_PT_light(CyclesButtonsPanel, Panel):
             layout.row().prop(light, "type")
 
         col = layout.column()
+        heading = col.column(align=True, heading="Temperature")
+        row = heading.column(align=True).row(align=True)
+        row.prop(light, "use_temperature", text="")
+        # Don't show color preview for now, it is grayed out so the color
+        # is not accurate. Would not a change in the UI code to allow
+        # non-editable colors to be displayed as is.
+        if False:  # light.use_temperature:
+            sub = row.split(factor=0.7, align=True)
+            sub.active = light.use_temperature
+            sub.prop(light, "temperature", text="")
+            sub.prop(light, "temperature_color", text="")
+        else:
+            sub = row.row()
+            sub.active = light.use_temperature
+            sub.prop(light, "temperature", text="")
 
-        col.prop(light, "color")
+        if light.use_temperature:
+            col.prop(light, "color", text="Tint")
+        else:
+            col.prop(light, "color", text="Color")
+
+        layout.separator()
+
+        col = layout.column()
         col.prop(light, "energy")
-        col.separator()
+        col.prop(light, "exposure")
+        col.prop(light, "normalize")
 
+        layout.separator()
+
+        col = layout.column()
         if light.type in {'POINT', 'SPOT'}:
-            col.prop(light, "use_soft_falloff")
             col.prop(light, "shadow_soft_size", text="Radius")
+            col.prop(light, "use_soft_falloff")
         elif light.type == 'SUN':
             col.prop(light, "angle")
         elif light.type == 'AREA':
@@ -1553,6 +1561,25 @@ class CYCLES_LIGHT_PT_light(CyclesButtonsPanel, Panel):
             elif light.shape in {'RECTANGLE', 'ELLIPSE'}:
                 sub.prop(light, "size", text="Size X")
                 sub.prop(light, "size_y", text="Y")
+
+
+class CYCLES_LIGHT_PT_settings(CyclesButtonsPanel, Panel):
+    bl_label = "Settings"
+    bl_context = "data"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.light and CyclesButtonsPanel.poll(context)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        light = context.light
+        clamp = light.cycles
+
+        col = layout.column()
 
         if not (light.type == 'AREA' and clamp.is_portal):
             col.separator()
@@ -2522,7 +2549,6 @@ classes = (
     CYCLES_RENDER_PT_passes_aov,
     CYCLES_RENDER_PT_passes_lightgroups,
     CYCLES_RENDER_PT_filter,
-    CYCLES_RENDER_PT_override,
     CYCLES_PT_post_processing,
     CYCLES_CAMERA_PT_dof,
     CYCLES_CAMERA_PT_dof_aperture,
@@ -2537,6 +2563,7 @@ classes = (
     CYCLES_OBJECT_PT_visibility_culling,
     CYCLES_LIGHT_PT_preview,
     CYCLES_LIGHT_PT_light,
+    CYCLES_LIGHT_PT_settings,
     CYCLES_LIGHT_PT_nodes,
     CYCLES_LIGHT_PT_beam_shape,
     CYCLES_WORLD_PT_preview,
@@ -2569,6 +2596,7 @@ classes = (
     node_panel(CYCLES_WORLD_PT_settings_surface),
     node_panel(CYCLES_WORLD_PT_settings_volume),
     node_panel(CYCLES_LIGHT_PT_light),
+    node_panel(CYCLES_LIGHT_PT_settings),
     node_panel(CYCLES_LIGHT_PT_beam_shape)
 )
 

@@ -67,7 +67,7 @@ struct MikkMeshWrapper {
   {
     /* TODO: Check whether introducing a template boolean in order to
      * turn this into a constexpr is worth it. */
-    if (uv != nullptr) {
+    if (has_uv()) {
       const int corner_index = CornerIndex(face_num, vert_num);
       const float2 tfuv = uv[corner_index];
       return mikk::float3(tfuv.x, tfuv.y, 1.0f);
@@ -99,6 +99,11 @@ struct MikkMeshWrapper {
     if (tangent_sign != nullptr) {
       tangent_sign[corner_index] = orientation ? 1.0f : -1.0f;
     }
+  }
+
+  bool has_uv() const
+  {
+    return uv != nullptr;
   }
 
   const Mesh *mesh;
@@ -616,6 +621,18 @@ void Mesh::apply_transform(const Transform &tfm, const bool apply_to_motion)
 
       for (size_t i = 0; i < steps_size; i++) {
         vert_steps[i] = transform_point(&tfm, vert_steps[i]);
+      }
+    }
+
+    Attribute *attr_N = attributes.find(ATTR_STD_MOTION_VERTEX_NORMAL);
+
+    if (attr_N) {
+      const Transform ntfm = transform_normal;
+      const size_t steps_size = verts.size() * (motion_steps - 1);
+      float3 *normal_steps = attr_N->data_float3();
+
+      for (size_t i = 0; i < steps_size; i++) {
+        normal_steps[i] = normalize(transform_direction(&ntfm, normal_steps[i]));
       }
     }
   }

@@ -68,7 +68,7 @@ static Vector<const GeometryAttributeInfo *> get_attribute_info_from_context(
   if (!tree_zones) {
     return {};
   }
-  const ContextualGeoTreeLogs tree_logs = GeoModifierLog::get_contextual_tree_logs(*snode);
+  const ContextualGeoTreeLogs tree_logs = GeoNodesLog::get_contextual_tree_logs(*snode);
 
   Set<StringRef> names;
 
@@ -138,7 +138,7 @@ static void attribute_search_update_fn(
 
 /**
  * Some custom data types don't correspond to node types and therefore can't be
- * used by the named attribute input node. Find the best option or fallback to float.
+ * used by the named attribute input node. Find the best option or fall back to float.
  */
 static eCustomDataType data_type_in_attribute_input_node(const eCustomDataType type)
 {
@@ -225,7 +225,7 @@ void node_geometry_add_attribute_search_button(const bContext & /*C*/,
                                                const bNode &node,
                                                PointerRNA &socket_ptr,
                                                uiLayout &layout,
-                                               const StringRefNull placeholder)
+                                               const StringRef placeholder)
 {
   uiBlock *block = uiLayoutGetBlock(&layout);
   uiBut *but = uiDefIconTextButR(block,
@@ -243,7 +243,7 @@ void node_geometry_add_attribute_search_button(const bContext & /*C*/,
                                  0.0f,
                                  0.0f,
                                  "");
-  UI_but_placeholder_set(but, placeholder.c_str());
+  UI_but_placeholder_set(but, placeholder);
 
   const bNodeSocket &socket = *static_cast<const bNodeSocket *>(socket_ptr.data);
   AttributeSearchData *data = MEM_callocN<AttributeSearchData>(__func__);

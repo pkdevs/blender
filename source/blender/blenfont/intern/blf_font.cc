@@ -31,12 +31,12 @@
 #include "BLI_math_bits.h"
 #include "BLI_math_color_blend.h"
 #include "BLI_math_matrix.h"
+#include "BLI_mutex.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_rect.h"
 #include "BLI_string.h"
 #include "BLI_string_cursor_utf8.h"
 #include "BLI_string_utf8.h"
-#include "BLI_threads.h"
 #include "BLI_vector.hh"
 
 #include "BLF_api.hh"
@@ -64,7 +64,7 @@ static FTC_Manager ftc_manager = nullptr;
 static FTC_CMapCache ftc_charmap_cache = nullptr;
 
 /* Lock for FreeType library, used around face creation and deletion. */
-static ThreadMutex ft_lib_mutex;
+static blender::Mutex ft_lib_mutex;
 
 /* May be set to #UI_widgetbase_draw_cache_flush. */
 static void (*blf_draw_cache_flush)() = nullptr;
@@ -102,7 +102,7 @@ static FT_Error blf_cache_face_requester(FTC_FaceID faceID,
   FontBLF *font = (FontBLF *)faceID;
   int err = FT_Err_Cannot_Open_Resource;
 
-  BLI_mutex_lock(&ft_lib_mutex);
+  std::scoped_lock lock(ft_lib_mutex);
   if (font->filepath) {
     err = FT_New_Face(lib, font->filepath, 0, face);
   }
@@ -110,7 +110,6 @@ static FT_Error blf_cache_face_requester(FTC_FaceID faceID,
     err = FT_New_Memory_Face(
         lib, static_cast<const FT_Byte *>(font->mem), (FT_Long)font->mem_size, 0, face);
   }
-  BLI_mutex_unlock(&ft_lib_mutex);
 
   if (err == FT_Err_Ok) {
     font->face = *face;
@@ -189,14 +188,16 @@ static ft_pix blf_unscaled_F26Dot6_to_pixels(FontBLF *font, FT_Pos value)
 static void blf_batch_draw_init()
 {
   GPUVertFormat format = {0};
-  g_batch.pos_loc = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+  g_batch.pos_loc = GPU_vertformat_attr_add(
+      &format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32_32);
   g_batch.col_loc = GPU_vertformat_attr_add(
-      &format, "col", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
-  g_batch.offset_loc = GPU_vertformat_attr_add(&format, "offset", GPU_COMP_I32, 1, GPU_FETCH_INT);
+      &format, "col", blender::gpu::VertAttrType::UNORM_8_8_8_8);
+  g_batch.offset_loc = GPU_vertformat_attr_add(
+      &format, "offset", blender::gpu::VertAttrType::SINT_32);
   g_batch.glyph_size_loc = GPU_vertformat_attr_add(
-      &format, "glyph_size", GPU_COMP_I32, 2, GPU_FETCH_INT);
+      &format, "glyph_size", blender::gpu::VertAttrType::SINT_32_32);
   g_batch.glyph_flags_loc = GPU_vertformat_attr_add(
-      &format, "flags", GPU_COMP_U32, 1, GPU_FETCH_INT);
+      &format, "flags", blender::gpu::VertAttrType::UINT_32);
 
   g_batch.verts = GPU_vertbuf_create_with_format_ex(format, GPU_USAGE_STREAM);
   GPU_vertbuf_data_alloc(*g_batch.verts, BLF_BATCH_DRAW_LEN_MAX);
@@ -1296,12 +1297,12 @@ static void blf_font_wrap_apply(FontBLF *font,
     const uint codepoint_prev = g_prev ? g_prev->c : 0;
 
     /**
-     * Implementation Detail (utf8).
+     * Implementation Detail (UTF8).
      *
      * Take care with single byte offsets here,
-     * since this is utf8 we can't be sure a single byte is a single character.
+     * since this is UTF8 we can't be sure a single byte is a single character.
      *
-     * This is _only_ done when we know for sure the character is ascii (newline or a space).
+     * This is _only_ done when we know for sure the character is ASCII (newline or a space).
      */
     pen_x_next = pen_x + advance_x;
 
@@ -1580,7 +1581,6 @@ char *blf_display_name(FontBLF *font)
 int blf_font_init()
 {
   memset(&g_batch, 0, sizeof(g_batch));
-  BLI_mutex_init(&ft_lib_mutex);
   int err = FT_Init_FreeType(&ft_lib);
   if (err == FT_Err_Ok) {
     /* Create a FreeType cache manager. */
@@ -1601,7 +1601,6 @@ int blf_font_init()
 
 void blf_font_exit()
 {
-  BLI_mutex_end(&ft_lib_mutex);
   if (ftc_manager) {
     FTC_Manager_Done(ftc_manager);
   }
@@ -1884,7 +1883,7 @@ bool blf_ensure_face(FontBLF *font)
     err = FTC_Manager_LookupFace(ftc_manager, font, &font->face);
   }
   else {
-    BLI_mutex_lock(&ft_lib_mutex);
+    std::scoped_lock lock(ft_lib_mutex);
     if (font->filepath) {
       err = FT_New_Face(font->ft_lib, font->filepath, 0, &font->face);
     }
@@ -1898,7 +1897,6 @@ bool blf_ensure_face(FontBLF *font)
     if (!err) {
       font->face->generic.data = font;
     }
-    BLI_mutex_unlock(&ft_lib_mutex);
   }
 
   if (err) {
@@ -2107,14 +2105,13 @@ void blf_font_free(FontBLF *font)
   }
 
   if (font->face) {
-    BLI_mutex_lock(&ft_lib_mutex);
+    std::scoped_lock lock(ft_lib_mutex);
     if (font->flags & BLF_CACHED) {
       FTC_Manager_RemoveFaceID(ftc_manager, font);
     }
     else {
       FT_Done_Face(font->face);
     }
-    BLI_mutex_unlock(&ft_lib_mutex);
     font->face = nullptr;
   }
   if (font->filepath) {

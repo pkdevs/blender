@@ -91,7 +91,7 @@ void OBJECT_OT_particle_system_add(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_particle_system_add";
   ot->description = "Add a particle system";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->poll = ED_operator_object_active_local_editable;
   ot->exec = particle_system_add_exec;
 
@@ -140,7 +140,7 @@ void OBJECT_OT_particle_system_remove(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_particle_system_remove";
   ot->description = "Remove the selected particle system";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->poll = ED_operator_object_active_local_editable;
   ot->exec = particle_system_remove_exec;
 
@@ -202,7 +202,7 @@ void PARTICLE_OT_new(wmOperatorType *ot)
   ot->idname = "PARTICLE_OT_new";
   ot->description = "Add new particle settings";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = new_particle_settings_exec;
   ot->poll = psys_poll;
 
@@ -252,7 +252,7 @@ void PARTICLE_OT_new_target(wmOperatorType *ot)
   ot->idname = "PARTICLE_OT_new_target";
   ot->description = "Add a new particle target";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = new_particle_target_exec;
 
   /* flags */
@@ -301,7 +301,7 @@ void PARTICLE_OT_target_remove(wmOperatorType *ot)
   ot->idname = "PARTICLE_OT_target_remove";
   ot->description = "Remove the selected particle target";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = remove_particle_target_exec;
 
   /* flags */
@@ -491,7 +491,7 @@ void PARTICLE_OT_dupliob_copy(wmOperatorType *ot)
   ot->idname = "PARTICLE_OT_dupliob_copy";
   ot->description = "Duplicate the current instance object";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = copy_particle_dupliob_exec;
 
   /* flags */
@@ -535,7 +535,7 @@ void PARTICLE_OT_dupliob_remove(wmOperatorType *ot)
   ot->idname = "PARTICLE_OT_dupliob_remove";
   ot->description = "Remove the selected instance object";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = remove_particle_dupliob_exec;
 
   /* flags */
@@ -585,7 +585,7 @@ void PARTICLE_OT_dupliob_move_down(wmOperatorType *ot)
 
 static void disconnect_hair(Depsgraph *depsgraph, Scene *scene, Object *ob, ParticleSystem *psys)
 {
-  Object *object_eval = DEG_get_evaluated_object(depsgraph, ob);
+  Object *object_eval = DEG_get_evaluated(depsgraph, ob);
   ParticleSystem *psys_eval = psys_eval_get(depsgraph, ob, psys);
   ParticleSystemModifierData *psmd_eval = psys_get_modifier(object_eval, psys_eval);
   ParticleEditSettings *pset = PE_settings(scene);
@@ -696,7 +696,7 @@ static bool remap_hair_emitter(Depsgraph *depsgraph,
                                bool from_global,
                                bool to_global)
 {
-  Object *object_eval = DEG_get_evaluated_object(depsgraph, ob);
+  Object *object_eval = DEG_get_evaluated(depsgraph, ob);
   ParticleSystem *psys_eval = psys_eval_get(depsgraph, ob, psys);
   ParticleSystemModifierData *target_psmd = psys_get_modifier(object_eval, psys_eval);
   ParticleData *pa, *tpa;
@@ -1374,4 +1374,66 @@ void PARTICLE_OT_duplicate_particle_system(wmOperatorType *ot)
                   false,
                   "Duplicate Settings",
                   "Duplicate settings as well, so the new particle system uses its own settings");
+}
+
+static bool remove_all_particle_systems_poll(bContext *C)
+{
+  if (!ED_operator_object_active_local_editable(C)) {
+    return false;
+  }
+  const Object *ob = blender::ed::object::context_active_object(C);
+  if (BLI_listbase_is_empty(&ob->particlesystem)) {
+    return false;
+  }
+  if (ob->mode != OB_MODE_OBJECT) {
+    CTX_wm_operator_poll_msg_set(C, "Object must be in object mode");
+    return false;
+  }
+  return true;
+}
+static wmOperatorStatus particle_system_remove_all_exec(bContext *C, wmOperator * /*op*/)
+{
+  Main *bmain = CTX_data_main(C);
+  Object *ob = blender::ed::object::context_object(C);
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+
+  if (!scene || !ob) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const eObjectMode mode_orig = eObjectMode(ob->mode);
+  LISTBASE_FOREACH_MUTABLE (ParticleSystem *, psys, &ob->particlesystem) {
+    object_remove_particle_system(bmain, scene, ob, psys);
+  }
+
+  /* possible this isn't the active object
+   * object_remove_particle_system() clears the mode on the last psys
+   */
+  if (mode_orig & OB_MODE_PARTICLE_EDIT) {
+    if ((ob->mode & OB_MODE_PARTICLE_EDIT) == 0) {
+      BKE_view_layer_synced_ensure(scene, view_layer);
+      if (BKE_view_layer_active_object_get(view_layer) == ob) {
+        WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_MODE_OBJECT, nullptr);
+      }
+    }
+  }
+
+  WM_event_add_notifier(C, NC_OBJECT | ND_PARTICLE, ob);
+  WM_event_add_notifier(C, NC_OBJECT | ND_POINTCACHE, ob);
+
+  return OPERATOR_FINISHED;
+}
+
+void PARTICLE_OT_particle_system_remove_all(wmOperatorType *ot)
+{
+  ot->name = "Remove All Particle Systems";
+  ot->description = "Remove all particle system within the active object";
+  ot->idname = "PARTICLE_OT_particle_system_remove_all";
+
+  ot->poll = remove_all_particle_systems_poll;
+  ot->exec = particle_system_remove_all_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }

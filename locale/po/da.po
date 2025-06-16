@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'1f4cae0c4623')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'6ccdb8c06e27')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-28 09:32+0000\n"
-"PO-Revision-Date: 2025-04-18 12:33+0000\n"
+"POT-Creation-Date: 2025-06-16 10:45+0000\n"
+"PO-Revision-Date: 2025-06-11 19:59+0000\n"
 "Last-Translator: leif larsen <linuxdk1978@gmail.com>\n"
 "Language-Team: Danish <https://translate.blender.org/projects/blender-ui/ui/da/>\n"
 "Language: da\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.10.1"
+"X-Generator: Weblate 5.11"
 
 
 msgid "Shader AOV"
@@ -2864,6 +2864,10 @@ msgid "File format version the .blend file was saved with"
 msgstr "Filformatversion .blend-filen blev gemt med"
 
 
+msgid "Volume data-blocks"
+msgstr "Volume data-blokke"
+
+
 msgid "Window Managers"
 msgstr "Window Managers"
 
@@ -2946,6 +2950,10 @@ msgstr "Hovedskrifttyper"
 
 msgid "Collection of fonts"
 msgstr "Samling af skrifttyper"
+
+
+msgid "Main Grease Pencils"
+msgstr "Hoved Grease Blyant"
 
 
 msgid "Main Hair Curves"
@@ -3044,6 +3052,10 @@ msgid "Collection of objects"
 msgstr "Samling af genstande"
 
 
+msgid "Main Paint Curves"
+msgstr "Hoved Malings Kurver"
+
+
 msgid "Collection of palettes"
 msgstr "Samling af paletter"
 
@@ -3118,6 +3130,10 @@ msgstr "Tilfældig"
 
 msgid "Children"
 msgstr "Børn"
+
+
+msgid "B-Bone"
+msgstr "B-Knogle"
 
 
 msgid "Parent"
@@ -3521,10 +3537,6 @@ msgid "Blend Mode"
 msgstr "Blandings måde"
 
 
-msgid "B-Bone"
-msgstr "B-Knogle"
-
-
 msgid "Local"
 msgstr "Lokal"
 
@@ -3684,6 +3696,10 @@ msgstr "Nøglebillede A"
 
 msgid "Keyframe B"
 msgstr "Nøglebillede B"
+
+
+msgid "Starting"
+msgstr "Begynde"
 
 
 msgid "To"
@@ -4088,16 +4104,4 @@ msgstr "%s '%s' ikke fundet"
 
 msgid "Import-Export"
 msgstr "Importér-Expotér"
-
-
-msgid "Complete"
-msgstr "Færdig"
-
-
-msgid "In Progress"
-msgstr "I gang"
-
-
-msgid "Starting"
-msgstr "Begynde"
 

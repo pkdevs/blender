@@ -479,7 +479,7 @@ void GRAPH_OT_select_all(wmOperatorType *ot)
   ot->idname = "GRAPH_OT_select_all";
   ot->description = "Toggle selection of all keyframes";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = graphkeys_deselectall_exec;
   ot->poll = graphop_visible_keyframes_poll;
 
@@ -954,8 +954,6 @@ static wmOperatorStatus graphkeys_lassoselect_exec(bContext *C, wmOperator *op)
   rcti rect;
   rctf rect_fl;
 
-  bool incl_handles;
-
   /* Get editor data. */
   if (ANIM_animdata_get_context(C, &ac) == 0) {
     return OPERATOR_CANCELLED;
@@ -973,21 +971,13 @@ static wmOperatorStatus graphkeys_lassoselect_exec(bContext *C, wmOperator *op)
     deselect_graph_keys(&ac, false, SELECT_SUBTRACT, true);
   }
 
-  {
-    SpaceGraph *sipo = (SpaceGraph *)ac.sl;
-    if (selectmode == SELECT_ADD) {
-      incl_handles = ((sipo->flag & SIPO_SELVHANDLESONLY) || (sipo->flag & SIPO_NOHANDLES)) == 0;
-    }
-    else {
-      incl_handles = (sipo->flag & SIPO_NOHANDLES) == 0;
-    }
-  }
-
   /* Get settings from operator. */
   BLI_lasso_boundbox(&rect, data_lasso.mcoords);
   BLI_rctf_rcti_copy(&rect_fl, &rect);
 
   /* Apply box_select action. */
+  SpaceGraph *sgraph = reinterpret_cast<SpaceGraph *>(ac.sl);
+  const bool incl_handles = (sgraph->flag & SIPO_NOHANDLES) == 0;
   const bool any_key_selection_changed = box_select_graphkeys(
       &ac, &rect_fl, BEZT_OK_REGION_LASSO, selectmode, incl_handles, &data_lasso);
   const bool use_curve_selection = RNA_boolean_get(op->ptr, "use_curve_selection");
@@ -1036,7 +1026,6 @@ void GRAPH_OT_select_lasso(wmOperatorType *ot)
 static wmOperatorStatus graph_circle_select_exec(bContext *C, wmOperator *op)
 {
   bAnimContext ac;
-  bool incl_handles = false;
 
   KeyframeEdit_CircleData data = {nullptr};
   rctf rect_fl;
@@ -1068,17 +1057,9 @@ static wmOperatorStatus graph_circle_select_exec(bContext *C, wmOperator *op)
   rect_fl.ymin = y - radius;
   rect_fl.ymax = y + radius;
 
-  {
-    SpaceGraph *sipo = (SpaceGraph *)ac.sl;
-    if (selectmode == SELECT_ADD) {
-      incl_handles = ((sipo->flag & SIPO_SELVHANDLESONLY) || (sipo->flag & SIPO_NOHANDLES)) == 0;
-    }
-    else {
-      incl_handles = (sipo->flag & SIPO_NOHANDLES) == 0;
-    }
-  }
-
   /* Apply box_select action. */
+  SpaceGraph *sgraph = reinterpret_cast<SpaceGraph *>(ac.sl);
+  const bool incl_handles = (sgraph->flag & SIPO_NOHANDLES) == 0;
   const bool any_key_selection_changed = box_select_graphkeys(
       &ac, &rect_fl, BEZT_OK_REGION_CIRCLE, selectmode, incl_handles, &data);
   if (any_key_selection_changed) {
@@ -1219,6 +1200,7 @@ static void columnselect_graph_keys(bAnimContext *ac, short mode)
           ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
 
       LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+        ked.data = ale;
         ANIM_fcurve_keyframes_loop(
             &ked, static_cast<FCurve *>(ale->key_data), nullptr, bezt_to_cfraelem, nullptr);
       }
@@ -1308,7 +1290,7 @@ void GRAPH_OT_select_column(wmOperatorType *ot)
   ot->idname = "GRAPH_OT_select_column";
   ot->description = "Select all keyframes on the specified frame(s)";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = graphkeys_columnselect_exec;
   ot->poll = graphop_visible_keyframes_poll;
 
@@ -1373,7 +1355,7 @@ void GRAPH_OT_select_linked(wmOperatorType *ot)
   ot->idname = "GRAPH_OT_select_linked";
   ot->description = "Select keyframes occurring in the same F-Curves as selected ones";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = graphkeys_select_linked_exec;
   ot->poll = graphop_visible_keyframes_poll;
 
@@ -1457,7 +1439,7 @@ void GRAPH_OT_select_more(wmOperatorType *ot)
   ot->idname = "GRAPH_OT_select_more";
   ot->description = "Select keyframes beside already selected ones";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = graphkeys_select_more_exec;
   ot->poll = graphop_visible_keyframes_poll;
 
@@ -1492,7 +1474,7 @@ void GRAPH_OT_select_less(wmOperatorType *ot)
   ot->idname = "GRAPH_OT_select_less";
   ot->description = "Deselect keyframes on ends of selection islands";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = graphkeys_select_less_exec;
   ot->poll = graphop_visible_keyframes_poll;
 
@@ -1648,7 +1630,7 @@ void GRAPH_OT_select_leftright(wmOperatorType *ot)
   ot->idname = "GRAPH_OT_select_leftright";
   ot->description = "Select keyframes to the left or the right of the current frame";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = graphkeys_select_leftright_invoke;
   ot->exec = graphkeys_select_leftright_exec;
   ot->poll = graphop_visible_keyframes_poll;

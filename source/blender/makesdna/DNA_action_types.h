@@ -287,10 +287,17 @@ typedef struct bPoseChannel {
   /** User-Defined Properties on this PoseChannel. */
   IDProperty *prop;
 
+  /**
+   * System-defined custom properties storage.
+   *
+   * In Blender 4.5, only used to ensure forward compatibility with 5.x blend-files, and data
+   * management consistency.
+   */
+  IDProperty *system_properties;
+
   /** Constraints that act on this PoseChannel. */
   ListBase constraints;
-  /** Need to match bone name length: MAXBONENAME. */
-  char name[64];
+  char name[/*MAXBONENAME*/ 64];
 
   /** Dynamic, for detecting transform changes. */
   short flag;
@@ -421,6 +428,8 @@ typedef struct bPoseChannel {
   struct bPoseChannel *orig_pchan;
 
   BoneColor color; /* MUST be named the same as in Bone and EditBone structs. */
+
+  void *_pad2;
 
   /** Runtime data (keep last). */
   struct bPoseChannel_Runtime runtime;
@@ -758,6 +767,11 @@ typedef enum eActionGroup_Flag {
  * \see blender::animrig::Action for more detailed documentation.
  */
 typedef struct bAction {
+#ifdef __cplusplus
+  /** See #ID_Type comment for why this is here. */
+  static constexpr ID_Type id_type = ID_AC;
+#endif
+
   /** ID-serialization for relinking. */
   ID id;
 
@@ -896,7 +910,7 @@ typedef enum eDopeSheet_FilterFlag {
   /* datatype-based filtering */
   ADS_FILTER_NOSHAPEKEYS = (1 << 6),
   ADS_FILTER_NOMESH = (1 << 7),
-  /** for animdata on object level, if we only want to concentrate on materials/etc. */
+  /** For animation-data on object level, if we only want to concentrate on materials/etc. */
   ADS_FILTER_NOOBJ = (1 << 8),
   ADS_FILTER_NOLAT = (1 << 9),
   ADS_FILTER_NOCAM = (1 << 10),
@@ -1112,8 +1126,8 @@ typedef struct bActionChannel {
 
   /** Settings accessed via bitmapping. */
   int flag;
-  /** Channel name, MAX_NAME. */
-  char name[64];
+  /** Channel name. */
+  char name[/*MAX_NAME*/ 64];
   /** Temporary setting - may be used to indicate group that channel belongs to during syncing. */
   int temp;
 } bActionChannel;
@@ -1126,7 +1140,7 @@ typedef struct bActionChannel {
  */
 typedef struct ActionLayer {
   /** User-Visible identifier, unique within the Animation. */
-  char name[64]; /* MAX_NAME. */
+  char name[/*MAX_NAME*/ 64];
 
   float influence; /* [0-1] */
 
@@ -1170,7 +1184,7 @@ typedef struct ActionSlot {
    *
    * \see #AnimData::slot_name
    */
-  char identifier[66]; /* MAX_ID_NAME */
+  char identifier[/*MAX_ID_NAME*/ 66];
 
   /**
    * Type of ID-block that this slot is intended for.

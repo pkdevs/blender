@@ -41,6 +41,7 @@ static void node_declare(NodeDeclarationBuilder &b)
                      .default_value(0.1f)
                      .min(0.001f)
                      .subtype(PROP_DISTANCE)
+                     .field_on_all()
                      .make_available([](bNode &node) {
                        node_storage(node).mode = GEO_NODE_CURVE_RESAMPLE_LENGTH;
                      });
@@ -61,7 +62,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
+  layout->prop(ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
@@ -116,9 +117,7 @@ static PointCloud *curves_to_points(
 {
   const AttributeAccessor curve_attributes = curves.attributes();
 
-  PointCloud *pointcloud = BKE_pointcloud_new_nomain(0);
-  CustomData_free(&pointcloud->pdata);
-  pointcloud->totpoint = curves.points_num();
+  PointCloud *pointcloud = bke::pointcloud_new_no_attributes(curves.points_num());
   MutableAttributeAccessor point_attributes = pointcloud->attributes_for_write();
 
   const bke::AttributeFilterFromFunc filter = [&](const StringRef name) {

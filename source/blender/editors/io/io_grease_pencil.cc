@@ -47,11 +47,19 @@ static void grease_pencil_export_common_props_definition(wmOperatorType *ot)
 {
   using blender::io::grease_pencil::ExportParams;
   using SelectMode = ExportParams::SelectMode;
+  using FrameMode = ExportParams::FrameMode;
 
   static const EnumPropertyItem select_mode_items[] = {
       {int(SelectMode::Active), "ACTIVE", 0, "Active", "Include only the active object"},
       {int(SelectMode::Selected), "SELECTED", 0, "Selected", "Include selected objects"},
       {int(SelectMode::Visible), "VISIBLE", 0, "Visible", "Include all visible objects"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  static const EnumPropertyItem frame_mode_items[] = {
+      {int(FrameMode::Active), "ACTIVE", 0, "Active", "Include only active frame"},
+      {int(FrameMode::Selected), "SELECTED", 0, "Selected", "Include selected frames"},
+      {int(FrameMode::Scene), "SCENE", 0, "Scene", "Include all scene frames"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -62,6 +70,12 @@ static void grease_pencil_export_common_props_definition(wmOperatorType *ot)
                int(SelectMode::Active),
                "Object",
                "Which objects to include in the export");
+  ot->prop = RNA_def_enum(ot->srna,
+                          "frame_mode",
+                          frame_mode_items,
+                          int(FrameMode::Active),
+                          "Frames",
+                          "Which frames to include in the export");
   RNA_def_float(ot->srna,
                 "stroke_sample",
                 0.0f,
@@ -176,10 +190,10 @@ static void grease_pencil_import_svg_draw(bContext * /*C*/, wmOperator *op)
   uiLayout *layout = op->layout;
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
-  uiLayout *box = uiLayoutBox(layout);
+  uiLayout *box = &layout->box();
   uiLayout *col = &box->column(false);
-  uiItemR(col, op->ptr, "resolution", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(col, op->ptr, "scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col->prop(op->ptr, "resolution", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col->prop(op->ptr, "scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static bool grease_pencil_import_svg_poll(bContext *C)
@@ -305,7 +319,8 @@ static wmOperatorStatus grease_pencil_export_svg_exec(bContext *C, wmOperator *o
   const bool use_uniform_width = RNA_boolean_get(op->ptr, "use_uniform_width");
   const ExportParams::SelectMode select_mode = ExportParams::SelectMode(
       RNA_enum_get(op->ptr, "selected_object_type"));
-  const ExportParams::FrameMode frame_mode = ExportParams::FrameMode::Active;
+  const ExportParams::FrameMode frame_mode = ExportParams::FrameMode(
+      RNA_enum_get(op->ptr, "frame_mode"));
   const bool use_clip_camera = RNA_boolean_get(op->ptr, "use_clip_camera");
   const float stroke_sample = RNA_float_get(op->ptr, "stroke_sample");
 
@@ -330,31 +345,56 @@ static wmOperatorStatus grease_pencil_export_svg_exec(bContext *C, wmOperator *o
   return OPERATOR_FINISHED;
 }
 
-static void grease_pencil_export_svg_draw(bContext * /*C*/, wmOperator *op)
+enum class GreasePencilExportFiletype {
+  SVG = 0,
+  PDF = 1,
+};
+
+/**
+ * Defines the layout of the exporter properties.
+ *
+ * \param ptr: RNA pointer to access the export operator's properties.
+ */
+static void ui_gpencil_export_settings(uiLayout *layout,
+                                       PointerRNA *ptr,
+                                       GreasePencilExportFiletype file_type)
 {
-  uiLayout *layout = op->layout;
-  uiLayout *box, *row;
+  uiLayout *box, *row, *col, *sub;
 
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
 
-  box = uiLayoutBox(layout);
+  box = &layout->box();
 
   row = &box->row(false);
-  uiItemL(row, IFACE_("Scene Options"), ICON_NONE);
+  row->label(IFACE_("Scene Options"), ICON_NONE);
 
   row = &box->row(false);
-  uiItemR(row, op->ptr, "selected_object_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  row->prop(ptr, "selected_object_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  box = uiLayoutBox(layout);
+  box = &layout->box();
   row = &box->row(false);
-  uiItemL(row, IFACE_("Export Options"), ICON_NONE);
+  row->label(IFACE_("Export Options"), ICON_NONE);
 
-  uiLayout *col = &box->column(false);
-  uiItemR(col, op->ptr, "stroke_sample", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(col, op->ptr, "use_fill", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(col, op->ptr, "use_uniform_width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(col, op->ptr, "use_clip_camera", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col = &box->column(false);
+  sub = &col->column(false);
+  sub->prop(ptr, "frame_mode", UI_ITEM_NONE, IFACE_("Frame"), ICON_NONE);
+
+  uiLayoutSetPropSep(box, true);
+
+  sub = &col->column(true);
+  sub->prop(ptr, "stroke_sample", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  sub->prop(ptr, "use_fill", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  sub->prop(ptr, "use_uniform_width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  if (file_type == GreasePencilExportFiletype::SVG) {
+    col->prop(ptr, "use_clip_camera", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+}
+
+static void grease_pencil_export_svg_draw(bContext * /*C*/, wmOperator *op)
+{
+  ui_gpencil_export_settings(op->layout, op->ptr, GreasePencilExportFiletype::SVG);
 }
 
 static bool grease_pencil_export_svg_poll(bContext *C)
@@ -490,40 +530,9 @@ static wmOperatorStatus grease_pencil_export_pdf_exec(bContext *C, wmOperator *o
   return OPERATOR_FINISHED;
 }
 
-static void ui_gpencil_export_pdf_settings(uiLayout *layout, PointerRNA *imfptr)
-{
-  uiLayout *box, *row, *col, *sub;
-
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
-
-  box = uiLayoutBox(layout);
-
-  row = &box->row(false);
-  uiItemL(row, IFACE_("Scene Options"), ICON_NONE);
-
-  row = &box->row(false);
-  uiItemR(row, imfptr, "selected_object_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-
-  box = uiLayoutBox(layout);
-  row = &box->row(false);
-  uiItemL(row, IFACE_("Export Options"), ICON_NONE);
-
-  col = &box->column(false);
-  sub = &col->column(true);
-  uiItemR(sub, imfptr, "frame_mode", UI_ITEM_NONE, IFACE_("Frame"), ICON_NONE);
-
-  uiLayoutSetPropSep(box, true);
-
-  sub = &col->column(true);
-  uiItemR(sub, imfptr, "stroke_sample", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(sub, imfptr, "use_fill", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(sub, imfptr, "use_uniform_width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-}
-
 static void grease_pencil_export_pdf_draw(bContext * /*C*/, wmOperator *op)
 {
-  ui_gpencil_export_pdf_settings(op->layout, op->ptr);
+  ui_gpencil_export_settings(op->layout, op->ptr, GreasePencilExportFiletype::PDF);
 }
 
 static bool grease_pencil_export_pdf_poll(bContext *C)
@@ -559,24 +568,7 @@ void WM_OT_grease_pencil_export_pdf(wmOperatorType *ot)
 
   using blender::io::grease_pencil::ExportParams;
 
-  static const EnumPropertyItem frame_mode_items[] = {
-      {int(ExportParams::FrameMode::Active), "ACTIVE", 0, "Active", "Include only active frame"},
-      {int(ExportParams::FrameMode::Selected),
-       "SELECTED",
-       0,
-       "Selected",
-       "Include selected frames"},
-      {int(ExportParams::FrameMode::Scene), "SCENE", 0, "Scene", "Include all scene frames"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
   blender::ed::io::grease_pencil_export_common_props_definition(ot);
-  ot->prop = RNA_def_enum(ot->srna,
-                          "frame_mode",
-                          frame_mode_items,
-                          int(ExportParams::FrameMode::Active),
-                          "Frames",
-                          "Which frames to include in the export");
 }
 
 #  endif /* WITH_HARU */

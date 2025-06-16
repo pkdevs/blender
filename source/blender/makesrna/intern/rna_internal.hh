@@ -66,7 +66,7 @@ struct PropertyDefRNA {
   int dnapointerlevel;
   /**
    * Offset in bytes within `dnastructname`.
-   * -1 when unusable (follows pointer for e.g.). */
+   * -1 when unusable (follows pointer for example). */
   int dnaoffset;
   int dnasize;
 
@@ -394,6 +394,8 @@ std::optional<std::string> rna_CameraBackgroundImage_image_or_movieclip_user_pat
 std::optional<std::string> rna_ColorManagedDisplaySettings_path(const PointerRNA *ptr);
 std::optional<std::string> rna_ColorManagedViewSettings_path(const PointerRNA *ptr);
 std::optional<std::string> rna_ColorManagedInputColorspaceSettings_path(const PointerRNA *ptr);
+
+std::optional<std::string> rna_Channelbag_path(const PointerRNA *ptr);
 
 /* Node socket subtypes for group interface. */
 void rna_def_node_socket_interface_subtypes(BlenderRNA *brna);

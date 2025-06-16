@@ -8,7 +8,9 @@
  */
 
 #include "BLI_compiler_attrs.h"
+#include "BLI_mutex.hh"
 
+#include <cstdint>
 #include <optional>
 
 struct rcti;
@@ -26,6 +28,8 @@ struct Library;
 struct ListBase;
 struct Main;
 struct Object;
+struct PartialUpdateRegister;
+struct PartialUpdateUser;
 struct RenderResult;
 struct RenderSlot;
 struct ReportList;
@@ -34,6 +38,28 @@ struct StampData;
 
 #define IMA_MAX_SPACE 64
 #define IMA_UDIM_MAX 2000
+
+namespace blender::bke {
+
+struct ImageRuntime {
+  /* Mutex used to guarantee thread-safe access to the cached ImBuf of the corresponding image ID.
+   */
+  Mutex cache_mutex;
+
+  /** Register containing partial updates. */
+  PartialUpdateRegister *partial_update_register = nullptr;
+  /** Partial update user for GPUTextures stored inside the Image. */
+  PartialUpdateUser *partial_update_user = nullptr;
+
+  /* The image's current update count. See deg::set_id_update_count for more information. */
+  uint64_t update_count = 0;
+
+  /* Compositor viewer might be translated, and that translation will be stored in this runtime
+   * vector by the compositor so that the editor draw code can draw the image translated. */
+  float backdrop_offset[2] = {};
+};
+
+}  // namespace blender::bke
 
 void BKE_image_free_packedfiles(Image *image);
 void BKE_image_free_views(Image *image);
@@ -578,13 +604,18 @@ GPUTexture *BKE_image_get_gpu_viewer_texture(Image *image, ImageUser *iuser);
  * tiles as used in material shaders.
  */
 struct ImageGPUTextures {
-  GPUTexture *texture;
-  GPUTexture *tile_mapping;
+  GPUTexture **texture;
+  GPUTexture **tile_mapping;
 };
 
 ImageGPUTextures BKE_image_get_gpu_material_texture(Image *image,
                                                     ImageUser *iuser,
                                                     const bool use_tile_mapping);
+
+/* Same as BKE_image_get_gpu_material_texture but will not load the texture if it isn't already. */
+ImageGPUTextures BKE_image_get_gpu_material_texture_try(Image *image,
+                                                        ImageUser *iuser,
+                                                        const bool use_tile_mapping);
 
 /**
  * Is the alpha of the `GPUTexture` for a given image/ibuf premultiplied.

@@ -8,6 +8,7 @@
  * \ingroup sequencer
  */
 
+#include "BLI_function_ref.hh"
 #include "BLI_vector_set.hh"
 
 struct ListBase;
@@ -23,7 +24,7 @@ using ForEachFunc = bool (*)(Strip *strip, void *user_data);
 
 /**
  * Utility function to recursively iterate through all sequence strips in a `seqbase` list.
- * Uses callback to do operations on each sequence element.
+ * Uses callback to do operations on each element.
  * The callback can stop the iteration if needed.
  *
  * \param seqbase: #ListBase of sequences to be iterated over.
@@ -31,6 +32,9 @@ using ForEachFunc = bool (*)(Strip *strip, void *user_data);
  * \param user_data: pointer to user data that can be used in the callback function.
  */
 void for_each_callback(ListBase *seqbase, ForEachFunc callback, void *user_data);
+
+/** Same as above, but using a more modern FunctionRef as callback. */
+void for_each_callback(ListBase *seqbase, blender::FunctionRef<bool(Strip *)> callback);
 
 /**
  * Expand set by running `strip_query_func()` for each strip, which will be used as reference.

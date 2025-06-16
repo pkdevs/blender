@@ -142,8 +142,8 @@ static IndexMask get_visible_strokes(const Object &object,
 {
   const bke::CurvesGeometry &strokes = drawing.strokes();
   const bke::AttributeAccessor attributes = strokes.attributes();
-  const VArray<int> materials = *attributes.lookup<int>(attr_material_index,
-                                                        bke::AttrDomain::Curve);
+  const VArray<int> materials = *attributes.lookup_or_default<int>(
+      attr_material_index, bke::AttrDomain::Curve, 0);
 
   auto is_visible_curve = [&](const int curve_i) {
     /* Check if stroke can be drawn. */
@@ -242,7 +242,7 @@ static std::optional<Bounds<float2>> compute_objects_bounds(
   std::optional<Bounds<float2>> full_bounds = std::nullopt;
 
   for (const ObjectInfo &info : objects) {
-    const Object *object_eval = DEG_get_evaluated_object(&depsgraph, info.object);
+    const Object *object_eval = DEG_get_evaluated(&depsgraph, info.object);
     const GreasePencil &grease_pencil_eval = *static_cast<GreasePencil *>(object_eval->data);
 
     for (const int layer_index : grease_pencil_eval.layers().index_range()) {
@@ -578,6 +578,20 @@ float2 GreasePencilExporter::project_to_screen(const float4x4 &transform,
   }
 
   return float2(V2D_IS_CLIPPED);
+}
+
+bool GreasePencilExporter::is_selected_frame(const GreasePencil &grease_pencil,
+                                             const int frame_number) const
+{
+  for (const bke::greasepencil::Layer *layer : grease_pencil.layers()) {
+    if (layer->is_visible()) {
+      const GreasePencilFrame *frame = layer->frame_at(frame_number);
+      if ((frame != nullptr) && frame->is_selected()) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 }  // namespace blender::io::grease_pencil

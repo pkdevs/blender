@@ -201,7 +201,7 @@ CCL_NAMESPACE_BEGIN
 #  endif
 #endif
 #ifndef __KERNEL_GPU__
-#  ifdef WITH_PATH_GUIDING
+#  if defined(WITH_PATH_GUIDING)
 #    define __PATH_GUIDING__
 #  endif
 #  define __VOLUME_RECORD_ALL__
@@ -1477,7 +1477,11 @@ struct ccl_align(16) KernelData
   void *device_bvh;
 #else
 #  ifdef __EMBREE__
+#    if RTC_VERSION >= 40400
+  RTCTraversable device_bvh;
+#    else
   RTCScene device_bvh;
+#    endif
 #    ifndef __KERNEL_64_BIT__
   int pad1;
 #    endif
@@ -1760,7 +1764,7 @@ struct KernelWorkTile {
 /* Shader Evaluation.
  *
  * Position on a primitive on an object at which we want to evaluate the
- * shader for e.g. mesh displacement or light importance map. */
+ * shader for example mesh displacement or light importance map. */
 
 struct KernelShaderEvalInput {
   int object;

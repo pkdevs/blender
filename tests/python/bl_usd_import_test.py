@@ -128,8 +128,8 @@ class USDImportTest(AbstractUSDTest):
         # Test topology counts.
         self.assertIn("m_degenerate", objects, "Scene does not contain object m_degenerate")
         mesh = objects["m_degenerate"].data
-        self.assertEqual(len(mesh.polygons), 2)
-        self.assertEqual(len(mesh.edges), 7)
+        self.assertEqual(len(mesh.polygons), 0)
+        self.assertEqual(len(mesh.edges), 0)
         self.assertEqual(len(mesh.vertices), 6)
 
         self.assertIn("m_triangles", objects, "Scene does not contain object m_triangles")
@@ -159,6 +159,32 @@ class USDImportTest(AbstractUSDTest):
         self.assertEqual(len(mesh.edges), 5)
         self.assertEqual(len(mesh.vertices), 5)
         self.assertEqual(len(mesh.polygons[0].vertices), 5)
+
+    def test_import_mesh_topology_change(self):
+        """Test importing meshes with changing topology over time."""
+
+        infile = str(self.testdir / "usd_mesh_topology_change.usda")
+        res = bpy.ops.wm.usd_import(filepath=infile)
+        self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {infile}")
+
+        # Check topology for all frames against expected vertex and face counts
+        expected_face_verts = [
+            (4, 4, 4),
+            (3, 4, 5),
+            (3, 3, 6),
+            (4, 4, 4),
+        ]
+        for frame in range(1, 5):
+            bpy.context.scene.frame_set(frame)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+
+            mesh = depsgraph.objects["TopoTest"].data
+
+            expected = expected_face_verts[frame - 1]
+            self.assertEqual(len(mesh.polygons), len(expected), f"Unexpected data for {frame=}")
+            for face in range(0, 3):
+                verts = mesh.polygons[face].vertices
+                self.assertEqual(len(verts), expected[face], f"Unexpected data for {frame=} {face=}")
 
     def test_import_mesh_uv_maps(self):
         """Test importing meshes with udim UVs and multiple UV sets."""
@@ -470,6 +496,42 @@ class USDImportTest(AbstractUSDTest):
         assert_displacement(mat, None, 0.5, 0.3)
         mat = bpy.data.materials["mid_0_0_scale_0_3"]
         assert_displacement(mat, None, 0.0, 0.3)
+
+    def test_import_material_attributes(self):
+        """Validate correct import of Attribute information from UsdPrimvarReaders"""
+
+        # Use the existing materials test file to create the USD file
+        # for import. It is validated as part of the bl_usd_export test.
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_materials_attributes.blend"))
+        testfile = str(self.tempdir / "usd_materials_attributes.usda")
+        res = bpy.ops.wm.usd_export(filepath=str(testfile), export_materials=True)
+        self.assertEqual({'FINISHED'}, res, f"Unable to export to {testfile}")
+
+        # Reload the empty file and import back in
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "empty.blend"))
+        res = bpy.ops.wm.usd_import(filepath=testfile)
+        self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {testfile}")
+
+        # Most shader graph validation should occur through the Hydra render test suite. Here we
+        # will only check some high-level criteria for each expected node graph.
+
+        def assert_attribute(mat, attribute_name, from_socket, to_socket):
+            nodes = [n for n in mat.node_tree.nodes if n.type == 'ATTRIBUTE' and n.attribute_name == attribute_name]
+            self.assertTrue(len(nodes) == 1)
+            outputs = [o for o in nodes[0].outputs if o.identifier == from_socket]
+            self.assertTrue(len(outputs) == 1)
+            self.assertTrue(len(outputs[0].links) == 1)
+            link = outputs[0].links[0]
+            self.assertEqual(link.from_socket.identifier, from_socket)
+            self.assertEqual(link.to_socket.identifier, to_socket)
+
+        mat = bpy.data.materials["Material"]
+        self.assert_all_nodes_present(
+            mat, ["Principled BSDF", "Attribute", "Attribute.001", "Attribute.002", "Material Output"])
+
+        assert_attribute(mat, "displayColor", "Color", "Base Color")
+        assert_attribute(mat, "f_vec", "Vector", "Normal")
+        assert_attribute(mat, "f_float", "Fac", "Roughness")
 
     def test_import_shader_varname_with_connection(self):
         """Test importing USD shader where uv primvar is a connection"""
@@ -1168,6 +1230,29 @@ class USDImportTest(AbstractUSDTest):
         self.assertEqual(blender_light.shape, 'DISK')  # We read as disk to mirror what USD supports
         self.assertAlmostEqual(blender_light.size, 4, 3)
 
+    def test_import_dome_lights(self):
+        """Test importing dome lights and verify their rotations."""
+
+        # Test files and their expected EnvironmentTexture Mapping rotation values
+        tests = [
+            ("usd_dome_light_1_stageZ_poleY.usda", [0.0, 0.0, 0.0]),
+            ("usd_dome_light_1_stageZ_poleZ.usda", [0.0, -1.5708, 0.0]),
+            ("usd_dome_light_1_stageY_poleDefault.usda", [-1.5708, 0.0, 0.0])
+        ]
+
+        for test_name, expected_rot in tests:
+            bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "empty.blend"))
+
+            infile = str(self.testdir / test_name)
+            res = bpy.ops.wm.usd_import(filepath=infile)
+            self.assertEqual({'FINISHED'}, res, f"Unable to import USD file {infile}")
+
+            # Validate that the Mapping node on the World Material is set to the correct rotation
+            world = bpy.data.worlds["World"]
+            node = world.node_tree.nodes["Mapping"]
+            self.assertEqual(
+                self.round_vector(node.inputs[2].default_value), expected_rot, f"Incorrect rotation for {test_name}")
+
     def check_attribute(self, blender_data, attribute_name, domain, data_type, elements_len):
         attr = blender_data.attributes[attribute_name]
         self.assertEqual(attr.domain, domain)
@@ -1655,13 +1740,13 @@ class USDImportTest(AbstractUSDTest):
                 self.assertEqual(image.tiles[tile].size[1], size)
 
         def check_materials():
-            self.assertEqual(len(bpy.data.materials), 7)  # +1 because of the "Dots Stroke" material
             self.assertTrue("Clip_With_LessThanInvert" in bpy.data.materials)
             self.assertTrue("Clip_With_Round" in bpy.data.materials)
             self.assertTrue("Material" in bpy.data.materials)
             self.assertTrue("NormalMap" in bpy.data.materials)
             self.assertTrue("NormalMap_Scale_Bias" in bpy.data.materials)
             self.assertTrue("Transforms" in bpy.data.materials)
+            self.assertEqual(len(bpy.data.materials), 6)
 
         # Reload the empty file and import back in using IMPORT_PACK
         bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "empty.blend"))

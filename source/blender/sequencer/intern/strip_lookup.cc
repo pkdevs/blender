@@ -15,19 +15,20 @@
 
 #include "BLI_listbase.h"
 #include "BLI_map.hh"
+#include "BLI_mutex.hh"
 #include "BLI_vector_set.hh"
 
 #include <cstring>
-#include <mutex>
 
 #include "MEM_guardedalloc.h"
 
 namespace blender::seq {
 
-static std::mutex lookup_lock;
+static Mutex lookup_lock;
 
 struct StripLookup {
   blender::Map<std::string, Strip *> strip_by_name;
+  blender::Map<const Scene *, VectorSet<Strip *>> strips_by_scene;
   blender::Map<const Strip *, Strip *> meta_by_strip;
   blender::Map<const Strip *, blender::VectorSet<Strip *>> effects_by_strip;
   blender::Map<const SeqTimelineChannel *, Strip *> owner_by_channel;
@@ -45,14 +46,23 @@ static void strip_lookup_append_effect(const Strip *input, Strip *effect, StripL
   effects.add(effect);
 }
 
+static void strip_by_scene_lookup_build(Strip *strip, StripLookup *lookup)
+{
+  if (strip->scene == nullptr) {
+    return;
+  }
+  VectorSet<Strip *> &strips = lookup->strips_by_scene.lookup_or_add_default(strip->scene);
+  strips.add(strip);
+}
+
 static void strip_lookup_build_effect(Strip *strip, StripLookup *lookup)
 {
   if ((strip->type & STRIP_TYPE_EFFECT) == 0) {
     return;
   }
 
-  strip_lookup_append_effect(strip->seq1, strip, lookup);
-  strip_lookup_append_effect(strip->seq2, strip, lookup);
+  strip_lookup_append_effect(strip->input1, strip, lookup);
+  strip_lookup_append_effect(strip->input2, strip, lookup);
 }
 
 static void strip_lookup_build_from_seqbase(Strip *parent_meta,
@@ -69,6 +79,7 @@ static void strip_lookup_build_from_seqbase(Strip *parent_meta,
     lookup->strip_by_name.add(strip->name + 2, strip);
     lookup->meta_by_strip.add(strip, parent_meta);
     strip_lookup_build_effect(strip, lookup);
+    strip_by_scene_lookup_build(strip, lookup);
 
     if (strip->type == STRIP_TYPE_META) {
       strip_lookup_build_from_seqbase(strip, &strip->seqbase, lookup);
@@ -127,6 +138,16 @@ Strip *lookup_strip_by_name(Editing *ed, const char *key)
   strip_lookup_update_if_needed(ed, &ed->runtime.strip_lookup);
   StripLookup *lookup = ed->runtime.strip_lookup;
   return lookup->strip_by_name.lookup_default(key, nullptr);
+}
+
+Span<Strip *> lookup_strips_by_scene(Editing *ed, const Scene *key)
+{
+  BLI_assert(ed != nullptr);
+  std::lock_guard lock(lookup_lock);
+  strip_lookup_update_if_needed(ed, &ed->runtime.strip_lookup);
+  StripLookup *lookup = ed->runtime.strip_lookup;
+  VectorSet<Strip *> &strips = lookup->strips_by_scene.lookup_or_add_default(key);
+  return strips.as_span();
 }
 
 Strip *lookup_meta_by_strip(Editing *ed, const Strip *key)

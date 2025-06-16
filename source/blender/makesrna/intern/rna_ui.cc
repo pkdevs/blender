@@ -464,6 +464,11 @@ static int rna_UIList_filter_const_FILTER_ITEM_get(PointerRNA * /*ptr*/)
   return UILST_FLT_ITEM;
 }
 
+static int rna_UIList_item_never_show(PointerRNA * /*ptr*/)
+{
+  return UILST_FLT_ITEM_NEVER_SHOW;
+}
+
 static IDProperty **rna_UIList_idprops(PointerRNA *ptr)
 {
   uiList *ui_list = (uiList *)ptr->data;
@@ -1358,12 +1363,12 @@ static void rna_Menu_bl_description_set(PointerRNA *ptr, const char *value)
 
 static bool rna_UILayout_active_get(PointerRNA *ptr)
 {
-  return uiLayoutGetActive(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->active();
 }
 
 static void rna_UILayout_active_set(PointerRNA *ptr, bool value)
 {
-  uiLayoutSetActive(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->active_set(value);
 }
 
 static bool rna_UILayout_active_default_get(PointerRNA *ptr)
@@ -1398,12 +1403,12 @@ static void rna_UILayout_alert_set(PointerRNA *ptr, bool value)
 
 static void rna_UILayout_op_context_set(PointerRNA *ptr, int value)
 {
-  uiLayoutSetOperatorContext(static_cast<uiLayout *>(ptr->data), wmOperatorCallContext(value));
+  static_cast<uiLayout *>(ptr->data)->operator_context_set(wmOperatorCallContext(value));
 }
 
 static int rna_UILayout_op_context_get(PointerRNA *ptr)
 {
-  return uiLayoutGetOperatorContext(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->operator_context();
 }
 
 static bool rna_UILayout_enabled_get(PointerRNA *ptr)
@@ -1455,52 +1460,52 @@ static int rna_UILayout_direction_get(PointerRNA *ptr)
 
 static float rna_UILayout_scale_x_get(PointerRNA *ptr)
 {
-  return uiLayoutGetScaleX(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->scale_x();
 }
 
 static void rna_UILayout_scale_x_set(PointerRNA *ptr, float value)
 {
-  uiLayoutSetScaleX(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->scale_x_set(value);
 }
 
 static float rna_UILayout_scale_y_get(PointerRNA *ptr)
 {
-  return uiLayoutGetScaleY(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->scale_y();
 }
 
 static void rna_UILayout_scale_y_set(PointerRNA *ptr, float value)
 {
-  uiLayoutSetScaleY(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->scale_y_set(value);
 }
 
 static float rna_UILayout_units_x_get(PointerRNA *ptr)
 {
-  return uiLayoutGetUnitsX(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->ui_units_x();
 }
 
 static void rna_UILayout_units_x_set(PointerRNA *ptr, float value)
 {
-  uiLayoutSetUnitsX(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->ui_units_x_set(value);
 }
 
 static float rna_UILayout_units_y_get(PointerRNA *ptr)
 {
-  return uiLayoutGetUnitsY(static_cast<uiLayout *>(ptr->data));
+  return static_cast<uiLayout *>(ptr->data)->ui_units_y();
 }
 
 static void rna_UILayout_units_y_set(PointerRNA *ptr, float value)
 {
-  uiLayoutSetUnitsY(static_cast<uiLayout *>(ptr->data), value);
+  static_cast<uiLayout *>(ptr->data)->ui_units_y_set(value);
 }
 
 static int rna_UILayout_emboss_get(PointerRNA *ptr)
 {
-  return int(uiLayoutGetEmboss(static_cast<uiLayout *>(ptr->data)));
+  return int(static_cast<uiLayout *>(ptr->data)->emboss());
 }
 
 static void rna_UILayout_emboss_set(PointerRNA *ptr, int value)
 {
-  uiLayoutSetEmboss(static_cast<uiLayout *>(ptr->data), blender::ui::EmbossType(value));
+  static_cast<uiLayout *>(ptr->data)->emboss_set(blender::ui::EmbossType(value));
 }
 
 static bool rna_UILayout_property_split_get(PointerRNA *ptr)
@@ -1672,8 +1677,8 @@ static void rna_def_ui_layout(BlenderRNA *brna)
       {int(blender::ui::EmbossType::Pulldown),
        "PULLDOWN_MENU",
        0,
-       "Pulldown Menu",
-       "Draw pulldown menu style"},
+       "Pull-down Menu",
+       "Draw pull-down menu style"},
       {int(blender::ui::EmbossType::PieMenu),
        "RADIAL_MENU",
        0,
@@ -2146,6 +2151,11 @@ static void rna_def_uilist(BlenderRNA *brna)
       "FILTER_ITEM",
       "The value of the reserved bitflag 'FILTER_ITEM' (in filter_flags values)");
   RNA_def_property_int_funcs(prop, "rna_UIList_filter_const_FILTER_ITEM_get", nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "bitflag_item_never_show", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_ui_text(prop, "ITEM_NEVER_SHOW", "Skip the item from displaying in the list");
+  RNA_def_property_int_funcs(prop, "rna_UIList_item_never_show", nullptr, nullptr);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
 

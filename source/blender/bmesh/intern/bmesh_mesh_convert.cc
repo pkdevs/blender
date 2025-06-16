@@ -319,7 +319,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
   /* -------------------------------------------------------------------- */
   /* Shape Key */
   int tot_shape_keys = 0;
-  if (mesh->key != nullptr && DEG_is_original_id(&mesh->id)) {
+  if (mesh->key != nullptr && DEG_is_original(mesh)) {
     /* Evaluated meshes can be topologically inconsistent with their shape keys.
      * Shape keys are also already integrated into the state of the evaluated
      * mesh, so considering them here would kind of apply them twice. */
@@ -666,7 +666,7 @@ static BMVert **bm_to_mesh_vertex_map(BMesh *bm, const int old_verts_num)
  *
  * Shape key synchronizing could work under the assumption that the key-block is
  * fixed-in-place when entering edit-mode allowing them to be used as a reference when exiting.
- * It often does work but isn't reliable since for e.g. rendering may flush changes
+ * It often does work but isn't reliable since for example rendering may flush changes
  * from the edit-mesh to the key-block (there are a handful of other situations where
  * changes may be flushed, see #ED_editors_flush_edits and related functions).
  * When using undo, it's not known if the data in key-block is from the past or future,
@@ -714,7 +714,7 @@ static BMVert **bm_to_mesh_vertex_map(BMesh *bm, const int old_verts_num)
  *   - Use the value from the original shape key
  *     WARNING: this is technically incorrect! (see note on "Key Block Usage").
  *   - Use the current vertex location,
- *     Also not correct but it's better then having it zeroed for e.g.
+ *     Also not correct but it's better then having it zeroed for example.
  *
  * - Missing key-index layer.
  *   In this case the basis key won't apply its deltas to other keys and if a shape-key layer is

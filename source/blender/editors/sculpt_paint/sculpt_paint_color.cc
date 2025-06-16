@@ -401,7 +401,8 @@ static void do_paint_brush_task(const Scene &scene,
   }
   filter_distances_with_radius(radius, distances, factors);
   apply_hardness_to_distances(radius, cache.hardness, distances);
-  calc_brush_strength_factors(cache, brush, distances, factors);
+  BKE_brush_calc_curve_factors(
+      eBrushCurvePreset(brush.curve_preset), brush.curve, distances, radius, factors);
 
   MutableSpan<float> auto_mask;
   if (cache.automasking) {
@@ -417,9 +418,10 @@ static void do_paint_brush_task(const Scene &scene,
 
   const float density = ss.cache->paint_brush.density;
   if (density < 1.0f) {
+    BLI_assert(ss.cache->paint_brush.density_seed);
+    const float seed = ss.cache->paint_brush.density_seed.value_or(0.0f);
     for (const int i : verts.index_range()) {
-      const float hash_noise = BLI_hash_int_01(ss.cache->paint_brush.density_seed * 1000 *
-                                               verts[i]);
+      const float hash_noise = BLI_hash_int_01(seed * 1000 * verts[i]);
       if (hash_noise > density) {
         const float noise = density * hash_noise;
         factors[i] *= noise;
@@ -427,11 +429,23 @@ static void do_paint_brush_task(const Scene &scene,
     }
   }
 
-  const float3 brush_color_rgb = ss.cache->invert ?
-                                     BKE_brush_secondary_color_get(&scene, &paint, &brush) :
-                                     BKE_brush_color_get(&scene, &paint, &brush);
+  float3 brush_color_rgb = ss.cache->invert ?
+                               BKE_brush_secondary_color_get(&scene, &paint, &brush) :
+                               BKE_brush_color_get(&scene, &paint, &brush);
+
+  IMB_colormanagement_srgb_to_scene_linear_v3(brush_color_rgb, brush_color_rgb);
+
+  const std::optional<BrushColorJitterSettings> color_jitter_settings =
+      BKE_brush_color_jitter_get_settings(&scene, &paint, &brush);
+  if (color_jitter_settings) {
+    brush_color_rgb = BKE_paint_randomize_color(*color_jitter_settings,
+                                                *ss.cache->initial_hsv_jitter,
+                                                ss.cache->stroke_distance,
+                                                ss.cache->pressure,
+                                                brush_color_rgb);
+  }
+
   float4 brush_color(brush_color_rgb, 1.0f);
-  IMB_colormanagement_srgb_to_scene_linear_v3(brush_color, brush_color);
 
   const Span<float4> orig_colors = orig_color_data_get_mesh(object, node);
 
@@ -558,10 +572,11 @@ void do_paint_brush(const Scene &scene,
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
   MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
 
+  if (!ss.cache->paint_brush.density_seed) {
+    ss.cache->paint_brush.density_seed = BLI_hash_int_01(ss.cache->location_symm[0] * 1000);
+  }
+
   if (SCULPT_stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
-    if (SCULPT_stroke_is_first_brush_step(*ss.cache)) {
-      ss.cache->paint_brush.density_seed = BLI_hash_int_01(ss.cache->location_symm[0] * 1000);
-    }
     return;
   }
 

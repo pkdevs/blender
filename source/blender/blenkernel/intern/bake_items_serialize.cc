@@ -15,7 +15,6 @@
 #include "BKE_volume.hh"
 
 #include "BLI_endian_defines.h"
-#include "BLI_endian_switch.h"
 #include "BLI_listbase.h"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_path_utils.hh"
@@ -289,11 +288,9 @@ std::optional<ImplicitSharingInfoAndData> BlobReadSharing::read_shared(
 
 static StringRefNull get_endian_io_name(const int endian)
 {
-  if (endian == L_ENDIAN) {
-    return "little";
-  }
-  BLI_assert(endian == B_ENDIAN);
-  return "big";
+  BLI_assert(endian == L_ENDIAN);
+  UNUSED_VARS_NDEBUG(endian);
+  return "little";
 }
 
 static StringRefNull get_domain_io_name(const AttrDomain domain)
@@ -329,7 +326,7 @@ static std::optional<eCustomDataType> get_data_type_from_io_name(const StringRef
 }
 
 /**
- * Write the data and remember which endianness the data had.
+ * Write the data, always in little endian.
  */
 static std::shared_ptr<DictionaryValue> write_blob_raw_data_with_endian(
     BlobWriter &blob_writer,
@@ -338,14 +335,14 @@ static std::shared_ptr<DictionaryValue> write_blob_raw_data_with_endian(
     const int64_t size_in_bytes)
 {
   auto io_data = blob_sharing.write_deduplicated(blob_writer, data, size_in_bytes);
-  if (ENDIAN_ORDER == B_ENDIAN) {
-    io_data->append_str("endian", get_endian_io_name(ENDIAN_ORDER));
-  }
+  BLI_STATIC_ASSERT(ENDIAN_ORDER == L_ENDIAN, "Blender only builds on little endian systems")
   return io_data;
 }
 
 /**
- * Read data of an into an array and optionally perform an endian switch if necessary.
+ * Read data of an into an array.
+ *
+ * \returns True if successful, false if reading fails, or endian switch would be needed.
  */
 [[nodiscard]] static bool read_blob_raw_data_with_endian(const BlobReader &blob_reader,
                                                          const DictionaryValue &io_data,
@@ -367,21 +364,9 @@ static std::shared_ptr<DictionaryValue> write_blob_raw_data_with_endian(
   const StringRefNull current_endian = get_endian_io_name(ENDIAN_ORDER);
   const bool need_endian_switch = stored_endian != current_endian;
   if (need_endian_switch) {
-    switch (element_size) {
-      case 1:
-        break;
-      case 2:
-        BLI_endian_switch_uint16_array(static_cast<uint16_t *>(r_data), elements_num);
-        break;
-      case 4:
-        BLI_endian_switch_uint32_array(static_cast<uint32_t *>(r_data), elements_num);
-        break;
-      case 8:
-        BLI_endian_switch_uint64_array(static_cast<uint64_t *>(r_data), elements_num);
-        break;
-      default:
-        return false;
-    }
+    /* NOTE: this is endianness-sensitive. */
+    /* Blender only builds on little endian systems, and reads little endian data here. */
+    return false;
   }
   return true;
 }
@@ -611,9 +596,8 @@ static PointCloud *try_load_pointcloud(const DictionaryValue &io_geometry,
   if (!io_attributes) {
     return nullptr;
   }
-  PointCloud *pointcloud = BKE_pointcloud_new_nomain(0);
-  CustomData_free_layer_named(&pointcloud->pdata, "position");
-  pointcloud->totpoint = io_pointcloud->lookup_int("num_points").value_or(0);
+  const int points_num = io_pointcloud->lookup_int("num_points").value_or(0);
+  PointCloud *pointcloud = bke::pointcloud_new_no_attributes(points_num);
 
   auto cancel = [&]() {
     BKE_id_free(nullptr, pointcloud);
@@ -987,7 +971,7 @@ static Volume *try_load_volume(const DictionaryValue &io_geometry, const BlobRea
       return nullptr;
     }
   }
-  Volume *volume = reinterpret_cast<Volume *>(BKE_id_new_nomain(ID_VO, nullptr));
+  Volume *volume = BKE_id_new_nomain<Volume>(nullptr);
   auto cancel = [&]() {
     BKE_id_free(nullptr, volume);
     return nullptr;

@@ -21,6 +21,7 @@
 /* Needed for the instance iterator. */
 #include "DNA_object_types.h"
 
+#include "BKE_duplilist.hh"
 #include "BKE_object_types.hh"
 
 struct BLI_Iterator;
@@ -89,10 +90,6 @@ Scene *DEG_get_evaluated_scene(const Depsgraph *graph);
  */
 ViewLayer *DEG_get_evaluated_view_layer(const Depsgraph *graph);
 
-/** Get evaluated version of object for given original one. */
-Object *DEG_get_evaluated_object(const Depsgraph *depsgraph, Object *object);
-const Object *DEG_get_evaluated_object(const Depsgraph *depsgraph, const Object *object);
-
 /** Get evaluated version of given ID data-block. */
 ID *DEG_get_evaluated_id(const Depsgraph *depsgraph, ID *id);
 const ID *DEG_get_evaluated_id(const Depsgraph *depsgraph, const ID *id);
@@ -148,14 +145,24 @@ Depsgraph *DEG_get_depsgraph_by_id(const ID &id);
  * are not out-of-main localized data-blocks.
  */
 bool DEG_is_original_id(const ID *id);
-bool DEG_is_original_object(const Object *object);
+
+template<typename T> bool DEG_is_original(const T *id)
+{
+  static_assert(blender::dna::is_ID_v<T>);
+  return DEG_is_original_id(reinterpret_cast<const ID *>(id));
+}
 
 /* Opposite of the above (`DEG_is_original_*`).
  *
  * If the data-block is not original it must be evaluated, and vice versa. */
 
 bool DEG_is_evaluated_id(const ID *id);
-bool DEG_is_evaluated_object(const Object *object);
+
+template<typename T> bool DEG_is_evaluated(const T *id)
+{
+  static_assert(blender::dna::is_ID_v<T>);
+  return DEG_is_evaluated_id(reinterpret_cast<const ID *>(id));
+}
 
 /**
  * Check whether depsgraph is fully evaluated. This includes the following checks:
@@ -259,9 +266,11 @@ struct DEGObjectIterData {
   /* Object which created the dupli-list. */
   Object *dupli_parent;
   /* List of duplicated objects. */
-  ListBase *dupli_list;
+  DupliList dupli_list;
   /* Next duplicated object to step into. */
   DupliObject *dupli_object_next;
+  /* The dupli_list index of dupli_object_next. */
+  int dupli_object_next_index;
   /* Corresponds to current object: current iterator object is evaluated from
    * this duplicated object. */
   DupliObject *dupli_object_current;
@@ -273,7 +282,9 @@ struct DEGObjectIterData {
   /* **** Iteration over ID nodes **** */
   size_t id_node_index;
   size_t num_id_nodes;
-  DEGObjectIterData &operator=(const DEGObjectIterData &other);
+
+  /* Copy the current/next data and move the DupliList. */
+  void transfer_from(DEGObjectIterData &other);
 };
 
 void DEG_iterator_objects_begin(BLI_Iterator *iter, DEGObjectIterData *data);

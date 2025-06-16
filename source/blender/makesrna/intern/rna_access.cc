@@ -24,8 +24,8 @@
 #include "BLI_dynstr.h"
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
+#include "BLI_mutex.hh"
 #include "BLI_string.h"
-#include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.hh"
@@ -1210,6 +1210,11 @@ int RNA_property_tags(PropertyRNA *prop)
   return rna_ensure_property(prop)->tags;
 }
 
+PropertyPathTemplateType RNA_property_path_template_type(PropertyRNA *prop)
+{
+  return rna_ensure_property(prop)->path_template_type;
+}
+
 bool RNA_property_builtin(PropertyRNA *prop)
 {
   return (rna_ensure_property(prop)->flag_internal & PROP_INTERN_BUILTIN) != 0;
@@ -1905,6 +1910,22 @@ bool RNA_enum_name(const EnumPropertyItem *item, const int value, const char **r
   }
   return false;
 }
+
+bool RNA_enum_name_gettexted(const EnumPropertyItem *item,
+                             int value,
+                             const char *translation_context,
+                             const char **r_name)
+{
+  bool result;
+
+  result = RNA_enum_name(item, value, r_name);
+
+  if (result) {
+    *r_name = BLT_translate_do_iface(translation_context, *r_name);
+  }
+
+  return result;
+};
 
 bool RNA_enum_description(const EnumPropertyItem *item,
                           const int value,
@@ -3650,7 +3671,10 @@ std::string RNA_property_string_get(PointerRNA *ptr, PropertyRNA *prop)
 
   size_t length = size_t(RNA_property_string_length(ptr, prop));
   std::string string_ret{};
-  string_ret.reserve(length + 1);
+  /* Note: after `resize()` the underlying buffer is actually at least `length +
+   * 1` bytes long, because (since C++11) `std::string` guarantees a terminating
+   * null byte, but that is not considered part of the length. */
+  string_ret.resize(length);
 
   if (sprop->get) {
     sprop->get(ptr, string_ret.data());
@@ -3982,7 +4006,7 @@ void RNA_property_enum_set(PointerRNA *ptr, PropertyRNA *prop, int value)
   }
 }
 
-int RNA_property_enum_get_default(PointerRNA * /*ptr*/, PropertyRNA *prop)
+int RNA_property_enum_get_default(PointerRNA *ptr, PropertyRNA *prop)
 {
   EnumPropertyRNA *eprop = (EnumPropertyRNA *)rna_ensure_property(prop);
   BLI_assert(RNA_property_type(prop) == PROP_ENUM);
@@ -3995,6 +4019,9 @@ int RNA_property_enum_get_default(PointerRNA * /*ptr*/, PropertyRNA *prop)
           idprop->ui_data);
       return ui_data->default_value;
     }
+  }
+  if (eprop->get_default) {
+    return eprop->get_default(ptr, prop);
   }
 
   return eprop->defaultvalue;
@@ -4038,7 +4065,7 @@ PointerRNA RNA_property_pointer_get(PointerRNA *ptr, PropertyRNA *prop)
   PointerPropertyRNA *pprop = (PointerPropertyRNA *)prop;
   IDProperty *idprop;
 
-  static ThreadMutex lock = BLI_MUTEX_INITIALIZER;
+  static blender::Mutex mutex;
 
   BLI_assert(RNA_property_type(prop) == PROP_POINTER);
 
@@ -4063,11 +4090,10 @@ PointerRNA RNA_property_pointer_get(PointerRNA *ptr, PropertyRNA *prop)
     /* NOTE: While creating/writing data in an accessor is really bad design-wise, this is
      * currently very difficult to avoid in that case. So a global mutex is used to keep ensuring
      * thread safety. */
-    BLI_mutex_lock(&lock);
+    std::scoped_lock lock(mutex);
     /* NOTE: We do not need to check again for existence of the pointer after locking here, since
      * this is also done in #RNA_property_pointer_add itself. */
     RNA_property_pointer_add(ptr, prop);
-    BLI_mutex_unlock(&lock);
     return RNA_property_pointer_get(ptr, prop);
   }
   return PointerRNA_NULL;
@@ -4134,7 +4160,8 @@ void RNA_property_pointer_set(PointerRNA *ptr,
       IDP_ReplaceInGroup_ex(
           group,
           blender::bke::idprop::create(idprop->name, value, IDP_FLAG_STATIC_TYPE).release(),
-          idprop);
+          idprop,
+          0);
     }
   }
   /* IDProperty disguised as RNA property (and not yet defined in ptr). */

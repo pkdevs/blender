@@ -385,7 +385,7 @@ static void do_versions_nodetree_file_output_layers_2_64_5(bNodeTree *ntree)
 
         /* Multi-layer names are stored as separate strings now,
          * used the path string before, so copy it over. */
-        STRNCPY(input->layer, input->path);
+        STRNCPY_UTF8(input->layer, input->path);
 
         /* paths/layer names also have to be unique now, initial check */
         ntreeCompositOutputFileUniquePath(&node->inputs, sock, input->path, '_');
@@ -629,11 +629,11 @@ static const char *node_get_static_idname(int type, int treetype)
         return "CompositorNodeViewer";
       case CMP_NODE_RGB:
         return "CompositorNodeRGB";
-      case CMP_NODE_VALUE:
+      case CMP_NODE_VALUE_DEPRECATED:
         return "CompositorNodeValue";
-      case CMP_NODE_MIX_RGB:
+      case CMP_NODE_MIX_RGB_DEPRECATED:
         return "CompositorNodeMixRGB";
-      case CMP_NODE_VALTORGB:
+      case CMP_NODE_VALTORGB_DEPRECATED:
         return "CompositorNodeValToRGB";
       case CMP_NODE_RGBTOBW:
         return "CompositorNodeRGBToBW";
@@ -651,7 +651,7 @@ static const char *node_get_static_idname(int type, int treetype)
         return "CompositorNodeFilter";
       case CMP_NODE_MAP_VALUE:
         return "CompositorNodeMapValue";
-      case CMP_NODE_MAP_RANGE:
+      case CMP_NODE_MAP_RANGE_DEPRECATED:
         return "CompositorNodeMapRange";
       case CMP_NODE_TIME:
         return "CompositorNodeTime";
@@ -999,12 +999,39 @@ static void do_versions_nodetree_customnodes(bNodeTree *ntree, int /*is_group*/)
   }
 }
 
+/* Sync functions update formula parameters for other modes, such that the result is comparable.
+ * Note that the results are not exactly the same due to differences in color handling
+ * (sRGB conversion happens for LGG),
+ * but this keeps settings comparable. */
+static void color_balance_node_cdl_from_lgg(bNode *node)
+{
+  NodeColorBalance *n = (NodeColorBalance *)node->storage;
+
+  for (int c = 0; c < 3; c++) {
+    n->slope[c] = (2.0f - n->lift[c]) * n->gain[c];
+    n->offset[c] = (n->lift[c] - 1.0f) * n->gain[c];
+    n->power[c] = (n->gamma[c] != 0.0f) ? 1.0f / n->gamma[c] : 1000000.0f;
+  }
+}
+
+static void color_balance_node_lgg_from_cdl(bNode *node)
+{
+  NodeColorBalance *n = (NodeColorBalance *)node->storage;
+
+  for (int c = 0; c < 3; c++) {
+    float d = n->slope[c] + n->offset[c];
+    n->lift[c] = (d != 0.0f ? n->slope[c] + 2.0f * n->offset[c] / d : 0.0f);
+    n->gain[c] = d;
+    n->gamma[c] = (n->power[c] != 0.0f) ? 1.0f / n->power[c] : 1000000.0f;
+  }
+}
+
 static bool strip_colorbalance_update_cb(Strip *strip, void * /*user_data*/)
 {
   StripData *data = strip->data;
 
   if (data && data->color_balance) {
-    SequenceModifierData *smd = blender::seq::modifier_new(
+    StripModifierData *smd = blender::seq::modifier_new(
         strip, nullptr, seqModifierType_ColorBalance);
     ColorBalanceModifierData *cbmd = (ColorBalanceModifierData *)smd;
 
@@ -1435,7 +1462,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 261, 3)) {
     {
-      /* convert extended ascii to utf-8 for text editor */
+      /* Convert extended ASCII to UTF8 for text editor. */
       CLANG_FORMAT_NOP_WORKAROUND;
       LISTBASE_FOREACH (Text *, text, &bmain->texts) {
         if (!(text->flags & TXT_ISEXT)) {
@@ -2118,24 +2145,6 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
         }
       }
     }
-
-    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
-      if (ntree->type == NTREE_COMPOSIT) {
-        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-          if (node->type_legacy == CMP_NODE_IMAGE) {
-            Image *image = static_cast<Image *>(
-                blo_do_versions_newlibadr(fd, &ntree->id, ID_IS_LINKED(ntree), node->id));
-
-            if (image) {
-              if ((image->flag & IMA_DO_PREMUL) == 0 && image->alpha_mode == IMA_ALPHA_STRAIGHT) {
-                node->custom1 |= CMP_NODE_IMAGE_USE_STRAIGHT_OUTPUT;
-              }
-            }
-          }
-        }
-      }
-    }
-    FOREACH_NODETREE_END;
   }
   else if (!MAIN_VERSION_FILE_ATLEAST(bmain, 266, 1)) {
     /* texture use alpha was removed for 2.66 but added back again for 2.66a,
@@ -2677,7 +2686,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
             NodeColorBalance *n = static_cast<NodeColorBalance *>(node->storage);
             if (node->custom1 == 0) {
               /* LGG mode stays the same, just init CDL settings */
-              ntreeCompositColorBalanceSyncFromLGG(ntree, node);
+              color_balance_node_cdl_from_lgg(node);
             }
             else if (node->custom1 == 1) {
               /* CDL previously used same variables as LGG, copy them over
@@ -2686,7 +2695,7 @@ void blo_do_versions_260(FileData *fd, Library * /*lib*/, Main *bmain)
               copy_v3_v3(n->offset, n->lift);
               copy_v3_v3(n->power, n->gamma);
               copy_v3_v3(n->slope, n->gain);
-              ntreeCompositColorBalanceSyncFromCDL(ntree, node);
+              color_balance_node_lgg_from_cdl(node);
             }
           }
         }

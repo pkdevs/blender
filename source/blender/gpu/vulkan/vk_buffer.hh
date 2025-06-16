@@ -27,9 +27,13 @@ class VKBuffer : public NonCopyable {
   VmaAllocation allocation_ = VK_NULL_HANDLE;
   VkMemoryPropertyFlags vk_memory_property_flags_;
   TimelineValue async_timeline_ = 0;
+  /** Has a previous allocation failed. Will skip reallocations. */
+  bool allocation_failed_ = false;
 
   /* Pointer to the virtually mapped memory. */
   void *mapped_memory_ = nullptr;
+
+  VkDeviceAddress vk_device_address = 0;
 
  public:
   VKBuffer() = default;
@@ -106,6 +110,11 @@ class VKBuffer : public NonCopyable {
    */
   void *mapped_memory_get() const;
 
+  VkDeviceAddress device_address_get() const
+  {
+    return vk_device_address;
+  }
+
   /**
    * Is this buffer mapped (visible on host)
    */
@@ -121,6 +130,22 @@ class VKBuffer : public NonCopyable {
   bool map();
   void unmap();
 };
+
+inline void *VKBuffer::mapped_memory_get() const
+{
+  BLI_assert_msg(this->is_mapped(), "Cannot access a non-mapped buffer.");
+  return mapped_memory_;
+}
+
+inline bool VKBuffer::is_mapped() const
+{
+  return mapped_memory_ != nullptr;
+}
+
+inline bool VKBuffer::is_allocated() const
+{
+  return allocation_ != VK_NULL_HANDLE;
+}
 
 /**
  * Helper struct to enable buffers to be bound with an offset.

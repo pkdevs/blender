@@ -225,7 +225,7 @@ static void text_blend_read_data(BlendDataReader *reader, ID *id)
 }
 
 IDTypeInfo IDType_ID_TXT = {
-    /*id_code*/ ID_TXT,
+    /*id_code*/ Text::id_type,
     /*id_filter*/ FILTER_ID_TXT,
     /*dependencies_id_types*/ 0,
     /*main_listbase_index*/ INDEX_ID_TXT,
@@ -281,7 +281,7 @@ Text *BKE_text_add(Main *bmain, const char *name)
 {
   Text *ta;
 
-  ta = static_cast<Text *>(BKE_id_new(bmain, ID_TXT, name));
+  ta = BKE_id_new<Text>(bmain, name);
   /* Texts have no users by default... Set the fake user flag to ensure that this text block
    * doesn't get deleted by default when cleaning up data blocks. */
   id_us_min(&ta->id);
@@ -1445,7 +1445,7 @@ char *txt_to_buf(Text *text, size_t *r_buf_strlen)
     *buf_step++ = '\n';
   }
   /* Remove the trailing new-line so a round-trip doesn't add a newline:
-   * Python for e.g. `text.from_string(text.as_string())`. */
+   * Python for example `text.from_string(text.as_string())`. */
   if (has_data) {
     buf_step--;
   }

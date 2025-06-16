@@ -57,8 +57,8 @@ void point_map_to_tube(float3 vin, out float3 vout)
 void node_tex_image_linear(float3 co, sampler2D ima, out float4 color, out float alpha)
 {
 #ifdef GPU_FRAGMENT_SHADER
-  float2 dx = dFdx(co.xy) * texture_lod_bias_get();
-  float2 dy = dFdy(co.xy) * texture_lod_bias_get();
+  float2 dx = gpu_dfdx(co.xy) * texture_lod_bias_get();
+  float2 dy = gpu_dfdy(co.xy) * texture_lod_bias_get();
 
   color = safe_color(textureGrad(ima, co.xy, dx, dy));
 #else
@@ -182,18 +182,18 @@ bool node_tex_tile_lookup(inout float3 co, sampler2DArray ima, sampler1DArray ma
 {
   float2 tile_pos = floor(co.xy);
 
-  if (tile_pos.x < 0 || tile_pos.y < 0 || tile_pos.x >= 10)
+  if (tile_pos.x < 0 || tile_pos.y < 0 || tile_pos.x >= 10) {
     return false;
-
+  }
   float tile = 10 * tile_pos.y + tile_pos.x;
-  if (tile >= textureSize(map, 0).x)
+  if (tile >= textureSize(map, 0).x) {
     return false;
-
+  }
   /* Fetch tile information. */
   float tile_layer = texelFetch(map, int2(tile, 0), 0).x;
-  if (tile_layer < 0)
+  if (tile_layer < 0) {
     return false;
-
+  }
   float4 tile_info = texelFetch(map, int2(tile, 1), 0);
 
   co = float3(((co.xy - tile_pos) * tile_info.zw) + tile_info.xy, tile_layer);

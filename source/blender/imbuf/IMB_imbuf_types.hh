@@ -16,11 +16,14 @@
 #include "IMB_imbuf_enums.h"
 
 struct ColormanageCache;
-struct ColorSpace;
 struct GPUTexture;
 struct IDProperty;
 
-#define IMB_MIPMAP_LEVELS 20
+namespace blender::ocio {
+class ColorSpace;
+}
+using ColorSpace = blender::ocio::ColorSpace;
+
 #define IMB_FILEPATH_SIZE 1024
 
 /**
@@ -146,14 +149,14 @@ struct ImBufByteBuffer {
   uint8_t *data;
   ImBufOwnership ownership;
 
-  ColorSpace *colorspace;
+  const ColorSpace *colorspace;
 };
 
 struct ImBufFloatBuffer {
   float *data;
   ImBufOwnership ownership;
 
-  ColorSpace *colorspace;
+  const ColorSpace *colorspace;
 };
 
 struct ImBufGPU {
@@ -216,11 +219,6 @@ struct ImBuf {
   /** Amount of dithering to apply, when converting float -> byte. */
   float dither;
 
-  /* mipmapping */
-  /** MipMap levels, a series of halved images */
-  ImBuf *mipmap[IMB_MIPMAP_LEVELS];
-  int miptot, miplevel;
-
   /* externally used data */
   /** reference index for ImBuf lists */
   int index;
@@ -269,8 +267,6 @@ struct ImBuf {
 enum {
   /** image needs to be saved is not the same as filename */
   IB_BITMAPDIRTY = (1 << 1),
-  /** image mipmaps are invalid, need recreate */
-  IB_MIPMAP_INVALID = (1 << 2),
   /** float buffer changed, needs recreation of byte rect */
   IB_RECT_INVALID = (1 << 3),
   /** either float or byte buffer changed, need to re-calculate display buffers */

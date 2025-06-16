@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'1f4cae0c4623')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'6ccdb8c06e27')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-28 09:32+0000\n"
+"POT-Creation-Date: 2025-06-16 10:45+0000\n"
 "PO-Revision-Date: 2025-04-14 08:19+0000\n"
 "Last-Translator: soheil ali-pasha <sapachannel.ir@gmail.com>\n"
 "Language-Team: Persian <https://translate.blender.org/projects/blender-ui/ui/fa/>\n"
@@ -1231,6 +1231,10 @@ msgid "Children"
 msgstr "ﻥﺍﺪﻧﺯﺮﻓ"
 
 
+msgid "B-Bone"
+msgstr "ﯽﺸﻤﺧ ﻥﺍﻮﺨﺘﺳﺍ"
+
+
 msgid "Parent"
 msgstr "ﻊﺒﻨﻣ"
 
@@ -2316,10 +2320,6 @@ msgid "Feature Set"
 msgstr "ﯽﮔﮋﯾﻭ ﻪﻋﻮﻤﺠﻣ"
 
 
-msgid "B-Bone"
-msgstr "ﯽﺸﻤﺧ ﻥﺍﻮﺨﺘﺳﺍ"
-
-
 msgid "Edit Bones"
 msgstr "ﺎﻫ‌ﻥﺍﻮﺨﺘﺳﺍ ﺶﯾﺍﺮﯾﻭ"
 
@@ -2563,6 +2563,10 @@ msgstr "U"
 
 msgid "V"
 msgstr "V"
+
+
+msgid "Normalize"
+msgstr "ﯼﺯﺎﺳ ﯼﺩﺎﻋ"
 
 
 msgid "Spot Blend"
@@ -2953,10 +2957,6 @@ msgid "Mix"
 msgstr "ﻁﻮﻠﺨﻣ"
 
 
-msgid "Apply"
-msgstr "ﻝﺎﻤﻋﺍ"
-
-
 msgid "Text"
 msgstr "ﻦﺘﻣ"
 
@@ -2965,20 +2965,24 @@ msgid "Pivot Point"
 msgstr "ﺶﺧﺮﭼ ﻪﻄﻘﻧ"
 
 
-msgid "Mirror"
-msgstr "ﻪﻨﯾﺁ"
-
-
-msgid "Add Image"
-msgstr "ﺮﯾﻮﺼﺗ ﻥﺩﺮﮐ‌ﻪﻓﺎﺿﺍ"
+msgid "Convert"
+msgstr "ﻞﯾﺪﺒﺗ"
 
 
 msgid "Relations"
 msgstr "ﻂﺑﺍﻭﺭ"
 
 
-msgid "Convert"
-msgstr "ﻞﯾﺪﺒﺗ"
+msgid "Add Image"
+msgstr "ﺮﯾﻮﺼﺗ ﻥﺩﺮﮐ‌ﻪﻓﺎﺿﺍ"
+
+
+msgid "Apply"
+msgstr "ﻝﺎﻤﻋﺍ"
+
+
+msgid "Mirror"
+msgstr "ﻪﻨﯾﺁ"
 
 
 msgid "Key"
@@ -3239,10 +3243,6 @@ msgstr "ﯽﻠﺒﻗ ﻢﯾﺮﻓ"
 
 msgid "Double"
 msgstr "ﯽﯾﺎﺗﻭﺩ"
-
-
-msgid "Normalize"
-msgstr "ﯼﺯﺎﺳ ﯼﺩﺎﻋ"
 
 
 msgid "Use Red Channel"
@@ -4390,10 +4390,6 @@ msgid "Invert Zoom Direction"
 msgstr "ﺩﻮﺷ ﺲﮑﻋﺮﺑ ﻡﻭﺯ ﺖﻬﺟ"
 
 
-msgid "Lock Horizon"
-msgstr "ﻖﻓﺍ ﻞﻔﻗ"
-
-
 msgid "Turntable"
 msgstr "ﻪﻧﻭﺩﺮﮔ ﻪﺤﻔﺻ"
 
@@ -4731,6 +4727,10 @@ msgid "Not Set"
 msgstr "ﻩﺪﺸﻧ ﺺﺨﺸﻣ"
 
 
+msgid "Auto Normalize"
+msgstr "ﺭﺎﮐﺩﻮﺧ ﯼﺯﺎﺳ ﯼﺩﺎﻋ"
+
+
 msgctxt "Operator"
 msgid "Search..."
 msgstr "...ﻮﺠﺘﺴﺟ"
@@ -4829,6 +4829,10 @@ msgid "B"
 msgstr "B"
 
 
+msgid "Lock Horizon"
+msgstr "ﻖﻓﺍ ﻞﻔﻗ"
+
+
 msgid "Location:"
 msgstr ":ﻥﺎﮑﻣ"
 
@@ -4853,10 +4857,6 @@ msgstr "ﺎﻫ ﻦﯿﭼ"
 
 msgid "Seams"
 msgstr "ﺎﻫ ﺯﺭﺩ"
-
-
-msgid "Auto Normalize"
-msgstr "ﺭﺎﮐﺩﻮﺧ ﯼﺯﺎﺳ ﯼﺩﺎﻋ"
 
 
 msgid "Multi-Paint"
@@ -5208,86 +5208,6 @@ msgstr "ﯽﻤﯾﺪﻗ"
 
 msgid "Blender File View"
 msgstr "ﺭﺪﻨﻠﺑ ﻞﯾﺎﻓ ﺶﯾﺎﻤﻧ"
-
-
-msgid "Japanese (日本語)"
-msgstr "(日本語) ﯽﻨﭘﺍﮊ"
-
-
-msgid "Italian (Italiano)"
-msgstr "(Italiano) ﯽﯾﺎﯿﻟﺎﺘﯾﺍ"
-
-
-msgid "German (Deutsch)"
-msgstr "(Deutsch) ﯽﻧﺎﻤﻟﺁ"
-
-
-msgid "Finnish (Suomi)"
-msgstr "(Suomi) ﯼﺪﻧﻼ﻿ﻨﻓ"
-
-
-msgid "Swedish (Svenska)"
-msgstr "(Svenska) ﯼﺪﺋﻮﺳ"
-
-
-msgid "French (Français)"
-msgstr "(Français) ﯼﻮﺴﻧﺍﺮﻓ"
-
-
-msgid "Spanish (Español)"
-msgstr "(Español) ﯽﯾﺎﯿﻧﺎﭙﺳﺍ"
-
-
-msgid "Catalan (Català)"
-msgstr "(Català) ﯽﻧﻻ﻿ﺎﺗﺎﮐ"
-
-
-msgid "Portuguese (Português)"
-msgstr "(Português) ﯽﻟﺎﻐﺗﺮﭘ"
-
-
-msgid "Simplified Chinese (简体中文)"
-msgstr "(简体中文) ﻩﺩﺎﺳ ﯽﻨﯿﭼ"
-
-
-msgid "Traditional Chinese (繁體中文)"
-msgstr "(繁體中文) ﯽﺘﻨﺳ ﯽﻨﯿﭼ"
-
-
-msgid "Russian (Русский)"
-msgstr "(Русский) ﯽﺳﻭﺭ"
-
-
-msgid "Croatian (Hrvatski)"
-msgstr "(Hrvatski) ﯽﺗﺍﻭﺮﮐ"
-
-
-msgid "Polish (Polski)"
-msgstr "(Polski) ﯽﻧﺎﺘﺴﻬﻟ"
-
-
-msgid "Romanian (Român)"
-msgstr "(Român) ﯽﯾﺎﯿﻧﺎﻣﻭﺭ"
-
-
-msgid "Arabic (ﺔﻴﺑﺮﻌﻟﺍ)"
-msgstr "(ﺔﯿﺑﺮﻌﻟﺍ) ﯼﺯﺎﺗ"
-
-
-msgid "Bulgarian (Български)"
-msgstr "(Български) ﯼﺭﺎﻐﻠﺑ"
-
-
-msgid "Greek (Ελληνικά)"
-msgstr "(Ελληνικά) ﯽﻧﺎﻧﻮﯾ"
-
-
-msgid "Persian (ﯽﺳﺭﺎﻓ)"
-msgstr "(ﯽﺳﺭﺎﻓ) ﯽﺳﺭﺎﻓ"
-
-
-msgid "Indonesian (Bahasa indonesia)"
-msgstr "(Bahasa indonesia) ﯼﺰﻧﻭﺪﻧﺍ"
 
 
 msgid "Smooth by Angle"

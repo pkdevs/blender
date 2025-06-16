@@ -13,7 +13,6 @@
 
 #include "vk_backend.hh"
 #include "vk_context.hh"
-#include "vk_data_conversion.hh"
 #include "vk_framebuffer.hh"
 #include "vk_immediate.hh"
 #include "vk_state_manager.hh"
@@ -49,12 +48,8 @@ void VKImmediate::deinit(VKDevice &device)
 
 uchar *VKImmediate::begin()
 {
-  const VKDevice &device = VKBackend::get().device;
-  const VKWorkarounds &workarounds = device.workarounds_get();
-  vertex_format_converter.init(&vertex_format, workarounds);
   uint add_vertex = prim_type == GPU_PRIM_LINE_LOOP ? 1 : 0;
-  const size_t bytes_needed = vertex_buffer_size(&vertex_format_converter.device_format_get(),
-                                                 vertex_len + add_vertex);
+  const size_t bytes_needed = vertex_buffer_size(&vertex_format, vertex_len + add_vertex);
   size_t offset_alignment = GPU_storage_buffer_alignment();
   VKBuffer &buffer = ensure_space(bytes_needed, offset_alignment);
 
@@ -74,15 +69,6 @@ void VKImmediate::end()
   BLI_assert_msg(prim_type != GPU_PRIM_NONE, "Illegal state: not between an immBegin/End pair.");
   if (vertex_idx == 0) {
     return;
-  }
-
-  if (vertex_format_converter.needs_conversion()) {
-    /* Determine the start of the subbuffer. The `vertex_data` attribute changes when new vertices
-     * are loaded.
-     */
-    uchar *data = static_cast<uchar *>(active_buffers_.last()->mapped_memory_get()) +
-                  buffer_offset_;
-    vertex_format_converter.convert(data, data, vertex_idx);
   }
 
   if (prim_type == GPU_PRIM_LINE_LOOP) {
@@ -139,7 +125,6 @@ void VKImmediate::end()
 
   buffer_offset_ += current_subbuffer_len_;
   current_subbuffer_len_ = 0;
-  vertex_format_converter.reset();
 }
 
 VKBufferWithOffset VKImmediate::active_buffer() const
@@ -171,7 +156,7 @@ VKBuffer &VKImmediate::ensure_space(VkDeviceSize bytes_needed, VkDeviceSize offs
   if (!recycling_buffers_.is_empty() &&
       recycling_buffers_.last()->size_in_bytes() >= bytes_required)
   {
-    CLOG_INFO(&LOG, 2, "Activating recycled buffer");
+    CLOG_INFO(&LOG, 3, "Activating recycled buffer");
     buffer_offset_ = 0;
     active_buffers_.append(recycling_buffers_.pop_last());
     return *active_buffers_.last();
@@ -179,7 +164,7 @@ VKBuffer &VKImmediate::ensure_space(VkDeviceSize bytes_needed, VkDeviceSize offs
 
   /* Offset alignment isn't needed when creating buffers as it is managed by VMA. */
   VkDeviceSize alloc_size = new_buffer_size(bytes_needed);
-  CLOG_INFO(&LOG, 2, "Allocate buffer (size=%d)", int(alloc_size));
+  CLOG_INFO(&LOG, 3, "Allocate buffer (size=%d)", int(alloc_size));
   buffer_offset_ = 0;
   active_buffers_.append(std::make_unique<VKBuffer>());
   VKBuffer &result = *active_buffers_.last();
@@ -198,7 +183,7 @@ VKBuffer &VKImmediate::ensure_space(VkDeviceSize bytes_needed, VkDeviceSize offs
 void VKImmediate::reset()
 {
   if (!recycling_buffers_.is_empty()) {
-    CLOG_INFO(&LOG, 2, "Discarding %d unused buffers", int(recycling_buffers_.size()));
+    CLOG_INFO(&LOG, 3, "Discarding %d unused buffers", int(recycling_buffers_.size()));
   }
   recycling_buffers_.clear();
   recycling_buffers_ = std::move(active_buffers_);

@@ -196,6 +196,7 @@ void RealizeOnDomainOperation::realize_on_domain_cpu(const float3x3 &inverse_tra
         sample = input.sample_bilinear_wrap(
             normalized_coordinates, realization_options.repeat_x, realization_options.repeat_y);
         break;
+      case Interpolation::Anisotropic:
       case Interpolation::Bicubic:
         sample = input.sample_cubic_wrap(
             normalized_coordinates, realization_options.repeat_x, realization_options.repeat_y);
@@ -214,13 +215,8 @@ Domain RealizeOnDomainOperation::compute_domain()
  * realization shouldn't be needed. */
 static constexpr float transformation_tolerance = 10e-6f;
 
-/* Given a potentially transformed domain, compute a domain such that its rotation and scale become
- * identity and the size of the domain is increased/reduced to adapt to the new transformation. For
- * instance, if the domain is rotated, the returned domain will have zero rotation but expanded
- * size to account for the bounding box of the domain after rotation. The size of the returned
- * domain is bound and clipped by the maximum possible size to avoid allocations that surpass
- * hardware limits. */
-static Domain compute_realized_transformation_domain(Context &context, const Domain &domain)
+Domain RealizeOnDomainOperation::compute_realized_transformation_domain(Context &context,
+                                                                        const Domain &domain)
 {
   const int2 size = domain.size;
 
@@ -307,8 +303,8 @@ SimpleOperation *RealizeOnDomainOperation::construct_if_needed(
                                     InputRealizationMode::OperationDomain;
   const Domain target_domain = use_operation_domain ? operation_domain : input_result.domain();
 
-  const Domain realized_target_domain = compute_realized_transformation_domain(context,
-                                                                               target_domain);
+  const Domain realized_target_domain =
+      RealizeOnDomainOperation::compute_realized_transformation_domain(context, target_domain);
 
   /* The input have an almost identical domain to the realized target domain, so no need to realize
    * it and the operation is not needed. */

@@ -54,6 +54,10 @@ class WeightPaintOperation : public GreasePencilStrokeOperation {
 
     Array<float2> point_positions;
 
+    /* A stroke point can be read-only in case of material locking. Read-only means that the
+     * vertex weight can't be changed, but the weight does count for average, blur and smear. */
+    Array<bool> point_is_read_only;
+
     /* Flag for all stroke points in a drawing: true when the point was touched by the brush during
      * a #GreasePencilStrokeOperation. */
     Array<bool> points_touched_by_brush;
@@ -199,7 +203,7 @@ class WeightPaintOperation : public GreasePencilStrokeOperation {
                                      const int frame_group)
   {
     const Depsgraph *depsgraph = CTX_data_depsgraph_pointer(&C);
-    const Object *ob_eval = DEG_get_evaluated_object(depsgraph, this->object);
+    const Object *ob_eval = DEG_get_evaluated(depsgraph, this->object);
     const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
     const ARegion *region = CTX_wm_region(&C);
 
@@ -247,6 +251,16 @@ class WeightPaintOperation : public GreasePencilStrokeOperation {
             drawing_weight_data.point_positions[point] = ED_view3d_project_float_v2_m4(
                 region, deformation.positions[point], projection);
           }
+        });
+
+        /* Get the read-only state of stroke points (can be true in case of material locking). */
+        drawing_weight_data.point_is_read_only.reinitialize(deformation.positions.size());
+        drawing_weight_data.point_is_read_only.fill(true);
+        IndexMaskMemory memory;
+        const IndexMask editable_points = ed::greasepencil::retrieve_editable_points(
+            *this->object, drawing_info.drawing, drawing_info.layer_index, memory);
+        editable_points.foreach_index(GrainSize(1024), [&](const int64_t index) {
+          drawing_weight_data.point_is_read_only[index] = false;
         });
 
         /* Initialize the flag for stroke points being touched by the brush. */

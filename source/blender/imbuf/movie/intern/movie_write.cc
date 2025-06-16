@@ -21,9 +21,9 @@
 
 #  include "MEM_guardedalloc.h"
 
-#  include "BLI_endian_defines.h"
 #  include "BLI_fileops.h"
 #  include "BLI_math_base.h"
+#  include "BLI_math_color.h"
 #  include "BLI_path_utils.hh"
 #  include "BLI_string.h"
 #  include "BLI_threads.h"
@@ -32,6 +32,7 @@
 #  include "BKE_global.hh"
 #  include "BKE_image.hh"
 #  include "BKE_main.hh"
+#  include "BKE_path_templates.hh"
 
 #  include "IMB_imbuf.hh"
 
@@ -53,11 +54,12 @@ static void ffmpeg_dict_set_int(AVDictionary **dict, const char *key, int value)
 }
 
 static void ffmpeg_movie_close(MovieWriter *context);
-static void ffmpeg_filepath_get(MovieWriter *context,
+static bool ffmpeg_filepath_get(MovieWriter *context,
                                 char filepath[FILE_MAX],
                                 const RenderData *rd,
                                 bool preview,
-                                const char *suffix);
+                                const char *suffix,
+                                ReportList *reports);
 
 static AVFrame *alloc_frame(AVPixelFormat pix_fmt, int width, int height)
 {
@@ -230,7 +232,9 @@ static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *image)
   if (use_float) {
     /* Float image: need to split up the image into a planar format,
      * because `libswscale` does not support RGBA->YUV conversions from
-     * packed float formats. */
+     * packed float formats.
+     * Un-premultiply the image if the output format supports alpha, to
+     * match the format of the byte image. */
     BLI_assert_msg(rgb_frame->linesize[1] == linesize_dst &&
                        rgb_frame->linesize[2] == linesize_dst &&
                        rgb_frame->linesize[3] == linesize_dst,
@@ -242,40 +246,39 @@ static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *image)
       float *dst_r = reinterpret_cast<float *>(rgb_frame->data[2] + dst_offset);
       float *dst_a = reinterpret_cast<float *>(rgb_frame->data[3] + dst_offset);
       const float *src = pixels_fl + image->x * y * 4;
-      for (int x = 0; x < image->x; x++) {
-        *dst_r++ = src[0];
-        *dst_g++ = src[1];
-        *dst_b++ = src[2];
-        *dst_a++ = src[3];
-        src += 4;
+
+      if (MOV_codec_supports_alpha(context->ffmpeg_codec, context->ffmpeg_profile)) {
+        for (int x = 0; x < image->x; x++) {
+          float tmp[4];
+          premul_to_straight_v4_v4(tmp, src);
+          *dst_r++ = tmp[0];
+          *dst_g++ = tmp[1];
+          *dst_b++ = tmp[2];
+          *dst_a++ = tmp[3];
+          src += 4;
+        }
+      }
+      else {
+        for (int x = 0; x < image->x; x++) {
+          *dst_r++ = src[0];
+          *dst_g++ = src[1];
+          *dst_b++ = src[2];
+          *dst_a++ = src[3];
+          src += 4;
+        }
       }
     }
   }
   else {
-    /* Byte image: flip the image vertically, possibly with endian
-     * conversion. */
+    /* Byte image: flip the image vertically. */
     const size_t linesize_src = rgb_frame->width * 4;
     for (int y = 0; y < height; y++) {
       uint8_t *target = rgb_frame->data[0] + linesize_dst * (height - y - 1);
       const uint8_t *src = pixels + linesize_src * y;
 
-#  if ENDIAN_ORDER == L_ENDIAN
+      /* NOTE: this is endianness-sensitive. */
+      /* The target buffer is always expected to contain little-endian RGBA values. */
       memcpy(target, src, linesize_src);
-
-#  elif ENDIAN_ORDER == B_ENDIAN
-      const uint8_t *end = src + linesize_src;
-      while (src != end) {
-        target[3] = src[0];
-        target[2] = src[1];
-        target[1] = src[2];
-        target[0] = src[3];
-
-        target += 4;
-        src += 4;
-      }
-#  else
-#    error ENDIAN_ORDER should either be L_ENDIAN or B_ENDIAN.
-#  endif
     }
   }
 
@@ -346,7 +349,7 @@ static const AVCodec *get_av1_encoder(
        * where using a different encoder is desirable, such as in #103849. */
       codec = avcodec_find_encoder_by_name("librav1e");
       if (!codec) {
-        /* Fallback to `libaom-av1` if librav1e is not found. */
+        /* Fall back to `libaom-av1` if librav1e is not found. */
         codec = avcodec_find_encoder_by_name("libaom-av1");
       }
       break;
@@ -764,6 +767,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
 
   const bool is_10_bpp = rd->im_format.depth == R_IMF_CHAN_DEPTH_10;
   const bool is_12_bpp = rd->im_format.depth == R_IMF_CHAN_DEPTH_12;
+  const bool is_16_bpp = rd->im_format.depth == R_IMF_CHAN_DEPTH_16;
   if (is_10_bpp) {
     c->pix_fmt = AV_PIX_FMT_YUV420P10LE;
   }
@@ -803,12 +807,53 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   }
 
   if (codec_id == AV_CODEC_ID_FFV1) {
-    c->pix_fmt = AV_PIX_FMT_RGB32;
+    if (rd->im_format.planes == R_IMF_PLANES_BW) {
+      c->pix_fmt = AV_PIX_FMT_GRAY8;
+      if (is_10_bpp) {
+        c->pix_fmt = AV_PIX_FMT_GRAY10;
+      }
+      else if (is_12_bpp) {
+        c->pix_fmt = AV_PIX_FMT_GRAY12;
+      }
+      else if (is_16_bpp) {
+        c->pix_fmt = AV_PIX_FMT_GRAY16;
+      }
+    }
+    else if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
+      c->pix_fmt = AV_PIX_FMT_RGB32;
+      if (is_10_bpp) {
+        c->pix_fmt = AV_PIX_FMT_GBRAP10;
+      }
+      else if (is_12_bpp) {
+        c->pix_fmt = AV_PIX_FMT_GBRAP12;
+      }
+      else if (is_16_bpp) {
+        c->pix_fmt = AV_PIX_FMT_GBRAP16;
+      }
+    }
+    else { /* RGB */
+      c->pix_fmt = AV_PIX_FMT_0RGB32;
+      if (is_10_bpp) {
+        c->pix_fmt = AV_PIX_FMT_GBRP10;
+      }
+      else if (is_12_bpp) {
+        c->pix_fmt = AV_PIX_FMT_GBRP12;
+      }
+      else if (is_16_bpp) {
+        c->pix_fmt = AV_PIX_FMT_GBRP16;
+      }
+    }
   }
 
   if (codec_id == AV_CODEC_ID_QTRLE) {
-    if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
+    if (rd->im_format.planes == R_IMF_PLANES_BW) {
+      c->pix_fmt = AV_PIX_FMT_GRAY8;
+    }
+    else if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
       c->pix_fmt = AV_PIX_FMT_ARGB;
+    }
+    else { /* RGB */
+      c->pix_fmt = AV_PIX_FMT_RGB24;
     }
   }
 
@@ -829,8 +874,14 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   }
 
   if (codec_id == AV_CODEC_ID_PNG) {
-    if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
+    if (rd->im_format.planes == R_IMF_PLANES_BW) {
+      c->pix_fmt = AV_PIX_FMT_GRAY8;
+    }
+    else if (rd->im_format.planes == R_IMF_PLANES_RGBA) {
       c->pix_fmt = AV_PIX_FMT_RGBA;
+    }
+    else { /* RGB */
+      c->pix_fmt = AV_PIX_FMT_RGB24;
     }
   }
   if (codec_id == AV_CODEC_ID_PRORES) {
@@ -914,7 +965,8 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   }
   else {
     /* Output pixel format is different, allocate frame for conversion. */
-    AVPixelFormat src_format = is_10_bpp || is_12_bpp ? AV_PIX_FMT_GBRAPF32LE : AV_PIX_FMT_RGBA;
+    AVPixelFormat src_format = is_10_bpp || is_12_bpp || is_16_bpp ? AV_PIX_FMT_GBRAPF32LE :
+                                                                     AV_PIX_FMT_RGBA;
     context->img_convert_frame = alloc_frame(src_format, c->width, c->height);
     context->img_convert_ctx = ffmpeg_sws_get_context(
         c->width, c->height, src_format, c->width, c->height, c->pix_fmt, SWS_BICUBIC);
@@ -989,7 +1041,9 @@ static bool start_ffmpeg_impl(MovieWriter *context,
   }
 
   /* Determine the correct filename */
-  ffmpeg_filepath_get(context, filepath, rd, context->ffmpeg_preview, suffix);
+  if (!ffmpeg_filepath_get(context, filepath, rd, context->ffmpeg_preview, suffix, reports)) {
+    return false;
+  }
   FF_DEBUG_PRINT(
       "ffmpeg: starting output to %s:\n"
       "  type=%d, codec=%d, audio_codec=%d,\n"
@@ -1222,12 +1276,19 @@ static void flush_delayed_frames(AVCodecContext *c, AVStream *stream, AVFormatCo
   av_packet_free(&packet);
 }
 
-/* Get the output filename-- similar to the other output formats */
-static void ffmpeg_filepath_get(MovieWriter *context,
+/**
+ * Get the output filename-- similar to the other output formats.
+ *
+ * \param reports If non-null, will report errors with `RPT_ERROR` level reports.
+ *
+ * \return true on success, false on failure due to errors.
+ */
+static bool ffmpeg_filepath_get(MovieWriter *context,
                                 char filepath[FILE_MAX],
                                 const RenderData *rd,
                                 bool preview,
-                                const char *suffix)
+                                const char *suffix,
+                                ReportList *reports)
 {
   char autosplit[20];
 
@@ -1236,7 +1297,7 @@ static void ffmpeg_filepath_get(MovieWriter *context,
   int sfra, efra;
 
   if (!filepath || !exts) {
-    return;
+    return false;
   }
 
   if (preview) {
@@ -1249,6 +1310,16 @@ static void ffmpeg_filepath_get(MovieWriter *context,
   }
 
   BLI_strncpy(filepath, rd->pic, FILE_MAX);
+
+  const blender::Vector<blender::bke::path_templates::Error> errors = BKE_path_apply_template(
+      filepath,
+      FILE_MAX,
+      BKE_build_template_variables_for_render_path(BKE_main_blendfile_path_from_global(), rd));
+  if (!errors.is_empty()) {
+    BKE_report_path_template_errors(reports, RPT_ERROR, filepath, errors);
+    return false;
+  }
+
   BLI_path_abs(filepath, BKE_main_blendfile_path_from_global());
 
   BLI_file_ensure_parent_dir_exists(filepath);
@@ -1290,14 +1361,17 @@ static void ffmpeg_filepath_get(MovieWriter *context,
   }
 
   BLI_path_suffix(filepath, FILE_MAX, suffix, "");
+
+  return true;
 }
 
 static void ffmpeg_get_filepath(char filepath[/*FILE_MAX*/ 1024],
                                 const RenderData *rd,
                                 bool preview,
-                                const char *suffix)
+                                const char *suffix,
+                                ReportList *reports)
 {
-  ffmpeg_filepath_get(nullptr, filepath, rd, preview, suffix);
+  ffmpeg_filepath_get(nullptr, filepath, rd, preview, suffix, reports);
 }
 
 static MovieWriter *ffmpeg_movie_open(const Scene *scene,
@@ -1526,15 +1600,16 @@ void MOV_write_end(MovieWriter *writer)
 void MOV_filepath_from_settings(char filepath[/*FILE_MAX*/ 1024],
                                 const RenderData *rd,
                                 bool preview,
-                                const char *suffix)
+                                const char *suffix,
+                                ReportList *reports)
 {
 #ifdef WITH_FFMPEG
   if (is_imtype_ffmpeg(rd->im_format.imtype)) {
-    ffmpeg_get_filepath(filepath, rd, preview, suffix);
+    ffmpeg_get_filepath(filepath, rd, preview, suffix, reports);
     return;
   }
 #else
-  UNUSED_VARS(rd, preview, suffix);
+  UNUSED_VARS(rd, preview, suffix, reports);
 #endif
   filepath[0] = '\0';
 }

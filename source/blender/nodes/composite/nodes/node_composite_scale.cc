@@ -39,18 +39,10 @@ static void cmp_node_scale_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Color>("Image")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
-      .compositor_realization_mode(CompositorInputRealizationMode::None)
-      .compositor_domain_priority(0);
-  b.add_input<decl::Float>("X")
-      .default_value(1.0f)
-      .min(0.0001f)
-      .max(CMP_SCALE_MAX)
-      .compositor_domain_priority(1);
-  b.add_input<decl::Float>("Y")
-      .default_value(1.0f)
-      .min(0.0001f)
-      .max(CMP_SCALE_MAX)
-      .compositor_domain_priority(2);
+      .compositor_realization_mode(CompositorInputRealizationMode::None);
+  b.add_input<decl::Float>("X").default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
+  b.add_input<decl::Float>("Y").default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
+
   b.add_output<decl::Color>("Image");
 }
 
@@ -75,19 +67,15 @@ static void node_composite_update_scale(bNodeTree *ntree, bNode *node)
 
 static void node_composit_buts_scale(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "interpolation", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
-  uiItemR(layout, ptr, "space", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  layout->prop(ptr, "interpolation", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  layout->prop(ptr, "space", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 
   if (RNA_enum_get(ptr, "space") == CMP_NODE_SCALE_RENDER_SIZE) {
-    uiItemR(layout,
-            ptr,
-            "frame_method",
-            UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_EXPAND,
-            std::nullopt,
-            ICON_NONE);
-    uiLayout *row = &layout->row(true);
-    uiItemR(row, ptr, "offset_x", UI_ITEM_R_SPLIT_EMPTY_NAME, "X", ICON_NONE);
-    uiItemR(row, ptr, "offset_y", UI_ITEM_R_SPLIT_EMPTY_NAME, "Y", ICON_NONE);
+    layout->prop(ptr,
+                 "frame_method",
+                 UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_EXPAND,
+                 std::nullopt,
+                 ICON_NONE);
   }
 }
 
@@ -110,15 +98,13 @@ class ScaleOperation : public NodeOperation {
   void execute_constant_size()
   {
     const float2 scale = this->get_scale();
-    const math::AngleRadian rotation = 0.0f;
-    const float2 translation = this->get_translation();
-    const float3x3 transformation = math::from_loc_rot_scale<float3x3>(
-        translation, rotation, scale);
+    const float3x3 transformation = math::from_scale<float3x3>(scale);
 
     const Result &input = this->get_input("Image");
     Result &output = this->get_result("Image");
     output.share_data(input);
     output.transform(transformation);
+
     output.get_realization_options().interpolation = this->get_interpolation();
   }
 
@@ -142,6 +128,7 @@ class ScaleOperation : public NodeOperation {
      * cases, as the logic used by the bicubic realization shader expects textures to use bilinear
      * interpolation. */
     const Interpolation interpolation = this->get_interpolation();
+    /* For now the EWA sampling falls back to bicubic interpolation. */
     const bool use_bilinear = ELEM(interpolation, Interpolation::Bilinear, Interpolation::Bicubic);
     GPU_texture_filter_mode(input, use_bilinear);
     GPU_texture_extend_mode(input, GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
@@ -188,6 +175,8 @@ class ScaleOperation : public NodeOperation {
       float2 scaled_coordinates = center +
                                   (coordinates - center) / math::max(scale, float2(0.0001f));
       switch (interpolation) {
+        /* For now the EWA sampling falls back to bicubic interpolation. */
+        case Interpolation::Anisotropic:
         case Interpolation::Bicubic:
           output.store_pixel(texel, input.sample_cubic_wrap(scaled_coordinates, false, false));
           break;
@@ -216,6 +205,7 @@ class ScaleOperation : public NodeOperation {
         return Interpolation::Nearest;
       case CMP_NODE_INTERPOLATION_BILINEAR:
         return Interpolation::Bilinear;
+      case CMP_NODE_INTERPOLATION_ANISOTROPIC:
       case CMP_NODE_INTERPOLATION_BICUBIC:
         return Interpolation::Bicubic;
     }
@@ -315,18 +305,6 @@ class ScaleOperation : public NodeOperation {
     return float2(math::max(scale.x, scale.y));
   }
 
-  float2 get_translation()
-  {
-    /* Only the render size option supports offset translation. */
-    if (get_scale_method() != CMP_NODE_SCALE_RENDER_SIZE) {
-      return float2(0.0f);
-    }
-
-    /* Translate by the offset factor relative to the new size. */
-    const float2 input_size = float2(get_input("Image").domain().size);
-    return get_offset() * input_size * get_scale();
-  }
-
   bool is_variable_size()
   {
     /* Only relative scaling can be variable. */
@@ -346,11 +324,6 @@ class ScaleOperation : public NodeOperation {
   {
     return static_cast<CMPNodeScaleRenderSizeMethod>(bnode().custom2);
   }
-
-  float2 get_offset()
-  {
-    return float2(bnode().custom3, bnode().custom4);
-  }
 };
 
 static NodeOperation *get_compositor_operation(Context &context, DNode node)
@@ -360,7 +333,7 @@ static NodeOperation *get_compositor_operation(Context &context, DNode node)
 
 }  // namespace blender::nodes::node_composite_scale_cc
 
-void register_node_type_cmp_scale()
+static void register_node_type_cmp_scale()
 {
   namespace file_ns = blender::nodes::node_composite_scale_cc;
 
@@ -381,3 +354,4 @@ void register_node_type_cmp_scale()
 
   blender::bke::node_register_type(ntype);
 }
+NOD_REGISTER_NODE(register_node_type_cmp_scale)

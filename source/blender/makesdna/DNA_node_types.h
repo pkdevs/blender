@@ -12,7 +12,8 @@
 #include "DNA_listBase.h"
 #include "DNA_node_tree_interface_types.h"
 #include "DNA_scene_types.h" /* for #ImageFormatData */
-#include "DNA_vec_types.h"   /* for #rctf */
+#include "DNA_texture_types.h"
+#include "DNA_vec_types.h" /* for #rctf */
 
 /** Workaround to forward-declare C++ type in C header. */
 #ifdef __cplusplus
@@ -125,8 +126,7 @@ typedef struct bNodeSocket {
   /** Unique identifier for mapping. */
   char identifier[64];
 
-  /** MAX_NAME. */
-  char name[64];
+  char name[/*MAX_NAME*/ 64];
 
   /** Only used for the Image and OutputFile nodes, should be removed at some point. */
   void *storage;
@@ -164,10 +164,10 @@ typedef struct bNodeSocket {
 
   char _pad[4];
 
-  /** Custom dynamic defined label, MAX_NAME. */
-  char label[64];
-  char short_label[64];
-  char description[64];
+  /** Custom dynamic defined label. */
+  char label[/*MAX_NAME*/ 64];
+  char short_label[/*MAX_NAME*/ 64];
+  char description[/*MAX_NAME*/ 64];
 
   /**
    * The default attribute name to use for geometry nodes modifier output attribute sockets.
@@ -196,18 +196,54 @@ typedef struct bNodeSocket {
   bNodeSocketRuntimeHandle *runtime;
 
 #ifdef __cplusplus
-  bool is_hidden() const;
-  bool is_available() const;
-  bool is_panel_collapsed() const;
+  /**
+   * Whether the socket is hidden in a way that the user can control.
+   *
+   * \note: This is not the exact opposite of `is_visible()` which takes other things into account.
+   */
+  bool is_user_hidden() const;
+  /**
+   * Socket visibility depends on a few different factors like whether it's hidden by the user,
+   * it's available or it's inferred to be hidden based on other inputs.
+   *
+   * A visible socket has a valid #bNodeSocketRuntime::location. However, it may not actually be
+   * drawn as stand-alone socket if it's in a collapsed panel. To check for that, use
+   * #is_icon_visible.
+   */
   bool is_visible() const;
-  bool is_multi_input() const;
-  bool is_input() const;
-  bool is_output() const;
-
+  /**
+   * The socket is visible and it's drawn as a stand-alone icon in the node editor. So any parent
+   * panel is open.
+   */
+  bool is_icon_visible() const;
+  /**
+   * Unavailable sockets are usually treated as if they don't exist. It's not something that can be
+   * controlled by users for built-in nodes.
+   */
+  bool is_available() const;
+  /**
+   * Whether this socket is in a collapsed panel.
+   */
+  bool is_panel_collapsed() const;
+  /**
+   * Inputs may be grayed out if they are detected to be not affecting the output and the node is
+   * not itself some kind of output node.
+   */
+  bool is_inactive() const;
   /**
    * False when this input socket definitely does not affect the output.
    */
   bool affects_node_output() const;
+  /**
+   * This becomes false when it is detected that the input socket is currently not used and its
+   * usage depends on a menu (as opposed to e.g. a boolean input). By convention, sockets whose
+   * visibility is controlled by a menu should be hidden.
+   */
+  bool inferred_input_socket_visibility() const;
+
+  bool is_multi_input() const;
+  bool is_input() const;
+  bool is_output() const;
 
   /** Utility to access the value of the socket. */
   template<typename T> T *default_value_typed();
@@ -285,6 +321,8 @@ typedef enum eNodeSocketDisplayShape {
   SOCK_DISPLAY_SHAPE_CIRCLE_DOT = 3,
   SOCK_DISPLAY_SHAPE_SQUARE_DOT = 4,
   SOCK_DISPLAY_SHAPE_DIAMOND_DOT = 5,
+  SOCK_DISPLAY_SHAPE_LINE = 6,
+  SOCK_DISPLAY_SHAPE_VOLUME_GRID = 7,
 } eNodeSocketDisplayShape;
 
 /** Socket side (input/output). */
@@ -380,8 +418,8 @@ typedef struct bNode {
   /* Input and output #bNodeSocket. */
   ListBase inputs, outputs;
 
-  /** The node's name for unique identification and string lookup. MAX_NAME. */
-  char name[64];
+  /** The node's name for unique identification and string lookup. */
+  char name[/*MAX_NAME*/ 64];
 
   /**
    * A value that uniquely identifies a node in a node tree even when the name changes.
@@ -469,8 +507,8 @@ typedef struct bNode {
   float locx_legacy, locy_legacy;
   float offsetx_legacy, offsety_legacy;
 
-  /** Custom user-defined label, MAX_NAME. */
-  char label[64];
+  /** Custom user-defined label. */
+  char label[/*MAX_NAME*/ 64];
 
   /** Custom user-defined color. */
   float color[3];
@@ -509,11 +547,6 @@ typedef struct bNode {
 
   /* This node is reroute which is not logically connected to any source of value. */
   bool is_dangling_reroute() const;
-
-  /* True if the socket is visible and has a valid location. The icon may not be visible. */
-  bool is_socket_drawn(const bNodeSocket &socket) const;
-  /* True if the socket is drawn and the icon is visible. */
-  bool is_socket_icon_drawn(const bNodeSocket &socket) const;
 
   /* The following methods are only available when #bNodeTree.ensure_topology_cache has been
    * called. */
@@ -717,6 +750,11 @@ typedef struct bNestedNodeRef {
  * materials and textures allocate their own tree struct.
  */
 typedef struct bNodeTree {
+#ifdef __cplusplus
+  /** See #ID_Type comment for why this is here. */
+  static constexpr ID_Type id_type = ID_NT;
+#endif
+
   ID id;
   /** Animation data (must be immediately after id for utilities to use it). */
   struct AnimData *adt;
@@ -952,8 +990,11 @@ typedef struct bNodeSocketValueBoolean {
 typedef struct bNodeSocketValueVector {
   /** RNA subtype. */
   int subtype;
-  float value[3];
+  /* Only some of the values might be used depending on the dimensions. */
+  float value[4];
   float min, max;
+  /* The number of dimensions of the vector. Can be 2, 3, or 4. */
+  int dimensions;
 } bNodeSocketValueVector;
 
 typedef struct bNodeSocketValueRotation {
@@ -967,8 +1008,7 @@ typedef struct bNodeSocketValueRGBA {
 typedef struct bNodeSocketValueString {
   int subtype;
   char _pad[4];
-  /** 1024 = FILEMAX. */
-  char value[1024];
+  char value[/*FILE_MAX*/ 1024];
 } bNodeSocketValueString;
 
 typedef struct bNodeSocketValueObject {
@@ -1018,6 +1058,9 @@ typedef enum GeometryNodeAssetTraitFlag {
   GEO_NODE_ASSET_MODIFIER = (1 << 6),
   GEO_NODE_ASSET_OBJECT = (1 << 7),
   GEO_NODE_ASSET_WAIT_FOR_CURSOR = (1 << 8),
+  GEO_NODE_ASSET_GREASE_PENCIL = (1 << 9),
+  /* Only used by Grease Pencil for now. */
+  GEO_NODE_ASSET_PAINT = (1 << 10),
 } GeometryNodeAssetTraitFlag;
 ENUM_OPERATORS(GeometryNodeAssetTraitFlag, GEO_NODE_ASSET_WAIT_FOR_CURSOR);
 
@@ -1050,11 +1093,6 @@ typedef enum CMPNodeMaskFlags {
   CMP_NODE_MASK_FLAG_SIZE_FIXED = (1 << 8),
   CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE = (1 << 9),
 } CMPNodeMaskFlags;
-
-enum {
-  CMP_NODEFLAG_BLUR_VARIABLE_SIZE = (1 << 0),
-  CMP_NODEFLAG_BLUR_EXTEND_BOUNDS = (1 << 1),
-};
 
 typedef struct NodeFrame {
   short flag;
@@ -1131,14 +1169,20 @@ typedef struct NodeImageLayer {
 } NodeImageLayer;
 
 typedef struct NodeBlurData {
-  short sizex, sizey;
-  short samples, maxspeed, minspeed, relative, aspect;
-  short curved;
-  float fac, percentx, percenty;
+  short sizex DNA_DEPRECATED;
+  short sizey DNA_DEPRECATED;
+  short samples DNA_DEPRECATED;
+  short maxspeed DNA_DEPRECATED;
+  short minspeed DNA_DEPRECATED;
+  short relative DNA_DEPRECATED;
+  short aspect DNA_DEPRECATED;
+  short curved DNA_DEPRECATED;
+  float fac DNA_DEPRECATED;
+  float percentx DNA_DEPRECATED;
+  float percenty DNA_DEPRECATED;
   short filtertype;
-  char bokeh, gamma;
-  /** Needed for absolute/relative conversions. */
-  int image_in_width, image_in_height;
+  char bokeh DNA_DEPRECATED;
+  char gamma DNA_DEPRECATED;
 } NodeBlurData;
 
 typedef struct NodeDBlurData {
@@ -1153,8 +1197,9 @@ typedef struct NodeDBlurData {
 } NodeDBlurData;
 
 typedef struct NodeBilateralBlurData {
-  float sigma_color, sigma_space;
-  short iter;
+  float sigma_color DNA_DEPRECATED;
+  float sigma_space DNA_DEPRECATED;
+  short iter DNA_DEPRECATED;
   char _pad[2];
 } NodeBilateralBlurData;
 
@@ -1176,12 +1221,13 @@ typedef struct NodeAntiAliasingData {
 
 /** \note Only for do-version code. */
 typedef struct NodeHueSat {
-  float hue, sat, val;
+  float hue DNA_DEPRECATED;
+  float sat DNA_DEPRECATED;
+  float val DNA_DEPRECATED;
 } NodeHueSat;
 
 typedef struct NodeImageFile {
-  /** 1024 = FILE_MAX. */
-  char name[1024];
+  char name[/*FILE_MAX*/ 1024];
   struct ImageFormatData im_format;
   int sfra, efra;
 } NodeImageFile;
@@ -1190,8 +1236,7 @@ typedef struct NodeImageFile {
  * XXX: first struct fields should match #NodeImageFile to ensure forward compatibility.
  */
 typedef struct NodeImageMultiFile {
-  /** 1024 = FILE_MAX. */
-  char base_path[1024];
+  char base_path[/*FILE_MAX*/ 1024];
   ImageFormatData format;
   /** XXX old frame rand values from NodeImageFile for forward compatibility. */
   int sfra DNA_DEPRECATED, efra DNA_DEPRECATED;
@@ -1207,13 +1252,12 @@ typedef struct NodeImageMultiFileSocket {
   short use_node_format;
   char save_as_render;
   char _pad1[3];
-  /** 1024 = FILE_MAX. */
-  char path[1024];
+  char path[/*FILE_MAX*/ 1024];
   ImageFormatData format;
 
   /* Multi-layer output. */
-  /** EXR_TOT_MAXNAME-2 ('.' and channel char are appended). */
-  char layer[30];
+  /** Subtract 2 because '.' and channel char are appended. */
+  char layer[/*EXR_TOT_MAXNAME - 2*/ 62];
   char _pad2[2];
 } NodeImageMultiFileSocket;
 
@@ -1230,12 +1274,19 @@ typedef struct NodeChroma {
 } NodeChroma;
 
 typedef struct NodeTwoXYs {
-  short x1, x2, y1, y2;
-  float fac_x1, fac_x2, fac_y1, fac_y2;
+  short x1 DNA_DEPRECATED;
+  short x2 DNA_DEPRECATED;
+  short y1 DNA_DEPRECATED;
+  short y2 DNA_DEPRECATED;
+  float fac_x1 DNA_DEPRECATED;
+  float fac_x2 DNA_DEPRECATED;
+  float fac_y1 DNA_DEPRECATED;
+  float fac_y2 DNA_DEPRECATED;
 } NodeTwoXYs;
 
 typedef struct NodeTwoFloats {
-  float x, y;
+  float x DNA_DEPRECATED;
+  float y DNA_DEPRECATED;
 } NodeTwoFloats;
 
 typedef struct NodeVertexCol {
@@ -1250,11 +1301,14 @@ typedef struct NodeCMPCombSepColor {
 
 /** Defocus blur node. */
 typedef struct NodeDefocus {
-  char bktype, _pad0, preview, gamco;
-  short samples, no_zbuf;
-  float fstop, maxblur, bthresh, scale;
+  char bktype;
+  char gamco DNA_DEPRECATED;
+  char no_zbuf;
+  char _pad0;
+  float fstop;
+  float maxblur;
+  float scale;
   float rotation;
-  char _pad1[4];
 } NodeDefocus;
 
 typedef struct NodeScriptDict {
@@ -1282,6 +1336,13 @@ typedef struct NodeGlare {
   char _pad1[4];
 } NodeGlare;
 
+/* Glare Node. Stored in NodeGlare.quality. */
+typedef enum CMPNodeGlareQuality {
+  CMP_NODE_GLARE_QUALITY_HIGH = 0,
+  CMP_NODE_GLARE_QUALITY_MEDIUM = 1,
+  CMP_NODE_GLARE_QUALITY_LOW = 2,
+} CMPNodeGlareQuality;
+
 /** Tone-map node. */
 typedef struct NodeTonemap {
   float key DNA_DEPRECATED;
@@ -1305,22 +1366,22 @@ typedef struct NodeLensDist {
 
 typedef struct NodeColorBalance {
   /* ASC CDL parameters. */
-  float slope[3];
-  float offset[3];
-  float power[3];
-  float offset_basis;
+  float slope[3] DNA_DEPRECATED;
+  float offset[3] DNA_DEPRECATED;
+  float power[3] DNA_DEPRECATED;
+  float offset_basis DNA_DEPRECATED;
   char _pad[4];
 
   /* LGG parameters. */
-  float lift[3];
-  float gamma[3];
-  float gain[3];
+  float lift[3] DNA_DEPRECATED;
+  float gamma[3] DNA_DEPRECATED;
+  float gain[3] DNA_DEPRECATED;
 
   /* White-point parameters. */
-  float input_temperature;
-  float input_tint;
-  float output_temperature;
-  float output_tint;
+  float input_temperature DNA_DEPRECATED;
+  float input_tint DNA_DEPRECATED;
+  float output_temperature DNA_DEPRECATED;
+  float output_tint DNA_DEPRECATED;
 } NodeColorBalance;
 
 typedef struct NodeColorspill {
@@ -1358,9 +1419,6 @@ typedef struct NodeTexBase {
 typedef struct NodeTexSky {
   NodeTexBase base;
   int sky_model;
-  float sun_direction[3];
-  float turbidity;
-  float ground_albedo;
   float sun_size;
   float sun_intensity;
   float sun_elevation;
@@ -1370,7 +1428,7 @@ typedef struct NodeTexSky {
   float dust_density;
   float ozone_density;
   char sun_disc;
-  char _pad[7];
+  char _pad[11];
 } NodeTexSky;
 
 typedef struct NodeTexImage {
@@ -1466,24 +1524,6 @@ typedef struct NodeShaderVectTransform {
   char _pad[4];
 } NodeShaderVectTransform;
 
-typedef struct NodeShaderTexPointDensity {
-  NodeTexBase base;
-  short point_source;
-  char _pad[2];
-  int particle_system;
-  float radius;
-  int resolution;
-  short space;
-  short interpolation;
-  short color_source;
-  short ob_color_source;
-  /** Used at runtime only by sampling RNA API. */
-  PointDensity pd;
-  int cached_resolution;
-  /** Vertex attribute layer for color source, MAX_CUSTOMDATA_LAYER_NAME. */
-  char vertex_attribute_name[68];
-} NodeShaderTexPointDensity;
-
 typedef struct NodeShaderPrincipled {
   char use_subsurface_auto_radius;
   char _pad[3];
@@ -1501,7 +1541,7 @@ typedef struct TexNodeOutput {
 } TexNodeOutput;
 
 typedef struct NodeKeyingScreenData {
-  char tracking_object[64];
+  char tracking_object[/*MAX_NAME*/ 64];
   float smoothness DNA_DEPRECATED;
 } NodeKeyingScreenData;
 
@@ -1521,19 +1561,23 @@ typedef struct NodeKeyingData {
 } NodeKeyingData;
 
 typedef struct NodeTrackPosData {
-  char tracking_object[64];
+  char tracking_object[/*MAX_NAME*/ 64];
   char track_name[64];
 } NodeTrackPosData;
 
 typedef struct NodeTranslateData {
   char wrap_axis;
-  char relative;
+  char relative DNA_DEPRECATED;
   short interpolation;
 } NodeTranslateData;
 
 typedef struct NodeScaleData {
   short interpolation;
 } NodeScaleData;
+
+typedef struct NodeDisplaceData {
+  short interpolation;
+} NodeDisplaceData;
 
 typedef struct NodePlaneTrackDeformData {
   char tracking_object[64];
@@ -1548,8 +1592,7 @@ typedef struct NodeShaderScript {
   int mode;
   int flag;
 
-  /** 1024 = FILE_MAX. */
-  char filepath[1024];
+  char filepath[/*FILE_MAX*/ 1024];
 
   char bytecode_hash[64];
   char *bytecode;
@@ -1558,31 +1601,30 @@ typedef struct NodeShaderScript {
 typedef struct NodeShaderTangent {
   int direction_type;
   int axis;
-  char uv_map[64];
+  char uv_map[/*MAX_CUSTOMDATA_LAYER_NAME_NO_PREFIX*/ 64];
 } NodeShaderTangent;
 
 typedef struct NodeShaderNormalMap {
   int space;
-  char uv_map[64];
+  char uv_map[/*MAX_CUSTOMDATA_LAYER_NAME_NO_PREFIX*/ 64];
 } NodeShaderNormalMap;
 
 typedef struct NodeShaderUVMap {
-  char uv_map[64];
+  char uv_map[/*MAX_CUSTOMDATA_LAYER_NAME_NO_PREFIX*/ 64];
 } NodeShaderUVMap;
 
 typedef struct NodeShaderVertexColor {
-  char layer_name[64];
+  char layer_name[/*MAX_CUSTOMDATA_LAYER_NAME_NO_PREFIX*/ 64];
 } NodeShaderVertexColor;
 
 typedef struct NodeShaderTexIES {
   int mode;
 
-  /** 1024 = FILE_MAX. */
-  char filepath[1024];
+  char filepath[/*FILE_MAX*/ 1024];
 } NodeShaderTexIES;
 
 typedef struct NodeShaderOutputAOV {
-  char name[64];
+  char name[/*MAX_NAME*/ 64];
 } NodeShaderOutputAOV;
 
 typedef struct NodeSunBeams {
@@ -1593,8 +1635,7 @@ typedef struct NodeSunBeams {
 typedef struct CryptomatteEntry {
   struct CryptomatteEntry *next, *prev;
   float encoded_hash;
-  /** MAX_NAME. */
-  char name[64];
+  char name[/*MAX_NAME*/ 64];
   char _pad[4];
 } CryptomatteEntry;
 
@@ -1622,8 +1663,7 @@ typedef struct NodeCryptomatte {
   /** Contains #CryptomatteEntry. */
   ListBase entries;
 
-  /* MAX_NAME */
-  char layer_name[64];
+  char layer_name[/*MAX_NAME*/ 64];
   /** Stores `entries` as a string for opening in 2.80-2.91. */
   char *matte_id;
 
@@ -2145,7 +2185,9 @@ typedef struct NodeGeometryClosureInputItem {
   char *name;
   /** #eNodeSocketDatatype. */
   short socket_type;
-  char _pad[2];
+  /** #NodeSocketInterfaceStructureType.  */
+  int8_t structure_type;
+  char _pad[1];
   int identifier;
 } NodeGeometryClosureInputItem;
 
@@ -2182,7 +2224,9 @@ typedef struct NodeGeometryEvaluateClosureInputItem {
   char *name;
   /** #eNodeSocketDatatype */
   short socket_type;
-  char _pad[2];
+  /** #NodeSocketInterfaceStructureType.  */
+  int8_t structure_type;
+  char _pad[1];
   int identifier;
 } NodeGeometryEvaluateClosureInputItem;
 
@@ -2190,7 +2234,9 @@ typedef struct NodeGeometryEvaluateClosureOutputItem {
   char *name;
   /** #eNodeSocketDatatype */
   short socket_type;
-  char _pad[2];
+  /** #NodeSocketInterfaceStructureType.  */
+  int8_t structure_type;
+  char _pad[1];
   int identifier;
 } NodeGeometryEvaluateClosureOutputItem;
 
@@ -2358,6 +2404,21 @@ typedef struct NodeGeometrySeparateBundle {
   int active_index;
   char _pad[4];
 } NodeGeometrySeparateBundle;
+
+typedef struct NodeFunctionFormatStringItem {
+  char *name;
+  int identifier;
+  int16_t socket_type;
+  char _pad[2];
+} NodeFunctionFormatStringItem;
+
+typedef struct NodeFunctionFormatString {
+  NodeFunctionFormatStringItem *items;
+  int items_num;
+  int next_identifier;
+  int active_index;
+  char _pad[4];
+} NodeFunctionFormatString;
 
 /* script node mode */
 enum {
@@ -2547,11 +2608,7 @@ enum {
 };
 
 /* sky texture */
-enum {
-  SHD_SKY_PREETHAM = 0,
-  SHD_SKY_HOSEK = 1,
-  SHD_SKY_NISHITA = 2,
-};
+enum { SHD_SKY_NISHITA = 0 };
 
 /* environment texture */
 enum {
@@ -2711,6 +2768,8 @@ typedef enum NodeVectorMathOperation {
   NODE_VECTOR_MATH_REFRACT = 24,
   NODE_VECTOR_MATH_FACEFORWARD = 25,
   NODE_VECTOR_MATH_MULTIPLY_ADD = 26,
+  NODE_VECTOR_MATH_POWER = 27,
+  NODE_VECTOR_MATH_SIGN = 28,
 } NodeVectorMathOperation;
 
 typedef enum NodeBooleanMathOperation {
@@ -2827,11 +2886,6 @@ typedef enum CMPNodeTranslateRepeatAxis {
 } CMPNodeTranslateRepeatAxis;
 
 #define CMP_NODE_MASK_MBLUR_SAMPLES_MAX 64
-
-/* image */
-enum {
-  CMP_NODE_IMAGE_USE_STRAIGHT_OUTPUT = 1,
-};
 
 /* viewer and composite output. */
 enum {
@@ -2952,15 +3006,8 @@ typedef enum CMPNodeInterpolation {
   CMP_NODE_INTERPOLATION_NEAREST = 0,
   CMP_NODE_INTERPOLATION_BILINEAR = 1,
   CMP_NODE_INTERPOLATION_BICUBIC = 2,
+  CMP_NODE_INTERPOLATION_ANISOTROPIC = 3,
 } CMPNodeInterpolation;
-
-/* CornerPin node interpolation option. */
-typedef enum CMPNodeCornerPinInterpolation {
-  CMP_NODE_CORNER_PIN_INTERPOLATION_NEAREST = 0,
-  CMP_NODE_CORNER_PIN_INTERPOLATION_BILINEAR = 1,
-  CMP_NODE_CORNER_PIN_INTERPOLATION_BICUBIC = 2,
-  CMP_NODE_CORNER_PIN_INTERPOLATION_ANISOTROPIC = 3,
-} CMPNodeCornerPinInterpolation;
 
 /* Set Alpha Node. */
 
@@ -3025,29 +3072,21 @@ typedef enum CMPNodeLensDistortionType {
   CMP_NODE_LENS_DISTORTION_HORIZONTAL = 1,
 } CMPNodeLensDistortionType;
 
-/* Point Density shader node */
+/* Relative To Pixel node. Stored in custom1. */
+typedef enum CMPNodeRelativeToPixelDataType {
+  CMP_NODE_RELATIVE_TO_PIXEL_DATA_TYPE_FLOAT = 0,
+  CMP_NODE_RELATIVE_TO_PIXEL_DATA_TYPE_VECTOR = 1,
+} CMPNodeRelativeToPixelDataType;
 
-enum {
-  SHD_POINTDENSITY_SOURCE_PSYS = 0,
-  SHD_POINTDENSITY_SOURCE_OBJECT = 1,
-};
-
-enum {
-  SHD_POINTDENSITY_SPACE_OBJECT = 0,
-  SHD_POINTDENSITY_SPACE_WORLD = 1,
-};
-
-enum {
-  SHD_POINTDENSITY_COLOR_PARTAGE = 1,
-  SHD_POINTDENSITY_COLOR_PARTSPEED = 2,
-  SHD_POINTDENSITY_COLOR_PARTVEL = 3,
-};
-
-enum {
-  SHD_POINTDENSITY_COLOR_VERTCOL = 0,
-  SHD_POINTDENSITY_COLOR_VERTWEIGHT = 1,
-  SHD_POINTDENSITY_COLOR_VERTNOR = 2,
-};
+/* Relative To Pixel node. Stored in custom2. */
+typedef enum CMPNodeRelativeToPixelReferenceDimension {
+  CMP_NODE_RELATIVE_TO_PIXEL_REFERENCE_DIMENSION_PER_DIMENSION = 0,
+  CMP_NODE_RELATIVE_TO_PIXEL_REFERENCE_DIMENSION_X = 1,
+  CMP_NODE_RELATIVE_TO_PIXEL_REFERENCE_DIMENSION_Y = 2,
+  CMP_NODE_RELATIVE_TO_PIXEL_REFERENCE_DIMENSION_GREATER = 3,
+  CMP_NODE_RELATIVE_TO_PIXEL_REFERENCE_DIMENSION_SMALLER = 4,
+  CMP_NODE_RELATIVE_TO_PIXEL_REFERENCE_DIMENSION_DIAGONAL = 5,
+} CMPNodeRelativeToPixelReferenceDimension;
 
 /* Scattering phase functions */
 enum {

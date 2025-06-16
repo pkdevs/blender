@@ -150,7 +150,7 @@ static void verttag_set_cb(BMLoop *l, bool val, void *user_data_v)
     if (verttag_filter_cb(l_iter, user_data)) {
       const float *luv_iter = BM_ELEM_CD_GET_FLOAT_P(l_iter, cd_loop_uv_offset);
       if (equals_v2v2(luv, luv_iter)) {
-        uvedit_uv_select_set(scene, bm, l_iter, val, false, user_data->offsets);
+        uvedit_uv_select_set(scene, bm, l_iter, val, user_data->offsets);
       }
     }
   }
@@ -272,7 +272,7 @@ static void edgetag_set_cb(BMLoop *l, bool val, void *user_data_v)
   UserData_UV *user_data = static_cast<UserData_UV *>(user_data_v);
   const Scene *scene = user_data->scene;
   BMesh *bm = user_data->bm;
-  uvedit_edge_select_set_with_sticky(scene, bm, l, val, false, user_data->offsets);
+  uvedit_edge_select_set_with_sticky(scene, bm, l, val, user_data->offsets);
 }
 
 static int mouse_mesh_uv_shortest_path_edge(Scene *scene,
@@ -387,7 +387,7 @@ static void facetag_set_cb(BMFace *f, bool val, void *user_data_v)
   UserData_UV *user_data = static_cast<UserData_UV *>(user_data_v);
   const Scene *scene = user_data->scene;
   BMesh *bm = user_data->bm;
-  uvedit_face_select_set_with_sticky(scene, bm, f, val, false, user_data->offsets);
+  uvedit_face_select_set_with_sticky(scene, bm, f, val, user_data->offsets);
 }
 
 static int mouse_mesh_uv_shortest_path_face(Scene *scene,
@@ -518,7 +518,7 @@ static bool uv_shortest_path_pick_ex(Scene *scene,
     if (flush != 0) {
       const bool select = (flush == 1);
       BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
-      if (ts->uv_flag & UV_SYNC_SELECTION) {
+      if (ts->uv_flag & UV_FLAG_SYNC_SELECT) {
         ED_uvedit_select_sync_flush(scene->toolsettings, bm, select);
       }
       else {
@@ -526,11 +526,11 @@ static bool uv_shortest_path_pick_ex(Scene *scene,
       }
     }
 
-    if (ts->uv_flag & UV_SYNC_SELECTION) {
+    if (ts->uv_flag & UV_FLAG_SYNC_SELECT) {
       DEG_id_tag_update(static_cast<ID *>(obedit->data), ID_RECALC_SELECT);
     }
     else {
-      Object *obedit_eval = DEG_get_evaluated_object(depsgraph, obedit);
+      Object *obedit_eval = DEG_get_evaluated(depsgraph, obedit);
       BKE_mesh_batch_cache_dirty_tag(static_cast<Mesh *>(obedit_eval->data),
                                      BKE_MESH_BATCH_DIRTY_UVEDIT_SELECT);
     }
@@ -611,7 +611,7 @@ static wmOperatorStatus uv_shortest_path_pick_invoke(bContext *C,
     else if (uv_selectmode & UV_SELECT_EDGE) {
       /* Edge selection. */
       BMLoop *l_src = nullptr;
-      if (ts->uv_flag & UV_SYNC_SELECTION) {
+      if (ts->uv_flag & UV_FLAG_SYNC_SELECT) {
         BMEdge *e_src = BM_mesh_active_edge_get(bm);
         if (e_src != nullptr) {
           l_src = uv_find_nearest_loop_from_edge(scene, obedit, e_src, co);
@@ -634,7 +634,7 @@ static wmOperatorStatus uv_shortest_path_pick_invoke(bContext *C,
     else {
       /* Vertex selection. */
       BMLoop *l_src = nullptr;
-      if (ts->uv_flag & UV_SYNC_SELECTION) {
+      if (ts->uv_flag & UV_FLAG_SYNC_SELECT) {
         BMVert *v_src = BM_mesh_active_vert_get(bm);
         if (v_src != nullptr) {
           l_src = uv_find_nearest_loop_from_vert(scene, obedit, v_src, co);
@@ -768,7 +768,7 @@ void UV_OT_shortest_path_pick(wmOperatorType *ot)
   ot->idname = "UV_OT_shortest_path_pick";
   ot->description = "Select shortest path between two selections";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = uv_shortest_path_pick_invoke;
   ot->exec = uv_shortest_path_pick_exec;
   ot->poll = ED_operator_uvedit_space_image;
@@ -859,7 +859,7 @@ void UV_OT_shortest_path_select(wmOperatorType *ot)
   ot->idname = "UV_OT_shortest_path_select";
   ot->description = "Selected shortest path between two vertices/edges/faces";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = uv_shortest_path_select_exec;
   ot->poll = ED_operator_uvedit_space_image;
 

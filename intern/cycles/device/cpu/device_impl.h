@@ -6,6 +6,7 @@
 
 /* So ImathMath is included before our kernel_cpu_compat. */
 #ifdef WITH_OSL
+#  include <cstdint> /* Needed before `sdlexec.h` for `int32_t` with GCC 15.1. */
 /* So no context pollution happens from indirectly included windows.h */
 #  ifdef _WIN32
 #    include "util/windows.h"
@@ -47,7 +48,7 @@ class CPUDevice : public Device {
   RTCScene embree_scene = nullptr;
   RTCDevice embree_device;
 #endif
-#ifdef WITH_PATH_GUIDING
+#if defined(WITH_PATH_GUIDING)
   mutable unique_ptr<openpgl::cpp::Device> guiding_device;
 #endif
 

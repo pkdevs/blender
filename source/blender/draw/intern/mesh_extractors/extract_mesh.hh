@@ -263,13 +263,13 @@ void extract_face_dots_subdiv(const DRWSubdivCache &subdiv_cache,
 gpu::VertBufPtr extract_normals(const MeshRenderData &mr, bool use_hq);
 gpu::VertBufPtr extract_normals_subdiv(const MeshRenderData &mr,
                                        const DRWSubdivCache &subdiv_cache,
-                                       gpu::VertBuf &pos_nor);
+                                       gpu::VertBuf &pos);
 gpu::VertBufPtr extract_vert_normals(const MeshRenderData &mr);
 gpu::VertBufPtr extract_face_dot_normals(const MeshRenderData &mr, bool use_hq);
 gpu::VertBufPtr extract_edge_factor(const MeshRenderData &mr);
 gpu::VertBufPtr extract_edge_factor_subdiv(const DRWSubdivCache &subdiv_cache,
                                            const MeshRenderData &mr,
-                                           gpu::VertBuf &pos_nor);
+                                           gpu::VertBuf &pos);
 
 gpu::IndexBufPtr extract_tris(const MeshRenderData &mr, const SortedFaceData &face_sorted);
 void create_material_subranges(const SortedFaceData &face_sorted,
@@ -371,10 +371,14 @@ gpu::VertBufPtr extract_sculpt_data_subdiv(const MeshRenderData &mr,
 
 gpu::VertBufPtr extract_orco(const MeshRenderData &mr);
 
-gpu::VertBufPtr extract_attribute(const MeshRenderData &mr, const DRW_AttributeRequest &request);
+gpu::VertBufPtr extract_attribute(const MeshRenderData &mr, StringRef name);
 gpu::VertBufPtr extract_attribute_subdiv(const MeshRenderData &mr,
                                          const DRWSubdivCache &subdiv_cache,
-                                         const DRW_AttributeRequest &request);
+                                         StringRef name);
 gpu::VertBufPtr extract_attr_viewer(const MeshRenderData &mr);
+
+gpu::VertBufPtr extract_paint_overlay_flags(const MeshRenderData &mr);
+gpu::VertBufPtr extract_paint_overlay_flags_subdiv(const MeshRenderData &mr,
+                                                   const DRWSubdivCache &subdiv_cache);
 
 }  // namespace blender::draw

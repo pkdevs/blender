@@ -380,11 +380,20 @@ int MOV_codec_valid_bit_depths(int av_codec_id)
   int bit_depths = R_IMF_CHAN_DEPTH_8;
 #ifdef WITH_FFMPEG
   /* Note: update properties_output.py `use_bpp` when changing this function. */
-  if (ELEM(av_codec_id, AV_CODEC_ID_H264, AV_CODEC_ID_H265, AV_CODEC_ID_AV1, AV_CODEC_ID_PRORES)) {
+  if (ELEM(av_codec_id,
+           AV_CODEC_ID_H264,
+           AV_CODEC_ID_H265,
+           AV_CODEC_ID_AV1,
+           AV_CODEC_ID_PRORES,
+           AV_CODEC_ID_FFV1))
+  {
     bit_depths |= R_IMF_CHAN_DEPTH_10;
   }
-  if (ELEM(av_codec_id, AV_CODEC_ID_H265, AV_CODEC_ID_AV1)) {
+  if (ELEM(av_codec_id, AV_CODEC_ID_H265, AV_CODEC_ID_AV1, AV_CODEC_ID_FFV1)) {
     bit_depths |= R_IMF_CHAN_DEPTH_12;
+  }
+  if (ELEM(av_codec_id, AV_CODEC_ID_FFV1)) {
+    bit_depths |= R_IMF_CHAN_DEPTH_16;
   }
 #else
   UNUSED_VARS(av_codec_id);
@@ -452,7 +461,7 @@ void MOV_validate_output_settings(RenderData *rd, const ImageFormatData *imf)
 
   if (imf->imtype == R_IMF_IMTYPE_FFMPEG) {
     if (rd->ffcodecdata.type <= 0 || rd->ffcodecdata.codec <= 0 ||
-        rd->ffcodecdata.audio_codec <= 0 || rd->ffcodecdata.video_bitrate <= 1)
+        rd->ffcodecdata.audio_codec < 0 || rd->ffcodecdata.video_bitrate <= 1)
     {
       ffmpeg_preset_set(rd, FFMPEG_PRESET_H264);
       rd->ffcodecdata.constant_rate_factor = FFM_CRF_MEDIUM;
@@ -499,21 +508,20 @@ void MOV_validate_output_settings(RenderData *rd, const ImageFormatData *imf)
 #endif
 }
 
-bool MOV_codec_supports_alpha(const FFMpegCodecData &ff_codec_data)
+bool MOV_codec_supports_alpha(int av_codec_id, int ffmpeg_profile)
 {
 #ifdef WITH_FFMPEG
-  if (ff_codec_data.codec == AV_CODEC_ID_PRORES) {
-    return ELEM(
-        ff_codec_data.ffmpeg_prores_profile, FFM_PRORES_PROFILE_4444, FFM_PRORES_PROFILE_4444_XQ);
+  if (av_codec_id == AV_CODEC_ID_PRORES) {
+    return ELEM(ffmpeg_profile, FFM_PRORES_PROFILE_4444, FFM_PRORES_PROFILE_4444_XQ);
   }
-  return ELEM(ff_codec_data.codec,
+  return ELEM(av_codec_id,
               AV_CODEC_ID_FFV1,
               AV_CODEC_ID_QTRLE,
               AV_CODEC_ID_PNG,
               AV_CODEC_ID_VP9,
               AV_CODEC_ID_HUFFYUV);
 #else
-  UNUSED_VARS(ff_codec_data);
+  UNUSED_VARS(av_codec_id, ffmpeg_profile);
   return false;
 #endif
 }

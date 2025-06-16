@@ -17,6 +17,7 @@
 #include "BLI_utildefines.h"
 
 #include "GPU_batch.hh"
+#include "GPU_state.hh"
 
 #include "../generic/py_capi_utils.hh"
 #include "../generic/python_compat.hh"
@@ -185,7 +186,7 @@ static PyObject *pygpu_batch_program_set(BPyGPUBatch *self, BPyGPUShader *py_sha
 {
   static bool deprecation_warning_issued = false;
 
-  /* Deprecation warning raised when calling `gpu.types.GPUBatch.program_set`.  */
+  /* Deprecation warning raised when calling `gpu.types.GPUBatch.program_set`. */
   if (!deprecation_warning_issued) {
     PyErr_WarnEx(PyExc_DeprecationWarning,
                  "Calls to GPUBatch.program_set are deprecated."
@@ -258,16 +259,16 @@ static const char *pygpu_shader_check_compatibility(blender::gpu::Batch *batch)
       }
       const blender::StringRefNull name = GPU_vertformat_attr_name_get(&format, a, 0);
       if (pos_attr_id == -1 && name == "pos") {
-        if (!ELEM(a->comp_type, GPU_COMP_F32)) {
+        if (!ELEM(a->type.comp_type(), GPU_COMP_F32)) {
           return "For POLYLINE shaders, the 'pos' attribute needs to be 'F32'";
         }
-        if (!ELEM(a->fetch_mode, GPU_FETCH_FLOAT)) {
+        if (!ELEM(a->type.fetch_mode(), GPU_FETCH_FLOAT)) {
           return "For POLYLINE shaders, the 'pos' attribute must use the 'FLOAT' fetch type";
         }
         pos_attr_id = a_idx;
       }
       else if (col_attr_id == -1 && name == "color") {
-        if (!ELEM(a->comp_type, GPU_COMP_F32, GPU_COMP_U8)) {
+        if (!ELEM(a->type.comp_type(), GPU_COMP_F32, GPU_COMP_U8)) {
           return "For POLYLINE shaders, the 'color' attribute needs to be 'F32' or 'U8'";
         }
         col_attr_id = a_idx;
@@ -316,6 +317,66 @@ static PyObject *pygpu_batch_draw(BPyGPUBatch *self, PyObject *args)
   }
   else if (self->batch->shader != py_shader->shader) {
     GPU_batch_set_shader(self->batch, py_shader->shader);
+  }
+
+  /* Emit a warning when trying to draw wide lines as it is too late to automatically switch to a
+   * polyline shader. */
+  if (py_shader && py_shader->is_builtin &&
+      ELEM(self->batch->prim_type, GPU_PRIM_LINES, GPU_PRIM_LINE_STRIP, GPU_PRIM_LINE_LOOP))
+  {
+    GPUShader *shader = py_shader->shader;
+    const float line_width = GPU_line_width_get();
+    const bool use_linesmooth = GPU_line_smooth_get();
+    if (line_width > 1.0f || use_linesmooth) {
+      if (shader == GPU_shader_get_builtin_shader(GPU_SHADER_3D_FLAT_COLOR)) {
+        PyErr_WarnEx(PyExc_DeprecationWarning,
+                     "Calling GPUBatch.draw to draw wide or smooth lines with "
+                     "GPU_SHADER_3D_FLAT_COLOR is deprecated. "
+                     "Use GPU_SHADER_3D_POLYLINE_FLAT_COLOR instead.",
+                     1);
+      }
+      else if (shader == GPU_shader_get_builtin_shader(GPU_SHADER_3D_SMOOTH_COLOR)) {
+        PyErr_WarnEx(PyExc_DeprecationWarning,
+                     "Calling GPUBatch.draw to draw wide or smooth lines with "
+                     "GPU_SHADER_3D_SMOOTH_COLOR is deprecated. "
+                     "Use GPU_SHADER_3D_POLYLINE_SMOOTH_COLOR instead.",
+                     1);
+      }
+      else if (shader == GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR)) {
+        PyErr_WarnEx(PyExc_DeprecationWarning,
+                     "Calling GPUBatch.draw to draw wide or smooth lines with "
+                     "GPU_SHADER_3D_UNIFORM_COLOR is deprecated. "
+                     "Use GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR instead.",
+                     1);
+      }
+    }
+  }
+
+  /* Emit a warning when trying to draw points with a regular shader as it is too late to
+   * automatically switch to a point shader. */
+  if (py_shader && py_shader->is_builtin && self->batch->prim_type == GPU_PRIM_POINTS) {
+    GPUShader *shader = py_shader->shader;
+    if (shader == GPU_shader_get_builtin_shader(GPU_SHADER_3D_FLAT_COLOR)) {
+      PyErr_WarnEx(PyExc_DeprecationWarning,
+                   "Calling GPUBatch.draw to draw points with "
+                   "GPU_SHADER_3D_FLAT_COLOR is deprecated. "
+                   "Use GPU_SHADER_3D_POINT_FLAT_COLOR instead.",
+                   1);
+    }
+    else if (shader == GPU_shader_get_builtin_shader(GPU_SHADER_3D_SMOOTH_COLOR)) {
+      PyErr_WarnEx(PyExc_DeprecationWarning,
+                   "Calling GPUBatch.draw to draw points with "
+                   "GPU_SHADER_3D_SMOOTH_COLOR is deprecated. "
+                   "Use GPU_SHADER_3D_POINT_FLAT_COLOR instead.",
+                   1);
+    }
+    else if (shader == GPU_shader_get_builtin_shader(GPU_SHADER_3D_UNIFORM_COLOR)) {
+      PyErr_WarnEx(PyExc_DeprecationWarning,
+                   "Calling GPUBatch.draw to draw points with "
+                   "GPU_SHADER_3D_UNIFORM_COLOR is deprecated. "
+                   "Use GPU_SHADER_3D_POINT_SMOOTH_COLOR instead.",
+                   1);
+    }
   }
 
   if (const char *error = pygpu_shader_check_compatibility(self->batch)) {

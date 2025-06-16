@@ -199,11 +199,8 @@
     .volumetric_light_clamp = 0.0f, \
     .volumetric_shadow_samples = 16, \
  \
-    .gtao_distance = 0.2f, \
-    .gtao_thickness = 0.5f, \
-    .gtao_focus = 0.05f, \
-    .gtao_resolution = 2, \
- \
+    .fast_gi_bias = 0.05f, \
+    .fast_gi_resolution = 2, \
     .fast_gi_step_count = 8, \
     .fast_gi_ray_count = 2, \
     .fast_gi_quality = 0.25f, \
@@ -235,7 +232,7 @@
  \
     .overscan = 3.0f, \
  \
-    .flag = SCE_EEVEE_TAA_REPROJECTION, \
+    .flag = SCE_EEVEE_TAA_REPROJECTION | SCE_EEVEE_SHADOW_ENABLED, \
   }
 
 #define _DNA_DEFAULT_SceneGreasePencil \
@@ -243,6 +240,7 @@
     .smaa_threshold = 1.0f, \
     .smaa_threshold_render = 0.25f, \
     .aa_samples = 8, \
+    .motion_blur_steps = 8, \
   }
 
 #define _DNA_DEFAULT_SceneHydra \
@@ -379,8 +377,13 @@
     .snap_node_mode = SCE_SNAP_TO_GRID, \
     .snap_uv_mode = SCE_SNAP_TO_INCREMENT, \
     .snap_anim_mode = SCE_SNAP_TO_FRAME, \
+    .snap_playhead_mode = SCE_SNAP_TO_KEYS | SCE_SNAP_TO_STRIPS, \
+    .snap_step_frames = 2, \
+    .snap_step_seconds = 1, \
+    .playhead_snap_distance = 20, \
     .snap_flag = SCE_SNAP_TO_INCLUDE_EDITED | SCE_SNAP_TO_INCLUDE_NONEDITED, \
     .snap_flag_anim = SCE_SNAP, \
+    .snap_flag_playhead = 0, \
     .snap_transform_mode_flag = SCE_SNAP_TRANSFORM_MODE_TRANSLATE, \
     .snap_face_nearest_steps = 1, \
     .snap_angle_increment_3d = DEG2RADF(5.0f), \

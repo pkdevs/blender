@@ -14,7 +14,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_endian_switch.h"
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
@@ -151,33 +150,6 @@ static void shapekey_blend_write(BlendWriter *writer, ID *id, const void *id_add
 #define IPO_BEZTRIPLE 100
 #define IPO_BPOINT 101
 
-static void switch_endian_keyblock(Key *key, KeyBlock *kb)
-{
-  int elemsize = key->elemsize;
-  char *data = static_cast<char *>(kb->data);
-
-  for (int a = 0; a < kb->totelem; a++) {
-    const char *cp = key->elemstr;
-    char *poin = data;
-
-    while (cp[0]) {    /* cp[0] == amount */
-      switch (cp[1]) { /* cp[1] = type */
-        case IPO_FLOAT:
-        case IPO_BPOINT:
-        case IPO_BEZTRIPLE: {
-          int b = cp[0];
-          BLI_endian_switch_float_array((float *)poin, b);
-          poin += sizeof(float) * b;
-          break;
-        }
-      }
-
-      cp += 2;
-    }
-    data += elemsize;
-  }
-}
-
 static void shapekey_blend_read_data(BlendDataReader *reader, ID *id)
 {
   Key *key = (Key *)id;
@@ -188,9 +160,9 @@ static void shapekey_blend_read_data(BlendDataReader *reader, ID *id)
   LISTBASE_FOREACH (KeyBlock *, kb, &key->block) {
     BLO_read_data_address(reader, &kb->data);
 
-    if (BLO_read_requires_endian_switch(reader)) {
-      switch_endian_keyblock(key, kb);
-    }
+    /* NOTE: this is endianness-sensitive. */
+    /* Keyblock data would need specific endian switching depending of the exact type of data it
+     * contain. */
   }
 }
 
@@ -203,7 +175,7 @@ static void shapekey_blend_read_after_liblink(BlendLibReader * /*reader*/, ID *i
 }
 
 IDTypeInfo IDType_ID_KE = {
-    /*id_code*/ ID_KE,
+    /*id_code*/ Key::id_type,
     /*id_filter*/ FILTER_ID_KE,
     /* Warning! key->from, could be more types in future? */
     /*dependencies_id_types*/ FILTER_ID_ME | FILTER_ID_CU_LEGACY | FILTER_ID_LT,
@@ -260,7 +232,7 @@ Key *BKE_key_add(Main *bmain, ID *id) /* common function */
   Key *key;
   char *el;
 
-  key = static_cast<Key *>(BKE_id_new(bmain, ID_KE, "Key"));
+  key = BKE_id_new<Key>(bmain, "Key");
 
   key->type = KEY_NORMAL;
   key->from = id;
@@ -338,116 +310,122 @@ void BKE_key_sort(Key *key)
 
 /**************** do the key ****************/
 
-void key_curve_position_weights(float t, float data[4], int type)
+void key_curve_position_weights(float t, float data[4], KeyInterpolationType type)
 {
   float t2, t3, fc;
 
-  if (type == KEY_LINEAR) {
-    data[0] = 0.0f;
-    data[1] = -t + 1.0f;
-    data[2] = t;
-    data[3] = 0.0f;
-  }
-  else if (type == KEY_CARDINAL) {
-    t2 = t * t;
-    t3 = t2 * t;
-    fc = 0.71f;
+  switch (type) {
+    case KEY_LINEAR:
+      data[0] = 0.0f;
+      data[1] = -t + 1.0f;
+      data[2] = t;
+      data[3] = 0.0f;
+      break;
+    case KEY_CARDINAL:
+      t2 = t * t;
+      t3 = t2 * t;
+      fc = 0.71f;
 
-    data[0] = -fc * t3 + 2.0f * fc * t2 - fc * t;
-    data[1] = (2.0f - fc) * t3 + (fc - 3.0f) * t2 + 1.0f;
-    data[2] = (fc - 2.0f) * t3 + (3.0f - 2.0f * fc) * t2 + fc * t;
-    data[3] = fc * t3 - fc * t2;
-  }
-  else if (type == KEY_BSPLINE) {
-    t2 = t * t;
-    t3 = t2 * t;
+      data[0] = -fc * t3 + 2.0f * fc * t2 - fc * t;
+      data[1] = (2.0f - fc) * t3 + (fc - 3.0f) * t2 + 1.0f;
+      data[2] = (fc - 2.0f) * t3 + (3.0f - 2.0f * fc) * t2 + fc * t;
+      data[3] = fc * t3 - fc * t2;
+      break;
+    case KEY_BSPLINE:
+      t2 = t * t;
+      t3 = t2 * t;
 
-    data[0] = -0.16666666f * t3 + 0.5f * t2 - 0.5f * t + 0.16666666f;
-    data[1] = 0.5f * t3 - t2 + 0.66666666f;
-    data[2] = -0.5f * t3 + 0.5f * t2 + 0.5f * t + 0.16666666f;
-    data[3] = 0.16666666f * t3;
-  }
-  else if (type == KEY_CATMULL_ROM) {
-    t2 = t * t;
-    t3 = t2 * t;
-    fc = 0.5f;
+      data[0] = -0.16666666f * t3 + 0.5f * t2 - 0.5f * t + 0.16666666f;
+      data[1] = 0.5f * t3 - t2 + 0.66666666f;
+      data[2] = -0.5f * t3 + 0.5f * t2 + 0.5f * t + 0.16666666f;
+      data[3] = 0.16666666f * t3;
+      break;
+    case KEY_CATMULL_ROM:
+      t2 = t * t;
+      t3 = t2 * t;
+      fc = 0.5f;
 
-    data[0] = -fc * t3 + 2.0f * fc * t2 - fc * t;
-    data[1] = (2.0f - fc) * t3 + (fc - 3.0f) * t2 + 1.0f;
-    data[2] = (fc - 2.0f) * t3 + (3.0f - 2.0f * fc) * t2 + fc * t;
-    data[3] = fc * t3 - fc * t2;
+      data[0] = -fc * t3 + 2.0f * fc * t2 - fc * t;
+      data[1] = (2.0f - fc) * t3 + (fc - 3.0f) * t2 + 1.0f;
+      data[2] = (fc - 2.0f) * t3 + (3.0f - 2.0f * fc) * t2 + fc * t;
+      data[3] = fc * t3 - fc * t2;
+      break;
   }
 }
 
-void key_curve_tangent_weights(float t, float data[4], int type)
+void key_curve_tangent_weights(float t, float data[4], KeyInterpolationType type)
 {
   float t2, fc;
 
-  if (type == KEY_LINEAR) {
-    data[0] = 0.0f;
-    data[1] = -1.0f;
-    data[2] = 1.0f;
-    data[3] = 0.0f;
-  }
-  else if (type == KEY_CARDINAL) {
-    t2 = t * t;
-    fc = 0.71f;
+  switch (type) {
+    case KEY_LINEAR:
+      data[0] = 0.0f;
+      data[1] = -1.0f;
+      data[2] = 1.0f;
+      data[3] = 0.0f;
+      break;
+    case KEY_CARDINAL:
+      t2 = t * t;
+      fc = 0.71f;
 
-    data[0] = -3.0f * fc * t2 + 4.0f * fc * t - fc;
-    data[1] = 3.0f * (2.0f - fc) * t2 + 2.0f * (fc - 3.0f) * t;
-    data[2] = 3.0f * (fc - 2.0f) * t2 + 2.0f * (3.0f - 2.0f * fc) * t + fc;
-    data[3] = 3.0f * fc * t2 - 2.0f * fc * t;
-  }
-  else if (type == KEY_BSPLINE) {
-    t2 = t * t;
+      data[0] = -3.0f * fc * t2 + 4.0f * fc * t - fc;
+      data[1] = 3.0f * (2.0f - fc) * t2 + 2.0f * (fc - 3.0f) * t;
+      data[2] = 3.0f * (fc - 2.0f) * t2 + 2.0f * (3.0f - 2.0f * fc) * t + fc;
+      data[3] = 3.0f * fc * t2 - 2.0f * fc * t;
+      break;
+    case KEY_BSPLINE:
+      t2 = t * t;
 
-    data[0] = -0.5f * t2 + t - 0.5f;
-    data[1] = 1.5f * t2 - t * 2.0f;
-    data[2] = -1.5f * t2 + t + 0.5f;
-    data[3] = 0.5f * t2;
-  }
-  else if (type == KEY_CATMULL_ROM) {
-    t2 = t * t;
-    fc = 0.5f;
+      data[0] = -0.5f * t2 + t - 0.5f;
+      data[1] = 1.5f * t2 - t * 2.0f;
+      data[2] = -1.5f * t2 + t + 0.5f;
+      data[3] = 0.5f * t2;
+      break;
+    case KEY_CATMULL_ROM:
+      t2 = t * t;
+      fc = 0.5f;
 
-    data[0] = -3.0f * fc * t2 + 4.0f * fc * t - fc;
-    data[1] = 3.0f * (2.0f - fc) * t2 + 2.0f * (fc - 3.0f) * t;
-    data[2] = 3.0f * (fc - 2.0f) * t2 + 2.0f * (3.0f - 2.0f * fc) * t + fc;
-    data[3] = 3.0f * fc * t2 - 2.0f * fc * t;
+      data[0] = -3.0f * fc * t2 + 4.0f * fc * t - fc;
+      data[1] = 3.0f * (2.0f - fc) * t2 + 2.0f * (fc - 3.0f) * t;
+      data[2] = 3.0f * (fc - 2.0f) * t2 + 2.0f * (3.0f - 2.0f * fc) * t + fc;
+      data[3] = 3.0f * fc * t2 - 2.0f * fc * t;
+      break;
   }
 }
 
-void key_curve_normal_weights(float t, float data[4], int type)
+void key_curve_normal_weights(float t, float data[4], KeyInterpolationType type)
 {
   float fc;
 
-  if (type == KEY_LINEAR) {
-    data[0] = 0.0f;
-    data[1] = 0.0f;
-    data[2] = 0.0f;
-    data[3] = 0.0f;
-  }
-  else if (type == KEY_CARDINAL) {
-    fc = 0.71f;
+  switch (type) {
+    case KEY_LINEAR:
+      data[0] = 0.0f;
+      data[1] = 0.0f;
+      data[2] = 0.0f;
+      data[3] = 0.0f;
+      break;
+    case KEY_CARDINAL:
+      fc = 0.71f;
 
-    data[0] = -6.0f * fc * t + 4.0f * fc;
-    data[1] = 6.0f * (2.0f - fc) * t + 2.0f * (fc - 3.0f);
-    data[2] = 6.0f * (fc - 2.0f) * t + 2.0f * (3.0f - 2.0f * fc);
-    data[3] = 6.0f * fc * t - 2.0f * fc;
-  }
-  else if (type == KEY_BSPLINE) {
-    data[0] = -1.0f * t + 1.0f;
-    data[1] = 3.0f * t - 2.0f;
-    data[2] = -3.0f * t + 1.0f;
-    data[3] = 1.0f * t;
-  }
-  else if (type == KEY_CATMULL_ROM) {
-    fc = 0.5f;
+      data[0] = -6.0f * fc * t + 4.0f * fc;
+      data[1] = 6.0f * (2.0f - fc) * t + 2.0f * (fc - 3.0f);
+      data[2] = 6.0f * (fc - 2.0f) * t + 2.0f * (3.0f - 2.0f * fc);
+      data[3] = 6.0f * fc * t - 2.0f * fc;
+      break;
+    case KEY_BSPLINE:
+      data[0] = -1.0f * t + 1.0f;
+      data[1] = 3.0f * t - 2.0f;
+      data[2] = -3.0f * t + 1.0f;
+      data[3] = 1.0f * t;
+      break;
+    case KEY_CATMULL_ROM:
+      fc = 0.5f;
 
-    data[0] = -6.0f * fc * t + 4.0f * fc;
-    data[1] = 6.0f * (2.0f - fc) * t + 2.0f * (fc - 3.0f);
-    data[2] = 6.0f * (fc - 2.0f) * t + 2.0f * (3.0f - 2.0f * fc);
-    data[3] = 6.0f * fc * t - 2.0f * fc;
+      data[0] = -6.0f * fc * t + 4.0f * fc;
+      data[1] = 6.0f * (2.0f - fc) * t + 2.0f * (fc - 3.0f);
+      data[2] = 6.0f * (fc - 2.0f) * t + 2.0f * (3.0f - 2.0f * fc);
+      data[3] = 6.0f * fc * t - 2.0f * fc;
+      break;
   }
 }
 
@@ -584,11 +562,11 @@ static int setkeys(float fac, ListBase *lb, KeyBlock *k[], float t[4], int cycl)
   }
 
   /* interpolation */
-  key_curve_position_weights(d, t, k[1]->type);
+  key_curve_position_weights(d, t, KeyInterpolationType(k[1]->type));
 
   if (k[1]->type != k[2]->type) {
     float t_other[4];
-    key_curve_position_weights(d, t_other, k[2]->type);
+    key_curve_position_weights(d, t_other, KeyInterpolationType(k[2]->type));
     interp_v4_v4v4(t, t, t_other, d);
   }
 
@@ -1779,7 +1757,7 @@ Key **BKE_key_from_id_p(ID *id)
     }
     case ID_CU_LEGACY: {
       Curve *cu = (Curve *)id;
-      if (cu->vfont == nullptr) {
+      if (cu->ob_type != OB_FONT) {
         return &cu->key;
       }
       break;
@@ -2231,7 +2209,6 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
 
   blender::Array<blender::float3> positions(mesh->vert_positions());
   BKE_keyblock_convert_to_mesh(kb, positions);
-  const blender::Span<blender::int2> edges = mesh->edges();
   const blender::OffsetIndices faces = mesh->faces();
   const blender::Span<int> corner_verts = mesh->corner_verts();
   const blender::Span<int> corner_edges = mesh->corner_edges();
@@ -2277,11 +2254,10 @@ void BKE_keyblock_mesh_calc_normals(const KeyBlock *kb,
                                                                  AttrDomain::Corner);
     mesh::normals_calc_corners(
         positions,
-        edges,
         faces,
         corner_verts,
         corner_edges,
-        mesh->corner_to_face_map(),
+        mesh->vert_to_face_map(),
         {reinterpret_cast<blender::float3 *>(face_normals), faces.size()},
         sharp_edges,
         sharp_faces,

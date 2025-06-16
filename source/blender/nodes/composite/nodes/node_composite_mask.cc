@@ -31,7 +31,7 @@ static void cmp_node_mask_declare(NodeDeclarationBuilder &b)
 
   b.add_layout([](uiLayout *layout, bContext *C, PointerRNA *ptr) {
     uiTemplateID(layout, C, ptr, "mask", nullptr, nullptr, nullptr);
-    uiItemR(layout, ptr, "size_source", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+    layout->prop(ptr, "size_source", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
   });
 
   b.add_input<decl::Int>("Size X")
@@ -68,14 +68,6 @@ static void cmp_node_mask_declare(NodeDeclarationBuilder &b)
       .max(1.0f)
       .description("Exposure for motion blur as a factor of FPS")
       .compositor_expects_single_value();
-}
-
-static void node_composit_init_mask(bNodeTree * /*ntree*/, bNode *node)
-{
-  /* All members are deprecated and needn't be set, but the data is still allocated for forward
-   * compatibility. */
-  NodeMask *data = MEM_callocN<NodeMask>(__func__);
-  node->storage = data;
 }
 
 static void node_mask_label(const bNodeTree * /*ntree*/,
@@ -205,7 +197,7 @@ static NodeOperation *get_compositor_operation(Context &context, DNode node)
 
 }  // namespace blender::nodes::node_composite_mask_cc
 
-void register_node_type_cmp_mask()
+static void register_node_type_cmp_mask()
 {
   namespace file_ns = blender::nodes::node_composite_mask_cc;
 
@@ -218,12 +210,9 @@ void register_node_type_cmp_mask()
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::cmp_node_mask_declare;
   ntype.updatefunc = file_ns::node_update;
-  ntype.initfunc = file_ns::node_composit_init_mask;
   ntype.labelfunc = file_ns::node_mask_label;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
-  blender::bke::node_type_storage(
-      ntype, "NodeMask", node_free_standard_storage, node_copy_standard_storage);
-
   blender::bke::node_register_type(ntype);
 }
+NOD_REGISTER_NODE(register_node_type_cmp_mask)

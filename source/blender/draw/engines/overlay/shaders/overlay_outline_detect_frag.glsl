@@ -236,7 +236,7 @@ void main()
     frag_color = float4(0.0f);
   }
   else if (color_id == 1u) {
-    frag_color = theme.colors.select;
+    frag_color = theme.colors.object_select;
   }
   else if (color_id == 3u) {
     frag_color = theme.colors.active_object;
@@ -265,7 +265,7 @@ void main()
     /* NOTE(Metal): Discards are not explicit returns in Metal. We should also return to avoid
      * erroneous derivatives which can manifest during texture sampling in
      * non-uniform-control-flow. */
-    discard;
+    gpu_discard_fragment();
     return;
   }
 

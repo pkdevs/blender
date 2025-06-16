@@ -68,9 +68,9 @@ void Instance::init()
 
     const bool viewport_uses_workbench = state.v3d->shading.type <= OB_SOLID ||
                                          BKE_scene_uses_blender_workbench(state.scene);
-    const bool viewport_uses_eevee = state.v3d->shading.type == OB_MATERIAL ||
-                                     (state.v3d->shading.type == OB_RENDER &&
-                                      BKE_scene_uses_blender_eevee(state.scene));
+    const bool viewport_uses_eevee = STREQ(
+        ED_view3d_engine_type(state.scene, state.v3d->shading.type)->idname,
+        RE_engine_id_BLENDER_EEVEE);
     const bool use_resolution_scaling = BKE_render_preview_pixel_size(&state.scene->r) != 1;
     /* Only workbench ensures the depth buffer is matching overlays.
      * Force depth prepass for other render engines.
@@ -244,7 +244,7 @@ void Resources::update_theme_settings(const DRWContext *ctx, const State &state)
   UI_GetThemeColor4fv(TH_WIRE, gb.colors.wire);
   UI_GetThemeColor4fv(TH_WIRE_EDIT, gb.colors.wire_edit);
   UI_GetThemeColor4fv(TH_ACTIVE, gb.colors.active_object);
-  UI_GetThemeColor4fv(TH_SELECT, gb.colors.select);
+  UI_GetThemeColor4fv(TH_SELECT, gb.colors.object_select);
   gb.colors.library_select = rgba_uchar_to_float(0x88, 0xFF, 0xFF, 155);
   gb.colors.library = rgba_uchar_to_float(0x55, 0xCC, 0xCC, 155);
   UI_GetThemeColor4fv(TH_TRANSFORM, gb.colors.transform);
@@ -447,7 +447,7 @@ void Instance::begin_sync()
     layer.bounds.begin_sync(resources, state);
     layer.cameras.begin_sync(resources, state);
     layer.curves.begin_sync(resources, state);
-    layer.edit_text.begin_sync(resources, state);
+    layer.text.begin_sync(resources, state);
     layer.empties.begin_sync(resources, state);
     layer.facing.begin_sync(resources, state);
     layer.fade.begin_sync(resources, state);
@@ -573,7 +573,7 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
         layer.pointclouds.edit_object_sync(manager, ob_ref, resources, state);
         break;
       case OB_FONT:
-        layer.edit_text.edit_object_sync(manager, ob_ref, resources, state);
+        layer.text.edit_object_sync(manager, ob_ref, resources, state);
         break;
       case OB_GREASE_PENCIL:
         layer.grease_pencil.edit_object_sync(manager, ob_ref, resources, state);
@@ -653,7 +653,7 @@ void Instance::end_sync()
     layer.axes.end_sync(resources, state);
     layer.bounds.end_sync(resources, state);
     layer.cameras.end_sync(resources, state);
-    layer.edit_text.end_sync(resources, state);
+    layer.text.end_sync(resources, state);
     layer.empties.end_sync(resources, state);
     layer.force_fields.end_sync(resources, state);
     layer.lights.end_sync(resources, state);
@@ -812,7 +812,7 @@ void Instance::draw_v3d(Manager &manager, View &view)
     // layer.facing.draw(framebuffer, manager, view);
     layer.fade.draw(framebuffer, manager, view);
     layer.mode_transfer.draw(framebuffer, manager, view);
-    layer.edit_text.draw(framebuffer, manager, view);
+    layer.text.draw(framebuffer, manager, view);
     layer.paints.draw(framebuffer, manager, view);
     layer.particles.draw(framebuffer, manager, view);
   };
@@ -975,9 +975,9 @@ bool Instance::object_is_sculpt_mode(const ObjectRef &ob_ref)
     const Object *active_object = state.object_active;
     const bool is_active_object = ob_ref.object == active_object;
 
-    bool is_geonode_preview = ob_ref.dupli_object && ob_ref.dupli_object->preview_base_geometry;
-    bool is_active_dupli_parent = ob_ref.dupli_parent == active_object;
-    return is_active_object || (is_active_dupli_parent && is_geonode_preview);
+    bool is_active_geonode_preview = ob_ref.preview_base_geometry() != nullptr &&
+                                     ob_ref.is_active(state.object_active);
+    return is_active_object || is_active_geonode_preview;
   }
 
   if (state.object_mode == OB_MODE_SCULPT) {
@@ -1008,13 +1008,9 @@ bool Instance::object_is_edit_paint_mode(const ObjectRef &ob_ref,
                                          bool in_sculpt_mode)
 {
   bool in_edit_paint_mode = in_edit_mode || in_paint_mode || in_sculpt_mode;
-  if (ob_ref.object->base_flag & BASE_FROM_DUPLI) {
-    /* Disable outlines for objects instanced by an object in sculpt, paint or edit mode. */
-    in_edit_paint_mode |= ob_ref.dupli_parent && (object_is_edit_mode(ob_ref.dupli_parent) ||
-                                                  object_is_sculpt_mode(ob_ref.dupli_parent) ||
-                                                  object_is_paint_mode(ob_ref.dupli_parent));
-  }
-  return in_edit_paint_mode;
+  /* Disable outlines for objects instanced by an object in sculpt, paint or edit mode. */
+  return in_edit_paint_mode || ob_ref.parent_is_in_edit_paint_mode(
+                                   state.object_active, state.object_mode, state.ctx_mode);
 }
 
 bool Instance::object_is_edit_mode(const Object *object)

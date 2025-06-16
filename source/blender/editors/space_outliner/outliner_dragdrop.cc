@@ -436,7 +436,7 @@ static wmOperatorStatus parent_drop_invoke(bContext *C, wmOperator *op, const wm
                           static_cast<wmDragID *>(drag->ids.first),
                           par,
                           object::PAR_OBJECT,
-                          event->modifier & KM_ALT);
+                          !(event->modifier & KM_ALT));
 
   return OPERATOR_FINISHED;
 }
@@ -444,11 +444,11 @@ static wmOperatorStatus parent_drop_invoke(bContext *C, wmOperator *op, const wm
 void OUTLINER_OT_parent_drop(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Drop to Set Parent (hold Alt to keep transforms)";
+  ot->name = "Drop to Set Parent (hold Alt to not keep transforms)";
   ot->description = "Drag to parent in Outliner";
   ot->idname = "OUTLINER_OT_parent_drop";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = parent_drop_invoke;
 
   ot->poll = ED_operator_region_outliner_active;
@@ -519,8 +519,8 @@ static wmOperatorStatus parent_clear_invoke(bContext *C, wmOperator * /*op*/, co
       Object *object = (Object *)drag_id->id;
 
       object::parent_clear(object,
-                           (event->modifier & KM_ALT) ? object::CLEAR_PARENT_KEEP_TRANSFORM :
-                                                        object::CLEAR_PARENT_ALL);
+                           (event->modifier & KM_ALT) ? object::CLEAR_PARENT_ALL :
+                                                        object::CLEAR_PARENT_KEEP_TRANSFORM);
     }
   }
 
@@ -533,11 +533,11 @@ static wmOperatorStatus parent_clear_invoke(bContext *C, wmOperator * /*op*/, co
 void OUTLINER_OT_parent_clear(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Drop to Clear Parent (hold Alt to keep transforms)";
+  ot->name = "Drop to Clear Parent (hold Alt to not keep transforms)";
   ot->description = "Drag to clear parent in Outliner";
   ot->idname = "OUTLINER_OT_parent_clear";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = parent_clear_invoke;
 
   ot->poll = ED_operator_outliner_active;
@@ -608,7 +608,7 @@ void OUTLINER_OT_scene_drop(wmOperatorType *ot)
   ot->description = "Drag object to scene in Outliner";
   ot->idname = "OUTLINER_OT_scene_drop";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = scene_drop_invoke;
 
   ot->poll = ED_operator_region_outliner_active;
@@ -665,7 +665,7 @@ void OUTLINER_OT_material_drop(wmOperatorType *ot)
   ot->description = "Drag material to object in Outliner";
   ot->idname = "OUTLINER_OT_material_drop";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = material_drop_invoke;
 
   ot->poll = ED_operator_region_outliner_active;
@@ -1081,7 +1081,7 @@ void OUTLINER_OT_datastack_drop(wmOperatorType *ot)
   ot->description = "Copy or reorder modifiers, constraints, and effects";
   ot->idname = "OUTLINER_OT_datastack_drop";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = datastack_drop_invoke;
 
   ot->poll = ED_operator_outliner_active;
@@ -1235,7 +1235,7 @@ static std::string collection_drop_tooltip(bContext *C,
 
     /* Test if we are moving within same parent collection. */
     bool same_level = false;
-    LISTBASE_FOREACH (CollectionParent *, parent, &data.to->runtime.parents) {
+    LISTBASE_FOREACH (CollectionParent *, parent, &data.to->runtime->parents) {
       if (data.from == parent->collection) {
         same_level = true;
       }
@@ -1371,7 +1371,7 @@ void OUTLINER_OT_collection_drop(wmOperatorType *ot)
   ot->description = "Drag to move to collection in Outliner";
   ot->idname = "OUTLINER_OT_collection_drop";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = collection_drop_invoke;
   ot->poll = ED_operator_outliner_active;
 
