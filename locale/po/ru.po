@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Beta (b'6ccdb8c06e27')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'a051f87fee73')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-16 10:45+0000\n"
-"PO-Revision-Date: 2025-06-16 09:45+0000\n"
+"POT-Creation-Date: 2025-06-23 08:33+0000\n"
+"PO-Revision-Date: 2025-06-23 08:33+0000\n"
 "Last-Translator: Fatih Alexandr <radix83@rambler.ru>\n"
 "Language-Team: Russian <https://translate.blender.org/projects/blender-ui/ui/ru/>\n"
 "Language: ru\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || (n%100>=11 && n%100<=14)? 2 : 3);\n"
-"X-Generator: Weblate 5.11"
+"X-Generator: Weblate 5.12.1"
 
 
 msgid "Shader AOV"
@@ -27956,7 +27956,7 @@ msgstr "Кадр, на котором заканчивается симуляц�
 
 
 msgid "Simulation Frame Start"
-msgstr "Кадр симуляции - Начало"
+msgstr "Первый кадр симуляции"
 
 
 msgid "Frame at which simulations start"
@@ -28092,23 +28092,23 @@ msgstr "Включить действия VR-контроллера по умо�
 
 
 msgid "Enable bindings for the Huawei controllers. Note that this may not be supported by all OpenXR runtimes"
-msgstr "Включить назначения для контроллеров Huawei. Обратите внимание, что это может поддерживаться не всеми средами выполнения OpenXR"
+msgstr "Включить назначения для контро́ллеров Huawei. Обратите внимание, что это может поддерживаться не всеми средами выполнения OpenXR"
 
 
 msgid "Enable bindings for the HP Reverb G2 controllers. Note that this may not be supported by all OpenXR runtimes"
-msgstr "Включить назначения для контроллеров HP Reverb G2. Обратите внимание, что это может поддерживаться не всеми средами выполнения OpenXR"
+msgstr "Включить назначения для контро́ллеров HP Reverb G2. Обратите внимание, что это может поддерживаться не всеми средами выполнения OpenXR"
 
 
 msgid "Enable bindings for the HTC Vive Cosmos controllers. Note that this may not be supported by all OpenXR runtimes"
-msgstr "Включить назначения для контроллеров HTC Vive Cosmos. Обратите внимание, что это может поддерживаться не всеми средами выполнения OpenXR"
+msgstr "Включить назначения для контро́ллеров HTC Vive Cosmos. Обратите внимание, что это может поддерживаться не всеми средами выполнения OpenXR"
 
 
 msgid "Enable bindings for the HTC Vive Focus 3 controllers. Note that this may not be supported by all OpenXR runtimes"
-msgstr "Включить назначения для контроллеров HTC Vive Focus 3. Обратите внимание, что это может поддерживаться не всеми средами выполнения OpenXR"
+msgstr "Включить назначения для контро́ллеров HTC Vive Focus 3. Обратите внимание, что это может поддерживаться не всеми средами выполнения OpenXR"
 
 
 msgid "Use input from gamepad (Microsoft Xbox Controller) instead of motion controllers"
-msgstr "Использовать вход с геймпада (Microsoft Xbox Controller) вместо контроллеров движения"
+msgstr "Использовать вход с геймпада (Microsoft Xbox Controller) вместо контро́ллеров движения"
 
 
 msgid "Landmark"
@@ -29958,7 +29958,7 @@ msgstr "Переопределение ID-библиотеки"
 
 
 msgid "Struct gathering all data needed by overridden linked IDs"
-msgstr "Структура, хранящая все данные, необходимые переопределённым связанным ID"
+msgstr "Структура, хранящая все данные, необходимые переопределённым связанным идентификаторам"
 
 
 msgid "Hierarchy Root ID"
@@ -32453,7 +32453,7 @@ msgstr "Элементы раскладки клавиатуры"
 
 
 msgid "Collection of keymap items"
-msgstr "Коллекция элементов раскладок клавиатуры"
+msgstr "Коллекция элементов раскладки клавиатуры"
 
 
 msgid "Collection of keymaps"
@@ -34660,10 +34660,6 @@ msgid "Bone Roll"
 msgstr "Крен кости"
 
 
-msgid "Merge"
-msgstr "Объединить"
-
-
 msgid "Pivot Point"
 msgstr "Центр трансформации"
 
@@ -34692,172 +34688,176 @@ msgid "Vertex Group Locks"
 msgstr "Блокировки групп вершин"
 
 
-msgid "Set Face Strength"
-msgstr "Установить твёрдость грани"
-
-
-msgid "Select by Face Strength"
-msgstr "Выделить по твёрдости грани"
-
-
-msgid "Hooks"
-msgstr "Крюки"
-
-
-msgid "Link/Transfer Data"
-msgstr "Связать/передать данные"
-
-
-msgid "Convert"
-msgstr "Конвертировать"
-
-
-msgid "Relations"
-msgstr "Отношения"
-
-
-msgid "Add Image"
-msgstr "Добавить изображение"
-
-
-msgid "Light Probe"
-msgstr "Зонд освещения"
-
-
-msgid "Face Data"
-msgstr "Данные граней"
-
-
-msgid "Light"
-msgstr "Свет"
-
-
-msgid "Make Single User"
-msgstr "Для одного пользователя"
-
-
-msgid "Asset"
-msgstr "Ассет"
-
-
-msgid "Mesh Select Mode"
-msgstr "Режим выделения меша"
-
-
-msgid "Quick Effects"
-msgstr "Быстрые эффекты"
-
-
-msgid "Disable Bone Options"
-msgstr "Отключить параметры костей"
-
-
-msgid "Enable Bone Options"
-msgstr "Включить параметры костей"
-
-
-msgid "Track"
-msgstr "Отслеживание"
-
-
-msgid "Toggle Bone Options"
-msgstr "Переключить опции костей"
-
-
-msgid "Apply"
-msgstr "Применить"
-
-
-msgid "Assign Material"
-msgstr "Назначить материал"
-
-
-msgid "Rigid Body"
-msgstr "Твёрдое тело"
-
-
-msgid "Propagate"
-msgstr "Распространение"
-
-
-msgid "Local View"
-msgstr "Локальный вид"
-
-
-msgid "Select More/Less"
-msgstr "Выделить больше/меньше"
-
-
-msgid "Bone Collections"
-msgstr "Коллекции костей"
-
-
-msgid "In-Betweens"
-msgstr "Промежуточные"
-
-
-msgid "Clear Transform"
-msgstr "Очистить трансформацию"
-
-
-msgid "Select Loops"
-msgstr "Выделить петли"
-
-
-msgid "Select Linked"
-msgstr "Выделить связанные"
-
-
-msgid "Select All by Trait"
-msgstr "Выделить всё по признаку"
-
-
-msgid "Select Similar"
-msgstr "Выделить по схожести"
-
-
-msgid "View Regions"
-msgstr "Области обзора"
-
-
-msgid "Align View to Active"
-msgstr "Выровнять вид по активному"
-
-
-msgid "Align View"
-msgstr "Выровнять вид"
-
-
-msgid "Navigation"
-msgstr "Навигация"
-
-
-msgid "Viewpoint"
-msgstr "Точка обзора"
+msgid "Mirror"
+msgstr "Зеркало"
 
 
 msgid "UV Mapping"
 msgstr "UV-разметка"
 
 
-msgid "Mirror"
-msgstr "Зеркало"
+msgid "Local View"
+msgstr "Локальный вид"
 
 
-msgid "Random Mask"
-msgstr "Случайная маска"
+msgid "Viewpoint"
+msgstr "Точка обзора"
 
 
-msgid "Face Sets Init"
-msgstr "Инициализация наборов граней"
+msgid "Navigation"
+msgstr "Навигация"
+
+
+msgid "Align View"
+msgstr "Выровнять вид"
+
+
+msgid "Align View to Active"
+msgstr "Выровнять вид по активному"
+
+
+msgid "View Regions"
+msgstr "Области обзора"
+
+
+msgid "Select More/Less"
+msgstr "Выделить больше/меньше"
+
+
+msgid "Select Similar"
+msgstr "Выделить по схожести"
+
+
+msgid "Select All by Trait"
+msgstr "Выделить всё по признаку"
+
+
+msgid "Select Linked"
+msgstr "Выделить связанные"
+
+
+msgid "Select Loops"
+msgstr "Выделить петли"
+
+
+msgid "Assign Material"
+msgstr "Назначить материал"
+
+
+msgid "Light"
+msgstr "Свет"
+
+
+msgid "Light Probe"
+msgstr "Зонд освещения"
+
+
+msgid "Add Image"
+msgstr "Добавить изображение"
+
+
+msgid "Relations"
+msgstr "Отношения"
+
+
+msgid "Rigid Body"
+msgstr "Твёрдое тело"
+
+
+msgid "Apply"
+msgstr "Применить"
+
+
+msgid "Track"
+msgstr "Отслеживание"
+
+
+msgid "Quick Effects"
+msgstr "Быстрые эффекты"
+
+
+msgid "Asset"
+msgstr "Ассет"
+
+
+msgid "Make Single User"
+msgstr "Для одного пользователя"
+
+
+msgid "Convert"
+msgstr "Конвертировать"
+
+
+msgid "Link/Transfer Data"
+msgstr "Связать/передать данные"
+
+
+msgid "Hooks"
+msgstr "Крюки"
+
+
+msgid "Trim/Add"
+msgstr "Обрезать/Добавить"
 
 
 msgid "Sculpt Set Pivot"
 msgstr "Установить центр трансформации скульптинга"
 
 
-msgid "Trim/Add"
-msgstr "Обрезать/Добавить"
+msgid "Face Sets Init"
+msgstr "Инициализация наборов граней"
+
+
+msgid "Random Mask"
+msgstr "Случайная маска"
+
+
+msgid "Clear Transform"
+msgstr "Очистить трансформацию"
+
+
+msgid "In-Betweens"
+msgstr "Промежуточные"
+
+
+msgid "Propagate"
+msgstr "Распространение"
+
+
+msgid "Bone Collections"
+msgstr "Коллекции костей"
+
+
+msgid "Toggle Bone Options"
+msgstr "Переключить опции костей"
+
+
+msgid "Enable Bone Options"
+msgstr "Включить параметры костей"
+
+
+msgid "Disable Bone Options"
+msgstr "Отключить параметры костей"
+
+
+msgid "Mesh Select Mode"
+msgstr "Режим выделения меша"
+
+
+msgid "Face Data"
+msgstr "Данные граней"
+
+
+msgid "Select by Face Strength"
+msgstr "Выделить по твёрдости грани"
+
+
+msgid "Set Face Strength"
+msgstr "Установить твёрдость грани"
+
+
+msgid "Merge"
+msgstr "Объединить"
 
 
 msgid "Keyframe Insert Pie"
@@ -43964,7 +43964,7 @@ msgstr "Влияние алгоритма стабилизации на вращ
 
 
 msgid "Scale Influence"
-msgstr "Влияние на Масштаб"
+msgstr "Влияние на масштаб"
 
 
 msgid "Influence of stabilization algorithm on footage scale"
@@ -44629,7 +44629,7 @@ msgstr "Конвертировать предумножение"
 
 
 msgid "(Deprecated: Use Straight Alpha input instead.)"
-msgstr "(Устарело: вместо этого используйте ввод \"Чистый альфа-канал (straight alpha)\".)"
+msgstr "(Устарело: вместо этого используйте ввод \"Прямой альфа-канал (straight alpha)\".)"
 
 
 msgid "Smooth away jagged edges"
@@ -46290,7 +46290,7 @@ msgstr "Входной файл изображения или видео"
 
 
 msgid "Straight Alpha Output"
-msgstr "Вывод с чистым альфа-каналом"
+msgstr "Вывод с прямым альфа-каналом"
 
 
 msgid "Put node output buffer to straight alpha instead of premultiplied"
@@ -47200,7 +47200,7 @@ msgstr "Конвертировать прямой альфа-канал в пр�
 
 
 msgid "To Straight"
-msgstr "В чистый альфа-канал"
+msgstr "В прямой альфа-канал"
 
 
 msgid "Convert premultiplied to straight"
@@ -49266,7 +49266,7 @@ msgstr "Импортировать строку из текстового фай
 
 
 msgid "Import VDB"
-msgstr "Импорт VDB"
+msgstr "Импортировать VDB"
 
 
 msgid "Import volume data from a .vdb file"
@@ -56261,7 +56261,7 @@ msgstr " Прикрепляет конечность IK к FK конечност
 
 msgctxt "Operator"
 msgid "IK2FK"
-msgstr "IK к FK"
+msgstr "IK->FK"
 
 
 msgctxt "Operator"
@@ -61442,7 +61442,7 @@ msgstr "Добавить новый объект кривых на основе 
 
 msgctxt "Operator"
 msgid "Convert Curves to Particle System"
-msgstr "Конвертировать кривых в систему частиц"
+msgstr "Конвертировать кривые в систему частиц"
 
 
 msgid "Add a new or update an existing hair particle system on the surface object"
@@ -65670,7 +65670,7 @@ msgstr "Копировать F-модификаторы"
 
 
 msgid "Copy the F-Modifier(s) of the active F-Curve"
-msgstr "Копировать F-модификаторы активной F-кривой"
+msgstr "Копировать F-модификатор(ы) активной F-кривой"
 
 
 msgctxt "Operator"
@@ -65948,10 +65948,6 @@ msgstr "От правого"
 
 msgid "The factor to scale keys with"
 msgstr "Коэффициент масштабирования ключей"
-
-
-msgid "Are handles tested individually against the selection criteria"
-msgstr "Протестированы ли все рукоятки по критерию отбора"
 
 
 msgid "Select Curves"
@@ -66399,7 +66395,7 @@ msgstr "Удалить кадр(ы) Grease Pencil"
 
 
 msgid "Method used for deleting Grease Pencil frames"
-msgstr "Метод, используемый для удаления рамок Grease Pencil"
+msgstr "Метод, используемый для удаления кадров Grease Pencil"
 
 
 msgid "Deletes current frame in the active layer"
@@ -72680,7 +72676,7 @@ msgstr "Добавить F-модификатор выбранного типа 
 
 
 msgid "Copy the F-Modifier(s) of the active NLA-Strip"
-msgstr "Копировать F-модификаторы активной НЛА-дорожке"
+msgstr "Копировать F-модификатор(ы) активной НЛА-дорожки"
 
 
 msgid "Add copied F-Modifiers to the selected NLA-Strips"
@@ -74744,10 +74740,6 @@ msgid "Curve from Mesh or Text objects"
 msgstr "Кривая из меш- или текстовых объектов"
 
 
-msgid "Mesh from Curve, Surface, Metaball, or Text objects"
-msgstr "Меш из объектов кривой, поверхности, метасферы или текста"
-
-
 msgid "Curves from evaluated curve data"
 msgstr "Кривые из оценённых данных кривых"
 
@@ -75976,7 +75968,7 @@ msgstr "Дублировать модификатор на той же пози�
 
 msgctxt "Operator"
 msgid "Copy Modifier to Selected"
-msgstr "Скопировать модификаторы на выделение"
+msgstr "Копировать модификаторы на выделение"
 
 
 msgid "Copy the modifier from the active object to all selected objects"
@@ -78342,7 +78334,7 @@ msgstr "Новый ID"
 
 
 msgid "New ID to remap all selected IDs' users to"
-msgstr "Новый ID для ремаппинга пользователей выделенных ID"
+msgstr "Новый ID для переназначения пользователей выделенных ID"
 
 
 msgid "Old ID"
@@ -83448,7 +83440,7 @@ msgstr "Тип эффекта дорожки"
 
 msgctxt "Sequence"
 msgid "Crossfade"
-msgstr "Перекрёстное затухание"
+msgstr "Перекрёстное наложение"
 
 
 msgid "Fade out of one video, fading into another"
@@ -83493,11 +83485,11 @@ msgstr "Наложить альфа-канал \"под\" другим виде�
 
 msgctxt "Sequence"
 msgid "Gamma Crossfade"
-msgstr "Гамма перекрёстное затухание"
+msgstr "Гамма-перекрёстное наложение"
 
 
 msgid "Crossfade with color correction"
-msgstr "Перекрёстное затухание с цветокоррекцией"
+msgstr "Перекрёстное наложение с цветокоррекцией"
 
 
 msgctxt "Sequence"
@@ -88636,7 +88628,7 @@ msgstr "Время, на которое затвор камеры закрыт"
 
 
 msgid "Shutter Open"
-msgstr "Затвор открыт"
+msgstr "Затвор - Открыт"
 
 
 msgid "Time at which the shutter is open"
@@ -91708,7 +91700,7 @@ msgstr "Захват XR-навигации"
 
 
 msgid "Navigate the VR scene by grabbing with controllers"
-msgstr "Перемещаться по сцене виртуальной реальности с помощью контроллеров"
+msgstr "Перемещаться по сцене виртуальной реальности с помощью контро́ллеров"
 
 
 msgid "Prevent changes to viewer location"
@@ -93713,7 +93705,7 @@ msgstr "Устройства рендера Cycles"
 
 
 msgid "Display Graphics"
-msgstr "Отображать графы"
+msgstr "Графическое отображение"
 
 
 msgid "Memory & Limits"
@@ -95762,11 +95754,11 @@ msgstr "Максимальный объём используемой памят�
 
 
 msgid "Undo Steps"
-msgstr "Шаги отмены"
+msgstr "Шагов отмены действий"
 
 
 msgid "Number of undo steps available (smaller values conserve memory)"
-msgstr "Количество отменяемых действий (чем меньше, тем больше экономится память)"
+msgstr "Количество доступных шагов отмены действий (чем меньше, тем больше экономится память)"
 
 
 msgid "Channel Group Colors"
@@ -95970,7 +95962,7 @@ msgstr "Рисовать F-кривые, используя сглаживани
 
 
 msgid "Global Undo"
-msgstr "Глобальная отмена"
+msgstr "Глобальная отмена действий"
 
 
 msgid "Global undo works by keeping a full copy of the file itself in memory, so takes extra memory"
@@ -96170,11 +96162,11 @@ msgstr "Обеспечивает новую визуализацию совме�
 
 
 msgid "Undo Legacy"
-msgstr "Старая система отмены"
+msgstr "Старая система отмены действий"
 
 
 msgid "Use legacy undo (slower than the new default one, but may be more stable in some cases)"
-msgstr "Использовать старую систему отмены (медленнее, чем новая, но в некоторых случаях более стабильная)"
+msgstr "Использовать старую систему отмены действий (медленнее, чем новая, но в некоторых случаях более стабильная)"
 
 
 msgid "Enable viewport debugging options for developers in the overlays pop-over"
@@ -97408,7 +97400,7 @@ msgstr "Разрешить онлайн-доступ"
 
 
 msgid "Allow Blender to access the internet. Add-ons that follow this setting will only connect to the internet if enabled. However, Blender cannot prevent third-party add-ons from violating this rule."
-msgstr "Разрешить Blender доступ к интернету. Аддоны, следующие этой настройке, будут подключаться к интернету только в том случае, если они включены. Однако Blender не может помешать сторонним аддонам нарушать это правило."
+msgstr "Разрешить Blender доступ к интернету. Аддоны, следующие этой настройке, будут подключаться к интернету только в том случае, если эта опция включена. Однако Blender не может помешать сторонним аддонам обходить это правило."
 
 
 msgid "Overlay Smooth Wires"
@@ -97689,10 +97681,6 @@ msgstr "Язык, используемый для перевода"
 
 msgid "Automatic (Automatic)"
 msgstr "Автоматически (автоматически)"
-
-
-msgid "Automatically choose system's defined language if available, or fall-back to English"
-msgstr "Автоматически выбирать системный язык (если задан) или использовать английский по умолчанию"
 
 
 msgid "HDRI Preview Size"
@@ -98849,7 +98837,7 @@ msgstr "Поиск по регулярному выражению"
 
 
 msgid "Use regular expressions to match text in the 'Find' field"
-msgstr "Использовать регулярные выражения для поиска соответствий с строкой поиска"
+msgstr "Использовать регулярные выражения для поиска соответствий со строкой поиска"
 
 
 msgid "Form of curves"
@@ -101195,7 +101183,7 @@ msgstr "Потомок контро́ллера"
 
 
 msgid "The glue bone becomes a child of the control bone"
-msgstr "Склеивающая кость становится потомком кости-контро́ллера"
+msgstr "Склеивающая кость становится потомком управляющей кости"
 
 
 msgid "Mirror Of Control"
@@ -101211,7 +101199,7 @@ msgstr "Зеркалировать с родителями"
 
 
 msgid "The glue bone keeps its parent, but uses Copy Transforms to group both local and parent induced motion of the control into local space"
-msgstr "Склеивающая кость сохранит своё иерархическое положение, но будет использовать копирование трансформаций для группировки движения (как локального, так и вызванного родителем-контроллером) в локальном пространстве"
+msgstr "Склеивающая кость сохранит своё иерархическое положение, но будет использовать копирование трансформаций для группировки движения (как локального, так и вызванного родителем-контро́ллером) в локальном пространстве"
 
 
 msgid "Deformation Bridge"
@@ -101555,7 +101543,7 @@ msgstr "Тип этого региона"
 
 
 msgid "View2D"
-msgstr "2D-вид"
+msgstr "2D-Вид"
 
 
 msgid "2D view of the region"
@@ -108066,19 +108054,19 @@ msgstr "Индекс слота материала этой кривой"
 
 
 msgid "Order U"
-msgstr "Упорядочить U"
+msgstr "Порядок по U"
 
 
 msgid "NURBS order in the U direction. Higher values make each point influence a greater area, but have worse performance."
-msgstr "NURBS-упорядочение в направлении U. Более высокие значения заставляют каждую точку влиять на большую область, но имеют худшую производительность."
+msgstr "NURBS-упоря́дочение в направлении U. Более высокие значения заставляют каждую точку влиять на большую область, но имеют худшую производительность."
 
 
 msgid "Order V"
-msgstr "Порядок V"
+msgstr "Порядок по V"
 
 
 msgid "NURBS order in the V direction. Higher values make each point influence a greater area, but have worse performance."
-msgstr "NURBS-упорядочение в направлении V. Более высокие значения заставляют каждую точку влиять на большую область, но имеют худшую производительность."
+msgstr "NURBS-упоря́дочение в направлении V. Более высокие значения заставляют каждую точку влиять на большую область, но имеют худшую производительность."
 
 
 msgid "Points U"
@@ -108645,11 +108633,11 @@ msgstr "Генерируемый цвет"
 
 
 msgid "Crossfade Strip"
-msgstr "Дорожка перекрёстного затухания"
+msgstr "Дорожка перекрёстного наложения"
 
 
 msgid "Gamma Crossfade Strip"
-msgstr "Дорожка гамма-перекрёстного затухания"
+msgstr "Дорожка гамма-перекрёстного наложения"
 
 
 msgid "Gaussian Blur Strip"
@@ -114474,7 +114462,7 @@ msgstr "Сделать освещение фиксированным и не с�
 
 
 msgid "Show VR Controllers"
-msgstr "Отображать VR-контроллеры"
+msgstr "Отображать VR-контро́ллеры"
 
 
 msgid "Show Landmarks"
@@ -115648,7 +115636,7 @@ msgstr "Стиль отрисовки контроллера"
 
 
 msgid "Style to use when drawing VR controllers"
-msgstr "Стиль, используемый при отображении контроллеров виртуальной реальности"
+msgstr "Стиль, используемый при отображении контро́ллеров виртуальной реальности"
 
 
 msgctxt "Color"
@@ -115688,11 +115676,11 @@ msgstr "Отрисовывать светлый контроллер с лучо
 
 
 msgid "Show Controllers"
-msgstr "Отобразить контроллеры"
+msgstr "Отобразить контро́ллеры"
 
 
 msgid "Show VR controllers (requires VR actions for controller poses)"
-msgstr "Отобразить VR-контроллеры (требуются действия виртуальной реальности для поз контроллера)"
+msgstr "Отобразить VR-контро́ллеры (требуются действия виртуальной реальности для поз контро́ллера)"
 
 
 msgid "Show Custom Overlays"
@@ -118664,7 +118652,7 @@ msgstr "Универсальный гизмо - Возможно перетас�
 
 msgctxt "WindowManager"
 msgid "Generic Gizmo Select"
-msgstr "Выделить универсальный гизмо"
+msgstr "Универсальный гизмо - Выделить"
 
 
 msgctxt "WindowManager"
@@ -119039,7 +119027,7 @@ msgstr "Для установки и обновления онлайн-расш�
 
 
 msgid "You can adjust this later from \"System\" preferences."
-msgstr "Вы можете настроить это позже в настройках \"Система\"."
+msgstr "Вы можете настроить это позже в настройках \"Системы\"."
 
 
 msgctxt "Operator"
@@ -119885,7 +119873,11 @@ msgstr "Заменить связи"
 
 
 msgid "This operator is removed due to the changes of node menus."
-msgstr "Этот оператор удалён в связи с изменениями в меню узлов."
+msgstr "Этот оператор удалён в связи с изменениями в меню нод."
+
+
+msgid "A native implementation of the function is expected in the future."
+msgstr "В будущем ожидается реализация этой функции нативно."
 
 
 msgctxt "Operator"
@@ -119906,6 +119898,10 @@ msgstr "Сброс нод в рамке"
 msgctxt "Operator"
 msgid "Reset Node"
 msgstr "Сброс ноды"
+
+
+msgid "Use Shaders"
+msgstr "Использовать шейдеры"
 
 
 msgid "Use Geometry Nodes"
@@ -120004,6 +120000,10 @@ msgid "No matching images found"
 msgstr "Соответствующие изображения не найдены"
 
 
+msgid "No file chosen"
+msgstr "Файл не выбран"
+
+
 msgid "{} does not exist"
 msgstr "{} не существует"
 
@@ -120020,6 +120020,10 @@ msgid "Deleted {} nodes"
 msgstr "Удалено {} нод"
 
 
+msgid "Deleted 1 node"
+msgstr "Удалена 1 нода"
+
+
 msgid "Successfully copied attributes from {} to {}"
 msgstr "Атрибуты успешно скопированы из {} в {}"
 
@@ -120034,6 +120038,10 @@ msgstr "Неподдерживаемый тип дерева узлов"
 
 msgid "Please select only 1 frame to reset"
 msgstr "Пожалуйста, выберите только 1 кадр для сброса"
+
+
+msgid "No valid node(s) in selection"
+msgstr "В выделении нет допустимой(-ых) нод(ы)"
 
 
 msgid "Successfully reset {}"
@@ -120080,6 +120088,10 @@ msgid "Viewer image not found."
 msgstr "Изображение предпросмотра не найдено."
 
 
+msgid "Current editor is not a node editor."
+msgstr "Текущий редактор не является редактором нод."
+
+
 msgid "No node tree was found in the current node editor."
 msgstr "В текущем редакторе нод не найдено дерево узлов."
 
@@ -120094,6 +120106,10 @@ msgstr "Текущее дерево нод не содержит ни одной
 
 msgid "No active node."
 msgstr "Нет активной ноды."
+
+
+msgid "Current node has no visible outputs."
+msgstr "Текущая нода не имеет видимых выходов."
 
 
 msgid "At least one node must be selected."
@@ -120112,13 +120128,36 @@ msgstr ""
 "Должен быть одним из {:s}."
 
 
+msgid "Active node should not be of type {:s}."
+msgstr "Активная нода не должна иметь тип {:s}."
+
+
 msgid "At least {:d} nodes must be selected."
 msgstr "Необходимо выделить не менее {:d} нод."
+
+
+msgid "Active node should be of type {:s}."
+msgstr "Активная нода должна иметь тип {:s}."
 
 
 msgctxt "Operator"
 msgid "Select Pose Bones"
 msgstr "Выделить кости позы"
+
+
+msgctxt "Operator"
+msgid "Deselect Pose Bones"
+msgstr "Снять выделение с костей позы"
+
+
+msgctxt "Operator"
+msgid "Apply Pose"
+msgstr "Применить позу"
+
+
+msgctxt "Operator"
+msgid "Apply Pose Flipped"
+msgstr "Применить отражённую позу"
 
 
 msgctxt "Operator"
@@ -120136,12 +120175,26 @@ msgid "Remove Selected Bones"
 msgstr "Удалить выделенные кости"
 
 
+msgctxt "Operator"
+msgid "Blend Pose"
+msgstr "Смешать позу"
+
+
+msgctxt "Operator"
+msgid "Blend Pose Flipped"
+msgstr "Смешать отражённую позу"
+
+
 msgid "Pose Asset copied, use Paste As New Asset in any Asset Browser to paste"
 msgstr "Ассет для поз скопирован, используйте \"вставить как новый ассет\" в любом браузере ассетов, чтобы вставить"
 
 
 msgid "Pasted %d assets"
 msgstr "Вставлено %d ассетов"
+
+
+msgid "Deselect those bones that are used in this pose"
+msgstr "Снять выделение с тех костей, которые используются в этой позе"
 
 
 msgid "Converted %d poses to pose assets"
@@ -120194,6 +120247,10 @@ msgstr "Действие %r не является устаревшей библ�
 
 msgid "Unable to convert to pose assets"
 msgstr "Невозможно преобразовать в ассеты позы"
+
+
+msgid "Active object has no pose library Action"
+msgstr "Активный объект не содержит никаких действий в библиотеке поз"
 
 
 msgid "Selected bones from %s"
@@ -120267,6 +120324,22 @@ msgid "This feature set requires Blender {:s} or newer to work properly."
 msgstr "Для корректной работы этого набора функций требуется Blender {:s} или более новая версия."
 
 
+msgid "The feature set archive must contain one base directory"
+msgstr "Архив набора функций должен содержать одну основную папку"
+
+
+msgid "The feature set archive has no rigs or metarigs, or is missing __init__.py"
+msgstr "В архиве набора функций нет ригов или метаригов, или в нём отсутствует __init__.py"
+
+
+msgid "The feature set archive base directory name is not a valid identifier: '{:s}'"
+msgstr "Имя основной папки архива набора функций не является допустимым в качестве идентификатора: '{:s}'"
+
+
+msgid "The name '{:s}' is not allowed for feature sets"
+msgstr "Имя '{:s}' является недопустимым для наборов функций"
+
+
 msgid "Feature set directory already exists: '{:s}'"
 msgstr "Каталог набора функций уже существует: '{:s}'"
 
@@ -120316,8 +120389,22 @@ msgid "Copy Only Parameters"
 msgstr "Копировать только параметры"
 
 
+msgctxt "Operator"
+msgid "Copy Type & Parameters"
+msgstr "Копировать тип и параметры"
+
+
+msgctxt "Operator"
+msgid "Mirror Type & Parameters"
+msgstr "Зеркально отразить тип и параметры"
+
+
 msgid "No suitable selected bones to copy to"
 msgstr "Нет подходящих выделенных костей, на которые можно что-то скопировать"
+
+
+msgid "Mirrored parameters of {:d} bones"
+msgstr "Зеркально отражены параметры {:d} костей"
 
 
 msgid "Copied {:s} parameters to {:d} bones"
@@ -120340,20 +120427,88 @@ msgid "Master Control"
 msgstr "Базовый контроль"
 
 
+msgid "Deform Bone"
+msgstr "Кость деформации"
+
+
+msgid "Pivot Control"
+msgstr "Контроллер вращения"
+
+
+msgid "This rig type does not add the ORG prefix."
+msgstr "Этот тип рига не добавляет префикс ORG (оригинальные кости)."
+
+
+msgid "Manually add ORG, MCH or DEF as needed."
+msgstr "При необходимости вручную добавьте префикс ORG, MCH или DEF (оригинальные кости, механизмы или деформационные)."
+
+
+msgid "Constraint names have special meanings."
+msgstr "Имена ограничителей имеют особое значение."
+
+
+msgid "'CTRL:...' constraints are moved to the control bone."
+msgstr "Ограничители 'CTRL:...' переносятся на управляющую кость."
+
+
+msgid "'DEF:...' constraints are moved to the deform bone."
+msgstr "Ограничители 'DEF:...' переносятся на деформирующую кость."
+
+
+msgid "Convergence Bone"
+msgstr "Конвергенция костей"
+
+
 msgid "Eyeball And Iris Deforms"
 msgstr "Деформации глазного яблока и радужной оболочки"
+
+
+msgid "Follow X"
+msgstr "Следить по X"
+
+
+msgid "Follow Z"
+msgstr "Следить по Z"
+
+
+msgid "Eyelids Follow{}"
+msgstr "Веки следуют за{}"
+
+
+msgid "Eyelids Attached{}"
+msgstr "Веки прикреплены{}"
 
 
 msgid "This monolithic face rig is deprecated."
 msgstr "Эта монолитный лицевой риг устарел."
 
 
+msgid "Custom IK Pivot"
+msgstr "Пользовательский пивот IK"
+
+
+msgid "Auto Align End"
+msgstr "Авто-выравнивание конца"
+
+
 msgid "Auto Align {:s}"
 msgstr "Автовыравнивание {:s}"
 
 
+msgid "A straight line rest shape works best."
+msgstr "Лучше всего подойдет прямая поза покоя."
+
+
+msgid "IK->FK ({:s})"
+msgstr "IK->FK ({:s})"
+
+
 msgid "Bend rotation axis:"
 msgstr "Ось вращения изгиба:"
+
+
+msgid "IK Control"
+msgstr "IK Контро́ллер"
 
 
 msgid "Primary rotation axis:"
@@ -120364,12 +120519,24 @@ msgid "Extra FK Controls"
 msgstr "Доп. FK контроллеры"
 
 
+msgid "Generate Deform Bone"
+msgstr "Генерировать кость деформации"
+
+
 msgid "All constraints are moved to the control bone."
 msgstr "Все ограничители переносятся на управляющую кость."
 
 
 msgid "Use Scale:"
 msgstr "Использовать масштабирование:"
+
+
+msgid "Connect Mirror:"
+msgstr "Соединить симметрию:"
+
+
+msgid "Connect Next:"
+msgstr "Соединить далее:"
 
 
 msgid "Sharpen:"
@@ -120384,6 +120551,14 @@ msgid "Propagate:"
 msgstr "Распространить:"
 
 
+msgid "To Controls"
+msgstr "Для контро́ллеров"
+
+
+msgid "Generate Control"
+msgstr "Генерировать контро́ллер"
+
+
 msgid "Note: this combined rig is deprecated."
 msgstr "Примечание: этот комбинированный риг устарел."
 
@@ -120396,12 +120571,29 @@ msgid "Rig Name"
 msgstr "Имя рига"
 
 
+msgid "Overwrite Existing:"
+msgstr "Перезаписать существующие:"
+
+
 msgid "Target Rig"
 msgstr "Целевой риг"
 
 
+msgid "Rig UI Script"
+msgstr "Скрипт ПИ рига"
+
+
 msgid "Run Script"
 msgstr "Запустить скрипт"
+
+
+msgctxt "Operator"
+msgid "Add sample"
+msgstr "Добавить образец"
+
+
+msgid "Unified select/active colors"
+msgstr "Унифицировать цвета"
 
 
 msgctxt "Operator"
@@ -120419,8 +120611,26 @@ msgid "Add Standard"
 msgstr "Добавить стандартный"
 
 
+msgid "Rig type"
+msgstr "Тип рига"
+
+
+msgid "This metarig requires upgrading to Bone Collections"
+msgstr "Этому метаригу требуется обновление до коллекций костей"
+
+
+msgctxt "Operator"
+msgid "Upgrade Metarig"
+msgstr "Обновить метариг"
+
+
 msgid "WARNING: This metarig contains deprecated Rigify rig-types and cannot be upgraded automatically."
 msgstr "ВНИМАНИЕ: Этот метариг содержит устаревшие типы ригов Rigify и не может быть обновлён автоматически."
+
+
+msgctxt "Operator"
+msgid "Re-Generate Rig"
+msgstr "Заново сгенерировать риг"
 
 
 msgctxt "Operator"
@@ -120428,13 +120638,91 @@ msgid "Generate Rig"
 msgstr "Сгенерировать риг"
 
 
+msgid "Click a button to select a collection:"
+msgstr "Нажмите кнопку, чтобы выделить коллекцию:"
+
+
+msgid "Permanently hidden collections:"
+msgstr "Постоянно скрытые коллекции:"
+
+
+msgctxt "Operator"
+msgid "IK2FK Pose"
+msgstr "Поза IK->FK"
+
+
+msgctxt "Operator"
+msgid "FK2IK Pose"
+msgstr "Поза FK->IK"
+
+
+msgctxt "Operator"
+msgid "IK2FK Action"
+msgstr "Действие IK->FK"
+
+
+msgctxt "Operator"
+msgid "FK2IK Action"
+msgstr "Действие FK->IK"
+
+
+msgctxt "Operator"
+msgid "Switch to pole"
+msgstr "Переключить на колено"
+
+
 msgctxt "Operator"
 msgid "Switch to rotation"
 msgstr "Переключить на вращение"
 
 
+msgid "Incorrect armature..."
+msgstr "Неправильная арматура..."
+
+
+msgid "No bone collections have UI buttons assigned - please check the Bone Collections UI sub-panel"
+msgstr "Ни одна коллекция костей не имеет назначенных кнопок в интерфейсе — проверьте подпанель \"ПИ коллекции костей (bone collections UI)\""
+
+
+msgid "No issues detected"
+msgstr "Проблем не обнаружено"
+
+
+msgid "You must select a rig type to create a sample of"
+msgstr "Необходимо выбрать тип рига, на основе которого нужно создать образец"
+
+
+msgctxt "Operator"
+msgid "Encode Metarig"
+msgstr "Кодировать метариг"
+
+
+msgctxt "Operator"
+msgid "Encode Metarig Sample"
+msgstr "Кодировать образец метарига"
+
+
 msgid "This metarig contains old rig-types that can be automatically upgraded to benefit from new rigify features."
 msgstr "Этот метариг содержит старые типы ригов, которые можно автоматически модернизировать для использования новых функций rigify."
+
+
+msgid "Click to assign the button here:"
+msgstr "Нажмите здесь, чтобы назначить кнопку:"
+
+
+msgctxt "Operator"
+msgid "Encode Metarig to Python"
+msgstr "Кодировать метариг в Python"
+
+
+msgctxt "Operator"
+msgid "Encode Sample to Python"
+msgstr "Кодировать образец в Python"
+
+
+msgctxt "Operator"
+msgid "Encode Mesh Widget to Python"
+msgstr "Кодировать меш-виджет в Python"
 
 
 msgctxt "Operator"
@@ -120442,12 +120730,41 @@ msgid "Clear IK Action"
 msgstr "Очистить IK действие"
 
 
+msgctxt "Operator"
+msgid "Clear FK Action"
+msgstr "Очистить действие FK"
+
+
+msgid "Metarig written to text datablock {:s}"
+msgstr "Метариг записан в текстовый блок данных {:s}"
+
+
+msgid "Metarig Sample written to text datablock {:s}"
+msgstr "Образец метарига записан в текстовый блок данных {:s}"
+
+
+msgid "({:s} on bone {:s})"
+msgstr "({:s} на кости {:s})"
+
+
+msgid "This metarig uses the old face rig."
+msgstr "В этом метариге используется старый лицевой риг."
+
+
 msgid "The '{:s}' collection will be added upon generation"
 msgstr "Коллекция '{:s}' будет добавлена при генерации"
 
 
+msgid "No options"
+msgstr "Нет вариантов"
+
+
 msgid "Options:"
 msgstr "Опции:"
+
+
+msgid "Incorrect armature for type '{:s}'"
+msgstr "Неправильная арматура для типа '{:s}'"
 
 
 msgid "Generation has thrown an exception: "
@@ -120469,6 +120786,14 @@ msgstr "Действие"
 
 msgid "Use the plus button to add list entries"
 msgstr "Используйте кнопку \"плюс\", чтобы добавить в список записи"
+
+
+msgid "Collection {:s} has the same uid {:d} as {:s}"
+msgstr "Коллекция {:s} имеет тот же uid {:d}, что и {:s}"
+
+
+msgid "Bone {:s} has a broken reference to {:s} collection '{:s}'"
+msgstr "Кость {:s} имеет неработающую ссылку '{:s}' на коллекцию {:s}"
 
 
 msgid "WARNING: preferences are lost when add-on is disabled, be sure to use \"Save Persistent\" if you want to keep your settings!"
@@ -120515,6 +120840,11 @@ msgstr "Измените настройки аддона перевода инт
 
 
 msgctxt "Operator"
+msgid "Init Settings"
+msgstr "Настройки инициализации"
+
+
+msgctxt "Operator"
 msgid "Reset Settings"
 msgstr "Сбросить настройки"
 
@@ -120522,6 +120852,11 @@ msgstr "Сбросить настройки"
 msgctxt "Operator"
 msgid "Update Work Repository"
 msgstr "Обновить рабочий репозиторий"
+
+
+msgctxt "Operator"
+msgid "Clean up Work Repository"
+msgstr "Очистить рабочий репозиторий"
 
 
 msgctxt "Operator"
@@ -120562,8 +120897,28 @@ msgid "Tracking"
 msgstr "Трекинг"
 
 
+msgid "Positional"
+msgstr "Позиционно"
+
+
+msgid "Passthrough"
+msgstr "Внешняя камера"
+
+
+msgid "Controllers"
+msgstr "Контро́ллеры"
+
+
 msgid "Custom Overlays"
 msgstr "Пользовательские наложения"
+
+
+msgid "Object Extras"
+msgstr "Дополнительные объекты"
+
+
+msgid "Controller Style"
+msgstr "Стиль контро́ллера"
 
 
 msgctxt "Camera"
@@ -120571,8 +120926,44 @@ msgid "End"
 msgstr "Конец"
 
 
+msgid "Gamepad"
+msgstr "Геймпад"
+
+
+msgid "HP Reverb G2"
+msgstr "HP Reverb G2"
+
+
+msgid "HTC Vive Cosmos"
+msgstr "HTC Vive Cosmos"
+
+
+msgid "HTC Vive Focus"
+msgstr "HTC Vive Focus"
+
+
+msgid "Huawei"
+msgstr "Huawei"
+
+
+msgid "Note:"
+msgstr "Примечание:"
+
+
+msgid "Settings here may have a significant"
+msgstr "Данные настройки могут оказывать существенное"
+
+
 msgid "performance impact!"
 msgstr "влияние на производительность!"
+
+
+msgid "Start VR Session"
+msgstr "Начать сеанс VR"
+
+
+msgid "Stop VR Session"
+msgstr "Остановить сеанс VR"
 
 
 msgid "* Missing Paths *"
@@ -120605,6 +120996,18 @@ msgstr "Добавить новый"
 
 msgid "Search by Key-Binding"
 msgstr "Поиск по сочетанию клавиш"
+
+
+msgid "(Unassigned)"
+msgstr "(Неназначенные)"
+
+
+msgid "{:s} (unavailable)"
+msgstr "{:s} (недоступно)"
+
+
+msgid "{:s} (Global)"
+msgstr "{:s} (Глобально)"
 
 
 msgctxt "Operator"
@@ -120652,6 +121055,10 @@ msgid "Removed {:d} of {:d} bone collections"
 msgstr "Удалено {:d} из {:d} коллекций костей"
 
 
+msgid "Nothing to bake"
+msgstr "Нечего запекать"
+
+
 msgid "Complete report available on '{:s}' text datablock"
 msgstr "Полный отчёт доступен в текстовом блоке данных '{:s}'"
 
@@ -120664,6 +121071,10 @@ msgid "No selected bones to copy to"
 msgstr "Нет выделенных костей, на которые можно что-то скопировать"
 
 
+msgid "Bone colors were synced; for {:d} bones this will not be visible due to pose bone color overrides"
+msgstr "Цвета костей были синхронизированы; для {:d} костей это не будет заметно из-за переопределений цвета позовых костей"
+
+
 msgid "None of the bone collections is marked 'solo'"
 msgstr "Ни одна из коллекций костей не имеет маркировки 'соло'"
 
@@ -120672,8 +121083,32 @@ msgid "All bone collections are in use"
 msgstr "Все коллекции костей находятся в использовании"
 
 
+msgid "An action slot can only be created when an action is assigned"
+msgstr "Слот действия может быть создан только тогда, когда назначено действие"
+
+
 msgid "Action slots are only supported by layered Actions. Upgrade this Action first"
 msgstr "Слоты действий поддерживаются только послойными действиями. Сначала обновите это действие"
+
+
+msgid "Creating a new Slot is not possible on a linked Action"
+msgstr "Создание нового слота в связанном действии невозможно"
+
+
+msgid "This data-block has no Action slot assigned"
+msgstr "Этот блок данных не имеет назначенного слота действия"
+
+
+msgid "No Action slot is assigned, so there is nothing to un-assign"
+msgstr "Слот действия не назначен, поэтому отменять назначение не для чего"
+
+
+msgid "Go to pose mode to copy pose bone colors"
+msgstr "Перейдите в режим позы, чтобы скопировать цвета позовых костей"
+
+
+msgid "Cannot do anything in mode {!r}"
+msgstr "В режиме {!r} ничего сделать нельзя"
 
 
 msgid "Could not find material or light using Shader Node Tree - {:s}"
@@ -120736,8 +121171,20 @@ msgid "The clipboard does not contain a Selection Set"
 msgstr "Буфер обмена не содержит набор выделения"
 
 
+msgid "Identified {:d} problematic tracks"
+msgstr "Выявлено {:d} проблемных треков"
+
+
+msgid "No usable tracks selected"
+msgstr "Не выделено ни одного пригодного для использования трека"
+
+
 msgid "Motion Tracking constraint to be converted not found"
 msgstr "Ограничитель отслеживания движения, подлежащий преобразованию, не найден"
+
+
+msgid "Movie clip to use tracking data from isn't set"
+msgstr "Не установлен видеофрагмент, из которого будут использоваться данные отслеживания"
 
 
 msgid "Motion Tracking object not found"
@@ -120764,6 +121211,10 @@ msgid "No active camera in the scene"
 msgstr "В сцене нет активной камеры"
 
 
+msgid "Unexpected modifier type: "
+msgstr "Неожиданный тип модификатора: "
+
+
 msgid "Target object not specified"
 msgstr "Целевой объект не указан"
 
@@ -120780,12 +121231,24 @@ msgid "No layer found"
 msgstr "Слой не найден"
 
 
+msgid "Layer is already added as a mask"
+msgstr "Слой уже добавлен в качестве маски"
+
+
+msgid "Image path not set"
+msgstr "Путь к изображению не установлен"
+
+
 msgid "Image path {!r} not found, image may be packed or unsaved"
 msgstr "Путь к изображению {!r} не найден, изображение может быть упаковано или несохранено"
 
 
 msgid "Image is packed, unpack before editing"
 msgstr "Изображение запаковано, распакуйте перед редактированием"
+
+
+msgid "Could not make new image"
+msgstr "Не удалось создать новое изображение"
 
 
 msgid "Could not find image '{:s}'"
@@ -120805,7 +121268,23 @@ msgstr "Добавлено {:d} изображений-плоскостей"
 
 
 msgid "{:d} image(s) converted to mesh plane(s)"
-msgstr "{:d} изображение(-я) преобразовано(-ы) в меш-плоскость(и)"
+msgstr "{:d} изображение(-я, -ий) преобразовано(-ы) в меш-плоскость(-и)"
+
+
+msgid "Cannot generate materials for unknown {:s} render engine"
+msgstr "Невозможно сгенерировать материалы для неизвестного движка рендеринга {:s}"
+
+
+msgid "Generating Cycles/EEVEE compatible material, but won't be visible with {:s} engine"
+msgstr "Генерация материала, совместимого с Cycles/EEVEE, но он не будет виден с движком {:s}"
+
+
+msgid "Please select at least one image"
+msgstr "Выделите хотя бы одно изображение"
+
+
+msgid "No images converted"
+msgstr "Ни одно изображение не было преобразовано"
 
 
 msgid "{:s} is not supported"
@@ -120824,6 +121303,10 @@ msgid "{:d} duplicates found in {:d} mesh(es), mirror may be incomplete"
 msgstr "Найдено {:d} дубликатов в {:d} меше(-ах), зеркалирование может быть неполным"
 
 
+msgid "Assigned shortcut {:d} to {:s}"
+msgstr "Сочетание клавиш {:d} назначено для {:s}"
+
+
 msgid "Only boolean input sockets are supported"
 msgstr "Поддерживаются только логические входные сокеты"
 
@@ -120832,8 +121315,12 @@ msgid "Socket must be in a panel"
 msgstr "Сокет должен быть на панели"
 
 
+msgid "Select a node to assign a shortcut"
+msgstr "Выделите ноду, чтобы назначить сочетание клавиш"
+
+
 msgid "Unable to set shortcut, selected node is not a viewer node or does not support viewing"
-msgstr "Невозможно установить сочетание клавиш, выбранная нода не является узлом просмотра или не поддерживает просмотр"
+msgstr "Невозможно установить сочетание клавиш, выделенная нода не является узлом \"Предпросмотра (viewer)\" или не поддерживает просмотр"
 
 
 msgid "Shortcut {:d} is not assigned to a Viewer node yet"
@@ -120872,12 +121359,20 @@ msgid "Other object is not a mesh"
 msgstr "Другой объект не является мешем"
 
 
+msgid "Other object has no shape key"
+msgstr "Другой объект не имеет ключа формы"
+
+
 msgid "Object: {:s}, Mesh: '{:s}' has no UVs"
 msgstr "Объект: {:s}, Меш: '{:s}' не имеет UV"
 
 
 msgid "Active camera is not in this scene"
 msgstr "Активная камера не присутствует в этой сцене"
+
+
+msgid "No {0} modifiers found"
+msgstr "Модификаторы {0} не найдены"
 
 
 msgid "Skipping '{:s}', not a mesh"
@@ -120900,8 +121395,20 @@ msgid "Object: {:s}, Mesh: '{:s}' has {:d} loops (for {:d} faces), expected {:d}
 msgstr "Объект: {:s}, Меш: '{:s}' имеет {:d} петель (для {:d} граней), ожидается {:d}"
 
 
+msgid "Modifiers cannot be added to object: "
+msgstr "Невозможно добавить модификаторы к объекту: "
+
+
+msgid "Object {!r} already has {!r} F-Curve(s). Remove these before trying again"
+msgstr "Объект {!r} уже имеет {!r} F-кривую(-ых). Удалите её/их перед повторной попыткой"
+
+
 msgid "Could not add a new UV map to object '{:s}' (Mesh '{:s}')"
 msgstr "Не удалось добавить новую UV-карту к объекту '{:s}' (Меш '{:s}')"
+
+
+msgid "No objects with bound-box selected"
+msgstr "Не выделен ни один объект с габаритным контейнером"
 
 
 msgid "Smoke Domain"
@@ -120921,7 +121428,11 @@ msgstr "Материал мех"
 
 
 msgid "Mesh has no face area"
-msgstr "У меша нет площади грани"
+msgstr "Меш не содержит области граней"
+
+
+msgid "Mesh UV map required"
+msgstr "Требуется UV-карта меша"
 
 
 msgid "Unable to apply \"Generate\" modifier"
@@ -120936,6 +121447,18 @@ msgid "Select two mesh objects"
 msgstr "Выделить два меш-объекта"
 
 
+msgid "Built without Fluid modifier"
+msgstr "Создано без модификатора жидкости \"Флюид (fluid)\""
+
+
+msgid "Smoke Domain Material"
+msgstr "Материал домена для дыма"
+
+
+msgid "Liquid Domain Material"
+msgstr "Материал домена для жидкости"
+
+
 msgid "Object {!r} already has a particle system"
 msgstr "Объект {!r} уже имеет систему частиц"
 
@@ -120948,6 +121471,10 @@ msgid "Interpolate Hair Curves"
 msgstr "Интерполировать кривые волос"
 
 
+msgid "Explode Fade"
+msgstr "Затухание взрыва"
+
+
 msgid "Hair Curves Noise"
 msgstr "Шум волос-кривых"
 
@@ -120956,8 +121483,16 @@ msgid "Frizz Hair Curves"
 msgstr "Завить кривые волос"
 
 
+msgid "Explode fade"
+msgstr "Исчезновение взрыва"
+
+
 msgid "New Preset"
 msgstr "Новый пресет"
+
+
+msgid "Unknown file type: {!r}"
+msgstr "Неизвестный тип файла: {!r}"
 
 
 msgid "Built-in themes cannot be removed"
@@ -120992,6 +121527,10 @@ msgid "Failed to execute the preset: "
 msgstr "Не удалось выполнить пресет: "
 
 
+msgid "No other objects selected"
+msgstr "Другие объекты не выделены"
+
+
 msgid "File {!r} not found"
 msgstr "Файл {!r} не найден"
 
@@ -121008,12 +121547,28 @@ msgid "The selected strips don't overlap"
 msgstr "Выделенные дорожки не перекрываются"
 
 
+msgid "Added fade animation to {:d} {:s}"
+msgstr "Добавлена анимация затухания для {:d} {:s}"
+
+
 msgid "Select 2 sound strips"
 msgstr "Выделить 2 звуковые дорожки"
 
 
+msgid "No strips selected"
+msgstr "Дорожки не выделены"
+
+
+msgid "Current frame not within strip framerange"
+msgstr "Текущий кадр не входит в диапазон кадров дорожки"
+
+
 msgid "Reload Start-Up file to restore settings"
 msgstr "Перезагрузить начальный файл для восстановления настроек"
+
+
+msgid "Filepath not set"
+msgstr "Путь к файлу не установлен"
 
 
 msgid "Failed to get themes path"
@@ -121048,12 +121603,20 @@ msgid "Installing keymap failed: {:s}"
 msgstr "Установка раскладки не удалась: {:s}"
 
 
+msgid "This script was written for Blender version {:d}.{:d}.{:d} and might not function (correctly), though it is enabled"
+msgstr "Этот скрипт был написан для версии Blender {:d}.{:d}.{:d} и может работать некорректно даже при включении"
+
+
 msgid "File already installed to {!r}"
 msgstr "Файл уже установлен в {!r}"
 
 
 msgid "Source file is in the add-on search path: {!r}"
 msgstr "Исходный файл находится в пути поиска аддона: {!r}"
+
+
+msgid "ZIP packaged incorrectly; __init__.py should be in a directory, not at top-level"
+msgstr "ZIP-архив упакован неправильно; __init__.py должен находиться в папке, а не на верхнем уровне (корневой папке)"
 
 
 msgid "Modules Installed ({:s}) from {!r} into {!r}"
@@ -121072,12 +121635,28 @@ msgid "Remove Add-on: {!r}?"
 msgstr "Удалить аддон: {!r}?"
 
 
+msgid "Path: {!r}"
+msgstr "Путь: {!r}"
+
+
+msgid "Active face must be a quad"
+msgstr "Активная грань должна быть четырёхугольной"
+
+
+msgid "Active face not selected"
+msgstr "Активная грань не выделена"
+
+
 msgid "No selected faces"
 msgstr "Нет выделенных граней"
 
 
 msgid "No UV layers"
 msgstr "Нет UV-слоёв"
+
+
+msgid "No active face"
+msgstr "Нет активной грани"
 
 
 msgid "No mesh object"
@@ -121107,6 +121686,10 @@ msgid "Quaternion Rotation"
 msgstr "Вращение по кватерниону"
 
 
+msgid "See OperatorList.txt text block"
+msgstr "Смотрите текстовый блок OperatorList.txt"
+
+
 msgid "Renamed {:d} of {:d} {:s}"
 msgstr "Переименовано {:d} из {:d} {:s}"
 
@@ -121124,8 +121707,20 @@ msgid "Licensed under the GNU General Public License"
 msgstr "Лицензия GNU General Public License"
 
 
+msgid "Nothing to operate on: {:s}[ ].{:s}"
+msgstr "Нет ничего, с чем можно было бы оперировать: {:s}[ ].{:s}"
+
+
+msgid "File path was not set"
+msgstr "Путь к файлу не был установлен"
+
+
 msgid "File '{:s}' not found"
 msgstr "Файл '{:s}' не найден"
+
+
+msgid "No reference available {!r}, Update info in 'rna_manual_reference.py' or callback to bpy.utils.manual_map()"
+msgstr "Нет доступной ссылки {!r}, обновите информацию в 'rna_manual_reference.py' или выполните обратный вызов bpy.utils.manual_map()"
 
 
 msgid "Direct execution not supported"
@@ -121134,6 +121729,10 @@ msgstr "Прямое выполнение не поддерживается"
 
 msgid "Cannot edit properties from override data"
 msgstr "Невозможно редактировать свойства из данных переопределения"
+
+
+msgid "Data path not set"
+msgstr "Путь к данным не установлен"
 
 
 msgid "Properties from override data cannot be edited"
@@ -121230,20 +121829,40 @@ msgid "Operator not found: bpy.ops.{:s}"
 msgstr "Оператор не найден: bpy.ops.{:s}"
 
 
+msgid "Bug"
+msgstr "Программная ошибка"
+
+
 msgid "Report a bug with pre-filled version information"
 msgstr "Сообщить об ошибке с предварительным заполнением информации о данной версии"
+
+
+msgid "Release Notes"
+msgstr "Примечания к выпуску"
 
 
 msgid "Read about what's new in this version of Blender"
 msgstr "Прочитайте о том, что нового появилось в этой версии Blender'а"
 
 
+msgid "User Manual"
+msgstr "Руководство пользователя"
+
+
 msgid "The reference manual for this version of Blender"
 msgstr "Справочное руководство для этой версии Blender'а"
 
 
+msgid "Python API Reference"
+msgstr "Справочник по API Python"
+
+
 msgid "The API reference manual for this version of Blender"
 msgstr "Справочное руководство по API для этой версии Blender'а"
+
+
+msgid "Development Fund"
+msgstr "Фонд развития"
 
 
 msgid "The donation program to support maintenance and improvements"
@@ -121252,6 +121871,10 @@ msgstr "Программа пожертвований на поддержку т
 
 msgid "Blender's official web-site"
 msgstr "Официальный сайт Blender'а"
+
+
+msgid "Credits"
+msgstr "Авторы"
 
 
 msgid "Lists committers to Blender's source code"
@@ -121266,8 +121889,40 @@ msgid "Online directory of free and open source extensions"
 msgstr "Онлайн-каталог бесплатных и открытых расширений"
 
 
+msgid "Tool cannot be set with an empty space"
+msgstr "Инструмент не может быть установлен с пустым пространством"
+
+
 msgid "Fallback Tool"
 msgstr "Запасной инструмент"
+
+
+msgid "Mesh(es)"
+msgstr "Меш(и)"
+
+
+msgid "Curve(s)"
+msgstr "Кривая(-ые)"
+
+
+msgid "Metaball(s)"
+msgstr "Метасфера(-ы)"
+
+
+msgid "Volume(s)"
+msgstr "Объём(ы)"
+
+
+msgid "Grease Pencil(s)"
+msgstr "Grease Pencil(s)"
+
+
+msgid "Armature(s)"
+msgstr "Арматура(-ы)"
+
+
+msgid "Lattice(s)"
+msgstr "Решётка(-и)"
 
 
 msgid "Light(s)"
@@ -121276,6 +121931,10 @@ msgstr "Источник(и) освещения"
 
 msgid "Light Probe(s)"
 msgstr "Зонд(ы) освещения"
+
+
+msgid "Camera(s)"
+msgstr "Камера(-ы)"
 
 
 msgid "Speaker(s)"
@@ -121330,6 +121989,10 @@ msgid "Strip From"
 msgstr "Удалить от"
 
 
+msgid " (delta)"
+msgstr " (дельта)"
+
+
 msgid "Node(s)"
 msgstr "Нода(-ы)"
 
@@ -121340,6 +122003,10 @@ msgstr "Коллекция(-ы)"
 
 msgid "Rename {:d} {:s}"
 msgstr "Переименовать {:d} {:s}"
+
+
+msgid "Invalid regular expression (find): "
+msgstr "Неверное регулярное выражение (поиск): "
 
 
 msgid "Version: {:s}"
@@ -121364,6 +122031,15 @@ msgstr "Тип \"{:s}\" не найден"
 
 msgid "Material(s)"
 msgstr "Материал(ы)"
+
+
+msgid "Invalid regular expression (replace): "
+msgstr "Неверное регулярное выражение (замена): "
+
+
+msgctxt "Operator"
+msgid "Import Blender {:d}.{:d} Preferences"
+msgstr "Импортировать настройки Blender {:d}.{:d}"
 
 
 msgid "Windowing Environment: {:s}"
@@ -121405,6 +122081,10 @@ msgid "Rotation"
 msgstr "Повернуть"
 
 
+msgid "New Group"
+msgstr "Новая группа"
+
+
 msgid "Switch Stereo View"
 msgstr "Переключатель стерео вида"
 
@@ -121440,6 +122120,10 @@ msgstr "Диапазон кадров до"
 
 msgid "After"
 msgstr "После"
+
+
+msgid "Cached Range"
+msgstr "Кэшированный диапазон"
 
 
 msgctxt "Operator"
@@ -121543,6 +122227,10 @@ msgstr "Выровнять по нормали"
 
 msgid "Pivot Offset"
 msgstr "Смещение центра вращения"
+
+
+msgid "No target bones added"
+msgstr "Целевые кости не добавлены"
 
 
 msgid "Weight Position"
@@ -121672,6 +122360,10 @@ msgid "Not assigned to any bone collection."
 msgstr "Не отнесена ни к одной коллекции костей."
 
 
+msgid "Override Transform"
+msgstr "Переопределить трансформацию"
+
+
 msgid "Control Rotation"
 msgstr "Управлять вращением"
 
@@ -121705,6 +122397,15 @@ msgid "Pole Merge Angle Start"
 msgstr "Угол начала слияния полюсов"
 
 
+msgid "Focus on Bone"
+msgstr "Фокус на кости"
+
+
+msgctxt "Image"
+msgid "Flip"
+msgstr "Перевернуть"
+
+
 msgid "Not Set"
 msgstr "Не устанавливать"
 
@@ -121719,6 +122420,14 @@ msgstr "Мин. широта"
 
 msgid "Longitude Min"
 msgstr "Долгота - Мин."
+
+
+msgid "K0"
+msgstr "K0"
+
+
+msgid "Height Min"
+msgstr "Высота - Мин."
 
 
 msgid "Resolution Preview U"
@@ -122121,6 +122830,10 @@ msgid "No annotation source"
 msgstr "Нет источника аннотации"
 
 
+msgid "Channel Colors are disabled in Animation preferences"
+msgstr "Цвета каналов отключены в настройках анимации"
+
+
 msgctxt "Operator"
 msgid "Selection to Cursor"
 msgstr "Выделенное к курсору"
@@ -122241,6 +122954,10 @@ msgid "Intersection"
 msgstr "Пересечение"
 
 
+msgid "Volume Intersection"
+msgstr "Пересечение объёма"
+
+
 msgid "Unsupported displacement method"
 msgstr "Неподдерживаемый метод смещения"
 
@@ -122255,6 +122972,10 @@ msgstr "Из тени"
 
 msgid "Material Mask"
 msgstr "Маска материала"
+
+
+msgid "Custom Occlusion"
+msgstr "Пользовательская окклюзия"
 
 
 msgid "Raytraced Transmission"
@@ -122358,6 +123079,10 @@ msgid "Strip Name"
 msgstr "Имя дорожки"
 
 
+msgid "Max B-frames"
+msgstr "Макс. B-кадров"
+
+
 msgid "Buffer"
 msgstr "Буфер"
 
@@ -122400,6 +123125,10 @@ msgstr "По активному инструменту"
 
 msgid "Falloff Opacity"
 msgstr "Непрозрачность спада"
+
+
+msgid "Randomize Color"
+msgstr "Случайный выбор цвета"
 
 
 msgid "Mesh Boundary"
@@ -122487,8 +123216,16 @@ msgid "Point Count"
 msgstr "Число точек"
 
 
+msgid "Count Max"
+msgstr "Макс. количество"
+
+
 msgid "Mask Value"
 msgstr "Значение маски"
+
+
+msgid "Invert to Fill"
+msgstr "Инвертировать на заполнение"
 
 
 msgid "Invert to Scrape"
@@ -122579,6 +123316,11 @@ msgstr "Форма пряди"
 
 msgid "Diameter Root"
 msgstr "Диаметр Корень"
+
+
+msgctxt "Operator"
+msgid "Convert to Curves"
+msgstr "Преобразовать в кривые"
 
 
 msgid "Lifetime Randomness"
@@ -122845,6 +123587,11 @@ msgid "Delete Bake"
 msgstr "Удалить запекание"
 
 
+msgctxt "Simulation"
+msgid "Scale Influence"
+msgstr "Масштаб - Влияние"
+
+
 msgctxt "Operator"
 msgid "Bake Image Sequence"
 msgstr "Запечь последовательность изображений"
@@ -123042,6 +123789,14 @@ msgid "Guide Parent"
 msgstr "Направляющий объект"
 
 
+msgid "Enable Guides first! Defaulting to Fluid Velocity"
+msgstr "Сначала включите направляющие! По умолчанию \"Скорость флюида (fluid velocity)\""
+
+
+msgid "Scene Gravity"
+msgstr "Гравитация сцены"
+
+
 msgid "Empty Space"
 msgstr "Свободное пространство"
 
@@ -123066,6 +123821,16 @@ msgstr "Толщина поверхности"
 
 msgid "Use Effector"
 msgstr "Использовать эффектор"
+
+
+msgctxt "Operator"
+msgid "Baking Noise - ESC to pause"
+msgstr "Запекание шума - ESC для паузы"
+
+
+msgctxt "Operator"
+msgid "Baking Mesh - ESC to pause"
+msgstr "Запекание меша - ESC для паузы"
 
 
 msgctxt "Operator"
@@ -124973,7 +125738,7 @@ msgstr "Нет доступных элементов"
 
 msgctxt "Operator"
 msgid "Sound Crossfade"
-msgstr "Перекрёстное затухание звука"
+msgstr "Перекрёстное наложение звука"
 
 
 msgctxt "Operator"
@@ -125128,6 +125893,16 @@ msgstr "Сцена…"
 
 
 msgctxt "Operator"
+msgid "Crossfade"
+msgstr "Перекрёстное наложение"
+
+
+msgctxt "Operator"
+msgid "Gamma Crossfade"
+msgstr "Гамма-перекрёстное наложение"
+
+
+msgctxt "Operator"
 msgid "Wipe"
 msgstr "Вытеснение"
 
@@ -125170,6 +125945,31 @@ msgstr "Выключить невыделенные дорожки"
 msgctxt "Operator"
 msgid "Unmute Deselected Strips"
 msgstr "Включить невыделенные дорожки"
+
+
+msgctxt "Operator"
+msgid "Subtract"
+msgstr "Вычитание"
+
+
+msgctxt "Operator"
+msgid "Multiply"
+msgstr "Умножение"
+
+
+msgctxt "Operator"
+msgid "Alpha Over"
+msgstr "Альфа-наложение"
+
+
+msgctxt "Operator"
+msgid "Alpha Under"
+msgstr "Альфа снизу"
+
+
+msgctxt "Operator"
+msgid "Color Mix"
+msgstr "Смеше́ние цветов"
 
 
 msgctxt "Operator"
@@ -125328,6 +126128,10 @@ msgstr "Обрезать до"
 
 msgid "Two or more channels are needed below this strip"
 msgstr "Два или больше каналов нужно под этой дорожкой"
+
+
+msgid "Internal Attributes"
+msgstr "Внутренние атрибуты"
 
 
 msgid "Wrap Around"
@@ -126044,7 +126848,7 @@ msgstr "Лимит подключений"
 
 
 msgid "Undo Memory Limit"
-msgstr "Размер памяти на отмену"
+msgstr "Размер памяти на отмену действий"
 
 
 msgid "Console Scrollback Lines"
@@ -126254,6 +127058,10 @@ msgid "Invert Wheel Zoom Direction"
 msgstr "Инв. масштабирование колёсиком"
 
 
+msgid "Navigation Mode"
+msgstr "Режим навигации"
+
+
 msgid "Lock Horizon"
 msgstr "Фиксировать горизонт"
 
@@ -126268,6 +127076,10 @@ msgstr "Ось орбиты"
 
 msgid "Pan Sensitivity"
 msgstr "Чувствительность панорамирования"
+
+
+msgid "Invert Pan"
+msgstr "Инвертировать панорамирование"
 
 
 msgid "Invert Pan Axis"
@@ -126313,6 +127125,10 @@ msgstr "Включить при запуске, переопределив на�
 
 msgid "Disabled on startup, overriding the preference."
 msgstr "Отключить при запуске, переопределив настройки."
+
+
+msgid "Invert Rotate"
+msgstr "Инвертировать вращение"
 
 
 msgid "Authentication"
@@ -127413,6 +128229,16 @@ msgstr "Масштабировать толщину"
 
 
 msgctxt "Operator"
+msgid "Convert Type"
+msgstr "Преобразовать тип"
+
+
+msgctxt "Operator"
+msgid "Set Resolution"
+msgstr "Установить разрешение"
+
+
+msgctxt "Operator"
 msgid "Bezier"
 msgstr "Безье"
 
@@ -127436,6 +128262,10 @@ msgstr "Локальная камера"
 
 msgid "Camera to View"
 msgstr "Камера к виду"
+
+
+msgid "Focus"
+msgstr "Фокус"
 
 
 msgid "Object Gizmos"
@@ -128794,6 +129624,10 @@ msgid "User Library"
 msgstr "Библиотека пользователя"
 
 
+msgid "No AnimData to set tmpact on"
+msgstr "Нет данных анимации для установки временного действия"
+
+
 msgid "Attempt to set action on non-animatable ID"
 msgstr "Попытка задать действие для неанимируемого ID"
 
@@ -129010,8 +129844,16 @@ msgid "Can't initialize cloth"
 msgstr "Невозможно инициализировать ткань"
 
 
+msgid "Null cloth object"
+msgstr "Нулевой объект ткани"
+
+
 msgid "Out of memory on allocating cloth object"
 msgstr "Недостаточно памяти при распределении объекта-ткани"
+
+
+msgid "Cannot build springs"
+msgstr "Невозможно создать пружины"
 
 
 msgid "Out of memory on allocating vertices"
@@ -129054,6 +129896,18 @@ msgid "At least two points required"
 msgstr "Требуется не менее двух точек"
 
 
+msgid "Must have more control points than Order"
+msgstr "Должно быть больше контрольных точек, чем есть в \"Порядке (order)\""
+
+
+msgid "%d more %s row(s) needed for Bézier"
+msgstr "Для Безье требуется ещё %d строк(и, а) по %s"
+
+
+msgid "%d more point(s) needed for Bézier"
+msgstr "Для Безье требуется ещё %d точка(-и, -ек)"
+
+
 msgid "curves"
 msgstr "кривые"
 
@@ -129072,6 +129926,10 @@ msgstr "Цвет"
 
 msgid "Int"
 msgstr "Целое число"
+
+
+msgid "4 by 4 Float Matrix"
+msgstr "Матрица float 4 на 4"
 
 
 msgid "2D 16-Bit Integer"
@@ -129096,6 +129954,22 @@ msgstr "КлючФормы"
 
 msgid "OS Loop"
 msgstr "Петля исходного пространства"
+
+
+msgid "Int8"
+msgstr "Целое8"
+
+
+msgid "Int 2D"
+msgstr "Целое 2D"
+
+
+msgid "Float3"
+msgstr "Нецелое3"
+
+
+msgid "Float2"
+msgstr "Нецелое2"
 
 
 msgid "Source and destination meshes do not have the same number of vertices, 'Topology' mapping cannot be used in this case"
@@ -129180,8 +130054,17 @@ msgid "Untitled"
 msgstr "Без имени"
 
 
+msgctxt "Action"
+msgid "Stepped"
+msgstr "Ступенчатость"
+
+
 msgid "LineStyle"
 msgstr "СтильЛиний"
+
+
+msgid "LineSet %i"
+msgstr "НаборЛиний %i"
 
 
 msgid "LineSet"
@@ -129194,6 +130077,10 @@ msgstr "Нода \"Длина сплайна\""
 
 msgid "\"{}\" attribute from geometry"
 msgstr "Атрибут \"{}\" из геометрии"
+
+
+msgid "ID / Index"
+msgstr "ID / Индекс"
 
 
 msgid "True Normal"
@@ -129296,6 +130183,14 @@ msgid "Library override templates have been removed: removing all override data 
 msgstr "Шаблоны переопределения библиотеки были удалены: удаление всех данных переопределения из блока данных '%s'"
 
 
+msgid "Data corruption: data-block '%s' is using itself as library override reference, removing all override data"
+msgstr "Повреждение данных: блок данных '%s' использует себя в качестве ссылки переопределения библиотеки, удаляя все данные переопределения"
+
+
+msgid "Data corruption: data-block '%s' is using another local data-block ('%s') as library override reference, removing all override data"
+msgstr "Повреждение данных: блок данных '%s' использует другой локальный блок данных ('%s') в качестве ссылки переопределения библиотеки, удаляя все данные переопределения"
+
+
 msgid "Data corruption: data-block `%s` has a Library Override property with no RNA path"
 msgstr "Повреждение данных: блок данных `%s` имеет свойство переопределения библиотеки без пути RNA"
 
@@ -129326,6 +130221,10 @@ msgstr "зондыосвещения"
 
 msgid "linestyles"
 msgstr "стили линий"
+
+
+msgid "Merged %d IDs from '%s' Main into '%s' Main; %d IDs and %d Libraries already existed as part of the destination Main, and %d IDs missing from destination Main, were freed together with the source Main"
+msgstr "%d ID из базы данных '%s' были объединены в базу данных '%s'; %d ID и %d библиотек уже существовало как часть целевой базы данных, и %d ID, отсутствующих в целевой базе данных были освобождены вместе с исходной базой данных"
 
 
 msgid "MaskLayer"
@@ -129416,8 +130315,16 @@ msgid "Conversion is not supported"
 msgstr "Конвертация не поддерживается"
 
 
+msgid "Links can only go into a zone but not out"
+msgstr "Связи от нод могут только входить в зону, но не выходить из неё"
+
+
 msgid "Can't find object data of %s lib %s"
-msgstr "Невозможно найти данные объекта %s библ. %s"
+msgstr "Не удалось найти данные объекта %s библ. %s"
+
+
+msgid "Object %s lost data"
+msgstr "Потеряны данные объекта %s"
 
 
 msgid "Surf"
@@ -129426,6 +130333,10 @@ msgstr "Сёрф"
 
 msgid "Mball"
 msgstr "МСфера"
+
+
+msgid "PointCloud"
+msgstr "ОблакоТочек"
 
 
 msgid "LightProbe"
@@ -129516,6 +130427,10 @@ msgid "particles"
 msgstr "частицы"
 
 
+msgid "Unsaved"
+msgstr "Не сохранено"
+
+
 msgid "%i frames found!"
 msgstr "%i кадров найдено!"
 
@@ -129578,6 +130493,10 @@ msgstr "Невозможно добавить твёрдое тело к объ�
 
 msgid "Can't create Rigid Body world"
 msgstr "Невозможно создать среду твёрдых тел"
+
+
+msgid "Compiled without Bullet physics engine"
+msgstr "Скомпилировано без физического движка Bullet"
 
 
 msgid "LIB: object lost from scene: '%s'"
@@ -129653,8 +130572,16 @@ msgid "Miles"
 msgstr "Мили"
 
 
+msgid "Furlongs"
+msgstr "Фурлонги"
+
+
 msgid "Chains"
 msgstr "Цепочки"
+
+
+msgid "Thou"
+msgstr "Тысячная (Мил)"
 
 
 msgid "Square Kilometers"
@@ -129689,8 +130616,32 @@ msgid "Square Micrometers"
 msgstr "Квадратные микрометры"
 
 
+msgid "Square Miles"
+msgstr "Квадратные мили"
+
+
+msgid "Square Furlongs"
+msgstr "Квадратные фурлонги"
+
+
+msgid "Square Chains"
+msgstr "Квадратные чейны (мерные цепи)"
+
+
+msgid "Square Yards"
+msgstr "Квадратные ярды"
+
+
+msgid "Square Feet"
+msgstr "Квадратные футы"
+
+
 msgid "Square Inches"
 msgstr "Квадратные дюймы"
+
+
+msgid "Square Thou"
+msgstr "Квадратные милы (тысячные)"
 
 
 msgid "Cubic Kilometers"
@@ -129725,12 +130676,32 @@ msgid "Cubic Micrometers"
 msgstr "Кубические микрометры"
 
 
+msgid "Cubic Miles"
+msgstr "Кубические мили"
+
+
+msgid "Cubic Furlongs"
+msgstr "Кубические фурлонги"
+
+
 msgid "Cubic Chains"
 msgstr "Кубические цепочки"
 
 
+msgid "Cubic Yards"
+msgstr "Кубические ярды"
+
+
+msgid "Cubic Feet"
+msgstr "Кубические футы"
+
+
 msgid "Cubic Inches"
 msgstr "Кубические дюймы"
+
+
+msgid "Cubic Thou"
+msgstr "Кубические милы (тысячные)"
 
 
 msgid "Tonnes"
@@ -129765,6 +130736,10 @@ msgid "Tons"
 msgstr "Тонны"
 
 
+msgid "Centum weights"
+msgstr "Центнеры"
+
+
 msgid "Stones"
 msgstr "Камни"
 
@@ -129787,6 +130762,10 @@ msgstr "Километров в час"
 
 msgid "Feet per second"
 msgstr "Футов в секунду"
+
+
+msgid "Miles per hour"
+msgstr "Миль в час"
 
 
 msgid "Meters per second squared"
@@ -129825,6 +130804,34 @@ msgid "Arcseconds"
 msgstr "Угловые секунды"
 
 
+msgid "Gigawatts"
+msgstr "Гигаватты"
+
+
+msgid "Megawatts"
+msgstr "Мегаватты"
+
+
+msgid "Kilowatts"
+msgstr "Киловатты"
+
+
+msgid "Watts"
+msgstr "Ватты"
+
+
+msgid "Milliwatts"
+msgstr "Милливатты"
+
+
+msgid "Microwatts"
+msgstr "Микроватты"
+
+
+msgid "Nanowatts"
+msgstr "Нановатты"
+
+
 msgid "Kelvin"
 msgstr "Кельвин"
 
@@ -129833,12 +130840,32 @@ msgid "Celsius"
 msgstr "Цельсий"
 
 
+msgid "Fahrenheit"
+msgstr "Фаренгейт"
+
+
+msgid "Hertz"
+msgstr "Герц"
+
+
+msgid "Kilohertz"
+msgstr "Килогерц"
+
+
 msgid "fonts"
 msgstr "шрифты"
 
 
 msgid "volumes"
 msgstr "объёмы"
+
+
+msgid "Could not load volume for writing"
+msgstr "Не удалось загрузить объём для записи"
+
+
+msgid "Could not write volume: %s"
+msgstr "Не удалось записать объём: %s"
 
 
 msgid "Could not write volume: Unknown error writing VDB file"
@@ -129857,6 +130884,10 @@ msgid "worlds"
 msgstr "окружающие среды"
 
 
+msgid "Library database with null library data-block pointer!"
+msgstr "База данных библиотеки содержит нулевой указатель на блок данных библиотеки!"
+
+
 msgid "ID %s is in local database while being linked from library %s!"
 msgstr "Идертификатор %s в локальной базе был связан с библиотекой %s!"
 
@@ -129869,6 +130900,10 @@ msgid "Library ID %s in library %s, this should not happen!"
 msgstr "Идентификатор библиотеки %s в библиотеке %s, что не должно происходить!"
 
 
+msgid "ID %s has null lib pointer while being in library %s!"
+msgstr "Идентификатор %s содержит нулевой указатель библиотеки, находясь в библиотеке %s!"
+
+
 msgid "ID %s has mismatched lib pointer!"
 msgstr "ID %s содержит несоответствующий библиотечный указатель!"
 
@@ -129879,6 +130914,10 @@ msgstr "ID %s не найден в библиотеке %s!"
 
 msgid "ID %s uses shapekey %s, but its 'from' pointer is invalid (%p), fixing..."
 msgstr "ID %s использует ключ формы %s, но его указатель 'from' неверный (%p), исправляем…"
+
+
+msgid "Shapekey %s has an invalid 'from' pointer (%p), it will be deleted"
+msgstr "Ключ формы %s содержит недопустимый указатель 'от' (%p), он будет удалён"
 
 
 msgid "insufficient content"
@@ -129925,6 +130964,10 @@ msgid "Unable to open blend <memory>"
 msgstr "Ошибка открытия файла blend в памяти"
 
 
+msgid "Critical blend-file corruption: Conflicts and/or otherwise invalid data-blocks names (see console for details)"
+msgstr "Критическое повреждение blend-файла: существуют недопустимые и/или конфликтующие имена блоков данных (подробности см. в консоли)"
+
+
 msgid "The file was saved by a newer version, open it with Blender %s or later"
 msgstr "Файл был сохранён более новой версией, откройте его с помощью Blender %s или более поздней версии"
 
@@ -129957,6 +131000,22 @@ msgid "Unable to open '%s': %s"
 msgstr "Ошибка открытия «%s»: %s"
 
 
+msgid "Blendfile '%s' was created by a future version of Blender and contains ID names longer than currently supported. These have been truncated."
+msgstr "Файл .blend '%s' был создан предстоящей версией Blender'а и содержит имена ID длиннее, чем поддерживаются в настоящее время. Они были усечены."
+
+
+msgid "Blendfile '%s' appears corrupted, it contains invalid ID names. These have been truncated."
+msgstr "Файл .blend '%s', похоже, повреждён, он содержит недопустимые имена идентификаторов. Они были усечены."
+
+
+msgid "Library '%s' was created by a future version of Blender and contains ID names longer than currently supported. This may cause missing linked data, consider opening and re-saving that library with the current Blender version."
+msgstr "Библиотека '%s' была создана предстоящей версией Blender'а и содержит имена идентификаторов длиннее, чем поддерживается в настоящее время. Это может привести к потере связанных данных, рассмотрите возможность открытия и повторного сохранения этой библиотеки в текущей версии Blender'а."
+
+
+msgid "Library '%s' appears corrupted, it contains invalid ID names. This may cause missing linked data."
+msgstr "Библиотека '%s', похоже, повреждена, она содержит недопустимые имена идентификаторов. Это может привести к потере связанных данных."
+
+
 msgid "GP_Palette"
 msgstr "Палитра GP"
 
@@ -129973,6 +131032,14 @@ msgid "Eevee material conversion problem. Error in console"
 msgstr "Ошибка преобразования материалов EEVEE. Текст ошибки в консоли"
 
 
+msgid "Proxy lost from object %s lib %s"
+msgstr "Утерян прокси объекта %s библ. %s"
+
+
+msgid "Proxy lost from object %s lib <NONE>"
+msgstr "Утерян прокси объекта %s библ. <NONE>"
+
+
 msgid "Material %s could not be converted because of different Blend Mode and Shadow Mode (need manual adjustment)"
 msgstr "Материал %s не может быть преобразован из-за разных режимов смешивания и тени (требуется ручная настройка)"
 
@@ -129981,12 +131048,20 @@ msgid "Material %s could not be converted because of non-trivial alpha blending 
 msgstr "Материал %s не удалось преобразовать из-за нетривиального альфа-смешивания (требуется ручная настройка)"
 
 
+msgid "%s contains a volume shader that might need to be converted to object (see world volume panel)"
+msgstr "%s содержит шейдер объёма, который может потребоваться преобразовать в объект (см. панель объёма мира)"
+
+
 msgid "2D_Animation"
 msgstr "2D_Animation"
 
 
 msgid "Sculpting"
 msgstr "Скульптинг"
+
+
+msgid "VFX"
+msgstr "VFX"
 
 
 msgid "Video_Editing"
@@ -130003,6 +131078,10 @@ msgstr "Ошибка создания резервной копии версии
 
 msgid "Checking validity of current .blend file *BEFORE* save to disk"
 msgstr "Проверка корректности текущего .blend-файла *ПЕРЕД* сохранением на диск"
+
+
+msgid "Critical data corruption: Conflicts and/or otherwise invalid data-blocks names (see console for details)"
+msgstr "Критическое повреждение данных: существуют недопустимые и/или конфликтующие имена блоков данных (подробности см. в консоли)"
 
 
 msgid "Version backup failed (file saved with @)"
@@ -130073,6 +131152,10 @@ msgid "Edge-rings are not connected"
 msgstr "Кольца рёбер не соединены"
 
 
+msgid "color_index is invalid"
+msgstr "color_index недействителен"
+
+
 msgid "Compositor node tree has cyclic links!"
 msgstr "Дерево узлов компо́зитора имеет циклические ссылки!"
 
@@ -130097,8 +131180,20 @@ msgid "Errors during render. See the System Console for more info."
 msgstr "Ошибки во время рендеринга. Более подробную информацию смотрите в системной консоли."
 
 
+msgid "Compiling EEVEE engine shaders"
+msgstr "Компиляция шейдеров движка EEVEE"
+
+
+msgid "Loading textures ({} remaining)"
+msgstr "Загрузка текстур (осталось {})"
+
+
 msgid "Compiling shaders ({} remaining)"
 msgstr "Компиляция шейдеров (осталось {})"
+
+
+msgid "Setting Preferences > System > Shader Compilation Method to Subprocess might improve compilation time."
+msgstr "Настройки > Система > изменение 'Метода компиляции шейдеров' на 'Подпроцессы' может сократить время компиляции."
 
 
 msgid "Optimizing shaders ({} remaining)"
@@ -130201,6 +131296,10 @@ msgid "Failed to load asset library"
 msgstr "Не удалось загрузить библиотеку ассетов"
 
 
+msgid "No name set"
+msgstr "Имя не установлено"
+
+
 msgid "Unexpected library type. Failed to create pose asset"
 msgstr "Непредвиденный тип библиотеки. Не удалось создать ассет позы"
 
@@ -130213,16 +131312,32 @@ msgid "Action is not editable"
 msgstr "Действие не подлежит редактированию"
 
 
+msgid "Asset blend file is not editable"
+msgstr "Файлы .blend ассетов не подлежат редактированию"
+
+
 msgid "NLA Strip Controls"
 msgstr "Элементы управления НЛА дорожками"
+
+
+msgid "F-Curve visibility in Graph Editor"
+msgstr "Видимость F-кривой в редакторе графов"
 
 
 msgid "Grease Pencil layer is visible in the viewport"
 msgstr "Слой Grease Pencil показывается во вьюпорте"
 
 
+msgid "Toggle visibility of Channels in Graph Editor for editing"
+msgstr "Переключить видимость каналов в редакторе графов для возможности редактирования"
+
+
 msgid "Display channel regardless of object selection"
 msgstr "Отображать канал независимо от выделения объектов"
+
+
+msgid "Enable F-Curve modifiers"
+msgstr "Включить модификаторы F-кривых"
 
 
 msgid "Make channels grouped under this channel visible"
@@ -130273,12 +131388,40 @@ msgid "No channels to operate on"
 msgstr "Нет каналов для продолжения операции"
 
 
+msgid "No keyframes to focus on"
+msgstr "Нет ключевых кадров, на которых можно сосредоточиться"
+
+
 msgid "None of the selected channels is an Action Slot"
 msgstr "Ни один из выделенных каналов не является слотом действия"
 
 
+msgid "No open Graph Editor window found"
+msgstr "Не найдено открытого окна редактора графов"
+
+
+msgid "Cannot create the Animation Context"
+msgstr "Невозможно создать контекст анимации"
+
+
+msgid "One or more F-Curves are not visible due to filter settings"
+msgstr "Одна или несколько F-кривых не видны из-за настроек фильтра"
+
+
+msgid "F-Curves have no valid size"
+msgstr "F-кривые имеют недопустимый размер"
+
+
+msgid "Separated %s into %i new actions"
+msgstr "%s было разделено на %i новых действия(-ий)"
+
+
 msgid "No active action to operate on"
 msgstr "Нет активного действия для оперирования"
+
+
+msgid "Active action is not layered"
+msgstr "Активное действие не может содержать слои"
 
 
 msgid "No active object"
@@ -130341,8 +131484,29 @@ msgid "No markers are selected"
 msgstr "Маркеры не выделены"
 
 
+msgid "Markers are locked"
+msgstr "Маркеры заблокированы"
+
+
+msgid "Toggle Snapping"
+msgstr "Переключить привязку"
+
+
+msgctxt "Operator"
+msgid "Set Frame (Strip Preview)"
+msgstr "Установить кадр (предпросмотр дорожки)"
+
+
 msgid "Start frame clamped to valid rendering range"
 msgstr "Начальный кадр ограничен допустимым диапазоном рендеринга"
+
+
+msgid "End frame clamped to valid rendering range"
+msgstr "Конечный кадр ограничен допустимым диапазоном рендеринга"
+
+
+msgid "The action %s is not editable"
+msgstr "Действие %s не подлежит редактированию"
 
 
 msgid "Moved %i slot(s) into the action of the active object"
@@ -130355,6 +131519,10 @@ msgstr "Не удалось объединить ни одну анимацию.
 
 msgid "Expected an animation area to be active"
 msgstr "Необходимо, чтобы область анимации была активна"
+
+
+msgid "Action is already layered"
+msgstr "Действие уже является многослойным"
 
 
 msgid "Active object has no action"
@@ -130401,12 +131569,32 @@ msgid "<Unknown Modifier>"
 msgstr "<Неизвестный модификатор>"
 
 
+msgid "y = (Ax + B)"
+msgstr "y = (Ax + B)"
+
+
+msgid "× (Ax + B)"
+msgstr "× (Ax + B)"
+
+
+msgid "Add Control Point"
+msgstr "Добавить контрольную точку"
+
+
+msgid "Delete Modifier"
+msgstr "Удалить модификатор"
+
+
 msgid "Add a new control-point to the envelope on the current frame"
 msgstr "Добавить новую контрольную точку в оболочку на текущем кадре"
 
 
 msgid "Delete envelope control point"
 msgstr "Удалить контрольную точку оболочки"
+
+
+msgid "Coefficient"
+msgstr "Коэффициент"
 
 
 msgctxt "Action"
@@ -130615,12 +131803,41 @@ msgid "Move to New Bone Collection"
 msgstr "Переместить в новую коллекцию костей"
 
 
+msgctxt "Operator"
+msgid "New Bone Collection"
+msgstr "Новая коллекция костей"
+
+
+msgid "This operator only works in pose mode and armature edit mode"
+msgstr "Этот оператор работает только в режиме позы и режиме редактирования арматуры"
+
+
+msgid "No bones selected, nothing to assign to bone collection"
+msgstr "Кости не выделены, нечего назначать для коллекции костей"
+
+
+msgid "All selected bones were already part of this collection"
+msgstr "Все выделенные кости уже были частью этой коллекции"
+
+
 msgid "No bone collection named '%s'"
 msgstr "Нет коллекции костей с именем '%s'"
 
 
+msgid "Cannot assign to linked bone collection %s"
+msgstr "Невозможно назначить для связанной коллекцию костей %s"
+
+
+msgid "No bones selected, nothing to unassign from bone collection"
+msgstr "Кости не выделены, не с чего снимать назначение для коллекции костей"
+
+
 msgid "None of the selected bones were assigned to this collection"
 msgstr "Ни одна из выделенных костей не была назначена этой коллекции"
+
+
+msgid "Missing bone name"
+msgstr "Отсутствует имя кости"
 
 
 msgid "Could not find bone '%s'"
@@ -130659,6 +131876,18 @@ msgid "Armature has no active bone collection, select one first"
 msgstr "У арматуры нет активной коллекции костей, сначала выберите её"
 
 
+msgid "Cannot edit bone collections that are linked from another blend file"
+msgstr "Невозможно редактировать коллекции костей, связанные с другим blend-файлом"
+
+
+msgid "Bone collections can only be edited on an Armature"
+msgstr "Коллекции костей можно редактировать только на арматуре"
+
+
+msgid "Pinned armature is not active in the 3D viewport"
+msgstr "Закреплённая арматура не является активной в 3D-вьюпорте"
+
+
 msgid "Cannot edit bone collections on linked Armatures without override"
 msgstr "Невозможно редактировать коллекции костей на связанных арматурах без переопределения"
 
@@ -130667,8 +131896,20 @@ msgid "Cannot edit bone collections on a linked Armature with a system override;
 msgstr "Невозможно редактировать коллекции костей на связанной арматуре с системным переопределением; явно создайте переопределение для данных арматуры"
 
 
+msgid "Linked bone collections are not editable"
+msgstr "Связанные коллекции костей не подлежат редактированию"
+
+
+msgid "Cannot (de)select bones on linked object, that would need an override"
+msgstr "Невозможно выделить/снять выделение костей в связанном объекте, для этого необходимо предварительно применить переопределение"
+
+
 msgid "No active bone collection"
 msgstr "Нет активной коллекции косткй"
+
+
+msgid "This needs a local Armature or an override"
+msgstr "Для этого нужна локальная арматура или переопределение"
 
 
 msgid "Bone Heat Weighting: failed to find solution for one or more bones"
@@ -130693,6 +131934,18 @@ msgstr "Очистить траектории движения всех кост
 
 msgid "Cannot pose libdata"
 msgstr "Позы неприменимы к библиотечным данным"
+
+
+msgid "Show Original Pose"
+msgstr "Показать исходную позу"
+
+
+msgid "Show Blended Pose"
+msgstr "Показать смешанную позу"
+
+
+msgid "Flip Pose"
+msgstr "Перевернуть позу"
 
 
 msgid "Pose lib is only for armatures in pose mode"
@@ -130737,6 +131990,14 @@ msgstr "Инструмент скольжения"
 
 msgid "Cancel"
 msgstr "Отмена"
+
+
+msgid "Axis Constraint"
+msgstr "Ограничивающая ось"
+
+
+msgid "Axis Only"
+msgstr "Только ось"
 
 
 msgid "Bone Visibility"
@@ -130791,6 +132052,10 @@ msgid "No asset found at path \"%s\""
 msgstr "Ассет не был найден по пути \"%s\""
 
 
+msgid "Unlock Aspect Ratio"
+msgstr "Разблокировать соотн. сторон"
+
+
 msgid "Delete all asset metadata, turning the selected asset data-blocks back into normal data-blocks, and set Fake User to ensure the data-blocks will still be saved"
 msgstr "Удалить все метаданные ассета, преобразуя выбранные блоки данных ассета обратно в обычные блоки данных, и установить фиктивного пользователя, чтобы гарантировать, что блоки данных по-прежнему будут сохранены"
 
@@ -130827,6 +132092,10 @@ msgid "Path too long, cannot save"
 msgstr "Путь слишком длинный, сохранить не удалось"
 
 
+msgid "Invalid screenshot area selection"
+msgstr "Неверный выбор области снимка экрана"
+
+
 msgid "Saving failed"
 msgstr "Сохранение не удалось"
 
@@ -130859,6 +132128,10 @@ msgid "Unable to copy bundle due to %zu external dependencies; more details on t
 msgstr "Невозможно скопировать пакет из-за внешних зависимостей %zu; более подробная информация на консоли"
 
 
+msgid "Screenshot cannot be smaller than %i pixels on a side"
+msgstr "Снимок экрана не может быть меньше %i пикселей на какой-либо стороне"
+
+
 msgid "Asset catalogs cannot be edited in this asset library"
 msgstr "Каталоги ассетов не могут быть отредактированы в этой библиотеке ассетов"
 
@@ -130871,6 +132144,10 @@ msgid "No changes to be saved"
 msgstr "Нет изменений для сохранения"
 
 
+msgid "No selected asset"
+msgstr "Нет выделенного ассета"
+
+
 msgid "Enable catalog, making contained assets visible in the asset shelf"
 msgstr "Включить каталог, сделав содержащиеся в нём ассеты видимыми на полке ассетов"
 
@@ -130881,6 +132158,10 @@ msgstr "Переключить видимость каталога на полк
 
 msgid "No applicable assets found"
 msgstr "Не найдено подходящих ассетов"
+
+
+msgid "Catalog Selector"
+msgstr "Селектор каталога"
 
 
 msgid "Select the asset library and the contained catalogs to display in the asset shelf"
@@ -131056,6 +132337,14 @@ msgid "Control point belongs to another spline"
 msgstr "Контрольная точка принадлежит другой кривой"
 
 
+msgid "Unicode codepoint hex value"
+msgstr "Шестнадцатеричное значение кодовой точки юникода"
+
+
+msgid "Enter a Unicode codepoint hex value"
+msgstr "Ввести шестнадцатеричное значение кодовой точки юникода"
+
+
 msgid "Text too long"
 msgstr "Текст слишком длинный"
 
@@ -131076,6 +132365,10 @@ msgid "File too long %s"
 msgstr "Файл %s слишком длинный"
 
 
+msgid "Some curves could not be converted because they were not attached to the surface"
+msgstr "Некоторые кривые не удалось преобразовать, поскольку они не были прикреплены к поверхности"
+
+
 msgid "Curves do not have attachment information that can be used for deformation"
 msgstr "Кривые не содержат информации о прикреплении, которую можно использовать для деформации"
 
@@ -131084,12 +132377,20 @@ msgid "Could not snap some curves to the surface"
 msgstr "Не удалось прикрепить некоторые кривые к поверхности"
 
 
+msgid "Curves must have a mesh surface object set"
+msgstr "Кривые должны иметь установленную поверхность типа \"меш\""
+
+
 msgid "Only available in point selection mode"
 msgstr "Доступно только в режиме выделения точек"
 
 
 msgid "Active object is not a selected curves object"
 msgstr "Активный объект не является выделенной кривой"
+
+
+msgid "No curves data to join"
+msgstr "Нет данных кривых для объединения"
 
 
 msgid "Add Color Attribute"
@@ -131104,12 +132405,20 @@ msgid "Convert Color Attribute Domain"
 msgstr "Конвертировать домен цветового атрибута"
 
 
+msgid "Cannot convert to the selected type"
+msgstr "Невозможно преобразовать в выбранный тип"
+
+
 msgid "No active attribute"
 msgstr "Нет активного атрибута"
 
 
 msgid "The active attribute has an unsupported type"
 msgstr "Активный атрибут имеет неподдерживаемый тип"
+
+
+msgid "Operation is not allowed in edit mode"
+msgstr "Операция не может быть выполнена в режиме редактирования"
 
 
 msgid "Non-Assets"
@@ -131142,6 +132451,10 @@ msgstr "Группа нод должна иметь ноду вывода гру
 
 msgid "Node group's first output must be a geometry"
 msgstr "Первый выход группы нод должен быть геометрией"
+
+
+msgid "Place Next Stroke Vertex"
+msgstr "Разместить следующую вершину штриха"
 
 
 msgid "Erase"
@@ -131220,6 +132533,14 @@ msgid "Nothing selected"
 msgstr "Ничего не выделено"
 
 
+msgid "The object has only one material"
+msgstr "Объект имеет только один материал"
+
+
+msgid "The object has only one layer"
+msgstr "Объект имеет только один слой"
+
+
 msgid "No active Grease Pencil layer to paste into"
 msgstr "Нет активного слоя Grease Pencil для вставки"
 
@@ -131229,7 +132550,11 @@ msgstr "Активный слой не подлежит редактирован
 
 
 msgid "No Grease Pencil frame to draw on"
-msgstr "Нет рамки для рисования с Grease Pencil"
+msgstr "Нет кадра Grease Pencil для рисования"
+
+
+msgid "Couldn't find matching layer, pasting into active layer"
+msgstr "Не удалось найти соответствующий слой, вставка производится в активный слой"
 
 
 msgid "Active object is not a selected Grease Pencil"
@@ -131262,6 +132587,22 @@ msgstr "Добавить новый слой Grease Pencil"
 
 msgid "No active group"
 msgstr "Нет активной группы"
+
+
+msgid "No child layers to merge"
+msgstr "Нет дочерних слоев для объединения"
+
+
+msgid "Cannot add active layer as mask"
+msgstr "Невозможно добавить активный слой в качестве маски"
+
+
+msgid "Layer already added"
+msgstr "Слой уже добавлен"
+
+
+msgid "Unable to find layer to add"
+msgstr "Не удалось найти слой для добавления"
 
 
 msgid "No active layer to duplicate"
@@ -131312,12 +132653,28 @@ msgid "Selection is not a bone. Armature needs to be in Pose Mode or Edit Mode t
 msgstr "Выбор не является костью. Для выбора в 3D-вьюпорте - арматура должна быть в режиме Pose Mode или Edit Mode"
 
 
+msgid "Selection is not a bone"
+msgstr "Выделение не является костью"
+
+
 msgid "Can only pick from the 3D viewport or the outliner"
 msgstr "Можно выбирать только из 3D-вьюпорта или из окна аутлайнера"
 
 
+msgid "The active object needs to be an armature"
+msgstr "Активный объект должен быть арматурой"
+
+
+msgid "The armature needs to be in Pose mode or Edit mode"
+msgstr "Арматура должна находиться в режимах позы или редактирования"
+
+
 msgid "Drag to continue sampling, release when done"
 msgstr "Перетащите, чтобы продолжить выбор, отпустите, когда закончите"
+
+
+msgid "Press 'Enter' to sample outside of a Blender window"
+msgstr "Нажмите 'Enter', чтобы выполнить сэмплирование за пределами окна Blender'а"
 
 
 msgid "Could not resolve path '%s'"
@@ -131334,6 +132691,14 @@ msgstr "Свойство по пути «%s» не является нецело
 
 msgid "Current: "
 msgstr "Текущий: "
+
+
+msgid ", Ctrl: Stroke, Shift: Fill, Shift+Ctrl: Both"
+msgstr ", Ctrl: Штрих, Shift: Заполнить, Shift+Ctrl: Оба"
+
+
+msgid "Press a key"
+msgstr "Нажмите клавишу"
 
 
 msgid "Error evaluating number, see Info editor for details"
@@ -131378,7 +132743,7 @@ msgstr "Добавить в определяемое пользователем 
 
 
 msgid "Only keyboard shortcuts can be edited that way, please use User Preferences otherwise"
-msgstr "Только клавиатурные сочетания могут редактироваться таким образом, пожалуйста для этого используйте окно настроек"
+msgstr "Таким способом можно редактировать только сочетания клавиш для клавиатуры, в противном случае используйте настройки пользователя"
 
 
 msgctxt "Operator"
@@ -131438,7 +132803,17 @@ msgstr "Очистить одиночные ключевые кадры"
 
 msgctxt "Operator"
 msgid "View All in Graph Editor"
-msgstr "Просмотреть все в редакторе графов"
+msgstr "Просмотр в редакторе графов (все)"
+
+
+msgctxt "Operator"
+msgid "View Single in Graph Editor"
+msgstr "Просмотр в редакторе графов (индивидуально)"
+
+
+msgctxt "Operator"
+msgid "View in Graph Editor"
+msgstr "Просмотр в редакторе графов"
 
 
 msgctxt "Operator"
@@ -131454,6 +132829,16 @@ msgstr "Удалить одиночный драйвер"
 msgctxt "Operator"
 msgid "Delete Driver"
 msgstr "Удалить драйвер"
+
+
+msgctxt "Operator"
+msgid "Copy Drivers to Selected"
+msgstr "Копировать драйверы на выделение"
+
+
+msgctxt "Operator"
+msgid "Copy All Drivers to Selected"
+msgstr "Копировать все драйверы на выделение"
 
 
 msgctxt "Operator"
@@ -131479,6 +132864,21 @@ msgstr "Удалить переопределение"
 msgctxt "Operator"
 msgid "Remove Single Override"
 msgstr "Удалить одиночное переопределение"
+
+
+msgctxt "Operator"
+msgid "Define Overrides"
+msgstr "Установить переопределения"
+
+
+msgctxt "Operator"
+msgid "Define Single Override"
+msgstr "Установить одно переопределение"
+
+
+msgctxt "Operator"
+msgid "Define Override"
+msgstr "Установить переопределение"
 
 
 msgctxt "Operator"
@@ -131547,12 +132947,28 @@ msgid "Autocomplete"
 msgstr "Автодополнение"
 
 
+msgid "R"
+msgstr "R"
+
+
+msgid "G"
+msgstr "G"
+
+
 msgid "OS"
 msgstr "Операционная система"
 
 
 msgid "Esc"
 msgstr "Esc"
+
+
+msgid "Pause"
+msgstr "Пауза"
+
+
+msgid "Insert"
+msgstr "Вставить"
 
 
 msgctxt "UI_Events_KeyMaps"
@@ -131592,6 +133008,14 @@ msgid "%d items"
 msgstr "%d элементов"
 
 
+msgid "Red:"
+msgstr "Красный:"
+
+
+msgid "Green:"
+msgstr "Зелёный:"
+
+
 msgid "Blue:"
 msgstr "Синий:"
 
@@ -131602,6 +133026,14 @@ msgstr "Тон:"
 
 msgid "Saturation:"
 msgstr "Насыщенность:"
+
+
+msgid "Lightness:"
+msgstr "Светлота:"
+
+
+msgid "Alpha:"
+msgstr "Альфа:"
 
 
 msgid "Hex"
@@ -131900,6 +133332,11 @@ msgid "Reset Black/White point and curves"
 msgstr "Сбросить чёрную/белую точки и кривые"
 
 
+msgctxt "Color"
+msgid "C"
+msgstr "C"
+
+
 msgid "Preset"
 msgstr "Пресет"
 
@@ -131930,6 +133367,14 @@ msgstr "Переместить {} {} выше {}"
 
 msgid "Move {} {} below {}"
 msgstr "Переместить {} {} ниже {}"
+
+
+msgid "Layer is locked or not visible"
+msgstr "Слой заблокирован или не виден"
+
+
+msgid "Layer Group is locked or not visible"
+msgstr "Группа слоёв заблокирована или не видна"
 
 
 msgid "ID-Block:"
@@ -132078,6 +133523,18 @@ msgstr "Выбрать рабочее пространство для созда
 
 msgid "Browse LightProbe to be linked"
 msgstr "Выбор связываемого зонда освещения"
+
+
+msgid "Browse Curves Data to be linked"
+msgstr "Обзор данных кривых, которые необходимо связать"
+
+
+msgid "Browse Point Cloud Data to be linked"
+msgstr "Обзор данных облака точек, которые необходимо связать"
+
+
+msgid "Browse Volume Data to be linked"
+msgstr "Обзор данных объёма, которые необходимо связать"
 
 
 msgid "Browse ID data to be linked"
@@ -132229,6 +133686,10 @@ msgid "New"
 msgstr "Создать"
 
 
+msgid "Add to linking collection"
+msgstr "Добавить в коллекцию привязки"
+
+
 msgid "Add to linking collection before {}"
 msgstr "Добавить в коллекцию привязки перед {}"
 
@@ -132245,12 +133706,28 @@ msgid "Select List Item"
 msgstr "Выбрать элемент списка"
 
 
+msgid "Hide filtering options"
+msgstr "Скрыть параметры фильтрации"
+
+
 msgid "Insert before socket"
 msgstr "Вставить перед сокетом"
 
 
 msgid "Insert after socket"
 msgstr "Вставить после сокета"
+
+
+msgid "Insert into panel"
+msgstr "Вставить в панель"
+
+
+msgid "Insert before panel"
+msgstr "Вставить перед панелью"
+
+
+msgid "Insert after panel"
+msgstr "Вставить после панели"
 
 
 msgid "No Properties"
@@ -132297,6 +133774,10 @@ msgid "Stop animation playback"
 msgstr "Остановить воспроизведение анимации"
 
 
+msgid "Split/Dock"
+msgstr "Разделить/Стыковать"
+
+
 msgid "Duplicate into Window"
 msgstr "Дублировать в окно"
 
@@ -132313,8 +133794,16 @@ msgid "Show Hidden Region"
 msgstr "Отобразить скрытую область"
 
 
+msgid "Active object has negative scale"
+msgstr "Активный объект имеет отрицательный масштаб"
+
+
 msgid "Active object has non-uniform scale"
 msgstr "Активный объект имеет неравномерный масштаб"
+
+
+msgid "Click to open the info editor"
+msgstr "Нажмите, чтобы открыть редактор информации"
 
 
 msgid "Show in Info Log"
@@ -132337,16 +133826,57 @@ msgid "Can't edit external library data"
 msgstr "Правка данных из внешних библиотек невозможна"
 
 
+msgid "Samples Transform"
+msgstr "Сэмплов - Трансформация"
+
+
+msgid "Use Schema"
+msgstr "Использовать заданную схему"
+
+
 msgid "Method Quads"
 msgstr "Четырёхугольники"
+
+
+msgctxt "Camera"
+msgid "Close"
+msgstr "Закрыт"
+
+
+msgid "No filepath given"
+msgstr "Путь к файлу не указан"
 
 
 msgid "Unable to determine ABC sequence length"
 msgstr "Невозможно определить длину последовательности ABC"
 
 
+msgid "Global Orientation"
+msgstr "Глобальная ориентация"
+
+
+msgid "Texture Options"
+msgstr "Параметры текстуры"
+
+
 msgid "Only Selected Map"
 msgstr "Только выделенная карта"
+
+
+msgid "Export Data Options"
+msgstr "Параметры экспорта данных"
+
+
+msgid "Armature Options"
+msgstr "Параметры арматуры"
+
+
+msgid "Collada Options"
+msgstr "Параметры Collada"
+
+
+msgid "Import Data Options"
+msgstr "Параметры импорта данных"
 
 
 msgid "Can't create export file"
@@ -132369,12 +133899,28 @@ msgid "Parsing errors in Document (see Blender Console)"
 msgstr "Ошибки парсинга документа (см. консоль Blender)"
 
 
+msgid "Multiple file handlers can be used, drop to pick which to use"
+msgstr "В наличии есть несколько обработчиков файлов, перетащите, чтобы выбрать нужный"
+
+
 msgid "Scene Options"
 msgstr "Параметры сцены"
 
 
+msgid "Export Options"
+msgstr "Параметры экспорта"
+
+
 msgid "Unable to find valid 3D View area"
 msgstr "Невозможно найти действительную площадь 3D-вида"
+
+
+msgid "Unable to export SVG"
+msgstr "Невозможно экспортировать SVG"
+
+
+msgid "Unable to export PDF"
+msgstr "Невозможно экспортировать PDF"
 
 
 msgid "Unable to import '%s'"
@@ -132389,6 +133935,14 @@ msgid "Triangulated Mesh"
 msgstr "Триангулированный меш"
 
 
+msgid "Grouping"
+msgstr "Группировка"
+
+
+msgid "Object Groups"
+msgstr "Группы объектов"
+
+
 msgid "Material Groups"
 msgstr "Группы материалов"
 
@@ -132397,16 +133951,44 @@ msgid "Smooth Groups"
 msgstr "Группы сглаживания"
 
 
+msgid "Smooth Group Bitflags"
+msgstr "Битовые флаги групп сглаживания"
+
+
+msgid "PBR Extensions"
+msgstr "Расширения PBR"
+
+
+msgid "File exported successfully"
+msgstr "Файл успешно экспортирован"
+
+
+msgid "ASCII"
+msgstr "ASCII"
+
+
 msgid "Batch"
 msgstr "Партия"
+
+
+msgid "No filename given"
+msgstr "Имя файла не задано"
 
 
 msgid "Blender Data"
 msgstr "Данные Blender'а"
 
 
+msgid "File References"
+msgstr "Ссылки на файлы"
+
+
 msgid "Rigging"
 msgstr "Риггинг"
+
+
+msgid "Display Purpose"
+msgstr "Отобразить назначение"
 
 
 msgid "Particles and Instancing"
@@ -132474,6 +134056,10 @@ msgid "Profile Shape"
 msgstr "Форма профиля"
 
 
+msgid "Harden"
+msgstr "Укрепить"
+
+
 msgid "Outer"
 msgstr "Снаружи"
 
@@ -132484,6 +134070,10 @@ msgstr "Форма профиля соединения"
 
 msgid "Intersection Type"
 msgstr "Тип пересечения"
+
+
+msgid "Draw Cut Line"
+msgstr "Нарисовать линию разреза"
 
 
 msgid "Selected edges/faces required"
@@ -132506,6 +134096,10 @@ msgid "Thickness: %s, Depth: %s"
 msgstr "Толщина: %s, Глубина: %s"
 
 
+msgid "Compiled without GMP, using fast solver"
+msgstr "Скомпилировано без GMP (GNU Multiple Precision Arithmetic Library - бесплатная библиотека для арифметических операций произвольной точности), с использованием быстрого решателя"
+
+
 msgid "No intersections found"
 msgstr "Не найдено пересечений"
 
@@ -132524,6 +134118,14 @@ msgstr "Отменить"
 
 msgid "Pan View"
 msgstr "Панорамировать вид"
+
+
+msgid "Midpoint Snap"
+msgstr "Привязка к сред. точке"
+
+
+msgid "Ignore Snap"
+msgstr "Игнор. привязку"
 
 
 msgid "Measure"
@@ -132552,6 +134154,10 @@ msgstr "Разрез петлёй может работать неправиль
 
 msgid "Create Mesh From Paint Mask"
 msgstr "Создать меш из маски краски"
+
+
+msgid "Extract"
+msgstr "Извлечь"
 
 
 msgid "The geometry cannot be extracted with dyntopo activated"
@@ -132646,6 +134252,18 @@ msgid "Use mouse"
 msgstr "Использовать мышку"
 
 
+msgid "Use Pivot"
+msgstr "Использовать пивот"
+
+
+msgid "Set and use 3D cursor"
+msgstr "Установить и использовать 3D-курсор"
+
+
+msgid "Select and use mesh item"
+msgstr "Выделить и использовать элемент меша"
+
+
 msgid "Invalid selection order"
 msgstr "Неправильный порядок выделения"
 
@@ -132660,6 +134278,10 @@ msgstr "Среди выделенных рёбер нет таких, котор
 
 msgid "No selected vertex"
 msgstr "Нет выделенной вершины"
+
+
+msgid "Mesh(es) do not have shape keys"
+msgstr "У меша(-ей) нет ключей формы"
 
 
 msgid "Active mesh does not have shape keys"
@@ -132783,11 +134405,23 @@ msgstr "Активный объект не относится в выделен�
 
 
 msgid "No mesh data to join"
-msgstr "Нет мешей для присоединения"
+msgstr "Нет мешей для объединения"
+
+
+msgid "No source mesh objects selected"
+msgstr "Не выделено ни одного исходного меш-объекта"
+
+
+msgid "Selected meshes must have equal numbers of vertices, edges, and faces"
+msgstr "Выделенные меши должны иметь равное число вершин, рёбер и граней"
 
 
 msgid "No additional selected meshes with equal vertex count to join"
 msgstr "Нет дополнительных выделенных мешей с тем же числом вершин для присоединения"
+
+
+msgid "No name matches between selected objects and shape keys"
+msgstr "Нет совпадений имён между выделенными объектами и ключами формы"
 
 
 msgid "Joining results in %d vertices, limit is %ld"
@@ -132822,8 +134456,20 @@ msgid "Delete selected objects?"
 msgstr "Удалить выделенные объекты?"
 
 
+msgid "Empty Material"
+msgstr "Пустой материал"
+
+
 msgid "SoundTrack"
 msgstr "Звуковой клип"
+
+
+msgid "Empty Fill"
+msgstr "Пустое заполнение"
+
+
+msgid "Converted Layer"
+msgstr "Преобразованный слой"
 
 
 msgctxt "Light"
@@ -132857,6 +134503,11 @@ msgstr "Вихрь"
 
 
 msgctxt "Object"
+msgid "Magnet"
+msgstr "Магнит"
+
+
+msgctxt "Object"
 msgid "Wind"
 msgstr "Ветер"
 
@@ -132864,6 +134515,11 @@ msgstr "Ветер"
 msgctxt "Object"
 msgid "CurveGuide"
 msgstr "НаправляющаяКривой"
+
+
+msgctxt "Object"
+msgid "TextureField"
+msgstr "ТекстурноеПоле"
 
 
 msgctxt "Object"
@@ -132897,8 +134553,18 @@ msgstr "Перетаскивание"
 
 
 msgctxt "Object"
+msgid "FluidField"
+msgstr "ПолеФлюида"
+
+
+msgctxt "Object"
 msgid "Field"
 msgstr "Поле"
+
+
+msgctxt "GPencil"
+msgid "GPencil"
+msgstr "GPencil"
 
 
 msgctxt "GPencil"
@@ -132915,6 +134581,14 @@ msgid "Cannot create editmode armature"
 msgstr "Невозможно создать арматуру в режиме редактирования"
 
 
+msgid "Image objects can only be added in Object Mode"
+msgstr "Объекты-изображения можно добавлять только в объектном режиме"
+
+
+msgid "No editable objects to convert"
+msgstr "Нет редактируемых объектов для преобразования"
+
+
 msgid "Converting some non-editable object/object data, enforcing 'Keep Original' option to True"
 msgstr "Преобразование некоторых нередактируемых объектов/данных объекта с установкой параметра \"сохранить оригинал\" в значение \"истинно\""
 
@@ -132923,12 +134597,20 @@ msgid "Object not found"
 msgstr "Объект не найден"
 
 
+msgid "Object could not be duplicated"
+msgstr "Объект не может быть продублирован"
+
+
 msgid "This data does not support joining in edit mode"
 msgstr "Данные этого типа не поддерживают объединение в режиме редактирования"
 
 
 msgid "Cannot edit external library data"
 msgstr "Правка данных внешних библиотек невозможна"
+
+
+msgid "Active object final transform has one or more zero scaled axes"
+msgstr "В финальной трансформации активного объекта имеется одна или несколько осей с нулевым масштабом"
 
 
 msgid "Cannot delete indirectly linked object '%s'"
@@ -132963,12 +134645,24 @@ msgid "Object '%s' has no evaluated curves data"
 msgstr "Объект '%s' не имеет оцененных данных кривой"
 
 
+msgid "None of the objects are compatible with a conversion to \"%s\""
+msgstr "Ни один из объектов не совместим с преобразованием в \"%s\""
+
+
+msgid "The selection included %d object type(s) which do not support conversion to \"%s\""
+msgstr "Выделение включает в себя %d типа(-ов) объектов, которые не поддерживают преобразование в \"%s\""
+
+
 msgid "Cannot edit object '%s' as it is used by override collections"
 msgstr "Невозможно редактировать объект '%s', так как он используется коллекциями переопределений"
 
 
 msgid "No active mesh object"
 msgstr "Нет активного меш-объекта"
+
+
+msgid "This operation is not supported in edit mode"
+msgstr "Данная операция не поддерживается в режиме редактирования"
 
 
 msgid "Cannot edit object used by override collections"
@@ -133139,6 +134833,14 @@ msgid "Problem baking object \"%s\""
 msgstr "Ошибка запекания объекта «%s»"
 
 
+msgid "Overwrite existing bake data?"
+msgstr "Перезаписать существующие данные запекания?"
+
+
+msgid "Modifier containing the node is disabled"
+msgstr "Модификатор, содержащий ноду, отключён"
+
+
 msgid "Can't determine bake location on disk. Falling back to packed bake."
 msgstr "Невозможно определить местоположение запекания на диске. Возврат к запакованному запеканию."
 
@@ -133153,6 +134855,14 @@ msgstr "Не удалось удалить папку %s для каплевид
 
 msgid "Bake directory of object %s, modifier %s is empty, setting default path"
 msgstr "Папка запекания объекта %s, модификатор %s пуст, установка пути по умолчанию"
+
+
+msgid "Path conflict: %d caches set to path %s"
+msgstr "Конфликт путей: %d кэширования(-й) установлены на путь %s"
+
+
+msgid "Cache has to be enabled"
+msgstr "Кэширование должно быть включено"
 
 
 msgid "Remove exporter?"
@@ -133171,6 +134881,14 @@ msgid "Active object contains no collections"
 msgstr "Активный объект не содержит коллекций"
 
 
+msgid "Could not add the collection because it is overridden"
+msgstr "Не удалось добавить коллекцию, так как она переопределена"
+
+
+msgid "Could not add the collection because it is linked"
+msgstr "Не удалось добавить коллекцию, так как она связана"
+
+
 msgid "Could not add the collection because of dependency cycle detected"
 msgstr "Не удалось добавить коллекцию из-за обнаруженной циклической зависимости"
 
@@ -133185,6 +134903,18 @@ msgstr "Невозможно отсоединить коллекцию библ�
 
 msgid "File handler '%s' not found"
 msgstr "Обработчик для файла '%s' не найден"
+
+
+msgid "File handler operator '%s' not found"
+msgstr "Оператор обработчика файлов '%s' не найден"
+
+
+msgid "File path '%s' is not a valid file"
+msgstr "Путь к файлу '%s' не является допустимым файлом"
+
+
+msgid "Exported '%s'"
+msgstr "Экспортировано '%s'"
 
 
 msgid "Exported %d files from collection '%s'"
@@ -133235,6 +134965,10 @@ msgid "Could not find constraint data for ObjectSolver Set Inverse"
 msgstr "Не удалось найти данные ограничителя для установки инверсии расчёта объекта"
 
 
+msgid "Applied constraint was not first, result may not be as expected"
+msgstr "Применённый ограничитель не был первым в стеке, - результат может быть не таким, как вы могли бы ожидать"
+
+
 msgid "No constraints for copying"
 msgstr "Нет ограничителей для копирования"
 
@@ -133279,6 +135013,18 @@ msgid "Cannot edit constraints coming from linked data in a library override"
 msgstr "Невозможно редактировать ограничители, поступающие из связанных данных в переопределении библиотеки"
 
 
+msgid "No other bones are selected"
+msgstr "Никакие другие кости не выделены"
+
+
+msgid "No selected object to copy from"
+msgstr "Нет выделенного объекта с которого следует произвести копирование"
+
+
+msgid "No other objects are selected"
+msgstr "Никакие другие объекты не выделены"
+
+
 msgid "Transfer data layer(s) (weights, edge sharp, etc.) from selected meshes to active one"
 msgstr "Передача слоя(-ёв) данных (весов, остроты рёбер и т. д.) из выделенных мешей в активный"
 
@@ -133295,12 +135041,24 @@ msgid "Skipping object '%s', data '%s' has already been processed with a previou
 msgstr "Пропуск объекта «%s», связанные данные «%s» уже обработаны вместе с другим объектом"
 
 
+msgid "Failed to transfer mesh data to %d objects"
+msgstr "Не удалось перенести данные меша в %d объект(а, -ов)"
+
+
 msgid "Calculate Object Motion Paths"
 msgstr "Рассчитать траектории движений объекта"
 
 
 msgid "Move to New Collection"
 msgstr "Переместить в новую коллекцию"
+
+
+msgid "Clear motion paths of selected objects"
+msgstr "Очистить траектории движений выделенных объектов"
+
+
+msgid "Clear motion paths of all objects"
+msgstr "Очистить траектории движений всех объектов"
 
 
 msgid "Can't edit linked mesh or curve data"
@@ -133321,6 +135079,10 @@ msgstr "Невозможно добавить объекты к переопре
 
 msgid "No objects selected"
 msgstr "Ни одного объекта не выделено"
+
+
+msgid "Unable to change object mode while transforming"
+msgstr "Невозможно переключиться из объектного режима во время трансформации"
 
 
 msgid "%u object(s) hidden"
@@ -133371,6 +135133,22 @@ msgid "Unable to execute '%s', error changing modes"
 msgstr "Не удалось выполнить «%s», ошибка смены режимов"
 
 
+msgid "No target object to transfer the mode to"
+msgstr "Нет целевого объекта для передачи режима"
+
+
+msgid "Unable to transfer mode, the source and/or target objects are not editable"
+msgstr "Невозможно передать режим, исходные и/или целевые объекты не подлежат редактированию"
+
+
+msgid "Current mode of source object '%s' is not compatible with target liboverride object '%s'"
+msgstr "Текущий режим исходного объекта '%s' несовместим с целевым объектом переопределения библиотеки '%s'"
+
+
+msgid "Current mode of source object '%s' is not compatible with target object '%s'"
+msgstr "Текущий режим исходного объекта '%s' несовместим с целевым объектом '%s'"
+
+
 msgid "Apply Modifier"
 msgstr "Применить модификатор"
 
@@ -133391,8 +135169,24 @@ msgid "Cannot move above a modifier requiring original data"
 msgstr "Нельзя переместить модификатор выше другого модификатора, требующего исходные данные"
 
 
+msgid "Cannot move modifier beyond the start of the list"
+msgstr "Невозможно переместить модификатор за пределы начала списка"
+
+
 msgid "Cannot move beyond a non-deforming modifier"
 msgstr "Нельзя переместить за недеформирующий модификатор"
+
+
+msgid "Cannot move modifier beyond the end of the list"
+msgstr "Переместить модификатор за пределы конца списка невозможно"
+
+
+msgid "Cannot move modifier beyond the end of the stack"
+msgstr "Переместить модификатор за пределы конца стека невозможно"
+
+
+msgid "Evaluated geometry from modifier does not contain a mesh"
+msgstr "Геометрия, оценённая модификатором, не содержит меш"
 
 
 msgid "Modifier is disabled, skipping apply"
@@ -133427,6 +135221,26 @@ msgid "Applied modifier only changed CV points, not tessellated/bevel vertices"
 msgstr "Применённый модификатор изменил только контрольные вершины, но не вершины от тесселяции или фаски"
 
 
+msgid "Constructive modifiers cannot be applied"
+msgstr "Конструктивные модификаторы не могут быть применены"
+
+
+msgid "Evaluated geometry from modifier does not contain curves"
+msgstr "Геометрия, оценённая модификатором, не содержит кривых"
+
+
+msgid "Evaluated geometry from modifier does not contain a point cloud"
+msgstr "Геометрия, оценённая модификатором, не содержит облако точек"
+
+
+msgid "Cannot apply this modifier to Grease Pencil geometry"
+msgstr "Этот модификатор невозможно применить к геометрии Grease Pencil"
+
+
+msgid "Evaluated geometry from modifier does not contain Grease Pencil geometry"
+msgstr "Геометрия, оценённая модификатором, не содержит геометрию Grease Pencil"
+
+
 msgid "Modifiers cannot be applied in edit mode"
 msgstr "Невозможно применить модификатор в режиме редактирования"
 
@@ -133459,6 +135273,10 @@ msgid "Object '%s' does not support %s modifiers"
 msgstr "Объект '%s' не поддерживает модификаторы %s"
 
 
+msgid "Modifier can only be added once to object '%s'"
+msgstr "Модификатор можно добавить к объекту '%s' только единожды"
+
+
 msgid "Copying modifier '%s' to object '%s' failed"
 msgstr "Копирование модификатора '%s' в объект '%s' не удалось"
 
@@ -133467,12 +135285,32 @@ msgid "Removed modifier: %s"
 msgstr "Удалён модификатор: %s"
 
 
+msgid "Applied modifier: %s"
+msgstr "Применён модификатор: %s"
+
+
+msgid "Modifier '%s' was not copied to any objects"
+msgstr "Модификатор '%s' не был скопирован ни в один объект"
+
+
 msgid "Mesh '%s' has no skin vertex data"
 msgstr "У меша «%s» нет данных оболочки"
 
 
+msgid "Cannot edit modifiers coming from linked data in a library override"
+msgstr "Невозможно редактировать модификаторы, которые поступают из связанных данных в переопределении библиотеки"
+
+
 msgid "This modifier operation is not allowed from Edit mode"
 msgstr "Эта операция модификатора не разрешена в режиме редактирования"
+
+
+msgid "Modifiers cannot be applied on override data"
+msgstr "Модификаторы не могут применяться к переопределённым данным"
+
+
+msgid "No selected object is active"
+msgstr "Ни один из выделенных объект не активен"
 
 
 msgid "Object type of source object is not supported"
@@ -133507,6 +135345,10 @@ msgid "No valid subdivisions found to rebuild lower levels"
 msgstr "Не найдено подходящих подразделений для перестройки нижних уровней"
 
 
+msgid "%d new levels rebuilt"
+msgstr "%d новых уровней перестроено"
+
+
 msgid "Set Parent To"
 msgstr "Установить родителя на"
 
@@ -133521,6 +135363,10 @@ msgstr "Объект (без инверсии)"
 
 msgid "Object (Keep Transform Without Inverse)"
 msgstr "Объект (сохранить трансформацию без инверсии)"
+
+
+msgid "Object (Attach Curves to Surface)"
+msgstr "Объект (прикрепить кривые к поверхности)"
 
 
 msgid "Make Selected Objects Single-User"
@@ -133615,6 +135461,14 @@ msgid "Collection '%s' (instantiated by the active object) is not overridable"
 msgstr "Коллекцию «%s» (экземпляр которой используется активным объектом) нельзя переопределить"
 
 
+msgid "Could not find an overridable root hierarchy for object '%s'"
+msgstr "Не удалось найти переопределяемый корневой объект иерархии для объекта '%s'"
+
+
+msgid "Too many potential root collections (%d) for the override hierarchy, please use the Outliner instead"
+msgstr "Слишком много потенциальных корневых коллекций (%d) для иерархии переопределения, рекомендуется вместо этого использовать аутлайнер"
+
+
 msgid "Change Size"
 msgstr "Изменить размер"
 
@@ -133683,6 +135537,10 @@ msgid "Only one Effect of this type is allowed"
 msgstr "Только один эффект этого типа возможен"
 
 
+msgid "Cannot move effect beyond the end of the stack"
+msgstr "Переместить эффект за пределы конца стека невозможно"
+
+
 msgid "Effect cannot be added to object '%s'"
 msgstr "Эффект не может быть добавлен на объект «%s»"
 
@@ -133695,12 +135553,40 @@ msgid "Removed effect: %s"
 msgstr "Удалён эффект: %s"
 
 
+msgid "Cannot edit shaderfxs in a library override"
+msgstr "Невозможно редактировать эффекты шейдера в переопределении библиотеки"
+
+
 msgid "Object type is not supported"
 msgstr "Тип объекта не поддерживается"
 
 
+msgid "Cannot edit library or override data"
+msgstr "Невозможно редактировать данные из библиотеки или переопределять их"
+
+
+msgid "Cannot edit shaderfxs coming from linked data in a library override"
+msgstr "Невозможно редактировать эффекты шейдера, поступающие из связанных данных в переопределении библиотеки"
+
+
 msgid "Apply current visible shape to the object data, and delete all shape keys"
 msgstr "Применить текущую видимую форму к данным объекта и удалить все ключи формы"
+
+
+msgid "Lock all shape keys of the active object"
+msgstr "Заблокировать все ключи формы активного объекта"
+
+
+msgid "Unlock all shape keys of the active object"
+msgstr "Разблокировать все ключи формы активного объекта"
+
+
+msgid "The active shape key of %s is locked"
+msgstr "Активный ключ формы для %s заблокирован"
+
+
+msgid "The object %s has locked shape keys"
+msgstr "Объект %s имеет заблокированные ключи формы"
 
 
 msgid "Apply Object Transformations"
@@ -133719,6 +135605,10 @@ msgid "Objects have no data to transform"
 msgstr "У объектов нет данных для преобразования"
 
 
+msgid "Failed to apply rotation to some of the objects"
+msgstr "Не удалось применить вращение к некоторым объектам"
+
+
 msgid "Cannot apply to a multi user armature"
 msgstr "Невозможно применить к арматуре с несколькими пользователями"
 
@@ -133735,8 +135625,16 @@ msgid "Point cloud object does not support this set origin operation"
 msgstr "Объект \"облако точек\" не поддерживает эту операцию установки ориджина"
 
 
+msgid "Text objects can only have their scale applied: \"%s\""
+msgstr "К текстовым объектам можно применить только их масштаб: \"%s\""
+
+
 msgid "Area Lights can only have scale applied: \"%s\""
 msgstr "К протяжённым источникам можно применить только масштаб: «%s»"
+
+
+msgid "Object \"%s\" has a non-invertible transformation matrix, not applying transform"
+msgstr "Объект \"%s\" имеет необратимую матрицу трансформации, трансформация применена не будет"
 
 
 msgid "%i object(s) not centered, %i changed:"
@@ -133843,8 +135741,20 @@ msgid "Copy vertex groups to selected: %d done, %d failed (object data must supp
 msgstr "Копировать группы вершин к выделенным: %d выполнено, %d не удалось (данные объекта должны поддерживать группы вершин и иметь соответствующие индексы)"
 
 
+msgid "No active editable object"
+msgstr "Нет активного редактируемого объекта"
+
+
 msgid "Object type does not support vertex groups"
 msgstr "Тип объекта не поддерживает группы вершин"
+
+
+msgid "Object type \"%s\" does not have editable data"
+msgstr "Тип объекта \"%s\" не имеет редактируемых данных"
+
+
+msgid "Object has no vertex groups"
+msgstr "Объект не имеет групп вершин"
 
 
 msgid "Vertex select needs to be enabled in weight paint mode"
@@ -133887,6 +135797,10 @@ msgid "Copy particle systems to selected: %d done, %d failed"
 msgstr "Копировать системы частиц на выделенные: %d выполнено, %d ошибок"
 
 
+msgid "Object must be in object mode"
+msgstr "Объект должен находиться в объектном режиме"
+
+
 msgid "Bake failed: no Fluid modifier found"
 msgstr "Запекание не удалось: модификатор жидкости не найден"
 
@@ -133895,8 +135809,16 @@ msgid "Bake failed: invalid domain"
 msgstr "Запекание не удалось: недействительный домен"
 
 
+msgid "Bake free failed: no Fluid modifier found"
+msgstr "Очистка запекания не удалась: модификатор флюида не найден"
+
+
 msgid "Bake free failed: invalid domain"
 msgstr "Очистка запекания не удалась: недействительный домен"
+
+
+msgid "Bake free failed: pending bake jobs found"
+msgstr "Очистка запекания не удалась: найдены ожидающие задания по запеканию"
 
 
 msgid "Fluid: Empty cache path, reset to default '%s'"
@@ -133917,6 +135839,10 @@ msgstr "Блоки данных переопределения библиоте�
 
 msgid "Linked data-blocks do not allow editing caches"
 msgstr "Связанные блоки данных не позволяют редактировать кэши"
+
+
+msgid "Linked or library override data-blocks do not allow adding or removing caches"
+msgstr "Связанные блоки данных или блоки данных переопределения библиотеки не позволяют добавлять или удалять кэши"
 
 
 msgid "No Rigid Body World to add Rigid Body Constraint to"
@@ -134139,6 +136065,10 @@ msgid "Active object is not a selected point cloud object"
 msgstr "Активный объект не является выделенным облаком точек"
 
 
+msgid "No point cloud data to join"
+msgstr "Нет данных облака точек для объединения"
+
+
 msgid "3D Local View "
 msgstr "Локальный 3D-вид "
 
@@ -134259,8 +136189,20 @@ msgid "Copied material to internal clipboard"
 msgstr "Материал скопирован в буфер обмена"
 
 
+msgid "Cannot paste without a material"
+msgstr "Невозможно вставить без материала"
+
+
+msgid "Internal clipboard is not from a material"
+msgstr "Содержимое буфера обмена не соответствует материалу"
+
+
 msgid "Removed %d slots"
 msgstr "Удалёно %d слотов"
+
+
+msgid "Removed %d materials"
+msgstr "Удалено %d материала(-ов)"
 
 
 msgid "Blender Render"
@@ -134283,6 +136225,10 @@ msgid "Replace this area"
 msgstr "Заменить эту область"
 
 
+msgid "Move area here"
+msgstr "Переместить область сюда"
+
+
 msgid "A narrow vertical area interferes with this operation"
 msgstr "Узкая вертикальная область мешает этой операции"
 
@@ -134293,6 +136239,14 @@ msgstr "Узкая горизонтальная область мешает эт
 
 msgid "Select Area"
 msgstr "Выделить область"
+
+
+msgid "Select Split"
+msgstr "Выбрать разделение"
+
+
+msgid "Select Location"
+msgstr "Выбрать положение"
 
 
 msgid "Join Up"
@@ -134376,6 +136330,10 @@ msgid "Area not found in the active screen"
 msgstr "Область не найдена на активном экране"
 
 
+msgid "Unable to close area"
+msgstr "Невозможно закрыть область"
+
+
 msgid "Can only scale region size from an action zone"
 msgstr "Масштабирование региона возможно только из зоны действия"
 
@@ -134416,8 +136374,24 @@ msgid "expected a timeline/animation area to be active"
 msgstr "Необходима активная область с временной шкалой или анимацией"
 
 
+msgid "Expected an active Outliner"
+msgstr "Необходим активный аутлайнер"
+
+
+msgid "Expected an Outliner region"
+msgstr "Необходим регион аутлайнера"
+
+
 msgid "Context missing active object"
 msgstr "Нет активного объекта в контексте"
+
+
+msgid "Cannot edit library linked or non-editable override object"
+msgstr "Невозможно редактировать объекты, связанные с библиотекой или объекты нередактируемых переопределений"
+
+
+msgid "Cannot edit hidden object"
+msgstr "Невозможно редактировать скрытый объект"
 
 
 msgid "expected a view3d region & editmesh"
@@ -134426,6 +136400,10 @@ msgstr "Необходим регион 3D-вида в режиме редакт
 
 msgid "No object, or not exclusively in pose mode"
 msgstr "Нет объекта или не всецело в режиме позы"
+
+
+msgid "Object is a local library override"
+msgstr "Объект представляет собой локальное переопределение библиотеки"
 
 
 msgid "expected a view3d region & editcurve"
@@ -134440,6 +136418,14 @@ msgid "Flipping regions in the Top-bar is not allowed"
 msgstr "Перемещение областей на верхней панели невозможно"
 
 
+msgid "Missing: %s"
+msgstr "Отсутствует: %s"
+
+
+msgid "Missing: %s.%s"
+msgstr "Отсутствует: %s.%s"
+
+
 msgid "No menu items found"
 msgstr "Не найдены пункты меню"
 
@@ -134450,6 +136436,10 @@ msgstr "Кликните правой кнопкой мыши на кнопке,
 
 msgid "Quick Favorites"
 msgstr "Избранное"
+
+
+msgid "screen"
+msgstr "экран"
 
 
 msgctxt "Operator"
@@ -134469,6 +136459,14 @@ msgid "Permanently delete brush asset blend file. This cannot be undone."
 msgstr "Удалить blend-файл ассета кисти навсегда. Это действие не может быть отменено."
 
 
+msgid "Permanently delete brush. This cannot be undone."
+msgstr "Удалить кисть навсегда. Это действие не может быть отменено."
+
+
+msgid "Unable to activate brush, wrong object mode"
+msgstr "Не удалось активировать кисть, неправильный режим объекта"
+
+
 msgid "Unable to activate just-saved brush asset"
 msgstr "Невозможно активировать только что сохранённый ассет кисти"
 
@@ -134485,8 +136483,24 @@ msgid "Asset file is not editable"
 msgstr "Файл ассета не подлежит редактированию"
 
 
+msgid "Assets in the current file cannot be individually saved"
+msgstr "Ассеты в текущем файле не могут быть сохранены по отдельности"
+
+
+msgid "Assets in the current file cannot be reverted"
+msgstr "Ассеты в текущем файле не могут быть восстановлены"
+
+
 msgid "Original surface mesh is empty"
 msgstr "Исходный меш поверхности пуст"
+
+
+msgid "Evaluated surface mesh is empty"
+msgstr "Оцениваемая меш-поверхность является пустой"
+
+
+msgid "Missing surface mesh"
+msgstr "Отсутствует меш-поверхность"
 
 
 msgid "Missing UV map for attaching curves on original surface"
@@ -134509,8 +136523,24 @@ msgid "UV map or surface attachment is invalid"
 msgstr "Недопустимая UV-карта или прикрепление к поверхности"
 
 
+msgid "No editable Grease Pencil layer"
+msgstr "Нет редактируемого слоя Grease Pencil"
+
+
+msgid "No Grease Pencil frame to draw weight on"
+msgstr "Нет кадров Grease Pencil, на которых можно было бы рисовать веса"
+
+
 msgid "Active group is locked, aborting"
 msgstr "Активная группа заблокирована, операция прервана"
+
+
+msgid "Fill tool needs active material"
+msgstr "Инструменту заливки требуется активный материал"
+
+
+msgid "Unable to fill unclosed areas"
+msgstr "Невозможно произвести заливку незамкнутых областей"
 
 
 msgid "GPencil Interpolation: "
@@ -134548,12 +136578,28 @@ msgid "Dynamic Effects"
 msgstr "Динамические эффекты"
 
 
+msgid "Trace"
+msgstr "Трассировка"
+
+
 msgid "Target object not a Grease Pencil, ignoring!"
 msgstr "Целевой объект не является типом Grease Pencil, он будет проигнорирован!"
 
 
 msgid "Target object library-data, ignoring!"
 msgstr "Целевой объект представляет собой \"данные библиотеки\", он будет проигнорирован!"
+
+
+msgid "No image empty selected"
+msgstr "Изображение-пустышка не выделено"
+
+
+msgid "No valid image format selected"
+msgstr "Не выбран допустимый формат изображения"
+
+
+msgid "PaintCurve"
+msgstr "КриваяРисования"
 
 
 msgid "Sample color for %s"
@@ -134566,6 +136612,10 @@ msgstr "Кисть. Используйте левую кнопку мыши, ч�
 
 msgid "Palette. Use Left Click to sample more colors"
 msgstr "Палитра. Используйте левую кнопку мыши, чтобы собрать больше семплов"
+
+
+msgid "Sampling color for palette"
+msgstr "Сэмплинг цвета для палитры"
 
 
 msgid "Packed MultiLayer files cannot be painted"
@@ -134586,6 +136636,18 @@ msgstr "Рисование невозможно для многослойных 
 
 msgid "Add Paint Slot"
 msgstr "Добавить слот рисования"
+
+
+msgid " UVs,"
+msgstr " UV,"
+
+
+msgid " Materials,"
+msgstr " Материалы,"
+
+
+msgid " Textures (or linked),"
+msgstr " Текстуры (или связанные),"
 
 
 msgid " Stencil,"
@@ -134622,6 +136684,10 @@ msgstr "Ошибка при создании внеэкранного буфер
 
 msgid "Missing%s%s%s%s detected!"
 msgstr "Недостающие элементы: %s%s%s%s!"
+
+
+msgid "Palette created"
+msgstr "Палитра создана"
 
 
 msgid "The modifier used does not support deformed locations"
@@ -136101,12 +138167,24 @@ msgid "Could not add an image node"
 msgstr "Не удалось добавить ноду изображения"
 
 
+msgid "Could not add image. A node tree has not been created or assigned"
+msgstr "Не удалось добавить изображение. Древо нод не было создано или назначено"
+
+
 msgid "Could not add a mask node"
 msgstr "Не удалось добавить ноду маски"
 
 
 msgid "Could not add material"
 msgstr "Не удалось добавить материал"
+
+
+msgid "Cannot set both socket and panel identifier"
+msgstr "Невозможно одновременно установить идентификаторы для сокета и панели"
+
+
+msgid "Invalid panel identifier"
+msgstr "Неверный идентификатор панели"
 
 
 msgid "Could not add a color node"
@@ -136135,6 +138213,14 @@ msgstr "Тип нодового дерева %s не определён"
 
 msgid "Adding node groups isn't supported for custom (Python defined) node trees"
 msgstr "Добавление нодовых групп не поддерживается для пользовательских (определённых Python) деревьев нод"
+
+
+msgid "Cannot drag an output socket"
+msgstr "Невозможно перетащить выходной сокет"
+
+
+msgid "Cannot drag panel with no inputs"
+msgstr "Невозможно перетащить панель без входов"
 
 
 msgid "{} (Menu)"
@@ -136433,6 +138519,18 @@ msgid "Unsupported Menu Socket"
 msgstr "Неподдерживаемый сокет меню"
 
 
+msgid "Add \"%s\" Input"
+msgstr "Добавить вход \"%s\""
+
+
+msgid "Add \"%s\" Input (Ctrl to add panel)"
+msgstr "Добавить вход \"%s\" (Ctrl для добавления панели)"
+
+
+msgid "Add \"%s\" Panel"
+msgstr "Добавить панель \"%s\""
+
+
 msgid "More than one collection is selected"
 msgstr "Выделено больше одной коллекции"
 
@@ -136709,6 +138807,10 @@ msgid "Remap Data ID"
 msgstr "Переназначить ID-данных"
 
 
+msgid "Remap"
+msgstr "Переназначить"
+
+
 msgid "Purge Unused Data from This File"
 msgstr "Удалить неиспользуемые данные из этого файла"
 
@@ -136786,7 +138888,7 @@ msgstr "Неверная пара старый/новый идентификат
 
 
 msgid "Old ID '%s' is linked from a library, indirect usages of this data-block will not be remapped"
-msgstr "На старый ID '%s' ссылается библиотека, непрямое использование этого датаблока не будет подвергнуто ремаппингу"
+msgstr "На старый ID '%s' ссылается библиотека, непрямое использование этого датаблока не будет подвергнуто переназначению"
 
 
 msgid "Copied %d selected data-block(s)"
@@ -136865,6 +138967,10 @@ msgid "Invalid anchor ('%s') found, needed to create library override from data-
 msgstr "Найден неверный якорь ('%s'), необходимо создать переопределение библиотеки из блока данных '%s'"
 
 
+msgid "Could not create library override from data-block '%s', one of its parents is not overridable ('%s')"
+msgstr "Не удалось создать переопределение библиотеки из блока данных '%s', поскольку один из его родителей не является переопределяемым ('%s')"
+
+
 msgid "Invalid hierarchy root ('%s') found, needed to create library override from data-block '%s'"
 msgstr "Найден неверный корень иерархии ('%s'), необходимо создать переопределение библиотеки из блока данных '%s'"
 
@@ -136877,12 +138983,24 @@ msgid "Cannot clear embedded library override '%s', only overrides of real data-
 msgstr "Невозможно очистить переопределение встроенной библиотеки '%s', очищать напрямую можно только переопределения реальных блоков данных"
 
 
+msgid "Cannot clear linked library override '%s', only local overrides can be directly cleared"
+msgstr "Невозможно удалить связанное переопределение библиотеки '%s', напрямую можно удалять только локальные переопределения"
+
+
 msgid "No Library Overrides"
 msgstr "Нет переопределений библиотеки"
 
 
 msgid "Contains linked library overrides that need to be resynced, updating the library is recommended"
 msgstr "Содержит связанные переопределения библиотеки, которые необходимо повторно синхронизировать. Рекомендуется обновить библиотеку"
+
+
+msgid "Missing library"
+msgstr "Отсутствует библиотека"
+
+
+msgid "This override data-block is not needed anymore, but was detected as user-edited"
+msgstr "Этот блок данных переопределения больше не нужен, но был обнаружен как отредактированный пользователем"
 
 
 msgid "This override data-block is unused"
@@ -136893,12 +139011,24 @@ msgid "This override property does not exist in current data, it will be removed
 msgstr "Это свойство переопределения не существует в текущих данных, оно будет удалено при следующем сохранении .blend-файла"
 
 
+msgid "Added through override"
+msgstr "Добавлено через переопределение"
+
+
 msgid "Protected from override"
 msgstr "Защищено от переопределения"
 
 
 msgid "Additive override"
-msgstr "Дополняющее переопределение"
+msgstr "Добавляющее переопределение"
+
+
+msgid "Subtractive override"
+msgstr "Вычитающее переопределение"
+
+
+msgid "Multiplicative override"
+msgstr "Мультипликативное переопределение"
 
 
 msgid "(empty)"
@@ -136914,7 +139044,7 @@ msgstr "Не удалось перезагрузить с запуском мо�
 
 
 msgid "Add a crossfade transition strip for two selected strips with video content"
-msgstr "Добавить дорожку перекрёстного перехода для двух выделенных дорожек с видеосодержанием"
+msgstr "Добавить дорожку перехода перекрёстного наложения для двух выделенных дорожек с видеосодержанием"
 
 
 msgid "Add an add blend mode effect strip for two selected strips with video content"
@@ -136931,6 +139061,10 @@ msgstr "Добавить дорожку эффекта режима наложе
 
 msgid "Add an alpha under blend mode effect strip for two selected strips with video content"
 msgstr "Добавить дорожку эффекта альфа в режиме наложения для двух выделенных дорожек с видеосодержанием"
+
+
+msgid "Add a gamma crossfade transition strip for two selected strips with video content"
+msgstr "Добавить дорожку перёкрестного перехода гаммы для двух выделенных дорожек с видеосодержанием"
 
 
 msgid "Add a multiply blend mode effect strip for two selected strips with video content"
@@ -136975,6 +139109,10 @@ msgstr "Добавить в секвенсор текстовую дорожку
 
 msgid "Add a color mix effect strip to the sequencer"
 msgstr "Добавить в секвенсор дорожку эффектов для смешивания цветов"
+
+
+msgid "No available channel for the current frame."
+msgstr "Для текущего кадра нет доступных каналов."
 
 
 msgid "Movie clip not found"
@@ -137025,6 +139163,14 @@ msgid "%d strips pasted"
 msgstr "%d дорожек вставлено"
 
 
+msgid "Slip Offset: Frames: %s"
+msgstr "Смещение сдвига: Кадры: %s"
+
+
+msgid "Slip Offset: Frames: %d"
+msgstr "Смещение сдвига: Кадры: %d"
+
+
 msgid "Separate Sequence Images"
 msgstr "Разделить изображения секвенции"
 
@@ -137045,8 +139191,20 @@ msgid "Cannot reassign inputs: recursion detected"
 msgstr "Невозможно переназначить входы: обнаружена рекурсия"
 
 
+msgid "Active strip is not an effect strip"
+msgstr "Активная дорожка не является дорожкой эффектов"
+
+
+msgid "Strip needs two inputs to swap"
+msgstr "Чтобы поменять дорожку местами необходимо два входа"
+
+
 msgid "Please select two strips"
 msgstr "Необходимо выделить две дорожки"
+
+
+msgid "New effect takes less or more inputs"
+msgstr "Новый эффект использует меньше или больше входов"
 
 
 msgid "Can't create subtitle file"
@@ -137157,12 +139315,24 @@ msgid "Fog Volume"
 msgstr "Объём тумана"
 
 
+msgid "Level Set"
+msgstr "Набор уровней"
+
+
 msgid "(Geometry)"
 msgstr "(Геометрия)"
 
 
+msgid "No Data-Block"
+msgstr "Нет блока данных"
+
+
 msgid "For Each Element"
 msgstr "Для каждого элемента"
+
+
+msgid "No Active Context"
+msgstr "Нет активного контекста"
 
 
 msgid ""
@@ -138393,6 +140563,10 @@ msgid "Smart UV Project"
 msgstr "Умное UV-проецирование"
 
 
+msgid "Built without SLIM, falling back to conformal method"
+msgstr "Скомпилировано без SLIM, возврат к методу \"Согласованно (conformal)\""
+
+
 msgid "Object has non-uniform scale, unwrap will operate on a non-scaled version of the mesh"
 msgstr "Масштаб объекта различается по осям, развёртывание будет произведено для немасштабированного меша"
 
@@ -138737,6 +140911,10 @@ msgid "USD Import: unable to open stage to read %s"
 msgstr "Импорт USD: невозможно открыть сценарий для чтения %s"
 
 
+msgid "One or more objects used as prototypes in 'Instance on Points' nodes either do not have 'As Instance' enabled in their 'Object Info' nodes, or the prototype is the base geometry input itself. Both cases prevent valid point instancer export. If it's the former, enable 'As Instance' to avoid incorrect self-referencing."
+msgstr "Один или несколько объектов, используемых в качестве прототипов в нодах 'Экземпляр на точки (instance on points)', либо не имеют включённого флажка на опции 'В качестве экземпляра (as instance)' в своих нодах 'Информация об объекте (object info)', либо прототип сам является базовой геометрией входных данных. В обоих случаях это помешает экспорту допустимого инстансера точек. Если это первый случай, - включите опцию 'В качестве экземпляра (as instance)', чтобы избежать некорректных ссылок на \"самого себя\"."
+
+
 msgid "An exception occurred invoking USD hook '%s'. Please see the console for details"
 msgstr "Произошло исключение при вызове USD-крюка '%s'. Подробности см. в консоли"
 
@@ -138751,6 +140929,10 @@ msgstr "Primvar (примитивная переменная) '%s' (интерп
 
 msgid "%s: Error: Couldn't get input socket %s for node %s"
 msgstr "%s: Ошибка: Не удалось получить входной сокет %s для узла %s"
+
+
+msgid "Invalid face data detected for mesh '%s'. Automatic correction will be used, but some data will most likely be lost"
+msgstr "Обнаружены недействительные данные граней в меше '%s'. Будет использована автоматическая коррекция, но некоторые данные, скорее всего, будут потеряны"
 
 
 msgid "USD Import: UV attribute value '%s' count inconsistent with interpolation type"
@@ -138809,6 +140991,14 @@ msgid "%s: Number of offsets greater than number of mesh vertices for blend shap
 msgstr "%s: Количество смещений больше чем количество вершин меша для смешанной формы %s"
 
 
+msgid "%s: Couldn't query skeleton %s"
+msgstr "%s: Не удалось сделать запрос скелета %s"
+
+
+msgid "%s: Topology and joint order size mismatch for skeleton %s"
+msgstr "%s: Несоответствие размера между топологией и порядком сочленений для скелета %s"
+
+
 msgid "%s: Couldn't add bone for joint %s"
 msgstr "%s: Не удалось добавить кость для сустава %s"
 
@@ -138821,8 +141011,20 @@ msgid "%s: Mismatch in bind xforms and joint counts for skeleton %s"
 msgstr "%s: Несоответствие между количеством связанных Xформ и количеством суставов в скелете %s"
 
 
+msgid "USD Skeleton Import: bone matrices with negative determinants detected in prim %s. Such matrices may indicate negative scales, possibly due to mirroring operations, and can't currently be converted to Blender's bone representation. The skeletal animation won't be imported"
+msgstr "Импорт скелета USD: В примитиве %s обнаружены матрицы костей с отрицательными детерминантами. Эти матрицы могут указывать на отрицательные масштабы, возможно, из-за операций симметризации (зеркалирования), поэтому в настоящее время их нельзя преобразовать в представление костей Blender'а. Анимация скелета импортирована не будет"
+
+
 msgid "%s: Joint weights and joint indices element size mismatch for prim %s"
 msgstr "%s: Несоответствие размеров между весами (влияниями) сустава и идентификаторами элементов соединения для примитива %s"
+
+
+msgid "%s: Joint weights and joint indices size mismatch for prim %s"
+msgstr "%s: Несоответствие размеров между весами сустава и идентификаторами сустава для примитива %s"
+
+
+msgid "%s: Unexpected joint weights interpolation type %s for prim %s"
+msgstr "%s: Неожиданный тип %s интерполяции весов сустава для примитива %s"
 
 
 msgid "%s: Joint weights of unexpected size for vertex interpolation for prim %s"
@@ -138843,6 +141045,14 @@ msgstr "%s: Не удалось найти общего предка Xформу
 
 msgid "Curve width size not supported for USD interpolation"
 msgstr "Размер ширины кривой не поддерживается для интерполяции USD"
+
+
+msgid "Cannot export mixed curve types in the same Curves object"
+msgstr "Невозможно экспортировать смешанные типы кривых в один и тот же объект-кривую"
+
+
+msgid "Cannot export mixed cyclic and non-cyclic curves in the same Curves object"
+msgstr "Невозможно экспортировать смешанные замкнутые и незамкнутые кривые в один и тот же объект-кривую"
 
 
 msgid "Attribute '%s' (Blender domain %d, type %d) cannot be converted to USD"
@@ -138879,6 +141089,10 @@ msgstr "Меш '%s', Атрибут '%s' (домен %d, тип %d) не мог�
 
 msgid "USD export: Simple subdivision not supported, exporting subdivided mesh"
 msgstr "Экспорт USD: простое подразделение не поддерживается, экспортируется подразделённый меш"
+
+
+msgid "Instances number '%d' doesn't match transforms size '%d'"
+msgstr "Количество экземпляров '%d' не соответствует размеру трансформаций '%d'"
 
 
 msgid "USD Export: failed to resolve .vdb file for object: %s"
@@ -139317,6 +141531,10 @@ msgid "Unable to remove curve point"
 msgstr "Не удалось удалить точку кривой"
 
 
+msgid "CurveMapping does not own CurveMap"
+msgstr "Отображению кривой не принадлежит карта кривой"
+
+
 msgid "Unable to add element to colorband (limit %d)"
 msgstr "Не удалось добавить элемент в набор цветов (максимум %d)"
 
@@ -139583,12 +141801,32 @@ msgid "Mini"
 msgstr "Мини"
 
 
+msgid "Use 8-bit floating-point numbers where possible, otherwise use 16-bit"
+msgstr "Использовать 8-битные числа с плавающей запятой, где это возможно, в противном случае будут использоваться 16-битные числа"
+
+
 msgid "Emit fluid from mesh surface or volume"
 msgstr "Выделение жидкости из поверхности или объёма меша"
 
 
 msgid "Emit smoke from particles"
 msgstr "Выделение дыма из частиц"
+
+
+msgid "Vertex Group is locked"
+msgstr "Группа вершин заблокирована"
+
+
+msgid "Indices and weights must have the same lengths"
+msgstr "Индексы и веса должны иметь одинаковую длину"
+
+
+msgid "Vertex Group \"%s\" does not exist"
+msgstr "Группа вершин \"%s\" не существует"
+
+
+msgid "Vertex Group \"%s\" is locked"
+msgstr "Группа вершин \"%s\" заблокирована"
 
 
 msgid "Frame already exists on frame number %d"
@@ -140077,6 +142315,10 @@ msgid "Invalid target!"
 msgstr "Неверная цель!"
 
 
+msgid "uv_on_emitter() requires a modifier from an evaluated object"
+msgstr "uv_on_emitter()'у требуется модификатор оцениваемого объекта"
+
+
 msgid "Mesh has no UV data"
 msgstr "У меша нет UV-разметки"
 
@@ -140256,8 +142498,20 @@ msgid "MovieTracking '%s' cannot be removed"
 msgstr "Отслеживание видеофрагмента «%s» не может быть удалено"
 
 
+msgid "Registering panel class:"
+msgstr "Регистрация класса панели:"
+
+
 msgid "Region not found in space type"
 msgstr "Регион не найден в типе пространства"
+
+
+msgid "%s '%s' has category '%s'"
+msgstr "%s '%s' относится к категории '%s'"
+
+
+msgid "%s '%s', bl_idname '%s' could not be unregistered"
+msgstr "%s '%s', bl_idname '%s' не может быть снято с регистрации"
 
 
 msgid "%s parent '%s' for '%s' not found"
@@ -140278,6 +142532,10 @@ msgstr "Регистрация класса обработчика файлов:
 
 msgid "Layout panels can not be used in this context"
 msgstr "Панели макетов не могут быть использованы в этом контексте"
+
+
+msgid "template_popup_confirm used outside of a popup"
+msgstr "template_popup_confirm используется вне всплывающего окна"
 
 
 msgid "Launched with \"--offline-mode\", cannot be changed"
@@ -140310,6 +142568,16 @@ msgstr "Шрифт не упакован"
 
 msgid "Font is not editable"
 msgstr "Шрифт не подлежит редактированию"
+
+
+msgctxt "UI_Events_KeyMaps"
+msgid "Left"
+msgstr "Левая"
+
+
+msgctxt "UI_Events_KeyMaps"
+msgid "Middle"
+msgstr "Средняя"
 
 
 msgctxt "UI_Events_KeyMaps"
@@ -140557,12 +142825,28 @@ msgid "Property value not in enumeration"
 msgstr "Значение свойства не определено в перечислении"
 
 
+msgid "context \"window\" is None"
+msgstr "Контекст \"окна\" - Ничего"
+
+
 msgid "Not running with '--enable-event-simulate' enabled"
 msgstr "Выполнение отключено из-за включённого флага «--enable-event-simulate»"
 
 
 msgid "Value: only 'PRESS/RELEASE/NOTHING' are supported"
 msgstr "Значение: поддерживаются только 'НАЖАТЬ/ОТПУСТИТЬ/НИЧЕГО'"
+
+
+msgid "Value: must be 'PRESS/RELEASE' for keyboard/buttons"
+msgstr "Значение: для клавиатуры/кнопок должно быть 'НАЖАТЬ/ОТПУСТИТЬ'"
+
+
+msgid "Value: must be 'NOTHING' for motion"
+msgstr "Значение: для движения должно быть 'НИЧЕГО'"
+
+
+msgid "Value: must be 'PRESS' when unicode is set"
+msgstr "Значение: если установлен юникод, должно быть 'НАЖАТЬ'"
 
 
 msgid "Only a single character supported"
@@ -140577,8 +142861,16 @@ msgid "Gizmo group '%s' has 'PERSISTENT' option set!"
 msgstr "В группе манипуляторов '%s' установлена опция 'PERSISTENT'!"
 
 
+msgid "KeyMapItem '%s' not found in KeyMap '%s'"
+msgstr "Элемент раскладки клавиатуры '%s' не найден в раскладке клавиатуры '%s'"
+
+
 msgid "Modal key-maps not supported for add-on key-config"
 msgstr "Модальные сопоставления клавиш не поддерживаются для конфигурации клавиш аддона"
+
+
+msgid "KeyMap '%s' not found in KeyConfig '%s'"
+msgstr "Раскладка клавиатуры '%s' не найдена в конфигурации клавиш '%s'"
 
 
 msgid "KeyConfig '%s' cannot be removed"
@@ -140589,8 +142881,16 @@ msgid "GizmoType '%s' not known"
 msgstr "Тип манипуляторов «%s» не известен"
 
 
+msgid "GizmoType '%s' is for a 3D gizmo-group. The 'draw_select' callback is set where only 'test_select' will be used."
+msgstr "Тип гизмо '%s' предназначен для 3D-гизмо-группы. Функция обратного вызова 'draw_select' будет устанавливаться только там, где будет использоваться 'test_select'."
+
+
 msgid "%s area type does not support gizmos"
 msgstr "%s тип области не поддерживает гизмо"
+
+
+msgid "Operator missing srna"
+msgstr "В операторе отсутствует srna"
 
 
 msgid "Unknown operator"
@@ -140725,6 +143025,14 @@ msgid "CorrectiveSmooth"
 msgstr "КорректирующееСглаживание"
 
 
+msgid "Attempt to bind from inactive dependency graph"
+msgstr "Попытка создать привязку из неактивного графа зависимостей"
+
+
+msgid "Bind data required"
+msgstr "Требуются \"данные\" привязки"
+
+
 msgid "Bind vertex count mismatch: %u to %u"
 msgstr "Несоответствие количества вершин для привязки: %u к %u"
 
@@ -140779,6 +143087,10 @@ msgstr "Эффективное расстояние"
 
 msgid "Fading"
 msgstr "Проявление/исчезновение"
+
+
+msgid "Weight Output"
+msgstr "Вес вывода"
 
 
 msgid "Offset Start"
@@ -140857,12 +143169,20 @@ msgid "Illumination Filtering"
 msgstr "Фильтрация освещения"
 
 
+msgid "Crease (Angle Cached)"
+msgstr "Складка (кэшированный угол)"
+
+
 msgid "Material Borders"
 msgstr "Границы между материалами"
 
 
 msgid "Light Contour"
 msgstr "Контур света"
+
+
+msgid "Type overlapping cached"
+msgstr "Тип кэшированного перекрытия"
 
 
 msgid "Allow Overlapping Types"
@@ -140905,8 +143225,16 @@ msgid "Geometry Space"
 msgstr "Пространство геометрии"
 
 
+msgid "Geometry Threshold"
+msgstr "Порог геометрии"
+
+
 msgid "Filter Source"
 msgstr "Фильтр источника"
+
+
+msgid "Continue Without Clearing"
+msgstr "Продолжить без очистки"
 
 
 msgid "Depth Offset"
@@ -140974,8 +143302,16 @@ msgid "MeshCache"
 msgstr "КэшМеша"
 
 
+msgid "'Integrate' only valid for Mesh objects"
+msgstr "'Совмещение (integrate)' действительно только для меш-объектов"
+
+
 msgid "'Integrate' original mesh vertex mismatch"
 msgstr "'Интегрировать' несовпадение вершин исходного меша"
+
+
+msgid "'Integrate' requires faces"
+msgstr "Для 'Совмещения (integrate)' требуются грани"
 
 
 msgid "Time Remapping"
@@ -140986,8 +143322,16 @@ msgid "Axis Mapping"
 msgstr "Сопоставление осей"
 
 
+msgid "Missing header"
+msgstr "Отсутствует заголовок"
+
+
 msgid "Vertex count mismatch"
 msgstr "Несоответствие количества вершин"
+
+
+msgid "Invalid frame total"
+msgstr "Неверное общее количество кадров"
 
 
 msgid "Timestamp read failed"
@@ -141014,6 +143358,10 @@ msgid "Unknown error opening file"
 msgstr "Неизвестная ошибка при открытии файла"
 
 
+msgid "Invalid header"
+msgstr "Недопустимый заголовок"
+
+
 msgid "MeshDeform"
 msgstr "ДеформацияМеша"
 
@@ -141024,6 +143372,10 @@ msgstr "Невозможно получить меш из объекта-кле�
 
 msgid "Cage vertices changed from %d to %d"
 msgstr "Вершины клетки изменены с %d на %d"
+
+
+msgid "Bind data missing"
+msgstr "Отсутствуют \"данные\" привязки"
 
 
 msgid "MeshSequenceCache"
@@ -141115,6 +143467,10 @@ msgid "NormalEdit"
 msgstr "РедактированиеНормалей"
 
 
+msgid "Invalid target settings"
+msgstr "Настройки цели недопустимы"
+
+
 msgid "Coverage"
 msgstr "Покрытие"
 
@@ -141124,7 +143480,7 @@ msgstr "Удалить запекание"
 
 
 msgid "Built without Ocean modifier"
-msgstr "Построено без модификатора океана"
+msgstr "Создано без модификатора \"Океан (ocean)\""
 
 
 msgctxt "Mesh"
@@ -141162,7 +143518,7 @@ msgstr "Преобразовать в меш"
 
 
 msgid "Built without Remesh modifier"
-msgstr "Построить без модификатора Remesh"
+msgstr "Создано без модификатора \"Ремеш (remesh)\""
 
 
 msgid "Zero voxel size cannot be solved"
@@ -141307,7 +143663,7 @@ msgstr "Нет допустимого целевого меша"
 
 
 msgid "Attempt to unbind from inactive dependency graph"
-msgstr "Попытка отвязаться от неактивного графика зависимостей"
+msgstr "Попытка убрать привязку от неактивного графа зависимостей"
 
 
 msgid "Vertices changed from %u to %u"
@@ -141439,7 +143795,11 @@ msgstr "Коэфф."
 
 
 msgid "Straight Alpha"
-msgstr "Чистый альфа-канал"
+msgstr "Прямой альфа-канал"
+
+
+msgid "Defines whether the foreground is in straight alpha form, which is necessary to know for proper alpha compositing. Images in the compositor are in premultiplied alpha form by default, so this should be false in most cases. But if, and only if, the foreground was converted to straight alpha form for some reason, this should be set to true"
+msgstr "Определяет, находится ли изображение переднего плана в формате прямого альфа-канала, что необходимо знать для правильного альфа-композитинга. Изображения в компо́зиторе по умолчанию используют предварительно умноженный формат альфа-канала, поэтому в большинстве случаев эту опцию следует отключать. Однако если изображение переднего плана использует прямой альфа-канал, эту опцию следует включить"
 
 
 msgid "Specifies the threshold or sensitivity to edges. Lowering this value you will be able to detect more edges at the expense of performance"
@@ -141727,7 +144087,7 @@ msgstr "Тональный диапазон"
 
 
 msgid "Disabled, built without OpenColorIO"
-msgstr "Отключено, построено без OpenColorIO"
+msgstr "Отключено, скомпилировано без OpenColorIO"
 
 
 msgid "Upper Left"
@@ -141744,6 +144104,26 @@ msgstr "Нижний левый"
 
 msgid "Lower Right"
 msgstr "Нижний правый"
+
+
+msgid "Alpha Crop"
+msgstr "Альфа-усечение"
+
+
+msgid "The X position of the lower left corner of the crop region"
+msgstr "Положение по X для нижнего левого угла области обрезки"
+
+
+msgid "The Y position of the lower left corner of the crop region"
+msgstr "Положение по Y для нижнего левого угла области обрезки"
+
+
+msgid "The width of the crop region"
+msgstr "Ширина области обрезки"
+
+
+msgid "Sets the areas outside of the crop region to be transparent instead of actually cropping the size of the image"
+msgstr "Делает участки за пределами области кадрирования прозрачными вместо фактической обрезки изображения до меньшего размера"
 
 
 msgid "The node tree must be the compositing node tree of any scene in the file"
@@ -141783,7 +144163,7 @@ msgstr "Качество:"
 
 
 msgid "Disabled. Built without OpenImageDenoise"
-msgstr "Отключено. Построено без OpenImageDenoise"
+msgstr "Отключено. Скомпилировано без OpenImageDenoise"
 
 
 msgid "Disabled. Platform not supported"
@@ -141886,6 +144266,10 @@ msgid "Base Path:"
 msgstr "Базовый путь:"
 
 
+msgid "Add Input"
+msgstr "Добавить вход"
+
+
 msgid "Layer:"
 msgstr "Слой:"
 
@@ -141896,6 +144280,10 @@ msgstr "Подпуть к файлу:"
 
 msgid "Format:"
 msgstr "Формат:"
+
+
+msgid "Invalid path template in File Output node. Skipping writing file."
+msgstr "Неверный шаблон пути в ноде \"Вывода в файл (file output)\". Файл сохранён не будет."
 
 
 msgid ""
@@ -141936,6 +144324,14 @@ msgstr "Уровень яркости, при котором пиксели сч
 
 msgid "The smoothness of the extracted highlights"
 msgstr "Плавность извлечённых бликов"
+
+
+msgid "Clamp bright highlights"
+msgstr "Подавить яркие блики"
+
+
+msgid "Clamp bright highlights such that their brightness are not larger than this value"
+msgstr "Подавить яркие блики так, чтобы их яркость не превышала это значение"
 
 
 msgid "Adjusts the brightness of the glare"
@@ -141992,6 +144388,26 @@ msgstr "Сглаживание краёв"
 
 msgid "Render passes in the Viewport compositor are only supported in EEVEE"
 msgstr "Проходы рендеринга в компо́зиторе вьюпорта поддерживаются только в EEVEE"
+
+
+msgid "Zero centered coordinates normalizes along the larger dimension for uniform scaling"
+msgstr "Координаты, центрированные по нулю нормализуются по наибольшему измерению для достижения равномерного масштабирования"
+
+
+msgid "Normalized coordinates with half pixel offsets"
+msgstr "Нормализованные координаты со сдвигом в половину пикселя"
+
+
+msgid "Integer pixel coordinates"
+msgstr "Целочисленные пиксельные координаты"
+
+
+msgid "The dimensions of the image in pixels with transformations applied"
+msgstr "Размеры изображения в пикселях с применёнными трансформациями"
+
+
+msgid "The original resolution of the image in pixels before any transformations"
+msgstr "Исходное разрешение изображения в пикселях до каких-либо трансформаций"
 
 
 msgid "The size of the inpaint in pixels"
@@ -142198,6 +144614,10 @@ msgid "Use multi-sampled motion blur of the plane"
 msgstr "Использовать размытие движения с множественным сэмплингом для плоскости"
 
 
+msgid "A value that is relative to the image size and needs to be converted to be in pixels"
+msgstr "Значение, которое является относительным к размеру изображения и которое необходимо преобразовать в пиксели"
+
+
 msgid "Degr"
 msgstr "Градусы"
 
@@ -142327,6 +144747,14 @@ msgid "Equal Axes"
 msgstr "Равные оси"
 
 
+msgid "Bitwise %s"
+msgstr "Побитовая операция %s"
+
+
+msgid "A"
+msgstr "A"
+
+
 msgid "Column 1 Row 1"
 msgstr "Столбец 1 строка 1"
 
@@ -142432,6 +144860,74 @@ msgstr "Первое совпадение"
 msgctxt "NodeTree"
 msgid "Unknown"
 msgstr "Неизвестно"
+
+
+msgid "Format Items"
+msgstr "Элементы формата"
+
+
+msgid "Empty identifier can't be used when explicit identifier was used before. For example, \"{} {x}\" is ok but \"{x} {}\" is not."
+msgstr "Пустой идентификатор не может быть использован, если ранее был использован явный идентификатор. Например, \"{} {x}\" допустимо, но \"{x} {}\" — нет."
+
+
+msgid "Format uses more inputs than provided."
+msgstr "Формат использует больше входов, чем предусмотрено."
+
+
+msgid "Invalid identifier: \"{}\""
+msgstr "Неверный идентификатор: \"{}\""
+
+
+msgid "An input name can't start with a digit: \"{}\""
+msgstr "Имя входа не может начинаться с цифры: \"{}\""
+
+
+msgid "There are no inputs."
+msgstr "Нет входов."
+
+
+msgid "Input with index {} does not exist. Currently, the maximum possible index is {}. Did you mean to use {{:{}}}?"
+msgstr "Вход с индексом {} не существует. В настоящее время максимально возможный индекс — {}. Возможно, вы имели в виду {{:{}}}?"
+
+
+msgid "Input does not exist: \"{}\""
+msgstr "Вход не существует: \"{}\""
+
+
+msgid "Format contains unsupported \"{}\" character: \"{}\""
+msgstr "Формат содержит неподдерживаемый символ \"{}\": \"{}\""
+
+
+msgid "Invalid format: \"{}\""
+msgstr "Недопустимый формат: \"{}\""
+
+
+msgid "Type \"{}\" can't be formatted"
+msgstr "Тип \"{}\" не может быть отформатирован"
+
+
+msgid "Only integer inputs can be used as dynamic width: \"{}\""
+msgstr "В качестве динамической ширины можно использовать только целочисленные входы: \"{}\""
+
+
+msgid "Only integer inputs can be used as dynamic precision: \"{}\""
+msgstr "В качестве динамической точности можно использовать только целочисленные входы: \"{}\""
+
+
+msgid "Invalid format specifier: \"{}\""
+msgstr "Недопустимый спецификатор формата: \"{}\""
+
+
+msgid "Invalid format specifier for string: \"{}\""
+msgstr "Недопустимый спецификатор формата для строки: \"{}\""
+
+
+msgid "Format specifier is not closed: \"{}\""
+msgstr "Спецификатор формата не закрыт: \"{}\""
+
+
+msgid "Format string using a Python and path template compatible syntax. For example, \"Count: {}\" would replace the {} with the first input value."
+msgstr "Форматировать строку, используя Python и синтаксис, совместимый с шаблоном пути. Например, \"Количество: {}\" заменит {} на значение первого входа."
 
 
 msgid "Hash"
@@ -142581,6 +145077,10 @@ msgstr "Запечь упакованное"
 
 msgid "Data-Block References"
 msgstr "Ссылки на блоки данных"
+
+
+msgid "Can't bake in zone"
+msgstr "Невозможно производить запекание в пределах зоны"
 
 
 msgid "Baked Frame {}"
@@ -143385,6 +145885,14 @@ msgid "Create a separate curve instance for every layer"
 msgstr "Создать отдельный экземпляр кривой для каждого слоя"
 
 
+msgid "Transform from grid index space to object space"
+msgstr "Преобразование из пространства индексов сетки в пространство объектов"
+
+
+msgid "Default value outside of grid voxels"
+msgstr "Значение по умолчанию за пределами сетки вокселей"
+
+
 msgid "Values larger than the threshold are inside the generated mesh"
 msgstr "Значения, превышающие пороговое значение, находятся внутри сгенерированного меша"
 
@@ -143467,6 +145975,10 @@ msgstr "Файл содержит недопустимые символы UTF-8"
 
 msgid "Path to a text file"
 msgstr "Путь к текстовому файлу"
+
+
+msgid "Path to a OpenVDB file"
+msgstr "Путь к файлу OpenVDB"
 
 
 msgid "Has Neighbor"
@@ -143981,6 +146493,10 @@ msgid "The number of horizontal rings"
 msgstr "Количество горизонтальных колец"
 
 
+msgid "The subdivision level is too large"
+msgstr "Уровень подразделения слишком велик"
+
+
 msgid "Disabled, Blender was compiled without OpenSubdiv"
 msgstr "Отключено, Blender был скомпилирован без OpenSubdiv"
 
@@ -144237,6 +146753,10 @@ msgid "The index of the control point plus the offset within the entire curves d
 msgstr "Индекс контрольной точки плюс смещение внутри всего блока данных кривых"
 
 
+msgid "Offset Valid"
+msgstr "Действительное смещение"
+
+
 msgid "The number of points to create"
 msgstr "Количество точек для создания"
 
@@ -144453,6 +146973,18 @@ msgid "Simulation State"
 msgstr "Состояние симуляции"
 
 
+msgid "Simulation zone is not supported"
+msgstr "Зона симуляции не поддерживается"
+
+
+msgid "Simulation must not be in a loop or closure"
+msgstr "Симуляция не должна быть зацикленной или замкнутой"
+
+
+msgid "Simulation must not be in a loop"
+msgstr "Симуляция не должна быть зацикленной"
+
+
 msgid "Skip"
 msgstr "Пропускать"
 
@@ -144545,6 +147077,10 @@ msgid "The selection of each element as a floating point value"
 msgstr "Выделение каждого элемента как значения с плавающей запятой"
 
 
+msgid "Invalid transformation for volume grids"
+msgstr "Недопустимая трансформация для сеток объёма"
+
+
 msgid "Volume scale is lower than permitted by OpenVDB"
 msgstr "Масштаб объёма ниже разрешенного OpenVDB"
 
@@ -144575,6 +147111,10 @@ msgstr "UV-координаты от 0 до 1 для каждого угла г�
 
 msgid "UV Unwrap Field"
 msgstr "Поле UV-развёртки"
+
+
+msgid "No color overlay"
+msgstr "Без цветового наложения"
 
 
 msgid "Rotation values can only be displayed with the text overlay in the 3D view"
@@ -144689,6 +147229,14 @@ msgid "Missing Data-Block"
 msgstr "Отсутствует блок данных"
 
 
+msgid "Unused Output"
+msgstr "Неиспользуемый выход"
+
+
+msgid "There are multiple group output nodes and this one is not active"
+msgstr "Имеется несколько нод \"Выходов группы (group output)\", и эта является неактивной"
+
+
 msgid "Nesting a node group inside of itself is not allowed"
 msgstr "Вложение группы нод внутрь самой себя не допускается"
 
@@ -144715,6 +147263,18 @@ msgstr "Неопределенный тип дерева узлов"
 
 msgid " (Deprecated)"
 msgstr " (Устарело)"
+
+
+msgid "Input grids have incompatible transforms"
+msgstr "Входные сетки имеют несовместимые трансформации"
+
+
+msgid "No input grid found that can determine the topology"
+msgstr "Не найдено входной сетки, которая могла бы определить топологию"
+
+
+msgid "Grid type not supported"
+msgstr "Тип сетки не поддерживается"
 
 
 msgid "Not a shader node tree"
@@ -145640,12 +148200,32 @@ msgid "No mesh in active object"
 msgstr "Нет меша в активном объекте"
 
 
+msgid "Absorption Coefficients"
+msgstr "Коэффициенты поглощения"
+
+
+msgid "Scatter Coefficients"
+msgstr "Коэффициенты рассеяния"
+
+
 msgid "Backscatter"
 msgstr "Обратное рассеивание"
 
 
 msgid "Diameter"
 msgstr "Диаметр"
+
+
+msgid "Emission Coefficients"
+msgstr "Коэффициенты излучения"
+
+
+msgid "Probability density per color channel that light is absorbed per unit distance traveled in the medium"
+msgstr "Плотность вероятности поглощения света на единицу расстояния, пройденного в среде, на каждый цветовой канал"
+
+
+msgid "Probability density per color channel of an out-scattering event occurring per unit distance"
+msgstr "Плотность вероятности на каждый цветовой канал для события \"рассеяния за пределы\", происходящего на единицу расстояния"
 
 
 msgid "Directionality of the scattering. Zero is isotropic, negative is backward, positive is forward"
@@ -145662,6 +148242,10 @@ msgstr "Часть света, рассеиваемая назад"
 
 msgid "Diameter of the water droplets, in micrometers"
 msgstr "Диаметр капель воды, в микрометрах"
+
+
+msgid "Emitted radiance per color channel that is added to a ray per unit distance"
+msgstr "Излучаемое свечение на каждый цветовой канал, которое добавляется к лучу на единицу расстояния"
 
 
 msgid "Scatter"
@@ -146330,6 +148914,10 @@ msgid "KeyMaps are equal"
 msgstr "Раскладки одинаковы"
 
 
+msgid "KeyMap item result may be incorrect since an update is pending, call `context.window_manager.keyconfigs.update()` to ensure matches can be found."
+msgstr "Результат элемента раскладки клавиатуры может быть неверным, поскольку ожидается обновление. Вызовите `context.window_manager.keyconfigs.update()`, чтобы убедиться в возможности нахождения совпадений."
+
+
 msgid "KeyMap \"%s\" doesn't match \"%s\""
 msgstr "Раскладка \"%s\" не соответствует \"%s\""
 
@@ -146882,6 +149470,18 @@ msgid "Water"
 msgstr "Вода"
 
 
+msgid "Fill Only"
+msgstr "Только заполнение"
+
+
+msgid "Stroke Only"
+msgstr "Только штрих"
+
+
+msgid "Stroke and Fill"
+msgstr "Штрих и заполнение"
+
+
 msgid "Blender 27x"
 msgstr "Blender 27x"
 
@@ -147104,6 +149704,10 @@ msgstr "Репозиторий расширений поддерживает у�
 
 msgid "Copy Global Transform"
 msgstr "Копировать глобальную трансформацию"
+
+
+msgid "Copy and paste object and bone transforms with ease"
+msgstr "Позволяет с лёгкостью копировать и вставлять трансформации объектов и костей"
 
 
 msgid "Cycles Render Engine"
