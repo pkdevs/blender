@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Beta (b'a051f87fee73')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'b4eeddd11342')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-23 08:33+0000\n"
-"PO-Revision-Date: 2025-06-23 08:33+0000\n"
+"POT-Creation-Date: 2025-06-30 09:22+0000\n"
+"PO-Revision-Date: 2025-06-30 08:53+0000\n"
 "Last-Translator: Fatih Alexandr <radix83@rambler.ru>\n"
 "Language-Team: Russian <https://translate.blender.org/projects/blender-ui/ui/ru/>\n"
 "Language: ru\n"
@@ -80,7 +80,7 @@ msgstr "Группировка F-кривых"
 
 
 msgid "Groupings of F-Curves for display purposes, in e.g. the dopesheet and graph editor"
-msgstr "Группировка F-кривых в целях отображения, например, в редакторе графов или экспозиционном листе"
+msgstr "Группировка F-кривых в назначениях отображения, например, в редакторе графов или экспозиционном листе"
 
 
 msgid "Slot"
@@ -4605,7 +4605,7 @@ msgstr "Отображать только эту коллекцию костей
 
 
 msgid "Visible"
-msgstr "Видимо"
+msgstr "Видимое"
 
 
 msgid "Bones in this collection will be visible in pose/object mode"
@@ -10590,11 +10590,11 @@ msgstr "Показывать геометрию самого объекта на
 
 
 msgid "UV Coordinates"
-msgstr "UV-координаты"
+msgstr "UV-Координаты"
 
 
 msgid "UV coordinates in parent object space"
-msgstr "UV-координаты в пространстве родительского объекта"
+msgstr "UV-Координаты в пространстве родительского объекта"
 
 
 msgid "Dependency Graph Update"
@@ -14075,7 +14075,7 @@ msgstr "Относительный путь"
 
 
 msgid "Path relative to the directory currently displayed in the File Browser (includes the file name)"
-msgstr "Путь относительно каталога, отображаемого в данный момент в браузере файлов (включает имя файла)"
+msgstr "Путь относительно папки, отображаемой в данный момент в браузере файлов (включает имя файла)"
 
 
 msgid "File Select ID Filter"
@@ -21193,7 +21193,7 @@ msgstr "Прозрачность (альфа) затемнённого пере�
 
 
 msgid "Sensor Fit"
-msgstr "Подгонка сенсора"
+msgstr "Cенсор - Подгонка"
 
 
 msgid "Method to fit image and field of view angle inside the sensor"
@@ -24548,7 +24548,7 @@ msgstr "Глубина преломления"
 
 
 msgid "Approximate the thickness of the object to compute two refraction events (0 is disabled) (Deprecated)"
-msgstr "Приблизительное значение толщины объекта для вычисления двух событий преломления (0 отключено) (устарело)"
+msgstr "Вычислить приблизительную толщину объекта для расчёта двух событий преломления (0 - отключено) (устарело)"
 
 
 msgid "Roughness of the material"
@@ -24632,7 +24632,7 @@ msgstr "Пластина"
 
 
 msgid "Approximate the object as an infinite slab of thickness defined by the node tree"
-msgstr "Аппроксимируйте объект как бесконечную пластину толщиной, определённой деревом нод"
+msgstr "Аппроксимировать объект в качестве бесконечной пластины с толщиной, определяемой деревом нод"
 
 
 msgid "Backface Culling"
@@ -35044,6 +35044,11 @@ msgid "Align"
 msgstr "Выровнять"
 
 
+msgctxt "Operator"
+msgid "Mirror"
+msgstr "Отразить"
+
+
 msgid "UV Select Mode"
 msgstr "Режим выделения UV"
 
@@ -36005,7 +36010,7 @@ msgstr "Закреплённое состояние UV в редакторе UV"
 
 
 msgid "UV coordinates on face corners"
-msgstr "UV-координаты на углах грани"
+msgstr "UV-Координаты на углах грани"
 
 
 msgid "UV Vertex Selection"
@@ -40837,7 +40842,7 @@ msgstr "Модификатор нод"
 
 
 msgid "Simulation Bake Directory"
-msgstr "Каталог для запекания симуляции"
+msgstr "Папка для запекания симуляции"
 
 
 msgid "Location on disk where the bake data is stored"
@@ -52623,7 +52628,7 @@ msgstr "Извлечь UV-карту из геометрии или активн
 
 
 msgid "UV coordinates to be used for mapping"
-msgstr "UV-координаты, используемые для сопоставления"
+msgstr "UV-Координаты, используемые для сопоставления"
 
 
 msgid "Input numerical values to other nodes in the tree"
@@ -59770,7 +59775,7 @@ msgstr "Принять"
 
 
 msgid "Open a directory browser, hold Shift to open the file, Alt to browse containing directory"
-msgstr "Открыть браузер директорий, удерживайте Shift для открытия файла, Alt для просмотра содержимого директории"
+msgstr "Открыть браузер директорий, удерживайте Shift для открытия файла, Alt для просмотра содержимого папки"
 
 
 msgid "Directory of the file"
@@ -59782,7 +59787,7 @@ msgstr "Выбрать файл относительно текущего blend-
 
 
 msgid "Open a file browser, hold Shift to open the file, Alt to browse containing directory"
-msgstr "Открыть браузер файлов, удерживайте Shift для открытия файла, Alt для просмотра содержимого директории"
+msgstr "Открыть браузер файлов, удерживайте Shift для открытия файла, Alt для просмотра содержимого папки"
 
 
 msgid "Glob Filter"
@@ -65950,6 +65955,10 @@ msgid "The factor to scale keys with"
 msgstr "Коэффициент масштабирования ключей"
 
 
+msgid "Are handles tested individually against the selection criteria, independently from their keys. When unchecked, handles are (de)selected in unison with their keys"
+msgstr "Будут ли ручки тестироваться индивидуально по критериям выделения, независимо от их ключей. Если флажок не установлен, ручки будут сниматься с выделения/выделяться в унисон со своими ключами"
+
+
 msgid "Select Curves"
 msgstr "Выделять кривые"
 
@@ -65976,7 +65985,7 @@ msgstr "Воздействовать на сам ключ"
 
 
 msgid "Keep"
-msgstr "Сохранять"
+msgstr "Оставлять"
 
 
 msgid "Leave as is"
@@ -68953,6 +68962,14 @@ msgstr "Предположить оригинальную позу привяз�
 
 msgid "Try to guess the original bind pose for skinned meshes from the inverse bind matrices. When off, use default/rest pose as bind pose"
 msgstr "Попытаться угадать исходную позу привязки для мешей со скином из инверсных матриц связывания. Если выключено, использовать позу по умолчанию/покоя в качестве позы привязки"
+
+
+msgid "Merge Material Slot when possible"
+msgstr "Объединять слоты материалов, когда это возможно"
+
+
+msgid "Merge material slots when possible"
+msgstr "Объединять слоты материалов, когда это возможно"
 
 
 msgid "Pack Images"
@@ -74740,6 +74757,14 @@ msgid "Curve from Mesh or Text objects"
 msgstr "Кривая из меш- или текстовых объектов"
 
 
+msgid "Mesh from Curve, Surface, Metaball, Text, or Point Cloud objects"
+msgstr "Меш из объектов кривой, поверхности, метасферы, текста или облака точек"
+
+
+msgid "Point Cloud from Mesh objects"
+msgstr "Облако точек из меш-объектов"
+
+
 msgid "Curves from evaluated curve data"
 msgstr "Кривые из оценённых данных кривых"
 
@@ -79702,11 +79727,6 @@ msgid "Hide selected particles"
 msgstr "Скрыть выделенные частицы"
 
 
-msgctxt "Operator"
-msgid "Mirror"
-msgstr "Отразить"
-
-
 msgid "Duplicate and mirror the selected particles along the local X axis"
 msgstr "Дублировать и отразить выделенные частицы относительно локальной оси X"
 
@@ -80680,7 +80700,7 @@ msgstr "Добавить библиотеку ассетов"
 
 
 msgid "Add a directory to be used by the Asset Browser as source of assets"
-msgstr "Добавить каталог, который будет использоваться браузером ассетов в качестве источника ассетов"
+msgstr "Добавить папку, которая будет использоваться браузером ассетов в качестве источника ассетов"
 
 
 msgctxt "Operator"
@@ -80737,11 +80757,11 @@ msgstr "Персональный токен доступа, может потр�
 
 
 msgid "Custom Directory"
-msgstr "Пользовательский каталог"
+msgstr "Пользовательская папка"
 
 
 msgid "The local directory containing extensions"
-msgstr "Локальный каталог, содержащий расширения"
+msgstr "Локальная папка, содержащая расширения"
 
 
 msgid "Unique repository name"
@@ -80781,7 +80801,7 @@ msgstr "Для репозитория требуется токен доступ
 
 
 msgid "Manually set the path for extensions to be stored. When disabled a user's extensions directory is created."
-msgstr "Вручную задать путь для сохранения расширений. При отключении создаётся каталог расширений пользователя."
+msgstr "Вручную задать путь для сохранения расширений. При отключении создаётся папка расширений пользователя."
 
 
 msgid "Check for Updates on Startup"
@@ -80864,7 +80884,7 @@ msgstr "Фильтровать папки"
 
 
 msgid "Index of the script directory to remove"
-msgstr "Индекс каталога скриптов для удаления"
+msgstr "Индекс папки скриптов для удаления"
 
 
 msgid "MatCap"
@@ -90523,7 +90543,7 @@ msgstr "Переназначить относительные пути"
 
 
 msgid "Remap relative paths when saving to a different directory"
-msgstr "Переназначить относительные пути при сохранении в другую директорию"
+msgstr "Переназначить относительные пути при сохранении в другую папку"
 
 
 msgctxt "Operator"
@@ -90823,11 +90843,11 @@ msgstr "Сохранять символы в кодировке UTF-8 при н�
 
 
 msgid "Blender Names"
-msgstr "Идентификаторы Blender"
+msgstr "Идентификаторы Blender'а"
 
 
 msgid "Author USD custom attributes containing the original Blender object and object data names"
-msgstr "Авторские пользовательские атрибуты USD, содержащие исходный объект Blender и имена данных объекта"
+msgstr "Авторские пользовательские атрибуты USD, содержащие исходный объект Blender'а и имена данных объекта"
 
 
 msgid "Convert Orientation"
@@ -91003,7 +91023,7 @@ msgstr "Экспорт текстур"
 
 
 msgid "If exporting materials, export textures referenced by material nodes to a 'textures' directory in the same directory as the USD file"
-msgstr "При экспорте материалов экспортировать текстуры, на которые ссылаются ноды материалов, в каталог для \"текстур\" в том же каталоге, что и файл USD"
+msgstr "При экспорте материалов экспортировать текстуры, на которые ссылаются ноды материалов, в папку для \"текстур\" в той же папке, что и файл USD"
 
 
 msgid "Texture export method"
@@ -91063,11 +91083,11 @@ msgstr "Сгенерировать приблизительное предста
 
 
 msgid "Merge parent Xform"
-msgstr "Объединить родительскую Xформу"
+msgstr "Объединить родительскую Xформацию"
 
 
 msgid "Merge USD primitives with their Xform parent if possible. USD does not allow nested UsdGeomGprims, intermediary Xform prims will be defined to keep the USD file valid when encountering object hierarchies."
-msgstr "Если возможно, объединить примитивы USD с их родительскими элементами Xформы. USD не допускает вложенных UsdGeomGprim'ов, чтобы сохранить корректность файла USD при обнаружении иерархий объектов, - будут определены промежуточные примитивы Xформ."
+msgstr "Если возможно, объединить примитивы USD с их родительскими элементами Xформации. USD не допускает вложенных примитивов UsdGeomGprims, чтобы сохранить корректность файла USD при обнаружении иерархий объектов, - будут определены промежуточные примитивы Xформации."
 
 
 msgid "Meters Per Unit"
@@ -91183,7 +91203,7 @@ msgstr "Экспортировать только видимые объекты.
 
 
 msgid "Xform Ops"
-msgstr "Операторы Xформы"
+msgstr "Операторы Xформации"
 
 
 msgid "The type of transform operators to write"
@@ -91195,15 +91215,15 @@ msgstr "Переместить, вращать, масштабировать"
 
 
 msgid "Export with translate, rotate, and scale Xform operators"
-msgstr "Экспорт с помощью операторов Xформы: переместить, вращать и масштабировать"
+msgstr "Экспорт с помощью операторов Xформации: переместить, вращать и масштабировать"
 
 
 msgid "Translate, Orient, Scale"
-msgstr "Переместить, ориентация, масштабировать"
+msgstr "Переместить, ориентировать, масштабировать"
 
 
 msgid "Export with translate, orient quaternion, and scale Xform operators"
-msgstr "Экспорт с помощью операторов Xформы: перемещения, ориентации кватерниона и масштабирования"
+msgstr "Экспортировать с помощью операторов Xформации: перемещения, кватерниона ориентации и масштабирования"
 
 
 msgid "Export matrix operator"
@@ -91220,7 +91240,7 @@ msgstr "Импортировать сценарий USD в текущую сце
 
 
 msgid "Apply Unit Conversion Scale"
-msgstr "Применить масштаб преобразования юнитов"
+msgstr "Применить масштаб преобразования единиц"
 
 
 msgid "Scale the scene objects by the USD stage's meters per unit value. This scaling is applied in addition to the value specified in the Scale option"
@@ -91352,7 +91372,7 @@ msgstr "Шкала интенсивности импортированных и�
 
 
 msgid "Allow USD primitives to merge with their Xform parent if they are the only child in the hierarchy"
-msgstr "Разрешить примитивам USD объединяться с их родительским элементом Xформой, если они являются единственным дочерним элементом в иерархии"
+msgstr "Разрешить примитивам USD объединяться с их родительским элементом Xформации, если они являются единственным дочерним элементом в иерархии"
 
 
 msgid "Material Name Collision"
@@ -91372,7 +91392,7 @@ msgstr "Импортировать каждый материал USD как ун
 
 
 msgid "Reference Existing"
-msgstr "Существует ссылка"
+msgstr "Существующая ссылка"
 
 
 msgid "If a material with the same name already exists, reference that instead of importing"
@@ -92939,7 +92959,7 @@ msgstr "Диски"
 
 
 msgid "Directory Path"
-msgstr "Путь к директории"
+msgstr "Путь к папке"
 
 
 msgid "Filter Settings"
@@ -96398,7 +96418,7 @@ msgstr "Папка для временных файлов"
 
 
 msgid "The directory for storing temporary save files. The path must reference an existing directory or it will be ignored"
-msgstr "Каталог (папка) для хранения временных файлов сохранения. Путь должен ссылаться на существующий каталог, иначе он будет проигнорирован"
+msgstr "Папка для хранения временных файлов сохранения. Путь должен ссылаться на существующую папку, в противном случае он будет проигнорирован"
 
 
 msgid ""
@@ -96443,7 +96463,7 @@ msgid ""
 "Automatic saving of temporary files in temp directory, uses process ID.\n"
 "Warning: Sculpt and edit mode data won't be saved"
 msgstr ""
-"Автоматическое сохранение временных файлов в каталоге temp, использует идентификатор процесса.\n"
+"Автоматическое сохранение временных файлов в папке temp, использует идентификатор процесса.\n"
 "Предупреждение: данные режима скульптинга и редактирования сохранены не будут"
 
 
@@ -97524,7 +97544,7 @@ msgstr "Размер отступа вокруг каждого редактор
 
 
 msgid "Color Picker Type"
-msgstr "Тип выбора цвета"
+msgstr "Тип виджета выбора цвета"
 
 
 msgid "Different styles of displaying the color picker widget"
@@ -97681,6 +97701,10 @@ msgstr "Язык, используемый для перевода"
 
 msgid "Automatic (Automatic)"
 msgstr "Автоматически (автоматически)"
+
+
+msgid "Automatically choose the system-defined language if available, or fall-back to English (US)"
+msgstr "Автоматически выбирать системный язык, если он доступен, или вернуться к английскому (США)"
 
 
 msgid "HDRI Preview Size"
@@ -98284,7 +98308,7 @@ msgstr "Путь вывода"
 
 
 msgid "Property is a filename, filepath or directory output"
-msgstr "Свойство представляет собой имя файла, путь к файлу или каталог вывода"
+msgstr "Свойство представляет собой имя файла, путь к файлу или папку вывода"
 
 
 msgid "Path Relative"
@@ -98292,7 +98316,7 @@ msgstr "Относительный путь"
 
 
 msgid "Property is a path which supports the \"//\" prefix, signifying the location as relative to the \".blend\" file's directory"
-msgstr "Свойство — это путь, который поддерживает префикс \"//\", обозначающий расположение относительно каталога файлов \".blend\""
+msgstr "Свойство — это путь, который поддерживает префикс \"//\", обозначающий расположение относительно папки файлов \".blend\""
 
 
 msgid "Variable Expression Support"
@@ -98383,7 +98407,7 @@ msgstr "Путь к файлу"
 
 msgctxt "Unit"
 msgid "Directory Path"
-msgstr "Путь к директории"
+msgstr "Путь к папке"
 
 
 msgctxt "Unit"
@@ -104163,7 +104187,7 @@ msgstr "Альтернативный путь к скрипту, соответ�
 
 
 msgid "Identifier for the Python scripts directory"
-msgstr "Идентификатор каталога скриптов Python"
+msgstr "Идентификатор папки скриптов Python"
 
 
 msgid "Python Scripts Directories"
@@ -113244,7 +113268,7 @@ msgstr "Идентификатор (не обязательно уникальн
 
 
 msgid "Path to a directory with .blend files to use as an asset library"
-msgstr "Путь к каталогу с файлами .blend для использования в качестве библиотеки ассетов"
+msgstr "Путь к папке с файлами .blend для использования в качестве библиотеки ассетов"
 
 
 msgid "Use relative path when linking assets from this asset library"
@@ -113261,12 +113285,12 @@ msgstr "Настройки для определения репозитория 
 
 msgctxt "File browser"
 msgid "Custom Directory"
-msgstr "Пользовательский каталог"
+msgstr "Пользовательская папка"
 
 
 msgctxt "File browser"
 msgid "Directory"
-msgstr "Директория"
+msgstr "Папка"
 
 
 msgid "Enable the repository"
@@ -113283,7 +113307,7 @@ msgstr "URL"
 
 
 msgid "Select if the repository is in a user managed or system provided directory"
-msgstr "Выбрать, будет ли находится репозиторий в каталоге, управляемом пользователем или в каталоге, предоставленным системой"
+msgstr "Выбрать, будет ли находится репозиторий в папке, управляемой пользователем или в папке, предоставленной системой"
 
 
 msgid "Repository managed by the user, stored in user directories"
@@ -113347,7 +113371,7 @@ msgstr "Включить этот источник света в режиме с
 
 
 msgid "UV Sculpting"
-msgstr "UV-скульптинг"
+msgstr "UV-Скульптинг"
 
 
 msgctxt "Curve"
@@ -118918,7 +118942,7 @@ msgstr "Невозможно установить по относительно�
 
 
 msgid "Unable to install a directory"
-msgstr "Невозможно установить каталог"
+msgstr "Невозможно установить папку"
 
 
 msgid "Age: {:s}"
@@ -120341,7 +120365,7 @@ msgstr "Имя '{:s}' является недопустимым для набо�
 
 
 msgid "Feature set directory already exists: '{:s}'"
-msgstr "Каталог набора функций уже существует: '{:s}'"
+msgstr "Папка набора функций уже существует: '{:s}'"
 
 
 msgid "Status:"
@@ -121024,7 +121048,7 @@ msgstr "Выделять кнопкой мышки"
 
 
 msgid "3D View"
-msgstr "3D-вид"
+msgstr "3D-Вид"
 
 
 msgid "Grave Accent / Tilde Action"
@@ -121371,10 +121395,6 @@ msgid "Active camera is not in this scene"
 msgstr "Активная камера не присутствует в этой сцене"
 
 
-msgid "No {0} modifiers found"
-msgstr "Модификаторы {0} не найдены"
-
-
 msgid "Skipping '{:s}', not a mesh"
 msgstr "Пропуск '{:s}', не меш"
 
@@ -121616,7 +121636,7 @@ msgstr "Исходный файл находится в пути поиска а
 
 
 msgid "ZIP packaged incorrectly; __init__.py should be in a directory, not at top-level"
-msgstr "ZIP-архив упакован неправильно; __init__.py должен находиться в папке, а не на верхнем уровне (корневой папке)"
+msgstr "ZIP-архив упакован неправильно; __init__.py должен находиться в папке, а не на верхнем уровне иерархии (корневой папке)"
 
 
 msgid "Modules Installed ({:s}) from {!r} into {!r}"
@@ -123999,7 +124019,7 @@ msgstr "Порог SMAA"
 
 
 msgid "SSAA Samples"
-msgstr "SSAA Сэмплы"
+msgstr "Сэмплы SSAA"
 
 
 msgid "Max Child Particles"
@@ -125162,7 +125182,7 @@ msgstr "Поверх изображения"
 
 
 msgid "Fixed Subdivisions"
-msgstr "Фикс-ые подразделения"
+msgstr "Фикс. подразделения"
 
 
 msgctxt "Operator"
@@ -127010,18 +127030,6 @@ msgstr "Cycles отключён в этой сборке"
 
 msgid "A restart of Blender is required"
 msgstr "Требуется перезапуск Blender'а"
-
-
-msgid "Vulkan backend limitations:"
-msgstr "Ограничения бэкэнда Vulkan:"
-
-
-msgid "• WoA support"
-msgstr "• Поддержка WoA"
-
-
-msgid "• Low VR performance"
-msgstr "• Низкая производительность VR"
 
 
 msgid "Open blend files with this Blender version"
@@ -129657,7 +129665,7 @@ msgstr "арматуры"
 
 
 msgid "Failed to create asset library directory to save asset"
-msgstr "Не удалось создать каталог библиотеки ассетов для сохранения ассета"
+msgstr "Не удалось создать папку библиотеки ассетов для сохранения ассета"
 
 
 msgid "Failed to write to asset library"
@@ -129717,7 +129725,7 @@ msgstr "Распаковать запекание можно только есл
 
 
 msgid "%s is not a directory"
-msgstr "%s не является каталогом"
+msgstr "%s не является папкой"
 
 
 msgid "Cannot ensure directory: %s"
@@ -131053,7 +131061,7 @@ msgstr "%s содержит шейдер объёма, который может
 
 
 msgid "2D_Animation"
-msgstr "2D_Animation"
+msgstr "2D-Aнимация"
 
 
 msgid "Sculpting"
@@ -131065,7 +131073,7 @@ msgstr "VFX"
 
 
 msgid "Video_Editing"
-msgstr "Video_Editing"
+msgstr "Редактирование видео"
 
 
 msgid "Unable to make version backup: filename too short"
@@ -132858,12 +132866,12 @@ msgstr "Добавить одиночно в ключевой набор"
 
 msgctxt "Operator"
 msgid "Remove Overrides"
-msgstr "Удалить переопределение"
+msgstr "Удалить переопределения"
 
 
 msgctxt "Operator"
 msgid "Remove Single Override"
-msgstr "Удалить одиночное переопределение"
+msgstr "Удалить одно переопределение"
 
 
 msgctxt "Operator"
@@ -132973,7 +132981,7 @@ msgstr "Вставить"
 
 msgctxt "UI_Events_KeyMaps"
 msgid "Space"
-msgstr "Пространство"
+msgstr "Пробел"
 
 
 msgid "Animate property"
@@ -133988,7 +133996,7 @@ msgstr "Риггинг"
 
 
 msgid "Display Purpose"
-msgstr "Отобразить назначение"
+msgstr "Назначение отображения"
 
 
 msgid "Particles and Instancing"
@@ -134846,7 +134854,7 @@ msgstr "Невозможно определить местоположение �
 
 
 msgid "Failed to remove metadata directory %s"
-msgstr "Не удалось удалить каталог метаданных %s"
+msgstr "Не удалось удалить папку метаданных %s"
 
 
 msgid "Failed to remove blobs directory %s"
@@ -139167,6 +139175,10 @@ msgid "Slip Offset: Frames: %s"
 msgstr "Смещение сдвига: Кадры: %s"
 
 
+msgid "Slip Offset: Frames: %d Sound Offset: %.3f"
+msgstr "Смещение сдвига: Кадры: %d Смещение звука: %.3f"
+
+
 msgid "Slip Offset: Frames: %d"
 msgstr "Смещение сдвига: Кадры: %d"
 
@@ -140716,11 +140728,11 @@ msgstr "Ошибка чтения сэмплинга точек; более по
 
 
 msgid "Object type mismatch, Alembic object path pointed to XForm when importing, but not any more"
-msgstr "Несоответствие типа объекта, путь объекта Alembic указывал на Xформу при импорте, но теперь это не так"
+msgstr "Несоответствие типа объекта, путь объекта Alembic указывал на Xформацию при импорте, но теперь это не так"
 
 
 msgid "Object type mismatch, Alembic object path points to XForm"
-msgstr "Несоответствие типа объекта, путь объекта Alembic указывает на Xформу"
+msgstr "Несоответствие типа объекта, путь объекта Alembic указывает на Xформацию"
 
 
 msgid "Invalid object: verify object path"
@@ -140860,7 +140872,7 @@ msgstr "%s: Путь к папке импорта текстур пуст, не 
 
 
 msgid "%s: import directory is relative but the blend file path is empty. Please save the blend file before importing the USD or provide an absolute import directory path. Can't import %s"
-msgstr "%s: каталог импорта относительный, но путь к blend-файлу пуст. Сохраните blend-файл перед импортом USD или укажите абсолютный путь к каталогу импорта. Невозможно импортировать %s"
+msgstr "%s: папка импорта относительна, но путь к blend-файлу пуст. Сохраните blend-файл перед импортом USD или укажите абсолютный путь к папке импорта. Невозможно импортировать %s"
 
 
 msgid "%s: Couldn't create texture import directory %s"
@@ -140924,7 +140936,7 @@ msgstr "Произошло исключение при вызове USD-крюк
 
 
 msgid "Primvar '%s' (interpolation %s, type %s) cannot be converted to Blender"
-msgstr "Primvar (примитивная переменная) '%s' (интерполяция %s, тип %s) не может быть преобразована в Blender"
+msgstr "Primvar (переменная примитива) '%s' (интерполяция %s, тип %s) не может быть преобразована в Blender"
 
 
 msgid "%s: Error: Couldn't get input socket %s for node %s"
@@ -141008,7 +141020,7 @@ msgstr "%s: Несоответствие в количестве костей и
 
 
 msgid "%s: Mismatch in bind xforms and joint counts for skeleton %s"
-msgstr "%s: Несоответствие между количеством связанных Xформ и количеством суставов в скелете %s"
+msgstr "%s: Несоответствие между количеством связанных Xформаций и количеством суставов в скелете %s"
 
 
 msgid "USD Skeleton Import: bone matrices with negative determinants detected in prim %s. Such matrices may indicate negative scales, possibly due to mirroring operations, and can't currently be converted to Blender's bone representation. The skeletal animation won't be imported"
@@ -141040,7 +141052,7 @@ msgstr "%s: Ошибка создания данных по группе деф�
 
 
 msgid "%s: Couldn't find a common Xform ancestor for skinned prim %s and skeleton %s to convert to a USD SkelRoot. This can be addressed by setting a root primitive in the export options"
-msgstr "%s: Не удалось найти общего предка Xформу для скинированного примитива %s и скелета %s для преобразования в корень скелета USD (SkelRoot). Это можно исправить, установив корневой примитив в параметрах экспорта"
+msgstr "%s: Не удалось найти общего предка Xформацию для скинированного примитива %s и скелета %s для преобразования в корень скелета USD (SkelRoot). Это можно исправить, установив корневой примитив в параметрах экспорта"
 
 
 msgid "Curve width size not supported for USD interpolation"
@@ -142543,7 +142555,7 @@ msgstr "Программа была запущена с опцией \"--авт�
 
 
 msgid "Script directory not found"
-msgstr "Каталог скрипта не найден"
+msgstr "Папка скрипта не найдена"
 
 
 msgid "Asset Library not found"
@@ -147106,7 +147118,7 @@ msgstr "Рёбра, отмеченные там, где меш \"обрезае�
 
 
 msgid "UV coordinates between 0 and 1 for each face corner in the selected faces"
-msgstr "UV-координаты от 0 до 1 для каждого угла грани в выделенных гранях"
+msgstr "UV-Координаты от 0 до 1 для каждого угла грани в выделенных гранях"
 
 
 msgid "UV Unwrap Field"
@@ -150286,7 +150298,7 @@ msgstr "UV-координаты поверхности"
 
 
 msgid "Surface UV coordinates at the attachment point"
-msgstr "UV-координаты поверхности в точке прикрепления"
+msgstr "UV-Координаты поверхности в точке прикрепления"
 
 
 msgid "Surface Normal"
@@ -150990,7 +151002,7 @@ msgstr "UV прикрепления"
 
 
 msgid "Surface attachment UV coordinates stored on each curve"
-msgstr "UV-координаты прикрепления к поверхности сохраняются на каждой кривой"
+msgstr "UV-Координаты прикрепления к поверхности сохраняются на каждой кривой"
 
 
 msgid "Attachment is Valid"

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Beta (b'a051f87fee73')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'b4eeddd11342')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-23 08:33+0000\n"
+"POT-Creation-Date: 2025-06-30 09:22+0000\n"
 "PO-Revision-Date: 2025-04-14 08:53+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -33484,6 +33484,11 @@ msgstr "ﯼﻭﻮﯾ"
 
 msgid "Align"
 msgstr "ﺎﻧﻻ﻿ ﮟﯿﻣ ﮪﺪﯿﺳ"
+
+
+msgctxt "Operator"
+msgid "Mirror"
+msgstr "ﮧﻨﯿﺋﺁ"
 
 
 msgid "UV Select Mode"
@@ -75073,11 +75078,6 @@ msgstr "ﮟﯾﺮﮐ ﻡﺪﻌﻟﺎﮐ ﻮﮐ ﻦﺸﯾﮉﯾﺍ ﻡﺎﻤﺗ �
 
 msgid "Hide selected particles"
 msgstr "ﮟﯿﺋﺎﭙﮭﭼ ﻮﮐ ﺕﺍﺭﺫ ﺐﺨﺘﻨﻣ"
-
-
-msgctxt "Operator"
-msgid "Mirror"
-msgstr "ﮧﻨﯿﺋﺁ"
 
 
 msgid "Duplicate and mirror the selected particles along the local X axis"
