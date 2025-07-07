@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Beta (b'b4eeddd11342')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'ca38e3be9467')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-30 09:22+0000\n"
+"POT-Creation-Date: 2025-07-07 10:02+0000\n"
 "PO-Revision-Date: 2025-04-14 08:53+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -33079,36 +33079,12 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
-msgid "Clean Up"
-msgstr "ﯽﺋﺎﻔﺻ"
-
-
 msgid "Show/Hide"
 msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
 
 
-msgid "Special Characters"
-msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
-
-
-msgid "Kerning"
-msgstr "ﮓﻨﻧﺮﮐ"
-
-
-msgid "Text"
-msgstr "ﻦﺘﻣ"
-
-
-msgid "Metaball"
-msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
-
-
-msgid "Names"
-msgstr "ﻡﺎﻧ"
-
-
-msgid "Bone Roll"
-msgstr "ﻝﻭﺭ ﻥﻮﺑ"
+msgid "Clean Up"
+msgstr "ﯽﺋﺎﻔﺻ"
 
 
 msgid "Pivot Point"
@@ -33195,6 +33171,10 @@ msgid "Assign Material"
 msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺩﺍﻮﻣ"
 
 
+msgid "Metaball"
+msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
+
+
 msgid "Light"
 msgstr "ﯽﻨﺷﻭﺭ"
 
@@ -33279,6 +33259,10 @@ msgid "Bone Collections"
 msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮞﻮﯾﮉﮨ"
 
 
+msgid "Names"
+msgstr "ﻡﺎﻧ"
+
+
 msgid "Toggle Bone Options"
 msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
 
@@ -33309,6 +33293,22 @@ msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
 
 msgid "Merge"
 msgstr "ﺎﻧﺮﮐ ﻢﺿ"
+
+
+msgid "Special Characters"
+msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
+
+
+msgid "Kerning"
+msgstr "ﮓﻨﻧﺮﮐ"
+
+
+msgid "Text"
+msgstr "ﻦﺘﻣ"
+
+
+msgid "Bone Roll"
+msgstr "ﻝﻭﺭ ﻥﻮﺑ"
 
 
 msgid "Keyframe Insert Pie"
@@ -50459,10 +50459,6 @@ msgid "Minimum value"
 msgstr "ﺭﺪﻗ ﻢﮐ ﺯﺍ ﻢﮐ"
 
 
-msgid "Subtype"
-msgstr "ﻢﺴﻗ ﯽﻠﯾﺫ"
-
-
 msgid "Subtype of the default value"
 msgstr "ﻢﺴﻗ ﯽﻠﯾﺫ ﯽﮐ ﺭﺪﻗ ﮦﺪﺷ ﮯﻃ"
 
@@ -59234,10 +59230,6 @@ msgid "Other geometry types, like curve, metaball, etc. (converted to meshes)"
 msgstr "(ﻞﯾﺪﺒﺗ ﮟﯿﻣ ﮞﻮﺸﯿﻣ) ﮦﺮﯿﻏﻭ ،ﻝﺎﺑ ﺎﭩﯿﻣ ،ﻢﺧ ﮯﺴﯿﺟ ،ﻡﺎﺴﻗﺍ ﺮﮕﯾﺩ ﯽﮐ ﯼﺮﭩﯿﻣﻮﯿﺟ"
 
 
-msgid "Path Mode"
-msgstr "ﮈﻮﻣ ﮫﺗﺎﭘ"
-
-
 msgid "Method used to reference paths"
 msgstr "ﮧﻘﯾﺮﻃ ﻻ﻿ﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻨﯾﺩ ﮧﻟﺍﻮﺣ ﺎﮐ ﮞﻮﺘﺳﺍﺭ"
 
@@ -59250,20 +59242,12 @@ msgid "Always write absolute paths"
 msgstr "ﮟﯿﮭﮑﻟ ﮯﺘﺳﺍﺭ ﻖﻠﻄﻣ ﮧﺸﯿﻤﮨ"
 
 
-msgid "Always write relative paths (where possible)"
-msgstr "(ﻮﮨ ﻦﮑﻤﻣ ﮞﺎﮩﺟ) ﮟﯿﮭﮑﻟ ﮯﺘﺳﺍﺭ ﮧﻘﻠﻌﺘﻣ ﮧﺸﯿﻤﮨ"
-
-
-msgid "Match"
-msgstr "ﭻﯿﻣ"
+msgid "Write relative paths where possible"
+msgstr "ﮟﯿﮭﮑﻟ ﮯﺘﺳﺍﺭ ﮧﻘﻠﻌﺘﻣ ﻮﮨ ﻦﮑﻤﻣ ﮞﺎﮩﺟ"
 
 
 msgid "Match absolute/relative setting with input path"
 msgstr "ﮟﯾﺮﮐ ﭻﯿﻣ ﻮﮐ ﺐﯿﺗﺮﺗ ﺭﺍﺩ ﮧﺘﺷﺭ/ﻖﻠﻄﻣ ﮫﺗﺎﺳ ﮯﮐ ﮧﺘﺳﺍﺭ ﭧﭘ ﻥﺍ"
-
-
-msgid "Strip Path"
-msgstr "ﮧﺘﺳﺍﺭ ﺎﮐ ﯽﭩﭘ"
 
 
 msgid "Filename only"
@@ -84591,10 +84575,6 @@ msgstr "ﺭﻮﺤﻣ Y ﯽﻔﻨﻣ"
 
 msgid "Negative Z axis"
 msgstr "ﺭﻮﺤﻣ Z ﯽﻔﻨﻣ"
-
-
-msgid "Write relative paths where possible"
-msgstr "ﮟﯿﮭﮑﻟ ﮯﺘﺳﺍﺭ ﮧﻘﻠﻌﺘﻣ ﻮﮨ ﻦﮑﻤﻣ ﮞﺎﮩﺟ"
 
 
 msgid "Write filename only"
@@ -116803,6 +116783,10 @@ msgid "Prefetch"
 msgstr "ﮟﯾﺮﮐ ﺖﻓﺎﯾﺯﺎﺑ ﯽﮕﺸﯿﭘ"
 
 
+msgid "Match"
+msgstr "ﭻﯿﻣ"
+
+
 msgctxt "Operator"
 msgid "Copy from Active Track"
 msgstr "ﮟﯾﺮﮐ ﯽﭘﺎﮐ ﮯﺳ ﮏﯾﺮﭨ ﻝﺎﻌﻓ"
@@ -124303,6 +124287,10 @@ msgid "Control point belongs to another spline"
 msgstr "ﮯﮨ ﮯﺳ ﻦﺋﻼ﻿ﭙﺳﺍ ﮮﺮﺳﻭﺩ ﻖﻠﻌﺗ ﺎﮐ ﭧﻨﺋﺍﻮﭘ ﻝﻭﺮﭩﻨﮐ"
 
 
+msgid "Insert"
+msgstr "Insert"
+
+
 msgid "Unicode codepoint hex value"
 msgstr "ﻮﯿﻠﯾﻭ ﺲﮑﯿﮨ ﭧﻨﺋﺍﻮﭘﮈﻮﮐ ﮈﻮﮑﯿﻧﻮﯾ"
 
@@ -124827,10 +124815,6 @@ msgstr "Esc"
 
 msgid "Pause"
 msgstr "Pause"
-
-
-msgid "Insert"
-msgstr "Insert"
 
 
 msgctxt "UI_Events_KeyMaps"
@@ -125794,6 +125778,10 @@ msgstr "ﮓﯿﻠﻓ ﭧﺑ ﮦﻭﺮﮔ ﺭﺍﻮﻤﮨ"
 
 msgid "PBR Extensions"
 msgstr "ﺰﻨﺸﻨﯿﭩﺴﮑﯾﺍ ﺭﺁ ﯽﺑ ﯽﭘ"
+
+
+msgid "Path Mode"
+msgstr "ﮈﻮﻣ ﮫﺗﺎﭘ"
 
 
 msgid "ASCII"
@@ -129647,6 +129635,10 @@ msgid "Menu Undefined"
 msgstr "ﮧﻨﯿﻌﺘﻣ ﺮﯿﻏ ﻮﻨﯿﻣ"
 
 
+msgid "Subtype"
+msgstr "ﻢﺴﻗ ﯽﻠﯾﺫ"
+
+
 msgid "Could not determine type of group node"
 msgstr "ﺎﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻦﯿﻌﺗ ﺎﮐ ﻢﺴﻗ ﯽﮐ ﮈﻮﻧ ﮦﻭﺮﮔ"
 
@@ -129973,10 +129965,6 @@ msgstr "ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻞﻣﺎﺷ ﮧﻋﻮﻤﺠ�
 
 msgid "No active collection"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮧﻋﻮﻤﺠﻣ ﻝﺎﻌﻓ ﯽﺋﻮﮐ"
-
-
-msgid "Could not find a valid parent collection for the new duplicate, it won't be linked to any view layer"
-msgstr "ﺎﮔ ﮯﺋﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﮏﻨﻟ ﮯﺳ ﺕﺮﭘ ﻮﯾﻭ ﯽﺴﮐ ﮯﺳﺍ ،ﺎﮑﺳ ﻞﻣ ﮟﯿﮩﻧ ﻦﺸﮑﯿﻠﮐ ﻦﯾﺪﻟﺍﻭ ﺖﺳﺭﺩ ﮯﯿﻟ ﮯﮐ ﻞﻘﻧ ﮯﺌﻧ"
 
 
 msgid "Cannot add a collection to a linked/override collection/scene"
@@ -137369,11 +137357,6 @@ msgid "IOR Level"
 msgstr "IOR ﻝﻮﯿﻟ"
 
 
-msgctxt "NodeTree"
-msgid "Tint"
-msgstr "ﺖﮕﻧﺭ"
-
-
 msgid "Subsurface"
 msgstr "ﺢﻄﺳ ﯽﻠﯾﺫ"
 
@@ -137384,6 +137367,11 @@ msgstr "ﻦﯿﺷ"
 
 msgid "Thin Film"
 msgstr "ﻢﻠﻓ ﻼ﻿ﺘﭘ"
+
+
+msgctxt "NodeTree"
+msgid "Tint"
+msgstr "ﺖﮕﻧﺭ"
 
 
 msgid "Strength of the bump mapping effect, interpolating between no bump mapping and full bump mapping"

@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Beta (b'b4eeddd11342')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'ca38e3be9467')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-30 09:22+0000\n"
-"PO-Revision-Date: 2025-06-10 01:57+0000\n"
+"POT-Creation-Date: 2025-07-07 10:02+0000\n"
+"PO-Revision-Date: 2025-06-30 16:59+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
 "Language: ta\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.11"
+"X-Generator: Weblate 5.12.1"
 
 
 msgid "Shader AOV"
@@ -5534,6 +5534,10 @@ msgstr "செயலில் அடுக்கு"
 
 msgid "Only edit the active layer of the object"
 msgstr "பொருளின் செயலில் உள்ள அடுக்கை மட்டுமே திருத்தவும்"
+
+
+msgid "Auto-Remove Fill Guides"
+msgstr "தானாக அகற்றப்பட்ட வழிகாட்டிகளை நிரப்பு"
 
 
 msgid "Strokes Collision"
@@ -34588,36 +34592,12 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
-msgid "Clean Up"
-msgstr "தூய்மை செய்"
-
-
 msgid "Show/Hide"
 msgstr "காட்டு/மறைக்க"
 
 
-msgid "Special Characters"
-msgstr "சிறப்பு எழுத்துக்கள்"
-
-
-msgid "Kerning"
-msgstr "கெர்னிங்"
-
-
-msgid "Text"
-msgstr "உரை"
-
-
-msgid "Metaball"
-msgstr "வளர்சிதை மாற்ற"
-
-
-msgid "Names"
-msgstr "பெயர்கள்"
-
-
-msgid "Bone Roll"
-msgstr "எலும்பு ரோல்"
+msgid "Clean Up"
+msgstr "தூய்மை செய்"
 
 
 msgid "Pivot Point"
@@ -34704,6 +34684,10 @@ msgid "Assign Material"
 msgstr "மூலப்பொருள் ஒதுக்க"
 
 
+msgid "Metaball"
+msgstr "வளர்சிதை மாற்ற"
+
+
 msgid "Light"
 msgstr "ஒளி"
 
@@ -34788,6 +34772,10 @@ msgid "Bone Collections"
 msgstr "எலும்பு வசூல்"
 
 
+msgid "Names"
+msgstr "பெயர்கள்"
+
+
 msgid "Toggle Bone Options"
 msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
 
@@ -34818,6 +34806,22 @@ msgstr "முக வலிமையை அமைக்கவும்"
 
 msgid "Merge"
 msgstr "ஒன்றிணைக்கவும்"
+
+
+msgid "Special Characters"
+msgstr "சிறப்பு எழுத்துக்கள்"
+
+
+msgid "Kerning"
+msgstr "கெர்னிங்"
+
+
+msgid "Text"
+msgstr "உரை"
+
+
+msgid "Bone Roll"
+msgstr "எலும்பு ரோல்"
 
 
 msgid "Keyframe Insert Pie"
@@ -53694,6 +53698,7 @@ msgid "Minimum value"
 msgstr "குறைந்தபட்ச மதிப்பு"
 
 
+msgctxt "Unit"
 msgid "Subtype"
 msgstr "துணை வகை"
 
@@ -62714,10 +62719,6 @@ msgid "Other geometry types, like curve, metaball, etc. (converted to meshes)"
 msgstr "வளைவு, வளர்சிதை மாற்றங்கள் போன்ற பிற வடிவியல் வகைகள் (மெச்களாக மாற்றப்படுகின்றன)"
 
 
-msgid "Path Mode"
-msgstr "பாதை முறை"
-
-
 msgid "Method used to reference paths"
 msgstr "பாதைகளைக் குறிப்பிடப் பயன்படுத்தப்படும் முறை"
 
@@ -62730,20 +62731,12 @@ msgid "Always write absolute paths"
 msgstr "எப்போதும் முழுமையான பாதைகளை எழுதுங்கள்"
 
 
-msgid "Always write relative paths (where possible)"
-msgstr "எப்போதும் உறவினர் பாதைகளை எழுதுங்கள் (சாத்தியமான இடங்களில்)"
-
-
-msgid "Match"
-msgstr "பொருத்துக"
+msgid "Write relative paths where possible"
+msgstr "முடிந்தவரை உறவினர் பாதைகளை எழுதுங்கள்"
 
 
 msgid "Match absolute/relative setting with input path"
 msgstr "உள்ளீட்டு பாதையுடன் முழுமையான/உறவினர் அமைப்பை பொருத்துங்கள்"
-
-
-msgid "Strip Path"
-msgstr "துண்டு பாதை"
 
 
 msgid "Filename only"
@@ -89446,10 +89439,6 @@ msgid "Negative Z axis"
 msgstr "எதிர்மறை சட் அச்சு"
 
 
-msgid "Write relative paths where possible"
-msgstr "முடிந்தவரை உறவினர் பாதைகளை எழுதுங்கள்"
-
-
 msgid "Write filename only"
 msgstr "கோப்பு பெயரை மட்டும் எழுதுங்கள்"
 
@@ -89843,11 +89832,6 @@ msgstr "மென்மையான அதிகபட்சம்"
 
 msgid "Soft Min"
 msgstr "மென்மையான மணித்துளி"
-
-
-msgctxt "Unit"
-msgid "Subtype"
-msgstr "துணை வகை"
 
 
 msgid "Soft Limits"
@@ -121607,6 +121591,14 @@ msgid "Mix Vector"
 msgstr "கலவை திசையன்"
 
 
+msgid "For Each Element"
+msgstr "ஒவ்வொரு உறுப்புக்கும்"
+
+
+msgid "Determinant"
+msgstr "அணிக்கோவை"
+
+
 msgid "Calculation Range"
 msgstr "கணக்கீடு வரம்பு"
 
@@ -123678,6 +123670,10 @@ msgstr "அளவுத்திருத்தம்"
 msgctxt "Operator"
 msgid "Prefetch"
 msgstr "ப்ரீஃபெட்ச்"
+
+
+msgid "Match"
+msgstr "பொருத்துக"
 
 
 msgctxt "Operator"
@@ -131662,6 +131658,10 @@ msgid "Control point belongs to another spline"
 msgstr "கட்டுப்பாட்டு புள்ளி மற்றொரு ச்ப்லைனுக்கு சொந்தமானது"
 
 
+msgid "Insert"
+msgstr "செருகவும்"
+
+
 msgid "Unicode codepoint hex value"
 msgstr "யூனிகோட் குறியீட்டு முறை ஃச் மதிப்பு"
 
@@ -132290,10 +132290,6 @@ msgstr "எச்கே"
 
 msgid "Pause"
 msgstr "இடைநிறுத்தம்"
-
-
-msgid "Insert"
-msgstr "செருகவும்"
 
 
 msgctxt "UI_Events_KeyMaps"
@@ -133282,6 +133278,10 @@ msgstr "மென்மையான குழு பிட்ஃப்ளாக�
 
 msgid "PBR Extensions"
 msgstr "பிபிஆர் நீட்டிப்புகள்"
+
+
+msgid "Path Mode"
+msgstr "பாதை முறை"
 
 
 msgid "File exported successfully"
@@ -137368,6 +137368,10 @@ msgid "Menu Undefined"
 msgstr "பட்டியல் வரையறுக்கப்படவில்லை"
 
 
+msgid "Subtype"
+msgstr "துணை வகை"
+
+
 msgid "Could not determine type of group node"
 msgstr "குழு முனையின் வகையை தீர்மானிக்க முடியவில்லை"
 
@@ -137766,10 +137770,6 @@ msgstr "இணைக்கப்பட்ட/மேலெழுதும் க�
 
 msgid "No active collection"
 msgstr "செயலில் சேகரிப்பு இல்லை"
-
-
-msgid "Could not find a valid parent collection for the new duplicate, it won't be linked to any view layer"
-msgstr "புதிய நகலுக்கான சரியான பெற்றோர் சேகரிப்பைக் கண்டுபிடிக்க முடியவில்லை, இது எந்த பார்வை அடுக்குடனும் இணைக்கப்படாது"
 
 
 msgid "Cannot add a collection to a linked/override collection/scene"
@@ -138522,10 +138522,6 @@ msgstr "(வடிவியல்)"
 
 msgid "No Data-Block"
 msgstr "தரவு-தடுப்பு இல்லை"
-
-
-msgid "For Each Element"
-msgstr "ஒவ்வொரு உறுப்புக்கும்"
 
 
 msgid "No Active Context"
@@ -143968,10 +143964,6 @@ msgid "The string to find in the input string"
 msgstr "உள்ளீட்டு சரத்தில் கண்டுபிடிக்க சரம்"
 
 
-msgid "Determinant"
-msgstr "அணிக்கோவை"
-
-
 msgid "The string to replace each match with"
 msgstr "ஒவ்வொரு போட்டியையும் மாற்றுவதற்கான சரம்"
 
@@ -146642,11 +146634,6 @@ msgid "IOR Level"
 msgstr "ior நிலை"
 
 
-msgctxt "NodeTree"
-msgid "Tint"
-msgstr "நிறம்"
-
-
 msgid "Subsurface"
 msgstr "மேற்பரப்பு"
 
@@ -146657,6 +146644,11 @@ msgstr "சீன்"
 
 msgid "Thin Film"
 msgstr "மென்படலம்"
+
+
+msgctxt "NodeTree"
+msgid "Tint"
+msgstr "நிறம்"
 
 
 msgid "Strength of the bump mapping effect, interpolating between no bump mapping and full bump mapping"

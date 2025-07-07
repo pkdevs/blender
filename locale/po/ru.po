@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Beta (b'b4eeddd11342')\n"
+"Project-Id-Version: Blender 4.5.0 Beta (b'ca38e3be9467')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-30 09:22+0000\n"
-"PO-Revision-Date: 2025-06-30 08:53+0000\n"
+"POT-Creation-Date: 2025-07-07 10:02+0000\n"
+"PO-Revision-Date: 2025-07-07 06:59+0000\n"
 "Last-Translator: Fatih Alexandr <radix83@rambler.ru>\n"
 "Language-Team: Russian <https://translate.blender.org/projects/blender-ui/ui/ru/>\n"
 "Language: ru\n"
@@ -1081,11 +1081,11 @@ msgstr "Идентификатор последнего назначенного
 
 
 msgid "NLA Tracks"
-msgstr "НЛА-дорожки"
+msgstr "НЛА-Треки"
 
 
 msgid "NLA Tracks (i.e. Animation Layers)"
-msgstr "НЛА-дорожки (т. е. слои анимации)"
+msgstr "НЛА-Треки (т. е. слои анимации)"
 
 
 msgid "NLA Evaluation Enabled"
@@ -2758,7 +2758,7 @@ msgstr "Аннотация"
 
 
 msgid "Annotation data-blocks (legacy Grease Pencil)"
-msgstr "Блоки данных аннотаций (от старой версии Grease Pencil)"
+msgstr "Блоки данных аннотаций (старая система Grease Pencil)"
 
 
 msgid "Grease Pencil"
@@ -4357,7 +4357,7 @@ msgstr "Кость отображается только в режиме ред�
 
 
 msgid "Selectable"
-msgstr "Доступна для выделения"
+msgstr "Доступно для выделения"
 
 
 msgid "Bone is able to be selected"
@@ -12412,7 +12412,7 @@ msgstr "Установить 4-канальный режим для аудиок
 
 
 msgid "5.1 Surround"
-msgstr "Объёмный 5.1"
+msgstr "5.1 объёмный"
 
 
 msgid "Set audio channels to 5.1 surround sound"
@@ -12420,7 +12420,7 @@ msgstr "Установить режим объёмного звука 5.1 для
 
 
 msgid "7.1 Surround"
-msgstr "Объёмный 7.1"
+msgstr "7.1 объёмный"
 
 
 msgid "Set audio channels to 7.1 surround sound"
@@ -23406,7 +23406,7 @@ msgstr "Результат рендеринга"
 
 
 msgid "Compositing"
-msgstr "Постобработка"
+msgstr "Компо́зитинг"
 
 
 msgid "Deinterlace"
@@ -28221,7 +28221,7 @@ msgstr "Определение аудиоканалов"
 
 
 msgid "Stereo LFE"
-msgstr "Stereo LFE"
+msgstr "Стерео LFE"
 
 
 msgid "Stereo FX"
@@ -28229,11 +28229,11 @@ msgstr "Стерео эффекты"
 
 
 msgid "5 Channels"
-msgstr "5-канальная"
+msgstr "5 каналов"
 
 
 msgid "6.1 Surround"
-msgstr "6.1 Объёмный звук"
+msgstr "6.1 объёмный"
 
 
 msgid "Sound sample file used by this Sound data-block"
@@ -30482,7 +30482,7 @@ msgstr "Сжатие с потерями для 32-битных десятичн
 
 
 msgid "B44 (lossy)"
-msgstr "B44A (с потерями)"
+msgstr "B44 (с потерями)"
 
 
 msgid "Lossy compression for 16 bit float images, at fixed 2.3:1 ratio"
@@ -30534,7 +30534,7 @@ msgstr "Режим сжатия для TIFF"
 
 
 msgid "Deflate"
-msgstr "Сдуть"
+msgstr "Deflate"
 
 
 msgid "LZW"
@@ -34628,36 +34628,12 @@ msgid "Editor menu containing buttons"
 msgstr "Меню редактора, содержащее кнопки"
 
 
-msgid "Clean Up"
-msgstr "Привести в порядок"
-
-
 msgid "Show/Hide"
 msgstr "Показать/скрыть"
 
 
-msgid "Special Characters"
-msgstr "Специальные символы"
-
-
-msgid "Kerning"
-msgstr "Кернинг"
-
-
-msgid "Text"
-msgstr "Текст"
-
-
-msgid "Metaball"
-msgstr "Метасфера"
-
-
-msgid "Names"
-msgstr "Названия"
-
-
-msgid "Bone Roll"
-msgstr "Крен кости"
+msgid "Clean Up"
+msgstr "Привести в порядок"
 
 
 msgid "Pivot Point"
@@ -34744,6 +34720,10 @@ msgid "Assign Material"
 msgstr "Назначить материал"
 
 
+msgid "Metaball"
+msgstr "Метасфера"
+
+
 msgid "Light"
 msgstr "Свет"
 
@@ -34828,6 +34808,10 @@ msgid "Bone Collections"
 msgstr "Коллекции костей"
 
 
+msgid "Names"
+msgstr "Названия"
+
+
 msgid "Toggle Bone Options"
 msgstr "Переключить опции костей"
 
@@ -34858,6 +34842,22 @@ msgstr "Установить твёрдость грани"
 
 msgid "Merge"
 msgstr "Объединить"
+
+
+msgid "Special Characters"
+msgstr "Специальные символы"
+
+
+msgid "Kerning"
+msgstr "Кернинг"
+
+
+msgid "Text"
+msgstr "Текст"
+
+
+msgid "Bone Roll"
+msgstr "Крен кости"
 
 
 msgid "Keyframe Insert Pie"
@@ -44221,7 +44221,7 @@ msgstr "Смещение этого события движения. Диапа�
 
 
 msgid "NLA Strip"
-msgstr "Дорожка NLA"
+msgstr "Дорожка НЛА"
 
 
 msgid "A container referencing an existing Action"
@@ -44253,7 +44253,7 @@ msgstr "Число, которое определяет, какое подмно
 
 
 msgid "NLA Strip is active"
-msgstr "Дорожка NLA активна"
+msgstr "Дорожка НЛА активна"
 
 
 msgid "Number of frames at start of strip to fade in influence"
@@ -44321,7 +44321,7 @@ msgstr "Модификаторы, влияющие на все F-кривые в
 
 
 msgid "Disable NLA Strip evaluation"
-msgstr "Отключить расчёт дорожки NLA"
+msgstr "Отключить расчёт дорожки НЛА"
 
 
 msgid "Number of times to repeat the action range"
@@ -44333,7 +44333,7 @@ msgstr "Коэффициент масштабирования для дейст�
 
 
 msgid "NLA Strip is selected"
-msgstr "НЛА-дорожка выбрана"
+msgstr "НЛА-Дорожка выбрана"
 
 
 msgid "Strip Time"
@@ -44441,11 +44441,11 @@ msgstr "Коллекция НЛА-дорожек"
 
 
 msgid "NLA Track"
-msgstr "НЛА-трек"
+msgstr "НЛА-Трек"
 
 
 msgid "An animation layer containing Actions referenced as NLA strips"
-msgstr "Слой анимации, содержащий действия, называемые NLA-дорожками"
+msgstr "Слой анимации, содержащий действия, называемые НЛА-дорожками"
 
 
 msgid "NLA Track is active"
@@ -44465,7 +44465,7 @@ msgstr "НЛА-трек вычисляется обособленно (т. е. �
 
 
 msgid "NLA Track is locked"
-msgstr "НЛА-трек заблокирован"
+msgstr "НЛА-Трек заблокирован"
 
 
 msgid "Disable NLA Track evaluation"
@@ -44473,11 +44473,11 @@ msgstr "Отключить расчёт трека НЛА"
 
 
 msgid "NLA Track is selected"
-msgstr "НЛА-трек выбран"
+msgstr "НЛА-Трек выбран"
 
 
 msgid "NLA Strips on this NLA-track"
-msgstr "НЛА-дорожки этого НЛА-трека"
+msgstr "НЛА-Дорожки этого НЛА-трека"
 
 
 msgid "Collection of NLA Tracks"
@@ -53886,6 +53886,7 @@ msgid "Minimum value"
 msgstr "Минимальное значение"
 
 
+msgctxt "Unit"
 msgid "Subtype"
 msgstr "Подтип"
 
@@ -54315,9 +54316,9 @@ msgid ""
 "    >>> layout.context_pointer_set(\"nla_strip\", nla_strip)\n"
 "    "
 msgstr ""
-"Отменить назначение слота действия из NLA дорожки.\n"
+"Отменить назначение слота действия из НЛА дорожки.\n"
 "\n"
-"    Обратите внимание, что _какая_ NLA дорожка должна снять назначение слота, должна быть установлена в\n"
+"    Обратите внимание, что _какая_ НЛА дорожка должна снять назначение слота, должна быть установлена в\n"
 "    контекстном указателе \"nla_strip\", используя:\n"
 "\n"
 "    >>> layout.context_pointer_set(\"nla_strip\", nla_strip)\n"
@@ -56699,7 +56700,7 @@ msgstr "Переименовать несколько элементов одн�
 
 msgctxt "Operator"
 msgid "Batch Rename"
-msgstr "Массовое переименование"
+msgstr "Пакетное переименование"
 
 
 msgid "Check and fix all strings in current .blend file to be valid UTF-8 Unicode (needed for some old, 2.4x area files)"
@@ -58486,7 +58487,7 @@ msgstr "Отменить назначение слота действия, фа�
 
 
 msgid "Un-assign the action slot from this NLA strip, effectively making it non-animated"
-msgstr "Отменить назначение слота действия этой NLA-дорожке, фактически сделав её неанимированной"
+msgstr "Отменить назначение слота действия этой НЛА-дорожке, фактически сделав её неанимированной"
 
 
 msgctxt "Operator"
@@ -62915,10 +62916,6 @@ msgid "Other geometry types, like curve, metaball, etc. (converted to meshes)"
 msgstr "Другие типы геометрии, например, кривые, метасферы и пр. (преобразованные в меши)"
 
 
-msgid "Path Mode"
-msgstr "Режим пути"
-
-
 msgid "Method used to reference paths"
 msgstr "Метод, используемый для генерации путей"
 
@@ -62931,20 +62928,12 @@ msgid "Always write absolute paths"
 msgstr "Всегда записывать абсолютные пути"
 
 
-msgid "Always write relative paths (where possible)"
-msgstr "Всегда использовать относительные пути (где возможно)"
-
-
-msgid "Match"
-msgstr "Сопоставление"
+msgid "Write relative paths where possible"
+msgstr "По возможности указывать относительные пути"
 
 
 msgid "Match absolute/relative setting with input path"
 msgstr "Сопоставить абсолютную/относительную настройку с входным путём"
-
-
-msgid "Strip Path"
-msgstr "Обрезка пути"
 
 
 msgid "Filename only"
@@ -72654,7 +72643,7 @@ msgstr "Дублировать дорожки"
 
 
 msgid "Duplicate selected NLA-Strips, adding the new strips to new track(s)"
-msgstr "Дублировать выделенные NLA-дорожки, добавив новые дорожки к новому треку(-ам)"
+msgstr "Дублировать выделенные НЛА-дорожки, добавив новые дорожки к новому треку(-ам)"
 
 
 msgid "When duplicating strips, assign new copies of the actions they use"
@@ -72667,7 +72656,7 @@ msgstr "Дублировать с созданием связей"
 
 
 msgid "Duplicate Linked selected NLA-Strips, adding the new strips to new track(s)"
-msgstr "Дублировать выделенные NLA-дорожки, добавив новые дорожки к новому треку(-ам)"
+msgstr "Дублировать выделенные НЛА-дорожки, добавив новые дорожки к новому треку(-ам)"
 
 
 msgid "Duplicate Strips"
@@ -72784,7 +72773,7 @@ msgstr "Включить выделенные объекты"
 
 
 msgid "Make selected objects appear in NLA Editor by adding Animation Data"
-msgstr "Отобразить выделенные объекты в нелинейном редакторе анимации, добавив данные анимации"
+msgstr "Отобразить выделенные объекты в редакторе нелинейной анимации, добавив данные анимации"
 
 
 msgctxt "Operator"
@@ -89489,7 +89478,7 @@ msgstr "Импортировать файл FBX в текущую сцену"
 
 
 msgid "Offset to apply to animation timestamps, in frames"
-msgstr "Смещение, применяемое к временным меткам анимации, в кадрах"
+msgstr "Смещение, применяемое к временны́м меткам анимации, в кадрах"
 
 
 msgid "Vertex colors in the file are in sRGB color space"
@@ -89505,7 +89494,7 @@ msgstr "Перечисления в качестве строк"
 
 
 msgid "Store custom property enumeration values as strings"
-msgstr "Сохранять значения пользовательских перечислений в виде строк"
+msgstr "Сохранить значения перечислений пользовательских свойств в виде строк"
 
 
 msgctxt "Operator"
@@ -89813,10 +89802,6 @@ msgstr "Отрицательная ось Y"
 
 msgid "Negative Z axis"
 msgstr "Отрицательная ось Z"
-
-
-msgid "Write relative paths where possible"
-msgstr "По возможности указывать относительные пути"
 
 
 msgid "Write filename only"
@@ -90212,11 +90197,6 @@ msgstr "Плавно - Макс."
 
 msgid "Soft Min"
 msgstr "Плавно - Мин."
-
-
-msgctxt "Unit"
-msgid "Subtype"
-msgstr "Подтип"
 
 
 msgid "Soft Limits"
@@ -102619,7 +102599,7 @@ msgstr "Штамп сетевого адреса"
 
 
 msgid "Include the hostname of the machine that rendered the frame"
-msgstr "Включить сетевой адрес компьютера, который рендерит этот кадр"
+msgstr "Включить сетевой адрес компьютера, который производит рендеринг данного кадра"
 
 
 msgid "Stamp Labels"
@@ -108338,11 +108318,11 @@ msgstr "Активная таблица"
 
 
 msgid "Stereo 3D Display"
-msgstr "Экран стерео 3D"
+msgstr "Отображение стерео 3D"
 
 
 msgid "Settings for stereo 3D display"
-msgstr "Настройки экрана стерео 3D"
+msgstr "Настройки отображения стерео 3D"
 
 
 msgid "Stereo Output"
@@ -111903,7 +111883,7 @@ msgstr "Настройки темы для цветовых наборов ви�
 
 
 msgid "Inner"
-msgstr "Внутреннее"
+msgstr "Внутри"
 
 
 msgid "Inner Selected"
@@ -118953,6 +118933,26 @@ msgid "Error: {:s}"
 msgstr "Ошибка: {:s}"
 
 
+msgctxt "Preferences"
+msgid "Extension"
+msgstr "Расширение"
+
+
+msgctxt "Preferences"
+msgid "Core"
+msgstr "Встроенный"
+
+
+msgctxt "Preferences"
+msgid "Legacy (User)"
+msgstr "Прежней системы (пользовательский)"
+
+
+msgctxt "Preferences"
+msgid "Legacy (Other)"
+msgstr "Прежней системы (прочее)"
+
+
 msgid "Missing Built-in Add-ons"
 msgstr "Отсутствуют встроенные аддоны"
 
@@ -119031,7 +119031,7 @@ msgstr "Обратная связь"
 
 
 msgid "Maintainer"
-msgstr "Сопровождающий"
+msgstr "Разработчик"
 
 
 msgid "Blender's extension repository not found!"
@@ -119095,7 +119095,7 @@ msgstr "Заблокировано"
 
 
 msgid "Permissions"
-msgstr "Разрешения"
+msgstr "Права доступа"
 
 
 msgctxt "Operator"
@@ -119123,7 +119123,7 @@ msgstr "Необходимо обновить репозиторий расши�
 
 
 msgid "No permissions specified"
-msgstr "Разрешения не указаны"
+msgstr "Права доступа не указаны"
 
 
 msgctxt "Operator"
@@ -121395,6 +121395,10 @@ msgid "Active camera is not in this scene"
 msgstr "Активная камера не присутствует в этой сцене"
 
 
+msgid "No {:s} modifiers found"
+msgstr "Модификаторы {:s} не найдены"
+
+
 msgid "Skipping '{:s}', not a mesh"
 msgstr "Пропуск '{:s}', не меш"
 
@@ -122113,6 +122117,14 @@ msgid "Mix Vector"
 msgstr "Смешать векторы"
 
 
+msgid "For Each Element"
+msgstr "Для каждого элемента"
+
+
+msgid "Determinant"
+msgstr "Определитель"
+
+
 msgid "Calculation Range"
 msgstr "Диапазон расчёта"
 
@@ -122414,7 +122426,7 @@ msgstr "Гармония"
 
 
 msgid "Pole Merge Angle Start"
-msgstr "Угол начала слияния полюсов"
+msgstr "Угол слияния полюсов - Начало"
 
 
 msgid "Focus on Bone"
@@ -122725,6 +122737,11 @@ msgstr "Обновлять при редактировании"
 msgctxt "Operator"
 msgid "Search..."
 msgstr "Поиск..."
+
+
+msgctxt "Speaker"
+msgid "Volume Min"
+msgstr "Громкость - Мин."
 
 
 msgid "Distance Reference"
@@ -123068,7 +123085,7 @@ msgstr "Старый"
 
 msgctxt "Time"
 msgid "New"
-msgstr "Создать"
+msgstr "Новый"
 
 
 msgid "Date"
@@ -124188,6 +124205,10 @@ msgstr "Калибровка"
 msgctxt "Operator"
 msgid "Prefetch"
 msgstr "Закэшировать"
+
+
+msgid "Match"
+msgstr "Сопоставление"
 
 
 msgctxt "Operator"
@@ -125584,7 +125605,7 @@ msgstr "Вставить датаблоки"
 
 
 msgid "All View Layers"
-msgstr "Все видовые слои"
+msgstr "Все слои визуализации"
 
 
 msgid "Object Contents"
@@ -127032,6 +127053,14 @@ msgid "A restart of Blender is required"
 msgstr "Требуется перезапуск Blender'а"
 
 
+msgid "Current Vulkan backend limitations:"
+msgstr "Текущие ограничения бэкэнда Vulkan:"
+
+
+msgid "• Low performance in VR"
+msgstr "• Низкая производительность в VR"
+
+
 msgid "Open blend files with this Blender version"
 msgstr "Открывать blend-файлы с помощью этой версии Blender'а"
 
@@ -127105,6 +127134,10 @@ msgstr "URL репозитория"
 
 msgid "Enable Cycles Render Engine add-on to use Cycles"
 msgstr "Включить аддон Cycles Render Engine для использования Cycles"
+
+
+msgid "• Windows on ARM requires driver 31.0.112.0 or higher"
+msgstr "• Для Windows на ARM требуется драйвер 31.0.112.0 или выше"
 
 
 msgid "Microsoft Store installation"
@@ -131353,7 +131386,7 @@ msgstr "Сделать видимыми все каналы, сгруппиро�
 
 
 msgid "NLA Track is the only one evaluated in this animation data-block, with all others muted"
-msgstr "Выполняется только Трек NLA в этом датаблоке анимации, все остальные выключены"
+msgstr "Выполняется только НЛА-трек в этом датаблоке анимации, все остальные выключены"
 
 
 msgid "Editability of keyframes for this channel"
@@ -131522,7 +131555,7 @@ msgstr "Перемещено %i слот(а, ов) в действие акти�
 
 
 msgid "Failed to merge any animation. Note that NLA strips cannot be merged"
-msgstr "Не удалось объединить ни одну анимацию. Обратите внимание, что NLA-дорожки не могут быть объединены"
+msgstr "Не удалось объединить ни одну анимацию. Обратите внимание, что НЛА-дорожки не могут быть объединены"
 
 
 msgid "Expected an animation area to be active"
@@ -131801,6 +131834,10 @@ msgstr "Активный объект не является выделенной
 
 msgid "Separated bones"
 msgstr "Отделённые кости"
+
+
+msgid "Cannot join objects that share armature data: %s"
+msgstr "Невозможно объединить объекты, которые имеют общие данные арматуры: %s"
 
 
 msgid "Unselectable bone in chain"
@@ -132343,6 +132380,10 @@ msgstr "Нет выделенных контрольных точек"
 
 msgid "Control point belongs to another spline"
 msgstr "Контрольная точка принадлежит другой кривой"
+
+
+msgid "Insert"
+msgstr "Вставить"
 
 
 msgid "Unicode codepoint hex value"
@@ -132973,10 +133014,6 @@ msgstr "Esc"
 
 msgid "Pause"
 msgstr "Пауза"
-
-
-msgid "Insert"
-msgstr "Вставить"
 
 
 msgctxt "UI_Events_KeyMaps"
@@ -133965,6 +134002,10 @@ msgstr "Битовые флаги групп сглаживания"
 
 msgid "PBR Extensions"
 msgstr "Расширения PBR"
+
+
+msgid "Path Mode"
+msgstr "Режим пути"
 
 
 msgid "File exported successfully"
@@ -138080,7 +138121,7 @@ msgstr "Трек анимации не найден по индексу %d"
 
 
 msgid "Animation track at index %d is not a NLA 'Active Action' track"
-msgstr "Трек анимации с индексом %d не является NLA-треком 'активного действия'"
+msgstr "Трек анимации с индексом %d не является НЛА-треком 'активного действия'"
 
 
 msgid ""
@@ -138149,6 +138190,10 @@ msgstr "Ошибка меню"
 
 msgid "Menu Undefined"
 msgstr "Меню не определено"
+
+
+msgid "Subtype"
+msgstr "Подтип"
 
 
 msgid "Could not determine type of group node"
@@ -138551,10 +138596,6 @@ msgid "No active collection"
 msgstr "Нет активной коллекции"
 
 
-msgid "Could not find a valid parent collection for the new duplicate, it won't be linked to any view layer"
-msgstr "Не удалось найти корректную родительскую коллекцию для нового дубликата, поэтому он не будет связан и с каким слоём вида"
-
-
 msgid "Cannot add a collection to a linked/override collection/scene"
 msgstr "Невозможно добавить коллекцию в связанную/переопределяемую коллекцию/сцену"
 
@@ -138868,7 +138909,7 @@ msgstr "Для выполнения операции необходимо зад
 
 
 msgid "No orphaned data-blocks to purge"
-msgstr "Нет потерянных блоков данных, которые нужно очищать"
+msgstr "Нет неиспользуемых блоков данных, которые нужно очищать"
 
 
 msgid "Cannot delete library override id '%s', it is part of an override hierarchy"
@@ -139337,10 +139378,6 @@ msgstr "(Геометрия)"
 
 msgid "No Data-Block"
 msgstr "Нет блока данных"
-
-
-msgid "For Each Element"
-msgstr "Для каждого элемента"
 
 
 msgid "No Active Context"
@@ -142347,6 +142384,10 @@ msgid "Cannot edit bone groups for library overrides"
 msgstr "Невозможно редактировать группы костей для переопределения библиотек"
 
 
+msgid "Cannot use armature object as custom bone shape"
+msgstr "Невозможно использовать объект-арматуру в качестве пользовательской формы кости"
+
+
 msgid "Constraint '%s' not found in pose bone '%s'"
 msgstr "Ограничитель «%s» не найден для позовой кости «%s»"
 
@@ -142369,6 +142410,18 @@ msgstr "Функции передана поверхность столкнов�
 
 msgid "Rigidbody world was not properly initialized, need to step the simulation first"
 msgstr "Среда твёрдых тел не инициализирована, сначала необходимо произвести шаг симуляции"
+
+
+msgid "Float (Half)"
+msgstr "Нецелое (16-бит)"
+
+
+msgid "16-bit color channels. Data passes like Depth will still be saved using full 32-bit precision."
+msgstr "16-битные цветовые каналы. Проходы данных, такие как глубина, будут по-прежнему сохраняться с использованием полной 32-битной точности."
+
+
+msgid "Float (Full)"
+msgstr "Нецелое (32 бита)"
 
 
 msgid "Use the scene orientation"
@@ -144973,10 +145026,6 @@ msgstr "Истинно, если входная матрица обратима"
 
 msgid "The string to find in the input string"
 msgstr "Строка, которую нужно найти во входной строке"
-
-
-msgid "Determinant"
-msgstr "Определитель"
 
 
 msgid "The string to replace each match with"
@@ -147673,11 +147722,6 @@ msgid "IOR Level"
 msgstr "Уровень IOR"
 
 
-msgctxt "NodeTree"
-msgid "Tint"
-msgstr "Оттенок"
-
-
 msgid "Subsurface"
 msgstr "Подповерхность"
 
@@ -147688,6 +147732,11 @@ msgstr "Лоск"
 
 msgid "Thin Film"
 msgstr "Тонкая плёнка"
+
+
+msgctxt "NodeTree"
+msgid "Tint"
+msgstr "Оттенок"
 
 
 msgid "Strength of the bump mapping effect, interpolating between no bump mapping and full bump mapping"
