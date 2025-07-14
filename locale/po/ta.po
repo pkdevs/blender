@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Beta (b'ca38e3be9467')\n"
+"Project-Id-Version: Blender 4.5.0 Release Candidate (b'08ec4602a2f7')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-07 10:02+0000\n"
-"PO-Revision-Date: 2025-06-30 16:59+0000\n"
+"POT-Creation-Date: 2025-07-14 09:15+0000\n"
+"PO-Revision-Date: 2025-07-10 14:59+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
 "Language: ta\n"
@@ -713,7 +713,7 @@ msgstr "வளைவுகளை அதிக அளவில் பயன்ப
 
 
 msgid "Disable MetalRT (uses BVH2 layout for intersection queries)"
-msgstr "உலோகஆர்டியை முடக்கு (குறுக்குவெட்டு வினவல்களுக்குப் பிவிஎச்2 தளவமைப்பைப் பயன்படுத்துகிறது)"
+msgstr "மெட்டல்ஆர்டியை முடக்கு (குறுக்குவெட்டு வினவல்களுக்குப் பி.வி.எச் 2 தளவமைப்பைப் பயன்படுத்துகிறது)"
 
 
 msgid "On"
@@ -721,7 +721,7 @@ msgstr "துவங்கு"
 
 
 msgid "Enable MetalRT for intersection queries"
-msgstr "குறுக்குவெட்டு வினவல்களுக்கு உலோகஆர்டியை இயக்கு"
+msgstr "குறுக்குவெட்டு வினவல்களுக்கு மெட்டல்ஆர்ட்டை இயக்கு"
 
 
 msgid "Auto"
@@ -737,7 +737,7 @@ msgstr "சாதனங்கள் முழுவதும் நினைவ�
 
 
 msgid "Make more room for large scenes to fit by distributing memory across interconnected devices (e.g. via NVLink) rather than duplicating it"
-msgstr "நினைவகத்தை நகலெடுப்பதற்குப் பதிலாக ஒன்றோடொன்று இணைக்கப்பட்ட சாதனங்களில் (எ.கா. NVLink வழியாக) விநியோகிப்பதன் மூலம் பெரிய காட்சிகளைப் பொருத்துவதற்கு அதிக இடமளி"
+msgstr "நினைவகத்தை நகலெடுப்பதற்குப் பதிலாக ஒன்றோடொன்று இணைக்கப்பட்ட சாதனங்களில் (எ.கா. NVLink வழியாக) விநியோகிப்பதன் மூலம் பெரிய காட்சிகளைப் பொருத்துவதற்கு அதிக இடமளிக்கவும்"
 
 
 msgid "HIP RT"
@@ -749,7 +749,7 @@ msgstr "HIP RT RDNA2 மற்றும் அதற்கு மேற்பட
 
 
 msgid "Embree on GPU"
-msgstr "GPU மேல் எம்பிறி"
+msgstr "GPU மேல் எம்ப்ரீ"
 
 
 msgid "Embree on GPU enables the use of hardware ray tracing on Intel GPUs, providing better overall performance"
@@ -769,7 +769,7 @@ msgstr "GLTF உட்பொதிக்கப்பட்ட வடிவமை
 
 
 msgid "Display glTF UI to manage animations"
-msgstr "அசைவுட்டங்களை நிர்வகிக்க glTF இடைமுகத்தைக் காண்பி"
+msgstr "அசைவுட்டங்களை நிர்வகிக்க gltf இடைமுகத்தைக் காண்பி"
 
 
 msgid "glTFpack file path"
@@ -781,7 +781,7 @@ msgstr "gltfpack பைனரிக்கு பாதை"
 
 
 msgid "Displays glTF Material Output node in Shader Editor (Menu Add > Output)"
-msgstr "நிழல் திருத்தியில் glTF மூலப்பொருள் வெளியீட்டு முனையைக் காட்டுகிறது (பட்டியல் சேர்> வெளியீடு)"
+msgstr "சேடர் திருத்தியில் சி.எல்.டி.எஃப் மூலப்பொருள் வெளியீட்டு முனையைக் காட்டுகிறது (மெனு சேர்> வெளியீடு)"
 
 
 msgid "        Filter by Name"
@@ -869,7 +869,7 @@ msgstr "fribidi தொகுப்பு"
 
 
 msgid "The FriBidi C compiled library (.so under Linux, .dll under windows...), you’ll likely have to edit it if you’re under Windows, e.g. using the one included in Blender libraries repository"
-msgstr "ஃப்ரிபிடி சி தொகுக்கப்பட்ட நூலகம் (.so லினக்சின் கீழ், .dll சாளரத்தின் கீழ் ...), நீங்கள் சாளரத்தின் கீழ் இருந்தால் அதைத் திருத்த வேண்டியிருக்கும், எ.கா. கலப்பான் நூலகங்களின் களஞ்சியத்தில் சேர்க்கப்பட்டதைப் பயன்படுத்துதல்"
+msgstr "ஃப்ரிபிடி சி தொகுக்கப்பட்ட நூலகம் (.so லினக்சின் கீழ், .dll விண்டோசின் கீழ் ...), நீங்கள் விண்டோசின் கீழ் இருந்தால் அதைத் திருத்த வேண்டியிருக்கும், எ.கா. கலப்பான் நூலகங்களின் களஞ்சியத்தில் சேர்க்கப்பட்டதைப் பயன்படுத்துதல்"
 
 
 msgid "Translation Root"
@@ -877,7 +877,7 @@ msgstr "மொழிபெயர்ப்பு வேர்"
 
 
 msgid "The bf-translation repository"
-msgstr "பிஎஃப்-மொழிபெயர்ப்பு களஞ்சியம்"
+msgstr "பி.எஃப்-மொழிபெயர்ப்பு களஞ்சியம்"
 
 
 msgid "Import Paths"
@@ -897,11 +897,11 @@ msgstr "கலப்பான் மூல வேர் பாதை"
 
 
 msgid "Spell Cache"
-msgstr "சொல் சேகரிப்பு"
+msgstr "எழுத்து சேகரிப்பு"
 
 
 msgid "A cache storing validated msgids, to avoid re-spellchecking them"
-msgstr "மீண்டும் எழுத்துப்பிழை சரிபார்ப்பதைத் தவிர்க்க, சரிபார்க்கப்பட்ட செய்திகளைச் சேமிக்கும் ஒரு தற்காலிக சேமிப்பு"
+msgstr "மீண்டும் எழுத்துப்பிழை சரிபார்ப்பதைத் தவிர்க்க, சரிபார்க்கப்பட்ட msgids களை சேமிக்கும் ஒரு தற்காலிக சேமிப்பு"
 
 
 msgid "Warn Msgid Not Capitalized"
@@ -917,7 +917,7 @@ msgstr "நிலையான தரவு பாதை"
 
 
 msgid "The name of a json file storing those settings (unfortunately, Blender's system does not work here)"
-msgstr "அந்த அமைப்புகளைச் சேமிக்கும் சாதொபொகு கோப்பின் பெயர் (எதிர்பாராதவிதமாக, கலப்பானின் அமைப்பு இங்கே வேலை செய்யாது)"
+msgstr "அந்த அமைப்புகளைச் சேமிக்கும் சாதொபொகு கோப்பின் பெயர் (துரதிர்ச்டவசமாக, கலப்பானின் அமைப்பு இங்கே வேலை செய்யாது)"
 
 
 msgid "User Add-ons"
@@ -8724,7 +8724,7 @@ msgstr "இலக்கு இயக்க பாதைக்கு பூட்
 
 
 msgid "Camera"
-msgstr "படக்கருவி"
+msgstr "புகைப்பட கருவி"
 
 
 msgid "Camera to which motion is parented (if empty active scene camera is used)"
@@ -10148,7 +10148,7 @@ msgstr "வளைவை அதிகரிக்கும் (உயர் த�
 
 
 msgid "Split"
-msgstr "பிள"
+msgstr "பிளவு"
 
 
 msgid "Split the curve until the tolerance is met (fast)"
@@ -13603,7 +13603,7 @@ msgstr "சுருட்டை"
 
 
 msgid "Gradient"
-msgstr "நிறமாற்றி"
+msgstr "சாய்வு"
 
 
 msgid "Nabla"
@@ -26315,7 +26315,7 @@ msgstr "உருவகப்படுத்துதல் தற்கால�
 
 
 msgid "Cache frames during simulation nodes playback"
-msgstr "உருவகப்படுத்துதல் முனைகள் பின்னணியின்போது தற்காலிக சட்டகங்கள்"
+msgstr "உருவகப்படுத்துதல் முனைகள் பின்னணியின்போது கேச் பிரேம்கள்"
 
 
 msgid "Vertex Groups"
@@ -29022,7 +29022,7 @@ msgstr "மிரர் ஃச்"
 
 
 msgid "Mirror the image repetition on the X direction"
-msgstr "ஃச் திசையில் பட மறுபடியும் பிரதிபலிக்கு"
+msgstr "ஃச் திசையில் பட மறுபடியும் மறுபடியும் பிரதிபலிக்கவும்"
 
 
 msgid "Mirror Y"
@@ -29030,7 +29030,7 @@ msgstr "மிரர் ஒய்"
 
 
 msgid "Mirror the image repetition on the Y direction"
-msgstr "ஒய் திசையில் பட மறுபடியும் பிரதிபலி"
+msgstr "ஒய் திசையில் பட மறுபடியும் மறுபடியும் பிரதிபலிக்கவும்"
 
 
 msgid "Normal Map"
@@ -34592,12 +34592,36 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Clean Up"
+msgstr "தூய்மை செய்"
+
+
 msgid "Show/Hide"
 msgstr "காட்டு/மறைக்க"
 
 
-msgid "Clean Up"
-msgstr "தூய்மை செய்"
+msgid "Special Characters"
+msgstr "சிறப்பு எழுத்துக்கள்"
+
+
+msgid "Kerning"
+msgstr "கெர்னிங்"
+
+
+msgid "Text"
+msgstr "உரை"
+
+
+msgid "Metaball"
+msgstr "வளர்சிதை மாற்ற"
+
+
+msgid "Names"
+msgstr "பெயர்கள்"
+
+
+msgid "Bone Roll"
+msgstr "எலும்பு ரோல்"
 
 
 msgid "Pivot Point"
@@ -34684,10 +34708,6 @@ msgid "Assign Material"
 msgstr "மூலப்பொருள் ஒதுக்க"
 
 
-msgid "Metaball"
-msgstr "வளர்சிதை மாற்ற"
-
-
 msgid "Light"
 msgstr "ஒளி"
 
@@ -34772,10 +34792,6 @@ msgid "Bone Collections"
 msgstr "எலும்பு வசூல்"
 
 
-msgid "Names"
-msgstr "பெயர்கள்"
-
-
 msgid "Toggle Bone Options"
 msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
 
@@ -34806,22 +34822,6 @@ msgstr "முக வலிமையை அமைக்கவும்"
 
 msgid "Merge"
 msgstr "ஒன்றிணைக்கவும்"
-
-
-msgid "Special Characters"
-msgstr "சிறப்பு எழுத்துக்கள்"
-
-
-msgid "Kerning"
-msgstr "கெர்னிங்"
-
-
-msgid "Text"
-msgstr "உரை"
-
-
-msgid "Bone Roll"
-msgstr "எலும்பு ரோல்"
 
 
 msgid "Keyframe Insert Pie"
@@ -35197,7 +35197,7 @@ msgstr "முனை ரேங்க்லர்"
 
 
 msgid "Switch Type to..."
-msgstr "வகைக்கு மாறு..."
+msgstr "வகை வகை ..."
 
 
 msgid "Light Linking Specials"
@@ -35754,7 +35754,7 @@ msgstr "இந்த முகத்தின் முதல் வளையத
 
 
 msgid "Loop Total"
-msgstr "மொத்த சுழல்"
+msgstr "மொத்த மொத்த"
 
 
 msgid "Number of loops used by this face"
@@ -37402,7 +37402,7 @@ msgstr "மோதல் மாற்றியமைப்பாளர்"
 
 
 msgid "Collision modifier defining modifier stack position used for collision"
-msgstr "மோதலுக்குப் பயன்படுத்தப்படும் மாற்றியமைப்பான் அடுக்கு நிலையை வரையறுக்கும் மோதல் மாற்றி"
+msgstr "மோதல் மாற்றியமைக்கும் மாற்றியமைக்கும் மாற்றியமைக்கும் அடுக்கு நிலை"
 
 
 msgid "Settings"
@@ -39484,7 +39484,7 @@ msgstr "செயலில் உள்ள கேமராவுக்கு ப
 
 
 msgid "Match Output"
-msgstr "பொருந்தும் வெளியீடு"
+msgstr "பொருந்தும் பொருந்தும்"
 
 
 msgid "Match output vertex group based on name"
@@ -47489,7 +47489,7 @@ msgstr "ஒரு குறிப்பிட்ட அச்சில் பட
 
 
 msgid "No repeating"
-msgstr "மீண்டும் மீண்டும் இல்லை"
+msgstr "மறுநிகழ்வு இல்லை"
 
 
 msgid "X Axis"
@@ -49091,7 +49091,7 @@ msgstr "கண்ணாடி"
 
 
 msgid "Repeatedly flip the image horizontally and vertically"
-msgstr "படத்தை கிடைமட்டமாகவும் செங்குத்தாகவும் மீண்டும் மீண்டும் புரட்டவும்"
+msgstr "படத்தை கிடைமட்டமாகவும் செங்குத்தாகவும் மறுநிகழ்வு புரட்டவும்"
 
 
 msgid "Method for smoothing values between pixels"
@@ -52995,7 +52995,7 @@ msgstr "முக்கிய பொருட்களின் சேகரி�
 
 
 msgid "Collection of repeat items"
-msgstr "மீண்டும் மீண்டும் உருப்படிகளின் சேகரிப்பு"
+msgstr "மறுநிகழ்வு உருப்படிகளின் சேகரிப்பு"
 
 
 msgid "Separate Bundle Item"
@@ -54143,7 +54143,7 @@ msgstr "அனிமேசன் உருமாற்றக் கட்டு�
 
 
 msgid "Remove all bone collections that have neither bones nor children. This is done recursively, so bone collections that only have unused children are also removed"
-msgstr "எலும்புகளோ குழந்தைகளோ இல்லாத அனைத்து எலும்பு சேகரிப்புகளையும் அகற்றவும். இது மீண்டும் மீண்டும் செய்யப்படுகிறது, எனவே பயன்படுத்தப்படாத குழந்தைகளை மட்டுமே கொண்ட எலும்பு சேகரிப்புகள் அகற்றப்படுகின்றன"
+msgstr "எலும்புகளோ குழந்தைகளோ இல்லாத அனைத்து எலும்பு சேகரிப்புகளையும் அகற்றவும். இது மறுநிகழ்வு செய்யப்படுகிறது, எனவே பயன்படுத்தப்படாத குழந்தைகளை மட்டுமே கொண்ட எலும்பு சேகரிப்புகள் அகற்றப்படுகின்றன"
 
 
 msgctxt "Operator"
@@ -54970,12 +54970,12 @@ msgstr "முனை சேர்க்கவும்"
 
 
 msgid "Add a repeat zone that allows executing nodes a dynamic number of times"
-msgstr "முனைகளை இயக்க அனுமதிக்கும் மீண்டும் மீண்டும் மண்டலத்தைச் சேர்க்கவும்"
+msgstr "முனைகளை இயக்க அனுமதிக்கும் மறுநிகழ்வு மண்டலத்தைச் சேர்க்கவும்"
 
 
 msgctxt "Operator"
 msgid "Add Repeat Zone"
-msgstr "மீண்டும் மீண்டும் மண்டலத்தைச் சேர்க்கவும்"
+msgstr "மறுநிகழ்வு மண்டலத்தைச் சேர்க்கவும்"
 
 
 msgid "Add simulation zone input and output nodes to the active tree"
@@ -56932,7 +56932,7 @@ msgstr "அழைப்பு மீண்டும்"
 
 
 msgid "True when run from the operator 'Repeat Last'"
-msgstr "ஆபரேட்டரிடமிருந்து 'கடைசியாக மீண்டும் மீண்டும்' ஓடும்போது உண்மை"
+msgstr "ஆபரேட்டரிடமிருந்து 'கடைசியாக மறுநிகழ்வு' ஓடும்போது உண்மை"
 
 
 msgid "Focus Region"
@@ -59531,7 +59531,7 @@ msgstr "முதன்மை அல்லது முகமூடி ச்ட
 
 
 msgid "Use Repeat"
-msgstr "மீண்டும் மீண்டும் பயன்படுத்தவும்"
+msgstr "மறுநிகழ்வு பயன்படுத்தவும்"
 
 
 msgid "Use repeat mapping values"
@@ -61947,7 +61947,7 @@ msgstr "செயலில் இருந்து தொடங்கி ஒவ
 
 
 msgid "Number of selected elements in the repetitive sequence"
-msgstr "மீண்டும் மீண்டும் வரிசையில் தேர்ந்தெடுக்கப்பட்ட கூறுகளின் எண்ணிக்கை"
+msgstr "மறுநிகழ்வு வரிசையில் தேர்ந்தெடுக்கப்பட்ட கூறுகளின் எண்ணிக்கை"
 
 
 msgid "Offset from the starting point"
@@ -61959,7 +61959,7 @@ msgstr "தேர்வுப்பட்டது"
 
 
 msgid "Number of deselected elements in the repetitive sequence"
-msgstr "மீண்டும் மீண்டும் வரிசையில் தேர்ந்தெடுக்கப்பட்ட கூறுகளின் எண்ணிக்கை"
+msgstr "மறுநிகழ்வு வரிசையில் தேர்ந்தெடுக்கப்பட்ட கூறுகளின் எண்ணிக்கை"
 
 
 msgctxt "Operator"
@@ -70128,7 +70128,7 @@ msgstr "எக்ச்ட்ரூட் மீண்டும்"
 
 
 msgid "Extrude selected vertices, edges or faces repeatedly"
-msgstr "தேர்ந்தெடுக்கப்பட்ட செங்குத்துகள், விளிம்புகள் அல்லது முகங்கள் மீண்டும் மீண்டும்"
+msgstr "தேர்ந்தெடுக்கப்பட்ட செங்குத்துகள், விளிம்புகள் அல்லது முகங்கள் மறுநிகழ்வு"
 
 
 msgid "Offset vector"
@@ -74482,6 +74482,14 @@ msgid "Curve from Mesh or Text objects"
 msgstr "கண்ணி அல்லது உரை பொருள்களிலிருந்து வளைவு"
 
 
+msgid "Mesh from Curve, Surface, Metaball, Text, or Point Cloud objects"
+msgstr "வளைவு, மேற்பரப்பு, வளர்சிதை மாற்ற, உரை அல்லது புள்ளி மேகப் பொருள்களிலிருந்து கண்ணி"
+
+
+msgid "Point Cloud from Mesh objects"
+msgstr "கண்ணி பொருள்களிலிருந்து புள்ளி முகில்"
+
+
 msgid "Curves from evaluated curve data"
 msgstr "மதிப்பிடப்பட்ட வளைவு தரவுகளிலிருந்து வளைவுகள்"
 
@@ -77699,7 +77707,7 @@ msgstr "நகல் சேகரிப்பு"
 
 
 msgid "Recursively duplicate the collection, all its children, objects and object data"
-msgstr "சேகரிப்பு, அதன் அனைத்து குழந்தைகள், பொருள்கள் மற்றும் பொருள் தரவுகளை மீண்டும் மீண்டும் நகலெடுக்கவும்"
+msgstr "சேகரிப்பு, அதன் அனைத்து குழந்தைகள், பொருள்கள் மற்றும் பொருள் தரவுகளை மறுநிகழ்வு நகலெடுக்கவும்"
 
 
 msgctxt "Operator"
@@ -77708,7 +77716,7 @@ msgstr "இணைக்கப்பட்ட சேகரிப்பு நக�
 
 
 msgid "Recursively duplicate the collection, all its children and objects, with linked object data"
-msgstr "இணைக்கப்பட்ட பொருள் தரவுகளுடன் சேகரிப்பு, அதன் அனைத்து குழந்தைகள் மற்றும் பொருள்களையும் மீண்டும் மீண்டும் நகலெடுக்கவும்"
+msgstr "இணைக்கப்பட்ட பொருள் தரவுகளுடன் சேகரிப்பு, அதன் அனைத்து குழந்தைகள் மற்றும் பொருள்களையும் மறுநிகழ்வு நகலெடுக்கவும்"
 
 
 msgctxt "Operator"
@@ -78092,7 +78100,7 @@ msgstr "மறுபரிசீலனை செய்யுங்கள்"
 
 
 msgid "Select objects recursively from active element"
-msgstr "செயலில் உள்ள உறுப்பிலிருந்து மீண்டும் மீண்டும் பொருள்களைத் தேர்ந்தெடுக்கவும்"
+msgstr "செயலில் உள்ள உறுப்பிலிருந்து மறுநிகழ்வு பொருள்களைத் தேர்ந்தெடுக்கவும்"
 
 
 msgctxt "Operator"
@@ -78362,7 +78370,7 @@ msgstr "சுழல்நிலை நீக்கு"
 
 
 msgid "Recursively check for indirectly unused data-blocks, ensuring that no orphaned data-blocks remain after execution"
-msgstr "மறைமுகமாக பயன்படுத்தப்படாத தரவு-தொகுதிகளை மீண்டும் மீண்டும் சரிபார்க்கவும், அனாதையான தரவு-தொகுதிகள் செயல்படுத்தப்பட்ட பிறகு இருக்காது என்பதை உறுதிசெய்கிறது"
+msgstr "மறைமுகமாக பயன்படுத்தப்படாத தரவு-தொகுதிகளை மறுநிகழ்வு சரிபார்க்கவும், அனாதையான தரவு-தொகுதிகள் செயல்படுத்தப்பட்ட பிறகு இருக்காது என்பதை உறுதிசெய்கிறது"
 
 
 msgctxt "Operator"
@@ -94055,7 +94063,7 @@ msgstr "ஒரு சேகரிப்பில் ஒரு துகள் �
 
 
 msgid "The number of times this object is repeated with respect to other objects"
-msgstr "மற்ற பொருள்களைப் பொறுத்தவரை இந்த பொருள் எத்தனை முறை மீண்டும் மீண்டும் செய்யப்படுகிறது"
+msgstr "மற்ற பொருள்களைப் பொறுத்தவரை இந்த பொருள் எத்தனை முறை மறுநிகழ்வு செய்யப்படுகிறது"
 
 
 msgid "Particle instance object name"
@@ -94684,7 +94692,7 @@ msgstr "கனமான"
 
 
 msgid "Cache file path"
-msgstr "தற்காலிக சேமிப்பு கோப்புப் பாதை"
+msgstr "தற்காலிக கோப்பு சேமிப்பு பாதை"
 
 
 msgid "Frame on which the simulation stops"
@@ -103250,7 +103258,7 @@ msgstr "4096 பி.எக்ச்"
 
 
 msgid "Number of times the light is reinjected inside light grids, 0 disable indirect diffuse light"
-msgstr "ஒளி கட்டங்களுக்குள் ஒளி மீண்டும் மீண்டும் செய்யப்படுகிறது, 0 மறைமுக பரவல் ஒளியை முடக்கு"
+msgstr "ஒளி கட்டங்களுக்குள் ஒளி மறுநிகழ்வு செய்யப்படுகிறது, 0 மறைமுக பரவல் ஒளியை முடக்கு"
 
 
 msgid "Clamp Glossy"
@@ -103821,7 +103829,7 @@ msgstr "உயர்மட்ட கீற்றுகள் மட்டும�
 
 
 msgid "All strips, recursively including those inside metastrips"
-msgstr "அனைத்து கீற்றுகளும், மேவுஉரிகளுக்குள் உள்ளவர்கள் உட்பட மீண்டும் மீண்டும்"
+msgstr "அனைத்து கீற்றுகளும், மேவுஉரிகளுக்குள் உள்ளவர்கள் உட்பட மறுநிகழ்வு"
 
 
 msgid "Cache Final"
@@ -105722,11 +105730,11 @@ msgstr "வழங்குதல் தொடர்பான பண்புக�
 
 
 msgid "Display Repeated"
-msgstr "மீண்டும் மீண்டும் காட்சி"
+msgstr "மறுநிகழ்வு காட்சி"
 
 
 msgid "Display the image repeated outside of the main view"
-msgstr "முக்கிய பார்வைக்கு வெளியே மீண்டும் மீண்டும் படத்தைக் காண்பி"
+msgstr "முக்கிய பார்வைக்கு வெளியே மறுநிகழ்வு படத்தைக் காண்பி"
 
 
 msgid "Show Stereo"
@@ -107893,7 +107901,7 @@ msgstr "துண்டு மற்ற கீற்றுகளுடன் எ
 
 
 msgid "Cross"
-msgstr "குறுக்கு"
+msgstr "கட"
 
 
 msgid "Alpha Under"
@@ -107901,7 +107909,7 @@ msgstr "ஆல்பா கீழ்"
 
 
 msgid "Gamma Cross"
-msgstr "காமா குறுக்கு"
+msgstr "காமா கிராச்"
 
 
 msgid "Y position of the sequence strip"
@@ -114866,7 +114874,7 @@ msgstr "பொத்தானில் ஆப்டிக்சைப் பய�
 
 
 msgid "Apply haptics repeatedly for the duration of the button press"
-msgstr "பொத்தானின் காலத்திற்கு மீண்டும் மீண்டும் ஆப்டிக்சைப் பயன்படுத்துங்கள்"
+msgstr "பொத்தானின் காலத்திற்கு மறுநிகழ்வு ஆப்டிக்சைப் பயன்படுத்துங்கள்"
 
 
 msgid "Haptic Name"
@@ -122255,11 +122263,6 @@ msgstr "அடிப்படை தடிமன்"
 
 msgid "Spacing Along Stroke"
 msgstr "பக்கவாதத்துடன் இடைவெளி"
-
-
-msgctxt "Operator"
-msgid "Go to Linestyle Textures Properties"
-msgstr "linestyle டெக்ச்ச்சர்ச் properties என்பதற்குச் செல்லவும்"
 
 
 msgid "Priority"

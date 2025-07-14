@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Beta (b'ca38e3be9467')\n"
+"Project-Id-Version: Blender 4.5.0 Release Candidate (b'08ec4602a2f7')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-07 10:02+0000\n"
-"PO-Revision-Date: 2025-07-07 06:59+0000\n"
+"POT-Creation-Date: 2025-07-14 09:15+0000\n"
+"PO-Revision-Date: 2025-07-14 07:59+0000\n"
 "Last-Translator: Fatih Alexandr <radix83@rambler.ru>\n"
 "Language-Team: Russian <https://translate.blender.org/projects/blender-ui/ui/ru/>\n"
 "Language: ru\n"
@@ -4825,7 +4825,7 @@ msgstr "С высотой"
 
 
 msgid "Has Jitter"
-msgstr "С разбросом"
+msgstr "С колебанием"
 
 
 msgid "Has Crease/Pinch Factor"
@@ -5116,11 +5116,11 @@ msgstr "Плоский"
 
 
 msgid "Curve Jitter"
-msgstr "Кривая разброса"
+msgstr "Кривая колебания"
 
 
 msgid "Curve used for the jitter effect"
-msgstr "Кривая, используемая для эффекта разброса"
+msgstr "Кривая, используемая для эффекта колебания"
 
 
 msgid "Random Curve"
@@ -5403,11 +5403,11 @@ msgstr "Толщина контурного штриха относительн�
 
 msgctxt "Brush"
 msgid "Jitter"
-msgstr "Разброс"
+msgstr "Колебание"
 
 
 msgid "Jitter factor of brush radius for new strokes"
-msgstr "Коэффициент разброса радиуса кисти для новых штрихов"
+msgstr "Коэффициент колебания радиуса кисти для новых штрихов"
 
 
 msgctxt "Amount"
@@ -5416,7 +5416,7 @@ msgstr "Степень гладкости"
 
 
 msgid "Amount of smoothing to apply after finish newly created strokes, to reduce jitter/noise"
-msgstr "Величина сглаживания, применяемого после завершения штрихов, для уменьшения разброса/шума"
+msgstr "Величина сглаживания, применяемого после завершения штрихов, для уменьшения колебания/шума"
 
 
 msgid "Iterations"
@@ -5593,11 +5593,11 @@ msgstr "Заливать только области, видимые во вью
 
 
 msgid "Use Pressure Jitter"
-msgstr "Включить разброс от давления"
+msgstr "Включить колебание от давления"
 
 
 msgid "Use tablet pressure for jitter"
-msgstr "Использовать давление на планшет для разброса"
+msgstr "Использовать давление на планшет для колебания"
 
 
 msgid "Keep Caps"
@@ -10793,6 +10793,14 @@ msgid "Include visualization of lattice related animation data"
 msgstr "Включить отображение данных об анимации, относящихся к решёткам"
 
 
+msgid "Display Light Probe"
+msgstr "Показывать световые зонды"
+
+
+msgid "Include visualization of lightprobe related animation data"
+msgstr "Включить отображение данных об анимации, относящихся к световым зондам"
+
+
 msgid "Display Light"
 msgstr "Показывать источники света"
 
@@ -10958,7 +10966,7 @@ msgstr "Показать объёмы"
 
 
 msgid "Include visualization of volume related animation data"
-msgstr "Включить отображение данных об анимации, относящихся к объемам"
+msgstr "Включить отображение данных об анимации, относящихся к объёмам"
 
 
 msgid "Display World"
@@ -17571,7 +17579,7 @@ msgstr "«Предельная» поза (или другая нестанда�
 
 msgctxt "GPencil"
 msgid "Jitter"
-msgstr "Разброс"
+msgstr "Колебание"
 
 
 msgid "A filler or baked keyframe for keying on ones, or some other purpose as needed"
@@ -17924,39 +17932,39 @@ msgstr "Группа слоёв Grease Pencil"
 
 
 msgid "Reset color tag"
-msgstr "Сбросить цветовую метку"
+msgstr "Сбросить цветовой тег"
 
 
 msgid "Color tag 1"
-msgstr "Цветной тег 1"
+msgstr "Цветовой тег 1"
 
 
 msgid "Color tag 2"
-msgstr "Цветной тег 2"
+msgstr "Цветовой тег 2"
 
 
 msgid "Color tag 3"
-msgstr "Цветной тег 3"
+msgstr "Цветовой тег 3"
 
 
 msgid "Color tag 4"
-msgstr "Цветной тег 4"
+msgstr "Цветовой тег 4"
 
 
 msgid "Color tag 5"
-msgstr "Цветной тег 5"
+msgstr "Цветовой тег 5"
 
 
 msgid "Color tag 6"
-msgstr "Цветной тег 6"
+msgstr "Цветовой тег 6"
 
 
 msgid "Color tag 7"
-msgstr "Цветной тег 7"
+msgstr "Цветовой тег 7"
 
 
 msgid "Color tag 8"
-msgstr "Цветной тег 8"
+msgstr "Цветовой тег 8"
 
 
 msgid "The layer group is expanded in the UI"
@@ -19326,7 +19334,7 @@ msgstr "Рандомизировать"
 
 
 msgid "Introduce jitter/randomness into strokes"
-msgstr "Производить разброс/случайность в штрихи"
+msgstr "Производить колебание/случайность в штрихи"
 
 
 msgctxt "GPencil"
@@ -19604,19 +19612,19 @@ msgstr "Колебание положения кисти при рисовани
 
 
 msgid "Jitter the position of the brush in pixels while painting"
-msgstr "Отклонять положение кисти случайным образом при рисовании"
+msgstr "Случайное колебание положения кисти при рисовании"
 
 
 msgid "Jitter Unit"
-msgstr "Единица разброса"
+msgstr "Единица колебания"
 
 
 msgid "Jitter in screen space or relative to brush size"
-msgstr "Разброс (джиттер) в пространстве экрана или относительно размера кисти"
+msgstr "Колебание (джиттер) в пространстве экрана или относительно размера кисти"
 
 
 msgid "Jittering happens in screen space, in pixels"
-msgstr "Разброс происходит в пространстве экрана, в пикселях"
+msgstr "Колебание происходит в пространстве экрана, в пикселях"
 
 
 msgid "Brush"
@@ -19624,7 +19632,7 @@ msgstr "Кисть"
 
 
 msgid "Jittering happens relative to the brush size"
-msgstr "Разброс происходит относительно размера кисти"
+msgstr "Колебание происходит относительно размера кисти"
 
 
 msgid "Mask Stencil Dimensions"
@@ -19969,7 +19977,7 @@ msgstr "Ластик смещения Multires"
 
 msgctxt "Brush"
 msgid "Multires Displacement Smear"
-msgstr "Мазок смещения Multires"
+msgstr "Размазывание смещения Multires"
 
 
 msgctxt "Brush"
@@ -20354,11 +20362,11 @@ msgstr "Обрабатывать каждый цвет пикселя как о�
 
 
 msgid "Use Color Jitter"
-msgstr "Использовать разброс цвета"
+msgstr "Использовать колебание цвета"
 
 
 msgid "Jitter brush color"
-msgstr "Разброс цвета кисти"
+msgstr "Колебание цвета кисти"
 
 
 msgid "Connected Only"
@@ -20606,11 +20614,11 @@ msgstr "Включить чувствительность к давлению п
 
 
 msgid "Jitter Pressure"
-msgstr "Разброс от давления"
+msgstr "Колебание от давления"
 
 
 msgid "Enable tablet pressure sensitivity for jitter"
-msgstr "Включить датчик чувствительности на планшете для разброса"
+msgstr "Включить датчик чувствительности на планшете для колебания"
 
 
 msgid "Mask Pressure Mode"
@@ -20722,7 +20730,7 @@ msgstr "Используйте давление для регулировани�
 
 
 msgid "Value Jitter"
-msgstr "Разброс яркости"
+msgstr "Колебание яркости"
 
 
 msgid "Color jitter effect on value"
@@ -23627,7 +23635,7 @@ msgstr "Масштабирует мощность света экспоненц�
 
 
 msgid "Node tree for node based lights"
-msgstr "Система нодов для источников света"
+msgstr "Дерево нод для источников света"
 
 
 msgid "Normalize"
@@ -23774,7 +23782,7 @@ msgstr "Размытие ступенчатости теней с помощью
 
 
 msgid "Shadow Jitter Overblur"
-msgstr "Чрезмерное размытие разброса теней"
+msgstr "Чрезмерное размытие колебания теней"
 
 
 msgid "Apply shadow tracing to each jittered sample to reduce under-sampling artifacts"
@@ -23838,11 +23846,11 @@ msgstr "Ограничить разрешение на 1 единицу от о�
 
 
 msgid "Shadow Jitter"
-msgstr "Разброс тени"
+msgstr "Колебание тени"
 
 
 msgid "Enable jittered soft shadows to increase shadow precision (disabled in viewport unless enabled in the render settings). Has a high performance impact."
-msgstr "Включите разброс мягких теней, чтобы повысить точность тени (отключено во вьюпорте, если оно не включено в настройках рендеринга). Имеет высокий эффект производительности."
+msgstr "Включить колебание мягких теней, чтобы повысить точность тени (отключено во вьюпорте, если оно не включено в настройках рендеринга). Имеет высокий эффект производительности."
 
 
 msgid "Point Light"
@@ -24456,7 +24464,7 @@ msgstr "Величина зеркального отражения для тра
 
 
 msgid "Node tree for node based materials"
-msgstr "Система нодов для материалов"
+msgstr "Дерево нод для материалов"
 
 
 msgid "Active Paint Texture Index"
@@ -25156,7 +25164,7 @@ msgstr "Древо нод, состоящее из связанных узлов
 
 
 msgid "The node tree label"
-msgstr "Метка нодовой системы"
+msgstr "Метка дерева нод"
 
 
 msgid "Use Group Interface"
@@ -25168,7 +25176,7 @@ msgstr "Определяет видимость некоторых элемен�
 
 
 msgid "Color Tag"
-msgstr "Цветной тег"
+msgstr "Цветовой тег"
 
 
 msgid "Color tag of the node group which influences the header color"
@@ -25280,7 +25288,7 @@ msgstr "Текущее положение (смещение) вида для э�
 
 
 msgid "Compositor Node Tree"
-msgstr "Нодовая система композитинга"
+msgstr "Дерево нод компо́зитора"
 
 
 msgid "Node tree consisting of linked nodes used for compositing"
@@ -25376,19 +25384,19 @@ msgstr "Ожидать нажатие мышки перед запуском о�
 
 
 msgid "Shader Node Tree"
-msgstr "Система нодов шейдера"
+msgstr "Дерево нод шейдера"
 
 
 msgid "Node tree consisting of linked nodes used for materials (and other shading data-blocks)"
-msgstr "Система, состоящая из связанных нодов, используемых для материалов (и других датаблоков затенения)"
+msgstr "Нодовое дерево , состоящее из связанных нод, используемых для материалов (и других датаблоков затенения)"
 
 
 msgid "Texture Node Tree"
-msgstr "Система нодов текстуры"
+msgstr "Дерево нод текстуры"
 
 
 msgid "Node tree consisting of linked nodes used for textures"
-msgstr "Система из связанных нодов, используемое для текстур"
+msgstr "Нодовое дерево из связанных нод, используемое для текстур"
 
 
 msgid "Object data-block defining an object in a scene"
@@ -28488,7 +28496,7 @@ msgstr "Коэфф. красного"
 
 
 msgid "Node tree for node-based textures"
-msgstr "Система нодов для текстур"
+msgstr "Дерево нод для текстур"
 
 
 msgid "Blend"
@@ -29906,7 +29914,7 @@ msgstr "Настройки тумана окружающей среды"
 
 
 msgid "Node tree for node based worlds"
-msgstr "Система нодов для окружающей среды"
+msgstr "Дерево нод для окружающей среды"
 
 
 msgid "Resolution when baked to a texture"
@@ -32732,7 +32740,7 @@ msgstr "\"Экстремальная\" поза или какая-то друг�
 
 msgctxt "Action"
 msgid "Jitter"
-msgstr "Разброс"
+msgstr "Колебание"
 
 
 msgctxt "Action"
@@ -34628,12 +34636,36 @@ msgid "Editor menu containing buttons"
 msgstr "Меню редактора, содержащее кнопки"
 
 
+msgid "Clean Up"
+msgstr "Привести в порядок"
+
+
 msgid "Show/Hide"
 msgstr "Показать/скрыть"
 
 
-msgid "Clean Up"
-msgstr "Привести в порядок"
+msgid "Special Characters"
+msgstr "Специальные символы"
+
+
+msgid "Kerning"
+msgstr "Кернинг"
+
+
+msgid "Text"
+msgstr "Текст"
+
+
+msgid "Metaball"
+msgstr "Метасфера"
+
+
+msgid "Names"
+msgstr "Названия"
+
+
+msgid "Bone Roll"
+msgstr "Крен кости"
 
 
 msgid "Pivot Point"
@@ -34720,10 +34752,6 @@ msgid "Assign Material"
 msgstr "Назначить материал"
 
 
-msgid "Metaball"
-msgstr "Метасфера"
-
-
 msgid "Light"
 msgstr "Свет"
 
@@ -34808,10 +34836,6 @@ msgid "Bone Collections"
 msgstr "Коллекции костей"
 
 
-msgid "Names"
-msgstr "Названия"
-
-
 msgid "Toggle Bone Options"
 msgstr "Переключить опции костей"
 
@@ -34842,22 +34866,6 @@ msgstr "Установить твёрдость грани"
 
 msgid "Merge"
 msgstr "Объединить"
-
-
-msgid "Special Characters"
-msgstr "Специальные символы"
-
-
-msgid "Kerning"
-msgstr "Кернинг"
-
-
-msgid "Text"
-msgstr "Текст"
-
-
-msgid "Bone Roll"
-msgstr "Крен кости"
 
 
 msgid "Keyframe Insert Pie"
@@ -35306,7 +35314,7 @@ msgstr "Изменить"
 
 
 msgid "Set Color Tag"
-msgstr "Установить цветной тег"
+msgstr "Установить цветовой тег"
 
 
 msgid "Sequencer"
@@ -44494,7 +44502,7 @@ msgstr "Активный НЛА-трек"
 
 
 msgid "Node in a node tree"
-msgstr "Нода в системе нодов"
+msgstr "Нода в дереве нод"
 
 
 msgid "The node label"
@@ -44514,7 +44522,7 @@ msgstr "Особый цвет тела ноды"
 
 
 msgid "Node header color tag"
-msgstr "Цветной тег заголовка ноды"
+msgstr "Цветовой тег заголовка ноды"
 
 
 msgid "Absolute bounding box dimensions of the node"
@@ -44952,7 +44960,7 @@ msgstr "Используемый алгоритм ограничения кан�
 
 
 msgid "Single"
-msgstr "Один"
+msgstr "Одиночный"
 
 
 msgid "Limit by single channel"
@@ -46529,11 +46537,11 @@ msgstr "Только для искажения с положительным к�
 
 msgctxt "NodeTree"
 msgid "Jitter"
-msgstr "Разброс"
+msgstr "Колебание"
 
 
 msgid "Enable/disable jittering (faster, but also noisier). (Deprecated: Use Jitter input instead.)"
-msgstr "Включить/отключить разброс (быстрее, но и больше шума). (Устарело: вместо этого используйте вход \"Разброс (jitter)\".)"
+msgstr "Включить/отключить колебание (быстрее, но и больше шума). (Устарело: вместо этого используйте вход \"Колебание (jitter)\".)"
 
 
 msgid "Projector"
@@ -50055,7 +50063,7 @@ msgstr "Объединение сеток способом добавления"
 
 
 msgid "Combine grids in a subtractive way"
-msgstr "Произвести комбинирование сеток путём вычленения"
+msgstr "Произвести комбинирование сеток путём разностного вычленения"
 
 
 msgid "Sample Curve"
@@ -53895,6 +53903,11 @@ msgid "Subtype of the default value"
 msgstr "Подтип значения по умолчанию"
 
 
+msgctxt "Unit"
+msgid "Default"
+msgstr "По умолчанию"
+
+
 msgid "Geometry Node Socket Interface"
 msgstr "Интерфейс сокета ноды геометрии"
 
@@ -53948,7 +53961,7 @@ msgstr "Размеры векторного сокета"
 
 
 msgid "Node Tree Path"
-msgstr "Путь к системе нодов"
+msgstr "Путь к дереву нод"
 
 
 msgid "Element of the node space tree path"
@@ -53956,7 +53969,7 @@ msgstr "Путь к элементу дерева нодового простр�
 
 
 msgid "Base node tree from context"
-msgstr "Основная нодовая системы из контекста"
+msgstr "Основное дерево нод из контекста"
 
 
 msgid "Collection of Nodes"
@@ -55153,7 +55166,7 @@ msgstr "Добавить зону для каждого элемента гео�
 
 
 msgid "Add a node to the active tree"
-msgstr "Добавить ноду к активной системе нодов"
+msgstr "Добавить ноду к активному дереву нод"
 
 
 msgctxt "Operator"
@@ -55473,7 +55486,7 @@ msgstr "Поменять связи"
 
 
 msgid "Go to parent node tree"
-msgstr "Перейти к родительской системе нод"
+msgstr "Перейти к родительскому дереву нод"
 
 
 msgctxt "Operator"
@@ -57378,7 +57391,7 @@ msgstr "Экстремум"
 
 
 msgid "Jitter"
-msgstr "Разброс"
+msgstr "Колебание"
 
 
 msgid "Generated"
@@ -62916,28 +62929,63 @@ msgid "Other geometry types, like curve, metaball, etc. (converted to meshes)"
 msgstr "Другие типы геометрии, например, кривые, метасферы и пр. (преобразованные в меши)"
 
 
+msgctxt "File browser"
+msgid "Path Mode"
+msgstr "Режим пути"
+
+
 msgid "Method used to reference paths"
 msgstr "Метод, используемый для генерации путей"
+
+
+msgctxt "File browser"
+msgid "Auto"
+msgstr "Авто"
 
 
 msgid "Use relative paths with subdirectories only"
 msgstr "Использовать относительные пути только для подкаталогов"
 
 
+msgctxt "File browser"
+msgid "Absolute"
+msgstr "Абсолютно"
+
+
 msgid "Always write absolute paths"
 msgstr "Всегда записывать абсолютные пути"
+
+
+msgctxt "File browser"
+msgid "Relative"
+msgstr "Относительно"
 
 
 msgid "Write relative paths where possible"
 msgstr "По возможности указывать относительные пути"
 
 
+msgctxt "File browser"
+msgid "Match"
+msgstr "Соответствие"
+
+
 msgid "Match absolute/relative setting with input path"
 msgstr "Сопоставить абсолютную/относительную настройку с входным путём"
 
 
+msgctxt "File browser"
+msgid "Strip"
+msgstr "Удалить"
+
+
 msgid "Filename only"
 msgstr "Только имя файла"
+
+
+msgctxt "File browser"
+msgid "Copy"
+msgstr "Копировать"
 
 
 msgid "Copy the file to the destination path (or subdirectory)"
@@ -66594,7 +66642,7 @@ msgstr "Коэффициент поправки для кадра с больш�
 
 
 msgid "Amount of smoothing to apply to interpolated strokes, to reduce jitter/noise"
-msgstr "Степень сглаживания, применяемая к интерполированным штрихам, для уменьшения разброса/шума"
+msgstr "Степень сглаживания, применяемая к интерполированным штрихам, для уменьшения колебания/шума"
 
 
 msgid "Use Selection"
@@ -66815,7 +66863,7 @@ msgstr "Имя новой группы слоёв"
 
 msgctxt "Operator"
 msgid "Grease Pencil Group Color Tag"
-msgstr "Цветной тег группы Grease Pencil"
+msgstr "Цветовой тег группы Grease Pencil"
 
 
 msgid "Change layer group icon"
@@ -73018,7 +73066,7 @@ msgstr "Добавить ноду импорта"
 
 
 msgid "Add an import node to the node tree"
-msgstr "Добавить импортный узел в дерево нод"
+msgstr "Добавить импортную ноду в дерево нод"
 
 
 msgctxt "Operator"
@@ -73162,7 +73210,7 @@ msgstr "Местоположение центра новых нод в 2D-вид
 
 
 msgid "Connect active node to the active output node of the node tree"
-msgstr "Подключить активный узел к активному выходному узлу дерева нод"
+msgstr "Подключить активную ноду к активной выходной ноде дерева нод"
 
 
 msgid "Run in Geometry Nodes Editor"
@@ -73262,7 +73310,7 @@ msgstr "Сохранить связи со входами для дублиру�
 
 
 msgid "Duplicate node but not node trees, linking to the original data"
-msgstr "Дублирование нодов, но не древа нод, со ссылкой на исходные данные"
+msgstr "Дублирование нод, но не нодового древа, со ссылкой на исходные данные"
 
 
 msgid "Duplicate selected nodes and move them"
@@ -73299,7 +73347,7 @@ msgstr "Найти узел по имени и выбрать его"
 
 
 msgid "Add a node to the active tree for glTF export"
-msgstr "Добавить узел в активное дерево для экспорта glTF"
+msgstr "Добавить ноду в активное дерево для экспорта glTF"
 
 
 msgctxt "Operator"
@@ -73338,11 +73386,11 @@ msgstr "Отделить выделенные ноды от группы нод"
 
 
 msgid "Copy to parent node tree, keep group intact"
-msgstr "Копировать родительскую нодовую систему, не затрагивая группу"
+msgstr "Копировать родительское дерево нод, не затрагивая группу"
 
 
 msgid "Move to parent node tree, remove from group"
-msgstr "Переместить в родительскую нодовую систему, удалив из группы"
+msgstr "Переместить в родительское дерево нод, удалив из группы"
 
 
 msgctxt "Operator"
@@ -73569,7 +73617,7 @@ msgstr "Создать нодовое дерево"
 
 
 msgid "Create a new node tree"
-msgstr "Создать новую систему нодов"
+msgstr "Создать новое дерево нод"
 
 
 msgid "Tree Type"
@@ -77944,7 +77992,7 @@ msgstr "Очистить драйверы"
 
 msgctxt "Operator"
 msgid "Set Color Tag"
-msgstr "Установить цветной тег"
+msgstr "Установить цветовой тег"
 
 
 msgid "Set a color tag for the selected collections"
@@ -83296,7 +83344,7 @@ msgstr "Расстояние, в пределах которого симмет�
 
 msgctxt "Operator"
 msgid "Trim Box Gesture"
-msgstr "Жест вычленения рамкой"
+msgstr "Жест обрезки рамкой"
 
 
 msgid "Execute a boolean operation on the mesh and a rectangle defined by the cursor"
@@ -83353,7 +83401,7 @@ msgstr "Использовать положение и радиус курсор
 
 msgctxt "Operator"
 msgid "Trim Lasso Gesture"
-msgstr "Жест вычленения обводкой"
+msgstr "Жест обрезки обводкой"
 
 
 msgid "Execute a boolean operation on the mesh and a shape defined by the cursor"
@@ -83362,7 +83410,7 @@ msgstr "Выполнить логическую операцию с мешем �
 
 msgctxt "Operator"
 msgid "Trim Line Gesture"
-msgstr "Жест вычленения по линии"
+msgstr "Жест обрезки по линии"
 
 
 msgid "Remove a portion of the mesh on one side of a line"
@@ -83371,7 +83419,7 @@ msgstr "Удалить часть меша с одной стороны лини
 
 msgctxt "Operator"
 msgid "Trim Polyline Gesture"
-msgstr "Жест вычленения по полилинии"
+msgstr "Жест обрезки по полилинии"
 
 
 msgid "Execute a boolean operation on the mesh and a polygonal shape defined by the cursor"
@@ -84540,7 +84588,7 @@ msgstr "Разрезать на месте курсора, а не на теку
 
 
 msgid "Set a color tag for the selected strips"
-msgstr "Установить цветной тег для выделенных дорожек"
+msgstr "Установить цветовой тег для выделенных дорожек"
 
 
 msgid "Color 09"
@@ -94101,22 +94149,22 @@ msgstr "Набор граней по полилинии"
 
 msgctxt "Operator"
 msgid "Box Trim"
-msgstr "Вычленение рамкой"
+msgstr "Обрезать рамкой"
 
 
 msgctxt "Operator"
 msgid "Lasso Trim"
-msgstr "Вычленение обводкой"
+msgstr "Обрезать обводкой"
 
 
 msgctxt "Operator"
 msgid "Line Trim"
-msgstr "Вычленение по линии"
+msgstr "Обрезать по линии"
 
 
 msgctxt "Operator"
 msgid "Polyline Trim"
-msgstr "Вычленение по полилинии"
+msgstr "Обрезать по полилинии"
 
 
 msgctxt "Operator"
@@ -96038,7 +96086,7 @@ msgstr "Без авто-повторной синхронизации перео
 
 
 msgid "Disable library overrides automatic resync detection and process on file load (can be useful to help fixing broken files). Also see the `--disable-liboverride-auto-resync` command line option"
-msgstr "Отключить автоматическое обнаружение повторной синхронизации библиотеки переопределений и процесс загрузки файла (может быть полезно для исправления повреждённых файлов). Также см. параметр командной строки `--disable-liboverride-auto-resync`"
+msgstr "Отключить автоматическое обнаружение повторной синхронизации переопределений библиотеки и процесс загрузки файла (может быть полезно для исправления повреждённых файлов). Также см. параметр командной строки `--disable-liboverride-auto-resync`"
 
 
 msgid "Asset Debug Info"
@@ -96680,7 +96728,7 @@ msgstr "Отображать центр орбиты во время враще�
 
 
 msgid "Zoom direction"
-msgstr "Назначение зума"
+msgstr "Направление зума"
 
 
 msgid "Which axis of the 3D Mouse cap zooms the view"
@@ -96760,7 +96808,7 @@ msgstr "Традиционное направление прокрутки"
 
 
 msgid "Natural"
-msgstr "Естественное"
+msgstr "Естественный"
 
 
 msgid "Natural scroll direction"
@@ -103735,7 +103783,7 @@ msgstr "Размер пула освещённости; больший разм�
 
 
 msgid "16 MB"
-msgstr "16 MB"
+msgstr "16 МБ"
 
 
 msgid "32 MB"
@@ -103931,11 +103979,11 @@ msgstr "Включить модуль трассировки лучей"
 
 
 msgid "Jittered Shadows (Viewport)"
-msgstr "Разброс теней (Вьюпорт)"
+msgstr "Колебание теней (Вьюпорт)"
 
 
 msgid "Enable jittered shadows on the viewport. (Jittered shadows are always enabled for final renders)."
-msgstr "Включить разброс теней во вьюпорте. (Дрожание теней всегда включено для окончательного рендера)."
+msgstr "Включить колебание теней во вьюпорте. (Для окончательного рендера колебание теней всегда включено)."
 
 
 msgid "Enable shadow casting from lights"
@@ -104430,7 +104478,7 @@ msgstr "Отображать пути к исходному файлу или и
 
 
 msgid "Show Color Tags"
-msgstr "Показать цветные теги"
+msgstr "Показать цветовые теги"
 
 
 msgid "Display the strip color tags in the sequencer"
@@ -106351,7 +106399,7 @@ msgstr "Редактировать дерево"
 
 
 msgid "Node tree being displayed and edited"
-msgstr "Отображаемая и редактируемая нода системы"
+msgstr "Отображаемое и редактируемое дерево нод"
 
 
 msgid "Node Tool Tree"
@@ -106414,7 +106462,7 @@ msgstr "Путь от датаблока до нодового дерева, р�
 
 
 msgid "Use the pinned node tree"
-msgstr "Закрепить нодовую систему"
+msgstr "Закрепить дерево нод"
 
 
 msgctxt "ID"
@@ -106476,7 +106524,7 @@ msgstr "Редактировать ноды текстуры у стиля ли�
 
 
 msgid "Node tree type to display and edit"
-msgstr "Тип отображаемой и редактируемой системы нодов"
+msgstr "Тип отображаемого и редактируемого дерева нод"
 
 
 msgid "Geometry Node Editor"
@@ -107188,7 +107236,7 @@ msgstr "Использовать фильтр"
 
 
 msgid "Viewer Path"
-msgstr "Путь просмотра"
+msgstr "Путь предпросмотра"
 
 
 msgid "Path to the data that is displayed in the spreadsheet"
@@ -107776,7 +107824,7 @@ msgstr "Показать наложение с текстом"
 
 
 msgid "Get the node tree path as a string"
-msgstr "Получить адрес нодовой системы в виде строки"
+msgstr "Получить адрес нодового дерева в виде строки"
 
 
 msgid "Preview Shape"
@@ -110386,7 +110434,7 @@ msgstr "Настройки темы цветов коллекций"
 
 
 msgid "Collection Color Tag"
-msgstr "Коллекция цветных тегов"
+msgstr "Коллекция цветовых тегов"
 
 
 msgid "Theme Console"
@@ -110518,19 +110566,19 @@ msgstr "Цвет выделенного сгенерированного клю�
 
 
 msgid "Jitter Keyframe"
-msgstr "Ключевой кадр разброса"
+msgstr "Ключевой кадр колебания"
 
 
 msgid "Color of jitter keyframe"
-msgstr "Цвет ключевого кадра разброса"
+msgstr "Цвет ключевого кадра колебания"
 
 
 msgid "Jitter Keyframe Selected"
-msgstr "Выделенный ключевой кадр разброса"
+msgstr "Выделенный ключевой кадр колебания"
 
 
 msgid "Color of selected jitter keyframe"
-msgstr "Цвет выделенного ключевого кадра разброса"
+msgstr "Цвет выделенного ключевого кадра колебания"
 
 
 msgid "Moving Hold Keyframe"
@@ -113676,7 +113724,7 @@ msgstr "Дополнительные"
 
 
 msgid "Object details, including empty wire, cameras and other visual guides"
-msgstr "Детали объектов, такие как пустая проволока, камеры и другие визуальные элементы"
+msgstr "Детальные объекты, такие как пустышки, камеры, источники света, проволока и другие визуальные элементы"
 
 
 msgid "Display Face Center"
@@ -114762,7 +114810,7 @@ msgstr "Грубо"
 
 
 msgid "Display one box or point for each intermediate tree node"
-msgstr "Отобразить одно поле или точку для каждого промежуточного узла дерева"
+msgstr "Отобразить одно поле или точку для каждой промежуточной ноды дерева"
 
 
 msgid "Fine"
@@ -116888,42 +116936,42 @@ msgstr "Инструмент 3D-вида: Скульптинг, Набор гр�
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Trim"
-msgstr "Инструмент 3D-вида: Скульптинг, Вычленение рамкой"
+msgstr "Инструмент 3D-вида: Скульптинг, Обрезка рамкой"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Box Trim (fallback)"
-msgstr "Инструмент 3D-вида: Скульптинг, Вычленение рамкой (доп. вариант)"
+msgstr "Инструмент 3D-вида: Скульптинг, Обрезка рамкой (доп. вариант)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Trim"
-msgstr "Инструмент 3D-вида: Скульптинг, Вычленение обводкой"
+msgstr "Инструмент 3D-вида: Скульптинг, Обрезка обводкой"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Lasso Trim (fallback)"
-msgstr "Инструмент 3D-вида: Скульптинг, Вычленение обводкой (доп. вариант)"
+msgstr "Инструмент 3D-вида: Скульптинг, Обрезка обводкой (доп. вариант)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Trim"
-msgstr "Инструмент 3D-вида: Скульптинг, Вычленение по линии"
+msgstr "Инструмент 3D-вида: Скульптинг, Обрезка по линии"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Line Trim (fallback)"
-msgstr "Инструмент 3D-вида: Скульптинг, Вычленение по линии (доп. вариант)"
+msgstr "Инструмент 3D-вида: Скульптинг, Обрезка по линии (доп. вариант)"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Trim"
-msgstr "Инструмент 3D-вида: Скульптинг, Вычленение по полилинии"
+msgstr "Инструмент 3D-вида: Скульптинг, Обрезка по полилинии"
 
 
 msgctxt "WindowManager"
 msgid "3D View Tool: Sculpt, Polyline Trim (fallback)"
-msgstr "Инструмент 3D-вида: Скульптинг, Вычленение по полилинии (доп. вариант)"
+msgstr "Инструмент 3D-вида: Скульптинг, Обрезка по полилинии (доп. вариант)"
 
 
 msgctxt "WindowManager"
@@ -119325,8 +119373,32 @@ msgid "Blender was compiled without a viewport denoiser"
 msgstr "Blender был скомпилирован без шумоподавителя вьюпорта"
 
 
+msgid "Do not use compute device"
+msgstr "Не использовать вычислительное устройство"
+
+
 msgid " (Unoptimized Performance)"
 msgstr " (не оптимизировано для производительности)"
+
+
+msgid "Use CUDA for GPU acceleration"
+msgstr "Использовать CUDA для ускорения GPU"
+
+
+msgid "Use OptiX for GPU acceleration"
+msgstr "Использовать OptiX для ускорения GPU"
+
+
+msgid "Use HIP for GPU acceleration"
+msgstr "Использовать HIP для ускорения GPU"
+
+
+msgid "Use Metal for GPU acceleration"
+msgstr "Использовать Metal для ускорения GPU"
+
+
+msgid "Use oneAPI for GPU acceleration"
+msgstr "Использовать oneAPI для ускорения GPU"
 
 
 msgid "No compatible GPUs found for Cycles"
@@ -120057,7 +120129,7 @@ msgstr "Нет свободных входов для ноды {}"
 
 
 msgid "Unsupported node tree type"
-msgstr "Неподдерживаемый тип дерева узлов"
+msgstr "Неподдерживаемый тип дерева нод"
 
 
 msgid "Please select only 1 frame to reset"
@@ -120117,7 +120189,7 @@ msgstr "Текущий редактор не является редакторо
 
 
 msgid "No node tree was found in the current node editor."
-msgstr "В текущем редакторе нод не найдено дерево узлов."
+msgstr "В текущем редакторе нод не найдено дерево нод."
 
 
 msgid "Current node tree is linked from another .blend file."
@@ -120148,7 +120220,7 @@ msgid ""
 "Current node tree type not supported.\n"
 "Should be one of {:s}."
 msgstr ""
-"Текущий тип дерева узлов не поддерживается.\n"
+"Текущий тип дерева нод не поддерживается.\n"
 "Должен быть одним из {:s}."
 
 
@@ -122117,6 +122189,30 @@ msgid "Mix Vector"
 msgstr "Смешать векторы"
 
 
+msgid "CSV (.csv)"
+msgstr "CSV (.csv)"
+
+
+msgid "Wavefront (.obj)"
+msgstr "Wavefront (.obj)"
+
+
+msgid "Stanford PLY (.ply)"
+msgstr "Stanford PLY (.ply)"
+
+
+msgid "STL (.stl)"
+msgstr "STL (.stl)"
+
+
+msgid "Text (.txt)"
+msgstr "Текст (.txt)"
+
+
+msgid "OpenVDB (.vdb)"
+msgstr "OpenVDB (.vdb)"
+
+
 msgid "For Each Element"
 msgstr "Для каждого элемента"
 
@@ -122786,11 +122882,6 @@ msgstr "Основная толщина"
 
 msgid "Spacing Along Stroke"
 msgstr "Расстояния вдоль штрихов"
-
-
-msgctxt "Operator"
-msgid "Go to Linestyle Textures Properties"
-msgstr "Перейти к свойствам текстур стилей линий"
 
 
 msgid "Priority"
@@ -124008,7 +124099,7 @@ msgstr "Временное перепроецирование"
 
 
 msgid "Jittered Shadows"
-msgstr "Разброс теней"
+msgstr "Колебание теней"
 
 
 msgid "Denoising Device"
@@ -125696,7 +125787,7 @@ msgstr "Кривые анимации"
 
 
 msgid "Color Tags"
-msgstr "Цветные теги"
+msgstr "Цветовые теги"
 
 
 msgid "Offsets"
@@ -126149,6 +126240,10 @@ msgstr "Упаковать"
 
 msgid "Original frame range: {:d}-{:d} ({:d})"
 msgstr "Исходный диапазон кадров: {:d}-{:d} ({:d})"
+
+
+msgid "{:d} MB"
+msgstr "{:d} МБ"
 
 
 msgid "Hz"
@@ -128968,7 +129063,7 @@ msgstr "Замкнуть"
 
 
 msgid "Toggle X-Ray"
-msgstr "Переключить полупрозрачность"
+msgstr "Переключить рентген"
 
 
 msgid "To 3D Cursor"
@@ -131198,7 +131293,7 @@ msgstr "color_index недействителен"
 
 
 msgid "Compositor node tree has cyclic links!"
-msgstr "Дерево узлов компо́зитора имеет циклические ссылки!"
+msgstr "Дерево нод компо́зитора имеет циклические ссылки!"
 
 
 msgid "Compositor node tree has undefined nodes or sockets!"
@@ -131206,7 +131301,7 @@ msgstr "Дерево нод компо́зитора имеет неопреде
 
 
 msgid "Compositor node tree has unsupported nodes."
-msgstr "Дерево узлов композитора содержит неподдерживаемые ноды."
+msgstr "Дерево нод компо́зитора содержит неподдерживаемые ноды."
 
 
 msgid "Error: Too many AOVs"
@@ -131243,6 +131338,10 @@ msgstr "Оптимизация шейдеров (осталось {})"
 
 msgid "Error: Too many lights in the scene."
 msgstr "Ошибка: слишком много источников света в сцене."
+
+
+msgid "Bake Lighting"
+msgstr "Запечь освещение"
 
 
 msgid "Warning: Could not allocate light probes volume pool of {} MB, using {} MB instead."
@@ -133004,6 +133103,10 @@ msgid "G"
 msgstr "G"
 
 
+msgid "StudioLight Icon"
+msgstr "Значок студийного освещения"
+
+
 msgid "OS"
 msgstr "Операционная система"
 
@@ -133527,7 +133630,7 @@ msgstr "Выбор связываемых действий"
 
 
 msgid "Browse Node Tree to be linked"
-msgstr "Выбор связываемой нодовой системы"
+msgstr "Выбор связываемого дерева нод"
 
 
 msgid "Browse Brush to be linked"
@@ -133817,6 +133920,10 @@ msgstr "Остановить эту работу"
 
 msgid "Stop animation playback"
 msgstr "Остановить воспроизведение анимации"
+
+
+msgid "Canceling..."
+msgstr "Отмена..."
 
 
 msgid "Split/Dock"
@@ -134313,6 +134420,14 @@ msgid "Select and use mesh item"
 msgstr "Выделить и использовать элемент меша"
 
 
+msgid "Removed %d vertex"
+msgstr "Удалено: %d вершин(а)"
+
+
+msgid "Removed %d vertices"
+msgstr "Удалено: %d вершин"
+
+
 msgid "Invalid selection order"
 msgstr "Неправильный порядок выделения"
 
@@ -134746,6 +134861,10 @@ msgid "No objects found to bake from"
 msgstr "Не найден объект, с которого необходимо произвести запекание"
 
 
+msgid "Multires Bake"
+msgstr "Запечь мультиразрешение"
+
+
 msgid "Combined bake pass requires Emit, or a light pass with Direct or Indirect contributions enabled"
 msgstr "Для прохода комбинированного запекания необходимо включить проходы излучения, прямого или непрямого освещения"
 
@@ -134882,6 +135001,10 @@ msgid "Problem baking object \"%s\""
 msgstr "Ошибка запекания объекта «%s»"
 
 
+msgid "Texture Bake"
+msgstr "Запечь текстуру"
+
+
 msgid "Overwrite existing bake data?"
 msgstr "Перезаписать существующие данные запекания?"
 
@@ -134912,6 +135035,14 @@ msgstr "Конфликт путей: %d кэширования(-й) устано
 
 msgid "Cache has to be enabled"
 msgstr "Кэширование должно быть включено"
+
+
+msgid "Calculate Simulation"
+msgstr "Рассчитать симуляцию"
+
+
+msgid "Bake Nodes"
+msgstr "Запечь ноды"
 
 
 msgid "Remove exporter?"
@@ -135374,6 +135505,10 @@ msgid "Active object has no modifiers"
 msgstr "Активный объект не имеет модификаторов"
 
 
+msgid "Ocean Simulation"
+msgstr "Симуляция океана"
+
+
 msgid "Reshape can work only with higher levels of subdivisions"
 msgstr "Изменение формы работает только с более высоким уровнем подразделений"
 
@@ -135568,6 +135703,10 @@ msgstr "Ремешер не может работать с активирова�
 
 msgid "The remesher cannot run with a Multires modifier in the modifier stack"
 msgstr "Ремешер не может работать с модификатором \"мультиразрешения\" в стеке модификаторов"
+
+
+msgid "QuadriFlow Remesh"
+msgstr "Ремеш QuadriFlow"
 
 
 msgid "Select Collection"
@@ -135834,6 +135973,10 @@ msgid "Bake failed: invalid canvas"
 msgstr "Запекание не удалось: недопустимый холст"
 
 
+msgid "Dynamic Paint Bake"
+msgstr "Запечь динамическое рисование"
+
+
 msgid "Removed %d double particle(s)"
 msgstr "Удалено %d сдвоенных частиц"
 
@@ -135880,6 +136023,14 @@ msgstr "Флюид: Не удалось создать папку кэша '%s',
 
 msgid "Fluid: Could not use default cache directory '%s', please define a valid cache path manually"
 msgstr "Флюид: Невозможно использовать папку кэша \"по умолчанию\" '%s', определите допустимый путь к кэшу вручную"
+
+
+msgid "Fluid Bake"
+msgstr "Запечь флюид"
+
+
+msgid "Fluid Free"
+msgstr "Выпустить флюид"
 
 
 msgid "Library override data-blocks only support Disk Cache storage"
@@ -136142,6 +136293,14 @@ msgid "Mem:%.2fM, Peak: %.2fM"
 msgstr "Память:%.2fМбайт, пик: %.2fМбайт"
 
 
+msgid "Rendering sequence..."
+msgstr "Последовательность рендеринга..."
+
+
+msgid "Render..."
+msgstr "Рендеринг..."
+
+
 msgid "Cannot write a single file with an animation format selected"
 msgstr "Невозможно записать анимацию в одиночный файл выбранного формата"
 
@@ -136174,6 +136333,10 @@ msgid "Skipping existing frame \"%s\""
 msgstr "Пропуск существующего кадра «%s»"
 
 
+msgid "Viewport Render"
+msgstr "Рендер вьюпорта"
+
+
 msgid "Node groups do not support automatic previews"
 msgstr "Группы нод не поддерживают автоматический предварительный просмотр"
 
@@ -136188,6 +136351,18 @@ msgstr "Коллекция не содержит типы объектов, ко
 
 msgid "Data-block type does not support automatic previews"
 msgstr "Тип блока данных не поддерживает автоматический предварительный просмотр"
+
+
+msgid "Load Previews"
+msgstr "Загрузить превью"
+
+
+msgid "Icon Preview"
+msgstr "Превью значков"
+
+
+msgid "Shader Preview"
+msgstr "Превью шейдера"
 
 
 msgid "Unable to remove material slot in edit mode"
@@ -136645,6 +136820,10 @@ msgstr "Изображение-пустышка не выделено"
 
 msgid "No valid image format selected"
 msgstr "Не выбран допустимый формат изображения"
+
+
+msgid "Trace Image"
+msgstr "Трассировка изображения"
 
 
 msgid "PaintCurve"
@@ -137115,6 +137294,10 @@ msgid "File: %s"
 msgstr "Файл: %s"
 
 
+msgid "Prefetching"
+msgstr "Кэширование"
+
+
 msgid "Delete track corresponding to the selected curve?"
 msgstr "Удалить трек, соответствующий выделенной кривой?"
 
@@ -137129,6 +137312,10 @@ msgstr "Не выбраны файлы для открытия"
 
 msgid "Cannot read '%s': %s"
 msgstr "Ошибка чтения «%s»: %s"
+
+
+msgid "Building Proxies"
+msgstr "Перестройка прокси"
 
 
 msgid "Place Marker"
@@ -137187,6 +137374,10 @@ msgid "Average re-projection error: %.2f px"
 msgstr "Средняя ошибка повторного проецирования: %.2f px"
 
 
+msgid "Solve Camera"
+msgstr "Расчёт камеры"
+
+
 msgid "Track the selected markers backward for the entire clip"
 msgstr "Отслеживать выделенные маркеры в обратном направлении по всему клипу"
 
@@ -137201,6 +137392,10 @@ msgstr "Отслеживать выделенные маркеры вперёд 
 
 msgid "Track the selected markers forward by one frame"
 msgstr "Отслеживать выделенные маркеры вперёд по одному кадру"
+
+
+msgid "Track Markers"
+msgstr "Отслеживание маркеров"
 
 
 msgid "New lines unsupported, call this operator multiple times"
@@ -137383,8 +137578,16 @@ msgid "Asset Catalogs"
 msgstr "Каталоги ассетов"
 
 
+msgid "Listing Dirs..."
+msgstr "Отображение списка папок..."
+
+
 msgid "Date Modified"
 msgstr "Дата изменения"
+
+
+msgid "Validating Bookmarks..."
+msgstr "Проверка закладок..."
 
 
 msgid "Home"
@@ -138141,11 +138344,11 @@ msgstr "Некоторые ноды ссылаются на другие иде�
 
 
 msgid "Cannot add node %s into node tree %s: %s"
-msgstr "Невозможно добавить ноду %s в дерево узлов %s: %s"
+msgstr "Невозможно добавить ноду %s в дерево нод %s: %s"
 
 
 msgid "Cannot add node %s into node tree %s"
-msgstr "Невозможно добавить ноду %s в дерево узлов %s"
+msgstr "Невозможно добавить ноду %s в дерево нод %s"
 
 
 msgid "Label Size"
@@ -138468,6 +138671,22 @@ msgid "Dangling reroute is ignored, default value of target socket is used"
 msgstr "Усечённое перенаправление будет проигнорировано, будет использовано значение по умолчанию для целевого сокета"
 
 
+msgid "(Single Value)"
+msgstr "(Единое значение)"
+
+
+msgid "(Dynamic Structure Type)"
+msgstr "(Динамический тип структуры)"
+
+
+msgid "(Field)"
+msgstr "(Поле)"
+
+
+msgid "(Volume Grid)"
+msgstr "(Сетка объёма)"
+
+
 msgid "Connect a link to create a new socket"
 msgstr "Подключить соединение для создания нового сокета"
 
@@ -138548,6 +138767,10 @@ msgid "There is no parent group node in this context"
 msgstr "В этом контексте нет родительской групповой ноды"
 
 
+msgid "Shader Previews"
+msgstr "Превью шейдеров"
+
+
 msgid "Disconnect"
 msgstr "Отсоединить"
 
@@ -138606,6 +138829,10 @@ msgstr "Невозможно добавить цветовой тег для с�
 
 msgid "Cannot delete collection '%s', it is either a linked one used by other linked scenes/collections, or a library override one"
 msgstr "Невозможно удалить коллекцию '%s', она либо является связанной и используется другими связанными сценами/коллекциями, либо она является коллекцией переопределений библиотеки"
+
+
+msgid "Unable to duplicate %d of the selected collections. Could not find a valid parent collection for the new duplicate, they won't be linked to any view layer"
+msgstr "Не удалось дублировать %d выбранных коллекций. Для новых дубликатов не найдено допустимых родительских коллекций; они не будут связаны ни с одним слоем визуализации"
 
 
 msgid "Reorder"
@@ -138909,7 +139136,7 @@ msgstr "Для выполнения операции необходимо зад
 
 
 msgid "No orphaned data-blocks to purge"
-msgstr "Нет неиспользуемых блоков данных, которые нужно очищать"
+msgstr "Нет потерянных блоков данных, которые нужно очищать"
 
 
 msgid "Cannot delete library override id '%s', it is part of an override hierarchy"
@@ -139274,6 +139501,10 @@ msgstr "Выделить одну или несколько дорожек"
 
 msgid "Can't set a negative range"
 msgstr "Отрицательный диапазон установить невозможно"
+
+
+msgid "Strip Previews"
+msgstr "Превью дорожек"
 
 
 msgid "Set Selected Strip Proxies"
@@ -140636,6 +140867,10 @@ msgid "Unwrap failed to solve %d of %d island(s), edge seams may need to be adde
 msgstr "Не удалось развернуть %d из %d островов, возможно, необходимо добавить рёберные швы"
 
 
+msgid "Packing UVs"
+msgstr "Упаковка UV"
+
+
 msgid "Freestyle: Mesh loading"
 msgstr "Freestyle: Загрузка меша"
 
@@ -140698,6 +140933,10 @@ msgstr "Формат изображения не является видео ф�
 
 msgid "Audio sample format unsupported"
 msgstr "Формат аудиообразца не поддерживается"
+
+
+msgid "Alembic Export"
+msgstr "Экспорт Alembic"
 
 
 msgid "Object type mismatch, Alembic object path pointed to Camera when importing, but not any more"
@@ -140774,6 +141013,10 @@ msgstr "Несоответствие типа объекта, путь объе�
 
 msgid "Invalid object: verify object path"
 msgstr "Недействительный объект: проверьте путь к объекту"
+
+
+msgid "Alembic Import"
+msgstr "Импорт Alembic"
 
 
 msgid "CSV Import: Cannot open file '%s'"
@@ -140952,12 +141195,20 @@ msgid "USD Export: Unable to find collection '%s'"
 msgstr "Экспорт USD: Не удалось найти коллекцию '%s'"
 
 
+msgid "USD Export"
+msgstr "Экспорт USD"
+
+
 msgid "Could not open USD archive for reading, see console for detail"
 msgstr "Не удалось открыть архив USD для чтения, подробности см. в консоли"
 
 
 msgid "USD Import: unable to open stage to read %s"
 msgstr "Импорт USD: невозможно открыть сценарий для чтения %s"
+
+
+msgid "USD Import"
+msgstr "Импорт USD"
 
 
 msgid "One or more objects used as prototypes in 'Instance on Points' nodes either do not have 'As Instance' enabled in their 'Object Info' nodes, or the prototype is the base geometry input itself. Both cases prevent valid point instancer export. If it's the former, enable 'As Instance' to avoid incorrect self-referencing."
@@ -142125,7 +142376,7 @@ msgstr "Одинаковое входное/выходное направлен�
 
 
 msgid "Unable to locate link in node tree"
-msgstr "Связь не найдена в нодовой системе"
+msgstr "Связь не найдена в дереве нод"
 
 
 msgid "The links must be siblings"
@@ -142173,7 +142424,7 @@ msgstr "Регистрация класса дерева нод: '%s', bl_idname
 
 
 msgid "Node tree '%s' has undefined type %s"
-msgstr "Нодовая система «%s» имеет неопределённый тип %s"
+msgstr "Дерево нод '%s' имеет неопределённый тип %s"
 
 
 msgid "Node type %s undefined"
@@ -142184,12 +142435,12 @@ msgid ""
 "Cannot add node of type %s to node tree '%s'\n"
 "  %s"
 msgstr ""
-"Невозможно добавить ноду типа %s в дерево узлов '%s'\n"
+"Невозможно добавить ноду типа %s в дерево нод '%s'\n"
 "  %s"
 
 
 msgid "Cannot add node of type %s to node tree '%s'"
-msgstr "Невозможно добавить ноду с типом %s в систему нодов «%s»"
+msgstr "Невозможно добавить ноду с типом %s в дерево нод '%s'"
 
 
 msgid "Unable to locate node '%s' in node tree"
@@ -144503,6 +144754,11 @@ msgid "Feather Size"
 msgstr "Размер растушёвки"
 
 
+msgctxt "Image"
+msgid "Edges"
+msgstr "Края"
+
+
 msgid "Blur the color of the input image in YCC color space before keying while leaving the luminance intact using a Gaussian blur of the given size"
 msgstr "Размыть цвет входного изображения в цветовом пространстве YCC перед самим кеингом, сохраняя яркость нетронутой, используя Гауссово размытие заданного размера"
 
@@ -144567,6 +144823,11 @@ msgid "Despill"
 msgstr "Подавление разлива"
 
 
+msgctxt "NodeTree"
+msgid "Key"
+msgstr "Ключ"
+
+
 msgid "Specifies the smoothness of the keying screen"
 msgstr "Задаёт плавность для экрана кеинга"
 
@@ -144604,7 +144865,7 @@ msgstr "Величина хроматической аберрации, доба
 
 
 msgid "Introduces jitter while doing distortion, which can be faster but can produce grainy or noisy results"
-msgstr "Вносит разброс (джиттер) при искажении, который может быть быстрее, но также может привести и к зернистым или шумным результатам"
+msgstr "Производит колебание (джиттер) при искажении, которое может быть быстрее, но также может привести и к зернистым или шумным результатам"
 
 
 msgid "Scales the image such that it fits entirely in the frame, leaving no empty spaces at the corners"
@@ -145122,6 +145383,11 @@ msgstr "Стандартное отклонение"
 
 msgid "Variance"
 msgstr "Расхождение"
+
+
+msgctxt "NodeTree"
+msgid "Median"
+msgstr "Медиана"
 
 
 msgid "Bake Items"
@@ -147319,7 +147585,7 @@ msgstr "Входная геометрия имеет неподдерживае�
 
 
 msgid "Undefined Node Tree Type"
-msgstr "Неопределенный тип дерева узлов"
+msgstr "Неопределенный тип дерева нод"
 
 
 msgid " (Deprecated)"
@@ -147339,11 +147605,11 @@ msgstr "Тип сетки не поддерживается"
 
 
 msgid "Not a shader node tree"
-msgstr "Не является шейдерным деревом узлов"
+msgstr "Не является шейдерным деревом нод"
 
 
 msgid "Not a shader, geometry, or compositor node tree"
-msgstr "Не является деревом узлов шейдера, геометрии или компо́зитора"
+msgstr "Не является деревом нод шейдера, геометрии или компо́зитора"
 
 
 msgid "AO"
@@ -148338,7 +148604,7 @@ msgstr "Образцы"
 
 
 msgid "Not a texture node tree"
-msgstr "Не является деревом узлов текстуры"
+msgstr "Не является деревом нод текстуры"
 
 
 msgid "Bricks 1"
@@ -148430,7 +148696,7 @@ msgstr "Рендеринг части изображения не поддерж
 
 
 msgid "No node tree in scene"
-msgstr "Нет нодовой системы в сцене"
+msgstr "В сцене нет дерева нод"
 
 
 msgid "No render output node in scene"
@@ -148487,6 +148753,10 @@ msgstr "Результат чтения рендеринга: ожидаемый
 
 msgid "Reading render result: expected channel \"%s.%s\" not found"
 msgstr "Результат чтения рендеринга: ожидаемый канал \"%s.%s\" не найден"
+
+
+msgid "Strip Thumbnails"
+msgstr "Миниатюры дорожек"
 
 
 msgid "Channel %d"
