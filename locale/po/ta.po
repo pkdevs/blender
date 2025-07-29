@@ -1,11 +1,11 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'a775d58b2e0e')\n"
+"Project-Id-Version: Blender 5.0.0 Alpha (b'a7042ca30c82')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-21 08:48+0000\n"
-"PO-Revision-Date: 2025-07-10 14:59+0000\n"
-"Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
+"POT-Creation-Date: 2025-07-29 08:51+0000\n"
+"PO-Revision-Date: 2025-07-23 15:07+0000\n"
+"Last-Translator: Dinesh <ddineah0@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
 "Language: ta\n"
 "MIME-Version: 1.0\n"
@@ -13008,6 +13008,10 @@ msgid "Video bitrate (kbit/s)"
 msgstr "வீடியோ பிட்ரேட் (kbit/s)"
 
 
+msgid "HDR"
+msgstr "எச்.டி.ஆர்"
+
+
 msgid "F-Modifier"
 msgstr "எஃப்-மாடிஃபையர்"
 
@@ -14820,10 +14824,6 @@ msgstr "திரவ டொமைன் அமைப்புகள்"
 
 msgid "Margin added around fluid to minimize boundary interference"
 msgstr "எல்லை குறுக்கீட்டைக் குறைக்க திரவத்தைச் சுற்றி விளிம்பு சேர்க்கப்பட்டது"
-
-
-msgid "Minimum amount of fluid a cell can contain before it is considered empty"
-msgstr "ஒரு செல் காலியாகக் கருதப்படுவதற்கு முன்பு குறைந்தபட்சம் ஒரு திரவம் கொண்டிருக்கலாம்"
 
 
 msgid "Additional"
@@ -23058,14 +23058,6 @@ msgid "Output image in DPX format"
 msgstr "டிபிஎக்ச் வடிவத்தில் வெளியீட்டு படம்"
 
 
-msgid "OpenEXR MultiLayer"
-msgstr "openexr multalayer"
-
-
-msgid "Output image in multilayer OpenEXR format"
-msgstr "மல்டிலேயர் ஓபன் எக்ச்ஆர் வடிவத்தில் வெளியீட்டு படம்"
-
-
 msgid "Output image in OpenEXR format"
 msgstr "openexr வடிவத்தில் வெளியீட்டு படம்"
 
@@ -23092,6 +23084,14 @@ msgstr "வலை"
 
 msgid "Output image in WebP format"
 msgstr "வலை வடிவத்தில் வெளியீட்டு படம்"
+
+
+msgid "OpenEXR MultiLayer"
+msgstr "openexr multalayer"
+
+
+msgid "Output image in multilayer OpenEXR format"
+msgstr "மல்டிலேயர் ஓபன் எக்ச்ஆர் வடிவத்தில் வெளியீட்டு படம்"
 
 
 msgid "FFmpeg Video"
@@ -29793,10 +29793,6 @@ msgid "The world's volume used to be rendered by EEVEE Legacy. Conversion is nee
 msgstr "உலகின் தொகுதி ஈவி மரபு மூலம் வழங்கப்பட்டது. அதை ஒழுங்காக வழங்க மாற்றம் தேவை."
 
 
-msgid "Use shader nodes to render the world"
-msgstr "உலகத்தை வழங்க சேடர் முனைகளைப் பயன்படுத்தவும்"
-
-
 msgid "Use Shadow"
 msgstr "நிழலைப் பயன்படுத்துங்கள்"
 
@@ -30375,6 +30371,10 @@ msgstr "சே 2 கே"
 
 msgid "Output color space settings"
 msgstr "வெளியீட்டு வண்ண விண்வெளி அமைப்புகள்"
+
+
+msgid "Video"
+msgstr "காணொளி"
 
 
 msgid "Quality for image formats that support lossy compression"
@@ -34488,62 +34488,6 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
-msgid "Pivot Point"
-msgstr "பிவோட் புள்ளி"
-
-
-msgid "Snap"
-msgstr "ச்னாப்"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
-
-
-msgid "Mask Edit"
-msgstr "முகமூடி திருத்து"
-
-
-msgid "Automasking"
-msgstr "ஆட்டோமேச்கிங்"
-
-
-msgid "Face Sets Edit"
-msgstr "முகம் தொகுப்புகள் திருத்து"
-
-
-msgid "Vertex Group Locks"
-msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
-
-
-msgid "Mirror"
-msgstr "கண்ணாடி"
-
-
-msgid "UV Mapping"
-msgstr "புறஊதா மேப்பிங்"
-
-
-msgid "Local View"
-msgstr "உள்ளக பார்வை"
-
-
-msgid "Viewpoint"
-msgstr "பார்வை"
-
-
-msgid "Navigation"
-msgstr "வழிசெலுத்தல்"
-
-
-msgid "Align View"
-msgstr "பார்வையை சீரமைக்கவும்"
-
-
-msgid "Align View to Active"
-msgstr "செயலில் பார்வையை சீரமைக்கவும்"
-
-
 msgid "View Regions"
 msgstr "மண்டலங்களைக் காண்க"
 
@@ -34636,6 +34580,10 @@ msgid "Hooks"
 msgstr "கொக்கிகள்"
 
 
+msgid "Vertex Group Locks"
+msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
+
+
 msgid "Trim/Add"
 msgstr "டிரிம்/சேர்"
 
@@ -34718,6 +34666,58 @@ msgstr "உரை"
 
 msgid "Bone Roll"
 msgstr "எலும்பு ரோல்"
+
+
+msgid "Pivot Point"
+msgstr "பிவோட் புள்ளி"
+
+
+msgid "Snap"
+msgstr "ச்னாப்"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
+
+
+msgid "Mask Edit"
+msgstr "முகமூடி திருத்து"
+
+
+msgid "Automasking"
+msgstr "ஆட்டோமேச்கிங்"
+
+
+msgid "Face Sets Edit"
+msgstr "முகம் தொகுப்புகள் திருத்து"
+
+
+msgid "Mirror"
+msgstr "கண்ணாடி"
+
+
+msgid "UV Mapping"
+msgstr "புறஊதா மேப்பிங்"
+
+
+msgid "Local View"
+msgstr "உள்ளக பார்வை"
+
+
+msgid "Viewpoint"
+msgstr "பார்வை"
+
+
+msgid "Navigation"
+msgstr "வழிசெலுத்தல்"
+
+
+msgid "Align View"
+msgstr "பார்வையை சீரமைக்கவும்"
+
+
+msgid "Align View to Active"
+msgstr "செயலில் பார்வையை சீரமைக்கவும்"
 
 
 msgid "Keyframe Insert Pie"
@@ -40925,10 +40925,6 @@ msgid "Resolution of the generated surface for rendering and baking"
 msgstr "வழங்குதல் மற்றும் பேக்கிங்கிற்காக உருவாக்கப்பட்ட மேற்பரப்பின் தீர்மானம்"
 
 
-msgid "Sharpen peak"
-msgstr "கூர்மையான உச்சம்"
-
-
 msgid "Peak sharpening for 'JONSWAP' and 'TMA' models"
 msgstr "'jonswap' மற்றும் 'tma' மாதிரிகளுக்கு உச்ச கூர்மைப்படுத்துதல்"
 
@@ -44722,14 +44718,6 @@ msgstr "YUV (Y - LUMA, உ V - Chroma) வண்ண செயலாக்கத�
 
 msgid "Color space used for YCbCrA processing"
 msgstr "ycbcra செயலாக்கத்திற்கு பயன்படுத்தப்படும் வண்ண இடம்"
-
-
-msgid "Composite"
-msgstr "கூட்டு"
-
-
-msgid "Final render output"
-msgstr "இறுதி வழங்குதல் வெளியீடு"
 
 
 msgid "Convert Colorspace"
@@ -51639,10 +51627,6 @@ msgid "Subpath used for this slot"
 msgstr "இந்த ச்லாட்டுக்கு பயன்படுத்தப்படும் துணை பாதை"
 
 
-msgid "Use Node Format"
-msgstr "முனை வடிவமைப்பைப் பயன்படுத்தவும்"
-
-
 msgid "Output File Layer Slot"
 msgstr "வெளியீட்டு கோப்பு அடுக்கு ச்லாட்"
 
@@ -53054,10 +53038,6 @@ msgstr "வெவ்வேறு மாதிரி வரம்புகளு�
 msgctxt "Operator"
 msgid "Merge Images"
 msgstr "படங்களை ஒன்றிணைக்கவும்"
-
-
-msgid "Enable nodes on a material, world or light"
-msgstr "ஒரு மூலப்பொருள், உலகம் அல்லது ஒளியில் முனைகளை இயக்கவும்"
 
 
 msgctxt "Operator"
@@ -72357,10 +72337,6 @@ msgid "OPEN_EXR"
 msgstr "Open_exr"
 
 
-msgid "HDR"
-msgstr "எச்.டி.ஆர்"
-
-
 msgid "Select Parent Frame"
 msgstr "பெற்றோர் சட்டத்தைத் தேர்ந்தெடுக்கவும்"
 
@@ -88728,10 +88704,6 @@ msgid "Export Textures"
 msgstr "ஏற்றுமதி அமைப்புகள்"
 
 
-msgid "If exporting materials, export textures referenced by material nodes to a 'textures' directory in the same directory as the USD file"
-msgstr "மூலப்பொருட்களை ஏற்றுமதி செய்தால், மூலப்பொருள் முனைகளால் குறிப்பிடப்பட்ட அமைப்புகள் அமெரிக்க டாலர் கோப்பின் அதே கோப்பகத்தில் ஒரு 'அமைப்பு' கோப்பகத்திற்கு குறிப்பிடப்படுகின்றன"
-
-
 msgid "Texture export method"
 msgstr "அமைப்பு ஏற்றுமதி முறை"
 
@@ -90132,74 +90104,6 @@ msgid "Panel containing UI elements"
 msgstr "இடைமுகம் கூறுகளைக் கொண்ட குழு"
 
 
-msgid "Active Tool"
-msgstr "செயலில் உள்ள கருவி"
-
-
-msgid "View Lock"
-msgstr "பூட்டைக் காண்க"
-
-
-msgid "Selectability & Visibility"
-msgstr "தேர்ந்தெடுக்கும் தன்மை மற்றும் தெரிவுநிலை"
-
-
-msgid "Wireframe Color"
-msgstr "வயர்ஃப்ரேம் நிறம்"
-
-
-msgid "Shadow Settings"
-msgstr "நிழல் அமைப்புகள்"
-
-
-msgid "SSAO Settings"
-msgstr "ssao அமைப்புகள்"
-
-
-msgid "Cavity"
-msgstr "குழி"
-
-
-msgid "Render Pass"
-msgstr "பாச் வழங்குதல்"
-
-
-msgid "Compositor"
-msgstr "தொகுப்பாளர்"
-
-
-msgid "Overlays"
-msgstr "மேலடுக்குகள்"
-
-
-msgid "Guides"
-msgstr "வழிகாட்டிகள்"
-
-
-msgid "Viewer Node"
-msgstr "பார்வையாளர் முனை"
-
-
-msgid "Motion Tracking"
-msgstr "இயக்க கண்காணிப்பு"
-
-
-msgid "Mesh Edit Mode"
-msgstr "கண்ணி திருத்து பயன்முறை"
-
-
-msgid "Measurement"
-msgstr "அளவீட்டு"
-
-
-msgid "Curve Edit Mode"
-msgstr "வளைவு திருத்து பயன்முறை"
-
-
-msgid "Curves Edit Mode"
-msgstr "வளைவுகள் திருத்து பயன்முறை"
-
-
 msgid "Snapping"
 msgstr "ச்னாப்பிங்"
 
@@ -90214,6 +90118,10 @@ msgstr "வீச்சு வேலை வாய்ப்பு"
 
 msgid "Drawing Plane"
 msgstr "வரைதல் வானூர்தி"
+
+
+msgid "Guides"
+msgstr "வழிகாட்டிகள்"
 
 
 msgid "Grease Pencil Options"
@@ -90278,6 +90186,70 @@ msgstr "gltf"
 
 msgid "glTF Animations"
 msgstr "GLTF அனிமேசன்கள்"
+
+
+msgid "Active Tool"
+msgstr "செயலில் உள்ள கருவி"
+
+
+msgid "View Lock"
+msgstr "பூட்டைக் காண்க"
+
+
+msgid "Selectability & Visibility"
+msgstr "தேர்ந்தெடுக்கும் தன்மை மற்றும் தெரிவுநிலை"
+
+
+msgid "Wireframe Color"
+msgstr "வயர்ஃப்ரேம் நிறம்"
+
+
+msgid "Shadow Settings"
+msgstr "நிழல் அமைப்புகள்"
+
+
+msgid "SSAO Settings"
+msgstr "ssao அமைப்புகள்"
+
+
+msgid "Cavity"
+msgstr "குழி"
+
+
+msgid "Render Pass"
+msgstr "பாச் வழங்குதல்"
+
+
+msgid "Compositor"
+msgstr "தொகுப்பாளர்"
+
+
+msgid "Overlays"
+msgstr "மேலடுக்குகள்"
+
+
+msgid "Viewer Node"
+msgstr "பார்வையாளர் முனை"
+
+
+msgid "Motion Tracking"
+msgstr "இயக்க கண்காணிப்பு"
+
+
+msgid "Mesh Edit Mode"
+msgstr "கண்ணி திருத்து பயன்முறை"
+
+
+msgid "Measurement"
+msgstr "அளவீட்டு"
+
+
+msgid "Curve Edit Mode"
+msgstr "வளைவு திருத்து பயன்முறை"
+
+
+msgid "Curves Edit Mode"
+msgstr "வளைவுகள் திருத்து பயன்முறை"
 
 
 msgid "Import Settings"
@@ -91131,10 +91103,6 @@ msgstr "குறியாக்கம்"
 
 msgid "Audio"
 msgstr "ஆடியோ"
-
-
-msgid "Video"
-msgstr "காணொளி"
 
 
 msgid "FFmpeg Presets"
@@ -95271,14 +95239,6 @@ msgstr "மொழிபெயர்ப்புக்கு பயன்பட�
 
 msgid "Automatic (Automatic)"
 msgstr "தானியங்கி (தானியங்கி)"
-
-
-msgid "HDRI Preview Size"
-msgstr "hdri முன்னோட்ட அளவு"
-
-
-msgid "Diameter of the HDRI preview spheres"
-msgstr "hdri முன்னோட்டக் கோளங்களின் விட்டம்"
 
 
 msgid "Mini Axes Brightness"
@@ -126286,6 +126246,10 @@ msgid "To 3D Cursor"
 msgstr "3d கர்சருக்கு"
 
 
+msgid "Specular Lighting"
+msgstr "ஏகப்பட்ட விளக்குகள்"
+
+
 msgid "Camera Guides"
 msgstr "கேமரா வழிகாட்டிகள்"
 
@@ -126470,10 +126434,6 @@ msgstr "ஃப்ரீபாணி விளிம்பை அழிக்க�
 msgctxt "Operator"
 msgid "Clear Freestyle Face"
 msgstr "ஃப்ரீபாணி முகத்தை அழிக்கவும்"
-
-
-msgid "Specular Lighting"
-msgstr "ஏகப்பட்ட விளக்குகள்"
 
 
 msgid "Ridge"
@@ -127577,10 +127537,6 @@ msgstr "வோக்சல் அளவு %f மிகவும் சிறி
 
 msgid "Tangent space can only be computed for tris/quads, aborting"
 msgstr "tris/quads க்கு மட்டுமே தொடுகோடு கணக்கிட முடியும், கருக்கலைப்பு"
-
-
-msgid "Tangent space computation needs a UV Map, \"%s\" not found, aborting"
-msgstr "தொடுகோடு விண்வெளி கணக்கீட்டிற்கு புறஊதா வரைபடம் தேவை, \"%s\" கண்டுபிடிக்கப்படவில்லை, கருக்கலைப்பு"
 
 
 msgid "Possible data loss when saving this file! %s modifier is deprecated (Object: %s)"
@@ -134783,6 +134739,10 @@ msgid "There is no animation data to operate on"
 msgstr "செயல்பட அனிமேசன் தரவு எதுவும் இல்லை"
 
 
+msgid "Composite"
+msgstr "கூட்டு"
+
+
 msgid "Discard"
 msgstr "நிராகரிக்கவும்"
 
@@ -138774,6 +138734,10 @@ msgid "UV map '%s' not found"
 msgstr "புறஊதா வரைபடம் '%s' காணப்படவில்லை"
 
 
+msgid "Tangent space computation needs a UV Map, \"%s\" not found, aborting"
+msgstr "தொடுகோடு விண்வெளி கணக்கீட்டிற்கு புறஊதா வரைபடம் தேவை, \"%s\" கண்டுபிடிக்கப்படவில்லை, கருக்கலைப்பு"
+
+
 msgid "Number of custom normals is not number of loops (%f / %d)"
 msgstr "தனிப்பயன் இயல்புகளின் எண்ணிக்கை சுழல்களின் எண்ணிக்கை அல்ல ( %f / %d)"
 
@@ -141076,30 +141040,6 @@ msgstr "உள் முகமூடி"
 
 msgid "Outer Mask"
 msgstr "வெளிப்புற முகமூடி"
-
-
-msgid "Path:"
-msgstr "பாதை:"
-
-
-msgid "Base Path:"
-msgstr "அடிப் பாதை:"
-
-
-msgid "Add Input"
-msgstr "உள்ளீட்டைச் சேர்க்கவும்"
-
-
-msgid "Layer:"
-msgstr "அடுக்கு:"
-
-
-msgid "File Subpath:"
-msgstr "கோப்பு துணை பாத்:"
-
-
-msgid "Format:"
-msgstr "வடிவம்:"
 
 
 msgid "Invalid path template in File Output node. Skipping writing file."
@@ -145019,10 +144959,6 @@ msgid "Border rendering is not supported by sequencer"
 msgstr "எல்லை வழங்குதல் சீக்வென்சரால் ஆதரிக்கப்படவில்லை"
 
 
-msgid "No render output node in scene"
-msgstr "காட்சியில் வெளியீட்டு முனை இல்லை"
-
-
 msgid "All render layers are disabled"
 msgstr "அனைத்து வழங்குதல் அடுக்குகளும் முடக்கப்பட்டுள்ளன"
 
@@ -145660,16 +145596,6 @@ msgstr "வரையறுக்கப்பட்ட இயங்குதள �
 
 
 msgctxt "WindowManager"
-msgid "Your graphics card or driver has limited support. It may work, but with issues."
-msgstr "உங்கள் கிராபிக்ச் அட்டை அல்லது இயக்கிக்கு மட்டுப்படுத்தப்பட்ட உதவி உள்ளது. இது வேலை செய்யலாம், ஆனால் சிக்கல்களுடன்."
-
-
-msgctxt "WindowManager"
-msgid "Newer graphics drivers may be available to improve Blender support."
-msgstr "கலப்பான் ஆதரவை மேம்படுத்த புதிய கிராபிக்ச் இயக்கிகள் கிடைக்கக்கூடும்."
-
-
-msgctxt "WindowManager"
 msgid "Graphics card:"
 msgstr "வரைகலை ஓவியம், வரைகலை அட்டை:"
 
@@ -145692,16 +145618,6 @@ msgstr "உங்கள் கிராபிக்ச் அட்டை அல
 msgctxt "WindowManager"
 msgid "Upgrading to the latest macOS version may improve Blender support"
 msgstr "அண்மைக் கால macos பதிப்பிற்கு மேம்படுத்துவது கலப்பான் ஆதரவை மேம்படுத்தக்கூடும்"
-
-
-msgctxt "WindowManager"
-msgid "Your graphics card or driver is not supported."
-msgstr "உங்கள் கிராபிக்ச் அட்டை அல்லது இயக்கி ஆதரிக்கப்படவில்லை."
-
-
-msgctxt "WindowManager"
-msgid "The program will now close."
-msgstr "நிரல் இப்போது மூடப்படும்."
 
 
 msgid "Intel binary detected. Expect reduced performance."

@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'a775d58b2e0e')\n"
+"Project-Id-Version: Blender 5.0.0 Alpha (b'a7042ca30c82')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-21 08:48+0000\n"
-"PO-Revision-Date: 2025-04-14 08:53+0000\n"
+"POT-Creation-Date: 2025-07-29 08:51+0000\n"
+"PO-Revision-Date: 2025-07-23 15:12+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
 "Language: ur\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.10.1"
+"X-Generator: Weblate 5.12.1"
 
 
 msgid "Shader AOV"
@@ -12385,6 +12385,10 @@ msgid "Video bitrate (kbit/s)"
 msgstr "(kbit/s) ﭧﯾﺭ ﭧﺑ ﻮﯾﮉﯾﻭ"
 
 
+msgid "HDR"
+msgstr "ﺭﺁ ﯼﮈ ﭻﯾﺍ"
+
+
 msgid "F-Modifier"
 msgstr "ﺮﺋﺎﻔﯾﮈﻮﻣ ﻒﯾﺍ"
 
@@ -14134,10 +14138,6 @@ msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻦﯿﻣﻭﮈ ﻝﺎﯿﺳ"
 
 msgid "Margin added around fluid to minimize boundary interference"
 msgstr "ﺎﯿﮔ ﺎﯿﮐ ﻞﻣﺎﺷ ﻦﺟﺭﺎﻣ ﺩﺮﮔ ﺩﺭﺍ ﮯﮐ ﻝﺎﯿﺳ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻢﮐ ﻮﮐ ﺖﻠﺧﺍﺪﻣ ﯽﮐ ﺪﺣ"
-
-
-msgid "Minimum amount of fluid a cell can contain before it is considered empty"
-msgstr "ﮯﮨ ﺎﺘﮑﺳ ﻮﮨ ﺩﻮﺟﻮﻣ ﻝﺎﯿﺳ ﻢﮐ ﺯﺍ ﻢﮐ ﮟﯿﻣ ﺱﺍ ﮯﻠﮩﭘ ﮯﺳ ﮯﻧﺎﺟ ﺎﮭﺠﻤﺳ ﯽﻟﺎﺧ ﻮﮐ ﻞﯿﺳ ﮏﯾﺍ"
 
 
 msgid "Additional"
@@ -21946,14 +21946,6 @@ msgid "Output image in DPX format"
 msgstr "DPX ﺞﯿﻣﺍ ﭧﭘ ﭦﺅﺁ ﮟﯿﻣ ﭧﯿﻣﺭﺎﻓ"
 
 
-msgid "OpenEXR MultiLayer"
-msgstr "ﺕﺮﭘ  ﯽﭩﻠﻣ ﺭﺁ ﺲﮑﯾﺍ ﻦﭘﻭﺍ"
-
-
-msgid "Output image in multilayer OpenEXR format"
-msgstr "ﺞﯿﻣﺍ ﭧﭘ ﭦﺅﺁ ﮟﯿﻣ ﭧﯿﻣﺭﺎﻓ ﺭﺁ ﺲﮑﯾﺍ ﯼﺍ ﻦﭘﻭﺍ  ﺕﺮﭘ  ﯽﭩﻠﻣ"
-
-
 msgid "Output image in OpenEXR format"
 msgstr "OpenEXR ﺞﯿﻣﺍ ﭧﭘ ﭦﺅﺁ ﮟﯿﻣ ﭧﯿﻣﺭﺎﻓ"
 
@@ -21980,6 +21972,14 @@ msgstr "ﯽﭘ ﺐﯾﻭ"
 
 msgid "Output image in WebP format"
 msgstr "WebP ﺞﯿﻣﺍ ﭧﭘ ﭦﺅﺁ ﮟﯿﻣ ﭧﯿﻣﺭﺎﻓ"
+
+
+msgid "OpenEXR MultiLayer"
+msgstr "ﺕﺮﭘ  ﯽﭩﻠﻣ ﺭﺁ ﺲﮑﯾﺍ ﻦﭘﻭﺍ"
+
+
+msgid "Output image in multilayer OpenEXR format"
+msgstr "ﺞﯿﻣﺍ ﭧﭘ ﭦﺅﺁ ﮟﯿﻣ ﭧﯿﻣﺭﺎﻓ ﺭﺁ ﺲﮑﯾﺍ ﯼﺍ ﻦﭘﻭﺍ  ﺕﺮﭘ  ﯽﭩﻠﻣ"
 
 
 msgid "FFmpeg Video"
@@ -28459,10 +28459,6 @@ msgid "The world's volume used to be rendered by EEVEE Legacy. Conversion is nee
 msgstr "ﮯﮨ ﺕﺭﻭﺮﺿ ﯽﮐ ﮞﻮﻟﺩﺎﺒﺗ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺶﯿﭘ ﮯﺳ ﮯﻘﯾﺮﻃ ﺢﯿﺤﺻ ﮯﺳﺍﺎﮭﺗ ﺎﺗﺎﺟ ﺎﯿﮐ ﺶﯿﭘ ﮯﻌﯾﺭﺫ ﮯﮐ EEVEE Legacy ﻢﺠﺣ ﺎﮐ ﺎﯿﻧﺩ"
 
 
-msgid "Use shader nodes to render the world"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺱﮈﻮﻨﺘﮕﻧﺭ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺶﯿﭘ ﻮﮐ ﺎﯿﻧﺩ"
-
-
 msgid "Use Shadow"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﻭﮉﯿﺷ"
 
@@ -28989,6 +28985,10 @@ msgstr "J2K"
 
 msgid "Output color space settings"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ ﭧﭘ ﭦﺅﺁ"
+
+
+msgid "Video"
+msgstr "ﻮﯾﮉﯾﻭ"
 
 
 msgid "Quality for image formats that support lossy compression"
@@ -32979,62 +32979,6 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
-msgid "Pivot Point"
-msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
-
-
-msgid "Snap"
-msgstr "ﭗﯿﻨﺳ"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "ﻑﺁ ﻝﺎﻓ ﺮﺋﺎﻔﯾﮈﻮﻣ ﺐﺳﺎﻨﺘﻣ"
-
-
-msgid "Mask Edit"
-msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﮏﺳﺎﻣ"
-
-
-msgid "Automasking"
-msgstr "ﮓﻨﮑﺳﺎﻣﻮﭨﺁ"
-
-
-msgid "Face Sets Edit"
-msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﯿﺳ ﮯﮐ ﮮﺮﮩﭼ"
-
-
-msgid "Vertex Group Locks"
-msgstr "ﮎﻻ﻿ ﮦﻭﺮﮔ ﺲﮑﯿﭨﺭﻭ"
-
-
-msgid "Mirror"
-msgstr "ﮧﻨﯿﺋﺁ"
-
-
-msgid "UV Mapping"
-msgstr "ﮓﻨﭙﯿﻣ ﯼﻭﻮﯾ"
-
-
-msgid "Local View"
-msgstr "ﺮﻈﻨﻣ ﯽﻣﺎﻘﻣ"
-
-
-msgid "Viewpoint"
-msgstr "ﺮﻈﻧ ﮧﻄﻘﻧ"
-
-
-msgid "Navigation"
-msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
-
-
-msgid "Align View"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﮟﯿﻣ ﮪﺪﯿﺳ"
-
-
-msgid "Align View to Active"
-msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﮟﯿﻣ ﻝﺎﻌﻓ ﻮﮐ ﺮﻈﻨﻣ"
-
-
 msgid "View Regions"
 msgstr "ﮟﯿﮭﮑﯾﺩ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ"
 
@@ -33127,6 +33071,10 @@ msgid "Hooks"
 msgstr "ﮯﭩﻧﺎﮐ"
 
 
+msgid "Vertex Group Locks"
+msgstr "ﮎﻻ﻿ ﮦﻭﺮﮔ ﺲﮑﯿﭨﺭﻭ"
+
+
 msgid "Trim/Add"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ/ﻡﺮﭨ"
 
@@ -33209,6 +33157,58 @@ msgstr "ﻦﺘﻣ"
 
 msgid "Bone Roll"
 msgstr "ﻝﻭﺭ ﻥﻮﺑ"
+
+
+msgid "Pivot Point"
+msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
+
+
+msgid "Snap"
+msgstr "ﭗﯿﻨﺳ"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "ﻑﺁ ﻝﺎﻓ ﺮﺋﺎﻔﯾﮈﻮﻣ ﺐﺳﺎﻨﺘﻣ"
+
+
+msgid "Mask Edit"
+msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﮏﺳﺎﻣ"
+
+
+msgid "Automasking"
+msgstr "ﮓﻨﮑﺳﺎﻣﻮﭨﺁ"
+
+
+msgid "Face Sets Edit"
+msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﯿﺳ ﮯﮐ ﮮﺮﮩﭼ"
+
+
+msgid "Mirror"
+msgstr "ﮧﻨﯿﺋﺁ"
+
+
+msgid "UV Mapping"
+msgstr "ﮓﻨﭙﯿﻣ ﯼﻭﻮﯾ"
+
+
+msgid "Local View"
+msgstr "ﺮﻈﻨﻣ ﯽﻣﺎﻘﻣ"
+
+
+msgid "Viewpoint"
+msgstr "ﺮﻈﻧ ﮧﻄﻘﻧ"
+
+
+msgid "Navigation"
+msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
+
+
+msgid "Align View"
+msgstr "ﮟﯿﮭﮑﯾﺩ ﮟﯿﻣ ﮪﺪﯿﺳ"
+
+
+msgid "Align View to Active"
+msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﮟﯿﻣ ﻝﺎﻌﻓ ﻮﮐ ﺮﻈﻨﻣ"
 
 
 msgid "Keyframe Insert Pie"
@@ -39305,10 +39305,6 @@ msgid "Resolution of the generated surface for rendering and baking"
 msgstr "ﻦﺷﻮﻟﻭﺰﯾﺭ ﺎﮐ ﺢﻄﺳ ﮦﺩﺮﮐ ﺭﺎﯿﺗ ﮯﯿﻟ ﮯﮐ ﮓﻨﮑﯿﺑ ﺭﻭﺍ ﮓﻧﺭﮉﻨﯾﺭ"
 
 
-msgid "Sharpen peak"
-msgstr "ﺎﻧﺮﮐ ﺰﯿﺗ ﻮﮐ ﯽﭨﻮﭼ"
-
-
 msgid "Peak sharpening for 'JONSWAP' and 'TMA' models"
 msgstr "'JONSWAP' ﺭﻭﺍ 'TMA' ﺎﻧﺮﮐ ﺰﯿﺗ ﻮﮐ ﯽﭨﻮﭼ ﮯﯿﻟ ﮯﮐ ﺰﻟﮈﺎﻣ"
 
@@ -42999,14 +42995,6 @@ msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ ﮓﻧﺭ"
 
 msgid "Color space used for YCbCrA processing"
 msgstr "YCbCrA ﮧﮕﺟ ﻦﯿﮕﻧﺭ ﯽﻟﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ"
-
-
-msgid "Composite"
-msgstr "ﻊﻣﺎﺟ"
-
-
-msgid "Final render output"
-msgstr "ﭧﭘ ﭦﺅﺁ ﺭﮉﻨﯾﺭ ﻞﻨﺋﺎﻓ"
 
 
 msgid "Convert Colorspace"
@@ -49201,10 +49189,6 @@ msgid "Subpath used for this slot"
 msgstr "ﺎﯿﮔ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮧﺘﺳﺍﺭ ﺐﺳ ﮯﯿﻟ ﮯﮐ ﭦﻼ﻿ﺳ ﺱﺍ"
 
 
-msgid "Use Node Format"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﭧﯿﻣﺭﺎﻓ ﮈﻮﻧ"
-
-
 msgid "Output File Layer Slot"
 msgstr "ﭦﻼ﻿ﺳ  ﺕﺮﭘ  ﻞﺋﺎﻓ ﭧﭘ ﭦﺅﺁ"
 
@@ -50532,10 +50516,6 @@ msgstr "OpenEXR ﮟﯿﺋﺎﻨﺑ ﮟﯿﻣ ﺮﯾﻮﺼﺗ ﮏﯾﺍ ﮫﺗﺎ
 msgctxt "Operator"
 msgid "Merge Images"
 msgstr "ﮟﯾﺮﮐ ﻢﺿ ﻮﮐ ﺰﺠﯿﻣﺍ"
-
-
-msgid "Enable nodes on a material, world or light"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺱﮈﻮﻧ ﺮﭘ ﯽﻨﺷﻭﺭ ﺎﯾ ﺎﯿﻧﺩ ،ﺩﺍﻮﻣ"
 
 
 msgctxt "Operator"
@@ -68868,10 +68848,6 @@ msgid "OPEN_EXR"
 msgstr "OPEN_EXR"
 
 
-msgid "HDR"
-msgstr "ﺭﺁ ﯼﮈ ﭻﯾﺍ"
-
-
 msgid "Select Parent Frame"
 msgstr "ﻢﯾﺮﻓ ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﻦﯾﺪﻟﺍﻭ"
 
@@ -84548,10 +84524,6 @@ msgid "Export Textures"
 msgstr "ﮟﯾﺮﮐ ﺪﻣﺁﺮﺑ ﺮﭽﺴﮑﯿﭨ"
 
 
-msgid "If exporting materials, export textures referenced by material nodes to a 'textures' directory in the same directory as the USD file"
-msgstr "ﮯﮨ ﻞﺋﺎﻓ USD ﮟﯿﻣ ﺲﺟ ﮟﯾﺮﮐ ﺪﻣﺁﺮﺑ ﮟﯿﻣ ﯼﺮﭩﮐﺮﺋﺍﮈ 'ﺮﭽﭩﺴﮑﯿﭨ' ﮟﯿﻣ ﯼﺮﭩﮐﺮﺋﺍﮈ ﯽﺳﺍ ﻮﮐ ﺮﭽﺴﮑﯿﭨ ﮦﺩﺮﮐ ﮧﻟﺍﻮﺣ ﮯﻌﯾﺭﺫ ﮯﮐ ﺱﮈﻮﻧ ﮯﮐ ﺩﺍﻮﻣ ،ﻮﺗ ﮟﯿﮨ ﮯﮨﺭ ﺮﮐ ﺪﻣﺁﺮﺑ ﺩﺍﻮﻣ ﺮﮔﺍ"
-
-
 msgid "Texture export method"
 msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﮯﻧﺮﮐ ﺪﻣﺁﺮﺑ ﺖﺧﺎﺳ"
 
@@ -85814,66 +85786,6 @@ msgid "Panel containing UI elements"
 msgstr "UI ﻞﻨﯿﭘ ﻞﻤﺘﺸﻣ ﺮﭘ ﺮﺻﺎﻨﻋ"
 
 
-msgid "Active Tool"
-msgstr "ﻝﻮﭨ ﻝﺎﻌﻓ"
-
-
-msgid "View Lock"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﮎﻻ﻿"
-
-
-msgid "Selectability & Visibility"
-msgstr "ﺖﯿﺋﺮﻣ ﺭﻭﺍ ﺏﺎﺨﺘﻧﺍ"
-
-
-msgid "Shadow Settings"
-msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻭﮉﯿﺷ"
-
-
-msgid "SSAO Settings"
-msgstr "SSAO ﺕﺎﺒﯿﺗﺮﺗ"
-
-
-msgid "Cavity"
-msgstr "ﺎﮩﮔ"
-
-
-msgid "Render Pass"
-msgstr "ﺱﺎﭘ ﺭﮉﻨﯾﺭ"
-
-
-msgid "Compositor"
-msgstr "ﺮﭩﯾﺯﻮﭙﻤﮐ"
-
-
-msgid "Overlays"
-msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
-
-
-msgid "Guides"
-msgstr "ﺯﮉﯿﺋﺎﮔ"
-
-
-msgid "Viewer Node"
-msgstr "ﮈﻮﻧ ﺮﻇﺎﻧ"
-
-
-msgid "Motion Tracking"
-msgstr "ﮓﻨﮑﯾﺮﭨ ﺖﮐﺮﺣ"
-
-
-msgid "Mesh Edit Mode"
-msgstr "ﮈﻮﻣ ﭧﯾﮉﯾﺍ ﺶﯿﻣ"
-
-
-msgid "Measurement"
-msgstr "ﺶﺋﺎﻤﯿﭘ"
-
-
-msgid "Curve Edit Mode"
-msgstr "ﮈﻮﻣ ﺎﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﻢﺧ"
-
-
 msgid "Snapping"
 msgstr "ﮓﻨﭙﯿﻨﺳ"
 
@@ -85888,6 +85800,10 @@ msgstr "ﭧﻨﻤﺴﯿﻠﭘ ﮎﻭﺮﭩﺳﺍ"
 
 msgid "Drawing Plane"
 msgstr "ﻦﯿﻠﭘ ﮓﻨﺋﺍﺭﮈ"
+
+
+msgid "Guides"
+msgstr "ﺯﮉﯿﺋﺎﮔ"
 
 
 msgid "Quad View"
@@ -85940,6 +85856,62 @@ msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
 
 msgid "glTF Animations"
 msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
+
+
+msgid "Active Tool"
+msgstr "ﻝﻮﭨ ﻝﺎﻌﻓ"
+
+
+msgid "View Lock"
+msgstr "ﮟﯿﮭﮑﯾﺩ ﮎﻻ﻿"
+
+
+msgid "Selectability & Visibility"
+msgstr "ﺖﯿﺋﺮﻣ ﺭﻭﺍ ﺏﺎﺨﺘﻧﺍ"
+
+
+msgid "Shadow Settings"
+msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻭﮉﯿﺷ"
+
+
+msgid "SSAO Settings"
+msgstr "SSAO ﺕﺎﺒﯿﺗﺮﺗ"
+
+
+msgid "Cavity"
+msgstr "ﺎﮩﮔ"
+
+
+msgid "Render Pass"
+msgstr "ﺱﺎﭘ ﺭﮉﻨﯾﺭ"
+
+
+msgid "Compositor"
+msgstr "ﺮﭩﯾﺯﻮﭙﻤﮐ"
+
+
+msgid "Overlays"
+msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
+
+
+msgid "Viewer Node"
+msgstr "ﮈﻮﻧ ﺮﻇﺎﻧ"
+
+
+msgid "Motion Tracking"
+msgstr "ﮓﻨﮑﯾﺮﭨ ﺖﮐﺮﺣ"
+
+
+msgid "Mesh Edit Mode"
+msgstr "ﮈﻮﻣ ﭧﯾﮉﯾﺍ ﺶﯿﻣ"
+
+
+msgid "Measurement"
+msgstr "ﺶﺋﺎﻤﯿﭘ"
+
+
+msgid "Curve Edit Mode"
+msgstr "ﮈﻮﻣ ﺎﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﻢﺧ"
 
 
 msgid "Chain Scaling"
@@ -86745,10 +86717,6 @@ msgstr "ﮓﻧﮈﻮﮑﻧﺍ"
 
 msgid "Audio"
 msgstr "ﻮﯾﮈﺁ"
-
-
-msgid "Video"
-msgstr "ﻮﯾﮉﯾﻭ"
 
 
 msgid "FFmpeg Presets"
@@ -90754,14 +90722,6 @@ msgstr "ﻥﺎﺑﺯ ﯽﻟﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ �
 
 msgid "Automatic (Automatic)"
 msgstr "(ﺭﺎﮐﺩﻮﺧ) ﺭﺎﮐﺩﻮﺧ"
-
-
-msgid "HDRI Preview Size"
-msgstr "HDRI  ﺰﺋﺎﺳ ﻮﯾﻮﯾﺮﭘ"
-
-
-msgid "Diameter of the HDRI preview spheres"
-msgstr "HDRI  ﺮﻄﻗ ﺎﮐ ﮞﻭﺮﺋﺍﺩ ﻮﯾﻮﯾﺮﭘ"
 
 
 msgid "Mini Axes Brightness"
@@ -119992,6 +119952,10 @@ msgid "To 3D Cursor"
 msgstr "3D ﮏﺗ ﺮﺳﺮﮐ"
 
 
+msgid "Specular Lighting"
+msgstr "ﮓﻨﭩﺋﻻ﻿ ﺮﻟﻮﮑﯿﭙﺳ"
+
+
 msgid "Camera Guides"
 msgstr "ﺯﮉﯿﺋﺎﮔ ﮦﺮﻤﯿﮐ"
 
@@ -120176,10 +120140,6 @@ msgstr "ﮟﯾﺮﮐ ﻑﺎﺻ ﺞﯾﺍ ﻞﺋﺎﭩﺳﺍ ﯼﺮﻓ"
 msgctxt "Operator"
 msgid "Clear Freestyle Face"
 msgstr "ﮟﯾﺮﮐ ﻑﺎﺻ ﮦﺮﮩﭼ ﻞﺋﺎﭩﺳﺍ ﯼﺮﻓ"
-
-
-msgid "Specular Lighting"
-msgstr "ﮓﻨﭩﺋﻻ﻿ ﺮﻟﻮﮑﯿﭙﺳ"
 
 
 msgid "Ridge"
@@ -121242,10 +121202,6 @@ msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﮟﯿﻣ ﻊﺿﻭ 
 
 msgid "Tangent space can only be computed for tris/quads, aborting"
 msgstr "ﻞﻤﺣ ﻁﺎﻘﺳﺍ ،ﮯﮨ ﯽﺘﮑﺳ ﺎﺟ ﯽﮐ ﮯﯿﻟ ﮯﮐ tris/quads ﻑﺮﺻ ﯽﺘﻨﮔ ﯽﮐ ﺲﯿﭙﺳﺍ ﭧﻨﺠﻨﯿﭨ"
-
-
-msgid "Tangent space computation needs a UV Map, \"%s\" not found, aborting"
-msgstr "ﮯﮨ ﺎﮨﺭ ﻮﮨ ﻁﺎﻘﺳﺍ ،ﻼ﻿ﻣ ﮟﯿﮩﻧ \"%s‬‪\" ،ﮯﮨ ﺕﺭﻭﺮﺿ ﯽﮐ ﭗﯿﻣ ﯼﻭﻮﯾ ﮯﯿﻟ ﮯﮐ ﻦﺸﯿﭨﻮﯿﭙﻤﮐ ﻼ﻿ﺧ ﭧﻨﺠﻨﯿﭨ"
 
 
 msgid "Possible data loss when saving this file! %s modifier is deprecated (Object: %s)"
@@ -127832,6 +127788,10 @@ msgid "There is no animation data to operate on"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﺎﭩﯾﮈ ﺕﺎﯿﮐﺮﺣ  ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻡﺎﮐ"
 
 
+msgid "Composite"
+msgstr "ﻊﻣﺎﺟ"
+
+
 msgid "Discard"
 msgstr "ﮟﯾﺩ ﺮﮐ ﺩﺭ"
 
@@ -131450,6 +131410,10 @@ msgid "UV map '%s' not found"
 msgstr "ﻼ﻿ﻣ ﮟﯿﮩﻧ '%s‬‪' ﮧﺸﻘﻧ  ﯼﻭﻮﯾ"
 
 
+msgid "Tangent space computation needs a UV Map, \"%s\" not found, aborting"
+msgstr "ﮯﮨ ﺎﮨﺭ ﻮﮨ ﻁﺎﻘﺳﺍ ،ﻼ﻿ﻣ ﮟﯿﮩﻧ \"%s‬‪\" ،ﮯﮨ ﺕﺭﻭﺮﺿ ﯽﮐ ﭗﯿﻣ ﯼﻭﻮﯾ ﮯﯿﻟ ﮯﮐ ﻦﺸﯿﭨﻮﯿﭙﻤﮐ ﻼ﻿ﺧ ﭧﻨﺠﻨﯿﭨ"
+
+
 msgid "Number of custom normals is not number of loops (%f / %d)"
 msgstr "(%f‬ / ‪%d‬‪) ﮯﮨ ﮟﯿﮩﻧ ﺩﺍﺪﻌﺗ ﯽﮐ ﺲﭘﻮﻟ ﺩﺍﺪﻌﺗ ﯽﮐ ﺰﻠﻣﺭﺎﻧ ﺕﺭﻭﺮﺿ ﺐﺴﺣ"
 
@@ -133295,30 +133259,6 @@ msgstr "ﮏﺳﺎﻣ ﯽﻧﻭﺭﺪﻧﺍ"
 
 msgid "Outer Mask"
 msgstr "ﮏﺳﺎﻣ ﯽﻧﻭﺮﯿﺑ"
-
-
-msgid "Path:"
-msgstr ":ﮧﺘﺳﺍﺭ"
-
-
-msgid "Base Path:"
-msgstr ":ﮧﺘﺳﺍﺭ ﯼﺩﺎﯿﻨﺑ"
-
-
-msgid "Add Input"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﭧﭘ ﻥﺍ"
-
-
-msgid "Layer:"
-msgstr ":ﺕﺮﭘ"
-
-
-msgid "File Subpath:"
-msgstr ":ﮫﺗﺎﭘ ﺐﺳ ﻞﺋﺎﻓ"
-
-
-msgid "Format:"
-msgstr ":ﭧﯿﻣﺭﺎﻓ"
 
 
 msgid "Disabled, built without FFTW"
@@ -136454,10 +136394,6 @@ msgid "Border rendering is not supported by sequencer"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﮧﻌﯾﺭﺫ ﮯﮐ ﺮﺴﻨﯾﻮﮑﯿﺳ ﮓﻧﺭﮉﻨﯾﺭ ﺭﮈﺭﺎﺑ"
 
 
-msgid "No render output node in scene"
-msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮈﻮﻧ ﭧﭘ ﭦﺅﺁ ﺭﮉﻨﯾﺭ ﯽﺋﻮﮐ ﮟﯿﻣ ﺮﻈﻨﻣ"
-
-
 msgid "All render layers are disabled"
 msgstr "ﮟﯿﮨ ﻝﺎﻌﻓ ﺮﯿﻏ ﮟﯿﺗﺮﭘ ﺭﮉﻨﯾﺭ ﻡﺎﻤﺗ"
 
@@ -137019,16 +136955,6 @@ msgstr "ﭦﺭﻮﭙﺳ ﻡﺭﺎﻓ ﭧﯿﻠﭘ ﺩﻭﺪﺤﻣ"
 
 
 msgctxt "WindowManager"
-msgid "Your graphics card or driver has limited support. It may work, but with issues."
-msgstr ".ﮫﺗﺎﺳ ﮯﮐ ﻞﺋﺎﺴﻣ ﻦﮑﯿﻟ ،ﮯﮨ ﺎﺘﮑﺳ ﺮﮐ ﻡﺎﮐ ﮧﯾ ﮯﮨ ﻞﺻﺎﺣ ﻥﻭﺎﻌﺗ ﺩﻭﺪﺤﻣ ﻮﮐ ﺭﻮﯿﺋﺍﺭﮈ ﺎﯾ ﮈﺭﺎﮐ ﺲﮑﻓﺍﺮﮔ ﮯﮐ ﭖﺁ"
-
-
-msgctxt "WindowManager"
-msgid "Newer graphics drivers may be available to improve Blender support."
-msgstr "ﮟﯿﮨ ﮯﺘﮑﺳ ﻮﮨ ﺏﺎﯿﺘﺳﺩ ﺭﻮﯿﺋﺍﺭﮈ ﺲﮑﻓﺍﺮﮔ ﮯﺌﻧ ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﻨﺑ ﺮﺘﮩﺑ ﻮﮐ ﭦﺭﻮﭙﺳ ﺭﮉﻨﯿﻠﺑ"
-
-
-msgctxt "WindowManager"
 msgid "Graphics card:"
 msgstr ":ﮈﺭﺎﮐ ﺲﮑﻓﺍﺮﮔ"
 
@@ -137046,16 +136972,6 @@ msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﻥﮊﺭﻭ macOS �
 msgctxt "WindowManager"
 msgid "Upgrading to the latest macOS version may improve Blender support"
 msgstr "ﮯﮨ ﺎﺘﮑﺳ ﺎﺟ ﺎﯾﺎﻨﺑ ﺮﺘﮩﺑ ﻮﮐ ﭦﺭﻮﭙﺳ ﺭﮉﻨﯿﻠﺑ ﮯﺳ ﮯﻧﺮﮐ ﮉﯾﺮﮔ ﭖﺍ ﮟﯿﻣ ﻥﮊﺭﻭ macOS ﻦﯾﺮﺗ ﮦﺯﺎﺗ"
-
-
-msgctxt "WindowManager"
-msgid "Your graphics card or driver is not supported."
-msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮧﺘﻓﺎﯾ ﻥﻭﺎﻌﺗ ﺭﻮﯿﺋﺍﺭﮈ ﺎﯾ ﮈﺭﺎﮐ ﺲﮑﻓﺍﺮﮔ ﺎﮐ ﭖﺁ"
-
-
-msgctxt "WindowManager"
-msgid "The program will now close."
-msgstr "ﺎﮔ ﮯﺋﺎﺟ ﻮﮨ ﺪﻨﺑ ﺏﺍ ﻡﺍﺮﮔﻭﺮﭘ"
 
 
 msgid "Set Stereo 3D"
