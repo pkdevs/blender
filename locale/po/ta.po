@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'a7042ca30c82')\n"
+"Project-Id-Version: Blender 5.0.0 Alpha (b'720cc7d08c9c')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-29 08:51+0000\n"
+"POT-Creation-Date: 2025-08-04 09:08+0000\n"
 "PO-Revision-Date: 2025-07-23 15:07+0000\n"
 "Last-Translator: Dinesh <ddineah0@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -16422,6 +16422,10 @@ msgid "Menu"
 msgstr "பட்டியல்"
 
 
+msgid "Shader"
+msgstr "சேடர்"
+
+
 msgid "Collection"
 msgstr "சேகரிப்பு"
 
@@ -25135,10 +25139,6 @@ msgid "Script"
 msgstr "கையால் எழுதப்பட்ட தாள்"
 
 
-msgid "Shader"
-msgstr "சேடர்"
-
-
 msgid "Pattern"
 msgstr "முறை"
 
@@ -32304,10 +32304,6 @@ msgid "Double Click"
 msgstr "இரட்டை சொடுக்கு"
 
 
-msgid "Click Drag"
-msgstr "இழுத்தல் என்பதைக் சொடுக்கு செய்க"
-
-
 msgid "KeyMap Items"
 msgstr "கீமாப் உருப்படிகள்"
 
@@ -34488,6 +34484,58 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Snap"
+msgstr "ச்னாப்"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
+
+
+msgid "Mask Edit"
+msgstr "முகமூடி திருத்து"
+
+
+msgid "Automasking"
+msgstr "ஆட்டோமேச்கிங்"
+
+
+msgid "Face Sets Edit"
+msgstr "முகம் தொகுப்புகள் திருத்து"
+
+
+msgid "Vertex Group Locks"
+msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
+
+
+msgid "Mirror"
+msgstr "கண்ணாடி"
+
+
+msgid "UV Mapping"
+msgstr "புறஊதா மேப்பிங்"
+
+
+msgid "Local View"
+msgstr "உள்ளக பார்வை"
+
+
+msgid "Viewpoint"
+msgstr "பார்வை"
+
+
+msgid "Navigation"
+msgstr "வழிசெலுத்தல்"
+
+
+msgid "Align View"
+msgstr "பார்வையை சீரமைக்கவும்"
+
+
+msgid "Align View to Active"
+msgstr "செயலில் பார்வையை சீரமைக்கவும்"
+
+
 msgid "View Regions"
 msgstr "மண்டலங்களைக் காண்க"
 
@@ -34580,10 +34628,6 @@ msgid "Hooks"
 msgstr "கொக்கிகள்"
 
 
-msgid "Vertex Group Locks"
-msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
-
-
 msgid "Trim/Add"
 msgstr "டிரிம்/சேர்"
 
@@ -34670,54 +34714,6 @@ msgstr "எலும்பு ரோல்"
 
 msgid "Pivot Point"
 msgstr "பிவோட் புள்ளி"
-
-
-msgid "Snap"
-msgstr "ச்னாப்"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "விகிதாசார திருத்துதல் வீழ்ச்சி"
-
-
-msgid "Mask Edit"
-msgstr "முகமூடி திருத்து"
-
-
-msgid "Automasking"
-msgstr "ஆட்டோமேச்கிங்"
-
-
-msgid "Face Sets Edit"
-msgstr "முகம் தொகுப்புகள் திருத்து"
-
-
-msgid "Mirror"
-msgstr "கண்ணாடி"
-
-
-msgid "UV Mapping"
-msgstr "புறஊதா மேப்பிங்"
-
-
-msgid "Local View"
-msgstr "உள்ளக பார்வை"
-
-
-msgid "Viewpoint"
-msgstr "பார்வை"
-
-
-msgid "Navigation"
-msgstr "வழிசெலுத்தல்"
-
-
-msgid "Align View"
-msgstr "பார்வையை சீரமைக்கவும்"
-
-
-msgid "Align View to Active"
-msgstr "செயலில் பார்வையை சீரமைக்கவும்"
 
 
 msgid "Keyframe Insert Pie"
@@ -45417,16 +45413,6 @@ msgid "Map a texture using UV coordinates, to apply a texture to objects in comp
 msgstr "புற ஊதா ஆயத்தொலைவுகளைப் பயன்படுத்தி ஒரு அமைப்பை வரைபடமாக்கவும், தொகுக்கத்தில் உள்ள பொருள்களுக்கு ஒரு அமைப்பைப் பயன்படுத்தவும்"
 
 
-msgctxt "NodeTree"
-msgid "Nearest"
-msgstr "அருகில்"
-
-
-msgctxt "NodeTree"
-msgid "Anisotropic"
-msgstr "அனிசோட்ரோபிக்"
-
-
 msgid "Input mask from a mask datablock, created in the image editor"
 msgstr "பட எடிட்டரில் உருவாக்கப்பட்ட முகமூடி தரவு பிளாக்கிலிருந்து உள்ளீட்டு முகமூடி"
 
@@ -45657,10 +45643,6 @@ msgstr "சுழற்றுங்கள்"
 
 msgid "Rotate image by specified angle"
 msgstr "குறிப்பிட்ட கோணத்தால் படத்தை சுழற்றுங்கள்"
-
-
-msgid "Method to use to filter rotation"
-msgstr "சுழற்சியை வடிகட்ட பயன்படுத்த வேண்டிய முறை"
 
 
 msgid "Change the size of the image"
@@ -46643,22 +46625,6 @@ msgid "Which domain to store the data in"
 msgstr "தரவை சேமிக்க எந்த டொமைன்"
 
 
-msgid "Closure Input"
-msgstr "மூடல் உள்ளீடு"
-
-
-msgid "Paired Output"
-msgstr "இணை வெளியீடு"
-
-
-msgid "Zone output node that this input node is paired with"
-msgstr "இந்த உள்ளீட்டு முனை சோடியாக இருக்கும் மண்டல வெளியீட்டு முனை"
-
-
-msgid "Closure Output"
-msgstr "மூடல் வெளியீடு"
-
-
 msgid "Collection Info"
 msgstr "சேகரிப்பு செய்தி"
 
@@ -46681,14 +46647,6 @@ msgstr "சேகரிப்பு ஆஃப்செட்டுடன் த�
 
 msgid "Bring the input collection geometry into the modified object, maintaining the relative position between the objects in the scene"
 msgstr "உள்ளீட்டு சேகரிப்பு வடிவவியலை மாற்றியமைக்கப்பட்ட பொருளில் கொண்டு வாருங்கள், காட்சியில் உள்ள பொருள்களுக்கு இடையில் தொடர்புடைய நிலையை பராமரித்தல்"
-
-
-msgid "Combine Bundle"
-msgstr "மூட்டை இணைக்கவும்"
-
-
-msgid "Combine multiple socket values into one."
-msgstr "பல சாக்கெட் மதிப்புகளை ஒன்றாக இணைக்கவும்."
 
 
 msgid "Convex Hull"
@@ -47147,18 +47105,6 @@ msgid "Group faces into regions surrounded by the selected boundary edges"
 msgstr "தேர்ந்தெடுக்கப்பட்ட எல்லை விளிம்புகளால் சூழப்பட்ட பகுதிகளில் குழு முகங்கள்"
 
 
-msgid "Evaluate Closure"
-msgstr "மூடலை மதிப்பீடு செய்யுங்கள்"
-
-
-msgid "Input Items"
-msgstr "உள்ளீட்டு உருப்படிகள்"
-
-
-msgid "Output Items"
-msgstr "வெளியீட்டு உருப்படிகள்"
-
-
 msgid "Extrude Mesh"
 msgstr "எக்ச்ட்ரூட் மெச்"
 
@@ -47231,32 +47177,12 @@ msgid "Generate a mesh on the XY plane with faces on the inside of input curves"
 msgstr "உள்ளீட்டு வளைவுகளின் உட்புறத்தில் முகங்களுடன் xy விமானத்தில் ஒரு கண்ணி உருவாக்கவும்"
 
 
-msgid "Triangles"
-msgstr "முக்கோணங்கள்"
-
-
-msgid "N-gons"
-msgstr "என்-கன்ச்"
-
-
 msgid "Fillet Curve"
 msgstr "ஃபில்லட் வளைவு"
 
 
 msgid "Round corners by generating circular arcs on each control point"
 msgstr "ஒவ்வொரு கட்டுப்பாட்டு புள்ளியிலும் வட்ட வளைவுகளை உருவாக்குவதன் மூலம் சுற்று மூலைகள்"
-
-
-msgid "How to choose number of vertices on fillet"
-msgstr "ஃபில்லட்டில் செங்குத்துகளின் எண்ணிக்கையை எவ்வாறு தேர்வு செய்வது"
-
-
-msgid "Align Bézier handles to create circular arcs at each control point"
-msgstr "ஒவ்வொரு கட்டுப்பாட்டு புள்ளியிலும் வட்ட வளைவுகளை உருவாக்க பெசியர் கைப்பிடிகளை சீரமைக்கவும்"
-
-
-msgid "Add control points along a circular arc (handle type is vector if Bézier Spline)"
-msgstr "வட்ட வளைவுடன் கட்டுப்பாட்டு புள்ளிகளைச் சேர்க்கவும் (பெசியர் ச்ப்லைன் என்றால் கைப்பிடி வகை திசையன் ஆகும்)"
 
 
 msgid "Flip Faces"
@@ -47269,6 +47195,14 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட முகங�
 
 msgid "For Each Geometry Element Input"
 msgstr "ஒவ்வொரு வடிவியல் உறுப்பு உள்ளீட்டிற்கும்"
+
+
+msgid "Paired Output"
+msgstr "இணை வெளியீடு"
+
+
+msgid "Zone output node that this input node is paired with"
+msgstr "இந்த உள்ளீட்டு முனை சோடியாக இருக்கும் மண்டல வெளியீட்டு முனை"
 
 
 msgid "For Each Geometry Element Output"
@@ -47836,14 +47770,6 @@ msgid "Merge vertices or points within a given distance"
 msgstr "கொடுக்கப்பட்ட தூரத்திற்குள் செங்குத்துகள் அல்லது புள்ளிகளை ஒன்றிணைக்கவும்"
 
 
-msgid "Merge all close selected points, whether or not they are connected"
-msgstr "அவை இணைக்கப்பட்டிருந்தாலும் இல்லாவிட்டாலும், தேர்ந்தெடுக்கப்பட்ட அனைத்து புள்ளிகளையும் ஒன்றிணைக்கவும்"
-
-
-msgid "Only merge mesh vertices along existing edges. This method can be much faster"
-msgstr "தற்போதுள்ள விளிம்புகளுடன் கண்ணி செங்குத்துகளை மட்டுமே ஒன்றிணைக்கவும். இந்த முறை மிக வேகமாக இருக்கும்"
-
-
 msgid "Merge Layers"
 msgstr "அடுக்குகளை ஒன்றிணைக்கவும்"
 
@@ -47890,6 +47816,10 @@ msgstr "வகை நிரப்பு"
 
 msgid "N-Gon"
 msgstr "என்-கோன்"
+
+
+msgid "Triangles"
+msgstr "முக்கோணங்கள்"
 
 
 msgid "Generate a cone mesh"
@@ -48016,10 +47946,6 @@ msgid "Create a fog volume with the shape of the input mesh's surface"
 msgstr "உள்ளீட்டு கண்ணி மேற்பரப்பின் வடிவத்துடன் ஒரு மூடுபனி அளவை உருவாக்கவும்"
 
 
-msgid "How the voxel size is specified"
-msgstr "வோக்சல் அளவு எவ்வாறு குறிப்பிடப்பட்டுள்ளது"
-
-
 msgid "UV Sphere"
 msgstr "புறஊதா கோளம்"
 
@@ -48144,18 +48070,6 @@ msgid "Cast rays from the context geometry onto a target geometry, and retrieve 
 msgstr "சூழல் வடிவவியலில் இருந்து கதிர்களை இலக்கு வடிவவியலுக்கு அனுப்பவும், ஒவ்வொரு அடி புள்ளியிலிருந்தும் தகவல்களை மீட்டெடு"
 
 
-msgid "Mapping from the target geometry to hit points"
-msgstr "புள்ளிகளைத் தாக்க இலக்கு வடிவவியலில் இருந்து மேப்பிங்"
-
-
-msgid "Interpolate the attribute from the corners of the hit face"
-msgstr "அடி முகத்தின் மூலைகளிலிருந்து பண்புகளை இடைக்கணிக்கவும்"
-
-
-msgid "Use the attribute value of the closest mesh element"
-msgstr "நெருங்கிய கண்ணி உறுப்பின் பண்புக்கூறு மதிப்பைப் பயன்படுத்தவும்"
-
-
 msgid "Realize Instances"
 msgstr "நிகழ்வுகளை உணருங்கள்"
 
@@ -48170,26 +48084,6 @@ msgstr "பெயரிடப்பட்ட பண்புக்கூறு �
 
 msgid "Delete an attribute with a specified name from a geometry. Typically used to optimize performance"
 msgstr "ஒரு வடிவவியலிலிருந்து ஒரு குறிப்பிட்ட பெயருடன் ஒரு பண்புக்கூறு நீக்கவும். செயல்திறனை மேம்படுத்த பொதுவாகப் பயன்படுகிறது"
-
-
-msgid "Pattern Mode"
-msgstr "முறை பயன்முறை"
-
-
-msgid "How the attributes to remove are chosen"
-msgstr "அகற்ற வேண்டிய பண்புக்கூறுகள் எவ்வாறு தேர்ந்தெடுக்கப்படுகின்றன"
-
-
-msgid "Remove the one attribute with the given name"
-msgstr "கொடுக்கப்பட்ட பெயருடன் ஒரு பண்புக்கூறு அகற்று"
-
-
-msgid "Wildcard"
-msgstr "வைல்டு அட்டை"
-
-
-msgid "Remove all attributes that match the pattern which is allowed to contain a single wildcard (*)"
-msgstr "ஒற்றை வைல்டு அட்டை (*) கொண்டிருக்க அனுமதிக்கப்பட்ட வடிவத்துடன் பொருந்தக்கூடிய அனைத்து பண்புகளையும் அகற்று"
 
 
 msgid "Repeat Input"
@@ -48222,22 +48116,6 @@ msgstr "கடைசி பகுதியை வைத்திருங்க�
 
 msgid "Do not collapse curves to single points if they are shorter than the given length. The collapsing behavior exists for compatibility reasons."
 msgstr "கொடுக்கப்பட்ட நீளத்தை விடக் குறைவாக இருந்தால் வளைவுகளை ஒற்றை புள்ளிகளுக்கு உடைக்க வேண்டாம். இணைந்த நடத்தை பொருந்தக்கூடிய காரணங்களுக்காக உள்ளது."
-
-
-msgid "How to specify the amount of samples"
-msgstr "மாதிரிகளின் அளவைக் குறிப்பிடுவது எப்படி"
-
-
-msgid "Output the input spline's evaluated points, based on the resolution attribute for NURBS and Bézier splines. Poly splines are unchanged"
-msgstr "nurbs மற்றும் bézier splines க்கான தெளிவுத்திறன் பண்புக்கூறு அடிப்படையில் உள்ளீட்டு ச்ப்லைனின் மதிப்பிடப்பட்ட புள்ளிகளை வெளியீடு செய்யுங்கள். பாலி ச்ப்லைன்கள் மாறாமல் உள்ளன"
-
-
-msgid "Sample the specified number of points along each spline"
-msgstr "ஒவ்வொரு ச்ப்லைனிலும் குறிப்பிட்ட எண்ணிக்கையிலான புள்ளிகளை மாதிரி செய்யுங்கள்"
-
-
-msgid "Calculate the number of samples by splitting each spline into segments with the specified length"
-msgstr "குறிப்பிட்ட நீளத்துடன் ஒவ்வொரு ச்ப்லைனையும் பிரிவுகளாகப் பிரிப்பதன் மூலம் மாதிரிகளின் எண்ணிக்கையைக் கணக்கிடுங்கள்"
 
 
 msgid "Reverse Curve"
@@ -48312,26 +48190,6 @@ msgid "Node socket data type"
 msgstr "முனை சாக்கெட் தரவு வகை"
 
 
-msgid "Interpolation Mode"
-msgstr "இடைக்கணிப்பு முறை"
-
-
-msgid "How to interpolate the values between neighboring voxels"
-msgstr "அண்டை வோக்சல்களுக்கு இடையிலான மதிப்புகளை எவ்வாறு இடைக்கணிப்பது"
-
-
-msgid "Nearest Neighbor"
-msgstr "அருகிலுள்ள அண்டை"
-
-
-msgid "Trilinear"
-msgstr "மூன்றுகோடு"
-
-
-msgid "Triquadratic"
-msgstr "Triquadracic"
-
-
 msgid "Sample Grid Index"
 msgstr "மாதிரி கட்டம் அட்டவணை"
 
@@ -48396,18 +48254,6 @@ msgid "Scale individual edges or neighboring edge islands"
 msgstr "தனிப்பட்ட விளிம்புகள் அல்லது அண்டை விளிம்பு தீவுகளை அளவிடவும்"
 
 
-msgid "Scale Mode"
-msgstr "அளவிலான பயன்முறை"
-
-
-msgid "Scale elements by the same factor in every direction"
-msgstr "ஒவ்வொரு திசையிலும் ஒரே காரணியால் கூறுகளை அளவிடவும்"
-
-
-msgid "Scale elements in a single direction"
-msgstr "ஒற்றை திசையில் கூறுகளை அளவிடவும்"
-
-
 msgid "Scale Instances"
 msgstr "அளவிலான நிகழ்வுகள்"
 
@@ -48422,14 +48268,6 @@ msgstr "தன்வய பொருள்"
 
 msgid "Retrieve the object that contains the geometry nodes modifier currently being executed"
 msgstr "தற்போது செயல்படுத்தப்படும் வடிவியல் முனைகள் மாற்றியமைப்பைக் கொண்ட பொருளை மீட்டெடுக்கவும்"
-
-
-msgid "Separate Bundle"
-msgstr "தனி மூட்டை"
-
-
-msgid "Split a bundle into multiple sockets."
-msgstr "ஒரு மூட்டை பல சாக்கெட்டுகளாக பிரிக்கவும்."
 
 
 msgid "Separate Components"
@@ -48466,30 +48304,6 @@ msgstr "வளைவை இயல்பாக அமைக்கவும்"
 
 msgid "Set the evaluation mode for curve normals"
 msgstr "வளைவு இயல்பான மதிப்பீட்டு பயன்முறையை அமைக்கவும்"
-
-
-msgid "Mode for curve normal evaluation"
-msgstr "வளைவு இயல்பான மதிப்பீட்டிற்கான பயன்முறை"
-
-
-msgid "Minimum Twist"
-msgstr "குறைந்தபட்ச திருப்பம்"
-
-
-msgid "Calculate normals with the smallest twist around the curve tangent across the whole curve"
-msgstr "முழு வளைவிலும் வளைவு தொடுகோடு சுற்றியுள்ள மிகச்சிறிய திருப்பத்துடன் இயல்புகளை கணக்கிடுங்கள்"
-
-
-msgid "Z Up"
-msgstr "சட் up"
-
-
-msgid "Calculate normals perpendicular to the Z axis and the curve tangent. If a series of points is vertical, the X axis is used."
-msgstr "சட் அச்சு மற்றும் வளைவு தொடுகோடு செங்குத்தாக இயல்பான தன்மையைக் கணக்கிடுங்கள். ஒரு தொடர் புள்ளிகள் செங்குத்தாக இருந்தால், ஃச் அச்சு பயன்படுத்தப்படுகிறது."
-
-
-msgid "Use the stored custom normal attribute as the final normals"
-msgstr "சேமிக்கப்பட்ட தனிப்பயன் இயல்பான பண்புகளை இறுதி இயல்பாக பயன்படுத்தவும்"
 
 
 msgid "Set Curve Radius"
@@ -49000,32 +48814,12 @@ msgid "Scale islands of a UV map and move them so they fill the UV space as much
 msgstr "புறஊதா வரைபடத்தின் அளவிலான தீவுகள் மற்றும் அவற்றை நகர்த்தவும், இதனால் அவை புறஊதா இடத்தை முடிந்தவரை நிரப்புகின்றன"
 
 
-msgid "Shape Method"
-msgstr "வடிவ முறை"
-
-
 msgid "UV Unwrap"
 msgstr "புறஊதா அவிழ்த்து விடுங்கள்"
 
 
 msgid "Generate a UV map based on seam edges"
 msgstr "மடிப்பு விளிம்புகளின் அடிப்படையில் புறஊதா வரைபடத்தை உருவாக்குங்கள்"
-
-
-msgid "Angle Based"
-msgstr "கோணம் அடிப்படையிலானது"
-
-
-msgid "This method gives a good 2D representation of a mesh"
-msgstr "இந்த முறை ஒரு கண்ணி ஒரு நல்ல 2 டி பிரதிநிதித்துவத்தை அளிக்கிறது"
-
-
-msgid "Conformal"
-msgstr "சமநிலை"
-
-
-msgid "Uses LSCM (Least Squares Conformal Mapping). This usually gives a less accurate UV mapping than Angle Based, but works better for simpler objects"
-msgstr "lscm ஐப் பயன்படுத்துகிறது (குறைந்தது சதுரங்கள் கன்ஃபார்மல் மேப்பிங்). இது வழக்கமாக கோண அடிப்படையை விட குறைவான துல்லியமான புறஊதா மேப்பிங்கை அளிக்கிறது, ஆனால் எளிமையான பொருள்களுக்கு சிறப்பாக செயல்படுகிறது"
 
 
 msgid "Vertex of Corner"
@@ -49074,6 +48868,34 @@ msgstr "முனை குழுக்களில் தனிப்பயன�
 
 msgid "Warning Type"
 msgstr "எச்சரிக்கை வகை"
+
+
+msgid "Closure Input"
+msgstr "மூடல் உள்ளீடு"
+
+
+msgid "Closure Output"
+msgstr "மூடல் வெளியீடு"
+
+
+msgid "Combine Bundle"
+msgstr "மூட்டை இணைக்கவும்"
+
+
+msgid "Combine multiple socket values into one."
+msgstr "பல சாக்கெட் மதிப்புகளை ஒன்றாக இணைக்கவும்."
+
+
+msgid "Evaluate Closure"
+msgstr "மூடலை மதிப்பீடு செய்யுங்கள்"
+
+
+msgid "Input Items"
+msgstr "உள்ளீட்டு உருப்படிகள்"
+
+
+msgid "Output Items"
+msgstr "வெளியீட்டு உருப்படிகள்"
 
 
 msgctxt "NodeTree"
@@ -49131,6 +48953,14 @@ msgstr "ஒரு உள்ளீடு மற்றும் பல வெள�
 
 msgid "Type of socket"
 msgstr "சாக்கெட் வகை"
+
+
+msgid "Separate Bundle"
+msgstr "தனி மூட்டை"
+
+
+msgid "Split a bundle into multiple sockets."
+msgstr "ஒரு மூட்டை பல சாக்கெட்டுகளாக பிரிக்கவும்."
 
 
 msgid "Shader Node"
@@ -51411,8 +51241,40 @@ msgid "Value to Normal"
 msgstr "இயல்பான மதிப்பு"
 
 
+msgid "Closure Input Item"
+msgstr "மூடல் உள்ளீட்டு உருப்படி"
+
+
+msgid "Closure Input Items"
+msgstr "மூடல் உள்ளீட்டு உருப்படிகள்"
+
+
+msgid "Closure Output Item"
+msgstr "மூடல் வெளியீட்டு உருப்படி"
+
+
+msgid "Closure Output Items"
+msgstr "மூடல் வெளியீட்டு உருப்படிகள்"
+
+
+msgid "Combine Bundle Item"
+msgstr "மூட்டை உருப்படியை இணைக்கவும்"
+
+
+msgid "Collection of combine bundle items"
+msgstr "கூட்டு மூட்டை உருப்படிகளின் தொகுப்பு"
+
+
 msgid "Enum Item"
 msgstr "enum உருப்படி"
+
+
+msgid "Input Item"
+msgstr "உள்ளீட்டு உருப்படி"
+
+
+msgid "Output Item"
+msgstr "வெளியீட்டு உருப்படி"
 
 
 msgid "Bake Item"
@@ -51447,38 +51309,6 @@ msgid "Collection of capture attribute items"
 msgstr "பிடிப்பு பண்புக்கூறு உருப்படிகளின் தொகுப்பு"
 
 
-msgid "Closure Input Item"
-msgstr "மூடல் உள்ளீட்டு உருப்படி"
-
-
-msgid "Closure Input Items"
-msgstr "மூடல் உள்ளீட்டு உருப்படிகள்"
-
-
-msgid "Closure Output Item"
-msgstr "மூடல் வெளியீட்டு உருப்படி"
-
-
-msgid "Closure Output Items"
-msgstr "மூடல் வெளியீட்டு உருப்படிகள்"
-
-
-msgid "Combine Bundle Item"
-msgstr "மூட்டை உருப்படியை இணைக்கவும்"
-
-
-msgid "Collection of combine bundle items"
-msgstr "கூட்டு மூட்டை உருப்படிகளின் தொகுப்பு"
-
-
-msgid "Input Item"
-msgstr "உள்ளீட்டு உருப்படி"
-
-
-msgid "Output Item"
-msgstr "வெளியீட்டு உருப்படி"
-
-
 msgid "Generation Items"
 msgstr "தலைமுறை உருப்படிகள்"
 
@@ -51501,14 +51331,6 @@ msgstr "முக்கிய பொருட்களின் சேகரி�
 
 msgid "Collection of repeat items"
 msgstr "மறுநிகழ்வு உருப்படிகளின் சேகரிப்பு"
-
-
-msgid "Separate Bundle Item"
-msgstr "தனி மூட்டை உருப்படி"
-
-
-msgid "Collection of separate bundle items"
-msgstr "தனி மூட்டை பொருட்களின் சேகரிப்பு"
 
 
 msgid "Collection of simulation items"
@@ -51641,6 +51463,14 @@ msgstr "இந்த ச்லாட்டுக்கு பயன்படு�
 
 msgid "Node Outputs"
 msgstr "முனை வெளியீடுகள்"
+
+
+msgid "Separate Bundle Item"
+msgstr "தனி மூட்டை உருப்படி"
+
+
+msgid "Collection of separate bundle items"
+msgstr "தனி மூட்டை பொருட்களின் சேகரிப்பு"
 
 
 msgid "Node Socket"
@@ -61000,6 +60830,10 @@ msgid "Y Up"
 msgstr "ஆம்"
 
 
+msgid "Z Up"
+msgstr "சட் up"
+
+
 msgid "-X Up"
 msgstr "-x up"
 
@@ -62441,14 +62275,6 @@ msgstr "வெளிப்புற கோப்பு செயல்பாட�
 
 msgid "Perform external operation on a file or folder"
 msgstr "ஒரு கோப்பு அல்லது கோப்புறையில் வெளிப்புற செயல்பாட்டைச் செய்யுங்கள்"
-
-
-msgid "File or folder path"
-msgstr "கோப்பு அல்லது கோப்புறை பாதை"
-
-
-msgid "Operation to perform on the file or path"
-msgstr "கோப்பு அல்லது பாதையில் செய்ய செயல்பாடு"
 
 
 msgid "Open the file"
@@ -75272,10 +75098,6 @@ msgid "Move Shape Key"
 msgstr "வடிவ விசையை நகர்த்தவும்"
 
 
-msgid "Move the active shape key up/down in the list"
-msgstr "செயலில் உள்ள வடிவ விசையை பட்டியலில் மேலே/கீழ் நகர்த்தவும்"
-
-
 msgctxt "Operator"
 msgid "Remove Shape Key"
 msgstr "வடிவ விசையை அகற்று"
@@ -80191,10 +80013,6 @@ msgid "Hide Panels"
 msgstr "பேனல்களை மறைக்கவும்"
 
 
-msgid "Hide all the panels"
-msgstr "அனைத்து பேனல்களையும் மறைக்கவும்"
-
-
 msgctxt "Operator"
 msgid "Set Screen"
 msgstr "திரை அமைக்கவும்"
@@ -81442,10 +81260,6 @@ msgstr "கர்சரின் கீழ் மேற்பரப்புக�
 
 msgid "Mouse Position X"
 msgstr "சுட்டி நிலை ஃச்"
-
-
-msgid "Position of the mouse used for \"Surface\" mode"
-msgstr "\"மேற்பரப்பு\" பயன்முறைக்கு பயன்படுத்தப்படும் சுட்டியின் நிலை"
 
 
 msgid "Mouse Position Y"
@@ -85114,6 +84928,10 @@ msgid "Scale islands to fill unit square"
 msgstr "அலகு சதுரத்தை நிரப்ப தீவுகள்"
 
 
+msgid "Shape Method"
+msgstr "வடிவ முறை"
+
+
 msgid "Exact Shape (Concave)"
 msgstr "சரியான வடிவம் (குழிவானது)"
 
@@ -85577,6 +85395,14 @@ msgstr "\"குறைந்தபட்ச நீட்சி\" முறை �
 
 msgid "Unwrapping method (Angle Based usually gives better results than Conformal, while being somewhat slower)"
 msgstr "அவிழ்க்கும் முறை (ஆங்கிள் அடிப்படையிலானவை பொதுவாக ஒத்திசைவானதை விட சிறந்த முடிவுகளைத் தருகின்றன, அதே நேரத்தில் ஓரளவு மெதுவாக இருக்கும்)"
+
+
+msgid "Angle Based"
+msgstr "கோணம் அடிப்படையிலானது"
+
+
+msgid "Conformal"
+msgstr "சமநிலை"
 
 
 msgid "Minimum Stretch"
@@ -90104,6 +89930,74 @@ msgid "Panel containing UI elements"
 msgstr "இடைமுகம் கூறுகளைக் கொண்ட குழு"
 
 
+msgid "Active Tool"
+msgstr "செயலில் உள்ள கருவி"
+
+
+msgid "View Lock"
+msgstr "பூட்டைக் காண்க"
+
+
+msgid "Selectability & Visibility"
+msgstr "தேர்ந்தெடுக்கும் தன்மை மற்றும் தெரிவுநிலை"
+
+
+msgid "Wireframe Color"
+msgstr "வயர்ஃப்ரேம் நிறம்"
+
+
+msgid "Shadow Settings"
+msgstr "நிழல் அமைப்புகள்"
+
+
+msgid "SSAO Settings"
+msgstr "ssao அமைப்புகள்"
+
+
+msgid "Cavity"
+msgstr "குழி"
+
+
+msgid "Render Pass"
+msgstr "பாச் வழங்குதல்"
+
+
+msgid "Compositor"
+msgstr "தொகுப்பாளர்"
+
+
+msgid "Overlays"
+msgstr "மேலடுக்குகள்"
+
+
+msgid "Guides"
+msgstr "வழிகாட்டிகள்"
+
+
+msgid "Viewer Node"
+msgstr "பார்வையாளர் முனை"
+
+
+msgid "Motion Tracking"
+msgstr "இயக்க கண்காணிப்பு"
+
+
+msgid "Mesh Edit Mode"
+msgstr "கண்ணி திருத்து பயன்முறை"
+
+
+msgid "Measurement"
+msgstr "அளவீட்டு"
+
+
+msgid "Curve Edit Mode"
+msgstr "வளைவு திருத்து பயன்முறை"
+
+
+msgid "Curves Edit Mode"
+msgstr "வளைவுகள் திருத்து பயன்முறை"
+
+
 msgid "Snapping"
 msgstr "ச்னாப்பிங்"
 
@@ -90118,10 +90012,6 @@ msgstr "வீச்சு வேலை வாய்ப்பு"
 
 msgid "Drawing Plane"
 msgstr "வரைதல் வானூர்தி"
-
-
-msgid "Guides"
-msgstr "வழிகாட்டிகள்"
 
 
 msgid "Grease Pencil Options"
@@ -90186,70 +90076,6 @@ msgstr "gltf"
 
 msgid "glTF Animations"
 msgstr "GLTF அனிமேசன்கள்"
-
-
-msgid "Active Tool"
-msgstr "செயலில் உள்ள கருவி"
-
-
-msgid "View Lock"
-msgstr "பூட்டைக் காண்க"
-
-
-msgid "Selectability & Visibility"
-msgstr "தேர்ந்தெடுக்கும் தன்மை மற்றும் தெரிவுநிலை"
-
-
-msgid "Wireframe Color"
-msgstr "வயர்ஃப்ரேம் நிறம்"
-
-
-msgid "Shadow Settings"
-msgstr "நிழல் அமைப்புகள்"
-
-
-msgid "SSAO Settings"
-msgstr "ssao அமைப்புகள்"
-
-
-msgid "Cavity"
-msgstr "குழி"
-
-
-msgid "Render Pass"
-msgstr "பாச் வழங்குதல்"
-
-
-msgid "Compositor"
-msgstr "தொகுப்பாளர்"
-
-
-msgid "Overlays"
-msgstr "மேலடுக்குகள்"
-
-
-msgid "Viewer Node"
-msgstr "பார்வையாளர் முனை"
-
-
-msgid "Motion Tracking"
-msgstr "இயக்க கண்காணிப்பு"
-
-
-msgid "Mesh Edit Mode"
-msgstr "கண்ணி திருத்து பயன்முறை"
-
-
-msgid "Measurement"
-msgstr "அளவீட்டு"
-
-
-msgid "Curve Edit Mode"
-msgstr "வளைவு திருத்து பயன்முறை"
-
-
-msgid "Curves Edit Mode"
-msgstr "வளைவுகள் திருத்து பயன்முறை"
 
 
 msgid "Import Settings"
@@ -107844,14 +107670,6 @@ msgid "Color of keyframes on a path before current frame"
 msgstr "தற்போதைய சட்டகத்திற்கு முன் ஒரு பாதையில் கீஃப்ரேம்களின் நிறம்"
 
 
-msgid "Preview Range"
-msgstr "முன்னோட்டம் வரம்பு"
-
-
-msgid "Color of preview range overlay"
-msgstr "முன்னோட்ட வரம்பு மேலடுக்கு நிறம்"
-
-
 msgid "Selected Marker"
 msgstr "தேர்ந்தெடுக்கப்பட்ட மார்க்கர்"
 
@@ -107894,6 +107712,14 @@ msgstr "சேகரிப்பு வண்ணங்களுக்கான �
 
 msgid "Collection Color Tag"
 msgstr "சேகரிப்பு வண்ண குறிச்சொல்"
+
+
+msgid "Preview Range"
+msgstr "முன்னோட்டம் வரம்பு"
+
+
+msgid "Color of preview range overlay"
+msgstr "முன்னோட்ட வரம்பு மேலடுக்கு நிறம்"
 
 
 msgid "Theme Console"
@@ -116311,10 +116137,6 @@ msgid "Launch Blender without --offline-mode"
 msgstr "-ஆஃப்லைன்-பயன்முறை இல்லாமல் பிளெண்டரைத் தொடங்கவும்"
 
 
-msgid "Please turn Online Access on in the System settings."
-msgstr "கணினி அமைப்புகளில் நிகழ்நிலை அணுகலை இயக்கவும்."
-
-
 msgid "Internet access is required to install extensions from the internet."
 msgstr "இணையத்திலிருந்து நீட்டிப்புகளை நிறுவ இணைய அணுகல் தேவை."
 
@@ -122639,11 +122461,6 @@ msgstr "செங்குத்து பிளவு"
 
 
 msgctxt "Operator"
-msgid "Toggle Fullscreen Area"
-msgstr "முழுத்திரை பரப்பை நிலைமாற்று"
-
-
-msgctxt "Operator"
 msgid "Transition"
 msgstr "மாற்றம்"
 
@@ -127363,10 +127180,6 @@ msgid "GP_Layer"
 msgstr "gp_layer"
 
 
-msgid "grease_pencils"
-msgstr "பசை_எழுதுகோல்கள்"
-
-
 msgid "grease_pencils_v3"
 msgstr "பசை_எழுதுகோல்_ப3"
 
@@ -131316,16 +131129,8 @@ msgid "Path selection requires two matching elements to be selected"
 msgstr "பாதை தேர்வுக்கு இரண்டு பொருந்தக்கூடிய கூறுகள் தேர்ந்தெடுக்கப்பட வேண்டும்"
 
 
-msgid "Cannot rip selected faces"
-msgstr "தேர்ந்தெடுக்கப்பட்ட முகங்களை கிழிக்க முடியாது"
-
-
 msgid "Cannot rip multiple disconnected vertices"
 msgstr "துண்டிக்கப்பட்ட பல செங்குத்துகளை கிழிக்க முடியாது"
-
-
-msgid "Rip failed"
-msgstr "rip தோல்வியுற்றது"
 
 
 msgid "Vertex select - Shift-Click for multiple modes, Ctrl-Click contracts selection"
@@ -133355,10 +133160,6 @@ msgstr "பகுதிகளை மீட்டமை"
 
 msgid "Maximize Area"
 msgstr "பரப்பை அதிகரிக்கவும்"
-
-
-msgid "Full Screen Area"
-msgstr "முழு திரை பரப்பு"
 
 
 msgid "Show Header"
@@ -137070,10 +136871,6 @@ msgid "Shrink/Fatten: "
 msgstr "சுருக்கம்/ஃபாட்டன்: "
 
 
-msgid " or Alt) Even Thickness {}"
-msgstr " அல்லது alt) கூட தடிமன் {}"
-
-
 msgid "'Shrink/Fatten' meshes is only supported in edit mode"
 msgstr "'சுருக்கம்/ஃபாட்டன்' மெச்கள் திருத்து பயன்முறையில் மட்டுமே ஆதரிக்கப்படுகின்றன"
 
@@ -137345,6 +137142,10 @@ msgstr "%d தீவு (கள்) %d ஐத் தவிர்த்து, �
 
 msgid "Rip is not compatible with sync selection"
 msgstr "RIP ஒத்திசைவு தேர்வோடு பொருந்தாது"
+
+
+msgid "Rip failed"
+msgstr "rip தோல்வியுற்றது"
 
 
 msgid "Cannot split selection when sync selection is enabled"
@@ -141842,6 +141643,10 @@ msgid "Limit the maximum value of the radius in order to avoid overlapping fille
 msgstr "ஃபில்லெட்டுகளை ஒன்றுடன் ஒன்று தவிர்ப்பதற்காக ஆரம் அதிகபட்ச மதிப்பைக் கட்டுப்படுத்துங்கள்"
 
 
+msgid "How to choose number of vertices on fillet"
+msgstr "ஃபில்லட்டில் செங்குத்துகளின் எண்ணிக்கையை எவ்வாறு தேர்வு செய்வது"
+
+
 msgid "Handle Type Selection node"
 msgstr "வகை வகை தேர்வு முனை"
 
@@ -142073,6 +141878,10 @@ msgstr "புள்ளிகளின் உள் தொகுப்பின�
 
 msgid "An attribute field with a selection of the outer points"
 msgstr "வெளிப்புற புள்ளிகளின் தேர்வைக் கொண்ட ஒரு பண்புக்கூறு புலம்"
+
+
+msgid "How to specify the amount of samples"
+msgstr "மாதிரிகளின் அளவைக் குறிப்பிடுவது எப்படி"
 
 
 msgid "Curve Index"
@@ -143116,6 +142925,10 @@ msgid "Width of the active voxel surface, in voxels"
 msgstr "செயலில் உள்ள வோக்சல் மேற்பரப்பின் அகலம், வோக்சல்களில்"
 
 
+msgid "How the voxel size is specified"
+msgstr "வோக்சல் அளவு எவ்வாறு குறிப்பிடப்பட்டுள்ளது"
+
+
 msgid "Corner Index"
 msgstr "மூலையில் அட்டவணை"
 
@@ -143432,6 +143245,10 @@ msgid "Hit Distance"
 msgstr "தூரத்தை அடியுங்கள்"
 
 
+msgid "Mapping from the target geometry to hit points"
+msgstr "புள்ளிகளைத் தாக்க இலக்கு வடிவவியலில் இருந்து மேப்பிங்"
+
+
 msgid "Realize All"
 msgstr "அனைத்தையும் உணருங்கள்"
 
@@ -143460,6 +143277,14 @@ msgid "Attribute does not exist: \"{}\""
 msgstr "பண்புக்கூறு இல்லை: \"{}\""
 
 
+msgid "Pattern Mode"
+msgstr "முறை பயன்முறை"
+
+
+msgid "How the attributes to remove are chosen"
+msgstr "அகற்ற வேண்டிய பண்புக்கூறுகள் எவ்வாறு தேர்ந்தெடுக்கப்படுகின்றன"
+
+
 msgid "Repeat Items"
 msgstr "உருப்படிகளை மீண்டும் செய்யவும்"
 
@@ -143470,6 +143295,10 @@ msgstr "மறுசெய்கை"
 
 msgid "Index of the current iteration. Starts counting at zero"
 msgstr "தற்போதைய மறு செய்கையின் அட்டவணை. பூச்சியத்தில் எண்ணத் தொடங்குகிறது"
+
+
+msgid "How to interpolate the values between neighboring voxels"
+msgstr "அண்டை வோக்சல்களுக்கு இடையிலான மதிப்புகளை எவ்வாறு இடைக்கணிப்பது"
 
 
 msgid "Which element to retrieve a value from on the geometry"
@@ -143504,6 +143333,10 @@ msgid "Whether the node could find a single face to sample at the UV coordinate"
 msgstr "புறஊதா ஒருங்கிணைப்பில் மாதிரிக்கு ஒற்றை முகத்தைக் கண்டுபிடிக்க முடியுமா"
 
 
+msgid "Scale Mode"
+msgstr "அளவிலான பயன்முறை"
+
+
 msgid "Origin of the scaling for each element. If multiple elements are connected, their center is averaged"
 msgstr "ஒவ்வொரு உறுப்புக்கும் அளவிடுதலின் தோற்றம். பல கூறுகள் இணைக்கப்பட்டிருந்தால், அவற்றின் நடுவண் சராசரியாக இருக்கும்"
 
@@ -143520,10 +143353,6 @@ msgid "Grid 2"
 msgstr "கட்டம் 2"
 
 
-msgid "Value not found: \"{}\""
-msgstr "மதிப்பு காணப்படவில்லை: \"{}\""
-
-
 msgid "Inverted"
 msgstr "தலைகீழ்"
 
@@ -143538,6 +143367,10 @@ msgstr "தேர்வில் வடிவவியலின் பகுத�
 
 msgid "The parts of the geometry not in the selection"
 msgstr "வடிவவியலின் பகுதிகள் தேர்வில் இல்லை"
+
+
+msgid "Mode for curve normal evaluation"
+msgstr "வளைவு இயல்பான மதிப்பீட்டிற்கான பயன்முறை"
 
 
 msgid "Mesh has no faces for material assignment"
@@ -143784,16 +143617,8 @@ msgid "Recursive closure is not allowed"
 msgstr "சுழல்நிலை மூடல் அனுமதிக்கப்படவில்லை"
 
 
-msgid "Closure input has incompatible type: \"{}\""
-msgstr "மூடல் உள்ளீட்டில் பொருந்தாத வகை உள்ளது: \"{}\""
-
-
 msgid "Closure does not have input: \"{}\""
 msgstr "மூடலுக்கு உள்ளீடு இல்லை: \"{}\""
-
-
-msgid "Closure output has incompatible type: \"{}\""
-msgstr "மூடல் வெளியீட்டில் பொருந்தாத வகை உள்ளது: \"{}\""
 
 
 msgid "Closure does not have output: \"{}\""
