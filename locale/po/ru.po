@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'720cc7d08c9c')\n"
+"Project-Id-Version: Blender 5.0.0 Alpha (b'6dca66d606ed')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-04 09:08+0000\n"
-"PO-Revision-Date: 2025-08-04 09:02+0000\n"
+"POT-Creation-Date: 2025-08-11 08:28+0000\n"
+"PO-Revision-Date: 2025-08-11 08:27+0000\n"
 "Last-Translator: Fatih Alexandr <radix83@rambler.ru>\n"
 "Language-Team: Russian <https://translate.blender.org/projects/blender-ui/ui/ru/>\n"
 "Language: ru\n"
@@ -4612,10 +4612,6 @@ msgid "Radius of head of bone (for Envelope deform only)"
 msgstr "Радиус начала кости (только для деформации оболочки)"
 
 
-msgid "Bone is not visible when it is not in Edit Mode (i.e. in Object or Pose Modes)"
-msgstr "Кость отображается только в режиме редактирования (но не в режимах объекта, позы и др.)"
-
-
 msgid "Selectable"
 msgstr "Доступно для выделения"
 
@@ -4746,10 +4742,6 @@ msgstr "Если у кости есть родитель, осуществлят
 
 msgid "Cyclic Offset"
 msgstr "Циклические смещение"
-
-
-msgid "When bone doesn't have a parent, it receives cyclic offset effects (Deprecated)"
-msgstr "Если у кости нет родителя, она получает циклическое смещение (не рекомендуется)"
 
 
 msgid "Deform"
@@ -7456,6 +7448,22 @@ msgid "BT.2020 2.4 Exponent EOTF Display"
 msgstr "BT.2020 со степенной функцией 2.4 EOTF дисплей"
 
 
+msgid "Rec.2100-HLG"
+msgstr "Rec.2100-HLG"
+
+
+msgid "Rec.2100-HLG 1000 nits peak display with reference white at 100 nits"
+msgstr "Пиковое отображение яркости Rec.2100-HLG составляет 1000 нит при эталонном уровне белого в 100 нит"
+
+
+msgid "Rec.2100-PQ"
+msgstr "Rec.2100-PQ"
+
+
+msgid "Rec.2100-PQ 10000 nits peak display with reference white at 100 nits"
+msgstr "Пиковое отображение яркости Rec.2100-PQ составляет 10000 нит при эталонном уровне белого в 100 нит"
+
+
 msgid "sRGB IEC 61966-2-1 compound (piece-wise) encoding"
 msgstr "sRGB IEC 61966-2-1 составное (piece-wise) кодирование"
 
@@ -7774,14 +7782,6 @@ msgstr "Элементы градиентной карты"
 
 msgid "Collection of Color Ramp Elements"
 msgstr "Коллекция элементов градиентной карты"
-
-
-msgid "File Output Slots"
-msgstr "Слоты вывода в файл"
-
-
-msgid "Collection of File Output node slots"
-msgstr "Коллекция слотов ноды вывода в файл"
 
 
 msgid "Console Input"
@@ -9334,10 +9334,6 @@ msgstr "Нижняя граница угла Z"
 
 msgid "Legacy Behavior"
 msgstr "Устаревшее поведение"
-
-
-msgid "Use the old semi-broken behavior that doesn't understand that rotations loop around"
-msgstr "Использовать старое, частично неработающее поведение, которое не понимает, что повороты зациклены"
 
 
 msgid "Limit X"
@@ -11385,10 +11381,6 @@ msgid "Fallback"
 msgstr "Резервный"
 
 
-msgid "The value to use if the data path can't be resolved"
-msgstr "Значение, которое можно использовать, если путь до данных не может быть корректно определен"
-
-
 msgid "ID-block that the specific property used can be found from (id_type property must be set first)"
 msgstr "ID-блок, в котором находится заданное свойство (сначала должно быть установлено свойство id_type)"
 
@@ -11447,10 +11439,6 @@ msgstr "Среднее масштабирование"
 
 msgid "Use Fallback"
 msgstr "Использовать запасной вариант"
-
-
-msgid "Use the fallback value if the data path can't be resolved, instead of failing to evaluate the driver"
-msgstr "Используйте резервное значение, если путь к данным не может быть определён, вместо того, чтобы предотвращать оценку драйвера"
 
 
 msgid "Driver Variable"
@@ -12491,10 +12479,6 @@ msgid "Auto WXYZ to YRGB"
 msgstr "Авто WXYZ в YRGB"
 
 
-msgid "Use axis colors for XYZ parts of transform, and yellow for the 'W' channel"
-msgstr "Использовать цвета осей для XYZ каналов трансформации и жёлтый для канала W"
-
-
 msgid "User Defined"
 msgstr "Пользовательский"
 
@@ -13058,6 +13042,22 @@ msgstr "Битрейт видео (Кбит/с)"
 
 msgid "HDR"
 msgstr "HDR"
+
+
+msgid "Rec.2100 PQ"
+msgstr "Rec.2100 PQ"
+
+
+msgid "Rec.2100 color space with Perceptual Quantizer HDR encoding"
+msgstr "Цветовое пространство Rec.2100 с кодированием с расширенным динамическим диапазоном (HDR), который основан на перцептивном квантовании (PQ)"
+
+
+msgid "Rec.2100 HLG"
+msgstr "Rec.2100 HLG"
+
+
+msgid "Rec.2100 color space with Hybrid-Log Gamma HDR encoding"
+msgstr "Цветовое пространство Rec.2100 с HDR-кодированием \"Hybrid-Log Gamma\" для отображения видео на устройствах с разным уровнем поддержки HDR"
 
 
 msgid "F-Modifier"
@@ -18135,10 +18135,6 @@ msgid "Editable"
 msgstr "Можно редактировать"
 
 
-msgid "This data-block is editable in the user interface. Linked datablocks are not editable, except if they were loaded as editable assets."
-msgstr "Этот блок данных можно редактировать в пользовательском интерфейсе. Связанные блоки данных нельзя редактировать, за исключением случаев, когда они были загружены как редактируемые ассеты."
-
-
 msgid "Embedded Data"
 msgstr "Встроенные данные"
 
@@ -18362,10 +18358,6 @@ msgstr "Список слотов в этом действии"
 
 msgid "Cyclic Animation"
 msgstr "Циклическая анимация"
-
-
-msgid "The action is intended to be used as a cycle looping over its manually set playback frame range (enabling this doesn't automatically make it loop)"
-msgstr "Действие предназначено для использования в качестве зацикливания, вручную заданного диапазона кадров воспроизведения (включение этой функции не делает его автоматически зацикленным)"
 
 
 msgid "Manual Frame Range"
@@ -21940,10 +21932,6 @@ msgid "Enable the curve to become a translation path"
 msgstr "Включить режим траектории перемещения для кривой"
 
 
-msgid "Clamp the curve path children so they can't travel past the start/end point of the curve"
-msgstr "Ограничить дочерние элементы пути-кривой так, чтобы они не могли пройти дальше начальной/конечной точки кривой"
-
-
 msgid "Follow"
 msgstr "Следить"
 
@@ -22170,10 +22158,6 @@ msgstr "Вертикальный отступ от ориджина объект
 
 msgid "Textbox Overflow"
 msgstr "Переполнение блоков текста"
-
-
-msgid "Handle the text behavior when it doesn't fit in the text boxes"
-msgstr "Выбор поведения, если текст не умещается в текстовом поле"
 
 
 msgid "Overflow"
@@ -23078,104 +23062,56 @@ msgid "Format used for re-saving this file"
 msgstr "Формат, используемый для пересохранения этого файла"
 
 
-msgid "BMP"
-msgstr "BMP"
-
-
-msgid "Output image in bitmap format"
-msgstr "Сохранять изображение в формате BMP"
-
-
-msgid "Iris"
-msgstr "Iris"
-
-
-msgid "Output image in SGI IRIS format"
-msgstr "Вывод изображения в формате SGI IRIS"
-
-
-msgid "Output image in PNG format"
-msgstr "Сохранять изображение в формате PNG"
-
-
-msgid "JPEG"
-msgstr "JPEG"
-
-
 msgid "Output image in JPEG format"
 msgstr "Сохранять изображение в формате JPEG"
-
-
-msgid "JPEG 2000"
-msgstr "JPEG 2000"
-
-
-msgid "Output image in JPEG 2000 format"
-msgstr "Сохранять изображение в формате JPEG 2000"
-
-
-msgid "Targa"
-msgstr "Targa"
-
-
-msgid "Output image in Targa format"
-msgstr "Сохранять изображение в формате Targa"
-
-
-msgid "Targa Raw"
-msgstr "Targa Raw"
-
-
-msgid "Output image in uncompressed Targa format"
-msgstr "Сохранять изображение в несжатом формате PNG"
-
-
-msgid "Cineon"
-msgstr "Cineon"
-
-
-msgid "Output image in Cineon format"
-msgstr "Сохранять изображение в формате Cineon"
-
-
-msgid "DPX"
-msgstr "DPX"
-
-
-msgid "Output image in DPX format"
-msgstr "Сохранять изображение в формате DPX"
 
 
 msgid "Output image in OpenEXR format"
 msgstr "Сохранять изображения в формате OpenEXR"
 
 
-msgid "Radiance HDR"
-msgstr "Radiance HDR"
-
-
-msgid "Output image in Radiance HDR format"
-msgstr "Сохранять изображение в формате Radiance HDR"
-
-
-msgid "TIFF"
-msgstr "TIFF"
-
-
-msgid "Output image in TIFF format"
-msgstr "Сохранять изображение в формате TIFF"
-
-
-msgid "WebP"
-msgstr "WebP"
+msgid "Output image in PNG format"
+msgstr "Сохранять изображение в формате PNG"
 
 
 msgid "Output image in WebP format"
 msgstr "Вывод изображения в формате WebP"
 
 
-msgid "OpenEXR MultiLayer"
-msgstr "Многослойный OpenEXR"
+msgid "Output image in bitmap format"
+msgstr "Сохранять изображение в формате BMP"
+
+
+msgid "Output image in Cineon format"
+msgstr "Сохранять изображение в формате Cineon"
+
+
+msgid "Output image in DPX format"
+msgstr "Сохранять изображение в формате DPX"
+
+
+msgid "Output image in SGI IRIS format"
+msgstr "Вывод изображения в формате SGI IRIS"
+
+
+msgid "Output image in JPEG 2000 format"
+msgstr "Сохранять изображение в формате JPEG 2000"
+
+
+msgid "Output image in Radiance HDR format"
+msgstr "Сохранять изображение в формате Radiance HDR"
+
+
+msgid "Output image in Targa format"
+msgstr "Сохранять изображение в формате Targa"
+
+
+msgid "Output image in uncompressed Targa format"
+msgstr "Сохранять изображение в несжатом формате PNG"
+
+
+msgid "Output image in TIFF format"
+msgstr "Сохранять изображение в формате TIFF"
 
 
 msgid "Output image in multilayer OpenEXR format"
@@ -23332,10 +23268,6 @@ msgstr "Поля для швов"
 
 msgid "Margin to take into account when fixing UV seams during painting. Higher number would improve seam-fixes for mipmaps, but decreases performance."
 msgstr "Запас, который следует учитывать при закреплении UV-швов при покраске. Более высокое число улучшит исправление швов для mipmaps, но снизит производительность."
-
-
-msgid "Width and height of the image buffer in pixels, zero when image data can't be loaded"
-msgstr "Ширина и высота буфера изображения в пикселях, ноль, если данные изображения не могут быть загружены"
 
 
 msgctxt "Image"
@@ -23595,10 +23527,6 @@ msgstr "Внешний .blend-файл, с которым связаны дан�
 
 msgid "Path to the library .blend file"
 msgstr "Путь до библиотечного .blend-файла"
-
-
-msgid "Datablocks in this library are editable despite being linked. Used by brush assets and their dependencies."
-msgstr "Блоки данных в этой библиотеке доступны для редактирования, несмотря на то, что связаны. Используется ассетами кистей и их зависимостями."
 
 
 msgid "Library Overrides Need resync"
@@ -25159,10 +25087,6 @@ msgid "Global scene frame number at which this movie starts playing (affects all
 msgstr "Номер кадра глобальной сцены, на котором начинается воспроизведение видеофрагмента (влияет на все данные, связанные с видеофрагментом)"
 
 
-msgid "Width and height in pixels, zero when image data can't be loaded"
-msgstr "Ширина и высота в пикселях, ноль, если данные изображения не могут быть загружены"
-
-
 msgid "Where the clip comes from"
 msgstr "Источник видеофрагмента"
 
@@ -26077,10 +26001,6 @@ msgstr "Вращение Эйлера"
 
 msgid "Rotation in Eulers"
 msgstr "Вращение с помощью углов Эйлера"
-
-
-msgid "The kind of rotation to apply, values from other rotation modes aren't used"
-msgstr "Вид применяемого вращения, значения из других режимов вращения не используются"
 
 
 msgid "Quaternion (WXYZ)"
@@ -29677,10 +29597,6 @@ msgid "Is Interface Locked"
 msgstr "Заблокирован ли интерфейс"
 
 
-msgid "If true, the interface is currently locked by a running job and data shouldn't be modified from application timers. Otherwise, the running job might conflict with the handler causing unexpected results or even crashes."
-msgstr "Если переменная имеет значение \"истинно\", интерфейс в настоящее время заблокирован запущенным заданием, и данные не должны изменяться из таймеров приложения. В противном случае выполняющееся задание может конфликтовать с обработчиком, приводя к неожиданным результатам или даже аварийному завершению работы."
-
-
 msgid "Key Configurations"
 msgstr "Конфигурации клавиш"
 
@@ -30497,6 +30413,18 @@ msgid "Output color space settings"
 msgstr "Настройки выходного цветового пространства"
 
 
+msgid "Media Type"
+msgstr "Тип носителя"
+
+
+msgid "The type of media to save"
+msgstr "Тип носителя для сохранения"
+
+
+msgid "Multi-Layer EXR"
+msgstr "Многослойный EXR"
+
+
 msgid "Video"
 msgstr "Видео"
 
@@ -30642,7 +30570,7 @@ msgstr "Особый значок"
 
 
 msgid "True if this preview icon has been modified by py script, and is no more auto-generated by Blender"
-msgstr "Истинно, если этот значок предварительного просмотра был изменён скриптом py и больше не генерируется автоматически Blender'ом"
+msgstr "Истинно, если этот значок предварительного просмотра был изменён скриптом \"py\" и больше не генерируется автоматически Blender'ом"
 
 
 msgid "Custom Image"
@@ -30963,10 +30891,6 @@ msgstr "Идентификатор элемента"
 
 msgid "Identifier of operator to call on input event"
 msgstr "Идентификатор оператора, вызываемого при событии ввода"
-
-
-msgid "Is this keymap item user defined (doesn't just replace a builtin item)"
-msgstr "Определена ли эта раскладка пользователем (простой замены встроенной раскладки не происходит)"
 
 
 msgid "User Modified"
@@ -34608,6 +34532,10 @@ msgid "Editor menu containing buttons"
 msgstr "Меню редактора, содержащее кнопки"
 
 
+msgid "Pivot Point"
+msgstr "Центр трансформации"
+
+
 msgid "Snap"
 msgstr "Привязка"
 
@@ -34836,10 +34764,6 @@ msgid "Bone Roll"
 msgstr "Крен кости"
 
 
-msgid "Pivot Point"
-msgstr "Центр трансформации"
-
-
 msgid "Keyframe Insert Pie"
 msgstr "Круговой меню вставки ключевых кадров"
 
@@ -34853,7 +34777,7 @@ msgstr "Базовый"
 
 
 msgid "Bone Collection Specials"
-msgstr "Инструменты коллекций костей"
+msgstr "Инструменты коллекции костей"
 
 
 msgid "Add -> Armature -> Rigify Meta-Rigs."
@@ -34931,7 +34855,7 @@ msgstr "Зум"
 
 
 msgid "Collection Specials"
-msgstr "Инструменты коллекций"
+msgstr "Инструменты коллекции"
 
 
 msgid "Console"
@@ -37217,10 +37141,6 @@ msgid "Index Based"
 msgstr "На основе индексов"
 
 
-msgid "Set the material on new faces based on the order of the material slot lists. If a material doesn't exist on the modifier object, the face will use the same material slot or the first if the object doesn't have enough slots."
-msgstr "Установить материал на новых гранях на основе порядка списка слотов материалов. Если материал не существует на объекте-модификаторе, грань будет использовать тот же слот материала или первый, если у объекта недостаточно слотов."
-
-
 msgid "Transfer"
 msgstr "Перенести"
 
@@ -39221,10 +39141,6 @@ msgstr "Слой Grease Pencil, которому назначаются сген
 
 msgid "Grease Pencil material assigned to the generated strokes"
 msgstr "Материал Grease Pencil, назначаемый сгенерированным штрихам"
-
-
-msgid "The thickness for the generated strokes"
-msgstr "Толщина генерируемых штрихов"
 
 
 msgid "Back Face Culling"
@@ -44900,6 +44816,10 @@ msgid "ITU 709"
 msgstr "ITU 709"
 
 
+msgid "JPEG"
+msgstr "JPEG"
+
+
 msgid "Combine Color"
 msgstr "Комбинировать цвет"
 
@@ -44966,6 +44886,34 @@ msgstr "Привязка по углам"
 
 msgid "Plane warp transformation using explicit corner values"
 msgstr "Преобразование деформации плоскости с использованием явных угловых значений"
+
+
+msgid "X Extension Mode"
+msgstr "Режим расширения по X"
+
+
+msgid "The extension mode applied to the X axis"
+msgstr "Режим расширения, применяемый к оси X"
+
+
+msgid "Areas outside of the image are filled with zero"
+msgstr "Области за пределами изображения заполняются нулями"
+
+
+msgid "Areas outside of the image are filled with the closest boundary pixel in the image"
+msgstr "Области за пределами изображения заполняются пикселями с ближайшего края изображения"
+
+
+msgid "Areas outside of the image are filled with repetitions of the image"
+msgstr "Области за пределами изображения заполняются повторениями изображения"
+
+
+msgid "Y Extension Mode"
+msgstr "Режим расширения по Y"
+
+
+msgid "The extension mode applied to the Y axis"
+msgstr "Режим расширения, применяемый к оси Y"
 
 
 msgid "Interpolation method"
@@ -45290,34 +45238,6 @@ msgstr "Растушёвка"
 
 msgid "Displace pixel position using an offset vector"
 msgstr "Смещение положения пикселя с использованием вектора смещения"
-
-
-msgid "X Extension Mode"
-msgstr "Режим расширения по X"
-
-
-msgid "The extension mode applied to the X axis"
-msgstr "Режим расширения, применяемый к оси X"
-
-
-msgid "Areas outside of the image are filled with zero"
-msgstr "Области за пределами изображения заполняются нулями"
-
-
-msgid "Areas outside of the image are filled with the closest boundary pixel in the image"
-msgstr "Области за пределами изображения заполняются пикселями с ближайшего края изображения"
-
-
-msgid "Areas outside of the image are filled with repetitions of the image"
-msgstr "Области за пределами изображения заполняются повторениями изображения"
-
-
-msgid "Y Extension Mode"
-msgstr "Режим расширения по Y"
-
-
-msgid "The extension mode applied to the Y axis"
-msgstr "Режим расширения, применяемый к оси Y"
 
 
 msgid "Distance Key"
@@ -45661,10 +45581,6 @@ msgid "Map a texture using UV coordinates, to apply a texture to objects in comp
 msgstr "Наложение текстуры с использованием UV-координат для применения текстуры к объектам при композитинге"
 
 
-msgid "Input mask from a mask datablock, created in the image editor"
-msgstr "Вводная маска из блока данных маски, созданного в редакторе изображений"
-
-
 msgid "Size Source"
 msgstr "Источник размера"
 
@@ -45687,10 +45603,6 @@ msgstr "Фикс./Сцена"
 
 msgid "Pixel size scaled by scene percentage"
 msgstr "Масштабировать размер пикселя по процентной доле сцены"
-
-
-msgid "Input image or movie from a movie clip datablock, typically used for motion tracking"
-msgstr "Входное изображение или видео из блока данных видеоклипа, обычно используется для отслеживания движения"
 
 
 msgid "Movie Distortion"
@@ -45721,28 +45633,12 @@ msgid "Write image file to disk"
 msgstr "Записать файл изображения на диск"
 
 
-msgid "Active Input Index"
-msgstr "Индекс активного входа"
+msgid "Active Item Index"
+msgstr "Индекс активного элемента"
 
 
-msgid "Active input index in details view list"
-msgstr "Индекс активного входа в списке подробной информации"
-
-
-msgid "Base Path"
-msgstr "Базовый путь"
-
-
-msgid "Base output path for the image"
-msgstr "Базовый путь вывода для изображения"
-
-
-msgid "File Slots"
-msgstr "Слоты файлов"
-
-
-msgid "EXR Layer Slots"
-msgstr "Слоты слоёв EXR"
+msgid "Index of the active item"
+msgstr "Индекс активного элемента"
 
 
 msgid "Save as Render"
@@ -46450,14 +46346,6 @@ msgid "Insert values into a string using a Python and path template compatible f
 msgstr "Вставить значения в строку, используя синтаксис форматирования, совместимый с Python и шаблоном пути"
 
 
-msgid "Active Item Index"
-msgstr "Индекс активного элемента"
-
-
-msgid "Index of the active item"
-msgstr "Индекс активного элемента"
-
-
 msgid "Hash Value"
 msgstr "Хеш значения"
 
@@ -46975,10 +46863,6 @@ msgstr "Выделение ручек по типу"
 
 msgid "Provide a selection based on the handle types of Bézier control points"
 msgstr "Предоставить выделение на основе типов ручек контрольных точек Безье"
-
-
-msgid "The handle can be moved anywhere, and doesn't influence the point's other handle"
-msgstr "Ручку можно перемещать в любое место, она не влияет на другую ручку точки"
 
 
 msgid "The location is automatically calculated to be smooth"
@@ -49163,11 +49047,11 @@ msgstr "Объединить связку"
 
 
 msgid "Combine multiple socket values into one."
-msgstr "Объединить несколько значений сокетов в одно."
+msgstr "Объединить значения нескольких сокетов воеди́но."
 
 
 msgid "Evaluate Closure"
-msgstr "Оценить замыкание"
+msgstr "Вычислить замыкание"
 
 
 msgid "Input Items"
@@ -51173,10 +51057,6 @@ msgid "Reflect"
 msgstr "Отразить"
 
 
-msgid "Reflect A around the normal B. B doesn't need to be normalized."
-msgstr "Отразить A относительно нормали B. B не нуждается в нормализации."
-
-
 msgctxt "NodeTree"
 msgid "Refract"
 msgstr "Преломление"
@@ -51574,11 +51454,15 @@ msgstr "Элементы вывода замыкания"
 
 
 msgid "Combine Bundle Item"
-msgstr "Объединить элемент связки"
+msgstr "Элемент объединения связки"
 
 
 msgid "Collection of combine bundle items"
-msgstr "Коллекция пакетных элементов, подлежащих комбинированию"
+msgstr "Коллекция элементов объединения связки"
+
+
+msgid "Dimensions of the vector socket"
+msgstr "Размеры векторного сокета"
 
 
 msgid "Enum Item"
@@ -51761,40 +51645,16 @@ msgid "Collection of items that make up an enum"
 msgstr "Коллекция элементов, составляющих перечисление"
 
 
-msgid "Output File Slot"
-msgstr "Слот выходного файла"
-
-
-msgid "Single layer file slot of the file output node"
-msgstr "Слот одного слоя из файла для ноды вывода файлов"
-
-
-msgid "Subpath used for this slot"
-msgstr "Подпуть, используемый этим слотом"
-
-
-msgid "Output File Layer Slot"
-msgstr "Слот слоя выходного файла"
-
-
-msgid "Multilayer slot of the file output node"
-msgstr "Многослойный слот ноды вывода файлов"
-
-
-msgid "OpenEXR layer name used for this slot"
-msgstr "Имя слоя OpenEXR, используемое для этого слота"
-
-
 msgid "Node Outputs"
 msgstr "Выходы ноды"
 
 
 msgid "Separate Bundle Item"
-msgstr "Пакетных элемент для разделения"
+msgstr "Элемент разделения связки"
 
 
 msgid "Collection of separate bundle items"
-msgstr "Коллекция пакетных элементов, подлежащих к отделению"
+msgstr "Коллекция элементов разделения связки"
 
 
 msgid "Node Socket"
@@ -51986,11 +51846,11 @@ msgstr "Сокет узла для нескольких соединений"
 
 
 msgid "Closure Node Socket"
-msgstr "Сокет замыкания ноды"
+msgstr "Сокет \"замыкание\" ноды"
 
 
 msgid "Closure socket of a node"
-msgstr "Замыкающий сокет ноды"
+msgstr "Сокет \"замыкание\" данной ноды"
 
 
 msgid "Collection Node Socket"
@@ -52445,10 +52305,6 @@ msgstr "Интерфейс сокета текстурной ноды"
 
 msgid "Vector Node Socket Interface"
 msgstr "Векторный интерфейс сокет ноды"
-
-
-msgid "Dimensions of the vector socket"
-msgstr "Размеры векторного сокета"
 
 
 msgid "Node Tree Path"
@@ -55794,10 +55650,6 @@ msgstr "Продлевать участки за конечными ключев
 
 msgid "Make Cyclic (F-Modifier)"
 msgstr "Зациклить (F-модификатор)"
-
-
-msgid "Add Cycles F-Modifier if one doesn't exist already"
-msgstr "Добавить F-модификатор цикла, если он ещё не установлен"
 
 
 msgid "Clear Cyclic (F-Modifier)"
@@ -71510,10 +71362,6 @@ msgid "Add an existing node group to the current node editor"
 msgstr "Добавить существующую группу нод в текущий редактор нод"
 
 
-msgid "Show the datablock selector in the node"
-msgstr "Показать селектор блока данных в ноде"
-
-
 msgctxt "Operator"
 msgid "Add Node Group Asset"
 msgstr "Добавить ассет нодовой группы"
@@ -72688,6 +72536,10 @@ msgid "Choose the file format to save to"
 msgstr "Выбрать формат, в который будет сохраняться файл"
 
 
+msgid "BMP"
+msgstr "BMP"
+
+
 msgid "IRIS"
 msgstr "IRIS"
 
@@ -72704,8 +72556,16 @@ msgid "CINEON"
 msgstr "CINEON"
 
 
+msgid "DPX"
+msgstr "DPX"
+
+
 msgid "OPEN_EXR"
 msgstr "OPEN_EXR"
+
+
+msgid "TIFF"
+msgstr "TIFF"
 
 
 msgid "Select Parent Frame"
@@ -72727,37 +72587,6 @@ msgstr "Переключить параметры ноды"
 
 msgid "Toggle option buttons display for selected nodes"
 msgstr "Переключить показ кнопок параметров для выделенных нодов"
-
-
-msgctxt "Operator"
-msgid "Add File Node Socket"
-msgstr "Добавить сокет к ноду файла"
-
-
-msgid "Add a new input to a file output node"
-msgstr "Добавить новый вход к ноду сохранения файлов"
-
-
-msgid "Subpath of the output file"
-msgstr "Подпуть выходного файла"
-
-
-msgctxt "Operator"
-msgid "Move File Node Socket"
-msgstr "Переместить сокет ноды файла"
-
-
-msgid "Move the active input of a file output node up or down the list"
-msgstr "Переместить активный вход ноды сохранения файла вниз или вверх по списку"
-
-
-msgctxt "Operator"
-msgid "Remove File Node Socket"
-msgstr "Удалить сокет ноды файла"
-
-
-msgid "Remove the active input from a file output node"
-msgstr "Убрать активный вход из узла выходного файла"
 
 
 msgid "Attach selected nodes"
@@ -73486,10 +73315,6 @@ msgstr "Перетащить нодовую группу геометрии на
 
 msgid "Session UID of the geometry node group being dropped"
 msgstr "UID сеанс группы нод геометрии, который удаляется"
-
-
-msgid "Show the datablock selector in the modifier"
-msgstr "Отображать селектор блока данных в модификаторе"
 
 
 msgctxt "Operator"
@@ -75652,6 +75477,15 @@ msgstr "Заблокировать все ключи формы"
 
 msgid "Unlock all shape keys"
 msgstr "Разблокировать все ключи формы"
+
+
+msgctxt "Operator"
+msgid "Make Shape Key the Basis Key"
+msgstr "Сделать ключ формы ключом основы"
+
+
+msgid "Make this shape key the new basis key, effectively applying it to the mesh. Note that this applies the shape key at its 100% value"
+msgstr "Сделать этот ключ формы новым ключом основы, применив его к мешу. Обратите внимание, что при этом ключ формы будет применён со значением в 100%"
 
 
 msgctxt "Operator"
@@ -82509,10 +82343,6 @@ msgstr "Длина каждого кадра"
 msgctxt "Operator"
 msgid "Lock Strips"
 msgstr "Заблокировать дорожки"
-
-
-msgid "Lock strips so they can't be transformed"
-msgstr "Заблокировать дорожки, чтобы их нельзя было случайно изменить"
 
 
 msgctxt "Operator"
@@ -92000,6 +91830,10 @@ msgid "Collection Colors"
 msgstr "Цвета коллекций"
 
 
+msgid "Common"
+msgstr "Общие"
+
+
 msgid "Dope Sheet/Timeline"
 msgstr "Экспозиционный лист/Временная шкала"
 
@@ -94309,14 +94143,6 @@ msgid "Disable the asset indexer, to force every asset library refresh to comple
 msgstr "Отключить индексатор ассетов, чтобы каждое обновление библиотеки ресурсов приводило к полному перечитыванию ассетов с диска"
 
 
-msgid "Bundle and Closure Nodes"
-msgstr "Ноды связок и замыкания"
-
-
-msgid "Enables bundle and closure nodes in Geometry Nodes"
-msgstr "Включает ноды связок и замыкания в геометрических нодах"
-
-
 msgid "Cycles Debug"
 msgstr "Отладка Cycles"
 
@@ -94387,14 +94213,6 @@ msgstr "Предварительный просмотр ноды шейдера"
 
 msgid "Enables previews in the shader node editor"
 msgstr "Включает превью в нодовом редакторе шейдеров"
-
-
-msgid "Node Structure Types"
-msgstr "Типы нодовых структур"
-
-
-msgid "Enables new visualization of socket data compatibility in Geometry Nodes"
-msgstr "Обеспечивает новую визуализацию совместимости данных для сокетов в геометрических нодах"
 
 
 msgid "Undo Legacy"
@@ -96489,10 +96307,6 @@ msgstr "Свойство можно редактировать из связан
 
 msgid "Never None"
 msgstr "Не может не быть"
-
-
-msgid "True when this value can't be set to None"
-msgstr "Истинно, когда это значение не может быть установлено на \"нет\""
 
 
 msgid "Return"
@@ -99746,10 +99560,6 @@ msgid "Vertical Split"
 msgstr "Разделить вертикально"
 
 
-msgid "Region floats on screen, doesn't use any fixed alignment"
-msgstr "Область плавает на экране, не используются никакие фиксированные привязки"
-
-
 msgid "Quad Split"
 msgstr "Разбиение квадратов"
 
@@ -100113,10 +99923,6 @@ msgstr "Запечь нормали"
 
 msgid "Bake displacement"
 msgstr "Запечь карту смещений"
-
-
-msgid "Instead of automatically normalizing to the range 0 to 1, apply a user scale to the derivative map"
-msgstr "Вместо автоматической нормализации до диапазона от 0 до 1 применить пользовательский масштаб к производной карте"
 
 
 msgid "Region Maximum X"
@@ -100652,14 +100458,6 @@ msgstr "Запечь из мультиразрешения"
 
 msgid "Bake directly from multires object"
 msgstr "Запечь непосредственно от объектов с мультиразрешением"
-
-
-msgid "User Scale"
-msgstr "Пользовательский масштаб"
-
-
-msgid "Use a user scale for the derivative map"
-msgstr "Использовать особое масштабирование для карты производных"
 
 
 msgid "Render Region"
@@ -102655,10 +102453,6 @@ msgstr "Отображать ключи ретайминга поверх дор
 
 msgid "Show Source"
 msgstr "Отображать источник"
-
-
-msgid "Display path to source file, or name of source datablock"
-msgstr "Отображать пути к исходному файлу или именя исходного блока данных"
 
 
 msgid "Show Color Tags"
@@ -108426,6 +108220,10 @@ msgid "Clip Editor"
 msgstr "Редактор клипов"
 
 
+msgid "Theme properties shared by different editors"
+msgstr "Настройки темы, общие для разных редакторов"
+
+
 msgid "The path to the preset loaded into this theme (if any)"
 msgstr "Путь к пресету, загруженному в эту тему (если есть)"
 
@@ -108622,14 +108420,6 @@ msgid "Strips Selected"
 msgstr "Выделенные дорожки"
 
 
-msgid "Marker Line"
-msgstr "Линия маркера"
-
-
-msgid "Marker Line Selected"
-msgstr "Выбранная линия маркера"
-
-
 msgid "Scrubbing/Markers Region"
 msgstr "Область перемотки/маркеров"
 
@@ -108646,12 +108436,44 @@ msgid "Collection Color Tag"
 msgstr "Коллекция цветовых тегов"
 
 
+msgid "Common Theme Properties"
+msgstr "Настройки общих тем"
+
+
+msgid "Common Animation Properties"
+msgstr "Общие настройки анимации"
+
+
+msgid "Shared animation theme properties"
+msgstr "Общие настройки темы анимации"
+
+
+msgid "Channel Group"
+msgstr "Группа каналов"
+
+
+msgid "Active Channel Group"
+msgstr "Активная группа каналов"
+
+
+msgid "Sub-channel"
+msgstr "Подканал"
+
+
 msgid "Preview Range"
 msgstr "Диапазон предпросмотра"
 
 
 msgid "Color of preview range overlay"
 msgstr "Цвет диапазона верхнего слоя предпросмотра"
+
+
+msgid "Marker Line"
+msgstr "Линия маркера"
+
+
+msgid "Marker Line Selected"
+msgstr "Выбранная линия маркера"
 
 
 msgid "Theme Console"
@@ -108686,24 +108508,8 @@ msgid "Theme settings for the Dope Sheet"
 msgstr "Настройки темы для экспозиционного листа"
 
 
-msgid "Active Channel Group"
-msgstr "Активная группа каналов"
-
-
-msgid "Channel Group"
-msgstr "Группа каналов"
-
-
 msgid "Channels Selected"
 msgstr "Выделенные каналы"
-
-
-msgid "Dope Sheet Channel"
-msgstr "Канал экспозиционного листа"
-
-
-msgid "Dope Sheet Sub-channel"
-msgstr "Субканал экспозиционного листа"
 
 
 msgid "Interpolation Line"
@@ -109228,18 +109034,6 @@ msgstr "Датаблок анимации с активным действием
 
 msgid "No Active Action"
 msgstr "Нет активного действия"
-
-
-msgid "Animation data-block doesn't have active action"
-msgstr "У блока данных анимации нет активного действия"
-
-
-msgid "Nonlinear Animation Channel"
-msgstr "Канал нелинейной анимации"
-
-
-msgid "Sub-channel"
-msgstr "Подканал"
 
 
 msgid "Meta Strips"
@@ -111200,10 +110994,6 @@ msgid "Number of the position that this tile covers"
 msgstr "Номер позиции, которую покрывает эта плитка"
 
 
-msgid "Width and height of the tile buffer in pixels, zero when image data can't be loaded"
-msgstr "Ширина и высота буфера плитки в пикселях, ноль, если данные изображения не могут быть загружены"
-
-
 msgid "Collection of UDIM tiles"
 msgstr "Коллекция плиток UDIM"
 
@@ -112823,7 +112613,7 @@ msgstr "Корень иерархии коллекций этого слоя в�
 
 
 msgid "Material Override"
-msgstr "Индекс материала"
+msgstr "Переопределение материала"
 
 
 msgid "Material to override all other materials in this view layer"
@@ -112891,7 +112681,7 @@ msgstr "Объект-криптомаска"
 
 
 msgid "Render cryptomatte object pass, for isolating objects in compositing"
-msgstr "Рендерить проход объекта-криптомаки, изолирующий объекты в постобработке"
+msgstr "Рендерить проход объекта-криптомаски, изолирующий объекты при композитинге"
 
 
 msgid "Deliver Grease Pencil render result in a separate pass"
@@ -112951,7 +112741,7 @@ msgstr "Для каждого элемента геометрии"
 
 
 msgid "EvaluateClosure"
-msgstr "ОценитьЗмыкание"
+msgstr "ВычислитьЗамыкание"
 
 
 msgid "Name that can be displayed in the UI for this element"
@@ -117147,6 +116937,10 @@ msgid "Launch Blender without --offline-mode"
 msgstr "Запустите Blender без --автономного-режима"
 
 
+msgid "Please enable Online Access from the System settings."
+msgstr "Включите онлайн-доступ в разделе настроек \"Система (system)\"."
+
+
 msgid "Internet access is required to install extensions from the internet."
 msgstr "Для установки расширений из Интернета необходим доступ в Интернет."
 
@@ -117561,10 +117355,6 @@ msgstr "Не удалось открыть запрос OSL %s"
 
 msgid "External shader script must have .osl or .oso extension, or be a module name"
 msgstr "Внешний скрипт шейдера должен использовать расширение .osl или .oso или иметь модульное имя"
-
-
-msgid "Can't read OSO bytecode to store in node at %r"
-msgstr "Ошибка чтения байткода OSO для сохранения в ноде в %r"
 
 
 msgid "Failed to write .oso file next to external .osl file at "
@@ -119383,10 +119173,6 @@ msgid "Nothing to bake"
 msgstr "Нечего запекать"
 
 
-msgid "Complete report available on '{:s}' text datablock"
-msgstr "Полный отчёт доступен в текстовом блоке данных '{:s}'"
-
-
 msgid "No active bone to copy from"
 msgstr "Нет активной кости, с которой можно что-то скопировать"
 
@@ -119441,10 +119227,6 @@ msgstr "Не удалось найти материал или свет с по�
 
 msgid "Could not find scene using Compositor Node Tree - {:s}"
 msgstr "Не удалось найти сцену с помощью дерева нод компо́зитора - {:s}"
-
-
-msgid "Asset metadata from external asset libraries can't be edited, only assets stored in the current file can"
-msgstr "Метаданные ассетов из внешних библиотек ассетов отредактированы быть не могут, редактировать можно только ассеты, хранящиеся в текущем файле"
 
 
 msgid "No asset selected"
@@ -120974,13 +120756,8 @@ msgstr "Инвертировать все блокировки"
 
 
 msgctxt "Operator"
-msgid "Delete All Shape Keys"
-msgstr "Удалить все ключи форм"
-
-
-msgctxt "Operator"
-msgid "Apply All Shape Keys"
-msgstr "Применить все ключи формы"
+msgid "Make Basis"
+msgstr "Сделать основой"
 
 
 msgctxt "Operator"
@@ -121019,23 +120796,8 @@ msgstr "Удалить все группы"
 
 
 msgctxt "Operator"
-msgid "New Shape from Mix"
-msgstr "Новая форма из микса"
-
-
-msgctxt "Operator"
-msgid "Mirror Shape Key (Topology)"
-msgstr "Отразить ключ формы (топологически)"
-
-
-msgctxt "Operator"
-msgid "Move to Top"
-msgstr "Переместить наверх"
-
-
-msgctxt "Operator"
-msgid "Move to Bottom"
-msgstr "Переместить вниз"
+msgid "Flip"
+msgstr "Отразить"
 
 
 msgid "Auto Normalize"
@@ -123137,6 +122899,16 @@ msgstr "Идентификаторы Blender"
 
 
 msgctxt "Operator"
+msgid "Move to Top"
+msgstr "Переместить наверх"
+
+
+msgctxt "Operator"
+msgid "Move to Bottom"
+msgstr "Переместить вниз"
+
+
+msgctxt "Operator"
 msgid "Increase Number"
 msgstr "Увеличить номер"
 
@@ -123738,7 +123510,7 @@ msgstr "Наложения редактора нод"
 
 
 msgid "Wire Colors"
-msgstr "Цвета проволоки"
+msgstr "Цвета связей"
 
 
 msgid "Reroute Auto Labels"
@@ -124093,6 +123865,11 @@ msgstr "Перекрёстное наложение звука"
 msgctxt "Operator"
 msgid "Change Keying Set..."
 msgstr "Изменить ключевой набор…"
+
+
+msgctxt "Operator"
+msgid "Delete Keyframes..."
+msgstr "Удалить ключевые кадры…"
 
 
 msgctxt "Operator"
@@ -125880,11 +125657,6 @@ msgstr "Сделать локальными…"
 
 
 msgctxt "Operator"
-msgid "Delete Keyframes..."
-msgstr "Удалить ключевые кадры…"
-
-
-msgctxt "Operator"
 msgid "Clear Keyframes..."
 msgstr "Очистить ключевые кадры…"
 
@@ -126494,11 +126266,6 @@ msgstr "Сильная"
 
 
 msgctxt "Operator"
-msgid "Flip"
-msgstr "Отразить"
-
-
-msgctxt "Operator"
 msgid "Set from Faces"
 msgstr "Установить из граней"
 
@@ -126653,17 +126420,9 @@ msgid "Mesh Edit Mode Overlays"
 msgstr "Наложения режима редактирования меша"
 
 
-msgid "Creases"
-msgstr "Складки"
-
-
 msgctxt "Plural"
 msgid "Sharp"
 msgstr "Острые"
-
-
-msgid "Seams"
-msgstr "Швы"
 
 
 msgid "Vertex Group Weights"
@@ -128043,10 +127802,6 @@ msgid "The attribute name must not be empty"
 msgstr "Имя атрибута не должно быть пустым"
 
 
-msgid "Attribute is required and can't be removed"
-msgstr "Атрибут является обязательным и не может быть удалён"
-
-
 msgid "Domain unsupported for \"%s\" attribute"
 msgstr "Домен не поддерживается для атрибута \"%s\""
 
@@ -128189,10 +127944,6 @@ msgstr "файлы_кэша"
 
 msgid "cameras"
 msgstr "камеры"
-
-
-msgid "Can't initialize cloth"
-msgstr "Невозможно инициализировать ткань"
 
 
 msgid "Null cloth object"
@@ -128442,6 +128193,10 @@ msgid "GP_Layer"
 msgstr "СлойЭК"
 
 
+msgid "annotations"
+msgstr "аннотации"
+
+
 msgid "grease_pencils_v3"
 msgstr "grease_pencils_v3"
 
@@ -128666,10 +128421,6 @@ msgid "Links can only go into a zone but not out"
 msgstr "Связи от нод могут только входить в зону, но не выходить из неё"
 
 
-msgid "Can't find object data of %s lib %s"
-msgstr "Не удалось найти данные объекта %s библ. %s"
-
-
 msgid "Object %s lost data"
 msgstr "Потеряны данные объекта %s"
 
@@ -128832,14 +128583,6 @@ msgstr "Ошибка нехватки памяти"
 
 msgid "Undefined Type"
 msgstr "Неопределённый тип"
-
-
-msgid "Can't add Rigid Body to non mesh object"
-msgstr "Невозможно добавить твёрдое тело к объекту, не являющемуся мешем"
-
-
-msgid "Can't create Rigid Body world"
-msgstr "Невозможно создать среду твёрдых тел"
 
 
 msgid "Compiled without Bullet physics engine"
@@ -129559,6 +129302,10 @@ msgid "Error: Too many lights in the scene."
 msgstr "Ошибка: слишком много источников света в сцене."
 
 
+msgid "Baking lighting..."
+msgstr "Запекание освещения..."
+
+
 msgid "Warning: Could not allocate light probes volume pool of {} MB, using {} MB instead."
 msgstr "Предупреждение: Не удалось выделить пул томов световых зондов размером {} МБ, вместо этого используется {} МБ."
 
@@ -129729,10 +129476,6 @@ msgstr "Включить влияние каналов на результат (
 
 msgid "Display action without any time remapping (when unpinned)"
 msgstr "Показывать действие без преобразования времени (если незакреплено)"
-
-
-msgid "Can't edit this property from a linked data-block"
-msgstr "Невозможно отредактировать свойство из связанного датаблока"
 
 
 msgid "CombinedAction"
@@ -130044,10 +129787,6 @@ msgstr "Нет удалённых ключевых кадров у %d объек
 
 msgid "\"%s\" property cannot be animated"
 msgstr "Свойство «%s» не может быть анимировано"
-
-
-msgid "Button doesn't appear to have any property information attached (ptr.data = %p, prop = %p)"
-msgstr "К клавише не прикреплена информация о свойствах (ptr.data = %p, prop = %p)"
 
 
 msgid "Not deleting keyframe for locked F-Curve for NLA Strip influence on %s - %s '%s'"
@@ -130974,6 +130713,10 @@ msgstr "Все объекты Line Art теперь очищены от запе
 
 msgid "Baked strokes are cleared"
 msgstr "Запечённые штрихи удаляются"
+
+
+msgid "Baking Line Art..."
+msgstr "Запекание Line Art..."
 
 
 msgid "Panning"
@@ -132189,8 +131932,8 @@ msgid "This file is managed by the Blender asset system and cannot be overridden
 msgstr "Этот файл управляется системой ассетов Blender'а и не может быть переопределён"
 
 
-msgid "Can't edit external library data"
-msgstr "Правка данных из внешних библиотек невозможна"
+msgid "Cannot edit external library data"
+msgstr "Правка данных внешних библиотек невозможна"
 
 
 msgid "Samples Transform"
@@ -132395,6 +132138,10 @@ msgid "Miter Profile Shape"
 msgstr "Форма профиля соединения"
 
 
+msgid "Seams"
+msgstr "Швы"
+
+
 msgid "Intersection Type"
 msgstr "Тип пересечения"
 
@@ -132493,6 +132240,10 @@ msgstr "Геометрию невозможно извлечь при актив
 
 msgid "Path selection requires two matching elements to be selected"
 msgstr "Для выделения пути необходимо выделить два элемента общего типа"
+
+
+msgid "Cannot rip faces"
+msgstr "Не удалось разорвать грани"
 
 
 msgid "Cannot rip multiple disconnected vertices"
@@ -132940,10 +132691,6 @@ msgid "This data does not support joining in edit mode"
 msgstr "Данные этого типа не поддерживают объединение в режиме редактирования"
 
 
-msgid "Cannot edit external library data"
-msgstr "Правка данных внешних библиотек невозможна"
-
-
 msgid "Active object final transform has one or more zero scaled axes"
 msgstr "В финальной трансформации активного объекта имеется одна или несколько осей с нулевым масштабом"
 
@@ -133030,6 +132777,10 @@ msgstr "Изображение используемого типа неприг�
 
 msgid "No objects found to bake from"
 msgstr "Не найден объект, с которого необходимо произвести запекание"
+
+
+msgid "Baking Multires..."
+msgstr "Запекание мультиразрешения..."
 
 
 msgid "Combined bake pass requires Emit, or a light pass with Direct or Indirect contributions enabled"
@@ -133120,10 +132871,6 @@ msgid "No active image found in material slot (%d) for object \"%s\""
 msgstr "Не найдено активное изображение для слота материала (%d) объекта «%s»"
 
 
-msgid "Object \"%s\" is not a mesh or can't be converted to a mesh (Curve, Text, Surface or Metaball)"
-msgstr "Объект \"%s\" не является мешем или не может быть преобразован в меш (кривая, текст, поверхность или метасфера)"
-
-
 msgid "Uninitialized image %s"
 msgstr "Изображение %s не инициализировано"
 
@@ -133168,16 +132915,16 @@ msgid "Problem baking object \"%s\""
 msgstr "Ошибка запекания объекта «%s»"
 
 
+msgid "Baking texture..."
+msgstr "Запекание текстур..."
+
+
 msgid "Overwrite existing bake data?"
 msgstr "Перезаписать существующие данные запекания?"
 
 
 msgid "Modifier containing the node is disabled"
 msgstr "Модификатор, содержащий ноду, отключён"
-
-
-msgid "Can't determine bake location on disk. Falling back to packed bake."
-msgstr "Невозможно определить местоположение запекания на диске. Возврат к запакованному запеканию."
 
 
 msgid "Failed to remove metadata directory %s"
@@ -133198,6 +132945,14 @@ msgstr "Конфликт путей: %d кэширования(-й) устано
 
 msgid "Cache has to be enabled"
 msgstr "Кэширование должно быть включено"
+
+
+msgid "Calculating simulation..."
+msgstr "Расчёт симуляции..."
+
+
+msgid "Baking nodes..."
+msgstr "Запекание нод..."
 
 
 msgid "Remove exporter?"
@@ -133418,10 +133173,6 @@ msgstr "Привязать к коллекции (рекурсивно)"
 
 msgid "Link to Collection"
 msgstr "Привязать к коллекции"
-
-
-msgid "Can't edit linked mesh or curve data"
-msgstr "Невозможно отредактировать данные линкованого меша или кривой"
 
 
 msgid "No collection selected"
@@ -133684,6 +133435,10 @@ msgid "Active object has no modifiers"
 msgstr "Активный объект не имеет модификаторов"
 
 
+msgid "Simulating ocean..."
+msgstr "Симуляция океана..."
+
+
 msgid "Reshape can work only with higher levels of subdivisions"
 msgstr "Изменение формы работает только с более высоким уровнем подразделений"
 
@@ -133810,10 +133565,6 @@ msgstr "Не удалось добавить модификатор геомет
 
 msgid "Incorrect context for running object data unlink"
 msgstr "Неверный контекст для разрыва связи с данными объекта"
-
-
-msgid "Can't unlink this object data"
-msgstr "Не удалось отсоединить данные объекта"
 
 
 msgid "Collection '%s' (instantiated by the active object) is not overridable"
@@ -134144,12 +133895,12 @@ msgid "Bake failed: invalid canvas"
 msgstr "Запекание не удалось: недопустимый холст"
 
 
+msgid "Baking Dynamic Paint..."
+msgstr "Запекание динамического рисования..."
+
+
 msgid "Removed %d double particle(s)"
 msgstr "Удалено %d сдвоенных частиц"
-
-
-msgid "No hair connected (can't connect hair if particle system modifier is disabled)"
-msgstr "Нет присоединённых волос (невозможно присоединить волосы, если модификатор системы частиц отключён)"
 
 
 msgid "Copy particle systems to selected: %d done, %d failed"
@@ -134202,6 +133953,10 @@ msgstr "Связанные блоки данных не позволяют ре�
 
 msgid "Linked or library override data-blocks do not allow adding or removing caches"
 msgstr "Связанные блоки данных или блоки данных переопределения библиотеки не позволяют добавлять или удалять кэши"
+
+
+msgid "Baking point cache..."
+msgstr "Запекание кэша точек..."
 
 
 msgid "No Rigid Body World to add Rigid Body Constraint to"
@@ -134456,6 +134211,10 @@ msgid "Rendering sequence..."
 msgstr "Последовательность рендеринга..."
 
 
+msgid "Rendering..."
+msgstr "Рендеринг..."
+
+
 msgid "Cannot write a single file with an animation format selected"
 msgstr "Невозможно записать анимацию в одиночный файл выбранного формата"
 
@@ -134488,6 +134247,10 @@ msgid "Skipping existing frame \"%s\""
 msgstr "Пропуск существующего кадра «%s»"
 
 
+msgid "Rendering viewport..."
+msgstr "Рендеринг вьюпорта..."
+
+
 msgid "Node groups do not support automatic previews"
 msgstr "Группы нод не поддерживают автоматический предварительный просмотр"
 
@@ -134516,8 +134279,8 @@ msgid "Error rendering Scene %s preview: %s."
 msgstr "Ошибка рендеринга сцены для %s предварительного просмотра: %s."
 
 
-msgid "Can't bake light probe while rendering"
-msgstr "Невозможно запечь световой зонд во время рендеринга"
+msgid "Loading previews..."
+msgstr "Загрузка превью..."
 
 
 msgid "No active lineset and associated line style to manipulate the modifier"
@@ -134702,6 +134465,10 @@ msgstr "Добавить {}"
 
 msgid "Append (Reuse) {}"
 msgstr "Добавить (повторно использовать данные) {}"
+
+
+msgid "Set {} as active"
+msgstr "Установить {} как активную"
 
 
 msgctxt "Screen"
@@ -135449,6 +135216,10 @@ msgid "File: %s"
 msgstr "Файл: %s"
 
 
+msgid "Prefetching..."
+msgstr "Кэширование..."
+
+
 msgid "Delete track corresponding to the selected curve?"
 msgstr "Удалить трек, соответствующий выделенной кривой?"
 
@@ -135463,6 +135234,10 @@ msgstr "Не выбраны файлы для открытия"
 
 msgid "Cannot read '%s': %s"
 msgstr "Ошибка чтения «%s»: %s"
+
+
+msgid "Building proxies..."
+msgstr "Построение прокси..."
 
 
 msgid "Place Marker"
@@ -135535,6 +135310,10 @@ msgstr "Отслеживать выделенные маркеры вперёд 
 
 msgid "Track the selected markers forward by one frame"
 msgstr "Отслеживать выделенные маркеры вперёд по одному кадру"
+
+
+msgid "Tracking markers..."
+msgstr "Отслеживание маркеров..."
 
 
 msgid "New lines unsupported, call this operator multiple times"
@@ -135717,8 +135496,16 @@ msgid "Asset Catalogs"
 msgstr "Каталоги ассетов"
 
 
+msgid "Listing directories..."
+msgstr "Отображение списка папок..."
+
+
 msgid "Date Modified"
 msgstr "Дата изменения"
+
+
+msgid "Validating bookmarks..."
+msgstr "Проверка закладок..."
 
 
 msgid "Home"
@@ -135843,10 +135630,6 @@ msgstr "F-кривая описана только F-модификаторам�
 
 msgid "See Modifiers panel below"
 msgstr "См. панель модификаторов ниже"
-
-
-msgid "F-Curve doesn't have any keyframes as it only contains sampled points"
-msgstr "F-кривая не имеет ключевых кадров и содержит только измеренные точки"
 
 
 msgid "No active keyframe on F-Curve"
@@ -136090,10 +135873,6 @@ msgid "Hard coded Non-Linear, Gamma:1.7"
 msgstr "Жёсткофикс. нелинейная, гамма: 1.7"
 
 
-msgid "Can't Load Image"
-msgstr "Не удалось загрузить изображение"
-
-
 msgid "%d × %d, "
 msgstr "%d × %d, "
 
@@ -136208,26 +135987,6 @@ msgstr "%d изобр. подлежит сохранению в %s"
 
 msgid "Saved %s"
 msgstr "%s сохранено"
-
-
-msgid "Packed library image can't be saved: \"%s\" from \"%s\""
-msgstr "Невозможно сохранить запакованное изображение библиотеки: \"%s\" из \"%s\""
-
-
-msgid "Image can't be saved, use a different file format: \"%s\""
-msgstr "Изображение не может быть сохранено, используйте другой формат файла: \"%s\""
-
-
-msgid "Multiple images can't be saved to an identical path: \"%s\""
-msgstr "Несколько изображений не могут быть сохранены по одному и тому же пути: \"%s\""
-
-
-msgid "Image can't be saved, no valid file path: \"%s\""
-msgstr "Изображение не может быть сохранено, нет допустимого пути к файлу: \"%s\""
-
-
-msgid "can't save image while rendering"
-msgstr "Невозможно сохранить изображение во время рендеринга"
 
 
 msgid "No images available"
@@ -136650,6 +136409,10 @@ msgid " Named Attributes"
 msgstr " Названные атрибуты"
 
 
+msgid "Compositing..."
+msgstr "Компо́зитинг..."
+
+
 msgid "Not inside node group"
 msgstr "Не внутри группы нод"
 
@@ -136914,20 +136677,12 @@ msgid "More than one collection is selected"
 msgstr "Выделено больше одной коллекции"
 
 
-msgid "Can't add a new collection to linked/override scene"
-msgstr "Невозможно добавить новую коллекцию в связанную/переопределяемую сцену"
-
-
 msgid "No active collection"
 msgstr "Нет активной коллекции"
 
 
 msgid "Cannot add a collection to a linked/override collection/scene"
 msgstr "Невозможно добавить коллекцию в связанную/переопределяемую коллекцию/сцену"
-
-
-msgid "Can't add a color tag to a linked collection"
-msgstr "Невозможно добавить цветовой тег для связанной коллекции"
 
 
 msgid "Cannot delete collection '%s', it is either a linked one used by other linked scenes/collections, or a library override one"
@@ -136994,10 +136749,6 @@ msgid "Move inside collection (Ctrl to link)"
 msgstr "Переместить внутри коллекции (Ctrl для связывания)"
 
 
-msgid "Can't edit library linked or non-editable override object(s)"
-msgstr "Невозможно редактировать связанные с библиотекой или нередактируемые объекты переопределения"
-
-
 msgid "Use view layer for rendering"
 msgstr "Использовать слой визуализации для рендера"
 
@@ -137015,7 +136766,7 @@ msgid ""
 " • Shift to set children"
 msgstr ""
 "Запретить выделять объект во вьюпорте\n"
-" • Shift — применить также и на потомков"
+" • Shift — применить также и к потомкам"
 
 
 msgid ""
@@ -137023,7 +136774,7 @@ msgid ""
 " • Shift to set children"
 msgstr ""
 "Глобально убрать объект во вьюпортах\n"
-" • Shift — применить также и на потомков"
+" • Shift — применить также и к потомкам"
 
 
 msgid ""
@@ -137031,7 +136782,7 @@ msgid ""
 " • Shift to set children"
 msgstr ""
 "Глобально отключить на рендере\n"
-" • Shift — применить также и на потомков"
+" • Shift — применить также и к потомкам"
 
 
 msgid ""
@@ -137039,7 +136790,7 @@ msgid ""
 " • Shift to set children"
 msgstr ""
 "Ограничить видимость в 3D-виде\n"
-" • Shift — применить также и на потомков"
+" • Shift — применить также и к потомкам"
 
 
 msgid ""
@@ -137047,7 +136798,7 @@ msgid ""
 " • Shift to set children"
 msgstr ""
 "Ограничить выделение в 3D-виде\n"
-" • Shift — применить также и на потомков"
+" • Shift — применить также и к потомкам"
 
 
 msgid "Restrict visibility in the 3D View"
@@ -137176,10 +136927,6 @@ msgstr "Путь к библиотеке «%s» не существует, ис�
 
 msgid "Library path '%s' is now valid, please reload the library"
 msgstr "Путь к библиотеке «%s» теперь правильный, пожалуйста, перезагрузите библиотеку"
-
-
-msgid "Can't edit library or non-editable override data"
-msgstr "Невозможно редактировать библиотеку или нередактируемые данные переопределения"
 
 
 msgid "Remap Data ID"
@@ -137418,10 +137165,6 @@ msgid "Strip None"
 msgstr "Без дорожки"
 
 
-msgid "Can't reload with running modal operators"
-msgstr "Не удалось перезагрузить с запуском модальных операторов"
-
-
 msgid "Add a crossfade transition strip for two selected strips with video content"
 msgstr "Добавить дорожку перехода перекрёстного наложения для двух выделенных дорожек с видеосодержанием"
 
@@ -137594,24 +137337,12 @@ msgid "New effect takes less or more inputs"
 msgstr "Новый эффект использует меньше или больше входов"
 
 
-msgid "Can't create subtitle file"
-msgstr "Не удалось создать файл субтитров"
-
-
-msgid "Can't overwrite export file"
-msgstr "Не удалось перезаписать экспортируемый файл"
-
-
 msgid "No subtitles (text strips) to export"
 msgstr "Нет субтитров (текстовых дорожек) для экспорта"
 
 
 msgid "Select one or more strips"
 msgstr "Выделить одну или несколько дорожек"
-
-
-msgid "Can't set a negative range"
-msgstr "Отрицательный диапазон установить невозможно"
 
 
 msgid "Set Selected Strip Proxies"
@@ -138405,10 +138136,6 @@ msgid "Bone selection count error"
 msgstr "Ошибка подсчёта выделенных костей"
 
 
-msgid "Linked data can't text-space transform"
-msgstr "Невозможно преобразовать связанные данные по текстурному пространству"
-
-
 msgid "Unsupported object type for text-space transform"
 msgstr "Неподдерживаемый тип объекта для преобразования по текстурному пространству"
 
@@ -138962,6 +138689,10 @@ msgid "Unwrap failed to solve %d of %d island(s), edge seams may need to be adde
 msgstr "Не удалось развернуть %d из %d островов, возможно, необходимо добавить рёберные швы"
 
 
+msgid "Packing UVs..."
+msgstr "Упаковка UV..."
+
+
 msgid "Freestyle: Mesh loading"
 msgstr "Freestyle: Загрузка меша"
 
@@ -138980,10 +138711,6 @@ msgstr "Ошибка записи кадра"
 
 msgid "No valid formats found"
 msgstr "Не найдены допустимые форматы"
-
-
-msgid "Can't allocate FFmpeg format context"
-msgstr "Невозможно выделить контекст формата FFmpeg"
 
 
 msgid "Render width has to be 720 pixels for DV!"
@@ -139024,6 +138751,10 @@ msgstr "Формат изображения не является видео ф�
 
 msgid "Audio sample format unsupported"
 msgstr "Формат аудиообразца не поддерживается"
+
+
+msgid "Exporting Alembic..."
+msgstr "Экспорт Alembic..."
 
 
 msgid "Object type mismatch, Alembic object path pointed to Camera when importing, but not any more"
@@ -139100,6 +138831,10 @@ msgstr "Несоответствие типа объекта, путь объе�
 
 msgid "Invalid object: verify object path"
 msgstr "Недействительный объект: проверьте путь к объекту"
+
+
+msgid "Importing Alembic..."
+msgstr "Импорт Alembic..."
 
 
 msgid "CSV Import: Cannot open file '%s'"
@@ -139190,36 +138925,12 @@ msgid "%s: Will not overwrite existing asset %s"
 msgstr "%s: Не перезапишет существующий ассет %s"
 
 
-msgid "%s: Can't resolve path %s"
-msgstr "%s: Невозможно определить путь %s"
-
-
-msgid "%s: Can't resolve path %s for writing"
-msgstr "%s: Невозможно определить путь %s для записи"
-
-
-msgid "%s: Can't copy %s. The source and destination paths are the same"
-msgstr "%s: Невозможно скопировать %s. Исходный и конечный пути совпадают"
-
-
-msgid "%s: Can't write to asset %s: %s"
-msgstr "%s: Невозможно записать в ассет %s: %s"
-
-
-msgid "%s: Can't open source asset %s"
-msgstr "%s: Невозможно открыть исходный ассет %s"
-
-
 msgid "%s: Will not copy zero size source asset %s"
 msgstr "%s: Не будет копировать исходный ассет нулевого размера %s"
 
 
 msgid "%s: Null buffer for source asset %s"
 msgstr "%s: Нулевой буфер для исходного ассета %s"
-
-
-msgid "%s: Can't open destination asset %s for writing"
-msgstr "%s: Невозможно открыть ассет назначения %s для записи"
 
 
 msgid "%s: Error writing to destination asset %s"
@@ -139234,24 +138945,8 @@ msgid "%s: Texture import directory path empty, couldn't import %s"
 msgstr "%s: Путь к папке импорта текстур пуст, не удалось импортировать %s"
 
 
-msgid "%s: import directory is relative but the blend file path is empty. Please save the blend file before importing the USD or provide an absolute import directory path. Can't import %s"
-msgstr "%s: папка импорта относительна, но путь к blend-файлу пуст. Сохраните blend-файл перед импортом USD или укажите абсолютный путь к папке импорта. Невозможно импортировать %s"
-
-
 msgid "%s: Couldn't create texture import directory %s"
 msgstr "%s: Не удалось создать папку для импорта текстур %s"
-
-
-msgid "Can't resolve path %s for writing"
-msgstr "Невозможно определить путь %s для записи"
-
-
-msgid "Can't write to asset %s:  %s"
-msgstr "Невозможно записать в ассет %s:  %s"
-
-
-msgid "Can't open destination asset %s for writing"
-msgstr "Невозможно открыть ассет назначения %s для записи"
 
 
 msgid "Error writing to destination asset %s"
@@ -139278,12 +138973,20 @@ msgid "USD Export: Unable to find collection '%s'"
 msgstr "Экспорт USD: Не удалось найти коллекцию '%s'"
 
 
+msgid "Exporting USD..."
+msgstr "Экспорт USD..."
+
+
 msgid "Could not open USD archive for reading, see console for detail"
 msgstr "Не удалось открыть архив USD для чтения, подробности см. в консоли"
 
 
 msgid "USD Import: unable to open stage to read %s"
 msgstr "Импорт USD: невозможно открыть сценарий для чтения %s"
+
+
+msgid "Importing USD..."
+msgstr "Импорт USD..."
 
 
 msgid "One or more objects used as prototypes in 'Instance on Points' nodes either do not have 'As Instance' enabled in their 'Object Info' nodes, or the prototype is the base geometry input itself. Both cases prevent valid point instancer export. If it's the former, enable 'As Instance' to avoid incorrect self-referencing."
@@ -139338,16 +139041,8 @@ msgid "%s: Couldn't get world bind transforms for skeleton %s"
 msgstr "%s: Не удалось получить трансформации привязки мира для скелета %s"
 
 
-msgid "%s: Number of bind transforms doesn't match the number of joints for skeleton %s"
-msgstr "%s: Количество трансформаций привязки не соответствует количеству суставов скелета %s"
-
-
 msgid "%s: Couldn't get blendshape targets for prim %s"
 msgstr "%s: Не удалось получить цели-формы смешения для примитива %s"
-
-
-msgid "%s: Number of blendshapes doesn't match number of blendshape targets for prim %s"
-msgstr "%s: Количество форм смешивания не соответствует количеству целей-форм смешивания для примитива %s"
 
 
 msgid "%s: Couldn't get stage for prim %s"
@@ -139384,10 +139079,6 @@ msgstr "%s: Несоответствие в количестве костей и
 
 msgid "%s: Mismatch in bind xforms and joint counts for skeleton %s"
 msgstr "%s: Несоответствие между количеством связанных Xформаций и количеством суставов в скелете %s"
-
-
-msgid "USD Skeleton Import: bone matrices with negative determinants detected in prim %s. Such matrices may indicate negative scales, possibly due to mirroring operations, and can't currently be converted to Blender's bone representation. The skeletal animation won't be imported"
-msgstr "Импорт скелета USD: В примитиве %s обнаружены матрицы костей с отрицательными детерминантами. Эти матрицы могут указывать на отрицательные масштабы, возможно, из-за операций симметризации (зеркалирования), поэтому в настоящее время их нельзя преобразовать в представление костей Blender'а. Анимация скелета импортирована не будет"
 
 
 msgid "%s: Joint weights and joint indices element size mismatch for prim %s"
@@ -139466,10 +139157,6 @@ msgid "USD export: Simple subdivision not supported, exporting subdivided mesh"
 msgstr "Экспорт USD: простое подразделение не поддерживается, экспортируется подразделённый меш"
 
 
-msgid "Instances number '%d' doesn't match transforms size '%d'"
-msgstr "Количество экземпляров '%d' не соответствует размеру трансформаций '%d'"
-
-
 msgid "USD Export: failed to resolve .vdb file for object: %s"
 msgstr "Экспорт USD: не удалось разрешить файл .vdb для объекта: %s"
 
@@ -139500,10 +139187,6 @@ msgstr "Связанные блоки данных не могут быть пе
 
 msgid "Built-in fonts cannot be renamed"
 msgstr "Встроенные шрифты нельзя переименовывать"
-
-
-msgid "Datablocks not in global Main data-base cannot be renamed"
-msgstr "Блоки данных, не входящие в глобальную основную базу данных, не могут быть переименованы"
 
 
 msgid "Cannot edit 'runtime' status of non-blendfile data-blocks, as they are by definition always runtime"
@@ -139570,18 +139253,6 @@ msgid "Data-block '%s' is not a library override, or not part of a library overr
 msgstr "Блок данных '%s' не является переопределением библиотеки или не является частью иерархии переопределений библиотеки"
 
 
-msgid "This property is for internal use only and can't be edited"
-msgstr "Это свойство только для внутреннего использования и не может быть изменено"
-
-
-msgid "Can't edit this property from an override data-block"
-msgstr "Невозможно отредактировать свойство из переопределённого датаблока"
-
-
-msgid "Can't edit this property from a system override data-block"
-msgstr "Невозможно редактировать это свойство из системного блока данных переопределения"
-
-
 msgid "Only boolean, int, float, and enum properties supported"
 msgstr "Поддерживаются только свойства логический, целое, нецелое и перечень"
 
@@ -139592,14 +139263,6 @@ msgstr "Поддерживаются только свойства логиче�
 
 msgid "'%s' does not contain '%s' with prefix and suffix"
 msgstr "'%s' не содержит '%s' с префиксом и суффиксом"
-
-
-msgid "'%s' doesn't have upper case alpha-numeric prefix"
-msgstr "«%s» не имеет буквенно-цифрового префикса в верхнем регистре"
-
-
-msgid "'%s' doesn't have an alpha-numeric suffix"
-msgstr "«%s» не имеет буквенно-цифрового префикса"
 
 
 msgid "%s: expected %s type, not %s"
@@ -139660,10 +139323,6 @@ msgstr "Слот не может быть \"None\""
 
 msgid "F-Curve data path empty, invalid argument"
 msgstr "Пустой путь к данным для F-кривой, неверный аргумент"
-
-
-msgid "Could not remove the F-Curve Group from the collection because it doesn't exist in the collection"
-msgstr "Не удалось удалить группу F-кривых из коллекции, так как её в ней нет"
 
 
 msgid "Cannot return channelbag when slot is None"
@@ -139968,10 +139627,6 @@ msgid "Indices must be sorted in ascending order"
 msgstr "Индексы должны быть отсортированы в порядке возрастания"
 
 
-msgid "Indices can't have duplicates"
-msgstr "Индексы не могут иметь дубликатов"
-
-
 msgid "Sizes must be greater than zero"
 msgstr "Размеры должны быть больше нуля"
 
@@ -140206,10 +139861,6 @@ msgstr "Группа вершин \"%s\" заблокирована"
 
 msgid "Frame already exists on frame number %d"
 msgstr "Кадр уже существует на кадре номер %d"
-
-
-msgid "Frame doesn't exists on frame number %d"
-msgstr "Кадр не существует на кадре номер %d"
 
 
 msgid "Image not packed"
@@ -140546,10 +140197,6 @@ msgid "Unable to locate socket '%s' in node"
 msgstr "Сокет '%s' не найден в ноде"
 
 
-msgid "Can't pair zone input node %s with %s because it does not have the same zone type"
-msgstr "Невозможно сопоставить входную ноду зоны %s с %s, поскольку у них разный тип зоны"
-
-
 msgid "The output node %s is already paired with %s"
 msgstr "Выходная нода %s уже связана с %s"
 
@@ -140644,14 +140291,6 @@ msgstr "Неверный режим присваивания"
 
 msgid "Bad vertex index in list"
 msgstr "Неверный индекс вершины в списке"
-
-
-msgid "Object '%s' can't be selected because it is not in View Layer '%s'!"
-msgstr "Объект «%s» невозможно выделить, так как он не находится в слое визуализации «%s»!"
-
-
-msgid "Object '%s' can't be hidden because it is not in View Layer '%s'!"
-msgstr "Объект «%s» невозможно скрыть, так как он не находится в слое визуализации «%s»!"
 
 
 msgid "Object %s not in view layer %s"
@@ -142705,10 +142344,6 @@ msgid "Outer Mask"
 msgstr "Внешняя маска"
 
 
-msgid "File Subpaths"
-msgstr "Подпути к файлам"
-
-
 msgid "Invalid path template in File Output node. Skipping writing file."
 msgstr "Неверный шаблон пути в ноде \"Вывода в файл (file output)\". Файл сохранён не будет."
 
@@ -142811,10 +142446,6 @@ msgstr "Располагать звёзды по диагонали"
 
 msgid "The position of the source of the rays in normalized coordinates. 0 means lower left corner and 1 means upper right corner"
 msgstr "Положение источника лучей в нормализованных координатах. \"0\" будет означать нижний левый угол, а \"1\" - верхний правый угол"
-
-
-msgid "Viewport compositor setup not fully supported"
-msgstr "Настройка компо́зитора для вьюпорта поддерживается не полностью"
 
 
 msgid "ID value"
@@ -143246,20 +142877,12 @@ msgid "Format Items"
 msgstr "Элементы формата"
 
 
-msgid "Empty identifier can't be used when explicit identifier was used before. For example, \"{} {x}\" is ok but \"{x} {}\" is not."
-msgstr "Пустой идентификатор не может быть использован, если ранее был использован явный идентификатор. Например, \"{} {x}\" допустимо, но \"{x} {}\" — нет."
-
-
 msgid "Format uses more inputs than provided."
 msgstr "Формат использует больше входов, чем предусмотрено."
 
 
 msgid "Invalid identifier: \"{}\""
 msgstr "Неверный идентификатор: \"{}\""
-
-
-msgid "An input name can't start with a digit: \"{}\""
-msgstr "Имя входа не может начинаться с цифры: \"{}\""
 
 
 msgid "There are no inputs."
@@ -143280,10 +142903,6 @@ msgstr "Формат содержит неподдерживаемый симв�
 
 msgid "Invalid format: \"{}\""
 msgstr "Недопустимый формат: \"{}\""
-
-
-msgid "Type \"{}\" can't be formatted"
-msgstr "Тип \"{}\" не может быть отформатирован"
 
 
 msgid "Only integer inputs can be used as dynamic width: \"{}\""
@@ -143456,10 +143075,6 @@ msgid "Data-Block References"
 msgstr "Ссылки на блоки данных"
 
 
-msgid "Can't bake in zone"
-msgstr "Невозможно производить запекание в пределах зоны"
-
-
 msgid "Baked Frame {}"
 msgstr "Запечённый кадр {}"
 
@@ -143548,12 +143163,13 @@ msgid "Orthographic camera scale (similar to zoom)"
 msgstr "Масштаб ортогональной камеры (аналогично зуму)"
 
 
+msgctxt "NodeTree"
+msgid "Closure"
+msgstr "Замыкание"
+
+
 msgid "Collection contains current object"
 msgstr "Коллекция содержит текущий объект"
-
-
-msgid "Can't access collections geometry because it's not evaluated yet. This can happen when there is a dependency cycle"
-msgstr "Невозможно получить доступ к геометрии коллекций, поскольку она ещё не оценена. Это может произойти, когда существует цикл зависимости"
 
 
 msgid "Separate Children"
@@ -143573,7 +143189,7 @@ msgstr "Сбросить трансформацию каждого дочерн�
 
 
 msgid "Bundle Items"
-msgstr "Пакетные элементы"
+msgstr "Элементы связки"
 
 
 msgid "Disabled, Blender was compiled without Bullet"
@@ -144198,6 +143814,11 @@ msgid "Missing Geometry"
 msgstr "Отсутствующая геометрия"
 
 
+msgctxt "NodeTree"
+msgid "For Each Element"
+msgstr "Для каждого элемента"
+
+
 msgid "Element"
 msgstr "Элемент"
 
@@ -144539,10 +144160,6 @@ msgstr "Количество граней, содержащих вершину"
 
 msgid "Vertex Face Count Field"
 msgstr "Поле числа граней вершины"
-
-
-msgid "Anonymous attributes can't be accessed by name"
-msgstr "К анонимным атрибутам нельзя получить доступ по имени"
 
 
 msgid "For meshes, outputs normals without custom normal attributes taken into account"
@@ -145094,20 +144711,12 @@ msgid "The total Y size of the region in pixels"
 msgstr "Общий размер по Y данного региона в пикселях"
 
 
-msgid "Can't access object's transforms because it's not evaluated yet. This can happen when there is a dependency cycle"
-msgstr "Невозможно получить доступ к трансформациям объекта, поскольку он ещё не оценен. Это может произойти, когда существует цикл зависимости"
-
-
 msgid "Geometry cannot be retrieved from the edited object itself"
 msgstr "Геометрия не может быть извлечена из самого отредактированного объекта"
 
 
 msgid "Geometry cannot be retrieved from the modifier object"
 msgstr "Геометрия не может быть извлечена из объекта-модификатора"
-
-
-msgid "Can't access object's geometry because it's not evaluated yet. This can happen when there is a dependency cycle"
-msgstr "Невозможно получить доступ к геометрии объекта, поскольку она ещё не оценена. Это может произойти, когда существует цикл зависимости"
 
 
 msgid "As Instance"
@@ -145335,8 +144944,28 @@ msgid "Grid 2"
 msgstr "Сетка 2"
 
 
+msgid "Value not found in bundle: \"{}\""
+msgstr "Значение не найдено в связке: \"{}\""
+
+
+msgid "Cannot get internal value from bundle"
+msgstr "Невозможно получить внутреннее значение из связки"
+
+
+msgid "Implicit type conversion when separating bundle"
+msgstr "Неявная конверсия типов при разделении связки"
+
+
+msgid "Conversion not supported when separating bundle"
+msgstr "Конверсия не поддерживается при разделении связки"
+
+
 msgid "Inverted"
 msgstr "Инвертировано"
+
+
+msgid "Geometry to split into two parts"
+msgstr "Геометрия, которую следует разделить на две части"
 
 
 msgid "The parts of the geometry that go into the first output"
@@ -145349,6 +144978,14 @@ msgstr "Части геометрии в выделении"
 
 msgid "The parts of the geometry not in the selection"
 msgstr "Части геометрии, не входящие в выделение"
+
+
+msgid "Curves to change the handles on"
+msgstr "Кривые, у которых следует изменить положение ручек"
+
+
+msgid "Curves to change the normals on"
+msgstr "Кривые, у которых следует изменить нормали"
 
 
 msgid "Mode for curve normal evaluation"
@@ -145403,10 +145040,6 @@ msgid "Simulation must not be in a loop or closure"
 msgstr "Симуляция не должна быть зацикленной или замкнутой"
 
 
-msgid "Simulation must not be in a loop"
-msgstr "Симуляция не должна быть зацикленной"
-
-
 msgctxt "NodeTree"
 msgid "Simulation"
 msgstr "Симуляция"
@@ -145446,10 +145079,6 @@ msgstr "Все геометрические группы как отдельны
 
 msgid "The group ID of each group instance"
 msgstr "ID группы каждой группы экземпляров"
-
-
-msgid "Anonymous attributes can't be created here"
-msgstr "Здесь нельзя создавать анонимные атрибуты"
 
 
 msgid "Failed to write to attribute \"{}\" with domain \"{}\" and type \"{}\""
@@ -145664,6 +145293,14 @@ msgid "Recursive closure is not allowed"
 msgstr "Рекурсивное замыкание недопустимо"
 
 
+msgid "Conversion not supported when evaluating closure"
+msgstr "Преобразование не поддерживается при вычислении замыкания"
+
+
+msgid "Implicit type conversion when evaluating closure"
+msgstr "Неявная конверсия типов при вычислении замыкания"
+
+
 msgid "Closure does not have input: \"{}\""
 msgstr "Замыкание не имеет ввода: \"{}\""
 
@@ -145727,6 +145364,30 @@ msgstr "Неопределенный тип дерева нод"
 
 msgid " (Deprecated)"
 msgstr " (Устарело)"
+
+
+msgid ""
+"\n"
+"Update based on linked closure signature"
+msgstr ""
+"\n"
+"Обновить на основе связанной сигнатуры замыкания"
+
+
+msgid "No bundle signature found"
+msgstr "Сигнатура связки не найдена"
+
+
+msgid "Found conflicting bundle signatures"
+msgstr "Обнаружены конфликтующие сигнатуры связки"
+
+
+msgid "No closure signature found"
+msgstr "Сигнатур замыкания не найдено"
+
+
+msgid "Found conflicting closure signatures"
+msgstr "Найдены конфликтующие сигнатуры замыкания"
 
 
 msgid "Input grids have incompatible transforms"
@@ -147282,10 +146943,6 @@ msgid "Cannot save blend file, path \"%s\" is a directory"
 msgstr "Невозможно сохранить blend-файл, путь \"%s\" является папкой"
 
 
-msgid "Can't read alternative start-up file: \"%s\""
-msgstr "Невозможно прочитать альтернативный загрузочный файл: \"%s\""
-
-
 msgid "Saved incremental as \"%s\""
 msgstr "Сохранено инкрементально как \"%s\""
 
@@ -147304,14 +146961,6 @@ msgstr "Не библиотека"
 
 msgid "Nothing indicated"
 msgstr "Ничего не указано"
-
-
-msgid "Can't append data-block '%s' of type '%s'"
-msgstr "Невозможно добавить датаблок «%s» типа «%s"
-
-
-msgid "Can't link data-block '%s' of type '%s'"
-msgstr "Невозможно связать датаблок «%s» типа «%s"
 
 
 msgid "'%s': cannot use current file as library"
@@ -147388,10 +147037,6 @@ msgstr "Раскладки одинаковы"
 
 msgid "KeyMap item result may be incorrect since an update is pending, call `context.window_manager.keyconfigs.update()` to ensure matches can be found."
 msgstr "Результат элемента раскладки клавиатуры может быть неверным, поскольку ожидается обновление. Вызовите `context.window_manager.keyconfigs.update()`, чтобы убедиться в возможности нахождения совпадений."
-
-
-msgid "KeyMap \"%s\" doesn't match \"%s\""
-msgstr "Раскладка \"%s\" не соответствует \"%s\""
 
 
 msgid "KeyMap \"%s\" (base) must be a user keymap"
@@ -147497,6 +147142,16 @@ msgstr "Платформа поддерживается ограниченно"
 
 
 msgctxt "WindowManager"
+msgid "Your graphics card or driver version has limited support. It may work, but with issues."
+msgstr "Ваша видеокарта или версия драйвера имеют ограниченную поддержку. Она может работать, но с проблемами."
+
+
+msgctxt "WindowManager"
+msgid "Newer graphics drivers might be available with better Blender compatibility."
+msgstr "Могут быть доступны более новые графические драйверы с лучшей совместимостью с Blender'ом."
+
+
+msgctxt "WindowManager"
 msgid "Graphics card:"
 msgstr "Видеокарта:"
 
@@ -147519,6 +147174,16 @@ msgstr "Ваша видеокарта или драйвер не поддерж�
 msgctxt "WindowManager"
 msgid "Upgrading to the latest macOS version may improve Blender support"
 msgstr "Обновление до последней версии macOS может улучшить поддержку Blender"
+
+
+msgctxt "WindowManager"
+msgid "Your graphics card or driver version is not supported."
+msgstr "Ваша видеокарта или версия драйвера не поддерживается."
+
+
+msgctxt "WindowManager"
+msgid "Blender will now close."
+msgstr "Blender сейчас закроется."
 
 
 msgid "Intel binary detected. Expect reduced performance."
@@ -148663,6 +148328,10 @@ msgstr "Литовский - Lietuviškai"
 
 msgid "English (UK)"
 msgstr "Английский (Великобритания) - English (UK)"
+
+
+msgid "Malayalam - മലയാളം"
+msgstr "Малаялам - മലയാളം"
 
 
 msgid "Add & Subtract"
