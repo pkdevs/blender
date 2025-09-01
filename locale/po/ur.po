@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'68abaa12d581')\n"
+"Project-Id-Version: Blender 5.0.0 Alpha (b'61dd8a1435fb')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-25 08:31+0000\n"
+"POT-Creation-Date: 2025-09-01 09:40+0000\n"
 "PO-Revision-Date: 2025-07-23 15:12+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -2287,6 +2287,14 @@ msgid "Object to use as cage instead of calculating the cage from the active obj
 msgstr "ﺽﺍﺮﺘﻋﺍ ﺎﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﮮﺮﺠﻨﭘ ﮯﺋﺎﺠﺑ ﮯﮐ ﮯﻧﺎﮕﻟ ﺏﺎﺴﺣ ﺎﮐ ﮮﺮﺠﻨﭘ ﮯﺳ ﮯﺷ ﻝﺎﻌﻓ ﮫﺗﺎﺳ ﮯﮐ ﺝﺍﺮﺧﺍ ﮯﮐ ﮮﺮﺠﻨﭘ"
 
 
+msgid "Object"
+msgstr "ﺰﯿﭼ"
+
+
+msgid "Tangent"
+msgstr "ﭧﻨﺠﻨﯿﭨ"
+
+
 msgid "File Path"
 msgstr "ﮧﺘﺳﺍﺭ ﺎﮐ ﻞﺋﺎﻓ"
 
@@ -2387,16 +2395,8 @@ msgid "Choose normal space for baking"
 msgstr "ﮟﯾﺮﮐ ﺏﺎﺨﺘﻧﺍ ﺎﮐ ﮧﮕﺟ ﻡﺎﻋ ﮯﯿﻟ ﮯﮐ ﮓﻨﮑﯿﺑ"
 
 
-msgid "Object"
-msgstr "ﺰﯿﭼ"
-
-
 msgid "Bake the normals in object space"
 msgstr "ﮟﯾﺮﮐ ﮏﯿﺑ ﻞﻣﺭﺎﻧ ﺮﭘ ﮧﮕﺟ ﯽﮐ ﺰﯿﭼ"
-
-
-msgid "Tangent"
-msgstr "ﭧﻨﺠﻨﯿﭨ"
 
 
 msgid "Bake the normals in tangent space"
@@ -2505,6 +2505,10 @@ msgstr "ﯽﻧﺎﮑﻣ ﻞﻘﻧ"
 
 msgid "Bake displacement"
 msgstr "ﯽﻧﺎﮑﻣ ﻞﻘﻧ ﺎﻧﺎﮑﭘ"
+
+
+msgid "Vector Displacement"
+msgstr "ﯽﻧﺎﮑﻣ ﻞﻘﻧ ﯽﮐ ﺮﭩﮑﯾﻭ"
 
 
 msgid "Automatic Name"
@@ -17280,10 +17284,6 @@ msgid "Full Name"
 msgstr "ﻡﺎﻧ ﺍﺭﻮﭘ"
 
 
-msgid "Unique data-block ID name, including library one is any"
-msgstr "ﮯﮨ ﯽﮭﺑ ﯽﺋﻮﮐ ﯼﺮﯾﺮﺒﺋﻻ﻿ ﻝﻮﻤﺸﺑ ،ﻡﺎﻧ ﺎﮐ ID ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ ﺩﺮﻔﻨﻣ"
-
-
 msgid "Original ID"
 msgstr "ID ﻞﺻﺍ"
 
@@ -18977,10 +18977,6 @@ msgid "Preview the scrape planes in the cursor during the stroke"
 msgstr "ﮟﯿﻟ ﮦﺰﺋﺎﺟ ﺎﮐ ﻦﯿﻠﭘ ﮯﻟﺍﻭ ﮯﻨﭼﺮﮭﮐ ﮟﯿﻣ ﺮﺳﺮﮐ ﻥﺍﺭﻭﺩ ﮯﮐ ﮎﻭﺮﭩﺳﺍ"
 
 
-msgid "Radius of the brush in pixels"
-msgstr "ﺱﺍﺩﺭ ﺎﮐ ﺵﺮﺑ ﮟﯿﻣ ﺰﻠﺴﮑﭘ"
-
-
 msgid "Laplacian"
 msgstr "ﻦﺌﯿﺴﯿﻠﭙﯿﻟ"
 
@@ -19141,14 +19137,6 @@ msgid "Automatically align edges to the brush direction to generate cleaner topo
 msgstr "ﮯﮨ ﺎﺗﻮﮨ ﺮﺛﺍ ﺎﮐ ﯽﮔﺩﺮﮐﺭﺎﮐ ﺎﮐ ﺱﺍ ﮧﮑﻧﻮﯿﮐ ﮯﮨ ﺎﺗﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﻦﯾﺮﺘﮩﺑ ﺮﭘ ﮞﻮﺸﯿﻣ ﯽﻟﻮﭘ ﻢﮐ ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﺮﭘ ﺭﻮﻃ ﺭﺎﮐﺩﻮﺧ ﮟﯿﻣ ﺖﻤﺳ ﯽﮐ ﺵﺮﺑ ﻮﮐ ﮞﻭﺭﺎﻨﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺖﺣﺎﺿﻭ ﯽﮐ ﺕﺎﯿﺻﻮﺼﺧ ﺰﯿﺗ ﺭﻭﺍ ﮯﻧﺮﮐ ﺍﺪﯿﭘ ﯽﺟﻮﻟﻮﭘﻮﭨ ﺮﻨﯿﻠﮐ"
 
 
-msgid "Unprojected Radius"
-msgstr "ﺱﺍﺩﺭ ﻊﻗﻮﺘﻣ ﺮﯿﻏ"
-
-
-msgid "Radius of brush in Blender units"
-msgstr "ﺱﺍﺩﺭ ﺎﮐ ﺵﺮﺑ ﮟﯿﻣ ﮞﻮﭩﻧﻮﯾ ﺭﮉﻨﯿﻠﺑ"
-
-
 msgid "Accumulate"
 msgstr "ﺎﻧﺮﮐ ﻊﻤﺟ"
 
@@ -19261,10 +19249,6 @@ msgid "Lock the position of the vertices in the simulation falloff area to avoid
 msgstr "ﮟﯾﺮﮐ ﺍﺪﯿﭘ ﯽﻠﻘﺘﻨﻣ ﻡﺮﻧ ﮫﺗﺎﺳ ﮯﮐ ﮞﻮﻗﻼ﻿ﻋ ﮦﺮﺛﺎﺘﻣ ﺮﯿﻏ ﺭﻭﺍ ﮟﯾﺮﮐ ﻞﻔﻘﻣ ﻮﮐ ﻦﺸﯾﺯﻮﭘ ﯽﮐ ﮞﻮﯿﭨﻮﭼ ﮟﯿﻣ ﺎﯾﺮﯾﺍ ﻑﺁ ﻝﺎﻓ ﯽﻠﻘﻧ ﮯﯿﻟ ﮯﮐ ﮯﻨﭽﺑ ﮯﺳ ﮯﻧﻮﻤﻧ"
 
 
-msgid "Vector Displacement"
-msgstr "ﯽﻧﺎﮑﻣ ﻞﻘﻧ ﯽﮐ ﺮﭩﮑﯾﻭ"
-
-
 msgid "Handle each pixel color as individual vector for displacement (area plane mapping only)"
 msgstr "(ﮓﻨﭙﯿﻣ ﻦﯿﻠﭘ ﺎﯾﺮﯾﺍ ﻑﺮﺻ) ﮟﯾﺮﮐ ﻝﮉﻨﯿﮨ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﺮﭩﮑﯾﻭ ﯼﺩﺍﺮﻔﻧﺍ ﻮﮐ ﮓﻧﺭ ﮯﮐ ﻞﺴﮑﭘ ﺮﮨ ﮯﯿﻟ ﮯﮐ ﯽﻧﺎﮑﻣ ﻞﻘﻧ"
 
@@ -19367,10 +19351,6 @@ msgstr "ﺅﺎﺑﺩ ﺭﺍﻮﻤﮨ ﺎﭩﻟﺍ"
 
 msgid "Lighter pressure causes more smoothing to be applied"
 msgstr "ﮯﮨ ﺎﺘﻨﺑ ﺐﺒﺳ ﺎﮐ ﮯﻧﺮﮐ ﺭﺍﻮﻤﮨ ﮦﺩﺎﯾﺯ ﺅﺎﺑﺩ ﺎﮑﻠﮨ"
-
-
-msgid "Radius Unit"
-msgstr "ﭧﻧﻮﯾ ﺱﺍﺩﺭ"
 
 
 msgid "Measure brush size relative to the view or the scene"
@@ -42600,51 +42580,6 @@ msgid "Blur an image, using several blur modes"
 msgstr "ﮟﯾﺮﮐ ﻻ﻿ﺪﻨﮬﺩ ﻮﮐ ﺮﯾﻮﺼﺗ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺯﮈﻮﻣ ﺮﻠﺑ ﯽﺌﮐ"
 
 
-msgctxt "NodeTree"
-msgid "Filter Type"
-msgstr "ﻢﺴﻗ ﯽﮐ ﺮﭩﻠﻓ"
-
-
-msgctxt "NodeTree"
-msgid "Flat"
-msgstr "ﭧﯿﻠﻓ"
-
-
-msgctxt "NodeTree"
-msgid "Tent"
-msgstr "ﮧﻤﯿﺧ"
-
-
-msgctxt "NodeTree"
-msgid "Quadratic"
-msgstr "ﺭﻮﮐﻮﭼ"
-
-
-msgctxt "NodeTree"
-msgid "Cubic"
-msgstr "ﮏﺑﻮﯿﮐ"
-
-
-msgctxt "NodeTree"
-msgid "Gaussian"
-msgstr "ﯽﺳﻭﺎﮔ"
-
-
-msgctxt "NodeTree"
-msgid "Fast Gaussian"
-msgstr "ﯽﺳﻭﺎﮔ ﺰﯿﺗ"
-
-
-msgctxt "NodeTree"
-msgid "Catrom"
-msgstr "ﻡﻭﺮﭩﯿﮐ"
-
-
-msgctxt "NodeTree"
-msgid "Mitch"
-msgstr "ﭻﻣ"
-
-
 msgid "Bokeh Blur"
 msgstr "ﺮﻠﺑ ﮯﮐﻮﺑ"
 
@@ -42667,14 +42602,6 @@ msgstr "ﮏﺳﺎﻣ ﺲﮐﺎﺑ"
 
 msgid "Create rectangular mask suitable for use as a simple matte"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﮏﺳﺎﻣ ﻞﯿﻄﺘﺴﻣ ﮞﻭﺯﻮﻣ ﮯﯿﻟ ﮯﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﻻ﻿ﺪﻨﮬﺩ ﮦﺩﺎﺳ ﮏﯾﺍ"
-
-
-msgid "Mask Type"
-msgstr "ﻢﺴﻗ ﯽﮐ ﮏﺳﺎﻣ"
-
-
-msgid "Not"
-msgstr "ﮟﯿﮩﻧ"
 
 
 msgid "Brightness/Contrast"
@@ -42899,14 +42826,6 @@ msgid "Plane warp transformation using explicit corner values"
 msgstr "ﯽﻠﯾﺪﺒﺗ ﯽﮐ ﭖﺭﺍﻭ ﻦﯿﻠﭘ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺭﺍﺪﻗﺍ ﯽﮐ ﮯﻧﻮﮐ ﺢﺿﺍﻭ"
 
 
-msgid "Interpolation method"
-msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﻦﺸﯿﻟﻮﭘﺮﭩﻧﺍ"
-
-
-msgid "Anisotropic"
-msgstr "ﮏﭘﻭﺮﭨﻮﺴﯿﻧﺍ"
-
-
 msgid "Crops image to a smaller region, either making the cropped area transparent or resizing the image"
 msgstr "ﺎﻧﺮﮐ ﻞﯾﺪﺒﺗ ﺰﺋﺎﺳ ﺎﮐ ﺮﯾﻮﺼﺗ ﺎﯾ ﻑﺎﻔﺷﮯﮨ ﺎﺗﺎﻨﺑ ﮧﮕﺟ ﯽﺋﻮﮨ ﯽﺷﺍﺮﺗ ﻮﺗ ﺎﯾ ،ﮯﮨ ﺎﺘﺷﺍﺮﺗ ﮟﯿﻣ ﮯﻗﻼ﻿ﻋ ﮯﭨﻮﮭﭼ ﻮﮐ ﺮﯾﻮﺼﺗ"
 
@@ -43127,38 +43046,6 @@ msgid "Denoise renders from Cycles and other ray tracing renderers"
 msgstr "ﮯﮨ ﺎﺗﺮﮐ ﺶﯿﭘ ﮯﺳ ﺯﺭﺭﮉﻨﯾﺭ ﮓﻨﺴﯾﺮﭨ ﮮﺭ ﺮﮕﯾﺩ ﺭﻭﺍ ﺰﻠﮑﯿﺋﺎﺳ ﺰﺋﺍﻮﻨﯾﮈ"
 
 
-msgid "Denoising prefilter"
-msgstr "ﺮﭩﻠﻔﯾﺮﭘ ﻦﺋﻮﻨﯾﮈ"
-
-
-msgid "No prefiltering, use when guiding passes are noise-free"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﮯﻧﻮﮨ ﮎﺎﭘ ﮯﺳ ﺭﻮﺷ ﺰﺳﺎﭘ ﮓﻧﮉﯿﺋﺎﮔ ،ﮟﯿﮩﻧ ﮓﻧﺮﭩﻠﻓ ﯼﺮﭘ ﯽﺋﻮﮐ"
-
-
-msgid "Denoise image and guiding passes together. Improves quality when guiding passes are noisy using least amount of extra processing time."
-msgstr "Denoise ﮞﻮﮨ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺖﻗﻭ ﮓﻨﺴﯿﺳﻭﺮﭘ ﯽﻓﺎﺿﺍ ﻢﮐ ﮯﺳ ﺭﻮﺷ ﺰﺳﺎﭘ ﮓﻧﮉﯿﺋﺎﮔ ﺐﺟ ﮯﮨ ﺎﺗﺎﻨﺑ ﺮﺘﮩﺑ ﻮﮐ ﺭﺎﯿﻌﻣ ﮟﯿﮨ ﮯﺗﺭﺰﮔ ﮫﺗﺎﺳ ﮏﯾﺍ ﮓﻧﮉﯿﺋﺎﮔ ﺭﻭﺍ ﺞﯿﻣﺍ"
-
-
-msgid "Prefilter noisy guiding passes before denoising image. Improves quality when guiding passes are noisy using extra processing time."
-msgstr "ﮟﯿﮨ ﮯﺗﺮﮐ ﺭﻮﺷ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺖﻗﻭ ﮓﻨﺴﯿﺳﻭﺮﭘ ﯽﻓﺎﺿﺍ ﺰﺳﺎﭘ ﮓﻧﮉﯿﺋﺎﮔ ﺐﺟ ﮯﮨ ﺎﺗﺎﻨﺑ ﺮﺘﮩﺑ ﻮﮐ ﺭﺎﯿﻌﻣ ﮯﮨ ﯽﺗﺎﺟ ﺭﺰﮔ ﮯﻠﮩﭘ ﮯﺳ ﮯﻧﺮﮐ ﺩﺮﺘﺴﻣ ﻮﮐ ﺮﯾﻮﺼﺗ ﮓﻧﮉﯿﺋﺎﮔ ﯽﻟﺍﻭ ﺭﻮﺷ ﺮﭩﻠﻓ ﯼﺮﭘ"
-
-
-msgid "High"
-msgstr "ﯽﻠﻋﺍ"
-
-
-msgid "High quality"
-msgstr "ﺭﺎﯿﻌﻣ ﯽٰﻠﻋﺍ"
-
-
-msgid "Balanced"
-msgstr "ﻥﺯﺍﻮﺘﻣ"
-
-
-msgid "Balanced between performance and quality"
-msgstr "ﻥﺯﺍﻮﺘﻣ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﺭﺎﯿﻌﻣ ﺭﻭﺍ ﯽﮔﺩﺮﮐﺭﺎﮐ"
-
-
 msgid "Despeckle"
 msgstr "ﻞﮑﯿﭙﺳﺎﯾﮈ"
 
@@ -43181,14 +43068,6 @@ msgstr "ﺎﻧﺮﮐ ﻢﺘﺧ/ﺎﻧﻼ﻿ﯿﮭﭘ"
 
 msgid "Expand and shrink masks"
 msgstr "ﮟﯾﮍﮑﺳ ﺭﻭﺍ ﮟﯿﺋﻼ﻿ﯿﮭﭘ ﻮﮐ ﮏﺳﺎﻣ"
-
-
-msgid "Growing/shrinking mode"
-msgstr "ﮈﻮﻣ ﺎﮐ ﮯﻧﮍﮑﺳ/ﮯﻨﮬﮍﺑ"
-
-
-msgid "Feather"
-msgstr "ﮫﮑﻨﭘ"
 
 
 msgid "Displace pixel position using an offset vector"
@@ -43271,50 +43150,6 @@ msgid "Apply common image enhancement filters"
 msgstr "ﮟﯿﺋﺎﮕﻟ ﺯﺮﭩﻠﻓ ﮯﻟﺍﻭ ﮯﻧﺎﮬﮍﺑ ﺞﯿﻣﺍ ﻡﺎﻋ"
 
 
-msgid "Filter Type"
-msgstr "ﻢﺴﻗ ﯽﮐ ﺮﭩﻠﻓ"
-
-
-msgid "Soften"
-msgstr "ﺎﻧﺮﮐ ﻡﺮﻧ"
-
-
-msgid "Box Sharpen"
-msgstr "ﺎﻧﺮﮐ ﺰﯿﺗ ﺲﮐﺎﺑ"
-
-
-msgid "An aggressive sharpening filter"
-msgstr "ﺮﭩﻠﻓ ﻻ﻿ﺍﻭ ﮯﻧﺮﮐ ﺰﯿﺗ ﮧﻧﺎﺣﺭﺎﺟ ﮏﯾﺍ"
-
-
-msgid "Diamond Sharpen"
-msgstr "ﺰﯿﺗ ﮉﻨﻤﺋﺍﮈ"
-
-
-msgid "A moderate sharpening filter"
-msgstr "ﺮﭩﻠﻓ ﻻ﻿ﺍﻭ ﮯﻧﺮﮐ ﺰﯿﺗ ﺪﻨﺴﭘ ﻝﺍﺪﺘﻋﺍ ﮏﯾﺍ"
-
-
-msgid "Laplace"
-msgstr "ﺲﯿﻠﭘﻻ﻿"
-
-
-msgid "Sobel"
-msgstr "ﻞﺑﻮﺳ"
-
-
-msgid "Prewitt"
-msgstr "ﭦﻮﯾﺮﭘ"
-
-
-msgid "Kirsch"
-msgstr "ﺵﺮﮐ"
-
-
-msgid "Shadow"
-msgstr "ﮧﯾﺎﺳ"
-
-
 msgid "Flip an image along a defined axis"
 msgstr "ﮟﯿﺋﺎﭩﻠﭘ ﺮﯾﻮﺼﺗ ﮫﺗﺎﺳ ﮯﮐ ﺭﻮﺤﻣ ﻦﯿﻌﺘﻣ ﮏﯾﺍ"
 
@@ -43325,42 +43160,6 @@ msgstr "ﺪﻧﻮﭼﺎﮑﭼ"
 
 msgid "Add lens flares, fog and glows around bright parts of the image"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺯﻮﻠﮔ ﺭﻭﺍ ﮒﻮﻓ ،ﺯﺮﺌﯿﻠﻓ ﺲﻨﯿﻟ ﺩﺮﮔ ﺩﺭﺍ ﮯﮐ ﮞﻮﺼﺣ ﻦﺷﻭﺭ ﮯﮐ ﺮﯾﻮﺼﺗ"
-
-
-msgid "Glare Type"
-msgstr "ﻢﺴﻗ ﯽﮐ ﺪﻧﻮﭼﺎﮑﭼ"
-
-
-msgid "Bloom"
-msgstr "ﺎﻨﻠﮭﮐ"
-
-
-msgid "Ghosts"
-msgstr "ﺕﻮﮭﺑ"
-
-
-msgid "Streaks"
-msgstr "ﮟﯾﺮﯿﮑﻟ"
-
-
-msgid "Fog Glow"
-msgstr "ﮏﻤﭼ ﯽﮐ ﺪﻨﮬﺩ"
-
-
-msgid "Simple Star"
-msgstr "ﮦﺭﺎﺘﺳ ﮦﺩﺎﺳ"
-
-
-msgid "Sun Beams"
-msgstr "ﮟﯿﻧﺮﮐ ﯽﮐ ﺝﺭﻮﺳ"
-
-
-msgid "If not set to high quality, the effect will be applied to a low-res copy of the source image"
-msgstr "ﺎﮔ ﮯﺋﺎﺟ ﺎﯿﮐ ﻮﮔﻻ﻿ ﺮﭘ ﯽﭘﺎﮐ ﻦﺷﻮﯿﻟﻭﺰﯾﺭ ﻢﮐ ﯽﮐ ﺮﯾﻮﺼﺗ ﯽﮐ ﺬﺧﺎﻣ ﺮﺛﺍ ،ﻮﺗ ﮯﮨ ﮟﯿﮩﻧ ﭧﯿﺳ ﺮﭘ ﺭﺎﯿﻌﻣ ﯽﻠﻋﺍ ﺮﮔﺍ"
-
-
-msgid "Low"
-msgstr "ﻢﮐ"
 
 
 msgid "Hue Correct"
@@ -43415,11 +43214,6 @@ msgid "Perform both chroma keying (to remove the backdrop) and despill (to corre
 msgstr "ﮟﯾﺩ ﻡﺎﺠﻧﺍ ﮞﻮﻧﻭﺩ (ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺖﺳﺭﺩ ﭧﺳﺎﮐ ﺮﻠﮐ ﮯﺳ ﭖﺍﺭﮈ ﮏﯿﺑ) ﻞﭙﺳﮈ ﺭﻭﺍ (ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﭩﮨ ﻮﮐ ﭖﺍﺭﮈ ﮏﯿﺑ) ﮓﻨﯿﮐ ﺎﻣﻭﺮﮐ"
 
 
-msgctxt "Curve"
-msgid "Feather Falloff"
-msgstr "ﻑﺁ ﻝﺎﻓ ﺭﺪﯿﻓ"
-
-
 msgid "Keying Screen"
 msgstr "ﻦﯾﺮﮑﺳﺍ ﮓﻨﯿﮐ"
 
@@ -43440,22 +43234,6 @@ msgid "Apply smoothing filter that preserves edges, for stylized and painterly e
 msgstr "ﺕﺍﺮﺛﺍ ﮯﮐ ﯼﺭﻮﺼﻣﮯﯿﻟ ﮯﮐ ﺭﻭﺍ ﮈﺰﺋﻼ﻿ﺋﺎﭩﺳﺍ ،ﮯﮨ ﺎﺘﮭﮐﺭ ﻅﻮﻔﺤﻣ ﻮﮐ ﮞﻭﺭﺎﻨﮐ ﻮﺟ ﮟﯿﺋﺎﮕﻟ ﺮﭩﻠﻓ ﺭﺍﻮﻤﮨ"
 
 
-msgid "Variation of Kuwahara filter to use"
-msgstr "ﯽﻠﯾﺪﺒﺗ ﯽﮐ ﺮﭩﻠﻓ ﺍﺭﺎﮨﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ"
-
-
-msgid "Classic"
-msgstr "ﮏﺳﻼ﻿ﮐ"
-
-
-msgid "Fast but less accurate variation"
-msgstr "ﺮﯿﻐﺗ ﺖﺳﺭﺩ ﻢﮐ ﻦﮑﯿﻟ ﺰﯿﺗ"
-
-
-msgid "Accurate but slower variation"
-msgstr "ﺮﯿﻐﺗ ﺖﺴﺳ ﻦﮑﯿﻟ ﺖﺳﺭﺩ"
-
-
 msgid "Lens Distortion"
 msgstr "ﻒﯾﺮﺤﺗ ﯽﮐ ﺲﻨﯿﻟ"
 
@@ -43466,34 +43244,6 @@ msgstr "ﮟﯿﺋﺎﻨﺑ ﮧﻧﻮﻤﻧ ﺎﮐ ﯼﺯﺎﺑ ﺭﻭﺍ ﺦﺴ�
 
 msgid "Compute average and standard deviation of pixel values"
 msgstr "ﮟﯾﺮﮐ ﯽﺘﻨﮔ ﯽﮐ ﻑﺍﺮﺤﻧﺍ ﯼﺭﺎﯿﻌﻣ ﺭﻭﺍ ﻂﺳﻭﺍ ﯽﮐ ﺭﺍﺪﻗﺍ ﻞﺴﮑﭘ"
-
-
-msgid "Combined"
-msgstr "ﮧﮐﺮﺘﺸﻣ"
-
-
-msgid "Combined RGB"
-msgstr "ﯽﺒﯿﺟﺭﺁ ﮧﮐﺮﺘﺸﻣ"
-
-
-msgid "Red Channel"
-msgstr "ﻞﻨﯿﭼ ﮉﯾﺭ"
-
-
-msgid "Green Channel"
-msgstr "ﻞﻨﯿﭼ ﻦﯾﺮﮔ"
-
-
-msgid "Blue Channel"
-msgstr "ﻞﻨﯿﭼ ﻮﯿﻠﺑ"
-
-
-msgid "Luminance"
-msgstr "ﯽﻨﺷﻭﺭ"
-
-
-msgid "Luminance Channel"
-msgstr "ﻞﻨﯿﭼ ﺎﮐ ﯽﻨﺷﻭﺭ"
 
 
 msgid "Luminance Key"
@@ -43512,40 +43262,12 @@ msgid "Map a texture using UV coordinates, to apply a texture to objects in comp
 msgstr "ﮟﯿﺋﺎﻨﺑ ﮧﺸﻘﻧ ﺎﮐ ﺖﺧﺎﺳ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺲﭩﯿﻨﯾﮈﺭﺁﻮﮐ UV ،ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﮕﻟ ﺖﺧﺎﺳ ﺮﭘ ءﺎﯿﺷﺍ ﮟﯿﻣ ﮓﻨﭨﺯﻮﭙﻤﮐ"
 
 
-msgid "Size Source"
-msgstr "ﮧﻌﯾﺭﺫ ﺎﮐ ﺰﺋﺎﺳ"
-
-
-msgid "Where to get the mask size from for aspect/size information"
-msgstr "ﮯﺋﺎﺟ ﺎﯿﮐ ﻞﺻﺎﺣ ﮯﺳ ﮞﺎﮩﮐ ﺰﺋﺎﺳ ﺎﮐ ﮏﺳﺎﻣ ﮯﯿﻟ ﮯﮐ ﺕﺎﻣﻮﻠﻌﻣ ﯽﮐ ﺰﺋﺎﺳ/ﻮﻠﮩﭘ"
-
-
-msgid "Scene Size"
-msgstr "ﺰﺋﺎﺳ ﺎﮐ ﺮﻈﻨﻣ"
-
-
-msgid "Use pixel size for the buffer"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺰﺋﺎﺳ ﻞﺴﮑﭘ ﮯﯿﻟ ﮯﮐ ﺮﻔﺑ"
-
-
-msgid "Fixed/Scene"
-msgstr "ﺮﻈﻨﻣ/ﮉﺴﮑﻓ"
-
-
-msgid "Pixel size scaled by scene percentage"
-msgstr "ﺎﭨﻮﮭﭼ ﺰﺋﺎﺳ ﺎﮐ ﻞﺴﮑﭘ ﮯﺳ ﺏﺎﺴﺣ ﮯﮐ ﺪﺼﯿﻓ ﮯﮐ ﺮﻈﻨﻣ"
-
-
 msgid "Movie Distortion"
 msgstr "ﻦﺸﯾﺮﭩﺳﮈ ﯼﻭﻮﻣ"
 
 
 msgid "Remove lens distortion from footage, using motion tracking camera lens settings"
 msgstr "ﮟﯾﺩ ﺎﭩﮨ ﻮﮐ ﺦﺴﻣ ﯽﮐ ﺲﻨﯿﻟ ﮯﺳ ﺞﯿﭨﻮﻓ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺰﮕﻨﭩﯿﺳ ﺲﻨﯿﻟ ﮦﺮﻤﯿﮐ ﮓﻨﮑﯾﺮﭨ ﺖﮐﺮﺣ"
-
-
-msgid "Distortion to use to filter image"
-msgstr "ﺦﺴﻣ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺮﭩﻠﻓ ﻮﮐ ﺮﯾﻮﺼﺗ"
 
 
 msgid "Map values to 0 to 1 range, based on the minimum and maximum pixel values"
@@ -43660,10 +43382,6 @@ msgid "Change the size of the image"
 msgstr "ﺮﯾﻮﺼﺗ of the ﺰﺋﺎﺳ the ﯽﻠﯾﺪﺒﺗ"
 
 
-msgid "Coordinate space to scale relative to"
-msgstr "ﮟﯾﺮﮐ ﻁﻮﺑﺮﻣ ﻮﮐ ﮧﮕﺟ ﺮﭘ ﮯﻧﺎﻤﯿﭘ ﯽﺘﺒﺴﻧ"
-
-
 msgid "Scene Time"
 msgstr "ﺖﻗﻭ ﺎﮐ ﺮﻈﻨﻣ"
 
@@ -43716,10 +43434,6 @@ msgid "Stabilize footage using 2D stabilization motion tracking settings"
 msgstr "2D ﮟﯾﺮﮐ ﻢﮑﺤﺘﺴﻣ ﻮﮐ ﺞﯿﭨﻮﻓ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺰﮕﻨﭩﯿﺳ ﮓﻨﮑﯾﺮﭨ ﺖﮐﺮﺣ  ﻦﺸﯾﺰﺋﻼ﻿ﺒﯿﭩﺳﺍ"
 
 
-msgid "Method to use to filter stabilization"
-msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺮﭩﻠﻓ ﻮﮐ ﻡﺎﮑﺤﺘﺳﺍ"
-
-
 msgid "Switch"
 msgstr "ﮟﯾﺮﮐ ﭻﺋﻮﺳ"
 
@@ -43752,68 +43466,12 @@ msgid "Map one set of colors to another in order to approximate the appearance o
 msgstr "ﻞﮑﺷ ﯼﺮﮨﺎﻇ ﯽﮐ ﺞﻨﯾﺭ ﮎﺮﺤﺘﻣ ﯽﻠﻋﺍﮯﮑﺳﺎﺟ ﺎﯾﺎﮕﻟ ﮦﺯﺍﺪﻧﺍ ﮧﮐﺎﺗ ﮟﯿﺋﺎﮕﻟ ﮧﺸﻘﻧ ﮟﯿﻣ ﮮﺮﺳﻭﺩ ﻮﮐ ﭧﯿﺳ ﮏﯾﺍ ﮯﮐ ﮞﻮﮕﻧﺭ"
 
 
-msgid "Tonemap Type"
-msgstr "ﻢﺴﻗ ﯽﮐ ﭗﯿﻣ ﻥﻮﭨ"
-
-
-msgid "R/D Photoreceptor"
-msgstr "R/D ﺮﭩﭙﯿﺴﯾﺭ ﻮﭨﻮﻓ"
-
-
-msgid "More advanced algorithm based on eye physiology, by Reinhard and Devlin"
-msgstr "ﻢﮭﺗﺭﻮﮕﻟﺍ ﺪﯾﺪﺟ ﺪﯾﺰﻣ ﯽﻨﺒﻣ ﺮﭘ ﯽﺟﻮﻟﺎﯾﺰﻓ ﯽﮐ ﮞﻮﮭﮑﻧﺁ ،ﮧﻌﯾﺭﺫ ﮯﮐ ﻦﻟﻮﯾﮈ ﺭﻭﺍ ﮈﺭﺎﮨ ﻦﯾﺭ"
-
-
-msgid "Rh Simple"
-msgstr "Rh ﮦﺩﺎﺳ"
-
-
-msgid "Simpler photographic algorithm by Reinhard"
-msgstr "ﻢﮭﺗﺭﻮﮕﻟﺍ ﯽﻓﺍﺮﮔ ﻮﭨﻮﻓ ﻥﺎﺳﺁ ﮧﻌﯾﺭﺫ ﮯﮐ ﮈﺭﺎﮨ ﻦﯾﺭ"
-
-
 msgid "Track Position"
 msgstr "ﻡﺎﻘﻣ  ﮏﯾﺮﭨ"
 
 
 msgid "Provide information about motion tracking points, such as x and y values"
 msgstr "ﺭﺍﺪﻗﺍ y ﺭﻭﺍ x ﮧﮐ ﮯﺴﯿﺟ ،ﮟﯾﺮﮐ ﻢﮨﺍﺮﻓ ﺕﺎﻣﻮﻠﻌﻣ ﮟﯿﻣ ﮮﺭﺎﺑ ﮯﮐ ﺲﭩﻨﺋﺍﻮﭘ ﮓﻨﮑﯾﺮﭨ ﺖﮐﺮﺣ"
-
-
-msgid "Frame to be used for relative position"
-msgstr "ﻢﯾﺮﻓ ﻻ﻿ﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ  ﻡﺎﻘﻣ  ﺭﺍﺩ ﮧﺘﺷﺭ"
-
-
-msgid "Which marker position to use for output"
-msgstr "ﮯﮨ ﯽﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ  ﻡﺎﻘﻣ  ﯽﺳ ﻥﻮﮐ ﯽﮐ ﺮﮐﺭﺎﻣ ﮯﯿﻟ ﮯﮐ ﭧﭘ ﭦﺅﺁ"
-
-
-msgid "Output absolute position of a marker"
-msgstr "ﭧﭘ ﭦﺅﺁ  ﻡﺎﻘﻣ  ﻖﻠﻄﻣ ﯽﮐ ﺮﮐﺭﺎﻣ"
-
-
-msgid "Relative Start"
-msgstr "ﺯﺎﻏﺁ ﺭﺍﺩ ﮧﺘﺷﺭ"
-
-
-msgid "Output position of a marker relative to first marker of a track"
-msgstr "ﻡﺎﻘﻣ  ﭧﭘ ﭦﺅﺁ ﯽﮐ ﺮﮐﺭﺎﻣ ﺖﺒﺴﻧ ﮯﮐ ﺮﮐﺭﺎﻣ ﮯﻠﮩﭘ ﮯﮐ ﮏﯾﺮﭨ"
-
-
-msgid "Relative Frame"
-msgstr "ﻢﯾﺮﻓ ﺭﺍﺩ ﮧﺘﺷﺭ"
-
-
-msgid "Output position of a marker relative to marker at given frame number"
-msgstr "ﻡﺎﻘﻣ  ﭧﭘ ﭦﺅﺁ ﯽﮐ ﺮﮐﺭﺎﻣ ﺖﺒﺴﻧ ﯽﮐ ﺮﮐﺭﺎﻣ ﺮﭘ ﺮﺒﻤﻧ ﻢﯾﺮﻓ ﮯﺌﮔ ﮯﺌﯾﺩ"
-
-
-msgid "Absolute Frame"
-msgstr "ﻢﯾﺮﻓ ﻖﻠﻄﻣ"
-
-
-msgid "Output absolute position of a marker at given frame number"
-msgstr "ﭧﭘ ﭦﺅﺁ  ﻡﺎﻘﻣ  ﻖﻠﻄﻣ ﯽﮐ ﺮﮐﺭﺎﻣ ﺮﭘ ﺮﺒﻤﻧ ﻢﯾﺮﻓ ﮯﺌﮔ ﮯﺌﯾﺩ"
 
 
 msgid "Scale, translate and rotate an image"
@@ -43934,6 +43592,10 @@ msgstr "ﺭﻭﺍ"
 
 msgid "Or"
 msgstr "ﺎﯾ"
+
+
+msgid "Not"
+msgstr "ﮟﯿﮩﻧ"
 
 
 msgid "Boolean Math"
@@ -49571,6 +49233,10 @@ msgstr "ﯼﺪﻨﺑﺎﭘ ﻝﺎﻌﻓ"
 
 msgid "Active Object constraint"
 msgstr "ﯼﺪﻨﺑﺎﭘ ﯽﮐ ﮯﺷ ﻝﺎﻌﻓ"
+
+
+msgid "Shadow"
+msgstr "ﮧﯾﺎﺳ"
 
 
 msgid "Object cast shadows in the 3D viewport"
@@ -56576,12 +56242,8 @@ msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﯼﺭ ﻮﮐ ﯽﺋﺎﺒﻤﻟ ﻞﺻﺍ ﯽﮐ
 
 
 msgctxt "Operator"
-msgid "Add Bezier"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﯾﺰﯿﺑ"
-
-
-msgid "Add new bezier curve"
-msgstr "ﻢﺧ ﺮﺌﯾﺰﯿﺑ ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺎﯿﻧ"
+msgid "Add Bézier"
+msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﺌﯾﺰﯿﺑ"
 
 
 msgid "The alignment of the new object"
@@ -56743,6 +56405,10 @@ msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﻢﺴﻗ ﯽﮐ ﻝﮉﻨﯿﮨ"
 
 msgid "Set the handle type for bezier curves"
 msgstr "ﮟﯾﺮﮐ ﺭﺮﻘﻣ ﻢﺴﻗ ﯽﮐ ﻝﮉﻨﯿﮨ ﮯﺌﻟ ﮯﮐ ﻁﻮﻄﺧ ﯽﻨﺤﻨﻣ ﺮﯾﺰﯿﺑ"
+
+
+msgid "Toggle Free/Align"
+msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ /ﯼﺮﻓ ﻞﮔﻮﭨ"
 
 
 msgctxt "Operator"
@@ -57072,10 +56738,6 @@ msgid "Spline type"
 msgstr "ﻢﺴﻗ ﯽﮐ ﻦﺋﻼ﻿ﭙﺳ"
 
 
-msgid "Toggle Free/Align"
-msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ /ﯼﺮﻓ ﻞﮔﻮﭨ"
-
-
 msgid "Hide (un)selected control points"
 msgstr "ﺲﭩﻨﺋﺍﻮﭘ ﻝﻭﺮﭩﻨﮐ ﺐﺨﺘﻨﻣ (ﺮﯿﻏ) ﮟﯿﺋﺎﭙﮭﭼ"
 
@@ -57247,11 +56909,6 @@ msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﻞﮐﺮﺳ ﺮﺌﯾﺰﯿﺑ"
 
 msgid "Construct a Bézier Circle"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﻞﮐﺮﺳ ﺮﺌﯾﺰﯿﺑ ﮏﯾﺍ"
-
-
-msgctxt "Operator"
-msgid "Add Bézier"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﺌﯾﺰﯿﺑ"
 
 
 msgid "Construct a Bézier Curve"
@@ -61569,14 +61226,6 @@ msgid "Elastic"
 msgstr "ﺭﺍﺪﮑﭽﻟ"
 
 
-msgid "Join and Copy"
-msgstr "ﮟﯾﺮﮐ ﯽﭘﺎﮐ ﺭﻭﺍ ﮞﻮﮨ ﻞﻣﺎﺷ"
-
-
-msgid "Join"
-msgstr "ﺖﯿﻟﻮﻤﺷ"
-
-
 msgctxt "Operator"
 msgid "Set Active Layer"
 msgstr "Set ﺕﺮﭘ ﻝﺎﻌﻓ"
@@ -64165,6 +63814,10 @@ msgid "Recalculate animation data on selected points for frames selected in the 
 msgstr "ﮟﯿﺋﺎﮕﻟ ﺏﺎﺴﺣ ﮦﺭﺎﺑﻭﺩ ﺎﮐ ﺎﭩﯾﮈ ﺕﺎﯿﮐﺮﺣ  ﺮﭘ ﺲﭩﻨﺋﺍﻮﭘ ﺐﺨﺘﻨﻣ ﮯﯿﻟ ﮯﮐ ﮞﻮﻤﯾﺮﻓ ﮦﺩﺮﮐ ﺐﺨﺘﻨﻣ ﮟﯿﻣ ﭧﯿﺷ ﭖﻭﮈ"
 
 
+msgid "Feather"
+msgstr "ﮫﮑﻨﭘ"
+
+
 msgctxt "Operator"
 msgid "Slide Point"
 msgstr "ﭧﻨﺋﺍﻮﭘ ﮉﯿﺋﻼ﻿ﺳ"
@@ -64447,6 +64100,10 @@ msgstr "ﺲﭘﻮﻟ ﺞﯾﺍ ﺝﺮﺑ"
 
 msgid "Create a bridge of faces between two or more selected edge loops"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﻞﭘ ﮏﯾﺍ ﺎﮐ ﮞﻭﺮﮩﭼ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﺲﭘﻮﻟ ﮯﮐ ﮞﻭﺭﺎﻨﮐ ﺐﺨﺘﻨﻣ ﮦﺩﺎﯾﺯ ﺎﯾ ﻭﺩ"
+
+
+msgid "Interpolation method"
+msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﻦﺸﯿﻟﻮﭘﺮﭩﻧﺍ"
 
 
 msgid "Blend Path"
@@ -68849,6 +68506,10 @@ msgid "Type of pass to bake, some of them may not be supported by the current re
 msgstr "ﮯﮨ ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﭦﺭﻮﭙﺳ ﮯﻌﯾﺭﺫ ﮯﮐ ﻦﺠﻧﺍ ﺭﮉﻨﯾﺭ ﮦﺩﻮﺟﻮﻣ ﻮﮐ ﮫﭽﮐ ﮯﺳ ﮟﯿﻣ ﻥﺍ ،ﻢﺴﻗ ﯽﮐ ﺱﺎﭘ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮏﯿﺑ"
 
 
+msgid "Combined"
+msgstr "ﮧﮐﺮﺘﺸﻣ"
+
+
 msgid "Automatically name the output file with the pass type"
 msgstr "ﮟﯾﺩ ﻡﺎﻧ ﺩﻮﺨﺑ ﺩﻮﺧ ﻮﮐ ﻞﺋﺎﻓ ﭧﭘ ﭦﺅﺁ ﮫﺗﺎﺳ ﮯﮐ ﻢﺴﻗ ﯽﮐ ﺱﺎﭘ"
 
@@ -70814,6 +70475,14 @@ msgstr "ﺭﺎﺘﻓﺭ ﯽﮐ ﺮﮨﺎﺑ"
 
 msgid "Apply Hair Guides"
 msgstr "ﮟﯿﺋﺎﮕﻟ ﺯﮉﯿﺋﺎﮔ ﺮﺌﯿﮨ"
+
+
+msgid "Low"
+msgstr "ﻢﮐ"
+
+
+msgid "High"
+msgstr "ﯽﻠﻋﺍ"
 
 
 msgid "Hair Radius"
@@ -73713,6 +73382,10 @@ msgid "Value, Hue, Saturation"
 msgstr "ﯽﺘﭘﺮﺘﻨﺳ ،ﮓﻧﺭ ،ﺭﺪﻗ"
 
 
+msgid "Luminance"
+msgstr "ﯽﻨﺷﻭﺭ"
+
+
 msgctxt "Operator"
 msgid "Brush Edit"
 msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﺵﺮﺑ"
@@ -76413,6 +76086,10 @@ msgid "Fill Color"
 msgstr "ﮟﯾﺮﮭﺑ ﮓﻧﺭ"
 
 
+msgid "Filter Type"
+msgstr "ﻢﺴﻗ ﯽﮐ ﺮﭩﻠﻓ"
+
+
 msgid "Fill with a specific color"
 msgstr "ﮟﯾﺮﮭﺑ ﮯﺳ ﮓﻧﺭ ﺹﻮﺼﺨﻣ ﮏﯾﺍ"
 
@@ -77325,6 +77002,10 @@ msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﻦﺸﯾﺮﭘﺁ ﻦﯿﻟ�
 
 msgid "Use a union boolean operation"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﻦﺸﯾﺮﭘﺁ ﻦﯿﻟﻮﺑ ﻦﯿﻧﻮﯾ"
+
+
+msgid "Join"
+msgstr "ﺖﯿﻟﻮﻤﺷ"
 
 
 msgid "Join the new mesh as separate geometry, without performing any boolean operation"
@@ -78312,6 +77993,10 @@ msgid "Offset to the data of the strip"
 msgstr "ﭧﯿﺳ ﻑﺁ ﻮﮐ ﺎﭩﯾﮈ ﮯﮐ ﯽﭩﭘ"
 
 
+msgid "Use Cursor Position"
+msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ  ﻡﺎﻘﻣ  ﯽﮐ ﺮﺳﺮﮐ"
+
+
 msgctxt "Operator"
 msgid "Snap Strips to the Current Frame"
 msgstr "ﺲﭘﺮﭩﺳ ﭗﯿﻨﺳﺍ ﺮﭘ ﻢﯾﺮﻓ ﮦﺩﻮﺟﻮﻣ"
@@ -78364,10 +78049,6 @@ msgstr "ﮯﮨ ﺎﺘﮨﺭ ﺐﺨﺘﻨﻣ ﺪﻌﺑ ﮯﮐ ﮯﻧﻮﮨ ﻢﯿ
 
 msgid "The type of split operation to perform on strips"
 msgstr "ﻢﺴﻗ ﯽﮐ ﻦﺸﯾﺮﭘﺁ ﭧﻠﭙﺳ ﮯﯿﻟ ﮯﮐ ﮯﻨﯾﺩ ﻡﺎﺠﻧﺍ ﺮﭘ ﺲﭘﺮﭩﺳ"
-
-
-msgid "Use Cursor Position"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ  ﻡﺎﻘﻣ  ﯽﮐ ﺮﺳﺮﮐ"
 
 
 msgid "Split at position of the cursor instead of current frame"
@@ -85178,10 +84859,6 @@ msgid "Brush Detail"
 msgstr "ﻞﯿﺼﻔﺗ ﯽﮐ ﺵﺮﺑ"
 
 
-msgid "Mesh detail is relative to brush radius"
-msgstr "ﮯﮨ ﻖﻠﻌﺘﻣ ﮯﺳ ﺱﺍﺩﺭ ﮯﮐ ﺵﺮﺑ ﻞﯿﺼﻔﺗ ﯽﮐ ﺶﯿﻣ"
-
-
 msgid "Manual Detail"
 msgstr "ﻞﯿﺼﻔﺗ ﯽﺘﺳﺩ"
 
@@ -87146,6 +86823,10 @@ msgstr "ﯽﻠﯾﺫ"
 
 msgid "Make hairs less puffy"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﻦﺟﻮﺳ ﻢﮐ ﻮﮐ ﮞﻮﻟﺎﺑ"
+
+
+msgid "Radius of the brush in pixels"
+msgstr "ﺱﺍﺩﺭ ﺎﮐ ﺵﺮﺑ ﮟﯿﻣ ﺰﻠﺴﮑﭘ"
 
 
 msgid "Brush steps"
@@ -91578,6 +91259,10 @@ msgid "Prefilter noisy guiding (albedo and normal) passes to improve denoising q
 msgstr "OpenImageDenoise ﺰﺳﺎﭘ (ﻞﻣﺭﺎﻧ ﺭﻭﺍ ﻭﮉﯿﺒﻟﺍ) ﮓﻧﮉﯿﺋﺎﮔ ﺭﻮﺷ ﺮﭩﻠﻓ ﯼﺮﭘ ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﻨﺑ ﺮﺘﮩﺑ ﻮﮐ ﯽﭩﻟﺍﻮﮐ ﮓﻧﺰﺋﺍﻮﻨﯾﮈ ﺖﻗﻭ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ"
 
 
+msgid "No prefiltering, use when guiding passes are noise-free"
+msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﮯﻧﻮﮨ ﮎﺎﭘ ﮯﺳ ﺭﻮﺷ ﺰﺳﺎﭘ ﮓﻧﮉﯿﺋﺎﮔ ،ﮟﯿﮩﻧ ﮓﻧﺮﭩﻠﻓ ﯼﺮﭘ ﯽﺋﻮﮐ"
+
+
 msgid "Denoise color and guiding passes together. Improves quality when guiding passes are noisy using least amount of extra processing time"
 msgstr "ﮞﻮﮨ ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺖﻗﻭ ﮓﻨﺴﯿﺳﻭﺮﭘ ﯽﻓﺎﺿﺍ ﻢﮐ ﮯﺳ ﺭﻮﺷ ﺰﺳﺎﭘ ﮓﻧﮉﯿﺋﺎﮔ ﺐﺟ ﮯﮨ ﺎﺗﺎﻨﺑ ﺮﺘﮩﺑ ﻮﮐ ﺭﺎﯿﻌﻣ ﮟﯿﮨ ﮯﺗﺭﺰﮔ ﮫﺗﺎﺳ ﮏﯾﺍ ﮓﻧﮉﯿﺋﺎﮔ ﺭﻭﺍ ﮓﻧﺭ ﺰﺋﺍﻮﻨﯾﮈ"
 
@@ -91592,6 +91277,18 @@ msgstr "ﺭﺎﯿﻌﻣ ﺎﻧﺮﮐ ﺭﺎﮑﻧﺍ"
 
 msgid "Overall denoising quality when using OpenImageDenoise"
 msgstr "OpenImageDenoise ﺮﭘ ﺭﻮﻃ ﯽﻋﻮﻤﺠﻣ ﺖﻗﻭ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ denoising ﺭﺎﯿﻌﻣ"
+
+
+msgid "High quality"
+msgstr "ﺭﺎﯿﻌﻣ ﯽٰﻠﻋﺍ"
+
+
+msgid "Balanced"
+msgstr "ﻥﺯﺍﻮﺘﻣ"
+
+
+msgid "Balanced between performance and quality"
+msgstr "ﻥﺯﺍﻮﺘﻣ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﺭﺎﯿﻌﻣ ﺭﻭﺍ ﯽﮔﺩﺮﮐﺭﺎﮐ"
 
 
 msgid "High performance"
@@ -101149,8 +100846,20 @@ msgid "Normally always 1, but can be used as an extra control to alter the brigh
 msgstr "ﮯﮨ ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﻝﻭﺮﭩﻨﮐ ﯽﻓﺎﺿﺍ ﮏﯾﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﻞﺑ ﮏﻤﭼ ﻦﮑﯿﻟ ،1 ﮧﺸﯿﻤﮨ ﺮﭘ ﺭﻮﻃ ﻡﺎﻋ"
 
 
+msgid "Tonemap Type"
+msgstr "ﻢﺴﻗ ﯽﮐ ﭗﯿﻣ ﻥﻮﭨ"
+
+
 msgid "Tone mapping algorithm"
 msgstr "ﻢﮭﺗﺭﻮﮕﻟﺍ ﮓﻨﭙﯿﻣ ﻥﻮﭨ"
+
+
+msgid "R/D Photoreceptor"
+msgstr "R/D ﺮﭩﭙﯿﺴﯾﺭ ﻮﭨﻮﻓ"
+
+
+msgid "Rh Simple"
+msgstr "Rh ﮦﺩﺎﺳ"
 
 
 msgid "Equalize audio"
@@ -101980,10 +101689,6 @@ msgid "Settings for space list"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﮯﯿﻟ ﮯﮐ ﺖﺳﺮﮩﻓ ﯽﮐ ﮧﮕﺟ"
 
 
-msgid "Strips Selected"
-msgstr "ﺐﺨﺘﻨﻣ ﺲﭘﺮﭩﺳ"
-
-
 msgid "Scrubbing/Markers Region"
 msgstr "ﮧﻗﻼ﻿ﻋ ﺎﮐ ﺯﺮﮐﺭﺎﻣ/ﮓﻨﺑﺮﮑﺳﺍ"
 
@@ -102010,6 +101715,102 @@ msgstr "ﮦﻭﺮﮔ ﻞﻨﯿﭼ ﻝﺎﻌﻓ"
 
 msgid "Sub-channel"
 msgstr "ﻞﻨﯿﭼ ﯽﻠﯾﺫ"
+
+
+msgid "Breakdown Keyframe"
+msgstr "ﻢﯾﺮﻓ ﯽﮐ ﻥﺅﺍﮈ ﮏﯾﺮﺑ"
+
+
+msgid "Color of breakdown keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﻥﺅﺍﮈ ﮏﯾﺮﺑ"
+
+
+msgid "Breakdown Keyframe Selected"
+msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﻢﯾﺮﻓ ﯽﮐ ﻥﺅﺍﮈ ﮏﯾﺮﺑ"
+
+
+msgid "Color of selected breakdown keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﻥﺅﺍﮈ ﮏﯾﺮﺑ ﺐﺨﺘﻨﻣ"
+
+
+msgid "Extreme Keyframe"
+msgstr "ﻢﯾﺮﻓ ﯽﮐ ﻢﯾﺮﭩﺴﮑﯾﺍ"
+
+
+msgid "Color of extreme keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ ﯽﺋﺎﮩﺘﻧﺍ"
+
+
+msgid "Extreme Keyframe Selected"
+msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻢﯾﺮﻓ ﯽﮐ ﻢﯾﺮﭩﺴﮑﯾﺍ"
+
+
+msgid "Color of selected extreme keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ ﯽﺋﺎﮩﺘﻧﺍ ﺐﺨﺘﻨﻣ"
+
+
+msgid "Generated Keyframe"
+msgstr "ﻢﯾﺮﻓ ﯽﮐ ﺎﯿﮐ ﺍﺪﯿﭘ"
+
+
+msgid "Color of generated keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﮦﺩﺮﮐ ﺭﺎﯿﺗ"
+
+
+msgid "Generated Keyframe Selected"
+msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ ﺎﯿﮐ ﺍﺪﯿﭘ"
+
+
+msgid "Color of selected generated keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﮦﺪﺷ ﺐﺨﺘﻨﻣ"
+
+
+msgid "Jitter Keyframe"
+msgstr "ﻢﯾﺮﻓ ﯽﮐ ﺮﭩﺟ"
+
+
+msgid "Color of jitter keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﺮﭩﺟ"
+
+
+msgid "Jitter Keyframe Selected"
+msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻢﯾﺮﻔﯿﮐ ﺮﭩﺟ"
+
+
+msgid "Color of selected jitter keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﺮﭩﺟ ﺐﺨﺘﻨﻣ"
+
+
+msgid "Moving Hold Keyframe"
+msgstr "ﺎﻧﺮﮐ ﻞﻘﺘﻨﻣ ﻮﮐ ﻢﯾﺮﻓ ﯽﮐ ﮉﻟﻮﮨ"
+
+
+msgid "Color of moving hold keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﮉﻟﻮﮨ ﮓﻧﻭﻮﻣ"
+
+
+msgid "Moving Hold Keyframe Selected"
+msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﻢﯾﺮﻓ ﯽﮐ ﮉﻟﻮﮨ ﮓﻧﻭﻮﻣ"
+
+
+msgid "Color of selected moving hold keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﮉﻟﻮﮨ ﮓﻧﻭﻮﻣ ﺐﺨﺘﻨﻣ"
+
+
+msgid "Keyframe Selected"
+msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ"
+
+
+msgid "Color of selected keyframe"
+msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﺐﺨﺘﻨﻣ"
+
+
+msgid "Long Key"
+msgstr "ﯽﺑﺎﭼ ﯽﺒﻤﻟ"
+
+
+msgid "Long Key Selected"
+msgstr "ﯽﺌﮔ ﯽﮐ ﺐﺨﺘﻨﻣ ﺪﯿﻠﮐ ﯽﺒﻤﻟ"
 
 
 msgid "Preview Range"
@@ -102108,10 +101909,6 @@ msgid "Color of lines showing non-Bézier interpolation modes"
 msgstr "ﮯﮨ ﺎﮨﺭ ﺎﮭﮐﺩ ﺯﮈﻮﻣ ﻦﺸﯿﻟﻮﭘﺮﭩﻧﺍ ﺮﺌﯾﺰﯿﺑ ﺮﯿﻏ ﮓﻧﺭ ﺎﮐ ﮞﻭﺮﯿﮑﻟ"
 
 
-msgid "Color of Keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ"
-
-
 msgid "Keyframe Border"
 msgstr "ﺭﮈﺭﺎﺑ ﻢﯾﺮﻓ ﯽﮐ"
 
@@ -102128,108 +101925,12 @@ msgid "Color of selected keyframe border"
 msgstr "ﮓﻧﺭ ﺎﮐ ﺭﮈﺭﺎﺑ ﻢﯾﺮﻓ ﯽﮐ ﺐﺨﺘﻨﻣ"
 
 
-msgid "Breakdown Keyframe"
-msgstr "ﻢﯾﺮﻓ ﯽﮐ ﻥﺅﺍﮈ ﮏﯾﺮﺑ"
-
-
-msgid "Color of breakdown keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﻥﺅﺍﮈ ﮏﯾﺮﺑ"
-
-
-msgid "Breakdown Keyframe Selected"
-msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﻢﯾﺮﻓ ﯽﮐ ﻥﺅﺍﮈ ﮏﯾﺮﺑ"
-
-
-msgid "Color of selected breakdown keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﻥﺅﺍﮈ ﮏﯾﺮﺑ ﺐﺨﺘﻨﻣ"
-
-
-msgid "Extreme Keyframe"
-msgstr "ﻢﯾﺮﻓ ﯽﮐ ﻢﯾﺮﭩﺴﮑﯾﺍ"
-
-
-msgid "Color of extreme keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ ﯽﺋﺎﮩﺘﻧﺍ"
-
-
-msgid "Extreme Keyframe Selected"
-msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻢﯾﺮﻓ ﯽﮐ ﻢﯾﺮﭩﺴﮑﯾﺍ"
-
-
-msgid "Color of selected extreme keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ ﯽﺋﺎﮩﺘﻧﺍ ﺐﺨﺘﻨﻣ"
-
-
-msgid "Generated Keyframe"
-msgstr "ﻢﯾﺮﻓ ﯽﮐ ﺎﯿﮐ ﺍﺪﯿﭘ"
-
-
-msgid "Color of generated keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﮦﺩﺮﮐ ﺭﺎﯿﺗ"
-
-
-msgid "Generated Keyframe Selected"
-msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ ﺎﯿﮐ ﺍﺪﯿﭘ"
-
-
-msgid "Color of selected generated keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﮦﺪﺷ ﺐﺨﺘﻨﻣ"
-
-
-msgid "Jitter Keyframe"
-msgstr "ﻢﯾﺮﻓ ﯽﮐ ﺮﭩﺟ"
-
-
-msgid "Color of jitter keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﺮﭩﺟ"
-
-
-msgid "Jitter Keyframe Selected"
-msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻢﯾﺮﻔﯿﮐ ﺮﭩﺟ"
-
-
-msgid "Color of selected jitter keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﺮﭩﺟ ﺐﺨﺘﻨﻣ"
-
-
-msgid "Moving Hold Keyframe"
-msgstr "ﺎﻧﺮﮐ ﻞﻘﺘﻨﻣ ﻮﮐ ﻢﯾﺮﻓ ﯽﮐ ﮉﻟﻮﮨ"
-
-
-msgid "Color of moving hold keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﮉﻟﻮﮨ ﮓﻧﻭﻮﻣ"
-
-
-msgid "Moving Hold Keyframe Selected"
-msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﻢﯾﺮﻓ ﯽﮐ ﮉﻟﻮﮨ ﮓﻧﻭﻮﻣ"
-
-
-msgid "Color of selected moving hold keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﮉﻟﻮﮨ ﮓﻧﻭﻮﻣ ﺐﺨﺘﻨﻣ"
-
-
 msgid "Keyframe Scale Factor"
 msgstr "ﺮﭩﮑﯿﻓ ﮧﻧﺎﻤﯿﭘ  ﻢﯾﺮﻓ ﯽﮐ"
 
 
 msgid "Scale factor for adjusting the height of keyframes"
 msgstr "ﺮﺼﻨﻋ ﺎﮐ ﮯﻧﺎﻤﯿﭘ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﭧﺴﺟﮉﯾﺍ ﻮﮐ ﯽﺋﺎﭽﻧﻭﺍ ﯽﮐ ﮞﻮﻤﯾﺮﻓ ﯼﺪﯿﻠﮐ"
-
-
-msgid "Keyframe Selected"
-msgstr "ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ"
-
-
-msgid "Color of selected keyframe"
-msgstr "ﮓﻧﺭ ﺎﮐ ﻢﯾﺮﻓ ﯽﮐ ﺐﺨﺘﻨﻣ"
-
-
-msgid "Long Key"
-msgstr "ﯽﺑﺎﭼ ﯽﺒﻤﻟ"
-
-
-msgid "Long Key Selected"
-msgstr "ﯽﺌﮔ ﯽﮐ ﺐﺨﺘﻨﻣ ﺪﯿﻠﮐ ﯽﺒﻤﻟ"
 
 
 msgid "Simulated Frames"
@@ -102618,6 +102319,10 @@ msgstr "(ﮯﯿﻟ ﮯﮐ ﮞﻭﺯﺍﻭﺁ ﯽﮐ ﺮﮑﯿﭙﺳﺍ ﮯﻟﺍ
 
 msgid "Unselected Action-Clip Strip"
 msgstr "ﯽﭩﭘ ﯽﮐ ﭗﻠﮐ ﻡﺍﺪﻗﺍ ﮦﺩﺮﮐ ﺐﺨﺘﻨﻣ ﺮﯿﻏ"
+
+
+msgid "Strips Selected"
+msgstr "ﺐﺨﺘﻨﻣ ﺲﭘﺮﭩﺳ"
 
 
 msgid "Selected Action-Clip Strip"
@@ -103359,14 +103064,6 @@ msgstr "ﻢﯾﺮﻓ ﯽﮐ ﻞﺴﻨﭘ ﺲﯾﺮﮔ"
 
 msgid "Color for indicating Grease Pencil keyframes"
 msgstr "Grease Pencil ﮓﻧﺭ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﯽﮨﺪﻧﺎﺸﻧ ﯽﮐ ﮞﻮﻤﯾﺮﻓ ﯽﮐ"
-
-
-msgid "Object Keyframe"
-msgstr "ﻢﯾﺮﻓ ﯽﮐ ﺰﯿﭼ"
-
-
-msgid "Color for indicating object keyframes"
-msgstr "ﮓﻧﺭ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﯽﮨﺪﻧﺎﺸﻧ ﯽﮐ ﺰﻤﯾﺮﻓ ﯽﮐ ﺰﯿﭼ"
 
 
 msgid "Vertex Bevel"
@@ -104491,10 +104188,6 @@ msgid "Overrides for some of the active brush's settings"
 msgstr "ﺯﮉﯿﺋﺍﺭ ﺭﻭﻭﺍ ﮯﯿﻟ ﮯﮐ ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﺵﺮﺑ ﻝﺎﻌﻓ ﮫﭽﮐ"
 
 
-msgid "Radius of the brush"
-msgstr "ﺱﺍﺩﺭ ﺎﮐ ﺵﺮﺑ"
-
-
 msgid "Use Unified Color"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮓﻧﺭ ﮉﯿﺋﺎﻔﯿﻧﻮﯾ"
 
@@ -104509,14 +104202,6 @@ msgstr "Use ﮯﻧﻮﻤﻧ ﮯﮐ ﭧﭘ ﻥﺍ ﺪﺤﺘﻣ"
 
 msgid "Instead of per-brush input samples, the value is shared across brushes"
 msgstr "ﮯﮨ ﯽﺗﺎﺟ ﯽﮐ ﺮﺌﯿﺷ ﮟﯿﻣ ﮞﻮﺷﺮﺑ ﺭﺪﻗ ،ﮯﺋﺎﺠﺑ ﯽﮐ ﮞﻮﻧﻮﻤﻧ ﭧﭘ ﻥﺍ ﺵﺮﺑ ﯽﻓ"
-
-
-msgid "Use Unified Radius"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺱﺍﺩﺭ ﺪﺤﺘﻣ"
-
-
-msgid "Instead of per-brush radius, the radius is shared across brushes"
-msgstr "ﮯﮨ ﮧﮐﺮﺘﺸﻣ ﮟﯿﻣ ﮞﻮﺷﺮﺑ ﺱﺍﺩﺭ ،ﮯﺋﺎﺠﺑ ﮯﮐ ﺱﺍﺩﺭ ﺵﺮﺑ ﯽﻓ"
 
 
 msgid "Use Unified Strength"
@@ -105874,6 +105559,10 @@ msgstr "EEVEE ﮟﯿﮭﮑﯾﺩ ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﺕﺮﭘ ﮯﯿ�
 
 msgid "Distance of object that contribute to the ambient occlusion effect"
 msgstr "ﮯﮨ ﺎﺘﻟﺍﮈ ﮧﺼﺣ ﮟﯿﻣ ﺮﺛﺍ ﮯﮐ ﭦﻭﺎﮐﺭ ﯽﻄﯿﺤﻣ ﻮﺟ ﮧﻠﺻﺎﻓ ﺎﮐ ﺰﯿﭼ"
+
+
+msgid "Bloom"
+msgstr "ﺎﻨﻠﮭﮐ"
 
 
 msgid "Deliver bloom pass (deprecated)"
@@ -118564,11 +118253,6 @@ msgstr "ﯽﺋﺎﭨﻮﻣ ﮧﻧﺎﻤﯿﭘ"
 
 
 msgctxt "Operator"
-msgid "Bezier"
-msgstr "ﺮﯾﺰﯿﺑ"
-
-
-msgctxt "Operator"
 msgid "View Selected"
 msgstr "ﮟﯿﮭﮑﯾﺩ ﮦﺩﺮﮐ ﺐﺨﺘﻨﻣ"
 
@@ -122729,6 +122413,10 @@ msgid "Lightness:"
 msgstr ":ﻦﭘ ﺎﮑﻠﮨ"
 
 
+msgid "Value:"
+msgstr ":ﺭﺪﻗ"
+
+
 msgid "Alpha:"
 msgstr ":ﺎﻔﻟﺍ"
 
@@ -122737,21 +122425,12 @@ msgid "Hex"
 msgstr "ﺲﮑﯿﮨ"
 
 
-msgid "Red, Green, Blue"
-msgstr "ﻼ﻿ﯿﻧ ،ﺰﺒﺳ ،ﺥﺮﺳ"
-
-
 msgid "Hue, Saturation, Lightness"
 msgstr "ﻦﭘ ﺎﮑﻠﮨ ،ﯽﺘﭘﺮﺘﻨﺳ ،ﺖﮕﻧﺭ"
 
 
 msgid "Lightness"
 msgstr "ﻦﭘ ﺎﮑﻠﮨ"
-
-
-msgctxt "Color"
-msgid "Value:"
-msgstr ":ﺭﺪﻗ"
 
 
 msgctxt "Color"
@@ -123547,10 +123226,6 @@ msgid "Unable to find valid 3D View area"
 msgstr "ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﺵﻼ﻿ﺗ ﺎﯾﺮﯾﺍ ﻮﯾﻭ 3D ﺖﺳﺭﺩ"
 
 
-msgid "Unable to export SVG"
-msgstr "SVG ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﺪﻣﺁﺮﺑ"
-
-
 msgid "Unable to export PDF"
 msgstr "PDF ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﺪﻣﺁﺮﺑ"
 
@@ -124295,10 +123970,6 @@ msgstr "ﺭﺎﺼﺤﻧﺍ ﺮﻠﮐﺮﺳ ﮯﯿﻟ ﮯﮐ %s‬‪ ﺮﯾﻮ�
 
 msgid "Uninitialized image \"%s\" from object \"%s\""
 msgstr "ﮈﺰﺋﻻ﻿ﺎﭩﺴﻧﺍ ﻥﺍ %s‬‪ ﺮﯾﻮﺼﺗ ﮯﺳ %s‬‪ ﺰﯿﭼ"
-
-
-msgid "No active image found in material \"%s\" (%d) for object \"%s\""
-msgstr "ﮯﯿﻟ ﮯﮐ ﺰﯿﭼ%s‬‪ ﯽﻠﻣ ﮟﯿﮩﻧ ﺮﯾﻮﺼﺗ ﻝﺎﻌﻓ ﯽﺋﻮﮐ ﮟﯿﻣ (%s‬ (‪%d‬‪ ﺩﺍﻮﻣ"
 
 
 msgid "Uninitialized image %s"
@@ -126735,10 +126406,6 @@ msgstr ":ﺭﺎﮩﻇﺍ"
 
 msgid "Add Input Variable"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﯿﻐﺘﻣ ﭧﭘ ﻥﺍ"
-
-
-msgid "Value:"
-msgstr ":ﺭﺪﻗ"
 
 
 msgid "Update Dependencies"
@@ -132243,10 +131910,6 @@ msgid "Bokeh Type:"
 msgstr ":ﻢﺴﻗ ﯽﮐ ﮧﯿﮐﻮﺑ"
 
 
-msgid "Prefilter:"
-msgstr ":ﺮﭩﻠﻓ ﯼﺮﭘ"
-
-
 msgid "Result"
 msgstr "ﮧﺠﯿﺘﻧ"
 
@@ -132275,8 +131938,48 @@ msgid "Outer Mask"
 msgstr "ﮏﺳﺎﻣ ﯽﻧﻭﺮﯿﺑ"
 
 
-msgid "Disabled, built without FFTW"
-msgstr "ﺎﯿﮔ ﺎﯾﺎﻨﺑ ﺮﯿﻐﺑ ﮯﮐ FFTW ،ﻝﺎﻌﻓ ﺮﯿﻏ"
+msgid "Soften"
+msgstr "ﺎﻧﺮﮐ ﻡﺮﻧ"
+
+
+msgid "Box Sharpen"
+msgstr "ﺎﻧﺮﮐ ﺰﯿﺗ ﺲﮐﺎﺑ"
+
+
+msgid "Laplace"
+msgstr "ﺲﯿﻠﭘﻻ﻿"
+
+
+msgid "Sobel"
+msgstr "ﻞﺑﻮﺳ"
+
+
+msgid "Prewitt"
+msgstr "ﭦﻮﯾﺮﭘ"
+
+
+msgid "Kirsch"
+msgstr "ﺵﺮﮐ"
+
+
+msgid "Diamond Sharpen"
+msgstr "ﺰﯿﺗ ﮉﻨﻤﺋﺍﮈ"
+
+
+msgid "Simple Star"
+msgstr "ﮦﺭﺎﺘﺳ ﮦﺩﺎﺳ"
+
+
+msgid "Fog Glow"
+msgstr "ﮏﻤﭼ ﯽﮐ ﺪﻨﮬﺩ"
+
+
+msgid "Streaks"
+msgstr "ﮟﯾﺮﯿﮑﻟ"
+
+
+msgid "Sun Beams"
+msgstr "ﮟﯿﻧﺮﮐ ﯽﮐ ﺝﺭﻮﺳ"
 
 
 msgid "Color Modulation"
@@ -132321,6 +132024,10 @@ msgstr "ﯼﺯﺎﺑ"
 
 msgid "Standard Deviation"
 msgstr "ﻑﺍﺮﺤﻧﺍ ﯼﺭﺎﯿﻌﻣ"
+
+
+msgid "Size Source"
+msgstr "ﮧﻌﯾﺭﺫ ﺎﮐ ﺰﺋﺎﺳ"
 
 
 msgid "Use feather information from the mask"
@@ -134674,6 +134381,10 @@ msgstr "IOR ﺢﻄﺳ ﯽﻠﯾﺫ"
 
 msgid "Subsurface Anisotropy"
 msgstr "ﯽﭘﻭﺮﭨﻮﺴﯿﻧﺍ ﺢﻄﺳ ﯽﻠﯾﺫ"
+
+
+msgid "Anisotropic"
+msgstr "ﮏﭘﻭﺮﭨﻮﺴﯿﻧﺍ"
 
 
 msgid "Anisotropic Rotation"
