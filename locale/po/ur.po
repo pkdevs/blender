@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'29d18c45e4ed')\n"
+"Project-Id-Version: Blender 5.0.0 Alpha (b'68bccbaeeefe')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-09-10 07:24+0000\n"
+"POT-Creation-Date: 2025-09-15 07:14+0000\n"
 "PO-Revision-Date: 2025-07-23 15:12+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -2097,14 +2097,6 @@ msgstr "ﮯﮨ ﺎﺘﮑﺳ ﺎﺟ ﺎﯿﮐ ﻞﯾﺪﺒﺗ ﻡﺎﻧ ﺎﯾ �
 
 msgid "Name of the Attribute"
 msgstr "ﻡﺎﻧ ﺎﮐ ﺖﻔﺻ"
-
-
-msgid "Array"
-msgstr "ﻒﺻ"
-
-
-msgid "Single"
-msgstr "ﻞﮕﻨﺳ"
 
 
 msgid "Bool Attribute"
@@ -19637,36 +19629,12 @@ msgid "Whether to use a custom frame for looking up data in the cache file, inst
 msgstr "ﮟﯿﮩﻧ ﺎﯾ ﮯﮨ ﺎﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﻢﯾﺮﻓ ﻢﭩﺴﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺵﻼ﻿ﺗ ﺎﭩﯾﮈ ﮟﯿﻣ ﻞﺋﺎﻓ ﺶﯿﮐ ،ﮯﺋﺎﺠﺑ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﻮﮐ ﻢﯾﺮﻓ ﮯﮐﻮﯾﻭ ﮦﺩﻮﺟﻮﻣ"
 
 
-msgid "Prefetch Cache Size"
-msgstr "ﺰﺋﺎﺳ ﺎﮐ ﮯﺸﯿﮐ ﭻﯿﻓ ﯼﺮﭘ"
-
-
-msgid "Memory usage limit in megabytes for the Cycles Procedural cache, if the data does not fit within the limit, rendering is aborted"
-msgstr "Cycles ﮯﮨ ﺎﺗﺎﺟ ﺎﯾﺩ ﮎﻭﺭ ﻮﮐ ﮓﻧﺭﮉﻨﯾﺭ ﻮﺗ ،ﮯﮨ ﺎﺗﻮﮨ ﮟﯿﮩﻧ ﭧﻓ ﺭﺪﻧﺍ ﮯﮐ ﺪﺣ ﺱﺍ ﺎﭩﯾﮈ ﺮﮔﺍ ،ﺪﺣ ﯽﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﮐ ﯼﺭﻮﻤﯿﻣ ﮟﯿﻣ ﺲﭩﺋﺎﺑ ﺎﮕﯿﻣ ﮯﯿﻟ ﮯﮐ ﺶﯿﮐ ﻝﺮﺠﯿﺳﻭﺮﭘ"
-
-
 msgid "Value by which to enlarge or shrink the object with respect to the world's origin (only applicable through a Transform Cache constraint)"
 msgstr "(ﮯﮨ ﺎﺗﻮﮨ ﻮﮔﻻ﻿ ﮯﻌﯾﺭﺫ ﮯﮐ ﯼﺪﻨﺑﺎﭘ ﯽﮐ ﮯﺸﯿﮐ ﻡﺭﺎﻔﺴﻧﺍﺮﭨ ﻑﺮﺻ) ﮯﮨ ﺎﻧﮍﮑﺳ ﺎﯾ ﺍﮍﺑ ﻮﮐ ﮯﺷ ﮯﺳ ﮯﻟﺍﻮﺣ ﮯﮐ ﻞﺻﺍ ﯽﮐ ﺎﯿﻧﺩ ﮯﻌﯾﺭﺫ ﮯﮐ ﺲﺟ ﺭﺪﻗ"
 
 
 msgid "Up"
 msgstr "ﺮﭘﻭﺍ"
-
-
-msgid "Use Prefetch"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﭻﯿﻔﯾﺮﭘ"
-
-
-msgid "When enabled, the Cycles Procedural will preload animation data for faster updates"
-msgstr "ﺎﮔ ﮮﺮﮐ ﮈﻮﻟ ﮯﺳ ﮯﻠﮩﭘ ﻮﮐ ﺎﭩﯾﮈ ﺕﺎﯿﮐﺮﺣ  ﮯﯿﻟ ﮯﮐ ﺲﭩﯾﮈ ﭖﺍ ﺮﺗ ﺰﯿﺗ ﻝﺮﺠﯿﺳﻭﺮﭘ ﺰﻠﮑﯿﺋﺎﺳ ،ﺮﭘ ﮯﻧﻮﮨ ﻝﺎﻌﻓ"
-
-
-msgid "Use Render Engine Procedural"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﻝﺮﺠﯿﺳﻭﺮﭘ ﻦﺠﻧﺍ ﺭﮉﻨﯾﺭ"
-
-
-msgid "Display boxes in the viewport as placeholders for the objects, Cycles will use a procedural to load the objects during viewport rendering in experimental mode, other render engines will also receive a placeholder and should take care of loading the Alembic data themselves if possible"
-msgstr "ﮯﯿﮨﺎﭼ ﺎﻨﮭﮐﺭ ﻝﺎﯿﺧ ﺎﮐ ﮯﻧﺮﮐ ﮈﻮﻟ ﺎﭩﯾﮈ ﮏﺒﻤﻠﯾﺍ ﺩﻮﺧ ﮟﯿﮩﻧﺍ ﻮﺗ ﻮﮨ ﻦﮑﻤﻣ ﺮﮔﺍ ﺭﻭﺍ ﺎﮔ ﮯﻠﻣ ﺭﮉﻟﻮﮨ ﺲﯿﻠﭘ ﮏﯾﺍ ﯽﮭﺑ ﻮﮐ ﮞﻮﻨﺠﻧﺍ ﺭﮉﻨﯾﺭ ﮮﺮﺳﻭﺩ ،ﮯﮔ ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺭﺎﮐ ﮧﻘﯾﺮﻃ ﮏﯾﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮈﻮﻟ ﻮﮐ ءﺎﯿﺷﺍ ﻥﺍﺭﻭﺩ ﮯﮐ ﮓﻧﺭﮉﻨﯾﺭ ﭦﺭﻮﭘ ﻮﯾﻭ ﮟﯿﻣ ﺭﻮﻃ ﯽﺗﺎﺑﺮﺠﺗCycles،ﮟﯿﺋﺎﮭﮐﺩ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﺭﮉﻟﻮﮨ ﺲﯿﻠﭘ ﮯﮐ ءﺎﯿﺷﺍ ﻮﮐ ﺲﮑﺑ ﮟﯿﻣ ﭦﺭﻮﭘ ﻮﯾﻭ"
 
 
 msgid "Velocity Attribute"
@@ -32805,8 +32773,48 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
+msgid "Mesh Select Mode"
+msgstr "ﮈﻮﻣ ﭧﮑﯿﻠﺳ ﺶﯿﻣ"
+
+
+msgid "Face Data"
+msgstr "ﺎﭩﯾﮈ ﺎﮐ ﮮﺮﮩﭼ"
+
+
+msgid "Select by Face Strength"
+msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
+
+
+msgid "Set Face Strength"
+msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
+
+
+msgid "Clean Up"
+msgstr "ﯽﺋﺎﻔﺻ"
+
+
+msgid "Merge"
+msgstr "ﺎﻧﺮﮐ ﻢﺿ"
+
+
 msgid "Show/Hide"
 msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
+
+
+msgid "Special Characters"
+msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
+
+
+msgid "Kerning"
+msgstr "ﮓﻨﻧﺮﮐ"
+
+
+msgid "Text"
+msgstr "ﻦﺘﻣ"
+
+
+msgid "Metaball"
+msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
 
 
 msgid "Names"
@@ -32815,10 +32823,6 @@ msgstr "ﻡﺎﻧ"
 
 msgid "Bone Roll"
 msgstr "ﻝﻭﺭ ﻥﻮﺑ"
-
-
-msgid "Clean Up"
-msgstr "ﯽﺋﺎﻔﺻ"
 
 
 msgid "Pivot Point"
@@ -32847,10 +32851,6 @@ msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﯿﺳ ﮯﮐ ﮮﺮ�
 
 msgid "Vertex Group Locks"
 msgstr "ﮎﻻ﻿ ﮦﻭﺮﮔ ﺲﮑﯿﭨﺭﻭ"
-
-
-msgid "Metaball"
-msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
 
 
 msgid "Mirror"
@@ -33003,38 +33003,6 @@ msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉ�
 
 msgid "Disable Bone Options"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
-
-
-msgid "Mesh Select Mode"
-msgstr "ﮈﻮﻣ ﭧﮑﯿﻠﺳ ﺶﯿﻣ"
-
-
-msgid "Face Data"
-msgstr "ﺎﭩﯾﮈ ﺎﮐ ﮮﺮﮩﭼ"
-
-
-msgid "Select by Face Strength"
-msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
-
-
-msgid "Set Face Strength"
-msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
-
-
-msgid "Merge"
-msgstr "ﺎﻧﺮﮐ ﻢﺿ"
-
-
-msgid "Special Characters"
-msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
-
-
-msgid "Kerning"
-msgstr "ﮓﻨﻧﺮﮐ"
-
-
-msgid "Text"
-msgstr "ﻦﺘﻣ"
 
 
 msgid "Keyframe Insert Pie"
@@ -34439,6 +34407,10 @@ msgstr "ﮓﻨﭙﯿﻣ ﺮﭽﺴﮑﯿﭨ"
 
 msgid "Change stroke UV texture values"
 msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﮟﯾﺭﺪﻗ ﯽﮐ ﺖﺧﺎﺴﯾﻭ ﻮﯿﮐﻭﺮﭩﺳﺍ"
+
+
+msgid "Array"
+msgstr "ﻒﺻ"
 
 
 msgid "Create copies of the shape with offsets"
@@ -41531,10 +41503,6 @@ msgid "Opacity of the image"
 msgstr "ﻦﭘﻻ﻿ﺪﻨﮬﺩ ﯽﮐ ﺮﯾﻮﺼﺗ"
 
 
-msgid "Markers"
-msgstr "ﺮﮐﺭﺎﻣ"
-
-
 msgid "Collection of markers in track"
 msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﺮﮐﺭﺎﻣ ﮟﯿﻣ ﮏﯾﺮﭨ"
 
@@ -42607,6 +42575,10 @@ msgstr "ﻢﮭﺗﺭﻮﮕﻟﺍ"
 
 msgid "Algorithm to use to limit channel"
 msgstr "ﻢﮭﺗﺭﻮﮕﻟﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺩﻭﺪﺤﻣ ﻮﮐ ﻞﻨﯿﭼ"
+
+
+msgid "Single"
+msgstr "ﻞﮕﻨﺳ"
 
 
 msgid "Limit by single channel"
@@ -47928,10 +47900,6 @@ msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺖﺧﺎﺳ ﯽﮐ ﺮﮩﻟ 
 
 msgid "White Noise Texture"
 msgstr "ﺖﺧﺎﺳ ﯽﮐ ﺭﻮﺷ ﺪﯿﻔﺳ"
-
-
-msgid "Return a random value or color based on an input seed"
-msgstr "ﮟﯿﺋﺎﭨﻮﻟ ﮓﻧﺭ ﺎﯾ ﺭﺪﻗ ﺐﯿﺗﺮﺗ ﮯﺑ ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﺞﯿﺑ ﭧﭘ ﻥﺍ"
 
 
 msgid "UV Along Stroke"
@@ -84938,16 +84906,16 @@ msgid "glTF Material Variants"
 msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
 
 
+msgid "glTF Animations"
+msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
+
+
 msgid "Active Tool"
 msgstr "ﻝﻮﭨ ﻝﺎﻌﻓ"
 
 
 msgid "View Lock"
 msgstr "ﮟﯿﮭﮑﯾﺩ ﮎﻻ﻿"
-
-
-msgid "glTF Animations"
-msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
 
 
 msgid "Selectability & Visibility"
@@ -85072,10 +85040,6 @@ msgstr "ﮓﻨﭩﻓ"
 
 msgid "Override Layers"
 msgstr "ﮟﯾﺮﮐ ﮉﺋﺍﺭ ﺭﻭﻭﺍ ﻮﮐ ﮞﻮﺗﺮﭘ"
-
-
-msgid "Render Procedural"
-msgstr "ﻝﺮﺠﯿﺳﻭﺮﭘ ﺭﮉﻨﯾﺭ"
 
 
 msgid "Bone Constraints"
@@ -86012,10 +85976,6 @@ msgid "New Objects"
 msgstr "ﭧﮑﯿﺠﺑﺁ ﯽﺌﻧ"
 
 
-msgid "Debugging"
-msgstr "ﮓﻨﮕﺒﯾﮈ"
-
-
 msgid "New Features"
 msgstr "ﺕﺎﯿﺻﻮﺼﺧ ﯽﺌﻧ"
 
@@ -86163,10 +86123,6 @@ msgstr "ﭧﯿﺳ ﮓﻧﺭ ﺎﮐ ﮞﻮﯾﮉﮨ"
 
 msgid "Theme Space"
 msgstr "ﺲﯿﭙﺳﺍ ﻢﯿﮭﺗ"
-
-
-msgid "Theme Space List"
-msgstr "ﭧﺴﻟ ﺲﯿﭙﺳﺍ ﻢﯿﮭﺗ"
 
 
 msgid "Collection Colors"
@@ -91782,14 +91738,6 @@ msgid "Use different seed values (and hence noise patterns) at different frames"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ (ﮯﻧﻮﻤﻧ ﮯﮐ ﺭﻮﺷ ﮯﺳ ﮧﺟﻭ ﺱﺍ ﺭﻭﺍ) ﺭﺍﺪﻗﺍ ﻒﻠﺘﺨﻣ ﯽﮐ ﺞﯿﺑ ﺮﭘ ﮞﻮﻤﯾﺮﻓ ﻒﻠﺘﺨﻣ"
 
 
-msgid "Use Tiling"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﮓﻨﻠﺋﺎﭨ"
-
-
-msgid "Render high resolution images in tiles to reduce memory usage, using the specified tile size. Tiles are cached to disk while rendering to save memory"
-msgstr "ﮯﮨ ﺎﺗﺎﺟ ﺎﯿﮐ ﻅﻮﻔﺤﻣ ﮟﯿﻣ ﮏﺳﮈ ﻮﮐ ﺰﻠﺋﺎﭨ ﻥﺍﺭﻭﺩ ﮯﮐ ﮓﻧﺭﮉﻨﯾﺭ ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﭽﺑ ﻮﮐ ﯼﺭﻮﻤﯿﻣ ﮟﯾﺮﮐ ﺶﯿﭘ ﺮﯾﻭﺎﺼﺗ ﯽﻟﺍﻭ ﻦﺷﻮﯿﻟﻭﺰﯾﺭ ﯽﺋﺎﮨ ﮟﯿﻣ ﮞﻮﻠﺋﺎﭨ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻢﮐ ﻮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﮐ ﯼﺭﻮﻤﯿﻣ ،ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺰﺋﺎﺳ ﻞﺋﺎﭨ ﺹﻮﺼﺨﻣ"
-
-
 msgid "Allow objects to be culled based on the camera frustum"
 msgstr "ﮟﯾﺩ ﺕﺯﺎﺟﺍ ﯽﮐ ﮯﻧﺮﮐ ﻢﺘﺧ ﻮﮐ ءﺎﯿﺷﺍ ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﻢﭩﺳﺮﻓ ﮦﺮﻤﯿﮐ"
 
@@ -96177,6 +96125,10 @@ msgid "Snap to strip hold offsets"
 msgstr "ﮟﯾﺮﮐ ﭗﯿﻨﺳ ﮯﯿﻟ ﮯﮐ ﮯﻧﺭﺎﺗﺍ ﻮﮐ ﺲﭩﯿﺴﻓﺁ ﮉﻟﻮﮨ"
 
 
+msgid "Markers"
+msgstr "ﺮﮐﺭﺎﻣ"
+
+
 msgid "Snap to markers"
 msgstr "ﺮﮐﺭﺎﻣ ﮟﯾﺮﮐ ﭗﯿﻨﺳ ﺮﭘ"
 
@@ -100047,6 +99999,11 @@ msgid "Animation start offset (trim start)"
 msgstr "(ﭦﺭﺎﭩﺳﺍ ﻡﺮﭨ) ﭧﯿﺳ ﻑﺁ ﭦﺭﺎﭩﺳﺍ ﺕﺎﯿﮐﺮﺣ"
 
 
+msgctxt "Color"
+msgid "Value"
+msgstr "ﺭﺪﻗ"
+
+
 msgid "Color Strip"
 msgstr "ﯽﭩﭘ ﯽﮐ ﮓﻧﺭ"
 
@@ -101468,10 +101425,6 @@ msgid "User interface styling and color settings"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﮓﻧﺭ ﺭﻭﺍ ﻞﺋﺎﭩﺳﺍ ﺲﯿﻓﺮﭩﻧﺍ ﺭﺯﻮﯾ"
 
 
-msgid "Settings for asset shelf"
-msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻒﻠﯿﺷ ﮧﺛﺎﺛﺍ"
-
-
 msgid "Clip Editor"
 msgstr "ﺮﭩﯾﮉﯾﺍ ﭗﻠﮐ"
 
@@ -101486,22 +101439,6 @@ msgstr "ﻡﺎﻧ ﺎﮐ ﻢﯿﮭﺗ"
 
 msgid "Active Theme Area"
 msgstr "ﺎﯾﺮﯾﺍ ﻢﯿﮭﺗ ﻝﺎﻌﻓ"
-
-
-msgid "Theme Asset Shelf Color"
-msgstr "ﮓﻧﺭ ﻒﻠﯿﺷ ﮧﺛﺎﺛﺍ ﻢﯿﮭﺗ"
-
-
-msgid "Theme settings for asset shelves"
-msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻢﯿﮭﺗ ﮯﯿﻟ ﮯﮐ ﻒﻠﯿﺷ ﮧﺛﺎﺛﺍ"
-
-
-msgid "Main Region Background"
-msgstr "ﺮﻈﻨﻣ ﺲﭘ ﺎﮐ ﻦﺠﯾﺭ ﻦﯿﻣ"
-
-
-msgid "Header Background"
-msgstr "ﺮﻈﻨﻣ ﺲﭘ ﺎﮐ ﺭﮉﯿﮨ"
 
 
 msgid "Theme Bone Color Set"
@@ -101612,14 +101549,6 @@ msgid "Settings for space"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﮧﮕﺟ"
 
 
-msgid "Settings for space list"
-msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﮯﯿﻟ ﮯﮐ ﺖﺳﺮﮩﻓ ﯽﮐ ﮧﮕﺟ"
-
-
-msgid "Scrubbing/Markers Region"
-msgstr "ﮧﻗﻼ﻿ﻋ ﺎﮐ ﺯﺮﮐﺭﺎﻣ/ﮓﻨﺑﺮﮑﺳﺍ"
-
-
 msgid "Theme Collection Color"
 msgstr "ﮓﻧﺭ ﺎﮐ ﻦﺸﮑﯿﻠﮐ ﻢﯿﮭﺗ"
 
@@ -101638,10 +101567,6 @@ msgstr "ﮦﻭﺮﮔ ﻞﻨﯿﭼ"
 
 msgid "Active Channel Group"
 msgstr "ﮦﻭﺮﮔ ﻞﻨﯿﭼ ﻝﺎﻌﻓ"
-
-
-msgid "Sub-channel"
-msgstr "ﻞﻨﯿﭼ ﯽﻠﯾﺫ"
 
 
 msgid "Breakdown Keyframe"
@@ -101748,14 +101673,6 @@ msgid "Color of preview range overlay"
 msgstr "ﮓﻧﺭ ﺎﮐ ﮯﻟﺭﻭﻭﺍ ﺞﻨﯾﺭ ﻮﯾﻮﯾﺮﭘ"
 
 
-msgid "Marker Line"
-msgstr "ﻦﺋﻻ﻿ ﺮﮐﺭﺎﻣ"
-
-
-msgid "Marker Line Selected"
-msgstr "ﯽﺌﮔ ﯽﮐ ﺐﺨﺘﻨﻣ ﻦﺋﻻ﻿ ﺮﮐﺭﺎﻣ"
-
-
 msgid "Align Handle"
 msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﻝﮉﻨﯿﮨ"
 
@@ -101822,10 +101739,6 @@ msgstr "ﭧﯿﺷ ﭖﻭﮈ ﻢﯿﮭﺗ"
 
 msgid "Theme settings for the Dope Sheet"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻢﯿﮭﺗ ﮯﯿﻟ ﮯﮐ ﭧﯿﺷ ﭖﻭﮈ"
-
-
-msgid "Channels Selected"
-msgstr "ﺰﻠﻨﯿﭼ ﮦﺩﺮﮐ ﺐﺨﺘﻨﻣ"
 
 
 msgid "Interpolation Line"
@@ -101998,10 +101911,6 @@ msgstr "ﺮﭩﯾﮉﯾﺍ ﻑﺍﺮﮔ ﻢﯿﮭﺗ"
 
 msgid "Theme settings for the graph editor"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻢﯿﮭﺗ ﮯﯿﻟ ﮯﮐ ﺮﭩﯾﮉﯾﺍ ﻑﺍﺮﮔ"
-
-
-msgid "Channels Region"
-msgstr "ﮧﻗﻼ﻿ﻋ ﺎﮐ ﺰﻠﻨﯿﭼ"
 
 
 msgid "Vertex Select"
@@ -102224,10 +102133,6 @@ msgid "Selected Meta Strip (for grouping related strips)"
 msgstr "(ﮯﯿﻟ ﮯﮐ ﯼﺪﻨﺑ ﮦﻭﺮﮔ ﯽﮐ ﺲﭘﺮﭩﺳ ﮧﻘﻠﻌﺘﻣ) ﭖﺮﭩﺳ ﺎﭩﯿﻣ ﺐﺨﺘﻨﻣ"
 
 
-msgid "Nonlinear Animation Track"
-msgstr "ﮏﯾﺮﭨ ﺕﺎﯿﮐﺮﺣ  ﺮﻨﺋﻻ﻿ ﻥﺎﻧ"
-
-
 msgid "Sound Strips"
 msgstr "ﺲﭘﺮﭩﺳ ﮉﻧﺅﺎﺳ"
 
@@ -102436,16 +102341,24 @@ msgid "Search Match"
 msgstr "ﮟﯾﺮﮐ ﺵﻼ﻿ﺗ ﭻﯿﻣ"
 
 
+msgid "Theme settings for asset shelves"
+msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻢﯿﮭﺗ ﮯﯿﻟ ﮯﮐ ﻒﻠﯿﺷ ﮧﺛﺎﺛﺍ"
+
+
+msgid "Header Background"
+msgstr "ﺮﻈﻨﻣ ﺲﭘ ﺎﮐ ﺭﮉﯿﮨ"
+
+
+msgid "Selected Text"
+msgstr "ﻦﺘﻣ ﺐﺨﺘﻨﻣ"
+
+
 msgid "Theme Sequence Editor"
 msgstr "ﺮﭩﯾﮉﯾﺍ ﺲﻨﯾﻮﮑﯿﺳ ﻢﯿﮭﺗ"
 
 
 msgid "Theme settings for the Sequence Editor"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻢﯿﮭﺗ ﮯﯿﻟ ﮯﮐ ﺮﭩﯾﮉﯾﺍ ﺐﯿﺗﺮﺗ"
-
-
-msgid "Active Modifier Outline"
-msgstr "ﻦﺋﻻ﻿ ﭦﺅﺁ ﺮﺋﺎﻔﯾﮈﻮﻣ ﻝﺎﻌﻓ"
 
 
 msgid "Audio Strip"
@@ -102462,10 +102375,6 @@ msgstr "ﺮﻈﻨﻣ ﺲﭘ ﻮﯾﻮﯾﺮﭘ"
 
 msgid "Selected Strips"
 msgstr "ﺲﭘﺮﭩﺳ ﺐﺨﺘﻨﻣ"
-
-
-msgid "Selected Text"
-msgstr "ﻦﺘﻣ ﺐﺨﺘﻨﻣ"
 
 
 msgid "Transition Strip"
@@ -102486,30 +102395,6 @@ msgstr "ﭧﺋﻻ﻿ ﯽﺋﺎﮨ ﭧﺴﮑﯿﭨ ﺭﮉﯿﮨ"
 
 msgid "Text Highlight"
 msgstr "ﮟﯾﺮﮐ ﮞﺎﯾﺎﻤﻧ ﻮﮐ ﻦﺘﻣ"
-
-
-msgid "Theme Space List Settings"
-msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﭧﺴﻟ ﺲﯿﭙﺳﺍ ﻢﯿﮭﺗ"
-
-
-msgid "Source List"
-msgstr "ﺖﺳﺮﮩﻓ ﯽﮐ ﺬﺧﺎﻣ"
-
-
-msgid "Source List Text"
-msgstr "ﻦﺘﻣ ﺎﮐ ﺖﺳﺮﮩﻓ ﯽﮐ ﺬﺧﺎﻣ"
-
-
-msgid "Source List Text Highlight"
-msgstr "ﮟﯾﺮﮐ ﮞﺎﯾﺎﻤﻧ ﻮﮐ ﻦﺘﻣ ﮯﮐ ﺖﺳﺮﮩﻓ ﯽﮐ ﺬﺧﺎﻣ"
-
-
-msgid "Source List Title"
-msgstr "ﻥﺍﻮﻨﻋ ﺎﮐ ﺖﺳﺮﮩﻓ ﯽﮐ ﺬﺧﺎﻣ"
-
-
-msgid "Region Background"
-msgstr "ﺮﻈﻨﻣ ﺲﭘ ﺎﮐ ﮯﻄﺧ"
 
 
 msgid "Theme Spreadsheet"
@@ -109280,22 +109165,6 @@ msgid "Legacy Add-on"
 msgstr "ﻥﺁ ﮉﯾﺍ ﯽﺴﯿﮕﯿﻟ"
 
 
-msgid "Do you want to install the following {:s}?"
-msgstr "؟ﮟﯿﮨ ﮯﺘﮨﺎﭼ ﺎﻧﺮﮐ ﻝﺎﭩﺴﻧﺍ ﻮﮐ {s:} ﻞﯾﺫ ﺝﺭﺩ ﭖﺁ ﺎﯿﮐ"
-
-
-msgid "Name: {:s}"
-msgstr "{s:} :ﻡﺎﻧ"
-
-
-msgid "Repository: {:s}"
-msgstr "{s:} :ﮦﺮﯿﺧﺫ"
-
-
-msgid "Size: {:s}"
-msgstr "{s:} :ﺰﺋﺎﺳ"
-
-
 msgid "The dropped extension comes from an unknown repository."
 msgstr "ﮯﮨ ﺎﺗﺁ ﮯﺳ ﯼﺮﭨﺯﻮﭙﯾﺭ ﻡﻮﻠﻌﻣﺎﻧ ﮏﯾﺍ ﻦﺸﻨﯿﭩﺴﮑﯾﺍ ﺎﯿﮔ ﺎﯾﺩ ﺍﺮﮔ"
 
@@ -109445,6 +109314,10 @@ msgid "Theme \"{:s}\" is already installed!"
 msgstr "!ﮯﮨ ﻝﺎﭩﺴﻧﺍ ﯽﮨ ﮯﻠﮩﭘ \"{s:}\" ﻢﯿﮭﺗ"
 
 
+msgid "Name: {:s}"
+msgstr "{s:} :ﻡﺎﻧ"
+
+
 msgid "URL: {:s}"
 msgstr "URL: {:s}"
 
@@ -109459,6 +109332,18 @@ msgstr "ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﻝﺎﭩﺴﻧﺍ ﮯﺳ ﮯﺘﺳﺍ�
 
 msgid "Unable to install a directory"
 msgstr "ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﻝﺎﭩﺴﻧﺍ ﯼﺮﭩﮑﯾﺮﺋﺍﮈ"
+
+
+msgid "Do you want to install the following {:s}?"
+msgstr "؟ﮟﯿﮨ ﮯﺘﮨﺎﭼ ﺎﻧﺮﮐ ﻝﺎﭩﺴﻧﺍ ﻮﮐ {s:} ﻞﯾﺫ ﺝﺭﺩ ﭖﺁ ﺎﯿﮐ"
+
+
+msgid "Repository: {:s}"
+msgstr "{s:} :ﮦﺮﯿﺧﺫ"
+
+
+msgid "Size: {:s}"
+msgstr "{s:} :ﺰﺋﺎﺳ"
 
 
 msgid "Age: {:s}"
@@ -110491,10 +110376,6 @@ msgid "{} does not seem to be part of a sequence"
 msgstr "ﺎﺘﮕﻟ ﮟﯿﮩﻧ ﮧﺼﺣ ﺎﮐ ﺐﯿﺗﺮﺗ ﯽﺴﮐ {}"
 
 
-msgid "Ignored {}, "
-msgstr " "
-
-
 msgid "Deleted {} nodes"
 msgstr "ﺱﮈﻮﻧ {} ﮦﺪﺷ ﻑﺬﺣ"
 
@@ -110543,16 +110424,16 @@ msgid "This node has no inputs to swap"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﭧﭘ ﻥﺍ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻞﯾﺪﺒﺗ ﮟﯿﻣ ﮈﻮﻧ ﺱﺍ"
 
 
+msgid "Ignored {}"
+msgstr "{} ﺎﯿﮔ ﺎﯿﮐ ﺯﺍﺪﻧﺍ ﺮﻈﻧ"
+
+
 msgid "This node has no input connections to swap"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﻦﺸﮑﻨﮐ ﭧﭘ ﻥﺍ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮧﻟﺩﺎﺒﺗ ﮟﯿﻣ ﮈﻮﻧ ﺱﺍ"
 
 
 msgid "Ignored {} (not of the same type as {})"
 msgstr "({} ﮧﮐ ﺎﺴﯿﺟ ﮟﯿﮩﻧ ﺎﮐ ﻢﺴﻗ ﯽﺳﺍ) {} ﺎﯿﮔ ﺎﯿﮐ ﺯﺍﺪﻧﺍ ﺮﻈﻧ"
-
-
-msgid "Ignored {}"
-msgstr "{} ﺎﯿﮔ ﺎﯿﮐ ﺯﺍﺪﻧﺍ ﺮﻈﻧ"
 
 
 msgid "Some connections have been lost due to differing numbers of output sockets"
@@ -114870,6 +114751,10 @@ msgid "Clear Recent Items"
 msgstr "ﮟﯾﺮﮐ ﻑﺎﺻ ﻮﮐ ﺰﻤﭩﺋﺁ ﮧﯿﻟﺎﺣ"
 
 
+msgid "Source List"
+msgstr "ﺖﺳﺮﮩﻓ ﯽﮐ ﺬﺧﺎﻣ"
+
+
 msgctxt "Operator"
 msgid "Back"
 msgstr "ﮯﮭﭽﯿﭘ"
@@ -116138,11 +116023,6 @@ msgstr "ﮟﯾﺮﮐ ﻊﯿﺳﻮﺗ/ﻞﻘﺘﻨﻣ ﮯﺳ ﻢﯾﺮﻓ ﮦﺩ�
 
 
 msgctxt "Operator"
-msgid "Hold Split"
-msgstr "ﻭﮍﮑﭘ ﻮﮐ ﭧﻠﭙﺳ"
-
-
-msgctxt "Operator"
 msgid "Delete Strip & Data"
 msgstr "ﮟﯾﺮﮐ ﻑﺬﺣ ﻮﮐ ﺎﭩﯾﮈ ﺭﻭﺍ ﯽﭩﭘ"
 
@@ -116306,11 +116186,6 @@ msgid "File: {:s}"
 msgstr "{s:} :ﻞﺋﺎﻓ"
 
 
-msgctxt "WindowManager"
-msgid "Keying"
-msgstr "ﮓﻨﯿﻠﮐ"
-
-
 msgctxt "Operator"
 msgid "Move Marker"
 msgstr "ﮟﯾﺮﮐ ﻞﻘﺘﻨﻣ ﺮﮐﺭﺎﻣ"
@@ -116373,6 +116248,11 @@ msgid "Only Active Keying Set"
 msgstr "ﭧﯿﺳ ﮓﻨﯿﮐ ﻝﺎﻌﻓ ﻑﺮﺻ"
 
 
+msgctxt "WindowManager"
+msgid "Keying"
+msgstr "ﮓﻨﯿﻠﮐ"
+
+
 msgid "Layered Recording"
 msgstr "ﮓﻧﮈﺭﺎﮑﯾﺭ ﯽﻟﺍﻭ ﮞﻮﺗﺮﭘ"
 
@@ -116383,10 +116263,6 @@ msgstr "ﺮﺻﺎﻗ ﮯﺳ ﮯﻧﺮﮐ ﺵﻼ﻿ﺗ ﮦﻭﺮﮔ ﺭﺎﺑ ﺭ
 
 msgid "Taper Start"
 msgstr "ﭦﺭﺎﭩﺳﺍ ﺮﭙﯿﭨ"
-
-
-msgid "Weight: {:.3f}"
-msgstr "{3f.:} :ﻥﺯﻭ"
 
 
 msgid "Style Start"
@@ -116427,6 +116303,10 @@ msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺭﮉﻨﻠﺳ ﮟﯿﻣ ﻝﺎﺟ ﻝﺎﻌ�
 
 msgid "Add sphere to mesh interactively"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﮦﺮﺋﺍﺩ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﺟ ﻝﺎﻌﻓ ﺮﭩﻧﺍ"
+
+
+msgid "Weight: {:.3f}"
+msgstr "{3f.:} :ﻥﺯﻭ"
 
 
 msgctxt "Operator"
@@ -122310,11 +122190,6 @@ msgid "Lightness"
 msgstr "ﻦﭘ ﺎﮑﻠﮨ"
 
 
-msgctxt "Color"
-msgid "Value"
-msgstr "ﺭﺪﻗ"
-
-
 msgid "Redo"
 msgstr "ﮟﯾﺮﮐ ﮦﺭﺎﺑﻭﺩ"
 
@@ -122435,18 +122310,6 @@ msgstr "{} ﮯﭽﯿﻧ {} ﮟﯾﺮﮐ ﻞﻘﺘﻨﻣ"
 
 msgid "Manual Scale"
 msgstr "ﮧﻧﺎﻤﯿﭘ ﯽﺘﺳﺩ"
-
-
-msgid "Only Alembic Procedurals supported"
-msgstr "ﯽﺌﮔ ﯽﮐ ﺖﯾﺎﻤﺣ ﯽﮐ ﺭﺎﮐ ﮧﻘﯾﺮﻃ ﮏﺒﻤﯿﻟﺍ ﻑﺮﺻ"
-
-
-msgid "The Cycles Alembic Procedural is only available with the experimental feature set"
-msgstr "Cycles Alembic Procedural ﮯﮨ ﺏﺎﯿﺘﺳﺩ ﮫﺗﺎﺳ ﮯﮐ ﭧﯿﺳ ﺮﭽﯿﻓ ﯽﺗﺎﺑﺮﺠﺗ ﻑﺮﺻ"
-
-
-msgid "The active render engine does not have an Alembic Procedural"
-msgstr "ﮯﮨ ﮟﯿﮩﻧ ﻝﺮﺠﯿﺳﻭﺮﭘ ﮏﺒﻤﯿﻟﺍ ﮟﯿﻣ ﻦﺠﻧﺍ ﺭﮉﻨﯾﺭ ﻝﺎﻌﻓ"
 
 
 msgid "Sort By:"
@@ -134520,10 +134383,6 @@ msgid "Strength of the light source"
 msgstr "ﺖﻗﺎﻃ ﯽﮐ ﻊﺒﻨﻣ ﮯﮐ ﯽﻨﺷﻭﺭ"
 
 
-msgid "Color input on which invertion will be applied"
-msgstr "ﺎﮔ ﮯﺋﺎﺟ ﺎﯿﮐ ﻮﮔﻻ﻿ ﺎﭩﻟﺍ ﺮﭘ ﺲﺟ ﭧﭘ ﻥﺍ ﺮﻠﮐ"
-
-
 msgid "Facing"
 msgstr "ﺎﻧﺮﮐ ﺎﻨﻣﺎﺳ"
 
@@ -134886,10 +134745,6 @@ msgstr "ﮧﯾﻭﺍﺯ ﮯﯿﻟ ﮯﮐ ﮯﻧﺎﻤﮭﮔ ﻮﮐ ﺮﭩﮑﯾ�
 
 msgid "The amount of rotation on each axis, around the X, Y, then Z axes in that order"
 msgstr "ﺩﺮﮔ ﺩﺭﺍ ﮯﮐ ﺭﻮﺤﻣ Z ﺮﮭﭘ ،X، Y ﮟﯿﻣ ﺐﯿﺗﺮﺗ ﺱﺍ ،ﺭﺍﺪﻘﻣ ﯽﮐ ﺵﺩﺮﮔ ﺮﭘ ﺭﻮﺤﻣ ﮏﯾﺍ ﺮﮨ"
-
-
-msgid "Vector, point, or normal which will be used for convertion between spaces"
-msgstr "ﺎﮔ ﮯﺋﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﯽﻠﯾﺪﺒﺗ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﮞﻮﮩﮕﺟ ﯽﻟﺎﺧ ﻮﺟ ﻞﻣﺭﺎﻧ ﺎﯾ ،ﭧﻨﺋﺍﻮﭘ ،ﺮﭩﮑﯾﻭ"
 
 
 msgid "No mesh in active object"
