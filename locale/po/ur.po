@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'68bccbaeeefe')\n"
+"Project-Id-Version: Blender 5.0.0 Alpha (b'fb3904ce45c6')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-09-15 07:14+0000\n"
+"POT-Creation-Date: 2025-09-22 08:45+0000\n"
 "PO-Revision-Date: 2025-07-23 15:12+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -1853,10 +1853,6 @@ msgstr "ﮟﯾﺮﮐ ﺭﻮﭩﺳﺍ ﮟﯿﻣ ﺕﺎﺤﯿﺟﺮﺗ ﻮﮐ ﮒ�
 
 msgid "Space Type"
 msgstr "ﻢﺴﻗ ﯽﺋﻼ﻿ﺧ"
-
-
-msgid "The space where the asset shelf is going to be used in"
-msgstr "ﮯﮨ ﺎﮨﺭ ﺎﺟ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﻒﻠﯿﺷ ﮧﺛﺎﺛﺍ ﮞﺎﮩﺟ ﮧﮕﺟ ﮦﻭ"
 
 
 msgid "Preview Size"
@@ -6772,8 +6768,8 @@ msgid "Color management specific to display device"
 msgstr "ﻡﺎﻈﺘﻧﺍ ﺎﮐ ﮓﻧﺭ ﺹﻮﺼﺨﻣ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮯﻧﺎﮭﮐﺩ ﻮﮐ ﺲﺋﺍﻮﯾﮈ"
 
 
-msgid "Display Device"
-msgstr "ﺲﺋﺍﻮﯾﮈ ﮯﻠﭙﺳﮈ"
+msgid "Display"
+msgstr "ﮯﻠﭙﺳﮈ"
 
 
 msgid "Input color space settings"
@@ -6968,8 +6964,8 @@ msgid "Perform chromatic adaption from a different white point"
 msgstr "ﮟﯾﺩ ﻡﺎﺠﻧﺍ ﺖﻘﻓﺍﻮﻣ ﻦﯿﮕﻧﺭ ﮯﺳ ﮧﻄﻘﻧ ﺪﯿﻔﺳ ﻒﻠﺘﺨﻣ ﮏﯾﺍ"
 
 
-msgid "View Transform"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﻡﺭﺎﻔﺴﻧﺍﺮﭨ"
+msgid "View"
+msgstr "ﮟﯿﮭﮑﯾﺩ"
 
 
 msgid "View used when converting image to a display space"
@@ -9828,10 +9824,6 @@ msgstr "ﭧﻨﺠﻨﯿﭨ ﮯﺳ ﺢﻄﺳ"
 
 msgid "Draw in the surface plane"
 msgstr "ﮟﯿﭽﻨﯿﮭﮐ ﮟﯿﻣ ﻦﯿﻠﭘ ﮯﮐ ﺢﻄﺳ"
-
-
-msgid "View"
-msgstr "ﮟﯿﮭﮑﯾﺩ"
 
 
 msgid "Draw in a plane aligned to the viewport"
@@ -25180,10 +25172,6 @@ msgid "How particles are displayed in viewport"
 msgstr "ﮟﯿﮨ ﮯﺗﺎﺟ ﮯﺋﺎﮭﮐﺩ ﮯﺴﯿﮐ ﺕﺍﺭﺫ ﮟﯿﻣ ﭦﺭﻮﭘ ﻮﯾﻭ"
 
 
-msgid "Display"
-msgstr "ﮯﻠﭙﺳﮈ"
-
-
 msgid "Percentage of particles to display in 3D view"
 msgstr "3D ﺪﺼﯿﻓ ﺎﮐ ﺕﺍﺭﺫ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮯﻧﺎﮭﮐﺩ ﮟﯿﻣﻮﯾﻭ"
 
@@ -32773,6 +32761,18 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
+msgid "Toggle Bone Options"
+msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
+
+
+msgid "Enable Bone Options"
+msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
+
+
+msgid "Disable Bone Options"
+msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
+
+
 msgid "Mesh Select Mode"
 msgstr "ﮈﻮﻣ ﭧﮑﯿﻠﺳ ﺶﯿﻣ"
 
@@ -32991,18 +32991,6 @@ msgstr "ﺎﻧﺮﮐ ﻎﯿﻠﺒﺗ"
 
 msgid "Bone Collections"
 msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮞﻮﯾﮉﮨ"
-
-
-msgid "Toggle Bone Options"
-msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
-
-
-msgid "Enable Bone Options"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
-
-
-msgid "Disable Bone Options"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
 
 
 msgid "Keyframe Insert Pie"
@@ -33606,6 +33594,11 @@ msgstr "ﻦﯾﺪﻟﺍﻭ"
 msgctxt "Operator"
 msgid "Empty"
 msgstr "ﯽﻟﺎﺧ"
+
+
+msgctxt "Operator"
+msgid "Lattice"
+msgstr "ﯽﻟﺎﺟ"
 
 
 msgctxt "Constraint"
@@ -42552,52 +42545,6 @@ msgid "Create matte based on differences in color channels"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﭧﯿﻣ ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﻕﺮﻓ ﮟﯿﻣ ﺰﻠﻨﯿﭼ ﻦﯿﮕﻧﺭ"
 
 
-msgid "YUV"
-msgstr "Y ﯼﻭﻮﯾ"
-
-
-msgid "YCbCr"
-msgstr "YCbCr"
-
-
-msgctxt "Color"
-msgid "Limit Channel"
-msgstr "ﮟﯾﺮﮐ ﺩﻭﺪﺤﻣ ﻮﮐ ﻞﻨﯿﭼ"
-
-
-msgid "Limit by this channel's value"
-msgstr "ﺪﺣ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺭﺪﻗ ﯽﮐ ﻞﻨﯿﭼ ﺱﺍ"
-
-
-msgid "Algorithm"
-msgstr "ﻢﮭﺗﺭﻮﮕﻟﺍ"
-
-
-msgid "Algorithm to use to limit channel"
-msgstr "ﻢﮭﺗﺭﻮﮕﻟﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺩﻭﺪﺤﻣ ﻮﮐ ﻞﻨﯿﭼ"
-
-
-msgid "Single"
-msgstr "ﻞﮕﻨﺳ"
-
-
-msgid "Limit by single channel"
-msgstr "ﺪﺣ ﮧﻌﯾﺭﺫ ﮯﮐ ﻞﻨﯿﭼ ﻞﮕﻨﺳ"
-
-
-msgid "Limit by maximum of other channels"
-msgstr "ﮟﯾﺮﮐ ﺩﻭﺪﺤﻣ ﮏﺗ ﺰﻠﻨﯿﭼ ﮮﺮﺳﻭﺩ ﮦﺩﺎﯾﺯ ﮯﺳ ﮦﺩﺎﯾﺯ"
-
-
-msgctxt "Color"
-msgid "Channel"
-msgstr "ﻞﻨﯿﭼ"
-
-
-msgid "Channel used to determine matte"
-msgstr "ﻞﻨﯿﭼ ﻻ﻿ﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﻻ﻿ﺪﻨﮬﺩ"
-
-
 msgid "Chroma Key"
 msgstr "ﺪﯿﻠﮐ ﺎﻣﻭﺮﮐ"
 
@@ -42612,26 +42559,6 @@ msgstr "ﻥﺯﺍﻮﺗ ﻦﯿﮕﻧﺭ"
 
 msgid "Adjust color and values"
 msgstr "ﮟﯾﺮﮐ ﭧﺴﺟﮉﯾﺍ ﻮﮐ ﺭﺍﺪﻗﺍ ﺭﻭﺍ ﮓﻧﺭ"
-
-
-msgid "Correction Formula"
-msgstr "ﮧﻟﻮﻣﺭﺎﻓ ﯽﺣﻼ﻿ﺻﺍ"
-
-
-msgid "Lift/Gamma/Gain"
-msgstr "ﻦﯿﮔ/ﺎﻣﺎﮔ/ﭧﻔﻟ"
-
-
-msgid "Offset/Power/Slope (ASC-CDL)"
-msgstr "(ASC-CDL) ﻥﺍﻮﻠﮬﮈ/ﺭﻭﺎﭘ/ﭧﯿﺴﻓﺁ"
-
-
-msgid "ASC-CDL standard color correction"
-msgstr "ASC-CDL ﺡﻼ﻿ﺻﺍ ﯽﮐ ﮓﻧﺭ ﯼﺭﺎﯿﻌﻣ"
-
-
-msgid "Chromatic adaption from a different white point"
-msgstr "ﺖﻘﻓﺍﻮﻣ ﻦﯿﮕﻧﺭ ﮯﺳ ﮧﻄﻘﻧ ﺪﯿﻔﺳ ﻒﻠﺘﺨﻣ ﮏﯾﺍ"
 
 
 msgid "Input White Point"
@@ -42670,50 +42597,6 @@ msgid "Remove colors from a blue or green screen, by reducing one RGB channel co
 msgstr "ﮟﯾﺩ ﺎﭩﮨ ﻮﮐ ﮞﻮﮕﻧﺭ ﮯﺳ ﻦﯾﺮﮑﺳﺍ ﺰﺒﺳ ﺎﯾ ﮯﻠﯿﻧ ﮯﮐﺮﮐ ﻢﮐ ﻮﮐ ﻞﻨﯿﭼ ﯽﺑ ﯽﺟ ﺭﺁ ﮏﯾﺍ ﮟﯿﻣ ﮯﻠﺑﺎﻘﻣ ﮯﮐ ﮮﺮﺳﻭﺩ"
 
 
-msgid "Red spill suppression"
-msgstr "ﺎﻧﺎﺑﺩ ﻞﭙﺳ ﮉﯾﺭ"
-
-
-msgid "Green spill suppression"
-msgstr "ﺎﻧﺎﺑﺩ ﻞﭙﺳ ﻦﯾﺮﮔ"
-
-
-msgid "Blue spill suppression"
-msgstr "ﺎﻧﺎﺑﺩ ﻞﭙﺳ ﻮﯿﻠﺑ"
-
-
-msgid "Limit by red"
-msgstr "ﺪﺣ ﮯﺳ ﻑﺮﻃ ﯽﮐ ﺥﺮﺳ"
-
-
-msgid "Limit by green"
-msgstr "ﺪﺣ ﮯﺳ ﻑﺮﻃ ﯽﮐ ﺰﺒﺳ"
-
-
-msgid "Limit by blue"
-msgstr "ﺪﺣ ﯽﮐ ﮓﻧﺭ ﮯﻠﯿﻧ"
-
-
-msgid "Simple limit algorithm"
-msgstr "ﻢﮭﺗﺭﻮﮕﻟﺍ ﺪﺣ ﮦﺩﺎﺳ"
-
-
-msgid "Average limit algorithm"
-msgstr "ﻢﮭﺗﺭﻮﮕﻟﺍ ﺪﺣ ﻂﺳﻭﺍ"
-
-
-msgid "ITU 601"
-msgstr "601 ﻮﯾ ﯽﭨ ﯽﺋﺁ"
-
-
-msgid "ITU 709"
-msgstr "709 ﻮﯾ ﯽﭨ ﯽﺋﺁ"
-
-
-msgid "JPEG"
-msgstr "ﯽﺟ ﯼﺍ ﯽﭘ ﮯﺟ"
-
-
 msgid "Combine Color"
 msgstr "ﮟﯾﺮﮐ ﺎﺠﮑﯾ ﮓﻧﺭ"
 
@@ -42726,8 +42609,28 @@ msgid "Mode of color processing"
 msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ ﮓﻧﺭ"
 
 
+msgid "YCbCr"
+msgstr "YCbCr"
+
+
+msgid "YUV"
+msgstr "Y ﯼﻭﻮﯾ"
+
+
 msgid "Color space used for YCbCrA processing"
 msgstr "YCbCrA ﮧﮕﺟ ﻦﯿﮕﻧﺭ ﯽﻟﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮓﻨﺴﯿﺳﻭﺮﭘ"
+
+
+msgid "ITU 601"
+msgstr "601 ﻮﯾ ﯽﭨ ﯽﺋﺁ"
+
+
+msgid "ITU 709"
+msgstr "709 ﻮﯾ ﯽﭨ ﯽﺋﺁ"
+
+
+msgid "JPEG"
+msgstr "ﯽﺟ ﯼﺍ ﯽﭘ ﮯﺟ"
 
 
 msgid "Convert Colorspace"
@@ -43018,56 +42921,12 @@ msgid "Create matte based on 3D distance between colors"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﭧﯿﻣ ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﮯﻠﺻﺎﻓ 3D ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﮞﻮﮕﻧﺭ"
 
 
-msgid "RGB color space"
-msgstr "ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ ﯽﺒﯿﺟﺭﺁ"
-
-
-msgid "YCbCr suppression"
-msgstr "YCbCr ﺎﻧﺎﺑﺩ"
-
-
 msgid "Double Edge Mask"
 msgstr "ﮏﺳﺎﻣ ﺞﯾﺍ ﻞﺑﮈ"
 
 
 msgid "Create a gradient between two masks"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﻥﻼ﻿ﯿﻣ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﮏﺳﺎﻣ ﻭﺩ"
-
-
-msgid "Buffer Edge Mode"
-msgstr "ﮈﻮﻣ ﺞﯾﺍ ﺮﻔﺑ"
-
-
-msgid "Bleed Out"
-msgstr "ﺎﻨﻟﺎﮑﻧ ﻥﻮﺧ"
-
-
-msgid "Allow mask pixels to bleed along edges"
-msgstr "ﮟﯾﺩ ﮯﻨﮩﺑ ﻥﻮﺧ ﮫﺗﺎﺳ ﮯﮐ ﮞﻭﺭﺎﻨﮐ ﻮﮐ ﺰﻠﺴﮑﭘ ﮏﺳﺎﻣ"
-
-
-msgid "Keep In"
-msgstr "ﮟﯿﮭﮐﺭ ﺭﺪﻧﺍ"
-
-
-msgid "Restrict mask pixels from touching edges"
-msgstr "ﮟﯿﮐﻭﺭ ﮯﺳ ﮯﻧﻮﮭﭼ ﻮﮐ ﮞﻭﺭﺎﻨﮐ ﻮﮐ ﺰﻠﺴﮑﭘ ﮏﺳﺎﻣ"
-
-
-msgid "Inner Edge Mode"
-msgstr "ﮈﻮﻣ ﺎﮐ ﮮﺭﺎﻨﮐ ﯽﻧﻭﺭﺪﻧﺍ"
-
-
-msgid "All pixels on inner mask edge are considered during mask calculation"
-msgstr "ﮯﮨ ﺎﺗﺎﺟ ﺎﯿﮐ ﺭﻮﻏ ﺮﭘ ﺰﻠﺴﮑﭘ ﻡﺎﻤﺗ ﺩﻮﺟﻮﻣ ﺮﭘ ﮮﺭﺎﻨﮐ ﮯﮐ ﮏﺳﺎﻣ ﯽﻧﻭﺭﺪﻧﺍ ﻥﺍﺭﻭﺩ ﮯﮐ ﻦﺸﯿﻟﻮﮑﻠﯿﮐ ﮏﺳﺎﻣ"
-
-
-msgid "Adjacent Only"
-msgstr "ﮧﻘﺤﻠﻣ ﻑﺮﺻ"
-
-
-msgid "Only inner mask pixels adjacent to outer mask pixels are considered during mask calculation"
-msgstr "ﮯﮨ ﺎﺗﺎﺟ ﺎﯿﮐ ﺭﻮﻏ ﺮﭘ ﺰﻠﺴﮑﭘ ﮏﺳﺎﻣ ﯽﻧﻭﺭﺪﻧﺍ ﻑﺮﺻ ﻖﺤﻠﻣ ﮯﺳ ﺰﻠﺴﮑﭘ ﮏﺳﺎﻣ ﯽﻧﻭﺮﯿﺑ ﻥﺍﺭﻭﺩ ﮯﮐ ﻦﺸﯿﻟﻮﮑﻠﯿﮐ ﮏﺳﺎﻣ"
 
 
 msgid "Ellipse Mask"
@@ -43262,26 +43121,6 @@ msgid "Convert to and from premultiplied (associated) alpha"
 msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﮯﺳ ﺱﺍ ﺭﻭﺍ ﮟﯿﻣ ﺎﻔﻟﺍ (ﻖﻠﻌﺘﻣ) ﺖﻗﻭ ﺯﺍ ﻞﺒﻗ"
 
 
-msgid "Conversion between premultiplied alpha and key alpha"
-msgstr "ﯽﻠﯾﺪﺒﺗ ﻥﺎﯿﻣﺭﺩ ﮯﮐ ﺎﻔﻟﺍ ﯼﺪﯿﻠﮐ ﺭﻭﺍ ﺎﻔﻟﺍ ﮯﺋﻮﮨ ﮯﮬﮍﺑ ﮯﺳ ﮯﻠﮩﭘ"
-
-
-msgid "To Premultiplied"
-msgstr "ﺮﮐ ﮪﮍﺑ ﮯﺳ ﮯﻠﮩﭘ ﮯﺳ"
-
-
-msgid "Convert straight to premultiplied"
-msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﺮﮐ ﮪﮍﺑ ﮯﺳ ﮯﻠﮩﭘ ﺖﺳﺍﺭ ﮦﺍﺮﺑ"
-
-
-msgid "To Straight"
-msgstr "ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﺎﮬﺪﯿﺳ"
-
-
-msgid "Convert premultiplied to straight"
-msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﮟﯿﻣ ﮯﮬﺪﯿﺳ ﺮﮐ ﮪﮍﺑ ﮯﺳ ﮯﻠﮩﭘ"
-
-
 msgid "A color picker"
 msgstr "ﻻ﻿ﺍﻭ ﮯﻨﻨﭼ ﮓﻧﺭ"
 
@@ -43340,22 +43179,6 @@ msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﺎﻔﻟﺍ"
 
 msgid "Add an alpha channel to an image"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﻞﻨﯿﭼ ﺎﻔﻟﺍ ﮟﯿﻣ ﺮﯾﻮﺼﺗ"
-
-
-msgid "Apply Mask"
-msgstr "ﮟﯿﺋﺎﮕﻟ ﮏﺳﺎﻣ"
-
-
-msgid "Multiply the input image's RGBA channels by the alpha input value"
-msgstr "ﮟﯾﺩ ﺏﺮﺿ ﮯﺳ ﻮﯿﻠﯾﻭ ﭧﭘ ﻥﺍ ﺎﻔﻟﺍ ﻮﮐ ﺰﻠﻨﯿﭼ ﮮﺍ ﯽﺑ ﯽﺟ ﺭﺁ ﮯﮐ ﺞﯿﻣﺍ ﭧﭘ ﻥﺍ"
-
-
-msgid "Replace Alpha"
-msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻮﮐ ﺎﻔﻟﺍ"
-
-
-msgid "Replace the input image's alpha channel by the alpha input value"
-msgstr "ﮟﯾﺩ ﻝﺪﺑ ﮯﺳ ﻮﯿﻠﯾﻭ ﭧﭘ ﻥﺍ ﺎﻔﻟﺍ ﻮﮐ ﻞﻨﯿﭼ ﺎﻔﻟﺍ ﮯﮐ ﺞﯿﻣﺍ ﭧﭘ ﻥﺍ"
 
 
 msgid "Combine two images for side-by-side display. Typically used in combination with a Viewer node"
@@ -47629,14 +47452,6 @@ msgid "Air"
 msgstr "ﺍﻮﮨ"
 
 
-msgid ""
-"Density of air molecules.\n"
-"• 0 - No air.\n"
-"• 1 - Clear day atmosphere.\n"
-"• 2 - Highly polluted day"
-msgstr "ﻥﺩ ﮦﺩﻮﻟﺁ ﯽﺋﺎﮩﺘﻧﺍ - 2 •ﻝﻮﺣﺎﻤﻧﺩ ﻑﺎﺻ - 1 •ﮯﮨ ﮟﯿﮩﻧ ﺍﻮﮨ - 0 •ﺖﻓﺎﺜﮐ ﯽﮐ ﺰﻟﻮﯿﮑﯿﻟﺎﻣ ﮯﮐ ﺍﻮﮨ"
-
-
 msgid "Altitude"
 msgstr "ﯽﺋﺎﭽﻧﻭﺍ"
 
@@ -47645,29 +47460,8 @@ msgid "Height from sea level"
 msgstr "ﯽﺋﺎﭽﻧﻭﺍ ﮯﺳ ﺭﺪﻨﻤﺳ ﺢﻄﺳ"
 
 
-msgid "Dust"
-msgstr "ﻝﻮﮬﺩ"
-
-
-msgid ""
-"Density of dust molecules and water droplets.\n"
-"• 0 - No dust.\n"
-"• 1 - Clear day atmosphere.\n"
-"• 5 - City like atmosphere.\n"
-"• 10 - Hazy day"
-msgstr "ﻥﺩ ﻻ﻿ﺪﻨﮬﺩ- 10 •ﻝﻮﺣﺎﻣ ﺎﺴﯿﺟ ﺮﮩﺷ - 5 •ﻝﻮﺣﺎﻣ ﺎﮐ ﻥﺩ ﻑﺎﺻ - 1 •ﮟﯿﮩﻧ ﻝﻮﮬﺩ ﯽﺋﻮﮐ - 0 •ﺖﻓﺎﺜﮐ ﯽﮐ ﮞﻭﺪﻧﻮﺑ ﯽﮐ ﯽﻧﺎﭘ ﺭﻭﺍ ﺰﻟﻮﯿﮑﯿﻟﺎﻣ ﮯﮐ ﻝﻮﮬﺩ"
-
-
 msgid "Ozone"
 msgstr "ﻥﻭﺯﻭﺍ"
-
-
-msgid ""
-"Density of ozone layer.\n"
-"• 0 - No ozone.\n"
-"• 1 - Clear day atmosphere.\n"
-"• 2 - City like atmosphere"
-msgstr "ﻝﻮﺣﺎﻣ ﺎﺴﯿﺟ ﺮﮩﺷ - 2 •ﻝﻮﺣﺎﻤﻧﺩ ﻑﺎﺻ - 1 •ﮟﯿﮩﻧ ﻥﻭﺯﻭﺍ ﯽﺋﻮﮐ - 0 •ﺖﻓﺎﺜﮐ ﯽﮐ ﮧﮩﺗ ﯽﮐ ﻥﻭﺯﻭﺍ"
 
 
 msgid "Sky Type"
@@ -47676,14 +47470,6 @@ msgstr "ﭗﺋﺎﭨ ﯽﺋﺎﮑﺳﺍ"
 
 msgid "Which sky model should be used"
 msgstr "ﮯﺋﺎﺟ ﺎﯿﮐ ﻝﺎﻤﻌﺘﺳﺍ ﻝﮈﺎﻣ ﯽﻧﺎﻤﺳﺁ ﺎﺳ ﻥﻮﮐ"
-
-
-msgid "Nishita"
-msgstr "ﺎﺘﯿﺸﻧ"
-
-
-msgid "Nishita 1993 improved"
-msgstr "ﯽﺋﺁ ﯼﺮﺘﮩﺑ ﮟﯿﻣ 1993 ﺎﺘﯿﺸﻧ"
 
 
 msgid "Sun Disc"
@@ -47704,10 +47490,6 @@ msgstr "ﮧﯾﻭﺍﺯ ﺎﮐ ﺝﺭﻮﺳ ﮯﺳ ﻖﻓﺍ"
 
 msgid "Sun Intensity"
 msgstr "ﺕﺪﺷ ﯽﮐ ﺝﺭﻮﺳ"
-
-
-msgid "Strength of sun"
-msgstr "ﺖﻗﺎﻃ ﯽﮐ ﺝﺭﻮﺳ"
 
 
 msgid "Sun Rotation"
@@ -48281,6 +48063,10 @@ msgstr "ﮯﮨ ﺎﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮈﻮﻧ ﭧﭘ ﭦﺅﺁ ﺎ
 
 msgid "Value to Normal"
 msgstr "ﻞﻣﺭﺎﻧ ﮯﺳ ﺭﺪﻗ"
+
+
+msgid "Single"
+msgstr "ﻞﮕﻨﺳ"
 
 
 msgid "Enum Item"
@@ -100474,6 +100260,18 @@ msgid "Correction Method"
 msgstr "ﮧﻘﯾﺮﻃ ﺎﮐ ﺢﯿﺤﺼﺗ"
 
 
+msgid "Lift/Gamma/Gain"
+msgstr "ﻦﯿﮔ/ﺎﻣﺎﮔ/ﭧﻔﻟ"
+
+
+msgid "Offset/Power/Slope (ASC-CDL)"
+msgstr "(ASC-CDL) ﻥﺍﻮﻠﮬﮈ/ﺭﻭﺎﭘ/ﭧﯿﺴﻓﺁ"
+
+
+msgid "ASC-CDL standard color correction"
+msgstr "ASC-CDL ﺡﻼ﻿ﺻﺍ ﯽﮐ ﮓﻧﺭ ﯼﺭﺎﯿﻌﻣ"
+
+
 msgid "Color balance gain (highlights)"
 msgstr "(ﮞﺎﯿﮑﻠﮭﺟ) ﮧﻓﺎﺿﺍ ﮟﯿﻣ ﻥﺯﺍﻮﺗ ﻦﯿﮕﻧﺭ"
 
@@ -115685,11 +115483,6 @@ msgstr "ﮟﯾﺮﮐ ﺶﯾﺮﻔﯾﺭ ﻮﮐ ﺐﺳ"
 
 
 msgctxt "Operator"
-msgid "Sequence Render Animation"
-msgstr "ﻦﺸﯿﻤﯿﻨﯾﺍ ﺭﮉﻨﯾﺭ ﺐﯿﺗﺮﺗ"
-
-
-msgctxt "Operator"
 msgid "Toggle Sequencer/Preview"
 msgstr "ﻮﯾﻮﯾﺮﭘ /ﺮﺴﻨﯾﻮﮑﯿﺳ ﻞﮔﻮﭨ"
 
@@ -115829,11 +115622,6 @@ msgstr "ﮟﯾﺮﮐ ﭧﻓ ﻮﯾﻮﯾﺮﭘ  ﮟﯿﻣ ﻭﮉﻧﻭ"
 
 msgid "Auto Zoom"
 msgstr "ﻡﻭﺯ ﻮﭨﺁ"
-
-
-msgctxt "Operator"
-msgid "Sequence Render Image"
-msgstr "ﺞﯿﻣﺍ ﺭﮉﻨﯾﺭ ﺐﯿﺗﺮﺗ"
 
 
 msgctxt "Operator"
@@ -117022,16 +116810,6 @@ msgstr "ﺖﺳﺍﺭ / ﮦﺎﮕﻧ"
 
 
 msgctxt "Operator"
-msgid "Viewport Render Image"
-msgstr "ﺞﯿﻣﺍ ﺭﮉﻨﯾﺭ ﭦﺭﻮﭘﻮﯾﻭ"
-
-
-msgctxt "Operator"
-msgid "Viewport Render Keyframes"
-msgstr "ﺰﻤﯾﺮﻓ ﯽﮐ ﺭﮉﻨﯾﺭ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgctxt "Operator"
 msgid "Toggle Local View"
 msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐﻮﯾﻭ ﯽﻣﺎﻘﻣ"
 
@@ -118178,11 +117956,6 @@ msgstr "(ﺪﺣ) ﭧﮑﯿﺟﻭﺮﭘ ﮯﺳ ﺮﻈﻨﻣ"
 
 
 msgctxt "Operator"
-msgid "Viewport Render Animation"
-msgstr "ﻦﺸﯿﻤﯿﻨﯾﺍ ﺭﮉﻨﯾﺭ ﭦﺭﻮﭘﻮﯾﻭ"
-
-
-msgctxt "Operator"
 msgid "Roll Left"
 msgstr "ﮟﯾﺮﮐ ﻝﻭﺭ ﮟﯿﺋﺎﺑ"
 
@@ -118220,11 +117993,6 @@ msgstr "ﮎﻼ﻿ﺑ ﻼ﻿ﮔﺍ"
 msgctxt "Operator"
 msgid "Armature"
 msgstr "ﺮﭽﻣﺭﺁ"
-
-
-msgctxt "Operator"
-msgid "Lattice"
-msgstr "ﯽﻟﺎﺟ"
 
 
 msgctxt "Operator"
@@ -123415,12 +123183,12 @@ msgid "No mesh data to join"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﺎﭩﯾﮈ ﻝﺎﺟ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﻮﮨ ﻞﻣﺎﺷ"
 
 
-msgid "No additional selected meshes with equal vertex count to join"
-msgstr "ﮯﮨ ﮟﯿﮩﻧ ﻝﺎﺟ ﺐﺨﺘﻨﻣ ﯽﻓﺎﺿﺍ ﯽﺋﻮﮐ ﮫﺗﺎﺳ ﮯﮐ ﯽﺘﻨﮔ ﯽﮐ ﯽﭨﻮﭼ ﯼﻭﺎﺴﻣ ﮯﯿﻟ ﮯﮐ ﮯﻧﻮﮨ ﻞﻣﺎﺷ"
-
-
 msgid "Joining results in %d vertices, limit is %ld"
 msgstr "‪%d‬ ﺪﺣ ،ﺞﺋﺎﺘﻧ ﮯﮐ ﮯﻧﻮﮨ ﻞﻣﺎﺷ ﮟﯿﻣ ﯼﺩﻮﻤﻋ ‪%l‬d ﮯﮨ"
+
+
+msgid "No additional selected meshes with equal vertex count to join"
+msgstr "ﮯﮨ ﮟﯿﮩﻧ ﻝﺎﺟ ﺐﺨﺘﻨﻣ ﯽﻓﺎﺿﺍ ﯽﺋﻮﮐ ﮫﺗﺎﺳ ﮯﮐ ﯽﺘﻨﮔ ﯽﮐ ﯽﭨﻮﭼ ﯼﻭﺎﺴﻣ ﮯﯿﻟ ﮯﮐ ﮯﻧﻮﮨ ﻞﻣﺎﺷ"
 
 
 msgid "Delete selected metaball elements?"
@@ -131538,24 +131306,8 @@ msgid "Bright"
 msgstr "ﻦﺷﻭﺭ"
 
 
-msgid "Color Space:"
-msgstr ":ﮧﮕﺟ ﯽﮐ ﮓﻧﺭ"
-
-
-msgid "Key Channel:"
-msgstr ":ﻞﻨﯿﭼ ﯼﺪﯿﻠﮐ"
-
-
-msgid "Limiting Channel:"
-msgstr ":ﺎﻧﺮﮐ ﺩﻭﺪﺤﻣ ﻮﮐ ﻞﻨﯿﭼ"
-
-
 msgid "Key Color"
 msgstr "ﮓﻧﺭ ﯼﺪﯿﻠﮐ"
-
-
-msgid "Despill Channel:"
-msgstr ":ﻞﻨﯿﭼ ﻞﭙﺴﯾﮈ"
 
 
 msgid "Correction for shadows"
@@ -131652,14 +131404,6 @@ msgstr "1 ﺮﯾﻮﺼﺗ"
 
 msgid "Image 2"
 msgstr "2 ﺮﯾﻮﺼﺗ"
-
-
-msgid "Inner Edge:"
-msgstr ":ﮮﺭﺎﻨﮐ ﯽﻧﻭﺭﺪﻧﺍ"
-
-
-msgid "Buffer Edge:"
-msgstr ":ﺞﯾﺍ ﺮﻔﺑ"
 
 
 msgid "Inner Mask"

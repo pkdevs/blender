@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Alpha (b'68bccbaeeefe')\n"
+"Project-Id-Version: Blender 5.0.0 Alpha (b'fb3904ce45c6')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-09-15 07:14+0000\n"
+"POT-Creation-Date: 2025-09-22 08:45+0000\n"
 "PO-Revision-Date: 2025-08-06 08:59+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -2063,10 +2063,6 @@ msgstr "உள்ளக சொத்து அலமாரியில் அம
 
 msgid "Space Type"
 msgstr "விண்வெளி வகை"
-
-
-msgid "The space where the asset shelf is going to be used in"
-msgstr "சொத்து அலமாரியில் பயன்படுத்தப் போகும் இடம்"
 
 
 msgid "Preview Size"
@@ -7308,8 +7304,8 @@ msgid "Color management specific to display device"
 msgstr "சாதனத்தைக் காண்பிக்க வண்ண மேலாண்மை குறிப்பிட்டது"
 
 
-msgid "Display Device"
-msgstr "காட்சி சாதனம்"
+msgid "Display"
+msgstr "காட்சி"
 
 
 msgid "Input color space settings"
@@ -7528,8 +7524,8 @@ msgid "Perform chromatic adaption from a different white point"
 msgstr "வேறு வெள்ளை புள்ளியிலிருந்து வண்ணத் தழுவல் செய்யுங்கள்"
 
 
-msgid "View Transform"
-msgstr "உருமாற்றத்தைக் காண்க"
+msgid "View"
+msgstr "பார்வை"
 
 
 msgid "View used when converting image to a display space"
@@ -10437,10 +10433,6 @@ msgstr "மேற்பரப்புக்கு தொடுகோடு"
 
 msgid "Draw in the surface plane"
 msgstr "மேற்பரப்பு விமானத்தில் வரையவும்"
-
-
-msgid "View"
-msgstr "பார்வை"
 
 
 msgid "Draw in a plane aligned to the viewport"
@@ -26524,10 +26516,6 @@ msgid "Axis"
 msgstr "அச்சு"
 
 
-msgid "Display"
-msgstr "காட்சி"
-
-
 msgid "Percentage of particles to display in 3D view"
 msgstr "3d பார்வையில் காண்பிக்க துகள்களின் விழுக்காடு"
 
@@ -34416,6 +34404,18 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Toggle Bone Options"
+msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
+
+
+msgid "Enable Bone Options"
+msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
+
+
+msgid "Disable Bone Options"
+msgstr "எலும்பு விருப்பங்களை முடக்கு"
+
+
 msgid "Mesh Select Mode"
 msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
 
@@ -34634,18 +34634,6 @@ msgstr "பிரச்சாரம்"
 
 msgid "Bone Collections"
 msgstr "எலும்பு வசூல்"
-
-
-msgid "Toggle Bone Options"
-msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
-
-
-msgid "Enable Bone Options"
-msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
-
-
-msgid "Disable Bone Options"
-msgstr "எலும்பு விருப்பங்களை முடக்கு"
 
 
 msgid "Keyframe Insert Pie"
@@ -35278,6 +35266,11 @@ msgstr "பெற்றோர்"
 msgctxt "Operator"
 msgid "Empty"
 msgstr "வெறுமை"
+
+
+msgctxt "Operator"
+msgid "Lattice"
+msgstr "நட்டு"
 
 
 msgctxt "Constraint"
@@ -44381,38 +44374,6 @@ msgid "Overlay a foreground image onto a background image"
 msgstr "பின்னணி படத்தில் ஒரு முன்புற படத்தை மேலடுக்கு"
 
 
-msgid "Operation Type"
-msgstr "செயல்பாட்டு வகை"
-
-
-msgid "The type of alpha over operation"
-msgstr "செயல்பாட்டின் மீது ஆல்பா வகை"
-
-
-msgid "Over"
-msgstr "வீச்சலகு"
-
-
-msgid "The foreground goes over the background according to the alpha of the foreground"
-msgstr "முன்புறத்தின் ஆல்பாவின் படி பின்னணியில் முன்னால் செல்கிறது"
-
-
-msgid "Disjoint Over"
-msgstr "ஒத்துப்போகிறது"
-
-
-msgid "The foreground goes over the background according to the alpha of the foreground while assuming the background is being held out by the foreground"
-msgstr "முன்புறத்தின் ஆல்பாவிற்கு ஏற்ப முன்பே பின்னணியில் உள்ளது"
-
-
-msgid "Conjoint Over"
-msgstr "இணை"
-
-
-msgid "The foreground goes over the background according to the alpha of the foreground but the foreground completely covers the background if it is more opaque"
-msgstr "முன்புறத்தின் ஆல்பாவிற்கு ஏற்ப பின்னணி பின்னணியைக் கடந்து செல்கிறது, ஆனால் அது அதிக ஒளிபுகாதாக இருந்தால் பின்னணி பின்னணியை முழுமையாக உள்ளடக்கியது"
-
-
 msgid "Smooth away jagged edges"
 msgstr "துண்டிக்கப்பட்ட விளிம்புகளை மென்மையாக்கவும்"
 
@@ -44469,68 +44430,6 @@ msgid "Create matte based on differences in color channels"
 msgstr "வண்ண சேனல்களில் உள்ள வேறுபாடுகளின் அடிப்படையில் MATTE ஐ உருவாக்கவும்"
 
 
-msgid "RGB (Red, Green, Blue) color space"
-msgstr "RGB (சிவப்பு, பச்சை, நீலம்) வண்ண இடம்"
-
-
-msgid "HSV (Hue, Saturation, Value) color space"
-msgstr "HSV (சாயல், செறிவு, மதிப்பு) வண்ண இடம்"
-
-
-msgid "YUV"
-msgstr "yuv"
-
-
-msgid "YUV (Y - luma, U V - chroma) color space"
-msgstr "Yuv (y - luma, உ v - Chroma) வண்ண இடம்"
-
-
-msgid "YCbCr"
-msgstr "ycbcr"
-
-
-msgid "YCbCr (Y - luma, Cb - blue-difference chroma, Cr - red-difference chroma) color space"
-msgstr "YCBCR (Y - LUMA, CB - நீல -வேறுபாடு குரோமா, சிஆர் - சிவப்பு -வேறுபாடு குரோமா) வண்ண இடம்"
-
-
-msgctxt "Color"
-msgid "Limit Channel"
-msgstr "சேனலைக் கட்டுப்படுத்துங்கள்"
-
-
-msgid "Limit by this channel's value"
-msgstr "இந்த சேனலின் மதிப்பால் கட்டுப்படுத்தவும்"
-
-
-msgid "Algorithm"
-msgstr "வழிமுறை"
-
-
-msgid "Algorithm to use to limit channel"
-msgstr "சேனலைக் கட்டுப்படுத்த பயன்படுத்த வழிமுறை"
-
-
-msgid "Single"
-msgstr "ஒற்றை"
-
-
-msgid "Limit by single channel"
-msgstr "ஒற்றை சேனலின் வரம்பு"
-
-
-msgid "Limit by maximum of other channels"
-msgstr "பிற சேனல்களின் அதிகபட்சம்"
-
-
-msgctxt "Color"
-msgid "Channel"
-msgstr "வாய்க்கால்"
-
-
-msgid "Channel used to determine matte"
-msgstr "மேட்டை தீர்மானிக்க சேனல் பயன்படுத்தப்படுகிறது"
-
-
 msgid "Chroma Key"
 msgstr "குரோமா விசை"
 
@@ -44545,26 +44444,6 @@ msgstr "வண்ண சமநிலை"
 
 msgid "Adjust color and values"
 msgstr "வண்ணம் மற்றும் மதிப்புகளை சரிசெய்யவும்"
-
-
-msgid "Correction Formula"
-msgstr "திருத்தம் தேற்றம்"
-
-
-msgid "Lift/Gamma/Gain"
-msgstr "லிப்ட்/காமா/ஆதாயம்"
-
-
-msgid "Offset/Power/Slope (ASC-CDL)"
-msgstr "ஆஃப்செட்/பவர்/சாய்வு (asc-cdl)"
-
-
-msgid "ASC-CDL standard color correction"
-msgstr "asc-cdl நிலையான வண்ண திருத்தம்"
-
-
-msgid "Chromatic adaption from a different white point"
-msgstr "வேறு வெள்ளை புள்ளியிலிருந்து வண்ணத் தழுவல்"
 
 
 msgid "Input White Point"
@@ -44603,50 +44482,6 @@ msgid "Remove colors from a blue or green screen, by reducing one RGB channel co
 msgstr "மற்றவர்களுடன் ஒப்பிடும்போது ஒரு RGB சேனலைக் குறைப்பதன் மூலம், நீல அல்லது பச்சை திரையில் இருந்து வண்ணங்களை அகற்றவும்"
 
 
-msgid "Red spill suppression"
-msgstr "சிவப்பு கசிவு அடக்குமுறை"
-
-
-msgid "Green spill suppression"
-msgstr "பச்சை கசிவு அடக்குமுறை"
-
-
-msgid "Blue spill suppression"
-msgstr "நீல கசிவு அடக்குமுறை"
-
-
-msgid "Limit by red"
-msgstr "சிவப்பு மூலம் வரம்பு"
-
-
-msgid "Limit by green"
-msgstr "பச்சை நிறத்தால் வரம்பு"
-
-
-msgid "Limit by blue"
-msgstr "நீல நிறத்தால் வரம்பு"
-
-
-msgid "Simple limit algorithm"
-msgstr "எளிய வரம்பு வழிமுறை"
-
-
-msgid "Average limit algorithm"
-msgstr "சராசரி வரம்பு வழிமுறை"
-
-
-msgid "ITU 601"
-msgstr "ஐடியு 601"
-
-
-msgid "ITU 709"
-msgstr "ஐடியு 709"
-
-
-msgid "JPEG"
-msgstr "jpeg"
-
-
 msgid "Combine Color"
 msgstr "வண்ணத்தை இணைக்கவும்"
 
@@ -44671,8 +44506,16 @@ msgid "Use HSL (Hue, Saturation, Lightness) color processing"
 msgstr "HSL (சாயல், செறிவு, லேசான) வண்ண செயலாக்கத்தைப் பயன்படுத்தவும்"
 
 
+msgid "YCbCr"
+msgstr "ycbcr"
+
+
 msgid "Use YCbCr (Y - luma, Cb - blue-difference chroma, Cr - red-difference chroma) color processing"
 msgstr "YCBCR (Y - LUMA, CB - நீல -வேறுபாடு குரோமா, சிஆர் - சிவப்பு -வேறுபாடு குரோமா) வண்ண செயலாக்கம் பயன்படுத்தவும்"
+
+
+msgid "YUV"
+msgstr "yuv"
 
 
 msgid "Use YUV (Y - luma, U V - chroma) color processing"
@@ -44681,6 +44524,18 @@ msgstr "YUV (Y - LUMA, உ V - Chroma) வண்ண செயலாக்கத�
 
 msgid "Color space used for YCbCrA processing"
 msgstr "ycbcra செயலாக்கத்திற்கு பயன்படுத்தப்படும் வண்ண இடம்"
+
+
+msgid "ITU 601"
+msgstr "ஐடியு 601"
+
+
+msgid "ITU 709"
+msgstr "ஐடியு 709"
+
+
+msgid "JPEG"
+msgstr "jpeg"
 
 
 msgid "Convert Colorspace"
@@ -44971,56 +44826,12 @@ msgid "Create matte based on 3D distance between colors"
 msgstr "வண்ணங்களுக்கு இடையில் 3D தூரத்தின் அடிப்படையில் மேட்டை உருவாக்கவும்"
 
 
-msgid "RGB color space"
-msgstr "rgb வண்ண இடம்"
-
-
-msgid "YCbCr suppression"
-msgstr "ycbcr அடக்குமுறை"
-
-
 msgid "Double Edge Mask"
 msgstr "இரட்டை விளிம்பு முகமூடி"
 
 
 msgid "Create a gradient between two masks"
 msgstr "இரண்டு முகமூடிகளுக்கு இடையில் ஒரு சாய்வு உருவாக்கவும்"
-
-
-msgid "Buffer Edge Mode"
-msgstr "இடையக விளிம்பு பயன்முறை"
-
-
-msgid "Bleed Out"
-msgstr "இரத்தக்கசிவு"
-
-
-msgid "Allow mask pixels to bleed along edges"
-msgstr "முகமூடி பிக்சல்களை விளிம்புகளில் இரத்தம் வர அனுமதிக்கவும்"
-
-
-msgid "Keep In"
-msgstr "வைத்து"
-
-
-msgid "Restrict mask pixels from touching edges"
-msgstr "முகமூடி பிக்சல்களைத் தொடும் விளிம்புகளிலிருந்து கட்டுப்படுத்தவும்"
-
-
-msgid "Inner Edge Mode"
-msgstr "உள் விளிம்பு பயன்முறை"
-
-
-msgid "All pixels on inner mask edge are considered during mask calculation"
-msgstr "முகமூடி கணக்கீட்டின் போது உள் முகமூடி விளிம்பில் உள்ள அனைத்து பிக்சல்களும் கருதப்படுகின்றன"
-
-
-msgid "Adjacent Only"
-msgstr "அருகில் மட்டும்"
-
-
-msgid "Only inner mask pixels adjacent to outer mask pixels are considered during mask calculation"
-msgstr "முகமூடி கணக்கீட்டின் போது வெளிப்புற முகமூடி பிக்சல்களுக்கு அருகிலுள்ள உள் முகமூடி படப்புள்ளிகள் மட்டுமே கருதப்படுகின்றன"
 
 
 msgid "Ellipse Mask"
@@ -45235,26 +45046,6 @@ msgid "Convert to and from premultiplied (associated) alpha"
 msgstr "முன்கூட்டியே (தொடர்புடைய) ஆல்பாவுக்கு மாற்றவும்"
 
 
-msgid "Conversion between premultiplied alpha and key alpha"
-msgstr "முன்கூட்டியே ஆல்பா மற்றும் விசை ஆல்பா இடையே மாற்றம்"
-
-
-msgid "To Premultiplied"
-msgstr "முன்கூட்டியே"
-
-
-msgid "Convert straight to premultiplied"
-msgstr "நேராக முன்கூட்டியே மாற்றவும்"
-
-
-msgid "To Straight"
-msgstr "நேராக"
-
-
-msgid "Convert premultiplied to straight"
-msgstr "முன்கூட்டியே நேராக மாற்றவும்"
-
-
 msgid "A color picker"
 msgstr "ஒரு வண்ண தேர்வாளர்"
 
@@ -45373,22 +45164,6 @@ msgstr "ஆல்பாவை அமைக்கவும்"
 
 msgid "Add an alpha channel to an image"
 msgstr "ஒரு படத்தில் ஆல்பா சேனலைச் சேர்க்கவும்"
-
-
-msgid "Apply Mask"
-msgstr "முகமூடியைப் பயன்படுத்துங்கள்"
-
-
-msgid "Multiply the input image's RGBA channels by the alpha input value"
-msgstr "உள்ளீட்டு படத்தின் rgba சேனல்களை ஆல்பா உள்ளீட்டு மதிப்பால் பெருக்கவும்"
-
-
-msgid "Replace Alpha"
-msgstr "ஆல்பாவை மாற்றவும்"
-
-
-msgid "Replace the input image's alpha channel by the alpha input value"
-msgstr "ஆல்பா உள்ளீட்டு மதிப்பால் உள்ளீட்டு பட ஆல்பா சேனலை மாற்றவும்"
 
 
 msgid "Combine two images for side-by-side display. Typically used in combination with a Viewer node"
@@ -50166,18 +49941,6 @@ msgid "Air"
 msgstr "காற்று"
 
 
-msgid ""
-"Density of air molecules.\n"
-"• 0 - No air.\n"
-"• 1 - Clear day atmosphere.\n"
-"• 2 - Highly polluted day"
-msgstr ""
-"காற்று மூலக்கூறுகளின் அடர்த்தி.\n"
-" • 0 - காற்று இல்லை.\n"
-" • 1 - தெளிவான நாள் வளிமண்டலம்.\n"
-" • 2 - அதிக மாசுபட்ட நாள்"
-
-
 msgid "Altitude"
 msgstr "உயரம்"
 
@@ -50186,38 +49949,8 @@ msgid "Height from sea level"
 msgstr "கடல் மட்டத்திலிருந்து உயரம்"
 
 
-msgid "Dust"
-msgstr "தூசி"
-
-
-msgid ""
-"Density of dust molecules and water droplets.\n"
-"• 0 - No dust.\n"
-"• 1 - Clear day atmosphere.\n"
-"• 5 - City like atmosphere.\n"
-"• 10 - Hazy day"
-msgstr ""
-"தூசி மூலக்கூறுகள் மற்றும் நீர் துளிகளின் அடர்த்தி.\n"
-" • 0 - தூசி இல்லை.\n"
-" • 1 - தெளிவான நாள் வளிமண்டலம்.\n"
-" • 5 - வளிமண்டலம் போன்ற நகரம்.\n"
-" • 10 - மங்கலான நாள்"
-
-
 msgid "Ozone"
 msgstr "ஓசோன்"
-
-
-msgid ""
-"Density of ozone layer.\n"
-"• 0 - No ozone.\n"
-"• 1 - Clear day atmosphere.\n"
-"• 2 - City like atmosphere"
-msgstr ""
-"ஓசோன் அடுக்கின் அடர்த்தி.\n"
-" • 0 - ஓசோன் இல்லை.\n"
-" • 1 - தெளிவான நாள் வளிமண்டலம்.\n"
-" • 2 - வளிமண்டலம் போன்ற நகரம்"
 
 
 msgid "Sky Type"
@@ -50226,14 +49959,6 @@ msgstr "வான வகை"
 
 msgid "Which sky model should be used"
 msgstr "எந்த வான மாதிரியைப் பயன்படுத்த வேண்டும்"
-
-
-msgid "Nishita"
-msgstr "நிசிதா"
-
-
-msgid "Nishita 1993 improved"
-msgstr "நிசிதா 1993 மேம்பட்டது"
 
 
 msgid "Sun Disc"
@@ -50254,10 +49979,6 @@ msgstr "அடிவானத்திலிருந்து சூரிய �
 
 msgid "Sun Intensity"
 msgstr "சூரிய தீவிரம்"
-
-
-msgid "Strength of sun"
-msgstr "சூரியனின் வலிமை"
 
 
 msgid "Sun Rotation"
@@ -50925,6 +50646,10 @@ msgstr "சாக்கெட் ஒரு கட்டத்தை எதிர
 
 msgid "Socket expects a list"
 msgstr "சாக்கெட் ஒரு பட்டியலை எதிர்பார்க்கிறது"
+
+
+msgid "Single"
+msgstr "ஒற்றை"
 
 
 msgid "Socket expects a single value"
@@ -106526,6 +106251,18 @@ msgid "Correction Method"
 msgstr "திருத்தும் முறை"
 
 
+msgid "Lift/Gamma/Gain"
+msgstr "லிப்ட்/காமா/ஆதாயம்"
+
+
+msgid "Offset/Power/Slope (ASC-CDL)"
+msgstr "ஆஃப்செட்/பவர்/சாய்வு (asc-cdl)"
+
+
+msgid "ASC-CDL standard color correction"
+msgstr "asc-cdl நிலையான வண்ண திருத்தம்"
+
+
 msgid "Color balance gain (highlights)"
 msgstr "வண்ண சமநிலை ஆதாயம் (சிறப்பம்சங்கள்)"
 
@@ -122933,11 +122670,6 @@ msgstr "அனைத்தையும் புதுப்பி"
 
 
 msgctxt "Operator"
-msgid "Sequence Render Animation"
-msgstr "சீக்வென்ச் வழங்குதல் அனிமேசன்"
-
-
-msgctxt "Operator"
 msgid "Toggle Sequencer/Preview"
 msgstr "சீக்வென்சர் மாற்று/முன்னோட்டம்"
 
@@ -123081,11 +122813,6 @@ msgstr "சாளரத்தில் முன்னோட்டத்தை �
 
 msgid "Auto Zoom"
 msgstr "ஆட்டோ சூம்"
-
-
-msgctxt "Operator"
-msgid "Sequence Render Image"
-msgstr "வரிசை வழங்குதல் படம்"
 
 
 msgctxt "Operator"
@@ -124430,16 +124157,6 @@ msgstr "முன்னோக்கு/ஆர்த்தோகிராஃப�
 
 
 msgctxt "Operator"
-msgid "Viewport Render Image"
-msgstr "viewport render படத்தை வழங்கவும்"
-
-
-msgctxt "Operator"
-msgid "Viewport Render Keyframes"
-msgstr "viewport keyframes ஐ வழங்குகிறது"
-
-
-msgctxt "Operator"
 msgid "Toggle Local View"
 msgstr "உள்ளக பார்வையை நிலைநிறுத்துங்கள்"
 
@@ -125629,11 +125346,6 @@ msgstr "கடைசி பக்கவாதம்"
 
 
 msgctxt "Operator"
-msgid "Viewport Render Animation"
-msgstr "வியாபோர்ட் வழங்குதல் அனிமேசன்"
-
-
-msgctxt "Operator"
 msgid "Roll Left"
 msgstr "ரோல் இடது"
 
@@ -125686,11 +125398,6 @@ msgstr "ஒற்றை அம்பு"
 msgctxt "Operator"
 msgid "Armature"
 msgstr "ஆர்மேச்சர்"
-
-
-msgctxt "Operator"
-msgid "Lattice"
-msgstr "நட்டு"
 
 
 msgctxt "Operator"
@@ -131441,6 +131148,10 @@ msgid "No mesh data to join"
 msgstr "சேர கண்ணி தரவு இல்லை"
 
 
+msgid "Joining results in %d vertices, limit is %ld"
+msgstr "%d செங்குத்துகளில் முடிவுகளை இணைத்தல், வரம்பு %ld ஆகும்"
+
+
 msgid "No source mesh objects selected"
 msgstr "மூல கண்ணி பொருள்கள் எதுவும் தேர்ந்தெடுக்கப்படவில்லை"
 
@@ -131463,10 +131174,6 @@ msgstr "மாறும் டோபாலசி சிற்பத்தில�
 
 msgid "Mesh faces and vertices reordered spatially"
 msgstr "கண்ணி முகங்களும் செங்குத்துகளும் இடஞ்சார்ந்த முறையில் மறுவரிசைப்படுத்தப்பட்டன"
-
-
-msgid "Joining results in %d vertices, limit is %ld"
-msgstr "%d செங்குத்துகளில் முடிவுகளை இணைத்தல், வரம்பு %ld ஆகும்"
 
 
 msgid "Updated %d shape key(s)"
@@ -140783,18 +140490,6 @@ msgid "Bright"
 msgstr "பிரகாசமான"
 
 
-msgid "Color Space:"
-msgstr "வண்ண இடம்:"
-
-
-msgid "Key Channel:"
-msgstr "முக்கிய சேனல்:"
-
-
-msgid "Limiting Channel:"
-msgstr "சேனலைக் கட்டுப்படுத்துதல்:"
-
-
 msgid "Channel values lower than this minimum are keyed"
 msgstr "இந்த குறைந்தபட்சத்தை விடக் குறைவான சேனல் மதிப்புகள் விசை"
 
@@ -140829,10 +140524,6 @@ msgstr "வண்ணத்திற்கும் முக்கிய நி�
 
 msgid "If the difference in value between the color and key color is less than this threshold, it is keyed"
 msgstr "வண்ணத்திற்கும் முக்கிய நிறத்திற்கும் இடையிலான மதிப்பில் உள்ள வேறுபாடு இந்த வாசலை விட குறைவாக இருந்தால், அது திறமையாக இருக்கும்"
-
-
-msgid "Despill Channel:"
-msgstr "டெச்பில் சேனல்:"
 
 
 msgid "Limit Strength"
@@ -141181,14 +140872,6 @@ msgstr "கொடுக்கப்பட்ட வண்ண இடத்தி�
 
 msgid "If the distance between the color and the key color in the given color space is less than this threshold, it is partially keyed, otherwise, it is not keyed"
 msgstr "கொடுக்கப்பட்ட வண்ண இடத்தின் வண்ணத்திற்கும் முக்கிய நிறத்திற்கும் இடையிலான தூரம் இந்த வாசலை விட குறைவாக இருந்தால், அது ஓரளவு முக்கியமானது, இல்லையெனில், அது முக்கியமல்ல"
-
-
-msgid "Inner Edge:"
-msgstr "உள் விளிம்பு:"
-
-
-msgid "Buffer Edge:"
-msgstr "இடையக விளிம்பு:"
 
 
 msgid "Inner Mask"
