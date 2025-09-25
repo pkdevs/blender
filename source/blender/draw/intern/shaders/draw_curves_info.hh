@@ -11,7 +11,7 @@
 #  include "gpu_shader_compat.hh"
 
 #  include "draw_attribute_shader_shared.hh"
-#  include "draw_object_infos_info.hh"
+#  include "draw_object_infos_infos.hh"
 
 #  define DRW_HAIR_INFO
 #endif
