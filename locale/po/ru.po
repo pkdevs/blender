@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'5517941a60ac')\n"
+"Project-Id-Version: Blender 5.0.0 Beta (b'702691150287')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-13 14:36+0000\n"
+"POT-Creation-Date: 2025-10-13 16:12+0000\n"
 "PO-Revision-Date: 2025-10-13 07:59+0000\n"
 "Last-Translator: Fatih Alexandr <radix83@rambler.ru>\n"
 "Language-Team: Russian <https://translate.blender.org/projects/blender-ui/ui/ru/>\n"
@@ -29735,14 +29735,6 @@ msgid "Maintained by community developers"
 msgstr "Расширения, сопровождаемые разработчиками из сообщества"
 
 
-msgid "Testing"
-msgstr "Тестирование"
-
-
-msgid "Newly contributed scripts (excluded from release builds)"
-msgstr "Недавно добавленные скрипты (не вошедшие в официальные выпуски)"
-
-
 msgid "Addon Tags"
 msgstr "Теги аддона"
 
@@ -34786,12 +34778,44 @@ msgid "Editor menu containing buttons"
 msgstr "Меню редактора, содержащее кнопки"
 
 
-msgid "Convert"
-msgstr "Конвертировать"
+msgid "Metaball"
+msgstr "Метасфера"
 
 
-msgid "Make Single User"
-msgstr "Для одного пользователя"
+msgid "Light"
+msgstr "Свет"
+
+
+msgid "Light Probe"
+msgstr "Зонд освещения"
+
+
+msgid "Add Image"
+msgstr "Добавить изображение"
+
+
+msgid "Relations"
+msgstr "Отношения"
+
+
+msgid "Rigid Body"
+msgstr "Твёрдое тело"
+
+
+msgid "Apply"
+msgstr "Применить"
+
+
+msgid "Track"
+msgstr "Отслеживание"
+
+
+msgid "Quick Effects"
+msgstr "Быстрые эффекты"
+
+
+msgid "Show/Hide"
+msgstr "Показать/скрыть"
 
 
 msgid "Clean Up"
@@ -34802,16 +34826,68 @@ msgid "Asset"
 msgstr "Ассет"
 
 
-msgid "Show/Hide"
-msgstr "Показать/скрыть"
+msgid "Make Single User"
+msgstr "Для одного пользователя"
+
+
+msgid "Convert"
+msgstr "Конвертировать"
+
+
+msgid "Link/Transfer Data"
+msgstr "Связать/передать данные"
+
+
+msgid "Hooks"
+msgstr "Крюки"
+
+
+msgid "Vertex Group Locks"
+msgstr "Блокировки групп вершин"
+
+
+msgid "Trim/Add"
+msgstr "Обрезать/Добавить"
+
+
+msgid "Sculpt Set Pivot"
+msgstr "Установить центр трансформации скульптинга"
+
+
+msgid "Face Sets Init"
+msgstr "Инициализация наборов граней"
+
+
+msgid "Random Mask"
+msgstr "Случайная маска"
 
 
 msgid "Layout"
 msgstr "Разметка"
 
 
-msgid "Apply"
-msgstr "Применить"
+msgid "Clear Transform"
+msgstr "Очистить трансформацию"
+
+
+msgid "In-Betweens"
+msgstr "Промежуточные"
+
+
+msgid "Propagate"
+msgstr "Распространение"
+
+
+msgid "Bone Collections"
+msgstr "Коллекции костей"
+
+
+msgid "Names"
+msgstr "Названия"
+
+
+msgid "Adjust"
+msgstr "Коррекция"
 
 
 msgid "Toggle Bone Options"
@@ -34826,68 +34902,52 @@ msgid "Disable Bone Options"
 msgstr "Отключить параметры костей"
 
 
-msgid "Quick Effects"
-msgstr "Быстрые эффекты"
+msgid "Keying"
+msgstr "Кеинг"
 
 
 msgid "Mesh Select Mode"
 msgstr "Режим выделения меша"
 
 
-msgid "Face Data"
-msgstr "Данные граней"
-
-
-msgid "Adjust"
-msgstr "Коррекция"
-
-
-msgid "Select by Face Strength"
-msgstr "Выделить по твёрдости грани"
-
-
-msgid "Set Face Strength"
-msgstr "Установить твёрдость грани"
-
-
-msgid "Keying"
-msgstr "Кеинг"
-
-
 msgid "Tracking"
 msgstr "Трекинг"
-
-
-msgid "Merge"
-msgstr "Объединить"
 
 
 msgid "Utilities"
 msgstr "Утилиты"
 
 
+msgid "Face Data"
+msgstr "Данные граней"
+
+
 msgid "Math"
 msgstr "Математика"
+
+
+msgid "Select by Face Strength"
+msgstr "Выделить по твёрдости грани"
 
 
 msgid "Creative"
 msgstr "Творческий"
 
 
-msgid "Track"
-msgstr "Отслеживание"
+msgid "Set Face Strength"
+msgstr "Установить твёрдость грани"
 
 
-msgid "Names"
-msgstr "Названия"
+msgid "Merge"
+msgstr "Объединить"
+
+
+msgid "Render Preview"
+msgstr "Превью рендера"
 
 
 msgid "Special Characters"
 msgstr "Специальные символы"
-
-
-msgid "Metaball"
-msgstr "Метасфера"
 
 
 msgid "Kerning"
@@ -34898,36 +34958,8 @@ msgid "Text"
 msgstr "Текст"
 
 
-msgid "Render Preview"
-msgstr "Превью рендера"
-
-
-msgid "Bone Collections"
-msgstr "Коллекции костей"
-
-
 msgid "Bone Roll"
 msgstr "Крен кости"
-
-
-msgid "Rigid Body"
-msgstr "Твёрдое тело"
-
-
-msgid "Propagate"
-msgstr "Распространение"
-
-
-msgid "In-Betweens"
-msgstr "Промежуточные"
-
-
-msgid "Relations"
-msgstr "Отношения"
-
-
-msgid "Add Image"
-msgstr "Добавить изображение"
 
 
 msgid "Pivot Point"
@@ -34938,44 +34970,24 @@ msgid "Snap"
 msgstr "Привязка"
 
 
-msgid "Light Probe"
-msgstr "Зонд освещения"
-
-
 msgid "Proportional Editing Falloff"
 msgstr "Спад пропорционального редактирования"
-
-
-msgid "Light"
-msgstr "Свет"
 
 
 msgid "Mask Edit"
 msgstr "Редактировать маску"
 
 
-msgid "Select More/Less"
-msgstr "Выделить больше/меньше"
-
-
 msgid "Automasking"
 msgstr "Автомаски́рование"
 
 
-msgid "Face Sets Edit"
-msgstr "Редактировать наборы граней"
-
-
-msgid "Vertex Group Locks"
-msgstr "Блокировки групп вершин"
-
-
-msgid "Clear Transform"
-msgstr "Очистить трансформацию"
-
-
 msgid "Read"
 msgstr "Прочитать"
+
+
+msgid "Face Sets Edit"
+msgstr "Редактировать наборы граней"
 
 
 msgid "Sample"
@@ -34990,72 +35002,12 @@ msgid "Primitives"
 msgstr "Примитивы"
 
 
-msgid "Select Loops"
-msgstr "Выделить петли"
-
-
-msgid "Select Linked"
-msgstr "Выделить связанные"
-
-
-msgid "Select All by Trait"
-msgstr "Выделить всё по признаку"
-
-
-msgid "Face Sets Init"
-msgstr "Инициализация наборов граней"
-
-
-msgid "Select Similar"
-msgstr "Выделить по схожести"
-
-
-msgid "Sculpt Set Pivot"
-msgstr "Установить центр трансформации скульптинга"
-
-
-msgid "Random Mask"
-msgstr "Случайная маска"
-
-
-msgid "View Regions"
-msgstr "Области обзора"
-
-
-msgid "Align View to Active"
-msgstr "Выровнять вид по активному"
-
-
-msgid "Align View"
-msgstr "Выровнять вид"
-
-
-msgid "Navigation"
-msgstr "Навигация"
-
-
-msgid "Viewpoint"
-msgstr "Точка обзора"
-
-
 msgid "Gizmo"
 msgstr "Гизмо"
 
 
 msgid "Instances"
 msgstr "Экземпляры"
-
-
-msgid "Local View"
-msgstr "Локальный вид"
-
-
-msgid "UV Mapping"
-msgstr "UV-Разметка"
-
-
-msgid "Trim/Add"
-msgstr "Обрезать/Добавить"
 
 
 msgid "Mirror"
@@ -35066,32 +35018,64 @@ msgid "Import"
 msgstr "Импортировать"
 
 
+msgid "UV Mapping"
+msgstr "UV-Разметка"
+
+
+msgid "Local View"
+msgstr "Локальный вид"
+
+
+msgid "Viewpoint"
+msgstr "Точка обзора"
+
+
+msgid "Navigation"
+msgstr "Навигация"
+
+
+msgid "Align View"
+msgstr "Выровнять вид"
+
+
+msgid "Align View to Active"
+msgstr "Выровнять вид по активному"
+
+
 msgid "Deprecated"
 msgstr "Устаревшие"
+
+
+msgid "View Regions"
+msgstr "Области обзора"
+
+
+msgid "Select More/Less"
+msgstr "Выделить больше/меньше"
 
 
 msgid "List"
 msgstr "Список"
 
 
+msgid "Select Similar"
+msgstr "Выделить по схожести"
+
+
+msgid "Select All by Trait"
+msgstr "Выделить всё по признаку"
+
+
 msgid "UV"
 msgstr "UV"
 
 
-msgid "Assign Material"
-msgstr "Назначить материал"
+msgid "Select Linked"
+msgstr "Выделить связанные"
 
 
-msgid "Hooks"
-msgstr "Крюки"
-
-
-msgid "Link/Transfer Data"
-msgstr "Связать/передать данные"
-
-
-msgid "Keyframe Insert Pie"
-msgstr "Круговой меню вставки ключевых кадров"
+msgid "Select Loops"
+msgstr "Выделить петли"
 
 
 msgid "Animals"
@@ -35100,6 +35084,14 @@ msgstr "Животные"
 
 msgid "Basic"
 msgstr "Базовый"
+
+
+msgid "Assign Material"
+msgstr "Назначить материал"
+
+
+msgid "Keyframe Insert Pie"
+msgstr "Круговой меню вставки ключевых кадров"
 
 
 msgid "Bone Collection Specials"
@@ -91275,6 +91267,26 @@ msgid "Panel containing UI elements"
 msgstr "Панель содержит элементы интерфейса"
 
 
+msgid "Auto-Masking"
+msgstr "Авто-маски́рование"
+
+
+msgid "Curves Sculpt Add Curve Options"
+msgstr "Скульптинг кривых - Параметры добавления кривых"
+
+
+msgid "Curves Sculpt Parameter Falloff"
+msgstr "Скульптинг кривых - Параметр спада"
+
+
+msgid "Curves Grow/Shrink Scaling"
+msgstr "Масштабирование кривых: увеличить/уменьшить"
+
+
+msgid "Viewport Debug"
+msgstr "Отладка вьюпорта"
+
+
 msgid "VR"
 msgstr "VR"
 
@@ -91401,26 +91413,6 @@ msgstr "Стереоскопия"
 
 msgid "Multi Frame"
 msgstr "Мультикадр"
-
-
-msgid "Auto-Masking"
-msgstr "Авто-маски́рование"
-
-
-msgid "Curves Sculpt Add Curve Options"
-msgstr "Скульптинг кривых - Параметры добавления кривых"
-
-
-msgid "Curves Sculpt Parameter Falloff"
-msgstr "Скульптинг кривых - Параметр спада"
-
-
-msgid "Curves Grow/Shrink Scaling"
-msgstr "Масштабирование кривых: увеличить/уменьшить"
-
-
-msgid "Viewport Debug"
-msgstr "Отладка вьюпорта"
 
 
 msgid "Import Settings"
