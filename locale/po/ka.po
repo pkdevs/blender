@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'5517941a60ac')\n"
+"Project-Id-Version: Blender 5.0.0 Beta (b'702691150287')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-13 14:36+0000\n"
+"POT-Creation-Date: 2025-10-13 16:12+0000\n"
 "PO-Revision-Date: 2025-10-13 12:08+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
@@ -29735,14 +29735,6 @@ msgid "Maintained by community developers"
 msgstr "მომსახურებას უწევენ საზოგადოების წევრი დეველოპერები"
 
 
-msgid "Testing"
-msgstr "ტესტირება"
-
-
-msgid "Newly contributed scripts (excluded from release builds)"
-msgstr "ახლად შემოტანილი სკრიპტები (რომლებიც გამოშვებულ კომპილაციებში არ შესულა)"
-
-
 msgid "Addon Tags"
 msgstr "დანამატების ტეგები"
 
@@ -34786,12 +34778,44 @@ msgid "Editor menu containing buttons"
 msgstr "რედაქტორის მენიუ, რომელიც ღილაკებს შეიცავს"
 
 
-msgid "Convert"
-msgstr "კონვერტირება"
+msgid "Metaball"
+msgstr "მეტაბურთი"
 
 
-msgid "Make Single User"
-msgstr "ცალ მომხმარებლად ქცევა"
+msgid "Light"
+msgstr "სინათლე"
+
+
+msgid "Light Probe"
+msgstr "სინათლის ზონდი"
+
+
+msgid "Add Image"
+msgstr "გამოსახულების დამატება"
+
+
+msgid "Relations"
+msgstr "ურთიერთდამოკიდებულებები"
+
+
+msgid "Rigid Body"
+msgstr "უდრეკი სხეული"
+
+
+msgid "Apply"
+msgstr "გამოყენება"
+
+
+msgid "Track"
+msgstr "თვალის დევნება"
+
+
+msgid "Quick Effects"
+msgstr "სწრაფი ეფექტები"
+
+
+msgid "Show/Hide"
+msgstr "ჩვენება/დამალვა"
 
 
 msgid "Clean Up"
@@ -34802,16 +34826,68 @@ msgid "Asset"
 msgstr "აქტივი"
 
 
-msgid "Show/Hide"
-msgstr "ჩვენება/დამალვა"
+msgid "Make Single User"
+msgstr "ცალ მომხმარებლად ქცევა"
+
+
+msgid "Convert"
+msgstr "კონვერტირება"
+
+
+msgid "Link/Transfer Data"
+msgstr "მონაცემების ბმულით დაკავშირება/გადატანა"
+
+
+msgid "Hooks"
+msgstr "კაუჭები"
+
+
+msgid "Vertex Group Locks"
+msgstr "წვეროთა ჯგუფების ბლოკები"
+
+
+msgid "Trim/Add"
+msgstr "მოკრეჭა/დამატება"
+
+
+msgid "Sculpt Set Pivot"
+msgstr "საძერწი ნაკრების ბრუნვის ცენტრი"
+
+
+msgid "Face Sets Init"
+msgstr "წახნაგთა ნაკრების ინიციალიზაცია"
+
+
+msgid "Random Mask"
+msgstr "შემთხვევითი ნიღაბი"
 
 
 msgid "Layout"
 msgstr "განლაგება"
 
 
-msgid "Apply"
-msgstr "გამოყენება"
+msgid "Clear Transform"
+msgstr "გარდაქმნის გასუფთავება"
+
+
+msgid "In-Betweens"
+msgstr "შუაში"
+
+
+msgid "Propagate"
+msgstr "გავრცელება"
+
+
+msgid "Bone Collections"
+msgstr "ძვლების კოლექციები"
+
+
+msgid "Names"
+msgstr "სახელები"
+
+
+msgid "Adjust"
+msgstr "რეგულირება"
 
 
 msgid "Toggle Bone Options"
@@ -34826,68 +34902,52 @@ msgid "Disable Bone Options"
 msgstr "ძვლის ვარიანტების გათიშვა"
 
 
-msgid "Quick Effects"
-msgstr "სწრაფი ეფექტები"
+msgid "Keying"
+msgstr "ამოჭრა"
 
 
 msgid "Mesh Select Mode"
 msgstr "მეშის მონიშვნის რეჟიმი"
 
 
-msgid "Face Data"
-msgstr "წახნაგების მონაცემები"
-
-
-msgid "Adjust"
-msgstr "რეგულირება"
-
-
-msgid "Select by Face Strength"
-msgstr "მონიშნე წახნაგების სიძლიერის მიხედვით"
-
-
-msgid "Set Face Strength"
-msgstr "წახნაგის სიძლიერის დაყენება"
-
-
-msgid "Keying"
-msgstr "ამოჭრა"
-
-
 msgid "Tracking"
 msgstr "თვალის დევნება"
-
-
-msgid "Merge"
-msgstr "შერწყმა"
 
 
 msgid "Utilities"
 msgstr "უტილიტები"
 
 
+msgid "Face Data"
+msgstr "წახნაგების მონაცემები"
+
+
 msgid "Math"
 msgstr "მეშის პრიმიტივები"
+
+
+msgid "Select by Face Strength"
+msgstr "მონიშნე წახნაგების სიძლიერის მიხედვით"
 
 
 msgid "Creative"
 msgstr "კრეატიული"
 
 
-msgid "Track"
-msgstr "თვალის დევნება"
+msgid "Set Face Strength"
+msgstr "წახნაგის სიძლიერის დაყენება"
 
 
-msgid "Names"
-msgstr "სახელები"
+msgid "Merge"
+msgstr "შერწყმა"
+
+
+msgid "Render Preview"
+msgstr "რენდერის გადახედვა"
 
 
 msgid "Special Characters"
 msgstr "სპეციალური ასონიშნები"
-
-
-msgid "Metaball"
-msgstr "მეტაბურთი"
 
 
 msgid "Kerning"
@@ -34898,36 +34958,8 @@ msgid "Text"
 msgstr "ტექსტი"
 
 
-msgid "Render Preview"
-msgstr "რენდერის გადახედვა"
-
-
-msgid "Bone Collections"
-msgstr "ძვლების კოლექციები"
-
-
 msgid "Bone Roll"
 msgstr "ძვლის ტრიალი"
-
-
-msgid "Rigid Body"
-msgstr "უდრეკი სხეული"
-
-
-msgid "Propagate"
-msgstr "გავრცელება"
-
-
-msgid "In-Betweens"
-msgstr "შუაში"
-
-
-msgid "Relations"
-msgstr "ურთიერთდამოკიდებულებები"
-
-
-msgid "Add Image"
-msgstr "გამოსახულების დამატება"
 
 
 msgid "Pivot Point"
@@ -34938,44 +34970,24 @@ msgid "Snap"
 msgstr "მიკვრა"
 
 
-msgid "Light Probe"
-msgstr "სინათლის ზონდი"
-
-
 msgid "Proportional Editing Falloff"
 msgstr "პროპორციული რედაქტირების მილევა"
-
-
-msgid "Light"
-msgstr "სინათლე"
 
 
 msgid "Mask Edit"
 msgstr "ნიღბის რედაქტირება"
 
 
-msgid "Select More/Less"
-msgstr "მეტის/ნაკლების მონიშვნა"
-
-
 msgid "Automasking"
 msgstr "ავტომატური შენიღბვა"
 
 
-msgid "Face Sets Edit"
-msgstr "წახნაგების ნაკრებთა რედაქტირება"
-
-
-msgid "Vertex Group Locks"
-msgstr "წვეროთა ჯგუფების ბლოკები"
-
-
-msgid "Clear Transform"
-msgstr "გარდაქმნის გასუფთავება"
-
-
 msgid "Read"
 msgstr "წაკითხვა"
+
+
+msgid "Face Sets Edit"
+msgstr "წახნაგების ნაკრებთა რედაქტირება"
 
 
 msgid "Sample"
@@ -34990,72 +35002,12 @@ msgid "Primitives"
 msgstr "პრიმიტივები"
 
 
-msgid "Select Loops"
-msgstr "მარყუჟების მონიშვნა"
-
-
-msgid "Select Linked"
-msgstr "მიბმულის მონიშვნა"
-
-
-msgid "Select All by Trait"
-msgstr "ყველას მონიშვნა თვისებით"
-
-
-msgid "Face Sets Init"
-msgstr "წახნაგთა ნაკრების ინიციალიზაცია"
-
-
-msgid "Select Similar"
-msgstr "მსგავსის მონიშვნა"
-
-
-msgid "Sculpt Set Pivot"
-msgstr "საძერწი ნაკრების ბრუნვის ცენტრი"
-
-
-msgid "Random Mask"
-msgstr "შემთხვევითი ნიღაბი"
-
-
-msgid "View Regions"
-msgstr "ხედის მონაკვეთები"
-
-
-msgid "Align View to Active"
-msgstr "ხედის მისადაგება აქტიურზე"
-
-
-msgid "Align View"
-msgstr "ხედის მისადაგება"
-
-
-msgid "Navigation"
-msgstr "ნავიგაცია"
-
-
-msgid "Viewpoint"
-msgstr "თვალთახედვა"
-
-
 msgid "Gizmo"
 msgstr "გიზმო"
 
 
 msgid "Instances"
 msgstr "ინსტანციები"
-
-
-msgid "Local View"
-msgstr "ლოკალური ხედი"
-
-
-msgid "UV Mapping"
-msgstr "UV დატანა"
-
-
-msgid "Trim/Add"
-msgstr "მოკრეჭა/დამატება"
 
 
 msgid "Mirror"
@@ -35066,32 +35018,64 @@ msgid "Import"
 msgstr "იმპორტი"
 
 
+msgid "UV Mapping"
+msgstr "UV დატანა"
+
+
+msgid "Local View"
+msgstr "ლოკალური ხედი"
+
+
+msgid "Viewpoint"
+msgstr "თვალთახედვა"
+
+
+msgid "Navigation"
+msgstr "ნავიგაცია"
+
+
+msgid "Align View"
+msgstr "ხედის მისადაგება"
+
+
+msgid "Align View to Active"
+msgstr "ხედის მისადაგება აქტიურზე"
+
+
 msgid "Deprecated"
 msgstr "არარეკომენდირებული"
+
+
+msgid "View Regions"
+msgstr "ხედის მონაკვეთები"
+
+
+msgid "Select More/Less"
+msgstr "მეტის/ნაკლების მონიშვნა"
 
 
 msgid "List"
 msgstr "სია"
 
 
+msgid "Select Similar"
+msgstr "მსგავსის მონიშვნა"
+
+
+msgid "Select All by Trait"
+msgstr "ყველას მონიშვნა თვისებით"
+
+
 msgid "UV"
 msgstr "UV"
 
 
-msgid "Assign Material"
-msgstr "მასალის მიკუთვნება"
+msgid "Select Linked"
+msgstr "მიბმულის მონიშვნა"
 
 
-msgid "Hooks"
-msgstr "კაუჭები"
-
-
-msgid "Link/Transfer Data"
-msgstr "მონაცემების ბმულით დაკავშირება/გადატანა"
-
-
-msgid "Keyframe Insert Pie"
-msgstr "საკვანძო ფაზის ჩასმის სექტორი"
+msgid "Select Loops"
+msgstr "მარყუჟების მონიშვნა"
 
 
 msgid "Animals"
@@ -35100,6 +35084,14 @@ msgstr "ცხოველები"
 
 msgid "Basic"
 msgstr "ძირითადი"
+
+
+msgid "Assign Material"
+msgstr "მასალის მიკუთვნება"
+
+
+msgid "Keyframe Insert Pie"
+msgstr "საკვანძო ფაზის ჩასმის სექტორი"
 
 
 msgid "Bone Collection Specials"
@@ -91130,6 +91122,26 @@ msgid "Panel containing UI elements"
 msgstr "პანელი, რომელიც UI-ს ელემენტებს შეიცავს"
 
 
+msgid "Auto-Masking"
+msgstr "ავტომატური შენიღბვა"
+
+
+msgid "Curves Sculpt Add Curve Options"
+msgstr "წირების ძერწვაში წირის დამატების ვარიანტები"
+
+
+msgid "Curves Sculpt Parameter Falloff"
+msgstr "წირების ძერწვის პარამეტრის მილევა"
+
+
+msgid "Curves Grow/Shrink Scaling"
+msgstr "წირების ზრდა/კუმშვა მასშტაბირებით"
+
+
+msgid "Viewport Debug"
+msgstr "სარკმლის ხარვეზების აღმოფხვრა"
+
+
 msgid "VR"
 msgstr "ვ.რ."
 
@@ -91256,26 +91268,6 @@ msgstr "სტერეოსკოპია"
 
 msgid "Multi Frame"
 msgstr "მრავალკადრიანი"
-
-
-msgid "Auto-Masking"
-msgstr "ავტომატური შენიღბვა"
-
-
-msgid "Curves Sculpt Add Curve Options"
-msgstr "წირების ძერწვაში წირის დამატების ვარიანტები"
-
-
-msgid "Curves Sculpt Parameter Falloff"
-msgstr "წირების ძერწვის პარამეტრის მილევა"
-
-
-msgid "Curves Grow/Shrink Scaling"
-msgstr "წირების ზრდა/კუმშვა მასშტაბირებით"
-
-
-msgid "Viewport Debug"
-msgstr "სარკმლის ხარვეზების აღმოფხვრა"
 
 
 msgid "Import Settings"
