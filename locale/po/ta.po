@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Beta (b'702691150287')\n"
+"Project-Id-Version: Blender 5.0.0 Beta (b'2b3706e29f27')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-13 16:12+0000\n"
+"POT-Creation-Date: 2025-10-20 08:46+0000\n"
 "PO-Revision-Date: 2025-08-06 08:59+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -19156,10 +19156,6 @@ msgid "Amount of random elements that are going to be affected by the brush"
 msgstr "தூரிகையால் பாதிக்கப்படவிருக்கும் சீரற்ற கூறுகளின் அளவு"
 
 
-msgid "Direction"
-msgstr "திசையில்"
-
-
 msgid "Add effect of brush"
 msgstr "தூரிகையின் விளைவைச் சேர்க்கவும்"
 
@@ -27729,10 +27725,6 @@ msgid "Sync to audio playback, dropping frames"
 msgstr "ஆடியோ பிளேபேக்குடன் ஒத்திசைக்கவும், பிரேம்களைக் கைவிடவும்"
 
 
-msgid "Second"
-msgstr "நொடி"
-
-
 msgid "Timeline Markers"
 msgstr "காலவரிசை குறிப்பான்கள்"
 
@@ -30609,6 +30601,10 @@ msgstr "கட்டுப்பாட்டு விசை அழுத்த�
 
 msgid "Control key pressed"
 msgstr "கட்டுப்பாட்டு விசை அழுத்தியது"
+
+
+msgid "Direction"
+msgstr "திசையில்"
 
 
 msgid "The direction (only applies to drag events)"
@@ -34310,6 +34306,14 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Assign Material"
+msgstr "மூலப்பொருள் ஒதுக்க"
+
+
+msgid "Select More/Less"
+msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
+
+
 msgid "Metaball"
 msgstr "வளர்சிதை மாற்ற"
 
@@ -34378,6 +34382,10 @@ msgid "Vertex Group Locks"
 msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
 
 
+msgid "Layout"
+msgstr "தளவமைப்பு"
+
+
 msgid "Trim/Add"
 msgstr "டிரிம்/சேர்"
 
@@ -34394,16 +34402,16 @@ msgid "Random Mask"
 msgstr "சீரற்ற முகமூடி"
 
 
-msgid "Layout"
-msgstr "தளவமைப்பு"
-
-
 msgid "Clear Transform"
 msgstr "தெளிவான உருமாற்றம்"
 
 
 msgid "In-Betweens"
 msgstr "இன்-பெட்வீன்ச்"
+
+
+msgid "Adjust"
+msgstr "சரிசெய்யவும்"
 
 
 msgid "Propagate"
@@ -34414,32 +34422,12 @@ msgid "Bone Collections"
 msgstr "எலும்பு வசூல்"
 
 
-msgid "Names"
-msgstr "பெயர்கள்"
-
-
-msgid "Adjust"
-msgstr "சரிசெய்யவும்"
-
-
-msgid "Toggle Bone Options"
-msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
-
-
-msgid "Enable Bone Options"
-msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
-
-
-msgid "Disable Bone Options"
-msgstr "எலும்பு விருப்பங்களை முடக்கு"
-
-
 msgid "Keying"
 msgstr "கீயிங்"
 
 
-msgid "Mesh Select Mode"
-msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
+msgid "Names"
+msgstr "பெயர்கள்"
 
 
 msgid "Tracking"
@@ -34450,12 +34438,28 @@ msgid "Utilities"
 msgstr "பயன்பாடுகள்"
 
 
-msgid "Face Data"
-msgstr "முகத்தை முகம்"
+msgid "Toggle Bone Options"
+msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
 
 
 msgid "Math"
 msgstr "கணிதம்"
+
+
+msgid "Enable Bone Options"
+msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
+
+
+msgid "Disable Bone Options"
+msgstr "எலும்பு விருப்பங்களை முடக்கு"
+
+
+msgid "Mesh Select Mode"
+msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Face Data"
+msgstr "முகத்தை முகம்"
 
 
 msgid "Select by Face Strength"
@@ -34486,8 +34490,24 @@ msgid "Bone Roll"
 msgstr "எலும்பு ரோல்"
 
 
+msgid "Read"
+msgstr "படி"
+
+
+msgid "Sample"
+msgstr "மாதிரி"
+
+
+msgid "Write"
+msgstr "எழுதுங்கள்"
+
+
 msgid "Pivot Point"
 msgstr "பிவோட் புள்ளி"
+
+
+msgid "Primitives"
+msgstr "ப்ரைமிடிவ்ச்"
 
 
 msgid "Snap"
@@ -34506,24 +34526,8 @@ msgid "Automasking"
 msgstr "ஆட்டோமேச்கிங்"
 
 
-msgid "Read"
-msgstr "படி"
-
-
 msgid "Face Sets Edit"
 msgstr "முகம் தொகுப்புகள் திருத்து"
-
-
-msgid "Sample"
-msgstr "மாதிரி"
-
-
-msgid "Write"
-msgstr "எழுதுங்கள்"
-
-
-msgid "Primitives"
-msgstr "ப்ரைமிடிவ்ச்"
 
 
 msgid "Gizmo"
@@ -34534,12 +34538,16 @@ msgid "Instances"
 msgstr "நிகழ்வுகள்"
 
 
-msgid "Mirror"
-msgstr "கண்ணாடி"
-
-
 msgid "Import"
 msgstr "இறக்குமதி"
+
+
+msgid "Deprecated"
+msgstr "மதிப்பிடப்பட்டது"
+
+
+msgid "Mirror"
+msgstr "கண்ணாடி"
 
 
 msgid "UV Mapping"
@@ -34550,12 +34558,20 @@ msgid "Local View"
 msgstr "உள்ளக பார்வை"
 
 
+msgid "List"
+msgstr "பட்டியல்"
+
+
 msgid "Viewpoint"
 msgstr "பார்வை"
 
 
 msgid "Navigation"
 msgstr "வழிசெலுத்தல்"
+
+
+msgid "UV"
+msgstr "புறஊதா"
 
 
 msgid "Align View"
@@ -34566,20 +34582,8 @@ msgid "Align View to Active"
 msgstr "செயலில் பார்வையை சீரமைக்கவும்"
 
 
-msgid "Deprecated"
-msgstr "மதிப்பிடப்பட்டது"
-
-
 msgid "View Regions"
 msgstr "மண்டலங்களைக் காண்க"
-
-
-msgid "Select More/Less"
-msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
-
-
-msgid "List"
-msgstr "பட்டியல்"
 
 
 msgid "Select Similar"
@@ -34590,28 +34594,20 @@ msgid "Select All by Trait"
 msgstr "அனைத்தையும் பண்பின் மூலம் தேர்ந்தெடுக்கவும்"
 
 
-msgid "UV"
-msgstr "புறஊதா"
+msgid "Animals"
+msgstr "விலங்குகள்"
 
 
 msgid "Select Linked"
 msgstr "இணைக்கப்பட்டதைத் தேர்ந்தெடுக்கவும்"
 
 
-msgid "Select Loops"
-msgstr "சுழல்களைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Animals"
-msgstr "விலங்குகள்"
-
-
 msgid "Basic"
 msgstr "அடிப்படை"
 
 
-msgid "Assign Material"
-msgstr "மூலப்பொருள் ஒதுக்க"
+msgid "Select Loops"
+msgstr "சுழல்களைத் தேர்ந்தெடுக்கவும்"
 
 
 msgid "Keyframe Insert Pie"
@@ -105290,16 +105286,9 @@ msgid "Method for controlling how the strip combines with other strips"
 msgstr "துண்டு மற்ற கீற்றுகளுடன் எவ்வாறு இணைகிறது என்பதைக் கட்டுப்படுத்துவதற்கான முறை"
 
 
-msgid "Cross"
-msgstr "கட"
-
-
-msgid "Alpha Under"
-msgstr "ஆல்பா கீழ்"
-
-
-msgid "Gamma Cross"
-msgstr "காமா கிராச்"
+msgctxt "Color"
+msgid "Value"
+msgstr "மதிப்பு"
 
 
 msgid "Y position of the sequence strip"
@@ -105551,11 +105540,6 @@ msgstr "ச்ட்ரிப்பின் கீழ் ஆல்பா"
 
 msgid "Color Mix Strip"
 msgstr "வண்ண கலவை துண்டு"
-
-
-msgctxt "Color"
-msgid "Value"
-msgstr "மதிப்பு"
 
 
 msgid "Color Strip"
@@ -120525,6 +120509,10 @@ msgstr "திசைவேகம் நேரியல்"
 
 msgid "This object is part of a compound shape"
 msgstr "இந்த பொருள் ஒரு கூட்டு வடிவத்தின் ஒரு பகுதியாகும்"
+
+
+msgid "Second"
+msgstr "நொடி"
 
 
 msgid "X Stiffness"
@@ -138268,6 +138256,10 @@ msgid "Unable to copy item"
 msgstr "உருப்படியை நகலெடுக்க முடியவில்லை"
 
 
+msgid "Anisotropic"
+msgstr "அனிசோட்ரோபிக்"
+
+
 msgctxt "NodeTree"
 msgid "Functions"
 msgstr "செயல்பாடுகள்"
@@ -140741,10 +140733,6 @@ msgstr "விசை"
 
 msgid "Specifies the smoothness of the keying screen"
 msgstr "கீயிங் திரையின் மென்மையைக் குறிப்பிடுகிறது"
-
-
-msgid "Anisotropic"
-msgstr "அனிசோட்ரோபிக்"
 
 
 msgid "Uniformity"
