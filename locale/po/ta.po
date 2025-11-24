@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.0.0 Beta (b'd29f9f6118e5')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'ef4e8fa75057')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-10 09:45+0000\n"
+"POT-Creation-Date: 2025-11-24 08:35+0000\n"
 "PO-Revision-Date: 2025-08-06 08:59+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -768,10 +768,6 @@ msgid "Show only hotkeys that have this text in their name"
 msgstr "இந்த உரையை அவற்றின் பெயரில் வைத்திருக்கும் ஆட்கீசை மட்டும் காட்டு"
 
 
-msgid "Hide Mix nodes"
-msgstr "கலவை முனைகளை மறைக்கவும்"
-
-
 msgid "When merging nodes with the Ctrl+Numpad0 hotkey (and similar) specify whether to collapse them or show the full node with options expanded"
 msgstr "Ctrl+NumPad0 ஆட்ச்கி (மற்றும் ஒத்த) உடன் முனைகளை ஒன்றிணைக்கும் போது அவற்றை உடைக்க வேண்டுமா அல்லது முழு முனையை விரிவாக்கிய விருப்பங்களுடன் காண்பிக்கும்போது குறிப்பிடவும்"
 
@@ -830,14 +826,6 @@ msgstr "ஆட்ச்கி பட்டியலைக் காட்டு"
 
 msgid "Expand this box into a list of all the hotkeys for functions in this addon"
 msgstr "இந்த கூடுதல் செயல்பாடுகளுக்கான அனைத்து ஆட்கீசின் பட்டியலாக இந்த பெட்டியை விரிவாக்குங்கள்"
-
-
-msgid "Show Principled naming tags"
-msgstr "கொள்கை ரீதியான பெயரிடும் குறிச்சொற்களைக் காட்டு"
-
-
-msgid "Expand this box into a list of all naming tags for principled texture setup"
-msgstr "கொள்கை ரீதியான அமைப்பு அமைப்பிற்கான அனைத்து பெயரிடும் குறிச்சொற்களின் பட்டியலாக இந்த பெட்டியை விரிவாக்குங்கள்"
 
 
 msgid "Fribidi Library"
@@ -2041,6 +2029,282 @@ msgid "Space Type"
 msgstr "விண்வெளி வகை"
 
 
+msgid "Actions"
+msgstr "செயல்கள்"
+
+
+msgid "Show Action data-blocks"
+msgstr "செயல் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Annotations"
+msgstr "சிறுகுறிப்புகள்"
+
+
+msgid "Armatures"
+msgstr "ஆயுதங்கள்"
+
+
+msgid "Show Armature data-blocks"
+msgstr "ஆர்மேச்சர் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Brushes"
+msgstr "தூரிகைகள்"
+
+
+msgid "Show Brushes data-blocks"
+msgstr "தூரிகைகள் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Cache Files"
+msgstr "கேச் கோப்புகள்"
+
+
+msgid "Show Cache File data-blocks"
+msgstr "கேச் கோப்பு தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Cameras"
+msgstr "கேமராக்கள்"
+
+
+msgid "Show Camera data-blocks"
+msgstr "கேமரா தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Curves"
+msgstr "வளைவுகள்"
+
+
+msgid "Show Curve data-blocks"
+msgstr "வளைவு தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Hair Curves"
+msgstr "முடி வளைவுகள்"
+
+
+msgid "Show/hide Curves data-blocks"
+msgstr "வளைவுகள் தரவு-தொகுதிகளைக் காட்டவும்/மறைக்கவும்"
+
+
+msgid "Fonts"
+msgstr "எழுத்துருக்கள்"
+
+
+msgid "Show Font data-blocks"
+msgstr "எழுத்துரு தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Grease Pencil"
+msgstr "பசை எழுதுகோல்"
+
+
+msgid "Show Grease Pencil data-blocks"
+msgstr "கிரீச் பென்சில் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Collections"
+msgstr "சேகரிப்புகள்"
+
+
+msgid "Show Collection data-blocks"
+msgstr "சேகரிப்பு தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Images"
+msgstr "படங்கள்"
+
+
+msgid "Show Image data-blocks"
+msgstr "பட தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Lattices"
+msgstr "லட்டுகள்"
+
+
+msgid "Show Lattice data-blocks"
+msgstr "லட்டு தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Lights"
+msgstr "விளக்குகள்"
+
+
+msgid "Show Light data-blocks"
+msgstr "ஒளி தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Light Probes"
+msgstr "ஒளி ஆய்வுகள்"
+
+
+msgid "Show Light Probe data-blocks"
+msgstr "ஒளி ஆய்வு தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Freestyle Linestyles"
+msgstr "ஃப்ரீபாணி லைன்பாணிகள்"
+
+
+msgid "Show Freestyle's Line Style data-blocks"
+msgstr "ஃப்ரீச்டைலின் வரி பாணி தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Masks"
+msgstr "முகமூடிகள்"
+
+
+msgid "Show Mask data-blocks"
+msgstr "முகமூடி தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Materials"
+msgstr "மூலப்பொருட்கள்"
+
+
+msgid "Show Material data-blocks"
+msgstr "மூலப்பொருள் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Meshes"
+msgstr "மெச்கள்"
+
+
+msgid "Show Mesh data-blocks"
+msgstr "கண்ணி தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Metaballs"
+msgstr "வளர்சிதை மாற்றங்கள்"
+
+
+msgid "Show Metaball data-blocks"
+msgstr "வளர்சிதை மாற்ற தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Movie Clips"
+msgstr "திரைப்பட கிளிப்புகள்"
+
+
+msgid "Show Movie Clip data-blocks"
+msgstr "மூவி கிளிப் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Node Trees"
+msgstr "முனை மரங்கள்"
+
+
+msgid "Show Node Tree data-blocks"
+msgstr "முனை மரம் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Objects"
+msgstr "பொருள்கள்"
+
+
+msgid "Show Object data-blocks"
+msgstr "பொருள் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Paint Curves"
+msgstr "வளைவுகள் பெயிண்ட்"
+
+
+msgid "Show Paint Curve data-blocks"
+msgstr "பெயிண்ட் வளைவு தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Palettes"
+msgstr "தட்டுகள்"
+
+
+msgid "Show Palette data-blocks"
+msgstr "தட்டு தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Particles Settings"
+msgstr "துகள்கள் அமைப்புகள்"
+
+
+msgid "Show Particle Settings data-blocks"
+msgstr "துகள் அமைப்புகள் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Point Clouds"
+msgstr "புள்ளி மேகங்கள்"
+
+
+msgid "Show/hide Point Cloud data-blocks"
+msgstr "புள்ளி மேகக்கணி தரவு-தொகுதிகளைக் காட்டு/மறைக்கவும்"
+
+
+msgid "Scenes"
+msgstr "காட்சிகள்"
+
+
+msgid "Show Scene data-blocks"
+msgstr "காட்சி தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Sounds"
+msgstr "ஒலிகள்"
+
+
+msgid "Show Sound data-blocks"
+msgstr "ஒலி தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Speakers"
+msgstr "பேச்சாளர்கள்"
+
+
+msgid "Show Speaker data-blocks"
+msgstr "ச்பீக்கர் தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Texts"
+msgstr "நூல்கள்"
+
+
+msgid "Show Text data-blocks"
+msgstr "உரை தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Textures"
+msgstr "கட்டமைப்புகள்"
+
+
+msgid "Show Texture data-blocks"
+msgstr "அமைப்பு தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Volumes"
+msgstr "கொள்ளளவுகள்"
+
+
+msgid "Show/hide Volume data-blocks"
+msgstr "தொகுதி தரவு-தொகுதிகளைக் காட்டவும்/மறைக்கவும்"
+
+
+msgid "Workspaces"
+msgstr "பணியிடங்கள்"
+
+
+msgid "Show workspace data-blocks"
+msgstr "பணியிட தரவு-தொகுதிகளைக் காட்டு"
+
+
+msgid "Worlds"
+msgstr "உலகங்கள்"
+
+
+msgid "Show World data-blocks"
+msgstr "உலக தரவு-தொகுதிகளைக் காட்டு"
+
+
 msgid "Preview Size"
 msgstr "முன்னோட்டம் அளவு"
 
@@ -2941,10 +3205,6 @@ msgid "Main data structure representing a .blend file and all its data-blocks"
 msgstr "ஒரு .கலப்பு கோப்பு மற்றும் அதன் அனைத்து தரவு-தொகுதிகளையும் குறிக்கும் முக்கிய தரவு அமைப்பு"
 
 
-msgid "Actions"
-msgstr "செயல்கள்"
-
-
 msgid "Action data-blocks"
 msgstr "செயல் தரவு-தொகுதிகள்"
 
@@ -2957,40 +3217,20 @@ msgid "Annotation data-blocks (legacy Grease Pencil)"
 msgstr "சிறுகுறிப்பு தரவு-தொகுதிகள் (மரபு கிரீச் பென்சில்)"
 
 
-msgid "Armatures"
-msgstr "ஆயுதங்கள்"
-
-
 msgid "Armature data-blocks"
 msgstr "ஆர்மேச்சர் டேட்டா-பிளாக்ச்"
-
-
-msgid "Brushes"
-msgstr "தூரிகைகள்"
 
 
 msgid "Brush data-blocks"
 msgstr "தரவு-தொகுதிகளை துலக்கவும்"
 
 
-msgid "Cache Files"
-msgstr "கேச் கோப்புகள்"
-
-
 msgid "Cache Files data-blocks"
 msgstr "தரவு-தொகுதிகளை கேச் கோப்புகள்"
 
 
-msgid "Cameras"
-msgstr "கேமராக்கள்"
-
-
 msgid "Camera data-blocks"
 msgstr "கேமரா தரவு-தொகுதிகள்"
-
-
-msgid "Collections"
-msgstr "சேகரிப்புகள்"
 
 
 msgid "Collection data-blocks"
@@ -2999,10 +3239,6 @@ msgstr "சேகரிப்பு தரவு-தொகுதிகள்"
 
 msgid "Color Space"
 msgstr "வண்ண இடம்"
-
-
-msgid "Curves"
-msgstr "வளைவுகள்"
 
 
 msgid "Curve data-blocks"
@@ -3025,24 +3261,12 @@ msgid "Vector font data-blocks"
 msgstr "திசையன் எழுத்துரு தரவு-தொகுதிகள்"
 
 
-msgid "Grease Pencil"
-msgstr "பசை எழுதுகோல்"
-
-
 msgid "Grease Pencil data-blocks"
 msgstr "பசை எழுதுகோல் தரவு-தொகுதிகள்"
 
 
-msgid "Hair Curves"
-msgstr "முடி வளைவுகள்"
-
-
 msgid "Hair curve data-blocks"
 msgstr "முடி வளைவு தரவு-தொகுதிகள்"
-
-
-msgid "Images"
-msgstr "படங்கள்"
 
 
 msgid "Image data-blocks"
@@ -3065,10 +3289,6 @@ msgid "Has the current session been saved to disk as a .blend file"
 msgstr "தற்போதைய அமர்வு வட்டில் ஒரு .கலப்பு கோப்பாக சேமிக்கப்பட்டுள்ளதா"
 
 
-msgid "Lattices"
-msgstr "லட்டுகள்"
-
-
 msgid "Lattice data-blocks"
 msgstr "லட்டு தரவு-தொகுதிகள்"
 
@@ -3081,16 +3301,8 @@ msgid "Library data-blocks"
 msgstr "நூலக தரவு-தொகுதிகள்"
 
 
-msgid "Light Probes"
-msgstr "ஒளி ஆய்வுகள்"
-
-
 msgid "Light Probe data-blocks"
 msgstr "ஒளி ஆய்வு தரவு-தொகுதிகள்"
-
-
-msgid "Lights"
-msgstr "விளக்குகள்"
 
 
 msgid "Light data-blocks"
@@ -3105,40 +3317,20 @@ msgid "Line Style data-blocks"
 msgstr "லைன் பாணி தரவு-தொகுதிகள்"
 
 
-msgid "Masks"
-msgstr "முகமூடிகள்"
-
-
 msgid "Masks data-blocks"
 msgstr "தரவு-தொகுதிகள் முகமூடி"
-
-
-msgid "Materials"
-msgstr "மூலப்பொருட்கள்"
 
 
 msgid "Material data-blocks"
 msgstr "மூலப்பொருள் தரவு-தொகுதிகள்"
 
 
-msgid "Meshes"
-msgstr "மெச்கள்"
-
-
 msgid "Mesh data-blocks"
 msgstr "கண்ணி தரவு-தொகுதிகள்"
 
 
-msgid "Metaballs"
-msgstr "வளர்சிதை மாற்றங்கள்"
-
-
 msgid "Metaball data-blocks"
 msgstr "வளர்சிதை மாற்ற தரவு-தொகுதிகள்"
-
-
-msgid "Movie Clips"
-msgstr "திரைப்பட கிளிப்புகள்"
 
 
 msgid "Movie Clip data-blocks"
@@ -3153,24 +3345,12 @@ msgid "Node group data-blocks"
 msgstr "முனை குழு தரவு-தொகுதிகள்"
 
 
-msgid "Objects"
-msgstr "பொருள்கள்"
-
-
 msgid "Object data-blocks"
 msgstr "பொருள் தரவு-தொகுதிகள்"
 
 
-msgid "Paint Curves"
-msgstr "வளைவுகள் பெயிண்ட்"
-
-
 msgid "Paint Curves data-blocks"
 msgstr "வளைவுகள் தரவு-தொகுதிகள்"
-
-
-msgid "Palettes"
-msgstr "தட்டுகள்"
 
 
 msgid "Palette data-blocks"
@@ -3185,16 +3365,8 @@ msgid "Particle data-blocks"
 msgstr "துகள் தரவு-தொகுதிகள்"
 
 
-msgid "Point Clouds"
-msgstr "புள்ளி மேகங்கள்"
-
-
 msgid "Point cloud data-blocks"
 msgstr "புள்ளி முகில் தரவு-தொகுதிகள்"
-
-
-msgid "Scenes"
-msgstr "காட்சிகள்"
 
 
 msgid "Scene data-blocks"
@@ -3217,32 +3389,16 @@ msgid "Shape Key data-blocks"
 msgstr "முக்கிய தரவு-தொகுதிகளை வடிவமைக்கவும்"
 
 
-msgid "Sounds"
-msgstr "ஒலிகள்"
-
-
 msgid "Sound data-blocks"
 msgstr "ஒலி தரவு-தொகுதிகள்"
-
-
-msgid "Speakers"
-msgstr "பேச்சாளர்கள்"
 
 
 msgid "Speaker data-blocks"
 msgstr "பேச்சாளர் தரவு-தொகுதிகள்"
 
 
-msgid "Texts"
-msgstr "நூல்கள்"
-
-
 msgid "Text data-blocks"
 msgstr "உரை தரவு-தொகுதிகள்"
-
-
-msgid "Textures"
-msgstr "கட்டமைப்புகள்"
 
 
 msgid "Texture data-blocks"
@@ -3265,10 +3421,6 @@ msgid "File format version the .blend file was saved with"
 msgstr "கோப்பு வடிவமைப்பு பதிப்பு .கலப்பு கோப்பு சேமிக்கப்பட்டது"
 
 
-msgid "Volumes"
-msgstr "கொள்ளளவுகள்"
-
-
 msgid "Volume data-blocks"
 msgstr "தொகுதி தரவு-தொகுதிகள்"
 
@@ -3281,16 +3433,8 @@ msgid "Window manager data-blocks"
 msgstr "சாளர மேலாளர் தரவு-தொகுதிகள்"
 
 
-msgid "Workspaces"
-msgstr "பணியிடங்கள்"
-
-
 msgid "Workspace data-blocks"
 msgstr "பணியிட தரவு-தொகுதிகள்"
-
-
-msgid "Worlds"
-msgstr "உலகங்கள்"
 
 
 msgid "World data-blocks"
@@ -13998,162 +14142,6 @@ msgid "Which asset types to show/hide, when browsing an asset library"
 msgstr "ஒரு சொத்து நூலகத்தை உலாவும்போது, எந்த சொத்து வகைகள் காட்ட வேண்டும்/மறைக்க வேண்டும்"
 
 
-msgid "Annotations"
-msgstr "சிறுகுறிப்புகள்"
-
-
-msgid "Show Armature data-blocks"
-msgstr "ஆர்மேச்சர் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Cache File data-blocks"
-msgstr "கேச் கோப்பு தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Camera data-blocks"
-msgstr "கேமரா தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Curve data-blocks"
-msgstr "வளைவு தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show/hide Curves data-blocks"
-msgstr "வளைவுகள் தரவு-தொகுதிகளைக் காட்டவும்/மறைக்கவும்"
-
-
-msgid "Fonts"
-msgstr "எழுத்துருக்கள்"
-
-
-msgid "Show Font data-blocks"
-msgstr "எழுத்துரு தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Grease Pencil data-blocks"
-msgstr "கிரீச் பென்சில் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Image data-blocks"
-msgstr "பட தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Lattice data-blocks"
-msgstr "லட்டு தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Light data-blocks"
-msgstr "ஒளி தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Light Probe data-blocks"
-msgstr "ஒளி ஆய்வு தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Freestyle Linestyles"
-msgstr "ஃப்ரீபாணி லைன்பாணிகள்"
-
-
-msgid "Show Freestyle's Line Style data-blocks"
-msgstr "ஃப்ரீச்டைலின் வரி பாணி தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Mask data-blocks"
-msgstr "முகமூடி தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Mesh data-blocks"
-msgstr "கண்ணி தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Metaball data-blocks"
-msgstr "வளர்சிதை மாற்ற தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Movie Clip data-blocks"
-msgstr "மூவி கிளிப் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Paint Curve data-blocks"
-msgstr "பெயிண்ட் வளைவு தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Palette data-blocks"
-msgstr "தட்டு தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Particles Settings"
-msgstr "துகள்கள் அமைப்புகள்"
-
-
-msgid "Show Particle Settings data-blocks"
-msgstr "துகள் அமைப்புகள் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show/hide Point Cloud data-blocks"
-msgstr "புள்ளி மேகக்கணி தரவு-தொகுதிகளைக் காட்டு/மறைக்கவும்"
-
-
-msgid "Show Sound data-blocks"
-msgstr "ஒலி தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Speaker data-blocks"
-msgstr "ச்பீக்கர் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Text data-blocks"
-msgstr "உரை தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Texture data-blocks"
-msgstr "அமைப்பு தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show/hide Volume data-blocks"
-msgstr "தொகுதி தரவு-தொகுதிகளைக் காட்டவும்/மறைக்கவும்"
-
-
-msgid "Show workspace data-blocks"
-msgstr "பணியிட தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Action data-blocks"
-msgstr "செயல் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Brushes data-blocks"
-msgstr "தூரிகைகள் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Collection data-blocks"
-msgstr "சேகரிப்பு தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Material data-blocks"
-msgstr "மூலப்பொருள் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Node Trees"
-msgstr "முனை மரங்கள்"
-
-
-msgid "Show Node Tree data-blocks"
-msgstr "முனை மரம் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Object data-blocks"
-msgstr "பொருள் தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show Scene data-blocks"
-msgstr "காட்சி தரவு-தொகுதிகளைக் காட்டு"
-
-
-msgid "Show World data-blocks"
-msgstr "உலக தரவு-தொகுதிகளைக் காட்டு"
-
-
 msgid "File Select Parameters"
 msgstr "கோப்பு அளவுருக்களைத் தேர்ந்தெடுக்கவும்"
 
@@ -19724,16 +19712,8 @@ msgid "Face Sets"
 msgstr "முகம் செட்"
 
 
-msgid "Creates a pose segment per face sets, starting from the active face set"
-msgstr "செயலில் உள்ள முகத் தொகுப்பிலிருந்து தொடங்கி, முகத் தொகுப்புகளுக்கு ஒரு போச் பிரிவை உருவாக்குகிறது"
-
-
 msgid "Face Sets FK"
 msgstr "முகம் fk ஐ அமைக்கிறது"
-
-
-msgid "Simulates an FK deformation using the Face Set under the cursor as control"
-msgstr "கர்சரின் கீழ் அமைக்கப்பட்ட முகத்தை கட்டுப்பாட்டாகப் பயன்படுத்தி ஒரு fk சிதைவை உருவகப்படுத்துகிறது"
 
 
 msgid "Smooth Iterations"
@@ -20191,10 +20171,6 @@ msgid "Face Sets Boundary Automasking"
 msgstr "முகம் எல்லை ஆட்டோமேச்கிங்கை அமைக்கிறது"
 
 
-msgid "Do not affect vertices that belong to a Face Set boundary"
-msgstr "முகம் அமைக்கப்பட்ட எல்லைக்கு சொந்தமான செங்குத்துகளை பாதிக்காதீர்கள்"
-
-
 msgid "Cavity Mask"
 msgstr "குழி முகமூடி"
 
@@ -20217,10 +20193,6 @@ msgstr "தனிப்பயன் குழி வளைவு"
 
 msgid "Use custom curve"
 msgstr "தனிப்பயன் வளைவைப் பயன்படுத்தவும்"
-
-
-msgid "Affect only vertices that share Face Sets with the active vertex"
-msgstr "செயலில் உள்ள வெர்டெக்சுடன் முகத் தொகுப்புகளைப் பகிர்ந்து கொள்ளும் செங்குத்துகளை மட்டுமே பாதிக்கிறது"
 
 
 msgid "Area Normal"
@@ -32494,14 +32466,6 @@ msgid "Available"
 msgstr "கிடைக்கிறது"
 
 
-msgid "Insert a keyframe for each of the BBone shape properties"
-msgstr "ஒவ்வொரு bbone வடிவ பண்புகளுக்கும் ஒரு கீஃப்ரேமை செருகவும்"
-
-
-msgid "BBone Shape"
-msgstr "எலும்பு வடிவம்"
-
-
 msgid "Insert keyframes for additional location offset"
 msgstr "கூடுதல் இருப்பிட ஆஃப்செட்டுக்கு கீஃப்ரேம்களை செருகவும்"
 
@@ -34306,12 +34270,24 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Align View"
+msgstr "பார்வையை சீரமைக்கவும்"
+
+
+msgid "Apply"
+msgstr "இடு"
+
+
 msgid "Track"
 msgstr "டிராக்"
 
 
 msgid "Quick Effects"
 msgstr "விரைவான விளைவுகள்"
+
+
+msgid "Navigation"
+msgstr "வழிசெலுத்தல்"
 
 
 msgid "Show/Hide"
@@ -34344,6 +34320,14 @@ msgstr "கொக்கிகள்"
 
 msgid "Vertex Group Locks"
 msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
+
+
+msgid "Viewpoint"
+msgstr "பார்வை"
+
+
+msgid "Local View"
+msgstr "உள்ளக பார்வை"
 
 
 msgid "Trim/Add"
@@ -34382,10 +34366,6 @@ msgid "Names"
 msgstr "பெயர்கள்"
 
 
-msgid "Apply"
-msgstr "இடு"
-
-
 msgid "Toggle Bone Options"
 msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
 
@@ -34418,12 +34398,12 @@ msgid "Set Face Strength"
 msgstr "முக வலிமையை அமைக்கவும்"
 
 
-msgid "Merge"
-msgstr "ஒன்றிணைக்கவும்"
-
-
 msgid "Adjust"
 msgstr "சரிசெய்யவும்"
+
+
+msgid "Merge"
+msgstr "ஒன்றிணைக்கவும்"
 
 
 msgid "Keying"
@@ -34442,12 +34422,24 @@ msgid "Math"
 msgstr "கணிதம்"
 
 
+msgid "UV Mapping"
+msgstr "புறஊதா மேப்பிங்"
+
+
 msgid "Special Characters"
 msgstr "சிறப்பு எழுத்துக்கள்"
 
 
 msgid "Kerning"
 msgstr "கெர்னிங்"
+
+
+msgid "Snap"
+msgstr "ச்னாப்"
+
+
+msgid "Mirror"
+msgstr "கண்ணாடி"
 
 
 msgid "Text"
@@ -34464,10 +34456,6 @@ msgstr "எலும்பு ரோல்"
 
 msgid "Pivot Point"
 msgstr "பிவோட் புள்ளி"
-
-
-msgid "Snap"
-msgstr "ச்னாப்"
 
 
 msgid "Proportional Editing Falloff"
@@ -34500,38 +34488,6 @@ msgstr "எழுதுங்கள்"
 
 msgid "Primitives"
 msgstr "ப்ரைமிடிவ்ச்"
-
-
-msgid "Mirror"
-msgstr "கண்ணாடி"
-
-
-msgid "UV Mapping"
-msgstr "புறஊதா மேப்பிங்"
-
-
-msgid "Local View"
-msgstr "உள்ளக பார்வை"
-
-
-msgid "Viewpoint"
-msgstr "பார்வை"
-
-
-msgid "Navigation"
-msgstr "வழிசெலுத்தல்"
-
-
-msgid "Align View"
-msgstr "பார்வையை சீரமைக்கவும்"
-
-
-msgid "Align View to Active"
-msgstr "செயலில் பார்வையை சீரமைக்கவும்"
-
-
-msgid "View Regions"
-msgstr "மண்டலங்களைக் காண்க"
 
 
 msgid "Select More/Less"
@@ -34590,6 +34546,10 @@ msgid "Light Probe"
 msgstr "ஒளி ஆய்வு"
 
 
+msgid "View Regions"
+msgstr "மண்டலங்களைக் காண்க"
+
+
 msgid "Add Image"
 msgstr "படத்தைச் சேர்க்கவும்"
 
@@ -34600,6 +34560,10 @@ msgstr "உறவுகள்"
 
 msgid "Rigid Body"
 msgstr "கடினமான உடல்"
+
+
+msgid "Align View to Active"
+msgstr "செயலில் பார்வையை சீரமைக்கவும்"
 
 
 msgid "Keyframe Insert Pie"
@@ -34884,10 +34848,6 @@ msgstr "தேர்ந்தெடுக்கப்பட்ட அனைவ�
 
 msgid "Use Node Name/Label"
 msgstr "முனை பெயர்/லேபிளைப் பயன்படுத்தவும்"
-
-
-msgid "Use Outputs Names"
-msgstr "வெளியீட்டு பெயர்களைப் பயன்படுத்தவும்"
 
 
 msgid "Merge Selected Nodes using Geometry Nodes"
@@ -50774,6 +50734,10 @@ msgid "Diamond with inner dot"
 msgstr "உள் புள்ளியுடன் வைரம்"
 
 
+msgid "Volume Grid"
+msgstr "தொகுதி கட்டம்"
+
+
 msgid "Enable the socket"
 msgstr "சாக்கெட்டை இயக்கவும்"
 
@@ -50848,10 +50812,6 @@ msgstr "கிடைக்கவில்லை"
 
 msgid "True if the socket is unavailable"
 msgstr "சாக்கெட் கிடைக்கவில்லை என்றால் உண்மை"
-
-
-msgid "Custom dynamic defined socket label"
-msgstr "தனிப்பயன் மாறும் வரையறுக்கப்பட்ட சாக்கெட் சிட்டை"
 
 
 msgid "Link Limit"
@@ -52638,6 +52598,19 @@ msgid "Unlink Panel Toggle"
 msgstr "பேனல் மாற்று"
 
 
+msgid "Link from this output"
+msgstr "இந்த வெளியீட்டிலிருந்து இணைப்பு"
+
+
+msgctxt "Operator"
+msgid "Make Link"
+msgstr "இணைப்பு செய்யுங்கள்"
+
+
+msgid "Make a link from one socket to another"
+msgstr "ஒரு சாக்கெட்டிலிருந்து இன்னொரு சாக்கெட்டுக்கு ஒரு இணைப்பை உருவாக்கவும்"
+
+
 msgid "Create a new geometry node group and assign it to the active modifier"
 msgstr "ஒரு புதிய வடிவியல் முனை குழுவை உருவாக்கி, செயலில் மாற்றியமைப்பிற்கு ஒதுக்கவும்"
 
@@ -52679,12 +52652,8 @@ msgstr "இந்த பெயருடன் ஒரு பண்புக்க
 
 
 msgctxt "Operator"
-msgid "Add UV map"
-msgstr "புற ஊதா வரைபடத்தைச் சேர்க்கவும்"
-
-
-msgid "Add Reroute Nodes and link them to outputs of selected nodes"
-msgstr "REROUTE முனைகளைச் சேர்த்து அவற்றை தேர்ந்தெடுக்கப்பட்ட முனைகளின் வெளியீடுகளுடன் இணைக்கவும்"
+msgid "Add Attribute"
+msgstr "பண்புக்கூறு சேர்க்கவும்"
 
 
 msgctxt "Operator"
@@ -52711,10 +52680,6 @@ msgid "Principled Texture Setup"
 msgstr "கொள்கை ரீதியான அமைப்பு அமைப்பு"
 
 
-msgid "Align the selected nodes neatly in a row/column"
-msgstr "தேர்ந்தெடுக்கப்பட்ட முனைகளை ஒரு வரிசை/நெடுவரிசையில் அழகாக சீரமைக்கவும்"
-
-
 msgctxt "Operator"
 msgid "Align Nodes"
 msgstr "முனைகளை சீரமைக்கவும்"
@@ -52734,15 +52699,6 @@ msgid "Reset Backdrop"
 msgstr "பின்னணியை மீட்டமைக்கவும்"
 
 
-msgid "Link from this output"
-msgstr "இந்த வெளியீட்டிலிருந்து இணைப்பு"
-
-
-msgctxt "Operator"
-msgid "Make Link"
-msgstr "இணைப்பு செய்யுங்கள்"
-
-
 msgctxt "Operator"
 msgid "Clear Label"
 msgstr "தெளிவான சிட்டை"
@@ -52756,10 +52712,6 @@ msgstr "நகல் சிட்டை"
 msgctxt "Operator"
 msgid "Copy Settings"
 msgstr "அமைப்புகளை நகலெடுக்கவும்"
-
-
-msgid "Delete all nodes whose output is not used"
-msgstr "வெளியீடு பயன்படுத்தப்படாத அனைத்து முனைகளையும் நீக்கு"
 
 
 msgctxt "Operator"
@@ -52808,14 +52760,6 @@ msgid "Link Active Node to Selected"
 msgstr "தேர்ந்தெடுக்கப்பட்ட செயலில் உள்ள முனையை இணைக்கவும்"
 
 
-msgid "Link to Composite node or Material Output node"
-msgstr "கலப்பு முனை அல்லது பொருள் வெளியீட்டு முனைக்கு இணைக்கவும்"
-
-
-msgid "Make a link from one socket to another"
-msgstr "ஒரு சாக்கெட்டிலிருந்து இன்னொரு சாக்கெட்டுக்கு ஒரு இணைப்பை உருவாக்கவும்"
-
-
 msgctxt "Operator"
 msgid "Merge Nodes"
 msgstr "முனைகளை ஒன்றிணைக்கவும்"
@@ -52833,10 +52777,6 @@ msgstr "லேபிள்களை மாற்றவும்"
 msgctxt "Operator"
 msgid "Reload Images"
 msgstr "படங்களை மீண்டும் ஏற்றவும்"
-
-
-msgid "Reset Nodes in Selection"
-msgstr "தேர்வில் முனைகளை மீட்டமைக்கவும்"
 
 
 msgctxt "Operator"
@@ -55280,10 +55220,6 @@ msgstr "புதிய விசைகள் நேரியல்"
 
 msgid "New keys will be constant"
 msgstr "புதிய விசைகள் நிலையானதாக இருக்கும்"
-
-
-msgid "The range in which to create new keys"
-msgstr "புதிய விசைகளை உருவாக்க வேண்டிய வரம்பு"
 
 
 msgid "Remove Outside Range"
@@ -62353,11 +62289,6 @@ msgstr "இணைக்கவும்"
 
 msgid "Unlink active font data-block"
 msgstr "செயலில் உள்ள எழுத்துரு தரவு-தொகுதியை அவிழ்த்து விடுங்கள்"
-
-
-msgctxt "Operator"
-msgid "Add Attribute"
-msgstr "பண்புக்கூறு சேர்க்கவும்"
 
 
 msgid "Add attribute to geometry"
@@ -70950,10 +70881,6 @@ msgid "Copy color to all selected nodes"
 msgstr "தேர்ந்தெடுக்கப்பட்ட அனைத்து முனைகளுக்கும் வண்ணத்தை நகலெடுக்கவும்"
 
 
-msgid "Add Reroutes to outputs"
-msgstr "வெளியீடுகளுக்கு REROUTES ஐச் சேர்க்கவும்"
-
-
 msgid "Option"
 msgstr "விருப்பம்"
 
@@ -70986,20 +70913,12 @@ msgid "Set the file path relative to the blend file, when possible"
 msgstr "கலப்பு கோப்போடு தொடர்புடைய கோப்பு பாதையை முடிந்தால் அமைக்கவும்"
 
 
-msgid "Add texture node setup to selected shaders"
-msgstr "தேர்ந்தெடுக்கப்பட்ட சேடர்களில் அமைப்பு முனை அமைப்பைச் சேர்க்கவும்"
-
-
 msgid "Add Mapping Nodes"
 msgstr "மேப்பிங் முனைகளைச் சேர்க்கவும்"
 
 
 msgid "Create coordinate and mapping nodes for the texture (ignored for selected texture nodes)"
 msgstr "அமைப்புக்கான ஒருங்கிணைப்பு மற்றும் மேப்பிங் முனைகளை உருவாக்கவும் (தேர்ந்தெடுக்கப்பட்ட அமைப்பு முனைகளுக்கு புறக்கணிக்கப்படுகிறது)"
-
-
-msgid "Add texture node setup for Principled BSDF"
-msgstr "கொள்கை ரீதியான பி.எச்.டி.எஃப் -க்கு அமைப்பு முனை அமைப்பைச் சேர்க்கவும்"
 
 
 msgid "Folder to search in for image files"
@@ -71310,10 +71229,6 @@ msgid "Delete Muted"
 msgstr "முடக்கப்பட்டதை நீக்கு"
 
 
-msgid "Delete (but reconnect, like Ctrl-X) all muted nodes"
-msgstr "அனைத்து முடக்கிய முனைகளையும் நீக்கு (ஆனால் மீண்டும் இணைக்கவும்)"
-
-
 msgid "Change factors of Mix nodes and Mix Shader nodes"
 msgstr "கலவை முனைகளின் காரணிகளை மாற்றி, நிழல் முனைகளை கலக்கவும்"
 
@@ -71334,10 +71249,6 @@ msgid "Automatic output type detection"
 msgstr "தானியங்கி வெளியீட்டு வகை கண்டறிதல்"
 
 
-msgid "Merge using ADD or MIX Shader"
-msgstr "சேர் அல்லது கலக்க சேடரைப் பயன்படுத்தி ஒன்றிணைக்கவும்"
-
-
 msgid "Merge using Mesh Boolean or Join Geometry nodes"
 msgstr "கண்ணி பூலியனைப் பயன்படுத்தி ஒன்றிணைக்கவும் அல்லது வடிவியல் முனைகளில் சேரவும்"
 
@@ -71356,14 +71267,6 @@ msgstr "கணித முனை"
 
 msgid "Merge using Math nodes"
 msgstr "கணித முனைகளைப் பயன்படுத்தி ஒன்றிணைக்கவும்"
-
-
-msgid "Z-Combine Node"
-msgstr "இசட்-கோமின் முனை"
-
-
-msgid "Merge using Z-Combine nodes"
-msgstr "Z- காம்பின் முனைகளைப் பயன்படுத்தி ஒன்றிணைக்கவும்"
 
 
 msgid "Alpha Over Node"
@@ -71540,16 +71443,8 @@ msgid "TIFF"
 msgstr "டிஃப்"
 
 
-msgid "Select Parent Frame"
-msgstr "பெற்றோர் சட்டத்தைத் தேர்ந்தெடுக்கவும்"
-
-
 msgid "Select Children"
 msgstr "குழந்தைகளைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Select members of selected frame"
-msgstr "தேர்ந்தெடுக்கப்பட்ட சட்டத்தின் உறுப்பினர்களைத் தேர்ந்தெடுக்கவும்"
 
 
 msgctxt "Operator"
@@ -79214,6 +79109,10 @@ msgid "Move selected area edges"
 msgstr "தேர்ந்தெடுக்கப்பட்ட பரப்பு விளிம்புகளை நகர்த்தவும்"
 
 
+msgid "Snapping"
+msgstr "ச்னாப்பிங்"
+
+
 msgctxt "Operator"
 msgid "Area Options"
 msgstr "பரப்பு விருப்பங்கள்"
@@ -79773,10 +79672,6 @@ msgid "Use Face Sets"
 msgstr "முகத் தொகுப்புகளைப் பயன்படுத்துங்கள்"
 
 
-msgid "Apply the filter only to the Face Set under the cursor"
-msgstr "கர்சரின் கீழ் அமைக்கப்பட்ட முகத்திற்கு மட்டுமே வடிகட்டியைப் பயன்படுத்துங்கள்"
-
-
 msgctxt "Operator"
 msgid "Filter Color"
 msgstr "வடிகட்டி நிறம்"
@@ -79950,10 +79845,6 @@ msgid "Modify Active"
 msgstr "செயலில் மாற்றவும்"
 
 
-msgid "Modify the active Face Set instead of creating a new one"
-msgstr "புதிய ஒன்றை உருவாக்குவதற்கு பதிலாக செயலில் உள்ள முக தொகுப்பை மாற்றவும்"
-
-
 msgid "Reposition Pivot"
 msgstr "முன்னேற்றத்தை மாற்றவும்"
 
@@ -79976,24 +79867,12 @@ msgid "Face Sets Visibility"
 msgstr "முகம் தெரிவுநிலையை அமைக்கிறது"
 
 
-msgid "Change the visibility of the Face Sets of the sculpt"
-msgstr "சிற்பத்தின் முகத் தொகுப்புகளின் தெரிவுநிலையை மாற்றவும்"
-
-
 msgid "Toggle Visibility"
 msgstr "தெரிவுநிலையை மாற்றவும்"
 
 
-msgid "Hide all Face Sets except for the active one"
-msgstr "செயலில் ஒன்றைத் தவிர அனைத்து முகத் தொகுப்புகளையும் மறைக்கவும்"
-
-
 msgid "Show Active Face Set"
 msgstr "செயலில் முகம் தொகுப்பைக் காட்டு"
-
-
-msgid "Hide Active Face Sets"
-msgstr "செயலில் உள்ள முகத் தொகுப்புகளை மறைக்கவும்"
 
 
 msgctxt "Operator"
@@ -80001,44 +79880,20 @@ msgid "Edit Face Set"
 msgstr "முகத் தொகுப்பைத் திருத்து"
 
 
-msgid "Edits the current active Face Set"
-msgstr "தற்போதைய செயலில் முகம் தொகுப்பை திருத்துகிறது"
-
-
 msgid "Grow Face Set"
 msgstr "முகம் தொகுப்பை வளர்க்கவும்"
-
-
-msgid "Grows the Face Sets boundary by one face based on mesh topology"
-msgstr "கண்ணி இடவியலின் அடிப்படையில் முகம் ஒரு முகத்தால் எல்லையை வளர்க்கிறது"
 
 
 msgid "Shrink Face Set"
 msgstr "முகத்தை சுருக்கவும்"
 
 
-msgid "Shrinks the Face Sets boundary by one face based on mesh topology"
-msgstr "கண்ணி இடவியலின் அடிப்படையில் முகம் ஒரு முகத்தால் எல்லையை அமைக்கிறது"
-
-
-msgid "Deletes the faces that are assigned to the Face Set"
-msgstr "முகத் தொகுப்பிற்கு ஒதுக்கப்பட்ட முகங்களை நீக்குகிறது"
-
-
 msgid "Fair Positions"
 msgstr "நியாயமான நிலைகள்"
 
 
-msgid "Creates a smooth as possible geometry patch from the Face Set minimizing changes in vertex positions"
-msgstr "வெர்டெக்ச் நிலைகளில் ஏற்படும் மாற்றங்களைக் குறைக்கும் முகம் தொகுப்பிலிருந்து முடிந்தவரை வடிவியல் இணைப்பை உருவாக்குகிறது"
-
-
 msgid "Fair Tangency"
 msgstr "நியாயமான தொடுநிலை"
-
-
-msgid "Creates a smooth as possible geometry patch from the Face Set minimizing changes in vertex tangents"
-msgstr "வெர்டெக்ச் தொடுகோடுகளில் மாற்றங்களைக் குறைக்கும் முகம் தொகுப்பிலிருந்து முடிந்தவரை வடிவியல் இணைப்பு ஒரு மென்மையான உருவாக்குகிறது"
 
 
 msgid "Modify Hidden"
@@ -80052,10 +79907,6 @@ msgstr "மறைக்கப்பட்ட வடிவவியலுக்�
 msgctxt "Operator"
 msgid "Face Set Extract"
 msgstr "முகம் தொகுப்பு சாறு"
-
-
-msgid "Create a new mesh object from the selected Face Set"
-msgstr "தேர்ந்தெடுக்கப்பட்ட முக தொகுப்பிலிருந்து புதிய கண்ணி பொருளை உருவாக்கவும்"
 
 
 msgid "Add Boundary Loop"
@@ -80109,40 +79960,20 @@ msgid "Create Face Set"
 msgstr "முகம் தொகுப்பை உருவாக்கவும்"
 
 
-msgid "Create a new Face Set"
-msgstr "புதிய முகம் தொகுப்பை உருவாக்கவும்"
-
-
 msgid "Face Set from Masked"
 msgstr "முகமூடியிலிருந்து முகம் அமைக்கப்பட்டுள்ளது"
-
-
-msgid "Create a new Face Set from the masked faces"
-msgstr "முகமூடி அணிந்த முகங்களிலிருந்து புதிய முகத்தை உருவாக்கவும்"
 
 
 msgid "Face Set from Visible"
 msgstr "காணக்கூடிய முகம் அமைக்கப்பட்டுள்ளது"
 
 
-msgid "Create a new Face Set from the visible vertices"
-msgstr "புலப்படும் செங்குத்துகளிலிருந்து புதிய முகத்தை உருவாக்கவும்"
-
-
 msgid "Face Set Full Mesh"
 msgstr "முகம் முழு கண்ணி அமைக்கவும்"
 
 
-msgid "Create an unique Face Set with all faces in the sculpt"
-msgstr "சிற்பத்தில் உள்ள அனைத்து முகங்களுடனும் ஒரு தனித்துவமான முகத்தை உருவாக்கவும்"
-
-
 msgid "Face Set from Edit Mode Selection"
 msgstr "திருத்து பயன்முறை தேர்விலிருந்து முகம் தொகுப்பு"
-
-
-msgid "Create an Face Set corresponding to the Edit Mode face selection"
-msgstr "திருத்து பயன்முறை முகம் தேர்வுக்கு ஒத்த முக தொகுப்பை உருவாக்கவும்"
 
 
 msgctxt "Operator"
@@ -80150,85 +79981,41 @@ msgid "Init Face Sets"
 msgstr "init முகம் செட்"
 
 
-msgid "Initializes all Face Sets in the mesh"
-msgstr "கண்ணி இல் உள்ள அனைத்து முகத் தொகுப்புகளையும் துவக்குகிறது"
-
-
 msgid "Face Sets from Loose Parts"
 msgstr "தளர்வான பகுதிகளிலிருந்து முகம் அமைக்கிறது"
-
-
-msgid "Create a Face Set per loose part in the mesh"
-msgstr "மெசில் தளர்வான பகுதிக்கு ஒரு முகம் தொகுப்பை உருவாக்கவும்"
 
 
 msgid "Face Sets from Material Slots"
 msgstr "மூலப்பொருள் இடங்களிலிருந்து முகம் செட்"
 
 
-msgid "Create a Face Set per Material Slot"
-msgstr "ஒரு மூலப்பொருள் ச்லாட்டுக்கு ஒரு முகம் தொகுப்பை உருவாக்கவும்"
-
-
 msgid "Face Sets from Mesh Normals"
 msgstr "கண்ணி இயல்புகளிலிருந்து முகம் செட்"
-
-
-msgid "Create Face Sets for Faces that have similar normal"
-msgstr "ஒத்த இயல்பான முகங்களுக்கு முகத் தொகுப்புகளை உருவாக்கவும்"
 
 
 msgid "Face Sets from UV Seams"
 msgstr "புறஊதா சீம்களிலிருந்து முகம் செட்"
 
 
-msgid "Create Face Sets using UV Seams as boundaries"
-msgstr "புறஊதா சீம்களைப் பயன்படுத்தி முகத் தொகுப்புகளை உருவாக்கவும்"
-
-
 msgid "Face Sets from Edge Creases"
 msgstr "எட்ச் மடிப்புகளிலிருந்து முகம் அமைக்கிறது"
-
-
-msgid "Create Face Sets using Edge Creases as boundaries"
-msgstr "விளிம்பு மடிப்புகளை எல்லைகளாகப் பயன்படுத்தி முகத் தொகுப்புகளை உருவாக்கவும்"
 
 
 msgid "Face Sets from Bevel Weight"
 msgstr "பெவெல் எடையிலிருந்து முகம் அமைக்கிறது"
 
 
-msgid "Create Face Sets using Bevel Weights as boundaries"
-msgstr "பெவல் எடைகளைப் பயன்படுத்தி முகத் தொகுப்புகளை எல்லைகளாக உருவாக்கவும்"
-
-
 msgid "Face Sets from Sharp Edges"
 msgstr "கூர்மையான விளிம்புகளிலிருந்து முகம் செட்"
-
-
-msgid "Create Face Sets using Sharp Edges as boundaries"
-msgstr "கூர்மையான விளிம்புகளை எல்லைகளாகப் பயன்படுத்தி முகத் தொகுப்புகளை உருவாக்கவும்"
 
 
 msgid "Face Sets from Face Set Boundaries"
 msgstr "முகம் அமைக்கப்பட்ட எல்லைகளிலிருந்து முகம் செட்"
 
 
-msgid "Create a Face Set per isolated Face Set"
-msgstr "தனிமைப்படுத்தப்பட்ட முகத் தொகுப்பிற்கு ஒரு முகம் தொகுப்பை உருவாக்கவும்"
-
-
-msgid "Minimum value to consider a certain attribute a boundary when creating the Face Sets"
-msgstr "ஒரு குறிப்பிட்ட பண்புக்கூறுகளை முக செட்களை உருவாக்கும்போது ஒரு எல்லையை கருத்தில் கொள்ள குறைந்தபட்ச மதிப்பு"
-
-
 msgctxt "Operator"
 msgid "Randomize Face Sets Colors"
 msgstr "முகத்தை சீரற்றதாக்குங்கள் வண்ணங்கள் அமைக்கின்றன"
-
-
-msgid "Generates a new set of random colors to render the Face Sets in the viewport"
-msgstr "காட்சியமைப்பில் முகத் தொகுப்புகளை வழங்க சீரற்ற வண்ணங்களின் புதிய தொகுப்பை உருவாக்குகிறது"
 
 
 msgctxt "Operator"
@@ -80491,10 +80278,6 @@ msgstr "மெச் தளர்த்தவும்"
 msgctxt "Operator"
 msgid "Relax Face Sets"
 msgstr "முகத் தொகுப்புகளை தளர்த்தவும்"
-
-
-msgid "Smooth the edges of all the Face Sets"
-msgstr "அனைத்து முகத் தொகுப்புகளின் விளிம்புகளையும் மென்மையாக்கவும்"
 
 
 msgctxt "Operator"
@@ -89450,10 +89233,6 @@ msgid "Curves Edit Mode"
 msgstr "வளைவுகள் திருத்து பயன்முறை"
 
 
-msgid "Snapping"
-msgstr "ச்னாப்பிங்"
-
-
 msgid "Transform Orientations"
 msgstr "உருமாறும் நோக்குநிலைகள்"
 
@@ -97373,56 +97152,8 @@ msgid "Path to the pot template file"
 msgstr "பானை வார்ப்புரு கோப்பிற்கான பாதை"
 
 
-msgid "Naming Components for alpha maps"
-msgstr "ஆல்பா வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for AO maps"
-msgstr "AO வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for Base Color maps"
-msgstr "அடிப்படை வண்ண வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for bump maps"
-msgstr "பம்ப் வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for displacement maps"
-msgstr "இடப்பெயர்ச்சி வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for emission maps"
-msgstr "உமிழ்வு வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
 msgid "Gloss"
 msgstr "பளபளப்பு"
-
-
-msgid "Naming Components for glossy maps"
-msgstr "பளபளப்பான வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for metallness maps"
-msgstr "உலோகம் வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for Normal maps"
-msgstr "சாதாரண வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for roughness maps"
-msgstr "கரடுமுரடான வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for Specular maps"
-msgstr "ஏகப்பட்ட வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
-
-
-msgid "Naming Components for transmission maps"
-msgstr "பரிமாற்ற வரைபடங்களுக்கான பெயரிடும் கூறுகள்"
 
 
 msgid "Python expression to be evaluated as the initial node setting"
@@ -107356,14 +107087,6 @@ msgid "Theme settings for the Dope Sheet"
 msgstr "டோப் தாளுக்கான கருப்பொருள் அமைப்புகள்"
 
 
-msgid "Interpolation Line"
-msgstr "இடைக்கணிப்பு வரி"
-
-
-msgid "Color of lines showing non-Bézier interpolation modes"
-msgstr "பெசியர் அல்லாத இடைக்கணிப்பு முறைகளைக் காட்டும் வரிகளின் நிறம்"
-
-
 msgid "Keyframe Border"
 msgstr "கீஃப்ரேம் எல்லை"
 
@@ -111472,10 +111195,6 @@ msgstr "தொகுதி மரத்தில் முனைகளுக்�
 
 msgid "Display points for nodes in the volume tree"
 msgstr "தொகுதி மரத்தில் முனைகளுக்கான புள்ளிகளைக் காண்பி"
-
-
-msgid "Volume Grid"
-msgstr "தொகுதி கட்டம்"
 
 
 msgid "3D volume grid"
@@ -115962,10 +115681,6 @@ msgid "Requires Intel GPU with Xe-HPG architecture"
 msgstr "xe-hpg கட்டமைப்புடன் இன்டெல் சிபியு தேவைப்படுகிறது"
 
 
-msgid "and AMD driver version %s or newer"
-msgstr "மற்றும் amd இயக்கி பதிப்பு %s அல்லது புதியது"
-
-
 msgid "and Windows driver version %s or newer"
 msgstr "மற்றும் சாளரங்கள் டிரைவர் பதிப்பு %s அல்லது புதியது"
 
@@ -116479,14 +116194,6 @@ msgid "Add Principled Setup"
 msgstr "கொள்கை ரீதியான அமைப்பைச் சேர்க்கவும்"
 
 
-msgid "(Quick access: Shift+W)"
-msgstr "(விரைவான அணுகல்: சிப்ட்+டபிள்யூ)"
-
-
-msgid "To Socket"
-msgstr "சாக்கெட்"
-
-
 msgctxt "Operator"
 msgid "Settings from Active"
 msgstr "செயலில் இருந்து அமைப்புகள்"
@@ -116500,16 +116207,6 @@ msgstr "இணைப்புகளை மாற்ற வேண்டாம்"
 msgctxt "Operator"
 msgid "Replace Links"
 msgstr "இணைப்புகளை மாற்றவும்"
-
-
-msgctxt "Operator"
-msgid "Select frame's members (children)"
-msgstr "பிரேம் உறுப்பினர்களைத் தேர்ந்தெடுக்கவும் (குழந்தைகள்)"
-
-
-msgctxt "Operator"
-msgid "Select parent frame"
-msgstr "பெற்றோர் சட்டத்தைத் தேர்ந்தெடுக்கவும்"
 
 
 msgctxt "Operator"
@@ -116536,11 +116233,6 @@ msgstr "கணித முனைகளைப் பயன்படுத்த�
 
 msgid "Use Mix Nodes"
 msgstr "கலவை முனைகளைப் பயன்படுத்தவும்"
-
-
-msgctxt "Operator"
-msgid "Use Z-Combine Nodes"
-msgstr "Z- காம்பின் முனைகளைப் பயன்படுத்தவும்"
 
 
 msgctxt "Operator"
@@ -116592,10 +116284,6 @@ msgstr "முனை {} நீக்கப்பட்டது"
 
 msgid "Nothing to delete"
 msgstr "நீக்க எதுவும் இல்லை"
-
-
-msgid "Reloaded images"
-msgstr "மீண்டும் ஏற்றப்பட்ட படங்கள்"
 
 
 msgid "No images found to reload in this node tree"
@@ -116692,6 +116380,10 @@ msgstr "இந்த முனைக்கு இடமாற்றம் செ
 
 msgid "Some connections have been lost due to differing numbers of output sockets"
 msgstr "வெளியீட்டு சாக்கெட்டுகளின் மாறுபட்ட எண்ணிக்கையால் சில இணைப்புகள் இழந்துவிட்டன"
+
+
+msgid "To Socket"
+msgstr "சாக்கெட்"
 
 
 msgid "Edit tags for auto texture detection in Principled BSDF setup"
@@ -117972,8 +117664,8 @@ msgid "No camera found"
 msgstr "கேமரா எதுவும் கிடைக்கவில்லை"
 
 
-msgid "Other object is not a mesh"
-msgstr "மற்ற பொருள் ஒரு கண்ணி அல்ல"
+msgid "Expected one other selected mesh object to copy from"
+msgstr "தேர்ந்தெடுக்கப்பட்ட மற்றொரு கண்ணி பொருள் நகலெடுக்க எதிர்பார்க்கப்படுகிறது"
 
 
 msgid "Other object has no shape key"
@@ -117998,10 +117690,6 @@ msgstr "'{:s}' ஐத் தவிர்த்து, ஒரு கண்ணி 
 
 msgid "Skipping '{:s}', vertex count differs"
 msgstr "'{:s}' ஐத் தவிர்த்து, வெர்டெக்ச் எண்ணிக்கை வேறுபடுகிறது"
-
-
-msgid "Expected one other selected mesh object to copy from"
-msgstr "தேர்ந்தெடுக்கப்பட்ட மற்றொரு கண்ணி பொருள் நகலெடுக்க எதிர்பார்க்கப்படுகிறது"
 
 
 msgid "No animation data to convert on object: {!r}"
@@ -121778,10 +121466,6 @@ msgstr "முகம்"
 msgctxt "Operator"
 msgid "Zoom 1:1"
 msgstr "பெரிதாக்கு 1:1"
-
-
-msgid "Image*"
-msgstr "படிமம்*"
 
 
 msgid "Repeat Image"
@@ -133116,18 +132800,6 @@ msgid "multi-res modifier"
 msgstr "மல்டி-ரெச் மாற்றியமைப்பாளர்"
 
 
-msgid "vertex data"
-msgstr "வெர்டெக்ச் தரவு"
-
-
-msgid "edge data"
-msgstr "விளிம்பு தரவு"
-
-
-msgid "face data"
-msgstr "முகத்தை முகம்"
-
-
 msgid "constructive modifier"
 msgstr "ஆக்கபூர்வமான மாற்றியமைப்பாளர்"
 
@@ -136470,10 +136142,6 @@ msgstr "டோப் தாள் திருத்தியில் சுழ
 
 msgid "Shear: %s %s"
 msgstr "வெட்டு: %s %s"
-
-
-msgid "Shear: %.3f %s"
-msgstr "வெட்டு: %.3f %s"
 
 
 msgid "Shear Axis"
@@ -142684,12 +142352,12 @@ msgid "Number of subdivisions on top of the basic icosahedron"
 msgstr "அடிப்படை ஐகோசாஎட்ரானுக்கு மேல் துணைப்பிரிவுகளின் எண்ணிக்கை"
 
 
-msgid "Start Location"
-msgstr "இருப்பிடத்தைத் தொடங்கவும்"
-
-
 msgid "End Location"
 msgstr "இறுதி இடம்"
+
+
+msgid "Start Location"
+msgstr "இருப்பிடத்தைத் தொடங்கவும்"
 
 
 msgid "Number of vertices on the line"
