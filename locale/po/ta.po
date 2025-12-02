@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'ef4e8fa75057')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'dba3692987cb')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-24 08:35+0000\n"
+"POT-Creation-Date: 2025-12-02 11:29+0000\n"
 "PO-Revision-Date: 2025-08-06 08:59+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -34270,10 +34270,6 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
-msgid "Align View"
-msgstr "பார்வையை சீரமைக்கவும்"
-
-
 msgid "Apply"
 msgstr "இடு"
 
@@ -34284,10 +34280,6 @@ msgstr "டிராக்"
 
 msgid "Quick Effects"
 msgstr "விரைவான விளைவுகள்"
-
-
-msgid "Navigation"
-msgstr "வழிசெலுத்தல்"
 
 
 msgid "Show/Hide"
@@ -34320,14 +34312,6 @@ msgstr "கொக்கிகள்"
 
 msgid "Vertex Group Locks"
 msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
-
-
-msgid "Viewpoint"
-msgstr "பார்வை"
-
-
-msgid "Local View"
-msgstr "உள்ளக பார்வை"
 
 
 msgid "Trim/Add"
@@ -34422,24 +34406,12 @@ msgid "Math"
 msgstr "கணிதம்"
 
 
-msgid "UV Mapping"
-msgstr "புறஊதா மேப்பிங்"
-
-
 msgid "Special Characters"
 msgstr "சிறப்பு எழுத்துக்கள்"
 
 
 msgid "Kerning"
 msgstr "கெர்னிங்"
-
-
-msgid "Snap"
-msgstr "ச்னாப்"
-
-
-msgid "Mirror"
-msgstr "கண்ணாடி"
 
 
 msgid "Text"
@@ -34456,6 +34428,10 @@ msgstr "எலும்பு ரோல்"
 
 msgid "Pivot Point"
 msgstr "பிவோட் புள்ளி"
+
+
+msgid "Snap"
+msgstr "ச்னாப்"
 
 
 msgid "Proportional Editing Falloff"
@@ -34488,6 +34464,38 @@ msgstr "எழுதுங்கள்"
 
 msgid "Primitives"
 msgstr "ப்ரைமிடிவ்ச்"
+
+
+msgid "Mirror"
+msgstr "கண்ணாடி"
+
+
+msgid "UV Mapping"
+msgstr "புறஊதா மேப்பிங்"
+
+
+msgid "Local View"
+msgstr "உள்ளக பார்வை"
+
+
+msgid "Viewpoint"
+msgstr "பார்வை"
+
+
+msgid "Navigation"
+msgstr "வழிசெலுத்தல்"
+
+
+msgid "Align View"
+msgstr "பார்வையை சீரமைக்கவும்"
+
+
+msgid "Align View to Active"
+msgstr "செயலில் பார்வையை சீரமைக்கவும்"
+
+
+msgid "View Regions"
+msgstr "மண்டலங்களைக் காண்க"
 
 
 msgid "Select More/Less"
@@ -34546,10 +34554,6 @@ msgid "Light Probe"
 msgstr "ஒளி ஆய்வு"
 
 
-msgid "View Regions"
-msgstr "மண்டலங்களைக் காண்க"
-
-
 msgid "Add Image"
 msgstr "படத்தைச் சேர்க்கவும்"
 
@@ -34560,10 +34564,6 @@ msgstr "உறவுகள்"
 
 msgid "Rigid Body"
 msgstr "கடினமான உடல்"
-
-
-msgid "Align View to Active"
-msgstr "செயலில் பார்வையை சீரமைக்கவும்"
 
 
 msgid "Keyframe Insert Pie"
@@ -50858,10 +50858,6 @@ msgid "Boolean value socket of a node"
 msgstr "ஒரு முனையின் பூலியன் மதிப்பு சாக்கெட்"
 
 
-msgid "Default Value"
-msgstr "இயல்புநிலை மதிப்பு"
-
-
 msgid "Bundle Node Socket"
 msgstr "மூட்டை முனை சாக்கெட்"
 
@@ -51120,6 +51116,10 @@ msgstr "இயல்புநிலை உள்ளீடு"
 
 msgid "Input to use when the socket is unconnected. Requires \"Hide Value\"."
 msgstr "சாக்கெட் இணைக்கப்படும்போது பயன்படுத்த உள்ளீடு. \"மதிப்பை மறை\" தேவை."
+
+
+msgid "Default Value"
+msgstr "இயல்புநிலை மதிப்பு"
 
 
 msgid "The node socket's default value"
@@ -60169,10 +60169,6 @@ msgid "Other"
 msgstr "மற்றொன்று"
 
 
-msgid "Other geometry types, like curve, metaball, etc. (converted to meshes)"
-msgstr "வளைவு, வளர்சிதை மாற்றங்கள் போன்ற பிற வடிவியல் வகைகள் (மெச்களாக மாற்றப்படுகின்றன)"
-
-
 msgctxt "File browser"
 msgid "Path Mode"
 msgstr "பாதை முறை"
@@ -66012,20 +66008,12 @@ msgid "Update Scene FPS"
 msgstr "காட்சி fps ஐப் புதுப்பிக்கவும்"
 
 
-msgid "Set the scene framerate to that of the BVH file (note that this nullifies the 'Scale FPS' option, as the scale will be 1:1)"
-msgstr "காட்சியை பிவிஎச் கோப்பில் அமைக்கவும் (இது 'அளவுகோல் எஃப்பிஎச்' விருப்பத்தை ரத்து செய்கிறது என்பதை நினைவில் கொள்க, ஏனெனில் அளவு 1: 1 ஆக இருக்கும்)"
-
-
 msgid "Loop the animation playback"
 msgstr "அனிமேசன் பிளேபேக்கை லூப் செய்யுங்கள்"
 
 
 msgid "Scale FPS"
 msgstr "அளவிலான எஃப்பிஎச்"
-
-
-msgid "Scale the framerate from the BVH to the current scenes, otherwise each BVH frame maps directly to a Blender frame"
-msgstr "பிவிஎச் முதல் தற்போதைய காட்சிகளுக்கு பிரேம்ரேட்டை அளவிடவும், இல்லையெனில் ஒவ்வொரு பிவிஎச் பிரேம் வரைபடங்களையும் நேரடியாக ஒரு கலப்பான் சட்டகத்திற்கு"
 
 
 msgid "Animation Offset"
@@ -69844,10 +69832,6 @@ msgstr "தூய்மையான வளைவுகள்"
 
 msgid "After baking curves, remove redundant keys"
 msgstr "வளைவுகளை பேக்கிங் செய்த பிறகு, தேவையற்ற விசைகளை அகற்றவும்"
-
-
-msgid "Clear Constraints"
-msgstr "தெளிவான தடைகள்"
 
 
 msgid "Remove all constraints from keyed object/bones. To get a correct bake with this setting Visual Keying should be enabled"
@@ -92788,14 +92772,6 @@ msgid "Enable additional features for the new curves data block"
 msgstr "புதிய வளைவுகள் தரவுத் தொகுதிக்கான கூடுதல் அம்சங்களை இயக்கவும்"
 
 
-msgid "Recompute ID Usercount On Save"
-msgstr "சேமிப்பதில் ஐடியை மீண்டும் இணைக்கவும்"
-
-
-msgid "Recompute all ID usercounts before saving to a blendfile. Allows to work around invalid usercount handling in code that may lead to loss of data due to wrongly detected unused data-blocks"
-msgstr "ஒரு கலவையில் சேமிப்பதற்கு முன் அனைத்து ஐடி USERCOUNT களையும் மீண்டும் இணைக்கவும். தவறாகப் பயன்படுத்தப்படாத தரவு-தொகுதிகள் காரணமாக தரவை இழக்க வழிவகுக்கும் குறியீட்டில் தவறான பயன்பாட்டு கையாளுதலைச் சுற்றி வேலை செய்ய அனுமதிக்கிறது"
-
-
 msgid "Sculpt Texture Paint"
 msgstr "சிற்பம் அமைப்பு வண்ணப்பூச்சு"
 
@@ -105609,6 +105585,10 @@ msgid "Strips nested in meta strip"
 msgstr "மேவு ச்ட்ரிப்பில் கூடு கட்டப்பட்ட கீற்றுகள்"
 
 
+msgid "Playback volume of the sound"
+msgstr "ஒலியின் பின்னணி தொகுதி"
+
+
 msgid "MovieClip Strip"
 msgstr "மூவிக்லிப் துண்டு"
 
@@ -105687,10 +105667,6 @@ msgstr "சிறுகுறிப்புகளைப் பயன்பட�
 
 msgid "Show Annotations in OpenGL previews"
 msgstr "opengl மாதிரிக்காட்சிகளில் சிறுகுறிப்புகளைக் காட்டு"
-
-
-msgid "Playback volume of the sound"
-msgstr "ஒலியின் பின்னணி தொகுதி"
 
 
 msgid "Sound Strip"
@@ -122024,16 +122000,6 @@ msgstr "அடுத்த துண்டுக்குச் செல்ல�
 
 
 msgctxt "Operator"
-msgid "Movie"
-msgstr "திரைப்படம்"
-
-
-msgctxt "Operator"
-msgid "Image/Sequence"
-msgstr "படம்/வரிசை"
-
-
-msgctxt "Operator"
 msgid "Fade"
 msgstr "மங்கு"
 
@@ -125762,10 +125728,6 @@ msgstr "கொடுக்கப்பட்ட ஐடியுக்கு ஆ�
 
 msgid "No action to delete keyframes from for ID = %s"
 msgstr "ஐடியிலிருந்து கீஃப்ரேம்களை நீக்க எந்த நடவடிக்கையும் இல்லை = %s"
-
-
-msgid "Not deleting keyframe for locked F-Curve '%s' for %s '%s'"
-msgstr "%s '%s' க்கு பூட்டப்பட்ட f-curve '%s' க்கான கீஃப்ரேமை நீக்கவில்லை"
 
 
 msgid "Could not clear keyframe, as RNA path is invalid for the given ID (ID = %s, path = %s)"
@@ -130086,10 +130048,6 @@ msgid "Thickness: %s, Depth: %s"
 msgstr "தடிமன்: %s, ஆழம்: %s"
 
 
-msgid "Compiled without GMP, using fast solver"
-msgstr "வேகமான தீர்வைப் பயன்படுத்தி gmp இல்லாமல் தொகுக்கப்பட்டது"
-
-
 msgid "No intersections found"
 msgstr "குறுக்குவெட்டுகள் எதுவும் கிடைக்கவில்லை"
 
@@ -133354,10 +133312,6 @@ msgstr "கோப்பு பெயர்"
 
 msgid "Asset Catalogs"
 msgstr "சொத்து பட்டியல்கள்"
-
-
-msgid "Listing directories..."
-msgstr "பட்டியலிடும் கோப்பகங்கள் ..."
 
 
 msgid "Date Modified"
@@ -141398,10 +141352,6 @@ msgid "Values used to sort the curve's points. Uses indices by default"
 msgstr "வளைவின் புள்ளிகளை வரிசைப்படுத்த பயன்படுத்தப்படும் மதிப்புகள். இயல்பாக குறியீடுகளைப் பயன்படுத்துகிறது"
 
 
-msgid "Which of the sorted points to output"
-msgstr "வரிசைப்படுத்தப்பட்ட எது வெளியீட்டிற்கு புள்ளிகள்"
-
-
 msgid "A point of the curve, chosen by the sort index"
 msgstr "வளைவின் ஒரு புள்ளி, வரிசை குறியீட்டால் தேர்ந்தெடுக்கப்படுகிறது"
 
@@ -142456,10 +142406,6 @@ msgid "Values that sort the corners attached to the edge"
 msgstr "விளிம்பில் இணைக்கப்பட்ட மூலைகளை வரிசைப்படுத்தும் மதிப்புகள்"
 
 
-msgid "Which of the sorted corners to output"
-msgstr "வெளியீட்டிற்கு வரிசைப்படுத்தப்பட்ட மூலைகளில் எது"
-
-
 msgid "A corner of the input edge in its face's winding order, chosen by the sort index"
 msgstr "உள்ளீட்டு விளிம்பின் ஒரு மூலையில் அதன் முகத்தின் முறுக்கு வரிசையில், வரிசை குறியீட்டால் தேர்ந்தெடுக்கப்படுகிறது"
 
@@ -142554,10 +142500,6 @@ msgstr "மூலையில் முந்தைய விளிம்பி�
 
 msgid "Values used to sort the edges connected to the vertex. Uses indices by default"
 msgstr "வெர்டெக்சுடன் இணைக்கப்பட்ட விளிம்புகளை வரிசைப்படுத்த பயன்படுத்தப்படும் மதிப்புகள். இயல்பாக குறியீடுகளைப் பயன்படுத்துகிறது"
-
-
-msgid "Which of the sorted edges to output"
-msgstr "வெளியீட்டிற்கு வரிசைப்படுத்தப்பட்ட விளிம்புகளில் எது"
 
 
 msgid "An edge connected to the face, chosen by the sort index"

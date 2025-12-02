@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'ef4e8fa75057')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'dba3692987cb')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-24 08:35+0000\n"
+"POT-Creation-Date: 2025-12-02 11:29+0000\n"
 "PO-Revision-Date: 2025-07-23 15:12+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -32656,10 +32656,6 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
-msgid "Align View"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﮟﯿﻣ ﮪﺪﯿﺳ"
-
-
 msgid "Apply"
 msgstr "ﮟﯿﺋﺎﮕﻟ"
 
@@ -32670,10 +32666,6 @@ msgstr "ﮏﯾﺮﭨ"
 
 msgid "Quick Effects"
 msgstr "ﺕﺍﺮﺛﺍ ﯼﺭﻮﻓ"
-
-
-msgid "Navigation"
-msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
 
 
 msgid "Show/Hide"
@@ -32706,14 +32698,6 @@ msgstr "ﮯﭩﻧﺎﮐ"
 
 msgid "Vertex Group Locks"
 msgstr "ﮎﻻ﻿ ﮦﻭﺮﮔ ﺲﮑﯿﭨﺭﻭ"
-
-
-msgid "Viewpoint"
-msgstr "ﺮﻈﻧ ﮧﻄﻘﻧ"
-
-
-msgid "Local View"
-msgstr "ﺮﻈﻨﻣ ﯽﻣﺎﻘﻣ"
 
 
 msgid "Trim/Add"
@@ -32808,24 +32792,12 @@ msgid "Math"
 msgstr "ﯽﺿﺎﯾﺭ"
 
 
-msgid "UV Mapping"
-msgstr "ﮓﻨﭙﯿﻣ ﯼﻭﻮﯾ"
-
-
 msgid "Special Characters"
 msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
 
 
 msgid "Kerning"
 msgstr "ﮓﻨﻧﺮﮐ"
-
-
-msgid "Snap"
-msgstr "ﭗﯿﻨﺳ"
-
-
-msgid "Mirror"
-msgstr "ﮧﻨﯿﺋﺁ"
 
 
 msgid "Text"
@@ -32842,6 +32814,10 @@ msgstr "ﻝﻭﺭ ﻥﻮﺑ"
 
 msgid "Pivot Point"
 msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
+
+
+msgid "Snap"
+msgstr "ﭗﯿﻨﺳ"
 
 
 msgid "Proportional Editing Falloff"
@@ -32874,6 +32850,38 @@ msgstr "ﮟﯿﮭﮑﻟ"
 
 msgid "Primitives"
 msgstr "ﻢﯾﺪﻗ"
+
+
+msgid "Mirror"
+msgstr "ﮧﻨﯿﺋﺁ"
+
+
+msgid "UV Mapping"
+msgstr "ﮓﻨﭙﯿﻣ ﯼﻭﻮﯾ"
+
+
+msgid "Local View"
+msgstr "ﺮﻈﻨﻣ ﯽﻣﺎﻘﻣ"
+
+
+msgid "Viewpoint"
+msgstr "ﺮﻈﻧ ﮧﻄﻘﻧ"
+
+
+msgid "Navigation"
+msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
+
+
+msgid "Align View"
+msgstr "ﮟﯿﮭﮑﯾﺩ ﮟﯿﻣ ﮪﺪﯿﺳ"
+
+
+msgid "Align View to Active"
+msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﮟﯿﻣ ﻝﺎﻌﻓ ﻮﮐ ﺮﻈﻨﻣ"
+
+
+msgid "View Regions"
+msgstr "ﮟﯿﮭﮑﯾﺩ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ"
 
 
 msgid "Select More/Less"
@@ -32928,10 +32936,6 @@ msgid "Light Probe"
 msgstr "ﺏﻭﺮﭘ ﭧﺋﻻ﻿"
 
 
-msgid "View Regions"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ"
-
-
 msgid "Add Image"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﯾﻮﺼﺗ"
 
@@ -32942,10 +32946,6 @@ msgstr "ﮯﺘﺷﺭ"
 
 msgid "Rigid Body"
 msgstr "ﻢﺴﺟ ﺖﺨﺳ"
-
-
-msgid "Align View to Active"
-msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﮟﯿﻣ ﻝﺎﻌﻓ ﻮﮐ ﺮﻈﻨﻣ"
 
 
 msgid "Keyframe Insert Pie"
@@ -48208,10 +48208,6 @@ msgid "Boolean value socket of a node"
 msgstr "ﭧﮐﺎﺳ ﻮﯿﻠﯾﻭ ﻦﯿﻟﻮﺑ ﺎﮐ ﮈﻮﻧ"
 
 
-msgid "Default Value"
-msgstr "ﺭﺪﻗ ﭧﻟﺎﻔﯾﮈ"
-
-
 msgid "Collection Node Socket"
 msgstr "ﭧﮐﺎﺳ ﮈﻮﻧ ﮧﻋﻮﻤﺠﻣ"
 
@@ -48454,6 +48450,10 @@ msgstr "ﭧﭘ ﻥﺍ ﮦﺪﺷ ﮯﻃ"
 
 msgid "Input to use when the socket is unconnected. Requires \"Hide Value\"."
 msgstr "\"ﺭﺪﻗﮯﮨ ﺕﺭﻭﺮﺿ ﯽﮐ \"ﮟﯿﺋﺎﭙﮭﭼ\" ﭧﭘ ﻥﺍ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﮯﻧﻮﮨ ﮏﻠﺴﻨﻣ ﺮﯿﻏ ﮯﮐ ﭧﮐﺎﺳ"
+
+
+msgid "Default Value"
+msgstr "ﺭﺪﻗ ﭧﻟﺎﻔﯾﮈ"
 
 
 msgid "The node socket's default value"
@@ -57186,10 +57186,6 @@ msgid "Other"
 msgstr "ﺮﮕﯾﺩ"
 
 
-msgid "Other geometry types, like curve, metaball, etc. (converted to meshes)"
-msgstr "(ﻞﯾﺪﺒﺗ ﮟﯿﻣ ﮞﻮﺸﯿﻣ) ﮦﺮﯿﻏﻭ ،ﻝﺎﺑ ﺎﭩﯿﻣ ،ﻢﺧ ﮯﺴﯿﺟ ،ﻡﺎﺴﻗﺍ ﺮﮕﯾﺩ ﯽﮐ ﯼﺮﭩﯿﻣﻮﯿﺟ"
-
-
 msgid "Method used to reference paths"
 msgstr "ﮧﻘﯾﺮﻃ ﻻ﻿ﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻨﯾﺩ ﮧﻟﺍﻮﺣ ﺎﮐ ﮞﻮﺘﺳﺍﺭ"
 
@@ -62505,20 +62501,12 @@ msgid "Update Scene FPS"
 msgstr "ﮟﯾﺮﮐ ﭧﯾﮈ ﭖﺍ ﻮﮐ FPS ﺮﻈﻨﻣ"
 
 
-msgid "Set the scene framerate to that of the BVH file (note that this nullifies the 'Scale FPS' option, as the scale will be 1:1)"
-msgstr "(ﺎﮔ ﻮﮨ 1:1 ﮧﻧﺎﻤﯿﭘ  ﮧﮑﻧﻮﯿﮐ ،ﮯﮨ ﺎﺘﯾﺩ ﺮﮐ ﻡﺪﻌﻟﺎﮐ ﻮﮐ ﺭﺎﯿﺘﺧﺍ 'FPS ﮧﻧﺎﻤﯿﭘ ' ﮧﯾ ﮧﮐ ﮟﯾﺮﮐ ﭦﻮﻧ) ﮟﯾﺮﮐ ﭧﯿﺳ ﻖﺑﺎﻄﻣ ﮯﮐ ﻞﺋﺎﻓ BVH ﻮﮐ ﭧﯾﺮﻤﯾﺮﻓ ﻦﯿﺳ"
-
-
 msgid "Loop the animation playback"
 msgstr "ﮟﯾﺮﮐ ﭖﻮﻟ ﻮﮐ ﮏﯿﺑ ﮯﻠﭘ ﯼﺮﯾﺬﭘ ﺖﮐﺮﺣ"
 
 
 msgid "Scale FPS"
 msgstr "ﮧﻧﺎﻤﯿﭘ ﺲﯾﺍ ﯽﭘ ﻒﯾﺍ"
-
-
-msgid "Scale the framerate from the BVH to the current scenes, otherwise each BVH frame maps directly to a Blender frame"
-msgstr "BVH ﺮﮨ ﺮﮕﯾﺩ ﺕﺭﻮﺼﺑ ،ﮟﯾﺮﮐ ﺶﺋﺎﻤﯿﭘ ﯽﮐ ﭧﯾﺮﻤﯾﺮﻓ ﮏﺗ ﺮﻇﺎﻨﻣ ﮦﺩﻮﺟﻮﻣ ﮯﺳ BVH ﮯﮨ ﺎﺗﻮﮨ ﺮﭘ ﻢﯾﺮﻓ ﺭﮉﻨﯿﻠﺑ ﺖﺳﺍﺭ ﮦﺍﺮﺑ ﮧﺸﻘﻧ ﺎﮐ ﻢﯾﺮﻓ"
 
 
 msgid "Animation Offset"
@@ -66208,10 +66196,6 @@ msgstr "ﺭﺎﺗ  ﮟﯿﻤﺧ ﻑﺎﺻ"
 
 msgid "After baking curves, remove redundant keys"
 msgstr "ﮟﯾﺩ ﺎﭩﮨ ﮞﺎﯿﺑﺎﭼ ﻮﺘﻟﺎﻓ ،ﺪﻌﺑ ﮯﮐ  ﮟﯿﻤﺧ ﮓﻨﮑﯿﺑ"
-
-
-msgid "Clear Constraints"
-msgstr "ﮟﯾﺮﮐ ﻑﺎﺻ ﮞﺎﯾﺪﻨﺑﺎﭘ"
 
 
 msgid "Clear Parents"
@@ -87749,14 +87733,6 @@ msgid "Enable additional features for the new curves data block"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺕﺎﯿﺻﻮﺼﺧ ﯽﻓﺎﺿﺍ ﮯﯿﻟ ﮯﮐ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ  ﻢﺧ  ﮯﺌﻧ"
 
 
-msgid "Recompute ID Usercount On Save"
-msgstr "ﮟﯾﺮﮐ ﯽﺘﻨﮔ ﮦﺭﺎﺑﻭﺩ ﯽﮐ ﻑﺭﺎﺻ ID ﺮﭘ ﮯﻧﺮﮐ ﻅﻮﻔﺤﻣ"
-
-
-msgid "Recompute all ID usercounts before saving to a blendfile. Allows to work around invalid usercount handling in code that may lead to loss of data due to wrongly detected unused data-blocks"
-msgstr "ﮯﮨ ﺎﺘﮑﺳ ﻦﺑ ﺚﻋﺎﺑ ﺎﮐ ﻥﺎﺼﻘﻧ ﮯﮐ ﺎﭩﯾﮈ ﮯﺳ ﮧﺟﻭ ﯽﮐ ﮯﻧﺎﮕﻟ ﮧﺘﭘ ﺎﮐ ﺲﮐﻼ﻿ﺑ ﺎﭩﯾﮈ ﮦﺪﺷ ﻝﺎﻤﻌﺘﺳﺍ ﺮﯿﻏ ﮯﺳ ﮯﻘﯾﺮﻃ ﻂﻠﻏ ﻮﺟ ﮯﮨ ﺎﺘﯾﺩ ﺕﺯﺎﺟﺍ ﯽﮐ ﮯﻧﺮﮐ ﻡﺎﮐ ﺩﺮﮔ ﺩﺭﺍ ﮯﮐ ﮓﻨﻟﮉﻨﯿﮨ ﭧﻧﺅﺎﮐ ﺭﺯﻮﯾ ﻂﻠﻏ ﮟﯿﻣ ﮈﻮﮐ ﮟﯾﺮﮐ ﯽﺘﻨﮔ ﮦﺭﺎﺑﻭﺩ ﺎﮐ ﯽﺘﻨﮔ ﻑﺭﺎﺻ ID ﻡﺎﻤﺗ ﮯﻠﮩﭘ ﮯﺳ ﮯﻧﺮﮐ ﻅﻮﻔﺤﻣ ﮟﯿﻣ ﻞﺋﺎﻓ ﮉﻨﯿﻠﺑ"
-
-
 msgid "Sculpt Texture Paint"
 msgstr "ﭧﻨﯿﭘ ﺖﺧﺎﺳ  ﮧﻤﺴﺠﻣ"
 
@@ -99471,6 +99447,10 @@ msgid "Sequence strip to group other strips as a single sequence strip"
 msgstr "ﯽﭩﭘ ﯽﻟﺍﻭ ﺐﯿﺗﺮﺗ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮦﻭﺮﮔ ﻮﮐ ﺲﭘﺮﭩﺳ ﯼﺮﺳﻭﺩ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﯽﭩﭘ ﯽﻟﺍﻭ ﺐﯿﺗﺮﺗ ﮏﯾﺍ"
 
 
+msgid "Playback volume of the sound"
+msgstr "ﻡﻮﯿﻟﺍﻭ ﮏﯿﺑ ﮯﻠﭘ ﺎﮐ ﺯﺍﻭﺁ"
+
+
 msgid "Sequence strip to load a video from the clip editor"
 msgstr "ﯽﭩﭘ ﯽﮐ ﻞﺴﻠﺴﺗ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮈﻮﻟ ﻮﯾﮉﯾﻭ ﮯﺳ ﺮﭩﯾﮉﯾﺍ ﭗﻠﮐ"
 
@@ -99545,10 +99525,6 @@ msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺕﺎﺤﯾﺮﺸﺗ"
 
 msgid "Show Annotations in OpenGL previews"
 msgstr "OpenGL  ﮟﯿﺋﺎﮭﮐﺩ ﺕﺎﺤﯾﺮﺸﺗ ﮟﯿﻣ ﻮﯾﻮﯾﺮﭘ"
-
-
-msgid "Playback volume of the sound"
-msgstr "ﻡﻮﯿﻟﺍﻭ ﮏﯿﺑ ﮯﻠﭘ ﺎﮐ ﺯﺍﻭﺁ"
 
 
 msgid "Sequence strip defining a sound to be played over a period of time"
@@ -114716,16 +114692,6 @@ msgstr "(ﺰﮐﺮﻣ) ﮟﯿﺋﺎﺟ ﺮﭘ ﯽﭩﭘ ﯽﻠﮔﺍ"
 
 
 msgctxt "Operator"
-msgid "Movie"
-msgstr "ﻢﻠﻓ"
-
-
-msgctxt "Operator"
-msgid "Image/Sequence"
-msgstr "ﺐﯿﺗﺮﺗ/ﺮﯾﻮﺼﺗ"
-
-
-msgctxt "Operator"
 msgid "Fade"
 msgstr "ﻻ﻿ﺪﻨﮬﺩ"
 
@@ -118226,10 +118192,6 @@ msgstr "(%s‬‪ = ﮧﺘﺳﺍﺭ ،ID = ‪%s‬) ﮯﮨ ﻂﻠﻏ ﮯﯿﻟ 
 
 msgid "No action to delete keyframes from for ID = %s"
 msgstr "ID = ‪%s‬ ﮯﮨ ﮟﯿﮩﻧ ﯽﺋﺍﻭﺭﺭﺎﮐ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻑﺬﺣ ﻮﮐ ﮞﻮﻤﯾﺮﻓ ﯼﺪﯿﻠﮐ ﮯﯿﻟ ﮯﮐ"
-
-
-msgid "Not deleting keyframe for locked F-Curve '%s' for %s '%s'"
-msgstr "‪%s‬ '‪%s‬' ﻢﺧ-ﻒﯾﺍﺪﻨﺑ ﮯﯿﻟ ﮯﮐ  '‪%s‬' ﮯﮨ ﺎﮨﺭ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻑﺬﺣ ﻮﮐ ﻢﯾﺮﻓ ﯼﺪﯿﻠﮐ ﮯﯿﻟ ﮯﮐ"
 
 
 msgid "Could not clear keyframe, as RNA path is invalid for the given ID (ID = %s, path = %s)"
@@ -122021,10 +121983,6 @@ msgstr "ﺎﮔﻮﮨ ﺎﻧﺮﮐ ﺐﺨﺘﻨﻣ ﯽﮭﺑ ﮓﻧﺮﭩﺳ ﮏ�
 
 msgid "Thickness: %s, Depth: %s"
 msgstr "‬%s‪ :ﯽﺋﺍﺮﮩﮔ ,%s‬‪ :ﯽﺋﺎﭨﻮﻣ"
-
-
-msgid "Compiled without GMP, using fast solver"
-msgstr "GMP ﮯﺋﻮﮨ ﮯﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﺭﻮﻟﻮﺳ ﭧﺳﺎﻓ ،ﺎﯿﮔ ﺎﯿﮐ ﺐﺗﺮﻣ ﺮﯿﻐﺑ ﮯﮐ"
 
 
 msgid "No intersections found"
@@ -131264,10 +131222,6 @@ msgid "Values used to sort the curve's points. Uses indices by default"
 msgstr "ﮯﮨ ﺎﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺖﺳﺮﮩﻓ ﭧﻟﺎﻔﯾﮈ ﺭﻮﻄﺑ ﮟﯾﺭﺪﻗ ﯽﻟﺍﻭ ﮯﻧﻮﮨ ﻝﺎﻤﻌﺘﺳﺍ ﮯﯿﻟ ﮯﮐ ﮯﻨﯾﺩ ﺐﯿﺗﺮﺗ ﻮﮐ ﺲﭩﻨﺋﺍﻮﭘ ﮯﮐ ﻢﺧ"
 
 
-msgid "Which of the sorted points to output"
-msgstr "ﺎﺳ ﻥﻮﮐ ﮯﺳ ﮟﯿﻣ ﺲﭩﻨﺋﺍﻮﭘ ﮦﺪﺷ ﺐﯿﺗﺮﺗ ﮯﺌﻟ ﮯﮐ ﭧﭘ ﭦﺅﺁ"
-
-
 msgid "A point of the curve, chosen by the sort index"
 msgstr "ﮯﮨ ﺎﯿﮔ ﺎﯿﮐ ﺐﺨﺘﻨﻣ ﮯﻌﯾﺭﺫ ﮯﮐ ﺖﺳﺮﮩﻓ ﺐﯿﺗﺮﺗ ، ﺭﺍﺩ ﻢﺧ"
 
@@ -132056,10 +132010,6 @@ msgid "Values that sort the corners attached to the edge"
 msgstr "ﮟﯿﮨ ﯽﺘﯾﺩ ﺐﯿﺗﺮﺗ ﻮﮐ ﮞﻮﻧﻮﮐ ﮏﻠﺴﻨﻣ ﮯﺳ ﮮﺭﺎﻨﮐ ﻮﺟ ﮟﯾﺭﺪﻗ"
 
 
-msgid "Which of the sorted corners to output"
-msgstr "ﺎﺳ ﻥﻮﮐ ﮯﺳ ﮟﯿﻣ ﮞﻮﻧﻮﮐ ﮦﺪﺷ ﺐﯿﺗﺮﺗ ﮯﯿﻟ ﮯﮐ ﭧﭘ ﭦﺅﺁ"
-
-
 msgid "A corner of the input edge in its face's winding order, chosen by the sort index"
 msgstr "ﮯﮨ ﺎﯿﮔ ﺎﯿﮐ ﮯﻌﯾﺭﺫ ﮯﮐ ﺖﺳﺮﮩﻓ ﮯﻟﺍﻭ ﮯﻨﭩﻧﺎﮭﭼ ﺏﺎﺨﺘﻧﺍ ﺎﮐ ﺲﺟ ،ﮟﯿﻣ ﺭﮈﺭﺁ ﮓﻧﮉﻨﺋﺍﻭ ﮯﮐ ﮮﺮﮩﭼ ﮯﮐ ﺱﺍ ﺎﻧﻮﮐ ﮏﯾﺍ ﺎﮐ ﮮﺭﺎﻨﮐ ﭧﭘ ﻥﺍ"
 
@@ -132154,10 +132104,6 @@ msgstr "ﮦﺭﺎﻨﮐ ﻼ﻿ﮭﭽﭘ ﺎﮐ ﮯﻧﻮﮐ"
 
 msgid "Values used to sort the edges connected to the vertex. Uses indices by default"
 msgstr "ﮯﮨ ﺎﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺖﺳﺮﮩﻓ ﭧﻟﺎﻔﯾﮈ ﺭﻮﻄﺑ ﮯﯿﻟ ﮯﮐ ﮯﻨﯾﺩ ﺐﯿﺗﺮﺗ ﻮﮐ ﮞﻭﺭﺎﻨﮐ ﮏﻠﺴﻨﻣ ﮯﺳ ﺮﺳ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﮞﻭﺭﺪﻗ"
-
-
-msgid "Which of the sorted edges to output"
-msgstr "ﺎﺳ ﻥﻮﮐ ﮯﺳ ﮟﯿﻣ ﮞﻭﺭﺎﻨﮐ ﮦﺩﺮﮐ ﺐﯿﺗﺮﺗ ﮯﯿﻟ ﮯﮐ ﭧﭘ ﭦﺅﺁ"
 
 
 msgid "An edge connected to the face, chosen by the sort index"
