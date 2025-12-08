@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'dba3692987cb')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'7084f8328cd3')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-02 11:29+0000\n"
+"POT-Creation-Date: 2025-12-08 10:32+0000\n"
 "PO-Revision-Date: 2025-07-23 15:12+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -32656,6 +32656,38 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
+msgid "Assign Material"
+msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺩﺍﻮﻣ"
+
+
+msgid "Select More/Less"
+msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻢﮐ/ﮦﺩﺎﯾﺯ"
+
+
+msgid "Metaball"
+msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
+
+
+msgid "Light"
+msgstr "ﯽﻨﺷﻭﺭ"
+
+
+msgid "Light Probe"
+msgstr "ﺏﻭﺮﭘ ﭧﺋﻻ﻿"
+
+
+msgid "Add Image"
+msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﯾﻮﺼﺗ"
+
+
+msgid "Relations"
+msgstr "ﮯﺘﺷﺭ"
+
+
+msgid "Rigid Body"
+msgstr "ﻢﺴﺟ ﺖﺨﺳ"
+
+
 msgid "Apply"
 msgstr "ﮟﯿﺋﺎﮕﻟ"
 
@@ -32674,6 +32706,10 @@ msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
 
 msgid "Clean Up"
 msgstr "ﯽﺋﺎﻔﺻ"
+
+
+msgid "Layout"
+msgstr "ﭦﺅﺁ ﮯﻟ"
 
 
 msgid "Asset"
@@ -32704,6 +32740,10 @@ msgid "Trim/Add"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ/ﻡﺮﭨ"
 
 
+msgid "Adjust"
+msgstr "ﮟﯾﺮﮐ ﭧﺴﺟﮉﯾﺍ"
+
+
 msgid "Sculpt Set Pivot"
 msgstr "ﭦﻮﯿﭘ ﭧﯿﺳ ﮧﻤﺴﺠﻣ"
 
@@ -32712,8 +32752,20 @@ msgid "Face Sets Init"
 msgstr "ﭧﻧﺍ ﺲﭩﯿﺳ ﺲﯿﻓ"
 
 
+msgid "Keying"
+msgstr "ﮓﻨﯿﻠﮐ"
+
+
 msgid "Random Mask"
 msgstr "ﮏﺳﺎﻣ ﺐﯿﺗﺮﺗ ﮯﺑ"
+
+
+msgid "Tracking"
+msgstr "ﮓﻨﮑﯾﺮﭨ"
+
+
+msgid "Utilities"
+msgstr "ﺖﯾﺩﺎﻓﺍ"
 
 
 msgid "Clear Transform"
@@ -32722,6 +32774,10 @@ msgstr "ﻡﺭﺎﻔﺴﻧﺍﺮﭨ  ﺕﺮﭘ ﮎ"
 
 msgid "In-Betweens"
 msgstr "ﮟﯿﻣ ﻥﺎﯿﻣﺭﺩ"
+
+
+msgid "Math"
+msgstr "ﯽﺿﺎﯾﺭ"
 
 
 msgid "Propagate"
@@ -32748,10 +32804,6 @@ msgid "Disable Bone Options"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
 
 
-msgid "Layout"
-msgstr "ﭦﺅﺁ ﮯﻟ"
-
-
 msgid "Mesh Select Mode"
 msgstr "ﮈﻮﻣ ﭧﮑﯿﻠﺳ ﺶﯿﻣ"
 
@@ -32768,28 +32820,8 @@ msgid "Set Face Strength"
 msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
 
 
-msgid "Adjust"
-msgstr "ﮟﯾﺮﮐ ﭧﺴﺟﮉﯾﺍ"
-
-
 msgid "Merge"
 msgstr "ﺎﻧﺮﮐ ﻢﺿ"
-
-
-msgid "Keying"
-msgstr "ﮓﻨﯿﻠﮐ"
-
-
-msgid "Tracking"
-msgstr "ﮓﻨﮑﯾﺮﭨ"
-
-
-msgid "Utilities"
-msgstr "ﺖﯾﺩﺎﻓﺍ"
-
-
-msgid "Math"
-msgstr "ﯽﺿﺎﯾﺭ"
 
 
 msgid "Special Characters"
@@ -32804,12 +32836,24 @@ msgid "Text"
 msgstr "ﻦﺘﻣ"
 
 
-msgid "Metaball"
-msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
-
-
 msgid "Bone Roll"
 msgstr "ﻝﻭﺭ ﻥﻮﺑ"
+
+
+msgid "Read"
+msgstr "ﮟﯿﮬﮍﭘ"
+
+
+msgid "Sample"
+msgstr "ﮧﻧﻮﻤﻧ"
+
+
+msgid "Write"
+msgstr "ﮟﯿﮭﮑﻟ"
+
+
+msgid "Primitives"
+msgstr "ﻢﯾﺪﻗ"
 
 
 msgid "Pivot Point"
@@ -32828,28 +32872,32 @@ msgid "Mask Edit"
 msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﮏﺳﺎﻣ"
 
 
+msgid "Gizmo"
+msgstr "ﻮﻣﺰﯿﮔ"
+
+
 msgid "Automasking"
 msgstr "ﮓﻨﮑﺳﺎﻣﻮﭨﺁ"
+
+
+msgid "Instances"
+msgstr "ﮟﯿﻟﺎﺜﻣ"
 
 
 msgid "Face Sets Edit"
 msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﯿﺳ ﮯﮐ ﮮﺮﮩﭼ"
 
 
-msgid "Read"
-msgstr "ﮟﯿﮬﮍﭘ"
+msgid "Import"
+msgstr "ﮟﯾﺮﮐ ﺪﻣﺁﺭﺩ"
 
 
-msgid "Sample"
-msgstr "ﮧﻧﻮﻤﻧ"
+msgid "Deprecated"
+msgstr "ﮦﺩﻮﺳﺮﻓ"
 
 
-msgid "Write"
-msgstr "ﮟﯿﮭﮑﻟ"
-
-
-msgid "Primitives"
-msgstr "ﻢﯾﺪﻗ"
+msgid "UV"
+msgstr "ﯼﻭﻮﯾ"
 
 
 msgid "Mirror"
@@ -32884,18 +32932,6 @@ msgid "View Regions"
 msgstr "ﮟﯿﮭﮑﯾﺩ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ"
 
 
-msgid "Select More/Less"
-msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻢﮐ/ﮦﺩﺎﯾﺯ"
-
-
-msgid "Gizmo"
-msgstr "ﻮﻣﺰﯿﮔ"
-
-
-msgid "Instances"
-msgstr "ﮟﯿﻟﺎﺜﻣ"
-
-
 msgid "Select Similar"
 msgstr "ﮟﯾﺮﮐ ﺏﺎﺨﺘﻧﺍ ﺎﮐ ﺡﺮﻃ ﯽﺳﺍ"
 
@@ -32910,42 +32946,6 @@ msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﮉﮑﻨﻟ"
 
 msgid "Select Loops"
 msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﺲﭘﻮﻟ"
-
-
-msgid "Import"
-msgstr "ﮟﯾﺮﮐ ﺪﻣﺁﺭﺩ"
-
-
-msgid "Deprecated"
-msgstr "ﮦﺩﻮﺳﺮﻓ"
-
-
-msgid "Assign Material"
-msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺩﺍﻮﻣ"
-
-
-msgid "UV"
-msgstr "ﯼﻭﻮﯾ"
-
-
-msgid "Light"
-msgstr "ﯽﻨﺷﻭﺭ"
-
-
-msgid "Light Probe"
-msgstr "ﺏﻭﺮﭘ ﭧﺋﻻ﻿"
-
-
-msgid "Add Image"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﯾﻮﺼﺗ"
-
-
-msgid "Relations"
-msgstr "ﮯﺘﺷﺭ"
-
-
-msgid "Rigid Body"
-msgstr "ﻢﺴﺟ ﺖﺨﺳ"
 
 
 msgid "Keyframe Insert Pie"
@@ -33046,8 +33046,8 @@ msgid "Console"
 msgstr "ﻝﻮﺴﻨﮐ"
 
 
-msgid "Languages..."
-msgstr "...ﮟﯿﻧﺎﺑﺯ"
+msgid "Languages"
+msgstr "ﮟﯿﻧﺎﺑﺯ"
 
 
 msgid "Add Attribute"
@@ -51517,11 +51517,6 @@ msgid "Generate system information, saved into a text file"
 msgstr "ﮟﯿﺋﺎﻨﺑ ﺕﺎﻣﻮﻠﻌﻣ ﯽﮐ ﻢﭩﺴﺳ ﮦﺩﺮﮐ ﻅﻮﻔﺤﻣ ﮟﯿﻣ ﻞﺋﺎﻓ ﭧﺴﮑﯿﭨ"
 
 
-msgctxt "Operator"
-msgid "Save System Info"
-msgstr "ﮟﯾﺮﮐ ﻅﻮﻔﺤﻣ ﻮﮐ ﺕﺎﻣﻮﻠﻌﻣ ﯽﮐ ﻢﭩﺴﺳ"
-
-
 msgid "Set the tool by name (for key-maps)"
 msgstr "(ﮯﯿﻟ ﮯﮐ ﮞﻮﺸﻘﻧ ﯼﺪﯿﻠﮐ) ﮟﯾﺮﮐ ﭧﯿﺳ ﮯﺳ ﻡﺎﻧ ﻮﮐ ﺭﺍﺯﻭﺍ"
 
@@ -59167,51 +59162,6 @@ msgstr "ﻡﺎﻧ ﺎﮐ ﻒﺻﻭ ﮓﻧﺭ"
 
 
 msgctxt "Operator"
-msgid "Run Node Group"
-msgstr "ﮟﯿﺋﻼ﻿ﭼ ﮦﻭﺮﮔ ﮈﻮﻧ"
-
-
-msgid "Execute a node group on geometry"
-msgstr "ﮟﯿﺋﻼ﻿ﭼ ﻮﮐ ﮦﻭﺮﮔ ﮈﻮﻧ ﺮﭘ ﯼﺮﭩﯿﻣﻮﯿﺟ"
-
-
-msgid "3D Cursor Position"
-msgstr "3D ﻡﺎﻘﻣ ﺮﺳﺮﮐ"
-
-
-msgid "3D Cursor Rotation"
-msgstr "3D ﺵﺩﺮﮔ ﺮﺳﺮﮐ"
-
-
-msgid "Mouse coordinates in region space"
-msgstr "ﻼ﻿ﺧ ﮧﻗﻼ﻿ﻋ in ﻁﺎﻘﻧ ﺱﺅﺎﻣ"
-
-
-msgid "Name of the data-block to use by the operator"
-msgstr "ﻡﺎﻧ ﺎﮐ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﻌﯾﺭﺫ ﮯﮐ ﺮﭩﯾﺮﭘﺁ"
-
-
-msgid "Region Size"
-msgstr "ﺰﺋﺎﺳ ﮧﻗﻼ﻿ﻋ"
-
-
-msgid "Session UID of the data-block to use by the operator"
-msgstr "UID ﻦﺸﯿﺳ ﺎﮐ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﻌﯾﺭﺫ ﮯﮐ ﺮﭩﯾﺮﭘﺁ"
-
-
-msgid "Viewport Is Perspective"
-msgstr "ﮯﮨ ﮦﺎﮕﻧ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgid "Viewport Projection Transform"
-msgstr "ﯽﻠﯾﺪﺒﺗ ﻦﺸﮑﯿﺟﻭﺮﭘ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgid "Viewport View Transform"
-msgstr "ﮟﯿﮭﮑﯾﺩ ﻡﺭﺎﻔﺴﻧﺍﺮﭨ ﭦﺭﻮﭘ ﻮﯾﻭ"
-
-
-msgctxt "Operator"
 msgid "Set Geometry Randomization"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﻦﺸﯾﺰﺋﺎﻣﮉﻨﯾﺭ ﯼﺮﭩﯿﻣﻮﯿﺟ"
 
@@ -66548,6 +66498,14 @@ msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﻦﺸﮑﯿﻠﮐ ﮈﻮﻧ"
 
 msgid "Add a collection info node to the current node editor"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﮈﻮﻧ ﺕﺎﻣﻮﻠﻌﻣ ﮧﻋﻮﻤﺠﻣ ﮏﯾﺍ ﮟﯿﻣ ﺮﭩﯾﮉﯾﺍ ﮈﻮﻧ ﮦﺩﻮﺟﻮﻣ"
+
+
+msgid "Name of the data-block to use by the operator"
+msgstr "ﻡﺎﻧ ﺎﮐ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﻌﯾﺭﺫ ﮯﮐ ﺮﭩﯾﺮﭘﺁ"
+
+
+msgid "Session UID of the data-block to use by the operator"
+msgstr "UID ﻦﺸﯿﺳ ﺎﮐ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮯﻌﯾﺭﺫ ﮯﮐ ﺮﭩﯾﺮﭘﺁ"
 
 
 msgid "Source color"
@@ -84226,6 +84184,42 @@ msgid "Panel containing UI elements"
 msgstr "UI ﻞﻨﯿﭘ ﻞﻤﺘﺸﻣ ﺮﭘ ﺮﺻﺎﻨﻋ"
 
 
+msgid "Quad View"
+msgstr "ﻮﯾﻭﺍﮍﮐﻮﭼ"
+
+
+msgid "Onion Skin"
+msgstr "ﺪﻠﺟ ﯽﮐ ﺯﺎﯿﭘ"
+
+
+msgid "Stereoscopy"
+msgstr "ﯽﭘﻮﮑﺳﻮﯾﺮﯿﭩﺳ"
+
+
+msgid "Multi Frame"
+msgstr "ﻢﯾﺮﻓ ﯽﭩﻠﻣ"
+
+
+msgid "Auto-Masking"
+msgstr "ﮓﻨﮑﺳﺎﻣ ﻮﭨﺁ"
+
+
+msgid "Curves Sculpt Add Curve Options"
+msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺕﺍﺭﺎﯿﺘﺧﺍ ﻢﺴﺠﻣ ﮯﮐ ﻢﺴﺠﻣ ﮟﯿﻤﺧ"
+
+
+msgid "Curves Sculpt Parameter Falloff"
+msgstr "ﻑﺁ ﻝﺎﻓ ﺮﭩﯿﻣﺍﺮﯿﭘ ﻢﺴﺠﻣ  ﮟﯿﻤﺧ"
+
+
+msgid "Curves Grow/Shrink Scaling"
+msgstr "ﺎﻧﮍﮑﺳ/ﺎﻨﮬﮍﺑ  ﮟﯿﻤﺧ"
+
+
+msgid "Viewport Debug"
+msgstr "ﮓﺒﯾﮈ ﭦﺭﻮﭘ ﻮﯾﻭ"
+
+
 msgid "VR"
 msgstr "ﺭﺁ ﯼﻭ"
 
@@ -84312,42 +84306,6 @@ msgstr "ﭧﻨﻤﺴﯿﻠﭘ ﮎﻭﺮﭩﺳﺍ"
 
 msgid "Drawing Plane"
 msgstr "ﻦﯿﻠﭘ ﮓﻨﺋﺍﺭﮈ"
-
-
-msgid "Quad View"
-msgstr "ﻮﯾﻭﺍﮍﮐﻮﭼ"
-
-
-msgid "Onion Skin"
-msgstr "ﺪﻠﺟ ﯽﮐ ﺯﺎﯿﭘ"
-
-
-msgid "Stereoscopy"
-msgstr "ﯽﭘﻮﮑﺳﻮﯾﺮﯿﭩﺳ"
-
-
-msgid "Multi Frame"
-msgstr "ﻢﯾﺮﻓ ﯽﭩﻠﻣ"
-
-
-msgid "Auto-Masking"
-msgstr "ﮓﻨﮑﺳﺎﻣ ﻮﭨﺁ"
-
-
-msgid "Curves Sculpt Add Curve Options"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺕﺍﺭﺎﯿﺘﺧﺍ ﻢﺴﺠﻣ ﮯﮐ ﻢﺴﺠﻣ ﮟﯿﻤﺧ"
-
-
-msgid "Curves Sculpt Parameter Falloff"
-msgstr "ﻑﺁ ﻝﺎﻓ ﺮﭩﯿﻣﺍﺮﯿﭘ ﻢﺴﺠﻣ  ﮟﯿﻤﺧ"
-
-
-msgid "Curves Grow/Shrink Scaling"
-msgstr "ﺎﻧﮍﮑﺳ/ﺎﻨﮬﮍﺑ  ﮟﯿﻤﺧ"
-
-
-msgid "Viewport Debug"
-msgstr "ﮓﺒﯾﮈ ﭦﺭﻮﭘ ﻮﯾﻭ"
 
 
 msgid "Chain Scaling"
@@ -91344,10 +91302,6 @@ msgstr "langs ﮧﯾﺭﺎﺷﺍ ﺎﮐ ﻥﺎﺑﺯ ﻝﺎﻌﻓ ﮟﯿﻣ ﮧ�
 
 msgid "Whether these settings have already been auto-set or not"
 msgstr "ﮟﯿﮩﻧ ﺎﯾ ﮟﯿﮨ ﯽﮑﭼ ﻮﮨ ﭧﯿﺳ ﺩﻮﺧ ﺯﺍ ﯽﮨ ﮯﻠﮩﭘ ﺰﮕﻨﭩﯿﺳ ﮧﯾ ﺎﯾﺁ"
-
-
-msgid "Languages"
-msgstr "ﮟﯿﻧﺎﺑﺯ"
 
 
 msgid "Languages to update in work repository"
@@ -113570,11 +113524,6 @@ msgstr "ﮈﻮﻣ ﻦﺸﯿﻟﻮﭘ ﺍﺮﭩﺴﮑﯾﺍ"
 
 
 msgctxt "Operator"
-msgid "Move..."
-msgstr "...ﮟﯾﺮﮐ ﻞﻘﺘﻨﻣ"
-
-
-msgctxt "Operator"
 msgid "Snap"
 msgstr "ﭗﯿﻨﺳ"
 
@@ -114278,11 +114227,6 @@ msgstr "...ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﻡﺎﻧ"
 
 
 msgctxt "Operator"
-msgid "Track Ordering..."
-msgstr "...ﮓﻧﺭﮈﺭﺁ ﮏﯾﺮﭨ"
-
-
-msgctxt "Operator"
 msgid "Add Above Selected"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﺮﭘﻭﺍ ﮦﺩﺮﮐ ﺐﺨﺘﻨﻣ"
 
@@ -114815,11 +114759,6 @@ msgid "Both Sides"
 msgstr "ﻑﺮﻃ ﮞﻮﻧﻭﺩ"
 
 
-msgctxt "Operator"
-msgid "Side of Frame..."
-msgstr "...ﻑﺮﻃ ﯽﮐ ﻢﯾﺮﻓ"
-
-
 msgid "Handle"
 msgstr "ﺎﻨﻟﺎﮭﺒﻨﺳ"
 
@@ -114872,11 +114811,6 @@ msgstr "ﮏﻤﭼ"
 msgctxt "Operator"
 msgid "Gaussian Blur"
 msgstr "ﺮﻠﺑ ﯽﺳﻭﺎﮔ"
-
-
-msgctxt "Operator"
-msgid "Insert Keyframe with Keying Set"
-msgstr "ﭧﯿﺳ ﮓﻨﯿﮐ with ﮟﯾﺮﮐ ﻞﺧﺍﺩ ﻢﯾﺮﻓ ﯽﮐ"
 
 
 msgctxt "Operator"
@@ -116223,16 +116157,6 @@ msgstr "ﺮﮑﯿﭙﺳ"
 
 
 msgctxt "Operator"
-msgid "Mesh Plane"
-msgstr "ﮦﺭﺎﯿﻃ ﻝﺎﺟ"
-
-
-msgctxt "Operator"
-msgid "Make Local..."
-msgstr "...ﮟﯿﺋﺎﻨﺑ ﯽﻣﺎﻘﻣ"
-
-
-msgctxt "Operator"
 msgid "Bake Action..."
 msgstr "...ﻡﺍﺪﻗﺍ ﮏﯿﺑ"
 
@@ -116732,11 +116656,6 @@ msgstr "ﮟﯾﺮﮐ ﭧﯾﮈ ﭖﺍ ﻮﮐ ﺰﮭﺗﺎﭘ ﺖﮐﺮﺣ  ﻡ�
 
 
 msgctxt "Operator"
-msgid "Sort Elements..."
-msgstr "...ﮟﯾﺩ ﺐﯿﺗﺮﺗ ﻮﮐ ﺮﺻﺎﻨﻋ"
-
-
-msgctxt "Operator"
 msgid "Extrude Vertices"
 msgstr "ﺎﻨﻟﺎﮑﻧ ﺮﮨﺎﺑ ﯼﺩﻮﻤﻋ"
 
@@ -117099,16 +117018,6 @@ msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮧﻋﻮﻤﺠﻣ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﻝ
 msgctxt "Operator"
 msgid "Collection Instance"
 msgstr "ﻝﺎﺜﻣ ﯽﮐ ﮯﻧﺮﮐ ﻊﻤﺟ"
-
-
-msgctxt "Operator"
-msgid "Reference"
-msgstr "ﮧﻟﺍﻮﺣ"
-
-
-msgctxt "Operator"
-msgid "Background"
-msgstr "ﺮﻈﻨﻣ ﺲﭘ"
 
 
 msgctxt "Operator"
@@ -119381,10 +119290,6 @@ msgid "ID %s uses shapekey %s, but its 'from' pointer is invalid (%p), fixing...
 msgstr "ID ‪%s‬ ﯽﮐ ﭗﯿﺷ ‪%s‬ ﺎﮐ ﺱﺍ ﻦﮑﯿﻟ ،ﮯﮨ ﯽﺗﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ 'from' ﮯﮨ ﻂﻠﻏ ﺮﭩﻨﺋﺍﻮﭘ (%p)، ﮓﻨﺴﮑﻓ..."
 
 
-msgid "insufficient content"
-msgstr "ﺩﺍﻮﻣ ﯽﻓﺎﮐﺎﻧ"
-
-
 msgid "unknown error reading file"
 msgstr "ﯽﻄﻠﻏ ﻡﻮﻠﻌﻣﺎﻧ ﮟﯿﻣ ﮯﻨﮬﮍﭘ ﻞﺋﺎﻓ"
 
@@ -119435,10 +119340,6 @@ msgstr "ﮟﯿﻟﻮﮭﮐ ﮫﺗﺎﺳ ﮯﮐ ﺪﻌﺑ ﺎﯾ %s‬‪ ﺭﮉ�
 
 msgid "Failed to read blend file '%s': %s"
 msgstr "‬%s‪ :ﻡﺎﮐﺎﻧ ﮟﯿﻣ ﮯﻨﮬﮍﭘ '%s‬‪' ﻞﺋﺎﻓ ﮉﻨﯿﻠﺑ"
-
-
-msgid "Unable to read '%s': %s"
-msgstr "'‪%s‬' ﮟﯿﮩﻧ ﻞﺑﺎﻗ ﮯﮐ ﮯﻨﮬﮍﭘ: ‪%s‬"
 
 
 msgid "Unrecognized file format '%s'"
@@ -120783,16 +120684,6 @@ msgstr "(ﻅﻮﻔﺤﻣ ﮟﯿﻣ ﺕﺎﺤﯿﺟﺮﺗ ﯽﮐ ﻑﺭﺎﺻ) �
 
 msgid "Only keyboard shortcuts can be edited that way, please use User Preferences otherwise"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺕﺎﺤﯿﺟﺮﺗ ﯽﮐ ﻑﺭﺎﺻ ﺮﮕﯾﺩ ﺕﺭﻮﺼﺑ ،ﮯﮨ ﯽﺘﮑﺳ ﺎﺟ ﯽﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﮐ ﭦﺭﺎﺷ ﮈﺭﻮﺑ ﯽﮐ ﻑﺮﺻ ﺡﺮﻃ ﺱﺍ"
-
-
-msgctxt "Operator"
-msgid "Change Shortcut"
-msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﭧﮐ ﭦﺭﺎﺷ"
-
-
-msgctxt "Operator"
-msgid "Assign Shortcut"
-msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﭧﮐ ﭦﺭﺎﺷ"
 
 
 msgctxt "Operator"
@@ -134083,18 +133974,6 @@ msgstr "ﮯﮨ ﯼﺭﻭﺮﺿ ﺎﻧﻮﮨ ﭦﻮﻠﻓ ﺎﯾ ﺩﺪﻋ ﮏﯾ
 
 msgid "Property must be a none, distance, factor, percentage, angle, or pixel"
 msgstr "ﮯﯿﮨﺎﭼ ﺎﻧﻮﮨ ﻞﺴﮑﭘ ﺎﯾ ،ﮧﯾﻭﺍﺯ ،ﺪﺼﯿﻓ ،ﺮﺼﻨﻋ ،ﮧﻠﺻﺎﻓ ،ﮟﯿﮩﻧ ﯽﺋﻮﮐ ﯽﭨﺮﭘﺍﺮﭘ"
-
-
-msgid "Registering operator class: '%s', invalid bl_idname '%s', at position %d"
-msgstr "ﺮﭘ %d‬‪  ﻡﺎﻘﻣ  ،'bl_idname '‪%s‬ ﻂﻠﻏ ،'%s‬‪' :ﺱﻼ﻿ﮐ ﺮﭩﯾﺮﭘﺁ ﻦﺸﯾﺮﭩﺴﺟﺭ"
-
-
-msgid "Registering operator class: '%s', invalid bl_idname '%s', is too long, maximum length is %d"
-msgstr "ﮯﮨ %d‬‪ ﯽﺋﺎﺒﻤﻟ ﮦﺩﺎﯾﺯ ﮯﺳ ﮦﺩﺎﯾﺯ ،ﮯﮨ ﺎﺒﻤﻟ ﺖﮩﺑ ،'bl_idname '‪%s‬ ﻂﻠﻏ ،'%s‬‪' :ﺝﺍﺭﺪﻧﺍ ﺎﮐ ﺱﻼ﻿ﮐ ﺮﭩﯾﺮﭘﺁ"
-
-
-msgid "Registering operator class: '%s', invalid bl_idname '%s', must contain 1 '.' character"
-msgstr "ﺭﺍﺩﺮﮐ 'ﮯﯿﮨﺎﭼ ﺎﻧﻮﮨ ﻞﻣﺎﺷ' bl_idname '‪%s‬'، 1 ﻂﻠﻏ ،'%s‬‪' :ﺱﻼ﻿ﮐ ﺮﭩﯾﺮﭘﺁ ﻦﺸﯾﺮﭩﺴﺟﺭ"
 
 
 msgid "Cannot read %s '%s': %s"
