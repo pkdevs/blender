@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'4e205b56c72f')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'edd300f2e755')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-22 09:32+0000\n"
-"PO-Revision-Date: 2025-12-20 09:12+0000\n"
+"POT-Creation-Date: 2025-12-29 09:32+0000\n"
+"PO-Revision-Date: 2025-12-28 10:00+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -34950,52 +34950,12 @@ msgid "Editor menu containing buttons"
 msgstr "რედაქტორის მენიუ, რომელიც ღილაკებს შეიცავს"
 
 
-msgid "Local View"
-msgstr "ლოკალური ხედი"
-
-
-msgid "Viewpoint"
-msgstr "თვალთახედვა"
-
-
-msgid "Navigation"
-msgstr "ნავიგაცია"
-
-
-msgid "Align View"
-msgstr "ხედის მისადაგება"
-
-
-msgid "Align View to Active"
-msgstr "ხედის მისადაგება აქტიურზე"
-
-
-msgid "View Regions"
-msgstr "ხედის მონაკვეთები"
+msgid "Assign Material"
+msgstr "მასალის მიკუთვნება"
 
 
 msgid "Select More/Less"
 msgstr "მეტის/ნაკლების მონიშვნა"
-
-
-msgid "Select Similar"
-msgstr "მსგავსის მონიშვნა"
-
-
-msgid "Select All by Trait"
-msgstr "ყველას მონიშვნა თვისებით"
-
-
-msgid "Select Linked"
-msgstr "დაკავშირებულის მონიშვნა"
-
-
-msgid "Select Loops"
-msgstr "მარყუჟების მონიშვნა"
-
-
-msgid "Assign Material"
-msgstr "მასალის მიკუთვნება"
 
 
 msgid "Metaball"
@@ -35008,10 +34968,6 @@ msgstr "სინათლე"
 
 msgid "Light Probe"
 msgstr "სინათლის ზონდი"
-
-
-msgid "Layout"
-msgstr "განლაგება"
 
 
 msgid "Add Image"
@@ -35034,10 +34990,6 @@ msgid "Track"
 msgstr "თვალის დევნება"
 
 
-msgid "Adjust"
-msgstr "რეგულირება"
-
-
 msgid "Quick Effects"
 msgstr "სწრაფი ეფექტები"
 
@@ -35050,20 +35002,12 @@ msgid "Clean Up"
 msgstr "გასუფთავება"
 
 
-msgid "Keying"
-msgstr "ამოჭრა"
-
-
 msgid "Asset"
 msgstr "აქტივი"
 
 
 msgid "Make Single User"
 msgstr "ცალ მომხმარებლად ქცევა"
-
-
-msgid "Tracking"
-msgstr "თვალის დევნება"
 
 
 msgid "Convert"
@@ -35074,20 +35018,12 @@ msgid "Link/Transfer Data"
 msgstr "მონაცემების ბმულით დაკავშირება/გადატანა"
 
 
-msgid "Utilities"
-msgstr "უტილიტები"
-
-
 msgid "Hooks"
 msgstr "კაუჭები"
 
 
-msgid "Math"
-msgstr "მეშის პრიმიტივები"
-
-
-msgid "Creative"
-msgstr "კრეატიული"
+msgid "Layout"
+msgstr "განლაგება"
 
 
 msgid "Vertex Group Locks"
@@ -35110,6 +35046,10 @@ msgid "Random Mask"
 msgstr "შემთხვევითი ნიღაბი"
 
 
+msgid "Adjust"
+msgstr "რეგულირება"
+
+
 msgid "Clear Transform"
 msgstr "გარდაქმნის გასუფთავება"
 
@@ -35118,20 +35058,36 @@ msgid "In-Betweens"
 msgstr "შუაში"
 
 
-msgid "Render Preview"
-msgstr "რენდერის გადახედვა"
-
-
 msgid "Propagate"
 msgstr "გავრცელება"
+
+
+msgid "Keying"
+msgstr "ამოჭრა"
 
 
 msgid "Bone Collections"
 msgstr "ძვლების კოლექციები"
 
 
+msgid "Tracking"
+msgstr "თვალის დევნება"
+
+
 msgid "Names"
 msgstr "სახელები"
+
+
+msgid "Utilities"
+msgstr "უტილიტები"
+
+
+msgid "Math"
+msgstr "მეშის პრიმიტივები"
+
+
+msgid "Creative"
+msgstr "კრეატიული"
 
 
 msgid "Toggle Bone Options"
@@ -35162,24 +35118,32 @@ msgid "Set Face Strength"
 msgstr "წახნაგის სიძლიერის დაყენება"
 
 
+msgid "Render Preview"
+msgstr "რენდერის გადახედვა"
+
+
 msgid "Merge"
 msgstr "შერწყმა"
-
-
-msgid "Read"
-msgstr "წაკითხვა"
 
 
 msgid "Special Characters"
 msgstr "სპეციალური ასონიშნები"
 
 
-msgid "Sample"
-msgstr "ნიმუშის აღება"
-
-
 msgid "Kerning"
 msgstr "ასოთშორისი ინტერვალი"
+
+
+msgid "Bone Roll"
+msgstr "ძვლის ტრიალი"
+
+
+msgid "Read"
+msgstr "წაკითხვა"
+
+
+msgid "Sample"
+msgstr "ნიმუშის აღება"
 
 
 msgid "Write"
@@ -35188,22 +35152,6 @@ msgstr "წერა"
 
 msgid "Primitives"
 msgstr "პრიმიტივები"
-
-
-msgid "Bone Roll"
-msgstr "ძვლის ტრიალი"
-
-
-msgid "Gizmo"
-msgstr "გიზმო"
-
-
-msgid "Instances"
-msgstr "ინსტანციები"
-
-
-msgid "Import"
-msgstr "იმპორტი"
 
 
 msgid "Pivot Point"
@@ -35218,10 +35166,6 @@ msgid "Proportional Editing Falloff"
 msgstr "პროპორციული რედაქტირების მილევა"
 
 
-msgid "Deprecated"
-msgstr "არარეკომენდირებული"
-
-
 msgid "Mask Edit"
 msgstr "ნიღბის რედაქტირება"
 
@@ -35234,12 +35178,20 @@ msgid "Face Sets Edit"
 msgstr "წახნაგების ნაკრებთა რედაქტირება"
 
 
-msgid "List"
-msgstr "სია"
+msgid "Gizmo"
+msgstr "გიზმო"
 
 
-msgid "UV"
-msgstr "UV"
+msgid "Instances"
+msgstr "ინსტანციები"
+
+
+msgid "Import"
+msgstr "იმპორტი"
+
+
+msgid "Deprecated"
+msgstr "არარეკომენდირებული"
 
 
 msgid "Mirror"
@@ -35248,6 +35200,54 @@ msgstr "გასარკისებურება"
 
 msgid "UV Mapping"
 msgstr "UV დატანა"
+
+
+msgid "List"
+msgstr "სია"
+
+
+msgid "Local View"
+msgstr "ლოკალური ხედი"
+
+
+msgid "UV"
+msgstr "UV"
+
+
+msgid "Viewpoint"
+msgstr "თვალთახედვა"
+
+
+msgid "Navigation"
+msgstr "ნავიგაცია"
+
+
+msgid "Align View"
+msgstr "ხედის მისადაგება"
+
+
+msgid "Align View to Active"
+msgstr "ხედის მისადაგება აქტიურზე"
+
+
+msgid "View Regions"
+msgstr "ხედის მონაკვეთები"
+
+
+msgid "Select Similar"
+msgstr "მსგავსის მონიშვნა"
+
+
+msgid "Select All by Trait"
+msgstr "ყველას მონიშვნა თვისებით"
+
+
+msgid "Select Linked"
+msgstr "დაკავშირებულის მონიშვნა"
+
+
+msgid "Select Loops"
+msgstr "მარყუჟების მონიშვნა"
 
 
 msgid "Keyframe Insert Pie"
@@ -91755,50 +91755,6 @@ msgid "Panel containing UI elements"
 msgstr "პანელი, რომელიც UI-ს ელემენტებს შეიცავს"
 
 
-msgid "Curve Edit Mode"
-msgstr "წირის რედაქტირების რეჟიმი"
-
-
-msgid "Curves Edit Mode"
-msgstr "წირების რედაქტირების რეჟიმი"
-
-
-msgid "Transform Orientations"
-msgstr "გარდაქმნების ორიენტაციები"
-
-
-msgid "Stroke Placement"
-msgstr "მონასმის განთავსება"
-
-
-msgid "Drawing Plane"
-msgstr "სახატავი სიბრტყე"
-
-
-msgid "Guides"
-msgstr "ნიშნულები"
-
-
-msgid "Grease Pencil Options"
-msgstr "გრიზ ფენსილის ვარიანტები"
-
-
-msgid "Quad View"
-msgstr "ოთხმაგი ხედი"
-
-
-msgid "Onion Skin"
-msgstr "კალკი"
-
-
-msgid "Stereoscopy"
-msgstr "სტერეოსკოპია"
-
-
-msgid "Multi Frame"
-msgstr "მრავალკადრიანი"
-
-
 msgid "Auto-Masking"
 msgstr "ავტომატური შენიღბვა"
 
@@ -91883,6 +91839,10 @@ msgid "Overlays"
 msgstr "გადაფარებები"
 
 
+msgid "Guides"
+msgstr "ნიშნულები"
+
+
 msgid "Viewer Node"
 msgstr "მაჩვენებლის კვანძი"
 
@@ -91897,6 +91857,46 @@ msgstr "მეშის რედაქტირების რეჟიმი"
 
 msgid "Measurement"
 msgstr "გაზომვა"
+
+
+msgid "Curve Edit Mode"
+msgstr "წირის რედაქტირების რეჟიმი"
+
+
+msgid "Curves Edit Mode"
+msgstr "წირების რედაქტირების რეჟიმი"
+
+
+msgid "Transform Orientations"
+msgstr "გარდაქმნების ორიენტაციები"
+
+
+msgid "Stroke Placement"
+msgstr "მონასმის განთავსება"
+
+
+msgid "Drawing Plane"
+msgstr "სახატავი სიბრტყე"
+
+
+msgid "Grease Pencil Options"
+msgstr "გრიზ ფენსილის ვარიანტები"
+
+
+msgid "Quad View"
+msgstr "ოთხმაგი ხედი"
+
+
+msgid "Onion Skin"
+msgstr "კალკი"
+
+
+msgid "Stereoscopy"
+msgstr "სტერეოსკოპია"
+
+
+msgid "Multi Frame"
+msgstr "მრავალკადრიანი"
 
 
 msgid "Import Settings"
@@ -97263,6 +97263,10 @@ msgid "Italian - Italiano"
 msgstr "იტალიური - Italiano"
 
 
+msgid "Locale code: it_IT. Translation progress: 44%"
+msgstr "ლოკალური კოდი: it_IT. თარგმანის პროგრესი: 44%"
+
+
 msgid "Japanese - 日本語"
 msgstr "იაპონური - 日本語"
 
@@ -97307,6 +97311,10 @@ msgid "Norwegian (Bokmål) - Norsk bokmål"
 msgstr "ნორვეგიული (Bokmål) - Norsk bokmål"
 
 
+msgid "Locale code: nb. Translation progress: 3%"
+msgstr "ლოკალური კოდი: nb. თარგმანის პროგრესი: 3%"
+
+
 msgid "Persian - ﯽﺳﺭﺎﻓ"
 msgstr "სპარსული - ﯽﺳﺭﺎﻓ"
 
@@ -97333,10 +97341,6 @@ msgstr "ლოკალური კოდი: pt_BR. თარგმანი�
 
 msgid "Portuguese (Portugal) - Português europeu"
 msgstr "პორტუგალიური (პორტუგალიური) - Português europeu"
-
-
-msgid "Locale code: pt_PT. Translation progress: 73%"
-msgstr "ლოკალური კოდი: pt_PT. თარგმანის პროგრესი: 73%"
 
 
 msgid "Romanian - Român"
@@ -97407,6 +97411,10 @@ msgid "Swedish - Svenska"
 msgstr "შვედური - Svenska"
 
 
+msgid "Locale code: sv_SE. Translation progress: 21%"
+msgstr "ლოკალური კოდი: sv_SE. თარგმანის პროგრესი: 21%"
+
+
 msgid "Tamil - தமிழ்"
 msgstr "ტამილური - தமிழ்"
 
@@ -97449,6 +97457,10 @@ msgstr "ლოკალური კოდი: ur. თარგმანის �
 
 msgid "Vietnamese - Tiếng Việt"
 msgstr "ვიეტნამური - Tiếng Việt"
+
+
+msgid "Locale code: vi_VN. Translation progress: 94%"
+msgstr "ლოკალური კოდი: vi_VN. თარგმანის პროგრესი: 94%"
 
 
 msgid "Reference Sphere Size"
@@ -98511,6 +98523,10 @@ msgstr "ID თვისებების ჯგუფი"
 
 msgid "Group of ID properties"
 msgstr "ID თვისებათა ჯგუფი"
+
+
+msgid "Unique name used in the code and scripting, can be re-defined in Python sub-classes if needed"
+msgstr "კოდსა და სკრიპტინგში გამოყენებული უნიკალური სახელი, საჭიროების შემთხვევაში შესაძლებელია Python-ის ქვეკლასებში მისი ხელახლა განსაზღვრა"
 
 
 msgid "Action to apply to the rig via constraints"
@@ -132058,10 +132074,6 @@ msgid "color_index is invalid"
 msgstr "color_index უვარგისია"
 
 
-msgid "Compositor node tree has cyclic links!"
-msgstr "კომპოზიტორის კვანძოვან ხეს ციკლური ბმულები აქვს!"
-
-
 msgid "Error: Too many AOVs"
 msgstr "შეცდომა: მეტისმეტად ბევრი AOV"
 
@@ -143605,6 +143617,10 @@ msgid "%s is not supported, pass a Bone, PoseBone, or EditBone"
 msgstr "%s-ს მხარდაჭერა არ აქვს, გადაეცი ძვალი, პოზის ძვალი, ან რედაქტირებადი ძვალი"
 
 
+msgid "Asset metadata from external libraries cannot be edited. Only assets stored in the current file can be edited."
+msgstr "აქტივის მეტამონაცემები გარე აქტივების ბიბლიოთეკებიდან ვერ რედაქტირდება. მხოლოდ მიმდინარე ფაილში შენახული აქტივების რედაქტირებაა შესაძლებელი."
+
+
 msgid "Tag '%s' already present for given asset"
 msgstr "მოცემულ აქტივში ტეგი '%s' უკვე არის"
 
@@ -154063,7 +154079,7 @@ msgstr "ისე დაამასშტაბირე გამოსახ�
 
 
 msgid "The number of samples used to compute the blur. The more samples the smoother the result, at the expense of more compute time. The actual number of samples is two to the power of this input, so it increases exponentially"
-msgstr "გაბუნდოვნების გამოსათვლელად გამოყენებული სინჯების რაოდენობა. რაც მეტი სინჯია, მით უფრო თანაბარია შედეგი და უფრო ხანგრძლივია გამოთვლის პროცესი. სინჯების ნამდვილი რაოდენობაა ორი ხარისხად ეს შენატანი, ასე რომ, იი ექსპონენციურად იზრდება"
+msgstr "გაბუნდოვნების გამოსათვლელად გამოყენებული სინჯების რაოდენობა. რაც მეტი სინჯია, მით უფრო თანაბარია შედეგი და უფრო ხანგრძლივია გამოთვლის პროცესი. სინჯების ნამდვილი რაოდენობაა ორი ხარისხად ეს შენატანი, ასე რომ, იგი ექსპონენციურად იზრდება"
 
 
 msgid "Different styles of aberrations"
