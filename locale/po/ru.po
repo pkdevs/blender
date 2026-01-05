@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'edd300f2e755')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'9b232e97f2e1')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-29 09:32+0000\n"
-"PO-Revision-Date: 2025-12-29 09:32+0000\n"
+"POT-Creation-Date: 2026-01-05 11:52+0000\n"
+"PO-Revision-Date: 2026-01-05 07:41+0000\n"
 "Last-Translator: Alexandr Fatih <radix83@rambler.ru>\n"
 "Language-Team: Russian <https://translate.blender.org/projects/blender-ui/ui/ru/>\n"
 "Language: ru\n"
@@ -8665,7 +8665,7 @@ msgstr "Действие объекта"
 
 
 msgid "Bones only: apply the object's transformation channels of the action to the constrained bone, instead of bone's channels"
-msgstr "Только для костей: применять каналы трансформации объекта действия на ограничиваемую кость, а не на каналы кости"
+msgstr "Только для костей: применять каналы трансформации объекта заданного действия на ограничиваемую кость, а не на каналы кости"
 
 
 msgid "Use Evaluation Time"
@@ -8697,7 +8697,7 @@ msgstr "Использовать оболочки"
 
 
 msgid "Multiply weights by envelope for all bones, instead of acting like Vertex Group based blending. The specified weights are still used, and only the listed bones are considered."
-msgstr "Умножать веса на обёртки всех костей (в противоположность смеси на основе групп вершин). Будут использоваться указанные веса и только выбранные кости."
+msgstr "Умножать веса на оболочки всех костей (в противоположность смешивания на основе групп вершин). Будут использоваться указанные веса и только выбранные кости."
 
 
 msgid "Use Current Location"
@@ -34950,12 +34950,152 @@ msgid "Editor menu containing buttons"
 msgstr "Меню редактора, содержащее кнопки"
 
 
-msgid "Assign Material"
-msgstr "Назначить материал"
+msgid "Show/Hide"
+msgstr "Показать/скрыть"
+
+
+msgid "Names"
+msgstr "Названия"
+
+
+msgid "Bone Roll"
+msgstr "Крен кости"
+
+
+msgid "Math"
+msgstr "Математика"
+
+
+msgid "Utilities"
+msgstr "Утилиты"
+
+
+msgid "Clean Up"
+msgstr "Привести в порядок"
+
+
+msgid "Pivot Point"
+msgstr "Центр трансформации"
+
+
+msgid "Snap"
+msgstr "Привязка"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "Спад пропорционального редактирования"
+
+
+msgid "Mask Edit"
+msgstr "Редактировать маску"
+
+
+msgid "Automasking"
+msgstr "Автомаски́рование"
+
+
+msgid "Read"
+msgstr "Прочитать"
+
+
+msgid "Sample"
+msgstr "Сэмплировать"
+
+
+msgid "Face Sets Edit"
+msgstr "Редактировать наборы граней"
+
+
+msgid "Write"
+msgstr "Записать"
+
+
+msgid "Vertex Group Locks"
+msgstr "Блокировки групп вершин"
+
+
+msgid "Primitives"
+msgstr "Примитивы"
+
+
+msgid "Gizmo"
+msgstr "Гизмо"
+
+
+msgid "Instances"
+msgstr "Экземпляры"
+
+
+msgid "Import"
+msgstr "Импортировать"
+
+
+msgid "Mirror"
+msgstr "Зеркало"
+
+
+msgid "UV Mapping"
+msgstr "UV-Разметка"
+
+
+msgid "Local View"
+msgstr "Локальный вид"
+
+
+msgid "Viewpoint"
+msgstr "Точка обзора"
+
+
+msgid "Navigation"
+msgstr "Навигация"
+
+
+msgid "Deprecated"
+msgstr "Устаревшие"
+
+
+msgid "Align View"
+msgstr "Выровнять вид"
+
+
+msgid "Align View to Active"
+msgstr "Выровнять вид по активному"
+
+
+msgid "View Regions"
+msgstr "Области обзора"
 
 
 msgid "Select More/Less"
 msgstr "Выделить больше/меньше"
+
+
+msgid "List"
+msgstr "Список"
+
+
+msgid "UV"
+msgstr "UV"
+
+
+msgid "Select Similar"
+msgstr "Выделить по схожести"
+
+
+msgid "Select All by Trait"
+msgstr "Выделить всё по признаку"
+
+
+msgid "Select Linked"
+msgstr "Выделить связанные"
+
+
+msgid "Select Loops"
+msgstr "Выделить петли"
+
+
+msgid "Assign Material"
+msgstr "Назначить материал"
 
 
 msgid "Metaball"
@@ -34994,14 +35134,6 @@ msgid "Quick Effects"
 msgstr "Быстрые эффекты"
 
 
-msgid "Show/Hide"
-msgstr "Показать/скрыть"
-
-
-msgid "Clean Up"
-msgstr "Привести в порядок"
-
-
 msgid "Asset"
 msgstr "Ассет"
 
@@ -35022,14 +35154,6 @@ msgid "Hooks"
 msgstr "Крюки"
 
 
-msgid "Layout"
-msgstr "Разметка"
-
-
-msgid "Vertex Group Locks"
-msgstr "Блокировки групп вершин"
-
-
 msgid "Trim/Add"
 msgstr "Обрезать/Добавить"
 
@@ -35042,12 +35166,12 @@ msgid "Face Sets Init"
 msgstr "Инициализация наборов граней"
 
 
+msgid "Layout"
+msgstr "Разметка"
+
+
 msgid "Random Mask"
 msgstr "Случайная маска"
-
-
-msgid "Adjust"
-msgstr "Коррекция"
 
 
 msgid "Clear Transform"
@@ -35062,32 +35186,12 @@ msgid "Propagate"
 msgstr "Распространение"
 
 
-msgid "Keying"
-msgstr "Кеинг"
-
-
 msgid "Bone Collections"
 msgstr "Коллекции костей"
 
 
-msgid "Tracking"
-msgstr "Трекинг"
-
-
-msgid "Names"
-msgstr "Названия"
-
-
-msgid "Utilities"
-msgstr "Утилиты"
-
-
-msgid "Math"
-msgstr "Математика"
-
-
-msgid "Creative"
-msgstr "Художественные"
+msgid "Adjust"
+msgstr "Коррекция"
 
 
 msgid "Toggle Bone Options"
@@ -35098,8 +35202,16 @@ msgid "Enable Bone Options"
 msgstr "Включить параметры костей"
 
 
+msgid "Keying"
+msgstr "Кеинг"
+
+
 msgid "Disable Bone Options"
 msgstr "Отключить параметры костей"
+
+
+msgid "Tracking"
+msgstr "Трекинг"
 
 
 msgid "Mesh Select Mode"
@@ -35110,6 +35222,10 @@ msgid "Face Data"
 msgstr "Данные граней"
 
 
+msgid "Creative"
+msgstr "Художественные"
+
+
 msgid "Select by Face Strength"
 msgstr "Выделить по твёрдости грани"
 
@@ -35118,12 +35234,12 @@ msgid "Set Face Strength"
 msgstr "Установить твёрдость грани"
 
 
-msgid "Render Preview"
-msgstr "Превью рендера"
-
-
 msgid "Merge"
 msgstr "Объединить"
+
+
+msgid "Render Preview"
+msgstr "Превью рендера"
 
 
 msgid "Special Characters"
@@ -35132,122 +35248,6 @@ msgstr "Специальные символы"
 
 msgid "Kerning"
 msgstr "Кернинг"
-
-
-msgid "Bone Roll"
-msgstr "Крен кости"
-
-
-msgid "Read"
-msgstr "Прочитать"
-
-
-msgid "Sample"
-msgstr "Сэмплировать"
-
-
-msgid "Write"
-msgstr "Записать"
-
-
-msgid "Primitives"
-msgstr "Примитивы"
-
-
-msgid "Pivot Point"
-msgstr "Центр трансформации"
-
-
-msgid "Snap"
-msgstr "Привязка"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "Спад пропорционального редактирования"
-
-
-msgid "Mask Edit"
-msgstr "Редактировать маску"
-
-
-msgid "Automasking"
-msgstr "Автомаски́рование"
-
-
-msgid "Face Sets Edit"
-msgstr "Редактировать наборы граней"
-
-
-msgid "Gizmo"
-msgstr "Гизмо"
-
-
-msgid "Instances"
-msgstr "Экземпляры"
-
-
-msgid "Import"
-msgstr "Импортировать"
-
-
-msgid "Deprecated"
-msgstr "Устаревшие"
-
-
-msgid "Mirror"
-msgstr "Зеркало"
-
-
-msgid "UV Mapping"
-msgstr "UV-Разметка"
-
-
-msgid "List"
-msgstr "Список"
-
-
-msgid "Local View"
-msgstr "Локальный вид"
-
-
-msgid "UV"
-msgstr "UV"
-
-
-msgid "Viewpoint"
-msgstr "Точка обзора"
-
-
-msgid "Navigation"
-msgstr "Навигация"
-
-
-msgid "Align View"
-msgstr "Выровнять вид"
-
-
-msgid "Align View to Active"
-msgstr "Выровнять вид по активному"
-
-
-msgid "View Regions"
-msgstr "Области обзора"
-
-
-msgid "Select Similar"
-msgstr "Выделить по схожести"
-
-
-msgid "Select All by Trait"
-msgstr "Выделить всё по признаку"
-
-
-msgid "Select Linked"
-msgstr "Выделить связанные"
-
-
-msgid "Select Loops"
-msgstr "Выделить петли"
 
 
 msgid "Keyframe Insert Pie"
@@ -61471,6 +61471,14 @@ msgid "Convert rotations to euler ZYX"
 msgstr "Преобразовать вращения по Эйлеру ZYX"
 
 
+msgid "Sort Children By Name"
+msgstr "Сортировать потомков по имени"
+
+
+msgid "Sort the children of each bone alphabetically"
+msgstr "Сортировать потомков каждой кости в алфавитном порядке"
+
+
 msgid "Add Leaf Bones"
 msgstr "Добавить листовые кости"
 
@@ -68556,7 +68564,7 @@ msgstr "Установить все нормали вершин по облас�
 
 
 msgid "Set all vertex normals by corner angle"
-msgstr "Установить все нормали вершин по углу угла"
+msgstr "Установить все нормали вершин по градусу угла"
 
 
 msgid "Weight applied per face"
@@ -82426,10 +82434,6 @@ msgid "Project the geometry onto a plane defined by a line"
 msgstr "Спроецировать геометрию на плоскость, определяемую линией"
 
 
-msgid "Sample the vertex color of the active vertex"
-msgstr "Сэмплировать цвет активной вершины"
-
-
 msgctxt "Operator"
 msgid "Sample Detail Size"
 msgstr "Выбрать размер детализации"
@@ -91755,34 +91759,6 @@ msgid "Panel containing UI elements"
 msgstr "Панель содержит элементы интерфейса"
 
 
-msgid "Auto-Masking"
-msgstr "Авто-маски́рование"
-
-
-msgid "Curves Sculpt Add Curve Options"
-msgstr "Скульптинг кривых - Параметры добавления кривых"
-
-
-msgid "Curves Sculpt Parameter Falloff"
-msgstr "Скульптинг кривых - Параметр спада"
-
-
-msgid "Curves Grow/Shrink Scaling"
-msgstr "Масштабирование кривых: увеличить/уменьшить"
-
-
-msgid "Viewport Debug"
-msgstr "Отладка вьюпорта"
-
-
-msgid "VR"
-msgstr "VR"
-
-
-msgid "VR Info"
-msgstr "Информация о VR"
-
-
 msgid "glTF Variants"
 msgstr "Варианты glTF"
 
@@ -91897,6 +91873,34 @@ msgstr "Стереоскопия"
 
 msgid "Multi Frame"
 msgstr "Мультикадр"
+
+
+msgid "Auto-Masking"
+msgstr "Авто-маски́рование"
+
+
+msgid "Curves Sculpt Add Curve Options"
+msgstr "Скульптинг кривых - Параметры добавления кривых"
+
+
+msgid "Curves Sculpt Parameter Falloff"
+msgstr "Скульптинг кривых - Параметр спада"
+
+
+msgid "Curves Grow/Shrink Scaling"
+msgstr "Масштабирование кривых: увеличить/уменьшить"
+
+
+msgid "Viewport Debug"
+msgstr "Отладка вьюпорта"
+
+
+msgid "VR"
+msgstr "VR"
+
+
+msgid "VR Info"
+msgstr "Информация о VR"
 
 
 msgid "Import Settings"
@@ -97255,10 +97259,6 @@ msgid "Indonesian - Bahasa indonesia"
 msgstr "Индонезийский - Bahasa Indonesia"
 
 
-msgid "Locale code: id_ID. Translation progress: 21%"
-msgstr "Код локали: id_ID. Прогресс перевода: 21%"
-
-
 msgid "Italian - Italiano"
 msgstr "Итальянский - Italiano"
 
@@ -97341,6 +97341,10 @@ msgstr "Код локали: pt_BR. Прогресс перевода: 43%"
 
 msgid "Portuguese (Portugal) - Português europeu"
 msgstr "Португальский (Португалия) - Português europeu"
+
+
+msgid "Locale code: pt_PT. Translation progress: 74%"
+msgstr "Код локали: pt_PT. Прогресс перевода: 74%"
 
 
 msgid "Romanian - Român"
@@ -132074,6 +132078,10 @@ msgid "color_index is invalid"
 msgstr "color_index недействителен"
 
 
+msgid "Compositor node tree has cyclic links."
+msgstr "Дерево нод компо́зитора имеет зацикленные связи."
+
+
 msgid "Error: Too many AOVs"
 msgstr "Ошибка: слишком много AOV"
 
@@ -152835,8 +152843,16 @@ msgid "Property must be a none, distance, factor, percentage, angle, or pixel"
 msgstr "Свойство должно быть бестиповым, расстоянием, множителем, процентом, углом или количеством пикселей"
 
 
+msgid "%sInvalid character at position %d"
+msgstr "%sНедопустимый символ в позиции %d"
+
+
 msgid "%sIdentifier too long, maximum length is %d"
 msgstr "%sИдентификатор является слишком длинным, максимальная длина -- %d"
+
+
+msgid "%sMust contain 1 '.' character"
+msgstr "%sДолжен содержать 1 символ \".\""
 
 
 msgid "Cannot read %s '%s': %s"

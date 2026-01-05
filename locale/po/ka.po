@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'edd300f2e755')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'9b232e97f2e1')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-29 09:32+0000\n"
-"PO-Revision-Date: 2025-12-28 10:00+0000\n"
+"POT-Creation-Date: 2026-01-05 11:52+0000\n"
+"PO-Revision-Date: 2026-01-04 15:40+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -5782,11 +5782,11 @@ msgstr "შეავსე შიდა არე"
 
 msgctxt "Brush"
 msgid "Inverted"
-msgstr "შექცეული"
+msgstr "შებრუნებული"
 
 
 msgid "Fill inverted area"
-msgstr "შეავსე შექცეული არე"
+msgstr "შეავსე შებრუნებული არე"
 
 
 msgid "Mode to draw boundary limits"
@@ -8745,7 +8745,7 @@ msgstr "შექმენი ბორკილზე დაფუძნებ�
 
 
 msgid "Inverse Matrix"
-msgstr "შექცეული მატრიცა"
+msgstr "ინვერსიული მატრიცა"
 
 
 msgid "Transformation matrix to apply before"
@@ -8753,11 +8753,11 @@ msgstr "გარდაქმნის წინასწარ გამოს�
 
 
 msgid "Set Inverse Pending"
-msgstr "შექცევის მოლოდინის დაყენება"
+msgstr "ინვერსიის მოლოდინის დაყენება"
 
 
 msgid "Set to true to request recalculation of the inverse matrix"
-msgstr "დააყენე ჭეშმარიტზე, რათა მოითხოვო შექცეული მატრიცის ხელახალი გამოთვლა"
+msgstr "დააყენე ჭეშმარიტზე, რათა მოითხოვო ინვერსიული მატრიცის ხელახალი გამოთვლა"
 
 
 msgid "Location X"
@@ -8889,7 +8889,7 @@ msgstr "ძვლის სიგრძის გასწვრივ მდე
 
 
 msgid "Invert X"
-msgstr "X-ის შექცევა"
+msgstr "X-ის ინვერსია"
 
 
 msgid "Invert the X location"
@@ -8897,7 +8897,7 @@ msgstr "შეაქციე მდებარეობა X-ზე"
 
 
 msgid "Invert Y"
-msgstr "Y-ის შექცევა"
+msgstr "Y-ის ინვერსია"
 
 
 msgid "Invert the Y location"
@@ -8905,7 +8905,7 @@ msgstr "შეაქციე მდებარეობა Y-ზე"
 
 
 msgid "Invert Z"
-msgstr "Z-ის შექცევა"
+msgstr "Z-ის ინვერსია"
 
 
 msgid "Invert the Z location"
@@ -9017,15 +9017,15 @@ msgstr "ეილერი ბრუნვის ZYX თანმიმდევ
 
 
 msgid "Invert the X rotation"
-msgstr "შებრუნე ბრუნვა X-ზე"
+msgstr "შეაბრუნე ბრუნვა X-ზე"
 
 
 msgid "Invert the Y rotation"
-msgstr "შებრუნე ბრუნვა Y-ზე"
+msgstr "შეაბრუნე ბრუნვა Y-ზე"
 
 
 msgid "Invert the Z rotation"
-msgstr "შებრუნე ბრუნვა Z-ზე"
+msgstr "შეაბრუნე ბრუნვა Z-ზე"
 
 
 msgid "Specify how the copied and existing rotations are combined"
@@ -10000,7 +10000,7 @@ msgstr "ღერძი, რომელიც ნორმალს მიე�
 
 
 msgid "Invert Cull"
-msgstr "გამოხშირვის შექცევა"
+msgstr "გამოხშირვის შებრუნება"
 
 
 msgid "When projecting in the opposite direction invert the face cull mode"
@@ -10180,11 +10180,11 @@ msgstr "გამოიყენე ძვლების ორიგინა�
 
 
 msgid "Inverse Scale"
-msgstr "შექცეული მასშტაბი"
+msgstr "შებრუნებული მასშტაბი"
 
 
 msgid "Scale of the X and Z axes is the inverse of the Y-Scale"
-msgstr "X და Z ღერძთა მასშტაბი Y-მასშტაბის შექცეული ვერსიაა"
+msgstr "X და Z ღერძთა მასშტაბი Y-მასშტაბის შებრუნებული ვერსიაა"
 
 
 msgid "Volume Preservation"
@@ -11625,7 +11625,7 @@ msgstr "ანბანურად ალაგებს მონაცემ�
 
 
 msgid "Invert"
-msgstr "შექცევა"
+msgstr "შებრუნება"
 
 
 msgid "Invert filter search"
@@ -17947,7 +17947,7 @@ msgstr "ნიღბის ხილულობის დაყენება"
 
 
 msgid "Invert mask"
-msgstr "ნიღბის შექცევა"
+msgstr "ნიღბის შებრუნება"
 
 
 msgid "Mask layer name"
@@ -17991,7 +17991,7 @@ msgstr "უკუღმა"
 
 
 msgid "Apply offset in reverse animation direction"
-msgstr "გამოიყენე აცდენა ანიმაციის შექცეული მიმართულებით"
+msgstr "გამოიყენე აცდენა ანიმაციის უკუმიმართულებით"
 
 
 msgid "Ping Pong"
@@ -18131,11 +18131,11 @@ msgstr "შრის ლოკალური გარდაქმნის მ
 
 
 msgid "Inverse Parent Matrix"
-msgstr "შექცეული მშობელი მატრიცა"
+msgstr "ინვერსიული მშობელი მატრიცა"
 
 
 msgid "Inverse of layer's parent transformation matrix"
-msgstr "შრის მშობლის გარდაქმნის მატრიცის შექცეული სახე"
+msgstr "შრის მშობლის გარდაქმნის მატრიცის ინვერსიული სახე"
 
 
 msgid "Layer Opacity"
@@ -19185,7 +19185,7 @@ msgstr "იყენებს ფუნჯის მილევას ციკ
 
 
 msgid "Loop and Invert"
-msgstr "ციკლი და შექცევა"
+msgstr "ციკლი და შებრუნება"
 
 
 msgid "Applies the falloff radius in a loop pattern, inverting the displacement direction in each pattern repetition"
@@ -19904,11 +19904,11 @@ msgstr "ზეწოლის მოდულაციის შექცევ�
 
 
 msgid "Invert to Scrape or Fill"
-msgstr "შექცევა მოფხეკად, ან შევსებად"
+msgstr "შებრუნება მოფხეკად, ან შევსებად"
 
 
 msgid "Use Scrape or Fill brush when inverting this brush instead of inverting its displacement direction"
-msgstr "ამ ფუნჯის შექცევისას მისი გადანაცვლების მიმართულების შექცევის ნაცვლად გამოიყენე მოფხეკის, ან შევსების ფუნჯი"
+msgstr "ამ ფუნჯის შებრუნებისას მისი გადანაცვლების მიმართულების შექცევის ნაცვლად გამოიყენე მოფხეკის, ან შევსების ფუნჯი"
 
 
 msgid "Invert Pressure for Wet Mix"
@@ -20035,7 +20035,7 @@ msgstr "სიბრტყის ზემოთ მაქსიმალურ�
 
 
 msgid "Inversion Mode"
-msgstr "შექცევის რეჟიმი"
+msgstr "შებრუნების რეჟიმი"
 
 
 msgid "Invert Displacement"
@@ -20614,7 +20614,7 @@ msgstr "არ იმოქმედო მწვერვალების წ
 
 
 msgid "Inverted Cavity Mask"
-msgstr "ღრმულის შექცეული ნიღაბი"
+msgstr "ღრმულის შებრუნებული ნიღაბი"
 
 
 msgid "Do not affect vertices within crevices, based on the surface curvature"
@@ -22925,7 +22925,7 @@ msgstr "დახარისხების გასაღების ნა�
 
 
 msgid "Reverse order"
-msgstr "თანმიმდევრობის შებრუნება"
+msgstr "უკუთანმიმდევრობა"
 
 
 msgid "Split Dash 1"
@@ -24291,7 +24291,7 @@ msgstr "ზონდის ზეგავლენის მანძილი"
 
 
 msgid "Invert Collection"
-msgstr "კოლექციის შექცევა"
+msgstr "კოლექციის შებრუნება"
 
 
 msgid "Invert visibility collection (Deprecated)"
@@ -26208,11 +26208,11 @@ msgstr ""
 
 
 msgid "Parent Inverse Matrix"
-msgstr "მშობელი შექცეული მატრიცა"
+msgstr "მშობელი ინვერსიული მატრიცა"
 
 
 msgid "Inverse of object's parent matrix at time of parenting"
-msgstr "ობიექტის მშობელი მატრიცის დაქვემდებარების დროინდელი ვერსიის შექცევა"
+msgstr "ობიექტის მშობელი მატრიცის დაქვემდებარების დროინდელი ვერსიის ინვერსია"
 
 
 msgid "Matrix World"
@@ -27185,7 +27185,7 @@ msgstr "RK4"
 
 
 msgid "Invert Grid"
-msgstr "ბადის შექცევა"
+msgstr "ბადის შებრუნება"
 
 
 msgid "Invert what is considered object and what is not"
@@ -29251,7 +29251,7 @@ msgstr "გაამრავლე ინტერპოლაციის მ�
 
 
 msgid "Invert Alpha"
-msgstr "ალფას შექცევა"
+msgstr "ალფას შებრუნება"
 
 
 msgid "Invert all the alpha values in the image"
@@ -29799,7 +29799,7 @@ msgstr "პინგპონგი"
 
 
 msgid "Repeat the frames, reversing the playback direction every other cycle"
-msgstr "გაიმეორე კადრები ყოველ მეორე ციკლში დაკვრის მიმართულების შებრუნებით"
+msgstr "გაიმეორე კადრები ყოველ მეორე ციკლში დაკვრის უკუმიმართულებით"
 
 
 msgid "Name of the velocity field, or the base name if the velocity is split into multiple grids"
@@ -30507,7 +30507,7 @@ msgstr "ანიმაცია"
 
 
 msgid "Stateless solver computing pose starting from current action and non-IK constraints"
-msgstr "ამომხსნელი მდგომარეობის შენახვის გარეშე გამოითვლის პოზას დაწყებული მიმდინარე ქმედებით და, ასევე არა-შექცეული კინემატიკის ბორკილებს"
+msgstr "ამომხსნელი მდგომარეობის შენახვის გარეშე გამოითვლის პოზას დაწყებული მიმდინარე ქმედებით და, ასევე არაშექცეული კინემატიკის ბორკილებს"
 
 
 msgid "Simulation"
@@ -30515,7 +30515,7 @@ msgstr "სიმულაცია"
 
 
 msgid "State-full solver running in real-time context and ignoring actions and non-IK constraints"
-msgstr "ამომხსნელი მდგომარეობის შენახვით მუშაობს ნამდვილი დროის კონტექსტში და აიგნორირებს არა შექცეული კინემატიკის ბორკილებს"
+msgstr "ამომხსნელი მდგომარეობის შენახვით მუშაობს ნამდვილი დროის კონტექსტში და აიგნორირებს არაშექცეული კინემატიკის ბორკილებს"
 
 
 msgid "Precision of convergence in case of reiteration"
@@ -34950,12 +34950,152 @@ msgid "Editor menu containing buttons"
 msgstr "რედაქტორის მენიუ, რომელიც ღილაკებს შეიცავს"
 
 
-msgid "Assign Material"
-msgstr "მასალის მიკუთვნება"
+msgid "Show/Hide"
+msgstr "ჩვენება/დამალვა"
+
+
+msgid "Names"
+msgstr "სახელები"
+
+
+msgid "Bone Roll"
+msgstr "ძვლის ტრიალი"
+
+
+msgid "Math"
+msgstr "მეშის პრიმიტივები"
+
+
+msgid "Utilities"
+msgstr "უტილიტები"
+
+
+msgid "Clean Up"
+msgstr "გასუფთავება"
+
+
+msgid "Pivot Point"
+msgstr "ბრუნვის ცენტრი"
+
+
+msgid "Snap"
+msgstr "მიკვრა"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "პროპორციული რედაქტირების მილევა"
+
+
+msgid "Mask Edit"
+msgstr "ნიღბის რედაქტირება"
+
+
+msgid "Automasking"
+msgstr "ავტომატური შენიღბვა"
+
+
+msgid "Read"
+msgstr "წაკითხვა"
+
+
+msgid "Sample"
+msgstr "ნიმუშის აღება"
+
+
+msgid "Face Sets Edit"
+msgstr "წახნაგების ნაკრებთა რედაქტირება"
+
+
+msgid "Write"
+msgstr "წერა"
+
+
+msgid "Vertex Group Locks"
+msgstr "წვეროთა ჯგუფების ბლოკები"
+
+
+msgid "Primitives"
+msgstr "პრიმიტივები"
+
+
+msgid "Gizmo"
+msgstr "გიზმო"
+
+
+msgid "Instances"
+msgstr "ინსტანციები"
+
+
+msgid "Import"
+msgstr "იმპორტი"
+
+
+msgid "Mirror"
+msgstr "გასარკისებურება"
+
+
+msgid "UV Mapping"
+msgstr "UV დატანა"
+
+
+msgid "Local View"
+msgstr "ლოკალური ხედი"
+
+
+msgid "Viewpoint"
+msgstr "თვალთახედვა"
+
+
+msgid "Navigation"
+msgstr "ნავიგაცია"
+
+
+msgid "Deprecated"
+msgstr "არარეკომენდირებული"
+
+
+msgid "Align View"
+msgstr "ხედის მისადაგება"
+
+
+msgid "Align View to Active"
+msgstr "ხედის მისადაგება აქტიურზე"
+
+
+msgid "View Regions"
+msgstr "ხედის მონაკვეთები"
 
 
 msgid "Select More/Less"
 msgstr "მეტის/ნაკლების მონიშვნა"
+
+
+msgid "List"
+msgstr "სია"
+
+
+msgid "UV"
+msgstr "UV"
+
+
+msgid "Select Similar"
+msgstr "მსგავსის მონიშვნა"
+
+
+msgid "Select All by Trait"
+msgstr "ყველას მონიშვნა თვისებით"
+
+
+msgid "Select Linked"
+msgstr "დაკავშირებულის მონიშვნა"
+
+
+msgid "Select Loops"
+msgstr "მარყუჟების მონიშვნა"
+
+
+msgid "Assign Material"
+msgstr "მასალის მიკუთვნება"
 
 
 msgid "Metaball"
@@ -34994,14 +35134,6 @@ msgid "Quick Effects"
 msgstr "სწრაფი ეფექტები"
 
 
-msgid "Show/Hide"
-msgstr "ჩვენება/დამალვა"
-
-
-msgid "Clean Up"
-msgstr "გასუფთავება"
-
-
 msgid "Asset"
 msgstr "აქტივი"
 
@@ -35022,14 +35154,6 @@ msgid "Hooks"
 msgstr "კაუჭები"
 
 
-msgid "Layout"
-msgstr "განლაგება"
-
-
-msgid "Vertex Group Locks"
-msgstr "წვეროთა ჯგუფების ბლოკები"
-
-
 msgid "Trim/Add"
 msgstr "მოკრეჭა/დამატება"
 
@@ -35042,12 +35166,12 @@ msgid "Face Sets Init"
 msgstr "წახნაგთა ნაკრების ინიციალიზაცია"
 
 
+msgid "Layout"
+msgstr "განლაგება"
+
+
 msgid "Random Mask"
 msgstr "შემთხვევითი ნიღაბი"
-
-
-msgid "Adjust"
-msgstr "რეგულირება"
 
 
 msgid "Clear Transform"
@@ -35062,32 +35186,12 @@ msgid "Propagate"
 msgstr "გავრცელება"
 
 
-msgid "Keying"
-msgstr "ამოჭრა"
-
-
 msgid "Bone Collections"
 msgstr "ძვლების კოლექციები"
 
 
-msgid "Tracking"
-msgstr "თვალის დევნება"
-
-
-msgid "Names"
-msgstr "სახელები"
-
-
-msgid "Utilities"
-msgstr "უტილიტები"
-
-
-msgid "Math"
-msgstr "მეშის პრიმიტივები"
-
-
-msgid "Creative"
-msgstr "კრეატიული"
+msgid "Adjust"
+msgstr "რეგულირება"
 
 
 msgid "Toggle Bone Options"
@@ -35098,8 +35202,16 @@ msgid "Enable Bone Options"
 msgstr "ძვლის ვარიანტების ჩართვა"
 
 
+msgid "Keying"
+msgstr "ამოჭრა"
+
+
 msgid "Disable Bone Options"
 msgstr "ძვლის ვარიანტების გათიშვა"
+
+
+msgid "Tracking"
+msgstr "თვალის დევნება"
 
 
 msgid "Mesh Select Mode"
@@ -35110,6 +35222,10 @@ msgid "Face Data"
 msgstr "წახნაგების მონაცემები"
 
 
+msgid "Creative"
+msgstr "კრეატიული"
+
+
 msgid "Select by Face Strength"
 msgstr "მონიშნე წახნაგების სიძლიერის მიხედვით"
 
@@ -35118,12 +35234,12 @@ msgid "Set Face Strength"
 msgstr "წახნაგის სიძლიერის დაყენება"
 
 
-msgid "Render Preview"
-msgstr "რენდერის გადახედვა"
-
-
 msgid "Merge"
 msgstr "შერწყმა"
+
+
+msgid "Render Preview"
+msgstr "რენდერის გადახედვა"
 
 
 msgid "Special Characters"
@@ -35132,122 +35248,6 @@ msgstr "სპეციალური ასონიშნები"
 
 msgid "Kerning"
 msgstr "ასოთშორისი ინტერვალი"
-
-
-msgid "Bone Roll"
-msgstr "ძვლის ტრიალი"
-
-
-msgid "Read"
-msgstr "წაკითხვა"
-
-
-msgid "Sample"
-msgstr "ნიმუშის აღება"
-
-
-msgid "Write"
-msgstr "წერა"
-
-
-msgid "Primitives"
-msgstr "პრიმიტივები"
-
-
-msgid "Pivot Point"
-msgstr "ბრუნვის ცენტრი"
-
-
-msgid "Snap"
-msgstr "მიკვრა"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "პროპორციული რედაქტირების მილევა"
-
-
-msgid "Mask Edit"
-msgstr "ნიღბის რედაქტირება"
-
-
-msgid "Automasking"
-msgstr "ავტომატური შენიღბვა"
-
-
-msgid "Face Sets Edit"
-msgstr "წახნაგების ნაკრებთა რედაქტირება"
-
-
-msgid "Gizmo"
-msgstr "გიზმო"
-
-
-msgid "Instances"
-msgstr "ინსტანციები"
-
-
-msgid "Import"
-msgstr "იმპორტი"
-
-
-msgid "Deprecated"
-msgstr "არარეკომენდირებული"
-
-
-msgid "Mirror"
-msgstr "გასარკისებურება"
-
-
-msgid "UV Mapping"
-msgstr "UV დატანა"
-
-
-msgid "List"
-msgstr "სია"
-
-
-msgid "Local View"
-msgstr "ლოკალური ხედი"
-
-
-msgid "UV"
-msgstr "UV"
-
-
-msgid "Viewpoint"
-msgstr "თვალთახედვა"
-
-
-msgid "Navigation"
-msgstr "ნავიგაცია"
-
-
-msgid "Align View"
-msgstr "ხედის მისადაგება"
-
-
-msgid "Align View to Active"
-msgstr "ხედის მისადაგება აქტიურზე"
-
-
-msgid "View Regions"
-msgstr "ხედის მონაკვეთები"
-
-
-msgid "Select Similar"
-msgstr "მსგავსის მონიშვნა"
-
-
-msgid "Select All by Trait"
-msgstr "ყველას მონიშვნა თვისებით"
-
-
-msgid "Select Linked"
-msgstr "დაკავშირებულის მონიშვნა"
-
-
-msgid "Select Loops"
-msgstr "მარყუჟების მონიშვნა"
 
 
 msgid "Keyframe Insert Pie"
@@ -37029,7 +37029,7 @@ msgstr "არმატურის დეფორმაციის მოდ�
 
 
 msgid "Invert vertex group influence"
-msgstr "წვეროთა ჯგუფის ზეგავლენის შექცევა"
+msgstr "წვეროთა ჯგუფის ზეგავლენის შებრუნება"
 
 
 msgid "Armature object to deform with"
@@ -37661,7 +37661,7 @@ msgstr "აგებისას გააშემთხვევითე წ�
 
 
 msgid "Reversed"
-msgstr "შებრუნებული"
+msgstr "შექცეული"
 
 
 msgid "Deconstruct the mesh instead of building it"
@@ -38664,7 +38664,7 @@ msgstr "მიმართულება შეუცვალე დენა�
 
 
 msgid "Invert Vertex Group"
-msgstr "წვეროთა ჯგუფის შექცევა"
+msgstr "წვეროთა ჯგუფის შებრუნება"
 
 
 msgid "Invert vertex group weights"
@@ -39174,7 +39174,7 @@ msgstr "წირი"
 
 
 msgid "Reverse the transformation between this object and its target"
-msgstr "ამ ობიექტსა და მის სამიზნეს შორის ტრანსფორმაციის შებრუნება"
+msgstr "ამ ობიექტსა და მის სამიზნეს შორის ტრანსფორმაციის შექცევა"
 
 
 msgid "Parent Object for hook, also recalculates and clears offset"
@@ -40457,7 +40457,7 @@ msgstr "დატოვე კადრი და არ შეცვალო �
 
 
 msgid "Loop back and forth starting in reverse"
-msgstr "ციკლირება წინ და უკან, დაწყებული შებრუნებული მიმართულებით"
+msgstr "ციკლირება წინ და უკან, დაწყებული უკუმიმართულებით"
 
 
 msgid "Chain"
@@ -43702,7 +43702,7 @@ msgstr "დაალაგე არხები ბოლო კადრის
 
 
 msgid "Invert Dopesheet Sort"
-msgstr "საექსპოზიციო ფურცლის დალაგების შექცევა"
+msgstr "საექსპოზიციო ფურცლის დალაგების შებრუნება"
 
 
 msgid "Invert sort order of dopesheet channels"
@@ -45554,7 +45554,7 @@ msgstr "განავრცე გამოსახულების სა�
 
 
 msgid "Invert Color"
-msgstr "ფერის შექცევა"
+msgstr "ფერის შებრუნება"
 
 
 msgid "Invert colors, producing a negative"
@@ -46542,7 +46542,7 @@ msgstr "ბრუნვის შექცევა"
 
 
 msgid "Compute the inverse of the given rotation"
-msgstr "გამოთვალე ბრუნვის შექცევა"
+msgstr "გამოთვალე მოცემული ბრუნვის შექცევა"
 
 
 msgid "Match String"
@@ -47474,7 +47474,7 @@ msgstr "წახნაგების ამოტრიალება"
 
 
 msgid "Reverse the order of the vertices and edges of selected faces, flipping their normal direction"
-msgstr "შეაბრუნე მონიშნულ წახნაგთა წვეროებისა და წიბოების რაოდენობა, მათი ნორმალების მიმართულების შეტრიალებით"
+msgstr "შეაქციე მონიშნულ წახნაგთა წვეროებისა და წიბოების თანმიმდევრობა, მათი ნორმალების მიმართულების შეტრიალებით"
 
 
 msgid "For Each Geometry Element Input"
@@ -48491,7 +48491,7 @@ msgstr "ნუ ჩაშლი წირებს თითო წერტი�
 
 
 msgid "Reverse Curve"
-msgstr "წირის შებრუნება"
+msgstr "წირის შექცევა"
 
 
 msgid "Change the direction of curves by swapping their start and end data"
@@ -49195,7 +49195,7 @@ msgstr "შეინახე მონიშვნის ჭეშმარი�
 
 
 msgid "Store floating point selection values. For mesh geometry, stored inverted as the sculpt mode mask"
-msgstr "შეინახე მონიშვნის წილადნიშნა მნიშვნელობები. მეშის გეომეტრიისთვის შექცეული შეინახება, როგორც ძერწვის რეჟიმის ნიღაბი"
+msgstr "შეინახე მონიშვნის წილადნიშნა მნიშვნელობები. მეშის გეომეტრიისთვის შებრუნებული შეინახება, როგორც ძერწვის რეჟიმის ნიღაბი"
 
 
 msgid "Transform Geometry"
@@ -49976,7 +49976,7 @@ msgstr ""
 
 
 msgid "Invert a color, producing a negative"
-msgstr "ფერის შექცევის გზით შექმენი ნეგატივი"
+msgstr "ფერის შებრუნების გზით შექმენი ნეგატივი"
 
 
 msgid "Layer Weight"
@@ -50068,7 +50068,7 @@ msgstr "გარდაქმენი წერტილი"
 
 
 msgid "Transform a texture by inverse mapping the texture coordinate"
-msgstr "გარდაქმენი ტექსტურა ტექსტურის კოორდინატის შექცეული განაწილებით"
+msgstr "გარდაქმენი ტექსტურა ტექსტურის კოორდინატის შებრუნებული განაწილებით"
 
 
 msgid "Transform a direction vector (Location is ignored)"
@@ -59952,7 +59952,7 @@ msgstr "ციკლური სვლა ისტორიაში"
 
 
 msgid "Reverse cycle history"
-msgstr "შებრუნებული ციკლური სვლა ისტორიაში"
+msgstr "ციკლური უკუსვლა ისტორიაში"
 
 
 msgctxt "Operator"
@@ -60112,20 +60112,20 @@ msgstr "შექმენი შეტყობინება ოპერა�
 
 msgctxt "Operator"
 msgid "Clear Inverse"
-msgstr "შექცეულის გასუფთავება"
+msgstr "შებრუნებულის გასუფთავება"
 
 
 msgid "Clear inverse correction for Child Of constraint"
-msgstr "გაასუფთავე შექცეული კორექცია ბორკილის შვილობილისთვის"
+msgstr "გაასუფთავე შებრუნებული კორექცია ბორკილის შვილობილისთვის"
 
 
 msgctxt "Operator"
 msgid "Set Inverse"
-msgstr "შექცეულის დაყენება"
+msgstr "შებრუნებულის დაყენება"
 
 
 msgid "Set inverse correction for Child Of constraint"
-msgstr "დააყენე შექცეული კორექცია ბორკილის შვილობილისთვის"
+msgstr "დააყენე შებრუნებული კორექცია ბორკილის შვილობილისთვის"
 
 
 msgctxt "Operator"
@@ -60213,11 +60213,11 @@ msgstr "აწიე ბორკილი ბორკილთა სტეკ
 
 
 msgid "Clear inverse correction for Object Solver constraint"
-msgstr "გაასუფთავე შექცეული კორექცია ობიექტის ამომხსნელი ბორკილისთვის"
+msgstr "გაასუფთავე შებრუნებული კორექცია ობიექტის ამომხსნელი ბორკილისთვის"
 
 
 msgid "Set inverse correction for Object Solver constraint"
-msgstr "დააყენე შექცეული კორექცია ობიექტის ამომხსნელი ბორკილისთვის"
+msgstr "დააყენე შებრუნებული კორექცია ობიექტის ამომხსნელი ბორკილისთვის"
 
 
 msgctxt "Operator"
@@ -61469,6 +61469,14 @@ msgstr "ეილერი (ZYX)"
 
 msgid "Convert rotations to euler ZYX"
 msgstr "დააკონვერტირე ბრუნვები ეილერ ZYX-დ"
+
+
+msgid "Sort Children By Name"
+msgstr "შვილობილების დალაგება სახელის მიხედვით"
+
+
+msgid "Sort the children of each bone alphabetically"
+msgstr "ანბანურად დაალაგე თითოეული ძვლის შვილობილები"
 
 
 msgid "Add Leaf Bones"
@@ -64137,7 +64145,7 @@ msgstr "დამასტაბილირებელი მონასმ�
 
 
 msgid "Helper to draw smooth and clean lines. Press Shift for an invert effect (even if this option is not active)"
-msgstr "გლუვი და სუფთა ხაზების დასახატი დამხმარე ხელსაწყო. შექცევის ეფექტისთვის დააჭირე Shift-ს (გინდაც ეს ვარიანტი აქტიური არ იყოს)"
+msgstr "გლუვი და სუფთა ხაზების დასახატი დამხმარე ხელსაწყო. შებრუნების ეფექტისთვის დააჭირე Shift-ს (გინდაც ეს ვარიანტი აქტიური არ იყოს)"
 
 
 msgid "Wait for first click instead of painting immediately"
@@ -65101,7 +65109,7 @@ msgstr "გამოიყენე ფუნჯი ჩვეულებრი�
 
 msgctxt "Operator"
 msgid "Invert"
-msgstr "შექცევა"
+msgstr "შებრუნება"
 
 
 msgid "Invert action of brush for duration of stroke"
@@ -66667,7 +66675,7 @@ msgstr "დაარეგულირე წვეროთა ფერის 
 
 msgctxt "Operator"
 msgid "Vertex Paint Invert"
-msgstr "წვეროთა მოხატულობის შექცევა"
+msgstr "წვეროთა მოხატულობის შებრუნება"
 
 
 msgid "Invert RGB values"
@@ -66755,7 +66763,7 @@ msgstr "დახატე წონა მონასმის წერტი
 
 msgctxt "Operator"
 msgid "Invert Weight"
-msgstr "წონის შექცევა"
+msgstr "წონის შებრუნება"
 
 
 msgid "Invert the weight of active vertex group"
@@ -67168,7 +67176,7 @@ msgstr "მასშტაბი Blender-ის ერთეულში პი�
 
 msgctxt "Operator"
 msgid "Invert Channels"
-msgstr "არხების შექცევა"
+msgstr "არხების შებრუნება"
 
 
 msgid "Invert image's channels"
@@ -68002,7 +68010,7 @@ msgstr "შეტრიალება (გაუმრუდებლად)"
 
 
 msgid "Mirror all control points without inverting the lattice deform"
-msgstr "გაასარკისებურე ყველა სამართავი წერტილი გისოსების დეფორმაციის შეუქცევლად"
+msgstr "გაასარკისებურე ყველა სამართავი წერტილი გისოსების დეფორმაციის შეუბრუნებლად"
 
 
 msgid "Coordinates along this axis get flipped"
@@ -68795,7 +68803,7 @@ msgstr "შერწყი წახნაგების შექმნის 
 
 msgctxt "Operator"
 msgid "Reverse Colors"
-msgstr "ფერების შებრუნება"
+msgstr "ფერების შექცევა"
 
 
 msgid "Flip direction of face corner color attribute inside faces"
@@ -71012,7 +71020,7 @@ msgstr "რომელ ელემენტებზე მოხდეს ზ
 
 
 msgid "Reverse the sorting effect"
-msgstr "შეაბრუნე დალაგების ეფექტი"
+msgstr "შეაქციე დალაგების ეფექტი"
 
 
 msgid "Seed for random-based operations"
@@ -71248,7 +71256,7 @@ msgstr "მოაშორე UV რუკა"
 
 msgctxt "Operator"
 msgid "Reverse UVs"
-msgstr "UVის შებრუნება"
+msgstr "UV-ის შექცევა"
 
 
 msgid "Flip direction of UV coordinates inside faces"
@@ -73936,7 +73944,7 @@ msgstr "აირიდე ანაწყობების ცვლილე�
 
 
 msgid "Reverse Transfer"
-msgstr "გარდაქმნის შებრუნება"
+msgstr "შექცეული გადატანა"
 
 
 msgid "Transfer from selected objects to active one"
@@ -75402,7 +75410,7 @@ msgstr "გამოიყენე ობიექტის მშობლი�
 
 msgctxt "Operator"
 msgid "Make Parent without Inverse"
-msgstr "მშობლის შეუქცევლად გადაქცევა"
+msgstr "მშობლად გადაქცევა შებრუნების გარეშე"
 
 
 msgid "Set the object's parenting without setting the inverse parent correction"
@@ -82193,7 +82201,7 @@ msgstr "ქმნის ნიღაბს ზედაპირის სიმ
 
 
 msgid "Cavity (Inverted)"
-msgstr "ღრმული (შექცეული)"
+msgstr "ღრმული (შებრუნებული)"
 
 
 msgid "Custom Curve"
@@ -82424,10 +82432,6 @@ msgstr "ხაზის პროეცირების ჟესტი"
 
 msgid "Project the geometry onto a plane defined by a line"
 msgstr "დააპროეცირე გეომეტრია ხაზით განსაზღვრულ სიბრტყეზე"
-
-
-msgid "Sample the vertex color of the active vertex"
-msgstr "აიღე აქტიური წვეროს ფერის ნიმუში"
 
 
 msgctxt "Operator"
@@ -85706,11 +85710,11 @@ msgstr "შენახული ანაწყობების ფაილ�
 
 
 msgid "Invert Selection"
-msgstr "მონიშვნის შექცევა"
+msgstr "მონიშვნის შებრუნება"
 
 
 msgid "Inverse selection (overrides 'Select All' when True)"
-msgstr "შექცეული მონიშვნა (როცა ჭეშმარიტია, უკუაგდებს 'მონიშნე ყველა'-ს)"
+msgstr "შებრუნებული მონიშვნა (როცა ჭეშმარიტია, უკუაგდებს 'მონიშნე ყველა'-ს)"
 
 
 msgid "Select All"
@@ -89709,7 +89713,7 @@ msgstr "გააუქმე და აღადგინე"
 
 msgctxt "Operator"
 msgid "Revert"
-msgstr "დაბრუნება საწყის მდგომარეობაში"
+msgstr "საწყის მდგომარეობაში დაბრუნება"
 
 
 msgid "Reload the saved file"
@@ -91755,34 +91759,6 @@ msgid "Panel containing UI elements"
 msgstr "პანელი, რომელიც UI-ს ელემენტებს შეიცავს"
 
 
-msgid "Auto-Masking"
-msgstr "ავტომატური შენიღბვა"
-
-
-msgid "Curves Sculpt Add Curve Options"
-msgstr "წირების ძერწვაში წირის დამატების ვარიანტები"
-
-
-msgid "Curves Sculpt Parameter Falloff"
-msgstr "წირების ძერწვის პარამეტრის მილევა"
-
-
-msgid "Curves Grow/Shrink Scaling"
-msgstr "წირების ზრდა/კუმშვა მასშტაბირებით"
-
-
-msgid "Viewport Debug"
-msgstr "სარკმლის ხარვეზების აღმოფხვრა"
-
-
-msgid "VR"
-msgstr "ვ.რ."
-
-
-msgid "VR Info"
-msgstr "ვ.რ.-ის ინფო"
-
-
 msgid "glTF Variants"
 msgstr "glTF ნაირსახეობები"
 
@@ -91897,6 +91873,34 @@ msgstr "სტერეოსკოპია"
 
 msgid "Multi Frame"
 msgstr "მრავალკადრიანი"
+
+
+msgid "Auto-Masking"
+msgstr "ავტომატური შენიღბვა"
+
+
+msgid "Curves Sculpt Add Curve Options"
+msgstr "წირების ძერწვაში წირის დამატების ვარიანტები"
+
+
+msgid "Curves Sculpt Parameter Falloff"
+msgstr "წირების ძერწვის პარამეტრის მილევა"
+
+
+msgid "Curves Grow/Shrink Scaling"
+msgstr "წირების ზრდა/კუმშვა მასშტაბირებით"
+
+
+msgid "Viewport Debug"
+msgstr "სარკმლის ხარვეზების აღმოფხვრა"
+
+
+msgid "VR"
+msgstr "ვ.რ."
+
+
+msgid "VR Info"
+msgstr "ვ.რ.-ის ინფო"
 
 
 msgid "Import Settings"
@@ -92479,7 +92483,7 @@ msgstr "მასშტაბირება წახნაგის ზომ�
 
 
 msgid "Parent Inverse Transform"
-msgstr "მშობლის შექცეული გარდაქმნა"
+msgstr "მშობლის შებრუნებული გარდაქმნა"
 
 
 msgid "Shadow Linking"
@@ -97255,10 +97259,6 @@ msgid "Indonesian - Bahasa indonesia"
 msgstr "ინდონეზიური - Bahasa indonesia"
 
 
-msgid "Locale code: id_ID. Translation progress: 21%"
-msgstr "ლოკალური კოდი: id_ID. თარგმანის პროგრესი: 21%"
-
-
 msgid "Italian - Italiano"
 msgstr "იტალიური - Italiano"
 
@@ -97341,6 +97341,10 @@ msgstr "ლოკალური კოდი: pt_BR. თარგმანი�
 
 msgid "Portuguese (Portugal) - Português europeu"
 msgstr "პორტუგალიური (პორტუგალიური) - Português europeu"
+
+
+msgid "Locale code: pt_PT. Translation progress: 74%"
+msgstr "ლოკალური კოდი: pt_PT. თარგმანის პროგრესი: 74%"
 
 
 msgid "Romanian - Român"
@@ -100883,7 +100887,7 @@ msgstr "წვეტის პირდაპირი მართვა"
 
 
 msgid "The last bone of the chain is directly controlled, like the hand in an IK arm, and the middle stretches to reach it"
-msgstr "ჯაჭვის ბოლო ძვალი პირდაპირ იმართება, როგორც შექცეული კინემატიკის ხელის მტევანი, ხოლოდ შუალა იწელება, რომ მას მისწვდეს"
+msgstr "ჯაჭვის ბოლო ძვალი პირდაპირ იმართება, როგორც შექცეული კინემატიკის ხელის მტევანი, მხოლოდ შუალა იწელება, რომ მას მისწვდეს"
 
 
 msgid "Manual Squash & Stretch"
@@ -115132,11 +115136,11 @@ msgstr "იარე მიზიდულობის გავლენის 
 
 
 msgid "Reverse Mouse"
-msgstr "თაგვის შებრუნება"
+msgstr "თაგვის შექცევა"
 
 
 msgid "Reverse the vertical movement of the mouse"
-msgstr "შეაბრუნე თაგვის შვეული მოძრაობა"
+msgstr "შეაქციე თაგვის შვეული მოძრაობა"
 
 
 msgid "View Height"
@@ -115725,7 +115729,7 @@ msgstr "ვ.რ. ნავიგაციის ანაწყობები"
 
 
 msgid "Reverses the direction of rotation input"
-msgstr "შეყვანილი ბრუნვის მიმართულების პირიქით შებრუნება"
+msgstr "შეყვანილი ბრუნვის მიმართულების შექცევა"
 
 
 msgid "Snap Turn"
@@ -117379,11 +117383,11 @@ msgstr "დააბრუნე თავდაპირველი ნორ�
 
 msgctxt "WindowManager"
 msgid "Invert"
-msgstr "შექცევა"
+msgstr "შებრუნება"
 
 
 msgid "Toggle inversion of affected normals"
-msgstr "გადართე გავლენის ქვეშ მოქცეული ნორმალების შექცევა"
+msgstr "გადართე გავლენის ქვეშ მოქცეული ნორმალების შებრუნება"
 
 
 msgctxt "WindowManager"
@@ -118729,12 +118733,12 @@ msgstr "დააყენე მიკვრის ფუძე (გამო�
 
 msgctxt "WindowManager"
 msgid "Snap Invert"
-msgstr "მიკვრის შექცევა"
+msgstr "მიკვრის შებრუნება"
 
 
 msgctxt "WindowManager"
 msgid "Snap Invert (Off)"
-msgstr "მიკვრის შექცევა (გამორთული)"
+msgstr "მიკვრის შებრუნება (გამორთული)"
 
 
 msgctxt "WindowManager"
@@ -121457,7 +121461,7 @@ msgstr "PO-ს იმპორტი..."
 
 msgctxt "Operator"
 msgid "Invert Selection"
-msgstr "მონიშვნის შექცევა"
+msgstr "მონიშვნის შებრუნება"
 
 
 msgid "Positional"
@@ -123329,7 +123333,7 @@ msgstr "ისრის ზომა"
 
 msgctxt "Operator"
 msgid "Lock Invert All"
-msgstr "ყველა ბლოკის შექცევა"
+msgstr "ყველა ბლოკის შებრუნება"
 
 
 msgctxt "Operator"
@@ -123616,7 +123620,7 @@ msgstr "კადრის დაბლოკვა"
 
 
 msgid "Inverse Color"
-msgstr "შექცეული ფერი"
+msgstr "შებრუნებული ფერი"
 
 
 msgid "Unlocked"
@@ -123756,7 +123760,7 @@ msgstr "გამოსახულების მოკვეცა"
 
 msgctxt "Operator"
 msgid "Clear Parent Inverse Transform"
-msgstr "მშობლის შექცეული გარდაქმნის გასუფთავება"
+msgstr "მშობლის შებრუნებული გარდაქმნის გასუფთავება"
 
 
 msgid "Tracking Axis"
@@ -123898,7 +123902,7 @@ msgstr "წახნაგების ნაკრებთა ზღვარ�
 
 
 msgid "Cavity (inverted)"
-msgstr "ღრმული (შექცეული)"
+msgstr "ღრმული (შებრუნებული)"
 
 
 msgid "Sculpt Curves"
@@ -125214,7 +125218,7 @@ msgstr "კედლის დაყენება"
 
 msgctxt "Operator"
 msgid "Inverse"
-msgstr "შექცეული"
+msgstr "შებრუნებული"
 
 
 msgctxt "Operator"
@@ -125821,7 +125825,7 @@ msgstr "ყველა გამოსახულების შენახ�
 
 msgctxt "Operator"
 msgid "Invert Image Colors"
-msgstr "გამოსახულების ფერების შექცევა"
+msgstr "გამოსახულების ფერების შებრუნება"
 
 
 msgctxt "Operator"
@@ -125918,22 +125922,22 @@ msgstr "ბრუნვა 180°-ით"
 
 msgctxt "Operator"
 msgid "Invert Red Channel"
-msgstr "წითელი არხის შექცევა"
+msgstr "წითელი არხის შებრუნება"
 
 
 msgctxt "Operator"
 msgid "Invert Green Channel"
-msgstr "მწვანე არხის შექცევა"
+msgstr "მწვანე არხის შებრუნება"
 
 
 msgctxt "Operator"
 msgid "Invert Blue Channel"
-msgstr "ლურჯი არხის შექცევა"
+msgstr "ლურჯი არხის შებრუნება"
 
 
 msgctxt "Operator"
 msgid "Invert Alpha Channel"
-msgstr "ალფა არხის შექცევა"
+msgstr "ალფა არხის შებრუნება"
 
 
 msgctxt "Operator"
@@ -125993,7 +125997,7 @@ msgstr "ჩამაგრების მოხსნა"
 
 msgctxt "Operator"
 msgid "Invert Pins"
-msgstr "სამაგრების შექცევა"
+msgstr "სამაგრების შებრუნება"
 
 
 msgctxt "Operator"
@@ -128423,7 +128427,7 @@ msgstr "ვიზუალური გარდაქმნა"
 
 
 msgid "Parent Inverse"
-msgstr "შექცეული მშობელი"
+msgstr "შებრუნებული მშობელი"
 
 
 msgctxt "Operator"
@@ -128498,7 +128502,7 @@ msgstr "მოუნიშნავის განბლოკვა"
 
 msgctxt "Operator"
 msgid "Invert Locks"
-msgstr "ბლოკების შექცევა"
+msgstr "ბლოკების შებრუნება"
 
 
 msgctxt "Operator"
@@ -128542,7 +128546,7 @@ msgstr "წახნაგების აქტიური ნაკრებ�
 
 msgctxt "Operator"
 msgid "Invert Visible"
-msgstr "ხილულის შექცევა"
+msgstr "ხილულის შებრუნება"
 
 
 msgctxt "Operator"
@@ -128636,7 +128640,7 @@ msgstr "ნიღბის გასუფთავება"
 
 msgctxt "Operator"
 msgid "Invert Mask"
-msgstr "ნიღბის შექცევა"
+msgstr "ნიღბის შებრუნება"
 
 
 msgctxt "Operator"
@@ -129366,7 +129370,7 @@ msgstr "გარეგნული გეომეტრია მეშად"
 
 msgctxt "Operator"
 msgid "Make Parent without Inverse (Keep Transform)"
-msgstr "მშობლის შექმნა შექცევის გარეშე (შეინარჩუნე გარდაქმნა)"
+msgstr "მშობლის შექმნა შებრუნების გარეშე (შეინარჩუნე გარდაქმნა)"
 
 
 msgctxt "Operator"
@@ -132074,6 +132078,10 @@ msgid "color_index is invalid"
 msgstr "color_index უვარგისია"
 
 
+msgid "Compositor node tree has cyclic links."
+msgstr "კომპოზიტორის კვანძოვან ხეს ციკლური ბმულები აქვს."
+
+
 msgid "Error: Too many AOVs"
 msgstr "შეცდომა: მეტისმეტად ბევრი AOV"
 
@@ -134549,7 +134557,7 @@ msgstr "ხელახლა გამოიყენე და განაა
 
 
 msgid "Reverse Path"
-msgstr "ტრაექტორიის შებრუნება"
+msgstr "ტრაექტორიის შექცევა"
 
 
 msgid "Toggle Profile Clipping"
@@ -136310,7 +136318,7 @@ msgstr "სამიზნის გარეშე"
 
 
 msgid "Could not find constraint data for Child-Of Set Inverse"
-msgstr "შექცევაზე დაყენების შვილობილისთვის ბორკილების მონაცემები ვერ მოიძებნა"
+msgstr "შებრუნებაზე დაყენების შვილობილისთვის ბორკილების მონაცემები ვერ მოიძებნა"
 
 
 msgid "Child Of constraint not found"
@@ -136326,7 +136334,7 @@ msgstr "ტრაექტორია უკვე ანიმირებუ�
 
 
 msgid "Could not find constraint data for ObjectSolver Set Inverse"
-msgstr "ბორკილების მონაცემების ობიექტის ამომხსნელის შექცევაზე დაყენებისთვის ვერ მოიძებნა"
+msgstr "ბორკილების მონაცემების ობიექტის ამომხსნელის შებრუნებაზე დაყენებისთვის ვერ მოიძებნა"
 
 
 msgid "Applied constraint was not first, result may not be as expected"
@@ -136378,7 +136386,7 @@ msgstr "ბორკილები, რომლებიც ბიბლიო
 
 
 msgid "No inverse correction is set, so there is nothing to clear"
-msgstr "შექცეული შესწორება დაყენებული არაა, ასე რომ, გასასუფთავებელი არაფერია"
+msgstr "შებრუნებული შესწორება დაყენებული არაა, ასე რომ, გასასუფთავებელი არაფერია"
 
 
 msgid "No other bones are selected"
@@ -136759,11 +136767,11 @@ msgstr "ობიექტი (დატოვე გარდაქმნა)"
 
 
 msgid "Object (Without Inverse)"
-msgstr "ობიექტი (შექცევის გარეშე)"
+msgstr "ობიექტი (შებრუნების გარეშე)"
 
 
 msgid "Object (Keep Transform Without Inverse)"
-msgstr "ობიექტი (დატოვე გარდაქმნა შექცევის გარეშე)"
+msgstr "ობიექტი (დატოვე გარდაქმნა შებრუნების გარეშე)"
 
 
 msgid "Object (Attach Curves to Surface)"
@@ -139129,7 +139137,7 @@ msgstr "სპეციალურ სიმბოლოებს (არაა
 
 
 msgid "It cannot be a reserved keyword in Python"
-msgstr "Python-ში შებრუნებული საკვანძო სიტყვა ვერ იქნება"
+msgstr "Python-ში რეზერვირებული საკვანძო სიტყვა ვერ იქნება"
 
 
 msgid "Python restricted for security"
@@ -142199,7 +142207,7 @@ msgstr "თანამიმდევრობის გაცურება: 
 
 
 msgid "Snap Invert"
-msgstr "მიკვრის შექცევა"
+msgstr "მიკვრის შებრუნება"
 
 
 msgid "Set Snap Base"
@@ -142275,7 +142283,7 @@ msgstr "შეკუმშვა/გაბერვა: "
 
 
 msgid "Even Thickness Invert"
-msgstr "თანაბარი სისქის შექცევა"
+msgstr "თანაბარი სისქის შებრუნება"
 
 
 msgid "'Shrink/Fatten' meshes is only supported in edit mode"
@@ -146516,7 +146524,7 @@ msgstr "გაითიშა, დაკომპილირდა OpenColorIO-
 
 
 msgid "Convert from display to scene linear instead. Not all view transforms can be inverted exactly, and the result may not match the original scene linear image"
-msgstr "დააკონვერტირე დისპლეიდან სცენის წრფივად. ყველა ხედის გარდაქმნის ზუსტი შექცევა შეუძლებელია, ამიტომ შეიძლება, შედეგი ორიგინალი სცენის წრფივ გამოსახულებას არ დაემთხვეს"
+msgstr "დააკონვერტირე დისპლეიდან სცენის წრფივად. ყველა ხედის გარდაქმნის ზუსტი შებრუნება შეუძლებელია, ამიტომ შეიძლება, შედეგი ორიგინალი სცენის წრფივ გამოსახულებას არ დაემთხვეს"
 
 
 msgid "The kernel is a float and will be convolved with all input channels"
@@ -147122,7 +147130,7 @@ msgstr "მითითებული ზომის მქონე წრი
 
 
 msgid "Dilate or erode the computed matte using an inverse distance operation evaluated at the given falloff of the specified size. Negative sizes means erosion while positive means dilation"
-msgstr "მითითებული ზომის მოცემულ მილევასთან გამოთვლილი შექცეული მანძილის ოპერაციის მეშვეობით გააგანიერე, ან გამოფიტე გამოთვლილი კაშე. უარყოფითი ზომები ეროზიას ნიშნავს, ხოლო დადებითი - გაგანიერებას"
+msgstr "მითითებული ზომის მოცემულ მილევასთან გამოთვლილი მანძილის შებრუნებული ოპერაციის მეშვეობით გააგანიერე, ან გამოფიტე გამოთვლილი კაშე. უარყოფითი ზომები ეროზიას ნიშნავს, ხოლო დადებითი - გაგანიერებას"
 
 
 msgid "Specifies the strength of the despill"
@@ -147687,7 +147695,7 @@ msgstr "შექცევადი"
 
 
 msgid "The inverted matrix or the identity matrix if the input is not invertible"
-msgstr "შექცეული მატრიცა, ან ერთეულოვანი მატრიცა, თუ შენატანი შეუქცევადია"
+msgstr "ინვერსიული მატრიცა, ან ერთეულოვანი მატრიცა, თუ შენატანი შექცევადი არაა"
 
 
 msgid "True if the input matrix is invertible"
@@ -148149,7 +148157,7 @@ msgstr "ცენტრის დაკავშირება"
 
 
 msgid "Invert Arc"
-msgstr "თაღის შექცევა"
+msgstr "რკალის შექცევა"
 
 
 msgid "The number of points on the arc"
@@ -148960,7 +148968,7 @@ msgstr "ჩაიჭირე მნიშვნელობები თავ�
 
 
 msgid "Revert"
-msgstr "დაბრუნება უწინდელ მდგომარეობაში"
+msgstr "უწინდელ მდგომარეობაში დაბრუნება"
 
 
 msgid "Revert to 1st order integration when clamping would be applied. More conservative than clamping"
@@ -150331,7 +150339,7 @@ msgstr "ცალკეულ კომპონენტებად დას�
 
 
 msgid "Inverted"
-msgstr "შექცეული"
+msgstr "შებრუნებული"
 
 
 msgid "Geometry to split into two parts"
@@ -151539,7 +151547,7 @@ msgstr "სინათლის წყაროს სიძლიერე"
 
 
 msgid "Color input on which inversion will be applied"
-msgstr "ფერის შენატანი, რომელზეც შექცევა იქნება გამოყენებული"
+msgstr "ფერის შენატანი, რომელზეც შებრუნება იქნება გამოყენებული"
 
 
 msgid "Facing"
