@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'9b232e97f2e1')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'12e628ea43f8')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-05 11:52+0000\n"
-"PO-Revision-Date: 2026-01-05 07:41+0000\n"
+"POT-Creation-Date: 2026-01-12 15:09+0000\n"
+"PO-Revision-Date: 2026-01-12 10:12+0000\n"
 "Last-Translator: Alexandr Fatih <radix83@rambler.ru>\n"
 "Language-Team: Russian <https://translate.blender.org/projects/blender-ui/ui/ru/>\n"
 "Language: ru\n"
@@ -9207,7 +9207,7 @@ msgstr "Положение пола"
 
 
 msgid "Location of target that object will not pass through"
-msgstr "Положение преграды, которая будет ограничивать объект"
+msgstr "Положение перекрытия, которое будет ограничивать объект"
 
 
 msgid "Offset of floor from object origin"
@@ -18566,16 +18566,8 @@ msgid "Is Layered Action"
 msgstr "Это действие со слоями"
 
 
-msgid "Return whether this is a layered Action. An empty Action is considered as both a 'legacy' and a 'layered' Action."
-msgstr "Указывает, является ли это действие многослойным. Пустое действие будет считаться и как 'немногослойным' (устаревшим), так и 'многослойным'."
-
-
 msgid "Is Legacy Action"
 msgstr "Это устаревшее действие"
-
-
-msgid "Return whether this is a legacy Action. Legacy Actions have no layers or slots. An empty Action is considered as both a 'legacy' and a 'layered' Action. Since Blender 4.4 actions are automatically updated to layered actions, and thus this will only return True when the action is empty"
-msgstr "Указывает, является ли это действие устаревшим. У устаревших действий нет ни слоёв ни слотов. Пустое действие рассматривается и как 'устаревшее' (немногослойное) и как 'многослойное' действие. Начиная с Blender 4.4 — действия автоматически обновляются до многослойных действий, и, таким образом, это возвращает значение \"истинно\" только тогда, когда действие будет являться пустым"
 
 
 msgid "Is Empty"
@@ -20379,18 +20371,6 @@ msgstr "Интервалы между срабатываниями кисти в
 
 msgid "Stabilize Normal"
 msgstr "Стабилизировать нормаль"
-
-
-msgid "Stabilize the orientation of the brush plane."
-msgstr "Стабилизировать ориентацию плоскости кисти."
-
-
-msgid "Stabilize Plane"
-msgstr "Стабилизировать плоскость"
-
-
-msgid "Stabilize the center of the brush plane."
-msgstr "Стабилизировать центр плоскости кисти."
 
 
 msgid "Stencil Dimensions"
@@ -34954,6 +34934,26 @@ msgid "Show/Hide"
 msgstr "Показать/скрыть"
 
 
+msgid "Special Characters"
+msgstr "Специальные символы"
+
+
+msgid "Kerning"
+msgstr "Кернинг"
+
+
+msgid "Math"
+msgstr "Математика"
+
+
+msgid "Metaball"
+msgstr "Метасфера"
+
+
+msgid "Utilities"
+msgstr "Утилиты"
+
+
 msgid "Names"
 msgstr "Названия"
 
@@ -34962,20 +34962,28 @@ msgid "Bone Roll"
 msgstr "Крен кости"
 
 
-msgid "Math"
-msgstr "Математика"
-
-
-msgid "Utilities"
-msgstr "Утилиты"
-
-
 msgid "Clean Up"
 msgstr "Привести в порядок"
 
 
+msgid "Read"
+msgstr "Прочитать"
+
+
+msgid "Sample"
+msgstr "Сэмплировать"
+
+
+msgid "Write"
+msgstr "Записать"
+
+
 msgid "Pivot Point"
 msgstr "Центр трансформации"
+
+
+msgid "Primitives"
+msgstr "Примитивы"
 
 
 msgid "Snap"
@@ -34994,28 +35002,12 @@ msgid "Automasking"
 msgstr "Автомаски́рование"
 
 
-msgid "Read"
-msgstr "Прочитать"
-
-
-msgid "Sample"
-msgstr "Сэмплировать"
-
-
 msgid "Face Sets Edit"
 msgstr "Редактировать наборы граней"
 
 
-msgid "Write"
-msgstr "Записать"
-
-
 msgid "Vertex Group Locks"
 msgstr "Блокировки групп вершин"
-
-
-msgid "Primitives"
-msgstr "Примитивы"
 
 
 msgid "Gizmo"
@@ -35030,6 +35022,10 @@ msgid "Import"
 msgstr "Импортировать"
 
 
+msgid "Deprecated"
+msgstr "Устаревшие"
+
+
 msgid "Mirror"
 msgstr "Зеркало"
 
@@ -35042,6 +35038,10 @@ msgid "Local View"
 msgstr "Локальный вид"
 
 
+msgid "List"
+msgstr "Список"
+
+
 msgid "Viewpoint"
 msgstr "Точка обзора"
 
@@ -35050,8 +35050,8 @@ msgid "Navigation"
 msgstr "Навигация"
 
 
-msgid "Deprecated"
-msgstr "Устаревшие"
+msgid "UV"
+msgstr "UV"
 
 
 msgid "Align View"
@@ -35068,14 +35068,6 @@ msgstr "Области обзора"
 
 msgid "Select More/Less"
 msgstr "Выделить больше/меньше"
-
-
-msgid "List"
-msgstr "Список"
-
-
-msgid "UV"
-msgstr "UV"
 
 
 msgid "Select Similar"
@@ -35096,10 +35088,6 @@ msgstr "Выделить петли"
 
 msgid "Assign Material"
 msgstr "Назначить материал"
-
-
-msgid "Metaball"
-msgstr "Метасфера"
 
 
 msgid "Light"
@@ -35154,6 +35142,10 @@ msgid "Hooks"
 msgstr "Крюки"
 
 
+msgid "Layout"
+msgstr "Разметка"
+
+
 msgid "Trim/Add"
 msgstr "Обрезать/Добавить"
 
@@ -35166,16 +35158,16 @@ msgid "Face Sets Init"
 msgstr "Инициализация наборов граней"
 
 
-msgid "Layout"
-msgstr "Разметка"
-
-
 msgid "Random Mask"
 msgstr "Случайная маска"
 
 
 msgid "Clear Transform"
 msgstr "Очистить трансформацию"
+
+
+msgid "Adjust"
+msgstr "Коррекция"
 
 
 msgid "In-Betweens"
@@ -35190,28 +35182,28 @@ msgid "Bone Collections"
 msgstr "Коллекции костей"
 
 
-msgid "Adjust"
-msgstr "Коррекция"
+msgid "Keying"
+msgstr "Кеинг"
+
+
+msgid "Tracking"
+msgstr "Трекинг"
 
 
 msgid "Toggle Bone Options"
 msgstr "Переключить опции костей"
 
 
+msgid "Creative"
+msgstr "Художественные"
+
+
 msgid "Enable Bone Options"
 msgstr "Включить параметры костей"
 
 
-msgid "Keying"
-msgstr "Кеинг"
-
-
 msgid "Disable Bone Options"
 msgstr "Отключить параметры костей"
-
-
-msgid "Tracking"
-msgstr "Трекинг"
 
 
 msgid "Mesh Select Mode"
@@ -35222,10 +35214,6 @@ msgid "Face Data"
 msgstr "Данные граней"
 
 
-msgid "Creative"
-msgstr "Художественные"
-
-
 msgid "Select by Face Strength"
 msgstr "Выделить по твёрдости грани"
 
@@ -35234,20 +35222,12 @@ msgid "Set Face Strength"
 msgstr "Установить твёрдость грани"
 
 
-msgid "Merge"
-msgstr "Объединить"
-
-
 msgid "Render Preview"
 msgstr "Превью рендера"
 
 
-msgid "Special Characters"
-msgstr "Специальные символы"
-
-
-msgid "Kerning"
-msgstr "Кернинг"
+msgid "Merge"
+msgstr "Объединить"
 
 
 msgid "Keyframe Insert Pie"
@@ -54164,13 +54144,8 @@ msgstr "Импортировать секвенцию изображений"
 
 
 msgctxt "Operator"
-msgid "Texture Setup"
-msgstr "Настройка текстуры"
-
-
-msgctxt "Operator"
-msgid "Principled Texture Setup"
-msgstr "Текстурная организацию нод для Principled BSDF"
+msgid "Add Texture Setup"
+msgstr "Добавить текстурную организацию нод"
 
 
 msgid "Align selected nodes in a grid pattern"
@@ -96231,10 +96206,6 @@ msgid "Orbit Around Selection"
 msgstr "Вращать вокруг выделения"
 
 
-msgid "Use selection as the pivot point"
-msgstr "Использовать выделение в качестве центра трансформации"
-
-
 msgid "Zoom to Mouse Position"
 msgstr "Приближать к положению курсора"
 
@@ -97139,10 +97110,6 @@ msgid "Chinese (Traditional) - 繁體中文"
 msgstr "Китайский (традиционный) - 繁體中文"
 
 
-msgid "Locale code: zh_HANT. Translation progress: 51%"
-msgstr "Код локали: zh_HANT. Прогресс перевода: 51%"
-
-
 msgid "Czech - Čeština"
 msgstr "Чешский - Čeština"
 
@@ -97259,6 +97226,10 @@ msgid "Indonesian - Bahasa indonesia"
 msgstr "Индонезийский - Bahasa Indonesia"
 
 
+msgid "Locale code: id_ID. Translation progress: 22%"
+msgstr "Код локали: id_ID. Прогресс перевода: 22%"
+
+
 msgid "Italian - Italiano"
 msgstr "Итальянский - Italiano"
 
@@ -97325,10 +97296,6 @@ msgstr "Код локали: fa_IR. Прогресс перевода: 3%"
 
 msgid "Polish - Polski"
 msgstr "Польский - Polski"
-
-
-msgid "Locale code: pl_PL. Translation progress: 18%"
-msgstr "Код локали: pl_PL. Прогресс перевода: 18%"
 
 
 msgid "Portuguese (Brazil) - Português brasileiro"
@@ -108451,6 +108418,14 @@ msgstr "Начальный отображаемый кадр в редактор
 
 msgid "End Offset"
 msgstr "Конечное смещение"
+
+
+msgid "Offset from the end of the strip in frames"
+msgstr "Смещение от конца дорожки, в кадрах"
+
+
+msgid "Offset from the start of the strip in frames"
+msgstr "Смещение от начала дорожки, в кадрах"
 
 
 msgid "X position where the strip begins"
@@ -120167,16 +120142,6 @@ msgid "Image Sequence"
 msgstr "Секвенция изображений"
 
 
-msgctxt "Operator"
-msgid "Add Texture Setup"
-msgstr "Добавить текстурную организацию нод"
-
-
-msgctxt "Operator"
-msgid "Add Principled Setup"
-msgstr "Добавить организацию нод для Principled"
-
-
 msgid "(Quick Access: Shift+W)"
 msgstr "(Быстрый доступ: Shift+W)"
 
@@ -121662,10 +121627,6 @@ msgid "An action slot can only be created when an action is assigned"
 msgstr "Слот действия может быть создан только тогда, когда назначено действие"
 
 
-msgid "Action slots are only supported by layered Actions. Upgrade this Action first"
-msgstr "Слоты действий поддерживаются только послойными действиями. Сначала обновите это действие"
-
-
 msgid "Creating a new Slot is not possible on a linked Action"
 msgstr "Создание нового слота в связанном действии невозможно"
 
@@ -123002,7 +122963,7 @@ msgstr "Минимальное значение торможения"
 
 
 msgid "Steps Min"
-msgstr "Мин. шаг"
+msgstr "Шаг - Мин."
 
 
 msgid "Display Size X"
@@ -129239,11 +129200,6 @@ msgstr "Проецировать из вида (вписать в границы
 
 
 msgctxt "Operator"
-msgid "Frame Last Stroke"
-msgstr "Кадрировать последний штрих"
-
-
-msgctxt "Operator"
 msgid "Render Playblast"
 msgstr "Рендеринг анимации вьюпорта"
 
@@ -132076,10 +132032,6 @@ msgstr "Кольца рёбер не соединены"
 
 msgid "color_index is invalid"
 msgstr "color_index недействителен"
-
-
-msgid "Compositor node tree has cyclic links."
-msgstr "Дерево нод компо́зитора имеет зацикленные связи."
 
 
 msgid "Error: Too many AOVs"
@@ -141237,12 +141189,12 @@ msgid "Select movie or image strips"
 msgstr "Выделить видео дорожки или дорожки изображений"
 
 
-msgid "Cannot create key inside of speed transition"
-msgstr "Невозможно создать ключ внутри перехода скорости"
-
-
 msgid "Cannot create freeze frame"
 msgstr "Невозможно создать стоп-кадр"
+
+
+msgid "Cannot create key inside of speed transition"
+msgstr "Невозможно создать ключ внутри перехода скорости"
 
 
 msgid "Cannot create transition from first or last key"
@@ -143461,16 +143413,8 @@ msgid "Cannot return channelbag when slot is None"
 msgstr "Невозможно вернуть пакет каналов, если слот отсутствует"
 
 
-msgid "Cannot add slots to a legacy Action '%s'. Convert it to a layered Action first."
-msgstr "Невозможно добавить слоты к устаревшему действию \"%s\". Сначала преобразуйте его в многослойное действие."
-
-
 msgid "Invalid slot name '%s': name must not be empty."
 msgstr "Недопустимое имя слота \"%s\": имя не должно быть пустым."
-
-
-msgid "Cannot add layers to a legacy Action '%s'. Convert it to a layered Action first."
-msgstr "Невозможно добавить слои к устаревшему действию \"%s\". Сначала преобразуйте его в многослойное действие."
 
 
 msgid "F-Curve '%s[%d]' already exists in this channelbag"
@@ -146971,54 +146915,6 @@ msgid "The amount of jitter to introduce while computing rays, higher jitter can
 msgstr "Величина колебания, производимого при вычислении лучей. Более высокие значения колебания могут ускорить вычисление, но также могут привести и к более зернистым или шумным результатам"
 
 
-msgid "Wrong Image Input Type"
-msgstr "Неправильный тип входа \"Изображение (Image)\""
-
-
-msgid "Wrong Mask Input Type"
-msgstr "Неправильный тип входа \"Маска (mask)\""
-
-
-msgid "Unsupported Inputs"
-msgstr "Неподдерживаемые входы"
-
-
-msgid "Node group's main Image input should be of type Color"
-msgstr "Основной вход \"Изображение (image)\" группы нод должен иметь тип \"Цвет (color)\""
-
-
-msgid "Node group's Mask input should be of type Color"
-msgstr "Вход группы нод \"Маска (mask)\" должен иметь тип \"Цвет (color)\""
-
-
-msgid "Only a main Image and Mask inputs are supported, the rest are unsupported and will return zero"
-msgstr "Поддерживаются только основные входы \"Изображение (image)\" и \"Маска (mask)\", остальные не поддерживаются и дадут нулевое значение"
-
-
-msgid "No Output"
-msgstr "Нет выхода"
-
-
-msgid "Wrong Output Type"
-msgstr "Неправильный тип вывода"
-
-
-msgid "Ignored Outputs"
-msgstr "Игнорируемые выходы"
-
-
-msgid "Node group must have a Color output socket"
-msgstr "Группа нод должна иметь выходной сокет \"Цвет (color)\""
-
-
-msgid "Node group's first output must be a color output"
-msgstr "Первый выход группы нод должен быть цветовым выходом"
-
-
-msgid "Only the first output is considered while the rest are ignored"
-msgstr "Рассматриваться будет только первый вывод, остальные игнорируются"
-
-
 msgid "Fac"
 msgstr "Коэфф."
 
@@ -147380,6 +147276,10 @@ msgstr "Заменить альфа"
 
 msgid "Replace the input image's alpha channel by the alpha input value"
 msgstr "Заменить альфа-канал входного изображения на входное значение альфа"
+
+
+msgid "SDF"
+msgstr "SDF"
 
 
 msgid "Line position where the image should be split"
@@ -149017,10 +148917,6 @@ msgstr "Преобразовать неактивные воксели и тай
 
 msgid "Turn regions where all voxels have the same value and active state (within a tolerance threshold) into inactive background tiles"
 msgstr "Преобразовать области, воксели которых имеют одинаковое значение и активное состояние (в пределах заданного порога допуска), в неактивные фоновые тайлы"
-
-
-msgid "SDF"
-msgstr "SDF"
 
 
 msgid "Replace inactive tiles with inactive nodes. Faster than tolerance-based pruning, useful for cases like narrow-band SDF grids with only inside or outside background values."
@@ -150876,8 +150772,56 @@ msgid "Inspection index is out of range"
 msgstr "Индекс проверки выходит за пределы диапазона"
 
 
+msgid "Wrong Image Input Type"
+msgstr "Неправильный тип входа \"Изображение (Image)\""
+
+
+msgid "Wrong Mask Input Type"
+msgstr "Неправильный тип входа \"Маска (mask)\""
+
+
+msgid "Unsupported Inputs"
+msgstr "Неподдерживаемые входы"
+
+
+msgid "No Output"
+msgstr "Нет выхода"
+
+
+msgid "Wrong Output Type"
+msgstr "Неправильный тип вывода"
+
+
+msgid "Ignored Outputs"
+msgstr "Игнорируемые выходы"
+
+
 msgid "Unused Output"
 msgstr "Неиспользуемый выход"
+
+
+msgid "Node group's main Image input should be of type Color"
+msgstr "Основной вход \"Изображение (image)\" группы нод должен иметь тип \"Цвет (color)\""
+
+
+msgid "Node group's Mask input should be of type Color"
+msgstr "Вход группы нод \"Маска (mask)\" должен иметь тип \"Цвет (color)\""
+
+
+msgid "Only a main Image and Mask inputs are supported, the rest are unsupported and will return zero"
+msgstr "Поддерживаются только основные входы \"Изображение (image)\" и \"Маска (mask)\", остальные не поддерживаются и дадут нулевое значение"
+
+
+msgid "Node group must have a Color output socket"
+msgstr "Группа нод должна иметь выходной сокет \"Цвет (color)\""
+
+
+msgid "Node group's first output must be a color output"
+msgstr "Первый выход группы нод должен быть цветовым выходом"
+
+
+msgid "Only the first output is considered while the rest are ignored"
+msgstr "Рассматриваться будет только первый вывод, остальные игнорируются"
 
 
 msgid "There are multiple group output nodes and this one is not active"

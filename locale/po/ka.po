@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'9b232e97f2e1')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'12e628ea43f8')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-05 11:52+0000\n"
-"PO-Revision-Date: 2026-01-04 15:40+0000\n"
+"POT-Creation-Date: 2026-01-12 15:09+0000\n"
+"PO-Revision-Date: 2026-01-09 13:12+0000\n"
 "Last-Translator: Tamar <TamMebonia@gmail.com>\n"
 "Language-Team: Georgian <https://translate.blender.org/projects/blender-ui/ui/ka/>\n"
 "Language: ka\n"
@@ -18566,16 +18566,8 @@ msgid "Is Layered Action"
 msgstr "თუა შრეებიანი ქმედება"
 
 
-msgid "Return whether this is a layered Action. An empty Action is considered as both a 'legacy' and a 'layered' Action."
-msgstr "დააბრუნე პასუხი, არის თუ არა ეს შრეებიანი ქმედება. ცარიელი ქმედება 'შრეებიანადაც' ითვლება და 'ძველებურადაც'."
-
-
 msgid "Is Legacy Action"
 msgstr "თუა ძველებური ქმედება"
-
-
-msgid "Return whether this is a legacy Action. Legacy Actions have no layers or slots. An empty Action is considered as both a 'legacy' and a 'layered' Action. Since Blender 4.4 actions are automatically updated to layered actions, and thus this will only return True when the action is empty"
-msgstr "დააბრუნე ინფორმაცია, არის თუ არა ეს ძველებური ქმედება. ძველებურ ქმედებებს შრეები და სლოტები არ გააჩნია. ცარიელი ქმედება 'ძველებურადაც' ითვლება და 'შრეებიანადაც'. Blender 4.4-იდან მოყოლებული, ქმედებები ავტომატურად განახლდა და გარდაიქმნა შრეებიან ქმედებებად, შესაბამისად, მნიშვნელობა ჭეშმარიტი მხოლოდ მაშინ დაბრუნდება, თუ ქმედება ცარიელია"
 
 
 msgid "Is Empty"
@@ -20379,18 +20371,6 @@ msgstr "დაშორება ფუნჯის წაცხებებს 
 
 msgid "Stabilize Normal"
 msgstr "ნორმალის დასტაბილურება"
-
-
-msgid "Stabilize the orientation of the brush plane."
-msgstr "დაასტაბილურე ფუნჯის სიბრტყის ორიენტაცია."
-
-
-msgid "Stabilize Plane"
-msgstr "სიბრტყის დასტაბილურება"
-
-
-msgid "Stabilize the center of the brush plane."
-msgstr "დაასტაბილურე ფუნჯის სიბრტყის ცენტრი."
 
 
 msgid "Stencil Dimensions"
@@ -34954,6 +34934,26 @@ msgid "Show/Hide"
 msgstr "ჩვენება/დამალვა"
 
 
+msgid "Special Characters"
+msgstr "სპეციალური ასონიშნები"
+
+
+msgid "Kerning"
+msgstr "ასოთშორისი ინტერვალი"
+
+
+msgid "Math"
+msgstr "მეშის პრიმიტივები"
+
+
+msgid "Metaball"
+msgstr "მეტაბურთი"
+
+
+msgid "Utilities"
+msgstr "უტილიტები"
+
+
 msgid "Names"
 msgstr "სახელები"
 
@@ -34962,20 +34962,28 @@ msgid "Bone Roll"
 msgstr "ძვლის ტრიალი"
 
 
-msgid "Math"
-msgstr "მეშის პრიმიტივები"
-
-
-msgid "Utilities"
-msgstr "უტილიტები"
-
-
 msgid "Clean Up"
 msgstr "გასუფთავება"
 
 
+msgid "Read"
+msgstr "წაკითხვა"
+
+
+msgid "Sample"
+msgstr "ნიმუშის აღება"
+
+
+msgid "Write"
+msgstr "წერა"
+
+
 msgid "Pivot Point"
 msgstr "ბრუნვის ცენტრი"
+
+
+msgid "Primitives"
+msgstr "პრიმიტივები"
 
 
 msgid "Snap"
@@ -34994,28 +35002,12 @@ msgid "Automasking"
 msgstr "ავტომატური შენიღბვა"
 
 
-msgid "Read"
-msgstr "წაკითხვა"
-
-
-msgid "Sample"
-msgstr "ნიმუშის აღება"
-
-
 msgid "Face Sets Edit"
 msgstr "წახნაგების ნაკრებთა რედაქტირება"
 
 
-msgid "Write"
-msgstr "წერა"
-
-
 msgid "Vertex Group Locks"
 msgstr "წვეროთა ჯგუფების ბლოკები"
-
-
-msgid "Primitives"
-msgstr "პრიმიტივები"
 
 
 msgid "Gizmo"
@@ -35030,6 +35022,10 @@ msgid "Import"
 msgstr "იმპორტი"
 
 
+msgid "Deprecated"
+msgstr "არარეკომენდირებული"
+
+
 msgid "Mirror"
 msgstr "გასარკისებურება"
 
@@ -35042,6 +35038,10 @@ msgid "Local View"
 msgstr "ლოკალური ხედი"
 
 
+msgid "List"
+msgstr "სია"
+
+
 msgid "Viewpoint"
 msgstr "თვალთახედვა"
 
@@ -35050,8 +35050,8 @@ msgid "Navigation"
 msgstr "ნავიგაცია"
 
 
-msgid "Deprecated"
-msgstr "არარეკომენდირებული"
+msgid "UV"
+msgstr "UV"
 
 
 msgid "Align View"
@@ -35068,14 +35068,6 @@ msgstr "ხედის მონაკვეთები"
 
 msgid "Select More/Less"
 msgstr "მეტის/ნაკლების მონიშვნა"
-
-
-msgid "List"
-msgstr "სია"
-
-
-msgid "UV"
-msgstr "UV"
 
 
 msgid "Select Similar"
@@ -35096,10 +35088,6 @@ msgstr "მარყუჟების მონიშვნა"
 
 msgid "Assign Material"
 msgstr "მასალის მიკუთვნება"
-
-
-msgid "Metaball"
-msgstr "მეტაბურთი"
 
 
 msgid "Light"
@@ -35154,6 +35142,10 @@ msgid "Hooks"
 msgstr "კაუჭები"
 
 
+msgid "Layout"
+msgstr "განლაგება"
+
+
 msgid "Trim/Add"
 msgstr "მოკრეჭა/დამატება"
 
@@ -35166,16 +35158,16 @@ msgid "Face Sets Init"
 msgstr "წახნაგთა ნაკრების ინიციალიზაცია"
 
 
-msgid "Layout"
-msgstr "განლაგება"
-
-
 msgid "Random Mask"
 msgstr "შემთხვევითი ნიღაბი"
 
 
 msgid "Clear Transform"
 msgstr "გარდაქმნის გასუფთავება"
+
+
+msgid "Adjust"
+msgstr "რეგულირება"
 
 
 msgid "In-Betweens"
@@ -35190,28 +35182,28 @@ msgid "Bone Collections"
 msgstr "ძვლების კოლექციები"
 
 
-msgid "Adjust"
-msgstr "რეგულირება"
+msgid "Keying"
+msgstr "ამოჭრა"
+
+
+msgid "Tracking"
+msgstr "თვალის დევნება"
 
 
 msgid "Toggle Bone Options"
 msgstr "ძვლის პარამეტრების ვარიანტები"
 
 
+msgid "Creative"
+msgstr "კრეატიული"
+
+
 msgid "Enable Bone Options"
 msgstr "ძვლის ვარიანტების ჩართვა"
 
 
-msgid "Keying"
-msgstr "ამოჭრა"
-
-
 msgid "Disable Bone Options"
 msgstr "ძვლის ვარიანტების გათიშვა"
-
-
-msgid "Tracking"
-msgstr "თვალის დევნება"
 
 
 msgid "Mesh Select Mode"
@@ -35222,10 +35214,6 @@ msgid "Face Data"
 msgstr "წახნაგების მონაცემები"
 
 
-msgid "Creative"
-msgstr "კრეატიული"
-
-
 msgid "Select by Face Strength"
 msgstr "მონიშნე წახნაგების სიძლიერის მიხედვით"
 
@@ -35234,20 +35222,12 @@ msgid "Set Face Strength"
 msgstr "წახნაგის სიძლიერის დაყენება"
 
 
-msgid "Merge"
-msgstr "შერწყმა"
-
-
 msgid "Render Preview"
 msgstr "რენდერის გადახედვა"
 
 
-msgid "Special Characters"
-msgstr "სპეციალური ასონიშნები"
-
-
-msgid "Kerning"
-msgstr "ასოთშორისი ინტერვალი"
+msgid "Merge"
+msgstr "შერწყმა"
 
 
 msgid "Keyframe Insert Pie"
@@ -54164,13 +54144,8 @@ msgstr "გამოსახულებების თანამიმდ�
 
 
 msgctxt "Operator"
-msgid "Texture Setup"
-msgstr "ტექსტურის კონფიგურაცია"
-
-
-msgctxt "Operator"
-msgid "Principled Texture Setup"
-msgstr "პრინციპული ტექსტურის წყობა"
+msgid "Add Texture Setup"
+msgstr "ტექსტურის წყობის დამატება"
 
 
 msgid "Align selected nodes in a grid pattern"
@@ -96231,10 +96206,6 @@ msgid "Orbit Around Selection"
 msgstr "ორბიტირება მონიშნულის გარშემო"
 
 
-msgid "Use selection as the pivot point"
-msgstr "გამოიყენე მონიშვნა ბრუნვის ცენტრად"
-
-
 msgid "Zoom to Mouse Position"
 msgstr "ზუმით მიახლოვება თაგვის პოზიციასთან"
 
@@ -97139,10 +97110,6 @@ msgid "Chinese (Traditional) - 繁體中文"
 msgstr "ჩინური (ტრადიციული) - 繁體中文"
 
 
-msgid "Locale code: zh_HANT. Translation progress: 51%"
-msgstr "ლოკალური კოდი: zh_HANT. თარგმანის პროგრესი: 51%"
-
-
 msgid "Czech - Čeština"
 msgstr "ჩეხური - Čeština"
 
@@ -97259,6 +97226,10 @@ msgid "Indonesian - Bahasa indonesia"
 msgstr "ინდონეზიური - Bahasa indonesia"
 
 
+msgid "Locale code: id_ID. Translation progress: 22%"
+msgstr "ლოკალური კოდი: id_ID. თარგმანის პროგრესი: 22%"
+
+
 msgid "Italian - Italiano"
 msgstr "იტალიური - Italiano"
 
@@ -97325,10 +97296,6 @@ msgstr "ლოკალური კოდი: fa_IR. თარგმანი�
 
 msgid "Polish - Polski"
 msgstr "პოლონური - Polski"
-
-
-msgid "Locale code: pl_PL. Translation progress: 18%"
-msgstr "ლოკალური კოდი: pl_PL. თარგმანის პროგრესი: 18%"
 
 
 msgid "Portuguese (Brazil) - Português brasileiro"
@@ -108451,6 +108418,14 @@ msgstr "აცდენების დადების შემდეგ თ
 
 msgid "End Offset"
 msgstr "დასასრულის აცდენა"
+
+
+msgid "Offset from the end of the strip in frames"
+msgstr "აცდენა კადრებში ლენტის ბოლოდან"
+
+
+msgid "Offset from the start of the strip in frames"
+msgstr "აცდენა კადრებში ლენტის დასაწყისიდან"
 
 
 msgid "X position where the strip begins"
@@ -120167,16 +120142,6 @@ msgid "Image Sequence"
 msgstr "გამოსახულებების თანამიმდევრობა"
 
 
-msgctxt "Operator"
-msgid "Add Texture Setup"
-msgstr "ტექსტურის წყობის დამატება"
-
-
-msgctxt "Operator"
-msgid "Add Principled Setup"
-msgstr "პრინციპული წყობის დამატება"
-
-
 msgid "(Quick Access: Shift+W)"
 msgstr "(სწრაფი წვდომა: Shift+W)"
 
@@ -121660,10 +121625,6 @@ msgstr "ძვალთა ყველა კოლექცია ხმარ
 
 msgid "An action slot can only be created when an action is assigned"
 msgstr "ქმედების სლოტის შექმნა მხოლოდ მაშინ შეიძლება, როცა ქმედება მიკუთვნებულია"
-
-
-msgid "Action slots are only supported by layered Actions. Upgrade this Action first"
-msgstr "ქმედებათა სლოტების მხარდაჭერა მხოლოდ შრეებიან ქმედებებს აქვს. პირველ რიგში გააკეთე ამ ქმედების აფგრეიდი"
 
 
 msgid "Creating a new Slot is not possible on a linked Action"
@@ -129239,11 +129200,6 @@ msgstr "პროეცირება ხედიდან (ფარგლე
 
 
 msgctxt "Operator"
-msgid "Frame Last Stroke"
-msgstr "ბოლო მონასმის დაჩარჩოვება"
-
-
-msgctxt "Operator"
 msgid "Render Playblast"
 msgstr "რენდერის ფლეიბლასტი"
 
@@ -132078,10 +132034,6 @@ msgid "color_index is invalid"
 msgstr "color_index უვარგისია"
 
 
-msgid "Compositor node tree has cyclic links."
-msgstr "კომპოზიტორის კვანძოვან ხეს ციკლური ბმულები აქვს."
-
-
 msgid "Error: Too many AOVs"
 msgstr "შეცდომა: მეტისმეტად ბევრი AOV"
 
@@ -134155,7 +134107,7 @@ msgstr "ალფა:"
 
 
 msgid "Hex"
-msgstr "ჰექს"
+msgstr "ჰექს."
 
 
 msgid "Scene linear values in the working color space"
@@ -141237,12 +141189,12 @@ msgid "Select movie or image strips"
 msgstr "მონიშნე ვიდეო, ან გამოსახულების ლენტები"
 
 
-msgid "Cannot create key inside of speed transition"
-msgstr "სისწრაფის გარდასვლის შიგნით სოლი ვერ შეიქმნება"
-
-
 msgid "Cannot create freeze frame"
 msgstr "გაყინული კადრი ვერ შეიქმნება"
+
+
+msgid "Cannot create key inside of speed transition"
+msgstr "სისწრაფის გარდასვლის შიგნით სოლი ვერ შეიქმნება"
 
 
 msgid "Cannot create transition from first or last key"
@@ -143461,16 +143413,8 @@ msgid "Cannot return channelbag when slot is None"
 msgstr "როცა სლოტი 'არაფერზეა' დაყენებული, არხების შეკვრის დაბრუნება შეუძლებელია"
 
 
-msgid "Cannot add slots to a legacy Action '%s'. Convert it to a layered Action first."
-msgstr "ძველებურ ქმედებას '%s' სლოტები ვერ დაემატება. ჯერ შრეებიან ქმედებად დააკონვერტირე."
-
-
 msgid "Invalid slot name '%s': name must not be empty."
 msgstr "სლოტის გამოუსადეგარი სახელი '%s': სახელი ცარიელი არ უნდა იყოს."
-
-
-msgid "Cannot add layers to a legacy Action '%s'. Convert it to a layered Action first."
-msgstr "ძველებურ ქმედებას '%s' შრეები ვერ დაემატება. ჯერ შრეებიან ქმედებად დააკონვერტირე."
 
 
 msgid "F-Curve '%s[%d]' already exists in this channelbag"
@@ -146971,54 +146915,6 @@ msgid "The amount of jitter to introduce while computing rays, higher jitter can
 msgstr "სხივების გამოთვლისას შემოსატანი რყევის ოდენობა, რყევის მაღალი დონე შეიძლება, უფრო სწრაფი იყოს, მაგრამ დამარცვლოვნებული, ან ხმაურიანი შედეგები მოგვცეს"
 
 
-msgid "Wrong Image Input Type"
-msgstr "გამომავალი გამოსახულების არასწორი ტიპი"
-
-
-msgid "Wrong Mask Input Type"
-msgstr "შემავალი ნიღბის არასწორი ტიპი"
-
-
-msgid "Unsupported Inputs"
-msgstr "მხარდაუჭერელი შენატანები"
-
-
-msgid "Node group's main Image input should be of type Color"
-msgstr "კვანძთა ჯგუფის მთავარი გამოსახულების შენატანი ფერის ტიპის უნდა იყოს"
-
-
-msgid "Node group's Mask input should be of type Color"
-msgstr "კვანძთა ჯგუფის ნიღბის შენატანი ფერის ტიპის უნდა იყოს"
-
-
-msgid "Only a main Image and Mask inputs are supported, the rest are unsupported and will return zero"
-msgstr "მხოლოდ მთავარ გამოსახულებისა და ნიღბის შენატანებია მხარდაჭერილი, დანარჩენი მხარდაუჭერელია და ნულზე დაბრუნდება"
-
-
-msgid "No Output"
-msgstr "გამონატანი არ არსებობს"
-
-
-msgid "Wrong Output Type"
-msgstr "გამონატანის არასწორი ტიპი"
-
-
-msgid "Ignored Outputs"
-msgstr "იგნორირებული გამონატანები"
-
-
-msgid "Node group must have a Color output socket"
-msgstr "კვანძთა ჯგუფს ფერის გამონატანის ბუდე უნდა ჰქონდეს"
-
-
-msgid "Node group's first output must be a color output"
-msgstr "კვანძთა ჯგუფის პირველი გამონატანი ფერი უნდა იყოს"
-
-
-msgid "Only the first output is considered while the rest are ignored"
-msgstr "გათვალისწინებული იქნება მხოლოდ პირველი გამონატანი, დანარჩენი იგნორირდება"
-
-
 msgid "Fac"
 msgstr "კოეფ."
 
@@ -147380,6 +147276,10 @@ msgstr "ალფას ჩანაცვლება"
 
 msgid "Replace the input image's alpha channel by the alpha input value"
 msgstr "ჩაანაცვლე შემავალი გამოსახულების ალფა არხი ალფას შემავალი მნიშვნელობით"
+
+
+msgid "SDF"
+msgstr "SDF"
 
 
 msgid "Line position where the image should be split"
@@ -149017,10 +148917,6 @@ msgstr "გადააქციე არააქტიური ვოქს�
 
 msgid "Turn regions where all voxels have the same value and active state (within a tolerance threshold) into inactive background tiles"
 msgstr "გადააქციე მონაკვეთები, სადაც ყველა ვოქსელს ერთი და იგივე მნიშვნელობა და აქტიური მდგომარეობა აქვს (ტოლერანტობის გარკვეულ ფარგლებში), არააქტიურ ფონურ ფილებად"
-
-
-msgid "SDF"
-msgstr "SDF"
 
 
 msgid "Replace inactive tiles with inactive nodes. Faster than tolerance-based pruning, useful for cases like narrow-band SDF grids with only inside or outside background values."
@@ -150876,8 +150772,56 @@ msgid "Inspection index is out of range"
 msgstr "ინსპექციის ინდექსი დიაპაზონს გარეთაა"
 
 
+msgid "Wrong Image Input Type"
+msgstr "გამომავალი გამოსახულების არასწორი ტიპი"
+
+
+msgid "Wrong Mask Input Type"
+msgstr "შემავალი ნიღბის არასწორი ტიპი"
+
+
+msgid "Unsupported Inputs"
+msgstr "მხარდაუჭერელი შენატანები"
+
+
+msgid "No Output"
+msgstr "გამონატანი არ არსებობს"
+
+
+msgid "Wrong Output Type"
+msgstr "გამონატანის არასწორი ტიპი"
+
+
+msgid "Ignored Outputs"
+msgstr "იგნორირებული გამონატანები"
+
+
 msgid "Unused Output"
 msgstr "გამოუყენებელი გამონატანი"
+
+
+msgid "Node group's main Image input should be of type Color"
+msgstr "კვანძთა ჯგუფის მთავარი გამოსახულების შენატანი ფერის ტიპის უნდა იყოს"
+
+
+msgid "Node group's Mask input should be of type Color"
+msgstr "კვანძთა ჯგუფის ნიღბის შენატანი ფერის ტიპის უნდა იყოს"
+
+
+msgid "Only a main Image and Mask inputs are supported, the rest are unsupported and will return zero"
+msgstr "მხოლოდ მთავარ გამოსახულებისა და ნიღბის შენატანებია მხარდაჭერილი, დანარჩენი მხარდაუჭერელია და ნულზე დაბრუნდება"
+
+
+msgid "Node group must have a Color output socket"
+msgstr "კვანძთა ჯგუფს ფერის გამონატანის ბუდე უნდა ჰქონდეს"
+
+
+msgid "Node group's first output must be a color output"
+msgstr "კვანძთა ჯგუფის პირველი გამონატანი ფერი უნდა იყოს"
+
+
+msgid "Only the first output is considered while the rest are ignored"
+msgstr "გათვალისწინებული იქნება მხოლოდ პირველი გამონატანი, დანარჩენი იგნორირდება"
 
 
 msgid "There are multiple group output nodes and this one is not active"

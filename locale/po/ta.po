@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'9b232e97f2e1')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'12e628ea43f8')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-05 11:52+0000\n"
+"POT-Creation-Date: 2026-01-12 15:09+0000\n"
 "PO-Revision-Date: 2025-08-06 08:59+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -18215,16 +18215,8 @@ msgid "Is Layered Action"
 msgstr "அடுக்கு நடவடிக்கை"
 
 
-msgid "Return whether this is a layered Action. An empty Action is considered as both a 'legacy' and a 'layered' Action."
-msgstr "இது ஒரு அடுக்கு செயல் என்பதைத் திரும்புக. ஒரு வெற்று நடவடிக்கை ஒரு 'மரபு' மற்றும் 'அடுக்கு' செயல் எனக் கருதப்படுகிறது."
-
-
 msgid "Is Legacy Action"
 msgstr "மரபு நடவடிக்கை"
-
-
-msgid "Return whether this is a legacy Action. Legacy Actions have no layers or slots. An empty Action is considered as both a 'legacy' and a 'layered' Action. Since Blender 4.4 actions are automatically updated to layered actions, and thus this will only return True when the action is empty"
-msgstr "இது ஒரு மரபு நடவடிக்கை என்பதை திரும்பவும். மரபு செயல்களில் அடுக்குகள் அல்லது இடங்கள் இல்லை. ஒரு வெற்று நடவடிக்கை ஒரு 'மரபு' மற்றும் 'அடுக்கு' செயல் எனக் கருதப்படுகிறது. பிளெண்டர் 4.4 செயல்கள் தானாகவே அடுக்கு செயல்களுக்கு புதுப்பிக்கப்படுவதால், நடவடிக்கை காலியாக இருக்கும்போது மட்டுமே இது உண்மையாக இருக்கும்"
 
 
 msgid "Is Empty"
@@ -19973,18 +19965,6 @@ msgstr "தூரிகை விட்டம் ஒரு சதவீதமா
 
 msgid "Stabilize Normal"
 msgstr "இயல்பை உறுதிப்படுத்தவும்"
-
-
-msgid "Stabilize the orientation of the brush plane."
-msgstr "தூரிகை விமானத்தின் நோக்குநிலையை உறுதிப்படுத்தவும்."
-
-
-msgid "Stabilize Plane"
-msgstr "விமானத்தை உறுதிப்படுத்தவும்"
-
-
-msgid "Stabilize the center of the brush plane."
-msgstr "தூரிகை விமானத்தின் மையத்தை உறுதிப்படுத்தவும்."
 
 
 msgid "Stencil Dimensions"
@@ -34278,6 +34258,26 @@ msgid "Show/Hide"
 msgstr "காட்டு/மறைக்க"
 
 
+msgid "Special Characters"
+msgstr "சிறப்பு எழுத்துக்கள்"
+
+
+msgid "Kerning"
+msgstr "கெர்னிங்"
+
+
+msgid "Math"
+msgstr "கணிதம்"
+
+
+msgid "Metaball"
+msgstr "வளர்சிதை மாற்ற"
+
+
+msgid "Utilities"
+msgstr "பயன்பாடுகள்"
+
+
 msgid "Names"
 msgstr "பெயர்கள்"
 
@@ -34286,20 +34286,28 @@ msgid "Bone Roll"
 msgstr "எலும்பு ரோல்"
 
 
-msgid "Math"
-msgstr "கணிதம்"
-
-
-msgid "Utilities"
-msgstr "பயன்பாடுகள்"
-
-
 msgid "Clean Up"
 msgstr "தூய்மை செய்"
 
 
+msgid "Read"
+msgstr "படி"
+
+
+msgid "Sample"
+msgstr "மாதிரி"
+
+
+msgid "Write"
+msgstr "எழுதுங்கள்"
+
+
 msgid "Pivot Point"
 msgstr "பிவோட் புள்ளி"
+
+
+msgid "Primitives"
+msgstr "ப்ரைமிடிவ்ச்"
 
 
 msgid "Snap"
@@ -34318,28 +34326,12 @@ msgid "Automasking"
 msgstr "ஆட்டோமேச்கிங்"
 
 
-msgid "Read"
-msgstr "படி"
-
-
-msgid "Sample"
-msgstr "மாதிரி"
-
-
 msgid "Face Sets Edit"
 msgstr "முகம் தொகுப்புகள் திருத்து"
 
 
-msgid "Write"
-msgstr "எழுதுங்கள்"
-
-
 msgid "Vertex Group Locks"
 msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
-
-
-msgid "Primitives"
-msgstr "ப்ரைமிடிவ்ச்"
 
 
 msgid "Gizmo"
@@ -34354,6 +34346,10 @@ msgid "Import"
 msgstr "இறக்குமதி"
 
 
+msgid "Deprecated"
+msgstr "மதிப்பிடப்பட்டது"
+
+
 msgid "Mirror"
 msgstr "கண்ணாடி"
 
@@ -34366,6 +34362,10 @@ msgid "Local View"
 msgstr "உள்ளக பார்வை"
 
 
+msgid "List"
+msgstr "பட்டியல்"
+
+
 msgid "Viewpoint"
 msgstr "பார்வை"
 
@@ -34374,8 +34374,8 @@ msgid "Navigation"
 msgstr "வழிசெலுத்தல்"
 
 
-msgid "Deprecated"
-msgstr "மதிப்பிடப்பட்டது"
+msgid "UV"
+msgstr "புறஊதா"
 
 
 msgid "Align View"
@@ -34392,14 +34392,6 @@ msgstr "மண்டலங்களைக் காண்க"
 
 msgid "Select More/Less"
 msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
-
-
-msgid "List"
-msgstr "பட்டியல்"
-
-
-msgid "UV"
-msgstr "புறஊதா"
 
 
 msgid "Select Similar"
@@ -34420,10 +34412,6 @@ msgstr "சுழல்களைத் தேர்ந்தெடுக்க�
 
 msgid "Assign Material"
 msgstr "மூலப்பொருள் ஒதுக்க"
-
-
-msgid "Metaball"
-msgstr "வளர்சிதை மாற்ற"
 
 
 msgid "Light"
@@ -34478,6 +34466,10 @@ msgid "Hooks"
 msgstr "கொக்கிகள்"
 
 
+msgid "Layout"
+msgstr "தளவமைப்பு"
+
+
 msgid "Trim/Add"
 msgstr "டிரிம்/சேர்"
 
@@ -34490,16 +34482,16 @@ msgid "Face Sets Init"
 msgstr "முகம் தொடங்குகிறது"
 
 
-msgid "Layout"
-msgstr "தளவமைப்பு"
-
-
 msgid "Random Mask"
 msgstr "சீரற்ற முகமூடி"
 
 
 msgid "Clear Transform"
 msgstr "தெளிவான உருமாற்றம்"
+
+
+msgid "Adjust"
+msgstr "சரிசெய்யவும்"
 
 
 msgid "In-Betweens"
@@ -34514,8 +34506,12 @@ msgid "Bone Collections"
 msgstr "எலும்பு வசூல்"
 
 
-msgid "Adjust"
-msgstr "சரிசெய்யவும்"
+msgid "Keying"
+msgstr "கீயிங்"
+
+
+msgid "Tracking"
+msgstr "கண்காணிப்பு"
 
 
 msgid "Toggle Bone Options"
@@ -34526,16 +34522,8 @@ msgid "Enable Bone Options"
 msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
 
 
-msgid "Keying"
-msgstr "கீயிங்"
-
-
 msgid "Disable Bone Options"
 msgstr "எலும்பு விருப்பங்களை முடக்கு"
-
-
-msgid "Tracking"
-msgstr "கண்காணிப்பு"
 
 
 msgid "Mesh Select Mode"
@@ -34556,14 +34544,6 @@ msgstr "முக வலிமையை அமைக்கவும்"
 
 msgid "Merge"
 msgstr "ஒன்றிணைக்கவும்"
-
-
-msgid "Special Characters"
-msgstr "சிறப்பு எழுத்துக்கள்"
-
-
-msgid "Kerning"
-msgstr "கெர்னிங்"
 
 
 msgid "Keyframe Insert Pie"
@@ -52671,13 +52651,8 @@ msgstr "பட வரிசையை இறக்குமதி செய்ய
 
 
 msgctxt "Operator"
-msgid "Texture Setup"
-msgstr "அமைப்பு அமைப்பு"
-
-
-msgctxt "Operator"
-msgid "Principled Texture Setup"
-msgstr "கொள்கை ரீதியான அமைப்பு அமைப்பு"
+msgid "Add Texture Setup"
+msgstr "அமைப்பு அமைப்பைச் சேர்க்கவும்"
 
 
 msgctxt "Operator"
@@ -93367,10 +93342,6 @@ msgid "Orbit Around Selection"
 msgstr "தேர்வைச் சுற்றி சுற்றுப்பாதை"
 
 
-msgid "Use selection as the pivot point"
-msgstr "தேர்வை பிவோட் புள்ளியாகப் பயன்படுத்தவும்"
-
-
 msgid "Zoom to Mouse Position"
 msgstr "சுட்டி நிலைக்கு பெரிதாக்கு"
 
@@ -116045,16 +116016,6 @@ msgstr "பட வரிசை"
 
 
 msgctxt "Operator"
-msgid "Add Texture Setup"
-msgstr "அமைப்பு அமைப்பைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
-msgid "Add Principled Setup"
-msgstr "கொள்கை ரீதியான அமைப்பைச் சேர்க்கவும்"
-
-
-msgctxt "Operator"
 msgid "Settings from Active"
 msgstr "செயலில் இருந்து அமைப்புகள்"
 
@@ -117230,10 +117191,6 @@ msgstr "அனைத்து எலும்பு சேகரிப்பு�
 
 msgid "An action slot can only be created when an action is assigned"
 msgstr "ஒரு செயல் ஒதுக்கப்படும்போது மட்டுமே ஒரு செயல் ச்லாட்டை உருவாக்க முடியும்"
-
-
-msgid "Action slots are only supported by layered Actions. Upgrade this Action first"
-msgstr "செயல் இடங்கள் அடுக்கு செயல்களால் மட்டுமே ஆதரிக்கப்படுகின்றன. இந்த செயலை முதலில் மேம்படுத்தவும்"
 
 
 msgid "Creating a new Slot is not possible on a linked Action"
@@ -124391,11 +124348,6 @@ msgstr "உருமாறும் நோக்குநிலைக்கு �
 msgctxt "Operator"
 msgid "Project from View (Bounds)"
 msgstr "பார்வையில் இருந்து திட்டம் (எல்லைகள்)"
-
-
-msgctxt "Operator"
-msgid "Frame Last Stroke"
-msgstr "கடைசி பக்கவாதம்"
 
 
 msgctxt "Operator"
@@ -134948,12 +134900,12 @@ msgid "Select movie or image strips"
 msgstr "மூவி அல்லது பட கீற்றுகளைத் தேர்ந்தெடுக்கவும்"
 
 
-msgid "Cannot create key inside of speed transition"
-msgstr "வேக மாற்றத்தின் உள்ளே விசையை உருவாக்க முடியாது"
-
-
 msgid "Cannot create freeze frame"
 msgstr "முடக்கம் சட்டத்தை உருவாக்க முடியாது"
+
+
+msgid "Cannot create key inside of speed transition"
+msgstr "வேக மாற்றத்தின் உள்ளே விசையை உருவாக்க முடியாது"
 
 
 msgid "Cannot create transition from first or last key"
@@ -136872,16 +136824,8 @@ msgid "Cannot return channelbag when slot is None"
 msgstr "ச்லாட் எதுவும் இல்லாதபோது சேனல் பேக்கைத் திருப்ப முடியாது"
 
 
-msgid "Cannot add slots to a legacy Action '%s'. Convert it to a layered Action first."
-msgstr "'%s' என்ற மரபு நடவடிக்கைக்கு இடங்களை சேர்க்க முடியாது. முதலில் அதை ஒரு அடுக்கு செயலாக மாற்றவும்."
-
-
 msgid "Invalid slot name '%s': name must not be empty."
 msgstr "தவறான ச்லாட் பெயர் '%s': பெயர் காலியாக இருக்கக்கூடாது."
-
-
-msgid "Cannot add layers to a legacy Action '%s'. Convert it to a layered Action first."
-msgstr "ஒரு மரபு நடவடிக்கைக்கு '%s' அடுக்குகளைச் சேர்க்க முடியாது. முதலில் அதை ஒரு அடுக்கு செயலாக மாற்றவும்."
 
 
 msgid "F-Curve '%s[%d]' already exists in this channelbag"
@@ -139894,30 +139838,6 @@ msgstr "நட்சத்திரத்தை குறுக்காக ச�
 
 msgid "The position of the source of the rays in normalized coordinates. 0 means lower left corner and 1 means upper right corner"
 msgstr "இயல்பாக்கப்பட்ட ஆயத்தொகுதிகளில் கதிர்களின் மூலத்தின் நிலை. 0 என்றால் கீழ் இடது மூலையில் மற்றும் 1 என்றால் மேல் வலது மூலையில்"
-
-
-msgid "No Output"
-msgstr "வெளியீடு இல்லை"
-
-
-msgid "Wrong Output Type"
-msgstr "தவறான வெளியீட்டு வகை"
-
-
-msgid "Ignored Outputs"
-msgstr "புறக்கணிக்கப்பட்ட வெளியீடுகள்"
-
-
-msgid "Node group must have a Color output socket"
-msgstr "முனை குழுவில் வண்ண வெளியீட்டு சாக்கெட் இருக்க வேண்டும்"
-
-
-msgid "Node group's first output must be a color output"
-msgstr "நோட் குழுவின் முதல் வெளியீடு வண்ண வெளியீடாக இருக்க வேண்டும்"
-
-
-msgid "Only the first output is considered while the rest are ignored"
-msgstr "முதல் வெளியீடு மட்டுமே கருதப்படுகிறது, மீதமுள்ளவை புறக்கணிக்கப்படுகின்றன"
 
 
 msgid "Fac"
@@ -143077,8 +142997,32 @@ msgid "Inspection index is out of range"
 msgstr "ஆய்வுக் குறியீடு வரம்பிற்கு வெளியே உள்ளது"
 
 
+msgid "No Output"
+msgstr "வெளியீடு இல்லை"
+
+
+msgid "Wrong Output Type"
+msgstr "தவறான வெளியீட்டு வகை"
+
+
+msgid "Ignored Outputs"
+msgstr "புறக்கணிக்கப்பட்ட வெளியீடுகள்"
+
+
 msgid "Unused Output"
 msgstr "பயன்படுத்தப்படாத வெளியீடு"
+
+
+msgid "Node group must have a Color output socket"
+msgstr "முனை குழுவில் வண்ண வெளியீட்டு சாக்கெட் இருக்க வேண்டும்"
+
+
+msgid "Node group's first output must be a color output"
+msgstr "நோட் குழுவின் முதல் வெளியீடு வண்ண வெளியீடாக இருக்க வேண்டும்"
+
+
+msgid "Only the first output is considered while the rest are ignored"
+msgstr "முதல் வெளியீடு மட்டுமே கருதப்படுகிறது, மீதமுள்ளவை புறக்கணிக்கப்படுகின்றன"
 
 
 msgid "There are multiple group output nodes and this one is not active"

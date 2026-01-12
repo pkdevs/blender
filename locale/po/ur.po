@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'9b232e97f2e1')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'12e628ea43f8')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-05 11:52+0000\n"
+"POT-Creation-Date: 2026-01-12 15:09+0000\n"
 "PO-Revision-Date: 2025-07-23 15:12+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -32664,6 +32664,26 @@ msgid "Show/Hide"
 msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
 
 
+msgid "Special Characters"
+msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
+
+
+msgid "Kerning"
+msgstr "ﮓﻨﻧﺮﮐ"
+
+
+msgid "Math"
+msgstr "ﯽﺿﺎﯾﺭ"
+
+
+msgid "Metaball"
+msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
+
+
+msgid "Utilities"
+msgstr "ﺖﯾﺩﺎﻓﺍ"
+
+
 msgid "Names"
 msgstr "ﻡﺎﻧ"
 
@@ -32672,20 +32692,28 @@ msgid "Bone Roll"
 msgstr "ﻝﻭﺭ ﻥﻮﺑ"
 
 
-msgid "Math"
-msgstr "ﯽﺿﺎﯾﺭ"
-
-
-msgid "Utilities"
-msgstr "ﺖﯾﺩﺎﻓﺍ"
-
-
 msgid "Clean Up"
 msgstr "ﯽﺋﺎﻔﺻ"
 
 
+msgid "Read"
+msgstr "ﮟﯿﮬﮍﭘ"
+
+
+msgid "Sample"
+msgstr "ﮧﻧﻮﻤﻧ"
+
+
+msgid "Write"
+msgstr "ﮟﯿﮭﮑﻟ"
+
+
 msgid "Pivot Point"
 msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
+
+
+msgid "Primitives"
+msgstr "ﻢﯾﺪﻗ"
 
 
 msgid "Snap"
@@ -32704,28 +32732,12 @@ msgid "Automasking"
 msgstr "ﮓﻨﮑﺳﺎﻣﻮﭨﺁ"
 
 
-msgid "Read"
-msgstr "ﮟﯿﮬﮍﭘ"
-
-
-msgid "Sample"
-msgstr "ﮧﻧﻮﻤﻧ"
-
-
 msgid "Face Sets Edit"
 msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﯿﺳ ﮯﮐ ﮮﺮﮩﭼ"
 
 
-msgid "Write"
-msgstr "ﮟﯿﮭﮑﻟ"
-
-
 msgid "Vertex Group Locks"
 msgstr "ﮎﻻ﻿ ﮦﻭﺮﮔ ﺲﮑﯿﭨﺭﻭ"
-
-
-msgid "Primitives"
-msgstr "ﻢﯾﺪﻗ"
 
 
 msgid "Gizmo"
@@ -32738,6 +32750,10 @@ msgstr "ﮟﯿﻟﺎﺜﻣ"
 
 msgid "Import"
 msgstr "ﮟﯾﺮﮐ ﺪﻣﺁﺭﺩ"
+
+
+msgid "Deprecated"
+msgstr "ﮦﺩﻮﺳﺮﻓ"
 
 
 msgid "Mirror"
@@ -32760,8 +32776,8 @@ msgid "Navigation"
 msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
 
 
-msgid "Deprecated"
-msgstr "ﮦﺩﻮﺳﺮﻓ"
+msgid "UV"
+msgstr "ﯼﻭﻮﯾ"
 
 
 msgid "Align View"
@@ -32778,10 +32794,6 @@ msgstr "ﮟﯿﮭﮑﯾﺩ ﻮﮐ ﮞﻮﻗﻼ﻿ﻋ"
 
 msgid "Select More/Less"
 msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻢﮐ/ﮦﺩﺎﯾﺯ"
-
-
-msgid "UV"
-msgstr "ﯼﻭﻮﯾ"
 
 
 msgid "Select Similar"
@@ -32802,10 +32814,6 @@ msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﻮﮐ ﺲﭘﻮﻟ"
 
 msgid "Assign Material"
 msgstr "ﮟﯾﺮﮐ ﺾﯾﻮﻔﺗ ﺩﺍﻮﻣ"
-
-
-msgid "Metaball"
-msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
 
 
 msgid "Light"
@@ -32860,6 +32868,10 @@ msgid "Hooks"
 msgstr "ﮯﭩﻧﺎﮐ"
 
 
+msgid "Layout"
+msgstr "ﭦﺅﺁ ﮯﻟ"
+
+
 msgid "Trim/Add"
 msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ/ﻡﺮﭨ"
 
@@ -32872,16 +32884,16 @@ msgid "Face Sets Init"
 msgstr "ﭧﻧﺍ ﺲﭩﯿﺳ ﺲﯿﻓ"
 
 
-msgid "Layout"
-msgstr "ﭦﺅﺁ ﮯﻟ"
-
-
 msgid "Random Mask"
 msgstr "ﮏﺳﺎﻣ ﺐﯿﺗﺮﺗ ﮯﺑ"
 
 
 msgid "Clear Transform"
 msgstr "ﻡﺭﺎﻔﺴﻧﺍﺮﭨ  ﺕﺮﭘ ﮎ"
+
+
+msgid "Adjust"
+msgstr "ﮟﯾﺮﮐ ﭧﺴﺟﮉﯾﺍ"
 
 
 msgid "In-Betweens"
@@ -32896,8 +32908,12 @@ msgid "Bone Collections"
 msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮞﻮﯾﮉﮨ"
 
 
-msgid "Adjust"
-msgstr "ﮟﯾﺮﮐ ﭧﺴﺟﮉﯾﺍ"
+msgid "Keying"
+msgstr "ﮓﻨﯿﻠﮐ"
+
+
+msgid "Tracking"
+msgstr "ﮓﻨﮑﯾﺮﭨ"
 
 
 msgid "Toggle Bone Options"
@@ -32908,16 +32924,8 @@ msgid "Enable Bone Options"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
 
 
-msgid "Keying"
-msgstr "ﮓﻨﯿﻠﮐ"
-
-
 msgid "Disable Bone Options"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
-
-
-msgid "Tracking"
-msgstr "ﮓﻨﮑﯾﺮﭨ"
 
 
 msgid "Mesh Select Mode"
@@ -32938,14 +32946,6 @@ msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
 
 msgid "Merge"
 msgstr "ﺎﻧﺮﮐ ﻢﺿ"
-
-
-msgid "Special Characters"
-msgstr "ﺭﺍﺩﺮﮐ ﯽﺻﻮﺼﺧ"
-
-
-msgid "Kerning"
-msgstr "ﮓﻨﻧﺮﮐ"
 
 
 msgid "Keyframe Insert Pie"
@@ -49886,13 +49886,8 @@ msgstr "ﺐﯿﺗﺮﺗ ﯽﮐ ﺮﯾﻮﺼﺗ ﮟﯾﺮﮐ ﺪﻣﺁﺭﺩ"
 
 
 msgctxt "Operator"
-msgid "Texture Setup"
-msgstr "ﭖﺍ ﭧﯿﺳ ﭦﻭﺎﻨﺑ"
-
-
-msgctxt "Operator"
-msgid "Principled Texture Setup"
-msgstr "ﭖﺍ ﭧﯿﺳ ﭦﻭﺎﻨﺑ ﯽﻟﻮﺻﺍ"
+msgid "Add Texture Setup"
+msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﭖﺍ ﭧﯿﺳ ﺮﭽﺴﮑﯿﭨ"
 
 
 msgctxt "Operator"
@@ -88233,10 +88228,6 @@ msgid "Orbit Around Selection"
 msgstr "ﺭﺍﺪﻣ ﺩﺮﮔ ﺩﺭﺍ ﮯﮐ ﺏﺎﺨﺘﻧﺍ"
 
 
-msgid "Use selection as the pivot point"
-msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺮﭘ ﺭﻮﻃ ﮯﮐ ﮧﻄﻘﻧ ﺭﻮﺤﻣ ﻮﮐ ﺏﺎﺨﺘﻧﺍ"
-
-
 msgid "Zoom to Mouse Position"
 msgstr "ﮟﯾﺮﮐ ﻡﻭﺯ ﻮﮐ  ﻡﺎﻘﻣ  ﯽﮐ ﺱﺅﺎﻣ"
 
@@ -109082,16 +109073,6 @@ msgstr "ﺐﯿﺗﺮﺗ ﯽﮐ ﺮﯾﻮﺼﺗ"
 
 
 msgctxt "Operator"
-msgid "Add Texture Setup"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﭖﺍ ﭧﯿﺳ ﺮﭽﺴﮑﯿﭨ"
-
-
-msgctxt "Operator"
-msgid "Add Principled Setup"
-msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﭖﺍ ﭧﯿﺳ ﯽﻟﻮﺻﺍ"
-
-
-msgctxt "Operator"
 msgid "Settings from Active"
 msgstr "ﻝﺎﻌﻓ ﮯﺳ ﺕﺎﺒﯿﺗﺮﺗ"
 
@@ -110228,10 +110209,6 @@ msgstr "ﮯﮨ ﺎﯿﮔ ﺎﯿﮐ ﮟﯿﮩﻧ ﺩﺯ ﻥﺎﺸﻧ 'ﻮﻟﻮ�
 
 msgid "All bone collections are in use"
 msgstr "ﮟﯿﮨ ﮟﯿﻣ ﻝﺎﻤﻌﺘﺳﺍ ﮯﻋﻮﻤﺠﻣ ﻡﺎﻤﺗ ﮯﮐ ﮞﻮﯾﮉﮨ"
-
-
-msgid "Action slots are only supported by layered Actions. Upgrade this Action first"
-msgstr "۔ﮟﯾﺮﮐ ﮉﯾﺮﮔ ﭖﺍ ﻮﮐ ﻦﺸﮑﯾﺍ ﺱﺍ ﮯﻠﮩﭘ ۔ﮯﮨ ﺎﺗﺎﺟ ﺎﯿﮐ ﭦﺭﻮﭙﺳ ﮯﻌﯾﺭﺫ ﮯﮐ ﺰﻨﺸﮑﯾﺍ ﺭﺍﺩ ﮧﮩﺗ ﻑﺮﺻ ﻮﮐ ﺲﭨﻼ﻿ﺳ ﻦﺸﮑﯾﺍ"
 
 
 msgid "This data-block has no Action slot assigned"
@@ -126148,12 +126125,12 @@ msgid "Select movie or image strips"
 msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﺲﭘﺮﭩﺳ ﺞﯿﻣﺍ ﺎﯾ ﯼﻭﻮﻣ"
 
 
-msgid "Cannot create key inside of speed transition"
-msgstr "ﯽﺘﮑﺳ ﻦﺑ ﮟﯿﮩﻧ ﺪﯿﻠﮐ ﺭﺪﻧﺍ ﮯﮐ ﯽﻠﻘﺘﻨﻣ ﯽﮐ ﺭﺎﺘﻓﺭ"
-
-
 msgid "Cannot create freeze frame"
 msgstr "ﺎﺘﮑﺳ ﺎﺟ ﺎﯾﺎﻨﺑ ﮟﯿﮩﻧ ﻢﯾﺮﻓ ﺪﻤﺠﻨﻣ"
+
+
+msgid "Cannot create key inside of speed transition"
+msgstr "ﯽﺘﮑﺳ ﻦﺑ ﮟﯿﮩﻧ ﺪﯿﻠﮐ ﺭﺪﻧﺍ ﮯﮐ ﯽﻠﻘﺘﻨﻣ ﯽﮐ ﺭﺎﺘﻓﺭ"
 
 
 msgid "Cannot create transition from first or last key"
@@ -127853,14 +127830,6 @@ msgstr "ﺎﺘﮑﺳ ﻮﮨ ﮟﯿﮩﻧ ﯽﺋﻮﮐ ﭦﻼ﻿ﺳ"
 
 msgid "F-Curve data path empty, invalid argument"
 msgstr "ﻞﯿﻟﺩ ﻂﻠﻏ ،ﯽﻟﺎﺧ ﮧﺘﺳﺍﺭ ﺎﭩﯾﮈ ﻢﺧ-ﻒﯾﺍ"
-
-
-msgid "Cannot add slots to a legacy Action '%s'. Convert it to a layered Action first."
-msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﮟﯿﻣ ﻦﺸﮑﯾﺍ ﺭﺍﺩ ﮧﮩﺗ ﮯﻠﮩﭘ ﮯﺳﺍ ﮯﺘﮑﺳ ﺮﮐ ﮟﯿﮩﻧ ﻞﻣﺎﺷ ﭦﻼ﻿ﺳ ﮟﯿﻣ '%s‬‪' ﯽﺋﺍﻭﺭﺭﺎﮐ ﯽﻧﺍﺮﭘ ﮏﯾﺍ"
-
-
-msgid "Cannot add layers to a legacy Action '%s'. Convert it to a layered Action first."
-msgstr "ﮟﯾﺮﮐ ﻞﯾﺪﺒﺗ ﮟﯿﻣ ﻦﺸﮑﯾﺍ ﺭﺍﺩ ﮧﮩﺗ ﮯﻠﮩﭘ ﮯﺳﺍ ﮟﯿﺘﮑﺳ ﺎﺟ ﯽﮐ ﮟﯿﮩﻧ ﻞﻣﺎﺷ ﮟﯿﻣ '%s‬‪' ﯽﺋﺍﻭﺭﺭﺎﮐ ﯽﻧﺍﺮﭘ ﮏﯾﺍ ﮟﯿﺗﺮﭘ"
 
 
 msgid "F-Curve '%s[%d]' already exists in this channelbag"
