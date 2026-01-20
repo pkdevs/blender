@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'12e628ea43f8')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'e3ae31b49e53')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-12 15:09+0000\n"
+"POT-Creation-Date: 2026-01-20 10:29+0000\n"
 "PO-Revision-Date: 2025-07-23 15:12+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Urdu <https://translate.blender.org/projects/blender-ui/ui/ur/>\n"
@@ -32660,6 +32660,38 @@ msgid "Editor menu containing buttons"
 msgstr "ﻮﻨﯿﻣ ﺮﭩﯾﮉﯾﺍ ﻞﻤﺘﺸﻣ ﺮﭘ ﮞﻮﻨﭩﺑ"
 
 
+msgid "Mesh Select Mode"
+msgstr "ﮈﻮﻣ ﭧﮑﯿﻠﺳ ﺶﯿﻣ"
+
+
+msgid "Face Data"
+msgstr "ﺎﭩﯾﮈ ﺎﮐ ﮮﺮﮩﭼ"
+
+
+msgid "Select by Face Strength"
+msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
+
+
+msgid "Set Face Strength"
+msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
+
+
+msgid "Math"
+msgstr "ﯽﺿﺎﯾﺭ"
+
+
+msgid "Clean Up"
+msgstr "ﯽﺋﺎﻔﺻ"
+
+
+msgid "Utilities"
+msgstr "ﺖﯾﺩﺎﻓﺍ"
+
+
+msgid "Merge"
+msgstr "ﺎﻧﺮﮐ ﻢﺿ"
+
+
 msgid "Show/Hide"
 msgstr "ﮟﯿﺋﺎﭙﮭﭼ/ﮟﯿﺋﺎﮭﮐﺩ"
 
@@ -32672,32 +32704,16 @@ msgid "Kerning"
 msgstr "ﮓﻨﻧﺮﮐ"
 
 
-msgid "Math"
-msgstr "ﯽﺿﺎﯾﺭ"
-
-
 msgid "Metaball"
 msgstr "ﻝﺎﺑ ﺎﭩﯿﻣ"
 
 
-msgid "Utilities"
-msgstr "ﺖﯾﺩﺎﻓﺍ"
+msgid "Read"
+msgstr "ﮟﯿﮬﮍﭘ"
 
 
 msgid "Names"
 msgstr "ﻡﺎﻧ"
-
-
-msgid "Bone Roll"
-msgstr "ﻝﻭﺭ ﻥﻮﺑ"
-
-
-msgid "Clean Up"
-msgstr "ﯽﺋﺎﻔﺻ"
-
-
-msgid "Read"
-msgstr "ﮟﯿﮬﮍﭘ"
 
 
 msgid "Sample"
@@ -32708,12 +32724,24 @@ msgid "Write"
 msgstr "ﮟﯿﮭﮑﻟ"
 
 
-msgid "Pivot Point"
-msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
+msgid "Bone Roll"
+msgstr "ﻝﻭﺭ ﻥﻮﺑ"
 
 
 msgid "Primitives"
 msgstr "ﻢﯾﺪﻗ"
+
+
+msgid "Gizmo"
+msgstr "ﻮﻣﺰﯿﮔ"
+
+
+msgid "Instances"
+msgstr "ﮟﯿﻟﺎﺜﻣ"
+
+
+msgid "Pivot Point"
+msgstr "ﭧﻨﺋﺍﻮﭘ ﭦﻮﯿﭘ"
 
 
 msgid "Snap"
@@ -32732,6 +32760,10 @@ msgid "Automasking"
 msgstr "ﮓﻨﮑﺳﺎﻣﻮﭨﺁ"
 
 
+msgid "Import"
+msgstr "ﮟﯾﺮﮐ ﺪﻣﺁﺭﺩ"
+
+
 msgid "Face Sets Edit"
 msgstr "ﮟﯾﺮﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﭧﯿﺳ ﮯﮐ ﮮﺮﮩﭼ"
 
@@ -32740,20 +32772,12 @@ msgid "Vertex Group Locks"
 msgstr "ﮎﻻ﻿ ﮦﻭﺮﮔ ﺲﮑﯿﭨﺭﻭ"
 
 
-msgid "Gizmo"
-msgstr "ﻮﻣﺰﯿﮔ"
-
-
-msgid "Instances"
-msgstr "ﮟﯿﻟﺎﺜﻣ"
-
-
-msgid "Import"
-msgstr "ﮟﯾﺮﮐ ﺪﻣﺁﺭﺩ"
-
-
 msgid "Deprecated"
 msgstr "ﮦﺩﻮﺳﺮﻓ"
+
+
+msgid "UV"
+msgstr "ﯼﻭﻮﯾ"
 
 
 msgid "Mirror"
@@ -32774,10 +32798,6 @@ msgstr "ﺮﻈﻧ ﮧﻄﻘﻧ"
 
 msgid "Navigation"
 msgstr "ﻦﺸﯿﮕﯾﻮﯿﻧ"
-
-
-msgid "UV"
-msgstr "ﯼﻭﻮﯾ"
 
 
 msgid "Align View"
@@ -32836,6 +32856,10 @@ msgid "Rigid Body"
 msgstr "ﻢﺴﺟ ﺖﺨﺳ"
 
 
+msgid "Layout"
+msgstr "ﭦﺅﺁ ﮯﻟ"
+
+
 msgid "Apply"
 msgstr "ﮟﯿﺋﺎﮕﻟ"
 
@@ -32868,8 +32892,16 @@ msgid "Hooks"
 msgstr "ﮯﭩﻧﺎﮐ"
 
 
-msgid "Layout"
-msgstr "ﭦﺅﺁ ﮯﻟ"
+msgid "Adjust"
+msgstr "ﮟﯾﺮﮐ ﭧﺴﺟﮉﯾﺍ"
+
+
+msgid "Keying"
+msgstr "ﮓﻨﯿﻠﮐ"
+
+
+msgid "Tracking"
+msgstr "ﮓﻨﮑﯾﺮﭨ"
 
 
 msgid "Trim/Add"
@@ -32892,10 +32924,6 @@ msgid "Clear Transform"
 msgstr "ﻡﺭﺎﻔﺴﻧﺍﺮﭨ  ﺕﺮﭘ ﮎ"
 
 
-msgid "Adjust"
-msgstr "ﮟﯾﺮﮐ ﭧﺴﺟﮉﯾﺍ"
-
-
 msgid "In-Betweens"
 msgstr "ﮟﯿﻣ ﻥﺎﯿﻣﺭﺩ"
 
@@ -32908,14 +32936,6 @@ msgid "Bone Collections"
 msgstr "ﮧﻋﻮﻤﺠﻣ ﺎﮐ ﮞﻮﯾﮉﮨ"
 
 
-msgid "Keying"
-msgstr "ﮓﻨﯿﻠﮐ"
-
-
-msgid "Tracking"
-msgstr "ﮓﻨﮑﯾﺮﭨ"
-
-
 msgid "Toggle Bone Options"
 msgstr "ﮟﯾﺮﮐ ﻞﮔﻮﭨ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
 
@@ -32926,26 +32946,6 @@ msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉ�
 
 msgid "Disable Bone Options"
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻌﻓ ﺮﯿﻏ ﻮﮐ ﺕﺍﺭﺎﯿﺘﺧﺍ ﮯﮐ ﯼﮉﮨ"
-
-
-msgid "Mesh Select Mode"
-msgstr "ﮈﻮﻣ ﭧﮑﯿﻠﺳ ﺶﯿﻣ"
-
-
-msgid "Face Data"
-msgstr "ﺎﭩﯾﮈ ﺎﮐ ﮮﺮﮩﭼ"
-
-
-msgid "Select by Face Strength"
-msgstr "ﮟﯾﺮﮐ ﺐﺨﺘﻨﻣ ﮯﺳ ﻅﺎﺤﻟ ﮯﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
-
-
-msgid "Set Face Strength"
-msgstr "ﮟﯾﺮﮐ ﻦﯿﻌﺗ ﺎﮐ ﺖﻗﺎﻃ ﯽﮐ ﮮﺮﮩﭼ"
-
-
-msgid "Merge"
-msgstr "ﺎﻧﺮﮐ ﻢﺿ"
 
 
 msgid "Keyframe Insert Pie"
@@ -45495,66 +45495,6 @@ msgid "Generate a paragraph of text with a specific font, using a curve instance
 msgstr "ﮟﯾﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﺎﮐ ﻝﺎﺜﻣ ﻞﺑ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﮦﺮﯿﺧﺫ ﻮﮐ ﻑﺮﺣ ﺮﮨ ،ﮟﯿﺋﺎﻨﺑ ﻑﺍﺮﮔﺍﺮﯿﭘ ﮏﯾﺍ ﺎﮐ ﻦﺘﻣ ﮫﺗﺎﺳ ﮯﮐ ﭧﻧﻮﻓ ﺹﻮﺼﺨﻣ ﮏﯾﺍ"
 
 
-msgid "Align text to the center"
-msgstr "ﮟﯾﺮﮐ ﮪﺪﯿﺳ ﮟﯿﻣ ﭻﯿﺑ ﻮﮐ ﻦﺘﻣ"
-
-
-msgid "Align text to the left and the right"
-msgstr "ﮟﯿﮭﮐﺭ ﮟﯿﻣ ﮪﺪﯿﺳ ﮟﯿﺋﺍﺩ ﺭﻭﺍ ﮟﯿﺋﺎﺑ ﻮﮐ ﻦﺘﻣ"
-
-
-msgid "Align text to the left and the right, with equal character spacing"
-msgstr "ﮫﺗﺎﺳ ﮯﮐ ﮧﮕﺟ ﯽﮐ ﻑﻭﺮﺣ ﯼﻭﺎﺴﻣ ،ﮟﯾﺮﮐ ﮟﯿﻣ ﮪﺪﯿﺳ ﻑﺮﻃ ﮟﯿﺋﺍﺩ ﺭﻭﺍ ﮟﯿﺋﺎﺑ ﻮﮐ ﻦﺘﻣ"
-
-
-msgid "Font of the text. Falls back to the UI font by default."
-msgstr "ﮯﮨ ﺎﺗﺁ ﺲﭘﺍﻭ ﺮﭘ ﭧﻧﻮﻓ UI ﺮﭘ ﺭﻮﻃ ﮦﺪﺷ ﮯﻃ ﮯﺳ ﮯﻠﮩﭘ ﭧﻧﻮﻓ ﺎﮐ ﻦﺘﻣ"
-
-
-msgid "Let the text use more space than the specified height"
-msgstr "ﮟﯾﺩ ﮯﻧﺮﮐ ﻝﺎﻤﻌﺘﺳﺍ ﮧﮕﺟ ﮦﺩﺎﯾﺯ ﮯﺳ ﯽﺋﺎﭽﻧﻭﺍ ﺹﻮﺼﺨﻣ ﻮﮐ ﻦﺘﻣ"
-
-
-msgid "Scale To Fit"
-msgstr "ﮧﻧﺎﻤﯿﭘ ﮯﯿﻟ ﮯﮐ ﮯﻧﻮﮨ ﭧﻓ"
-
-
-msgid "Scale the text size to fit inside the width and height"
-msgstr "ﮟﯾﺮﮐ ﮧﻧﺎﻤﯿﭘ ﺰﺋﺎﺳ ﺎﮐ ﻦﺘﻣ ﮯﯿﻟ ﮯﮐ ﮯﻧﻮﮨ ﭧﻓ ﺭﺪﻧﺍ ﮯﮐ ﯽﺋﺎﭽﻧﻭﺍ ﺭﻭﺍ ﯽﺋﺍﮌﻮﭼ"
-
-
-msgid "Only output curves that fit within the width and height. Output the remainder to the \"Remainder\" output."
-msgstr "ﮟﯾﺮﮐ ﭧﭘ ﭦﺅﺁ ﮟﯿﻣ ﭧﭘ ﭦﺅﺁ \"ﮧﯿﻘﺑ\" ﻮﮐ ﮧﯿﻘﺑ ﮞﻮﮨ ﭧﻓ ﮟﯿﻣ ﯽﺋﺎﭽﻧﻭﺍ ﺭﻭﺍ ﯽﺋﺍﮌﻮﭼ ﻮﺟ ﮟﯿﻤﺧ ﭧﭘ ﭦﺅﺁ ﻑﺮﺻ"
-
-
-msgid "Pivot point position relative to character"
-msgstr "ﻡﺎﻘﻣ  ﯽﮐ ﭧﻨﺋﺍﻮﭘ ﺭﻮﺤﻣ ﺖﺒﺴﻧ ﯽﮐ ﺭﺍﺩﺮﮐ"
-
-
-msgid "Top Left"
-msgstr "ﮟﯿﺋﺎﺑ ﺮﭘﻭﺍ"
-
-
-msgid "Top Center"
-msgstr "ﺮﭩﻨﯿﺳ ﭖﺎﭨ"
-
-
-msgid "Top Right"
-msgstr "ﮟﯿﺋﺍﺩ ﺮﭘﻭﺍ"
-
-
-msgid "Bottom Left"
-msgstr "ﮟﯿﺋﺎﺑ ﮯﭽﯿﻧ"
-
-
-msgid "Bottom Center"
-msgstr "ﺰﮐﺮﻣ ﺎﮐ ﮯﭽﯿﻧ"
-
-
-msgid "Bottom Right"
-msgstr "ﮟﯿﺋﺍﺩ ﮯﭽﯿﻧ"
-
-
 msgid "Subdivide Curve"
 msgstr "ﻢﺧ ﻢﯿﺴﻘﺗ ﯽﻠﯾﺫ"
 
@@ -45746,6 +45686,10 @@ msgstr "ﺰﺋﺎﺳ ﺎﮐ ﭧﻧﻮﻓ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﻝﺎﻤ
 
 msgid "Shrink the frame to minimal bounding box"
 msgstr "ﮟﯾﮍﮑﺳ ﮏﺗ ﺲﮐﺎﺑ ﮓﻧﮉﻧﺅﺎﺑ ﻢﮐ ﮯﺳ ﻢﮐ ﻮﮐ ﻢﯾﺮﻓ"
+
+
+msgid "Single"
+msgstr "ﻞﮕﻨﺳ"
 
 
 msgid "Group Input"
@@ -47908,10 +47852,6 @@ msgid "Value to Normal"
 msgstr "ﻞﻣﺭﺎﻧ ﮯﺳ ﺭﺪﻗ"
 
 
-msgid "Single"
-msgstr "ﻞﮕﻨﺳ"
-
-
 msgid "Enum Item"
 msgstr "Enum ﻢﭩﺋﺁ"
 
@@ -49802,15 +49742,6 @@ msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﻢﭩﺋﺁ ﺎﯿﻧ ﮏﯾﺍ ﮟﯿﻣ ﺲ
 msgctxt "Operator"
 msgid "New Item"
 msgstr "ﻢﭩﺋﺁ ﺎﯿﻧ"
-
-
-msgid "Remove active item from the interface"
-msgstr "ﮟﯾﺩ ﺎﭩﮨ ﻮﮐ ﻢﭩﺋﺁ ﻝﺎﻌﻓ ﮯﺳ ﺲﯿﻓﺮﭩﻧﺍ"
-
-
-msgctxt "Operator"
-msgid "Remove Item"
-msgstr "ﮟﯾﺩ ﺎﭩﮨ ﻮﮐ ﻢﭩﺋﺁ"
 
 
 msgid "Link from this output"
@@ -60234,6 +60165,11 @@ msgstr "ﮟﯾﺮﮐ ﭻﺋﻮﺳ ﺮﭘ ﮈﻮﻣ ﮯﮐ ﮯﻧﺎﭩﻣ ﻮﮐ
 
 
 msgctxt "Operator"
+msgid "Mask"
+msgstr "ﮏﺳﺎﻣ"
+
+
+msgctxt "Operator"
 msgid "Set Curve Caps"
 msgstr "ﮟﯾﺮﮐ ﭧﯿﺳ ﺲﭙﯿﮐ ﻢﺧ"
 
@@ -66632,6 +66568,11 @@ msgstr "ﮟﯾﺮﮐ ﻞﻣﺎﺷ ﻢﭩﺋﺁ"
 
 msgid "Move direction"
 msgstr "ﺖﻤﺳ ﮟﯾﺮﮐ ﻞﻘﺘﻨﻣ"
+
+
+msgctxt "Operator"
+msgid "Remove Item"
+msgstr "ﮟﯾﺩ ﺎﭩﮨ ﻮﮐ ﻢﭩﺋﺁ"
 
 
 msgctxt "Operator"
@@ -84130,14 +84071,6 @@ msgid "Panel containing UI elements"
 msgstr "UI ﻞﻨﯿﭘ ﻞﻤﺘﺸﻣ ﺮﭘ ﺮﺻﺎﻨﻋ"
 
 
-msgid "glTF Material Variants"
-msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
-
-
-msgid "glTF Animations"
-msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
-
-
 msgid "Active Tool"
 msgstr "ﻝﻮﭨ ﻝﺎﻌﻓ"
 
@@ -84170,6 +84103,10 @@ msgid "Compositor"
 msgstr "ﺮﭩﯾﺯﻮﭙﻤﮐ"
 
 
+msgid "glTF Material Variants"
+msgstr "glTF ﮟﯿﺘﻟﺎﺣ ﻒﻠﺘﺨﻣ ﯽﮐ ﺩﺍﻮﻣ"
+
+
 msgid "Overlays"
 msgstr "ﺰﯿﻟﺭﻭﻭﺍ"
 
@@ -84196,6 +84133,10 @@ msgstr "ﺶﺋﺎﻤﯿﭘ"
 
 msgid "Curve Edit Mode"
 msgstr "ﮈﻮﻣ ﺎﮐ ﺮﺋﺎﻔﯾﮈﻮﻣ ﮟﯿﻣ ﻢﺧ"
+
+
+msgid "glTF Animations"
+msgstr "glTF ﺮﯾﻭﺎﺼﺗ ﮎﺮﺤﺘﻣ"
 
 
 msgid "Transform Orientations"
@@ -84716,11 +84657,6 @@ msgstr "ﻭﮍﮑﭘ"
 msgctxt "Operator"
 msgid "Brush"
 msgstr "ﺵﺮﺑ"
-
-
-msgctxt "Operator"
-msgid "Mask"
-msgstr "ﮏﺳﺎﻣ"
 
 
 msgid "Tiling"
@@ -97329,6 +97265,14 @@ msgid "Filter based on key bindings"
 msgstr "ﮟﯾﺮﮐ ﺮﭩﻠﻓ ﺮﭘ ﺩﺎﯿﻨﺑ ﯽﮐ ﮞﻮﯾﺪﻨﺑﺎﭘ ﯼﺪﯿﻠﮐ"
 
 
+msgid "Tab Search Results"
+msgstr "ﺞﺋﺎﺘﻧ ﮯﮐ ﺵﻼ﻿ﺗ ﺐﯿﭨ"
+
+
+msgid "Whether or not each visible tab has a search result"
+msgstr "ﮟﯿﮩﻧ ﺎﯾ ﮯﮨ ﮧﺠﯿﺘﻧ ﺎﮐ ﺵﻼ﻿ﺗ ﮟﯿﻣ ﺐﯿﭨ ﮯﻟﺍﻭ ﮯﻧﺁ ﺮﻈﻧ ﺮﮨ"
+
+
 msgid "Properties Space"
 msgstr "ﺲﯿﭙﺳﺍ ﺰﯿﭨﺮﭘﺍﺮﭘ"
 
@@ -97487,14 +97431,6 @@ msgstr "ﮮﺮﮐ ﮎﺍﺮﺘﺷﺍ ﺎﮐ ﺭﮈﺭﺎﺑ ﮫﺗﺎﺳ ﮯﮐ 
 
 msgid "Strip Modifiers"
 msgstr "ﺮﺋﺎﻔﯾﮈﻮﻣ ﯽﭩﭘ"
-
-
-msgid "Tab Search Results"
-msgstr "ﺞﺋﺎﺘﻧ ﮯﮐ ﺵﻼ﻿ﺗ ﺐﯿﭨ"
-
-
-msgid "Whether or not each visible tab has a search result"
-msgstr "ﮟﯿﮩﻧ ﺎﯾ ﮯﮨ ﮧﺠﯿﺘﻧ ﺎﮐ ﺵﻼ﻿ﺗ ﮟﯿﻣ ﺐﯿﭨ ﮯﻟﺍﻭ ﮯﻧﺁ ﺮﻈﻧ ﺮﮨ"
 
 
 msgid "Pin ID"
@@ -99197,6 +99133,10 @@ msgstr "ﻦﺟﺭﺎﻣ ﺲﮐﺎﺑ ﺭﻮﻄﺑ ﮯﮐ ﺮﺼﻨﻋ ﮯﮐ ﯽ
 
 msgid "Text color"
 msgstr "ﮓﻧﺭ ﺎﮐ ﻦﺘﻣ"
+
+
+msgid "Font of the text. Falls back to the UI font by default."
+msgstr "ﮯﮨ ﺎﺗﺁ ﺲﭘﺍﻭ ﺮﭘ ﭧﻧﻮﻓ UI ﺮﭘ ﺭﻮﻃ ﮦﺪﺷ ﮯﻃ ﮯﺳ ﮯﻠﮩﭘ ﭧﻧﻮﻓ ﺎﮐ ﻦﺘﻣ"
 
 
 msgid "Size of the text"
@@ -101304,16 +101244,16 @@ msgid "Theme settings for the Blender Preferences"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻢﯿﮭﺗ ﮯﯿﻟ ﮯﮐ ﺕﺎﺤﯿﺟﺮﺗ ﯽﮐ ﺭﮉﻨﯿﻠﺑ"
 
 
+msgid "Search Match"
+msgstr "ﮟﯾﺮﮐ ﺵﻼ﻿ﺗ ﭻﯿﻣ"
+
+
 msgid "Theme Properties"
 msgstr "ﺰﯿﭨﺮﭘﺍﺮﭘ ﻢﯿﮭﺗ"
 
 
 msgid "Theme settings for the Properties"
 msgstr "ﺕﺎﺒﯿﺗﺮﺗ ﯽﮐ ﻢﯿﮭﺗ ﮯﯿﻟ ﮯﮐ ﺰﯿﭨﺮﭘﺍﺮﭘ"
-
-
-msgid "Search Match"
-msgstr "ﮟﯾﺮﮐ ﺵﻼ﻿ﺗ ﭻﯿﻣ"
 
 
 msgid "Theme settings for asset shelves"
@@ -125333,12 +125273,8 @@ msgstr ""
 "۔ﮟﯿﮨ ﮯﺌﮔ ﮯﯿﮐ ﮟﯿﮩﻧ ﺾﯾﻮﻔﺗ ﻮﮐ ﮒﻼ﻿ﭩﯿﮐ ﮯﺛﺎﺛﺍ ﮯﮐ ﭖﻭﺮﮔ ﮈﻮﻧ ﻝﻮﭨ"
 
 
-msgid "The internal clipboard is empty"
-msgstr "ﮯﮨ ﯽﻟﺎﺧ ﮈﺭﻮﺑ ﭗﻠﮐ ﯽﻧﻭﺭﺪﻧﺍ"
-
-
-msgid "Some nodes references to other IDs could not be restored, will be left empty"
-msgstr "ﺎﮔ ﮯﺋﺎﺟ ﺎﯾﺩ ﮌﻮﮭﭼ ﯽﻟﺎﺧ ،ﺎﮑﺳ ﺎﺟ ﺎﯿﮐ ﮟﯿﮩﻧ ﻝﺎﺤﺑ ﻮﮐ ﺱﮈﻮﻧ ﮫﭽﮐ ﮯﺳ ﮯﻟﺍﻮﺣ ﮯﮐ IDs ﺮﮕﯾﺩ"
+msgid "No data to paste"
+msgstr "ﮯﮨ ﮟﯿﮩﻧ ﺎﭩﯾﮈ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﭧﺴﯿﭘ"
 
 
 msgid "Cannot add node %s into node tree %s: %s"
@@ -125847,10 +125783,6 @@ msgstr "ﮟﯿﮩﻧ ﻢﭩﺋﺁ ﻝﺎﻌﻓ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯ
 
 msgid "No selected data-blocks to copy"
 msgstr "ﮯﮨ ﮟﯿﮩﻧ ﮎﻼ﻿ﺑ ﺎﭩﯾﮈ ﺐﺨﺘﻨﻣ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﯽﭘﺎﮐ"
-
-
-msgid "No data to paste"
-msgstr "ﮯﮨ ﮟﯿﮩﻧ ﺎﭩﯾﮈ ﯽﺋﻮﮐ ﮯﯿﻟ ﮯﮐ ﮯﻧﺮﮐ ﭧﺴﯿﭘ"
 
 
 msgid "Operation requires an active keying set"
@@ -132298,6 +132230,14 @@ msgstr "ﮯﮨ ﻢﮐ ﮯﺳ ﺕﺯﺎﺟﺍ ﯽﮐ VDBﻼ﻿ﮭﮐ ﮧﻧﺎﻤ
 
 msgid "How the transformation is specified"
 msgstr "ﮯﮨ ﯽﺗﺎﺟ ﯽﮐ ﮯﺴﯿﮐ ﺖﺣﺎﺿﻭ ﯽﮐ ﯽﻠﯾﺪﺒﺗ"
+
+
+msgid "Bottom Left"
+msgstr "ﮟﯿﺋﺎﺑ ﮯﭽﯿﻧ"
+
+
+msgid "Top Right"
+msgstr "ﮟﯿﺋﺍﺩ ﺮﭘﻭﺍ"
 
 
 msgid "Faces to consider when packing islands"

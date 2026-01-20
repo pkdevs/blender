@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'12e628ea43f8')\n"
+"Project-Id-Version: Blender 5.1.0 Alpha (b'e3ae31b49e53')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-12 15:09+0000\n"
+"POT-Creation-Date: 2026-01-20 10:29+0000\n"
 "PO-Revision-Date: 2025-08-06 08:59+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -34254,6 +34254,38 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "Mesh Select Mode"
+msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Face Data"
+msgstr "முகத்தை முகம்"
+
+
+msgid "Select by Face Strength"
+msgstr "முக வலிமையால் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Set Face Strength"
+msgstr "முக வலிமையை அமைக்கவும்"
+
+
+msgid "Math"
+msgstr "கணிதம்"
+
+
+msgid "Clean Up"
+msgstr "தூய்மை செய்"
+
+
+msgid "Utilities"
+msgstr "பயன்பாடுகள்"
+
+
+msgid "Merge"
+msgstr "ஒன்றிணைக்கவும்"
+
+
 msgid "Show/Hide"
 msgstr "காட்டு/மறைக்க"
 
@@ -34266,32 +34298,16 @@ msgid "Kerning"
 msgstr "கெர்னிங்"
 
 
-msgid "Math"
-msgstr "கணிதம்"
-
-
 msgid "Metaball"
 msgstr "வளர்சிதை மாற்ற"
 
 
-msgid "Utilities"
-msgstr "பயன்பாடுகள்"
+msgid "Read"
+msgstr "படி"
 
 
 msgid "Names"
 msgstr "பெயர்கள்"
-
-
-msgid "Bone Roll"
-msgstr "எலும்பு ரோல்"
-
-
-msgid "Clean Up"
-msgstr "தூய்மை செய்"
-
-
-msgid "Read"
-msgstr "படி"
 
 
 msgid "Sample"
@@ -34302,12 +34318,24 @@ msgid "Write"
 msgstr "எழுதுங்கள்"
 
 
-msgid "Pivot Point"
-msgstr "பிவோட் புள்ளி"
+msgid "Bone Roll"
+msgstr "எலும்பு ரோல்"
 
 
 msgid "Primitives"
 msgstr "ப்ரைமிடிவ்ச்"
+
+
+msgid "Gizmo"
+msgstr "கிச்மோ"
+
+
+msgid "Instances"
+msgstr "நிகழ்வுகள்"
+
+
+msgid "Pivot Point"
+msgstr "பிவோட் புள்ளி"
 
 
 msgid "Snap"
@@ -34326,6 +34354,10 @@ msgid "Automasking"
 msgstr "ஆட்டோமேச்கிங்"
 
 
+msgid "Import"
+msgstr "இறக்குமதி"
+
+
 msgid "Face Sets Edit"
 msgstr "முகம் தொகுப்புகள் திருத்து"
 
@@ -34334,20 +34366,16 @@ msgid "Vertex Group Locks"
 msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
 
 
-msgid "Gizmo"
-msgstr "கிச்மோ"
-
-
-msgid "Instances"
-msgstr "நிகழ்வுகள்"
-
-
-msgid "Import"
-msgstr "இறக்குமதி"
-
-
 msgid "Deprecated"
 msgstr "மதிப்பிடப்பட்டது"
+
+
+msgid "List"
+msgstr "பட்டியல்"
+
+
+msgid "UV"
+msgstr "புறஊதா"
 
 
 msgid "Mirror"
@@ -34362,20 +34390,12 @@ msgid "Local View"
 msgstr "உள்ளக பார்வை"
 
 
-msgid "List"
-msgstr "பட்டியல்"
-
-
 msgid "Viewpoint"
 msgstr "பார்வை"
 
 
 msgid "Navigation"
 msgstr "வழிசெலுத்தல்"
-
-
-msgid "UV"
-msgstr "புறஊதா"
 
 
 msgid "Align View"
@@ -34434,6 +34454,10 @@ msgid "Rigid Body"
 msgstr "கடினமான உடல்"
 
 
+msgid "Layout"
+msgstr "தளவமைப்பு"
+
+
 msgid "Apply"
 msgstr "இடு"
 
@@ -34466,8 +34490,16 @@ msgid "Hooks"
 msgstr "கொக்கிகள்"
 
 
-msgid "Layout"
-msgstr "தளவமைப்பு"
+msgid "Adjust"
+msgstr "சரிசெய்யவும்"
+
+
+msgid "Keying"
+msgstr "கீயிங்"
+
+
+msgid "Tracking"
+msgstr "கண்காணிப்பு"
 
 
 msgid "Trim/Add"
@@ -34490,10 +34522,6 @@ msgid "Clear Transform"
 msgstr "தெளிவான உருமாற்றம்"
 
 
-msgid "Adjust"
-msgstr "சரிசெய்யவும்"
-
-
 msgid "In-Betweens"
 msgstr "இன்-பெட்வீன்ச்"
 
@@ -34506,14 +34534,6 @@ msgid "Bone Collections"
 msgstr "எலும்பு வசூல்"
 
 
-msgid "Keying"
-msgstr "கீயிங்"
-
-
-msgid "Tracking"
-msgstr "கண்காணிப்பு"
-
-
 msgid "Toggle Bone Options"
 msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
 
@@ -34524,26 +34544,6 @@ msgstr "எலும்பு விருப்பங்களை இயக்�
 
 msgid "Disable Bone Options"
 msgstr "எலும்பு விருப்பங்களை முடக்கு"
-
-
-msgid "Mesh Select Mode"
-msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Face Data"
-msgstr "முகத்தை முகம்"
-
-
-msgid "Select by Face Strength"
-msgstr "முக வலிமையால் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Set Face Strength"
-msgstr "முக வலிமையை அமைக்கவும்"
-
-
-msgid "Merge"
-msgstr "ஒன்றிணைக்கவும்"
 
 
 msgid "Keyframe Insert Pie"
@@ -47853,66 +47853,6 @@ msgid "Generate a paragraph of text with a specific font, using a curve instance
 msgstr "ஒவ்வொரு எழுத்தையும் சேமிக்க ஒரு வளைவு நிகழ்வைப் பயன்படுத்தி, ஒரு குறிப்பிட்ட எழுத்துருவுடன் உரையின் பத்தியை உருவாக்குங்கள்"
 
 
-msgid "Align text to the center"
-msgstr "உரையை மையத்திற்கு சீரமைக்கவும்"
-
-
-msgid "Align text to the left and the right"
-msgstr "இடது மற்றும் வலதுபுறத்தில் உரையை சீரமைக்கவும்"
-
-
-msgid "Align text to the left and the right, with equal character spacing"
-msgstr "சமமான எழுத்து இடைவெளியுடன் இடது மற்றும் வலதுபுறத்தில் உரையை சீரமைக்கவும்"
-
-
-msgid "Font of the text. Falls back to the UI font by default."
-msgstr "உரையின் எழுத்துரு. இயல்பாகவே இடைமுகம் எழுத்துருவுக்கு மீண்டும் விழுகிறது."
-
-
-msgid "Let the text use more space than the specified height"
-msgstr "உரை குறிப்பிட்ட உயரத்தை விட அதிக இடத்தைப் பயன்படுத்தட்டும்"
-
-
-msgid "Scale To Fit"
-msgstr "பொருத்தமான அளவு"
-
-
-msgid "Scale the text size to fit inside the width and height"
-msgstr "அகலம் மற்றும் உயரத்திற்குள் பொருந்தும் வகையில் உரை அளவை அளவிடவும்"
-
-
-msgid "Only output curves that fit within the width and height. Output the remainder to the \"Remainder\" output."
-msgstr "அகலம் மற்றும் உயரத்திற்குள் பொருந்தக்கூடிய வெளியீட்டு வளைவுகள் மட்டுமே. மீதமுள்ளவற்றை \"மீதமுள்ள\" வெளியீட்டிற்கு வெளியிடுங்கள்."
-
-
-msgid "Pivot point position relative to character"
-msgstr "பாத்திரத்துடன் தொடர்புடைய பிவோட் புள்ளி நிலை"
-
-
-msgid "Top Left"
-msgstr "மேல் இடது"
-
-
-msgid "Top Center"
-msgstr "மேல் நடுவண்"
-
-
-msgid "Top Right"
-msgstr "மேல் வலது"
-
-
-msgid "Bottom Left"
-msgstr "கீழே இடது"
-
-
-msgid "Bottom Center"
-msgstr "கீழே நடுவண்"
-
-
-msgid "Bottom Right"
-msgstr "கீழே வலது"
-
-
 msgid "Subdivide Curve"
 msgstr "உட்பிரிவு வளைவு"
 
@@ -48144,6 +48084,42 @@ msgstr "லேபிளைக் காண்பிக்க பயன்பட�
 
 msgid "Shrink the frame to minimal bounding box"
 msgstr "சட்டத்தை குறைந்தபட்ச எல்லை பெட்டியாக சுருக்கவும்"
+
+
+msgid "Structure Type"
+msgstr "கட்டமைப்பு வகை"
+
+
+msgid "What kind of higher order types are expected to flow through this socket"
+msgstr "இந்த சாக்கெட் வழியாக எந்த வகையான உயர் வரிசை வகைகள் பாயும் என்று எதிர்பார்க்கப்படுகிறது"
+
+
+msgid "Automatically detect a good structure type based on how the socket is used"
+msgstr "சாக்கெட் எவ்வாறு பயன்படுத்தப்படுகிறது என்பதை அடிப்படையாகக் கொண்டு ஒரு நல்ல கட்டமைப்பு வகையை தானாகவே கண்டறியவும்"
+
+
+msgid "Socket can work with different kinds of structures"
+msgstr "சாக்கெட் பல்வேறு வகையான கட்டமைப்புகளுடன் வேலை செய்யலாம்"
+
+
+msgid "Socket expects a field"
+msgstr "சாக்கெட் ஒரு புலத்தை எதிர்பார்க்கிறது"
+
+
+msgid "Socket expects a grid"
+msgstr "சாக்கெட் ஒரு கட்டத்தை எதிர்பார்க்கிறது"
+
+
+msgid "Socket expects a list"
+msgstr "சாக்கெட் ஒரு பட்டியலை எதிர்பார்க்கிறது"
+
+
+msgid "Single"
+msgstr "ஒற்றை"
+
+
+msgid "Socket expects a single value"
+msgstr "சாக்கெட் ஒரு மதிப்பை எதிர்பார்க்கிறது"
 
 
 msgid "Group Input"
@@ -50410,42 +50386,6 @@ msgid "Closure Input Item"
 msgstr "மூடல் உள்ளீட்டு உருப்படி"
 
 
-msgid "Structure Type"
-msgstr "கட்டமைப்பு வகை"
-
-
-msgid "What kind of higher order types are expected to flow through this socket"
-msgstr "இந்த சாக்கெட் வழியாக எந்த வகையான உயர் வரிசை வகைகள் பாயும் என்று எதிர்பார்க்கப்படுகிறது"
-
-
-msgid "Automatically detect a good structure type based on how the socket is used"
-msgstr "சாக்கெட் எவ்வாறு பயன்படுத்தப்படுகிறது என்பதை அடிப்படையாகக் கொண்டு ஒரு நல்ல கட்டமைப்பு வகையை தானாகவே கண்டறியவும்"
-
-
-msgid "Socket can work with different kinds of structures"
-msgstr "சாக்கெட் பல்வேறு வகையான கட்டமைப்புகளுடன் வேலை செய்யலாம்"
-
-
-msgid "Socket expects a field"
-msgstr "சாக்கெட் ஒரு புலத்தை எதிர்பார்க்கிறது"
-
-
-msgid "Socket expects a grid"
-msgstr "சாக்கெட் ஒரு கட்டத்தை எதிர்பார்க்கிறது"
-
-
-msgid "Socket expects a list"
-msgstr "சாக்கெட் ஒரு பட்டியலை எதிர்பார்க்கிறது"
-
-
-msgid "Single"
-msgstr "ஒற்றை"
-
-
-msgid "Socket expects a single value"
-msgstr "சாக்கெட் ஒரு மதிப்பை எதிர்பார்க்கிறது"
-
-
 msgid "Closure Input Items"
 msgstr "மூடல் உள்ளீட்டு உருப்படிகள்"
 
@@ -52558,15 +52498,6 @@ msgstr "இடைமுகத்தில் புதிய உருப்ப�
 msgctxt "Operator"
 msgid "New Item"
 msgstr "புதிய பொருள்"
-
-
-msgid "Remove active item from the interface"
-msgstr "இடைமுகத்திலிருந்து செயலில் உள்ள உருப்படியை அகற்று"
-
-
-msgctxt "Operator"
-msgid "Remove Item"
-msgstr "உருப்படியை அகற்று"
 
 
 msgid "Make the panel toggle a stand-alone socket"
@@ -63464,6 +63395,11 @@ msgid "Switch brush to erase mode for duration of stroke"
 msgstr "பக்கவாதத்தின் காலத்திற்கு அழிக்கும் பயன்முறையில் தூரிகையை மாற்றவும்"
 
 
+msgctxt "Operator"
+msgid "Mask"
+msgstr "முகமூடி"
+
+
 msgid "Pen Flip"
 msgstr "பேனா புரட்டு"
 
@@ -70338,6 +70274,11 @@ msgstr "செயலில் உள்ள உருப்படியை நக
 
 msgid "Move direction"
 msgstr "திசையை நகர்த்தவும்"
+
+
+msgctxt "Operator"
+msgid "Remove Item"
+msgstr "உருப்படியை அகற்று"
 
 
 msgid "Remove active item"
@@ -89009,22 +88950,6 @@ msgid "Panel containing UI elements"
 msgstr "இடைமுகம் கூறுகளைக் கொண்ட குழு"
 
 
-msgid "glTF Variants"
-msgstr "gltf வகைகள்"
-
-
-msgid "glTF Material Variants"
-msgstr "GLTF பொருள் மாறுபாடுகள்"
-
-
-msgid "glTF"
-msgstr "gltf"
-
-
-msgid "glTF Animations"
-msgstr "GLTF அனிமேசன்கள்"
-
-
 msgid "Active Tool"
 msgstr "செயலில் உள்ள கருவி"
 
@@ -89061,6 +88986,14 @@ msgid "Compositor"
 msgstr "தொகுப்பாளர்"
 
 
+msgid "glTF Variants"
+msgstr "gltf வகைகள்"
+
+
+msgid "glTF Material Variants"
+msgstr "GLTF பொருள் மாறுபாடுகள்"
+
+
 msgid "Overlays"
 msgstr "மேலடுக்குகள்"
 
@@ -89091,6 +89024,14 @@ msgstr "வளைவு திருத்து பயன்முறை"
 
 msgid "Curves Edit Mode"
 msgstr "வளைவுகள் திருத்து பயன்முறை"
+
+
+msgid "glTF"
+msgstr "gltf"
+
+
+msgid "glTF Animations"
+msgstr "GLTF அனிமேசன்கள்"
 
 
 msgid "Transform Orientations"
@@ -89651,11 +89592,6 @@ msgstr "ச்மியர்"
 msgctxt "Operator"
 msgid "Clone"
 msgstr "நகலி"
-
-
-msgctxt "Operator"
-msgid "Mask"
-msgstr "முகமூடி"
 
 
 msgid "Tiling"
@@ -95145,6 +95081,11 @@ msgstr "0.0 முதல் 1.0 வரை ஒரு காரணி"
 
 
 msgctxt "Unit"
+msgid "Mass"
+msgstr "நிறை"
+
+
+msgctxt "Unit"
 msgid "Angle"
 msgstr "கோணம்"
 
@@ -95343,11 +95284,6 @@ msgstr "தொகுதி"
 msgctxt "Unit"
 msgid "Rotation"
 msgstr "சுழற்சி"
-
-
-msgctxt "Unit"
-msgid "Mass"
-msgstr "நிறை"
 
 
 msgctxt "Unit"
@@ -103235,6 +103171,14 @@ msgid "Filter based on key bindings"
 msgstr "முக்கிய பிணைப்புகளின் அடிப்படையில் வடிகட்டவும்"
 
 
+msgid "Tab Search Results"
+msgstr "தாவல் தேடல் முடிவுகள்"
+
+
+msgid "Whether or not each visible tab has a search result"
+msgstr "ஒவ்வொரு புலப்படும் தாவலுக்கும் ஒரு தேடல் முடிவு உள்ளதா இல்லையா"
+
+
 msgid "Properties Space"
 msgstr "பண்புகள் இடம்"
 
@@ -103393,14 +103337,6 @@ msgstr "இந்த ஆசிரியர் ஒரு வெளிப்பு
 
 msgid "Strip Modifiers"
 msgstr "உரி மாற்றியமைப்பாளர்கள்"
-
-
-msgid "Tab Search Results"
-msgstr "தாவல் தேடல் முடிவுகள்"
-
-
-msgid "Whether or not each visible tab has a search result"
-msgstr "ஒவ்வொரு புலப்படும் தாவலுக்கும் ஒரு தேடல் முடிவு உள்ளதா இல்லையா"
 
 
 msgid "Pin ID"
@@ -105291,6 +105227,10 @@ msgstr "பெட்டி உயரத்தின் காரணியாக 
 
 msgid "Text color"
 msgstr "உரை நிறம்"
+
+
+msgid "Font of the text. Falls back to the UI font by default."
+msgstr "உரையின் எழுத்துரு. இயல்பாகவே இடைமுகம் எழுத்துருவுக்கு மீண்டும் விழுகிறது."
 
 
 msgid "Size of the text"
@@ -107495,16 +107435,16 @@ msgid "Theme settings for the Blender Preferences"
 msgstr "கலப்பான் விருப்பங்களுக்கான கருப்பொருள் அமைப்புகள்"
 
 
+msgid "Search Match"
+msgstr "தேடல் போட்டி"
+
+
 msgid "Theme Properties"
 msgstr "கருப்பொருள் பண்புகள்"
 
 
 msgid "Theme settings for the Properties"
 msgstr "பண்புகளுக்கான கருப்பொருள் அமைப்புகள்"
-
-
-msgid "Search Match"
-msgstr "தேடல் போட்டி"
 
 
 msgid "Theme settings for asset shelves"
@@ -133760,12 +133700,8 @@ msgstr ""
 " சொத்து உலாவியில் பட்டியல்களை ஒதுக்கலாம்"
 
 
-msgid "The internal clipboard is empty"
-msgstr "உள் கிளிப்போர்டு காலியாக உள்ளது"
-
-
-msgid "Some nodes references to other IDs could not be restored, will be left empty"
-msgstr "சில முனைகள் மற்ற ஐடிகளைப் பற்றிய குறிப்புகளை மீட்டெடுக்க முடியவில்லை, காலியாக விடப்படும்"
+msgid "No data to paste"
+msgstr "ஒட்டுவதற்கு தரவு இல்லை"
 
 
 msgid "Cannot add node %s into node tree %s: %s"
@@ -134522,10 +134458,6 @@ msgstr "மறுபெயரிட செயலில் உள்ள உரு
 
 msgid "No selected data-blocks to copy"
 msgstr "நகலெடுக்க தேர்ந்தெடுக்கப்பட்ட தரவு-தொகுதிகள் இல்லை"
-
-
-msgid "No data to paste"
-msgstr "ஒட்டுவதற்கு தரவு இல்லை"
 
 
 msgid "There is no active data-block"
@@ -141387,6 +141319,10 @@ msgid "Each input geometry is turned into a separate instance"
 msgstr "ஒவ்வொரு உள்ளீட்டு வடிவவியலும் ஒரு தனி நிகழ்வாக மாற்றப்படுகிறது"
 
 
+msgid "Cannot get internal value from bundle"
+msgstr "மூட்டையிலிருந்து உள் மதிப்பைப் பெற முடியாது"
+
+
 msgid "Volume to take a named grid out of"
 msgstr "பெயரிடப்பட்ட கட்டத்தை எடுக்க தொகுதி"
 
@@ -142564,10 +142500,6 @@ msgid "Value not found in bundle: \"{}\""
 msgstr "மூட்டையில் மதிப்பு காணப்படவில்லை: \"{}\""
 
 
-msgid "Cannot get internal value from bundle"
-msgstr "மூட்டையிலிருந்து உள் மதிப்பைப் பெற முடியாது"
-
-
 msgid "Implicit type conversion when separating bundle"
 msgstr "மூட்டையை பிரிக்கும்போது மறைமுக வகை மாற்றம்"
 
@@ -142851,6 +142783,14 @@ msgstr "தனித்தனியாக மொழிபெயர்க்க�
 
 msgid "Mesh to triangulate"
 msgstr "முக்கோணத்திற்கு கண்ணி"
+
+
+msgid "Bottom Left"
+msgstr "கீழே இடது"
+
+
+msgid "Top Right"
+msgstr "மேல் வலது"
 
 
 msgid "Faces to consider when packing islands"
