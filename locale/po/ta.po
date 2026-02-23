@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Beta (b'1fa1b22043cd')\n"
+"Project-Id-Version: Blender 5.1.0 Beta (b'57dd016d99c8')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-02-16 10:28+0000\n"
+"POT-Creation-Date: 2026-02-23 10:33+0000\n"
 "PO-Revision-Date: 2025-08-06 08:59+0000\n"
 "Last-Translator: தமிழ்நேரம் <anishprabu.t@gmail.com>\n"
 "Language-Team: Tamil <https://translate.blender.org/projects/blender-ui/ui/ta/>\n"
@@ -5932,18 +5932,6 @@ msgid "Threshold in screen space used for the simplify algorithm. Points within 
 msgstr "எளிமைப்படுத்தும் வழிமுறைக்கு பயன்படுத்தப்படும் திரை இடத்தில் வாசல். இந்த வாசலுக்குள் உள்ள புள்ளிகள் அவை ஒரு நேர் கோட்டில் இருப்பதைப் போல கருதப்படுகின்றன."
 
 
-msgid "Stroke"
-msgstr "வீச்சு"
-
-
-msgid "Fill"
-msgstr "நிரப்பவும்"
-
-
-msgid "Both"
-msgstr "இரண்டும்"
-
-
 msgid "Active Layer"
 msgstr "செயலில் அடுக்கு"
 
@@ -6132,8 +6120,16 @@ msgid "Defines how vertex color affect to the strokes"
 msgstr "வெர்டெக்ச் நிறம் வீச்சுகள் எவ்வாறு பாதிக்கிறது என்பதை வரையறுக்கிறது"
 
 
+msgid "Stroke"
+msgstr "வீச்சு"
+
+
 msgid "Vertex Color affects to Stroke only"
 msgstr "வெர்டெக்ச் வண்ணம் பக்கவாதத்திற்கு மட்டுமே பாதிக்கிறது"
+
+
+msgid "Fill"
+msgstr "நிரப்பவும்"
 
 
 msgid "Vertex Color affects to Fill only"
@@ -7696,48 +7692,13 @@ msgid "Blend Factor"
 msgstr "கலப்பு காரணி"
 
 
-msgid "Blend Type"
-msgstr "கலப்பு வகை"
-
-
 msgid "Mode used to mix with texture output color"
 msgstr "அமைப்பு வெளியீட்டு வண்ணத்துடன் கலக்கப் பயன்படுகிறது"
 
 
-msgid "Mix"
-msgstr "கலக்க"
-
-
-msgid "Darken"
-msgstr "இருட்டடி"
-
-
-msgid "Lighten"
-msgstr "ஒளிரச் செய்யுங்கள்"
-
-
-msgid "Screen"
-msgstr "திரை"
-
-
-msgid "Overlay"
-msgstr "மேலடுக்கு"
-
-
-msgid "Soft Light"
-msgstr "மென்மையான ஒளி"
-
-
-msgid "Linear Light"
-msgstr "நேரியல் ஒளி"
-
-
-msgid "Difference"
-msgstr "வேறுபாடு"
-
-
-msgid "Divide"
-msgstr "பிரி"
+msgctxt "Color"
+msgid "Value"
+msgstr "மதிப்பு"
 
 
 msgid "Brightness"
@@ -13537,6 +13498,10 @@ msgid "Give randomness to the modified F-Curve"
 msgstr "மாற்றியமைக்கப்பட்ட எஃப்-வளைவுக்கு சீரற்ற தன்மையைக் கொடுங்கள்"
 
 
+msgid "Blend Type"
+msgstr "கலப்பு வகை"
+
+
 msgid "Method of modifying the existing F-Curve"
 msgstr "தற்போதுள்ள எஃப்-வளைவை மாற்றும் முறை"
 
@@ -17783,6 +17748,10 @@ msgid "Hard Light"
 msgstr "கடினமான ஒளி"
 
 
+msgid "Divide"
+msgstr "பிரி"
+
+
 msgid "Grease Pencil frames"
 msgstr "கிரீச் பென்சில் பிரேம்கள்"
 
@@ -18615,10 +18584,6 @@ msgid "View Normal Limit"
 msgstr "சாதாரண வரம்பைக் காண்க"
 
 
-msgid "Blending Mode"
-msgstr "கலப்பு பயன்முறை"
-
-
 msgid "Brush blending mode"
 msgstr "தூரிகை கலத்தல் பயன்முறை"
 
@@ -18635,16 +18600,8 @@ msgid "Use Multiply blending mode while painting"
 msgstr "ஓவியம் வரையில் பெருக்க கலப்பு பயன்முறையைப் பயன்படுத்தவும்"
 
 
-msgid "Color Burn"
-msgstr "வண்ண எரியும்"
-
-
 msgid "Use Color Burn blending mode while painting"
 msgstr "ஓவியம் வரையில் வண்ண எரியும் கலப்பு பயன்முறையைப் பயன்படுத்தவும்"
-
-
-msgid "Linear Burn"
-msgstr "நேரியல் எரியும்"
 
 
 msgid "Use Linear Burn blending mode while painting"
@@ -18657,10 +18614,6 @@ msgstr "ஓவியம் வரையில் லைட் கலிங் �
 
 msgid "Use Screen blending mode while painting"
 msgstr "ஓவியம் வரையில் திரை கலப்பு பயன்முறையைப் பயன்படுத்தவும்"
-
-
-msgid "Color Dodge"
-msgstr "வண்ண டாட்ச்"
 
 
 msgid "Use Color Dodge blending mode while painting"
@@ -18683,10 +18636,6 @@ msgid "Use Hard Light blending mode while painting"
 msgstr "ஓவியம் வரையில் கடின ஒளி கலப்பு பயன்முறையைப் பயன்படுத்தவும்"
 
 
-msgid "Vivid Light"
-msgstr "தெளிவான ஒளி"
-
-
 msgid "Use Vivid Light blending mode while painting"
 msgstr "ஓவியம் வரையில் தெளிவான ஒளி கலப்பு பயன்முறையைப் பயன்படுத்தவும்"
 
@@ -18695,20 +18644,12 @@ msgid "Use Linear Light blending mode while painting"
 msgstr "ஓவியம் வரையில் நேரியல் ஒளி கலப்பு பயன்முறையைப் பயன்படுத்தவும்"
 
 
-msgid "Pin Light"
-msgstr "முள் ஒளி"
-
-
 msgid "Use Pin Light blending mode while painting"
 msgstr "ஓவியம் வரையில் முள் ஒளி கலப்பு பயன்முறையைப் பயன்படுத்தவும்"
 
 
 msgid "Use Difference blending mode while painting"
 msgstr "ஓவியம் வரையில் வேறுபாடு கலப்பு பயன்முறையைப் பயன்படுத்தவும்"
-
-
-msgid "Exclusion"
-msgstr "விலக்கு"
 
 
 msgid "Use Exclusion blending mode while painting"
@@ -18735,16 +18676,8 @@ msgid "Use Value blending mode while painting"
 msgstr "ஓவியம் வரையில் மதிப்பு கலத்தல் பயன்முறையைப் பயன்படுத்தவும்"
 
 
-msgid "Erase Alpha"
-msgstr "ஆல்பாவை அழிக்கவும்"
-
-
 msgid "Erase alpha while painting"
 msgstr "ஓவியம் வரையில் ஆல்பாவை அழிக்கவும்"
-
-
-msgid "Add Alpha"
-msgstr "ஆல்பா சேர்க்கவும்"
 
 
 msgid "Add alpha while painting"
@@ -32850,6 +32783,14 @@ msgid "Specify how the modifier value is blended into the base value"
 msgstr "மாற்றியமைக்கும் மதிப்பு எவ்வாறு அடிப்படை மதிப்பில் கலக்கப்படுகிறது என்பதைக் குறிப்பிடவும்"
 
 
+msgid "Mix"
+msgstr "கலக்க"
+
+
+msgid "Difference"
+msgstr "வேறுபாடு"
+
+
 msgid "Curve used for the curve mapping"
 msgstr "வளைவு மேப்பிங்கிற்கு பயன்படுத்தப்படும் வளைவு"
 
@@ -33056,6 +32997,42 @@ msgstr "வரி வண்ண மாற்றிகளை வரையறுக
 
 msgid "Change line color along stroke"
 msgstr "பக்கவாதத்துடன் வரி நிறத்தை மாற்றவும்"
+
+
+msgid "Darken"
+msgstr "இருட்டடி"
+
+
+msgid "Color Burn"
+msgstr "வண்ண எரியும்"
+
+
+msgid "Lighten"
+msgstr "ஒளிரச் செய்யுங்கள்"
+
+
+msgid "Screen"
+msgstr "திரை"
+
+
+msgid "Color Dodge"
+msgstr "வண்ண டாட்ச்"
+
+
+msgid "Overlay"
+msgstr "மேலடுக்கு"
+
+
+msgid "Soft Light"
+msgstr "மென்மையான ஒளி"
+
+
+msgid "Linear Light"
+msgstr "நேரியல் ஒளி"
+
+
+msgid "Exclusion"
+msgstr "விலக்கு"
 
 
 msgid "Color ramp used to change line color"
@@ -34230,8 +34207,16 @@ msgid "Editor menu containing buttons"
 msgstr "பொத்தான்களைக் கொண்ட திருத்தி பட்டியல்"
 
 
+msgid "UV"
+msgstr "புறஊதா"
+
+
 msgid "Read"
 msgstr "படி"
+
+
+msgid "Rigid Body"
+msgstr "கடினமான உடல்"
 
 
 msgid "Write"
@@ -34242,16 +34227,124 @@ msgid "Sample"
 msgstr "மாதிரி"
 
 
-msgid "Clean Up"
-msgstr "தூய்மை செய்"
-
-
 msgid "Primitives"
 msgstr "ப்ரைமிடிவ்ச்"
 
 
+msgid "Apply"
+msgstr "இடு"
+
+
+msgid "Track"
+msgstr "டிராக்"
+
+
+msgid "Quick Effects"
+msgstr "விரைவான விளைவுகள்"
+
+
 msgid "Show/Hide"
 msgstr "காட்டு/மறைக்க"
+
+
+msgid "Clean Up"
+msgstr "தூய்மை செய்"
+
+
+msgid "Asset"
+msgstr "சொத்து"
+
+
+msgid "Make Single User"
+msgstr "ஒற்றை பயனரை உருவாக்குங்கள்"
+
+
+msgid "Convert"
+msgstr "மாற்றவும்"
+
+
+msgid "Link/Transfer Data"
+msgstr "இணைப்பு/பரிமாற்ற தரவு"
+
+
+msgid "Hooks"
+msgstr "கொக்கிகள்"
+
+
+msgid "Vertex Group Locks"
+msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
+
+
+msgid "Trim/Add"
+msgstr "டிரிம்/சேர்"
+
+
+msgid "Sculpt Set Pivot"
+msgstr "சிற்பம் செட் பிவோட்"
+
+
+msgid "Face Sets Init"
+msgstr "முகம் தொடங்குகிறது"
+
+
+msgid "Random Mask"
+msgstr "சீரற்ற முகமூடி"
+
+
+msgid "Clear Transform"
+msgstr "தெளிவான உருமாற்றம்"
+
+
+msgid "In-Betweens"
+msgstr "இன்-பெட்வீன்ச்"
+
+
+msgid "Propagate"
+msgstr "பிரச்சாரம்"
+
+
+msgid "Bone Collections"
+msgstr "எலும்பு வசூல்"
+
+
+msgid "Names"
+msgstr "பெயர்கள்"
+
+
+msgid "Toggle Bone Options"
+msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
+
+
+msgid "Enable Bone Options"
+msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
+
+
+msgid "Disable Bone Options"
+msgstr "எலும்பு விருப்பங்களை முடக்கு"
+
+
+msgid "Mesh Select Mode"
+msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Face Data"
+msgstr "முகத்தை முகம்"
+
+
+msgid "Select by Face Strength"
+msgstr "முக வலிமையால் தேர்ந்தெடுக்கவும்"
+
+
+msgid "Set Face Strength"
+msgstr "முக வலிமையை அமைக்கவும்"
+
+
+msgid "Merge"
+msgstr "ஒன்றிணைக்கவும்"
+
+
+msgid "Layout"
+msgstr "தளவமைப்பு"
 
 
 msgid "Special Characters"
@@ -34266,12 +34359,28 @@ msgid "Metaball"
 msgstr "வளர்சிதை மாற்ற"
 
 
-msgid "Names"
-msgstr "பெயர்கள்"
+msgid "Adjust"
+msgstr "சரிசெய்யவும்"
+
+
+msgid "Keying"
+msgstr "கீயிங்"
 
 
 msgid "Bone Roll"
 msgstr "எலும்பு ரோல்"
+
+
+msgid "Tracking"
+msgstr "கண்காணிப்பு"
+
+
+msgid "Utilities"
+msgstr "பயன்பாடுகள்"
+
+
+msgid "Math"
+msgstr "கணிதம்"
 
 
 msgid "Pivot Point"
@@ -34296,14 +34405,6 @@ msgstr "ஆட்டோமேச்கிங்"
 
 msgid "Face Sets Edit"
 msgstr "முகம் தொகுப்புகள் திருத்து"
-
-
-msgid "Vertex Group Locks"
-msgstr "வெர்டெக்ச் குழு பூட்டுகள்"
-
-
-msgid "Layout"
-msgstr "தளவமைப்பு"
 
 
 msgid "Mirror"
@@ -34342,10 +34443,6 @@ msgid "Select More/Less"
 msgstr "மேலும்/குறைவாக தேர்ந்தெடுக்கவும்"
 
 
-msgid "Adjust"
-msgstr "சரிசெய்யவும்"
-
-
 msgid "Select Similar"
 msgstr "ஒத்ததைத் தேர்ந்தெடுக்கவும்"
 
@@ -34354,116 +34451,16 @@ msgid "Select All by Trait"
 msgstr "அனைத்தையும் பண்பின் மூலம் தேர்ந்தெடுக்கவும்"
 
 
-msgid "Keying"
-msgstr "கீயிங்"
-
-
 msgid "Select Linked"
 msgstr "இணைக்கப்பட்டதைத் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Tracking"
-msgstr "கண்காணிப்பு"
 
 
 msgid "Select Loops"
 msgstr "சுழல்களைத் தேர்ந்தெடுக்கவும்"
 
 
-msgid "Utilities"
-msgstr "பயன்பாடுகள்"
-
-
-msgid "Math"
-msgstr "கணிதம்"
-
-
 msgid "Assign Material"
 msgstr "மூலப்பொருள் ஒதுக்க"
-
-
-msgid "Light"
-msgstr "ஒளி"
-
-
-msgid "Light Probe"
-msgstr "ஒளி ஆய்வு"
-
-
-msgid "Add Image"
-msgstr "படத்தைச் சேர்க்கவும்"
-
-
-msgid "Relations"
-msgstr "உறவுகள்"
-
-
-msgid "Rigid Body"
-msgstr "கடினமான உடல்"
-
-
-msgid "Apply"
-msgstr "இடு"
-
-
-msgid "Track"
-msgstr "டிராக்"
-
-
-msgid "Quick Effects"
-msgstr "விரைவான விளைவுகள்"
-
-
-msgid "Asset"
-msgstr "சொத்து"
-
-
-msgid "Make Single User"
-msgstr "ஒற்றை பயனரை உருவாக்குங்கள்"
-
-
-msgid "Convert"
-msgstr "மாற்றவும்"
-
-
-msgid "Link/Transfer Data"
-msgstr "இணைப்பு/பரிமாற்ற தரவு"
-
-
-msgid "Hooks"
-msgstr "கொக்கிகள்"
-
-
-msgid "Trim/Add"
-msgstr "டிரிம்/சேர்"
-
-
-msgid "Sculpt Set Pivot"
-msgstr "சிற்பம் செட் பிவோட்"
-
-
-msgid "Face Sets Init"
-msgstr "முகம் தொடங்குகிறது"
-
-
-msgid "Random Mask"
-msgstr "சீரற்ற முகமூடி"
-
-
-msgid "Clear Transform"
-msgstr "தெளிவான உருமாற்றம்"
-
-
-msgid "In-Betweens"
-msgstr "இன்-பெட்வீன்ச்"
-
-
-msgid "Propagate"
-msgstr "பிரச்சாரம்"
-
-
-msgid "Bone Collections"
-msgstr "எலும்பு வசூல்"
 
 
 msgid "Gizmo"
@@ -34474,36 +34471,16 @@ msgid "Instances"
 msgstr "நிகழ்வுகள்"
 
 
-msgid "Toggle Bone Options"
-msgstr "எலும்பு விருப்பங்களை மாற்றவும்"
-
-
-msgid "Enable Bone Options"
-msgstr "எலும்பு விருப்பங்களை இயக்கவும்"
-
-
-msgid "Disable Bone Options"
-msgstr "எலும்பு விருப்பங்களை முடக்கு"
-
-
 msgid "Import"
 msgstr "இறக்குமதி"
 
 
-msgid "Mesh Select Mode"
-msgstr "கண்ணி தேர்ந்தெடுக்கப்பட்ட பயன்முறையைத் தேர்ந்தெடுக்கவும்"
+msgid "Light"
+msgstr "ஒளி"
 
 
-msgid "Face Data"
-msgstr "முகத்தை முகம்"
-
-
-msgid "Select by Face Strength"
-msgstr "முக வலிமையால் தேர்ந்தெடுக்கவும்"
-
-
-msgid "Set Face Strength"
-msgstr "முக வலிமையை அமைக்கவும்"
+msgid "Light Probe"
+msgstr "ஒளி ஆய்வு"
 
 
 msgid "Deprecated"
@@ -34514,12 +34491,12 @@ msgid "List"
 msgstr "பட்டியல்"
 
 
-msgid "Merge"
-msgstr "ஒன்றிணைக்கவும்"
+msgid "Add Image"
+msgstr "படத்தைச் சேர்க்கவும்"
 
 
-msgid "UV"
-msgstr "புறஊதா"
+msgid "Relations"
+msgstr "உறவுகள்"
 
 
 msgid "Keyframe Insert Pie"
@@ -34753,13 +34730,13 @@ msgid "Track"
 msgstr "மின்தடம்"
 
 
-msgid "Node"
-msgstr "முனை"
-
-
 msgctxt "NodeTree"
 msgid "Constant"
 msgstr "மாறிலி"
+
+
+msgid "Node"
+msgstr "முனை"
 
 
 msgid "Node Color Specials"
@@ -41792,10 +41769,6 @@ msgstr "மற்றொரு பொருளின் உள்ளக உரு
 
 msgid "Use coordinates from a UV layer"
 msgstr "புறஊதா அடுக்கிலிருந்து ஆயத்தொலைவுகளைப் பயன்படுத்தவும்"
-
-
-msgid "Use Channel"
-msgstr "சேனலைப் பயன்படுத்தவும்"
 
 
 msgid "Which texture channel to use for masking"
@@ -49039,6 +49012,10 @@ msgstr "முனை 0.0 முதல் 1.0 வரம்பு வரை கி
 
 msgid "Mix values by a factor"
 msgstr "மதிப்புகளை ஒரு காரணியால் கலக்கவும்"
+
+
+msgid "Blending Mode"
+msgstr "கலப்பு பயன்முறை"
 
 
 msgid "Clamp Factor"
@@ -62567,6 +62544,10 @@ msgid "Equalize selected keyframes' right handles"
 msgstr "தேர்ந்தெடுக்கப்பட்ட கீஃப்ரேம்களின் வலது கைப்பிடிகளை சமப்படுத்தவும்"
 
 
+msgid "Both"
+msgstr "இரண்டும்"
+
+
 msgid "Equalize both of a keyframe's handles"
 msgstr "கீஃப்ரேம் கைப்பிடிகள் இரண்டையும் சமப்படுத்தவும்"
 
@@ -67657,10 +67638,6 @@ msgid "Only cut the front most geometry"
 msgstr "முன் பெரும்பாலான வடிவவியலை மட்டுமே வெட்டுங்கள்"
 
 
-msgid "Measurements"
-msgstr "அளவீடுகள்"
-
-
 msgid "Visible distance and angle measurements"
 msgstr "புலப்படும் தூரம் மற்றும் கோண அளவீடுகள்"
 
@@ -67675,6 +67652,11 @@ msgstr "தூரங்களையும் கோணங்களையும�
 
 msgid "Show just distance measurements"
 msgstr "தூர அளவீடுகளைக் காட்டுங்கள்"
+
+
+msgctxt "Mesh"
+msgid "Angle"
+msgstr "கோணம்"
 
 
 msgid "Show just angle measurements"
@@ -70578,20 +70560,12 @@ msgid "Linear Light Mode"
 msgstr "நேரியல் ஒளி பயன்முறை"
 
 
-msgid "Current"
-msgstr "நடப்பு"
-
-
 msgid "Leave at current state"
 msgstr "தற்போதைய நிலையில் விடுங்கள்"
 
 
 msgid "Next blend type/operation"
 msgstr "அடுத்த கலப்பு வகை/செயல்பாடு"
-
-
-msgid "Prev"
-msgstr "முந்தைய"
 
 
 msgid "Previous blend type/operation"
@@ -88614,6 +88588,30 @@ msgid "Panel containing UI elements"
 msgstr "இடைமுகம் கூறுகளைக் கொண்ட குழு"
 
 
+msgid "VR"
+msgstr "வி.ஆர்"
+
+
+msgid "VR Info"
+msgstr "வி.ஆர் செய்தி"
+
+
+msgid "glTF Variants"
+msgstr "gltf வகைகள்"
+
+
+msgid "glTF Material Variants"
+msgstr "GLTF பொருள் மாறுபாடுகள்"
+
+
+msgid "glTF"
+msgstr "gltf"
+
+
+msgid "glTF Animations"
+msgstr "GLTF அனிமேசன்கள்"
+
+
 msgid "Active Tool"
 msgstr "செயலில் உள்ள கருவி"
 
@@ -88658,14 +88656,6 @@ msgid "Guides"
 msgstr "வழிகாட்டிகள்"
 
 
-msgid "glTF Variants"
-msgstr "gltf வகைகள்"
-
-
-msgid "glTF Material Variants"
-msgstr "GLTF பொருள் மாறுபாடுகள்"
-
-
 msgid "Viewer Node"
 msgstr "பார்வையாளர் முனை"
 
@@ -88688,14 +88678,6 @@ msgstr "வளைவு திருத்து பயன்முறை"
 
 msgid "Curves Edit Mode"
 msgstr "வளைவுகள் திருத்து பயன்முறை"
-
-
-msgid "glTF"
-msgstr "gltf"
-
-
-msgid "glTF Animations"
-msgstr "GLTF அனிமேசன்கள்"
 
 
 msgid "Transform Orientations"
@@ -88748,14 +88730,6 @@ msgstr "வளைவுகள் வளரும்/சுருக்கவு�
 
 msgid "Viewport Debug"
 msgstr "வியூபோர்ட் பிழைத்திருத்தம்"
-
-
-msgid "VR"
-msgstr "வி.ஆர்"
-
-
-msgid "VR Info"
-msgstr "வி.ஆர் செய்தி"
 
 
 msgid "Import Settings"
@@ -103041,6 +103015,10 @@ msgid "Show reference frame only"
 msgstr "குறிப்பு சட்டத்தை மட்டும் காட்டு"
 
 
+msgid "Current"
+msgstr "நடப்பு"
+
+
 msgid "Show current frame only"
 msgstr "தற்போதைய சட்டகத்தை மட்டும் காட்டு"
 
@@ -103910,11 +103888,6 @@ msgid "Type of stretch to display"
 msgstr "காண்பிக்க நீட்டிக்க வகை"
 
 
-msgctxt "Mesh"
-msgid "Angle"
-msgstr "கோணம்"
-
-
 msgid "Angular distortion between UV and 3D angles"
 msgstr "புறஊதா மற்றும் 3டி கோணங்களுக்கு இடையில் கோண விலகல்"
 
@@ -104401,11 +104374,6 @@ msgstr "உரிபின் வண்ணங்கள் மற்ற கீற
 
 msgid "Method for controlling how the strip combines with other strips"
 msgstr "துண்டு மற்ற கீற்றுகளுடன் எவ்வாறு இணைகிறது என்பதைக் கட்டுப்படுத்துவதற்கான முறை"
-
-
-msgctxt "Color"
-msgid "Value"
-msgstr "மதிப்பு"
 
 
 msgid "Strip Color"
@@ -128305,10 +128273,6 @@ msgid "Lightness:"
 msgstr "லேசான தன்மை:"
 
 
-msgid "Value:"
-msgstr "மதிப்பு:"
-
-
 msgid "Alpha:"
 msgstr "ஆல்பா:"
 
@@ -132615,6 +132579,10 @@ msgstr "வெளிப்பாடு:"
 
 msgid "Add Input Variable"
 msgstr "உள்ளீட்டு மாறியைச் சேர்க்கவும்"
+
+
+msgid "Value:"
+msgstr "மதிப்பு:"
 
 
 msgid "Update Dependencies"
