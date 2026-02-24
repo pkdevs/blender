@@ -539,6 +539,18 @@ class DiffuseBsdfNode : public BsdfNode {
   NODE_SOCKET_API(float, roughness)
 };
 
+// TODO (OpenPBR): Do a propper implementation
+class OpenPBRBsdfNode : public BsdfNode {
+ public:
+  SHADER_NODE_CLASS(OpenPBRBsdfNode)
+  bool is_linear_operation() override
+  {
+    return true;
+  }
+
+  NODE_SOCKET_API(float, roughness)
+};
+
 /* Disney principled BRDF */
 class PrincipledBsdfNode : public BsdfBaseNode {
  public:

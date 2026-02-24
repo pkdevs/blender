@@ -2656,6 +2656,38 @@ void DiffuseBsdfNode::compile(OSLCompiler &compiler)
   compiler.add(this, "node_diffuse_bsdf");
 }
 
+// TODO (OpenPBR): Do a propper implementation
+NODE_DEFINE(OpenPBRBsdfNode)
+{
+  NodeType *type = NodeType::add("open_pbr_bsdf", create, NodeType::SHADER);
+
+  SOCKET_IN_COLOR(color, "Color", make_float3(0.8f, 0.8f, 0.8f));
+  SOCKET_IN_NORMAL(normal, "Normal", zero_float3(), SocketType::LINK_NORMAL);
+  SOCKET_IN_FLOAT(surface_mix_weight, "SurfaceMixWeight", 0.0f, SocketType::SVM_INTERNAL);
+  SOCKET_IN_FLOAT(roughness, "Roughness", 0.0f);
+
+  SOCKET_OUT_CLOSURE(BSDF, "BSDF");
+
+  return type;
+}
+
+OpenPBRBsdfNode::OpenPBRBsdfNode() : BsdfNode(get_node_type())
+{
+  // TODO (OpenPBR): switch and implement CLOSURE_BSDF_OPEN_PBR_ID
+  closure = CLOSURE_BSDF_OPEN_PBR_ID;
+}
+
+void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
+{
+  BsdfNode::compile(compiler, input("Roughness"), nullptr, input("Color"));
+}
+
+void OpenPBRBsdfNode::compile(OSLCompiler &compiler)
+{
+  compiler.add(this, "node_open_pbr_bsdf");
+}
+
+
 /* Disney principled BSDF Closure */
 NODE_DEFINE(PrincipledBsdfNode)
 {

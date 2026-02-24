@@ -6255,6 +6255,25 @@ static void def_sheen(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
+// TODO (OpenPBR): implement the right stuff this is currently just copy and past from principled
+static void def_open_pbr(BlenderRNA * /*brna*/, StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "distribution", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "custom1");
+  RNA_def_property_enum_items(prop, node_principled_distribution_items);
+  RNA_def_property_ui_text(prop, "Distribution", "Light scattering distribution on rough surface");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNode_socket_update");
+
+  prop = RNA_def_property(srna, "subsurface_method", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "custom2");
+  RNA_def_property_enum_items(prop, node_subsurface_method_items);
+  RNA_def_property_ui_text(
+      prop, "Subsurface Method", "Method for rendering subsurface scattering");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNode_socket_update");
+}
+
 static void def_principled(BlenderRNA * /*brna*/, StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -10732,6 +10751,9 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("ShaderNode", "ShaderNodeBsdfHair", def_hair);
   define("ShaderNode", "ShaderNodeBsdfHairPrincipled", def_hair_principled);
   define("ShaderNode", "ShaderNodeBsdfMetallic", def_metallic);
+  //TODO (OpenPBR): use def_open_pbr
+  define("ShaderNode", "ShaderNodeBsdfOpenPBR");
+  //define("ShaderNode", "ShaderNodeBsdfOpenPBR", def_open_pbr);
   define("ShaderNode", "ShaderNodeBsdfPrincipled", def_principled);
   define("ShaderNode", "ShaderNodeBsdfRayPortal");
   define("ShaderNode", "ShaderNodeBsdfRefraction", def_refraction);

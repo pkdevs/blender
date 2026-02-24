@@ -39,6 +39,7 @@ set(SRC_OSL
   node_glossy_bsdf.osl
   node_gradient_texture.osl
   node_hair_info.osl
+  node_open_pbr_bsdf.osl
   node_point_info.osl
   node_scatter_volume.osl
   node_scene_time.osl

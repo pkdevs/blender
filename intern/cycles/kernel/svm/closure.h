@@ -186,6 +186,7 @@ ccl_device
     }
   }
   else IF_KERNEL_NODES_FEATURE(EMISSION) {
+    // TODO (OpenPBR): OpenPBR can have Emission as well
     if (mix_weight == 0.0f || type != CLOSURE_BSDF_PRINCIPLED_ID) {
       /* Only principled BSDF can have emission. */
       return svm_node_closure_bsdf_skip(offset, type);
@@ -457,6 +458,7 @@ ccl_device
 
       break;
     }
+    case CLOSURE_BSDF_OPEN_PBR_ID:
     case CLOSURE_BSDF_DIFFUSE_ID: {
       const ccl_global SVMNodeDiffuseBsdfData &bsdf_data = svm_node_get<SVMNodeDiffuseBsdfData>(
           kg, &offset);

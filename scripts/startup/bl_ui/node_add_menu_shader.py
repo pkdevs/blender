@@ -281,6 +281,11 @@ class NODE_MT_shader_node_shader_base(node_add_menu.NodeMenu):
         )
         self.node_operator(
             layout,
+            "ShaderNodeBsdfOpenPBR",
+            poll=object_shader_nodes_poll(context),
+        )
+        self.node_operator(
+            layout,
             "ShaderNodeBsdfPrincipled",
             poll=object_material_shader_nodes_poll(context),
         )
@@ -352,7 +357,6 @@ class NODE_MT_shader_node_shader_base(node_add_menu.NodeMenu):
             "ShaderNodeVolumeCoefficients",
             poll=not object_light_shader_nodes_poll(context),
         )
-
         self.draw_assets_for_catalog(layout, self.bl_label)
 
 
