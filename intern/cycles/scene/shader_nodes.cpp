@@ -2661,17 +2661,19 @@ NODE_DEFINE(OpenPBRBsdfNode)
 {
   NodeType *type = NodeType::add("open_pbr_bsdf", create, NodeType::SHADER);
 
-  SOCKET_IN_COLOR(color, "Color", make_float3(0.8f, 0.8f, 0.8f));
-  SOCKET_IN_NORMAL(normal, "Normal", zero_float3(), SocketType::LINK_NORMAL);
-  SOCKET_IN_FLOAT(surface_mix_weight, "SurfaceMixWeight", 0.0f, SocketType::SVM_INTERNAL);
-  SOCKET_IN_FLOAT(roughness, "Roughness", 0.0f);
+  SOCKET_IN_FLOAT(base_weight, "Base Weight", 1.0f);
+  SOCKET_IN_COLOR(base_color, "Base Color", make_float3(0.8f, 0.8f, 0.8f));
+  SOCKET_IN_FLOAT(base_metalness, "Base Metalness", 0.0f);
+  SOCKET_IN_FLOAT(diffuse_roughness, "Diffuse Roughness", 0.0f);
+  SOCKET_IN_NORMAL(normal, "Geometry Normal", zero_float3(), SocketType::LINK_NORMAL);
+\
 
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
   return type;
 }
 
-OpenPBRBsdfNode::OpenPBRBsdfNode() : BsdfNode(get_node_type())
+OpenPBRBsdfNode::OpenPBRBsdfNode() : BsdfBaseNode(get_node_type())
 {
   // TODO (OpenPBR): switch and implement CLOSURE_BSDF_OPEN_PBR_ID
   closure = CLOSURE_BSDF_OPEN_PBR_ID;
@@ -2679,7 +2681,14 @@ OpenPBRBsdfNode::OpenPBRBsdfNode() : BsdfNode(get_node_type())
 
 void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
 {
-  BsdfNode::compile(compiler, input("Roughness"), nullptr, input("Color"));
+  const int base_weight_offset = compiler.stack_assign_if_linked(input("Base Weight"));
+  const int base_color_offset = compiler.stack_assign_if_linked(input("Base Color"));
+  const int base_metalness_offset = compiler.stack_assign_if_linked(input("Base Metalness"));
+  const int base_diffuse_roughness_offset = compiler.stack_assign_if_linked(input("Diffuse Roughness"));
+
+  const int normal_offset = compiler.stack_assign_if_linked(input("Geometry Normal"));
+
+  //BsdfBaseNode::compile(compiler, input("Roughness"), nullptr, input("Color"));
 }
 
 void OpenPBRBsdfNode::compile(OSLCompiler &compiler)

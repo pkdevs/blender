@@ -6,13 +6,15 @@
 
 // TODO (OpenPBR): implement the OpenPBR OSL shader
 
-shader node_open_pbr_bsdf(color Color = 0.8,
-                         float Roughness = 0.0,
-                         normal Normal = N,
+shader node_open_pbr_bsdf(float BaseWeight = 1.0,
+                         color BaseColor = 0.8,
+                         float DiffuseRoughness = 0.0,
+                         float BaseMetalness = 0.0,
+                         normal GeometryNormal = N,
                          output closure color BSDF = 0)
 {
-  if (Roughness < 1e-5)
-    BSDF = Color * diffuse(Normal);
+  if (DiffuseRoughness < 1e-5)
+    BSDF = BaseColor * diffuse(GeometryNormal);
   else
-    BSDF = oren_nayar_diffuse_bsdf(Normal, clamp(Color, 0.0, 1.0), Roughness);
+    BSDF = oren_nayar_diffuse_bsdf(GeometryNormal, clamp(BaseColor, 0.0, 1.0), DiffuseRoughness);
 }

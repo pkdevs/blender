@@ -540,7 +540,7 @@ class DiffuseBsdfNode : public BsdfNode {
 };
 
 // TODO (OpenPBR): Do a propper implementation
-class OpenPBRBsdfNode : public BsdfNode {
+class OpenPBRBsdfNode : public BsdfBaseNode {
  public:
   SHADER_NODE_CLASS(OpenPBRBsdfNode)
   bool is_linear_operation() override
@@ -548,7 +548,11 @@ class OpenPBRBsdfNode : public BsdfNode {
     return true;
   }
 
-  NODE_SOCKET_API(float, roughness)
+  NODE_SOCKET_API(float, base_weight)
+  NODE_SOCKET_API(float3, base_color)
+  NODE_SOCKET_API(float, base_metalness)
+  NODE_SOCKET_API(float, diffuse_roughness)
+  NODE_SOCKET_API(float3, normal)
 };
 
 /* Disney principled BRDF */
