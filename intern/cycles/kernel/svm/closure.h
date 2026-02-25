@@ -458,7 +458,44 @@ ccl_device
 
       break;
     }
-    case CLOSURE_BSDF_OPEN_PBR_ID:
+    case CLOSURE_BSDF_OPEN_PBR_ID: {
+      // uint base_weight_offset;  //( == param1_offset)
+      uint base_color_offset;
+      // uint base_metalness_offset;  //( == param2_offset)
+      uint base_diffuse_roughness_offset;
+
+      // Atm we do not have more parameters
+      // const uint4 data_node2 = read_node(kg, &offset);
+
+      const float base_weight = saturatef(param1);
+      base_color_offset = data_node.y;
+      const float3 base_color = stack_load_float3_default(
+          stack, base_color_offset, make_float3(0.8f, 0.8f, 0.8f));
+      const float base_metalness = saturatef(param2);
+      base_diffuse_roughness_offset = data_node.z;
+      const float diffuse_rougness = stack_load_float_default(
+          stack, base_diffuse_roughness_offset, 0.f);
+
+      const Spectrum weight = base_color * mix_weight;
+      ccl_private OrenNayarBsdf *bsdf = (ccl_private OrenNayarBsdf *)bsdf_alloc(
+          sd, sizeof(OrenNayarBsdf), weight);
+
+      if (bsdf) {
+        bsdf->N = N;
+
+        const float roughness = param1;
+
+        if (roughness < 1e-5f) {
+          sd->flag |= bsdf_diffuse_setup((ccl_private DiffuseBsdf *)bsdf);
+        }
+        else {
+          bsdf->roughness = roughness;
+          const Spectrum color = saturate(rgb_to_spectrum(stack_load_float3(stack, data_node.y)));
+          sd->flag |= bsdf_oren_nayar_setup(sd, bsdf, color);
+        }
+      }
+      break;
+    }
     case CLOSURE_BSDF_DIFFUSE_ID: {
       const ccl_global SVMNodeDiffuseBsdfData &bsdf_data = svm_node_get<SVMNodeDiffuseBsdfData>(
           kg, &offset);

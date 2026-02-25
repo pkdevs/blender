@@ -7,11 +7,11 @@
 // TODO (OpenPBR): implement the OpenPBR OSL shader
 
 shader node_open_pbr_bsdf(float BaseWeight = 1.0,
-                         color BaseColor = 0.8,
-                         float DiffuseRoughness = 0.0,
-                         float BaseMetalness = 0.0,
-                         normal GeometryNormal = N,
-                         output closure color BSDF = 0)
+                          color BaseColor = 0.8,
+                          float DiffuseRoughness = 0.0,
+                          float BaseMetalness = 0.0,
+                          normal GeometryNormal = N,
+                          output closure color BSDF = 0)
 {
   if (DiffuseRoughness < 1e-5)
     BSDF = BaseColor * diffuse(GeometryNormal);

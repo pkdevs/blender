@@ -2666,7 +2666,6 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_FLOAT(base_metalness, "Base Metalness", 0.0f);
   SOCKET_IN_FLOAT(diffuse_roughness, "Diffuse Roughness", 0.0f);
   SOCKET_IN_NORMAL(normal, "Geometry Normal", zero_float3(), SocketType::LINK_NORMAL);
-\
 
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
@@ -2681,14 +2680,33 @@ OpenPBRBsdfNode::OpenPBRBsdfNode() : BsdfBaseNode(get_node_type())
 
 void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
 {
-  const int base_weight_offset = compiler.stack_assign_if_linked(input("Base Weight"));
-  const int base_color_offset = compiler.stack_assign_if_linked(input("Base Color"));
-  const int base_metalness_offset = compiler.stack_assign_if_linked(input("Base Metalness"));
-  const int base_diffuse_roughness_offset = compiler.stack_assign_if_linked(input("Diffuse Roughness"));
+  ShaderInput *base_weight_in = input("Base Weight");
+  ShaderInput *base_color_in = input("Base Color");
+  ShaderInput *base_metalness_in = input("Base Metalness");
+  ShaderInput *base_diffuse_roughness_in = input("Diffuse Roughness");
 
-  const int normal_offset = compiler.stack_assign_if_linked(input("Geometry Normal"));
+  // TODO (Sebastian): use stack_assign_if_linked
+  const int base_weight_offset = compiler.stack_assign(base_weight_in);
+  const int base_color_offset = compiler.stack_assign(base_color_in);
+  const int base_metalness_offset = compiler.stack_assign(base_metalness_in);
+  const int base_diffuse_roughness_offset = compiler.stack_assign(base_diffuse_roughness_in);
 
-  //BsdfBaseNode::compile(compiler, input("Roughness"), nullptr, input("Color"));
+  ShaderInput *geometry_normal_in = input("Geometry Normal");
+  const int normal_offset = compiler.stack_assign_if_linked(geometry_normal_in);
+
+  /* Encode all parameters into data nodes. */
+  /* node */
+  compiler.add_node(NODE_CLOSURE_BSDF,
+                    compiler.encode_uchar4(closure,
+                                           base_weight_offset,
+                                           base_metalness_offset,
+                                           compiler.closure_mix_weight_offset()),
+                    __float_as_int(get_float(base_weight_in->socket_type)),
+                    __float_as_int(get_float(base_metalness_in->socket_type)));
+
+  /* data node */
+  compiler.add_node(
+      normal_offset, base_color_offset, base_diffuse_roughness_offset, SVM_STACK_INVALID);
 }
 
 void OpenPBRBsdfNode::compile(OSLCompiler &compiler)
@@ -2696,6 +2714,15 @@ void OpenPBRBsdfNode::compile(OSLCompiler &compiler)
   compiler.add(this, "node_open_pbr_bsdf");
 }
 
+bool OpenPBRBsdfNode::has_surface_transparent()
+{
+  return false;
+}
+
+bool OpenPBRBsdfNode::has_surface_emission()
+{
+  return false;
+}
 
 /* Disney principled BSDF Closure */
 NODE_DEFINE(PrincipledBsdfNode)

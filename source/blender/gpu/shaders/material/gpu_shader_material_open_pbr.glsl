@@ -7,7 +7,13 @@
 // TODO (OpenPBR): implement the correct GLSL shader
 
 [[node]]
-void node_bsdf_open_pbr(float base_weight, float4 base_color, float base_metalness, float diffuse_roughness, float3 N, float weight, Closure &result)
+void node_bsdf_open_pbr(float base_weight,
+                        float4 base_color,
+                        float base_metalness,
+                        float diffuse_roughness,
+                        float3 N,
+                        float weight,
+                        Closure &result)
 {
   ClosureDiffuse diffuse_data;
   diffuse_data.weight = weight;

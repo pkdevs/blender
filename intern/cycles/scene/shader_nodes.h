@@ -553,6 +553,10 @@ class OpenPBRBsdfNode : public BsdfBaseNode {
   NODE_SOCKET_API(float, base_metalness)
   NODE_SOCKET_API(float, diffuse_roughness)
   NODE_SOCKET_API(float3, normal)
+
+ public:
+  bool has_surface_transparent() override;
+  bool has_surface_emission() override;
 };
 
 /* Disney principled BRDF */
