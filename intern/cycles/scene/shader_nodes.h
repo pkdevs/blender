@@ -547,16 +547,65 @@ class OpenPBRBsdfNode : public BsdfBaseNode {
   {
     return true;
   }
-
+  /* Base Component */
   NODE_SOCKET_API(float, base_weight)
   NODE_SOCKET_API(float3, base_color)
   NODE_SOCKET_API(float, base_metalness)
   NODE_SOCKET_API(float, diffuse_roughness)
-  NODE_SOCKET_API(float3, normal)
+  /* Specular Component */
+  NODE_SOCKET_API(float, specular_weight)
+  NODE_SOCKET_API(float3, specular_color)
+  NODE_SOCKET_API(float, specular_roughness)
+  NODE_SOCKET_API(float, specular_roughness_anisotropy)
+  NODE_SOCKET_API(float, specular_ior)
+  /* Transmission Component */
+  NODE_SOCKET_API(float, transmission_weight)
+  NODE_SOCKET_API(float3, transmission_color)
+  NODE_SOCKET_API(float, transmission_depth)
+  NODE_SOCKET_API(float3, transmission_scatter)
+  NODE_SOCKET_API(float, transmission_scatter_anisotropy)
+  NODE_SOCKET_API(float, transmission_dispersion_scale)
+  NODE_SOCKET_API(float, transmission_dispersion_abbe_number)
+  /* Subsurface Component */
+  NODE_SOCKET_API(float, subsurface_weight)
+  NODE_SOCKET_API(float3, subsurface_color)
+  NODE_SOCKET_API(float, subsurface_radius)
+  NODE_SOCKET_API(float3, subsurface_radius_scale)
+  NODE_SOCKET_API(float, subsurface_scatter_anisotropy)
+  /* Coat Component */
+  NODE_SOCKET_API(float, coat_weight)
+  NODE_SOCKET_API(float3, coat_color)
+  NODE_SOCKET_API(float, coat_roughness)
+  NODE_SOCKET_API(float, coat_roughness_anisotropy)
+  NODE_SOCKET_API(float, coat_ior)
+  NODE_SOCKET_API(float, coat_darkening)
+  /* Fuzz Component */
+  NODE_SOCKET_API(float, fuzz_weight)
+  NODE_SOCKET_API(float3, fuzz_color)
+  NODE_SOCKET_API(float, fuzz_roughness)
+  /* Emission Component */
+  NODE_SOCKET_API(float, emission_luminance)
+  NODE_SOCKET_API(float3, emission_color)
+  /* Thin-film Component */
+  NODE_SOCKET_API(float, thin_film_weight)
+  NODE_SOCKET_API(float, thin_film_thickness)
+  NODE_SOCKET_API(float, thin_film_ior)
+  /* Geometry Component */
+  NODE_SOCKET_API(float, geometry_opacity)
+  NODE_SOCKET_API(bool, geometry_thin_walled)
+  NODE_SOCKET_API(float3, geometry_normal)
+  NODE_SOCKET_API(float3, geometry_tangent)
+  NODE_SOCKET_API(float3, geometry_coat_normal)
+  NODE_SOCKET_API(float3, geometry_coat_tangent)
 
  public:
   bool has_surface_transparent() override;
   bool has_surface_emission() override;
+  bool has_surface_bssrdf() override;
+  void simplify_settings(Scene *scene) override;
+ protected:
+  /* Checks whether the given weight input is potentially non-zero. */
+  bool has_nonzero_weight(const char *name);
 };
 
 /* Disney principled BRDF */

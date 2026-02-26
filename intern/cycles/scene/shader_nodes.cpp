@@ -2661,11 +2661,56 @@ NODE_DEFINE(OpenPBRBsdfNode)
 {
   NodeType *type = NodeType::add("open_pbr_bsdf", create, NodeType::SHADER);
 
+  /* Base Component */
   SOCKET_IN_FLOAT(base_weight, "Base Weight", 1.0f);
-  SOCKET_IN_COLOR(base_color, "Base Color", make_float3(0.8f, 0.8f, 0.8f));
+  SOCKET_IN_COLOR(base_color, "Base Color", make_float3(0.8f));
   SOCKET_IN_FLOAT(base_metalness, "Base Metalness", 0.0f);
   SOCKET_IN_FLOAT(diffuse_roughness, "Diffuse Roughness", 0.0f);
-  SOCKET_IN_NORMAL(normal, "Geometry Normal", zero_float3(), SocketType::LINK_NORMAL);
+  /* Specular Component */
+  SOCKET_IN_FLOAT(specular_weight, "Specular Weight", 1.0f);
+  SOCKET_IN_COLOR(specular_color, "Specular Color", one_float3());
+  SOCKET_IN_FLOAT(specular_roughness, "Specular Roughness", 0.3f);
+  SOCKET_IN_FLOAT(specular_roughness_anisotropy, "Specular Roughness Anisotropy", 0.0f);
+  SOCKET_IN_FLOAT(specular_ior, "Specular IOR", 1.5f);
+  /* Transmission Component */
+  SOCKET_IN_FLOAT(transmission_weight, "Transmission Weight", .0f);
+  SOCKET_IN_COLOR(transmission_color, "Transmission Color", one_float3());
+  SOCKET_IN_FLOAT(transmission_depth, "Transmission Depth", 0.0f);
+  SOCKET_IN_COLOR(transmission_scatter, "Transmission Scatter", zero_float3());
+  SOCKET_IN_FLOAT(transmission_scatter_anisotropy, "Transmission Anisotropy", 0.0f);
+  SOCKET_IN_FLOAT(transmission_dispersion_scale, "Transmission Dispersion Scale", 0.0f);
+  SOCKET_IN_FLOAT(transmission_dispersion_abbe_number, "Transmission DispersionAbbeNumber", 20.0f);
+  /* Subsurface Component */
+  SOCKET_IN_FLOAT(subsurface_weight, "Subsurface Weight", .0f);
+  SOCKET_IN_COLOR(subsurface_color, "Subsurface Color", make_float3(0.8f));
+  SOCKET_IN_FLOAT(subsurface_radius, "Subsurface Radius", 1.0f);
+  SOCKET_IN_COLOR(subsurface_radius_scale, "Subsurface Radius Scale",  make_float3(1.0f, 0.5f, 0.25f));
+  SOCKET_IN_FLOAT(subsurface_scatter_anisotropy, "Subsurface Scatter Anisotropy", .0f);
+  /* Coat Component */
+  SOCKET_IN_FLOAT(coat_weight, "Coat Weight", .0f);
+  SOCKET_IN_COLOR(coat_color, "Coat Color", one_float3());
+  SOCKET_IN_FLOAT(coat_roughness, "Coat Roughness", .0f);
+  SOCKET_IN_FLOAT(coat_roughness_anisotropy, "Coat Roughness Anisotropy", .0f);
+  SOCKET_IN_FLOAT(coat_ior, "Coat IOR", 1.6f);
+  SOCKET_IN_FLOAT(coat_darkening, "Coat Darkening", 1.0f);
+  /* Fuzz Component */
+  SOCKET_IN_FLOAT(fuzz_weight, "Fuzz Weight", .0f);
+  SOCKET_IN_COLOR(fuzz_color, "Fuzz Color", one_float3());
+  SOCKET_IN_FLOAT(fuzz_roughness, "Fuzz Roughness", .5f);
+  /* Emission Component */
+  SOCKET_IN_FLOAT(emission_luminance, "Emission Luminance", .0f);
+  SOCKET_IN_COLOR(emission_color, "Emission Color", one_float3());
+  /* Thin Film Component */
+  SOCKET_IN_FLOAT(thin_film_weight, "Thin Film Weight", .0f);
+  SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", .5f);
+  SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.4f);
+  /* Geometry Component */
+  SOCKET_IN_FLOAT(geometry_opacity, "Geometry Opacity", 1.0f);
+  SOCKET_IN_BOOLEAN(geometry_thin_walled, "Geometry Thin Walled", false);
+  SOCKET_IN_NORMAL(geometry_normal, "Geometry Normal", zero_float3(), SocketType::LINK_NORMAL);
+  SOCKET_IN_NORMAL(geometry_tangent, "Geometry Tangent", zero_float3(), SocketType::LINK_TANGENT);
+  SOCKET_IN_NORMAL(geometry_coat_normal, "Geometry Coat Normal", zero_float3());
+  SOCKET_IN_NORMAL(geometry_coat_tangent, "Geometry Coat Tangent", zero_float3());
 
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
@@ -2716,12 +2761,34 @@ void OpenPBRBsdfNode::compile(OSLCompiler &compiler)
 
 bool OpenPBRBsdfNode::has_surface_transparent()
 {
-  return false;
+  return has_nonzero_weight("Transmittance Weight");
 }
 
 bool OpenPBRBsdfNode::has_surface_emission()
 {
-  return false;
+  return has_nonzero_weight("Emission Luminance");
+}
+
+bool OpenPBRBsdfNode::has_surface_bssrdf()
+{
+  return has_nonzero_weight("Subsurface Weight");
+}
+
+bool OpenPBRBsdfNode::has_nonzero_weight(const char *name)
+{
+  ShaderInput *weight_in = input(name);
+  if (weight_in == nullptr) {
+    return true;
+  }
+  if (weight_in->link != nullptr) {
+    return true;
+  }
+  return (get_float(weight_in->socket_type) >= CLOSURE_WEIGHT_CUTOFF);
+}
+
+void OpenPBRBsdfNode::simplify_settings(Scene * /* scene */)
+{
+
 }
 
 /* Disney principled BSDF Closure */
