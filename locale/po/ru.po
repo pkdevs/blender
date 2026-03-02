@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Beta (b'57dd016d99c8')\n"
+"Project-Id-Version: Blender 5.1.0 Beta (b'fd269015ba63')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-02-23 10:33+0000\n"
-"PO-Revision-Date: 2026-02-20 12:12+0000\n"
+"POT-Creation-Date: 2026-03-02 13:27+0000\n"
+"PO-Revision-Date: 2026-03-02 12:07+0000\n"
 "Last-Translator: Alexandr Fatih <radix83@rambler.ru>\n"
 "Language-Team: Russian <https://translate.blender.org/projects/blender-ui/ui/ru/>\n"
 "Language: ru\n"
@@ -6075,8 +6075,23 @@ msgid "Threshold in screen space used for the simplify algorithm. Points within 
 msgstr "Порог в экранном пространстве, используемый для алгоритма упрощения. Точки в пределах этого порога обрабатываются так, как если бы они находились на прямой линии."
 
 
+msgctxt "GPencil"
+msgid "Stroke Mode"
+msgstr "Режим штриха"
+
+
 msgid "Mode to use when creating strokes"
 msgstr "Режим, используемый при создании штрихов"
+
+
+msgctxt "GPencil"
+msgid "Fill"
+msgstr "Заполнить"
+
+
+msgctxt "GPencil"
+msgid "Both"
+msgstr "Оба"
 
 
 msgid "Active Layer"
@@ -7911,8 +7926,18 @@ msgid "Blend Factor"
 msgstr "Коэффициент смеше́ния"
 
 
+msgctxt "Color"
+msgid "Blend Type"
+msgstr "Тип смешивания"
+
+
 msgid "Mode used to mix with texture output color"
 msgstr "Режим смеше́ния с выходным цветом текстуры"
+
+
+msgctxt "Color"
+msgid "Mix"
+msgstr "Смешать"
 
 
 msgctxt "Color"
@@ -7963,6 +7988,11 @@ msgstr "Разница"
 msgctxt "Color"
 msgid "Subtract"
 msgstr "Вычесть"
+
+
+msgctxt "Color"
+msgid "Divide"
+msgstr "Разделить"
 
 
 msgctxt "Color"
@@ -19189,8 +19219,18 @@ msgid "Use Value blending mode while painting"
 msgstr "Использовать режим смешивания «Яркость» при рисовании"
 
 
+msgctxt "Color"
+msgid "Erase Alpha"
+msgstr "Удалить альфа"
+
+
 msgid "Erase alpha while painting"
 msgstr "Удаление альфа при рисовании"
+
+
+msgctxt "Color"
+msgid "Add Alpha"
+msgstr "Добавить альфа"
 
 
 msgid "Add alpha while painting"
@@ -20646,7 +20686,7 @@ msgstr "Выравнивание топологии"
 
 
 msgid "Automatically align edges to the brush direction to generate cleaner topology and define sharp features. Best used on low-poly meshes as it has a performance impact."
-msgstr "Автоматически выравнивать рёбра по направлению движения кисти, для генерации более чистой топологии и подчеркнуть заострённые места. Лучше использовать на низкополигональных мешах, так как функция влияет на производительность."
+msgstr "Автоматически выравнивать рёбра по направлению движения кисти, для генерации более чистой топологии и проработки чётких деталей. Лучше использовать на низкополигональных мешах, так как функция влияет на производительность."
 
 
 msgid "Unprojected Size"
@@ -25616,7 +25656,7 @@ msgstr "Создавать прокси-изображения в особой �
 
 
 msgid "Node tree consisting of linked nodes used for shading, textures and compositing"
-msgstr "Древо нод, состоящее из связанных узлов для шейдинга, текстурирования и компо́зитинга"
+msgstr "Древо нод, состоящее из связанных нод для шейдинга, текстурирования и компо́зитинга"
 
 
 msgid "Annotation data"
@@ -28196,7 +28236,7 @@ msgstr "Активная камера, используемая при ренд�
 
 
 msgid "Scene root collection that owns all the objects and other collections instantiated in the scene"
-msgstr "Корневая коллекция сцены, которой принадлежат как все объекты, так и другие коллекции, созданные в сцене"
+msgstr "Корневая коллекция сцены, которой принадлежат как все объекты, так и другие коллекции, экземпляры которых были созданы в сцене"
 
 
 msgid "Compositor Nodes"
@@ -30819,7 +30859,7 @@ msgstr "Настройки сцены"
 
 
 msgid "Choose BW for saving grayscale images, RGB for saving red, green and blue channels, and RGBA for saving red, green, blue and alpha channels"
-msgstr "Выберите BW для сохранения изображений в градациях серого, RGB для сохранения каналов красного, зелёного и синего, RGBA для сохранения каналов красного, зелёного, синего и альфа-канала"
+msgstr "Выберите ч/б (BW) для сохранения изображений в градациях серого, RGB для сохранения каналов красного, зелёного и синего, RGBA для сохранения каналов красного, зелёного, синего и альфа-канала"
 
 
 msgid "BW"
@@ -35150,12 +35190,16 @@ msgid "UV"
 msgstr "UV"
 
 
+msgid "Metaball"
+msgstr "Метасфера"
+
+
 msgid "Read"
 msgstr "Прочитать"
 
 
-msgid "Rigid Body"
-msgstr "Твёрдое тело"
+msgid "Show/Hide"
+msgstr "Показать/скрыть"
 
 
 msgid "Write"
@@ -35170,164 +35214,16 @@ msgid "Primitives"
 msgstr "Примитивы"
 
 
-msgid "Apply"
-msgstr "Применить"
-
-
-msgid "Track"
-msgstr "Отслеживание"
-
-
-msgid "Quick Effects"
-msgstr "Быстрые эффекты"
-
-
-msgid "Show/Hide"
-msgstr "Показать/скрыть"
-
-
-msgid "Clean Up"
-msgstr "Привести в порядок"
-
-
-msgid "Asset"
-msgstr "Ассет"
-
-
-msgid "Make Single User"
-msgstr "Для одного пользователя"
-
-
-msgid "Convert"
-msgstr "Конвертировать"
-
-
-msgid "Link/Transfer Data"
-msgstr "Связать/передать данные"
-
-
-msgid "Hooks"
-msgstr "Крюки"
-
-
-msgid "Vertex Group Locks"
-msgstr "Блокировки групп вершин"
-
-
-msgid "Trim/Add"
-msgstr "Обрезать/Добавить"
-
-
-msgid "Sculpt Set Pivot"
-msgstr "Установить центр трансформации скульптинга"
-
-
-msgid "Face Sets Init"
-msgstr "Инициализация наборов граней"
-
-
-msgid "Random Mask"
-msgstr "Случайная маска"
-
-
-msgid "Clear Transform"
-msgstr "Очистить трансформацию"
-
-
-msgid "In-Betweens"
-msgstr "Промежуточные"
-
-
-msgid "Propagate"
-msgstr "Распространение"
-
-
-msgid "Bone Collections"
-msgstr "Коллекции костей"
-
-
 msgid "Names"
 msgstr "Названия"
-
-
-msgid "Toggle Bone Options"
-msgstr "Переключить опции костей"
-
-
-msgid "Enable Bone Options"
-msgstr "Включить параметры костей"
-
-
-msgid "Disable Bone Options"
-msgstr "Отключить параметры костей"
-
-
-msgid "Mesh Select Mode"
-msgstr "Режим выделения меша"
-
-
-msgid "Face Data"
-msgstr "Данные граней"
-
-
-msgid "Select by Face Strength"
-msgstr "Выделить по твёрдости грани"
-
-
-msgid "Set Face Strength"
-msgstr "Установить твёрдость грани"
-
-
-msgid "Merge"
-msgstr "Объединить"
-
-
-msgid "Layout"
-msgstr "Разметка"
-
-
-msgid "Render Preview"
-msgstr "Превью рендера"
-
-
-msgid "Special Characters"
-msgstr "Специальные символы"
-
-
-msgid "Kerning"
-msgstr "Кернинг"
-
-
-msgid "Metaball"
-msgstr "Метасфера"
-
-
-msgid "Adjust"
-msgstr "Коррекция"
-
-
-msgid "Keying"
-msgstr "Кеинг"
 
 
 msgid "Bone Roll"
 msgstr "Крен кости"
 
 
-msgid "Tracking"
-msgstr "Трекинг"
-
-
-msgid "Utilities"
-msgstr "Утилиты"
-
-
-msgid "Math"
-msgstr "Математика"
-
-
-msgid "Creative"
-msgstr "Художественные"
+msgid "Clean Up"
+msgstr "Привести в порядок"
 
 
 msgid "Pivot Point"
@@ -35352,6 +35248,10 @@ msgstr "Автомаски́рование"
 
 msgid "Face Sets Edit"
 msgstr "Редактировать наборы граней"
+
+
+msgid "Vertex Group Locks"
+msgstr "Блокировки групп вершин"
 
 
 msgid "Mirror"
@@ -35390,6 +35290,10 @@ msgid "Select More/Less"
 msgstr "Выделить больше/меньше"
 
 
+msgid "Layout"
+msgstr "Разметка"
+
+
 msgid "Select Similar"
 msgstr "Выделить по схожести"
 
@@ -35402,24 +35306,40 @@ msgid "Select Linked"
 msgstr "Выделить связанные"
 
 
+msgid "Render Preview"
+msgstr "Превью рендера"
+
+
 msgid "Select Loops"
 msgstr "Выделить петли"
+
+
+msgid "Adjust"
+msgstr "Коррекция"
 
 
 msgid "Assign Material"
 msgstr "Назначить материал"
 
 
-msgid "Gizmo"
-msgstr "Гизмо"
+msgid "Keying"
+msgstr "Кеинг"
 
 
-msgid "Instances"
-msgstr "Экземпляры"
+msgid "Tracking"
+msgstr "Трекинг"
 
 
-msgid "Import"
-msgstr "Импортировать"
+msgid "Utilities"
+msgstr "Утилиты"
+
+
+msgid "Math"
+msgstr "Математика"
+
+
+msgid "Creative"
+msgstr "Художественные"
 
 
 msgid "Light"
@@ -35430,20 +35350,140 @@ msgid "Light Probe"
 msgstr "Зонд освещения"
 
 
-msgid "Deprecated"
-msgstr "Устаревшие"
-
-
-msgid "List"
-msgstr "Список"
-
-
 msgid "Add Image"
 msgstr "Добавить изображение"
 
 
 msgid "Relations"
 msgstr "Отношения"
+
+
+msgid "Rigid Body"
+msgstr "Твёрдое тело"
+
+
+msgid "Apply"
+msgstr "Применить"
+
+
+msgid "Track"
+msgstr "Отслеживание"
+
+
+msgid "Quick Effects"
+msgstr "Быстрые эффекты"
+
+
+msgid "Asset"
+msgstr "Ассет"
+
+
+msgid "Make Single User"
+msgstr "Для одного пользователя"
+
+
+msgid "Convert"
+msgstr "Конвертировать"
+
+
+msgid "Link/Transfer Data"
+msgstr "Связать/передать данные"
+
+
+msgid "Hooks"
+msgstr "Крюки"
+
+
+msgid "Trim/Add"
+msgstr "Обрезать/Добавить"
+
+
+msgid "Sculpt Set Pivot"
+msgstr "Установить центр трансформации скульптинга"
+
+
+msgid "Face Sets Init"
+msgstr "Инициализация наборов граней"
+
+
+msgid "Random Mask"
+msgstr "Случайная маска"
+
+
+msgid "Clear Transform"
+msgstr "Очистить трансформацию"
+
+
+msgid "In-Betweens"
+msgstr "Промежуточные"
+
+
+msgid "Propagate"
+msgstr "Распространение"
+
+
+msgid "Bone Collections"
+msgstr "Коллекции костей"
+
+
+msgid "Toggle Bone Options"
+msgstr "Переключить опции костей"
+
+
+msgid "Enable Bone Options"
+msgstr "Включить параметры костей"
+
+
+msgid "Disable Bone Options"
+msgstr "Отключить параметры костей"
+
+
+msgid "Mesh Select Mode"
+msgstr "Режим выделения меша"
+
+
+msgid "Gizmo"
+msgstr "Гизмо"
+
+
+msgid "Face Data"
+msgstr "Данные граней"
+
+
+msgid "Instances"
+msgstr "Экземпляры"
+
+
+msgid "Select by Face Strength"
+msgstr "Выделить по твёрдости грани"
+
+
+msgid "Set Face Strength"
+msgstr "Установить твёрдость грани"
+
+
+msgid "Import"
+msgstr "Импортировать"
+
+
+msgid "Merge"
+msgstr "Объединить"
+
+
+msgid "Deprecated"
+msgstr "Устаревшие"
+
+
+msgid "Special Characters"
+msgstr "Специальные символы"
+
+
+msgid "List"
+msgstr "Список"
+
+
+msgid "Kerning"
+msgstr "Кернинг"
 
 
 msgid "Keyframe Insert Pie"
@@ -42805,8 +42845,38 @@ msgid "Use coordinates from a UV layer"
 msgstr "Использовать координаты из UV-слоя"
 
 
+msgctxt "Color"
+msgid "Use Channel"
+msgstr "Используемый канал"
+
+
 msgid "Which texture channel to use for masking"
 msgstr "Текстурный канал, используемый для маски́рования"
+
+
+msgctxt "Color"
+msgid "Intensity"
+msgstr "Интенсивность"
+
+
+msgctxt "Color"
+msgid "Red"
+msgstr "Красный"
+
+
+msgctxt "Color"
+msgid "Green"
+msgstr "Зелёный"
+
+
+msgctxt "Color"
+msgid "Blue"
+msgstr "Синий"
+
+
+msgctxt "Color"
+msgid "Alpha"
+msgstr "Альфа"
 
 
 msgid "Masking Tex"
@@ -47902,7 +47972,7 @@ msgstr "Расширение и размытие сетки"
 
 
 msgid "Dilate or erode the active regions of a grid. This changes which voxels are active but does not change their values."
-msgstr "Расширить или размыть активные области сетки. Это изменяет то, какие воксели будут считаться активными, но не изменяет их исходных значений."
+msgstr "Расширить или размыть активные области сетки. Это изменяет то, какие воксели будут считаться активными без изменения их исходных значений."
 
 
 msgid "Grid Divergence"
@@ -49668,7 +49738,7 @@ msgstr "Получить элемент связки"
 
 
 msgid "Retrieve a bundle item by path."
-msgstr "Извлечь элемент связки по пути."
+msgstr "Извлечь элемент связки используя путь."
 
 
 msgid "Group Input"
@@ -50726,6 +50796,10 @@ msgid "Generate a perturbed normal from an RGB normal map image. Typically used 
 msgstr "Сгенерировать возмущённую нормаль из RGB изображения карты нормалей. Обычно используется для имитации поверхностей с высокой детализацией"
 
 
+msgid "Base"
+msgstr "Основа"
+
+
 msgid "OpenGL or DirectX"
 msgstr "OpenGL или DirectX"
 
@@ -50795,7 +50869,7 @@ msgid ""
 "Provide custom render passes for arbitrary shader node outputs"
 msgstr ""
 "Произвольные выходные переменные.\n"
-"Предоставить пользовательские проходы рендеринга для произвольных выводов узлов шейдера"
+"Предоставить пользовательские проходы рендеринга для произвольных выводов нод шейдера"
 
 
 msgid "Name of the AOV that this output writes to"
@@ -70132,6 +70206,11 @@ msgid "Only cut the front most geometry"
 msgstr "Разрезать только меш на переднем плане"
 
 
+msgctxt "Mesh"
+msgid "Measurements"
+msgstr "Измерения"
+
+
 msgid "Visible distance and angle measurements"
 msgstr "Видимые измерения расстояний и углов"
 
@@ -70140,8 +70219,18 @@ msgid "Show no measurements"
 msgstr "Не показывать измерений"
 
 
+msgctxt "Mesh"
+msgid "Both"
+msgstr "Оба"
+
+
 msgid "Show both distances and angles"
 msgstr "Показывать как расстояния, так и углы"
+
+
+msgctxt "Mesh"
+msgid "Distance"
+msgstr "Расстояние"
 
 
 msgid "Show just distance measurements"
@@ -73297,12 +73386,27 @@ msgid "Linear Light Mode"
 msgstr "Линейный свет"
 
 
+msgctxt "Color"
+msgid "Current"
+msgstr "Текущий"
+
+
 msgid "Leave at current state"
 msgstr "Оставить в текущем режиме"
 
 
+msgctxt "Color"
+msgid "Next"
+msgstr "След."
+
+
 msgid "Next blend type/operation"
 msgstr "Следующий тип/операция смешивания"
+
+
+msgctxt "Color"
+msgid "Prev"
+msgstr "Предыд."
 
 
 msgid "Previous blend type/operation"
@@ -84708,11 +84812,6 @@ msgid "Set cursor position in text"
 msgstr "Установить положение курсора в тексте"
 
 
-msgctxt "Operator"
-msgid "Delete Character"
-msgstr "Удалить символ"
-
-
 msgid "Delete text at cursor position"
 msgstr "Удалять текст относительно положения курсора"
 
@@ -84741,11 +84840,6 @@ msgstr "Редактировать текст"
 
 msgid "Toggle text editing"
 msgstr "Переключить редактирование текста"
-
-
-msgctxt "Operator"
-msgid "Insert Character"
-msgstr "Ввести символ"
 
 
 msgid "String to be inserted at cursor position"
@@ -84797,7 +84891,7 @@ msgstr "Вид по границам"
 
 
 msgid "Set the boundaries of the border used for offset view"
-msgstr "Установите границы края, используемые для смещённого вида"
+msgstr "Задать границы, которые будут использоваться для отображения со смещением"
 
 
 msgid "Zoom the sequencer on the selected strips"
@@ -86269,6 +86363,11 @@ msgstr "Пипетка для Grease Pencil"
 
 msgid "Sample a color from the Blender Window and create Grease Pencil material"
 msgstr "Взять образец цвета из окна Blender'а и создать материал Grease Pencil"
+
+
+msgctxt "GPencil"
+msgid "Material Mode"
+msgstr "Режим материала"
 
 
 msgctxt "Operator"
@@ -90937,7 +91036,7 @@ msgstr "USD шейдер для превью поверхности"
 
 
 msgid "Generate an approximate USD Preview Surface shader representation of a Principled BSDF node network"
-msgstr "Сгенерировать приблизительное представление шейдера для предварительного просмотра поверхности USD для сети узлов Principled BSDF"
+msgstr "Сгенерировать приблизительное представление шейдера для предварительного просмотра поверхности USD для сети нод Principled BSDF"
 
 
 msgid "Merge parent Xform"
@@ -92382,30 +92481,6 @@ msgid "Panel containing UI elements"
 msgstr "Панель содержит элементы интерфейса"
 
 
-msgid "VR"
-msgstr "VR"
-
-
-msgid "VR Info"
-msgstr "Информация о VR"
-
-
-msgid "glTF Variants"
-msgstr "Варианты glTF"
-
-
-msgid "glTF Material Variants"
-msgstr "Варианты материалов glTF"
-
-
-msgid "glTF"
-msgstr "glTF"
-
-
-msgid "glTF Animations"
-msgstr "Анимации glTF"
-
-
 msgid "Active Tool"
 msgstr "Активный инструмент"
 
@@ -92474,6 +92549,14 @@ msgid "Curves Edit Mode"
 msgstr "Режим редактирования кривых"
 
 
+msgid "glTF Variants"
+msgstr "Варианты glTF"
+
+
+msgid "glTF Material Variants"
+msgstr "Варианты материалов glTF"
+
+
 msgid "Transform Orientations"
 msgstr "Ориентации трансформации"
 
@@ -92502,6 +92585,14 @@ msgid "Stereoscopy"
 msgstr "Стереоскопия"
 
 
+msgid "glTF"
+msgstr "glTF"
+
+
+msgid "glTF Animations"
+msgstr "Анимации glTF"
+
+
 msgid "Multi Frame"
 msgstr "Мультикадр"
 
@@ -92524,6 +92615,14 @@ msgstr "Масштабирование кривых: увеличить/умен
 
 msgid "Viewport Debug"
 msgstr "Отладка вьюпорта"
+
+
+msgid "VR"
+msgstr "VR"
+
+
+msgid "VR Info"
+msgstr "Информация о VR"
 
 
 msgid "Import Settings"
@@ -97727,7 +97826,7 @@ msgid "Locale code: eu_EU. Translation progress: 1%"
 msgstr "Код локали: eu_EU. Прогресс перевода: 1%"
 
 
-msgid "Belarusian - беларуску"
+msgid "Belarusian - Беларуская"
 msgstr "Белорусский - Беларуская"
 
 
@@ -97763,6 +97862,10 @@ msgid "Chinese (Traditional) - 繁體中文"
 msgstr "Китайский (традиционный) - 繁體中文"
 
 
+msgid "Locale code: zh_HANT. Translation progress: 62%"
+msgstr "Код локали: zh_HANT. Прогресс перевода: 62%"
+
+
 msgid "Czech - Čeština"
 msgstr "Чешский - Čeština"
 
@@ -97781,6 +97884,10 @@ msgstr "Код локали: da. Прогресс перевода: 3%"
 
 msgid "Dutch - Nederlands"
 msgstr "Голландский - Nederlands"
+
+
+msgid "Locale code: nl_NL. Translation progress: 8%"
+msgstr "Код локали: nl_NL. Прогресс перевода: 8%"
 
 
 msgid "English (UK)"
@@ -97895,10 +98002,6 @@ msgid "Korean - 한국어"
 msgstr "Корейский - 한국어"
 
 
-msgid "Locale code: ko_KR. Translation progress: 49%"
-msgstr "Код локали: ko_KR. Прогресс перевода: 49%"
-
-
 msgid "Kyrgyz - Кыргыз тили"
 msgstr "Киргизский - Кыргыз тили"
 
@@ -98003,6 +98106,10 @@ msgid "Slovenian - Slovenščina"
 msgstr "Словенский - Slovenščina"
 
 
+msgid "Locale code: sl. Translation progress: 51%"
+msgstr "Код локали: sl. Прогресс перевода: 51%"
+
+
 msgid "Spanish - Español"
 msgstr "Испанский - Español"
 
@@ -98069,6 +98176,10 @@ msgstr "Код локали: ur. Прогресс перевода: 86%"
 
 msgid "Vietnamese - Tiếng Việt"
 msgstr "Вьетнамский - Tiếng Việt"
+
+
+msgid "Locale code: vi_VN. Translation progress: 93%"
+msgstr "Код локали: vi_VN. Прогресс перевода: 93%"
 
 
 msgid "Reference Sphere Size"
@@ -98813,10 +98924,6 @@ msgstr "Пропустить сохранение"
 
 msgid "True when the property uses ghost values"
 msgstr "Истинно, когда свойство использует фантомные значения"
-
-
-msgid "Base"
-msgstr "Основа"
 
 
 msgid "Struct definition used for properties assigned to this item"
@@ -107493,7 +107600,7 @@ msgstr "Вектороскоп цветности"
 
 
 msgid "Overlay Type"
-msgstr "Тип перекрытия"
+msgstr "Тип наложения"
 
 
 msgid "Overlay display method"
@@ -107501,11 +107608,11 @@ msgstr "Метод отображения наложения"
 
 
 msgid "Show rectangle area overlay"
-msgstr "Отображать перекрытие прямоуг. области"
+msgstr "Отображать наложение прямоугольной области"
 
 
 msgid "Show reference frame only"
-msgstr "Отображать только кадр эталона"
+msgstr "Отображать только эталонный кадр"
 
 
 msgid "Current"
@@ -119646,8 +119753,28 @@ msgid "Disable Snap"
 msgstr "Отключить привязку"
 
 
+msgid "All Repositories"
+msgstr "Все репозитории"
+
+
+msgid "Show extensions from all repositories"
+msgstr "Показать расширения из всех репозиториев"
+
+
+msgid "Only show extensions from this repository"
+msgstr "Показать расширения только из этого репозитория"
+
+
 msgid "Checking for Extension Updates"
 msgstr "Проверка обновлений расширений"
+
+
+msgid "Enable Add-on"
+msgstr "Включить аддон"
+
+
+msgid "Set Current Theme"
+msgstr "Установить текущую тему"
 
 
 msgid "Repository \"{:s}\": {:s}{:s}"
@@ -121114,7 +121241,7 @@ msgstr "Невозможно поменять местами входы мног
 
 
 msgid "This node has no inputs to swap"
-msgstr "У этого узла нет входов для обмена"
+msgstr "У этой ноды нет входов для обмена"
 
 
 msgid "This node has no input connections to swap"
@@ -132888,7 +133015,7 @@ msgstr "Предупреждение: Не удалось выделить пу�
 
 
 msgid "Irradiance Atlas texture could not be created"
-msgstr "Текстура атласа освещённости не может быть создана"
+msgstr "Текстурный атлас освещённости не может быть создан"
 
 
 msgid "Error: Malformed irradiance grid data"
@@ -133290,6 +133417,11 @@ msgstr "Добавить новую контрольную точку в обо�
 
 msgid "Delete envelope control point"
 msgstr "Удалить контрольную точку оболочки"
+
+
+msgctxt "Modifier"
+msgid "Constant"
+msgstr "Константа"
 
 
 msgctxt "Action"
@@ -135000,6 +135132,11 @@ msgstr "С гамма-коррекцией"
 
 
 msgctxt "Color"
+msgid "Value:"
+msgstr "Значение:"
+
+
+msgctxt "Color"
 msgid "Lightness"
 msgstr "Светлота"
 
@@ -135915,6 +136052,14 @@ msgid "Anim Player"
 msgstr "Остановить"
 
 
+msgid ""
+"Time Remaining: {}\n"
+"Time Elapsed: {}"
+msgstr ""
+"Оставшееся время: {}\n"
+"Прошло времени: {}"
+
+
 msgid "Stop this job"
 msgstr "Остановить эту работу"
 
@@ -136279,6 +136424,10 @@ msgstr "Измерить"
 
 msgid "Angle Constraint"
 msgstr "Ограничитель угла"
+
+
+msgid ": Cycle Edge"
+msgstr ": Переключить ребро"
 
 
 msgid "Selected faces required"
@@ -137977,6 +138126,22 @@ msgstr "Инвертировать блокировки выбранных гр�
 
 msgid "Invert locks of unselected vertex groups of the active object"
 msgstr "Инвертировать блокировки невыбранных групп вершин активного объекта"
+
+
+msgid "Active Group"
+msgstr "Активная группа"
+
+
+msgid "The active Vertex Group"
+msgstr "Активная группа вершин"
+
+
+msgid "All Vertex Groups assigned to Selection"
+msgstr "Все группы вершин, назначенные на выделение"
+
+
+msgid "All Vertex Groups assigned to Deform Bones"
+msgstr "Все группы вершин, назначенные на деформационные кости"
 
 
 msgid "All groups are locked"
@@ -143726,6 +143891,10 @@ msgstr "Несоответствие типа объекта, путь объе�
 
 msgid "Invalid object: verify object path"
 msgstr "Недействительный объект: проверьте путь к объекту"
+
+
+msgid "Could not find an editable collection in current scene, imported data will not be instantiated"
+msgstr "Не удалось найти редактируемую коллекцию в текущей сцене, для импортируемых данных не будут созданы экземпляры"
 
 
 msgid "Could not open Alembic archive for reading, see console for detail"
@@ -151993,6 +152162,11 @@ msgstr "Входная геометрия имеет неподдерживае�
 
 msgid "Undefined Node Tree Type"
 msgstr "Неопределенный тип дерева нод"
+
+
+msgctxt "Color"
+msgid "Unknown"
+msgstr "Неизвестный"
 
 
 msgid "Output node must not be in zone"
