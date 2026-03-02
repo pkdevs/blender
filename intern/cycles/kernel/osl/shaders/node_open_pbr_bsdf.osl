@@ -2,55 +2,370 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
+#include "mx_funcs.h"
 #include "stdcycles.h"
 
 // TODO (OpenPBR): implement the OpenPBR OSL shader
 
-shader node_open_pbr_bsdf(float BaseWeight = 1.0,
-                          color BaseColor = 0.8,
-                          float DiffuseRoughness = 0.0,
-                          float BaseMetalness = 0.0,
-                          float SpecularWeight = 1.0,
-                          color SpecularColor = 1.0,
-                          float SpecularRoughness = 0.3,
-                          float SpecularRoughnessAnisotropy = 0.0,
-                          float SpecularIOR = 1.5,
-                          float TransmissionWeight = 0.0,
-                          color TransmissionColor = 1.0,
-                          float TransmissionDepth = 0.0,
-                          color TransmissionScatter = 0.0,
-                          float TransmissionAnisotropy = 0.0,
-                          float TransmissionDispersionScale = 0.0,
-                          float TransmissionDispersionAbbeNumber = 20.0, 
-                          float SubsurfaceWeight = 0.0,
-                          color SubsurfaceColor = 0.8,
-                          float SubsurfaceRadius = 1.0,
-                          color SubsurfaceRadiusScale = {1.0, 0.5, 0.25}, 
-                          float SubsurfaceScatterAnisotropy = 0.0,
-                          float CoatWeight = 0.0,
-                          color CoatColor = 1.0,
-                          float CoatRoughness = 0.0,
-                          float CoatRoughnessAnisotropy = 0.0,
-                          float CoatIOR = 1.6,
-                          float CoatDarkening = 1.0,
-                          float FuzzWeight = 0.0,
-                          color FuzzColor = 1.0,
-                          float FuzzRoughness = 0.5,
-                          float EmissionLuminance = 0.0,
-                          color EmissionColor = 1.0,
-                          float ThinFilmWeight = 0,
-                          float ThinFilmThickness = 0.5,
-                          float ThinFilmIOR = 1.4,
-                          float GeometryOpacity = 1.0,
-                          // bool GeometryThinWalled = false,   // TODO (Sebastian): No idea yet how booleans work
-                          normal GeometryNormal = N,
-                          normal GeometryTangent = normalize(dPdu),
-                          normal GeometryCoatNormal = N,
-                          normal GeometryCoatTangent = normalize(dPdu),
-                          output closure color BSDF = 0)
+#define BSDF_T closure color
+
+closure color null_closure()
 {
-  if (DiffuseRoughness < 1e-5)
-    BSDF = BaseColor * diffuse(GeometryNormal);
-  else
-    BSDF = oren_nayar_diffuse_bsdf(GeometryNormal, clamp(BaseColor, 0.0, 1.0), DiffuseRoughness);
+  closure color null_closure = 0;
+  return null_closure;
+}
+
+void NG_convert_float_color3(float in, output color out)
+{
+  color combine_out = color(in, in, in);
+  out = combine_out;
+}
+
+void mx_generalized_schlick_bsdf(float weight,
+                                 color color0,
+                                 color color82,
+                                 color color90,
+                                 float exponent,
+                                 vector2 roughness,
+                                 float thinfilm_thickness,
+                                 float thinfilm_ior,
+                                 normal N,
+                                 vector U,
+                                 string distribution,
+                                 string scatter_mode,
+                                 output BSDF_T bsdf)
+{
+  color reflection_tint = (scatter_mode == "T") ? color(0.0) : color(1.0);
+  color transmission_tint = (scatter_mode == "R") ? color(0.0) : color(1.0);
+  bsdf = weight * generalized_schlick_bsdf(N,
+                                           U,
+                                           reflection_tint,
+                                           transmission_tint,
+                                           roughness.x,
+                                           roughness.y,
+                                           color0,
+                                           color90,
+                                           exponent,
+                                           distribution,
+                                           "thinfilm_thickness",
+                                           thinfilm_thickness,
+                                           "thinfilm_ior",
+                                           thinfilm_ior);
+}
+
+void mx_dielectric_bsdf(float weight,
+                        color tint,
+                        float ior,
+                        vector2 roughness,
+                        float thinfilm_thickness,
+                        float thinfilm_ior,
+                        normal N,
+                        vector U,
+                        string distribution,
+                        string scatter_mode,
+                        output BSDF_T bsdf)
+{
+  color reflection_tint = (scatter_mode == "T") ? color(0.0) : tint;
+  color transmission_tint = (scatter_mode == "R") ? color(0.0) : tint;
+  bsdf = weight * dielectric_bsdf(N,
+                                  U,
+                                  reflection_tint,
+                                  transmission_tint,
+                                  roughness.x,
+                                  roughness.y,
+                                  ior,
+                                  distribution,
+                                  "thinfilm_thickness",
+                                  thinfilm_thickness,
+                                  "thinfilm_ior",
+                                  thinfilm_ior);
+}
+
+void NG_open_pbr_anisotropy(float roughness, float anisotropy, output vector2 out)
+{
+  float rough_sq_out = roughness * roughness;
+  float aniso_invert_amount_tmp = 1.000000;
+  float aniso_invert_out = aniso_invert_amount_tmp - anisotropy;
+  float aniso_invert_sq_out = aniso_invert_out * aniso_invert_out;
+  float denom_in2_tmp = 1.000000;
+  float denom_out = aniso_invert_sq_out + denom_in2_tmp;
+  float fraction_in1_tmp = 2.000000;
+  float fraction_out = fraction_in1_tmp / denom_out;
+  float sqrt_out = sqrt(fraction_out);
+  float alpha_x_out = rough_sq_out * sqrt_out;
+  float alpha_y_out = aniso_invert_out * alpha_x_out;
+  vector2 result_out = {alpha_x_out, alpha_y_out};
+  out = result_out;
+}
+
+shader node_open_pbr_bsdf(
+    float BaseWeight = 1.0,
+    color BaseColor = 0.8,
+    float DiffuseRoughness = 0.0,
+    float BaseMetalness = 0.0,
+    float SpecularWeight = 1.0,
+    color SpecularColor = 1.0,
+    float SpecularRoughness = 0.3,
+    float SpecularRoughnessAnisotropy = 0.0,
+    float SpecularIOR = 1.5,
+    float TransmissionWeight = 0.0,
+    color TransmissionColor = 1.0,
+    float TransmissionDepth = 0.0,
+    color TransmissionScatter = 0.0,
+    float TransmissionAnisotropy = 0.0,
+    float TransmissionDispersionScale = 0.0,
+    float TransmissionDispersionAbbeNumber = 20.0,
+    float SubsurfaceWeight = 0.0,
+    color SubsurfaceColor = 0.8,
+    float SubsurfaceRadius = 1.0,
+    color SubsurfaceRadiusScale = {1.0, 0.5, 0.25},
+    float SubsurfaceScatterAnisotropy = 0.0,
+    float CoatWeight = 0.0,
+    color CoatColor = 1.0,
+    float CoatRoughness = 0.0,
+    float CoatRoughnessAnisotropy = 0.0,
+    float CoatIOR = 1.6,
+    float CoatDarkening = 1.0,
+    float FuzzWeight = 0.0,
+    color FuzzColor = 1.0,
+    float FuzzRoughness = 0.5,
+    float EmissionLuminance = 0.0,
+    color EmissionColor = 1.0,
+    float ThinFilmWeight = 0,
+    float ThinFilmThickness = 0.5,
+    float ThinFilmIOR = 1.4,
+    float GeometryOpacity = 1.0,
+    // bool GeometryThinWalled = false,   // TODO (Sebastian): No idea yet how booleans work
+    normal GeometryNormal = N,
+    normal GeometryTangent = normalize(dPdu),
+    normal GeometryCoatNormal = N,
+    normal GeometryCoatTangent = normalize(dPdu),
+    output closure color BSDF = 0)
+{
+  /* Base */
+  float base_weight = BaseWeight;
+  color base_color = BaseColor;
+  float base_diffuse_roughness = DiffuseRoughness;
+  float base_metalness = BaseMetalness;
+
+  /* Specular */
+  float specular_weight = SpecularWeight;
+  color specular_color = SpecularColor;
+  float specular_roughness = SpecularRoughness;
+  float specular_roughness_anisotropy = SpecularRoughnessAnisotropy;
+  float specular_ior = SpecularIOR;
+
+  /* Coat */
+  float coat_weight = CoatWeight;
+  color coat_color = CoatColor;
+  float coat_ior = CoatIOR;
+  float coat_roughness = CoatRoughness;
+  float coat_roughness_anisotropy = CoatRoughnessAnisotropy;
+  float coat_darkening = CoatDarkening;
+
+  /* Fuzz */
+  float fuzz_weight = FuzzWeight;
+  color fuzz_color = FuzzColor;
+  float fuzz_roughness = FuzzRoughness;
+
+  /* Subsurface */
+  float subsurface_weight = SubsurfaceWeight;
+  color subsurface_color = SubsurfaceColor;
+
+  /* Geometrty */
+  normal geometry_normal = GeometryNormal;
+  normal geometry_tangent = GeometryTangent;
+  normal geometry_coat_normal = geometry_normal;
+  normal geometry_coat_tangent = geometry_tangent;
+
+  vector2 coat_roughness_vector_out = vector2(0.0, 0.0);
+  NG_open_pbr_anisotropy(coat_roughness, coat_roughness_anisotropy, coat_roughness_vector_out);
+
+  color metal_reflectivity_out = base_color * base_weight;
+  color metal_edgecolor_out = specular_color * specular_weight;
+
+  float coat_roughness_to_power_4_in2_tmp = 4.000000;
+  float coat_roughness_to_power_4_out = pow(coat_roughness, coat_roughness_to_power_4_in2_tmp);
+
+  float specular_roughness_to_power_4_in2_tmp = 4.000000;
+  float specular_roughness_to_power_4_out = pow(specular_roughness,
+                                                specular_roughness_to_power_4_in2_tmp);
+
+  float base_color_nonnegative_in2_tmp = 0.000000;
+  color base_color_nonnegative_out = max(base_color, base_color_nonnegative_in2_tmp);
+
+  float specular_to_coat_ior_ratio_out = specular_ior / coat_ior;
+  float coat_to_specular_ior_ratio_out = coat_ior / specular_ior;
+
+  float specular_to_coat_ior_ratio_tir_fix_value2_tmp = 1.000000;
+  float specular_to_coat_ior_ratio_tir_fix_out = mx_ternary(
+      specular_to_coat_ior_ratio_out > specular_to_coat_ior_ratio_tir_fix_value2_tmp,
+      specular_to_coat_ior_ratio_out,
+      coat_to_specular_ior_ratio_out);
+
+  float eta_s_out = mix(specular_ior, specular_to_coat_ior_ratio_tir_fix_out, coat_weight);
+  float eta_s_minus_one_in2_tmp = 1.000000;
+  float eta_s_minus_one_out = eta_s_out - eta_s_minus_one_in2_tmp;
+  float eta_s_plus_one_in2_tmp = 1.000000;
+  float eta_s_plus_one_out = eta_s_out + eta_s_plus_one_in2_tmp;
+  float specular_F0_sqrt_out = eta_s_minus_one_out / eta_s_plus_one_out;
+
+  float specular_F0_out = specular_F0_sqrt_out * specular_F0_sqrt_out;
+  float scaled_specular_F0_out = specular_weight * specular_F0_out;
+  float scaled_specular_F0_clamped_low_tmp = 0.000000;
+  float scaled_specular_F0_clamped_high_tmp = 0.999990;
+  float scaled_specular_F0_clamped_out = clamp(scaled_specular_F0_out,
+                                               scaled_specular_F0_clamped_low_tmp,
+                                               scaled_specular_F0_clamped_high_tmp);
+
+  float sign_eta_s_minus_one_out = sign(eta_s_minus_one_out);
+  float sqrt_scaled_specular_F0_out = sqrt(scaled_specular_F0_clamped_out);
+  float modulated_eta_s_epsilon_out = sign_eta_s_minus_one_out * sqrt_scaled_specular_F0_out;
+
+  float one_plus_modulated_eta_s_epsilon_in1_tmp = 1.000000;
+  float one_plus_modulated_eta_s_epsilon_out = one_plus_modulated_eta_s_epsilon_in1_tmp +
+                                               modulated_eta_s_epsilon_out;
+  float one_minus_modulated_eta_s_epsilon_in1_tmp = 1.000000;
+  float one_minus_modulated_eta_s_epsilon_out = one_minus_modulated_eta_s_epsilon_in1_tmp -
+                                                modulated_eta_s_epsilon_out;
+
+  float modulated_eta_s_out = one_plus_modulated_eta_s_epsilon_out /
+                              one_minus_modulated_eta_s_epsilon_out;
+
+  float coat_ior_minus_one_in2_tmp = 1.000000;
+  float coat_ior_minus_one_out = coat_ior - coat_ior_minus_one_in2_tmp;
+  float coat_ior_plus_one_in1_tmp = 1.000000;
+  float coat_ior_plus_one_out = coat_ior_plus_one_in1_tmp + coat_ior;
+  float coat_ior_to_F0_sqrt_out = coat_ior_minus_one_out / coat_ior_plus_one_out;
+  float coat_ior_to_F0_out = coat_ior_to_F0_sqrt_out * coat_ior_to_F0_sqrt_out;
+
+  float coat_ior_sqr_out = coat_ior * coat_ior;
+
+  float one_minus_coat_F0_in1_tmp = 1.000000;
+  float one_minus_coat_F0_out = one_minus_coat_F0_in1_tmp - coat_ior_to_F0_out;
+
+  float one_minus_coat_F0_over_eta2_out = one_minus_coat_F0_out / coat_ior_sqr_out;
+
+  float coat_weight_times_coat_darkening_out = coat_weight * coat_darkening;
+  color coat_attenuation_bg_tmp = color(1.000000, 1.000000, 1.000000);
+  color coat_attenuation_out = mix(coat_attenuation_bg_tmp, coat_color, coat_weight);
+
+  color Edielectric_out = mix(base_color, subsurface_color, subsurface_weight);
+
+  float Kcoat_in1_tmp = 1.000000;
+  float Kcoat_out = Kcoat_in1_tmp - one_minus_coat_F0_over_eta2_out;
+  color Emetal_out = base_color * specular_weight;
+  color Ebase_out = mix(Edielectric_out, Emetal_out, base_metalness);
+  color Ebase_Kcoat_out = Ebase_out * Kcoat_out;
+
+  color one_minus_Ebase_Kcoat_in1_tmp = color(1.000000, 1.000000, 1.000000);
+  color one_minus_Ebase_Kcoat_out = one_minus_Ebase_Kcoat_in1_tmp - Ebase_Kcoat_out;
+
+  float one_minus_Kcoat_in1_tmp = 1.000000;
+  float one_minus_Kcoat_out = one_minus_Kcoat_in1_tmp - Kcoat_out;
+
+  color one_minus_Kcoat_color_out = color(0.0);
+  NG_convert_float_color3(one_minus_Kcoat_out, one_minus_Kcoat_color_out);
+
+  color base_darkening_out = one_minus_Kcoat_color_out / one_minus_Ebase_Kcoat_out;
+  color modulated_base_darkening_bg_tmp = color(1.000000, 1.000000, 1.000000);
+  color modulated_base_darkening_out = mix(
+      modulated_base_darkening_bg_tmp, base_darkening_out, coat_weight_times_coat_darkening_out);
+
+  float two_times_coat_roughness_to_power_4_in2_tmp = 2.000000;
+  float two_times_coat_roughness_to_power_4_out = coat_roughness_to_power_4_out *
+                                                  two_times_coat_roughness_to_power_4_in2_tmp;
+
+  float add_coat_and_spec_roughnesses_to_power_4_out = two_times_coat_roughness_to_power_4_out +
+                                                       specular_roughness_to_power_4_out;
+
+  float min_1_add_coat_and_spec_roughnesses_to_power_4_in1_tmp = 1.000000;
+  float min_1_add_coat_and_spec_roughnesses_to_power_4_out = min(
+      min_1_add_coat_and_spec_roughnesses_to_power_4_in1_tmp,
+      add_coat_and_spec_roughnesses_to_power_4_out);
+
+  float coat_affected_specular_roughness_in2_tmp = 0.250000;
+  float coat_affected_specular_roughness_out = pow(
+      min_1_add_coat_and_spec_roughnesses_to_power_4_out,
+      coat_affected_specular_roughness_in2_tmp);
+
+  float effective_specular_roughness_out = mix(
+      specular_roughness, coat_affected_specular_roughness_out, coat_weight);
+
+  vector2 main_roughness_out = vector2(0.0, 0.0);
+  NG_open_pbr_anisotropy(
+      effective_specular_roughness_out, specular_roughness_anisotropy, main_roughness_out);
+
+  BSDF_T diffuse_bsdf_out = base_weight * oren_nayar_diffuse_bsdf(geometry_normal,
+                                                                  base_color_nonnegative_out,
+                                                                  base_diffuse_roughness);
+
+  BSDF_T fuzz_bsdf_out = fuzz_weight * sheen_bsdf(geometry_normal, fuzz_color, fuzz_roughness);
+  BSDF_T coat_bsdf_out = null_closure();
+  mx_dielectric_bsdf(coat_weight,
+                     color(1.000000, 1.000000, 1.000000),
+                     coat_ior,
+                     coat_roughness_vector_out,
+                     0.000000,
+                     1.500000,
+                     geometry_coat_normal,
+                     geometry_coat_tangent,
+                     "ggx",
+                     "R",
+                     coat_bsdf_out);
+
+  BSDF_T metal_bsdf_out = null_closure();
+  mx_generalized_schlick_bsdf(specular_weight,
+                              metal_reflectivity_out,
+                              metal_edgecolor_out,
+                              color(1.000000, 1.000000, 1.000000),
+                              5.000000,
+                              main_roughness_out,
+                              0.000000,
+                              1.500000,
+                              geometry_normal,
+                              geometry_tangent,
+                              "ggx",
+                              "R",
+                              metal_bsdf_out);
+  /* No support for thin film */
+  // BSDF_T metal_bsdf_tf_mix_out = mix(metal_bsdf_out, metal_bsdf_tf_out, thin_film_weight);
+  BSDF_T metal_bsdf_tf_mix_out = metal_bsdf_out;
+
+  BSDF_T dielectric_reflection_out = null_closure();
+  mx_dielectric_bsdf(1.000000,
+                     specular_color,
+                     modulated_eta_s_out,
+                     main_roughness_out,
+                     0.000000,
+                     1.500000,
+                     geometry_normal,
+                     geometry_tangent,
+                     "ggx",
+                     "R",
+                     dielectric_reflection_out);
+
+  /* No support for thin film */
+  // BSDF_T dielectric_reflection_tf_mix_out = mix(dielectric_reflection_out,
+  // dielectric_reflection_tf_out, thin_film_weight);
+  BSDF_T dielectric_reflection_tf_mix_out = dielectric_reflection_out;
+
+  /* No support for subsurface */
+  // BSDF_T opaque_base_out = mix(diffuse_bsdf_out, selected_subsurface_out, subsurface_weight);
+  BSDF_T opaque_base_out = diffuse_bsdf_out;
+
+  /* No support for translucent */
+  // BSDF_T dielectric_substrate_out = mix(opaque_base_out, dielectric_volume_transmission_out,
+  // transmission_weight);
+  BSDF_T dielectric_substrate_out = opaque_base_out;
+
+  BSDF_T dielectric_base_out = layer(dielectric_reflection_tf_mix_out, dielectric_substrate_out);
+  BSDF_T base_substrate_out = mix(dielectric_base_out, metal_bsdf_tf_mix_out, base_metalness);
+  BSDF_T darkened_base_substrate_out = (modulated_base_darkening_out * base_substrate_out);
+  BSDF_T coat_substrate_attenuated_out = (coat_attenuation_out * darkened_base_substrate_out);
+  BSDF_T coat_layer_out = layer(coat_bsdf_out, coat_substrate_attenuated_out);
+  BSDF_T fuzz_layer_out = layer(fuzz_bsdf_out, coat_layer_out);
+
+
+  BSDF = fuzz_layer_out;
 }

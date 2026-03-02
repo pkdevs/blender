@@ -188,6 +188,7 @@ foreach(_file ${SRC_OSL})
       ${OSL_COMPILER} -q -O2
         -I"${CMAKE_CURRENT_SOURCE_DIR}"
         -I"${OSL_SHADER_DIR}"
+        -I"${LIBDIR}/materialx/libraries/stdlib/genosl/include"
         -o ${_OSO_FILE}
         ${_OSL_FILE}
     DEPENDS ${_OSL_FILE} ${SRC_OSL_HEADERS} ${OSL_COMPILER}
