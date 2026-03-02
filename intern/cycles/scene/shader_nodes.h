@@ -603,6 +603,7 @@ class OpenPBRBsdfNode : public BsdfBaseNode {
   bool has_surface_emission() override;
   bool has_surface_bssrdf() override;
   void simplify_settings(Scene *scene) override;
+
  protected:
   /* Checks whether the given weight input is potentially non-zero. */
   bool has_nonzero_weight(const char *name);

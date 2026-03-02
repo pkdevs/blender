@@ -2684,7 +2684,8 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_FLOAT(subsurface_weight, "Subsurface Weight", .0f);
   SOCKET_IN_COLOR(subsurface_color, "Subsurface Color", make_float3(0.8f));
   SOCKET_IN_FLOAT(subsurface_radius, "Subsurface Radius", 1.0f);
-  SOCKET_IN_COLOR(subsurface_radius_scale, "Subsurface Radius Scale",  make_float3(1.0f, 0.5f, 0.25f));
+  SOCKET_IN_COLOR(
+      subsurface_radius_scale, "Subsurface Radius Scale", make_float3(1.0f, 0.5f, 0.25f));
   SOCKET_IN_FLOAT(subsurface_scatter_anisotropy, "Subsurface Scatter Anisotropy", .0f);
   /* Coat Component */
   SOCKET_IN_FLOAT(coat_weight, "Coat Weight", .0f);
@@ -2786,10 +2787,7 @@ bool OpenPBRBsdfNode::has_nonzero_weight(const char *name)
   return (get_float(weight_in->socket_type) >= CLOSURE_WEIGHT_CUTOFF);
 }
 
-void OpenPBRBsdfNode::simplify_settings(Scene * /* scene */)
-{
-
-}
+void OpenPBRBsdfNode::simplify_settings(Scene * /* scene */) {}
 
 /* Disney principled BSDF Closure */
 NODE_DEFINE(PrincipledBsdfNode)
