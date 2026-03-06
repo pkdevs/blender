@@ -1222,21 +1222,26 @@ class NODE_OT_interface_item_new(NodeInterfaceOperator, Operator):
         active_pos = active_item.position if active_item else -1
 
         if self.item_type == 'INPUT':
-            item = interface.new_socket("Socket", socket_type=self.find_valid_socket_type(tree), in_out='INPUT')
+            new_item = interface.new_socket("Socket", socket_type=self.find_valid_socket_type(tree), in_out='INPUT')
         elif self.item_type == 'OUTPUT':
-            item = interface.new_socket("Socket", socket_type=self.find_valid_socket_type(tree), in_out='OUTPUT')
+            new_item = interface.new_socket("Socket", socket_type=self.find_valid_socket_type(tree), in_out='OUTPUT')
         elif self.item_type == 'PANEL':
-            item = interface.new_panel("Panel")
+            new_item = interface.new_panel("Panel")
         else:
             return {'CANCELLED'}
 
         if active_item:
             # Insert into active panel if possible, otherwise insert after active item.
-            if active_item.item_type == 'PANEL' and item.item_type != 'PANEL':
-                interface.move_to_parent(item, active_item, len(active_item.interface_items))
+            if active_item.item_type == 'PANEL' and new_item.item_type != 'PANEL':
+                interface.move_to_parent(new_item, active_item, len(active_item.interface_items))
             else:
-                interface.move_to_parent(item, active_item.parent, active_pos + 1)
-        interface.active = item
+                interface.move_to_parent(new_item, active_item.parent, active_pos + 1)
+
+        # Clear multi-selection
+        for item in interface.items_tree:
+            item.select = False
+
+        interface.active = new_item
 
         return {'FINISHED'}
 
@@ -1284,12 +1289,15 @@ class NODE_OT_interface_item_new_panel_toggle(Operator):
         interface = tree.interface
         active_panel = interface.active
 
-        item = interface.new_socket(active_panel.name, socket_type='NodeSocketBool', in_out='INPUT')
-
+        new_item = interface.new_socket(active_panel.name, socket_type='NodeSocketBool', in_out='INPUT')
         # Set is_panel_toggle after moving into parent
-        interface.move_to_parent(item, active_panel, 0)
-        item.is_panel_toggle = True
+        interface.move_to_parent(new_item, active_panel, 0)
+        new_item.is_panel_toggle = True
 
+        # Clear multi-selection
+        for item in interface.items_tree:
+            item.select = False
+        
         return {'FINISHED'}
 
 
