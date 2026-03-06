@@ -1297,7 +1297,7 @@ class NODE_OT_interface_item_new_panel_toggle(Operator):
         # Clear multi-selection
         for item in interface.items_tree:
             item.select = False
-        
+
         return {'FINISHED'}
 
 
