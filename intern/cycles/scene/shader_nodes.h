@@ -551,7 +551,7 @@ class OpenPBRBsdfNode : public BsdfBaseNode {
   NODE_SOCKET_API(float, base_weight)
   NODE_SOCKET_API(float3, base_color)
   NODE_SOCKET_API(float, base_metalness)
-  NODE_SOCKET_API(float, diffuse_roughness)
+  NODE_SOCKET_API(float, base_diffuse_roughness)
   /* Specular Component */
   NODE_SOCKET_API(float, specular_weight)
   NODE_SOCKET_API(float3, specular_color)

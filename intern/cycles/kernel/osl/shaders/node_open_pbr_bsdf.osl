@@ -101,7 +101,7 @@ void NG_open_pbr_anisotropy(float roughness, float anisotropy, output vector2 ou
 shader node_open_pbr_bsdf(
     float BaseWeight = 1.0,
     color BaseColor = 0.8,
-    float DiffuseRoughness = 0.0,
+    float BaseDiffuseRoughness = 0.0,
     float BaseMetalness = 0.0,
     float SpecularWeight = 1.0,
     color SpecularColor = 1.0,
@@ -145,7 +145,7 @@ shader node_open_pbr_bsdf(
   /* Base */
   float base_weight = BaseWeight;
   color base_color = BaseColor;
-  float base_diffuse_roughness = DiffuseRoughness;
+  float base_diffuse_roughness = BaseDiffuseRoughness;
   float base_metalness = BaseMetalness;
 
   /* Specular */

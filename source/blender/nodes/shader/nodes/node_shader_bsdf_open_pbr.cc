@@ -22,7 +22,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Base Component
    * *****************************************************************/
-  PanelDeclarationBuilder &base = b.add_panel("Base").default_closed(false);
+  PanelDeclarationBuilder &base = b.add_panel("Base"_ustr).default_closed(false);
   base.add_input<decl::Float>("Base Weight")
       .default_value(1.0f)
       .min(0.0f)
@@ -37,7 +37,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1.0f)
       .subtype(PROP_FACTOR);
 #define OPENPBR_SOCK_BASE_METALNESS_ID 3
-  base.add_input<decl::Float>("Diffuse Roughness")
+  base.add_input<decl::Float>("Base Diffuse Roughness")
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
@@ -46,7 +46,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Specular Component
    * *****************************************************************/
-  PanelDeclarationBuilder &specular = b.add_panel("Specular").default_closed(false);
+  PanelDeclarationBuilder &specular = b.add_panel("Specular"_ustr).default_closed(false);
   specular.add_input<decl::Float>("Specular Weight")
       .default_value(1.0f)
       .min(0.0f)
@@ -76,7 +76,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Transmission Component
    * *****************************************************************/
-  PanelDeclarationBuilder &transmission = b.add_panel("Transmission").default_closed(false);
+  PanelDeclarationBuilder &transmission = b.add_panel("Transmission"_ustr).default_closed(false);
   transmission.add_input<decl::Float>("Transmission Weight")
       .default_value(0.0f)
       .min(0.0f)
@@ -116,7 +116,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Subsurface Component
    * *****************************************************************/
-  PanelDeclarationBuilder &subsurface = b.add_panel("Subsurface").default_closed(false);
+  PanelDeclarationBuilder &subsurface = b.add_panel("Subsurface"_ustr).default_closed(false);
   subsurface.add_input<decl::Float>("Subsurface Weight")
       .default_value(0.0f)
       .min(0.0f)
@@ -143,7 +143,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Coat Component
    * *****************************************************************/
-  PanelDeclarationBuilder &coat = b.add_panel("Coat").default_closed(false);
+  PanelDeclarationBuilder &coat = b.add_panel("Coat"_ustr).default_closed(false);
   coat.add_input<decl::Float>("Coat Weight")
       .default_value(0.0f)
       .min(0.0f)
@@ -179,7 +179,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Fuzz Component
    * *****************************************************************/
-  PanelDeclarationBuilder &fuzz = b.add_panel("Fuzz").default_closed(false);
+  PanelDeclarationBuilder &fuzz = b.add_panel("Fuzz"_ustr).default_closed(false);
   fuzz.add_input<decl::Float>("Fuzz Weight")
       .default_value(0.0f)
       .min(0.0f)
@@ -197,7 +197,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Emission Component
    * *****************************************************************/
-  PanelDeclarationBuilder &emission = b.add_panel("Emission").default_closed(false);
+  PanelDeclarationBuilder &emission = b.add_panel("Emission"_ustr).default_closed(false);
   emission.add_input<decl::Float>("Emission Luminance")
       .default_value(0.0f)
       .min(0.0f)
@@ -209,7 +209,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Thin-film Component
    * *****************************************************************/
-  PanelDeclarationBuilder &thinfilm = b.add_panel("Thin-film").default_closed(false);
+  PanelDeclarationBuilder &thinfilm = b.add_panel("Thin-film"_ustr).default_closed(false);
   thinfilm.add_input<decl::Float>("Thin-film Weight")
       .default_value(0.0f)
       .min(0.0f)
@@ -231,7 +231,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Geometry Component
    * *****************************************************************/
-  PanelDeclarationBuilder &geometry = b.add_panel("Geometry").default_closed(false);
+  PanelDeclarationBuilder &geometry = b.add_panel("Geometry"_ustr).default_closed(false);
   geometry.add_input<decl::Float>("Geometry Opacity")
       .default_value(1.0f)
       .min(0.0f)
@@ -278,7 +278,7 @@ NODE_SHADER_MATERIALX_BEGIN
   NodeItem base_weight = get_input_value("Base Weight", NodeItem::Type::Float);
   NodeItem base_color = get_input_value("Base Color", NodeItem::Type::Color3);
   NodeItem base_metalness = get_input_value("Base Metalness", NodeItem::Type::Float);
-  NodeItem base_roughness = get_input_value("Diffuse Roughness", NodeItem::Type::Float);
+  NodeItem base_roughness = get_input_value("Base Diffuse Roughness", NodeItem::Type::Float);
 
   NodeItem geometry_normal = get_input_link("Geometry Normal", NodeItem::Type::Vector3);
   /* set up the open pbr MaterialX shader node: "open_pbr_surface"*/

@@ -2665,7 +2665,7 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_FLOAT(base_weight, "Base Weight", 1.0f);
   SOCKET_IN_COLOR(base_color, "Base Color", make_float3(0.8f));
   SOCKET_IN_FLOAT(base_metalness, "Base Metalness", 0.0f);
-  SOCKET_IN_FLOAT(diffuse_roughness, "Diffuse Roughness", 0.0f);
+  SOCKET_IN_FLOAT(base_diffuse_roughness, "Base Diffuse Roughness", 0.0f);
   /* Specular Component */
   SOCKET_IN_FLOAT(specular_weight, "Specular Weight", 1.0f);
   SOCKET_IN_COLOR(specular_color, "Specular Color", one_float3());
@@ -2729,7 +2729,7 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
   ShaderInput *base_weight_in = input("Base Weight");
   ShaderInput *base_color_in = input("Base Color");
   ShaderInput *base_metalness_in = input("Base Metalness");
-  ShaderInput *base_diffuse_roughness_in = input("Diffuse Roughness");
+  ShaderInput *base_diffuse_roughness_in = input("Base Diffuse Roughness");
 
   // TODO (Sebastian): use stack_assign_if_linked
   const int base_weight_offset = compiler.stack_assign(base_weight_in);
