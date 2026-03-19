@@ -8,6 +8,7 @@
 // TODO (OpenPBR): implement the OpenPBR OSL shader
 
 #define BSDF_T closure color
+#define VDF_T closure color
 
 closure color null_closure()
 {
@@ -18,6 +19,35 @@ closure color null_closure()
 void NG_convert_float_color3(float in, output color out)
 {
   color combine_out = color(in, in, in);
+  out = combine_out;
+}
+
+void NG_separate3_color3(color in, output float outr, output float outg, output float outb)
+{
+  int N_extract_0_index_tmp = 0;
+  float N_extract_0_out = mx_extract(in, N_extract_0_index_tmp);
+  int N_extract_1_index_tmp = 1;
+  float N_extract_1_out = mx_extract(in, N_extract_1_index_tmp);
+  int N_extract_2_index_tmp = 2;
+  float N_extract_2_out = mx_extract(in, N_extract_2_index_tmp);
+  outr = N_extract_0_out;
+  outg = N_extract_1_out;
+  outb = N_extract_2_out;
+}
+
+void NG_convert_color3_vector3(color in, output vector out)
+{
+  float separate_outr = 0.0;
+  float separate_outg = 0.0;
+  float separate_outb = 0.0;
+  NG_separate3_color3(in, separate_outr, separate_outg, separate_outb);
+  vector combine_out = vector(separate_outr, separate_outg, separate_outb);
+  out = combine_out;
+}
+
+void NG_convert_float_vector3(float in, output vector out)
+{
+  vector combine_out = vector(in, in, in);
   out = combine_out;
 }
 
@@ -51,6 +81,17 @@ void mx_generalized_schlick_bsdf(float weight,
                                            thinfilm_thickness,
                                            "thinfilm_ior",
                                            thinfilm_ior);
+}
+
+void mx_anisotropic_vdf(color absorption, color scattering, float anisotropy, output VDF_T vdf)
+{
+  // Convert from absorption and scattering coefficients to
+  // extinction coefficient and single-scattering albedo.
+  //color extinction = absorption + scattering;
+  //color albedo = scattering / extinction;
+  color extinction = color(0.0, 0.0,0.0);
+  color albedo = color(1.0, 0.0,0.0);
+  vdf = anisotropic_vdf(albedo, extinction, anisotropy);
 }
 
 void mx_dielectric_bsdf(float weight,
@@ -153,12 +194,27 @@ shader node_open_pbr_bsdf(
   color specular_color = SpecularColor;
   float specular_roughness = SpecularRoughness;
   float specular_roughness_anisotropy = SpecularRoughnessAnisotropy;
-  float specular_ior = SpecularIOR;
+  
+  float specular_ior = backfacing() ? 1.0 /SpecularIOR : SpecularIOR;
+  //float specular_ior = SpecularIOR;
+
+  /* Transmission */
+  float transmission_weight = TransmissionWeight;
+  color transmission_color = TransmissionColor;
+
+   //since we do not support volume yet
+  float transmission_depth = 0.0;
+  //float transmission_depth = TransmissionDepth;
+  
+  color transmission_scatter = TransmissionScatter;
+  float transmission_scatter_anisotropy = TransmissionAnisotropy;
+  //float transmission_dispersion_scale = TransmissionDispersionScale;
+  //float transmission_dispersion_abbe_number = TransmissionDispersionAbbeNumber;
 
   /* Coat */
   float coat_weight = CoatWeight;
   color coat_color = CoatColor;
-  float coat_ior = CoatIOR;
+  float coat_ior =  backfacing() ? 1.0 / CoatIOR : CoatIOR;
   float coat_roughness = CoatRoughness;
   float coat_roughness_anisotropy = CoatRoughnessAnisotropy;
   float coat_darkening = CoatDarkening;
@@ -249,6 +305,59 @@ shader node_open_pbr_bsdf(
   float coat_weight_times_coat_darkening_out = coat_weight * coat_darkening;
   color coat_attenuation_bg_tmp = color(1.000000, 1.000000, 1.000000);
   color coat_attenuation_out = mix(coat_attenuation_bg_tmp, coat_color, coat_weight);
+
+  float if_transmission_tint_value2_tmp = 0.000000;
+  color if_transmission_tint_in1_tmp = color(1.000000, 1.000000, 1.000000);
+  color if_transmission_tint_out = mx_ternary(transmission_depth > if_transmission_tint_value2_tmp,
+                                              if_transmission_tint_in1_tmp,
+                                              transmission_color);
+  vector transmission_color_vector_out = vector(0.0);
+  NG_convert_color3_vector3(transmission_color, transmission_color_vector_out);
+  vector transmission_depth_vector_out = vector(0.0);
+  NG_convert_float_vector3(transmission_depth, transmission_depth_vector_out);
+  vector transmission_scatter_vector_out = vector(0.0);
+  NG_convert_color3_vector3(transmission_scatter, transmission_scatter_vector_out);
+
+  vector transmission_color_ln_out = log(transmission_color_vector_out);
+  float extinction_coeff_denom_in2_tmp = -1.000000;
+  vector extinction_coeff_denom_out = transmission_color_ln_out * extinction_coeff_denom_in2_tmp;
+
+  vector scattering_coeff_out = transmission_scatter_vector_out / transmission_depth_vector_out;
+  vector extinction_coeff_out = extinction_coeff_denom_out / transmission_depth_vector_out;
+  vector absorption_coeff_out = extinction_coeff_out - scattering_coeff_out;
+  int absorption_coeff_x_index_tmp = 0;
+  float absorption_coeff_x_out = mx_extract(absorption_coeff_out, absorption_coeff_x_index_tmp);
+  int absorption_coeff_y_index_tmp = 1;
+  float absorption_coeff_y_out = mx_extract(absorption_coeff_out, absorption_coeff_y_index_tmp);
+  int absorption_coeff_z_index_tmp = 2;
+  float absorption_coeff_z_out = mx_extract(absorption_coeff_out, absorption_coeff_z_index_tmp);
+  float absorption_coeff_min_x_y_out = min(absorption_coeff_x_out, absorption_coeff_y_out);
+  float absorption_coeff_min_out = min(absorption_coeff_min_x_y_out, absorption_coeff_z_out);
+
+  vector absorption_coeff_min_vector_out = vector(0.0);
+  NG_convert_float_vector3(absorption_coeff_min_out, absorption_coeff_min_vector_out);
+
+  vector absorption_coeff_shifted_out = absorption_coeff_out - absorption_coeff_min_vector_out;
+
+  float if_absorption_coeff_shifted_value1_tmp = 0.000000;
+  vector if_absorption_coeff_shifted_out = mx_ternary(if_absorption_coeff_shifted_value1_tmp >
+                                                          absorption_coeff_min_out,
+                                                      absorption_coeff_shifted_out,
+                                                      absorption_coeff_out);
+
+  float if_volume_absorption_value2_tmp = 0.000000;
+  vector if_volume_absorption_in2_tmp = vector(0.000000, 0.000000, 0.000000);
+  vector if_volume_absorption_out = mx_ternary(transmission_depth >
+                                                   if_volume_absorption_value2_tmp,
+                                               if_absorption_coeff_shifted_out,
+                                               if_volume_absorption_in2_tmp);
+
+  float if_volume_scattering_value2_tmp = 0.000000;
+  vector if_volume_scattering_in2_tmp = vector(0.000000, 0.000000, 0.000000);
+  vector if_volume_scattering_out = mx_ternary(transmission_depth >
+                                                   if_volume_scattering_value2_tmp,
+                                               scattering_coeff_out,
+                                               if_volume_scattering_in2_tmp);
 
   color Edielectric_out = mix(base_color, subsurface_color, subsurface_weight);
 
@@ -345,6 +454,31 @@ shader node_open_pbr_bsdf(
                      "R",
                      dielectric_reflection_out);
 
+  BSDF_T dielectric_transmission_out = null_closure();
+
+  mx_dielectric_bsdf(1.000000,
+                     if_transmission_tint_out,
+                     modulated_eta_s_out,
+                     main_roughness_out,
+                     0.000000,
+                     1.500000,
+                     geometry_normal,
+                     geometry_tangent,
+                     "ggx",
+                     "T",
+                     dielectric_transmission_out);
+
+  //VDF_T dielectric_volume_out = null_closure();
+  //mx_anisotropic_vdf(if_volume_absorption_out,
+  //                   if_volume_scattering_out,
+  //                   transmission_scatter_anisotropy,
+  //                   dielectric_volume_out);
+              
+  //BSDF_T dielectric_volume_transmission_out = layer(dielectric_transmission_out,
+  //                                                  dielectric_volume_out);
+  
+  BSDF_T dielectric_volume_transmission_out = dielectric_transmission_out;
+
   /* No support for thin film */
   // BSDF_T dielectric_reflection_tf_mix_out = mix(dielectric_reflection_out,
   // dielectric_reflection_tf_out, thin_film_weight);
@@ -355,9 +489,10 @@ shader node_open_pbr_bsdf(
   BSDF_T opaque_base_out = diffuse_bsdf_out;
 
   /* No support for translucent */
-  // BSDF_T dielectric_substrate_out = mix(opaque_base_out, dielectric_volume_transmission_out,
-  // transmission_weight);
-  BSDF_T dielectric_substrate_out = opaque_base_out;
+  BSDF_T dielectric_substrate_out = mix(
+      opaque_base_out, dielectric_volume_transmission_out, transmission_weight);
+  // BSDF_T dielectric_substrate_out = opaque_base_out;
+
 
   BSDF_T dielectric_base_out = layer(dielectric_reflection_tf_mix_out, dielectric_substrate_out);
   BSDF_T base_substrate_out = mix(dielectric_base_out, metal_bsdf_tf_mix_out, base_metalness);
@@ -366,6 +501,10 @@ shader node_open_pbr_bsdf(
   BSDF_T coat_layer_out = layer(coat_bsdf_out, coat_substrate_attenuated_out);
   BSDF_T fuzz_layer_out = layer(fuzz_bsdf_out, coat_layer_out);
 
-
+  //BSDF = dielectric_volume_out;
+  //BSDF = dielectric_transmission_out;
+  // BSDF = dielectric_base_out;
   BSDF = fuzz_layer_out;
+
+  //BSDF = transmission_color * transparent();
 }
