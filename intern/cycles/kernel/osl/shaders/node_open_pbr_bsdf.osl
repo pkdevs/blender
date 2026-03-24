@@ -9,6 +9,7 @@
 
 #define BSDF_T closure color
 #define VDF_T closure color
+#define EDF_T closure color
 
 closure color null_closure()
 {
@@ -49,6 +50,19 @@ void NG_convert_float_vector3(float in, output vector out)
 {
   vector combine_out = vector(in, in, in);
   out = combine_out;
+}
+
+color mx_fresnel_schlick(float cosTheta, color f0, color f90, float exponent)
+{
+    float x = clamp(1.0 - cosTheta, 0.0, 1.0);
+    return mix(f0, f90, pow(x, exponent));
+}
+
+void mx_generalized_schlick_edf(color color0, color color90, float exponent, EDF_T base, output EDF_T result)
+{
+    float NdotV = fabs(dot(N,-I));
+    color f = mx_fresnel_schlick(NdotV, color0, color90, exponent);
+    result = base * f;
 }
 
 void mx_generalized_schlick_bsdf(float weight,
@@ -228,6 +242,10 @@ shader node_open_pbr_bsdf(
   float subsurface_weight = SubsurfaceWeight;
   color subsurface_color = SubsurfaceColor;
 
+  /* Emission */
+  color emission_color = EmissionColor;
+  float emission_luminance = EmissionLuminance;
+
   /* Geometrty */
   normal geometry_normal = GeometryNormal;
   normal geometry_tangent = GeometryTangent;
@@ -301,10 +319,14 @@ shader node_open_pbr_bsdf(
   float one_minus_coat_F0_out = one_minus_coat_F0_in1_tmp - coat_ior_to_F0_out;
 
   float one_minus_coat_F0_over_eta2_out = one_minus_coat_F0_out / coat_ior_sqr_out;
+  color one_minus_coat_F0_color_out = color(0.0);
+  NG_convert_float_color3(one_minus_coat_F0_out, one_minus_coat_F0_color_out);
 
   float coat_weight_times_coat_darkening_out = coat_weight * coat_darkening;
   color coat_attenuation_bg_tmp = color(1.000000, 1.000000, 1.000000);
   color coat_attenuation_out = mix(coat_attenuation_bg_tmp, coat_color, coat_weight);
+
+  color emission_weight_out = emission_color * emission_luminance;
 
   float if_transmission_tint_value2_tmp = 0.000000;
   color if_transmission_tint_in1_tmp = color(1.000000, 1.000000, 1.000000);
@@ -501,10 +523,16 @@ shader node_open_pbr_bsdf(
   BSDF_T coat_layer_out = layer(coat_bsdf_out, coat_substrate_attenuated_out);
   BSDF_T fuzz_layer_out = layer(fuzz_bsdf_out, coat_layer_out);
 
+  EDF_T uncoated_emission_edf_out = uniform_edf(emission_weight_out);
+  EDF_T coat_tinted_emission_edf_out = (coat_color * uncoated_emission_edf_out);
+  EDF_T coated_emission_edf_out = null_closure();
+  mx_generalized_schlick_edf(one_minus_coat_F0_color_out, color(0.000000, 0.000000, 0.000000), 5.000000, coat_tinted_emission_edf_out, coated_emission_edf_out);
+  EDF_T emission_edf_out = mix(uncoated_emission_edf_out, coated_emission_edf_out, coat_weight);
+
   //BSDF = dielectric_volume_out;
   //BSDF = dielectric_transmission_out;
   // BSDF = dielectric_base_out;
-  BSDF = fuzz_layer_out;
+  BSDF = fuzz_layer_out + emission_edf_out;
 
   //BSDF = transmission_color * transparent();
 }
