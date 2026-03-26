@@ -2731,11 +2731,84 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
   ShaderInput *base_metalness_in = input("Base Metalness");
   ShaderInput *base_diffuse_roughness_in = input("Base Diffuse Roughness");
 
+  ShaderInput *specular_weight_in = input("Specular Weight");
+  ShaderInput *specular_color_in = input("Specular Color");
+  ShaderInput *specular_roughness_in = input("Specular Roughness");
+  ShaderInput *specular_roughness_anisotropy_in = input("Specular Roughness Anisotropy");
+  ShaderInput *specular_ior_in = input("Specular IOR");
+
+  ShaderInput *transmission_weight_in = input("Transmission Weight");
+  ShaderInput *transmission_color_in = input("Transmission Color");
+  ShaderInput *transmission_depth_in = input("Transmission Depth");
+  ShaderInput *transmission_scatter_in = input("Transmission Scatter");
+  ShaderInput *transmission_scatter_anisotropy_in = input("Transmission Anisotropy");
+  ShaderInput *transmission_dispersion_scale_in = input("Transmission Dispersion Scale");
+  ShaderInput *transmission_dispersion_abbe_number_in = input("Transmission DispersionAbbeNumber");
+
+  ShaderInput *subsurface_weight_in = input("Subsurface Weight");
+  ShaderInput *subsurface_color_in = input("Subsurface Color");
+  ShaderInput *subsurface_radius_in = input("Subsurface Radius");
+  ShaderInput *subsurface_radius_scale_in = input("Subsurface Radius Scale");
+  ShaderInput *subsurface_scatter_anisotropy_in = input("Subsurface Scatter Anisotropy");
+  /* Coat Component */
+  ShaderInput *coat_weight_in = input("Coat Weight");
+  ShaderInput *coat_color_in = input("Coat Color");
+  ShaderInput *coat_roughness_in = input("Coat Roughness");
+  ShaderInput *coat_roughness_anisotropy_in = input("Coat Roughness Anisotropy");
+  ShaderInput *coat_ior_in = input("Coat IOR");
+  ShaderInput *coat_darkening_in = input("Coat Darkening");
+  /* Fuzz Component */
+  ShaderInput *fuzz_weight_in = input("Fuzz Weight");
+  ShaderInput *fuzz_color_in = input("Fuzz Color");
+  ShaderInput *fuzz_roughness_in = input("Fuzz Roughness");
+  /* Emission Component */
+  ShaderInput *emission_luminance_in = input("Emission Luminance");
+  ShaderInput *emission_color_in = input("Emission Color");
+
   // TODO (Sebastian): use stack_assign_if_linked
   const int base_weight_offset = compiler.stack_assign(base_weight_in);
   const int base_color_offset = compiler.stack_assign(base_color_in);
   const int base_metalness_offset = compiler.stack_assign(base_metalness_in);
   const int base_diffuse_roughness_offset = compiler.stack_assign(base_diffuse_roughness_in);
+
+  const int specular_weight_offset = compiler.stack_assign(specular_weight_in);
+  const int specular_color_offset = compiler.stack_assign(specular_color_in);
+  const int specular_roughness_offset = compiler.stack_assign(specular_roughness_in);
+  const int specular_roughness_anisotropy_offset = compiler.stack_assign(
+      specular_roughness_anisotropy_in);
+  const int specular_ior_offset = compiler.stack_assign(specular_ior_in);
+
+  const int transmission_weight_offset = compiler.stack_assign(transmission_weight_in);
+  const int transmission_color_offset = compiler.stack_assign(transmission_color_in);
+  const int transmission_depth_offset = compiler.stack_assign(transmission_depth_in);
+  const int transmission_scatter_offset = compiler.stack_assign(transmission_scatter_in);
+  const int transmission_scatter_anisotropy_offset = compiler.stack_assign(
+      transmission_scatter_anisotropy_in);
+  const int transmission_dispersion_scale_offset = compiler.stack_assign(
+      transmission_dispersion_scale_in);
+  const int transmission_dispersion_abbe_number_offset = compiler.stack_assign(
+      transmission_dispersion_abbe_number_in);
+
+  const int subsurface_weight_offset = compiler.stack_assign(subsurface_weight_in);
+  const int subsurface_color_offset = compiler.stack_assign(subsurface_color_in);
+  const int subsurface_radius_offset = compiler.stack_assign(subsurface_radius_in);
+  const int subsurface_radius_scale_offset = compiler.stack_assign(subsurface_radius_scale_in);
+  const int subsurface_scatter_anisotropy_offset = compiler.stack_assign(
+      subsurface_scatter_anisotropy_in);
+
+  const int coat_weight_offset = compiler.stack_assign(coat_weight_in);
+  const int coat_color_offset = compiler.stack_assign(coat_color_in);
+  const int coat_roughness_offset = compiler.stack_assign(coat_roughness_in);
+  const int coat_roughness_anisotropy_offset = compiler.stack_assign(coat_roughness_anisotropy_in);
+  const int coat_ior_offset = compiler.stack_assign(coat_ior_in);
+  const int coat_darkening_offset = compiler.stack_assign(coat_darkening_in);
+
+  const int fuzz_weight_offset = compiler.stack_assign(fuzz_weight_in);
+  const int fuzz_color_offset = compiler.stack_assign(fuzz_color_in);
+  const int fuzz_roughness_offset = compiler.stack_assign(fuzz_roughness_in);
+
+  const int emission_luminance_offset = compiler.stack_assign(emission_luminance_in);
+  const int emission_color_offset = compiler.stack_assign(emission_color_in);
 
   ShaderInput *geometry_normal_in = input("Geometry Normal");
   const int normal_offset = compiler.stack_assign_if_linked(geometry_normal_in);
@@ -2750,9 +2823,41 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
                     __float_as_int(get_float(base_weight_in->socket_type)),
                     __float_as_int(get_float(base_metalness_in->socket_type)));
 
-  /* data node */
+  /* data nodes */
+  compiler.add_node(normal_offset,
+                    compiler.encode_uchar4(base_color_offset,
+                                           base_diffuse_roughness_offset,
+                                           specular_weight_offset,
+                                           specular_color_offset),
+                    compiler.encode_uchar4(specular_roughness_offset,
+                                           specular_roughness_anisotropy_offset,
+                                           specular_ior_offset,
+                                           transmission_weight_offset),
+                    compiler.encode_uchar4(transmission_color_offset,
+                                           transmission_depth_offset,
+                                           transmission_scatter_offset,
+                                           transmission_scatter_anisotropy_offset));
   compiler.add_node(
-      normal_offset, base_color_offset, base_diffuse_roughness_offset, SVM_STACK_INVALID);
+      compiler.encode_uchar4(transmission_dispersion_scale_offset,
+                             transmission_dispersion_abbe_number_offset,
+                             subsurface_weight_offset,
+                             subsurface_color_offset),
+      compiler.encode_uchar4(subsurface_radius_offset,
+                             subsurface_radius_scale_offset,
+                             subsurface_scatter_anisotropy_offset,
+                             coat_weight_offset),
+      compiler.encode_uchar4(coat_color_offset,
+                             coat_roughness_offset,
+                             coat_roughness_anisotropy_offset,
+                             coat_ior_offset),
+      compiler.encode_uchar4(
+          coat_darkening_offset, fuzz_weight_offset, fuzz_color_offset, fuzz_roughness_offset));
+  compiler.add_node(
+      compiler.encode_uchar4(
+          emission_luminance_offset, emission_color_offset, SVM_STACK_INVALID, SVM_STACK_INVALID),
+      SVM_STACK_INVALID,
+      SVM_STACK_INVALID,
+      SVM_STACK_INVALID);
 }
 
 void OpenPBRBsdfNode::compile(OSLCompiler &compiler)

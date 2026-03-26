@@ -464,10 +464,148 @@ ccl_device
       // uint base_metalness_offset;  //( == param2_offset)
       uint base_diffuse_roughness_offset;
 
+      uint specular_weight_offset;
+      uint specular_color_offset;
+      uint specular_roughness_offset;
+      uint specular_roughness_anisotropy_offset;
+      uint specular_ior_offset;
+
+      uint transmission_weight_offset;
+      uint transmission_color_offset;
+      uint transmission_depth_offset;
+      uint transmission_scatter_offset;
+      uint transmission_scatter_anisotropy_offset;
+      uint transmission_dispersion_scale_offset;
+      uint transmission_dispersion_abbe_number_offset;
+
+      uint subsurface_weight_offset;
+      uint subsurface_color_offset;
+      uint subsurface_radius_offset;
+      uint subsurface_radius_scale_offset;
+      uint subsurface_scatter_anisotropy_offset;
+
+      uint coat_weight_offset;
+      uint coat_color_offset;
+      uint coat_roughness_offset;
+      uint coat_roughness_anisotropy_offset;
+      uint coat_ior_offset;
+      uint coat_darkening_offset;
+
+      uint fuzz_weight_offset;
+      uint fuzz_color_offset;
+      uint fuzz_roughness_offset;
+
+      uint emission_luminance_offset;
+      uint emission_color_offset;
+
+      uint dummy_0_offset;
+      uint dummy_1_offset;
       // Atm we do not have more parameters
       // const uint4 data_node2 = read_node(kg, &offset);
 
+      const uint4 data_node2 = read_node(kg, &offset);
+      const uint4 data_node3 = read_node(kg, &offset);
+
+      svm_unpack_node_uchar4(data_node.y,
+                             &base_color_offset,
+                             &base_diffuse_roughness_offset,
+                             &specular_weight_offset,
+                             &specular_color_offset);
+      svm_unpack_node_uchar4(data_node.z,
+                             &specular_roughness_offset,
+                             &specular_roughness_anisotropy_offset,
+                             &specular_ior_offset,
+                             &transmission_weight_offset);
+      svm_unpack_node_uchar4(data_node.w,
+                             &transmission_color_offset,
+                             &transmission_depth_offset,
+                             &transmission_scatter_offset,
+                             &transmission_scatter_anisotropy_offset);
+
+      svm_unpack_node_uchar4(data_node2.x,
+                             &transmission_dispersion_scale_offset,
+                             &transmission_dispersion_abbe_number_offset,
+                             &subsurface_weight_offset,
+                             &subsurface_color_offset);
+      svm_unpack_node_uchar4(data_node2.y,
+                             &subsurface_radius_offset,
+                             &subsurface_radius_scale_offset,
+                             &subsurface_scatter_anisotropy_offset,
+                             &coat_weight_offset);
+      svm_unpack_node_uchar4(data_node2.z,
+                             &coat_color_offset,
+                             &coat_roughness_offset,
+                             &coat_roughness_anisotropy_offset,
+                             &coat_ior_offset);
+      svm_unpack_node_uchar4(data_node2.w,
+                             &coat_darkening_offset,
+                             &fuzz_weight_offset,
+                             &fuzz_color_offset,
+                             &fuzz_roughness_offset);
+
+      svm_unpack_node_uchar4(data_node3.x,
+                             &emission_luminance_offset,
+                             &emission_color_offset,
+                             &dummy_0_offset,
+                             &dummy_1_offset);
+
       const float base_weight = saturatef(param1);
+      const float3 base_color = saturate(
+          stack_load_float3_default(stack, base_color_offset, make_float3(0.8f)));
+      const float base_metalness = saturatef(param2);
+      const float base_diffuse_roughness = stack_load_float_default(
+          stack, base_diffuse_roughness_offset, 0.f);
+
+      const float specular_weight = saturatef(
+          stack_load_float_default(stack, specular_weight_offset, 1.f));
+      const float3 specular_color = saturate(
+          stack_load_float3_default(stack, specular_color_offset, make_float3(1.0f)));
+      const float specular_roughness = saturatef(
+          stack_load_float_default(stack, specular_roughness_offset, 0.f));
+      const float specular_roughness_anisotroy = saturatef(
+          stack_load_float_default(stack, specular_roughness_anisotropy_offset, 0.f));
+      const float specular_ior = saturatef(
+          stack_load_float_default(stack, specular_ior_offset, 1.5f));
+
+      const float subsurface_weight = 0.f;
+      const float transmission_weight = 0.f;
+      const float fuzz_weight = 0.f;
+      const float coat_weight = 0.f;
+      const float3 emission = zero_float3();
+
+      const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
+
+      // const ClosureType distribution = CLOSURE_BSDF_MICROFACET_GGX_ID;
+      const ClosureType distribution = CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID;
+
+      float specular_alpha_x = sqr(specular_roughness);
+      float specular_alpha_y = sqr(specular_roughness);
+      float3 T = zero_float3();
+      /*
+      if (specular_roughness_anisotroy > 0.0f && stack_valid(tangent_offset)) {
+        T = stack_load_float3(stack, tangent_offset);
+        const float aspect = sqrtf(1.0f - anisotropic * 0.9f);
+        alpha_x /= aspect;
+        alpha_y *= aspect;
+        const float anisotropic_rotation = stack_load_float_default(
+            stack, anisotropic_rotation_offset, 0.0f);
+        if (anisotropic_rotation != 0.0f) {
+          T = rotate_around_axis(T, N, anisotropic_rotation * M_2PI_F);
+        }
+      }
+      */
+
+#ifdef __CAUSTICS_TRICKS__
+      const bool reflective_caustics = (kernel_data.integrator.caustics_reflective ||
+                                        (path_flag & PATH_RAY_DIFFUSE) == 0);
+      const bool refractive_caustics = (kernel_data.integrator.caustics_refractive ||
+                                        (path_flag & PATH_RAY_DIFFUSE) == 0);
+#else
+      const bool reflective_caustics = true;
+      const bool refractive_caustics = true;
+#endif
+
+      /*
       base_color_offset = data_node.y;
       const float3 base_color = stack_load_float3_default(
           stack, base_color_offset, make_float3(0.8f, 0.8f, 0.8f));
@@ -475,23 +613,54 @@ ccl_device
       base_diffuse_roughness_offset = data_node.z;
       const float diffuse_rougness = stack_load_float_default(
           stack, base_diffuse_roughness_offset, 0.f);
+      */
 
-      const Spectrum weight = base_color * mix_weight;
-      ccl_private OrenNayarBsdf *bsdf = (ccl_private OrenNayarBsdf *)bsdf_alloc(
-          sd, sizeof(OrenNayarBsdf), weight);
+      Spectrum weight = make_spectrum(mix_weight);
 
-      if (bsdf) {
-        bsdf->N = N;
+      /* First layer: Fuzz */
+      if (fuzz_weight > CLOSURE_WEIGHT_CUTOFF) {
+      }
 
-        const float roughness = param1;
+      /* Second layer: Coat */
+      if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
+      }
 
-        if (roughness < 1e-5f) {
-          sd->flag |= bsdf_diffuse_setup((ccl_private DiffuseBsdf *)bsdf);
+      if (!is_zero(emission)) {
+      }
+
+      IF_KERNEL_NODES_FEATURE(BSDF)
+      {
+
+        /* Metallic component */
+        if (base_metalness > CLOSURE_WEIGHT_CUTOFF) {
+
+          /* Attenuate other components */
+          weight *= (1.0f - base_metalness);
         }
-        else {
-          bsdf->roughness = roughness;
-          const Spectrum color = saturate(rgb_to_spectrum(stack_load_float3(stack, data_node.y)));
-          sd->flag |= bsdf_oren_nayar_setup(sd, bsdf, color);
+
+        /* Specular Component */
+        if (specular_weight > CLOSURE_WEIGHT_CUTOFF &&
+            (reflective_caustics && (specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
+        {
+        }
+        if (base_weight > CLOSURE_WEIGHT_CUTOFF) {
+          /* Diffuse Component*/
+          ccl_private OrenNayarBsdf *bsdf = (ccl_private OrenNayarBsdf *)bsdf_alloc(
+              sd,
+              sizeof(OrenNayarBsdf),
+              rgb_to_spectrum(base_color) * (1.0f - subsurface_weight) * weight);
+          if (bsdf) {
+            bsdf->N = N;
+
+            /* setup bsdf */
+            if (base_diffuse_roughness < CLOSURE_WEIGHT_CUTOFF) {
+              sd->flag |= bsdf_diffuse_setup((ccl_private DiffuseBsdf *)bsdf);
+            }
+            else {
+              bsdf->roughness = base_diffuse_roughness;
+              sd->flag |= bsdf_oren_nayar_setup(sd, bsdf, rgb_to_spectrum(base_color));
+            }
+          }
         }
       }
       break;
