@@ -3630,6 +3630,7 @@ void MESH_OT_merge(wmOperatorType *ot)
   /* properties */
   ot->prop = RNA_def_enum(
       ot->srna, "type", merge_type_items, MESH_MERGE_CENTER, "Type", "Merge method to use");
+  RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_ID_MESH);
   RNA_def_enum_funcs(ot->prop, merge_type_itemf);
 
   WM_operatortype_props_advanced_begin(ot);
