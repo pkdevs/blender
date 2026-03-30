@@ -105,8 +105,10 @@ class MaskOperation : public NodeOperation {
         domain,
         this->get_aspect_ratio(),
         this->get_use_feather(),
+        this->context().get_frame_number(),
         this->get_motion_blur_samples(),
-        this->get_motion_blur_shutter());
+        this->get_motion_blur_shutter(),
+        false);
 
     Result &output_mask = this->get_result("Mask");
     output_mask.wrap_external(cached_mask);
