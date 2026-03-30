@@ -333,7 +333,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   geometry::debug_randomize_instance_order(dst_instances.get());
 
   GeometrySet dst_geometry = GeometrySet::from_instances(std::move(dst_instances));
-  dst_geometry.name = src_geometry.name;
+  dst_geometry.set_name(src_geometry.name());
   dst_geometry.copy_bundle_from(src_geometry);
 
   params.set_output("Instances"_ustr, std::move(dst_geometry));

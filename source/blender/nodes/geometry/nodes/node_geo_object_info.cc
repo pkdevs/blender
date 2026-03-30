@@ -155,7 +155,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
   }
 
-  geometry_set.name = object->id.name + 2;
+  geometry_set.set_name(object->id.name + 2);
   params.set_output("Geometry"_ustr, geometry_set);
 }
 

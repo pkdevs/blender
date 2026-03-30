@@ -99,7 +99,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   for (const StringRef error : realize_result.errors) {
     params.error_message_add(NodeWarningType::Error, error);
   }
-  realize_result.geometry.name = geometry_set.name;
+  realize_result.geometry.set_name(geometry_set.name());
   params.set_output("Geometry"_ustr, std::move(realize_result.geometry));
 }
 

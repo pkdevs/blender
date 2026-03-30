@@ -868,7 +868,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   {
     new_curves.add(*curve_edit_data);
   }
-  new_curves.name = guide_curves_geometry.name;
+  new_curves.set_name(guide_curves_geometry.name());
   new_curves.copy_bundle_from(guide_curves_geometry);
 
   params.set_output("Curves"_ustr, std::move(new_curves));

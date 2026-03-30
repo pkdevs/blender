@@ -263,7 +263,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet result_geometry = geometry::join_geometries(
       all_geometries, {}, std::make_optional(types_to_join));
   result_geometry.replace_mesh(result);
-  result_geometry.name = set_a.name;
+  result_geometry.set_name(set_a.name());
   for (const GeometrySet &geometry : all_geometries) {
     result_geometry.merge_bundle_from(geometry);
   }

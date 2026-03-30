@@ -31,13 +31,15 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet volumes;
   GeometrySet instances;
 
-  const std::string &name = geometry_set.name;
-  meshes.name = name;
-  curves.name = name;
-  grease_pencil.name = name;
-  pointclouds.name = name;
-  volumes.name = name;
-  instances.name = name;
+  const StringRef name = geometry_set.name();
+  if (!name.is_empty()) {
+    meshes.set_name(name);
+    curves.set_name(name);
+    grease_pencil.set_name(name);
+    pointclouds.set_name(name);
+    volumes.set_name(name);
+    instances.set_name(name);
+  }
 
   meshes.copy_bundle_from(geometry_set);
   curves.copy_bundle_from(geometry_set);
