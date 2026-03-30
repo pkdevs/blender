@@ -198,7 +198,6 @@ std::optional<Bounds<float3>> view3d_calc_minmax_visible(Depsgraph *depsgraph,
 
   const View3D *v3d = static_cast<View3D *>(area->spacedata.first);
   const RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
   ViewLayer *view_layer_eval = DEG_get_evaluated_view_layer(depsgraph);
 
   float3 min, max;

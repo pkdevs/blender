@@ -2653,7 +2653,7 @@ static ID *create_placeholder(Main *mainvar,
 
   *(reinterpret_cast<short *>(ph_id->name)) = idcode;
   BLI_strncpy(ph_id->name + 2, idname, sizeof(ph_id->name) - 2);
-  BKE_libblock_init_empty(mainvar, ph_id);
+  BKE_libblock_init_empty(ph_id);
   ph_id->lib = mainvar->curlib;
   ph_id->tag = tag | ID_TAG_MISSING;
   ph_id->us = ID_FAKE_USERS(ph_id);
