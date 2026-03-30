@@ -2584,11 +2584,31 @@ static void handle_curves_start_cap(bContext *C, void *, void *)
 }
 
 constexpr std::array<EnumPropertyItem, 5> enum_curve_knot_mode_items{{
-    {NURBS_KNOT_MODE_NORMAL, "NORMAL", ICON_NONE, "Normal", ""},
-    {NURBS_KNOT_MODE_ENDPOINT, "ENDPOINT", ICON_NONE, "Endpoint", ""},
-    {NURBS_KNOT_MODE_BEZIER, "BEZIER", ICON_NONE, "Bézier", ""},
-    {NURBS_KNOT_MODE_ENDPOINT_BEZIER, "ENDPOINT_BEZIER", ICON_NONE, "Endpoint Bézier", ""},
-    {NURBS_KNOT_MODE_CUSTOM, "CUSTOM", ICON_NONE, "Custom", ""},
+    {NURBS_KNOT_MODE_NORMAL,
+     "NORMAL",
+     ICON_NONE,
+     CTX_N_(BLT_I18NCONTEXT_ID_GPENCIL, "Normal"),
+     ""},
+    {NURBS_KNOT_MODE_ENDPOINT,
+     "ENDPOINT",
+     ICON_NONE,
+     CTX_N_(BLT_I18NCONTEXT_ID_GPENCIL, "Endpoint"),
+     ""},
+    {NURBS_KNOT_MODE_BEZIER,
+     "BEZIER",
+     ICON_NONE,
+     CTX_N_(BLT_I18NCONTEXT_ID_GPENCIL, "Bézier"),
+     ""},
+    {NURBS_KNOT_MODE_ENDPOINT_BEZIER,
+     "ENDPOINT_BEZIER",
+     ICON_NONE,
+     CTX_N_(BLT_I18NCONTEXT_ID_GPENCIL, "Endpoint Bézier"),
+     ""},
+    {NURBS_KNOT_MODE_CUSTOM,
+     "CUSTOM",
+     ICON_NONE,
+     CTX_N_(BLT_I18NCONTEXT_ID_GPENCIL, "Custom"),
+     ""},
 }};
 
 static void knot_modes_menu(bContext * /*C*/, ui::Layout *layout, void *knot_mode_p)
@@ -2600,7 +2620,7 @@ static void knot_modes_menu(bContext * /*C*/, ui::Layout *layout, void *knot_mod
   for (const EnumPropertyItem &item : enum_curve_knot_mode_items) {
     uiDefButI(block,
               ui::ButtonType::ButMenu,
-              IFACE_(item.name),
+              CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, item.name),
               0,
               0,
               UI_UNIT_X * 5,
@@ -2626,7 +2646,7 @@ static void grease_pencil_cap_menu(bContext * /*C*/, ui::Layout *layout, void *c
   for (const EnumPropertyItem &item : enum_grease_pencil_cap_items) {
     uiDefButI(block,
               ui::ButtonType::ButMenu,
-              IFACE_(item.name),
+              CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, item.name),
               0,
               0,
               UI_UNIT_X * 5,
@@ -2752,23 +2772,25 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
       });
 
   if (status.nurbs_count == status.curve_count) {
-    add_labeled_field(
-        IFACE_("Knot Mode"),
-        status.nurbs_knot_mode_max * status.nurbs_count == status.nurbs_knot_mode_sum,
-        [&]() {
-          ui::Button *but = uiDefMenuBut(block,
-                                         knot_modes_menu,
-                                         &modified.nurbs_knot_mode,
-                                         enum_curve_knot_mode_items[modified.nurbs_knot_mode].name,
-                                         0,
-                                         0,
-                                         butw,
-                                         buth,
-                                         "");
-          button_type_set_menu_from_pulldown(but);
-          button_func_set(but, handle_curves_knot_mode, nullptr, nullptr);
-          return but;
-        });
+    add_labeled_field(IFACE_("Knot Mode"),
+                      status.nurbs_knot_mode_max * status.nurbs_count ==
+                          status.nurbs_knot_mode_sum,
+                      [&]() {
+                        ui::Button *but = uiDefMenuBut(
+                            block,
+                            knot_modes_menu,
+                            &modified.nurbs_knot_mode,
+                            CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL,
+                                       enum_curve_knot_mode_items[modified.nurbs_knot_mode].name),
+                            0,
+                            0,
+                            butw,
+                            buth,
+                            "");
+                        button_type_set_menu_from_pulldown(but);
+                        button_func_set(but, handle_curves_knot_mode, nullptr, nullptr);
+                        return but;
+                      });
 
     add_labeled_field(
         IFACE_("Order"), status.order_max * status.nurbs_count == status.order_sum, [&]() {
@@ -2817,23 +2839,25 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
                         return but;
                       });
 
-    add_labeled_field(
-        IFACE_("Start Cap"),
-        status.start_cap.value_max * status.curve_count == status.start_cap.value_sum,
-        [&]() {
-          ui::Button *but = uiDefMenuBut(block,
-                                         grease_pencil_cap_menu,
-                                         &modified.start_cap,
-                                         enum_grease_pencil_cap_items[modified.start_cap].name,
-                                         0,
-                                         0,
-                                         butw,
-                                         buth,
-                                         "");
-          button_type_set_menu_from_pulldown(but);
-          button_func_set(but, handle_curves_start_cap, nullptr, nullptr);
-          return but;
-        });
+    add_labeled_field(IFACE_("Start Cap"),
+                      status.start_cap.value_max * status.curve_count ==
+                          status.start_cap.value_sum,
+                      [&]() {
+                        ui::Button *but = uiDefMenuBut(
+                            block,
+                            grease_pencil_cap_menu,
+                            &modified.start_cap,
+                            CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL,
+                                       enum_grease_pencil_cap_items[modified.start_cap].name),
+                            0,
+                            0,
+                            butw,
+                            buth,
+                            "");
+                        button_type_set_menu_from_pulldown(but);
+                        button_func_set(but, handle_curves_start_cap, nullptr, nullptr);
+                        return but;
+                      });
 
     add_labeled_field(IFACE_("End Cap"),
                       status.end_cap.value_max * status.curve_count == status.end_cap.value_sum,
@@ -2842,7 +2866,8 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
                             block,
                             grease_pencil_cap_menu,
                             &modified.end_cap,
-                            enum_grease_pencil_cap_items[modified.end_cap].name,
+                            CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL,
+                                       enum_grease_pencil_cap_items[modified.end_cap].name),
                             0,
                             0,
                             butw,
