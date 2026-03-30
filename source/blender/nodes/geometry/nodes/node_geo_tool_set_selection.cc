@@ -5,6 +5,10 @@
 #include "BKE_mesh.hh"
 #include "BKE_type_conversions.hh"
 
+#include "FN_field.hh"
+#include "FN_multi_function.hh"
+#include "FN_multi_function_registry.hh"
+
 #include "NOD_rna_define.hh"
 
 #include "UI_interface_layout.hh"
@@ -70,14 +74,13 @@ static GField clamp_selection(const GField &selection)
 static GField invert_selection(const GField &selection)
 {
   if (selection.cpp_type().is<bool>()) {
-    static auto invert = mf::build::SI1_SO<bool, bool>("Invert Selection",
-                                                       [](const bool value) { return !value; });
+    static const mf::MultiFunction &invert = fn::multi_function::registry::lookup("!bool"_ustr);
     return GField(FieldOperation::from(invert, {selection}));
   }
 
-  static auto invert = mf::build::SI1_SO<float, float>(
-      "Invert Selection", [](const float value) { return 1.0f - value; });
-  return GField(FieldOperation::from(invert, {selection}));
+  static const mf::MultiFunction &invert = fn::multi_function::registry::lookup(
+      "float - float"_ustr);
+  return GField(FieldOperation::from(invert, {fn::make_constant_field(1.0f), selection}));
 }
 
 /**
