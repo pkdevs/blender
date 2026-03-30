@@ -1780,9 +1780,10 @@ static void do_view3d_vgroup_buttons(bContext *C, void * /*arg*/, int event)
     return;
   }
 
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   ed::object::vgroup_vert_active_mirror(ob, event - B_VGRP_PNL_EDIT_SINGLE);
   DEG_id_tag_update(ob->data, ID_RECALC_GEOMETRY);
@@ -1791,9 +1792,10 @@ static void do_view3d_vgroup_buttons(bContext *C, void * /*arg*/, int event)
 
 static bool view3d_panel_vgroup_poll(const bContext *C, PanelType * /*pt*/)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   if (ob && (BKE_object_is_in_editmode_vgroup(ob) || BKE_object_is_in_wpaint_select_vert(ob))) {
     MDeformVert *dvert_act = ED_mesh_active_dvert_get_only(ob);
@@ -1820,9 +1822,10 @@ static void update_active_vertex_weight(bContext *C, void *arg1, void * /*arg2*/
 static void view3d_panel_vgroup(const bContext *C, Panel *panel)
 {
   ui::Block *block = panel->layout->absolute().block();
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   View3D *v3d = CTX_wm_view3d(C);
   TransformProperties *tfp = v3d_transform_props_ensure(v3d);
@@ -2174,10 +2177,11 @@ static void v3d_editmetaball_buts(ui::Layout &layout, Object *ob)
 
 static void do_view3d_region_buttons(bContext *C, void * /*index*/, int event)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   View3D *v3d = CTX_wm_view3d(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   switch (event) {
@@ -2205,18 +2209,20 @@ static void do_view3d_region_buttons(bContext *C, void * /*index*/, int event)
 
 static bool view3d_panel_transform_poll(const bContext *C, PanelType * /*pt*/)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   return (BKE_view_layer_active_base_get(view_layer) != nullptr);
 }
 
 static void view3d_panel_transform(const bContext *C, Panel *panel)
 {
   ui::Block *block;
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   Object *obedit = OBEDIT_FROM_OBACT(ob);
 
@@ -2255,9 +2261,10 @@ static void view3d_panel_transform(const bContext *C, Panel *panel)
 
 static bool view3d_panel_curve_data_poll(const bContext *C, PanelType * /*pt*/)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   return (ob && ELEM(ob->type, OB_GREASE_PENCIL, OB_CURVES) && BKE_object_is_in_editmode(ob));
 }
@@ -2268,9 +2275,10 @@ static void apply_to_active_object(
                      const IndexMask &selection,
                      bke::CurvesGeometry &curves)> curves_geometry_handler)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   View3D *v3d = CTX_wm_view3d(C);
@@ -2634,9 +2642,10 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
 {
   using namespace ed::curves;
 
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   ui::Block *block = panel->layout->block();
 

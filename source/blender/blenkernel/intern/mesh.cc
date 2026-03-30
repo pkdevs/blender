@@ -1338,7 +1338,7 @@ Mesh *mesh_new_no_attributes(const int verts_num,
 {
   Mesh *mesh = static_cast<Mesh *>(BKE_libblock_alloc(
       nullptr, ID_ME, BKE_idtype_idcode_to_name(ID_ME), LIB_ID_CREATE_LOCALIZE));
-  BKE_libblock_init_empty(&mesh->id);
+  BKE_libblock_init_empty(nullptr, &mesh->id);
 
   mesh->verts_num = verts_num;
   mesh->edges_num = edges_num;

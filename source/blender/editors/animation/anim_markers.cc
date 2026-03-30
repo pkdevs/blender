@@ -78,7 +78,8 @@ ListBaseT<TimeMarker> *ED_scene_markers_get(const bContext *C, Scene *scene)
   return ac.markers;
 }
 
-ListBaseT<TimeMarker> *ED_scene_markers_get_from_area(Scene *scene,
+ListBaseT<TimeMarker> *ED_scene_markers_get_from_area(const Main &bmain,
+                                                      Scene *scene,
                                                       ViewLayer *view_layer,
                                                       const ScrArea *area)
 {
@@ -95,7 +96,7 @@ ListBaseT<TimeMarker> *ED_scene_markers_get_from_area(Scene *scene,
     }
   }
 
-  bAction *active_action = ANIM_active_action_from_area(scene, view_layer, area);
+  bAction *active_action = ANIM_active_action_from_area(bmain, scene, view_layer, area);
   if (active_action) {
     return &active_action->markers;
   }
@@ -1379,6 +1380,7 @@ static void select_marker_camera_switch(
     BLI_assert(CTX_data_mode_enum(C) == CTX_MODE_OBJECT);
 
     const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+    const Main *bmain = CTX_data_main(C);
     Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
 
     ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -1386,7 +1388,7 @@ static void select_marker_camera_switch(
     int sel = 0;
 
     if (!extend) {
-      BKE_view_layer_base_deselect_all(scene, view_layer);
+      BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
     }
 
     for (TimeMarker &marker : *markers) {
@@ -1396,7 +1398,7 @@ static void select_marker_camera_switch(
       }
     }
 
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
 
     for (TimeMarker &marker : *markers) {
       if (marker.camera) {

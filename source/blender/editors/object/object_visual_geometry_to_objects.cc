@@ -488,10 +488,10 @@ static wmOperatorStatus visual_geometry_to_objects_exec(bContext *C, wmOperator 
     BKE_collection_child_add(&bmain, scene.master_collection, new_collection);
   }
   /* Ensure that the #Base for objects and #LayerCollection for collections are created. */
-  BKE_scene_view_layers_synced_ensure(&scene);
+  BKE_scene_view_layers_synced_ensure(bmain, &scene);
 
   /* Deselect everything so that we can select the new objects. */
-  BKE_view_layer_base_deselect_all(&scene, &active_view_layer);
+  BKE_view_layer_base_deselect_all(bmain, &scene, &active_view_layer);
   /* Select the new objects. */
   for (Object *object : all_new_top_level_objects) {
     Base *base = BKE_view_layer_base_find(&active_view_layer, object);

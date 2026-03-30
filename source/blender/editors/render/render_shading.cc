@@ -1030,6 +1030,7 @@ void WORLD_OT_new(wmOperatorType *ot)
 static wmOperatorStatus view_layer_add_exec(bContext *C, wmOperator *op)
 {
   wmWindow *win = CTX_wm_window(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
 
   ViewLayer *view_layer_current = win ? WM_window_get_active_view_layer(win) : nullptr;
@@ -1040,8 +1041,12 @@ static wmOperatorStatus view_layer_add_exec(bContext *C, wmOperator *op)
       type = VIEWLAYER_ADD_NEW;
     }
   }
-  ViewLayer *view_layer_new = BKE_view_layer_add(
-      scene, view_layer_current ? view_layer_current->name : nullptr, view_layer_current, type);
+  ViewLayer *view_layer_new = BKE_view_layer_add(bmain,
+                                                 scene,
+                                                 view_layer_current ? view_layer_current->name :
+                                                                      nullptr,
+                                                 view_layer_current,
+                                                 type);
 
   if (win) {
     WM_window_set_active_view_layer(win, view_layer_new);
@@ -1448,6 +1453,7 @@ enum {
 
 static Vector<Object *> lightprobe_cache_irradiance_volume_subset_get(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Scene *scene = CTX_data_scene(C);
 
@@ -1468,7 +1474,7 @@ static Vector<Object *> lightprobe_cache_irradiance_volume_subset_get(bContext *
   int subset = RNA_enum_get(op->ptr, "subset");
   switch (subset) {
     case LIGHTCACHE_SUBSET_ALL: {
-      FOREACH_OBJECT_BEGIN (scene, view_layer, ob) {
+      FOREACH_OBJECT_BEGIN (bmain, scene, view_layer, ob) {
         if (is_irradiance_volume(ob)) {
           irradiance_volume_setup(ob);
         }

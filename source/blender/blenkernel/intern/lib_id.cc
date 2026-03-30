@@ -1464,7 +1464,7 @@ void *BKE_libblock_alloc(Main *bmain, short type, const char *name, const int fl
   return BKE_libblock_alloc_in_lib(bmain, std::nullopt, type, name, flag);
 }
 
-void BKE_libblock_init_empty(ID *id)
+void BKE_libblock_init_empty(Main *bmain, ID *id)
 {
   const IDTypeInfo *idtype_info = BKE_idtype_get_info_from_id(id);
 
@@ -1521,7 +1521,7 @@ void *BKE_id_new_in_lib(Main *bmain,
   }
 
   ID *id = static_cast<ID *>(BKE_libblock_alloc_in_lib(bmain, owner_library, type, name, 0));
-  BKE_libblock_init_empty(id);
+  BKE_libblock_init_empty(bmain, id);
 
   return id;
 }
@@ -1542,7 +1542,7 @@ void *BKE_id_new_nomain(const short type, const char *name)
       type,
       name,
       LIB_ID_CREATE_NO_MAIN | LIB_ID_CREATE_NO_USER_REFCOUNT | LIB_ID_CREATE_NO_DEG_TAG));
-  BKE_libblock_init_empty(id);
+  BKE_libblock_init_empty(nullptr, id);
 
   return id;
 }
