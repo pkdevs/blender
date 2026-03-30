@@ -21,22 +21,25 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Geometry>("Geometry")
+  b.add_input<decl::Geometry>("Geometry"_ustr)
       .description("Geometry whose instances are (partially) realized");
-  b.add_output<decl::Geometry>("Geometry").propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection")
+  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
       .default_value(true)
       .hide_value()
       .field_on_all()
       .description("Which top-level instances to realize");
-  b.add_input<decl::Bool>("Realize All")
+  b.add_input<decl::Bool>("Realize All"_ustr)
       .default_value(true)
       .field_on_all()
       .description(
           "Realize all levels of nested instances for a top-level instances. Overrides the value "
           "of the Depth input");
-  b.add_input<decl::Int>("Depth").default_value(0).min(0).field_on_all().description(
-      "Number of levels of nested instances to realize for each top-level instance");
+  b.add_input<decl::Int>("Depth"_ustr)
+      .default_value(0)
+      .min(0)
+      .field_on_all()
+      .description("Number of levels of nested instances to realize for each top-level instance");
 }
 
 static void node_layout_ex(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)

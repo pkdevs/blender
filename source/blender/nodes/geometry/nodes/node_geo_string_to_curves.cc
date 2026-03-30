@@ -132,46 +132,46 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
-  b.add_output<decl::Geometry>("Curve Instances");
-  b.add_output<decl::String>("Remainder")
+  b.add_output<decl::Geometry>("Curve Instances"_ustr);
+  b.add_output<decl::String>("Remainder"_ustr)
       .usage_by_menu("Overflow"_ustr, GEO_NODE_STRING_TO_CURVES_MODE_TRUNCATE);
-  b.add_output<decl::Int>("Line").field_on_all().translation_context(BLT_I18NCONTEXT_ID_TEXT);
-  b.add_output<decl::Int>("Word").field_on_all().translation_context(BLT_I18NCONTEXT_ID_TEXT);
-  b.add_output<decl::Vector>("Pivot Point").field_on_all();
+  b.add_output<decl::Int>("Line"_ustr).field_on_all().translation_context(BLT_I18NCONTEXT_ID_TEXT);
+  b.add_output<decl::Int>("Word"_ustr).field_on_all().translation_context(BLT_I18NCONTEXT_ID_TEXT);
+  b.add_output<decl::Vector>("Pivot Point"_ustr).field_on_all();
 
-  b.add_input<decl::String>("String").optional_label();
-  b.add_input<decl::Float>("Size").default_value(1.0f).min(0.0f).subtype(PROP_DISTANCE);
-  b.add_input<decl::Font>("Font")
+  b.add_input<decl::String>("String"_ustr).optional_label();
+  b.add_input<decl::Float>("Size"_ustr).default_value(1.0f).min(0.0f).subtype(PROP_DISTANCE);
+  b.add_input<decl::Font>("Font"_ustr)
       .default_value_fn(
           [](const bNode & /*node*/) { return id_cast<ID *>(BKE_vfont_builtin_ensure()); })
       .optional_label();
   {
     auto &p = b.add_panel("Alignment"_ustr).default_closed(true);
-    p.add_input<decl::Menu>("Align X")
+    p.add_input<decl::Menu>("Align X"_ustr)
         .static_items(rna_node_geometry_string_to_curves_align_x_items)
         .optional_label();
-    p.add_input<decl::Menu>("Align Y")
+    p.add_input<decl::Menu>("Align Y"_ustr)
         .static_items(rna_node_geometry_string_to_curves_align_y_items)
         .optional_label();
-    p.add_input<decl::Menu>("Pivot Point")
+    p.add_input<decl::Menu>("Pivot Point"_ustr)
         .static_items(rna_node_geometry_string_to_curves_pivot_mode);
   }
   {
     auto &p = b.add_panel("Spacing"_ustr).default_closed(true);
-    p.add_input<decl::Float>("Character Spacing").default_value(1.0f).min(0.0f);
-    p.add_input<decl::Float>("Word Spacing").default_value(1.0f).min(0.0f);
-    p.add_input<decl::Float>("Line Spacing").default_value(1.0f).min(0.0f);
+    p.add_input<decl::Float>("Character Spacing"_ustr).default_value(1.0f).min(0.0f);
+    p.add_input<decl::Float>("Word Spacing"_ustr).default_value(1.0f).min(0.0f);
+    p.add_input<decl::Float>("Line Spacing"_ustr).default_value(1.0f).min(0.0f);
   }
   {
     auto &p = b.add_panel("Text Box"_ustr).default_closed(true);
-    p.add_input<decl::Menu>("Overflow")
+    p.add_input<decl::Menu>("Overflow"_ustr)
         .static_items(rna_node_geometry_string_to_curves_overflow_items)
         .optional_label();
-    p.add_input<decl::Float>("Text Box Width")
+    p.add_input<decl::Float>("Text Box Width"_ustr)
         .default_value(0.0f)
         .min(0.0f)
         .subtype(PROP_DISTANCE);
-    p.add_input<decl::Float>("Text Box Height")
+    p.add_input<decl::Float>("Text Box Height"_ustr)
         .default_value(0.0f)
         .min(0.0f)
         .subtype(PROP_DISTANCE)

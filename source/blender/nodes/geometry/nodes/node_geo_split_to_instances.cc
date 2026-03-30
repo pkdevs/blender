@@ -24,18 +24,18 @@ namespace blender::nodes::node_geo_split_to_instances_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Geometry")
+  b.add_input<decl::Geometry>("Geometry"_ustr)
       .supported_type({GeometryComponent::Type::Mesh,
                        GeometryComponent::Type::PointCloud,
                        GeometryComponent::Type::Curve,
                        GeometryComponent::Type::Instance})
       .description("Geometry to split into instances");
-  b.add_input<decl::Bool>("Selection").default_value(true).field_on_all().hide_value();
-  b.add_input<decl::Int>("Group ID").field_on_all().hide_value();
-  b.add_output<decl::Geometry>("Instances")
+  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).field_on_all().hide_value();
+  b.add_input<decl::Int>("Group ID"_ustr).field_on_all().hide_value();
+  b.add_output<decl::Geometry>("Instances"_ustr)
       .propagate_all()
       .description("All geometry groups as separate instances");
-  b.add_output<decl::Int>("Group ID")
+  b.add_output<decl::Int>("Group ID"_ustr)
       .field_on_all()
       .description("The group ID of each group instance");
 }

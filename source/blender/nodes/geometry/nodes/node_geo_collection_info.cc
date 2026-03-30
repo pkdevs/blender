@@ -27,15 +27,15 @@ NODE_STORAGE_FUNCS(NodeGeometryCollectionInfo)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Collection>("Collection").optional_label();
-  b.add_input<decl::Bool>("Separate Children")
+  b.add_input<decl::Collection>("Collection"_ustr).optional_label();
+  b.add_input<decl::Bool>("Separate Children"_ustr)
       .description(
           "Output each child of the collection as a separate instance, sorted alphabetically");
-  b.add_input<decl::Bool>("Reset Children")
+  b.add_input<decl::Bool>("Reset Children"_ustr)
       .description(
           "Reset the transforms of every child instance in the output. Only used when Separate "
           "Children is enabled");
-  b.add_output<decl::Geometry>("Instances")
+  b.add_output<decl::Geometry>("Instances"_ustr)
       .description(
           "Instance of the collection or instances of all the children in the collection");
 }

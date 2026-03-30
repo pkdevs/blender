@@ -8,16 +8,16 @@ namespace blender::nodes::node_geo_separate_components_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Geometry")
+  b.add_input<decl::Geometry>("Geometry"_ustr)
       .description("Geometry to split into separate components");
-  b.add_output<decl::Geometry>("Mesh").propagate_all();
-  b.add_output<decl::Geometry>("Curve").propagate_all();
-  b.add_output<decl::Geometry>("Grease Pencil").propagate_all();
-  b.add_output<decl::Geometry>("Point Cloud").propagate_all();
-  b.add_output<decl::Geometry>("Volume")
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all();
+  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all();
+  b.add_output<decl::Geometry>("Grease Pencil"_ustr).propagate_all();
+  b.add_output<decl::Geometry>("Point Cloud"_ustr).propagate_all();
+  b.add_output<decl::Geometry>("Volume"_ustr)
       .translation_context(BLT_I18NCONTEXT_ID_ID)
       .propagate_all();
-  b.add_output<decl::Geometry>("Instances").propagate_all();
+  b.add_output<decl::Geometry>("Instances"_ustr).propagate_all();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)

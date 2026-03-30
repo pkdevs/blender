@@ -16,18 +16,18 @@ namespace blender::nodes::node_geo_grease_pencil_to_curves_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Grease Pencil")
+  b.add_input<decl::Geometry>("Grease Pencil"_ustr)
       .supported_type(bke::GeometryComponent::Type::GreasePencil)
       .description("Grease Pencil data to convert to curves");
-  b.add_input<decl::Bool>("Selection")
+  b.add_input<decl::Bool>("Selection"_ustr)
       .default_value(true)
       .hide_value()
       .field_on_all()
       .description("Select the layers to convert");
-  b.add_input<decl::Bool>("Layers as Instances")
+  b.add_input<decl::Bool>("Layers as Instances"_ustr)
       .default_value(true)
       .description("Create a separate curve instance for every layer");
-  b.add_output<decl::Geometry>("Curves").propagate_all();
+  b.add_output<decl::Geometry>("Curves"_ustr).propagate_all();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)

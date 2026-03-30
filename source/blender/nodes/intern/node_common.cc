@@ -271,8 +271,8 @@ static BaseSocketDeclarationBuilder &build_interface_socket_declaration(
   bke::bNodeSocketType *base_typeinfo = bke::node_socket_type_find(io_socket.socket_type);
   eNodeSocketDatatype datatype = SOCK_CUSTOM;
 
-  const StringRef name = io_socket.name;
-  const StringRef identifier = io_socket.identifier;
+  const UString name(io_socket.name);
+  const UString identifier(io_socket.identifier);
 
   BaseSocketDeclarationBuilder *decl = nullptr;
   if (base_typeinfo) {
@@ -608,10 +608,10 @@ static void node_reroute_declare(nodes::NodeDeclarationBuilder &b)
   }
 
   const StringRefNull socket_idname(static_cast<const NodeReroute *>(node->storage)->type_idname);
-  b.add_input<nodes::decl::Custom>("Input")
+  b.add_input<nodes::decl::Custom>("Input"_ustr)
       .idname(socket_idname.c_str())
       .structure_type(nodes::StructureType::Dynamic);
-  b.add_output<nodes::decl::Custom>("Output")
+  b.add_output<nodes::decl::Custom>("Output"_ustr)
       .idname(socket_idname.c_str())
       .structure_type(nodes::StructureType::Dynamic);
 }
@@ -841,11 +841,11 @@ static void node_implicit_conversion_declare(nodes::NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.add_default_layout();
-  b.add_input<nodes::decl::Custom>("Value")
+  b.add_input<nodes::decl::Custom>("Value"_ustr)
       .idname(socket_idname.c_str())
       .structure_type(nodes::StructureType::Dynamic)
       .optional_label();
-  b.add_output<nodes::decl::Custom>("Value")
+  b.add_output<nodes::decl::Custom>("Value"_ustr)
       .idname(socket_idname.c_str())
       .structure_type(nodes::StructureType::Dynamic)
       .reference_pass_all()
@@ -1004,7 +1004,7 @@ static void group_input_declare(NodeDeclarationBuilder &b)
     }
     return true;
   });
-  b.add_output<decl::Extend>("", "__extend__");
+  b.add_output<decl::Extend>(""_ustr, "__extend__"_ustr);
 }
 
 static void group_output_declare(NodeDeclarationBuilder &b)
@@ -1029,7 +1029,7 @@ static void group_output_declare(NodeDeclarationBuilder &b)
     }
     return true;
   });
-  b.add_input<decl::Extend>("", "__extend__");
+  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr);
 }
 
 static bool group_input_insert_link(bke::NodeInsertLinkParams &params)
