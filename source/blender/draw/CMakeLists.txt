@@ -531,7 +531,7 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_shadow_tilemap_lib.glsl
   engines/eevee/shaders/eevee_shadow_tilemap_rendermap_comp.glsl
   engines/eevee/shaders/eevee_shadow_visibility_comp.glsl
-  engines/eevee/shaders/eevee_spherical_harmonics_lib.glsl
+  engines/eevee/shaders/eevee_spherical_harmonics.bsl.hh
   engines/eevee/shaders/eevee_subsurface_lib.glsl
   engines/eevee/shaders/eevee_subsurface.bsl.hh
   engines/eevee/shaders/eevee_surf_capture_frag.glsl
