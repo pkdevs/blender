@@ -2650,12 +2650,36 @@ static wmOperatorStatus texture_slot_move_exec(bContext *C, wmOperator *op)
         mtex_ar[act] = mtex_ar[act - 1];
         mtex_ar[act - 1] = mtexswap;
 
-        BKE_animdata_fix_paths_rename(
-            id, adt, nullptr, "texture_slots", nullptr, nullptr, act - 1, -1, false);
-        BKE_animdata_fix_paths_rename(
-            id, adt, nullptr, "texture_slots", nullptr, nullptr, act, act - 1, false);
-        BKE_animdata_fix_paths_rename(
-            id, adt, nullptr, "texture_slots", nullptr, nullptr, -1, act, false);
+        BKE_animdata_fix_paths_rename(id,
+                                      adt,
+                                      nullptr,
+                                      "texture_slots",
+                                      nullptr,
+                                      nullptr,
+                                      act - 1,
+                                      -1,
+                                      /*verify_paths=*/false,
+                                      /*infix_is_name=*/true);
+        BKE_animdata_fix_paths_rename(id,
+                                      adt,
+                                      nullptr,
+                                      "texture_slots",
+                                      nullptr,
+                                      nullptr,
+                                      act,
+                                      act - 1,
+                                      /*verify_paths=*/false,
+                                      /*infix_is_name=*/true);
+        BKE_animdata_fix_paths_rename(id,
+                                      adt,
+                                      nullptr,
+                                      "texture_slots",
+                                      nullptr,
+                                      nullptr,
+                                      -1,
+                                      act,
+                                      /*verify_paths=*/false,
+                                      /*infix_is_name=*/true);
 
         set_active_mtex(id, act - 1);
       }
@@ -2666,12 +2690,36 @@ static wmOperatorStatus texture_slot_move_exec(bContext *C, wmOperator *op)
         mtex_ar[act] = mtex_ar[act + 1];
         mtex_ar[act + 1] = mtexswap;
 
-        BKE_animdata_fix_paths_rename(
-            id, adt, nullptr, "texture_slots", nullptr, nullptr, act + 1, -1, false);
-        BKE_animdata_fix_paths_rename(
-            id, adt, nullptr, "texture_slots", nullptr, nullptr, act, act + 1, false);
-        BKE_animdata_fix_paths_rename(
-            id, adt, nullptr, "texture_slots", nullptr, nullptr, -1, act, false);
+        BKE_animdata_fix_paths_rename(id,
+                                      adt,
+                                      nullptr,
+                                      "texture_slots",
+                                      nullptr,
+                                      nullptr,
+                                      act + 1,
+                                      -1,
+                                      /*verify_paths=*/false,
+                                      /*infix_is_name=*/true);
+        BKE_animdata_fix_paths_rename(id,
+                                      adt,
+                                      nullptr,
+                                      "texture_slots",
+                                      nullptr,
+                                      nullptr,
+                                      act,
+                                      act + 1,
+                                      /*verify_paths=*/false,
+                                      /*infix_is_name=*/true);
+        BKE_animdata_fix_paths_rename(id,
+                                      adt,
+                                      nullptr,
+                                      "texture_slots",
+                                      nullptr,
+                                      nullptr,
+                                      -1,
+                                      act,
+                                      /*verify_paths=*/false,
+                                      /*infix_is_name=*/true);
 
         set_active_mtex(id, act + 1);
       }
