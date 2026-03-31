@@ -27,16 +27,16 @@ class PowFunction : public MultiFunction {
   PowFunction()
   {
     static Signature signature = []() {
-      pow_2 = &registry::lookup("float ^ 2"_ustr);
-      pow_3 = &registry::lookup("float ^ 3"_ustr);
+      pow_2 = &registry::lookup("float ** 2"_ustr);
+      pow_3 = &registry::lookup("float ** 3"_ustr);
       static auto pow_generic_fn = build::SI2_SO<float, float, float>(
-          "float ^ float",
+          "pow generic",
           [](const float a, const float b) { return safe_powf(a, b); },
           build::exec_presets::Materialized());
       pow_generic = &pow_generic_fn;
 
       Signature signature;
-      SignatureBuilder builder("float ^ float", signature);
+      SignatureBuilder builder("float ** float", signature);
       builder.single_input<float>("Base");
       builder.single_input<float>("Exponent");
       builder.single_output<float>("Result");
@@ -165,11 +165,11 @@ void register_common_functions()
 
   registry::add_new_cb([]() {
     return build::SI1_SO<float, float>(
-        "float ^ 2", [](const float a) { return a * a; }, exec_fast);
+        "float ** 2", [](const float a) { return a * a; }, exec_fast);
   });
   registry::add_new_cb([]() {
     return build::SI1_SO<float, float>(
-        "float ^ 3", [](const float a) { return a * a * a; }, exec_fast);
+        "float ** 3", [](const float a) { return a * a * a; }, exec_fast);
   });
   registry::add_new_cb([] {
     return build::SI1_SO<float, float>("exp(float)", [](const float a) { return expf(a); });
@@ -408,7 +408,7 @@ void register_common_functions()
         exec_fast);
   });
   registry::add_new_cb([] {
-    return build::SI2_SO<float3, float3, float3>("float3 ^ float3", [](float3 a, float3 b) {
+    return build::SI2_SO<float3, float3, float3>("float3 ** float3", [](float3 a, float3 b) {
       return float3(safe_powf(a.x, b.x), safe_powf(a.y, b.y), safe_powf(a.z, b.z));
     });
   });
@@ -539,7 +539,7 @@ void register_common_functions()
   });
   registry::add_new_cb([] {
     return mf::build::SI2_SO<int, int, int>(
-        "int ^ int", [](int a, int b) { return math::pow(a, b); }, exec_fast);
+        "int ** int", [](int a, int b) { return math::pow(a, b); }, exec_fast);
   });
   registry::add_new_cb([] {
     return mf::build::SI3_SO<int, int, int, int>(
@@ -613,6 +613,44 @@ void register_common_functions()
   registry::add_new_cb([] {
     return mf::build::SI2_SO<bool, bool, bool>(
         "bool && !bool", [](bool a, bool b) { return a && !b; }, exec_fast);
+  });
+  registry::add_new_cb([] {
+    return mf::build::SI2_SO<int, int, int>(
+        "int & int", [](int a, int b) { return a & b; }, exec_fast);
+  });
+  registry::add_new_cb([] {
+    return mf::build::SI2_SO<int, int, int>(
+        "int | int", [](int a, int b) { return a | b; }, exec_fast);
+  });
+  registry::add_new_cb([] {
+    return mf::build::SI2_SO<int, int, int>(
+        "int ^ int", [](int a, int b) { return a ^ b; }, exec_fast);
+  });
+  registry::add_new_cb(
+      [] { return build::SI1_SO<int, int>("~int", [](int a) { return ~a; }, exec_fast); });
+  registry::add_new_cb([] {
+    return build::SI2_SO<int, int, int>(
+        "shift(int, int)",
+        [](int a, int b) {
+          const uint32_t value = a;
+          const int shift = math::clamp(b, -32, 32);
+          const uint64_t wide_value = uint64_t(value) << 16;
+          const uint64_t wide_result = shift > 0 ? wide_value << shift : wide_value >> -shift;
+          return uint32_t(wide_result >> 16);
+        },
+        exec_fast);
+  });
+  registry::add_new_cb([] {
+    return build::SI2_SO<int, int, int>(
+        "rotate(int, int)",
+        [](int a, int b) {
+          const uint32_t value = a;
+          const int shift = math::mod_periodic(b, 32);
+          const uint64_t wide_value = uint64_t(value) | (uint64_t(value) << 32);
+          const uint64_t double_result = (wide_value << shift);
+          return uint32_t((double_result | (double_result >> 32)) & ((uint64_t(1) << 33) - 1));
+        },
+        exec_fast);
   });
 }
 
