@@ -19,7 +19,7 @@
 #include "DNA_pointcloud_types.h"
 
 #include "BLI_array_utils.hh"
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 

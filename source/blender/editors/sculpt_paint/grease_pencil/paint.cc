@@ -19,7 +19,7 @@
 #include "BKE_scene.hh"
 
 #include "BLI_bounds.hh"
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_length_parameterize.hh"
 #include "BLI_listbase.h"
 #include "BLI_math_base.hh"
