@@ -233,7 +233,6 @@ def gitea_json_issue_events_filter(
 # However, it provides an option to fetch the configured username from the local Git,
 # in case the user does not explicitly supply the username.
 def git_username_detect() -> str | None:
-    import os
     import subprocess
 
     # Get the repository directory
