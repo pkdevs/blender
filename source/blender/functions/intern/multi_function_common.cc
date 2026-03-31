@@ -48,8 +48,8 @@ class PowFunction : public MultiFunction {
   void call(const IndexMask &mask, Params params, Context context) const override
   {
     /* Use GVArray here to avoid unnecessary conversions to typed virtual arrays. */
-    const GVArray &base = params.readonly_single_input<float>(0, "Base");
-    const GVArray &exponent = params.readonly_single_input<float>(1, "Exponent");
+    const GVArray &base = params.readonly_single_input(0, "Base");
+    const GVArray &exponent = params.readonly_single_input(1, "Exponent");
     MutableSpan<float> result = params.uninitialized_single_output<float>(2, "Result");
 
     if (exponent.is_single()) {
@@ -88,6 +88,74 @@ class PowFunction : public MultiFunction {
       }
     }
     pow_generic->call(mask, params, context);
+  }
+};
+
+class DivideFunction : public MultiFunction {
+ private:
+  static inline const MultiFunction *multiply = nullptr;
+  static inline const MultiFunction *divide_generic = nullptr;
+
+ public:
+  DivideFunction()
+  {
+    static Signature signature = []() {
+      multiply = &registry::lookup("float * float"_ustr);
+      static auto divide_generic_fn = build::SI2_SO<float, float, float>(
+          "float / float",
+          [](float a, float b) { return safe_divide(a, b); },
+          build::exec_presets::AllSpanOrSingle());
+      divide_generic = &divide_generic_fn;
+
+      Signature signature;
+      SignatureBuilder builder("float / float", signature);
+      builder.single_input<float>("A");
+      builder.single_input<float>("B");
+      builder.single_output<float>("Result");
+      return signature;
+    }();
+    this->set_signature(&signature);
+  }
+
+  void call(const IndexMask &mask, mf::Params params, mf::Context context) const override
+  {
+    const GVArray &a = params.readonly_single_input(0, "A");
+    const GVArray &b = params.readonly_single_input(1, "B");
+    MutableSpan<float> result = params.uninitialized_single_output<float>(2, "Result");
+
+    if (b.is_single()) {
+      float divisor;
+      b.get_internal_single(&divisor);
+      if (divisor == 0.0f) {
+        /* We define the output to be 0 for division by zero. Same as #safe_divide. */
+        index_mask::masked_fill(result, 0.0f, mask);
+        return;
+      }
+      if (divisor == 1.0f) {
+        /* If the divisor is 1 the result is the dividend. */
+        a.materialize_to_uninitialized(mask, result.data());
+        return;
+      }
+      /* Use multiplication by the inverse which is more efficient than division. */
+      const float inverse = 1.0f / divisor;
+      ParamsBuilder sub_params{*multiply, &mask};
+      sub_params.add_readonly_single_input(a);
+      sub_params.add_readonly_single_input_value(inverse);
+      sub_params.add_uninitialized_single_output(result);
+      multiply->call(mask, sub_params, context);
+      return;
+    }
+    if (a.is_single()) {
+      float dividend;
+      a.get_internal_single(&dividend);
+      if (dividend == 0.0f) {
+        /* If the dividend is zero the result is always zero regardless of the divisor. */
+        index_mask::masked_fill(result, 0.0f, mask);
+        return;
+      }
+    }
+    /* General case. */
+    divide_generic->call(mask, params, context);
   }
 };
 
@@ -189,12 +257,7 @@ void register_common_functions()
     return build::SI2_SO<float, float, float>(
         "float * float", [](const float a, const float b) { return a * b; }, exec_fast);
   });
-  registry::add_new_cb([] {
-    return build::SI2_SO<float, float, float>(
-        "float / float",
-        [](const float a, const float b) { return safe_divide(a, b); },
-        exec_fast);
-  });
+  registry::add_new_cb([] { return DivideFunction(); });
   registry::add_new_cb([] { return PowFunction(); });
   registry::add_new_cb([] {
     return build::SI2_SO<float, float, float>(
