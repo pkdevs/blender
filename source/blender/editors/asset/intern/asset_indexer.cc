@@ -256,7 +256,7 @@ AssetMetaData *asset_metadata_from_dictionary(const DictionaryValue &entry)
 
     /* The top level property must be a group, further asset metadata property lookups assume
      * that. This is also the only way to support more than a single property. */
-    if (properties->next || properties->type != IDP_GROUP) {
+    if (properties && (properties->next || properties->type != IDP_GROUP)) {
       asset_data->properties = bke::idprop::create_group("AssetMetaData.properties").release();
       for (IDProperty *property = properties; property != nullptr; property = property->next) {
         IDP_AddToGroup(asset_data->properties, property);
