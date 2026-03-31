@@ -469,7 +469,9 @@ std::unique_ptr<io::serialize::ArrayValue> convert_to_serialize_values(
     const IDProperty *properties);
 
 /**
- * \brief Convert the given `value` to an `IDProperty`.
+ * \brief Convert the given `value` (which must be an array) to an `IDProperty`.
+ * \return The first successfully converted property with further array elements in the
+ *    `IDProperty.next` chain, or null if none could be converted or \a value is not an array.
  */
 IDProperty *convert_from_serialize_value(const io::serialize::Value &value);
 
