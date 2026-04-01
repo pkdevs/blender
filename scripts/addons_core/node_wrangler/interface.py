@@ -397,24 +397,16 @@ def save_viewer_menu_func(self, context):
 
 
 def reset_nodes_button(self, context):
+    layout = self.layout
     node_active = context.active_node
     node_selected = context.selected_nodes
 
     # Check if active node is in the selection, ignore some node types
-    if (len(node_selected) != 1
-            or node_active is None
-            or not node_active.select
-            or node_active.type in {"REROUTE", "GROUP"}):
+    if len(node_selected) < 1:
         return
 
-    row = self.layout.row()
-
-    if node_active.type == "FRAME":
-        row.operator("node.nw_reset_nodes", text="Reset Nodes in Frame", icon="FILE_REFRESH")
-    else:
-        row.operator("node.nw_reset_nodes", text="Reset Node", icon="FILE_REFRESH")
-
-    self.layout.separator()
+    layout.operator("node.nw_reset_nodes", icon="FILE_REFRESH")
+    layout.separator()
 
 
 classes = (
