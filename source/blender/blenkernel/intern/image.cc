@@ -5469,7 +5469,7 @@ bool BKE_image_buffer_format_writable(ImBuf *ibuf)
   return (BKE_imtype_to_ftype(im_format.imtype, &options_dummy) == ibuf->ftype);
 }
 
-void BKE_image_file_format_set(Image *image, int ftype, const ImbFormatOptions *options)
+void BKE_image_file_format_set(Image *image, eImbFileType ftype, const ImbFormatOptions *options)
 {
   std::scoped_lock lock(image->runtime->cache_mutex);
   if (image->runtime->cache != nullptr) {
@@ -5478,7 +5478,7 @@ void BKE_image_file_format_set(Image *image, int ftype, const ImbFormatOptions *
     while (!IMB_moviecacheIter_done(iter)) {
       ImBuf *ibuf = IMB_moviecacheIter_getImBuf(iter);
       if (ibuf != nullptr) {
-        ibuf->ftype = static_cast<eImbFileType>(ftype);
+        ibuf->ftype = ftype;
         ibuf->foptions = *options;
       }
       IMB_moviecacheIter_step(iter);

@@ -275,7 +275,7 @@ struct ImBuf {
 
   /* file information */
   /** file type we are going to save as */
-  enum eImbFileType ftype = IMB_FTYPE_NONE;
+  eImbFileType ftype = IMB_FTYPE_NONE;
   /** file format specific flags */
   ImbFormatOptions foptions;
   /** The absolute file path associated with this image. */
