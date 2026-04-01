@@ -11,9 +11,9 @@
 #include <Python.h>
 
 #include "BLI_rect.h"
-#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
+#include "DNA_space_enums.h"
 #include "py_capi_utils.hh"
 
 #include "python_compat.hh" /* IWYU pragma: keep. */
@@ -669,7 +669,7 @@ static PyObject *py_imbuf_filepath_get(Py_ImBuf *self, void * /*closure*/)
 {
   PY_IMBUF_CHECK_OBJ(self);
   ImBuf *ibuf = self->ibuf;
-  return PyC_UnicodeFromBytes(ibuf->filepath);
+  return PyC_UnicodeFromBytes(ibuf->filepath.c_str());
 }
 
 static int py_imbuf_filepath_set(Py_ImBuf *self, PyObject *value, void * /*closure*/)
@@ -677,7 +677,7 @@ static int py_imbuf_filepath_set(Py_ImBuf *self, PyObject *value, void * /*closu
   PY_IMBUF_CHECK_INT(self);
 
   ImBuf *ibuf = self->ibuf;
-  const Py_ssize_t value_str_len_max = sizeof(ibuf->filepath);
+  const Py_ssize_t value_str_len_max = FILE_MAX;
   PyObject *value_coerce = nullptr;
   Py_ssize_t value_str_len;
   const char *value_str = PyC_UnicodeAsBytesAndSize(value, &value_str_len, &value_coerce);
@@ -689,7 +689,7 @@ static int py_imbuf_filepath_set(Py_ImBuf *self, PyObject *value, void * /*closu
     Py_XDECREF(value_coerce);
     return -1;
   }
-  memcpy(ibuf->filepath, value_str, value_str_len + 1);
+  ibuf->filepath = value_str;
   Py_XDECREF(value_coerce);
   return 0;
 }
@@ -870,7 +870,7 @@ static PyObject *py_imbuf_repr(Py_ImBuf *self)
   if (ibuf != nullptr) {
     return PyUnicode_FromFormat("<imbuf: address=%p, filepath='%s', size=(%d, %d)>",
                                 ibuf,
-                                ibuf->filepath,
+                                ibuf->filepath.c_str(),
                                 ibuf->x,
                                 ibuf->y);
   }
@@ -1380,7 +1380,7 @@ static PyObject *imbuf_load_impl(const char *filepath)
     return nullptr;
   }
 
-  STRNCPY(ibuf->filepath, filepath);
+  ibuf->filepath = filepath;
 
   return Py_ImBuf_CreatePyObject(ibuf);
 }
@@ -1544,7 +1544,7 @@ static PyObject *M_imbuf_write(PyObject * /*self*/, PyObject *args, PyObject *kw
   const char *filepath = filepath_data.value;
   if (filepath == nullptr) {
     /* Argument omitted, use images path. */
-    filepath = py_imb->ibuf->filepath;
+    filepath = py_imb->ibuf->filepath.c_str();
   }
   PyObject *result = imbuf_write_impl(py_imb->ibuf, filepath);
   Py_XDECREF(filepath_data.value_coerce);
