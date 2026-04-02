@@ -4788,7 +4788,6 @@ void node_draw_space(const bContext &C, ARegion &region)
   ui::view2d_view_ortho(&v2d);
   draw_background_color();
   GPU_depth_test(GPU_DEPTH_NONE);
-  GPU_scissor_test(true);
 
   /* XXX `snode->runtime->cursor` set in coordinate-space for placing new nodes,
    * used for drawing noodles too. */
