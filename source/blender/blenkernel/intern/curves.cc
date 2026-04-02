@@ -111,11 +111,8 @@ static void curves_blend_write(BlendWriter *writer, ID *id, const void *id_addre
   curves->attributes_active_index_legacy = curves->geometry.attributes_active_index;
 
   ResourceScope scope;
-  bke::CurvesGeometry::BlendWriteData write_data(scope);
+  bke::CurvesGeometry::BlendWriteData write_data(writer, scope);
   curves->geometry.wrap().blend_write_prepare(write_data, !BLO_write_is_undo(writer));
-
-  BLO_write_shared_tag(writer, curves->geometry.curve_offsets);
-  BLO_write_shared_tag(writer, curves->geometry.custom_knots);
 
   /* Write LibData */
   writer->write_id_struct(id_address, curves);
