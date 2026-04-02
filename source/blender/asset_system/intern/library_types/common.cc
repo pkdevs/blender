@@ -24,7 +24,7 @@ const bUserAssetLibrary *UserAssetLibraryWrapper::user_asset_library() const
   if (user_asset_library_ == nullptr) {
     return nullptr;
   }
-  if (BLI_findindex(&U.asset_libraries, &user_asset_library_) == -1) {
+  if (BLI_findindex(&U.asset_libraries, user_asset_library_) == -1) {
     user_asset_library_ = nullptr;
     return nullptr;
   }
