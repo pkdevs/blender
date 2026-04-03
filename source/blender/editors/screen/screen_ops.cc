@@ -4305,6 +4305,8 @@ static bool area_join_apply(bContext *C, wmOperator *op)
     WM_window_title_refresh(CTX_wm_manager(C), CTX_wm_window(C));
   }
 
+  CTX_wm_window(C)->tag_cursor_refresh = true;
+
   return true;
 }
 
