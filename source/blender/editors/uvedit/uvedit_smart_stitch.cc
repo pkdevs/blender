@@ -1849,6 +1849,8 @@ static StitchState *stitch_init(bContext *C,
   state->obedit = obedit;
   state->em = em;
 
+  uvedit_select_prepare(scene, em->bm);
+
   /* Workaround for sync-select & face-select mode which implies all selected faces are detached,
    * for stitch this isn't useful behavior, see #86924. */
   const int selectmode_orig = scene->toolsettings->selectmode;
@@ -2169,13 +2171,14 @@ static int stitch_init_all(bContext *C, wmOperator *op)
     return 0;
   }
 
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ToolSettings *ts = scene->toolsettings;
 
   ViewLayer *view_layer = CTX_data_view_layer(C);
   View3D *v3d = CTX_wm_view3d(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, v3d);
+      *bmain, scene, view_layer, v3d);
 
   if (objects.is_empty()) {
     BKE_report(op->reports, RPT_ERROR, "No objects selected");

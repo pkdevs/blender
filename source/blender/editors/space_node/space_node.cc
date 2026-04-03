@@ -89,7 +89,13 @@ void ED_node_tree_start(ARegion *region, SpaceNode *snode, bNodeTree *ntree, ID 
 
     /* Set initial view center from node tree. */
     copy_v2_v2(path->view_center, ntree->view_center);
+    path->view_width = ntree->view_width;
+
     if (region) {
+      /* Leave the zoom level unchanged if it hasn't been set before. */
+      if (ntree->view_width != 0.0f) {
+        ui::view2d_size_x_set(&region->v2d, ntree->view_width);
+      }
       ui::view2d_center_set(&region->v2d, ntree->view_center[0], ntree->view_center[1]);
     }
 
@@ -140,7 +146,11 @@ void ED_node_tree_push(ARegion *region, SpaceNode *snode, bNodeTree *ntree, bNod
 
   /* Set initial view center from node tree. */
   copy_v2_v2(path->view_center, ntree->view_center);
+  path->view_width = ntree->view_width;
   if (region) {
+    if (ntree->view_width != 0.0f) {
+      ui::view2d_size_x_set(&region->v2d, ntree->view_width);
+    }
     ui::view2d_center_set(&region->v2d, ntree->view_center[0], ntree->view_center[1]);
   }
 
@@ -173,8 +183,11 @@ void ED_node_tree_pop(ARegion *region, SpaceNode *snode)
   path = static_cast<bNodeTreePath *>(snode->treepath.last);
   snode->edittree = path->nodetree;
 
-  /* Set view center from node tree path. */
+  /* Set view center and zoom from node tree path. */
   if (region) {
+    if (path->view_width != 0.0f) {
+      ui::view2d_size_x_set(&region->v2d, path->view_width);
+    }
     ui::view2d_center_set(&region->v2d, path->view_center[0], path->view_center[1]);
   }
 
@@ -564,10 +577,12 @@ static SpaceLink *node_create(const ScrArea * /*area*/, const Scene * /*scene*/)
 
   snode->flag = SNODE_SHOW_GPENCIL | SNODE_USE_ALPHA;
   snode->overlay.flag = (SN_OVERLAY_SHOW_OVERLAYS | SN_OVERLAY_SHOW_WIRE_COLORS |
-                         SN_OVERLAY_SHOW_PATH | SN_OVERLAY_SHOW_PREVIEWS);
+                         SN_OVERLAY_SHOW_PATH | SN_OVERLAY_SHOW_PREVIEWS |
+                         SN_OVERLAY_SHOW_RENDER_REGION);
 
   /* backdrop */
   snode->zoom = 1.0f;
+  snode->overlay.passepartout_alpha = 0.5f;
 
   /* select the first tree type for valid type */
   for (const bke::bNodeTreeType *treetype : bke::node_tree_types_get()) {
@@ -784,6 +799,7 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
     case NC_SCREEN:
       switch (wmn->data) {
         case ND_ANIMPLAY:
+        case ND_ANIMATION_PLAYBACK:
           node_area_tag_tree_recalc(snode, area);
           break;
       }
@@ -1467,7 +1483,17 @@ static int /*eContextResult*/ node_context(const bContext *C,
     }
     return CTX_RESULT_OK;
   }
-
+  if (CTX_data_equals(member, "edit_image")) {
+    if (snode->edittree != nullptr) {
+      if (bNode *node = bke::node_get_active(*snode->edittree)) {
+        if (ELEM(node->type_legacy, SH_NODE_TEX_IMAGE, SH_NODE_TEX_ENVIRONMENT)) {
+          Image *image = id_cast<Image *>(node->id);
+          CTX_data_id_pointer_set(result, &image->id);
+          return CTX_RESULT_OK;
+        }
+      }
+    }
+  }
   return CTX_RESULT_MEMBER_NOT_FOUND;
 }
 

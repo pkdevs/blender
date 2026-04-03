@@ -153,6 +153,16 @@ bNodeLink &version_node_add_link(
     bNodeTree &ntree, bNode &node_a, bNodeSocket &socket_a, bNode &node_b, bNodeSocket &socket_b);
 
 /**
+ * Returns true if the node has valid storage data.
+ * If the node does not have storage data then the node type is set to "Undefined" to prevent
+ * further access and the function returns false.
+ *
+ * Storage can get lost when saving nodes in older versions and then loading such files may contain
+ * nodes where storage is expected but does not exist (#154086).
+ */
+bool version_node_ensure_storage_or_invalidate(bNode &node);
+
+/**
  * Adjust animation data for newly added node sockets.
  *
  * Node sockets are addressed by their index (in their RNA path, and thus FCurves/drivers), and
@@ -186,6 +196,8 @@ void version_node_id(bNodeTree *ntree, int node_type, const char *new_name);
  * Convert `SocketName.001` unique name format to `SocketName_001`. Previously both were used.
  */
 void version_node_socket_id_delim(bNodeSocket *socket);
+
+void version_node_socket_identifier_set(bNodeSocket &socket, StringRefNull identifier);
 
 bNodeSocket *version_node_add_socket_if_not_exist(bNodeTree *ntree,
                                                   bNode *node,

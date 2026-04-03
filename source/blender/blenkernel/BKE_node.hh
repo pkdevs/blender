@@ -58,6 +58,7 @@ struct bNodeTreeExec;
 
 class CPPType;
 namespace nodes {
+struct GeneratedTreeSrnaData;
 class NodeMultiFunctionBuilder;
 class GeoNodeExecParams;
 class NodeDeclaration;
@@ -149,6 +150,12 @@ using NodeBlendWriteFunction = void (*)(const bNodeTree &tree,
                                         BlendWriter &writer);
 using NodeBlendDataReadFunction = void (*)(bNodeTree &tree, bNode &node, BlendDataReader &reader);
 
+using SocketMakeGeometryNodesInputSrnaFunction =
+    void (*)(const bNodeTree &tree,
+             StructRNA &srna,
+             const bNodeTreeInterfaceSocket &io_socket,
+             nodes::GeneratedTreeSrnaData &r_generated);
+
 /**
  * \brief Defines a socket type.
  *
@@ -208,6 +215,8 @@ struct bNodeSocketType {
   SocketGetGeometryNodesCPPValueFunction get_geometry_nodes_cpp_value = nullptr;
   /* Default value for this socket type. */
   const SocketValueVariant *geometry_nodes_default_value = nullptr;
+
+  SocketMakeGeometryNodesInputSrnaFunction make_geometry_nodes_input_srna = nullptr;
 };
 
 using NodeInitExecFunction = void *(*)(bNodeExecContext * context,
@@ -632,6 +641,14 @@ void node_register_type(bNodeType &ntype);
 void node_unregister_type(bNodeType &ntype);
 void node_register_alias(bNodeType &nt, StringRef alias);
 
+/**
+ * Set the node type \a idname and \a type_legacy to "undefined" to prevent future access to broken
+ * nodes. This should be used for nodes with missing data that cannot be fixed and should be
+ * permanently disabled.
+ * \warning The node type is not recoverable afterwards!
+ */
+void node_set_undefined_type(bNode &node);
+
 Span<bNodeType *> node_types_get();
 
 bNodeSocketType *node_socket_type_find(StringRef idname);
@@ -920,6 +937,7 @@ void node_tree_free_local_node(bNodeTree &ntree, bNode &node);
 void node_tree_update_all_new(Main &main);
 
 /** Update asset meta-data cache of data-block properties. */
+IDProperty *node_create_asset_meta_data_properties(const bNodeTree &node_tree);
 void node_update_asset_metadata(bNodeTree &node_tree);
 
 void node_tree_node_flag_set(bNodeTree &ntree, int flag, bool enable);

@@ -225,16 +225,66 @@ class Context : public compositor::Context {
     BLI_thread_lock(LOCK_DRAW_IMAGE);
 
     void *lock;
-    ImBuf *image_buffer = BKE_image_acquire_ibuf(image, &image_user, &lock);
+    ImBuf *image_buffer = BKE_image_acquire_ibuf_gpu(image, &image_user, &lock);
 
     const int2 size = viewer_result.is_single_value() ? this->get_render_size() :
                                                         viewer_result.domain().data_size;
-    if (image_buffer->x != size.x || image_buffer->y != size.y) {
+
+    /* The image buffer has a different size than the viewer result, set the new size and free all
+     * data to be reallocated later. */
+    if (int2(image_buffer->x, image_buffer->y) != size) {
       IMB_free_byte_pixels(image_buffer);
       IMB_free_float_pixels(image_buffer);
+      IMB_free_gpu_textures(image_buffer);
       image_buffer->x = size.x;
       image_buffer->y = size.y;
-      IMB_alloc_float_pixels(image_buffer, 4, false);
+    }
+
+    if (this->use_gpu()) {
+      /* If using GPU, free any potential previous CPU data. */
+      IMB_free_float_pixels(image_buffer);
+
+      /* Allocate a GPU texture if using GPU and no texture exists or one exists but with a
+       * different format. */
+      if (!image_buffer->gpu.texture ||
+          GPU_texture_format(image_buffer->gpu.texture) != viewer_result.get_gpu_texture_format())
+      {
+        gpu::TextureFormat format = viewer_result.get_gpu_texture_format();
+        gpu::Texture *texture = GPU_texture_create_2d(
+            __func__, size.x, size.y, 1, format, GPU_TEXTURE_USAGE_GENERAL, nullptr);
+        IMB_assign_gpu_texture(image_buffer, texture);
+      }
+    }
+    else {
+      /* If not using GPU, free any potential previous GPU data. */
+      IMB_free_gpu_textures(image_buffer);
+
+      /* Allocate float buffer if not using GPU and no float buffer exists. */
+      if (!image_buffer->float_buffer.data) {
+        IMB_alloc_float_pixels(image_buffer, 4, false);
+      }
+    }
+
+    if (this->use_gpu()) {
+      if (viewer_result.is_single_value()) {
+        GPU_texture_clear(image_buffer->gpu.texture,
+                          GPU_DATA_FLOAT,
+                          viewer_result.get_single_value<compositor::Color>());
+      }
+      else {
+        GPU_texture_copy(image_buffer->gpu.texture, viewer_result);
+      }
+      image_buffer->userflags |= IB_HOST_BUFFER_INVALID;
+    }
+    else {
+      if (viewer_result.is_single_value()) {
+        IMB_rectfill(image_buffer, viewer_result.get_single_value<compositor::Color>());
+      }
+      else {
+        std::memcpy(image_buffer->float_buffer.data,
+                    viewer_result.cpu_data().data(),
+                    size.x * size.y * 4 * sizeof(float));
+      }
       image_buffer->userflags |= IB_DISPLAY_BUFFER_INVALID;
     }
 
@@ -244,21 +294,6 @@ class Context : public compositor::Context {
       copy_v2_v2_int(image_buffer->display_size, viewer_result.domain().display_size);
       copy_v2_v2_int(image_buffer->display_offset, display_offset);
       copy_v2_v2_int(image_buffer->data_offset, viewer_result.domain().data_offset);
-    }
-
-    if (viewer_result.is_single_value()) {
-      IMB_rectfill(image_buffer, viewer_result.get_single_value<compositor::Color>());
-    }
-    else if (this->use_gpu()) {
-      GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
-      float *output_buffer = static_cast<float *>(
-          GPU_texture_read(viewer_result, GPU_DATA_FLOAT, 0));
-      IMB_assign_float_buffer(image_buffer, output_buffer, IB_TAKE_OWNERSHIP);
-    }
-    else {
-      std::memcpy(image_buffer->float_buffer.data,
-                  viewer_result.cpu_data().data(),
-                  size.x * size.y * 4 * sizeof(float));
     }
 
     BKE_image_partial_update_mark_full_update(image);
@@ -426,7 +461,7 @@ class Context : public compositor::Context {
     }
 
     /* We assume the given pass is a Cryptomatte pass and retrieve its layer name. If it wasn't a
-     * Cryptomatte pass, the checks below will fail anyways. */
+     * Cryptomatte pass, the checks below will fail anyway. */
     const std::string combined_pass_name = std::string(view_layer->name) + "." + pass_name;
     StringRef cryptomatte_layer_name = bke::cryptomatte::BKE_cryptomatte_extract_layer_name(
         combined_pass_name);
@@ -476,7 +511,7 @@ class Context : public compositor::Context {
   {
     switch (input_data_.scene->r.compositor_precision) {
       case SCE_COMPOSITOR_PRECISION_AUTO:
-        /* Auto uses full precision for final renders and half procession otherwise. */
+        /* Auto uses full precision for final renders and half precision otherwise. */
         if (this->render_context()) {
           return compositor::ResultPrecision::Full;
         }
@@ -539,12 +574,15 @@ class Context : public compositor::Context {
 
     /* Set the reference count for the outputs, only the first color output is actually needed,
      * while the rest are ignored. */
+    const bool is_group_output_needed = flag_is_set(needed_outputs,
+                                                    NodeGroupOutputTypes::GroupOutputNode);
     node_group.ensure_interface_cache();
     for (const bNodeTreeInterfaceSocket *output_socket : node_group.interface_outputs()) {
-      const bool is_fisrt_output = output_socket == node_group.interface_outputs().first();
+      const bool is_first_output = output_socket == node_group.interface_outputs().first();
       Result &output_result = node_group_operation.get_result(output_socket->identifier);
       const bool is_color = output_result.type() == ResultType::Color;
-      output_result.set_reference_count(is_fisrt_output && is_color ? 1 : 0);
+      const bool is_needed = is_group_output_needed && is_first_output && is_color;
+      output_result.set_reference_count(is_needed ? 1 : 0);
     }
 
     /* Map the inputs to the operation. */
@@ -702,8 +740,8 @@ class Compositor {
         DRW_gpu_context_disable();
       }
       else {
-        GPU_render_end();
         GPU_context_active_set(nullptr);
+        GPU_render_end();
         GHOST_IContext *re_system_gpu_context = RE_system_gpu_context_get(&render_);
         WM_system_gpu_context_release(re_system_gpu_context);
       }

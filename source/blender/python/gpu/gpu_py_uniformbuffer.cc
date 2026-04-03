@@ -111,7 +111,10 @@ PyDoc_STRVAR(
     pygpu_uniformbuffer_update_doc,
     ".. method:: update(data)\n"
     "\n"
-    "   Update the data of the uniform buffer object.\n");
+    "   Update the data of the uniform buffer object.\n"
+    "\n"
+    "   :param data: Data to fill the buffer.\n"
+    "   :type data: Buffer\n");
 static PyObject *pygpu_uniformbuffer_update(BPyGPUUniformBuf *self, PyObject *obj)
 {
   BPYGPU_UNIFORMBUF_CHECK_OBJ(self);
@@ -171,12 +174,14 @@ static PyMethodDef pygpu_uniformbuffer__tp_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     pygpu_uniformbuffer__tp_doc,
-    ".. class:: GPUUniformBuf(data)\n"
+    ".. class:: GPUUniformBuf\n"
     "\n"
-    "   This object gives access to off uniform buffers.\n"
+    "   This object gives access to uniform buffers.\n"
     "\n"
-    "   :arg data: Data to fill the buffer.\n"
-    "   :type data: object exposing buffer interface\n");
+    "   .. method:: __init__(data)\n"
+    "\n"
+    "      :param data: Data to fill the buffer.\n"
+    "      :type data: Buffer\n");
 PyTypeObject BPyGPUUniformBuf_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "GPUUniformBuf",

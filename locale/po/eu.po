@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.1.0 Alpha (b'bd8d088b2702')\n"
+"Project-Id-Version: Blender 5.2.0 Alpha (b'227100a72567')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-26 11:28+0000\n"
+"POT-Creation-Date: 2026-03-30 09:56+0000\n"
 "PO-Revision-Date: 2025-07-23 15:13+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Basque <https://translate.blender.org/projects/blender-ui/ui/eu/>\n"
@@ -207,6 +207,10 @@ msgid "Default"
 msgstr "Lehenetsia"
 
 
+msgid "Display Mode"
+msgstr "Bistaraketa Modua"
+
+
 msgid "Height"
 msgstr "Altuera"
 
@@ -393,10 +397,6 @@ msgstr "Gorde"
 
 msgid "Environment"
 msgstr "Ingurunea"
-
-
-msgid "Display Mode"
-msgstr "Bistaraketa Modua"
 
 
 msgid "Link"
@@ -1873,6 +1873,11 @@ msgstr "Testua: Barnekoa"
 
 
 msgctxt "Operator"
+msgid "Save Copy..."
+msgstr "Kopia gorde..."
+
+
+msgctxt "Operator"
 msgid "Quit"
 msgstr "Irten"
 
@@ -1880,11 +1885,6 @@ msgstr "Irten"
 msgctxt "Operator"
 msgid "Render Animation"
 msgstr "Animazioa"
-
-
-msgctxt "Operator"
-msgid "Save Copy..."
-msgstr "Kopia gorde..."
 
 
 msgctxt "Operator"

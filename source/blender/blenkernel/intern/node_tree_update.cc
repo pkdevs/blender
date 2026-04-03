@@ -33,10 +33,11 @@
 
 #include "MOD_nodes.hh"
 
+#include "NOD_dependencies.hh"
 #include "NOD_geo_viewer.hh"
-#include "NOD_geometry_nodes_dependencies.hh"
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
+#include "NOD_geometry_nodes_srna.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_socket.hh"
 #include "NOD_socket_declarations.hh"
@@ -46,6 +47,9 @@
 #include "DEG_depsgraph_build.hh"
 
 #include "BLT_translation.hh"
+
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
 namespace blender {
 
@@ -277,7 +281,7 @@ struct NodeTreeRelations {
       for (ModifierData &md : object.modifiers) {
         if (md.type == eModifierType_Nodes) {
           NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(&md);
-          if (nmd->node_group != nullptr) {
+          if (nmd->node_group && !ID_MISSING(nmd->node_group)) {
             modifiers_users_->add(nmd->node_group, {&object, &md});
           }
         }
@@ -559,7 +563,7 @@ class NodeTreeMainUpdater {
       this->update_socket_shapes(ntree);
     }
 
-    if (ntree.type == NTREE_GEOMETRY) {
+    if (ELEM(ntree.type, NTREE_GEOMETRY, NTREE_COMPOSIT)) {
       this->update_eval_dependencies(ntree);
     }
 
@@ -578,6 +582,13 @@ class NodeTreeMainUpdater {
 
     if (ntree.tree_interface.requires_dependent_tree_updates()) {
       result.interface_changed = true;
+    }
+
+    if (result.interface_changed) {
+      if (ntree.type == NTREE_GEOMETRY) {
+        ntree.runtime->geometry_nodes_srna_data = nodes::create_geometry_nodes_rna_for_modifier(
+            ntree);
+      }
     }
 
 #ifndef NDEBUG
@@ -694,7 +705,7 @@ class NodeTreeMainUpdater {
         continue;
       }
       const std::string identifier_str = GeoViewerItemsAccessor::socket_identifier_for_item(item);
-      const bNodeSocket *socket = viewer_node.input_by_identifier(identifier_str.c_str());
+      const bNodeSocket *socket = viewer_node.input_by_identifier(UString(identifier_str));
       if (!socket) {
         continue;
       }
@@ -717,7 +728,7 @@ class NodeTreeMainUpdater {
     bNodeSocket *to;
     int multi_input_sort_id = 0;
 
-    BLI_STRUCT_EQUALITY_OPERATORS_3(InternalLink, from, to, multi_input_sort_id);
+    friend bool operator==(const InternalLink &a, const InternalLink &b) = default;
   };
 
   const bNodeLink *first_non_dangling_link(const bNodeTree & /*ntree*/,
@@ -1061,13 +1072,13 @@ class NodeTreeMainUpdater {
           }
 
           if (node->is_type("NodeGetBundleItem")) {
-            bNodeSocket &socket = *node->output_by_identifier("Item");
+            bNodeSocket &socket = *node->output_by_identifier("Item"_ustr);
             const auto &storage = *static_cast<const NodeGetBundleItem *>(node->storage);
             socket.display_shape = get_socket_shape(
                 socket, storage.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
           }
           else if (node->is_type("NodeStoreBundleItem")) {
-            bNodeSocket &socket = *node->input_by_identifier("Item");
+            bNodeSocket &socket = *node->input_by_identifier("Item"_ustr);
             const auto &storage = *static_cast<const NodeStoreBundleItem *>(node->storage);
             socket.display_shape = get_socket_shape(
                 socket, storage.structure_type == NODE_INTERFACE_SOCKET_STRUCTURE_TYPE_AUTO);
@@ -1081,16 +1092,13 @@ class NodeTreeMainUpdater {
   void update_eval_dependencies(bNodeTree &ntree)
   {
     ntree.ensure_topology_cache();
-    nodes::GeometryNodesEvalDependencies new_deps =
-        nodes::gather_geometry_nodes_eval_dependencies_with_cache(ntree);
+    nodes::EvalDependencies new_deps = nodes::gather_eval_dependencies_with_cache(ntree);
 
     /* Check if the dependencies have changed. */
-    if (!ntree.runtime->geometry_nodes_eval_dependencies ||
-        new_deps != *ntree.runtime->geometry_nodes_eval_dependencies)
-    {
+    if (!ntree.runtime->eval_dependencies || new_deps != *ntree.runtime->eval_dependencies) {
       needs_relations_update_ = true;
-      ntree.runtime->geometry_nodes_eval_dependencies =
-          std::make_unique<nodes::GeometryNodesEvalDependencies>(std::move(new_deps));
+      ntree.runtime->eval_dependencies = std::make_unique<nodes::EvalDependencies>(
+          std::move(new_deps));
     }
   }
 
@@ -1747,12 +1755,7 @@ class NodeTreeMainUpdater {
             socket_hash = get_socket_ptr_hash(socket);
           }
           else {
-            if (internal_input->type == socket.type) {
-              socket_hash = *hash_by_socket_id[internal_input->index_in_tree()];
-            }
-            else {
-              socket_hash = get_socket_ptr_hash(socket);
-            }
+            socket_hash = *hash_by_socket_id[internal_input->index_in_tree()];
           }
         }
         else {

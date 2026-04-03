@@ -19,8 +19,8 @@ namespace nodes::node_shader_tex_environment_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Vector").hide_value();
-  b.add_output<decl::Color>("Color").no_muted_links();
+  b.add_input<decl::Vector>("Vector"_ustr).hide_value();
+  b.add_output<decl::Color>("Color"_ustr).no_muted_links();
 }
 
 static void node_shader_init_tex_environment(bNodeTree * /*ntree*/, bNode *node)
@@ -48,7 +48,11 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat,
   bNode *node_original = node->runtime->original ? node->runtime->original : node;
   NodeTexImage *tex_original = static_cast<NodeTexImage *>(node_original->storage);
   ImageUser *iuser = &tex_original->iuser;
-  GPUSamplerState sampler = {GPU_SAMPLER_FILTERING_LINEAR | GPU_SAMPLER_FILTERING_ANISOTROPIC,
+  /* Setting the GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE enables anisotropic filtering. The
+   * exact number of samples are being determined at bind time by the engine.
+   * See #blender::draw::PassBase<T>::material_set */
+  GPUSamplerState sampler = {GPU_SAMPLER_FILTERING_LINEAR |
+                                 GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE,
                              GPU_SAMPLER_EXTEND_MODE_REPEAT,
                              GPU_SAMPLER_EXTEND_MODE_REPEAT};
   /* TODO(@fclem): For now assume mipmap is always enabled. */
@@ -77,7 +81,7 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat,
     /* Force the highest mipmap and don't do anisotropic filtering.
      * This is to fix the artifact caused by derivatives discontinuity. */
     sampler.disable_filtering_flag(GPU_SAMPLER_FILTERING_MIPMAP |
-                                   GPU_SAMPLER_FILTERING_ANISOTROPIC);
+                                   GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK);
   }
   else {
     GPU_link(mat, "node_tex_environment_mirror_ball", in[0].link, &in[0].link);

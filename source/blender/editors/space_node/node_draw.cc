@@ -81,6 +81,7 @@
 #include "ED_node_preview.hh"
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
+#include "ED_util.hh"
 #include "ED_viewer_path.hh"
 
 #include "UI_interface.hh"
@@ -89,6 +90,7 @@
 #include "UI_view2d.hh"
 
 #include "RNA_access.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
 #include "NOD_geometry_nodes_gizmos.hh"
@@ -265,9 +267,7 @@ static bool compare_node_depth(const bNode *a, const bNode *b)
 void tree_draw_order_update(bNodeTree &ntree)
 {
   Array<bNode *> sort_nodes = ntree.all_nodes();
-  std::sort(sort_nodes.begin(), sort_nodes.end(), [](bNode *a, bNode *b) {
-    return a->ui_order < b->ui_order;
-  });
+  std::ranges::sort(sort_nodes, [](bNode *a, bNode *b) { return a->ui_order < b->ui_order; });
   std::stable_sort(sort_nodes.begin(), sort_nodes.end(), compare_node_depth);
   for (const int i : sort_nodes.index_range()) {
     sort_nodes[i]->ui_order = i;
@@ -280,9 +280,8 @@ Array<bNode *> tree_draw_order_calc_nodes(bNodeTree &ntree)
   if (nodes.is_empty()) {
     return {};
   }
-  std::sort(nodes.begin(), nodes.end(), [](const bNode *a, const bNode *b) {
-    return a->ui_order < b->ui_order;
-  });
+  std::ranges::sort(nodes,
+                    [](const bNode *a, const bNode *b) { return a->ui_order < b->ui_order; });
   return nodes;
 }
 
@@ -292,9 +291,8 @@ Array<bNode *> tree_draw_order_calc_nodes_reversed(bNodeTree &ntree)
   if (nodes.is_empty()) {
     return {};
   }
-  std::sort(nodes.begin(), nodes.end(), [](const bNode *a, const bNode *b) {
-    return a->ui_order > b->ui_order;
-  });
+  std::ranges::sort(nodes,
+                    [](const bNode *a, const bNode *b) { return a->ui_order > b->ui_order; });
   return nodes;
 }
 
@@ -2065,7 +2063,6 @@ static void node_draw_panels(bNodeTree &ntree, const bNode &node, ui::Block &blo
                                                0,
                                                0,
                                                "");
-      button_retval_set(panel_toggle_but, -1);
       button_func_tooltip_custom_set(
           panel_toggle_but,
           [](bContext &C, ui::TooltipData &tip, ui::Button *but, void *argN) {
@@ -2092,7 +2089,7 @@ static void node_draw_panels(bNodeTree &ntree, const bNode &node, ui::Block &blo
     ui::Button *label_but = uiDefBut(
         &block,
         ui::ButtonType::Label,
-        CTX_IFACE_(panel_translation_context, panel_decl.name),
+        CTX_IFACE_(panel_translation_context, panel_decl.name.ref()),
         offsetx,
         int(*panel_runtime.header_center_y - NODE_DYS),
         short(draw_bounds.xmax - draw_bounds.xmin - (left_padding * UI_SCALE_FAC)),
@@ -2422,11 +2419,9 @@ static std::string named_attribute_tooltip(bContext * /*C*/, void *argN, const S
   for (auto &&item : arg.usage_by_attribute.items()) {
     sorted_used_attribute.append({item.key, item.value});
   }
-  std::sort(sorted_used_attribute.begin(),
-            sorted_used_attribute.end(),
-            [](const NameWithUsage &a, const NameWithUsage &b) {
-              return BLI_strcasecmp_natural(a.name.c_str(), b.name.c_str()) < 0;
-            });
+  std::ranges::sort(sorted_used_attribute, [](const NameWithUsage &a, const NameWithUsage &b) {
+    return BLI_strcasecmp_natural(a.name.c_str(), b.name.c_str()) < 0;
+  });
 
   for (const NameWithUsage &attribute : sorted_used_attribute) {
     const StringRefNull name = attribute.name;
@@ -2883,12 +2878,10 @@ static ColorTheme4f node_header_color_get(const bNodeTree &ntree,
   return color_header;
 }
 
-static void node_header_custom_tooltip(const bNode &node, ui::Button &but)
+static void node_header_custom_tooltip(const bNodeTree &ntree, const bNode &node, ui::Button &but)
 {
-  button_func_tooltip_custom_set(
-      &but,
-      [](bContext & /*C*/, ui::TooltipData &data, ui::Button * /*but*/, void *argN) {
-        const bNode &node = *static_cast<const bNode *>(argN);
+  button_func_tooltip_custom_set_cpp(
+      but, [&node, &ntree](bContext & /*C*/, ui::TooltipData &data) {
         const std::string description = node.typeinfo->ui_description_fn ?
                                             TIP_(node.typeinfo->ui_description_fn(node)) :
                                             TIP_(node.typeinfo->ui_description);
@@ -2897,16 +2890,18 @@ static void node_header_custom_tooltip(const bNode &node, ui::Button &but)
               data, std::move(description), "", ui::TIP_STYLE_NORMAL, ui::TIP_LC_NORMAL);
         }
         if (U.flag & USER_TOOLTIPS_PYTHON) {
+          PointerRNA nodeptr = RNA_pointer_create_discrete(
+              const_cast<ID *>(&ntree.id), RNA_Node, const_cast<bNode *>(&node));
           tooltip_text_field_add(data,
-                                 fmt::format("Python: {}", node.idname),
+                                 fmt::format("Python: {}\n{}",
+                                             node.idname,
+                                             RNA_path_full_struct_py(&nodeptr).value_or("")),
                                  "",
                                  ui::TIP_STYLE_MONO,
-                                 ui::TIP_LC_PYTHON,
+                                 ui::TIP_LC_DIMMED,
                                  !description.empty());
         }
-      },
-      &const_cast<bNode &>(node),
-      nullptr);
+      });
 }
 
 static void node_draw_basis(const bContext &C,
@@ -3186,7 +3181,7 @@ static void node_draw_basis(const bContext &C,
                              0,
                              0,
                              std::nullopt);
-  node_header_custom_tooltip(node, *but);
+  node_header_custom_tooltip(ntree, node, *but);
 
   if (node.is_muted()) {
     button_flag_enable(but, ui::BUT_INACTIVE);
@@ -3382,7 +3377,7 @@ static void node_draw_collapsed(const bContext &C,
                              0,
                              0,
                              std::nullopt);
-  node_header_custom_tooltip(node, *but);
+  node_header_custom_tooltip(ntree, node, *but);
 
   /* Outline. */
   {
@@ -4314,7 +4309,7 @@ static void node_draw_zones_and_frames(const ARegion &region,
     BLI_assert_unreachable();
     return 0.0f;
   };
-  std::sort(draw_order.begin(), draw_order.end(), [&](const ZoneOrNode &a, const ZoneOrNode &b) {
+  std::ranges::sort(draw_order, [&](const ZoneOrNode &a, const ZoneOrNode &b) {
     /* Draw zones with smaller bounding box on top to make them visible. */
     return get_zone_or_node_width(a) > get_zone_or_node_width(b);
   });
@@ -4664,9 +4659,15 @@ static void draw_tree_path(const bContext &C, ARegion &region)
   GPU_matrix_pop_projection();
 }
 
-static void snode_setup_v2d(SpaceNode &snode, ARegion &region, const float2 &center)
+static void snode_setup_v2d(SpaceNode &snode,
+                            ARegion &region,
+                            const float2 &center,
+                            const float size_x)
 {
   View2D &v2d = region.v2d;
+  BLI_assert(!BLI_rctf_is_empty(&v2d.cur));
+  const float aspect = BLI_rctf_size_x(&v2d.cur) / BLI_rctf_size_y(&v2d.cur);
+  BLI_rctf_resize(&v2d.cur, size_x, size_x / aspect);
 
   /* Shift view to node tree center. */
   ui::view2d_center_set(&v2d, center[0], center[1]);
@@ -4782,6 +4783,7 @@ void node_draw_space(const bContext &C, ARegion &region)
   wmWindow *win = CTX_wm_window(&C);
   SpaceNode &snode = *CTX_wm_space_node(&C);
   View2D &v2d = region.v2d;
+  Scene &scene = *CTX_data_scene(&C);
 
   /* Setup off-screen buffers. */
   GPUViewport *viewport = WM_draw_region_get_viewport(&region);
@@ -4792,7 +4794,6 @@ void node_draw_space(const bContext &C, ARegion &region)
   ui::view2d_view_ortho(&v2d);
   draw_background_color();
   GPU_depth_test(GPU_DEPTH_NONE);
-  GPU_scissor_test(true);
 
   /* XXX `snode->runtime->cursor` set in coordinate-space for placing new nodes,
    * used for drawing noodles too. */
@@ -4830,20 +4831,47 @@ void node_draw_space(const bContext &C, ARegion &region)
     /* Current View2D center, will be set temporarily for parent node trees. */
     float2 center;
     ui::view2d_center_get(&v2d, &center.x, &center.y);
+    const float size_x = BLI_rctf_size_x(&v2d.cur);
 
     /* Store new view center in path and current edit tree. */
     copy_v2_v2(path->view_center, center);
+    path->view_width = size_x;
     if (snode.edittree) {
       copy_v2_v2(snode.edittree->view_center, center);
+      snode.edittree->view_width = size_x;
     }
 
     /* Top-level edit tree. */
     bNodeTree *ntree = path->nodetree;
     if (ntree) {
-      snode_setup_v2d(snode, region, center);
+      snode_setup_v2d(snode, region, center, size_x);
 
       /* Backdrop. */
       draw_nodespace_back_pix(C, region, snode, path->parent_key);
+
+      {
+        GPU_matrix_push_projection();
+        wmOrtho2_region_pixelspace(&region);
+
+        const bool show_render_region = ED_node_is_compositor(&snode) &&
+                                        snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS &&
+                                        snode.overlay.flag & SN_OVERLAY_SHOW_RENDER_REGION &&
+                                        snode.flag & SNODE_BACKDRAW;
+        if (show_render_region) {
+          int render_size_x, render_size_y;
+          BKE_render_resolution(&scene.r, true, &render_size_x, &render_size_y);
+          rcti render_region;
+          BLI_rcti_init(&render_region, 0, render_size_x, 0, render_size_y);
+
+          ED_region_render_region_draw(region.winx / 2 + snode.xof,
+                                       region.winy / 2 + snode.yof,
+                                       &render_region,
+                                       snode.zoom,
+                                       snode.zoom,
+                                       snode.overlay.passepartout_alpha);
+        }
+        GPU_matrix_pop_projection();
+      }
 
       {
         float original_proj[4][4];

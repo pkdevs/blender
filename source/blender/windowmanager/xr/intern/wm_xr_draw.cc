@@ -20,6 +20,9 @@
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 
+#include "BKE_context.hh"
+#include "BKE_scene.hh"
+
 #include "ED_view3d_offscreen.hh"
 
 #include "GHOST_Xr-api.hh"
@@ -101,7 +104,9 @@ static void wm_xr_draw_matrices_create(const wmXrDrawData *draw_data,
 
   /* Apply base pose and navigation. */
   wm_xr_pose_scale_to_imat(&draw_data->base_pose, draw_data->base_scale, base_inv);
-  wm_xr_pose_scale_to_imat(&session_state->nav_pose_prev, session_state->nav_scale_prev, nav_inv);
+  wm_xr_pose_scale_to_imat(&session_state->nav_pose_last_actions_sync,
+                           session_state->viewer_scale_last_actions_sync,
+                           nav_inv);
   mul_m4_m4m4(m, eye_inv, base_inv);
   mul_m4_m4m4(r_viewmat, m, nav_inv);
 
@@ -123,7 +128,7 @@ static void wm_xr_draw_viewport_buffers_to_active_framebuffer(
       BLI_findlink(&surface_data->viewports, draw_view->view_idx));
   BLI_assert(vp && vp->viewport);
 
-  const bool is_upside_down = GHOST_XrSessionNeedsUpsideDownDrawing(runtime_data->context);
+  const bool is_upside_down = GHOST_XrSessionNeedsUpsideDownDrawing(runtime_data->ghost_context);
   rcti rect{};
   rect.xmin = 0;
   rect.ymin = 0;
@@ -170,10 +175,19 @@ void wm_xr_draw_view(const GHOST_XrDrawViewInfo *draw_view, void *customdata)
   /* Some systems have drawing glitches without this. */
   GPU_clear_depth(1.0f);
 
+  /* XR context is ensured before each draw in #wm_xr_session_surface_draw. */
+  bContext *xr_context = WM_xr_session_context_get(xr_data);
+  Scene *scene = CTX_data_scene(xr_context);
+
+  /* The XR context depsgraph is separately evaluated outside of drawing within the XR surface
+   * #do_depsgraph callback. Thus, obtain the depsgraph directly without evaluating it. */
+  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(xr_context);
+
   /* Draws the view into the surface_data->viewport's frame-buffers. */
-  ED_view3d_draw_offscreen_simple(draw_data->depsgraph,
-                                  draw_data->scene,
+  ED_view3d_draw_offscreen_simple(depsgraph,
+                                  scene,
                                   &settings->shading,
+                                  xr_context,
                                   eDrawType(settings->shading.type),
                                   settings->object_type_exclude_viewport,
                                   settings->object_type_exclude_select,
@@ -184,7 +198,7 @@ void wm_xr_draw_view(const GHOST_XrDrawViewInfo *draw_view, void *customdata)
                                   winmat,
                                   settings->clip_start,
                                   settings->clip_end,
-                                  session_state->vignette_data->aperture,
+                                  session_state->vignette_aperture,
                                   true,
                                   false,
                                   true,
@@ -422,7 +436,7 @@ void wm_xr_draw_controllers(const bContext * /*C*/, ARegion * /*region*/, void *
 {
   wmXrData *xr = static_cast<wmXrData *>(customdata);
   const XrSessionSettings *settings = &xr->session_settings;
-  GHOST_IXrContext *xr_context = xr->runtime->context;
+  GHOST_IXrContext *xr_context = xr->runtime->ghost_context;
   wmXrSessionState *state = &xr->runtime->session_state;
 
   wm_xr_controller_model_draw(settings, xr_context, state);

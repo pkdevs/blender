@@ -35,6 +35,13 @@ const EnumPropertyItem rna_enum_mesh_delimit_mode_items[] = {
 };
 
 const EnumPropertyItem rna_enum_mesh_walk_delimit_edge_loop_items[] = {
+    {BMW_DELIMIT_EDGE_MARK_SEAM, "SEAM", 0, "Seam", "Delimit edge loop selection at seams"},
+    {BMW_DELIMIT_EDGE_MARK_SHARP,
+     "SHARP",
+     0,
+     "Sharp",
+     "Delimit edge loop selection at sharp edges"},
+    {BMW_DELIMIT_EDGE_LOOP_NGONS, "NGONS", 0, "N-gons", "Stop boundary selection at n-gons"},
     {BMW_DELIMIT_EDGE_LOOP_INNER_CORNERS,
      "INNER_CORNERS",
      0,
@@ -46,7 +53,6 @@ const EnumPropertyItem rna_enum_mesh_walk_delimit_edge_loop_items[] = {
      "Outer Corners",
      "Stop boundary selection at vertices with two edges when they share a face that is not an "
      "n-gon"},
-    {BMW_DELIMIT_EDGE_LOOP_NGONS, "NGONS", 0, "N-gons", "Stop boundary selection at n-gons"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -1002,11 +1008,6 @@ static PointerRNA rna_MeshUVLoopLayer_pin_ensure(PointerRNA ptr)
   return bool_layer_ensure(&ptr, BKE_uv_map_pin_name_get);
 }
 
-static void rna_MeshUVLoopLayer_uv_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
-{
-  rna_Attribute_data_begin(iter, ptr);
-}
-
 static bool rna_MeshUVLoopLayer_active_render_get(PointerRNA *ptr)
 {
   return rna_Attribute_name_get(*ptr) == rna_mesh(ptr)->default_uv_map_name();
@@ -1053,6 +1054,29 @@ static void rna_MeshUVLoopLayer_clone_set(PointerRNA *ptr, bool value)
   }
   mesh->clone_uv_map_attribute = BLI_strdupn(name.c_str(), name.size());
   BKE_mesh_tessface_clear(mesh);
+}
+
+bool rna_MeshUVLoopLayer_data_lookup_int(PointerRNA *ptr, int index, PointerRNA *r_ptr)
+{
+  CollectionPropertyIterator iter;
+  rna_Attribute_data_begin(&iter, ptr);
+  if (!iter.valid) {
+    *r_ptr = PointerRNA_NULL;
+    return false;
+  }
+
+  ArrayIterator *internal = &iter.internal.array;
+  if (index < 0 || index >= internal->length) {
+    *r_ptr = PointerRNA_NULL;
+    return false;
+  }
+
+  internal->ptr += internal->itemsize * index;
+
+  *r_ptr = RNA_pointer_create_with_parent(
+      iter.parent, RNA_MeshUVLoop, rna_iterator_array_get(&iter));
+  rna_iterator_array_end(&iter);
+  return true;
 }
 
 static void rna_Mesh_vertex_colors_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
@@ -1366,8 +1390,7 @@ static bool rna_MeshEdge_is_loose_get(PointerRNA *ptr)
 {
   const Mesh *mesh = rna_mesh(ptr);
   const int index = rna_MeshEdge_index_get(ptr);
-  const bke::LooseEdgeCache &loose_edges = mesh->loose_edges();
-  return loose_edges.count > 0 && loose_edges.is_loose_bits[index];
+  return mesh->loose_edges().contains(index);
 }
 
 static int rna_MeshLoopTriangle_material_index_get(PointerRNA *ptr)
@@ -2330,7 +2353,7 @@ static void rna_def_mloopuv(BlenderRNA *brna)
                                     "rna_iterator_array_end",
                                     "rna_iterator_array_get",
                                     "rna_Attribute_data_length",
-                                    nullptr,
+                                    "rna_MeshUVLoopLayer_data_lookup_int",
                                     nullptr,
                                     nullptr);
 
@@ -2368,12 +2391,12 @@ static void rna_def_mloopuv(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "UV", "UV coordinates on face corners");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_IGNORE);
   RNA_def_property_collection_funcs(prop,
-                                    "rna_MeshUVLoopLayer_uv_begin",
+                                    "rna_Attribute_data_begin",
                                     "rna_iterator_array_next",
                                     "rna_iterator_array_end",
                                     "rna_iterator_array_get",
                                     "rna_Attribute_data_length",
-                                    nullptr,
+                                    "rna_Attribute_data_lookup_int",
                                     nullptr,
                                     nullptr);
 
@@ -2388,7 +2411,7 @@ static void rna_def_mloopuv(BlenderRNA *brna)
                                     "rna_iterator_array_end",
                                     "rna_iterator_array_get",
                                     "rna_MeshUVLoopLayer_pin_length",
-                                    nullptr,
+                                    "rna_Attribute_data_lookup_int",
                                     nullptr,
                                     nullptr);
 

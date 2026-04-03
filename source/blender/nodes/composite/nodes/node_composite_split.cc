@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_numbers.hh"
+#include <numbers>
 
 #include "GPU_shader.hh"
 
@@ -15,22 +15,22 @@ namespace blender::nodes::node_composite_split_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Position")
+  b.add_input<decl::Vector>("Position"_ustr)
       .dimensions(2)
       .subtype(PROP_FACTOR)
       .default_value({0.5f, 0.5f})
       .min(0.0f)
       .max(1.0f)
       .description("Line position where the image should be split");
-  b.add_input<decl::Float>("Rotation")
-      .default_value(math::numbers::pi_v<float> / 4.0f)
+  b.add_input<decl::Float>("Rotation"_ustr)
+      .default_value(std::numbers::pi_v<float> / 4.0f)
       .subtype(PROP_ANGLE)
       .description("Line angle where the image should be split");
 
-  b.add_input<decl::Color>("Image").structure_type(StructureType::Dynamic);
-  b.add_input<decl::Color>("Image", "Image_001").structure_type(StructureType::Dynamic);
+  b.add_input<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
+  b.add_input<decl::Color>("Image"_ustr, "Image_001"_ustr).structure_type(StructureType::Dynamic);
 
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
 }
 
 using namespace blender::compositor;

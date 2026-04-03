@@ -277,9 +277,8 @@ static Vector<bNodeSocket *> get_available_sorted_inputs(const bNodeTree *ntree,
     }
   }
 
-  std::sort(inputs.begin(), inputs.end(), [](const bNodeSocket *a, const bNodeSocket *b) {
-    return a->type > b->type;
-  });
+  std::ranges::sort(inputs,
+                    [](const bNodeSocket *a, const bNodeSocket *b) { return a->type > b->type; });
 
   return inputs;
 }
@@ -338,7 +337,7 @@ static void sort_multi_input_socket_links_with_drag(bNodeSocket &socket,
 
   links.append({&drag_link, cursor});
 
-  std::sort(links.begin(), links.end(), [](const LinkAndPosition a, const LinkAndPosition b) {
+  std::ranges::sort(links, [](const LinkAndPosition a, const LinkAndPosition b) {
     return a.multi_socket_position.y < b.multi_socket_position.y;
   });
 
@@ -354,7 +353,7 @@ void update_multi_input_indices_for_removed_links(bNode &node)
       continue;
     }
     Vector<bNodeLink *, 8> links = socket->directly_linked_links();
-    std::sort(links.begin(), links.end(), [](const bNodeLink *a, const bNodeLink *b) {
+    std::ranges::sort(links, [](const bNodeLink *a, const bNodeLink *b) {
       return a->multi_input_sort_id < b->multi_input_sort_id;
     });
 
@@ -373,7 +372,7 @@ static void snode_autoconnect(bContext &C,
   Vector<bNode *> sorted_nodes = get_selected_nodes(*ntree).extract_vector();
 
   /* Sort nodes left to right. */
-  std::sort(sorted_nodes.begin(), sorted_nodes.end(), [](const bNode *a, const bNode *b) {
+  std::ranges::sort(sorted_nodes, [](const bNode *a, const bNode *b) {
     return a->location[0] < b->location[0];
   });
 
@@ -2122,10 +2121,10 @@ static void node_join_attach_recursive(bNodeTree &ntree,
   }
 }
 
-static Vector<const bNode *> get_sorted_node_parents(const bNode &node)
+static Vector<bNode *> get_sorted_node_parents(const bNode &node)
 {
-  Vector<const bNode *> parents;
-  for (const bNode *parent = node.parent; parent; parent = parent->parent) {
+  Vector<bNode *> parents;
+  for (bNode *parent = node.parent; parent; parent = parent->parent) {
     parents.append(parent);
   }
   /* Reverse so that the root frame is the first element (if there is any). */
@@ -2133,15 +2132,15 @@ static Vector<const bNode *> get_sorted_node_parents(const bNode &node)
   return parents;
 }
 
-static const bNode *find_common_parent_node(const Span<const bNode *> nodes)
+bNode *find_common_parent_node(const Span<bNode *> nodes)
 {
   if (nodes.is_empty()) {
     return nullptr;
   }
   /* The common parent node also has to be a parent of the first node. */
-  Vector<const bNode *> candidates = get_sorted_node_parents(*nodes[0]);
+  Vector<bNode *> candidates = get_sorted_node_parents(*nodes[0]);
   for (const bNode *node : nodes.drop_front(1)) {
-    const Vector<const bNode *> parents = get_sorted_node_parents(*node);
+    const Vector<bNode *> parents = get_sorted_node_parents(*node);
     /* Possibly shrink set of candidates so that it only contains the parents common with the
      * current node. */
     candidates.resize(std::min(candidates.size(), parents.size()));
@@ -2171,7 +2170,7 @@ static wmOperatorStatus node_join_in_frame_exec(bContext *C, wmOperator * /*op*/
 
   bNode *frame_node = add_static_node(*C, NODE_FRAME, snode.runtime->cursor);
   bke::node_set_active(ntree, *frame_node);
-  frame_node->parent = const_cast<bNode *>(find_common_parent_node(selected_nodes.as_span()));
+  frame_node->parent = find_common_parent_node(selected_nodes.as_span());
 
   ntree.ensure_topology_cache();
 
@@ -2802,6 +2801,7 @@ static int get_main_socket_priority(const bNodeSocket *socket)
       return 5;
     case SOCK_RGBA:
       return 6;
+    case SOCK_INT_VECTOR:
     case SOCK_STRING:
     case SOCK_SHADER:
     case SOCK_OBJECT:

@@ -2636,7 +2636,7 @@ void DepsgraphRelationBuilder::build_object_data_geometry(Object *object)
     add_relation(geom_init_key, obdata_ubereval_key, "Object Geometry UberEval");
   }
   if (object->type == OB_MBALL) {
-    Object *mom = BKE_mball_basis_find(scene_, object);
+    Object *mom = BKE_mball_basis_find(*bmain_, scene_, object);
     ComponentKey mom_geom_key(&mom->id, NodeType::GEOMETRY);
     /* motherball - mom depends on children! */
     if (mom == object) {
@@ -2914,7 +2914,7 @@ void DepsgraphRelationBuilder::build_camera(Camera *camera)
     ComponentKey camera_parameters_key(&camera->id, NodeType::PARAMETERS);
     ComponentKey dof_ob_key(&camera->dof.focus_object->id, NodeType::TRANSFORM);
     add_relation(dof_ob_key, camera_parameters_key, "Camera DOF");
-    if (camera->dof.focus_subtarget[0]) {
+    if (camera->dof.focus_object->type == OB_ARMATURE && camera->dof.focus_subtarget[0]) {
       OperationKey target_key(&camera->dof.focus_object->id,
                               NodeType::BONE,
                               camera->dof.focus_subtarget,
@@ -3117,7 +3117,7 @@ void DepsgraphRelationBuilder::build_nodetree(bNodeTree *ntree)
     }
     else if (id_type == ID_VF) {
       build_vfont(id_cast<VFont *>(id));
-      ComponentKey vfont_key(id, NodeType::GENERIC_DATABLOCK);
+      ComponentKey vfont_key(id, NodeType::PARAMETERS);
       add_relation(vfont_key, ntree_output_key, "VFont -> Node");
     }
     else if (id_type == ID_GR) {
@@ -3467,6 +3467,15 @@ static bool strip_build_prop_cb(Strip *strip, void *user_data)
     ViewLayer *sequence_view_layer = BKE_view_layer_default_render(strip->scene);
     cd->builder->build_scene_speakers(strip->scene, sequence_view_layer);
   }
+  if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
+    const CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);
+    if (comp_data->node_group) {
+      cd->builder->build_nodetree(comp_data->node_group);
+      OperationKey node_tree_key(
+          &comp_data->node_group->id, NodeType::NTREE_OUTPUT, OperationCode::NTREE_OUTPUT);
+      cd->builder->add_relation(node_tree_key, cd->sequencer_key, "Effect's Node Group");
+    }
+  }
   for (StripModifierData &modifier : strip->modifiers) {
     if (modifier.type != eSeqModifierType_Compositor) {
       continue;
@@ -3526,7 +3535,7 @@ void DepsgraphRelationBuilder::build_scene_audio(Scene *scene)
 
 void DepsgraphRelationBuilder::build_scene_speakers(Scene *scene, ViewLayer *view_layer)
 {
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain_, scene, view_layer);
   for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
     Object *object = base.object;
     if (object->type != OB_SPEAKER || !need_pull_base_into_graph(&base)) {

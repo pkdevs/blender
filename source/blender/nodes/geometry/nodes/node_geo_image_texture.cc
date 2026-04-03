@@ -22,13 +22,13 @@ NODE_STORAGE_FUNCS(NodeGeometryImageTexture)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Image>("Image").optional_label();
-  b.add_input<decl::Vector>("Vector")
+  b.add_input<decl::Image>("Image"_ustr).optional_label();
+  b.add_input<decl::Vector>("Vector"_ustr)
       .implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD)
       .description("Texture coordinates from 0 to 1");
-  b.add_input<decl::Int>("Frame").min(0).max(MAXFRAMEF);
-  b.add_output<decl::Color>("Color").no_muted_links().dependent_field().reference_pass_all();
-  b.add_output<decl::Float>("Alpha").no_muted_links().dependent_field().reference_pass_all();
+  b.add_input<decl::Int>("Frame"_ustr).min(0).max(MAXFRAMEF);
+  b.add_output<decl::Color>("Color"_ustr).no_muted_links().dependent_field().reference_pass_all();
+  b.add_output<decl::Float>("Alpha"_ustr).no_muted_links().dependent_field().reference_pass_all();
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -383,7 +383,7 @@ class ImageFieldsFunction : public mf::MultiFunction {
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  Image *image = params.extract_input<Image *>("Image");
+  Image *image = params.extract_input<Image *>("Image"_ustr);
   if (image == nullptr) {
     params.set_default_remaining_outputs();
     return;
@@ -396,7 +396,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   image_user.cycl = false;
   image_user.frames = INT_MAX;
   image_user.sfra = 1;
-  image_user.framenr = BKE_image_is_animated(image) ? params.extract_input<int>("Frame") : 0;
+  image_user.framenr = BKE_image_is_animated(image) ? params.extract_input<int>("Frame"_ustr) : 0;
 
   std::unique_ptr<ImageFieldsFunction> image_fn;
   try {
@@ -408,7 +408,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
 
-  auto sample_uv = params.extract_input<bke::SocketValueVariant>("Vector");
+  auto sample_uv = params.extract_input<bke::SocketValueVariant>("Vector"_ustr);
 
   std::string error_message;
   bke::SocketValueVariant color;
@@ -421,8 +421,8 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
 
-  params.set_output("Color", std::move(color));
-  params.set_output("Alpha", std::move(alpha));
+  params.set_output("Color"_ustr, std::move(color));
+  params.set_output("Alpha"_ustr, std::move(alpha));
 }
 
 static void node_register()

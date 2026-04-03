@@ -111,11 +111,8 @@ static void curves_blend_write(BlendWriter *writer, ID *id, const void *id_addre
   curves->attributes_active_index_legacy = curves->geometry.attributes_active_index;
 
   ResourceScope scope;
-  bke::CurvesGeometry::BlendWriteData write_data(scope);
-  curves->geometry.wrap().blend_write_prepare(write_data);
-
-  BLO_write_shared_tag(writer, curves->geometry.curve_offsets);
-  BLO_write_shared_tag(writer, curves->geometry.custom_knots);
+  bke::CurvesGeometry::BlendWriteData write_data(writer, scope);
+  curves->geometry.wrap().blend_write_prepare(write_data, !BLO_write_is_undo(writer));
 
   /* Write LibData */
   writer->write_id_struct(id_address, curves);
@@ -124,9 +121,9 @@ static void curves_blend_write(BlendWriter *writer, ID *id, const void *id_addre
   /* Direct data */
   curves->geometry.wrap().blend_write(*writer, curves->id, write_data);
 
-  BLO_write_string(writer, curves->surface_uv_map);
+  writer->write_string(curves->surface_uv_map);
 
-  BLO_write_pointer_array(writer, curves->totcol, curves->mat);
+  writer->write_pointer_array(curves->totcol, curves->mat);
 }
 
 static void curves_blend_read_data(BlendDataReader *reader, ID *id)
@@ -143,34 +140,34 @@ static void curves_blend_read_data(BlendDataReader *reader, ID *id)
 }
 
 IDTypeInfo IDType_ID_CV = {
-    /*id_code*/ Curves::id_type,
-    /*id_filter*/ FILTER_ID_CV,
-    /*dependencies_id_types*/ FILTER_ID_MA | FILTER_ID_OB,
-    /*main_listbase_index*/ INDEX_ID_CV,
-    /*struct_size*/ sizeof(Curves),
-    /*name*/ "Curves",
-    /*name_plural*/ N_("hair_curves"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_CURVES,
-    /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /*asset_type_info*/ nullptr,
+    .id_code = Curves::id_type,
+    .id_filter = FILTER_ID_CV,
+    .dependencies_id_types = FILTER_ID_MA | FILTER_ID_OB,
+    .main_listbase_index = INDEX_ID_CV,
+    .struct_size = sizeof(Curves),
+    .name = "Curves",
+    .name_plural = N_("hair_curves"),
+    .translation_context = BLT_I18NCONTEXT_ID_CURVES,
+    .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ curves_init_data,
-    /*copy_data*/ curves_copy_data,
-    /*free_data*/ curves_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ curves_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ curves_foreach_working_space_color,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = curves_init_data,
+    .copy_data = curves_copy_data,
+    .free_data = curves_free_data,
+    .make_local = nullptr,
+    .foreach_id = curves_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = curves_foreach_working_space_color,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ curves_blend_write,
-    /*blend_read_data*/ curves_blend_read_data,
-    /*blend_read_after_liblink*/ nullptr,
+    .blend_write = curves_blend_write,
+    .blend_read_data = curves_blend_read_data,
+    .blend_read_after_liblink = nullptr,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 Curves *BKE_curves_add(Main *bmain, const char *name)
@@ -386,7 +383,7 @@ void curves_normals_point_domain_calc(const CurvesGeometry &curves, MutableSpan<
 {
   const bke::CurvesFieldContext context(curves, AttrDomain::Point);
   fn::FieldEvaluator evaluator(context, curves.points_num());
-  fn::Field<float3> field(std::make_shared<bke::NormalFieldInput>());
+  fn::Field<float3> field = fn::Field<float3>::from_input<bke::NormalFieldInput>();
   evaluator.add_with_destination(std::move(field), normals);
   evaluator.evaluate();
 }

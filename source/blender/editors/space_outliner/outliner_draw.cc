@@ -211,7 +211,7 @@ static void restrictbutton_bone_select_fn(bContext *C, void *poin, void *poin2)
   }
 
   DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
-  WM_event_add_notifier(C, NC_OBJECT | ND_POSE, nullptr);
+  WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, nullptr);
 }
 
 static void restrictbutton_ebone_select_fn(bContext *C, void *poin, void *poin2)
@@ -228,7 +228,7 @@ static void restrictbutton_ebone_select_fn(bContext *C, void *poin, void *poin2)
         arm, ebone, BONE_UNSELECTABLE, (ebone->flag & BONE_UNSELECTABLE) != 0);
   }
 
-  WM_event_add_notifier(C, NC_OBJECT | ND_POSE, nullptr);
+  WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, nullptr);
 }
 
 static void restrictbutton_ebone_visibility_fn(bContext *C, void *poin, void *poin2)
@@ -243,7 +243,7 @@ static void restrictbutton_ebone_visibility_fn(bContext *C, void *poin, void *po
     restrictbutton_recursive_ebone(arm, ebone, BONE_HIDDEN_A, (ebone->flag & BONE_HIDDEN_A) != 0);
   }
 
-  WM_event_add_notifier(C, NC_OBJECT | ND_POSE, nullptr);
+  WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, nullptr);
 }
 
 static void restrictbutton_gp_layer_flag_fn(bContext *C, void *poin, void * /*poin2*/)
@@ -304,7 +304,7 @@ static void outliner_object_set_flag_recursive_fn(bContext *C,
         DEG_id_tag_update(&ob_iter->id, ID_RECALC_SYNC_TO_EVAL);
       }
       else {
-        BKE_view_layer_synced_ensure(scene, view_layer);
+        BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
         Base *base_iter = BKE_view_layer_base_find(view_layer, ob_iter);
         /* Child can be in a collection excluded from view-layer. */
         if (base_iter == nullptr) {
@@ -364,14 +364,18 @@ static void outliner_layer_or_collection_pointer_create(Scene *scene,
 }
 
 /** Create either a RNA_ObjectBase or a RNA_Object pointer. */
-static void outliner_base_or_object_pointer_create(
-    Scene *scene, ViewLayer *view_layer, Collection *collection, Object *ob, PointerRNA *ptr)
+static void outliner_base_or_object_pointer_create(const Main &bmain,
+                                                   Scene *scene,
+                                                   ViewLayer *view_layer,
+                                                   Collection *collection,
+                                                   Object *ob,
+                                                   PointerRNA *ptr)
 {
   if (collection) {
     *ptr = RNA_id_pointer_create(&ob->id);
   }
   else {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(bmain, scene, view_layer);
     Base *base = BKE_view_layer_base_find(view_layer, ob);
     *ptr = RNA_pointer_create_discrete(&scene->id, RNA_ObjectBase, base);
   }
@@ -379,7 +383,8 @@ static void outliner_base_or_object_pointer_create(
 
 /* NOTE: Collection is only valid when we want to change the collection data, otherwise we get it
  * from layer collection. Layer collection is valid whenever we are looking at a view layer. */
-static void outliner_collection_set_flag_recursive(Scene *scene,
+static void outliner_collection_set_flag_recursive(const Main &bmain,
+                                                   Scene *scene,
                                                    ViewLayer *view_layer,
                                                    LayerCollection *layer_collection,
                                                    Collection *collection,
@@ -405,7 +410,7 @@ static void outliner_collection_set_flag_recursive(Scene *scene,
      * otherwise we would not take collection exclusion into account. */
     for (CollectionObject &cob : layer_collection->collection->gobject) {
 
-      outliner_base_or_object_pointer_create(scene, view_layer, collection, cob.ob, &ptr);
+      outliner_base_or_object_pointer_create(bmain, scene, view_layer, collection, cob.ob, &ptr);
       if (!RNA_property_editable(&ptr, base_or_object_prop)) {
         continue;
       }
@@ -421,7 +426,8 @@ static void outliner_collection_set_flag_recursive(Scene *scene,
   /* Keep going recursively. */
   if (layer_collection) {
     for (LayerCollection &layer_collection_iter : layer_collection->layer_collections) {
-      outliner_collection_set_flag_recursive(scene,
+      outliner_collection_set_flag_recursive(bmain,
+                                             scene,
                                              view_layer,
                                              &layer_collection_iter,
                                              collection ? layer_collection_iter.collection :
@@ -433,7 +439,8 @@ static void outliner_collection_set_flag_recursive(Scene *scene,
   }
   else {
     for (CollectionChild &child : collection->children) {
-      outliner_collection_set_flag_recursive(scene,
+      outliner_collection_set_flag_recursive(bmain,
+                                             scene,
                                              view_layer,
                                              nullptr,
                                              child.collection,
@@ -539,7 +546,8 @@ static bool outliner_collection_is_isolated(Scene *scene,
   return true;
 }
 
-void outliner_collection_isolate_flag(Scene *scene,
+void outliner_collection_isolate_flag(const Main &bmain,
+                                      Scene *scene,
                                       ViewLayer *view_layer,
                                       LayerCollection *layer_collection,
                                       Collection *collection,
@@ -568,7 +576,8 @@ void outliner_collection_isolate_flag(Scene *scene,
   if (was_isolated) {
     const bool default_value = RNA_property_boolean_get_default(nullptr, layer_or_collection_prop);
     /* Make every collection go back to its default "visibility" state. */
-    outliner_collection_set_flag_recursive(scene,
+    outliner_collection_set_flag_recursive(bmain,
+                                           scene,
                                            view_layer,
                                            top_layer_collection,
                                            top_collection,
@@ -579,7 +588,8 @@ void outliner_collection_isolate_flag(Scene *scene,
   }
 
   /* Make every collection "invisible". */
-  outliner_collection_set_flag_recursive(scene,
+  outliner_collection_set_flag_recursive(bmain,
+                                         scene,
                                          view_layer,
                                          top_layer_collection,
                                          top_collection,
@@ -588,7 +598,8 @@ void outliner_collection_isolate_flag(Scene *scene,
                                          is_hide);
 
   /* Make this collection and its children collections the only "visible". */
-  outliner_collection_set_flag_recursive(scene,
+  outliner_collection_set_flag_recursive(bmain,
+                                         scene,
                                          view_layer,
                                          layer_collection,
                                          collection,
@@ -670,7 +681,8 @@ static void outliner_collection_set_flag_recursive_fn(bContext *C,
   }
 
   if (extend) {
-    outliner_collection_set_flag_recursive(scene,
+    outliner_collection_set_flag_recursive(*bmain,
+                                           scene,
                                            view_layer,
                                            layer_collection,
                                            collection,
@@ -679,7 +691,8 @@ static void outliner_collection_set_flag_recursive_fn(bContext *C,
                                            value);
   }
   else {
-    outliner_collection_isolate_flag(scene,
+    outliner_collection_isolate_flag(*bmain,
+                                     scene,
                                      view_layer,
                                      layer_collection,
                                      collection,
@@ -847,7 +860,8 @@ static void namebutton_fn(bContext *C, void *tsep, char *oldname)
             STRNCPY_UTF8(ebone->name, oldname);
             ED_armature_bone_rename(bmain, arm, oldname, newname);
             WM_msg_publish_rna_prop(mbus, &arm->id, ebone, EditBone, name);
-            WM_event_add_notifier(C, NC_OBJECT | ND_POSE, nullptr);
+            WM_event_add_notifier(C, NC_OBJECT | ND_ARMATURE_STRUCTURE, arm);
+            WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, arm);
             DEG_id_tag_update(tselem->id, ID_RECALC_SYNC_TO_EVAL);
             undo_str = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Edit Bone");
           }
@@ -870,7 +884,8 @@ static void namebutton_fn(bContext *C, void *tsep, char *oldname)
           STRNCPY_UTF8(bone->name, oldname);
           ED_armature_bone_rename(bmain, arm, oldname, newname);
           WM_msg_publish_rna_prop(mbus, &arm->id, bone, Bone, name);
-          WM_event_add_notifier(C, NC_OBJECT | ND_POSE, nullptr);
+          WM_event_add_notifier(C, NC_OBJECT | ND_ARMATURE_STRUCTURE, arm);
+          WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, arm);
           DEG_id_tag_update(tselem->id, ID_RECALC_SYNC_TO_EVAL);
           undo_str = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Bone");
           break;
@@ -894,7 +909,8 @@ static void namebutton_fn(bContext *C, void *tsep, char *oldname)
           STRNCPY_UTF8(pchan->name, oldname);
           ED_armature_bone_rename(bmain, id_cast<bArmature *>(ob->data), oldname, newname);
           WM_msg_publish_rna_prop(mbus, &arm->id, pchan->bone, Bone, name);
-          WM_event_add_notifier(C, NC_OBJECT | ND_POSE, nullptr);
+          WM_event_add_notifier(C, NC_OBJECT | ND_ARMATURE_STRUCTURE, arm);
+          WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, arm);
           DEG_id_tag_update(tselem->id, ID_RECALC_SYNC_TO_EVAL);
           DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
           undo_str = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Pose Bone");
@@ -1138,6 +1154,7 @@ static bool outliner_restrict_properties_collection_set(Scene *scene,
 }
 
 static void outliner_draw_restrictbuts(ui::Block *block,
+                                       const Main &bmain,
                                        Scene *scene,
                                        ViewLayer *view_layer,
                                        ARegion *region,
@@ -1255,7 +1272,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
         PointerRNA ptr = RNA_id_pointer_create(&ob->id);
 
         if (space_outliner->show_restrict_flags & SO_RESTRICT_HIDE) {
-          BKE_view_layer_synced_ensure(scene, view_layer);
+          BKE_view_layer_synced_ensure(bmain, scene, view_layer);
           Base *base = (te.directdata) ? static_cast<Base *>(te.directdata) :
                                          BKE_view_layer_base_find(view_layer, ob);
           if (base) {
@@ -1814,7 +1831,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
 
     if (TSELEM_OPEN(tselem, space_outliner)) {
       outliner_draw_restrictbuts(
-          block, scene, view_layer, region, space_outliner, &te.subtree, props_active);
+          block, bmain, scene, view_layer, region, space_outliner, &te.subtree, props_active);
     }
   }
 }
@@ -1887,7 +1904,6 @@ static void outliner_draw_userbuts(ui::Block *block,
                             0,
                             0,
                             tip);
-      button_retval_set(bt, 1);
 
       if (is_linked) {
         button_flag_enable(bt, ui::BUT_DISABLED);
@@ -2210,7 +2226,7 @@ static void outliner_buttons(const bContext *C,
                 "");
   button_retval_set(bt, OL_NAMEBUTTON);
   /* Handle undo through the #template_id_cb set below. Default undo handling from the button
-   * code (see #ui_apply_but_undo) would not work here, as the new name is not yet applied to the
+   * code (see #apply_but_undo) would not work here, as the new name is not yet applied to the
    * ID. */
   button_flag_disable(bt, ui::BUT_UNDO);
   button_func_rename_set(bt, namebutton_fn, tselem);
@@ -2813,6 +2829,7 @@ TreeElementIcon tree_element_get_icon(TreeStoreElem *tselem, TreeElement *te)
           case STRIP_TYPE_CROSS:
           case STRIP_TYPE_GAMCROSS:
           case STRIP_TYPE_WIPE:
+          case STRIP_TYPE_COMPOSITOR:
             data.icon = ICON_ARROW_LEFTRIGHT;
             break;
           case STRIP_TYPE_META:
@@ -3265,7 +3282,7 @@ static bool element_should_draw_faded(const TreeViewContext &tvc,
       case ID_OB: {
         const Object *ob = id_cast<const Object *>(tselem->id);
         /* Lookup in view layer is logically const as it only checks a cache. */
-        BKE_view_layer_synced_ensure(tvc.scene, tvc.view_layer);
+        BKE_view_layer_synced_ensure(*tvc.bmain, tvc.scene, tvc.view_layer);
         const Base *base = (te->directdata) ?
                                static_cast<const Base *>(te->directdata) :
                                BKE_view_layer_base_find(static_cast<ViewLayer *>(tvc.view_layer),
@@ -3350,7 +3367,7 @@ static void outliner_draw_tree_element(ui::Block *block,
     if (tselem->type == TSE_SOME_ID) {
       if (te->idcode == ID_OB) {
         Object *ob = id_cast<Object *>(tselem->id);
-        BKE_view_layer_synced_ensure(tvc.scene, tvc.view_layer);
+        BKE_view_layer_synced_ensure(*tvc.bmain, tvc.scene, tvc.view_layer);
         Base *base = (te->directdata) ? static_cast<Base *>(te->directdata) :
                                         BKE_view_layer_base_find(tvc.view_layer, ob);
         const bool is_selected = (base != nullptr) && ((base->flag & BASE_SELECTED) != 0);
@@ -3460,6 +3477,12 @@ static void outliner_draw_tree_element(ui::Block *block,
 
       if (tselem->type == TSE_LAYER_COLLECTION) {
         const Collection *collection = id_cast<Collection *>(tselem->id);
+        if (collection->importer) {
+          ui::icon_draw_alpha(
+              float(startx) + offsx + 2 * ufac, float(*starty) + 2 * ufac, ICON_IMPORT, alpha_fac);
+          offsx += UI_UNIT_X + 4 * ufac;
+        }
+
         if (!BLI_listbase_is_empty(&collection->exporters)) {
           ui::icon_draw_alpha(
               float(startx) + offsx + 2 * ufac, float(*starty) + 2 * ufac, ICON_EXPORT, alpha_fac);
@@ -3586,11 +3609,11 @@ static void outliner_draw_hierarchy_lines_recursive(uint pos,
 
   /* Draw vertical lines between collections */
   bool draw_hierarchy_line;
-  bool is_object_line;
+  bool use_dashed_line;
   for (TreeElement &te : *lb) {
     TreeStoreElem *tselem = TREESTORE(&te);
     draw_hierarchy_line = false;
-    is_object_line = false;
+    use_dashed_line = false;
     *starty -= UI_UNIT_Y;
     short color_tag = COLLECTION_COLOR_NONE;
 
@@ -3607,7 +3630,7 @@ static void outliner_draw_hierarchy_lines_recursive(uint pos,
       else if ((tselem->type == TSE_SOME_ID) && (te.idcode == ID_OB)) {
         if (subtree_contains_object(&te.subtree)) {
           draw_hierarchy_line = true;
-          is_object_line = true;
+          use_dashed_line = true;
           y = *starty;
         }
       }
@@ -3618,6 +3641,11 @@ static void outliner_draw_hierarchy_lines_recursive(uint pos,
           draw_hierarchy_line = true;
           y = *starty;
         }
+      }
+      else if (ELEM(tselem->type, TSE_BONE, TSE_EBONE, TSE_POSE_CHANNEL)) {
+        draw_hierarchy_line = true;
+        use_dashed_line = true;
+        y = *starty;
       }
 
       outliner_draw_hierarchy_lines_recursive(
@@ -3636,7 +3664,7 @@ static void outliner_draw_hierarchy_lines_recursive(uint pos,
 
       line_color[3] = alpha_fac;
       immUniformColor4ubv(line_color);
-      outliner_draw_hierarchy_line(pos, startx, y, *starty, is_object_line);
+      outliner_draw_hierarchy_line(pos, startx, y, *starty, use_dashed_line);
     }
   }
 }
@@ -4014,7 +4042,9 @@ void draw_outliner(const bContext *C, bool do_rebuild)
                 SO_DATA_API,
                 SO_ID_ORPHANS))
       {
-        outliner_sync_selection(C, tvc, space_outliner);
+        if (outliner_sync_selection(C, tvc, space_outliner)) {
+          outliner_scroll_to_active(C, space_outliner, region, &tvc);
+        }
       }
     }
   }
@@ -4080,6 +4110,7 @@ void draw_outliner(const bContext *C, bool do_rebuild)
     RestrictPropertiesActive props_active;
     memset(&props_active, 1, sizeof(RestrictPropertiesActive));
     outliner_draw_restrictbuts(block,
+                               *tvc.bmain,
                                tvc.scene,
                                tvc.view_layer,
                                region,

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "scene/shader.h"
+#include "kernel/svm/types.h"
 #include "scene/background.h"
 #include "scene/integrator.h"
 #include "scene/light.h"
@@ -165,7 +166,7 @@ int blender_attribute_name_split_type(ustring name, string *r_real_name)
 
 static float3 get_node_output_rgba(blender::bNode &b_node, const string &name)
 {
-  blender::bNodeSocket *b_sock = b_node.output_by_identifier(name);
+  blender::bNodeSocket *b_sock = b_node.output_by_identifier(blender::UString(name));
   BLI_assert(b_sock->type == blender::SOCK_RGBA);
   const auto &default_value = *b_sock->default_value_typed<blender::bNodeSocketValueRGBA>();
   return make_float3(default_value.value[0], default_value.value[1], default_value.value[2]);
@@ -173,7 +174,7 @@ static float3 get_node_output_rgba(blender::bNode &b_node, const string &name)
 
 static float get_node_output_value(blender::bNode &b_node, const string &name)
 {
-  blender::bNodeSocket *b_sock = b_node.output_by_identifier(name);
+  blender::bNodeSocket *b_sock = b_node.output_by_identifier(blender::UString(name));
   BLI_assert(b_sock->type == blender::SOCK_FLOAT);
   const auto &default_value = *b_sock->default_value_typed<blender::bNodeSocketValueFloat>();
   return default_value.value;
@@ -181,7 +182,7 @@ static float get_node_output_value(blender::bNode &b_node, const string &name)
 
 static float3 get_node_output_vector(blender::bNode &b_node, const string &name)
 {
-  blender::bNodeSocket *b_sock = b_node.output_by_identifier(name);
+  blender::bNodeSocket *b_sock = b_node.output_by_identifier(blender::UString(name));
   BLI_assert(b_sock->type == blender::SOCK_VECTOR);
   const auto &default_value = *b_sock->default_value_typed<blender::bNodeSocketValueVector>();
   return make_float3(default_value.value[0], default_value.value[1], default_value.value[2]);
@@ -254,7 +255,8 @@ static void set_default_value(ShaderInput *input,
     }
     case SocketType::STRING: {
       const auto &default_value = *b_sock.default_value_typed<blender::bNodeSocketValueString>();
-      node->set(socket, (ustring)blender_absolute_path(b_data, b_id, default_value.value).c_str());
+      node->set(socket,
+                (ustring)blender_absolute_path(b_data, &b_id, default_value.value).c_str());
       break;
     }
     default:
@@ -358,9 +360,24 @@ static ShaderNode *add_node(Scene *scene,
     color->set_value(get_node_output_rgba(b_node, "Color"));
     node = color;
   }
+  else if (b_node.is_type("FunctionNodeInputVector")) {
+    ColorNode *color = graph->create_node<ColorNode>();
+    color->set_value(get_node_output_vector(b_node, "Vector"));
+    node = color;
+  }
   else if (b_node.is_type("ShaderNodeValue")) {
     ValueNode *value = graph->create_node<ValueNode>();
     value->set_value(get_node_output_value(b_node, "Value"));
+    node = value;
+  }
+  else if (b_node.is_type("FunctionNodeInputBool")) {
+    ValueNode *value = graph->create_node<ValueNode>();
+    value->set_value(get_node_output_value(b_node, "Boolean"));
+    node = value;
+  }
+  else if (b_node.is_type("FunctionNodeInputInt")) {
+    ValueNode *value = graph->create_node<ValueNode>();
+    value->set_value(get_node_output_value(b_node, "Integer"));
     node = value;
   }
   else if (b_node.is_type("ShaderNodeCameraData")) {
@@ -796,7 +813,7 @@ static ShaderNode *add_node(Scene *scene,
       }
       else {
         const string absolute_filepath = blender_absolute_path(
-            b_data, b_ntree.id, storage.filepath);
+            b_data, &b_ntree.id, storage.filepath);
         node = OSLShaderManager::osl_node(graph, scene, absolute_filepath, "");
       }
     }
@@ -821,9 +838,7 @@ static ShaderNode *add_node(Scene *scene,
     if (b_image) {
       const blender::eImageSource b_image_source = blender::eImageSource(b_image->source);
       blender::PointerRNA image_rna_ptr = RNA_id_pointer_create(&b_image->id);
-      blender::PointerRNA colorspace_ptr = RNA_pointer_get(&image_rna_ptr, "colorspace_settings");
-      image->set_colorspace(ustring(get_enum_identifier(colorspace_ptr, "name")));
-
+      image->set_colorspace(ustring(b_image->colorspace_settings.name));
       image->set_animated(is_image_animated(b_image_source, b_image_user));
       image->set_alpha_type(get_image_alpha_type(*b_image));
 
@@ -896,8 +911,7 @@ static ShaderNode *add_node(Scene *scene,
     if (b_image) {
       const blender::eImageSource b_image_source = blender::eImageSource(b_image->source);
       blender::PointerRNA image_rna_ptr = RNA_id_pointer_create(&b_image->id);
-      blender::PointerRNA colorspace_ptr = RNA_pointer_get(&image_rna_ptr, "colorspace_settings");
-      env->set_colorspace(ustring(get_enum_identifier(colorspace_ptr, "name")));
+      env->set_colorspace(ustring(b_image->colorspace_settings.name));
       env->set_animated(is_image_animated(b_image_source, b_image_user));
       env->set_alpha_type(get_image_alpha_type(*b_image));
 
@@ -1031,13 +1045,10 @@ static ShaderNode *add_node(Scene *scene,
     IESLightNode *ies = graph->create_node<IESLightNode>();
     switch (storage.mode) {
       case blender::NODE_IES_EXTERNAL:
-        ies->set_filename(ustring(blender_absolute_path(b_data, b_ntree.id, storage.filepath)));
+        ies->set_filename(ustring(blender_absolute_path(b_data, &b_ntree.id, storage.filepath)));
         break;
       case blender::NODE_IES_INTERNAL:
         ustring ies_content = ustring(get_text_datablock_content(b_node.id));
-        if (ies_content.empty()) {
-          ies_content = "\n";
-        }
         ies->set_ies(ies_content);
         break;
     }
@@ -1051,8 +1062,10 @@ static ShaderNode *add_node(Scene *scene,
   else if (b_node.is_type("ShaderNodeNormalMap")) {
     const auto &storage = *static_cast<blender::NodeShaderNormalMap *>(b_node.storage);
     NormalMapNode *nmap = graph->create_node<NormalMapNode>();
-    nmap->set_space((NodeNormalMapSpace)storage.space);
+    nmap->set_space(NodeNormalMapSpace(storage.space));
     nmap->set_attribute(ustring(storage.uv_map));
+    nmap->set_convention(NodeNormalMapConvention(storage.convention));
+    nmap->set_base(NodeNormalMapBase(storage.base));
     node = nmap;
   }
   else if (b_node.is_type("ShaderNodeRadialTiling")) {
@@ -1097,6 +1110,11 @@ static ShaderNode *add_node(Scene *scene,
     OutputAOVNode *aov = graph->create_node<OutputAOVNode>();
     aov->set_name(ustring(storage.name));
     node = aov;
+  }
+  else if (b_node.is_type("ShaderNodeRaycast")) {
+    RaycastNode *raycast = graph->create_node<RaycastNode>();
+    raycast->set_only_local(b_node.custom1);
+    node = raycast;
   }
 
   if (node) {

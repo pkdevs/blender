@@ -14,10 +14,10 @@ namespace blender::nodes::node_fn_input_color_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>("Color").custom_draw([](CustomSocketDrawParams &params) {
+  b.add_output<decl::Color>("Color"_ustr).custom_draw([](CustomSocketDrawParams &params) {
     params.layout.alignment_set(ui::LayoutAlign::Expand);
     ui::Layout &col = params.layout.column(false);
-    template_color_picker(&col, &params.node_ptr, "value", true, false, false, true);
+    template_color_picker(&col, &params.node_ptr, "value", true, false, false, false);
     col.prop(&params.node_ptr, "value", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
   });
 }

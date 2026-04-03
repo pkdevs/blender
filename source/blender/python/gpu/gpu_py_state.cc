@@ -23,6 +23,13 @@
 #include "gpu_py_framebuffer.hh"
 #include "gpu_py_state.hh" /* own include */
 
+/* Doc-string Literal types. */
+#define PYDOC_BLEND_LITERAL \
+  "Literal['NONE', 'ALPHA', 'ALPHA_PREMULT', 'ADDITIVE', " \
+  "'ADDITIVE_PREMULT', 'MULTIPLY', 'SUBTRACT', 'INVERT']"
+#define PYDOC_DEPTHTEST_LITERAL \
+  "Literal['NONE', 'ALWAYS', 'LESS', 'LESS_EQUAL', 'EQUAL', 'GREATER', 'GREATER_EQUAL']"
+
 namespace blender {
 
 /* -------------------------------------------------------------------- */
@@ -78,7 +85,7 @@ PyDoc_STRVAR(
     "\n"
     "   Defines the fixed pipeline blending equation.\n"
     "\n"
-    "   :arg mode: The type of blend mode.\n"
+    "   :param mode: The type of blend mode.\n"
     "\n"
     "      * ``NONE`` No blending.\n"
     "      * ``ALPHA`` The original color channels are interpolated according to the alpha "
@@ -94,7 +101,7 @@ PyDoc_STRVAR(
     //"      * ``OIT``.\n"
     //"      * ``BACKGROUND`` .\n"
     //"      * ``CUSTOM`` .\n"
-    "   :type mode: str\n");
+    "   :type mode: " PYDOC_BLEND_LITERAL "\n");
 static PyObject *pygpu_state_blend_set(PyObject * /*self*/, PyObject *value)
 {
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
@@ -131,7 +138,7 @@ PyDoc_STRVAR(
     "\n"
     "   Sets the number of ``gl_ClipDistance`` planes used for clip geometry.\n"
     "\n"
-    "   :arg distances_enabled: Number of clip distances enabled.\n"
+    "   :param distances_enabled: Number of clip distances enabled.\n"
     "   :type distances_enabled: int\n");
 static PyObject *pygpu_state_clip_distances_set(PyObject * /*self*/, PyObject *value)
 {
@@ -157,10 +164,8 @@ PyDoc_STRVAR(
     "\n"
     "   Defines the depth_test equation.\n"
     "\n"
-    "   :arg mode: The depth test equation name.\n"
-    "      Possible values are ``NONE``, ``ALWAYS``, ``LESS``, ``LESS_EQUAL``, ``EQUAL``, "
-    "``GREATER`` and ``GREATER_EQUAL``.\n"
-    "   :type mode: str\n");
+    "   :param mode: The depth test equation name.\n"
+    "   :type mode: " PYDOC_DEPTHTEST_LITERAL "\n");
 static PyObject *pygpu_state_depth_test_set(PyObject * /*self*/, PyObject *value)
 {
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
@@ -197,7 +202,7 @@ PyDoc_STRVAR(
     "\n"
     "   Write to depth component.\n"
     "\n"
-    "   :arg value: True for writing to the depth component.\n"
+    "   :param value: True for writing to the depth component.\n"
     "   :type value: bool\n");
 static PyObject *pygpu_state_depth_mask_set(PyObject * /*self*/, PyObject *value)
 {
@@ -235,13 +240,13 @@ PyDoc_STRVAR(
     "   Specifies the viewport of the active framebuffer.\n"
     "   Note: The viewport state is not saved upon framebuffer rebind.\n"
     "\n"
-    "   :arg x: Lower left corner x coordinate, in pixels.\n"
+    "   :param x: Lower left corner x coordinate, in pixels.\n"
     "   :type x: int\n"
-    "   :arg y: Lower left corner y coordinate, in pixels.\n"
+    "   :param y: Lower left corner y coordinate, in pixels.\n"
     "   :type y: int\n"
-    "   :arg xsize: Width of the viewport.\n"
+    "   :param xsize: Width of the viewport.\n"
     "   :type xsize: int\n"
-    "   :arg ysize: Height of the viewport.\n"
+    "   :param ysize: Height of the viewport.\n"
     "   :type ysize: int\n");
 static PyObject *pygpu_state_viewport_set(PyObject * /*self*/, PyObject *args)
 {
@@ -289,13 +294,13 @@ PyDoc_STRVAR(
     "   Specifies the scissor area of the active framebuffer.\n"
     "   Note: The scissor state is not saved upon framebuffer rebind.\n"
     "\n"
-    "   :arg x: Lower left corner x coordinate, in pixels.\n"
+    "   :param x: Lower left corner x coordinate, in pixels.\n"
     "   :type x: int\n"
-    "   :arg y: Lower left corner y coordinate, in pixels.\n"
+    "   :param y: Lower left corner y coordinate, in pixels.\n"
     "   :type y: int\n"
-    "   :arg xsize: Width of the scissor rectangle.\n"
+    "   :param xsize: Width of the scissor rectangle.\n"
     "   :type xsize: int\n"
-    "   :arg ysize: Height of the scissor rectangle.\n"
+    "   :param ysize: Height of the scissor rectangle.\n"
     "   :type ysize: int\n");
 static PyObject *pygpu_state_scissor_set(PyObject * /*self*/, PyObject *args)
 {
@@ -346,7 +351,7 @@ PyDoc_STRVAR(
     "\n"
     "   Enable/disable scissor testing on the active framebuffer.\n"
     "\n"
-    "   :arg enable:\n"
+    "   :param enable:\n"
     "        True - enable scissor testing.\n"
     "        False - disable scissor testing.\n"
     "   :type enable: bool\n");
@@ -370,7 +375,7 @@ PyDoc_STRVAR(
     "\n"
     "   Specify the width of rasterized lines.\n"
     "\n"
-    "   :arg width: New width.\n"
+    "   :param width: New width.\n"
     "   :type width: float\n");
 static PyObject *pygpu_state_line_width_set(PyObject * /*self*/, PyObject *value)
 {
@@ -409,7 +414,7 @@ PyDoc_STRVAR(
     "\n"
     "   Specify the diameter of rasterized points.\n"
     "\n"
-    "   :arg size: New diameter.\n"
+    "   :param size: New diameter.\n"
     "   :type size: float\n");
 static PyObject *pygpu_state_point_size_set(PyObject * /*self*/, PyObject *value)
 {
@@ -431,13 +436,13 @@ PyDoc_STRVAR(
     "\n"
     "   Enable or disable writing of frame buffer color components.\n"
     "\n"
-    "   :arg r: Red component.\n"
+    "   :param r: Red component.\n"
     "   :type r: bool\n"
-    "   :arg g: Green component.\n"
+    "   :param g: Green component.\n"
     "   :type g: bool\n"
-    "   :arg b: Blue component.\n"
+    "   :param b: Blue component.\n"
     "   :type b: bool\n"
-    "   :arg a: Alpha component.\n"
+    "   :param a: Alpha component.\n"
     "   :type a: bool\n");
 static PyObject *pygpu_state_color_mask_set(PyObject * /*self*/, PyObject *args)
 {
@@ -459,8 +464,8 @@ PyDoc_STRVAR(
     "\n"
     "   Specify whether none, front-facing or back-facing facets can be culled.\n"
     "\n"
-    "   :arg culling: ``NONE``, ``FRONT`` or ``BACK``.\n"
-    "   :type culling: str\n");
+    "   :param culling: The face culling mode.\n"
+    "   :type culling: Literal['NONE', 'FRONT', 'BACK']\n");
 static PyObject *pygpu_state_face_culling_set(PyObject * /*self*/, PyObject *value)
 {
   BPYGPU_IS_INIT_OR_ERROR_OBJ;
@@ -481,7 +486,7 @@ PyDoc_STRVAR(
     "\n"
     "   Specifies the orientation of front-facing polygons.\n"
     "\n"
-    "   :arg invert: True for clockwise polygons as front-facing.\n"
+    "   :param invert: True for clockwise polygons as front-facing.\n"
     "   :type invert: bool\n");
 static PyObject *pygpu_state_front_facing_set(PyObject * /*self*/, PyObject *value)
 {
@@ -504,7 +509,7 @@ PyDoc_STRVAR(
     "   If enabled, the derived point size is taken from the (potentially clipped) "
     "shader builtin gl_PointSize.\n"
     "\n"
-    "   :arg enable: True for shader builtin gl_PointSize.\n"
+    "   :param enable: True for shader builtin gl_PointSize.\n"
     "   :type enable: bool\n");
 static PyObject *pygpu_state_program_point_size_set(PyObject * /*self*/, PyObject *value)
 {

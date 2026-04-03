@@ -206,7 +206,7 @@ static void image_free_data(ID *id)
   MEM_SAFE_DELETE(image->stereo3d_format);
 
   BKE_icon_id_delete(&image->id);
-  BKE_previewimg_free(&image->preview);
+  BKE_previewimg_id_free(&image->id);
 
   BLI_freelistN(&image->tiles);
 
@@ -423,41 +423,44 @@ static void image_blend_read_after_liblink(BlendLibReader * /*reader*/, ID *id)
 }
 
 IDTypeInfo IDType_ID_IM = {
-    /*id_code*/ Image::id_type,
-    /*id_filter*/ FILTER_ID_IM,
-    /*dependencies_id_types*/ 0,
-    /*main_listbase_index*/ INDEX_ID_IM,
-    /*struct_size*/ sizeof(Image),
-    /*name*/ "Image",
-    /*name_plural*/ "images",
-    /*translation_context*/ BLT_I18NCONTEXT_ID_IMAGE,
-    /*flags*/ IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /*asset_type_info*/ nullptr,
+    .id_code = Image::id_type,
+    .id_filter = FILTER_ID_IM,
+    .dependencies_id_types = 0,
+    .main_listbase_index = INDEX_ID_IM,
+    .struct_size = sizeof(Image),
+    .name = "Image",
+    .name_plural = "images",
+    .translation_context = BLT_I18NCONTEXT_ID_IMAGE,
+    .flags = IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ image_init_data,
-    /*copy_data*/ image_copy_data,
-    /*free_data*/ image_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ nullptr,
-    /*foreach_cache*/ image_foreach_cache,
-    /*foreach_path*/ image_foreach_path,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = image_init_data,
+    .copy_data = image_copy_data,
+    .free_data = image_free_data,
+    .make_local = nullptr,
+    .foreach_id = nullptr,
+    .foreach_cache = image_foreach_cache,
+    .foreach_path = image_foreach_path,
+    .foreach_working_space_color = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ image_blend_write,
-    /*blend_read_data*/ image_blend_read_data,
-    /*blend_read_after_liblink*/ image_blend_read_after_liblink,
+    .blend_write = image_blend_write,
+    .blend_read_data = image_blend_read_data,
+    .blend_read_after_liblink = image_blend_read_after_liblink,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 /* prototypes */
 static int image_num_viewfiles(Image *ima);
 static ImBuf *image_load_image_file(
     Image *ima, ImageUser *iuser, int entry, int cfra, bool is_sequence);
-static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock);
+static ImBuf *image_acquire_ibuf(Image *ima,
+                                 ImageUser *iuser,
+                                 void **r_lock,
+                                 const bool ensure_host_buffer);
 static void image_update_views_format(Image *ima, ImageUser *iuser);
 static void image_add_view(Image *ima, const char *viewname, const char *filepath);
 
@@ -1200,8 +1203,10 @@ static ImBuf *add_ibuf_for_tile(Image *ima, ImageTile *tile)
     return nullptr;
   }
 
-  STRNCPY(ibuf->filepath, ima->filepath);
-  BLI_path_abs(ibuf->filepath, ID_BLEND_PATH_FROM_GLOBAL(&ima->id));
+  char filepath[FILE_MAX];
+  STRNCPY(filepath, ima->filepath);
+  BLI_path_abs(filepath, ID_BLEND_PATH_FROM_GLOBAL(&ima->id));
+  ibuf->filepath = filepath;
 
   /* Mark the tile itself as having been generated. */
   tile->gen_flag |= IMA_GEN_TILE;
@@ -1314,7 +1319,7 @@ static void image_colorspace_from_imbuf(Image *image, const ImBuf *ibuf)
 Image *BKE_image_add_from_imbuf(Main *bmain, ImBuf *ibuf, const char *name)
 {
   if (name == nullptr) {
-    name = BLI_path_basename(ibuf->filepath);
+    name = BLI_path_basename(ibuf->filepath.c_str());
   }
 
   /* When the image buffer has valid path create a new image with "file" source and copy the path
@@ -1345,15 +1350,16 @@ void BKE_image_replace_imbuf(Image *image, ImBuf *ibuf)
 
   /* Keep generated image type flags consistent with the image buffer. */
   if (image->source == IMA_SRC_GENERATED) {
+    ImageTile *base_tile = BKE_image_get_tile(image, 0);
     if (ibuf->float_buffer.data) {
-      image->gen_flag |= IMA_GEN_FLOAT;
+      base_tile->gen_flag |= IMA_GEN_FLOAT;
     }
     else {
-      image->gen_flag &= ~IMA_GEN_FLOAT;
+      base_tile->gen_flag &= ~IMA_GEN_FLOAT;
     }
 
-    image->gen_x = ibuf->x;
-    image->gen_y = ibuf->y;
+    base_tile->gen_x = ibuf->x;
+    base_tile->gen_y = ibuf->y;
   }
 
   /* Consider image dirty since its content can not be re-created unless the image is explicitly
@@ -1371,7 +1377,6 @@ static bool image_memorypack_imbuf(
 
   if (ibuf->encoded_buffer.data == nullptr) {
     CLOG_STR_ERROR(&LOG, "memory save for pack error");
-    IMB_freeImBuf(ibuf);
     image_free_packedfiles(ima);
     return false;
   }
@@ -1416,7 +1421,7 @@ bool BKE_image_memorypack(Image *ima)
         break;
       }
 
-      const char *filepath = ibuf->filepath;
+      const char *filepath = ibuf->filepath.c_str();
       if (is_tiled) {
         iuser.tile = tile.tile_number;
         BKE_image_user_file_path(&iuser, ima, tiled_filepath);
@@ -4632,11 +4637,15 @@ BLI_INLINE bool image_quick_test(Image *ima, const ImageUser *iuser)
 }
 
 /**
- * Checks optional #ImageUser and verifies/creates #ImBuf.
+ * Checks optional #ImageUser and verifies/creates #ImBuf. If ensure_host_buffer is true and the
+ * image buffer has GPU data, they will be read to the host.
  *
  * \warning Not thread-safe, so callee should worry about thread locks.
  */
-static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock)
+static ImBuf *image_acquire_ibuf(Image *ima,
+                                 ImageUser *iuser,
+                                 void **r_lock,
+                                 const bool ensure_host_buffer)
 {
   ImBuf *ibuf = nullptr;
   int entry = 0, index = 0;
@@ -4753,6 +4762,10 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock)
     }
   }
 
+  if (ensure_host_buffer) {
+    IMB_ensure_host_buffer(ibuf);
+  }
+
   BKE_image_tag_time(ima);
 
   return ibuf;
@@ -4768,7 +4781,19 @@ ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock)
   }
 
   std::scoped_lock lock(ima->runtime->cache_mutex);
-  return image_acquire_ibuf(ima, iuser, r_lock);
+  return image_acquire_ibuf(ima, iuser, r_lock, true);
+}
+
+/* Identical to BKE_image_acquire_ibuf but passing false to the ensure_host_buffer argument for the
+ * image_acquire_ibuf function. */
+ImBuf *BKE_image_acquire_ibuf_gpu(Image *ima, ImageUser *iuser, void **r_lock)
+{
+  if (ima == nullptr) {
+    return nullptr;
+  }
+
+  std::scoped_lock lock(ima->runtime->cache_mutex);
+  return image_acquire_ibuf(ima, iuser, r_lock, false);
 }
 
 static int get_multilayer_view_index(const Image &image,
@@ -4808,7 +4833,7 @@ ImBuf *BKE_image_acquire_multilayer_view_ibuf(const RenderData &render_data,
 
   /* Force load the image once, possibly with a different user from what it will need to be in the
    * end. This ensures proper image type, and initializes multi-layer state when needed. */
-  ImBuf *tmp_ibuf = image_acquire_ibuf(&image, &local_user, nullptr);
+  ImBuf *tmp_ibuf = image_acquire_ibuf(&image, &local_user, nullptr, false);
   IMB_freeImBuf(tmp_ibuf);
 
   if (BKE_image_is_multilayer(&image)) {
@@ -4833,7 +4858,7 @@ ImBuf *BKE_image_acquire_multilayer_view_ibuf(const RenderData &render_data,
     local_user.multi_index = BKE_scene_multiview_view_id_get(&render_data, view_name);
   }
 
-  return image_acquire_ibuf(&image, &local_user, nullptr);
+  return image_acquire_ibuf(&image, &local_user, nullptr, true);
 }
 
 void BKE_image_release_ibuf(Image *ima, ImBuf *ibuf, void *lock)
@@ -4869,7 +4894,7 @@ bool BKE_image_has_ibuf(Image *ima, ImageUser *iuser)
   ibuf = image_get_cached_ibuf(ima, iuser, nullptr, nullptr, nullptr);
 
   if (!ibuf) {
-    ibuf = image_acquire_ibuf(ima, iuser, nullptr);
+    ibuf = image_acquire_ibuf(ima, iuser, nullptr, false);
   }
 
   IMB_freeImBuf(ibuf);
@@ -5446,7 +5471,7 @@ bool BKE_image_buffer_format_writable(ImBuf *ibuf)
   return (BKE_imtype_to_ftype(im_format.imtype, &options_dummy) == ibuf->ftype);
 }
 
-void BKE_image_file_format_set(Image *image, int ftype, const ImbFormatOptions *options)
+void BKE_image_file_format_set(Image *image, eImbFileType ftype, const ImbFormatOptions *options)
 {
   std::scoped_lock lock(image->runtime->cache_mutex);
   if (image->runtime->cache != nullptr) {
@@ -5455,7 +5480,7 @@ void BKE_image_file_format_set(Image *image, int ftype, const ImbFormatOptions *
     while (!IMB_moviecacheIter_done(iter)) {
       ImBuf *ibuf = IMB_moviecacheIter_getImBuf(iter);
       if (ibuf != nullptr) {
-        ibuf->ftype = static_cast<eImbFileType>(ftype);
+        ibuf->ftype = ftype;
         ibuf->foptions = *options;
       }
       IMB_moviecacheIter_step(iter);
@@ -5497,7 +5522,7 @@ ImBuf *BKE_image_get_ibuf_with_name(Image *image, const char *filepath)
 
     while (!IMB_moviecacheIter_done(iter)) {
       ImBuf *current_ibuf = IMB_moviecacheIter_getImBuf(iter);
-      if (current_ibuf != nullptr && STREQ(current_ibuf->filepath, filepath)) {
+      if (current_ibuf != nullptr && current_ibuf->filepath == filepath) {
         ibuf = current_ibuf;
         IMB_refImBuf(ibuf);
         break;

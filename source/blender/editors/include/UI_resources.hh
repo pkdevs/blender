@@ -49,6 +49,7 @@ enum ThemeColorID {
   TH_WARNING,
   TH_INFO,
   TH_SUCCESS,
+  TH_LINK,
 
   TH_THEMEUI,
   /* Common colors among spaces. */
@@ -85,6 +86,7 @@ enum ThemeColorID {
   TH_HILITE,
 
   TH_GRID,
+  TH_GRID_MAJOR,
   TH_WIRE,
   TH_WIRE_INNER,
   TH_WIRE_EDIT,

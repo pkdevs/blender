@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "BKE_appdir.hh"
-#include "BKE_scene.hh"
 #include "DEG_depsgraph_query.hh"
+#include "DNA_scene_types.h"
+#include "DNA_userdef_types.h"
 #include "DNA_world_types.h"
 #include "RNA_prototypes.hh"
 #include "RNA_types.hh"
@@ -152,8 +153,9 @@ void BlenderSync::sync_recalc(blender::Depsgraph &b_depsgraph,
       }
 
       if (can_have_geometry || is_light) {
-        const bool updated_geometry = (b_id->recalc & (blender::ID_RECALC_GEOMETRY |
-                                                       blender::ID_RECALC_ALL)) != 0;
+        const bool updated_geometry = (b_id->recalc & blender::ID_RECALC_GEOMETRY) != 0 ||
+                                      (b_ob->data &&
+                                       (b_ob->data->recalc & blender::ID_RECALC_ALL) != 0);
         const bool updated_transform = (b_id->recalc & blender::ID_RECALC_TRANSFORM) != 0;
 
         /* Geometry (mesh, hair, volume). */
@@ -237,6 +239,7 @@ void BlenderSync::sync_recalc(blender::Depsgraph &b_depsgraph,
       }
     }
   }
+  ITER_END;
 
   if (use_adaptive_subdivision) {
     /* Mark all meshes as needing to be exported again if dicing changed. */
@@ -275,7 +278,6 @@ void BlenderSync::sync_recalc(blender::Depsgraph &b_depsgraph,
       }
     }
   }
-  ITER_END;
 
   if (b_v3d) {
     const BlenderViewportParameters new_viewport_parameters(b_screen, b_v3d, use_developer_ui);
@@ -550,10 +552,10 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
     integrator->set_denoiser_type(denoise_params.type);
     integrator->set_denoise_use_gpu(denoise_params.use_gpu);
     integrator->set_denoise_start_sample(denoise_params.start_sample);
-    integrator->set_use_denoise_pass_albedo(denoise_params.use_pass_albedo);
-    integrator->set_use_denoise_pass_normal(denoise_params.use_pass_normal);
+    integrator->set_denoiser_passes(denoise_params.passes);
     integrator->set_denoiser_prefilter(denoise_params.prefilter);
     integrator->set_denoiser_quality(denoise_params.quality);
+    integrator->set_denoiser_upscale_factor(denoise_params.upscale_factor);
   }
 
   /* UPDATE_NONE as we don't want to tag the integrator as modified (this was done by the
@@ -734,7 +736,9 @@ static bool get_known_pass_type(blender::RenderPass &b_pass, PassType &type, Pas
   MAP_PASS("BakeDifferential", PASS_BAKE_DIFFERENTIAL, false);
 
   MAP_PASS("Denoising Albedo", PASS_DENOISING_ALBEDO, true);
+  MAP_PASS("Denoising Specular Albedo", PASS_DENOISING_SPECULAR_ALBEDO, true);
   MAP_PASS("Denoising Normal", PASS_DENOISING_NORMAL, true);
+  MAP_PASS("Denoising Roughness", PASS_DENOISING_ROUGHNESS, true);
   MAP_PASS("Denoising Depth", PASS_DENOISING_DEPTH, true);
 
   MAP_PASS("Shadow Catcher", PASS_SHADOW_CATCHER, false);
@@ -905,7 +909,9 @@ void BlenderSync::free_data_after_sync(blender::Depsgraph &b_depsgraph)
 
 /* Scene Parameters */
 
-SceneParams BlenderSync::get_scene_params(blender::Scene &b_scene,
+SceneParams BlenderSync::get_scene_params(blender::UserDef &b_preferences,
+                                          blender::Main &b_data,
+                                          blender::Scene &b_scene,
                                           const bool background,
                                           const bool use_developer_ui)
 {
@@ -938,23 +944,27 @@ SceneParams BlenderSync::get_scene_params(blender::Scene &b_scene,
   params.hair_shape = (CurveShapeType)get_enum(
       csscene, "shape", CURVE_NUM_SHAPE_TYPES, CURVE_THICK);
 
-  int texture_limit;
+  float texture_resolution;
   if (background) {
-    texture_limit = RNA_enum_get(&cscene, "texture_limit_render");
+    texture_resolution = RNA_float_get(&cscene, "texture_resolution_render");
   }
   else {
-    texture_limit = RNA_enum_get(&cscene, "texture_limit");
+    texture_resolution = RNA_float_get(&cscene, "texture_resolution");
   }
-  if (texture_limit > 0 && (b_scene.r.mode & blender::R_SIMPLIFY) != 0) {
-    params.texture_limit = 1 << (texture_limit + 6);
+  if (texture_resolution < 1.0f && (b_scene.r.mode & blender::R_SIMPLIFY) != 0) {
+    params.texture_resolution = texture_resolution;
   }
   else {
-    params.texture_limit = 0;
+    params.texture_resolution = 1.0f;
   }
 
   params.bvh_layout = DebugFlags().cpu.bvh_layout;
 
   params.background = background;
+  params.use_texture_cache = b_scene.r.scemode & blender::R_USE_TEXTURE_CACHE;
+  params.auto_texture_cache = b_scene.r.scemode & blender::R_TEXTURE_CACHE_AUTO_GENERATE;
+  params.texture_cache_path = blender_absolute_path(
+      b_data, nullptr, b_preferences.texture_cachedir);
 
   return params;
 }
@@ -971,13 +981,16 @@ bool BlenderSync::get_session_pause(blender::Scene &b_scene, bool background)
 SessionParams BlenderSync::get_session_params(blender::RenderEngine &b_engine,
                                               blender::UserDef &b_preferences,
                                               blender::Scene &b_scene,
-                                              bool background)
+                                              bool background,
+                                              float pixelsize)
 {
   SessionParams params;
+
+  /* Feature Set */
   blender::PointerRNA scene_rna_ptr = RNA_id_pointer_create(&b_scene.id);
   blender::PointerRNA cscene = RNA_pointer_get(&scene_rna_ptr, "cycles");
 
-  if (background && (b_engine.flag & blender::RE_ENGINE_PREVIEW) == 0) {
+  if (background) {
     /* Viewport and preview renders do not require temp directory and do request session
      * parameters more often than the background render.
      * Optimize RNA-C++ usage and memory allocation a bit by saving string access which we know
@@ -1022,7 +1035,14 @@ SessionParams BlenderSync::get_session_params(blender::RenderEngine &b_engine,
   }
 
   /* Viewport Performance */
-  params.pixel_size = BKE_render_preview_pixel_size(&b_scene.r);
+  if (b_scene.r.preview_pixel_size == 0) {
+    /* Automatic pixel size. */
+    params.pixel_size = (pixelsize > 1.5f) ? 2 : 1;
+  }
+  else {
+    /* Specific user chosen pixel size. */
+    params.pixel_size = b_scene.r.preview_pixel_size;
+  }
 
   if (background) {
     params.pixel_size = 1;
@@ -1133,18 +1153,15 @@ DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
 
   switch (input_passes) {
     case DENOISER_INPUT_RGB:
-      denoising.use_pass_albedo = false;
-      denoising.use_pass_normal = false;
+      denoising.passes = DENOISER_PASS_NONE;
       break;
 
     case DENOISER_INPUT_RGB_ALBEDO:
-      denoising.use_pass_albedo = true;
-      denoising.use_pass_normal = false;
+      denoising.passes = DENOISER_PASS_ALBEDO;
       break;
 
     case DENOISER_INPUT_RGB_ALBEDO_NORMAL:
-      denoising.use_pass_albedo = true;
-      denoising.use_pass_normal = true;
+      denoising.passes = DENOISER_PASS_ALBEDO | DENOISER_PASS_NORMAL;
       break;
 
     default:

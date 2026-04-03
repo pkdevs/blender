@@ -99,14 +99,13 @@ static GAttributeReader reader_for_vertex_group_index(const CurvesGeometry &curv
   return {varray_for_deform_verts(dverts, vertex_group_index), AttrDomain::Point};
 }
 
-static GAttributeReader try_get_vertex_group(const void *owner, const StringRef attribute_id)
+static GAttributeReader try_get_vertex_group(const void *owner, const StringRef name)
 {
   const CurvesGeometry *curves = static_cast<const CurvesGeometry *>(owner);
   if (curves == nullptr) {
     return {};
   }
-  const int vertex_group_index = BKE_defgroup_name_index(&curves->vertex_group_names,
-                                                         attribute_id);
+  const int vertex_group_index = BKE_defgroup_name_index(&curves->vertex_group_names, name);
   if (vertex_group_index < 0) {
     return {};
   }
@@ -114,42 +113,18 @@ static GAttributeReader try_get_vertex_group(const void *owner, const StringRef 
   return reader_for_vertex_group_index(*curves, dverts, vertex_group_index);
 }
 
-static GAttributeWriter try_get_vertex_group_for_write(void *owner, const StringRef attribute_id)
+static GAttributeWriter try_get_vertex_group_for_write(void *owner, const StringRef name)
 {
   CurvesGeometry *curves = static_cast<CurvesGeometry *>(owner);
   if (curves == nullptr) {
     return {};
   }
-  const int vertex_group_index = BKE_defgroup_name_index(&curves->vertex_group_names,
-                                                         attribute_id);
+  const int vertex_group_index = BKE_defgroup_name_index(&curves->vertex_group_names, name);
   if (vertex_group_index < 0) {
     return {};
   }
   MutableSpan<MDeformVert> dverts = curves->deform_verts_for_write();
   return {varray_for_mutable_deform_verts(dverts, vertex_group_index), AttrDomain::Point};
-}
-
-static bool try_delete_vertex_group(void *owner, const StringRef name)
-{
-  CurvesGeometry *curves = static_cast<CurvesGeometry *>(owner);
-  if (curves == nullptr) {
-    return true;
-  }
-
-  int index;
-  bDeformGroup *group;
-  if (!BKE_defgroup_listbase_name_find(&curves->vertex_group_names, name, &index, &group)) {
-    return false;
-  }
-  BLI_remlink(&curves->vertex_group_names, group);
-  MEM_delete(group);
-  if (curves->deform_verts().is_empty()) {
-    return true;
-  }
-
-  MutableSpan<MDeformVert> dverts = curves->deform_verts_for_write();
-  remove_defgroup_index(dverts, index);
-  return true;
 }
 
 static bool foreach_vertex_group(const void *owner, FunctionRef<void(const AttributeIter &)> fn)
@@ -290,6 +265,13 @@ static const auto &builtin_attributes()
   return attributes;
 }
 
+static const auto &array_storage_required()
+{
+  static Set<StringRef> attributes{
+      "position", "handle_left", "handle_right", "nurbs_weight", "surface_uv_coordinate"};
+  return attributes;
+}
+
 /** \} */
 
 static AttributeAccessorFunctions get_curves_accessor_functions()
@@ -350,8 +332,7 @@ static AttributeAccessorFunctions get_curves_accessor_functions()
                             const AttributeAccessor &accessor) {
     const CurvesGeometry &curves = *static_cast<const CurvesGeometry *>(owner);
 
-    const bool should_continue = foreach_vertex_group(
-        owner, [&](const AttributeIter &iter) { fn(iter); });
+    const bool should_continue = foreach_vertex_group(owner, fn);
     if (!should_continue) {
       return;
     }
@@ -364,6 +345,7 @@ static AttributeAccessorFunctions get_curves_accessor_functions()
       };
       AttributeIter iter(attr.name(), attr.domain(), attr.data_type(), get_fn);
       iter.is_builtin = builtin_attributes().contains(attr.name());
+      iter.storage_type = attr.storage_type();
       iter.accessor = &accessor;
       fn(iter);
       if (iter.is_stopped()) {
@@ -396,7 +378,9 @@ static AttributeAccessorFunctions get_curves_accessor_functions()
   fn.remove = [](void *owner, const StringRef name) -> bool {
     CurvesGeometry &curves = *static_cast<CurvesGeometry *>(owner);
 
-    if (try_delete_vertex_group(owner, name)) {
+    if (try_delete_vertex_group(
+            curves.vertex_group_names, name, [&]() { return curves.deform_verts_for_write(); }))
+    {
       return true;
     }
 
@@ -432,7 +416,40 @@ static AttributeAccessorFunctions get_curves_accessor_functions()
     if (storage.lookup(name)) {
       return false;
     }
-    storage.add(name, domain, type, attribute_init_to_data(type, domain_size, initializer));
+    const bool array = array_storage_required().contains(name);
+    Attribute::DataVariant data = attribute_init_to_data(type, domain_size, initializer, array);
+    storage.add(name, domain, type, std::move(data));
+    if (initializer.type != AttributeInit::Type::Construct) {
+      if (const std::optional<AttrUpdateOnChange> fn = changed_tags().lookup_try(name)) {
+        (*fn)(owner);
+      }
+    }
+    return true;
+  };
+  fn.rename = [](void *owner, const Map<StringRef, StringRef> &name_map, bool overwrite) {
+    CurvesGeometry &curves = *static_cast<CurvesGeometry *>(owner);
+    return rename_attributes(
+        curves.attribute_storage.wrap(),
+        name_map,
+        overwrite,
+        builtin_attributes(),
+        array_storage_required(),
+        [&](const bke::AttrDomain domain) { return get_domain_size(owner, domain); },
+        &curves.vertex_group_names,
+        [&]() { return curves.deform_verts_for_write(); });
+  };
+  fn.assign_data = [](void *owner, StringRef name, const AttributeInit &initializer) {
+    CurvesGeometry &curves = *static_cast<CurvesGeometry *>(owner);
+    AttributeStorage &storage = curves.attribute_storage.wrap();
+    Attribute *attr = storage.lookup(name);
+    if (!attr) {
+      return false;
+    }
+    Attribute::DataVariant data = attribute_init_to_data(attr->data_type(),
+                                                         get_domain_size(owner, attr->domain()),
+                                                         initializer,
+                                                         array_storage_required().contains(name));
+    attr->assign_data(std::move(data));
     if (initializer.type != AttributeInit::Type::Construct) {
       if (const std::optional<AttrUpdateOnChange> fn = changed_tags().lookup_try(name)) {
         (*fn)(owner);

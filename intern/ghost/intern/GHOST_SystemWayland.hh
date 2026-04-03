@@ -19,6 +19,7 @@
 #include <wayland-client.h>
 
 #include <mutex>
+#include <span>
 #include <string>
 
 #ifdef USE_EVENT_BACKGROUND_THREAD
@@ -71,6 +72,14 @@ wl_fixed_t gwl_window_scale_wl_fixed_from(const GWL_WindowScaleParams &scale_par
 
 int gwl_window_scale_int_to(const GWL_WindowScaleParams &scale_params, int value);
 int gwl_window_scale_int_from(const GWL_WindowScaleParams &scale_params, int value);
+
+/**
+ * Scale a logical buffer size to physical pixels, returning an integer buffer scale.
+ * The buffer scale is rounded up so `result / *r_buffer_scale == logical_size`.
+ */
+int gwl_window_scale_buffer_size_to(const GWL_WindowScaleParams &scale_params,
+                                    int logical_size,
+                                    int *r_buffer_scale);
 
 #define FRACTIONAL_DENOMINATOR 120
 
@@ -241,6 +250,8 @@ class GHOST_SystemWayland : public GHOST_System {
    */
   GHOST_TimerManager *key_repeat_timer_manager();
 
+  void xdg_toplevel_icon_update(GHOST_WindowWayland *window, struct xdg_toplevel *toplevel);
+
   /* WAYLAND direct-data access. */
 
   struct wl_display *wl_display_get();
@@ -255,7 +266,7 @@ class GHOST_SystemWayland : public GHOST_System {
   struct zxdg_decoration_manager_v1 *xdg_decor_manager_get();
   /* End `xdg_decor`. */
 
-  const std::vector<GWL_Output *> &outputs_get() const;
+  const std::span<GWL_Output *const> outputs_get() const;
 
   struct wl_shm *wl_shm_get() const;
 
@@ -269,6 +280,9 @@ class GHOST_SystemWayland : public GHOST_System {
 
   bool use_window_frame_get() const;
   bool use_window_frame_csd_get() const;
+#ifdef WITH_GHOST_CSD
+  const GHOST_CSD_Layout &csd_layout_base_get() const;
+#endif
 
   static const char *xdg_app_id_get();
 

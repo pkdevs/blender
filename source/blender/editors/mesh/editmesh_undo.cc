@@ -248,7 +248,9 @@ static void store_layer(const eCustomDataType type,
    */
   if (CustomData_layertype_is_dynamic(type)) {
     ImplicitSharingInfoAndData state = {sharing_info, data};
-    state.sharing_info->add_user();
+    if (state.data) {
+      state.sharing_info->add_user();
+    }
     bcd.non_trivial_arrays.lookup_or_add_default(type).append(state);
     return;
   }
@@ -320,25 +322,43 @@ static BArrayCustomData *um_arraystore_cd_create(CustomData *cdata,
                 bcd_reference,
                 index_in_type,
                 bcd);
-    layer.sharing_info->remove_user_and_delete_if_last();
-    layer.sharing_info = nullptr;
-    layer.data = nullptr;
+    if (layer.data) {
+      layer.sharing_info->remove_user_and_delete_if_last();
+      layer.sharing_info = nullptr;
+      layer.data = nullptr;
+    }
   }
 
   for (bke::Attribute *attribute : attributes) {
     const eCustomDataType type = *bke::attr_type_to_custom_data_type(attribute->data_type());
-    const bke::Attribute::DataVariant &data = attribute->data();
-    BLI_assert(std::holds_alternative<bke::Attribute::ArrayData>(data));
-    const bke::Attribute::ArrayData &array_data = std::get<bke::Attribute::ArrayData>(data);
-    store_layer(type,
-                array_data.data,
-                array_data.sharing_info.get(),
-                data_len,
-                bs_index,
-                bcd_reference,
-                index_in_type,
-                bcd);
-    attribute->assign_data({});
+    switch (attribute->storage_type()) {
+      case bke::AttrStorageType::Array: {
+        const auto &data = std::get<bke::Attribute::ArrayData>(attribute->data());
+        store_layer(type,
+                    data.data,
+                    data.sharing_info.get(),
+                    data_len,
+                    bs_index,
+                    bcd_reference,
+                    index_in_type,
+                    bcd);
+        attribute->assign_data(bke::Attribute::ArrayData{});
+        break;
+      }
+      case bke::AttrStorageType::Single: {
+        int &i = index_in_type.lookup_or_add(type, 0);
+        BLI_SCOPED_DEFER([&]() { i++; });
+        if (CustomData_layertype_is_dynamic(type)) {
+          bcd.non_trivial_arrays.lookup_or_add_default(type).append(ImplicitSharingInfoAndData{});
+          break;
+        }
+        const int stride = CustomData_sizeof(type);
+        BLI_array_store_at_size_ensure(
+            &um_arraystore.bs_stride[bs_index], stride, array_chunk_size_calc(stride));
+        bcd.trivial_arrays.lookup_or_add_default(type).append(nullptr);
+        break;
+      }
+    }
   }
 
   if (bcd.trivial_arrays.is_empty() && bcd.non_trivial_arrays.is_empty()) {
@@ -445,6 +465,10 @@ static void um_arraystore_cd_expand(const BArrayCustomData *bcd,
 
     int &i = index_in_type.lookup_or_add(type, 0);
     BLI_SCOPED_DEFER([&]() { i++; });
+
+    if (attribute->storage_type() == bke::AttrStorageType::Single) {
+      continue;
+    }
 
     bke::Attribute::ArrayData array_data{};
     if (bcd->non_trivial_arrays.contains(type)) {
@@ -631,7 +655,10 @@ static void um_arraystore_expand_clear(UndoMesh *um)
   um_arraystore_cd_clear(&mesh->corner_data);
   um_arraystore_cd_clear(&mesh->face_data);
   for (bke::Attribute &attr : mesh->attribute_storage.wrap()) {
-    attr.assign_data({});
+    if (attr.storage_type() == bke::AttrStorageType::Single) {
+      continue;
+    }
+    attr.assign_data(bke::Attribute::ArrayData{});
   }
   if (mesh->face_offset_indices) {
     implicit_sharing::free_shared_data(&mesh->face_offset_indices,
@@ -1084,9 +1111,10 @@ static void undomesh_free_data(UndoMesh *um)
 
 static Object *editmesh_object_from_context(bContext *C)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
   if (obedit && obedit->type == OB_MESH) {
     const Mesh *mesh = id_cast<Mesh *>(obedit->data);
@@ -1145,7 +1173,7 @@ static bool mesh_undosys_step_encode(bContext *C, Main *bmain, UndoStep *us_p)
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const ToolSettings *ts = scene->toolsettings;
-  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(scene, view_layer);
+  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(*bmain, scene, view_layer);
 
   us->scene_ref.ptr = scene;
   us->elems = MEM_new_array_zeroed<MeshUndoStep_Elem>(objects.size(), __func__);
@@ -1238,7 +1266,7 @@ static void mesh_undosys_step_decode(
 
   /* The first element is always active */
   ED_undo_object_set_active_or_warn(
-      scene, view_layer, us->elems[0].obedit_ref.ptr, us_p->name, &LOG);
+      *bmain, scene, view_layer, us->elems[0].obedit_ref.ptr, us_p->name, &LOG);
 
   /* Check after setting active (unless undoing into another scene). */
   BLI_assert(mesh_undosys_poll(C) || (scene != CTX_data_scene(C)));

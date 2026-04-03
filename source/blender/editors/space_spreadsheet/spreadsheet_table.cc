@@ -72,7 +72,7 @@ void spreadsheet_bundle_path_clear(SpreadsheetBundleTreeViewPath &bundle_path)
 }
 
 void spreadsheet_bundle_path_init_from(
-    const Span<StringRef> keys,
+    const Span<UString> keys,
     const std::optional<SpreadsheetClosureInputOutput> closure_input_output,
     SpreadsheetBundleTreeViewPath &r_bundle_path)
 {
@@ -80,7 +80,7 @@ void spreadsheet_bundle_path_init_from(
   r_bundle_path.bundle_path = MEM_new_array<SpreadsheetBundlePathElem>(keys.size(), __func__);
   r_bundle_path.bundle_path_num = keys.size();
   for (const int i : keys.index_range()) {
-    const StringRef key = keys[i];
+    const StringRef key = keys[i].ref();
     r_bundle_path.bundle_path[i].identifier = BLI_strdupn(key.data(), key.size());
   }
   r_bundle_path.closure_input_output = closure_input_output.value_or(SPREADSHEET_CLOSURE_NONE);
@@ -116,7 +116,7 @@ static void write_bundle_path(BlendWriter *writer,
 {
   writer->write_struct_array(bundle_path.bundle_path_num, bundle_path.bundle_path);
   for (const int i : IndexRange(bundle_path.bundle_path_num)) {
-    BLO_write_string(writer, bundle_path.bundle_path[i].identifier);
+    writer->write_string(bundle_path.bundle_path[i].identifier);
   }
 }
 
@@ -251,7 +251,7 @@ void spreadsheet_table_blend_write(BlendWriter *writer, const SpreadsheetTable *
 {
   writer->write_struct(table);
   spreadsheet_table_id_blend_write(writer, table->id);
-  BLO_write_pointer_array(writer, table->num_columns, table->columns);
+  writer->write_pointer_array(table->num_columns, table->columns);
   for (const int i : IndexRange(table->num_columns)) {
     spreadsheet_column_blend_write(writer, table->columns[i]);
   }
@@ -316,7 +316,7 @@ void spreadsheet_table_remove_unused(SpaceSpreadsheet &sspreadsheet)
     for (const SpreadsheetTable *table : Span(sspreadsheet.tables, sspreadsheet.num_tables)) {
       last_used_times.append(table->last_used);
     }
-    std::sort(last_used_times.begin(), last_used_times.end());
+    std::ranges::sort(last_used_times);
     min_last_used = last_used_times[sspreadsheet.num_tables - max_tables];
   }
 
@@ -378,7 +378,7 @@ void spreadsheet_table_remove_unused_columns(SpreadsheetTable &table)
       last_used_times.append(column->last_used);
     }
   }
-  std::sort(last_used_times.begin(), last_used_times.end());
+  std::ranges::sort(last_used_times);
   const int min_last_used = last_used_times[max_unavailable_columns_target];
 
   dna::array::remove_if<SpreadsheetColumn *>(

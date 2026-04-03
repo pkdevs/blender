@@ -321,15 +321,16 @@ PyDoc_STRVAR(
     "\n"
     "   Assigns callbacks to a gizmos property.\n"
     "\n"
-    "   :arg target: Target property name.\n"
+    "   :param target: Target property name.\n"
     "   :type target: str\n"
-    "   :arg get: Function that returns the value for this property (single value or sequence).\n"
+    "   :param get: Function that returns the value for this property "
+    "(single value or sequence).\n"
     "   :type get: Callable[[], float | Sequence[float]]\n"
-    "   :arg set: Function that takes a single value argument and applies it.\n"
+    "   :param set: Function that takes a single value argument and applies it.\n"
     "   :type set: Callable[[tuple[float, ...]], Any]\n"
-    "   :arg range: Function that returns a (min, max) tuple for gizmos that use a range. "
+    "   :param range: Function that returns a (min, max) tuple for gizmos that use a range. "
     "The returned value is not used.\n"
-    "   :type range: callable\n");
+    "   :type range: Callable[[], tuple[float, float]] | None\n");
 static PyObject *bpy_gizmo_target_set_handler(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
   struct {
@@ -379,6 +380,10 @@ static PyObject *bpy_gizmo_target_set_handler(PyObject * /*self*/, PyObject *arg
 
   gz = params.gz_with_target_type.gz;
   gz_prop_type = params.gz_with_target_type.gz_prop_type;
+
+  if (params.py_fn_slots[BPY_GIZMO_FN_SLOT_RANGE_GET] == Py_None) {
+    params.py_fn_slots[BPY_GIZMO_FN_SLOT_RANGE_GET] = nullptr;
+  }
 
   {
     const int slots_required = 2;
@@ -433,7 +438,7 @@ PyDoc_STRVAR(
     "\n"
     "   Get the value of this target property.\n"
     "\n"
-    "   :arg target: Target property name.\n"
+    "   :param target: Target property name.\n"
     "   :type target: str\n"
     "   :return: The value of the target property as a value or array based on the target type.\n"
     "   :rtype: float | tuple[float, ...]\n");
@@ -503,7 +508,7 @@ PyDoc_STRVAR(
     "\n"
     "   Set the value of this target property.\n"
     "\n"
-    "   :arg target: Target property name.\n"
+    "   :param target: Target property name.\n"
     "   :type target: str\n");
 static PyObject *bpy_gizmo_target_set_value(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
@@ -589,7 +594,7 @@ PyDoc_STRVAR(
     "\n"
     "   Get the range for this target property.\n"
     "\n"
-    "   :arg target: Target property name.\n"
+    "   :param target: Target property name.\n"
     "   :return: The range of this property (min, max).\n"
     "   :rtype: tuple[float, float]\n");
 static PyObject *bpy_gizmo_target_get_range(PyObject * /*self*/, PyObject *args, PyObject *kw)

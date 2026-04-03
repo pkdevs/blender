@@ -305,7 +305,7 @@ void OUTLINER_OT_item_openclose(wmOperatorType *ot)
 {
   ot->name = "Open/Close";
   ot->idname = "OUTLINER_OT_item_openclose";
-  ot->description = "Toggle whether item under cursor is enabled or closed";
+  ot->description = "Toggle whether item under cursor is open or closed";
 
   ot->invoke = outliner_item_openclose_invoke;
   ot->modal = outliner_item_openclose_modal;
@@ -1539,14 +1539,16 @@ static bool outliner_open_back(TreeElement *te)
 /**
  * \return element representing the active base or bone in the outliner, or null if none exists
  */
-static TreeElement *outliner_show_active_get_element(bContext *C,
+static TreeElement *outliner_show_active_get_element(const bContext *C,
                                                      SpaceOutliner *space_outliner,
                                                      const Scene *scene,
                                                      ViewLayer *view_layer)
 {
   TreeElement *te;
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  const Main *bmain = CTX_data_main(C);
+
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obact = BKE_view_layer_active_object_get(view_layer);
 
   if (!obact) {
@@ -1593,6 +1595,26 @@ static void outliner_show_active(SpaceOutliner *space_outliner,
 
   for (TreeElement &ten : te->subtree) {
     outliner_show_active(space_outliner, region, &ten, id);
+  }
+}
+
+void outliner_scroll_to_active(const bContext *C,
+                               SpaceOutliner *space_outliner,
+                               ARegion *region,
+                               TreeViewContext *tvc)
+{
+  const View2D *v2d = &region->v2d;
+  TreeElement *active_te = outliner_show_active_get_element(
+      C, space_outliner, tvc->scene, tvc->view_layer);
+
+  if (active_te) {
+    if (!BLI_rctf_isect_y(&v2d->cur, active_te->ys)) {
+      outliner_show_active(space_outliner, region, active_te, TREESTORE(active_te)->id);
+      const int size_y = BLI_rcti_size_y(&v2d->mask) + 1;
+      const int ytop = (active_te->ys + (size_y / 2));
+      const int delta_y = ytop - v2d->cur.ymax;
+      outliner_scroll_view(space_outliner, region, delta_y);
+    }
   }
 }
 

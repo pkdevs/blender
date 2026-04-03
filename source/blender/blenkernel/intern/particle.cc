@@ -378,34 +378,34 @@ static void particle_settings_blend_read_after_liblink(BlendLibReader * /*reader
 }
 
 IDTypeInfo IDType_ID_PA = {
-    /*id_code*/ ParticleSettings::id_type,
-    /*id_filter*/ FILTER_ID_PA,
-    /*dependencies_id_types*/ FILTER_ID_OB | FILTER_ID_GR | FILTER_ID_TE,
-    /*main_listbase_index*/ INDEX_ID_PA,
-    /*struct_size*/ sizeof(ParticleSettings),
-    /*name*/ "ParticleSettings",
-    /*name_plural*/ N_("particles"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_PARTICLESETTINGS,
-    /*flags*/ 0,
-    /*asset_type_info*/ nullptr,
+    .id_code = ParticleSettings::id_type,
+    .id_filter = FILTER_ID_PA,
+    .dependencies_id_types = FILTER_ID_OB | FILTER_ID_GR | FILTER_ID_TE,
+    .main_listbase_index = INDEX_ID_PA,
+    .struct_size = sizeof(ParticleSettings),
+    .name = "ParticleSettings",
+    .name_plural = N_("particles"),
+    .translation_context = BLT_I18NCONTEXT_ID_PARTICLESETTINGS,
+    .flags = 0,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ particle_settings_init,
-    /*copy_data*/ particle_settings_copy_data,
-    /*free_data*/ particle_settings_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ particle_settings_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = particle_settings_init,
+    .copy_data = particle_settings_copy_data,
+    .free_data = particle_settings_free_data,
+    .make_local = nullptr,
+    .foreach_id = particle_settings_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ particle_settings_blend_write,
-    /*blend_read_data*/ particle_settings_blend_read_data,
-    /*blend_read_after_liblink*/ particle_settings_blend_read_after_liblink,
+    .blend_write = particle_settings_blend_write,
+    .blend_read_data = particle_settings_blend_read_data,
+    .blend_read_after_liblink = particle_settings_blend_read_after_liblink,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 uint PSYS_FRAND_SEED_OFFSET[PSYS_FRAND_COUNT];
@@ -692,7 +692,7 @@ bool psys_in_edit_mode(Depsgraph *depsgraph, const ParticleSystem *psys)
 {
   const Scene *scene = DEG_get_input_scene(depsgraph);
   ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*DEG_get_bmain(depsgraph), scene, view_layer);
   const Object *object = BKE_view_layer_active_object_get(view_layer);
   if (object == nullptr) {
     /* TODO(sergey): Needs double-check with multi-object edit. */

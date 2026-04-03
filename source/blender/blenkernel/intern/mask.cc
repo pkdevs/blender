@@ -129,9 +129,9 @@ static void mask_blend_write(BlendWriter *writer, ID *id, const void *id_address
 
     for (MaskLayerShape &masklay_shape : masklay.splines_shapes) {
       writer->write_struct(&masklay_shape);
-      BLO_write_float_array(writer,
-                            masklay_shape.tot_vert * (sizeof(MaskLayerShapeElem) / sizeof(float)),
-                            masklay_shape.data);
+      writer->write_float_array(masklay_shape.tot_vert *
+                                    (sizeof(MaskLayerShapeElem) / sizeof(float)),
+                                masklay_shape.data);
     }
   }
 }
@@ -185,34 +185,34 @@ static void mask_blend_read_data(BlendDataReader *reader, ID *id)
 }
 
 IDTypeInfo IDType_ID_MSK = {
-    /*id_code*/ Mask::id_type,
-    /*id_filter*/ FILTER_ID_MSK,
-    /*dependencies_id_types*/ FILTER_ID_MC, /* WARNING! mask->parent.id, not typed. */
-    /*main_listbase_index*/ INDEX_ID_MSK,
-    /*struct_size*/ sizeof(Mask),
-    /*name*/ "Mask",
-    /*name_plural*/ N_("masks"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_MASK,
-    /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /*asset_type_info*/ nullptr,
+    .id_code = Mask::id_type,
+    .id_filter = FILTER_ID_MSK,
+    .dependencies_id_types = FILTER_ID_MC, /* WARNING! mask->parent.id, not typed. */
+    .main_listbase_index = INDEX_ID_MSK,
+    .struct_size = sizeof(Mask),
+    .name = "Mask",
+    .name_plural = N_("masks"),
+    .translation_context = BLT_I18NCONTEXT_ID_MASK,
+    .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ nullptr,
-    /*copy_data*/ mask_copy_data,
-    /*free_data*/ mask_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ mask_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = nullptr,
+    .copy_data = mask_copy_data,
+    .free_data = mask_free_data,
+    .make_local = nullptr,
+    .foreach_id = mask_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ mask_blend_write,
-    /*blend_read_data*/ mask_blend_read_data,
-    /*blend_read_after_liblink*/ nullptr,
+    .blend_write = mask_blend_write,
+    .blend_read_data = mask_blend_read_data,
+    .blend_read_after_liblink = nullptr,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 struct MaskClipboard {
@@ -310,6 +310,7 @@ MaskLayer *BKE_mask_layer_new(Mask *mask, const char *name)
   masklay->blend = MASK_BLEND_MERGE_ADD;
   masklay->alpha = 1.0f;
   masklay->flag = MASK_LAYERFLAG_FILL_DISCRETE | MASK_LAYERFLAG_FILL_OVERLAP;
+  masklay->fill_solver = MASK_FILL_SOLVER_CDT;
 
   return masklay;
 }
@@ -317,6 +318,16 @@ MaskLayer *BKE_mask_layer_new(Mask *mask, const char *name)
 MaskLayer *BKE_mask_layer_active(Mask *mask)
 {
   return static_cast<MaskLayer *>(BLI_findlink(&mask->masklayers, mask->masklay_act));
+}
+
+MaskLayer *BKE_mask_layer_by_name(Mask *mask, const char *layer_name)
+{
+  for (MaskLayer &mask_layer : mask->masklayers) {
+    if (STREQ(mask_layer.name, layer_name)) {
+      return &mask_layer;
+    }
+  }
+  return nullptr;
 }
 
 void BKE_mask_layer_active_set(Mask *mask, MaskLayer *masklay)
@@ -370,6 +381,7 @@ MaskLayer *BKE_mask_layer_copy(const MaskLayer *masklay)
   masklay_new->blend_flag = masklay->blend_flag;
   masklay_new->flag = masklay->flag;
   masklay_new->falloff = masklay->falloff;
+  masklay_new->fill_solver = masklay->fill_solver;
   masklay_new->visibility_flag = masklay->visibility_flag;
 
   for (MaskSpline &spline : masklay->splines) {
@@ -439,6 +451,16 @@ MaskSpline *BKE_mask_spline_add(MaskLayer *masklay)
   BKE_mask_parent_init(&spline->parent);
 
   return spline;
+}
+
+void BKE_mask_spline_move_to_layer(MaskSpline *spline,
+                                   MaskLayer *src_mask_layer,
+                                   MaskLayer *dst_mask_layer)
+{
+  if (src_mask_layer != dst_mask_layer) {
+    BLI_remlink(&src_mask_layer->splines, spline);
+    BLI_addtail(&dst_mask_layer->splines, spline);
+  }
 }
 
 bool BKE_mask_spline_remove(MaskLayer *mask_layer, MaskSpline *spline)

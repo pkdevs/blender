@@ -278,7 +278,7 @@ static wmOperatorStatus pose_calculate_paths_exec(bContext *C, wmOperator *op)
 #endif
 
   /* notifiers for updates */
-  WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
+  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, ob);
 
   return OPERATOR_FINISHED;
 }
@@ -353,7 +353,7 @@ static wmOperatorStatus pose_update_paths_exec(bContext *C, wmOperator *op)
   ED_pose_recalculate_paths(C, scene, ob, POSE_PATH_CALC_RANGE_FULL);
 
   /* notifiers for updates */
-  WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
+  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, ob);
 
   return OPERATOR_FINISHED;
 }
@@ -421,7 +421,7 @@ static wmOperatorStatus pose_clear_paths_exec(bContext *C, wmOperator *op)
   pose_clear_paths(ob, only_selected);
 
   /* notifiers for updates */
-  WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
+  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, ob);
 
   return OPERATOR_FINISHED;
 }
@@ -477,7 +477,7 @@ static wmOperatorStatus pose_update_paths_range_exec(bContext *C, wmOperator * /
 
   /* tag for updates */
   DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
-  WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
+  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, ob);
 
   return OPERATOR_FINISHED;
 }
@@ -507,7 +507,7 @@ static wmOperatorStatus pose_flip_names_exec(bContext *C, wmOperator *op)
   View3D *v3d = CTX_wm_view3d(C);
   const bool do_strip_numbers = RNA_boolean_get(op->ptr, "do_strip_numbers");
 
-  FOREACH_OBJECT_IN_MODE_BEGIN (scene, view_layer, v3d, OB_ARMATURE, OB_MODE_POSE, ob) {
+  FOREACH_OBJECT_IN_MODE_BEGIN (bmain, scene, view_layer, v3d, OB_ARMATURE, OB_MODE_POSE, ob) {
     bArmature *arm = id_cast<bArmature *>(ob->data);
     ListBaseT<LinkData> bones_names = {nullptr};
 
@@ -520,11 +520,12 @@ static wmOperatorStatus pose_flip_names_exec(bContext *C, wmOperator *op)
 
     BLI_freelistN(&bones_names);
 
-    /* since we renamed stuff... */
+    /* Since we renamed stuff... */
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(C, NC_GEOM | ND_DATA | NA_RENAME, ob->data);
 
-    /* NOTE: notifier might evolve. */
-    WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
+    /* Update animation channels */
+    WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, ob->data);
   }
   FOREACH_OBJECT_IN_MODE_END;
 
@@ -571,11 +572,12 @@ static wmOperatorStatus pose_autoside_names_exec(bContext *C, wmOperator *op)
     }
 
     if (ob_prev != ob) {
-      /* since we renamed stuff... */
+      /* Since we renamed stuff... */
       DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+      WM_event_add_notifier(C, NC_GEOM | ND_DATA | NA_RENAME, ob->data);
 
-      /* NOTE: notifier might evolve. */
-      WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
+      /* Update animation channels */
+      WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, ob->data);
       ob_prev = ob;
     }
   }
@@ -632,7 +634,7 @@ static wmOperatorStatus pose_bone_rotmode_exec(bContext *C, wmOperator *op)
       /* Notifiers and updates. */
       DEG_id_tag_update(reinterpret_cast<ID *>(ob), ID_RECALC_GEOMETRY);
       WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, ob);
-      WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
+      WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
       prev_ob = ob;
     }
   }
@@ -667,9 +669,11 @@ void POSE_OT_rotation_mode_set(wmOperatorType *ot)
 /* active object is armature in posemode, poll checked */
 static wmOperatorStatus pose_hide_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Vector<Object *> objects = BKE_object_pose_array_get_unique(scene, view_layer, CTX_wm_view3d(C));
+  Vector<Object *> objects = BKE_object_pose_array_get_unique(
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   bool changed_multi = false;
 
   const int hide_select = !RNA_boolean_get(op->ptr, "unselected");
@@ -720,9 +724,11 @@ void POSE_OT_hide(wmOperatorType *ot)
 /* active object is armature in posemode, poll checked */
 static wmOperatorStatus pose_reveal_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Vector<Object *> objects = BKE_object_pose_array_get_unique(scene, view_layer, CTX_wm_view3d(C));
+  Vector<Object *> objects = BKE_object_pose_array_get_unique(
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   bool changed_multi = false;
   const bool select = RNA_boolean_get(op->ptr, "select");
 
@@ -777,13 +783,15 @@ void POSE_OT_reveal(wmOperatorType *ot)
 
 static wmOperatorStatus pose_flip_quats_exec(bContext *C, wmOperator * /*op*/)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
 
   bool changed_multi = false;
 
   ViewLayer *view_layer = CTX_data_view_layer(C);
   View3D *v3d = CTX_wm_view3d(C);
-  FOREACH_OBJECT_IN_MODE_BEGIN (scene, view_layer, v3d, OB_ARMATURE, OB_MODE_POSE, ob_iter) {
+  FOREACH_OBJECT_IN_MODE_BEGIN (bmain, scene, view_layer, v3d, OB_ARMATURE, OB_MODE_POSE, ob_iter)
+  {
     bool changed = false;
     /* loop through all selected pchans, flipping and keying (as needed) */
     FOREACH_PCHAN_SELECTED_IN_OBJECT_BEGIN (ob_iter, pchan) {

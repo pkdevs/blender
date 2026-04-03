@@ -52,6 +52,24 @@
 
 #include "CLG_log.h"
 
+/* Doc-string Literal types. */
+
+#define PYDOC_INSERTKEY_OPTIONS_LITERAL \
+  "Literal[" \
+  "'INSERTKEY_NEEDED', " \
+  "'INSERTKEY_VISUAL', " \
+  "'INSERTKEY_REPLACE', " \
+  "'INSERTKEY_AVAILABLE', " \
+  "'INSERTKEY_CYCLE_AWARE']"
+#define PYDOC_KEYTYPE_LITERAL \
+  "Literal[" \
+  "'KEYFRAME', " \
+  "'BREAKDOWN', " \
+  "'MOVING_HOLD', " \
+  "'EXTREME', " \
+  "'JITTER', " \
+  "'GENERATED']"
+
 namespace blender {
 
 /* for keyframes and drivers */
@@ -292,26 +310,26 @@ static int pyrna_struct_keyframe_parse(PointerRNA *ptr,
 }
 
 char pyrna_struct_keyframe_insert_doc[] =
-    ".. method:: keyframe_insert(data_path, /, *, index=-1, "
+    ".. method:: keyframe_insert(data_path, *, index=-1, "
     "frame=bpy.context.scene.frame_current, "
     "group=\"\", options=set(), keytype='KEYFRAME')\n"
     "\n"
     "   Insert a keyframe on the property given, adding fcurves and animation data when "
     "necessary.\n"
     "\n"
-    "   :arg data_path: path to the property to key, analogous to the fcurve's data path.\n"
+    "   :param data_path: path to the property to key, analogous to the fcurve's data path.\n"
     "   :type data_path: str\n"
-    "   :arg index: array index of the property to key.\n"
+    "   :param index: array index of the property to key.\n"
     "      Defaults to -1 which will key all indices or a single channel if the property is not "
     "an array.\n"
     "   :type index: int\n"
-    "   :arg frame: The frame on which the keyframe is inserted, defaulting to the current "
+    "   :param frame: The frame on which the keyframe is inserted, defaulting to the current "
     "frame.\n"
     "   :type frame: float\n"
-    "   :arg group: The name of the group the F-Curve should be added to if it doesn't exist "
+    "   :param group: The name of the group the F-Curve should be added to if it doesn't exist "
     "yet.\n"
     "   :type group: str\n"
-    "   :arg options: Optional set of flags:\n"
+    "   :param options: Optional set of flags:\n"
     "\n"
     "      - ``INSERTKEY_NEEDED`` Only insert keyframes where they're needed in the relevant "
     "F-Curves.\n"
@@ -320,10 +338,11 @@ char pyrna_struct_keyframe_insert_doc[] =
     "      - ``INSERTKEY_AVAILABLE`` Only insert into already existing F-Curves.\n"
     "      - ``INSERTKEY_CYCLE_AWARE`` Take cyclic extrapolation into account "
     "(Cycle-Aware Keying option).\n"
-    "   :type options: set[str]\n"
-    "   :arg keytype: Type of the key: 'KEYFRAME', 'BREAKDOWN', 'MOVING_HOLD', 'EXTREME', "
-    "'JITTER', or 'GENERATED'\n"
-    "   :type keytype: str\n"
+    "   :type options: set[" PYDOC_INSERTKEY_OPTIONS_LITERAL
+    "]\n"
+    "   :param keytype: Type of the key.\n"
+    "   :type keytype: " PYDOC_KEYTYPE_LITERAL
+    "\n"
     "   :return: Success of keyframe insertion.\n"
     "   :rtype: bool\n";
 PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyObject *kw)
@@ -389,14 +408,18 @@ PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyOb
     if (prop) {
       NlaStrip *strip = static_cast<NlaStrip *>(ptr.data);
       FCurve *fcu = BKE_fcurve_find(&strip->fcurves, RNA_property_identifier(prop), index);
-      result = insert_keyframe_direct(&reports,
-                                      ptr,
-                                      prop,
-                                      fcu,
-                                      &anim_eval_context,
-                                      eBezTriple_KeyframeType(keytype),
-                                      nullptr,
-                                      eInsertKeyFlags(options));
+      if (fcu) {
+        SingleKeyingResult key_result = insert_keyframe_direct(ptr,
+                                                               *prop,
+                                                               *fcu,
+                                                               anim_eval_context.eval_time,
+                                                               eBezTriple_KeyframeType(keytype),
+                                                               eInsertKeyFlags(options));
+        result = key_result == SingleKeyingResult::SUCCESS;
+        if (key_result != SingleKeyingResult::SUCCESS) {
+          generate_single_keying_result_report(key_result, &reports);
+        }
+      }
     }
     else {
       BKE_reportf(&reports, RPT_ERROR, "Could not resolve path (%s)", path_full);
@@ -448,21 +471,23 @@ PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyOb
 }
 
 char pyrna_struct_keyframe_delete_doc[] =
-    ".. method:: keyframe_delete(data_path, /, *, index=-1, "
+    ".. method:: keyframe_delete(data_path, *, index=-1, "
     "frame=bpy.context.scene.frame_current, "
     "group=\"\")\n"
     "\n"
     "   Remove a keyframe from this properties fcurve.\n"
     "\n"
-    "   :arg data_path: path to the property to remove a key, analogous to the fcurve's data "
+    "   :param data_path: path to the property to remove a key, analogous to the fcurve's data "
     "path.\n"
     "   :type data_path: str\n"
-    "   :arg index: array index of the property to remove a key. Defaults to -1 removing all "
-    "indices or a single channel if the property is not an array.\n"
+    "   :param index: array index of the property to remove a key. "
+    "Defaults to -1 removing all indices or a single channel "
+    "if the property is not an array.\n"
     "   :type index: int\n"
-    "   :arg frame: The frame on which the keyframe is deleted, defaulting to the current frame.\n"
+    "   :param frame: The frame on which the keyframe is deleted, "
+    "defaulting to the current frame.\n"
     "   :type frame: float\n"
-    "   :arg group: The name of the group the F-Curve should be added to if it doesn't exist "
+    "   :param group: The name of the group the F-Curve should be added to if it doesn't exist "
     "yet.\n"
     "   :type group: str\n"
     "   :return: Success of keyframe deletion.\n"
@@ -575,10 +600,10 @@ char pyrna_struct_driver_add_doc[] =
     "\n"
     "   Adds driver(s) to the given property\n"
     "\n"
-    "   :arg path: path to the property to drive, analogous to the fcurve's data path.\n"
+    "   :param path: path to the property to drive, analogous to the fcurve's data path.\n"
     "   :type path: str\n"
-    "   :arg index: array index of the property drive. Defaults to -1 for all indices or a single "
-    "channel if the property is not an array.\n"
+    "   :param index: array index of the property drive. "
+    "Defaults to -1 for all indices or a single channel if the property is not an array.\n"
     "   :type index: int\n"
     "   :return: The driver added or a list of drivers when index is -1.\n"
     "   :rtype: :class:`bpy.types.FCurve` | list[:class:`bpy.types.FCurve`]\n";
@@ -652,10 +677,10 @@ char pyrna_struct_driver_remove_doc[] =
     "\n"
     "   Remove driver(s) from the given property\n"
     "\n"
-    "   :arg path: path to the property to drive, analogous to the fcurve's data path.\n"
+    "   :param path: path to the property to drive, analogous to the fcurve's data path.\n"
     "   :type path: str\n"
-    "   :arg index: array index of the property drive. Defaults to -1 for all indices or a single "
-    "channel if the property is not an array.\n"
+    "   :param index: array index of the property drive. "
+    "Defaults to -1 for all indices or a single channel if the property is not an array.\n"
     "   :type index: int\n"
     "   :return: Success of driver removal.\n"
     "   :rtype: bool\n";

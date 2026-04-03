@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
-#pragma create_info
 
 #include "draw_view_infos.hh"  // IWYU pragma: export
 
@@ -120,6 +119,8 @@ struct Mesh {
   [[legacy_info]] ShaderCreateInfo draw_modelmat_with_custom_id;
   [[legacy_info]] ShaderCreateInfo drw_clipped;
 
+  /** WORKAROUND: This exact compilation constant is checked in Metal backend to enable clip
+   * distances. */
   [[compilation_constant]] const bool use_clipping;
 };
 
@@ -132,7 +133,7 @@ struct Mesh {
   float3 world_pos = drw_point_object_to_world(v_in.pos);
   out_position = drw_point_world_to_homogenous(world_pos);
 
-  if (mesh.use_clipping) {
+  if (mesh.use_clipping) [[static_branch]] {
     view_clipping_distances(world_pos);
   }
 
@@ -157,6 +158,8 @@ struct Curves {
   [[legacy_info]] ShaderCreateInfo draw_curves_infos;
   [[legacy_info]] ShaderCreateInfo drw_clipped;
 
+  /** WORKAROUND: This exact compilation constant is checked in Metal backend to enable clip
+   * distances. */
   [[compilation_constant]] const bool use_clipping;
 
   [[sampler(WB_CURVES_COLOR_SLOT) /*, frequency(batch)*/]] samplerBuffer ac;
@@ -193,7 +196,7 @@ struct Curves {
     nor = hair_random_normal(pt.curve_T, pt.curve_B, pt.curve_N, hair_rand);
   }
 
-  if (curves.use_clipping) {
+  if (curves.use_clipping) [[static_branch]] {
     view_clipping_distances(world_pos);
   }
 
@@ -227,6 +230,8 @@ struct PointCloud {
   [[legacy_info]] ShaderCreateInfo draw_pointcloud;
   [[legacy_info]] ShaderCreateInfo drw_clipped;
 
+  /** WORKAROUND: This exact compilation constant is checked in Metal backend to enable clip
+   * distances. */
   [[compilation_constant]] const bool use_clipping;
 };
 
@@ -245,7 +250,7 @@ struct PointCloud {
 
   out_position = drw_point_world_to_homogenous(pt.P);
 
-  if (point_cloud.use_clipping) {
+  if (point_cloud.use_clipping) [[static_branch]] {
     view_clipping_distances(pt.P);
   }
 
@@ -283,10 +288,11 @@ struct OpaqueOut {
 
 [[fragment]] void frag_opaque([[resource_table]] Resources &srt,
                               [[in]] const VertOut &v_out,
+                              [[front_facing]] const bool facing,
                               [[out]] OpaqueOut &frag_out)
 {
   frag_out.object_id = uint(v_out.object_id);
-  frag_out.normal = normal_encode(gl_FrontFacing, v_out.normal);
+  frag_out.normal = normal_encode(facing, v_out.normal);
 
   frag_out.material = float4(v_out.color, float_pair_encode(v_out.roughness, v_out.metallic));
 
@@ -296,7 +302,7 @@ struct OpaqueOut {
 
   if (srt.lighting_mode == WORKBENCH_LIGHTING_MATCAP) [[static_branch]] {
     /* For matcaps, save front facing in alpha channel. */
-    frag_out.material.a = float(gl_FrontFacing);
+    frag_out.material.a = float(facing);
   }
 }
 

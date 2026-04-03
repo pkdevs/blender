@@ -65,15 +65,24 @@ if(WITH_OPENVDB)
 endif()
 
 # -----------------------------------------------------------------------------
+# Configure Ceres
+add_library(bf_deps_optional_ceres INTERFACE)
+add_library(bf::dependencies::optional::ceres ALIAS bf_deps_optional_ceres)
+
+if(TARGET Ceres::ceres)
+  target_compile_definitions(bf_deps_optional_ceres INTERFACE WITH_CERES)
+  target_link_libraries(bf_deps_optional_ceres INTERFACE Ceres::ceres)
+endif()
+
+# -----------------------------------------------------------------------------
 # Configure Eigen
 
 add_library(bf_deps_eigen INTERFACE)
 add_library(bf::dependencies::eigen ALIAS bf_deps_eigen)
-
-target_include_directories(bf_deps_eigen SYSTEM INTERFACE ${EIGEN3_INCLUDE_DIRS})
+target_link_libraries(bf_deps_eigen INTERFACE Eigen3::Eigen)
 
 if(WITH_TBB)
-  target_compile_definitions(bf_deps_eigen INTERFACE WITH_TBB)
+  target_compile_definitions(bf_deps_eigen INTERFACE EIGEN_HAS_TBB)
   target_include_directories(bf_deps_eigen SYSTEM INTERFACE ${TBB_INCLUDE_DIRS})
   target_link_libraries(bf_deps_eigen INTERFACE ${TBB_LIBRARIES})
 endif()
@@ -138,18 +147,8 @@ target_link_libraries(bf_deps_png INTERFACE ${PNG_LIBRARIES})
 # -----------------------------------------------------------------------------
 # Configure OpenImageIO
 
-add_library(bf_deps_openimageio INTERFACE)
-add_library(bf::dependencies::openimageio ALIAS bf_deps_openimageio)
-
-target_include_directories(bf_deps_openimageio SYSTEM INTERFACE ${OPENIMAGEIO_INCLUDE_DIRS})
-target_link_libraries(bf_deps_openimageio INTERFACE ${OPENIMAGEIO_LIBRARIES})
-
-# OpenImageIO headers include `Imath` headers when there is no SSE support for
-# matrix operations. This depends on the specific architecture and compiler
-# flags, most reliable is to always include the `Imath` headers if we have them.
-if(DEFINED IMATH_INCLUDE_DIRS)
-  target_include_directories(bf_deps_openimageio SYSTEM INTERFACE ${IMATH_INCLUDE_DIRS})
-endif()
+add_library(bf::dependencies::openimageio ALIAS OpenImageIO::OpenImageIO)
+get_target_property(OPENIMAGEIO_TOOL OpenImageIO::oiiotool LOCATION)
 
 # -----------------------------------------------------------------------------
 # Configure USD
@@ -195,8 +194,7 @@ add_library(bf::dependencies::optional::openexr ALIAS bf_deps_optional_openexr)
 
 if(WITH_IMAGE_OPENEXR)
   target_compile_definitions(bf_deps_optional_openexr INTERFACE WITH_IMAGE_OPENEXR)
-  target_include_directories(bf_deps_optional_openexr SYSTEM INTERFACE ${OPENEXR_INCLUDE_DIRS})
-  target_link_libraries(bf_deps_optional_openexr INTERFACE ${OPENEXR_LIBRARIES})
+  target_link_libraries(bf_deps_optional_openexr INTERFACE OpenEXR::OpenEXR)
 endif()
 
 # -----------------------------------------------------------------------------
@@ -328,6 +326,38 @@ if(WITH_VULKAN_BACKEND)
 endif()
 
 # -----------------------------------------------------------------------------
+# Configure Embree
+
+add_library(bf_deps_optional_embree INTERFACE)
+add_library(bf::dependencies::optional::embree ALIAS bf_deps_optional_embree)
+
+if(WITH_CYCLES_EMBREE)
+  target_include_directories(bf_deps_optional_embree SYSTEM INTERFACE ${EMBREE_INCLUDE_DIRS})
+  target_link_libraries(bf_deps_optional_embree INTERFACE ${EMBREE_LIBRARIES})
+endif()
+
+# -----------------------------------------------------------------------------
+# Configure OpenPGL
+
+add_library(bf_deps_optional_openpgl INTERFACE)
+add_library(bf::dependencies::optional::openpgl ALIAS bf_deps_optional_openpgl)
+
+if(WITH_CYCLES_PATH_GUIDING)
+  target_include_directories(bf_deps_optional_openpgl SYSTEM INTERFACE ${OPENPGL_INCLUDE_DIR})
+  target_link_libraries(bf_deps_optional_openpgl INTERFACE ${OPENPGL_LIBRARIES})
+endif()
+
+# -----------------------------------------------------------------------------
+# Configure NanoVDB
+
+add_library(bf_deps_optional_nanovdb INTERFACE)
+add_library(bf::dependencies::optional::nanovdb ALIAS bf_deps_optional_nanovdb)
+
+if(WITH_NANOVDB)
+  target_include_directories(bf_deps_optional_nanovdb SYSTEM INTERFACE ${NANOVDB_INCLUDE_DIR})
+endif()
+
+# -----------------------------------------------------------------------------
 # Configure Epoxy
 
 add_library(bf_deps_epoxy INTERFACE)
@@ -410,7 +440,7 @@ if(WITH_AUDASPACE)
   endif()
   target_include_directories(bf_deps_optional_audaspace SYSTEM INTERFACE ${AUDASPACE_C_INCLUDE_DIRS} ${AUDASPACE_PY_INCLUDE_DIRS})
   if(WITH_SYSTEM_AUDASPACE)
-    target_link_libraries(bf_deps_optional_audaspace INTERFACE ${AUDASPACE_C_LIBRARIES} ${AUDASPACE_PY_LIBRARIES})
+    target_link_libraries(bf_deps_optional_audaspace INTERFACE ${AUDASPACE_LIBRARIES} ${AUDASPACE_PY_LIBRARIES})
   else()
     target_link_libraries(bf_deps_optional_audaspace INTERFACE audaspace audaspace-py)
   endif()
@@ -447,3 +477,22 @@ endif()
 #
 
 add_library(bf::dependencies::fmt ALIAS fmt::fmt)
+
+# -----------------------------------------------------------------------------
+# Configure OSL
+
+if(WITH_CYCLES_OSL)
+  add_library(bf_deps_optional_osl INTERFACE)
+  target_link_libraries(bf_deps_optional_osl INTERFACE OSL::oslcomp OSL::oslquery OSL::oslnoise)
+  # Link oslexec with the -force_load flag on macOS.
+  if(APPLE)
+    target_link_libraries(bf_deps_optional_osl INTERFACE -force_load OSL::oslexec)
+  else()
+    target_link_libraries(bf_deps_optional_osl INTERFACE OSL::oslexec)
+  endif()
+  add_library(bf::dependencies::optional::osl ALIAS bf_deps_optional_osl)
+  get_target_property(OSL_COMPILER OSL::oslc LOCATION)
+else()
+  add_library(bf_deps_optional_osl INTERFACE)
+  add_library(bf::dependencies::optional::osl ALIAS bf_deps_optional_osl)
+endif()

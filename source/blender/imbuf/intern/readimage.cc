@@ -117,7 +117,14 @@ static void imb_handle_colorspace_and_alpha(ImBuf *ibuf,
     }
   }
 
-  colormanage_imbuf_make_linear(ibuf, new_colorspace, ColorManagedFileOutput::Image);
+  if (flags & IB_no_colorspace_convert) {
+    if (ibuf->float_buffer.data != nullptr) {
+      ibuf->float_buffer.colorspace = colormanage_colorspace_get_named(new_colorspace);
+    }
+  }
+  else {
+    colormanage_imbuf_make_linear(ibuf, new_colorspace, ColorManagedFileOutput::Image);
+  }
 }
 
 ImBuf *IMB_load_image_from_memory(const uchar *mem,
@@ -205,7 +212,7 @@ ImBuf *IMB_load_image_from_filepath(const char *filepath,
   ibuf = IMB_load_image_from_file_descriptor(file, flags, filepath, r_colorspace);
 
   if (ibuf) {
-    STRNCPY(ibuf->filepath, filepath);
+    ibuf->filepath = filepath;
   }
 
   close(file);

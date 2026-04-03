@@ -85,18 +85,18 @@ static void node_declare(NodeDeclarationBuilder &b)
     const std::string identifier = FileOutputItemsAccessor::socket_identifier_for_item(item);
     BaseSocketDeclarationBuilder *declaration = nullptr;
     if (socket_type == SOCK_VECTOR) {
-      declaration = &b.add_input<decl::Vector>(item.name, identifier)
+      declaration = &b.add_input<decl::Vector>(UString(item.name), UString(identifier))
                          .dimensions(item.vector_socket_dimensions);
     }
     else {
-      declaration = &b.add_input(socket_type, item.name, identifier);
+      declaration = &b.add_input(socket_type, UString(item.name), UString(identifier));
     }
     declaration->structure_type(StructureType::Dynamic)
         .compositor_realization_mode(realization_mode)
         .socket_name_ptr(&node_tree->id, *FileOutputItemsAccessor::item_srna, &item, "name");
   }
 
-  b.add_input<decl::Extend>("", "__extend__");
+  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr);
 }
 
 static void node_init(const bContext *C, PointerRNA *node_pointer)
@@ -105,6 +105,7 @@ static void node_init(const bContext *C, PointerRNA *node_pointer)
   NodeCompositorFileOutput *data = MEM_new<NodeCompositorFileOutput>(__func__);
   node->storage = data;
   data->save_as_render = true;
+  data->use_file_extension = true;
   data->file_name = BLI_strdup("file_name");
 
   BKE_image_format_init(&data->format);
@@ -189,7 +190,7 @@ static Vector<bke::path_templates::Error> compute_image_path(const StringRefNull
                                       &template_variables,
                                       frame_number,
                                       &format,
-                                      scene.r.scemode & R_EXTENSION,
+                                      bool(node_storage(node).use_file_extension),
                                       is_animation_render,
                                       BKE_scene_multiview_view_suffix_get(&scene.r, view));
 }
@@ -352,6 +353,9 @@ static void node_draw_buttons_extended(ui::Layout &layout,
     const bNode &node = *node_pointer->data_as<bNode>();
     const ImageFormatData &node_format = *format_pointer.data_as<ImageFormatData>();
 
+    panel->prop(
+        node_pointer, "use_file_extension", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+
     if (is_multi_layer) {
       output_paths_layout(*panel, context, "", node, node_format);
     }
@@ -369,7 +373,7 @@ static void node_draw_buttons_extended(ui::Layout &layout,
 static void node_blend_write(const bNodeTree & /*tree*/, const bNode &node, BlendWriter &writer)
 {
   const NodeCompositorFileOutput &data = node_storage(node);
-  BLO_write_string(&writer, data.file_name);
+  writer.write_string(data.file_name);
   BKE_image_format_blend_write(&writer, const_cast<ImageFormatData *>(&data.format));
   socket_items::blend_write<FileOutputItemsAccessor>(&writer, node);
 }
@@ -419,7 +423,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
       socket_items::add_item_with_socket_type_and_name<FileOutputItemsAccessor>(
           params.node_tree, node, socket_type, params.socket.name);
     }
-    params.update_and_connect_available_socket(node, params.socket.name);
+    params.update_and_connect_available_socket(node, UString(params.socket.name));
   });
 }
 
@@ -632,10 +636,18 @@ class FileOutputOperation : public NodeOperation {
         file_output.add_pass(pass_name, view_name, "XY", buffer);
         break;
       case ResultType::Int2:
+      case ResultType::Int3:
       case ResultType::Int:
       case ResultType::Bool:
+      case ResultType::Float4x4:
       case ResultType::Menu:
       case ResultType::String:
+      case ResultType::Object:
+      case ResultType::Image:
+      case ResultType::Font:
+      case ResultType::Scene:
+      case ResultType::Text:
+      case ResultType::Mask:
         /* Not supported. */
         BLI_assert_unreachable();
         break;
@@ -649,7 +661,7 @@ class FileOutputOperation : public NodeOperation {
     BLI_assert(result.is_single_value());
 
     const int64_t length = int64_t(size.x) * size.y;
-    const int64_t buffer_size = length * result.channels_count();
+    const int64_t buffer_size = length * (result.get_cpp_type().size / sizeof(float));
     float *buffer = MEM_new_array_uninitialized<float>(buffer_size,
                                                        "File Output Inflated Buffer.");
 
@@ -665,9 +677,17 @@ class FileOutputOperation : public NodeOperation {
       }
       case ResultType::Int:
       case ResultType::Int2:
+      case ResultType::Int3:
       case ResultType::Bool:
+      case ResultType::Float4x4:
       case ResultType::Menu:
       case ResultType::String:
+      case ResultType::Object:
+      case ResultType::Image:
+      case ResultType::Font:
+      case ResultType::Scene:
+      case ResultType::Text:
+      case ResultType::Mask:
         /* Not supported. */
         BLI_assert_unreachable();
         return nullptr;
@@ -718,9 +738,17 @@ class FileOutputOperation : public NodeOperation {
       case ResultType::Float2:
       case ResultType::Int2:
       case ResultType::Int:
+      case ResultType::Int3:
       case ResultType::Bool:
+      case ResultType::Float4x4:
       case ResultType::Menu:
       case ResultType::String:
+      case ResultType::Object:
+      case ResultType::Image:
+      case ResultType::Font:
+      case ResultType::Scene:
+      case ResultType::Text:
+      case ResultType::Mask:
         /* Not supported. */
         BLI_assert_unreachable();
         break;
@@ -897,7 +925,7 @@ StructRNA **FileOutputItemsAccessor::item_srna = &RNA_NodeCompositorFileOutputIt
 
 void FileOutputItemsAccessor::blend_write_item(BlendWriter *writer, const ItemT &item)
 {
-  BLO_write_string(writer, item.name);
+  writer->write_string(item.name);
   BKE_image_format_blend_write(writer, const_cast<ImageFormatData *>(&item.format));
 }
 

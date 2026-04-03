@@ -19,7 +19,6 @@
 #include "BLI_sys_types.h"
 #include "BLI_vector.hh"
 
-#include "BKE_attribute_storage.hh"
 #include "BKE_volume_enums.hh"
 
 #include "DNA_customdata_types.h"
@@ -532,8 +531,6 @@ const char *CustomData_get_active_layer_name(const CustomData *data, eCustomData
  */
 const char *CustomData_get_render_layer_name(const CustomData *data, eCustomDataType type);
 
-bool CustomData_layer_is_anonymous(const CustomData *data, eCustomDataType type, int n);
-
 void CustomData_bmesh_set_n(
     CustomData *data, void *block, eCustomDataType type, int n, const void *source);
 
@@ -602,14 +599,6 @@ bool CustomData_verify_versions(CustomData *data, int index);
 /* BMesh specific custom-data stuff. */
 
 void CustomData_bmesh_init_pool(CustomData *data, int totelem, char htype);
-
-/**
- * Validate and fix data of \a layer,
- * if possible (needs relevant callback in layer's type to be defined).
- *
- * \return True if some errors were found.
- */
-bool CustomData_layer_validate(CustomDataLayer *layer, uint totitems, bool do_fixes);
 
 /* External file storage */
 
@@ -682,18 +671,13 @@ void CustomData_data_transfer(const MeshPairRemap *me_remap, CustomDataTransferL
  *
  * \param data: The custom-data to tweak for .blend file writing (modified in place).
  * \param layers_to_write: A reduced set of layers to be written to file.
- * \param write_data: #AttributeStorage data to write, to support the option for writing the new
- * format even when it isn't used at runtime.
  *
  * \warning This function invalidates the custom data struct by changing the layer counts and the
  * #layers pointer, and by invalidating the type map. It expects to work on a shallow copy of
  * the struct.
  */
 void CustomData_blend_write_prepare(CustomData &data,
-                                    bke::AttrDomain domain,
-                                    int domain_size,
-                                    Vector<CustomDataLayer, 16> &layers_to_write,
-                                    bke::AttributeStorage::BlendWriteData &write_data);
+                                    Vector<CustomDataLayer, 16> &layers_to_write);
 
 /**
  * \param layers_to_write: Layers created by #CustomData_blend_write_prepare.

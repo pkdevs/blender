@@ -164,10 +164,10 @@ static void curve_blend_write(BlendWriter *writer, ID *id, const void *id_addres
   BKE_id_blend_write(writer, &cu->id);
 
   /* direct data */
-  BLO_write_pointer_array(writer, cu->totcol, cu->mat);
+  writer->write_pointer_array(cu->totcol, cu->mat);
 
   if (cu->ob_type == OB_FONT) {
-    BLO_write_string(writer, cu->str);
+    writer->write_string(cu->str);
     writer->write_struct_array(cu->len_char32 + 1, cu->strinfo);
     writer->write_struct_array(cu->totbox, cu->tb);
   }
@@ -183,10 +183,10 @@ static void curve_blend_write(BlendWriter *writer, ID *id, const void *id_addres
       else {
         writer->write_struct_array(nu.pntsu * nu.pntsv, nu.bp);
         if (nu.knotsu) {
-          BLO_write_float_array(writer, KNOTSU(&nu), nu.knotsu);
+          writer->write_float_array(KNOTSU(&nu), nu.knotsu);
         }
         if (nu.knotsv) {
-          BLO_write_float_array(writer, KNOTSV(&nu), nu.knotsv);
+          writer->write_float_array(KNOTSV(&nu), nu.knotsv);
         }
       }
     }
@@ -275,34 +275,34 @@ static void curve_blend_read_data(BlendDataReader *reader, ID *id)
 }
 
 IDTypeInfo IDType_ID_CU_LEGACY = {
-    /*id_code*/ Curve::id_type,
-    /*id_filter*/ FILTER_ID_CU_LEGACY,
-    /*dependencies_id_types*/ FILTER_ID_OB | FILTER_ID_MA | FILTER_ID_VF | FILTER_ID_KE,
-    /*main_listbase_index*/ INDEX_ID_CU_LEGACY,
-    /*struct_size*/ sizeof(Curve),
-    /*name*/ "Curve",
-    /*name_plural*/ N_("curves"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_CURVE_LEGACY,
-    /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /*asset_type_info*/ nullptr,
+    .id_code = Curve::id_type,
+    .id_filter = FILTER_ID_CU_LEGACY,
+    .dependencies_id_types = FILTER_ID_OB | FILTER_ID_MA | FILTER_ID_VF | FILTER_ID_KE,
+    .main_listbase_index = INDEX_ID_CU_LEGACY,
+    .struct_size = sizeof(Curve),
+    .name = "Curve",
+    .name_plural = N_("curves"),
+    .translation_context = BLT_I18NCONTEXT_ID_CURVE_LEGACY,
+    .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ curve_init_data,
-    /*copy_data*/ curve_copy_data,
-    /*free_data*/ curve_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ curve_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = curve_init_data,
+    .copy_data = curve_copy_data,
+    .free_data = curve_free_data,
+    .make_local = nullptr,
+    .foreach_id = curve_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ curve_blend_write,
-    /*blend_read_data*/ curve_blend_read_data,
-    /*blend_read_after_liblink*/ nullptr,
+    .blend_write = curve_blend_write,
+    .blend_read_data = curve_blend_read_data,
+    .blend_read_after_liblink = nullptr,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 void BKE_curve_editfont_free(Curve *cu)
@@ -3011,7 +3011,9 @@ void BKE_curve_bevelList_make(Object *ob, const ListBaseT<Nurb> *nurbs, const bo
     if (CU_IS_2D(cu)) {
       sd = sortdata;
       for (a = 0; a < poly; a++, sd++) {
+        BLI_assert(sd->bl->reversed == false);
         if (sd->bl->hole == sd->dir) {
+          sd->bl->reversed = true;
           BevList *bl = sd->bl;
           bevp1 = bl->bevpoints;
           bevp2 = bevp1 + (bl->nr - 1);

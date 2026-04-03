@@ -368,7 +368,8 @@ enum eSpaceSeq_SequencerPreviewOverlay_Flag {
 /** #SequencerTimelineOverlay.flag */
 enum eSpaceSeq_SequencerTimelineOverlay_Flag {
   SEQ_TIMELINE_SHOW_STRIP_OFFSETS = (1 << 1),
-  SEQ_TIMELINE_SHOW_THUMBNAILS = (1 << 2),
+  /** Show thumbnails only at ends of a strip. */
+  SEQ_TIMELINE_STRIP_END_THUMBNAILS = (1 << 2),
   /** Use #Strip::color_tag */
   SEQ_TIMELINE_SHOW_STRIP_COLOR_TAG = (1 << 3),
   SEQ_TIMELINE_SHOW_STRIP_RETIMING = (1 << 4),
@@ -383,6 +384,8 @@ enum eSpaceSeq_SequencerTimelineOverlay_Flag {
   SEQ_TIMELINE_SHOW_STRIP_SOURCE = (1 << 15),
   SEQ_TIMELINE_SHOW_STRIP_DURATION = (1 << 16),
   SEQ_TIMELINE_SHOW_GRID = (1 << 18),
+  /** Show continuous sequence of thumbnails. */
+  SEQ_TIMELINE_CONTINUOUS_THUMBNAILS = (1 << 19),
 };
 
 /** #SequencerCacheOverlay.flag */
@@ -493,6 +496,12 @@ enum eFileAssetImportFlags {
   FILE_ASSET_IMPORT_INSTANCE_COLLECTIONS_ON_APPEND = (1 << 1),
 };
 
+enum eFileSel_AssetParams_Flag {
+  /** Only show files available offline. More than a filter, it prevents downloading asset listings
+   * when enabled. */
+  FILE_ASSETS_HIDE_ONLINE = (1 << 0),
+};
+
 /** #SpaceFile.browse_mode (File Space Browsing Mode). */
 enum eFileBrowse_Mode {
   /* Regular Blender File Browser */
@@ -563,13 +572,13 @@ enum eFileDetails {
 /** File selector types. */
 enum eFileSelectType {
   FILE_LOADLIB = 1,
-  FILE_MAIN = 2,
   /** Load assets from #Main. */
   FILE_MAIN_ASSET = 3,
   /** Load assets of an asset library containing external files. */
   FILE_ASSET_LIBRARY = 4,
   /** Load all asset libraries. */
   FILE_ASSET_LIBRARY_ALL = 5,
+  FILE_ASSET_LIBRARY_REMOTE = 6,
 
   FILE_UNIX = 8,
   FILE_BLENDER = 8, /* don't display relative paths */
@@ -652,6 +661,8 @@ enum eFileSel_File_Types {
   FILE_TYPE_VOLUME = (1 << 19),
 
   FILE_TYPE_ASSET = (1 << 28),
+  /** Set together with #FILE_TYPE_ASSET when the asset is hosted online, not on disk. */
+  FILE_TYPE_ASSET_ONLINE = (1 << 29),
   /** An FS directory (i.e. S_ISDIR on its path is true). */
   FILE_TYPE_DIR = (1 << 30),
   FILE_TYPE_BLENDERLIB = (1u << 31),
@@ -788,6 +799,7 @@ enum {
   /** All gizmos. */
   SI_GIZMO_HIDE = (1 << 0),
   SI_GIZMO_HIDE_NAVIGATE = (1 << 1),
+  SI_GIZMO_HIDE_ACTIVE_NODE = (1 << 2),
 };
 
 /** Keep in sync with `STEPS_LEN` in `grid_frag.glsl`. */
@@ -836,6 +848,7 @@ enum eSpaceNodeOverlay_Flag {
    * of connected reroute nodes.
    */
   SN_OVERLAY_SHOW_REROUTE_AUTO_LABELS = (1 << 7),
+  SN_OVERLAY_SHOW_RENDER_REGION = (1 << 8),
 };
 
 enum eSpaceNodeOverlay_preview_shape {
@@ -1049,6 +1062,7 @@ enum eSpreadsheetColumnValueType {
   SPREADSHEET_VALUE_TYPE_BUNDLE_ITEM = 13,
   SPREADSHEET_VALUE_TYPE_INT64 = 14,
   SPREADSHEET_VALUE_TYPE_INT32_3D = 15,
+  SPREADSHEET_VALUE_TYPE_FLOAT4 = 16,
 };
 
 enum eSpreadsheetColumnFlag {

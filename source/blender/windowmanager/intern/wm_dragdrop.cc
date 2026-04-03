@@ -9,6 +9,7 @@
  */
 
 #include <cstring>
+#include <functional>
 
 #include "AS_asset_representation.hh"
 
@@ -95,6 +96,18 @@ struct wmDropBoxMap {
   char idname[KMAP_MAX_NAME];
 };
 
+struct wmDragPrefetchHandler {
+  eWM_DragDataType drag_type;
+
+  std::function<void(bContext &C, wmDrag &drag)> on_drag_start;
+};
+
+static Vector<wmDragPrefetchHandler> &global_prefetch_handlers()
+{
+  static Vector<wmDragPrefetchHandler> storage;
+  return storage;
+}
+
 ListBaseT<wmDropBox> *WM_dropboxmap_find(const char *idname, int spaceid, int regionid)
 {
   for (wmDropBoxMap &dm : dropboxes) {
@@ -144,6 +157,17 @@ wmDropBox *WM_dropbox_add(ListBaseT<wmDropBox> *lb,
   BLI_addtail(lb, drop);
 
   return drop;
+}
+
+void WM_drag_global_prefetch_handler_add(
+    const eWM_DragDataType drag_type,
+    const std::function<void(bContext &C, wmDrag &drag)> on_drag_start)
+{
+  wmDragPrefetchHandler handler{};
+  handler.drag_type = drag_type;
+  handler.on_drag_start = on_drag_start;
+
+  global_prefetch_handlers().append(handler);
 }
 
 static void wm_dropbox_item_update_ot(wmDropBox *drop)
@@ -231,6 +255,12 @@ void wm_dropbox_free()
 
 static void wm_dropbox_invoke(bContext *C, wmDrag *drag)
 {
+  for (wmDragPrefetchHandler &handler : global_prefetch_handlers()) {
+    if (handler.drag_type == drag->type) {
+      handler.on_drag_start(*C, *drag);
+    }
+  }
+
   wmWindowManager *wm = CTX_wm_manager(C);
 
   /* Create a bitmap flag matrix of all currently visible region and area types.
@@ -466,6 +496,13 @@ static wmDropBox *dropbox_active(bContext *C,
                                  wmDrag *drag,
                                  const wmEvent *event)
 {
+  if (wmDragAsset *asset_data = WM_drag_get_asset_data(drag, 0)) {
+    if (asset_data->asset->is_online()) {
+      drag->drop_state.disabled_info = RPT_("Downloading asset...");
+      return nullptr;
+    }
+  }
+
   for (wmEventHandler &handler_base : *handlers) {
     if (handler_base.type == WM_HANDLER_TYPE_DROPBOX) {
       wmEventHandler_Dropbox *handler = reinterpret_cast<wmEventHandler_Dropbox *>(&handler_base);
@@ -1051,7 +1088,7 @@ const std::string WM_drag_get_item_name(wmDrag *drag)
       return path_drag_data->tooltip;
     }
     case WM_DRAG_NAME:
-      return *static_cast<const std::string *>(drag->poin);
+      return static_cast<const char *>(drag->poin);
     default:
       break;
   }

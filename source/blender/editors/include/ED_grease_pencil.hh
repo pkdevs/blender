@@ -410,6 +410,11 @@ IndexMask retrieve_visible_points(Object &object,
                                   const bke::greasepencil::Drawing &drawing,
                                   IndexMaskMemory &memory);
 
+/* Note that this the fills that are visible, not the stroke that are also fills. */
+IndexMask retrieve_visible_fills(Object &object,
+                                 const bke::greasepencil::Drawing &drawing,
+                                 IndexMaskMemory &memory);
+
 IndexMask retrieve_visible_bezier_strokes(Object &object,
                                           const bke::greasepencil::Drawing &drawing,
                                           IndexMaskMemory &memory);
@@ -897,7 +902,6 @@ bool apply_mask_as_selection(bke::CurvesGeometry &curves,
                              const IndexMask &selection,
                              bke::AttrDomain selection_domain,
                              StringRef attribute_name,
-                             GrainSize grain_size,
                              eSelectOp sel_op);
 
 bool apply_mask_as_segment_selection(bke::CurvesGeometry &curves,
@@ -905,7 +909,6 @@ bool apply_mask_as_segment_selection(bke::CurvesGeometry &curves,
                                      StringRef attribute_name,
                                      const Curves2DBVHTree &tree_data,
                                      IndexRange tree_data_range,
-                                     GrainSize grain_size,
                                      eSelectOp sel_op);
 
 namespace trim {

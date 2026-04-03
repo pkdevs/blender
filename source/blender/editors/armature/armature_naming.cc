@@ -366,8 +366,7 @@ void ED_armature_bone_rename(Main *bmain,
     /* XXX: the ID here is for armatures,
      * but most bone drivers are actually on the object instead. */
     {
-
-      BKE_animdata_fix_paths_rename_all(&arm->id, "pose.bones", oldname, newname);
+      BKE_animdata_fix_paths_rename_all(&arm->id, "bones", oldname, newname);
     }
 
     /* correct view locking */
@@ -460,7 +459,7 @@ static wmOperatorStatus armature_flip_names_exec(bContext *C, wmOperator *op)
   const bool do_strip_numbers = RNA_boolean_get(op->ptr, "do_strip_numbers");
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *ob : objects) {
     bArmature *arm = id_cast<bArmature *>(ob->data);
 
@@ -544,7 +543,7 @@ static wmOperatorStatus armature_autoside_names_exec(bContext *C, wmOperator *op
   bool changed_multi = false;
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *ob : objects) {
     bArmature *arm = id_cast<bArmature *>(ob->data);
     bool changed = false;
@@ -586,6 +585,10 @@ static wmOperatorStatus armature_autoside_names_exec(bContext *C, wmOperator *op
 
     /* Since we renamed stuff... */
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(C, NC_GEOM | ND_DATA | NA_RENAME, ob->data);
+
+    /* Update animation channels */
+    WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, ob->data);
 
     /* NOTE: notifier might evolve. */
     WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);

@@ -14,6 +14,8 @@
 #include "BLI_math_vector.hh"
 #include "BLI_task.hh"
 
+#include "DNA_sequence_types.h"
+
 #include "IMB_imbuf.hh"
 
 namespace blender {
@@ -65,6 +67,10 @@ struct ModifierApplyContext {
 };
 
 void modifier_apply_stack(ModifierApplyContext &context, int timeline_frame);
+
+ImBuf *modifier_render_mask_input(const ModifierApplyContext &context,
+                                  const StripModifierData &smd,
+                                  int timeline_frame);
 
 bool modifier_persistent_uids_are_valid(const Strip &strip);
 

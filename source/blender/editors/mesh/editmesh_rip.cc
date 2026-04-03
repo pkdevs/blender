@@ -1017,10 +1017,11 @@ static int edbm_rip_invoke__edge(bContext *C, const wmEvent *event, Object *obed
 /* based on mouse cursor position, it defines how is being ripped */
 static wmOperatorStatus edbm_rip_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   const bool do_fill = RNA_boolean_get(op->ptr, "use_fill");
 
   bool no_vertex_selected = true;
@@ -1130,7 +1131,7 @@ void MESH_OT_rip(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Rip";
   ot->idname = "MESH_OT_rip";
-  ot->description = "Disconnect vertex or edges from connected geometry";
+  ot->description = "Disconnect vertices or edges from connected geometry";
 
   /* API callbacks. */
   ot->invoke = edbm_rip_invoke;

@@ -247,6 +247,18 @@ void Instance::begin_sync()
     pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   }
   {
+    /* Merges the object's depth to the viewport compositor depth pass. */
+    PassSimple &pass = this->merge_depth_pass_ps;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
+    pass.shader_set(ShaderCache::get().depth_pass_merge.get());
+    pass.bind_texture("depth_buf", &this->depth_tx);
+    pass.bind_image("depth_pass_img", &this->depth_pass_img);
+    pass.push_constant("stroke_order3d", &this->is_stroke_order_3d);
+    pass.push_constant("gp_model_matrix", &this->object_bound_mat);
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+  }
+  {
     PassSimple &pass = this->mask_invert_ps;
     pass.init();
     pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_LOGIC_INVERT);
@@ -398,6 +410,7 @@ tObject *Instance::object_sync_do(Object *ob, ResourceHandleRange res_handle)
   for (const DrawingInfo info : drawings) {
     const Layer &layer = *layers[info.layer_index];
 
+    const std::optional<GroupedSpan<int3>> triangles = info.drawing.triangles();
     const bke::CurvesGeometry &curves = info.drawing.strokes();
     const OffsetIndices<int> points_by_curve = curves.evaluated_points_by_curve();
     const bke::AttributeAccessor attributes = curves.attributes();
@@ -407,22 +420,31 @@ tObject *Instance::object_sync_do(Object *ob, ResourceHandleRange res_handle)
     IndexMaskMemory memory;
     const IndexMask visible_strokes = ed::greasepencil::retrieve_visible_strokes(
         *ob, info.drawing, memory);
+    const IndexMask visible_fills = ed::greasepencil::retrieve_visible_fills(
+        *ob, info.drawing, memory);
+    const std::optional<GroupedSpan<int>> fills = info.drawing.fills();
+    const int num_fills = fills.has_value() ? fills->size() : 0;
 
     /* Precompute all the triangle and vertex counts.
      * In case the drawing should not be rendered, we need to compute the offset where the next
      * drawing begins. */
-    Array<int> num_triangles_per_stroke(visible_strokes.size());
-    Array<int> num_vertices_per_stroke(visible_strokes.size());
+    Array<int> num_triangles_per_fill(num_fills);
+    Array<int> num_vertices_per_curve(curves.curves_num());
     int total_num_triangles = 0;
     int total_num_vertices = 0;
-    visible_strokes.foreach_index([&](const int stroke_i, const int pos) {
-      const IndexRange points = points_by_curve[stroke_i];
-      const int num_stroke_triangles = (points.size() >= 3) ? (points.size() - 2) : 0;
+    if (triangles) {
+      visible_fills.foreach_index([&](const int fill_index) {
+        const int num_stroke_triangles = (*triangles)[fill_index].size();
+        num_triangles_per_fill[fill_index] = num_stroke_triangles;
+        total_num_triangles += num_stroke_triangles;
+      });
+    }
+
+    visible_strokes.foreach_index([&](const int curve_i) {
+      const IndexRange points = points_by_curve[curve_i];
       const int num_stroke_vertices = (points.size() +
-                                       int(cyclic[stroke_i] && (points.size() >= 3)));
-      num_triangles_per_stroke[pos] = num_stroke_triangles;
-      num_vertices_per_stroke[pos] = num_stroke_vertices;
-      total_num_triangles += num_stroke_triangles;
+                                       int(cyclic[curve_i] && (points.size() >= 3)));
+      num_vertices_per_curve[curve_i] = num_stroke_vertices;
       total_num_vertices += num_stroke_vertices;
     });
 
@@ -469,6 +491,11 @@ tObject *Instance::object_sync_do(Object *ob, ResourceHandleRange res_handle)
     const VArray<bool> is_fill_guide = *attributes.lookup_or_default<bool>(
         ".is_fill_guide", bke::AttrDomain::Curve, false);
 
+    const VArray<bool> hide_stroke = *attributes.lookup_or_default<bool>(
+        "hide_stroke", bke::AttrDomain::Curve, false);
+    const VArray<int> fill_ids = *attributes.lookup_or_default<int>(
+        "fill_id", bke::AttrDomain::Curve, 0);
+
     const bool only_lines = !ELEM(ob->mode,
                                   OB_MODE_PAINT_GREASE_PENCIL,
                                   OB_MODE_WEIGHT_GREASE_PENCIL,
@@ -477,30 +504,63 @@ tObject *Instance::object_sync_do(Object *ob, ResourceHandleRange res_handle)
                             do_multi_frame;
     const bool is_onion = info.onion_id != 0;
 
-    visible_strokes.foreach_index([&](const int stroke_i, const int pos) {
-      const IndexRange points = points_by_curve[stroke_i];
+    int fill_index = 0;
+
+    Array<int> fill_index_by_curves(curves.curves_num(), -1);
+    Array<int> first_curves(curves.curves_num());
+    array_utils::fill_index_range<int>(first_curves);
+
+    for (const int curve_i : curves.curves_range()) {
+      const bool is_filled = fill_ids[curve_i] != 0;
+      const bool active_filled = is_filled && (fill_index_by_curves[curve_i] == -1);
+
+      /* Keep track of already rendered fills. */
+      if (active_filled) {
+        const Span<int> fill = (*fills)[fill_index];
+        const int first_curve = fill.first();
+        for (const int pos : fill.index_range()) {
+          const int curve_i = fill[pos];
+          fill_index_by_curves[curve_i] = fill_index;
+          first_curves[curve_i] = first_curve;
+        }
+
+        fill_index++;
+      }
+    }
+
+    visible_strokes.foreach_index([&](const int curve_i) {
+      /* Will be `-1` if not a fill. */
+      const int fill_index = fill_index_by_curves[curve_i];
+
+      const bool is_filled = fill_index != -1;
+      const bool active_filled = is_filled && (first_curves[curve_i] == curve_i);
+
       /* The material index is allowed to be negative as it's stored as a generic attribute. We
        * clamp it here to avoid crashing in the rendering code. Any stroke with a material < 0 will
        * use the first material in the first material slot. */
-      const int material_index = std::max(stroke_materials[stroke_i], 0);
+      const int material_index = std::max(stroke_materials[curve_i], 0);
       const MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, material_index + 1);
 
-      const bool is_fill_guide_stroke = is_fill_guide[stroke_i];
+      const bool is_fill_guide_stroke = is_fill_guide[curve_i];
+
+      const bool has_triangles = active_filled && triangles && !triangles->is_empty() &&
+                                 !(*triangles)[fill_index].is_empty();
 
       const bool hide_material = (gp_style->flag & GP_MATERIAL_HIDE) != 0;
-      const bool show_stroke = ((gp_style->flag & GP_MATERIAL_STROKE_SHOW) != 0) ||
-                               is_fill_guide_stroke;
-      const bool show_fill = (points.size() >= 3) &&
-                             ((gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0) &&
-                             (!this->simplify_fill) && !is_fill_guide_stroke;
+      const bool show_stroke = !hide_stroke[curve_i] || is_fill_guide_stroke;
+      const bool show_fill = (has_triangles) && active_filled && (!this->simplify_fill) &&
+                             !is_fill_guide_stroke;
       const bool hide_onion = is_onion && ((gp_style->flag & GP_MATERIAL_HIDE_ONIONSKIN) != 0 ||
                                            (!do_onion && !do_multi_frame));
       const bool skip_stroke = hide_material || (!show_stroke && !show_fill) ||
                                (only_lines && !do_onion && is_onion) || hide_onion;
 
       if (skip_stroke) {
-        t_offset += num_triangles_per_stroke[pos];
-        t_offset += num_vertices_per_stroke[pos] * 2;
+        if (active_filled) {
+          t_offset += num_triangles_per_fill[fill_index];
+        }
+        t_offset += num_vertices_per_curve[curve_i] * 2;
+
         return;
       }
 
@@ -543,19 +603,21 @@ tObject *Instance::object_sync_do(Object *ob, ResourceHandleRange res_handle)
 
       if (show_fill) {
         const int v_first = t_offset * 3;
-        const int v_count = num_triangles_per_stroke[pos] * 3;
+        const int v_count = num_triangles_per_fill[fill_index] * 3;
         drawcall_add(pass, geom, v_first, v_count);
       }
 
-      t_offset += num_triangles_per_stroke[pos];
+      if (active_filled) {
+        t_offset += num_triangles_per_fill[fill_index];
+      }
 
       if (show_stroke) {
         const int v_first = t_offset * 3;
-        const int v_count = num_vertices_per_stroke[pos] * 2 * 3;
+        const int v_count = num_vertices_per_curve[curve_i] * 2 * 3;
         drawcall_add(pass, geom, v_first, v_count);
       }
 
-      t_offset += num_vertices_per_stroke[pos] * 2;
+      t_offset += num_vertices_per_curve[curve_i] * 2;
     });
   }
 
@@ -674,6 +736,11 @@ void Instance::acquire_resources()
     grease_pencil_pass.acquire(size, gpu::TextureFormat::SFLOAT_16_16_16_16);
     this->gpencil_pass_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(grease_pencil_pass));
   }
+
+  if (DRW_viewport_pass_texture_exists(RE_PASSNAME_DEPTH)) {
+    draw::TextureFromPool &depth_pass = DRW_viewport_pass_texture_get(RE_PASSNAME_DEPTH);
+    this->depth_pass_img = depth_pass.gpu_texture();
+  }
 }
 
 void Instance::release_resources()
@@ -696,8 +763,6 @@ void Instance::draw_mask(View &view, tObject *ob, tLayer *layer)
 {
   Manager *manager = DRW_manager_get();
 
-  const float clear_col[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-  float clear_depth = ob->is_drawmode3d ? 1.0f : 0.0f;
   bool inverted = false;
   /* OPTI(@fclem): we could optimize by only clearing if the new mask_bits does not contain all
    * the masks already rendered in the buffer, and drawing only the layers not already drawn. */
@@ -721,7 +786,8 @@ void Instance::draw_mask(View &view, tObject *ob, tLayer *layer)
 
     if (!cleared) {
       cleared = true;
-      GPU_framebuffer_clear_color_depth(this->mask_fb, clear_col, clear_depth);
+      GPU_framebuffer_clear_color_depth(
+          this->mask_fb, {1.0, 1.0, 1.0, 1.0}, ob->is_drawmode3d ? 1.0f : 0.0f);
     }
 
     tLayer *mask_layer = grease_pencil_layer_cache_get(ob, i, true);
@@ -734,7 +800,7 @@ void Instance::draw_mask(View &view, tObject *ob, tLayer *layer)
   }
 
   if (!inverted) {
-    /* Blend shader expect an opacity mask not a reavealage buffer. */
+    /* Blend shader expect an opacity mask not a revealage buffer. */
     manager->submit(this->mask_invert_ps);
   }
 
@@ -745,7 +811,7 @@ void Instance::draw_object(View &view, tObject *ob)
 {
   Manager *manager = DRW_manager_get();
 
-  const float clear_cols[2][4] = {{0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}};
+  const std::array<double4, 2> clear_cols = {double4{0, 0, 0, 0}, double4{1, 1, 1, 1}};
 
   GPU_debug_group_begin("GPencil Object");
 
@@ -792,6 +858,10 @@ void Instance::draw_object(View &view, tObject *ob)
     manager->submit(this->merge_depth_ps, view);
   }
 
+  if (DRW_viewport_pass_texture_exists(RE_PASSNAME_DEPTH)) {
+    manager->submit(this->merge_depth_pass_ps, view);
+  }
+
   GPU_debug_group_end();
 }
 
@@ -810,18 +880,21 @@ void Instance::draw(Manager &manager)
   }
   BLI_assert(this->scene_depth_tx);
 
-  float clear_cols[2][4] = {{0.0f, 0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}};
+  std::array<double4, 2> clear_cols = {double4{0.0f, 0.0f, 0.0f, 0.0f},
+                                       double4{1.0f, 1.0f, 1.0f, 1.0f}};
 
   /* Fade 3D objects. */
   if ((!this->is_render) && (this->fade_3d_object_opacity > -1.0f) && (this->obact != nullptr) &&
       ELEM(this->obact->type, OB_GREASE_PENCIL))
   {
-    float background_color[3];
+    float3 background_color;
     ED_view3d_background_color_get(this->scene, this->v3d, background_color);
     /* Blend color. */
-    interp_v3_v3v3(clear_cols[0], background_color, clear_cols[0], this->fade_3d_object_opacity);
+    background_color = math::interpolate(
+        background_color, float3(clear_cols[0]), this->fade_3d_object_opacity);
 
-    mul_v4_fl(clear_cols[1], this->fade_3d_object_opacity);
+    clear_cols[0] = double4(background_color, 0.0f);
+    clear_cols[1] = double4(float4(clear_cols[1]) * this->fade_3d_object_opacity);
   }
 
   /* Sort object by decreasing Z to avoid most of alpha ordering issues. */

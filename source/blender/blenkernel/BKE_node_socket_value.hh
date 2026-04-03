@@ -79,7 +79,7 @@ class SocketValueVariant {
    *
    * Small types are embedded directly, while larger types are separately allocated.
    */
-  Any<void, 24> value_;
+  Any<void, 32> value_;
 
  public:
   /**
@@ -96,11 +96,10 @@ class SocketValueVariant {
    * Create a variant based on the given value. This works for primitive types. For more complex
    * types use #set explicitly. Alternatively, one can use the #From or #ConstructIn utilities.
    */
-  template<typename T,
-           /* The enable-if is necessary to avoid overriding the copy/moveconstructors. */
-           BLI_ENABLE_IF((std::is_trivial_v<std::decay_t<T>> ||
-                          is_same_any_v<std::decay_t<T>, std::string>))>
+  template<typename T>
   explicit SocketValueVariant(T &&value)
+      /* Required to avoid overriding the copy/move-constructors. */
+    requires(std::is_trivial_v<std::decay_t<T>> || is_same_any_v<std::decay_t<T>, std::string>)
   {
     this->set(std::forward<T>(value));
   }
@@ -137,6 +136,8 @@ class SocketValueVariant {
    * Replaces the stored value with a new value of potentially a different type.
    */
   template<typename T> void set(T &&value);
+
+  eNodeSocketDatatype socket_type() const;
 
   /**
    * If true, the stored value cannot be converted to a single value without loss of information.
@@ -212,6 +213,11 @@ class SocketValueVariant {
    */
   template<typename T> void store_impl(T value);
 };
+
+inline eNodeSocketDatatype SocketValueVariant::socket_type() const
+{
+  return socket_type_;
+}
 
 template<typename T>
 inline SocketValueVariant &SocketValueVariant::ConstructIn(void *ptr, T &&value)

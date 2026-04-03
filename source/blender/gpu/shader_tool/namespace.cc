@@ -23,23 +23,28 @@ static void parse_namespace_symbols(Scope ns, metadata::Source &metadata)
   ns.foreach_scope(ScopeType::Namespace,
                    [&](const Scope &ns) { parse_namespace_symbols(ns, metadata); });
 
-  auto process_symbol =
-      [&](Scope ns_scope, Token name, string identifier, size_t line, bool is_method) {
-        if (name.scope() != ns_scope) {
-          return;
-        }
-        string prefix;
-        while (ns_scope.type() == ScopeType::Namespace || ns_scope.type() == ScopeType::Struct) {
-          prefix = ns_scope.front().prev().full_symbol_name() + "::" + prefix;
-          ns_scope = ns_scope.scope();
-        }
-        Symbol symbol;
-        symbol.name_space = prefix;
-        symbol.identifier = identifier;
-        symbol.definition_line = line;
-        symbol.is_method = is_method;
-        metadata.symbol_table.emplace_back(symbol);
-      };
+  auto process_symbol = [&](Scope ns_scope,
+                            Token name,
+                            string_view identifier,
+                            size_t line,
+                            bool is_method,
+                            bool is_static) {
+    if (name.scope() != ns_scope) {
+      return;
+    }
+    string prefix;
+    while (ns_scope.type() == ScopeType::Namespace || ns_scope.type() == ScopeType::Struct) {
+      prefix = ns_scope.front().prev().full_symbol_name() + "::" + prefix;
+      ns_scope = ns_scope.scope();
+    }
+    Symbol symbol;
+    symbol.name_space = prefix;
+    symbol.identifier = identifier;
+    symbol.definition_line = line;
+    symbol.is_method = is_method;
+    symbol.is_static = is_static;
+    metadata.symbol_table.emplace_back(symbol);
+  };
 
   auto process_templates = [&](Scope ns_scope, Token t, bool is_method) {
     if (t.next() == '<') {
@@ -55,34 +60,34 @@ static void parse_namespace_symbols(Scope ns, metadata::Source &metadata)
       /* Struct. */
       Token name = t.next().next();
       Scope template_args = name.next().scope();
-      string resolved_name = name.str() +
+      string resolved_name = string(name.str()) +
                              SourceProcessor::template_arguments_mangle(template_args);
-      process_symbol(ns_scope, name, resolved_name, line, false);
+      process_symbol(ns_scope, name, resolved_name, line, false, false);
     }
     else {
       /* Function. */
       Token end = t.find_next(SemiColon);
       Scope template_args = end.prev().scope().front().prev().scope();
       Token name = template_args.front().prev();
-      string resolved_name = name.str() +
+      string resolved_name = string(name.str()) +
                              SourceProcessor::template_arguments_mangle(template_args);
-      process_symbol(ns_scope, name, resolved_name, line, is_method);
+      process_symbol(ns_scope, name, resolved_name, line, is_method, false);
     }
   };
 
   ns.foreach_struct([&](Token, Scope, Token struct_name, Scope body) {
-    process_symbol(ns, struct_name, struct_name.str(), struct_name.line_number(), false);
+    process_symbol(ns, struct_name, struct_name.str(), struct_name.line_number(), false, false);
     /* Methods. */
-    body.foreach_function([&](bool, Token, Token name, Scope, bool, Scope) {
+    body.foreach_function([&](bool is_static, Token, Token name, Scope, bool, Scope) {
       /* For methods, the declaration line is the top of the struct. */
-      process_symbol(body, name, name.str(), struct_name.line_number(), true);
+      process_symbol(body, name, name.str(), struct_name.line_number(), true, is_static);
     });
     /* Parse template instantiations. */
-    ns.foreach_token(Template, [&](Token t) { process_templates(body, t, true); });
+    body.foreach_token(Template, [&](Token t) { process_templates(body, t, true); });
   });
 
   ns.foreach_function([&](bool, Token, Token name, Scope, bool, Scope) {
-    process_symbol(ns, name, name.str(), name.line_number(), false);
+    process_symbol(ns, name, name.str(), name.line_number(), false, false);
   });
   /* Parse template instantiations. */
   ns.foreach_token(Template, [&](Token t) { process_templates(ns, t, false); });
@@ -90,8 +95,7 @@ static void parse_namespace_symbols(Scope ns, metadata::Source &metadata)
 
 void SourceProcessor::parse_local_symbols(Parser &parser)
 {
-  parser().foreach_scope(ScopeType::Namespace,
-                         [&](const Scope &ns) { parse_namespace_symbols(ns, metadata_); });
+  parse_namespace_symbols(parser(), metadata_);
 }
 
 static void lower_namespace(string ns_prefix,
@@ -100,7 +104,7 @@ static void lower_namespace(string ns_prefix,
                             SourceProcessor::report_callback report_error,
                             const set<Symbol> &symbols_set)
 {
-  string ns_name = scope.front().prev().str();
+  string ns_name(scope.front().prev().str());
   ns_prefix += ns_name + "::";
 
   bool has_nested_scope = false;
@@ -119,6 +123,32 @@ static void lower_namespace(string ns_prefix,
     if (token.prev() == '.') {
       return;
     }
+    Token next = token.next();
+    /* Only process the end token of a namespace qualified identifier. */
+    if (next == ':') {
+      return;
+    }
+
+    bool is_pipeline_arg = false;
+    if (token.scope().type() == ScopeType::FunctionArg) {
+      std::string_view type = token.scope().scope().front().prev(2).str();
+      is_pipeline_arg = (type == "PipelineGraphic" || type == "PipelineCompute");
+    }
+
+    if (is_pipeline_arg) {
+      /* Special case for pipelines. We need to match the function names but they are arguments. */
+    }
+    /* Only process function calls or types. */
+    else if (next != '<' &&  /* Templated type or function. */
+             next != '{' &&  /* Type definition. */
+             next != '&' &&  /* Reference definition. */
+             next != Word && /* Variable definition. */
+             token.scope().type() != parser::ScopeType::TemplateArg && /* Template argument. */
+             next != '(' /* Function call or reference definition. */
+    )
+    {
+      return;
+    }
 
     const bool is_fn = (token.next() == '(');
     /* Reject method definition. */
@@ -132,9 +162,11 @@ static void lower_namespace(string ns_prefix,
        * In this case we need to add the struct name during the fully qualified name lookup. */
       const Scope struct_scope = token.scope().first_scope_of_type(ScopeType::Struct);
       if (struct_scope.is_valid()) {
-        struct_name = struct_scope.str();
+        struct_name = struct_scope.front().prev().full_symbol_name();
       }
     }
+
+    const int token_line = token.line_number();
 
     for (const auto &symbol : symbols_set) {
       if (token.str() != symbol.identifier) {
@@ -144,29 +176,76 @@ static void lower_namespace(string ns_prefix,
       if (symbol.name_space.substr(0, ns_prefix.size()) != ns_prefix) {
         continue;
       }
-      /* Reject symbols declared after the identifier. */
-      if (token.line_number() < symbol.definition_line) {
+      /* Reject symbols declared after the identifier.
+       * Note that static method have their definition line at the top of the struct. */
+      if (token_line < symbol.definition_line) {
         continue;
       }
       /* Symbol as it could be specified from this namespace. */
       string symbol_visible = symbol.name_space.substr(ns_prefix.size()) + symbol.identifier;
 
+      bool append_struct_ns = false;
+      string specified_symbol = token.full_symbol_name();
       /* First try to match methods. */
       if (symbol.is_method && !struct_name.empty()) {
-        if (struct_name + token.full_symbol_name() == symbol_visible) {
+        if (!symbol.is_static) {
           continue;
         }
-        /* Do not append namespace for method call matches. */
-        break;
+
+        bool is_prev_ns_specifier = token.prev() == ':' && token.prev(2) == ':';
+        if (!is_prev_ns_specifier) {
+          /* For unspecified symbol, we append the struct namespace to try to match the method
+           * visible symbol. */
+          specified_symbol = struct_name + "::" + specified_symbol;
+          append_struct_ns = true;
+        }
+
+        if (specified_symbol != symbol_visible) {
+          continue;
+        }
+        /* Matched a static method. */
+      }
+      else {
+        /* Other symbols. */
+        if (specified_symbol != symbol_visible) {
+          continue;
+        }
       }
 
-      /* Other symbols. */
-      if (token.full_symbol_name() != symbol_visible) {
-        continue;
+      /* Only for non-definition. */
+      if (token.prev() != Word) {
+        /* WORKAROUND: Since we do not have overload argument type infos, we cannot resolve
+         * them like C++ does. Instead, we error on ambiguity and let the user resolve it. */
+        for (const auto &overload : symbols_set) {
+          /* Searching for overload in other namespaces. */
+          if (overload.name_space == symbol.name_space || overload.identifier != symbol.identifier)
+          {
+            continue;
+          }
+          /* Reject symbols declared after the identifier.
+           * Note that static method have their definition line at the top of the struct. */
+          if (token_line < overload.definition_line) {
+            continue;
+          }
+          /* Only expand symbols that are visible inside this namespace. */
+          if (ns_prefix.substr(0, overload.name_space.size()) != overload.name_space) {
+            continue;
+          }
+          if (specified_symbol != overload.identifier) {
+            continue;
+          }
+          report_error(ERROR_TOK(token),
+                       "Call to function is ambiguous. Specify namespace to remove ambiguity.");
+          break;
+        }
       }
 
       /* Append current namespace. */
       parser.insert_before(token.namespace_start(), ns_name + "::");
+      if (append_struct_ns) {
+        /* Append struct namespace for static methods. */
+        parser.insert_before(token.namespace_start(), struct_name + "::");
+      }
       /* Only match a symbol once. */
       break;
     }
@@ -175,7 +254,7 @@ static void lower_namespace(string ns_prefix,
   /* Pipeline declarations.
    * Manually handle them. They are the only use-case of variable defined in global scope. */
   scope.foreach_match("AA(A", [&](vector<Token> toks) {
-    if (toks[0].scope().type() != ScopeType::Namespace || toks[0].str().find("Pipeline") != 0) {
+    if (toks[0].scope().type() != ScopeType::Namespace || !toks[0].str().starts_with("Pipeline")) {
       return;
     }
     parser.insert_before(toks[1], ns_name + SourceProcessor::namespace_separator);
@@ -236,6 +315,25 @@ void SourceProcessor::lower_namespaces(Parser &parser)
       lower_namespace("", scope, parser, report_error_, symbols_set);
     });
   } while (parser.apply_mutations());
+}
+
+void SourceProcessor::lower_scope_resolution_operators(Parser &parser)
+{
+  parser().foreach_match<true>("::", [&](const vector<Token> &tokens) {
+    if (tokens[0].scope().type() == ScopeType::Attribute) {
+      return;
+    }
+    Token prev = tokens[0].prev();
+    if (prev != Word && !(prev == '>' && prev.followed_by_whitespace() == false)) {
+      /* Global namespace reference. */
+      parser.erase(tokens.front(), tokens.back());
+    }
+    else {
+      /* Specific namespace reference. */
+      parser.replace(tokens.front(), tokens.back(), namespace_separator);
+    }
+  });
+  parser.apply_mutations();
 }
 
 }  // namespace blender::gpu::shader

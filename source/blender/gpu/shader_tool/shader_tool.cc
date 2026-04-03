@@ -138,7 +138,7 @@ int main(int argc, char **argv)
 
   /* Open the output file for writing */
   std::ofstream metadata_file(metadata_file_name, std::ofstream::out | std::ofstream::binary);
-  if (!output_file) {
+  if (!metadata_file) {
     std::cerr << "Error: Could not open output file " << metadata_file_name << std::endl;
     input_file.close();
     exit(1);
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
 
   /* Open the output file for writing */
   std::ofstream infos_file(infos_file_name, std::ofstream::out | std::ofstream::binary);
-  if (!output_file) {
+  if (!infos_file) {
     std::cerr << "Error: Could not open output file " << infos_file_name << std::endl;
     input_file.close();
     exit(1);
@@ -177,8 +177,7 @@ int main(int argc, char **argv)
       };
 
   std::string filename(output_file_name);
-  const bool is_info = filename.find("infos.hh") != std::string::npos ||
-                       buffer.str().find("#pragma create_info") != std::string::npos;
+  const bool is_info = filename.ends_with("infos.hh") || filename.ends_with(".bsl.hh");
 
   using namespace gpu::shader;
 

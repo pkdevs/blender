@@ -17,6 +17,7 @@ set(SRC
   operators/bmo_bevel.cc
   operators/bmo_bisect_plane.cc
   operators/bmo_bridge.cc
+  operators/bmo_circularize.cc
   operators/bmo_connect.cc
   operators/bmo_connect_concave.cc
   operators/bmo_connect_nonplanar.cc
@@ -186,15 +187,6 @@ endif()
 if(WITH_FREESTYLE)
   add_definitions(-DWITH_FREESTYLE)
 endif()
-
-if(WITH_TBB)
-  if(WIN32)
-    # TBB includes Windows.h which will define min/max macros
-    # that will collide with the STL versions.
-    add_definitions(-DNOMINMAX)
-  endif()
-endif()
-
 
 blender_add_lib(bf_bmesh "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_library(bf::bmesh ALIAS bf_bmesh)

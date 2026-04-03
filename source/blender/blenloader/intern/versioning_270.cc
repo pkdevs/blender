@@ -76,9 +76,13 @@
 #include "NOD_composite.hh"
 #include "NOD_socket.hh"
 
+#include "ANIM_versioning.hh"
+
 #include "readfile.hh"
 
 #include "MEM_guardedalloc.h"
+
+#include "versioning_common.hh"
 
 namespace blender {
 
@@ -818,11 +822,13 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
         if (ntree->type == NTREE_COMPOSIT) {
           for (bNode &node : ntree->nodes) {
             if (ELEM(node.type_legacy, CMP_NODE_PLANETRACKDEFORM)) {
-              NodePlaneTrackDeformData *data = static_cast<NodePlaneTrackDeformData *>(
-                  node.storage);
-              data->flag = 0;
-              data->motion_blur_samples = 16;
-              data->motion_blur_shutter = 0.5f;
+              if (version_node_ensure_storage_or_invalidate(node)) {
+                NodePlaneTrackDeformData *data = static_cast<NodePlaneTrackDeformData *>(
+                    node.storage);
+                data->flag = 0;
+                data->motion_blur_samples = 16;
+                data->motion_blur_shutter = 0.5f;
+              }
             }
           }
         }
@@ -1496,16 +1502,18 @@ void blo_do_versions_270(FileData *fd, Library * /*lib*/, Main *bmain)
           bke::node_tree_set_type(*ntree);
           for (bNode &node : ntree->nodes) {
             if (node.type_legacy == CMP_NODE_GLARE) {
-              NodeGlare *ndg = static_cast<NodeGlare *>(node.storage);
-              switch (ndg->type) {
-                case CMP_NODE_GLARE_STREAKS:
-                  ndg->streaks = ndg->angle;
-                  break;
-                case CMP_NODE_GLARE_SIMPLE_STAR:
-                  ndg->star_45 = ndg->angle != 0;
-                  break;
-                default:
-                  break;
+              if (version_node_ensure_storage_or_invalidate(node)) {
+                NodeGlare *ndg = static_cast<NodeGlare *>(node.storage);
+                switch (ndg->type) {
+                  case CMP_NODE_GLARE_STREAKS:
+                    ndg->streaks = ndg->angle;
+                    break;
+                  case CMP_NODE_GLARE_SIMPLE_STAR:
+                    ndg->star_45 = ndg->angle != 0;
+                    break;
+                  default:
+                    break;
+                }
               }
             }
           }
@@ -1659,7 +1667,7 @@ void do_versions_after_linking_270(Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 279, 2)) {
     /* B-Bones (bbone_in/out -> bbone_easein/out) + Stepped FMod Frame Start/End fix */
-    BKE_fcurves_main_cb(bmain, do_version_bbone_easing_fcurve_fix);
+    animrig::versioning::fcurves_main_cb(bmain, do_version_bbone_easing_fcurve_fix);
   }
 }
 

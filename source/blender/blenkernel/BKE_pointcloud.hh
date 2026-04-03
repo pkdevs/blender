@@ -9,6 +9,8 @@
  * \brief General operations for point clouds.
  */
 
+#include "MEM_guardedalloc.h" /* For `MEM_CXX_CLASS_ALLOC_FUNCS`. */
+
 #include "BLI_bounds_types.hh"
 #include "BLI_kdopbvh.hh"
 #include "BLI_math_vector_types.hh"
@@ -63,6 +65,8 @@ bool BKE_pointcloud_attribute_required(const PointCloud *pointcloud, StringRef n
  * data-block.
  */
 void pointcloud_copy_parameters(const PointCloud &src, PointCloud &dst);
+
+void pointcloud_resize(PointCloud &pointcloud, int size);
 
 /* Dependency Graph */
 

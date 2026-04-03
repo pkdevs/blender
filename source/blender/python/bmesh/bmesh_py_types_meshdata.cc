@@ -46,7 +46,7 @@ namespace blender {
 #define BPy_BMLoopUV_Check(v) (Py_TYPE(v) == &BPy_BMLoopUV_Type)
 
 struct BPy_BMLoopUV {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   float *uv;
   /**
    * Pin may be null, signifying the layer doesn't exist.
@@ -64,7 +64,7 @@ struct BPy_BMLoopUV {
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_bmloopuv_uv_doc,
-    "Loops UV (as a 2D Vector).\n"
+    "Loop UV (as a 2D Vector).\n"
     "\n"
     ":type: :class:`mathutils.Vector`\n");
 static PyObject *bpy_bmloopuv_uv_get(BPy_BMLoopUV *self, void * /*closure*/)
@@ -194,7 +194,7 @@ PyObject *BPy_BMLoopUV_CreatePyObject(BMesh *bm, BMLoop *loop, int layer)
 #define BPy_BMVertSkin_Check(v) (Py_TYPE(v) == &BPy_BMVertSkin_Type)
 
 struct BPy_BMVertSkin {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   MVertSkin *data;
 };
 
@@ -285,7 +285,7 @@ static void bm_init_types_bmvertskin()
 
   BPy_BMVertSkin_Type.tp_name = "BMVertSkin";
 
-  BPy_BMVertSkin_Type.tp_doc = nullptr; /* todo */
+  BPy_BMVertSkin_Type.tp_doc = "Skin vertex data for the skin modifier.";
 
   BPy_BMVertSkin_Type.tp_getset = bpy_bmvertskin_getseters;
 
@@ -444,7 +444,7 @@ PyObject *BPy_BMLoopColor_CreatePyObject(MLoopCol *mloopcol)
 #define BPy_BMDeformVert_Check(v) (Py_TYPE(v) == &BPy_BMDeformVert_Type)
 
 struct BPy_BMDeformVert {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   MDeformVert *data;
 };
 
@@ -577,7 +577,7 @@ PyDoc_STRVAR(
     "   Return the group indices used by this vertex\n"
     "   (matching Python's dict.keys() functionality).\n"
     "\n"
-    "   :return: the deform group this vertex uses\n"
+    "   :return: The deform group indices this vertex uses.\n"
     "   :rtype: list[int]\n");
 static PyObject *bpy_bmdeformvert_keys(BPy_BMDeformVert *self)
 {
@@ -652,11 +652,13 @@ PyDoc_STRVAR(
     "   Returns the deform weight matching the key or default\n"
     "   when not found (matches Python's dictionary function of the same name).\n"
     "\n"
-    "   :arg key: The key associated with deform weight.\n"
+    "   :param key: The vertex group index.\n"
     "   :type key: int\n"
-    "   :arg default: Optional argument for the value to return if\n"
+    "   :param default: Optional argument for the value to return if\n"
     "      *key* is not found.\n"
-    "   :type default: Any\n");
+    "   :type default: Any\n"
+    "   :return: The deform weight or the default when not found.\n"
+    "   :rtype: float | Any\n");
 static PyObject *bpy_bmdeformvert_get(BPy_BMDeformVert *self, PyObject *args)
 {
   int key;

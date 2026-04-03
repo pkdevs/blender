@@ -251,7 +251,8 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 
   /* will only work for non multiview correctly */
   if (v3d) {
-    camera = BKE_camera_multiview_render(oglrender->scene, v3d->camera, "new opengl render view");
+    camera = BKE_camera_multiview_render(
+        *oglrender->bmain, oglrender->scene, v3d->camera, "new opengl render view");
     BKE_render_result_stamp_info(oglrender->scene, camera, rr, false);
   }
   else {
@@ -360,7 +361,8 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 
       /* for stamp only */
       if (oglrender->rv3d->persp == RV3D_CAMOB && v3d->camera) {
-        camera = BKE_camera_multiview_render(oglrender->scene, v3d->camera, viewname);
+        camera = BKE_camera_multiview_render(
+            *oglrender->bmain, oglrender->scene, v3d->camera, viewname);
       }
     }
     else {
@@ -828,7 +830,8 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 
     /* MUST be cleared on exit */
     oglrender->scene->customdata_mask_modal = CustomData_MeshMasks{};
-    ED_view3d_datamask(oglrender->scene,
+    ED_view3d_datamask(*oglrender->bmain,
+                       oglrender->scene,
                        oglrender->view_layer,
                        oglrender->v3d,
                        &oglrender->scene->customdata_mask_modal);
@@ -967,6 +970,11 @@ static bool screen_opengl_render_anim_init(wmOperator *op)
   OGLRender *oglrender = static_cast<OGLRender *>(op->customdata);
   Scene *scene = oglrender->scene;
 
+  if (!(scene->r.mode & R_SAVE_OUTPUT)) {
+    BKE_report(op->reports, RPT_ERROR, "Render output disabled in Output properties");
+    return false;
+  }
+
   ImageFormatData image_format;
   BKE_image_format_init_for_write(&image_format, scene, nullptr, true);
 
@@ -981,14 +989,19 @@ static bool screen_opengl_render_anim_init(wmOperator *op)
         &scene->r, &image_format, oglrender->sizex, oglrender->sizey, &width, &height);
     oglrender->movie_writers.reserve(oglrender->totvideos);
 
+    const bool is_multiview_name = ((scene->r.scemode & R_MULTIVIEW) != 0 &&
+                                    (image_format.views_format == R_IMF_VIEWS_INDIVIDUAL));
+
     for (i = 0; i < oglrender->totvideos; i++) {
       Scene *scene_eval = DEG_get_evaluated_scene(oglrender->depsgraph);
-      const char *suffix = BKE_scene_multiview_view_id_suffix_get(&scene->r, i);
+      const char *suffix = is_multiview_name ?
+                               BKE_scene_multiview_view_id_suffix_get(&scene->r, i) :
+                               "";
       MovieWriter *writer = MOV_write_begin(scene_eval,
                                             &scene->r,
                                             &image_format,
-                                            oglrender->sizex,
-                                            oglrender->sizey,
+                                            width,
+                                            height,
                                             oglrender->reports,
                                             PRVRANGEON != 0,
                                             suffix);

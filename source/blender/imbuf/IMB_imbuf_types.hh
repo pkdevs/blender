@@ -15,6 +15,8 @@
 
 #include "IMB_imbuf_enums.h"
 
+#include <string>
+
 namespace blender {
 
 struct ColormanageCache;
@@ -28,8 +30,6 @@ namespace ocio {
 class ColorSpace;
 }
 using ColorSpace = ocio::ColorSpace;
-
-#define IMB_FILEPATH_SIZE 1024
 
 /**
  * \ingroup imbuf
@@ -75,10 +75,16 @@ using ColorSpace = ocio::ColorSpace;
 #define TIF_COMPRESS_LZW (1 << 5)
 #define TIF_COMPRESS_PACKBITS (1 << 4)
 
+#define AVIF_10BIT (1 << 8)
+#define AVIF_12BIT (1 << 9)
+
 struct ImbFormatOptions {
   short flag = 0;
-  /** Quality serves dual purpose as quality number for JPEG or compression amount for PNG. */
-  char quality = 0;
+  /** Quality for JPEG, WebP, AVIF. */
+  char quality = 90;
+  /* Compression amount for PNG.
+   * Default to low compression ratio that is not time consuming. */
+  char compress = 15;
 };
 
 /* -------------------------------------------------------------------- */
@@ -115,6 +121,9 @@ enum eImBufFlags {
    * The image contains display window information. See ImbBuf.display_size and other members for
    * more information. */
   IB_has_display_window = 1 << 17,
+
+  /** Perform no color space conversions when reading, leave the image in the file colorspace. */
+  IB_no_colorspace_convert = 1 << 18,
 };
 
 /** \} */
@@ -266,11 +275,11 @@ struct ImBuf {
 
   /* file information */
   /** file type we are going to save as */
-  enum eImbFileType ftype = IMB_FTYPE_NONE;
+  eImbFileType ftype = IMB_FTYPE_NONE;
   /** file format specific flags */
   ImbFormatOptions foptions;
   /** The absolute file path associated with this image. */
-  char filepath[IMB_FILEPATH_SIZE] = "";
+  std::string filepath;
   /** For movie files, the frame number loaded from the file. */
   int fileframe = 0;
 
@@ -309,6 +318,9 @@ enum {
   IB_DISPLAY_BUFFER_INVALID = (1 << 4),
   /** image buffer is persistent in the memory and should never be removed from the cache */
   IB_PERSISTENT = (1 << 5),
+  /** The image buffer is backed by a GPU texture storage but the host buffers either do not exist
+   * or are out-dated and needs to read from the GPU texture. */
+  IB_HOST_BUFFER_INVALID = (1 << 6),
 };
 
 /** \} */

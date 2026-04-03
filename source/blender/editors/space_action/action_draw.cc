@@ -762,7 +762,7 @@ static void timeline_cache_draw_geometry_nodes(const Span<CacheRange> cache_rang
   }
   Vector<int> status_change_frames;
   status_change_frames.extend(status_change_frames_set.begin(), status_change_frames_set.end());
-  std::sort(status_change_frames.begin(), status_change_frames.end());
+  std::ranges::sort(status_change_frames);
   const OffsetIndices<int> frame_ranges = status_change_frames.as_span();
 
   GPU_matrix_push();
@@ -879,7 +879,7 @@ void timeline_draw_cache(const SpaceAction *saction, const Object *ob, const Sce
         continue;
       }
       const NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(&md);
-      if (nmd->node_group == nullptr) {
+      if (nmd->node_group == nullptr || ID_MISSING(nmd->node_group)) {
         continue;
       }
       if (!nmd->runtime->cache) {

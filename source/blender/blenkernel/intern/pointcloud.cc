@@ -115,8 +115,12 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   PointCloud *pointcloud = id_cast<PointCloud *>(id);
 
   ResourceScope scope;
-  bke::AttributeStorage::BlendWriteData attribute_data{scope};
-  attribute_storage_blend_write_prepare(pointcloud->attribute_storage.wrap(), attribute_data);
+  bke::AttributeStorage::BlendWriteData attribute_data{writer, scope};
+  attribute_storage_blend_write_prepare(
+      pointcloud->attribute_storage.wrap(),
+      !BLO_write_is_undo(writer),
+      [&](const AttrDomain /*domain*/) { return pointcloud->totpoint; },
+      attribute_data);
 
   if (attribute_data.attributes.is_empty()) {
     pointcloud->attribute_storage.dna_attributes = nullptr;
@@ -126,6 +130,7 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
     pointcloud->attribute_storage.dna_attributes = attribute_data.attributes.data();
     pointcloud->attribute_storage.dna_attributes_num = attribute_data.attributes.size();
   }
+  BLO_write_generated_pointer_tag(writer, pointcloud->attribute_storage.dna_attributes);
 
   CustomData_reset(&pointcloud->pdata_legacy);
 
@@ -136,7 +141,7 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   /* Direct data */
   pointcloud->attribute_storage.wrap().blend_write(*writer, attribute_data);
 
-  BLO_write_pointer_array(writer, pointcloud->totcol, pointcloud->mat);
+  writer->write_pointer_array(pointcloud->totcol, pointcloud->mat);
 }
 
 static void pointcloud_blend_read_data(BlendDataReader *reader, ID *id)
@@ -154,34 +159,34 @@ static void pointcloud_blend_read_data(BlendDataReader *reader, ID *id)
 }
 
 IDTypeInfo IDType_ID_PT = {
-    /*id_code*/ PointCloud::id_type,
-    /*id_filter*/ FILTER_ID_PT,
-    /*dependencies_id_types*/ FILTER_ID_MA,
-    /*main_listbase_index*/ INDEX_ID_PT,
-    /*struct_size*/ sizeof(PointCloud),
-    /*name*/ "PointCloud",
-    /*name_plural*/ N_("pointclouds"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_POINTCLOUD,
-    /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /*asset_type_info*/ nullptr,
+    .id_code = PointCloud::id_type,
+    .id_filter = FILTER_ID_PT,
+    .dependencies_id_types = FILTER_ID_MA,
+    .main_listbase_index = INDEX_ID_PT,
+    .struct_size = sizeof(PointCloud),
+    .name = "PointCloud",
+    .name_plural = N_("pointclouds"),
+    .translation_context = BLT_I18NCONTEXT_ID_POINTCLOUD,
+    .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ pointcloud_init_data,
-    /*copy_data*/ pointcloud_copy_data,
-    /*free_data*/ pointcloud_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ pointcloud_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ pointcloud_foreach_working_space_color,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = pointcloud_init_data,
+    .copy_data = pointcloud_copy_data,
+    .free_data = pointcloud_free_data,
+    .make_local = nullptr,
+    .foreach_id = pointcloud_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = pointcloud_foreach_working_space_color,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ pointcloud_blend_write,
-    /*blend_read_data*/ pointcloud_blend_read_data,
-    /*blend_read_after_liblink*/ nullptr,
+    .blend_write = pointcloud_blend_write,
+    .blend_read_data = pointcloud_blend_read_data,
+    .blend_read_after_liblink = nullptr,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 Span<float3> PointCloud::positions() const
@@ -310,6 +315,33 @@ void pointcloud_copy_parameters(const PointCloud &src, PointCloud &dst)
   dst.mat = MEM_new_array_uninitialized<Material *>(src.totcol, __func__);
   dst.totcol = src.totcol;
   MutableSpan(dst.mat, dst.totcol).copy_from(Span(src.mat, src.totcol));
+}
+
+void pointcloud_resize(PointCloud &pointcloud, const int size)
+{
+  BLI_assert(size > 0);
+
+  const int old_totpoint = pointcloud.totpoint;
+
+  if (size == old_totpoint) {
+    return;
+  }
+
+  pointcloud.totpoint = size;
+
+  bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
+  if (old_totpoint == 0) {
+    /* If there were no points before, ensure the position attribute exists. */
+    attributes.add<float3>("position", bke::AttrDomain::Point, bke::AttributeInitConstruct());
+  }
+
+  pointcloud.attribute_storage.wrap().resize(bke::AttrDomain::Point, pointcloud.totpoint);
+
+  if (size > old_totpoint) {
+    /* Initialize new points. */
+    fill_attribute_range_default(
+        attributes, bke::AttrDomain::Point, {}, IndexRange(old_totpoint, size));
+  }
 }
 
 /* Dependency Graph */

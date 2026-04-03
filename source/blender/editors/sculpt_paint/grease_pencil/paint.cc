@@ -11,6 +11,7 @@
 #include "BKE_deform.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_grease_pencil_fills.hh"
 #include "BKE_grease_pencil_vertex_groups.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_material.hh"
@@ -18,7 +19,7 @@
 #include "BKE_scene.hh"
 
 #include "BLI_bounds.hh"
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_length_parameterize.hh"
 #include "BLI_listbase.h"
 #include "BLI_math_base.hh"
@@ -39,7 +40,9 @@
 #include "ED_grease_pencil.hh"
 #include "ED_view3d.hh"
 
+#include "GEO_fit_curves.hh"
 #include "GEO_join_geometries.hh"
+#include "GEO_set_curve_type.hh"
 #include "GEO_simplify_curves.hh"
 #include "GEO_smooth_curves.hh"
 
@@ -295,10 +298,10 @@ struct PaintOperationExecutor {
       ColorGeometry4f color_base;
       copy_v3_v3(color_base, brush_->color);
       color_base.a = settings_->vertex_factor;
-      if (ELEM(settings_->vertex_mode, GPPAINT_MODE_STROKE, GPPAINT_MODE_BOTH)) {
+      if (settings_->flag2 & GP_BRUSH_USE_STROKE) {
         vertex_color_ = color_base;
       }
-      if (ELEM(settings_->vertex_mode, GPPAINT_MODE_FILL, GPPAINT_MODE_BOTH)) {
+      if (settings_->flag2 & GP_BRUSH_USE_FILL) {
         fill_color_ = color_base;
       }
     }
@@ -406,7 +409,7 @@ struct PaintOperationExecutor {
         "material_index", bke::AttrDomain::Curve);
     bke::SpanAttributeWriter<bool> cyclic = attributes.lookup_or_add_for_write_span<bool>(
         "cyclic", bke::AttrDomain::Curve);
-    cyclic.span[active_curve] = false;
+    cyclic.span[active_curve] = use_fill;
     materials.span[active_curve] = material_index;
     curve_attributes_to_skip.add_multiple({"material_index", "cyclic"});
     cyclic.finish();
@@ -432,6 +435,25 @@ struct PaintOperationExecutor {
       aspect_ratio.span[active_curve] = aspect_ratio_;
       curve_attributes_to_skip.add("aspect_ratio");
       aspect_ratio.finish();
+    }
+
+    if ((settings_->flag2 & GP_BRUSH_USE_STROKE) == 0) {
+      bke::SpanAttributeWriter<bool> hide_stroke = attributes.lookup_or_add_for_write_span<bool>(
+          "hide_stroke", bke::AttrDomain::Curve);
+      hide_stroke.span[active_curve] = true;
+      curve_attributes_to_skip.add("hide_stroke");
+      hide_stroke.finish();
+    }
+    if (use_fill) {
+      bke::SpanAttributeWriter<int> fill_id = attributes.lookup_or_add_for_write_span<int>(
+          "fill_id", bke::AttrDomain::Curve);
+      /* Set new fill id to zero, because it will have uninitialized memory otherwise.
+       * Then get the #VArray of all fill ids to compute a new one. */
+      fill_id.span[active_curve] = 0;
+      const int new_fill_id = bke::greasepencil::get_next_available_fill_id(fill_id.span);
+      fill_id.span[active_curve] = new_fill_id;
+      curve_attributes_to_skip.add("fill_id");
+      fill_id.finish();
     }
 
     if (settings_->uv_random > 0.0f || attributes.contains("rotation")) {
@@ -468,9 +490,7 @@ struct PaintOperationExecutor {
     if (use_fill && (start_opacity < 1.0f || attributes.contains("fill_opacity"))) {
       if (bke::SpanAttributeWriter<float> fill_opacities =
               attributes.lookup_or_add_for_write_span<float>(
-                  "fill_opacity",
-                  bke::AttrDomain::Curve,
-                  bke::AttributeInitVArray(VArray<float>::from_single(1.0f, curves.curves_num()))))
+                  "fill_opacity", bke::AttrDomain::Curve, bke::AttributeInitValue(1.0f)))
       {
         fill_opacities.span[active_curve] = start_opacity;
         curve_attributes_to_skip.add("fill_opacity");
@@ -1208,7 +1228,7 @@ void PaintOperation::on_stroke_begin(const bContext &C, const InputSample &start
   Material *material = BKE_grease_pencil_object_material_ensure_from_brush(
       CTX_data_main(&C), object_, brush);
   const int material_index = BKE_object_material_index_get(object_, material);
-  const bool use_fill = (material->gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0;
+  const bool use_fill = (settings->flag2 & GP_BRUSH_USE_FILL) != 0;
 
   frame_number_ = scene_->r.cfra;
   drawing_ = grease_pencil->get_editable_drawing_at(layer, frame_number_);
@@ -1450,18 +1470,7 @@ static int trim_end_points(bke::greasepencil::Drawing &drawing,
     }
 
     bke::GSpanAttributeWriter dst = attributes.lookup_for_write_span(iter.name);
-    GMutableSpan attribute_data = dst.span;
-
-    bke::attribute_math::to_static_type(attribute_data.type(), [&]<typename T>() {
-      MutableSpan<T> span_data = attribute_data.typed<T>();
-
-      for (int i = last_active_point - num_points_to_remove + 1;
-           i < curves.points_num() - num_points_to_remove;
-           i++)
-      {
-        span_data[i] = span_data[i + num_points_to_remove];
-      }
-    });
+    bke::attribute_math::shift_left(dst.span, last_active_point, curves.points_num(), 0);
     dst.finish();
   });
 
@@ -1485,17 +1494,22 @@ static void deselect_stroke(Scene *scene,
   const bke::AttrDomain selection_domain = ED_grease_pencil_edit_selection_domain_get(
       scene->toolsettings);
 
-  bke::GSpanAttributeWriter selection = ed::curves::ensure_selection_attribute(
-      curves, selection_domain, bke::AttrType::Bool);
+  for (const StringRef selection_attribute_name :
+       ed::curves::get_curves_selection_attribute_names(curves))
+  {
+    bke::GSpanAttributeWriter selection = ed::curves::ensure_selection_attribute(
+        curves, selection_domain, bke::AttrType::Bool, selection_attribute_name);
 
-  if (selection_domain == bke::AttrDomain::Curve) {
-    ed::curves::fill_selection_false(selection.span.slice(IndexRange::from_single(active_curve)));
-  }
-  else if (selection_domain == bke::AttrDomain::Point) {
-    ed::curves::fill_selection_false(selection.span.slice(points));
-  }
+    if (selection_domain == bke::AttrDomain::Curve) {
+      ed::curves::fill_selection_false(
+          selection.span.slice(IndexRange::from_single(active_curve)));
+    }
+    else if (selection_domain == bke::AttrDomain::Point) {
+      ed::curves::fill_selection_false(selection.span.slice(points));
+    }
 
-  selection.finish();
+    selection.finish();
+  }
 }
 
 static void process_stroke_weights(const Scene &scene,
@@ -1624,6 +1638,38 @@ static void append_stroke_to_multiframe_drawings(
   }
 }
 
+static void convert_stroke_type(bke::greasepencil::Drawing &drawing,
+                                const int active_curve,
+                                const float threshold,
+                                const int8_t curve_type)
+{
+  bke::CurvesGeometry &curves = drawing.strokes_for_write();
+  const IndexMask selection = IndexRange::from_single(active_curve);
+  const VArray<float> thresholds = VArray<float>::from_single(threshold, curves.curves_num());
+
+  /* TODO: Detect or manually provide corners. */
+  const VArray<bool> corners = VArray<bool>::from_single(false, curves.points_num());
+  curves = geometry::fit_poly_to_bezier_curves(
+      curves, selection, thresholds, corners, geometry::FitMethod::Refit, {});
+
+  if (curve_type == CURVE_TYPE_CATMULL_ROM) {
+    geometry::ConvertCurvesOptions options;
+    options.convert_bezier_handles_to_poly_points = false;
+    options.convert_bezier_handles_to_catmull_rom_points = false;
+    options.keep_bezier_shape_as_nurbs = true;
+    options.keep_catmull_rom_shape_as_nurbs = true;
+    curves = geometry::convert_curves(curves, selection, CURVE_TYPE_CATMULL_ROM, {}, options);
+  }
+  else if (curve_type == CURVE_TYPE_NURBS) {
+    geometry::ConvertCurvesOptions options;
+    options.convert_bezier_handles_to_poly_points = false;
+    options.convert_bezier_handles_to_catmull_rom_points = false;
+    options.keep_bezier_shape_as_nurbs = true;
+    options.keep_catmull_rom_shape_as_nurbs = true;
+    curves = geometry::convert_curves(curves, selection, CURVE_TYPE_NURBS, {}, options);
+  }
+}
+
 void PaintOperation::on_stroke_done(const bContext &C)
 {
   using namespace blender::bke;
@@ -1662,9 +1708,6 @@ void PaintOperation::on_stroke_done(const bContext &C)
   /* Remove trailing points with radii close to zero. */
   trim_end_points(drawing, 1e-5f, on_back, active_curve);
 
-  /* Set the selection of the newly drawn stroke to false. */
-  deselect_stroke(scene_, drawing, active_curve);
-
   if (do_post_processing) {
     if (settings->draw_smoothfac > 0.0f && settings->draw_smoothlvl > 0) {
       smooth_stroke(drawing, settings->draw_smoothfac, settings->draw_smoothlvl, active_curve);
@@ -1693,7 +1736,15 @@ void PaintOperation::on_stroke_done(const bContext &C)
                      material_index,
                      on_back);
     }
+    if (settings->curve_type != CURVE_TYPE_POLY) {
+      convert_stroke_type(
+          drawing, active_curve, settings->conversion_threshold, settings->curve_type);
+    }
   }
+
+  /* Set the selection of the newly drawn stroke to false. */
+  deselect_stroke(scene_, drawing, active_curve);
+
   /* Remove the temporary attribute. */
   attributes.remove(".draw_tool_screen_space_positions");
 

@@ -50,21 +50,40 @@ struct NodeAndSocket {
   const bNode &node;
   std::string socket_identifier;
   eNodeSocketInOut in_out;
+  bool link_muted;
+  std::optional<int> multi_input_sort_id;
 
   NodeAndSocket(const bNode &node,
                 const StringRef socket_identifier,
-                const eNodeSocketInOut in_out)
-      : node(node), socket_identifier(socket_identifier), in_out(in_out)
+                const eNodeSocketInOut in_out,
+                const bool link_muted,
+                std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(node),
+        socket_identifier(socket_identifier),
+        in_out(in_out),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
   {
   }
-  NodeAndSocket(const bNode &node, const bNodeSocket &socket)
-      : node(node), socket_identifier(socket.identifier), in_out(eNodeSocketInOut(socket.in_out))
+  NodeAndSocket(const bNode &node,
+                const bNodeSocket &socket,
+                const bool link_muted,
+                std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(node),
+        socket_identifier(socket.identifier),
+        in_out(eNodeSocketInOut(socket.in_out)),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
   {
   }
-  NodeAndSocket(const bNodeSocket &socket)
+  NodeAndSocket(const bNodeSocket &socket,
+                const bool link_muted,
+                std::optional<int> multi_input_sort_id = std::nullopt)
       : node(socket.owner_node()),
         socket_identifier(socket.identifier),
-        in_out(eNodeSocketInOut(socket.in_out))
+        in_out(eNodeSocketInOut(socket.in_out)),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
   {
   }
 
@@ -88,10 +107,10 @@ struct NodeAndSocket {
 
   friend bool operator==(const NodeAndSocket &a, const NodeAndSocket &b)
   {
-    return (&a.node == &b.node) && (a.in_out == b.in_out) &&
-           (a.socket_identifier == b.socket_identifier);
+    return &a.node == &b.node && a.in_out == b.in_out &&
+           a.socket_identifier == b.socket_identifier && a.link_muted == b.link_muted &&
+           a.multi_input_sort_id == b.multi_input_sort_id;
   }
-  BLI_STRUCT_DERIVED_UNEQUAL_OPERATOR(NodeAndSocket)
 };
 
 /**
@@ -103,27 +122,46 @@ struct MutableNodeAndSocket {
   bNode &node;
   std::string socket_identifier;
   eNodeSocketInOut in_out;
+  bool link_muted;
+  std::optional<int> multi_input_sort_id;
 
   MutableNodeAndSocket(bNode &node,
                        const StringRef socket_identifier,
-                       const eNodeSocketInOut in_out)
-      : node(node), socket_identifier(socket_identifier), in_out(in_out)
+                       const eNodeSocketInOut in_out,
+                       const bool link_muted,
+                       std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(node),
+        socket_identifier(socket_identifier),
+        in_out(in_out),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
   {
   }
-  MutableNodeAndSocket(bNode &node, bNodeSocket &socket)
-      : node(node), socket_identifier(socket.identifier), in_out(eNodeSocketInOut(socket.in_out))
+  MutableNodeAndSocket(bNode &node,
+                       bNodeSocket &socket,
+                       const bool link_muted,
+                       std::optional<int> multi_input_sort_id = std::nullopt)
+      : node(node),
+        socket_identifier(socket.identifier),
+        in_out(eNodeSocketInOut(socket.in_out)),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
   {
   }
-  MutableNodeAndSocket(bNodeSocket &socket)
+  MutableNodeAndSocket(bNodeSocket &socket,
+                       const bool link_muted,
+                       std::optional<int> multi_input_sort_id = std::nullopt)
       : node(socket.owner_node()),
         socket_identifier(socket.identifier),
-        in_out(eNodeSocketInOut(socket.in_out))
+        in_out(eNodeSocketInOut(socket.in_out)),
+        link_muted(link_muted),
+        multi_input_sort_id(multi_input_sort_id)
   {
   }
 
   NodeAndSocket operator()() const
   {
-    return {node, socket_identifier, in_out};
+    return {node, socket_identifier, in_out, link_muted, multi_input_sort_id};
   }
 
   bool is_input() const
@@ -146,33 +184,41 @@ struct MutableNodeAndSocket {
 
   friend bool operator==(const MutableNodeAndSocket &a, const MutableNodeAndSocket &b)
   {
-    return (&a.node == &b.node) && (a.in_out == b.in_out) &&
-           (a.socket_identifier == b.socket_identifier);
+    return &a.node == &b.node && a.in_out == b.in_out &&
+           (a.socket_identifier == b.socket_identifier) && a.link_muted == b.link_muted &&
+           a.multi_input_sort_id == b.multi_input_sort_id;
   }
-  BLI_STRUCT_DERIVED_UNEQUAL_OPERATOR(MutableNodeAndSocket)
 };
 
 template<> struct DefaultHash<NodeAndSocket> {
   uint64_t operator()(const NodeAndSocket &value) const
   {
-    return get_default_hash(&value.node, value.in_out, value.socket_identifier);
+    return get_default_hash(&value.node,
+                            value.in_out,
+                            value.socket_identifier,
+                            value.link_muted,
+                            value.multi_input_sort_id ? *value.multi_input_sort_id : 0);
   }
   uint64_t operator()(const bNodeSocket &socket) const
   {
     return get_default_hash(
-        &socket.owner_node(), eNodeSocketInOut(socket.in_out), socket.identifier);
+        &socket.owner_node(), eNodeSocketInOut(socket.in_out), socket.identifier, false, 0);
   }
 };
 
 template<> struct DefaultHash<MutableNodeAndSocket> {
   uint64_t operator()(const MutableNodeAndSocket &value) const
   {
-    return get_default_hash(&value.node, value.in_out, value.socket_identifier);
+    return get_default_hash(&value.node,
+                            value.in_out,
+                            value.socket_identifier,
+                            value.link_muted,
+                            value.multi_input_sort_id ? *value.multi_input_sort_id : 0);
   }
   uint64_t operator()(const bNodeSocket &socket) const
   {
     return get_default_hash(
-        &socket.owner_node(), eNodeSocketInOut(socket.in_out), socket.identifier);
+        &socket.owner_node(), eNodeSocketInOut(socket.in_out), socket.identifier, false, 0);
   }
 };
 
@@ -596,6 +642,8 @@ void invoke_node_link_drag_add_menu(bContext &C,
                                     bNodeSocket &socket,
                                     const float2 &cursor);
 
+void NODE_OT_link_drag_operation_test(wmOperatorType *ot);
+
 /* `add_menu_assets.cc` */
 
 MenuType catalog_assets_menu_type();
@@ -690,6 +738,7 @@ NodeTreeInterfaceMapping build_node_declaration_interface(const NodeSetInterface
  * node. No new sockets are added to the interface.
  */
 NodeTreeInterfaceMapping map_group_node_interface(const NodeSetInterfaceParams &params,
+                                                  const bNodeTree &tree,
                                                   const bNode &group_node);
 
 /**
@@ -734,11 +783,21 @@ GroupInputOutputNodes connect_copied_nodes_to_interface(
     const NodeTreeInterfaceMapping &io_mapping);
 
 /**
+ * Proxy nodes to replace the original group tree interface after ungrouping.
+ * Keys are the tree interface socket identifiers.
+ * May contain null pointers!
+ */
+using InterfaceProxyNodes = Map<std::string, bNode *>;
+
+/**
  * Connect copied node sockets to external nodes in the interface mapping.
  */
-void connect_copied_nodes_to_external_sockets(const bNodeTree &src_tree,
-                                              const NodeSetCopy &copied_nodes,
-                                              const NodeTreeInterfaceMapping &io_mapping);
+InterfaceProxyNodes connect_copied_nodes_to_external_sockets(
+    bContext &C,
+    const bNodeTree &src_tree,
+    const NodeSetCopy &copied_nodes,
+    const NodeTreeInterfaceMapping &io_mapping,
+    const bNode *group_node = nullptr);
 
 /**
  * Connect the group node to external sockets in the interface mapping.

@@ -18,12 +18,12 @@
 #include "NOD_geometry_nodes_list.hh"
 #include "NOD_menu_value.hh"
 
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_math_rotation_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_memory_counter.hh"
 
-#include "FN_field.hh"
+#include "FN_field_evaluation.hh"
 
 namespace blender::bke {
 
@@ -164,6 +164,7 @@ static bool static_type_is_base_socket_type(const eNodeSocketDatatype socket_typ
       return std::is_same_v<T, bke::GeometrySet>;
     case SOCK_CUSTOM:
     case SOCK_SHADER:
+    case SOCK_INT_VECTOR:
       return false;
   }
   BLI_assert_unreachable();
@@ -179,13 +180,13 @@ template<typename T> T SocketValueVariant::extract()
       }
       case Kind::Single: {
         const GPointer single_value = this->get_single_ptr();
-        return fn::make_constant_field(*single_value.type(), single_value.get());
+        return fn::GField::from_constant(*single_value.type(), single_value.get());
       }
       case Kind::List:
       case Kind::Grid: {
         const CPPType *cpp_type = socket_type_to_geo_nodes_base_cpp_type(socket_type_);
         BLI_assert(cpp_type);
-        return fn::make_constant_field(*cpp_type, cpp_type->default_value());
+        return fn::GField::from_constant(*cpp_type, cpp_type->default_value());
       }
       case Kind::None: {
         BLI_assert_unreachable();
@@ -194,8 +195,9 @@ template<typename T> T SocketValueVariant::extract()
     }
   }
   else if constexpr (fn::is_field_v<T>) {
-    BLI_assert(static_type_is_base_socket_type<typename T::base_type>(socket_type_));
-    return T(this->extract<fn::GField>());
+    using base_type = typename T::base_type;
+    BLI_assert(static_type_is_base_socket_type<base_type>(socket_type_));
+    return this->extract<fn::GField>().typed<base_type>();
   }
   else if constexpr (std::is_same_v<T, nodes::ListPtr>) {
     if (kind_ != Kind::List) {
@@ -244,7 +246,12 @@ template<typename T> T SocketValueVariant::extract()
     }
   }
   BLI_assert_unreachable();
-  return T();
+  if constexpr (std::is_same_v<T, fn::GField>) {
+    return fn::GField(CPPType::get<float>());
+  }
+  else {
+    return T();
+  }
 }
 
 template<typename T> T SocketValueVariant::get() const
@@ -264,6 +271,7 @@ template<typename T> void SocketValueVariant::store_impl(T value)
     socket_type_ = *new_socket_type;
     kind_ = Kind::Field;
     value_.emplace<fn::GField>(std::move(value));
+    static_assert(decltype(value_)::is_inline_v<fn::GField>);
   }
   else if constexpr (fn::is_field_v<T>) {
     /* Always store #Field<T> as #GField. */
@@ -419,10 +427,7 @@ bool SocketValueVariant::is_context_dependent_field() const
     return false;
   }
   const fn::GField &field = value_.get<fn::GField>();
-  if (!field) {
-    return false;
-  }
-  return field.node().depends_on_input();
+  return field.depends_on_input();
 }
 
 bool SocketValueVariant::is_field() const
@@ -555,6 +560,7 @@ void SocketValueVariant::ensure_owns_direct_data()
     case SOCK_FLOAT:
     case SOCK_INT:
     case SOCK_VECTOR:
+    case SOCK_INT_VECTOR:
     case SOCK_BOOLEAN:
     case SOCK_ROTATION:
     case SOCK_MATRIX:
@@ -612,6 +618,7 @@ bool SocketValueVariant::owns_direct_data() const
     case SOCK_FLOAT:
     case SOCK_INT:
     case SOCK_VECTOR:
+    case SOCK_INT_VECTOR:
     case SOCK_BOOLEAN:
     case SOCK_ROTATION:
     case SOCK_MATRIX:

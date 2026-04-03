@@ -132,7 +132,7 @@ static void shapekey_blend_write(BlendWriter *writer, ID *id, const void *id_add
     }
     writer->write_struct_at_address(&kb, &tmp_kb);
     if (tmp_kb.data != nullptr) {
-      BLO_write_raw(writer, tmp_kb.totelem * key->elemsize, tmp_kb.data);
+      writer->write_raw(tmp_kb.totelem * key->elemsize, tmp_kb.data);
     }
   }
 }
@@ -167,37 +167,37 @@ static void shapekey_blend_read_after_liblink(BlendLibReader * /*reader*/, ID *i
 }
 
 IDTypeInfo IDType_ID_KE = {
-    /*id_code*/ Key::id_type,
-    /*id_filter*/ FILTER_ID_KE,
+    .id_code = Key::id_type,
+    .id_filter = FILTER_ID_KE,
     /* Warning! key->from, could be more types in future? */
-    /*dependencies_id_types*/ FILTER_ID_ME | FILTER_ID_CU_LEGACY | FILTER_ID_LT,
-    /*main_listbase_index*/ INDEX_ID_KE,
-    /*struct_size*/ sizeof(Key),
-    /*name*/ "Key",
-    /*name_plural*/ N_("shape_keys"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_SHAPEKEY,
-    /*flags*/ IDTYPE_FLAGS_NO_LIBLINKING,
-    /*asset_type_info*/ nullptr,
+    .dependencies_id_types = FILTER_ID_ME | FILTER_ID_CU_LEGACY | FILTER_ID_LT,
+    .main_listbase_index = INDEX_ID_KE,
+    .struct_size = sizeof(Key),
+    .name = "Key",
+    .name_plural = N_("shape_keys"),
+    .translation_context = BLT_I18NCONTEXT_ID_SHAPEKEY,
+    .flags = IDTYPE_FLAGS_NO_LIBLINKING,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ nullptr,
-    /*copy_data*/ shapekey_copy_data,
-    /*free_data*/ shapekey_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ shapekey_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
+    .init_data = nullptr,
+    .copy_data = shapekey_copy_data,
+    .free_data = shapekey_free_data,
+    .make_local = nullptr,
+    .foreach_id = shapekey_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
     /* A bit weird, due to shape-keys not being strictly speaking embedded data... But they also
      * share a lot with those (non linkable, only ever used by one owner ID, etc.). */
-    /*owner_pointer_get*/ shapekey_owner_pointer_get,
+    .owner_pointer_get = shapekey_owner_pointer_get,
 
-    /*blend_write*/ shapekey_blend_write,
-    /*blend_read_data*/ shapekey_blend_read_data,
-    /*blend_read_after_liblink*/ shapekey_blend_read_after_liblink,
+    .blend_write = shapekey_blend_write,
+    .blend_read_data = shapekey_blend_read_data,
+    .blend_read_after_liblink = shapekey_blend_read_after_liblink,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 #define KEY_MODE_DUMMY 0 /* Use where mode isn't checked for. */
@@ -674,6 +674,7 @@ static void copy_key_float3_weighted(const int vertex_count,
  */
 static void key_evaluate_relative_float3(Key *key,
                                          KeyBlock *active_keyblock,
+                                         const std::optional<Span<bool>> keys_to_process,
                                          const int vertex_count,
                                          float **per_keyblock_weights,
                                          float *target_data)
@@ -686,6 +687,9 @@ static void key_evaluate_relative_float3(Key *key,
   for (std::pair<int, KeyBlock &> enumerator : key->block.enumerate()) {
     KeyBlock &kb = enumerator.second;
     if (&kb == key->refkey) {
+      continue;
+    }
+    if (keys_to_process && !(*keys_to_process)[enumerator.first]) {
       continue;
     }
     /* No difference in vertex count allowed. */
@@ -892,7 +896,11 @@ static void keyblock_free_per_block_weights(Key *key,
   MEM_delete(per_keyblock_weights);
 }
 
-static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
+static void do_mesh_key(Object *ob,
+                        Key *key,
+                        const std::optional<Span<bool>> keys_to_process,
+                        char *out,
+                        const int tot)
 {
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
 
@@ -901,7 +909,7 @@ static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
     float **per_keyblock_weights;
     per_keyblock_weights = keyblock_get_per_block_weights(ob, key, &cache);
     key_evaluate_relative_float3(
-        key, actkb, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
+        key, actkb, keys_to_process, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
     keyblock_free_per_block_weights(key, per_keyblock_weights, &cache);
   }
   else {
@@ -920,12 +928,17 @@ static void do_mesh_key(Object *ob, Key *key, char *out, const int tot)
   }
 }
 
-static void do_curve_key(Object *ob, Key *key, char *out, const int tot)
+static void do_curve_key(Object *ob,
+                         Key *key,
+                         const std::optional<Span<bool>> keys_to_process,
+                         char *out,
+                         const int tot)
 {
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
 
   if (key->type == KEY_RELATIVE) {
-    key_evaluate_relative_float3(key, actkb, tot, nullptr, reinterpret_cast<float *>(out));
+    key_evaluate_relative_float3(
+        key, actkb, keys_to_process, tot, nullptr, reinterpret_cast<float *>(out));
   }
   else {
     const float ctime_scaled = key->ctime / 100.0f;
@@ -943,7 +956,11 @@ static void do_curve_key(Object *ob, Key *key, char *out, const int tot)
   }
 }
 
-static void do_latt_key(Object *ob, Key *key, char *out, const int tot)
+static void do_latt_key(Object *ob,
+                        Key *key,
+                        const std::optional<Span<bool>> keys_to_process,
+                        char *out,
+                        const int tot)
 {
   Lattice *lt = id_cast<Lattice *>(ob->data);
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
@@ -952,7 +969,7 @@ static void do_latt_key(Object *ob, Key *key, char *out, const int tot)
     float **per_keyblock_weights;
     per_keyblock_weights = keyblock_get_per_block_weights(ob, key, nullptr);
     key_evaluate_relative_float3(
-        key, actkb, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
+        key, actkb, keys_to_process, tot, per_keyblock_weights, reinterpret_cast<float *>(out));
     keyblock_free_per_block_weights(key, per_keyblock_weights, nullptr);
   }
   else {
@@ -982,8 +999,12 @@ static void keyblock_data_convert_to_curve(const float *fp,
                                            ListBaseT<Nurb> *nurb,
                                            const int totpoint);
 
-float *BKE_key_evaluate_object_ex(
-    Object *ob, int *r_totelem, float *arr, size_t arr_size, ID *obdata)
+float *BKE_key_evaluate_object_ex(Object *ob,
+                                  int *r_totelem,
+                                  float *arr,
+                                  size_t arr_size,
+                                  const std::optional<Span<bool>> keys_to_process,
+                                  ID *obdata)
 {
   Key *key = BKE_key_from_object(ob);
   KeyBlock *actkb = BKE_keyblock_from_object(ob);
@@ -1058,16 +1079,16 @@ float *BKE_key_evaluate_object_ex(
   }
   else {
     if (ob->type == OB_MESH) {
-      do_mesh_key(ob, key, out, tot);
+      do_mesh_key(ob, key, keys_to_process, out, tot);
     }
     else if (ob->type == OB_LATTICE) {
-      do_latt_key(ob, key, out, tot);
+      do_latt_key(ob, key, keys_to_process, out, tot);
     }
     else if (ob->type == OB_CURVES_LEGACY) {
-      do_curve_key(ob, key, out, tot);
+      do_curve_key(ob, key, keys_to_process, out, tot);
     }
     else if (ob->type == OB_SURF) {
-      do_curve_key(ob, key, out, tot);
+      do_curve_key(ob, key, keys_to_process, out, tot);
     }
   }
 
@@ -1108,7 +1129,7 @@ float *BKE_key_evaluate_object_ex(
 
 float *BKE_key_evaluate_object(Object *ob, int *r_totelem)
 {
-  return BKE_key_evaluate_object_ex(ob, r_totelem, nullptr, 0, nullptr);
+  return BKE_key_evaluate_object_ex(ob, r_totelem, nullptr, 0, std::nullopt, nullptr);
 }
 
 int BKE_keyblock_element_count_from_shape(const Key *key, const int shape_index)

@@ -73,6 +73,13 @@ enum eUserpref_File_Preview_Type {
   USER_FILE_PREVIEW_CAMERA,
 };
 
+/** #UserDef.save_modified_images */
+enum eUserpref_Save_Modified_Images {
+  USER_SAVE_MODIFIED_IMAGES_ASK = 0,
+  USER_SAVE_MODIFIED_IMAGES_ALWAYS,
+  USER_SAVE_MODIFIED_IMAGES_NEVER,
+};
+
 enum eUserPref_PrefFlag {
   USER_PREF_FLAG_SAVE = (1 << 0),
 };
@@ -167,6 +174,7 @@ enum eUserpref_UI_Flag2 {
   USER_REGION_OVERLAP = (1 << 1),
   USER_UIFLAG2_UNUSED_2 = (1 << 2),
   USER_UIFLAG2_UNUSED_3 = (1 << 3), /* dirty */
+  USER_UIFLAG2_SHOW_ONLINE_ASSETS = (1 << 4),
 };
 
 /** #UserDef.gpu_flag */
@@ -615,7 +623,12 @@ struct bUserAssetLibrary {
   struct bUserAssetLibrary *next = nullptr, *prev = nullptr;
 
   char name[/*MAX_NAME*/ 64] = "";
+  /** The path on disk for this asset library. For remote libraries
+   * (#ASSET_LIBRARY_USE_REMOTE_URL), this is the download cache directory, where already
+   * downloaded assets will be placed. */
   char dirpath[/*FILE_MAX*/ 1024] = "";
+  /** Only for remote asset libraries (#ASSET_LIBRARY_USE_REMOTE_URL is set). */
+  char remote_url[/*FILE_MAX*/ 1024];
 
   short import_method = ASSET_IMPORT_PACK;  /* eAssetImportMethod */
   short flag = ASSET_LIBRARY_RELATIVE_PATH; /* eAssetLibrary_Flag */
@@ -699,7 +712,7 @@ struct WalkNavigation {
 };
 
 struct XrNavigation {
-  float vignette_intensity = 60;
+  float vignette_intensity = 70;
   float turn_speed = DEG2RAD(60);
   float turn_amount = DEG2RAD(30);
   short flag = USER_XR_NAV_SNAP_TURN;
@@ -738,6 +751,7 @@ enum eUserPref_Section {
   USER_SECTION_EXPERIMENTAL = 16,
   USER_SECTION_EXTENSIONS = 17,
   USER_SECTION_DEVELOPER_TOOLS = 18,
+  USER_SECTION_ASSETS = 19,
 };
 
 /** #UserDef_SpaceData.flag (State of the user preferences UI). */
@@ -810,7 +824,9 @@ struct UserDef_Experimental {
   char use_shader_node_previews = 0;
   char use_geometry_nodes_lists = 0;
   char use_geometry_bundle = 0;
-  char _pad[4] = {};
+  char use_remote_asset_libraries = 0;
+  char use_collection_importer = 0;
+  char _pad[2] = {};
 };
 
 #define USER_EXPERIMENTAL_TEST(userdef, member) (((userdef)->experimental).member)
@@ -881,6 +897,7 @@ struct UserDef {
   /* EXR cache path */
   char render_cachedir[/*FILE_MAXDIR*/ 768] = "";
   char textudir[/*FILE_MAXDIR*/ 768] = "//";
+  char texture_cachedir[/*FILE_MAXDIR*/ 768] = "";
   /* Deprecated, use #UserDef.script_directories instead. */
   DNA_DEPRECATED char pythondir_legacy[/*FILE_MAXDIR*/ 768] = "";
   char sounddir[/*FILE_MAXDIR*/ 768] = "//";
@@ -911,7 +928,7 @@ struct UserDef {
                USER_NODE_AUTO_OFFSET | USER_GLOBALUNDO | USER_SHOW_GIZMO_NAVIGATE |
                USER_SHOW_VIEWPORTNAME | USER_SHOW_FPS | USER_CONTINUOUS_MOUSE | USER_SAVE_PROMPT;
   /** #eUserpref_UI_Flag2. */
-  char uiflag2 = USER_REGION_OVERLAP;
+  char uiflag2 = USER_REGION_OVERLAP | USER_UIFLAG2_SHOW_ONLINE_ASSETS;
   char gpu_flag = USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE | USER_GPU_FLAG_SUBDIVISION_EVALUATION;
   char _pad8[6] = {};
   /* Experimental flag for app-templates to make changes to behavior
@@ -1041,11 +1058,11 @@ struct UserDef {
   short vbotimeout = 120, vbocollectrate = 60;
   short textimeout = 120, texcollectrate = 60;
   int memcachelimit = 4096;
+  int geometry_nodes_stack_limit = 100;
   /** Unused. */
   int prefetchframes = 0;
   /** Control the rotation step of the view when PAD2, PAD4, PAD6&PAD8 is use. */
   float pad_rot_angle = 15;
-  char _pad12[4] = {};
   /** Rotating view icon size. */
   short rvisize = 25;
   /** Rotating view icon brightness. */
@@ -1201,7 +1218,8 @@ struct UserDef {
 
   float collection_instance_empty_size = 1.0f;
   char text_flag = 0;
-  char _pad10[1] = {};
+
+  char save_modified_images = USER_SAVE_MODIFIED_IMAGES_ASK; /* eUserpref_Save_Modified_Images */
 
   char file_preview_type = USER_FILE_PREVIEW_AUTO; /* eUserpref_File_Preview_Type */
   char statusbar_flag = STATUSBAR_SHOW_VERSION |

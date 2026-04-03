@@ -14,6 +14,8 @@
 
 #include "BLI_math_vector_types.hh"
 
+#include "DNA_windowmanager_enums.h"
+
 #include "gizmo/wm_gizmo_wmapi.hh"
 
 namespace blender {
@@ -95,6 +97,10 @@ void wm_gesture_tag_redraw(wmWindow *win);
  * Hard-coded to event #TIMERJOBS.
  */
 void wm_jobs_timer(wmWindowManager *wm, wmTimer *wt);
+/**
+ * Handle jobs that are ready and finished.
+ */
+void wm_jobs_handle_finished(const bContext *C);
 /**
  * Kill job entirely, also removes timer itself.
  */

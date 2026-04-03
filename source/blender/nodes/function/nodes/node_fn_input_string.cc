@@ -21,7 +21,7 @@ namespace blender::nodes::node_fn_input_string_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_output<decl::String>("String").custom_draw([](CustomSocketDrawParams &params) {
+  b.add_output<decl::String>("String"_ustr).custom_draw([](CustomSocketDrawParams &params) {
     params.layout.alignment_set(ui::LayoutAlign::Expand);
     PropertyRNA *prop = RNA_struct_find_property(&params.node_ptr, "string");
     params.layout.prop(&params.node_ptr,
@@ -76,7 +76,7 @@ static void node_storage_copy(bNodeTree * /*dst_ntree*/, bNode *dest_node, const
 static void node_blend_write(const bNodeTree & /*tree*/, const bNode &node, BlendWriter &writer)
 {
   const NodeInputString *storage = static_cast<const NodeInputString *>(node.storage);
-  BLO_write_string(&writer, storage->string);
+  writer.write_string(storage->string);
 }
 
 static void node_blend_read(bNodeTree & /*tree*/, bNode &node, BlendDataReader &reader)
@@ -97,7 +97,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 
   params.add_item(IFACE_("String"), [](LinkSearchOpParams &params) {
     bNode &node = params.add_node("FunctionNodeInputString");
-    params.update_and_connect_available_socket(node, "String");
+    params.update_and_connect_available_socket(node, "String"_ustr);
 
     /* Adapt width of the new node to its content. */
     const StringRef string = static_cast<NodeInputString *>(node.storage)->string;

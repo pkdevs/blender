@@ -10,26 +10,29 @@ namespace blender::nodes::node_geo_geometry_to_instance_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Geometry")
+  b.add_input<decl::Geometry>("Geometry"_ustr)
       .multi_input()
       .description("Each input geometry is turned into a separate instance");
-  b.add_output<decl::Geometry>("Instances").propagate_all();
+  b.add_output<decl::Geometry>("Instances"_ustr).propagate_all();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
   GeoNodesMultiInput<GeometrySet> geometries =
-      params.extract_input<GeoNodesMultiInput<GeometrySet>>("Geometry");
-  std::unique_ptr<bke::Instances> instances = std::make_unique<bke::Instances>();
+      params.extract_input<GeoNodesMultiInput<GeometrySet>>("Geometry"_ustr);
+  auto instances = std::make_unique<bke::Instances>(geometries.values.size());
 
-  for (GeometrySet &geometry : geometries.values) {
+  MutableSpan<int> handles = instances->reference_handles_for_write();
+
+  for (const int i : geometries.values.index_range()) {
+    GeometrySet &geometry = geometries.values[i];
     geometry.ensure_owns_direct_data();
-    const int handle = instances->add_reference(std::move(geometry));
-    instances->add_instance(handle, float4x4::identity());
+    handles[i] = instances->add_reference(std::move(geometry));
   }
 
-  GeometrySet new_geometry = GeometrySet::from_instances(instances.release());
-  params.set_output("Instances", std::move(new_geometry));
+  instances->transforms_for_write().fill(float4x4::identity());
+
+  params.set_output("Instances"_ustr, GeometrySet::from_instances(std::move(instances)));
 }
 
 static void node_register()

@@ -419,8 +419,20 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(space_action.anim_interpolation_linear);
   }
 
-  if (!USER_VERSION_ATLEAST(501, 100)) {
+  if (!USER_VERSION_ATLEAST(501, 19)) {
     FROM_DEFAULT_V4_UCHAR(space_preferences.match);
+  }
+
+  if (!USER_VERSION_ATLEAST(501, 26)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.grid_major);
+  }
+
+  if (!USER_VERSION_ATLEAST(501, 28)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.gp_wire_edit);
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 8)) {
+    FROM_DEFAULT_V4_UCHAR(tui.link);
   }
 
   /**
@@ -1738,6 +1750,25 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(501, 17)) {
     userdef->flag |= USER_HIDE_DOT_DATABLOCK;
+  }
+
+  if (!USER_VERSION_ATLEAST(501, 24)) {
+    /* Increase the base XR vignette value to match the previous default after logic refactor. */
+    /* Can be either 50 or 60 due to an oversight in the original feature (dde9d21b91) where
+     * the DNA default was set 60, but the versioning_userdef set it to 50. */
+    if (userdef->xr_navigation.vignette_intensity == 50 ||
+        userdef->xr_navigation.vignette_intensity == 60)
+    {
+      userdef->xr_navigation.vignette_intensity = 70;
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 3)) {
+    userdef->uiflag2 |= USER_UIFLAG2_SHOW_ONLINE_ASSETS;
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 13)) {
+    userdef->geometry_nodes_stack_limit = 100;
   }
 
   /**

@@ -251,15 +251,10 @@ static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf)
     BKE_image_release_ibuf(ima, ibuf, nullptr);
   }
 
-  if (GPU_mipmap_enabled()) {
-    GPU_texture_update_mipmap_chain(tex);
-    GPU_texture_mipmap_mode(tex, true, true);
-    if (ima) {
-      ima->runtime->gpuflag |= IMA_GPU_MIPMAP_COMPLETE;
-    }
-  }
-  else {
-    GPU_texture_mipmap_mode(tex, false, true);
+  GPU_texture_update_mipmap_chain(tex);
+  GPU_texture_mipmap_mode(tex, true, true);
+  if (ima) {
+    ima->runtime->gpuflag |= IMA_GPU_MIPMAP_COMPLETE;
   }
 
   return tex;
@@ -349,7 +344,7 @@ static void image_gpu_texture_try_partial_update(Image *image, ImageUser *iuser)
 
 void BKE_image_ensure_gpu_texture(Image *image, ImageUser *iuser)
 {
-  if (!image) {
+  if (!image || !iuser) {
     return;
   }
 
@@ -364,8 +359,20 @@ void BKE_image_ensure_gpu_texture(Image *image, ImageUser *iuser)
   }
 }
 
+/* Returns the GPU textures representing the given image with the given image user. The image
+ * texture cache is checked first and if cached texture exist, they will be returned. If try_only
+ * is true, nullptr textures will be returned if no cached textures exists, otherwise, the textures
+ * will be generated and added to the cached.
+ *
+ * The textures are generated from the given image buffer which is assumed to be acquired from the
+ * image with the image user, but if nullptr is provided, the image buffer will be acquired
+ * internally. If use_viewers is true, the image buffer will be acquired with locking to allow
+ * retrieval of images of type viewer. If use_tile_mapping is true and the image is a tiled images,
+ * the returned texture will be a 2D texture array with a mapping texture to sampling the image at
+ * arbitrary tiles, otherwise, only the tile in the image user will be retrieved. */
 static ImageGPUTextures image_get_gpu_texture(Image *ima,
                                               ImageUser *iuser,
+                                              ImBuf *image_buffer,
                                               const bool use_viewers,
                                               const bool use_tile_mapping,
                                               bool try_only)
@@ -448,11 +455,20 @@ static ImageGPUTextures image_get_gpu_texture(Image *ima,
     return result;
   }
 
-  /* check if we have a valid image buffer */
+  /* Acquire the image buffer if not provided. */
   void *lock;
-  ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, (use_viewers) ? &lock : nullptr);
+  ImBuf *ibuf = image_buffer;
+  if (!image_buffer) {
+    ibuf = BKE_image_acquire_ibuf(ima, iuser, (use_viewers) ? &lock : nullptr);
+  }
+  BLI_SCOPED_DEFER([&]() {
+    if (!image_buffer) {
+      BKE_image_release_ibuf(ima, ibuf, (use_viewers) ? lock : nullptr);
+    }
+  });
+
+  /* check if we have a valid image buffer */
   if (ibuf == nullptr) {
-    BKE_image_release_ibuf(ima, ibuf, (use_viewers) ? lock : nullptr);
     *result.texture = image_gpu_texture_error_create(textarget);
     if (textarget == TEXTARGET_2D_ARRAY) {
       *result.tile_mapping = image_gpu_texture_error_create(TEXTARGET_TILE_MAPPING);
@@ -471,19 +487,14 @@ static ImageGPUTextures image_get_gpu_texture(Image *ima,
     const bool store_premultiplied = BKE_image_has_gpu_texture_premultiplied_alpha(ima, ibuf);
 
     *result.texture = IMB_create_gpu_texture(
-        ima->id.name + 2, ibuf, use_high_bitdepth, store_premultiplied);
+        ima->id.name + 2, ibuf, use_high_bitdepth, store_premultiplied, true);
 
     if (*result.texture) {
       GPU_texture_extend_mode(*result.texture, GPU_SAMPLER_EXTEND_MODE_REPEAT);
 
-      if (GPU_mipmap_enabled()) {
-        GPU_texture_update_mipmap_chain(*result.texture);
-        ima->runtime->gpuflag |= IMA_GPU_MIPMAP_COMPLETE;
-        GPU_texture_mipmap_mode(*result.texture, true, true);
-      }
-      else {
-        GPU_texture_mipmap_mode(*result.texture, false, true);
-      }
+      GPU_texture_update_mipmap_chain(*result.texture);
+      ima->runtime->gpuflag |= IMA_GPU_MIPMAP_COMPLETE;
+      GPU_texture_mipmap_mode(*result.texture, true, true);
     }
   }
 
@@ -491,33 +502,36 @@ static ImageGPUTextures image_get_gpu_texture(Image *ima,
     GPU_texture_original_size_set(*result.texture, ibuf->x, ibuf->y);
   }
 
-  BKE_image_release_ibuf(ima, ibuf, (use_viewers) ? lock : nullptr);
-
   return result;
 }
 
 gpu::Texture *BKE_image_get_gpu_texture(Image *image, ImageUser *iuser)
 {
-  return *image_get_gpu_texture(image, iuser, false, false, false).texture;
+  return *image_get_gpu_texture(image, iuser, nullptr, false, false, false).texture;
 }
 
 gpu::Texture *BKE_image_get_gpu_viewer_texture(Image *image, ImageUser *iuser)
 {
-  return *image_get_gpu_texture(image, iuser, true, false, false).texture;
+  return *image_get_gpu_texture(image, iuser, nullptr, true, false, false).texture;
+}
+
+gpu::Texture *BKE_image_get_gpu_viewer_texture(Image *image, ImageUser *iuser, ImBuf *image_buffer)
+{
+  return *image_get_gpu_texture(image, iuser, image_buffer, true, false, false).texture;
 }
 
 ImageGPUTextures BKE_image_get_gpu_material_texture(Image *image,
                                                     ImageUser *iuser,
                                                     const bool use_tile_mapping)
 {
-  return image_get_gpu_texture(image, iuser, false, use_tile_mapping, false);
+  return image_get_gpu_texture(image, iuser, nullptr, false, use_tile_mapping, false);
 }
 
 ImageGPUTextures BKE_image_get_gpu_material_texture_try(Image *image,
                                                         ImageUser *iuser,
                                                         const bool use_tile_mapping)
 {
-  return image_get_gpu_texture(image, iuser, false, use_tile_mapping, true);
+  return image_get_gpu_texture(image, iuser, nullptr, false, use_tile_mapping, true);
 }
 
 /** \} */
@@ -877,12 +891,8 @@ static void gpu_texture_update_from_ibuf(
     MEM_delete(rect_float);
   }
 
-  if (GPU_mipmap_enabled()) {
-    GPU_texture_update_mipmap_chain(tex);
-  }
-  else {
-    ima->runtime->gpuflag &= ~IMA_GPU_MIPMAP_COMPLETE;
-  }
+  GPU_texture_update_mipmap_chain(tex);
+  ima->runtime->gpuflag |= IMA_GPU_MIPMAP_COMPLETE;
 
   GPU_texture_unbind(tex);
 }

@@ -89,50 +89,28 @@ int blender_attribute_name_split_type(ustring name, string *r_real_name);
 void python_thread_state_save(void **python_thread_state);
 void python_thread_state_restore(void **python_thread_state);
 
-static bool mesh_use_corner_normals(const BObjectInfo &b_ob_info, blender::Mesh *mesh)
-{
-  return mesh && !b_ob_info.use_adaptive_subdivision &&
-         (mesh->normals_domain(true) == blender::bke::MeshNormalDomain::Corner);
-}
-
-void mesh_split_edges_for_corner_normals(blender::Mesh &mesh);
-
 static inline blender::Mesh *object_to_mesh(BObjectInfo &b_ob_info)
 {
   blender::Mesh *mesh = (GS(b_ob_info.object_data->name) == blender::ID_ME) ?
                             blender::id_cast<blender::Mesh *>(b_ob_info.object_data) :
                             nullptr;
 
-  bool use_corner_normals = false;
-
   if (b_ob_info.is_real_object_data()) {
     if (mesh) {
       if (mesh->runtime->edit_mesh) {
         /* Flush edit-mesh to mesh, including all data layers. */
         mesh = object_copy_mesh_data(b_ob_info);
-        use_corner_normals = mesh_use_corner_normals(b_ob_info, mesh);
-      }
-      else if (mesh_use_corner_normals(b_ob_info, mesh)) {
-        /* Make a copy to split faces. */
-        mesh = object_copy_mesh_data(b_ob_info);
-        use_corner_normals = true;
       }
     }
     else {
       mesh = object_copy_mesh_data(b_ob_info);
-      use_corner_normals = mesh_use_corner_normals(b_ob_info, mesh);
     }
   }
   else {
     /* TODO: what to do about non-mesh geometry instances? */
-    use_corner_normals = mesh_use_corner_normals(b_ob_info, mesh);
   }
 
   if (mesh) {
-    if (use_corner_normals) {
-      mesh_split_edges_for_corner_normals(*mesh);
-    }
-
     if (b_ob_info.use_adaptive_subdivision) {
       mesh->corner_tris();
     }
@@ -358,7 +336,7 @@ static inline bool image_is_builtin(blender::Image &ima, blender::RenderEngine &
   }
 
   return BKE_image_has_packedfile(&ima) || image_source == blender::IMA_SRC_GENERATED ||
-         image_source == blender::IMA_SRC_MOVIE ||
+         image_source == blender::IMA_SRC_MOVIE || BKE_image_is_dirty(&ima) ||
          ((engine.flag & blender::RE_ENGINE_PREVIEW) != 0 &&
           image_source != blender::IMA_SRC_SEQUENCE);
 }
@@ -499,14 +477,14 @@ static inline void set_string(blender::PointerRNA &ptr, const char *name, const 
 /* Relative Paths */
 
 static inline string blender_absolute_path(blender::Main &b_data,
-                                           blender::ID &b_id,
+                                           blender::ID *b_id,
                                            const string &path)
 {
   if (path.size() >= 2 && path[0] == '/' && path[1] == '/') {
     string dirname;
 
-    if (b_id.lib) {
-      dirname = blender_absolute_path(b_data, b_id.lib->id, b_id.lib->filepath);
+    if (b_id && b_id->lib) {
+      dirname = blender_absolute_path(b_data, &b_id->lib->id, b_id->lib->filepath);
     }
     else {
       dirname = b_data.filepath;

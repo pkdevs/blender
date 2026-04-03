@@ -101,6 +101,14 @@ enum class NodeAssetMenuOperatorType : int8_t {
   Swap,
 };
 
+/**
+ * Panel popup draw direction.
+ */
+enum class PopupAttachDirection : int8_t {
+  Vertical = 0,
+  Horizontal = 1,
+};
+
 enum class EnumTabExpand {
   Default = 0,
   Row,
@@ -376,7 +384,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
 
   /**
    * Add a new split sub-layout, items placed in this sub-layout are added horizontally next to
-   * each other in row, but width is splitted between the first item and remaining items.
+   * each other in row, but width is split between the first item and remaining items.
    * \param percentage: Width percent to split.
    */
   Layout &split(float percentage, bool align);
@@ -397,6 +405,11 @@ struct Layout : public Item, NonCopyable, NonMovable {
 
   /** Adds a label item that will display text and/or icon in the layout. */
   void label(StringRef name, int icon);
+
+  /**
+   * Adds link item, displays a url that can be clicked in the layout.
+   */
+  void link(StringRef url, StringRef name, int icon);
 
   /**
    * Adds a menu item, which is a button that when active will display a menu.
@@ -570,7 +583,8 @@ struct Layout : public Item, NonCopyable, NonMovable {
   void popover(const bContext *C,
                StringRef panel_type,
                std::optional<StringRef> name_opt,
-               int icon);
+               int icon,
+               PopupAttachDirection direction = PopupAttachDirection::Vertical);
   void popover_group(
       bContext *C, int space_id, int region_id, const char *context, const char *category);
 
@@ -657,6 +671,15 @@ struct Layout : public Item, NonCopyable, NonMovable {
                          int icon,
                          const char *panel_type);
 
+  /**
+   * Adds a RNA property item, and sets a custom menu to expose its value.
+   */
+  void prop_with_menu(PointerRNA *ptr,
+                      blender::StringRefNull propname,
+                      eUI_Item_Flag flag,
+                      std::optional<blender::StringRefNull> name,
+                      int icon,
+                      const char *menu_type);
   /**
    * Adds a RNA property item, and sets a custom menu to expose its value.
    */
@@ -902,8 +925,6 @@ ENUM_OPERATORS(eUI_Item_Flag)
  * \note Must not be run after #block_layout_resolve.
  */
 bool block_apply_search_filter(Block *block, const char *search_filter);
-
-void uiLayoutSetFunc(Layout *layout, MenuHandleFunc handlefunc, void *argv);
 
 /**
  * Set tooltip function for all buttons in the layout.

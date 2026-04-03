@@ -371,12 +371,12 @@ static ARegion *wm_searchbox_tooltip_init(
   *r_exit_on_event = true;
 
   for (Block &block : region->runtime->uiblocks) {
-    for (const std::unique_ptr<Button> &but : block.buttons) {
-      if (but->type != ButtonType::SearchMenu) {
+    for (Button &but : block.buttons()) {
+      if (but.type != ButtonType::SearchMenu) {
         continue;
       }
 
-      ButtonSearch *search_but = static_cast<ButtonSearch *>(but.get());
+      ButtonSearch *search_but = static_cast<ButtonSearch *>(&but);
       if (!search_but->item_tooltip_fn) {
         continue;
       }
@@ -581,6 +581,27 @@ void searchbox_update(bContext *C, ARegion *region, Button *but, const bool rese
     }
     if (data->items.totitem == 1 && but->editstr[0]) {
       data->active = 0;
+    }
+  }
+
+  /* Nothing active, check at mouse location. */
+  if (data->active == -1) {
+    wmWindow *win = CTX_wm_window(C);
+    if (win && win->runtime && win->runtime->eventstate) {
+      const int cursor_x = win->runtime->eventstate->xy[0];
+      const int cursor_y = win->runtime->eventstate->xy[1];
+      if (BLI_rcti_isect_pt(&region->winrct, cursor_x, cursor_y)) {
+        rcti rect;
+        for (int a = 0; a < data->items.totitem; a++) {
+          searchbox_butrect(&rect, data, a);
+          if (BLI_rcti_isect_pt(
+                  &rect, cursor_x - region->winrct.xmin, cursor_y - region->winrct.ymin))
+          {
+            data->active = a;
+            break;
+          }
+        }
+      }
     }
   }
 

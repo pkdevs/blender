@@ -87,8 +87,9 @@ static bool act_markers_make_local_poll(bContext *C)
   }
 
   /* 3) */
+  const Main *bmain = CTX_data_main(C);
   bAction *active_action = ANIM_active_action_from_area(
-      CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_area(C));
+      *bmain, CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_area(C));
   if (!active_action) {
     return false;
   }
@@ -100,8 +101,9 @@ static bool act_markers_make_local_poll(bContext *C)
 static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*op*/)
 {
   ListBaseT<TimeMarker> *markers = ED_context_get_markers(C);
+  const Main *bmain = CTX_data_main(C);
   bAction *act = ANIM_active_action_from_area(
-      CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_area(C));
+      *bmain, CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_area(C));
 
   TimeMarker *marker, *markern = nullptr;
 
@@ -1286,6 +1288,19 @@ static wmOperatorStatus actkeys_clean_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
+static std::string actkeys_clean_get_description(bContext * /*C*/,
+                                                 wmOperatorType * /*ot*/,
+                                                 PointerRNA *ptr)
+{
+  /* Custom description based on the 'channels' property */
+  if (RNA_boolean_get(ptr, "channels")) {
+    return TIP_("Simplify F-Curves and remove empty or redundant channels.");
+  }
+
+  /* Use the default description in the other case. */
+  return "";
+}
+
 void ACTION_OT_clean(wmOperatorType *ot)
 {
   /* identifiers */
@@ -1295,6 +1310,7 @@ void ACTION_OT_clean(wmOperatorType *ot)
 
   /* API callbacks. */
   // ot->invoke =  /* XXX we need that number popup for this! */
+  ot->get_description = actkeys_clean_get_description;
   ot->exec = actkeys_clean_exec;
   ot->poll = ED_operator_action_active;
 

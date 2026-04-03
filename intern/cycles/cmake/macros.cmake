@@ -10,7 +10,7 @@ function(cycles_set_solution_folder target)
   endif()
 endfunction()
 
-macro(cycles_add_library target library_deps)
+function(cycles_add_library target library_deps)
   add_library(${target} ${ARGN})
 
   # On Windows certain libraries have two sets of binaries: one for debug builds and one for
@@ -53,106 +53,86 @@ macro(cycles_add_library target library_deps)
   # somehow in a way which allows to have Cycles standalone.
   if(NOT "${library_deps}" STREQUAL "")
     set(next_library_mode "")
+    set(next_library_scope "PUBLIC")
     foreach(library ${library_deps})
       string(TOLOWER "${library}" library_lower)
       if(("${library_lower}" STREQUAL "optimized") OR
          ("${library_lower}" STREQUAL "debug"))
         set(next_library_mode "${library_lower}")
+      elseif(("${library}" STREQUAL "PUBLIC") OR
+             ("${library}" STREQUAL "PRIVATE") OR
+             ("${library}" STREQUAL "INTERFACE"))
+        set(next_library_scope "${library}")
       else()
         if("${next_library_mode}" STREQUAL "optimized")
-          target_link_libraries(${target} optimized ${library})
+          target_link_libraries(${target} ${next_library_scope} optimized ${library})
         elseif("${next_library_mode}" STREQUAL "debug")
-          target_link_libraries(${target} debug ${library})
+          target_link_libraries(${target} ${next_library_scope} debug ${library})
         else()
-          target_link_libraries(${target} ${library})
+          target_link_libraries(${target} ${next_library_scope} ${library})
         endif()
         set(next_library_mode "")
       endif()
     endforeach()
   endif()
 
-  cycles_set_solution_folder(${target})
-endmacro()
+  # On windows vcpkg goes out of its way to make its libs the preferred
+  # libs, and needs to be explicitly be told not to do that.
+  if(WIN32)
+    set_target_properties(${target} PROPERTIES VS_GLOBAL_VcpkgEnabled "false")
+  endif()
 
-macro(cycles_external_libraries_append libraries)
+  cycles_set_solution_folder(${target})
+endfunction()
+
+# Modifies in parent scope:
+# - `${libraries}`: appended with external library dependencies.
+function(cycles_external_libraries_append libraries)
+  # Dependencies with modern targets, these always exist even when optional deps are disabled.
+  list(APPEND ${libraries}
+    bf::dependencies::openimageio
+    bf::dependencies::pthreads
+    bf::dependencies::zlib
+    bf::dependencies::optional::embree
+    bf::dependencies::optional::opencolorio
+    bf::dependencies::optional::openexr
+    bf::dependencies::optional::openimagedenoise
+    bf::dependencies::optional::openpgl
+    bf::dependencies::optional::opensubdiv
+    bf::dependencies::optional::openvdb
+    bf::dependencies::optional::osl
+    bf::dependencies::optional::pugixml
+    bf::dependencies::optional::python
+    bf::dependencies::optional::webp
+    ${CMAKE_DL_LIBS}
+    ${PLATFORM_LINKLIBS}
+  )
+
+  # Platform-specific frameworks and libraries.
   if(APPLE)
     list(APPEND ${libraries} "-framework Foundation")
     if(WITH_USD)
       list(APPEND ${libraries} "-framework CoreVideo -framework Cocoa -framework OpenGL")
+    endif()
+    if(WITH_OPENCOLORIO)
+      list(APPEND ${libraries} "-framework IOKit")
+      list(APPEND ${libraries} "-framework Carbon")
+    endif()
+    if(WITH_OPENIMAGEDENOISE)
+      if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
+        list(APPEND ${libraries} "-framework Accelerate")
+      endif()
     endif()
   elseif(WIN32)
     if(WITH_USD)
       list(APPEND ${libraries} "opengl32")
     endif()
   endif()
-  if(WITH_CYCLES_OSL)
-    list(APPEND ${libraries} ${OSL_LIBRARIES})
-  endif()
-  if(WITH_CYCLES_EMBREE)
-    list(APPEND ${libraries} ${EMBREE_LIBRARIES})
-    if(EMBREE_SYCL_SUPPORT)
-      list(APPEND ${libraries} ${SYCL_LIBRARIES})
-    endif()
-  endif()
-  if(WITH_OPENSUBDIV)
-    list(APPEND ${libraries} ${OPENSUBDIV_LIBRARIES})
-  endif()
-  if(WITH_OPENCOLORIO)
-    list(APPEND ${libraries} ${OPENCOLORIO_LIBRARIES})
-    if(APPLE)
-      list(APPEND ${libraries} "-framework IOKit")
-      list(APPEND ${libraries} "-framework Carbon")
-    endif()
-  endif()
-  if(WITH_OPENVDB)
-    list(APPEND ${libraries} ${OPENVDB_LIBRARIES})
-    if(DEFINED BLOSC_LIBRARIES)
-      list(APPEND ${libraries} ${BLOSC_LIBRARIES})
-    endif()
-  endif()
-  if(WITH_OPENIMAGEDENOISE)
-    list(APPEND ${libraries} ${OPENIMAGEDENOISE_LIBRARIES})
-    if(APPLE)
-      if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
-        list(APPEND ${libraries} "-framework Accelerate")
-      endif()
-    endif()
-  endif()
-  if(WITH_PATH_GUIDING)
-    list(APPEND ${libraries} ${OPENPGL_LIBRARIES})
-  endif()
-  if(WITH_IMAGE_WEBP)
-    list(APPEND ${libraries} ${WEBP_LIBRARIES})
-  endif()
   if(UNIX AND NOT APPLE)
     list(APPEND ${libraries} "-lm -lc -lutil")
   endif()
-  list(APPEND ${libraries}
-    ${OPENIMAGEIO_LIBRARIES}
-    ${PNG_LIBRARIES}
-    ${JPEG_LIBRARIES}
-    ${TIFF_LIBRARY}
-    ${OPENJPEG_LIBRARIES}
-    ${OPENEXR_LIBRARIES}
-    ${OPENEXR_LIBRARIES} # For circular dependencies between libs.
-    ${PUGIXML_LIBRARIES}
-    ${ZLIB_LIBRARIES}
-    ${CMAKE_DL_LIBS}
-  )
-  if(NOT WITH_PYTHON_MODULE)
-    list(APPEND ${libraries} ${PYTHON_LIBRARIES})
-  endif()
 
-  if(DEFINED PTHREADS_LIBRARIES)
-    list(APPEND ${libraries}
-      ${PTHREADS_LIBRARIES}
-    )
-  endif()
-
-  list(APPEND ${libraries}
-    ${PLATFORM_LINKLIBS}
-  )
-
+  # GPU backends.
   if(WITH_CYCLES_DEVICE_CUDA OR WITH_CYCLES_DEVICE_OPTIX)
     if(WITH_CUDA_DYNLOAD)
       list(APPEND ${libraries} extern_cuew)
@@ -165,6 +145,11 @@ macro(cycles_external_libraries_append libraries)
     list(APPEND ${libraries} extern_hipew)
   endif()
 
+  if(WITH_CYCLES_DEVICE_ONEAPI AND WITH_CYCLES_EMBREE  AND EMBREE_SYCL_SUPPORT)
+    list(APPEND ${libraries} ${SYCL_LIBRARIES})
+  endif()
+
+  # Compatibility libraries.
   if(UNIX AND NOT APPLE)
     if(CYCLES_STANDALONE_REPOSITORY)
       list(APPEND ${libraries} extern_libc_compat)
@@ -179,9 +164,10 @@ macro(cycles_external_libraries_append libraries)
   if(NOT CYCLES_STANDALONE_REPOSITORY)
     list(APPEND ${libraries} bf_intern_guardedalloc)
   endif()
-endmacro()
+  set(${libraries} "${${libraries}}" PARENT_SCOPE)
+endfunction()
 
-macro(cycles_install_libraries target)
+function(cycles_install_libraries target)
   # Copy DLLs for dynamically linked libraries.
   if(WIN32)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -198,4 +184,4 @@ macro(cycles_install_libraries target)
         DESTINATION ${CMAKE_INSTALL_PREFIX})
     endif()
   endif()
-endmacro()
+endfunction()

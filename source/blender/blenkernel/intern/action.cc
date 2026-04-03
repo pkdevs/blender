@@ -234,7 +234,7 @@ static void action_free_data(ID *id)
 
   /* Free markers & preview. */
   BLI_freelistN(&action.markers);
-  BKE_previewimg_free(&action.preview);
+  BKE_previewimg_id_free(&action.id);
 
   BLI_assert(action.is_empty());
 }
@@ -312,13 +312,13 @@ static void write_channelbag(BlendWriter *writer, animrig::Channelbag &channelba
   writer->write_struct_cast<ActionChannelbag>(&channelbag);
 
   Span<bActionGroup *> groups = channelbag.channel_groups();
-  BLO_write_pointer_array(writer, groups.size(), groups.data());
+  writer->write_pointer_array(groups.size(), groups.data());
   for (const bActionGroup *group : groups) {
     writer->write_struct(group);
   }
 
   Span<FCurve *> fcurves = channelbag.fcurves();
-  BLO_write_pointer_array(writer, fcurves.size(), fcurves.data());
+  writer->write_pointer_array(fcurves.size(), fcurves.data());
   for (FCurve *fcurve : fcurves) {
     writer->write_struct(fcurve);
     BKE_fcurve_blend_write_data(writer, fcurve);
@@ -331,7 +331,7 @@ static void write_strip_keyframe_data(BlendWriter *writer,
   writer->write_struct_cast<ActionStripKeyframeData>(&strip_keyframe_data);
 
   auto channelbags = strip_keyframe_data.channelbags();
-  BLO_write_pointer_array(writer, channelbags.size(), channelbags.data());
+  writer->write_pointer_array(channelbags.size(), channelbags.data());
 
   for (animrig::Channelbag *channelbag : channelbags) {
     write_channelbag(writer, *channelbag);
@@ -341,8 +341,7 @@ static void write_strip_keyframe_data(BlendWriter *writer,
 static void write_strip_keyframe_data_array(
     BlendWriter *writer, Span<animrig::StripKeyframeData *> strip_keyframe_data_array)
 {
-  BLO_write_pointer_array(
-      writer, strip_keyframe_data_array.size(), strip_keyframe_data_array.data());
+  writer->write_pointer_array(strip_keyframe_data_array.size(), strip_keyframe_data_array.data());
 
   for (animrig::StripKeyframeData *keyframe_data : strip_keyframe_data_array) {
     write_strip_keyframe_data(writer, *keyframe_data);
@@ -351,7 +350,7 @@ static void write_strip_keyframe_data_array(
 
 static void write_strips(BlendWriter *writer, Span<animrig::Strip *> strips)
 {
-  BLO_write_pointer_array(writer, strips.size(), strips.data());
+  writer->write_pointer_array(strips.size(), strips.data());
 
   for (animrig::Strip *strip : strips) {
     writer->write_struct_cast<ActionStrip>(strip);
@@ -360,7 +359,7 @@ static void write_strips(BlendWriter *writer, Span<animrig::Strip *> strips)
 
 static void write_layers(BlendWriter *writer, Span<animrig::Layer *> layers)
 {
-  BLO_write_pointer_array(writer, layers.size(), layers.data());
+  writer->write_pointer_array(layers.size(), layers.data());
 
   for (animrig::Layer *layer : layers) {
     writer->write_struct_cast<ActionLayer>(layer);
@@ -370,7 +369,7 @@ static void write_layers(BlendWriter *writer, Span<animrig::Layer *> layers)
 
 static void write_slots(BlendWriter *writer, Span<animrig::Slot *> slots)
 {
-  BLO_write_pointer_array(writer, slots.size(), slots.data());
+  writer->write_pointer_array(slots.size(), slots.data());
   for (animrig::Slot *slot : slots) {
     /* Make a shallow copy using the C type, so that no new runtime struct is
      * allocated for the copy. */
@@ -738,38 +737,38 @@ static AssetTypeInfo AssetType_AC = {
 }  // namespace bke
 
 IDTypeInfo IDType_ID_AC = {
-    /*id_code*/ bAction::id_type,
-    /*id_filter*/ FILTER_ID_AC,
+    .id_code = bAction::id_type,
+    .id_filter = FILTER_ID_AC,
 
     /* This value will be set dynamically in `BKE_idtype_init()` to only include
      * animatable ID types (see `animrig::Slot::users()`). */
-    /*dependencies_id_types*/ FILTER_ID_ALL,
+    .dependencies_id_types = FILTER_ID_ALL,
 
-    /*main_listbase_index*/ INDEX_ID_AC,
-    /*struct_size*/ sizeof(bAction),
-    /*name*/ "Action",
-    /*name_plural*/ "actions",
-    /*translation_context*/ BLT_I18NCONTEXT_ID_ACTION,
-    /*flags*/ IDTYPE_FLAGS_NO_ANIMDATA,
-    /*asset_type_info*/ &bke::AssetType_AC,
+    .main_listbase_index = INDEX_ID_AC,
+    .struct_size = sizeof(bAction),
+    .name = "Action",
+    .name_plural = "actions",
+    .translation_context = BLT_I18NCONTEXT_ID_ACTION,
+    .flags = IDTYPE_FLAGS_NO_ANIMDATA,
+    .asset_type_info = &bke::AssetType_AC,
 
-    /*init_data*/ bke::action_init_data,
-    /*copy_data*/ bke::action_copy_data,
-    /*free_data*/ bke::action_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ bke::action_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = bke::action_init_data,
+    .copy_data = bke::action_copy_data,
+    .free_data = bke::action_free_data,
+    .make_local = nullptr,
+    .foreach_id = bke::action_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ bke::action_blend_write,
-    /*blend_read_data*/ bke::action_blend_read_data,
-    /*blend_read_after_liblink*/ nullptr,
+    .blend_write = bke::action_blend_write,
+    .blend_read_data = bke::action_blend_read_data,
+    .blend_read_after_liblink = nullptr,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 /* ***************** Library data level operations on action ************** */

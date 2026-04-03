@@ -60,7 +60,7 @@ const EnumPropertyItem rna_enum_fmodifier_type_items[] = {
     {FMODIFIER_TYPE_SMOOTH,
      "SMOOTH",
      0,
-     "Gaussian Smoothing",
+     "Smooth (Gaussian)",
      "Smooth curve using Gaussian smoothing"},
     {0, nullptr, 0, nullptr, nullptr},
 };
@@ -588,7 +588,7 @@ static std::optional<std::string> rna_FCurve_path(const PointerRNA *ptr)
 
   /* If the F-Curve is not owned by an Action, bail out early. It could be a driver, NLA control
    * curve, or stored in some place that's yet unknown at the time of writing of this code. */
-  if (GS(ptr->owner_id) != ID_AC) {
+  if (GS(ptr->owner_id->name) != ID_AC) {
     return {};
   }
 

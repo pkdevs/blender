@@ -225,7 +225,7 @@ float2 dof_pixel_history_motion_vector(int2 texel_sample)
  * \a texel is sample position with sub-pixel accuracy. */
 DofSample dof_sample_history(float2 input_texel)
 {
-#if 1 /* Bilinar. */
+#if 1 /* Bilinear. */
   float2 uv = float2(input_texel + 0.5f) / float2(textureSize(in_history_tx, 0));
   float4 color = textureLod(in_history_tx, uv, 0.0f);
 
@@ -266,7 +266,9 @@ DofSample dof_sample_history(float2 input_texel)
 }
 
 /* Modulate the history color to avoid ghosting artifact. */
-DofSample dof_amend_history(DofNeighborhoodMinMax bbox, DofSample history, DofSample src)
+DofSample dof_amend_history(DofNeighborhoodMinMax bbox,
+                            DofSample history,
+                            [[maybe_unused]] DofSample src)
 {
 #if 0
   /* Clip instead of clamping to avoid color accumulating in the AABB corners. */

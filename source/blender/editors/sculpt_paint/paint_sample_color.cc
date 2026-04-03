@@ -310,6 +310,7 @@ static float3 paint_sample_color(bContext *C,
                                  const int2 mval,
                                  const bool use_merged_texture)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Paint *paint = BKE_paint_get_active_from_context(C);
@@ -322,7 +323,7 @@ static float3 paint_sample_color(bContext *C,
   std::optional<float3> sampled_color;
   if (v3d && !use_merged_texture) {
     ViewLayer *view_layer = CTX_data_view_layer(C);
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     Object *ob = BKE_view_layer_active_object_get(view_layer);
 
     if (mode == PaintMode::Texture3D) {
@@ -563,7 +564,7 @@ static wmOperatorStatus sample_color_modal(bContext *C, wmOperator *op, const wm
 static bool sample_color_poll(bContext *C)
 {
   return (image_paint_poll_ignore_tool(C) || vertex_paint_poll_ignore_tool(C) ||
-          SCULPT_mode_poll(C) || ed::greasepencil::grease_pencil_painting_poll(C) ||
+          sculpt_mode_poll(C) || ed::greasepencil::grease_pencil_painting_poll(C) ||
           ed::greasepencil::grease_pencil_vertex_painting_poll(C));
 }
 

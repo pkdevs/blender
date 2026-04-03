@@ -318,9 +318,8 @@ void BM_verts_sort_radial_plane(BMVert **vert_arr, int len)
   }
 
   /* sort by angle and magic! - we have our ngon */
-  std::sort(vang.begin(), vang.end(), [](const AngleIndex &a, const AngleIndex &b) {
-    return a.first < b.first;
-  });
+  std::ranges::sort(vang,
+                    [](const AngleIndex &a, const AngleIndex &b) { return a.first < b.first; });
 
   /* --- */
 
@@ -579,6 +578,8 @@ void BM_mesh_copy_init_customdata_all_layers(BMesh *bm_dst,
     for (int l = 0; l < src->totlayer; l++) {
       CustomData_add_layer_named(
           dst, eCustomDataType(src->layers[l].type), CD_SET_DEFAULT, 0, src->layers[l].name);
+      /* Needed to keep this a working shape key layer (see also #customdata_merge_internal). */
+      dst->layers[l].uid = src->layers[l].uid;
     }
     CustomData_bmesh_init_pool(dst, size, htypes[i]);
   }

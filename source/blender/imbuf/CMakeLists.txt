@@ -22,6 +22,7 @@ set(SRC
   intern/conversion.cc
   intern/filetype.cc
   intern/filter.cc
+  intern/format_avif.cc
   intern/format_bmp.cc
   intern/format_dds.cc
   intern/format_hdr.cc
@@ -130,10 +131,6 @@ if(WIN32)
   list(APPEND INC
     ../../../intern/utfconv
   )
-endif()
-
-if(WIN32)
-  add_definitions(-DNOMINMAX)
 endif()
 
 # no need to compile object files for inline headers.

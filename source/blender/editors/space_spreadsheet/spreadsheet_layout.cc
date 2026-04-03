@@ -91,7 +91,8 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
 
   void draw_top_row_cell(int column_index, const CellDrawParams &params) const final
   {
-    const StringRefNull name = spreadsheet_layout_.columns[column_index].values->name();
+    const ColumnValues &values = *spreadsheet_layout_.columns[column_index].values;
+    const StringRefNull name = values.name();
     ui::Button *but = uiDefIconTextBut(params.block,
                                        ui::ButtonType::Label,
                                        ICON_NONE,
@@ -102,12 +103,15 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
                                        params.height,
                                        nullptr,
                                        std::nullopt);
+    std::string description = values.description().is_empty() ?
+                                  std::string(name) :
+                                  fmt::format("{}\n{}", name, values.description());
     button_func_tooltip_set(
         but,
         [](bContext * /*C*/, void *arg, StringRef /*tip*/) {
           return *static_cast<std::string *>(arg);
         },
-        MEM_new<std::string>(__func__, name),
+        MEM_new<std::string>(__func__, std::move(description)),
         [](void *arg) { MEM_delete(static_cast<std::string *>(arg)); });
     /* Center-align column headers. */
     button_drawflag_disable(but, ui::BUT_TEXT_LEFT);
@@ -246,6 +250,11 @@ class SpreadsheetLayoutDrawer : public SpreadsheetDrawer {
     if (type.is<float3>()) {
       const float3 value = *value_ptr.get<float3>();
       this->draw_float_vector(params, Span(&value.x, 3));
+      return;
+    }
+    if (type.is<float4>()) {
+      const float4 value = *value_ptr.get<float4>();
+      this->draw_float_vector(params, Span(&value.x, 4));
       return;
     }
     if (type.is<ColorGeometry4f>()) {
@@ -691,6 +700,17 @@ float ColumnValues::fit_column_values_width_px(const std::optional<int64_t> &max
           data_.typed<float3>(),
           [](const float3 value) {
             return fmt::format("{:.3f}  {:.3f}  {:.3f}", value.x, value.y, value.z);
+          });
+    }
+    case SPREADSHEET_VALUE_TYPE_FLOAT4: {
+      return estimate_max_column_width<float4>(
+          get_min_width(12 * SPREADSHEET_WIDTH_UNIT),
+          fontid,
+          max_sample_size,
+          data_.typed<float4>(),
+          [](const float4 value) {
+            return fmt::format(
+                "{:.3f}  {:.3f}  {:.3f}  {:.3f}", value.x, value.y, value.z, value.w);
           });
     }
     case SPREADSHEET_VALUE_TYPE_COLOR: {

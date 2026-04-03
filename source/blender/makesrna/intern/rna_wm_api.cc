@@ -16,6 +16,8 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
+#include "ED_screen.hh"
+
 #include "UI_interface_icons.hh"
 #include "UI_interface_types.hh"
 
@@ -66,7 +68,11 @@ const EnumPropertyItem rna_enum_window_cursor_items[] = {
 
 #ifdef RNA_RUNTIME
 
+#  include "AS_remote_library.hh"
+
 #  include "DNA_userdef_types.h"
+
+#  include "ED_screen.hh"
 
 #  include "BLI_listbase.h"
 #  include "BLI_string.h"
@@ -792,6 +798,72 @@ static wmEvent *rna_Window_event_add_simulate(wmWindow *win,
   return WM_event_add_simulate(win, &e);
 }
 
+static Scene *rna_Window_find_playing_scene(wmWindow *win, const bool scrub)
+{
+  return ED_screen_find_playing_scene(WM_window_get_active_screen(win), scrub);
+}
+
+static wmWindow *rna_Windows_find_playing(wmWindowManager *wm, const bool scrub)
+{
+  wmWindow *win = ED_window_animation_playing_no_scrub(wm);
+  if (!win) {
+    return nullptr;
+  }
+  if (scrub) {
+    bScreen *screen = WM_window_get_active_screen(win);
+    if (screen->scrubbing) {
+      return win;
+    }
+    return nullptr;
+  }
+  return win;
+}
+
+using RemoteLibraryLoadingStatus = asset_system::RemoteLibraryLoadingStatus;
+
+static void rna_asset_library_status_begin_loading(const char *library_url, float timeout)
+{
+  RemoteLibraryLoadingStatus::begin_loading(library_url, timeout);
+}
+
+static void rna_asset_library_status_ping_still_loading(const char *library_url)
+{
+  RemoteLibraryLoadingStatus::ping_still_loading(library_url);
+}
+
+static void rna_asset_library_status_ping_metafiles_in_place(const char *library_url)
+{
+  RemoteLibraryLoadingStatus::ping_metafiles_in_place(library_url);
+}
+
+static void rna_asset_library_status_ping_loaded_new_pages(const char *library_url)
+{
+  RemoteLibraryLoadingStatus::ping_new_pages(library_url);
+}
+
+static void rna_asset_library_status_ping_loaded_new_preview(bContext *C,
+                                                             const char *preview_full_path)
+{
+  RemoteLibraryLoadingStatus::ping_new_preview(*C, preview_full_path);
+}
+
+static void rna_asset_library_status_ping_loaded_new_assets(bContext *C, const char *library_url)
+{
+  RemoteLibraryLoadingStatus::ping_new_assets(*C, library_url);
+}
+
+static void rna_asset_library_status_finished_loading(const char *library_url)
+{
+  RemoteLibraryLoadingStatus::set_finished(library_url);
+}
+
+static void rna_asset_library_status_failed_loading(const char *library_url, const char *message)
+{
+  RemoteLibraryLoadingStatus::set_failure(
+      library_url,
+      message && message[0] ? std::optional<blender::StringRefNull>{message} : std::nullopt);
+}
+
 }  // namespace blender
 
 #else
@@ -874,6 +946,24 @@ void RNA_api_window(StructRNA *srna)
   RNA_def_boolean(func, "hyper", false, "Hyper", "");
   parm = RNA_def_pointer(func, "event", "Event", "Item", "Added key map item");
   RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "find_playing_scene", "rna_Window_find_playing_scene");
+  RNA_def_boolean(
+      func, "scrub", false, "Scrubbing", "Check if time in the scene is being scrubbed");
+  parm = RNA_def_pointer(func, "scene", "Scene", "Scene", "Scene that is currently playing");
+  RNA_def_function_return(func, parm);
+}
+
+void RNA_api_windows(StructRNA *srna)
+{
+  FunctionRNA *func;
+  PropertyRNA *param;
+
+  func = RNA_def_function(srna, "find_playing", "rna_Windows_find_playing");
+  RNA_def_boolean(
+      func, "scrub", false, "Scrubbing", "Check if time in the window is being scrubbed");
+  param = RNA_def_pointer(func, "window", "Window", "Window", "Window that is currently playing");
+  RNA_def_function_return(func, param);
 }
 
 const EnumPropertyItem rna_operator_popup_icon_items[] = {
@@ -1508,6 +1598,142 @@ void RNA_api_keyconfigs(StructRNA *srna)
       false,
       "Keep Properties",
       "Operator properties are kept to allow the operators to be registered again in the future");
+}
+
+/* Exposes the #blender::asset_system::asset_library_status_xxx() functions in the WM API, for the
+ * lack of a better place. */
+void RNA_api_asset_library_loading_status(StructRNA *srna)
+{
+  FunctionRNA *func;
+  PropertyRNA *parm;
+
+  func = RNA_def_function(
+      srna, "asset_library_status_begin_loading", "rna_asset_library_status_begin_loading");
+  RNA_def_function_ui_description(
+      func, "Inform the asset system that the asset library at the given URL is being loaded.");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(func,
+                        "library_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The URL identifying the asset library being loaded");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_float(
+      func,
+      "timeout",
+      0.3,
+      0.0,
+      FLT_MAX,
+      "Timeout",
+      "Maximum time in seconds after which the asset library loading will be considered "
+      "cancelled, if no further status reporting is done (e.g. by repeated calls to "
+      "`asset_library_status_ping_still_loading()`).",
+      0.0,
+      FLT_MAX);
+
+  func = RNA_def_function(srna,
+                          "asset_library_status_ping_still_loading",
+                          "rna_asset_library_status_ping_still_loading");
+  RNA_def_function_ui_description(func,
+                                  "Inform the asset system that the loading is still ongoing. "
+                                  "Call this regularly to prevent the loading status to timeout.");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(func,
+                        "library_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The URL identifying the asset library being loaded");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna,
+                          "asset_library_status_ping_metafiles_in_place",
+                          "rna_asset_library_status_ping_metafiles_in_place");
+  RNA_def_function_ui_description(
+      func,
+      "Inform the asset system that the asset meta files (_asset-library-meta.json, "
+      "asset-listing.json, blender_assets.cats.txt) are in place and ready to be loaded");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(func,
+                        "library_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The URL identifying the asset library being loaded");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna,
+                          "asset_library_status_ping_loaded_new_pages",
+                          "rna_asset_library_status_ping_loaded_new_pages");
+  RNA_def_function_ui_description(func, "Inform the asset system that new content");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(func,
+                        "library_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The URL identifying the asset library being loaded");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna,
+                          "asset_library_status_ping_loaded_new_preview",
+                          "rna_asset_library_status_ping_loaded_new_preview");
+  RNA_def_function_ui_description(
+      func, "Inform the asset system that a new preview is available and ready for display");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+  parm = RNA_def_string(
+      func,
+      "preview_full_path",
+      nullptr,
+      0,
+      "URL",
+      "The full path (not URL!) pointing to the the asset preview that should be available now");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(srna,
+                          "asset_library_status_ping_loaded_new_assets",
+                          "rna_asset_library_status_ping_loaded_new_assets");
+  RNA_def_function_ui_description(func,
+                                  "Inform the asset system that new assets were downloaded and "
+                                  "available at the expected location on disk");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+  parm = RNA_def_string(func,
+                        "library_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The URL identifying the asset library being loaded");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(
+      srna, "asset_library_status_finished_loading", "rna_asset_library_status_finished_loading");
+  RNA_def_function_ui_description(func,
+                                  "Inform the asset system that the asset library at the given "
+                                  "URL has successfully finished loading.");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(func,
+                        "library_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The URL identifying the asset library being loaded");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(
+      srna, "asset_library_status_failed_loading", "rna_asset_library_status_failed_loading");
+  RNA_def_function_ui_description(func,
+                                  "Inform the asset system that the asset library at the given "
+                                  "URL failed loading, and should be aborted.");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(func,
+                        "library_url",
+                        nullptr,
+                        0,
+                        "URL",
+                        "The URL identifying the asset library being loaded");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_string(func, "message", nullptr, 0, "Message", "An error message to show to users");
 }
 
 }  // namespace blender

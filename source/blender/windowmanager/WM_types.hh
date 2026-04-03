@@ -434,6 +434,8 @@ struct wmNotifier {
 #define ND_SKETCH (7 << 16)
 #define ND_WORKSPACE_SET (8 << 16)
 #define ND_WORKSPACE_DELETE (9 << 16)
+/* Notifies if frames changes as part of animation playback. */
+#define ND_ANIMATION_PLAYBACK (10 << 16)
 
 /* NC_SCENE Scene. */
 #define ND_SCENEBROWSE (1 << 16)
@@ -462,9 +464,27 @@ struct wmNotifier {
 /* NC_OBJECT Object. */
 #define ND_TRANSFORM (18 << 16)
 #define ND_OB_SHADING (19 << 16)
+/**
+ * For non-structural pose-mode changes like transforms.
+ * \note renaming, selecting, bone collections have their own dedicated notifiers,
+ * also see #ND_BONE_SELECT.
+ */
 #define ND_POSE (20 << 16)
 #define ND_BONE_ACTIVE (21 << 16)
+/** Intended for selection and visibility changes in pose/armature edit modes.
+ * Historically this was also used for most edit-mode changes (also "structural" like adding,
+ * deleting, subdividing, filling, ..., bones). Also covers hiding/revealing (in pose-mode and
+ * edit-mode). Note this causes a full (possibly slow) rebuild of the Outliner tree. For such
+ * changes, new code should use #ND_ARMATURE_STRUCTURE. */
 #define ND_BONE_SELECT (22 << 16)
+/** Indicate a change to the structure of the armature; this has implications for both the armature
+ * object and the armature data.
+ *
+ * The value is set to #ND_BONE_SELECT as a transitional state, as currently that notifier is
+ * already used to signify such structural changes. In the future, those uses of #ND_BONE_SELECT
+ * should be replaced with #ND_ARMATURE_STRUCTURE, making the selection notifier only relevant for
+ * selection again. See #153774. */
+#define ND_ARMATURE_STRUCTURE ND_BONE_SELECT
 #define ND_DRAW (23 << 16)
 #define ND_MODIFIER (24 << 16)
 #define ND_KEYS (25 << 16)

@@ -40,13 +40,10 @@ from bl_ui.space_userpref import (
 USE_SHOW_ADDON_TYPE_AS_TEXT = True
 USE_SHOW_ADDON_TYPE_AS_ICON = True
 
-# Hide these add-ons when enabled (unless running with extensions debugging enabled).
-SECRET_ADDONS = {__package__}
-
 # For official extensions, it's policy that the website in the JSON listing overrides the developers own website.
-# This incurs and awkward lookup although it's not likely to cause a noticeable slowdown.
+# This incurs an awkward lookup although it's not likely to cause a noticeable slowdown.
 # This choice moves away from the `blender_manifest.toml` being the source of truth for an extensions meta-data
-# so we might want to reconsider this as this at some point.
+# so we might want to reconsider this at some point.
 USE_ADDON_IGNORE_EXTENSION_MANIFEST_HACK = True
 
 
@@ -80,7 +77,7 @@ def pkg_repo_and_id_from_theme_path(repos_all, filepath):
     if not filepath:
         return None
 
-    # Strip the `theme.xml` filename.
+    # Strip the filename ("theme.xml" in this case).
     dirpath = os.path.dirname(filepath)
     repo_directory, pkg_id = os.path.split(dirpath)
     for repo_index, repo in enumerate(repos_all):
@@ -161,7 +158,7 @@ ADDON_TYPE_LEGACY_CORE = 1
 ADDON_TYPE_LEGACY_USER = 2
 # Any add-on which does not match any of the above characteristics.
 # This is most likely from `os.path.join(bpy.utils.resource_path('LOCAL'), "scripts", "addons")`.
-# In this context, the difference between this an any other add-on is not important,
+# In this context, the difference between this and any other add-on is not important,
 # so there is no need to go to the effort of differentiating `LOCAL` from other kinds of add-ons.
 # If instances of "Legacy (Other)" add-ons exist in a default installation, this may be an error,
 # otherwise, it's not a problem if these occur with customized user-configurations.
@@ -517,14 +514,14 @@ def addons_panel_draw_items(
             del item_local
         else:
             # Weak but allow some add-ons to be hidden, as they're for internal use.
-            if (module_name in SECRET_ADDONS) and is_enabled and (show_development is False):
+            if (module_name in addon_utils._addons_hidden_core) and is_enabled and (show_development is False):
                 continue
 
             item_warnings = []
 
             item_name = bl_info["name"]
-            # A "." is added to the extensions manifest tag-line.
-            # Avoid duplicate dot for legacy add-ons.
+            # A "." is added to extensions manifest tag-lines, so strip it here
+            # to avoid a duplicate dot for legacy add-ons.
             item_description = bl_info["description"].rstrip(".")
             item_tags = (bl_info["category"],)
 
@@ -941,7 +938,7 @@ class ExtensionUI_FilterParams:
             active_theme_info=active_theme_info,
             repos_all=repos_all,
             repo_filter=repo_filter,
-            # Extensions don't different between these (add-ons do).
+            # Extensions don't differentiate between these (add-ons do).
             show_installed_enabled=wm.extension_show_panel_installed,
             show_installed_disabled=wm.extension_show_panel_installed,
             show_available=wm.extension_show_panel_available,
@@ -1282,7 +1279,7 @@ def extensions_map_from_legacy_addons_ensure():
 
 
 def extensions_map_from_legacy_addons_reverse_lookup(pkg_id):
-    # Return the old name from the package ID.
+    # Return the legacy add-on module name from the package ID.
     extensions_map_from_legacy_addons_ensure()
     for key_addon_module_name, (value_pkg_id, _) in extensions_map_from_legacy_addons.items():
         if pkg_id == value_pkg_id:
@@ -1356,7 +1353,7 @@ def extension_draw_item(
     del sub
 
     # Add a top-level row so `row_right` can have a grayed out button/label
-    # without graying out the menu item since# that is functional.
+    # without graying out the menu item since that is functional.
     row_right_toplevel = row.row(align=True)
     if operation_in_progress:
         row_right_toplevel.enabled = False
@@ -1889,7 +1886,7 @@ class USERPREF_MT_extensions_item(Menu):
     bl_label = "Extension Item"
 
     # WARNING: this is slow, so avoid having a generic function
-    # because it could easily be misused to create inefficient.
+    # because it could easily be misused to create inefficient code.
     #
     # This is acceptable when used in this menu since the function
     # only runs when the user clicks on the menu item.
@@ -2060,7 +2057,7 @@ def extensions_panel_draw(panel, context):
     row_b.prop(wm, "extension_type", text="")
 
     row_b.separator()
-    row_b.prop(wm, "extension_use_filter", text="", icon='FILTER')
+    row_b.prop(wm, "extension_use_filter", text="", icon=('FILTER_FILLED' if wm.extension_use_filter else 'FILTER'))
     row_b.popover("USERPREF_PT_extensions_filter", text="", icon='DOWNARROW_HLT')
 
     row_b.separator()

@@ -258,7 +258,7 @@ static bool write_internal_bake_pixels(Image *image,
       to_colorspace = IMB_colormanagement_get_float_colorspace(ibuf);
     }
     else {
-      to_colorspace = IMB_colormanagement_get_rect_colorspace(ibuf);
+      to_colorspace = IMB_colormanagement_get_byte_colorspace(ibuf);
     }
 
     if (from_colorspace != to_colorspace) {
@@ -404,7 +404,7 @@ static bool write_external_bake_pixels(const char *filepath,
     if (!is_noncolor) {
       const char *from_colorspace = IMB_colormanagement_role_colorspace_name_get(
           COLOR_ROLE_SCENE_LINEAR);
-      const char *to_colorspace = IMB_colormanagement_get_rect_colorspace(ibuf);
+      const char *to_colorspace = IMB_colormanagement_get_byte_colorspace(ibuf);
       IMB_colormanagement_transform_float(
           buffer, ibuf->x, ibuf->y, ibuf->channels, from_colorspace, to_colorspace, false);
     }
@@ -466,13 +466,14 @@ static bool is_noncolor_pass(eScenePassType pass_type)
 }
 
 /* if all is good tag image and return true */
-static bool bake_object_check(const Scene *scene,
+static bool bake_object_check(const Main &bmain,
+                              const Scene *scene,
                               ViewLayer *view_layer,
                               Object *ob,
                               const eBakeTarget target,
                               ReportList *reports)
 {
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(bmain, scene, view_layer);
   Base *base = BKE_view_layer_base_find(view_layer, ob);
 
   if (base == nullptr) {
@@ -663,7 +664,7 @@ static bool bake_objects_check(Main *bmain,
   if (is_selected_to_active) {
     int tot_objects = 0;
 
-    if (!bake_object_check(scene, view_layer, ob, target, reports)) {
+    if (!bake_object_check(*bmain, scene, view_layer, ob, target, reports)) {
       return false;
     }
 
@@ -696,7 +697,8 @@ static bool bake_objects_check(Main *bmain,
     }
 
     for (const PointerRNA &ptr : selected_objects) {
-      if (!bake_object_check(scene, view_layer, static_cast<Object *>(ptr.data), target, reports))
+      if (!bake_object_check(
+              *bmain, scene, view_layer, static_cast<Object *>(ptr.data), target, reports))
       {
         return false;
       }
@@ -1313,6 +1315,7 @@ static bool bake_targets_output_vertex_colors(BakeTargets *targets, Object *ob)
           convert_float_color_to_byte_color(&color, 1, is_noncolor, &colors[i]);
         }
       }
+      attr.finish();
     }
   }
 

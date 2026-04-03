@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BKE_attribute.hh"
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_math_matrix.hh"
 
 #include "BKE_curves.hh"
@@ -137,18 +137,14 @@ void free_trace(Trace *trace)
 {
   potrace_state_free(trace);
 }
-bke::CurvesGeometry trace_to_curves(const Trace &trace,
-                                    const StringRef hole_attribute_id,
-                                    const float4x4 &transform)
+bke::CurvesGeometry trace_to_curves(const Trace &trace, const float4x4 &transform)
 {
-
-  return trace_to_curves(trace, hole_attribute_id, [=](const int2 &pixel) {
+  return trace_to_curves(trace, [=](const int2 &pixel) {
     return math::transform_point(transform, float3(pixel.x, pixel.y, 0));
   });
 }
 
 bke::CurvesGeometry trace_to_curves(const Trace &trace,
-                                    const StringRef hole_attribute_id,
                                     FunctionRef<float3(const int2 &)> pixel_to_position)
 {
   auto project_pixel = [&](const potrace_dpoint_t &point) -> float3 {
@@ -188,19 +184,16 @@ bke::CurvesGeometry trace_to_curves(const Trace &trace,
   curves.offsets_for_write().copy_from(offsets);
 
   /* Construct all curves as Bezier curves. */
-  curves.curve_types_for_write().fill(CURVE_TYPE_BEZIER);
-  curves.update_curve_types();
+  curves.fill_curve_types(CURVE_TYPE_BEZIER);
   /* All trace curves are cyclic. */
-  curves.cyclic_for_write().fill(true);
+  curves.attributes_for_write().add<bool>(
+      "cyclic", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
 
-  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
   MutableSpan<int8_t> handle_types_left = curves.handle_types_left_for_write();
   MutableSpan<int8_t> handle_types_right = curves.handle_types_right_for_write();
   MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();
   MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
   MutableSpan<float3> positions = curves.positions_for_write();
-  bke::SpanAttributeWriter<bool> holes = attributes.lookup_or_add_for_write_span<bool>(
-      hole_attribute_id, bke::AttrDomain::Curve);
 
   /* Draw each curve. */
   int curve_i = 0;
@@ -211,11 +204,6 @@ bke::CurvesGeometry trace_to_curves(const Trace &trace,
     const IndexRange points = points_by_curve[curve_i];
     if (points.is_empty()) {
       continue;
-    }
-
-    /* Mark paths with negative sign as "holes". */
-    if (holes) {
-      holes.span[curve_i] = (path->sign == '-');
     }
 
     /* POTRACE stores the last 3 points of a bezier segment.
@@ -261,7 +249,6 @@ bke::CurvesGeometry trace_to_curves(const Trace &trace,
     }
   }
 
-  holes.finish();
   curves.tag_topology_changed();
   curves.tag_positions_changed();
   curves.tag_radii_changed();

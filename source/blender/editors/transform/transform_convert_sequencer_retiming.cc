@@ -87,7 +87,7 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   }
 
   ListBaseT<Strip> *seqbasep = seq::active_seqbase_get(ed);
-  seq::iterator_set_expand(scene, seqbasep, transformed_strips, seq::query_strip_effect_chain);
+  seq::iterator_set_expand(seqbasep, transformed_strips, seq::query_strip_effect_chain);
 
   VectorSet<Strip *> dependant;
   dependant.add_multiple(transformed_strips);
@@ -158,8 +158,9 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
         /* Ensure that this key cannot pass the next key. */
         ts->offset_clamp.xmax = min_ii(key_next->strip_frame_index - key->strip_frame_index - 1,
                                        ts->offset_clamp.xmax);
-        /* XXX: There is an off-by-one error for the last "fake" key's `strip_frame_index`, which
-         * is 1 less than it should be. This is not an immediate issue but should be fixed. */
+        /* TODO(john): There is an off-by-one error for the last "fake" key's `strip_frame_index`,
+         * which is 1 less than it should be. This is not an immediate issue but should be fixed.
+         */
       }
       if (key->strip_frame_index != 0) {
         /* Ensure that this key cannot pass the previous key. */
@@ -218,7 +219,7 @@ static void recalcData_sequencer_retiming(TransInfo *t)
     const TransDataSeq *tdseq = static_cast<TransDataSeq *>(td->extra);
     Strip *strip = tdseq->strip;
 
-    if (!seq::retiming_data_is_editable(strip)) {
+    if (!seq::retiming_show_keys(strip)) {
       continue;
     }
 
@@ -243,7 +244,7 @@ static void recalcData_sequencer_retiming(TransInfo *t)
       seq::retiming_transition_key_frame_set(t->scene, strip, key, round_fl_to_int(new_frame));
     }
     else {
-      seq::retiming_key_frame_set(t->scene, strip, key, new_frame, true);
+      seq::retiming_key_frame_set(t->scene, strip, key, new_frame);
     }
 
     seq::relations_invalidate_cache(t->scene, strip);
@@ -252,7 +253,7 @@ static void recalcData_sequencer_retiming(TransInfo *t)
   /* Test overlap, displays red outline. */
   Editing *ed = seq::editing_get(t->scene);
   seq::iterator_set_expand(
-      t->scene, seq::active_seqbase_get(ed), transformed_strips, seq::query_strip_effect_chain);
+      seq::active_seqbase_get(ed), transformed_strips, seq::query_strip_effect_chain);
   for (Strip *strip : transformed_strips) {
     strip->runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
     if (seq::transform_test_overlap(t->scene, seq::active_seqbase_get(ed), strip)) {

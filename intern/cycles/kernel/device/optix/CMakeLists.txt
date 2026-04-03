@@ -16,7 +16,7 @@ set(SRC_KERNEL_DEVICE_OPTIX
 )
 
 if(WITH_CYCLES_OSL)
-  math(EXPR OSL_LIBRARY_VERSION_CODE "${OSL_LIBRARY_VERSION_MAJOR} * 10000 + ${OSL_LIBRARY_VERSION_MINOR} * 100 + ${OSL_LIBRARY_VERSION_PATCH}")
+  math(EXPR OSL_LIBRARY_VERSION_CODE "${OSL_VERSION_MAJOR} * 10000 + ${OSL_VERSION_MINOR} * 100 + ${OSL_VERSION_PATCH}")
 
   set(SRC_KERNEL_DEVICE_OPTIX
     ${SRC_KERNEL_DEVICE_OPTIX}
@@ -40,7 +40,9 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
   # CUDA version
   cuda_get_version(CUDA_VERSION)
 
-  macro(cycles_optix_kernel_add name input flags)
+  # Modifies in parent scope:
+  # - `optix_ptx`: appended with compressed ptx output.
+  function(cycles_optix_kernel_add name input flags)
     set(output "${CMAKE_CURRENT_BINARY_DIR}/${name}.ptx")
     set(output_compressed "${output}.zst")
 
@@ -94,9 +96,10 @@ if(WITH_CYCLES_CUDA_BINARIES AND WITH_CYCLES_DEVICE_OPTIX)
       DEPENDS ${output})
 
     list(APPEND optix_ptx ${output_compressed})
+    set(optix_ptx "${optix_ptx}" PARENT_SCOPE)
 
     delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${output_compressed}" ${CYCLES_INSTALL_PATH}/lib)
-  endmacro()
+  endfunction()
 
   cycles_optix_kernel_add(
     kernel_optix

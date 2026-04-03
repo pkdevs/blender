@@ -18,17 +18,18 @@ namespace blender::nodes::node_fn_value_to_string_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.is_function_node();
   const bNode *node = b.node_or_null();
 
   if (node != nullptr) {
     const eNodeSocketDatatype data_type = eNodeSocketDatatype(node->custom1);
-    b.add_input(data_type, "Value");
+    b.add_input(data_type, "Value"_ustr);
 
-    auto &decimals = b.add_input<decl::Int>("Decimals").min(0);
+    auto &decimals = b.add_input<decl::Int>("Decimals"_ustr).min(0);
     decimals.available(data_type == SOCK_FLOAT);
   }
 
-  b.add_output<decl::String>("String");
+  b.add_output<decl::String>("String"_ustr);
 }
 
 static const mf::MultiFunction *get_multi_function(const bNode &bnode)
@@ -73,11 +74,11 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
       params.add_item(IFACE_("Value"), [](LinkSearchOpParams &params) {
         bNode &node = params.add_node("FunctionNodeValueToString");
         node.custom1 = SOCK_INT;
-        params.update_and_connect_available_socket(node, "Value");
+        params.update_and_connect_available_socket(node, "Value"_ustr);
       });
       params.add_item(IFACE_("Decimals"), [](LinkSearchOpParams &params) {
         bNode &node = params.add_node("FunctionNodeValueToString");
-        params.update_and_connect_available_socket(node, "Decimals");
+        params.update_and_connect_available_socket(node, "Decimals"_ustr);
       });
     }
     else {
@@ -85,7 +86,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
         params.add_item(IFACE_("Value"), [](LinkSearchOpParams &params) {
           bNode &node = params.add_node("FunctionNodeValueToString");
           node.custom1 = SOCK_FLOAT;
-          params.update_and_connect_available_socket(node, "Value");
+          params.update_and_connect_available_socket(node, "Value"_ustr);
         });
       }
     }
@@ -94,7 +95,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     if (socket_type == SOCK_STRING) {
       params.add_item(IFACE_("String"), [](LinkSearchOpParams &params) {
         bNode &node = params.add_node("FunctionNodeValueToString");
-        params.update_and_connect_available_socket(node, "String");
+        params.update_and_connect_available_socket(node, "String"_ustr);
       });
     }
   }

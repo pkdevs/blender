@@ -167,7 +167,7 @@ static PyObject *Vector_vectorcall(PyObject *type,
         return nullptr;
       }
 
-      copy_vn_fl(vec, vec_num, 0.0f);
+      std::fill_n(vec, vec_num, 0.0f);
       break;
     }
     case 1: {
@@ -214,9 +214,9 @@ PyDoc_STRVAR(
     "\n"
     "   Create a vector of length size with all values set to fill.\n"
     "\n"
-    "   :arg size: The length of the vector to be created.\n"
+    "   :param size: The length of the vector to be created.\n"
     "   :type size: int\n"
-    "   :arg fill: The value used to fill the vector.\n"
+    "   :param fill: The value used to fill the vector.\n"
     "   :type fill: float\n"
     "   :return: A new vector.\n"
     "   :rtype: :class:`Vector`\n");
@@ -244,7 +244,7 @@ static PyObject *C_Vector_Fill(PyObject *cls, PyObject *args)
     return nullptr;
   }
 
-  copy_vn_fl(vec, vec_num, fill);
+  std::fill_n(vec, vec_num, fill);
 
   return Vector_CreatePyObject_alloc(vec, vec_num, reinterpret_cast<PyTypeObject *>(cls));
 }
@@ -256,14 +256,14 @@ PyDoc_STRVAR(
     "\n"
     "   Create a vector filled with a range of values.\n"
     "\n"
-    "    This method can also be called with a single argument, "
+    "   This method can also be called with a single argument, "
     "in which case the argument is interpreted as ``stop`` and ``start`` defaults to 0.\n"
     "\n"
-    "   :arg start: The start of the range used to fill the vector.\n"
+    "   :param start: The start of the range used to fill the vector.\n"
     "   :type start: int\n"
-    "   :arg stop: The end of the range used to fill the vector.\n"
+    "   :param stop: The end of the range used to fill the vector.\n"
     "   :type stop: int\n"
-    "   :arg step: The step between successive values in the vector.\n"
+    "   :param step: The step between successive values in the vector.\n"
     "   :type step: int\n"
     "   :return: A new vector.\n"
     "   :rtype: :class:`Vector`\n");
@@ -342,11 +342,11 @@ PyDoc_STRVAR(
     "   Create a vector of the specified size which is filled with linearly spaced "
     "values between start and stop values.\n"
     "\n"
-    "   :arg start: The start of the range used to fill the vector.\n"
+    "   :param start: The start of the range used to fill the vector.\n"
     "   :type start: float\n"
-    "   :arg stop: The end of the range used to fill the vector.\n"
+    "   :param stop: The end of the range used to fill the vector.\n"
     "   :type stop: float\n"
-    "   :arg size: The size of the vector to be created.\n"
+    "   :param size: The size of the vector to be created.\n"
     "   :type size: int\n"
     "   :return: A new vector.\n"
     "   :rtype: :class:`Vector`\n");
@@ -388,9 +388,9 @@ PyDoc_STRVAR(
     "\n"
     "   Create a vector by repeating the values in vector until the required size is reached.\n"
     "\n"
-    "   :arg vector: The vector to draw values from.\n"
-    "   :type vector: :class:`mathutils.Vector`\n"
-    "   :arg size: The size of the vector to be created.\n"
+    "   :param vector: The vector to draw values from.\n"
+    "   :type vector: :class:`Vector`\n"
+    "   :param size: The size of the vector to be created.\n"
     "   :type size: int\n"
     "   :return: A new vector.\n"
     "   :rtype: :class:`Vector`\n");
@@ -462,7 +462,7 @@ static PyObject *Vector_zero(VectorObject *self)
     return nullptr;
   }
 
-  copy_vn_fl(self->vec, self->vec_num, 0.0f);
+  std::fill_n(self->vec, self->vec_num, 0.0f);
 
   if (BaseMath_WriteCallback(self) == -1) {
     return nullptr;
@@ -486,8 +486,9 @@ PyDoc_STRVAR(
     "\n"
     "   .. warning:: Normalizing a vector where all values are zero has no effect.\n"
     "\n"
-    "   .. note:: Normalize works for vectors of all sizes,\n"
-    "      however 4D Vectors w axis is left untouched.\n");
+    "   .. note:: For 4D vectors, only the x, y, z components are normalized;\n"
+    "      the w component is left untouched.\n"
+    "      The resulting 4D vector may not have unit length.\n");
 static PyObject *Vector_normalize(VectorObject *self)
 {
   const int vec_num = (self->vec_num == 4 ? 3 : self->vec_num);
@@ -506,6 +507,10 @@ PyDoc_STRVAR(
     ".. method:: normalized()\n"
     "\n"
     "   Return a new, normalized vector.\n"
+    "\n"
+    "   .. note:: For 4D vectors, only the x, y, z components are normalized;\n"
+    "      the w component is left untouched.\n"
+    "      The resulting 4D vector may not have unit length.\n"
     "\n"
     "   :return: a normalized copy of the vector\n"
     "   :rtype: :class:`Vector`\n");
@@ -527,7 +532,7 @@ PyDoc_STRVAR(
     "\n"
     "   Resize the vector to have size number of elements.\n"
     "\n"
-    "   :arg size: The new size of the vector.\n"
+    "   :param size: The new size of the vector.\n"
     "   :type size: int\n");
 static PyObject *Vector_resize(VectorObject *self, PyObject *value)
 {
@@ -561,7 +566,7 @@ static PyObject *Vector_resize(VectorObject *self, PyObject *value)
 
   /* If the vector has increased in length, set all new elements to 0.0f */
   if (vec_num > self->vec_num) {
-    copy_vn_fl(self->vec + self->vec_num, vec_num - self->vec_num, 0.0f);
+    std::fill_n(self->vec + self->vec_num, vec_num - self->vec_num, 0.0f);
   }
 
   self->vec_num = vec_num;
@@ -575,7 +580,7 @@ PyDoc_STRVAR(
     "\n"
     "   Return a resized copy of the vector with size number of elements.\n"
     "\n"
-    "   :arg size: The new size of the vector.\n"
+    "   :param size: The new size of the vector.\n"
     "   :type size: int\n"
     "   :return: A new vector.\n"
     "   :rtype: :class:`Vector`\n");
@@ -602,7 +607,7 @@ static PyObject *Vector_resized(VectorObject *self, PyObject *value)
     return nullptr;
   }
 
-  copy_vn_fl(vec, vec_num, 0.0f);
+  std::fill_n(vec, vec_num, 0.0f);
   memcpy(vec, self->vec, self->vec_num * sizeof(float));
 
   return Vector_CreatePyObject_alloc(vec, vec_num, nullptr);
@@ -771,7 +776,7 @@ PyDoc_STRVAR(
     "\n"
     "   Return this vector as a tuple with a given precision.\n"
     "\n"
-    "   :arg precision: The number to round the value to in [-1, 21].\n"
+    "   :param precision: The number to round the value to in [-1, 21].\n"
     "   :type precision: int\n"
     "   :return: the values of the vector rounded by *precision*\n"
     "   :rtype: tuple[float, ...]\n");
@@ -810,9 +815,9 @@ PyDoc_STRVAR(
     "\n"
     "   Return a quaternion rotation from the vector and the track and up axis.\n"
     "\n"
-    "   :arg track: Track axis string.\n"
-    "   :type track: Literal['-', 'X', 'Y', 'Z', '-X', '-Y', '-Z']\n"
-    "   :arg up: Up axis string.\n"
+    "   :param track: Track axis string.\n"
+    "   :type track: Literal['X', 'Y', 'Z', '-X', '-Y', '-Z']\n"
+    "   :param up: Up axis string.\n"
     "   :type up: Literal['X', 'Y', 'Z']\n"
     "   :return: rotation from the vector and the track and up axis.\n"
     "   :rtype: :class:`Quaternion`\n");
@@ -994,7 +999,7 @@ PyDoc_STRVAR(
     "\n"
     "   Return the reflection vector from the *mirror* argument.\n"
     "\n"
-    "   :arg mirror: This vector could be a normal from the reflecting surface.\n"
+    "   :param mirror: This vector could be a normal from the reflecting surface.\n"
     "   :type mirror: :class:`Vector`\n"
     "   :return: The reflected vector matching the size of this vector.\n"
     "   :rtype: :class:`Vector`\n");
@@ -1047,7 +1052,7 @@ PyDoc_STRVAR(
     "\n"
     "   Return the cross product of this vector and another.\n"
     "\n"
-    "   :arg other: The other vector to perform the cross product with.\n"
+    "   :param other: The other vector to perform the cross product with.\n"
     "   :type other: :class:`Vector`\n"
     "   :return: The cross product as a vector or a float when 2D vectors are used.\n"
     "   :rtype: :class:`Vector` | float\n"
@@ -1098,7 +1103,7 @@ PyDoc_STRVAR(
     "\n"
     "   Return the dot product of this vector and another.\n"
     "\n"
-    "   :arg other: The other vector to perform the dot product with.\n"
+    "   :param other: The other vector to perform the dot product with.\n"
     "   :type other: :class:`Vector`\n"
     "   :return: The dot product.\n"
     "   :rtype: float\n");
@@ -1135,9 +1140,11 @@ PyDoc_STRVAR(
     "\n"
     "   Return the angle between two vectors.\n"
     "\n"
-    "   :arg other: another vector to compare the angle with\n"
+    "   .. note:: For 4D vectors, only the x, y, z components are used.\n"
+    "\n"
+    "   :param other: another vector to compare the angle with\n"
     "   :type other: :class:`Vector`\n"
-    "   :arg fallback: return this when the angle can't be calculated (zero length vector),\n"
+    "   :param fallback: return this when the angle can't be calculated (zero length vector),\n"
     "      (instead of raising a :exc:`ValueError`).\n"
     "   :type fallback: Any\n"
     "   :return: angle in radians or fallback when given\n"
@@ -1208,9 +1215,9 @@ PyDoc_STRVAR(
     "\n"
     "   Return the signed angle between two 2D vectors (clockwise is positive).\n"
     "\n"
-    "   :arg other: another vector to compare the angle with\n"
+    "   :param other: another vector to compare the angle with\n"
     "   :type other: :class:`Vector`\n"
-    "   :arg fallback: return this when the angle can't be calculated (zero length vector),\n"
+    "   :param fallback: return this when the angle can't be calculated (zero length vector),\n"
     "      (instead of raising a :exc:`ValueError`).\n"
     "   :type fallback: Any\n"
     "   :return: angle in radians or fallback when given\n"
@@ -1271,7 +1278,7 @@ PyDoc_STRVAR(
     "   Returns a quaternion representing the rotational difference between this\n"
     "   vector and another.\n"
     "\n"
-    "   :arg other: second vector.\n"
+    "   :param other: second vector.\n"
     "   :type other: :class:`Vector`\n"
     "   :return: the rotational difference between the two vectors.\n"
     "   :rtype: :class:`Quaternion`\n"
@@ -1319,7 +1326,7 @@ PyDoc_STRVAR(
     "\n"
     "   Return the projection of this vector onto the *other*.\n"
     "\n"
-    "   :arg other: second vector.\n"
+    "   :param other: second vector.\n"
     "   :type other: :class:`Vector`\n"
     "   :return: the parallel projection vector\n"
     "   :rtype: :class:`Vector`\n");
@@ -1366,9 +1373,9 @@ PyDoc_STRVAR(
     "\n"
     "   Returns the interpolation of two vectors.\n"
     "\n"
-    "   :arg other: value to interpolate with.\n"
+    "   :param other: value to interpolate with.\n"
     "   :type other: :class:`Vector`\n"
-    "   :arg factor: The interpolation value in [0.0, 1.0].\n"
+    "   :param factor: The interpolation value in [0.0, 1.0].\n"
     "   :type factor: float\n"
     "   :return: The interpolated vector.\n"
     "   :rtype: :class:`Vector`\n");
@@ -1411,11 +1418,11 @@ PyDoc_STRVAR(
     "\n"
     "   Returns the interpolation of two non-zero vectors (spherical coordinates).\n"
     "\n"
-    "   :arg other: value to interpolate with.\n"
+    "   :param other: value to interpolate with.\n"
     "   :type other: :class:`Vector`\n"
-    "   :arg factor: The interpolation value typically in [0.0, 1.0].\n"
+    "   :param factor: The interpolation value typically in [0.0, 1.0].\n"
     "   :type factor: float\n"
-    "   :arg fallback: return this when the vector can't be calculated (zero length "
+    "   :param fallback: return this when the vector can't be calculated (zero length "
     "vector or direct opposites),\n"
     "      (instead of raising a :exc:`ValueError`).\n"
     "   :type fallback: Any\n"
@@ -1508,7 +1515,7 @@ PyDoc_STRVAR(
     "\n"
     "   .. note:: 2D vectors are a special case that can only be rotated by a 2x2 matrix.\n"
     "\n"
-    "   :arg other: rotation component of mathutils value\n"
+    "   :param other: rotation component of mathutils value\n"
     "   :type other: :class:`Euler` | :class:`Quaternion` | :class:`Matrix`\n");
 static PyObject *Vector_rotate(VectorObject *self, PyObject *value)
 {
@@ -2672,7 +2679,7 @@ static int Vector_length_set(VectorObject *self, PyObject *value)
     return -1;
   }
   if (param == 0.0) {
-    copy_vn_fl(self->vec, self->vec_num, 0.0f);
+    std::fill_n(self->vec, self->vec_num, 0.0f);
     return 0;
   }
 
@@ -3561,7 +3568,7 @@ PyDoc_STRVAR(
     "\n"
     "   This object gives access to Vectors in Blender.\n"
     "\n"
-    "   :arg seq: Components of the vector, must be a sequence of at least two.\n"
+    "   :param seq: Components of the vector, must be a sequence of at least two.\n"
     "   :type seq: Sequence[float]\n");
 PyTypeObject vector_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
@@ -3656,7 +3663,7 @@ PyObject *Vector_CreatePyObject(const float *vec, const int vec_num, PyTypeObjec
       memcpy(self->vec, vec, vec_num * sizeof(float));
     }
     else { /* new empty */
-      copy_vn_fl(self->vec, vec_num, 0.0f);
+      std::fill_n(self->vec, vec_num, 0.0f);
       if (vec_num == 4) { /* do the homogeneous thing */
         self->vec[3] = 1.0f;
       }

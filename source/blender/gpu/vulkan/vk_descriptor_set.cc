@@ -15,7 +15,11 @@
 #include "vk_texture.hh"
 #include "vk_vertex_buffer.hh"
 
+#include "CLG_log.h"
+
 namespace blender::gpu {
+
+static CLG_LogRef LOG = {"gpu.vulkan"};
 
 void VKDescriptorSetTracker::update_descriptor_set(VKContext &context,
                                                    render_graph::VKResourceAccessInfo &access_info,
@@ -111,9 +115,19 @@ void VKDescriptorSetTracker::update_resource_access_info_binding_sampler(
     render_graph::VKResourceAccessInfo &access_info)
 {
   const BindSpaceTextures::Elem *elem_ptr = state_manager.textures_.get(resource_binding.binding);
-  if (!elem_ptr) {
+  if (!elem_ptr || elem_ptr->resource == nullptr) {
     /* Unbound resource. */
-    BLI_assert_unreachable();
+    if (bool(G.debug & G_DEBUG_GPU)) {
+      VKContext &context = *VKContext::get();
+      const VKShader &shader = *static_cast<const VKShader *>(context.shader);
+      const VKShaderInterface &interface = shader.interface_get();
+      const ShaderInput &shader_input = *interface.texture_get(resource_binding.binding);
+      CLOG_ERROR(&LOG,
+                 "Missing Texture bind at slot %d : %s > %s",
+                 shader_input.binding,
+                 shader.name_get().c_str(),
+                 interface.input_name_get(&shader_input));
+    }
     return;
   }
   const BindSpaceTextures::Elem &elem = *elem_ptr;
@@ -174,7 +188,7 @@ void VKDescriptorSetTracker::update_resource_access_info_binding_input_attachmen
   const VKDevice &device = VKBackend::get().device;
   VKTexture *texture = nullptr;
   if (device.extensions_get().dynamic_rendering_local_read) {
-    texture = static_cast<VKTexture *>(state_manager.images_.get(resource_binding.binding));
+    texture = state_manager.images_.get(resource_binding.binding);
   }
   else {
     texture = static_cast<VKTexture *>(
@@ -256,7 +270,7 @@ void VKDescriptorSetTracker::update_resource_access_info(
       VKPushConstants::StorageType::UNIFORM_BUFFER)
   {
     shader.push_constants.update_uniform_buffer();
-    const VKUniformBuffer &uniform_buffer = *shader.push_constants.uniform_buffer_get().get();
+    const VKUniformBuffer &uniform_buffer = *shader.push_constants.uniform_buffer_get();
     access_info.buffers.append({uniform_buffer.vk_handle(), VK_ACCESS_UNIFORM_READ_BIT});
   }
 }
@@ -290,9 +304,8 @@ void VKDescriptorSetUpdator::bind_texture_resource(const VKDevice &device,
                                                    const VKResourceBinding &resource_binding)
 {
   const BindSpaceTextures::Elem *elem_ptr = state_manager.textures_.get(resource_binding.binding);
-  if (!elem_ptr) {
+  if (!elem_ptr || elem_ptr->resource == nullptr) {
     /* Unbound resource. */
-    BLI_assert_unreachable();
     return;
   }
   const BindSpaceTextures::Elem &elem = *elem_ptr;
@@ -335,8 +348,7 @@ void VKDescriptorSetUpdator::bind_input_attachment_resource(
 {
   const bool supports_local_read = device.extensions_get().dynamic_rendering_local_read;
   if (supports_local_read) {
-    VKTexture *texture = static_cast<VKTexture *>(
-        state_manager.images_.get(resource_binding.binding));
+    VKTexture *texture = state_manager.images_.get(resource_binding.binding);
     BLI_assert(texture);
     bind_image(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
                VK_NULL_HANDLE,
@@ -437,7 +449,7 @@ void VKDescriptorSetUpdator::bind_push_constants(VKPushConstants &push_constants
   {
     return;
   }
-  const VKUniformBuffer &uniform_buffer = *push_constants.uniform_buffer_get().get();
+  const VKUniformBuffer &uniform_buffer = *push_constants.uniform_buffer_get();
   bind_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
               uniform_buffer.vk_handle(),
               0,

@@ -462,7 +462,8 @@ struct FileAssetSelectParams {
 
   short import_method = 0; /* eFileAssetImportMethod */
   short import_flags = 0;  /* eFileImportFlags */
-  char _pad2[4] = {};
+
+  int asset_flags = 0; /* #eFileSel_AssetParams_Flag */
 };
 
 /**
@@ -577,7 +578,7 @@ struct FileDirEntry {
   /** Optional argument for shortcuts, aliases etc. */
   char *redirection_path = nullptr;
 
-  /** When showing local IDs (FILE_MAIN, FILE_MAIN_ASSET), ID this file represents. Note comment
+  /** When showing local IDs (#FILE_MAIN_ASSET), ID this file represents. Note comment
    * for FileListInternEntry.local_data, the same applies here! */
   ID *id = nullptr;
   /** If this file represents an asset, its asset data is here. Note that we may show assets of
@@ -804,9 +805,10 @@ struct bNodeTreePath {
   struct bNodeTree *nodetree = nullptr;
   /** Base key for nodes in this tree instance. */
   bNodeInstanceKey parent_key;
-  char _pad[4] = {};
   /** V2d center point, so node trees can have different offsets in editors. */
   float view_center[2] = {};
+  /** V2d width. Used to calculate zoom levels for node editors. */
+  float view_width = 0.0f;
 
   char node_name[/*MAX_NAME*/ 64] = "";
   char display_name[/*MAX_NAME*/ 64] = "";
@@ -817,6 +819,8 @@ struct SpaceNodeOverlay {
   int flag = 0;
   /* eSpaceNodeOverlay_preview_shape */
   int preview_shape = 0;
+  float passepartout_alpha = 0;
+  char _pad[4] = {};
 };
 
 struct SpaceNode {
@@ -1286,6 +1290,7 @@ struct SpreadsheetRowFilter {
   float threshold = 0;
   float value_float2[2] = {};
   float value_float3[3] = {};
+  float value_float4[4] = {};
   float value_color[4] = {};
   char _pad1[4] = {};
 };

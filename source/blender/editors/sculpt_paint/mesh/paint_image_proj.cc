@@ -457,7 +457,7 @@ struct ProjPaintState {
   const bool *select_poly_eval;
   const bool *hide_poly_eval;
   const int *material_indices;
-  const bool *sharp_faces_eval;
+  Span<float3> corner_normals_eval;
   Span<int3> corner_tris_eval;
   Span<int> corner_tri_faces_eval;
 
@@ -1728,28 +1728,19 @@ static float project_paint_uvpixel_mask(const ProjPaintState *ps,
   /* calculate mask */
   if (ps->do_mask_normal) {
     const int3 &tri = ps->corner_tris_eval[tri_index];
-    const int face_i = ps->corner_tri_faces_eval[tri_index];
     const int vert_tri[3] = {PS_CORNER_TRI_AS_VERT_INDEX_3(ps, tri)};
     float no[3], angle_cos;
 
-    if (!(ps->sharp_faces_eval && ps->sharp_faces_eval[face_i])) {
+    {
       const float *no1, *no2, *no3;
-      no1 = ps->vert_normals[vert_tri[0]];
-      no2 = ps->vert_normals[vert_tri[1]];
-      no3 = ps->vert_normals[vert_tri[2]];
+      no1 = ps->corner_normals_eval[tri[0]];
+      no2 = ps->corner_normals_eval[tri[1]];
+      no3 = ps->corner_normals_eval[tri[2]];
 
       no[0] = w[0] * no1[0] + w[1] * no2[0] + w[2] * no3[0];
       no[1] = w[0] * no1[1] + w[1] * no2[1] + w[2] * no3[1];
       no[2] = w[0] * no1[2] + w[1] * no2[2] + w[2] * no3[2];
       normalize_v3(no);
-    }
-    else {
-      /* In case the normalizing per pixel isn't optimal,
-       * we could cache or access from evaluated mesh. */
-      normal_tri_v3(no,
-                    ps->vert_positions_eval[vert_tri[0]],
-                    ps->vert_positions_eval[vert_tri[1]],
-                    ps->vert_positions_eval[vert_tri[2]]);
     }
 
     if (UNLIKELY(ps->is_flip_object)) {
@@ -4105,13 +4096,13 @@ static bool proj_paint_state_mesh_eval_init(const bContext *C, ProjPaintState *p
 
   ps->vert_positions_eval = ps->mesh_eval->vert_positions();
   ps->vert_normals = ps->mesh_eval->vert_normals();
+  ps->corner_normals_eval = ps->mesh_eval->corner_normals();
   ps->edges_eval = ps->mesh_eval->edges();
   ps->faces_eval = ps->mesh_eval->faces();
   ps->corner_verts_eval = ps->mesh_eval->corner_verts();
   ps->select_poly_eval = nullptr;
   ps->hide_poly_eval = nullptr;
   ps->material_indices = nullptr;
-  ps->sharp_faces_eval = nullptr;
   const bke::AttributeAccessor attributes = ps->mesh_eval->attributes();
   if (const bke::GAttributeReader attr = attributes.lookup(".select_poly")) {
     if (attr.domain == bke::AttrDomain::Face && attr.varray.type().is<bool>()) {
@@ -4131,13 +4122,6 @@ static bool proj_paint_state_mesh_eval_init(const bContext *C, ProjPaintState *p
     if (attr.domain == bke::AttrDomain::Face && attr.varray.type().is<int>()) {
       if (attr.varray.is_span()) {
         ps->material_indices = attr.varray.get_internal_span().typed<int>().data();
-      }
-    }
-  }
-  if (const bke::GAttributeReader attr = attributes.lookup("sharp_face")) {
-    if (attr.domain == bke::AttrDomain::Face && attr.varray.type().is<bool>()) {
-      if (attr.varray.is_span()) {
-        ps->sharp_faces_eval = attr.varray.get_internal_span().typed<bool>().data();
       }
     }
   }
@@ -5567,8 +5551,8 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
             /* Color texture (alpha used as mask). */
             if (ps->is_texbrush) {
               const MTex *mtex = BKE_brush_color_texture_get(brush, OB_MODE_TEXTURE_PAINT);
-              float samplecos[3];
-              float texrgba[4];
+              float3 samplecos;
+              float4 texrgba;
 
               /* taking 3d copy to account for 3D mapping too.
                * It gets concatenated during sampling */
@@ -6286,7 +6270,7 @@ static wmOperatorStatus texture_paint_camera_project_exec(bContext *C, wmOperato
   int orig_brush_size;
   IDProperty *idgroup;
   IDProperty *view_data = nullptr;
-  BKE_view_layer_synced_ensure(&scene, &view_layer);
+  BKE_view_layer_synced_ensure(*bmain, &scene, &view_layer);
   Object *ob = BKE_view_layer_active_object_get(&view_layer);
   bool uvs, mat, tex;
 
@@ -6500,7 +6484,7 @@ static wmOperatorStatus texture_paint_image_from_view_exec(bContext *C, wmOperat
     return OPERATOR_CANCELLED;
   }
 
-  STRNCPY(ibuf->filepath, filepath);
+  ibuf->filepath = filepath;
 
   image = BKE_image_add_from_imbuf(bmain, ibuf, "image_view");
 
@@ -6694,6 +6678,7 @@ static Material *get_or_create_current_material(bContext *C, Object *ob)
     Main *bmain = CTX_data_main(C);
     ma = BKE_material_add(bmain, "Material");
     BKE_object_material_assign(bmain, ob, ma, ob->actcol, BKE_MAT_ASSIGN_USERPREF);
+    nodes::node_tree_shader_default(C, bmain, &ma->id);
   }
   return ma;
 }

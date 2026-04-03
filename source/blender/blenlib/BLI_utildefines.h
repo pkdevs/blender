@@ -2,9 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/* Use a define instead of `#pragma once` because of `BLI_memory_utils.h` */
-#ifndef __BLI_UTILDEFINES_H__
-#define __BLI_UTILDEFINES_H__
+#pragma once
 
 /** \file
  * \ingroup bli
@@ -384,21 +382,27 @@ inline constexpr int64_t power_of_2_max(const int64_t x)
   } \
   ((void)0)
 
-/* defined
- * in memory_utils.c for now. I do not know where we should put it actually... */
-#ifndef __BLI_MEMORY_UTILS_H__
-/**
- * Check if memory is zeroed, as with `memset(arr, 0, arr_size)`.
- */
-extern bool BLI_memory_is_zero(const void *arr, size_t arr_size);
-#endif
+#ifdef __cplusplus
+constexpr bool memory_is_zero(const void *data, const size_t size)
+{
+  const char *arr_byte = static_cast<const char *>(data);
+  const char *arr_end = static_cast<const char *>(data) + size;
 
-#define MEMCMP_STRUCT_AFTER_IS_ZERO_OR_EQUAL(struct_dst, struct_src, member) \
-  (BLI_memory_is_zero((const char *)(struct_dst) + OFFSETOF_STRUCT_AFTER(struct_dst, member), \
-                      sizeof(*(struct_dst)) - OFFSETOF_STRUCT_AFTER(struct_dst, member)) || \
-   (memcmp((const char *)(struct_dst) + OFFSETOF_STRUCT_AFTER(struct_dst, member), \
-           (const char *)(struct_src) + OFFSETOF_STRUCT_AFTER(struct_src, member), \
-           sizeof(*(struct_dst)) - OFFSETOF_STRUCT_AFTER(struct_dst, member)) == 0))
+  while ((arr_byte != arr_end) && (*arr_byte == 0)) {
+    arr_byte++;
+  }
+
+  return (arr_byte == arr_end);
+}
+
+#  define MEMCMP_STRUCT_AFTER_IS_ZERO_OR_EQUAL(struct_dst, struct_src, member) \
+    (memory_is_zero((const char *)(struct_dst) + OFFSETOF_STRUCT_AFTER(struct_dst, member), \
+                    sizeof(*(struct_dst)) - OFFSETOF_STRUCT_AFTER(struct_dst, member)) || \
+     (memcmp((const char *)(struct_dst) + OFFSETOF_STRUCT_AFTER(struct_dst, member), \
+             (const char *)(struct_src) + OFFSETOF_STRUCT_AFTER(struct_src, member), \
+             sizeof(*(struct_dst)) - OFFSETOF_STRUCT_AFTER(struct_dst, member)) == 0))
+
+#endif
 
 #define INIT_DEFAULT_STRUCT_AFTER(struct_dst, member) \
   { \
@@ -566,15 +570,6 @@ extern bool BLI_memory_is_zero(const void *arr, size_t arr_size);
 /** No-op for expressions we don't want to instantiate, but must remain valid. */
 #define EXPR_NOP(expr) (void)(0 ? ((void)(expr), 1) : 0)
 
-/**
- * Utility macro that wraps `std::enable_if` to make it a bit easier to use and less verbose for
- * SFINAE in common cases.
- *
- * \note Often one has to invoke this macro with double parenthesis. That's because the condition
- * often contains a comma and angle brackets are not recognized as parenthesis by the preprocessor.
- */
-#define BLI_ENABLE_IF(condition) typename std::enable_if_t<(condition)> * = nullptr
-
 #if defined(_MSC_VER) && !defined(__clang__)
 #  define BLI_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
 #elif defined(__has_cpp_attribute)
@@ -630,5 +625,3 @@ BOUNDED_ARRAY_TYPE_SIZE() noexcept
 
 }  // namespace blender
 #endif
-
-#endif /* __BLI_UTILDEFINES_H__ */

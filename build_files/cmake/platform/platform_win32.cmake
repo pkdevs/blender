@@ -20,10 +20,6 @@ set(CMAKE_MAP_IMPORTED_CONFIG_RELEASE Release RelWithDebInfo MinSizeRel Debug)
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   set(MSVC_CLANG ON)
-  if(NOT WITH_WINDOWS_EXTERNAL_MANIFEST)
-    message(WARNING "WITH_WINDOWS_EXTERNAL_MANIFEST is required for clang, turning ON")
-    set(WITH_WINDOWS_EXTERNAL_MANIFEST ON)
-  endif()
   set(VC_TOOLS_DIR $ENV{VCToolsRedistDir} CACHE STRING "Location of the msvc redistributables")
   set(MSVC_REDIST_DIR ${VC_TOOLS_DIR})
   if(DEFINED MSVC_REDIST_DIR)
@@ -34,6 +30,12 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang")
       "copying of the runtime dlls will not work, "
       "try running from the visual studio developer prompt."
     )
+  endif()
+  # if set, leave CUDA_HOST_COMPILER alone, if not set default it with
+  # the path to cl.exe since otherwise it will try to use clang-cl and
+  # the cuda build will fail due to a non-supported compiler.
+  if(NOT DEFINED CUDA_HOST_COMPILER)
+    find_program(CUDA_HOST_COMPILER cl.exe)
   endif()
 else()
   if(WITH_BLENDER)
@@ -72,18 +74,22 @@ if(WITH_BLENDER AND NOT WITH_PYTHON_MODULE)
   set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT blender)
 endif()
 
-macro(warn_hardcoded_paths package_name)
+function(warn_hardcoded_paths package_name)
   if(WITH_WINDOWS_FIND_MODULES)
     message(WARNING "Using HARDCODED ${package_name} locations")
   endif()
-endmacro()
+endfunction()
 
+# NOTE: must be a macro, forwards to `find_package()`
+# whose result variables must be visible in the caller's scope.
 macro(windows_find_package package_name)
   if(WITH_WINDOWS_FIND_MODULES)
     find_package(${package_name})
   endif()
 endmacro()
 
+# NOTE: must be a macro, forwards `${ARGV}` to `find_package()`
+# whose result variables must be visible in the caller's scope.
 macro(find_package_wrapper)
   if(WITH_WINDOWS_FIND_MODULES)
     find_package(${ARGV})
@@ -102,6 +108,16 @@ string(APPEND CMAKE_MODULE_LINKER_FLAGS " /SAFESEH:NO /ignore:4099")
 
 if(WITH_WINDOWS_EXTERNAL_MANIFEST)
   string(APPEND CMAKE_EXE_LINKER_FLAGS " /manifest:no")
+else()
+  if(MSVC_CLANG)
+    # lld-link.exe corrupts the manifest by supplying UAC information in the
+    # wrong namespace. Since we supply this our selves in our manifests already
+    # we can just disable this. See https://github.com/llvm/llvm-project/issues/120394
+    # for details.
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " /manifestuac:no")
+    string(APPEND CMAKE_SHARED_LINKER_FLAGS " /manifestuac:no")
+    string(APPEND CMAKE_MODULE_LINKER_FLAGS " /manifestuac:no")
+  endif()
 endif()
 
 list(APPEND PLATFORM_LINKLIBS
@@ -120,6 +136,9 @@ add_definitions(
   -D_SCL_SECURE_NO_DEPRECATE
   -D_CONSOLE
   -D_LIB
+  -D_USE_MATH_DEFINES
+  -DWIN32_LEAN_AND_MEAN
+  -DNOMINMAX
 )
 
 # MSVC11 needs _ALLOW_KEYWORD_MACROS to build
@@ -130,7 +149,7 @@ add_definitions(-D_ALLOW_KEYWORD_MACROS)
 # to remove for individual files that want to disable it
 # using the /GR- flag without generating a build warning
 # that both /GR and /GR- are specified.
-remove_cc_flag("/GR")
+remove_c_and_cxx_flag("/GR")
 
 # Make the Windows 8.1 API available for use.
 add_definitions(-D_WIN32_WINNT=0x603)
@@ -151,7 +170,7 @@ if(WITH_WINDOWS_BUNDLE_CRT)
   # ucrtbase(d).dll cannot be in the manifest, due to the way windows 10 handles
   # redirects for this dll, for details see #88813.
   foreach(lib ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
-    string(FIND ${lib} "ucrtbase" pos)
+    string(FIND "${lib}" "ucrtbase" pos)
     if(NOT pos EQUAL -1)
       list(REMOVE_ITEM CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS ${lib})
       install(FILES ${lib} DESTINATION . COMPONENT Libraries)
@@ -178,7 +197,7 @@ configure_file(
   @ONLY
 )
 
-remove_cc_flag(
+remove_c_and_cxx_flag(
   "/MDd"
   "/MD"
   "/Zi"
@@ -386,6 +405,15 @@ set(ZLIB_DIR ${LIBDIR}/zlib)
 set(fmt_DIR ${LIBDIR}/fmt/lib/cmake/config)
 find_package(fmt REQUIRED CONFIG)
 
+set(Eigen3_DIR ${LIBDIR}/eigen)
+find_package(Eigen3 REQUIRED CONFIG)
+
+if(WITH_LIBMV)
+  set(absl_DIR ${LIBDIR}/abseil)
+  set(Ceres_DIR ${LIBDIR}/ceres)
+  find_package(Ceres REQUIRED CONFIG)
+endif()
+
 windows_find_package(ZLIB) # We want to find before finding things that depend on it like PNG.
 windows_find_package(PNG)
 if(NOT PNG_FOUND)
@@ -501,57 +529,13 @@ if(WITH_CODEC_FFMPEG)
   endif()
 endif()
 
+set(openjph_ROOT ${LIBDIR}/openjph)
+
 if(WITH_IMAGE_OPENEXR)
-  # Imath and OpenEXR have a single combined build option and include and library variables
-  # used by the rest of the build system.
-  set(IMATH_ROOT_DIR ${LIBDIR}/imath)
-  set(IMATH_VERSION "3.14")
-  windows_find_package(IMATH REQUIRED)
-  if(NOT IMATH_FOUND)
-    set(IMATH ${LIBDIR}/imath)
-    set(IMATH_INCLUDE_DIR ${IMATH}/include)
-    set(IMATH_INCLUDE_DIRS ${IMATH_INCLUDE_DIR} ${IMATH}/include/Imath)
-    set(IMATH_LIBPATH ${IMATH}/lib)
-    if(EXISTS ${IMATH_LIBPATH}/Imath_s.lib)
-      set(IMATH_POSTFIX _s)
-    endif()
-    set(IMATH_LIBRARIES
-      optimized ${IMATH_LIBPATH}/Imath${IMATH_POSTFIX}.lib
-      debug ${IMATH_LIBPATH}/Imath${IMATH_POSTFIX}_d.lib
-    )
-  endif()
-  set(OPENEXR_ROOT_DIR ${LIBDIR}/openexr)
-  set(OPENEXR_VERSION "3.14")
-  windows_find_package(OPENEXR REQUIRED)
-  if(NOT OpenEXR_FOUND)
-    warn_hardcoded_paths(OpenEXR)
-    set(OPENEXR ${LIBDIR}/openexr)
-    set(OPENEXR_INCLUDE_DIR ${OPENEXR}/include)
-    set(OPENEXR_INCLUDE_DIRS
-      ${OPENEXR_INCLUDE_DIR}
-      ${IMATH_INCLUDE_DIRS}
-      ${OPENEXR_INCLUDE_DIR}/OpenEXR
-    )
-    set(OPENEXR_LIBPATH ${OPENEXR}/lib)
-    # Check if the blender 3.3 lib static library exists
-    # if not assume this is a 3.4+ dynamic version.
-    if(EXISTS "${OPENEXR_LIBPATH}/OpenEXR_s.lib")
-      set(OPENEXR_POSTFIX _s)
-    endif()
-    set(OPENEXR_LIBRARIES
-      optimized ${OPENEXR_LIBPATH}/Iex${OPENEXR_POSTFIX}.lib
-      optimized ${OPENEXR_LIBPATH}/IlmThread${OPENEXR_POSTFIX}.lib
-      optimized ${OPENEXR_LIBPATH}/OpenEXR${OPENEXR_POSTFIX}.lib
-      optimized ${OPENEXR_LIBPATH}/OpenEXRCore${OPENEXR_POSTFIX}.lib
-      optimized ${OPENEXR_LIBPATH}/OpenEXRUtil${OPENEXR_POSTFIX}.lib
-      debug ${OPENEXR_LIBPATH}/Iex${OPENEXR_POSTFIX}_d.lib
-      debug ${OPENEXR_LIBPATH}/IlmThread${OPENEXR_POSTFIX}_d.lib
-      debug ${OPENEXR_LIBPATH}/OpenEXR${OPENEXR_POSTFIX}_d.lib
-      debug ${OPENEXR_LIBPATH}/OpenEXRCore${OPENEXR_POSTFIX}_d.lib
-      debug ${OPENEXR_LIBPATH}/OpenEXRUtil${OPENEXR_POSTFIX}_d.lib
-      ${IMATH_LIBRARIES}
-    )
-  endif()
+  set(IMATH_ROOT ${LIBDIR}/imath)
+  find_package(IMATH REQUIRED CONFIG)
+  set(OpenEXR_ROOT ${LIBDIR}/openexr)
+  find_package(OpenEXR REQUIRED CONFIG)
 endif()
 
 # Try to find tiff first then complain and set static and maybe wrong paths
@@ -615,23 +599,8 @@ endif()
 unset(_PYTHON_VERSION)
 unset(_PYTHON_VERSION_NO_DOTS)
 
-windows_find_package(OpenImageIO)
-if(NOT OpenImageIO_FOUND)
-  set(OPENIMAGEIO ${LIBDIR}/OpenImageIO)
-  set(OPENIMAGEIO_LIBPATH ${OPENIMAGEIO}/lib)
-  set(OPENIMAGEIO_INCLUDE_DIR ${OPENIMAGEIO}/include)
-  set(OPENIMAGEIO_INCLUDE_DIRS ${OPENIMAGEIO_INCLUDE_DIR})
-  set(OIIO_OPTIMIZED
-    optimized ${OPENIMAGEIO_LIBPATH}/OpenImageIO.lib
-    optimized ${OPENIMAGEIO_LIBPATH}/OpenImageIO_Util.lib
-  )
-  set(OIIO_DEBUG
-    debug ${OPENIMAGEIO_LIBPATH}/OpenImageIO_d.lib
-    debug ${OPENIMAGEIO_LIBPATH}/OpenImageIO_Util_d.lib
-  )
-  set(OPENIMAGEIO_LIBRARIES ${OIIO_OPTIMIZED} ${OIIO_DEBUG})
-  set(OPENIMAGEIO_TOOL "${OPENIMAGEIO}/bin/oiiotool.exe")
-endif()
+set(OpenImageIO_ROOT ${LIBDIR}/OpenImageIO)
+find_package(OpenImageIO REQUIRED CONFIG)
 
 if(WITH_LLVM)
   set(LLVM_ROOT_DIR ${LIBDIR}/llvm CACHE PATH "Path to the LLVM installation")
@@ -699,7 +668,7 @@ if(WITH_OPENVDB)
       debug ${OPENVDB_LIBPATH}/openvdb_d.lib
     )
   endif()
-  set(OPENVDB_DEFINITIONS -DNOMINMAX -D_USE_MATH_DEFINES)
+  set(OPENVDB_DEFINITIONS -DNOMINMAX)
 endif()
 
 if(WITH_NANOVDB)
@@ -909,48 +878,8 @@ endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_OSL)
   set(CYCLES_OSL ${LIBDIR}/osl CACHE PATH "Path to OpenShadingLanguage installation")
-  set(OSL_SHADER_DIR ${CYCLES_OSL}/shaders)
-  # Shaders have moved around a bit between OSL versions, check multiple locations
-  if(NOT EXISTS "${OSL_SHADER_DIR}")
-    set(OSL_SHADER_DIR ${CYCLES_OSL}/share/OSL/shaders)
-  endif()
-  find_library(OSL_LIB_EXEC NAMES oslexec PATHS ${CYCLES_OSL}/lib)
-  find_library(OSL_LIB_COMP NAMES oslcomp PATHS ${CYCLES_OSL}/lib)
-  find_library(OSL_LIB_QUERY NAMES oslquery PATHS ${CYCLES_OSL}/lib)
-  find_library(OSL_LIB_NOISE NAMES oslnoise PATHS ${CYCLES_OSL}/lib)
-  find_library(OSL_LIB_EXEC_DEBUG NAMES oslexec_d PATHS ${CYCLES_OSL}/lib)
-  find_library(OSL_LIB_COMP_DEBUG NAMES oslcomp_d PATHS ${CYCLES_OSL}/lib)
-  find_library(OSL_LIB_QUERY_DEBUG NAMES oslquery_d PATHS ${CYCLES_OSL}/lib)
-  find_library(OSL_LIB_NOISE_DEBUG NAMES oslnoise_d PATHS ${CYCLES_OSL}/lib)
-  list(APPEND OSL_LIBRARIES
-    optimized ${OSL_LIB_COMP}
-    optimized ${OSL_LIB_EXEC}
-    optimized ${OSL_LIB_QUERY}
-    debug ${OSL_LIB_EXEC_DEBUG}
-    debug ${OSL_LIB_COMP_DEBUG}
-    debug ${OSL_LIB_QUERY_DEBUG}
-    ${PUGIXML_LIBRARIES}
-  )
-  if(OSL_LIB_NOISE)
-    list(APPEND OSL_LIBRARIES optimized ${OSL_LIB_NOISE})
-  endif()
-  if(OSL_LIB_NOISE_DEBUG)
-    list(APPEND OSL_LIBRARIES debug ${OSL_LIB_NOISE_DEBUG})
-  endif()
-  find_path(OSL_INCLUDE_DIR OSL/oslclosure.h PATHS ${CYCLES_OSL}/include)
-  find_program(OSL_COMPILER NAMES oslc PATHS ${CYCLES_OSL}/bin)
-  file(STRINGS "${OSL_INCLUDE_DIR}/OSL/oslversion.h" OSL_LIBRARY_VERSION_MAJOR
-       REGEX "^[ \t]*#define[ \t]+OSL_LIBRARY_VERSION_MAJOR[ \t]+[0-9]+.*$")
-  file(STRINGS "${OSL_INCLUDE_DIR}/OSL/oslversion.h" OSL_LIBRARY_VERSION_MINOR
-       REGEX "^[ \t]*#define[ \t]+OSL_LIBRARY_VERSION_MINOR[ \t]+[0-9]+.*$")
-  file(STRINGS "${OSL_INCLUDE_DIR}/OSL/oslversion.h" OSL_LIBRARY_VERSION_PATCH
-       REGEX "^[ \t]*#define[ \t]+OSL_LIBRARY_VERSION_PATCH[ \t]+[0-9]+.*$")
-  string(REGEX REPLACE ".*#define[ \t]+OSL_LIBRARY_VERSION_MAJOR[ \t]+([.0-9]+).*"
-         "\\1" OSL_LIBRARY_VERSION_MAJOR ${OSL_LIBRARY_VERSION_MAJOR})
-  string(REGEX REPLACE ".*#define[ \t]+OSL_LIBRARY_VERSION_MINOR[ \t]+([.0-9]+).*"
-         "\\1" OSL_LIBRARY_VERSION_MINOR ${OSL_LIBRARY_VERSION_MINOR})
-  string(REGEX REPLACE ".*#define[ \t]+OSL_LIBRARY_VERSION_PATCH[ \t]+([.0-9]+).*"
-         "\\1" OSL_LIBRARY_VERSION_PATCH ${OSL_LIBRARY_VERSION_PATCH})
+  set(OSL_ROOT ${CYCLES_OSL}) 
+  find_package(OSL REQUIRED CONFIG) 
 endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_EMBREE)

@@ -363,6 +363,7 @@ enum {
   R_IMF_IMTYPE_PSD = 34,
   R_IMF_IMTYPE_WEBP = 35,
   /* R_IMF_IMTYPE_AV1 = 36, DEPRECATED */
+  R_IMF_IMTYPE_AVIF = 37,
 
   R_IMF_IMTYPE_INVALID = 255,
 };
@@ -687,6 +688,12 @@ enum eCompositorDenoiseQaulity {
   SCE_COMPOSITOR_DENOISE_FAST = 2,
 };
 
+/** #RenderData::save_mode */
+enum eRenderOutputMode {
+  R_SAVE_MODE_DEFAULT = 0,
+  R_SAVE_MODE_DISABLED = 1,
+};
+
 /** #RenderData::time_jump_unit */
 enum {
   SCE_TIME_JUMP_FRAME = 0,
@@ -698,6 +705,9 @@ enum {
   /** Use preview range. */
   SCER_PRV_RANGE = 1 << 0,
   SCER_LOCK_FRAME_SELECTION = 1 << 1,
+  /* If set, allows frames before the playback start frame to be played instead of snapping to the
+     start frame. */
+  SCER_ALLOW_PREROLL = 1 << 2,
   /** Show/use sub-frames (for checking motion blur). */
   SCER_SHOW_SUBFRAME = 1 << 3,
 };
@@ -734,6 +744,7 @@ enum {
   R_EDGE_FRS = 1 << 25,        /* R_EDGE reserved for Freestyle */
   R_PERSISTENT_DATA = 1 << 26, /* Keep data around for re-render. */
   R_MODE_UNUSED_27 = 1 << 27,  /* cleared */
+  R_SAVE_OUTPUT = 1 << 28,
 };
 
 /** #RenderData::seq_flag */
@@ -771,6 +782,8 @@ enum {
   R_SCEMODE_UNUSED_19 = 1 << 19, /* cleared */
   R_EXR_CACHE_FILE = 1 << 20,
   R_MULTIVIEW = 1 << 21,
+  R_USE_TEXTURE_CACHE = 1 << 22,
+  R_TEXTURE_CACHE_AUTO_GENERATE = 1 << 23,
 };
 
 /** #RenderData::stamp */
@@ -875,12 +888,12 @@ struct RenderData {
   /**
    * Flags for render settings. Use bit-masking to access the settings.
    */
-  int scemode = R_DOCOMP | R_DOSEQ | R_EXTENSION;
+  int scemode = R_DOCOMP | R_DOSEQ | R_EXTENSION | R_USE_TEXTURE_CACHE;
 
   /**
    * Flags for render settings. Use bit-masking to access the settings.
    */
-  int mode = 0;
+  int mode = R_SAVE_OUTPUT;
 
   short frs_sec = 24;
 
@@ -990,10 +1003,10 @@ struct RenderData {
 
   /** Render engine. */
   char engine[32] = "";
-  char _pad2[2] = {};
 
   /** Performance Options. */
   short perf_flag = 0;
+  short anisotropic_filter = 2;
 
   /** Baking. */
   struct BakeData bake;
@@ -1183,10 +1196,6 @@ struct Paint {
    * file load.
    */
   struct AssetWeakReference *brush_asset_reference = nullptr;
-
-  /** Default eraser brush and associated weak reference. */
-  struct Brush *eraser_brush = nullptr;
-  struct AssetWeakReference *eraser_brush_asset_reference = nullptr;
 
   ToolSystemBrushBindings tool_brush_bindings;
 
@@ -1447,8 +1456,6 @@ struct Sculpt {
 
   Paint paint;
 
-  /** For rotating around a pivot point. */
-  // float pivot[3] = {}; XXX not used?
   int flags = SCULPT_DYNTOPO_SUBDIVIDE | SCULPT_DYNTOPO_COLLAPSE;
 
   /** Transform tool. */
@@ -1456,8 +1463,6 @@ struct Sculpt {
 
   int automasking_flags = 0;
 
-  // /* Control tablet input. */
-  // char tablet_size = {}, tablet_strength = {}; XXX not used?
   int radial_symm_legacy[3] = {};
 
   /** Maximum edge length for dynamic topology sculpting (in pixels). */
@@ -1771,6 +1776,7 @@ enum eSequencerSnapFlag {
   SEQ_SNAP_IGNORE_MUTED = 1 << 0,
   SEQ_SNAP_IGNORE_SOUND = 1 << 1,
   SEQ_SNAP_CURRENT_FRAME_TO_STRIPS = 1 << 2,
+  SEQ_SNAP_TO_ALL_CHANNEL_STRIPS = 1 << 3,
 };
 
 struct SequencerToolSettings {
@@ -1867,7 +1873,8 @@ enum eSnapMode {
   SCE_SNAP_TO_KEYS = (1 << 3),
   SCE_SNAP_TO_STRIPS = (1 << 4),
 
-  /** #ToolSettings::snap_mode and #ToolSettings::snap_node_mode and #ToolSettings.snap_uv_mode */
+  /** #ToolSettings::snap_mode and #ToolSettings::snap_node_mode and #ToolSettings.snap_uv_mode and
+     #ToolSettings::snap_mode_tools */
   SCE_SNAP_TO_POINT = (1 << 0),
   SCE_SNAP_TO_EDGE_MIDPOINT = (1 << 1),
   SCE_SNAP_TO_EDGE_ENDPOINT = (1 << 2),
@@ -1886,8 +1893,14 @@ enum eSnapMode {
 };
 ENUM_OPERATORS(eSnapMode)
 
+/**
+ * \note The exact value here is used in an enum, any changes require versioning.
+ */
 #define SCE_SNAP_TO_VERTEX (SCE_SNAP_TO_POINT | SCE_SNAP_TO_EDGE_ENDPOINT)
 
+/**
+ * \note The exact value here is used in an enum, any changes require versioning.
+ */
 #define SCE_SNAP_TO_GEOM \
   (SCE_SNAP_TO_VERTEX | SCE_SNAP_TO_EDGE | SCE_SNAP_TO_FACE | SCE_SNAP_TO_FACE_MIDPOINT | \
    SCE_SNAP_TO_EDGE_MIDPOINT | SCE_SNAP_TO_EDGE_PERPENDICULAR)
@@ -2629,6 +2642,10 @@ struct SceneEEVEE {
   float clamp_volume_direct = 0;
   float clamp_volume_indirect = 0;
 
+  /** Global lighting intensity. */
+  float direct_light_intensity = 1.0f;
+  float indirect_light_intensity = 1.0f;
+
   int ray_tracing_method = RAYTRACE_EEVEE_METHOD_SCREEN;
 
   struct RaytraceEEVEE ray_tracing_options;
@@ -2691,6 +2708,15 @@ enum {
   SCE_KEYS_NO_SELONLY = 1 << 4,
   SCE_READFILE_LIBLINK_NEED_SETSCENE_CHECK = 1 << 5,
   SCE_CUSTOM_SIMULATION_RANGE = 1 << 6,
+};
+
+/** #Scene::playback_loop_mode */
+enum eScenePlaybackLoopMode {
+  SCE_LOOP_MODE_INFINITE = 0,
+  SCE_LOOP_MODE_STOP_END_FRAME = 1,
+  SCE_LOOP_MODE_STOP_START_FRAME = 2,
+  SCE_LOOP_MODE_RESTORE = 3,
+  SCE_LOOP_MODE_BOUNCE = 4,
 };
 
 /* Return flag BKE_scene_base_iter_next functions. */
@@ -2762,7 +2788,9 @@ struct Scene {
 
   /** None of the dependency graph vars is mean to be saved. */
   SceneDepsgraphsMap *depsgraph_hash = nullptr;
-  char _pad7[4] = {};
+
+  uint8_t playback_loop_mode = SCE_LOOP_MODE_INFINITE;
+  char _pad7[3] = {};
 
   /* User-Defined KeyingSets. */
   /**

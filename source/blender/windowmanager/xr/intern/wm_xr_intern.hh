@@ -35,7 +35,7 @@ struct wmXrSessionState {
 
   /** Last known viewer pose (centroid of eyes, in world space) stored for queries. */
   GHOST_XrPose viewer_pose;
-  /** The last known view matrix, calculated from above's viewer pose. */
+  /** The last known view matrix, calculated from the above viewer pose. */
   float viewer_viewmat[4][4];
   /** The last known viewer matrix, without navigation applied. */
   float viewer_mat_base[4][4];
@@ -47,6 +47,8 @@ struct wmXrSessionState {
   Object *prev_base_pose_object;
   /** Copy of XrSessionSettings.flag created on the last draw call, stored to detect changes. */
   int prev_settings_flag;
+  /** Copy of XrSessionSettings.view_scale, stored to detect changes. */
+  float prev_view_scale_setting;
   /** Copy of wmXrDrawData.base_pose. */
   GHOST_XrPose prev_base_pose;
   /** Copy of wmXrDrawData.base_scale. */
@@ -63,10 +65,12 @@ struct wmXrSessionState {
   /** Current navigation transforms. */
   GHOST_XrPose nav_pose;
   float nav_scale;
-  /** Navigation transforms from the last actions sync, used to calculate the viewer/controller
-   * poses. */
-  GHOST_XrPose nav_pose_prev;
-  float nav_scale_prev;
+  float viewer_scale;
+
+  /** Navigation transforms and viewer scale from the last action sync, used to calculate the
+   * viewer/controller poses. */
+  GHOST_XrPose nav_pose_last_actions_sync;
+  float viewer_scale_last_actions_sync;
   bool is_navigation_dirty;
 
   /** Last known controller data. */
@@ -79,19 +83,21 @@ struct wmXrSessionState {
   /* Name of the action set (if any) to activate before the next actions sync. */
   char active_action_set_next[64]; /* #MAX_NAME. */
 
-  /** The current state and parameters of the vignette that appears while moving. */
-  struct wmXrVignetteData *vignette_data;
+  /** The current view vignette aperture, appears on movement. */
+  float vignette_aperture;
+  /** Timestamp of last vignette update, used for delta time calculation. */
+  double vignette_last_update_time;
 };
 
 struct wmXrRuntimeData {
-  GHOST_IXrContext *context;
+  /* GHOST XR context. */
+  GHOST_IXrContext *ghost_context;
 
-  /** The window the session was started in. Stored to be able to follow its view-layer. This may
-   * be an invalid reference, i.e. the window may have been closed. */
-  wmWindow *session_root_win;
+  /* XR-specific Blender context. */
+  bContext *b_context;
 
-  /** Off-screen area used for XR events. */
-  struct ScrArea *area;
+  /* Owning pointer to the XR offscreen area. Must be freed on XR session exit. */
+  ScrArea *offscreen_area;
 
   /** Although this struct is internal, RNA gets a handle to this for state information queries. */
   wmXrSessionState session_state;
@@ -119,9 +125,6 @@ struct wmXrSurfaceData {
 };
 
 struct wmXrDrawData {
-  struct Scene *scene;
-  struct Depsgraph *depsgraph;
-
   wmXrData *xr_data;
   wmXrSurfaceData *surface_data;
 
@@ -207,22 +210,6 @@ struct wmXrActionSet {
   ListBaseT<LinkData> active_modal_actions;
   /** Currently active haptic actions. */
   ListBaseT<wmXrHapticAction> active_haptic_actions;
-};
-
-struct wmXrVignetteData {
-  /** Vignette state. */
-  float aperture;
-  float aperture_velocity;
-
-  /** Vignette parameters. */
-  float initial_aperture;
-  float initial_aperture_velocity;
-
-  float aperture_min;
-  float aperture_max;
-
-  float aperture_velocity_max;
-  float aperture_velocity_delta;
 };
 
 /* `wm_xr.cc` */

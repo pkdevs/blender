@@ -169,6 +169,10 @@ class SourceProcessor {
 
   /* --- Lowering --- */
 
+  /* Remove `maybe_unused` attribute. */
+  void lower_maybe_unused(Parser &parser);
+  /* Lower parameters that have no name (invalid in GLSL). */
+  void lower_namesless_parameters(Parser &parser);
   /**
    * Given our code-style, we don't need the disambiguation.
    * Example: `x.template foo<int>()` > `x.foo<int>()`
@@ -328,6 +332,9 @@ class SourceProcessor {
   int static_array_size(const Scope &array, int fallback_value);
 
  public:
+  /* Check for existence of preprocessor pragma in file. */
+  static bool has_pragma(Parser &parser, std::string_view pragma_str);
+
   /** Remove trailing white-spaces. */
   static std::string strip_whitespace(const std::string &str);
 
@@ -338,11 +345,12 @@ class SourceProcessor {
   static std::string get_create_info_placeholder(const std::string &name);
 
   /* Make a scope only active based on the given condition using `#if` preprocessor directives.
-   * Processor contained return statements by returning 0 if scope is disabled. */
+   * Processor contained return statements by returning 0 if scope is disabled.
+   * fn_type can be invalid token if scope is not a function scope. */
   static void guarded_scope_mutation(Parser &parser,
                                      Scope scope,
                                      const std::string &condition,
-                                     Token fn_type = Token::invalid());
+                                     Token fn_type);
 
   /* Return `#line 1 filename\n`. */
   static std::string line_directive_prefix(const std::string &filename);

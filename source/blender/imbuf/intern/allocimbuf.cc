@@ -26,6 +26,8 @@
 
 #include "BLI_threads.h"
 
+#include "GPU_context.hh"
+#include "GPU_state.hh"
 #include "GPU_texture.hh"
 
 #include "CLG_log.h"
@@ -418,6 +420,39 @@ void IMB_assign_float_buffer(ImBuf *ibuf, float *buffer_data, const ImBufOwnersh
   }
 }
 
+void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture)
+{
+  IMB_free_gpu_textures(ibuf);
+  ibuf->gpu.texture = texture;
+}
+
+void IMB_ensure_host_buffer(ImBuf *ibuf)
+{
+  if (!ibuf || !ibuf->gpu.texture) {
+    return;
+  }
+
+  /* The host buffers are already up-to-date. */
+  if (!(ibuf->userflags & IB_HOST_BUFFER_INVALID)) {
+    return;
+  }
+  ibuf->userflags &= ~IB_HOST_BUFFER_INVALID;
+
+  const bool need_secondary_context = !GPU_context_active_get();
+  if (need_secondary_context) {
+    IMB_activate_gpu_context();
+  }
+
+  GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
+  float *output_buffer = static_cast<float *>(
+      GPU_texture_read(ibuf->gpu.texture, GPU_DATA_FLOAT, 0));
+  IMB_assign_float_buffer(ibuf, output_buffer, IB_TAKE_OWNERSHIP);
+
+  if (need_secondary_context) {
+    IMB_deactivate_gpu_context();
+  }
+}
+
 void IMB_assign_byte_buffer(ImBuf *ibuf,
                             const ImBufByteBuffer &buffer,
                             const ImBufOwnership ownership)
@@ -524,8 +559,6 @@ bool IMB_initImBuf(ImBuf *ibuf, uint x, uint y, uchar planes, uint flags)
   ibuf->y = y;
   ibuf->planes = planes;
   ibuf->ftype = IMB_FTYPE_PNG;
-  /* The '15' means, set compression to low ratio but not time consuming. */
-  ibuf->foptions.quality = 15;
   /* float option, is set to other values when buffers get assigned. */
   ibuf->channels = 4;
   /* IMB_DPI_DEFAULT -> pixels-per-meter. */

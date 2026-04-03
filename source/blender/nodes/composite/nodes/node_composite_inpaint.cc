@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_math_base.hh"
-#include "BLI_math_numbers.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -20,14 +19,18 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .hide_value()
       .structure_type(StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic).align_with_previous();
+  b.add_output<decl::Color>("Image"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 
-  b.add_input<decl::Int>("Size").default_value(0).min(0).description(
-      "The size of the inpaint in pixels");
+  b.add_input<decl::Int>("Size"_ustr)
+      .default_value(0)
+      .min(0)
+      .description("The size of the inpaint in pixels");
 }
 
 using namespace blender::compositor;
@@ -244,7 +247,7 @@ class InpaintOperation : public NodeOperation {
        * inpainting distance since areas outside of the clamp range only indirectly affect the
        * inpainting region due to blurring and thus needn't use higher blur radii. */
       float blur_window_size = math::min(float(max_distance), distance_to_boundary) /
-                               math::numbers::sqrt2;
+                               std::numbers::sqrt2;
       bool skip_smoothing = distance_to_boundary > (max_distance * 2.0f);
       float smoothing_radius = skip_smoothing ? 0.0f : blur_window_size;
       smoothing_radius_image.store_pixel(texel, smoothing_radius);

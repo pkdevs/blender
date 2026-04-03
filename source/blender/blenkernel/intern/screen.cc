@@ -89,7 +89,7 @@ static void screen_free_data(ID *id)
 
   BKE_screen_area_map_free(AREAMAP_FROM_SCREEN(screen));
 
-  BKE_previewimg_free(&screen->preview);
+  BKE_previewimg_id_free(&screen->id);
 
   /* Region and timer are freed by the window manager. */
   /* Cannot use MEM_SAFE_DELETE, as #wmTooltipState type is only defined in `WM_types.hh`, which is
@@ -244,37 +244,37 @@ static void screen_blend_read_after_liblink(BlendLibReader *reader, ID *id)
 }
 
 IDTypeInfo IDType_ID_SCR = {
-    /*id_code*/ bScreen::id_type,
-    /*id_filter*/ FILTER_ID_SCR,
+    .id_code = bScreen::id_type,
+    .id_filter = FILTER_ID_SCR,
     /* NOTE: Can actually link to any ID type through UI (e.g. Outliner Editor).
      * This is handled separately though. */
-    /*dependencies_id_types*/ FILTER_ID_SCE,
-    /*main_listbase_index*/ INDEX_ID_SCR,
-    /*struct_size*/ sizeof(bScreen),
-    /*name*/ "Screen",
-    /*name_plural*/ N_("screens"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_SCREEN,
-    /*flags*/ IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_NO_MEMFILE_UNDO,
-    /*asset_type_info*/ nullptr,
+    .dependencies_id_types = FILTER_ID_SCE,
+    .main_listbase_index = INDEX_ID_SCR,
+    .struct_size = sizeof(bScreen),
+    .name = "Screen",
+    .name_plural = N_("screens"),
+    .translation_context = BLT_I18NCONTEXT_ID_SCREEN,
+    .flags = IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_NO_MEMFILE_UNDO,
+    .asset_type_info = nullptr,
 
-    /*init_data*/ screen_init_data,
-    /*copy_data*/ screen_copy_data,
-    /*free_data*/ screen_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ screen_foreach_id,
-    /*foreach_cache*/ nullptr,
-    /*foreach_path*/ nullptr,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = screen_init_data,
+    .copy_data = screen_copy_data,
+    .free_data = screen_free_data,
+    .make_local = nullptr,
+    .foreach_id = screen_foreach_id,
+    .foreach_cache = nullptr,
+    .foreach_path = nullptr,
+    .foreach_working_space_color = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ screen_blend_write,
+    .blend_write = screen_blend_write,
     /* Cannot be used yet, because #direct_link_screen has a return value. */
-    /*blend_read_data*/ nullptr,
-    /*blend_read_after_liblink*/ screen_blend_read_after_liblink,
+    .blend_read_data = nullptr,
+    .blend_read_after_liblink = screen_blend_read_after_liblink,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 /** \} */
@@ -613,8 +613,8 @@ LayoutPanelState *BKE_panel_layout_panel_state_ensure(Panel *panel,
                                                       const bool default_closed)
 {
   ListBaseT<LayoutPanelState> &layout_panel_states =
-      panel->runtime->popup_layout_panel_states ? *panel->runtime->popup_layout_panel_states :
-                                                  panel->layout_panel_states;
+      panel->runtime->layout_panel_states_storage ? *panel->runtime->layout_panel_states_storage :
+                                                    panel->layout_panel_states;
   const uint32_t logical_time = ++panel->layout_panel_states_clock;
   /* Overflow happened, reset all last used times. Not sure if this will ever happen in practice,
    * but better handle the overflow explicitly. */
@@ -1297,7 +1297,7 @@ static void write_panel_list(BlendWriter *writer, ListBaseT<Panel> *lb)
     writer->write_struct_at_address(&panel, &panel_copy);
     writer->write_struct_list(&panel.layout_panel_states);
     for (LayoutPanelState &state : panel.layout_panel_states) {
-      BLO_write_string(writer, state.idname);
+      writer->write_string(state.idname);
     }
     write_panel_list(writer, &panel.children);
   }
@@ -1364,11 +1364,9 @@ static void remove_least_recently_used_panel_states(Panel &panel, const int64_t 
   if (all_states.size() <= max_kept) {
     return;
   }
-  std::sort(all_states.begin(),
-            all_states.end(),
-            [](const LayoutPanelState *a, const LayoutPanelState *b) {
-              return a->last_used < b->last_used;
-            });
+  std::ranges::sort(all_states, [](const LayoutPanelState *a, const LayoutPanelState *b) {
+    return a->last_used < b->last_used;
+  });
   for (LayoutPanelState *state : all_states.as_span().drop_back(max_kept)) {
     BLI_remlink(&panel.layout_panel_states, state);
     layout_panel_state_delete(state);

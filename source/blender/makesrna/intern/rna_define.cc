@@ -700,6 +700,13 @@ static bool rna_range_from_int_type(const char *dnatype, int r_range[2])
 
 /* Blender Data Definition */
 
+BlenderRNA *RNA_create_runtime()
+{
+  BlenderRNA *brna = MEM_new<BlenderRNA>(__func__);
+  brna->runtime = true;
+  return brna;
+}
+
 BlenderRNA *RNA_create()
 {
   BlenderRNA *brna = MEM_new<BlenderRNA>(__func__);
@@ -878,7 +885,18 @@ void RNA_free(BlenderRNA *brna)
 
     /* Reverse iteration to make removing from vector faster. */
     for (auto srna = brna->structs.rbegin(); srna != brna->structs.rend(); srna++) {
+      if (brna->runtime) {
+#ifdef RNA_RUNTIME
+#  ifdef WITH_PYTHON
+        BPY_free_srna_pytype(srna->get());
+#  endif
+#endif
+      }
       RNA_struct_free(brna, srna->get());
+    }
+
+    if (brna->runtime) {
+      MEM_delete(brna);
     }
   }
 
@@ -1057,7 +1075,7 @@ StructRNA *RNA_def_struct_ptr(BlenderRNA *brna, const char *identifier, StructRN
 #ifdef RNA_RUNTIME
       PointerPropertyRNA *pprop = reinterpret_cast<PointerPropertyRNA *>(prop);
       pprop->get = rna_builtin_type_get;
-      pprop->type = RNA_Struct;
+      pprop->pointer_type = RNA_Struct;
 #endif
     }
   }
@@ -1283,6 +1301,11 @@ void RNA_def_struct_path_func(StructRNA *srna, const char *path)
   if (path) {
     srna->path = reinterpret_cast<StructPathFunc>(const_cast<char *>(path));
   }
+}
+
+void RNA_def_struct_path_func_runtime(StructRNA *srna, StructPathFunc path_fn)
+{
+  srna->path = path_fn;
 }
 
 void RNA_def_struct_identifier(BlenderRNA *brna, StructRNA *srna, const char *identifier)
@@ -1951,7 +1974,7 @@ void RNA_def_property_struct_type(PropertyRNA *prop, const char *type)
   switch (prop->type) {
     case PROP_POINTER: {
       PointerPropertyRNA *pprop = reinterpret_cast<PointerPropertyRNA *>(prop);
-      pprop->type = reinterpret_cast<StructRNA *>(const_cast<char *>(type));
+      pprop->pointer_type = reinterpret_cast<StructRNA *>(const_cast<char *>(type));
       break;
     }
     case PROP_COLLECTION: {
@@ -1982,7 +2005,7 @@ void RNA_def_property_struct_runtime(StructOrFunctionRNA *cont, PropertyRNA *pro
   switch (prop->type) {
     case PROP_POINTER: {
       PointerPropertyRNA *pprop = reinterpret_cast<PointerPropertyRNA *>(prop);
-      pprop->type = type;
+      pprop->pointer_type = type;
 
       /* Check between `cont` and `srna` is mandatory, since when defined from python
        * `DefRNA.laststruct` is not valid.
@@ -3834,6 +3857,23 @@ void RNA_def_property_string_search_func_runtime(PropertyRNA *prop,
   sprop->search = search_fn;
   if (search_fn != nullptr) {
     sprop->search_flag = search_flag | PROP_STRING_SEARCH_SUPPORTED;
+  }
+}
+
+void RNA_def_property_pointer_funcs_runtime(PropertyRNA *prop,
+                                            PointerPropertyGetFunc getfunc,
+                                            PointerPropertySetFunc setfunc,
+                                            PointerPropertyTypeFunc typefunc)
+{
+  PointerPropertyRNA *pprop = reinterpret_cast<PointerPropertyRNA *>(prop);
+  if (getfunc) {
+    pprop->get = getfunc;
+  }
+  if (setfunc) {
+    pprop->set = setfunc;
+  }
+  if (typefunc) {
+    pprop->type_fn = typefunc;
   }
 }
 

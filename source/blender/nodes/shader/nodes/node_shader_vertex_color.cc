@@ -20,8 +20,8 @@ namespace nodes::node_shader_vertex_color_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>("Color");
-  b.add_output<decl::Float>("Alpha");
+  b.add_output<decl::Color>("Color"_ustr);
+  b.add_output<decl::Float>("Alpha"_ustr);
 }
 
 static void node_shader_buts_vertex_color(ui::Layout &layout, bContext *C, PointerRNA *ptr)
@@ -40,7 +40,7 @@ static void node_shader_buts_vertex_color(ui::Layout &layout, bContext *C, Point
     }
   }
 
-  layout.prop(ptr, "layer_name", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_GROUP_VCOL);
+  layout.prop(ptr, "layer_name", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_GROUP_VCOL);
   layout.label(RPT_("No mesh in active object"), ICON_ERROR);
 }
 

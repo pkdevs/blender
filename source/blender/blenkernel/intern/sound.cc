@@ -231,35 +231,35 @@ static void sound_blend_read_data(BlendDataReader *reader, ID *id)
 }
 
 IDTypeInfo IDType_ID_SO = {
-    /*id_code*/ bSound::id_type,
-    /*id_filter*/ FILTER_ID_SO,
-    /*dependencies_id_types*/ 0,
-    /*main_listbase_index*/ INDEX_ID_SO,
-    /*struct_size*/ sizeof(bSound),
-    /*name*/ "Sound",
-    /*name_plural*/ N_("sounds"),
-    /*translation_context*/ BLT_I18NCONTEXT_ID_SOUND,
-    /*flags*/ IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
-    /*asset_type_info*/ nullptr,
+    .id_code = bSound::id_type,
+    .id_filter = FILTER_ID_SO,
+    .dependencies_id_types = 0,
+    .main_listbase_index = INDEX_ID_SO,
+    .struct_size = sizeof(bSound),
+    .name = "Sound",
+    .name_plural = N_("sounds"),
+    .translation_context = BLT_I18NCONTEXT_ID_SOUND,
+    .flags = IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = nullptr,
 
     /* A fuzzy case, think NULLified content is OK here... */
-    /*init_data*/ nullptr,
-    /*copy_data*/ sound_copy_data,
-    /*free_data*/ sound_free_data,
-    /*make_local*/ nullptr,
-    /*foreach_id*/ nullptr,
-    /*foreach_cache*/ sound_foreach_cache,
-    /*foreach_path*/ sound_foreach_path,
-    /*foreach_working_space_color*/ nullptr,
-    /*owner_pointer_get*/ nullptr,
+    .init_data = nullptr,
+    .copy_data = sound_copy_data,
+    .free_data = sound_free_data,
+    .make_local = nullptr,
+    .foreach_id = nullptr,
+    .foreach_cache = sound_foreach_cache,
+    .foreach_path = sound_foreach_path,
+    .foreach_working_space_color = nullptr,
+    .owner_pointer_get = nullptr,
 
-    /*blend_write*/ sound_blend_write,
-    /*blend_read_data*/ sound_blend_read_data,
-    /*blend_read_after_liblink*/ nullptr,
+    .blend_write = sound_blend_write,
+    .blend_read_data = sound_blend_read_data,
+    .blend_read_after_liblink = nullptr,
 
-    /*blend_read_undo_preserve*/ nullptr,
+    .blend_read_undo_preserve = nullptr,
 
-    /*lib_override_apply_post*/ nullptr,
+    .lib_override_apply_post = nullptr,
 };
 
 #ifdef WITH_AUDASPACE
@@ -1778,7 +1778,9 @@ bool bke::sound_mixdown(AUD_Sequence sequence,
                         aud::Codec codec,
                         unsigned int bitrate,
                         bool split_channels,
-                        std::string &r_error)
+                        std::string &r_error,
+                        bool (*progress_callback)(float, void *),
+                        void *progress_data)
 {
   using namespace aud;
   try {
@@ -1789,7 +1791,8 @@ bool bke::sound_mixdown(AUD_Sequence sequence,
     if (!split_channels) {
       std::shared_ptr<IWriter> writer = FileWriter::createWriter(
           filename, specs, format, codec, bitrate);
-      FileWriter::writeReader(reader, writer, length, buffersize, nullptr, nullptr);
+      FileWriter::writeReader(
+          reader, writer, length, buffersize, progress_callback, progress_data);
     }
     else {
       std::vector<std::shared_ptr<IWriter>> writers;
@@ -1815,7 +1818,8 @@ bool bke::sound_mixdown(AUD_Sequence sequence,
         }
         writers.push_back(FileWriter::createWriter(stream, specs_mono, format, codec, bitrate));
       }
-      FileWriter::writeReader(reader, writers, length, buffersize, nullptr, nullptr);
+      FileWriter::writeReader(
+          reader, writers, length, buffersize, progress_callback, progress_data);
     }
     return true;
   }

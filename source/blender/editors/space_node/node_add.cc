@@ -1251,7 +1251,7 @@ static wmOperatorStatus node_add_import_node_exec(bContext *C, wmOperator *op)
     }
 
     if (node) {
-      bNodeSocket &path_socket = *node->input_by_identifier("Path");
+      bNodeSocket &path_socket = *node->input_by_identifier("Path"_ustr);
       BLI_assert(path_socket.type == SOCK_STRING);
       auto *socket_data = static_cast<bNodeSocketValueString *>(path_socket.default_value);
       STRNCPY(socket_data->value, path.c_str());
@@ -1850,15 +1850,36 @@ void NODE_OT_duplicate_compositing_modifier_node_group(wmOperatorType *ot)
 /** \name New Compositor Sequencer Node Group Operator
  * \{ */
 
-static void initialize_compositor_sequencer_node_group(const bContext *C, bNodeTree &ntree)
+static void initialize_compositor_sequencer_node_group(const bContext *C,
+                                                       bNodeTree &ntree,
+                                                       bool for_effect,
+                                                       int effect_input_count)
 {
   BLI_assert(ntree.type == NTREE_COMPOSIT);
   BLI_assert(BLI_listbase_count(&ntree.nodes) == 0);
 
-  ntree.tree_interface.add_socket(
-      "Image", "", "NodeSocketColor", NODE_INTERFACE_SOCKET_INPUT, nullptr);
-  ntree.tree_interface.add_socket(
-      "Mask", "", "NodeSocketColor", NODE_INTERFACE_SOCKET_INPUT, nullptr);
+  if (for_effect) {
+    /* Effect: Input 1, Input 2, Fader depending on input count. */
+    if (effect_input_count == 2) {
+      ntree.tree_interface.add_socket(
+          "Input 1", "", "NodeSocketColor", NODE_INTERFACE_SOCKET_INPUT, nullptr);
+      ntree.tree_interface.add_socket(
+          "Input 2", "", "NodeSocketColor", NODE_INTERFACE_SOCKET_INPUT, nullptr);
+    }
+    else if (effect_input_count == 1) {
+      ntree.tree_interface.add_socket(
+          "Input", "", "NodeSocketColor", NODE_INTERFACE_SOCKET_INPUT, nullptr);
+    }
+    ntree.tree_interface.add_socket(
+        "Effect Fader", "", "NodeSocketFloat", NODE_INTERFACE_SOCKET_INPUT, nullptr);
+  }
+  else {
+    /* Modifier: Image, Mask. */
+    ntree.tree_interface.add_socket(
+        "Image", "", "NodeSocketColor", NODE_INTERFACE_SOCKET_INPUT, nullptr);
+    ntree.tree_interface.add_socket(
+        "Mask", "", "NodeSocketColor", NODE_INTERFACE_SOCKET_INPUT, nullptr);
+  }
   ntree.tree_interface.add_socket(
       "Image", "", "NodeSocketColor", NODE_INTERFACE_SOCKET_OUTPUT, nullptr);
 
@@ -1908,23 +1929,42 @@ static wmOperatorStatus new_compositor_sequencer_node_group_exec(bContext *C, wm
   char tree_name[MAX_ID_NAME - 2];
   RNA_string_get(op->ptr, "name", tree_name);
 
-  bNodeTree *ntree = new_node_tree_impl(C, tree_name, "CompositorNodeTree");
-  initialize_compositor_sequencer_node_group(C, *ntree);
-
   Strip *strip = seq::select_active_get(scene);
+  const bool is_effect_active = strip != nullptr && strip->type == STRIP_TYPE_COMPOSITOR;
+  int effect_input_count = 0;
+  if (is_effect_active) {
+    effect_input_count = (strip->input1 && strip->input2) ? 2 : (strip->input1 ? 1 : 0);
+  }
 
-  /* Add modifier and assign node tree when the strip has no active compositor modifier. */
+  bNodeTree *ntree = new_node_tree_impl(C, tree_name, "CompositorNodeTree");
+  initialize_compositor_sequencer_node_group(C, *ntree, is_effect_active, effect_input_count);
+
   if (strip != nullptr && strip->type != STRIP_TYPE_SOUND) {
+    bool assigned_node_tree = false;
+
+    /* If strip is a compositor effect: assign the node tree. */
+    if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
+      CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);
+      comp_data->node_group = ntree;
+      assigned_node_tree = true;
+    }
+
+    /* Otherwise, if there's no active compositor modifier: create one and assign the node tree. */
     StripModifierData *active_smd = seq::modifier_get_active(strip);
-    if (!active_smd || active_smd->type != eSeqModifierType_Compositor) {
+    if (!assigned_node_tree && (!active_smd || active_smd->type != eSeqModifierType_Compositor)) {
       StripModifierData *smd = seq::modifier_new(strip, nullptr, eSeqModifierType_Compositor);
       seq::modifier_persistent_uid_init(*strip, *smd);
 
       SequencerCompositorModifierData *modifier_data =
           reinterpret_cast<SequencerCompositorModifierData *>(smd);
       modifier_data->node_group = ntree;
-      seq::relations_invalidate_cache(scene, strip);
+      assigned_node_tree = true;
+    }
 
+    if (assigned_node_tree) {
+      /* Which strips are used by which node trees has changed. */
+      seq::strip_lookup_invalidate(scene->ed);
+      seq::relations_invalidate_cache(scene, strip);
       /* Tag depsgraph relations for an update since the modifier should now be referencing a
        * different node tree. */
       DEG_relations_tag_update(bmain);

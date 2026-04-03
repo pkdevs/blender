@@ -543,7 +543,7 @@ void add_generic_get_opts(bContext *C,
 
     if (RNA_struct_property_is_set(op->ptr, "rotation")) {
       /* If rotation is set, always use it. Alignment (and corresponding user preference)
-       * can be ignored since this is in world space anyways.
+       * can be ignored since this is in world space anyway.
        * To not confuse (e.g. on redo), don't set it to #ALIGN_WORLD in the op UI though. */
       *r_is_view_aligned = false;
       RNA_float_get_array(op->ptr, "rotation", r_rot);
@@ -629,7 +629,7 @@ Object *add_type_with_obdata(bContext *C,
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     Object *obedit = BKE_view_layer_edit_object_get(view_layer);
     if (obedit != nullptr) {
       editmode_exit_ex(bmain, scene, obedit, EM_FREEDATA);
@@ -650,7 +650,7 @@ Object *add_type_with_obdata(bContext *C,
     ob = BKE_object_add(bmain, scene, view_layer, type, name);
   }
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *ob_base_act = BKE_view_layer_active_base_get(view_layer);
   /* While not getting a valid base is not a good thing, it can happen in convoluted corner cases,
    * better not crash on it in releases. */
@@ -783,7 +783,9 @@ static std::optional<Bounds<float3>> lattice_add_to_selected_collect_targets_and
     r_targets.append(base.object);
     const Object *object_eval = DEG_get_evaluated(depsgraph, base.object);
     if (object_eval && DEG_object_transform_is_evaluated(*object_eval)) {
-      if (std::optional<Bounds<float3>> object_bounds = BKE_object_boundbox_get(object_eval)) {
+      if (std::optional<Bounds<float3>> object_bounds = BKE_object_evaluated_geometry_bounds(
+              object_eval))
+      {
         const float (*object_to_world_matrix)[4] = object_eval->object_to_world().ptr();
         /* Generate all 8 corners of the bounding box. */
         std::array<float3, 8> corners = bounds::corners(*object_bounds);
@@ -1254,7 +1256,7 @@ static wmOperatorStatus object_metaball_add_exec(bContext *C, wmOperator *op)
   add_generic_get_opts(C, op, 'Z', loc, rot, nullptr, &enter_editmode, &local_view_bits, nullptr);
 
   bool newob = false;
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
   if (obedit == nullptr || obedit->type != OB_MBALL) {
     obedit = add_type(C, OB_MBALL, nullptr, loc, rot, true, local_view_bits);
@@ -1289,7 +1291,7 @@ void OBJECT_OT_metaball_add(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Add Metaball";
-  ot->description = "Add an metaball object to the scene";
+  ot->description = "Add a metaball object to the scene";
   ot->idname = "OBJECT_OT_metaball_add";
 
   /* API callbacks. */
@@ -1362,7 +1364,7 @@ static wmOperatorStatus object_armature_add_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *obedit = BKE_view_layer_edit_object_get(view_layer);
 
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -2793,7 +2795,7 @@ static void make_object_duplilist_real(bContext *C,
     }
 
     BKE_collection_object_add_from(bmain, scene, base->object, ob_dst);
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     Base *base_dst = BKE_view_layer_base_find(view_layer, ob_dst);
     BLI_assert(base_dst != nullptr);
 
@@ -3074,12 +3076,13 @@ static void object_data_convert_curve_to_mesh(Main *bmain, Depsgraph *depsgraph,
 
 static bool object_convert_poll(bContext *C)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   if (!ID_IS_EDITABLE(scene)) {
     return false;
   }
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   /* Don't use `active_object` in the context, it's important this value
    * is from the view-layer as it's used to check if Blender is in object mode. */
   Object *obact = BKE_view_layer_active_object_get(view_layer);
@@ -3105,7 +3108,7 @@ static Base *duplibase_for_convert(
   DEG_id_tag_update(&obn->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
   BKE_collection_object_add_from(bmain, scene, ob, obn);
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *basen = BKE_view_layer_base_find(view_layer, obn);
   base_select(basen, BA_SELECT);
   base_select(base, BA_DESELECT);
@@ -3381,16 +3384,17 @@ static int mesh_to_grease_pencil_add_material(Main &bmain,
 
   if (stroke_color.has_value()) {
     copy_v4_v4(ma->gp_style->stroke_rgba, stroke_color.value());
-    srgb_to_linearrgb_v4(ma->gp_style->stroke_rgba, ma->gp_style->stroke_rgba);
+  }
+  else {
+    copy_v4_v4(ma->gp_style->stroke_rgba, float4(0.0f));
   }
 
   if (fill_color.has_value()) {
     copy_v4_v4(ma->gp_style->fill_rgba, fill_color.value());
-    srgb_to_linearrgb_v4(ma->gp_style->fill_rgba, ma->gp_style->fill_rgba);
   }
-
-  SET_FLAG_FROM_TEST(ma->gp_style->flag, stroke_color.has_value(), GP_MATERIAL_STROKE_SHOW);
-  SET_FLAG_FROM_TEST(ma->gp_style->flag, fill_color.has_value(), GP_MATERIAL_FILL_SHOW);
+  else {
+    copy_v4_v4(ma->gp_style->fill_rgba, float4(0.0f));
+  }
 
   return index;
 }
@@ -3452,14 +3456,14 @@ static void mesh_data_to_grease_pencil(const Mesh &mesh_eval,
                                        const float offset,
                                        const Array<int> &material_remap)
 {
-  grease_pencil.flag |= GREASE_PENCIL_STROKE_ORDER_3D;
+  using namespace bke::greasepencil;
 
   if (mesh_eval.edges_num <= 0) {
     return;
   }
 
-  bke::greasepencil::Layer &layer_line = grease_pencil.add_layer(DATA_("Lines"));
-  bke::greasepencil::Drawing *drawing_line = grease_pencil.insert_frame(layer_line, current_frame);
+  Layer &layer_line = grease_pencil.add_layer(DATA_("Lines"));
+  Drawing *drawing_line = grease_pencil.insert_frame(layer_line, current_frame);
 
   const Span<float3> mesh_positions = mesh_eval.vert_positions();
   const OffsetIndices<int> faces = mesh_eval.faces();
@@ -3467,69 +3471,85 @@ static void mesh_data_to_grease_pencil(const Mesh &mesh_eval,
   const Span<int> corner_verts = mesh_eval.corner_verts();
 
   if (generate_faces && !faces.is_empty()) {
-    bke::greasepencil::Layer &layer_fill = grease_pencil.add_layer(DATA_("Fills"));
-    bke::greasepencil::Drawing *drawing_fill = grease_pencil.insert_frame(layer_fill,
-                                                                          current_frame);
+    Layer &layer_fill = grease_pencil.add_layer(DATA_("Fills"));
+    Drawing *drawing_fill = grease_pencil.insert_frame(layer_fill, current_frame);
     const int fills_num = faces.size();
     const int fills_points_num = corner_verts.size();
 
     drawing_fill->strokes_for_write().resize(fills_points_num, fills_num);
-    bke::CurvesGeometry &curves_fill = drawing_fill->strokes_for_write();
-    MutableSpan<float3> positions_fill = curves_fill.positions_for_write();
-    MutableSpan<int> offsets_fill = curves_fill.offsets_for_write();
-    MutableSpan<bool> cyclic_fill = curves_fill.cyclic_for_write();
-    bke::SpanAttributeWriter<int> stroke_materials_fill =
-        curves_fill.attributes_for_write().lookup_or_add_for_write_span<int>(
-            "material_index", bke::AttrDomain::Curve);
-    bke::AttributeAccessor mesh_attributes = mesh_eval.attributes();
-    VArray<int> mesh_materials = *mesh_attributes.lookup_or_default(
+    bke::CurvesGeometry &curves = drawing_fill->strokes_for_write();
+    bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+    MutableSpan<float3> positions = curves.positions_for_write();
+    MutableSpan<int> offsets = curves.offsets_for_write();
+
+    curves.fill_curve_types(CURVE_TYPE_POLY);
+    array_utils::gather(mesh_positions, corner_verts, positions);
+    array_utils::copy(faces_span, offsets);
+    attributes.add<bool>("cyclic", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
+
+    VArray<int> mesh_materials = *mesh_eval.attributes().lookup_or_default(
         "material_index", bke::AttrDomain::Face, 0);
+    bke::SpanAttributeWriter<int> material_indices =
+        attributes.lookup_or_add_for_write_only_span<int>("material_index",
+                                                          bke::AttrDomain::Curve);
+    threading::parallel_for(curves.curves_range(), 2048, [&](const IndexRange range) {
+      for (const int i : range) {
+        /* Increase material index by 1 to accommodate the stroke material. */
+        material_indices.span[i] = material_remap[mesh_materials[i]] + 1;
+      }
+    });
+    material_indices.finish();
 
-    curves_fill.fill_curve_types(CURVE_TYPE_POLY);
-    array_utils::gather(mesh_positions, corner_verts, positions_fill);
-    array_utils::copy(faces_span, offsets_fill);
-    cyclic_fill.fill(true);
+    bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_or_add_for_write_only_span<int>(
+        "fill_id", bke::AttrDomain::Curve);
+    threading::parallel_for(curves.curves_range(), 2048, [&](const IndexRange range) {
+      for (const int i : range) {
+        const int fill_id = i + 1;
+        fill_ids.span[i] = fill_id;
+      }
+    });
+    fill_ids.finish();
 
-    MutableSpan<int> material_span = stroke_materials_fill.span;
-    for (const int face_i : material_span.index_range()) {
-      /* Increase material index by 1 to accommodate the stroke material. */
-      material_span[face_i] = material_remap[mesh_materials[face_i]] + 1;
-    }
-    stroke_materials_fill.finish();
+    bke::SpanAttributeWriter<bool> hide_stroke = attributes.lookup_or_add_for_write_span<bool>(
+        "hide_stroke", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
+    hide_stroke.finish();
   }
 
   Mesh *mesh_copied = BKE_mesh_copy_for_eval(mesh_eval);
   const Span<float3> normals = mesh_copied->vert_normals();
 
-  std::string unique_attribute_id = BKE_attribute_calc_unique_name(
+  std::string normals_attribute_name = BKE_attribute_calc_unique_name(
       AttributeOwner::from_id(&mesh_copied->id), "vertex_normal_for_conversion");
 
   mesh_copied->attributes_for_write().add(
-      unique_attribute_id,
+      normals_attribute_name,
       bke::AttrDomain::Point,
       bke::AttrType::Float3,
       bke::AttributeInitVArray(VArray<float3>::from_span(normals)));
 
   const int edges_num = mesh_copied->edges_num;
-  bke::CurvesGeometry curves = geometry::mesh_edges_to_curves_convert(
-      *mesh_copied, IndexRange(edges_num), {});
+  bke::CurvesGeometry curves_edges = geometry::mesh_edges_to_curves_convert(
+      *mesh_copied, IndexRange(edges_num), bke::attribute_filter_from_skip_ref({"radius"}));
 
-  MutableSpan<float3> curve_positions = curves.positions_for_write();
-  const VArraySpan<float3> point_normals = *curves.attributes().lookup<float3>(
-      unique_attribute_id);
-
+  MutableSpan<float3> curve_positions = curves_edges.positions_for_write();
+  const VArraySpan<float3> point_normals = *curves_edges.attributes().lookup<float3>(
+      normals_attribute_name);
   threading::parallel_for(curve_positions.index_range(), 8192, [&](const IndexRange range) {
     for (const int point_i : range) {
       curve_positions[point_i] += offset * point_normals[point_i];
     }
   });
+  curves_edges.attributes_for_write().remove(normals_attribute_name);
 
   BKE_defgroup_copy_list(&grease_pencil.vertex_group_names, &mesh_copied->vertex_group_names);
   grease_pencil.vertex_group_active_index = mesh_copied->vertex_group_active_index;
 
-  curves.radius_for_write().fill(stroke_radius);
+  grease_pencil.flag |= GREASE_PENCIL_STROKE_ORDER_3D;
 
-  drawing_line->strokes_for_write() = std::move(curves);
+  bke::MutableAttributeAccessor attributes = curves_edges.attributes_for_write();
+  attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(stroke_radius));
+
+  drawing_line->strokes_for_write() = std::move(curves_edges);
   drawing_line->tag_topology_changed();
 
   BKE_id_free(nullptr, mesh_copied);
@@ -3714,7 +3734,9 @@ static Object *convert_curves_to_grease_pencil(Base &base,
     BLI_assert(drawing != nullptr);
     drawing->strokes_for_write() = curves_eval->geometry.wrap();
     /* Default radius (1.0 unit) is too thick for converted strokes. */
-    drawing->radii_for_write().fill(0.01f);
+    bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
+    attributes.remove("radius");
+    attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
 
     BKE_grease_pencil_nomain_to_grease_pencil(grease_pencil, new_grease_pencil);
     BKE_object_material_from_eval_data(info.bmain, newob, &curves_eval->id);
@@ -3943,19 +3965,20 @@ static Object *convert_font_to_curves(Base &base, ObjectConversionInfo &info, Ba
   return curve_ob;
 }
 
-/* Currently neither Grease Pencil nor legacy curves supports per-stroke/curve fill attribute, thus
- * the #fill argument applies on all strokes that are converted. */
-static void add_grease_pencil_materials_for_conversion(Main &bmain,
-                                                       ID &from_id,
-                                                       Object &gp_object,
-                                                       const bool use_fill)
+static void add_grease_pencil_materials_for_conversion(Main &bmain, ID &from_id, Object &gp_object)
 {
   short *len_p = BKE_id_material_len_p(&from_id);
   if (!len_p || *len_p == 0) {
+    Material *gp_material = BKE_grease_pencil_object_material_new(
+        &bmain, &gp_object, IFACE_("Empty Material"), nullptr);
+    gp_material->gp_style->fill_rgba[3] = 1.0f;
     return;
   }
   Material ***materials = BKE_id_material_array_p(&from_id);
   if (!materials || !(*materials)) {
+    Material *gp_material = BKE_grease_pencil_object_material_new(
+        &bmain, &gp_object, IFACE_("Empty Material"), nullptr);
+    gp_material->gp_style->fill_rgba[3] = 1.0f;
     return;
   }
   for (short i = 0; i < *len_p; i++) {
@@ -3969,14 +3992,33 @@ static void add_grease_pencil_materials_for_conversion(Main &bmain,
      * have anything to copy color information from. In those cases we still added an empty
      * material to keep the material index matching. */
     if (!orig_material) {
+      gp_material->gp_style->fill_rgba[3] = 1.0f;
       continue;
     }
 
+    copy_v4_v4(gp_material->gp_style->stroke_rgba, &orig_material->r);
     copy_v4_v4(gp_material->gp_style->fill_rgba, &orig_material->r);
-
-    SET_FLAG_FROM_TEST(gp_material->gp_style->flag, !use_fill, GP_MATERIAL_STROKE_SHOW);
-    SET_FLAG_FROM_TEST(gp_material->gp_style->flag, use_fill, GP_MATERIAL_FILL_SHOW);
   }
+}
+
+static void create_grease_pencil_fills(bke::greasepencil::Drawing &drawing)
+{
+  bke::CurvesGeometry &curves = drawing.strokes_for_write();
+  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+  VArray<int> materials = *attributes.lookup_or_default(
+      "material_index", bke::AttrDomain::Curve, 0);
+  bke::SpanAttributeWriter<int> fill_ids = attributes.lookup_or_add_for_write_only_span<int>(
+      "fill_id", bke::AttrDomain::Curve);
+  /* Hide all the strokes, only show fills. */
+  attributes.add<bool>("hide_stroke", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
+
+  /* Mark all the strokes in the same material as the same fill. */
+  for (const int curve_i : curves.curves_range()) {
+    fill_ids.span[curve_i] = materials[curve_i] + 1;
+  }
+
+  fill_ids.finish();
 }
 
 static Object *convert_font_to_grease_pencil(Base &base,
@@ -4004,15 +4046,20 @@ static Object *convert_font_to_grease_pencil(Base &base,
 
   drawing->strokes_for_write() = std::move(curves);
   /* Default radius (1.0 unit) is too thick for converted strokes. */
-  drawing->radii_for_write().fill(0.01f);
-  drawing->tag_positions_changed();
+  bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
+  attributes.remove("radius");
+  attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
+
+  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
+  if (use_fill) {
+    create_grease_pencil_fills(*drawing);
+  }
 
   curve_ob->data = id_cast<ID *>(grease_pencil);
   curve_ob->type = OB_GREASE_PENCIL;
   curve_ob->totcol = grease_pencil->material_array_num;
 
-  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
-  add_grease_pencil_materials_for_conversion(*info.bmain, legacy_curve_id->id, *newob, use_fill);
+  add_grease_pencil_materials_for_conversion(*info.bmain, legacy_curve_id->id, *newob);
 
   /* We don't need the intermediate font/curve data ID any more. */
   BKE_id_delete(info.bmain, legacy_curve_id);
@@ -4114,8 +4161,15 @@ static Object *convert_curves_legacy_to_grease_pencil(Base &base,
 
   drawing->strokes_for_write() = std::move(curves);
   /* Default radius (1.0 unit) is too thick for converted strokes. */
-  drawing->radii_for_write().fill(0.01f);
+  bke::MutableAttributeAccessor attributes = drawing->strokes_for_write().attributes_for_write();
+  attributes.remove("radius");
+  attributes.add<float>("radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
   drawing->tag_positions_changed();
+
+  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
+  if (use_fill) {
+    create_grease_pencil_fills(*drawing);
+  }
 
   newob->data = id_cast<ID *>(grease_pencil);
   newob->type = OB_GREASE_PENCIL;
@@ -4124,8 +4178,7 @@ static Object *convert_curves_legacy_to_grease_pencil(Base &base,
    * sync. */
   newob->totcol = grease_pencil->material_array_num;
 
-  const bool use_fill = (legacy_curve_id->flag & (CU_FRONT | CU_BACK)) != 0;
-  add_grease_pencil_materials_for_conversion(*info.bmain, legacy_curve_id->id, *newob, use_fill);
+  add_grease_pencil_materials_for_conversion(*info.bmain, legacy_curve_id->id, *newob);
 
   /* For some reason this must be called, otherwise evaluated id_cow will still be the original
    * curves id (and that seems to only happen if "Keep Original" is enabled, and only with this
@@ -4167,7 +4220,7 @@ static Object *convert_mball_to_mesh(Base &base,
   base.flag &= ~BASE_SELECTED;
   base.object->base_flag &= ~BASE_SELECTED;
 
-  baseob = BKE_mball_basis_find(info.scene, ob);
+  baseob = BKE_mball_basis_find(*info.bmain, info.scene, ob);
 
   if (ob != baseob) {
     /* If mother-ball is converting it would be marked as done later. */
@@ -4294,7 +4347,7 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
       if (ob->type == OB_MBALL && target == OB_MESH) {
         if (BKE_mball_is_basis(ob) == false) {
           Object *ob_basis;
-          ob_basis = BKE_mball_basis_find(scene, ob);
+          ob_basis = BKE_mball_basis_find(*bmain, scene, ob);
           if (ob_basis) {
             ob_basis->flag &= ~OB_DONE;
           }
@@ -4441,7 +4494,8 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
         if (ob_mball->type == OB_MBALL) {
           Object *ob_basis = nullptr;
           if (!BKE_mball_is_basis(ob_mball) &&
-              ((ob_basis = BKE_mball_basis_find(scene, ob_mball)) && (ob_basis->flag & OB_DONE)))
+              ((ob_basis = BKE_mball_basis_find(*bmain, scene, ob_mball)) &&
+               (ob_basis->flag & OB_DONE)))
           {
             base_free_and_unlink(bmain, scene, ob_mball);
           }
@@ -4470,7 +4524,7 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
     view_layer->basact = act_base;
   }
   else {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     if (Object *object = BKE_view_layer_active_object_get(view_layer)) {
       if (object->flag & OB_DONE) {
         WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, object);
@@ -4656,10 +4710,10 @@ static Base *object_add_duplicate_internal(Main *bmain,
     return nullptr;
   }
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *base_src = BKE_view_layer_base_find(view_layer, ob);
   object_add_sync_base_collection(bmain, scene, view_layer, base_src, object_new);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *base_new = BKE_view_layer_base_find(view_layer, object_new);
   if (base_src && base_new) {
     object_add_sync_local_view(base_src, base_new);
@@ -4762,7 +4816,7 @@ static wmOperatorStatus duplicate_exec(bContext *C, wmOperator *op)
   }
 
   /* Sync the view layer. Everything else should not tag the view_layer out of sync. */
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   const Base *active_base = BKE_view_layer_active_base_get(view_layer);
   for (DuplicateObjectLink &link : object_base_links) {
     if (!link.object_new) {
@@ -4882,7 +4936,7 @@ static wmOperatorStatus object_add_named_exec(bContext *C, wmOperator *op)
 
   /* #object_add_duplicate_internal() doesn't deselect other objects,
    * unlike #object_add_common() or #BKE_view_layer_base_deselect_all(). */
-  base_deselect_all(scene, view_layer, nullptr, SEL_DESELECT);
+  base_deselect_all(*bmain, scene, view_layer, nullptr, SEL_DESELECT);
   base_select(basen, BA_SELECT);
   base_activate(C, basen);
 
@@ -4967,7 +5021,7 @@ static wmOperatorStatus object_transform_to_mouse_exec(bContext *C, wmOperator *
       WM_operator_properties_id_lookup_from_name_or_session_uid(bmain, op->ptr, ID_OB));
 
   if (!ob) {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     ob = BKE_view_layer_active_object_get(view_layer);
   }
 

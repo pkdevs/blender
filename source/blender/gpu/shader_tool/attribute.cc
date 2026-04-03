@@ -15,6 +15,33 @@ using namespace std;
 using namespace shader::parser;
 using namespace metadata;
 
+void SourceProcessor::lower_maybe_unused(Parser &parser)
+{
+  using namespace metadata;
+
+  parser().foreach_token(SquareOpen, [&](Token par_open) {
+    if (par_open.next() != '[') {
+      return;
+    }
+    Scope attributes = par_open.next().scope();
+    attributes.foreach_attribute([&](Token attr, Scope) {
+      if (attr.str() == "maybe_unused") {
+        if (attr.next() == ',') {
+          parser.erase(attr, attr.next());
+        }
+        else if (attr.prev() == ',') {
+          parser.erase(attr.prev(), attr);
+        }
+        else if (attr.next() == ']') {
+          parser.erase(attributes.scope());
+        }
+      }
+    });
+  });
+
+  parser.apply_mutations();
+}
+
 void SourceProcessor::lint_attributes(Parser &parser)
 {
   parser().foreach_token(SquareOpen, [&](Token par_open) {
@@ -24,9 +51,9 @@ void SourceProcessor::lint_attributes(Parser &parser)
     Scope attributes = par_open.next().scope();
     bool invalid = false;
     attributes.foreach_attribute([&](Token attr, Scope attr_scope) {
-      string attr_str = attr.str();
+      string attr_str = string(attr.str());
       if (attr_str == "base_instance" || attr_str == "clip_distance" ||
-          attr_str == "compilation_constant" || attr_str == "compute" ||
+          attr_str == "compilation_constant" || attr_str == "compute" || attr_str == "shared" ||
           attr_str == "early_fragment_tests" || attr_str == "flat" || attr_str == "frag_coord" ||
           attr_str == "frag_stencil_ref" || attr_str == "fragment" || attr_str == "front_facing" ||
           attr_str == "global_invocation_id" || attr_str == "in" || attr_str == "instance_id" ||
@@ -34,8 +61,7 @@ void SourceProcessor::lint_attributes(Parser &parser)
           attr_str == "local_invocation_index" || attr_str == "no_perspective" ||
           attr_str == "num_work_groups" || attr_str == "out" || attr_str == "point_coord" ||
           attr_str == "point_size" || attr_str == "position" || attr_str == "push_constant" ||
-          attr_str == "resource_table" || attr_str == "smooth" ||
-          attr_str == "specialization_constant" || attr_str == "vertex_id" ||
+          attr_str == "resource_table" || attr_str == "smooth" || attr_str == "vertex_id" ||
           attr_str == "legacy_info" || attr_str == "vertex" || attr_str == "viewport_index" ||
           attr_str == "work_group_id" || attr_str == "maybe_unused" || attr_str == "fallthrough" ||
           attr_str == "nodiscard" || attr_str == "node")
@@ -47,7 +73,8 @@ void SourceProcessor::lint_attributes(Parser &parser)
       }
       else if (attr_str == "attribute" || attr_str == "index" || attr_str == "frag_color" ||
                attr_str == "frag_depth" || attr_str == "uniform" || attr_str == "condition" ||
-               attr_str == "sampler")
+               attr_str == "frequency" || attr_str == "sampler" ||
+               attr_str == "specialization_constant")
       {
         if (attr_scope.is_invalid()) {
           report_error_(ERROR_TOK(attr), "This attribute requires 1 argument");
@@ -67,6 +94,12 @@ void SourceProcessor::lint_attributes(Parser &parser)
         }
       }
       else if (attr_str == "local_size") {
+        if (attr_scope.is_invalid()) {
+          report_error_(ERROR_TOK(attr), "This attribute requires at least 1 argument");
+          invalid = true;
+        }
+      }
+      else if (attr_str == "metal_max_total_threads_per_threadgroup") {
         if (attr_scope.is_invalid()) {
           report_error_(ERROR_TOK(attr), "This attribute requires at least 1 argument");
           invalid = true;
@@ -116,7 +149,8 @@ void SourceProcessor::lint_attributes(Parser &parser)
       Token prev_tok = attributes.front().prev().prev();
       if (prev_tok == '(' || prev_tok == '{' || prev_tok == ';' || prev_tok == ',' ||
           prev_tok == '}' || prev_tok == ')' || prev_tok == '\n' || prev_tok == ' ' ||
-          prev_tok.is_invalid())
+          prev_tok == '>' || prev_tok.is_invalid() ||
+          prev_tok.scope().type() == ScopeType::Preprocessor)
       {
         /* Placement is maybe correct. Could refine a bit more. */
       }

@@ -106,7 +106,7 @@ class VKContext : public Context, NonCopyable {
 
   void memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb) override;
 
-  void debug_group_begin(const char *, int) override;
+  void debug_group_begin(const char *name, int index) override;
   void debug_group_end() override;
   bool debug_capture_begin(const char *title) override;
   void debug_capture_end() override;
@@ -153,7 +153,8 @@ class VKContext : public Context, NonCopyable {
   VKDescriptorSetTracker &descriptor_set_get();
   VKStateManager &state_manager_get() const;
 
-  static void swap_buffer_draw_callback(const GHOST_VulkanSwapChainData *data);
+  static void swap_buffer_draw_callback(const GHOST_VulkanSwapChainData *data,
+                                        bool wait_for_submission);
   static void swap_buffer_acquired_callback();
   static void openxr_acquire_framebuffer_image_callback(GHOST_VulkanOpenXRData *data);
   static void openxr_release_framebuffer_image_callback(GHOST_VulkanOpenXRData *data);
@@ -164,7 +165,7 @@ class VKContext : public Context, NonCopyable {
       VKBuffer &buffer, VkDeviceSize min_offset_alignment);
 
  private:
-  void swap_buffer_draw_handler(const GHOST_VulkanSwapChainData &data);
+  void swap_buffer_draw_handler(const GHOST_VulkanSwapChainData &data, bool wait_for_submission);
   void swap_buffer_acquired_handler();
 
   void openxr_acquire_framebuffer_image_handler(GHOST_VulkanOpenXRData &data);

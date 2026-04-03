@@ -22,9 +22,12 @@
 #include "BLI_math_vector.h"
 #include "BLI_string_utf8.h"
 
+#include "BLT_translation.hh"
+
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_report.hh"
+#include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BKE_unit.hh"
 
@@ -42,6 +45,8 @@
 
 #include "eyedropper_intern.hh"
 #include "interface_intern.hh"
+
+#include "ANIM_keyframing.hh"
 
 namespace blender::ui {
 
@@ -288,7 +293,7 @@ static void depthdropper_depth_sample_pt(bContext *C,
                                    false);
         }
         else {
-          STRNCPY_UTF8(ddr->name, "Nothing under cursor");
+          STRNCPY_UTF8(ddr->name, RPT_("Nothing under cursor"));
         }
       }
     }
@@ -304,6 +309,10 @@ static void depthdropper_depth_set(bContext *C, DepthDropper *ddr, const float d
   RNA_property_float_set(&ddr->ptr, ddr->prop, depth);
   ddr->is_set = true;
   RNA_property_update(C, &ddr->ptr, ddr->prop);
+  Scene *scene = CTX_data_scene(C);
+  const bool only_when_keyed = animrig::is_keying_flag(scene, AUTOKEY_FLAG_INSERTAVAILABLE);
+  animrig::autokeyframe_property(
+      C, scene, &ddr->ptr, ddr->prop, 0, BKE_scene_frame_get(scene), only_when_keyed);
 }
 
 /* set sample from accumulated values */

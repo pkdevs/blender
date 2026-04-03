@@ -21,6 +21,7 @@
 #include "BLI_string_utf8.h"
 #include "BLI_string_utils.hh"
 #include "BLI_system.h"
+#include "BLI_tempfile.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 #include BLI_SYSTEM_PID_H
@@ -492,8 +493,31 @@ static ImBuf *thumb_create_or_fail(const char *file_path,
   return img;
 }
 
+/**
+ * Do not generate thumbnails for 'temp' file paths (i.e. contained into system-defined temp
+ * directory).
+ */
+static bool skip_thumbnails_for_filepath(const char *filepath)
+{
+  char temp_dir[FILE_MAX];
+  BLI_temp_directory_path_get(temp_dir, sizeof(temp_dir));
+  return BLI_path_contains(temp_dir, filepath);
+}
+
 ImBuf *IMB_thumb_create(const char *filepath, ThumbSize size, ThumbSource source, ImBuf *img)
 {
+  if (source == THB_SOURCE_DIRECT) {
+    /* Not yet implemented (not needed currently). Could just directly write the image to the given
+     * `filepath`. */
+    BLI_assert_msg(source != THB_SOURCE_DIRECT,
+                   "Writing thumbnails with direct source isn't implemented");
+    return nullptr;
+  }
+
+  if (skip_thumbnails_for_filepath(filepath)) {
+    return nullptr;
+  }
+
   char uri[URI_MAX] = "";
   char thumb_name[40];
 
@@ -542,6 +566,30 @@ void IMB_thumb_delete(const char *file_or_lib_path, ThumbSize size)
 
 ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSource source)
 {
+  if (source == THB_SOURCE_DIRECT) {
+    const eFileAttributes file_attributes = BLI_file_attributes(file_or_lib_path);
+    /* Don't trigger download files from online drives. Maybe less of a problem for
+     * #THE_SOURCE_DIRECT, since what we request is the actual image itself. For other sources this
+     * may download a bunch of large files like videos or blends, just to extract a thumbnail. But
+     * for now, keep the API consistent and do not trigger download of such files. */
+    if (file_attributes & FILE_ATTR_OFFLINE) {
+      return nullptr;
+    }
+
+    ImBuf *thumb = IMB_load_image_from_filepath(file_or_lib_path, IB_byte_data | IB_metadata);
+    if (!thumb) {
+      return nullptr;
+    }
+
+    IMB_byte_from_float(thumb);
+    IMB_free_float_pixels(thumb);
+    return thumb;
+  }
+
+  if (skip_thumbnails_for_filepath(file_or_lib_path)) {
+    return nullptr;
+  }
+
   char path_buff[FILE_MAX_LIBEXTRA];
   char *blen_group = nullptr, *blen_id = nullptr;
 

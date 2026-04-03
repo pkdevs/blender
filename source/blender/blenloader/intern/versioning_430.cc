@@ -130,8 +130,8 @@ static void node_reroute_add_storage(bNodeTree &tree)
        * identifiers were sometimes all lower case. Fixing those wrong socket identifiers is
        * important because otherwise they loose links now that the reroute node also uses node
        * declarations. */
-      STRNCPY_UTF8(input.identifier, "Input");
-      STRNCPY_UTF8(output.identifier, "Output");
+      version_node_socket_identifier_set(input, "Input");
+      version_node_socket_identifier_set(output, "Output");
 
       NodeReroute *data = MEM_new<NodeReroute>(__func__);
       STRNCPY_UTF8(data->type_idname, input.idname);
@@ -265,9 +265,11 @@ void blo_do_versions_430(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       if (ntree->type != NTREE_CUSTOM) {
         for (bNode &node : ntree->nodes) {
           if (node.type_legacy == CMP_NODE_COLORBALANCE) {
-            NodeColorBalance *n = static_cast<NodeColorBalance *>(node.storage);
-            n->input_temperature = n->output_temperature = 6500.0f;
-            n->input_tint = n->output_tint = 10.0f;
+            if (version_node_ensure_storage_or_invalidate(node)) {
+              NodeColorBalance *n = static_cast<NodeColorBalance *>(node.storage);
+              n->input_temperature = n->output_temperature = 6500.0f;
+              n->input_tint = n->output_tint = 10.0f;
+            }
           }
         }
       }
@@ -305,6 +307,9 @@ void blo_do_versions_430(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
 
       for (bNode &node : ntree->nodes) {
         if (node.type_legacy != CMP_NODE_OUTPUT_FILE) {
+          continue;
+        }
+        if (!version_node_ensure_storage_or_invalidate(node)) {
           continue;
         }
 

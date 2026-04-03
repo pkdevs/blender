@@ -324,11 +324,15 @@ void GHOST_WindowWin32::adjustWindowRectForClosestMonitor(LPRECT win_rect,
   GetMonitorInfo(hmonitor, &monitor);
 
   /* Constrain requested size and position to fit within this monitor. */
-  LONG width = min(monitor.rcWork.right - monitor.rcWork.left, win_rect->right - win_rect->left);
-  LONG height = min(monitor.rcWork.bottom - monitor.rcWork.top, win_rect->bottom - win_rect->top);
-  win_rect->left = min(max(monitor.rcWork.left, win_rect->left), monitor.rcWork.right - width);
+  LONG width = std::min(monitor.rcWork.right - monitor.rcWork.left,
+                        win_rect->right - win_rect->left);
+  LONG height = std::min(monitor.rcWork.bottom - monitor.rcWork.top,
+                         win_rect->bottom - win_rect->top);
+  win_rect->left = std::min(std::max(monitor.rcWork.left, win_rect->left),
+                            monitor.rcWork.right - width);
   win_rect->right = win_rect->left + width;
-  win_rect->top = min(max(monitor.rcWork.top, win_rect->top), monitor.rcWork.bottom - height);
+  win_rect->top = std::min(std::max(monitor.rcWork.top, win_rect->top),
+                           monitor.rcWork.bottom - height);
   win_rect->bottom = win_rect->top + height;
 
   /* With Windows 10 and newer we can adjust for chrome that differs with DPI and scale. */
@@ -350,7 +354,7 @@ void GHOST_WindowWin32::adjustWindowRectForClosestMonitor(LPRECT win_rect,
   }
 
   /* But never allow a top position that can hide part of the title bar. */
-  win_rect->top = max(monitor.rcWork.top, win_rect->top);
+  win_rect->top = std::max(monitor.rcWork.top, win_rect->top);
 }
 
 bool GHOST_WindowWin32::getValid() const
@@ -952,7 +956,7 @@ void GHOST_WindowWin32::loadWintab(bool enable)
 {
   if (!wintab_) {
     WINTAB_PRINTF("Loading Wintab for window %p\n", h_wnd_);
-    if (wintab_ = GHOST_Wintab::loadWintab(h_wnd_)) {
+    if ((wintab_ = GHOST_Wintab::loadWintab(h_wnd_))) {
       if (enable) {
         wintab_->enable();
 
@@ -1350,7 +1354,7 @@ void GHOST_WindowWin32::updateHDRInfo()
 
       if (::DisplayConfigGetDeviceInfo(&white_level.header) == ERROR_SUCCESS) {
         if (white_level.SDRWhiteLevel > 0) {
-          /* Windows assumes 1.0 = 80 nits, so multipley by that to get the absolute
+          /* Windows assumes 1.0 = 80 nits, so multiply by that to get the absolute
            * value in nits if we need it in the future. */
           info.sdr_white_level = static_cast<float>(white_level.SDRWhiteLevel) / 1000.0f;
         }

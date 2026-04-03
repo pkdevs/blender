@@ -491,7 +491,7 @@ static const char *rna_parameter_type_name(PropertyRNA *parm)
       if (parm->flag_parameter & PARM_RNAPTR) {
         return "PointerRNA";
       }
-      return rna_find_dna_type(reinterpret_cast<const char *>(pparm->type));
+      return rna_find_dna_type(reinterpret_cast<const char *>(pparm->pointer_type));
     }
     case PROP_COLLECTION: {
       return "CollectionVector";
@@ -749,13 +749,13 @@ static char *rna_def_property_get_func(
         if (dp->dnapointerlevel == 0) {
           fprintf(f,
                   "    return RNA_pointer_create_with_parent(*ptr, RNA_%s, &data->%s);\n",
-                  reinterpret_cast<const char *>(pprop->type),
+                  reinterpret_cast<const char *>(pprop->pointer_type),
                   dp->dnaname);
         }
         else {
           fprintf(f,
                   "    return RNA_pointer_create_with_parent(*ptr, RNA_%s, data->%s);\n",
-                  reinterpret_cast<const char *>(pprop->type),
+                  reinterpret_cast<const char *>(pprop->pointer_type),
                   dp->dnaname);
         }
       }
@@ -1179,9 +1179,9 @@ static char *rna_def_property_set_func(
         rna_print_data_get(f, dp);
 
         PointerPropertyRNA *pprop = reinterpret_cast<PointerPropertyRNA *>(dp->prop);
-        StructRNA *type = (pprop->type) ?
-                              rna_find_struct(reinterpret_cast<const char *>(pprop->type)) :
-                              nullptr;
+        StructRNA *type = (pprop->pointer_type) ? rna_find_struct(reinterpret_cast<const char *>(
+                                                      pprop->pointer_type)) :
+                                                  nullptr;
 
         if (prop->flag & PROP_ID_SELF_CHECK) {
           /* No pointers to self allowed. */
@@ -1585,12 +1585,8 @@ static char *rna_def_property_begin_func(
   return func;
 }
 
-static char *rna_def_property_lookup_int_func(FILE *f,
-                                              StructRNA *srna,
-                                              PropertyRNA *prop,
-                                              PropertyDefRNA *dp,
-                                              const char *manualfunc,
-                                              const char *nextfunc)
+static char *rna_def_property_lookup_int_func(
+    FILE *f, StructRNA *srna, PropertyRNA *prop, const char *manualfunc, const char *nextfunc)
 {
   /* note on indices, this is for external functions and ignores skipped values.
    * so the index can only be checked against the length when there is no 'skip' function. */
@@ -1601,10 +1597,6 @@ static char *rna_def_property_lookup_int_func(FILE *f,
   }
 
   if (!manualfunc) {
-    if (!dp->dnastructname || !dp->dnaname) {
-      return nullptr;
-    }
-
     /* only supported in case of standard next functions */
     if (STREQ(nextfunc, "rna_iterator_array_next")) {
     }
@@ -1679,46 +1671,6 @@ static char *rna_def_property_lookup_int_func(FILE *f,
   fprintf(f, "    %s_%s_end(&iter);\n\n", srna->identifier, rna_safe_id(prop->identifier));
 
   fprintf(f, "    return found;\n");
-
-#if 0
-  rna_print_data_get(f, dp);
-  item_type = (cprop->item_type) ? (const char *)cprop->item_type : "UnknownType";
-
-  if (dp->dnalengthname || dp->dnalengthfixed) {
-    if (dp->dnalengthname) {
-      fprintf(f,
-              "\n    rna_array_lookup_int(ptr, RNA_%s, data->%s, sizeof(data->%s[0]), data->%s, "
-              "index);\n",
-              item_type,
-              dp->dnaname,
-              dp->dnaname,
-              dp->dnalengthname);
-    }
-    else {
-      fprintf(
-          f,
-          "\n    rna_array_lookup_int(ptr, RNA_%s, data->%s, sizeof(data->%s[0]), %d, index);\n",
-          item_type,
-          dp->dnaname,
-          dp->dnaname,
-          dp->dnalengthfixed);
-    }
-  }
-  else {
-    if (dp->dnapointerlevel == 0) {
-      fprintf(f,
-              "\n    return rna_listbase_lookup_int(ptr, RNA_%s, &data->%s, index);\n",
-              item_type,
-              dp->dnaname);
-    }
-    else {
-      fprintf(f,
-              "\n    return rna_listbase_lookup_int(ptr, RNA_%s, data->%s, index);\n",
-              item_type,
-              dp->dnaname);
-    }
-  }
-#endif
 
   fprintf(f, "}\n\n");
 
@@ -2160,7 +2112,7 @@ static void rna_def_property_funcs(FILE *f, StructRNA *srna, PropertyDefRNA *dp)
           f, srna, prop, dp, reinterpret_cast<const char *>(pprop->get)));
       pprop->set = reinterpret_cast<PropPointerSetFunc>(rna_def_property_set_func(
           f, srna, prop, dp, reinterpret_cast<const char *>(pprop->set)));
-      if (!pprop->type) {
+      if (!pprop->pointer_type) {
         CLOG_ERROR(
             &LOG, "%s.%s, pointer must have a struct type.", srna->identifier, prop->identifier);
         DefRNA.error = true;
@@ -2205,7 +2157,7 @@ static void rna_def_property_funcs(FILE *f, StructRNA *srna, PropertyDefRNA *dp)
           f, srna, prop, dp, reinterpret_cast<const char *>(cprop->end)));
       cprop->lookupint = reinterpret_cast<PropCollectionLookupIntFunc>(
           rna_def_property_lookup_int_func(
-              f, srna, prop, dp, reinterpret_cast<const char *>(cprop->lookupint), nextfunc));
+              f, srna, prop, reinterpret_cast<const char *>(cprop->lookupint), nextfunc));
       cprop->lookupstring = reinterpret_cast<PropCollectionLookupStringFunc>(
           rna_def_property_lookup_string_func(
               f, srna, prop, dp, reinterpret_cast<const char *>(cprop->lookupstring), item_type));
@@ -2715,15 +2667,17 @@ static void rna_auto_types()
           PointerPropertyRNA *pprop = reinterpret_cast<PointerPropertyRNA *>(dp.prop);
           StructRNA *type;
 
-          if (!pprop->type && !pprop->get) {
-            pprop->type = reinterpret_cast<StructRNA *>(
+          if (!pprop->pointer_type && !pprop->get) {
+            pprop->pointer_type = reinterpret_cast<StructRNA *>(
                 const_cast<char *>(rna_find_type(dp.dnatype)));
           }
 
           /* Only automatically define `PROP_ID_REFCOUNT` if it was not already explicitly set or
            * cleared by calls to `RNA_def_property_flag` or `RNA_def_property_clear_flag`. */
-          if ((pprop->flag_internal & PROP_INTERN_PTR_ID_REFCOUNT_FORCED) == 0 && pprop->type) {
-            type = rna_find_struct(reinterpret_cast<const char *>(pprop->type));
+          if ((pprop->flag_internal & PROP_INTERN_PTR_ID_REFCOUNT_FORCED) == 0 &&
+              pprop->pointer_type)
+          {
+            type = rna_find_struct(reinterpret_cast<const char *>(pprop->pointer_type));
             if (type && (type->flag & STRUCT_ID_REFCOUNT)) {
               pprop->flag |= PROP_ID_REFCOUNT;
             }
@@ -3506,7 +3460,7 @@ static void rna_generate_property(FILE *f, StructRNA *srna, const char *nest, Pr
 
       /* XXX This systematically enforces that flag on ID pointers...
        * we'll probably have to revisit. :/ */
-      StructRNA *type = rna_find_struct(reinterpret_cast<const char *>(pprop->type));
+      StructRNA *type = rna_find_struct(reinterpret_cast<const char *>(pprop->pointer_type));
       if (type && (type->flag & STRUCT_ID) &&
           !(prop->flag_internal & PROP_INTERN_PTR_OWNERSHIP_FORCED))
       {
@@ -3788,8 +3742,8 @@ static void rna_generate_property(FILE *f, StructRNA *srna, const char *nest, Pr
               rna_function_string(pprop->set),
               rna_function_string(pprop->type_fn),
               rna_function_string(pprop->poll));
-      if (pprop->type) {
-        fprintf(f, "RNA_%s\n", reinterpret_cast<const char *>(pprop->type));
+      if (pprop->pointer_type) {
+        fprintf(f, "RNA_%s\n", reinterpret_cast<const char *>(pprop->pointer_type));
       }
       else {
         fprintf(f, "nullptr\n");

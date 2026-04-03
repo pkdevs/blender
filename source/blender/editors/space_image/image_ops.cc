@@ -140,6 +140,11 @@ static void sima_zoom_set(
     sima->xof += ((location[0] - 0.5f) * w - sima->xof) * (sima->zoom - oldzoom) / sima->zoom;
     sima->yof += ((location[1] - 0.5f) * h - sima->yof) * (sima->zoom - oldzoom) / sima->zoom;
   }
+
+  Image *ima = ED_space_image(sima);
+  if (ima) {
+    ima->runtime->view_zoom = sima->zoom;
+  }
 }
 
 static void sima_zoom_set_factor(SpaceImage *sima,
@@ -243,8 +248,9 @@ static bool image_from_context_has_data_poll(bContext *C)
   }
 
   void *lock;
-  ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock);
-  const bool has_buffer = (ibuf && (ibuf->byte_buffer.data || ibuf->float_buffer.data));
+  ImBuf *ibuf = BKE_image_acquire_ibuf_gpu(ima, iuser, &lock);
+  const bool has_buffer = (ibuf && (ibuf->byte_buffer.data || ibuf->float_buffer.data ||
+                                    ibuf->gpu.texture));
   BKE_image_release_ibuf(ima, ibuf, lock);
   return has_buffer;
 }
@@ -428,6 +434,12 @@ static wmOperatorStatus image_view_pan_exec(bContext *C, wmOperator *op)
 
   ED_region_tag_redraw(CTX_wm_region(C));
 
+  Image *ima = ED_space_image(sima);
+  if (ima) {
+    ima->runtime->view_offset[0] = sima->xof;
+    ima->runtime->view_offset[1] = sima->yof;
+  }
+
   return OPERATOR_FINISHED;
 }
 
@@ -523,6 +535,7 @@ struct ViewZoomData {
   float zoom;
   int launch_event;
   float location[2];
+  bool snap;
 
   /* needed for continuous zoom */
   wmTimer *timer;
@@ -555,6 +568,7 @@ static void image_view_zoom_init(bContext *C, wmOperator *op, const wmEvent *eve
   vpd->origx = event->xy[0];
   vpd->origy = event->xy[1];
   vpd->zoom = sima->zoom;
+  vpd->snap = false;
   vpd->launch_event = WM_userdef_event_type_from_keymap_type(event->type);
 
   ui::view2d_region_to_view(
@@ -720,10 +734,6 @@ static wmOperatorStatus image_view_zoom_modal(bContext *C, wmOperator *op, const
   short event_code = VIEW_PASS;
   wmOperatorStatus ret = OPERATOR_RUNNING_MODAL;
 
-  WorkspaceStatus status(C);
-  status.item_bool(IFACE_("Snap"), event->modifier & KM_CTRL, ICON_EVENT_CTRL);
-  status.item_bool(IFACE_("Precision"), event->modifier & KM_SHIFT, ICON_EVENT_SHIFT);
-
   /* Execute the events. */
   if (event->type == MOUSEMOVE) {
     event_code = VIEW_APPLY;
@@ -739,6 +749,11 @@ static wmOperatorStatus image_view_zoom_modal(bContext *C, wmOperator *op, const
       event_code = VIEW_CONFIRM;
     }
   }
+  else if (ELEM(event->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY)) {
+    /* Snapping should be off when the operator starts, regardless
+     * of ctrl key state. Only change with subsequent presses. */
+    vpd->snap = (event->val == KM_PRESS);
+  }
 
   switch (event_code) {
     case VIEW_APPLY: {
@@ -750,7 +765,7 @@ static wmOperatorStatus image_view_zoom_modal(bContext *C, wmOperator *op, const
                        U.viewzoom,
                        (U.uiflag & USER_ZOOM_INVERT) != 0,
                        (use_cursor_init && (U.uiflag & USER_ZOOM_TO_MOUSEPOS)),
-                       event->modifier & KM_CTRL,
+                       vpd->snap,
                        event->modifier & KM_SHIFT);
       break;
     }
@@ -759,6 +774,10 @@ static wmOperatorStatus image_view_zoom_modal(bContext *C, wmOperator *op, const
       break;
     }
   }
+
+  WorkspaceStatus status(C);
+  status.item_bool(IFACE_("Snap"), vpd->snap, ICON_EVENT_CTRL);
+  status.item_bool(IFACE_("Precision"), event->modifier & KM_SHIFT, ICON_EVENT_SHIFT);
 
   if ((ret & OPERATOR_RUNNING_MODAL) == 0) {
     image_view_zoom_exit(C, op, false);
@@ -942,7 +961,7 @@ void IMAGE_OT_view_cursor_center(wmOperatorType *ot)
 
   /* identifiers */
   ot->name = "Cursor To Center View";
-  ot->description = "Set 2D Cursor To Center View location";
+  ot->description = "Set 2D cursor to center view location";
   ot->idname = "IMAGE_OT_view_cursor_center";
 
   /* API callbacks. */
@@ -998,6 +1017,8 @@ static wmOperatorStatus image_view_selected_exec(bContext *C, wmOperator * /*op*
   ViewLayer *view_layer;
   Object *obedit;
 
+  const Main *bmain = CTX_data_main(C);
+
   /* retrieve state */
   sima = CTX_wm_space_image(C);
   region = CTX_wm_region(C);
@@ -1009,7 +1030,7 @@ static wmOperatorStatus image_view_selected_exec(bContext *C, wmOperator * /*op*
   float min[2], max[2];
   if (ED_space_image_show_uvedit(sima, obedit)) {
     Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-        scene, view_layer, nullptr);
+        *bmain, scene, view_layer, nullptr);
     bool success = ED_uvedit_minmax_multi(scene, objects, min, max);
     if (!success) {
       return OPERATOR_CANCELLED;
@@ -1798,7 +1819,7 @@ void IMAGE_OT_match_movie_length(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Match Movie Length";
-  ot->description = "Set image's user's length to the one of this video";
+  ot->description = "Set the image's frame range to match the video's duration";
   ot->idname = "IMAGE_OT_match_movie_length";
 
   /* API callbacks. */
@@ -2105,7 +2126,12 @@ static void image_save_as_draw(bContext *C, wmOperator *op)
     PointerRNA linear_settings_ptr = RNA_pointer_get(&imf_ptr, "linear_colorspace_settings");
     ui::Layout &col = layout.column(true);
     col.separator();
-    col.prop(&linear_settings_ptr, "name", UI_ITEM_NONE, IFACE_("Color Space"), ICON_NONE);
+    col.prop_with_menu(&linear_settings_ptr,
+                       "name",
+                       UI_ITEM_NONE,
+                       IFACE_("Color Space"),
+                       ICON_NONE,
+                       "UI_MT_color_space_select");
   }
 
   /* Multiview settings. */
@@ -2352,7 +2378,7 @@ static wmOperatorStatus image_save_sequence_exec(bContext *C, wmOperator *op)
   }
 
   /* get a filename for menu */
-  BLI_path_split_dir_part(first_ibuf->filepath, di, sizeof(di));
+  BLI_path_split_dir_part(first_ibuf->filepath.c_str(), di, sizeof(di));
   BKE_reportf(op->reports, RPT_INFO, "%d image(s) will be saved in %s", tot, di);
 
   iter = IMB_moviecacheIter_new(image->runtime->cache);
@@ -2360,12 +2386,12 @@ static wmOperatorStatus image_save_sequence_exec(bContext *C, wmOperator *op)
     ibuf = IMB_moviecacheIter_getImBuf(iter);
 
     if (ibuf != nullptr && ibuf->userflags & IB_BITMAPDIRTY) {
-      if (0 == IMB_save_image(ibuf, ibuf->filepath, IB_byte_data)) {
+      if (0 == IMB_save_image(ibuf, ibuf->filepath.c_str(), IB_byte_data)) {
         BKE_reportf(op->reports, RPT_ERROR, "Could not write image: %s", strerror(errno));
         break;
       }
 
-      BKE_reportf(op->reports, RPT_INFO, "Saved %s", ibuf->filepath);
+      BKE_reportf(op->reports, RPT_INFO, "Saved %s", ibuf->filepath.c_str());
       ibuf->userflags &= ~IB_BITMAPDIRTY;
     }
 
@@ -3609,7 +3635,7 @@ bool ED_space_image_get_position(SpaceImage *sima,
                                  float r_fpos[2])
 {
   void *lock;
-  ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock, 0);
+  ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock, 0, false);
 
   if (ibuf == nullptr) {
     ED_space_image_release_buffer(sima, ibuf, lock);
@@ -3636,7 +3662,7 @@ bool ED_space_image_color_sample(
   int tile = BKE_image_get_tile_from_pos(sima->image, uv, uv, nullptr);
 
   void *lock;
-  ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock, tile);
+  ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock, tile, true);
   bool ret = false;
 
   if (ibuf == nullptr) {
@@ -3722,7 +3748,7 @@ static wmOperatorStatus image_sample_line_exec(bContext *C, wmOperator *op)
   sub_v2_v2(uv2, ofs);
 
   void *lock;
-  ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock, tile);
+  ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock, tile, true);
   Histogram *hist = &sima->sample_line_hist;
 
   if (ibuf == nullptr) {

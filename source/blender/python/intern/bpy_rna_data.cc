@@ -19,6 +19,7 @@
 #include "../generic/py_capi_utils.hh"
 #include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
+#include "BLI_path_utils.hh"
 #include "BLI_string.h"
 
 #include "BKE_global.hh"
@@ -35,7 +36,7 @@ namespace blender {
 struct BPy_DataContext {
   PyObject_HEAD /* Required Python macro. */
   BPy_StructRNA *data_rna;
-  char filepath[1024];
+  char filepath[FILE_MAX];
 };
 
 static PyObject *bpy_rna_data_temp_data(PyObject *self, PyObject *args, PyObject *kw);
@@ -139,11 +140,11 @@ static PyTypeObject bpy_rna_data_context_Type = {
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_rna_data_context_load_doc,
-    ".. method:: temp_data(*, filepath=None)\n"
+    ".. staticmethod:: temp_data(*, filepath=None)\n"
     "\n"
     "   A context manager that temporarily creates blender file data.\n"
     "\n"
-    "   :arg filepath: The file path for the newly temporary data. "
+    "   :param filepath: The file path for the newly temporary data. "
     "When None, the path of the currently open file is used.\n"
     "   :type filepath: str | bytes | None\n"
     "\n"

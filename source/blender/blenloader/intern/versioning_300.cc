@@ -96,7 +96,6 @@
 #include "readfile.hh"
 
 #include "SEQ_channels.hh"
-#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_retiming.hh"
 #include "SEQ_sequencer.hh"
@@ -696,6 +695,9 @@ static void version_geometry_nodes_replace_transfer_attribute_node(bNodeTree *nt
     if (node.type_legacy != GEO_NODE_TRANSFER_ATTRIBUTE_DEPRECATED) {
       continue;
     }
+    if (!version_node_ensure_storage_or_invalidate(node)) {
+      continue;
+    }
     bNodeSocket *old_geometry_socket = bke::node_find_socket(node, SOCK_IN, "Source");
     const NodeGeometryTransferAttribute *storage =
         static_cast<const NodeGeometryTransferAttribute *>(node.storage);
@@ -932,6 +934,9 @@ static void version_geometry_nodes_extrude_smooth_propagation(bNodeTree &ntree)
     if (node.idname != StringRef("GeometryNodeExtrudeMesh")) {
       continue;
     }
+    if (!version_node_ensure_storage_or_invalidate(node)) {
+      continue;
+    }
     if (static_cast<const NodeGeometryExtrudeMesh *>(node.storage)->mode !=
         GEO_NODE_EXTRUDE_MESH_EDGES)
     {
@@ -955,6 +960,9 @@ static void version_geometry_nodes_extrude_smooth_propagation(bNodeTree &ntree)
 
     const bool versioning_already_done = [&]() {
       if (geometry_in_link->fromnode->idname != StringRef("GeometryNodeCaptureAttribute")) {
+        return false;
+      }
+      if (!version_node_ensure_storage_or_invalidate(node)) {
         return false;
       }
       bNode *capture_node = geometry_in_link->fromnode;
@@ -1167,15 +1175,17 @@ void do_versions_after_linking_300(FileData * /*fd*/, Main *bmain)
           if (STREQ(link.tosock->identifier, "Switch")) {
             bNode *to_node = link.tonode;
 
-            uint8_t mode = (static_cast<NodeSwitch *>(to_node->storage))->input_type;
-            if (ELEM(mode,
-                     SOCK_GEOMETRY,
-                     SOCK_OBJECT,
-                     SOCK_COLLECTION,
-                     SOCK_TEXTURE,
-                     SOCK_MATERIAL))
-            {
-              link.tosock = link.tosock->next;
+            if (version_node_ensure_storage_or_invalidate(*to_node)) {
+              uint8_t mode = (static_cast<NodeSwitch *>(to_node->storage))->input_type;
+              if (ELEM(mode,
+                       SOCK_GEOMETRY,
+                       SOCK_OBJECT,
+                       SOCK_COLLECTION,
+                       SOCK_TEXTURE,
+                       SOCK_MATERIAL))
+              {
+                link.tosock = link.tosock->next;
+              }
             }
           }
         }
@@ -1211,7 +1221,7 @@ void do_versions_after_linking_300(FileData * /*fd*/, Main *bmain)
           continue;
         }
         NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(&md);
-        if (nmd->node_group == nullptr) {
+        if (nmd->node_group == nullptr || ID_MISSING(nmd->node_group)) {
           continue;
         }
 
@@ -1696,7 +1706,7 @@ static void version_geometry_nodes_set_position_node_offset(bNodeTree *ntree)
       return;
     }
     /* Change identifier of old socket, so that there is no name collision. */
-    STRNCPY_UTF8(old_offset_socket->identifier, "Offset_old");
+    version_node_socket_identifier_set(*old_offset_socket, "Offset_old");
     bke::node_add_static_socket(
         *ntree, node, SOCK_IN, SOCK_VECTOR, PROP_TRANSLATION, "Offset", "Offset");
   }
@@ -1754,9 +1764,7 @@ static bool version_merge_still_offsets(Strip *strip, void * /*user_data*/)
 
 static bool version_set_seq_single_frame_content(Strip *strip, void * /*user_data*/)
 {
-  if ((strip->len == 1) && (strip->type == STRIP_TYPE_IMAGE ||
-                            (strip->is_effect() && seq::effect_get_num_inputs(strip->type) == 0)))
-  {
+  if ((strip->len == 1) && (strip->type == STRIP_TYPE_IMAGE || !strip->is_effect_with_inputs())) {
     strip->flag |= SEQ_SINGLE_FRAME_CONTENT;
   }
   return true;
@@ -3623,18 +3631,20 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
       if (ntree->type == NTREE_GEOMETRY) {
         for (bNode &node : ntree->nodes) {
           if (node.type_legacy == GEO_NODE_CURVE_SPLINE_TYPE) {
-            NodeGeometryCurveSplineType *storage = static_cast<NodeGeometryCurveSplineType *>(
-                node.storage);
-            switch (storage->spline_type) {
-              case 0: /* GEO_NODE_SPLINE_TYPE_BEZIER */
-                storage->spline_type = CURVE_TYPE_BEZIER;
-                break;
-              case 1: /* GEO_NODE_SPLINE_TYPE_NURBS */
-                storage->spline_type = CURVE_TYPE_NURBS;
-                break;
-              case 2: /* GEO_NODE_SPLINE_TYPE_POLY */
-                storage->spline_type = CURVE_TYPE_POLY;
-                break;
+            if (version_node_ensure_storage_or_invalidate(node)) {
+              NodeGeometryCurveSplineType *storage = static_cast<NodeGeometryCurveSplineType *>(
+                  node.storage);
+              switch (storage->spline_type) {
+                case 0: /* GEO_NODE_SPLINE_TYPE_BEZIER */
+                  storage->spline_type = CURVE_TYPE_BEZIER;
+                  break;
+                case 1: /* GEO_NODE_SPLINE_TYPE_NURBS */
+                  storage->spline_type = CURVE_TYPE_NURBS;
+                  break;
+                case 2: /* GEO_NODE_SPLINE_TYPE_POLY */
+                  storage->spline_type = CURVE_TYPE_POLY;
+                  break;
+              }
             }
           }
         }
@@ -3887,12 +3897,14 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
         if (node.type_legacy != GEO_NODE_SAMPLE_CURVE) {
           continue;
         }
-        static_cast<NodeGeometryCurveSample *>(node.storage)->use_all_curves = true;
-        static_cast<NodeGeometryCurveSample *>(node.storage)->data_type = CD_PROP_FLOAT;
-        bNodeSocket *curve_socket = bke::node_find_socket(node, SOCK_IN, "Curve");
-        BLI_assert(curve_socket != nullptr);
-        STRNCPY_UTF8(curve_socket->name, "Curves");
-        STRNCPY_UTF8(curve_socket->identifier, "Curves");
+        if (version_node_ensure_storage_or_invalidate(node)) {
+          static_cast<NodeGeometryCurveSample *>(node.storage)->use_all_curves = true;
+          static_cast<NodeGeometryCurveSample *>(node.storage)->data_type = CD_PROP_FLOAT;
+          bNodeSocket *curve_socket = bke::node_find_socket(node, SOCK_IN, "Curve");
+          BLI_assert(curve_socket != nullptr);
+          STRNCPY_UTF8(curve_socket->name, "Curves");
+          version_node_socket_identifier_set(*curve_socket, "Curves");
+        }
       }
     }
   }

@@ -428,7 +428,7 @@ static void fileselect_refresh_asset_params(FileAssetSelectParams *asset_params)
     BLI_assert(library->custom_library_index >= 0);
 
     user_library = BKE_preferences_asset_library_find_index(&U, library->custom_library_index);
-    if (!user_library || (user_library->flag & ASSET_LIBRARY_DISABLED)) {
+    if (!user_library || !BKE_preferences_asset_library_is_valid(&U, user_library, false)) {
       library->type = ASSET_LIBRARY_ALL;
     }
   }
@@ -450,7 +450,9 @@ static void fileselect_refresh_asset_params(FileAssetSelectParams *asset_params)
       BLI_assert(user_library);
       STRNCPY(base_params->dir, user_library->dirpath);
       BLI_path_slash_native(base_params->dir);
-      base_params->type = FILE_ASSET_LIBRARY;
+      base_params->type = (user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) ?
+                              FILE_ASSET_LIBRARY_REMOTE :
+                              FILE_ASSET_LIBRARY;
       break;
   }
 }
@@ -672,6 +674,11 @@ void ED_fileselect_set_params_from_userdef(SpaceFile *sfile)
 
   FileSelectParams *params = fileselect_ensure_updated_file_params(sfile);
   if (!op) {
+    return;
+  }
+
+  if (sfile_udata->thumbnail_size == 0) {
+    /* Saved params are invalid so continue with defaults. */
     return;
   }
 
@@ -1423,8 +1430,7 @@ void file_params_renamefile_activate(SpaceFile *sfile, FileSelectParams *params)
       file_select_deselect_all(sfile, FILE_SEL_SELECTED);
       idx = file_params_find_renamed(params, sfile->files);
       file = filelist_file(sfile->files, idx);
-      filelist_entry_select_set(
-          sfile->files, file, FILE_SEL_ADD, FILE_SEL_SELECTED | FILE_SEL_HIGHLIGHTED, CHECK_ALL);
+      filelist_entry_select_set(sfile->files, file, FILE_SEL_ADD, FILE_SEL_SELECTED, CHECK_ALL);
       params->active_file = idx;
       file_params_renamefile_clear(params);
       params->rename_flag = FILE_PARAMS_RENAME_POSTSCROLL_ACTIVE;

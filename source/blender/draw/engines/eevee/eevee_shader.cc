@@ -443,7 +443,7 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
     case LIGHT_CULLING_DEBUG:
       return "eevee_light_culling_debug";
     case LIGHT_CULLING_SELECT:
-      return "eevee_light_culling_select";
+      return "eevee_light_culling_cull";
     case LIGHT_CULLING_SORT:
       return "eevee_light_culling_sort";
     case LIGHT_CULLING_TILE:
@@ -518,6 +518,8 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_shadow_tilemap_init";
     case SHADOW_TILEMAP_TAG_UPDATE:
       return "eevee_shadow_tag_update";
+    case SHADOW_TILEMAP_TAG_UPDATE_PROPAGATE:
+      return "eevee_shadow_tag_update_propagate";
     case SHADOW_TILEMAP_TAG_USAGE_OPAQUE:
       return "eevee_shadow_tag_usage_opaque";
     case SHADOW_TILEMAP_TAG_USAGE_SURFELS:
@@ -592,9 +594,16 @@ class SlotAllocator {
   bool sampler_overflow_ = false;
   bool vertex_id_overflow_ = false;
 
+  Set<std::string> visited_infos;
+
  public:
+  /** WATCH: Recursive. */
   void reserve_slots(const gpu::shader::ShaderCreateInfo &info)
   {
+    if (!visited_infos.add_overwrite(info.name_)) {
+      /* Avoid infinite recursion or visiting an info more than once. */
+      return;
+    }
     using namespace blender::gpu::shader;
     for (const ShaderCreateInfo::VertIn &vert_in : info.vertex_inputs_) {
       available_vertex_id_ &= ~(uint32_t(1) << vert_in.index);
@@ -613,6 +622,13 @@ class SlotAllocator {
       if (res.bind_type == ShaderCreateInfo::Resource::SAMPLER) {
         available_samplers_ &= ~(uint64_t(1) << res.slot);
       }
+    }
+
+    for (const auto &[info_name, _] : info.additional_infos_) {
+      const ShaderCreateInfo *info = reinterpret_cast<const ShaderCreateInfo *>(
+          GPU_shader_create_info_get(info_name.c_str()));
+      /** WATCH: Recursive. */
+      reserve_slots(*info);
     }
   }
 
@@ -760,26 +776,17 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
       break;
   }
 
-  SlotAllocator available_slots;
-
   if (!pipeline_info_name.is_empty()) {
     info.additional_info(pipeline_info_name);
-    const ShaderCreateInfo *info = reinterpret_cast<const ShaderCreateInfo *>(
-        GPU_shader_create_info_get(pipeline_info_name.c_str()));
-    available_slots.reserve_slots(*info);
   }
   if (!additional_info_name.is_empty()) {
     info.additional_info(additional_info_name);
-    const ShaderCreateInfo *info = reinterpret_cast<const ShaderCreateInfo *>(
-        GPU_shader_create_info_get(additional_info_name.c_str()));
-    available_slots.reserve_slots(*info);
   }
   if (!geometry_info_name.is_empty()) {
     info.additional_info(geometry_info_name);
-    const ShaderCreateInfo *info = reinterpret_cast<const ShaderCreateInfo *>(
-        GPU_shader_create_info_get(geometry_info_name.c_str()));
-    available_slots.reserve_slots(*info);
   }
+  SlotAllocator available_slots;
+  available_slots.reserve_slots(info);
   return available_slots;
 }
 
@@ -842,23 +849,10 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     }
   }
 
-  SlotAllocator slots = add_pipeline_create_info(
-      info, pipeline_type, geometry_type, use_shader_to_rgba);
-
-  for (auto &resource : info.batch_resources_) {
-    if (resource.bind_type == ShaderCreateInfo::Resource::BindType::SAMPLER) {
-      resource.slot = slots.get_next_sampler();
-    }
-  }
-
-  /* Only deferred material allow use of cryptomatte and render passes. */
-  if (pipeline_type == MAT_PIPE_DEFERRED) {
-    info.additional_info("eevee_render_pass_out");
-    info.additional_info("eevee_cryptomatte_out");
-  }
-
-  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA)) {
-    info.define("MAT_SHADER_TO_RGBA");
+  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_RAYCAST) &&
+      ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD))
+  {
+    info.additional_info("eevee_raycast");
   }
 
   if (ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD) &&
@@ -868,6 +862,24 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     info.additional_info("eevee_previous_layer_radiance");
   }
 
+  /* Only deferred material allow use of cryptomatte and render passes. */
+  if (pipeline_type == MAT_PIPE_DEFERRED) {
+    info.additional_info("eevee_render_pass_out");
+    info.additional_info("eevee_cryptomatte_out");
+  }
+
+  SlotAllocator slots = add_pipeline_create_info(
+      info, pipeline_type, geometry_type, use_shader_to_rgba);
+
+  for (auto &resource : info.batch_resources_) {
+    if (resource.bind_type == ShaderCreateInfo::Resource::BindType::SAMPLER) {
+      resource.slot = slots.get_next_sampler();
+    }
+  }
+
+  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_SHADER_TO_RGBA)) {
+    info.define("MAT_SHADER_TO_RGBA");
+  }
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_DIFFUSE)) {
     info.define("MAT_DIFFUSE");
   }
@@ -1215,7 +1227,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
     frag_gen << "}\n\n";
 
     /* TODO(fclem): Find a way to pass material parameters inside the material UBO. */
-    info.define("thickness_mode", thickness_type == MAT_THICKNESS_SLAB ? "-1.0" : "1.0");
+    info.define("thickness_mode", thickness_type == MAT_THICKNESS_SLAB ? "false" : "true");
 
     frag_gen << "float nodetree_thickness()\n";
     frag_gen << "{\n";
@@ -1330,11 +1342,12 @@ static GPUPass *pass_replacement_cb(void *void_thunk, GPUMaterial *mat)
   bool has_transparency = GPU_material_flag_get(mat, GPU_MATFLAG_TRANSPARENT);
   bool has_shadow_transparency = has_transparency && transparent_shadows;
   bool has_raytraced_transmission = blender_mat && (blender_mat->blend_flag & MA_BL_SS_REFRACTION);
+  bool has_raycast = GPU_material_flag_get(mat, GPU_MATFLAG_RAYCAST);
 
   bool can_use_default = (is_shadow_pass &&
                           (!has_vertex_displacement && !has_shadow_transparency)) ||
                          (is_prepass && (!has_vertex_displacement && !has_transparency &&
-                                         !has_raytraced_transmission));
+                                         !has_raytraced_transmission && !has_raycast));
   if (can_use_default) {
     GPUMaterial *mat = thunk->shader_module->material_shader_get(thunk->default_mat,
                                                                  thunk->default_mat->nodetree,

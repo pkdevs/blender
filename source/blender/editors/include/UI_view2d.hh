@@ -238,10 +238,14 @@ void view2d_draw_lines_y(const View2D *v2d, bool show_fractions, int base);
  * \param base Defines in what distance the lines are drawn. Depending on the zoom level of the
  * `v2d` the distance is always a full fraction or multiple of the given base.
  */
-void view2d_draw_lines_x(
-    const View2D *v2d, bool display_seconds, bool show_fractions, bool draw_minor_lines, int base);
+void view2d_draw_lines_x(const View2D *v2d,
+                         const Scene *scene,
+                         bool display_seconds,
+                         bool show_fractions,
+                         bool draw_minor_lines,
+                         int base);
 /**
- * Wrapper around `view2d_draw_lines_x` that calculates the `base` from the `scene` framerate.
+ * Wrapper around `view2d_draw_lines_x` that calculates the `base` from the `scene` frame-rate.
  */
 void view2d_draw_lines_x_frames(const View2D *v2d,
                                 const Scene *scene,
@@ -249,7 +253,7 @@ void view2d_draw_lines_x_frames(const View2D *v2d,
                                 bool show_fractions,
                                 bool draw_minor_lines);
 
-float view2d_grid_resolution_x__frames_or_seconds(const View2D *v2d, const Scene *scene);
+float view2d_grid_resolution_x(const View2D *v2d, const Scene *scene, bool display_seconds);
 float view2d_grid_resolution_y__values(const View2D *v2d, int base);
 
 /**
@@ -260,7 +264,7 @@ void view2d_draw_scale_y(
 /**
  * Draw a text scale in either frames or seconds.
  *
- * \param display_seconds If true, the scale is interpreted as seconds and will draw a timecode.
+ * \param display_seconds If true, the scale is interpreted as seconds and will draw a time-code.
  * \param show_fractions If true, fractional scales will be drawn when zoomed in far enough.
  * Otherwise the minimum step distance is clamped to 1, meaning only whole number indicators will
  * be drawn even when zoomed in. If `display_seconds` is true, this setting will always be false.
@@ -299,7 +303,7 @@ void view2d_scrollers_draw(View2D *v2d, const rcti *mask_custom);
  *
  * \param columnwidth, rowheight: size of each 'cell'
  * \param startx, starty: coordinates (in 'tot' rect space) that the list starts from.
- * This should be (0,0) for most views. However, for those where the starting row was offsetted
+ * This should be (0,0) for most views. However, for those where the starting row was offset
  * (like for Animation Editor channel lists, to make the first entry more visible), these will be
  * the min-coordinates of the first item.
  * \param viewx, viewy: 2D-coordinates (in 2D-view / 'tot' rect space) to get the cell for
@@ -414,6 +418,7 @@ void view2d_scale_get_inverse(const View2D *v2d, float *r_x, float *r_y);
  */
 void view2d_center_get(const View2D *v2d, float *r_x, float *r_y);
 void view2d_center_set(View2D *v2d, float x, float y);
+void view2d_size_x_set(View2D *v2d, float size_x);
 
 /**
  * Simple pan function

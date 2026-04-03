@@ -23,9 +23,21 @@
 #include "kernel/bvh/util.h"
 #include "kernel/globals.h"
 #include "kernel/integrator/state.h"
+#include "kernel/integrator/state_util.h"
 #include "kernel/types.h"
 
 CCL_NAMESPACE_BEGIN
+
+enum IntersectionTest : uint {
+  ISECT_TEST_NONE = 0,
+
+  ISECT_TEST_VISIBILITY_FLAG = (1 << 0),
+  ISECT_TEST_SHADOW_LINKING = (1 << 1),
+  ISECT_TEST_SELF_SHADOW = (1 << 2),
+
+  ISECT_TEST_ALL = (ISECT_TEST_VISIBILITY_FLAG | ISECT_TEST_SHADOW_LINKING |
+                    ISECT_TEST_SELF_SHADOW),
+};
 
 /* Special tricks to subclass payload.
  * The issue here is Metal does not support subclassing, but HIP-RT had performance issues with
@@ -115,7 +127,7 @@ BVH_SHADOW_ALL_PAYLOAD_SUBCLASS(BVHShadowAllPayload, BVHPayload)
  *   function will consider the shadow ray to be blocked.
  * - If a transparent surface is hit, the intersection is recorded into the shadow_isect array in
  *   the state. The closest N intersections are recorded. */
-template<bool perform_intersection_tests, uint enabled_primitive_types = PRIMITIVE_ALL>
+template<uint perform_intersection_tests, uint enabled_primitive_types = PRIMITIVE_ALL>
 ccl_device_forceinline bool bvh_shadow_all_anyhit_filter(
     KernelGlobals kg,
     IntegratorShadowState state,
@@ -125,19 +137,23 @@ ccl_device_forceinline bool bvh_shadow_all_anyhit_filter(
     const Intersection isect)
 
 {
-  if constexpr (perform_intersection_tests) {
 #if defined(__VISIBILITY_FLAG__)
+  if constexpr ((perform_intersection_tests & ISECT_TEST_VISIBILITY_FLAG) != 0) {
     if ((kernel_data_fetch(objects, isect.object).visibility & ray_visibility) == 0) {
       return true;
     }
+  }
 #endif
 
 #if defined(__SHADOW_LINKING__)
+  if constexpr ((perform_intersection_tests & ISECT_TEST_SHADOW_LINKING) != 0) {
     if (intersection_skip_shadow_link(kg, ray_self, isect.object)) {
       return true;
     }
+  }
 #endif
 
+  if constexpr ((perform_intersection_tests & ISECT_TEST_SELF_SHADOW) != 0) {
     if (intersection_skip_self_shadow(ray_self, isect.object, isect.prim)) {
       return true;
     }
@@ -174,7 +190,7 @@ ccl_device_forceinline bool bvh_shadow_all_anyhit_filter(
    * NOTE: Currently, spatial splits are not used with OptiX, so there is no need to check whether
    * the intersection has been already recorded. */
 #  if !defined(__KERNEL_OPTIX__)
-  if constexpr (enabled_primitive_types & (PRIMITIVE_ALL & ~PRIMITIVE_CURVE)) {
+  if constexpr ((enabled_primitive_types & (PRIMITIVE_ALL & ~PRIMITIVE_CURVE)) != 0) {
     if ((isect.type & PRIMITIVE_CURVE) == 0) {
       if (intersection_skip_shadow_already_recoded(
               state, isect.object, isect.prim, num_recorded_hits))
@@ -195,7 +211,7 @@ ccl_device_forceinline bool bvh_shadow_all_anyhit_filter(
   }
 
 #  if defined(__HAIR__)
-  if constexpr (enabled_primitive_types & PRIMITIVE_CURVE) {
+  if constexpr ((enabled_primitive_types & PRIMITIVE_CURVE) != 0) {
     /* Always use baked shadow transparency for curves. */
     if (isect.type & PRIMITIVE_CURVE) {
       payload.throughput *= intersection_curve_shadow_transparency(
@@ -217,7 +233,7 @@ ccl_device_forceinline bool bvh_shadow_all_anyhit_filter(
 
   /* If the filter function only handles curves, it is known for the fact that nothing is to be
    * recorded: curves accumulated baked transparency. Skip this code for a curve-only case. */
-  if constexpr (enabled_primitive_types & (PRIMITIVE_ALL & ~PRIMITIVE_CURVE)) {
+  if constexpr ((enabled_primitive_types & (PRIMITIVE_ALL & ~PRIMITIVE_CURVE)) != 0) {
     /* Always increase the number of recorded hits, even beyond the maximum, so that we can detect
      * this and trace another ray if needed. */
     num_recorded_hits += 1;

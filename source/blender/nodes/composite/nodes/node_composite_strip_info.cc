@@ -21,11 +21,11 @@ namespace blender::nodes::node_composite_strip_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Int>("Start Frame");
-  b.add_output<decl::Int>("End Frame");
-  b.add_output<decl::Vector>("Location").dimensions(2);
-  b.add_output<decl::Float>("Rotation");
-  b.add_output<decl::Vector>("Scale").dimensions(2);
+  b.add_output<decl::Int>("Start Frame"_ustr);
+  b.add_output<decl::Int>("End Frame"_ustr);
+  b.add_output<decl::Vector>("Location"_ustr).dimensions(2);
+  b.add_output<decl::Float>("Rotation"_ustr);
+  b.add_output<decl::Vector>("Scale"_ustr).dimensions(2);
 }
 
 using namespace blender::compositor;
@@ -38,7 +38,7 @@ class StripInfoOperation : public NodeOperation {
   {
     const Strip *strip = this->context().get_strip();
     if (strip == nullptr) {
-      this->execute_invalid();
+      this->allocate_default_remaining_outputs();
       return;
     }
 
@@ -72,34 +72,6 @@ class StripInfoOperation : public NodeOperation {
       scale_result.allocate_single_value();
       scale_result.set_single_value(
           float2(strip->data->transform->scale_x, strip->data->transform->scale_y));
-    }
-  }
-
-  void execute_invalid()
-  {
-    Result &start_frame_result = this->get_result("Start Frame");
-    if (start_frame_result.should_compute()) {
-      start_frame_result.allocate_invalid();
-    }
-
-    Result &end_frame_result = this->get_result("End Frame");
-    if (end_frame_result.should_compute()) {
-      end_frame_result.allocate_invalid();
-    }
-
-    Result &location_result = this->get_result("Location");
-    if (location_result.should_compute()) {
-      location_result.allocate_invalid();
-    }
-
-    Result &rotation_result = this->get_result("Rotation");
-    if (rotation_result.should_compute()) {
-      rotation_result.allocate_invalid();
-    }
-
-    Result &scale_result = this->get_result("Scale");
-    if (scale_result.should_compute()) {
-      scale_result.allocate_invalid();
     }
   }
 };

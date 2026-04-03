@@ -1392,6 +1392,13 @@ static void region_azones_add(const bScreen *screen, ScrArea *area, ARegion *reg
     return;
   }
 
+  /* Quad View center resizing zone. */
+  if (region->alignment == RGN_ALIGN_QSPLIT &&
+      region->runtime->quadview_index == bke::ARegionQuadviewIndex::BottomLeft)
+  {
+    quadview_azone_init(area, region);
+  }
+
   region_azones_add_edge(area, region, RGN_ALIGN_ENUM_FROM_MASK(region->alignment), is_fullscreen);
 
   /* For a split region also continue the azone edge from the next region if this region is aligned
@@ -1420,6 +1427,19 @@ static int rct_fits(const rcti *rect, const eScreenAxis dir_axis, int size)
 
 /* *************************************************************** */
 
+/* Only for internal area management functions that act before #ARegionRuntime.visible is
+ * updated. */
+static bool region_is_hidden(const ARegion *region)
+{
+  if (region->flag & RGN_FLAG_HIDDEN) {
+    return true;
+  }
+  if (region->alignment & RGN_ALIGN_HIDE_WITH_PREV) {
+    return region->prev && (region->prev->flag & RGN_FLAG_HIDDEN);
+  }
+  return false;
+}
+
 /* region should be overlapping */
 /* function checks if some overlapping region was defined before - on same place */
 static void region_overlap_fix(ScrArea *area, ARegion *region)
@@ -1429,7 +1449,10 @@ static void region_overlap_fix(ScrArea *area, ARegion *region)
   int align1 = 0;
   const int align = RGN_ALIGN_ENUM_FROM_MASK(region->alignment);
   for (region_iter = region->prev; region_iter; region_iter = region_iter->prev) {
-    if (region_iter->flag & (RGN_FLAG_POLL_FAILED | RGN_FLAG_HIDDEN)) {
+    if (region_is_hidden(region_iter)) {
+      continue;
+    }
+    if (region_iter->flag & RGN_FLAG_POLL_FAILED) {
       continue;
     }
     if (!region_iter->overlap || (region_iter->alignment & RGN_SPLIT_PREV)) {
@@ -1477,7 +1500,10 @@ static void region_overlap_fix(ScrArea *area, ARegion *region)
   /* At this point, 'region' is in its final position and still open.
    * Make a final check it does not overlap any previous 'other side' region. */
   for (region_iter = region->prev; region_iter; region_iter = region_iter->prev) {
-    if (region_iter->flag & (RGN_FLAG_POLL_FAILED | RGN_FLAG_HIDDEN)) {
+    if (region_is_hidden(region_iter)) {
+      continue;
+    }
+    if (region_iter->flag & RGN_FLAG_POLL_FAILED) {
       continue;
     }
     if (!region_iter->overlap || (region_iter->alignment & RGN_SPLIT_PREV)) {
@@ -1571,6 +1597,7 @@ static void region_rect_recursive(
   }
 
   int alignment = RGN_ALIGN_ENUM_FROM_MASK(region->alignment);
+  const bool is_hidden = region_is_hidden(region);
 
   /* set here, assuming userpref switching forces to call this again */
   region->overlap = ED_region_is_overlap(area->spacetype, region->regiontype);
@@ -1625,7 +1652,7 @@ static void region_rect_recursive(
                 (region->sizey > 1 ? region->sizey + 0.5f : region->runtime->type->prefsizey);
   }
 
-  if (region->flag & (RGN_FLAG_POLL_FAILED | RGN_FLAG_HIDDEN)) {
+  if (is_hidden || (region->flag & RGN_FLAG_POLL_FAILED)) {
     /* hidden is user flag */
   }
   else if (alignment == RGN_ALIGN_FLOAT) {
@@ -1848,7 +1875,7 @@ static void region_rect_recursive(
   region->winx = BLI_rcti_size_x(&region->winrct) + 1;
   region->winy = BLI_rcti_size_y(&region->winrct) + 1;
 
-  if (region->winy <= U.border_width && !(region->flag & RGN_FLAG_HIDDEN)) {
+  if (region->winy <= U.border_width && !is_hidden) {
     /* Don't draw when just a couple pixels tall. #143617. */
     region->flag |= RGN_FLAG_TOO_SMALL;
   }
@@ -1868,7 +1895,7 @@ static void region_rect_recursive(
   }
 
   /* Set `region->winrct` for action-zones. */
-  if (region->flag & (RGN_FLAG_HIDDEN | RGN_FLAG_TOO_SMALL)) {
+  if (is_hidden || (region->flag & RGN_FLAG_TOO_SMALL)) {
     region->winrct = (region->overlap) ? *overlap_remainder : *remainder;
 
     switch (alignment) {
@@ -2205,6 +2232,7 @@ void ED_area_init(bContext *C, const wmWindow *win, ScrArea *area)
   wmWindowManager *wm = CTX_wm_manager(C);
   WorkSpace *workspace = WM_window_get_active_workspace(win);
   const bScreen *screen = BKE_workspace_active_screen_get(win->workspace_hook);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = WM_window_get_active_scene(win);
   ViewLayer *view_layer = WM_window_get_active_view_layer(win);
 
@@ -2259,18 +2287,12 @@ void ED_area_init(bContext *C, const wmWindow *win, ScrArea *area)
 
     /* Some AZones use View2D data which is only updated in region init, so call that first! */
     region_azones_add(screen, area, &region);
-
-    if (region.alignment == RGN_ALIGN_QSPLIT &&
-        region.runtime->quadview_index == bke::ARegionQuadviewIndex::BottomLeft)
-    {
-      quadview_azone_init(area, &region);
-    }
   }
 
   /* Avoid re-initializing tools while resizing areas & regions. */
   if ((G.moving & G_TRANSFORM_WM) == 0) {
     if ((1 << area->spacetype) & WM_TOOLSYSTEM_SPACE_MASK) {
-      if (WM_toolsystem_refresh_screen_area(workspace, scene, view_layer, area) ||
+      if (WM_toolsystem_refresh_screen_area(*bmain, workspace, scene, view_layer, area) ||
           /* When the tool is null it may not be initialized.
            * This happens when switching to a new area, see: #126990.
            *
@@ -2430,7 +2452,9 @@ void region_toggle_hidden(bContext *C, ARegion *region, const bool do_fade)
 
   region->flag ^= RGN_FLAG_HIDDEN;
 
-  if (do_fade && region->overlap && !(U.uiflag & USER_REDUCE_MOTION)) {
+  if (do_fade && region->overlap && !(U.uiflag & USER_REDUCE_MOTION) &&
+      !region->runtime->regiontimer)
+  {
     /* starts a timer, and in end calls the stuff below itself (region_sblend_invoke()) */
     ED_region_visibility_change_update_animated(C, area, region);
   }
@@ -3262,7 +3286,7 @@ static int panel_draw_width_from_max_width_get(const ARegion *region,
 {
   /* With a background, we want some extra padding. */
   return ui::panel_should_show_background(region, panel_type) ?
-             max_width - UI_PANEL_MARGIN_X * 2.0f :
+             max_width - round_fl_to_int(UI_PANEL_MARGIN_X * 2.0f) :
              max_width;
 }
 
@@ -3323,7 +3347,7 @@ void ED_region_panels_layout_ex(const bContext *C,
     margin_x = category_tabs_width;
   }
 
-  const int max_panel_width = BLI_rctf_size_x(&v2d->cur) - margin_x;
+  const int max_panel_width = round_fl_to_int(BLI_rctf_size_x(&v2d->cur)) - margin_x;
   /* Works out to 10 * UI_UNIT_X or 20 * UI_UNIT_X. */
   const int em = (region->runtime->type->prefsizex) ? 10 : 20;
 
