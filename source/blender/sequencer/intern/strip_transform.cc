@@ -700,18 +700,18 @@ static Array<float2> strip_image_transform_quad_get_ex(const Scene *scene,
     float2 offset(0, 0);
 
     switch (data->anchor_x) {
-      case SEQ_TEXT_ALIGN_X_LEFT:
+      case SEQ_TEXT_ANCHOR_X_LEFT:
         offset.x = image_size.x / 2;
         break;
-      case SEQ_TEXT_ALIGN_X_RIGHT:
+      case SEQ_TEXT_ANCHOR_X_RIGHT:
         offset.x = -image_size.x / 2;
         break;
     }
     switch (data->anchor_y) {
-      case SEQ_TEXT_ALIGN_Y_BOTTOM:
+      case SEQ_TEXT_ANCHOR_Y_BOTTOM:
         offset.y = image_size.y / 2;
         break;
-      case SEQ_TEXT_ALIGN_Y_TOP:
+      case SEQ_TEXT_ANCHOR_Y_TOP:
         offset.y = -image_size.y / 2;
         break;
     }
