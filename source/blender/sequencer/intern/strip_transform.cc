@@ -37,9 +37,21 @@
 
 namespace blender::seq {
 
+/* -------------------------------------------------------------------- */
+/** \name Transform Utilities
+ * \{ */
+
 bool transform_single_image_check(const Strip *strip)
 {
   return (strip->flag & SEQ_SINGLE_FRAME_CONTENT) != 0;
+}
+
+bool transform_is_locked(const ListBaseT<SeqTimelineChannel> *channels, const Strip *strip)
+{
+  const SeqTimelineChannel *channel = channel_get_by_index(channels, strip->channel);
+  return strip->flag & SEQ_LOCK ||
+         (channel_is_locked(channel) &&
+          !flag_is_set(strip->runtime->flag, StripRuntimeFlag::IgnoreChannelLock));
 }
 
 bool transform_strip_can_be_translated(const Strip *strip)
@@ -68,6 +80,12 @@ bool transform_test_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Stri
   }
   return false;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Timeline Strip Transform
+ * \{ */
 
 void transform_translate_strip(Scene *evil_scene, Strip *strip, int delta)
 {
@@ -568,13 +586,11 @@ void strip_channel_set(Strip *strip, int channel)
   strip->channel = math::clamp(channel, 1, MAX_CHANNELS);
 }
 
-bool transform_is_locked(const ListBaseT<SeqTimelineChannel> *channels, const Strip *strip)
-{
-  const SeqTimelineChannel *channel = channel_get_by_index(channels, strip->channel);
-  return strip->flag & SEQ_LOCK ||
-         (channel_is_locked(channel) &&
-          !flag_is_set(strip->runtime->flag, StripRuntimeFlag::IgnoreChannelLock));
-}
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Preview Image Transform
+ * \{ */
 
 float2 image_transform_mirror_factor_get(const Strip *strip)
 {
@@ -775,5 +791,7 @@ Bounds<float2> image_transform_bounding_box_from_collection(Scene *scene,
 
   return box;
 }
+
+/** \} */
 
 }  // namespace blender::seq
