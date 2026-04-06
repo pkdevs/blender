@@ -42,6 +42,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_rect.h"
+#include "BLI_string.h"
 #include "BLI_string_ref.hh"
 #include "BLI_string_utf8.h"
 #include "BLI_task.hh"
@@ -831,6 +832,7 @@ static std::shared_ptr<const ocio::CPUProcessor> get_display_buffer_processor(
   display_parameters.use_display_emulation = (target == DISPLAY_SPACE_DRAW) ?
                                                  get_display_emulation(display_settings) :
                                                  false;
+  display_parameters.use_scope_space = (target == DISPLAY_SPACE_SCOPE);
 
   return g_config()->get_display_cpu_processor(display_parameters);
 }
@@ -1986,22 +1988,28 @@ static bool is_colorspace_same_as_display(const ColorSpace *colorspace,
                                           const ColorManagedViewSettings *view_settings,
                                           const ColorManagedDisplaySettings *display_settings)
 {
-  if ((view_settings->flag & COLORMANAGE_VIEW_USE_CURVES) != 0 ||
-      (view_settings->flag & COLORMANAGE_VIEW_USE_WHITE_BALANCE) != 0 ||
-      view_settings->exposure != 0.0f || view_settings->gamma != 1.0f)
-  {
-    return false;
-  }
+  if (view_settings) {
+    if ((view_settings->flag & COLORMANAGE_VIEW_USE_CURVES) != 0 ||
+        (view_settings->flag & COLORMANAGE_VIEW_USE_WHITE_BALANCE) != 0 ||
+        view_settings->exposure != 0.0f || view_settings->gamma != 1.0f)
+    {
+      return false;
+    }
 
-  const ocio::Look *look = g_config()->get_look_by_name(view_settings->look);
-  if (look != nullptr && !look->process_space().is_empty()) {
-    return false;
+    const ocio::Look *look = g_config()->get_look_by_name(view_settings->look);
+    if (look != nullptr && !look->process_space().is_empty()) {
+      return false;
+    }
   }
 
   const ColorSpace *display_colorspace = IMB_colormangement_display_get_color_space(
       view_settings, display_settings);
   if (display_colorspace != colorspace) {
     return false;
+  }
+
+  if (view_settings == nullptr) {
+    return true;
   }
 
   const ocio::Display *display = g_config()->get_display_by_name(display_settings->display_device);
@@ -2012,8 +2020,20 @@ static bool is_colorspace_same_as_display(const ColorSpace *colorspace,
 bool IMB_colormanagement_display_processor_needed(
     const ImBuf *ibuf,
     const ColorManagedViewSettings *view_settings,
-    const ColorManagedDisplaySettings *display_settings)
+    const ColorManagedDisplaySettings *display_settings,
+    const ColorManagedDisplaySpace display_space)
 {
+  switch (display_space) {
+    case DISPLAY_SPACE_DRAW:
+    case DISPLAY_SPACE_COLOR_INSPECTION:
+    case DISPLAY_SPACE_VIDEO_OUTPUT:
+    case DISPLAY_SPACE_IMAGE_OUTPUT:
+      break;
+    case DISPLAY_SPACE_SCOPE:
+      /* Always needed for custom scope space. */
+      return true;
+  }
+
   if (ibuf->float_data() == nullptr && ibuf->byte_buffer.colorspace) {
     return !is_colorspace_same_as_display(
         ibuf->byte_buffer.colorspace, view_settings, display_settings);
@@ -3012,8 +3032,9 @@ const ColorSpace *IMB_colormangement_display_get_color_space(
   /* Get the colorspace that the image is in after applying this view and display
    * transform. If we are going to a display referred colorspace we can use that. */
   const ocio::Display *display = g_config()->get_display_by_name(display_settings->display_device);
-  const ocio::View *view = (display) ? display->get_view_by_name(view_settings->view_transform) :
-                                       nullptr;
+  const ocio::View *view = (view_settings && display) ?
+                               display->get_view_by_name(view_settings->view_transform) :
+                               nullptr;
   const ColorSpace *colorspace = (view) ? view->display_colorspace() : nullptr;
   if (colorspace && colorspace->is_display_referred()) {
     return colorspace;
@@ -3070,6 +3091,20 @@ int IMB_colormanagement_view_max_nits(const char *display_name, const char *view
   }
   const ocio::View *view = display->get_view_by_name(view_name);
   return view ? view->max_nits() : 0;
+}
+
+ocio::ScopeInfo IMB_colormanagement_get_scope_info(
+    const ColorManagedDisplaySettings *display_settings, const char *view_name)
+{
+  const ocio::Display *display = g_config()->get_display_by_name(display_settings->display_device);
+  if (display == nullptr) {
+    return {};
+  }
+  const ocio::View *view = (display) ? display->get_view_by_name(view_name) : nullptr;
+  if (view == nullptr) {
+    return {};
+  }
+  return view->scope_info();
 }
 
 /** \} */
@@ -4274,7 +4309,9 @@ std::optional<ColormanageProcessor> ColormanageProcessor::display_processor_for_
     const ColorManagedDisplaySettings *display_settings,
     const ColorManagedDisplaySpace display_space)
 {
-  if (!IMB_colormanagement_display_processor_needed(ibuf, view_settings, display_settings)) {
+  if (!IMB_colormanagement_display_processor_needed(
+          ibuf, view_settings, display_settings, display_space))
+  {
     return std::nullopt;
   }
   return display_processor_new(view_settings, display_settings, display_space, false, nullptr);
@@ -4463,7 +4500,8 @@ bool IMB_colormanagement_setup_glsl_draw_from_space(
     const ColorSpace *from_colorspace,
     float dither,
     bool predivide,
-    bool do_overlay_merge)
+    bool do_overlay_merge,
+    ColorManagedDisplaySpace display_space)
 {
   ColorManagedViewSettings untonemapped_view_settings;
   const ColorManagedViewSettings *applied_view_settings;
@@ -4508,7 +4546,10 @@ bool IMB_colormanagement_setup_glsl_draw_from_space(
   display_parameters.use_hdr_buffer = GPU_hdr_support();
   display_parameters.use_hdr_display = IMB_colormanagement_display_is_hdr(
       display_settings, display_parameters.view.c_str());
-  display_parameters.use_display_emulation = get_display_emulation(*display_settings);
+  display_parameters.use_display_emulation = (display_space == DISPLAY_SPACE_DRAW) ?
+                                                 get_display_emulation(*display_settings) :
+                                                 false;
+  display_parameters.use_scope_space = (display_space == DISPLAY_SPACE_SCOPE);
 
   /* Bind shader. Internally GPU shaders are created and cached on demand. */
   global_gpu_state.gpu_shader_bound = g_config()->get_gpu_shader_binder().display_bind(

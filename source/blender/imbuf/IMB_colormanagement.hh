@@ -37,6 +37,7 @@ class CPUProcessor;
 class ColorSpace;
 class Config;
 class Display;
+struct ScopeInfo;
 }  // namespace ocio
 
 using ColorManagedConfig = ocio::Config;
@@ -57,6 +58,8 @@ enum ColorManagedDisplaySpace {
   DISPLAY_SPACE_VIDEO_OUTPUT,
   /** Convert to display space for inspecting color values as text in the UI. */
   DISPLAY_SPACE_COLOR_INSPECTION,
+  /** Convert to space suitable for plotting scopes. */
+  DISPLAY_SPACE_SCOPE,
 };
 
 enum class ColorManagedFileOutput { Image, Video };
@@ -389,6 +392,10 @@ bool IMB_colormanagement_display_support_emulation(
 /** Max luminance of the view transform, or 0 if no maximum found. */
 int IMB_colormanagement_view_max_nits(const char *display_name, const char *view_name);
 
+/** Get scope display info for waveform/parade/vectorscope. */
+ocio::ScopeInfo IMB_colormanagement_get_scope_info(
+    const ColorManagedDisplaySettings *display_settings, const char *view_name);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -565,7 +572,8 @@ class ColormanageProcessor : NonCopyable {
 bool IMB_colormanagement_display_processor_needed(
     const ImBuf *ibuf,
     const ColorManagedViewSettings *view_settings,
-    const ColorManagedDisplaySettings *display_settings);
+    const ColorManagedDisplaySettings *display_settings,
+    const ColorManagedDisplaySpace display_space = DISPLAY_SPACE_DRAW);
 
 /** \} */
 
@@ -602,7 +610,8 @@ bool IMB_colormanagement_setup_glsl_draw_from_space(
     const ColorSpace *from_colorspace,
     float dither,
     bool predivide,
-    bool do_overlay_merge);
+    bool do_overlay_merge,
+    ColorManagedDisplaySpace display_space = DISPLAY_SPACE_DRAW);
 /**
  * Same as setup_glsl_draw, but color management settings are guessing from a given context.
  */
