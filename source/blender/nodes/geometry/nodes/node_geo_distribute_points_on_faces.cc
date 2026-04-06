@@ -107,19 +107,17 @@ static math::Quaternion normal_to_rotation(const float3 normal)
   return math::normalize(math::Quaternion(quat));
 }
 
-static void sample_mesh_surface(const Mesh &mesh,
-                                const float base_density,
-                                const Span<float> density_factors,
-                                const int seed,
-                                Vector<float3> &r_positions,
-                                Vector<float3> &r_bary_coords,
-                                Vector<int> &r_tri_indices)
+static OffsetIndices<int> calc_tri_point_offsets(const Mesh &mesh,
+                                                 const float base_density,
+                                                 const Span<float> density_factors,
+                                                 const int seed,
+                                                 Array<int> &r_count_data)
 {
   const Span<float3> positions = mesh.vert_positions();
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<int3> corner_tris = mesh.corner_tris();
 
-  Array<int> count_data(corner_tris.size() + 1);
+  r_count_data = Array<int>(corner_tris.size() + 1);
   threading::parallel_for(corner_tris.index_range(), 1024, [&](const IndexRange range) {
     for (const int64_t tri_i : range) {
       const int3 &tri = corner_tris[tri_i];
@@ -139,13 +137,24 @@ static void sample_mesh_surface(const Mesh &mesh,
 
       const int corner_tri_seed = noise::hash(tri_i, seed);
       RandomNumberGenerator corner_tri_rng(corner_tri_seed);
-      count_data[tri_i] = corner_tri_rng.round_probabilistic(area * base_density *
-                                                             corner_tri_density_factor);
+      r_count_data[tri_i] = corner_tri_rng.round_probabilistic(area * base_density *
+                                                               corner_tri_density_factor);
     }
   });
 
-  const OffsetIndices<int> points_by_tri = offset_indices::accumulate_counts_to_offsets(
-      count_data);
+  return offset_indices::accumulate_counts_to_offsets(r_count_data);
+}
+
+static void sample_bary_coords(const Mesh &mesh,
+                               const int seed,
+                               const OffsetIndices<int> points_by_tri,
+                               Vector<float3> &r_positions,
+                               Vector<float3> &r_bary_coords,
+                               Vector<int> &r_tri_indices)
+{
+  const Span<float3> positions = mesh.vert_positions();
+  const Span<int> corner_verts = mesh.corner_verts();
+  const Span<int3> corner_tris = mesh.corner_tris();
 
   r_positions.resize(points_by_tri.total_size());
   r_bary_coords.resize(points_by_tri.total_size());
@@ -512,15 +521,19 @@ static PointCloud *create_points_random(const Mesh &mesh,
                                         const bke::AttributeFilter &attribute_filter,
                                         const bool use_legacy_normal)
 {
+  Array<int> count_data;
+  const Array<float> densities = calc_full_density_factors_with_selection(
+      mesh, density_field, selection_field);
+  const OffsetIndices<int> points_by_tri = calc_tri_point_offsets(
+      mesh, 1.0f, densities, seed, count_data);
+  if (points_by_tri.is_empty()) {
+    return nullptr;
+  }
+
   Vector<float3> positions;
   Vector<float3> bary_coords;
   Vector<int> tri_indices;
-  const Array<float> densities = calc_full_density_factors_with_selection(
-      mesh, density_field, selection_field);
-  sample_mesh_surface(mesh, 1.0f, densities, seed, positions, bary_coords, tri_indices);
-  if (positions.is_empty()) {
-    return nullptr;
-  }
+  sample_bary_coords(mesh, seed, points_by_tri, positions, bary_coords, tri_indices);
 
   PointCloud *pointcloud = bke::pointcloud_new_no_attributes(positions.size());
   bke::MutableAttributeAccessor point_attributes = pointcloud->attributes_for_write();
@@ -552,10 +565,17 @@ static PointCloud *create_points_poisson_disk(const Mesh &mesh,
                                               const bke::AttributeFilter &attribute_filter,
                                               const bool use_legacy_normal)
 {
+  Array<int> count_data;
+  const OffsetIndices<int> points_by_tri = calc_tri_point_offsets(
+      mesh, density_max, {}, seed, count_data);
+  if (points_by_tri.is_empty()) {
+    return nullptr;
+  }
+
   Vector<float3> positions;
   Vector<float3> bary_coords;
   Vector<int> tri_indices;
-  sample_mesh_surface(mesh, density_max, {}, seed, positions, bary_coords, tri_indices);
+  sample_bary_coords(mesh, seed, points_by_tri, positions, bary_coords, tri_indices);
 
   Array<bool> elimination_mask(positions.size(), false);
   update_elimination_mask_for_close_points(positions, minimum_distance, elimination_mask);
