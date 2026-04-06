@@ -49,7 +49,7 @@ static inline Language language_from_filename(const std::string &filename)
  */
 class SourceProcessor {
  public:
-  using report_callback = parser::report_callback;
+  using ErrorHandler = parser::ErrorHandler;
   using Parser = parser::IntermediateForm<parser::FullLexer, parser::FullParser>;
   using Scope = parser::Scope;
   using Token = parser::Token;
@@ -62,8 +62,6 @@ class SourceProcessor {
   static constexpr const char *linted_struct_suffix = "_host_shared_";
   static constexpr const char *uniform_struct_suffix = "uniform_";
 
-#define ERROR_TOK(token) (token).line_number(), (token).char_number(), (token).line_str()
-
  private:
   const std::string source_;
   const std::string filepath_;
@@ -71,15 +69,22 @@ class SourceProcessor {
 
   Language language_;
 
-  report_callback report_error_;
+  parser::ErrorHandler error_handler = {
+      .default_filename = filepath_.substr(filepath_.find_last_of('/') + 1)};
+
+  void report_error(Token tok, std::string message)
+  {
+    error_handler.report(tok, message);
+  }
+
+  void report_error(int row, int column, std::string line, std::string message)
+  {
+    error_handler.report(row, column, line, message);
+  }
 
  public:
-  SourceProcessor(
-      const std::string &source,
-      const std::string &filepath,
-      Language language,
-      report_callback report_error = [](int, int, std::string, const char *) {})
-      : source_(source), filepath_(filepath), language_(language), report_error_(report_error)
+  SourceProcessor(const std::string &source, const std::string &filepath, Language language)
+      : source_(source), filepath_(filepath), language_(language)
   {
   }
 
@@ -88,6 +93,8 @@ class SourceProcessor {
     std::string source;
     /* Parsed metadata. */
     metadata::Source metadata;
+
+    std::optional<parser::ErrorHandler::Error> error;
   };
 
   /* Convert to intermediate language. Also outputs metadata.

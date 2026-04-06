@@ -331,10 +331,10 @@ inline std::ostream &operator<<(std::ostream &out, const std::vector<int> &v)
 template<typename LexerFn, typename ParserFn>
 struct IntermediateForm : MutableString, Parser<LexerFn, ParserFn> {
  protected:
-  report_callback &report_error;
+  ErrorHandler &report_error;
 
  public:
-  IntermediateForm(const std::string_view input, report_callback &report_error)
+  IntermediateForm(const std::string_view input, ErrorHandler &report_error)
       : MutableString(input), report_error(report_error)
   {
     parse(report_error);
@@ -373,7 +373,7 @@ struct IntermediateForm : MutableString, Parser<LexerFn, ParserFn> {
     return str_;
   }
 
-  void parse(report_callback &report_error)
+  void parse(ErrorHandler &report_error)
   {
     this->lexical_analysis(str_);
     this->semantic_analysis(report_error);

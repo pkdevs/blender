@@ -158,7 +158,7 @@ void SourceProcessor::parse_local_symbols(Parser &parser)
 static void lower_namespace(string ns_prefix,
                             const Scope &scope,
                             SourceProcessor::Parser &parser,
-                            SourceProcessor::report_callback report_error,
+                            ErrorHandler &error_handler,
                             const set<Symbol> &symbols_set)
 {
   string ns_name(scope.front().prev().str());
@@ -166,7 +166,7 @@ static void lower_namespace(string ns_prefix,
 
   bool has_nested_scope = false;
   scope.foreach_scope(ScopeType::Namespace, [&](const Scope &scope) {
-    lower_namespace(ns_prefix, scope, parser, report_error, symbols_set);
+    lower_namespace(ns_prefix, scope, parser, error_handler, symbols_set);
     has_nested_scope = true;
   });
 
@@ -292,8 +292,8 @@ static void lower_namespace(string ns_prefix,
           if (specified_symbol != overload.identifier) {
             continue;
           }
-          report_error(ERROR_TOK(token),
-                       "Call to function is ambiguous. Specify namespace to remove ambiguity.");
+          error_handler.report(
+              token, "Call to function is ambiguous. Specify namespace to remove ambiguity.");
           break;
         }
       }
@@ -324,7 +324,7 @@ static void lower_namespace(string ns_prefix,
     parser.erase(scope.back());
   }
   else {
-    report_error(ERROR_TOK(namespace_tok), "Expected namespace token.");
+    error_handler.report(namespace_tok, "Expected namespace token.");
   }
 }
 
@@ -370,7 +370,7 @@ void SourceProcessor::lower_namespaces(Parser &parser)
     /* Parse each namespace declaration.
      * Do it iteratively from the deepest namespace to the shallowest. */
     parser().foreach_scope(ScopeType::Namespace, [&](const Scope &scope) {
-      lower_namespace("", scope, parser, report_error_, symbols_set);
+      lower_namespace("", scope, parser, error_handler, symbols_set);
     });
   } while (parser.apply_mutations());
 }

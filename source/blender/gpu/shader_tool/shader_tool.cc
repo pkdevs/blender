@@ -161,19 +161,6 @@ int main(int argc, char **argv)
   std::stringstream buffer;
   buffer << input_file.rdbuf();
 
-  int error = 0;
-
-  auto report_error =
-      [&](int err_line, int err_char, const std::string &line, const char *err_msg) {
-        std::cerr << input_file_name;
-        std::cerr << ':' << std::to_string(err_line) << ':' << std::to_string(err_char + 1);
-        std::cerr << ": error: " << err_msg << std::endl;
-        std::cerr << line << std::endl;
-        std::cerr << std::string(err_char, ' ') << '^' << std::endl;
-
-        error++;
-      };
-
   std::string filename(output_file_name);
   const bool is_info = filename.ends_with("infos.hh") || filename.ends_with(".bsl.hh");
 
@@ -192,9 +179,9 @@ int main(int argc, char **argv)
     external_symbols = scan_external_symbols(file_list, visited_files, buffer.str(), filename);
   }
 
-  SourceProcessor processor(buffer.str(), input_file_name, language, report_error);
+  SourceProcessor processor(buffer.str(), input_file_name, language);
 
-  auto [result, metadata] = processor.convert(external_symbols);
+  auto [result, metadata, error] = processor.convert(external_symbols);
 
   output_file << result;
 
@@ -214,5 +201,9 @@ int main(int argc, char **argv)
   metadata_file.close();
   infos_file.close();
 
-  return error;
+  if (error) {
+    std::cerr << error.value().full_report << std::endl;
+  }
+
+  return error.has_value() ? 1 : 0;
 }

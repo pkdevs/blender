@@ -38,7 +38,7 @@ string SourceProcessor::template_arguments_mangle(const Scope template_args)
 string SourceProcessor::template_full_specified_name(metadata::TemplateDefinition &template_def)
 {
   SourceProcessor::Parser name_parser(template_def.name_space + template_def.identifier,
-                                      report_error_);
+                                      error_handler);
   lower_scope_resolution_operators(name_parser);
   return name_parser.result_get();
 }
@@ -47,7 +47,7 @@ static void parse_template_definition_args(const Scope arg,
                                            vector<string> &arg_list,
                                            const Scope fn_args,
                                            bool &all_template_args_in_function_signature,
-                                           report_callback report_error)
+                                           ErrorHandler &error_handler)
 {
   const Token type = arg.front();
   const Token name = type.str() == "enum" ? type.next().next() : type.next();
@@ -78,7 +78,7 @@ static void parse_template_definition_args(const Scope arg,
     all_template_args_in_function_signature = false;
   }
   else {
-    report_error(ERROR_TOK(type), "Invalid template argument type");
+    error_handler.report(type, "Invalid template argument type");
   }
 }
 
@@ -113,8 +113,7 @@ void SourceProcessor::lower_template_instantiation(
       arg_count++;
     });
     if (arg_count != arg_list.size()) {
-      report_error_(ERROR_TOK(inst_args.front()),
-                    "Invalid amount of argument in template instantiation.");
+      report_error(inst_args.front(), "Invalid amount of argument in template instantiation.");
       return;
     }
   }
@@ -122,7 +121,7 @@ void SourceProcessor::lower_template_instantiation(
   /* Specialize template content. */
   string instance_content;
   {
-    SourceProcessor::Parser instance_parser(fn_decl, report_error_);
+    SourceProcessor::Parser instance_parser(fn_decl, error_handler);
 
     /* Inject namespace around definition for symbols namespaces resolution. */
     if (template_def.name_space.empty()) {
@@ -272,8 +271,7 @@ void SourceProcessor::process_template_struct(metadata::TemplateDefinition &temp
     vector<string> arg_list;
 
     /* Parse template declaration. */
-    DefinitionParser(metadata::TemplateDefinition &template_def,
-                     SourceProcessor::report_callback report_error)
+    DefinitionParser(metadata::TemplateDefinition &template_def, ErrorHandler report_error)
         : def_parser(template_def.definition, report_error)
     {
       template_scope.foreach_scope(ScopeType::TemplateArg, [&](Scope arg) {
@@ -298,7 +296,7 @@ void SourceProcessor::process_template_struct(metadata::TemplateDefinition &temp
     }
 
     if (!def_parser) {
-      def_parser = make_unique<DefinitionParser>(template_def, report_error_);
+      def_parser = make_unique<DefinitionParser>(template_def, error_handler);
     }
 
     lower_template_instantiation(parser,
@@ -334,8 +332,7 @@ void SourceProcessor::process_template_function(
     vector<string> arg_list;
 
     /* Parse template declaration. */
-    DefinitionParser(metadata::TemplateDefinition &template_def,
-                     SourceProcessor::report_callback report_error)
+    DefinitionParser(metadata::TemplateDefinition &template_def, ErrorHandler report_error)
         : def_parser(template_def.definition, report_error)
     {
       assert(fn_start.is_valid() && fn_name.is_valid() && fn_args.is_valid() &&
@@ -360,7 +357,7 @@ void SourceProcessor::process_template_function(
     }
 
     if (!def_parser) {
-      def_parser = make_unique<DefinitionParser>(template_def, report_error_);
+      def_parser = make_unique<DefinitionParser>(template_def, error_handler);
     }
 
     lower_template_instantiation(parser,
@@ -381,8 +378,8 @@ void SourceProcessor::lower_templates(Parser &parser)
    * This is required by the BSL spec in order to simplify implementation. */
   auto lint_explicit = [&](const Token symbol_name) {
     if (symbol_name.next().scope().type() != parser::ScopeType::Template) {
-      report_error_(
-          ERROR_TOK(symbol_name),
+      report_error(
+          symbol_name,
           "Template instantiation and specialization require explicit template arguments");
     }
   };
@@ -397,8 +394,7 @@ void SourceProcessor::lower_templates(Parser &parser)
   parser().foreach_match("t<..>", [&](const vector<Token> &toks) {
     /* Default arguments are not supported. */
     toks[1].scope().foreach_token(Assign, [&](Token tok) {
-      report_error_(ERROR_TOK(tok),
-                    "Default arguments are not supported inside template declaration");
+      report_error(tok, "Default arguments are not supported inside template declaration");
       error = true;
     });
 

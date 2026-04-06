@@ -15,17 +15,13 @@ static std::string process_test_string(std::string str,
                                        shader::Language language = shader::Language::BLENDER_GLSL)
 {
   using namespace shader;
-  SourceProcessor processor(
-      str,
-      "test.bsl",
-      language,
-      [&](int /*err_line*/, int /*err_char*/, const std::string & /*line*/, const char *err_msg) {
-        if (first_error.empty()) {
-          first_error = err_msg;
-        }
-      });
+  SourceProcessor processor(str, "test.bsl", language);
 
-  auto [result, metadata] = processor.convert();
+  auto [result, metadata, error] = processor.convert();
+
+  if (error) {
+    first_error = error.value().message;
+  }
 
   if (r_metadata != nullptr) {
     *r_metadata = metadata;
@@ -2515,8 +2511,6 @@ static void test_preprocess_srt_mutations()
   using namespace std;
   using namespace shader::parser;
 
-  report_callback no_err_report = [](int, int, string, const char *) {};
-
   {
     string input = R"(
 float fn([[resource_table]] SRT &srt) {
@@ -2580,8 +2574,6 @@ static void test_preprocess_entry_point_resources()
 {
   using namespace std;
   using namespace shader::parser;
-
-  report_callback no_err_report = [](int, int, string, const char *) {};
 
   {
     string input = R"(
@@ -2826,8 +2818,6 @@ static void test_preprocess_pipeline_description()
   using namespace std;
   using namespace shader::parser;
 
-  report_callback no_err_report = [](int, int, string, const char *) {};
-
   {
     string input = R"(
 namespace ns {
@@ -3001,7 +2991,7 @@ static void test_preprocess_parser()
 
   using IntermediateForm = IntermediateForm<FullLexer, FullParser>;
 
-  report_callback no_err_report = [](int, int, string, const char *) {};
+  ErrorHandler err_handler;
 
   {
     string input = R"(
@@ -3019,7 +3009,7 @@ static void test_preprocess_parser()
 )";
     string expect = R"(
 1;1;1;1;1;1;1;1;1;1;1+1;)";
-    EXPECT_EQ(IntermediateForm(input, no_err_report).token_types_str(), expect);
+    EXPECT_EQ(IntermediateForm(input, err_handler).token_types_str(), expect);
   }
   {
     string input = R"(
@@ -3028,8 +3018,8 @@ static void test_preprocess_parser()
     string expect = R"(
 [[A(1,1,A),A,A(A)]])";
     string scopes = R"(GABbcmmmbbcm)";
-    EXPECT_EQ(IntermediateForm(input, no_err_report).token_types_str(), expect);
-    EXPECT_EQ(IntermediateForm(input, no_err_report).scope_types_str, scopes);
+    EXPECT_EQ(IntermediateForm(input, err_handler).token_types_str(), expect);
+    EXPECT_EQ(IntermediateForm(input, err_handler).scope_types_str, scopes);
   }
   {
     string input = R"(
@@ -3042,7 +3032,7 @@ class B {
 )";
     string expect = R"(
 sA{AA=1;};SA{AA;};)";
-    EXPECT_EQ(IntermediateForm(input, no_err_report).token_types_str(), expect);
+    EXPECT_EQ(IntermediateForm(input, err_handler).token_types_str(), expect);
   }
   {
     string input = R"(
@@ -3057,7 +3047,7 @@ a
 )";
     string expect = R"(
 AZZAZAZA)";
-    EXPECT_EQ(IntermediateForm(input, no_err_report).token_types_str(), expect);
+    EXPECT_EQ(IntermediateForm(input, err_handler).token_types_str(), expect);
   }
   {
     string input = R"(
@@ -3067,8 +3057,8 @@ namespace T::U::V {}
     string expect = R"(
 nA{}nA::A::A{})";
     string expect_scopes = R"(GNN)";
-    EXPECT_EQ(IntermediateForm(input, no_err_report).token_types_str(), expect);
-    EXPECT_EQ(IntermediateForm(input, no_err_report).scope_types_str, expect_scopes);
+    EXPECT_EQ(IntermediateForm(input, err_handler).token_types_str(), expect);
+    EXPECT_EQ(IntermediateForm(input, err_handler).scope_types_str, expect_scopes);
   }
   {
     string input = R"(
@@ -3084,10 +3074,10 @@ void f(int t = 0) {
 )";
     string expect = R"(
 AA(AA=1){AA=1,A=1,A={1};{A=A=A,AP;i(AEA){r;}}})";
-    EXPECT_EQ(IntermediateForm(input, no_err_report).token_types_str(), expect);
+    EXPECT_EQ(IntermediateForm(input, err_handler).token_types_str(), expect);
   }
   {
-    IntermediateForm parser("float i;", no_err_report);
+    IntermediateForm parser("float i;", err_handler);
     parser.insert_after(Token(parser, 0), "A ");
     parser.insert_after(Token(parser, 0), "B  ");
     EXPECT_EQ(parser.result_get(), "float A B  i;");
@@ -3098,7 +3088,7 @@ A
 #line 100
 B
 )";
-    IntermediateForm parser(input, no_err_report);
+    IntermediateForm parser(input, err_handler);
     string expect = R"(
 A#A1A)";
     EXPECT_EQ(parser.token_types_str(), expect);
@@ -3122,7 +3112,7 @@ match(, const, bool, , foo, , ;)
 match([a], , int, , bar, [0], ;)
 )";
 
-    IntermediateForm parser(input, no_err_report);
+    IntermediateForm parser(input, err_handler);
 
     string result = "\n";
     parser().foreach_declaration([&](Scope attributes,
@@ -3150,7 +3140,6 @@ GPU_TEST(preprocess_parser);
 static int test_expression(std::string str)
 {
   using namespace shader::parser;
-  report_callback no_err_report = [](int, int, std::string, const char *) {};
   ExpressionParser parser;
   parser.lexical_analysis(str);
   try {
