@@ -33,8 +33,10 @@ static void rgba_float_to_display_space(const ColormanageProcessor &processor,
                                         const ColorSpace *src_colorspace,
                                         MutableSpan<float4> pixels)
 {
-  IMB_colormanagement_colorspace_to_scene_linear(
-      &pixels.data()->x, pixels.size(), 1, 4, src_colorspace, false);
+  if (src_colorspace) {
+    IMB_colormanagement_colorspace_to_scene_linear(
+        &pixels.data()->x, pixels.size(), 1, 4, src_colorspace, false);
+  }
   processor.apply(&pixels.data()->x, pixels.size(), 1, 4, false);
 }
 
