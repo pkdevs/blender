@@ -850,7 +850,7 @@ static void sequencer_preview_region_layout(const bContext *C, ARegion *region)
 
   if (sseq->flag & SEQ_ZOOM_TO_FIT) {
     View2D *v2d = &region->v2d;
-    v2d->cur = v2d->tot;
+    v2d->cur = SEQ_view_frame_fit(sseq, region, v2d->tot);
   }
 }
 
