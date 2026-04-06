@@ -26,7 +26,8 @@ using namespace metadata;
  */
 void SourceProcessor::lower_srt_accessor_templates(Parser &parser)
 {
-  parser().foreach_struct([&](Token, Scope, Token, Scope body) {
+  parser().foreach_token(Struct, [&](Token tok) {
+    Scope body = tok.find_next(lexit::BracketOpen).scope();
     body.foreach_declaration([&](Scope attributes,
                                  Token,
                                  Token type,

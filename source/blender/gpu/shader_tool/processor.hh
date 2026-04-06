@@ -92,7 +92,7 @@ class SourceProcessor {
 
   /* Convert to intermediate language. Also outputs metadata.
    * symbols_set is the set of namespace symbols from external files / dependencies. */
-  Result convert(std::vector<metadata::Symbol> symbols_set = {});
+  Result convert(metadata::Source external_sources_symbols = {});
 
   /* Lightweight parsing. Only Source::dependencies and Source::symbol_table are populated. */
   metadata::Source parse_include_and_symbols();
@@ -181,6 +181,8 @@ class SourceProcessor {
   /* Lower template definition and instantiation by doing simple copy paste + argument
    * substitution. */
   void lower_templates(Parser &parser);
+  void lower_template_calls(Parser &parser);
+  void lower_template_specialization(Parser &parser);
   /* Ensures pragma once is present in headers to comply to our include semantic. */
   void lint_pragma_once(Parser &parser, const std::string &filename);
   /* Unroll loops by copy pasting content. */
@@ -330,6 +332,42 @@ class SourceProcessor {
   /* Parse subscript scope with single integer literal and return the literal value.
    * Return the fallback value in any case of non-literal value, or failed conversion. */
   int static_array_size(const Scope &array, int fallback_value);
+
+  /* Process struct declaration and instantiate it in this file. */
+  void process_template_struct(metadata::TemplateDefinition &template_def,
+                               SourceProcessor::Parser &parser);
+  /* Process templated function (or class method) declaration and instantiate it in this file. */
+  void process_template_function(metadata::TemplateDefinition &template_def,
+                                 SourceProcessor::Parser &parser,
+                                 /* If method, the end token of the template inside the struct. */
+                                 const Token method_end);
+
+  void lower_pre_template(Parser &parser);
+
+  void lower_template_instantiation(
+      Parser &parser,
+      /* If method, the end token of the template inside the struct. */
+      const Token method_end,
+      const Token &inst_start,
+      const Scope &inst_args,
+      const metadata::TemplateDefinition template_def,
+      const Token &symbol_name,
+      const std::vector<std::string> &arg_list,
+      const std::string &fn_decl,
+      const bool all_template_args_in_function_signature);
+
+  metadata::TemplateDefinition parse_template_definition(SourceProcessor::Parser &parser,
+                                                         Token template_tok,
+                                                         bool is_method,
+                                                         Scope ns_scope,
+                                                         std::string filepath);
+
+  void parse_namespace_symbols(SourceProcessor::Parser &parser,
+                               Scope ns,
+                               metadata::Source &metadata,
+                               std::string filepath);
+
+  std::string template_full_specified_name(metadata::TemplateDefinition &template_def);
 
  public:
   /* Check for existence of preprocessor pragma in file. */

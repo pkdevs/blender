@@ -682,6 +682,22 @@ static void test_preprocess_template()
   {
     string input = R"(
 template<typename T>
+void func() { T::fn(); }
+template void func<A>();
+)";
+    string expect = R"(
+#line 3
+void funcTA() { A_fn(); }
+#line 5
+)";
+    string error;
+    string output = process_test_string(input, error);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+template<typename T>
 void func(T a) {a;}
 template void func<float>(float a);
 )";
@@ -844,7 +860,7 @@ static void test_preprocess_template_struct()
 template<typename T>
 struct A {
   T a;
-  A method(T b) const 
+  A method(T b) const
   {
     return A<T>{b};
   }
@@ -857,7 +873,7 @@ struct ATfloat {
   float a;
 #line 9
 };
-
+#line 12
 #ifndef GPU_METAL
 ATfloat ATfloat_ctor_();
 ATfloat _method(const ATfloat this_, float b);
@@ -959,15 +975,9 @@ void fn(A<int> a)
 #line 4
 struct N_ATint {
   int i;
-
-
-
-
-
-
-#line 19
+#line 10
 };
-#line 22
+#line 14
 #ifndef GPU_METAL
 N_ATint N_ATint_ctor_();
 void N_ATint_fn1(int a);
@@ -1082,15 +1092,15 @@ static void test_preprocess_cleanup()
   {
     string input = R"(
 #line 2
-int b = 0;          
-            
+int b = 0;
+
 #if 0
-           
+
 int a = 1;
 #elif 1
 #line 321
 #line 321
-int a = 0;          
+int a = 0;
 #endif
 )";
     string expect = R"(
