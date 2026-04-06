@@ -10,7 +10,6 @@
 #include "BLI_rand.hh"
 #include "BLI_task.hh"
 
-#include "BLI_timeit.hh"
 #include "DNA_pointcloud_types.h"
 
 #include "BKE_attribute_math.hh"
@@ -598,7 +597,6 @@ static Field<float> extract_non_negative_density(GeoNodeExecParams &params, cons
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  SCOPED_TIMER_AVERAGED(__func__);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh"_ustr);
 
   const Field<bool> selection = params.extract_input<Field<bool>>("Selection"_ustr);
