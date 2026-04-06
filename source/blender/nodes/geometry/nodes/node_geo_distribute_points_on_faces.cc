@@ -317,6 +317,13 @@ BLI_NOINLINE static void propagate_existing_attributes(const Mesh &mesh,
     if (!src) {
       return;
     }
+    const CommonVArrayInfo info = src.varray.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const bke::AttributeInitValue init(GPointer(src.varray.type(), info.data));
+      if (point_attributes.add(iter.name, AttrDomain::Point, iter.data_type, init)) {
+        return;
+      }
+    }
     GSpanAttributeWriter dst = point_attributes.lookup_or_add_for_write_only_span(
         name, AttrDomain::Point, iter.data_type);
     if (!dst) {
