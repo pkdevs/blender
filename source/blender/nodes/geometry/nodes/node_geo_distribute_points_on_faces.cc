@@ -10,6 +10,7 @@
 #include "BLI_rand.hh"
 #include "BLI_task.hh"
 
+#include "BLI_timeit.hh"
 #include "DNA_pointcloud_types.h"
 
 #include "BKE_attribute_math.hh"
@@ -169,9 +170,7 @@ static void sample_mesh_surface(const Mesh &mesh,
 
           for (const int i : points_by_tri[tri_i]) {
             const float3 bary_coord = corner_tri_rng.get_barycentric_coordinates();
-            float3 point_pos;
-            interp_v3_v3v3v3(point_pos, v0_pos, v1_pos, v2_pos, bary_coord);
-            r_positions[i] = point_pos;
+            r_positions[i] = bke::attribute_math::mix3(bary_coord, v0_pos, v1_pos, v2_pos);
             r_bary_coords[i] = bary_coord;
             r_tri_indices[i] = tri_i;
           }
@@ -599,6 +598,7 @@ static Field<float> extract_non_negative_density(GeoNodeExecParams &params, cons
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
+  SCOPED_TIMER_AVERAGED(__func__);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh"_ustr);
 
   const Field<bool> selection = params.extract_input<Field<bool>>("Selection"_ustr);
