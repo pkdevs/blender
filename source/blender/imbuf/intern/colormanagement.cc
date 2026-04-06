@@ -3095,6 +3095,16 @@ bool IMB_colormanagement_display_support_emulation(
   return (view) ? view->support_emulation() : false;
 }
 
+int IMB_colormanagement_view_max_nits(const char *display_name, const char *view_name)
+{
+  const ocio::Display *display = g_config()->get_display_by_name(display_name);
+  if (display == nullptr) {
+    return 0;
+  }
+  const ocio::View *view = display->get_view_by_name(view_name);
+  return view ? view->max_nits() : 0;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

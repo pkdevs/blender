@@ -392,6 +392,9 @@ bool IMB_colormanagement_display_is_wide_gamut(const ColorManagedDisplaySettings
 bool IMB_colormanagement_display_support_emulation(
     const ColorManagedDisplaySettings *display_settings, const char *view_name);
 
+/** Max luminance of the view transform, or 0 if no maximum found. */
+int IMB_colormanagement_view_max_nits(const char *display_name, const char *view_name);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

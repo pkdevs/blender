@@ -80,6 +80,9 @@ class LibOCIOView : public View {
     return display_colorspace_;
   }
 
+  /** Max luminance of the view transform, or 0 if no maximum found. */
+  int max_nits() const override;
+
   MEM_CXX_CLASS_ALLOC_FUNCS("LibOCIOView");
 };
 

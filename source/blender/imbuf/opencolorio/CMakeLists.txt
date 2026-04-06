@@ -59,6 +59,7 @@ set(SRC
   intern/libocio/libocio_look.hh
   intern/libocio/libocio_processor.cc
   intern/libocio/libocio_processor.hh
+  intern/libocio/libocio_view.cc
   intern/libocio/libocio_view.hh
 
   OCIO_api.hh

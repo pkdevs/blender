@@ -75,6 +75,12 @@ class View {
    * Not guaranteed to be display referred.
    */
   virtual const ColorSpace *display_colorspace() const = 0;
+
+  /** Max luminance of the view transform, or 0 if no maximum found. */
+  virtual int max_nits() const
+  {
+    return 0;
+  }
 };
 
 }  // namespace blender::ocio
