@@ -581,6 +581,9 @@ ccl_device
       float specular_alpha_x = sqr(specular_roughness);
       float specular_alpha_y = sqr(specular_roughness);
       float3 T = zero_float3();
+
+      const float thinfilm_thickness = 0.f;
+      const float thinfilm_ior = 0.f;
       /*
       if (specular_roughness_anisotroy > 0.0f && stack_valid(tangent_offset)) {
         T = stack_load_float3(stack, tangent_offset);
@@ -633,34 +636,34 @@ ccl_device
 
         /* Metallic component */
         if (base_metalness > CLOSURE_WEIGHT_CUTOFF) {
-          // if (reflective_caustics) {
-          //   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-          //       sd, sizeof(MicrofacetBsdf), base_metalness * weight);
-          //   ccl_private FresnelGeneralizedSchlick *fresnel =
-          //     (bsdf != nullptr) ? (ccl_private FresnelGeneralizedSchlick *)closure_alloc_extra(
-          //                             sd, sizeof(FresnelGeneralizedSchlick)) :
-          //                         nullptr;
+          if (reflective_caustics) {
+            ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+                  sd, sizeof(MicrofacetBsdf), base_metalness * weight);
+            ccl_private FresnelF82Tint *fresnel =
+                  (bsdf != nullptr) ?
+                      (ccl_private FresnelF82Tint *)closure_alloc_extra(sd, sizeof(FresnelF82Tint)) :
+                      nullptr;
 
-          //   if (bsdf && fresnel) {
-          //     bsdf->N = valid_reflection_N;
-          //     bsdf->ior = 1.0f;
-          //     bsdf->T = T;
-          //     bsdf->alpha_x = specular_alpha_x;
-          //     bsdf->alpha_y = specular_alpha_y;
+             if (bsdf && fresnel) {
+               bsdf->N = valid_reflection_N;
+               bsdf->ior = 1.0f;
+               bsdf->T = T;
+               bsdf->alpha_x = specular_alpha_x;
+               bsdf->alpha_y = specular_alpha_y;
 
-          //     fresnel->f0 = rgb_to_spectrum(base_color);
-          //     const Spectrum f82 = min(specular_color, one_spectrum());
+               fresnel->f0 = rgb_to_spectrum(base_color) * base_weight;
+               const Spectrum f82 = min(specular_color, one_spectrum());
 
-          //     fresnel->thin_film.thickness = thinfilm_thickness;
-          //     fresnel->thin_film.ior = thinfilm_ior;
+               fresnel->thin_film.thickness = thinfilm_thickness;
+               fresnel->thin_film.ior = thinfilm_ior;
 
-          //     /* setup bsdf */
-          //     sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
-          //     const bool is_multiggx = (distribution ==
-          //                               CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
-          //     bsdf_microfacet_setup_fresnel_f82_tint(kg, bsdf, sd, fresnel, f82, is_multiggx);
-          //   }
-          // }
+               /* setup bsdf */
+               sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
+               const bool is_multiggx = (distribution ==
+                                         CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
+               bsdf_microfacet_setup_fresnel_f82_tint(kg, bsdf, sd, fresnel, f82, is_multiggx);
+             }
+          }
 
           /* Attenuate other components */
           weight *= (1.0f - base_metalness);
@@ -711,7 +714,7 @@ ccl_device
           ccl_private OrenNayarBsdf *bsdf = (ccl_private OrenNayarBsdf *)bsdf_alloc(
               sd,
               sizeof(OrenNayarBsdf),
-              rgb_to_spectrum(base_color) * (1.0f - subsurface_weight) * weight);
+              rgb_to_spectrum(base_color * base_weight) * (1.0f - subsurface_weight) * weight);
           if (bsdf) {
             bsdf->N = N;
 
@@ -721,7 +724,7 @@ ccl_device
             }
             else {
               bsdf->roughness = base_diffuse_roughness;
-              sd->flag |= bsdf_oren_nayar_setup(sd, bsdf, rgb_to_spectrum(base_color));
+              sd->flag |= bsdf_oren_nayar_setup(sd, bsdf, rgb_to_spectrum(base_color * base_weight));
             }
           }
         }
