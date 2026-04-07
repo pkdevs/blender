@@ -942,7 +942,6 @@ static void apply_mask_mesh(const Depsgraph &depsgraph,
                             const auto_mask::Cache &automasking,
                             const ApplyMaskMode mode,
                             const float factor,
-                            const bool invert_automask,
                             const bke::pbvh::MeshNode &node,
                             LocalData &tls,
                             const MutableSpan<float> mask)
@@ -959,9 +958,7 @@ static void apply_mask_mesh(const Depsgraph &depsgraph,
   new_mask.fill(1.0f);
   auto_mask::calc_vert_factors(depsgraph, object, automasking, node, verts, new_mask);
 
-  if (invert_automask) {
-    mask::invert_mask(new_mask);
-  }
+  mask::invert_mask(new_mask);
 
   tls.mask.resize(verts.size());
   const MutableSpan<float> node_mask = tls.mask;
@@ -978,7 +975,6 @@ static void apply_mask_grids(const Depsgraph &depsgraph,
                              const auto_mask::Cache &automasking,
                              const ApplyMaskMode mode,
                              const float factor,
-                             const bool invert_automask,
                              const bke::pbvh::GridsNode &node,
                              LocalData &tls)
 {
@@ -999,9 +995,7 @@ static void apply_mask_grids(const Depsgraph &depsgraph,
   new_mask.fill(1.0f);
   auto_mask::calc_grids_factors(depsgraph, object, automasking, node, grids, new_mask);
 
-  if (invert_automask) {
-    mask::invert_mask(new_mask);
-  }
+  mask::invert_mask(new_mask);
 
   tls.mask.resize(grid_verts_num);
   const MutableSpan<float> node_mask = tls.mask;
@@ -1018,7 +1012,6 @@ static void apply_mask_bmesh(const Depsgraph &depsgraph,
                              const auto_mask::Cache &automasking,
                              const ApplyMaskMode mode,
                              const float factor,
-                             const float invert_automask,
                              bke::pbvh::BMeshNode &node,
                              LocalData &tls)
 {
@@ -1035,9 +1028,7 @@ static void apply_mask_bmesh(const Depsgraph &depsgraph,
   new_mask.fill(1.0f);
   auto_mask::calc_vert_factors(depsgraph, object, automasking, node, verts, new_mask);
 
-  if (invert_automask) {
-    mask::invert_mask(new_mask);
-  }
+  mask::invert_mask(new_mask);
 
   tls.mask.resize(verts.size());
   const MutableSpan<float> node_mask = tls.mask;
@@ -1055,8 +1046,7 @@ static void apply_mask_from_settings(const Depsgraph &depsgraph,
                                      const IndexMask &node_mask,
                                      const auto_mask::Cache &automasking,
                                      const ApplyMaskMode mode,
-                                     const float factor,
-                                     const bool invert_automask)
+                                     const float factor)
 {
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
@@ -1070,16 +1060,8 @@ static void apply_mask_from_settings(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            apply_mask_mesh(depsgraph,
-                            object,
-                            hide_vert,
-                            automasking,
-                            mode,
-                            factor,
-                            invert_automask,
-                            nodes[i],
-                            tls,
-                            mask.span);
+            apply_mask_mesh(
+                depsgraph, object, hide_vert, automasking, mode, factor, nodes[i], tls, mask.span);
             bke::pbvh::node_update_mask_mesh(mask.span, nodes[i]);
           },
           exec_mode::grain_size(1));
@@ -1094,8 +1076,7 @@ static void apply_mask_from_settings(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            apply_mask_grids(
-                depsgraph, object, automasking, mode, factor, invert_automask, nodes[i], tls);
+            apply_mask_grids(depsgraph, object, automasking, mode, factor, nodes[i], tls);
             bke::pbvh::node_update_mask_grids(key, masks, nodes[i]);
           },
           exec_mode::grain_size(1));
@@ -1108,8 +1089,7 @@ static void apply_mask_from_settings(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            apply_mask_bmesh(
-                depsgraph, object, automasking, mode, factor, invert_automask, nodes[i], tls);
+            apply_mask_bmesh(depsgraph, object, automasking, mode, factor, nodes[i], tls);
             bke::pbvh::node_update_mask_bmesh(mask_offset, nodes[i]);
           },
           exec_mode::grain_size(1));
@@ -1220,7 +1200,7 @@ static wmOperatorStatus mask_from_cavity_exec(bContext *C, wmOperator *op)
   undo::push_nodes(*depsgraph, ob, node_mask, undo::Type::Mask);
 
   automasking->calc_cavity_factor(*depsgraph, ob, node_mask);
-  apply_mask_from_settings(*depsgraph, ob, pbvh, node_mask, *automasking, mode, factor, false);
+  apply_mask_from_settings(*depsgraph, ob, pbvh, node_mask, *automasking, mode, factor);
 
   undo::push_end(ob);
 
@@ -1411,7 +1391,7 @@ static wmOperatorStatus mask_from_boundary_exec(bContext *C, wmOperator *op)
   undo::push_begin(scene, ob, op);
   undo::push_nodes(*depsgraph, ob, node_mask, undo::Type::Mask);
 
-  apply_mask_from_settings(*depsgraph, ob, pbvh, node_mask, *automasking, mode, factor, true);
+  apply_mask_from_settings(*depsgraph, ob, pbvh, node_mask, *automasking, mode, factor);
 
   undo::push_end(ob);
 
