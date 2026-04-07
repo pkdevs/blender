@@ -348,7 +348,7 @@ void blo_do_versions_520(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   }
 
   /* Disable "unified" flags for Grease Pencil Draw mode. */
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 12)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 11)) {
     for (Scene &scene : bmain->scenes) {
       if (scene.toolsettings->gp_paint) {
         UnifiedPaintSettings &settings =
