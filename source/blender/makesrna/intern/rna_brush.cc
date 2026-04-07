@@ -1791,8 +1791,7 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, nullptr, "conversion_threshold");
   RNA_def_property_range(prop, 0.0f, FLT_MAX);
   RNA_def_property_float_default(prop, 0.001f);
-  RNA_def_property_ui_text(
-      prop, "Threshold", "Threshold distance for between points for conversion");
+  RNA_def_property_ui_text(prop, "Threshold", "Threshold distance between points for conversion");
   RNA_def_parameter_clear_flags(prop, PROP_ANIMATABLE, ParameterFlag(0));
   RNA_def_property_update(prop, 0, "rna_BrushGpencilSettings_update");
 
