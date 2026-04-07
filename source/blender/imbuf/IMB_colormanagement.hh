@@ -194,7 +194,7 @@ void IMB_colormanagement_transform_byte(unsigned char *buffer,
  * Convert a byte image buffer into a float buffer, changing the color spaces too.
  */
 void IMB_colormanagement_transform_byte_to_float(float *float_buffer,
-                                                 unsigned char *byte_buffer,
+                                                 const unsigned char *byte_buffer,
                                                  int width,
                                                  int height,
                                                  int channels,
