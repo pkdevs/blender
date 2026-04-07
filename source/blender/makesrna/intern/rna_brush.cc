@@ -2113,8 +2113,7 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "show_lasso", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "flag", GP_BRUSH_DISSABLE_LASSO);
-  RNA_def_property_ui_text(
-      prop, "Show Lasso", "Do not display fill color while drawing the stroke");
+  RNA_def_property_ui_text(prop, "Show Lasso", "Display fill color while drawing the stroke");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, 0, "rna_BrushGpencilSettings_update");
 
