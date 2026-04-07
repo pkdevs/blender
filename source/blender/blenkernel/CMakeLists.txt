@@ -575,6 +575,7 @@ set(LIB
   PRIVATE bf::gpu
   bf_ikplugin
   PRIVATE bf::imbuf
+  PRIVATE bf::imbuf::opencolorio
   PRIVATE bf::imbuf::movie
   PRIVATE bf::intern::clog
   bf_intern_ghost

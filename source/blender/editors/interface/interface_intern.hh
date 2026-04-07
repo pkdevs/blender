@@ -1238,7 +1238,8 @@ void draw_but_HISTOGRAM(ARegion *region,
                         Button *but,
                         const uiWidgetColors *wcol,
                         const rcti *recti);
-void draw_but_WAVEFORM(ARegion *region,
+void draw_but_WAVEFORM(const bContext *C,
+                       ARegion *region,
                        Button *but,
                        const uiWidgetColors *wcol,
                        const rcti *recti);

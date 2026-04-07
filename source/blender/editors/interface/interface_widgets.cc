@@ -5641,7 +5641,7 @@ void draw_button(const bContext *C, ARegion *region, uiStyle *style, Button *but
         break;
 
       case ButtonType::Waveform:
-        draw_but_WAVEFORM(region, but, &tui->wcol_regular, rect);
+        draw_but_WAVEFORM(C, region, but, &tui->wcol_regular, rect);
         break;
 
       case ButtonType::Vectorscope:

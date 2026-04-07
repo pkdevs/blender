@@ -13,6 +13,7 @@
 #include "DNA_curve_types.h"
 #include "DNA_curveprofile_types.h"
 #include "DNA_movieclip_types.h"
+#include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
 #include "BLI_math_rotation.h"
@@ -25,12 +26,16 @@
 
 #include "BKE_colorband.hh"
 #include "BKE_colortools.hh"
+#include "BKE_context.hh"
 #include "BKE_curveprofile.h"
 #include "BKE_tracking.hh"
 
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+
+#include "OCIO_scope.hh"
+#include "OCIO_view.hh"
 
 #include "BIF_glutil.hh"
 
@@ -509,8 +514,7 @@ void draw_but_HISTOGRAM(ARegion *region,
 
   GPU_blend(GPU_BLEND_ALPHA);
 
-  float color[4];
-  theme::get_color_4fv(TH_PREVIEW_BACK, color);
+  const float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
   draw_roundbox_corner_set(CNR_ALL);
   rctf back_rect{};
   back_rect.xmin = rect.xmin - 1;
@@ -678,7 +682,8 @@ static void circle_draw_rgb(float *points, int tot_points, const float *col, GPU
   GPU_batch_discard(batch);
 }
 
-void draw_but_WAVEFORM(ARegion *region,
+void draw_but_WAVEFORM(const bContext *C,
+                       ARegion *region,
                        Button *but,
                        const uiWidgetColors * /*wcol*/,
                        const rcti *recti)
@@ -726,8 +731,7 @@ void draw_but_WAVEFORM(ARegion *region,
 
   GPU_blend(GPU_BLEND_ALPHA);
 
-  float color[4];
-  theme::get_color_4fv(TH_PREVIEW_BACK, color);
+  const float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
   draw_roundbox_corner_set(CNR_ALL);
   rctf back_rect{};
   back_rect.xmin = rect.xmin - 1.0f;
@@ -750,17 +754,47 @@ void draw_but_WAVEFORM(ARegion *region,
               BLI_rcti_size_x(&scissor_new),
               BLI_rcti_size_y(&scissor_new));
 
-  /* draw scale numbers first before binding any shader */
-  for (int i = 0; i < 6; i++) {
-    char str[4];
-    SNPRINTF_UTF8(str, "%-3d", i * 20);
-    str[3] = '\0';
-    BLF_color4f(BLF_default(), 1.0f, 1.0f, 1.0f, 0.08f);
-    BLF_draw_default(rect.xmin + 1, yofs - 5 + (i * 0.2f) * h, 0, str, sizeof(str) - 1);
+  /* Get scope info for the current display/view. */
+  const Scene *scene = CTX_data_scene(C);
+  const ocio::ScopeInfo &scope_info = IMB_colormanagement_get_scope_info(
+      &scene->display_settings, scene->view_settings.view_transform);
+
+  /* Draw labels centered on each grid line, with the line starting after the text.
+   * Font size is chosen so all labels fit without overlap. */
+  const int font_id = BLF_default();
+  float font_size = 8.0f * UI_SCALE_FAC;
+  float min_gap = FLT_MAX;
+  for (int i = 1; i < scope_info.graticules.size(); i++) {
+    min_gap = std::min(min_gap,
+                       scope_info.graticules[i].value - scope_info.graticules[i - 1].value);
+  }
+  font_size = std::min(font_size, min_gap * h * 0.8f);
+  BLF_size(font_id, font_size);
+  BLF_color4f(font_id, 1.0f, 1.0f, 1.0f, 0.2f);
+
+  struct GraticuleLine {
+    float x_start, y;
+  };
+  Vector<GraticuleLine> grid_lines;
+
+  for (const ocio::ScopeGraticule &graticule : scope_info.graticules) {
+    const float y = yofs + graticule.value * h;
+    const size_t label_len = strlen(graticule.label);
+
+    float text_width, text_height;
+    BLF_width_and_height(font_id, graticule.label, label_len, &text_width, &text_height);
+    const float gap = text_width + text_height;
+
+    BLF_position(font_id, rect.xmin + (gap - text_width) * 0.5f, y - text_height * 0.5f, 0);
+    BLF_draw(font_id, graticule.label, label_len);
+
+    grid_lines.append({rect.xmin + gap, y});
   }
 
-  /* Flush text cache before drawing things on top. */
+  /* Flush text cache before drawing lines on top. */
   BLF_batch_draw_flush();
+
+  GPU_blend(GPU_BLEND_ALPHA);
 
   GPUVertFormat *format = immVertexFormat();
   GPU_scissor_test(true);
@@ -768,29 +802,15 @@ void draw_but_WAVEFORM(ARegion *region,
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
-  immUniformColor4f(1.0f, 1.0f, 1.0f, 0.08f);
+  immUniformColor4f(1.0f, 1.0f, 1.0f, 0.2f);
 
-  /* draw grid lines here */
-  immBegin(GPU_PRIM_LINES, 12);
-
-  for (int i = 0; i < 6; i++) {
-    immVertex2f(pos, rect.xmin + 22, yofs + (i * 0.2f) * h);
-    immVertex2f(pos, rect.xmax + 1, yofs + (i * 0.2f) * h);
+  /* Draw grid lines. */
+  immBegin(GPU_PRIM_LINES, int(grid_lines.size()) * 2);
+  for (const GraticuleLine &line : grid_lines) {
+    immVertex2f(pos, line.x_start, line.y);
+    immVertex2f(pos, rect.xmax, line.y);
   }
-
   immEnd();
-
-  /* 3 vertical separation */
-  if (scopes->wavefrm_mode != SCOPES_WAVEFRM_LUMA) {
-    immBegin(GPU_PRIM_LINES, 4);
-
-    for (int i = 1; i < 3; i++) {
-      immVertex2f(pos, rect.xmin + i * w3, rect.ymin);
-      immVertex2f(pos, rect.xmin + i * w3, rect.ymax);
-    }
-
-    immEnd();
-  }
 
   /* separate min max zone on the right */
   immBegin(GPU_PRIM_LINES, 2);
@@ -1034,8 +1054,7 @@ void draw_but_VECTORSCOPE(ARegion *region,
   GPU_line_smooth(true);
   GPU_blend(GPU_BLEND_ALPHA);
 
-  float color[4];
-  theme::get_color_4fv(TH_PREVIEW_BACK, color);
+  const float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
   draw_roundbox_corner_set(CNR_ALL);
   rctf back_rect{};
   back_rect.xmin = rect.xmin - 1;
