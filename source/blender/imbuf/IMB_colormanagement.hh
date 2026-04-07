@@ -569,12 +569,6 @@ class ColormanageProcessor : NonCopyable {
   }
 };
 
-bool IMB_colormanagement_display_processor_needed(
-    const ImBuf *ibuf,
-    const ColorManagedViewSettings *view_settings,
-    const ColorManagedDisplaySettings *display_settings,
-    const ColorManagedDisplaySpace display_space = DISPLAY_SPACE_DRAW);
-
 /** \} */
 
 /* -------------------------------------------------------------------- */

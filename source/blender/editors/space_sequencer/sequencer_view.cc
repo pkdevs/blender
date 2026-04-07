@@ -181,33 +181,13 @@ static bool view_frame_preview_scope(bContext *C, wmOperator *op, ARegion *regio
   const View2D *v2d = ui::view2d_fromcontext(C);
   const int smooth_viewtx = WM_operator_smooth_viewtx_get(op);
 
-  if (sseq->mainb == SEQ_DRAW_IMG_HISTOGRAM) {
-    /* For histogram scope, use extents of the histogram. */
-    const ScopeHistogram &hist = sseq->runtime->scopes.histogram;
-    if (hist.data.is_empty()) {
-      return false;
-    }
-
+  if (ELEM(sseq->mainb,
+           SEQ_DRAW_IMG_HISTOGRAM,
+           SEQ_DRAW_IMG_WAVEFORM,
+           SEQ_DRAW_IMG_RGBPARADE,
+           SEQ_DRAW_IMG_VECTORSCOPE))
+  {
     rctf cur_new = v2d->tot;
-    const float val_max = ScopeHistogram::bin_to_float(math::reduce_max(hist.max_bin));
-    cur_new.xmax = cur_new.xmin + (cur_new.xmax - cur_new.xmin) * val_max;
-
-    /* Add some padding around whole histogram. */
-    BLI_rctf_scale(&cur_new, 1.1f);
-
-    ui::view2d_smooth_view(C, region, &cur_new, smooth_viewtx);
-    return true;
-  }
-
-  if (ELEM(sseq->mainb, SEQ_DRAW_IMG_WAVEFORM, SEQ_DRAW_IMG_RGBPARADE)) {
-    /* For waveform/parade scopes, use 3.0 display space Y value as bounds
-     * for HDR content. */
-    const bool hdr = sseq->runtime->scopes.last_ibuf_float;
-    rctf cur_new = v2d->tot;
-    if (hdr) {
-      const float val_max = 3.0f;
-      cur_new.ymax = cur_new.ymin + (cur_new.ymax - cur_new.ymin) * val_max;
-    }
     ui::view2d_smooth_view(C, region, &cur_new, smooth_viewtx);
     return true;
   }

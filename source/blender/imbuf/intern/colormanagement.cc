@@ -2017,7 +2017,7 @@ static bool is_colorspace_same_as_display(const ColorSpace *colorspace,
   return untonemapped_view && untonemapped_view->name() == view_settings->view_transform;
 }
 
-bool IMB_colormanagement_display_processor_needed(
+static bool imb_colormanagement_display_processor_needed(
     const ImBuf *ibuf,
     const ColorManagedViewSettings *view_settings,
     const ColorManagedDisplaySettings *display_settings,
@@ -2052,9 +2052,13 @@ static void colormanage_display_buffer_process(ImBuf *ibuf,
                                                const ColorManagedDisplaySettings *display_settings,
                                                const ColorManagedDisplaySpace display_space)
 {
-  std::optional<ColormanageProcessor> cm_processor =
-      ColormanageProcessor::display_processor_for_imbuf(
-          ibuf, view_settings, display_settings, display_space);
+  std::optional<ColormanageProcessor> cm_processor;
+  if (imb_colormanagement_display_processor_needed(
+          ibuf, view_settings, display_settings, display_space))
+  {
+    cm_processor = ColormanageProcessor::display_processor_new(
+        view_settings, display_settings, display_space, false, nullptr);
+  }
 
   ColormanageProcessor *processor = cm_processor ? &*cm_processor : nullptr;
 
@@ -4309,12 +4313,14 @@ std::optional<ColormanageProcessor> ColormanageProcessor::display_processor_for_
     const ColorManagedDisplaySettings *display_settings,
     const ColorManagedDisplaySpace display_space)
 {
-  if (!IMB_colormanagement_display_processor_needed(
+  if (!imb_colormanagement_display_processor_needed(
           ibuf, view_settings, display_settings, display_space))
   {
     return std::nullopt;
   }
-  return display_processor_new(view_settings, display_settings, display_space, false, nullptr);
+  const char *from_colorspace = imbuf_colorspace_name(ibuf, false);
+  return display_processor_new(
+      view_settings, display_settings, display_space, false, from_colorspace);
 }
 
 bool ColormanageProcessor::is_data_result() const
