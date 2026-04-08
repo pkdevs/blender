@@ -23,7 +23,7 @@ COMPUTE_SHADER_CREATE_INFO(eevee_ray_denoise_bilateral)
 #include "eevee_closure_lib.glsl"
 #include "eevee_filter_lib.glsl"
 #include "eevee_gbuffer_read_lib.glsl"
-#include "eevee_reverse_z_lib.glsl"
+#include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_sampling_lib.glsl"
 #include "gpu_shader_codegen_lib.glsl"
 #include "gpu_shader_math_vector_lib.glsl"

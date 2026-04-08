@@ -145,9 +145,7 @@ set(SRC_GLSL_LIB
   eevee_bxdf_diffuse_lib.glsl
   eevee_bxdf_lib.glsl
   eevee_bxdf_microfacet_lib.glsl
-  eevee_camera_lib.glsl
   eevee_closure_lib.glsl
-  eevee_colorspace_lib.glsl
   eevee_cryptomatte_lib.glsl
   eevee_depth_of_field_accumulator_lib.glsl
   eevee_depth_of_field_lib.glsl
@@ -167,21 +165,15 @@ set(SRC_GLSL_LIB
   eevee_ltc_lib.glsl
   eevee_motion_blur_lib.glsl
   # eevee_nodetree_lib.glsl # Has dependency on draw_model_lib that is hard to resolve
-  eevee_occupancy_lib.glsl
-  eevee_octahedron_lib.glsl
   eevee_ray_generate_lib.glsl
   eevee_ray_trace_screen_lib.glsl
-  eevee_ray_types_lib.glsl
   eevee_renderpass_lib.glsl
-  eevee_reverse_z_lib.glsl
   eevee_sampling_lib.glsl
   eevee_shadow_lib.glsl
-  eevee_shadow_tilemap_lib.glsl
   eevee_shadow_tracing_lib.glsl
   eevee_subsurface_lib.glsl
   eevee_surf_lib.glsl
   eevee_surfel_list_lib.glsl
-  eevee_thickness_lib.glsl
   # eevee_transparency_lib.glsl # Require Fragment shader include
   # eevee_velocity_lib.glsl # Has dependency on draw_model_lib that is hard to resolve
   eevee_volume_lib.glsl
