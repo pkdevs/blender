@@ -1162,14 +1162,14 @@ static ImBuf *add_ibuf_for_tile(Image *ima, ImageTile *tile)
 
     if (ima->colorspace_settings.name[0] == '\0') {
       const char *colorspace = IMB_colormanagement_role_colorspace_name_get(
-          COLOR_ROLE_DEFAULT_FLOAT);
+          COLOR_ROLE_SCENE_LINEAR);
 
       STRNCPY_UTF8(ima->colorspace_settings.name, colorspace);
     }
 
     if (ibuf != nullptr) {
       rect_float = ibuf->float_data_for_write();
-      IMB_colormanagement_check_is_data(ibuf, ima->colorspace_settings.name);
+      IMB_colormanagement_assign_float_colorspace(ibuf, ima->colorspace_settings.name);
     }
 
     if (IMB_colormanagement_space_name_is_data(ima->colorspace_settings.name)) {
