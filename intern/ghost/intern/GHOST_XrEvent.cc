@@ -39,7 +39,10 @@ GHOST_TSuccess GHOST_XrEventsHandle(GHOST_IXrContext *xr_contexthandle)
         GHOST_XrContextDestroy(xr_contexthandle);
         return GHOST_kSuccess;
       default:
-        CLOG_INFO(LOG_GHOST_XR, "Unhandled OpenXR event: %i", event->type);
+        char event_string_buf[XR_MAX_STRUCTURE_NAME_SIZE];
+        xrStructureTypeToString(xr_context.getInstance(), event->type, event_string_buf);
+        CLOG_INFO(
+            LOG_GHOST_XR, "Unhandled OpenXR event: %s (value: %i)", event_string_buf, event->type);
         return GHOST_kFailure;
     }
   }
