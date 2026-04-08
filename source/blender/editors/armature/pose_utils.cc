@@ -12,6 +12,7 @@
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
+#include "BLI_vector.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
@@ -76,7 +77,7 @@ enum eAction_TransformFlags {
 
 static eAction_TransformFlags get_item_transform_flags_and_fcurves(Object &ob,
                                                                    bPoseChannel &pchan,
-                                                                   ListBaseT<LinkData> &r_curves)
+                                                                   Vector<FCurve *> &r_curves)
 {
   if (!ob.adt || !ob.adt->action) {
     return eAction_TransformFlags(0);
@@ -122,32 +123,28 @@ static eAction_TransformFlags get_item_transform_flags_and_fcurves(Object &ob,
     pPtr = strstr(bPtr, "location");
     if (pPtr) {
       flags |= ACT_TRANS_LOC;
-
-      BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+      r_curves.append(&fcurve);
       return;
     }
 
     pPtr = strstr(bPtr, "scale");
     if (pPtr) {
       flags |= ACT_TRANS_SCALE;
-
-      BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+      r_curves.append(&fcurve);
       return;
     }
 
     pPtr = strstr(bPtr, "rotation");
     if (pPtr) {
       flags |= ACT_TRANS_ROT;
-
-      BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+      r_curves.append(&fcurve);
       return;
     }
 
     pPtr = strstr(bPtr, "bbone_");
     if (pPtr) {
       flags |= ACT_TRANS_BBONE;
-
-      BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+      r_curves.append(&fcurve);
       return;
     }
 
@@ -155,8 +152,7 @@ static eAction_TransformFlags get_item_transform_flags_and_fcurves(Object &ob,
     pPtr = strstr(bPtr, "[\"");
     if (pPtr) {
       flags |= ACT_TRANS_PROP;
-
-      BLI_addtail(&r_curves, BLI_genericNodeN(&fcurve));
+      r_curves.append(&fcurve);
       return;
     }
   });
@@ -170,7 +166,7 @@ static void fcurves_to_pchan_links_get(ListBaseT<tPChanFCurveLink> &pfLinks,
                                        Object &ob,
                                        bPoseChannel &pchan)
 {
-  ListBaseT<LinkData> curves = {nullptr, nullptr};
+  Vector<FCurve *> curves;
   const eAction_TransformFlags transFlags = get_item_transform_flags_and_fcurves(
       ob, pchan, curves);
 
@@ -180,7 +176,7 @@ static void fcurves_to_pchan_links_get(ListBaseT<tPChanFCurveLink> &pfLinks,
     return;
   }
 
-  tPChanFCurveLink *pfl = MEM_new_zeroed<tPChanFCurveLink>("tPChanFCurveLink");
+  tPChanFCurveLink *pfl = MEM_new<tPChanFCurveLink>("tPChanFCurveLink");
 
   pfl->ob = &ob;
   pfl->fcurves = curves;
@@ -315,14 +311,13 @@ void poseAnim_mapping_free(ListBaseT<tPChanFCurveLink> *pfLinks)
       IDP_FreeProperty(pfl->oldprops);
     }
 
-    /* free list of F-Curve reference links */
-    BLI_freelistN(&pfl->fcurves);
-
     /* free pchan RNA Path */
     MEM_delete(pfl->pchan_path);
 
-    /* free link itself */
-    BLI_freelinkN(pfLinks, pfl);
+    /* We cannot use BLI_freelinkN because that casts the TransformableFCurveLink to a C-style
+     * struct causing MEM_delete to do a C-style delete and not deallocate the Vector. */
+    BLI_remlink(pfLinks, pfl);
+    MEM_delete(pfl);
   }
 }
 
@@ -442,31 +437,6 @@ void poseAnim_mapping_autoKeyframe(bContext *C,
     }
   }
   FOREACH_OBJECT_IN_MODE_END;
-}
-
-/* ------------------------- */
-
-LinkData *poseAnim_mapping_getNextFCurve(ListBaseT<LinkData> *fcuLinks,
-                                         LinkData *prev,
-                                         const char *path)
-{
-  LinkData *first = static_cast<LinkData *>((prev)     ? prev->next :
-                                            (fcuLinks) ? fcuLinks->first :
-                                                         nullptr);
-  LinkData *ld;
-
-  /* check each link to see if the linked F-Curve has a matching path */
-  for (ld = first; ld; ld = ld->next) {
-    const FCurve *fcu = static_cast<const FCurve *>(ld->data);
-
-    /* check if paths match */
-    if (STREQ(path, fcu->rna_path)) {
-      return ld;
-    }
-  }
-
-  /* none found */
-  return nullptr;
 }
 
 /* *********************************************** */
