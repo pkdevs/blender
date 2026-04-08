@@ -242,11 +242,6 @@ static int pose_slide_init(bContext *C, wmOperator *op, ePoseSlide_Modes mode)
         ob_data->ob->adt, pso->prev_frame, NLATIME_CONVERT_UNMAP);
     ob_data->next_frame = BKE_nla_tweakedit_remap(
         ob_data->ob->adt, pso->next_frame, NLATIME_CONVERT_UNMAP);
-
-    /* Set depsgraph flags. */
-    /* Make sure the lock is set OK, unlock can be accidentally saved? */
-    ob_data->ob->pose->flag |= POSE_LOCKED;
-    ob_data->ob->pose->flag &= ~POSE_DO_UNLOCK;
   }
 
   /* Do basic initialize of RB-BST used for finding keyframes, but leave the filling of it up
