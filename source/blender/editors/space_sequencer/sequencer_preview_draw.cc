@@ -287,7 +287,7 @@ void sequencer_draw_maskedit(const bContext *C, Scene *scene, ARegion *region, S
 static void seq_prefetch_wm_notify(const bContext *C, Scene *scene)
 {
   if (seq::prefetch_need_redraw(C, scene)) {
-    WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, nullptr);
+    WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER_PREFETCH, nullptr);
   }
 }
 
