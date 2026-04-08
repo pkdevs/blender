@@ -564,10 +564,18 @@ ccl_device
           stack_load_float_default(stack, specular_roughness_offset, 0.f));
       const float specular_roughness_anisotroy = saturatef(
           stack_load_float_default(stack, specular_roughness_anisotropy_offset, 0.f));
-      const float specular_ior = stack_load_float_default(stack, specular_ior_offset, 1.5f);
+      float specular_ior = stack_load_float_default(stack, specular_ior_offset, 1.5f);
+      // flipping the IOR in case we are inside the object
+      specular_ior = (sd->flag & SD_BACKFACING) ? 1.0f / specular_ior : specular_ior;
 
       const float subsurface_weight = 0.f;
-      const float transmission_weight = 0.f;
+      const float transmission_weight = saturatef(
+          stack_load_float_default(stack, transmission_weight_offset, 1.f));
+      const float3 transmission_color = saturate(
+          stack_load_float3_default(stack, transmission_color_offset, make_float3(1.0f)));
+      const float transmission_depth = stack_load_float_default(
+          stack, transmission_depth_offset, 0.0f);
+
       const float fuzz_weight = 0.f;
       const float coat_weight = 0.f;
       const float3 emission = zero_float3();
@@ -593,8 +601,11 @@ ccl_device
                        oneMinusSpecularIOROveronePlusSpecularIOR;
       const float xiSpecular = clamp(specular_weight, 0.f, safe_divide(1.f, Fs));
       const float epsilonSpecular = signf(specular_ior - 1.f) * safe_sqrtf(xiSpecular * Fs);
-      const float modulated_specular_ior = safe_divide(1.f + epsilonSpecular,
-                                                       1.f - epsilonSpecular);
+      float modulated_specular_ior = safe_divide(1.f + epsilonSpecular, 1.f - epsilonSpecular);
+
+      // transmission component
+      const float3 transmission_tint = transmission_depth > 0.f ? one_float3() :
+                                                                  transmission_color;
 
       /*
       if (specular_roughness_anisotroy > 0.0f && stack_valid(tangent_offset)) {
@@ -679,6 +690,43 @@ ccl_device
 
           /* Attenuate other components */
           weight *= (1.0f - base_metalness);
+        }
+
+        /* Translucent Component*/
+        if (transmission_weight > CLOSURE_WEIGHT_CUTOFF &&
+            (refractive_caustics && (specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
+        {
+          ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+              sd, sizeof(MicrofacetBsdf), weight * transmission_weight);
+          ccl_private FresnelDielectricTint *fresnel =
+              (bsdf != nullptr) ? (ccl_private FresnelDielectricTint *)closure_alloc_extra(
+                                      sd, sizeof(FresnelDielectricTint)) :
+                                  nullptr;
+
+          if (bsdf && fresnel) {
+            bsdf->N = valid_reflection_N;
+            // Note the spec in this section says specular_ior but they mean the modulated version
+            // which is used for all slabs of the dielectric base.
+            bsdf->ior = modulated_specular_ior;
+            bsdf->T = T;
+            bsdf->alpha_x = specular_alpha_x;
+            bsdf->alpha_y = specular_alpha_y;
+
+            fresnel->reflection_tint = specular_color;
+            fresnel->transmission_tint = transmission_color;
+            fresnel->thin_film.thickness = thinfilm_thickness;
+            fresnel->thin_film.ior = thinfilm_ior;
+
+            /* setup bsdf */
+            sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
+            const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
+            bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
+
+            /* Attenuate lower layers */
+            // const Spectrum albedo = bsdf_albedo(
+            //     kg, sd, (ccl_private ShaderClosure *)bsdf, true, false);
+            weight = weight * (1.0f - transmission_weight);
+          }
         }
 
         /* Specular Component */
