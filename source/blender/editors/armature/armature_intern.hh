@@ -131,6 +131,22 @@ void POSE_OT_quaternions_flip(wmOperatorType *ot);
 
 /* `pose_utils.cc` */
 
+/**
+ * Types of transforms to apply to a tPchanFCurveLink.
+ */
+enum eAction_TransformFlags {
+  ACT_TRANS_LOC = (1 << 0),
+  ACT_TRANS_ROT = (1 << 1),
+  ACT_TRANS_SCALE = (1 << 2),
+
+  /* BBone shape - for all the parameters, provided one is set. */
+  ACT_TRANS_BBONE = (1 << 3),
+  ACT_TRANS_PROP = (1 << 4),
+
+  ACT_TRANS_ONLY = (ACT_TRANS_LOC | ACT_TRANS_ROT | ACT_TRANS_SCALE),
+  ACT_TRANS_ALL = (ACT_TRANS_ONLY | ACT_TRANS_PROP),
+};
+
 /* Temporary data linking PoseChannels with the F-Curves they affect */
 struct tPChanFCurveLink {
   tPChanFCurveLink *next, *prev;
@@ -140,6 +156,9 @@ struct tPChanFCurveLink {
 
   /** F-Curves for this PoseChannel (wrapped with LinkData) */
   Vector<FCurve *> fcurves;
+  /* This is used as an optimization to only do blending on transform types that actually have
+   * animation. */
+  eAction_TransformFlags transform_flag;
   /** Pose Channel which data is attached to */
   bPoseChannel *pchan;
 

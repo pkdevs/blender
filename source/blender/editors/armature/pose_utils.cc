@@ -58,23 +58,6 @@ namespace blender {
 /* *********************************************** */
 /* FCurves <-> PoseChannels Links */
 
-/**
- * Types of transforms applied to the given item:
- * - these are the return flags for get_item_transform_flags()
- */
-enum eAction_TransformFlags {
-  ACT_TRANS_LOC = (1 << 0),
-  ACT_TRANS_ROT = (1 << 1),
-  ACT_TRANS_SCALE = (1 << 2),
-
-  /* BBone shape - for all the parameters, provided one is set. */
-  ACT_TRANS_BBONE = (1 << 3),
-  ACT_TRANS_PROP = (1 << 4),
-
-  ACT_TRANS_ONLY = (ACT_TRANS_LOC | ACT_TRANS_ROT | ACT_TRANS_SCALE),
-  ACT_TRANS_ALL = (ACT_TRANS_ONLY | ACT_TRANS_PROP),
-};
-
 static eAction_TransformFlags get_item_transform_flags_and_fcurves(Object &ob,
                                                                    bPoseChannel &pchan,
                                                                    Vector<FCurve *> &r_curves)
@@ -170,8 +153,6 @@ static void fcurves_to_pchan_links_get(ListBaseT<tPChanFCurveLink> &pfLinks,
   const eAction_TransformFlags transFlags = get_item_transform_flags_and_fcurves(
       ob, pchan, curves);
 
-  pchan.flag &= ~(POSE_LOC | POSE_ROT | POSE_SCALE | POSE_BBONE_SHAPE);
-
   if (!transFlags) {
     return;
   }
@@ -189,18 +170,7 @@ static void fcurves_to_pchan_links_get(ListBaseT<tPChanFCurveLink> &pfLinks,
   BLI_addtail(&pfLinks, pfl);
 
   /* Set pchan's transform flags. */
-  if (transFlags & ACT_TRANS_LOC) {
-    pchan.flag |= POSE_LOC;
-  }
-  if (transFlags & ACT_TRANS_ROT) {
-    pchan.flag |= POSE_ROT;
-  }
-  if (transFlags & ACT_TRANS_SCALE) {
-    pchan.flag |= POSE_SCALE;
-  }
-  if (transFlags & ACT_TRANS_BBONE) {
-    pchan.flag |= POSE_BBONE_SHAPE;
-  }
+  pfl->transform_flag = transFlags;
 
   copy_v3_v3(pfl->oldloc, pchan.loc);
   copy_v3_v3(pfl->oldrot, pchan.eul);

@@ -755,17 +755,17 @@ static void pose_slide_rest_pose_apply(bContext *C, tPoseSlideOp *pso)
      */
     bPoseChannel *pchan = pfl.pchan;
 
-    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_LOC) && (pchan->flag & POSE_LOC)) {
+    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_LOC) && (pfl.transform_flag & ACT_TRANS_LOC)) {
       /* Calculate these for the 'location' vector, and use location curves. */
       pose_slide_rest_pose_apply_vec3(pso, pchan->loc, 0.0f);
     }
 
-    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_SCALE) && (pchan->flag & POSE_SCALE)) {
+    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_SCALE) && (pfl.transform_flag & ACT_TRANS_SCALE)) {
       /* Calculate these for the 'scale' vector, and use scale curves. */
       pose_slide_rest_pose_apply_vec3(pso, pchan->scale, 1.0f);
     }
 
-    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_ROT) && (pchan->flag & POSE_ROT)) {
+    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_ROT) && (pfl.transform_flag & ACT_TRANS_ROT)) {
       /* Everything depends on the rotation mode. */
       if (pchan->rotmode > 0) {
         /* Eulers - so calculate these for the 'eul' vector, and use euler_rotation curves. */
@@ -780,7 +780,9 @@ static void pose_slide_rest_pose_apply(bContext *C, tPoseSlideOp *pso)
       }
     }
 
-    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_BBONE_SHAPE) && (pchan->flag & POSE_BBONE_SHAPE)) {
+    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_BBONE_SHAPE) &&
+        (pfl.transform_flag & ACT_TRANS_BBONE))
+    {
       /* Bbone properties - they all start a "bbone_" prefix. */
       /* TODO: Not implemented. */
       // pose_slide_apply_props(pso, pfl, "bbone_");
@@ -831,17 +833,17 @@ static void pose_slide_apply(bContext *C, tPoseSlideOp *pso)
      */
     bPoseChannel *pchan = pfl.pchan;
 
-    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_LOC) && (pchan->flag & POSE_LOC)) {
+    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_LOC) && (pfl.transform_flag & ACT_TRANS_LOC)) {
       /* Calculate these for the 'location' vector, and use location curves. */
       pose_slide_apply_vec3(pso, &pfl, pchan->loc, "location");
     }
 
-    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_SCALE) && (pchan->flag & POSE_SCALE)) {
+    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_SCALE) && (pfl.transform_flag & ACT_TRANS_SCALE)) {
       /* Calculate these for the 'scale' vector, and use scale curves. */
       pose_slide_apply_vec3(pso, &pfl, pchan->scale, "scale");
     }
 
-    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_ROT) && (pchan->flag & POSE_ROT)) {
+    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_ROT) && (pfl.transform_flag & ACT_TRANS_ROT)) {
       /* Everything depends on the rotation mode. */
       if (pchan->rotmode > 0) {
         /* Eulers - so calculate these for the 'eul' vector, and use euler_rotation curves. */
@@ -856,7 +858,9 @@ static void pose_slide_apply(bContext *C, tPoseSlideOp *pso)
       }
     }
 
-    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_BBONE_SHAPE) && (pchan->flag & POSE_BBONE_SHAPE)) {
+    if (ELEM(pso->channels, PS_TFM_ALL, PS_TFM_BBONE_SHAPE) &&
+        (pfl.transform_flag & ACT_TRANS_BBONE))
+    {
       /* Bbone properties - they all start a "bbone_" prefix. */
       pose_slide_apply_props(pso, &pfl, "bbone_");
     }
