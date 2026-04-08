@@ -1474,6 +1474,13 @@ void blf_font_boundbox__wrap(
                       r_info,
                       blf_font_boundbox_wrap_cb,
                       r_box);
+
+  if (r_box->xmin > r_box->xmax) {
+    r_box->xmin = 0;
+    r_box->ymin = 0;
+    r_box->xmax = 0;
+    r_box->ymax = 0;
+  }
 }
 
 /** Utility for  #blf_font_draw_buffer__wrap. */
