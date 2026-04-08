@@ -627,14 +627,8 @@ void IMB_byte_from_float(ImBuf *ibuf)
                                       COLOR_ROLE_DEFAULT_BYTE) :
                                   ibuf->byte_buffer.colorspace->name().c_str();
   const bool predivide = IMB_alpha_affects_rgb(ibuf);
-  std::optional<ColormanageProcessor> processor =
-      STREQ(from_colorspace, to_colorspace) ?
-          std::nullopt :
-          std::make_optional<>(
-              ColormanageProcessor::colorspace_processor_new(from_colorspace, to_colorspace));
-  if (processor && processor->is_noop()) {
-    processor.reset();
-  }
+  ColormanageProcessor processor = ColormanageProcessor::colorspace_processor_new(from_colorspace,
+                                                                                  to_colorspace);
 
   /* At 4 floats per pixel, this is 32KB of data, and fits into typical CPU L1 cache. */
   static constexpr int grain_size = 2048;
@@ -650,8 +644,8 @@ void IMB_byte_from_float(ImBuf *ibuf)
           IMB_unpremultiply_rect_float(buffer.data(), ibuf->channels, range.size(), 1);
         }
         /* Convert to byte color space if needed. */
-        if (processor) {
-          processor->apply(buffer.data(), range.size(), 1, ibuf->channels, false);
+        if (!processor.is_noop()) {
+          processor.apply(buffer.data(), range.size(), 1, ibuf->channels, false);
         }
         /* Convert to bytes. */
         IMB_buffer_byte_from_float(byte_data + range.first() * 4,
