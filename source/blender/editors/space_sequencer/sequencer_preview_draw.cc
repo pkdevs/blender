@@ -478,14 +478,10 @@ static void draw_histogram(ARegion &region,
   ui::view2d_text_cache_draw(&region);
 }
 
-static float2 rgb_to_uv_scaled(const float3 &rgb)
+static float2 rgb_to_cbcr(const float3x3 &yuv_matrix, const float3 &rgb)
 {
-  float y, u, v;
-  rgb_to_yuv(rgb.x, rgb.y, rgb.z, &y, &u, &v, BLI_YUV_ITU_BT709);
-  /* Scale to +-0.5 range. */
-  u *= SeqScopes::VECSCOPE_U_SCALE;
-  v *= SeqScopes::VECSCOPE_V_SCALE;
-  return float2(u, v);
+  const float3 yuv = yuv_matrix * rgb;
+  return float2(yuv.y, yuv.z);
 }
 
 static void draw_waveform_graticule(ARegion *region,
@@ -537,7 +533,10 @@ static void draw_waveform_graticule(ARegion *region,
   ui::view2d_text_cache_draw(region);
 }
 
-static void draw_vectorscope_graticule(ARegion *region, SeqQuadsBatch &quads, const rctf &area)
+static void draw_vectorscope_graticule(ARegion *region,
+                                       SeqQuadsBatch &quads,
+                                       const rctf &area,
+                                       const ocio::ScopeInfo &scope_info)
 {
   const float skin_rad = DEG2RADF(123.0f); /* angle in radians of the skin tone line */
 
@@ -545,6 +544,9 @@ static void draw_vectorscope_graticule(ARegion *region, SeqQuadsBatch &quads, co
   const float h = BLI_rctf_size_y(&area);
   const float2 center{BLI_rctf_cent_x(&area), BLI_rctf_cent_y(&area)};
   const float radius = ((w < h) ? w : h) * 0.5f;
+
+  const float3x3 &yuv_matrix = scope_info.yuv_matrix;
+  const float3x3 inv_yuv_to_rec709 = scope_info.scope_gamut_to_rec709 * math::invert(yuv_matrix);
 
   /* Precalculate circle points/colors. */
   constexpr int circle_delta = 6;
@@ -556,11 +558,9 @@ static void draw_vectorscope_graticule(ARegion *region, SeqQuadsBatch &quads, co
     float x = cosf(a);
     float y = sinf(a);
     circle_pos[i] = float2(x, y);
-    float u = x / SeqScopes::VECSCOPE_U_SCALE;
-    float v = y / SeqScopes::VECSCOPE_V_SCALE;
 
-    float3 col;
-    yuv_to_rgb(0.5f, u, v, &col.x, &col.y, &col.z, BLI_YUV_ITU_BT709);
+    float3 yuv = float3(0.5f, x, y);
+    float3 col = inv_yuv_to_rec709 * yuv;
     circle_col[i] = col;
   }
 
@@ -669,7 +669,7 @@ static void draw_vectorscope_graticule(ARegion *region, SeqQuadsBatch &quads, co
   const float delta = radius * 0.01f;
   for (int i = 0; i < 6; i++) {
     float3 safe = primaries[i] * 0.75f;
-    float2 pos = center + rgb_to_uv_scaled(safe) * (radius * 2);
+    float2 pos = center + rgb_to_cbcr(yuv_matrix, safe) * (radius * 2);
     quads.add_wire_quad(pos.x - delta, pos.y - delta, pos.x + delta, pos.y + delta, col_target);
 
     buf[0] = names[i];
@@ -820,6 +820,7 @@ static void sequencer_draw_scopes(Scene *scene,
         GPU_shader_uniform_3fv(shader, "scope_luma_coeffs", scope_info.luma_coefficients);
         GPU_shader_uniform_mat3(
             shader, "scope_gamut_to_rec709", scope_info.scope_gamut_to_rec709.ptr());
+        GPU_shader_uniform_mat3(shader, "scope_yuv_matrix", scope_info.yuv_matrix.ptr());
         GPU_shader_uniform_1b(shader, "scope_is_hdr", scope_info.is_hdr);
         GPU_shader_uniform_1f(shader, "scope_point_size", point_size);
         GPU_shader_uniform_1b(shader, "img_premultiplied", premultiplied);
@@ -893,7 +894,9 @@ static void sequencer_draw_scopes(Scene *scene,
   }
   if (space_sequencer.mainb == SEQ_DRAW_IMG_VECTORSCOPE) {
     use_blend = true;
-    draw_vectorscope_graticule(&region, quads, preview);
+    const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(
+        &display_settings, view_settings.view_transform);
+    draw_vectorscope_graticule(&region, quads, preview, scope_info);
   }
 
   quads.draw();

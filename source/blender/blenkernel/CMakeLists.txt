@@ -577,6 +577,7 @@ set(LIB
   PRIVATE bf::imbuf
   PRIVATE bf::imbuf::opencolorio
   PRIVATE bf::imbuf::movie
+  PRIVATE bf::imbuf::opencolorio
   PRIVATE bf::intern::clog
   bf_intern_ghost
   PRIVATE bf::intern::guardedalloc

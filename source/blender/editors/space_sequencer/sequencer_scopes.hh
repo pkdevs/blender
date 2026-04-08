@@ -46,10 +46,6 @@ struct ScopeHistogram {
 };
 
 struct SeqScopes : public NonCopyable {
-  /* Multiplier to map YUV U,V range (+-0.436, +-0.615) to +-0.5 on both axes. */
-  static constexpr float VECSCOPE_U_SCALE = 0.5f / 0.436f;
-  static constexpr float VECSCOPE_V_SCALE = 0.5f / 0.615f;
-
   const ImBuf *last_ibuf = nullptr;
   int last_timeline_frame = 0;
   ScopeHistogram histogram;

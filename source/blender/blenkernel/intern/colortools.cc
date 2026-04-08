@@ -19,6 +19,7 @@
 
 #include "BLI_math_base.hh"
 #include "BLI_math_color.h"
+#include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_rect.h"
@@ -1542,23 +1543,19 @@ BLI_INLINE int get_bin_float(float f)
 
 static void save_sample_line(Scopes *scopes,
                              ColormanageProcessor *cm_processor_colors,
+                             const float3x3 &yuv_matrix,
                              const int idx,
                              const float fx,
                              const float position_rgb[3],
                              const float position_ycc[3],
                              const float color_rgb[3])
 {
-  float yuv[3];
-
-  rgb_to_yuv(std::min(position_rgb[0], 1.0f),
-             std::min(position_rgb[1], 1.0f),
-             std::min(position_rgb[2], 1.0f),
-             &yuv[0],
-             &yuv[1],
-             &yuv[2],
-             BLI_YUV_ITU_BT709);
-  scopes->vecscope[idx + 0] = yuv[1] * SCOPES_VEC_U_SCALE;
-  scopes->vecscope[idx + 1] = yuv[2] * SCOPES_VEC_V_SCALE;
+  const float3 clamped = float3(std::min(position_rgb[0], 1.0f),
+                                std::min(position_rgb[1], 1.0f),
+                                std::min(position_rgb[2], 1.0f));
+  const float3 yuv = yuv_matrix * clamped;
+  scopes->vecscope[idx + 0] = yuv.y;
+  scopes->vecscope[idx + 1] = yuv.z;
 
   int color_idx = (idx / 2) * 3;
   float hsv[3];
@@ -1694,6 +1691,8 @@ struct ScopesUpdateData {
   ColormanageProcessor *cm_processor_colors;
   /** Luminance coefficients matching the scope display gamut. */
   float3 luma_coefficients;
+  /** RGB to YCbCr matrix for the vectorscope. */
+  float3x3 yuv_matrix;
   const float *float_data;
   const uchar *byte_data;
   int ycc_mode;
@@ -1812,7 +1811,14 @@ static void scopes_update_cb(void *__restrict userdata,
       const float fx = float(x) / float(ibuf->x);
       const int idx = 2 * (ibuf->x * savedlines + x);
 
-      save_sample_line(scopes, cm_processor_colors, idx, fx, position_rgba, position_ycc, rgba);
+      save_sample_line(scopes,
+                       cm_processor_colors,
+                       data->yuv_matrix,
+                       idx,
+                       fx,
+                       position_rgba,
+                       position_ycc,
+                       rgba);
     }
   }
 }
@@ -1962,6 +1968,7 @@ void BKE_scopes_update(Scopes *scopes,
                                                            nullptr;
   data.cm_processor_colors = (cm_processor_colors) ? &cm_processor_colors.value() : nullptr;
   data.luma_coefficients = scope_info.luma_coefficients;
+  data.yuv_matrix = scope_info.yuv_matrix;
   data.float_data = ibuf->float_data();
   data.byte_data = ibuf->byte_data();
   data.ycc_mode = ycc_mode;

@@ -16,6 +16,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
+#include "BLI_math_matrix.hh"
 #include "BLI_math_rotation.h"
 #include "BLI_polyfill_2d.h"
 #include "BLI_rect.h"
@@ -960,17 +961,21 @@ static float polar_to_y(float center, float diam, float ampli, float angle)
   return center + diam * ampli * sinf(angle);
 }
 
-static void vectorscope_draw_target(
-    uint pos, float centerx, float centery, float diam, const float colf[3], char label)
+static void vectorscope_draw_target(uint pos,
+                                    float centerx,
+                                    float centery,
+                                    float diam,
+                                    const float colf[3],
+                                    char label,
+                                    const float3x3 &yuv_matrix)
 {
-  float y, u, v;
   float tangle = 0.0f, tampli;
   float dangle, dampli;
   const char labelstr[2] = {label, '\0'};
 
-  rgb_to_yuv(colf[0], colf[1], colf[2], &y, &u, &v, BLI_YUV_ITU_BT709);
-  u *= SCOPES_VEC_U_SCALE;
-  v *= SCOPES_VEC_V_SCALE;
+  const float3 yuv = yuv_matrix * float3(colf[0], colf[1], colf[2]);
+  const float u = yuv.y;
+  const float v = yuv.z;
 
   if (u > 0 && v >= 0) {
     tangle = atanf(v / u);
@@ -1018,13 +1023,20 @@ static void vectorscope_draw_target(
   immEnd();
 }
 
-void draw_but_VECTORSCOPE(ARegion *region,
+void draw_but_VECTORSCOPE(const bContext *C,
+                          ARegion *region,
                           Button *but,
                           const uiWidgetColors * /*wcol*/,
                           const rcti *recti)
 {
   const float skin_rad = DEG2RADF(123.0f); /* angle in radians of the skin tone line */
   const Scopes *scopes = reinterpret_cast<const Scopes *>(but->poin);
+
+  const Scene *scene = CTX_data_scene(C);
+  const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(
+      &scene->display_settings, scene->view_settings.view_transform);
+  const float3x3 &yuv_matrix = scope_info.yuv_matrix;
+  const float3x3 inv_yuv_to_rec709 = scope_info.scope_gamut_to_rec709 * math::invert(yuv_matrix);
 
   const float colors[6][3] = {
       {0.75, 0.0, 0.0},  /* Red */
@@ -1108,18 +1120,16 @@ void draw_but_VECTORSCOPE(ARegion *region,
       const float x = polar_to_x(centerx, diam, r, a);
       const float y = polar_to_y(centery, diam, r, a);
 
-      const float u = (x - centerx) / diam / SCOPES_VEC_U_SCALE;
-      const float v = (y - centery) / diam / SCOPES_VEC_V_SCALE;
-
       circle_fill_points[(i + 1) * 2] = x;
       circle_fill_points[(i + 1) * 2 + 1] = y;
 
-      float r, g, b;
-      yuv_to_rgb(0.5f, u, v, &r, &g, &b, BLI_YUV_ITU_BT709);
+      const float cb = (x - centerx) / diam;
+      const float cr = (y - centery) / diam;
+      const float3 rgb = inv_yuv_to_rec709 * float3(0.5f, cb, cr);
 
-      circle_fill_vertex_colors[(i + 1) * 4] = r * 0.2f;
-      circle_fill_vertex_colors[(i + 1) * 4 + 1] = g * 0.2f;
-      circle_fill_vertex_colors[(i + 1) * 4 + 2] = b * 0.2f;
+      circle_fill_vertex_colors[(i + 1) * 4] = rgb.x * 0.2f;
+      circle_fill_vertex_colors[(i + 1) * 4 + 1] = rgb.y * 0.2f;
+      circle_fill_vertex_colors[(i + 1) * 4 + 2] = rgb.z * 0.2f;
       circle_fill_vertex_colors[(i + 1) * 4 + 3] = 0.8f;
     }
 
@@ -1154,14 +1164,13 @@ void draw_but_VECTORSCOPE(ARegion *region,
     circle_points[i * 2] = x;
     circle_points[i * 2 + 1] = y;
 
-    const float u = (x - centerx) / diam / SCOPES_VEC_U_SCALE;
-    const float v = (y - centery) / diam / SCOPES_VEC_V_SCALE;
-    float r, g, b;
-    yuv_to_rgb(0.5f, u, v, &r, &g, &b, BLI_YUV_ITU_BT709);
+    const float cb = (x - centerx) / diam;
+    const float cr = (y - centery) / diam;
+    const float3 ring_rgb = inv_yuv_to_rec709 * float3(0.5f, cb, cr);
 
-    circle_vertex_colors[i * 4] = r;
-    circle_vertex_colors[i * 4 + 1] = g;
-    circle_vertex_colors[i * 4 + 2] = b;
+    circle_vertex_colors[i * 4] = ring_rgb.x;
+    circle_vertex_colors[i * 4 + 1] = ring_rgb.y;
+    circle_vertex_colors[i * 4 + 2] = ring_rgb.z;
     circle_vertex_colors[i * 4 + 3] = 0.8f;
   }
 
@@ -1218,7 +1227,7 @@ void draw_but_VECTORSCOPE(ARegion *region,
 
   /* saturation points */
   for (int i = 0; i < 6; i++) {
-    vectorscope_draw_target(pos, centerx, centery, diam, colors[i], color_names[i]);
+    vectorscope_draw_target(pos, centerx, centery, diam, colors[i], color_names[i], yuv_matrix);
   }
 
   if (scopes->ok && scopes->vecscope != nullptr) {

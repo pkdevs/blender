@@ -1243,7 +1243,8 @@ void draw_but_WAVEFORM(const bContext *C,
                        Button *but,
                        const uiWidgetColors *wcol,
                        const rcti *recti);
-void draw_but_VECTORSCOPE(ARegion *region,
+void draw_but_VECTORSCOPE(const bContext *C,
+                          ARegion *region,
                           Button *but,
                           const uiWidgetColors *wcol,
                           const rcti *recti);

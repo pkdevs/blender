@@ -133,12 +133,9 @@ void main()
   }
   else if (scope_mode == SEQ_DRAW_IMG_VECTORSCOPE) {
     /* Vectorscope: pixel position is based on U,V of the color. */
-    float4 yuva;
-    rgba_to_yuva_itu_709(float4(position, 1.0f), yuva);
+    float3 yuv = scope_yuv_matrix * position;
     float vec_size = min(image_width, image_height);
-    /* Multiplier to map YUV U,V range (+-0.436, +-0.615) to +-0.5 on both axes. */
-    float2 uv_scale = float2(0.5f / 0.436f, 0.5f / 0.615f);
-    pos = yuva.yz * vec_size * uv_scale;
+    pos = yuv.yz * vec_size;
   }
 
   /* Determine final point color: we want to keep the hue, desaturate it a bit,

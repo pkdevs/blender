@@ -114,7 +114,21 @@ const ScopeInfo &LibOCIOView::scope_info() const
   scope_info_->luma_coefficients = scope_info_->luma_coefficients *
                                    scope_info_->scope_gamut_to_rec709;
 
-  if (is_hdr_) {
+  /* Compute RGB to YCbCr matrix commonly used in video encoding, using
+   * either BT.709 (CICP matrix 1) or BT.2020 NCL (CICP matrix 9). */
+  float kr = 0.2126f;
+  float kb = 0.0722f;
+  if (gamut_ == Gamut::Rec2020) {
+    kr = 0.2627f;
+    kb = 0.0593f;
+  }
+  const float kg = 1.0f - kr - kb;
+  scope_info_->yuv_matrix = float3x3(
+      float3(kr, -kr / (2.0f * (1.0f - kb)), 0.5f),
+      float3(kg, -kg / (2.0f * (1.0f - kb)), -kg / (2.0f * (1.0f - kr))),
+      float3(kb, 0.5f, -kb / (2.0f * (1.0f - kr))));
+
+  if (scope_info_->is_hdr) {
     /* HDR. */
     scope_info_->view_transform_max_nits = max_nits();
     if (scope_info_->view_transform_max_nits > 0) {

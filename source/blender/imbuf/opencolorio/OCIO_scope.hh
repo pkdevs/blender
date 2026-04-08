@@ -39,6 +39,8 @@ struct ScopeInfo {
   blender::float3x3 scope_gamut_to_rec709 = blender::float3x3::identity();
   /** Luminance coefficients to use for scope evaluation (default Rec.709). */
   blender::float3 luma_coefficients = blender::float3(0.2126f, 0.7152f, 0.0722f);
+  /** RGB to YCbCr matrix for the vectorscope. */
+  blender::float3x3 yuv_matrix = blender::float3x3::identity();
 };
 
 }  // namespace blender::ocio
