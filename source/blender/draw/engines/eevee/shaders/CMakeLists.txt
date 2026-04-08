@@ -105,9 +105,6 @@ set(SRC_GLSL_COMP
   eevee_motion_blur_dilate_comp.glsl
   eevee_motion_blur_flatten_comp.glsl
   eevee_motion_blur_gather_comp.glsl
-  eevee_ray_denoise_bilateral_comp.glsl
-  eevee_ray_denoise_spatial_comp.glsl
-  eevee_ray_denoise_temporal_comp.glsl
   eevee_ray_generate_comp.glsl
   eevee_ray_tile_classify_comp.glsl
   eevee_ray_tile_compact_comp.glsl

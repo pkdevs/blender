@@ -486,9 +486,7 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_occupancy_convert_frag.glsl
   engines/eevee/shaders/eevee_occupancy_lib.bsl.hh
   engines/eevee/shaders/eevee_octahedron_lib.bsl.hh
-  engines/eevee/shaders/eevee_ray_denoise_bilateral_comp.glsl
-  engines/eevee/shaders/eevee_ray_denoise_spatial_comp.glsl
-  engines/eevee/shaders/eevee_ray_denoise_temporal_comp.glsl
+  engines/eevee/shaders/eevee_ray_denoise.bsl.hh
   engines/eevee/shaders/eevee_ray_generate_comp.glsl
   engines/eevee/shaders/eevee_ray_generate_lib.glsl
   engines/eevee/shaders/eevee_ray_tile_classify_comp.glsl
