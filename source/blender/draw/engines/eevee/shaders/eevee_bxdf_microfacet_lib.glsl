@@ -9,8 +9,8 @@
 SHADER_LIBRARY_CREATE_INFO(eevee_utility_texture)
 
 #include "eevee_bxdf_lib.glsl"
+#include "eevee_ltc_lut_lib.bsl.hh"
 #include "eevee_thickness_lib.bsl.hh"
-#include "eevee_utility_tx_lib.glsl"
 #include "gpu_shader_codegen_lib.glsl"
 #include "gpu_shader_math_base_lib.glsl"
 #include "gpu_shader_math_fast_lib.glsl"
@@ -401,10 +401,12 @@ Ray bxdf_ggx_ray_amend_transmission(ClosureUndetermined cl, float3 V, Ray ray, T
 
 ClosureLight bxdf_ggx_light_reflection(ClosureReflection cl, float3 V)
 {
+  auto &util_tx = sampler_get(eevee_utility_texture, utility_tx);
+
   float cos_theta = dot(cl.N, V);
+
   ClosureLight light;
-  auto &lut_tx = sampler_get(eevee_utility_texture, utility_tx);
-  light.ltc_mat = utility_tx_sample_lut(lut_tx, cos_theta, cl.roughness, UTIL_LTC_MAT_LAYER);
+  light.ltc_mat = eevee::lut::ltc::sample_utility_tx(util_tx, cos_theta, cl.roughness);
   light.N = cl.N;
   light.type = LIGHT_SPECULAR;
   return light;
@@ -412,6 +414,8 @@ ClosureLight bxdf_ggx_light_reflection(ClosureReflection cl, float3 V)
 
 ClosureLight bxdf_ggx_light_transmission(ClosureRefraction cl, float3 V, Thickness thickness)
 {
+  auto &util_tx = sampler_get(eevee_utility_texture, utility_tx);
+
   float perceptual_roughness = bxdf_ggx_perceived_roughness_transmission(cl.roughness, cl.ior);
 
   if (thickness.value() != 0.0f) {
@@ -425,9 +429,7 @@ ClosureLight bxdf_ggx_light_transmission(ClosureRefraction cl, float3 V, Thickne
   float cos_theta = dot(-cl.N, R);
 
   ClosureLight light;
-  auto &lut_tx = sampler_get(eevee_utility_texture, utility_tx);
-  light.ltc_mat = utility_tx_sample_lut(
-      lut_tx, cos_theta, perceptual_roughness, UTIL_LTC_MAT_LAYER);
+  light.ltc_mat = eevee::lut::ltc::sample_utility_tx(util_tx, cos_theta, perceptual_roughness);
   light.N = -cl.N;
   light.type = LIGHT_TRANSMISSION;
   return light;
