@@ -618,14 +618,8 @@ void IMB_byte_from_float(ImBuf *ibuf)
     }
   }
 
-  const char *from_colorspace = (ibuf->float_buffer.colorspace == nullptr) ?
-                                    IMB_colormanagement_role_colorspace_name_get(
-                                        COLOR_ROLE_SCENE_LINEAR) :
-                                    ibuf->float_buffer.colorspace->name().c_str();
-  const char *to_colorspace = (ibuf->byte_buffer.colorspace == nullptr) ?
-                                  IMB_colormanagement_role_colorspace_name_get(
-                                      COLOR_ROLE_DEFAULT_BYTE) :
-                                  ibuf->byte_buffer.colorspace->name().c_str();
+  const char *from_colorspace = IMB_colormanagement_get_float_colorspace(ibuf);
+  const char *to_colorspace = IMB_colormanagement_get_byte_colorspace(ibuf);
   const bool predivide = IMB_alpha_affects_rgb(ibuf);
   ColormanageProcessor processor = ColormanageProcessor::colorspace_processor_new(from_colorspace,
                                                                                   to_colorspace);
