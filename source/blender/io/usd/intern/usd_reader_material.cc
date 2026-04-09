@@ -322,6 +322,7 @@ static void set_viewport_material_props(Material *mtl, const pxr::UsdShadeShader
       pxr::VtValue val;
       if (attrs[0].Get(&val) && val.IsHolding<pxr::GfVec3f>()) {
         pxr::GfVec3f color = val.UncheckedGet<pxr::GfVec3f>();
+        io::usd::colorspace_attr_to_scene_linear(attrs[0], color);
         /* Note: The material is expected to be rendered by the Workbench render engine (Viewport
          * Display), so no need to define a material node tree. */
         mtl->r = color[0];
@@ -721,6 +722,7 @@ bool USDMaterialReader::set_node_input(const pxr::UsdShadeInput &usd_input,
     case SOCK_RGBA:
       if (val.IsHolding<pxr::GfVec3f>()) {
         pxr::GfVec3f v3f = val.UncheckedGet<pxr::GfVec3f>();
+        colorspace_attr_to_scene_linear(attrs[0], v3f);
         copy_v3_v3(sock->default_value_typed<bNodeSocketValueRGBA>()->value, v3f.data());
         return true;
       }
