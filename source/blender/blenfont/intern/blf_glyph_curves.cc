@@ -381,16 +381,24 @@ bool blf_character_to_curves(FontBLF *font,
                              ListBaseT<Nurb> *nurbsbase,
                              const float scale,
                              bool use_fallback,
-                             float *r_advance)
+                             float *r_advance,
+                             rctf *r_bounds)
 {
   FT_GlyphSlot glyph = blf_glyphslot_ensure_outline(font, unicode, use_fallback);
   if (!glyph) {
     *r_advance = 0.0f;
+    *r_bounds = {0.0f, 0.0f, 0.0f, 0.0f};
     return false;
   }
 
   blf_glyph_to_curves(glyph->outline, nurbsbase, scale);
   *r_advance = float(glyph->advance.x) * scale;
+
+  const FT_Glyph_Metrics &m = glyph->metrics;
+  r_bounds->xmin = float(m.horiBearingX) * scale;
+  r_bounds->xmax = float(m.horiBearingX + m.width) * scale;
+  r_bounds->ymin = float(m.horiBearingY - m.height) * scale;
+  r_bounds->ymax = float(m.horiBearingY) * scale;
   return true;
 }
 
