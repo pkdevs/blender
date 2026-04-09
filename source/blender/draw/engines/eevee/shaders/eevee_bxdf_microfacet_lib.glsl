@@ -382,7 +382,7 @@ void bxdf_ggx_context_amend_transmission(ClosureUndetermined &cl, float3 &V, Thi
     float perceived_roughness = bxdf_ggx_perceived_roughness_transmission(bsdf.roughness,
                                                                           bsdf.ior);
     float3 L = bxdf_ggx_dominant_direction_transmission(bsdf.N, V, bsdf.ior, perceived_roughness);
-    cl.N = -thickness_shape_intersect(thickness, bsdf.N, L).hit_N;
+    cl.N = -thickness.shape_intersect(bsdf.N, L).hit_N;
     V = -L;
   }
 }
@@ -394,7 +394,7 @@ Ray bxdf_ggx_ray_amend_transmission(ClosureUndetermined cl, float3 V, Ray ray, T
     float perceived_roughness = bxdf_ggx_perceived_roughness_transmission(bsdf.roughness,
                                                                           bsdf.ior);
     float3 L = bxdf_ggx_dominant_direction_transmission(bsdf.N, V, bsdf.ior, perceived_roughness);
-    ray.origin += thickness_shape_intersect(thickness, bsdf.N, L).hit_P;
+    ray.origin += thickness.shape_intersect(bsdf.N, L).hit_P;
   }
   return ray;
 }
@@ -420,7 +420,7 @@ ClosureLight bxdf_ggx_light_transmission(ClosureRefraction cl, float3 V, Thickne
 
   if (thickness.value() != 0.0f) {
     float3 L = bxdf_ggx_dominant_direction_transmission(cl.N, V, cl.ior, perceptual_roughness);
-    cl.N = -thickness_shape_intersect(thickness, cl.N, L).hit_N;
+    cl.N = -thickness.shape_intersect(cl.N, L).hit_N;
     V = -L;
   }
   /* Ad-hoc solution to reuse the reflection LUT. To be eventually replaced by own precomputed
