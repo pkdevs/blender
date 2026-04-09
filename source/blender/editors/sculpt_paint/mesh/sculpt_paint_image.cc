@@ -100,8 +100,8 @@ static void fetch_image_buffers(ImageData &image_data,
         }
 
         processor.buffer_to_linear_processor = std::move(buffer_to_linear);
-        processor.linear_to_buffer_processor = std::move(
-            ColormanageProcessor::colorspace_processor_from_scene_linear_new(*buffer_colorspace));
+        processor.linear_to_buffer_processor =
+            ColormanageProcessor::colorspace_processor_from_scene_linear_new(*buffer_colorspace);
         processor.is_noop = false;
 
         return processor;
