@@ -52,9 +52,10 @@ class TestEntry:
                 setattr(self, field, json_dict[field])
 
     def migrate(self):
-        missing_keys = self.output.keys() - self.output_all_runs.keys()
-        for key in missing_keys:
-            self.output_all_runs[key] = [self.output[key]]
+        if self.output:
+            missing_keys = self.output.keys() - self.output_all_runs.keys()
+            for key in missing_keys:
+                self.output_all_runs[key] = [self.output[key]]
 
 
 class TestQueue:
