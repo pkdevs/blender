@@ -1146,7 +1146,11 @@ static bool vfont_to_curve(Object *ob,
         }
 
         if ((mem[j] != '\n') && (chartransdata[j].do_break != 0)) {
-          if (mem[i] == ' ') {
+          /* Skip terminator spaces (those that became the wrap break point):
+           * they were removed from `wspace_nr` so they don't receive slack
+           * and dividing by `wspace_nr` here would be a divide-by-zero on
+           * lines whose only space was consumed by the wrap. */
+          if (mem[i] == ' ' && chartransdata[i].do_break == 0) {
             TempLineInfo *li;
 
             li = &lineinfo[ct->linenr];
