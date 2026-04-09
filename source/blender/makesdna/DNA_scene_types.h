@@ -1187,7 +1187,7 @@ struct MeshAutomaskingSettings {
 
   int boundary_edges_propagation_steps = 1;
   int cavity_blur_steps = 0;
-  float cavity_factor = 0.5f;
+  float cavity_factor = 0.0f;
 
   float start_normal_limit = 0.34906585f; /* 20 / 180 * pi. */
   float start_normal_falloff = 0.25f;
