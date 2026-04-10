@@ -22,6 +22,8 @@
 #include "kernel/util/colorspace.h"
 #include "util/defines.h"
 
+#define OPENPBR_SPEC_COMPLAINT
+
 CCL_NAMESPACE_BEGIN
 
 /* Closure Nodes */
@@ -675,8 +677,11 @@ ccl_device
               bsdf->alpha_y = specular_alpha_y;
 
               fresnel->f0 = rgb_to_spectrum(base_color) * base_weight;
+#ifdef OPENPBR_SPEC_COMPLAINT
               const Spectrum f82 = min(specular_color, one_spectrum());
-
+#else
+              const Spectrum f82 = min(specular_color * specular_weight, one_spectrum());
+#endif
               fresnel->thin_film.thickness = thinfilm_thickness;
               fresnel->thin_film.ior = thinfilm_ior;
 
@@ -691,7 +696,7 @@ ccl_device
           /* Attenuate other components */
           weight *= (1.0f - base_metalness);
         }
-
+#ifdef OPENPBR_SPEC_COMPLAINT       // OpenPBR v1.1 spec version (glossy diffuse layer)
         /* Translucent Component*/
         if (transmission_weight > CLOSURE_WEIGHT_CUTOFF &&
             (refractive_caustics && (specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
@@ -764,6 +769,82 @@ ccl_device
             weight = closure_layering_weight(albedo, weight);
           }
         }
+#else       // MaterialX OSL version (one layer to ruin them all)
+
+        /* Specular Component */
+        if (specular_weight > CLOSURE_WEIGHT_CUTOFF &&
+            (reflective_caustics &&
+             (modulated_specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
+        {
+          ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+              sd, sizeof(MicrofacetBsdf), weight);
+          ccl_private FresnelDielectricTint *fresnel =
+              (bsdf != nullptr) ? (ccl_private FresnelDielectricTint *)closure_alloc_extra(
+                                      sd, sizeof(FresnelDielectricTint)) :
+                                  nullptr;
+
+          if (bsdf && fresnel) {
+            bsdf->N = valid_reflection_N;
+            bsdf->ior = modulated_specular_ior;
+            bsdf->T = T;
+            bsdf->alpha_x = specular_alpha_x;
+            bsdf->alpha_y = specular_alpha_y;
+
+            fresnel->reflection_tint = specular_color;
+            fresnel->transmission_tint = zero_spectrum();
+            fresnel->thin_film.thickness = thinfilm_thickness;
+            fresnel->thin_film.ior = thinfilm_ior;
+
+            /* setup bsdf */
+            sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
+            const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
+            bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
+
+            /* Attenuate lower layers */
+            const Spectrum albedo = bsdf_albedo(
+                kg, sd, (ccl_private ShaderClosure *)bsdf, true, false);
+            weight = closure_layering_weight(albedo, weight);
+          }
+        }
+
+        /* Translucent Component*/
+        if (transmission_weight > CLOSURE_WEIGHT_CUTOFF &&
+            (refractive_caustics && (specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
+        {
+          ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+              sd, sizeof(MicrofacetBsdf), weight * transmission_weight);
+          ccl_private FresnelDielectricTint *fresnel =
+              (bsdf != nullptr) ? (ccl_private FresnelDielectricTint *)closure_alloc_extra(
+                                      sd, sizeof(FresnelDielectricTint)) :
+                                  nullptr;
+
+          if (bsdf && fresnel) {
+            bsdf->N = valid_reflection_N;
+            // Note the spec in this section says specular_ior but they mean the modulated version
+            // which is used for all slabs of the dielectric base.
+            bsdf->ior = modulated_specular_ior;
+            bsdf->T = T;
+            bsdf->alpha_x = specular_alpha_x;
+            bsdf->alpha_y = specular_alpha_y;
+
+            fresnel->reflection_tint = zero_float3();
+            fresnel->transmission_tint = transmission_color;
+            fresnel->thin_film.thickness = thinfilm_thickness;
+            fresnel->thin_film.ior = thinfilm_ior;
+
+            /* setup bsdf */
+            sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
+            const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
+            bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
+
+            /* Attenuate lower layers */
+            // const Spectrum albedo = bsdf_albedo(
+            //     kg, sd, (ccl_private ShaderClosure *)bsdf, true, false);
+            weight = weight * (1.0f - transmission_weight);
+          }
+        }
+
+#endif
         if (base_weight > CLOSURE_WEIGHT_CUTOFF) {
           /* Diffuse Component*/
           ccl_private OrenNayarBsdf *bsdf = (ccl_private OrenNayarBsdf *)bsdf_alloc(
