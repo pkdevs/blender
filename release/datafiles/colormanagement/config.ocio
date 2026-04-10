@@ -131,7 +131,7 @@ display_colorspaces:
 
   - !<ColorSpace>
     name: sRGB
-    aliases: [srgb_rec709_display, srgb_rec709_scene, sRGB 2.2, sRGB I-D65, srgb_display, sRGB - Display, g22_rec709, Utility - Gamma 2.2 - Rec.709 - Texture, Utility - sRGB - Texture, sRGB - Texture, srgb_tx, srgb_texture, Input - Generic - sRGB - Texture, "sRGB Display: 2.2 Gamma - Rec.709"]
+    aliases: [srgb_rec709_display, srgb_rec709_scene, sRGB 2.2, sRGB I-D65, srgb_display, sRGB - Display, g22_rec709, g22_rec709_scene, g22_rec709_display, Utility - Gamma 2.2 - Rec.709 - Texture, Utility - sRGB - Texture, sRGB - Texture, srgb_tx, srgb_texture, Input - Generic - sRGB - Texture, "sRGB Display: 2.2 Gamma - Rec.709"]
     family: Display
     equalitygroup:
     bitdepth: 32f
