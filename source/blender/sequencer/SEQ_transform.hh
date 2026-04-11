@@ -116,46 +116,27 @@ float2 image_transform_origin_get(const Scene *scene, const Strip *strip);
 float2 transform_image_raw_size_get(const Scene *scene, const Strip *strip);
 
 /**
- * Get 4 corner points of strip image, optionally without rotation component applied.
- * Corner vectors are in viewport space.
- *
- * \param scene: Scene in which strips are located
- * \param strip: Strip to calculate transformed image quad
- * \param apply_rotation: Apply strip rotation transform to the quad
- * \return array of 4 2D vectors
- */
-Array<float2> image_transform_quad_get(const Scene *scene,
-                                       const Strip *strip,
-                                       bool apply_rotation);
-/**
  * Get 4 corner points of strip image. Corner vectors are in viewport space.
  * Indices correspond to following corners (assuming no rotation):
  * 3--0
  * |  |
  * 2--1
  *
- * \param scene: Scene in which strips are located
  * \param strip: Strip to calculate transformed image quad
- * \return array of 4 2D vectors
+ * \return array of four 2D points
  */
-Array<float2> image_transform_final_quad_get(const Scene *scene, const Strip *strip);
+Array<float2> image_transform_quad_get(const Scene *scene, const Strip *strip);
 
 float2 image_preview_unit_to_px(const Scene *scene, float2 co_src);
 float2 image_preview_unit_from_px(const Scene *scene, float2 co_src);
 
 /**
- * Get viewport axis aligned bounding box from a collection of sequences.
- * The collection must have one or more strips
+ * Get viewport axis aligned bounding box from multiple strips.
  *
  * \param scene: Scene in which strips are located
  * \param strips: Collection of strips to get the bounding box from
- * \param apply_rotation: Include strip rotation transform in the bounding box calculation
- * \param r_min: Minimum x and y values
- * \param r_max: Maximum x and y values
  */
-Bounds<float2> image_transform_bounding_box_from_collection(Scene *scene,
-                                                            Span<Strip *> strips,
-                                                            bool apply_rotation);
+Bounds<float2> image_transform_bounding_box_from_collection(Scene *scene, Span<Strip *> strips);
 
 /**
  * Get strip image transformation matrix. Pivot point is set to correspond with viewport coordinate

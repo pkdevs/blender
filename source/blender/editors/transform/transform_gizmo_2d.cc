@@ -275,8 +275,7 @@ static bool gizmo2d_calc_bounds(const bContext *C, float *r_center, float *r_min
     int selected_strips = strips.size();
     if (selected_strips > 0) {
       has_select = true;
-      const Bounds<float2> box = seq::image_transform_bounding_box_from_collection(
-          scene, strips, selected_strips != 1);
+      const Bounds<float2> box = seq::image_transform_bounding_box_from_collection(scene, strips);
       copy_v2_v2(r_min, box.min);
       copy_v2_v2(r_max, box.max);
     }

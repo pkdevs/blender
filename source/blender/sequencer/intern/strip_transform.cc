@@ -675,31 +675,21 @@ float2 image_transform_origin_offset_pixelspace_get(const Scene *scene, const St
   return origin_pos_pixels * mirror * viewport_pixel_aspect;
 }
 
-static float3x3 seq_image_transform_matrix_get_ex(const Scene *scene,
-                                                  const Strip *strip,
-                                                  bool apply_rotation = true)
+float3x3 image_transform_matrix_get(const Scene *scene, const Strip *strip)
 {
-  const StripTransform *transform = strip->data->transform;
+  const StripTransform *tr = strip->data->transform;
+  const float3x3 matrix = math::from_loc_rot_scale<float3x3>(
+      float2(tr->xofs, tr->yofs), tr->rotation, float2(tr->scale_x, tr->scale_y));
+
   const float2 image_size = transform_image_raw_size_get(scene, strip);
-  const float2 origin_relative(transform->origin[0], transform->origin[1]);
+  const float2 origin_relative(tr->origin[0], tr->origin[1]);
   const float2 origin_absolute = image_size * origin_relative;
-  const float2 translation(transform->xofs, transform->yofs);
-  const float rotation = apply_rotation ? transform->rotation : 0.0f;
-  const float2 scale(transform->scale_x, transform->scale_y);
   const float2 pivot = origin_absolute - (image_size / 2);
 
-  const float3x3 matrix = math::from_loc_rot_scale<float3x3>(translation, rotation, scale);
   return math::from_origin_transform(matrix, pivot);
 }
 
-float3x3 image_transform_matrix_get(const Scene *scene, const Strip *strip)
-{
-  return seq_image_transform_matrix_get_ex(scene, strip);
-}
-
-static Array<float2> strip_image_transform_quad_get_ex(const Scene *scene,
-                                                       const Strip *strip,
-                                                       bool apply_rotation)
+Array<float2> image_transform_quad_get(const Scene *scene, const Strip *strip)
 {
   const float2 image_size = transform_image_raw_size_get(scene, strip);
 
@@ -738,7 +728,7 @@ static Array<float2> strip_image_transform_quad_get_ex(const Scene *scene,
     quad[3] += offset;
   }
 
-  const float3x3 matrix = seq_image_transform_matrix_get_ex(scene, strip, apply_rotation);
+  const float3x3 matrix = image_transform_matrix_get(scene, strip);
   const float2 viewport_pixel_aspect(scene->r.xasp / scene->r.yasp, 1.0f);
   const float2 mirror = image_transform_mirror_factor_get(strip);
 
@@ -750,16 +740,6 @@ static Array<float2> strip_image_transform_quad_get_ex(const Scene *scene,
     quad_transformed[i] = point * mirror * viewport_pixel_aspect;
   }
   return quad_transformed;
-}
-
-Array<float2> image_transform_quad_get(const Scene *scene, const Strip *strip, bool apply_rotation)
-{
-  return strip_image_transform_quad_get_ex(scene, strip, apply_rotation);
-}
-
-Array<float2> image_transform_final_quad_get(const Scene *scene, const Strip *strip)
-{
-  return strip_image_transform_quad_get_ex(scene, strip, true);
 }
 
 float2 image_preview_unit_to_px(const Scene *scene, const float2 co_src)
@@ -777,14 +757,12 @@ static Bounds<float2> negative_bounds()
   return {float2(std::numeric_limits<float>::max()), float2(std::numeric_limits<float>::lowest())};
 }
 
-Bounds<float2> image_transform_bounding_box_from_collection(Scene *scene,
-                                                            Span<Strip *> strips,
-                                                            bool apply_rotation)
+Bounds<float2> image_transform_bounding_box_from_collection(Scene *scene, Span<Strip *> strips)
 {
   Bounds<float2> box = negative_bounds();
 
   for (Strip *strip : strips) {
-    const Array<float2> quad = image_transform_quad_get(scene, strip, apply_rotation);
+    const Array<float2> quad = image_transform_quad_get(scene, strip);
     const Bounds<float2> strip_box = *bounds::min_max(quad.as_span());
     box = bounds::merge(box, strip_box);
   }

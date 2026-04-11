@@ -396,7 +396,7 @@ void recurs_sel_strip(Strip *strip_meta)
 
 bool strip_point_image_isect(const Scene *scene, const Strip *strip, float point_view[2])
 {
-  const Array<float2> strip_image_quad = seq::image_transform_final_quad_get(scene, strip);
+  const Array<float2> strip_image_quad = seq::image_transform_quad_get(scene, strip);
   return isect_point_quad_v2(point_view,
                              strip_image_quad[0],
                              strip_image_quad[1],
@@ -2066,7 +2066,7 @@ static bool strip_box_select_rect_image_isect(const Scene *scene,
                                               const Strip *strip,
                                               const rctf *rect)
 {
-  const Array<float2> strip_image_quad = seq::image_transform_final_quad_get(scene, strip);
+  const Array<float2> strip_image_quad = seq::image_transform_quad_get(scene, strip);
   float rect_quad[4][2] = {{rect->xmax, rect->ymax},
                            {rect->xmax, rect->ymin},
                            {rect->xmin, rect->ymin},

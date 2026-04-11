@@ -252,7 +252,7 @@ static void build_sources_preview(const Scene *scene,
 {
   for (Strip *strip : strip_sources) {
     if (!translate_origin) {
-      const Array<float2> strip_image_quad = seq::image_transform_final_quad_get(scene, strip);
+      const Array<float2> strip_image_quad = seq::image_transform_quad_get(scene, strip);
       for (const float2 &point : strip_image_quad) {
         snap_data->sources.append(point);
       }
@@ -348,7 +348,7 @@ static void build_targets_preview(const Scene *scene,
   }
 
   auto build_corners = [&](Strip *strip) {
-    const Array<float2> corners = seq::image_transform_final_quad_get(scene, strip);
+    const Array<float2> corners = seq::image_transform_quad_get(scene, strip);
     for (const float2 &point : corners) {
       snap_data->targets.append(point);
     }

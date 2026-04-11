@@ -68,7 +68,7 @@ static void store_transform_properties(const Scene *scene,
   tdseq->strip = strip;
   copy_v2_v2(tdseq->orig_origin_relative, transform->origin);
   tdseq->orig_origin_pixelspace = origin;
-  tdseq->quad_orig = seq::image_transform_final_quad_get(scene, strip);
+  tdseq->quad_orig = seq::image_transform_quad_get(scene, strip);
   tdseq->orig_matrix = math::invert(seq::image_transform_matrix_get(scene, strip));
 
   tdseq->orig_translation[0] = transform->xofs;
@@ -333,7 +333,7 @@ static float2 calculate_translation_offset(TransInfo *t, TransDataSeq *tdseq)
   const float2 viewport_pixel_aspect = {scene->r.xasp / scene->r.yasp, 1.0f};
   float2 mirror = seq::image_transform_mirror_factor_get(strip);
 
-  Array<float2> quad_new = seq::image_transform_final_quad_get(scene, strip);
+  Array<float2> quad_new = seq::image_transform_quad_get(scene, strip);
   return (quad_new[0] - tdseq->quad_orig[0]) * mirror / viewport_pixel_aspect;
 }
 
