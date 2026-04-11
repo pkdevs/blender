@@ -88,32 +88,31 @@ bool transform_is_locked(const ListBaseT<SeqTimelineChannel> *channels, const St
 
 /* Image transformation. */
 
-float2 image_transform_mirror_factor_get(const Strip *strip);
 /**
- * Get strip transform origin offset from image center
- * NOTE: This function does not apply axis mirror.
- *
- * \param scene: Scene in which strips are located
- * \param strip: Strip to calculate image transform origin
- */
-float2 image_transform_origin_offset_pixelspace_get(const Scene *scene, const Strip *strip);
+ * Get per-axis mirror factors for a \a strip image.
+ * \return float2 where each component is 1.0f (normal) or -1.0f (mirrored). */
+float2 image_transform_mirror_factor_get(const Strip *strip);
 
 /**
- * Get strip transform origin relative value. This function is mainly needed to
- * recalculate text strip origin position.
+ * Get the image-relative \a strip origin. This value lies in the range (0,0) to (1,1), where
+ * (0,0) corresponds to the bottom left of the image, and (1,1) the top left.
  *
- * \param render_size: Size of image canvas in pixels
- * \param strip: Strip to calculate origin for
+ * NOTE: Normally, you can get this value from `StripTransform::origin`; this function is only
+ * needed for text strips, whose origin must be converted to be relative to the render size.
  */
 float2 image_transform_origin_get(const Scene *scene, const Strip *strip);
 
 /**
- * Get size of the image, which is produced by strip without any transformation.
- *
- * \param render_size: Size of image canvas in pixels
- * \param strip: Strip to calculate origin for
+ * Get the \a strip origin's offset in view-space pixels from the preview's center.
+ * NOTE: This function does not apply axis mirror.
  */
-float2 transform_image_raw_size_get(const Scene *scene, const Strip *strip);
+float2 image_transform_origin_preview_offset_get(const Scene *scene, const Strip *strip);
+
+/**
+ * Get the original size of the \a strip image without any scaling or transformation.
+ * \return float2 with (width, height) in view-space pixels
+ */
+float2 image_transform_raw_size_get(const Scene *scene, const Strip *strip);
 
 /**
  * Get 4 corner points of strip image. Corner vectors are in viewport space.
@@ -132,18 +131,12 @@ float2 image_preview_unit_from_px(const Scene *scene, float2 co_src);
 
 /**
  * Get viewport axis aligned bounding box from multiple strips.
- *
- * \param scene: Scene in which strips are located
- * \param strips: Collection of strips to get the bounding box from
+ * \param strips: Span of strips to calculate the bounding box for
  */
-Bounds<float2> image_transform_bounding_box_from_collection(Scene *scene, Span<Strip *> strips);
+Bounds<float2> image_transform_bounding_box_from_strips_get(Scene *scene, Span<Strip *> strips);
 
 /**
- * Get strip image transformation matrix. Pivot point is set to correspond with viewport coordinate
- * system
- *
- * \param scene: Scene in which strips are located
- * \param strip: Strip that is used to construct the matrix
+ * Get \a strip image transformation matrix relative to its origin in view-space.
  */
 float3x3 image_transform_matrix_get(const Scene *scene, const Strip *strip);
 

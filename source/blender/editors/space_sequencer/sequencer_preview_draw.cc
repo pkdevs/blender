@@ -1017,8 +1017,8 @@ static void strip_draw_image_origin_and_outline(const bContext *C,
     return;
   }
 
-  const float2 origin = seq::image_transform_origin_offset_pixelspace_get(
-      CTX_data_sequencer_scene(C), strip);
+  const float2 origin = seq::image_transform_origin_preview_offset_get(CTX_data_sequencer_scene(C),
+                                                                       strip);
 
   /* Origin. */
   GPU_program_point_size(true);

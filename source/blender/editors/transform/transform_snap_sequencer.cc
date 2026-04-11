@@ -259,7 +259,7 @@ static void build_sources_preview(const Scene *scene,
     }
 
     /* Add origins last */
-    const float2 image_origin = seq::image_transform_origin_offset_pixelspace_get(scene, strip);
+    const float2 image_origin = seq::image_transform_origin_preview_offset_get(scene, strip);
     snap_data->sources.append(image_origin);
   }
 }
@@ -358,7 +358,7 @@ static void build_targets_preview(const Scene *scene,
   if (snap_mode & SEQ_SNAP_TO_STRIPS_PREVIEW) {
     for (Strip *strip : strip_targets) {
       build_corners(strip);
-      const float2 image_origin = seq::image_transform_origin_offset_pixelspace_get(scene, strip);
+      const float2 image_origin = seq::image_transform_origin_preview_offset_get(scene, strip);
       snap_data->targets.append(image_origin);
     }
   }

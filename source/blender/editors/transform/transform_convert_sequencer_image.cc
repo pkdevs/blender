@@ -89,7 +89,7 @@ static TransData *SeqToTransData(
     const Scene *scene, Strip *strip, TransData *td, TransData2D *td2d, int vert_index)
 {
   const StripTransform *transform = strip->data->transform;
-  const float2 origin = seq::image_transform_origin_offset_pixelspace_get(scene, strip);
+  const float2 origin = seq::image_transform_origin_preview_offset_get(scene, strip);
   const float2 mirror = seq::image_transform_mirror_factor_get(strip);
   float vertex[2] = {origin[0], origin[1]};
 
@@ -342,7 +342,7 @@ static float2 calculate_new_origin_position(TransInfo *t, TransDataSeq *tdseq, T
   Scene *scene = CTX_data_sequencer_scene(t->context);
   Strip *strip = tdseq->strip;
 
-  const float2 image_size = seq::transform_image_raw_size_get(scene, strip);
+  const float2 image_size = seq::image_transform_raw_size_get(scene, strip);
 
   const float2 viewport_pixel_aspect = {scene->r.xasp / scene->r.yasp, 1.0f};
   const float2 mirror = seq::image_transform_mirror_factor_get(strip);
