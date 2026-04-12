@@ -362,7 +362,7 @@ struct ImagePaintStroke final : public PaintStroke {
   void update_step(wmOperator *op, PointerRNA *itemptr) override;
   void redraw(bool final) override;
   bool test_cancel() override;
-  void done(bool is_cancel) override;
+  void done(bool is_cancel, bool stroke_started) override;
 
   void update_for_exec(bContext *C,
                        const Brush &brush,
@@ -441,7 +441,7 @@ void ImagePaintStroke::redraw(bool final)
   pop->mode->paint_stroke_redraw(this->evil_C, pop->stroke_handle, final);
 }
 
-void ImagePaintStroke::done(const bool is_cancel)
+void ImagePaintStroke::done(const bool is_cancel, const bool /*stroke_started*/)
 {
   Scene *scene = CTX_data_scene(this->evil_C);
   ToolSettings *toolsettings = scene->toolsettings;
