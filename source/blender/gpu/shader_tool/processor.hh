@@ -119,6 +119,10 @@ class SourceProcessor {
   }
 
  private:
+  Result convert_glsl();
+  Result convert_msl();
+  Result convert_bsl(metadata::Source external_sources_symbols);
+
   /* --- Cleanup --- */
 
   /** Remove single and multi-line comments to avoid this complexity during parsing. */
