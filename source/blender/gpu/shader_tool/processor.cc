@@ -138,6 +138,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl(metadata::Source external_s
   lower_attribute_sequences(parser);
   lower_strings_sequences(parser);
   lower_swizzle_methods(parser);
+  lower_binary_literals(parser);
   lower_classes(parser);
   lower_noop_keywords(parser);
   lower_trailing_comma_in_list(parser);
@@ -643,6 +644,20 @@ void SourceProcessor::lower_swizzle_methods(Parser &parser)
       /* `.xyz()` -> `.xyz` */
       /* Keep character count the same. Replace parenthesis by spaces. */
       parser.erase(tokens[2], tokens[3]);
+    }
+  });
+}
+
+/* Support for C++ binary literal syntax for integers. */
+void SourceProcessor::lower_binary_literals(Parser &parser)
+{
+  parser().foreach_token(Number, [&](const Token tok) {
+    string_view str = tok.str();
+    if (str.starts_with("0b") || str.starts_with("0B")) {
+      size_t value = std::stol(string(str.substr(2)), nullptr, 2);
+      parser.replace(tok.str_index_start(),
+                     tok.str_index_last_no_whitespace(),
+                     std::to_string(value) + (str.ends_with("u") ? "u" : ""));
     }
   });
 }
