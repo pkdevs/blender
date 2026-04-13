@@ -191,13 +191,19 @@ class Cursor : Overlay {
     if (space_link->spacetype != SPACE_IMAGE) {
       return false;
     }
+		
+		const Paint *paint = BKE_paint_get_active(const_cast<Scene *>(state.scene), const_cast<ViewLayer *>(state.view_layer));
+		const Brush *brush = (paint) ? BKE_paint_brush_for_read(paint) : nullptr;
+
     SpaceImage *sima = reinterpret_cast<SpaceImage *>(space_link);
     switch (sima->mode) {
       case SI_MODE_VIEW:
         return false;
         break;
       case SI_MODE_PAINT:
-        return true;
+				if (brush && (brush->stroke_method == BRUSH_STROKE_CURVE)) {
+        	return true;
+				}
         break;
       case SI_MODE_MASK:
         break;
