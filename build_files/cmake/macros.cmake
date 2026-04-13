@@ -1189,11 +1189,15 @@ function(glsl_to_c
   set(${list_to_add} ${${list_to_add}} PARENT_SCOPE)
 
   add_custom_command(
-    OUTPUT  ${_file_to} ${_file_meta} ${_file_info} ${_file_dep}
+    OUTPUT  ${_file_tmp} ${_file_meta} ${_file_info} ${_file_dep}
     DEPFILE ${_file_dep}
     COMMAND "$<TARGET_FILE:shader_tool>" ${_file_from} ${_file_tmp} ${_file_meta} ${_file_info} ${_file_dep} ${_inc_list}
+    DEPENDS ${_file_from} shader_tool)
+
+  add_custom_command(
+    OUTPUT  ${_file_to}
     COMMAND "$<TARGET_FILE:datatoc>" ${_file_tmp} ${_file_to}
-    DEPENDS ${_file_from} datatoc shader_tool)
+    DEPENDS ${_file_tmp} datatoc)
 
   set_source_files_properties(${_file_tmp} PROPERTIES GENERATED TRUE)
   set_source_files_properties(${_file_to}  PROPERTIES GENERATED TRUE)
