@@ -654,7 +654,7 @@ void SourceProcessor::lower_binary_literals(Parser &parser)
   parser().foreach_token(Number, [&](const Token tok) {
     string_view str = tok.str();
     if (str.starts_with("0b") || str.starts_with("0B")) {
-      size_t value = std::stol(string(str.substr(2)), nullptr, 2);
+      int64_t value = std::stoll(string(str.substr(2)), nullptr, 2);
       parser.replace(tok.str_index_start(),
                      tok.str_index_last_no_whitespace(),
                      std::to_string(value) + (str.ends_with("u") ? "u" : ""));
