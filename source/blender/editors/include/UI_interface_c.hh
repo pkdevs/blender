@@ -534,6 +534,8 @@ enum class ButtonType : int8_t {
   But = 1,
   Row,
   Text,
+  /** A multi-line text button */
+  TextBox,
   /** Drop-down list. */
   Menu,
   ButMenu,
@@ -2359,6 +2361,8 @@ void exit();
  * if non-variable. Therefore fixed weight bold font will look bold. */
 void update_text_styles();
 
+void invalidate_text_wrap_cache(const ARegion &region);
+
 #define UI_UNIT_X ((void)0, U.widget_unit)
 #define UI_UNIT_Y ((void)0, U.widget_unit)
 
@@ -2912,6 +2916,7 @@ enum FontStyleAlign {
 struct FontStyleDrawParams {
   FontStyleAlign align;
   uint word_wrap : 1;
+  bool word_clip = true;
 };
 
 /* Styled text draw */
