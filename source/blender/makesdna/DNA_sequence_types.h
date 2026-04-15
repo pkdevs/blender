@@ -876,6 +876,10 @@ enum eModMaskTime {
   STRIP_MASK_TIME_ABSOLUTE = 1,
 };
 
+enum SequencerCompositorModifierFlag {
+  HIDE_DATABLOCK_SELECTOR = (1 << 0),
+};
+
 struct StripModifierData {
   struct StripModifierData *next = nullptr, *prev = nullptr;
   int type = 0; /* eStripModifierType */
@@ -948,6 +952,11 @@ struct SequencerTonemapModifierData {
 
 struct SequencerCompositorModifierData {
   StripModifierData modifier;
+
+  /* #SequencerCompositorModifierFlag. */
+  int8_t flag = 0;
+  char _pad[7] = {};
+
   struct bNodeTree *node_group = nullptr;
 };
 

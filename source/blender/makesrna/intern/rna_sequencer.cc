@@ -4430,6 +4430,12 @@ static void rna_def_compositor_modifier(BlenderRNA *brna)
   RNA_def_property_update(
       prop, NC_SCENE | ND_SEQUENCER, "rna_CompositorModifier_node_group_update");
 
+  prop = RNA_def_property(srna, "show_group_selector", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, nullptr, "flag", HIDE_DATABLOCK_SELECTOR);
+  RNA_def_property_ui_text(prop, "Show Node Group", "");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
+  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, nullptr);
+
   rna_def_modifier_panel_open_prop(srna, "open_mask_input_panel", 1);
 
   prop = RNA_def_property(srna, "properties", PROP_POINTER, PROP_NONE);
