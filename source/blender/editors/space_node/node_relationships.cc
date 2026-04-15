@@ -535,7 +535,7 @@ static std::string get_viewer_source_name(const bNodeSocket &socket)
     }
     return reroute_input.logically_linked_sockets()[0]->name;
   }
-  return socket.name;
+  return blender::bke::node_socket_label(socket);
 }
 /**
  * Find the socket to link to in a viewer node.
