@@ -1351,12 +1351,7 @@ static void pygpu_shader_info__tp_dealloc(PyObject *self)
   PyObject_GC_UnTrack(self);
   if (py_info->references || py_info->vertex_source || py_info->fragment_source) {
     pygpu_shader_info__tp_clear(self);
-    Py_XDECREF(py_info->vertex_source);
-    Py_XDECREF(py_info->fragment_source);
-    Py_XDECREF(py_info->compute_source);
-    Py_XDECREF(py_info->references);
   }
-
 #endif
 
   Py_TYPE(self)->tp_free(self);
