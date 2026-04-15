@@ -586,7 +586,7 @@ static int snap_sequencer_calc_drag_drop_impl(TransInfo *t,
   TransSeqSnapData *snap_data = MEM_new<TransSeqSnapData>(__func__);
 
   VectorSet<Strip *> empty_col;
-  VectorSet<Strip *> strip_targets = query_strip_targets_timeline(scene, empty_col, false);
+  VectorSet<Strip *> strip_targets = query_strip_targets_timeline(scene, empty_col, true);
 
   BLI_assert(left_frame <= right_frame);
 
