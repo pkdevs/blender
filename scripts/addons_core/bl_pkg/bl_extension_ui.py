@@ -849,6 +849,7 @@ class ExtensionUI_FilterParams:
         "tags_exclude",
         "filter_by_type",
         "addons_enabled",
+        "asset_libraries_enabled_remote_urls",
         "active_theme_info",
         "repos_all",
 
@@ -871,6 +872,7 @@ class ExtensionUI_FilterParams:
             tags_exclude,
             filter_by_type,
             addons_enabled,
+            asset_libraries_enabled_remote_urls,
             active_theme_info,
             repos_all,
             repo_filter,
@@ -882,6 +884,7 @@ class ExtensionUI_FilterParams:
         self.tags_exclude = tags_exclude
         self.filter_by_type = filter_by_type
         self.addons_enabled = addons_enabled
+        self.asset_libraries_enabled_remote_urls = asset_libraries_enabled_remote_urls
         self.active_theme_info = active_theme_info
         self.repos_all = repos_all
         self.repo_filter = None if repo_filter == '_ALL_' else repo_filter
@@ -897,6 +900,7 @@ class ExtensionUI_FilterParams:
     def default_from_context(context):
         from .bl_extension_ops import (
             blender_filter_by_type_map,
+            extension_asset_library_enabled_remote_url_set,
             extension_repos_read,
         )
 
@@ -907,12 +911,20 @@ class ExtensionUI_FilterParams:
 
         filter_by_type = blender_filter_by_type_map[wm.extension_type]
         show_addons = filter_by_type in {"", "add-on"}
+        show_assets = filter_by_type in {"", "asset-library"}
         show_themes = filter_by_type in {"", "theme"}
 
         if show_addons:
             addons_enabled = {addon.module for addon in prefs.addons} if show_addons else None
         else:
             addons_enabled = None  # Unused.
+
+        if show_assets:
+            asset_libraries_enabled_remote_urls = extension_asset_library_enabled_remote_url_set(
+                prefs.filepaths.asset_libraries,
+            )
+        else:
+            asset_libraries_enabled_remote_urls = None  # Unused.
 
         if show_themes:
             active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.themes[0].filepath)
@@ -932,6 +944,7 @@ class ExtensionUI_FilterParams:
             tags_exclude=extension_tags_exclude,
             filter_by_type=filter_by_type,
             addons_enabled=addons_enabled,
+            asset_libraries_enabled_remote_urls=asset_libraries_enabled_remote_urls,
             active_theme_info=active_theme_info,
             repos_all=repos_all,
             repo_filter=repo_filter,
@@ -949,6 +962,7 @@ class ExtensionUI_FilterParams:
             pkg_manifest_remote,  # `dict[str, PkgManifest_Normalized]`
     ):
         from .bl_extension_ops import (
+            extension_asset_library_remote_url_from_item,
             pkg_info_check_exclude_filter,
         )
 
@@ -979,10 +993,13 @@ class ExtensionUI_FilterParams:
                     continue
 
             is_addon = False
+            is_asset_library = False
             is_theme = False
             match item.type:
                 case "add-on":
                     is_addon = True
+                case "asset-library":
+                    is_asset_library = True
                 case "theme":
                     is_theme = True
 
@@ -996,6 +1013,15 @@ class ExtensionUI_FilterParams:
                 else:
                     is_enabled = False
                     addon_module_name = None
+            elif is_asset_library:
+                # `is_installed` guarantees `item_local is not None`; `show_assets` invariant
+                # guarantees `self.asset_libraries_enabled_remote_urls` is a set (not None).
+                is_enabled = (
+                    is_installed
+                    and extension_asset_library_remote_url_from_item(item_local)
+                    in self.asset_libraries_enabled_remote_urls
+                )
+                addon_module_name = None
             elif is_theme:
                 is_enabled = (repo_index, pkg_id) == self.active_theme_info
                 addon_module_name = None
@@ -1893,7 +1919,11 @@ class USERPREF_MT_extensions_item(Menu):
         # to be a convenient way to do so.
 
         from . import repo_cache_store_ensure
-        from .bl_extension_ops import extension_repos_read
+        from .bl_extension_ops import (
+            extension_asset_library_find,
+            extension_asset_library_remote_url_from_item,
+            extension_repos_read,
+        )
 
         repo_module, pkg_id = extension_path.partition(".")[0::2]
 
@@ -1931,6 +1961,12 @@ class USERPREF_MT_extensions_item(Menu):
             match item_local.type:
                 case "add-on":
                     is_enabled = prefs.addons.get(addon_module_name) is not None
+                case "asset-library":
+                    library = extension_asset_library_find(
+                        prefs.filepaths.asset_libraries,
+                        extension_asset_library_remote_url_from_item(item_local),
+                    )
+                    is_enabled = library is not None and library.enabled
                 case "theme":
                     active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.themes[0].filepath)
                     is_enabled = (repo_index, pkg_id) == active_theme_info
@@ -1975,6 +2011,18 @@ class USERPREF_MT_extensions_item(Menu):
                             text="Add-on Enabled",
                             emboss=False,
                         ).module = addon_module_name
+            case "asset-library":
+                if is_installed:
+                    props = layout.operator(
+                        (
+                            "extensions.package_asset_library_disable" if is_enabled else
+                            "extensions.package_asset_library_enable"
+                        ),
+                        text="Disable Asset Library" if is_enabled else "Enable Asset Library",
+                    )
+                    props.repo_index = repo_index
+                    props.pkg_id = pkg_id
+                    del props
             case "theme":
                 if is_installed:
                     props = layout.operator(
@@ -2212,6 +2260,7 @@ def tags_exclude_match(
 def tags_current(wm, tags_attr):
     from .bl_extension_ops import (
         blender_filter_by_type_map,
+        extension_asset_library_enabled_remote_url_set,
         extension_repos_read,
         repo_cache_store_refresh_from_prefs,
     )
@@ -2242,10 +2291,15 @@ def tags_current(wm, tags_attr):
 
     addons_enabled = None
     active_theme_info = None
+    asset_libraries_enabled_remote_urls = None
 
     # Currently only add-ons can make use of enabled by type (usefully) for tags.
     if filter_by_type in {"", "add-on"}:
         addons_enabled = {addon.module for addon in prefs.addons}
+    if filter_by_type in {"", "asset-library"}:
+        asset_libraries_enabled_remote_urls = extension_asset_library_enabled_remote_url_set(
+            prefs.filepaths.asset_libraries,
+        )
     if filter_by_type in {"", "theme"}:
         active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.themes[0].filepath)
 
@@ -2256,6 +2310,7 @@ def tags_current(wm, tags_attr):
         tags_exclude=set(),  # Tags are being generated, ignore them.
         filter_by_type=filter_by_type,
         addons_enabled=addons_enabled,
+        asset_libraries_enabled_remote_urls=asset_libraries_enabled_remote_urls,
         active_theme_info=active_theme_info,
         repos_all=repos_all,
         repo_filter=repo_filter,

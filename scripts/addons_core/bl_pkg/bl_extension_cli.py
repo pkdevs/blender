@@ -362,7 +362,8 @@ class subcmd_pkg:
             return False  # The error was reported (and printed) by the operator.
 
         if not no_prefs:
-            if enable_on_install:
+            # Enabling add-ons & registering asset libraries changes the preferences.
+            if bpy.context.preferences.is_dirty:
                 blender_preferences_write()
 
         return True
@@ -420,7 +421,8 @@ class subcmd_pkg:
             sys.stderr.write("\n")
 
         if not no_prefs:
-            if enable_on_install:
+            # Enabling add-ons & registering asset libraries changes the preferences.
+            if bpy.context.preferences.is_dirty:
                 blender_preferences_write()
 
         return True

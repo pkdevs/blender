@@ -547,8 +547,6 @@ def _remote_asset_library_sync_all_periodic():
     """Periodically download remote asset library listings."""
     if not bpy.app.online_access:
         return
-    if not bpy.context.preferences.experimental.use_remote_asset_libraries:
-        return
 
     prefs = bpy.context.preferences
     for asset_lib in prefs.filepaths.asset_libraries:
@@ -928,6 +926,7 @@ def register():
             ('ALL', "All", "Show all extension types"),
             None,
             ('ADDON', "Add-ons", "Only show add-ons"),
+            ('ASSET_LIBRARY', "Asset Libraries", "Only show asset libraries"),
             ('THEME', "Themes", "Only show themes"),
         ),
         name="Filter by Type",
