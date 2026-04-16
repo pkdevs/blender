@@ -308,12 +308,6 @@ void IMB_colormanagement_pixel_to_display_space_v4(
     const ColorManagedDisplaySettings *display_settings,
     ColorManagedDisplaySpace display_space = DISPLAY_SPACE_DRAW);
 
-void IMB_colormanagement_imbuf_make_display_space(
-    ImBuf *ibuf,
-    const ColorManagedViewSettings *view_settings,
-    const ColorManagedDisplaySettings *display_settings,
-    ColorManagedDisplaySpace display_space = DISPLAY_SPACE_DRAW);
-
 /**
  * Prepare image buffer to be saved on disk, applying color management if needed
  * color management would be applied if image is saving as render result and if
@@ -541,7 +535,8 @@ class ColormanageProcessor : NonCopyable {
       const ColorManagedViewSettings *view_settings,
       const ColorManagedDisplaySettings *display_settings,
       ColorManagedDisplaySpace display_space = DISPLAY_SPACE_DRAW,
-      bool inverse = false);
+      bool inverse = false,
+      const char *from_colorspace = nullptr);
   static std::optional<ColormanageProcessor> display_processor_for_imbuf(
       const ImBuf *ibuf,
       const ColorManagedViewSettings *view_settings,

@@ -2025,13 +2025,12 @@ bool IMB_colormanagement_display_processor_needed(
   return true;
 }
 
-static void colormanage_display_buffer_process_ex(
-    ImBuf *ibuf,
-    float *display_buffer,
-    uchar *display_buffer_byte,
-    const ColorManagedViewSettings *view_settings,
-    const ColorManagedDisplaySettings *display_settings,
-    const ColorManagedDisplaySpace display_space)
+static void colormanage_display_buffer_process(ImBuf *ibuf,
+                                               float *display_buffer,
+                                               uchar *display_buffer_byte,
+                                               const ColorManagedViewSettings *view_settings,
+                                               const ColorManagedDisplaySettings *display_settings,
+                                               const ColorManagedDisplaySpace display_space)
 {
   std::optional<ColormanageProcessor> cm_processor =
       ColormanageProcessor::display_processor_for_imbuf(
@@ -2045,16 +2044,6 @@ static void colormanage_display_buffer_process_ex(
                                 display_buffer,
                                 display_buffer_byte,
                                 processor);
-}
-
-static void colormanage_display_buffer_process(ImBuf *ibuf,
-                                               uchar *display_buffer,
-                                               const ColorManagedViewSettings *view_settings,
-                                               const ColorManagedDisplaySettings *display_settings,
-                                               const ColorManagedDisplaySpace display_space)
-{
-  colormanage_display_buffer_process_ex(
-      ibuf, nullptr, display_buffer, view_settings, display_settings, display_space);
 }
 
 /** \} */
@@ -2613,35 +2602,6 @@ void IMB_colormanagement_pixel_to_display_space_v4(
   cm_processor.apply_v4(result);
 }
 
-static void colormanagement_imbuf_make_display_space(
-    ImBuf *ibuf,
-    const ColorManagedViewSettings *view_settings,
-    const ColorManagedDisplaySettings *display_settings,
-    const ColorManagedDisplaySpace display_space,
-    bool make_byte)
-{
-  if (!ibuf->byte_data() && make_byte) {
-    IMB_alloc_byte_pixels(ibuf);
-  }
-
-  colormanage_display_buffer_process_ex(ibuf,
-                                        ibuf->float_data_for_write(),
-                                        ibuf->byte_data_for_write(),
-                                        view_settings,
-                                        display_settings,
-                                        display_space);
-}
-
-void IMB_colormanagement_imbuf_make_display_space(
-    ImBuf *ibuf,
-    const ColorManagedViewSettings *view_settings,
-    const ColorManagedDisplaySettings *display_settings,
-    const ColorManagedDisplaySpace display_space)
-{
-  colormanagement_imbuf_make_display_space(
-      ibuf, view_settings, display_settings, display_space, false);
-}
-
 static ImBuf *imbuf_ensure_editable(ImBuf *ibuf, ImBuf *colormanaged_ibuf, bool allocate_result)
 {
   if (colormanaged_ibuf != ibuf) {
@@ -2663,6 +2623,17 @@ static ImBuf *imbuf_ensure_editable(ImBuf *ibuf, ImBuf *colormanaged_ibuf, bool 
   IMB_make_writable_float_buffer(ibuf);
 
   return ibuf;
+}
+
+static const char *imbuf_colorspace_name(const ImBuf *ibuf, const bool prefer_byte_buffer)
+{
+  return (ibuf->float_data() && !(prefer_byte_buffer && ibuf->byte_data())) ?
+             /* From float buffer. */
+             (ibuf->float_buffer.colorspace) ? ibuf->float_buffer.colorspace->name().c_str() :
+                                               global_role_scene_linear :
+             /* From byte buffer. */
+             (ibuf->byte_buffer.colorspace) ? ibuf->byte_buffer.colorspace->name().c_str() :
+                                              global_role_default_byte;
 }
 
 ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
@@ -2723,13 +2694,18 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
     /* Render output: perform conversion to display space using view transform. */
     colormanaged_ibuf = imbuf_ensure_editable(ibuf, colormanaged_ibuf, allocate_result);
 
-    colormanagement_imbuf_make_display_space(colormanaged_ibuf,
-                                             &image_format->view_settings,
-                                             &image_format->display_settings,
-                                             image_format->media_type == MEDIA_TYPE_VIDEO ?
-                                                 DISPLAY_SPACE_VIDEO_OUTPUT :
-                                                 DISPLAY_SPACE_IMAGE_OUTPUT,
-                                             byte_output);
+    if (!colormanaged_ibuf->byte_data() && byte_output) {
+      IMB_alloc_byte_pixels(colormanaged_ibuf);
+    }
+
+    colormanage_display_buffer_process(colormanaged_ibuf,
+                                       colormanaged_ibuf->float_data_for_write(),
+                                       colormanaged_ibuf->byte_data_for_write(),
+                                       &image_format->view_settings,
+                                       &image_format->display_settings,
+                                       image_format->media_type == MEDIA_TYPE_VIDEO ?
+                                           DISPLAY_SPACE_VIDEO_OUTPUT :
+                                           DISPLAY_SPACE_IMAGE_OUTPUT);
 
     if (colormanaged_ibuf->float_data()) {
       /* Float buffer isn't linear anymore.
@@ -2746,16 +2722,7 @@ ImBuf *IMB_colormanagement_imbuf_for_write(ImBuf *ibuf,
     /* Linear render or regular file output: conversion between two color spaces. */
 
     /* Detect which color space we need to convert between. */
-    const char *from_colorspace = (ibuf->float_data() && !(byte_output && ibuf->byte_data())) ?
-                                      /* From float buffer. */
-                                      (ibuf->float_buffer.colorspace) ?
-                                      ibuf->float_buffer.colorspace->name().c_str() :
-                                      global_role_scene_linear :
-                                      /* From byte buffer. */
-                                      (ibuf->byte_buffer.colorspace) ?
-                                      ibuf->byte_buffer.colorspace->name().c_str() :
-                                      global_role_default_byte;
-
+    const char *from_colorspace = imbuf_colorspace_name(ibuf, byte_output);
     const char *to_colorspace = image_format->linear_colorspace_settings.name;
 
     /* to_colorspace may need to modified to compensate for 100 vs 203 nits conventions. */
@@ -2920,7 +2887,7 @@ const uchar *IMB_display_buffer_acquire(ImBuf *ibuf,
       DISPLAY_BUFFER_CHANNELS * size_t(ibuf->x) * size_t(ibuf->y), "imbuf display buffer");
 
   colormanage_display_buffer_process(
-      ibuf, display_buffer, applied_view_settings, display_settings, DISPLAY_SPACE_DRAW);
+      ibuf, nullptr, display_buffer, applied_view_settings, display_settings, DISPLAY_SPACE_DRAW);
 
   colormanage_cache_put(
       ibuf, &cache_view_settings, &cache_display_settings, display_buffer, cache_handle);
@@ -4254,7 +4221,8 @@ ColormanageProcessor ColormanageProcessor::display_processor_new(
     const ColorManagedViewSettings *view_settings,
     const ColorManagedDisplaySettings *display_settings,
     const ColorManagedDisplaySpace display_space,
-    const bool inverse)
+    const bool inverse,
+    const char *from_colorspace)
 {
   ColorManagedViewSettings untonemapped_view_settings;
   const ColorManagedViewSettings *applied_view_settings;
@@ -4278,6 +4246,8 @@ ColormanageProcessor ColormanageProcessor::display_processor_new(
   }
 
   const bool use_white_balance = applied_view_settings->flag & COLORMANAGE_VIEW_USE_WHITE_BALANCE;
+  const char *processor_from_colorspace = from_colorspace ? from_colorspace :
+                                                            global_role_scene_linear;
   cm_processor.cpu_processor_ = get_display_buffer_processor(*display_settings,
                                                              applied_view_settings->look,
                                                              applied_view_settings->view_transform,
@@ -4286,7 +4256,7 @@ ColormanageProcessor ColormanageProcessor::display_processor_new(
                                                              applied_view_settings->temperature,
                                                              applied_view_settings->tint,
                                                              use_white_balance,
-                                                             global_role_scene_linear,
+                                                             processor_from_colorspace,
                                                              display_space,
                                                              inverse);
 
@@ -4307,7 +4277,7 @@ std::optional<ColormanageProcessor> ColormanageProcessor::display_processor_for_
   if (!IMB_colormanagement_display_processor_needed(ibuf, view_settings, display_settings)) {
     return std::nullopt;
   }
-  return display_processor_new(view_settings, display_settings, display_space);
+  return display_processor_new(view_settings, display_settings, display_space, false, nullptr);
 }
 
 bool ColormanageProcessor::is_data_result() const
