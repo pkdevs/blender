@@ -48,6 +48,8 @@ AssetCatalogService::AssetCatalogService(read_only_tag /*unused*/) : AssetCatalo
   const_cast<bool &>(is_read_only_) = true;
 }
 
+AssetCatalogService::~AssetCatalogService() = default;
+
 void AssetCatalogService::tag_has_unsaved_changes(AssetCatalog *edited_catalog)
 {
   BLI_assert(!is_read_only_);
