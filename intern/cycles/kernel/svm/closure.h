@@ -551,6 +551,9 @@ ccl_device
                              &dummy_0_offset,
                              &dummy_1_offset);
 
+      // TODO: use coat_normal
+      const float3 coat_normal = N;
+
       const float base_weight = saturatef(param1);
       const float3 base_color = saturate(
           stack_load_float3_default(stack, base_color_offset, make_float3(0.8f)));
@@ -562,7 +565,7 @@ ccl_device
           stack_load_float_default(stack, specular_weight_offset, 1.f));
       const float3 specular_color = saturate(
           stack_load_float3_default(stack, specular_color_offset, make_float3(1.0f)));
-      const float specular_roughness = saturatef(
+      float specular_roughness = saturatef(
           stack_load_float_default(stack, specular_roughness_offset, 0.f));
       const float specular_roughness_anisotroy = saturatef(
           stack_load_float_default(stack, specular_roughness_anisotropy_offset, 0.f));
@@ -578,8 +581,24 @@ ccl_device
       const float transmission_depth = stack_load_float_default(
           stack, transmission_depth_offset, 0.0f);
 
-      const float fuzz_weight = 0.f;
-      const float coat_weight = 0.f;
+      const float coat_weight = saturatef(
+          stack_load_float_default(stack, coat_weight_offset, 0.f));
+      const float3 coat_color = saturate(
+          stack_load_float3_default(stack, coat_color_offset, make_float3(1.0f)));
+      const float coat_roughness = saturatef(
+          stack_load_float_default(stack, coat_roughness_offset, 0.f));
+      const float coat_roughness_anisotropy = saturatef(
+          stack_load_float_default(stack, coat_roughness_anisotropy_offset, 0.f));
+      float coat_ior = stack_load_float_default(stack, coat_ior_offset, 1.6f);
+      coat_ior = (sd->flag & SD_BACKFACING) ? 1.0f / coat_ior : coat_ior;
+
+      const float fuzz_weight = saturatef(
+          stack_load_float_default(stack, fuzz_weight_offset, 0.f));
+      const float3 fuzz_color = saturate(
+          stack_load_float3_default(stack, fuzz_color_offset, make_float3(1.0f)));
+      const float fuzz_roughness = saturatef(
+          stack_load_float_default(stack, fuzz_roughness_offset, 0.f));
+
       const float3 emission = zero_float3();
 
       const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
@@ -593,6 +612,34 @@ ccl_device
 
       const float thinfilm_thickness = 0.f;
       const float thinfilm_ior = 0.f;
+
+      // coat roughening
+      float coated_specular_roughness = specular_roughness;
+      float coated_specular_ior = specular_ior;
+      if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
+        if (coated_specular_roughness > 0.f) {
+          const float specular_roughness_sqr = specular_roughness * specular_roughness;
+          const float coat_roughness_sqr = coat_roughness * coat_roughness;
+          const float min_coated_roughness = min(
+              1.f,
+              powf((specular_roughness_sqr * specular_roughness_sqr +
+                    coat_roughness_sqr * coat_roughness_sqr),
+                   0.25f /*1.f/4.f*/));
+          coated_specular_roughness = lerp(specular_ior, min_coated_roughness, coat_weight);
+        }
+        // TODO: we assume that the ambient ior is 1.0
+        const float ambient_ior = 1.f;
+        const float specular_over_coat = specular_ior / coat_ior;
+        const float coat_over_specular = coat_ior / specular_ior;
+        // Fixing the ration to compensate for total internal reflections (TIR)
+        // as described in section 3.9.8. of the OpenPBR v1.1 spec
+        const float tir_fixed_ratio = specular_over_coat > 1.f ? specular_over_coat :
+                                                                 coat_over_specular;
+        coated_specular_ior = lerp(specular_ior / ambient_ior, tir_fixed_ratio, coat_weight);
+      }
+
+      specular_roughness = coated_specular_roughness;
+      specular_ior = coated_specular_ior;
 
       // glossy component
       const float oneMinusSpecularIor = 1.f - specular_ior;
@@ -633,24 +680,75 @@ ccl_device
       const bool refractive_caustics = true;
 #endif
 
-      /*
-      base_color_offset = data_node.y;
-      const float3 base_color = stack_load_float3_default(
-          stack, base_color_offset, make_float3(0.8f, 0.8f, 0.8f));
-      const float base_metalness = saturatef(param2);
-      base_diffuse_roughness_offset = data_node.z;
-      const float diffuse_rougness = stack_load_float_default(
-          stack, base_diffuse_roughness_offset, 0.f);
-      */
-
       Spectrum weight = make_spectrum(mix_weight);
 
       /* First layer: Fuzz */
       if (fuzz_weight > CLOSURE_WEIGHT_CUTOFF) {
+        ccl_private SheenBsdf *bsdf = (ccl_private SheenBsdf *)bsdf_alloc(
+            sd, sizeof(SheenBsdf), fuzz_weight * rgb_to_spectrum(fuzz_color) * weight);
+
+        if (bsdf) {
+          bsdf->N = safe_normalize(mix(N, coat_normal, saturatef(coat_weight)));
+          bsdf->roughness = fuzz_roughness;
+
+          /* setup bsdf */
+          // TODO: need to validate if we use the correct sheen/fuzz model as descibed in the
+          // OpenPBR v 1.1 spec.
+          const int fuzz_flag = bsdf_sheen_setup(kg, sd, bsdf);
+
+          if (fuzz_flag) {
+            sd->flag |= fuzz_flag;
+
+            /* Attenuate lower layers */
+            const Spectrum albedo = bsdf_albedo(
+                kg, sd, (ccl_private ShaderClosure *)bsdf, true, false);
+            weight = closure_layering_weight(albedo, weight);
+          }
+        }
       }
 
       /* Second layer: Coat */
       if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
+        const float3 valid_coat_normal = maybe_ensure_valid_specular_reflection(sd, coat_normal);
+        if (reflective_caustics) {
+          ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+              sd, sizeof(MicrofacetBsdf), coat_weight * weight);
+
+          if (bsdf) {
+            bsdf->N = valid_reflection_N;
+            bsdf->ior = coat_ior;
+            bsdf->T = zero_float3();
+            bsdf->alpha_x = bsdf->alpha_y = sqr(coat_roughness);
+
+            /* setup bsdf */
+            sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
+            bsdf_microfacet_setup_fresnel_dielectric(kg, bsdf, sd);
+
+            /* Attenuate lower layers */
+            const Spectrum albedo = bsdf_albedo(
+                kg, sd, (ccl_private ShaderClosure *)bsdf, true, false);
+            weight = closure_layering_weight(albedo, weight);
+
+            // TODO: Need to add darkening
+
+            // Adding view-dependent absorption (Sec. 3.9.7 in the OpenPBR v1.1 spec)
+            if (!isequal(coat_color, one_float3())) {
+              /* Note: the correct approximation relieas on the cosines of the incoming and
+                outgoing directions. But we only have acces to the outgoing direction. We therefore
+                assume that the refracted cosine of both directionas are the same. The same
+                approaximation is done in Adobes' implementation and by our PrincipledBSDF.*/
+
+              const float cosNI = dot(sd->wi, valid_coat_normal);
+              /* Refract incoming direction into coat material.*/
+              const float cosNT = sqrtf(1.0f - sqr(1.0f / coat_ior) * (1 - sqr(cosNI)));
+              const float optical_depth = 1.0f / cosNT;
+              /* Note: Since we assume that the incoming and outgoing cosine are the same the sqrt
+                of the coat_color cancels out.*/
+              weight *= mix(
+                  one_spectrum(), power(rgb_to_spectrum(coat_color), optical_depth), coat_weight);
+            }
+          }
+        }
       }
 
       if (!is_zero(emission)) {
@@ -658,7 +756,6 @@ ccl_device
 
       IF_KERNEL_NODES_FEATURE(BSDF)
       {
-
         /* Metallic component */
         if (base_metalness > CLOSURE_WEIGHT_CUTOFF) {
           if (reflective_caustics) {
@@ -696,7 +793,7 @@ ccl_device
           /* Attenuate other components */
           weight *= (1.0f - base_metalness);
         }
-#ifdef OPENPBR_SPEC_COMPLAINT       // OpenPBR v1.1 spec version (glossy diffuse layer)
+#ifdef OPENPBR_SPEC_COMPLAINT  // OpenPBR v1.1 spec version (glossy diffuse layer)
         /* Translucent Component*/
         if (transmission_weight > CLOSURE_WEIGHT_CUTOFF &&
             (refractive_caustics && (specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
@@ -710,8 +807,6 @@ ccl_device
 
           if (bsdf && fresnel) {
             bsdf->N = valid_reflection_N;
-            // Note the spec in this section says specular_ior but they mean the modulated version
-            // which is used for all slabs of the dielectric base.
             bsdf->ior = modulated_specular_ior;
             bsdf->T = T;
             bsdf->alpha_x = specular_alpha_x;
@@ -726,11 +821,8 @@ ccl_device
             sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
             const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
             bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
-
-            /* Attenuate lower layers */
-            // const Spectrum albedo = bsdf_albedo(
-            //     kg, sd, (ccl_private ShaderClosure *)bsdf, true, false);
-            weight = weight * (1.0f - transmission_weight);
+            /* Attenuate other components */
+            weight *= (1.0f - transmission_weight);
           }
         }
 
@@ -769,7 +861,7 @@ ccl_device
             weight = closure_layering_weight(albedo, weight);
           }
         }
-#else       // MaterialX OSL version (one layer to ruin them all)
+#else  // MaterialX OSL version (one layer to ruin them all)
 
         /* Specular Component */
         if (specular_weight > CLOSURE_WEIGHT_CUTOFF &&
