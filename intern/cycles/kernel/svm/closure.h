@@ -599,7 +599,11 @@ ccl_device
       const float fuzz_roughness = saturatef(
           stack_load_float_default(stack, fuzz_roughness_offset, 0.f));
 
-      const float3 emission = zero_float3();
+      const float emission_luminance = stack_load_float_default(
+          stack, emission_luminance_offset, 0.f);
+      const float3 emission_color = saturate(
+          stack_load_float3_default(stack, emission_color_offset, make_float3(0.0f)));
+      const float3 emission = emission_color * emission_luminance;
 
       const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
 
@@ -682,6 +686,12 @@ ccl_device
 
       Spectrum weight = make_spectrum(mix_weight);
 
+      /* Before any actual shader components, apply transparency. */
+      // if (alpha < 1.0f) {
+      //   bsdf_transparent_setup(sd, weight * (1.0f - alpha), path_flag);
+      //   weight *= alpha;
+      // }
+
       /* First layer: Fuzz */
       if (fuzz_weight > CLOSURE_WEIGHT_CUTOFF) {
         ccl_private SheenBsdf *bsdf = (ccl_private SheenBsdf *)bsdf_alloc(
@@ -750,7 +760,9 @@ ccl_device
         }
       }
 
+      /* Emission (attenuated by sheen and coat) */
       if (!is_zero(emission)) {
+        emission_setup(sd, rgb_to_spectrum(emission) * weight);
       }
 
       IF_KERNEL_NODES_FEATURE(BSDF)
