@@ -715,7 +715,7 @@ ccl_device
               sd, sizeof(MicrofacetBsdf), coat_weight * weight);
 
           if (bsdf) {
-            bsdf->N = valid_reflection_N;
+            bsdf->N = valid_coat_normal;
             bsdf->ior = coat_ior;
             bsdf->T = zero_float3();
             bsdf->alpha_x = bsdf->alpha_y = sqr(coat_roughness);
@@ -728,26 +728,25 @@ ccl_device
             const Spectrum albedo = bsdf_albedo(
                 kg, sd, (ccl_private ShaderClosure *)bsdf, true, false);
             weight = closure_layering_weight(albedo, weight);
-
-            // TODO: Need to add darkening
-
-            // Adding view-dependent absorption (Sec. 3.9.7 in the OpenPBR v1.1 spec)
-            if (!isequal(coat_color, one_float3())) {
-              /* Note: the correct approximation relieas on the cosines of the incoming and
-                outgoing directions. But we only have acces to the outgoing direction. We therefore
-                assume that the refracted cosine of both directionas are the same. The same
-                approaximation is done in Adobes' implementation and by our PrincipledBSDF.*/
-
-              const float cosNI = dot(sd->wi, valid_coat_normal);
-              /* Refract incoming direction into coat material.*/
-              const float cosNT = sqrtf(1.0f - sqr(1.0f / coat_ior) * (1 - sqr(cosNI)));
-              const float optical_depth = 1.0f / cosNT;
-              /* Note: Since we assume that the incoming and outgoing cosine are the same the sqrt
-                of the coat_color cancels out.*/
-              weight *= mix(
-                  one_spectrum(), power(rgb_to_spectrum(coat_color), optical_depth), coat_weight);
-            }
           }
+        }
+        // TODO: Need to add darkening
+
+        // Adding view-dependent absorption (Sec. 3.9.7 in the OpenPBR v1.1 spec)
+        if (!isequal(coat_color, one_float3())) {
+          /* Note: the correct approximation relieas on the cosines of the incoming and
+            outgoing directions. But we only have acces to the outgoing direction. We therefore
+            assume that the refracted cosine of both directionas are the same. The same
+            approaximation is done in Adobes' implementation and by our PrincipledBSDF.*/
+
+          const float cosNI = dot(sd->wi, valid_coat_normal);
+          /* Refract incoming direction into coat material.*/
+          const float cosNT = sqrtf(1.0f - sqr(1.0f / coat_ior) * (1 - sqr(cosNI)));
+          const float optical_depth = 1.0f / cosNT;
+          /* Note: Since we assume that the incoming and outgoing cosine are the same the sqrt
+            of the coat_color cancels out.*/
+          weight *= mix(
+              one_spectrum(), power(rgb_to_spectrum(coat_color), optical_depth), coat_weight);
         }
       }
 
