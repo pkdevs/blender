@@ -1952,8 +1952,8 @@ static bool rna_SpaceImageEditor_show_uvedit_get(PointerRNA *ptr)
   if (win != nullptr) {
     Scene *scene = WM_window_get_active_scene(win);
     ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-    /* FIXME Using G_MAIN is weak, but should work in practrice given current context (code already
-     * relies on 'G_MAIN data'). */
+    /* FIXME Using G_MAIN is weak, but should work in practice given current context
+     * (code already relies on 'G_MAIN data'). */
     BKE_view_layer_synced_ensure(*G_MAIN, scene, view_layer);
     obedit = BKE_view_layer_edit_object_get(view_layer);
   }
@@ -1969,8 +1969,8 @@ static bool rna_SpaceImageEditor_show_maskedit_get(PointerRNA *ptr)
   if (win != nullptr) {
     Scene *scene = WM_window_get_active_scene(win);
     ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-    /* FIXME Using G_MAIN is weak, but should work in practrice given current context (code already
-     * relies on 'G_MAIN data'). */
+    /* FIXME Using G_MAIN is weak, but should work in practice given current context
+     * (code already relies on 'G_MAIN data'). */
     BKE_view_layer_synced_ensure(*G_MAIN, scene, view_layer);
     obedit = BKE_view_layer_edit_object_get(view_layer);
   }
