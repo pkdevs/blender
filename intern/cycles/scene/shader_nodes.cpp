@@ -2710,8 +2710,10 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_BOOLEAN(geometry_thin_walled, "Geometry Thin Walled", false);
   SOCKET_IN_NORMAL(geometry_normal, "Geometry Normal", zero_float3(), SocketType::LINK_NORMAL);
   SOCKET_IN_NORMAL(geometry_tangent, "Geometry Tangent", zero_float3(), SocketType::LINK_TANGENT);
-  SOCKET_IN_NORMAL(geometry_coat_normal, "Geometry Coat Normal", zero_float3());
-  SOCKET_IN_NORMAL(geometry_coat_tangent, "Geometry Coat Tangent", zero_float3());
+  SOCKET_IN_NORMAL(
+      geometry_coat_normal, "Geometry Coat Normal", zero_float3(), SocketType::LINK_NORMAL);
+  SOCKET_IN_NORMAL(
+      geometry_coat_tangent, "Geometry Coat Tangent", zero_float3(), SocketType::LINK_TANGENT);
 
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
@@ -2815,9 +2817,16 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
 
   const int geometry_opacity_offset = compiler.stack_assign(geometry_opacity_in);
 
-
   ShaderInput *geometry_normal_in = input("Geometry Normal");
-  const int normal_offset = compiler.stack_assign_if_linked(geometry_normal_in);
+  const int geometry_normal_offset = compiler.stack_assign_if_linked(geometry_normal_in);
+  ShaderInput *geometry_tangent_in = input("Geometry Tangent");
+  const int geometry_tangent_offset = compiler.stack_assign_if_linked(geometry_tangent_in);
+
+  ShaderInput *geometry_coat_normal_in = input("Geometry Coat Normal");
+  const int geometry_coat_normal_offset = compiler.stack_assign_if_linked(geometry_coat_normal_in);
+  ShaderInput *geometry_coat_tangent_in = input("Geometry Coat Tangent");
+  const int geometry_coat_tangent_offset = compiler.stack_assign_if_linked(
+      geometry_coat_tangent_in);
 
   /* Encode all parameters into data nodes. */
   /* node */
@@ -2830,7 +2839,7 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
                     __float_as_int(get_float(base_metalness_in->socket_type)));
 
   /* data nodes */
-  compiler.add_node(normal_offset,
+  compiler.add_node(geometry_normal_offset,
                     compiler.encode_uchar4(base_color_offset,
                                            base_diffuse_roughness_offset,
                                            specular_weight_offset,
@@ -2858,12 +2867,16 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
                              coat_ior_offset),
       compiler.encode_uchar4(
           coat_darkening_offset, fuzz_weight_offset, fuzz_color_offset, fuzz_roughness_offset));
-  compiler.add_node(
-      compiler.encode_uchar4(
-          emission_luminance_offset, emission_color_offset, geometry_opacity_offset, SVM_STACK_INVALID),
-      SVM_STACK_INVALID,
-      SVM_STACK_INVALID,
-      SVM_STACK_INVALID);
+  compiler.add_node(compiler.encode_uchar4(emission_luminance_offset,
+                                           emission_color_offset,
+                                           geometry_opacity_offset,
+                                           geometry_tangent_offset),
+                    compiler.encode_uchar4(geometry_coat_normal_offset,
+                                           geometry_coat_tangent_offset,
+                                           SVM_STACK_INVALID,
+                                           SVM_STACK_INVALID),
+                    SVM_STACK_INVALID,
+                    SVM_STACK_INVALID);
 }
 
 void OpenPBRBsdfNode::compile(OSLCompiler &compiler)

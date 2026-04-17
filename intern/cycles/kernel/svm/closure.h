@@ -27,15 +27,17 @@
 CCL_NAMESPACE_BEGIN
 
 /* Analytical approximation of the average directional albedo of the Fresnel factor [d'Eon2021]*/
-ccl_device_inline float hemispherical_albedo(const float eta){
-    const float eta_sqr = eta * eta;
-    if (eta > 1.0f) {
-      const float nominator = (10893.f * eta) - 1438.2f;
-      const float denominator = (-774.4f * eta_sqr) + (10212.f * eta) + 1.f;
-      return logf(nominator / denominator); 
-    } else {
-      return 1.0f - eta_sqr * (1.0f - hemispherical_albedo(1.f / eta));
-    }
+ccl_device_inline float hemispherical_albedo(const float eta)
+{
+  const float eta_sqr = eta * eta;
+  if (eta > 1.0f) {
+    const float nominator = (10893.f * eta) - 1438.2f;
+    const float denominator = (-774.4f * eta_sqr) + (10212.f * eta) + 1.f;
+    return logf(nominator / denominator);
+  }
+  else {
+    return 1.0f - eta_sqr * (1.0f - hemispherical_albedo(1.f / eta));
+  }
 }
 
 /* Closure Nodes */
@@ -513,6 +515,11 @@ ccl_device
       uint emission_color_offset;
 
       uint geometry_opacity_offset;
+      uint geometry_tangent_offset;
+
+      uint geometry_coat_normal_offset;
+      uint geometry_coat_tangent_offset;
+      uint dummy_0_offset;
       uint dummy_1_offset;
       // Atm we do not have more parameters
       // const uint4 data_node2 = read_node(kg, &offset);
@@ -561,10 +568,12 @@ ccl_device
                              &emission_luminance_offset,
                              &emission_color_offset,
                              &geometry_opacity_offset,
+                             &geometry_tangent_offset);
+      svm_unpack_node_uchar4(data_node3.y,
+                             &geometry_coat_normal_offset,
+                             &geometry_coat_tangent_offset,
+                             &dummy_0_offset,
                              &dummy_1_offset);
-
-      // TODO: use coat_normal
-      const float3 coat_normal = N;
 
       const float base_weight = saturatef(param1);
       const float3 base_color = saturate(
@@ -628,12 +637,8 @@ ccl_device
       // const ClosureType distribution = CLOSURE_BSDF_MICROFACET_GGX_ID;
       const ClosureType distribution = CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID;
 
-      float specular_alpha_x = sqr(specular_roughness);
-      float specular_alpha_y = sqr(specular_roughness);
-      float3 T = zero_float3();
-
       float3 modulated_base_darkening_factor = one_float3();
-      
+
       const float thinfilm_thickness = 0.f;
       const float thinfilm_ior = 0.f;
 
@@ -664,6 +669,34 @@ ccl_device
 
       specular_roughness = coated_specular_roughness;
       specular_ior = coated_specular_ior;
+
+      float specular_alpha_x = sqr(specular_roughness);
+      float specular_alpha_y = specular_alpha_x;
+
+      float3 geometry_tangent = zero_float3();
+      if (specular_roughness_anisotroy > 0.f) {
+        geometry_tangent = stack_load_float3(stack, geometry_tangent_offset);
+
+        specular_alpha_x = specular_alpha_x *
+                           sqrt(2.0f / (1.0f + sqr(1.0f - specular_roughness_anisotroy)));
+        specular_alpha_y = (1.0f - specular_roughness_anisotroy) * specular_alpha_x;
+        specular_alpha_x = max(specular_alpha_x, 1e-6f);
+        specular_alpha_y = max(specular_alpha_y, 1e-6f);
+      }
+
+      float coat_alpha_x = sqr(coat_roughness);
+      float coat_alpha_y = coat_alpha_x;
+
+      const float3 geometry_coat_normal = stack_load_float3(stack, geometry_coat_normal_offset);
+      float3 geometry_coat_tangent = zero_float3();
+      if (coat_roughness_anisotropy > 0.f) {
+        geometry_coat_tangent = stack_load_float3(stack, geometry_coat_tangent_offset);
+
+        coat_alpha_x = coat_alpha_x * sqrt(2.0f / (1.0f + sqr(1.0f - coat_roughness_anisotropy)));
+        coat_alpha_y = (1.0f - coat_roughness_anisotropy) * coat_alpha_x;
+        coat_alpha_x = max(coat_alpha_x, 1e-6f);
+        coat_alpha_y = max(coat_alpha_y, 1e-6f);
+      }
 
       // glossy component
       const float oneMinusSpecularIor = 1.f - specular_ior;
@@ -708,8 +741,8 @@ ccl_device
 
       /* Before any actual shader components, apply transparency. */
       if (geometry_opacity < 1.0f) {
-         bsdf_transparent_setup(sd, weight * (1.0f - geometry_opacity), path_flag);
-         weight *= geometry_opacity;
+        bsdf_transparent_setup(sd, weight * (1.0f - geometry_opacity), path_flag);
+        weight *= geometry_opacity;
       }
 
       /* First layer: Fuzz */
@@ -718,7 +751,7 @@ ccl_device
             sd, sizeof(SheenBsdf), fuzz_weight * rgb_to_spectrum(fuzz_color) * weight);
 
         if (bsdf) {
-          bsdf->N = safe_normalize(mix(N, coat_normal, saturatef(coat_weight)));
+          bsdf->N = safe_normalize(mix(N, geometry_coat_normal, saturatef(coat_weight)));
           bsdf->roughness = fuzz_roughness;
 
           /* setup bsdf */
@@ -739,7 +772,8 @@ ccl_device
 
       /* Second layer: Coat */
       if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
-        const float3 valid_coat_normal = maybe_ensure_valid_specular_reflection(sd, coat_normal);
+        const float3 valid_coat_normal = maybe_ensure_valid_specular_reflection(
+            sd, geometry_coat_normal);
         if (reflective_caustics) {
           ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
               sd, sizeof(MicrofacetBsdf), coat_weight * weight);
@@ -747,8 +781,9 @@ ccl_device
           if (bsdf) {
             bsdf->N = valid_coat_normal;
             bsdf->ior = coat_ior;
-            bsdf->T = zero_float3();
-            bsdf->alpha_x = bsdf->alpha_y = sqr(coat_roughness);
+            bsdf->T = geometry_coat_tangent;
+            bsdf->alpha_x = coat_alpha_x;
+            bsdf->alpha_y = coat_alpha_y;
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
@@ -762,36 +797,43 @@ ccl_device
         }
         // TODO: Need to add darkening
         if (coat_darkening > 0.f) {
-/*
-          //// Missing in MaterialX
-          const float Fs; //TODO
-          // metal roughness
-          const float r_m = specular_roughness;
-          // dielectric_base roughness
-          const float r_d = lerp(1.f, specular_roughness, specular_weight * Fs);
-          // effective base roughness
-          const float r_b = lerp(r_d, r_m, base_metalness);   // Missing in MaterialX
-          ////////////////////
-*/
+          /*
+                    //// Missing in MaterialX
+                    const float Fs; //TODO
+                    // metal roughness
+                    const float r_m = specular_roughness;
+                    // dielectric_base roughness
+                    const float r_d = lerp(1.f, specular_roughness, specular_weight * Fs);
+                    // effective base roughness
+                    const float r_b = lerp(r_d, r_m, base_metalness);   // Missing in MaterialX
+                    ////////////////////
+          */
           const float relative_coat_ior = coat_ior;
           const float relative_coat_ior_sqr = relative_coat_ior * relative_coat_ior;
           // heispherical albedo of the coat layer
           const float E_F = hemispherical_albedo(relative_coat_ior);
           // Base albedo at normal-incedent
           //// According to MaterialX
-          const float3 Edielctric = mix(base_color, subsurface_color, subsurface_weight);    // missing trasnmissive
+          const float3 Edielctric = mix(
+              base_color, subsurface_color, subsurface_weight);  // missing trasnmissive
           const float3 Emetal = base_color * specular_weight;
           const float3 Ebase = mix(Edielctric, Emetal, base_metalness);
           //////
-          const float3 E_b = Ebase; // need a better albedo approximation
+          const float3 E_b = Ebase;  // need a better albedo approximation
           // Internal diffuse reflection coefficient
-          const float K_r = 1.f - (1.f - E_F) / relative_coat_ior_sqr;  // check: Spec, Adobbe, MaterialX
-          const float K_s = hemispherical_albedo(relative_coat_ior); // check: Adobe,  missing in MaterialX
-          const float K = K_r; // MaterialX
-          //const float K = lerp(K_s, K_r, r_b); // check: Spec and Adobe, missing in MaterialX
-          
-          const float3 base_darkening_factor = (1.f - K) / (1.f - E_b * K); //check: Spec, MaterialX, Adobe
-          modulated_base_darkening_factor = mix(one_float3(), base_darkening_factor, coat_weight * coat_darkening); //check: Spec,  MaterialX, Adobe
+          const float K_r = 1.f -
+                            (1.f - E_F) / relative_coat_ior_sqr;  // check: Spec, Adobbe, MaterialX
+          const float K_s = hemispherical_albedo(
+              relative_coat_ior);  // check: Adobe,  missing in MaterialX
+          const float K = K_r;     // MaterialX
+          // const float K = lerp(K_s, K_r, r_b); // check: Spec and Adobe, missing in MaterialX
+
+          const float3 base_darkening_factor = (1.f - K) /
+                                               (1.f - E_b * K);  // check: Spec, MaterialX, Adobe
+          modulated_base_darkening_factor = mix(
+              one_float3(),
+              base_darkening_factor,
+              coat_weight * coat_darkening);  // check: Spec,  MaterialX, Adobe
         }
         // Adding view-dependent absorption (Sec. 3.9.7 in the OpenPBR v1.1 spec)
         if (!isequal(coat_color, one_float3())) {
@@ -833,7 +875,7 @@ ccl_device
             if (bsdf && fresnel) {
               bsdf->N = valid_reflection_N;
               bsdf->ior = 1.0f;
-              bsdf->T = T;
+              bsdf->T = geometry_tangent;
               bsdf->alpha_x = specular_alpha_x;
               bsdf->alpha_y = specular_alpha_y;
 
@@ -872,7 +914,7 @@ ccl_device
           if (bsdf && fresnel) {
             bsdf->N = valid_reflection_N;
             bsdf->ior = modulated_specular_ior;
-            bsdf->T = T;
+            bsdf->T = geometry_tangent;
             bsdf->alpha_x = specular_alpha_x;
             bsdf->alpha_y = specular_alpha_y;
 
@@ -905,7 +947,7 @@ ccl_device
           if (bsdf && fresnel) {
             bsdf->N = valid_reflection_N;
             bsdf->ior = modulated_specular_ior;
-            bsdf->T = T;
+            bsdf->T = geometry_tangent;
             bsdf->alpha_x = specular_alpha_x;
             bsdf->alpha_y = specular_alpha_y;
 
@@ -942,7 +984,7 @@ ccl_device
           if (bsdf && fresnel) {
             bsdf->N = valid_reflection_N;
             bsdf->ior = modulated_specular_ior;
-            bsdf->T = T;
+            bsdf->T = geometry_tangent;
             bsdf->alpha_x = specular_alpha_x;
             bsdf->alpha_y = specular_alpha_y;
 
@@ -979,7 +1021,7 @@ ccl_device
             // Note the spec in this section says specular_ior but they mean the modulated version
             // which is used for all slabs of the dielectric base.
             bsdf->ior = modulated_specular_ior;
-            bsdf->T = T;
+            bsdf->T = geometry_tangent;
             bsdf->alpha_x = specular_alpha_x;
             bsdf->alpha_y = specular_alpha_y;
 

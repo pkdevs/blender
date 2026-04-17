@@ -250,8 +250,8 @@ shader node_open_pbr_bsdf(
   /* Geometrty */
   normal geometry_normal = GeometryNormal;
   normal geometry_tangent = GeometryTangent;
-  normal geometry_coat_normal = geometry_normal;
-  normal geometry_coat_tangent = geometry_tangent;
+  normal geometry_coat_normal = GeometryCoatNormal;
+  normal geometry_coat_tangent = GeometryCoatTangent;
 
   float geometry_opacity = clamp(GeometryOpacity, 0.0, 1.0);
 
@@ -538,6 +538,7 @@ shader node_open_pbr_bsdf(
   // BSDF = dielectric_volume_out;
   // BSDF = dielectric_transmission_out;
   // BSDF = dielectric_base_out;
-  BSDF = (fuzz_layer_out + emission_edf_out) * geometry_opacity + (1.0 - geometry_opacity) * transparent();
+  BSDF = (fuzz_layer_out + emission_edf_out) * geometry_opacity +
+         (1.0 - geometry_opacity) * transparent();
   // BSDF = transmission_color * transparent();
 }
