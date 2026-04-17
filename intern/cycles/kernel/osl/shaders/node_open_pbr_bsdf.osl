@@ -54,15 +54,16 @@ void NG_convert_float_vector3(float in, output vector out)
 
 color mx_fresnel_schlick(float cosTheta, color f0, color f90, float exponent)
 {
-    float x = clamp(1.0 - cosTheta, 0.0, 1.0);
-    return mix(f0, f90, pow(x, exponent));
+  float x = clamp(1.0 - cosTheta, 0.0, 1.0);
+  return mix(f0, f90, pow(x, exponent));
 }
 
-void mx_generalized_schlick_edf(color color0, color color90, float exponent, EDF_T base, output EDF_T result)
+void mx_generalized_schlick_edf(
+    color color0, color color90, float exponent, EDF_T base, output EDF_T result)
 {
-    float NdotV = fabs(dot(N,-I));
-    color f = mx_fresnel_schlick(NdotV, color0, color90, exponent);
-    result = base * f;
+  float NdotV = fabs(dot(N, -I));
+  color f = mx_fresnel_schlick(NdotV, color0, color90, exponent);
+  result = base * f;
 }
 
 void mx_generalized_schlick_bsdf(float weight,
@@ -101,10 +102,10 @@ void mx_anisotropic_vdf(color absorption, color scattering, float anisotropy, ou
 {
   // Convert from absorption and scattering coefficients to
   // extinction coefficient and single-scattering albedo.
-  //color extinction = absorption + scattering;
-  //color albedo = scattering / extinction;
-  color extinction = color(0.0, 0.0,0.0);
-  color albedo = color(1.0, 0.0,0.0);
+  // color extinction = absorption + scattering;
+  // color albedo = scattering / extinction;
+  color extinction = color(0.0, 0.0, 0.0);
+  color albedo = color(1.0, 0.0, 0.0);
   vdf = anisotropic_vdf(albedo, extinction, anisotropy);
 }
 
@@ -208,27 +209,27 @@ shader node_open_pbr_bsdf(
   color specular_color = SpecularColor;
   float specular_roughness = SpecularRoughness;
   float specular_roughness_anisotropy = SpecularRoughnessAnisotropy;
-  
-  float specular_ior = backfacing() ? 1.0 /SpecularIOR : SpecularIOR;
-  //float specular_ior = SpecularIOR;
+
+  float specular_ior = backfacing() ? 1.0 / SpecularIOR : SpecularIOR;
+  // float specular_ior = SpecularIOR;
 
   /* Transmission */
   float transmission_weight = TransmissionWeight;
   color transmission_color = TransmissionColor;
 
-   //since we do not support volume yet
+  // since we do not support volume yet
   float transmission_depth = 0.0;
-  //float transmission_depth = TransmissionDepth;
-  
+  // float transmission_depth = TransmissionDepth;
+
   color transmission_scatter = TransmissionScatter;
   float transmission_scatter_anisotropy = TransmissionAnisotropy;
-  //float transmission_dispersion_scale = TransmissionDispersionScale;
-  //float transmission_dispersion_abbe_number = TransmissionDispersionAbbeNumber;
+  // float transmission_dispersion_scale = TransmissionDispersionScale;
+  // float transmission_dispersion_abbe_number = TransmissionDispersionAbbeNumber;
 
   /* Coat */
   float coat_weight = CoatWeight;
   color coat_color = CoatColor;
-  float coat_ior =  backfacing() ? 1.0 / CoatIOR : CoatIOR;
+  float coat_ior = backfacing() ? 1.0 / CoatIOR : CoatIOR;
   float coat_roughness = CoatRoughness;
   float coat_roughness_anisotropy = CoatRoughnessAnisotropy;
   float coat_darkening = CoatDarkening;
@@ -251,6 +252,8 @@ shader node_open_pbr_bsdf(
   normal geometry_tangent = GeometryTangent;
   normal geometry_coat_normal = geometry_normal;
   normal geometry_coat_tangent = geometry_tangent;
+
+  float geometry_opacity = clamp(GeometryOpacity, 0.0, 1.0);
 
   vector2 coat_roughness_vector_out = vector2(0.0, 0.0);
   NG_open_pbr_anisotropy(coat_roughness, coat_roughness_anisotropy, coat_roughness_vector_out);
@@ -490,15 +493,15 @@ shader node_open_pbr_bsdf(
                      "T",
                      dielectric_transmission_out);
 
-  //VDF_T dielectric_volume_out = null_closure();
-  //mx_anisotropic_vdf(if_volume_absorption_out,
-  //                   if_volume_scattering_out,
-  //                   transmission_scatter_anisotropy,
-  //                   dielectric_volume_out);
-              
-  //BSDF_T dielectric_volume_transmission_out = layer(dielectric_transmission_out,
-  //                                                  dielectric_volume_out);
-  
+  // VDF_T dielectric_volume_out = null_closure();
+  // mx_anisotropic_vdf(if_volume_absorption_out,
+  //                    if_volume_scattering_out,
+  //                    transmission_scatter_anisotropy,
+  //                    dielectric_volume_out);
+
+  // BSDF_T dielectric_volume_transmission_out = layer(dielectric_transmission_out,
+  //                                                   dielectric_volume_out);
+
   BSDF_T dielectric_volume_transmission_out = dielectric_transmission_out;
 
   /* No support for thin film */
@@ -515,7 +518,6 @@ shader node_open_pbr_bsdf(
       opaque_base_out, dielectric_volume_transmission_out, transmission_weight);
   // BSDF_T dielectric_substrate_out = opaque_base_out;
 
-
   BSDF_T dielectric_base_out = layer(dielectric_reflection_tf_mix_out, dielectric_substrate_out);
   BSDF_T base_substrate_out = mix(dielectric_base_out, metal_bsdf_tf_mix_out, base_metalness);
   BSDF_T darkened_base_substrate_out = (modulated_base_darkening_out * base_substrate_out);
@@ -526,13 +528,16 @@ shader node_open_pbr_bsdf(
   EDF_T uncoated_emission_edf_out = uniform_edf(emission_weight_out);
   EDF_T coat_tinted_emission_edf_out = (coat_color * uncoated_emission_edf_out);
   EDF_T coated_emission_edf_out = null_closure();
-  mx_generalized_schlick_edf(one_minus_coat_F0_color_out, color(0.000000, 0.000000, 0.000000), 5.000000, coat_tinted_emission_edf_out, coated_emission_edf_out);
+  mx_generalized_schlick_edf(one_minus_coat_F0_color_out,
+                             color(0.000000, 0.000000, 0.000000),
+                             5.000000,
+                             coat_tinted_emission_edf_out,
+                             coated_emission_edf_out);
   EDF_T emission_edf_out = mix(uncoated_emission_edf_out, coated_emission_edf_out, coat_weight);
 
-  //BSDF = dielectric_volume_out;
-  //BSDF = dielectric_transmission_out;
+  // BSDF = dielectric_volume_out;
+  // BSDF = dielectric_transmission_out;
   // BSDF = dielectric_base_out;
-  BSDF = fuzz_layer_out + emission_edf_out;
-
-  //BSDF = transmission_color * transparent();
+  BSDF = (fuzz_layer_out + emission_edf_out) * geometry_opacity + (1.0 - geometry_opacity) * transparent();
+  // BSDF = transmission_color * transparent();
 }

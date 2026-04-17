@@ -512,7 +512,7 @@ ccl_device
       uint emission_luminance_offset;
       uint emission_color_offset;
 
-      uint dummy_0_offset;
+      uint geometry_opacity_offset;
       uint dummy_1_offset;
       // Atm we do not have more parameters
       // const uint4 data_node2 = read_node(kg, &offset);
@@ -560,7 +560,7 @@ ccl_device
       svm_unpack_node_uchar4(data_node3.x,
                              &emission_luminance_offset,
                              &emission_color_offset,
-                             &dummy_0_offset,
+                             &geometry_opacity_offset,
                              &dummy_1_offset);
 
       // TODO: use coat_normal
@@ -619,6 +619,9 @@ ccl_device
       const float3 emission_color = saturate(
           stack_load_float3_default(stack, emission_color_offset, make_float3(0.0f)));
       const float3 emission = emission_color * emission_luminance;
+
+      const float geometry_opacity = saturatef(
+          stack_load_float_default(stack, geometry_opacity_offset, 1.f));
 
       const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
 
@@ -704,10 +707,10 @@ ccl_device
       Spectrum weight = make_spectrum(mix_weight);
 
       /* Before any actual shader components, apply transparency. */
-      // if (alpha < 1.0f) {
-      //   bsdf_transparent_setup(sd, weight * (1.0f - alpha), path_flag);
-      //   weight *= alpha;
-      // }
+      if (geometry_opacity < 1.0f) {
+         bsdf_transparent_setup(sd, weight * (1.0f - geometry_opacity), path_flag);
+         weight *= geometry_opacity;
+      }
 
       /* First layer: Fuzz */
       if (fuzz_weight > CLOSURE_WEIGHT_CUTOFF) {

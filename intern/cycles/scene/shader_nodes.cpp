@@ -2765,6 +2765,9 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
   ShaderInput *emission_luminance_in = input("Emission Luminance");
   ShaderInput *emission_color_in = input("Emission Color");
 
+  /* Geometry Component */
+  ShaderInput *geometry_opacity_in = input("Geometry Opacity");
+
   // TODO (Sebastian): use stack_assign_if_linked
   const int base_weight_offset = compiler.stack_assign(base_weight_in);
   const int base_color_offset = compiler.stack_assign(base_color_in);
@@ -2810,6 +2813,9 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
   const int emission_luminance_offset = compiler.stack_assign(emission_luminance_in);
   const int emission_color_offset = compiler.stack_assign(emission_color_in);
 
+  const int geometry_opacity_offset = compiler.stack_assign(geometry_opacity_in);
+
+
   ShaderInput *geometry_normal_in = input("Geometry Normal");
   const int normal_offset = compiler.stack_assign_if_linked(geometry_normal_in);
 
@@ -2854,7 +2860,7 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
           coat_darkening_offset, fuzz_weight_offset, fuzz_color_offset, fuzz_roughness_offset));
   compiler.add_node(
       compiler.encode_uchar4(
-          emission_luminance_offset, emission_color_offset, SVM_STACK_INVALID, SVM_STACK_INVALID),
+          emission_luminance_offset, emission_color_offset, geometry_opacity_offset, SVM_STACK_INVALID),
       SVM_STACK_INVALID,
       SVM_STACK_INVALID,
       SVM_STACK_INVALID);
