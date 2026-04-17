@@ -375,6 +375,8 @@ TEMP_DIR_LOCAL = ""
 # Don't leave temporary files in TMP: `/tmp` (since it's only cleared on restart).
 # Instead, have a test-local temporary directly which is removed when the test finishes.
 TEMP_DIR_TMPDIR = ""
+# The embedded Python version in use by `BLENDER_BIN`, may differ from the host Python running these tests.
+BLENDER_PYTHON_VERSION: tuple[int, int] = (0, 0)
 
 user_dirs: tuple[str, ...] = (
     "config",
@@ -988,7 +990,9 @@ class TestPythonVersions(TestWithTempBlenderUser_MixIn, unittest.TestCase):
 
         self.repo_add(repo_id=repo_id, repo_name=repo_name)
 
-        this_python_version_major, this_python_version_minor = sys.version_info[:2]
+        # Use Blender's embedded Python version (which may differ from the host Python running this test);
+        # wheel-compatibility filtering happens under Blender's Python.
+        this_python_version_major, this_python_version_minor = BLENDER_PYTHON_VERSION
         # TODO: this test doesn't make sense for the first Python major releases (4.0 for example).
         if this_python_version_minor == 0:
             return
@@ -1344,9 +1348,26 @@ class TestUnknownType(TestWithTempBlenderUser_MixIn, unittest.TestCase):
         self.assertNotIn("brush-set", stdout)
 
 
+def blender_python_version_query() -> tuple[int, int]:
+    # Return the ``(major, minor)`` version of Blender's embedded Python.
+    returncode, bl_stdout, bl_stderr = run_blender((
+        "--background",
+        "--factory-startup",
+        "--python-expr",
+        "import sys; print('BLENDER_PYTHON_VERSION={:d}.{:d}'.format(*sys.version_info[:2]))",
+    ))
+    for line in bl_stdout.splitlines():
+        if line.startswith("BLENDER_PYTHON_VERSION="):
+            major_str, _, minor_str = line.partition("=")[2].partition(".")
+            return (int(major_str), int(minor_str))
+    raise Exception("Failed to access the Python version")
+
+
 def main() -> None:
     # pylint: disable-next=global-statement
     global TEMP_DIR_BLENDER_USER, TEMP_DIR_REMOTE, TEMP_DIR_LOCAL, TEMP_DIR_TMPDIR, TEMP_DIR_REMOTE_AS_URL
+    # pylint: disable-next=global-statement
+    global BLENDER_PYTHON_VERSION
 
     with tempfile.TemporaryDirectory() as temp_prefix:
         TEMP_DIR_BLENDER_USER = os.path.join(temp_prefix, "bl_ext_blender")
@@ -1366,6 +1387,8 @@ def main() -> None:
             os.makedirs(os.path.join(TEMP_DIR_BLENDER_USER, dirname), exist_ok=True)
 
         TEMP_DIR_REMOTE_AS_URL = path_to_url(TEMP_DIR_REMOTE)
+
+        BLENDER_PYTHON_VERSION = blender_python_version_query()
 
         unittest.main()
 
