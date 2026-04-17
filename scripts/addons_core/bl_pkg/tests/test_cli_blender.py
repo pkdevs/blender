@@ -173,7 +173,7 @@ def contents_to_filesystem(
             fh.write(value)
 
 
-def create_package(
+def create_package_addon(
         pkg_src_dir: str,
         *,
         pkg_idname: str,
@@ -244,6 +244,35 @@ def create_package(
             fh.write(python_script)
         else:
             fh.write(python_script_generate_for_addon(text=""))
+
+    if file_contents is not None:
+        contents_to_filesystem(file_contents, pkg_src_dir)
+
+
+def create_package_theme(
+        pkg_src_dir: str,
+        *,
+        pkg_idname: str,
+
+        # Optional.
+        blender_version_min: str | None = None,
+        blender_version_max: str | None = None,
+        file_contents: dict[str, bytes] | None = None,
+) -> None:
+    pkg_name = pkg_idname.replace("_", " ").title()
+
+    with open(os.path.join(pkg_src_dir, PKG_MANIFEST_FILENAME_TOML), "w", encoding="utf-8") as fh:
+        fh.write('''schema_version = "1.0.0"\n''')
+        fh.write('''id = "{:s}"\n'''.format(pkg_idname))
+        fh.write('''name = "{:s}"\n'''.format(pkg_name))
+        fh.write('''type = "theme"\n''')
+        fh.write('''maintainer = "Maintainer Name <username@addr.com>"\n''')
+        fh.write('''license = ["SPDX:GPL-2.0-or-later"]\n''')
+        fh.write('''version = "1.0.0"\n''')
+        fh.write('''tagline = "This is a tagline"\n''')
+        fh.write('''blender_version_min = "{:s}"\n'''.format(blender_version_min or "0.0.0"))
+        if blender_version_max is not None:
+            fh.write('''blender_version_max = "{:s}"\n'''.format(blender_version_max))
 
     if file_contents is not None:
         contents_to_filesystem(file_contents, pkg_src_dir)
@@ -441,6 +470,7 @@ class TestWithTempBlenderUser_MixIn(unittest.TestCase):
             wheel_params: Sequence[WheelModuleParams] = (),
 
             # Optional.
+            pkg_type: str = "add-on",
             pkg_filename: str | None = None,
             platforms: tuple[str, ...] | None = None,
             blender_version_min: str | None = None,
@@ -452,18 +482,34 @@ class TestWithTempBlenderUser_MixIn(unittest.TestCase):
             pkg_filename = pkg_idname
         pkg_output_filepath = os.path.join(TEMP_DIR_REMOTE, pkg_filename + PKG_EXT)
         with tempfile.TemporaryDirectory() as package_build_dir:
-            create_package(
-                package_build_dir,
-                pkg_idname=pkg_idname,
+            if pkg_type == "add-on":
+                create_package_addon(
+                    package_build_dir,
+                    pkg_idname=pkg_idname,
 
-                # Optional.
-                wheel_params=wheel_params,
-                platforms=platforms,
-                blender_version_min=blender_version_min,
-                blender_version_max=blender_version_max,
-                python_script=python_script,
-                file_contents=file_contents,
-            )
+                    # Optional.
+                    wheel_params=wheel_params,
+                    platforms=platforms,
+                    blender_version_min=blender_version_min,
+                    blender_version_max=blender_version_max,
+                    python_script=python_script,
+                    file_contents=file_contents,
+                )
+            elif pkg_type == "theme":
+                assert not wheel_params, "wheels are not supported for theme packages"
+                assert platforms is None, "platforms are not supported for theme packages"
+                assert python_script is None, "python_script is not supported for theme packages"
+                create_package_theme(
+                    package_build_dir,
+                    pkg_idname=pkg_idname,
+
+                    # Optional.
+                    blender_version_min=blender_version_min,
+                    blender_version_max=blender_version_max,
+                    file_contents=file_contents,
+                )
+            else:
+                raise AssertionError("No create_package_* helper for pkg_type={!r}".format(pkg_type))
             stdout = run_blender_extensions_no_errors((
                 "build",
                 "--source-dir", package_build_dir,
@@ -1346,6 +1392,21 @@ class TestUnknownType(TestWithTempBlenderUser_MixIn, unittest.TestCase):
         self.assertNotIn("my_future_asset_library", stdout)
         self.assertNotIn("keymap", stdout)
         self.assertNotIn("brush-set", stdout)
+
+
+class TestTheme(TestWithTempBlenderUser_MixIn, unittest.TestCase):
+
+    def test_build_theme_package(self) -> None:
+        """
+        Build an extension of type ``theme`` whose content is a minimal XML theme file.
+        """
+        # Create a package contents.
+        pkg_idname = "my_theme"
+        self.build_package(
+            pkg_idname=pkg_idname,
+            pkg_type="theme",
+            file_contents={pkg_idname + ".xml": b'''<?xml version="1.0" encoding="UTF-8"?>\n<bpy/>\n'''},
+        )
 
 
 def blender_python_version_query() -> tuple[int, int]:
