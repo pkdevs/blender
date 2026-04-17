@@ -3100,9 +3100,18 @@ static std::optional<std::string> rna_SpaceClipOverlay_path(const PointerRNA *pt
 
 /* File browser. */
 
-static std::optional<std::string> rna_FileSelectParams_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_FileSelectParams_path(const PointerRNA *ptr)
 {
-  return "params";
+  const PointerRNA space_ptr = ptr->parent();
+  if (!space_ptr.owner_id) {
+    return std::nullopt;
+  }
+
+  std::optional<std::string> editor_path = BKE_screen_path_from_screen_to_space(&space_ptr);
+  if (!editor_path) {
+    return std::nullopt;
+  }
+  return fmt::format("{}.params", *editor_path);
 }
 
 int rna_FileSelectParams_filename_editable(const PointerRNA *ptr, const char **r_info)
