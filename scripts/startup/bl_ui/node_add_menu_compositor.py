@@ -25,6 +25,7 @@ class NODE_MT_compositor_node_input_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "CompositorNodeMovieClip")
         if context.space_data.node_tree_sub_type == 'SEQUENCER':
             self.node_operator(layout, "CompositorNodeSequencerStripInfo")
+        self.node_operator(layout, "CompositorNodeStringToImage")
 
         layout.separator()
         self.draw_menu(layout, path="Input/Scene")
@@ -41,6 +42,7 @@ class NODE_MT_compositor_node_input_constant_base(node_add_menu.NodeMenu):
         layout = self.layout
         self.node_operator(layout, "FunctionNodeInputBool")
         self.node_operator(layout, "CompositorNodeRGB")
+        self.node_operator(layout, "GeometryNodeInputFont")
         self.node_operator(layout, "FunctionNodeInputInt")
         self.node_operator(layout, "FunctionNodeInputIntVector")
         self.node_operator(layout, "FunctionNodeInputMenu")
