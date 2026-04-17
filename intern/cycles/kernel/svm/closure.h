@@ -26,6 +26,18 @@
 
 CCL_NAMESPACE_BEGIN
 
+/* Analytical approximation of the average directional albedo of the Fresnel factor [d'Eon2021]*/
+ccl_device_inline float hemispherical_albedo(const float eta){
+    const float eta_sqr = eta * eta;
+    if (eta > 1.0f) {
+      const float nominator = (10893.f * eta) - 1438.2f;
+      const float denominator = (-774.4f * eta_sqr) + (10212.f * eta) + 1.f;
+      return logf(nominator / denominator); 
+    } else {
+      return 1.0f - eta_sqr * (1.0f - hemispherical_albedo(1.f / eta));
+    }
+}
+
 /* Closure Nodes */
 
 ccl_device_inline int svm_node_closure_bsdf_skip(int offset, const uint type)
@@ -574,6 +586,7 @@ ccl_device
       specular_ior = (sd->flag & SD_BACKFACING) ? 1.0f / specular_ior : specular_ior;
 
       const float subsurface_weight = 0.f;
+      const float3 subsurface_color = zero_float3();
       const float transmission_weight = saturatef(
           stack_load_float_default(stack, transmission_weight_offset, 1.f));
       const float3 transmission_color = saturate(
@@ -591,6 +604,8 @@ ccl_device
           stack_load_float_default(stack, coat_roughness_anisotropy_offset, 0.f));
       float coat_ior = stack_load_float_default(stack, coat_ior_offset, 1.6f);
       coat_ior = (sd->flag & SD_BACKFACING) ? 1.0f / coat_ior : coat_ior;
+      const float coat_darkening = saturatef(
+          stack_load_float_default(stack, coat_darkening_offset, 1.f));
 
       const float fuzz_weight = saturatef(
           stack_load_float_default(stack, fuzz_weight_offset, 0.f));
@@ -614,6 +629,8 @@ ccl_device
       float specular_alpha_y = sqr(specular_roughness);
       float3 T = zero_float3();
 
+      float3 modulated_base_darkening_factor = one_float3();
+      
       const float thinfilm_thickness = 0.f;
       const float thinfilm_ior = 0.f;
 
@@ -741,13 +758,44 @@ ccl_device
           }
         }
         // TODO: Need to add darkening
-
+        if (coat_darkening > 0.f) {
+/*
+          //// Missing in MaterialX
+          const float Fs; //TODO
+          // metal roughness
+          const float r_m = specular_roughness;
+          // dielectric_base roughness
+          const float r_d = lerp(1.f, specular_roughness, specular_weight * Fs);
+          // effective base roughness
+          const float r_b = lerp(r_d, r_m, base_metalness);   // Missing in MaterialX
+          ////////////////////
+*/
+          const float relative_coat_ior = coat_ior;
+          const float relative_coat_ior_sqr = relative_coat_ior * relative_coat_ior;
+          // heispherical albedo of the coat layer
+          const float E_F = hemispherical_albedo(relative_coat_ior);
+          // Base albedo at normal-incedent
+          //// According to MaterialX
+          const float3 Edielctric = mix(base_color, subsurface_color, subsurface_weight);    // missing trasnmissive
+          const float3 Emetal = base_color * specular_weight;
+          const float3 Ebase = mix(Edielctric, Emetal, base_metalness);
+          //////
+          const float3 E_b = Ebase; // need a better albedo approximation
+          // Internal diffuse reflection coefficient
+          const float K_r = 1.f - (1.f - E_F) / relative_coat_ior_sqr;  // check: Spec, Adobbe, MaterialX
+          const float K_s = hemispherical_albedo(relative_coat_ior); // check: Adobe,  missing in MaterialX
+          const float K = K_r; // MaterialX
+          //const float K = lerp(K_s, K_r, r_b); // check: Spec and Adobe, missing in MaterialX
+          
+          const float3 base_darkening_factor = (1.f - K) / (1.f - E_b * K); //check: Spec, MaterialX, Adobe
+          modulated_base_darkening_factor = mix(one_float3(), base_darkening_factor, coat_weight * coat_darkening); //check: Spec,  MaterialX, Adobe
+        }
         // Adding view-dependent absorption (Sec. 3.9.7 in the OpenPBR v1.1 spec)
         if (!isequal(coat_color, one_float3())) {
-          /* Note: the correct approximation relieas on the cosines of the incoming and
+          /* Note: the correct approximation relies on the cosines of the incoming and
             outgoing directions. But we only have acces to the outgoing direction. We therefore
             assume that the refracted cosine of both directionas are the same. The same
-            approaximation is done in Adobes' implementation and by our PrincipledBSDF.*/
+            approaximation is done in Adobes' implementation and in our PrincipledBSDF.*/
 
           const float cosNI = dot(sd->wi, valid_coat_normal);
           /* Refract incoming direction into coat material.*/
@@ -764,6 +812,8 @@ ccl_device
       if (!is_zero(emission)) {
         emission_setup(sd, rgb_to_spectrum(emission) * weight);
       }
+
+      weight *= modulated_base_darkening_factor;
 
       IF_KERNEL_NODES_FEATURE(BSDF)
       {
