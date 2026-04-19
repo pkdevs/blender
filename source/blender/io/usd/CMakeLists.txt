@@ -60,9 +60,9 @@ set(SRC
   intern/usd_asset_utils.cc
   intern/usd_attribute_utils.cc
   intern/usd_blend_shape_utils.cc
-  intern/usd_colorspace_utils.cc
   intern/usd_capi_export.cc
   intern/usd_capi_import.cc
+  intern/usd_colorspace_utils.cc
   intern/usd_hierarchy_iterator.cc
   intern/usd_hook.cc
   intern/usd_instancing_utils.cc
