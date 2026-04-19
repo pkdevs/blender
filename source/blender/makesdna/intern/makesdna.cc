@@ -145,14 +145,14 @@ void BLI_system_backtrace(FILE *fp)
  * \param size: The struct size in bytes.
  * \return Index in the #types array.
  */
-static int add_type(const std::string &type_name, int size);
+static int add_type(StringRefNull type_name, int size);
 
 /**
  * Ensure that \a member_name is in the #members array.
  * \param member_name: Full struct member name (may include pointer prefix & array size).
  * \return Index in the #members array.
  */
-static int add_member(const std::string &member_name);
+static int add_member(StringRefNull member_name);
 
 /**
  * Add a new structure definition, of type matching the given \a type_index.
@@ -227,7 +227,7 @@ static const char *version_member_static_from_alias(const int type_index,
   return member_alias_full;
 }
 
-static int add_type(const std::string &type_name_input, int size)
+static int add_type(const StringRefNull type_name_input, const int size)
 {
   const char *type_name = version_struct_static_from_alias(type_name_input.c_str());
 
@@ -269,7 +269,7 @@ static int add_type(const std::string &type_name_input, int size)
  * form (function pointers rewritten as `(*name)()`, `(*name)(void)`, and name validaty
  * already checked by the parser).
  */
-static int add_member(const std::string &member_name)
+static int add_member(const StringRefNull member_name)
 {
   /* search name array */
   for (int member_index = 0; member_index < members_num; member_index++) {
@@ -681,7 +681,7 @@ void print_struct_sizes()
 }
 
 /** Register parsed structs, types, and members into the SDNA tables. */
-static void register_parsed_structs(const Vector<dna::ParsedStruct> &parsed_structs)
+static void register_parsed_structs(const Span<dna::ParsedStruct> parsed_structs)
 {
   for (const dna::ParsedStruct &parsed_struct : parsed_structs) {
     const int struct_type_index = add_type(parsed_struct.type_name, 0);
@@ -800,6 +800,7 @@ static int make_structDNA(const char *base_directory,
   }
   DEBUG_PRINTF(0, "\tFinished scanning %d headers.\n", header_count);
 
+  dna::substitute_cpp_types(parsed_structs);
   register_parsed_structs(parsed_structs);
 
   if (calculate_struct_sizes(firststruct, file_verify, base_directory)) {
