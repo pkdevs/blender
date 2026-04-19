@@ -145,6 +145,7 @@ set(SRC
   mesh/sculpt_pose.hh
   mesh/sculpt_smooth.hh
   mesh/sculpt_undo.hh
+  mesh/vw_paint_intern.hh
 
   mesh/brushes/bmesh_topology_rake.cc
   mesh/brushes/clay.cc

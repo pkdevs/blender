@@ -123,6 +123,7 @@ set(SRC
   intern/usd_instancing_utils.hh
   intern/usd_light_convert.hh
   intern/usd_mesh_utils.hh
+  intern/usd_precomp.hh
   intern/usd_utils.hh
 
   intern/usd_writer_abstract.hh
