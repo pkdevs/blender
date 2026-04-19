@@ -672,7 +672,7 @@ static PyObject *py_imbuf_filepath_get(Py_ImBuf *self, void * /*closure*/)
 {
   PY_IMBUF_CHECK_OBJ(self);
   ImBuf *ibuf = self->ibuf;
-  return PyC_UnicodeFromBytes(ibuf->filepath.c_str());
+  return PyC_UnicodeFromStdStr(ibuf->filepath);
 }
 
 static int py_imbuf_filepath_set(Py_ImBuf *self, PyObject *value, void * /*closure*/)
