@@ -16,6 +16,8 @@ struct ParsedMember {
   std::string type_name;
   /** Canonical full member name, e.g. `*var`, `arr[4]`, `(*func)()`. */
   std::string member_name;
+  /** Required alignment in bytes. */
+  int alignment = 0;
 };
 
 struct ParsedStruct {

@@ -98,6 +98,11 @@ static short *types_size_64;
  * - `sp[2]` sp[3] is [(type_index, member_index), ..] (number of pairs is defined by `sp[1]`),
  */
 static short **structs, *structdata;
+/**
+ * Optional alignment requirement for struct members, to override the standard
+ * alignment of the type. Indexed by the same offset as #structdata.
+ */
+static short *structdata_alignment;
 
 /** Versioning data */
 static struct {
@@ -320,10 +325,21 @@ static bool check_field_alignment(int firststruct,
                                   int struct_type_index,
                                   int type,
                                   int len,
+                                  int member_align_override,
                                   const char *name,
                                   const char *detail)
 {
   bool result = true;
+  if (member_align_override > 0 && (len % member_align_override)) {
+    fprintf(stderr,
+            "Align %d error (%s) in struct: %s %s (add %d padding bytes)\n",
+            member_align_override,
+            detail,
+            types[struct_type_index],
+            name,
+            member_align_override - (len % member_align_override));
+    result = false;
+  }
   if (type < firststruct && types_size_native[type] > 4 && (len % 8)) {
     fprintf(stderr,
             "Align 8 error (%s) in struct: %s %s (add %d padding bytes)\n",
@@ -516,14 +532,17 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
               }
             }
 
-            /* Check 2-4-8 aligned. */
+            /* Per-member C++ alignment override from the parser. */
+            const int member_align = structdata_alignment[sp - structdata];
+
+            /* Check 2-4-8 aligned, plus any stricter C++ alignment. */
             if (!check_field_alignment(
-                    firststruct, struct_type_index, type, size_32, cp, "32 bit"))
+                    firststruct, struct_type_index, type, size_32, member_align, cp, "32 bit"))
             {
               dna_error = true;
             }
             if (!check_field_alignment(
-                    firststruct, struct_type_index, type, size_64, cp, "64 bit"))
+                    firststruct, struct_type_index, type, size_64, member_align, cp, "64 bit"))
             {
               dna_error = true;
             }
@@ -533,6 +552,8 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
             size_64 += mul * types_size_64[type];
             max_align_32 = std::max<int>(max_align_32, types_align_32[type]);
             max_align_64 = std::max<int>(max_align_64, types_align_64[type]);
+            max_align_32 = std::max<int>(max_align_32, member_align);
+            max_align_64 = std::max<int>(max_align_64, member_align);
           }
           else {
             size_native = 0;
@@ -557,9 +578,10 @@ static int calculate_struct_sizes(int firststruct, FILE *file_verify, const char
           BLI_assert(max_align_64);
 
           /* Sanity check 2: alignment should always be equal or smaller than the maximum
-           * size of a build in type which is 8 bytes (i.e. `int64_t` or double). */
-          BLI_assert(max_align_32 <= 8);
-          BLI_assert(max_align_64 <= 8);
+           * alignment we support. 8 bytes for built-in types (e.g. `int64_t`, `double`),
+           * up to 16 bytes for C++ overaligned types like `float4x4`. */
+          BLI_assert(max_align_32 <= 16);
+          BLI_assert(max_align_64 <= 16);
 
           if (size_32 % max_align_32) {
             /* There is an one odd case where only the 32 bit struct has alignment issues
@@ -696,6 +718,7 @@ static void register_parsed_structs(const Span<dna::ParsedStruct> parsed_structs
 
       sp[0] = member_type_index;
       sp[1] = name;
+      structdata_alignment[sp - structdata] = short(parsed_member.alignment);
       structpoin[1]++;
       sp += 2;
     }
@@ -718,6 +741,7 @@ static int make_structDNA(const char *base_directory,
 
   /* the longest known struct is 50k, so we assume 100k is sufficient! */
   structdata = MEM_new_array_zeroed<short>(max_data_size, "structdata");
+  structdata_alignment = MEM_new_array_zeroed<short>(max_data_size, "structdata_alignment");
 
   /* a maximum of 5000 variables, must be sufficient? */
   members = MEM_new_array_zeroed<char *>(max_array_len, "names");
@@ -1012,6 +1036,7 @@ static int make_structDNA(const char *base_directory,
   }
 
   MEM_delete(structdata);
+  MEM_delete(structdata_alignment);
   MEM_delete(members);
   MEM_delete(types);
   MEM_delete(types_size_native);
