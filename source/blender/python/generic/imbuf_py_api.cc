@@ -1671,7 +1671,7 @@ static PyObject *M_imbuf_file_type_from_buffer(PyObject * /*self*/, PyObject *ar
     return nullptr;
   }
   const eImbFileType ftype = IMB_test_image_type_from_memory(
-      reinterpret_cast<const unsigned char *>(pybuffer.buf), pybuffer.len);
+      reinterpret_cast<const uchar *>(pybuffer.buf), pybuffer.len);
   PyBuffer_Release(&pybuffer);
 
   if (ftype == IMB_FTYPE_NONE) {

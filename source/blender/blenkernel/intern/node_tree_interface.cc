@@ -1756,7 +1756,7 @@ bNode *create_proxy_converter_node(const eNodeSocketDatatype socket_type,
 
   bNode *proxy_node = bke::node_add_node(&C, dst_tree, "NodeImplicitConversion"_ustr);
   auto &data = *static_cast<NodeImplicitConversion *>(proxy_node->storage);
-  BLI_strncpy(data.type_idname, socket_idname.c_str(), sizeof(data.type_idname));
+  STRNCPY(data.type_idname, socket_idname.c_str());
   BKE_ntree_update_tag_node_property(&dst_tree, proxy_node);
   BKE_ntree_update_after_single_tree_change(*CTX_data_main(&C), dst_tree);
 
