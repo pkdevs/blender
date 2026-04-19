@@ -20,6 +20,8 @@
 #include <cstring>
 #include <fstream>
 
+#include "BLI_math_matrix_types.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_utildefines.h"
 
@@ -656,11 +658,72 @@ static void substitute_listbase_t(ParsedMember &member)
   }
 }
 
+/** Replace vector and matrix types with C arrays. */
+struct CppVectorMatrixTypeMap {
+  StringRef cpp_type;
+  StringRef scalar;
+  int dimensions[2];
+  int alignment;
+};
+
+static const CppVectorMatrixTypeMap cpp_array_type_mappings[] = {
+    {"int2", "int", {2, 0}, alignof(blender::int2)},
+    {"int3", "int", {3, 0}, alignof(blender::int3)},
+    {"int4", "int", {4, 0}, alignof(blender::int4)},
+    {"float2", "float", {2, 0}, alignof(blender::float2)},
+    {"float3", "float", {3, 0}, alignof(blender::float3)},
+    {"float4", "float", {4, 0}, alignof(blender::float4)},
+    {"float2x2", "float", {2, 2}, alignof(blender::float2x2)},
+    {"float3x3", "float", {3, 3}, alignof(blender::float3x3)},
+    {"float4x4", "float", {4, 4}, alignof(blender::float4x4)},
+};
+
+static_assert(sizeof(blender::int2) == sizeof(int[2]));
+static_assert(sizeof(blender::int3) == sizeof(int[3]));
+static_assert(sizeof(blender::int4) == sizeof(int[4]));
+static_assert(sizeof(blender::float2) == sizeof(float[2]));
+static_assert(sizeof(blender::float3) == sizeof(float[3]));
+static_assert(sizeof(blender::float4) == sizeof(float[4]));
+static_assert(sizeof(blender::float2x2) == sizeof(float[2][2]));
+static_assert(sizeof(blender::float3x3) == sizeof(float[3][3]));
+static_assert(sizeof(blender::float4x4) == sizeof(float[4][4]));
+
+static void substitute_vector_or_matrix(ParsedMember &member)
+{
+  const CppVectorMatrixTypeMap *mapping = nullptr;
+  for (const CppVectorMatrixTypeMap &m : cpp_array_type_mappings) {
+    if (member.type_name == m.cpp_type) {
+      mapping = &m;
+      break;
+    }
+  }
+  if (mapping == nullptr || member.member_name.empty()) {
+    return;
+  }
+  member.type_name = mapping->scalar;
+  member.alignment = mapping->alignment;
+
+  /* Members like `float (*var)[3][3]` have the `[3][3]` stripped in
+   * #parse_paren_declaration. So also don't add it for `float3x3 *var` either,
+   * rather keep it as `float` `*var`. */
+  if (member.member_name[0] != '*' && member.member_name[0] != '(') {
+    member.member_name += '[';
+    member.member_name += char('0' + mapping->dimensions[0]);
+    member.member_name += ']';
+    if (mapping->dimensions[1] != 0) {
+      member.member_name += '[';
+      member.member_name += char('0' + mapping->dimensions[1]);
+      member.member_name += ']';
+    }
+  }
+}
+
 void substitute_cpp_types(Vector<ParsedStruct> &structs)
 {
   for (ParsedStruct &parsed_struct : structs) {
     for (ParsedMember &member : parsed_struct.members) {
       substitute_listbase_t(member);
+      substitute_vector_or_matrix(member);
     }
   }
 }
