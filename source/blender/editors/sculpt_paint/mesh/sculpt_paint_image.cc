@@ -480,10 +480,8 @@ void SCULPT_do_paint_brush_image(const Depsgraph &depsgraph,
   PixelData &pixel_data = *pbvh.pixels_;
   MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
 
-  /* Explicitly marked as serial due to image buffer fetching being non-threadsafe */
   node_mask.foreach_index(
-      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); },
-      exec_mode::serial);
+      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); });
   node_mask.foreach_index(
       [&](const int i) { do_push_undo_tile(image_data, nodes[i], pixel_nodes[i]); },
       exec_mode::grain_size(1));
