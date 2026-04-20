@@ -1850,22 +1850,22 @@ void PreviewLoadJob::push_load_request(PreviewImage *preview, const eIconSizes i
      * This happens when reloading online asset libraries with running preview downloads. */
     if (std::unique_ptr<RequestedPreview> *existing_request = requested_previews_.lookup_ptr(key))
     {
-      request = existing_request->get();
-      request->preview = preview;
+      /* Request is already pending, just let it finish. */
+      existing_request->get()->preview = preview;
+      return;
+    }
+
+    std::unique_ptr<RequestedPreview> new_request = std::make_unique<RequestedPreview>(preview,
+                                                                                       icon_size);
+    request = new_request.get();
+
+    if (is_downloading) {
+      request->state = PreviewState::Downloading;
     }
     else {
-      std::unique_ptr<RequestedPreview> new_request = std::make_unique<RequestedPreview>(
-          preview, icon_size);
-      request = new_request.get();
-
-      if (is_downloading) {
-        request->state = PreviewState::Downloading;
-      }
-      else {
-        request->state = PreviewState::LoadingFromDisk;
-      }
-      requested_previews_.add(key, std::move(new_request));
+      request->state = PreviewState::LoadingFromDisk;
     }
+    requested_previews_.add(key, std::move(new_request));
   }
 
   /* NOTE: The request gets pushed to the queue, even when state == PreviewState::Downloading, even
