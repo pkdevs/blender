@@ -495,12 +495,10 @@ void SCULPT_do_paint_brush_image(const Depsgraph &depsgraph,
 
   fix_non_manifold_seam_bleeding(ob, image_data, nodes, pixel_nodes, node_mask);
 
-  node_mask.foreach_index(
-      [&](const int i) {
-        bke::pbvh::pixels::mark_image_dirty(
-            nodes[i], pixel_nodes[i], *image_data.image, image_data.buffers);
-      },
-      exec_mode::grain_size(1));
+  node_mask.foreach_index([&](const int i) {
+    bke::pbvh::pixels::mark_image_dirty(
+        nodes[i], pixel_nodes[i], *image_data.image, image_data.buffers);
+  });
 }
 
 }  // namespace blender
