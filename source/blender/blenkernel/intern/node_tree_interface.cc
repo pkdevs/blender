@@ -1793,6 +1793,16 @@ static bNodeTreeInterfacePanel *make_panel(const int uid,
   return new_panel;
 }
 
+void item_reference_free(bNodeTreeInterfaceItemReference *item_reference)
+{
+  if (item_reference == nullptr) {
+    return;
+  }
+
+  MEM_delete(item_reference->items);
+  MEM_delete(item_reference);
+}
+
 }  // namespace bke::node_interface
 
 void bNodeTreeInterface::init_data()
