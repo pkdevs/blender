@@ -174,6 +174,7 @@ class IMAGE_MT_select(Menu):
         layout.operator("uv.select_pinned", text="Select Pinned")
         layout.operator("uv.select_split")
         layout.operator("uv.select_overlap")
+        layout.operator("uv.select_by_winding")
 
 
 class IMAGE_MT_select_linked(Menu):
