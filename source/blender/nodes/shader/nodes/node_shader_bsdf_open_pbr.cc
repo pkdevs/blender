@@ -32,7 +32,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   base.add_input<decl::Color>("Base Color").default_value({0.8f, 0.8f, 0.8f, 1.0f});
 #define OPENPBR_SOCK_BASE_COLOR_ID 2
   base.add_input<decl::Float>("Base Metalness")
-      .default_value(1.0f)
+      .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
@@ -209,20 +209,20 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Thin-film Component
    * *****************************************************************/
-  PanelDeclarationBuilder &thinfilm = b.add_panel("Thin-film"_ustr).default_closed(false);
-  thinfilm.add_input<decl::Float>("Thin-film Weight")
+  PanelDeclarationBuilder &thinfilm = b.add_panel("Thin Film"_ustr).default_closed(false);
+  thinfilm.add_input<decl::Float>("Thin Film Weight")
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
 #define OPENPBR_SOCK_THIN_FILM_WEIGHT_ID 33
-  thinfilm.add_input<decl::Float>("Thin-film Thickness")
+  thinfilm.add_input<decl::Float>("Thin Film Thickness")
       .default_value(0.5f)
       .min(0.0f)
-      .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .max(100000.0f)
+      .subtype(PROP_WAVELENGTH);
 #define OPENPBR_SOCK_THIN_FILM_THICKNESS_ID 34
-  thinfilm.add_input<decl::Float>("Thin-film IOR")
+  thinfilm.add_input<decl::Float>("Thin Film IOR")
       .default_value(1.4f)
       .min(0.0f)
       .max(3.0f)

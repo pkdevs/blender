@@ -247,6 +247,11 @@ shader node_open_pbr_bsdf(
   color emission_color = EmissionColor;
   float emission_luminance = EmissionLuminance;
 
+  /* Thin-Film*/
+  float thin_film_weight = ThinFilmWeight;
+  float thin_film_ior = ThinFilmIOR;
+  float thin_film_thickness = ThinFilmThickness;
+
   /* Geometrty */
   normal geometry_normal = GeometryNormal;
   normal geometry_tangent = GeometryTangent;
@@ -254,6 +259,9 @@ shader node_open_pbr_bsdf(
   normal geometry_coat_tangent = GeometryCoatTangent;
 
   float geometry_opacity = clamp(GeometryOpacity, 0.0, 1.0);
+
+  float thin_film_thickness_nm_in2_tmp = 1000.0;
+  float thin_film_thickness_nm_out = thin_film_thickness * thin_film_thickness_nm_in2_tmp;
 
   vector2 coat_roughness_vector_out = vector2(0.0, 0.0);
   NG_open_pbr_anisotropy(coat_roughness, coat_roughness_anisotropy, coat_roughness_vector_out);
@@ -447,6 +455,20 @@ shader node_open_pbr_bsdf(
                      "ggx",
                      "R",
                      coat_bsdf_out);
+  BSDF_T metal_bsdf_tf_out = null_closure();
+  mx_generalized_schlick_bsdf(specular_weight,
+                              metal_reflectivity_out,
+                              metal_edgecolor_out,
+                              color(1.000000, 1.000000, 1.000000),
+                              5.000000,
+                              main_roughness_out,
+                              thin_film_thickness_nm_out,
+                              thin_film_ior,
+                              geometry_normal,
+                              geometry_tangent,
+                              "ggx",
+                              "R",
+                              metal_bsdf_tf_out);
 
   BSDF_T metal_bsdf_out = null_closure();
   mx_generalized_schlick_bsdf(specular_weight,
@@ -464,7 +486,20 @@ shader node_open_pbr_bsdf(
                               metal_bsdf_out);
   /* No support for thin film */
   // BSDF_T metal_bsdf_tf_mix_out = mix(metal_bsdf_out, metal_bsdf_tf_out, thin_film_weight);
-  BSDF_T metal_bsdf_tf_mix_out = metal_bsdf_out;
+  BSDF_T dielectric_reflection_tf_out = null_closure();
+  mx_dielectric_bsdf(1.000000,
+                     specular_color,
+                     modulated_eta_s_out,
+                     main_roughness_out,
+                     thin_film_thickness_nm_out,
+                     thin_film_ior,
+                     geometry_normal,
+                     geometry_tangent,
+                     "ggx",
+                     "R",
+                     dielectric_reflection_tf_out);
+  BSDF_T metal_bsdf_tf_mix_out = mix(metal_bsdf_out, metal_bsdf_tf_out, thin_film_weight);
+  // BSDF_T metal_bsdf_tf_mix_out = metal_bsdf_out;
 
   BSDF_T dielectric_reflection_out = null_closure();
   mx_dielectric_bsdf(1.000000,
@@ -505,18 +540,16 @@ shader node_open_pbr_bsdf(
   BSDF_T dielectric_volume_transmission_out = dielectric_transmission_out;
 
   /* No support for thin film */
-  // BSDF_T dielectric_reflection_tf_mix_out = mix(dielectric_reflection_out,
-  // dielectric_reflection_tf_out, thin_film_weight);
-  BSDF_T dielectric_reflection_tf_mix_out = dielectric_reflection_out;
+  BSDF_T dielectric_reflection_tf_mix_out = mix(
+      dielectric_reflection_out, dielectric_reflection_tf_out, thin_film_weight);
+  // BSDF_T dielectric_reflection_tf_mix_out = dielectric_reflection_out;
 
   /* No support for subsurface */
   // BSDF_T opaque_base_out = mix(diffuse_bsdf_out, selected_subsurface_out, subsurface_weight);
   BSDF_T opaque_base_out = diffuse_bsdf_out;
 
-  /* No support for translucent */
   BSDF_T dielectric_substrate_out = mix(
       opaque_base_out, dielectric_volume_transmission_out, transmission_weight);
-  // BSDF_T dielectric_substrate_out = opaque_base_out;
 
   BSDF_T dielectric_base_out = layer(dielectric_reflection_tf_mix_out, dielectric_substrate_out);
   BSDF_T base_substrate_out = mix(dielectric_base_out, metal_bsdf_tf_mix_out, base_metalness);
@@ -541,4 +574,5 @@ shader node_open_pbr_bsdf(
   BSDF = (fuzz_layer_out + emission_edf_out) * geometry_opacity +
          (1.0 - geometry_opacity) * transparent();
   // BSDF = transmission_color * transparent();
+  // BSDF = metal_bsdf_tf_mix_out;
 }

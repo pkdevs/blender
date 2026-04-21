@@ -2763,6 +2763,12 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
   ShaderInput *fuzz_weight_in = input("Fuzz Weight");
   ShaderInput *fuzz_color_in = input("Fuzz Color");
   ShaderInput *fuzz_roughness_in = input("Fuzz Roughness");
+
+  /* Thin-film Component*/
+  ShaderInput *thin_film_weight_in = input("Thin Film Weight");
+  ShaderInput *thin_film_thickness_in = input("Thin Film Thickness");
+  ShaderInput *thin_film_ior_in = input("Thin Film IOR");
+
   /* Emission Component */
   ShaderInput *emission_luminance_in = input("Emission Luminance");
   ShaderInput *emission_color_in = input("Emission Color");
@@ -2811,6 +2817,10 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
   const int fuzz_weight_offset = compiler.stack_assign(fuzz_weight_in);
   const int fuzz_color_offset = compiler.stack_assign(fuzz_color_in);
   const int fuzz_roughness_offset = compiler.stack_assign(fuzz_roughness_in);
+
+  const int thin_film_weight_offset = compiler.stack_assign(thin_film_weight_in);
+  const int thin_film_thickness_offset = compiler.stack_assign(thin_film_thickness_in);
+  const int thin_film_ior_offset = compiler.stack_assign(thin_film_ior_in);
 
   const int emission_luminance_offset = compiler.stack_assign(emission_luminance_in);
   const int emission_color_offset = compiler.stack_assign(emission_color_in);
@@ -2867,16 +2877,18 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
                              coat_ior_offset),
       compiler.encode_uchar4(
           coat_darkening_offset, fuzz_weight_offset, fuzz_color_offset, fuzz_roughness_offset));
-  compiler.add_node(compiler.encode_uchar4(emission_luminance_offset,
-                                           emission_color_offset,
-                                           geometry_opacity_offset,
-                                           geometry_tangent_offset),
-                    compiler.encode_uchar4(geometry_coat_normal_offset,
-                                           geometry_coat_tangent_offset,
-                                           SVM_STACK_INVALID,
-                                           SVM_STACK_INVALID),
-                    SVM_STACK_INVALID,
-                    SVM_STACK_INVALID);
+  compiler.add_node(
+      compiler.encode_uchar4(emission_luminance_offset,
+                             emission_color_offset,
+                             geometry_opacity_offset,
+                             geometry_tangent_offset),
+      compiler.encode_uchar4(geometry_coat_normal_offset,
+                             geometry_coat_tangent_offset,
+                             thin_film_weight_offset,
+                             thin_film_thickness_offset),
+      compiler.encode_uchar4(
+          thin_film_ior_offset, SVM_STACK_INVALID, SVM_STACK_INVALID, SVM_STACK_INVALID),
+      SVM_STACK_INVALID);
 }
 
 void OpenPBRBsdfNode::compile(OSLCompiler &compiler)
