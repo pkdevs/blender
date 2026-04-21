@@ -866,9 +866,8 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
         layout = self.layout
         st = context.space_data
         params = st.params
-        asset = context.asset
 
-        if asset and asset.is_online:
+        if bpy.ops.asset.assets_download.poll():
             layout.operator("asset.assets_download")
             layout.separator()
 
