@@ -2810,6 +2810,8 @@ class USERPREF_PT_file_paths_asset_libraries(AssetsPanel, Panel):
                 row = layout.row()
                 row.alert = active_library.remote_url == ""
                 row.prop(active_library, "remote_url", text="", icon='INTERNET', placeholder="Repository URL")
+
+            layout.prop(active_library, "import_method", text="Import Method")
         else:
             layout.prop(active_library, "path")
             layout.prop(active_library, "import_method", text="Import Method")
