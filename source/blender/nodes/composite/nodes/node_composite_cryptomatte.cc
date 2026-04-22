@@ -295,11 +295,10 @@ class BaseCryptoMatteOperation : public NodeOperation {
     }
 
     if (matte_output.should_compute()) {
-      matte_output.steal_data(matte);
+      matte_output.share_data(matte);
     }
-    else {
-      matte.release();
-    }
+
+    matte.release();
   }
 
   /* Computes the pick result, which is a special human-viewable image that the user can pick

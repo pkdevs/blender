@@ -635,19 +635,6 @@ void Result::share_data(const Result &source)
   (*data_reference_count_)++;
 }
 
-void Result::steal_data(Result &source)
-{
-  BLI_assert(type_ == source.type_);
-  BLI_assert(!this->is_allocated() && source.is_allocated());
-
-  /* Overwrite everything except reference counts. */
-  const int reference_count = reference_count_;
-  *this = source;
-  reference_count_ = reference_count;
-
-  source = Result(*context_, type_, precision_);
-}
-
 void Result::steal_data(void *data, const Domain &domain)
 {
   BLI_assert(!this->is_allocated());

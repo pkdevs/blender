@@ -457,10 +457,12 @@ class Context : public compositor::Context {
       compositor::ConversionOperation conversion_operation(*this, pass_data.type(), pass.type());
       conversion_operation.map_input_to_result(&pass_data);
       conversion_operation.evaluate();
-      pass.steal_data(conversion_operation.get_result());
+      pass.share_data(conversion_operation.get_result());
+      conversion_operation.get_result().release();
     }
     else {
-      pass.steal_data(pass_data);
+      pass.share_data(pass_data);
+      pass_data.release();
     }
 
     /* We assume the given pass is a Cryptomatte pass and retrieve its layer name. If it wasn't a

@@ -331,7 +331,7 @@ class GlareOperation : public NodeOperation {
         this->write_highlights_output(highlights);
       }
       else {
-        highlights_output.steal_data(highlights);
+        highlights_output.share_data(highlights);
       }
     }
     highlights.release();
