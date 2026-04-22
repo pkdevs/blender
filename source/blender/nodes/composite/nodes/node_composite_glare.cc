@@ -2216,7 +2216,7 @@ class GlareOperation : public NodeOperation {
      * while for CPU, write to the result directly. */
     float *output = this->context().use_gpu() ?
                         const_cast<float *>(highlights_buffer) :
-                        static_cast<float *>(fog_glow_result.cpu_data().data());
+                        static_cast<float *>(fog_glow_result.cpu_data_for_write().data());
 
     /* Copy the result to the output. */
     threading::parallel_for(IndexRange(image_size.y), 1, [&](const IndexRange sub_y_range) {

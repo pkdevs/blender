@@ -582,7 +582,7 @@ Result Result::download_to_cpu() const
   result.allocate_texture(this->domain(), false, ResultStorageType::CPU);
 
   GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
-  GPU_texture_read(*this, this->get_gpu_data_format(), 0, result.cpu_data().data());
+  GPU_texture_read(*this, this->get_gpu_data_format(), 0, result.cpu_data_for_write().data());
 
   return result;
 }
@@ -789,8 +789,9 @@ void Result::free()
       gpu_texture_ = nullptr;
       break;
     case ResultStorageType::CPU:
-      this->cpu_data().type().destruct_n(this->cpu_data().data(), this->cpu_data().size());
-      MEM_delete_void(this->cpu_data().data());
+      this->cpu_data_for_write().type().destruct_n(this->cpu_data_for_write().data(),
+                                                   this->cpu_data_for_write().size());
+      MEM_delete_void(this->cpu_data_for_write().data());
       cpu_data_ = GMutableSpan();
       break;
   }
@@ -968,7 +969,8 @@ void Result::update_single_value_data()
       }
       break;
     case ResultStorageType::CPU:
-      this->get_cpp_type().copy_assign(this->single_value().get(), this->cpu_data().data());
+      this->get_cpp_type().copy_assign(this->single_value().get(),
+                                       this->cpu_data_for_write().data());
       break;
   }
 }

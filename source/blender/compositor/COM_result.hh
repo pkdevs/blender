@@ -384,7 +384,7 @@ class Result {
   gpu::Texture *gpu_texture() const;
 
   GSpan cpu_data() const;
-  GMutableSpan cpu_data();
+  GMutableSpan cpu_data_for_write();
 
   /* It is important to call update_single_value_data after adjusting the single value. See that
    * method for more information. */
@@ -507,7 +507,7 @@ BLI_INLINE_METHOD GSpan Result::cpu_data() const
   return cpu_data_;
 }
 
-BLI_INLINE_METHOD GMutableSpan Result::cpu_data()
+BLI_INLINE_METHOD GMutableSpan Result::cpu_data_for_write()
 {
   BLI_assert(storage_type_ == ResultStorageType::CPU);
   return cpu_data_;
@@ -636,7 +636,7 @@ BLI_INLINE_METHOD T Result::load_pixel_zero(const int2 &texel) const
 template<typename T>
 BLI_INLINE_METHOD void Result::store_pixel(const int2 &texel, const T &pixel_value)
 {
-  this->cpu_data().typed<T>()[this->get_pixel_index(texel)] = pixel_value;
+  this->cpu_data_for_write().typed<T>()[this->get_pixel_index(texel)] = pixel_value;
 }
 
 struct EWASamplingData {
