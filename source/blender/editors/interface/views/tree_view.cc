@@ -988,7 +988,7 @@ void TreeViewLayoutBuilder::build_from_tree(AbstractTreeView &tree_view)
       button_flag_disable(but, BUT_UNDO);
       def_but_icon(but, ICON_VIEWZOOM, UI_HAS_ICON);
       button_placeholder_set(but, IFACE_("Search"));
-
+      filter_layout.separator();
       but = uiDefIconButBitC(block,
                              ButtonType::Toggle,
                              1,
@@ -1015,7 +1015,6 @@ void TreeViewLayoutBuilder::build_from_tree(AbstractTreeView &tree_view)
           break;
       }
 
-      filter_layout.separator();
       but = uiDefIconBut(block,
                          ButtonType::IconToggle,
                          icon,
