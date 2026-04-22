@@ -302,10 +302,6 @@ class Result {
    * is expect to be allocated and have the same type and precision as this result. */
   void share_data(const Result &source);
 
-  /* Similar to the Result variant of steal_data, but steals from a raw data buffer. The buffer is
-   * assumed to be allocated using Blender's guarded allocator. */
-  void steal_data(void *data, const Domain &domain);
-
   /* Set up the result to wrap an external GPU texture that is not allocated nor managed by the
    * result. The is_external_ member will be set to true, the domain will be set to have the same
    * size as the texture, and the texture will be set to the given texture. See the is_external_

@@ -579,9 +579,10 @@ Result Result::download_to_cpu() const
   BLI_assert(this->is_allocated());
 
   Result result = Result(*context_, this->type(), this->precision());
+  result.allocate_texture(this->domain(), false, ResultStorageType::CPU);
+
   GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
-  void *data = GPU_texture_read(*this, this->get_gpu_data_format(), 0);
-  result.steal_data(data, this->domain());
+  GPU_texture_read(*this, this->get_gpu_data_format(), 0, result.cpu_data().data());
 
   return result;
 }
@@ -633,17 +634,6 @@ void Result::share_data(const Result &source)
   reference_count_ = reference_count;
 
   (*data_reference_count_)++;
-}
-
-void Result::steal_data(void *data, const Domain &domain)
-{
-  BLI_assert(!this->is_allocated());
-
-  const int64_t array_size = int64_t(domain.data_size.x) * int64_t(domain.data_size.y);
-  cpu_data_ = GMutableSpan(this->get_cpp_type(), data, array_size);
-  storage_type_ = ResultStorageType::CPU;
-  domain_ = domain;
-  data_reference_count_ = new int(1);
 }
 
 /* Returns true if the given GPU texture is compatible with the type and precision of the given
