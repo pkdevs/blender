@@ -338,12 +338,12 @@ static Bounds<int> motionpath_calculate_update_range(MPathTarget *mpt,
     /* Extend range further, since acceleration compensation propagates even further away. */
     if (fcu->auto_smoothing != FCURVE_SMOOTH_NONE) {
       fcu_sfra = motionpath_get_prev_prev_keyframe(mpt, keylist, fcu_sfra);
-      fcu_efra = motionpath_get_next_next_keyframe(mpt, keylist, fcu_efra);
+      fcu_efra = motionpath_get_next_next_keyframe(mpt, keylist, fcu_efra + 1);
     }
 
     if (fcu_sfra <= fcu_efra) {
       frame_range.min = min_ii(frame_range.min, fcu_sfra);
-      frame_range.max = max_ii(frame_range.max, fcu_efra);
+      frame_range.max = max_ii(frame_range.max, fcu_efra + 1);
     }
 
     ED_keylist_free(keylist);
@@ -418,6 +418,7 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
   }
 
   const int cfra = scene->r.cfra;
+  /* The frame range to calculate. Inclusive/Exclusive. */
   Bounds<int> frame_range = {INT_MAX, INT_MIN};
   switch (range) {
     case ANIMVIZ_CALC_RANGE_CURRENT_FRAME:
@@ -428,7 +429,7 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
       if (!frame_range.contains(cfra)) {
         return;
       }
-      frame_range = {cfra, cfra};
+      frame_range = {cfra, cfra + 1};
       break;
     case ANIMVIZ_CALC_RANGE_CHANGED:
       /* Nothing to do here, will be handled later when iterating through the targets. */
@@ -515,7 +516,7 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
             frame_range.max,
             frame_range.max - frame_range.min + 1);
 
-  for (scene->r.cfra = frame_range.min; scene->r.cfra <= frame_range.max; scene->r.cfra++) {
+  for (scene->r.cfra = frame_range.min; scene->r.cfra < frame_range.max; scene->r.cfra++) {
     if (range == ANIMVIZ_CALC_RANGE_CURRENT_FRAME) {
       /* For current frame, only update tagged. */
       BKE_scene_graph_update_tagged(depsgraph, bmain);
