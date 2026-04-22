@@ -709,20 +709,6 @@ void Result::wrap_external(void *data, int2 size)
   data_reference_count_ = new int(1);
 }
 
-void Result::wrap_external(const Result &result)
-{
-  BLI_assert(type_ == result.type());
-  BLI_assert(precision_ == result.precision());
-  BLI_assert(!this->is_allocated());
-
-  /* Steal the data of the given result and mark it as wrapping external data, but create a
-   * temporary copy of the result first, since steal_data will reset it. */
-  Result result_copy = result;
-  this->steal_data(result_copy);
-  is_external_ = true;
-  (*data_reference_count_)++;
-}
-
 void Result::set_transformation(const float3x3 &transformation)
 {
   domain_.transformation = transformation;

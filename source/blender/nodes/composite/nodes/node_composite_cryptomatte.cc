@@ -801,7 +801,7 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
        * instead. */
       Result layer_result = this->context().create_result(pass_result.type(),
                                                           pass_result.precision());
-      layer_result.wrap_external(pass_result);
+      layer_result.share_data(pass_result);
 
       layers.append(layer_result);
     }
@@ -1012,7 +1012,7 @@ class LegacyCryptoMatteOperation : public BaseCryptoMatteOperation {
       /* The layers will be released by the caller, so return a wrapper around the input result
        * instead. */
       Result layer_result = this->context().create_result(input.type(), input.precision());
-      layer_result.wrap_external(input);
+      layer_result.share_data(input);
 
       layers.append(layer_result);
     }

@@ -327,9 +327,6 @@ class Result {
   /* Identical to GPU variant of wrap_external but wraps a CPU buffer instead. */
   void wrap_external(void *data, int2 size);
 
-  /* Identical to GPU variant of wrap_external but wraps whatever the given result has instead. */
-  void wrap_external(const Result &result);
-
   /* Sets the transformation of the domain of the result to the given transformation. */
   void set_transformation(const float3x3 &transformation);
 
