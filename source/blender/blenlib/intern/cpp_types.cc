@@ -61,6 +61,7 @@ BLI_CPP_TYPE_MAKE(int32_t, CPPTypeFlags::BasicType)
 BLI_CPP_TYPE_MAKE(short2, CPPTypeFlags::BasicType)
 BLI_CPP_TYPE_MAKE(int2, CPPTypeFlags::BasicType)
 BLI_CPP_TYPE_MAKE(int3, CPPTypeFlags::BasicType)
+BLI_CPP_TYPE_MAKE(int4, CPPTypeFlags::BasicType)
 BLI_CPP_TYPE_MAKE(int64_t, CPPTypeFlags::BasicType)
 
 BLI_CPP_TYPE_MAKE(uint8_t, CPPTypeFlags::BasicType)
@@ -91,6 +92,7 @@ void register_cpp_types()
   BLI_CPP_TYPE_REGISTER(int32_t);
   BLI_CPP_TYPE_REGISTER(int2);
   BLI_CPP_TYPE_REGISTER(int3);
+  BLI_CPP_TYPE_REGISTER(int4);
   BLI_CPP_TYPE_REGISTER(int64_t);
 
   BLI_CPP_TYPE_REGISTER(uint8_t);
