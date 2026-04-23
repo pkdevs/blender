@@ -86,7 +86,9 @@ enum PointCacheCompression {
 
 struct PTCacheExtra {
   struct PTCacheExtra *next = nullptr, *prev = nullptr;
-  unsigned int type = 0, totdata = 0;
+  unsigned short type = 0;
+  char _pad[2] = {};
+  unsigned int totdata = 0;
   void *data = nullptr;
 };
 

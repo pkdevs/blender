@@ -719,8 +719,9 @@ struct View3D {
   int object_type_exclude_viewport = 0;
   int object_type_exclude_select = 0;
 
-  DNA_DEPRECATED short persp = 0;
-  DNA_DEPRECATED short view = 0;
+  DNA_DEPRECATED char persp = 0;
+  DNA_DEPRECATED char view = 0;
+  char _pad8[2] = {};
 
   struct Object *camera = nullptr, *ob_center = nullptr;
   rctf render_border = {};

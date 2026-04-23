@@ -771,13 +771,13 @@ struct UserDef_SpaceData {
  * #UserDef_SpaceData.)
  */
 struct UserDef_FileSpaceData {
-  int display_type = FILE_VERTICALDISPLAY; /* FileSelectParams.display */
-  int thumbnail_size = 96;                 /* FileSelectParams.thumbnail_size */
-  int sort_type = FILE_SORT_ALPHA;         /* FileSelectParams.sort */
-  int details_flags = FILE_DETAILS_SIZE |
-                      FILE_DETAILS_DATETIME; /* FileSelectParams.details_flags */
-  int flag = FILE_HIDE_DOT;                  /* FileSelectParams.flag */
-  int _pad0 = {};
+  short display_type = FILE_VERTICALDISPLAY; /* FileSelectParams.display */
+  short sort_type = FILE_SORT_ALPHA;         /* FileSelectParams.sort */
+  int thumbnail_size = 96;                   /* FileSelectParams.thumbnail_size */
+  char details_flags = FILE_DETAILS_SIZE |
+                       FILE_DETAILS_DATETIME; /* FileSelectParams.details_flags */
+  char _pad[5];
+  short flag = FILE_HIDE_DOT;         /* FileSelectParams.flag */
   uint64_t filter_id = FILTER_ID_ALL; /* FileSelectParams.filter_id */
 };
 
@@ -1073,7 +1073,7 @@ struct UserDef {
   /** Interpolation mode for newly added F-Curves. */
   char ipo_new = BEZT_IPO_BEZ;
   /** Handle types for newly added keyframes. */
-  char keyhandles_new = HD_AUTO_ANIM;
+  uchar keyhandles_new = HD_AUTO_ANIM;
   char _pad11[4] = {};
   /** #eZoomFrame_Mode. */
   char view_frame_type = ZOOM_FRAME_MODE_KEEP_RANGE;

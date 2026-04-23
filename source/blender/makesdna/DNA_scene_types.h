@@ -1019,7 +1019,8 @@ struct RenderData {
   /* MultiView. */
   ListBaseT<SceneRenderView> views = {nullptr, nullptr};
   short actview = 0;
-  short views_format = 0;
+  char views_format = 0;
+  char _pad9[1] = {};
 
   /* Hair Display. */
   short hair_type = 0, hair_subdiv = 0;
@@ -2276,7 +2277,7 @@ struct ToolSettings {
   /* Keying Settings. */
   /** Defines in DNA_userdef_types.h. */
   short keying_flag = 0;
-  char autokey_mode = AUTOKEY_MODE_NORMAL;
+  short autokey_mode = AUTOKEY_MODE_NORMAL;
   /** Keyframe type (see DNA_curve_types.h). */
   char keyframe_type = 0;
 
@@ -2291,8 +2292,6 @@ struct ToolSettings {
   char transform_flag = 0;
   /** Snap elements (per space-type), #eSnapMode. */
   char snap_node_mode = SCE_SNAP_TO_GRID;
-
-  char _pad = {};
 
   short snap_mode = SCE_SNAP_TO_INCREMENT;
   short snap_uv_mode = SCE_SNAP_TO_INCREMENT;

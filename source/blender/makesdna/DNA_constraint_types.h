@@ -695,7 +695,8 @@ struct bConstraintTarget {
   float matrix[4][4] = {};
 
   /** Space that target should be evaluated in (overrides bConstraint->tarspace). */
-  short space = 0;
+  char space = 0;
+  char _pad1;
   /** Runtime settings (for editor, etc.). */
   short flag = 0;
   /** Type of target (eConstraintObType). */

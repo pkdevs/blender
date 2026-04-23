@@ -385,9 +385,10 @@ struct MovieTrackingSettings {
   /* ** default tracker settings */
   /** Model of the motion for this track, #TrackingMotionModel. */
   short default_motion_model = 0;
+  short _pad = {};
   /** Flags for the tracking algorithm (use brute, use ESM, use pyramid, etc.),
    * #TrackingAlgorithmFlag. */
-  short default_algorithm_flag = 0;
+  int default_algorithm_flag = 0;
   /** Minimal correlation which is still treated as successful tracking. */
   float default_minimum_correlation = 0;
   /** Size of pattern area for new tracks, measured in pixels. */
@@ -401,8 +402,9 @@ struct MovieTrackingSettings {
   short default_margin = 0;
   /** Denotes which frame is used for the reference during tracking, #eTrackFrameMatch. */
   short default_pattern_match = 0;
+  short _pad1 = {};
   /** Default flags like color channels used by default. */
-  short default_flag = 0;
+  int default_flag = 0;
   /** Default weight of the track. */
   float default_weight = 0;
 

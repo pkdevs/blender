@@ -942,7 +942,7 @@ static bool default_get_tarmat_full_bbone(Depsgraph * /*depsgraph*/,
       if (no_copy == 0) { \
         datatar = ct->tar; \
         STRNCPY_UTF8(datasubtarget, ct->subtarget); \
-        con->tarspace = char(ct->space); \
+        con->tarspace = ct->space; \
       } \
 \
       BLI_freelinkN(list, ct); \
@@ -963,7 +963,7 @@ static bool default_get_tarmat_full_bbone(Depsgraph * /*depsgraph*/,
       bConstraintTarget *ctn = ct->next; \
       if (no_copy == 0) { \
         datatar = ct->tar; \
-        con->tarspace = char(ct->space); \
+        con->tarspace = ct->space; \
       } \
 \
       BLI_freelinkN(list, ct); \
