@@ -3138,19 +3138,6 @@ enum GreasePencilLineartModifierShadowFilter {
   LINEART_SHADOW_FILTER_ILLUMINATED_ENCLOSED_SHAPES = 3,
 };
 
-/* This enum is for modifier internal state only. */
-enum eLineArtGPencilModifierFlags {
-  /* These two moved to #eLineartMainFlags to keep consistent with flag variable purpose. */
-  /* MOD_LINEART_INVERT_SOURCE_VGROUP = (1 << 0), */
-  /* MOD_LINEART_MATCH_OUTPUT_VGROUP = (1 << 1), */
-  MOD_LINEART_BINARY_WEIGHTS = (1 << 2) /* Deprecated, this is removed for lack of use case. */,
-  MOD_LINEART_IS_BAKED = (1 << 3),
-  MOD_LINEART_USE_CACHE = (1 << 4),
-  MOD_LINEART_OFFSET_TOWARDS_CUSTOM_CAMERA = (1 << 5),
-  MOD_LINEART_INVERT_COLLECTION = (1 << 6),
-  MOD_LINEART_INVERT_SILHOUETTE_FILTER = (1 << 7),
-};
-
 enum GreasePencilLineartMaskSwitches {
   MOD_LINEART_MATERIAL_MASK_ENABLE = (1 << 0),
   /** When set, material mask bit comparisons are done with bit wise "AND" instead of "OR". */

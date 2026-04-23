@@ -282,13 +282,13 @@ enum {
   FREESTYLE_EDGE_MARK = 1,
 };
 
-struct FreestyleFace {
-  char flag;
-};
-
 /** #FreestyleFace.flag */
 enum {
   FREESTYLE_FACE_MARK = 1,
+};
+
+struct FreestyleFace {
+  char flag;
 };
 
 /** \} */
@@ -296,6 +296,19 @@ enum {
 /* -------------------------------------------------------------------- */
 /** \name Deprecated Structs
  * \{ */
+
+/** #MEdge.flag */
+enum {
+  /** Deprecated selection status. Now stored in ".select_edge" attribute. */
+  // SELECT = (1 << 0),
+  ME_SEAM = (1 << 2),
+  /** Deprecated hide status. Now stored in ".hide_edge" attribute. */
+  // ME_HIDE = (1 << 4),
+  /** Deprecated loose edge status. Now stored in #Mesh::loose_edges() runtime cache. */
+  ME_LOOSEEDGE = (1 << 7),
+  /** Deprecated sharp edge status. Now stored in "sharp_edge" attribute. */
+  ME_SHARP = (1 << 9),
+};
 
 /**
  * Mesh Edges.
@@ -314,17 +327,14 @@ struct MEdge {
   short flag_legacy;
 };
 
-/** #MEdge.flag */
+/** #MPoly.flag */
 enum {
-  /** Deprecated selection status. Now stored in ".select_edge" attribute. */
-  // SELECT = (1 << 0),
-  ME_SEAM = (1 << 2),
-  /** Deprecated hide status. Now stored in ".hide_edge" attribute. */
+  /** Deprecated smooth shading status. Now stored reversed in "sharp_face" attribute. */
+  ME_SMOOTH = (1 << 0),
+  /** Deprecated selection status. Now stored in ".select_poly" attribute. */
+  ME_FACE_SEL = (1 << 1),
+  /** Deprecated hide status. Now stored in ".hide_poly" attribute. */
   // ME_HIDE = (1 << 4),
-  /** Deprecated loose edge status. Now stored in #Mesh::loose_edges() runtime cache. */
-  ME_LOOSEEDGE = (1 << 7),
-  /** Deprecated sharp edge status. Now stored in "sharp_edge" attribute. */
-  ME_SHARP = (1 << 9),
 };
 
 /**
@@ -344,14 +354,11 @@ struct MPoly {
   char flag_legacy, _pad;
 };
 
-/** #MPoly.flag */
+/** #MLoopUV.flag */
 enum {
-  /** Deprecated smooth shading status. Now stored reversed in "sharp_face" attribute. */
-  ME_SMOOTH = (1 << 0),
-  /** Deprecated selection status. Now stored in ".select_poly" attribute. */
-  ME_FACE_SEL = (1 << 1),
-  /** Deprecated hide status. Now stored in ".hide_poly" attribute. */
-  // ME_HIDE = (1 << 4),
+  MLOOPUV_EDGESEL = (1 << 0),
+  MLOOPUV_VERTSEL = (1 << 1),
+  MLOOPUV_PINNED = (1 << 2),
 };
 
 /**
@@ -363,11 +370,12 @@ struct MLoopUV {
   int flag;
 };
 
-/** #MLoopUV.flag */
+/** #MVert.flag */
 enum {
-  MLOOPUV_EDGESEL = (1 << 0),
-  MLOOPUV_VERTSEL = (1 << 1),
-  MLOOPUV_PINNED = (1 << 2),
+  /** Deprecated selection status. Now stored in ".select_vert" attribute. */
+  // SELECT = (1 << 0),
+  /** Deprecated hide status. Now stored in ".hide_vert" attribute. */
+  ME_HIDE = (1 << 4),
 };
 
 /**
@@ -385,14 +393,6 @@ struct MVert {
    */
   char bweight_legacy;
   char _pad[2];
-};
-
-/** #MVert.flag */
-enum {
-  /** Deprecated selection status. Now stored in ".select_vert" attribute. */
-  // SELECT = (1 << 0),
-  /** Deprecated hide status. Now stored in ".hide_vert" attribute. */
-  ME_HIDE = (1 << 4),
 };
 
 /**

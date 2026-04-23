@@ -1777,6 +1777,13 @@ struct MeshStatVis {
 /** \name Sequencer Tool Settings
  * \{ */
 
+/** #SequencerToolSettings::overlap_mode */
+enum eSeqOverlapMode {
+  SEQ_OVERLAP_EXPAND,
+  SEQ_OVERLAP_OVERWRITE,
+  SEQ_OVERLAP_SHUFFLE,
+};
+
 /** #SequencerToolSettings::snap_mode */
 enum eSequencerSnapMode {
   SEQ_SNAP_TO_STRIPS = 1 << 0,
@@ -1945,12 +1952,6 @@ enum {
 enum {
   /** Weight paint only. */
   VP_FLAG_VGROUP_RESTRICT = (1 << 7),
-};
-
-enum eSeqOverlapMode {
-  SEQ_OVERLAP_EXPAND,
-  SEQ_OVERLAP_OVERWRITE,
-  SEQ_OVERLAP_SHUFFLE,
 };
 
 /** #ToolSettings::snap_transform_mode_flag */
