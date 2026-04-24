@@ -319,7 +319,7 @@ static void add_preset_button(Block *block,
                               std::optional<StringRef> tip,
                               CurveMapping *cumap,
                               const bool neg_slope,
-                              const int preset,
+                              const eCurveMappingPreset preset,
                               const RNAUpdateCb &cb)
 {
   Button *bt = uiDefIconBut(

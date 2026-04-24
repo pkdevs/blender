@@ -1114,6 +1114,8 @@ void uiTemplateImageStereo3d(ui::Layout *layout, PointerRNA *stereo3d_format_ptr
       col.prop(stereo3d_format_ptr, "use_squeezed_frame", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       break;
     }
+    case S3D_DISPLAY_PAGEFLIP:
+      break;
   }
 }
 

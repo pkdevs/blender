@@ -516,7 +516,7 @@ static void rna_userdef_extension_repo_access_token_set(PointerRNA *ptr, const c
 
 static void rna_userdef_extension_repo_generic_flag_set_impl(PointerRNA *ptr,
                                                              const bool value,
-                                                             const int flag)
+                                                             const eUserExtensionRepo_Flag flag)
 {
   Main *bmain = G.main;
   bUserExtensionRepo *repo = static_cast<bUserExtensionRepo *>(ptr->data);
@@ -547,7 +547,7 @@ static void rna_userdef_extension_repo_source_set(PointerRNA *ptr, int value)
   Main *bmain = G.main;
   bUserExtensionRepo *repo = static_cast<bUserExtensionRepo *>(ptr->data);
   BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_PRE);
-  repo->source = value;
+  repo->source = eUserExtensionRepo_Source(value);
   BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);
 }
 
@@ -713,7 +713,7 @@ static bUserExtensionRepo *rna_userdef_extension_repo_new(const char *name,
     repo->flag |= USER_EXTENSION_REPO_FLAG_USE_CUSTOM_DIRECTORY;
   }
 
-  repo->source = source;
+  repo->source = eUserExtensionRepo_Source(source);
 
   BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_POST);
   USERDEF_TAG_DIRTY;
@@ -789,12 +789,12 @@ static void rna_userdef_autokeymode_set(PointerRNA *ptr, int value)
   UserDef *userdef = static_cast<UserDef *>(ptr->data);
 
   if (value == AUTOKEY_MODE_NORMAL) {
-    userdef->autokey_mode |= (AUTOKEY_MODE_NORMAL - AUTOKEY_ON);
-    userdef->autokey_mode &= ~(AUTOKEY_MODE_EDITKEYS - AUTOKEY_ON);
+    userdef->autokey_mode |= eAutokey_Mode(AUTOKEY_MODE_NORMAL - AUTOKEY_ON);
+    userdef->autokey_mode &= ~eAutokey_Mode(AUTOKEY_MODE_EDITKEYS - AUTOKEY_ON);
   }
   else if (value == AUTOKEY_MODE_EDITKEYS) {
-    userdef->autokey_mode |= (AUTOKEY_MODE_EDITKEYS - AUTOKEY_ON);
-    userdef->autokey_mode &= ~(AUTOKEY_MODE_NORMAL - AUTOKEY_ON);
+    userdef->autokey_mode |= eAutokey_Mode(AUTOKEY_MODE_EDITKEYS - AUTOKEY_ON);
+    userdef->autokey_mode &= ~eAutokey_Mode(AUTOKEY_MODE_NORMAL - AUTOKEY_ON);
   }
 }
 
@@ -835,7 +835,7 @@ static void rna_userdef_timecode_style_set(PointerRNA *ptr, int value)
   int required_size = userdef->v2d_min_gridsize;
 
   /* Set the time-code style. */
-  userdef->timecode_style = value;
+  userdef->timecode_style = eTimecodeStyles(value);
 
   /* Adjust the v2d grid-size if needed so that time-codes don't overlap
    * NOTE: most of these have been hand-picked to avoid overlaps while still keeping

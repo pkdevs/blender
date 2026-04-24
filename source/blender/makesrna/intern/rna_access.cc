@@ -4341,7 +4341,7 @@ eStringPropertySearchFlag RNA_property_string_search_flag(PropertyRNA *prop)
 {
   StringPropertyRNA *sprop = reinterpret_cast<StringPropertyRNA *>(rna_ensure_property(prop));
   if (prop->magic != RNA_MAGIC) {
-    return eStringPropertySearchFlag(0);
+    return eStringPropertySearchFlag{};
   }
   BLI_assert(RNA_property_type(prop) == PROP_STRING);
   if (sprop->search) {

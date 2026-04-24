@@ -142,15 +142,13 @@ struct IDPropertyData {
 
 struct IDProperty {
   struct IDProperty *next = nullptr, *prev = nullptr;
-  /** #eIDPropertyType */
-  char type = 0;
+  eIDPropertyType type = IDP_STRING;
   /**
    * #eIDPropertySubType when `type` is #IDP_STRING.
    * #eIDPropertyType for all other types.
    */
   char subtype = 0;
-  /** #IDP_FLAG_GHOST and others. */
-  short flag = 0;
+  eIDPropertyFlag flag = {};
   char name[/*MAX_IDPROP_NAME*/ 64] = "";
 
   char _pad0[4] = {};
@@ -181,7 +179,7 @@ struct IDProperty {
 /* Static ID override structs. */
 
 /* IDOverrideLibraryPropertyOperation->operation. */
-enum {
+enum eID_OverrideLib_Op : short {
   /* Basic operations. */
   LIBOVERRIDE_OP_NOOP = 0, /* Special value, forbids any overriding. */
 
@@ -201,7 +199,7 @@ enum {
 };
 
 /* IDOverrideLibraryPropertyOperation->flag. */
-enum {
+enum eID_OverrideLib_OpFlag : short {
   /** User cannot remove that override operation. */
   LIBOVERRIDE_OP_FLAG_MANDATORY = 1 << 0,
   /** User cannot change that override operation. */
@@ -219,25 +217,27 @@ enum {
    */
   LIBOVERRIDE_OP_FLAG_IDPOINTER_ITEM_USE_ID = 1 << 9,
 };
+ENUM_OPERATORS(eID_OverrideLib_OpFlag)
 
 /* IDOverrideLibraryProperty->tag and IDOverrideLibraryPropertyOperation->tag. */
-enum {
+enum eID_OverrideLib_PropTag : short {
   /** This override property (operation) is unused and should be removed by cleanup process. */
   LIBOVERRIDE_PROP_OP_TAG_UNUSED = 1 << 0,
 
   /** This override property is forbidden and should be restored to its linked reference value. */
   LIBOVERRIDE_PROP_TAG_NEEDS_RETORE = 1 << 1,
 };
+ENUM_OPERATORS(eID_OverrideLib_PropTag)
 
 struct IDOverrideLibraryPropertyOperation {
   struct IDOverrideLibraryPropertyOperation *next = nullptr, *prev = nullptr;
 
   /* Type of override. */
-  short operation = 0;
-  short flag = 0;
+  eID_OverrideLib_Op operation = {};
+  eID_OverrideLib_OpFlag flag = {};
 
   /** Runtime, tags are common to both #IDOverrideProperty and #IDOverridePropertyOperation. */
-  short tag = 0;
+  eID_OverrideLib_PropTag tag = {};
   char _pad0[2] = {};
 
   /* Sub-item references, if needed (for arrays or collections only).
@@ -262,7 +262,7 @@ struct IDOverrideLibraryPropertyOperation {
 };
 
 /* IDOverrideLibrary->flag */
-enum {
+enum eID_OverrideLib_Flag : uint32_t {
   /**
    * The override data-block should not be considered as part of an override hierarchy (generally
    * because it was created as an single override, outside of any hierarchy consideration).
@@ -274,6 +274,7 @@ enum {
    */
   LIBOVERRIDE_FLAG_SYSTEM_DEFINED = 1 << 1,
 };
+ENUM_OPERATORS(eID_OverrideLib_Flag)
 
 /** A single overridden property, contain all operations on this one. */
 struct IDOverrideLibraryProperty {
@@ -294,7 +295,7 @@ struct IDOverrideLibraryProperty {
   /**
    * Runtime, tags are common to both IDOverrideLibraryProperty and
    * IDOverrideLibraryPropertyOperation. */
-  short tag = 0;
+  eID_OverrideLib_PropTag tag = {};
   char _pad[2] = {};
 
   /** The property type matching the rna_path. */
@@ -319,7 +320,7 @@ struct IDOverrideLibrary {
 
   IDOverrideLibraryRuntime *runtime = nullptr;
 
-  unsigned int flag = 0;
+  eID_OverrideLib_Flag flag = {};
   char _pad_1[4] = {};
 };
 
@@ -333,12 +334,13 @@ struct IDOverrideLibrary {
 #define MAX_ID_NAME 258
 
 /** #ID_Runtime_Remap.status */
-enum {
+enum eID_RemapStatus : char {
   /** new_id is directly linked in current .blend. */
   ID_REMAP_IS_LINKED_DIRECT = 1 << 0,
   /** There was some skipped 'user_one' usages of old_id. */
   ID_REMAP_IS_USER_ONE_SKIPPED = 1 << 1,
 };
+ENUM_OPERATORS(eID_RemapStatus)
 
 struct IDHash {
   char data[16] = "";
@@ -573,7 +575,7 @@ enum ePreviewImage_Flag {
 };
 
 /* PreviewImage.tag */
-enum {
+enum ePreviewImage_Tag : short {
   /** Deferred preview is being loaded. */
   PRV_TAG_DEFERRED_RENDERING = (1 << 1),
   /** Deferred preview should be deleted asap. */
@@ -583,6 +585,7 @@ enum {
   /* Rendering was interrupted and needs restart. */
   PRV_TAG_RESTART_RENDERING = (1 << 4),
 };
+ENUM_OPERATORS(ePreviewImage_Tag)
 
 /**
  * This type allows shallow copies. Use #BKE_previewimg_free() to release contained resources.
@@ -718,7 +721,7 @@ struct PreviewImage {
   ((void)0)
 
 /** id->flag (persistent). */
-enum {
+enum eID_Flag : short {
   /** Don't delete the data-block even if unused. */
   ID_FLAG_FAKEUSER = 1 << 9,
   /**
@@ -755,8 +758,9 @@ enum {
    * Indicates that this linked ID is packed into the current .blend file. This should never be set
    * on local ID (without)one with a null `ID::lib` pointer).
    */
-  ID_FLAG_LINKED_AND_PACKED = 1 << 15,
+  ID_FLAG_LINKED_AND_PACKED = short(1u << 15),
 };
+ENUM_OPERATORS(eID_Flag)
 
 /**
  * id->tag (runtime-only).
@@ -775,7 +779,7 @@ enum {
  * \note These tags are purely runtime, so changing there value is not an issue. When adding new
  * tags, please put them in the relevant category and always keep their values strictly increasing.
  */
-enum {
+enum eID_Tag : int {
   /**
    * Long-life tags giving important info about general ID management.
    *
@@ -987,8 +991,9 @@ enum {
    *
    * \todo Make it a RESET_AFTER_USE too.
    */
-  ID_TAG_DOIT = 1u << 31,
+  ID_TAG_DOIT = int(1u << 31),
 };
+ENUM_OPERATORS(eID_Tag)
 
 /**
  * Most of ID tags are cleared on file write (i.e. also when storing undo steps), since they

@@ -883,7 +883,7 @@ static void file_space_subtype_set(ScrArea *area, int value)
   for (ARegion &region : area->regionbase) {
     region.v2d.flag &= ~V2D_IS_INIT;
   }
-  sfile->browse_mode = value;
+  sfile->browse_mode = eFileBrowse_Mode(value);
 }
 
 static void file_space_subtype_item_extend(bContext * /*C*/, EnumPropertyItem **item, int *totitem)
@@ -945,7 +945,7 @@ static void file_space_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
   sfile->layout = nullptr;
   sfile->op = nullptr;
   sfile->previews_timer = nullptr;
-  sfile->tags = 0;
+  sfile->tags = eFileTags{};
   sfile->runtime = nullptr;
   BLO_read_struct(reader, FileSelectParams, &sfile->params);
   BLO_read_struct(reader, FileAssetSelectParams, &sfile->asset_params);

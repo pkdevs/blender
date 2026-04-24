@@ -50,7 +50,7 @@ void BKE_curvemapping_set_defaults(CurveMapping *cumap,
                                    float miny,
                                    float maxx,
                                    float maxy,
-                                   short default_handle_type)
+                                   eBezTriple_Handle default_handle_type)
 {
   int a;
   float clipminx, clipminy, clipmaxx, clipmaxy;
@@ -79,7 +79,7 @@ void BKE_curvemapping_set_defaults(CurveMapping *cumap,
       cumap->cm[a].default_handle_type = CUMA_HANDLE_AUTO_ANIM;
     }
     else {
-      cumap->cm[a].default_handle_type = 0;
+      cumap->cm[a].default_handle_type = {};
     }
 
     cumap->cm[a].totpoint = 2;
@@ -2070,7 +2070,7 @@ void BKE_color_managed_view_settings_init(ColorManagedViewSettings *view_setting
   STRNCPY_UTF8(view_settings->view_transform, view_transform);
   STRNCPY_UTF8(view_settings->look, "None");
 
-  view_settings->flag = 0;
+  view_settings->flag = eColorManageView_Flag{};
   view_settings->gamma = 1.0f;
   view_settings->exposure = 0.0f;
   view_settings->temperature = 6500.0f;

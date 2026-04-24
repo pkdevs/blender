@@ -125,7 +125,7 @@ static void fileselect_ensure_updated_asset_params(SpaceFile *sfile)
   base_params->display = FILE_IMGDISPLAY;
   base_params->sort = FILE_SORT_ASSET_CATALOG;
   /* No details columns supported for assets (wouldn't contain anything), disable them all. */
-  base_params->details_flags = 0;
+  base_params->details_flags = eFileDetails{};
   /* Asset libraries include all sub-directories, so enable maximal recursion. */
   base_params->recursion_level = FILE_SELECT_MAX_RECURSIONS;
   /* 'SMALL' size by default. More reasonable since this is typically used as regular editor,
@@ -183,7 +183,7 @@ static FileSelectParams *fileselect_ensure_updated_file_params(SpaceFile *sfile)
         params->title, WM_operatortype_name(op->type, op->ptr).c_str(), sizeof(params->title));
 
     if ((prop = RNA_struct_find_property(op->ptr, "filemode"))) {
-      params->type = RNA_property_int_get(op->ptr, prop);
+      params->type = eFileSelectType(RNA_property_int_get(op->ptr, prop));
     }
     else {
       params->type = FILE_SPECIAL;
@@ -217,16 +217,18 @@ static FileSelectParams *fileselect_ensure_updated_file_params(SpaceFile *sfile)
       BLI_path_normalize_dir(params->dir, sizeof(params->dir));
     }
 
-    params->flag = 0;
+    params->flag = eFileSel_Params_Flag{};
     if (is_directory == true && is_filename == false && is_filepath == false && is_files == false)
     {
       params->flag |= FILE_DIRSEL_ONLY;
     }
     if ((prop = RNA_struct_find_property(op->ptr, "check_existing"))) {
-      params->flag |= RNA_property_boolean_get(op->ptr, prop) ? int(FILE_CHECK_EXISTING) : 0;
+      params->flag |= RNA_property_boolean_get(op->ptr, prop) ? FILE_CHECK_EXISTING :
+                                                                eFileSel_Params_Flag{};
     }
     if ((prop = RNA_struct_find_property(op->ptr, "hide_props_region"))) {
-      params->flag |= RNA_property_boolean_get(op->ptr, prop) ? int(FILE_HIDE_TOOL_PROPS) : 0;
+      params->flag |= RNA_property_boolean_get(op->ptr, prop) ? FILE_HIDE_TOOL_PROPS :
+                                                                eFileSel_Params_Flag{};
     }
 
     params->filter = 0;
@@ -312,17 +314,20 @@ static FileSelectParams *fileselect_ensure_updated_file_params(SpaceFile *sfile)
     }
 
     if (params->type == FILE_LOADLIB) {
-      params->flag |= RNA_boolean_get(op->ptr, "link") ? FILE_LINK : 0;
-      params->flag |= RNA_boolean_get(op->ptr, "autoselect") ? FILE_AUTOSELECT : 0;
-      params->flag |= RNA_boolean_get(op->ptr, "active_collection") ? FILE_ACTIVE_COLLECTION : 0;
+      params->flag |= RNA_boolean_get(op->ptr, "link") ? FILE_LINK : eFileSel_Params_Flag{};
+      params->flag |= RNA_boolean_get(op->ptr, "autoselect") ? FILE_AUTOSELECT :
+                                                               eFileSel_Params_Flag{};
+      params->flag |= RNA_boolean_get(op->ptr, "active_collection") ? FILE_ACTIVE_COLLECTION :
+                                                                      eFileSel_Params_Flag{};
     }
 
     if ((prop = RNA_struct_find_property(op->ptr, "allow_path_tokens"))) {
-      params->flag |= RNA_property_boolean_get(op->ptr, prop) ? FILE_PATH_TOKENS_ALLOW : 0;
+      params->flag |= RNA_property_boolean_get(op->ptr, prop) ? FILE_PATH_TOKENS_ALLOW :
+                                                                eFileSel_Params_Flag{};
     }
 
     if ((prop = RNA_struct_find_property(op->ptr, "display_type"))) {
-      params->display = RNA_property_enum_get(op->ptr, prop);
+      params->display = eFileDisplayType(RNA_property_enum_get(op->ptr, prop));
     }
 
     if (params->display == FILE_DEFAULTDISPLAY) {
@@ -330,7 +335,7 @@ static FileSelectParams *fileselect_ensure_updated_file_params(SpaceFile *sfile)
     }
 
     if ((prop = RNA_struct_find_property(op->ptr, "sort_method"))) {
-      params->sort = RNA_property_enum_get(op->ptr, prop);
+      params->sort = eFileSortType(RNA_property_enum_get(op->ptr, prop));
     }
 
     if (params->sort == FILE_SORT_DEFAULT) {
@@ -1390,7 +1395,7 @@ void file_params_renamefile_clear(FileSelectParams *params)
 {
   params->renamefile[0] = '\0';
   params->rename_id = nullptr;
-  params->rename_flag = 0;
+  params->rename_flag = eFileSel_Params_RenameFlag{};
 }
 
 static int file_params_find_renamed(const FileSelectParams *params, FileList *filelist)

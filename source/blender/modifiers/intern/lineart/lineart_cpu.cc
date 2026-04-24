@@ -2382,6 +2382,8 @@ static int lineart_usage_check(Collection *c, Object *ob, bool is_render)
             return OBJECT_LRT_NO_INTERSECTION;
           case COLLECTION_LRT_FORCE_INTERSECTION:
             return OBJECT_LRT_FORCE_INTERSECTION;
+          case COLLECTION_LRT_INCLUDE:
+            break;
         }
         return OBJECT_LRT_INHERIT;
       }

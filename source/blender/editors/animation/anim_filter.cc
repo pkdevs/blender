@@ -3080,6 +3080,8 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac,
       expanded = FILTER_LIGHTPROBE_OBJD(probe);
       break;
     }
+    default:
+      break;
   }
 
   /* add object data animation channels */
@@ -3100,6 +3102,8 @@ static size_t animdata_filter_ds_obdata(bAnimContext *ac,
         }
         break;
       }
+      default:
+        break;
     }
   }
   END_ANIMFILTER_SUBCHANNELS;

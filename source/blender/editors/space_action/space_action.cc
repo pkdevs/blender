@@ -108,7 +108,9 @@ static SpaceLink *action_create(const ScrArea *area, const Scene *scene)
   region->regiontype = RGN_TYPE_CHANNELS;
   region->alignment = RGN_ALIGN_LEFT;
   /* Channel list is hidden by default in timeline mode, and visible in other modes. */
-  region->flag |= is_timeline ? RGN_FLAG_HIDDEN : 0;
+  if (is_timeline) {
+    region->flag |= RGN_FLAG_HIDDEN;
+  }
 
   /* Only need to set scroll settings, as this will use `listview` v2d configuration. */
   region->v2d.scroll = V2D_SCROLL_BOTTOM;

@@ -627,7 +627,7 @@ static std::string uilist_item_tooltip_func(bContext * /*C*/, void *argN, const 
 static uiList *uilist_ensure(const bContext *C,
                              uiListType *ui_list_type,
                              const char *list_id,
-                             int layout_type,
+                             euiList_LayoutType layout_type,
                              bool sort_reverse,
                              bool sort_lock)
 {
@@ -1011,7 +1011,7 @@ void template_uilist(Layout *layout,
   uiList *ui_list = uilist_ensure(C,
                                   ui_list_type,
                                   list_id,
-                                  layout_type,
+                                  euiList_LayoutType(layout_type),
                                   flags & TEMPLATE_LIST_SORT_REVERSE,
                                   flags & TEMPLATE_LIST_SORT_LOCK);
 

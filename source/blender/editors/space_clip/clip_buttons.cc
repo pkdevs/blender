@@ -237,7 +237,7 @@ struct MarkerUpdateCb {
   /** position and dimensions of marker search in pixel coords */
   float marker_search_pos[2], marker_search[2];
   /** marker's flags */
-  int marker_flag;
+  TrackingMarkerFlag marker_flag;
 };
 
 static void to_pixel_space(float r[2], const float a[2], int width, int height)
