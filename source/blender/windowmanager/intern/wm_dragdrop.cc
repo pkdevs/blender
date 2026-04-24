@@ -515,13 +515,6 @@ static wmDropBox *dropbox_active(bContext *C,
                                  wmDrag *drag,
                                  const wmEvent *event)
 {
-  if (wmDragAsset *asset_data = WM_drag_get_asset_data(drag, 0)) {
-    if (asset_data->asset->is_online()) {
-      drag->drop_state.disabled_info = RPT_("Downloading asset...");
-      return nullptr;
-    }
-  }
-
   for (wmEventHandler &handler_base : *handlers) {
     if (handler_base.type == WM_HANDLER_TYPE_DROPBOX) {
       wmEventHandler_Dropbox *handler = reinterpret_cast<wmEventHandler_Dropbox *>(&handler_base);
@@ -564,12 +557,49 @@ static wmDropBox *dropbox_active(bContext *C,
   return nullptr;
 }
 
+static bool has_single_asset_drag(const wmWindowManager &wm)
+{
+  for (const wmDrag &drag : wm.runtime->drags) {
+    if (drag.type == WM_DRAG_ASSET) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool drag_global_poll(const bContext *C, const wmDrag *drag, std::string *r_disabled_info)
+{
+  if (wmDragAsset *asset_data = WM_drag_get_asset_data(drag, 0)) {
+    if (asset_data->asset->is_online()) {
+      *r_disabled_info = RPT_("Downloading asset...");
+      return false;
+    }
+  }
+
+  if (!wm_drag_asset_path_exists(drag).value_or(true)) {
+    if ((drag->type == WM_DRAG_ASSET_LIST) && has_single_asset_drag(*CTX_wm_manager(C))) {
+      /* Return false without displaying a message. The "Asset not found" message below tends to
+       * show up twice when both #WM_DRAG_ASSET and #WM_DRAG_ASSET_LIST are present. Skip the check
+       * for the former if the latter exists. */
+      return false;
+    }
+
+    *r_disabled_info = RPT_("Asset not found");
+    return false;
+  }
+
+  return true;
+}
+
 /* Return active operator tooltip/name when mouse is in box. */
 static wmDropBox *wm_dropbox_active(bContext *C, wmDrag *drag, const wmEvent *event)
 {
-  /* Always do this check for asset dragging (as if it was in every poll). */
-  if (!wm_drag_asset_path_exists(drag).value_or(true)) {
-    drag->drop_state.disabled_info = RPT_("Asset not found");
+  drag->drop_state.disabled_info = std::nullopt;
+
+  /* Always do these checks for dragging (as if they were in every poll). */
+  std::string disabled_info;
+  if (!drag_global_poll(C, drag, &disabled_info)) {
+    drag->drop_state.disabled_info = disabled_info;
     return nullptr;
   }
 
@@ -577,8 +607,6 @@ static wmDropBox *wm_dropbox_active(bContext *C, wmDrag *drag, const wmEvent *ev
   bScreen *screen = WM_window_get_active_screen(win);
   ScrArea *area = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, event->xy);
   wmDropBox *drop = nullptr;
-
-  drag->drop_state.disabled_info = std::nullopt;
 
   if (area) {
     ARegion *region = ED_area_find_region_xy_visual(area, RGN_TYPE_ANY, event->xy);
