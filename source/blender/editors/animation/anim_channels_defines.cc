@@ -5876,48 +5876,48 @@ static void draw_setting_widget(bAnimContext *ac,
   ui::Button *but = nullptr;
   switch (ptrsize) {
     case sizeof(int): /* integer pointer for setting */
-      but = uiDefIconButBitI(block,
-                             butType,
-                             flag,
-                             icon,
-                             xpos,
-                             ypos,
-                             ICON_WIDTH,
-                             ICON_WIDTH,
-                             static_cast<int *>(ptr),
-                             0,
-                             0,
-                             tooltip);
+      but = uiDefIconButBit(block,
+                            butType,
+                            flag,
+                            icon,
+                            xpos,
+                            ypos,
+                            ICON_WIDTH,
+                            ICON_WIDTH,
+                            static_cast<int *>(ptr),
+                            0,
+                            0,
+                            tooltip);
       break;
 
     case sizeof(short): /* short pointer for setting */
-      but = uiDefIconButBitS(block,
-                             butType,
-                             flag,
-                             icon,
-                             xpos,
-                             ypos,
-                             ICON_WIDTH,
-                             ICON_WIDTH,
-                             static_cast<short *>(ptr),
-                             0,
-                             0,
-                             tooltip);
+      but = uiDefIconButBit(block,
+                            butType,
+                            flag,
+                            icon,
+                            xpos,
+                            ypos,
+                            ICON_WIDTH,
+                            ICON_WIDTH,
+                            static_cast<short *>(ptr),
+                            0,
+                            0,
+                            tooltip);
       break;
 
     case sizeof(char): /* char pointer for setting */
-      but = uiDefIconButBitC(block,
-                             butType,
-                             flag,
-                             icon,
-                             xpos,
-                             ypos,
-                             ICON_WIDTH,
-                             ICON_WIDTH,
-                             static_cast<char *>(ptr),
-                             0,
-                             0,
-                             tooltip);
+      but = uiDefIconButBit(block,
+                            butType,
+                            flag,
+                            icon,
+                            xpos,
+                            ypos,
+                            ICON_WIDTH,
+                            ICON_WIDTH,
+                            static_cast<char *>(ptr),
+                            0,
+                            0,
+                            tooltip);
       break;
   }
   if (!but) {
