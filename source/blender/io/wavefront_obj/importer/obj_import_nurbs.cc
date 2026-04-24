@@ -97,7 +97,7 @@ void CurveFromGeometry::create_nurbs(Curve *curve, const OBJImportParams &import
   Nurb *nurb = static_cast<Nurb *>(curve->nurb.first);
 
   nurb->type = CU_NURBS;
-  nurb->flag = CU_3D;
+  nurb->flag = CU_SMOOTH;
   nurb->next = nurb->prev = nullptr;
   /* BKE_nurb_points_add later on will update pntsu. If this were set to total curve points,
    * we get double the total points in viewport. */

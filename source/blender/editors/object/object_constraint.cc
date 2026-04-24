@@ -334,7 +334,7 @@ static void test_constraint(
   else if (con->type == CONSTRAINT_TYPE_FOLLOWTRACK) {
     bFollowTrackConstraint *data = static_cast<bFollowTrackConstraint *>(con->data);
 
-    if ((data->flag & CAMERASOLVER_ACTIVECLIP) == 0) {
+    if ((data->flag & FOLLOWTRACK_ACTIVECLIP) == 0) {
       if (data->clip != nullptr && data->track[0]) {
         MovieTracking *tracking = &data->clip->tracking;
         MovieTrackingObject *tracking_object;
@@ -370,7 +370,7 @@ static void test_constraint(
   else if (con->type == CONSTRAINT_TYPE_OBJECTSOLVER) {
     bObjectSolverConstraint *data = static_cast<bObjectSolverConstraint *>(con->data);
 
-    if ((data->flag & CAMERASOLVER_ACTIVECLIP) == 0 && (data->clip == nullptr)) {
+    if ((data->flag & OBJECTSOLVER_ACTIVECLIP) == 0 && (data->clip == nullptr)) {
       con->flag |= CONSTRAINT_DISABLE;
     }
   }

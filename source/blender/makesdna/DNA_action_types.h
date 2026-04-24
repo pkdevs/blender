@@ -350,6 +350,9 @@ enum eActionGroup_Flag {
   /* sub channel modifiers off */
   AGRP_MODIFIERS_OFF = (1 << 7),
 
+  /** F-Curves from this Action Group are always visible. */
+  AGRP_CURVES_ALWAYS_VISIBLE = (1 << 17),
+
   AGRP_TEMP = (1 << 30),
   AGRP_MOVED = (1u << 31),
 };

@@ -6035,7 +6035,7 @@ static void update_idprop_int(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDProp
           &rna_ptr, &rna_prop, static_cast<int *>(idprop.data.pointer));
     }
     else {
-      idprop.type = PROP_INT;
+      idprop.type = IDP_INT;
       IDP_int_set(&idprop, RNA_property_int_get_default(&rna_ptr, &rna_prop));
     }
   };
@@ -6128,21 +6128,21 @@ static void update_idprop_int(PointerRNA &rna_ptr, PropertyRNA &rna_prop, IDProp
     case IDP_FLOAT: {
       const float value = IDP_float_get(&idprop);
       IDP_ClearProperty(&idprop);
-      idprop.type = PROP_INT;
+      idprop.type = IDP_INT;
       IDP_int_set(&idprop, int(value));
       break;
     }
     case IDP_DOUBLE: {
       const double value = IDP_double_get(&idprop);
       IDP_ClearProperty(&idprop);
-      idprop.type = PROP_INT;
+      idprop.type = IDP_INT;
       IDP_int_set(&idprop, int(value));
       break;
     }
     case IDP_BOOLEAN: {
       const bool value = IDP_bool_get(&idprop);
       IDP_ClearProperty(&idprop);
-      idprop.type = PROP_INT;
+      idprop.type = IDP_INT;
       IDP_int_set(&idprop, int(value));
       break;
     }

@@ -1030,7 +1030,7 @@ void ED_view3d_quadview_update(ScrArea *area, ARegion *region, bool do_clip)
       rv3d->viewlock = viewlock;
 
       if (do_clip && (viewlock & RV3D_BOXCLIP) == 0) {
-        rv3d->rflag &= ~RV3D_BOXCLIP;
+        rv3d->rflag &= ~RV3D_CLIPPING;
       }
 
       /* use region_sync so we sync with one of the aligned views below
