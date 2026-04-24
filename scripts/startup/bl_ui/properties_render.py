@@ -12,7 +12,6 @@ from bl_ui.space_view3d import (
     VIEW3D_PT_shading_cavity,
 )
 from bl_ui.utils import PresetPanel
-import gpu
 
 
 class RenderButtonsPanel:
@@ -60,6 +59,7 @@ class RENDER_PT_color_management(RenderButtonsPanel, Panel):
     }
 
     def draw(self, context):
+        import gpu
 
         layout = self.layout
         layout.use_property_split = True
