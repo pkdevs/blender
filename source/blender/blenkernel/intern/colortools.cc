@@ -78,16 +78,19 @@ void BKE_curvemapping_set_defaults(CurveMapping *cumap,
     else if (default_handle_type == HD_AUTO_ANIM) {
       cumap->cm[a].default_handle_type = CUMA_HANDLE_AUTO_ANIM;
     }
+    else {
+      cumap->cm[a].default_handle_type = 0;
+    }
 
     cumap->cm[a].totpoint = 2;
     cumap->cm[a].curve = MEM_new_array<CurveMapPoint>(2, "curve points");
 
     cumap->cm[a].curve[0].x = minx;
     cumap->cm[a].curve[0].y = miny;
-    cumap->cm[a].curve[0].flag |= default_handle_type;
+    cumap->cm[a].curve[0].flag |= cumap->cm[a].default_handle_type;
     cumap->cm[a].curve[1].x = maxx;
     cumap->cm[a].curve[1].y = maxy;
-    cumap->cm[a].curve[1].flag |= default_handle_type;
+    cumap->cm[a].curve[1].flag |= cumap->cm[a].default_handle_type;
   }
 
   cumap->changed_timestamp = 0;
