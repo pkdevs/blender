@@ -567,11 +567,14 @@ static bool has_single_asset_drag(const wmWindowManager &wm)
   return false;
 }
 
-static bool drag_global_poll(const bContext *C, const wmDrag *drag, std::string *r_disabled_info)
+static bool drag_global_poll(const bContext *C,
+                             const wmDrag *drag,
+                             std::string *r_status_info,
+                             std::string *r_disabled_info)
 {
   if (wmDragAsset *asset_data = WM_drag_get_asset_data(drag, 0)) {
     if (asset_data->asset->is_online()) {
-      *r_disabled_info = RPT_("Downloading asset...");
+      *r_status_info = RPT_("Downloading asset...");
       return false;
     }
   }
@@ -596,10 +599,15 @@ static wmDropBox *wm_dropbox_active(bContext *C, wmDrag *drag, const wmEvent *ev
 {
   drag->drop_state.disabled_info = std::nullopt;
 
-  /* Always do these checks for dragging (as if they were in every poll). */
   std::string disabled_info;
-  if (!drag_global_poll(C, drag, &disabled_info)) {
+  /* The red of the `disabled_info` looks scary. Use this instead for non-error conditions, it will
+   * show in the normal text color. */
+  std::string status_info;
+  /* Always do these checks for dragging (as if they were in every poll). */
+  if (!drag_global_poll(C, drag, &status_info, &disabled_info)) {
     drag->drop_state.disabled_info = disabled_info;
+    /* Just use the tooltip for status info. There's no drop-box active to fill it anyway. */
+    drag->drop_state.tooltip = status_info;
     return nullptr;
   }
 
