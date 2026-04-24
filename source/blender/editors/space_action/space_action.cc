@@ -79,7 +79,7 @@ static SpaceLink *action_create(const ScrArea *area, const Scene *scene)
 
   saction->ads.filterflag |= ADS_FILTER_SUMMARY;
   if (is_timeline) {
-    saction->ads.filterflag |= ADS_FLAG_SUMMARY_COLLAPSED;
+    saction->ads.flag |= ADS_FLAG_SUMMARY_COLLAPSED;
   }
 
   saction->cache_display = TIME_CACHE_DISPLAY | TIME_CACHE_SOFTBODY | TIME_CACHE_PARTICLES |
