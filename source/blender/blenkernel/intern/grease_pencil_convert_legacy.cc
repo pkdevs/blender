@@ -1009,7 +1009,7 @@ static void legacy_gpencil_to_grease_pencil(ConversionData &conversion_data,
 {
   using namespace blender::bke::greasepencil;
 
-  if (gpd.flag & ID_FLAG_FAKEUSER) {
+  if (gpd.id.flag & ID_FLAG_FAKEUSER) {
     id_fake_user_set(&grease_pencil.id);
   }
 
@@ -2734,14 +2734,14 @@ static void legacy_object_modifier_build(ConversionData &conversion_data,
   legacy_object_modifier_influence(md_build.influence,
                                    legacy_md_build.layername,
                                    legacy_md_build.layer_pass,
-                                   legacy_md_build.flag & GP_WEIGHT_INVERT_LAYER,
-                                   legacy_md_build.flag & GP_WEIGHT_INVERT_LAYERPASS,
+                                   legacy_md_build.flag & GP_BUILD_INVERT_LAYER,
+                                   legacy_md_build.flag & GP_BUILD_INVERT_LAYERPASS,
                                    &legacy_md_build.material,
                                    legacy_md_build.pass_index,
-                                   legacy_md_build.flag & GP_WEIGHT_INVERT_MATERIAL,
-                                   legacy_md_build.flag & GP_WEIGHT_INVERT_PASS,
+                                   false,
+                                   legacy_md_build.flag & GP_BUILD_INVERT_PASS,
                                    legacy_md_build.target_vgname,
-                                   legacy_md_build.flag & GP_WEIGHT_INVERT_VGROUP,
+                                   false,
                                    nullptr,
                                    false);
 }
