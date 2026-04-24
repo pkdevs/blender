@@ -1414,7 +1414,7 @@ static void annotation_visible_on_space(tGPsdata *p)
     }
     case SPACE_SEQ: {
       SpaceSeq *sseq = static_cast<SpaceSeq *>(area->spacedata.first);
-      sseq->flag |= SEQ_PREVIEW_SHOW_GPENCIL;
+      sseq->preview_overlay.flag |= SEQ_PREVIEW_SHOW_GPENCIL;
       break;
     }
     case SPACE_IMAGE: {
