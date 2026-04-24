@@ -185,7 +185,7 @@ static TokenStream tokenize_dna_header(StringRef source)
   while (cur < end) {
     const char c = *cur;
 
-    /* Whitespace. */
+    /* White-space. */
     if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
       cur++;
       continue;
