@@ -340,9 +340,17 @@ class Grid : Overlay {
       grid_ubo_.offset = camera_offs.xy();
     }
     else { /* Orthographic. */
-      float3 camera_offs = drw_view_position -
-                           drw_view_forward * dot(drw_view_position, drw_view_forward);
-      grid_ubo_.offset = camera_offs.xy();
+      const float forward_z = drw_view_forward.z;
+      constexpr float eps = 1e-6f;
+      if (abs(forward_z) > eps) {
+        /* Center the grid on the intersection of the orthographic view ray with the XY plane. */
+        float3 camera_offs = drw_view_position -
+                             drw_view_forward * safe_divide(drw_view_position.z, forward_z);
+        grid_ubo_.offset = camera_offs.xy();
+      }
+      else {
+        grid_ubo_.offset = drw_view_position.xy();
+      }
     }
 
     /* Find the lowest relevant grid level for the above distance. */
