@@ -475,169 +475,67 @@ ccl_device
       break;
     }
     case CLOSURE_BSDF_OPEN_PBR_ID: {
-      // uint base_weight_offset;  //( == param1_offset)
-      uint base_color_offset;
-      // uint base_metalness_offset;  //( == param2_offset)
-      uint base_diffuse_roughness_offset;
+      const ccl_global SVMNodeOpenPBRBsdfData &data = svm_node_get<SVMNodeOpenPBRBsdfData>(
+          kg, &offset);
+      float3 N = stack_load_float3_default(stack, data.geometry_normal_offset, sd->N);
+      N = safe_normalize_fallback(N, sd->N);
 
-      uint specular_weight_offset;
-      uint specular_color_offset;
-      uint specular_roughness_offset;
-      uint specular_roughness_anisotropy_offset;
-      uint specular_ior_offset;
-
-      uint transmission_weight_offset;
-      uint transmission_color_offset;
-      uint transmission_depth_offset;
-      uint transmission_scatter_offset;
-      uint transmission_scatter_anisotropy_offset;
-      uint transmission_dispersion_scale_offset;
-      uint transmission_dispersion_abbe_number_offset;
-
-      uint subsurface_weight_offset;
-      uint subsurface_color_offset;
-      uint subsurface_radius_offset;
-      uint subsurface_radius_scale_offset;
-      uint subsurface_scatter_anisotropy_offset;
-
-      uint coat_weight_offset;
-      uint coat_color_offset;
-      uint coat_roughness_offset;
-      uint coat_roughness_anisotropy_offset;
-      uint coat_ior_offset;
-      uint coat_darkening_offset;
-
-      uint fuzz_weight_offset;
-      uint fuzz_color_offset;
-      uint fuzz_roughness_offset;
-
-      uint thin_film_weight_offset;
-      uint thin_film_thickness_offset;
-      uint thin_film_ior_offset;
-
-      uint emission_luminance_offset;
-      uint emission_color_offset;
-
-      uint geometry_opacity_offset;
-      uint geometry_tangent_offset;
-
-      uint geometry_coat_normal_offset;
-      uint geometry_coat_tangent_offset;
-      uint dummy_0_offset;
-      uint dummy_1_offset;
-      uint dummy_2_offset;
-      // Atm we do not have more parameters
-      // const uint4 data_node2 = read_node(kg, &offset);
-
-      const uint4 data_node2 = read_node(kg, &offset);
-      const uint4 data_node3 = read_node(kg, &offset);
-
-      svm_unpack_node_uchar4(data_node.y,
-                             &base_color_offset,
-                             &base_diffuse_roughness_offset,
-                             &specular_weight_offset,
-                             &specular_color_offset);
-      svm_unpack_node_uchar4(data_node.z,
-                             &specular_roughness_offset,
-                             &specular_roughness_anisotropy_offset,
-                             &specular_ior_offset,
-                             &transmission_weight_offset);
-      svm_unpack_node_uchar4(data_node.w,
-                             &transmission_color_offset,
-                             &transmission_depth_offset,
-                             &transmission_scatter_offset,
-                             &transmission_scatter_anisotropy_offset);
-
-      svm_unpack_node_uchar4(data_node2.x,
-                             &transmission_dispersion_scale_offset,
-                             &transmission_dispersion_abbe_number_offset,
-                             &subsurface_weight_offset,
-                             &subsurface_color_offset);
-      svm_unpack_node_uchar4(data_node2.y,
-                             &subsurface_radius_offset,
-                             &subsurface_radius_scale_offset,
-                             &subsurface_scatter_anisotropy_offset,
-                             &coat_weight_offset);
-      svm_unpack_node_uchar4(data_node2.z,
-                             &coat_color_offset,
-                             &coat_roughness_offset,
-                             &coat_roughness_anisotropy_offset,
-                             &coat_ior_offset);
-      svm_unpack_node_uchar4(data_node2.w,
-                             &coat_darkening_offset,
-                             &fuzz_weight_offset,
-                             &fuzz_color_offset,
-                             &fuzz_roughness_offset);
-
-      svm_unpack_node_uchar4(data_node3.x,
-                             &emission_luminance_offset,
-                             &emission_color_offset,
-                             &geometry_opacity_offset,
-                             &geometry_tangent_offset);
-      svm_unpack_node_uchar4(data_node3.y,
-                             &geometry_coat_normal_offset,
-                             &geometry_coat_tangent_offset,
-                             &thin_film_weight_offset,
-                             &thin_film_thickness_offset);
-      svm_unpack_node_uchar4(
-          data_node3.z, &thin_film_ior_offset, &dummy_0_offset, &dummy_1_offset, &dummy_2_offset);
-
-      const float base_weight = saturatef(param1);
-      const float3 base_color = saturate(
-          stack_load_float3_default(stack, base_color_offset, make_float3(0.8f)));
-      const float base_metalness = saturatef(param2);
-      const float base_diffuse_roughness = stack_load_float_default(
-          stack, base_diffuse_roughness_offset, 0.f);
+      const float base_weight = saturatef(stack_load(stack, data.base_weight));
+      const float3 base_color = max(stack_load(stack, data.base_color), zero_float3());
+      const float base_metalness = saturatef(
+          stack_load(stack, data.base_metalness));
+      const float base_diffuse_roughness = stack_load(
+          stack, data.base_diffuse_roughness);
 
       const float specular_weight = saturatef(
-          stack_load_float_default(stack, specular_weight_offset, 1.f));
+          stack_load(stack, data.specular_weight));
       const float3 specular_color = saturate(
-          stack_load_float3_default(stack, specular_color_offset, make_float3(1.0f)));
+          stack_load(stack, data.specular_color));
       float specular_roughness = saturatef(
-          stack_load_float_default(stack, specular_roughness_offset, 0.f));
-      const float specular_roughness_anisotroy = saturatef(
-          stack_load_float_default(stack, specular_roughness_anisotropy_offset, 0.f));
-      float specular_ior = stack_load_float_default(stack, specular_ior_offset, 1.5f);
+          stack_load(stack, data.specular_roughness));
+      const float specular_roughness_anisotropy = saturatef(
+          stack_load(stack, data.specular_roughness_anisotropy));
+      float specular_ior = stack_load(stack, data.specular_ior);
       // flipping the IOR in case we are inside the object
       specular_ior = (sd->flag & SD_BACKFACING) ? 1.0f / specular_ior : specular_ior;
 
       const float subsurface_weight = 0.f;
       const float3 subsurface_color = zero_float3();
       const float transmission_weight = saturatef(
-          stack_load_float_default(stack, transmission_weight_offset, 1.f));
+          stack_load(stack, data.transmission_weight));
       const float3 transmission_color = saturate(
-          stack_load_float3_default(stack, transmission_color_offset, make_float3(1.0f)));
-      const float transmission_depth = stack_load_float_default(
-          stack, transmission_depth_offset, 0.0f);
+          stack_load(stack, data.transmission_color));
+      const float transmission_depth = stack_load(
+          stack, data.transmission_depth);
 
       const float coat_weight = saturatef(
-          stack_load_float_default(stack, coat_weight_offset, 0.f));
+          stack_load(stack, data.coat_weight));
       const float3 coat_color = saturate(
-          stack_load_float3_default(stack, coat_color_offset, make_float3(1.0f)));
+          stack_load(stack, data.coat_color));
       const float coat_roughness = saturatef(
-          stack_load_float_default(stack, coat_roughness_offset, 0.f));
+          stack_load(stack, data.coat_roughness));
       const float coat_roughness_anisotropy = saturatef(
-          stack_load_float_default(stack, coat_roughness_anisotropy_offset, 0.f));
-      float coat_ior = stack_load_float_default(stack, coat_ior_offset, 1.6f);
+          stack_load(stack, data.coat_roughness_anisotropy));
+      float coat_ior = stack_load(stack, data.coat_ior);
       coat_ior = (sd->flag & SD_BACKFACING) ? 1.0f / coat_ior : coat_ior;
       const float coat_darkening = saturatef(
-          stack_load_float_default(stack, coat_darkening_offset, 1.f));
+          stack_load(stack, data.coat_darkening));
 
       const float fuzz_weight = saturatef(
-          stack_load_float_default(stack, fuzz_weight_offset, 0.f));
+          stack_load(stack, data.fuzz_weight));
       const float3 fuzz_color = saturate(
-          stack_load_float3_default(stack, fuzz_color_offset, make_float3(1.0f)));
+          stack_load(stack, data.fuzz_color));
       const float fuzz_roughness = saturatef(
-          stack_load_float_default(stack, fuzz_roughness_offset, 0.f));
+          stack_load(stack, data.fuzz_roughness));
 
-      const float emission_luminance = stack_load_float_default(
-          stack, emission_luminance_offset, 0.f);
+      const float emission_luminance = stack_load(
+          stack, data.emission_luminance);
       const float3 emission_color = saturate(
-          stack_load_float3_default(stack, emission_color_offset, make_float3(0.0f)));
+          stack_load(stack, data.emission_color));
       const float3 emission = emission_color * emission_luminance;
 
       const float geometry_opacity = saturatef(
-          stack_load_float_default(stack, geometry_opacity_offset, 1.f));
+          stack_load(stack, data.geometry_opacity));
 
       const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
 
@@ -647,11 +545,11 @@ ccl_device
       float3 modulated_base_darkening_factor = one_float3();
 
       const float thin_film_weight = saturatef(
-          stack_load_float_default(stack, thin_film_weight_offset, 0.f));
-      float thin_film_thickness = stack_load_float_default(
-          stack, thin_film_thickness_offset, 0.5f);
+          stack_load(stack, data.thin_film_weight));
+      float thin_film_thickness = stack_load(
+          stack, data.thin_film_thickness);
       thin_film_thickness *= 1000.f;
-      const float thin_film_ior = stack_load_float_default(stack, thin_film_ior_offset, 1.4f);
+      const float thin_film_ior = stack_load(stack, data.thin_film_ior);
 
       // coat roughening
       float coated_specular_roughness = specular_roughness;
@@ -685,12 +583,12 @@ ccl_device
       float specular_alpha_y = specular_alpha_x;
 
       float3 geometry_tangent = zero_float3();
-      if (specular_roughness_anisotroy > 0.f) {
-        geometry_tangent = stack_load_float3(stack, geometry_tangent_offset);
+      if (specular_roughness_anisotropy > 0.f && stack_valid(data.geometry_tangent_offset)) {
+        geometry_tangent = stack_load_float3(stack, data.geometry_tangent_offset);
 
         specular_alpha_x = specular_alpha_x *
-                           sqrt(2.0f / (1.0f + sqr(1.0f - specular_roughness_anisotroy)));
-        specular_alpha_y = (1.0f - specular_roughness_anisotroy) * specular_alpha_x;
+                           sqrt(2.0f / (1.0f + sqr(1.0f - specular_roughness_anisotropy)));
+        specular_alpha_y = (1.0f - specular_roughness_anisotropy) * specular_alpha_x;
         specular_alpha_x = max(specular_alpha_x, 1e-6f);
         specular_alpha_y = max(specular_alpha_y, 1e-6f);
       }
@@ -698,10 +596,11 @@ ccl_device
       float coat_alpha_x = sqr(coat_roughness);
       float coat_alpha_y = coat_alpha_x;
 
-      const float3 geometry_coat_normal = stack_load_float3(stack, geometry_coat_normal_offset);
+      const float3 geometry_coat_normal = safe_normalize_fallback(
+            stack_load_float3_default(stack, data.geometry_coat_normal_offset, N), sd->N);
       float3 geometry_coat_tangent = zero_float3();
-      if (coat_roughness_anisotropy > 0.f) {
-        geometry_coat_tangent = stack_load_float3(stack, geometry_coat_tangent_offset);
+      if (coat_roughness_anisotropy > 0.f && stack_valid(data.geometry_coat_tangent_offset)) {
+        geometry_coat_tangent = stack_load_float3(stack, data.geometry_coat_tangent_offset);
 
         coat_alpha_x = coat_alpha_x * sqrt(2.0f / (1.0f + sqr(1.0f - coat_roughness_anisotropy)));
         coat_alpha_y = (1.0f - coat_roughness_anisotropy) * coat_alpha_x;
@@ -1056,22 +955,13 @@ ccl_device
 #endif
         if (base_weight > CLOSURE_WEIGHT_CUTOFF) {
           /* Diffuse Component*/
-          ccl_private OrenNayarBsdf *bsdf = (ccl_private OrenNayarBsdf *)bsdf_alloc(
-              sd,
-              sizeof(OrenNayarBsdf),
-              rgb_to_spectrum(base_color * base_weight) * (1.0f - subsurface_weight) * weight);
-          if (bsdf) {
-            bsdf->N = N;
-
-            /* setup bsdf */
-            if (base_diffuse_roughness < CLOSURE_WEIGHT_CUTOFF) {
-              sd->flag |= bsdf_diffuse_setup((ccl_private DiffuseBsdf *)bsdf);
-            }
-            else {
-              bsdf->roughness = base_diffuse_roughness;
-              sd->flag |= bsdf_oren_nayar_setup(
-                  sd, bsdf, rgb_to_spectrum(base_color * base_weight));
-            }
+          const Spectrum diffuse_weight = (base_color * base_weight) * (1.0f - subsurface_weight) * weight;
+          if (diffuse_roughness_is_almost_zero(base_diffuse_roughness)) {
+            bsdf_diffuse_setup(sd, N, diffuse_weight);
+          }
+          else {
+            bsdf_oren_nayar_setup(
+                sd, N, diffuse_weight, base_diffuse_roughness, (base_color * base_weight));
           }
         }
       }
