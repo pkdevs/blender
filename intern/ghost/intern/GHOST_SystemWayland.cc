@@ -1315,6 +1315,26 @@ static void gwl_seat_key_layout_active_state_update_mask(GWL_Seat *seat)
     xkb_state_update_mask(
         seat->xkb.state_empty_with_numlock, 1 << mod_mod2, 0, 1 << mod_numlock, 0, 0, group);
   }
+
+#ifdef USE_NON_LATIN_KB_WORKAROUND
+  /* Re-evaluate against the now-current active layout. The flag must track the active layout
+   * (not just layout 0) because `state_empty_with_shift` follows the active layout and the
+   * digit-row workaround reads from it. */
+  seat->xkb_use_non_latin_workaround = false;
+  if (seat->xkb.state_empty_with_shift) {
+    seat->xkb_use_non_latin_workaround = true;
+    for (xkb_keycode_t key_code = KEY_1 + EVDEV_OFFSET; key_code <= KEY_0 + EVDEV_OFFSET;
+         key_code++)
+    {
+      const xkb_keysym_t sym_test = xkb_state_key_get_one_sym(seat->xkb.state_empty_with_shift,
+                                                              key_code);
+      if (!(sym_test >= XKB_KEY_0 && sym_test <= XKB_KEY_9)) {
+        seat->xkb_use_non_latin_workaround = false;
+        break;
+      }
+    }
+  }
+#endif
 }
 
 /** Callback that runs from GHOST's timer. */
@@ -5753,23 +5773,6 @@ static void keyboard_handle_keymap(void *data,
   }
 
   gwl_seat_key_layout_active_state_update_mask(seat);
-
-#ifdef USE_NON_LATIN_KB_WORKAROUND
-  seat->xkb_use_non_latin_workaround = false;
-  if (seat->xkb.state_empty_with_shift) {
-    seat->xkb_use_non_latin_workaround = true;
-    for (xkb_keycode_t key_code = KEY_1 + EVDEV_OFFSET; key_code <= KEY_0 + EVDEV_OFFSET;
-         key_code++)
-    {
-      const xkb_keysym_t sym_test = xkb_state_key_get_one_sym(seat->xkb.state_empty_with_shift,
-                                                              key_code);
-      if (!(sym_test >= XKB_KEY_0 && sym_test <= XKB_KEY_9)) {
-        seat->xkb_use_non_latin_workaround = false;
-        break;
-      }
-    }
-  }
-#endif
 
   keyboard_depressed_state_reset(seat);
 
