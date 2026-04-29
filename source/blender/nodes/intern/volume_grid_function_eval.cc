@@ -8,6 +8,8 @@
 #include "BKE_volume_grid.hh"
 #include "BKE_volume_grid_multi_function_eval.hh"
 
+#include "BLT_translation.hh"
+
 #include "volume_grid_function_eval.hh"
 
 namespace blender::nodes {
