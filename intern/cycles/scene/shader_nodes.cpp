@@ -2673,7 +2673,7 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_FLOAT(specular_roughness_anisotropy, "Specular Roughness Anisotropy", 0.0f);
   SOCKET_IN_FLOAT(specular_ior, "Specular IOR", 1.5f);
   /* Transmission Component */
-  SOCKET_IN_FLOAT(transmission_weight, "Transmission Weight", .0f);
+  SOCKET_IN_FLOAT(transmission_weight, "Transmission Weight", 0.0f);
   SOCKET_IN_COLOR(transmission_color, "Transmission Color", one_float3());
   SOCKET_IN_FLOAT(transmission_depth, "Transmission Depth", 0.0f);
   SOCKET_IN_COLOR(transmission_scatter, "Transmission Scatter", zero_float3());
@@ -2681,29 +2681,29 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_FLOAT(transmission_dispersion_scale, "Transmission Dispersion Scale", 0.0f);
   SOCKET_IN_FLOAT(transmission_dispersion_abbe_number, "Transmission DispersionAbbeNumber", 20.0f);
   /* Subsurface Component */
-  SOCKET_IN_FLOAT(subsurface_weight, "Subsurface Weight", .0f);
+  SOCKET_IN_FLOAT(subsurface_weight, "Subsurface Weight", 0.0f);
   SOCKET_IN_COLOR(subsurface_color, "Subsurface Color", make_float3(0.8f));
   SOCKET_IN_FLOAT(subsurface_radius, "Subsurface Radius", 1.0f);
   SOCKET_IN_COLOR(
       subsurface_radius_scale, "Subsurface Radius Scale", make_float3(1.0f, 0.5f, 0.25f));
-  SOCKET_IN_FLOAT(subsurface_scatter_anisotropy, "Subsurface Scatter Anisotropy", .0f);
+  SOCKET_IN_FLOAT(subsurface_scatter_anisotropy, "Subsurface Scatter Anisotropy", 0.0f);
   /* Coat Component */
-  SOCKET_IN_FLOAT(coat_weight, "Coat Weight", .0f);
+  SOCKET_IN_FLOAT(coat_weight, "Coat Weight", 0.0f);
   SOCKET_IN_COLOR(coat_color, "Coat Color", one_float3());
-  SOCKET_IN_FLOAT(coat_roughness, "Coat Roughness", .0f);
-  SOCKET_IN_FLOAT(coat_roughness_anisotropy, "Coat Roughness Anisotropy", .0f);
+  SOCKET_IN_FLOAT(coat_roughness, "Coat Roughness", 0.0f);
+  SOCKET_IN_FLOAT(coat_roughness_anisotropy, "Coat Roughness Anisotropy", 0.0f);
   SOCKET_IN_FLOAT(coat_ior, "Coat IOR", 1.6f);
   SOCKET_IN_FLOAT(coat_darkening, "Coat Darkening", 1.0f);
   /* Fuzz Component */
-  SOCKET_IN_FLOAT(fuzz_weight, "Fuzz Weight", .0f);
+  SOCKET_IN_FLOAT(fuzz_weight, "Fuzz Weight", 0.0f);
   SOCKET_IN_COLOR(fuzz_color, "Fuzz Color", one_float3());
-  SOCKET_IN_FLOAT(fuzz_roughness, "Fuzz Roughness", .5f);
+  SOCKET_IN_FLOAT(fuzz_roughness, "Fuzz Roughness", 0.5f);
   /* Emission Component */
-  SOCKET_IN_FLOAT(emission_luminance, "Emission Luminance", .0f);
+  SOCKET_IN_FLOAT(emission_luminance, "Emission Luminance", 0.0f);
   SOCKET_IN_COLOR(emission_color, "Emission Color", one_float3());
   /* Thin Film Component */
-  SOCKET_IN_FLOAT(thin_film_weight, "Thin Film Weight", .0f);
-  SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", .5f);
+  SOCKET_IN_FLOAT(thin_film_weight, "Thin Film Weight", 0.0f);
+  SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.5f);
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.4f);
   /* Geometry Component */
   SOCKET_IN_FLOAT(geometry_opacity, "Geometry Opacity", 1.0f);

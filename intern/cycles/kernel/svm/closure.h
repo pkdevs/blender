@@ -31,12 +31,12 @@ ccl_device_inline float hemispherical_albedo(const float eta)
 {
   const float eta_sqr = eta * eta;
   if (eta > 1.0f) {
-    const float nominator = (10893.f * eta) - 1438.2f;
-    const float denominator = (-774.4f * eta_sqr) + (10212.f * eta) + 1.f;
+    const float nominator = (10893.0f * eta) - 1438.2f;
+    const float denominator = (-774.4f * eta_sqr) + (10212.0f * eta) + 1.0f;
     return logf(nominator / denominator);
   }
   else {
-    return 1.0f - eta_sqr * (1.0f - hemispherical_albedo(1.f / eta));
+    return 1.0f - eta_sqr * (1.0f - hemispherical_albedo(1.0f / eta));
   }
 }
 
@@ -494,7 +494,7 @@ ccl_device
       // flipping the IOR in case we are inside the object
       specular_ior = (sd->flag & SD_BACKFACING) ? 1.0f / specular_ior : specular_ior;
 
-      const float subsurface_weight = 0.f;
+      const float subsurface_weight = 0.0f;
       const float3 subsurface_color = zero_float3();
       const float transmission_weight = saturatef(stack_load(stack, data.transmission_weight));
       const float3 transmission_color = saturate(stack_load(stack, data.transmission_color));
@@ -528,31 +528,31 @@ ccl_device
 
       const float thin_film_weight = saturatef(stack_load(stack, data.thin_film_weight));
       float thin_film_thickness = stack_load(stack, data.thin_film_thickness);
-      thin_film_thickness *= 1000.f;
+      thin_film_thickness *= 1000.0f;
       const float thin_film_ior = stack_load(stack, data.thin_film_ior);
 
       // coat roughening
       float coated_specular_roughness = specular_roughness;
       float coated_specular_ior = specular_ior;
       if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
-        if (coated_specular_roughness > 0.f) {
+        if (coated_specular_roughness > 0.0f) {
           const float specular_roughness_sqr = specular_roughness * specular_roughness;
           const float coat_roughness_sqr = coat_roughness * coat_roughness;
           const float min_coated_roughness = min(
-              1.f,
+              1.0f,
               powf((specular_roughness_sqr * specular_roughness_sqr +
                     coat_roughness_sqr * coat_roughness_sqr),
-                   0.25f /*1.f/4.f*/));
+                   0.25f /*1.0f/4.0f*/));
           coated_specular_roughness = mix(specular_ior, min_coated_roughness, coat_weight);
         }
         // TODO: we assume that the ambient ior is 1.0
-        const float ambient_ior = 1.f;
+        const float ambient_ior = 1.0f;
         const float specular_over_coat = specular_ior / coat_ior;
         const float coat_over_specular = coat_ior / specular_ior;
         // Fixing the ration to compensate for total internal reflections (TIR)
         // as described in section 3.9.8. of the OpenPBR v1.1 spec
-        const float tir_fixed_ratio = specular_over_coat > 1.f ? specular_over_coat :
-                                                                 coat_over_specular;
+        const float tir_fixed_ratio = specular_over_coat > 1.0f ? specular_over_coat :
+                                                                  coat_over_specular;
         coated_specular_ior = mix(specular_ior / ambient_ior, tir_fixed_ratio, coat_weight);
       }
 
@@ -563,7 +563,7 @@ ccl_device
       float specular_alpha_y = specular_alpha_x;
 
       float3 geometry_tangent = zero_float3();
-      if (specular_roughness_anisotropy > 0.f && stack_valid(data.geometry_tangent_offset)) {
+      if (specular_roughness_anisotropy > 0.0f && stack_valid(data.geometry_tangent_offset)) {
         geometry_tangent = stack_load_float3(stack, data.geometry_tangent_offset);
 
         specular_alpha_x = specular_alpha_x *
@@ -579,7 +579,7 @@ ccl_device
       const float3 geometry_coat_normal = safe_normalize_fallback(
           stack_load_float3_default(stack, data.geometry_coat_normal_offset, N), sd->N);
       float3 geometry_coat_tangent = zero_float3();
-      if (coat_roughness_anisotropy > 0.f && stack_valid(data.geometry_coat_tangent_offset)) {
+      if (coat_roughness_anisotropy > 0.0f && stack_valid(data.geometry_coat_tangent_offset)) {
         geometry_coat_tangent = stack_load_float3(stack, data.geometry_coat_tangent_offset);
 
         coat_alpha_x = coat_alpha_x * sqrt(2.0f / (1.0f + sqr(1.0f - coat_roughness_anisotropy)));
@@ -589,19 +589,19 @@ ccl_device
       }
 
       // glossy component
-      const float oneMinusSpecularIor = 1.f - specular_ior;
-      const float onePlusSpecularIor = 1.f + specular_ior;
+      const float oneMinusSpecularIor = 1.0f - specular_ior;
+      const float onePlusSpecularIor = 1.0f + specular_ior;
       const float oneMinusSpecularIOROveronePlusSpecularIOR = safe_divide(oneMinusSpecularIor,
                                                                           onePlusSpecularIor);
       const float Fs = oneMinusSpecularIOROveronePlusSpecularIOR *
                        oneMinusSpecularIOROveronePlusSpecularIOR;
-      const float xiSpecular = clamp(specular_weight, 0.f, safe_divide(1.f, Fs));
-      const float epsilonSpecular = signf(specular_ior - 1.f) * safe_sqrtf(xiSpecular * Fs);
-      float modulated_specular_ior = safe_divide(1.f + epsilonSpecular, 1.f - epsilonSpecular);
+      const float xiSpecular = clamp(specular_weight, 0.0f, safe_divide(1.0f, Fs));
+      const float epsilonSpecular = signf(specular_ior - 1.0f) * safe_sqrtf(xiSpecular * Fs);
+      float modulated_specular_ior = safe_divide(1.0f + epsilonSpecular, 1.0f - epsilonSpecular);
 
       // transmission component
-      const float3 transmission_tint = transmission_depth > 0.f ? one_float3() :
-                                                                  transmission_color;
+      const float3 transmission_tint = transmission_depth > 0.0f ? one_float3() :
+                                                                   transmission_color;
 
       /*
       if (specular_roughness_anisotroy > 0.0f && stack_valid(tangent_offset)) {
@@ -686,14 +686,14 @@ ccl_device
           }
         }
         // TODO: Need to add darkening
-        if (coat_darkening > 0.f) {
+        if (coat_darkening > 0.0f) {
           /*
                     //// Missing in MaterialX
                     const float Fs; //TODO
                     // metal roughness
                     const float r_m = specular_roughness;
                     // dielectric_base roughness
-                    const float r_d = lerp(1.f, specular_roughness, specular_weight * Fs);
+                    const float r_d = lerp(1.0f, specular_roughness, specular_weight * Fs);
                     // effective base roughness
                     const float r_b = lerp(r_d, r_m, base_metalness);   // Missing in MaterialX
                     ////////////////////
@@ -711,15 +711,15 @@ ccl_device
           //////
           const float3 E_b = Ebase;  // need a better albedo approximation
           // Internal diffuse reflection coefficient
-          const float K_r = 1.f -
-                            (1.f - E_F) / relative_coat_ior_sqr;  // check: Spec, Adobbe, MaterialX
+          const float K_r = 1.0f - (1.0f - E_F) /
+                                       relative_coat_ior_sqr;  // check: Spec, Adobbe, MaterialX
           const float K_s = hemispherical_albedo(
               relative_coat_ior);  // check: Adobe,  missing in MaterialX
           const float K = K_r;     // MaterialX
           // const float K = lerp(K_s, K_r, r_b); // check: Spec and Adobe, missing in MaterialX
 
-          const float3 base_darkening_factor = (1.f - K) /
-                                               (1.f - E_b * K);  // check: Spec, MaterialX, Adobe
+          const float3 base_darkening_factor = (1.0f - K) /
+                                               (1.0f - E_b * K);  // check: Spec, MaterialX, Adobe
           modulated_base_darkening_factor = mix(
               one_float3(),
               base_darkening_factor,
