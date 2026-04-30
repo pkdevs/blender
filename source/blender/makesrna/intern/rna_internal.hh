@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include "BLI_compiler_attrs.h"
+#include "BLI_string_ref.hh"
 
 #include "DNA_listBase.h"
 
@@ -63,51 +64,51 @@ struct FunctionDefRNA {
 };
 
 struct PropertyDefRNA {
-  PropertyDefRNA *next, *prev;
+  PropertyDefRNA *next = nullptr, *prev = nullptr;
 
-  ContainerRNA *cont;
-  PropertyRNA *prop;
+  ContainerRNA *cont = nullptr;
+  PropertyRNA *prop = nullptr;
 
   /* struct */
-  const char *dnastructname;
-  const char *dnastructfromname;
-  const char *dnastructfromprop;
+  StringRefNull dnastructname;
+  StringRefNull dnastructfromname;
+  StringRefNull dnastructfromprop;
 
   /* property */
-  const char *dnaname;
-  const char *dnatype;
-  int dnaarraylength;
-  int dnapointerlevel;
+  StringRefNull dnaname;
+  StringRefNull dnatype;
+  int dnaarraylength = 0;
+  int dnapointerlevel = 0;
   /**
    * Offset in bytes within `dnastructname`.
    * -1 when unusable (follows pointer for example). */
-  int dnaoffset;
-  int dnasize;
+  int dnaoffset = 0;
+  int dnasize = 0;
 
   /* for finding length of array collections */
-  const char *dnalengthstructname;
-  const char *dnalengthname;
-  int dnalengthfixed;
+  StringRefNull dnalengthstructname;
+  StringRefNull dnalengthname;
+  int dnalengthfixed = 0;
 
-  int64_t booleanbit;
-  bool booleannegative;
+  int64_t booleanbit = 0;
+  bool booleannegative = false;
 
   /* not to be confused with PROP_ENUM_FLAG
    * this only allows one of the flags to be set at a time, clearing all others */
-  int enumbitflags;
+  int enumbitflags = 0;
 };
 
 struct StructDefRNA {
   ContainerDefRNA cont;
 
-  StructRNA *srna;
-  const char *filename;
+  StructRNA *srna = nullptr;
+  StringRefNull filename;
 
-  const char *dnaname;
+  StringRefNull dnaname;
 
   /* for derived structs to find data in some property */
-  const char *dnafromname;
-  const char *dnafromprop;
+  StringRefNull dnafromname;
+  StringRefNull dnafromprop;
 
   ListBaseT<FunctionDefRNA> functions;
 };

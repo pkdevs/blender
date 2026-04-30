@@ -71,7 +71,7 @@ namespace blender {
  * Currently, all signed types and `uint64_t` cannot use their left-most bit (i.e. sign bit).
  */
 #define IS_DNATYPE_BOOLEAN_BITSHIFT_FULLRANGE_COMPAT(_str) \
-  STR_ELEM(_str, "char", "uchar", "ushort", "uint", "uint8_t", "uint16_t", "uint32_t")
+  ELEM(_str, "char", "uchar", "ushort", "uint", "uint8_t", "uint16_t", "uint32_t")
 
 /* Global used during defining */
 
@@ -89,10 +89,10 @@ static void print_default_info(const PropertyDefRNA *dp)
 {
   fprintf(stderr,
           "dna_type=%s, dna_offset=%d, dna_struct=%s, dna_name=%s, id=%s\n",
-          dp->dnatype,
+          dp->dnatype.c_str(),
           dp->dnaoffset,
-          dp->dnastructname,
-          dp->dnaname,
+          dp->dnastructname.c_str(),
+          dp->dnaname.c_str(),
           dp->prop->identifier);
 }
 #endif /* !RNA_RUNTIME */
@@ -443,30 +443,30 @@ static int rna_find_sdna_member(SDNA *sdna,
   return 0;
 }
 
-static bool rna_range_from_int_type(const char *dnatype, int r_range[2])
+static bool rna_range_from_int_type(const StringRef dnatype, int r_range[2])
 {
   /* Type `char` is unsigned too. */
-  if (STR_ELEM(dnatype, "char", "uchar")) {
+  if (ELEM(dnatype, "char", "uchar")) {
     r_range[0] = CHAR_MIN;
     r_range[1] = CHAR_MAX;
     return true;
   }
-  if (STREQ(dnatype, "short")) {
+  if (dnatype == "short") {
     r_range[0] = SHRT_MIN;
     r_range[1] = SHRT_MAX;
     return true;
   }
-  if (STR_ELEM(dnatype, "ushort")) {
+  if (dnatype == "ushort") {
     r_range[0] = 0;
     r_range[1] = USHRT_MAX;
     return true;
   }
-  if (STREQ(dnatype, "int")) {
+  if (dnatype == "int") {
     r_range[0] = INT_MIN;
     r_range[1] = INT_MAX;
     return true;
   }
-  if (STREQ(dnatype, "int8_t")) {
+  if (dnatype == "int8_t") {
     r_range[0] = INT8_MIN;
     r_range[1] = INT8_MAX;
     return true;
@@ -942,11 +942,11 @@ StructRNA *RNA_def_struct_ptr(BlenderRNA *brna, const char *identifier, StructRN
   rna_brna_structs_add(brna, std::move(srna_ptr));
 
 #ifndef RNA_RUNTIME
-  StructDefRNA *ds = MEM_new_zeroed<StructDefRNA>("StructDefRNA");
+  StructDefRNA *ds = MEM_new<StructDefRNA>("StructDefRNA");
   ds->srna = srna;
   rna_addtail(&DefRNA.structs, ds);
 
-  if (dsfrom) {
+  if (dsfrom && !dsfrom->dnaname.is_empty()) {
     ds->dnafromname = dsfrom->dnaname;
   }
 
@@ -1054,7 +1054,7 @@ void RNA_def_struct_sdna_from(StructRNA *srna, const char *structname, const cha
 
   ds = rna_find_def_struct(srna);
 
-  if (!ds->dnaname) {
+  if (ds->dnaname.is_empty()) {
     CLOG_ERROR(&LOG, "%s base struct must know DNA already.", structname);
     return;
   }
@@ -1067,7 +1067,9 @@ void RNA_def_struct_sdna_from(StructRNA *srna, const char *structname, const cha
     return;
   }
 
-  ds->dnafromprop = propname;
+  if (propname) {
+    ds->dnafromprop = propname;
+  }
   ds->dnaname = structname;
 }
 #endif
@@ -1272,7 +1274,7 @@ PropertyRNA *RNA_def_property(StructOrFunctionRNA *cont_,
       }
     }
 
-    dprop = MEM_new_zeroed<PropertyDefRNA>("PropertyDefRNA");
+    dprop = MEM_new<PropertyDefRNA>("PropertyDefRNA");
     rna_addtail(&dcont->properties, dprop);
   }
 #elif !defined(NDEBUG)
@@ -1941,7 +1943,7 @@ void RNA_def_property_enum_items(PropertyRNA *prop, const EnumPropertyItem *item
       int enum_dna_range[2];
       /* If this is larger, this is likely a string which can sometimes store enums. */
       if (PropertyDefRNA *dp = rna_find_struct_property_def(srna, prop)) {
-        if (dp->dnatype == nullptr || dp->dnatype[0] == '\0') {
+        if (dp->dnatype.is_empty()) {
           /* Unfortunately this happens when #PropertyDefRNA::dnastructname is for example
            * `type->region_type` there isn't a convenient way to access the int size. */
         }
@@ -1958,7 +1960,7 @@ void RNA_def_property_enum_items(PropertyRNA *prop, const EnumPropertyItem *item
                        "\"%s.%s\", enum type \"%s\" size is not known.",
                        srna->identifier,
                        prop->identifier,
-                       dp->dnatype);
+                       dp->dnatype.c_str());
           }
         }
       }
@@ -2323,7 +2325,7 @@ static PropertyDefRNA *rna_def_property_sdna(PropertyRNA *prop,
   ds = rna_find_struct_def(reinterpret_cast<StructRNA *>(dp->cont));
 
   if (!structname) {
-    structname = ds->dnaname;
+    structname = ds->dnaname.c_str();
   }
   if (!propname) {
     propname = prop->identifier;
@@ -2367,8 +2369,12 @@ static PropertyDefRNA *rna_def_property_sdna(PropertyRNA *prop,
   }
 
   dp->dnastructname = structname;
-  dp->dnastructfromname = ds->dnafromname;
-  dp->dnastructfromprop = ds->dnafromprop;
+  if (!ds->dnafromname.is_empty()) {
+    dp->dnastructfromname = ds->dnafromname;
+  }
+  if (!ds->dnafromprop.is_empty()) {
+    dp->dnastructfromprop = ds->dnafromprop;
+  }
   dp->dnaname = propname;
   dp->dnatype = smember.type;
   dp->dnaarraylength = smember.arraylength;
@@ -2435,12 +2441,12 @@ static void rna_def_property_boolean_sdna(PropertyRNA *prop,
 
   if (!DefRNA.silent) {
     /* Error check to ensure floats are not wrapped as integers/booleans. */
-    if (dp->dnatype && *dp->dnatype && IS_DNATYPE_BOOLEAN_COMPAT(dp->dnatype) == 0) {
+    if (!dp->dnatype.is_empty() && !IS_DNATYPE_BOOLEAN_COMPAT(dp->dnatype)) {
       CLOG_ERROR(&LOG,
                  "%s.%s is a '%s' but wrapped as type '%s'.",
                  srna->identifier,
                  prop->identifier,
-                 dp->dnatype,
+                 dp->dnatype.c_str(),
                  RNA_property_typename(prop->type));
       DefRNA.error = true;
       return;
@@ -2458,7 +2464,7 @@ static void rna_def_property_boolean_sdna(PropertyRNA *prop,
                    "items starting at bit %u.",
                    srna->identifier,
                    prop->identifier,
-                   dp->dnatype,
+                   dp->dnatype.c_str(),
                    dp->dnasize,
                    RNA_property_typename(prop->type),
                    length,
@@ -2477,7 +2483,7 @@ static void rna_def_property_boolean_sdna(PropertyRNA *prop,
 
   /* Set the default if possible. */
   if (dp->dnaoffset != -1) {
-    int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname);
+    int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname.c_str());
     if (SDNAnr != -1) {
       const void *default_data = DNA_default_table[SDNAnr];
       if (default_data) {
@@ -2490,20 +2496,22 @@ static void rna_def_property_boolean_sdna(PropertyRNA *prop,
           }
         }
         else {
-          if (STREQ(dp->dnatype, "char")) {
+          if (dp->dnatype == "char") {
             bprop->defaultvalue = *(const char *)default_data & booleanbit;
           }
-          else if (STREQ(dp->dnatype, "short")) {
+          else if (dp->dnatype == "short") {
             bprop->defaultvalue = *(const short *)default_data & booleanbit;
           }
-          else if (STREQ(dp->dnatype, "int")) {
+          else if (dp->dnatype == "int") {
             bprop->defaultvalue = *(const int *)default_data & booleanbit;
           }
           else {
             has_default = false;
             if (debugSRNA_defaults) {
-              fprintf(
-                  stderr, "%s default: unsupported boolean type (%s)\n", __func__, dp->dnatype);
+              fprintf(stderr,
+                      "%s default: unsupported boolean type (%s)\n",
+                      __func__,
+                      dp->dnatype.c_str());
             }
           }
 
@@ -2564,12 +2572,12 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
 
     /* Error check to ensure floats are not wrapped as integers/booleans. */
     if (!DefRNA.silent) {
-      if (dp->dnatype && *dp->dnatype && IS_DNATYPE_INT_COMPAT(dp->dnatype) == 0) {
+      if (!dp->dnatype.is_empty() && !IS_DNATYPE_INT_COMPAT(dp->dnatype)) {
         CLOG_ERROR(&LOG,
                    "%s.%s is a '%s' but wrapped as type '%s'.",
                    srna->identifier,
                    prop->identifier,
-                   dp->dnatype,
+                   dp->dnatype.c_str(),
                    RNA_property_typename(prop->type));
         DefRNA.error = true;
         return;
@@ -2577,7 +2585,7 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
     }
 
     /* SDNA doesn't pass us unsigned unfortunately. */
-    if (dp->dnatype != nullptr && (dp->dnatype[0] != '\0')) {
+    if (!dp->dnatype.is_empty()) {
       int range[2];
       if (rna_range_from_int_type(dp->dnatype, range)) {
         iprop->hardmin = iprop->softmin = range[0];
@@ -2588,12 +2596,12 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
                    "\"%s.%s\", type \"%s\" range not known.",
                    srna->identifier,
                    prop->identifier,
-                   dp->dnatype);
+                   dp->dnatype.c_str());
         DefRNA.error = true;
       }
 
       /* Rather arbitrary that this is only done for one type. */
-      if (STREQ(dp->dnatype, "int")) {
+      if (dp->dnatype == "int") {
         iprop->softmin = -10000;
         iprop->softmax = 10000;
       }
@@ -2605,7 +2613,7 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
 
     /* Set the default if possible. */
     if (dp->dnaoffset != -1) {
-      int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname);
+      int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname.c_str());
       if (SDNAnr != -1) {
         const void *default_data = DNA_default_table[SDNAnr];
         if (default_data) {
@@ -2616,7 +2624,7 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
           if (prop->totarraylength > 0) {
             const void *default_data_end = POINTER_OFFSET(default_data, dp->dnasize);
             const int size_final = sizeof(int) * prop->totarraylength;
-            if (STREQ(dp->dnatype, "char")) {
+            if (dp->dnatype == "char") {
               int *defaultarray = static_cast<int *>(rna_calloc(size_final));
               for (int i = 0; i < prop->totarraylength && default_data < default_data_end; i++) {
                 defaultarray[i] = *(const char *)default_data;
@@ -2624,7 +2632,7 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
               }
               iprop->defaultarray = defaultarray;
             }
-            else if (STREQ(dp->dnatype, "short")) {
+            else if (dp->dnatype == "short") {
 
               int *defaultarray = static_cast<int *>(rna_calloc(size_final));
               for (int i = 0; i < prop->totarraylength && default_data < default_data_end; i++) {
@@ -2634,7 +2642,7 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
               }
               iprop->defaultarray = defaultarray;
             }
-            else if (STREQ(dp->dnatype, "int")) {
+            else if (dp->dnatype == "int") {
               int *defaultarray = static_cast<int *>(rna_calloc(size_final));
               memcpy(defaultarray, default_data, std::min(size_final, dp->dnasize));
               iprop->defaultarray = defaultarray;
@@ -2645,7 +2653,7 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
                 fprintf(stderr,
                         "%s default: unsupported int array type (%s)\n",
                         __func__,
-                        dp->dnatype);
+                        dp->dnatype.c_str());
               }
             }
 
@@ -2661,22 +2669,25 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
             }
           }
           else {
-            if (STREQ(dp->dnatype, "char")) {
+            if (dp->dnatype == "char") {
               iprop->defaultvalue = *(const char *)default_data;
             }
-            else if (STREQ(dp->dnatype, "short")) {
+            else if (dp->dnatype == "short") {
               iprop->defaultvalue = (prop->subtype != PROP_UNSIGNED) ?
                                         *(const short *)default_data :
                                         *(const ushort *)default_data;
             }
-            else if (STREQ(dp->dnatype, "int")) {
+            else if (dp->dnatype == "int") {
               iprop->defaultvalue = (prop->subtype != PROP_UNSIGNED) ? *(const int *)default_data :
                                                                        *(const uint *)default_data;
             }
             else {
               has_default = false;
               if (debugSRNA_defaults) {
-                fprintf(stderr, "%s default: unsupported int type (%s)\n", __func__, dp->dnatype);
+                fprintf(stderr,
+                        "%s default: unsupported int type (%s)\n",
+                        __func__,
+                        dp->dnatype.c_str());
               }
             }
 
@@ -2708,14 +2719,14 @@ void RNA_def_property_float_sdna(PropertyRNA *prop, const char *structname, cons
   if ((dp = rna_def_property_sdna(prop, structname, propname))) {
     /* silent is for internal use */
     if (!DefRNA.silent) {
-      if (dp->dnatype && *dp->dnatype && IS_DNATYPE_FLOAT_COMPAT(dp->dnatype) == 0) {
+      if (!dp->dnatype.is_empty() && !IS_DNATYPE_FLOAT_COMPAT(dp->dnatype)) {
         /* Colors are an exception. these get translated. */
         if (prop->subtype != PROP_COLOR_GAMMA) {
           CLOG_ERROR(&LOG,
                      "%s.%s is a '%s' but wrapped as type '%s'.",
                      srna->identifier,
                      prop->identifier,
-                     dp->dnatype,
+                     dp->dnatype.c_str(),
                      RNA_property_typename(prop->type));
           DefRNA.error = true;
           return;
@@ -2723,21 +2734,21 @@ void RNA_def_property_float_sdna(PropertyRNA *prop, const char *structname, cons
       }
     }
 
-    if (dp->dnatype && STREQ(dp->dnatype, "char")) {
+    if (dp->dnatype == "char") {
       fprop->hardmin = fprop->softmin = 0.0f;
       fprop->hardmax = fprop->softmax = 1.0f;
     }
 
     /* Set the default if possible. */
     if (dp->dnaoffset != -1) {
-      int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname);
+      int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname.c_str());
       if (SDNAnr != -1) {
         const void *default_data = DNA_default_table[SDNAnr];
         if (default_data) {
           default_data = POINTER_OFFSET(default_data, dp->dnaoffset);
           bool has_default = true;
           if (prop->totarraylength > 0) {
-            if (STREQ(dp->dnatype, "float")) {
+            if (dp->dnatype == "float") {
               const int size_final = sizeof(float) * prop->totarraylength;
               float *defaultarray = static_cast<float *>(rna_calloc(size_final));
               memcpy(defaultarray, default_data, std::min(size_final, dp->dnasize));
@@ -2749,7 +2760,7 @@ void RNA_def_property_float_sdna(PropertyRNA *prop, const char *structname, cons
                 fprintf(stderr,
                         "%s default: unsupported float array type (%s)\n",
                         __func__,
-                        dp->dnatype);
+                        dp->dnatype.c_str());
               }
             }
 
@@ -2765,17 +2776,19 @@ void RNA_def_property_float_sdna(PropertyRNA *prop, const char *structname, cons
             }
           }
           else {
-            if (STREQ(dp->dnatype, "float")) {
+            if (dp->dnatype == "float") {
               fprop->defaultvalue = *(const float *)default_data;
             }
-            else if (STREQ(dp->dnatype, "char")) {
+            else if (dp->dnatype == "char") {
               fprop->defaultvalue = float(*(const char *)default_data) * (1.0f / 255.0f);
             }
             else {
               has_default = false;
               if (debugSRNA_defaults) {
-                fprintf(
-                    stderr, "%s default: unsupported float type (%s)\n", __func__, dp->dnatype);
+                fprintf(stderr,
+                        "%s default: unsupported float type (%s)\n",
+                        __func__,
+                        dp->dnatype.c_str());
               }
             }
 
@@ -2819,25 +2832,28 @@ void RNA_def_property_enum_sdna(PropertyRNA *prop, const char *structname, const
 
     /* Set the default if possible. */
     if (dp->dnaoffset != -1) {
-      int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname);
+      int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname.c_str());
       if (SDNAnr != -1) {
         const void *default_data = DNA_default_table[SDNAnr];
         if (default_data) {
           default_data = POINTER_OFFSET(default_data, dp->dnaoffset);
           bool has_default = true;
-          if (STREQ(dp->dnatype, "char")) {
+          if (dp->dnatype == "char") {
             eprop->defaultvalue = *(const char *)default_data;
           }
-          else if (STREQ(dp->dnatype, "short")) {
+          else if (dp->dnatype == "short") {
             eprop->defaultvalue = *(const short *)default_data;
           }
-          else if (STREQ(dp->dnatype, "int")) {
+          else if (dp->dnatype == "int") {
             eprop->defaultvalue = *(const int *)default_data;
           }
           else {
             has_default = false;
             if (debugSRNA_defaults) {
-              fprintf(stderr, "%s default: unsupported enum type (%s)\n", __func__, dp->dnatype);
+              fprintf(stderr,
+                      "%s default: unsupported enum type (%s)\n",
+                      __func__,
+                      dp->dnatype.c_str());
             }
           }
 
@@ -2889,7 +2905,7 @@ void RNA_def_property_string_sdna(PropertyRNA *prop, const char *structname, con
 
     /* Set the default if possible. */
     if ((dp->dnaoffset != -1) && (dp->dnapointerlevel != 0)) {
-      int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname);
+      int SDNAnr = DNA_struct_find_index_wrapper(DefRNA.sdna, dp->dnastructname.c_str());
       if (SDNAnr != -1) {
         const void *default_data = DNA_default_table[SDNAnr];
         if (default_data) {
@@ -2956,7 +2972,7 @@ void RNA_def_property_collection_sdna(PropertyRNA *prop,
       }
     }
 
-    if (dp->dnatype && STREQ(dp->dnatype, "ListBase")) {
+    if (dp->dnatype == "ListBase") {
       cprop->next = (PropCollectionNextFunc)(void *)"rna_iterator_listbase_next";
       cprop->get = (PropCollectionGetFunc)(void *)"rna_iterator_listbase_get";
       cprop->end = (PropCollectionEndFunc)(void *)"rna_iterator_listbase_end";
@@ -2968,7 +2984,7 @@ void RNA_def_property_collection_sdna(PropertyRNA *prop,
     StructDefRNA *ds = rna_find_struct_def(reinterpret_cast<StructRNA *>(dp->cont));
 
     if (!structname) {
-      structname = ds->dnaname;
+      structname = ds->dnaname.c_str();
     }
 
     int dnaoffset = 0;
