@@ -17,12 +17,15 @@ namespace nodes::node_shader_bsdf_open_pbr_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  const bNodeTree *ntree = b.tree_or_null();
+  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
+
   b.use_custom_socket_order();
 
   b.add_output<decl::Shader>("BSDF"_ustr);
 
   // TODO (Sebastian): Understand the usage of the Weight input better
-  b.add_input<decl::Float>("Weight"_ustr).available(false);
+  b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
 #define OPENPBR_SOCK_WEIGHT_ID 0
   /********************************************************************
    * Base Component
