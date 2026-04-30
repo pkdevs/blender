@@ -2703,7 +2703,7 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_COLOR(emission_color, "Emission Color", one_float3());
   /* Thin Film Component */
   SOCKET_IN_FLOAT(thin_film_weight, "Thin Film Weight", 0.0f);
-  SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.5f);
+  SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 500.0f);
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.4f);
   /* Geometry Component */
   SOCKET_IN_FLOAT(geometry_opacity, "Geometry Opacity", 1.0f);
