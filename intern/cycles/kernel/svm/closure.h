@@ -543,7 +543,7 @@ ccl_device
               powf((specular_roughness_sqr * specular_roughness_sqr +
                     coat_roughness_sqr * coat_roughness_sqr),
                    0.25f /*1.f/4.f*/));
-          coated_specular_roughness = lerp(specular_ior, min_coated_roughness, coat_weight);
+          coated_specular_roughness = mix(specular_ior, min_coated_roughness, coat_weight);
         }
         // TODO: we assume that the ambient ior is 1.0
         const float ambient_ior = 1.f;
@@ -553,7 +553,7 @@ ccl_device
         // as described in section 3.9.8. of the OpenPBR v1.1 spec
         const float tir_fixed_ratio = specular_over_coat > 1.f ? specular_over_coat :
                                                                  coat_over_specular;
-        coated_specular_ior = lerp(specular_ior / ambient_ior, tir_fixed_ratio, coat_weight);
+        coated_specular_ior = mix(specular_ior / ambient_ior, tir_fixed_ratio, coat_weight);
       }
 
       specular_roughness = coated_specular_roughness;
