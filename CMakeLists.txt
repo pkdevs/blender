@@ -348,6 +348,20 @@ if(UNIX AND NOT (APPLE OR HAIKU))
     option(WITH_GHOST_CSD "Enable client side decorations with Wayland" ON)
     mark_as_advanced(WITH_GHOST_CSD)
 
+    # NOTE: DBUS isn't WAYLAND specific, only the WAYLAND back-end uses it so
+    # the option is nested here for now.
+    option(WITH_GHOST_DBUS
+      "Build with DBUS support for desktop-portal cursor size & color-scheme queries. \
+Requires the `dbus-1` headers at build time."
+      ON
+    )
+    mark_as_advanced(WITH_GHOST_DBUS)
+
+    option(WITH_GHOST_DBUS_DYNLOAD
+      "Enable runtime dynamic loading of `libdbus` (avoids a build-time link dependency)" ON
+    )
+    mark_as_advanced(WITH_GHOST_DBUS_DYNLOAD)
+
     option(WITH_GHOST_WAYLAND_DYNLOAD "Enable runtime dynamic WAYLAND libraries loading" ON)
     mark_as_advanced(WITH_GHOST_WAYLAND_DYNLOAD)
 
@@ -362,6 +376,12 @@ endif()
 # Only used for WAYLAND, avoid having to check for WAYLAND everywhere by setting as disabled.
 if(NOT DEFINED WITH_GHOST_CSD)
   set(WITH_GHOST_CSD OFF)
+endif()
+if(NOT DEFINED WITH_GHOST_DBUS)
+  set(WITH_GHOST_DBUS OFF)
+endif()
+if(NOT DEFINED WITH_GHOST_DBUS_DYNLOAD)
+  set(WITH_GHOST_DBUS_DYNLOAD OFF)
 endif()
 
 if(WITH_GHOST_X11)
@@ -2569,6 +2589,8 @@ if(FIRST_RUN)
     endif()
     if(WITH_GHOST_WAYLAND)
       info_cfg_option(WITH_GHOST_WAYLAND_DYNLOAD)
+      info_cfg_option(WITH_GHOST_DBUS)
+      info_cfg_option(WITH_GHOST_DBUS_DYNLOAD)
     endif()
   endif()
 

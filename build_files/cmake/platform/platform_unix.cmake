@@ -789,6 +789,11 @@ if(WITH_GHOST_WAYLAND)
   set_and_warn_library_found("xkbcommon" xkbcommon_FOUND WITH_GHOST_WAYLAND)
 
   if(WITH_GHOST_WAYLAND)
+    if(WITH_GHOST_DBUS)
+      pkg_check_modules(dbus dbus-1)
+      set_and_warn_library_found("dbus" dbus_FOUND WITH_GHOST_DBUS)
+    endif()
+
     if(DEFINED LIBDIR)
       set(WAYLAND_SCANNER "${LIBDIR}/wayland/bin/wayland-scanner")
       if(NOT (EXISTS "${WAYLAND_SCANNER}"))

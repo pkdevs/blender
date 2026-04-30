@@ -317,6 +317,9 @@ class GHOST_SystemWayland : public GHOST_System {
   const GHOST_CSD_Layout &csd_layout_base_get() const;
 #endif
 
+  /** Values reported by the desktop portal, unset until they arrive (or never). */
+  const struct GHOST_DBusSettings &dbus_settings_get() const;
+
   static const char *xdg_app_id_get();
 
   /* WAYLAND utility functions. */

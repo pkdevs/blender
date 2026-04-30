@@ -60,6 +60,8 @@
 #endif
 #include <wayland-cursor.h>
 
+#include "GHOST_SystemDBusUnix.hh"
+
 #include <xkbcommon/xkbcommon-compose.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -1694,6 +1696,19 @@ struct GWL_Display {
 
   bool supports_color_manager_feature_windows_scrgb = false;
   bool supports_color_manager_extended_srgb_linear = false;
+
+  /**
+   * DBUS connection to the desktop portal. May be null when
+   * `WITH_GHOST_DBUS` is disabled or when DBUS init fails.
+   * All callers must null-check.
+   */
+  GHOST_DBus *dbus = nullptr;
+
+  /**
+   * The values #dbus has reported so far, kept because they're applied to
+   * seats as they're created, see #gwl_seat_capability_pointer_enable.
+   */
+  GHOST_DBusSettings dbus_settings;
 };
 
 /**
@@ -1704,6 +1719,11 @@ struct GWL_Display {
  */
 static void gwl_display_destroy(GWL_Display *display)
 {
+  if (display->dbus) {
+    ghost_dbus_destroy(display->dbus);
+    display->dbus = nullptr;
+  }
+
 #ifdef USE_EVENT_BACKGROUND_THREAD
   if (!display->background) {
     if (display->events_pthread) {
@@ -2470,6 +2490,28 @@ static GHOST_TTabletMode tablet_tool_map_type(enum zwp_tablet_tool_v2_type wp_ta
 
 static const int default_cursor_size = 24;
 
+/**
+ * The cursor size from `XCURSOR_SIZE`, unset when it isn't a usable value.
+ * This environment variable is used by enough WAYLAND applications that it
+ * makes sense to check it (see the `Xcursor` man page), it takes precedence
+ * over the size reported by DBUS.
+ */
+static std::optional<int> cursor_size_from_env()
+{
+  const char *env = getenv("XCURSOR_SIZE");
+  if (!env || (*env == '\0')) {
+    return std::nullopt;
+  }
+  char *env_end = nullptr;
+  const long value = strtol(env, &env_end, 10);
+  /* While clamping is not needed on the WAYLAND side,
+   * GHOST's internal logic may get confused by negative values, so ensure it's at least 1. */
+  if ((*env_end != '\0') || (value <= 0)) {
+    return std::nullopt;
+  }
+  return int(value);
+}
+
 static constexpr const char *ghost_wl_mime_text_plain = "text/plain";
 static constexpr const char *ghost_wl_mime_text_utf8 = "text/plain;charset=utf-8";
 static constexpr const char *ghost_wl_mime_text_uri_list = "text/uri-list";
@@ -2656,6 +2698,69 @@ static int ghost_wl_display_event_pump(wl_display *wl_display)
     err = wl_display_dispatch_pending(wl_display);
   }
   return err;
+}
+
+/**
+ * Blocking counterpart to #ghost_wl_display_event_pump which also waits on
+ * `fds_extra` (typically the DBUS descriptors) & returns after `timeout_ms`.
+ *
+ * Reimplements what #wl_display_dispatch does internally so more than the
+ * display can be waited on, another thread has no way to interrupt it.
+ */
+static int ghost_wl_display_event_wait(wl_display *wl_display,
+                                       const pollfd *fds_extra,
+                                       const int fds_extra_num,
+                                       const int timeout_ms)
+{
+#ifndef HAVE_POLL
+  /* Without `poll` only the display can be waited on. */
+  (void)fds_extra;
+  (void)fds_extra_num;
+  (void)timeout_ms;
+  return wl_display_dispatch(wl_display);
+#else
+  if (wl_display_prepare_read(wl_display) != 0) {
+    /* Events are already queued, handle those instead of waiting. */
+    return wl_display_dispatch_pending(wl_display);
+  }
+
+  pollfd fds[1 + GHOST_DBUS_FDS_MAX];
+  fds[0] = {wl_display_get_fd(wl_display), POLLIN | POLLPRI, 0};
+  const nfds_t fds_num = nfds_t(1 + fds_extra_num);
+  for (int i = 0; i < fds_extra_num; i++) {
+    fds[1 + i] = fds_extra[i];
+  }
+
+  /* Flush after #wl_display_prepare_read so a request made in between is sent,
+   * looping since a full socket reports #EAGAIN with requests left over. */
+  while (true) {
+    const int flush = wl_display_flush(wl_display);
+    if ((flush != -1) || (errno != EAGAIN)) {
+      /* NOTE: don't stop on #EPIPE, reading reports the protocol error. */
+      break;
+    }
+    /* Only the display, a ready `fds_extra` would spin here without flushing.
+     * Don't retry on #EINTR to ensure #SIGINT breaks out of the wait. */
+    pollfd fd_writable = {fds[0].fd, POLLOUT, 0};
+    if (poll(&fd_writable, 1, timeout_ms) <= 0) {
+      wl_display_cancel_read(wl_display);
+      return 0;
+    }
+  }
+
+  const int state = poll(fds, fds_num, timeout_ms);
+  if ((state <= 0) || (fds[0].revents == 0)) {
+    wl_display_cancel_read(wl_display);
+    /* Waking on `fds_extra`, timing out or being interrupted are all expected. */
+    return ((state == -1) && (errno != EINTR)) ? -1 : 0;
+  }
+
+  /* Any display event including `POLLHUP` & `POLLERR`, reading reports the error. */
+  if (wl_display_read_events(wl_display) == -1) {
+    return -1;
+  }
+  return wl_display_dispatch_pending(wl_display);
+#endif /* !HAVE_POLL */
 }
 
 #ifdef USE_KDE_VULKAN_UNGRAB_CURSOR_HACK
@@ -4602,6 +4707,32 @@ static const wl_buffer_listener cursor_buffer_listener = {
 static CLG_LogRef LOG_WL_CURSOR_SURFACE = {"ghost.wl.handle.cursor_surface"};
 #define LOG (&LOG_WL_CURSOR_SURFACE)
 
+/**
+ * Re-render the custom cursor on the focused surface of `seat_state_pointer`.
+ */
+static void cursor_shape_refresh_for_pointer(GWL_SeatStatePointer *seat_state_pointer,
+                                             const GWL_Cursor &cursor)
+{
+  if (!cursor.is_custom) {
+    return;
+  }
+  wl_surface *wl_surface_focus = seat_state_pointer->wl.surface_window;
+  if (!wl_surface_focus) {
+    return;
+  }
+  GHOST_WindowWayland *win = ghost_wl_surface_user_data(wl_surface_focus);
+  if (win) {
+    win->cursor_shape_refresh();
+  }
+}
+
+/** Re-render the custom cursor on both the pointer & tablet focused surfaces. */
+static void cursor_shape_refresh_for_seat(GWL_Seat *seat)
+{
+  cursor_shape_refresh_for_pointer(&seat->pointer, seat->cursor);
+  cursor_shape_refresh_for_pointer(&seat->tablet, seat->cursor);
+}
+
 static bool update_cursor_scale(GWL_Seat *seat,
                                 GWL_Cursor &cursor,
                                 GWL_SeatStatePointer *seat_state_pointer)
@@ -4621,18 +4752,37 @@ static bool update_cursor_scale(GWL_Seat *seat,
 
   if (scale > 0 && cursor.custom_cursor_scale != scale) {
     cursor.custom_cursor_scale = scale;
-    if (cursor.is_custom) {
-      wl_surface *wl_surface_focus = seat_state_pointer->wl.surface_window;
-      if (wl_surface_focus) {
-        GHOST_WindowWayland *win = ghost_wl_surface_user_data(wl_surface_focus);
-        if (win) {
-          win->cursor_shape_refresh();
-        }
-      }
-    }
+    cursor_shape_refresh_for_pointer(seat_state_pointer, cursor);
     return true;
   }
   return false;
+}
+
+/**
+ * Apply a new cursor size. The refresh is done directly (rather than via
+ * #update_cursor_scale's scale-changed side-effect) because the buffer scale
+ * itself isn't changing here, only the theme size.
+ */
+static void cursor_size_set(GWL_Seat *seat, const int size_new)
+{
+  if (seat->cursor.theme_size == size_new) {
+    return;
+  }
+  seat->cursor.theme_size = size_new;
+  cursor_shape_refresh_for_seat(seat);
+}
+
+/**
+ * Apply the desktops light/dark preference, Blender's cursor generator uses
+ * this to pick a contrasting color, see #ghost_wl_buffer_from_cursor_generator.
+ */
+static void cursor_dark_theme_set(GWL_Seat *seat, const bool use_dark_theme)
+{
+  if (seat->cursor.use_dark_theme == use_dark_theme) {
+    return;
+  }
+  seat->cursor.use_dark_theme = use_dark_theme;
+  cursor_shape_refresh_for_seat(seat);
 }
 
 static void cursor_surface_handle_enter(void *data, wl_surface *wl_surface, wl_output *wl_output)
@@ -7515,28 +7665,17 @@ static void gwl_seat_capability_pointer_enable(GWL_Seat *seat)
   ghost_wl_surface_tag_cursor_pointer(seat->cursor.wl.surface_cursor);
 
   gwl_seat_capability_pointer_multitouch_enable(seat);
-  {
-    /* Use environment variables, falling back to defaults.
-     * These environment variables are used by enough WAYLAND applications
-     * that it makes sense to check them (see `Xcursor` man page). */
-    const char *env;
-    env = getenv("XCURSOR_SIZE");
-    seat->cursor.theme_size = default_cursor_size;
 
-    if (env && (*env != '\0')) {
-      char *env_end = nullptr;
-      /* While clamping is not needed on the WAYLAND side,
-       * GHOST's internal logic may get confused by negative values, so ensure it's at least 1. */
-      const long value = strtol(env, &env_end, 10);
-      if ((*env_end == '\0') && (value > 0)) {
-        seat->cursor.theme_size = int(value);
-      }
-    }
+  /* Use what DBUS has reported so far, a pointer enabled before the portal
+   * replied is updated later by #processEvents via #ghost_dbus_handle. */
+  const GHOST_DBusSettings &dbus_settings = seat->system->dbus_settings_get();
 
-    /* TODO: detect this from the system.
-     * We *could* have weak support based on checking for known themes. */
-    seat->cursor.use_dark_theme = true;
-  }
+  /* Without `XCURSOR_SIZE` DBUS may report a size later. */
+  seat->cursor.theme_size = cursor_size_from_env().value_or(
+      dbus_settings.cursor_size.value_or(default_cursor_size));
+
+  /* Default to dark when the desktop has no preference. */
+  seat->cursor.use_dark_theme = dbus_settings.use_dark_theme.value_or(true);
 }
 
 static void gwl_seat_capability_pointer_disable(GWL_Seat *seat)
@@ -9086,6 +9225,19 @@ GHOST_SystemWayland::GHOST_SystemWayland(const bool background)
   /* Could be null in background mode, however there are enough
    * references to the timer-manager that it's safer to create it. */
   display_->key_repeat_timer_manager = new GHOST_TimerManager();
+
+  /* Connect to DBUS and fire the initial queries, the replies are picked up
+   * inside #processEvents. Skipped in background mode where there is no
+   * cursor. */
+  if (!background) {
+    display_->dbus = ghost_dbus_create();
+    if (display_->dbus) {
+      if (!cursor_size_from_env()) {
+        ghost_dbus_cursor_size_request(display_->dbus);
+      }
+      ghost_dbus_color_scheme_request(display_->dbus);
+    }
+  }
 }
 
 void GHOST_SystemWayland::display_destroy_and_free_all()
@@ -9119,9 +9271,33 @@ GHOST_TSuccess GHOST_SystemWayland::init()
 
 #undef pushEvent
 
+static CLG_LogRef LOG_WL_DBUS = {"ghost.wl.dbus"};
+
 bool GHOST_SystemWayland::processEvents(bool waitForEvent)
 {
   bool any_processed = false;
+
+  if (GHOST_DBusSettings dbus_settings;
+      display_->dbus && ghost_dbus_handle(display_->dbus, &dbus_settings)) [[unlikely]]
+  {
+#ifdef USE_EVENT_BACKGROUND_THREAD
+    std::lock_guard lock_server_guard{*server_mutex};
+#endif
+    if (dbus_settings.cursor_size) {
+      CLOG_DEBUG(&LOG_WL_DBUS, "cursor-size (%d)", *dbus_settings.cursor_size);
+      display_->dbus_settings.cursor_size = dbus_settings.cursor_size;
+      for (GWL_Seat *seat : display_->seats) {
+        cursor_size_set(seat, *dbus_settings.cursor_size);
+      }
+    }
+    if (dbus_settings.use_dark_theme) {
+      CLOG_DEBUG(&LOG_WL_DBUS, "color-scheme (dark=%d)", int(*dbus_settings.use_dark_theme));
+      display_->dbus_settings.use_dark_theme = dbus_settings.use_dark_theme;
+      for (GWL_Seat *seat : display_->seats) {
+        cursor_dark_theme_set(seat, *dbus_settings.use_dark_theme);
+      }
+    }
+  }
 
 #ifdef USE_EVENT_BACKGROUND_THREAD
   if (has_pending_actions_for_window.exchange(false)) [[unlikely]] {
@@ -9181,10 +9357,18 @@ bool GHOST_SystemWayland::processEvents(bool waitForEvent)
 #endif /* WITH_INPUT_NDOF */
 
   if (waitForEvent) {
+    /* Wait on what DBUS needs serviced too, otherwise a setting change is only
+     * applied once WAYLAND happens to have an event of its own. */
+    GHOST_DBusPoll dbus_poll;
+    if (display_->dbus) {
+      ghost_dbus_poll_get(display_->dbus, &dbus_poll);
+    }
 #ifdef USE_EVENT_BACKGROUND_THREAD
     std::lock_guard lock_server_guard{*server_mutex};
 #endif
-    if (wl_display_dispatch(display_->wl.display) == -1) {
+    if (ghost_wl_display_event_wait(
+            display_->wl.display, dbus_poll.fds, dbus_poll.fds_num, dbus_poll.timeout_ms) == -1)
+    {
       ghost_wl_display_report_error(display_->wl.display);
     }
   }
@@ -10857,6 +11041,11 @@ const GHOST_CSD_Layout &GHOST_SystemWayland::csd_layout_base_get() const
   return display_->csd_layout_base;
 }
 #endif
+
+const GHOST_DBusSettings &GHOST_SystemWayland::dbus_settings_get() const
+{
+  return display_->dbus_settings;
+}
 
 /** \} */
 
