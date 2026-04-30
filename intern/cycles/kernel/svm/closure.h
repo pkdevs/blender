@@ -482,17 +482,12 @@ ccl_device
 
       const float base_weight = saturatef(stack_load(stack, data.base_weight));
       const float3 base_color = max(stack_load(stack, data.base_color), zero_float3());
-      const float base_metalness = saturatef(
-          stack_load(stack, data.base_metalness));
-      const float base_diffuse_roughness = stack_load(
-          stack, data.base_diffuse_roughness);
+      const float base_metalness = saturatef(stack_load(stack, data.base_metalness));
+      const float base_diffuse_roughness = stack_load(stack, data.base_diffuse_roughness);
 
-      const float specular_weight = saturatef(
-          stack_load(stack, data.specular_weight));
-      const float3 specular_color = saturate(
-          stack_load(stack, data.specular_color));
-      float specular_roughness = saturatef(
-          stack_load(stack, data.specular_roughness));
+      const float specular_weight = saturatef(stack_load(stack, data.specular_weight));
+      const float3 specular_color = saturate(stack_load(stack, data.specular_color));
+      float specular_roughness = saturatef(stack_load(stack, data.specular_roughness));
       const float specular_roughness_anisotropy = saturatef(
           stack_load(stack, data.specular_roughness_anisotropy));
       float specular_ior = stack_load(stack, data.specular_ior);
@@ -501,41 +496,28 @@ ccl_device
 
       const float subsurface_weight = 0.f;
       const float3 subsurface_color = zero_float3();
-      const float transmission_weight = saturatef(
-          stack_load(stack, data.transmission_weight));
-      const float3 transmission_color = saturate(
-          stack_load(stack, data.transmission_color));
-      const float transmission_depth = stack_load(
-          stack, data.transmission_depth);
+      const float transmission_weight = saturatef(stack_load(stack, data.transmission_weight));
+      const float3 transmission_color = saturate(stack_load(stack, data.transmission_color));
+      const float transmission_depth = stack_load(stack, data.transmission_depth);
 
-      const float coat_weight = saturatef(
-          stack_load(stack, data.coat_weight));
-      const float3 coat_color = saturate(
-          stack_load(stack, data.coat_color));
-      const float coat_roughness = saturatef(
-          stack_load(stack, data.coat_roughness));
+      const float coat_weight = saturatef(stack_load(stack, data.coat_weight));
+      const float3 coat_color = saturate(stack_load(stack, data.coat_color));
+      const float coat_roughness = saturatef(stack_load(stack, data.coat_roughness));
       const float coat_roughness_anisotropy = saturatef(
           stack_load(stack, data.coat_roughness_anisotropy));
       float coat_ior = stack_load(stack, data.coat_ior);
       coat_ior = (sd->flag & SD_BACKFACING) ? 1.0f / coat_ior : coat_ior;
-      const float coat_darkening = saturatef(
-          stack_load(stack, data.coat_darkening));
+      const float coat_darkening = saturatef(stack_load(stack, data.coat_darkening));
 
-      const float fuzz_weight = saturatef(
-          stack_load(stack, data.fuzz_weight));
-      const float3 fuzz_color = saturate(
-          stack_load(stack, data.fuzz_color));
-      const float fuzz_roughness = saturatef(
-          stack_load(stack, data.fuzz_roughness));
+      const float fuzz_weight = saturatef(stack_load(stack, data.fuzz_weight));
+      const float3 fuzz_color = saturate(stack_load(stack, data.fuzz_color));
+      const float fuzz_roughness = saturatef(stack_load(stack, data.fuzz_roughness));
 
-      const float emission_luminance = stack_load(
-          stack, data.emission_luminance);
-      const float3 emission_color = saturate(
-          stack_load(stack, data.emission_color));
+      const float emission_luminance = stack_load(stack, data.emission_luminance);
+      const float3 emission_color = saturate(stack_load(stack, data.emission_color));
       const float3 emission = emission_color * emission_luminance;
 
-      const float geometry_opacity = saturatef(
-          stack_load(stack, data.geometry_opacity));
+      const float geometry_opacity = saturatef(stack_load(stack, data.geometry_opacity));
 
       const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
 
@@ -544,10 +526,8 @@ ccl_device
 
       float3 modulated_base_darkening_factor = one_float3();
 
-      const float thin_film_weight = saturatef(
-          stack_load(stack, data.thin_film_weight));
-      float thin_film_thickness = stack_load(
-          stack, data.thin_film_thickness);
+      const float thin_film_weight = saturatef(stack_load(stack, data.thin_film_weight));
+      float thin_film_thickness = stack_load(stack, data.thin_film_thickness);
       thin_film_thickness *= 1000.f;
       const float thin_film_ior = stack_load(stack, data.thin_film_ior);
 
@@ -597,7 +577,7 @@ ccl_device
       float coat_alpha_y = coat_alpha_x;
 
       const float3 geometry_coat_normal = safe_normalize_fallback(
-            stack_load_float3_default(stack, data.geometry_coat_normal_offset, N), sd->N);
+          stack_load_float3_default(stack, data.geometry_coat_normal_offset, N), sd->N);
       float3 geometry_coat_tangent = zero_float3();
       if (coat_roughness_anisotropy > 0.f && stack_valid(data.geometry_coat_tangent_offset)) {
         geometry_coat_tangent = stack_load_float3(stack, data.geometry_coat_tangent_offset);
@@ -955,7 +935,8 @@ ccl_device
 #endif
         if (base_weight > CLOSURE_WEIGHT_CUTOFF) {
           /* Diffuse Component*/
-          const Spectrum diffuse_weight = (base_color * base_weight) * (1.0f - subsurface_weight) * weight;
+          const Spectrum diffuse_weight = (base_color * base_weight) * (1.0f - subsurface_weight) *
+                                          weight;
           if (diffuse_roughness_is_almost_zero(base_diffuse_roughness)) {
             bsdf_diffuse_setup(sd, N, diffuse_weight);
           }

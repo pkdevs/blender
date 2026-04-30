@@ -2740,7 +2740,6 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
   if (has_nonzero_weight("Coat Roughness Anisotropy")) {
     geometry_coat_tangent_offset = compiler.input_link("Geometry Coat Tangent");
   }
-  
 
   compiler.add_node(this,
                     NODE_CLOSURE_BSDF,
@@ -2749,7 +2748,7 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
                         .mix_weight_offset = compiler.closure_mix_weight_offset(),
                     });
 
-compiler.add_node_data(SVMNodeOpenPBRBsdfData{
+  compiler.add_node_data(SVMNodeOpenPBRBsdfData{
       /* Base */
       .base_weight = compiler.input_float("Base Weight"),
       .base_color = compiler.input_float3("Base Color"),
@@ -2768,32 +2767,33 @@ compiler.add_node_data(SVMNodeOpenPBRBsdfData{
       .transmission_scatter = compiler.input_float3("Transmission Scatter"),
       .transmission_scatter_anisotropy = compiler.input_float("Transmission Anisotropy"),
       .transmission_dispersion_scale = compiler.input_float("Transmission Dispersion Scale"),
-      .transmission_dispersion_abbe_number = compiler.input_float("Transmission DispersionAbbeNumber"),
+      .transmission_dispersion_abbe_number = compiler.input_float(
+          "Transmission DispersionAbbeNumber"),
       /* Subsurface Scattering */
       .subsurface_weight = compiler.input_float("Subsurface Weight"),
       .subsurface_color = compiler.input_float3("Subsurface Color"),
       .subsurface_radius = compiler.input_float("Subsurface Radius"),
       .subsurface_radius_scale = compiler.input_float3("Subsurface Radius Scale"),
       .subsurface_scatter_anisotropy = compiler.input_float("Subsurface Scatter Anisotropy"),
-        /* Coat Component */
+      /* Coat Component */
       .coat_weight = compiler.input_float("Coat Weight"),
       .coat_color = compiler.input_float3("Coat Color"),
       .coat_roughness = compiler.input_float("Coat Roughness"),
       .coat_roughness_anisotropy = compiler.input_float("Coat Roughness Anisotropy"),
       .coat_ior = compiler.input_float("Coat IOR"),
       .coat_darkening = compiler.input_float("Coat Darkening"),
-        /* Fuzz Component */
+      /* Fuzz Component */
       .fuzz_weight = compiler.input_float("Fuzz Weight"),
       .fuzz_color = compiler.input_float3("Fuzz Color"),
       .fuzz_roughness = compiler.input_float("Fuzz Roughness"),
-        /* Thin-film Component*/
+      /* Thin-film Component*/
       .thin_film_weight = compiler.input_float("Thin Film Weight"),
       .thin_film_thickness = compiler.input_float("Thin Film Thickness"),
       .thin_film_ior = compiler.input_float("Thin Film IOR"),
-        /* Emission Component */
+      /* Emission Component */
       .emission_luminance = compiler.input_float("Emission Luminance"),
       .emission_color = compiler.input_float3("Emission Color"),
-        /* Geometry Component */
+      /* Geometry Component */
       .geometry_opacity = compiler.input_float("Geometry Opacity"),
       .geometry_normal_offset = geometry_normal_offset,
       .geometry_tangent_offset = geometry_tangent_offset,

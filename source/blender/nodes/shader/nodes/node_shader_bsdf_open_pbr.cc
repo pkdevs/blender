@@ -2,10 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "node_shader_util.hh"
 #include "BLI_math_base.h"
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
+#include "node_shader_util.hh"
 
 #include "BKE_node_runtime.hh"
 
@@ -128,7 +128,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1.0f)
       .subtype(PROP_FACTOR);
 #define OPENPBR_SOCK_SUBSURFACE_WEIGHT_ID 17
-  subsurface.add_input<decl::Color>("Subsurface Color"_ustr).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  subsurface.add_input<decl::Color>("Subsurface Color"_ustr)
+      .default_value({0.8f, 0.8f, 0.8f, 1.0f});
 #define OPENPBR_SOCK_SUBSURFACE_COLOR_ID 18
   subsurface.add_input<decl::Float>("Subsurface Radius"_ustr)
       .default_value(1.0f)
