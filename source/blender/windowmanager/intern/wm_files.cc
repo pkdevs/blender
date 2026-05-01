@@ -53,6 +53,7 @@
 #include "BLO_core_file_reader.hh"
 #include "BLO_readfile.hh"
 
+#include "BLT_date_string.hh"
 #include "BLT_lang.hh"
 #include "BLT_translation.hh"
 
@@ -3309,26 +3310,24 @@ static std::string wm_open_mainfile_get_description(bContext * /*C*/,
   }
 
   /* Date. */
-  char date_str[FILELIST_DIRENTRY_DATE_LEN];
-  char time_str[FILELIST_DIRENTRY_TIME_LEN];
-  bool is_today, is_yesterday;
-  BLI_filelist_entry_datetime_to_string(
-      nullptr, int64_t(stats.st_mtime), false, time_str, date_str, &is_today, &is_yesterday);
-  if (is_today || is_yesterday) {
-    STRNCPY(date_str, is_today ? TIP_("Today") : TIP_("Yesterday"));
-  }
+  const tm mod_time = *localtime(&stats.st_mtime);
+  const time_t ts_now = time(nullptr);
+  const tm now_tm = *localtime(&ts_now);
+  const char *lang = BLT_lang_get();
+  std::string modified_s = blender::date_string::datetime(&mod_time,
+                                                          lang,
+                                                          date_string::DateFormat(U.date_format),
+                                                          date_string::TimeFormat(U.time_format),
+                                                          &now_tm,
+                                                          TIP_("Today"),
+                                                          TIP_("Yesterday"));
 
   /* Size. */
   char size_str[FILELIST_DIRENTRY_SIZE_LEN];
   BLI_filelist_entry_size_to_string(nullptr, uint64_t(stats.st_size), false, size_str);
 
-  return fmt::format("{}\n\n{}: {} {}\n{}: {}",
-                     filepath,
-                     TIP_("Modified"),
-                     date_str,
-                     time_str,
-                     TIP_("Size"),
-                     size_str);
+  return fmt::format(
+      "{}\n\n{}: {}\n{}: {}", filepath, TIP_("Modified"), modified_s, TIP_("Size"), size_str);
 }
 
 /* Currently fits in a pointer. */

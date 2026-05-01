@@ -562,7 +562,9 @@ struct FileDirEntry {
   struct {
     /* Temp caching of UI-generated strings. */
     char size_str[16] = "";
-    char datetime_str[16 + 8] = "";
+    /* Maximum length includes possibility for 4-character x 4-byte
+     * short month name and 2-character x 4-byte "am/pm" translation. */
+    char datetime_str[40] = "";
   } draw_data;
 
   /** #eFileSel_File_Types. */

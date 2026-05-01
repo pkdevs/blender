@@ -372,6 +372,11 @@ static void file_listener(const wmSpaceTypeListenerParams *listener_params)
 
   /* context changes */
   switch (wmn->category) {
+    case NC_UI:
+      if (sfile) {
+        filelist_tag_force_reset(sfile->files);
+      }
+      break;
     case NC_SPACE:
       switch (wmn->data) {
         case ND_SPACE_FILE_LIST:
