@@ -1959,8 +1959,8 @@ void BKE_scopes_update(Scopes *scopes,
   cm_processor_colors = ColormanageProcessor::display_processor_for_imbuf(
       ibuf, view_settings, display_settings, DISPLAY_SPACE_DRAW);
 
-  const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(
-      display_settings, view_settings->view_transform);
+  const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(display_settings,
+                                                                        view_settings);
 
   /* Keep number of threads in sync with the merge parts below. */
   ScopesUpdateData data{};
