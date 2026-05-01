@@ -248,12 +248,13 @@ static const mf::MultiFunction *get_multi_function(const bNode &node)
               exec_preset_first_two);
           return &fn;
         }
-        case NODE_COMPARE_NOT_EQUAL:
+        case NODE_COMPARE_NOT_EQUAL: {
           static auto fn = mf::build::SI3_SO<float, float, float, bool>(
               "Not Equal",
               [](float a, float b, float epsilon) { return std::abs(a - b) > epsilon; },
               exec_preset_first_two);
           return &fn;
+        }
         case NODE_COMPARE_COLOR_BRIGHTER:
         case NODE_COMPARE_COLOR_DARKER:
           break;
