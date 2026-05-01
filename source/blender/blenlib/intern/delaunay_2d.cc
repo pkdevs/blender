@@ -2928,6 +2928,25 @@ template<typename T> void detect_holes_with_fillrule_nonzero(CDT_state<T> *cdt_s
     }
   }
 }
+
+/**
+ * Output types that use the even-odd hole detector.
+ */
+static inline bool output_uses_evenodd_holes(const CDT_output_type output_type)
+{
+  return ELEM(output_type, CDT_INSIDE_WITH_HOLES, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES);
+}
+
+/**
+ * Output types that use the non-zero winding hole detector,
+ * requiring `edge_winding_map` to be populated during construction.
+ */
+static inline bool output_uses_nonzero_holes(const CDT_output_type output_type)
+{
+  return ELEM(
+      output_type, CDT_INSIDE_WITH_HOLES_NONZERO, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES_NONZERO);
+}
+
 /**
  * Remove edges and merge faces to get desired output, as per options.
  * \note the cdt cannot be further changed after this.
@@ -2953,15 +2972,10 @@ void prepare_cdt_for_output(CDT_state<T> *cdt_state, const CDT_output_type outpu
   }
 
   /* Determine if hole detection is needed and which winding rule to use. */
-  bool need_holes_evenodd = ELEM(
-      output_type, CDT_INSIDE_WITH_HOLES, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES);
-  bool need_holes_nonzero = ELEM(
-      output_type, CDT_INSIDE_WITH_HOLES_NONZERO, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES_NONZERO);
-
-  if (need_holes_evenodd) {
+  if (output_uses_evenodd_holes(output_type)) {
     detect_holes_with_fillrule_even_odd(cdt_state);
   }
-  else if (need_holes_nonzero) {
+  else if (output_uses_nonzero_holes(output_type)) {
     detect_holes_with_fillrule_nonzero(cdt_state);
   }
 
@@ -3121,8 +3135,7 @@ CDT_result<T> delaunay_calc(const CDT_input<T> &input, CDT_output_type output_ty
   int ne = input.edge.size();
   int nf = input.face.size();
   CDT_state<T> cdt_state(nv, ne, nf, input.epsilon, input.need_ids);
-  const bool need_winding = ELEM(
-      output_type, CDT_INSIDE_WITH_HOLES_NONZERO, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES_NONZERO);
+  const bool need_winding = output_uses_nonzero_holes(output_type);
 
   /* Only constructed if winding is needed. */
   std::optional<Map<CDTEdge<T> *, int>> edge_winding_map;
