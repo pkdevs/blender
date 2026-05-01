@@ -22,7 +22,7 @@
 #include "kernel/util/colorspace.h"
 #include "util/defines.h"
 
-#define OPENPBR_SPEC_COMPLAINT
+#define OPENPBR_SPEC_COMPLIANT
 
 CCL_NAMESPACE_BEGIN
 
@@ -770,7 +770,7 @@ ccl_device
               bsdf->alpha_y = specular_alpha_y;
 
               fresnel->f0 = rgb_to_spectrum(base_color) * base_weight;
-#ifdef OPENPBR_SPEC_COMPLAINT
+#ifdef OPENPBR_SPEC_COMPLIANT
               const Spectrum f82 = min(specular_color, one_spectrum());
 #else
               const Spectrum f82 = min(specular_color * specular_weight, one_spectrum());
@@ -789,7 +789,7 @@ ccl_device
           /* Attenuate other components */
           weight *= (1.0f - base_metalness);
         }
-#ifdef OPENPBR_SPEC_COMPLAINT  // OpenPBR v1.1 spec version (glossy diffuse layer)
+#ifdef OPENPBR_SPEC_COMPLIANT  // OpenPBR v1.1 spec version (glossy diffuse layer)
         /* Translucent Component*/
         if (transmission_weight > CLOSURE_WEIGHT_CUTOFF &&
             (refractive_caustics && (specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
