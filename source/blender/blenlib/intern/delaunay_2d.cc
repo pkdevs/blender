@@ -2558,9 +2558,17 @@ template<typename T> void remove_faces_in_holes(CDT_state<T> *cdt_state)
   }
 }
 
+/* #CDTFace::visit_index sentinels used by the hole-detection flood-fill.
+ * The fill assigns a region number in `[0, num_regions)` to every non-deleted face it visits.
+ * `outer_face` is pre-set to #VISIT_INDEX_OUTER_FACE and skipped.
+ * deleted faces retain #VISIT_INDEX_UNVISITED since the outer for-loop skips them.
+ * Use `< 0` to check if a region isn't a "real" region. */
+static constexpr int VISIT_INDEX_UNVISITED = -1;
+static constexpr int VISIT_INDEX_OUTER_FACE = -2;
+
 /**
  * Flood-fill faces into regions connected through non-constraint edges.
- * Each face's `visit_index` is set to its region number (-1 = unvisited, -2 = outer face).
+ * Each face's `visit_index` is set to its region number.
  * Returns a vector of representative faces, one per region.
  */
 template<typename T> Vector<CDTFace<T> *> compute_face_regions(CDT_state<T> *cdt_state)
@@ -2573,19 +2581,19 @@ template<typename T> Vector<CDTFace<T> *> compute_face_regions(CDT_state<T> *cdt
   Vector<CDTFace<T> *> fstack;
   Vector<CDTFace<T> *> region_rep_face;
   for (int i : cdt->faces.index_range()) {
-    cdt->faces[i]->visit_index = -1;
+    cdt->faces[i]->visit_index = VISIT_INDEX_UNVISITED;
   }
   int cur_region = -1;
-  cdt->outer_face->visit_index = -2; /* Don't visit this one. */
+  cdt->outer_face->visit_index = VISIT_INDEX_OUTER_FACE; /* Don't visit this one. */
   for (int i : cdt->faces.index_range()) {
     CDTFace<T> *f = cdt->faces[i];
-    if (!f->deleted && f->symedge && f->visit_index == -1) {
+    if (!f->deleted && f->symedge && f->visit_index == VISIT_INDEX_UNVISITED) {
       fstack.append(f);
       ++cur_region;
       region_rep_face.append(f);
       while (!fstack.is_empty()) {
         CDTFace<T> *f = fstack.pop_last();
-        if (f->visit_index != -1) {
+        if (f->visit_index != VISIT_INDEX_UNVISITED) {
           continue;
         }
         f->visit_index = cur_region;
@@ -2594,7 +2602,7 @@ template<typename T> Vector<CDTFace<T> *> compute_face_regions(CDT_state<T> *cdt
         do {
           if (se->edge && !is_constrained_edge(se->edge)) {
             CDTFace<T> *fsym = sym(se)->face;
-            if (fsym && !fsym->deleted && fsym->visit_index == -1) {
+            if (fsym && !fsym->deleted && fsym->visit_index == VISIT_INDEX_UNVISITED) {
               fstack.append(fsym);
             }
           }
@@ -2733,13 +2741,13 @@ template<typename T> void detect_holes_with_fillrule_nonzero(CDT_state<T> *cdt_s
   Vector<CDTFace<T> *> fstack;
   fstack.reserve(cdt->faces.size()); /* Worst case: all faces in stack. */
   for (CDTFace<T> *f : cdt->faces) {
-    f->visit_index = -1; /* -1 = unvisited. */
+    f->visit_index = VISIT_INDEX_UNVISITED;
   }
-  cdt->outer_face->visit_index = -2; /* -2 = outer face (never process). */
+  cdt->outer_face->visit_index = VISIT_INDEX_OUTER_FACE;
 
   int cur_region = -1;
   for (CDTFace<T> *f_init : cdt->faces) {
-    if (f_init->deleted || !f_init->symedge || f_init->visit_index != -1) {
+    if (f_init->deleted || !f_init->symedge || f_init->visit_index != VISIT_INDEX_UNVISITED) {
       continue;
     }
     fstack.append(f_init);
@@ -2750,7 +2758,7 @@ template<typename T> void detect_holes_with_fillrule_nonzero(CDT_state<T> *cdt_s
 
     while (!fstack.is_empty()) {
       CDTFace<T> *f = fstack.pop_last();
-      if (f->visit_index != -1) {
+      if (f->visit_index != VISIT_INDEX_UNVISITED) {
         continue;
       }
       f->visit_index = cur_region;
@@ -2798,7 +2806,7 @@ template<typename T> void detect_holes_with_fillrule_nonzero(CDT_state<T> *cdt_s
            * priority since it carries the actual winding from crossing a polygon boundary. */
           found_any_outer = true;
         }
-        else if (!neighbor->deleted && neighbor->visit_index == -1) {
+        else if (!neighbor->deleted && neighbor->visit_index == VISIT_INDEX_UNVISITED) {
           fstack.append(neighbor);
         }
       } while ((se = se->next) != se_start);
