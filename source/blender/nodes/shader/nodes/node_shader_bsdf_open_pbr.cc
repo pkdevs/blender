@@ -226,10 +226,12 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_FACTOR);
 #define OPENPBR_SOCK_THIN_FILM_WEIGHT_ID 33
   thinfilm.add_input<decl::Float>("Thin Film Thickness"_ustr)
-      .default_value(500.0f)
+      .default_value(0.5f)
       .min(0.0f)
       .max(100000.0f)
-      .subtype(PROP_WAVELENGTH);
+      .description("Thickness of the film in micrometers");
+  /* TODO(weizhen): OpenPBR unit for thin film is micrometer, but our default is nanometer. Need to
+   * address this discrepancy. */
 #define OPENPBR_SOCK_THIN_FILM_THICKNESS_ID 34
   thinfilm.add_input<decl::Float>("Thin Film IOR"_ustr)
       .default_value(1.4f)
