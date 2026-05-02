@@ -46,6 +46,8 @@ Span<const char *> default_dna_header_filenames();
                                      Span<const char *> include_files);
 
 /** Convert C++ types to plain C types understood by DNA. */
-[[nodiscard]] bool substitute_cpp_types(Vector<ParsedStruct> &structs, Span<ParsedEnum> enums);
+[[nodiscard]] bool substitute_cpp_types(Vector<ParsedStruct> &structs,
+                                        Span<ParsedEnum> enums,
+                                        bool for_rna);
 
 }  // namespace blender::dna

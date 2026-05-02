@@ -809,7 +809,28 @@ static void substitute_vector_or_matrix(ParsedMember &member)
   return true;
 }
 
-bool substitute_cpp_types(Vector<ParsedStruct> &structs, const Span<ParsedEnum> enums)
+/** Map modern C integer type names to old SDNA names. */
+static void substitute_sdna_integer_type(ParsedMember &member)
+{
+  static const std::pair<const char *, const char *> integer_type_aliases[] = {
+      {"uint8_t", "uchar"},
+      {"int16_t", "short"},
+      {"uint16_t", "ushort"},
+      {"int32_t", "int"},
+      {"uint32_t", "int"},
+  };
+
+  for (const auto &[alias, sdna_name] : integer_type_aliases) {
+    if (member.type_name == alias) {
+      member.type_name = sdna_name;
+      break;
+    }
+  }
+}
+
+bool substitute_cpp_types(Vector<ParsedStruct> &structs,
+                          const Span<ParsedEnum> enums,
+                          bool /*for_rna*/)
 {
   Map<StringRef, const ParsedEnum *> enum_map;
   enum_map.reserve(enums.size());
@@ -824,6 +845,7 @@ bool substitute_cpp_types(Vector<ParsedStruct> &structs, const Span<ParsedEnum> 
       if (!substitute_enum(parsed_struct, member, enum_map)) {
         return false;
       }
+      substitute_sdna_integer_type(member);
     }
   }
   return true;

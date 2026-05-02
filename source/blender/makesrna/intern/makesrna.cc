@@ -30,6 +30,8 @@
 #include "RNA_enum_types.hh"
 #include "RNA_types.hh"
 
+#include "dna_parse.h"
+
 #include "makesrna_utils.hh"
 #include "rna_internal.hh"
 
@@ -406,7 +408,7 @@ static StructRNA *rna_find_struct(const char *identifier)
   return nullptr;
 }
 
-static const char *rna_find_type(const char *type)
+static const char *rna_find_type(const StringRef type)
 {
   StructDefRNA *ds;
 
@@ -528,7 +530,7 @@ static bool rna_parameter_is_const(const PropertyDefRNA *dparm)
 static bool rna_color_quantize(PropertyRNA *prop, PropertyDefRNA *dp)
 {
   return ((prop->type == PROP_FLOAT) && ELEM(prop->subtype, PROP_COLOR, PROP_COLOR_GAMMA) &&
-          (IS_DNATYPE_FLOAT_COMPAT(dp->dnatype) == 0));
+          !is_dnatype_float_compat(dp->dnatype));
 }
 
 /**
@@ -631,7 +633,7 @@ static char *rna_def_property_get_func(
     if (!dp->dnatype.is_empty()) {
 
       if (prop->type == PROP_FLOAT) {
-        if (!IS_DNATYPE_FLOAT_COMPAT(dp->dnatype)) {
+        if (!is_dnatype_float_compat(dp->dnatype)) {
           /* Colors are an exception. these get translated. */
           if (prop->subtype != PROP_COLOR_GAMMA) {
             CLOG_ERROR(&LOG,
@@ -646,7 +648,7 @@ static char *rna_def_property_get_func(
         }
       }
       else if (prop->type == PROP_BOOLEAN) {
-        if (!IS_DNATYPE_BOOLEAN_COMPAT(dp->dnatype)) {
+        if (!is_dnatype_boolean_compat(dp->dnatype)) {
           CLOG_ERROR(&LOG,
                      "%s.%s is a '%s' but wrapped as type '%s'.",
                      srna->identifier,
@@ -658,7 +660,7 @@ static char *rna_def_property_get_func(
         }
       }
       else if (ELEM(prop->type, PROP_INT, PROP_ENUM)) {
-        if (!IS_DNATYPE_INT_COMPAT(dp->dnatype)) {
+        if (!is_dnatype_int_compat(dp->dnatype)) {
           CLOG_ERROR(&LOG,
                      "%s.%s is a '%s' but wrapped as type '%s'.",
                      srna->identifier,
@@ -4399,16 +4401,26 @@ int main(int argc, char **argv)
   CLG_output_use_basename_set(true);
   CLG_level_set(debugSRNA ? CLG_LEVEL_DEBUG : CLG_LEVEL_WARN);
 
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s outdirectory [public header outdirectory]/\n", argv[0]);
+  if (argc < 3) {
+    fprintf(stderr, "Usage: %s dna_dir out_dir [header_out_dir]/\n", argv[0]);
     return_status = EXIT_FAILURE;
   }
   else {
+    const char *dna_header_path = argv[1];
+    Vector<dna::ParsedEnum> enums;
+    if (!(dna::parse_dna_headers(
+              dna_header_path, DefRNA.dna_structs, enums, dna::default_dna_header_filenames()) &&
+          dna::substitute_cpp_types(DefRNA.dna_structs, enums, true)))
+    {
+      fprintf(stderr, "Fatal!\n");
+      CLOG_FATAL(&LOG, "Failed to parse DNA headers for RNA registration");
+    }
+
     if (debugSRNA > 0) {
       fprintf(stderr, "Running makesrna\n");
     }
     makesrna_path = argv[0];
-    return_status = rna_preprocess(argv[1], (argc > 2) ? argv[2] : nullptr);
+    return_status = rna_preprocess(argv[2], (argc > 2) ? argv[3] : nullptr);
   }
 
   CLG_exit();

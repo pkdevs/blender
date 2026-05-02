@@ -689,10 +689,9 @@ static void write_sdna_type_offsets(FILE *file, const Span<dna::ParsedStruct> pa
 /** Write the `dna_struct_ids.cc` file for `sdna_struct_id_get<T>()`. */
 static void write_sdna_struct_ids(FILE *file, const Span<dna::ParsedStruct> parsed_structs)
 {
+  fprintf(file, "#include \"DNA_sdna_type_ids.hh\"\n\n");
   fprintf(file, "namespace blender {\n");
   fprintf(file, "namespace dna {\n\n");
-  fprintf(file, "template<typename T> int sdna_struct_id_get();\n\n");
-  fprintf(file, "int sdna_struct_id_get_max();\n");
   fprintf(file, "int sdna_struct_id_get_max() { return %d; }\n", int(parsed_structs.size()));
   fprintf(file, "\n}\n");
 
@@ -708,41 +707,53 @@ static void write_sdna_struct_ids(FILE *file, const Span<dna::ParsedStruct> pars
 }
 
 /** Write the `dna_defaults.cc` for RNA to automatically set property defaults. */
-static void write_sdna_defaults(FILE *file,
-                                const StringRefNull base_directory,
-                                const Span<dna::ParsedStruct> parsed_structs)
+static void write_rna_defaults(FILE *file,
+                               const StringRefNull base_directory,
+                               const Span<dna::ParsedStruct> parsed_structs)
 {
   fprintf(file, "/* Default struct member values for RNA. */\n");
   fprintf(file, "#define DNA_DEPRECATED_ALLOW\n");
   fprintf(file, "#define DNA_NO_EXTERNAL_CONSTRUCTORS\n");
-  for (int i = 0; *(includefiles[i]) != '\0'; i++) {
-    fprintf(file, "#include \"%s%s\"\n", base_directory.c_str(), includefiles[i]);
-  }
-  fprintf(file, "using namespace blender;\n");
-  for (const dna::ParsedStruct &parsed_struct : parsed_structs) {
-    const char *name = parsed_struct.alias_type_name.c_str();
-    if (STREQ(name, "bTheme")) {
-      /* Exception for bTheme which is auto-generated. */
-      fprintf(file, "extern \"C\" const bTheme U_theme_default;\n");
-    }
-    else {
-      fprintf(file, "static const %s DNA_DEFAULT_%s = {};\n", name, name);
-    }
+  fprintf(file, "#include \"DNA_sdna_type_ids.hh\"\n\n");
+
+  for (const char *filename : includefiles) {
+    fprintf(file, "#include \"%s%s\"\n", base_directory.c_str(), filename);
   }
 
-  fprintf(file, "const void *DNA_default_table[%d] = {\n", 1 + int(parsed_structs.size()));
-  fprintf(file, "  nullptr,\n");
+  fprintf(file, "namespace blender {\n\n");
+
+  /* Define an instance of each struct. */
   for (const dna::ParsedStruct &parsed_struct : parsed_structs) {
-    const char *name = parsed_struct.alias_type_name.c_str();
-    if (STREQ(name, "bTheme")) {
-      fprintf(file, "  &U_theme_default,\n");
+    const StringRefNull name = parsed_struct.type_name.c_str();
+    std::string default_var;
+
+    if (name == "bTheme") {
+      /* Exception for bTheme which is auto-generated. */
+      fprintf(file, "extern \"C\" const bTheme U_theme_default;\n");
+      default_var = "U_theme_default";
     }
     else {
-      fprintf(file, "  &DNA_DEFAULT_%s,\n", name);
+      fprintf(file, "static const %s DNA_DEFAULT_%s = {};\n", name.c_str(), name.c_str());
+      default_var = "DNA_DEFAULT_" + name;
     }
+
+    /* Table with pointer to each member. */
+    fprintf(file, "static const void *const member_defaults_%s[] = {\n", name.c_str());
+    for (const dna::ParsedMember &pm : parsed_struct.members) {
+      const StringRef bare_id = DNA_member_id_string_ref(pm.member_name);
+      fprintf(file, "  &%s.%.*s,\n", default_var.c_str(), int(bare_id.size()), bare_id.data());
+    }
+    fprintf(file, "};\n");
   }
-  fprintf(file, "};\n");
-  fprintf(file, "\n");
+
+  /* Table with all structs. */
+  fprintf(file, "\nextern const void *const *const DNA_member_default_table[] = {\n");
+  for (const dna::ParsedStruct &parsed_struct : parsed_structs) {
+    fprintf(file, "  member_defaults_%s,\n", parsed_struct.type_name.c_str());
+  }
+  fprintf(file, "};\n\n");
+
+  fprintf(file, "}  // namespace blender\n");
 }
 
 /** Write `dna_verify.cc` file to verify `sizeof` and `offsetof` match what we computed. */
@@ -758,8 +769,8 @@ static void write_sdna_verify(FILE *file,
   /* Workaround enum naming collision in static asserts
    * (ideally this included a unique name/id per file). */
   fprintf(file, "#define assert_line_ assert_line_DNA_\n");
-  for (int i = 0; *(includefiles[i]) != '\0'; i++) {
-    fprintf(file, "#include \"%s%s\"\n", base_directory.c_str(), includefiles[i]);
+  for (const char *filename : includefiles) {
+    fprintf(file, "#include \"%s%s\"\n", base_directory.c_str(), filename);
   }
   fprintf(file, "#undef assert_line_\n");
   fprintf(file, "\n");
@@ -871,8 +882,12 @@ static bool make_structDNA(const StringRefNull base_directory,
   }
   DEBUG_PRINTF(0, "\tFinished scanning headers.\n");
 
+  /* Write default values for RNA before any substitution or renaming, as RNA binds
+   * to the actual C++ data structures rather than SDNA. */
+  write_rna_defaults(file_defaults, base_directory, parsed_structs);
+
   /* Substitute C++ types with C types known to SDNA. */
-  if (!dna::substitute_cpp_types(parsed_structs, parsed_enums)) {
+  if (!dna::substitute_cpp_types(parsed_structs, parsed_enums, false)) {
     return false;
   }
 
@@ -896,7 +911,6 @@ static bool make_structDNA(const StringRefNull base_directory,
   /* Write auxiliary files. */
   write_sdna_type_offsets(file_offsets, parsed_structs);
   write_sdna_struct_ids(file_ids, parsed_structs);
-  write_sdna_defaults(file_defaults, base_directory, parsed_structs);
   write_sdna_verify(file_verify, table, parsed_structs, base_directory);
 
   DEBUG_PRINTF(0, "done.\n");

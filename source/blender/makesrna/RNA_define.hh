@@ -721,10 +721,6 @@ void RNA_def_property_free_pointers_set_py_data_callback(
 /* Utilities. */
 
 const char *RNA_property_typename(PropertyType type);
-#define IS_DNATYPE_FLOAT_COMPAT(_str) ELEM(_str, "float", "double")
-#define IS_DNATYPE_INT_COMPAT(_str) ELEM(_str, "int", "short", "char", "uchar", "ushort", "int8_t")
-#define IS_DNATYPE_BOOLEAN_COMPAT(_str) \
-  (IS_DNATYPE_INT_COMPAT(_str) || ELEM(_str, "int64_t", "uint64_t"))
 
 bool RNA_validate_identifier(const char *identifier,
                              bool is_property,
