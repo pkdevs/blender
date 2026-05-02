@@ -492,7 +492,7 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
     case SPHERE_PROBE_SUNLIGHT:
       return "eevee_lightprobe_sphere_sunlight";
     case SHADOW_CLIPMAP_CLEAR:
-      return "eevee_shadow_clipmap_clear";
+      return "eevee_shadow_tilemap_bounds_init";
     case SHADOW_DEBUG:
       return "eevee_shadow_debug";
     case SHADOW_PAGE_ALLOCATE:

@@ -508,9 +508,8 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_shadow_debug_frag.glsl
   engines/eevee/shaders/eevee_shadow_lib.glsl
   engines/eevee/shaders/eevee_shadow_tracing_lib.glsl
-  engines/eevee/shaders/eevee_shadow_clipmap_clear_comp.glsl
   engines/eevee/shaders/eevee_shadow_page_allocate.bsl.hh
-  engines/eevee/shaders/eevee_shadow_page_clear_comp.glsl
+  engines/eevee/shaders/eevee_shadow_page_clear.bsl.hh
   engines/eevee/shaders/eevee_shadow_page_defrag.bsl.hh
   engines/eevee/shaders/eevee_shadow_page_free.bsl.hh
   engines/eevee/shaders/eevee_shadow_page_mask.bsl.hh
@@ -520,11 +519,10 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_shadow_tag_usage_transparent.bsl.hh
   engines/eevee/shaders/eevee_shadow_tilemap_amend.bsl.hh
   engines/eevee/shaders/eevee_shadow_tilemap_bounds.bsl.hh
-  engines/eevee/shaders/eevee_shadow_tilemap_finalize_comp.glsl
-  engines/eevee/shaders/eevee_shadow_tilemap_init_comp.glsl
+  engines/eevee/shaders/eevee_shadow_tilemap_finalize.bsl.hh
+  engines/eevee/shaders/eevee_shadow_tilemap_init.bsl.hh
   engines/eevee/shaders/eevee_shadow_tilemap_lib.bsl.hh
-  engines/eevee/shaders/eevee_shadow_tilemap_rendermap_comp.glsl
-  engines/eevee/shaders/eevee_shadow_visibility_comp.glsl
+  engines/eevee/shaders/eevee_shadow_visibility.bsl.hh
   engines/eevee/shaders/eevee_spherical_harmonics.bsl.hh
   engines/eevee/shaders/eevee_subsurface_lib.glsl
   engines/eevee/shaders/eevee_subsurface.bsl.hh

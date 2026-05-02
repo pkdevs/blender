@@ -99,12 +99,6 @@ set(SRC_GLSL_COMP
   eevee_ray_trace_fallback_comp.glsl
   eevee_ray_trace_planar_comp.glsl
   eevee_ray_trace_screen_comp.glsl
-  eevee_shadow_clipmap_clear_comp.glsl
-  eevee_shadow_page_clear_comp.glsl
-  eevee_shadow_tilemap_finalize_comp.glsl
-  eevee_shadow_tilemap_init_comp.glsl
-  eevee_shadow_tilemap_rendermap_comp.glsl
-  eevee_shadow_visibility_comp.glsl
   eevee_surfel_cluster_build_comp.glsl
   eevee_surfel_light_comp.glsl
   eevee_surfel_list_build_comp.glsl
