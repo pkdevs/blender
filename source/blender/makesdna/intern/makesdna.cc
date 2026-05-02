@@ -48,22 +48,10 @@
 
 namespace blender {
 
-/* The include files that are needed to generate full Blender DNA.
- *
- * The include file below is automatically generated from the `SRC_DNA_INC`
- * variable in `source/blender/CMakeLists.txt`. */
-
-static const char *blender_includefiles[] = {
-#include "dna_includes_as_strings.h"
-
-    /* Empty string to indicate end of include files. */
-    "",
-};
-
 /* Include files that will be used to generate makesdna output.
  * By default, they match the blender_includefiles, but could be overridden via a command line
  * argument for the purposes of regression testing. */
-static const char **includefiles = blender_includefiles;
+static Span<const char *> includefiles = dna::default_dna_header_filenames();
 
 /* -------------------------------------------------------------------- */
 /** \name Debugging
@@ -77,7 +65,7 @@ static const char **includefiles = blender_includefiles;
  * - 2 = full trace, tell which names and types were found
  * - 4 = full trace, plus all gritty details
  */
-int debugSDNA = 0;
+extern int debugSDNA; /* Defined in `dna_parse.cc`. */
 
 #define DEBUG_PRINTF(debug_level, ...) \
   { \
@@ -878,15 +866,10 @@ static bool make_structDNA(const StringRefNull base_directory,
   Vector<dna::ParsedEnum> parsed_enums;
 
   DEBUG_PRINTF(0, "\tStart of header scan:\n");
-  int header_count = 0;
-  for (int i = 0; *(includefiles[i]) != '\0'; i++, header_count++) {
-    const std::string path = base_directory + includefiles[i];
-    DEBUG_PRINTF(0, "\t|-- Converting %s\n", path.c_str());
-    if (!dna::parse_dna_header(path, parsed_structs, parsed_enums)) {
-      return false;
-    }
+  if (!dna::parse_dna_headers(base_directory, parsed_structs, parsed_enums, includefiles)) {
+    return false;
   }
-  DEBUG_PRINTF(0, "\tFinished scanning %d headers.\n", header_count);
+  DEBUG_PRINTF(0, "\tFinished scanning headers.\n");
 
   /* Substitute C++ types with C types known to SDNA. */
   if (!dna::substitute_cpp_types(parsed_structs, parsed_enums)) {
@@ -981,10 +964,7 @@ int main(int argc, char **argv)
   }
 
   if (!cli_include_files.is_empty()) {
-    /* Append end sentinel. */
-    cli_include_files.append("");
-
-    includefiles = cli_include_files.data();
+    includefiles = Span<const char *>(cli_include_files.data(), cli_include_files.size());
   }
 
   /* Check the number of non-optional positional arguments. */
