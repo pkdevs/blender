@@ -55,14 +55,9 @@ set(SRC_GLSL_FRAG
   eevee_hiz_debug_frag.glsl
   eevee_lookdev_display_frag.glsl
   eevee_occupancy_convert_frag.glsl
-  eevee_renderpass_clear_frag.glsl
   eevee_shadow_debug_frag.glsl
   eevee_shadow_page_tile_frag.glsl
-  eevee_surf_capture_frag.glsl
-  eevee_surf_deferred_frag.glsl
   eevee_surf_depth_frag.glsl
-  eevee_surf_forward_frag.glsl
-  eevee_surf_hybrid_frag.glsl
   eevee_surf_occupancy_frag.glsl
   eevee_surf_shadow_frag.glsl
   eevee_surf_volume_frag.glsl
