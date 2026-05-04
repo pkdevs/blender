@@ -36,7 +36,6 @@ set(SRC_GLSL_VERT
   eevee_geom_volume_vert.glsl
   eevee_geom_world_vert.glsl
   eevee_lookdev_display_vert.glsl
-  eevee_shadow_page_tile_vert.glsl
 )
 
 set(SRC_GLSL_FRAG
@@ -56,7 +55,6 @@ set(SRC_GLSL_FRAG
   eevee_lookdev_display_frag.glsl
   eevee_occupancy_convert_frag.glsl
   eevee_shadow_debug_frag.glsl
-  eevee_shadow_page_tile_frag.glsl
   eevee_surf_depth_frag.glsl
   eevee_surf_occupancy_frag.glsl
   eevee_surf_shadow_frag.glsl

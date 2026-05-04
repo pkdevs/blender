@@ -537,8 +537,6 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_surf_occupancy_frag.glsl
   engines/eevee/shaders/eevee_surf_shadow_frag.glsl
   engines/eevee/shaders/eevee_surf_volume_frag.glsl
-  engines/eevee/shaders/eevee_shadow_page_tile_vert.glsl
-  engines/eevee/shaders/eevee_shadow_page_tile_frag.glsl
   engines/eevee/shaders/eevee_surf_world_frag.glsl
   engines/eevee/shaders/eevee_surfel_cluster_build_comp.glsl
   engines/eevee/shaders/eevee_surfel_light_comp.glsl

@@ -100,50 +100,6 @@ COMPUTE_SOURCE("eevee_shadow_page_clear_comp.glsl")
 IMAGE(SHADOW_ATLAS_IMG_SLOT, UINT_32, read_write, uimage2DArrayAtomic, shadow_atlas_img)
 GPU_SHADER_CREATE_END()
 
-/* TBDR clear implementation. */
-GPU_SHADER_CREATE_INFO(eevee_shadow_page_tile_clear)
-DO_STATIC_COMPILATION()
-DEFINE("PASS_CLEAR")
-TYPEDEF_SOURCE("eevee_defines.hh")
-TYPEDEF_SOURCE("eevee_shadow_shared.hh")
-BUILTINS(BuiltinBits::VIEWPORT_INDEX | BuiltinBits::LAYER)
-STORAGE_BUF(8, read, uint, src_coord_buf[SHADOW_RENDER_MAP_SIZE])
-VERTEX_SOURCE("eevee_shadow_page_tile_vert.glsl")
-FRAGMENT_SOURCE("eevee_shadow_page_tile_frag.glsl")
-FRAGMENT_OUT_ROG(0, float, out_tile_depth, SHADOW_ROG_ID)
-GPU_SHADER_CREATE_END()
-
-/* Interface for passing precalculated values in accumulation vertex to frag. */
-GPU_SHADER_NAMED_INTERFACE_INFO(eevee_shadow_page_tile_store_noperspective_iface,
-                                interp_noperspective)
-NO_PERSPECTIVE(float2, out_texel_xy)
-GPU_SHADER_NAMED_INTERFACE_END(interp_noperspective)
-GPU_SHADER_NAMED_INTERFACE_INFO(eevee_shadow_page_tile_store_flat_iface, interp_flat)
-#ifdef APPLE
-/* Metal supports ushort which saves a bit of performance here. */
-FLAT(ushort, out_page_z)
-#else
-FLAT(uint, out_page_z)
-#endif
-GPU_SHADER_NAMED_INTERFACE_END(interp_flat)
-
-/* 2nd tile pass to store shadow depths in atlas. */
-GPU_SHADER_CREATE_INFO(eevee_shadow_page_tile_store)
-DO_STATIC_COMPILATION()
-DEFINE("PASS_DEPTH_STORE")
-TYPEDEF_SOURCE("eevee_defines.hh")
-TYPEDEF_SOURCE("eevee_shadow_shared.hh")
-BUILTINS(BuiltinBits::VIEWPORT_INDEX | BuiltinBits::LAYER)
-STORAGE_BUF(7, read, uint, dst_coord_buf[SHADOW_RENDER_MAP_SIZE])
-STORAGE_BUF(8, read, uint, src_coord_buf[SHADOW_RENDER_MAP_SIZE])
-SUBPASS_IN(0, float, Float2DArray, in_tile_depth, SHADOW_ROG_ID)
-IMAGE(SHADOW_ATLAS_IMG_SLOT, UINT_32, read_write, uimage2DArray, shadow_atlas_img)
-VERTEX_OUT(eevee_shadow_page_tile_store_noperspective_iface)
-VERTEX_OUT(eevee_shadow_page_tile_store_flat_iface)
-VERTEX_SOURCE("eevee_shadow_page_tile_vert.glsl")
-FRAGMENT_SOURCE("eevee_shadow_page_tile_frag.glsl")
-GPU_SHADER_CREATE_END()
-
 /* Custom visibility check pass. */
 GPU_SHADER_CREATE_INFO(eevee_shadow_view_visibility)
 DO_STATIC_COMPILATION()
