@@ -571,6 +571,7 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
 {
   const VKDevice &device = VKBackend::get().device;
   const bool supports_local_read = device.extensions_get().dynamic_rendering_local_read;
+  const bool use_unified_image_layouts = device.extensions_get().unified_image_layouts;
 
   depth_attachment_format_ = VK_FORMAT_UNDEFINED;
   stencil_attachment_format_ = VK_FORMAT_UNDEFINED;
@@ -649,8 +650,11 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
       vk_image_view = image_view.vk_handle();
     }
     attachment_info.imageView = vk_image_view;
-    attachment_info.imageLayout = supports_local_read ? VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR :
-                                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachment_info.imageLayout = supports_local_read ?
+                                      VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR :
+                                      to_vk_unified_image_layout(
+                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                          use_unified_image_layouts);
 
     eGPUDataFormat data_format = to_texture_data_format(color_texture.format_get());
 
@@ -693,6 +697,7 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
     VkImageLayout vk_image_layout = is_depth_stencil_attachment ?
                                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
                                         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    vk_image_layout = to_vk_unified_image_layout(vk_image_layout, use_unified_image_layouts);
     GPUAttachmentState attachment_state = attachment_states_[GPU_FB_DEPTH_ATTACHMENT];
     VkImageView depth_image_view = VK_NULL_HANDLE;
     if (attachment_state == GPU_ATTACHMENT_WRITE) {

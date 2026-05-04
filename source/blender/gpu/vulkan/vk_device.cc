@@ -56,6 +56,7 @@ void VKExtensions::log() const
              " - [%c] provoking vertex\n"
              " - [%c] shader stencil export\n"
              " - [%c] ray queries\n"
+             " - [%c] unified image layouts\n"
              " - [%c] vertex input dynamic state\n"
              " - [%c] vertex pipeline stores and atomics",
              shader_output_viewport_index ? 'X' : ' ',
@@ -76,6 +77,7 @@ void VKExtensions::log() const
              provoking_vertex ? 'X' : ' ',
              GPU_stencil_export_support() ? 'X' : ' ',
              GPU_ray_query_support() ? 'X' : ' ',
+             unified_image_layouts ? 'X' : ' ',
              vertex_input_dynamic_state ? 'X' : ' ',
              GPU_vertex_pipeline_stores_and_atomics_support() ? 'X' : ' ');
 }
@@ -176,6 +178,7 @@ void VKDevice::init(GHOST_IContext *ghost_context)
   debug::object_label(vk_queue_, "GenericQueue");
 
   resources.use_dynamic_rendering_local_read = extensions_.dynamic_rendering_local_read;
+  resources.use_unified_image_layouts = extensions_.unified_image_layouts;
   orphaned_data.timeline_ = 0;
 
   init_submission_thread();
@@ -241,6 +244,14 @@ void VKDevice::init_physical_device_features()
   vk_physical_device_vulkan_11_features_.pNext = &vk_physical_device_vulkan_12_features_;
   vk_physical_device_vulkan_12_features_.pNext =
       &vk_physical_device_acceleration_structure_features_;
+  vk_physical_device_acceleration_structure_features_.pNext = nullptr;
+
+#ifdef VK_KHR_unified_image_layouts
+  if (supports_extension(VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME)) {
+    vk_physical_device_acceleration_structure_features_.pNext =
+        &vk_physical_device_unified_image_layouts_features_;
+  }
+#endif
 
   vkGetPhysicalDeviceFeatures2(vk_physical_device_, &features);
   vk_physical_device_features_ = features.features;

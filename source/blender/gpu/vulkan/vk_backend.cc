@@ -526,6 +526,7 @@ void VKBackend::detect_workarounds(VKDevice &device)
     extensions.extended_dynamic_state = false;
     extensions.multi_draw_indirect = false;
     extensions.provoking_vertex = false;
+    extensions.unified_image_layouts = false;
     GCaps.ray_query_support = false;
     GCaps.stencil_export_support = false;
     GCaps.texture_pool_workaround = true;
@@ -567,6 +568,11 @@ void VKBackend::detect_workarounds(VKDevice &device)
   extensions.multi_draw_indirect = device.physical_device_features_get().multiDrawIndirect ==
                                    VK_TRUE;
   extensions.provoking_vertex = device.supports_extension(VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME);
+#ifdef VK_KHR_unified_image_layouts
+  extensions.unified_image_layouts =
+      device.supports_extension(VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME) &&
+      device.physical_device_unified_image_layouts_features_get().unifiedImageLayouts;
+#endif
 #if 0
   extensions.host_image_copy = device.supports_extension(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
 #endif

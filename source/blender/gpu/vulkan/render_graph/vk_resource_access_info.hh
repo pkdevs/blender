@@ -40,7 +40,7 @@ struct VKImageAccess {
   VKSubImageRange subimage;
 
   /** Determine the image layout for the vk_access_flags. */
-  VkImageLayout to_vk_image_layout(bool supports_local_read) const;
+  VkImageLayout to_vk_image_layout(bool supports_local_read, bool use_unified_image_layouts) const;
 };
 
 /** Struct describing the access to a buffer. */

@@ -13,11 +13,12 @@
 
 namespace blender::gpu::render_graph {
 
-VkImageLayout VKImageAccess::to_vk_image_layout(bool supports_local_read) const
+VkImageLayout VKImageAccess::to_vk_image_layout(bool supports_local_read,
+                                                bool use_unified_image_layouts) const
 {
   if (vk_access_flags & (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT)) {
     /* TODO: when read only use VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL */
-    return VK_IMAGE_LAYOUT_GENERAL;
+    return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_GENERAL, use_unified_image_layouts);
   }
 
   if (supports_local_read && vk_access_flags & (VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
@@ -29,7 +30,8 @@ VkImageLayout VKImageAccess::to_vk_image_layout(bool supports_local_read) const
   if (vk_access_flags &
       (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT))
   {
-    return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                      use_unified_image_layouts);
   }
 
   // TODO: Add ATTACHMENT_READ_ONLY_OPTIMAL
@@ -37,13 +39,16 @@ VkImageLayout VKImageAccess::to_vk_image_layout(bool supports_local_read) const
       (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT))
   {
     if (vk_image_aspect == VK_IMAGE_ASPECT_DEPTH_BIT) {
-      return VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+      return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                                        use_unified_image_layouts);
     }
     if (vk_image_aspect == VK_IMAGE_ASPECT_STENCIL_BIT) {
-      return VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+      return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL,
+                                        use_unified_image_layouts);
     }
     BLI_assert(vk_image_aspect == (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT));
-    return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                      use_unified_image_layouts);
   }
   BLI_assert_unreachable();
   return VK_IMAGE_LAYOUT_UNDEFINED;
@@ -62,9 +67,11 @@ void VKResourceAccessInfo::build_links(VKResourceStateTracker &resources,
   }
 
   const bool supports_local_read = resources.use_dynamic_rendering_local_read;
+  const bool use_unified_image_layouts = resources.use_unified_image_layouts;
 
   for (const VKImageAccess &image_access : images) {
-    VkImageLayout image_layout = image_access.to_vk_image_layout(supports_local_read);
+    VkImageLayout image_layout = image_access.to_vk_image_layout(supports_local_read,
+                                                                 use_unified_image_layouts);
     const bool writes_to_resource = bool(image_access.vk_access_flags & VK_ACCESS_WRITE_MASK);
     ResourceWithStamp versioned_resource = writes_to_resource ?
                                                resources.get_image_and_increase_stamp(

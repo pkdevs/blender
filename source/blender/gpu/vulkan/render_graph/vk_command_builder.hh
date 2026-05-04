@@ -140,7 +140,7 @@ class VKCommandBuilder {
      *
      * Render suspension/resuming will not work after calling this method.
      */
-    void end(Barrier &r_barrier, bool use_local_read);
+    void end(Barrier &r_barrier, bool use_local_read, bool use_unified_image_layouts);
 
     /**
      * Suspend layer tracking
@@ -150,7 +150,7 @@ class VKCommandBuilder {
      * NOTE: Only call this method when you the rendering will be resumed, otherwise use
      * `layer_tracking_end`.
      */
-    void suspend(Barrier &r_barrier, bool use_local_read);
+    void suspend(Barrier &r_barrier, bool use_local_read, bool use_unified_image_layouts);
 
     /**
      * Resume suspended layer tracking.
@@ -158,7 +158,7 @@ class VKCommandBuilder {
      * Resume suspended layer tracking. This transits all registered layers back to its modified
      * state.
      */
-    void resume(Barrier &r_barrier, bool use_local_read);
+    void resume(Barrier &r_barrier, bool use_local_read, bool use_unified_image_layouts);
   };
 
   /**

@@ -426,17 +426,18 @@ void VKTexture::update_sub(int mip,
   if (use_host_image_copy) {
     VkImageAspectFlags vk_image_aspects = to_vk_image_aspect_single_bit(
         to_vk_image_aspect_flag_bits(device_format_), false);
+    const VkImageLayout image_layout = to_vk_unified_image_layout(
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, device.extensions_get().unified_image_layouts);
     VkHostImageLayoutTransitionInfoEXT image_layout_transition = {
         VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO_EXT,
         nullptr,
         vk_image_handle(),
         VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        image_layout,
         {vk_image_aspects, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS},
     };
     device.functions.vkTransitionImageLayout(device.vk_handle(), 1, &image_layout_transition);
-    device.resources.update_image_layout(vk_image_handle(),
-                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    device.resources.update_image_layout(vk_image_handle(), image_layout);
     /* TODO: Add support for VK_HOST_IMAGE_COPY_MEMCPY_EXT flag. It would theoretically allow
      * faster uploading, but requires sub resource to match our CPU layout. */
     VkMemoryToImageCopyEXT vk_memory_to_image_copy = {
@@ -454,7 +455,7 @@ void VKTexture::update_sub(int mip,
         nullptr,
         VkHostImageCopyFlagsEXT(0),
         vk_image_handle(),
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        image_layout,
         1,
         &vk_memory_to_image_copy};
     device.functions.vkCopyMemoryToImage(device.vk_handle(), &vk_copy_memory_to_image);

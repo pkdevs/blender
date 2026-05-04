@@ -61,7 +61,8 @@ class VKClearDepthStencilImageNode : public VKNodeInfo<VKNodeType::CLEAR_DEPTH_S
     ResourceWithStamp resource = resources.get_image_and_increase_stamp(
         create_info.node_data.vk_image);
     links.images.append({{resource, VK_ACCESS_TRANSFER_WRITE_BIT},
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                    resources.use_unified_image_layouts),
                          create_info.vk_image_aspects});
   }
 
@@ -73,11 +74,13 @@ class VKClearDepthStencilImageNode : public VKNodeInfo<VKNodeType::CLEAR_DEPTH_S
                       Span<uint8_t> /*storage_push_constants*/,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
-    command_buffer.clear_depth_stencil_image(data.vk_image,
-                                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                             &data.vk_clear_depth_stencil_value,
-                                             1,
-                                             &data.vk_image_subresource_range);
+    command_buffer.clear_depth_stencil_image(
+        data.vk_image,
+        to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   command_buffer.use_unified_image_layouts),
+        &data.vk_clear_depth_stencil_value,
+        1,
+        &data.vk_image_subresource_range);
   }
 };
 }  // namespace blender::gpu::render_graph

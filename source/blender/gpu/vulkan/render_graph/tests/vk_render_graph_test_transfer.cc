@@ -237,6 +237,146 @@ TEST_F(VKRenderGraphTestTransfer, clear_clear_copy_and_read_back)
       log[7]);
 }
 
+TEST_F(VKRenderGraphTestTransfer, clear_clear_copy_and_read_back_unified_image_layouts)
+{
+  resources.use_unified_image_layouts = true;
+  command_buffer->use_unified_image_layouts = true;
+
+  VkHandle<VkImage> src_image(1u);
+  VkHandle<VkImage> dst_image(2u);
+  VkHandle<VkBuffer> staging_buffer(3u);
+
+  resources.add_image(src_image, false);
+  resources.add_image(dst_image, false);
+  resources.add_buffer(staging_buffer);
+  VkClearColorValue color_white = {};
+  color_white.float32[0] = 1.0f;
+  color_white.float32[1] = 1.0f;
+  color_white.float32[2] = 1.0f;
+  color_white.float32[3] = 1.0f;
+  VkClearColorValue color_black = {};
+  color_black.float32[0] = 0.0f;
+  color_black.float32[1] = 0.0f;
+  color_black.float32[2] = 0.0f;
+  color_black.float32[3] = 1.0f;
+
+  VKClearColorImageNode::CreateInfo clear_color_image_src = {};
+  clear_color_image_src.vk_image = src_image;
+  clear_color_image_src.vk_clear_color_value = color_white;
+  VKClearColorImageNode::CreateInfo clear_color_image_dst = {};
+  clear_color_image_dst.vk_image = dst_image;
+  clear_color_image_dst.vk_clear_color_value = color_black;
+
+  VKCopyImageNode::CreateInfo copy_image = {};
+  copy_image.node_data.src_image = src_image;
+  copy_image.node_data.dst_image = dst_image;
+  copy_image.node_data.mip_levels = 1u;
+  copy_image.node_data.region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  copy_image.node_data.region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  copy_image.vk_image_aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+  VKCopyImageToBufferNode::CreateInfo copy_dst_image_to_buffer = {};
+  copy_dst_image_to_buffer.node_data.src_image = dst_image;
+  copy_dst_image_to_buffer.node_data.dst_buffer = staging_buffer;
+  copy_dst_image_to_buffer.node_data.region.imageSubresource.aspectMask =
+      VK_IMAGE_ASPECT_COLOR_BIT;
+  copy_dst_image_to_buffer.vk_image_aspects = VK_IMAGE_ASPECT_COLOR_BIT;
+
+  render_graph->add_node(clear_color_image_src);
+  render_graph->add_node(clear_color_image_dst);
+  render_graph->add_node(copy_image);
+  render_graph->add_node(copy_dst_image_to_buffer);
+  submit(render_graph, command_buffer);
+
+  EXPECT_EQ(8, log.size());
+  EXPECT_EQ(
+      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, "
+      "dst_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT" +
+          endl() +
+          " - image_barrier(src_access_mask=, dst_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
+          "old_layout=VK_IMAGE_LAYOUT_UNDEFINED, new_layout=VK_IMAGE_LAYOUT_GENERAL, "
+          "image=0x1, subresource_range=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, base_mip_level=0, level_count=4294967295, "
+          "base_array_layer=0, layer_count=4294967295  )" +
+          endl() + ")",
+      log[0]);
+  EXPECT_EQ("clear_color_image(image=0x1, image_layout=VK_IMAGE_LAYOUT_GENERAL)", log[1]);
+
+  EXPECT_EQ(
+      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, "
+      "dst_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT" +
+          endl() +
+          " - image_barrier(src_access_mask=, dst_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
+          "old_layout=VK_IMAGE_LAYOUT_UNDEFINED, new_layout=VK_IMAGE_LAYOUT_GENERAL, "
+          "image=0x2, subresource_range=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, base_mip_level=0, level_count=4294967295, "
+          "base_array_layer=0, layer_count=4294967295  )" +
+          endl() + ")",
+      log[2]);
+  EXPECT_EQ("clear_color_image(image=0x2, image_layout=VK_IMAGE_LAYOUT_GENERAL)", log[3]);
+
+  EXPECT_EQ(
+      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT, "
+      "dst_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT" +
+          endl() +
+          " - image_barrier(src_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
+          "dst_access_mask=VK_ACCESS_TRANSFER_READ_BIT, "
+          "old_layout=VK_IMAGE_LAYOUT_GENERAL, new_layout=VK_IMAGE_LAYOUT_GENERAL, image=0x1, "
+          "subresource_range=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, base_mip_level=0, level_count=4294967295, "
+          "base_array_layer=0, layer_count=4294967295  )" +
+          endl() +
+          " - image_barrier(src_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
+          "dst_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
+          "old_layout=VK_IMAGE_LAYOUT_GENERAL, new_layout=VK_IMAGE_LAYOUT_GENERAL, image=0x2, "
+          "subresource_range=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, base_mip_level=0, level_count=4294967295, "
+          "base_array_layer=0, layer_count=4294967295  )" +
+          endl() + ")",
+      log[4]);
+  EXPECT_EQ(
+      "copy_image(src_image=0x1, src_image_layout=VK_IMAGE_LAYOUT_GENERAL, "
+      "dst_image=0x2, dst_image_layout=VK_IMAGE_LAYOUT_GENERAL" +
+          endl() + " - region(src_subresource=" + endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, mip_level=0, base_array_layer=0, "
+          "layer_count=0  , src_offset=" +
+          endl() + "    x=0, y=0, z=0  , dst_subresource=" + endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, mip_level=0, base_array_layer=0, "
+          "layer_count=0  , dst_offset=" +
+          endl() + "    x=0, y=0, z=0  , extent=" + endl() + "    width=0, height=0, depth=0  )" +
+          endl() + ")",
+      log[5]);
+
+  EXPECT_EQ(
+      "pipeline_barrier(src_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT, "
+      "dst_stage_mask=VK_PIPELINE_STAGE_TRANSFER_BIT" +
+          endl() +
+          " - image_barrier(src_access_mask=VK_ACCESS_TRANSFER_WRITE_BIT, "
+          "dst_access_mask=VK_ACCESS_TRANSFER_READ_BIT, "
+          "old_layout=VK_IMAGE_LAYOUT_GENERAL, new_layout=VK_IMAGE_LAYOUT_GENERAL, image=0x2, "
+          "subresource_range=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, base_mip_level=0, level_count=4294967295, "
+          "base_array_layer=0, layer_count=4294967295  )" +
+          endl() + ")",
+      log[6]);
+  EXPECT_EQ(
+      "copy_image_to_buffer(src_image=0x2, src_image_layout=VK_IMAGE_LAYOUT_GENERAL, "
+      "dst_buffer=0x3" +
+          endl() +
+          " - region(buffer_offset=0, buffer_row_length=0, buffer_image_height=0, "
+          "image_subresource=" +
+          endl() +
+          "    aspect_mask=VK_IMAGE_ASPECT_COLOR_BIT, mip_level=0, base_array_layer=0, "
+          "layer_count=0  , image_offset=" +
+          endl() + "    x=0, y=0, z=0  , image_extent=\n    width=0, height=0, depth=0  )" +
+          endl() + ")",
+      log[7]);
+}
+
 /**
  * Clear an image, blit it to another image, copy to a staging buffer and read back.
  */

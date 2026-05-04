@@ -117,6 +117,12 @@ struct VKExtensions {
    */
   bool multi_draw_indirect = false;
 
+  /**
+   * Does the device support VK_KHR_unified_image_layouts with
+   * VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR::unifiedImageLayouts enabled.
+   */
+  bool unified_image_layouts = false;
+
   /** Log enabled features and extensions. */
   void log() const;
 };
@@ -230,6 +236,11 @@ class VKDevice : public NonCopyable {
       vk_physical_device_acceleration_structure_features_ = {
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
       };
+#ifdef VK_KHR_unified_image_layouts
+  VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR
+      vk_physical_device_unified_image_layouts_features_ = {
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR};
+#endif
   Array<VkExtensionProperties> device_extensions_;
 
   /** Functions of vk_ext_debugutils for this device/instance. */
@@ -319,6 +330,14 @@ class VKDevice : public NonCopyable {
   {
     return vk_physical_device_acceleration_structure_features_;
   }
+
+#ifdef VK_KHR_unified_image_layouts
+  const VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR &
+  physical_device_unified_image_layouts_features_get() const
+  {
+    return vk_physical_device_unified_image_layouts_features_;
+  }
+#endif
 
   VkInstance instance_get() const
   {

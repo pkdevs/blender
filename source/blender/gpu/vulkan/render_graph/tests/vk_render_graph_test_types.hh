@@ -29,10 +29,13 @@ class CommandBufferLog : public VKCommandBufferInterface {
   bool is_recording_ = false;
 
  public:
-  CommandBufferLog(Vector<std::string> &log, bool use_dynamic_rendering_local_read_ = true)
+  CommandBufferLog(Vector<std::string> &log,
+                   bool use_dynamic_rendering_local_read_ = true,
+                   bool use_unified_image_layouts_ = false)
       : log_(log)
   {
     use_dynamic_rendering_local_read = use_dynamic_rendering_local_read_;
+    use_unified_image_layouts = use_unified_image_layouts_;
   }
   virtual ~CommandBufferLog() {}
 

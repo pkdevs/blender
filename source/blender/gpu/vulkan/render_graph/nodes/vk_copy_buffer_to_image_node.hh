@@ -56,7 +56,8 @@ class VKCopyBufferToImageNode : public VKNodeInfo<VKNodeType::COPY_BUFFER_TO_IMA
         create_info.node_data.dst_image);
     links.buffers.append({src_resource, VK_ACCESS_TRANSFER_READ_BIT});
     links.images.append({{dst_resource, VK_ACCESS_TRANSFER_WRITE_BIT},
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                    resources.use_unified_image_layouts),
                          create_info.vk_image_aspects});
   }
 
@@ -69,7 +70,12 @@ class VKCopyBufferToImageNode : public VKNodeInfo<VKNodeType::COPY_BUFFER_TO_IMA
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
     command_buffer.copy_buffer_to_image(
-        data.src_buffer, data.dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &data.region);
+        data.src_buffer,
+        data.dst_image,
+        to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   command_buffer.use_unified_image_layouts),
+        1,
+        &data.region);
   }
 };
 }  // namespace blender::gpu::render_graph

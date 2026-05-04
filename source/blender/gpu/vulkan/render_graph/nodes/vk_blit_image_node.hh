@@ -58,10 +58,12 @@ class VKBlitImageNode : public VKNodeInfo<VKNodeType::BLIT_IMAGE,
     ResourceWithStamp src_resource = resources.get_image(create_info.src_image);
     ResourceWithStamp dst_resource = resources.get_image_and_increase_stamp(create_info.dst_image);
     links.images.append({{src_resource, VK_ACCESS_TRANSFER_READ_BIT},
-                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                         to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                    resources.use_unified_image_layouts),
                          VK_IMAGE_ASPECT_COLOR_BIT});
     links.images.append({{dst_resource, VK_ACCESS_TRANSFER_WRITE_BIT},
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                    resources.use_unified_image_layouts),
                          VK_IMAGE_ASPECT_COLOR_BIT});
   }
 
@@ -74,9 +76,11 @@ class VKBlitImageNode : public VKNodeInfo<VKNodeType::BLIT_IMAGE,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
     command_buffer.blit_image(data.src_image,
-                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                              to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                         command_buffer.use_unified_image_layouts),
                               data.dst_image,
-                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                         command_buffer.use_unified_image_layouts),
                               1,
                               &data.region,
                               data.filter);

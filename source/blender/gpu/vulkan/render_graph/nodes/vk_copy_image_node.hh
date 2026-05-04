@@ -65,10 +65,12 @@ class VKCopyImageNode : public VKNodeInfo<VKNodeType::COPY_IMAGE,
     ResourceWithStamp dst_resource = resources.get_image_and_increase_stamp(
         create_info.node_data.dst_image);
     links.images.append({{src_resource, VK_ACCESS_TRANSFER_READ_BIT},
-                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                         to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                    resources.use_unified_image_layouts),
                          create_info.vk_image_aspect});
     links.images.append({{dst_resource, VK_ACCESS_TRANSFER_WRITE_BIT},
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                    resources.use_unified_image_layouts),
                          create_info.vk_image_aspect});
   }
 
@@ -93,9 +95,11 @@ class VKCopyImageNode : public VKNodeInfo<VKNodeType::COPY_IMAGE,
     }
 
     command_buffer.copy_image(data.src_image,
-                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                              to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                         command_buffer.use_unified_image_layouts),
                               data.dst_image,
-                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                         command_buffer.use_unified_image_layouts),
                               uint32_t(regions.size()),
                               regions.data());
   }

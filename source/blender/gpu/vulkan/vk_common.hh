@@ -122,6 +122,46 @@ VkImageUsageFlags to_vk_image_usage(const eGPUTextureUsage usage,
                                     const GPUTextureFormatFlag format_flag,
                                     bool use_image_host_copy);
 
+BLI_INLINE VkImageLayout to_vk_unified_image_layout(const VkImageLayout vk_image_layout,
+                                                    const bool use_unified_image_layouts)
+{
+  if (!use_unified_image_layouts) {
+    return vk_image_layout;
+  }
+
+  switch (vk_image_layout) {
+    case VK_IMAGE_LAYOUT_UNDEFINED:
+    case VK_IMAGE_LAYOUT_PREINITIALIZED:
+    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+    case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR:
+#ifdef VK_KHR_dynamic_rendering_local_read
+    case VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR:
+#endif
+#ifdef VK_EXT_attachment_feedback_loop_layout
+    case VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT:
+#endif
+#ifdef VK_EXT_zero_initialize_device_memory
+    case VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT:
+#endif
+#ifdef VK_KHR_video_decode_queue
+    case VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR:
+    case VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR:
+    case VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR:
+#endif
+#ifdef VK_KHR_video_encode_queue
+    case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DST_KHR:
+    case VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR:
+    case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR:
+#endif
+#ifdef VK_KHR_video_encode_quantization_map
+    case VK_IMAGE_LAYOUT_VIDEO_ENCODE_QUANTIZATION_MAP_KHR:
+#endif
+      return vk_image_layout;
+    default:
+      return VK_IMAGE_LAYOUT_GENERAL;
+  }
+}
+
 template<typename T> VkObjectType to_vk_object_type(T /*vk_obj*/)
 {
   const std::type_info &tid = typeid(T);

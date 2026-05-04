@@ -56,7 +56,8 @@ class VKUpdateMipmapsNode : public VKNodeInfo<VKNodeType::UPDATE_MIPMAPS,
   {
     ResourceWithStamp resource = resources.get_image_and_increase_stamp(create_info.vk_image);
     links.images.append({{resource, VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT},
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         to_vk_unified_image_layout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                    resources.use_unified_image_layouts),
                          create_info.vk_image_aspect});
   }
 
@@ -68,6 +69,12 @@ class VKUpdateMipmapsNode : public VKNodeInfo<VKNodeType::UPDATE_MIPMAPS,
                       Span<uint8_t> /*storage_push_constants*/,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
+    const bool use_unified_image_layouts = command_buffer.use_unified_image_layouts;
+    const VkImageLayout transfer_src_layout = to_vk_unified_image_layout(
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, use_unified_image_layouts);
+    const VkImageLayout transfer_dst_layout = to_vk_unified_image_layout(
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, use_unified_image_layouts);
+
     VkImageMemoryBarrier image_memory_barrier = {};
     image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     image_memory_barrier.pNext = nullptr;
@@ -76,8 +83,8 @@ class VKUpdateMipmapsNode : public VKNodeInfo<VKNodeType::UPDATE_MIPMAPS,
     image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     image_memory_barrier.image = data.vk_image;
-    image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    image_memory_barrier.oldLayout = transfer_dst_layout;
+    image_memory_barrier.newLayout = transfer_src_layout;
     image_memory_barrier.subresourceRange.aspectMask = data.vk_image_aspect;
     image_memory_barrier.subresourceRange.baseArrayLayer = 0;
     image_memory_barrier.subresourceRange.layerCount = data.layer_count;
@@ -98,7 +105,7 @@ class VKUpdateMipmapsNode : public VKNodeInfo<VKNodeType::UPDATE_MIPMAPS,
       int3 src_size = dst_size;
       dst_size = math::max(src_size / 2, int3(1));
 
-      /* Update the source mipmap level to be in src optimal layout. */
+      /* Update the source mipmap level to be in the transfer source layout. */
       image_memory_barrier.subresourceRange.baseMipLevel = src_mipmap;
       command_buffer.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT,
                                       VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -116,20 +123,20 @@ class VKUpdateMipmapsNode : public VKNodeInfo<VKNodeType::UPDATE_MIPMAPS,
       image_blit.dstSubresource.mipLevel = dst_mipmap;
       image_blit.dstOffsets[1] = {dst_size.x, dst_size.y, dst_size.z};
       command_buffer.blit_image(data.vk_image,
-                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                transfer_src_layout,
                                 data.vk_image,
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                transfer_dst_layout,
                                 1,
                                 &image_blit,
                                 VK_FILTER_LINEAR);
     }
 
-    /* Ensure that all mipmap levels are in the VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL layout.
+    /* Ensure that all mipmap levels are in the graph's final transfer-destination layout.
      * This is the last known layout that the render graph knows about. */
     image_memory_barrier.subresourceRange.baseMipLevel = 0;
     image_memory_barrier.subresourceRange.levelCount = data.mipmaps - 1;
-    image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    image_memory_barrier.oldLayout = transfer_src_layout;
+    image_memory_barrier.newLayout = transfer_dst_layout;
     command_buffer.pipeline_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT,
                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
                                     VK_DEPENDENCY_BY_REGION_BIT,

@@ -18,6 +18,7 @@ VKCommandBufferWrapper::VKCommandBufferWrapper(VkCommandBuffer vk_command_buffer
 {
   use_dynamic_rendering_local_read = extensions.dynamic_rendering_local_read;
   use_multi_draw_indirect = extensions.multi_draw_indirect;
+  use_unified_image_layouts = extensions.unified_image_layouts;
 }
 
 void VKCommandBufferWrapper::begin_recording()

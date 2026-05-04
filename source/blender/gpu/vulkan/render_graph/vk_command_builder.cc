@@ -16,19 +16,27 @@
 
 namespace blender::gpu::render_graph {
 
-static VkImageLayout to_default_image_layout(VkImageAspectFlags aspect, bool use_local_read)
+static VkImageLayout to_default_image_layout(VkImageAspectFlags aspect,
+                                             bool use_local_read,
+                                             bool use_unified_image_layouts)
 {
   if (aspect & VK_IMAGE_ASPECT_DEPTH_BIT) {
     if (aspect & VK_IMAGE_ASPECT_STENCIL_BIT) {
-      return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                        use_unified_image_layouts);
     }
-    return VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                                      use_unified_image_layouts);
   }
   if (aspect & VK_IMAGE_ASPECT_STENCIL_BIT) {
-    return VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+    return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL,
+                                      use_unified_image_layouts);
   }
-  return use_local_read ? VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR :
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  if (use_local_read) {
+    return VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR;
+  }
+  return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                    use_unified_image_layouts);
 }
 
 /* -------------------------------------------------------------------- */
@@ -99,6 +107,7 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
 
   NodeHandle rendering_scope;
   bool rendering_active = false;
+  const bool use_unified_image_layouts = render_graph.resources_.use_unified_image_layouts;
 
   for (const int64_t group_index : group_nodes_.index_range()) {
     /* Extract the pre-barriers of this group. */
@@ -163,7 +172,7 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
          * reflects the correct state. These barriers needs to be added as node post barriers. We
          * assume that END_RENDERING is always the last node of a group. */
         Barrier barrier = {};
-        image_tracker.end(barrier, use_local_read);
+        image_tracker.end(barrier, use_local_read, use_unified_image_layouts);
         if (!barrier.is_empty()) {
           post_barriers.append(barrier);
         }
@@ -176,7 +185,8 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
               link.resource.handle);
           if (resource.use_subresource_tracking()) {
             VKResourceBarrierState &state = resource.barrier_state;
-            state.image_layout = to_default_image_layout(link.vk_image_aspect, use_local_read);
+            state.image_layout = to_default_image_layout(
+                link.vk_image_aspect, use_local_read, use_unified_image_layouts);
           }
         }
       }
@@ -189,7 +199,7 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
          * reflects the correct state. These barriers needs to be added as node post barriers.
          */
         Barrier barrier = {};
-        image_tracker.suspend(barrier, use_local_read);
+        image_tracker.suspend(barrier, use_local_read, use_unified_image_layouts);
         if (!barrier.is_empty()) {
           post_barriers.append(barrier);
         }
@@ -200,7 +210,8 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
               link.resource.handle);
           if (resource.use_subresource_tracking()) {
             VKResourceBarrierState &state = resource.barrier_state;
-            state.image_layout = to_default_image_layout(link.vk_image_aspect, use_local_read);
+            state.image_layout = to_default_image_layout(
+                link.vk_image_aspect, use_local_read, use_unified_image_layouts);
           }
         }
       }
@@ -221,7 +232,7 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
         /* Resume layered tracking. Each layer that has an override will be transition back to
          * the layer specific image layout. */
         barrier = {};
-        image_tracker.resume(barrier, use_local_read);
+        image_tracker.resume(barrier, use_local_read, use_unified_image_layouts);
         if (!barrier.is_empty()) {
           barrier_list_.append(barrier);
         }
@@ -249,7 +260,7 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
        * reflects the correct state. These barriers needs to be added as node post barriers.
        */
       Barrier barrier = {};
-      image_tracker.suspend(barrier, use_local_read);
+      image_tracker.suspend(barrier, use_local_read, use_unified_image_layouts);
       if (!barrier.is_empty()) {
         post_barriers.append(barrier);
       }
@@ -260,7 +271,8 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
             link.resource.handle);
         if (resource.use_subresource_tracking()) {
           VKResourceBarrierState &state = resource.barrier_state;
-          state.image_layout = to_default_image_layout(link.vk_image_aspect, use_local_read);
+          state.image_layout = to_default_image_layout(
+              link.vk_image_aspect, use_local_read, use_unified_image_layouts);
         }
       }
 
@@ -286,8 +298,8 @@ void VKCommandBuilder::groups_extract_barriers(VKRenderGraph &render_graph,
           VKResourceStateTracker::Resource &resource = render_graph.resources_.get_image_resource(
               link.resource.handle);
           VkImageLayout gpu_layout = resource.barrier_state.image_layout;
-          VkImageLayout optimal_layout = to_default_image_layout(link.vk_image_aspect,
-                                                                 use_local_read);
+          VkImageLayout optimal_layout = to_default_image_layout(
+              link.vk_image_aspect, use_local_read, use_unified_image_layouts);
           if (gpu_layout == optimal_layout) {
             continue;
           }
@@ -1049,15 +1061,18 @@ void VKCommandBuilder::ImageTracker::update(VkImage vk_image,
                                     subimage);
 }
 
-void VKCommandBuilder::ImageTracker::end(Barrier &r_barrier, bool use_local_read)
+void VKCommandBuilder::ImageTracker::end(Barrier &r_barrier,
+                                         bool use_local_read,
+                                         bool use_unified_image_layouts)
 {
-  suspend(r_barrier, use_local_read);
+  suspend(r_barrier, use_local_read, use_unified_image_layouts);
   tracked_attachments.clear();
   changes.clear();
 }
 
-void VKCommandBuilder::ImageTracker::suspend(Barrier &r_barrier, bool use_local_read)
-
+void VKCommandBuilder::ImageTracker::suspend(Barrier &r_barrier,
+                                             bool use_local_read,
+                                             bool use_unified_image_layouts)
 {
   if (changes.is_empty()) {
     return;
@@ -1080,7 +1095,8 @@ void VKCommandBuilder::ImageTracker::suspend(Barrier &r_barrier, bool use_local_
             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
             VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
         change.vk_image_layout,
-        to_default_image_layout(change.vk_image_aspect, use_local_read),
+        to_default_image_layout(
+            change.vk_image_aspect, use_local_read, use_unified_image_layouts),
         change.vk_image_aspect,
         change.subimage);
     r_barrier.image_memory_barriers = r_barrier.image_memory_barriers.with_new_end(
@@ -1092,13 +1108,16 @@ void VKCommandBuilder::ImageTracker::suspend(Barrier &r_barrier, bool use_local_
               << ", count=" << change.subimage.layer_count
               << ", from_layout=" << to_string(change.vk_image_layout)
               << ", to_layout=" << to_string(
-                     to_default_image_layout(change.vk_image_aspect, use_local_read))
+                     to_default_image_layout(
+                         change.vk_image_aspect, use_local_read, use_unified_image_layouts))
               << "\n";
 #endif
   }
 }
 
-void VKCommandBuilder::ImageTracker::resume(Barrier &r_barrier, bool use_local_read)
+void VKCommandBuilder::ImageTracker::resume(Barrier &r_barrier,
+                                            bool use_local_read,
+                                            bool use_unified_image_layouts)
 {
   if (changes.is_empty()) {
     return;
@@ -1121,7 +1140,8 @@ void VKCommandBuilder::ImageTracker::resume(Barrier &r_barrier, bool use_local_r
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
             VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
-        to_default_image_layout(change.vk_image_aspect, use_local_read),
+        to_default_image_layout(
+            change.vk_image_aspect, use_local_read, use_unified_image_layouts),
         change.vk_image_layout,
         change.vk_image_aspect,
         change.subimage);
@@ -1130,7 +1150,8 @@ void VKCommandBuilder::ImageTracker::resume(Barrier &r_barrier, bool use_local_r
               << ", layer=" << change.subimage.layer_base
               << ", count=" << change.subimage.layer_count
               << ", from_layout=" << to_string(
-                     to_default_image_layout(change.vk_image_aspect, use_local_read))
+                     to_default_image_layout(
+                         change.vk_image_aspect, use_local_read, use_unified_image_layouts))
               << ", to_layout=" << to_string(change.vk_image_layout) << "\n";
 #endif
   }
