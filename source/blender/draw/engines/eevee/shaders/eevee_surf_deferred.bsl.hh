@@ -219,4 +219,4 @@ void surf_deferred([[resource_table]] SurfaceDeferred &srt,
   frag_out.radiance.a = g_holdout;
 }
 
-};  // namespace eevee
+}  // namespace eevee
