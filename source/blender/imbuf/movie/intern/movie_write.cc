@@ -19,7 +19,6 @@
 
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
-#include <libavutil/dict.h>
 
 #ifdef WITH_FFMPEG
 #  include <cstdio>
