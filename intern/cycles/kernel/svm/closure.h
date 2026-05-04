@@ -27,7 +27,7 @@
 CCL_NAMESPACE_BEGIN
 
 /* Analytical approximation of the average directional albedo of the Fresnel factor [d'Eon2021]*/
-ccl_device_inline float hemispherical_albedo(const float eta)
+ccl_device float hemispherical_albedo(const float eta)
 {
   const float eta_sqr = eta * eta;
   if (eta > 1.0f) {
