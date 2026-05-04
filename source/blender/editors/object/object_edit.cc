@@ -571,7 +571,7 @@ static void flush_bone_selection_to_pose(Object &ob)
   BLI_assert(ob.pose);
   for (bPoseChannel &pose_bone : ob.pose->chanbase) {
     pose_bone.flag &= ~(POSE_SELECTED | POSE_SELECTED_ROOT | POSE_SELECTED_TIP);
-    const Bone *bone = pose_bone.bone;
+    const Bone *bone = pose_bone.bone_get(ob);
     if (bone->flag & BONE_ROOTSEL) {
       pose_bone.flag |= POSE_SELECTED_ROOT;
     }
@@ -588,8 +588,8 @@ static void flush_pose_selection_to_bone(Object &ob)
 {
   BLI_assert(ob.pose);
   for (bPoseChannel &pose_bone : ob.pose->chanbase) {
-    pose_bone.bone->flag &= ~(BONE_ROOTSEL | BONE_TIPSEL | BONE_SELECTED);
-    Bone *bone = pose_bone.bone;
+    Bone *bone = pose_bone.bone_get(ob);
+    bone->flag &= ~(BONE_ROOTSEL | BONE_TIPSEL | BONE_SELECTED);
     if (pose_bone.flag & POSE_SELECTED_ROOT) {
       bone->flag |= BONE_ROOTSEL;
     }

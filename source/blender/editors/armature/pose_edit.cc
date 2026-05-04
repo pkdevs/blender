@@ -567,8 +567,9 @@ static wmOperatorStatus pose_autoside_names_exec(bContext *C, wmOperator *op)
   /* loop through selected bones, auto-naming them */
   CTX_DATA_BEGIN_WITH_ID (C, bPoseChannel *, pchan, selected_pose_bones, Object *, ob) {
     bArmature *arm = id_cast<bArmature *>(ob->data);
+    const Bone *bone = pchan->bone_get(*ob);
     STRNCPY_UTF8(newname, pchan->name);
-    if (bone_autoside_name(newname, 1, axis, pchan->bone->head[axis], pchan->bone->tail[axis])) {
+    if (bone_autoside_name(newname, 1, axis, bone->head[axis], bone->tail[axis])) {
       ED_armature_bone_rename(bmain, arm, pchan->name, newname);
     }
 
@@ -683,7 +684,7 @@ static wmOperatorStatus pose_hide_exec(bContext *C, wmOperator *op)
     bool changed = false;
     bArmature *arm = id_cast<bArmature *>(ob_iter->data);
     for (bPoseChannel &pchan : ob_iter->pose->chanbase) {
-      if (!ANIM_bone_in_visible_collection(arm, pchan.bone)) {
+      if (!ANIM_bone_in_visible_collection(arm, pchan.bone_get(*ob_iter))) {
         continue;
       }
       if (((pchan.flag & POSE_SELECTED) != 0) != hide_select) {
@@ -738,13 +739,14 @@ static wmOperatorStatus pose_reveal_exec(bContext *C, wmOperator *op)
 
     bool changed = false;
     for (bPoseChannel &pchan : ob_iter->pose->chanbase) {
-      if (!ANIM_bone_in_visible_collection(arm, pchan.bone)) {
+      const Bone *bone = pchan.bone_get(*ob_iter);
+      if (!ANIM_bone_in_visible_collection(arm, bone)) {
         continue;
       }
       if ((pchan.drawflag & PCHAN_DRAW_HIDDEN) == 0) {
         continue;
       }
-      if (!(pchan.bone->flag & BONE_UNSELECTABLE)) {
+      if (!(bone->flag & BONE_UNSELECTABLE)) {
         SET_FLAG_FROM_TEST(pchan.flag, select, POSE_SELECTED);
       }
       pchan.drawflag &= ~PCHAN_DRAW_HIDDEN;
