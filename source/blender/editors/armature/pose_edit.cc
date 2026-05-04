@@ -137,20 +137,7 @@ bool ED_object_posemode_exit(bContext *C, Object *ob)
 /* ********************************************** */
 /* Motion Paths */
 
-static eAnimvizCalcRange pose_path_convert_range(ePosePathCalcRange range)
-{
-  switch (range) {
-    case POSE_PATH_CALC_RANGE_CURRENT_FRAME:
-      return ANIMVIZ_CALC_RANGE_CURRENT_FRAME;
-    case POSE_PATH_CALC_RANGE_CHANGED:
-      return ANIMVIZ_CALC_RANGE_CHANGED;
-    case POSE_PATH_CALC_RANGE_FULL:
-      return ANIMVIZ_CALC_RANGE_FULL;
-  }
-  return ANIMVIZ_CALC_RANGE_FULL;
-}
-
-void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, ePosePathCalcRange range)
+void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, eAnimvizCalcRange range)
 {
   /* Transform doesn't always have context available to do update. */
   if (C == nullptr) {
@@ -175,7 +162,7 @@ void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, ePosePathC
 
   /* For a single frame update it's faster to re-use existing dependency graph and avoid overhead
    * of building all the relations and so on for a temporary one. */
-  if (range == POSE_PATH_CALC_RANGE_CURRENT_FRAME) {
+  if (range == ANIMVIZ_CALC_RANGE_CURRENT_FRAME) {
     /* NOTE: Dependency graph will be evaluated at all the frames, but we first need to access some
      * nested pointers, like animation data. */
     depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -186,8 +173,7 @@ void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, ePosePathC
     free_depsgraph = true;
   }
 
-  animviz_calc_motionpaths(
-      depsgraph, bmain, scene, targets, pose_path_convert_range(range), !free_depsgraph);
+  animviz_calc_motionpaths(depsgraph, bmain, scene, targets, range, !free_depsgraph);
 
 #ifdef DEBUG_TIME
   TIMEIT_END(pose_path_calc);
@@ -195,7 +181,7 @@ void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, ePosePathC
 
   animviz_free_motionpath_targets(targets);
 
-  if (range != POSE_PATH_CALC_RANGE_CURRENT_FRAME) {
+  if (range != ANIMVIZ_CALC_RANGE_CURRENT_FRAME) {
     /* Tag armature object for copy-on-eval - so paths will draw/redraw.
      * For currently frame only we update evaluated object directly. */
     DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
@@ -272,7 +258,7 @@ static wmOperatorStatus pose_calculate_paths_exec(bContext *C, wmOperator *op)
 
   /* Calculate the bones that now have motion-paths. */
   /* TODO: only make for the selected bones? */
-  ED_pose_recalculate_paths(C, scene, ob, POSE_PATH_CALC_RANGE_FULL);
+  ED_pose_recalculate_paths(C, scene, ob, ANIMVIZ_CALC_RANGE_FULL);
 
 #ifdef DEBUG_TIME
   TIMEIT_END(recalc_pose_paths);
@@ -351,7 +337,7 @@ static wmOperatorStatus pose_update_paths_exec(bContext *C, wmOperator *op)
 
   /* Calculate the bones that now have motion-paths. */
   /* TODO: only make for the selected bones? */
-  ED_pose_recalculate_paths(C, scene, ob, POSE_PATH_CALC_RANGE_FULL);
+  ED_pose_recalculate_paths(C, scene, ob, ANIMVIZ_CALC_RANGE_FULL);
 
   /* notifiers for updates */
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, ob);

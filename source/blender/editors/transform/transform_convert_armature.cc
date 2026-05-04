@@ -1498,7 +1498,7 @@ static void recalcData_pose(TransInfo *t)
 
     /* Update motion paths once for all transformed bones in an object. */
     for (Object *ob : motionpath_updates) {
-      ED_pose_recalculate_paths(t->context, t->scene, ob, POSE_PATH_CALC_RANGE_CURRENT_FRAME);
+      ED_pose_recalculate_paths(t->context, t->scene, ob, ANIMVIZ_CALC_RANGE_CURRENT_FRAME);
     }
   }
 }
@@ -1759,8 +1759,8 @@ static void special_aftertrans_update__pose(bContext *C, TransInfo *t)
 
     /* Update motion paths once for all transformed bones in an object. */
     for (Object *ob : motionpath_updates) {
-      const ePosePathCalcRange range = canceled ? POSE_PATH_CALC_RANGE_CURRENT_FRAME :
-                                                  POSE_PATH_CALC_RANGE_CHANGED;
+      const eAnimvizCalcRange range = canceled ? ANIMVIZ_CALC_RANGE_CURRENT_FRAME :
+                                                 ANIMVIZ_CALC_RANGE_CHANGED;
       ED_pose_recalculate_paths(C, t->scene, ob, range);
     }
   }

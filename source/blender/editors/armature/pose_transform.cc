@@ -49,6 +49,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "ED_anim_api.hh"
 #include "ED_armature.hh"
 #include "ED_keyframing.hh"
 #include "ED_screen.hh"
@@ -1002,7 +1003,7 @@ static wmOperatorStatus pose_paste_exec(bContext *C, wmOperator *op)
 
   /* Recalculate paths if any of the bones have paths... */
   if (ob->pose->avs.path_bakeflag & MOTIONPATH_BAKE_HAS_PATHS) {
-    ED_pose_recalculate_paths(C, scene, ob, POSE_PATH_CALC_RANGE_FULL);
+    ED_pose_recalculate_paths(C, scene, ob, ANIMVIZ_CALC_RANGE_FULL);
   }
 
   /* Notifiers for updates, */
@@ -1319,7 +1320,7 @@ static wmOperatorStatus pose_clear_transform_generic_exec(bContext *C,
 
         /* now recalculate paths */
         if (ob_iter->pose->avs.path_bakeflag & MOTIONPATH_BAKE_HAS_PATHS) {
-          ED_pose_recalculate_paths(C, scene, ob_iter, POSE_PATH_CALC_RANGE_FULL);
+          ED_pose_recalculate_paths(C, scene, ob_iter, ANIMVIZ_CALC_RANGE_FULL);
         }
       }
 
