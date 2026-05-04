@@ -601,9 +601,9 @@ class BackgroundDownloader:
         self._logger.debug("shutting down")
         self._shutdown_event.set()
 
-        # Send the CANCEL message to shut down the background process.
+        # Send the SHUTDOWN message to shut down the background process.
         try:
-            self._connection.send(PipeMessage(PipeMsgType.CANCEL, None))
+            self._connection.send(PipeMessage(PipeMsgType.SHUTDOWN, None))
         except BrokenPipeError:
             # The other side is already shut down, which is fine.
             pass
@@ -768,7 +768,7 @@ class PipeMsgType(enum.Enum):
     QUEUE_DOWNLOAD = 'queue'
     """Payload: BackgroundDownloader.QueuedDownload"""
 
-    CANCEL = 'cancel'
+    SHUTDOWN = 'shutdown'
     """Payload: None"""
 
     REPORT = 'report'
@@ -869,7 +869,7 @@ def _download_queued_items(
     def periodic_check() -> bool:
         """Handle received messages, and return whether we can keep running.
 
-        Called periodically by this function, as well as by the downloader.
+        Called periodically by the outer function, as well as by the downloader.
         """
 
         while not do_shutdown.is_set():
@@ -877,10 +877,10 @@ def _download_queued_items(
                 received_msg: PipeMessage = rx_queue.get(block=False)
             except queue.Empty:
                 # Not receiving anything is fine.
-                return not do_shutdown.is_set()
+                break
 
             match received_msg.msgtype:
-                case PipeMsgType.CANCEL:
+                case PipeMsgType.SHUTDOWN:
                     do_shutdown.set()
                 case PipeMsgType.QUEUE_DOWNLOAD:
                     download_queue.append(received_msg.payload)
@@ -1410,7 +1410,7 @@ class HTTPRequestUnknownContentEncoding(HTTPRequestDownloadError):
 
 
 class DownloadCancelled(HTTPRequestDownloadError):
-    """Raised when ConditionalDownloader.cancel_download() was called.
+    """Raised when the ConditionalDownloader's periodic check returned False.
 
     This exception is raised in the thread/process that called
     ConditionalDownloader.download_to_file(), and NOT from the thread/process
