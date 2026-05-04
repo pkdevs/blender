@@ -39,8 +39,11 @@ void AmbientOcclusion::init()
   const SceneEEVEE &sce_eevee = inst_.scene->eevee;
   const ViewLayerEEVEE &view_layer_eevee = inst_.view_layer->eevee;
 
-  data_.distance = view_layer_eevee.ambient_occlusion_distance;
-  data_.gi_distance = (sce_eevee.fast_gi_distance > 0.0f) ? sce_eevee.fast_gi_distance : 1e16f;
+  data_.distance = (view_layer_eevee.ambient_occlusion_distance > 0.0f) ?
+                       view_layer_eevee.ambient_occlusion_distance :
+                       inst_.camera.bound_radius();
+  data_.gi_distance = (sce_eevee.fast_gi_distance > 0.0f) ? sce_eevee.fast_gi_distance :
+                                                            inst_.camera.bound_radius();
   /* AO node uses its own number of samples. */
   data_.lod_factor_ao = 1.0f / (1.0f + sce_eevee.fast_gi_quality * 4.0f);
   /* Scale up to LOD 5 at the end of the ray. */
