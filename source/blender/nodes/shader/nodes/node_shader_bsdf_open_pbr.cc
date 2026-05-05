@@ -24,7 +24,6 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_output<decl::Shader>("BSDF"_ustr);
 
-  // TODO (Sebastian): Understand the usage of the Weight input better
   b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
 #define OPENPBR_SOCK_WEIGHT_ID 0
   /********************************************************************

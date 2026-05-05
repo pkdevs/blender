@@ -539,7 +539,6 @@ class DiffuseBsdfNode : public BsdfNode {
   NODE_SOCKET_API(float, roughness)
 };
 
-// TODO (OpenPBR): Do a propper implementation
 class OpenPBRBsdfNode : public BsdfBaseNode {
  public:
   SHADER_NODE_CLASS(OpenPBRBsdfNode)

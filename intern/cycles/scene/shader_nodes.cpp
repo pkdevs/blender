@@ -2656,7 +2656,6 @@ void DiffuseBsdfNode::compile(OSLCompiler &compiler)
   compiler.add(this, "node_diffuse_bsdf");
 }
 
-// TODO (OpenPBR): Do a propper implementation
 NODE_DEFINE(OpenPBRBsdfNode)
 {
   NodeType *type = NodeType::add("open_pbr_bsdf", create, NodeType::SHADER);
@@ -2722,7 +2721,6 @@ NODE_DEFINE(OpenPBRBsdfNode)
 
 OpenPBRBsdfNode::OpenPBRBsdfNode() : BsdfBaseNode(get_node_type())
 {
-  // TODO (OpenPBR): switch and implement CLOSURE_BSDF_OPEN_PBR_ID
   closure = CLOSURE_BSDF_OPEN_PBR_ID;
 }
 
