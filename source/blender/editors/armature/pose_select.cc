@@ -250,7 +250,6 @@ static bool pose_select_children(bContext *C,
         if (pose_bone_is_below_one_of(pchan, selected_pose_bones)) {
           pose_do_bone_select({&pchan, bone}, SEL_SELECT);
           Bone *parent_bone = pchan.parent->bone_get(*arm);
-          const bool is_first_child = parent_bone->childbase.first == bone;
           if (modify_active && parent_bone == active_bone) {
             arm->act_bone = get_new_active_child(*parent_bone);
           }
@@ -261,7 +260,6 @@ static bool pose_select_children(bContext *C,
         if (selected_pose_bones.contains(pchan.parent)) {
           pose_do_bone_select({&pchan, bone}, SEL_SELECT);
           Bone *parent_bone = pchan.parent->bone_get(*arm);
-          const bool is_first_child = parent_bone->childbase.first == bone;
           if (modify_active && parent_bone == active_bone) {
             arm->act_bone = get_new_active_child(*parent_bone);
           }
