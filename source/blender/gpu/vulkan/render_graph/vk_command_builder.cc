@@ -20,23 +20,31 @@ static VkImageLayout to_default_image_layout(VkImageAspectFlags aspect,
                                              bool use_local_read,
                                              bool use_unified_image_layouts)
 {
+  VkImageLayout vk_image_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   if (aspect & VK_IMAGE_ASPECT_DEPTH_BIT) {
     if (aspect & VK_IMAGE_ASPECT_STENCIL_BIT) {
-      return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                                        use_unified_image_layouts);
+      vk_image_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     }
-    return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                                      use_unified_image_layouts);
+    else {
+      vk_image_layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    }
   }
-  if (aspect & VK_IMAGE_ASPECT_STENCIL_BIT) {
-    return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL,
-                                      use_unified_image_layouts);
+  else if (aspect & VK_IMAGE_ASPECT_STENCIL_BIT) {
+    vk_image_layout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
   }
-  if (use_local_read) {
-    return VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR;
+  else if (use_local_read) {
+    vk_image_layout = VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR;
   }
-  return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                    use_unified_image_layouts);
+  return to_vk_unified_image_layout(vk_image_layout, use_unified_image_layouts);
+}
+
+static bool is_rendering_scope_layout(const VkImageLayout vk_image_layout,
+                                      const bool use_unified_image_layouts)
+{
+  if (use_unified_image_layouts && vk_image_layout == VK_IMAGE_LAYOUT_GENERAL) {
+    return true;
+  }
+  return vk_image_layout == VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR;
 }
 
 /* -------------------------------------------------------------------- */
@@ -786,7 +794,10 @@ void VKCommandBuilder::add_image_read_barriers(VKRenderGraph &render_graph,
       /* Has already been covered in previous barrier no need to add this one. */
       continue;
     }
-    if (within_rendering && link.vk_image_layout != VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR) {
+    if (within_rendering &&
+        !is_rendering_scope_layout(link.vk_image_layout,
+                                   render_graph.resources_.use_unified_image_layouts))
+    {
       /* Allow only local read barriers inside rendering scope */
       continue;
     }
@@ -873,7 +884,10 @@ void VKCommandBuilder::add_image_write_barriers(VKRenderGraph &render_graph,
         versioned_resource.handle);
     VKResourceBarrierState &resource_state = resource.barrier_state;
     const VkAccessFlags wait_access = resource_state.vk_access;
-    if (within_rendering && link.vk_image_layout != VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR) {
+    if (within_rendering &&
+        !is_rendering_scope_layout(link.vk_image_layout,
+                                   render_graph.resources_.use_unified_image_layouts))
+    {
       /* Allow only local read barriers inside rendering scope */
       continue;
     }

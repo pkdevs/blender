@@ -25,7 +25,8 @@ VkImageLayout VKImageAccess::to_vk_image_layout(bool supports_local_read,
                                                 VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
                                                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT))
   {
-    return VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR;
+    return to_vk_unified_image_layout(VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR,
+                                      use_unified_image_layouts);
   }
   if (vk_access_flags &
       (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT))

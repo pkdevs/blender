@@ -134,12 +134,6 @@ BLI_INLINE VkImageLayout to_vk_unified_image_layout(const VkImageLayout vk_image
     case VK_IMAGE_LAYOUT_PREINITIALIZED:
     case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
     case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR:
-#ifdef VK_KHR_dynamic_rendering_local_read
-    case VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR:
-#endif
-#ifdef VK_EXT_attachment_feedback_loop_layout
-    case VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT:
-#endif
 #ifdef VK_EXT_zero_initialize_device_memory
     case VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT:
 #endif

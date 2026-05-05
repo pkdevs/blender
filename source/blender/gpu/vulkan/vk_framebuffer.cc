@@ -650,11 +650,10 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
       vk_image_view = image_view.vk_handle();
     }
     attachment_info.imageView = vk_image_view;
-    attachment_info.imageLayout = supports_local_read ?
-                                      VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR :
-                                      to_vk_unified_image_layout(
-                                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                          use_unified_image_layouts);
+    attachment_info.imageLayout = to_vk_unified_image_layout(
+        supports_local_read ? VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR :
+                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        use_unified_image_layouts);
 
     eGPUDataFormat data_format = to_texture_data_format(color_texture.format_get());
 

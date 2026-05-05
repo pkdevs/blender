@@ -390,11 +390,13 @@ void VKDescriptorSetUpdator::bind_input_attachment_resource(
   if (supports_local_read) {
     VKTexture *texture = state_manager.images_.get(resource_binding.binding);
     BLI_assert(texture);
+    const VkImageLayout vk_image_layout = to_vk_unified_image_layout(
+        VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR, device.extensions_get().unified_image_layouts);
     bind_image(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
                VK_NULL_HANDLE,
                texture->image_view_get(resource_binding.arrayed, VKImageViewFlags::NO_SWIZZLING)
                    .vk_handle(),
-               VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR,
+               vk_image_layout,
                resource_binding.location);
   }
   else {
