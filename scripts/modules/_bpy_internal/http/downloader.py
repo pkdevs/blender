@@ -37,9 +37,9 @@ import os
 import sys
 import time
 import zlib  # For streaming gzip decompression.
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from pathlib import Path
-from typing import Protocol, TypeAlias, Any, Generator
+from typing import Protocol, TypeAlias, Any, override
 
 # To work around this error:
 # mypy   : Variable "multiprocessing.Event" is not valid as a type
@@ -85,7 +85,7 @@ class ConditionalDownloader:
     chunk_size: int = 8192
     """Download this many bytes before saving to disk and reporting progress."""
 
-    periodic_check: Callable[[], bool]
+    periodic_check: Callable[[RequestDescription], bool]
     """Called repeatedly to see if a running download should continue or be canceled.
 
     During downloading, the ConditionalDownloader will repeatedly call this
@@ -113,13 +113,13 @@ class ConditionalDownloader:
         self.metadata_provider = metadata_provider
         self.http_session = http_session()
         self.chunk_size = 8192  # Sensible default, can be adjusted after creation if necessary.
-        self.periodic_check = lambda: True
+        self.periodic_check = lambda _: True
         self.timeout = None
         self._reporter = _DummyReporter()
 
     def download_to_file(
         self, url: str, local_path: Path, *, http_method: str = "GET"
-    ) -> None:
+    ) -> RequestDescription:
         """Download the URL to a file on disk.
 
         The download is streamed to 'local_path + "~"' first. When successful, it
@@ -138,6 +138,7 @@ class ConditionalDownloader:
         except Exception as ex:
             self._reporter.download_error(http_req_descr, local_path, ex)
             raise
+        return http_req_descr
 
     def _download_to_file(self, http_req_descr: RequestDescription, local_path: Path) -> None:
         """Same as download_to_file(), but without the exception handling."""
@@ -195,7 +196,7 @@ class ConditionalDownloader:
         """
 
         # Don't bother doing anything when the download was cancelled already.
-        if not self.periodic_check():
+        if not self.periodic_check(http_req_descr):
             raise DownloadCancelled(http_req_descr)
 
         req = requests.Request(http_req_descr.http_method, http_req_descr.url)
@@ -278,7 +279,7 @@ class ConditionalDownloader:
                 raise HTTPRequestUnknownContentEncoding(http_req_descr, content_encoding)
 
         # Avoid reporting any progress when the download was cancelled.
-        if not self.periodic_check():
+        if not self.periodic_check(http_req_descr):
             raise DownloadCancelled(http_req_descr)
 
         self._reporter.download_progress(http_req_descr, content_length, 0)
@@ -299,7 +300,7 @@ class ConditionalDownloader:
 
             # Download and process chunks until there are no more left.
             while chunk := stream.raw.read(self.chunk_size):
-                if not self.periodic_check():
+                if not self.periodic_check(http_req_descr):
                     raise DownloadCancelled(http_req_descr)
 
                 num_downloaded_bytes += len(chunk)
@@ -512,8 +513,14 @@ class BackgroundDownloader:
                        on_download_done: DownloadDoneCallback | None = None,
                        *,
                        http_method: str = 'GET',
-                       ) -> None:
-        """Queue up a download of some URL to a location on disk."""
+                       ) -> RequestDescription:
+        """Queue up a download of some URL to a location on disk.
+
+        Returns the RequestDescription of the queued download.
+
+        The background process must be running, and its shutdown should not
+        have been triggered yet.
+        """
 
         if self._shutdown_event.is_set():
             raise RuntimeError("BackgroundDownloader is shutting down, cannot queue new downloads")
@@ -530,6 +537,29 @@ class BackgroundDownloader:
         self._connection.send(PipeMessage(
             msgtype=PipeMsgType.QUEUE_DOWNLOAD,
             payload=(http_req_descr, local_path),
+        ))
+
+        return http_req_descr
+
+    def cancel_download(self, http_req_descr: RequestDescription) -> None:
+        """Cancel downloading a previously-queued request.
+
+        The request is un-queued, and if it was already downloading, the
+        download is cancelled. If the download was not queued, this is a
+        no-op.
+
+        If the background process is not running, or shutting down, this
+        is a no-op.
+        """
+
+        if self._shutdown_event.is_set():
+            return
+        if self._downloader_process is None:
+            return
+
+        self._connection.send(PipeMessage(
+            msgtype=PipeMsgType.CANCEL_DOWNLOAD,
+            payload=http_req_descr,
         ))
 
     @property
@@ -766,13 +796,32 @@ class BackgroundDownloader:
 
 class PipeMsgType(enum.Enum):
     QUEUE_DOWNLOAD = 'queue'
-    """Payload: BackgroundDownloader.QueuedDownload"""
+    """Payload: BackgroundDownloader.QueuedDownload
+
+    Main -> Background process.
+    Queue a HTTP request for downloading.
+    """
+
+    CANCEL_DOWNLOAD = 'cancel'
+    """Payload: RequestDescription
+
+    Main -> Background process.
+    Un-queue a HTTP request. If it is already downloading, abort the download.
+    """
 
     SHUTDOWN = 'shutdown'
-    """Payload: None"""
+    """Payload: None
+
+    Main -> Background process.
+    Cancel any running/queued requests, and shut down the background process.
+    """
 
     REPORT = 'report'
-    """Payload: QueueingReporter.FunctionCall"""
+    """Payload: QueueingReporter.FunctionCall
+
+    Background -> Main process.
+    Requests that the main process calls a DownloadReporter protocol function.
+    """
 
 
 @dataclasses.dataclass
@@ -802,7 +851,7 @@ def _download_queued_items(
     # Local queue for incoming messages.
     rx_queue: queue.Queue[PipeMessage] = queue.Queue()
 
-    # Local queue of stuff to download.
+    # Local queue of stuff to download & cancel.
     download_queue: collections.deque[BackgroundDownloader.QueuedDownload] = collections.deque()
 
     # Local queue of reports to send back to the main process.
@@ -866,11 +915,31 @@ def _download_queued_items(
     rx_thread.start()
     tx_thread.start()
 
-    def periodic_check() -> bool:
+    def unqueue_request(http_req_descr: RequestDescription) -> None:
+        """Remove the given HTTP request from the download queue."""
+
+        # Reconstruct the download queue, skipping the given HTTP request.
+        # We can't use deque.remove() here, because the RequestDescription
+        # is only part of the objects in the queue.
+        new_queue = [
+            (queued_req, queued_path)
+            for (queued_req, queued_path) in download_queue
+            if queued_req != http_req_descr
+        ]
+
+        # Do a replacement without changing the deque instance. This ensures that
+        # lingering references to download_queue remain valid.
+        download_queue.clear()
+        download_queue.extend(new_queue)
+
+    def periodic_check(http_req_descr: RequestDescription | None) -> bool:
         """Handle received messages, and return whether we can keep running.
 
-        Called periodically by the outer function, as well as by the downloader.
+        Called periodically by the outer function (with http_req_descr=None),
+        as well as by the downloader (with an actual http_req_descr).
         """
+
+        is_cancelled = False
 
         while not do_shutdown.is_set():
             try:
@@ -884,11 +953,21 @@ def _download_queued_items(
                     do_shutdown.set()
                 case PipeMsgType.QUEUE_DOWNLOAD:
                     download_queue.append(received_msg.payload)
+                case PipeMsgType.CANCEL_DOWNLOAD:
+                    assert isinstance(received_msg.payload, RequestDescription)
+                    request_to_cancel: RequestDescription = received_msg.payload
+                    if request_to_cancel == http_req_descr:
+                        is_cancelled = True
+                    # If this request was queued multiple times, it's not enough to
+                    # just cancel the currently-downloading one.
+                    unqueue_request(request_to_cancel)
                 case PipeMsgType.REPORT:
                     # Reports are sent by us, not by the other side.
                     pass
 
-        return not do_shutdown.is_set()
+        # Handle cancel conditions (shutdown + individual cancellations).
+        should_cancel = do_shutdown.is_set() or is_cancelled
+        return not should_cancel
 
     # Construct a ConditionalDownloader. Unfortunately this is necessary, as
     # not all its properties can be pickled, and as a result, it cannot be
@@ -903,7 +982,7 @@ def _download_queued_items(
     downloader.max_size_bytes = options.max_size_bytes
 
     try:
-        while periodic_check():
+        while periodic_check(None):
             # Pop an item off the front of the queue.
             try:
                 queued_download = download_queue.popleft()
@@ -954,19 +1033,6 @@ def _download_queued_items(
         log.exception("joining TX thread")
 
     log.debug("download process shutting down")
-
-
-class CancelEvent(Protocol):
-    """Protocol for event objects that indicate a download should be cancelled.
-
-    multiprocessing.Event and processing.Event are compatible with this protocol.
-    """
-
-    def is_set(self) -> bool:
-        return False
-
-    def clear(self) -> None:
-        return
 
 
 class DownloadReporter(Protocol):
@@ -1319,17 +1385,21 @@ class RequestDescription:
     of this class hashable (and thus usable as map key).
     """
 
+    @override
     def __hash__(self) -> int:
         return hash((self.http_method, self.url))
 
+    @override
     def __eq__(self, value: object) -> bool:
         if not isinstance(value, RequestDescription):
             return False
         return (self.http_method, self.url) == (value.http_method, value.url)
 
+    @override
     def __str__(self) -> str:
         return "RequestDescription({!s} {!s})".format(self.http_method, self.url)
 
+    @override
     def __repr__(self) -> str:
         return str(self)
 
