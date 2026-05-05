@@ -517,17 +517,19 @@ class RENDER_PT_eevee_denoise(RenderButtonsPanel, Panel):
         layout.use_property_decorate = False
         props = context.scene.eevee.ray_tracing_options
 
-        col = layout.column()
-        col.active = props.use_denoise
-        col.prop(props, "denoise_spatial")
+        col = layout.column(align=True)
 
-        col = layout.column()
-        col.active = props.use_denoise and props.denoise_spatial
-        col.prop(props, "denoise_temporal")
+        row = col.row()
+        row.active = props.use_denoise
+        row.prop(props, "denoise_spatial")
 
-        col = layout.column()
-        col.active = props.use_denoise and props.denoise_spatial and props.denoise_temporal
-        col.prop(props, "denoise_bilateral")
+        row = col.row()
+        row.active = props.use_denoise and props.denoise_spatial
+        row.prop(props, "denoise_temporal")
+
+        row = col.row()
+        row.active = props.use_denoise and props.denoise_spatial and props.denoise_temporal
+        row.prop(props, "denoise_bilateral")
 
 
 class RENDER_PT_eevee_light_paths(RenderButtonsPanel, Panel):
