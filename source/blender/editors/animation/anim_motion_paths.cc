@@ -118,14 +118,15 @@ void animviz_build_motionpath_targets(Object *ob, Vector<MPathTarget *> &r_targe
         continue;
       }
       Bone *bone = pchan.bone_get(*ob);
-      if (bone && ANIM_bone_in_visible_collection(arm, bone)) {
-        /* New target for bone. */
-        mpt = MEM_new_zeroed<MPathTarget>("MPathTarget PoseBone");
-        mpt->mpath = pchan.mpath;
-        mpt->ob = ob;
-        mpt->pchan = &pchan;
-        r_targets.append(mpt);
+      if (!bone || !ANIM_bone_in_visible_collection(arm, bone)) {
+        continue;
       }
+      /* New target for bone. */
+      mpt = MEM_new_zeroed<MPathTarget>("MPathTarget PoseBone");
+      mpt->mpath = pchan.mpath;
+      mpt->ob = ob;
+      mpt->pchan = &pchan;
+      r_targets.append(mpt);
     }
   }
 }
