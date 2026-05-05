@@ -494,12 +494,20 @@ ccl_device
       // flipping the IOR in case we are inside the object
       specular_ior = (sd->flag & SD_BACKFACING) ? 1.0f / specular_ior : specular_ior;
 
-      const float subsurface_weight = 0.0f;
-      const float3 subsurface_color = zero_float3();
       const float transmission_weight = saturatef(stack_load(stack, data.transmission_weight));
       const float3 transmission_color = saturate(stack_load(stack, data.transmission_color));
       const float transmission_depth = stack_load(stack, data.transmission_depth);
-
+#ifdef __SUBSURFACE__
+      const float subsurface_weight = saturatef(stack_load(stack, data.subsurface_weight));
+      const float3 subsurface_color = saturate(stack_load(stack, data.subsurface_color));
+      const float subsurface_radius = saturatef(stack_load(stack, data.subsurface_radius));
+      const float3 subsurface_radius_scale = saturate(
+          stack_load(stack, data.subsurface_radius_scale));
+      const float subsurface_scatter_anisotropy = saturatef(
+          stack_load(stack, data.subsurface_scatter_anisotropy));
+#else
+      const float subsurface_weight = 0.f;
+#endif
       const float coat_weight = saturatef(stack_load(stack, data.coat_weight));
       const float3 coat_color = saturate(stack_load(stack, data.coat_color));
       const float coat_roughness = saturatef(stack_load(stack, data.coat_roughness));
@@ -932,6 +940,32 @@ ccl_device
           }
         }
 
+#endif
+#ifdef __SUBSURFACE__
+        /* Subsurface Scattering Component */
+        if (subsurface_weight > CLOSURE_WEIGHT_CUTOFF) {
+          const Spectrum closure_weight = subsurface_weight * weight;
+          const ClosureType subsurface_method = CLOSURE_BSSRDF_RANDOM_WALK_ID;
+          ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, closure_weight);
+          if (bssrdf) {
+            bssrdf->radius = subsurface_radius_scale * subsurface_radius;
+            // Countering some legacy behavior in CLOSURE_BSSRDF_RANDOM_WALK_ID
+            bssrdf->radius *= M_4PI_F;
+            bssrdf->albedo = subsurface_color;
+            bssrdf->N = maybe_ensure_valid_specular_reflection(sd, N);
+            // To match with the OSL code path
+            // TODO (OpenPBR): double check the OSL/MaterialX spec for the BSSRDF closure
+            bssrdf->alpha = 1.0f;  // To match with the OSL code path
+            bssrdf->ior = 1.4f;    // To match with the OSL code path
+            // bssrdf->alpha = specular_alpha_x;
+            // bssrdf->ior = modulated_specular_ior;
+            /* Anisotropy is clamped to a valid range inside bssrdf_setup. */
+            bssrdf->anisotropy = subsurface_scatter_anisotropy;
+
+            /* setup bsdf */
+            sd->flag |= bssrdf_setup(sd, bssrdf, path_flag, subsurface_method);
+          }
+        }
 #endif
         if (base_weight > CLOSURE_WEIGHT_CUTOFF) {
           /* Diffuse Component*/

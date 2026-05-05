@@ -137,6 +137,16 @@ void mx_dielectric_bsdf(float weight,
                                   thinfilm_ior);
 }
 
+void mx_subsurface_bsdf(
+    float weight, color albedo, color radius, float anisotropy, normal N, output BSDF_T bsdf)
+{
+#if OSL_VERSION_MAJOR >= 1 && OSL_VERSION_MINOR >= 14
+  bsdf = weight * subsurface_bssrdf(N, albedo, radius, anisotropy);
+#else
+  bsdf = weight * subsurface_bssrdf(N, albedo, 1.0, radius, anisotropy);
+#endif
+}
+
 void NG_open_pbr_anisotropy(float roughness, float anisotropy, output vector2 out)
 {
   float rough_sq_out = roughness * roughness;
@@ -242,6 +252,10 @@ shader node_open_pbr_bsdf(
   /* Subsurface */
   float subsurface_weight = SubsurfaceWeight;
   color subsurface_color = SubsurfaceColor;
+  float subsurface_radius = SubsurfaceRadius;
+  subsurface_radius *= 4.0 * M_PI; // Countering some legacy behavior of Cycles bssrdf closure
+  color subsurface_radius_scale = SubsurfaceRadiusScale;
+  float subsurface_scatter_anisotropy = SubsurfaceScatterAnisotropy;
 
   /* Emission */
   color emission_color = EmissionColor;
@@ -354,6 +368,17 @@ shader node_open_pbr_bsdf(
   vector transmission_color_ln_out = log(transmission_color_vector_out);
   float extinction_coeff_denom_in2_tmp = -1.000000;
   vector extinction_coeff_denom_out = transmission_color_ln_out * extinction_coeff_denom_in2_tmp;
+
+  float subsurface_color_nonnegative_in2_tmp = 0.000000;
+  color subsurface_color_nonnegative_out = max(subsurface_color,
+                                               subsurface_color_nonnegative_in2_tmp);
+  float one_minus_subsurface_scatter_anisotropy_in1_tmp = 1.000000;
+  float one_minus_subsurface_scatter_anisotropy_out =
+      one_minus_subsurface_scatter_anisotropy_in1_tmp - subsurface_scatter_anisotropy;
+  float one_plus_subsurface_scatter_anisotropy_in1_tmp = 1.000000;
+  float one_plus_subsurface_scatter_anisotropy_out =
+      one_plus_subsurface_scatter_anisotropy_in1_tmp + subsurface_scatter_anisotropy;
+  color subsurface_radius_scaled_out = subsurface_radius_scale * subsurface_radius;
 
   vector scattering_coeff_out = transmission_scatter_vector_out / transmission_depth_vector_out;
   vector extinction_coeff_out = extinction_coeff_denom_out / transmission_depth_vector_out;
@@ -545,8 +570,35 @@ shader node_open_pbr_bsdf(
   // BSDF_T dielectric_reflection_tf_mix_out = dielectric_reflection_out;
 
   /* No support for subsurface */
-  // BSDF_T opaque_base_out = mix(diffuse_bsdf_out, selected_subsurface_out, subsurface_weight);
-  BSDF_T opaque_base_out = diffuse_bsdf_out;
+  /*
+  float subsurface_thin_walled_reflection_bsdf_weight_tmp = 1.000000;
+  BSDF_T subsurface_thin_walled_reflection_bsdf_out =
+  subsurface_thin_walled_reflection_bsdf_weight_tmp * oren_nayar_diffuse_bsdf(geometry_normal,
+  subsurface_color_nonnegative_out, base_diffuse_roughness); BSDF_T
+  subsurface_thin_walled_reflection_out = (subsurface_thin_walled_brdf_factor_out *
+  subsurface_thin_walled_reflection_bsdf_out); float
+  subsurface_thin_walled_transmission_bsdf_weight_tmp = 1.000000; BSDF_T
+  subsurface_thin_walled_transmission_bsdf_out =
+  subsurface_thin_walled_transmission_bsdf_weight_tmp * translucent_bsdf(geometry_normal,
+  subsurface_color_nonnegative_out); BSDF_T subsurface_thin_walled_transmission_out =
+  (subsurface_thin_walled_btdf_factor_out * subsurface_thin_walled_transmission_bsdf_out); float
+  subsurface_thin_walled_mix_tmp = 0.500000; BSDF_T subsurface_thin_walled_out =
+  mix(subsurface_thin_walled_transmission_out, subsurface_thin_walled_reflection_out,
+  subsurface_thin_walled_mix_tmp);
+  */
+  BSDF_T subsurface_bsdf_out = null_closure();
+  mx_subsurface_bsdf(1.000000,
+                     subsurface_color_nonnegative_out,
+                     subsurface_radius_scaled_out,
+                     subsurface_scatter_anisotropy,
+                     geometry_normal,
+                     subsurface_bsdf_out);
+  /* No thin wall yet*/
+  // BSDF_T selected_subsurface_out = mix(subsurface_bsdf_out, subsurface_thin_walled_out,
+  // subsurface_selector_out);
+  BSDF_T selected_subsurface_out = subsurface_bsdf_out;
+  BSDF_T opaque_base_out = mix(diffuse_bsdf_out, selected_subsurface_out, subsurface_weight);
+  // BSDF_T opaque_base_out = diffuse_bsdf_out;
 
   BSDF_T dielectric_substrate_out = mix(
       opaque_base_out, dielectric_volume_transmission_out, transmission_weight);
