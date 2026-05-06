@@ -464,7 +464,7 @@ struct SampleInput {
     float spatial_weight = filter_gaussian_weight(gauss, length_squared(float2(sample_offset)));
     float normal_weight = filter_angle_weight(center_N, sample_N);
 
-    return depth_weight * spatial_weight * normal_weight;
+    return max(1e-6f, depth_weight * spatial_weight * normal_weight);
   }
 
   /* Used for resolve. */
