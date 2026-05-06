@@ -551,10 +551,6 @@ static Py_ssize_t Euler_len(EulerObject * /*self*/)
 /** Sequence accessor (get): `x = object[i]`. */
 static PyObject *Euler_item(EulerObject *self, Py_ssize_t i)
 {
-  if (i < 0) {
-    i = EULER_SIZE - i;
-  }
-
   if (i < 0 || i >= EULER_SIZE) {
     PyErr_SetString(PyExc_IndexError,
                     "euler[attribute]: "
@@ -584,10 +580,6 @@ static int Euler_ass_item(EulerObject *self, Py_ssize_t i, PyObject *value)
                     "euler[attribute] = x: "
                     "assigned value not a number");
     return -1;
-  }
-
-  if (i < 0) {
-    i = EULER_SIZE - i;
   }
 
   if (i < 0 || i >= EULER_SIZE) {

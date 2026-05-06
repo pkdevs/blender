@@ -523,10 +523,6 @@ static Py_ssize_t Color_len(ColorObject * /*self*/)
 /** Sequence accessor (get): `x = object[i]`. */
 static PyObject *Color_item(ColorObject *self, Py_ssize_t i)
 {
-  if (i < 0) {
-    i = COLOR_SIZE - i;
-  }
-
   if (i < 0 || i >= COLOR_SIZE) {
     PyErr_SetString(PyExc_IndexError,
                     "color[item]: "
@@ -556,10 +552,6 @@ static int Color_ass_item(ColorObject *self, Py_ssize_t i, PyObject *value)
                     "color[item] = x: "
                     "assigned value not a number");
     return -1;
-  }
-
-  if (i < 0) {
-    i = COLOR_SIZE - i;
   }
 
   if (i < 0 || i >= COLOR_SIZE) {

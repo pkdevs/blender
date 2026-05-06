@@ -1037,10 +1037,6 @@ static Py_ssize_t Quaternion_len(QuaternionObject * /*self*/)
 /** Sequence accessor (get): `x = object[i]`. */
 static PyObject *Quaternion_item(QuaternionObject *self, Py_ssize_t i)
 {
-  if (i < 0) {
-    i = QUAT_SIZE - i;
-  }
-
   if (i < 0 || i >= QUAT_SIZE) {
     PyErr_SetString(PyExc_IndexError,
                     "quaternion[attribute]: "
@@ -1071,10 +1067,6 @@ static int Quaternion_ass_item(QuaternionObject *self, Py_ssize_t i, PyObject *o
                     "quaternion[index] = x: "
                     "assigned value not a number");
     return -1;
-  }
-
-  if (i < 0) {
-    i = QUAT_SIZE - i;
   }
 
   if (i < 0 || i >= QUAT_SIZE) {

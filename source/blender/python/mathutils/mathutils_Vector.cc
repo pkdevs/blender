@@ -1831,10 +1831,6 @@ static Py_ssize_t Vector_len(VectorObject *self)
 
 static PyObject *vector_item_internal(VectorObject *self, int i, const bool is_attr)
 {
-  if (i < 0) {
-    i = self->vec_num - i;
-  }
-
   if (i < 0 || i >= self->vec_num) {
     if (is_attr) {
       PyErr_Format(PyExc_AttributeError,
@@ -1875,10 +1871,6 @@ static int vector_ass_item_internal(VectorObject *self, int i, PyObject *value, 
                     "vector[index] = x: "
                     "assigned value not a number");
     return -1;
-  }
-
-  if (i < 0) {
-    i = self->vec_num - i;
   }
 
   if (i < 0 || i >= self->vec_num) {
