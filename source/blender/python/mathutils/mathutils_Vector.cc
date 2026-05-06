@@ -1941,14 +1941,22 @@ static int Vector_ass_slice(VectorObject *self, int begin, int end, PyObject *se
   begin = std::min(begin, end);
 
   vec_num = (end - begin);
-  if (mathutils_array_parse_alloc(&vec, vec_num, seq, "vector[begin:end] = [...]") == -1) {
+  const int parsed_size = mathutils_array_parse_alloc(
+      &vec, vec_num, seq, "vector[begin:end] = [...]");
+  if (parsed_size == -1) {
     return -1;
   }
 
-  if (vec == nullptr) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "vec[:] = seq: "
-                    "problem allocating pointer space");
+  /* The vector could be resized in this case.
+   * Rely on explicit use of the `.resize()` method because (unlike lists),
+   * these are more typically fixed size collections.
+   * Resizing is more likely to be a mistake as it isn't a common operation. */
+  if (parsed_size != vec_num) {
+    PyMem_Free(vec);
+    PyErr_Format(PyExc_ValueError,
+                 "vector[begin:end] = [...]: sequence size is %d, expected %d",
+                 parsed_size,
+                 vec_num);
     return -1;
   }
 

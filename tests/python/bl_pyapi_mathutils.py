@@ -84,6 +84,50 @@ class GenericSliceMixIn:
     def generic_make(self, values):
         raise NotImplementedError
 
+    def test_slice_get(self):
+        base = tuple(float(i + 1) for i in range(self.generic_len))
+        obj = self.generic_make(base)
+        self.assertIsInstance(obj[:], tuple)
+        self.assertEqual(obj[:], base)
+        self.assertEqual(obj[1:], base[1:])
+        self.assertEqual(obj[:-1], base[:-1])
+        self.assertEqual(obj[-1:], base[-1:])
+        self.assertEqual(obj[1:1], ())
+
+    def test_slice_set(self):
+        base = tuple(float(i + 1) for i in range(self.generic_len))
+        # Forward full overwrite (fast path).
+        obj = self.generic_make(base)
+        new_full = tuple(10.0 * (i + 1) for i in range(self.generic_len))
+        obj[:] = new_full
+        self.assertEqual(tuple(obj), new_full)
+        # Partial step-1 (slow path).
+        obj = self.generic_make(base)
+        new_tail = tuple(50.0 * (i + 1) for i in range(self.generic_len - 1))
+        obj[1:] = new_tail
+        self.assertEqual(tuple(obj), (base[0],) + new_tail)
+        # Empty extended slice with empty seq is a no-op.
+        obj = self.generic_make(base)
+        obj[5:2:1] = ()
+        self.assertEqual(tuple(obj), base)
+
+    def test_slice_set_length_mismatch(self):
+        base = tuple(float(i + 1) for i in range(self.generic_len))
+        obj = self.generic_make(base)
+        with self.assertRaises(ValueError):
+            obj[:] = base[:-1]
+        with self.assertRaises(ValueError):
+            obj[5:2:1] = (1.0,)
+        self.assertEqual(tuple(obj), base)
+
+    def test_slice_set_frozen(self):
+        base = tuple(float(i + 1) for i in range(self.generic_len))
+        obj = self.generic_make(base)
+        obj.freeze()
+        with self.assertRaises(TypeError):
+            obj[:] = base
+        self.assertEqual(tuple(obj), base)
+
     def test_slice_set_self_aliased_full(self):
         # `obj[:] = obj` writes original values back; effectively a no-op.
         base = tuple(float(i + 1) for i in range(self.generic_len))
@@ -110,6 +154,25 @@ class GenericSliceMixIn:
         original_id = id(obj)
         obj[:] = base
         self.assertEqual(id(obj), original_id)
+
+    def test_slice_set_seq_longer_than_slice(self):
+        # Assigning a sequence longer than the slice must raise ValueError,
+        # not silently truncate to the slice length.
+        base = tuple(float(i + 1) for i in range(self.generic_len))
+        obj = self.generic_make(base)
+        # `obj[0:1]` is a 1-length slice; pass 2 elements.
+        with self.assertRaises(ValueError):
+            obj[0:1] = [99.0, 98.0]
+        self.assertEqual(tuple(obj), base)
+
+    def test_slice_set_nonempty_seq_into_empty_slice(self):
+        # Assigning a non-empty sequence to an empty slice must raise ValueError,
+        # not silently no-op.
+        base = tuple(float(i + 1) for i in range(self.generic_len))
+        obj = self.generic_make(base)
+        with self.assertRaises(ValueError):
+            obj[1:1] = [99.0]
+        self.assertEqual(tuple(obj), base)
 
 
 class MatrixTesting(unittest.TestCase):
