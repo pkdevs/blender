@@ -416,6 +416,19 @@ class MatrixTesting(unittest.TestCase):
         with self.assertRaises(TypeError):
             mat[0][0] = 0.0
 
+    def test_matrix_freeze_iter(self):
+        rows = (
+            (1.0, 2.0, 3.0),
+            (4.0, 5.0, 6.0),
+            (7.0, 8.0, 9.0),
+        )
+        cols = tuple(zip(*rows))
+        mat = Matrix(rows)
+        mat.freeze()
+        self.assertEqual(tuple(tuple(v) for v in mat), rows)
+        self.assertEqual(tuple(tuple(v) for v in mat.row), rows)
+        self.assertEqual(tuple(tuple(v) for v in mat.col), cols)
+
     def test_buffer_protocol(self):
         expected = [list(range(i * 4, (i * 4) + 4)) for i in range(4)]
         m = Matrix(expected)
@@ -486,6 +499,16 @@ class MatrixSliceMixIn:
         self.assertEqual(obj[:-1], base[:-1])
         self.assertEqual(obj[-1:], base[-1:])
         self.assertEqual(obj[1:1], ())
+
+    def test_slice_set_frozen(self):
+        n = self.matrix_size
+        base = tuple(self._make_value(i + 1) for i in range(n))
+        mat, obj = self._make_obj(base)
+        # `MatrixAccess` has no `freeze()`; freezing the matrix is enough either way.
+        mat.freeze()
+        with self.assertRaises(TypeError):
+            obj[:] = base
+        self.assertEqual(tuple(obj), base)
 
 
 class Matrix3x3TestingSlice(MatrixSliceMixIn, unittest.TestCase):

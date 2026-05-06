@@ -2587,7 +2587,8 @@ static Py_ssize_t Matrix_len(MatrixObject *self)
  */
 static PyObject *Matrix_item_row(MatrixObject *self, Py_ssize_t row)
 {
-  if (BaseMath_ReadCallback_ForWrite(self) == -1) {
+  /* Read-only: write through the returned wrapper is prevented by its own set callback. */
+  if (BaseMath_ReadCallback(self) == -1) {
     return nullptr;
   }
 
@@ -2606,7 +2607,8 @@ static PyObject *Matrix_item_row(MatrixObject *self, Py_ssize_t row)
  */
 static PyObject *Matrix_item_col(MatrixObject *self, Py_ssize_t col)
 {
-  if (BaseMath_ReadCallback_ForWrite(self) == -1) {
+  /* Read-only: write through the returned wrapper is prevented by its own set callback. */
+  if (BaseMath_ReadCallback(self) == -1) {
     return nullptr;
   }
 
@@ -3986,7 +3988,7 @@ static PyObject *MatrixAccess_slice(MatrixAccessObject *self, Py_ssize_t begin, 
     matrix_access_len = matrix_user->row_num;
     Matrix_item_new = Matrix_item_row;
   }
-  else { /* MAT_ACCESS_ROW */
+  else { /* MAT_ACCESS_COL */
     matrix_access_len = matrix_user->col_num;
     Matrix_item_new = Matrix_item_col;
   }
@@ -4022,7 +4024,7 @@ static PyObject *MatrixAccess_subscript(MatrixAccessObject *self, PyObject *item
       }
       return Matrix_item_row(matrix_user, i);
     }
-    /* MAT_ACCESS_ROW */
+    /* MAT_ACCESS_COL */
     if (i < 0) {
       i += matrix_user->col_num;
     }
@@ -4068,7 +4070,7 @@ static int MatrixAccess_ass_subscript(MatrixAccessObject *self, PyObject *item, 
       }
       return Matrix_ass_item_row(matrix_user, i, value);
     }
-    /* MAT_ACCESS_ROW */
+    /* MAT_ACCESS_COL */
     if (i < 0) {
       i += matrix_user->col_num;
     }
