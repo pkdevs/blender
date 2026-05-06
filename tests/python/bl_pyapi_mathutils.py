@@ -174,6 +174,17 @@ class GenericSliceMixIn:
             obj[1:1] = [99.0]
         self.assertEqual(tuple(obj), base)
 
+    def test_slice_set_empty_slice_empty_seq(self):
+        # Empty slice with an empty sequence is a no-op.
+        base = tuple(float(i + 1) for i in range(self.generic_len))
+        obj = self.generic_make(base)
+        obj[0:0] = ()
+        self.assertEqual(tuple(obj), base)
+        obj[1:1] = ()
+        self.assertEqual(tuple(obj), base)
+        obj[-1:-1] = ()
+        self.assertEqual(tuple(obj), base)
+
 
 class MatrixTesting(unittest.TestCase):
 

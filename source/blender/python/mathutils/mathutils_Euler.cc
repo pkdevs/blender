@@ -653,7 +653,7 @@ static int Euler_ass_slice(EulerObject *self, int begin, int end, PyObject *seq)
     return -1;
   }
 
-  for (i = 0; i < EULER_SIZE; i++) {
+  for (i = 0; i < size; i++) {
     self->eul[begin + i] = eul[i];
   }
 

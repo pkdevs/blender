@@ -625,7 +625,7 @@ static int Color_ass_slice(ColorObject *self, int begin, int end, PyObject *seq)
     return -1;
   }
 
-  for (i = 0; i < COLOR_SIZE; i++) {
+  for (i = 0; i < size; i++) {
     self->col[begin + i] = col[i];
   }
 
