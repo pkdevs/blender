@@ -2045,6 +2045,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     C_AND_CXX_WARN_NO_FORMAT -Wno-format
     C_AND_CXX_WARN_NO_SWITCH -Wno-switch
     C_AND_CXX_WARN_NO_UNUSED_VARIABLE -Wno-unused-variable
+    C_AND_CXX_WARN_NO_UNUSED_BUT_SET_VARIABLE -Wno-unused-but-set-variable
     C_AND_CXX_WARN_NO_UNINITIALIZED -Wno-uninitialized
     C_AND_CXX_WARN_NO_IMPLICIT_FALLTHROUGH -Wno-implicit-fallthrough
   )
