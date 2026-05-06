@@ -289,8 +289,8 @@ ResultT eval(ScreenThicknessParameters thickness_params,
 
         /* Bias depth a bit to avoid self shadowing issues. */
         constexpr float bias = 2.0f * 2.4e-7f;
-        float sample_depth_front = sample_depth + (reversed ? -bias : bias);
-        float sample_depth_back = sample_depth + sample_thickness;
+        const float sample_depth_front = sample_depth + (reversed ? -bias : bias);
+        const float sample_depth_back = sample_depth + (reversed ? 0.0 : sample_thickness);
 
         float3 vP_sample_front = drw_point_screen_to_view(float3(sample_uv, sample_depth_front));
         float3 vP_sample_back = drw_point_screen_to_view(float3(sample_uv, sample_depth_back));
@@ -303,19 +303,37 @@ ResultT eval(ScreenThicknessParameters thickness_params,
         float3 ls_P_back = (vP_sample_back - vP) / search_distance;
         /* Simplification of `sin_from_cos(length(ls_P_front.xy))`. */
         float max_dist = sqrt_fast(saturate(1.0f - length_squared(ls_P_front.xy)));
-        ls_P_front.z = clamp(ls_P_front.z, -max_dist, max_dist);
-        ls_P_back.z = clamp(ls_P_back.z, -max_dist, max_dist);
-        if (ls_P_front.z == ls_P_back.z) {
-          continue;
+        if (!reversed) {
+          ls_P_front.z = clamp(ls_P_front.z, -max_dist, max_dist);
+          ls_P_back.z = clamp(ls_P_back.z, -max_dist, max_dist);
+          if (ls_P_front.z == ls_P_back.z) {
+            continue;
+          }
         }
 
         float3 vL_front = normalize(ls_P_front);
         float3 vL_back = normalize(ls_P_back);
 
+        float LV_front = dot(vL_front, vV);
+        float LV_back = dot(vL_back, vV);
+        if (reversed) {
+          /* In reverse mode we revert back to horizon scanning.
+           * Occlude everything in front of this sample. */
+          LV_front = 1.0f;
+          /* If hitting the background consider the sample infinitely far away. */
+          if (sample_depth == 1.0f) {
+            LV_back = -1.0f;
+          }
+        }
         /* Ordered pair of angle. Minimum in X, Maximum in Y.
          * Front will always have the smallest angle here since it is the closest to the view. */
-        float2 theta = acos_fast(float2(dot(vL_front, vV), dot(vL_back, vV)));
+        float2 theta = acos_fast(float2(LV_front, LV_back));
         theta.y = max(theta.x, theta.y);
+        if (reversed) {
+          /* This is the main part of the reversed AO.
+           * Rotate the angles 180 degrees to align with the front facing normal. */
+          theta -= M_PI;
+        }
         /* If we are tracing backward, the angles are negative. Swizzle to keep correct order. */
         theta = (side == 0) ? theta.xy : -theta.yx;
 
