@@ -927,7 +927,8 @@ mark_as_advanced(WITH_GPU_SHADER_CPP_COMPILATION)
 # Profiling
 option(WITH_TRACY "\
 Enable profiling via the Tracy Frame Profiler. \
-This option adds a `tracy_profiler` target for building the profiler GUI frontend. Requires internet access."
+This option adds a `tracy_profiler` target for building the profiler GUI front-end. \
+Requires internet access."
   OFF
 )
 mark_as_advanced(WITH_TRACY)

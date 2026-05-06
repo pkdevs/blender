@@ -7,7 +7,7 @@
 /** \file
  * \ingroup blt
  *
- * This allows converting std::tm datetime structures to localized date and
+ * This allows converting `std::tm datetime` structures to localized date and
  * time strings. The localization is based on the CLDR from the current locale.
  */
 
