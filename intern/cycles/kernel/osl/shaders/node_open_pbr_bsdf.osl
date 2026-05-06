@@ -253,7 +253,7 @@ shader node_open_pbr_bsdf(
   float subsurface_weight = SubsurfaceWeight;
   color subsurface_color = SubsurfaceColor;
   float subsurface_radius = SubsurfaceRadius;
-  subsurface_radius *= 4.0 * M_PI; // Countering some legacy behavior of Cycles bssrdf closure
+  subsurface_radius *= 4.0 * M_PI;  // Countering some legacy behavior of Cycles bssrdf closure
   color subsurface_radius_scale = SubsurfaceRadiusScale;
   float subsurface_scatter_anisotropy = SubsurfaceScatterAnisotropy;
 
@@ -593,6 +593,9 @@ shader node_open_pbr_bsdf(
                      subsurface_scatter_anisotropy,
                      geometry_normal,
                      subsurface_bsdf_out);
+  // TODO (OpenPBR): this is currently a hack to fix an interal bug in Cycles' subsurface_bssrdf
+  // OSL closure.
+  subsurface_bsdf_out *= subsurface_color_nonnegative_out;
   /* No thin wall yet*/
   // BSDF_T selected_subsurface_out = mix(subsurface_bsdf_out, subsurface_thin_walled_out,
   // subsurface_selector_out);

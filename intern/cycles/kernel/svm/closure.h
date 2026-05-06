@@ -944,7 +944,7 @@ ccl_device
 #ifdef __SUBSURFACE__
         /* Subsurface Scattering Component */
         if (subsurface_weight > CLOSURE_WEIGHT_CUTOFF) {
-          const Spectrum closure_weight = subsurface_weight * weight;
+          const Spectrum closure_weight = subsurface_weight * subsurface_color * weight;
           const ClosureType subsurface_method = CLOSURE_BSSRDF_RANDOM_WALK_ID;
           ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, closure_weight);
           if (bssrdf) {
