@@ -1901,48 +1901,49 @@ static int Vector_ass_item(VectorObject *self, Py_ssize_t i, PyObject *value)
   return vector_ass_item_internal(self, i, value, false);
 }
 
-/** Sequence slice accessor (get): `x = object[i:j]`. */
-static PyObject *Vector_slice(VectorObject *self, int begin, int end)
+/** Sequence slice accessor (get): `x = object[i:j]` / `object[i:j:step]`. */
+static PyObject *Vector_slice(VectorObject *self,
+                              Py_ssize_t start,
+                              Py_ssize_t step,
+                              Py_ssize_t slice_length)
 {
-  PyObject *tuple;
-  int count;
-
   if (BaseMath_ReadCallback(self) == -1) {
     return nullptr;
   }
 
-  CLAMP(begin, 0, self->vec_num);
-  if (end < 0) {
-    end = self->vec_num + end + 1;
+  PyObject *tuple = PyTuple_New(slice_length);
+  Py_ssize_t index = start;
+  for (Py_ssize_t i = 0; i < slice_length; i++, index += step) {
+    BLI_assert(index >= 0 && index < self->vec_num);
+    PyTuple_SET_ITEM(tuple, i, PyFloat_FromDouble(self->vec[index]));
   }
-  CLAMP(end, 0, self->vec_num);
-  begin = std::min(begin, end);
-
-  tuple = PyTuple_New(end - begin);
-  for (count = begin; count < end; count++) {
-    PyTuple_SET_ITEM(tuple, count - begin, PyFloat_FromDouble(self->vec[count]));
-  }
-
   return tuple;
 }
 
-/** Sequence slice accessor (set): `object[i:j] = x`. */
-static int Vector_ass_slice(VectorObject *self, int begin, int end, PyObject *seq)
+/**
+ * Sequence slice accessor (set): `object[i:j] = x` / `object[i:j:step] = x`.
+ * Length of `seq` must equal `slice_length`
+ * (Python list semantics: extended slice assignment cannot resize).
+ */
+static int Vector_ass_slice(
+    VectorObject *self, Py_ssize_t start, Py_ssize_t step, Py_ssize_t slice_length, PyObject *seq)
 {
-  int vec_num = 0;
   float *vec = nullptr;
 
-  if (BaseMath_ReadCallback_ForWrite(self) == -1) {
-    return -1;
+  /* Subset writes merge into existing values, so sync the source first. */
+  if (mathutils_slice_is_subset(start, step, slice_length, self->vec_num)) {
+    if (BaseMath_ReadCallback_ForWrite(self) == -1) {
+      return -1;
+    }
+  }
+  else {
+    if (BaseMath_Prepare_ForWrite(self) == -1) {
+      return -1;
+    }
   }
 
-  CLAMP(begin, 0, self->vec_num);
-  CLAMP(end, 0, self->vec_num);
-  begin = std::min(begin, end);
-
-  vec_num = (end - begin);
   const int parsed_size = mathutils_array_parse_alloc(
-      &vec, vec_num, seq, "vector[begin:end] = [...]");
+      &vec, int(slice_length), seq, "vector[slice] = seq");
   if (parsed_size == -1) {
     return -1;
   }
@@ -1951,17 +1952,20 @@ static int Vector_ass_slice(VectorObject *self, int begin, int end, PyObject *se
    * Rely on explicit use of the `.resize()` method because (unlike lists),
    * these are more typically fixed size collections.
    * Resizing is more likely to be a mistake as it isn't a common operation. */
-  if (parsed_size != vec_num) {
+  if (parsed_size != slice_length) {
     PyMem_Free(vec);
     PyErr_Format(PyExc_ValueError,
-                 "vector[begin:end] = [...]: sequence size is %d, expected %d",
+                 "vector[slice] = seq: sequence size is %d, expected %d",
                  parsed_size,
-                 vec_num);
+                 int(slice_length));
     return -1;
   }
 
-  /* Parsed well - now set in vector. */
-  memcpy(self->vec + begin, vec, vec_num * sizeof(float));
+  Py_ssize_t index = start;
+  for (Py_ssize_t i = 0; i < slice_length; i++, index += step) {
+    BLI_assert(index >= 0 && index < self->vec_num);
+    self->vec[index] = vec[i];
+  }
 
   PyMem_Free(vec);
 
@@ -1987,21 +1991,13 @@ static PyObject *Vector_subscript(VectorObject *self, PyObject *item)
     return Vector_item(self, i);
   }
   if (PySlice_Check(item)) {
-    Py_ssize_t start, stop, step, slicelength;
+    Py_ssize_t start, stop, step, slice_length;
 
-    if (PySlice_GetIndicesEx(item, self->vec_num, &start, &stop, &step, &slicelength) < 0) {
+    if (PySlice_GetIndicesEx(item, self->vec_num, &start, &stop, &step, &slice_length) < 0) {
       return nullptr;
     }
 
-    if (slicelength <= 0) {
-      return PyTuple_New(0);
-    }
-    if (step == 1) {
-      return Vector_slice(self, start, stop);
-    }
-
-    PyErr_SetString(PyExc_IndexError, "slice steps not supported with vectors");
-    return nullptr;
+    return Vector_slice(self, start, step, slice_length);
   }
 
   PyErr_Format(
@@ -2023,18 +2019,13 @@ static int Vector_ass_subscript(VectorObject *self, PyObject *item, PyObject *va
     return Vector_ass_item(self, i, value);
   }
   if (PySlice_Check(item)) {
-    Py_ssize_t start, stop, step, slicelength;
+    Py_ssize_t start, stop, step, slice_length;
 
-    if (PySlice_GetIndicesEx(item, self->vec_num, &start, &stop, &step, &slicelength) < 0) {
+    if (PySlice_GetIndicesEx(item, self->vec_num, &start, &stop, &step, &slice_length) < 0) {
       return -1;
     }
 
-    if (step == 1) {
-      return Vector_ass_slice(self, start, stop, value);
-    }
-
-    PyErr_SetString(PyExc_IndexError, "slice steps not supported with vectors");
-    return -1;
+    return Vector_ass_slice(self, start, step, slice_length, value);
   }
 
   PyErr_Format(

@@ -88,11 +88,17 @@ class GenericSliceMixIn:
         base = tuple(float(i + 1) for i in range(self.generic_len))
         obj = self.generic_make(base)
         self.assertIsInstance(obj[:], tuple)
+        # Step 1.
         self.assertEqual(obj[:], base)
         self.assertEqual(obj[1:], base[1:])
         self.assertEqual(obj[:-1], base[:-1])
         self.assertEqual(obj[-1:], base[-1:])
         self.assertEqual(obj[1:1], ())
+        # Stepped.
+        self.assertEqual(obj[::2], base[::2])
+        self.assertEqual(obj[::-1], base[::-1])
+        self.assertEqual(obj[::-2], base[::-2])
+        self.assertEqual(obj[1:1:-1], ())
 
     def test_slice_set(self):
         base = tuple(float(i + 1) for i in range(self.generic_len))
@@ -101,11 +107,23 @@ class GenericSliceMixIn:
         new_full = tuple(10.0 * (i + 1) for i in range(self.generic_len))
         obj[:] = new_full
         self.assertEqual(tuple(obj), new_full)
+        # Reverse full overwrite (fast path).
+        obj[::-1] = base
+        self.assertEqual(tuple(obj), base[::-1])
         # Partial step-1 (slow path).
         obj = self.generic_make(base)
         new_tail = tuple(50.0 * (i + 1) for i in range(self.generic_len - 1))
         obj[1:] = new_tail
         self.assertEqual(tuple(obj), (base[0],) + new_tail)
+        # Stepped partial (slow path).
+        obj = self.generic_make(base)
+        every_other = base[::2]
+        new_every_other = tuple(99.0 + i for i in range(len(every_other)))
+        obj[::2] = new_every_other
+        expected = list(base)
+        for i, v in zip(range(0, self.generic_len, 2), new_every_other):
+            expected[i] = v
+        self.assertEqual(tuple(obj), tuple(expected))
         # Empty extended slice with empty seq is a no-op.
         obj = self.generic_make(base)
         obj[5:2:1] = ()
@@ -117,6 +135,8 @@ class GenericSliceMixIn:
         with self.assertRaises(ValueError):
             obj[:] = base[:-1]
         with self.assertRaises(ValueError):
+            obj[::2] = base
+        with self.assertRaises(ValueError):
             obj[5:2:1] = (1.0,)
         self.assertEqual(tuple(obj), base)
 
@@ -124,9 +144,21 @@ class GenericSliceMixIn:
         base = tuple(float(i + 1) for i in range(self.generic_len))
         obj = self.generic_make(base)
         obj.freeze()
+        # Fast path (full overwrite, frozen check only).
         with self.assertRaises(TypeError):
             obj[:] = base
+        # Slow path (partial, frozen check inside `ReadCallback_ForWrite`).
+        with self.assertRaises(TypeError):
+            obj[::2] = base[::2]
         self.assertEqual(tuple(obj), base)
+
+    def test_slice_set_self_aliased_reverse(self):
+        # `obj[::-1] = obj` must reverse in place. Exercises the parse-through-seq
+        # sync path that silently undoes the `is_subset=false` fast-path skip.
+        base = tuple(float(i + 1) for i in range(self.generic_len))
+        obj = self.generic_make(base)
+        obj[::-1] = obj
+        self.assertEqual(tuple(obj), base[::-1])
 
     def test_slice_set_self_aliased_full(self):
         # `obj[:] = obj` writes original values back; effectively a no-op.
@@ -153,6 +185,8 @@ class GenericSliceMixIn:
         obj = self.generic_make(base)
         original_id = id(obj)
         obj[:] = base
+        self.assertEqual(id(obj), original_id)
+        obj[::2] = base[::2]
         self.assertEqual(id(obj), original_id)
 
     def test_slice_set_seq_longer_than_slice(self):
@@ -494,11 +528,59 @@ class MatrixSliceMixIn:
         base = tuple(self._make_value(i + 1) for i in range(n))
         _mat, obj = self._make_obj(base)
         self.assertIsInstance(obj[:], tuple)
+        # Step 1.
         self.assertEqual(obj[:], base)
         self.assertEqual(obj[1:], base[1:])
         self.assertEqual(obj[:-1], base[:-1])
         self.assertEqual(obj[-1:], base[-1:])
         self.assertEqual(obj[1:1], ())
+        # Stepped.
+        self.assertEqual(obj[::2], base[::2])
+        self.assertEqual(obj[::-1], base[::-1])
+        self.assertEqual(obj[::-2], base[::-2])
+        self.assertEqual(obj[1:1:-1], ())
+
+    def test_slice_set(self):
+        n = self.matrix_size
+        base = tuple(self._make_value(i + 1) for i in range(n))
+        # Forward full overwrite (fast path).
+        _mat, obj = self._make_obj(base)
+        new_full = tuple(self._make_value(10 * (i + 1)) for i in range(n))
+        obj[:] = new_full
+        self.assertEqual(tuple(obj), new_full)
+        # Reverse full overwrite (fast path).
+        obj[::-1] = base
+        self.assertEqual(tuple(obj), base[::-1])
+        # Partial step-1 (slow path).
+        _mat, obj = self._make_obj(base)
+        new_tail = tuple(self._make_value(50 * (i + 1)) for i in range(n - 1))
+        obj[1:] = new_tail
+        self.assertEqual(tuple(obj), (base[0],) + new_tail)
+        # Stepped partial (slow path).
+        _mat, obj = self._make_obj(base)
+        every_other = base[::2]
+        new_every_other = tuple(self._make_value(99 + i) for i in range(len(every_other)))
+        obj[::2] = new_every_other
+        expected = list(base)
+        for i, v in zip(range(0, n, 2), new_every_other):
+            expected[i] = v
+        self.assertEqual(tuple(obj), tuple(expected))
+        # Empty extended slice with empty seq is a no-op.
+        _mat, obj = self._make_obj(base)
+        obj[5:2:1] = ()
+        self.assertEqual(tuple(obj), base)
+
+    def test_slice_set_length_mismatch(self):
+        n = self.matrix_size
+        base = tuple(self._make_value(i + 1) for i in range(n))
+        _mat, obj = self._make_obj(base)
+        with self.assertRaises(ValueError):
+            obj[:] = base[:-1]
+        with self.assertRaises(ValueError):
+            obj[::2] = base
+        with self.assertRaises(ValueError):
+            obj[5:2:1] = (self._make_value(1),)
+        self.assertEqual(tuple(obj), base)
 
     def test_slice_set_frozen(self):
         n = self.matrix_size
@@ -506,9 +588,41 @@ class MatrixSliceMixIn:
         mat, obj = self._make_obj(base)
         # `MatrixAccess` has no `freeze()`; freezing the matrix is enough either way.
         mat.freeze()
+        # Fast path (full overwrite, frozen check only).
         with self.assertRaises(TypeError):
             obj[:] = base
+        # Slow path (partial, frozen check inside ReadCallback_ForWrite).
+        with self.assertRaises(TypeError):
+            obj[::2] = base[::2]
         self.assertEqual(tuple(obj), base)
+
+    def test_slice_set_self_aliased_reverse(self):
+        # `obj[::-1] = obj` reverses rows/cols in place.
+        # Atomicity comes from staging all parsed rows/cols before assigning.
+        n = self.matrix_size
+        base = tuple(self._make_value(i + 1) for i in range(n))
+        _mat, obj = self._make_obj(base)
+        obj[::-1] = obj
+        self.assertEqual(tuple(obj), base[::-1])
+
+    def test_slice_set_self_aliased_full(self):
+        # `obj[:] = obj` writes original values back; effectively a no-op.
+        n = self.matrix_size
+        base = tuple(self._make_value(i + 1) for i in range(n))
+        _mat, obj = self._make_obj(base)
+        obj[:] = obj
+        self.assertEqual(tuple(obj), base)
+
+    def test_slice_set_identity_preserved(self):
+        # Slice assignment must not replace the matrix or its `MatrixAccess` wrapper.
+        n = self.matrix_size
+        base = tuple(self._make_value(i + 1) for i in range(n))
+        _mat, obj = self._make_obj(base)
+        original_id = id(obj)
+        obj[:] = base
+        self.assertEqual(id(obj), original_id)
+        obj[::2] = base[::2]
+        self.assertEqual(id(obj), original_id)
 
 
 class Matrix3x3TestingSlice(MatrixSliceMixIn, unittest.TestCase):
