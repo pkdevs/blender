@@ -185,7 +185,8 @@ SphericalHarmonicL1<float4> select_result<SphericalHarmonicL1<float4>>(
  * If `reversed` is set to true, the input normal must be negated.
  */
 template<typename ResultT>
-ResultT eval(sampler2D hiz_tx,
+ResultT eval(ScreenThicknessParameters thickness_params,
+             sampler2D hiz_tx,
              sampler2D screen_radiance_tx,
              sampler2D screen_normal_tx,
              float3 vP,
@@ -193,8 +194,6 @@ ResultT eval(sampler2D hiz_tx,
              float4 noise,
              float2 pixel_size,
              float search_distance,
-             float thickness_near,
-             float thickness_far,
              float angle_bias,
              const int slice_count,
              const int sample_count,
@@ -255,6 +254,8 @@ ResultT eval(sampler2D hiz_tx,
        * screen at once and just scan through. */
       ScreenSpaceRay ssray = ScreenSpaceRay::create(ray, pixel_size);
 
+      ScreenThicknessEstimator thickness_estimator = ScreenThicknessEstimator::init(ray.origin.z);
+
 #if defined(GPU_METAL) && defined(GPU_APPLE)
 /* NOTE: Full loop unroll hint increases performance on Apple Silicon. */
 #  pragma clang loop unroll(full)
@@ -280,12 +281,19 @@ ResultT eval(sampler2D hiz_tx,
           continue;
         }
 
+        float sample_view_z = drw_depth_screen_to_view(sample_depth);
+        float sample_ndc_min_thickness = thickness_params.pixel_depth_thickness_at(sample_view_z);
+
+        float sample_thickness = thickness_estimator.thickness(
+            sample_depth, time, sample_ndc_min_thickness);
+
         /* Bias depth a bit to avoid self shadowing issues. */
         constexpr float bias = 2.0f * 2.4e-7f;
-        sample_depth += reversed ? -bias : bias;
+        float sample_depth_front = sample_depth + (reversed ? -bias : bias);
+        float sample_depth_back = sample_depth + sample_thickness;
 
-        float3 vP_sample_front = drw_point_screen_to_view(float3(sample_uv, sample_depth));
-        float3 vP_sample_back = vP_sample_front - vV * thickness_near;
+        float3 vP_sample_front = drw_point_screen_to_view(float3(sample_uv, sample_depth_front));
+        float3 vP_sample_back = drw_point_screen_to_view(float3(sample_uv, sample_depth_back));
 
         /* Mimic a sphere intersection check + clipping of the intersecting ray.
          * Assumes the ray is aligned with the view Z axis.
@@ -307,7 +315,7 @@ ResultT eval(sampler2D hiz_tx,
         /* Ordered pair of angle. Minimum in X, Maximum in Y.
          * Front will always have the smallest angle here since it is the closest to the view. */
         float2 theta = acos_fast(float2(dot(vL_front, vV), dot(vL_back, vV)));
-        theta.y = max(theta.x + thickness_far, theta.y);
+        theta.y = max(theta.x, theta.y);
         /* If we are tracing backward, the angles are negative. Swizzle to keep correct order. */
         theta = (side == 0) ? theta.xy : -theta.yx;
 
@@ -376,37 +384,34 @@ ResultT eval(sampler2D hiz_tx,
   return select_result<ResultT>(occlusion_accum, sh_accum);
 }
 
-template float eval<float>(sampler2D hiz_tx,
-                           sampler2D screen_radiance_tx,
-                           sampler2D screen_normal_tx,
+template float eval<float>(ScreenThicknessParameters,
+                           sampler2D,
+                           sampler2D,
+                           sampler2D,
                            float3,
                            float3,
                            float4,
                            float2,
                            float,
                            float,
-                           float,
-                           float,
                            int,
                            int,
                            bool,
                            bool);
-template SphericalHarmonicL1<float4> eval<SphericalHarmonicL1<float4>>(
-    sampler2D hiz_tx,
-    sampler2D screen_radiance_tx,
-    sampler2D screen_normal_tx,
-    float3,
-    float3,
-    float4,
-    float2,
-    float,
-    float,
-    float,
-    float,
-    int,
-    int,
-    bool,
-    bool);
+template SphericalHarmonicL1<float4> eval<SphericalHarmonicL1<float4>>(ScreenThicknessParameters,
+                                                                       sampler2D,
+                                                                       sampler2D,
+                                                                       sampler2D,
+                                                                       float3,
+                                                                       float3,
+                                                                       float4,
+                                                                       float2,
+                                                                       float,
+                                                                       float,
+                                                                       int,
+                                                                       int,
+                                                                       bool,
+                                                                       bool);
 
 /** \} */
 
@@ -769,6 +774,7 @@ void scan([[work_group_id]] const uint3 group_id,
   noise = fract(noise + sampling_rng_3D_get(SAMPLING_AO_U).xyzx);
 
   SphericalHarmonicL1<float4> result = eevee::fast_gi::eval<SphericalHarmonicL1<float4>>(
+      uniform_buf.raytrace.fast_gi_thickness,
       hiz_tx,
       srt.screen_radiance_tx,
       srt.screen_normal_tx,
@@ -777,8 +783,6 @@ void scan([[work_group_id]] const uint3 group_id,
       noise,
       uniform_buf.ao.pixel_size,
       uniform_buf.ao.gi_distance,
-      uniform_buf.ao.thickness_near,
-      uniform_buf.ao.thickness_far,
       uniform_buf.ao.angle_bias,
       constants.slice_count,
       constants.step_count,
@@ -1081,7 +1085,8 @@ void occlusion_pass([[global_invocation_id]] const uint3 global_id, [[resource_t
   float4 noise = utility_tx_fetch(lut_tx, float2(texel), UTIL_BLUE_NOISE_LAYER);
   noise = fract(noise + sampling_rng_3D_get(SAMPLING_AO_U).xyzx);
 
-  float result = eevee::fast_gi::eval<float>(hiz_tx,
+  float result = eevee::fast_gi::eval<float>(uniform_buf.raytrace.fast_gi_thickness,
+                                             hiz_tx,
                                              srt.dummy_tx,
                                              srt.dummy_tx,
                                              vP,
@@ -1089,8 +1094,6 @@ void occlusion_pass([[global_invocation_id]] const uint3 global_id, [[resource_t
                                              noise,
                                              uniform_buf.ao.pixel_size,
                                              uniform_buf.ao.distance,
-                                             uniform_buf.ao.thickness_near,
-                                             uniform_buf.ao.thickness_far,
                                              uniform_buf.ao.angle_bias,
                                              srt.ao_slice_count,
                                              srt.ao_step_count,
