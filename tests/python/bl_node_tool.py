@@ -115,6 +115,56 @@ class TestNodeTool(unittest.TestCase):
         self.assertIn("attr_with_default", attribute_names)
         self.assertIn("attr_without_default", attribute_names)
 
+    def test_menu_input(self):
+        from bpy.types import WindowManager
+
+        bpy.ops.mesh.primitive_cube_add()
+        cube = bpy.context.active_object
+
+        tree = create_object_mode_mesh_tool_tree(
+            "TestNodeToolMenu", "geometry.test_node_tool_menu"
+        )
+        tree.interface.new_socket("Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
+        mode_socket = tree.interface.new_socket(
+            "Mode", in_out='INPUT', socket_type='NodeSocketMenu')
+        tree.interface.new_socket("Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
+
+        group_input = tree.nodes.new("NodeGroupInput")
+        group_output = tree.nodes.new("NodeGroupOutput")
+        menu_switch = tree.nodes.new("GeometryNodeMenuSwitch")
+        menu_switch.data_type = 'VECTOR'
+        transform = tree.nodes.new("GeometryNodeTransform")
+
+        # The menu switch starts with default items "A" and "B". Rename and add a third so the items become X, Y, Z.
+        menu_switch.enum_items[0].name = "X"
+        menu_switch.enum_items[1].name = "Y"
+        menu_switch.enum_items.new("Z")
+
+        menu_switch.inputs["X"].default_value = (10.0, 0.0, 0.0)
+        menu_switch.inputs["Y"].default_value = (0.0, 10.0, 0.0)
+        menu_switch.inputs["Z"].default_value = (0.0, 0.0, 10.0)
+
+        tree.links.new(group_input.outputs["Geometry"], transform.inputs["Geometry"])
+        tree.links.new(group_input.outputs["Mode"], menu_switch.inputs["Menu"])
+        tree.links.new(menu_switch.outputs["Output"], transform.inputs["Translation"])
+        tree.links.new(transform.outputs["Geometry"], group_output.inputs["Geometry"])
+
+        WindowManager.register_node_group_operators()
+
+        bpy.ops.geometry.test_node_tool_menu(
+            'EXEC_DEFAULT',
+            inputs={mode_socket.identifier: {"value": "Y"}},
+        )
+
+        verts = cube.data.vertices
+        n = len(verts)
+        center_x = sum(v.co.x for v in verts) / n
+        center_y = sum(v.co.y for v in verts) / n
+        center_z = sum(v.co.z for v in verts) / n
+        self.assertAlmostEqual(center_x, 0.0, places=4)
+        self.assertAlmostEqual(center_y, 10.0, places=4)
+        self.assertAlmostEqual(center_z, 0.0, places=4)
+
 
 if __name__ == "__main__":
     import sys
