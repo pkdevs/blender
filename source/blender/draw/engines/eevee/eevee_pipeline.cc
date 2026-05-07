@@ -537,7 +537,7 @@ void ForwardPipeline::render(View &view,
   inst_.hiz_buffer.set_dirty();
   inst_.hiz_buffer.update();
 
-  inst_.shadows.set_view(view, extent);
+  inst_.shadows.render(view, extent);
   inst_.volume_probes.set_view(view);
   inst_.sphere_probes.set_view(view);
 
@@ -979,7 +979,7 @@ gpu::Texture *DeferredLayer::render(View &render_view,
 
   inst_.volume_probes.set_view(render_view);
   inst_.sphere_probes.set_view(render_view);
-  inst_.shadows.set_view(render_view, extent);
+  inst_.shadows.render(render_view, extent);
 
   inst_.gbuffer.bind(gbuffer_fb);
   inst_.manager->submit(gbuffer_ps_, render_view);
@@ -1463,7 +1463,7 @@ void DeferredProbePipeline::render(View &view,
   inst_.hiz_buffer.update();
 
   inst_.lights.set_view(view, extent);
-  inst_.shadows.set_view(view, extent);
+  inst_.shadows.render(view, extent);
   inst_.volume_probes.set_view(view);
   inst_.sphere_probes.set_view(view);
 
@@ -1560,7 +1560,7 @@ void PlanarProbePipeline::render(View &view,
   radiance_behind_tx_ = dummy_black_;
 
   inst_.pipelines.data.ray_type = RAY_TYPE_GLOSSY;
-  inst_.uniform_data.push_update();
+  inst_.uniform_data.pipeline.push_update();
 
   GPU_framebuffer_bind(prepass_fb);
   GPU_framebuffer_clear_depth(prepass_fb, inst_.film.depth.clear_value);
@@ -1572,7 +1572,7 @@ void PlanarProbePipeline::render(View &view,
   inst_.hiz_buffer.update();
 
   inst_.lights.set_view(view, extent);
-  inst_.shadows.set_view(view, extent);
+  inst_.shadows.render(view, extent);
   inst_.volume_probes.set_view(view);
   inst_.sphere_probes.set_view(view);
 
@@ -1583,7 +1583,7 @@ void PlanarProbePipeline::render(View &view,
   inst_.manager->submit(eval_light_ps_, view);
 
   inst_.pipelines.data.ray_type = RAY_TYPE_CAMERA;
-  inst_.uniform_data.push_update();
+  inst_.uniform_data.pipeline.push_update();
 
   GPU_debug_group_end();
 }
