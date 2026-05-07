@@ -141,7 +141,7 @@ int BKE_blender_cli_command_exec(bContext *C, const char *id, const int argc, co
 
 void BKE_blender_cli_command_print_help()
 {
-  /* As `g_command_handlers` isn't ordered, sorting in-place is acceptable. */
+  /* As `cli_command_handlers` isn't ordered, sorting in-place is acceptable. */
   std::ranges::sort(
       cli_command_handlers(),
       [](const CommandHandlerPtr &a, const CommandHandlerPtr &b) { return a->id < b->id; });
