@@ -617,15 +617,7 @@ void DeferredLayerBase::gbuffer_pass_sync(Instance &inst)
   gbuffer_ps_.bind_resources(inst.uniform_data);
   gbuffer_ps_.bind_resources(inst.sampling);
   gbuffer_ps_.bind_resources(inst.hiz_buffer.front);
-  gbuffer_ps_.bind_resources(inst.hiz_buffer.front);
   gbuffer_ps_.bind_resources(inst.cryptomatte);
-
-  /* Bind light resources for the NPR materials that gets rendered first.
-   * Non-NPR shaders will override these resource bindings. */
-  gbuffer_ps_.bind_resources(inst.lights);
-  gbuffer_ps_.bind_resources(inst.shadows);
-  gbuffer_ps_.bind_resources(inst.sphere_probes);
-  gbuffer_ps_.bind_resources(inst.volume_probes);
 
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL | DRW_STATE_WRITE_STENCIL |
                    DRW_STATE_CLIP_CONTROL_UNIT_RANGE | DRW_STATE_STENCIL_ALWAYS;
@@ -643,6 +635,10 @@ void DeferredLayerBase::gbuffer_pass_sync(Instance &inst)
         pass = &gbuffer_ps_.sub(subpass_names[hybrid][raycast][double_sided]);
         pass->state_set(double_sided ? state : (state | DRW_STATE_CULL_BACK));
         if (hybrid) {
+          pass->bind_resources(inst.lights);
+          pass->bind_resources(inst.shadows);
+          pass->bind_resources(inst.sphere_probes);
+          pass->bind_resources(inst.volume_probes);
           pass->bind_texture(HIZ_PREVIOUS_LAYER_TEX_SLOT, &inst.hiz_buffer.back.ref_tx_);
           pass->bind_texture(RADIANCE_PREVIOUS_LAYER_TEX_SLOT, &radiance_behind_tx_);
         }
