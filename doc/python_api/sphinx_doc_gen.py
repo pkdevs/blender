@@ -272,6 +272,7 @@ else:
     EXCLUDE_MODULES = [
         "aud",
         "blf",
+        "blf.types",
         "bl_math",
         "imbuf",
         "imbuf.types",
@@ -2518,6 +2519,7 @@ def write_rst_importable_modules(basepath):
         # C_modules.
         "aud": "Audio System",
         "blf": "Font Drawing",
+        "blf.types": "Font Drawing Types",
         "imbuf": "Image Buffer",
         "imbuf.types": "Image Buffer Types",
         "gpu": "GPU Module",
