@@ -41,6 +41,7 @@
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
+#include "DNA_genfile.h"
 #include "DNA_sdna_types.h"
 #include "dna_parse.h"
 #include "dna_utils.h"
@@ -128,8 +129,10 @@ struct TypeTable {
   };
   CustomIDVectorSet<TypeInfo, GetIDFn> types;
 
-  void add_builtin(StringRefNull name, short size)
+  void add_builtin(const StringRef name, const short size, const int expected_type_index)
   {
+    BLI_assert(this->types.size() == expected_type_index);
+    UNUSED_VARS_NDEBUG(expected_type_index);
     this->types.add_new({.name = name,
                          .size_native = size,
                          .size_32 = size,
@@ -179,22 +182,22 @@ static TypeTable build_type_table(const Span<dna::ParsedStruct> parsed_structs)
    * \warning uint is not allowed! use in structs an unsigned int.
    * \warning sizes must match #DNA_elem_type_size().
    */
-  table.add_builtin("char", 1);   /* SDNA_TYPE_CHAR */
-  table.add_builtin("uchar", 1);  /* SDNA_TYPE_UCHAR */
-  table.add_builtin("short", 2);  /* SDNA_TYPE_SHORT */
-  table.add_builtin("ushort", 2); /* SDNA_TYPE_USHORT */
-  table.add_builtin("int", 4);    /* SDNA_TYPE_INT */
+  table.add_builtin("char", 1, SDNA_TYPE_CHAR);
+  table.add_builtin("uchar", 1, SDNA_TYPE_UCHAR);
+  table.add_builtin("short", 2, SDNA_TYPE_SHORT);
+  table.add_builtin("ushort", 2, SDNA_TYPE_USHORT);
+  table.add_builtin("int", 4, SDNA_TYPE_INT);
 
   /* NOTE: long isn't supported, these are place-holders to maintain alignment with #eSDNA_Type. */
-  table.add_builtin("long", 4);  /* SDNA_TYPE_LONG */
-  table.add_builtin("ulong", 4); /* SDNA_TYPE_ULONG */
+  table.add_builtin("long", 4, 5 /* SDNA_TYPE_LONG */);
+  table.add_builtin("ulong", 4, 6 /* SDNA_TYPE_ULONG */);
 
-  table.add_builtin("float", 4);    /* SDNA_TYPE_FLOAT */
-  table.add_builtin("double", 8);   /* SDNA_TYPE_DOUBLE */
-  table.add_builtin("int64_t", 8);  /* SDNA_TYPE_INT64 */
-  table.add_builtin("uint64_t", 8); /* SDNA_TYPE_UINT64 */
-  table.add_builtin("void", 0);     /* SDNA_TYPE_VOID */
-  table.add_builtin("int8_t", 1);   /* SDNA_TYPE_INT8 */
+  table.add_builtin("float", 4, SDNA_TYPE_FLOAT);
+  table.add_builtin("double", 8, SDNA_TYPE_DOUBLE);
+  table.add_builtin("int64_t", 8, SDNA_TYPE_INT64);
+  table.add_builtin("uint64_t", 8, SDNA_TYPE_UINT64);
+  table.add_builtin("void", 0, SDNA_TYPE_VOID);
+  table.add_builtin("int8_t", 1, SDNA_TYPE_INT8);
 
   /* Fake place-holder struct definition used to get an identifier for raw, untyped bytes buffers
    * in blend-files.
