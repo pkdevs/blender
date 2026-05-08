@@ -79,8 +79,12 @@ class ConditionalDownloader:
     http_session: requests.Session
     """Requests session, for control over retry behavior, TCP connection pooling, etc."""
 
-    max_size_bytes: int = 0
-    """Maximum allowed size of the download in bytes. 0 means no limit."""
+    max_disk_size_bytes: int = 0
+    """Maximum allowed size of the download in bytes. 0 means no limit.
+
+    This is measured in bytes on disk, so when stream compression is used,
+    after decompressing.
+    """
 
     chunk_size: int = 8192
     """Download this many bytes before saving to disk and reporting progress."""
@@ -254,10 +258,11 @@ class ConditionalDownloader:
             raise ContentLengthUnknownError(http_req_descr) from None
 
         # Before actually downloading, check that the size is below the limit.
-        # During downloading, it's checked that the number of streamed bytes
-        # doesn't get larger than the declared content length.
-        if self.max_size_bytes > 0 and content_length > self.max_size_bytes:
-            raise ContentLengthTooBigError(http_req_descr, self.max_size_bytes, content_length)
+        # This check is just an upper limit, as when stream compression is used, the on-disk size will be larger than
+        # the Content-Length header indicates. But if the compressed stream is already too large, the uncompressed data
+        # will also be too large.
+        if self.max_disk_size_bytes > 0 and content_length > self.max_disk_size_bytes:
+            raise ContentLengthTooBigError(http_req_descr, self.max_disk_size_bytes, content_length)
 
         # The Content-Length header, obtained above, indicates the number of
         # bytes that we will be downloading. The Requests library automatically
@@ -286,10 +291,12 @@ class ConditionalDownloader:
 
         # Stream the response to a file.
         num_downloaded_bytes = 0
+        disk_bytes_written = 0
         with local_path.open("wb") as file:
             def write_and_report(chunk: bytes) -> None:
                 """Write a chunk to file, and report on the download progress."""
-                file.write(chunk)
+                nonlocal disk_bytes_written
+                disk_bytes_written += file.write(chunk)
 
                 self._reporter.download_progress(
                     http_req_descr, content_length, num_downloaded_bytes
@@ -309,6 +316,7 @@ class ConditionalDownloader:
                 write_and_report(chunk)
 
             if decoder:
+                # The network bytes for this last remaining decoded bit have already been counted.
                 write_and_report(decoder.flush())
                 assert decoder.eof
 
@@ -319,7 +327,7 @@ class ConditionalDownloader:
             request=http_req_descr,
             etag=stream.headers.get("ETag") or "",
             last_modified=stream.headers.get("Last-Modified") or "",
-            content_length=num_downloaded_bytes,
+            size_on_disk=disk_bytes_written,
         )
 
         return meta
@@ -400,8 +408,8 @@ class DownloaderOptions:
     When only one number is given, it is used for both timeouts.
     """
     http_headers: dict[str, str] = dataclasses.field(default_factory=dict)
-    max_size_bytes: int = 0
-    """Maximum download size, in bytes."""
+    max_disk_size_bytes: int = 0
+    """Maximum download size, in bytes on disk."""
 
     def __post_init__(self) -> None:
         self._ensure_user_agent()
@@ -979,7 +987,7 @@ def _download_queued_items(
     downloader.add_reporter(reporter)
     downloader.periodic_check = periodic_check
     downloader.timeout = options.timeout
-    downloader.max_size_bytes = options.max_size_bytes
+    downloader.max_disk_size_bytes = options.max_disk_size_bytes
 
     try:
         while periodic_check(None):
@@ -1302,7 +1310,7 @@ class MetadataProviderFilesystem(MetadataProvider):
             # than including the headers necessary for a conditional download.
             return False
 
-        if local_file_size != meta.content_length:
+        if local_file_size != meta.size_on_disk:
             return False
 
         return True
@@ -1357,7 +1365,7 @@ class HTTPMetadata:
 
     etag: str = ""
     last_modified: str = ""
-    content_length: int = 0
+    size_on_disk: int = 0
 
 
 # Freeze instances of this class, so they can be used as map key.

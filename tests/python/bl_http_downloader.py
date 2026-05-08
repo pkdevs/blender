@@ -145,7 +145,7 @@ class MaxDownloadSizeTest(unittest.TestCase):
         metadata_provider.load.return_value = None
 
         downloader = http_dl.ConditionalDownloader(metadata_provider=metadata_provider)
-        downloader.max_size_bytes = 100
+        downloader.max_disk_size_bytes = 100
 
         mock_response = MagicMock()
         mock_response.headers = {"Content-Length": "200", "Content-Type": "text/plain"}
