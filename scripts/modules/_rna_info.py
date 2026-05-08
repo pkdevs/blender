@@ -767,6 +767,7 @@ def BuildRNAInfo():
     def _bpy_types_iterator():
         # Don't report when these types are ignored.
         suppress_warning = {
+            "ContextTempOverride",
             "GeometrySet",
             "InlineShaderNodes",
             "bpy_func",
