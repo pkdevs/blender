@@ -216,7 +216,7 @@ source/blender/editors/space_text/.*      @ideasman42
 
 # --------------------------------------------------
 # VSE.
-source/blender/sequencer/.*                  @eliphaz 
+source/blender/sequencer/.*                  @eliphaz
 source/blender/editors/space_sequencer/.*    @eliphaz
 
 # --------------------------------------------------
