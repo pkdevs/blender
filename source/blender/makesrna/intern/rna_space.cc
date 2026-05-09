@@ -4635,6 +4635,12 @@ static void rna_def_space_outliner(BlenderRNA *brna)
       "Uncollapse the active item and scroll it into view when it changes outside the Outliner");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 
+  prop = RNA_def_property(srna, "show_users_column", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", SO_USERS_COLUMN);
+  RNA_def_property_ui_text(
+      prop, "Show Users Column", "Display number of users of this Data-Block (click to add Fake User)");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+
   /* Granular restriction column option. */
   prop = RNA_def_property(srna, "show_restrict_column_enable", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "show_restrict_flags", SO_RESTRICT_ENABLE);
