@@ -3663,7 +3663,7 @@ static PyMethodDef Matrix_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     matrix_doc,
-    ".. class:: Matrix(rows=Matrix.Identity(4), /)\n"
+    ".. class:: Matrix(rows=((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)), /)\n"
     "\n"
     "   This object gives access to Matrices in Blender, supporting square and rectangular\n"
     "   matrices from 2x2 up to 4x4.\n"
