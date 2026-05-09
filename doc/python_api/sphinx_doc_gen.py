@@ -2549,6 +2549,7 @@ def write_rst_importable_modules(basepath):
         "gpu.texture": "GPU Texture Utilities",
         "gpu.platform": "GPU Platform Utilities",
         "gpu.capabilities": "GPU Capabilities Utilities",
+        "gpu.compute": "GPU Compute Utilities",
         "bmesh": "BMesh Module",
         "bmesh.ops": "BMesh Operators",
         "bmesh.types": "BMesh Types",
