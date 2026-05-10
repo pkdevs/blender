@@ -25,6 +25,8 @@ static pxr::VtValue vt_value(const IDProperty *prop)
       return pxr::VtValue{IDP_double_get(prop)};
     case IDP_BOOLEAN:
       return pxr::VtValue{bool(IDP_bool_get(prop))};
+    default:
+      break;
   }
   return pxr::VtValue{};
 }
@@ -40,7 +42,7 @@ void CameraDelegate::sync(const Scene *scene)
     return;
   }
 
-  const Camera *camera = static_cast<const Camera *>(scene->camera->data);
+  const Camera *camera = id_cast<const Camera *>(scene->camera->data);
   if (camera_ == camera) {
     return;
   }

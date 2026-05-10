@@ -9,12 +9,26 @@
 #pragma once
 
 #include "BLI_assert.h"
+#include "BLI_enum_flags.hh"
 
 #include "GPU_vertex_buffer.hh"
 
 #include "gpu_framebuffer_private.hh"
 
 namespace blender::gpu {
+
+inline bool is_half_float(TextureFormat format)
+{
+  switch (format) {
+    case TextureFormat::SFLOAT_16_16_16_16:
+    case TextureFormat::SFLOAT_16_16_16:
+    case TextureFormat::SFLOAT_16_16:
+    case TextureFormat::SFLOAT_16:
+      return true;
+    default:
+      return false;
+  }
+}
 
 enum GPUTextureFormatFlag {
   /* The format has a depth component and can be used as depth attachment. */
@@ -37,7 +51,7 @@ enum GPUTextureFormatFlag {
   GPU_FORMAT_DEPTH_STENCIL = (GPU_FORMAT_DEPTH | GPU_FORMAT_STENCIL),
 };
 
-ENUM_OPERATORS(GPUTextureFormatFlag, GPU_FORMAT_SIGNED)
+ENUM_OPERATORS(GPUTextureFormatFlag)
 
 enum GPUTextureType {
   GPU_TEXTURE_1D = (1 << 0),
@@ -52,7 +66,7 @@ enum GPUTextureType {
   GPU_TEXTURE_CUBE_ARRAY = (GPU_TEXTURE_CUBE | GPU_TEXTURE_ARRAY),
 };
 
-ENUM_OPERATORS(GPUTextureType, GPU_TEXTURE_BUFFER)
+ENUM_OPERATORS(GPUTextureType)
 
 /* Format types for samplers within the shader.
  * This covers the sampler format type permutations within GLSL/MSL. */
@@ -65,13 +79,7 @@ enum GPUSamplerFormat {
   GPU_SAMPLER_TYPE_MAX = 4
 };
 
-ENUM_OPERATORS(GPUSamplerFormat, GPU_SAMPLER_TYPE_UINT)
-
-#ifndef NDEBUG
-#  define DEBUG_NAME_LEN 64
-#else
-#  define DEBUG_NAME_LEN 8
-#endif
+ENUM_OPERATORS(GPUSamplerFormat)
 
 /* Maximum number of image units. */
 #define GPU_MAX_IMAGE 8
@@ -118,8 +126,8 @@ class Texture {
   /** For error checking */
   int mip_min_ = 0, mip_max_ = 0;
 
-  /** For debugging */
-  char name_[DEBUG_NAME_LEN];
+  /** For debugging. */
+  std::string name_;
 
   /** Frame-buffer references to update on deletion. */
   GPUAttachmentType fb_attachment_[GPU_TEX_MAX_FBO_ATTACHED];
@@ -146,11 +154,11 @@ class Texture {
                  bool use_stencil);
 
   virtual void generate_mipmap() = 0;
-  virtual void copy_to(Texture *tex) = 0;
-  virtual void clear(eGPUDataFormat format, const void *data) = 0;
+  virtual void copy_to(Texture *tex, IndexRange mip_levels) = 0;
+  virtual void clear(const double4 data) = 0;
   virtual void swizzle_set(const char swizzle_mask[4]) = 0;
   virtual void mip_range_set(int min, int max) = 0;
-  virtual void *read(int mip, eGPUDataFormat format) = 0;
+  virtual void read(int mip, eGPUDataFormat format, void *dst) = 0;
 
   void attach_to(FrameBuffer *fb, GPUAttachmentType type);
   void detach_from(FrameBuffer *fb);
@@ -158,8 +166,12 @@ class Texture {
 
   void usage_set(eGPUTextureUsage usage_flags);
 
-  virtual void update_sub(
-      int mip, int offset[3], int extent[3], eGPUDataFormat format, const void *data) = 0;
+  virtual void update_sub(int mip,
+                          int offset[3],
+                          int extent[3],
+                          eGPUDataFormat format,
+                          const void *data,
+                          uint unpack_row_length = 0) = 0;
   virtual void update_sub(int offset[3],
                           int extent[3],
                           eGPUDataFormat format,
@@ -181,6 +193,8 @@ class Texture {
   {
     return gpu_image_usage_flags_;
   }
+
+  size_t read_size_get(int mip, eGPUDataFormat format) const;
 
   void mip_size_get(int mip, int r_size[3]) const
   {
@@ -312,7 +326,7 @@ class Texture {
  protected:
   virtual bool init_internal() = 0;
   virtual bool init_internal(VertBuf *vbo) = 0;
-  virtual bool init_internal(blender::gpu::Texture *src,
+  virtual bool init_internal(gpu::Texture *src,
                              int mip_offset,
                              int layer_offset,
                              bool use_stencil) = 0;
@@ -346,8 +360,6 @@ static inline const PixelBuffer *unwrap(const GPUPixelBuffer *pixbuf)
 {
   return reinterpret_cast<const PixelBuffer *>(pixbuf);
 }
-
-#undef DEBUG_NAME_LEN
 
 inline size_t to_bytesize(TextureFormat format)
 {

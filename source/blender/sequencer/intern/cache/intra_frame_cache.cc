@@ -13,6 +13,8 @@
 
 #include "IMB_imbuf.hh"
 
+#include "SEQ_sequencer.hh"
+
 #include "intra_frame_cache.hh"
 
 namespace blender::seq {
@@ -32,6 +34,7 @@ struct IntraFrameCache {
   int view_id = -1;
   int width = -1;
   int height = -1;
+  bool is_render = false;
 
   ~IntraFrameCache()
   {
@@ -45,7 +48,7 @@ static IntraFrameCache *query_intra_frame_cache(Scene *scene)
   if (scene == nullptr || scene->ed == nullptr) {
     return nullptr;
   }
-  return scene->ed->runtime.intra_frame_cache;
+  return scene->ed->runtime->intra_frame_cache;
 }
 
 void intra_frame_cache_invalidate(Scene *scene)
@@ -58,6 +61,7 @@ void intra_frame_cache_invalidate(Scene *scene)
     cache->view_id = -1;
     cache->width = -1;
     cache->height = -1;
+    cache->is_render = false;
   }
 }
 
@@ -139,7 +143,7 @@ void intra_frame_cache_put_preprocessed(Scene *scene, const Strip *strip, ImBuf 
   if (scene == nullptr || scene->ed == nullptr || strip == nullptr || image == nullptr) {
     return;
   }
-  IntraFrameCache *&cache = scene->ed->runtime.intra_frame_cache;
+  IntraFrameCache *&cache = scene->ed->runtime->intra_frame_cache;
   if (cache == nullptr) {
     cache = MEM_new<IntraFrameCache>(__func__);
   }
@@ -151,7 +155,7 @@ void intra_frame_cache_put_composite(Scene *scene, const Strip *strip, ImBuf *im
   if (scene == nullptr || scene->ed == nullptr || strip == nullptr || image == nullptr) {
     return;
   }
-  IntraFrameCache *&cache = scene->ed->runtime.intra_frame_cache;
+  IntraFrameCache *&cache = scene->ed->runtime->intra_frame_cache;
   if (cache == nullptr) {
     cache = MEM_new<IntraFrameCache>(__func__);
   }
@@ -162,21 +166,23 @@ void intra_frame_cache_destroy(Scene *scene)
 {
   IntraFrameCache *cache = query_intra_frame_cache(scene);
   if (cache != nullptr) {
-    MEM_SAFE_DELETE(scene->ed->runtime.intra_frame_cache);
+    MEM_SAFE_DELETE(scene->ed->runtime->intra_frame_cache);
   }
 }
 
-void intra_frame_cache_set_cur_frame(Scene *scene, float frame, int view_id, int width, int height)
+void intra_frame_cache_set_cur_frame(
+    Scene *scene, float frame, int view_id, int width, int height, bool is_render)
 {
   IntraFrameCache *cache = query_intra_frame_cache(scene);
   if (cache != nullptr) {
     if (cache->timeline_frame != frame || cache->view_id != view_id || cache->width != width ||
-        cache->height != height)
+        cache->height != height || cache->is_render != is_render)
     {
       cache->timeline_frame = frame;
       cache->view_id = view_id;
       cache->width = width;
       cache->height = height;
+      cache->is_render = is_render;
       cache->preprocessed.clear();
       cache->composite.clear();
     }

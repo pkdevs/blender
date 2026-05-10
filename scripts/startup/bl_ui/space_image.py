@@ -169,10 +169,19 @@ class IMAGE_MT_select(Menu):
         layout.menu("IMAGE_MT_select_linked")
 
         layout.separator()
-
-        layout.operator("uv.select_pinned", text="Select Pinned")
         layout.operator("uv.select_split")
-        layout.operator("uv.select_overlap")
+        layout.menu("IMAGE_MT_select_all_by_trait")
+
+
+class IMAGE_MT_select_all_by_trait(Menu):
+    bl_label = "Select All by Trait"
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.operator("uv.select_tile", text="Tile")
+        layout.operator("uv.select_pinned", text="Pinned")
+        layout.operator("uv.select_overlap", text="Overlap")
+        layout.operator("uv.select_by_winding", text="Winding")
 
 
 class IMAGE_MT_select_linked(Menu):
@@ -244,7 +253,6 @@ class IMAGE_MT_image(Menu):
             layout.operator("image.resize", text="Resize")
             layout.menu("IMAGE_MT_image_transform")
 
-        if ima and not show_render:
             if ima.packed_file:
                 if ima.filepath:
                     layout.separator()
@@ -410,9 +418,9 @@ class IMAGE_MT_uvs_unwrap(Menu):
         layout.separator()
 
         layout.operator_context = 'INVOKE_DEFAULT'
-        layout.operator("uv.smart_project")
-        layout.operator("uv.lightmap_pack")
-        layout.operator("uv.follow_active_quads")
+        layout.operator("uv.smart_project", text="Smart UV Project...")
+        layout.operator("uv.lightmap_pack", text="Lightmap Pack...")
+        layout.operator("uv.follow_active_quads", text="Follow Active Quads...")
 
         layout.separator()
 
@@ -616,10 +624,10 @@ class IMAGE_MT_pivot_pie(Menu):
 
         sima = context.space_data
 
-        pie.prop_enum(sima, "pivot_point", value='CENTER')
+        pie.prop_enum(sima, "pivot_point", value='BOUNDING_BOX_CENTER')
         pie.prop_enum(sima, "pivot_point", value='CURSOR')
         pie.prop_enum(sima, "pivot_point", value='INDIVIDUAL_ORIGINS')
-        pie.prop_enum(sima, "pivot_point", value='MEDIAN')
+        pie.prop_enum(sima, "pivot_point", value='MEDIAN_POINT')
 
 
 class IMAGE_MT_uvs_snap_pie(Menu):
@@ -870,27 +878,24 @@ class IMAGE_HT_header(Header):
 
             if tool_settings.use_uv_select_sync:
                 layout.template_edit_mode_selection()
-
-                layout.prop(tool_settings, "use_uv_select_island", icon_only=True)
-
-                # Currently this only works for edge-select & face-select modes.
-                row = layout.row()
-                mesh_select_mode = tool_settings.mesh_select_mode
-                if mesh_select_mode[0]:
-                    row.active = False
-                row.prop(tool_settings, "uv_sticky_select_mode", icon_only=True)
             else:
                 row = layout.row(align=True)
                 uv_select_mode = tool_settings.uv_select_mode[:]
-                row.operator("uv.select_mode", text="", icon='UV_VERTEXSEL',
-                             depress=(uv_select_mode == 'VERTEX')).type = 'VERTEX'
-                row.operator("uv.select_mode", text="", icon='UV_EDGESEL',
-                             depress=(uv_select_mode == 'EDGE')).type = 'EDGE'
-                row.operator("uv.select_mode", text="", icon='UV_FACESEL',
-                             depress=(uv_select_mode == 'FACE')).type = 'FACE'
+                row.operator(
+                    "uv.select_mode", text="", icon='UV_VERTEXSEL',
+                    depress=(uv_select_mode == 'VERTEX'),
+                ).type = 'VERTEX'
+                row.operator(
+                    "uv.select_mode", text="", icon='UV_EDGESEL',
+                    depress=(uv_select_mode == 'EDGE'),
+                ).type = 'EDGE'
+                row.operator(
+                    "uv.select_mode", text="", icon='UV_FACESEL',
+                    depress=(uv_select_mode == 'FACE'),
+                ).type = 'FACE'
 
-                layout.prop(tool_settings, "use_uv_select_island", icon_only=True)
-                layout.prop(tool_settings, "uv_sticky_select_mode", icon_only=True)
+            layout.prop(tool_settings, "use_uv_select_island", icon_only=True)
+            layout.prop(tool_settings, "uv_sticky_select_mode", icon_only=True)
 
         IMAGE_MT_editor_menus.draw_collapsible(context, layout)
 
@@ -940,6 +945,13 @@ class IMAGE_HT_header(Header):
             layout.prop_search(mesh.uv_layers, "active", mesh, "uv_layers", text="")
 
         if ima:
+            seq_scene = context.sequencer_scene
+            scene = context.scene
+
+            if show_render and seq_scene and (seq_scene != scene):
+                row = layout.row()
+                row.prop(sima, "show_sequencer_scene", text="")
+
             if ima.is_stereo_3d:
                 row = layout.row()
                 row.prop(sima, "show_stereo_3d", text="")
@@ -972,7 +984,8 @@ class IMAGE_MT_editor_menus(Menu):
             layout.menu("MASK_MT_select")
 
         if ima and ima.is_dirty:
-            layout.menu("IMAGE_MT_image", text="Image*")
+            # Show "*" to the left for consistency with unsaved files in the title bar.
+            layout.menu("IMAGE_MT_image", text="* Image")
         else:
             layout.menu("IMAGE_MT_image", text="Image")
 
@@ -1363,6 +1376,7 @@ class IMAGE_PT_paint_stroke(BrushButtonsPanel, Panel, StrokePanel):
     bl_parent_id = "IMAGE_PT_paint_settings"
     bl_category = "Tool"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_ui_units_x = 14
 
 
 class IMAGE_PT_paint_stroke_smooth_stroke(Panel, BrushButtonsPanel, SmoothStrokePanel):
@@ -1594,6 +1608,13 @@ class IMAGE_PT_gizmo_display(Panel):
         colsub = col.column()
         colsub.prop(view, "show_gizmo_navigate", text="Navigate")
 
+        image = view.image
+        show_compositor_gizmos = (image is not None and image.type == 'COMPOSITING' and
+                                  view.ui_mode in ('VIEW', 'MASK'))
+        if show_compositor_gizmos:
+            colsub = col.column()
+            colsub.prop(view, "show_gizmo_active_node")
+
 
 class IMAGE_PT_overlay(Panel):
     bl_space_type = 'IMAGE_EDITOR'
@@ -1725,8 +1746,14 @@ class IMAGE_PT_overlay_uv_display(Panel):
         overlay = sima.overlay
 
         layout.active = overlay.show_overlays
-        layout.prop(uvedit, "show_uv")
-        layout.prop(uvedit, "uv_face_opacity")
+
+        col = layout.column()
+        row = col.row(align=True)
+        row.prop(uvedit, "show_uv", text="")
+        sub = row.row()
+        sub.active = uvedit.show_uv
+        sub.prop(uvedit, "uv_face_opacity", text="Faces")
+        sub.prop(uvedit, "uv_edge_opacity", text="Edges")
 
 
 class IMAGE_PT_overlay_image(Panel):
@@ -1789,7 +1816,7 @@ class IMAGE_PT_overlay_mask(MASK_PT_display, Panel):
     def poll(cls, context):
         si = context.space_data
 
-        return si.ui_mode == 'MASK'
+        return si.mode == 'MASK'
 
 
 # Grease Pencil properties
@@ -1820,6 +1847,7 @@ classes = (
     IMAGE_MT_view,
     IMAGE_MT_view_zoom,
     IMAGE_MT_select,
+    IMAGE_MT_select_all_by_trait,
     IMAGE_MT_select_linked,
     IMAGE_MT_image,
     IMAGE_MT_image_transform,

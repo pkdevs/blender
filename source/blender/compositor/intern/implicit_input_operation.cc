@@ -43,8 +43,8 @@ void ImplicitInputOperation::execute()
       BLI_assert_unreachable();
       break;
     case ImplicitInput::TextureCoordinates:
-      const int2 size = this->context().get_compositing_region_size();
-      result.wrap_external(this->context().cache_manager().image_coordinates.get(
+      const int2 size = this->context().get_compositing_domain().data_size;
+      result.share_data(this->context().cache_manager().image_coordinates.get(
           this->context(), size, CoordinatesType::Uniform));
   }
 }

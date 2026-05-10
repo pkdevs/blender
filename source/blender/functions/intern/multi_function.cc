@@ -11,6 +11,16 @@ namespace blender::fn::multi_function {
 
 using ExecutionHints = MultiFunction::ExecutionHints;
 
+void MultiFunction::hash_unique(UniqueHashBytes &hash) const
+{
+  hash.add(this);
+}
+
+bool MultiFunction::equals(const MultiFunction &other) const
+{
+  return this == &other;
+}
+
 ExecutionHints MultiFunction::execution_hints() const
 {
   return this->get_execution_hints();
@@ -85,7 +95,7 @@ static void add_sliced_parameters(const Signature &signature,
         break;
       }
       case ParamCategory::SingleOutput: {
-        if (bool(signature.params[param_index].flag & ParamFlag::SupportsUnusedOutput)) {
+        if (flag_is_set(signature.params[param_index].flag, ParamFlag::SupportsUnusedOutput)) {
           const GMutableSpan span = full_params.uninitialized_single_output_if_required(
               param_index);
           if (span.is_empty()) {

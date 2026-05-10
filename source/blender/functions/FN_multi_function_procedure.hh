@@ -67,7 +67,7 @@ class InstructionCursor {
 
   Type type() const;
 
-  BLI_STRUCT_EQUALITY_OPERATORS_3(InstructionCursor, type_, instruction_, branch_output_)
+  friend bool operator==(const InstructionCursor &a, const InstructionCursor &b) = default;
 };
 
 /**
@@ -277,6 +277,8 @@ class Procedure : NonCopyable, NonMovable {
   std::string to_dot() const;
 
   bool validate() const;
+
+  void prepare_for_execution();
 
  private:
   bool validate_all_instruction_pointers_set() const;

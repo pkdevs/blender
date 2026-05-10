@@ -10,16 +10,16 @@ namespace blender::nodes::node_geo_input_mesh_edge_vertices_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Int>("Vertex Index 1")
+  b.add_output<decl::Int>("Vertex Index 1"_ustr)
       .field_source()
       .description("The index of the first vertex in the edge");
-  b.add_output<decl::Int>("Vertex Index 2")
+  b.add_output<decl::Int>("Vertex Index 2"_ustr)
       .field_source()
       .description("The index of the second vertex in the edge");
-  b.add_output<decl::Vector>("Position 1")
+  b.add_output<decl::Vector>("Position 1"_ustr)
       .field_source()
       .description("The position of the first vertex in the edge");
-  b.add_output<decl::Vector>("Position 2")
+  b.add_output<decl::Vector>("Position 2"_ustr)
       .field_source()
       .description("The position of the second vertex in the edge");
 }
@@ -48,7 +48,6 @@ class EdgeVertsInput final : public bke::MeshFieldInput {
   EdgeVertsInput(VertNumber vertex)
       : bke::MeshFieldInput(CPPType::get<int>(), "Edge Vertices Field"), vertex_(vertex)
   {
-    category_ = Category::Generated;
   }
 
   GVArray get_varray_for_context(const Mesh &mesh,
@@ -58,17 +57,11 @@ class EdgeVertsInput final : public bke::MeshFieldInput {
     return construct_edge_verts_gvarray(mesh, vertex_, domain);
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep & /*deep_hash_cache*/) const override
   {
-    return vertex_ == VertNumber::V1 ? 23847562893465 : 92384598734567;
-  }
-
-  bool is_equal_to(const fn::FieldNode &other) const override
-  {
-    if (const EdgeVertsInput *other_field = dynamic_cast<const EdgeVertsInput *>(&other)) {
-      return vertex_ == other_field->vertex_;
-    }
-    return false;
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    hash.add(vertex_);
   }
 
   std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
@@ -106,7 +99,6 @@ class EdgePositionFieldInput final : public bke::MeshFieldInput {
   EdgePositionFieldInput(VertNumber vertex)
       : bke::MeshFieldInput(CPPType::get<float3>(), "Edge Position Field"), vertex_(vertex)
   {
-    category_ = Category::Generated;
   }
 
   GVArray get_varray_for_context(const Mesh &mesh,
@@ -116,19 +108,11 @@ class EdgePositionFieldInput final : public bke::MeshFieldInput {
     return construct_edge_positions_gvarray(mesh, vertex_, domain);
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep & /*deep_hash_cache*/) const override
   {
-    return vertex_ == VertNumber::V1 ? 987456978362 : 374587679866;
-  }
-
-  bool is_equal_to(const fn::FieldNode &other) const override
-  {
-    if (const EdgePositionFieldInput *other_field = dynamic_cast<const EdgePositionFieldInput *>(
-            &other))
-    {
-      return vertex_ == other_field->vertex_;
-    }
-    return false;
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    hash.add(vertex_);
   }
 
   std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
@@ -139,29 +123,26 @@ class EdgePositionFieldInput final : public bke::MeshFieldInput {
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  Field<int> vertex_field_1{std::make_shared<EdgeVertsInput>(VertNumber::V1)};
-  Field<int> vertex_field_2{std::make_shared<EdgeVertsInput>(VertNumber::V2)};
-  Field<float3> position_field_1{std::make_shared<EdgePositionFieldInput>(VertNumber::V1)};
-  Field<float3> position_field_2{std::make_shared<EdgePositionFieldInput>(VertNumber::V2)};
-
-  params.set_output("Vertex Index 1", std::move(vertex_field_1));
-  params.set_output("Vertex Index 2", std::move(vertex_field_2));
-  params.set_output("Position 1", std::move(position_field_1));
-  params.set_output("Position 2", std::move(position_field_2));
+  params.set_output("Vertex Index 1"_ustr, Field<int>::from_input<EdgeVertsInput>(VertNumber::V1));
+  params.set_output("Vertex Index 2"_ustr, Field<int>::from_input<EdgeVertsInput>(VertNumber::V2));
+  params.set_output("Position 1"_ustr,
+                    Field<float3>::from_input<EdgePositionFieldInput>(VertNumber::V1));
+  params.set_output("Position 2"_ustr,
+                    Field<float3>::from_input<EdgePositionFieldInput>(VertNumber::V2));
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
   geo_node_type_base(
-      &ntype, "GeometryNodeInputMeshEdgeVertices", GEO_NODE_INPUT_MESH_EDGE_VERTICES);
+      &ntype, "GeometryNodeInputMeshEdgeVertices"_ustr, GEO_NODE_INPUT_MESH_EDGE_VERTICES);
   ntype.ui_name = "Edge Vertices";
   ntype.ui_description = "Retrieve topology information relating to each edge of a mesh";
   ntype.enum_name_legacy = "MESH_EDGE_VERTICES";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

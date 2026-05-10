@@ -21,7 +21,6 @@
 #include <mutex>
 
 #ifdef WITH_FFMPEG
-
 #  include "BLI_string.h"
 
 extern "C" {
@@ -31,6 +30,11 @@ extern "C" {
 #  include <libavformat/avformat.h>
 #  include <libavutil/log.h>
 }
+#endif
+
+namespace blender {
+
+#ifdef WITH_FFMPEG
 
 static CLG_LogRef LOG = {"video.ffmpeg"};
 
@@ -499,9 +503,9 @@ static void ffmpeg_preset_set(RenderData *rd, int preset)
   }
 }
 
-int MOV_codec_valid_bit_depths(AVCodecID av_codec_id)
+eImageFormatDepth MOV_codec_valid_bit_depths(AVCodecID av_codec_id)
 {
-  int bit_depths = R_IMF_CHAN_DEPTH_8;
+  eImageFormatDepth bit_depths = R_IMF_CHAN_DEPTH_8;
   /* Note: update properties_output.py `use_bpp` when changing this function. */
   if (ELEM(av_codec_id,
            AV_CODEC_ID_H264,
@@ -618,7 +622,7 @@ void MOV_validate_output_settings(RenderData *rd, const ImageFormatData *imf)
 #endif
 }
 
-int MOV_codec_valid_bit_depths(IMB_Ffmpeg_Codec_ID codec_id)
+eImageFormatDepth MOV_codec_valid_bit_depths(IMB_Ffmpeg_Codec_ID codec_id)
 {
 #ifdef WITH_FFMPEG
   return MOV_codec_valid_bit_depths(mov_av_codec_id_get(codec_id));
@@ -647,3 +651,5 @@ bool MOV_codec_supports_crf(IMB_Ffmpeg_Codec_ID codec_id)
   return false;
 #endif
 }
+
+}  // namespace blender

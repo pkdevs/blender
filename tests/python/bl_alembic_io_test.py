@@ -14,6 +14,8 @@ import unittest
 
 import bpy
 
+sys.path.append(str(pathlib.Path(__file__).parent.absolute()))
+
 args = None
 
 
@@ -449,6 +451,88 @@ class OverrideLayersTest(AbstractAlembicTest):
         self.assertEqual(len(mesh.polygons), 6)
 
 
+class AlembicVisibilityImportTests(AbstractAlembicTest):
+    def assertObjectVisibility(self, ob_name, state):
+        view_layer = bpy.context.view_layer
+        ob = bpy.data.objects[ob_name]
+        self.assertEqual(ob.hide_get(view_layer=view_layer), state)
+        self.assertEqual(ob.hide_render, state)
+
+    def assertObjectHidden(self, ob_name):
+        self.assertObjectVisibility(ob_name, True)
+
+    def assertObjectVisible(self, ob_name):
+        self.assertObjectVisibility(ob_name, False)
+
+    def test_import_visibility_hidden(self):
+        res = bpy.ops.wm.alembic_import(
+            filepath=str(self.testdir / "visibility-hidden.abc"),
+            as_background_job=False)
+        self.assertEqual({'FINISHED'}, res)
+
+        self.assertObjectHidden('HIDDEN')
+        self.assertObjectVisible('VISIBLE')
+
+    def test_import_visibility_deferred_parent_hidden(self):
+        res = bpy.ops.wm.alembic_import(
+            filepath=str(self.testdir / "visibility-parent-hidden-child-deferred.abc"),
+            as_background_job=False)
+        self.assertEqual({'FINISHED'}, res)
+
+        self.assertObjectHidden('HIDDEN')
+
+    def test_import_visibility_deferred_parent_visible(self):
+        res = bpy.ops.wm.alembic_import(
+            filepath=str(self.testdir / "visibility-parent-visible-child-deferred.abc"),
+            as_background_job=False)
+        self.assertEqual({'FINISHED'}, res)
+
+        self.assertObjectVisible('VISIBLE')
+
+    def test_import_visibility_visible_parent_hidden(self):
+        res = bpy.ops.wm.alembic_import(
+            filepath=str(self.testdir / "visibility-parent-hidden-child-visible.abc"),
+            as_background_job=False)
+        self.assertEqual({'FINISHED'}, res)
+
+        # Objects inherit the name of their parent Xform which is called 'HIDDEN' here
+        self.assertObjectVisible('HIDDEN')
+
+
+class AlembicImportComparisonTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.testdir = args.testdir
+        cls.output_dir = args.outdir
+
+    def test_import_alembic(self):
+        comparisondir = self.testdir.joinpath("compare")
+        input_files = sorted(pathlib.Path(comparisondir).glob("*.abc"))
+        self.passed_tests = []
+        self.failed_tests = []
+        self.updated_tests = []
+
+        from modules import io_report
+        report = io_report.Report("Alembic Import", self.output_dir, comparisondir, comparisondir.joinpath("reference"))
+        io_report.Report.context_lines = 8
+
+        for input_file in input_files:
+            input_file_path = pathlib.Path(input_file)
+
+            io_report.Report.side_to_print_single_line = 5
+            io_report.Report.side_to_print_multi_line = 3
+
+            with self.subTest(input_file_path.stem):
+                bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "empty.blend"))
+                ok = report.import_and_check(
+                    input_file, lambda filepath, params: bpy.ops.wm.alembic_import(
+                        filepath=str(input_file), **params))
+                if not ok:
+                    self.fail(f"{input_file.stem} import result does not match expectations")
+
+        report.finish("io_alembic_import")
+
+
 def main():
     global args
     import argparse
@@ -460,6 +544,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--testdir', required=True, type=pathlib.Path)
+    parser.add_argument('--outdir', required=True, type=pathlib.Path)
     args, remaining = parser.parse_known_args(argv)
 
     unittest.main(argv=remaining)

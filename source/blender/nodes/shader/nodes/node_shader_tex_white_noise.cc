@@ -13,14 +13,18 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_tex_white_noise_cc {
+namespace blender {
+
+namespace nodes::node_shader_tex_white_noise_cc {
 
 static void sh_node_tex_white_noise_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Vector>("Vector").min(-10000.0f).max(10000.0f).implicit_field(
-      NODE_DEFAULT_INPUT_POSITION_FIELD);
-  b.add_input<decl::Float>("W")
+  b.add_input<decl::Vector>("Vector"_ustr)
+      .min(-10000.0f)
+      .max(10000.0f)
+      .implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD);
+  b.add_input<decl::Float>("W"_ustr)
       .min(-10000.0f)
       .max(10000.0f)
       .make_available([](bNode &node) {
@@ -28,18 +32,18 @@ static void sh_node_tex_white_noise_declare(NodeDeclarationBuilder &b)
         node.custom1 = 1;
       })
       .description("Value used as seed in 1D and 4D dimensions");
-  b.add_output<decl::Float>("Value");
-  b.add_output<decl::Color>("Color");
+  b.add_output<decl::Float>("Value"_ustr);
+  b.add_output<decl::Color>("Color"_ustr);
 }
 
-static void node_shader_buts_white_noise(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_shader_buts_white_noise(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  layout->prop(ptr, "noise_dimensions", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  layout.prop(ptr, "noise_dimensions", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 }
 
-static void node_shader_init_tex_white_noise(bNodeTree * /*ntree*/, bNode *node)
+static void node_shader_init_tex_white_noise(bNodeTree *node_tree, bNode *node)
 {
-  node->custom1 = 3;
+  node->custom1 = node_tree->type == NTREE_COMPOSIT ? 2 : 3;
 }
 
 static const char *gpu_shader_get_name(const int dimensions)
@@ -63,8 +67,8 @@ static int gpu_shader_tex_white_noise(GPUMaterial *mat,
 
 static void node_shader_update_tex_white_noise(bNodeTree *ntree, bNode *node)
 {
-  bNodeSocket *sockVector = bke::node_find_socket(*node, SOCK_IN, "Vector");
-  bNodeSocket *sockW = bke::node_find_socket(*node, SOCK_IN, "W");
+  bNodeSocket *sockVector = bke::node_find_socket(*node, SOCK_IN, "Vector"_ustr);
+  bNodeSocket *sockW = bke::node_find_socket(*node, SOCK_IN, "W"_ustr);
 
   bke::node_set_socket_availability(*ntree, *sockVector, node->custom1 != 1);
   bke::node_set_socket_availability(*ntree, *sockW, node->custom1 == 1 || node->custom1 == 4);
@@ -181,6 +185,13 @@ class WhiteNoiseFunction : public mf::MultiFunction {
       }
     }
   }
+
+  void hash_unique(UniqueHashBytes &hash) const override
+  {
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    hash.add(dimensions_);
+  }
 };
 
 static void sh_node_noise_build_multi_function(NodeMultiFunctionBuilder &builder)
@@ -238,7 +249,7 @@ NODE_SHADER_MATERIALX_BEGIN
       break;
   }
 
-  if (STREQ(socket_out_->name, "Value")) {
+  if (STREQ(socket_out_->identifier, "Value")) {
     return noise;
   }
 
@@ -252,15 +263,15 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_tex_white_noise_cc
+}  // namespace nodes::node_shader_tex_white_noise_cc
 
 void register_node_type_sh_tex_white_noise()
 {
-  namespace file_ns = blender::nodes::node_shader_tex_white_noise_cc;
+  namespace file_ns = nodes::node_shader_tex_white_noise_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeTexWhiteNoise", SH_NODE_TEX_WHITE_NOISE);
+  common_node_type_base(&ntype, "ShaderNodeTexWhiteNoise"_ustr, SH_NODE_TEX_WHITE_NOISE);
   ntype.ui_name = "White Noise Texture";
   ntype.ui_description = "Calculate a random value or color based on an input seed";
   ntype.enum_name_legacy = "TEX_WHITE_NOISE";
@@ -273,5 +284,7 @@ void register_node_type_sh_tex_white_noise()
   ntype.build_multi_function = file_ns::sh_node_noise_build_multi_function;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

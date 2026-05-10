@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "usd_reader_light.hh"
+#include "usd_colorspace_utils.hh"
 
 #include "BLI_math_rotation.h"
 
 #include "BKE_light.h"
 #include "BKE_object.hh"
-
-#include "IMB_colormanagement.hh"
 
 #include "DNA_light_types.h"
 #include "DNA_object_types.h"
@@ -27,12 +26,12 @@ void USDLightReader::create_object(Main *bmain)
   Light *blight = BKE_light_add(bmain, name_.c_str());
 
   object_ = BKE_object_add_only_object(bmain, OB_LAMP, name_.c_str());
-  object_->data = blight;
+  object_->data = id_cast<ID *>(blight);
 }
 
 void USDLightReader::read_object_data(Main *bmain, const pxr::UsdTimeCode time)
 {
-  Light *blight = (Light *)object_->data;
+  Light *blight = id_cast<Light *>(object_->data);
 
   if (blight == nullptr) {
     return;
@@ -160,6 +159,7 @@ void USDLightReader::read_object_data(Main *bmain, const pxr::UsdTimeCode time)
   if (pxr::UsdAttribute color_attr = light_api.GetColorAttr()) {
     pxr::GfVec3f color;
     if (color_attr.Get(&color, time)) {
+      colorspace_attr_to_scene_linear(color_attr, color);
       blight->r = color[0];
       blight->g = color[1];
       blight->b = color[2];

@@ -8,33 +8,15 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
 #include "DNA_defs.h"
+
+namespace blender {
 
 struct ID;
 
-typedef struct TreeStoreElem {
-  short type, nr, flag, used;
-
-  /* XXX We actually also store non-ID data in this pointer for identifying
-   * the #TreeStoreElem for a #TreeElement when rebuilding the tree. Ugly! */
-  struct ID *id;
-} TreeStoreElem;
-
-/** Used only to store data in blend files. */
-typedef struct TreeStore {
-  /** Was previously used for memory pre-allocation. */
-  int totelem DNA_DEPRECATED;
-  /** Number of elements in data array. */
-  int usedelem;
-  /**
-   * Elements to be packed from mempool in `writefile.cc`
-   * or extracted to mempool in `readfile.cc`.
-   */
-  TreeStoreElem *data;
-} TreeStore;
-
 /** #TreeStoreElem.flag */
-enum {
+enum eTreeStoreElem_Flag : short {
   TSE_CLOSED = (1 << 0),
   TSE_SELECTED = (1 << 1),
   TSE_TEXTBUT = (1 << 2),
@@ -51,9 +33,10 @@ enum {
   TSE_DRAG_ANY = (TSE_DRAG_INTO | TSE_DRAG_BEFORE | TSE_DRAG_AFTER),
   TSE_HIGHLIGHTED_ANY = (TSE_HIGHLIGHTED | TSE_HIGHLIGHTED_ICON),
 };
+ENUM_OPERATORS(eTreeStoreElem_Flag)
 
 /** #TreeStoreElem.types */
-typedef enum eTreeStoreElemType {
+enum eTreeStoreElemType : short {
   /**
    * If an element is of this type, `TreeStoreElem.id` points to a valid ID and the ID-type can be
    * received through `TreeElement.idcode` (or `GS(TreeStoreElem.id->name)`). Note however that the
@@ -116,7 +99,7 @@ typedef enum eTreeStoreElemType {
   TSE_GREASE_PENCIL_NODE = 48,
   TSE_LINKED_NODE_TREE = 49,
   TSE_ACTION_SLOT = 50,
-} eTreeStoreElemType;
+};
 
 /** Check whether given #TreeStoreElem should have a real ID in #TreeStoreElem.id member. */
 #define TSE_IS_REAL_ID(_tse) \
@@ -133,3 +116,29 @@ typedef enum eTreeStoreElemType {
          TSE_ID_BASE, \
          TSE_GP_LAYER, \
          TSE_GENERIC_LABEL))
+
+struct TreeStoreElem {
+  eTreeStoreElemType type = TSE_SOME_ID;
+  short nr = 0;
+  eTreeStoreElem_Flag flag = {};
+  short used = 0;
+
+  /* XXX We actually also store non-ID data in this pointer for identifying
+   * the #TreeStoreElem for a #TreeElement when rebuilding the tree. Ugly! */
+  struct ID *id = nullptr;
+};
+
+/** Used only to store data in blend files. */
+struct TreeStore {
+  /** Was previously used for memory pre-allocation. */
+  DNA_DEPRECATED int totelem = 0;
+  /** Number of elements in data array. */
+  int usedelem = 0;
+  /**
+   * Elements to be packed from mempool in `writefile.cc`
+   * or extracted to mempool in `readfile.cc`.
+   */
+  TreeStoreElem *data = nullptr;
+};
+
+}  // namespace blender

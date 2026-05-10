@@ -10,6 +10,8 @@
 
 #include "ED_view3d.hh"
 
+namespace blender {
+
 /* internal exports only */
 
 struct ARegion;
@@ -68,7 +70,10 @@ void view3d_draw_region_info(const bContext *C, ARegion *region);
 void view3d_depths_rect_create(ARegion *region, rcti *rect, ViewDepths *r_d);
 /**
  * Utility function to find the closest Z value, use for auto-depth.
+ *
+ * \param r_xy: When non-null, set this to the region relative position of the hit.
  */
+float view3d_depth_near_ex(ViewDepths *d, int r_xy[2]);
 float view3d_depth_near(ViewDepths *d);
 
 /* view3d_dropboxes.cc */
@@ -193,7 +198,7 @@ void VIEW3D_OT_interactive_add(wmOperatorType *ot);
 
 extern "C" const char *view3d_context_dir[]; /* doc access */
 
-/* view3d_widgets.c */
+/* view3d_gizmo_*.cc */
 
 void VIEW3D_GGT_light_spot(wmGizmoGroupType *gzgt);
 void VIEW3D_GGT_light_point(wmGizmoGroupType *gzgt);
@@ -233,3 +238,5 @@ extern bool view3d_camera_border_hack_test;
 
 /* view3d_navigate_smoothview.cc */
 void view3d_smooth_free(RegionView3D *rv3d);
+
+}  // namespace blender

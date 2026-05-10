@@ -4,6 +4,7 @@
 #include "testing/testing.h"
 
 #include "BKE_brush.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -14,14 +15,11 @@
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
 
-class BrushTest : public testing::Test {
+namespace blender {
+
+class BrushTest : public bke::BlenderGTestBase {
  public:
   Main *bmain = nullptr;
-
-  static void SetUpTestSuite()
-  {
-    BKE_idtype_init();
-  }
 
   void SetUp() override
   {
@@ -96,13 +94,6 @@ TEST_F(BrushTest, deep_copy_grease_pencil_brush)
   brush->gpencil_settings->material_alt = static_cast<Material *>(
       BKE_id_new(bmain, ID_MA, "UnitTestMaterialAlt"));
 
-  /* Embedded Data */
-  brush->gpencil_settings->material->nodetree = BKE_id_new_nomain<bNodeTree>("UnitTestNodeTree");
-  brush->gpencil_settings->material->nodetree->id.flag |= ID_FLAG_EMBEDDED_DATA;
-  brush->gpencil_settings->material_alt->nodetree = BKE_id_new_nomain<bNodeTree>(
-      "UnitTestNodeTree2");
-  brush->gpencil_settings->material_alt->nodetree->id.flag |= ID_FLAG_EMBEDDED_DATA;
-
   Brush *duplicated_brush = BKE_brush_duplicate(
       bmain, brush, USER_DUP_OBDATA | USER_DUP_LINKED_ID, LIB_ID_DUPLICATE_IS_ROOT_ID);
 
@@ -120,3 +111,5 @@ TEST_F(BrushTest, deep_copy_grease_pencil_brush)
 
   EXPECT_TRUE(BLI_listbase_is_empty(&bmain->nodetrees));
 }
+
+}  // namespace blender

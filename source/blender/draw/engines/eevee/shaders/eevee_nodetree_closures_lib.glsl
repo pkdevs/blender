@@ -5,6 +5,7 @@
 #pragma once
 
 #include "infos/eevee_common_infos.hh"
+#include "infos/eevee_uniform_infos.hh"
 
 SHADER_LIBRARY_CREATE_INFO(eevee_global_ubo)
 SHADER_LIBRARY_CREATE_INFO(eevee_utility_texture)
@@ -23,6 +24,10 @@ packed_float3 g_volume_absorption;
 /* The Closure type is never used. Use float as dummy type. */
 #define Closure float
 #define CLOSURE_DEFAULT 0.0f
+
+#ifdef GLSL_CPP_STUBS
+#  define CLOSURE_BIN_COUNT 3
+#endif
 
 /* Maximum number of picked closure. */
 #ifndef CLOSURE_BIN_COUNT
@@ -59,27 +64,27 @@ ClosureUndetermined g_closure_get_resolved(uchar i, float weight_fac)
   return cl;
 }
 
-ClosureType closure_type_get(ClosureDiffuse cl)
+ClosureType closure_type_get(ClosureDiffuse /*cl*/)
 {
   return CLOSURE_BSDF_DIFFUSE_ID;
 }
 
-ClosureType closure_type_get(ClosureTranslucent cl)
+ClosureType closure_type_get(ClosureTranslucent /*cl*/)
 {
   return CLOSURE_BSDF_TRANSLUCENT_ID;
 }
 
-ClosureType closure_type_get(ClosureReflection cl)
+ClosureType closure_type_get(ClosureReflection /*cl*/)
 {
   return CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID;
 }
 
-ClosureType closure_type_get(ClosureRefraction cl)
+ClosureType closure_type_get(ClosureRefraction /*cl*/)
 {
   return CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID;
 }
 
-ClosureType closure_type_get(ClosureSubsurface cl)
+ClosureType closure_type_get(ClosureSubsurface /*cl*/)
 {
   return CLOSURE_BSSRDF_BURLEY_ID;
 }
@@ -87,7 +92,7 @@ ClosureType closure_type_get(ClosureSubsurface cl)
 /**
  * Returns true if the closure is to be selected based on the input weight.
  */
-bool closure_select_check(float weight, inout float total_weight, inout float r)
+bool closure_select_check(float weight, float &total_weight, float &r)
 {
   if (weight < 1e-5f) {
     return false;
@@ -104,9 +109,7 @@ bool closure_select_check(float weight, inout float total_weight, inout float r)
 /**
  * Assign `candidate` to `destination` based on a random value and the respective weights.
  */
-void closure_select(inout ClosureUndetermined destination,
-                    inout float random,
-                    ClosureUndetermined candidate)
+void closure_select(ClosureUndetermined &destination, float &random, ClosureUndetermined candidate)
 {
   float candidate_color_weight = average(abs(candidate.color));
   if (closure_select_check(candidate.weight * candidate_color_weight, destination.weight, random))
@@ -121,13 +124,16 @@ void closure_select(inout ClosureUndetermined destination,
 void closure_weights_reset(float closure_rand)
 {
   g_closure_rand[0] = closure_rand;
+  g_closure_bins[0].type = CLOSURE_NONE_ID;
   g_closure_bins[0].weight = 0.0f;
 #if CLOSURE_BIN_COUNT > 1
   g_closure_rand[1] = closure_rand;
+  g_closure_bins[1].type = CLOSURE_NONE_ID;
   g_closure_bins[1].weight = 0.0f;
 #endif
 #if CLOSURE_BIN_COUNT > 2
   g_closure_rand[2] = closure_rand;
+  g_closure_bins[2].type = CLOSURE_NONE_ID;
   g_closure_bins[2].weight = 0.0f;
 #endif
 

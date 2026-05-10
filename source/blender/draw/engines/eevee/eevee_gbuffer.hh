@@ -163,12 +163,10 @@ struct GBuffer {
     data_count = max_ii(closure_fb_layer_count, data_count);
     normal_count = max_ii(normal_fb_layer_count, normal_count);
 
-    dummy_header_tx_.ensure_2d_array(
-        gpu::TextureFormat::UINT_32, int2(1), 1, GPU_TEXTURE_USAGE_SHADER_WRITE);
-    dummy_closure_tx_.ensure_2d_array(
-        gpu::TextureFormat::UNORM_10_10_10_2, int2(1), 1, GPU_TEXTURE_USAGE_SHADER_WRITE);
-    dummy_normal_tx_.ensure_2d_array(
-        gpu::TextureFormat::UNORM_16_16, int2(1), 1, GPU_TEXTURE_USAGE_SHADER_WRITE);
+    eGPUTextureUsage dummy_use = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
+    dummy_header_tx_.ensure_2d_array(gpu::TextureFormat::UINT_32, int2(1), 1, dummy_use);
+    dummy_closure_tx_.ensure_2d_array(gpu::TextureFormat::UNORM_10_10_10_2, int2(1), 1, dummy_use);
+    dummy_normal_tx_.ensure_2d_array(gpu::TextureFormat::UNORM_16_16, int2(1), 1, dummy_use);
 
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE |
                              GPU_TEXTURE_USAGE_ATTACHMENT;
@@ -191,7 +189,7 @@ struct GBuffer {
   }
 
   /* Bind the GBuffer frame-buffer correctly using the correct workarounds. */
-  void bind(Framebuffer &gbuffer_fb)
+  void bind(Framebuffer &gbuffer_fb, bool clear_combined = false)
   {
     /* Workaround a Metal bug that is only showing up on ATI/Intel GPUs. */
     if (GPU_type_matches(
@@ -208,11 +206,14 @@ struct GBuffer {
       GPU_framebuffer_bind(gbuffer_fb);
       GPU_framebuffer_clear_stencil(gbuffer_fb, 0x0u);
     }
+
+    GPULoadOp combined_load_action = clear_combined ? GPU_LOADACTION_CLEAR : GPU_LOADACTION_LOAD;
+
     GPU_framebuffer_bind_ex(
         gbuffer_fb,
         {
             {GPU_LOADACTION_LOAD, GPU_STOREACTION_STORE},       /* Depth. */
-            {GPU_LOADACTION_LOAD, GPU_STOREACTION_STORE},       /* Combined. */
+            {combined_load_action, GPU_STOREACTION_STORE, {0}}, /* Combined. */
             {GPU_LOADACTION_CLEAR, GPU_STOREACTION_STORE, {0}}, /* GBuf Header. */
             {GPU_LOADACTION_DONT_CARE, GPU_STOREACTION_STORE},  /* GBuf Normal. */
             {GPU_LOADACTION_DONT_CARE, GPU_STOREACTION_STORE},  /* GBuf Closure. */

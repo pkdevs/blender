@@ -13,7 +13,7 @@ void main()
   int2 texel_film = int2(gl_FragCoord.xy) - uniform_buf.film.offset;
   float out_depth;
 
-  if (uniform_buf.film.display_only) {
+  if (display_only) {
     out_depth = imageLoadFast(depth_img, texel_film).r;
 
     if (display_id == -1) {
@@ -37,5 +37,5 @@ void main()
 
   gl_FragDepth = drw_depth_view_to_screen(-out_depth);
 
-  gl_FragDepth = film_display_depth_amend(texel_film, gl_FragDepth);
+  gl_FragDepth = film_display_depth_amend(gl_FragDepth);
 }

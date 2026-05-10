@@ -85,6 +85,17 @@ static bool rtc_progress_func(void *user_ptr, const double n)
   return !progress->get_cancel();
 }
 
+/* A work-around for Embree GPU builder that crashes on specific configuration of visibility flags
+ * and instancing. Apply to both CPU and GPU to keep behavior consistent to help with potential
+ * platform-specific visibility behavior. See #158123. */
+static uint get_visibility_for_tracing(const Object *object)
+{
+  /* Set the MSB to workaround the crash in Embree GPU. The bit is essentially ignored during
+   * rendering as none of the ray visibility flags (even with shadow linking shift applied)
+   * collides with it. */
+  return object->visibility_for_tracing() | (1U << 31U);
+}
+
 BVHEmbree::BVHEmbree(const BVHParams &params_,
                      const vector<Geometry *> &geometry_,
                      const vector<Object *> &objects_)
@@ -231,7 +242,7 @@ void BVHEmbree::add_object(Object *ob, const int i)
   }
   else if (geom->is_hair()) {
     Hair *hair = static_cast<Hair *>(geom);
-    if (hair->num_curves() > 0) {
+    if (hair->is_traceable()) {
       add_curves(ob, hair, i);
     }
   }
@@ -286,7 +297,7 @@ void BVHEmbree::add_instance(Object *ob, const int i)
 #  endif
   );
 
-  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+  rtcSetGeometryMask(geom_id, get_visibility_for_tracing(ob));
   rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
 
   rtcCommitGeometry(geom_id);
@@ -359,7 +370,7 @@ void BVHEmbree::add_triangles(const Object *ob, const Mesh *mesh, const int i)
   set_tri_vertex_buffer(geom_id, mesh, false);
 
   rtcSetGeometryUserData(geom_id, (void *)prim_offset);
-  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+  rtcSetGeometryMask(geom_id, get_visibility_for_tracing(ob));
   rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
 
   rtcCommitGeometry(geom_id);
@@ -663,7 +674,7 @@ void BVHEmbree::add_points(const Object *ob, const PointCloud *pointcloud, const
   set_point_vertex_buffer(geom_id, pointcloud, false);
 
   rtcSetGeometryUserData(geom_id, (void *)prim_offset);
-  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+  rtcSetGeometryMask(geom_id, get_visibility_for_tracing(ob));
   rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
 
   rtcCommitGeometry(geom_id);
@@ -742,7 +753,7 @@ void BVHEmbree::add_curves(const Object *ob, const Hair *hair, const int i)
   set_curve_vertex_buffer(geom_id, hair, false);
 
   rtcSetGeometryUserData(geom_id, (void *)prim_offset);
-  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+  rtcSetGeometryMask(geom_id, get_visibility_for_tracing(ob));
   rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
 
   rtcCommitGeometry(geom_id);
@@ -771,7 +782,7 @@ void BVHEmbree::refit(Progress &progress)
       }
       else if (geom->is_hair()) {
         Hair *hair = static_cast<Hair *>(geom);
-        if (hair->num_curves() > 0) {
+        if (hair->is_traceable()) {
           RTCGeometry geom = rtcGetGeometry(scene, geom_id + 1);
           set_curve_vertex_buffer(geom, hair, true);
           rtcSetGeometryUserData(geom, (void *)hair->curve_segment_offset);

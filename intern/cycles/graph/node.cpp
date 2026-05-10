@@ -301,15 +301,15 @@ bool Node::has_default_value(const SocketType &input) const
 {
   const void *src = input.default_value;
   void *dst = &get_socket_value<char>(this, input);
-  return memcmp(dst, src, input.size()) == 0;
+  return memcmp(dst, src, input.packed_size()) == 0;
 }
 
 void Node::set_default_value(const SocketType &input)
 {
   const void *src = input.default_value;
   void *dst = ((char *)this) + input.struct_offset;
-  if (input.size() > 0) {
-    memcpy(dst, src, input.size());
+  if (input.packed_size() > 0) {
+    memcpy(dst, src, input.packed_size());
   }
 }
 
@@ -379,7 +379,7 @@ void Node::copy_value(const SocketType &socket, const Node &other, const SocketT
   else {
     const void *src = ((char *)&other) + other_socket.struct_offset;
     void *dst = ((char *)this) + socket.struct_offset;
-    memcpy(dst, src, socket.size());
+    memcpy(dst, src, socket.storage_size());
 
     if (socket.type == SocketType::NODE) {
       Node *node = get_socket_value<Node *>(this, socket);
@@ -577,7 +577,7 @@ namespace {
 
 template<typename T> void value_hash(const Node *node, const SocketType &socket, MD5Hash &md5)
 {
-  md5.append(((uint8_t *)node) + socket.struct_offset, socket.size());
+  md5.append(((uint8_t *)node) + socket.struct_offset, socket.packed_size());
 }
 
 void float3_hash(const Node *node, const SocketType &socket, MD5Hash &md5)
@@ -729,7 +729,7 @@ size_t Node::get_total_size_in_bytes() const
       case SocketType::ENUM:
       case SocketType::TRANSFORM:
       case SocketType::NODE:
-        total_size += socket.size();
+        total_size += socket.storage_size();
         break;
 
       case SocketType::BOOLEAN_ARRAY:
@@ -817,22 +817,22 @@ void Node::dereference_all_used_nodes()
 
 bool Node::socket_is_modified(const SocketType &input) const
 {
-  return (socket_modified & input.modified_flag_bit) != 0;
+  return socket_modified.test(input.modified_flag_bit);
 }
 
 bool Node::is_modified() const
 {
-  return socket_modified != 0;
+  return socket_modified.any();
 }
 
 void Node::tag_modified()
 {
-  socket_modified = ~0ull;
+  socket_modified.set();
 }
 
 void Node::clear_modified()
 {
-  socket_modified = 0;
+  socket_modified.reset();
 }
 
 template<typename T> void Node::set_if_different(const SocketType &input, T value)
@@ -842,7 +842,7 @@ template<typename T> void Node::set_if_different(const SocketType &input, T valu
   }
 
   get_socket_value<T>(this, input) = value;
-  socket_modified |= input.modified_flag_bit;
+  socket_modified.set(input.modified_flag_bit);
 }
 
 void Node::set_if_different(const SocketType &input, Node *value)
@@ -861,7 +861,7 @@ void Node::set_if_different(const SocketType &input, Node *value)
   }
 
   get_socket_value<Node *>(this, input) = value;
-  socket_modified |= input.modified_flag_bit;
+  socket_modified.set(input.modified_flag_bit);
 }
 
 template<typename T> void Node::set_if_different(const SocketType &input, array<T> &value)
@@ -873,7 +873,7 @@ template<typename T> void Node::set_if_different(const SocketType &input, array<
   }
 
   get_socket_value<array<T>>(this, input).steal_data(value);
-  socket_modified |= input.modified_flag_bit;
+  socket_modified.set(input.modified_flag_bit);
 }
 
 void Node::set_if_different(const SocketType &input, array<Node *> &value)
@@ -894,7 +894,7 @@ void Node::set_if_different(const SocketType &input, array<Node *> &value)
   }
 
   get_socket_value<array<Node *>>(this, input).steal_data(value);
-  socket_modified |= input.modified_flag_bit;
+  socket_modified.set(input.modified_flag_bit);
 }
 
 void Node::print_modified_sockets() const

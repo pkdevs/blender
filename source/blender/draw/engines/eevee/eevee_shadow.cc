@@ -21,8 +21,6 @@
 
 namespace blender::eevee {
 
-ShadowTechnique ShadowModule::shadow_technique = ShadowTechnique::ATOMIC_RASTER;
-
 /* -------------------------------------------------------------------- */
 /** \name Tile map
  *
@@ -255,7 +253,7 @@ void ShadowPunctual::end_sync(Light &light)
         light.type, object_to_world, near, far, face, light.shadow_set_membership);
   }
 
-  light.local.tilemaps_count = tilemaps_needed;
+  light.local().tilemaps_count = tilemaps_needed;
   light.tilemap_index = tilemap_pool.tilemaps_data.size();
   for (ShadowTileMap *tilemap : tilemaps_) {
     /* Add shadow tile-maps grouped by lights to the GPU buffer. */
@@ -377,9 +375,9 @@ void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera
   /* Offset in tiles between the first and the last tile-maps. */
   int2 offset_vector = int2(round(farthest_tilemap_center / tile_size));
 
-  light.sun.clipmap_base_offset_neg = int2(0); /* Unused. */
-  light.sun.clipmap_base_offset_pos = (offset_vector * (1 << 16)) /
-                                      max_ii(levels_range.size() - 1, 1);
+  light.sun().clipmap_base_offset_neg = int2(0); /* Unused. */
+  light.sun().clipmap_base_offset_pos = (offset_vector * (1 << 16)) /
+                                        max_ii(levels_range.size() - 1, 1);
 
   /* \note cascade_level_range starts the range at the unique LOD to apply to all tile-maps. */
   int level = levels_range.first();
@@ -388,7 +386,7 @@ void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera
 
     /* Equal spacing between cascades layers since we want uniform shadow density. */
     int2 level_offset = origin_offset +
-                        shadow_cascade_grid_offset(light.sun.clipmap_base_offset_pos, i);
+                        shadow_cascade_grid_offset(light.sun().clipmap_base_offset_pos, i);
     tilemap->sync_orthographic(
         object_mat, level_offset, level, SHADOW_PROJECTION_CASCADE, light.shadow_set_membership);
 
@@ -397,14 +395,14 @@ void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera
     tilemap->set_updated();
   }
 
-  light.sun.clipmap_origin = float2(origin_offset) * tile_size;
+  light.sun().clipmap_origin = float2(origin_offset) * tile_size;
 
   light.type = LIGHT_SUN_ORTHO;
 
   /* Not really clip-maps, but this is in order to make #light_tilemap_max_get() work and determine
    * the scaling. */
-  light.sun.clipmap_lod_min = levels_range.first();
-  light.sun.clipmap_lod_max = levels_range.last();
+  light.sun().clipmap_lod_min = levels_range.first();
+  light.sun().clipmap_lod_max = levels_range.last();
 }
 
 /************************************************************************
@@ -472,8 +470,8 @@ void ShadowDirectional::clipmap_tilemaps_distribution(Light &light, const Camera
   }
 
   /* Number of levels is limited to 32 by `clipmap_level_range()` for this reason. */
-  light.sun.clipmap_base_offset_pos = pos_offset;
-  light.sun.clipmap_base_offset_neg = neg_offset;
+  light.sun().clipmap_base_offset_pos = pos_offset;
+  light.sun().clipmap_base_offset_neg = neg_offset;
 
   float tile_size_max = ShadowDirectional::tile_size_get(levels_range.last());
   int2 level_offset_max = tilemaps_[levels_range.size() - 1]->grid_offset;
@@ -487,10 +485,10 @@ void ShadowDirectional::clipmap_tilemaps_distribution(Light &light, const Camera
   light.object_to_world.y.w = location.y;
   light.object_to_world.z.w = location.z;
   /* Used as origin for the clipmap_base_offset trick. */
-  light.sun.clipmap_origin = float2(level_offset_max * tile_size_max);
+  light.sun().clipmap_origin = float2(level_offset_max * tile_size_max);
 
-  light.sun.clipmap_lod_min = levels_range.first();
-  light.sun.clipmap_lod_max = levels_range.last();
+  light.sun().clipmap_lod_min = levels_range.first();
+  light.sun().clipmap_lod_max = levels_range.last();
 }
 
 void ShadowDirectional::release_excess_tilemaps(const Light &light, const Camera &camera)
@@ -571,23 +569,7 @@ ShadowModule::ShadowModule(Instance &inst, ShadowSceneData &data) : inst_(inst),
 
 void ShadowModule::init()
 {
-  /* Temp: Disable TILE_COPY path while efficient solution for parameter buffer overflow is
-   * identified. This path can be re-enabled in future. */
-#if 0
-  /* Determine shadow update technique and atlas format.
-   * NOTE(Metal): Metal utilizes a tile-optimized approach for Apple Silicon's architecture. */
-  const bool is_metal_backend = (GPU_backend_get_type() == GPU_BACKEND_METAL);
-  const bool is_tile_based_arch = (GPU_platform_architecture() == GPU_ARCHITECTURE_TBDR);
-  if (is_metal_backend && is_tile_based_arch) {
-    ShadowModule::shadow_technique = ShadowTechnique::TILE_COPY;
-  }
-  else
-#endif
-  {
-    ShadowModule::shadow_technique = ShadowTechnique::ATOMIC_RASTER;
-  }
-
-  ::Scene &scene = *inst_.scene;
+  blender::Scene &scene = *inst_.scene;
 
   global_lod_bias_ = (1.0f - scene.eevee.shadow_resolution_scale) * SHADOW_TILEMAP_LOD;
 
@@ -606,8 +588,14 @@ void ShadowModule::init()
     }
   }
 
-  data_.ray_count = clamp_i(scene.eevee.shadow_ray_count, 1, SHADOW_MAX_RAY);
-  data_.step_count = clamp_i(scene.eevee.shadow_step_count, 1, SHADOW_MAX_STEP);
+  if (enabled_) {
+    data_.ray_count = clamp_i(scene.eevee.shadow_ray_count, 1, SHADOW_MAX_RAY);
+    data_.step_count = clamp_i(scene.eevee.shadow_step_count, 1, SHADOW_MAX_STEP);
+  }
+  else {
+    data_.ray_count = 1;
+    data_.step_count = 1;
+  }
 
   /* Pool size is in MBytes. */
   const size_t pool_byte_size = enabled_ ? scene.eevee.shadow_pool_size * square_i(1024) : 1;
@@ -618,10 +606,8 @@ void ShadowModule::init()
   const int2 atlas_extent = shadow_page_size_ * int2(SHADOW_PAGE_PER_ROW);
   const int atlas_layers = divide_ceil_u(shadow_page_len_, SHADOW_PAGE_PER_LAYER);
 
-  eGPUTextureUsage tex_usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
-  if (ShadowModule::shadow_technique == ShadowTechnique::ATOMIC_RASTER) {
-    tex_usage |= GPU_TEXTURE_USAGE_ATOMIC;
-  }
+  eGPUTextureUsage tex_usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE |
+                               GPU_TEXTURE_USAGE_ATOMIC;
   if (atlas_tx_.ensure_2d_array(atlas_type, atlas_extent, atlas_layers, tex_usage)) {
     /* Global update. */
     do_full_update_ = true;
@@ -753,41 +739,42 @@ void ShadowModule::begin_sync()
   }
 }
 
-void ShadowModule::sync_object(const Object *ob,
-                               const ObjectHandle &handle,
-                               const ResourceHandleRange &resource_handle,
+void ShadowModule::sync_object(const ObjectHandle &ob_handle,
                                bool is_alpha_blend,
                                bool has_transparent_shadows)
 {
-  bool is_shadow_caster = !(ob->visibility_flag & OB_HIDE_SHADOW);
+  bool is_shadow_caster = !(ob_handle.object->visibility_flag & OB_HIDE_SHADOW);
   if (!is_shadow_caster && !is_alpha_blend) {
     return;
   }
 
-  ShadowObject &shadow_ob = objects_.lookup_or_add_default(handle.object_key);
-  shadow_ob.used = true;
-  const bool is_initialized = shadow_ob.resource_handle.is_valid();
-  const bool has_jittered_transparency = has_transparent_shadows && data_.use_jitter;
-  if (is_shadow_caster && (handle.recalc || !is_initialized || has_jittered_transparency)) {
-    if (handle.recalc && is_initialized) {
-      past_casters_updated_.append(shadow_ob.resource_handle.raw());
-    }
+  for (int i : IndexRange(ob_handle.instances_count())) {
+    ShadowObject &shadow_ob = objects_.lookup_or_add_default(ObjectKey(ob_handle, i));
+    shadow_ob.used = true;
+    const bool is_initialized = shadow_ob.resource_handle.is_valid();
+    const bool has_jittered_transparency = has_transparent_shadows && data_.use_jitter;
+    ResourceHandle instance_handle = ob_handle.res_handle.sub_handle(i);
+    if (is_shadow_caster && (ob_handle.recalc || !is_initialized || has_jittered_transparency)) {
+      if (ob_handle.recalc && is_initialized) {
+        past_casters_updated_.append(shadow_ob.resource_handle.raw());
+      }
 
-    if (has_jittered_transparency) {
-      jittered_transparent_casters_.append(resource_handle.raw());
+      if (has_jittered_transparency) {
+        jittered_transparent_casters_.append(instance_handle.raw());
+      }
+      else {
+        curr_casters_updated_.append(instance_handle.raw());
+      }
     }
-    else {
-      curr_casters_updated_.append(resource_handle.raw());
-    }
-  }
-  shadow_ob.resource_handle = resource_handle;
+    shadow_ob.resource_handle = instance_handle;
 
-  if (is_shadow_caster) {
-    curr_casters_.append(resource_handle.raw());
+    if (is_shadow_caster) {
+      curr_casters_.append(instance_handle.raw());
+    }
   }
 
   if (is_alpha_blend && !inst_.is_baking()) {
-    tilemap_usage_transparent_ps_->draw(box_batch_, resource_handle);
+    tilemap_usage_transparent_ps_->draw(box_batch_, ob_handle.res_handle);
   }
 }
 
@@ -932,20 +919,23 @@ void ShadowModule::end_sync()
       /* Mark for update all shadow pages touching an updated shadow caster. */
       PassSimple &pass = caster_update_ps_;
       pass.init();
+      pass.framebuffer_set(&update_tag_fb_);
+      pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_CULL_FRONT);
       pass.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_UPDATE));
       pass.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
       pass.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+      pass.push_constant("tilemap_count", int(tilemap_pool.tilemaps_data.size()));
       /* Past caster transforms. */
       if (past_casters_updated_.size() > 0) {
         pass.bind_ssbo("bounds_buf", &manager.bounds_buf.previous());
         pass.bind_ssbo("resource_ids_buf", past_casters_updated_);
-        pass.dispatch(int3(past_casters_updated_.size(), 1, tilemap_pool.tilemaps_data.size()));
+        pass.draw(box_batch_, past_casters_updated_.size() * tilemap_pool.tilemaps_data.size());
       }
       /* Current caster transforms. */
       if (curr_casters_updated_.size() > 0) {
         pass.bind_ssbo("bounds_buf", &manager.bounds_buf.current());
         pass.bind_ssbo("resource_ids_buf", curr_casters_updated_);
-        pass.dispatch(int3(curr_casters_updated_.size(), 1, tilemap_pool.tilemaps_data.size()));
+        pass.draw(box_batch_, curr_casters_updated_.size() * tilemap_pool.tilemaps_data.size());
       }
       pass.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
@@ -955,13 +945,31 @@ void ShadowModule::end_sync()
       PassSimple &pass = jittered_transparent_caster_update_ps_;
       pass.init();
       if (jittered_transparent_casters_.size() > 0) {
+        pass.framebuffer_set(&update_tag_fb_);
+        pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_CULL_FRONT);
         pass.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_UPDATE));
+        pass.push_constant("tilemap_count", int(tilemap_pool.tilemaps_data.size()));
         pass.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
         pass.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
         pass.bind_ssbo("bounds_buf", &manager.bounds_buf.current());
         pass.bind_ssbo("resource_ids_buf", jittered_transparent_casters_);
-        pass.dispatch(
-            int3(jittered_transparent_casters_.size(), 1, tilemap_pool.tilemaps_data.size()));
+        pass.draw(box_batch_,
+                  jittered_transparent_casters_.size() * tilemap_pool.tilemaps_data.size());
+        pass.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+    }
+
+    {
+      /* Propagate the update tag to the lower LODs. */
+      PassSimple &pass = update_propagate_ps_;
+      pass.init();
+      if (past_casters_updated_.size() > 0 || curr_casters_updated_.size() > 0 ||
+          jittered_transparent_casters_.size() > 0)
+      {
+        pass.shader_set(inst_.shaders.static_shader_get(SHADOW_TILEMAP_TAG_UPDATE_PROPAGATE));
+        pass.bind_ssbo("tilemaps_buf", tilemap_pool.tilemaps_data);
+        pass.bind_ssbo("tiles_buf", tilemap_pool.tiles_data);
+        pass.dispatch(int3(1, 1, tilemap_pool.tilemaps_data.size()));
         pass.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
     }
@@ -1082,9 +1090,7 @@ void ShadowModule::end_sync()
         sub.barrier(GPU_BARRIER_TEXTURE_FETCH);
       }
 
-      /* NOTE: We do not need to run the clear pass when using the TBDR update variant, as tiles
-       * will be fully cleared as part of the shadow raster step. */
-      if (ShadowModule::shadow_technique != ShadowTechnique::TILE_COPY) {
+      {
         /** Clear pages that need to be rendered. */
         PassSimple::Sub &sub = pass.sub("RenderClear");
         sub.framebuffer_set(&render_fb_);
@@ -1275,6 +1281,11 @@ void ShadowModule::ShadowView::compute_visibility(ObjectBoundsBuf &bounds,
 
 void ShadowModule::set_view(View &view, int2 extent)
 {
+  data_.film_pixel_radius = screen_pixel_radius(view.wininv(), view.is_persp(), extent);
+}
+
+void ShadowModule::render(View &view, int2 extent)
+{
   if (enabled_ == false) {
     /* All lights have been tagged to have no shadow. */
     return;
@@ -1288,34 +1299,13 @@ void ShadowModule::set_view(View &view, int2 extent)
                                    1);
   max_view_per_tilemap_ = max_view_per_tilemap();
 
-  data_.film_pixel_radius = screen_pixel_radius(view.wininv(), view.is_persp(), extent);
-  inst_.uniform_data.push_update();
-
   usage_tag_fb_resolution_ = math::divide_ceil(extent, int2(std::exp2(usage_tag_fb_lod_)));
   usage_tag_fb.ensure(usage_tag_fb_resolution_);
 
-  eGPUTextureUsage usage = GPU_TEXTURE_USAGE_ATTACHMENT | GPU_TEXTURE_USAGE_MEMORYLESS;
-  int2 fb_size = int2(SHADOW_TILEMAP_RES * shadow_page_size_);
-  int fb_layers = SHADOW_VIEW_MAX;
+  /* Create attachment-less framebuffer. */
+  render_fb_.ensure(int2(SHADOW_TILEMAP_RES * shadow_page_size_));
 
-  if (shadow_technique == ShadowTechnique::ATOMIC_RASTER) {
-    /* Create attachment-less framebuffer. */
-    shadow_depth_fb_tx_.free();
-    shadow_depth_accum_tx_.free();
-    render_fb_.ensure(fb_size);
-  }
-  else if (shadow_technique == ShadowTechnique::TILE_COPY) {
-    /* Create memoryless depth attachment for on-tile surface depth accumulation. */
-    shadow_depth_fb_tx_.ensure_2d_array(
-        gpu::TextureFormat::SFLOAT_32_DEPTH, fb_size, fb_layers, usage);
-    shadow_depth_accum_tx_.ensure_2d_array(
-        gpu::TextureFormat::SFLOAT_32, fb_size, fb_layers, usage);
-    render_fb_.ensure(GPU_ATTACHMENT_TEXTURE(shadow_depth_fb_tx_),
-                      GPU_ATTACHMENT_TEXTURE(shadow_depth_accum_tx_));
-  }
-  else {
-    BLI_assert_unreachable();
-  }
+  update_tag_fb_.ensure(int2(SHADOW_TILEMAP_RES));
 
   inst_.hiz_buffer.update();
 
@@ -1326,14 +1316,15 @@ void ShadowModule::set_view(View &view, int2 extent)
       GPU_uniformbuf_clear_to_zero(shadow_multi_view_.matrices_ubo_get());
 
       inst_.manager->submit(tilemap_setup_ps_, view);
-      if (assign_if_different(update_casters_, false)) {
-        /* Run caster update only once. */
-        /* TODO(fclem): There is an optimization opportunity here where we can
-         * test casters only against the static tile-maps instead of all of them. */
-        inst_.manager->submit(caster_update_ps_, view);
-      }
       if (loop_count == 0) {
+        if (assign_if_different(update_casters_, false)) {
+          /* Run caster update only once. */
+          /* TODO(fclem): There is an optimization opportunity here where we can
+           * test casters only against the static tile-maps instead of all of them. */
+          inst_.manager->submit(caster_update_ps_, view);
+        }
         inst_.manager->submit(jittered_transparent_caster_update_ps_, view);
+        inst_.manager->submit(update_propagate_ps_, view);
       }
       inst_.manager->submit(tilemap_usage_ps_, view);
       inst_.manager->submit(tilemap_update_ps_, view);
@@ -1342,41 +1333,14 @@ void ShadowModule::set_view(View &view, int2 extent)
 
       statistics_buf_.current().async_flush_to_host();
 
-      /* Isolate shadow update into its own command buffer.
-       * If parameter buffer exceeds limits, then other work will not be impacted. */
-      bool use_flush = (shadow_technique == ShadowTechnique::TILE_COPY) &&
-                       (GPU_backend_get_type() == GPU_BACKEND_METAL);
       /* Flush every loop as these passes are very heavy. */
-      use_flush |= loop_count != 0;
+      bool use_flush = loop_count != 0;
 
       if (use_flush) {
         GPU_flush();
       }
 
-      /* TODO(fclem): Move all of this to the draw::PassMain. */
-      if (shadow_depth_fb_tx_.is_valid() && shadow_depth_accum_tx_.is_valid()) {
-        GPU_framebuffer_bind_ex(
-            render_fb_,
-            {
-                /* Depth is cleared to 0 for TBDR optimization. */
-                {GPU_LOADACTION_CLEAR, GPU_STOREACTION_DONT_CARE, {0.0f, 0.0f, 0.0f, 0.0f}},
-                {GPU_LOADACTION_CLEAR,
-                 GPU_STOREACTION_DONT_CARE,
-                 {FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX}},
-            });
-      }
-      else if (shadow_depth_fb_tx_.is_valid()) {
-        GPU_framebuffer_bind_ex(render_fb_,
-                                {
-                                    {GPU_LOADACTION_CLEAR,
-                                     GPU_STOREACTION_DONT_CARE,
-                                     {FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX}},
-                                });
-      }
-      else {
-        GPU_framebuffer_bind(render_fb_);
-      }
-
+      GPU_framebuffer_bind(render_fb_);
       GPU_framebuffer_multi_viewports_set(render_fb_,
                                           reinterpret_cast<int (*)[4]>(multi_viewports_.data()));
 

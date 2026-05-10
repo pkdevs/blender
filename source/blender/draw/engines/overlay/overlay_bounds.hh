@@ -167,12 +167,16 @@ class Bounds : Overlay {
         case RB_SHAPE_CAPSULE:
           add_bounds(true, OB_BOUND_CAPSULE);
           break;
+        case RB_SHAPE_CONVEXH:
+        case RB_SHAPE_TRIMESH:
+        case RB_SHAPE_COMPOUND:
+          break;
       };
     }
 
     /* Texture Space */
     if (show_extras && (ob->data != nullptr) && (ob->dtx & OB_TEXSPACE)) {
-      switch (GS(static_cast<ID *>(ob->data)->name)) {
+      switch (GS(ob->data->name)) {
         case ID_ME: {
           Mesh &me = DRW_object_get_data_for_drawing<Mesh>(*ob);
           BKE_mesh_texspace_ensure(&me);

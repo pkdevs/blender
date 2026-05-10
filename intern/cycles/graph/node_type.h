@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <bitset>
+
 #include "graph/node_enum.h"
 
 #include "util/array.h"  // IWYU pragma: keep
@@ -18,7 +20,7 @@ CCL_NAMESPACE_BEGIN
 struct Node;
 struct NodeType;
 
-using SocketModifiedFlags = uint64_t;
+using SocketModifiedFlags = std::bitset<128>;
 
 /* Socket Type */
 
@@ -79,18 +81,19 @@ struct SocketType {
   };
 
   ustring name;
-  Type type;
-  int struct_offset;
-  const void *default_value;
-  const NodeEnum *enum_values;
-  const NodeType *node_type;
-  int flags;
+  Type type = UNDEFINED;
+  int struct_offset = -1;
+  const void *default_value = nullptr;
+  const NodeEnum *enum_values = nullptr;
+  const NodeType *node_type = nullptr;
+  int flags = 0;
   ustring ui_name;
-  SocketModifiedFlags modified_flag_bit;
+  uint8_t modified_flag_bit = 0;
 
-  size_t size() const;
+  size_t storage_size() const;
+  size_t packed_size() const;
   bool is_array() const;
-  static size_t size(Type type);
+  static size_t size(Type type, bool packed);
   static size_t max_size();
   static ustring type_name(Type type);
   static void *zero_default_value();
@@ -133,7 +136,9 @@ struct NodeType {
                        Type type = NONE,
                        const NodeType *base = nullptr);
   static const NodeType *find(ustring name);
-  static unordered_map<ustring, NodeType> &types();
+  static vector<ustring> type_names();
+
+  static bool register_on_init(const NodeType *(*init_func)());
 };
 
 /* Node Definition Macros
@@ -151,6 +156,8 @@ struct NodeType {
 #define NODE_DEFINE(structname) \
   const NodeType *structname::node_type_ = nullptr; \
   thread_mutex structname::node_type_mutex_; \
+  static bool structname##_register_on_init = NodeType::register_on_init( \
+      structname::get_node_type); \
   unique_ptr<Node> structname::create(const NodeType *) \
   { \
     return make_unique<structname>(); \

@@ -89,9 +89,7 @@ def _create_armature():
     edit_bone.head = (1, 0, 0)
     bpy.ops.object.mode_set(mode='POSE')
     armature_obj.pose.bones[_BONE_NAME].rotation_mode = "XYZ"
-    armature_obj.pose.bones[_BONE_NAME].bone.select = True
-    armature_obj.pose.bones[_BONE_NAME].bone.select_head = True
-    armature_obj.pose.bones[_BONE_NAME].bone.select_tail = True
+    armature_obj.pose.bones[_BONE_NAME].select = True
     bpy.ops.object.mode_set(mode='OBJECT')
 
     return armature_obj
@@ -713,7 +711,6 @@ def _create_nla_anim_object():
     fcu.keyframe_points.insert(0, value=0).interpolation = 'LINEAR'
     fcu.keyframe_points.insert(10, value=1).interpolation = 'LINEAR'
     track.strips.new("base_strip", 0, action_base)
-    assert action_base.is_action_layered
 
     track = anim_object.animation_data.nla_tracks.new()
     track.name = "add"
@@ -723,7 +720,6 @@ def _create_nla_anim_object():
     fcu.keyframe_points.insert(10, value=1).interpolation = 'LINEAR'
     strip = track.strips.new("add_strip", 0, action_add)
     strip.blend_type = "ADD"
-    assert action_add.is_action_layered
 
     track = anim_object.animation_data.nla_tracks.new()
     track.name = "top"
@@ -732,7 +728,6 @@ def _create_nla_anim_object():
     fcu.keyframe_points.insert(0, value=0).interpolation = 'LINEAR'
     fcu.keyframe_points.insert(10, value=0).interpolation = 'LINEAR'
     track.strips.new("top_strip", 0, action_top)
-    assert action_top.is_action_layered
 
     return anim_object
 

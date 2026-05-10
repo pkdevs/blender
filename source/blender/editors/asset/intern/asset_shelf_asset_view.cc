@@ -17,6 +17,8 @@
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 
+#include "BLT_translation.hh"
+
 #include "DNA_asset_types.h"
 #include "DNA_screen_types.h"
 
@@ -63,8 +65,8 @@ class AssetViewItem : public ui::PreviewGridItem {
   AssetViewItem(asset_system::AssetRepresentation &asset_, StringRef identifier, StringRef label);
 
   void disable_asset_drag();
-  void build_grid_tile(const bContext &C, uiLayout &layout) const override;
-  void build_context_menu(bContext &C, uiLayout &column) const override;
+  void build_grid_tile(const bContext &C, ui::Layout &layout) const override;
+  void build_context_menu(bContext &C, ui::Layout &column) const override;
   std::optional<bool> should_be_active() const override;
   void on_activate(bContext &C) override;
   bool should_be_filtered_visible(StringRefNull filter_string) const override;
@@ -80,7 +82,7 @@ class AssetDragController : public ui::AbstractViewItemDragController {
 
   std::optional<eWM_DragDataType> get_drag_type() const override;
   void *create_drag_data() const override;
-  void on_drag_start(bContext &C) override;
+  void on_drag_start(bContext &C, ui::AbstractViewItem &item) override;
 };
 
 AssetView::AssetView(const AssetLibraryReference &library_ref, const AssetShelf &shelf)
@@ -104,7 +106,8 @@ void AssetView::build_items()
   }
 
   list::iterate(library_ref_, [&](asset_system::AssetRepresentation &asset) {
-    if (shelf_.type->asset_poll && !shelf_.type->asset_poll(shelf_.type, &asset)) {
+    if (!shelf::type_asset_poll(*shelf_.type, asset)) {
+      /* Skip this asset. */
       return true;
     }
 
@@ -146,8 +149,8 @@ void AssetView::build_items()
 bool AssetView::begin_filtering(const bContext &C) const
 {
   const ScrArea *area = CTX_wm_area(&C);
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-    if (UI_textbutton_activate_rna(&C, region, &shelf_, "search_filter")) {
+  for (ARegion &region : area->regionbase) {
+    if (ui::textbutton_activate_rna(&C, &region, &shelf_, "search_filter")) {
       return true;
     }
   }
@@ -198,7 +201,7 @@ void AssetViewItem::disable_asset_drag()
 
 /**
  * Needs freeing with #WM_operator_properties_free() (will be done by button if passed to that) and
- * #MEM_freeN().
+ * #MEM_delete().
  */
 static std::optional<wmOperatorCallParams> create_asset_operator_params(
     const StringRefNull op_name, const asset_system::AssetRepresentation &asset)
@@ -211,41 +214,40 @@ static std::optional<wmOperatorCallParams> create_asset_operator_params(
     return {};
   }
 
-  PointerRNA *op_props = MEM_new<PointerRNA>(__func__);
-  WM_operator_properties_create_ptr(op_props, ot);
+  PointerRNA *op_props = MEM_new<PointerRNA>(__func__, WM_operator_properties_create_ptr(ot));
   asset::operator_asset_reference_props_set(asset, *op_props);
   return wmOperatorCallParams{ot, op_props, wm::OpCallContext::InvokeRegionWin};
 }
 
-void AssetViewItem::build_grid_tile(const bContext & /*C*/, uiLayout &layout) const
+void AssetViewItem::build_grid_tile(const bContext &C, ui::Layout &layout) const
 {
   const AssetView &asset_view = reinterpret_cast<const AssetView &>(this->get_view());
   const AssetShelfType &shelf_type = *asset_view.shelf_.type;
 
-  PointerRNA asset_ptr = RNA_pointer_create_discrete(nullptr, &RNA_AssetRepresentation, &asset_);
-  UI_but_context_ptr_set(
-      layout.block(), reinterpret_cast<uiBut *>(view_item_but_), "asset", &asset_ptr);
+  PointerRNA asset_ptr = RNA_pointer_create_discrete(nullptr, RNA_AssetRepresentation, &asset_);
+  button_context_ptr_set(
+      layout.block(), reinterpret_cast<ui::Button *>(view_item_but_), "asset", &asset_ptr);
 
-  uiBut *item_but = reinterpret_cast<uiBut *>(this->view_item_button());
+  ui::Button *item_but = reinterpret_cast<ui::Button *>(this->view_item_button());
   if (std::optional<wmOperatorCallParams> activate_op = create_asset_operator_params(
           shelf_type.activate_operator, asset_))
   {
     /* Attach the operator, but don't call it through the button. We call it using
      * #on_activate(). */
-    UI_but_operator_set(item_but, activate_op->optype, activate_op->opcontext, activate_op->opptr);
-    UI_but_operator_set_never_call(item_but);
+    button_operator_set(item_but, activate_op->optype, activate_op->opcontext, activate_op->opptr);
+    button_operator_set_never_call(item_but);
 
     MEM_delete(activate_op->opptr);
   }
   const ui::GridViewStyle &style = this->get_view().get_style();
   /* Increase background draw size slightly, so highlights are well visible behind previews with an
    * opaque background. */
-  UI_but_view_item_draw_size_set(
+  button_view_item_draw_size_set(
       item_but, style.tile_width + 2 * U.pixelsize, style.tile_height + 2 * U.pixelsize);
 
-  UI_but_func_tooltip_custom_set(
+  button_func_tooltip_custom_set(
       item_but,
-      [](bContext & /*C*/, uiTooltipData &tip, uiBut * /*but*/, void *argN) {
+      [](bContext & /*C*/, ui::TooltipData &tip, ui::Button * /*but*/, void *argN) {
         const asset_system::AssetRepresentation *asset =
             static_cast<const asset_system::AssetRepresentation *>(argN);
         asset_tooltip(*asset, tip);
@@ -256,7 +258,7 @@ void AssetViewItem::build_grid_tile(const bContext & /*C*/, uiLayout &layout) co
   /* Request preview when drawing. Grid views have an optimization to only draw items that are
    * actually visible, so only previews scrolled into view will be loaded this way. This reduces
    * total loading time and memory footprint. */
-  asset_.ensure_previewable();
+  asset_.ensure_previewable(C);
 
   const int preview_id = [&]() -> int {
     /* Show loading icon while list is loading still. Previews might get pushed out of view again
@@ -269,15 +271,43 @@ void AssetViewItem::build_grid_tile(const bContext & /*C*/, uiLayout &layout) co
     return asset_preview_or_icon(asset_);
   }();
 
-  ui::PreviewGridItem::build_grid_tile_button(layout, preview_id);
+  ui::GridViewStyle grid_style = asset_view.get_style();
+  /* Add overlap layout so indicator icons can be displayed on top of the preview. */
+  ui::Layout &overlap = layout.overlap();
+  overlap.ui_units_x_set(grid_style.tile_width / UI_UNIT_X);
+  overlap.ui_units_y_set(grid_style.tile_height / UI_UNIT_Y);
+
+  ui::PreviewGridItem::build_grid_tile_button(overlap.column(true), preview_id);
+
+  ui::Layout &overlay_row = overlap.row(true);
+  overlay_row.alignment_set(ui::LayoutAlign::Right);
+
+  const bool is_highlighted = this->is_selected() || this->is_active() || this->is_hovered();
+  if (asset_.is_online() && is_highlighted) {
+    ui::Button *online_icon = uiItemL_ex(&overlay_row, "", ICON_INTERNET, false, false);
+    button_label_alpha_factor_set(online_icon, 0.6f);
+    button_label_draw_icon_border_set(online_icon, true);
+  }
 }
 
-void AssetViewItem::build_context_menu(bContext &C, uiLayout &column) const
+void AssetViewItem::build_context_menu(bContext &C, ui::Layout &column) const
 {
   const AssetView &asset_view = dynamic_cast<const AssetView &>(this->get_view());
   const AssetShelfType &shelf_type = *asset_view.shelf_.type;
+
+  bool has_items = false;
+
+  if (asset_.is_online()) {
+    column.op("asset.assets_download", IFACE_("Download Asset"), ICON_NONE);
+    has_items = true;
+  }
+
   if (shelf_type.draw_context_menu) {
-    shelf_type.draw_context_menu(&C, &shelf_type, &asset_, &column);
+    if (has_items) {
+      column.separator();
+    }
+    shelf_type.draw_context_menu(&C, &shelf_type, &asset_, column);
+    has_items = true;
   }
 }
 
@@ -340,7 +370,7 @@ static std::string filter_string_get(const AssetShelf &shelf)
   return search_string;
 }
 
-void build_asset_view(uiLayout &layout,
+void build_asset_view(ui::Layout &layout,
                       const AssetLibraryReference &library_ref,
                       const AssetShelf &shelf,
                       const bContext &C)
@@ -361,8 +391,8 @@ void build_asset_view(uiLayout &layout,
   asset_view->set_catalog_filter(catalog_filter_from_shelf_settings(shelf.settings, *library));
   asset_view->set_tile_size(tile_width, tile_height);
 
-  uiBlock *block = layout.block();
-  ui::AbstractGridView *grid_view = UI_block_add_view(
+  ui::Block *block = layout.block();
+  ui::AbstractGridView *grid_view = block_add_view(
       *block, "asset shelf asset view", std::move(asset_view));
   grid_view->set_context_menu_title("Asset Shelf");
 
@@ -391,7 +421,7 @@ std::optional<eWM_DragDataType> AssetDragController::get_drag_type() const
   return asset_.is_local_id() ? WM_DRAG_ID : WM_DRAG_ASSET;
 }
 
-void AssetDragController::on_drag_start(bContext &C)
+void AssetDragController::on_drag_start(bContext &C, ui::AbstractViewItem &item)
 {
   const AssetView &asset_view = this->get_view<AssetView>();
   const AssetShelfType &shelf_type = *asset_view.shelf_.type;
@@ -402,6 +432,14 @@ void AssetDragController::on_drag_start(bContext &C)
     WM_operator_name_call_ptr(&C, drag_op->optype, drag_op->opcontext, drag_op->opptr, nullptr);
     WM_operator_properties_free(drag_op->opptr);
     MEM_delete(drag_op->opptr);
+
+    /* Display as active so it's clear which item is being operated on. #activate() would trigger
+     * the activation operator. We really don't want this for poses, since dragging shouldn't fully
+     * apply a pose, but trigger interactive pose blending instead.
+     *
+     * Messing with the active state could cause problems, in that case a separate highlighting
+     * feature might make sense (so e.g. dragged from assets get an outline). */
+    item.set_state_active();
   }
 }
 

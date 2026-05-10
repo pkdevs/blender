@@ -32,6 +32,8 @@
 
 #include "RE_texture.h"
 
+namespace blender {
+
 static RNG_THREAD_ARRAY *random_tex_array;
 
 void RE_texture_rng_init()
@@ -719,10 +721,11 @@ static int multitex(Tex *tex,
         tex->nodetree, texres, texvec, thread, tex, which_output, cfra, texnode_preview, nullptr);
   }
   else {
+    if (tex->type == eTex_Type(0)) {
+      texres->tin = 0.0f;
+      return 0;
+    }
     switch (tex->type) {
-      case 0:
-        texres->tin = 0.0f;
-        return 0;
       case TEX_CLOUDS:
         retval = clouds(tex, texvec, texres);
         break;
@@ -846,7 +849,7 @@ static int multitex_nodes_intern(Tex *tex,
         ImBuf *ibuf = BKE_image_pool_acquire_ibuf(tex->ima, &tex->iuser, pool);
 
         /* don't linearize float buffers, assumed to be linear */
-        if (ibuf != nullptr && ibuf->float_buffer.data == nullptr && (retval & TEX_RGB) &&
+        if (ibuf != nullptr && ibuf->float_data() == nullptr && (retval & TEX_RGB) &&
             scene_color_manage)
         {
           IMB_colormanagement_colorspace_to_scene_linear_v3(texres->trgba,
@@ -883,7 +886,7 @@ static int multitex_nodes_intern(Tex *tex,
         ImBuf *ibuf = BKE_image_pool_acquire_ibuf(tex->ima, &tex->iuser, pool);
 
         /* don't linearize float buffers, assumed to be linear */
-        if (ibuf != nullptr && ibuf->float_buffer.data == nullptr && (retval & TEX_RGB) &&
+        if (ibuf != nullptr && ibuf->float_data() == nullptr && (retval & TEX_RGB) &&
             scene_color_manage)
         {
           IMB_colormanagement_colorspace_to_scene_linear_v3(texres->trgba,
@@ -1106,3 +1109,5 @@ bool RE_texture_evaluate(const MTex *mtex,
 
   return (rgb != 0);
 }
+
+}  // namespace blender

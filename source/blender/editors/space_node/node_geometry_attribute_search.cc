@@ -30,27 +30,30 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-#include "NOD_geometry_nodes_log.hh"
+#include "NOD_eval_log.hh"
 #include "NOD_socket.hh"
 
 #include "node_intern.hh"
 
-using blender::nodes::geo_eval_log::GeometryAttributeInfo;
+namespace blender {
 
-namespace blender::ed::space_node {
+using nodes::eval_log::GeometryAttributeInfo;
+
+namespace ed::space_node {
 
 struct AttributeSearchData {
   int32_t node_id;
   char socket_identifier[MAX_NAME];
 };
 
-/* This class must not have a destructor, since it is used by buttons and freed with #MEM_freeN. */
+/* This class must not have a destructor, since it is used by buttons and freed with
+ * #MEM_delete_void. */
 BLI_STATIC_ASSERT(std::is_trivially_destructible_v<AttributeSearchData>, "");
 
 static Vector<const GeometryAttributeInfo *> get_attribute_info_from_context(
     const bContext &C, AttributeSearchData &data)
 {
-  using namespace nodes::geo_eval_log;
+  using namespace nodes::eval_log;
 
   SpaceNode *snode = CTX_wm_space_node(&C);
   if (!snode) {
@@ -71,14 +74,14 @@ static Vector<const GeometryAttributeInfo *> get_attribute_info_from_context(
   if (!tree_zones) {
     return {};
   }
-  const ContextualGeoTreeLogs tree_logs = GeoNodesLog::get_contextual_tree_logs(*snode);
+  const ContextualNodeTreeLogs tree_logs = NodesEvalLog::get_contextual_tree_logs(*snode);
 
   Set<StringRef> names;
 
   /* For the attribute input node, collect attribute information from all nodes in the group. */
   if (node->type_legacy == GEO_NODE_INPUT_NAMED_ATTRIBUTE) {
     Vector<const GeometryAttributeInfo *> attributes;
-    tree_logs.foreach_tree_log([&](GeoTreeLog &tree_log) {
+    tree_logs.foreach_tree_log([&](NodeTreeLog &tree_log) {
       tree_log.ensure_socket_values();
       tree_log.ensure_existing_attributes();
       for (const GeometryAttributeInfo *attribute : tree_log.existing_attributes) {
@@ -93,12 +96,12 @@ static Vector<const GeometryAttributeInfo *> get_attribute_info_from_context(
     });
     return attributes;
   }
-  GeoTreeLog *tree_log = tree_logs.get_main_tree_log(*node);
+  NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*node);
   if (!tree_log) {
     return {};
   }
   tree_log->ensure_socket_values();
-  GeoNodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier);
+  NodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier);
   if (node_log == nullptr) {
     return {};
   }
@@ -126,7 +129,7 @@ static Vector<const GeometryAttributeInfo *> get_attribute_info_from_context(
 }
 
 static void attribute_search_update_fn(
-    const bContext *C, void *arg, const char *str, uiSearchItems *items, const bool is_first)
+    const bContext *C, void *arg, const char *str, ui::SearchItems *items, const bool is_first)
 {
   if (ED_screen_animation_playing(CTX_wm_manager(C))) {
     return;
@@ -160,6 +163,7 @@ static eCustomDataType data_type_in_attribute_input_node(const eCustomDataType t
       /* Unsupported currently. */
       return CD_PROP_FLOAT;
     case CD_PROP_FLOAT2:
+    case CD_PROP_FLOAT4:
     case CD_PROP_INT16_2D:
     case CD_PROP_INT32_2D:
       /* No 2D vector sockets currently. */
@@ -176,7 +180,7 @@ static void attribute_search_exec_fn(bContext *C, void *data_v, void *item_v)
   if (ED_screen_animation_playing(CTX_wm_manager(C))) {
     return;
   }
-  GeometryAttributeInfo *item = (GeometryAttributeInfo *)item_v;
+  GeometryAttributeInfo *item = static_cast<GeometryAttributeInfo *>(item_v);
   if (item == nullptr) {
     return;
   }
@@ -228,33 +232,32 @@ static void attribute_search_exec_fn(bContext *C, void *data_v, void *item_v)
 void node_geometry_add_attribute_search_button(const bContext & /*C*/,
                                                const bNode &node,
                                                PointerRNA &socket_ptr,
-                                               uiLayout &layout,
+                                               ui::Layout &layout,
                                                const StringRef placeholder)
 {
-  uiBlock *block = layout.block();
-  uiBut *but = uiDefIconTextButR(block,
-                                 ButType::SearchMenu,
-                                 0,
-                                 ICON_NONE,
-                                 "",
-                                 0,
-                                 0,
-                                 10 * UI_UNIT_X, /* Dummy value, replaced by layout system. */
-                                 UI_UNIT_Y,
-                                 &socket_ptr,
-                                 "default_value",
-                                 0,
-                                 "");
-  UI_but_placeholder_set(but, placeholder);
+  ui::Block *block = layout.block();
+  ui::Button *but = uiDefIconTextButR(block,
+                                      ui::ButtonType::SearchMenu,
+                                      ICON_NONE,
+                                      "",
+                                      0,
+                                      0,
+                                      10 * UI_UNIT_X, /* Dummy value, replaced by layout system. */
+                                      UI_UNIT_Y,
+                                      &socket_ptr,
+                                      "default_value",
+                                      0,
+                                      "");
+  button_placeholder_set(but, placeholder);
 
   const bNodeSocket &socket = *static_cast<const bNodeSocket *>(socket_ptr.data);
-  AttributeSearchData *data = MEM_callocN<AttributeSearchData>(__func__);
+  AttributeSearchData *data = MEM_new_zeroed<AttributeSearchData>(__func__);
   data->node_id = node.identifier;
   STRNCPY_UTF8(data->socket_identifier, socket.identifier);
 
-  UI_but_func_search_set_results_are_suggestions(but, true);
-  UI_but_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
-  UI_but_func_search_set(but,
+  button_func_search_set_results_are_suggestions(but, true);
+  button_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
+  button_func_search_set(but,
                          nullptr,
                          attribute_search_update_fn,
                          static_cast<void *>(data),
@@ -264,4 +267,6 @@ void node_geometry_add_attribute_search_button(const bContext & /*C*/,
                          nullptr);
 }
 
-}  // namespace blender::ed::space_node
+}  // namespace ed::space_node
+
+}  // namespace blender

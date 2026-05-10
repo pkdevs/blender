@@ -9,30 +9,21 @@
 #include "DNA_anim_types.h"
 
 #include "BKE_fcurve.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 
-#include "CLG_log.h"
+#include "RNA_define.hh"
+
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
 
-class AnimDrawTest : public testing::Test {
+class AnimDrawTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
   Object *object;
-
-  static void SetUpTestSuite()
-  {
-    CLG_init();
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void SetUp() override
   {
@@ -43,19 +34,19 @@ class AnimDrawTest : public testing::Test {
   void TearDown() override
   {
     BKE_main_free(this->bmain);
+    RNA_exit();
   }
 };
 
 TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
 {
-  FCurve *fcurve = MEM_callocN<FCurve>(__func__);
+  FCurve *fcurve = MEM_new<FCurve>(__func__);
   fcurve->array_index = 0;
 
   /* Avoid creating a Scene via BKE_id_new<Scene>(this->bmain, "SCTestScene"); as that requires
    * much more setup (appdirs, imbuf for color management, and maybe more). This test doesn't
    * actually need a full Scene, it just needs its `units` field. */
-  Scene scene;
-  memset(&scene.unit, 0, sizeof(scene.unit));
+  Scene scene = {};
   scene.unit.scale_length = 1.0f;
 
   { /* Rotation: Degrees. */

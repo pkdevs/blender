@@ -8,12 +8,14 @@
 
 #pragma once
 
-namespace blender::ocio {
+namespace blender {
+
+namespace ocio {
 class ColorSpace;
 class CPUProcessor;
-}  // namespace blender::ocio
+}  // namespace ocio
 
-using ColorSpace = blender::ocio::ColorSpace;
+using ColorSpace = ocio::ColorSpace;
 
 struct ImBuf;
 enum class ColorManagedFileOutput;
@@ -25,8 +27,6 @@ enum class ColorManagedFileOutput;
 void colormanagement_init();
 void colormanagement_exit();
 
-void colormanage_cache_free(ImBuf *ibuf);
-
 const ColorSpace *colormanage_colorspace_get_named(const char *name);
 const ColorSpace *colormanage_colorspace_get_roled(int role);
 
@@ -34,3 +34,5 @@ void colormanage_imbuf_set_default_spaces(ImBuf *ibuf);
 void colormanage_imbuf_make_linear(ImBuf *ibuf,
                                    const char *from_colorspace,
                                    ColorManagedFileOutput output);
+
+}  // namespace blender

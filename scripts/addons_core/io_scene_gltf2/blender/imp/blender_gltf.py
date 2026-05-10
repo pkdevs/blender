@@ -5,6 +5,7 @@
 import bpy
 from mathutils import Vector, Quaternion, Matrix
 from ...io.imp.user_extensions import import_user_extensions
+from ..com.gltf2_blender_utils import find_unused_name
 from .scene import BlenderScene
 from .material import BlenderMaterial
 from .image import BlenderImage
@@ -48,7 +49,8 @@ class BlenderGlTF():
 
         # If needed, create not used materials
         if gltf.import_settings['import_unused_materials']:
-            for mat_idx in [i for i in range(len(gltf.data.materials)) if len(gltf.data.materials[i].blender_material) == 0]:
+            for mat_idx in [i for i in range(len(gltf.data.materials)) if len(
+                    gltf.data.materials[i].blender_material) == 0]:
                 BlenderMaterial.create(gltf, mat_idx, None)
                 # Force material users (fake user)
                 bpy.data.materials[gltf.data.materials[mat_idx].blender_material[None]].use_fake_user = True
@@ -58,7 +60,6 @@ class BlenderGlTF():
                 BlenderImage.create(gltf, img_idx)
                 # Force image users (fake user)
                 bpy.data.images[gltf.data.images[img_idx].blender_image_name].use_fake_user = True
-
 
     @staticmethod
     def set_convert_functions(gltf):
@@ -170,14 +171,15 @@ class BlenderGlTF():
 
                 for ext in [
                         "KHR_materials_emissive_strength",
-                        # "KHR_materials_iridescence",
+                        "KHR_materials_iridescence",
                         "KHR_materials_volume",
                         "KHR_materials_ior",
                         "KHR_materials_transmission",
                         "KHR_materials_clearcoat",
                         "KHR_materials_sheen",
                         "KHR_materials_specular",
-                        "KHR_materials_anisotropy"
+                        "KHR_materials_anisotropy",
+                        "KHR_materials_dispersion",
                 ]:
                     if mat.extensions is not None and ext in mat.extensions:
                         mat.extensions[ext]["animations"] = {}
@@ -195,16 +197,30 @@ class BlenderGlTF():
                         tex.extensions["KHR_texture_transform"]["animations"] = {}
 
                 texs_ext = [
-                    mat.extensions["KHR_materials_volume"].get("thicknessTexture") if mat.extensions and "KHR_materials_volume" in mat.extensions else None,
-                    mat.extensions["KHR_materials_transmission"].get("transmissionTexture") if mat.extensions and "KHR_materials_transmission" in mat.extensions else None,
-                    mat.extensions["KHR_materials_specular"].get("specularTexture") if mat.extensions and "KHR_materials_specular" in mat.extensions else None,
-                    mat.extensions["KHR_materials_specular"].get("specularColorTexture") if mat.extensions and "KHR_materials_specular" in mat.extensions else None,
-                    mat.extensions["KHR_materials_sheen"].get("sheenColorTexture") if mat.extensions and "KHR_materials_sheen" in mat.extensions else None,
-                    mat.extensions["KHR_materials_sheen"].get("sheenRoughnessTexture") if mat.extensions and "KHR_materials_sheen" in mat.extensions else None,
-                    mat.extensions["KHR_materials_clearcoat"].get("clearcoatTexture") if mat.extensions and "KHR_materials_clearcoat" in mat.extensions else None,
-                    mat.extensions["KHR_materials_clearcoat"].get("clearcoatRoughnessTexture") if mat.extensions and "KHR_materials_clearcoat" in mat.extensions else None,
-                    mat.extensions["KHR_materials_clearcoat"].get("clearcoatNormalTexture") if mat.extensions and "KHR_materials_clearcoat" in mat.extensions else None,
-                    mat.extensions["KHR_materials_anisotropy"].get("anisotropyTexture") if mat.extensions and "KHR_materials_anisotropy" in mat.extensions else None,
+                    mat.extensions["KHR_materials_volume"].get(
+                        "thicknessTexture") if mat.extensions and "KHR_materials_volume" in mat.extensions else None,
+                    mat.extensions["KHR_materials_transmission"].get(
+                        "transmissionTexture") if mat.extensions and "KHR_materials_transmission" in mat.extensions else None,
+                    mat.extensions["KHR_materials_specular"].get(
+                        "specularTexture") if mat.extensions and "KHR_materials_specular" in mat.extensions else None,
+                    mat.extensions["KHR_materials_specular"].get(
+                        "specularColorTexture") if mat.extensions and "KHR_materials_specular" in mat.extensions else None,
+                    mat.extensions["KHR_materials_sheen"].get(
+                        "sheenColorTexture") if mat.extensions and "KHR_materials_sheen" in mat.extensions else None,
+                    mat.extensions["KHR_materials_sheen"].get(
+                        "sheenRoughnessTexture") if mat.extensions and "KHR_materials_sheen" in mat.extensions else None,
+                    mat.extensions["KHR_materials_clearcoat"].get(
+                        "clearcoatTexture") if mat.extensions and "KHR_materials_clearcoat" in mat.extensions else None,
+                    mat.extensions["KHR_materials_clearcoat"].get(
+                        "clearcoatRoughnessTexture") if mat.extensions and "KHR_materials_clearcoat" in mat.extensions else None,
+                    mat.extensions["KHR_materials_clearcoat"].get(
+                        "clearcoatNormalTexture") if mat.extensions and "KHR_materials_clearcoat" in mat.extensions else None,
+                    mat.extensions["KHR_materials_anisotropy"].get(
+                        "anisotropyTexture") if mat.extensions and "KHR_materials_anisotropy" in mat.extensions else None,
+                    mat.extensions["KHR_materials_iridescence"].get(
+                        "iridescenceTexture") if mat.extensions and "KHR_materials_iridescence" in mat.extensions else None,
+                    mat.extensions["KHR_materials_iridescence"].get(
+                        "iridescenceThicknessTexture") if mat.extensions and "KHR_materials_iridescence" in mat.extensions else None,
                 ]
 
                 for tex in [t for t in texs_ext if t is not None]:
@@ -229,7 +245,7 @@ class BlenderGlTF():
                 # for its NLA tracks.
                 desired_name = anim.name or "Anim_%d" % anim_idx
                 # TRS animations & Pointer will be created as separate tracks
-                anim.track_name = BlenderGlTF.find_unused_name(track_names, desired_name)
+                anim.track_name = find_unused_name(track_names, desired_name)
                 track_names.add(anim.track_name)
 
                 for channel_idx, channel in enumerate(anim.channels):
@@ -297,7 +313,7 @@ class BlenderGlTF():
                     if shapekey_name is None:
                         shapekey_name = "target_" + str(sk)
 
-                    shapekey_name = BlenderGlTF.find_unused_name(used_names, shapekey_name)
+                    shapekey_name = find_unused_name(used_names, shapekey_name)
                     used_names.add(shapekey_name)
 
                     mesh.shapekey_names.append(shapekey_name)
@@ -589,27 +605,27 @@ class BlenderGlTF():
             gltf.data.materials[int(pointer_tab[2])
                                 ].extensions["KHR_materials_anisotropy"]["animations"][anim_idx].append(channel_idx)
 
-    @staticmethod
-    def find_unused_name(haystack, desired_name):
-        """Finds a name not in haystack and <= 63 UTF-8 bytes.
-        (the limit on the size of a Blender name.)
-        If a is taken, tries a.001, then a.002, etc.
-        """
-        stem = desired_name[:63]
-        suffix = ''
-        cntr = 1
-        while True:
-            name = stem + suffix
+        if len(pointer_tab) == 6 and pointer_tab[1] == "materials" and \
+                pointer_tab[3] == "extensions" and \
+                pointer_tab[4] == "KHR_materials_dispersion" and \
+                pointer_tab[5] == "dispersion":
+            if anim_idx not in gltf.data.materials[int(
+                    pointer_tab[2])].extensions["KHR_materials_dispersion"]["animations"].keys():
+                gltf.data.materials[int(pointer_tab[2])
+                                    ].extensions["KHR_materials_dispersion"]["animations"][anim_idx] = []
+            gltf.data.materials[int(pointer_tab[2])
+                                ].extensions["KHR_materials_dispersion"]["animations"][anim_idx].append(channel_idx)
 
-            if len(name.encode('utf-8')) > 63:
-                stem = stem[:-1]
-                continue
-
-            if name not in haystack:
-                return name
-
-            suffix = '.%03d' % cntr
-            cntr += 1
+        if len(pointer_tab) == 6 and pointer_tab[1] == "materials" and \
+                pointer_tab[3] == "extensions" and \
+                pointer_tab[4] == "KHR_materials_iridescence" and \
+                pointer_tab[5] in ["iridescenceFactor", "iridescenceIor", "iridescenceThicknessMinimum", "iridescenceThicknessMaximum"]:
+            if anim_idx not in gltf.data.materials[int(
+                    pointer_tab[2])].extensions["KHR_materials_iridescence"]["animations"].keys():
+                gltf.data.materials[int(pointer_tab[2])
+                                    ].extensions["KHR_materials_iridescence"]["animations"][anim_idx] = []
+            gltf.data.materials[int(pointer_tab[2])
+                                ].extensions["KHR_materials_iridescence"]["animations"][anim_idx].append(channel_idx)
 
     @staticmethod
     def manage_material_variants(gltf):
@@ -629,5 +645,6 @@ class BlenderGlTF():
 
         for idx_variant, variant in enumerate(gltf.data.extensions['KHR_materials_variants']['variants']):
             var = bpy.data.scenes[0].gltf2_KHR_materials_variants_variants.add()
-            var.name = variant['name']
+            # Make sure variant idx is set before name, as name setter uses variant_idx
             var.variant_idx = idx_variant
+            var.name = variant['name']

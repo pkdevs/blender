@@ -108,6 +108,27 @@ class OBJECT_PT_delta_transform(ObjectButtonsPanel, Panel):
         col.prop(ob, "delta_scale", text="Scale")
 
 
+class OBJECT_PT_parent_inverse_transform(ObjectButtonsPanel, Panel):
+    bl_label = "Parent Inverse Transform"
+    bl_parent_id = "OBJECT_PT_transform"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.object
+        return ob and ob.parent
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        ob = context.object
+        layout.template_matrix(ob, "matrix_parent_inverse")
+
+        props = layout.operator("object.parent_clear", text="Clear Parent Inverse Transform")
+        props.type = 'CLEAR_INVERSE'
+
+
 class OBJECT_PT_relations(ObjectButtonsPanel, Panel):
     bl_label = "Relations"
     bl_options = {'DEFAULT_CLOSED'}
@@ -182,7 +203,10 @@ class OBJECT_PT_collections(ObjectButtonsPanel, Panel):
             col.context_pointer_set("collection", collection)
 
             row = col.box().row()
-            row.prop(collection, "name", text="")
+            icon = 'OUTLINER_COLLECTION'
+            if collection.color_tag != 'NONE':
+                icon = 'COLLECTION_' + collection.color_tag
+            row.prop(collection, "name", text="", icon=icon)
             row.operator("object.collection_remove", text="", icon='X', emboss=False)
             row.menu("COLLECTION_MT_context_menu", icon='DOWNARROW_HLT', text="")
 
@@ -394,7 +418,10 @@ class OBJECT_PT_visibility(ObjectButtonsPanel, Panel):
         layout = self.layout
         ob = context.object
 
-        layout.prop(ob, "hide_select", text="Selectable", toggle=False, invert_checkbox=True)
+        col = layout.column()
+        col.prop(ob, "hide_select", text="Selectable", toggle=False, invert_checkbox=True)
+        col.prop(ob, "hide_surface_pick", text="Surface Picking", toggle=False, invert_checkbox=True)
+        layout.separator()
 
         col = layout.column(heading="Show In")
         col.prop(ob, "hide_viewport", text="Viewports", toggle=False, invert_checkbox=True)
@@ -605,6 +632,7 @@ classes = (
     OBJECT_PT_context_object,
     OBJECT_PT_transform,
     OBJECT_PT_delta_transform,
+    OBJECT_PT_parent_inverse_transform,
     OBJECT_PT_relations,
     COLLECTION_MT_context_menu,
     OBJECT_PT_collections,

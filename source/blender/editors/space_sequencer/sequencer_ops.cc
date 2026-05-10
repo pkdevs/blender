@@ -6,8 +6,6 @@
  * \ingroup spseq
  */
 
-#include <cstdlib>
-
 #include "DNA_space_types.h"
 
 #include "WM_api.hh"
@@ -25,6 +23,7 @@ void sequencer_operatortypes()
 {
   /* `sequencer_edit.cc` */
   WM_operatortype_append(SEQUENCER_OT_split);
+  WM_operatortype_append(SEQUENCER_OT_box_blade);
   WM_operatortype_append(SEQUENCER_OT_slip);
   WM_operatortype_append(SEQUENCER_OT_mute);
   WM_operatortype_append(SEQUENCER_OT_unmute);
@@ -120,11 +119,12 @@ void sequencer_operatortypes()
   WM_operatortype_append(SEQUENCER_OT_effect_strip_add);
   WM_operatortype_append(SEQUENCER_OT_add_scene_strip_from_scene_asset);
 
-  /* sequencer_modifiers.c */
+  /* sequencer_modifier.cc */
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_add);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_remove);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_move);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_copy);
+  WM_operatortype_append(SEQUENCER_OT_strip_modifier_duplicate);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_move_to_index);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_set_active);
   WM_operatortype_append(SEQUENCER_OT_strip_modifier_equalizer_redefine);

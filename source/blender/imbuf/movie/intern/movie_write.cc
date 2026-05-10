@@ -11,11 +11,14 @@
 
 #include "BLI_string_ref.hh"
 
+#include "DNA_camera_types.h"
+#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "MOV_write.hh"
 
 #include "BKE_report.hh"
+#include "BKE_scene.hh"
 
 #ifdef WITH_FFMPEG
 #  include <cstdio>
@@ -25,6 +28,7 @@
 
 #  include "BLI_fileops.h"
 #  include "BLI_math_base.h"
+#  include "BLI_math_base.hh"
 #  include "BLI_math_color.h"
 #  include "BLI_path_utils.hh"
 #  include "BLI_string.h"
@@ -46,7 +50,11 @@
 
 #  include "ffmpeg_swscale.hh"
 #  include "movie_util.hh"
+#endif
 
+namespace blender {
+
+#ifdef WITH_FFMPEG
 static CLG_LogRef LOG = {"video.write"};
 static constexpr int64_t ffmpeg_autosplit_size = 2'000'000'000;
 
@@ -154,30 +162,16 @@ static void add_hdr_mastering_display_metadata(AVCodecParameters *codecpar,
     return;
   }
 
-  int max_luminance = 0;
+  /* Get max nits from the view transform. */
+  int max_luminance = IMB_colormanagement_view_max_nits(imf->display_settings.display_device,
+                                                        imf->view_settings.view_transform);
   if (c->color_trc == AVCOL_TRC_ARIB_STD_B67) {
-    /* HLG is always 1000 nits. */
-    max_luminance = 1000;
+    /* HLG is max 1000 nits, and also a good guess if not found. */
+    max_luminance = (max_luminance == 0) ? 1000 : std::min(max_luminance, 1000);
   }
   else if (c->color_trc == AVCOL_TRC_SMPTEST2084) {
-    /* PQ uses heuristic based on view transform name. In the future this could become
-     * a user control, but this solves the common cases. */
-    blender::StringRefNull view_name = imf->view_settings.view_transform;
-    if (view_name.find("HDR 500 nits") != blender::StringRef::not_found) {
-      max_luminance = 500;
-    }
-    else if (view_name.find("HDR 1000 nits") != blender::StringRef::not_found) {
-      max_luminance = 1000;
-    }
-    else if (view_name.find("HDR 2000 nits") != blender::StringRef::not_found) {
-      max_luminance = 2000;
-    }
-    else if (view_name.find("HDR 4000 nits") != blender::StringRef::not_found) {
-      max_luminance = 4000;
-    }
-    else if (view_name.find("HDR 10000 nits") != blender::StringRef::not_found) {
-      max_luminance = 10000;
-    }
+    /* PQ is max 10000 nits. */
+    max_luminance = std::min(max_luminance, 10000);
   }
 
   /* If we don't know anything, don't write metadata. The video player will make some
@@ -214,6 +208,126 @@ static void add_hdr_mastering_display_metadata(AVCodecParameters *codecpar,
   mastering_metadata->has_luminance = 1;
   mastering_metadata->min_luminance = av_make_q(1, 10000);
   mastering_metadata->max_luminance = av_make_q(max_luminance, 1);
+}
+
+/**
+ * \brief Add stereoscopic side data metadata if the output is side-by-side or top-bottom.
+ *
+ * The side data is only added when the scene uses stereoscopic with stereo views and the image
+ * format also contains stereo views.
+ */
+static void add_stereo3d_metadata(AVCodecParameters *codecpar,
+                                  const RenderData &render_data,
+                                  const ImageFormatData &imf)
+{
+  if (!BKE_scene_multiview_is_stereo3d(&render_data)) {
+    return;
+  }
+  if (imf.views_format != R_IMF_VIEWS_STEREO_3D) {
+    return;
+  }
+  if (imf.stereo3d_format.display_mode == S3D_DISPLAY_ANAGLYPH) {
+    return;
+  }
+  if (imf.stereo3d_format.display_mode == S3D_DISPLAY_PAGEFLIP) {
+    /* Could be supported, but requires metadata to be set for each frame. */
+    return;
+  }
+  AVPacketSideData *side_data = av_packet_side_data_new(&codecpar->coded_side_data,
+                                                        &codecpar->nb_coded_side_data,
+                                                        AV_PKT_DATA_STEREO3D,
+                                                        sizeof(AVStereo3D),
+                                                        0);
+  if (side_data == nullptr) {
+    CLOG_ERROR(&LOG, "Failed to attach stereo3d metadata to stream");
+    return;
+  }
+  AVStereo3D *stereo_3d = reinterpret_cast<AVStereo3D *>(side_data->data);
+  AVStereo3DType interlace_type = AV_STEREO3D_UNSPEC;
+  switch (imf.stereo3d_format.interlace_type) {
+    case S3D_INTERLACE_ROW:
+      interlace_type = AV_STEREO3D_LINES;
+      break;
+    case S3D_INTERLACE_COLUMN:
+      interlace_type = AV_STEREO3D_COLUMNS;
+      break;
+    case S3D_INTERLACE_CHECKERBOARD:
+      interlace_type = AV_STEREO3D_CHECKERBOARD;
+      break;
+    default:
+      break;
+  }
+
+  switch (imf.stereo3d_format.display_mode) {
+    case S3D_DISPLAY_SIDEBYSIDE: {
+      stereo_3d->type = AV_STEREO3D_SIDEBYSIDE;
+      stereo_3d->view = AV_STEREO3D_VIEW_PACKED;
+      const bool is_swapped = bool(imf.stereo3d_format.flag & S3D_SIDEBYSIDE_CROSSEYED);
+      if (is_swapped) {
+        stereo_3d->flags |= AV_STEREO3D_FLAG_INVERT;
+      }
+      break;
+    }
+
+    case S3D_DISPLAY_TOPBOTTOM: {
+      stereo_3d->type = AV_STEREO3D_TOPBOTTOM;
+      stereo_3d->view = AV_STEREO3D_VIEW_PACKED;
+      break;
+    }
+
+    case S3D_DISPLAY_INTERLACE: {
+      stereo_3d->type = interlace_type;
+      stereo_3d->view = AV_STEREO3D_VIEW_PACKED;
+      const bool is_swapped = bool(imf.stereo3d_format.flag & S3D_INTERLACE_SWAP);
+      if (is_swapped) {
+        stereo_3d->flags |= AV_STEREO3D_FLAG_INVERT;
+      }
+      break;
+    }
+
+    case S3D_DISPLAY_ANAGLYPH:
+    case S3D_DISPLAY_PAGEFLIP: {
+      BLI_assert_unreachable();
+    }
+  }
+}
+
+static void add_spherical_mapping_metadata(AVCodecParameters *codecpar, const Scene &scene)
+{
+  if (scene.camera == nullptr) {
+    return;
+  }
+  if (scene.camera->type != OB_CAMERA) {
+    return;
+  }
+  const Camera &camera = *reinterpret_cast<const Camera *>(scene.camera->data);
+
+  /* Only create the side data for full equirectangular cameras. */
+  if (camera.type != CAM_PANO) {
+    return;
+  }
+  if (camera.panorama_type != CAM_PANORAMA_EQUIRECTANGULAR) {
+    return;
+  }
+  if (!compare_ff(camera.latitude_min, -M_PI_2, 1e-6) ||
+      !compare_ff(camera.latitude_max, M_PI_2, 1e-6) ||
+      !compare_ff(camera.longitude_min, -M_PI, 1e-6) ||
+      !compare_ff(camera.longitude_max, M_PI, 1e-6))
+  {
+    return;
+  }
+
+  AVPacketSideData *side_data = av_packet_side_data_new(&codecpar->coded_side_data,
+                                                        &codecpar->nb_coded_side_data,
+                                                        AV_PKT_DATA_SPHERICAL,
+                                                        sizeof(AVSphericalMapping),
+                                                        0);
+  if (side_data == nullptr) {
+    CLOG_ERROR(&LOG, "Failed to attach spherical mapping metadata to stream");
+    return;
+  }
+  AVSphericalMapping &spherical = *reinterpret_cast<AVSphericalMapping *>(side_data->data);
+  spherical.projection = AV_SPHERICAL_EQUIRECTANGULAR;
 }
 
 /* Write a frame to the output file */
@@ -295,21 +409,22 @@ static ImBuf *alloc_imbuf_for_colorspace_transform(const ImBuf *input_ibuf)
    * This is a common pattern used in few areas with the goal to bypass the hardcoded number of
    * channels used by IMB_allocImBuf(). */
   ImBuf *result_ibuf = IMB_allocImBuf(input_ibuf->x, input_ibuf->y, input_ibuf->planes, 0);
-  result_ibuf->channels = input_ibuf->float_buffer.data ? input_ibuf->channels : 4;
+  result_ibuf->channels = input_ibuf->float_data() ? input_ibuf->channels : 4;
 
   /* Allocate float buffer with the proper number of channels. */
   const size_t num_pixels = IMB_get_pixel_count(input_ibuf);
-  float *buffer = MEM_malloc_arrayN<float>(num_pixels * result_ibuf->channels, "movie hdr image");
+  float *buffer = MEM_new_array_uninitialized<float>(num_pixels * result_ibuf->channels,
+                                                     "movie hdr image");
   IMB_assign_float_buffer(result_ibuf, buffer, IB_TAKE_OWNERSHIP);
 
   /* Transfer flags related to color space conversion from the original image buffer. */
   result_ibuf->flags |= (input_ibuf->flags & IB_alphamode_channel_packed);
 
-  if (input_ibuf->float_buffer.data) {
+  if (input_ibuf->float_data()) {
     /* Simple case: copy pixels from the source image as-is, without any conversion.
      * The result has the same colorspace as the input. */
-    memcpy(result_ibuf->float_buffer.data,
-           input_ibuf->float_buffer.data,
+    memcpy(result_ibuf->float_data_for_write(),
+           input_ibuf->float_data(),
            num_pixels * input_ibuf->channels * sizeof(float));
     result_ibuf->float_buffer.colorspace = input_ibuf->float_buffer.colorspace;
   }
@@ -319,7 +434,7 @@ static ImBuf *alloc_imbuf_for_colorspace_transform(const ImBuf *input_ibuf)
      * that the function only does alpha and byte->float conversions. */
     const bool predivide = IMB_alpha_affects_rgb(input_ibuf);
     IMB_buffer_float_from_byte(buffer,
-                               input_ibuf->byte_buffer.data,
+                               input_ibuf->byte_data(),
                                IB_PROFILE_SRGB,
                                IB_PROFILE_SRGB,
                                predivide,
@@ -341,12 +456,12 @@ static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *input_ib
       !(context->img_convert_frame->format == AV_PIX_FMT_RGBA &&
         ELEM(context->img_convert_frame->colorspace, AVCOL_SPC_RGB, AVCOL_SPC_UNSPECIFIED));
 
-  const ImBuf *image = (use_float && input_ibuf->float_buffer.data == nullptr) ?
+  const ImBuf *image = (use_float && input_ibuf->float_data() == nullptr) ?
                            alloc_imbuf_for_colorspace_transform(input_ibuf) :
                            input_ibuf;
 
-  const uint8_t *pixels = image->byte_buffer.data;
-  const float *pixels_fl = image->float_buffer.data;
+  const uint8_t *pixels = image->byte_data();
+  const float *pixels_fl = image->float_data();
 
   if ((!use_float && (pixels == nullptr)) || (use_float && (pixels_fl == nullptr))) {
     if (image != input_ibuf) {
@@ -770,7 +885,9 @@ static void set_quality_rate_options(const MovieWriter *context,
     crf = remap_crf_to_h264_10bpp_crf(crf);
   }
   else if (codec_id == AV_CODEC_ID_H265) {
-    crf = remap_crf_to_h265_crf(crf, is_10_bpp || is_12_bpp);
+    if (!context->custom_crf) {
+      crf = remap_crf_to_h265_crf(crf, is_10_bpp || is_12_bpp);
+    }
     /* Make H.265 much less verbose. */
     av_dict_set(opts, "x265-params", "log-level=1", 0);
   }
@@ -822,7 +939,7 @@ static void set_colorspace_options(AVCodecContext *c, const ColorSpace *colorspa
 }
 
 static AVStream *alloc_video_stream(MovieWriter *context,
-                                    const RenderData *rd,
+                                    const Scene &scene,
                                     const ImageFormatData *imf,
                                     AVCodecID codec_id,
                                     AVFormatContext *of,
@@ -834,6 +951,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   AVStream *st;
   const AVCodec *codec;
   AVDictionary *opts = nullptr;
+  const RenderData *rd = &scene.r;
 
   error[0] = '\0';
 
@@ -1166,6 +1284,8 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   avcodec_parameters_from_context(st->codecpar, c);
 
   add_hdr_mastering_display_metadata(st->codecpar, c, imf);
+  add_stereo3d_metadata(st->codecpar, *rd, *imf);
+  add_spherical_mapping_metadata(st->codecpar, scene);
 
   context->video_time = 0.0f;
 
@@ -1205,6 +1325,10 @@ static bool start_ffmpeg_impl(MovieWriter *context,
   context->ffmpeg_gop_size = rd->ffcodecdata.gop_size;
   context->ffmpeg_autosplit = (rd->ffcodecdata.flags & FFMPEG_AUTOSPLIT_OUTPUT) != 0;
   context->ffmpeg_crf = rd->ffcodecdata.constant_rate_factor;
+  context->custom_crf = rd->ffcodecdata.constant_rate_factor == FFM_CRF_CUSTOM;
+  if (context->custom_crf) {
+    context->ffmpeg_crf = rd->ffcodecdata.custom_constant_rate_factor;
+  }
   context->ffmpeg_preset = rd->ffcodecdata.ffmpeg_preset;
   context->ffmpeg_profile = 0;
 
@@ -1290,7 +1414,21 @@ static bool start_ffmpeg_impl(MovieWriter *context,
       break;
   }
 
-    /* Returns after this must 'goto fail;' */
+  if (context->custom_crf) {
+    if ((video_codec == AV_CODEC_ID_AV1) || (video_codec == AV_CODEC_ID_H264) ||
+        (video_codec == AV_CODEC_ID_H265))
+    {
+      context->ffmpeg_crf = math::clamp(context->ffmpeg_crf, 0, 51);
+    }
+    else if (video_codec == AV_CODEC_ID_VP9) {
+      context->ffmpeg_crf = math::clamp(context->ffmpeg_crf, 0, 63);
+    }
+    else if (video_codec == AV_CODEC_ID_MPEG4) {
+      context->ffmpeg_crf = math::clamp(context->ffmpeg_crf, 1, 31);
+    }
+  }
+
+  /* Returns after this must 'goto fail;' */
 
 #  if LIBAVFORMAT_VERSION_MAJOR >= 59
   of->oformat = fmt;
@@ -1330,7 +1468,7 @@ static bool start_ffmpeg_impl(MovieWriter *context,
 
   if (video_codec != AV_CODEC_ID_NONE) {
     context->video_stream = alloc_video_stream(
-        context, rd, imf, video_codec, of, rectx, recty, error, sizeof(error));
+        context, *scene, imf, video_codec, of, rectx, recty, error, sizeof(error));
     CLOG_INFO(&LOG, "ffmpeg: alloc video stream %p", context->video_stream);
     if (!context->video_stream) {
       if (error[0]) {
@@ -1352,7 +1490,8 @@ static bool start_ffmpeg_impl(MovieWriter *context,
                                                audio_codec,
                                                of,
                                                error,
-                                               sizeof(error));
+                                               sizeof(error),
+                                               reports);
     if (!context->audio_stream) {
       if (error[0]) {
         BKE_report(reports, RPT_ERROR, error);
@@ -1485,11 +1624,11 @@ static bool ffmpeg_filepath_get(MovieWriter *context,
 
   BLI_strncpy(filepath, rd->pic, FILE_MAX);
 
-  blender::bke::path_templates::VariableMap template_variables;
+  bke::path_templates::VariableMap template_variables;
   BKE_add_template_variables_general(template_variables, &scene->id);
   BKE_add_template_variables_for_render_path(template_variables, *scene);
 
-  const blender::Vector<blender::bke::path_templates::Error> errors = BKE_path_apply_template(
+  const Vector<bke::path_templates::Error> errors = BKE_path_apply_template(
       filepath, FILE_MAX, template_variables);
   if (!errors.is_empty()) {
     BKE_report_path_template_errors(reports, RPT_ERROR, filepath, errors);
@@ -1788,3 +1927,5 @@ void MOV_filepath_from_settings(char filepath[/*FILE_MAX*/ 1024],
 #endif
   filepath[0] = '\0';
 }
+
+}  // namespace blender

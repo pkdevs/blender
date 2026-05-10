@@ -21,8 +21,9 @@
 
 #include "DNA_userdef_types.h"
 
-#include "GHOST_C-api.h"
-#include "GHOST_Types.h"
+#include "GHOST_IContext.hh"
+#include "GHOST_ISystem.hh"
+#include "GHOST_Types.hh"
 
 #include "GPU_context.hh"
 
@@ -48,13 +49,16 @@
 
 #include "draw_debug.hh"
 
+#include <cstdio>
 #include <mutex>
+
+namespace blender {
 
 using namespace blender::gpu;
 
 static thread_local Context *active_ctx = nullptr;
 
-static blender::Mutex backend_users_mutex;
+static Mutex backend_users_mutex;
 static int num_backend_users = 0;
 
 static void gpu_backend_create();
@@ -64,15 +68,14 @@ static void gpu_backend_discard();
 /** \name gpu::Context methods
  * \{ */
 
-namespace blender::gpu {
+namespace gpu {
 
-int Context::context_counter = 0;
 Context::Context()
 {
   thread_ = pthread_self();
   is_active_ = false;
   matrix_state = GPU_matrix_state_create();
-  texture_pool = new TexturePool();
+  texture_pool = GPUBackend::get()->texturepool_alloc();
 
   context_id = Context::context_counter;
   Context::context_counter++;
@@ -181,13 +184,13 @@ Batch *Context::procedural_triangle_strips_batch_get()
   return procedural_triangle_strips_batch;
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
 
-GPUContext *GPU_context_create(void *ghost_window, void *ghost_context)
+GPUContext *GPU_context_create(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context)
 {
   {
     std::scoped_lock lock(backend_users_mutex);
@@ -202,7 +205,7 @@ GPUContext *GPU_context_create(void *ghost_window, void *ghost_context)
 
   GPU_context_active_set(wrap(ctx));
 
-  blender::draw::DebugDraw::get().acquire();
+  draw::DebugDraw::get().acquire();
 
   return wrap(ctx);
 }
@@ -212,7 +215,7 @@ void GPU_context_discard(GPUContext *ctx_)
   Context *ctx = unwrap(ctx_);
   BLI_assert(active_ctx == ctx);
 
-  blender::draw::DebugDraw::get().release();
+  draw::DebugDraw::get().release();
 
   GPUBackend *backend = GPUBackend::get();
   /* Flush any remaining printf while making sure we are inside render boundaries. */
@@ -264,7 +267,7 @@ GPUContext *GPU_context_active_get()
 
 void GPU_context_begin_frame(GPUContext *ctx)
 {
-  blender::gpu::Context *_ctx = unwrap(ctx);
+  gpu::Context *_ctx = unwrap(ctx);
   if (_ctx) {
     _ctx->begin_frame();
   }
@@ -272,9 +275,17 @@ void GPU_context_begin_frame(GPUContext *ctx)
 
 void GPU_context_end_frame(GPUContext *ctx)
 {
-  blender::gpu::Context *_ctx = unwrap(ctx);
+  gpu::Context *_ctx = unwrap(ctx);
   if (_ctx) {
     _ctx->end_frame();
+  }
+}
+
+void GPU_context_debug_pipeline_creation(GPUContext *ctx, bool enable)
+{
+  gpu::Context *_ctx = unwrap(ctx);
+  if (_ctx) {
+    _ctx->debug_pipeline_creation = enable;
   }
 }
 
@@ -284,7 +295,7 @@ void GPU_context_end_frame(GPUContext *ctx)
  * Used to avoid crash on some old drivers.
  * \{ */
 
-static blender::Mutex main_context_mutex;
+static Mutex main_context_mutex;
 
 void GPU_context_main_lock()
 {
@@ -347,16 +358,17 @@ void GPU_render_step(bool force_resource_release)
 static GPUBackendType g_backend_type = GPU_BACKEND_OPENGL;
 static std::optional<GPUBackendType> g_backend_type_override = std::nullopt;
 static std::optional<bool> g_backend_type_supported = std::nullopt;
+static std::optional<GHOST_GPUDevice> g_preferred_device_override = std::nullopt;
 static std::optional<int> g_vsync_override = std::nullopt;
 static GPUBackend *g_backend = nullptr;
-static GHOST_SystemHandle g_ghost_system = nullptr;
+static GHOST_ISystem *g_ghost_system = nullptr;
 
-void GPU_backend_ghost_system_set(void *ghost_system_handle)
+void GPU_backend_ghost_system_set(GHOST_ISystem *ghost_system_handle)
 {
-  g_ghost_system = reinterpret_cast<GHOST_SystemHandle>(ghost_system_handle);
+  g_ghost_system = ghost_system_handle;
 }
 
-void *GPU_backend_ghost_system_get()
+GHOST_ISystem *GPU_backend_ghost_system_get()
 {
   return g_ghost_system;
 }
@@ -397,9 +409,72 @@ bool GPU_backend_type_selection_is_overridden()
   return g_backend_type_override.has_value();
 }
 
+void GPU_backend_preferred_device_set_override(const int index,
+                                               const uint32_t vendor_id,
+                                               const uint32_t device_id)
+{
+  BLI_assert(index >= 0);
+
+  GHOST_GPUDevice device = {};
+  device.is_override = true;
+  device.fail_on_invalid_override = false;
+  device.index = index;
+  device.vendor_id = vendor_id;
+  device.device_id = device_id;
+  g_preferred_device_override = device;
+}
+
+GHOST_GPUDevice GPU_backend_preferred_device_get()
+{
+  if (g_preferred_device_override.has_value()) {
+    GHOST_GPUDevice device = g_preferred_device_override.value();
+    device.fail_on_invalid_override = (G.debug & G_DEBUG_GPU_DEVICE_NO_FALLBACK) != 0;
+    device.fallback_index = U.gpu_preferred_index;
+    device.fallback_vendor_id = U.gpu_preferred_vendor_id;
+    device.fallback_device_id = U.gpu_preferred_device_id;
+    return device;
+  }
+
+  GHOST_GPUDevice device = {};
+  device.is_override = false;
+  device.fail_on_invalid_override = false;
+  device.index = U.gpu_preferred_index;
+  device.vendor_id = U.gpu_preferred_vendor_id;
+  device.device_id = U.gpu_preferred_device_id;
+  device.fallback_index = device.index;
+  device.fallback_vendor_id = device.vendor_id;
+  device.fallback_device_id = device.device_id;
+  return device;
+}
+
+static const char *gpu_backend_type_name(const GPUBackendType backend_type)
+{
+  switch (backend_type) {
+    case GPU_BACKEND_OPENGL:
+      return "OpenGL";
+    case GPU_BACKEND_VULKAN:
+      return "Vulkan";
+    case GPU_BACKEND_METAL:
+      return "Metal";
+    case GPU_BACKEND_NONE:
+      return "None";
+    case GPU_BACKEND_ANY:
+      break;
+  }
+
+  return "Unknown";
+}
+
+#ifdef WITH_VULKAN_BACKEND
+void GPU_vulkan_supported_devices_print(FILE *fp)
+{
+  blender::gpu::VKBackend::supported_devices_print(fp);
+}
+#endif
+
 bool GPU_backend_type_selection_detect()
 {
-  blender::VectorSet<GPUBackendType> backends_to_check;
+  VectorSet<GPUBackendType> backends_to_check;
   if (g_backend_type_override.has_value()) {
     backends_to_check.add(*g_backend_type_override);
   }
@@ -416,6 +491,14 @@ bool GPU_backend_type_selection_detect()
   for (const GPUBackendType backend_type : backends_to_check) {
     GPU_backend_type_selection_set(backend_type);
     if (GPU_backend_supported()) {
+      if (g_preferred_device_override.has_value() && backend_type != GPU_BACKEND_VULKAN) {
+        fprintf(stderr,
+                "Warning: '--gpu-device' is only supported for the Vulkan backend. "
+                "Ignoring the device override for the selected %s backend and falling back to the "
+                "stored GPU preference.\n",
+                gpu_backend_type_name(backend_type));
+        g_preferred_device_override.reset();
+      }
       return true;
     }
     G.f |= G_FLAG_GPU_BACKEND_FALLBACK;
@@ -537,20 +620,7 @@ GPUBackendType GPU_backend_get_type()
 
 const char *GPU_backend_get_name()
 {
-  switch (GPU_backend_get_type()) {
-    case GPU_BACKEND_OPENGL:
-      return "OpenGL";
-    case GPU_BACKEND_VULKAN:
-      return "Vulkan";
-    case GPU_BACKEND_METAL:
-      return "Metal";
-    case GPU_BACKEND_NONE:
-      return "None";
-    case GPU_BACKEND_ANY:
-      break;
-  }
-
-  return "Unknown";
+  return gpu_backend_type_name(GPU_backend_get_type());
 }
 
 GPUBackend *GPUBackend::get()
@@ -563,6 +633,8 @@ GPUBackend *GPUBackend::get()
 /* -------------------------------------------------------------------- */
 /** \name GPUSecondaryContext
  * \{ */
+
+namespace gpu {
 
 static GHOST_TDrawingContextType ghost_context_type()
 {
@@ -585,12 +657,12 @@ static GHOST_TDrawingContextType ghost_context_type()
   }
 }
 
-GPUSecondaryContext::GPUSecondaryContext()
+GPUSecondaryContextData GPU_create_secondary_context()
 {
   /* Contexts can only be created on the main thread. */
   BLI_assert(BLI_thread_is_main());
 
-  GHOST_ContextHandle main_thread_ghost_context = GHOST_GetActiveGPUContext();
+  GHOST_IContext *main_thread_ghost_context = GHOST_IContext::getActiveDrawingContext();
   GPUContext *main_thread_gpu_context = GPU_context_active_get();
 
   /* GPU settings for context creation. */
@@ -599,36 +671,83 @@ GPUSecondaryContext::GPUSecondaryContext()
   if (G.debug & G_DEBUG_GPU) {
     gpu_settings.flags |= GHOST_gpuDebugContext;
   }
-  gpu_settings.preferred_device.index = U.gpu_preferred_index;
-  gpu_settings.preferred_device.vendor_id = U.gpu_preferred_vendor_id;
-  gpu_settings.preferred_device.device_id = U.gpu_preferred_device_id;
+  gpu_settings.preferred_device = GPU_backend_preferred_device_get();
 
   /* Grab the system handle. */
-  GHOST_SystemHandle ghost_system = reinterpret_cast<GHOST_SystemHandle>(
-      GPU_backend_ghost_system_get());
+  GHOST_ISystem *ghost_system = GPU_backend_ghost_system_get();
   BLI_assert(ghost_system);
 
   /* Create a Ghost GPU Context using the system handle. */
-  ghost_context_ = GHOST_CreateGPUContext(ghost_system, gpu_settings);
-  BLI_assert(ghost_context_);
+  GHOST_IContext *ghost_context = ghost_system->createOffscreenContext(gpu_settings);
+  BLI_assert(ghost_context);
 
   /* Activate it so GPU_context_create has a valid device for info queries. */
-  GHOST_ActivateGPUContext(reinterpret_cast<GHOST_ContextHandle>(ghost_context_));
+  ghost_context->activateDrawingContext();
 
   /* Create a GPU context for the secondary thread to use. */
-  gpu_context_ = GPU_context_create(nullptr, ghost_context_);
-  BLI_assert(gpu_context_);
+  GPUContext *gpu_context = GPU_context_create(nullptr, ghost_context);
+  BLI_assert(gpu_context);
 
   /* Release the Ghost GPU Context from this thread. */
-  GHOST_TSuccess success = GHOST_ReleaseGPUContext(
-      reinterpret_cast<GHOST_ContextHandle>(ghost_context_));
+  const GHOST_TSuccess success = ghost_context->releaseDrawingContext();
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
 
   /* Restore the main thread contexts.
-   * (required as the above context creation also makes it active). */
-  GHOST_ActivateGPUContext(main_thread_ghost_context);
-  GPU_context_active_set(main_thread_gpu_context);
+   * (required as the above context creation also makes it active).
+   * Contexts can be unset when called from the event system (#157456)  */
+  if (main_thread_ghost_context) {
+    main_thread_ghost_context->activateDrawingContext();
+  }
+  if (main_thread_gpu_context) {
+    GPU_context_active_set(main_thread_gpu_context);
+  }
+
+  return GPUSecondaryContextData{.ghost_context = ghost_context, .gpu_context = gpu_context};
+}
+
+void GPU_activate_secondary_context(const GPUSecondaryContextData &data)
+{
+  data.ghost_context->activateDrawingContext();
+  GPU_context_active_set(data.gpu_context);
+}
+
+void GPU_deactivate_secondary_context(const GPUSecondaryContextData &data)
+{
+  GPU_context_active_set(nullptr);
+  data.ghost_context->releaseDrawingContext();
+}
+
+void GPU_destroy_secondary_context(GPUSecondaryContextData &data)
+{
+  GHOST_IContext *cur_ghost_context = GHOST_IContext::getActiveDrawingContext();
+  GPUContext *cur_gpu_context = GPU_context_active_get();
+
+  GPU_activate_secondary_context(data);
+
+  GPU_context_discard(data.gpu_context);
+
+  data.ghost_context->releaseDrawingContext();
+
+  GHOST_ISystem *ghost_system = GPU_backend_ghost_system_get();
+  ghost_system->disposeContext(data.ghost_context);
+
+  /* Restore previous GHOST/GPU contexts, unless they are the same
+   * as what is being destroyed. */
+  if (cur_ghost_context && cur_ghost_context != data.ghost_context) {
+    cur_ghost_context->activateDrawingContext();
+  }
+  if (cur_gpu_context != data.gpu_context) {
+    GPU_context_active_set(cur_gpu_context);
+  }
+
+  data.ghost_context = nullptr;
+  data.gpu_context = nullptr;
+}
+
+GPUSecondaryContext::GPUSecondaryContext()
+{
+  data_ = GPU_create_secondary_context();
 }
 
 GPUSecondaryContext::~GPUSecondaryContext()
@@ -636,14 +755,13 @@ GPUSecondaryContext::~GPUSecondaryContext()
   /* Contexts should be destructed on the thread they were activated. */
   BLI_assert(!BLI_thread_is_main());
 
-  GPU_context_discard(gpu_context_);
+  GPU_context_discard(data_.gpu_context);
 
-  GHOST_ReleaseGPUContext(reinterpret_cast<GHOST_ContextHandle>(ghost_context_));
+  data_.ghost_context->releaseDrawingContext();
 
-  GHOST_SystemHandle ghost_system = reinterpret_cast<GHOST_SystemHandle>(
-      GPU_backend_ghost_system_get());
+  GHOST_ISystem *ghost_system = GPU_backend_ghost_system_get();
   BLI_assert(ghost_system);
-  GHOST_DisposeGPUContext(ghost_system, reinterpret_cast<GHOST_ContextHandle>(ghost_context_));
+  ghost_system->disposeContext(data_.ghost_context);
 }
 
 void GPUSecondaryContext::activate()
@@ -651,8 +769,11 @@ void GPUSecondaryContext::activate()
   /* Contexts need to be activated in the thread they're going to be used. */
   BLI_assert(!BLI_thread_is_main());
 
-  GHOST_ActivateGPUContext(reinterpret_cast<GHOST_ContextHandle>(ghost_context_));
-  GPU_context_active_set(gpu_context_);
+  data_.ghost_context->activateDrawingContext();
+  GPU_context_active_set(data_.gpu_context);
 }
 
 /** \} */
+
+}  // namespace gpu
+}  // namespace blender

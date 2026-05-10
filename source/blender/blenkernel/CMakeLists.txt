@@ -25,15 +25,9 @@ set(INC
 )
 
 set(INC_SYS
-  ${ZLIB_INCLUDE_DIRS}
-  ${ZSTD_INCLUDE_DIRS}
-
-  # For `vfontdata_freetype.cc`.
-  ${FREETYPE_INCLUDE_DIRS}
 )
 
 set(SRC
-  ${CMAKE_SOURCE_DIR}/release/datafiles/userdef/userdef_default.c
   intern/action.cc
   intern/action_bones.cc
   intern/action_mirror.cc
@@ -121,7 +115,6 @@ set(SRC
   intern/editmesh_tangent.cc
   intern/effect.cc
   intern/fcurve.cc
-  intern/fcurve_cache.cc
   intern/fcurve_driver.cc
   intern/file_handler.cc
   intern/fluid.cc
@@ -144,7 +137,9 @@ set(SRC
   intern/grease_pencil.cc
   intern/grease_pencil_attributes.cc
   intern/grease_pencil_convert_legacy.cc
+  intern/grease_pencil_fills.cc
   intern/grease_pencil_vertex_groups.cc
+  intern/gtest_setup.cc
   intern/icons.cc
   intern/icons_rasterize.cc
   intern/id_hash.cc
@@ -314,6 +309,7 @@ set(SRC
   intern/volume_grid.cc
   intern/volume_grid_fields.cc
   intern/volume_grid_file_cache.cc
+  intern/volume_grid_multi_function_eval.cc
   intern/volume_render.cc
   intern/volume_to_mesh.cc
   intern/wm_runtime.cc
@@ -417,11 +413,15 @@ set(SRC
   BKE_gpencil_modifier_legacy.h
   BKE_grease_pencil.h
   BKE_grease_pencil.hh
+  BKE_grease_pencil_fills.hh
   BKE_grease_pencil_legacy_convert.hh
   BKE_grease_pencil_vertex_groups.hh
-  BKE_icons.h
+  BKE_gtest_base.hh
+  BKE_gtest_setup.hh
+  BKE_icons.hh
   BKE_id_hash.hh
   BKE_idprop.hh
+  BKE_idprop_hash.hh
   BKE_idtype.hh
   BKE_image.hh
   BKE_image_format.hh
@@ -447,7 +447,7 @@ set(SRC
   BKE_main_idmap.hh
   BKE_main_invariants.hh
   BKE_main_namemap.hh
-  BKE_mask.h
+  BKE_mask.hh
   BKE_material.hh
   BKE_mball.hh
   BKE_mball_tessellate.hh
@@ -467,7 +467,7 @@ set(SRC
   BKE_mesh_types.hh
   BKE_mesh_wrapper.hh
   BKE_modifier.hh
-  BKE_movieclip.h
+  BKE_movieclip.hh
   BKE_multires.hh
   BKE_nla.hh
   BKE_node.hh
@@ -478,6 +478,7 @@ set(SRC
   BKE_node_socket_value_fwd.hh
   BKE_node_tree_dot_export.hh
   BKE_node_tree_interface.hh
+  BKE_node_tree_interface_convert.hh
   BKE_node_tree_reference_lifetimes.hh
   BKE_node_tree_update.hh
   BKE_node_tree_zones.hh
@@ -495,6 +496,7 @@ set(SRC
   BKE_path_templates.hh
   BKE_pointcache.h
   BKE_pointcloud.hh
+  BKE_pose.hh
   BKE_pose_backup.h
   BKE_preferences.h
   BKE_preview_image.hh
@@ -503,11 +505,13 @@ set(SRC
   BKE_scene.hh
   BKE_scene_runtime.hh
   BKE_screen.hh
-  BKE_shader_fx.h
+  BKE_shader_fx.hh
   BKE_shrinkwrap.hh
   BKE_softbody.h
-  BKE_sound.h
-  BKE_speaker.h
+  BKE_sound.hh
+  BKE_sound_sample.hh
+  BKE_sound_types.hh
+  BKE_speaker.hh
   BKE_studiolight.h
   BKE_subdiv.hh
   BKE_subdiv_ccg.hh
@@ -520,7 +524,7 @@ set(SRC
   BKE_text.h
   BKE_text_suggestions.h
   BKE_texture.h
-  BKE_tracking.h
+  BKE_tracking.hh
   BKE_type_conversions.hh
   BKE_undo_system.hh
   BKE_unit.hh
@@ -534,6 +538,7 @@ set(SRC
   BKE_volume_grid_fields.hh
   BKE_volume_grid_file_cache.hh
   BKE_volume_grid_fwd.hh
+  BKE_volume_grid_multi_function_eval.hh
   BKE_volume_grid_process.hh
   BKE_volume_grid_type_traits.hh
   BKE_volume_openvdb.hh
@@ -545,9 +550,7 @@ set(SRC
 
   nla_private.h
   particle_private.h
-  tracking_private.h
 
-  intern/attribute_access_intern.hh
   intern/attribute_storage_access.hh
   intern/data_transfer_intern.hh
   intern/lib_intern.hh
@@ -560,6 +563,7 @@ set(SRC
   intern/pbvh_uv_islands.hh
   intern/subdiv_converter.hh
   intern/subdiv_inline.hh
+  intern/tracking_private.hh
 )
 
 set(LIB
@@ -578,7 +582,9 @@ set(LIB
   PRIVATE bf::gpu
   bf_ikplugin
   PRIVATE bf::imbuf
+  PRIVATE bf::imbuf::opencolorio
   PRIVATE bf::imbuf::movie
+  PRIVATE bf::imbuf::opencolorio
   PRIVATE bf::intern::clog
   bf_intern_ghost
   PRIVATE bf::intern::guardedalloc
@@ -593,19 +599,19 @@ set(LIB
   PRIVATE bf::sequencer
   bf_shader_fx
   bf_simulation
-  PRIVATE bf::extern::fmtlib
   PRIVATE bf::extern::xxhash
   PRIVATE bf::intern::atomic
-  # For `vfontdata_freetype.c`.
-  ${FREETYPE_LIBRARIES} ${BROTLI_LIBRARIES}
+  PRIVATE bf::dependencies::zlib
+  PRIVATE bf::dependencies::zstd
+  PRIVATE bf::dependencies::freetype  # For `vfontdata_freetype.c`.
+  PRIVATE bf::dependencies::optional::fftw3
+  PRIVATE bf::dependencies::optional::opensubdiv
+  PRIVATE bf::dependencies::optional::audaspace
 )
 
 if(WITH_BINRELOC)
-  list(APPEND INC_SYS
-    ${BINRELOC_INCLUDE_DIRS}
-  )
   list(APPEND LIB
-    extern_binreloc
+    PRIVATE bf::extern::binreloc
   )
   add_definitions(-DWITH_BINRELOC)
 endif()
@@ -617,36 +623,14 @@ if(WIN32)
   )
 endif()
 
-if(WITH_AUDASPACE)
-  list(APPEND INC_SYS
-    ${AUDASPACE_C_INCLUDE_DIRS}
-  )
-  if(WITH_SYSTEM_AUDASPACE)
-    list(APPEND LIB
-      ${AUDASPACE_C_LIBRARIES}
-      ${AUDASPACE_PY_LIBRARIES}
-    )
-  endif()
-  add_definitions(-DWITH_AUDASPACE)
-endif()
-
 if(WITH_BULLET)
-  list(APPEND INC_SYS
-    ${BULLET_INCLUDE_DIRS}
-  )
   list(APPEND INC
     ../../../intern/rigidbody
   )
   list(APPEND LIB
     bf_intern_rigidbody
-
-    ${BULLET_LIBRARIES}
+    PRIVATE bf::dependencies::optional::bullet
   )
-  add_definitions(-DWITH_BULLET)
-endif()
-
-if(WITH_IMAGE_OPENEXR)
-  add_definitions(-DWITH_IMAGE_OPENEXR)
 endif()
 
 if(WITH_IMAGE_OPENJPEG)
@@ -714,16 +698,6 @@ if(WITH_LIBMV)
   add_definitions(-DWITH_LIBMV)
 endif()
 
-if(WITH_FFTW3)
-  list(APPEND INC_SYS
-    ${FFTW3_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${FFTW3_LIBRARIES}
-  )
-  add_definitions(-DFFTW3=1)
-endif()
-
 if(WITH_FREESTYLE)
   add_definitions(-DWITH_FREESTYLE)
 endif()
@@ -740,16 +714,6 @@ if(WITH_USD)
     ../io/usd
   )
   add_definitions(-DWITH_USD)
-endif()
-
-if(WITH_OPENSUBDIV)
-  list(APPEND INC_SYS
-    ${OPENSUBDIV_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${OPENSUBDIV_LIBRARIES}
-  )
-  add_definitions(-DWITH_OPENSUBDIV)
 endif()
 
 if(WITH_QUADRIFLOW)
@@ -784,7 +748,7 @@ add_dependencies(bf_blenkernel bf_rna)
 
 if(WITH_GTESTS)
   set(TEST_SRC
-    intern/action_test.cc
+    intern/anim_data_test.cc
     intern/armature_deform_test.cc
     intern/armature_test.cc
     intern/asset_metadata_test.cc
@@ -801,6 +765,7 @@ if(WITH_GTESTS)
     intern/idprop_test.cc
     intern/image_partial_update_test.cc
     intern/image_test.cc
+    intern/key_test.cc
     intern/lattice_deform_test.cc
     intern/layer_test.cc
     intern/lib_id_remapper_test.cc
@@ -810,6 +775,7 @@ if(WITH_GTESTS)
     intern/main_test.cc
     intern/nla_test.cc
     intern/path_templates_test.cc
+    intern/scene_test.cc
     intern/subdiv_ccg_test.cc
     intern/tracking_test.cc
     intern/volume_test.cc

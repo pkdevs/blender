@@ -13,7 +13,6 @@ set(INC
 )
 
 set(INC_SYS
-  ${PYTHON_INCLUDE_DIRS}
 )
 
 set(SRC
@@ -32,9 +31,11 @@ set(SRC
   bpy_app_timers.cc
   bpy_app_translations.cc
   bpy_app_usd.cc
+  bpy_audaspace.cc
   bpy_capi_utils.cc
   bpy_cli_command.cc
   bpy_driver.cc
+  bpy_driver_bytecode.cc
   bpy_geometry_set.cc
   bpy_gizmo_wrap.cc
   bpy_inline_shader_nodes.cc
@@ -46,6 +47,7 @@ set(SRC
   bpy_library_write.cc
   bpy_msgbus.cc
   bpy_operator.cc
+  bpy_operator_function.cc
   bpy_operator_wrap.cc
   bpy_path.cc
   bpy_props.cc
@@ -62,6 +64,7 @@ set(SRC
   bpy_rna_text.cc
   bpy_rna_types_capi.cc
   bpy_rna_ui.cc
+  bpy_rna_wm.cc
   bpy_traceback.cc
   bpy_utils_previews.cc
   bpy_utils_units.cc
@@ -81,9 +84,11 @@ set(SRC
   bpy_app_timers.hh
   bpy_app_translations.hh
   bpy_app_usd.hh
+  bpy_audaspace.hh
   bpy_capi_utils.hh
   bpy_cli_command.hh
   bpy_driver.hh
+  bpy_driver_bytecode.hh
   bpy_geometry_set.hh
   bpy_gizmo_wrap.hh
   bpy_inline_shader_nodes.hh
@@ -91,6 +96,7 @@ set(SRC
   bpy_library.hh
   bpy_msgbus.hh
   bpy_operator.hh
+  bpy_operator_function.hh
   bpy_operator_wrap.hh
   bpy_path.hh
   bpy_props.hh
@@ -106,6 +112,7 @@ set(SRC
   bpy_rna_text.hh
   bpy_rna_types_capi.hh
   bpy_rna_ui.hh
+  bpy_rna_wm.hh
   bpy_traceback.hh
   bpy_utils_previews.hh
   bpy_utils_units.hh
@@ -133,10 +140,11 @@ set(LIB
   bf_python_gpu
   PRIVATE bf::imbuf::opencolorio
   PRIVATE bf::nodes
-
-  ${PYTHON_LINKFLAGS}
-  ${PYTHON_LIBRARIES}
   PRIVATE bf::windowmanager
+
+  PRIVATE bf::dependencies::optional::python
+  PRIVATE bf::dependencies::optional::ffmpeg
+  PRIVATE bf::dependencies::optional::sdl
 )
 
 # Only to check if `buildinfo` is available.
@@ -183,21 +191,12 @@ if(WITH_AUDASPACE)
   add_definitions(-DWITH_AUDASPACE)
   if(WITH_PYTHON_NUMPY)
     add_definitions(-DWITH_AUDASPACE_PY)
+    list(APPEND LIB bf::dependencies::optional::audaspace)
   endif()
 endif()
 
 if(WITH_BULLET)
   add_definitions(-DWITH_BULLET)
-endif()
-
-if(WITH_CODEC_FFMPEG)
-  list(APPEND INC_SYS
-    ${FFMPEG_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${FFMPEG_LIBRARIES}
-  )
-  add_definitions(-DWITH_FFMPEG)
 endif()
 
 if(WITH_CODEC_SNDFILE)
@@ -233,10 +232,6 @@ if(WITH_IMAGE_CINEON)
   add_definitions(-DWITH_IMAGE_CINEON)
 endif()
 
-if(WITH_IMAGE_OPENEXR)
-  add_definitions(-DWITH_IMAGE_OPENEXR)
-endif()
-
 if(WITH_IMAGE_OPENJPEG)
   add_definitions(-DWITH_IMAGE_OPENJPEG)
 endif()
@@ -259,16 +254,9 @@ endif()
 
 if(WITH_OPENSUBDIV)
   add_definitions(-DWITH_OPENSUBDIV)
-endif()
-
-if(WITH_SDL)
-  list(APPEND INC_SYS
-    ${SDL_INCLUDE_DIR}
+  list(APPEND INC
+    ../../../../intern/opensubdiv
   )
-  list(APPEND LIB
-    ${SDL_LIBRARY}
-  )
-  add_definitions(-DWITH_SDL)
 endif()
 
 if(WITH_JACK)
@@ -334,13 +322,6 @@ if(WITH_USD)
   add_definitions(-DWITH_USD)
   list(APPEND INC
     ../../io/usd
-  )
-endif()
-
-if(WITH_OPENSUBDIV)
-  add_definitions(-DWITH_OPENSUBDIV)
-  list(APPEND INC
-    ../../../../intern/opensubdiv
   )
 endif()
 

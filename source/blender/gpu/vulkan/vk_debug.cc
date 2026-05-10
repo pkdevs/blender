@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "BKE_global.hh"
+#include "BLI_utildefines.h"
 #include "CLG_log.h"
 
 #include "vk_backend.hh"
@@ -18,11 +19,14 @@
 
 #include "gpu_profile_report.hh"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"gpu.vulkan"};
 
-namespace blender::gpu {
-void VKContext::debug_group_begin(const char *name, int)
+namespace gpu {
+void VKContext::debug_group_begin(const char *name, int index)
 {
+  UNUSED_VARS(index);
   render_graph().debug_group_begin(name, debug::get_debug_group_color(name));
 
   if (!G.profile_gpu) {
@@ -91,8 +95,6 @@ void VKContext::process_frame_timings()
 
 bool VKContext::debug_capture_begin(const char *title)
 {
-  flush_render_graph(RenderGraphFlushFlags::SUBMIT | RenderGraphFlushFlags::WAIT_FOR_COMPLETION |
-                     RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
   return VKBackend::get().debug_capture_begin(title);
 }
 
@@ -112,8 +114,6 @@ bool VKBackend::debug_capture_begin(const char *title)
 
 void VKContext::debug_capture_end()
 {
-  flush_render_graph(RenderGraphFlushFlags::SUBMIT | RenderGraphFlushFlags::WAIT_FOR_COMPLETION |
-                     RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
   VKBackend::get().debug_capture_end();
 }
 
@@ -155,9 +155,9 @@ void VKContext::debug_capture_scope_end(void *scope)
 #endif
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
 
-namespace blender::gpu::debug {
+namespace gpu::debug {
 
 void VKDebuggingTools::init(VkInstance vk_instance)
 {
@@ -183,9 +183,9 @@ void object_label(VkObjectType vk_object_type, uint64_t object_handle, const cha
   }
 }
 
-}  // namespace blender::gpu::debug
+}  // namespace gpu::debug
 
-namespace blender::gpu::debug {
+namespace gpu::debug {
 
 void VKDebuggingTools::print_labels(const VkDebugUtilsMessengerCallbackDataEXT *callback_data)
 {
@@ -215,7 +215,7 @@ void VKDebuggingTools::print_labels(const VkDebugUtilsMessengerCallbackDataEXT *
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-                   VkDebugUtilsMessageTypeFlagsEXT /*message_type*/,
+                   VkDebugUtilsMessageTypeFlagsEXT message_type,
                    const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
                    void *user_data)
 {
@@ -232,19 +232,25 @@ messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
     level = CLG_LEVEL_ERROR;
   }
 
-  const char *format = "{0x%x}% s\n %s ";
-  CLOG_AT_LEVEL(&LOG,
-                level,
-                format,
-                callback_data->messageIdNumber,
-                callback_data->pMessageIdName,
-                callback_data->pMessage);
-  const bool do_labels = (callback_data->objectCount + callback_data->cmdBufLabelCount +
-                          callback_data->queueLabelCount) > 0;
-  const bool log_active = CLOG_CHECK(&LOG, level);
-  if (do_labels && log_active) {
-    VKDebuggingTools &debugging_tools = *reinterpret_cast<VKDebuggingTools *>(user_data);
-    debugging_tools.print_labels(callback_data);
+  if (bool(message_type & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)) {
+    const char *format = "{0x%x}%s\n %s";
+    CLOG_AT_LEVEL(&LOG,
+                  level,
+                  format,
+                  callback_data->messageIdNumber,
+                  callback_data->pMessageIdName,
+                  callback_data->pMessage);
+    const bool do_labels = (callback_data->objectCount + callback_data->cmdBufLabelCount +
+                            callback_data->queueLabelCount) > 0;
+    const bool log_active = CLOG_CHECK(&LOG, level);
+    if (do_labels && log_active) {
+      VKDebuggingTools &debugging_tools = *reinterpret_cast<VKDebuggingTools *>(user_data);
+      debugging_tools.print_labels(callback_data);
+    }
+  }
+  else {
+    const char *format = "%s: %s";
+    CLOG_AT_LEVEL(&LOG, level, format, callback_data->pMessageIdName, callback_data->pMessage);
   }
 
   return VK_FALSE;
@@ -252,7 +258,7 @@ messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
 
 void VKDebuggingTools::init_messenger(VkInstance vk_instance)
 {
-  if (vk_debug_utils_messenger) {
+  if (vk_debug_utils_messenger != VK_NULL_HANDLE) {
     return;
   }
 
@@ -276,19 +282,19 @@ void VKDebuggingTools::init_messenger(VkInstance vk_instance)
   create_info.pUserData = this;
   device.functions.vkCreateDebugUtilsMessenger(
       vk_instance, &create_info, nullptr, &vk_debug_utils_messenger);
-  return;
 }
 
 void VKDebuggingTools::destroy_messenger(VkInstance vk_instance)
 {
-  if (vk_debug_utils_messenger == nullptr) {
+  if (vk_debug_utils_messenger == VK_NULL_HANDLE) {
     return;
   }
 
   VKDevice &device = VKBackend::get().device;
   device.functions.vkDestroyDebugUtilsMessenger(vk_instance, vk_debug_utils_messenger, nullptr);
-  vk_debug_utils_messenger = nullptr;
-  return;
+  vk_debug_utils_messenger = VK_NULL_HANDLE;
 }
 
-};  // namespace blender::gpu::debug
+};  // namespace gpu::debug
+
+}  // namespace blender

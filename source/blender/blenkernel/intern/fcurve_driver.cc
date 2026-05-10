@@ -52,8 +52,10 @@
 #include <algorithm>
 #include <cstring>
 
+namespace blender {
+
 #ifdef WITH_PYTHON
-static blender::Mutex python_driver_lock;
+static Mutex python_driver_lock;
 #endif
 
 static CLG_LogRef LOG = {"anim.fcurve"};
@@ -72,7 +74,7 @@ struct DriverVarTypeInfo {
   /* Allocation of target slots. */
   int num_targets;                              /* Number of target slots required. */
   const char *target_names[MAX_DRIVER_TARGETS]; /* UI names that should be given to the slots. */
-  short target_flags[MAX_DRIVER_TARGETS]; /* Flags defining the requirements for each slot. */
+  eDriverTarget_Flag target_flags[MAX_DRIVER_TARGETS];
 };
 
 /* Macro to begin definitions */
@@ -111,7 +113,7 @@ static bool driver_get_target_context_property(const DriverTargetContext *driver
 
     case DTAR_CONTEXT_PROPERTY_ACTIVE_VIEW_LAYER: {
       *r_property_ptr = RNA_pointer_create_discrete(
-          &driver_target_context->scene->id, &RNA_ViewLayer, driver_target_context->view_layer);
+          &driver_target_context->scene->id, RNA_ViewLayer, driver_target_context->view_layer);
       return true;
     }
   }
@@ -380,7 +382,7 @@ static short driver_check_valid_targets(ChannelDriver *driver, DriverVar *dvar)
   short valid_targets = 0;
 
   DRIVER_TARGETS_USED_LOOPER_BEGIN (dvar) {
-    Object *ob = (Object *)dtar->id;
+    Object *ob = id_cast<Object *>(dtar->id);
 
     /* Check if this target has valid data. */
     if ((ob == nullptr) || (GS(ob->id.name) != ID_OB)) {
@@ -439,7 +441,7 @@ static float dvar_eval_rotDiff(const AnimationEvalContext * /*anim_eval_context*
   for (int i = 0; i < 2; i++) {
     /* Get pointer to loc values to store in. */
     DriverTarget *dtar = &dvar->targets[i];
-    Object *ob = (Object *)dtar->id;
+    Object *ob = id_cast<Object *>(dtar->id);
     bPoseChannel *pchan;
 
     /* After the checks above, the targets should be valid here. */
@@ -502,7 +504,7 @@ static float dvar_eval_locDiff(const AnimationEvalContext * /*anim_eval_context*
   /* NOTE: for now, these are all just world-space */
   DRIVER_TARGETS_USED_LOOPER_BEGIN (dvar) {
     /* Get pointer to loc values to store in. */
-    Object *ob = (Object *)dtar->id;
+    Object *ob = id_cast<Object *>(dtar->id);
     bPoseChannel *pchan;
     float tmp_loc[3];
 
@@ -587,7 +589,7 @@ static float dvar_eval_transChan(const AnimationEvalContext * /*anim_eval_contex
                                  DriverVar *dvar)
 {
   DriverTarget *dtar = &dvar->targets[0];
-  Object *ob = (Object *)dtar->id;
+  Object *ob = id_cast<Object *>(dtar->id);
   bPoseChannel *pchan;
   float mat[4][4];
   float oldEul[3] = {0.0f, 0.0f, 0.0f};
@@ -638,7 +640,7 @@ static float dvar_eval_transChan(const AnimationEvalContext * /*anim_eval_contex
         /* Specially calculate local matrix, since chan_mat is not valid
          * since it stores delta transform of pose_mat so that deforms work
          * so it cannot be used here for "transform" space. */
-        BKE_pchan_to_mat4(pchan, mat);
+        BKE_pchan_to_mat4({pchan, pchan->bone_get(*ob)}, mat);
       }
     }
     else {
@@ -806,7 +808,7 @@ static DriverVarTypeInfo dvar_types[MAX_DVAR_TYPES] = {
     BEGIN_DVAR_TYPEDEF(DVAR_TYPE_SINGLE_PROP) dvar_eval_singleProp, /* Eval callback. */
     1,                                                              /* Number of targets used. */
     {"Property"},                                                   /* UI names for targets */
-    {0}                                                             /* Flags. */
+    {eDriverTarget_Flag{}}                                          /* Flags. */
     END_DVAR_TYPEDEF,
 
     BEGIN_DVAR_TYPEDEF(DVAR_TYPE_ROT_DIFF) dvar_eval_rotDiff, /* Eval callback. */
@@ -832,15 +834,15 @@ static DriverVarTypeInfo dvar_types[MAX_DVAR_TYPES] = {
     BEGIN_DVAR_TYPEDEF(DVAR_TYPE_CONTEXT_PROP) dvar_eval_contextProp, /* Eval callback. */
     1,                                                                /* Number of targets used. */
     {"Property"},                                                     /* UI names for targets */
-    {0}                                                               /* Flags. */
+    {eDriverTarget_Flag{}}                                            /* Flags. */
     END_DVAR_TYPEDEF,
 };
 
 /* Get driver variable typeinfo */
-static const DriverVarTypeInfo *get_dvar_typeinfo(int type)
+static const DriverVarTypeInfo *get_dvar_typeinfo(eDriverVar_Types type)
 {
   /* Check if valid type. */
-  if ((type >= 0) && (type < MAX_DVAR_TYPES)) {
+  if (uint32_t(type) < MAX_DVAR_TYPES) {
     return &dvar_types[type];
   }
 
@@ -853,7 +855,7 @@ static const DriverVarTypeInfo *get_dvar_typeinfo(int type)
 /** \name Driver API
  * \{ */
 
-void driver_free_variable(ListBase *variables, DriverVar *dvar)
+void driver_free_variable(ListBaseT<DriverVar> *variables, DriverVar *dvar)
 {
   /* Sanity checks. */
   if (dvar == nullptr) {
@@ -868,7 +870,7 @@ void driver_free_variable(ListBase *variables, DriverVar *dvar)
   DRIVER_TARGETS_LOOPER_BEGIN (dvar) {
     /* Free RNA path if applicable. */
     if (dtar->rna_path) {
-      MEM_freeN(dtar->rna_path);
+      MEM_delete(dtar->rna_path);
     }
   }
   DRIVER_TARGETS_LOOPER_END;
@@ -886,24 +888,24 @@ void driver_free_variable_ex(ChannelDriver *driver, DriverVar *dvar)
   BKE_driver_invalidate_expression(driver, false, true);
 }
 
-void driver_variables_copy(ListBase *dst_vars, const ListBase *src_vars)
+void driver_variables_copy(ListBaseT<DriverVar> *dst_vars, const ListBaseT<DriverVar> *src_vars)
 {
   BLI_assert(BLI_listbase_is_empty(dst_vars));
   BLI_duplicatelist(dst_vars, src_vars);
 
-  LISTBASE_FOREACH (DriverVar *, dvar, dst_vars) {
+  for (DriverVar &dvar : *dst_vars) {
     /* Need to go over all targets so that we don't leave any dangling paths. */
-    DRIVER_TARGETS_LOOPER_BEGIN (dvar) {
+    DRIVER_TARGETS_LOOPER_BEGIN (&dvar) {
       /* Make a copy of target's rna path if available. */
       if (dtar->rna_path) {
-        dtar->rna_path = static_cast<char *>(MEM_dupallocN(dtar->rna_path));
+        dtar->rna_path = MEM_dupalloc(dtar->rna_path);
       }
     }
     DRIVER_TARGETS_LOOPER_END;
   }
 }
 
-void driver_change_variable_type(DriverVar *dvar, int type)
+void driver_change_variable_type(DriverVar *dvar, eDriverVar_Types type)
 {
   const DriverVarTypeInfo *dvti = get_dvar_typeinfo(type);
 
@@ -919,7 +921,7 @@ void driver_change_variable_type(DriverVar *dvar, int type)
   /* Make changes to the targets based on the defines for these types.
    * NOTE: only need to make sure the ones we're using here are valid. */
   DRIVER_TARGETS_USED_LOOPER_BEGIN (dvar) {
-    short flags = dvti->target_flags[tarIndex];
+    eDriverTarget_Flag flags = dvti->target_flags[tarIndex];
 
     /* Store the flags. */
     dtar->flag = flags;
@@ -1003,7 +1005,7 @@ void driver_variable_name_validate(DriverVar *dvar)
 
 void driver_variable_unique_name(DriverVar *dvar)
 {
-  ListBase variables = BLI_listbase_from_link((Link *)dvar);
+  ListBaseT<DriverVar> variables = {dvar, dvar};
   BLI_uniquename(&variables, dvar, dvar->name, '_', offsetof(DriverVar, name), sizeof(dvar->name));
 }
 
@@ -1017,7 +1019,7 @@ DriverVar *driver_add_new_variable(ChannelDriver *driver)
   }
 
   /* Make a new variable. */
-  dvar = MEM_callocN<DriverVar>("DriverVar");
+  dvar = MEM_new<DriverVar>("DriverVar");
   BLI_addtail(&driver->variables, dvar);
 
   /* Don't use translations as this is referenced as a literal in #ChannelDriver::expression. */
@@ -1066,7 +1068,7 @@ void fcurve_free_driver(FCurve *fcu)
 
   /* Free driver itself, then set F-Curve's point to this to nullptr
    * (as the curve may still be used). */
-  MEM_freeN(driver);
+  MEM_delete(driver);
   fcu->driver = nullptr;
 }
 
@@ -1080,7 +1082,7 @@ ChannelDriver *fcurve_copy_driver(const ChannelDriver *driver)
   }
 
   /* Copy all data. */
-  ndriver = static_cast<ChannelDriver *>(MEM_dupallocN(driver));
+  ndriver = MEM_dupalloc(driver);
   ndriver->expr_comp = nullptr;
   ndriver->expr_simple = nullptr;
 
@@ -1118,8 +1120,8 @@ static ExprPyLike_Parsed *driver_compile_simple_expr_impl(ChannelDriver *driver)
 
   names[VAR_INDEX_FRAME] = "frame";
 
-  LISTBASE_FOREACH (DriverVar *, dvar, &driver->variables) {
-    names[i++] = dvar->name;
+  for (DriverVar &dvar : driver->variables) {
+    names[i++] = dvar.name;
   }
 
   return BLI_expr_pylike_parse(driver->expression, names, names_len + VAR_INDEX_CUSTOM);
@@ -1144,8 +1146,8 @@ static bool driver_evaluate_simple_expr(const AnimationEvalContext *anim_eval_co
 
   vars[VAR_INDEX_FRAME] = time;
 
-  LISTBASE_FOREACH (DriverVar *, dvar, &driver->variables) {
-    vars[i++] = driver_get_variable_value(anim_eval_context, driver, dvar);
+  for (DriverVar &dvar : driver->variables) {
+    vars[i++] = driver_get_variable_value(anim_eval_context, driver, &dvar);
   }
 
   /* Evaluate expression. */
@@ -1193,7 +1195,7 @@ static bool driver_compile_simple_expr(ChannelDriver *driver)
 
   /* Store the result if the field is still nullptr, or discard
    * it if another thread got here first. */
-  if (atomic_cas_ptr((void **)&driver->expr_simple, nullptr, expr) != nullptr) {
+  if (atomic_cas_ptr(reinterpret_cast<void **>(&driver->expr_simple), nullptr, expr) != nullptr) {
     BLI_expr_pylike_free(expr);
   }
 
@@ -1327,8 +1329,8 @@ static void evaluate_driver_sum(const AnimationEvalContext *anim_eval_context,
   int tot = 0;
 
   /* Loop through targets, adding (hopefully we don't get any overflow!). */
-  LISTBASE_FOREACH (DriverVar *, dvar, &driver->variables) {
-    value += driver_get_variable_value(anim_eval_context, driver, dvar);
+  for (DriverVar &dvar : driver->variables) {
+    value += driver_get_variable_value(anim_eval_context, driver, &dvar);
     tot++;
   }
 
@@ -1347,12 +1349,12 @@ static void evaluate_driver_min_max(const AnimationEvalContext *anim_eval_contex
   float value = 0.0f;
 
   /* Loop through the variables, getting the values and comparing them to existing ones. */
-  LISTBASE_FOREACH (DriverVar *, dvar, &driver->variables) {
+  for (DriverVar &dvar : driver->variables) {
     /* Get value. */
-    float tmp_val = driver_get_variable_value(anim_eval_context, driver, dvar);
+    float tmp_val = driver_get_variable_value(anim_eval_context, driver, &dvar);
 
     /* Store this value if appropriate. */
-    if (dvar->prev) {
+    if (dvar.prev) {
       /* Check if greater/smaller than the baseline. */
       if (driver->type == DRIVER_TYPE_MAX) {
         /* Max? */
@@ -1435,3 +1437,5 @@ float evaluate_driver(PathResolvedRNA *anim_rna,
 }
 
 /** \} */
+
+}  // namespace blender

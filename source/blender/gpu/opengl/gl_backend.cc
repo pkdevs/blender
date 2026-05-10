@@ -22,6 +22,8 @@
 #include "BLI_threads.h"
 #include "BLI_vector.hh"
 
+#include "CLG_log.h"
+
 #include "DNA_userdef_types.h"
 
 #include "gpu_capabilities_private.hh"
@@ -31,7 +33,11 @@
 
 #include "gl_backend.hh"
 
-namespace blender::gpu {
+namespace blender {
+
+static CLG_LogRef LOG = {"gpu.opengl"};
+
+namespace gpu {
 
 /* -------------------------------------------------------------------- */
 /** \name Platform
@@ -97,6 +103,8 @@ static bool is_bad_AMD_driver(const char *version_cstr)
   Vector<int> version;
 
   if (parse_version(version_str, " 00.00.00.00 ", version) ||
+      parse_version(version_str, " 00.00.0.000000 ", version) ||
+      parse_version(version_str, " 00.00.00.000000 ", version) ||
       parse_version(version_str, " 00.00.000000 ", version) ||
       parse_version(version_str, " 00.00.00 ", version) ||
       parse_version(version_str, " 00.00.0 ", version) ||
@@ -121,9 +129,9 @@ void GLBackend::platform_init()
 {
   BLI_assert(!GPG.initialized);
 
-  const char *vendor = (const char *)glGetString(GL_VENDOR);
-  const char *renderer = (const char *)glGetString(GL_RENDERER);
-  const char *version = (const char *)glGetString(GL_VERSION);
+  const char *vendor = reinterpret_cast<const char *>(glGetString(GL_VENDOR));
+  const char *renderer = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
+  const char *version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
   GPUDeviceType device = GPU_DEVICE_ANY;
   GPUOSType os = GPU_OS_ANY;
   GPUDriverType driver = GPU_DRIVER_ANY;
@@ -357,6 +365,17 @@ void GLBackend::platform_exit()
   GPG.clear();
 }
 
+TexturePool *GLBackend::texturepool_alloc()
+{
+  if (GCaps.texture_pool_workaround) {
+    CLOG_TRACE(&LOG, "Using texture pool \"TexturePoolImpl\".");
+    return new TexturePoolImpl();
+  }
+
+  CLOG_TRACE(&LOG, "Using texture pool \"GLTexturePool\".");
+  return new GLTexturePool();
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -365,14 +384,14 @@ void GLBackend::platform_exit()
 
 static const char *gl_extension_get(int i)
 {
-  return (char *)glGetStringi(GL_EXTENSIONS, i);
+  return reinterpret_cast<char *>(const_cast<GLubyte *>(glGetStringi(GL_EXTENSIONS, i)));
 }
 
 static void detect_workarounds()
 {
-  const char *vendor = (const char *)glGetString(GL_VENDOR);
-  const char *renderer = (const char *)glGetString(GL_RENDERER);
-  const char *version = (const char *)glGetString(GL_VERSION);
+  const char *vendor = reinterpret_cast<const char *>(glGetString(GL_VENDOR));
+  const char *renderer = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
+  const char *version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
 
   if (G.debug & G_DEBUG_GPU_FORCE_WORKAROUNDS) {
     printf("\n");
@@ -383,6 +402,7 @@ static void detect_workarounds()
     printf("    version: %s\n\n", version);
     GCaps.depth_blitting_workaround = true;
     GCaps.stencil_clasify_buffer_workaround = true;
+    GCaps.texture_pool_workaround = true;
     GLContext::debug_layer_workaround = true;
     /* Turn off Blender features. */
     GCaps.hdr_viewport_support = false;
@@ -497,6 +517,12 @@ static void detect_workarounds()
       if (ver0 == 31) {
         GCaps.stencil_clasify_buffer_workaround = true;
       }
+
+      /* Disable OpenGL texture pool on Snapdragon 8cx Gen 3 devices. See #142229. We assume that
+       * these devices use driver 30.x.x.x */
+      if (ver0 == 30) {
+        GCaps.texture_pool_workaround = true;
+      }
     }
   }
 #endif
@@ -517,6 +543,25 @@ static void detect_workarounds()
    * `internal format of texture N is not supported`. */
   if (GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_WIN, GPU_DRIVER_OFFICIAL)) {
     GLContext::multi_bind_image_support = false;
+  }
+
+  if (G.debug & G_DEBUG_GPU_NO_TEXTURE_POOL) {
+    GCaps.texture_pool_workaround = true;
+  }
+
+  /* Disable texture pool on any Intel driver; glTextureView is inconsistently
+   * broken on Intel HD and newer integrated cards, and output of the vendor string doesn't
+   * differentiate e.g. an Arc V140 from an Arc B750 :( */
+  if ((GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_ANY, GPU_DRIVER_ANY) ||
+       GPU_type_matches(GPU_DEVICE_INTEL_UHD, GPU_OS_ANY, GPU_DRIVER_ANY)))
+  {
+    GCaps.texture_pool_workaround = true;
+  }
+
+  /* Disable texture pool on closed source AMD driver; glTextureView
+   * breaks frame-buffers for several formats. This is not an issue on Mesa. */
+  if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL)) {
+    GCaps.texture_pool_workaround = true;
   }
 
   /* Metal-related Workarounds. */
@@ -557,10 +602,7 @@ void GLBackend::capabilities_init()
   /* Common Capabilities. */
   glGetIntegerv(GL_MAX_TEXTURE_SIZE, &GCaps.max_texture_size);
   glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &GCaps.max_texture_layers);
-  glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &GCaps.max_textures_frag);
-  glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &GCaps.max_textures_vert);
-  glGetIntegerv(GL_MAX_GEOMETRY_TEXTURE_IMAGE_UNITS, &GCaps.max_textures_geom);
-  glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &GCaps.max_textures);
+  glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &GCaps.max_textures);
   glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &GCaps.max_uniforms_vert);
   glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &GCaps.max_uniforms_frag);
   glGetIntegerv(GL_MAX_ELEMENTS_INDICES, &GCaps.max_batch_indices);
@@ -572,11 +614,9 @@ void GLBackend::capabilities_init()
   glGetIntegerv(GL_NUM_EXTENSIONS, &GCaps.extensions_len);
   GCaps.extension_get = gl_extension_get;
 
-  GCaps.max_samplers = GCaps.max_textures;
   GCaps.mem_stats_support = epoxy_has_gl_extension("GL_NVX_gpu_memory_info") ||
                             epoxy_has_gl_extension("GL_ATI_meminfo");
   GCaps.geometry_shader_support = true;
-  GCaps.max_samplers = GCaps.max_textures;
   GCaps.hdr_viewport_support = false;
 
   glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &GCaps.max_work_group_count[0]);
@@ -600,6 +640,8 @@ void GLBackend::capabilities_init()
 
   /* GL specific capabilities. */
   glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &GCaps.max_texture_3d_size);
+  glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE,
+                reinterpret_cast<int *>(&GCaps.max_buffer_texture_size));
   glGetIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE, &GLContext::max_cubemap_size);
   glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_BLOCKS, &GLContext::max_ubo_binds);
   GLint max_ssbo_binds;
@@ -703,4 +745,59 @@ void GLBackend::capabilities_init()
 
 /** \} */
 
-}  // namespace blender::gpu
+/* -------------------------------------------------------------------- */
+/** \name Log extensions
+ * \{ */
+
+void GLBackend::log_extensions()
+{
+  CLOG_DEBUG(&LOG,
+             "OpenGL Extensions\n"
+             " - [%c] Multi-bind\n"
+             " - [%c] Direct state access\n"
+             " - [%c] Anisotropic Texture Filtering\n"
+             " - [%c] Layered rendering\n"
+             " - [%c] Native barycentric coordinates\n"
+             " - [%c] Framebuffer fetch\n"
+             " - [%c] Texture barrier\n"
+             " - [%c] Shader stencil export\n",
+             GLContext::multi_bind_support ? 'X' : ' ',
+             GLContext::direct_state_access_support ? 'X' : ' ',
+             GLContext::texture_filter_anisotropic_support ? 'X' : ' ',
+             GLContext::layered_rendering_support ? 'X' : ' ',
+             GLContext::native_barycentric_support ? 'X' : ' ',
+             GLContext::framebuffer_fetch_support ? 'X' : ' ',
+             GLContext::texture_barrier_support ? 'X' : ' ',
+             GCaps.stencil_export_support ? 'X' : ' ');
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Log workarounds
+ * \{ */
+
+void GLBackend::log_workarounds()
+{
+  CLOG_DEBUG(&LOG,
+             "OpenGL Workarounds\n"
+             " - [%c] Debug layer workaround\n"
+             " - [%c] Generate mipmap workaround\n"
+             " - [%c] Unused framebuffer slot workaround\n"
+             " - [%c] Depth blitting workaround\n"
+             " - [%c] Stencil classify buffer workaround\n"
+             " - [%c] High-quality normals\n"
+             " - [%c] Use main context\n",
+             GLContext::debug_layer_workaround ? 'X' : ' ',
+             GLContext::generate_mipmap_workaround ? 'X' : ' ',
+             GLContext::unused_fb_slot_workaround ? 'X' : ' ',
+             GCaps.depth_blitting_workaround ? 'X' : ' ',
+             GCaps.stencil_clasify_buffer_workaround ? 'X' : ' ',
+             GCaps.use_hq_normals_workaround ? 'X' : ' ',
+             GCaps.use_main_context_workaround ? 'X' : ' ');
+}
+
+/** \} */
+
+}  // namespace gpu
+}  // namespace blender

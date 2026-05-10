@@ -28,27 +28,30 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-#include "NOD_geometry_nodes_log.hh"
+#include "NOD_eval_log.hh"
 #include "NOD_socket.hh"
 
 #include "node_intern.hh"
 
-using blender::nodes::geo_eval_log::GeometryInfoLog;
+namespace blender {
 
-namespace blender::ed::space_node {
+using nodes::eval_log::GeometryInfoLog;
+
+namespace ed::space_node {
 
 struct LayerSearchData {
   int32_t node_id;
   char socket_identifier[MAX_NAME];
 };
 
-/* This class must not have a destructor, since it is used by buttons and freed with #MEM_freeN. */
+/* This class must not have a destructor, since it is used by buttons and freed with
+ * #MEM_delete_void. */
 BLI_STATIC_ASSERT(std::is_trivially_destructible_v<LayerSearchData>, "");
 
 static Vector<const std::string *> get_layer_names_from_context(const bContext &C,
                                                                 LayerSearchData &data)
 {
-  using namespace nodes::geo_eval_log;
+  using namespace nodes::eval_log;
 
   SpaceNode *snode = CTX_wm_space_node(&C);
   if (!snode) {
@@ -69,14 +72,14 @@ static Vector<const std::string *> get_layer_names_from_context(const bContext &
   if (!tree_zones) {
     return {};
   }
-  const ContextualGeoTreeLogs tree_logs = GeoNodesLog::get_contextual_tree_logs(*snode);
+  const ContextualNodeTreeLogs tree_logs = NodesEvalLog::get_contextual_tree_logs(*snode);
 
   Set<StringRef> names;
 
   /* For the named layer selection input node, collect layer names from all nodes in the group. */
   if (node->type_legacy == GEO_NODE_INPUT_NAMED_LAYER_SELECTION) {
     Vector<const std::string *> layer_names;
-    tree_logs.foreach_tree_log([&](GeoTreeLog &tree_log) {
+    tree_logs.foreach_tree_log([&](NodeTreeLog &tree_log) {
       tree_log.ensure_socket_values();
       tree_log.ensure_layer_names();
       for (const std::string &name : tree_log.all_layer_names) {
@@ -88,12 +91,12 @@ static Vector<const std::string *> get_layer_names_from_context(const bContext &
     });
     return layer_names;
   }
-  GeoTreeLog *tree_log = tree_logs.get_main_tree_log(*node);
+  NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*node);
   if (!tree_log) {
     return {};
   }
   tree_log->ensure_socket_values();
-  GeoNodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier);
+  NodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier);
   if (node_log == nullptr) {
     return {};
   }
@@ -123,7 +126,7 @@ static Vector<const std::string *> get_layer_names_from_context(const bContext &
 }
 
 static void layer_search_update_fn(
-    const bContext *C, void *arg, const char *str, uiSearchItems *items, const bool is_first)
+    const bContext *C, void *arg, const char *str, ui::SearchItems *items, const bool is_first)
 {
   if (ED_screen_animation_playing(CTX_wm_manager(C))) {
     return;
@@ -179,33 +182,32 @@ static void layer_search_exec_fn(bContext *C, void *data_v, void *item_v)
 void node_geometry_add_layer_search_button(const bContext & /*C*/,
                                            const bNode &node,
                                            PointerRNA &socket_ptr,
-                                           uiLayout &layout,
+                                           ui::Layout &layout,
                                            const StringRef placeholder)
 {
-  uiBlock *block = layout.block();
-  uiBut *but = uiDefIconTextButR(block,
-                                 ButType::SearchMenu,
-                                 0,
-                                 ICON_OUTLINER_DATA_GP_LAYER,
-                                 "",
-                                 0,
-                                 0,
-                                 10 * UI_UNIT_X, /* Dummy value, replaced by layout system. */
-                                 UI_UNIT_Y,
-                                 &socket_ptr,
-                                 "default_value",
-                                 0,
-                                 "");
-  UI_but_placeholder_set(but, placeholder);
+  ui::Block *block = layout.block();
+  ui::Button *but = uiDefIconTextButR(block,
+                                      ui::ButtonType::SearchMenu,
+                                      ICON_OUTLINER_DATA_GP_LAYER,
+                                      "",
+                                      0,
+                                      0,
+                                      10 * UI_UNIT_X, /* Dummy value, replaced by layout system. */
+                                      UI_UNIT_Y,
+                                      &socket_ptr,
+                                      "default_value",
+                                      0,
+                                      "");
+  button_placeholder_set(but, placeholder);
 
   const bNodeSocket &socket = *static_cast<const bNodeSocket *>(socket_ptr.data);
-  LayerSearchData *data = MEM_callocN<LayerSearchData>(__func__);
+  LayerSearchData *data = MEM_new_zeroed<LayerSearchData>(__func__);
   data->node_id = node.identifier;
   STRNCPY_UTF8(data->socket_identifier, socket.identifier);
 
-  UI_but_func_search_set_results_are_suggestions(but, true);
-  UI_but_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
-  UI_but_func_search_set(but,
+  button_func_search_set_results_are_suggestions(but, true);
+  button_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
+  button_func_search_set(but,
                          nullptr,
                          layer_search_update_fn,
                          static_cast<void *>(data),
@@ -215,4 +217,6 @@ void node_geometry_add_layer_search_button(const bContext & /*C*/,
                          nullptr);
 }
 
-}  // namespace blender::ed::space_node
+}  // namespace ed::space_node
+
+}  // namespace blender

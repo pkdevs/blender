@@ -9,11 +9,13 @@
 #pragma once
 
 #include "BLI_bounds_types.hh"
+#include "BLI_enum_flags.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
 
 #include "DNA_scene_types.h"
+
+namespace blender {
 
 /* ********* exports for space_view3d/ module ********** */
 struct ARegion;
@@ -57,8 +59,11 @@ struct wmKeyMapItem;
 struct wmOperator;
 struct wmWindow;
 struct wmWindowManager;
-namespace blender::ed::transform {
+namespace ed::transform {
 struct SnapObjectContext;
+}
+namespace gpu {
+class Texture;
 }
 
 /** For mesh drawing callbacks, for viewport selection, etc. */
@@ -272,7 +277,6 @@ enum eV3DProjStatus {
   /** Outside range (mainly for short), (can't avoid) */
   V3D_PROJ_RET_OVERFLOW = 6,
 };
-ENUM_OPERATORS(eV3DProjStatus, V3D_PROJ_RET_OVERFLOW);
 
 /* some clipping tests are optional */
 enum eV3DProjTest {
@@ -304,7 +308,7 @@ enum eV3DProjTest {
    */
   V3D_PROJ_TEST_CLIP_CONTENT = (1 << 5),
 };
-ENUM_OPERATORS(eV3DProjTest, V3D_PROJ_TEST_CLIP_CONTENT);
+ENUM_OPERATORS(eV3DProjTest);
 
 #define V3D_PROJ_TEST_CLIP_DEFAULT \
   (V3D_PROJ_TEST_CLIP_BB | V3D_PROJ_TEST_CLIP_WIN | V3D_PROJ_TEST_CLIP_NEAR)
@@ -333,7 +337,7 @@ enum eV3DSnapCursor {
   V3D_SNAPCURSOR_SNAP_EDIT_GEOM_FINAL = 1 << 3,
   V3D_SNAPCURSOR_SNAP_EDIT_GEOM_CAGE = 1 << 4,
 };
-ENUM_OPERATORS(eV3DSnapCursor, V3D_SNAPCURSOR_SNAP_EDIT_GEOM_CAGE)
+ENUM_OPERATORS(eV3DSnapCursor)
 
 struct V3DSnapCursorData {
   eSnapMode type_source;
@@ -375,9 +379,9 @@ void ED_view3d_cursor_snap_state_prevpoint_set(V3DSnapCursorState *state,
 void ED_view3d_cursor_snap_data_update(V3DSnapCursorState *state,
                                        const bContext *C,
                                        const ARegion *region,
-                                       const blender::int2 &mval);
+                                       const int2 &mval);
 V3DSnapCursorData *ED_view3d_cursor_snap_data_get();
-blender::ed::transform::SnapObjectContext *ED_view3d_cursor_snap_context_ensure(Scene *scene);
+ed::transform::SnapObjectContext *ED_view3d_cursor_snap_context_ensure(Scene *scene);
 void ED_view3d_cursor_snap_draw_util(RegionView3D *rv3d,
                                      const float source_loc[3],
                                      const float target_loc[3],
@@ -477,9 +481,9 @@ void pose_foreachScreenBone(const ViewContext *vc,
 /**
  * \note use #ED_view3d_ob_project_mat_get to get the projection matrix
  */
-blender::float2 ED_view3d_project_float_v2_m4(const ARegion *region,
-                                              const float co[3],
-                                              const blender::float4x4 &mat);
+float2 ED_view3d_project_float_v2_m4(const ARegion *region,
+                                     const float co[3],
+                                     const float4x4 &mat);
 /**
  * \note use #ED_view3d_ob_project_mat_get to get projecting mat
  */
@@ -759,9 +763,8 @@ bool ED_view3d_win_to_segment_clipped(const Depsgraph *depsgraph,
                                       float r_ray_start[3],
                                       float r_ray_end[3],
                                       bool do_clip_planes);
-blender::float4x4 ED_view3d_ob_project_mat_get(const RegionView3D *rv3d, const Object *ob);
-blender::float4x4 ED_view3d_ob_project_mat_get_from_obmat(const RegionView3D *rv3d,
-                                                          const blender::float4x4 &obmat);
+float4x4 ED_view3d_ob_project_mat_get(const RegionView3D *rv3d, const Object *ob);
+float4x4 ED_view3d_ob_project_mat_get_from_obmat(const RegionView3D *rv3d, const float4x4 &obmat);
 
 /**
  * Convert between region relative coordinates (x,y) and depth component z and
@@ -792,7 +795,7 @@ bool ED_view3d_unproject_v3(
  * it's often preferable for perspective views to calculate the minimum based on near-clipping,
  * unlike orthographic views.
  */
-blender::Bounds<float> ED_view3d_dist_soft_range_get(const View3D *v3d, bool use_persp_range);
+Bounds<float> ED_view3d_dist_soft_range_get(const View3D *v3d, bool use_persp_range);
 
 /**
  * A version of #ED_view3d_dist_soft_range_get that only returns the minimum.
@@ -905,7 +908,7 @@ float ED_view3d_radius_to_dist_ortho(float lens, float radius);
 float ED_view3d_radius_to_dist(const View3D *v3d,
                                const ARegion *region,
                                const Depsgraph *depsgraph,
-                               char persp,
+                               eRegionView3D_Persp persp,
                                bool use_aspect,
                                float radius);
 
@@ -963,8 +966,8 @@ bool ED_view3d_depth_read_cached_seg(const ViewDepths *vd,
  * Returns viewport color in linear space, matching #ED_space_node_color_sample().
  */
 class ViewportColorSampleSession {
-  blender::gpu::Texture *tex = nullptr;
-  blender::ushort4 *data = nullptr;
+  gpu::Texture *tex = nullptr;
+  ushort4 *data = nullptr;
   int tex_w, tex_h;
   rcti valid_rect;
 
@@ -990,11 +993,23 @@ enum eV3DSelectObjectFilter {
   VIEW3D_SELECT_FILTER_NOP = 0,
   /** Don't select objects outside the current mode. */
   VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK = 1,
+  /**
+   * Similar to #VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK but iterates on objects
+   * in the same mode & type.
+   */
+  VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK_SAME_TYPE = 2,
   /** A version of #VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK that allows pose-bone selection. */
-  VIEW3D_SELECT_FILTER_WPAINT_POSE_MODE_LOCK = 2,
+  VIEW3D_SELECT_FILTER_WPAINT_POSE_MODE_LOCK = 3,
 };
 
-eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const Scene *scene, const Object *obact);
+enum class eV3DSelectShape {
+  BOX,
+  CIRCLE,
+};
+
+eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const Scene *scene,
+                                                         const View3D *v3d,
+                                                         const Object *obact);
 
 /**
  * Optionally cache data for multiple calls to #view3d_gpu_select
@@ -1012,12 +1027,14 @@ int view3d_gpu_select_ex(const ViewContext *vc,
                          const rcti *input,
                          eV3DSelectMode select_mode,
                          eV3DSelectObjectFilter select_filter,
+                         eV3DSelectShape select_shape,
                          bool do_material_slot_selection);
 int view3d_gpu_select(const ViewContext *vc,
                       GPUSelectBuffer *buffer,
                       const rcti *input,
                       eV3DSelectMode select_mode,
-                      eV3DSelectObjectFilter select_filter);
+                      eV3DSelectObjectFilter select_filter,
+                      eV3DSelectShape select_shape);
 int view3d_gpu_select_with_id_filter(const ViewContext *vc,
                                      GPUSelectBuffer *buffer,
                                      const rcti *input,
@@ -1144,11 +1161,13 @@ void ED_view3d_update_viewmat(const Depsgraph *depsgraph,
                               const float winmat[4][4],
                               const rcti *rect,
                               bool offscreen);
-bool ED_view3d_quat_from_axis_view(char view, char view_axis_roll, float r_quat[4]);
+bool ED_view3d_quat_from_axis_view(eRegionView3D_View view,
+                                   eRegionView3D_ViewAxisRoll view_axis_roll,
+                                   float r_quat[4]);
 bool ED_view3d_quat_to_axis_view(const float quat[4],
                                  float epsilon,
-                                 char *r_view,
-                                 char *r_view_axis_roll);
+                                 eRegionView3D_View *r_view,
+                                 eRegionView3D_ViewAxisRoll *r_view_axis_roll);
 /**
  * A version of #ED_view3d_quat_to_axis_view that updates `quat`
  * if it's within `epsilon` to an axis-view.
@@ -1157,21 +1176,23 @@ bool ED_view3d_quat_to_axis_view(const float quat[4],
  */
 bool ED_view3d_quat_to_axis_view_and_reset_quat(float quat[4],
                                                 float epsilon,
-                                                char *r_view,
-                                                char *r_view_axis_roll);
+                                                eRegionView3D_View *r_view,
+                                                eRegionView3D_ViewAxisRoll *r_view_axis_roll);
 
-char ED_view3d_lock_view_from_index(int index);
-char ED_view3d_axis_view_opposite(char view);
+eRegionView3D_View ED_view3d_lock_view_from_index(int index);
+eRegionView3D_View ED_view3d_axis_view_opposite(eRegionView3D_View view);
 bool ED_view3d_lock(RegionView3D *rv3d);
 
-void ED_view3d_datamask(const Scene *scene,
+void ED_view3d_datamask(const Main &bmain,
+                        const Scene *scene,
                         ViewLayer *view_layer,
                         const View3D *v3d,
                         CustomData_MeshMasks *r_cddata_masks);
 /**
  * Goes over all modes and view3d settings.
  */
-void ED_view3d_screen_datamask(const Scene *scene,
+void ED_view3d_screen_datamask(const Main &bmain,
+                               const Scene *scene,
                                ViewLayer *view_layer,
                                const bScreen *screen,
                                CustomData_MeshMasks *r_cddata_masks);
@@ -1187,7 +1208,7 @@ bool ED_view3d_offset_lock_check(const View3D *v3d, const RegionView3D *rv3d);
 void ED_view3d_persp_switch_from_camera(const Depsgraph *depsgraph,
                                         View3D *v3d,
                                         RegionView3D *rv3d,
-                                        char persp);
+                                        eRegionView3D_Persp persp);
 /**
  * Action to take when rotating the view,
  * handle auto-perspective and logic for switching out of views.
@@ -1438,3 +1459,5 @@ bool ED_view3d_is_region_xr_mirror_active(const wmWindowManager *wm,
                                           const View3D *v3d,
                                           const ARegion *region);
 #endif
+
+}  // namespace blender

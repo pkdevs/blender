@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <fcntl.h>
+#ifndef WIN32
+#  include <unistd.h>
+#else
+#  include <io.h>
+#endif
 #include <fmt/format.h>
 #include <mutex>
 #include <xxhash.h>
@@ -22,12 +27,12 @@ namespace blender::bke::id_hash {
 
 static std::optional<Vector<char>> read_file(const StringRefNull path)
 {
-  blender::fstream stream{path.c_str(), std::ios_base::in | std::ios_base::binary};
+  fstream stream{path.c_str(), std::ios_base::in | std::ios_base::binary};
   stream.seekg(0, std::ios_base::end);
   const int64_t size = stream.tellg();
   stream.seekg(0, std::ios_base::beg);
 
-  blender::Vector<char> buffer(size);
+  Vector<char> buffer(size);
   stream.read(buffer.data(), size);
   if (stream.bad()) {
     return std::nullopt;
@@ -51,6 +56,8 @@ static std::optional<XXH128_hash_t> compute_file_hash_with_memory_map(const Stri
   if (file == -1) {
     return std::nullopt;
   }
+  BLI_SCOPED_DEFER([&]() { close(file); });
+
   BLI_mmap_file *mmap_file = BLI_mmap_open(file);
   if (!mmap_file) {
     return std::nullopt;
@@ -104,9 +111,13 @@ static std::optional<XXH128_hash_t> get_source_file_hash(const ID &id, DeepHashE
     }
   }
 
-  if (stat.st_mtime != id.runtime->src_blend_modifification_time) {
-    r_errors.updated_files.add_as(path);
-    return std::nullopt;
+  /* The modification time may not be set if the data-block is added as linked data as part of
+   * versioning (e.g. in #do_versions_after_setup). */
+  if (id.runtime->src_blend_modifification_time != 0) {
+    if (stat.st_mtime != id.runtime->src_blend_modifification_time) {
+      r_errors.updated_files.add_as(path);
+      return std::nullopt;
+    }
   }
 
   if (const std::optional<XXH128_hash_t> hash = compute_file_hash(path)) {
@@ -149,6 +160,7 @@ static void compute_deep_hash_recursive(const Main &bmain,
     return;
   }
   current_stack.add(&id);
+  BLI_SCOPED_DEFER([&]() -> void { current_stack.remove(&id); });
   const std::optional<XXH128_hash_t> id_shallow_hash = get_id_shallow_hash(id, r_errors);
   if (!id_shallow_hash) {
     return;
@@ -165,15 +177,19 @@ static void compute_deep_hash_recursive(const Main &bmain,
       const_cast<ID *>(&id),
       [&](LibraryIDLinkCallbackData *cb_data) {
         if (cb_data->cb_flag & IDWALK_CB_LOOPBACK) {
-          /* Loopback pointer (e.g. from a shapekey to its owner geometry ID, or from a collection
-           * to its parents) should always be ignored, as they do not represent an actual
-           * dependency. The dependency relationship should already have been processed from the
-           * owner to its dependency anyway (if applicable). */
+          /* Loop-back pointer (e.g. from a shape-key to its owner geometry ID, or from a
+           * collection to its parents) should always be ignored, as they do not represent an
+           * actual dependency. The dependency relationship should already have been
+           * processed from the owner to its dependency anyway (if applicable). */
           return IDWALK_RET_NOP;
         }
         if (cb_data->cb_flag & (IDWALK_CB_EMBEDDED | IDWALK_CB_EMBEDDED_NOT_OWNING)) {
           /* Embedded data are part of their owner's internal data, and as such already computed as
            * part of the owner's shallow hash. */
+          return IDWALK_RET_NOP;
+        }
+        if (cb_data->cb_flag & IDWALK_CB_HASH_IGNORE) {
+          /* This pointer is explicitly ignored for the hash computation. */
           return IDWALK_RET_NOP;
         }
         ID *referenced_id = *cb_data->id_pointer;

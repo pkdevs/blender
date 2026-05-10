@@ -12,6 +12,8 @@
 
 #include <cstdint>
 
+namespace blender {
+
 enum class PaintMode : int8_t;
 struct bContext;
 struct bToolRef;
@@ -97,7 +99,6 @@ void *ED_image_paint_tile_find(PaintTileMap *paint_tile_map,
 void *ED_image_paint_tile_push(PaintTileMap *paint_tile_map,
                                Image *image,
                                ImBuf *ibuf,
-                               ImBuf **tmpibuf,
                                ImageUser *iuser,
                                int x_tile,
                                int y_tile,
@@ -136,10 +137,10 @@ eV3DShadingColorType ED_paint_shading_color_override(bContext *C,
  *
  * When #tref isn't given the active tool from the context is used.
  */
-bool ED_image_paint_brush_type_use_canvas(bContext *C, bToolRef *tref);
+bool ED_paint_brush_type_use_canvas(bContext *C, bToolRef *tref);
 
 /** Store the last used tool in the sculpt session. */
-void ED_image_paint_brush_type_update_sticky_shading_color(bContext *C, Object *ob);
+void ED_paint_brush_type_update_sticky_shading_color(bContext *C, Object *ob);
 
 void ED_object_vpaintmode_enter_ex(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &ob);
 void ED_object_vpaintmode_enter(bContext *C, Depsgraph &depsgraph);
@@ -159,3 +160,5 @@ void ED_object_texture_paint_mode_enter(bContext *C);
 
 void ED_object_texture_paint_mode_exit_ex(Main &bmain, Scene &scene, Object &ob);
 void ED_object_texture_paint_mode_exit(bContext *C);
+
+}  // namespace blender

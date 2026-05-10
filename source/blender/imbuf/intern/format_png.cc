@@ -12,6 +12,10 @@
 #include "IMB_filetype.hh"
 #include "IMB_imbuf_types.hh"
 
+namespace blender {
+
+const char *imb_file_extensions_png[] = {".png", nullptr};
+
 OIIO_NAMESPACE_USING
 using namespace blender::imbuf;
 
@@ -30,7 +34,7 @@ ImBuf *imb_load_png(const uchar *mem, size_t size, int flags, ImFileColorSpace &
   ImBuf *ibuf = imb_oiio_read(ctx, config, r_colorspace, spec);
   if (ibuf) {
     if (spec.format == TypeDesc::UINT16) {
-      ibuf->flags |= PNG_16BIT;
+      ibuf->foptions.flag |= PNG_16BIT;
     }
   }
 
@@ -40,7 +44,7 @@ ImBuf *imb_load_png(const uchar *mem, size_t size, int flags, ImFileColorSpace &
   return ibuf;
 }
 
-bool imb_save_png(ImBuf *ibuf, const char *filepath, int flags)
+static std::tuple<WriteContext, ImageSpec> prepare_save_png(ImBuf *ibuf, int flags)
 {
   const bool is_16bit = (ibuf->foptions.flag & PNG_16BIT);
   const int file_channels = ibuf->planes >> 3;
@@ -59,9 +63,22 @@ bool imb_save_png(ImBuf *ibuf, const char *filepath, int flags)
     file_spec.attribute("oiio:UnassociatedAlpha", 1);
   }
 
-  int compression = int(float(ibuf->foptions.quality) / 11.1111f);
+  int compression = int(float(ibuf->foptions.compress) / 11.1111f);
   compression = compression < 0 ? 0 : (compression > 9 ? 9 : compression);
   file_spec.attribute("png:compressionLevel", compression);
+  return {ctx, file_spec};
+}
 
+bool imb_save_png(ImBuf *ibuf, const char *filepath, int flags)
+{
+  const auto [ctx, file_spec] = prepare_save_png(ibuf, flags);
   return imb_oiio_write(ctx, filepath, file_spec);
 }
+
+Vector<uint8_t> imb_save_buffer_png(ImBuf *ibuf, int flags)
+{
+  const auto [ctx, file_spec] = prepare_save_png(ibuf, flags);
+  return imb_oiio_write_buffer(ctx, file_spec);
+}
+
+}  // namespace blender

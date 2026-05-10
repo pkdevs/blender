@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "testing/testing.h"
 
-#include "CLG_log.h"
-
 #include "BKE_bpath.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -20,7 +19,11 @@
 #include "BLI_path_utils.hh"
 #include "BLI_string.h"
 
-namespace blender::bke::tests {
+namespace blender {
+
+struct PathStore;
+
+namespace bke::tests {
 
 #ifdef WIN32
 #  define ABSOLUTE_ROOT "C:" SEP_STR
@@ -46,18 +49,8 @@ namespace blender::bke::tests {
 #define MOVIECLIP_PATH_RELATIVE RELATIVE_ROOT MOVIECLIP_PATH_ITEM
 #define MOVIECLIP_PATH_RELATIVE_MADE_ABSOLUTE BASE_DIR MOVIECLIP_PATH_ITEM
 
-class BPathTest : public testing::Test {
+class BPathTest : public BlenderGTestBase {
  public:
-  static void SetUpTestSuite()
-  {
-    CLG_init();
-    BKE_idtype_init();
-  }
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
-
   void SetUp() override
   {
     bmain = BKE_main_new();
@@ -147,10 +140,10 @@ TEST_F(BPathTest, list_backup_restore)
 
   void *path_list_handle = BKE_bpath_list_backup(bmain, static_cast<eBPathForeachFlag>(0));
 
-  ListBase *path_list = reinterpret_cast<ListBase *>(path_list_handle);
+  ListBaseT<PathStore> *path_list = static_cast<ListBaseT<PathStore> *>(path_list_handle);
   EXPECT_EQ(BLI_listbase_count(path_list), 2);
 
-  MEM_freeN(text->filepath);
+  MEM_delete(text->filepath);
   text->filepath = BLI_strdup(TEXT_PATH_ABSOLUTE);
   STRNCPY(movie_clip->filepath, MOVIECLIP_PATH_RELATIVE);
 
@@ -163,4 +156,5 @@ TEST_F(BPathTest, list_backup_restore)
   BKE_bpath_list_free(path_list_handle);
 }
 
-}  // namespace blender::bke::tests
+}  // namespace bke::tests
+}  // namespace blender

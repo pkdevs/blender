@@ -4,16 +4,24 @@
 
 #include "BKE_library.hh"
 #include "BKE_screen.hh"
+
 #include "BLI_listbase.h"
 #include "BLI_string_utf8.h"
+
 #include "BLT_translation.hh"
+
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
+
 #include "NOD_socket.hh"
+
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
+
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
+
+#include "ED_node.hh"
 
 #include "node_intern.hh"
 
@@ -29,7 +37,7 @@ static bool node_tree_interface_panel_poll(const bContext *C, PanelType * /*pt*/
   if (!ntree) {
     return false;
   }
-  if (ntree->flag & ID_FLAG_EMBEDDED_DATA) {
+  if (ntree->id.flag & ID_FLAG_EMBEDDED_DATA) {
     return false;
   }
   if (ntree->typeinfo->no_group_interface) {
@@ -38,22 +46,18 @@ static bool node_tree_interface_panel_poll(const bContext *C, PanelType * /*pt*/
   return true;
 }
 
-static void node_tree_interface_panel_draw(const bContext *C, Panel *panel)
+void node_tree_interface_draw(bContext &C, ui::Layout &layout, bNodeTree &tree)
 {
-  SpaceNode &snode = *CTX_wm_space_node(C);
-  bNodeTree &tree = *snode.edittree;
-  uiLayout &layout = *panel->layout;
-
-  PointerRNA tree_ptr = RNA_pointer_create_discrete(&tree.id, &RNA_NodeTree, &tree);
+  PointerRNA tree_ptr = RNA_pointer_create_discrete(&tree.id, RNA_NodeTree, &tree);
   PointerRNA interface_ptr = RNA_pointer_get(&tree_ptr, "interface");
 
   {
-    uiLayout &row = layout.row(false);
-    uiTemplateNodeTreeInterface(&row, C, &interface_ptr);
+    ui::Layout &row = layout.row(false);
+    template_tree_interface(&row, &C, &interface_ptr);
 
-    uiLayout &col = row.column(true);
+    ui::Layout &col = row.column(true);
     col.enabled_set(ID_IS_EDITABLE(&tree.id));
-    col.op_menu_enum(C, "node.interface_item_new", "item_type", "", ICON_ADD);
+    col.menu("NODE_MT_node_tree_interface_new_item", "", ICON_ADD);
     col.op("node.interface_item_remove", "", ICON_REMOVE);
     col.separator();
     col.menu("NODE_MT_node_tree_interface_context_menu", "", ICON_DOWNARROW_HLT);
@@ -74,7 +78,7 @@ static void node_tree_interface_panel_draw(const bContext *C, Panel *panel)
     layout.prop(&active_item_ptr, "socket_type", UI_ITEM_NONE, IFACE_("Type"), ICON_NONE);
     layout.prop(&active_item_ptr, "description", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     if (tree.type == NTREE_GEOMETRY) {
-      if (nodes::socket_type_supports_fields(stype->type) && stype->type != SOCK_MENU) {
+      if (nodes::socket_type_supports_attributes(stype->type)) {
         if (socket->flag & NODE_INTERFACE_SOCKET_OUTPUT) {
           layout.prop(&active_item_ptr, "attribute_domain", UI_ITEM_NONE, std::nullopt, ICON_NONE);
         }
@@ -83,7 +87,7 @@ static void node_tree_interface_panel_draw(const bContext *C, Panel *panel)
       }
     }
     if (stype->interface_draw) {
-      stype->interface_draw(&tree.id, socket, const_cast<bContext *>(C), &layout);
+      stype->interface_draw(&tree.id, socket, &C, &layout);
     }
   }
   if (active_item->item_type == NODE_INTERFACE_PANEL) {
@@ -93,24 +97,33 @@ static void node_tree_interface_panel_draw(const bContext *C, Panel *panel)
         &active_item_ptr, "default_closed", UI_ITEM_NONE, IFACE_("Closed by Default"), ICON_NONE);
 
     if (bNodeTreeInterfaceSocket *panel_toggle_socket = panel_item->header_toggle_socket()) {
-      if (uiLayout *panel = layout.panel(C, "panel_toggle", false, IFACE_("Panel Toggle"))) {
+      if (ui::Layout *panel = layout.panel(&C, "panel_toggle", false, IFACE_("Panel Toggle"))) {
         PointerRNA panel_toggle_socket_ptr = RNA_pointer_create_discrete(
-            &tree.id, &RNA_NodeTreeInterfaceSocket, panel_toggle_socket);
+            &tree.id, RNA_NodeTreeInterfaceSocket, panel_toggle_socket);
         panel->prop(
             &panel_toggle_socket_ptr, "default_value", UI_ITEM_NONE, IFACE_("Default"), ICON_NONE);
-        uiLayout &col = panel->column(false);
+        ui::Layout &col = panel->column(false);
         col.prop(
             &panel_toggle_socket_ptr, "hide_in_modifier", UI_ITEM_NONE, std::nullopt, ICON_NONE);
         col.prop(
-            &panel_toggle_socket_ptr, "force_non_field", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+            &panel_toggle_socket_ptr, "structure_type", UI_ITEM_NONE, IFACE_("Shape"), ICON_NONE);
       }
     }
   }
 }
 
+static void node_tree_interface_panel_draw(const bContext *C, Panel *panel)
+{
+  SpaceNode &snode = *CTX_wm_space_node(C);
+  bNodeTree &tree = *snode.edittree;
+  ui::Layout &layout = *panel->layout;
+
+  node_tree_interface_draw(const_cast<bContext &>(*C), layout, tree);
+}
+
 void node_tree_interface_panel_register(ARegionType *art)
 {
-  PanelType *pt = MEM_callocN<PanelType>("NODE_PT_node_tree_interface");
+  PanelType *pt = MEM_new_zeroed<PanelType>("NODE_PT_node_tree_interface");
   STRNCPY_UTF8(pt->idname, "NODE_PT_node_tree_interface");
   STRNCPY_UTF8(pt->label, N_("Group Sockets"));
   STRNCPY_UTF8(pt->category, "Group");

@@ -9,9 +9,7 @@
  * dragging larger headers into the createInfo pipeline which would cause problems.
  */
 
-#ifndef GPU_SHADER
-#  pragma once
-#endif
+#pragma once
 
 #ifndef SQUARE
 #  define SQUARE(x) ((x) * (x))
@@ -47,10 +45,11 @@
 /* Maximum number of thread-groups dispatched for remapping a probe to octahedral mapping. */
 #define SPHERE_PROBE_MAX_HARMONIC SQUARE(SPHERE_PROBE_ATLAS_RES / SPHERE_PROBE_REMAP_GROUP_SIZE)
 /* Start and end value for mixing sphere probe and volume probes. */
-#define SPHERE_PROBE_MIX_START_ROUGHNESS 0.7
-#define SPHERE_PROBE_MIX_END_ROUGHNESS 0.9
+#define SPHERE_PROBE_MIX_START_ROUGHNESS 0.7f
+#define SPHERE_PROBE_MIX_END_ROUGHNESS 0.9f
 /* Roughness of the last mip map for sphere probes. */
-#define SPHERE_PROBE_MIP_MAX_ROUGHNESS 0.7
+#define SPHERE_PROBE_MIP_MAX_ROUGHNESS 0.7f
+#define SPHERE_PROBE_FORMAT SFLOAT_16_16_16_16
 /**
  * Limited by the UBO size limit `(16384 bytes / sizeof(SphereProbeData))`.
  */
@@ -193,7 +192,7 @@
 
 /* Utility Texture. */
 #define UTIL_TEX_SIZE 64
-#define UTIL_BTDF_LAYER_COUNT 16
+#define UTIL_BSDF_LAYER_COUNT 16
 /* Scale and bias to avoid interpolation of the border pixel.
  * Remap UVs to the border pixels centers. */
 #define UTIL_TEX_UV_SCALE ((UTIL_TEX_SIZE - 1.0f) / UTIL_TEX_SIZE)
@@ -202,8 +201,8 @@
 #define UTIL_BLUE_NOISE_LAYER 0
 #define UTIL_SSS_TRANSMITTANCE_PROFILE_LAYER 1
 #define UTIL_LTC_MAT_LAYER 2
-#define UTIL_BSDF_LAYER 3
-#define UTIL_BTDF_LAYER 4
+#define UTIL_BRDF_LAYER 3
+#define UTIL_BSDF_LAYER 4
 #define UTIL_DISK_INTEGRAL_LAYER UTIL_SSS_TRANSMITTANCE_PROFILE_LAYER
 #define UTIL_DISK_INTEGRAL_COMP 3
 
@@ -220,6 +219,10 @@
 #  endif
 #endif
 
+#define PREPASS_FRAG_OUT_NORMAL 0
+#define PREPASS_FRAG_OUT_OB_ID 1
+#define PREPASS_FRAG_OUT_VELOCITY 2
+
 /* Resource bindings. */
 
 /* Textures. */
@@ -234,15 +237,17 @@
 #define SPHERE_PROBE_TEX_SLOT 7
 #define VOLUME_SCATTERING_TEX_SLOT 8
 #define VOLUME_TRANSMITTANCE_TEX_SLOT 9
+#define HIZ_PREVIOUS_LAYER_TEX_SLOT 10
+#define RADIANCE_PREVIOUS_LAYER_TEX_SLOT 11
+#define OBJECT_ID_TEX_SLOT 12
+#define PREPASS_NORMAL_TEX_SLOT 13
 /* Currently only used by ray-tracing, but might become used by forward too. */
-#define PLANAR_PROBE_DEPTH_TEX_SLOT 10
-#define PLANAR_PROBE_RADIANCE_TEX_SLOT 11
-/* Reserved slots info */
-#define MATERIAL_TEXTURE_RESERVED_SLOT_FIRST RBUFS_UTILITY_TEX_SLOT
-#define MATERIAL_TEXTURE_RESERVED_SLOT_LAST_NO_EVAL HIZ_TEX_SLOT
-#define MATERIAL_TEXTURE_RESERVED_SLOT_LAST_HYBRID SPHERE_PROBE_TEX_SLOT
-#define MATERIAL_TEXTURE_RESERVED_SLOT_LAST_FORWARD VOLUME_TRANSMITTANCE_TEX_SLOT
-#define MATERIAL_TEXTURE_RESERVED_SLOT_LAST_WORLD SPHERE_PROBE_TEX_SLOT
+#define PLANAR_PROBE_DEPTH_TEX_SLOT 14
+#define PLANAR_PROBE_RADIANCE_TEX_SLOT 15
+
+#define GBUF_CLOSURE_TEX_SLOT 16
+#define GBUF_NORMAL_TEX_SLOT 17
+#define GBUF_HEADER_TEX_SLOT 18
 
 /* Images. */
 #define RBUFS_COLOR_SLOT 0
@@ -267,15 +272,20 @@
 /* Uniform Buffers. */
 /* Slot 0 is GPU_NODE_TREE_UBO_SLOT. */
 #define UNIFORM_BUF_SLOT 1
+/* Split from the main uniform buffer since they're updated multiple times per frame. */
+#define PIPELINE_BUF_SLOT 2
+#define RAYTRACE_BUF_SLOT 3
 /* Only during surface shading (forward and deferred eval). */
-#define IRRADIANCE_GRID_BUF_SLOT 2
-#define SPHERE_PROBE_BUF_SLOT 3
-#define PLANAR_PROBE_BUF_SLOT 4
+#define IRRADIANCE_GRID_BUF_SLOT 4
+#define SPHERE_PROBE_BUF_SLOT 5
+#define PLANAR_PROBE_BUF_SLOT 6
 /* Only during pre-pass. */
-#define VELOCITY_CAMERA_PREV_BUF 2
-#define VELOCITY_CAMERA_CURR_BUF 3
-#define VELOCITY_CAMERA_NEXT_BUF 4
-#define CLIP_PLANE_BUF 5
+#define VELOCITY_CAMERA_PREV_BUF 4
+#define VELOCITY_CAMERA_CURR_BUF 5
+#define VELOCITY_CAMERA_NEXT_BUF 6
+#define CLIP_PLANE_BUF 7
+/* Only during subsurface scattering */
+#define SUBSURFACE_BUF_SLOT 4
 
 /* Storage Buffers. */
 #define LIGHT_CULL_BUF_SLOT 0
@@ -303,7 +313,7 @@
 
 #define CLOSURE_WEIGHT_CUTOFF 1e-5f
 /* Treat closure as singular if the roughness is below this threshold. */
-#define BSDF_ROUGHNESS_THRESHOLD 2e-2
+#define BSDF_ROUGHNESS_THRESHOLD 2e-2f
 
 /* Cannot use math libraries in shared headers yet. */
-#define EEVEE_PI 3.14159265358979323846 /* pi */
+#define EEVEE_PI 3.14159265358979323846f /* pi */

@@ -13,8 +13,6 @@
 
 #include "GPU_framebuffer.hh"
 
-#include "GHOST_C-api.h"
-
 #include "gpu_context_private.hh"
 #include "gpu_immediate_private.hh"
 
@@ -26,16 +24,19 @@
 #include "gl_backend.hh" /* TODO: remove. */
 #include "gl_context.hh"
 
-using namespace blender;
+namespace blender {
+
 using namespace blender::gpu;
 
 /* -------------------------------------------------------------------- */
 /** \name Constructor / Destructor
  * \{ */
 
-GLContext::GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list)
+GLContext::GLContext(GHOST_IWindow *ghost_window, GLSharedOrphanLists &shared_orphan_list)
     : shared_orphan_list_(shared_orphan_list)
 {
+  GLBackend::get()->add_context_id(context_id);
+
   if (G.debug & G_DEBUG_GPU) {
     debug::init_gl_callbacks();
   }
@@ -51,11 +52,12 @@ GLContext::GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list
   ghost_window_ = ghost_window;
 
   if (ghost_window) {
-    GLuint default_fbo = GHOST_GetDefaultGPUFramebuffer((GHOST_WindowHandle)ghost_window);
-    GHOST_RectangleHandle bounds = GHOST_GetClientBounds((GHOST_WindowHandle)ghost_window);
-    int w = GHOST_GetWidthRectangle(bounds);
-    int h = GHOST_GetHeightRectangle(bounds);
-    GHOST_DisposeRectangle(bounds);
+    GLuint default_fbo = ghost_window->getDefaultFramebuffer();
+
+    GHOST_Rect bounds;
+    ghost_window->getClientBounds(bounds);
+    const int w = bounds.getWidth();
+    const int h = bounds.getHeight();
 
     if (default_fbo != 0) {
       /* Bind default framebuffer, otherwise state might be undefined. */
@@ -102,6 +104,8 @@ GLContext::~GLContext()
     cache->clear();
   }
   glDeleteBuffers(1, &default_attr_vbo_);
+
+  GLBackend::get()->remove_context_id(context_id);
 }
 
 /** \} */
@@ -123,10 +127,11 @@ void GLContext::activate()
 
   if (ghost_window_) {
     /* Get the correct framebuffer size for the internal framebuffers. */
-    GHOST_RectangleHandle bounds = GHOST_GetClientBounds((GHOST_WindowHandle)ghost_window_);
-    int w = GHOST_GetWidthRectangle(bounds);
-    int h = GHOST_GetHeightRectangle(bounds);
-    GHOST_DisposeRectangle(bounds);
+    GHOST_Rect bounds = {0};
+    ghost_window_->getClientBounds(bounds);
+
+    const int w = bounds.getWidth();
+    const int h = bounds.getHeight();
 
     if (front_left) {
       front_left->size_set(w, h);
@@ -370,3 +375,5 @@ void GLContext::memory_statistics_get(int *r_total_mem, int *r_free_mem)
 }
 
 /** \} */
+
+}  // namespace blender

@@ -2,18 +2,22 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BKE_gtest_base.hh"
 #include "BKE_idprop.hh"
+
 #include "testing/testing.h"
 
 namespace blender::bke::tests {
 
-TEST(idproperties, CreateGroup)
+class IDPropertyTest : public BlenderGTestBase {};
+
+TEST_F(IDPropertyTest, CreateGroup)
 {
   IDProperty *prop = idprop::create_group("test").release();
   IDP_FreeProperty(prop);
 }
 
-TEST(idproperties, AddToGroup)
+TEST_F(IDPropertyTest, AddToGroup)
 {
   IDProperty *group = idprop::create_group("test").release();
   EXPECT_EQ(IDP_GetPropertyFromGroup(group, "a"), nullptr);
@@ -29,7 +33,7 @@ TEST(idproperties, AddToGroup)
   IDP_FreeProperty(group);
 }
 
-TEST(idproperties, ReplaceInGroup)
+TEST_F(IDPropertyTest, ReplaceInGroup)
 {
   IDProperty *group = idprop::create_group("test").release();
   EXPECT_TRUE(IDP_AddToGroup(group, idprop::create("a", 3.0f).release()));
@@ -41,7 +45,7 @@ TEST(idproperties, ReplaceInGroup)
   IDP_FreeProperty(group);
 }
 
-TEST(idproperties, RemoveFromGroup)
+TEST_F(IDPropertyTest, RemoveFromGroup)
 {
   IDProperty *group = idprop::create_group("test").release();
   EXPECT_EQ(IDP_GetPropertyFromGroup(group, "a"), nullptr);
@@ -54,7 +58,7 @@ TEST(idproperties, RemoveFromGroup)
   IDP_FreeProperty(group);
 }
 
-TEST(idproperties, ReplaceGroupInGroup)
+TEST_F(IDPropertyTest, ReplaceGroupInGroup)
 {
   IDProperty *group1 = idprop::create_group("test").release();
   IDP_AddToGroup(group1, idprop::create("a", 1).release());
@@ -72,7 +76,7 @@ TEST(idproperties, ReplaceGroupInGroup)
   IDP_FreeProperty(group2);
 }
 
-TEST(idproperties, SyncGroupValues)
+TEST_F(IDPropertyTest, SyncGroupValues)
 {
   IDProperty *group1 = idprop::create_group("test").release();
   IDProperty *group2 = idprop::create_group("test").release();
@@ -91,6 +95,44 @@ TEST(idproperties, SyncGroupValues)
 
   IDP_FreeProperty(group1);
   IDP_FreeProperty(group2);
+}
+
+TEST_F(IDPropertyTest, ReprGroup)
+{
+  auto repr_fn = [](IDProperty *prop) -> std::string {
+    uint result_len;
+    char *c_str = IDP_reprN(prop, &result_len);
+    std::string result = std::string(c_str, result_len);
+    MEM_delete(c_str);
+    return result;
+  };
+
+  IDProperty *group = idprop::create_group("test").release();
+
+  EXPECT_EQ(repr_fn(group), "{}");
+
+  IDP_AddToGroup(group, idprop::create("a", 1).release());
+  IDP_AddToGroup(group, idprop::create("b", 0.5f).release());
+  IDP_AddToGroup(group, idprop::create_bool("c", true).release());
+  IDP_AddToGroup(group, idprop::create_bool("d", false).release());
+  IDP_AddToGroup(group, idprop::create("e", "ABC (escape \" \\)").release());
+  IDP_AddToGroup(group, idprop::create("f", Span<int32_t>({-1, 0, 1})).release());
+  IDP_AddToGroup(group, idprop::create("g", Span<float>({-0.5f, 0.0f, 0.5f})).release());
+  IDP_AddToGroup(group, idprop::create_group("h").release());
+
+  EXPECT_EQ(repr_fn(group),
+            "{"
+            "\"a\": 1, "
+            "\"b\": 0.5, "
+            "\"c\": True, "
+            "\"d\": False, "
+            "\"e\": \"ABC (escape \\\" \\\\)\", "
+            "\"f\": [-1, 0, 1], "
+            "\"g\": [-0.5, 0, 0.5], "
+            "\"h\": {}"
+            "}");
+
+  IDP_FreeProperty(group);
 }
 
 }  // namespace blender::bke::tests

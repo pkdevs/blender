@@ -18,6 +18,8 @@ extern "C" {
 
 struct AVFrame;
 
+namespace blender {
+
 int ffmpeg_deinterlace(
     AVFrame *dst, const AVFrame *src, enum AVPixelFormat pix_fmt, int width, int height);
 
@@ -38,11 +40,13 @@ bool MOV_codec_supports_crf(AVCodecID codec_id);
  * Which pixel bit depths are supported by a given FFMPEG video CodecID.
  * Returns bit-mask of `R_IMF_CHAN_DEPTH_` flags.
  */
-int MOV_codec_valid_bit_depths(AVCodecID codec_id);
+eImageFormatDepth MOV_codec_valid_bit_depths(AVCodecID codec_id);
 
 /**
  * Returns thread count to be used for ffmpeg.
  */
 int MOV_thread_count();
+
+}  // namespace blender
 
 #endif /* WITH_FFMPEG */

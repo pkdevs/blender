@@ -110,7 +110,7 @@ Quaternion normalized_to_quat_with_checks(float3x3 mat)
   return normalized_to_quat_fast(mat);
 }
 
-void normalized_to_eul2(float3x3 mat, out EulerXYZ eul1, out EulerXYZ eul2)
+void normalized_to_eul2(float3x3 mat, EulerXYZ &eul1, EulerXYZ &eul2)
 {
   float cy = hypot(mat[0][0], mat[0][1]);
   if (cy > 16.0f * FLT_EPSILON) {
@@ -197,6 +197,38 @@ Quaternion to_quaternion(float4x4 mat, const bool normalized)
   return to_quaternion(to_float3x3(mat), normalized);
 }
 
+Quaternion to_quaternion(AxisAngle axis_angle)
+{
+  float angle_cos = cos(axis_angle.angle);
+  /** Using half angle identities: sin(angle / 2) = sqrt((1 - angle_cos) / 2) */
+  float sine = sqrt(0.5f - angle_cos * 0.5f);
+  float cosine = sqrt(0.5f + angle_cos * 0.5f);
+
+  /* TODO(fclem): Optimize. */
+  float angle_sin = sin(axis_angle.angle);
+  if (angle_sin < 0.0f) {
+    sine = -sine;
+  }
+
+  Quaternion quat;
+  quat.x = cosine;
+  quat.y = axis_angle.axis.x * sine;
+  quat.z = axis_angle.axis.y * sine;
+  quat.w = axis_angle.axis.z * sine;
+  return quat;
+}
+
+Quaternion to_quaternion(float3 axis, float angle)
+{
+  if (is_zero(axis)) {
+    return Quaternion::identity();
+  }
+  AxisAngle aa;
+  aa.axis = normalize(axis);
+  aa.angle = angle;
+  return to_quaternion(aa);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -248,27 +280,6 @@ EulerXYZ to_euler(float4x4 mat)
 /** \name Axis Angle Functions
  * \{ */
 
-Quaternion to_axis_angle(AxisAngle axis_angle)
-{
-  float angle_cos = cos(axis_angle.angle);
-  /** Using half angle identities: sin(angle / 2) = sqrt((1 - angle_cos) / 2) */
-  float sine = sqrt(0.5f - angle_cos * 0.5f);
-  float cosine = sqrt(0.5f + angle_cos * 0.5f);
-
-  /* TODO(fclem): Optimize. */
-  float angle_sin = sin(axis_angle.angle);
-  if (angle_sin < 0.0f) {
-    sine = -sine;
-  }
-
-  Quaternion quat;
-  quat.x = cosine;
-  quat.y = axis_angle.axis.x * sine;
-  quat.z = axis_angle.axis.y * sine;
-  quat.w = axis_angle.axis.z * sine;
-  return quat;
-}
-
 AxisAngle to_axis_angle(Quaternion quat)
 {
   /* Calculate angle/2, and sin(angle/2). */
@@ -286,7 +297,7 @@ AxisAngle to_axis_angle(Quaternion quat)
   if (is_zero(axis)) {
     axis[1] = 1.0f;
   }
-  return AxisAngle(axis, angle);
+  return {axis, angle};
 }
 
 AxisAngle to_axis_angle(EulerXYZ eul)
@@ -307,7 +318,7 @@ AxisAngle to_axis_angle(EulerXYZ eul)
  * Rotation and scale values will be flipped if it is negative.
  * This is a costly operation so it is disabled by default.
  */
-void to_rot_scale(float3x3 mat, out EulerXYZ r_rotation, out float3 r_scale)
+void to_rot_scale(float3x3 mat, EulerXYZ &r_rotation, float3 &r_scale)
 {
   r_scale = to_scale(mat);
   r_rotation = to_euler(mat, true);
@@ -320,8 +331,8 @@ void to_rot_scale(float3x3 mat, out EulerXYZ r_rotation, out float3 r_scale)
  * This is a costly operation so it is disabled by default.
  */
 void to_rot_scale(float3x3 mat,
-                  out EulerXYZ r_rotation,
-                  out float3 r_scale,
+                  EulerXYZ &r_rotation,
+                  float3 &r_scale,
                   const bool allow_negative_scale)
 {
   float3x3 normalized_mat = normalize_and_get_size(mat, r_scale);
@@ -333,14 +344,14 @@ void to_rot_scale(float3x3 mat,
   }
   r_rotation = to_euler(normalized_mat, true);
 }
-void to_rot_scale(float3x3 mat, out Quaternion r_rotation, out float3 r_scale)
+void to_rot_scale(float3x3 mat, Quaternion &r_rotation, float3 &r_scale)
 {
   r_scale = to_scale(mat);
   r_rotation = to_quaternion(mat, true);
 }
 void to_rot_scale(float3x3 mat,
-                  out Quaternion r_rotation,
-                  out float3 r_scale,
+                  Quaternion &r_rotation,
+                  float3 &r_scale,
                   const bool allow_negative_scale)
 {
   float3x3 normalized_mat = normalize_and_get_size(mat, r_scale);
@@ -353,35 +364,29 @@ void to_rot_scale(float3x3 mat,
   r_rotation = to_quaternion(normalized_mat, true);
 }
 
-void to_loc_rot_scale(float4x4 mat,
-                      out float3 r_location,
-                      out EulerXYZ r_rotation,
-                      out float3 r_scale)
+void to_loc_rot_scale(float4x4 mat, float3 &r_location, EulerXYZ &r_rotation, float3 &r_scale)
 {
   r_location = mat[3].xyz;
   to_rot_scale(to_float3x3(mat), r_rotation, r_scale);
 }
 void to_loc_rot_scale(float4x4 mat,
-                      out float3 r_location,
-                      out EulerXYZ r_rotation,
-                      out float3 r_scale,
+                      float3 &r_location,
+                      EulerXYZ &r_rotation,
+                      float3 &r_scale,
                       const bool allow_negative_scale)
 {
   r_location = mat[3].xyz;
   to_rot_scale(to_float3x3(mat), r_rotation, r_scale, allow_negative_scale);
 }
-void to_loc_rot_scale(float4x4 mat,
-                      out float3 r_location,
-                      out Quaternion r_rotation,
-                      out float3 r_scale)
+void to_loc_rot_scale(float4x4 mat, float3 &r_location, Quaternion &r_rotation, float3 &r_scale)
 {
   r_location = mat[3].xyz;
   to_rot_scale(to_float3x3(mat), r_rotation, r_scale);
 }
 void to_loc_rot_scale(float4x4 mat,
-                      out float3 r_location,
-                      out Quaternion r_rotation,
-                      out float3 r_scale,
+                      float3 &r_location,
+                      Quaternion &r_rotation,
+                      float3 &r_scale,
                       const bool allow_negative_scale)
 {
   r_location = mat[3].xyz;

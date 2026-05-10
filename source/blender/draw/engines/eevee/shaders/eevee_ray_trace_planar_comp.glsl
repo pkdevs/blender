@@ -13,13 +13,11 @@
 
 COMPUTE_SHADER_CREATE_INFO(eevee_ray_trace_planar)
 
-#include "eevee_bxdf_sampling_lib.glsl"
-#include "eevee_colorspace_lib.glsl"
+#include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_gbuffer_read_lib.glsl"
 #include "eevee_lightprobe_eval_lib.glsl"
 #include "eevee_ray_trace_screen_lib.glsl"
-#include "eevee_ray_types_lib.glsl"
-#include "eevee_reverse_z_lib.glsl"
+#include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_sampling_lib.glsl"
 
 void main()
@@ -44,21 +42,21 @@ void main()
     return;
   }
 
-  int2 texel_fullres = texel * uniform_buf.raytrace.resolution_scale +
-                       uniform_buf.raytrace.resolution_bias;
+  int2 texel_fullres = texel * raytrace_buf.trace_pixel_scale + raytrace_buf.trace_pixel_offset;
 
   gbuffer::Header gbuf_header = gbuffer::read_header(texel_fullres);
   ClosureType closure_type = gbuffer::mode_to_closure_type(gbuf_header.bin_type(closure_index));
 
-  if ((closure_type == CLOSURE_BSDF_TRANSLUCENT_ID) ||
-      (closure_type == CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID))
-  {
+  if (closure_has_transmission(closure_type)) {
     /* Planar light-probes cannot trace refraction yet. */
     return;
   }
 
+  ClosureUndetermined cl = gbuffer::read_bin(texel_fullres, closure_index);
+  float roughness = closure_apparent_roughness_get(cl);
+
   float depth = reverse_z::read(texelFetch(depth_tx, texel_fullres, 0).r);
-  float2 uv = (float2(texel_fullres) + 0.5f) * uniform_buf.raytrace.full_resolution_inv;
+  float2 uv = (float2(texel_fullres) + 0.5f) * raytrace_buf.full_resolution_inv;
 
   float3 P = drw_point_screen_to_world(float3(uv, depth));
   float3 V = drw_world_incident_vector(P);
@@ -93,11 +91,12 @@ void main()
   ray_view.max_time = 1000.0f;
 
   ScreenTraceHitData hit = raytrace_planar(
-      uniform_buf.raytrace, planar_depth_tx, planar, rand_trace, ray_view);
+      raytrace_buf, planar_depth_tx, planar, rand_trace, ray_view);
 
   if (hit.valid) {
     /* Evaluate radiance at hit-point. */
-    radiance = textureLod(planar_radiance_tx, float3(hit.ss_hit_P.xy, planar_id), 0.0f).rgb;
+    radiance = raytrace_sample_screen(
+        planar_radiance_tx, raytrace_buf, hit, roughness, hit.ss_hit_P.xy, planar_id);
   }
   else {
     /* Using ray direction as geometric normal to bias the sampling position.
@@ -105,13 +104,13 @@ void main()
      * direction over many rays. */
     float3 Ng = ray.direction;
     /* Fall back to nearest light-probe. */
-    LightProbeSample samp = lightprobe_load(P, Ng, V);
-    radiance = lightprobe_eval_direction(samp, P, ray.direction, ray_pdf_inv);
+    LightProbeSample samp = lightprobe_load(float2(texel), P, Ng, V);
+    radiance = lightprobe_eval_direction(samp, P, ray.direction, roughness);
     /* Set point really far for correct reprojection of background. */
     hit.time = 10000.0f;
   }
 
-  radiance = colorspace_brightness_clamp_max(radiance, uniform_buf.clamp.surface_indirect);
+  radiance = colorspace::brightness_clamp_max(radiance, uniform_buf.clamp.surface_indirect);
 
   imageStoreFast(ray_time_img, texel, float4(hit.time));
   imageStoreFast(ray_radiance_img, texel, float4(radiance, 0.0f));

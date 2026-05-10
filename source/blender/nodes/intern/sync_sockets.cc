@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include "DNA_node_types.h"
 #include "DNA_space_types.h"
@@ -28,6 +29,7 @@
 
 #include "BLT_translation.hh"
 
+#include "NOD_bundle_type.hh"
 #include "NOD_geo_bundle.hh"
 #include "NOD_geo_closure.hh"
 #include "NOD_socket_items.hh"
@@ -58,7 +60,7 @@ static BundleSyncState get_sync_state_separate_bundle(
     const bNode &separate_bundle_node,
     const bNodeSocket *src_bundle_socket = nullptr)
 {
-  BLI_assert(separate_bundle_node.is_type("NodeSeparateBundle"));
+  BLI_assert(separate_bundle_node.is_type("NodeSeparateBundle"_ustr));
   snode.edittree->ensure_topology_cache();
   if (!src_bundle_socket) {
     src_bundle_socket = &separate_bundle_node.input_socket(0);
@@ -91,13 +93,12 @@ static BundleSyncState get_sync_state_separate_bundle(
   return {NodeSyncState::Synced};
 }
 
-static BundleSyncState get_sync_state_combine_bundle(
-    const SpaceNode &snode,
-    const bNode &combine_bundle_node,
-    const bNodeSocket *src_bundle_socket = nullptr)
+static LinkedBundleSignatures get_expected_combine_bundle_signatures(
+    const SpaceNode &snode, const bNode &combine_bundle_node, const bNodeSocket *src_bundle_socket)
 {
-  BLI_assert(combine_bundle_node.is_type("NodeCombineBundle"));
+  BLI_assert(combine_bundle_node.is_type("NodeCombineBundle"_ustr));
   snode.edittree->ensure_topology_cache();
+
   if (!src_bundle_socket) {
     src_bundle_socket = &combine_bundle_node.output_socket(0);
   }
@@ -107,18 +108,39 @@ static BundleSyncState get_sync_state_combine_bundle(
   const ComputeContext *current_context = ed::space_node::compute_context_for_edittree_socket(
       snode, compute_context_cache, *src_bundle_socket);
   if (!current_context) {
-    return {NodeSyncState::NoSyncSource};
+    return {};
   }
-  const LinkedBundleSignatures linked_signatures = gather_linked_target_bundle_signatures(
+
+  const std::optional<StringRef> type = combine_bundle_node_type(*snode.edittree,
+                                                                 combine_bundle_node);
+  if (type) {
+    if (const FlatBundleTypePtr flat_bundle_type = BundleTypeRegistry::try_find_single_flat(*type))
+    {
+      SocketInContext socket = {current_context, src_bundle_socket};
+      LinkedBundleSignatures result;
+      result.items.append({flat_bundle_type->to_bundle_signature(), true, socket});
+      return result;
+    }
+  }
+  return gather_linked_target_bundle_signatures(
       current_context, *src_bundle_socket, compute_context_cache);
-  if (linked_signatures.items.is_empty()) {
+}
+
+static BundleSyncState get_sync_state_combine_bundle(
+    const SpaceNode &snode,
+    const bNode &combine_bundle_node,
+    const bNodeSocket *src_bundle_socket = nullptr)
+{
+  const LinkedBundleSignatures source_signatures = get_expected_combine_bundle_signatures(
+      snode, combine_bundle_node, src_bundle_socket);
+  if (source_signatures.items.is_empty()) {
     return {NodeSyncState::NoSyncSource};
   }
-  std::optional<BundleSignature> merged_signature = linked_signatures.get_merged_signature();
+  std::optional<BundleSignature> merged_signature = source_signatures.get_merged_signature();
   if (!merged_signature.has_value()) {
     return {NodeSyncState::ConflictingSyncSources};
   }
-  if (!linked_signatures.has_type_definition()) {
+  if (!source_signatures.has_type_definition()) {
     merged_signature->set_auto_structure_types();
   }
   const nodes::BundleSignature &current_signature =
@@ -236,7 +258,7 @@ void sync_sockets_separate_bundle(SpaceNode &snode,
     NodeSeparateBundleItem &new_item = *nodes::socket_items::add_item_with_socket_type_and_name<
         nodes ::SeparateBundleItemsAccessor>(
         *snode.edittree, separate_bundle_node, item.type->type, item.key.c_str());
-    new_item.structure_type = int(item.structure_type);
+    new_item.structure_type = item.structure_type;
     if (const std::optional<int> old_identifier = old_identifiers.lookup_try(item.key)) {
       new_item.identifier = *old_identifier;
     }
@@ -277,7 +299,7 @@ void sync_sockets_combine_bundle(SpaceNode &snode,
     NodeCombineBundleItem &new_item = *nodes::socket_items::add_item_with_socket_type_and_name<
         nodes ::CombineBundleItemsAccessor>(
         *snode.edittree, combine_bundle_node, item.type->type, item.key.c_str());
-    new_item.structure_type = int(item.structure_type);
+    new_item.structure_type = item.structure_type;
     if (const std::optional<int> old_identifier = old_identifiers.lookup_try(item.key)) {
       new_item.identifier = *old_identifier;
     }
@@ -327,7 +349,7 @@ void sync_sockets_evaluate_closure(SpaceNode &snode,
         *nodes::socket_items::add_item_with_socket_type_and_name<
             nodes::EvaluateClosureInputItemsAccessor>(
             *snode.edittree, evaluate_closure_node, item.type->type, item.key.c_str());
-    new_item.structure_type = int(item.structure_type);
+    new_item.structure_type = item.structure_type;
     if (const std::optional<int> old_identifier = old_input_identifiers.lookup_try(item.key)) {
       new_item.identifier = *old_identifier;
     }
@@ -337,7 +359,7 @@ void sync_sockets_evaluate_closure(SpaceNode &snode,
         *nodes::socket_items::add_item_with_socket_type_and_name<
             nodes::EvaluateClosureOutputItemsAccessor>(
             *snode.edittree, evaluate_closure_node, item.type->type, item.key.c_str());
-    new_item.structure_type = int(item.structure_type);
+    new_item.structure_type = item.structure_type;
     if (const std::optional<int> old_identifier = old_output_identifiers.lookup_try(item.key)) {
       new_item.identifier = *old_identifier;
     }
@@ -387,7 +409,7 @@ void sync_sockets_closure(SpaceNode &snode,
     NodeClosureInputItem &new_item =
         *nodes::socket_items::add_item_with_socket_type_and_name<nodes::ClosureInputItemsAccessor>(
             *snode.edittree, closure_output_node, item.type->type, item.key.c_str());
-    new_item.structure_type = int(item.structure_type);
+    new_item.structure_type = item.structure_type;
     if (const std::optional<int> old_identifier = old_input_identifiers.lookup_try(item.key)) {
       new_item.identifier = *old_identifier;
     }
@@ -396,7 +418,7 @@ void sync_sockets_closure(SpaceNode &snode,
     NodeClosureOutputItem &new_item = *nodes::socket_items::add_item_with_socket_type_and_name<
         nodes::ClosureOutputItemsAccessor>(
         *snode.edittree, closure_output_node, item.type->type, item.key.c_str());
-    new_item.structure_type = int(item.structure_type);
+    new_item.structure_type = item.structure_type;
     if (const std::optional<int> old_identifier = old_output_identifiers.lookup_try(item.key)) {
       new_item.identifier = *old_identifier;
     }
@@ -579,16 +601,16 @@ void sync_node(bContext &C, bNode &node, ReportList *reports)
 {
   const bke::bNodeZoneType &closure_zone_type = *bke::zone_type_by_node_type(NODE_CLOSURE_OUTPUT);
   SpaceNode &snode = *CTX_wm_space_node(&C);
-  if (node.is_type("NodeEvaluateClosure")) {
+  if (node.is_type("NodeEvaluateClosure"_ustr)) {
     sync_sockets_evaluate_closure(snode, node, reports);
   }
-  else if (node.is_type("NodeSeparateBundle")) {
+  else if (node.is_type("NodeSeparateBundle"_ustr)) {
     sync_sockets_separate_bundle(snode, node, reports);
   }
-  else if (node.is_type("NodeCombineBundle")) {
+  else if (node.is_type("NodeCombineBundle"_ustr)) {
     sync_sockets_combine_bundle(snode, node, reports);
   }
-  else if (node.is_type("NodeClosureInput")) {
+  else if (node.is_type("NodeClosureInput"_ustr)) {
     bNode &closure_input_node = node;
     if (bNode *closure_output_node = closure_zone_type.get_corresponding_output(
             *snode.edittree, closure_input_node))
@@ -596,7 +618,7 @@ void sync_node(bContext &C, bNode &node, ReportList *reports)
       sync_sockets_closure(snode, closure_input_node, *closure_output_node, reports);
     }
   }
-  else if (node.is_type("NodeClosureOutput")) {
+  else if (node.is_type("NodeClosureOutput"_ustr)) {
     bNode &closure_output_node = node;
     if (bNode *closure_input_node = closure_zone_type.get_corresponding_input(*snode.edittree,
                                                                               closure_output_node))
@@ -613,7 +635,7 @@ std::string sync_node_description_get(const bContext &C, const bNode &node)
     return "";
   }
 
-  if (node.is_type("NodeSeparateBundle")) {
+  if (node.is_type("NodeSeparateBundle"_ustr)) {
     const nodes::BundleSignature old_signature = nodes::BundleSignature::from_separate_bundle_node(
         node, true);
     if (const std::optional<nodes::BundleSignature> new_signature =
@@ -622,7 +644,7 @@ std::string sync_node_description_get(const bContext &C, const bNode &node)
       return get_bundle_sync_tooltip(old_signature, *new_signature);
     }
   }
-  else if (node.is_type("NodeCombineBundle")) {
+  else if (node.is_type("NodeCombineBundle"_ustr)) {
     const nodes::BundleSignature old_signature = nodes::BundleSignature::from_combine_bundle_node(
         node, true);
     if (const std::optional<nodes::BundleSignature> new_signature =
@@ -631,7 +653,7 @@ std::string sync_node_description_get(const bContext &C, const bNode &node)
       return get_bundle_sync_tooltip(old_signature, *new_signature);
     }
   }
-  else if (node.is_type("NodeEvaluateClosure")) {
+  else if (node.is_type("NodeEvaluateClosure"_ustr)) {
     const nodes::ClosureSignature old_signature =
         nodes::ClosureSignature::from_evaluate_closure_node(node, true);
     if (const std::optional<nodes::ClosureSignature> new_signature =
@@ -640,7 +662,7 @@ std::string sync_node_description_get(const bContext &C, const bNode &node)
       return get_closure_sync_tooltip(old_signature, *new_signature);
     }
   }
-  else if (node.is_type("NodeClosureOutput")) {
+  else if (node.is_type("NodeClosureOutput"_ustr)) {
     const nodes::ClosureSignature old_signature =
         nodes::ClosureSignature::from_closure_output_node(node, true);
     if (const std::optional<nodes::ClosureSignature> new_signature =
@@ -660,16 +682,16 @@ bool node_can_sync_sockets(const bContext &C, const bNodeTree & /*tree*/, const 
   }
   Map<int, bool> &cache = ed::space_node::node_can_sync_cache_get(*snode);
   const bool can_sync = cache.lookup_or_add_cb(node.identifier, [&]() {
-    if (node.is_type("NodeEvaluateClosure")) {
+    if (node.is_type("NodeEvaluateClosure"_ustr)) {
       return get_sync_state_evaluate_closure(*snode, node).source_signature.has_value();
     }
-    if (node.is_type("NodeClosureOutput")) {
+    if (node.is_type("NodeClosureOutput"_ustr)) {
       return get_sync_state_closure_output(*snode, node).source_signature.has_value();
     }
-    if (node.is_type("NodeCombineBundle")) {
+    if (node.is_type("NodeCombineBundle"_ustr)) {
       return get_sync_state_combine_bundle(*snode, node).source_signature.has_value();
     }
-    if (node.is_type("NodeSeparateBundle")) {
+    if (node.is_type("NodeSeparateBundle"_ustr)) {
       return get_sync_state_separate_bundle(*snode, node).source_signature.has_value();
     }
     return false;
@@ -680,17 +702,14 @@ bool node_can_sync_sockets(const bContext &C, const bNodeTree & /*tree*/, const 
 void node_can_sync_cache_clear(Main &bmain)
 {
   if (wmWindowManager *wm = static_cast<wmWindowManager *>(bmain.wm.first)) {
-    LISTBASE_FOREACH (wmWindow *, window, &wm->windows) {
-      bScreen *screen = BKE_workspace_active_screen_get(window->workspace_hook);
-      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-        SpaceLink *sl = static_cast<SpaceLink *>(area->spacedata.first);
+    for (wmWindow &window : wm->windows) {
+      bScreen *screen = BKE_workspace_active_screen_get(window.workspace_hook);
+      for (ScrArea &area : screen->areabase) {
+        SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
         if (sl->spacetype == SPACE_NODE) {
           SpaceNode *snode = reinterpret_cast<SpaceNode *>(sl);
-          /* This may be called before runtime data is initialized currently. */
-          if (snode->runtime) {
-            Map<int, bool> &cache = ed::space_node::node_can_sync_cache_get(*snode);
-            cache.clear();
-          }
+          Map<int, bool> &cache = ed::space_node::node_can_sync_cache_get(*snode);
+          cache.clear();
         }
       }
     }

@@ -11,6 +11,10 @@
 #include "IMB_filetype.hh"
 #include "IMB_imbuf_types.hh"
 
+namespace blender {
+
+const char *imb_file_extensions_bmp[] = {".bmp", ".dib", nullptr};
+
 OIIO_NAMESPACE_USING
 using namespace blender::imbuf;
 
@@ -30,13 +34,25 @@ ImBuf *imb_load_bmp(const uchar *mem, size_t size, int flags, ImFileColorSpace &
   return imb_oiio_read(ctx, config, r_colorspace, spec);
 }
 
-bool imb_save_bmp(ImBuf *ibuf, const char *filepath, int flags)
+static std::tuple<WriteContext, ImageSpec> prepare_save_bmp(ImBuf *ibuf, int flags)
 {
   const int file_channels = ibuf->planes >> 3;
   const TypeDesc data_format = TypeDesc::UINT8;
-
   WriteContext ctx = imb_create_write_context("bmp", ibuf, flags, false);
   ImageSpec file_spec = imb_create_write_spec(ctx, file_channels, data_format);
+  return {ctx, file_spec};
+}
 
+bool imb_save_bmp(ImBuf *ibuf, const char *filepath, int flags)
+{
+  const auto [ctx, file_spec] = prepare_save_bmp(ibuf, flags);
   return imb_oiio_write(ctx, filepath, file_spec);
 }
+
+Vector<uint8_t> imb_save_buffer_bmp(ImBuf *ibuf, int flags)
+{
+  const auto [ctx, file_spec] = prepare_save_bmp(ibuf, flags);
+  return imb_oiio_write_buffer(ctx, file_spec);
+}
+
+}  // namespace blender
