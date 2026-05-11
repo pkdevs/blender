@@ -2813,25 +2813,31 @@ bool OpenPBRBsdfNode::has_surface_transparent()
 
 bool OpenPBRBsdfNode::has_surface_emission()
 {
+  /* TODO(weizhen): should also check color. */
   return has_nonzero_weight("Emission Luminance");
 }
 
 bool OpenPBRBsdfNode::has_surface_bssrdf()
 {
+  /* TODO(weizhen): should also check scale. */
   return has_nonzero_weight("Subsurface Weight");
 }
 
+/* TODO(weizhen): share the same function with Principled. */
 bool OpenPBRBsdfNode::has_nonzero_weight(const char *name)
 {
   ShaderInput *weight_in = input(name);
-  assert(weight_in != nullptr);
+  assert(weight_in);
   if (weight_in->link != nullptr) {
     return true;
   }
   return (get_float(weight_in->socket_type) >= CLOSURE_WEIGHT_CUTOFF);
 }
 
-void OpenPBRBsdfNode::simplify_settings(Scene * /* scene */) {}
+void OpenPBRBsdfNode::simplify_settings(Scene * /* scene */)
+{
+  /* TODO(weizhen): disconnect unused inputs. */
+}
 
 /* Disney principled BSDF Closure */
 NODE_DEFINE(PrincipledBsdfNode)
