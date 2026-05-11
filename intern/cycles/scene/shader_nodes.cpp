@@ -2676,9 +2676,10 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_COLOR(transmission_color, "Transmission Color", one_float3());
   SOCKET_IN_FLOAT(transmission_depth, "Transmission Depth", 0.0f);
   SOCKET_IN_COLOR(transmission_scatter, "Transmission Scatter", zero_float3());
-  SOCKET_IN_FLOAT(transmission_scatter_anisotropy, "Transmission Anisotropy", 0.0f);
+  SOCKET_IN_FLOAT(transmission_scatter_anisotropy, "Transmission Scatter Anisotropy", 0.0f);
   SOCKET_IN_FLOAT(transmission_dispersion_scale, "Transmission Dispersion Scale", 0.0f);
-  SOCKET_IN_FLOAT(transmission_dispersion_abbe_number, "Transmission DispersionAbbeNumber", 20.0f);
+  SOCKET_IN_FLOAT(
+      transmission_dispersion_abbe_number, "Transmission Dispersion Abbe Number", 20.0f);
   /* Subsurface Component */
   SOCKET_IN_FLOAT(subsurface_weight, "Subsurface Weight", 0.0f);
   SOCKET_IN_COLOR(subsurface_color, "Subsurface Color", make_float3(0.8f));
@@ -2763,10 +2764,10 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
       .transmission_color = compiler.input_float3("Transmission Color"),
       .transmission_depth = compiler.input_float("Transmission Depth"),
       .transmission_scatter = compiler.input_float3("Transmission Scatter"),
-      .transmission_scatter_anisotropy = compiler.input_float("Transmission Anisotropy"),
+      .transmission_scatter_anisotropy = compiler.input_float("Transmission Scatter Anisotropy"),
       .transmission_dispersion_scale = compiler.input_float("Transmission Dispersion Scale"),
       .transmission_dispersion_abbe_number = compiler.input_float(
-          "Transmission DispersionAbbeNumber"),
+          "Transmission Dispersion Abbe Number"),
       /* Subsurface Scattering */
       .subsurface_weight = compiler.input_float("Subsurface Weight"),
       .subsurface_color = compiler.input_float3("Subsurface Color"),
