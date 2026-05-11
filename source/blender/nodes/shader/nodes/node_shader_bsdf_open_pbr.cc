@@ -96,7 +96,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_DISTANCE);
 #define OPENPBR_SOCK_TRANSMISSION_DEPTH_ID 12
   transmission.add_input<decl::Color>("Transmission Scatter"_ustr)
       .default_value({0.0f, 0.0f, 0.0f, 1.0f});
