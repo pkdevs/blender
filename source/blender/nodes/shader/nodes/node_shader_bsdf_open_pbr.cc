@@ -104,7 +104,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 #define OPENPBR_SOCK_TRANSMISSION_SCATTER_ID 13
   transmission.add_input<decl::Float>("Transmission Scatter Anisotropy"_ustr)
       .default_value(0.0f)
-      .min(0.0f)
+      .min(-1.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
 #define OPENPBR_SOCK_TRANSMISSION_SCATTER_ANISOTROPY_ID 14
