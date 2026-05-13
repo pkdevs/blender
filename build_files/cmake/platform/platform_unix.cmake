@@ -471,6 +471,12 @@ if(WITH_OPENIMAGEDENOISE)
   add_bundled_libraries(openimagedenoise/lib)
 endif()
 
+if(WITH_OTIO)
+  list(APPEND CMAKE_PREFIX_PATH "$ENV{HOME}/opentimelineio")
+  find_package_wrapper(OpenTimelineIO REQUIRED CONFIG PATHS "$ENV{HOME}/opentimelineio" NO_DEFAULT_PATH)
+  set_and_warn_library_found("OpenTimelineIO" OpenTimelineIO_FOUND WITH_OTIO)
+endif()
+
 if(WITH_LLVM)
   if(DEFINED LIBDIR)
     set(LLVM_STATIC ON)

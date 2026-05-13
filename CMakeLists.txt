@@ -477,6 +477,8 @@ option(WITH_IO_FBX "Enable FBX 3D file format support (*.fbx)" ON)
 option(WITH_IO_GREASE_PENCIL "Enable Grease Pencil file format IO (*.svg, *.pdf)" ON)
 option(WITH_IO_SPZ "Enable SPZ compressed 3D gaussian splats file format support (*.spz)" ON)
 
+option(WITH_OTIO "Enable OTIO Editing file format support (*.otio)" ON)
+
 # Sound output
 option(WITH_SDL_AUDIO "Enable SDL audio support" OFF)
 option(WITH_OPENAL "Enable OpenAL Support (http://www.openal.org)" ON)
