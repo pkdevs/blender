@@ -158,12 +158,21 @@ ccl_device void flatten_closure_tree(KernelGlobals kg,
         return;
       }
 
+      const ccl_private OSLClosure *last_closure = closure;
       weight = weight_stack[--stack_size];
       closure = closure_stack[stack_size];
       if (stack_size == layer_stack_level) {
         /* We just finished processing the top layers of a Layer closure, so adjust the weight to
          * account for the layering. */
-        weight = closure_layering_weight(layer_albedo, weight);
+        if (last_closure->id == OSL_CLOSURE_DielectricBSDF_ID &&
+            closure->id == OSL_CLOSURE_AnisotropicVDF_ID)
+        {
+          /* If a dielectric closure is layered over a VDF closure, it describes the surface
+           * interior to be a medium, hence shares the weight with the dielectric closure. */
+        }
+        else {
+          weight = closure_layering_weight(layer_albedo, weight);
+        }
         layer_stack_level = -1;
         /* If it's fully occluded, skip the base layer we just popped from the stack and grab
          * the next entry instead. */

@@ -261,14 +261,15 @@ void osl_eval_nodes_volume(const ThreadKernelGlobalsCPU *kg,
   OSL::ShadingContext *octx = kg->osl.context;
   const int shader = sd->shader & SHADER_MASK;
 
-  if (kg->osl.globals->volume_state[shader]) {
-    ss->execute(*octx,
-                *(kg->osl.globals->volume_state[shader]),
-                kg->osl.thread_index,
-                0,
-                *globals,
-                nullptr,
-                nullptr);
+  /* HACK: OpenPBR medium goes through the surface output. Which means we don't support volume and
+   * medium co-existing. */
+  /* TODO(OpenPBR): surface closures should have the check `(sd->flag & SD_IS_VOLUME_SHADER_EVAL)`
+   * to avoid being evaluated, unless they change the layer_albedo. */
+  const OSL::ShaderGroupRef ref = kg->osl.globals->volume_state[shader] ?
+                                      kg->osl.globals->volume_state[shader] :
+                                      kg->osl.globals->surface_state[shader];
+  if (ref) {
+    ss->execute(*octx, *ref, kg->osl.thread_index, 0, *globals, nullptr, nullptr);
   }
 
   /* flatten closure tree */

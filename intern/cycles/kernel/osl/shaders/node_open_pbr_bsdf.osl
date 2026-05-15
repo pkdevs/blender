@@ -106,10 +106,8 @@ void mx_anisotropic_vdf(color absorption, color scattering, float anisotropy, ou
 {
   // Convert from absorption and scattering coefficients to
   // extinction coefficient and single-scattering albedo.
-  // color extinction = absorption + scattering;
-  // color albedo = scattering / extinction;
-  color extinction = color(0.0, 0.0, 0.0);
-  color albedo = color(1.0, 0.0, 0.0);
+  color extinction = absorption + scattering;
+  color albedo = scattering / extinction;
   vdf = anisotropic_vdf(albedo, extinction, anisotropy);
 }
 
@@ -324,8 +322,7 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
   color transmission_color = TransmissionColor;
 
   // since we do not support volume yet
-  float transmission_depth = 0.0;
-  // float transmission_depth = TransmissionDepth;
+  float transmission_depth = TransmissionDepth;
 
   color transmission_scatter = TransmissionScatter;
   float transmission_scatter_anisotropy = TransmissionScatterAnisotropy;
@@ -650,16 +647,13 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
                      "T",
                      dielectric_transmission_out);
 
-  // VDF_T dielectric_volume_out = null_closure();
-  // mx_anisotropic_vdf(if_volume_absorption_out,
-  //                    if_volume_scattering_out,
-  //                    transmission_scatter_anisotropy,
-  //                    dielectric_volume_out);
-
-  // BSDF_T dielectric_volume_transmission_out = layer(dielectric_transmission_out,
-  //                                                   dielectric_volume_out);
-
-  BSDF_T dielectric_volume_transmission_out = dielectric_transmission_out;
+  VDF_T dielectric_volume_out = null_closure();
+  mx_anisotropic_vdf(if_volume_absorption_out,
+                     if_volume_scattering_out,
+                     transmission_scatter_anisotropy,
+                     dielectric_volume_out);
+  BSDF_T dielectric_volume_transmission_out = layer(dielectric_transmission_out,
+                                                    dielectric_volume_out);
 
   /* No support for thin film */
   BSDF_T dielectric_reflection_tf_mix_out = mix(
