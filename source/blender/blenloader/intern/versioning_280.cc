@@ -5191,7 +5191,6 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
           }
           SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&sl);
           space_outliner->filter &= ~eSpaceOutliner_Filter(SO_FLAG_UNUSED_1);
-          space_outliner->filter &= ~eSpaceOutliner_Filter(SO_FILTER_NO_OBJECT);
           space_outliner->show_restrict_flags = SO_RESTRICT_ENABLE | SO_RESTRICT_HIDE;
         }
       }

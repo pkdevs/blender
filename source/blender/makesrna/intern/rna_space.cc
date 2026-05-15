@@ -4637,8 +4637,9 @@ static void rna_def_space_outliner(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "show_users_column", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", SO_USERS_COLUMN);
-  RNA_def_property_ui_text(
-      prop, "Show Users Column", "Display number of users of this Data-Block (click to add Fake User)");
+  RNA_def_property_ui_text(prop,
+                           "Show Users Column",
+                           "Display number of users of this Data-Block (click to add Fake User)");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 
   /* Granular restriction column option. */
