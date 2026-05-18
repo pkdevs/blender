@@ -98,6 +98,9 @@ ccl_device_inline int svm_node_closure_bsdf_skip(int offset, const uint type)
     case CLOSURE_BSSRDF_RANDOM_WALK_SKIN_ID:
       offset += sizeof(SVMNodeBssrdfData) / sizeof(uint);
       break;
+    case CLOSURE_BSDF_OPEN_PBR_ID:
+      offset += sizeof(SVMNodeOpenPBRBsdfData) / sizeof(uint);
+      break;
     default:
       offset += sizeof(SVMNodeSimpleBsdfData) / sizeof(uint);
       break;
