@@ -540,6 +540,7 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
 
   BSDF_T dielectric_transmission_out = null_closure();
 
+  /* TODO(OpenPBR): use `multiggx` when LUT for refraction is implemented. */
   mx_dielectric_bsdf(1.000000,
                      if_transmission_tint_out,
                      modulated_eta_s_out,
