@@ -320,7 +320,7 @@ void register_node_type_sh_bsdf_open_pbr()
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
   ntype.add_ui_poll = object_shader_nodes_poll;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Large);
+  ntype.default_width = bke::NodeWidth::_240;
   ntype.gpu_fn = file_ns::node_shader_gpu_bsdf_open_pbr;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 

@@ -686,7 +686,7 @@ ccl_device
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
-            bsdf_microfacet_setup_fresnel_dielectric(kg, bsdf, sd);
+            bsdf_microfacet_setup_fresnel_dielectric(kg, bsdf, sd->wi);
 
             /* Attenuate lower layers */
             const Spectrum albedo = bsdf_albedo(
@@ -789,7 +789,7 @@ ccl_device
 
               /* setup bsdf */
               sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
-              bsdf_microfacet_setup_fresnel_f82_tint(kg, bsdf, sd, fresnel, f82, is_multiggx);
+              bsdf_microfacet_setup_fresnel_f82_tint(kg, bsdf, sd->wi, fresnel, f82, is_multiggx);
             }
           }
 
@@ -822,7 +822,7 @@ ccl_device
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
-            bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
+            bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd->wi, fresnel, is_multiggx);
             /* Attenuate other components */
             weight *= (1.0f - transmission_weight);
           }
@@ -854,7 +854,7 @@ ccl_device
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
-            bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
+            bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd->wi, fresnel, is_multiggx);
 
             /* Attenuate lower layers */
             const Spectrum albedo = bsdf_albedo(
