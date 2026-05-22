@@ -164,49 +164,48 @@ void NG_open_pbr_anisotropy(float roughness, float anisotropy, output vector2 ou
   out = result_out;
 }
 
-shader node_open_pbr_bsdf(
-    float BaseWeight = 1.0,
-    color BaseColor = 0.8,
-    float BaseDiffuseRoughness = 0.0,
-    float BaseMetalness = 0.0,
-    float SpecularWeight = 1.0,
-    color SpecularColor = 1.0,
-    float SpecularRoughness = 0.3,
-    float SpecularRoughnessAnisotropy = 0.0,
-    float SpecularIOR = 1.5,
-    float TransmissionWeight = 0.0,
-    color TransmissionColor = 1.0,
-    float TransmissionDepth = 0.0,
-    color TransmissionScatter = 0.0,
-    float TransmissionAnisotropy = 0.0,
-    float TransmissionDispersionScale = 0.0,
-    float TransmissionDispersionAbbeNumber = 20.0,
-    float SubsurfaceWeight = 0.0,
-    color SubsurfaceColor = 0.8,
-    float SubsurfaceRadius = 1.0,
-    color SubsurfaceRadiusScale = {1.0, 0.5, 0.25},
-    float SubsurfaceScatterAnisotropy = 0.0,
-    float CoatWeight = 0.0,
-    color CoatColor = 1.0,
-    float CoatRoughness = 0.0,
-    float CoatRoughnessAnisotropy = 0.0,
-    float CoatIOR = 1.6,
-    float CoatDarkening = 1.0,
-    float FuzzWeight = 0.0,
-    color FuzzColor = 1.0,
-    float FuzzRoughness = 0.5,
-    float EmissionLuminance = 0.0,
-    color EmissionColor = 1.0,
-    float ThinFilmWeight = 0,
-    float ThinFilmThickness = 0.5,
-    float ThinFilmIOR = 1.4,
-    float GeometryOpacity = 1.0,
-    // bool GeometryThinWalled = false,   // TODO (Sebastian): No idea yet how booleans work
-    normal GeometryNormal = N,
-    normal GeometryTangent = normalize(dPdu),
-    normal GeometryCoatNormal = N,
-    normal GeometryCoatTangent = normalize(dPdu),
-    output closure color BSDF = 0)
+shader node_open_pbr_bsdf(float BaseWeight = 1.0,
+                          color BaseColor = 0.8,
+                          float BaseDiffuseRoughness = 0.0,
+                          float BaseMetalness = 0.0,
+                          float SpecularWeight = 1.0,
+                          color SpecularColor = 1.0,
+                          float SpecularRoughness = 0.3,
+                          float SpecularRoughnessAnisotropy = 0.0,
+                          float SpecularIOR = 1.5,
+                          float TransmissionWeight = 0.0,
+                          color TransmissionColor = 1.0,
+                          float TransmissionDepth = 0.0,
+                          color TransmissionScatter = 0.0,
+                          float TransmissionAnisotropy = 0.0,
+                          float TransmissionDispersionScale = 0.0,
+                          float TransmissionDispersionAbbeNumber = 20.0,
+                          float SubsurfaceWeight = 0.0,
+                          color SubsurfaceColor = 0.8,
+                          float SubsurfaceRadius = 1.0,
+                          color SubsurfaceRadiusScale = {1.0, 0.5, 0.25},
+                          float SubsurfaceScatterAnisotropy = 0.0,
+                          float CoatWeight = 0.0,
+                          color CoatColor = 1.0,
+                          float CoatRoughness = 0.0,
+                          float CoatRoughnessAnisotropy = 0.0,
+                          float CoatIOR = 1.6,
+                          float CoatDarkening = 1.0,
+                          float FuzzWeight = 0.0,
+                          color FuzzColor = 1.0,
+                          float FuzzRoughness = 0.5,
+                          float EmissionLuminance = 0.0,
+                          color EmissionColor = 1.0,
+                          float ThinFilmWeight = 0,
+                          float ThinFilmThickness = 0.5,
+                          float ThinFilmIOR = 1.4,
+                          float GeometryOpacity = 1.0,
+                          // int GeometryThinWalled = 0,
+                          normal GeometryNormal = N,
+                          normal GeometryTangent = normalize(dPdu),
+                          normal GeometryCoatNormal = N,
+                          normal GeometryCoatTangent = normalize(dPdu),
+                          output closure color BSDF = 0)
 {
   /* Base */
   float base_weight = BaseWeight;
@@ -477,7 +476,7 @@ shader node_open_pbr_bsdf(
                      1.500000,
                      geometry_coat_normal,
                      geometry_coat_tangent,
-                     "ggx",
+                     "multi_ggx",
                      "R",
                      coat_bsdf_out);
   BSDF_T metal_bsdf_tf_out = null_closure();
@@ -491,7 +490,7 @@ shader node_open_pbr_bsdf(
                               thin_film_ior,
                               geometry_normal,
                               geometry_tangent,
-                              "ggx",
+                              "multi_ggx",
                               "R",
                               metal_bsdf_tf_out);
 
@@ -506,7 +505,7 @@ shader node_open_pbr_bsdf(
                               1.500000,
                               geometry_normal,
                               geometry_tangent,
-                              "ggx",
+                              "multi_ggx",
                               "R",
                               metal_bsdf_out);
   /* No support for thin film */
@@ -520,7 +519,7 @@ shader node_open_pbr_bsdf(
                      thin_film_ior,
                      geometry_normal,
                      geometry_tangent,
-                     "ggx",
+                     "multi_ggx",
                      "R",
                      dielectric_reflection_tf_out);
   BSDF_T metal_bsdf_tf_mix_out = mix(metal_bsdf_out, metal_bsdf_tf_out, thin_film_weight);
@@ -535,7 +534,7 @@ shader node_open_pbr_bsdf(
                      1.500000,
                      geometry_normal,
                      geometry_tangent,
-                     "ggx",
+                     "multi_ggx",
                      "R",
                      dielectric_reflection_out);
 
@@ -549,7 +548,7 @@ shader node_open_pbr_bsdf(
                      1.500000,
                      geometry_normal,
                      geometry_tangent,
-                     "ggx",
+                     "multi_ggx",
                      "T",
                      dielectric_transmission_out);
 
@@ -569,23 +568,30 @@ shader node_open_pbr_bsdf(
       dielectric_reflection_out, dielectric_reflection_tf_out, thin_film_weight);
   // BSDF_T dielectric_reflection_tf_mix_out = dielectric_reflection_out;
 
-  /* No support for subsurface */
+  /* Subsurface Thin-Walled*/
   /*
-  float subsurface_thin_walled_reflection_bsdf_weight_tmp = 1.000000;
-  BSDF_T subsurface_thin_walled_reflection_bsdf_out =
-  subsurface_thin_walled_reflection_bsdf_weight_tmp * oren_nayar_diffuse_bsdf(geometry_normal,
-  subsurface_color_nonnegative_out, base_diffuse_roughness); BSDF_T
-  subsurface_thin_walled_reflection_out = (subsurface_thin_walled_brdf_factor_out *
-  subsurface_thin_walled_reflection_bsdf_out); float
-  subsurface_thin_walled_transmission_bsdf_weight_tmp = 1.000000; BSDF_T
-  subsurface_thin_walled_transmission_bsdf_out =
-  subsurface_thin_walled_transmission_bsdf_weight_tmp * translucent_bsdf(geometry_normal,
-  subsurface_color_nonnegative_out); BSDF_T subsurface_thin_walled_transmission_out =
-  (subsurface_thin_walled_btdf_factor_out * subsurface_thin_walled_transmission_bsdf_out); float
-  subsurface_thin_walled_mix_tmp = 0.500000; BSDF_T subsurface_thin_walled_out =
-  mix(subsurface_thin_walled_transmission_out, subsurface_thin_walled_reflection_out,
-  subsurface_thin_walled_mix_tmp);
-  */
+    float subsurface_thin_walled_reflection_bsdf_weight_tmp = 1.000000;
+    BSDF_T subsurface_thin_walled_reflection_bsdf_out =
+        subsurface_thin_walled_reflection_bsdf_weight_tmp *
+        oren_nayar_diffuse_bsdf(
+            geometry_normal, subsurface_color_nonnegative_out, base_diffuse_roughness);
+    BSDF_T
+    subsurface_thin_walled_reflection_out = (subsurface_thin_walled_brdf_factor_out *
+                                             subsurface_thin_walled_reflection_bsdf_out);
+    float subsurface_thin_walled_transmission_bsdf_weight_tmp = 1.000000;
+    BSDF_T
+    subsurface_thin_walled_transmission_bsdf_out =
+        subsurface_thin_walled_transmission_bsdf_weight_tmp *
+        translucent_bsdf(geometry_normal, subsurface_color_nonnegative_out);
+    BSDF_T subsurface_thin_walled_transmission_out = (subsurface_thin_walled_btdf_factor_out *
+                                                      subsurface_thin_walled_transmission_bsdf_out);
+    float subsurface_thin_walled_mix_tmp = 0.500000;
+    BSDF_T subsurface_thin_walled_out = mix(subsurface_thin_walled_transmission_out,
+                                            subsurface_thin_walled_reflection_out,
+                                            subsurface_thin_walled_mix_tmp);
+
+    */
+  /* Subsurface */
   BSDF_T subsurface_bsdf_out = null_closure();
   mx_subsurface_bsdf(1.000000,
                      subsurface_color_nonnegative_out,

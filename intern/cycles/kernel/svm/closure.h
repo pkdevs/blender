@@ -503,8 +503,8 @@ ccl_device
       const float subsurface_radius = saturatef(stack_load(stack, data.subsurface_radius));
       const float3 subsurface_radius_scale = saturate(
           stack_load(stack, data.subsurface_radius_scale));
-      const float subsurface_scatter_anisotropy = saturatef(
-          stack_load(stack, data.subsurface_scatter_anisotropy));
+      const float subsurface_scatter_anisotropy = clamp(
+          stack_load(stack, data.subsurface_scatter_anisotropy), -1.0f, 1.0f);
 #else
       const float subsurface_weight = 0.f;
 #endif
@@ -529,13 +529,14 @@ ccl_device
 
       const float3 valid_reflection_N = maybe_ensure_valid_specular_reflection(sd, N);
 
-      // const ClosureType distribution = CLOSURE_BSDF_MICROFACET_GGX_ID;
-      const ClosureType distribution = CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID;
-
+      const bool is_multiggx = true;
       float3 modulated_base_darkening_factor = one_float3();
 
       const float thin_film_weight = saturatef(stack_load(stack, data.thin_film_weight));
       float thin_film_thickness = stack_load(stack, data.thin_film_thickness);
+      // TODO (OpenPBR): disabling thin-film for now until we have implemented it for all Fresnel
+      // modes and find a way to integrate the thin_film_weight
+      thin_film_thickness *= 0.f;
       thin_film_thickness *= 1000.0f;
       const float thin_film_ior = stack_load(stack, data.thin_film_ior);
 
@@ -788,8 +789,6 @@ ccl_device
 
               /* setup bsdf */
               sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
-              const bool is_multiggx = (distribution ==
-                                        CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
               bsdf_microfacet_setup_fresnel_f82_tint(kg, bsdf, sd, fresnel, f82, is_multiggx);
             }
           }
@@ -823,7 +822,6 @@ ccl_device
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
-            const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
             bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
             /* Attenuate other components */
             weight *= (1.0f - transmission_weight);
@@ -856,7 +854,6 @@ ccl_device
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
-            const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
             bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
 
             /* Attenuate lower layers */
@@ -893,7 +890,6 @@ ccl_device
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
-            const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
             bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
 
             /* Attenuate lower layers */
@@ -930,7 +926,6 @@ ccl_device
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
-            const bool is_multiggx = (distribution == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
             bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
 
             /* Attenuate lower layers */
