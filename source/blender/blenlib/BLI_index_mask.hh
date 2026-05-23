@@ -450,10 +450,10 @@ class IndexMask : private IndexMaskData {
   void foreach_index(Fn &&fn, Mode mode = exec_mode::serial) const;
 
   template<typename Value, typename Fn, typename Reduction>
-  inline Value parallel_reduce(const GrainSize grain_size,
-                               const Value &identity,
+  inline Value parallel_reduce(const Value &identity,
                                Fn &&fn,
-                               const Reduction &reduction) const;
+                               const Reduction &reduction,
+                               const exec_mode::Mode mode = exec_mode::serial) const;
 
   /**
    * Same as #foreach_index, but generates more code, increasing compile time and binary size. This
@@ -893,14 +893,14 @@ inline void IndexMask::foreach_index(Fn &&fn, const Mode mode) const
 }
 
 template<typename Value, typename Fn, typename Reduction>
-inline Value IndexMask::parallel_reduce(const GrainSize grain_size,
-                                        const Value &identity,
+inline Value IndexMask::parallel_reduce(const Value &identity,
                                         Fn &&fn,
-                                        const Reduction &reduction) const
+                                        const Reduction &reduction,
+                                        const exec_mode::Mode mode) const
 {
   return threading::parallel_reduce(
       this->index_range(),
-      grain_size.value,
+      mode.grain_size(4096),
       identity,
       [&](const IndexRange range, const Value &identity) {
         const IndexMask sub_mask = this->slice(range);

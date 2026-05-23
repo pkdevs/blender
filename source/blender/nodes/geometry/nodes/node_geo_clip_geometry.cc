@@ -8,6 +8,7 @@
 
 #include "NOD_socket_search_link.hh"
 
+#include "GEO_foreach_geometry.hh"
 #include "GEO_mesh_clip_geometry_by_plane.hh"
 
 #include "node_geometry_util.hh"
@@ -15,45 +16,45 @@
 namespace blender::nodes::node_geo_clip_geometry_cc {
 
 /* Node arg names: */
-constexpr char INPUT_PLANE_ORIGIN[7] = "Center";
-constexpr char INPUT_PLANE_NORMAL[7] = "Normal";
-constexpr char OUTPUT_PLANE_SELECTION[16] = "Intersection";
+constexpr std::string INPUT_PLANE_ORIGIN = "Center";
+constexpr std::string INPUT_PLANE_NORMAL = "Normal";
+constexpr std::string OUTPUT_PLANE_SELECTION = "Intersection";
 
 /*
  * Mesh
  */
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>(N_("Geometry"));
+  b.add_input<decl::Geometry>(N_("Geometry"_ustr));
 
-  b.add_input<decl::Vector>(INPUT_PLANE_ORIGIN)
+  b.add_input<decl::Vector>(blender::UString(INPUT_PLANE_ORIGIN))
       .default_value({0.0f, 0.0f, 0.0f})
       .subtype(PROP_XYZ);
-  b.add_input<decl::Vector>(INPUT_PLANE_NORMAL)
+  b.add_input<decl::Vector>(blender::UString(INPUT_PLANE_NORMAL))
       .default_value({1.0f, 0.0f, 0.0f})
       .subtype(PROP_XYZ);
 
-  b.add_output<decl::Geometry>(N_("Geometry")).propagate_all();
-  b.add_output<decl::Bool>(OUTPUT_PLANE_SELECTION).field_on_all();
+  b.add_output<decl::Geometry>(N_("Geometry"_ustr)).propagate_all();
+  b.add_output<decl::Bool>(blender::UString(OUTPUT_PLANE_SELECTION)).field_on_all();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Geometry");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
+  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Geometry"_ustr);
 
-  float3 plane_co = params.extract_input<float3>(INPUT_PLANE_ORIGIN);
-  float3 plane_no = params.extract_input<float3>(INPUT_PLANE_NORMAL);
+  float3 plane_co = params.extract_input<float3>(blender::UString(INPUT_PLANE_ORIGIN));
+  float3 plane_no = params.extract_input<float3>(blender::UString(INPUT_PLANE_NORMAL));
 
   blender::geometry::ClipByPlaneArgs args;
   args.plane_selection_attr_id = params.get_output_anonymous_attribute_id_if_needed(
-      OUTPUT_PLANE_SELECTION);
+      blender::UString(OUTPUT_PLANE_SELECTION));
 
   /* Check norm to avoid zero vector */
   if (normalize_v3(plane_no) != 0.0f) {
     plane_from_point_normal_v3(args.plane, plane_co, plane_no);
 
-    geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+    geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
       if (geometry_set.has_mesh()) {
         const Mesh *mesh_in = geometry_set.get_mesh();
 
@@ -67,7 +68,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     });
   }
 
-  params.set_output("Geometry", std::move(geometry_set));
+  params.set_output(blender::UString("Geometry"), std::move(geometry_set));
 }
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
@@ -79,13 +80,13 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
       eNodeSocketDatatype(params.other_socket().type));
   if (type && *type != CD_PROP_STRING) {
     /* The input and output sockets have the same name. */
-    params.add_item(IFACE_(INPUT_PLANE_ORIGIN), [type](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("GeometryNodeClipGeometry");
-      params.update_and_connect_available_socket(node, INPUT_PLANE_ORIGIN);
+    params.add_item(INPUT_PLANE_ORIGIN, [type](LinkSearchOpParams &params) {
+      bNode &node = params.add_node("GeometryNodeClipGeometry"_ustr);
+      params.update_and_connect_available_socket(node, blender::UString(INPUT_PLANE_ORIGIN));
     });
-    params.add_item(IFACE_(INPUT_PLANE_NORMAL), [type](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("GeometryNodeClipGeometry");
-      params.update_and_connect_available_socket(node, INPUT_PLANE_NORMAL);
+    params.add_item(INPUT_PLANE_NORMAL, [type](LinkSearchOpParams &params) {
+      bNode &node = params.add_node("GeometryNodeClipGeometry"_ustr);
+      params.update_and_connect_available_socket(node, blender::UString(INPUT_PLANE_NORMAL));
     });
   }
 }
@@ -94,7 +95,7 @@ static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeClipGeometry");
+  geo_node_type_base(&ntype, "GeometryNodeClipGeometry"_ustr);
   ntype.ui_name = "Clip Geometry";
   ntype.ui_description =
       "Clip the geometry by a plane, splitting the input geometry and removing all geometry on "

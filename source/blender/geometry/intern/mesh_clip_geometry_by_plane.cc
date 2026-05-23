@@ -242,12 +242,10 @@ void transfer_vertex_data(const Mesh &src_mesh,
   for (bke::AttributeTransferData &attribute : bke::retrieve_attributes_for_transfer(
            src_attributes,
            dst_attributes,
-           ATTR_DOMAIN_MASK_POINT,
+           {bke::AttrDomain::Point},
            bke::attribute_filter_with_skip_ref(attribute_filter, copy_point_skip)))
   {
-    bke::attribute_math::convert_to_static_type(attribute.meta_data.data_type, [&](auto dummy) {
-      using T = decltype(dummy);
-
+    bke::attribute_math::to_static_type(attribute.meta_data.data_type, [&]<typename T>() {
       const Span<T> src_data = attribute.src.template typed<T>();
       MutableSpan<T> dst_data = attribute.dst.span.typed<T>();
 
@@ -329,13 +327,11 @@ void transfer_edge_data(const Mesh &src_mesh,
   for (bke::AttributeTransferData &attribute : bke::retrieve_attributes_for_transfer(
            src_attributes,
            dst_attributes,
-           ATTR_DOMAIN_MASK_EDGE,
+           {bke::AttrDomain::Edge},
            bke::attribute_filter_with_skip_ref(attribute_filter, copy_edge_skip)))
   {
-    const CPPType &cpp_type = *bke::custom_data_type_to_cpp_type(attribute.meta_data.data_type);
-    bke::attribute_math::convert_to_static_type(cpp_type, [&](auto dummy) {
-      using T = decltype(dummy);
-
+    const CPPType &cpp_type = bke::attribute_type_to_cpp_type(attribute.meta_data.data_type);
+    bke::attribute_math::to_static_type(cpp_type, [&]<typename T>() {
       const Span<T> src_data = attribute.src.template typed<T>();
       MutableSpan<T> dst_data = attribute.dst.span.typed<T>();
 
@@ -522,13 +518,11 @@ void transfer_polygon_data(const Mesh &src_mesh,
   for (bke::AttributeTransferData &attribute : bke::retrieve_attributes_for_transfer(
            src_attributes,
            dst_attributes,
-           ATTR_DOMAIN_MASK_FACE,
+           {bke::AttrDomain::Face},
            bke::attribute_filter_with_skip_ref(attribute_filter, copy_poly_skip)))
   {
-    const CPPType &cpp_type = *bke::custom_data_type_to_cpp_type(attribute.meta_data.data_type);
-    bke::attribute_math::convert_to_static_type(cpp_type, [&](auto dummy) {
-      using T = decltype(dummy);
-
+    const CPPType &cpp_type = bke::attribute_type_to_cpp_type(attribute.meta_data.data_type);
+    bke::attribute_math::to_static_type(cpp_type, [&]<typename T>() {
       const Span<T> src_data = attribute.src.template typed<T>();
       MutableSpan<T> dst_data = attribute.dst.span.typed<T>();
 
@@ -556,13 +550,11 @@ void transfer_polygon_data(const Mesh &src_mesh,
     for (bke::AttributeTransferData &attribute : bke::retrieve_attributes_for_transfer(
              src_attributes,
              dst_attributes,
-             ATTR_DOMAIN_MASK_CORNER,
+             {bke::AttrDomain::Corner},
              bke::attribute_filter_with_skip_ref(attribute_filter, copy_poly_skip)))
     {
-      const CPPType &cpp_type = *bke::custom_data_type_to_cpp_type(attribute.meta_data.data_type);
-      bke::attribute_math::convert_to_static_type(cpp_type, [&](auto dummy) {
-        using T = decltype(dummy);
-
+      const CPPType &cpp_type = bke::attribute_type_to_cpp_type(attribute.meta_data.data_type);
+      bke::attribute_math::to_static_type(cpp_type, [&]<typename T>() {
         const Span<T> src_data = attribute.src.template typed<T>();
         MutableSpan<T> dst_data = attribute.dst.span.typed<T>();
 
@@ -753,7 +745,6 @@ static int compute_triangulation_offsets(const Mesh &src_mesh,
   const OffsetIndices src_polys = src_mesh.faces();
 
   const int max_per_face_corner_num = intersected_tris.parallel_reduce(
-      GrainSize(4096),
       0,
       [&](const int64_t index, const int64_t index_pos, const int & /* identity */) {
         const int face_size = src_polys[index].size();
@@ -761,7 +752,8 @@ static int compute_triangulation_offsets(const Mesh &src_mesh,
         r_tesselation_offsets[index_pos] = tri_count;
         return face_size;
       },
-      [](int a, int b) { return std::max<int>(a, b); });
+      [](int a, int b) { return std::max<int>(a, b); },
+    exec_mode::grain_size(4096));
 
   std::partial_sum(
       r_tesselation_offsets.begin(), r_tesselation_offsets.end(), r_tesselation_offsets.begin());
@@ -777,13 +769,13 @@ static inline IndexMask classify_vertices(const Mesh &src_mesh,
 {
   const Span<float3> src_positions = src_mesh.vert_positions();
   return IndexMask::from_predicate(
-      src_positions.index_range(), GrainSize(4096), memory, [&](const int64_t i) {
+      src_positions.index_range(), memory, [&](const int64_t i) {
         const float dist_to_plane = dist_signed_to_plane_v3(src_positions[i], args.plane);
         const bool is_kept = !is_clipped(dist_to_plane);
         vertex_flags[i] = is_kept;
         signed_distance[i] = dist_to_plane;
         return is_kept;
-      });
+      }, exec_mode::grain_size(4096));
 }
 
 static inline void classify_edges(const Mesh &src_mesh,
@@ -853,7 +845,7 @@ static void triangulate_clipped_geometry(const Mesh &src_mesh,
   /* Tesselate
    */
   intersected_tris.foreach_index(
-      GrainSize(512), [&](const int64_t index_poly, const int64_t index_pos) {
+      [&](const int64_t index_poly, const int64_t index_pos) {
         const IndexRange src_corner_range = src_polys[index_poly];
         const IndexRange local_corner_range(src_corner_range.size());
         const Span<int> local_corner_span = local_corner_indices.as_span().slice(
@@ -939,7 +931,7 @@ static void triangulate_clipped_geometry(const Mesh &src_mesh,
                                                   boundary_intersect_count / 2;
         r_edge_formed_dst_offsets[index_pos] = formed_count;
         r_edge_mask_offsets[index_pos] = tris_clipped_count; /* any cut => has edge on border */
-      });
+      }, exec_mode::grain_size(512));
 
   /* Accumulate dst offsets */
   threading::parallel_invoke(
@@ -1110,19 +1102,19 @@ std::pair<Mesh *, ClipResult> clip_by_plane(const Mesh &src_mesh,
   /* Split existing edges (asynchronous)
    */
   edge_selections[IntersectionType::Intersect].foreach_index(
-      GrainSize(4092), [&](const int64_t index_src_edge, const int64_t index_pos) {
+      [&](const int64_t index_src_edge, const int64_t index_pos) {
         float edge_weight;
         const int2 vert_indices = sorted_edge(src_edges[index_src_edge]);
         const int2 ve_index = fn_split_edge(
             vert_indices, index_pos, int2{int(index_src_edge), -1}, edge_weight);
         edge_remap[index_src_edge] = ve_index.y;
-      });
+      }, exec_mode::grain_size(4096));
 
   /* Generate output triangulation (asynchronous)
    */
   threading::EnumerableThreadSpecific<LocalClipData> thread_local_clip_buffers;
   face_selections[IntersectionType::Intersect].foreach_index(
-      GrainSize(512), [&](const int64_t index_poly, const int64_t index_pos) {
+      [&](const int64_t index_poly, const int64_t index_pos) {
         const IndexRange src_corner_range = src_polys[index_poly];
         const IndexRange local_corner_range(src_corner_range.size());
 
@@ -1418,15 +1410,14 @@ std::pair<Mesh *, ClipResult> clip_by_plane(const Mesh &src_mesh,
             tri_count += 2;
           }
         }
-      });
+      }, exec_mode::grain_size(512));
 
   const int copied_corner_count = face_selections[IntersectionType::Kept].parallel_reduce(
-      GrainSize(4096),
       0,
       [&](const int64_t index_face, const int64_t /* index_pos */, const int & /* identity */) {
         return int(src_polys[index_face].size());
       },
-      [](int a, int b) { return a + b; });
+      [](int a, int b) { return a + b; }, exec_mode::grain_size(4096));
 
   /* Set Descriptors */
   std::array<VariantVertexSet, 2> vertex_sets = {
