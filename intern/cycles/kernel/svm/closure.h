@@ -631,9 +631,9 @@ ccl_device
 
 #ifdef __CAUSTICS_TRICKS__
       const bool reflective_caustics = (kernel_data.integrator.caustics_reflective ||
-                                        (path_flag & PATH_RAY_DIFFUSE) == 0);
+                                        (ray_visibility & PATH_RAY_VISIBILITY_DIFFUSE) == 0);
       const bool refractive_caustics = (kernel_data.integrator.caustics_refractive ||
-                                        (path_flag & PATH_RAY_DIFFUSE) == 0);
+                                        (ray_visibility & PATH_RAY_VISIBILITY_DIFFUSE) == 0);
 #else
       const bool reflective_caustics = true;
       const bool refractive_caustics = true;
