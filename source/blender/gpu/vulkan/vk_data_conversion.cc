@@ -11,6 +11,8 @@
 #include "BLI_color_types.hh"
 #include "BLI_math_half.hh"
 
+#include "BLI_vector.hh"
+
 namespace blender::gpu {
 
 /** FP16 value 1.0 */
@@ -970,25 +972,6 @@ void convert_per_pixel(void *dst_memory, const void *src_memory, size_t buffer_s
   convert<DestinationType, SourceType>(dst, src);
 }
 
-/**
- * \brief Inline remapping from 3 components to 4 components where the data is stored at the end of
- * the buffer.
- */
-template<typename ComponentType>
-void remap_components_3to4_front_to_back(MutableSpan<ComponentType> components,
-                                         int64_t size,
-                                         ComponentType component_4_value)
-{
-  for (int index : IndexRange(size)) {
-    const int src_index = index * 3 + size;
-    const int dst_index = index * 4;
-    components[dst_index] = components[src_index];
-    components[dst_index + 1] = components[src_index + 1];
-    components[dst_index + 2] = components[src_index + 2];
-    components[dst_index + 3] = component_4_value;
-  }
-}
-
 static void convert_buffer(void *dst_memory,
                            const void *src_memory,
                            size_t buffer_size,
@@ -1137,27 +1120,35 @@ static void convert_buffer(void *dst_memory,
       MutableSpan<uint16_t> dst(static_cast<uint16_t *>(dst_memory),
                                 element_len * dst_component_len);
 
+      /* Convert in two stages. First convert all float3 to half3. Then convert the half3 to half4.
+       * A temp buffer is used to ensure that reading is fast. Reading from a GPU staging buffer
+       * can be slow. */
+      Vector<uint8_t> temp_memory(element_len * dst_component_len * sizeof(uint16_t));
+      MutableSpan<uint16_t> temp(reinterpret_cast<uint16_t *>(temp_memory.data()),
+                                 element_len * dst_component_len);
+
       /* Number of pixels to process in a single chunk. */
       constexpr int64_t chunk_size = 16 * 1024;
 
       threading::parallel_for(IndexRange(element_len), chunk_size, [&](const IndexRange range) {
         IndexRange src_range = IndexRange(range.start() * src_component_len,
                                           range.size() * src_component_len);
-        IndexRange dst_range = IndexRange(range.start() * dst_component_len,
-                                          range.size() * dst_component_len);
-        IndexRange dst_range_offset = IndexRange(range.start() * dst_component_len + range.size(),
-                                                 range.size() * src_component_len);
-        /* Doing float to half conversion manually to avoid implementation specific behavior
-         * regarding Inf and NaNs. Use make finite version to avoid unexpected black pixels on
-         * certain implementation. For platform parity we clamp these infinite values to finite
-         * values. */
+        IndexRange temp_range_offset = IndexRange(range.start() * src_component_len + element_len,
+                                                  range.size() * src_component_len);
         math::float_to_half_make_finite_array(
-            src.slice(src_range).data(), dst.slice(dst_range_offset).data(), src_range.size());
-        /* Conversion are stored at the end of the dst_memory, so remapping works with sequential
-         * access. */
-        remap_components_3to4_front_to_back(dst.slice(dst_range), range.size(), HALF_VALUE_1);
+            src.slice(src_range).data(), temp.slice(temp_range_offset).data(), src_range.size());
       });
 
+      /* Realign to float4. NOTE: this function can work on device memory with sequential write
+       * access. Multi-threading this part can degrade performance. */
+      for (int index : IndexRange(element_len)) {
+        const int src_index = index * src_component_len + element_len;
+        const int dst_index = index * dst_component_len;
+        dst[dst_index] = temp[src_index];
+        dst[dst_index + 1] = temp[src_index + 1];
+        dst[dst_index + 2] = temp[src_index + 2];
+        dst[dst_index + 3] = HALF_VALUE_1;
+      }
       break;
     }
     case ConversionType::HALF4_TO_FLOAT3:
