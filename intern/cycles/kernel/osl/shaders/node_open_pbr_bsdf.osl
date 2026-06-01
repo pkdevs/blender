@@ -177,7 +177,7 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
                           color TransmissionColor = 1.0,
                           float TransmissionDepth = 0.0,
                           color TransmissionScatter = 0.0,
-                          float TransmissionAnisotropy = 0.0,
+                          float TransmissionScatterAnisotropy = 0.0,
                           float TransmissionDispersionScale = 0.0,
                           float TransmissionDispersionAbbeNumber = 20.0,
                           float SubsurfaceWeight = 0.0,
@@ -231,7 +231,7 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
   // float transmission_depth = TransmissionDepth;
 
   color transmission_scatter = TransmissionScatter;
-  float transmission_scatter_anisotropy = TransmissionAnisotropy;
+  float transmission_scatter_anisotropy = TransmissionScatterAnisotropy;
   // float transmission_dispersion_scale = TransmissionDispersionScale;
   // float transmission_dispersion_abbe_number = TransmissionDispersionAbbeNumber;
 
