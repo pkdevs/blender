@@ -20,6 +20,8 @@
 
 #include "SEQ_sequencer.hh"
 
+#include "WM_types.hh"
+
 #include "opentime/rationalTime.h"
 #include "opentime/timeRange.h"
 #include "opentimelineio/clip.h"
@@ -55,14 +57,12 @@ static void export_scene_markers(const Scene *scene, SerializableObject::Retaine
 }
 
 static SerializableObject::Retainer<Stack> otio_export_recursive(
-    bContext *C,
+    Scene *scene,
     const blender::OTIOExportParams *export_params,
     ListBaseT<Strip> *strips,
     int _last_strip_end,
     int stack_end)
 {
-  Scene *scene = CTX_data_sequencer_scene(C);
-
   auto stack = SerializableObject::Retainer<Stack>(new Stack());
 
   /* Separate video and audio channels.
@@ -116,7 +116,7 @@ static SerializableObject::Retainer<Stack> otio_export_recursive(
               track, last_strip_end + 1, strip->left_handle() - 1, scene->frames_per_second());
 
           SerializableObject::Retainer<Stack> meta_stack = otio_export_recursive(
-              C,
+              scene,
               export_params,
               &strip->seqbase,
               strip->left_handle() - 1,
@@ -149,30 +149,38 @@ static SerializableObject::Retainer<Stack> otio_export_recursive(
   return stack;
 }
 
-wmOperatorStatus otio_export_exec(bContext *C, const blender::OTIOExportParams *export_params)
+void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
 {
+  ExportJobData *job_data = static_cast<ExportJobData *>(custom_data);
+  OTIOExportParams *export_params = &job_data->params;
 
-  Scene *scene = CTX_data_sequencer_scene(C);
+  Scene *scene = job_data->scene;
   Editing *editing = seq::editing_get(scene);
   ListBaseT<Strip> *seqbase = &editing->seqbase;
 
   if (!scene || !editing) {
-    BKE_report(export_params->reports, RPT_ERROR, "No Sequencer Scene found");
-    return OPERATOR_CANCELLED;
+    BKE_report(worker_status->reports, RPT_ERROR, "No Sequencer Scene found");
+    return;
   }
+
+  worker_status->progress = 0.0f;
+  worker_status->do_update = true;
 
   auto timeline = SerializableObject::Retainer<Timeline>(
       new Timeline(scene->id.name, RationalTime(0, scene->frames_per_second())));
 
   SerializableObject::Retainer<Stack> main_stack = otio_export_recursive(
-      C, export_params, seqbase, 0, scene->r.efra);
+      scene, export_params, seqbase, 0, scene->r.efra);
 
   export_scene_markers(scene, main_stack);
 
   timeline->set_tracks(main_stack);
-  timeline->to_json_file(export_params->filepath);
+  timeline->to_json_file(job_data->filepath);
 
-  return OPERATOR_FINISHED;
+  worker_status->progress = 1.0f;
+  worker_status->do_update = true;
+
+  BKE_report(worker_status->reports, RPT_INFO, "File exported successfully");
 }
 
 }  // namespace io::otio

@@ -8,6 +8,7 @@
 
 #include <cstring>
 
+#include "BLI_fileops.hh"
 #include "BLI_math_base.h"
 #include "BLI_path_utils.hh"
 #include "BLI_string.h"
@@ -118,10 +119,10 @@ static SerializableObject::Retainer<ImageSequenceReference> create_image_sequenc
     const char *target_url_base,
     const char *name_prefix,
     const char *name_suffix,
-    int start_frame_nr,
-    int frame_step,
-    int fps,
-    int num_digits)
+    const int start_frame_nr,
+    const int frame_step,
+    const float fps,
+    const int num_digits)
 {
   TimeRange media_available_range = get_media_available_range(strip, scene, fps);
   auto img_seq_ref = SerializableObject::Retainer<ImageSequenceReference>(
@@ -154,7 +155,7 @@ static bool img_seq_need_fallback(StripElem *se, size_t img_count)
   /* Get sequence number of the second image. */
   int frame_nr_2 = 0;
   int num_digits_2 = 0;
-  if (!BLI_path_frame_get(se->filename, &frame_nr_2, &num_digits_2)) {
+  if (!BLI_path_frame_get((++se)->filename, &frame_nr_2, &num_digits_2)) {
     return true;
   }
   if (frame_nr_2 - frame_nr < 1) {
@@ -164,46 +165,103 @@ static bool img_seq_need_fallback(StripElem *se, size_t img_count)
   return false;
 }
 
-static void img_sequence_rename(StripElem *se, const char *dirpath, int img_count, int &num_digits)
+static void path_append_sequence_number(const char *old_path,
+                                        char *path_out,
+                                        int frame_nr,
+                                        int padding)
+{
+  /* Copy old path. */
+  BLI_strncpy(path_out, old_path, FILE_MAX);
+
+  /* Remove and store the extension. */
+  char ext[FILE_MAX];
+  BLI_strncpy(ext, BLI_path_extension(path_out), sizeof(ext));
+  BLI_path_extension_strip(path_out);
+
+  /* create ### mask. */
+  char mask[FILE_MAX];
+
+  {
+    int curr = 0;
+    for (; curr < min_ii(padding, FILE_MAX - 1); ++curr) {
+      mask[curr] = '#';
+    }
+    mask[curr] = '\0';
+  }
+
+  BLI_strncat(path_out, ".", FILE_MAX);
+  BLI_strncat(path_out, mask, FILE_MAX);
+  BLI_strncat(path_out, ext, FILE_MAX);
+
+  /* Replace mask with frame_nr and with `0` pading if required. */
+  BLI_path_frame(path_out, FILE_MAX, frame_nr, padding);
+}
+
+static int calculate_padding(int img_count)
 {
   /* Count number of digits required to represent the largest number in the sequence. */
-  num_digits = 0;
-  for (int imc = img_count; imc; imc /= 10, ++num_digits) {
+  int padding = 0;
+
+  for (int imc = img_count; imc; imc /= 10) {
+    ++padding;
   };
 
-  char common_prefix[FILE_MAX];
-  BLI_strncpy(common_prefix, se->filename, sizeof(common_prefix));
-  BLI_path_extension_strip(common_prefix);
+  /* Keep the padding atleast 2. */
+  return max_ii(padding, 2);
+}
+
+static void img_sequence_rename(StripElem *se, const char *dirpath, int img_count, int padding)
+{
+  char common_filename[FILE_MAX];
+  BLI_strncpy(common_filename, se->filename, sizeof(common_filename));
 
   for (int seq_num = 1; seq_num <= img_count; ++seq_num, ++se) {
     char old_path[FILE_MAX];
     BLI_path_join(old_path, sizeof(old_path), dirpath, se->filename);
 
+    path_append_sequence_number(common_filename, se->filename, seq_num, padding);
+
     char new_path[FILE_MAX];
-    char ext[FILE_MAX];
-    char mask[FILE_MAX];
-
-    {
-      int curr = 0;
-      for (; curr < min_ii(num_digits, FILE_MAX - 1); ++curr) {
-        mask[curr] = '#';
-      }
-      mask[curr] = '\0';
-    }
-
-    BLI_strncpy(ext, BLI_path_extension(se->filename), sizeof(ext));
-    BLI_strncpy(se->filename, common_prefix, FILE_MAX);
-
-    BLI_strncat(se->filename, ".", FILE_MAX);
-    BLI_strncat(se->filename, mask, FILE_MAX);
-    BLI_strncat(se->filename, ext, FILE_MAX);
-
-    BLI_path_frame(se->filename, FILE_MAX, seq_num, num_digits);
     BLI_path_join(new_path, sizeof(new_path), dirpath, se->filename);
 
     std::rename(old_path, new_path);
   }
 }
+
+#ifndef WIN32
+/* `BLI_create_symlink` is not implemented for Windows. Windows require admin previlages to create
+ * symlinks. */
+
+static void img_sequence_create_symlinks(const StripElem *se,
+                                         char *target_url_base,
+                                         const int img_count,
+                                         int padding)
+{
+  char BL_links_path[FILE_MAX];
+  BLI_path_join(BL_links_path, sizeof(BL_links_path), target_url_base, "BL_links");
+
+  /* Create `BL_links` directory if it does not exist. */
+  if (!BLI_dir_create_recursive(BL_links_path)) {
+    return;
+  }
+
+  BLI_strncpy(target_url_base, BL_links_path, FILE_MAX);
+
+  char symlink_base_path[FILE_MAX];
+  BLI_path_join(symlink_base_path, sizeof(symlink_base_path), BL_links_path, se->filename);
+
+  for (int seq_num = 1; seq_num <= img_count; ++seq_num, ++se) {
+    char symlink_path[FILE_MAX];
+    path_append_sequence_number(symlink_base_path, symlink_path, seq_num, padding);
+
+    char symlink_target[FILE_MAX];
+    BLI_path_join(symlink_target, sizeof(symlink_target), "..", se->filename);
+
+    BLI_create_symlink(symlink_path, symlink_target);
+  }
+}
+
+#endif
 
 /***** Handle Export for each strip type. *****/
 
@@ -264,51 +322,62 @@ void ImageStripExporter::export_strip(const OTIOExportParams *export_params)
     StripElem *se = _strip->data->stripdata;
     size_t img_count = MEM_allocN_len(se) / sizeof(*se);
 
-    const char *target_url_base = _strip->data->dirpath;
+    char target_url_base[FILE_MAX];
+    BLI_strncpy(target_url_base, _strip->data->dirpath, sizeof(target_url_base));
     char name_prefix[FILE_MAX];
+    char name_suffix[FILE_MAX];
+    BLI_strncpy(name_suffix, BLI_path_extension(se->filename), sizeof(name_suffix));
 
     int frame_step = 1;
     int start_frame_nr = 1;
-    int num_digits = 0;
+    int padding = calculate_padding(img_count);
 
     if (img_seq_need_fallback(se, img_count)) {
+      /* Update `name_prefix` to : filename without extension + '.' */
+      BLI_strncpy(name_prefix, se->filename, sizeof(name_prefix));
+      BLI_path_extension_strip(name_prefix);
+      BLI_strncat(name_prefix, ".", sizeof(name_prefix));
+
       switch (export_params->img_sequence_fallback) {
         case FALLBACK_IMG_SEQUENCE_RENAME:
-          img_sequence_rename(se, _strip->data->dirpath, img_count, num_digits);
+          img_sequence_rename(se, target_url_base, img_count, padding);
           break;
 
+#ifndef WIN32
         case FALLBACK_IMG_SEQUENCE_SYMLINK:
+          img_sequence_create_symlinks(se, target_url_base, img_count, padding);
           break;
+#endif
 
         default:
           break;
       }
     }
     else {
-      if (!BLI_path_frame_get(se->filename, &start_frame_nr, &num_digits)) {
+      if (!BLI_path_frame_get(se->filename, &start_frame_nr, &padding)) {
         return;
       }
-    }
 
-    const char *name_suffix = BLI_path_extension(se->filename);
-    const char *curr = name_suffix;
+      const char *curr = BLI_path_extension(se->filename);
 
-    /* Copy the name prefix. */
-    for (int i = 0; i < num_digits; ++i, curr--) {
-    };
-    char *np = name_prefix;
-    char *copy_p = se->filename;
-    while (copy_p != curr) {
-      *np = *copy_p;
-      np++;
-      copy_p++;
-    }
-    *np = '\0';
+      /* Copy the name prefix. */
+      for (int i = 0; i < padding; ++i) {
+        --curr;
+      };
+      char *np = name_prefix;
+      char *copy_p = se->filename;
+      while (copy_p != curr) {
+        *np = *copy_p;
+        np++;
+        copy_p++;
+      }
+      *np = '\0';
 
-    if (img_count > 1) {
-      int second_frame_nr, second_num_digits;
-      BLI_path_frame_get((++se)->filename, &second_frame_nr, &second_num_digits);
-      frame_step = second_frame_nr - start_frame_nr;
+      if (img_count > 1) {
+        int second_frame_nr, second_num_digits;
+        BLI_path_frame_get((++se)->filename, &second_frame_nr, &second_num_digits);
+        frame_step = second_frame_nr - start_frame_nr;
+      }
     }
 
     add_gap_if_necessary();
@@ -321,8 +390,8 @@ void ImageStripExporter::export_strip(const OTIOExportParams *export_params)
                                         name_suffix,
                                         start_frame_nr,
                                         frame_step,
-                                        _scene->frames_per_second(),
-                                        num_digits);
+                                        media_fps,
+                                        padding);
     TimeRange source_range = get_strip_source_range(_strip, _scene, _scene->frames_per_second());
 
     auto clip = SerializableObject::Retainer<Clip>(

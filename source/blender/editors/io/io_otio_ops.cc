@@ -87,21 +87,24 @@ static const EnumPropertyItem io_otio_image_sequence_export_fallback[] = {
      ICON_NONE,
      "Rename Images",
      "Append Sequence Numbers to Image Name"},
+    {io::otio::FALLBACK_RENDER_MOVIE,
+     "IMG_SEQUENCE_RENDER_MOVIE",
+     ICON_NONE,
+     "Render Movie",
+     "Render and Link the Image Sequence as a Movie"},
+#  ifndef WIN32
     {io::otio::FALLBACK_IMG_SEQUENCE_SYMLINK,
      "IMG_SEQUENCE_SYMLINK",
      ICON_NONE,
      "Create Symlinks",
      "Create Sequenced Symbolic Links that Point to Original Images"},
+#  endif
     {0, nullptr, 0, nullptr, nullptr}};
 
 static wmOperatorStatus wm_otio_export_invoke(bContext *C,
                                               wmOperator *op,
                                               const wmEvent * /*event*/)
 {
-  if (!RNA_struct_property_is_set(op->ptr, "as_background_job")) {
-    RNA_boolean_set(op->ptr, "as_background_job", true);
-  }
-
   ED_fileselect_ensure_default_filepath(C, op, ".otio");
 
   WM_event_add_fileselect(C, op);
@@ -116,9 +119,10 @@ static wmOperatorStatus wm_otio_export_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  OTIOExportParams export_params;
+  char filepath[FILE_MAX];
+  RNA_string_get(op->ptr, "filepath", filepath);
 
-  RNA_string_get(op->ptr, "filepath", export_params.filepath);
+  OTIOExportParams export_params;
 
   export_params.bake_scene_strips = RNA_boolean_get(op->ptr, "bake_scene_strips");
   export_params.scene_strip_res = io::otio::scene_strip_resolution(
@@ -126,13 +130,7 @@ static wmOperatorStatus wm_otio_export_exec(bContext *C, wmOperator *op)
   export_params.img_sequence_fallback = io::otio::export_fallback(
       RNA_enum_get(op->ptr, "img_sequence_fallback"));
 
-  export_params.reports = op->reports;
-
-  wmOperatorStatus op_stat = OTIO_export(C, &export_params);
-
-  if (op_stat == OPERATOR_FINISHED) {
-    BKE_report(op->reports, RPT_INFO, "File exported successfully");
-  }
+  wmOperatorStatus op_stat = OTIO_export(C, filepath, &export_params);
   return op_stat;
 }
 
@@ -217,15 +215,6 @@ void WM_OT_otio_export(wmOperatorType *ot)
                io::otio::FALLBACK_IMG_SEQUENCE_RENAME,
                "Image Sequence",
                "Method to Export Non-Sequenced Image Sequences");
-
-  RNA_def_boolean(
-      ot->srna,
-      "as_background_job",
-      false,
-      "Run as Background Job",
-      "Enable this to run the import in the background, disable to block Blender while importing. "
-      "This option is deprecated; EXECUTE this operator to run in the foreground, and INVOKE it "
-      "to run as a background job");
 }
 
 namespace ed::io {

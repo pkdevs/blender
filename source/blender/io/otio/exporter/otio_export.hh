@@ -11,12 +11,11 @@
 #include "DNA_windowmanager_enums.h"
 
 namespace blender {
-struct bContext;
-struct OTIOExportParams;
+struct wmJobWorkerStatus;
 
 namespace io::otio {
 
-wmOperatorStatus otio_export_exec(bContext *C, const OTIOExportParams *export_params);
+void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status);
 
 }  // namespace io::otio
 }  // namespace blender

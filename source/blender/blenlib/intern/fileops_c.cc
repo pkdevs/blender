@@ -1562,12 +1562,10 @@ int BLI_copy(const char *path_src, const char *path_dst)
   return ret;
 }
 
-#  if 0
 int BLI_create_symlink(const char *path_src, const char *path_dst)
 {
   return symlink(path_dst, path_src);
 }
-#  endif
 
 #endif
 

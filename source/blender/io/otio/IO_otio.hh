@@ -16,8 +16,10 @@ namespace blender {
 
 struct bContext;
 struct ReportList;
+struct Scene;
 
 namespace io::otio {
+
 enum scene_strip_resolution {
   SCENE_STRIP_25_PERCENT,
   SCENE_STRIP_50_PERCENT,
@@ -28,24 +30,34 @@ enum scene_strip_resolution {
 enum export_fallback {
   FALLBACK_IMG_SEQUENCE_RENAME,
   FALLBACK_IMG_SEQUENCE_SYMLINK,
+
+  FALLBACK_RENDER_MOVIE,
 };
 
 }  // namespace io::otio
 
 struct OTIOExportParams {
-  /* Full path to the to-be-saved OTIO file. */
-  char filepath[FILE_MAX] = "";
-
   /* Scene Strip Options. */
   bool bake_scene_strips = true;
   io::otio::scene_strip_resolution scene_strip_res = io::otio::SCENE_STRIP_100_PERCENT;
 
   /* Fallback Options. */
   io::otio::export_fallback img_sequence_fallback = io::otio::FALLBACK_IMG_SEQUENCE_RENAME;
-
-  ReportList *reports = nullptr;
 };
 
-wmOperatorStatus OTIO_export(bContext *C, const OTIOExportParams *export_params);
+namespace io::otio {
+
+struct ExportJobData {
+  Scene *scene;
+
+  char filepath[FILE_MAX];
+  OTIOExportParams params;
+};
+
+}  // namespace io::otio
+
+wmOperatorStatus OTIO_export(const bContext *C,
+                             const char *filepath,
+                             const OTIOExportParams *export_params);
 
 }  // namespace blender
