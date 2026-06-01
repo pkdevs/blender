@@ -767,8 +767,9 @@ ccl_device
         /* Metallic component */
         if (base_metalness > CLOSURE_WEIGHT_CUTOFF) {
           if (reflective_caustics) {
+            /* In OpenPBR v1.1 Eq. 32 the Fresnel_82 term is multiplied with the specular_weight. We can achieve the same effect by mutl*/
             ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-                sd, sizeof(MicrofacetBsdf), base_metalness * weight);
+                sd, sizeof(MicrofacetBsdf), specular_weight * base_metalness * weight);
             ccl_private FresnelF82Tint *fresnel =
                 (bsdf != nullptr) ?
                     (ccl_private FresnelF82Tint *)closure_alloc_extra(sd, sizeof(FresnelF82Tint)) :
