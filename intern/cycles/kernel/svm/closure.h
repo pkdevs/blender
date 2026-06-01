@@ -825,6 +825,7 @@ ccl_device
               const Spectrum f82 = min(specular_color * specular_weight, one_spectrum());
 #endif
               fresnel->thin_film.thickness = thin_film_thickness;
+              /* TODO(OpenPBR): check if thin film_ior needs to be adjusted at backface. */
               fresnel->thin_film.ior = thin_film_ior;
 
               /* setup bsdf */
@@ -859,6 +860,10 @@ ccl_device
             fresnel->transmission_tint = transmission_color;
             fresnel->thin_film.thickness = thin_film_thickness;
             fresnel->thin_film.ior = thin_film_ior;
+            if (backfacing) {
+              /* TODO(OpenPBR): do we need to modulate thin film IOR too? */
+              adjust_thin_film_ior_at_backface(fresnel->thin_film.ior, modulated_specular_ior);
+            }
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
@@ -963,6 +968,9 @@ ccl_device
             fresnel->transmission_tint = transmission_color;
             fresnel->thin_film.thickness = thin_film_thickness;
             fresnel->thin_film.ior = thin_film_ior;
+            if (backfacing) {
+              adjust_thin_film_ior_at_backface(fresnel->thin_film.ior, modulated_specular_ior);
+            }
 
             /* setup bsdf */
             sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
