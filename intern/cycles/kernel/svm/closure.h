@@ -553,9 +553,9 @@ ccl_device
           const float min_coated_roughness = min(
               1.0f,
               powf((specular_roughness_sqr * specular_roughness_sqr +
-                    coat_roughness_sqr * coat_roughness_sqr),
+                    2.0f * coat_roughness_sqr * coat_roughness_sqr),
                    0.25f /*1.0f/4.0f*/));
-          coated_specular_roughness = mix(specular_ior, min_coated_roughness, coat_weight);
+          coated_specular_roughness = mix(specular_roughness, min_coated_roughness, coat_weight);
         }
         // TODO: we assume that the ambient ior is 1.0
         const float ambient_ior = 1.0f;
