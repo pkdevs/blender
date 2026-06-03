@@ -11,7 +11,7 @@
 
 #include "BKE_context.hh"
 
-#include "WM_api.hh";
+#include "WM_api.hh"
 
 #include "IO_otio.hh"
 #include "otio_export.hh"
@@ -25,6 +25,7 @@ wmOperatorStatus OTIO_export(const bContext *C,
                              const OTIOExportParams *export_params)
 {
   ExportJobData *job_data = MEM_new<ExportJobData>("OTIO export job data");
+  job_data->bmain = CTX_data_main(C);
   job_data->scene = CTX_data_sequencer_scene(C);
   job_data->params = *export_params;
   STRNCPY(job_data->filepath, filepath);

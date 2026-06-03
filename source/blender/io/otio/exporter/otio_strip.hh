@@ -16,6 +16,7 @@
 namespace blender {
 struct Strip;
 struct Scene;
+struct Main;
 struct OTIOExportParams;
 
 namespace io::otio {
@@ -35,13 +36,15 @@ class StripExporter {
 
   virtual ~StripExporter() {};
 
-  virtual void export_strip(const OTIOExportParams *export_params) = 0;
+  virtual void export_strip(Main * /*bmain*/, const OTIOExportParams * /*export_params*/) {};
 
   void add_gap_if_necessary();
   static void add_gap_if_necessary(SerializableObject::Retainer<Track> &_track,
                                    int start_frame,
                                    int end_frame,
                                    double scene_fps);
+
+  void export_with_missing_reference();
 
  protected:
   Strip *_strip;
@@ -57,7 +60,7 @@ class MovieStripExporter : public StripExporter {
                      int last_strip_end = 0)
       : StripExporter(strip, scene, track, last_strip_end) {};
 
-  void export_strip(const OTIOExportParams *export_params) override;
+  void export_strip(Main *bmain, const OTIOExportParams *export_params) override;
 };
 
 class SoundStripExporter : public StripExporter {
@@ -68,7 +71,7 @@ class SoundStripExporter : public StripExporter {
                      int last_strip_end = 0)
       : StripExporter(strip, scene, track, last_strip_end) {};
 
-  void export_strip(const OTIOExportParams *export_params) override;
+  void export_strip(Main *bmain, const OTIOExportParams *export_params) override;
 };
 
 class ImageStripExporter : public StripExporter {
@@ -79,7 +82,7 @@ class ImageStripExporter : public StripExporter {
                      int last_strip_end = 0)
       : StripExporter(strip, scene, track, last_strip_end) {};
 
-  void export_strip(const OTIOExportParams *export_params) override;
+  void export_strip(Main *bmain, const OTIOExportParams *export_params) override;
 };
 
 }  // namespace io::otio

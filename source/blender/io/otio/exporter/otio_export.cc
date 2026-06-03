@@ -9,6 +9,7 @@
 #include <map>
 
 #include "BKE_context.hh"
+#include "BKE_main.hh"
 #include "BKE_report.hh"
 
 #include "BLI_listbase_iterator.hh"
@@ -19,6 +20,7 @@
 #include "DNA_sequence_types.h"
 
 #include "SEQ_sequencer.hh"
+#include "SEQ_utils.hh"
 
 #include "WM_types.hh"
 
@@ -56,14 +58,34 @@ static void export_scene_markers(const Scene *scene, SerializableObject::Retaine
   }
 }
 
-static SerializableObject::Retainer<Stack> otio_export_recursive(
-    Scene *scene,
-    const blender::OTIOExportParams *export_params,
-    ListBaseT<Strip> *strips,
-    int _last_strip_end,
-    int stack_end)
+/**
+ * We need two stacks when we have meta strips with both video and audio strips. It is not as
+ * straight forward as separating clips to video or audio channels as metastrips can also contain
+ * other metastrips. Even if we separate the clips inside a meta strip to video and audio tracks,
+ * the metastrip will still me multi-media and could not be classified as a video/visual clip or
+ * audio clip. Hence, no mono-media track could be used to hold the metastrip.
+ *
+ * So, for every metastrip in the `main_stack` (root stack), we create two stacks: `primary_stack`
+ * and `secondary_stack`. Both stacks are identical in terms of nesting of metastrips but
+ * `primary_stack` holds only video/visual clips and metastrips which contain only video/visual
+ * clips whereas the `secondary_stack` holds audio clips and metastrips which contain only audio
+ * clips.
+ *
+ * In simple words, in `primary_stack` the audio clips are omitted and in `secondary_stack` the
+ * video/visual clips are omitted.
+ *
+ * NOTE: `secondary_stack` is nullptr when the function is not inside a metastrip.
+ */
+static void otio_export_recursive(Main *bmain,
+                                  Scene *scene,
+                                  const blender::OTIOExportParams *export_params,
+                                  SerializableObject::Retainer<Stack> *primary_stack,
+                                  SerializableObject::Retainer<Stack> *secondary_stack,
+                                  ListBaseT<Strip> *strips,
+                                  int _last_strip_end,
+                                  int stack_end)
 {
-  auto stack = SerializableObject::Retainer<Stack>(new Stack());
+  bool inside_meta = secondary_stack != nullptr;
 
   /* Separate video and audio channels.
    * Use negative channel number as key in std::map to store the sound strips.
@@ -92,6 +114,12 @@ static SerializableObject::Retainer<Stack> otio_export_recursive(
     auto track = SerializableObject::Retainer<Track>(
         new Track("", track_source_range, track_type));
 
+    auto meta_video_track = SerializableObject::Retainer<Track>(
+        new Track("", track_source_range, Track::Kind::video));
+
+    auto meta_audio_track = SerializableObject::Retainer<Track>(
+        new Track("", track_source_range, Track::Kind::audio));
+
     int last_strip_end = _last_strip_end;
 
     /* Append all the strips of this channel in the track. */
@@ -100,30 +128,76 @@ static SerializableObject::Retainer<Stack> otio_export_recursive(
 
       switch (strip->type) {
         case STRIP_TYPE_MOVIE:
-          strip_exporter = new MovieStripExporter(strip, scene, track, last_strip_end);
+          strip_exporter = new MovieStripExporter(
+              strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
           break;
 
         case STRIP_TYPE_SOUND:
-          strip_exporter = new SoundStripExporter(strip, scene, track, last_strip_end);
+          strip_exporter = new SoundStripExporter(
+              strip, scene, inside_meta ? meta_audio_track : track, last_strip_end);
           break;
 
         case STRIP_TYPE_IMAGE:
-          strip_exporter = new ImageStripExporter(strip, scene, track, last_strip_end);
+          strip_exporter = new ImageStripExporter(
+              strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
           break;
 
-        case STRIP_TYPE_META: {
-          StripExporter::add_gap_if_necessary(
-              track, last_strip_end + 1, strip->left_handle() - 1, scene->frames_per_second());
+        case STRIP_TYPE_META:
+        case STRIP_TYPE_SCENE: {
+          if (inside_meta) {
+            StripExporter::add_gap_if_necessary(meta_video_track,
+                                                last_strip_end + 1,
+                                                strip->left_handle() - 1,
+                                                scene->frames_per_second());
 
-          SerializableObject::Retainer<Stack> meta_stack = otio_export_recursive(
-              scene,
-              export_params,
-              &strip->seqbase,
-              strip->left_handle() - 1,
-              strip->right_handle(scene));
+            StripExporter::add_gap_if_necessary(meta_audio_track,
+                                                last_strip_end + 1,
+                                                strip->left_handle() - 1,
+                                                scene->frames_per_second());
+          }
+          else {
+            StripExporter::add_gap_if_necessary(
+                track, last_strip_end + 1, strip->left_handle() - 1, scene->frames_per_second());
+          }
+
+          int r_offset;
+          ListBaseT<SeqTimelineChannel> *r_channels;
+          ListBaseT<Strip> *seqbase = seq::get_seqbase_from_strip(strip, &r_channels, &r_offset);
+
+          if (!seqbase) {
+            StripExporter missing_reference_exporter_video = StripExporter(
+                strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
+
+            StripExporter missing_reference_exporter_audio = StripExporter(
+                strip, scene, inside_meta ? meta_audio_track : track, last_strip_end);
+
+            missing_reference_exporter_video.export_with_missing_reference();
+            missing_reference_exporter_audio.export_with_missing_reference();
+
+            break;
+          }
+
+          auto primary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
+          auto secondary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
+
+          otio_export_recursive(bmain,
+                                scene,
+                                export_params,
+                                &primary_meta_stack,
+                                &secondary_meta_stack,
+                                seqbase,
+                                strip->left_handle() - 1,
+                                strip->right_handle(scene));
 
           last_strip_end = strip->right_handle(scene);
-          track->append_child(meta_stack);
+
+          if (!primary_meta_stack->children().empty()) {
+            meta_video_track->append_child(primary_meta_stack);
+          }
+          if (!secondary_meta_stack->children().empty()) {
+            meta_audio_track->append_child(secondary_meta_stack);
+          }
+
         } break;
 
         default:
@@ -131,22 +205,45 @@ static SerializableObject::Retainer<Stack> otio_export_recursive(
       }
 
       if (strip_exporter) {
-        strip_exporter->export_strip(export_params);
+        strip_exporter->export_strip(bmain, export_params);
         last_strip_end = strip_exporter->last_strip_end;
 
         delete strip_exporter;
       }
     }
-    StripExporter::add_gap_if_necessary(
-        track, last_strip_end + 1, stack_end, scene->frames_per_second());
 
-    stack->append_child(track);
+    if (!track->children().empty()) {
+      StripExporter::add_gap_if_necessary(
+          track, last_strip_end + 1, stack_end, scene->frames_per_second());
+
+      (*primary_stack)->append_child(track);
+    }
+    if (!meta_video_track->children().empty()) {
+      StripExporter::add_gap_if_necessary(
+          meta_video_track, last_strip_end + 1, stack_end, scene->frames_per_second());
+
+      (*primary_stack)->append_child(meta_video_track);
+    }
+    if (!meta_audio_track->children().empty()) {
+      StripExporter::add_gap_if_necessary(
+          meta_audio_track, last_strip_end + 1, stack_end, scene->frames_per_second());
+
+      if (inside_meta) {
+        (*secondary_stack)->append_child(meta_audio_track);
+      }
+      else {
+        (*primary_stack)->append_child(meta_audio_track);
+      }
+    }
   }
+
   TimeRange source_range = TimeRange(
       RationalTime(0, scene->frames_per_second()),
       RationalTime(stack_end - _last_strip_end, scene->frames_per_second()));
-  stack->set_source_range(source_range);
-  return stack;
+  (*primary_stack)->set_source_range(source_range);
+  if (secondary_stack) {
+    (*secondary_stack)->set_source_range(source_range);
+  }
 }
 
 void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
@@ -154,6 +251,7 @@ void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
   ExportJobData *job_data = static_cast<ExportJobData *>(custom_data);
   OTIOExportParams *export_params = &job_data->params;
 
+  Main *bmain = job_data->bmain;
   Scene *scene = job_data->scene;
   Editing *editing = seq::editing_get(scene);
   ListBaseT<Strip> *seqbase = &editing->seqbase;
@@ -167,10 +265,11 @@ void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
   worker_status->do_update = true;
 
   auto timeline = SerializableObject::Retainer<Timeline>(
-      new Timeline(scene->id.name, RationalTime(0, scene->frames_per_second())));
+      new Timeline(scene->id.name + 2, RationalTime(0, scene->frames_per_second())));
 
-  SerializableObject::Retainer<Stack> main_stack = otio_export_recursive(
-      scene, export_params, seqbase, 0, scene->r.efra);
+  auto main_stack = SerializableObject::Retainer<Stack>(new Stack());
+  otio_export_recursive(
+      bmain, scene, export_params, &main_stack, nullptr, seqbase, 0, scene->r.efra);
 
   export_scene_markers(scene, main_stack);
 

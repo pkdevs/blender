@@ -17,6 +17,7 @@ namespace blender {
 struct bContext;
 struct ReportList;
 struct Scene;
+struct Main;
 
 namespace io::otio {
 
@@ -48,6 +49,7 @@ struct OTIOExportParams {
 namespace io::otio {
 
 struct ExportJobData {
+  Main *bmain;
   Scene *scene;
 
   char filepath[FILE_MAX];
