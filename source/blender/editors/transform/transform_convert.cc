@@ -889,8 +889,13 @@ static void init_TransDataContainers(TransInfo *t, Object *obact, Span<Object *>
 static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj_armature)
 {
   ViewLayer *view_layer = t->view_layer;
-  BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
-  Object *ob = BKE_view_layer_active_object_get(view_layer);
+  Object *ob = nullptr;
+  if (view_layer) {
+    ob = BKE_view_layer_active_object_get(view_layer);
+    if (t->scene) {
+      BKE_view_layer_synced_ensure(*t->bmain, t->scene, view_layer);
+    }
+  }
 
   /* If tests must match recalc_data for correct updates. */
   if (t->options & CTX_CURSOR) {
@@ -1053,8 +1058,13 @@ void create_trans_data(bContext *C, TransInfo *t)
     init_TransDataContainers(t, ob_armature, {ob_armature});
   }
   else {
-    BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
-    Object *ob = BKE_view_layer_active_object_get(t->view_layer);
+    ViewLayer *view_layer = t->view_layer;
+    Object *ob = nullptr;
+    if (view_layer) {
+      if (t->scene) {
+        BKE_view_layer_synced_ensure(*t->bmain, t->scene, view_layer);
+      }
+    }
     init_TransDataContainers(t, ob, {});
   }
 

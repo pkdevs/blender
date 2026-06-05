@@ -299,6 +299,24 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
             op->ptr, prop, (t->settings->uvcalc_flag & UVCALC_TRANSFORM_CORRECT_SLIDE) != 0);
       }
     }
+
+    /* Mesh automerge (only used in the 3D viewport). */
+    if (op && (prop = RNA_struct_find_property(op->ptr, "use_automerge_and_split")) &&
+        RNA_property_is_set(op->ptr, prop))
+    {
+      if (RNA_property_boolean_get(op->ptr, prop)) {
+        t->flag |= T_AUTOMERGE | T_AUTOSPLIT;
+      }
+    }
+    else if (t->obedit_type == OB_MESH) {
+      char automerge = t->scene->toolsettings->automerge;
+      if (automerge & AUTO_MERGE) {
+        t->flag |= T_AUTOMERGE;
+        if (automerge & AUTO_MERGE_AND_SPLIT) {
+          t->flag |= T_AUTOSPLIT;
+        }
+      }
+    }
   }
   else if (t->spacetype == SPACE_IMAGE) {
     SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
@@ -647,23 +665,6 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else { /* Add not pet option to context when not available. */
     t->options |= CTX_NO_PET;
-  }
-
-  if (op && (prop = RNA_struct_find_property(op->ptr, "use_automerge_and_split")) &&
-      RNA_property_is_set(op->ptr, prop))
-  {
-    if (RNA_property_boolean_get(op->ptr, prop)) {
-      t->flag |= T_AUTOMERGE | T_AUTOSPLIT;
-    }
-  }
-  else if (t->obedit_type == OB_MESH) {
-    char automerge = t->scene->toolsettings->automerge;
-    if (automerge & AUTO_MERGE) {
-      t->flag |= T_AUTOMERGE;
-      if (automerge & AUTO_MERGE_AND_SPLIT) {
-        t->flag |= T_AUTOSPLIT;
-      }
-    }
   }
 
   if (op && (prop = RNA_struct_find_property(op->ptr, "use_duplicated_keyframes")) &&
