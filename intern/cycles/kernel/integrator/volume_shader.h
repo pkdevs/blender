@@ -438,6 +438,32 @@ ccl_device_inline void volume_shader_motion_blur(KernelGlobals kg,
 
 /* Volume Evaluation */
 
+ccl_device_inline void volume_medium_eval(ConstIntegratorBakeState /* state */,
+                                          ccl_private ShaderData *ccl_restrict /* sd */)
+{
+}
+
+ccl_device_inline void volume_medium_eval(ConstIntegratorState state,
+                                          ccl_private ShaderData *ccl_restrict sd)
+{
+  if (!(sd->shader & SHADER_HAS_MEDIUM)) {
+    return;
+  }
+
+  const Spectrum sigma_s = INTEGRATOR_STATE(state, medium, sigma_s);
+  if (!is_zero(sigma_s)) {
+    ccl_private HenyeyGreensteinVolume *volume = (ccl_private HenyeyGreensteinVolume *)bsdf_alloc(
+        sd, sizeof(HenyeyGreensteinVolume), sigma_s);
+    if (volume) {
+      volume->g = INTEGRATOR_STATE(state, medium, anisotropy);
+      sd->flag |= volume_henyey_greenstein_setup(volume);
+    }
+  }
+
+  const Spectrum sigma_a = INTEGRATOR_STATE(state, medium, sigma_a);
+  volume_extinction_setup(sd, sigma_a + sigma_s);
+}
+
 template<const bool shadow, const uint64_t node_feature_mask, typename ConstIntegratorGenericState>
 ccl_device_inline bool volume_shader_eval_entry(KernelGlobals kg,
                                                 ConstIntegratorGenericState state,
@@ -487,6 +513,10 @@ ccl_device_inline bool volume_shader_eval_entry(KernelGlobals kg,
 #  endif
   {
 #  ifdef __SVM__
+    if constexpr (!shadow) {
+      /* TODO(weizhen): verify shadow transparency works when IOR == 1. */
+      volume_medium_eval(state, sd);
+    }
     svm_eval_nodes<node_feature_mask, SHADER_TYPE_VOLUME>(
         kg, state, sd, nullptr, path_visibility, path_flag);
 #  endif

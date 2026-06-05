@@ -1461,8 +1461,12 @@ void OSLCompiler::generate_nodes(const ShaderNodeSet &nodes)
             if (node->has_bump()) {
               current_shader->has_bump_from_surface = true;
             }
+
             if (node->has_dispersion()) {
               current_shader->has_dispersion = true;
+            }
+            if (node->has_medium()) {
+              current_shader->has_medium = true;
             }
           }
           else if (current_type == SHADER_TYPE_VOLUME) {

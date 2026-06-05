@@ -634,6 +634,16 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
                                 bsdf_sampled_roughness,
                                 bsdf_eta);
 
+  if ((sc->type == CLOSURE_BSDF_DIELECTRIC_VOLUMETRIC_ID) && (label & LABEL_TRANSMIT)) {
+    const ccl_private MicrofacetBsdf *bsdf = (const ccl_private MicrofacetBsdf *)sc;
+    const ccl_private FresnelDielectricVolumetric *fresnel =
+        (const ccl_private FresnelDielectricVolumetric *)bsdf->fresnel;
+    INTEGRATOR_STATE_WRITE(state, medium, sigma_a) = fresnel->sigma_a * bsdf->weight;
+    INTEGRATOR_STATE_WRITE(state, medium, sigma_s) = fresnel->sigma_s * bsdf->weight;
+    INTEGRATOR_STATE_WRITE(state, medium, anisotropy) = fresnel->anisotropy;
+    sd->shader |= SHADER_HAS_MEDIUM;
+  }
+
   return label;
 }
 

@@ -860,10 +860,6 @@ ccl_device
       }
 
       const float transmission_weight = saturatef(stack_load(stack, data.transmission_weight));
-      const float3 transmission_color = saturate(stack_load(stack, data.transmission_color));
-      const float transmission_depth = stack_load(stack, data.transmission_depth);
-      const float3 transmission_tint = transmission_depth > 0.0f ? one_float3() :
-                                                                   transmission_color;
 
 #ifdef __CAUSTICS_TRICKS__
       const bool refractive_caustics = (kernel_data.integrator.caustics_refractive ||
@@ -878,6 +874,7 @@ ccl_device
       if (transmission_weight > CLOSURE_WEIGHT_CUTOFF &&
           (refractive_caustics && (specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
       {
+        const float3 transmission_color = saturate(stack_load(stack, data.transmission_color));
         FresnelThinFilm thinfilm = {thin_film_thickness, thin_film_ior};
         if (thin_wall) {
           Spectrum reflectance, transmittance;
@@ -900,29 +897,55 @@ ccl_device
         else {
           ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
               sd, sizeof(MicrofacetBsdf), weight * transmission_weight);
-          ccl_private FresnelDielectricTint *fresnel =
-              (bsdf != nullptr) ? (ccl_private FresnelDielectricTint *)closure_alloc_extra(
-                                      sd, sizeof(FresnelDielectricTint)) :
-                                  nullptr;
-
-          if (bsdf && fresnel) {
+          if (bsdf) {
             bsdf->N = valid_reflection_N;
             bsdf->ior = modulated_specular_ior;
             bsdf->T = geometry_tangent;
             bsdf->alpha_x = specular_alpha.x;
             bsdf->alpha_y = specular_alpha.y;
-
-            fresnel->reflection_tint = specular_color;
-            fresnel->transmission_tint = transmission_color;
-            fresnel->thin_film = thinfilm;
             if (backfacing) {
               /* TODO(OpenPBR): do we need to modulate thin film IOR too? */
-              adjust_thin_film_ior_at_backface(fresnel->thin_film.ior, modulated_specular_ior);
+              adjust_thin_film_ior_at_backface(thinfilm.ior, modulated_specular_ior);
             }
 
-            /* setup bsdf */
-            sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
-            bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd->wi, fresnel, is_multiggx);
+            const float transmission_depth = max(stack_load(stack, data.transmission_depth), 0.0f);
+
+            if (transmission_depth == 0.0f) {
+              ccl_private FresnelDielectricTint *fresnel = (ccl_private FresnelDielectricTint *)
+                  closure_alloc_extra(sd, sizeof(FresnelDielectricTint));
+
+              if (fresnel) {
+                fresnel->reflection_tint = specular_color;
+                fresnel->transmission_tint = transmission_color;
+                fresnel->thin_film = thinfilm;
+
+                /* setup bsdf */
+                sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
+                bsdf_microfacet_setup_fresnel_dielectric_tint(
+                    kg, bsdf, sd->wi, fresnel, is_multiggx);
+              }
+            }
+            else {
+              ccl_private FresnelDielectricVolumetric *fresnel =
+                  (ccl_private FresnelDielectricVolumetric *)closure_alloc_extra(
+                      sd, sizeof(FresnelDielectricVolumetric));
+
+              if (fresnel) {
+                const Spectrum transmission_scatter = rgb_to_spectrum(
+                    saturate(stack_load(stack, data.transmission_scatter)));
+                fresnel->reflection_tint = specular_color;
+                fresnel->thin_film = thinfilm;
+                fresnel->anisotropy = clamp(
+                    stack_load(stack, data.transmission_scatter_anisotropy), -1.0f, 1.0f);
+                sd->flag |= bsdf_volumetric_setup(kg,
+                                                  bsdf,
+                                                  sd->wi,
+                                                  fresnel,
+                                                  transmission_scatter,
+                                                  transmission_color,
+                                                  transmission_depth);
+              }
+            }
           }
         }
         /* Attenuate other components */

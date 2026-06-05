@@ -116,6 +116,14 @@ KERNEL_STRUCT_END_ARRAY(volume_stack,
                         KERNEL_STRUCT_VOLUME_STACK_SIZE,
                         KERNEL_STRUCT_VOLUME_STACK_SIZE)
 
+/************************************ OpenPBR Medium *****************************/
+/* TODO(weizhen): can also abuse subsurface struct. */
+KERNEL_STRUCT_BEGIN_PACKED(medium, KERNEL_FEATURE_VOLUME)
+KERNEL_STRUCT_MEMBER_PACKED(medium, PackedSpectrum, sigma_a, KERNEL_FEATURE_VOLUME)
+KERNEL_STRUCT_MEMBER_PACKED(medium, PackedSpectrum, sigma_s, KERNEL_FEATURE_VOLUME)
+KERNEL_STRUCT_MEMBER_PACKED(medium, float, anisotropy, KERNEL_FEATURE_VOLUME)
+KERNEL_STRUCT_END(medium)
+
 /************************************ Path Guiding *****************************/
 KERNEL_STRUCT_BEGIN(guiding)
 #if defined(__PATH_GUIDING__)

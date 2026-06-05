@@ -158,6 +158,8 @@ ccl_device_inline void volume_stack_clean(KernelGlobals kg, IntegratorState stat
 ccl_device_inline bool volume_is_homogeneous(KernelGlobals kg,
                                              const ccl_private VolumeStack &entry)
 {
+  /* TODO(OpenPBR): medium should be homogeneous, although it can be combined with heterogeneous
+   * volumes. We don't support it, but we need to make sure it doesn't crash in that case. */
   const int shader_flag = kernel_data_fetch(shaders, (entry.shader & SHADER_MASK)).flags;
 
   if (shader_flag & SD_HETEROGENEOUS_VOLUME) {

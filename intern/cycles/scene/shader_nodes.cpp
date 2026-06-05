@@ -2829,6 +2829,12 @@ bool OpenPBRBsdfNode::has_surface_bssrdf()
   return has_nonzero_weight("Subsurface Weight");
 }
 
+bool OpenPBRBsdfNode::has_medium()
+{
+  /* TODO(weizhen): also check color. */
+  return has_nonzero_weight("Transmission Weight") && has_nonzero_weight("Transmission Depth");
+}
+
 /* TODO(weizhen): share the same function with Principled. */
 bool OpenPBRBsdfNode::has_nonzero_weight(const char *name)
 {

@@ -806,6 +806,9 @@ void SVMCompiler::generate_closure_node(ShaderNode *node, CompilerState *state)
     if (node->has_dispersion()) {
       current_shader->has_dispersion = true;
     }
+    if (node->has_medium()) {
+      current_shader->has_medium = true;
+    }
   }
 }
 
