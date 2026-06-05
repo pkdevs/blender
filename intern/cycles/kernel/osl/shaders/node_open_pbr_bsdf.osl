@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
+// #define OPENPBR_SPEC_COMPLIANT
+
 #include "mx_funcs.h"
 #include "stdcycles.h"
 #ifdef OPENPBR_SPEC_COMPLIANT
@@ -252,7 +254,28 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
       BSDF = transmission_weight * ThinGlassBSDF;
     }
     else {
-      /* TODO(weizhen): implement. */
+      float depth = max(TransmissionDepth, 0.0);
+      color transmission_tint = (depth == 0.0) ? transmission_color : color(1.0);
+      vector T = GeometryTangent;
+      BSDF_T Transmission = dielectric_bsdf(
+          GeometryNormal, T, specular_color, transmission_tint, r2, r2, specular_ior, "multi_ggx");
+
+      if (depth == 0.0) {
+        BSDF = transmission_weight * Transmission;
+      }
+      else {
+        color sigma_s = saturate(TransmissionScatter) / depth;
+        color sigma_t = -log(transmission_color) / depth;
+        float sigma_a_min = reduce_min(sigma_t - sigma_s);
+        if (sigma_a_min < 0.0) {
+          sigma_t -= sigma_a_min;
+        }
+        color albedo = sigma_s / sigma_t;
+        float anisotropy = clamp(TransmissionScatterAnisotropy, -1.0, 1.0);
+        VDF_T Medium = anisotropic_vdf(albedo, sigma_t, anisotropy);
+
+        BSDF = transmission_weight * layer(Transmission, Medium);
+      }
     }
   }
 }
