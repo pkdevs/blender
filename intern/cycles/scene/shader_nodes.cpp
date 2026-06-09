@@ -2805,7 +2805,7 @@ void OpenPBRBsdfNode::compile(OSLCompiler &compiler)
 
 bool OpenPBRBsdfNode::has_surface_transparent()
 {
-  return has_nonzero_weight("Geometry Opacity");
+  return (input("Geometry Opacity")->link || geometry_opacity < (1.0f - CLOSURE_WEIGHT_CUTOFF));
 }
 
 bool OpenPBRBsdfNode::has_surface_emission()
