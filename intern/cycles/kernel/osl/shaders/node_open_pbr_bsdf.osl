@@ -4,6 +4,10 @@
 
 #include "mx_funcs.h"
 #include "stdcycles.h"
+#ifdef OPENPBR_SPEC_COMPLIANT
+#  include "node_fresnel.h"
+#  include "node_math.h"
+#endif
 
 // TODO (OpenPBR): implement the OpenPBR OSL shader
 
@@ -164,6 +168,21 @@ void NG_open_pbr_anisotropy(float roughness, float anisotropy, output vector2 ou
   out = result_out;
 }
 
+#ifdef OPENPBR_SPEC_COMPLIANT
+#  define CLOSURE_WEIGHT_CUTOFF 1e-5
+
+/* Modulate the IOR so that the reflectivity at normal incidence is scaled by `weight`.
+ * OpenPBR Surface specification v1.1.1, Eq. (25,26).  */
+float modulate_ior(float ior, float weight)
+{
+  if (weight == 1.0) {
+    return ior;
+  }
+
+  float modulated_ior = ior_from_F0(weight * F0_from_ior(ior));
+  return (ior < 1.0) ? 1.0 / modulated_ior : modulated_ior;
+}
+
 shader node_open_pbr_bsdf(float BaseWeight = 1.0,
                           color BaseColor = 0.8,
                           float BaseDiffuseRoughness = 0.0,
@@ -200,7 +219,85 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
                           float ThinFilmThickness = 0.5,
                           float ThinFilmIOR = 1.4,
                           float GeometryOpacity = 1.0,
-                          // int GeometryThinWalled = 0,
+                          int GeometryThinWalled = 0,
+                          normal GeometryNormal = N,
+                          normal GeometryTangent = normalize(dPdu),
+                          normal GeometryCoatNormal = N,
+                          normal GeometryCoatTangent = normalize(dPdu),
+                          output closure color BSDF = 0)
+{
+  float specular_roughness = saturate(SpecularRoughness);
+  color specular_color = saturate(SpecularColor);
+  float specular_weight = max(SpecularWeight, 0.0);
+  int is_backfacing = !GeometryThinWalled && backfacing();
+  float specular_ior = is_backfacing ? 1.0 / SpecularIOR : SpecularIOR;
+  float modulated_specular_ior = modulate_ior(specular_ior, specular_weight);
+
+  /* TODO(OpenPBR): interpolate between thin-film and non-thin-film with `thin_film_weight`? */
+  float thin_film_thickness = (ThinFilmWeight == 1.0) ? max(ThinFilmThickness, 0.0) * 1000.0 : 0.0;
+
+  /* Transmission */
+  float transmission_weight = saturate(TransmissionWeight);
+  if (transmission_weight > CLOSURE_WEIGHT_CUTOFF) {
+    float r2 = sqr(specular_roughness);
+    color transmission_color = saturate(TransmissionColor);
+    float thinfilm_ior = is_backfacing ? ThinFilmIOR * specular_ior : ThinFilmIOR;
+    if (GeometryThinWalled) {
+      closure color ThinGlassBSDF = thin_glass(GeometryNormal,
+                                               vector(0.0),
+                                               specular_color,
+                                               transmission_color,
+                                               modulated_specular_ior,
+                                               r2,
+                                               thin_film_thickness,
+                                               thinfilm_ior);
+      BSDF = transmission_weight * ThinGlassBSDF;
+    }
+    else {
+      /* TODO(weizhen): implement. */
+    }
+  }
+}
+
+#else
+
+shader node_open_pbr_bsdf(float BaseWeight = 1.0,
+                          color BaseColor = 0.8,
+                          float BaseDiffuseRoughness = 0.0,
+                          float BaseMetalness = 0.0,
+                          float SpecularWeight = 1.0,
+                          color SpecularColor = 1.0,
+                          float SpecularRoughness = 0.3,
+                          float SpecularRoughnessAnisotropy = 0.0,
+                          float SpecularIOR = 1.5,
+                          float TransmissionWeight = 0.0,
+                          color TransmissionColor = 1.0,
+                          float TransmissionDepth = 0.0,
+                          color TransmissionScatter = 0.0,
+                          float TransmissionScatterAnisotropy = 0.0,
+                          float TransmissionDispersionScale = 0.0,
+                          float TransmissionDispersionAbbeNumber = 20.0,
+                          float SubsurfaceWeight = 0.0,
+                          color SubsurfaceColor = 0.8,
+                          float SubsurfaceRadius = 1.0,
+                          color SubsurfaceRadiusScale = {1.0, 0.5, 0.25},
+                          float SubsurfaceScatterAnisotropy = 0.0,
+                          float CoatWeight = 0.0,
+                          color CoatColor = 1.0,
+                          float CoatRoughness = 0.0,
+                          float CoatRoughnessAnisotropy = 0.0,
+                          float CoatIOR = 1.6,
+                          float CoatDarkening = 1.0,
+                          float FuzzWeight = 0.0,
+                          color FuzzColor = 1.0,
+                          float FuzzRoughness = 0.5,
+                          float EmissionLuminance = 0.0,
+                          color EmissionColor = 1.0,
+                          float ThinFilmWeight = 0,
+                          float ThinFilmThickness = 0.5,
+                          float ThinFilmIOR = 1.4,
+                          float GeometryOpacity = 1.0,
+                          int GeometryThinWalled = 0,
                           normal GeometryNormal = N,
                           normal GeometryTangent = normalize(dPdu),
                           normal GeometryCoatNormal = N,
@@ -570,28 +667,31 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
   // BSDF_T dielectric_reflection_tf_mix_out = dielectric_reflection_out;
 
   /* Subsurface Thin-Walled*/
-  /*
-    float subsurface_thin_walled_reflection_bsdf_weight_tmp = 1.000000;
-    BSDF_T subsurface_thin_walled_reflection_bsdf_out =
-        subsurface_thin_walled_reflection_bsdf_weight_tmp *
-        oren_nayar_diffuse_bsdf(
-            geometry_normal, subsurface_color_nonnegative_out, base_diffuse_roughness);
-    BSDF_T
-    subsurface_thin_walled_reflection_out = (subsurface_thin_walled_brdf_factor_out *
-                                             subsurface_thin_walled_reflection_bsdf_out);
-    float subsurface_thin_walled_transmission_bsdf_weight_tmp = 1.000000;
-    BSDF_T
-    subsurface_thin_walled_transmission_bsdf_out =
-        subsurface_thin_walled_transmission_bsdf_weight_tmp *
-        translucent_bsdf(geometry_normal, subsurface_color_nonnegative_out);
-    BSDF_T subsurface_thin_walled_transmission_out = (subsurface_thin_walled_btdf_factor_out *
-                                                      subsurface_thin_walled_transmission_bsdf_out);
-    float subsurface_thin_walled_mix_tmp = 0.500000;
-    BSDF_T subsurface_thin_walled_out = mix(subsurface_thin_walled_transmission_out,
-                                            subsurface_thin_walled_reflection_out,
-                                            subsurface_thin_walled_mix_tmp);
+  float subsurface_selector_out = float(GeometryThinWalled);
+  /* FIXME(OpenPBR): This looks wrong, subsurface_color is used once here, and once in
+   * oren_nayar_diffuse_bsdf(), so the color is applied twice. */
+  color subsurface_thin_walled_brdf_factor_out = subsurface_color *
+                                                 one_minus_subsurface_scatter_anisotropy_out;
+  color subsurface_thin_walled_btdf_factor_out = subsurface_color *
+                                                 one_plus_subsurface_scatter_anisotropy_out;
+  float subsurface_thin_walled_reflection_bsdf_weight_tmp = 1.000000;
+  BSDF_T subsurface_thin_walled_reflection_bsdf_out =
+      subsurface_thin_walled_reflection_bsdf_weight_tmp *
+      oren_nayar_diffuse_bsdf(
+          geometry_normal, subsurface_color_nonnegative_out, base_diffuse_roughness);
+  BSDF_T subsurface_thin_walled_reflection_out = (subsurface_thin_walled_brdf_factor_out *
+                                                  subsurface_thin_walled_reflection_bsdf_out);
+  float subsurface_thin_walled_transmission_bsdf_weight_tmp = 1.000000;
+  BSDF_T subsurface_thin_walled_transmission_bsdf_out =
+      subsurface_thin_walled_transmission_bsdf_weight_tmp *
+      translucent_bsdf(geometry_normal, subsurface_color_nonnegative_out);
+  BSDF_T subsurface_thin_walled_transmission_out = (subsurface_thin_walled_btdf_factor_out *
+                                                    subsurface_thin_walled_transmission_bsdf_out);
+  float subsurface_thin_walled_mix_tmp = 0.500000;
+  BSDF_T subsurface_thin_walled_out = mix(subsurface_thin_walled_transmission_out,
+                                          subsurface_thin_walled_reflection_out,
+                                          subsurface_thin_walled_mix_tmp);
 
-    */
   /* Subsurface */
   BSDF_T subsurface_bsdf_out = null_closure();
   mx_subsurface_bsdf(1.000000,
@@ -603,10 +703,8 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
   // TODO (OpenPBR): this is currently a hack to fix an interal bug in Cycles' subsurface_bssrdf
   // OSL closure.
   subsurface_bsdf_out *= subsurface_color_nonnegative_out;
-  /* No thin wall yet*/
-  // BSDF_T selected_subsurface_out = mix(subsurface_bsdf_out, subsurface_thin_walled_out,
-  // subsurface_selector_out);
-  BSDF_T selected_subsurface_out = subsurface_bsdf_out;
+  BSDF_T selected_subsurface_out = mix(
+      subsurface_bsdf_out, subsurface_thin_walled_out, subsurface_selector_out);
   BSDF_T opaque_base_out = mix(diffuse_bsdf_out, selected_subsurface_out, subsurface_weight);
   // BSDF_T opaque_base_out = diffuse_bsdf_out;
 
@@ -638,3 +736,5 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
   // BSDF = transmission_color * transparent();
   // BSDF = metal_bsdf_tf_mix_out;
 }
+
+#endif

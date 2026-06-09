@@ -2,8 +2,13 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#include "vector2.h"
-#include "vector4.h"
+/* FIXME(weizhen): we have two versions of `vector2.h` in osl and materialx libraries?? */
+#ifndef VECTOR2_H
+#  include "vector2.h"
+#endif
+#ifndef VECTOR4_H
+#  include "vector4.h"
+#endif
 
 #define vector3 point
 
@@ -190,4 +195,19 @@ matrix euler_to_mat(point euler)
 float average(point a)
 {
   return (a[0] + a[1] + a[2]) * (1.0 / 3.0);
+}
+
+float saturate(float f)
+{
+  return clamp(f, 0.0, 1.0);
+}
+
+color saturate(color c)
+{
+  return clamp(c, color(0.0), color(1.0));
+}
+
+float reduce_min(color c)
+{
+  return min(min(c[0], c[1]), c[2]);
 }

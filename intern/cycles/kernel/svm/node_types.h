@@ -1240,6 +1240,7 @@ struct SVMNodeOpenPBRBsdfData {
   SVMInputFloat3 emission_color;
   /* Geometry */
   SVMInputFloat geometry_opacity;
+  SVMInputInt geometry_thin_walled;
   SVMStackOffset geometry_normal_offset;
   SVMStackOffset geometry_tangent_offset;
   SVMStackOffset geometry_coat_normal_offset;

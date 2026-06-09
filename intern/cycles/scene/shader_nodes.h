@@ -591,7 +591,7 @@ class OpenPBRBsdfNode : public BsdfBaseNode {
   NODE_SOCKET_API(float, thin_film_ior)
   /* Geometry Component */
   NODE_SOCKET_API(float, geometry_opacity)
-  NODE_SOCKET_API(bool, geometry_thin_walled)
+  NODE_SOCKET_API(int, geometry_thin_walled)
   NODE_SOCKET_API(float3, geometry_normal)
   NODE_SOCKET_API(float3, geometry_tangent)
   NODE_SOCKET_API(float3, geometry_coat_normal)

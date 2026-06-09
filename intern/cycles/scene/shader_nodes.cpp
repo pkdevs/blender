@@ -2707,7 +2707,7 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.4f);
   /* Geometry Component */
   SOCKET_IN_FLOAT(geometry_opacity, "Geometry Opacity", 1.0f);
-  SOCKET_IN_BOOLEAN(geometry_thin_walled, "Geometry Thin Walled", false);
+  SOCKET_IN_INT(geometry_thin_walled, "Geometry Thin Walled", false);
   SOCKET_IN_NORMAL(geometry_normal, "Geometry Normal", zero_float3(), SocketType::LINK_NORMAL);
   SOCKET_IN_NORMAL(geometry_tangent, "Geometry Tangent", zero_float3(), SocketType::LINK_TANGENT);
   SOCKET_IN_NORMAL(
@@ -2794,6 +2794,7 @@ void OpenPBRBsdfNode::compile(SVMCompiler &compiler)
       .emission_color = compiler.input_float3("Emission Color"),
       /* Geometry Component */
       .geometry_opacity = compiler.input_float("Geometry Opacity"),
+      .geometry_thin_walled = compiler.input_int("Geometry Thin Walled"),
       .geometry_normal_offset = geometry_normal_offset,
       .geometry_tangent_offset = geometry_tangent_offset,
       .geometry_coat_normal_offset = geometry_coat_normal_offset,

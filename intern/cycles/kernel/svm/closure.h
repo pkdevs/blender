@@ -769,6 +769,7 @@ ccl_device
       const float base_weight = saturatef(stack_load(stack, data.base_weight));
       const float3 base_color = max(stack_load(stack, data.base_color), zero_float3());
       const float base_metalness = saturatef(stack_load(stack, data.base_metalness));
+      const float base_diffuse_roughness = stack_load(stack, data.base_diffuse_roughness);
 
       const float specular_weight = saturatef(stack_load(stack, data.specular_weight));
       const float3 specular_color = saturate(stack_load(stack, data.specular_color));
@@ -776,11 +777,6 @@ ccl_device
 #ifdef __SUBSURFACE__
       const float subsurface_weight = saturatef(stack_load(stack, data.subsurface_weight));
       const float3 subsurface_color = saturate(stack_load(stack, data.subsurface_color));
-      const float subsurface_radius = saturatef(stack_load(stack, data.subsurface_radius));
-      const float3 subsurface_radius_scale = saturate(
-          stack_load(stack, data.subsurface_radius_scale));
-      const float subsurface_scatter_anisotropy = clamp(
-          stack_load(stack, data.subsurface_scatter_anisotropy), -1.0f, 1.0f);
 #else
       const float subsurface_weight = 0.f;
 #endif
@@ -798,7 +794,8 @@ ccl_device
       const float coat_weight = saturatef(stack_load(stack, data.coat_weight));
       const float coat_roughness = saturatef(stack_load(stack, data.coat_roughness));
       float coat_ior = stack_load(stack, data.coat_ior);
-      const bool backfacing = (sd->flag & SD_BACKFACING);
+      const bool thin_wall = stack_load(stack, data.geometry_thin_walled);
+      const bool backfacing = (sd->flag & SD_BACKFACING) && !thin_wall;
       /* FIXME(OpenPBR): simply invert ior is incorrect, probably should do the same as thin film?
        * Didn't find in the spec how to address backface. Principled BSDF uses original coat IOR
        * without modification. */
@@ -877,38 +874,57 @@ ccl_device
 
 #ifdef OPENPBR_SPEC_COMPLIANT  // OpenPBR v1.1 spec version (glossy diffuse layer)
       /* Translucent Component*/
+      /* FIXME(OpenPBR): should be reflective || refractive. Also fix specular_ior == 1. */
       if (transmission_weight > CLOSURE_WEIGHT_CUTOFF &&
           (refractive_caustics && (specular_ior != 1.0f /* || thinfilm_thickness > 0.1f*/)))
       {
-        ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-            sd, sizeof(MicrofacetBsdf), weight * transmission_weight);
-        ccl_private FresnelDielectricTint *fresnel =
-            (bsdf != nullptr) ? (ccl_private FresnelDielectricTint *)closure_alloc_extra(
-                                    sd, sizeof(FresnelDielectricTint)) :
-                                nullptr;
-
-        if (bsdf && fresnel) {
-          bsdf->N = valid_reflection_N;
-          bsdf->ior = modulated_specular_ior;
-          bsdf->T = geometry_tangent;
-          bsdf->alpha_x = specular_alpha.x;
-          bsdf->alpha_y = specular_alpha.y;
-
-          fresnel->reflection_tint = specular_color;
-          fresnel->transmission_tint = transmission_color;
-          fresnel->thin_film.thickness = thin_film_thickness;
-          fresnel->thin_film.ior = thin_film_ior;
-          if (backfacing) {
-            /* TODO(OpenPBR): do we need to modulate thin film IOR too? */
-            adjust_thin_film_ior_at_backface(fresnel->thin_film.ior, modulated_specular_ior);
-          }
-
-          /* setup bsdf */
-          sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
-          bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd->wi, fresnel, is_multiggx);
-          /* Attenuate other components */
-          weight *= (1.0f - transmission_weight);
+        FresnelThinFilm thinfilm = {thin_film_thickness, thin_film_ior};
+        if (thin_wall) {
+          Spectrum reflectance, transmittance;
+          bsdf_thin_glass_setup(kg,
+                                sd,
+                                reflective_caustics,
+                                refractive_caustics,
+                                specular_color,
+                                transmission_color,
+                                transmission_weight * weight,
+                                valid_reflection_N,
+                                len(specular_alpha) * M_SQRT1_2F,
+                                modulated_specular_ior,
+                                thinfilm,
+                                &reflectance,
+                                &transmittance);
         }
+        else {
+          ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
+              sd, sizeof(MicrofacetBsdf), weight * transmission_weight);
+          ccl_private FresnelDielectricTint *fresnel =
+              (bsdf != nullptr) ? (ccl_private FresnelDielectricTint *)closure_alloc_extra(
+                                      sd, sizeof(FresnelDielectricTint)) :
+                                  nullptr;
+
+          if (bsdf && fresnel) {
+            bsdf->N = valid_reflection_N;
+            bsdf->ior = modulated_specular_ior;
+            bsdf->T = geometry_tangent;
+            bsdf->alpha_x = specular_alpha.x;
+            bsdf->alpha_y = specular_alpha.y;
+
+            fresnel->reflection_tint = specular_color;
+            fresnel->transmission_tint = transmission_color;
+            fresnel->thin_film = thinfilm;
+            if (backfacing) {
+              /* TODO(OpenPBR): do we need to modulate thin film IOR too? */
+              adjust_thin_film_ior_at_backface(fresnel->thin_film.ior, modulated_specular_ior);
+            }
+
+            /* setup bsdf */
+            sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
+            bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd->wi, fresnel, is_multiggx);
+          }
+        }
+        /* Attenuate other components */
+        weight *= (1.0f - transmission_weight);
       }
 
       /* Specular Component */
@@ -1025,31 +1041,41 @@ ccl_device
 #ifdef __SUBSURFACE__
       /* Subsurface Scattering Component */
       if (subsurface_weight > CLOSURE_WEIGHT_CUTOFF) {
+        const float sss_anisotropy = clamp(
+            stack_load(stack, data.subsurface_scatter_anisotropy), -1.0f, 1.0f);
         const Spectrum closure_weight = subsurface_weight * subsurface_color * weight;
-        const ClosureType subsurface_method = CLOSURE_BSSRDF_RANDOM_WALK_ID;
-        ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, closure_weight);
-        if (bssrdf) {
-          bssrdf->radius = subsurface_radius_scale * subsurface_radius;
-          // Countering some legacy behavior in CLOSURE_BSSRDF_RANDOM_WALK_ID
-          bssrdf->radius *= M_4PI_F;
-          bssrdf->albedo = subsurface_color;
-          bssrdf->N = maybe_ensure_valid_specular_reflection(sd, N);
-          // To match with the OSL code path
-          // TODO (OpenPBR): double check the OSL/MaterialX spec for the BSSRDF closure
-          bssrdf->alpha = 1.0f;  // To match with the OSL code path
-          bssrdf->ior = 1.4f;    // To match with the OSL code path
-          // bssrdf->alpha = specular_alpha.x;
-          // bssrdf->ior = modulated_specular_ior;
-          /* Anisotropy is clamped to a valid range inside bssrdf_setup. */
-          bssrdf->anisotropy = subsurface_scatter_anisotropy;
+        if (thin_wall) {
+          bsdf_thin_subsurface_setup(
+              sd, N, closure_weight, sss_anisotropy, base_diffuse_roughness, subsurface_color);
+        }
+        else {
+          const float subsurface_radius = saturatef(stack_load(stack, data.subsurface_radius));
+          const float3 subsurface_radius_scale = saturate(
+              stack_load(stack, data.subsurface_radius_scale));
 
-          /* setup bsdf */
-          sd->flag |= bssrdf_setup(sd, bssrdf, path_flag, subsurface_method);
+          const ClosureType subsurface_method = CLOSURE_BSSRDF_RANDOM_WALK_ID;
+          ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, closure_weight);
+          if (bssrdf) {
+            bssrdf->radius = subsurface_radius_scale * subsurface_radius;
+            // Countering some legacy behavior in CLOSURE_BSSRDF_RANDOM_WALK_ID
+            bssrdf->radius *= M_4PI_F;
+            bssrdf->albedo = subsurface_color;
+            bssrdf->N = maybe_ensure_valid_specular_reflection(sd, N);
+            // To match with the OSL code path
+            // TODO (OpenPBR): double check the OSL/MaterialX spec for the BSSRDF closure
+            bssrdf->alpha = 1.0f;  // To match with the OSL code path
+            bssrdf->ior = 1.4f;    // To match with the OSL code path
+            // bssrdf->alpha = specular_alpha.x;
+            // bssrdf->ior = modulated_specular_ior;
+            bssrdf->anisotropy = sss_anisotropy;
+
+            /* setup bsdf */
+            sd->flag |= bssrdf_setup(sd, bssrdf, path_flag, subsurface_method);
+          }
         }
       }
 #endif
       if (base_weight > CLOSURE_WEIGHT_CUTOFF) {
-        const float base_diffuse_roughness = stack_load(stack, data.base_diffuse_roughness);
         /* Diffuse Component*/
         const Spectrum diffuse_weight = (base_color * base_weight) * (1.0f - subsurface_weight) *
                                         weight;

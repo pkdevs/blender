@@ -137,10 +137,12 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .usage_by_bool("Geometry Thin Walled"_ustr, false);
 #define OPENPBR_SOCK_SUBSURFACE_RADIUS_ID 19
   subsurface.add_input<decl::Color>("Subsurface Radius Scale"_ustr)
-      .default_value({1.0f, 0.5f, 0.25f, 1.0f});
+      .default_value({1.0f, 0.5f, 0.25f, 1.0f})
+      .usage_by_bool("Geometry Thin Walled"_ustr, false);
 #define OPENPBR_SOCK_SUBSURFACE_RADIUS_SCALE_ID 20
   subsurface.add_input<decl::Float>("Subsurface Scatter Anisotropy"_ustr)
       .default_value(0.0f)
