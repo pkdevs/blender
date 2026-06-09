@@ -2805,6 +2805,15 @@ void OpenPBRBsdfNode::compile(OSLCompiler &compiler)
 
 bool OpenPBRBsdfNode::has_surface_transparent()
 {
+  if ((input("Geometry Thin Walled")->link || geometry_thin_walled) &&
+      has_nonzero_weight("Transmission Weight"))
+  {
+    /* Smooth thin glass are treated as transparent for non-camera rays.
+     * Transmission roughness depends on roughness, IOR and specular weight, so we loosen the
+     * constraint here and do not check if the roughness is zero. */
+    return true;
+  }
+
   return (input("Geometry Opacity")->link || geometry_opacity < (1.0f - CLOSURE_WEIGHT_CUTOFF));
 }
 
