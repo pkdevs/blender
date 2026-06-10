@@ -282,6 +282,10 @@ struct State {
   {
     return (this->overlay.flag & V3D_OVERLAY_SHOW_LIGHT_COLORS);
   }
+  bool show_light_ground_lines() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_HIDE_LIGHT_GROUND_LINES) == 0;
+  }
 };
 
 /* Matches Vertex Format. */

@@ -7192,6 +7192,7 @@ class VIEW3D_PT_overlay_object(Panel):
         subsub = sub.column()
         subsub.active = overlay.show_extras
         subsub.prop(overlay, "show_light_colors")
+        subsub.prop(overlay, "show_light_ground_lines")
         sub.prop(overlay, "show_relationship_lines")
         sub.prop(overlay, "show_outline_selected")
 

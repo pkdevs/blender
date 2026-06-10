@@ -5198,6 +5198,12 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Light Colors", "Show light colors");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
+  prop = RNA_def_property(srna, "show_light_ground_lines", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(
+    prop, nullptr, "overlay.flag", V3D_OVERLAY_HIDE_LIGHT_GROUND_LINES);
+  RNA_def_property_ui_text(prop, "Light Ground Lines", "Show light ground lines");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
   prop = RNA_def_property(srna, "show_bones", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "overlay.flag", V3D_OVERLAY_HIDE_BONES);
   RNA_def_property_ui_text(

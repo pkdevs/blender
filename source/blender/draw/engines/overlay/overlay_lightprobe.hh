@@ -86,6 +86,7 @@ class LightProbes : Overlay {
     const bool show_parallax = (prb.flag & LIGHTPROBE_FLAG_SHOW_PARALLAX) != 0;
     const bool show_influence = (prb.flag & LIGHTPROBE_FLAG_SHOW_INFLUENCE) != 0;
     const bool show_data = (ob_ref.object->base_flag & BASE_SELECTED) || res.is_selection();
+    const bool show_light_ground_lines = state.show_light_ground_lines();
 
     const select::ID select_id = res.select_id(ob_ref);
     const float4 color = res.object_wire_color(ob_ref, state);
@@ -101,7 +102,9 @@ class LightProbes : Overlay {
         clip_end = show_clipping ? prb.clipend : -1.0;
         call_buffers_.probe_cube_buf.append(data, select_id);
 
-        call_buffers_.ground_line_buf.append(float4(matrix.location(), 0.0f), select_id);
+        if (show_light_ground_lines) {
+          call_buffers_.ground_line_buf.append(float4(matrix.location(), 0.0f), select_id);
+        }
 
         if (show_influence) {
           LightProbeInstanceBuf &attenuation = (prb.attenuation_type == LIGHTPROBE_SHAPE_BOX) ?

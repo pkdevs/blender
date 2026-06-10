@@ -96,7 +96,11 @@ class Lights : Overlay {
     clip_end = la.att_dist;
     clip_start = la.clipsta;
 
-    call_buffers_.ground_line_buf.append(float4(matrix.location(), 0.0f), select_id);
+    const bool show_light_ground_lines = state.show_light_ground_lines();
+
+    if (show_light_ground_lines) {
+      call_buffers_.ground_line_buf.append(float4(matrix.location(), 0.0f), select_id);
+    }
 
     const float4 light_color = {la.r, la.g, la.b, 1.0f};
     const bool show_light_colors = state.show_light_colors();
