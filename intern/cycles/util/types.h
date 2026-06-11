@@ -32,3 +32,5 @@
 #include "util/types_spectrum.h"  // IWYU pragma: export
 
 #include "util/types_dual.h"  // IWYU pragma: export
+
+#include "util/types_gpu_packed.h"  // IWYU pragma: export

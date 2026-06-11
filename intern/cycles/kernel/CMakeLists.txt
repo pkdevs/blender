@@ -305,6 +305,7 @@ set(SRC_UTIL_HEADERS
   ../util/types_float3.h
   ../util/types_float4.h
   ../util/types_float8.h
+  ../util/types_gpu_packed.h
   ../util/types_image.h
   ../util/types_int2.h
   ../util/types_int3.h
