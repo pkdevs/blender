@@ -62,7 +62,7 @@ static void export_scene_markers(const Scene *scene, SerializableObject::Retaine
  * We need two stacks when we have meta strips with both video and audio strips. It is not as
  * straight forward as separating clips to video or audio channels as metastrips can also contain
  * other metastrips. Even if we separate the clips inside a meta strip to video and audio tracks,
- * the metastrip will still me multi-media and could not be classified as a video/visual clip or
+ * the metastrip will still be multi-media and could not be classified as a video/visual clip or
  * audio clip. Hence, no mono-media track could be used to hold the metastrip.
  *
  * So, for every metastrip in the `main_stack` (root stack), we create two stacks: `primary_stack`
@@ -79,6 +79,7 @@ static void export_scene_markers(const Scene *scene, SerializableObject::Retaine
 static void otio_export_recursive(Main *bmain,
                                   Scene *scene,
                                   const blender::OTIOExportParams *export_params,
+                                  const char *filepath,
                                   SerializableObject::Retainer<Stack> *primary_stack,
                                   SerializableObject::Retainer<Stack> *secondary_stack,
                                   ListBaseT<Strip> *strips,
@@ -126,24 +127,27 @@ static void otio_export_recursive(Main *bmain,
     for (Strip *strip : strips) {
       StripExporter *strip_exporter = nullptr;
 
-      switch (strip->type) {
-        case STRIP_TYPE_MOVIE:
-          strip_exporter = new MovieStripExporter(
-              strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
-          break;
-
-        case STRIP_TYPE_SOUND:
-          strip_exporter = new SoundStripExporter(
-              strip, scene, inside_meta ? meta_audio_track : track, last_strip_end);
-          break;
-
-        case STRIP_TYPE_IMAGE:
-          strip_exporter = new ImageStripExporter(
-              strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
-          break;
-
-        case STRIP_TYPE_META:
-        case STRIP_TYPE_SCENE: {
+      if (strip->type == STRIP_TYPE_MOVIE) {
+        strip_exporter = new MovieStripExporter(
+            strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
+      }
+      else if (strip->type == STRIP_TYPE_SOUND) {
+        strip_exporter = new SoundStripExporter(
+            strip, scene, inside_meta ? meta_audio_track : track, last_strip_end);
+      }
+      else if (strip->type == STRIP_TYPE_IMAGE) {
+        strip_exporter = new ImageStripExporter(
+            strip, scene, inside_meta ? meta_video_track : track, last_strip_end, filepath);
+      }
+      /* Nested Strips (Meta, Sequencer Scene). */
+      else if (strip->type == STRIP_TYPE_META ||
+               ((strip->type == STRIP_TYPE_SCENE) && (strip->flag & SEQ_SCENE_STRIPS)))
+      {
+        if (export_params->meta_strip_export == ExportOption::RENDER_MOVIE) {
+          strip_exporter = new RenderAsMovieExporter(
+              strip, scene, inside_meta ? meta_video_track : track, last_strip_end, filepath);
+        }
+        else {
           if (inside_meta) {
             StripExporter::add_gap_if_necessary(meta_video_track,
                                                 last_strip_end + 1,
@@ -173,35 +177,46 @@ static void otio_export_recursive(Main *bmain,
 
             missing_reference_exporter_video.export_with_missing_reference();
             missing_reference_exporter_audio.export_with_missing_reference();
-
-            break;
           }
+          else {
+            auto primary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
+            auto secondary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
 
-          auto primary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
-          auto secondary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
+            otio_export_recursive(bmain,
+                                  scene,
+                                  export_params,
+                                  filepath,
+                                  &primary_meta_stack,
+                                  &secondary_meta_stack,
+                                  seqbase,
+                                  strip->left_handle() - 1,
+                                  strip->right_handle(scene));
 
-          otio_export_recursive(bmain,
-                                scene,
-                                export_params,
-                                &primary_meta_stack,
-                                &secondary_meta_stack,
-                                seqbase,
-                                strip->left_handle() - 1,
-                                strip->right_handle(scene));
+            last_strip_end = strip->right_handle(scene);
 
-          last_strip_end = strip->right_handle(scene);
-
-          if (!primary_meta_stack->children().empty()) {
-            meta_video_track->append_child(primary_meta_stack);
+            if (!primary_meta_stack->children().empty()) {
+              meta_video_track->append_child(primary_meta_stack);
+            }
+            if (!secondary_meta_stack->children().empty()) {
+              meta_audio_track->append_child(secondary_meta_stack);
+            }
           }
-          if (!secondary_meta_stack->children().empty()) {
-            meta_audio_track->append_child(secondary_meta_stack);
-          }
+        }
+      }
+      /* 3D Scene Strip. */
+      else if (strip->type == STRIP_TYPE_SCENE && !(strip->flag & SEQ_SCENE_STRIPS) &&
+               strip->scene)
+      {
+        if (export_params->bake_scene_strips) {
+          strip_exporter = new RenderAsMovieExporter(
+              strip, scene, inside_meta ? meta_video_track : track, last_strip_end, filepath);
+        }
+        else {
+          auto missing_reference_exporter = StripExporter(
+              strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
 
-        } break;
-
-        default:
-          break;
+          missing_reference_exporter.export_with_missing_reference();
+        }
       }
 
       if (strip_exporter) {
@@ -254,12 +269,13 @@ void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
   Main *bmain = job_data->bmain;
   Scene *scene = job_data->scene;
   Editing *editing = seq::editing_get(scene);
-  ListBaseT<Strip> *seqbase = &editing->seqbase;
 
   if (!scene || !editing) {
     BKE_report(worker_status->reports, RPT_ERROR, "No Sequencer Scene found");
     return;
   }
+
+  ListBaseT<Strip> *seqbase = &editing->seqbase;
 
   worker_status->progress = 0.0f;
   worker_status->do_update = true;
@@ -268,8 +284,15 @@ void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
       new Timeline(scene->id.name + 2, RationalTime(0, scene->frames_per_second())));
 
   auto main_stack = SerializableObject::Retainer<Stack>(new Stack());
-  otio_export_recursive(
-      bmain, scene, export_params, &main_stack, nullptr, seqbase, 0, scene->r.efra);
+  otio_export_recursive(bmain,
+                        scene,
+                        export_params,
+                        job_data->filepath,
+                        &main_stack,
+                        nullptr,
+                        seqbase,
+                        0,
+                        scene->r.efra);
 
   export_scene_markers(scene, main_stack);
 

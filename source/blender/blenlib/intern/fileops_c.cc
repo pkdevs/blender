@@ -869,7 +869,6 @@ int BLI_copy(const char *path_src, const char *path_dst)
   return err;
 }
 
-#  if 0
 int BLI_create_symlink(const char *path_src, const char *path_dst)
 {
   /* See patch from #30870, should this ever become needed. */
@@ -878,7 +877,6 @@ int BLI_create_symlink(const char *path_src, const char *path_dst)
   (void)path_dst;
   return 1;
 }
-#  endif
 
 #else /* The UNIX world */
 
