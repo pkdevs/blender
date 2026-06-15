@@ -8,14 +8,22 @@
 
 #define DNA_DEPRECATED_ALLOW
 
+/* Define macros in `DNA_genfile.h`. */
+#define DNA_GENFILE_VERSIONING_MACROS
+
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
 #include "DNA_curves_types.h"
+#include "DNA_genfile.h"
 #include "DNA_grease_pencil_types.h"
 #include "DNA_mesh_types.h"
+#include "DNA_modifier_types.h"
+#include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
+
+#undef DNA_GENFILE_VERSIONING_MACROS
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_string_ref.hh"
@@ -131,7 +139,7 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
    */
 }
 
-void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
+void blo_do_versions_503(FileData *fd, Library * /*lib*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 1)) {
     for (Scene &scene : bmain->scenes) {
@@ -399,6 +407,22 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
           }
           return true;
         });
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 19)) {
+    if (!DNA_struct_member_exists(fd->filesdna, "SmoothModifierData", "float", "taubin_mu")) {
+      for (Object &ob : bmain->objects) {
+        for (ModifierData &md : ob.modifiers) {
+          if (md.type == eModifierType_Smooth) {
+            SmoothModifierData *smd = reinterpret_cast<SmoothModifierData *>(&md);
+            smd->method = MOD_SMOOTH_METHOD_SIMPLE;
+            smd->taubin_mu = -0.53f;
+            smd->hc_alpha = 0.0f;
+            smd->hc_beta = 0.5f;
+          }
+        }
       }
     }
   }
