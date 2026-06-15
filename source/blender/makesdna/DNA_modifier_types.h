@@ -765,12 +765,26 @@ enum SmoothModifierFlag : short {
 };
 ENUM_OPERATORS(SmoothModifierFlag);
 
+enum SmoothModifierMethod : short {
+  MOD_SMOOTH_METHOD_SIMPLE = 0,
+  MOD_SMOOTH_METHOD_TAUBIN = 1,
+  MOD_SMOOTH_METHOD_HC = 2,
+};
+
 struct SmoothModifierData {
   ModifierData modifier;
   float fac = 0.5f;
   char defgrp_name[/*MAX_VGROUP_NAME*/ 64] = "";
   SmoothModifierFlag flag = MOD_SMOOTH_X | MOD_SMOOTH_Y | MOD_SMOOTH_Z;
   short repeat = 1;
+
+  SmoothModifierMethod method = MOD_SMOOTH_METHOD_SIMPLE;
+  char _pad0[2] = {};
+
+  float taubin_mu = -0.53f;
+
+  float hc_alpha = 0.0f;
+  float hc_beta = 0.5f;
 };
 
 /** #CastModifierData.flag */
