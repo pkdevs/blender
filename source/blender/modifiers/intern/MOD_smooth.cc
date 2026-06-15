@@ -24,6 +24,7 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
+#include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 #include "RNA_types.hh"
 
@@ -94,6 +95,33 @@ static void laplacian_pass(const Span<int2> edges,
   });
 }
 
+static void neighbor_avg_pass(const Span<int2> edges,
+                              const Span<float3> src,
+                              MutableSpan<float3> dst_avg,
+                              MutableSpan<int> dst_count)
+{
+  dst_avg.fill(float3(0.0f));
+  dst_count.fill(0);
+  for (const int i : edges.index_range()) {
+    const int idx1 = edges[i][0];
+    const int idx2 = edges[i][1];
+    dst_avg[idx1] += src[idx2];
+    dst_count[idx1]++;
+    dst_avg[idx2] += src[idx1];
+    dst_count[idx2]++;
+  }
+  threading::parallel_for(src.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      if (dst_count[i] > 0) {
+        dst_avg[i] *= 1.0f / float(dst_count[i]);
+      }
+      else {
+        dst_avg[i] = src[i];
+      }
+    }
+  });
+}
+
 static void apply_blend(MutableSpan<float3> target,
                         const Span<float3> source,
                         const float fac,
@@ -126,6 +154,42 @@ static void apply_blend(MutableSpan<float3> target,
   });
 }
 
+static void hc_correction_pass(MutableSpan<float3> p,
+                               const Span<float3> q,
+                               const Span<float3> orig,
+                               const Span<int2> edges,
+                               const float alpha,
+                               const float beta,
+                               MutableSpan<float3> b,
+                               MutableSpan<float3> b_avg,
+                               MutableSpan<int> b_count)
+{
+  threading::parallel_for(p.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      b[i] = p[i] - (alpha * orig[i] + (1.0f - alpha) * q[i]);
+    }
+  });
+
+  b_avg.fill(float3(0.0f));
+  b_count.fill(0);
+  for (const int e : edges.index_range()) {
+    const int i1 = edges[e][0];
+    const int i2 = edges[e][1];
+    b_avg[i1] += b[i2];
+    b_count[i1]++;
+    b_avg[i2] += b[i1];
+    b_count[i2]++;
+  }
+
+  const float ombeta = 1.0f - beta;
+  threading::parallel_for(p.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      const float3 avg = b_count[i] > 0 ? b_avg[i] * (1.0f / float(b_count[i])) : float3(0.0f);
+      p[i] -= beta * b[i] + ombeta * avg;
+    }
+  });
+}
+
 static void smoothModifier_do(SmoothModifierData *smd,
                               Object *ob,
                               Mesh *mesh,
@@ -146,10 +210,52 @@ static void smoothModifier_do(SmoothModifierData *smd,
   int defgrp_index;
   MOD_get_vgroup(ob, mesh, smd->defgrp_name, &dvert, &defgrp_index);
 
-  for (int j = 0; j < smd->repeat; j++) {
-    laplacian_pass(edges, vertexCos, accumulated_vecs, accumulated_vecs_count);
-    apply_blend(
-        vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
+  switch (smd->method) {
+    case MOD_SMOOTH_METHOD_SIMPLE: {
+      for (int j = 0; j < smd->repeat; j++) {
+        laplacian_pass(edges, vertexCos, accumulated_vecs, accumulated_vecs_count);
+        apply_blend(
+            vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
+      }
+      break;
+    }
+    case MOD_SMOOTH_METHOD_TAUBIN: {
+      for (int j = 0; j < smd->repeat; j++) {
+        neighbor_avg_pass(edges, vertexCos, accumulated_vecs, accumulated_vecs_count);
+        apply_blend(
+            vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
+        neighbor_avg_pass(edges, vertexCos, accumulated_vecs, accumulated_vecs_count);
+        apply_blend(vertexCos,
+                    accumulated_vecs,
+                    smd->taubin_mu,
+                    smd->flag,
+                    dvert,
+                    defgrp_index,
+                    invert_vgroup);
+      }
+      break;
+    }
+    case MOD_SMOOTH_METHOD_HC: {
+      Array<float3> hc_p(vertexCos.as_span());
+      Array<float3> hc_b(verts_num);
+      Array<float3> hc_b_avg(verts_num);
+      Array<int> hc_b_count(verts_num);
+      for (int j = 0; j < smd->repeat; j++) {
+        neighbor_avg_pass(edges, hc_p, accumulated_vecs, accumulated_vecs_count);
+        hc_correction_pass(accumulated_vecs,
+                           hc_p,
+                           vertexCos.as_span(),
+                           edges,
+                           smd->hc_alpha,
+                           smd->hc_beta,
+                           hc_b,
+                           hc_b_avg,
+                           hc_b_count);
+        hc_p.as_mutable_span().copy_from(accumulated_vecs);
+      }
+      apply_blend(vertexCos, hc_p, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
+      break;
+    }
   }
 }
 
@@ -172,6 +278,8 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   layout.use_property_split_set(true);
 
+  layout.prop(ptr, "method", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
   ui::Layout &row = layout.row(true, IFACE_("Axis"));
   row.prop(ptr, "use_x", toggles_flag, std::nullopt, ICON_NONE);
   row.prop(ptr, "use_y", toggles_flag, std::nullopt, ICON_NONE);
@@ -179,6 +287,16 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   ui::Layout &col = layout.column(false);
   col.prop(ptr, "factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  const int method = RNA_enum_get(ptr, "method");
+  if (method == MOD_SMOOTH_METHOD_TAUBIN) {
+    col.prop(ptr, "taubin_mu", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  else if (method == MOD_SMOOTH_METHOD_HC) {
+    col.prop(ptr, "hc_alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "hc_beta", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+
   col.prop(ptr, "iterations", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
