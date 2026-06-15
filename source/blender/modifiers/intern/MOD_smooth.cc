@@ -46,8 +46,10 @@ static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_re
 
   const short flag = smd->flag & (MOD_SMOOTH_X | MOD_SMOOTH_Y | MOD_SMOOTH_Z);
 
-  /* disable if modifier is off for X, Y and Z or if factor is 0 */
-  if (smd->fac == 0.0f || flag == 0) {
+  if (flag == 0) {
+    return true;
+  }
+  if (smd->fac == 0.0f && (smd->method != MOD_SMOOTH_METHOD_TAUBIN || smd->taubin_mu == 0.0f)) {
     return true;
   }
 
