@@ -8,7 +8,9 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_array.hh"
 #include "BLI_math_vector_c.hh"
+#include "BLI_task.hh"
 #include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
@@ -61,28 +63,83 @@ static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_
   }
 }
 
-static void smoothModifier_do(
-    SmoothModifierData *smd, Object *ob, Mesh *mesh, float (*vertexCos)[3], int verts_num)
+static float vgroup_weight(const MDeformVert &dv, const int defgrp_index, const bool invert)
+{
+  const float w = BKE_defvert_find_weight(&dv, defgrp_index);
+  return invert ? 1.0f - w : w;
+}
+
+static void laplacian_pass(const Span<int2> edges,
+                           const Span<float3> src,
+                           MutableSpan<float3> dst_avg,
+                           MutableSpan<int> dst_count)
+{
+  dst_avg.fill(float3(0.0f));
+  dst_count.fill(0);
+  for (const int i : edges.index_range()) {
+    const int idx1 = edges[i][0];
+    const int idx2 = edges[i][1];
+    const float3 mid = (src[idx1] + src[idx2]) * 0.5f;
+    dst_count[idx1]++;
+    dst_avg[idx1] += mid;
+    dst_count[idx2]++;
+    dst_avg[idx2] += mid;
+  }
+  threading::parallel_for(src.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      if (dst_count[i] > 0) {
+        dst_avg[i] *= 1.0f / float(dst_count[i]);
+      }
+    }
+  });
+}
+
+static void apply_blend(MutableSpan<float3> target,
+                        const Span<float3> source,
+                        const float fac,
+                        const short flag,
+                        const MDeformVert *dvert,
+                        const int defgrp_index,
+                        const bool invert_vgroup)
+{
+  threading::parallel_for(target.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      float f = fac;
+      if (dvert) {
+        const float w = vgroup_weight(dvert[i], defgrp_index, invert_vgroup);
+        if (w <= 0.0f) {
+          continue;
+        }
+        f *= w;
+      }
+      const float f_orig = 1.0f - f;
+      if (flag & MOD_SMOOTH_X) {
+        target[i][0] = f_orig * target[i][0] + f * source[i][0];
+      }
+      if (flag & MOD_SMOOTH_Y) {
+        target[i][1] = f_orig * target[i][1] + f * source[i][1];
+      }
+      if (flag & MOD_SMOOTH_Z) {
+        target[i][2] = f_orig * target[i][2] + f * source[i][2];
+      }
+    }
+  });
+}
+
+static void smoothModifier_do(SmoothModifierData *smd,
+                              Object *ob,
+                              Mesh *mesh,
+                              MutableSpan<float3> vertexCos)
 {
   if (mesh == nullptr) {
     return;
   }
 
-  float (*accumulated_vecs)[3] = MEM_new_array_zeroed<float[3]>(verts_num, __func__);
-  if (!accumulated_vecs) {
-    return;
-  }
+  const int verts_num = vertexCos.size();
+  Array<float3> accumulated_vecs(verts_num);
+  Array<int> accumulated_vecs_count(verts_num);
 
-  uint *accumulated_vecs_count = MEM_new_array_zeroed<uint>(verts_num, __func__);
-  if (!accumulated_vecs_count) {
-    MEM_delete(accumulated_vecs);
-    return;
-  }
-
-  const float fac_new = smd->fac;
-  const float fac_orig = 1.0f - fac_new;
   const bool invert_vgroup = (smd->flag & MOD_SMOOTH_INVERT_VGROUP) != 0;
-
   const Span<int2> edges = mesh->edges();
 
   const MDeformVert *dvert;
@@ -90,77 +147,10 @@ static void smoothModifier_do(
   MOD_get_vgroup(ob, mesh, smd->defgrp_name, &dvert, &defgrp_index);
 
   for (int j = 0; j < smd->repeat; j++) {
-    if (j != 0) {
-      memset(accumulated_vecs, 0, sizeof(*accumulated_vecs) * size_t(verts_num));
-      memset(accumulated_vecs_count, 0, sizeof(*accumulated_vecs_count) * size_t(verts_num));
-    }
-
-    for (const int i : edges.index_range()) {
-      float fvec[3];
-      const uint idx1 = edges[i][0];
-      const uint idx2 = edges[i][1];
-
-      mid_v3_v3v3(fvec, vertexCos[idx1], vertexCos[idx2]);
-
-      accumulated_vecs_count[idx1]++;
-      add_v3_v3(accumulated_vecs[idx1], fvec);
-
-      accumulated_vecs_count[idx2]++;
-      add_v3_v3(accumulated_vecs[idx2], fvec);
-    }
-
-    const short flag = smd->flag;
-    if (dvert) {
-      const MDeformVert *dv = dvert;
-      for (int i = 0; i < verts_num; i++, dv++) {
-        float *vco_orig = vertexCos[i];
-        if (accumulated_vecs_count[i] > 0) {
-          mul_v3_fl(accumulated_vecs[i], 1.0f / float(accumulated_vecs_count[i]));
-        }
-        float *vco_new = accumulated_vecs[i];
-
-        const float f_vgroup = invert_vgroup ? (1.0f - BKE_defvert_find_weight(dv, defgrp_index)) :
-                                               BKE_defvert_find_weight(dv, defgrp_index);
-        if (f_vgroup <= 0.0f) {
-          continue;
-        }
-        const float f_new = f_vgroup * fac_new;
-        const float f_orig = 1.0f - f_new;
-
-        if (flag & MOD_SMOOTH_X) {
-          vco_orig[0] = f_orig * vco_orig[0] + f_new * vco_new[0];
-        }
-        if (flag & MOD_SMOOTH_Y) {
-          vco_orig[1] = f_orig * vco_orig[1] + f_new * vco_new[1];
-        }
-        if (flag & MOD_SMOOTH_Z) {
-          vco_orig[2] = f_orig * vco_orig[2] + f_new * vco_new[2];
-        }
-      }
-    }
-    else { /* no vertex group */
-      for (int i = 0; i < verts_num; i++) {
-        float *vco_orig = vertexCos[i];
-        if (accumulated_vecs_count[i] > 0) {
-          mul_v3_fl(accumulated_vecs[i], 1.0f / float(accumulated_vecs_count[i]));
-        }
-        float *vco_new = accumulated_vecs[i];
-
-        if (flag & MOD_SMOOTH_X) {
-          vco_orig[0] = fac_orig * vco_orig[0] + fac_new * vco_new[0];
-        }
-        if (flag & MOD_SMOOTH_Y) {
-          vco_orig[1] = fac_orig * vco_orig[1] + fac_new * vco_new[1];
-        }
-        if (flag & MOD_SMOOTH_Z) {
-          vco_orig[2] = fac_orig * vco_orig[2] + fac_new * vco_new[2];
-        }
-      }
-    }
+    laplacian_pass(edges, vertexCos, accumulated_vecs, accumulated_vecs_count);
+    apply_blend(
+        vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
   }
-
-  MEM_delete(accumulated_vecs);
-  MEM_delete(accumulated_vecs_count);
 }
 
 static void deform_verts(ModifierData *md,
@@ -169,8 +159,7 @@ static void deform_verts(ModifierData *md,
                          MutableSpan<float3> positions)
 {
   SmoothModifierData *smd = reinterpret_cast<SmoothModifierData *>(md);
-  smoothModifier_do(
-      smd, ctx->object, mesh, reinterpret_cast<float (*)[3]>(positions.data()), positions.size());
+  smoothModifier_do(smd, ctx->object, mesh, positions);
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
