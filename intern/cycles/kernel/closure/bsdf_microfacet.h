@@ -1650,9 +1650,9 @@ ccl_device int bsdf_volumetric_setup(KernelGlobals kg,
                                      const float depth)
 {
   fresnel->sigma_s = scatter / depth;
-  /* TODO(weizhen): FLT_MAX or INF or a very large number? */
+  /* To avoid numerical problems when a color channel is 0 we use -log(1e-5) = 5 as fallback */
   const Spectrum sigma_t = select(
-      transmission > zero_float3(), -log(transmission) / depth, make_spectrum(FLT_MAX));
+      transmission > zero_float3(), -log(transmission) / depth, make_float3(5.0f / depth));
   fresnel->sigma_a = sigma_t - fresnel->sigma_s;
   const float sigma_a_min = reduce_min(fresnel->sigma_a);
   if (sigma_a_min < 0.0f) {
