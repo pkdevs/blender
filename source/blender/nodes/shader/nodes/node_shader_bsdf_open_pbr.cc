@@ -2,7 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_base.h"
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 #include "node_shader_util.hh"
