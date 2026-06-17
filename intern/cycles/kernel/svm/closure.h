@@ -1082,8 +1082,6 @@ ccl_device
           ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, closure_weight);
           if (bssrdf) {
             bssrdf->radius = subsurface_radius_scale * subsurface_radius;
-            // Countering some legacy behavior in CLOSURE_BSSRDF_RANDOM_WALK_ID
-            bssrdf->radius *= M_4PI_F;
             bssrdf->albedo = subsurface_color;
             bssrdf->N = maybe_ensure_valid_specular_reflection(sd, N);
             // To match with the OSL code path

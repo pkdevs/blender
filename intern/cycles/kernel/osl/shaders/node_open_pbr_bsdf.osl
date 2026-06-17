@@ -369,7 +369,6 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
   float subsurface_weight = SubsurfaceWeight;
   color subsurface_color = SubsurfaceColor;
   float subsurface_radius = SubsurfaceRadius;
-  subsurface_radius *= 4.0 * M_PI;  // Countering some legacy behavior of Cycles bssrdf closure
   color subsurface_radius_scale = SubsurfaceRadiusScale;
   float subsurface_scatter_anisotropy = SubsurfaceScatterAnisotropy;
 
