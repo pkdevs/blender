@@ -111,13 +111,15 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .not_implemented();
 #define OPENPBR_SOCK_TRANSMISSION_DISPERSION_SCALE_ID 15
   transmission.add_input<decl::Float>("Transmission Dispersion Abbe Number"_ustr)
       .default_value(20.0f)
       .min(0.0f)
       .max(91.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .not_implemented();
 #define OPENPBR_SOCK_TRANSMISSION_DISPERSION_ABBE_NUMBER_ID 16
   /********************************************************************
    * Subsurface Component
@@ -171,7 +173,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .not_implemented();
 #define OPENPBR_SOCK_COAT_ROUGHNESS_ANISOTROPY_ID 25
   coat.add_input<decl::Float>("Coat IOR"_ustr)
       .default_value(1.6f)
@@ -218,17 +221,19 @@ static void node_declare(NodeDeclarationBuilder &b)
   /********************************************************************
    * Thin-film Component
    * *****************************************************************/
-  PanelDeclarationBuilder &thinfilm = b.add_panel("Thin Film"_ustr).default_closed(false);
+  PanelDeclarationBuilder &thinfilm = b.add_panel("Thin Film"_ustr).default_closed(true);
   thinfilm.add_input<decl::Float>("Thin Film Weight"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .not_implemented();
 #define OPENPBR_SOCK_THIN_FILM_WEIGHT_ID 33
   thinfilm.add_input<decl::Float>("Thin Film Thickness"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .max(100000.0f)
+      .not_implemented()
       .description("Thickness of the film in micrometers");
   /* TODO(weizhen): OpenPBR unit for thin film is micrometer, but our default is nanometer. Need to
    * address this discrepancy. */
@@ -237,7 +242,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(1.4f)
       .min(0.0f)
       .max(3.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .not_implemented();
 #define OPENPBR_SOCK_THIN_FILM_IOR_ID 35
   /********************************************************************
    * Geometry Component

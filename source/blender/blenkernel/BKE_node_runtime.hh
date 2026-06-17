@@ -1019,6 +1019,9 @@ inline bool bNodeSocket::is_user_hidden() const
 
 inline bool bNodeSocket::is_inactive() const
 {
+  if (this->flag & SOCK_NOT_IMPLEMENTED) {
+    return true;
+  }
   /* Gray out inputs that do not affect the output of the node currently.
    * Don't gray out any inputs if the node has no outputs (in which case no input can affect the
    * output). Otherwise, viewer node inputs would be inactive. */

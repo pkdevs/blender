@@ -295,6 +295,7 @@ void SocketDeclaration::set_common_flags(bNodeSocket &socket) const
   SET_FLAG_FROM_TEST(socket.flag, hide_value, SOCK_HIDE_VALUE);
   SET_FLAG_FROM_TEST(socket.flag, is_multi_input, SOCK_MULTI_INPUT);
   SET_FLAG_FROM_TEST(socket.flag, !is_available, SOCK_UNAVAIL);
+  SET_FLAG_FROM_TEST(socket.flag, not_implemented, SOCK_NOT_IMPLEMENTED);
 }
 
 bool SocketDeclaration::matches_common_data(const bNodeSocket &socket) const
@@ -632,6 +633,12 @@ BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::optional_label(bool 
 BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::hide_value(bool value)
 {
   decl_base_->hide_value = value;
+  return *this;
+}
+
+BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::not_implemented()
+{
+  decl_base_->not_implemented = true;
   return *this;
 }
 
