@@ -208,7 +208,7 @@ ccl_device_inline float3 openpbr_coat_darkening(const ccl_global SVMNodeOpenPBRB
 {
   // TODO: Need to add darkening
   const float coat_darkening = saturatef(stack_load(stack, data.coat_darkening));
-  if (!(coat_darkening < 1.0f)) {
+  if (coat_darkening == 0.0f) {
     return one_float3();
   }
   /*
