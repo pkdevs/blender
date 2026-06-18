@@ -475,6 +475,8 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
                                               transmission_color);
   vector transmission_color_vector_out = vector(0.0);
   NG_convert_color3_vector3(transmission_color, transmission_color_vector_out);
+  // Todo: This fix needs to be reported to MaterialX and OpenPBR
+  transmission_color_vector_out = clamp(transmission_color_vector_out, 1e-5, 1.0);
   vector transmission_depth_vector_out = vector(0.0);
   NG_convert_float_vector3(transmission_depth, transmission_depth_vector_out);
   vector transmission_scatter_vector_out = vector(0.0);
