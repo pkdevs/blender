@@ -719,8 +719,7 @@ ccl_device
           const ClosureType subsurface_method = data.subsurface_method;
           ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, closure_weight);
           if (bssrdf) {
-            const float3 subsurface_radius = max(stack_load(stack, data.subsurface_radius),
-                                                 zero_float3());
+            const float3 subsurface_radius = stack_load(stack, data.subsurface_radius);
             const float subsurface_scale = stack_load(stack, data.subsurface_scale);
 
             bssrdf->radius = rgb_to_spectrum(
@@ -1079,7 +1078,7 @@ ccl_device
               sd, N, closure_weight, sss_anisotropy, base_diffuse_roughness, subsurface_color);
         }
         else {
-          const float subsurface_radius = stack_load(stack, data.subsurface_radius);
+          const float subsurface_radius = max(stack_load(stack, data.subsurface_radius), 0.0f);
           const float3 subsurface_radius_scale = saturate(
               stack_load(stack, data.subsurface_radius_scale));
 
