@@ -28,10 +28,10 @@ CCL_NAMESPACE_BEGIN
 
 /* TODO(OpenPBR): all these helper functions should probably go to a separate header file? */
 /* Analytical approximation of the average directional albedo of the Fresnel factor [d'Eon2021]*/
-// avoiding recursion to make it work for oneAPI
+/* Avoiding recursion to make it work for some GPU backends (e.g., oneAPI) */
 ccl_device float hemispherical_albedo_(const float eta)
 {
-  const float eta_sqr = eta * eta;
+  const float eta_sqr = sqr(eta);
   const float nominator = (10893.0f * eta) - 1438.2f;
   const float denominator = (-774.4f * eta_sqr) + (10212.0f * eta) + 1.0f;
   return logf(nominator / denominator);
@@ -42,9 +42,7 @@ ccl_device float hemispherical_albedo(const float eta)
   if (eta > 1.0f) {
     return hemispherical_albedo_(eta);
   }
-  else {
-    return 1.0f - eta * eta * (1.0f - hemispherical_albedo_(1.0f / eta));
-  }
+  return 1.0f - sqr(eta) * (1.0f - hemispherical_albedo_(1.0f / eta));
 }
 
 /* Closure Nodes */
@@ -721,7 +719,8 @@ ccl_device
           const ClosureType subsurface_method = data.subsurface_method;
           ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, closure_weight);
           if (bssrdf) {
-            const float3 subsurface_radius = stack_load(stack, data.subsurface_radius);
+            const float3 subsurface_radius = max(stack_load(stack, data.subsurface_radius),
+                                                 zero_float3());
             const float subsurface_scale = stack_load(stack, data.subsurface_scale);
 
             bssrdf->radius = rgb_to_spectrum(
