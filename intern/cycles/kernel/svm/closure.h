@@ -1080,7 +1080,7 @@ ccl_device
               sd, N, closure_weight, sss_anisotropy, base_diffuse_roughness, subsurface_color);
         }
         else {
-          const float subsurface_radius = saturatef(stack_load(stack, data.subsurface_radius));
+          const float subsurface_radius = stack_load(stack, data.subsurface_radius);
           const float3 subsurface_radius_scale = saturate(
               stack_load(stack, data.subsurface_radius_scale));
 
