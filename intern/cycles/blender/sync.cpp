@@ -350,7 +350,7 @@ void BlenderSync::sync_data(blender::RenderData &b_render,
 
 /* Integrator */
 
-void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
+void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer, // !!!
                                   bool background,
                                   const DeviceInfo &denoise_device_info)
 {
@@ -429,6 +429,14 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   if (integrator->use_light_tree_is_modified()) {
     scene->light_manager->tag_update(scene, LightManager::UPDATE_ALL);
   }
+
+  IntegratorMethod integrator_method = (IntegratorMethod)get_enum(
+      cscene, 
+      "integrator_method", 
+      2, // Number of items
+      INTEGRATOR_METHOD_PATH); // Default
+
+  integrator->set_integrator_method(integrator_method);
 
   SamplingPattern sampling_pattern = (SamplingPattern)get_enum(
       cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_TABULATED_SOBOL);
@@ -1136,6 +1144,9 @@ SessionParams BlenderSync::get_session_params(blender::RenderEngine &b_engine,
 
   return params;
 }
+
+// TODO(Tri): Add a ReTIR Options enum, just like DenoiserDLSSQuality?
+
 
 DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
                                               blender::ViewLayer *b_view_layer,

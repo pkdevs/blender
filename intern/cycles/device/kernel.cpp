@@ -84,6 +84,11 @@ const char *device_kernel_as_string(DeviceKernel kernel)
       return "integrator_shade_volume_ray_marching";
     case DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT:
       return "integrator_shade_dedicated_light";
+
+    case DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST:
+      return "integrator_restir_test";
+    // TODO(Tri)
+
     case DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL:
       return "integrator_megakernel";
     case DEVICE_KERNEL_INTEGRATOR_QUEUED_PATHS_ARRAY:

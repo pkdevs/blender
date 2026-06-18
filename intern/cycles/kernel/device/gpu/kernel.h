@@ -427,6 +427,25 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
 }
 ccl_gpu_kernel_postfix
 
+// TODO(Tri)
+ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
+    ccl_gpu_kernel_signature(integrator_restir_test,
+                             const int num_states,
+                             ccl_global int *indices,
+                             ccl_global int *num_indices,
+                             ccl_global float *render_buffer,
+                             const int kernel_index)
+{
+  /* This lambda finds all paths whose queued_kernel matches this one */
+  ccl_gpu_kernel_lambda(INTEGRATOR_STATE(state, path, queued_kernel) == kernel_index,
+                        int kernel_index);
+  ccl_gpu_kernel_lambda_pass.kernel_index = kernel_index;
+
+  /* This helper automatically handles the state fetching and loop for GPU threads */
+  gpu_parallel_active_index_array(num_states, indices, num_indices, ccl_gpu_kernel_lambda_pass);
+}
+ccl_gpu_kernel_postfix
+
 ccl_gpu_kernel_threads(GPU_PARALLEL_ACTIVE_INDEX_DEFAULT_BLOCK_SIZE)
     ccl_gpu_kernel_signature(integrator_queued_shadow_paths_array,
                              const int num_states,

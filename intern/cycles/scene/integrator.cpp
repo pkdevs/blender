@@ -97,6 +97,16 @@ NODE_DEFINE(Integrator)
   guiding_directional_sampling_type_enum.insert("ROUGHNESS",
                                                 GUIDING_DIRECTIONAL_SAMPLING_TYPE_ROUGHNESS);
 
+
+// TODO(Tri): Use bool? Not rn
+  static NodeEnum integrator_method_enum;
+  integrator_method_enum.insert("regular_pt", INTEGRATOR_METHOD_PATH);
+  integrator_method_enum.insert("restir_pt", INTEGRATOR_METHOD_RESTIR_PT);
+  SOCKET_ENUM(integrator_method,
+              "Integrator Method",
+              integrator_method_enum,
+              INTEGRATOR_METHOD_RESTIR_PT);
+
   SOCKET_BOOLEAN(use_guiding, "Guiding", false);
   SOCKET_BOOLEAN(deterministic_guiding, "Deterministic Guiding", true);
   SOCKET_BOOLEAN(use_surface_guiding, "Surface Guiding", true);

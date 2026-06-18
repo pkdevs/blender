@@ -5,6 +5,7 @@
 #pragma once
 
 #include "kernel/integrator/state.h"
+#include "kernel/integrator/restir.h"
 
 #include "device/graphics_interop.h"
 #include "device/memory.h"
@@ -146,6 +147,10 @@ class PathTraceWorkGPU : public PathTraceWork {
   /* Temporary buffer to get an array of queued path for a particular kernel. */
   device_vector<int> queued_paths_;
   device_vector<int> num_queued_paths_;
+
+  /* Spatio temporal resevoir resampling buffers. */
+  device_vector<ReSTIRReservoir> restir_reservoirs_;
+  // device_vector<ReSTIRReservoir> restir_prev_frame_; // TODO(Tri): Later on...
 
   /* Temporary buffer for passing work tiles to kernel. */
   device_vector<KernelWorkTile> work_tiles_;

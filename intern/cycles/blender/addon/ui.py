@@ -38,7 +38,6 @@ class CYCLES_PT_sampling_presets(CyclesPresetPanel):
     preset_subdir = "cycles/sampling"
     preset_add_operator = "render.cycles_sampling_preset_add"
 
-
 class CYCLES_PT_viewport_sampling_presets(CyclesPresetPanel):
     bl_label = "Viewport Sampling Presets"
     preset_subdir = "cycles/viewport_sampling"
@@ -309,6 +308,8 @@ class CYCLES_RENDER_PT_sampling_render(CyclesButtonsPanel, Panel):
         sub.prop(cscene, "adaptive_threshold", text="")
 
         col = layout.column(align=True)
+        col.prop(cscene, "integrator_method")
+
         if cscene.use_adaptive_sampling:
             col.prop(cscene, "samples", text="Max Samples")
             col.prop(cscene, "adaptive_min_samples", text="Min Samples")

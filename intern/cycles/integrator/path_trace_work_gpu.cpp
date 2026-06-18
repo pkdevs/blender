@@ -95,6 +95,7 @@ PathTraceWorkGPU::PathTraceWorkGPU(Device *device,
           device, "integrator_next_shadow_path_index", MEM_READ_WRITE),
       queued_paths_(device, "queued_paths", MEM_READ_WRITE),
       num_queued_paths_(device, "num_queued_paths", MEM_READ_WRITE),
+      // restir_reservoirs_(device, "restir_reservoirs", MEM_READ_WRITE),
       work_tiles_(device, "work_tiles", MEM_READ_WRITE),
       display_rgba_half_(device, "display buffer half", MEM_READ_WRITE),
       max_num_paths_(0),
@@ -304,7 +305,7 @@ void PathTraceWorkGPU::alloc_integrator_path_split()
   }
 }
 
-void PathTraceWorkGPU::alloc_work_memory()
+void PathTraceWorkGPU::alloc_work_memory() // !!!
 {
   alloc_integrator_soa();
   alloc_integrator_queue();
@@ -516,6 +517,22 @@ bool PathTraceWorkGPU::enqueue_path_iteration()
   return true;
 }
 
+// !!!
+/** TODO: (Tri)
+DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE means every new ReSTIR stage will require:
+New DeviceKernel enum value.
+New device kernel implementation.
+New scheduler case.
+New queue transition path.
+
+In other words:
+enum entry
+→ kernel implementation
+→ scheduler support
+→ path transition
+
+is the full pipeline.
+*/
 void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num_paths_limit)
 {
   device_ptr d_path_index = 0;
@@ -590,11 +607,12 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE:
+    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: // !!!
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME_RAY_MARCHING:
-    case DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT: {
+    case DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT:
+    case DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST: { // !!!: To launch and test integrator_restir_test function
       /* Shading kernels with integrator state and render buffer. */
       const DeviceKernelArguments args(
           &d_path_index, &buffers_->buffer.device_pointer, &work_size);

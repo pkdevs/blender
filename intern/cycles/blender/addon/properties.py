@@ -118,6 +118,14 @@ def enum_sampling_pattern(self, context):
         return items + non_debug_items
 
 
+def enum_integrator_method(self, context): # New
+    items = [
+        ('PATH', "Path Tracing", "Standard unbiased path tracing", 0),
+        ('RESTIR', "ReSTIR PT", "Reservoir-based Spatio-Temporal Importance Resampling", 1),
+    ]
+    return items
+
+
 enum_emission_sampling = (
     ('NONE',
      'None',
@@ -381,6 +389,19 @@ def update_pause(self, context):
     context.area.tag_redraw()
 
 
+# !!!(Tri): A warning pop-up as well?
+def update_integrator_method(self, context):
+    # self as CyclesRenderSettings
+    if self.integrator_method == 'RESTIR':
+        # Suggest low samples
+        if self.samples > 16:
+            self.samples = 16
+        if self.preview_samples > 8:
+            self.preview_samples = 8
+        if self.max_bounces < 12:
+             self.max_bounces = 12
+
+
 class CyclesRenderSettings(bpy.types.PropertyGroup):
     __slots__ = ()
 
@@ -532,6 +553,14 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         description="Random sampling pattern used by the integrator",
         items=enum_sampling_pattern,
         default=5,
+    )
+
+    integrator_method: EnumProperty( # New
+        name="Integrator Method",
+        description="Technique used for light transport integration",
+        items=enum_integrator_method,
+        default=0,
+        update=update_integrator_method,
     )
 
     scrambling_distance: FloatProperty(
@@ -1520,7 +1549,7 @@ class CyclesCurveRenderSettings(bpy.types.PropertyGroup):
         del bpy.types.Scene.cycles_curves
 
 
-class CyclesRenderLayerSettings(bpy.types.PropertyGroup):
+class CyclesRenderLayerSettings(bpy.types.PropertyGroup): #
     __slots__ = ()
 
     pass_debug_sample_count: BoolProperty(
@@ -1840,6 +1869,8 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                     return True
 
         return False
+    
+
 
     @staticmethod
     def _format_device_name(name):

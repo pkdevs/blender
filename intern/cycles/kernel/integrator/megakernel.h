@@ -7,6 +7,7 @@
 #include "kernel/integrator/intersect_closest.h"
 #include "kernel/integrator/intersect_dedicated_light.h"
 #include "kernel/integrator/intersect_mnee.h"
+#include "kernel/integrator/restir.h"
 #include "kernel/integrator/intersect_shadow.h"
 #include "kernel/integrator/intersect_subsurface.h"
 #include "kernel/integrator/intersect_volume_stack.h"
@@ -106,6 +107,9 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
           break;
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE:
           integrator_intersect_mnee(kg, state);
+          break;
+        case DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST:
+          integrator_restir_test(kg, state, render_buffer); // !!!
           break;
         default:
           kernel_assert(0);
