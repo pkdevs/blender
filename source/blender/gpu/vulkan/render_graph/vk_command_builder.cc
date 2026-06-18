@@ -1109,8 +1109,7 @@ void VKCommandBuilder::ImageTracker::suspend(Barrier &r_barrier,
             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
             VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
         change.vk_image_layout,
-        to_default_image_layout(
-            change.vk_image_aspect, use_local_read, use_unified_image_layouts),
+        to_default_image_layout(change.vk_image_aspect, use_local_read, use_unified_image_layouts),
         change.vk_image_aspect,
         change.subimage);
     r_barrier.image_memory_barriers = r_barrier.image_memory_barriers.with_new_end(
@@ -1154,8 +1153,7 @@ void VKCommandBuilder::ImageTracker::resume(Barrier &r_barrier,
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
             VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
-        to_default_image_layout(
-            change.vk_image_aspect, use_local_read, use_unified_image_layouts),
+        to_default_image_layout(change.vk_image_aspect, use_local_read, use_unified_image_layouts),
         change.vk_image_layout,
         change.vk_image_aspect,
         change.subimage);
