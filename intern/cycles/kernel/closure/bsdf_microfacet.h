@@ -1651,7 +1651,7 @@ ccl_device int bsdf_volumetric_setup(KernelGlobals kg,
 {
   fresnel->sigma_s = scatter / depth;
   /* To avoid numerical problems when a color channel is 0 we clamp it to a minimum of 1e-5 */
-  const Spectrum transmission_clamped = clamp(transmission, make_float3(1e-5f), one_float3());
+  const Spectrum transmission_clamped = max(transmission, make_float3(1e-5f));
   const Spectrum sigma_t = -log(transmission_clamped) / depth;
   fresnel->sigma_a = sigma_t - fresnel->sigma_s;
   const float sigma_a_min = reduce_min(fresnel->sigma_a);
