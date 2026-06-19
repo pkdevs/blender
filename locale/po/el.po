@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8764d33c658b')\n"
+"Project-Id-Version: Blender 5.2.0 LTS Beta (b'e899b48ea546')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-01 07:36+0000\n"
+"POT-Creation-Date: 2026-06-15 07:32+0000\n"
 "PO-Revision-Date: 2025-07-23 15:19+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Greek <https://translate.blender.org/projects/blender-ui/ui/el/>\n"
@@ -523,6 +523,10 @@ msgid "Screen"
 msgstr "Οθόνη"
 
 
+msgid "Track"
+msgstr "Ανίχνευση"
+
+
 msgid "Mirror"
 msgstr "Καθρέφτισμα"
 
@@ -531,32 +535,28 @@ msgid "Snap"
 msgstr "Προσκόλληση"
 
 
-msgid "Select Linked"
-msgstr "Επιλογή Συνδεδεμένων"
-
-
-msgid "Metaball"
-msgstr "Μετα-σφαίρα"
-
-
-msgid "Light"
-msgstr "Φως"
-
-
 msgid "Rigid Body"
 msgstr "Rigid Body"
+
+
+msgid "Select Linked"
+msgstr "Επιλογή Συνδεδεμένων"
 
 
 msgid "Import"
 msgstr "Εισαγωγή"
 
 
+msgid "Metaball"
+msgstr "Μετα-σφαίρα"
+
+
 msgid "Apply"
 msgstr "Εφαρμογή"
 
 
-msgid "Track"
-msgstr "Ανίχνευση"
+msgid "Light"
+msgstr "Φως"
 
 
 msgid "Make Single User"
@@ -981,6 +981,10 @@ msgid "Viewport Shading"
 msgstr "Σκίαση Παραθύρου Οπτικής"
 
 
+msgid "Cancel"
+msgstr "Ακύρωση"
+
+
 msgctxt "Operator"
 msgid "Clear"
 msgstr "Καθαρισμός"
@@ -992,10 +996,6 @@ msgstr "Δαχτυλίδι"
 
 msgid "Assign"
 msgstr "Ανάθεση"
-
-
-msgid "Cancel"
-msgstr "Ακύρωση"
 
 
 msgid "Esc"

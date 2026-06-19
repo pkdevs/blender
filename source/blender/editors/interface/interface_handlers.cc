@@ -23,17 +23,17 @@
 #include "DNA_screen_types.h"
 
 #include "BLI_array.hh"
-#include "BLI_array_utils.h"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_rect.h"
-#include "BLI_sort_utils.h"
-#include "BLI_string.h"
-#include "BLI_string_cursor_utf8.h"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_array_utils_c.hh"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_sort_utils.hh"
+#include "BLI_string.hh"
+#include "BLI_string_cursor_utf8.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_animsys.h"
 #include "BKE_blender_undo.hh"
@@ -2197,7 +2197,7 @@ static bool but_drag_init(bContext *C, Button *but, HandleButtonData *data, cons
       drag_info->pushed_state = drag_toggle_but_pushed_state(but);
       drag_info->but_cent_start[0] = BLI_rctf_cent_x(&but->rect);
       drag_info->but_cent_start[1] = BLI_rctf_cent_y(&but->rect);
-      if (but->flag & BUT_DRAG_LOCK_X) {
+      if ((but->flag & BUT_DRAG_LOCK_X) == BUT_DRAG_LOCK_X) {
         drag_info->xy_lock[0] = true;
       }
       copy_v2_v2_int(drag_info->xy_init, event->xy);
@@ -3299,40 +3299,42 @@ static void textedit_set_cursor_pos(Button *but, const ARegion *region, const fl
 
   if (ELEM(but->type, ButtonType::Text, ButtonType::SearchMenu)) {
     if (but->flag & UI_HAS_ICON) {
-      startx += UI_ICON_SIZE / aspect;
+      startx += UI_ICON_SIZE;
     }
   }
   if (!(but->drawflag & BUT_NO_TEXT_PADDING)) {
     if (right_aligned) {
-      startx += U.pixelsize / aspect;
-      endx -= UI_TEXT_MARGIN_X * U.widget_unit / aspect;
+      startx += U.pixelsize;
+      endx -= UI_TEXT_MARGIN_X * U.widget_unit;
     }
     else {
-      startx += UI_TEXT_MARGIN_X * U.widget_unit / aspect;
-      endx -= U.pixelsize / aspect;
+      startx += UI_TEXT_MARGIN_X * U.widget_unit;
+      endx -= U.pixelsize;
     }
   }
   else if (right_aligned) {
-    endx -= U.pixelsize / aspect;
+    endx -= U.pixelsize;
   }
   else {
-    startx += U.pixelsize / aspect;
+    startx += U.pixelsize;
   }
 
-  if (right_aligned) {
-    int width = BLF_width(fstyle.uifont_id, str + but->ofs, strlen(str + but->ofs));
-    const float align_x_ofs = endx - startx - width;
-    startx += max_ff(0.0f, align_x_ofs);
-  }
-
-  /* Transform startx to screen space. */
+  /* Transform startx and endx to screen space. */
   block_to_window_fl(region, but->block, &startx, &starty_dummy);
+  block_to_window_fl(region, but->block, &endx, &starty_dummy);
 
   fontscale(&fstyle.points, aspect);
 
   fontstyle_set(&fstyle);
 
   button_text_password_hide(password_str, but, false);
+
+  /* Compute shift due to right-alignment after password filter. */
+  if (right_aligned) {
+    int width = BLF_width(fstyle.uifont_id, str + but->ofs, strlen(str + but->ofs));
+    const float align_x_ofs = endx - startx - width;
+    startx += max_ff(0.0f, align_x_ofs);
+  }
 
   /* mouse dragged outside the widget to the left */
   if (xy.x < startx) {
@@ -4198,7 +4200,8 @@ static int do_but_textedit(
             data->cancel = data->escapecancel = true;
           }
 #ifdef WITH_INPUT_IME
-          else if (is_ime_composing && ime_data->composite.size() && but->type == ButtonType::Text)
+          else if (is_ime_composing && !ime_data->composite.empty() &&
+                   but->type == ButtonType::Text)
           {
             textedit_insert_buf(
                 but, text_edit, ime_data->composite.c_str(), ime_data->composite.size());
@@ -4483,7 +4486,7 @@ static int do_but_textedit(
   }
   else if (event->type == WM_IME_COMPOSITE_EVENT) {
     changed = true;
-    if (ime_data->result.size()) {
+    if (!ime_data->result.empty()) {
       if (ELEM(but->type, ButtonType::Num, ButtonType::NumSlider) &&
           STREQ(ime_data->result.c_str(), "\xE3\x80\x82"))
       {
@@ -4694,7 +4697,7 @@ static void numedit_begin(Button *but, HandleButtonData *data)
         }
 
         /* Can happen at extreme values. */
-        if (UNLIKELY(softmin == softmax)) {
+        if (softmin == softmax) [[unlikely]] {
           if (data->origvalue > 0.0) {
             softmin = nextafterf(softmin, -FLT_MAX);
           }
@@ -4885,7 +4888,14 @@ static void block_open_begin(bContext *C, Button *but, HandleButtonData *data)
     }
   }
   else if (menufunc) {
-    data->menu = popup_menu_create(C, data->region, but, menufunc, arg);
+    data->menu = popup_menu_create(
+        C,
+        data->region,
+        but,
+        menufunc,
+        arg,
+        /* Inherit the `can_refresh` flag from the parent menu, if any. */
+        but->block->handle ? but->block->handle->can_refresh : false);
     if (MenuType *mt = button_menutype_get(but)) {
       STRNCPY_UTF8(data->menu->menu_idname, mt->idname);
     }
@@ -5419,6 +5429,7 @@ static int do_but_TEXTBOX(bContext *C,
                           const wmEvent *event)
 {
   wmWindow *win = CTX_wm_window(C);
+  const bool is_disabled = textbox->flag & BUT_DISABLED || data->disable_force;
 
   switch (data->state) {
     case BUTTON_STATE_TEXT_EDITING:
@@ -5460,7 +5471,16 @@ static int do_but_TEXTBOX(bContext *C,
           }
           break;
         }
-        if (win->cursor != WM_CURSOR_TEXT_EDIT) {
+        /* Set text-edit cursor only if the button is not disabled, otherwise reset the mouse
+         * cursor. */
+        if (is_disabled) {
+          if (win->cursor != WM_CURSOR_DEFAULT) {
+            WM_cursor_modal_restore(win);
+            WM_cursor_set(win, WM_CURSOR_DEFAULT);
+            data->changed_cursor = false;
+          }
+        }
+        else if (win->cursor != WM_CURSOR_TEXT_EDIT) {
           WM_cursor_modal_set(win, WM_CURSOR_TEXT_EDIT);
           data->changed_cursor = true;
         }
@@ -5542,6 +5562,10 @@ static int do_but_TEXTBOX(bContext *C,
     }
     default:
       break;
+  }
+  /* When disabled text-box buttons only can be scrolled/resized. */
+  if (is_disabled) {
+    return WM_UI_HANDLER_CONTINUE;
   }
   /* Handle regular text buttons events. */
   return do_but_TEX(C, block, textbox, data, event);
@@ -6395,7 +6419,7 @@ static int do_but_NUM(
           double precision = (roundf(log10f(data->value) + UI_PROP_SCALE_LOG_SNAP_OFFSET) - 1.0f) +
                              log10f(number_but->step_size);
           /* Non-finite when `data->value` is zero. */
-          if (UNLIKELY(!isfinite(precision))) {
+          if (!isfinite(precision)) [[unlikely]] {
             precision = -FLT_MAX; /* Ignore this value. */
           }
           value_step = powf(10.0f, max_ff(precision, -number_but->precision));
@@ -8958,6 +8982,15 @@ static int do_button(bContext *C, Block *block, Button *but, const wmEvent *even
 
   /* If `but->pointype` is set, `but->poin` should be too. */
   BLI_assert(!bool(but->pointype) || but->poin);
+
+  /* Let disabled text-box buttons to be scrolled/resized. */
+  if (is_disabled && but->type == ButtonType::TextBox) {
+    if (do_but_TEXTBOX(C, block, static_cast<ButtonTextBox *>(but), data, event) ==
+        WM_UI_HANDLER_BREAK)
+    {
+      return WM_UI_HANDLER_BREAK;
+    }
+  }
 
   /* Only hard-coded stuff here, button interactions with configurable
    * keymaps are handled using operators (see #keymap_ui). */

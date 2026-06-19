@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8764d33c658b')\n"
+"Project-Id-Version: Blender 5.2.0 LTS Beta (b'e899b48ea546')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-01 07:36+0000\n"
+"POT-Creation-Date: 2026-06-15 07:32+0000\n"
 "PO-Revision-Date: 2026-05-04 00:12+0000\n"
 "Last-Translator: Alessandro Vecchio <alessandrovecchio1907@gmail.com>\n"
 "Language-Team: Italian <https://translate.blender.org/projects/blender-ui/ui/it/>\n"
@@ -1656,6 +1656,42 @@ msgid "Armatures active edit bone"
 msgstr "Osso strutturale in modalità modifica (editbone) delle armature"
 
 
+msgid "Asset Library"
+msgstr "Libreria Assets"
+
+
+msgid "Is Editable"
+msgstr "È Modificabile"
+
+
+msgid "All Libraries"
+msgstr "Tutte le Librerie"
+
+
+msgid "Show assets from all of the listed asset libraries"
+msgstr "Mostra le risorse da tutte le librerie di risorse elencate"
+
+
+msgid "Current File"
+msgstr "File Corrente"
+
+
+msgid "Show the assets currently available in this Blender session"
+msgstr "Mostra le risorse attualmente disponibili in questa sessione di Blender"
+
+
+msgid "Essentials"
+msgstr "Essenziali"
+
+
+msgid "Custom"
+msgstr "Personalizzato"
+
+
+msgid "Show assets from the asset libraries configured in the Preferences"
+msgstr "Mostra risorse dalle librerie delle risorse configurate nelle Preferenze"
+
+
 msgid "User Asset Libraries"
 msgstr "Librerie Risorse Utente"
 
@@ -1809,40 +1845,8 @@ msgid "Regions for quick access to assets"
 msgstr "Comparti di accesso rapido alle risorse"
 
 
-msgid "Asset Library"
-msgstr "Libreria Assets"
-
-
 msgid "Choose the asset library to display assets from"
 msgstr "Scegli la libreria di risorse da cui visualizzare le risorse"
-
-
-msgid "All Libraries"
-msgstr "Tutte le Librerie"
-
-
-msgid "Show assets from all of the listed asset libraries"
-msgstr "Mostra le risorse da tutte le librerie di risorse elencate"
-
-
-msgid "Current File"
-msgstr "File Corrente"
-
-
-msgid "Show the assets currently available in this Blender session"
-msgstr "Mostra le risorse attualmente disponibili in questa sessione di Blender"
-
-
-msgid "Essentials"
-msgstr "Essenziali"
-
-
-msgid "Custom"
-msgstr "Personalizzato"
-
-
-msgid "Show assets from the asset libraries configured in the Preferences"
-msgstr "Mostra risorse dalle librerie delle risorse configurate nelle Preferenze"
 
 
 msgid "Activate Operator"
@@ -4510,10 +4514,6 @@ msgstr "Indice"
 
 msgid "Index of this bone collection in the armature.collections_all array. Note that finding this index requires a scan of all the bone collections, so do access this with care."
 msgstr "Indice di questa raccolta di ossa nella sequenza armature.collections_all. Nota che per trovare questo indice è necessaria una scansione di tutte le raccolte di ossa, quindi accedi a questo valore con cautela."
-
-
-msgid "Is Editable"
-msgstr "È Modificabile"
 
 
 msgid "This collection is owned by a local Armature, or was added via a library override in the current blend file"
@@ -24518,12 +24518,48 @@ msgid "Material slot name"
 msgstr "Nome dello slot materiale"
 
 
+msgid "Track"
+msgstr "Traccia"
+
+
+msgid "Math"
+msgstr "Matematica"
+
+
+msgid "Utilities"
+msgstr "Utilità"
+
+
+msgid "Assign Material"
+msgstr "Assegna Materiale"
+
+
+msgid "Read"
+msgstr "Lettura"
+
+
+msgid "Sample"
+msgstr "Campione"
+
+
+msgid "Write"
+msgstr "Scrittura"
+
+
+msgid "Primitives"
+msgstr "Primitive"
+
+
 msgid "Mirror"
 msgstr "Specchia"
 
 
 msgid "Snap"
 msgstr "Aggancia"
+
+
+msgid "Rigid Body"
+msgstr "Corpo Rigido"
 
 
 msgid "UV Mapping"
@@ -24554,16 +24590,12 @@ msgid "View Regions"
 msgstr "Regione Vista"
 
 
-msgid "Math"
-msgstr "Matematica"
-
-
 msgid "Select More/Less"
 msgstr "Seleziona Più/Meno"
 
 
-msgid "Utilities"
-msgstr "Utilità"
+msgid "Instances"
+msgstr "Istanze"
 
 
 msgid "Select Similar"
@@ -24582,96 +24614,12 @@ msgid "Select Loops"
 msgstr "Seleziona Anelli"
 
 
-msgid "Assign Material"
-msgstr "Assegna Materiale"
-
-
-msgid "Read"
-msgstr "Lettura"
-
-
-msgid "Sample"
-msgstr "Campione"
-
-
-msgid "Write"
-msgstr "Scrittura"
-
-
-msgid "Primitives"
-msgstr "Primitive"
-
-
-msgid "Metaball"
-msgstr "Metaball"
-
-
-msgid "Light"
-msgstr "Luce"
-
-
-msgid "Light Probe"
-msgstr "Sensore di Luce"
-
-
-msgid "Instances"
-msgstr "Istanze"
-
-
-msgid "Add Image"
-msgstr "Aggiungi Immagine"
-
-
-msgid "Relations"
-msgstr "Relazioni"
-
-
-msgid "Rigid Body"
-msgstr "Corpo Rigido"
-
-
 msgid "Import"
 msgstr "Importa"
 
 
-msgid "Apply"
-msgstr "Applica"
-
-
-msgid "Track"
-msgstr "Traccia"
-
-
-msgid "Quick Effects"
-msgstr "Effetti Veloci"
-
-
-msgid "Show/Hide"
-msgstr "Mostra/Nascondi"
-
-
-msgid "Clean Up"
-msgstr "Ripulisci"
-
-
-msgid "Asset"
-msgstr "Risorsa"
-
-
-msgid "Make Single User"
-msgstr "Rendi Utilizzatore Singolo"
-
-
-msgid "Convert"
-msgstr "Converti"
-
-
-msgid "Link/Transfer Data"
-msgstr "Collega/Trasferisci Dati"
-
-
-msgid "Hooks"
-msgstr "Ganci"
+msgid "Relations"
+msgstr "Relazioni"
 
 
 msgid "UV"
@@ -24682,12 +24630,60 @@ msgid "Vertex Group Locks"
 msgstr "Blocchi del Gruppo di Vertici"
 
 
-msgid "Face Sets Init"
-msgstr "Init Sets di Facce"
+msgid "Metaball"
+msgstr "Metaball"
 
 
 msgid "Random Mask"
 msgstr "Maschera Casuale"
+
+
+msgid "Asset"
+msgstr "Risorsa"
+
+
+msgid "Show/Hide"
+msgstr "Mostra/Nascondi"
+
+
+msgid "Apply"
+msgstr "Applica"
+
+
+msgid "Link/Transfer Data"
+msgstr "Collega/Trasferisci Dati"
+
+
+msgid "Clean Up"
+msgstr "Ripulisci"
+
+
+msgid "Face Sets Init"
+msgstr "Init Sets di Facce"
+
+
+msgid "Light Probe"
+msgstr "Sensore di Luce"
+
+
+msgid "Light"
+msgstr "Luce"
+
+
+msgid "Add Image"
+msgstr "Aggiungi Immagine"
+
+
+msgid "Hooks"
+msgstr "Ganci"
+
+
+msgid "Make Single User"
+msgstr "Rendi Utilizzatore Singolo"
+
+
+msgid "Quick Effects"
+msgstr "Effetti Veloci"
 
 
 msgid "Clear Transform"
@@ -24742,12 +24738,8 @@ msgid "Merge"
 msgstr "Unisci"
 
 
-msgid "Linked"
-msgstr "Collegato"
-
-
-msgid "Layout"
-msgstr "Layout"
+msgid "Convert"
+msgstr "Converti"
 
 
 msgid "Special Characters"
@@ -24756,6 +24748,14 @@ msgstr "Caratteri Speciali"
 
 msgid "Kerning"
 msgstr "Crenatura"
+
+
+msgid "Linked"
+msgstr "Collegato"
+
+
+msgid "Layout"
+msgstr "Layout"
 
 
 msgid "Bone Roll"
@@ -28405,6 +28405,10 @@ msgstr "Modificatore Nodi"
 
 msgid "Pack the baked data into the .blend file"
 msgstr "Incorpora i dati precalcolati nel file .blend"
+
+
+msgid "Bakes"
+msgstr "Precalcoli (bakes)"
 
 
 msgid "Node Group"
@@ -32968,10 +32972,6 @@ msgstr "Nodo Attivo"
 
 msgid "Active node in this tree"
 msgstr "Nodo attivo in quest'albero"
-
-
-msgid "Bakes"
-msgstr "Precalcoli (bakes)"
 
 
 msgid "Data-Block"
@@ -50170,26 +50170,6 @@ msgid "Active Palette Color"
 msgstr "Colore Tavolozza Attivo"
 
 
-msgid "Selectability & Visibility"
-msgstr "Selezionabilità e Visibilità"
-
-
-msgid "Shadow Settings"
-msgstr "Impostazioni Ombra"
-
-
-msgid "SSAO Settings"
-msgstr "Impostazioni SSAO"
-
-
-msgid "Cavity"
-msgstr "Cavità"
-
-
-msgid "Render Pass"
-msgstr "Passaggi Render"
-
-
 msgid "Compositor"
 msgstr "Compositore"
 
@@ -50228,6 +50208,26 @@ msgstr "Stereoscopia"
 
 msgid "Auto-Masking"
 msgstr "Auto-Mascheramento"
+
+
+msgid "Selectability & Visibility"
+msgstr "Selezionabilità e Visibilità"
+
+
+msgid "Shadow Settings"
+msgstr "Impostazioni Ombra"
+
+
+msgid "SSAO Settings"
+msgstr "Impostazioni SSAO"
+
+
+msgid "Cavity"
+msgstr "Cavità"
+
+
+msgid "Render Pass"
+msgstr "Passaggi Render"
 
 
 msgid "Chain Scaling"
@@ -59595,6 +59595,10 @@ msgid "Positional Tracking"
 msgstr "Tracciatura Posizione"
 
 
+msgid "Cancel"
+msgstr "Annulla"
+
+
 msgid "Navigate"
 msgstr "Navigare"
 
@@ -61046,11 +61050,6 @@ msgstr "Giacitura Tratto:"
 
 
 msgctxt "Operator"
-msgid "Add New Layer to "
-msgstr "Aggiungi Nuovo Livello a "
-
-
-msgctxt "Operator"
 msgid "New Layer"
 msgstr "Nuovo Livello"
 
@@ -61943,11 +61942,6 @@ msgstr "Vai a Genitore"
 
 
 msgctxt "Operator"
-msgid "New Folder"
-msgstr "Nuova Cartella"
-
-
-msgctxt "Operator"
 msgid "Render Active Object"
 msgstr "Render Oggetto Attivo"
 
@@ -61992,6 +61986,11 @@ msgstr "Muovi In Cima"
 msgctxt "Operator"
 msgid "Move to Bottom"
 msgstr "Muovi In Fondo"
+
+
+msgctxt "Operator"
+msgid "New Folder"
+msgstr "Nuova Cartella"
 
 
 msgctxt "Operator"
@@ -64965,10 +64964,6 @@ msgstr "Osso non selezionabile nella catena"
 
 msgid "No active Keying Set to use"
 msgstr "Nessun Gruppo Chiavi attivo da utilizzare"
-
-
-msgid "Cancel"
-msgstr "Annulla"
 
 
 msgid "No keyframes to slide between"
@@ -69695,6 +69690,10 @@ msgid "Mesh Texture Paint"
 msgstr "Pittura Texture Mesh"
 
 
+msgid "Curve Root"
+msgstr "Radice Curva"
+
+
 msgid "Offset Vector"
 msgstr "Vettore dell'Offset"
 
@@ -69707,16 +69706,12 @@ msgid "Ignore Sharpness"
 msgstr "Ignora Nitidezza"
 
 
-msgid "Minimum distance between two guides"
-msgstr "Distanza minima tra due Guide"
-
-
-msgid "Curve Root"
-msgstr "Radice Curva"
-
-
 msgid "Hair Tie Scale"
 msgstr "Scala Elastico per Capelli"
+
+
+msgid "Minimum distance between two guides"
+msgstr "Distanza minima tra due Guide"
 
 
 msgid "Cumulative Offset"

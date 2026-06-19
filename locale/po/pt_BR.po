@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8764d33c658b')\n"
+"Project-Id-Version: Blender 5.2.0 LTS Beta (b'e899b48ea546')\n"
 "Report-Msgid-Bugs-To: Leandro Paganelli <leandrobp@fastmail.com>\n"
-"POT-Creation-Date: 2026-06-01 07:36+0000\n"
+"POT-Creation-Date: 2026-06-15 07:32+0000\n"
 "PO-Revision-Date: 2026-04-13 10:12+0000\n"
 "Last-Translator: Gilberto Rodrigues <gilbertorodrigues@outlook.com>\n"
 "Language-Team: Portuguese (Brazil) <https://translate.blender.org/projects/blender-ui/ui/pt_BR/>\n"
@@ -1545,6 +1545,26 @@ msgid "Armatures active edit bone"
 msgstr "Osso de edição ativo na armação"
 
 
+msgid "Asset Library"
+msgstr "Biblioteca de Recursos"
+
+
+msgid "Show assets from all of the listed asset libraries"
+msgstr "Mostrar itens de todas as bibliotecas listadas"
+
+
+msgid "Show the assets currently available in this Blender session"
+msgstr "Mostrar os itens atualmente disponíveis nesta sessão do Blender"
+
+
+msgid "Essentials"
+msgstr "Essenciais"
+
+
+msgid "Custom"
+msgstr "Personalizar"
+
+
 msgid "User Asset Libraries"
 msgstr "Bibliotecas de Ativos do Usuário"
 
@@ -1665,28 +1685,8 @@ msgid "Regions for quick access to assets"
 msgstr "Regiões para acesso rápido aos ativos"
 
 
-msgid "Asset Library"
-msgstr "Biblioteca de Recursos"
-
-
 msgid "Choose the asset library to display assets from"
 msgstr "Escolha a biblioteca de ativos para exibir os ativos"
-
-
-msgid "Show assets from all of the listed asset libraries"
-msgstr "Mostrar itens de todas as bibliotecas listadas"
-
-
-msgid "Show the assets currently available in this Blender session"
-msgstr "Mostrar os itens atualmente disponíveis nesta sessão do Blender"
-
-
-msgid "Essentials"
-msgstr "Essenciais"
-
-
-msgid "Custom"
-msgstr "Personalizar"
 
 
 msgid "ID Name"
@@ -21188,12 +21188,24 @@ msgid "Material slot name"
 msgstr "Nome do compartimento do material."
 
 
+msgid "Track"
+msgstr "Rastrear"
+
+
+msgid "Math"
+msgstr "Matemática"
+
+
 msgid "Mirror"
 msgstr "Espelhar"
 
 
 msgid "Snap"
 msgstr "Atrair"
+
+
+msgid "Rigid Body"
+msgstr "Corpo rígido"
 
 
 msgid "UV Mapping"
@@ -21224,12 +21236,12 @@ msgid "View Regions"
 msgstr "Visualizar Regiões"
 
 
-msgid "Math"
-msgstr "Matemática"
-
-
 msgid "Select More/Less"
 msgstr "Selecionar mais ou menos"
+
+
+msgid "Instances"
+msgstr "Instâncias"
 
 
 msgid "Select Similar"
@@ -21248,76 +21260,60 @@ msgid "Select Loops"
 msgstr "Selecionar anéis"
 
 
-msgid "Metaball"
-msgstr "Meta-esfera"
-
-
-msgid "Light"
-msgstr "Luz"
-
-
-msgid "Light Probe"
-msgstr "Sonda de Luz"
-
-
-msgid "Instances"
-msgstr "Instâncias"
-
-
-msgid "Add Image"
-msgstr "Adicionar Imagem"
+msgid "Import"
+msgstr "Importar"
 
 
 msgid "Relations"
 msgstr "Relações"
 
 
-msgid "Rigid Body"
-msgstr "Corpo rígido"
+msgid "UV"
+msgstr "UV"
 
 
-msgid "Import"
-msgstr "Importar"
+msgid "Metaball"
+msgstr "Meta-esfera"
 
 
-msgid "Apply"
-msgstr "Aplicar"
-
-
-msgid "Track"
-msgstr "Rastrear"
-
-
-msgid "Quick Effects"
-msgstr "Efeitos instantâneos"
+msgid "Random Mask"
+msgstr "Máscara Aleatória"
 
 
 msgid "Show/Hide"
 msgstr "Mostrar ou ocultar"
 
 
+msgid "Apply"
+msgstr "Aplicar"
+
+
 msgid "Clean Up"
 msgstr "Limpeza"
 
 
-msgid "Make Single User"
-msgstr "Tornar usuário único"
+msgid "Light Probe"
+msgstr "Sonda de Luz"
 
 
-msgid "Convert"
-msgstr "Converter"
+msgid "Light"
+msgstr "Luz"
+
+
+msgid "Add Image"
+msgstr "Adicionar Imagem"
 
 
 msgid "Hooks"
 msgstr "Ganchos"
 
 
-msgid "UV"
-msgstr "UV"
+msgid "Make Single User"
+msgstr "Tornar usuário único"
 
 
-msgid "Random Mask"
-msgstr "Máscara Aleatória"
+msgid "Quick Effects"
+msgstr "Efeitos instantâneos"
 
 
 msgid "Clear Transform"
@@ -21360,16 +21356,20 @@ msgid "Merge"
 msgstr "Fundir"
 
 
+msgid "Convert"
+msgstr "Converter"
+
+
+msgid "Special Characters"
+msgstr "Caracteres especiais"
+
+
 msgid "Linked"
 msgstr "Vinculando"
 
 
 msgid "Layout"
 msgstr "Organizar"
-
-
-msgid "Special Characters"
-msgstr "Caracteres especiais"
 
 
 msgid "Bone Roll"
@@ -47979,10 +47979,6 @@ msgid "Active Palette Color"
 msgstr "Cor ativa da paleta"
 
 
-msgid "Render Pass"
-msgstr "Passo de renderização"
-
-
 msgid "Motion Tracking"
 msgstr "Captura de movimentos"
 
@@ -47997,6 +47993,10 @@ msgstr "Exibição Quadrante"
 
 msgid "Stereoscopy"
 msgstr "Estereoscopia"
+
+
+msgid "Render Pass"
+msgstr "Passo de renderização"
 
 
 msgid "Bone Constraints"
@@ -58455,6 +58455,10 @@ msgid "Session State"
 msgstr "Estado da Sessão"
 
 
+msgid "Cancel"
+msgstr "Cancelar"
+
+
 msgctxt "WindowManager"
 msgid "Window"
 msgstr "Janela"
@@ -62908,10 +62912,6 @@ msgstr "O conjunto de inserção de chaves não possui quaisquer caminhos."
 
 msgid "Relax Pose"
 msgstr "Relaxar Pose"
-
-
-msgid "Cancel"
-msgstr "Cancelar"
 
 
 msgid "No keyframes to slide between"

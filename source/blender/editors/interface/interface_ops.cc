@@ -22,11 +22,11 @@
 
 #include "ANIM_keyframing.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLF_api.hh"
 #include "BLT_lang.hh"
@@ -650,16 +650,16 @@ static wmOperatorStatus override_remove_button_exec(bContext *C, wmOperator *op)
         }
       }
     }
+    RNA_property_copy(bmain, &ptr, &src, prop, index, oprop, opop);
     BKE_lib_override_library_property_operation_delete(oprop, opop);
-    RNA_property_copy(bmain, &ptr, &src, prop, index);
     if (oprop->operations.is_empty()) {
       BKE_lib_override_library_property_delete(id->override_library, oprop);
     }
   }
   else {
     /* Just remove whole generic override operation of this property. */
+    RNA_property_copy(bmain, &ptr, &src, prop, -1, oprop);
     BKE_lib_override_library_property_delete(id->override_library, oprop);
-    RNA_property_copy(bmain, &ptr, &src, prop, -1);
   }
 
   /* Outliner e.g. has to be aware of this change. */
@@ -3089,6 +3089,14 @@ static void UI_OT_view_item_navigate(wmOperatorType *ot)
                "Navigation Direction",
                "Direction in which to navigate and select next element.");
 }
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name UI View Item Focus Operator
+ *
+ * Operator to bring the active item into view by scrolling the view.
+ *
+ * \{ */
 
 static wmOperatorStatus ui_view_item_focus_invoke(bContext *C,
                                                   wmOperator * /*op*/,
@@ -3114,7 +3122,6 @@ static void UI_OT_view_item_focus(wmOperatorType *ot)
 
   ot->flag = OPTYPE_INTERNAL;
 }
-
 /** \} */
 
 /* -------------------------------------------------------------------- */

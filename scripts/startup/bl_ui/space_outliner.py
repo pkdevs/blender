@@ -112,10 +112,20 @@ class OUTLINER_MT_context_menu(Menu):
     bl_label = "Outliner"
 
     @staticmethod
-    def draw_common_operators(layout):
-        layout.menu_contents("OUTLINER_MT_asset")
+    def draw_common_operators(space, layout):
+        # Mark/clear asset options does not belongs in certain outliner views.
+        if space.display_mode not in {'SEQUENCE', 'LIBRARY_OVERRIDES'}:
+            layout.menu_contents("OUTLINER_MT_asset")
 
-        layout.separator()
+            layout.separator()
+
+        if space.display_mode in {'LIBRARY_OVERRIDES'}:
+            layout.operator(
+                "outliner.liboverride_property_remove",
+                text="Remove",
+            )
+
+            layout.separator()
 
         layout.menu("OUTLINER_MT_liboverride", icon='LIBRARY_DATA_OVERRIDE')
 
@@ -136,7 +146,7 @@ class OUTLINER_MT_context_menu(Menu):
             OUTLINER_MT_collection_new.draw_without_context_menu(context, layout)
             layout.separator()
 
-        OUTLINER_MT_context_menu.draw_common_operators(layout)
+        OUTLINER_MT_context_menu.draw_common_operators(space, layout)
 
 
 class OUTLINER_MT_context_menu_view(Menu):
@@ -251,7 +261,7 @@ class OUTLINER_MT_collection(Menu):
         space = context.space_data
 
         layout.operator("outliner.collection_new", text="New", text_ctxt=i18n_contexts.id_collection).nested = True
-        layout.operator("outliner.collection_duplicate", text="Duplicate Collection")
+        layout.operator("outliner.collection_duplicate", text="Duplicate Collection", icon='DUPLICATE')
         layout.operator("outliner.collection_duplicate_linked", text="Duplicate Linked")
         layout.operator("outliner.id_copy", text="Copy", icon='COPYDOWN')
         layout.operator("outliner.id_paste", text="Paste", icon='PASTEDOWN')
@@ -292,7 +302,7 @@ class OUTLINER_MT_collection(Menu):
 
         layout.separator()
 
-        OUTLINER_MT_context_menu.draw_common_operators(layout)
+        OUTLINER_MT_context_menu.draw_common_operators(space, layout)
 
 
 class OUTLINER_MT_collection_new(Menu):
@@ -310,7 +320,7 @@ class OUTLINER_MT_collection_new(Menu):
 
         layout.separator()
 
-        OUTLINER_MT_context_menu.draw_common_operators(layout)
+        OUTLINER_MT_context_menu.draw_common_operators(context.space_data, layout)
 
 
 class OUTLINER_MT_object(Menu):
@@ -349,7 +359,7 @@ class OUTLINER_MT_object(Menu):
 
         layout.separator()
 
-        OUTLINER_MT_context_menu.draw_common_operators(layout)
+        OUTLINER_MT_context_menu.draw_common_operators(space, layout)
 
 
 class OUTLINER_MT_asset(Menu):

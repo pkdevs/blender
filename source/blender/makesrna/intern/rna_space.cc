@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_math_constants.h"
+#include "BLI_math_constants.hh"
 #include "BLI_string_ref.hh"
 #include "BLT_translation.hh"
 
@@ -23,8 +23,8 @@
 #include "ED_spreadsheet.hh"
 #include "ED_userpref.hh"
 
-#include "BLI_string.h"
-#include "BLI_sys_types.h"
+#include "BLI_string.hh"
+#include "BLI_sys_types.hh"
 
 #include "DNA_action_types.h"
 #include "DNA_camera_types.h"
@@ -183,6 +183,11 @@ const EnumPropertyItem rna_enum_space_type_items[] = {
      ICON_PREFERENCES,
      "Preferences",
      "Edit persistent configuration settings"},
+    {SPACE_PROJECT,
+     "PROJECT",
+     ICON_PROJECT,
+     "Project Setup",
+     "Manage the current Blender project"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -679,12 +684,12 @@ static const EnumPropertyItem spreadsheet_table_id_type_items[] = {
 #  include "DNA_userdef_types.h"
 
 #  include "BLI_index_range.hh"
-#  include "BLI_math_matrix.h"
-#  include "BLI_math_rotation.h"
-#  include "BLI_math_vector.h"
+#  include "BLI_math_matrix_c.hh"
+#  include "BLI_math_rotation_c.hh"
+#  include "BLI_math_vector_c.hh"
 #  include "BLI_path_utils.hh"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_anim_data.hh"
 #  include "BKE_brush.hh"
@@ -735,6 +740,8 @@ static const EnumPropertyItem spreadsheet_table_id_type_items[] = {
 
 #  include "RE_engine.h"
 
+#  include "rna_screen_utils.hh"
+
 namespace blender {
 
 /* -------------------------------------------------------------------- */
@@ -778,6 +785,8 @@ static StructRNA *rna_Space_refine(PointerRNA *ptr)
       return RNA_SpaceClipEditor;
     case SPACE_SPREADSHEET:
       return RNA_SpaceSpreadsheet;
+    case SPACE_PROJECT:
+      return RNA_SpaceProject;
 
       /* Currently no type info. */
     case SPACE_SCRIPT:
@@ -3984,6 +3993,38 @@ static const EnumPropertyItem *rna_FileAssetSelectParams_import_method_itemf(
   RNA_enum_item_end(&items, &items_num);
   *r_free = true;
   return items;
+}
+
+static ARegion *rna_SpaceProject_main_region_get(PointerRNA *ptr)
+{
+  if (!ptr->owner_id || (GS(ptr->owner_id->name) != ID_SCR)) {
+    return nullptr;
+  }
+
+  const bScreen *screen = blender::id_cast<bScreen *>(ptr->owner_id);
+  const SpaceProject *space_project = static_cast<SpaceProject *>(ptr->data);
+
+  return BKE_screen_find_region_in_space(
+      screen, reinterpret_cast<const SpaceLink *>(space_project), RGN_TYPE_WINDOW);
+}
+
+static int rna_SpaceProject_active_section_get(PointerRNA *ptr)
+{
+  ARegion *main_region = rna_SpaceProject_main_region_get(ptr);
+  return rna_region_active_panel_category_get(main_region);
+}
+static void rna_SpaceProject_active_section_set(PointerRNA *ptr, int value)
+{
+  ARegion *main_region = rna_SpaceProject_main_region_get(ptr);
+  rna_region_active_panel_category_set(main_region, value);
+}
+const EnumPropertyItem *rna_SpaceProject_active_section_itemf(bContext * /*C*/,
+                                                              PointerRNA *ptr,
+                                                              PropertyRNA * /*prop*/,
+                                                              bool *r_free)
+{
+  ARegion *main_region = rna_SpaceProject_main_region_get(ptr);
+  return rna_region_active_panel_category_itemf(main_region, r_free);
 }
 
 }  // namespace blender
@@ -7262,6 +7303,11 @@ static void rna_def_space_dopesheet(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Smoke", "Show the active object's smoke cache");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_TIME, nullptr);
 
+  prop = RNA_def_property(srna, "cache_compositor", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "cache_display", TIME_CACHE_COMPOSITOR);
+  RNA_def_property_ui_text(prop, "Compositor", "Show the interactive compositor playback cache");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_TIME, nullptr);
+
   prop = RNA_def_property(srna, "cache_simulation_nodes", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "cache_display", TIME_CACHE_SIMULATION_NODES);
   RNA_def_property_ui_text(
@@ -9498,6 +9544,27 @@ static void rna_def_space_spreadsheet(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SPREADSHEET, nullptr);
 }
 
+static void rna_def_space_project(BlenderRNA *brna)
+{
+  StructRNA *srna;
+
+  srna = RNA_def_struct(brna, "SpaceProject", "Space");
+  RNA_def_struct_sdna(srna, "SpaceProject");
+  RNA_def_struct_ui_text(srna, "Space Project", "Project space data");
+
+  rna_def_space_generic_show_region_toggles(srna, 1 << RGN_TYPE_UI);
+
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "active_section", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_region_panel_category_items);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_SpaceProject_active_section_get",
+                              "rna_SpaceProject_active_section_set",
+                              "rna_SpaceProject_active_section_itemf");
+  RNA_def_property_ui_text(prop, "Active Section", "Choose the category of options to display");
+}
+
 void RNA_def_space(BlenderRNA *brna)
 {
   rna_def_space(brna);
@@ -9526,6 +9593,7 @@ void RNA_def_space(BlenderRNA *brna)
   rna_def_space_node(brna);
   rna_def_space_clip(brna);
   rna_def_space_spreadsheet(brna);
+  rna_def_space_project(brna);
 }
 
 }  // namespace blender

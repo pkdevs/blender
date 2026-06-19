@@ -10,7 +10,7 @@
 #define DNA_DEPRECATED_ALLOW
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include <fmt/format.h>
@@ -27,13 +27,13 @@
 #include "DNA_userdef_types.h"
 #include "DNA_view3d_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -1242,14 +1242,26 @@ void BKE_screen_header_alignment_reset(bScreen *screen)
   for (ScrArea &area : screen->areabase) {
     for (ARegion &region : area.regionbase) {
       if (ELEM(region.regiontype, RGN_TYPE_HEADER, RGN_TYPE_TOOL_HEADER)) {
-        if (ELEM(area.spacetype, SPACE_FILE, SPACE_USERPREF, SPACE_OUTLINER, SPACE_PROPERTIES)) {
+        if (ELEM(area.spacetype,
+                 SPACE_FILE,
+                 SPACE_USERPREF,
+                 SPACE_OUTLINER,
+                 SPACE_PROPERTIES,
+                 SPACE_PROJECT))
+        {
           region.alignment = RGN_ALIGN_TOP;
           continue;
         }
         region.alignment = alignment;
       }
       if (region.regiontype == RGN_TYPE_FOOTER) {
-        if (ELEM(area.spacetype, SPACE_FILE, SPACE_USERPREF, SPACE_OUTLINER, SPACE_PROPERTIES)) {
+        if (ELEM(area.spacetype,
+                 SPACE_FILE,
+                 SPACE_USERPREF,
+                 SPACE_OUTLINER,
+                 SPACE_PROPERTIES,
+                 SPACE_PROJECT))
+        {
           region.alignment = RGN_ALIGN_BOTTOM;
           continue;
         }

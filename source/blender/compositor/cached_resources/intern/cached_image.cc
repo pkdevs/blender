@@ -7,10 +7,10 @@
 #include <string>
 
 #include "BLI_hash.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 
 #include "RE_pipeline.h"
@@ -331,8 +331,9 @@ CachedImage::CachedImage(Context &context,
   /* For GPU, we wrap the texture returned by IMB module and free it ourselves in destructor. For
    * CPU, we allocate the result and copy to it from the image buffer. */
   if (context.use_gpu()) {
-    texture_ = IMB_create_gpu_texture("Image Texture", linear_image_buffer, true, true, false);
-    GPU_texture_update_mipmap_chain(texture_);
+    const GPUTextureCreateFlags flags = GPUTextureCreateFlags::HighBitDepth |
+                                        GPUTextureCreateFlags::Premultiplied;
+    texture_ = IMB_create_gpu_texture("Image Texture", linear_image_buffer, flags);
     this->result.share_data(texture_);
   }
   else {

@@ -45,13 +45,13 @@
 #include <pxr/usd/usdShade/material.h>
 
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_euler_types.hh"
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_sort.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_collection.hh"
 #include "BKE_lib_id.hh"
@@ -188,7 +188,7 @@ static void determine_blender_compat(pxr::UsdStageRefPtr stage, ImportSettings &
   const std::string doc = stage->GetRootLayer()->GetDocumentation();
 
   /* Was the incoming Stage written by Blender? If so, set some broad compatibility flags. */
-  if (doc.find("Blender v", 0) == 0) {
+  if (doc.starts_with("Blender v")) {
     /* Set flag if the Blender Stage was from before version 4.4. */
     settings.blender_stage_version_prior_44 = doc < "Blender v4.4";
   }

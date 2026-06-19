@@ -10,9 +10,9 @@
 
 #include <cstdint>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_listBase.h"
 
@@ -159,6 +159,7 @@ void RNA_def_animviz(BlenderRNA *brna);
 void RNA_def_armature(BlenderRNA *brna);
 void RNA_def_attribute(BlenderRNA *brna);
 void RNA_def_asset(BlenderRNA *brna);
+void RNA_def_blender_project(BlenderRNA *brna);
 void RNA_def_boid(BlenderRNA *brna);
 void RNA_def_brush(BlenderRNA *brna);
 void RNA_def_cachefile(BlenderRNA *brna);

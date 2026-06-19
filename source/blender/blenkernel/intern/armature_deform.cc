@@ -14,14 +14,14 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_wrapper.hh"
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_quaternion.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_task.h"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
+#include "BLI_task_c.hh"
 
 #include "DNA_action_types.h"
 #include "DNA_armature_types.h"
@@ -89,20 +89,18 @@ float distfactor_to_bone(const float3 &position,
     const float distance_squared = math::distance_squared(position, head);
     return bone_envelope_falloff(distance_squared, radius_head, falloff_distance);
   }
-  else if (height > bone_length) {
+  if (height > bone_length) {
     /* After the end of the bone use the tail radius. */
     const float distance_squared = math::distance_squared(tail, position);
     return bone_envelope_falloff(distance_squared, radius_tail, falloff_distance);
   }
-  else {
-    /* Interpolate radius. */
-    const float distance_squared = math::distance_squared(position, head) - height * height;
-    const float closest_radius = bone_length != 0.0f ? math::interpolate(radius_head,
-                                                                         radius_tail,
-                                                                         height / bone_length) :
-                                                       radius_head;
-    return bone_envelope_falloff(distance_squared, closest_radius, falloff_distance);
-  }
+  /* Interpolate radius. */
+  const float distance_squared = math::distance_squared(position, head) - height * height;
+  const float closest_radius = bone_length != 0.0f ? math::interpolate(radius_head,
+                                                                       radius_tail,
+                                                                       height / bone_length) :
+                                                     radius_head;
+  return bone_envelope_falloff(distance_squared, closest_radius, falloff_distance);
 }
 
 namespace bke {

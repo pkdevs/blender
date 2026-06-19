@@ -599,7 +599,7 @@ struct FileDirEntry {
   int preview_icon_id = 0;
 
   eFileEntry_Flag flags = {};
-  /* eFileAttributes defined in BLI_fileops.h */
+  /* eFileAttributes defined in BLI_fileops.hh */
   int attributes = 0;
 };
 
@@ -1298,6 +1298,22 @@ struct SpreadsheetRowFilter {
   float value_float4[4] = {};
   float value_color[4] = {};
   char _pad1[4] = {};
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Blender Project
+ * \{ */
+
+struct SpaceProject {
+  SpaceLink *next = nullptr, *prev = nullptr;
+  /** Storage of regions for inactive spaces. */
+  ListBaseT<ARegion> regionbase = {nullptr, nullptr};
+  char spacetype = 0;
+  char link_flag = 0;
+  char _pad0[6] = {};
+  /* End 'SpaceLink' header. */
 };
 
 /** \} */

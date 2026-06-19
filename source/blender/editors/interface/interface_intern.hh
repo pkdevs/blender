@@ -12,7 +12,7 @@
 #include <optional>
 #include <ranges>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
@@ -287,6 +287,8 @@ struct Button : NonMovable {
   bool changed = false;
 
   BIFIconID icon = ICON_NONE;
+  /** Configurable draw scale for the icon. */
+  float icon_scale = 1.0f;
 
   /** Affects the order if this Button is used in menu-search. */
   float search_weight = 0.0f;
@@ -410,6 +412,8 @@ struct ButtonTextBox : public Button {
 /** Derived struct for #ButtonType::But */
 struct ButtonPush : public Button {
   bool draw_as_link = false;
+  /** See #button_pushbutton_draw_as_overlay_set(). */
+  bool draw_as_overlay = false;
 };
 
 /** Derived struct for #ButtonType::Num */
@@ -1166,8 +1170,25 @@ PopupBlockHandle *popup_block_create(bContext *C,
                                      void *arg,
                                      FreeArgFunc arg_free,
                                      bool can_refresh);
-PopupBlockHandle *popup_menu_create(
-    bContext *C, ARegion *butregion, Button *but, MenuCreateFunc menu_func, void *arg);
+/**
+ * \param can_refresh: Allow menus to re-run their layout definitions using
+ *    `ED_region_tag_refresh_ui()`. This can be used to update the grayed out state of items or the
+ *    icon for example, but doesn't have many use-cases.
+ *
+ *    Changes that mess with user input or make popups jump around under the cursor should be
+ *    avoided. For example, avoid:
+ *    - Adding/removing menu items.
+ *    - Changing menu item names.
+ *    - Changes that interfere with keyboard navigation.
+ *
+ *    Note that this property is inherited to submenus.
+ */
+PopupBlockHandle *popup_menu_create(bContext *C,
+                                    ARegion *butregion,
+                                    Button *but,
+                                    MenuCreateFunc menu_func,
+                                    void *arg,
+                                    bool can_refresh);
 
 /* `interface_region_popover.cc` */
 

@@ -24,14 +24,14 @@
 #include "DNA_screen_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_vector.hh"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_animsys.h"
 #include "BKE_context.hh"
@@ -1095,10 +1095,10 @@ static bool but_update_from_old_block(Block *block,
 
   /* As long as old and new buttons are aligned, avoid loop-in-loop (calling #but_find_old). */
   std::unique_ptr<Button> *oldbut_uptr;
-  if (LIKELY(but_old_idx->has_value() &&
-             /* Ignore previously matched buttons. */
-             !matched_old_buttons.contains(oldblock->buttons_ptrs[**but_old_idx].get()) &&
-             but_equals_old(but, oldblock->buttons_ptrs[**but_old_idx].get())))
+  if (but_old_idx->has_value() &&
+      /* Ignore previously matched buttons. */
+      !matched_old_buttons.contains(oldblock->buttons_ptrs[**but_old_idx].get()) &&
+      but_equals_old(but, oldblock->buttons_ptrs[**but_old_idx].get())) [[likely]]
   {
     oldbut_uptr = &oldblock->buttons_ptrs[**but_old_idx];
   }
@@ -3073,6 +3073,28 @@ static std::string textbox_string_get(ButtonTextBox *textbox)
   return RNA_property_string_get(&textbox->rnapoin, textbox->rnaprop);
 }
 
+/**
+ * Returns true if the unit should be included in the number edit string.
+ */
+static bool button_edit_string_include_unit_suffix(const Button *button)
+{
+  const int unit_type = RNA_SUBTYPE_UNIT_VALUE(button_unit_type_get(button));
+  if (BKE_unit_is_adaptive(*button->block->unit, unit_type)) {
+    /* Include the unit in the edit string when the unit is adaptive. */
+    return true;
+  }
+  PropertySubType subtype = PROP_NONE;
+  if (button->rnaprop) {
+    subtype = RNA_property_subtype(button->rnaprop);
+  }
+  if (subtype == PROP_TIME_ABSOLUTE) {
+    /* Include the unit in the edit string when the property uses absolute time (independent of the
+     * scene settings). */
+    return true;
+  }
+  return false;
+}
+
 void button_string_get_ex(Button *but,
                           char *str,
                           const size_t str_maxncpy,
@@ -3177,11 +3199,8 @@ void button_string_get_ex(Button *but,
       }
 
       if (button_is_unit(but)) {
-        /* In case where the unit is adaptive, include the unit in the edit string. Otherwise the
-         * unit is added as an edit hint. */
-        const int unit_type = RNA_SUBTYPE_UNIT_VALUE(button_unit_type_get(but));
-        const bool do_suffix = BKE_unit_is_adaptive(*but->block->unit, unit_type);
-        get_but_string_unit(but, str, str_maxncpy, value, false, prec, do_suffix);
+        const bool include_unit_suffix = button_edit_string_include_unit_suffix(but);
+        get_but_string_unit(but, str, str_maxncpy, value, false, prec, include_unit_suffix);
       }
       else if (subtype == PROP_FACTOR) {
         if (U.factor_display_type == USER_FACTOR_AS_FACTOR) {
@@ -3271,7 +3290,7 @@ char *button_string_get_dynamic(Button *but, int *r_str_size)
     BLI_assert(0);
   }
 
-  if (UNLIKELY(str == nullptr)) {
+  if (str == nullptr) [[unlikely]] {
     /* should never happen, paranoid check */
     *r_str_size = 1;
     str = BLI_strdup("");
@@ -5105,7 +5124,6 @@ static Button *def_but_operator_ptr(Block *block,
   }
 
   Button *but = def_but(block, type, str, x, y, width, height, nullptr, 0, 0, tip);
-  button_retval_set(but, -1);
   button_operator_set(but, ot, opcontext);
 
   /* Enable quick tooltip label if this is a tool button without a label. */
@@ -6314,6 +6332,11 @@ void button_hint_drawstr_set(Button *but, const char *string)
   button_add_shortcut(but, string, false);
 }
 
+void button_icon_scale_set(Button *but, const float scale)
+{
+  but->icon_scale = scale;
+}
+
 void button_icon_indicator_number_set(Button *but, const int indicator_number)
 {
   icon_text_overlay_init_from_count(&but->icon_overlay_text, indicator_number);
@@ -6334,6 +6357,14 @@ void button_node_link_set(Button *but, bNodeSocket *socket, const float draw_col
   but->flag |= BUT_NODE_LINK;
   but->custom_data = socket;
   rgba_float_to_uchar(but->col, draw_color);
+}
+
+void button_pushbutton_draw_as_overlay_set(Button *but, const bool value)
+{
+  ButtonPush *but_push = static_cast<ButtonPush *>(but);
+  BLI_assert(but->type == ButtonType::But);
+
+  but_push->draw_as_overlay = value;
 }
 
 void button_number_step_size_set(Button *but, float step_size)

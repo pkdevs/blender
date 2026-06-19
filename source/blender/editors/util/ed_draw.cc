@@ -12,11 +12,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -719,9 +719,10 @@ static const char *meta_data_list[] = {
 
 BLI_INLINE bool metadata_is_valid(const ImBuf *ibuf, char *r_str, short index, int offset)
 {
-  return (IMB_metadata_get_field(
-              ibuf->metadata, meta_data_list[index], r_str + offset, MAX_METADATA_STR - offset) &&
-          r_str[0]);
+  return (
+      IMB_metadata_get_field(
+          ibuf->metadata(), meta_data_list[index], r_str + offset, MAX_METADATA_STR - offset) &&
+      r_str[0]);
 }
 
 BLI_INLINE bool metadata_is_custom_drawable(const char *field)
@@ -1042,7 +1043,7 @@ void ED_region_image_metadata_draw(
 {
   const uiStyle *style = ui::style_get_dpi();
 
-  if (!ibuf->metadata) {
+  if (!ibuf->metadata()) {
     return;
   }
 

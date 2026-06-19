@@ -19,12 +19,12 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_array_utils.h"
+#include "BLI_array_utils_c.hh"
 #include "BLI_implicit_sharing.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_multi_value_map.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_task.hh"
 #include "BLI_vector.hh"
 
@@ -57,11 +57,11 @@
 // #  define DEBUG_PRINT
 // #  define DEBUG_TIME
 #  ifdef DEBUG_TIME
-#    include "BLI_time_utildefines.h"
+#    include "BLI_time_utildefines.hh"
 #  endif
 
-#  include "BLI_array_store.h"
-#  include "BLI_array_store_utils.h"
+#  include "BLI_array_store.hh"
+#  include "BLI_array_store_utils.hh"
 /**
  * This used to be much smaller (256), but this caused too much overhead
  * when selection moved to boolean arrays. Especially with high-poly meshes
@@ -100,7 +100,7 @@
 #endif
 
 #ifdef USE_ARRAY_STORE_THREAD
-#  include "BLI_task.h"
+#  include "BLI_task_c.hh"
 #endif
 
 namespace blender {
@@ -607,8 +607,8 @@ static void um_arraystore_compact(UndoMesh *um, const UndoMesh *um_ref)
               &um_arraystore.bs_stride[ARRAY_STORE_INDEX_SHAPE],
               stride,
               array_chunk_size_calc(stride));
-          um->store.keyblocks = MEM_new_array_uninitialized<BArrayState *>(mesh->key->totkey,
-                                                                           __func__);
+          um->store.keyblocks = MEM_new_array_uninitialized<BArrayState *>(
+              mesh->key->totkey, "um_arraystore_compact keyblocks");
 
           KeyBlock *keyblock = static_cast<KeyBlock *>(mesh->key->block.first);
           for (int i = 0; i < mesh->key->totkey; i++, keyblock = keyblock->next) {

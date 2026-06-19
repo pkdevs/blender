@@ -18,9 +18,9 @@
 #include "UI_interface_layout.hh"
 #include "UI_view2d.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_multi_value_map.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "UI_tree_view.hh"
 
@@ -96,13 +96,13 @@ void TreeViewItemContainer::sort_alpha()
   std::ranges::sort(children_,
                     [](const std::unique_ptr<AbstractTreeViewItem> &a,
                        const std::unique_ptr<AbstractTreeViewItem> &b) {
-                      StringRefNull a_name = a.get()->label();
-                      StringRefNull b_name = b.get()->label();
+                      StringRefNull a_name = a->label();
+                      StringRefNull b_name = b->label();
                       return BLI_strcasecmp_natural(a_name.c_str(), b_name.c_str()) < 0;
                     });
 
   for (std::unique_ptr<AbstractTreeViewItem> &item : children_) {
-    item.get()->sort_alpha();
+    item->sort_alpha();
   }
 }
 

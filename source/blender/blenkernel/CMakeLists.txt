@@ -62,6 +62,7 @@ set(SRC
   intern/blender.cc
   intern/blender_cli_command.cc
   intern/blender_copybuffer.cc
+  intern/blender_project.cc
   intern/blender_undo.cc
   intern/blender_user_menu.cc
   intern/blendfile.cc
@@ -347,6 +348,7 @@ set(SRC
   BKE_blender.hh
   BKE_blender_cli_command.hh
   BKE_blender_copybuffer.hh
+  BKE_blender_project.hh
   BKE_blender_undo.hh
   BKE_blender_user_menu.hh
   BKE_blender_version.h
@@ -424,6 +426,7 @@ set(SRC
   BKE_idtype.hh
   BKE_image.hh
   BKE_image_format.hh
+  BKE_image_gpu.hh
   BKE_image_partial_update.hh
   BKE_image_save.hh
   BKE_image_wrappers.hh
@@ -553,6 +556,7 @@ set(SRC
 
   intern/attribute_storage_access.hh
   intern/data_transfer_intern.hh
+  intern/image_intern.hh
   intern/lib_intern.hh
   intern/multires_inline.hh
   intern/multires_reshape.hh
@@ -674,7 +678,7 @@ if(WITH_PYTHON)
 
 
   if(PYTHON_EXECUTABLE)
-    get_filename_component(_python_exe_name ${PYTHON_EXECUTABLE} NAME)
+    cmake_path(GET PYTHON_EXECUTABLE FILENAME _python_exe_name)
     add_definitions(-DPYTHON_EXECUTABLE_NAME=${_python_exe_name})
     unset(_python_exe_name)
   endif()
