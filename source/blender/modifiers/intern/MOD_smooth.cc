@@ -9,7 +9,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_vector_c.hh"
+#include "BLI_offset_indices.hh"
 #include "BLI_task.hh"
 #include "BLI_utildefines.hh"
 
@@ -72,50 +74,72 @@ static float vgroup_weight(const MDeformVert &dv, const int defgrp_index, const 
   return invert ? 1.0f - w : w;
 }
 
-static void laplacian_pass(const Span<int2> edges,
-                           const Span<float3> src,
-                           MutableSpan<float3> dst_avg,
-                           MutableSpan<int> dst_count)
+static Array<float> compute_edge_cotangent_weights(const Mesh &mesh, const Span<float3> positions)
 {
-  dst_avg.fill(float3(0.0f));
-  dst_count.fill(0);
-  for (const int i : edges.index_range()) {
-    const int idx1 = edges[i][0];
-    const int idx2 = edges[i][1];
-    const float3 mid = (src[idx1] + src[idx2]) * 0.5f;
-    dst_count[idx1]++;
-    dst_avg[idx1] += mid;
-    dst_count[idx2]++;
-    dst_avg[idx2] += mid;
-  }
-  threading::parallel_for(src.index_range(), 4096, [&](const IndexRange range) {
-    for (const int i : range) {
-      if (dst_count[i] > 0) {
-        dst_avg[i] *= 1.0f / float(dst_count[i]);
-      }
+  const Span<int2> edges = mesh.edges();
+  const OffsetIndices<int> faces = mesh.faces();
+  const Span<int> corner_verts = mesh.corner_verts();
+  const Span<int> corner_edges = mesh.corner_edges();
+
+  Array<float> weights(edges.size(), 0.0f);
+
+  for (const int f : faces.index_range()) {
+    const IndexRange face = faces[f];
+    const int n = face.size();
+    if (n < 3) {
+      continue;
     }
-  });
+    for (int k = 0; k < n; k++) {
+      const int corner_curr = int(face[k]);
+      const int corner_next = int(face[(k + 1) % n]);
+      const int corner_prev = int(face[(k + n - 1) % n]);
+      const float3 &p_prev = positions[corner_verts[corner_prev]];
+      const float3 &p_curr = positions[corner_verts[corner_curr]];
+      const float3 &p_next = positions[corner_verts[corner_next]];
+      const float cot = cotangent_tri_weight_v3(p_prev, p_curr, p_next) * 0.5f;
+      if (cot <= 0.0f) {
+        continue;
+      }
+      weights[corner_edges[corner_curr]] += cot;
+    }
+  }
+
+  return weights;
 }
 
-static void neighbor_avg_pass(const Span<int2> edges,
-                              const Span<float3> src,
-                              MutableSpan<float3> dst_avg,
-                              MutableSpan<int> dst_count)
+static void scatter_avg_pass(const Span<int2> edges,
+                             const Span<float3> src,
+                             const Span<float> edge_weights,
+                             const bool use_midpoint,
+                             MutableSpan<float3> dst_avg,
+                             MutableSpan<float> dst_weight_sum)
 {
   dst_avg.fill(float3(0.0f));
-  dst_count.fill(0);
+  dst_weight_sum.fill(0.0f);
+  const bool weighted = !edge_weights.is_empty();
   for (const int i : edges.index_range()) {
     const int idx1 = edges[i][0];
     const int idx2 = edges[i][1];
-    dst_avg[idx1] += src[idx2];
-    dst_count[idx1]++;
-    dst_avg[idx2] += src[idx1];
-    dst_count[idx2]++;
+    const float w = weighted ? edge_weights[i] : 1.0f;
+    if (w == 0.0f) {
+      continue;
+    }
+    if (use_midpoint) {
+      const float3 mid = (src[idx1] + src[idx2]) * 0.5f;
+      dst_avg[idx1] += w * mid;
+      dst_avg[idx2] += w * mid;
+    }
+    else {
+      dst_avg[idx1] += w * src[idx2];
+      dst_avg[idx2] += w * src[idx1];
+    }
+    dst_weight_sum[idx1] += w;
+    dst_weight_sum[idx2] += w;
   }
   threading::parallel_for(src.index_range(), 4096, [&](const IndexRange range) {
     for (const int i : range) {
-      if (dst_count[i] > 0) {
-        dst_avg[i] *= 1.0f / float(dst_count[i]);
+      if (dst_weight_sum[i] > 0.0f) {
+        dst_avg[i] *= 1.0f / dst_weight_sum[i];
       }
       else {
         dst_avg[i] = src[i];
@@ -160,11 +184,12 @@ static void hc_correction_pass(MutableSpan<float3> p,
                                const Span<float3> q,
                                const Span<float3> orig,
                                const Span<int2> edges,
+                               const Span<float> edge_weights,
                                const float alpha,
                                const float beta,
                                MutableSpan<float3> b,
                                MutableSpan<float3> b_avg,
-                               MutableSpan<int> b_count)
+                               MutableSpan<float> b_weight_sum)
 {
   threading::parallel_for(p.index_range(), 4096, [&](const IndexRange range) {
     for (const int i : range) {
@@ -172,22 +197,12 @@ static void hc_correction_pass(MutableSpan<float3> p,
     }
   });
 
-  b_avg.fill(float3(0.0f));
-  b_count.fill(0);
-  for (const int e : edges.index_range()) {
-    const int i1 = edges[e][0];
-    const int i2 = edges[e][1];
-    b_avg[i1] += b[i2];
-    b_count[i1]++;
-    b_avg[i2] += b[i1];
-    b_count[i2]++;
-  }
+  scatter_avg_pass(edges, b, edge_weights, false, b_avg, b_weight_sum);
 
   const float ombeta = 1.0f - beta;
   threading::parallel_for(p.index_range(), 4096, [&](const IndexRange range) {
     for (const int i : range) {
-      const float3 avg = b_count[i] > 0 ? b_avg[i] * (1.0f / float(b_count[i])) : float3(0.0f);
-      p[i] -= beta * b[i] + ombeta * avg;
+      p[i] -= beta * b[i] + ombeta * b_avg[i];
     }
   });
 }
@@ -203,10 +218,18 @@ static void smoothModifier_do(SmoothModifierData *smd,
 
   const int verts_num = vertexCos.size();
   Array<float3> accumulated_vecs(verts_num);
-  Array<int> accumulated_vecs_count(verts_num);
+  Array<float> accumulated_weights(verts_num);
 
   const bool invert_vgroup = (smd->flag & MOD_SMOOTH_INVERT_VGROUP) != 0;
   const Span<int2> edges = mesh->edges();
+
+  const bool use_cotan = (smd->flag & MOD_SMOOTH_USE_COTAN) &&
+                         smd->method != MOD_SMOOTH_METHOD_SIMPLE;
+  Array<float> edge_weights;
+  if (use_cotan) {
+    edge_weights = compute_edge_cotangent_weights(*mesh, vertexCos.as_span());
+  }
+  const Span<float> weights_span = use_cotan ? edge_weights.as_span() : Span<float>{};
 
   const MDeformVert *dvert;
   int defgrp_index;
@@ -215,7 +238,7 @@ static void smoothModifier_do(SmoothModifierData *smd,
   switch (smd->method) {
     case MOD_SMOOTH_METHOD_SIMPLE: {
       for (int j = 0; j < smd->repeat; j++) {
-        laplacian_pass(edges, vertexCos, accumulated_vecs, accumulated_vecs_count);
+        scatter_avg_pass(edges, vertexCos, {}, true, accumulated_vecs, accumulated_weights);
         apply_blend(
             vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
       }
@@ -223,10 +246,12 @@ static void smoothModifier_do(SmoothModifierData *smd,
     }
     case MOD_SMOOTH_METHOD_TAUBIN: {
       for (int j = 0; j < smd->repeat; j++) {
-        neighbor_avg_pass(edges, vertexCos, accumulated_vecs, accumulated_vecs_count);
+        scatter_avg_pass(
+            edges, vertexCos, weights_span, false, accumulated_vecs, accumulated_weights);
         apply_blend(
             vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
-        neighbor_avg_pass(edges, vertexCos, accumulated_vecs, accumulated_vecs_count);
+        scatter_avg_pass(
+            edges, vertexCos, weights_span, false, accumulated_vecs, accumulated_weights);
         apply_blend(vertexCos,
                     accumulated_vecs,
                     smd->taubin_mu,
@@ -241,18 +266,19 @@ static void smoothModifier_do(SmoothModifierData *smd,
       Array<float3> hc_p(vertexCos.as_span());
       Array<float3> hc_b(verts_num);
       Array<float3> hc_b_avg(verts_num);
-      Array<int> hc_b_count(verts_num);
+      Array<float> hc_b_weight_sum(verts_num);
       for (int j = 0; j < smd->repeat; j++) {
-        neighbor_avg_pass(edges, hc_p, accumulated_vecs, accumulated_vecs_count);
+        scatter_avg_pass(edges, hc_p, weights_span, false, accumulated_vecs, accumulated_weights);
         hc_correction_pass(accumulated_vecs,
                            hc_p,
                            vertexCos.as_span(),
                            edges,
+                           weights_span,
                            smd->hc_alpha,
                            smd->hc_beta,
                            hc_b,
                            hc_b_avg,
-                           hc_b_count);
+                           hc_b_weight_sum);
         hc_p.as_mutable_span().copy_from(accumulated_vecs);
       }
       apply_blend(vertexCos, hc_p, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
@@ -297,6 +323,10 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   else if (method == MOD_SMOOTH_METHOD_HC) {
     col.prop(ptr, "hc_alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col.prop(ptr, "hc_beta", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+
+  if (method == MOD_SMOOTH_METHOD_TAUBIN || method == MOD_SMOOTH_METHOD_HC) {
+    col.prop(ptr, "use_cotangent_weights", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
   col.prop(ptr, "iterations", UI_ITEM_NONE, std::nullopt, ICON_NONE);
