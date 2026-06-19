@@ -5,6 +5,10 @@
 #pragma once
 
 #include "BLI_index_range.hh"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_math_vector_types.hh"
+
+#include "BKE_volume_grid_type_traits.hh"
 
 #ifdef WITH_OPENVDB
 #  include <openvdb/openvdb.h>

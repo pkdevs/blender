@@ -3799,6 +3799,47 @@ struct NodeGeometryDistributePointsInVolume {
   uint8_t mode = 0;
 };
 
+typedef struct NodeGeometryRasterizePointsItem {
+  char *name;
+  /* #NodeGeometryRasterizePointsItemType */
+  short type;
+  char _pad1[2];
+  /**
+   * Generated unique identifier for sockets which stays the same even when the item order or
+   * names change.
+   */
+  int identifier;
+  /** #NodeGridItemFlag */
+  int flag;
+  char _pad2[4];
+} NodeGeometryRasterizePointsItem;
+
+typedef enum NodeGeometryRasterizePointsItemType {
+  GEO_NODE_RASTERIZE_POINTS_ITEM_TYPE_SCALAR = 0,
+  GEO_NODE_RASTERIZE_POINTS_ITEM_TYPE_VECTOR = 1,
+} NodeGeometryRasterizePointsItemType;
+
+typedef enum NodeGeometryRasterizePointsItemFlag {
+  /* Classify the output as a staggered vector grid. */
+  GEO_NODE_RASTERIZE_POINTS_ITEM_VECTOR_STAGGERED = 1 << 1,
+} NodeGeometryRasterizePointsItemFlag;
+
+typedef struct NodeGeometryRasterizePoints {
+  DNA_DEFINE_CXX_METHODS(NodeGeometryRasterizePoints)
+
+  NodeGeometryRasterizePointsItem *items;
+  int items_num;
+  int active_index;
+  /** Identifier to give to the next repeat item. */
+  int next_identifier;
+  char _pad[4];
+
+#ifdef __cplusplus
+  blender::Span<NodeGeometryRasterizePointsItem> items_span() const;
+  blender::MutableSpan<NodeGeometryRasterizePointsItem> items_span();
+#endif
+} NodeGeometryRasterizePoints;
+
 struct NodeFunctionCompare {
   DNA_DEFINE_CXX_METHODS(NodeFunctionCompare)
 
