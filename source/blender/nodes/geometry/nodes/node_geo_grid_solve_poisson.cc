@@ -38,14 +38,17 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Solution to the Poisson equation");
   b.add_output<decl::Bool>("Success"_ustr).description("If the solver converged successfully");
   b.add_output<decl::Int>("Iterations"_ustr).description("Number of iterations performed");
-  b.add_output<decl::Float>("Absolute Error"_ustr).description("Final absolute error of the solution");
-  b.add_output<decl::Float>("Relative Error"_ustr).description("Final relative error of the solution");
+  b.add_output<decl::Float>("Absolute Error"_ustr)
+      .description("Final absolute error of the solution");
+  b.add_output<decl::Float>("Relative Error"_ustr)
+      .description("Final relative error of the solution");
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
 #ifdef WITH_OPENVDB
-  const bke::VolumeGrid<float> source_grid = params.extract_input<bke::VolumeGrid<float>>("Grid"_ustr);
+  const bke::VolumeGrid<float> source_grid = params.extract_input<bke::VolumeGrid<float>>(
+      "Grid"_ustr);
   if (!source_grid) {
     params.set_default_remaining_outputs();
     return;
@@ -66,11 +69,11 @@ static void node_geo_exec(GeoNodeExecParams params)
   openvdb::FloatTree::Ptr solution_tree = openvdb::tools::poisson::solve(
       source_vdb_grid.tree(), solver_state, staggered);
 
-  openvdb::FloatGrid::Ptr solution_grid = openvdb::FloatGrid::create(solution_tree);
+  openvdb::FloatGrid::Ptr solution_grid = openvdb::FloatGrid::create(std::move(solution_tree));
   solution_grid->setTransform(source_vdb_grid.transform().copy());
 
   params.set_output("Solution"_ustr, bke::VolumeGrid<float>(std::move(solution_grid)));
-  params.set_output("Iterations"_ustr, int(solver_state.iterations));
+  params.set_output("Iterations"_ustr, solver_state.iterations);
   params.set_output("Success"_ustr, solver_state.success);
   params.set_output("Absolute Error"_ustr, float(solver_state.absoluteError));
   params.set_output("Relative Error"_ustr, float(solver_state.relativeError));
