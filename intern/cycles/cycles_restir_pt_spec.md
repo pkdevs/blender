@@ -11,7 +11,7 @@ Architecture:
 
 Phase A:
 [x] Proof-of-concept `DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST` branch
-[] Direct-light-only RIS (No temporal reuse. No spatial reuse, No replay shifts).
+[x] Direct-light-only RIS (No temporal reuse. No spatial reuse, No replay shifts).
 
 Phase B:
 Temporal reuse.

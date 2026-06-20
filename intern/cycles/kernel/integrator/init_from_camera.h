@@ -120,17 +120,11 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
     /* Re-initialize path state for path integration. */
     path_state_init_integrator(kg, state, sample, rng_pixel, T);
 
-    // integrator_path_next(state,
-    //                      DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA,
-    //                      kernel_data.cam.is_inside_volume ?
-    //                          DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK :
-    //                          DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST); // !!!
-    // !!!(Tri): DEBUG ONLY
     integrator_path_next(state,
                          DEVICE_KERNEL_INTEGRATOR_INIT_FROM_CAMERA,
                          kernel_data.cam.is_inside_volume ?
                              DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK :
-                             DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST); // !!!: DEBUG ONLY
+                             DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST); // !!!
   }
   else {
     /* Initialize path state for path integration. */

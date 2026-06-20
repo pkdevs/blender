@@ -15,29 +15,93 @@
 CCL_NAMESPACE_BEGIN
 
 struct ReSTIRReservoir {
-    float W;
-    float w_sum;
-
-    uint M;
-
-    uint candidate_type;
-
-    float3 radiance;
-
     LightSample light;
 
-    float target_pdf;
-
-    uint rng_seed;
+    float W;       // final reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_weight;
+    uint M;
 };
 
+ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
+{
+  ReSTIRReservoir r{};      // Optional
 
-/**
- 1. Camera starts the path and sets the next kernel to RESTIR_TEST.
- 2. The Scheduler sees paths are queued for RESTIR_TEST and calls the kernel.
- 3. The Kernel sets the next kernel to INTERSECT_CLOSEST.
- 4. The Scheduler sees paths are now queued for INTERSECT_CLOSEST and the regular Cycles logic takes over.
- */
+  r.W = 0.0f;
+  r.M = 0;
+
+  return r;
+}
+
+// MARK: --- RIS State ---
+
+struct ReSTIRRisState {
+    LightSample light;
+
+    float weight_sum;       // Sum of (target/source); only exists while streaming candidates.
+    float selected_weight;  // selected RIS weight (target)
+
+    uint M;                 // Sample count
+};
+
+ccl_device_inline ReSTIRRisState restir_ris_empty()
+{
+  ReSTIRRisState s;
+
+  s.weight_sum = 0.0f;
+  s.selected_weight = 0.0f;
+  s.M = 0;
+
+  return s;
+}
+
+// !!!: 1 candidate, no shadows, validating the math path, for now...
+// TODO: Utilize restir_candidate_weight
+ccl_device_inline void restir_streaming_resample_step(
+    ccl_private ReSTIRRisState *ris,
+    const LightSample &candidate,
+    const float target_pdf,
+    const float source_pdf,
+    const float random)
+{
+  // candidate weights
+  if (source_pdf <= 0.0f || target_pdf <= 0.0f) {
+    ris->M++;
+    return;
+  }
+
+  const float sample_weight = target_pdf / source_pdf;
+
+  ris->weight_sum += sample_weight;
+  ris->M++;
+
+  if (random * ris->weight_sum < sample_weight) {
+    ris->light = candidate;
+    ris->selected_weight = sample_weight;
+  }
+}
+
+/* Matches Falcor: toReservoir() logic and Finalize weight calculation */
+ccl_device_inline ReSTIRReservoir restir_finalize(
+    const ccl_private ReSTIRRisState *ris)
+{
+  ReSTIRReservoir reservoir;
+
+  reservoir.light = ris->light;
+  reservoir.M = ris->M;
+
+  /* Falcor InitialResampling.cs.slang: 
+   * risState.weight = risState.weight > 0.f ? (risState.weightSum / risState.M) / risState.weight : 0.f; */
+  if (ris->selected_weight > 0.0f && ris->M > 0)
+  {
+    reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_weight;
+  }
+  else {
+    reservoir.W = 0.0f;
+  }
+
+  return reservoir;
+}
+
+// TODO: Should become the kernel?:
 ccl_device void integrator_restir_test(KernelGlobals kg,
                                        IntegratorState state,
                                        ccl_global float *ccl_restrict render_buffer)
@@ -47,5 +111,28 @@ ccl_device void integrator_restir_test(KernelGlobals kg,
                        DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST, 
                        DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST);
 }
+
+
+// // This is the math that actually chooses which light to keep (streamingResampleStep).
+// ccl_device bool reservoir_update(ReSTIRRisState &res, 
+//                                  LightSample sample, 
+//                                  float target_pdf, 
+//                                  float source_pdf, 
+//                                  float random_val) 
+// {
+//     // Falcor: float sampleWeight = targetPdf / sourcePdf;
+//     float weight = (source_pdf > 0.0f) ? (target_pdf / source_pdf) : 0.0f;
+    
+//     res.w_sum += weight;
+//     res.M += 1;
+
+//     // Falcor: bool selectSample = sampleNext1D(sg) * state.weightSum < sampleWeight;
+//     bool select = (random_val * res.w_sum) < weight;
+//     if (select) {
+//         res.light = sample;
+//         res.target_pdf = target_pdf;
+//     }
+//     return select;
+// }
 
 CCL_NAMESPACE_END

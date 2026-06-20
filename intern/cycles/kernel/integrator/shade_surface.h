@@ -19,6 +19,7 @@
 #include "kernel/integrator/guiding.h"
 #include "kernel/integrator/shadow_linking.h"
 #include "kernel/integrator/subsurface.h"
+#include "kernel/integrator/restir.h"
 #include "kernel/integrator/volume_stack.h"
 
 #include "kernel/types.h"
@@ -151,7 +152,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
       kg, state, path_visibility, path_flag, sd);
 
   guiding_record_surface_emission(kg, state, L, mis_weight);
-  film_write_surface_emission(
+  film_write_surface_emission( // !!!: Final radiance commit
       kg, state, L, mis_weight, render_buffer, object_lightgroup(kg, sd->object));
 }
 
@@ -306,6 +307,7 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
   return shadow_state;
 }
 
+// !!!: Holds the Direct-Light Logic Path; wavefront scheduler stage.
 /* Path tracing: sample point on light and evaluate light shader, then
  * queue shadow ray to be traced. */
 template<uint node_feature_mask>
@@ -344,7 +346,7 @@ ccl_device
     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
     const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
 
-    if (!light_sample_from_position(kg,
+    if (!light_sample_from_position(kg, // !!!: The light sample and its selection probability are generated here (sourcePdf)
                                     rand_light,
                                     sd->time,
                                     sd->P,
@@ -385,13 +387,76 @@ ccl_device
 #endif
 
   /* Evaluate constant part of light shader, rest will optionally be done in another kernel. */
-  Spectrum light_shader_eval ccl_optional_struct_init;
-  const bool is_constant_light_shader = light_sample_shader_eval_nee_constant(
+  Spectrum light_shader_eval ccl_optional_struct_init; // !!!: not necessarily the final emitted radiance (for all lights)
+  const bool is_constant_light_shader = light_sample_shader_eval_nee_constant( // !!!
       kg, ls.shader, ls.prim, ls.type != LIGHT_TRIANGLE, light_shader_eval);
 
   /* Evaluate BSDF. */
-  BsdfEval bsdf_eval ccl_optional_struct_init;
-  const float bsdf_pdf = surface_shader_bsdf_eval(kg, state, sd, ls.D, &bsdf_eval, ls.shader);
+  BsdfEval bsdf_eval ccl_optional_struct_init; // Should be the throughput/unshadowed contribution
+  const float bsdf_pdf = surface_shader_bsdf_eval(kg, state, sd, ls.D, &bsdf_eval, ls.shader); // !!!
+
+
+
+// --- RIS infrastructure validation
+// #ifdef __RESTIR_DI__
+// {
+  // Computing target
+
+  /* ReSTIR DI prototype target.
+  *
+  * `light_shader_eval` contains the constant part of the light shader. For
+  * constant-emission lights this is the full emitted radiance. For non-constant
+  * emission shaders, the remaining radiance is evaluated later in
+  * SHADE_LIGHT_NEE after the shadow ray reaches the light shading stage.
+  *
+  * This target is therefore approximate for textured/procedural emitters, which
+  * is acceptable for initial RIS infrastructure validation.
+  */
+  Spectrum contribution = bsdf_eval_sum(&bsdf_eval)
+      * light_shader_eval
+      * ls.eval_fac;
+
+  // Source PDF
+  float target = spectrum_to_gray(kg, contribution);
+
+  float source = ls.pdf;
+
+  // run RIS
+  ReSTIRRisState ris = restir_ris_empty();
+
+  float random = path_state_rng_1D(kg, rng_state, PRNG_LIGHT); // TODO(Tri): Later, add/use a distinct PRNG dimension for ReSTIR
+
+  restir_streaming_resample_step(
+    &ris,
+    ls,
+    target,
+    source,
+    random); // random comes from a single RNG sample
+
+  // Debug
+  kernel_assert(ris.M == 1);
+
+  kernel_assert(isfinite(target));
+  kernel_assert(isfinite(source));
+
+  kernel_assert(target >= 0);
+  kernel_assert(source > 0);
+
+  kernel_assert(isfinite(ris.weight_sum));
+  kernel_assert(ris.weight_sum >= 0.0f);
+
+  ReSTIRReservoir reservoir = restir_finalize(&ris);
+
+  kernel_assert(reservoir.M == 1);
+  kernel_assert(isfinite(reservoir.W));
+  kernel_assert(reservoir.W >= 0.0f);
+  if (target > 0.0f) {
+      kernel_assert(reservoir.W > 0.0f);
+  }
+// }
+// #endif
+
+
 
   Ray ray ccl_optional_struct_init;
 
@@ -410,9 +475,9 @@ ccl_device
 #endif /* __MNEE__ */
   {
     const float mis_weight = light_sample_mis_weight_nee(kg, ls.pdf, bsdf_pdf);
-    bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight);
+    bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight); // ???: The final throughput?
 
-    /* Path termination for constant light shader. */
+    /* Path termination for constant light shader. */ // !!!
     if (is_constant_light_shader && !(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
       const float terminate = path_state_rng_light_termination(kg, rng_state);
       if (light_sample_terminate(kg, &bsdf_eval, terminate)) {
@@ -420,13 +485,13 @@ ccl_device
       }
     }
     /* For non-constant light shader, probabilistic termination happens in
-     * SHADE_LIGHT_NEE when the full contribution is known. */
+     * SHADE_LIGHT_NEE when the full contribution is known. */ // !!!
     else if (bsdf_eval_is_zero(&bsdf_eval)) {
       return SHADER_EVAL_EMPTY;
     }
 
     /* Create shadow ray. */
-    light_sample_to_surface_shadow_ray(kg, sd, &ls, &ray);
+    light_sample_to_surface_shadow_ray(kg, sd, &ls, &ray); // !!!
   }
 
   if (ray.self.object != OBJECT_NONE) {
@@ -887,13 +952,16 @@ ccl_device_forceinline void integrator_shade_surface_next_kernel(IntegratorState
   }
 }
 
+/**
+  mostly a scheduler/dispatch function (The BSDF evaluation has already happened.)
+ */
 template<uint node_feature_mask = KERNEL_FEATURE_NODE_MASK_SURFACE & ~KERNEL_FEATURE_NODE_RAYTRACE,
          DeviceKernel current_kernel = DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE>
 ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
                                                      IntegratorState state,
                                                      ccl_global float *ccl_restrict render_buffer)
 {
-  const int continue_path_label = integrate_surface<node_feature_mask>(kg, state, render_buffer);
+  const int continue_path_label = integrate_surface<node_feature_mask>(kg, state, render_buffer); // !!!: Main Actor
   if (continue_path_label == LABEL_CACHE_MISS) {
     integrator_path_cache_miss_sorted(state, current_kernel);
     return;
@@ -930,6 +998,9 @@ ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
     }
   }
 #endif
+
+  // TODO(Tri): instead of letting it decide the next bounce immediately, intercept it? Nah
+  // NO
 
   integrator_shade_surface_next_kernel<current_kernel>(state);
 }
