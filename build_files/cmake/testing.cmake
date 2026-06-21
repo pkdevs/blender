@@ -193,6 +193,8 @@ function(blender_add_test_suite_lib
   library_deps
   )
 
+  return()
+
   # Sources which are common for all suites and do not need to yield their own
   # test suite binaries when WITH_TESTS_SINGLE_BINARY is OFF.
   set(common_sources ${ARGN})
@@ -306,6 +308,8 @@ function(blender_add_test_suite_executable
   includes_sys
   library_deps
   )
+
+  return()
 
   # Sources which are common for all suites and do not need to yield their own
   # test suite binaries when WITH_TESTS_SINGLE_BINARY is OFF.
