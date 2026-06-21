@@ -134,22 +134,14 @@ BLI_INLINE VkImageLayout to_vk_unified_image_layout(const VkImageLayout vk_image
     case VK_IMAGE_LAYOUT_PREINITIALIZED:
     case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
     case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR:
-#ifdef VK_EXT_zero_initialize_device_memory
     case VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT:
-#endif
-#ifdef VK_KHR_video_decode_queue
     case VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR:
     case VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR:
     case VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR:
-#endif
-#ifdef VK_KHR_video_encode_queue
     case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DST_KHR:
     case VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR:
     case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR:
-#endif
-#ifdef VK_KHR_video_encode_quantization_map
     case VK_IMAGE_LAYOUT_VIDEO_ENCODE_QUANTIZATION_MAP_KHR:
-#endif
       return vk_image_layout;
     default:
       return VK_IMAGE_LAYOUT_GENERAL;
