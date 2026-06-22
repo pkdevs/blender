@@ -15,6 +15,41 @@
 
 namespace blender::nodes::node_geo_grid_solve_poisson_cc {
 
+enum class Boundary {
+  /** No explicit boundary conditions, same as Dirichlet conditions with the background value. */
+  Background,
+  /** Dirichlet boundary condition, specify the solution value for all exterior boundary voxels. */
+  Fixed,
+  /** Neumann boundary condition, specify normal derivative for all exterior boundary voxels. */
+  Normal,
+  /** Select between \a Fixed and \a Normal boundary condition. */
+  Mixed,
+};
+
+static const EnumPropertyItem boundary_items[] = {
+    {int(Boundary::Background),
+     "BACKGROUND",
+     0,
+     "Background",
+     "No explicit boundary conditions, same as Dirichlet conditions with the background value"},
+    {int(Boundary::Fixed),
+     "FIXED",
+     0,
+     "Fixed",
+     "Dirichlet boundary condition, specify the solution value for all exterior boundary voxels"},
+    {int(Boundary::Normal),
+     "NORMAL",
+     0,
+     "Normal",
+     "Neumann boundary condition, specify normal derivative for all exterior boundary voxels"},
+    {int(Boundary::Mixed),
+     "MIXED",
+     0,
+     "Mixed",
+     "Select between fixed and normal boundary condition"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Float>("Grid"_ustr)
@@ -34,19 +69,18 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(false)
       .description("Use staggered grid discretization for the Laplacian operator");
 
-  b.add_input<decl::Bool>("Use Boundary"_ustr)
-      .default_value(false)
-      .description(
-          "Define boundary conditions for the solution at locations of inactive voxels that are "
-          "next to active voxels");
-  b.add_input<decl::Float>("Neumann Condition"_ustr)
-      .structure_type(StructureType::Field)
-      .hide_value()
-      .usage_by_bool("Use Boundary"_ustr, true);
-  b.add_input<decl::Float>("Dirichlet Condition"_ustr)
-      .structure_type(StructureType::Field)
-      .hide_value()
-      .usage_by_bool("Use Boundary"_ustr, true);
+  b.add_input<decl::Menu>("Boundary"_ustr)
+      .static_items(boundary_items)
+      .default_value(Boundary::Background)
+      .description("Boundary conditions for the solution between active and inactive voxels");
+  //   b.add_input<decl::Float>("Neumann Condition"_ustr)
+  //       .structure_type(StructureType::Field)
+  //       .hide_value()
+  //       .usage_by_bool("Use Boundary"_ustr, true);
+  //   b.add_input<decl::Float>("Dirichlet Condition"_ustr)
+  //       .structure_type(StructureType::Field)
+  //       .hide_value()
+  //       .usage_by_bool("Use Boundary"_ustr, true);
 
   b.add_output<decl::Float>("Solution"_ustr)
       .structure_type(StructureType::Grid)
@@ -59,7 +93,20 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Final relative error of the solution");
 }
 
-struct BoundaryOp {};
+struct DirichletBoundaryOp {
+  void operator()(const openvdb::Coord & /*ijk*/,
+                  const openvdb::Coord & /*neighbor*/,
+                  double & /*source*/,
+                  double &diagonal) const
+  {
+    //   if (neighbor.x() == ijk.x() && neighbor.z() == ijk.z()) {
+    // if (neighbor.y() < ijk.y())
+    //   source -= 1.0;
+    // else
+    diagonal -= 1.0;
+    //   }
+  };
+};
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
@@ -74,7 +121,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   const int max_iterations = params.extract_input<int>("Iterations"_ustr);
   const float tolerance = params.extract_input<float>("Tolerance"_ustr);
   const bool staggered = params.extract_input<bool>("Staggered"_ustr);
-  const bool use_boundary = params.extract_input<bool>("Use Boundary"_ustr);
+  const Boundary boundary = params.extract_input<Boundary>("Boundary"_ustr);
 
   bke::VolumeTreeAccessToken tree_token;
   const openvdb::FloatGrid &source_vdb_grid = source_grid.grid(tree_token);
@@ -85,29 +132,46 @@ static void node_geo_exec(GeoNodeExecParams params)
   solver_state.absoluteError = double(tolerance);
 
   openvdb::FloatTree::Ptr solution_tree;
-  if (use_boundary) {
-    using PreconditionerType =
-        openvdb::math::pcg::JacobiPreconditioner<openvdb::tools::poisson::LaplacianMatrix>;
-    openvdb::util::NullInterrupter interrupter;
-    const auto boundary = [](const openvdb::Coord &ijk,
-                             const openvdb::Coord &neighbor,
-                             double &source,
-                             double &diagonal) {
-      //   if (neighbor.x() == ijk.x() && neighbor.z() == ijk.z()) {
-      // if (neighbor.y() < ijk.y())
-      //   source -= 1.0;
-      // else
-      diagonal -= 1.0;
-      //   }
-    };
-    solution_tree =
-        openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<PreconditionerType>(
-            source_vdb_grid.tree(), boundary, solver_state, interrupter, staggered);
+  using PreconditionerType =
+      openvdb::math::pcg::JacobiPreconditioner<openvdb::tools::poisson::LaplacianMatrix>;
+  openvdb::util::NullInterrupter interrupter;
+  switch (boundary) {
+    case Boundary::Background:
+      solution_tree = openvdb::tools::poisson::solve(
+          source_vdb_grid.tree(), solver_state, staggered);
+      break;
+    case Boundary::Fixed: {
+      DirichletBoundaryOp boundary_op;
+      solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
+          PreconditionerType>(
+          source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
+      break;
+    }
+
+    default:
+      BLI_assert_unreachable();
+      solution_tree = std::make_shared<openvdb::FloatTree>();
+      break;
   }
-  else {
-    solution_tree = openvdb::tools::poisson::solve(
-        source_vdb_grid.tree(), solver_state, staggered);
-  }
+  //   if (use_boundary) {
+  //     using PreconditionerType =
+  //         openvdb::math::pcg::JacobiPreconditioner<openvdb::tools::poisson::LaplacianMatrix>;
+  //     openvdb::util::NullInterrupter interrupter;
+  //     const auto boundary = [](const openvdb::Coord &ijk,
+  //                              const openvdb::Coord &neighbor,
+  //                              double &source,
+  //                              double &diagonal) {
+  //       //   if (neighbor.x() == ijk.x() && neighbor.z() == ijk.z()) {
+  //       // if (neighbor.y() < ijk.y())
+  //       //   source -= 1.0;
+  //       // else
+  //       diagonal -= 1.0;
+  //       //   }
+  //     };
+  //     solution_tree =
+  //         openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<PreconditionerType>(
+  //             source_vdb_grid.tree(), boundary, solver_state, interrupter, staggered);
+  //   }
 
   openvdb::FloatGrid::Ptr solution_grid = openvdb::FloatGrid::create(std::move(solution_tree));
   solution_grid->setTransform(source_vdb_grid.transform().copy());
