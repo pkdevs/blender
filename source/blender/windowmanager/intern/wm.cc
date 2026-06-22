@@ -128,7 +128,13 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
     /* Update deprecated screen member (for so loading in 2.7x uses the correct screen). */
     win.screen = BKE_workspace_active_screen_get(win.workspace_hook);
 
-    writer->write_struct(&win);
+    writer->write_struct(&win, [](BlendStructWriter &struct_writer) {
+      struct_writer.zero_runtime_fields<wmWindow>([&](wmWindow &win) {
+        win.active = 0;
+        win.event_queue_check_click = 0;
+        win.event_queue_check_drag = 0;
+      });
+    });
     writer->write_struct(win.workspace_hook);
     writer->write_struct(win.stereo3d_format);
 

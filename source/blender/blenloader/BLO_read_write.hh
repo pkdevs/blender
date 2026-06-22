@@ -76,6 +76,13 @@ class BlendStructWriter {
    */
   void runtime_ptr(int64_t offset);
 
+  template<typename T, typename Fn> void zero_runtime_fields(Fn &&fn)
+  {
+    BLI_assert(struct_nr_ == dna::sdna_struct_id_get<T>());
+    T &data = *reinterpret_cast<T *>(data_.data());
+    fn(data);
+  }
+
   /**
    * Tag the pointer at the given offset as "generated". That implies that it may be remapped
    * to a stable pointer. It's expected that the pointer has been tagged with
@@ -218,7 +225,16 @@ struct BlendWriter {
   void write_id_struct(const void *id_address, const T *id, const BlendStructWriterFn fn = nullptr)
   {
     this->write_struct_at_address_by_id_with_filecode(
-        GS(id_cast<const ID *>(id)->name), dna::sdna_struct_id_get<T>(), id_address, id, fn);
+        GS(id_cast<const ID *>(id)->name),
+        dna::sdna_struct_id_get<T>(),
+        id_address,
+        id,
+        [&](BlendStructWriter &struct_writer) {
+          struct_writer.zero_runtime_fields<T>([&](T &data) { data.id.session_uid = 0; });
+          if (fn) {
+            fn(struct_writer);
+          }
+        });
   }
 };
 
