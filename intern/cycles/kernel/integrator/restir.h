@@ -17,7 +17,7 @@ CCL_NAMESPACE_BEGIN
 struct ReSTIRReservoir {
     LightSample light;
 
-    float W;       // final reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_weight;
+    float W;       // Final Probabilistic reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_target_pdf;
     uint M;
 };
 
@@ -37,7 +37,7 @@ struct ReSTIRRisState {
     LightSample light;
 
     float weight_sum;       // Sum of (target/source); only exists while streaming candidates.
-    float selected_weight;  // selected RIS weight (target)
+    float selected_target_pdf;  // selected RIS weight (target)
 
     uint M;                 // Sample count
 };
@@ -47,7 +47,7 @@ ccl_device_inline ReSTIRRisState restir_ris_empty()
   ReSTIRRisState s;
 
   s.weight_sum = 0.0f;
-  s.selected_weight = 0.0f;
+  s.selected_target_pdf = 0.0f;
   s.M = 0;
 
   return s;
@@ -75,7 +75,7 @@ ccl_device_inline void restir_streaming_resample_step(
 
   if (random * ris->weight_sum < sample_weight) {
     ris->light = candidate;
-    ris->selected_weight = sample_weight;
+    ris->selected_target_pdf = target_pdf;
   }
 }
 
@@ -90,9 +90,9 @@ ccl_device_inline ReSTIRReservoir restir_finalize(
 
   /* Falcor InitialResampling.cs.slang: 
    * risState.weight = risState.weight > 0.f ? (risState.weightSum / risState.M) / risState.weight : 0.f; */
-  if (ris->selected_weight > 0.0f && ris->M > 0)
+  if (ris->selected_target_pdf > 0.0f && ris->M > 0)
   {
-    reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_weight;
+    reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
   }
   else {
     reservoir.W = 0.0f;

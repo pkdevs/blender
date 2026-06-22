@@ -128,6 +128,7 @@ CCL_NAMESPACE_BEGIN
 #define __OBJECT_MOTION__
 #define __POINTCLOUD__
 #define __PRINCIPLED_HAIR__
+#define __RESTIR_DI__
 #define __SHADER_RAYTRACE__
 #define __SHADOW_CATCHER__
 #define __SHADOW_LINKING__

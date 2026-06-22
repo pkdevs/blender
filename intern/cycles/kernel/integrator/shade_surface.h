@@ -361,6 +361,108 @@ ccl_device
     }
   }
 
+// --- RIS infrastructure validation
+#ifdef __RESTIR_DI__
+  const uint candidate_count = 8;
+  ReSTIRRisState ris = restir_ris_empty();
+
+  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+  const uint bounce = INTEGRATOR_STATE(state, path, bounce);
+
+  for (uint i = 0; i < candidate_count; i++) {
+    LightSample candidate ccl_optional_struct_init;
+
+    // const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
+    // const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT + i); // temp 
+    const float3 rand_light = path_branched_rng_3D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_LIGHT);
+
+
+    if (!light_sample_from_position(kg,
+                                    rand_light,
+                                    sd->time,
+                                    sd->P,
+                                    sd->N,
+                                    light_link_receiver_nee(kg, sd),
+                                    sd->flag,
+                                    bounce,
+                                    path_flag,
+                                    &candidate))
+    {
+      ris.M++;
+      continue;
+    }
+
+    if (candidate.pdf <= 0.0f) {
+      ris.M++;
+      continue;
+    }
+
+    Spectrum candidate_light_eval ccl_optional_struct_init;
+    light_sample_shader_eval_nee_constant(kg,
+                                          candidate.shader,
+                                          candidate.prim,
+                                          candidate.type != LIGHT_TRIANGLE,
+                                          candidate_light_eval);
+
+    BsdfEval candidate_bsdf_eval ccl_optional_struct_init;
+    surface_shader_bsdf_eval(kg,
+                             state,
+                             sd,
+                             candidate.D,
+                             &candidate_bsdf_eval,
+                             candidate.shader);
+
+    // Computing target
+    /* ReSTIR DI prototype target.
+    *
+    * `light_shader_eval` contains the constant part of the light shader. For
+    * constant-emission lights this is the full emitted radiance. For non-constant
+    * emission shaders, the remaining radiance is evaluated later in
+    * SHADE_LIGHT_NEE after the shadow ray reaches the light shading stage.
+    *
+    * This target is therefore approximate for textured/procedural emitters, which
+    * is acceptable for initial RIS infrastructure validation.
+    */
+    const Spectrum contribution = bsdf_eval_sum(&candidate_bsdf_eval) *
+                                                candidate_light_eval * candidate.eval_fac;
+
+    const float target = spectrum_to_gray(kg, contribution);
+    const float source = candidate.pdf;
+
+    // TODO(Tri): Add a dedicated PRNG dimension for ReSTIR reservoir sampling.
+    // const float random = path_state_rng_1D(kg, rng_state, PRNG_LIGHT);
+    const float random = path_branched_rng_1D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_RESAMPLE);
+
+
+    restir_streaming_resample_step(&ris, candidate, target, source, random);
+  }
+
+  // DEBUG
+  kernel_assert(ris.M == candidate_count);
+  kernel_assert(isfinite(ris.weight_sum));
+  kernel_assert(ris.weight_sum >= 0.0f);
+
+  const ReSTIRReservoir reservoir = restir_finalize(&ris);
+
+  kernel_assert(reservoir.M == candidate_count);
+  kernel_assert(isfinite(reservoir.W));
+  kernel_assert(reservoir.W >= 0.0f);
+
+  // To verify resevoir.light
+  kernel_assert(reservoir.M == candidate_count);
+  if (reservoir.W > 0.0f) {
+      kernel_assert(reservoir.light.pdf > 0.0f);
+  }
+
+  if (reservoir.W == 0.0f) {
+      return SHADER_EVAL_EMPTY;
+  }
+
+  ls = reservoir.light; // !!!: DEBUG ONLY
+// }
+#endif
+
+
   kernel_assert(ls.pdf != 0.0f);
 
   const bool is_transmission = dot(ls.D, sd->N) < 0.0f;
@@ -397,64 +499,8 @@ ccl_device
 
 
 
-// --- RIS infrastructure validation
-// #ifdef __RESTIR_DI__
-// {
-  // Computing target
+// --- Old place for RIS infrastructure validation
 
-  /* ReSTIR DI prototype target.
-  *
-  * `light_shader_eval` contains the constant part of the light shader. For
-  * constant-emission lights this is the full emitted radiance. For non-constant
-  * emission shaders, the remaining radiance is evaluated later in
-  * SHADE_LIGHT_NEE after the shadow ray reaches the light shading stage.
-  *
-  * This target is therefore approximate for textured/procedural emitters, which
-  * is acceptable for initial RIS infrastructure validation.
-  */
-  Spectrum contribution = bsdf_eval_sum(&bsdf_eval)
-      * light_shader_eval
-      * ls.eval_fac;
-
-  // Source PDF
-  float target = spectrum_to_gray(kg, contribution);
-
-  float source = ls.pdf;
-
-  // run RIS
-  ReSTIRRisState ris = restir_ris_empty();
-
-  float random = path_state_rng_1D(kg, rng_state, PRNG_LIGHT); // TODO(Tri): Later, add/use a distinct PRNG dimension for ReSTIR
-
-  restir_streaming_resample_step(
-    &ris,
-    ls,
-    target,
-    source,
-    random); // random comes from a single RNG sample
-
-  // Debug
-  kernel_assert(ris.M == 1);
-
-  kernel_assert(isfinite(target));
-  kernel_assert(isfinite(source));
-
-  kernel_assert(target >= 0);
-  kernel_assert(source > 0);
-
-  kernel_assert(isfinite(ris.weight_sum));
-  kernel_assert(ris.weight_sum >= 0.0f);
-
-  ReSTIRReservoir reservoir = restir_finalize(&ris);
-
-  kernel_assert(reservoir.M == 1);
-  kernel_assert(isfinite(reservoir.W));
-  kernel_assert(reservoir.W >= 0.0f);
-  if (target > 0.0f) {
-      kernel_assert(reservoir.W > 0.0f);
-  }
-// }
-// #endif
 
 
 
@@ -475,7 +521,18 @@ ccl_device
 #endif /* __MNEE__ */
   {
     const float mis_weight = light_sample_mis_weight_nee(kg, ls.pdf, bsdf_pdf);
-    bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight); // ???: The final throughput?
+    // bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight); // !!!: The final throughput
+#ifdef __RESTIR_DI__
+    if (reservoir.W > 0.0f) { // restir_reservoir_weight
+      bsdf_eval_mul(&bsdf_eval,
+                    light_shader_eval * ls.eval_fac * reservoir.W * mis_weight);
+    }
+    else
+#endif
+    {
+      bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight);
+    }
+
 
     /* Path termination for constant light shader. */ // !!!
     if (is_constant_light_shader && !(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
