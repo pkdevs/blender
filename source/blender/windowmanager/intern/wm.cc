@@ -120,7 +120,10 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
 
   wm->runtime = nullptr;
 
-  writer->write_id_struct(id_address, wm);
+  writer->write_id_struct(id_address, wm, [](BlendStructWriter &struct_writer) {
+    struct_writer.zero_runtime_fields<wmWindowManager>(
+        [&](wmWindowManager &wm) { wm.extensions_updates = {}; });
+  });
   BKE_id_blend_write(writer, &wm->id);
   write_wm_xr_data(writer, &wm->xr);
 
@@ -133,6 +136,8 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
         win.active = 0;
         win.event_queue_check_click = 0;
         win.event_queue_check_drag = 0;
+        win.event_queue_consecutive_gesture_xy[0] = 0;
+        win.event_queue_consecutive_gesture_xy[1] = 0;
       });
     });
     writer->write_struct(win.workspace_hook);
