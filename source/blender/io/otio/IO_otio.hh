@@ -18,6 +18,7 @@ struct bContext;
 struct ReportList;
 struct Scene;
 struct Main;
+struct wmOperator;
 
 namespace io::otio {
 
@@ -69,6 +70,7 @@ struct ExportJobData {
 }  // namespace io::otio
 
 wmOperatorStatus OTIO_export(const bContext *C,
+                             wmOperator *op,
                              const char *filepath,
                              const OTIOExportParams *export_params);
 

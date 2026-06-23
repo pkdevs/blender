@@ -42,6 +42,7 @@ short get_scene_strip_resolution_percent(SceneStripRes resolution)
 using namespace io::otio;
 
 wmOperatorStatus OTIO_export(const bContext *C,
+                             wmOperator *op,
                              const char *filepath,
                              const OTIOExportParams *export_params)
 {
@@ -50,6 +51,11 @@ wmOperatorStatus OTIO_export(const bContext *C,
   job_data->scene = CTX_data_sequencer_scene(C);
   job_data->params = *export_params;
   STRNCPY(job_data->filepath, filepath);
+
+  if (!validate_timeline_blender(op->reports, job_data->scene)) {
+    MEM_delete(job_data);
+    return OPERATOR_CANCELLED;
+  }
 
   wmJob *wm_job = WM_jobs_get(CTX_wm_manager(C),
                               CTX_wm_window(C),

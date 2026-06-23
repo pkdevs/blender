@@ -163,7 +163,7 @@ static wmOperatorStatus wm_otio_export_exec(bContext *C, wmOperator *op)
   export_params.meta_strip_export = io::otio::ExportOption(
       RNA_enum_get(op->ptr, "meta_strip_export_option"));
 
-  wmOperatorStatus op_stat = OTIO_export(C, filepath, &export_params);
+  wmOperatorStatus op_stat = OTIO_export(C, op, filepath, &export_params);
   return op_stat;
 }
 
