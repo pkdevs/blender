@@ -16,7 +16,7 @@
 namespace blender::nodes::node_geo_grid_solve_poisson_cc {
 
 enum class Boundary {
-  /** No explicit boundary conditions, same as Dirichlet conditions with the background value. */
+  /** Dirichlet boundary condition, using the background value for all exterior boundary voxels. */
   Background,
   /** Dirichlet boundary condition, specify the solution value for all exterior boundary voxels. */
   Fixed,
@@ -107,6 +107,12 @@ struct DirichletBoundaryOp {
     //   }
   };
 };
+
+static openvdb::MaskTree get_boundary_mask(const openvdb::FloatTree &tree)
+{
+  openvdb::MaskTree mask_tree;
+  mask_tree.topologyUnion(tree);
+}
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
