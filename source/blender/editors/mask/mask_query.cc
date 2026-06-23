@@ -688,9 +688,30 @@ void ED_mask_center_from_pivot_ex(const bContext *C,
       C, min, max, false, handles_as_knot_selected_only);
 
   switch (mode) {
-    case V3D_AROUND_CURSOR:
-      ED_mask_cursor_location_get(area, r_center);
+    case V3D_AROUND_CURSOR: {
+      float cursor[2];
+      ED_mask_cursor_location_get(area, cursor);
+      switch (area->spacetype) {
+        case SPACE_CLIP: {
+          SpaceClip *space_clip = static_cast<SpaceClip *>(area->spacedata.first);
+          BKE_mask_coord_from_movieclip(space_clip->clip, &space_clip->user, r_center, cursor);
+          break;
+        }
+        case SPACE_SEQ: {
+          zero_v2(r_center);
+          break;
+        }
+        case SPACE_IMAGE: {
+          SpaceImage *space_image = static_cast<SpaceImage *>(area->spacedata.first);
+          BKE_mask_coord_from_image(space_image->image, &space_image->iuser, r_center, cursor);
+          break;
+        }
+        default:
+        BLI_assert(0);
+        break;
+      }
       break;
+    }
     default:
       mid_v2_v2v2(r_center, min, max);
       break;

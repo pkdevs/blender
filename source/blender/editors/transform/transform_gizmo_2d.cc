@@ -26,6 +26,7 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_layer.hh"
+#include "BKE_mask.hh"
 
 #include "RNA_access.hh"
 
@@ -241,7 +242,7 @@ static bool gizmo2d_calc_bounds(const bContext *C, float *r_center, float *r_min
   ScrArea *area = CTX_wm_area(C);
   bool has_select = false;
   if (area->spacetype == SPACE_IMAGE) {
-    const SpaceImage *sima = static_cast<const SpaceImage *>(area->spacedata.first);
+    SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
     switch (sima->mode) {
       case SI_MODE_UV: {
         const Main *bmain = CTX_data_main(C);
@@ -257,6 +258,8 @@ static bool gizmo2d_calc_bounds(const bContext *C, float *r_center, float *r_min
       }
       case SI_MODE_MASK: {
         if (ED_mask_selected_minmax(C, r_min, r_max, false, false)) {
+          BKE_mask_coord_to_image(sima->image, &sima->iuser, r_min, r_min);
+          BKE_mask_coord_to_image(sima->image, &sima->iuser, r_max, r_max);
           has_select = true;
         }
         break;
@@ -392,7 +395,7 @@ static bool gizmo2d_calc_transform_pivot(const bContext *C,
   if (area->spacetype == SPACE_IMAGE) {
     const Main *bmain = CTX_data_main(C);
     Scene *scene = CTX_data_scene(C);
-    const SpaceImage *sima = static_cast<const SpaceImage *>(area->spacedata.first);
+    SpaceImage *sima = static_cast<SpaceImage *>(area->spacedata.first);
     ViewLayer *view_layer = CTX_data_view_layer(C);
     switch (sima->mode) {
       case SI_MODE_UV:
@@ -402,6 +405,7 @@ static bool gizmo2d_calc_transform_pivot(const bContext *C,
       case SI_MODE_MASK:
         ED_mask_center_from_pivot_ex(
             C, area, sima->around, handles_as_knot_selected_only, r_pivot, &has_select);
+        BKE_mask_coord_to_image(sima->image, &sima->iuser, r_pivot, r_pivot);
         break;
       default:
         break;
