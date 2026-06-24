@@ -1810,7 +1810,7 @@ struct MeshStatVis {
 
 /** #SequencerToolSettings::overlap_mode */
 enum eSeqOverlapMode : int {
-  SEQ_OVERLAP_EXPAND,
+  SEQ_OVERLAP_RIPPLE,
   SEQ_OVERLAP_OVERWRITE,
   SEQ_OVERLAP_SHUFFLE,
 };
@@ -1846,7 +1846,7 @@ struct SequencerToolSettings {
   eSeqImageFitMethod fit_method = SEQ_SCALE_TO_FIT;
   eSequencerSnapMode snap_mode = {};
   eSequencerSnapFlag snap_flag = {};
-  eSeqOverlapMode overlap_mode = SEQ_OVERLAP_EXPAND;
+  eSeqOverlapMode overlap_mode = SEQ_OVERLAP_RIPPLE;
   /**
    * When there are many snap points,
    * 0-1 range corresponds to resolution from bound-box to all possible snap points.
