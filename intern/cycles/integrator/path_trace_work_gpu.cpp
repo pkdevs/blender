@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
+#include <utility> // Swap
+
 #include "integrator/path_trace_work_gpu.h"
 
 #include "device/device.h"
@@ -95,7 +97,8 @@ PathTraceWorkGPU::PathTraceWorkGPU(Device *device,
           device, "integrator_next_shadow_path_index", MEM_READ_WRITE),
       queued_paths_(device, "queued_paths", MEM_READ_WRITE),
       num_queued_paths_(device, "num_queued_paths", MEM_READ_WRITE),
-      // restir_reservoirs_(device, "restir_reservoirs", MEM_READ_WRITE),
+      restir_reservoirs_(device, "restir_reservoirs", MEM_READ_WRITE), // !!!
+      restir_reservoirs_prev_(device, "restir_reservoirs_prev", MEM_READ_WRITE),
       work_tiles_(device, "work_tiles", MEM_READ_WRITE),
       display_rgba_half_(device, "display buffer half", MEM_READ_WRITE),
       max_num_paths_(0),
@@ -311,6 +314,25 @@ void PathTraceWorkGPU::alloc_work_memory() // !!!
   alloc_integrator_queue();
   alloc_integrator_sorting();
   alloc_integrator_path_split();
+
+// >>> New
+  // const int2 res = film_->get_render_resolution(); // err: No member named `get_render_resolution` n `ccl:Film`
+  // const int pixel_count = res.x * res.y;
+
+  // Allocate per-pixel reservoir buffers for ReSTIR DI. 
+  // We use two buffers (current/previous) to allow temporal reuse across frames/samples.
+  const int pixel_count = effective_buffer_params_.width * effective_buffer_params_.height;
+
+  if (restir_reservoirs_.size() != pixel_count) {
+    restir_reservoirs_.alloc(pixel_count);
+    restir_reservoirs_.zero_to_device();
+  }
+
+  if (restir_reservoirs_prev_.size() != pixel_count) {
+    restir_reservoirs_prev_.alloc(pixel_count);
+    restir_reservoirs_prev_.zero_to_device(); // ensures first sample has empty reservoirs.
+  }
+// <<<
 }
 
 void PathTraceWorkGPU::init_execution()
@@ -404,6 +426,34 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
     ++num_iterations;
   }
 
+// >>> New
+  // At the end of each sample iteration, where a sample batch finalizes
+  // swap(restir_reservoirs_, restir_reservoirs_prev_); // New // Err here as well
+
+  // // enqueueing
+  // device_vector<ReSTIRReservoir> &current = restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
+  // device_vector<ReSTIRReservoir> &previous = restir_pingpong_ ? restir_reservoirs_ : restir_reservoirs_prev_;
+  // // pass
+  // device_ptr restir_current = current.device_pointer;
+  // device_ptr restir_prev = previous.device_pointer;
+
+  // restir_pingpong_ = !restir_pingpong_;
+  // device_vector<ReSTIRReservoir> &next_current = restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
+  // next_current.zero_to_device();
+
+
+  // Ping-pong the ReSTIR reservoirs: The 'current' buffer from this sample 
+  // becomes the 'previous' buffer for the next sample to enable temporal resampling.
+  restir_pingpong_ = !restir_pingpong_;
+  
+  // Clear the new 'current' buffer so it doesn't contain stale data from two samples ago.
+  device_vector<ReSTIRReservoir> &next_current = restir_pingpong_ ? 
+                                                 restir_reservoirs_prev_ : restir_reservoirs_;
+  next_current.zero_to_device();
+
+  // restir_reservoirs_.zero_to_device(); // after swap, the new current buffer should usually be cleared before reuse // !!!: Wrong
+
+// <<<
   if (num_iterations) {
     statistics.occupancy = float(num_busy_accum) / num_iterations / max_num_paths_;
   }
@@ -607,7 +657,34 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: // !!!
+    // case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: {
+    //   device_ptr restir_current = restir_reservoirs_.device_pointer;
+    //   device_ptr restir_prev = restir_reservoirs_prev_.device_pointer;
+
+    //   const DeviceKernelArguments args(&d_path_index, &buffers_->buffer.device_pointer, 
+    //                                   &work_size, &restir_current, &restir_prev);
+
+    //   queue_->enqueue(kernel, work_size, args);
+    //   break;
+    // }
+    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: {
+      device_vector<ReSTIRReservoir> &current =
+          restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
+      device_vector<ReSTIRReservoir> &previous =
+          restir_pingpong_ ? restir_reservoirs_ : restir_reservoirs_prev_;
+
+      device_ptr restir_current = current.device_pointer;
+      device_ptr restir_prev = previous.device_pointer;
+
+      const DeviceKernelArguments args(&d_path_index,
+                                      &buffers_->buffer.device_pointer,
+                                      &work_size,
+                                      &restir_current,
+                                      &restir_prev);
+
+      queue_->enqueue(kernel, work_size, args);
+      break;
+    }
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME_RAY_MARCHING:

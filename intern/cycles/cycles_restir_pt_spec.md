@@ -11,13 +11,20 @@ Architecture:
 
 Phase A:
 [x] Proof-of-concept `DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST` branch
-[x] Direct-light-only RIS (No temporal reuse. No spatial reuse, No replay shifts).
-[x] Recompute direct-light shading from the reservoir-selected sample
+[x] Direct-light-only RIS candidate gen (No temporal reuse. No spatial reuse, No replay shifts).
+[x] (Reservoir selection) Recompute direct-light shading from the reservoir-selected sample
 [x] Apply finalized reservoir weight to direct-light throughput
-[ ] Add visibility-aware reservoir validation
+[x] Remove redundant classic NEE sampling in ReSTIR mode
+[x] Add GPU per-pixel reservoir buffers and surface-shading kernel plumbing
+[x] Add first-hit reservoir write-back for temporal reuse
+[ ] Prepare visibility-aware validation hook
 
 Phase B:
-Temporal reuse.
+[x] Initial temporal reuse merge from previous per-pixel reservoir
+[x] Add current/previous reservoir ping-pong buffers
+[x] Validate temporal reuse effectiveness with debug visualizations
+[ ] Reprojection using motion vectors (Cross-pixel reuse when camera moves)
+[ ] Shadow-visibility-aware temporal validation
 
 Phase C:
 Spatial reuse.

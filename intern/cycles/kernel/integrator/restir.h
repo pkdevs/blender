@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "kernel/types.h"
 #include "kernel/integrator/state.h"
 #include "kernel/light/common.h" // LightSample
 #include "kernel/integrator/state_flow.h" // integrator_path_next
@@ -17,8 +18,9 @@ CCL_NAMESPACE_BEGIN
 struct ReSTIRReservoir {
     LightSample light;
 
-    float W;       // Final Probabilistic reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_target_pdf;
+    float W;        // Final Probabilistic reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_target_pdf;
     uint M;
+    bool visible;   // To rejected occuluded paths // New // TODO(Tri): Change to uint for safety?
 };
 
 ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
@@ -27,6 +29,7 @@ ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
 
   r.W = 0.0f;
   r.M = 0;
+  r.visible = true; // necessarily optimistic here; visibility is known only after the shadow ray. Later
 
   return r;
 }
@@ -53,11 +56,10 @@ ccl_device_inline ReSTIRRisState restir_ris_empty()
   return s;
 }
 
-// !!!: 1 candidate, no shadows, validating the math path, for now...
 // TODO: Utilize restir_candidate_weight
 ccl_device_inline void restir_streaming_resample_step(
     ccl_private ReSTIRRisState *ris,
-    const LightSample &candidate,
+    ccl_private const LightSample *candidate,
     const float target_pdf,
     const float source_pdf,
     const float random)
@@ -74,7 +76,7 @@ ccl_device_inline void restir_streaming_resample_step(
   ris->M++;
 
   if (random * ris->weight_sum < sample_weight) {
-    ris->light = candidate;
+    ris->light = *candidate;
     ris->selected_target_pdf = target_pdf;
   }
 }
@@ -87,6 +89,7 @@ ccl_device_inline ReSTIRReservoir restir_finalize(
 
   reservoir.light = ris->light;
   reservoir.M = ris->M;
+  reservoir.visible = true;
 
   /* Falcor InitialResampling.cs.slang: 
    * risState.weight = risState.weight > 0.f ? (risState.weightSum / risState.M) / risState.weight : 0.f; */
@@ -112,27 +115,58 @@ ccl_device void integrator_restir_test(KernelGlobals kg,
                        DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST);
 }
 
+ccl_device_inline bool restir_reservoir_is_valid(const ccl_private ReSTIRReservoir *r) // New
+{
+  return r->M > 0 && r->W > 0.0f && r->visible;
+}
 
-// // This is the math that actually chooses which light to keep (streamingResampleStep).
-// ccl_device bool reservoir_update(ReSTIRRisState &res, 
-//                                  LightSample sample, 
-//                                  float target_pdf, 
-//                                  float source_pdf, 
-//                                  float random_val) 
-// {
-//     // Falcor: float sampleWeight = targetPdf / sourcePdf;
-//     float weight = (source_pdf > 0.0f) ? (target_pdf / source_pdf) : 0.0f;
-    
-//     res.w_sum += weight;
-//     res.M += 1;
+// This is the math that actually chooses which light to keep (streamingResampleStep).
+ccl_device_inline bool restir_streaming_resample_reservoir( // New
+    ccl_private ReSTIRRisState *ris,
+    const ccl_private ReSTIRReservoir *reservoir,
+    const float target_pdf,
+    const float random)
+{
+  if (!restir_reservoir_is_valid(reservoir) || target_pdf <= 0.0f) {
+    return false;
+  }
 
-//     // Falcor: bool selectSample = sampleNext1D(sg) * state.weightSum < sampleWeight;
-//     bool select = (random_val * res.w_sum) < weight;
-//     if (select) {
-//         res.light = sample;
-//         res.target_pdf = target_pdf;
-//     }
-//     return select;
-// }
+  const float sample_weight = target_pdf * reservoir->W * float(reservoir->M);
+
+  if (sample_weight <= 0.0f || !isfinite(sample_weight)) {
+    return false;
+  }
+
+  ris->weight_sum += sample_weight;
+  ris->M += reservoir->M;
+
+  if (random * ris->weight_sum < sample_weight) {
+    ris->light = reservoir->light;
+    ris->selected_target_pdf = target_pdf;
+    return true;
+  }
+
+  return false;
+}
+
+ccl_device_inline ReSTIRReservoir restir_finalize_temporal(const ccl_private ReSTIRRisState *ris) // New
+{
+  ReSTIRReservoir reservoir = restir_reservoir_empty();
+
+  if (ris->selected_target_pdf <= 0.0f || ris->M == 0) {
+    return reservoir;
+  }
+
+  reservoir.light = ris->light;
+  reservoir.M = ris->M;
+  reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
+  reservoir.visible = true;
+
+  if (!isfinite(reservoir.W)) {
+    return restir_reservoir_empty();
+  }
+
+  return reservoir;
+}
 
 CCL_NAMESPACE_END

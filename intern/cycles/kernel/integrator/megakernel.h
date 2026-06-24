@@ -79,7 +79,7 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
           integrator_shade_background(kg, state, render_buffer);
           break;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE:
-          integrator_shade_surface(kg, state, render_buffer);
+          integrator_shade_surface(kg, state, render_buffer, nullptr, nullptr); // TODO(Tri): implement CPU reservoir buffers
           break;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME:
           integrator_shade_volume(kg, state, render_buffer);

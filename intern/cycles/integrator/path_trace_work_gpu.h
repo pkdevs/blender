@@ -149,8 +149,8 @@ class PathTraceWorkGPU : public PathTraceWork {
   device_vector<int> num_queued_paths_;
 
   /* Spatio temporal resevoir resampling buffers. */
-  // device_vector<ReSTIRReservoir> restir_reservoirs_; // ?: per-path? per-pixel? per-sample? per-active-state?
-  // device_vector<ReSTIRReservoir> restir_prev_frame_; // TODO(Tri): Later on...
+  device_vector<ReSTIRReservoir> restir_reservoirs_; //per-pixel
+  device_vector<ReSTIRReservoir> restir_reservoirs_prev_;
 
   /* Temporary buffer for passing work tiles to kernel. */
   device_vector<KernelWorkTile> work_tiles_;
@@ -160,6 +160,8 @@ class PathTraceWorkGPU : public PathTraceWork {
   device_vector<half4> display_rgba_half_;
 
   unique_ptr<DeviceGraphicsInterop> device_graphics_interop_;
+
+  bool restir_pingpong_ = false;
 
   /* Cached result of device->should_use_graphics_interop(). */
   bool interop_use_checked_ = false;
