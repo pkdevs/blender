@@ -712,13 +712,7 @@ static wmOperatorStatus sequencer_snap_exec(bContext *C, wmOperator *op)
     seq::relations_invalidate_cache(scene, strip);
   }
 
-  /* Test for overlap and shuffle. */
-  for (Strip *strip : selected) {
-    strip->runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
-    if (seq::transform_test_overlap(scene, ed->current_strips(), strip)) {
-      seq::transform_seqbase_shuffle(ed->current_strips(), strip, scene);
-    }
-  }
+  seq::transform_handle_overlap(scene, ed->current_strips(), selected, false);
 
   /* Recalculate bounds of effect strips, offsetting the keyframes if not snapping any handles. */
   for (Strip *strip : selected) {
@@ -1581,17 +1575,18 @@ static wmOperatorStatus sequencer_reload_exec(bContext *C, wmOperator *op)
   Editing *ed = seq::editing_get(scene);
   const bool adjust_length = RNA_boolean_get(op->ptr, "adjust_length");
 
+  VectorSet<Strip *> reloaded_strips;
   for (Strip &strip : *ed->current_strips()) {
     if (strip.flag & SEQ_SELECT) {
       seq::add_reload_new_file(bmain, scene, &strip, !adjust_length);
       seq::thumbnail_cache_invalidate_strip(scene, &strip);
 
-      if (adjust_length) {
-        if (seq::transform_test_overlap(scene, ed->current_strips(), &strip)) {
-          seq::transform_seqbase_shuffle(ed->current_strips(), &strip, scene);
-        }
-      }
+      reloaded_strips.add(&strip);
     }
+  }
+
+  if (adjust_length) {
+    seq::transform_handle_overlap(scene, ed->current_strips(), reloaded_strips, false);
   }
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
@@ -2266,11 +2261,7 @@ static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
       seq::transform_translate_strip(scene, strip, offset);
     }
 
-    for (Strip *strip : to_offset) {
-      if (seq::transform_test_overlap(scene, ed->current_strips(), strip)) {
-        seq::transform_seqbase_shuffle(ed->current_strips(), strip, scene);
-      }
-    }
+    seq::transform_handle_overlap(scene, ed->current_strips(), to_offset, false);
   }
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
@@ -2785,13 +2776,13 @@ static wmOperatorStatus sequencer_offset_clear_exec(bContext *C, wmOperator * /*
     strip = strip->next;
   }
 
+  VectorSet<Strip *> cleared_strips;
   for (strip = ed->current_strips()->first(); strip; strip = static_cast<Strip *>(strip->next)) {
     if (!strip->is_effect() && (strip->flag & SEQ_SELECT)) {
-      if (seq::transform_test_overlap(scene, ed->current_strips(), strip)) {
-        seq::transform_seqbase_shuffle(ed->current_strips(), strip, scene);
-      }
+      cleared_strips.add(strip);
     }
   }
+  seq::transform_handle_overlap(scene, ed->current_strips(), cleared_strips, false);
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
 
@@ -2835,6 +2826,7 @@ static wmOperatorStatus sequencer_separate_images_exec(bContext *C, wmOperator *
 
   seq::prefetch_stop(scene);
 
+  VectorSet<Strip *> new_strips;
   while (strip) {
     if ((strip->flag & SEQ_SELECT) && (strip->type == STRIP_TYPE_IMAGE) &&
         (strip->content_length() > 1))
@@ -2876,12 +2868,7 @@ static wmOperatorStatus sequencer_separate_images_exec(bContext *C, wmOperator *
         data_new->stripdata = se_new;
         data_new->stripdata_num = 1;
 
-        if (step > 1) {
-          strip_new->runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
-          if (seq::transform_test_overlap(scene, seqbase, strip_new)) {
-            seq::transform_seqbase_shuffle(seqbase, strip_new, scene);
-          }
-        }
+        new_strips.add(strip_new);
 
         /* XXX, COPY FCURVES */
 
@@ -2899,6 +2886,9 @@ static wmOperatorStatus sequencer_separate_images_exec(bContext *C, wmOperator *
   }
 
   seq::edit_remove_flagged_strips(scene, seqbase);
+  if (step > 1) {
+    seq::transform_handle_overlap(scene, seqbase, new_strips, false);
+  }
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
@@ -3049,9 +3039,9 @@ static wmOperatorStatus sequencer_meta_make_exec(bContext *C, wmOperator * /*op*
   strip_meta->start = meta_start_frame;
   strip_meta->content_length_set(meta_end_frame - meta_start_frame);
   seq::select_active_set(scene, strip_meta);
-  if (seq::transform_test_overlap(scene, active_seqbase, strip_meta)) {
-    seq::transform_seqbase_shuffle(active_seqbase, strip_meta, scene);
-  }
+  VectorSet<Strip *> meta_strips;
+  meta_strips.add(strip_meta);
+  seq::transform_handle_overlap(scene, active_seqbase, meta_strips, false);
 
   seq::strip_lookup_invalidate(ed);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
@@ -3111,14 +3101,13 @@ static wmOperatorStatus sequencer_meta_separate_exec(bContext *C, wmOperator * /
   seq::edit_remove_flagged_strips(scene, active_seqbase);
 
   /* Test for effects and overlap. */
+  VectorSet<Strip *> separated_strips;
   for (Strip &strip : *active_seqbase) {
     if (strip.flag & SEQ_SELECT) {
-      strip.runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
-      if (seq::transform_test_overlap(scene, active_seqbase, &strip)) {
-        seq::transform_seqbase_shuffle(active_seqbase, &strip, scene);
-      }
+      separated_strips.add(&strip);
     }
   }
+  seq::transform_handle_overlap(scene, active_seqbase, separated_strips, false);
 
   sequencer_select_do_updates(C, scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
