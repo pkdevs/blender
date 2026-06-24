@@ -108,10 +108,11 @@ struct DirichletBoundaryOp {
   };
 };
 
-static openvdb::MaskTree get_boundary_mask(const openvdb::FloatTree &tree)
+static openvdb::MaskTree::Ptr get_boundary_mask(const openvdb::FloatTree &tree)
 {
   openvdb::MaskTree mask_tree;
   mask_tree.topologyUnion(tree);
+  return std::make_unique<openvdb::MaskTree>(std::move(mask_tree));
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
