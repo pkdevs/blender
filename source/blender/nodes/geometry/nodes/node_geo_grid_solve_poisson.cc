@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_volume_grid.hh"
+#include "BKE_volume_grid_process.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -31,7 +31,7 @@ static const EnumPropertyItem boundary_items[] = {
      "BACKGROUND",
      0,
      "Background",
-     "No explicit boundary conditions, same as Dirichlet conditions with the background value"},
+     "Dirichlet boundary condition, using the background value for all exterior boundary voxels"},
     {int(Boundary::Fixed),
      "FIXED",
      0,
@@ -73,14 +73,14 @@ static void node_declare(NodeDeclarationBuilder &b)
       .static_items(boundary_items)
       .default_value(Boundary::Background)
       .description("Boundary conditions for the solution between active and inactive voxels");
-  //   b.add_input<decl::Float>("Neumann Condition"_ustr)
-  //       .structure_type(StructureType::Field)
-  //       .hide_value()
-  //       .usage_by_bool("Use Boundary"_ustr, true);
-  //   b.add_input<decl::Float>("Dirichlet Condition"_ustr)
-  //       .structure_type(StructureType::Field)
-  //       .hide_value()
-  //       .usage_by_bool("Use Boundary"_ustr, true);
+  b.add_input<decl::Float>("Fixed Value"_ustr)
+      .structure_type(StructureType::Field)
+      .hide_value()
+      .usage_by_menu("Boundary"_ustr, {int(Boundary::Fixed), int(Boundary::Mixed)});
+  b.add_input<decl::Vector>("Normal Vector"_ustr)
+      .structure_type(StructureType::Field)
+      .hide_value()
+      .usage_by_menu("Boundary"_ustr, {int(Boundary::Normal), int(Boundary::Mixed)});
 
   b.add_output<decl::Float>("Solution"_ustr)
       .structure_type(StructureType::Grid)
@@ -94,9 +94,16 @@ static void node_declare(NodeDeclarationBuilder &b)
 }
 
 struct DirichletBoundaryOp {
+  const openvdb::FloatGrid::ConstAccessor fixed_value_accessor_;
+
+  DirichletBoundaryOp(const openvdb::FloatGrid &fixed_value_grid)
+      : fixed_value_accessor_(fixed_value_grid.getConstAccessor())
+  {
+  }
+
   void operator()(const openvdb::Coord & /*ijk*/,
-                  const openvdb::Coord & /*neighbor*/,
-                  double & /*source*/,
+                  const openvdb::Coord &neighbor,
+                  double &source,
                   double &diagonal) const
   {
     //   if (neighbor.x() == ijk.x() && neighbor.z() == ijk.z()) {
@@ -104,6 +111,7 @@ struct DirichletBoundaryOp {
     //   source -= 1.0;
     // else
     diagonal -= 1.0;
+    source += fixed_value_accessor_.getValue(neighbor);
     //   }
   };
 };
@@ -112,6 +120,8 @@ static openvdb::MaskTree::Ptr get_boundary_mask(const openvdb::FloatTree &tree)
 {
   openvdb::MaskTree mask_tree;
   mask_tree.topologyUnion(tree);
+  openvdb::tools::dilateActiveValues(mask_tree, 1);
+  mask_tree.topologyDifference(tree);
   return std::make_unique<openvdb::MaskTree>(std::move(mask_tree));
 }
 
@@ -132,6 +142,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   bke::VolumeTreeAccessToken tree_token;
   const openvdb::FloatGrid &source_vdb_grid = source_grid.grid(tree_token);
+  const openvdb::math::Transform &grid_transform = source_vdb_grid.transform();
 
   openvdb::math::pcg::State solver_state;
   solver_state.iterations = max_iterations;
@@ -148,7 +159,15 @@ static void node_geo_exec(GeoNodeExecParams params)
           source_vdb_grid.tree(), solver_state, staggered);
       break;
     case Boundary::Fixed: {
-      DirichletBoundaryOp boundary_op;
+      const Field<float> fixed_value_field = params.extract_input<Field<float>>(
+          "Fixed Value"_ustr);
+      const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
+      Vector<bke::GVolumeGrid> fixed_value_grid(1);
+      bke::volume_grid::evaluate_fields_to_grid(
+          *mask_tree, grid_transform, {fixed_value_field}, fixed_value_grid);
+
+      bke::VolumeTreeAccessToken fixed_value_token;
+      DirichletBoundaryOp boundary_op(fixed_value_grid[0].typed<float>().grid(fixed_value_token));
       solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
           PreconditionerType>(
           source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
@@ -181,7 +200,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   //   }
 
   openvdb::FloatGrid::Ptr solution_grid = openvdb::FloatGrid::create(std::move(solution_tree));
-  solution_grid->setTransform(source_vdb_grid.transform().copy());
+  solution_grid->setTransform(grid_transform.copy());
 
   params.set_output("Solution"_ustr, bke::VolumeGrid<float>(std::move(solution_grid)));
   params.set_output("Iterations"_ustr, solver_state.iterations);
