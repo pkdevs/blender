@@ -23,17 +23,17 @@
 #include "DNA_screen_types.h"
 
 #include "BLI_array.hh"
-#include "BLI_array_utils.h"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_rect.h"
-#include "BLI_sort_utils.h"
-#include "BLI_string.h"
-#include "BLI_string_cursor_utf8.h"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_array_utils_c.hh"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_sort_utils.hh"
+#include "BLI_string.hh"
+#include "BLI_string_cursor_utf8.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_animsys.h"
 #include "BKE_blender_undo.hh"
@@ -3299,40 +3299,42 @@ static void textedit_set_cursor_pos(Button *but, const ARegion *region, const fl
 
   if (ELEM(but->type, ButtonType::Text, ButtonType::SearchMenu)) {
     if (but->flag & UI_HAS_ICON) {
-      startx += UI_ICON_SIZE / aspect;
+      startx += UI_ICON_SIZE;
     }
   }
   if (!(but->drawflag & BUT_NO_TEXT_PADDING)) {
     if (right_aligned) {
-      startx += U.pixelsize / aspect;
-      endx -= UI_TEXT_MARGIN_X * U.widget_unit / aspect;
+      startx += U.pixelsize;
+      endx -= UI_TEXT_MARGIN_X * U.widget_unit;
     }
     else {
-      startx += UI_TEXT_MARGIN_X * U.widget_unit / aspect;
-      endx -= U.pixelsize / aspect;
+      startx += UI_TEXT_MARGIN_X * U.widget_unit;
+      endx -= U.pixelsize;
     }
   }
   else if (right_aligned) {
-    endx -= U.pixelsize / aspect;
+    endx -= U.pixelsize;
   }
   else {
-    startx += U.pixelsize / aspect;
+    startx += U.pixelsize;
   }
 
-  if (right_aligned) {
-    int width = BLF_width(fstyle.uifont_id, str + but->ofs, strlen(str + but->ofs));
-    const float align_x_ofs = endx - startx - width;
-    startx += max_ff(0.0f, align_x_ofs);
-  }
-
-  /* Transform startx to screen space. */
+  /* Transform startx and endx to screen space. */
   block_to_window_fl(region, but->block, &startx, &starty_dummy);
+  block_to_window_fl(region, but->block, &endx, &starty_dummy);
 
   fontscale(&fstyle.points, aspect);
 
   fontstyle_set(&fstyle);
 
   button_text_password_hide(password_str, but, false);
+
+  /* Compute shift due to right-alignment after password filter. */
+  if (right_aligned) {
+    int width = BLF_width(fstyle.uifont_id, str + but->ofs, strlen(str + but->ofs));
+    const float align_x_ofs = endx - startx - width;
+    startx += max_ff(0.0f, align_x_ofs);
+  }
 
   /* mouse dragged outside the widget to the left */
   if (xy.x < startx) {
@@ -3854,7 +3856,7 @@ static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
   /* set cursor pos to the end of the text */
   but->editstr = text_edit.edit_string;
   but->pos = len;
-  if (bool(but->flag2 & BUT2_ACTIVATE_ON_INIT_NO_SELECT)) {
+  if (bool(but->flag & BUT_ACTIVATE_ON_INIT_NO_SELECT)) {
     but->selsta = len;
   }
   else {
@@ -4695,7 +4697,7 @@ static void numedit_begin(Button *but, HandleButtonData *data)
         }
 
         /* Can happen at extreme values. */
-        if (UNLIKELY(softmin == softmax)) {
+        if (softmin == softmax) [[unlikely]] {
           if (data->origvalue > 0.0) {
             softmin = nextafterf(softmin, -FLT_MAX);
           }
@@ -4886,7 +4888,14 @@ static void block_open_begin(bContext *C, Button *but, HandleButtonData *data)
     }
   }
   else if (menufunc) {
-    data->menu = popup_menu_create(C, data->region, but, menufunc, arg);
+    data->menu = popup_menu_create(
+        C,
+        data->region,
+        but,
+        menufunc,
+        arg,
+        /* Inherit the `can_refresh` flag from the parent menu, if any. */
+        but->block->handle ? but->block->handle->can_refresh : false);
     if (MenuType *mt = button_menutype_get(but)) {
       STRNCPY_UTF8(data->menu->menu_idname, mt->idname);
     }
@@ -4910,7 +4919,7 @@ static void block_open_begin(bContext *C, Button *but, HandleButtonData *data)
 #endif
 
   /* Force new region handler to run, in case that needs to activate some state (e.g. to handle
-   * #BUT2_FORCE_SEMI_MODAL_ACTIVE). */
+   * #BUT_FORCE_SEMI_MODAL_ACTIVE). */
   WM_event_add_mousemove(data->window);
 
   /* this makes adjacent blocks auto open from now on */
@@ -5420,6 +5429,7 @@ static int do_but_TEXTBOX(bContext *C,
                           const wmEvent *event)
 {
   wmWindow *win = CTX_wm_window(C);
+  const bool is_disabled = textbox->flag & BUT_DISABLED || data->disable_force;
 
   switch (data->state) {
     case BUTTON_STATE_TEXT_EDITING:
@@ -5461,7 +5471,16 @@ static int do_but_TEXTBOX(bContext *C,
           }
           break;
         }
-        if (win->cursor != WM_CURSOR_TEXT_EDIT) {
+        /* Set text-edit cursor only if the button is not disabled, otherwise reset the mouse
+         * cursor. */
+        if (is_disabled) {
+          if (win->cursor != WM_CURSOR_DEFAULT) {
+            WM_cursor_modal_restore(win);
+            WM_cursor_set(win, WM_CURSOR_DEFAULT);
+            data->changed_cursor = false;
+          }
+        }
+        else if (win->cursor != WM_CURSOR_TEXT_EDIT) {
           WM_cursor_modal_set(win, WM_CURSOR_TEXT_EDIT);
           data->changed_cursor = true;
         }
@@ -5543,6 +5562,10 @@ static int do_but_TEXTBOX(bContext *C,
     }
     default:
       break;
+  }
+  /* When disabled text-box buttons only can be scrolled/resized. */
+  if (is_disabled) {
+    return WM_UI_HANDLER_CONTINUE;
   }
   /* Handle regular text buttons events. */
   return do_but_TEX(C, block, textbox, data, event);
@@ -6396,7 +6419,7 @@ static int do_but_NUM(
           double precision = (roundf(log10f(data->value) + UI_PROP_SCALE_LOG_SNAP_OFFSET) - 1.0f) +
                              log10f(number_but->step_size);
           /* Non-finite when `data->value` is zero. */
-          if (UNLIKELY(!isfinite(precision))) {
+          if (!isfinite(precision)) [[unlikely]] {
             precision = -FLT_MAX; /* Ignore this value. */
           }
           value_step = powf(10.0f, max_ff(precision, -number_but->precision));
@@ -8960,6 +8983,15 @@ static int do_button(bContext *C, Block *block, Button *but, const wmEvent *even
   /* If `but->pointype` is set, `but->poin` should be too. */
   BLI_assert(!bool(but->pointype) || but->poin);
 
+  /* Let disabled text-box buttons to be scrolled/resized. */
+  if (is_disabled && but->type == ButtonType::TextBox) {
+    if (do_but_TEXTBOX(C, block, static_cast<ButtonTextBox *>(but), data, event) ==
+        WM_UI_HANDLER_BREAK)
+    {
+      return WM_UI_HANDLER_BREAK;
+    }
+  }
+
   /* Only hard-coded stuff here, button interactions with configurable
    * keymaps are handled using operators (see #keymap_ui). */
 
@@ -10303,7 +10335,7 @@ static void with_but_active_as_semi_modal(bContext *C,
 
 /**
  * Calls \a fn for all buttons that are either already semi-modal active or should be made to be
- * because the #BUT2_FORCE_SEMI_MODAL_ACTIVE flag is set. During the \a fn call, the button will
+ * because the #BUT_FORCE_SEMI_MODAL_ACTIVE flag is set. During the \a fn call, the button will
  * appear to be the active button, i.e. #region_find_active_but() will return this button.
  */
 static void foreach_semi_modal_but_as_active(bContext *C,
@@ -10315,7 +10347,7 @@ static void foreach_semi_modal_but_as_active(bContext *C,
 
   for (Block &block : region->runtime->uiblocks) {
     for (Button &but : block.buttons()) {
-      if ((but.flag2 & BUT2_FORCE_SEMI_MODAL_ACTIVE) || but.semi_modal_state) {
+      if ((but.flag & BUT_FORCE_SEMI_MODAL_ACTIVE) || but.semi_modal_state) {
         with_but_active_as_semi_modal(C, region, &but, [&]() { fn(&but); });
       }
     }

@@ -74,6 +74,8 @@ class NODE_MT_gn_curve_read_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeInputCurveTilt")
         self.node_operator(layout, "GeometryNodeCurveEndpointSelection")
         self.node_operator(layout, "GeometryNodeCurveHandleTypeSelection")
+        self.node_operator(layout, "GeometryNodeNURBSOrder")
+        self.node_operator(layout, "GeometryNodeNURBSWeight")
         self.node_operator(layout, "GeometryNodeInputSplineCyclic")
         self.node_operator(layout, "GeometryNodeSplineLength")
         self.node_operator(layout, "GeometryNodeSplineParameter")
@@ -171,6 +173,12 @@ class NODE_MT_gn_grease_pencil_read_base(node_add_menu.NodeMenu):
 
     def draw(self, _context):
         layout = self.layout
+        self.node_operator(layout, "GeometryNodeGreasePencilColor")
+        self.node_operator(layout, "GeometryNodeGreasePencilDrawTime")
+        self.node_operator(layout, "GeometryNodeGreasePencilFillID")
+        self.node_operator(layout, "GeometryNodeGreasePencilOpacity")
+        self.node_operator(layout, "GeometryNodeGreasePencilStrokeSoftness")
+        self.node_operator(layout, "GeometryNodeGreasePencilStrokeVisibility")
         self.node_operator(layout, "GeometryNodeInputNamedLayerSelection")
 
         self.draw_assets_for_catalog(layout, self.menu_path)
@@ -1025,10 +1033,12 @@ class NODE_MT_gn_volume_operations_base(node_add_menu.NodeMenu):
         layout.separator()
         self.node_operator(layout, "GeometryNodeFieldToGrid")
         self.node_operator(layout, "GeometryNodeGridClip")
+        self.node_operator(layout, "GeometryNodeGridDeactivateVoxels")
         self.node_operator(layout, "GeometryNodeGridDilateAndErode")
         self.node_operator(layout, "GeometryNodeGridMean")
         self.node_operator(layout, "GeometryNodeGridMedian")
         self.node_operator(layout, "GeometryNodeGridPrune")
+        self.node_operator(layout, "GeometryNodeGridTopologyBoolean")
         self.node_operator(layout, "GeometryNodeGridVoxelize")
 
         self.draw_assets_for_catalog(layout, self.menu_path)

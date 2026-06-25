@@ -13,17 +13,17 @@
 
 #include "BKE_blendfile.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_ghash.h"
+#include "BLI_fileops.hh"
+#include "BLI_ghash.hh"
 #include "BLI_hash_md5.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_system.h"
-#include "BLI_tempfile.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_system.hh"
+#include "BLI_tempfile.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 #include BLI_SYSTEM_PID_H
 
 #include "DNA_space_types.h" /* For FILE_MAX_LIBEXTRA */
@@ -50,7 +50,7 @@
 #  endif
 /* For SHGetSpecialFolderPath, has to be done before BLI_winstuff
  * because 'near' is disabled through BLI_windstuff */
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include "utfconv.hh"
 #  include <direct.h> /* #chdir */
 #  include <shlobj.h>
@@ -439,13 +439,13 @@ static ImBuf *thumb_create_ex(const char *file_path,
       }
     }
     SNPRINTF_UTF8(desc, "Thumbnail for %s", uri);
-    IMB_metadata_ensure(&img->metadata);
-    IMB_metadata_set_field(img->metadata, "Software", "Blender");
-    IMB_metadata_set_field(img->metadata, "Thumb::URI", uri);
-    IMB_metadata_set_field(img->metadata, "Description", desc);
-    IMB_metadata_set_field(img->metadata, "Thumb::MTime", mtime);
+    IDProperty *metadata = img->metadata_for_write();
+    IMB_metadata_set_field(metadata, "Software", "Blender");
+    IMB_metadata_set_field(metadata, "Thumb::URI", uri);
+    IMB_metadata_set_field(metadata, "Description", desc);
+    IMB_metadata_set_field(metadata, "Thumb::MTime", mtime);
     if (use_hash) {
-      IMB_metadata_set_field(img->metadata, "X-Blender::Hash", hash);
+      IMB_metadata_set_field(metadata, "X-Blender::Hash", hash);
     }
     img->ftype = IMB_FTYPE_PNG;
     img->color_mode = ImColorMode::RGBA;
@@ -499,6 +499,9 @@ static ImBuf *thumb_create_or_fail(const char *file_path,
  */
 static bool skip_thumbnails_for_filepath(const char *filepath)
 {
+  if (!BLI_path_extension_check(filepath, ".blend")) {
+    return false;
+  }
   char temp_dir[FILE_MAX];
   BLI_temp_directory_path_get(temp_dir, sizeof(temp_dir));
   return BLI_path_contains(temp_dir, filepath);
@@ -663,7 +666,7 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
 
         const bool use_hash = thumbhash_from_path(file_path, source, thumb_hash);
 
-        if (IMB_metadata_get_field(img->metadata, "Thumb::MTime", mtime, sizeof(mtime))) {
+        if (IMB_metadata_get_field(img->metadata(), "Thumb::MTime", mtime, sizeof(mtime))) {
           regenerate = (st.st_mtime != atol(mtime));
         }
         else {
@@ -673,7 +676,7 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
 
         if (use_hash && !regenerate) {
           if (IMB_metadata_get_field(
-                  img->metadata, "X-Blender::Hash", thumb_hash_curr, sizeof(thumb_hash_curr)))
+                  img->metadata(), "X-Blender::Hash", thumb_hash_curr, sizeof(thumb_hash_curr)))
           {
             regenerate = !STREQ(thumb_hash, thumb_hash_curr);
           }

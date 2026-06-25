@@ -4,15 +4,15 @@
 
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_multi_value_map.hh"
 #include "BLI_noise.hh"
 #include "BLI_rand.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8_symbols.hh"
 #include "BLI_vector_set.hh"
 
 #include "DNA_anim_types.h"
@@ -56,6 +56,8 @@
 #include "SEQ_iterator.hh"
 #include "SEQ_modifier.hh"
 #include "SEQ_sequencer.hh"
+
+#include "PRF_profile.hh"
 
 namespace blender {
 
@@ -388,6 +390,7 @@ class NodeTreeMainUpdater {
     if (root_ntrees.is_empty()) {
       return;
     }
+    PRF_scope_with_name("NodeTreeMainUpdater::update_rooted", ProfileCategory::Core);
 
     bool is_single_tree_update = false;
 
@@ -569,6 +572,7 @@ class NodeTreeMainUpdater {
 
   TreeUpdateResult update_tree(bNodeTree &ntree)
   {
+    PRF_scope_with_name("NodeTreeMainUpdater::update_tree", ProfileCategory::Core);
     TreeUpdateResult result;
 
     ntree.runtime->link_errors.clear();

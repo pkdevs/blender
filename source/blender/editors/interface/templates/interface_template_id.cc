@@ -18,9 +18,9 @@
 #include "BKE_main_invariants.hh"
 #include "BKE_packedFile.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_string_search.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -146,7 +146,7 @@ static bool id_search_add(const bContext *C, TemplateID *template_ui, SearchItem
                        name_ui,
                        id,
                        iconid,
-                       has_sep_char ? int(BUT_HAS_SEP_CHAR) : 0,
+                       has_sep_char ? int64_t(BUT_HAS_SEP_CHAR) : 0,
                        name_prefix_offset))
   {
     return false;

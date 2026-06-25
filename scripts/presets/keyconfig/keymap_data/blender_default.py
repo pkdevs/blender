@@ -1084,6 +1084,14 @@ def km_user_interface(_params):
          {"properties": [("direction", 'RIGHT')]}),
         ("ui.view_item_focus", {"type": 'NUMPAD_PERIOD', "value": 'PRESS'}, None),
         ("ui.view_item_focus", {"type": 'BUTTON4MOUSE', "value": 'PRESS'}, None),
+        ("ui.view_item_page_scroll", {"type": 'PAGE_UP', "value": 'PRESS', "repeat": True},
+         {"properties": [("scroll_direction", 'UP')]}),
+        ("ui.view_item_page_scroll", {"type": 'PAGE_DOWN', "value": 'PRESS', "repeat": True},
+         {"properties": [("scroll_direction", 'DOWN')]}),
+        ("ui.view_item_page_scroll", {"type": 'HOME', "value": 'PRESS'},
+         {"properties": [("scroll_direction", 'TOP')]}),
+        ("ui.view_item_page_scroll", {"type": 'END', "value": 'PRESS'},
+         {"properties": [("scroll_direction", 'BOTTOM')]}),
     ])
 
     return keymap
@@ -2484,12 +2492,22 @@ def km_file_browser(params):
         ("wm.context_toggle", {"type": 'N', "value": 'PRESS'},
          {"properties": [("data_path", "space_data.show_region_tool_props")]}),
         ("file.parent", {"type": 'UP_ARROW', "value": 'PRESS', "alt": True}, None),
+        ("file.parent", {"type": 'UP_ARROW', "value": 'PRESS', "ctrl": True}, None),
         ("file.previous", {"type": 'LEFT_ARROW', "value": 'PRESS', "alt": True}, None),
         ("file.previous", {"type": 'BUTTON4MOUSE', "value": 'PRESS'}, None),
+        ("file.previous", {"type": 'LEFT_BRACKET', "value": 'PRESS', "ctrl": True}, None),
         ("file.next", {"type": 'RIGHT_ARROW', "value": 'PRESS', "alt": True}, None),
         ("file.next", {"type": 'BUTTON5MOUSE', "value": 'PRESS'}, None),
+        ("file.next", {"type": 'RIGHT_BRACKET', "value": 'PRESS', "ctrl": True}, None),
+        ("wm.context_set_enum", {"type": 'ONE', "value": 'PRESS', "ctrl": True},
+         {"properties": [("data_path", "space_data.params.display_type"), ("value", 'LIST_VERTICAL')]}),
+        ("wm.context_set_enum", {"type": 'TWO', "value": 'PRESS', "ctrl": True},
+         {"properties": [("data_path", "space_data.params.display_type"), ("value", 'LIST_HORIZONTAL')]}),
+        ("wm.context_set_enum", {"type": 'THREE', "value": 'PRESS', "ctrl": True},
+         {"properties": [("data_path", "space_data.params.display_type"), ("value", 'THUMBNAIL')]}),
         # The two refresh operators have polls excluding each other (so only one is available depending on context).
         ("file.refresh", {"type": 'R', "value": 'PRESS'}, None),
+        ("file.refresh", {"type": 'R', "value": 'PRESS', "ctrl": True}, None),
         ("asset.library_refresh", {"type": 'R', "value": 'PRESS'}, None),
         ("asset.library_reload_listing", {"type": 'R', "value": 'PRESS', "shift": True}, None),
         ("file.parent", {"type": 'P', "value": 'PRESS'}, None),
@@ -2497,7 +2515,11 @@ def km_file_browser(params):
         ("file.next", {"type": 'BACK_SPACE', "value": 'PRESS', "shift": True}, None),
         ("wm.context_toggle", {"type": 'H', "value": 'PRESS'},
          {"properties": [("data_path", "space_data.params.show_hidden")]}),
-        ("file.directory_new", {"type": 'I', "value": 'PRESS'},
+        ("wm.context_toggle", {"type": 'H', "value": 'PRESS', "ctrl": True},
+         {"properties": [("data_path", "space_data.params.show_hidden")]}),
+        ("wm.context_toggle", {"type": 'PERIOD', "value": 'PRESS', "ctrl": True, "shift": True},
+         {"properties": [("data_path", "space_data.params.show_hidden")]}),
+        ("file.directory_new", {"type": 'N', "value": 'PRESS', "ctrl": True, "shift": True},
          {"properties": [("confirm", False)]}),
         ("file.rename", {"type": 'F2', "value": 'PRESS'}, None),
         ("file.delete", {"type": 'X', "value": 'PRESS'}, None),
@@ -2522,12 +2544,19 @@ def km_file_browser(params):
 
         # Select file under cursor before spawning the context menu.
         ("file.select", {"type": 'RIGHTMOUSE', "value": 'PRESS'},
-         {"properties": [
-             ("open", False),
-             ("only_activate_if_selected", params.select_mouse == 'LEFTMOUSE'), ("pass_through", True),
-         ]}),
+         {"properties": [("open", False), ("only_activate_if_selected", True), ("pass_through", True),]}),
         *_template_items_context_menu("FILEBROWSER_MT_context_menu", params.context_menu_event),
     ])
+
+    if params.select_mouse == 'RIGHTMOUSE':
+        # Also add context menu on right mouse click when right click selection is active. Many
+        # users expect this and it's consistent with the Outliner.
+        items.extend([
+            # Don't use `_template_items_context_menu()`, because it will also add an item for the
+            # application key, which would we duplicated with the above.
+            op_menu("FILEBROWSER_MT_context_menu", {"type": 'RIGHTMOUSE', "value": 'PRESS'}),
+            *_template_items_context_menu("ASSETBROWSER_MT_context_menu", {"type": 'RIGHTMOUSE', "value": 'PRESS'}),
+        ])
 
     return keymap
 
@@ -2574,6 +2603,7 @@ def km_file_browser_main(params):
         ("file.previous", {"type": 'BUTTON4MOUSE', "value": 'CLICK'}, None),
         ("file.next", {"type": 'BUTTON5MOUSE', "value": 'CLICK'}, None),
         *_template_items_select_actions(params, "file.select_all"),
+        ("file.select_all", {"type": 'A', "value": 'PRESS', "ctrl": True}, None),
         ("file.select_box", {"type": 'B', "value": 'PRESS'}, None),
         ("file.select_box", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG'}, None),
         ("file.select_box", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', "shift": True},
@@ -3312,6 +3342,7 @@ def km_sequencer_preview(params):
         *_template_items_select_actions(params, "sequencer.select_all"),
         ("sequencer.select_box", {"type": 'B', "value": 'PRESS'}, None),
         ("sequencer.select_circle", {"type": 'C', "value": 'PRESS'}, None),
+        ("sequencer.select_grouped", {"type": 'G', "value": 'PRESS', "shift": True}, None),
 
         # View.
         ("sequencer.view_selected", {"type": 'NUMPAD_PERIOD', "value": 'PRESS'}, None),
@@ -5752,7 +5783,7 @@ def km_edit_armature(params):
             (op_tool_cycle, "builtin.bone_size"), params),
         op_tool_optional(
             ("transform.transform", {"type": 'S', "value": 'PRESS', "alt": True},
-             {"properties": [("mode", 'BONE_ENVELOPE')]}),
+             {"properties": [("mode", 'BONE_ENVELOPE_DIST')]}),
             (op_tool_cycle, "builtin.bone_envelope"), params),
         op_tool_optional(
             ("transform.transform", {"type": 'R', "value": 'PRESS', "ctrl": True},
@@ -7693,11 +7724,11 @@ def km_3d_view_tool_edit_armature_roll(params):
 
 def km_3d_view_tool_edit_armature_bone_size(params):
     return (
-        "3D View Tool: Edit Armature, Bone Size",
+        "3D View Tool: Edit Armature, B-Bone Size",
         {"space_type": 'VIEW_3D', "region_type": 'WINDOW'},
         {"items": [
-            ("transform.transform", {**params.tool_maybe_tweak_event, **params.tool_modifier},
-             {"properties": [("release_confirm", True), ("mode", 'BONE_ENVELOPE')]}),
+            ("transform.bbone_resize", {**params.tool_maybe_tweak_event, **params.tool_modifier},
+             {"properties": [("release_confirm", True)]}),
         ]},
     )
 
@@ -7708,8 +7739,8 @@ def km_3d_view_tool_edit_armature_bone_envelope(params):
         {"space_type": 'VIEW_3D', "region_type": 'WINDOW'},
 
         {"items": [
-            ("transform.bbone_resize", {**params.tool_maybe_tweak_event, **params.tool_modifier},
-             {"properties": [("release_confirm", True)]}),
+            ("transform.transform", {**params.tool_maybe_tweak_event, **params.tool_modifier},
+             {"properties": [("release_confirm", True), ("mode", 'BONE_ENVELOPE_DIST')]}),
         ]},
     )
 

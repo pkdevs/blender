@@ -13,8 +13,8 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_blender_undo.hh"
 #include "BKE_callbacks.hh"
@@ -775,7 +775,8 @@ void ED_OT_undo_history(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Undo History";
-  ot->description = "Undo or redo specific action in history";
+  ot->description =
+      "Undo or redo from the current active step until the specified action in history";
   ot->idname = "ED_OT_undo_history";
 
   /* API callbacks. */

@@ -16,11 +16,11 @@
 #include "BLI_path_utils.hh"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -787,7 +787,7 @@ bool editmode_exit_ex(Main *bmain, Scene *scene, Object *obedit, int flag)
   if (editmode_load_free_ex(bmain, obedit, true, free_data) == false) {
     /* in rare cases (background mode) its possible active object
      * is flagged for editmode, without 'obedit' being set #35489. */
-    if (UNLIKELY(obedit && obedit->mode & OB_MODE_EDIT)) {
+    if (obedit && obedit->mode & OB_MODE_EDIT) [[unlikely]] {
       obedit->mode &= ~OB_MODE_EDIT;
       /* Also happens when mesh is shared across multiple objects. #69834. */
       DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
@@ -902,7 +902,7 @@ bool editmode_enter_ex(Main *bmain, Scene *scene, Object *ob, int flag)
     EDBM_mesh_make(ob, scene->toolsettings->selectmode, use_key_index);
 
     BMEditMesh *em = BKE_editmesh_from_object(ob);
-    if (LIKELY(em)) {
+    if (em) [[likely]] {
       BKE_editmesh_looptris_and_normals_calc(em);
     }
 
@@ -1290,7 +1290,7 @@ void motion_paths_recalc(bContext *C,
   Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
-  Vector<MPathTarget *> targets;
+  Vector<MPathTarget> targets;
   for (Object *ob : objects) {
     /* set flag to force recalc, then grab path(s) from object */
     if (has_object_motion_paths(ob)) {
@@ -1307,7 +1307,6 @@ void motion_paths_recalc(bContext *C,
   Depsgraph *depsgraph = animviz_depsgraph_build(bmain, scene, view_layer, targets);
 
   animviz_calc_motionpaths(depsgraph, scene, targets, range);
-  animviz_free_motionpath_targets(targets);
 
   /* Tag objects for copy-on-eval - so paths will draw/redraw
    * For currently frame only we update evaluated object directly. */
@@ -1929,8 +1928,10 @@ static wmOperatorStatus shade_auto_smooth_exec(bContext *C, wmOperator *op)
       PointerRNA nmd_ptr = RNA_pointer_create_discrete(
           &object->id, RNA_NodesModifier, smooth_by_angle_nmd);
       PointerRNA properties_ptr = RNA_pointer_get(&nmd_ptr, "properties");
+      PointerRNA inputs_ptr = RNA_pointer_get(&properties_ptr, "inputs");
+      PointerRNA input_ptr = RNA_pointer_get(&inputs_ptr, angle_identifier.c_str());
 
-      RNA_float_set(&properties_ptr, angle_identifier.c_str(), angle);
+      RNA_float_set(&input_ptr, "value", angle);
 
       DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
       WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, object);

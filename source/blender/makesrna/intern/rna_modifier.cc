@@ -17,7 +17,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "BLT_translation.hh"
 
@@ -849,9 +849,9 @@ static const EnumPropertyItem grease_pencil_build_time_mode_items[] = {
 #  include "DNA_object_force_types.h"
 #  include "DNA_particle_types.h"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_bake_geometry_nodes_modifier.hh"
 #  include "BKE_cachefile.hh"
@@ -870,7 +870,7 @@ static const EnumPropertyItem grease_pencil_build_time_mode_items[] = {
 #  include "BKE_ocean.h"
 #  include "BKE_particle.h"
 
-#  include "BLI_sort_utils.h"
+#  include "BLI_sort_utils.hh"
 #  include "BLI_string_utils.hh"
 
 #  include "DEG_depsgraph.hh"
@@ -1141,6 +1141,7 @@ RNA_MOD_OBJECT_SET(GreasePencilOutline, object, OB_EMPTY);
 RNA_MOD_OBJECT_SET(GreasePencilShrinkwrap, target, OB_MESH);
 RNA_MOD_OBJECT_SET(GreasePencilShrinkwrap, aux_target, OB_MESH);
 RNA_MOD_OBJECT_SET(GreasePencilBuild, object, OB_EMPTY);
+RNA_MOD_OBJECT_SET(GreasePencilLineart, source_camera, OB_CAMERA);
 
 static void rna_HookModifier_object_set(PointerRNA *ptr,
                                         PointerRNA value,
@@ -2167,8 +2168,8 @@ void rna_NodesModifierBake_override_diff(Main *bmain, RNAPropertyOverrideDiffCon
     if (nmd_bake_a->id != nmd_bake_b->id) {
       /* Bakes for different nodes, cannot do anything else here, ignore. */
       /* NOTE: Not sure if this can actually happen? Maybe in case the user assigns a different
-       * nodetree in the overridden version of the modifier, which happens to have exactly the same
-       * amount of bake nodes? */
+       * node-tree in the overridden version of the modifier, which happens to have exactly the
+       * same amount of bake nodes? */
       BLI_assert_unreachable();
       continue;
     }
@@ -2205,8 +2206,10 @@ void rna_NodesModifierBake_override_diff(Main *bmain, RNAPropertyOverrideDiffCon
                StringRefNull(nmd_bake_b->packed->blob_files[i].name)) ||
               (nmd_bake_a->packed->blob_files[i].data() !=
                nmd_bake_b->packed->blob_files[i].data()))
+          {
             is_different = true;
-          break;
+            break;
+          }
         }
       }
       if (!is_different) {
@@ -2270,6 +2273,8 @@ bool rna_NodesModifierBake_override_apply(Main *bmain,
 {
   PointerRNA *ptr_dst = &rnaapply_ctx.ptr_dst;
   PropertyRNA *prop_dst = rnaapply_ctx.prop_dst;
+
+#  ifndef NDEBUG
   IDOverrideLibraryPropertyOperation *opop = rnaapply_ctx.liboverride_operation;
   IDOverrideLibraryPropertyOperation *removed_opop = rnaapply_ctx.liboverride_removed_operation;
 
@@ -2277,14 +2282,15 @@ bool rna_NodesModifierBake_override_apply(Main *bmain,
    * #override_remove_button_exec), to revert the overridden changes. */
   BLI_assert_msg((((opop->operation == LIBOVERRIDE_OP_CUSTOM) && !removed_opop) ||
                   ((opop->operation == LIBOVERRIDE_OP_REPLACE) &&
-                   (removed_opop && (removed_opop->operation = LIBOVERRIDE_OP_CUSTOM)))),
+                   (removed_opop && (removed_opop->operation == LIBOVERRIDE_OP_CUSTOM)))),
                  "Unsupported RNA override operation on Nodes modifier bakes collection");
+#  endif
 
   NodesModifierBake *nmd_bake_src = rnaapply_ctx.ptr_item_src.data_as<NodesModifierBake>();
 
   /* Ignore index-based default 'destination item' defined by the generic liboverride apply code
    * and stored in RNAPropertyOverrideApplyContext::ptr_item_dst, as changes in source linked
-   * nodetree may have re-ordered its bakes. Instead, lookup by bake id. */
+   * node-tree may have re-ordered its bakes. Instead, lookup by bake id. */
   NodesModifierData *nmd_dst = ptr_dst->data_as<NodesModifierData>();
   NodesModifierBake *nmd_bake_dst = nmd_dst->find_bake(nmd_bake_src->id);
   if (!nmd_bake_dst) {
@@ -8268,30 +8274,6 @@ static void rna_def_modifier_nodes_bakes(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Bakes", "Bake data for every bake node");
 }
 
-static void rna_def_modifier_nodes_panel(BlenderRNA *brna)
-{
-  StructRNA *srna;
-  PropertyRNA *prop;
-
-  srna = RNA_def_struct(brna, "NodesModifierPanel", nullptr);
-  RNA_def_struct_ui_text(srna, "Nodes Modifier Panel", "");
-
-  prop = RNA_def_property(srna, "is_open", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", NODES_MODIFIER_PANEL_OPEN);
-  RNA_def_property_ui_text(prop, "Is Open", "Whether the panel is expanded or closed");
-  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
-  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, nullptr);
-}
-
-static void rna_def_modifier_nodes_panels(BlenderRNA *brna)
-{
-  StructRNA *srna;
-
-  srna = RNA_def_struct(brna, "NodesModifierPanels", nullptr);
-  RNA_def_struct_sdna(srna, "NodesModifierData");
-  RNA_def_struct_ui_text(srna, "Panels", "State of all panels defined by the node group");
-}
-
 static void rna_def_modifier_nodes_warning(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -8345,9 +8327,6 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   rna_def_modifier_nodes_bake(brna);
   rna_def_modifier_nodes_bakes(brna);
 
-  rna_def_modifier_nodes_panel(brna);
-  rna_def_modifier_nodes_panels(brna);
-
   rna_def_modifier_nodes_warning(brna);
 
   rna_def_modifier_nodes_properties(brna);
@@ -8388,11 +8367,6 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
                                   "rna_NodesModifierBake_override_diff",
                                   nullptr,
                                   "rna_NodesModifierBake_override_apply");
-
-  prop = RNA_def_property(srna, "panels", PROP_COLLECTION, PROP_NONE);
-  RNA_def_property_struct_type(prop, "NodesModifierPanel");
-  RNA_def_property_collection_sdna(prop, nullptr, "panels", "panels_num");
-  RNA_def_property_srna(prop, "NodesModifierPanels");
 
   prop = RNA_def_property(srna, "show_group_selector", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(
@@ -9267,6 +9241,11 @@ static void rna_def_modifier_grease_pencil_lineart(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "source_camera", PROP_POINTER, PROP_NONE);
+  RNA_def_property_pointer_funcs(prop,
+                                 nullptr,
+                                 "rna_GreasePencilLineartModifier_source_camera_set",
+                                 nullptr,
+                                 "rna_Camera_object_poll");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
   RNA_def_property_struct_type(prop, "Object");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);

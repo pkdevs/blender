@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8764d33c658b')\n"
+"Project-Id-Version: Blender 5.2.0 LTS Beta (b'051706edb5e5')\n"
 "Report-Msgid-Bugs-To: Leandro Paganelli <leandrobp@fastmail.com>\n"
-"POT-Creation-Date: 2026-06-01 07:36+0000\n"
+"POT-Creation-Date: 2026-06-22 07:24+0000\n"
 "PO-Revision-Date: 2026-04-13 10:12+0000\n"
 "Last-Translator: Gilberto Rodrigues <gilbertorodrigues@outlook.com>\n"
 "Language-Team: Portuguese (Brazil) <https://translate.blender.org/projects/blender-ui/ui/pt_BR/>\n"
@@ -1545,6 +1545,26 @@ msgid "Armatures active edit bone"
 msgstr "Osso de edição ativo na armação"
 
 
+msgid "Asset Library"
+msgstr "Biblioteca de Recursos"
+
+
+msgid "Show assets from all of the listed asset libraries"
+msgstr "Mostrar itens de todas as bibliotecas listadas"
+
+
+msgid "Show the assets currently available in this Blender session"
+msgstr "Mostrar os itens atualmente disponíveis nesta sessão do Blender"
+
+
+msgid "Essentials"
+msgstr "Essenciais"
+
+
+msgid "Custom"
+msgstr "Personalizar"
+
+
 msgid "User Asset Libraries"
 msgstr "Bibliotecas de Ativos do Usuário"
 
@@ -1665,28 +1685,8 @@ msgid "Regions for quick access to assets"
 msgstr "Regiões para acesso rápido aos ativos"
 
 
-msgid "Asset Library"
-msgstr "Biblioteca de Recursos"
-
-
 msgid "Choose the asset library to display assets from"
 msgstr "Escolha a biblioteca de ativos para exibir os ativos"
-
-
-msgid "Show assets from all of the listed asset libraries"
-msgstr "Mostrar itens de todas as bibliotecas listadas"
-
-
-msgid "Show the assets currently available in this Blender session"
-msgstr "Mostrar os itens atualmente disponíveis nesta sessão do Blender"
-
-
-msgid "Essentials"
-msgstr "Essenciais"
-
-
-msgid "Custom"
-msgstr "Personalizar"
 
 
 msgid "ID Name"
@@ -21188,18 +21188,6 @@ msgid "Material slot name"
 msgstr "Nome do compartimento do material."
 
 
-msgid "Mirror"
-msgstr "Espelhar"
-
-
-msgid "Snap"
-msgstr "Atrair"
-
-
-msgid "UV Mapping"
-msgstr "Mapeamento UV"
-
-
 msgid "Local View"
 msgstr "Visão local"
 
@@ -21224,10 +21212,6 @@ msgid "View Regions"
 msgstr "Visualizar Regiões"
 
 
-msgid "Math"
-msgstr "Matemática"
-
-
 msgid "Select More/Less"
 msgstr "Selecionar mais ou menos"
 
@@ -21248,6 +21232,10 @@ msgid "Select Loops"
 msgstr "Selecionar anéis"
 
 
+msgid "Math"
+msgstr "Matemática"
+
+
 msgid "Metaball"
 msgstr "Meta-esfera"
 
@@ -21260,10 +21248,6 @@ msgid "Light Probe"
 msgstr "Sonda de Luz"
 
 
-msgid "Instances"
-msgstr "Instâncias"
-
-
 msgid "Add Image"
 msgstr "Adicionar Imagem"
 
@@ -21274,10 +21258,6 @@ msgstr "Relações"
 
 msgid "Rigid Body"
 msgstr "Corpo rígido"
-
-
-msgid "Import"
-msgstr "Importar"
 
 
 msgid "Apply"
@@ -21308,12 +21288,16 @@ msgid "Convert"
 msgstr "Converter"
 
 
+msgid "Instances"
+msgstr "Instâncias"
+
+
 msgid "Hooks"
 msgstr "Ganchos"
 
 
-msgid "UV"
-msgstr "UV"
+msgid "Import"
+msgstr "Importar"
 
 
 msgid "Random Mask"
@@ -21330,6 +21314,10 @@ msgstr "Entre as continuidades"
 
 msgid "Propagate"
 msgstr "Propagar"
+
+
+msgid "UV"
+msgstr "UV"
 
 
 msgid "Names"
@@ -21360,6 +21348,14 @@ msgid "Merge"
 msgstr "Fundir"
 
 
+msgid "Special Characters"
+msgstr "Caracteres especiais"
+
+
+msgid "Bone Roll"
+msgstr "Rolagem dos ossos"
+
+
 msgid "Linked"
 msgstr "Vinculando"
 
@@ -21368,12 +21364,16 @@ msgid "Layout"
 msgstr "Organizar"
 
 
-msgid "Special Characters"
-msgstr "Caracteres especiais"
+msgid "Pivot Point"
+msgstr "Pontos de pivô"
 
 
-msgid "Bone Roll"
-msgstr "Rolagem dos ossos"
+msgid "Snap"
+msgstr "Atrair"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "Tipo de decaimento para edição proporcional"
 
 
 msgid "Keying"
@@ -21384,12 +21384,12 @@ msgid "Tracking"
 msgstr "Rastreamento"
 
 
-msgid "Pivot Point"
-msgstr "Pontos de pivô"
+msgid "Mirror"
+msgstr "Espelhar"
 
 
-msgid "Proportional Editing Falloff"
-msgstr "Tipo de decaimento para edição proporcional"
+msgid "UV Mapping"
+msgstr "Mapeamento UV"
 
 
 msgid "Basic"
@@ -47979,14 +47979,6 @@ msgid "Active Palette Color"
 msgstr "Cor ativa da paleta"
 
 
-msgid "Render Pass"
-msgstr "Passo de renderização"
-
-
-msgid "Motion Tracking"
-msgstr "Captura de movimentos"
-
-
 msgid "Transform Orientations"
 msgstr "Orientações de transformação"
 
@@ -47997,6 +47989,14 @@ msgstr "Exibição Quadrante"
 
 msgid "Stereoscopy"
 msgstr "Estereoscopia"
+
+
+msgid "Render Pass"
+msgstr "Passo de renderização"
+
+
+msgid "Motion Tracking"
+msgstr "Captura de movimentos"
 
 
 msgid "Bone Constraints"
@@ -48590,11 +48590,6 @@ msgstr "Empurrar"
 msgctxt "Operator"
 msgid "Roll"
 msgstr "Rolagem"
-
-
-msgctxt "Operator"
-msgid "Bone Size"
-msgstr "Tamanho dos ossos"
 
 
 msgctxt "Operator"
@@ -58455,6 +58450,10 @@ msgid "Session State"
 msgstr "Estado da Sessão"
 
 
+msgid "Cancel"
+msgstr "Cancelar"
+
+
 msgctxt "WindowManager"
 msgid "Window"
 msgstr "Janela"
@@ -62908,10 +62907,6 @@ msgstr "O conjunto de inserção de chaves não possui quaisquer caminhos."
 
 msgid "Relax Pose"
 msgstr "Relaxar Pose"
-
-
-msgid "Cancel"
-msgstr "Cancelar"
 
 
 msgid "No keyframes to slide between"

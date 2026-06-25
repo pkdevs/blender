@@ -40,16 +40,16 @@
 
 #include "BLT_translation.hh"
 
-#include "BLI_dial_2d.h"
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_dial_2d.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_brush.hh"
@@ -2033,7 +2033,7 @@ static ui::Block *wm_block_search_menu(bContext *C, ARegion *region, void *userd
   }
   else if (init_data->search_type == SEARCH_TYPE_SINGLE_MENU) {
     button_func_menu_search(but, init_data->single_menu_idname.c_str());
-    button_flag2_enable(but, ui::BUT2_ACTIVATE_ON_INIT_NO_SELECT);
+    button_flag_enable(but, ui::BUT_ACTIVATE_ON_INIT_NO_SELECT);
   }
   else {
     BLI_assert_unreachable();

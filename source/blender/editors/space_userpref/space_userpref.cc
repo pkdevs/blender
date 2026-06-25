@@ -11,9 +11,9 @@
 #include "DNA_space_types.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
@@ -418,6 +418,7 @@ void ED_spacetype_userpref()
   art->draw = ED_region_panels_draw;
   art->listener = userpref_main_region_listener;
   art->keymapflag = ED_KEYMAP_UI;
+  userpref_panels_register(*art);
 
   BLI_addhead(&st->regiontypes, art);
 

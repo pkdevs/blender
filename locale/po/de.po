@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8764d33c658b')\n"
+"Project-Id-Version: Blender 5.2.0 LTS Beta (b'051706edb5e5')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-01 07:36+0000\n"
+"POT-Creation-Date: 2026-06-22 07:24+0000\n"
 "PO-Revision-Date: 2025-12-02 20:06+0000\n"
 "Last-Translator: Bastitron <bastitronhd@gmail.com>\n"
 "Language-Team: German <https://translate.blender.org/projects/blender-ui/ui/de/>\n"
@@ -1268,6 +1268,18 @@ msgid "Armatures active edit bone"
 msgstr "Aktiven Bearbeitungsknochen verankern"
 
 
+msgid "Asset Library"
+msgstr "Bestand-Bibliothek"
+
+
+msgid "Current File"
+msgstr "Aktuelle Datei"
+
+
+msgid "Custom"
+msgstr "Benutzerdefiniert"
+
+
 msgid "Asset Data"
 msgstr "Vermögenssdaten"
 
@@ -1326,18 +1338,6 @@ msgstr "Benutzerdefiniertes Schild (Namenskürzel) für das Vermögen, verwendet
 
 msgid "Asset Metadata"
 msgstr "Asset-Metadaten"
-
-
-msgid "Asset Library"
-msgstr "Bestand-Bibliothek"
-
-
-msgid "Current File"
-msgstr "Aktuelle Datei"
-
-
-msgid "Custom"
-msgstr "Benutzerdefiniert"
 
 
 msgid "ID Name"
@@ -18683,14 +18683,6 @@ msgid "Material slot name"
 msgstr "Materialsteckplatzname"
 
 
-msgid "Mirror"
-msgstr "Spiegeln"
-
-
-msgid "Snap"
-msgstr "Einrasten"
-
-
 msgid "Local View"
 msgstr "Lokale Ansicht"
 
@@ -18713,10 +18705,6 @@ msgstr "Ansicht auf Aktiv ausrichten"
 
 msgid "View Regions"
 msgstr "Vierfenster Ansicht"
-
-
-msgid "Math"
-msgstr "Mathematisch"
 
 
 msgid "Select More/Less"
@@ -18743,20 +18731,8 @@ msgid "Assign Material"
 msgstr "Material zuweisen"
 
 
-msgid "Read"
-msgstr "Lesen"
-
-
-msgid "Sample"
-msgstr "Beispiel"
-
-
-msgid "Write"
-msgstr "Schreiben"
-
-
-msgid "Primitives"
-msgstr "Grundkörper"
+msgid "Math"
+msgstr "Mathematisch"
 
 
 msgid "Metaball"
@@ -18771,10 +18747,6 @@ msgid "Light Probe"
 msgstr "Lichtsonde"
 
 
-msgid "Instances"
-msgstr "Instanzen"
-
-
 msgid "Add Image"
 msgstr "Bild hinzufügen"
 
@@ -18783,12 +18755,24 @@ msgid "Relations"
 msgstr "Beziehungen"
 
 
+msgid "Read"
+msgstr "Lesen"
+
+
+msgid "Sample"
+msgstr "Beispiel"
+
+
+msgid "Write"
+msgstr "Schreiben"
+
+
 msgid "Rigid Body"
 msgstr "Rigid Body"
 
 
-msgid "Import"
-msgstr "Importieren"
+msgid "Primitives"
+msgstr "Grundkörper"
 
 
 msgid "Apply"
@@ -18823,16 +18807,20 @@ msgid "Convert"
 msgstr "Konvertieren"
 
 
+msgid "Instances"
+msgstr "Instanzen"
+
+
 msgid "Hooks"
 msgstr "Haken"
 
 
-msgid "UV"
-msgstr "UV"
-
-
 msgid "Vertex Group Locks"
 msgstr "Punktgruppen sperren"
+
+
+msgid "Import"
+msgstr "Importieren"
 
 
 msgid "Random Mask"
@@ -18845,6 +18833,10 @@ msgstr "Transformation löschen"
 
 msgid "In-Betweens"
 msgstr "Dazwischen"
+
+
+msgid "UV"
+msgstr "UV"
 
 
 msgid "Names"
@@ -18875,6 +18867,14 @@ msgid "Merge"
 msgstr "Zusammenführen"
 
 
+msgid "Special Characters"
+msgstr "Sonderzeichen"
+
+
+msgid "Kerning"
+msgstr "Kerning"
+
+
 msgid "Linked"
 msgstr "Verknüpft"
 
@@ -18883,12 +18883,20 @@ msgid "Layout"
 msgstr "Layout"
 
 
-msgid "Special Characters"
-msgstr "Sonderzeichen"
+msgid "Pivot Point"
+msgstr "Drehpunkt"
 
 
-msgid "Kerning"
-msgstr "Kerning"
+msgid "Snap"
+msgstr "Einrasten"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "Proportionaler Bearbeitungsabfall"
+
+
+msgid "Mask Edit"
+msgstr "Maskenbearbeitung"
 
 
 msgid "Keying"
@@ -18899,16 +18907,8 @@ msgid "Tracking"
 msgstr "Verfolgen"
 
 
-msgid "Pivot Point"
-msgstr "Drehpunkt"
-
-
-msgid "Proportional Editing Falloff"
-msgstr "Proportionaler Bearbeitungsabfall"
-
-
-msgid "Mask Edit"
-msgstr "Maskenbearbeitung"
+msgid "Mirror"
+msgstr "Spiegeln"
 
 
 msgid "Assets"
@@ -38732,6 +38732,46 @@ msgid "Active Palette Color"
 msgstr "Aktive Farbpalette"
 
 
+msgid "Measurement"
+msgstr "Messung"
+
+
+msgid "Curve Edit Mode"
+msgstr "Kurven-Bearbeitungsmodus"
+
+
+msgid "Transform Orientations"
+msgstr "Transformationsausrichtung"
+
+
+msgid "Drawing Plane"
+msgstr "Malfläche"
+
+
+msgid "Guides"
+msgstr "Hilfslinien"
+
+
+msgid "Quad View"
+msgstr "Vierfenster-Ansicht"
+
+
+msgid "Onion Skin"
+msgstr "Zwiebelhaut"
+
+
+msgid "Stereoscopy"
+msgstr "Stereoskopie"
+
+
+msgid "Auto-Masking"
+msgstr "Automatisches Maskieren"
+
+
+msgid "VR"
+msgstr "VR"
+
+
 msgid "Active Tool"
 msgstr "Aktives Werkzeug"
 
@@ -38764,52 +38804,12 @@ msgid "Overlays"
 msgstr "Überlagerungen"
 
 
-msgid "Guides"
-msgstr "Hilfslinien"
-
-
 msgid "Motion Tracking"
 msgstr "Bewegungsverfolgung"
 
 
 msgid "Mesh Edit Mode"
 msgstr "Maschenbearbeitungsmodus"
-
-
-msgid "Measurement"
-msgstr "Messung"
-
-
-msgid "Curve Edit Mode"
-msgstr "Kurven-Bearbeitungsmodus"
-
-
-msgid "Transform Orientations"
-msgstr "Transformationsausrichtung"
-
-
-msgid "Drawing Plane"
-msgstr "Malfläche"
-
-
-msgid "Quad View"
-msgstr "Vierfenster-Ansicht"
-
-
-msgid "Onion Skin"
-msgstr "Zwiebelhaut"
-
-
-msgid "Stereoscopy"
-msgstr "Stereoskopie"
-
-
-msgid "Auto-Masking"
-msgstr "Automatisches Maskieren"
-
-
-msgid "VR"
-msgstr "VR"
 
 
 msgid "Chain Scaling"
@@ -39573,11 +39573,6 @@ msgstr "Rollen"
 
 
 msgctxt "Operator"
-msgid "Bone Size"
-msgstr "Knochengröße"
-
-
-msgctxt "Operator"
 msgid "Bone Envelope"
 msgstr "Knochen umhüllen"
 
@@ -39741,6 +39736,10 @@ msgstr "Posen-Optionen"
 
 msgid "Action Maps"
 msgstr "Aktionskarten"
+
+
+msgid "Passepartout"
+msgstr "Hauptschlüssel"
 
 
 msgid "VR Session"
@@ -47730,6 +47729,10 @@ msgid "Collection of OpenXR user paths"
 msgstr "Sammlung von OpenXR Benutzerpfaden"
 
 
+msgid "Cancel"
+msgstr "Abbrechen"
+
+
 msgid "WorkSpace UI Tags"
 msgstr "Arbeitsplatz UI Tags"
 
@@ -49093,10 +49096,6 @@ msgstr "Rotation kontrollieren"
 msgctxt "Operator"
 msgid "Add Image"
 msgstr "Bild hinzufügen"
-
-
-msgid "Passepartout"
-msgstr "Hauptschlüssel"
 
 
 msgid "Golden"
@@ -50624,11 +50623,6 @@ msgid "Go to Parent"
 msgstr "Gehe zum Elternteil"
 
 
-msgctxt "Operator"
-msgid "New Folder"
-msgstr "Neuer Ordner"
-
-
 msgid "Asset Details"
 msgstr "Asset Dtails"
 
@@ -50696,6 +50690,11 @@ msgstr "Erhöhe Nummer"
 msgctxt "Operator"
 msgid "Decrease Number"
 msgstr "Vermindere Nummer"
+
+
+msgctxt "Operator"
+msgid "New Folder"
+msgstr "Neuer Ordner"
 
 
 msgid "Asset Catalog:"
@@ -53567,10 +53566,6 @@ msgid "Hidden %d"
 msgstr "Ausgeblendet %d"
 
 
-msgid "Eevee material conversion problem. Error in console"
-msgstr "Eevee Materialumwandlungsproblem. Fehler in der Konsole"
-
-
 msgid "Unable to make version backup: filename too short"
 msgstr "Versions-Backup kann nicht erstellt werden: Dateiname zu kurz"
 
@@ -53789,10 +53784,6 @@ msgstr "Aktives Objekt ist kein ausgewählter Anker"
 
 msgid "Separated bones"
 msgstr "Getrennte Knochen"
-
-
-msgid "Cancel"
-msgstr "Abbrechen"
 
 
 msgid "Programming error: missing clear transform function or keying set name"

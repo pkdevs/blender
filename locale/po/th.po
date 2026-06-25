@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8764d33c658b')\n"
+"Project-Id-Version: Blender 5.2.0 LTS Beta (b'051706edb5e5')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-01 07:36+0000\n"
+"POT-Creation-Date: 2026-06-22 07:24+0000\n"
 "PO-Revision-Date: 2026-03-19 12:41+0000\n"
 "Last-Translator: Banditer1483 <pleum.wongvarit@gmail.com>\n"
 "Language-Team: Thai <https://translate.blender.org/projects/blender-ui/ui/th/>\n"
@@ -1630,6 +1630,38 @@ msgid "Armatures active edit bone"
 msgstr "แก้ไขโครงกระดูกที่ใช้งานอยู่"
 
 
+msgid "Asset Library"
+msgstr "คลังสินทรัพย์"
+
+
+msgid "All Libraries"
+msgstr "คลังทั้งหมด"
+
+
+msgid "Show assets from all of the listed asset libraries"
+msgstr "แสดงเนื้อหาจากคลังเนื้อหาทั้งหมดที่ระบุไว้"
+
+
+msgid "Current File"
+msgstr "ไฟล์ปัจจุบัน"
+
+
+msgid "Show the assets currently available in this Blender session"
+msgstr "แสดงสินทรัพย์ที่มีอยู่ในช่วงสมัยของเบลนเดอร์นี้"
+
+
+msgid "Essentials"
+msgstr "รากแก่น"
+
+
+msgid "Custom"
+msgstr "กำหนดเอง"
+
+
+msgid "Show assets from the asset libraries configured in the Preferences"
+msgstr "แสดงเนื้อหาจากคลังเนื้อหาที่กำหนดค่าไว้ในส่วนการตั้งค่า"
+
+
 msgid "User Asset Libraries"
 msgstr "คลังสินทรัพย์ของผู้ใช้"
 
@@ -1775,40 +1807,8 @@ msgid "Regions for quick access to assets"
 msgstr "บริเวณที่เข้าถึงสินทรัพย์ได้อย่างรวดเร็ว"
 
 
-msgid "Asset Library"
-msgstr "คลังสินทรัพย์"
-
-
 msgid "Choose the asset library to display assets from"
 msgstr "เลือกคลังสินทรัพย์เพื่อแสดงสินทรัพย์จาก"
-
-
-msgid "All Libraries"
-msgstr "คลังทั้งหมด"
-
-
-msgid "Show assets from all of the listed asset libraries"
-msgstr "แสดงเนื้อหาจากคลังเนื้อหาทั้งหมดที่ระบุไว้"
-
-
-msgid "Current File"
-msgstr "ไฟล์ปัจจุบัน"
-
-
-msgid "Show the assets currently available in this Blender session"
-msgstr "แสดงสินทรัพย์ที่มีอยู่ในช่วงสมัยของเบลนเดอร์นี้"
-
-
-msgid "Essentials"
-msgstr "รากแก่น"
-
-
-msgid "Custom"
-msgstr "กำหนดเอง"
-
-
-msgid "Show assets from the asset libraries configured in the Preferences"
-msgstr "แสดงเนื้อหาจากคลังเนื้อหาที่กำหนดค่าไว้ในส่วนการตั้งค่า"
 
 
 msgid "Activate Operator"
@@ -4937,14 +4937,6 @@ msgid "Mix Color"
 msgstr "ผสมสี"
 
 
-msgid "Mirror"
-msgstr "กระจกสะท้อน"
-
-
-msgid "Snap"
-msgstr "ยึดติด"
-
-
 msgid "Local View"
 msgstr "มุมมองท้องถิ่น"
 
@@ -4985,10 +4977,6 @@ msgid "Add Image"
 msgstr "เพิ่มภาพ"
 
 
-msgid "Import"
-msgstr "นำเข้า"
-
-
 msgid "Apply"
 msgstr "นำไปใช้"
 
@@ -4999,6 +4987,10 @@ msgstr "แทร็ค"
 
 msgid "Hooks"
 msgstr "ตะขอ"
+
+
+msgid "Import"
+msgstr "นำเข้า"
 
 
 msgid "UV"
@@ -5021,12 +5013,12 @@ msgid "Layout"
 msgstr "เค้าโครง"
 
 
-msgid "Keying"
-msgstr "คีย์"
-
-
 msgid "Pivot Point"
 msgstr "จุดหมุน"
+
+
+msgid "Snap"
+msgstr "ยึดติด"
 
 
 msgid "Proportional Editing Falloff"
@@ -5035,6 +5027,14 @@ msgstr "แก้ไข"
 
 msgid "Mask Edit"
 msgstr "การแก้ไขหน้ากาก"
+
+
+msgid "Keying"
+msgstr "คีย์"
+
+
+msgid "Mirror"
+msgstr "กระจกสะท้อน"
 
 
 msgid "Zoom"
@@ -6389,11 +6389,6 @@ msgstr "วัดขนาด"
 
 
 msgctxt "Operator"
-msgid "Bone Size"
-msgstr "ขนาดกระดูก"
-
-
-msgctxt "Operator"
 msgid "Box"
 msgstr "กล่อง"
 
@@ -6834,6 +6829,10 @@ msgstr "วิธีที่จะแสดง/แรเงาวัตถุ�
 
 msgid "Error Message"
 msgstr "ข้อความแสดงข้อผิดพลาด"
+
+
+msgid "Cancel"
+msgstr "ยกเลิก"
 
 
 msgctxt "WindowManager"
@@ -7799,10 +7798,6 @@ msgstr "พื้นผิว"
 
 msgid "Key %d"
 msgstr "คีย์ %d"
-
-
-msgid "Cancel"
-msgstr "ยกเลิก"
 
 
 msgctxt "Curve"

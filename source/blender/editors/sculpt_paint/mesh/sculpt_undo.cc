@@ -33,12 +33,12 @@
 #include "BLI_bit_group_vector.hh"
 #include "BLI_compression.hh"
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_memory_counter.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_task.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_task_c.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_key_types.h"
@@ -2418,7 +2418,7 @@ void geometry_end(Object &ob)
 
 void register_type(UndoType *ut)
 {
-  ut->name = "Sculpt";
+  ut->identifier = "SCULPT";
   ut->poll = nullptr; /* No poll from context for now. */
   ut->step_encode_init = step_encode_init;
   ut->step_encode = step_encode;

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8764d33c658b')\n"
+"Project-Id-Version: Blender 5.2.0 LTS Beta (b'051706edb5e5')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-01 07:36+0000\n"
+"POT-Creation-Date: 2026-06-22 07:24+0000\n"
 "PO-Revision-Date: 2025-07-23 14:53+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Arabic <https://translate.blender.org/projects/blender-ui/ui/ar/>\n"
@@ -15656,18 +15656,6 @@ msgid "Material slot name"
 msgstr "ﺔﻣﺎﺨﻟﺍ ﺔﺤﺘﻓ ﻢﺳﺇ"
 
 
-msgid "Mirror"
-msgstr "ﻞﺛﺎﻣ"
-
-
-msgid "Snap"
-msgstr "ﻱﺫﺎﺣ"
-
-
-msgid "UV Mapping"
-msgstr "UV ءﺎﺴﻛﺇ"
-
-
 msgid "Navigation"
 msgstr "ﺢﻔّﺼﺗ"
 
@@ -15678,10 +15666,6 @@ msgstr "ﺮﻈﻨﻤﻟﺍ ﻱﺫﺎﺣ"
 
 msgid "Align View to Active"
 msgstr "ﻝﺎﻌّﻔﻠﻟ ﺮﻈﻨﻤﻟﺍ ﻱﺫﺎﺣ"
-
-
-msgid "Math"
-msgstr "ﺏﺎﺴﺣ"
 
 
 msgid "Select More/Less"
@@ -15700,6 +15684,10 @@ msgid "Select Linked"
 msgstr "ﺔﻄﺒﺗﺮﻤﻟﺍ ﺭﺎﺘﺧﺇ"
 
 
+msgid "Math"
+msgstr "ﺏﺎﺴﺣ"
+
+
 msgid "Metaball"
 msgstr "ﺔﻠﻋﺎﻔﺘﻣ ﺓﺮﻛ"
 
@@ -15714,10 +15702,6 @@ msgstr "ﺕﺎﻗﻼ﻿ﻌﻟﺍ"
 
 msgid "Rigid Body"
 msgstr "ﻞﻋﺎﻔﺘﻣ ﻢﺴﺟ"
-
-
-msgid "Import"
-msgstr "ﺩﺭﻮﺘﺳﺇ"
 
 
 msgid "Apply"
@@ -15740,8 +15724,8 @@ msgid "Hooks"
 msgstr "ﺕﺎﻓﺎﻄﺧ"
 
 
-msgid "UV"
-msgstr "ﺭﻭﺎﺤﻣ"
+msgid "Import"
+msgstr "ﺩﺭﻮﺘﺳﺇ"
 
 
 msgid "In-Betweens"
@@ -15750,6 +15734,10 @@ msgstr "ﻦﻴﺑ ﺎﻣ"
 
 msgid "Propagate"
 msgstr "ﻢﻤﻋ"
+
+
+msgid "UV"
+msgstr "ﺭﻭﺎﺤﻣ"
 
 
 msgid "Names"
@@ -15764,16 +15752,24 @@ msgid "Merge"
 msgstr "ﺞﻣﺩﺇ"
 
 
-msgid "Layout"
-msgstr "ﻖﻴﺴﻨﺗ"
-
-
 msgid "Special Characters"
 msgstr "ﺔﺻﺎﺧ ﻑﺮﺣﺃ"
 
 
 msgid "Bone Roll"
 msgstr "ﺔﻤﻈﻌﻟﺍ ءﺍﻮﺘﻟﺍ"
+
+
+msgid "Layout"
+msgstr "ﻖﻴﺴﻨﺗ"
+
+
+msgid "Snap"
+msgstr "ﻱﺫﺎﺣ"
+
+
+msgid "Proportional Editing Falloff"
+msgstr "ﻲﺒﺴﻨﻟﺍ ﺮﻳﺮﺤﺘﻟﺍ ﻲﺷﻼ﻿ﺗ"
 
 
 msgid "Keying"
@@ -15784,8 +15780,12 @@ msgid "Tracking"
 msgstr "ﺔﻘﺣﻼ﻿ﻤﻟﺍ"
 
 
-msgid "Proportional Editing Falloff"
-msgstr "ﻲﺒﺴﻨﻟﺍ ﺮﻳﺮﺤﺘﻟﺍ ﻲﺷﻼ﻿ﺗ"
+msgid "Mirror"
+msgstr "ﻞﺛﺎﻣ"
+
+
+msgid "UV Mapping"
+msgstr "UV ءﺎﺴﻛﺇ"
 
 
 msgctxt "MovieClip"
@@ -27697,16 +27697,16 @@ msgid "Palette Color"
 msgstr "ﻥﻮﻠﻟﺍ ﺔﺣﻮﻟ"
 
 
+msgid "Transform Orientations"
+msgstr "ﻝﻮﺤﺘﻟﺍ ﺕﺎﻫﺎﺠﺗﺍ"
+
+
 msgid "Render Pass"
 msgstr "ﺮﻴﻴﺼﺗ ﺮﻤﻣ"
 
 
 msgid "Motion Tracking"
 msgstr "ﺔﻛﺮﺤﻟﺍ ﺔﻘﺣﻼ﻿ﻣ"
-
-
-msgid "Transform Orientations"
-msgstr "ﻝﻮﺤﺘﻟﺍ ﺕﺎﻫﺎﺠﺗﺍ"
 
 
 msgid "Bone Constraints"
@@ -33016,6 +33016,10 @@ msgid "Operator Properties"
 msgstr "ﻞﻣﺎﻌﻟﺍ ﺹﺍﻮﺧ"
 
 
+msgid "Cancel"
+msgstr "ﻎﻟﺃ"
+
+
 msgctxt "WindowManager"
 msgid "Window"
 msgstr "ﺓﺬﻓﺎﻨﻟﺍ"
@@ -35123,10 +35127,6 @@ msgstr "ﺔﻟﻮﺼﻔﻣ ﻡﺎﻈﻋ"
 
 msgid "No active Keying Set to use"
 msgstr "ﻡﺍﺪﺨﺘﺳﻺ﻿ﻟ ﺔﻟﺎﻌّﻓ ﺢﻴﺗﺎﻔﻣ ﺔﻋﻮﻤﺠﻣ ﺪﺟﻮﺗ ﻻ﻿"
-
-
-msgid "Cancel"
-msgstr "ﻎﻟﺃ"
 
 
 msgid "No keyframes to slide between"

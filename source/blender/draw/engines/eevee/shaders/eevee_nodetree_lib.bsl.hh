@@ -354,7 +354,7 @@ void raycast_eval([[maybe_unused]] float3 position,
 
 #if defined(MAT_RAYCAST)
   if (!uni.pipeline_buf.can_raycast) {
-    /* We can't raycast on prepass for raycast visibile objects.
+    /* We can't ray-cast on pre-pass for ray-cast visible objects.
      * We use a UBO property to avoid compiling more shader variants. */
     return;
   }
@@ -646,7 +646,7 @@ float3 displacement_bump()
 void fragment_displacement()
 {
 #ifdef MAT_DISPLACEMENT_BUMP
-  g_data.N = g_data.Ni = displacement_bump();
+  g_data.N = displacement_bump();
 #endif
 }
 

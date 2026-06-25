@@ -20,13 +20,13 @@
 #include "DNA_userdef_types.h"
 
 #include "BLI_color_types.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 
@@ -127,7 +127,7 @@ enum class WidgetStyle {
  */
 struct WidgetStateInfo {
   /** Copy of #Button.flag (possibly with overrides for drawing). */
-  int but_flag;
+  int64_t but_flag;
   /** Copy of #Button.drawflag (possibly with overrides for drawing). */
   int but_drawflag;
   /** Copy of #Button.emboss. */
@@ -1355,7 +1355,7 @@ static void widget_draw_icon(
     return;
   }
 
-  const float aspect = but->block->aspect * UI_INV_SCALE_FAC;
+  const float aspect = (1.0f / but->icon_scale) * but->block->aspect * UI_INV_SCALE_FAC;
   const float height = ICON_DEFAULT_HEIGHT / aspect;
   bool force_outline = false;
 
@@ -2418,7 +2418,7 @@ static void widget_draw_text(const uiFontStyle *fstyle,
 
   /* Special case: when we're entering text for multiple buttons,
    * don't draw the text for any of the multi-editing buttons */
-  if (UNLIKELY(but->flag & BUT_DRAG_MULTI)) {
+  if (but->flag & BUT_DRAG_MULTI) [[unlikely]] {
     Button *but_edit = button_drag_multi_edit_get(but);
     if (but_edit) {
       drawstr = but_edit->editstr;
@@ -5107,11 +5107,31 @@ static void widget_roundbut_exec(Button *but,
     shape_preset_init_hold_action(&wtb.tria1, rect, 0.75f, 'r');
   }
 
-  const float rad = widget_radius_from_zoom(zoom, wcol);
+  float rad = widget_radius_from_zoom(zoom, wcol);
+
+  wtb.draw_emboss = draw_emboss(but);
+
+  if (const ButtonPush *push_but = dynamic_cast<ButtonPush *>(but)) {
+    if (push_but->draw_as_overlay) {
+      /* Enforce a full circle. */
+      rad = BLI_rcti_size_y(rect) * 0.5f;
+      roundboxalign = CNR_ALL;
+      wtb.draw_inner = true;
+      wtb.draw_outline = false;
+      wtb.draw_emboss = true;
+      /* Use a black transparent background and a white icon color, to ensure good contrast. */
+      const uchar background_col[4] = {0, 0, 0, (but->flag & UI_HOVER) ? uchar(120) : uchar(100)};
+      copy_v4_v4_uchar(wcol->inner, background_col);
+      copy_v4_v4_uchar(wcol->inner_sel, background_col);
+      const uchar foreground_col[4] = {
+          255, 255, 255, (but->flag & UI_HOVER) ? uchar(255) : uchar(230)};
+      copy_v4_v4_uchar(wcol->text, foreground_col);
+      copy_v4_v4_uchar(wcol->text_sel, foreground_col);
+    }
+  }
 
   /* half rounded */
   round_box_edges(&wtb, roundboxalign, rect, rad);
-  wtb.draw_emboss = draw_emboss(but);
   widgetbase_draw(&wtb, wcol);
 }
 
@@ -6249,7 +6269,7 @@ void draw_menu_item(const uiFontStyle *fstyle,
                     const bool use_unpadded,
                     const char *name,
                     int iconid,
-                    int but_flag,
+                    int64_t but_flag,
                     MenuItemSeparatorType separator_type,
                     int *r_xmax)
 {
@@ -6436,7 +6456,7 @@ void draw_preview_item(const uiFontStyle *fstyle,
                        const float zoom,
                        const char *name,
                        int iconid,
-                       int but_flag,
+                       int64_t but_flag,
                        FontStyleAlign text_align)
 {
   WidgetType *wt = widget_type(WidgetStyle::MenuItemUnpadded);

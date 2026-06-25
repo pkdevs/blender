@@ -11,7 +11,7 @@
 #include "BLI_function_ref.hh"
 #include "BLI_listbase_wrapper.hh"
 #include "BLI_map.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -290,6 +290,7 @@ IDOverrideLibraryPropertyOperation *TreeElementOverridesPropertyOperation::
     get_override_operation_from_id(ID &id, IDOverrideLibraryProperty &override_property) const
 {
   BLI_assert(ID_IS_OVERRIDE_LIBRARY_REAL(&id));
+  UNUSED_VARS_NDEBUG(id);
   for (IDOverrideLibraryPropertyOperation &opop : override_property.operations) {
     if (*operation_ == opop) {
       return &opop;
@@ -490,7 +491,9 @@ void OverrideRNAPathTreeBuilder::ensure_entire_collection(
 
     MEM_delete(coll_item_path);
     item_idx++;
-    previous_te = current_te;
+    if (current_te) {
+      previous_te = current_te;
+    }
   }
   RNA_PROP_END;
 }

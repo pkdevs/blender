@@ -7,9 +7,9 @@
  * Pose Mode API's and Operators for Pose Mode armatures.
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -53,7 +53,7 @@ namespace blender {
 #undef DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#  include "BLI_time_utildefines.h"
+#  include "BLI_time_utildefines.hh"
 #endif
 
 Object *ED_pose_object_from_context(bContext *C)
@@ -147,7 +147,7 @@ void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, eAnimvizCa
   Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
-  Vector<MPathTarget *> targets;
+  Vector<MPathTarget> targets;
   /* set flag to force recalc, then grab the relevant bones to target */
   ob->pose->avs.recalc |= ANIMVIZ_RECALC_PATHS;
   animviz_build_motionpath_targets(ob, targets);
@@ -164,7 +164,6 @@ void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, eAnimvizCa
   TIMEIT_END(pose_path_calc);
 #endif
 
-  animviz_free_motionpath_targets(targets);
   DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
 
   /* Free temporary depsgraph. */

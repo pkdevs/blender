@@ -22,12 +22,12 @@
 
 #include "BLI_array.hh"
 #include "BLI_bounds_types.hh"
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "WM_keymap.hh"
 #include "WM_types.hh"
@@ -2287,6 +2287,8 @@ bContext *WM_xr_session_context_ensure(wmXrData *xr, const wmWindowManager *wm);
 
 void WM_xr_session_base_pose_reset(wmXrData *xr);
 void WM_xr_session_state_navigation_reset(wmXrSessionState *state);
+
+void WM_xr_session_state_viewfinder_init(wmXrSessionState *state);
 void WM_xr_session_state_viewfinder_reset(wmXrSessionState *state);
 
 void WM_xr_session_state_vignette_activate(wmXrData *xr);

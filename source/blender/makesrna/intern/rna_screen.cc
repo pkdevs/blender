@@ -42,6 +42,7 @@ const EnumPropertyItem rna_enum_region_type_items[] = {
     {RGN_TYPE_FOOTER, "FOOTER", 0, "Footer", ""},
     {RGN_TYPE_TOOL_HEADER, "TOOL_HEADER", 0, "Tool Header", ""},
     {RGN_TYPE_XR, "XR", 0, "XR", ""},
+    {RGN_TYPE_SCRUBBING, "SCRUBBING", 0, "Scrubbing", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -54,7 +55,7 @@ const EnumPropertyItem rna_enum_region_panel_category_items[] = {
 
 #ifdef RNA_RUNTIME
 
-#  include "BLI_listbase.h"
+#  include "BLI_listbase.hh"
 
 #  include "RNA_access.hh"
 
@@ -240,7 +241,7 @@ static int rna_Area_ui_type_get(PointerRNA *ptr)
 {
   ScrArea *area = static_cast<ScrArea *>(ptr->data);
   /* This is for the Python API which may inspect empty areas. */
-  if (UNLIKELY(area->spacetype == SPACE_EMPTY)) {
+  if (area->spacetype == SPACE_EMPTY) [[unlikely]] {
     return SPACE_EMPTY;
   }
   const int area_type = rna_Area_type_get(ptr);

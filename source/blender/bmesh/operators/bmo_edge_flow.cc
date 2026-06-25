@@ -10,9 +10,9 @@
  */
 
 #include "BLI_array.hh"
-#include "BLI_math_base.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_curves.hh"
