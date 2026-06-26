@@ -6,8 +6,6 @@
 
 #include "kernel/globals.h"
 
-#include "kernel/light/common.h"
-
 CCL_NAMESPACE_BEGIN
 
 /* Simple CDF based sampling over all lights in the scene, without taking into

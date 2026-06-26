@@ -8,8 +8,6 @@
 
 #include "kernel/integrator/state.h"
 
-#include "kernel/light/common.h"
-
 #include "kernel/sample/lcg.h"
 
 #include "kernel/util/differential.h"

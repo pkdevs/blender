@@ -8,20 +8,11 @@
 
 #include "kernel/types.h"
 #include "kernel/integrator/state.h"
-#include "kernel/light/common.h" // LightSample
 #include "kernel/integrator/state_flow.h" // integrator_path_next
 
 #include "kernel/sample/pattern.h"
 
 CCL_NAMESPACE_BEGIN
-
-struct ReSTIRReservoir {
-    LightSample light;
-
-    float W;        // Final Probabilistic reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_target_pdf;
-    uint M;
-    bool visible;   // To rejected occuluded paths // New // TODO(Tri): Change to uint for safety?
-};
 
 ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
 {

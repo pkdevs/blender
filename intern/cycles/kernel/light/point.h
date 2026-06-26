@@ -8,8 +8,6 @@
 
 #include "kernel/geom/object.h"
 
-#include "kernel/light/common.h"
-
 #include "util/defines.h"
 #include "util/math_intersect.h"
 

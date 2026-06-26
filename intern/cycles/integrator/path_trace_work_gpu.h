@@ -5,7 +5,6 @@
 #pragma once
 
 #include "kernel/integrator/state.h"
-#include "kernel/integrator/restir.h"
 
 #include "device/graphics_interop.h"
 #include "device/memory.h"

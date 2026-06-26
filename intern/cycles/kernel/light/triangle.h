@@ -6,8 +6,6 @@
 
 #include "kernel/globals.h"
 
-#include "kernel/light/common.h"
-
 #include "kernel/geom/motion_triangle.h"
 #include "kernel/geom/object.h"
 #include "kernel/geom/triangle.h"

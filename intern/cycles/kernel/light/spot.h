@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "kernel/light/common.h"
 #include "kernel/light/point.h"
 
 #include "util/math_fast.h"

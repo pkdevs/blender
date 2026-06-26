@@ -6,8 +6,6 @@
 
 #include "kernel/geom/object.h"
 
-#include "kernel/light/common.h"
-
 #include "util/math_fast.h"
 
 CCL_NAMESPACE_BEGIN

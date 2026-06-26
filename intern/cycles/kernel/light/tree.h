@@ -17,7 +17,6 @@
 
 #include "kernel/light/area.h"
 #include "kernel/light/background.h"
-#include "kernel/light/common.h"
 #include "kernel/light/point.h"
 #include "kernel/light/spot.h"
 #include "kernel/light/sun.h"
