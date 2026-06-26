@@ -12,10 +12,9 @@ namespace blender {
 
 namespace nodes::node_shader_bsdf_open_pbr_cc {
 
-// TODO (OpenPBR): Add correct in and outputs
-
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  /* TODO(OpenPBR): clarify the concept of glossy, dielectric, opaque and base in the manual. */
   const bNodeTree *ntree = b.tree_or_null();
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
@@ -25,93 +24,143 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
 #define OPENPBR_SOCK_WEIGHT_ID 0
-  /********************************************************************
+  /* --------------------------------------------------------------------
    * Base Component
-   * *****************************************************************/
+   */
+  /* TODO(weizhen): I feel the panel folding should be the same as principled BSDF, that is, base
+   * is shown and all others are folded. Because base is not a component like others, but an
+   * overall control. */
   PanelDeclarationBuilder &base = b.add_panel("Base"_ustr).default_closed(false);
+  base.description(
+      "The bulk material structure, consisting of a mix of metal and dielectric components");
   base.add_input<decl::Float>("Base Weight"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description("Scalar multiplier of the Base Color");
 #define OPENPBR_SOCK_BASE_WEIGHT_ID 1
-  base.add_input<decl::Color>("Base Color"_ustr).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  base.add_input<decl::Color>("Base Color"_ustr)
+      .default_value({0.8f, 0.8f, 0.8f, 1.0f})
+      .description("Color of the diffuse lobe, and the metallic reflection at normal incidence");
 #define OPENPBR_SOCK_BASE_COLOR_ID 2
   base.add_input<decl::Float>("Base Metalness"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Blends between dielectric and metallic components. "
+          "At 0.0 the material is fully dielectric, at 1.0 it is fully metallic");
 #define OPENPBR_SOCK_BASE_METALNESS_ID 3
   base.add_input<decl::Float>("Base Diffuse Roughness"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Roughness of the diffuse lobe. 0.0 is perfect Lambertian reflection, 1.0 is fully "
+          "Oren-Nayar");
 #define OPENPBR_SOCK_DIFFUSE_ROUGHNESS_ID 4
-  /********************************************************************
+  /* --------------------------------------------------------------------
    * Specular Component
-   * *****************************************************************/
+   */
   PanelDeclarationBuilder &specular = b.add_panel("Specular"_ustr).default_closed(false);
+  specular.description("Controls the primary specular reflection lobe of the base dielectric");
   specular.add_input<decl::Float>("Specular Weight"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Modulates the dielectric reflectivity at normal incidence, and the metallic reflection "
+          "lobe. When it is 0.0, the specular reflection disappears entirely; when above 1.0, the "
+          "reflectivity is increased above the level specified by Specular IOR");
 #define OPENPBR_SOCK_SPECULAR_WEIGHT_ID 5
-  specular.add_input<decl::Color>("Specular Color"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  specular.add_input<decl::Color>("Specular Color"_ustr)
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .description(
+          "Tints the dielectric reflection lobe, and the metallic reflection at near-grazing "
+          "incidence");
 #define OPENPBR_SOCK_SPECULAR_COLOR_ID 6
   specular.add_input<decl::Float>("Specular Roughness"_ustr)
       .default_value(0.3f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Specifies microfacet roughness for both dielectric and metallic components. 0.0 is "
+          "perfect mirror reflection, 1.0 is completely rough");
 #define OPENPBR_SOCK_SPECULAR_ROUGHNESS_ID 7
   specular.add_input<decl::Float>("Specular Roughness Anisotropy"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Amount of anisotropy for glossy, transmission and metallic components. "
+          "Higher values give elongated highlights along the tangent direction");
 #define OPENPBR_SOCK_SPECULAR_ROUGHNESS_ANISOTROPY_ID 8
   specular.add_input<decl::Float>("Specular IOR"_ustr)
       .default_value(1.5f)
       .min(0.0f)
       .max(3.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Controls the refractive index of the dielectric. For most materials, the IOR is "
+          "between 1.0 (vacuum and air) and 4.0 (germanium). The default value of 1.5 is a good "
+          "approximation for glass");
 #define OPENPBR_SOCK_SPECULAR_IOR_ID 9
-  /********************************************************************
+  /* --------------------------------------------------------------------
    * Transmission Component
-   * *****************************************************************/
+   */
   PanelDeclarationBuilder &transmission = b.add_panel("Transmission"_ustr).default_closed(false);
+  transmission.description(
+      "For modeling materials that transmit and refract light into the object interior, ranging "
+      "from clear or colored glass and liquids to translucent materials with significant "
+      "scattering such as fruit juice, murky water, and opalescent glass");
   transmission.add_input<decl::Float>("Transmission Weight"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Blends between transmission and other opaque components (glossy-diffuse and "
+          "subsurface)");
 #define OPENPBR_SOCK_TRANSMISSION_WEIGHT_ID 10
   transmission.add_input<decl::Color>("Transmission Color"_ustr)
-      .default_value({1.0f, 1.0f, 1.0f, 1.0f});
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .description("Tint the dielectric refraction");
 #define OPENPBR_SOCK_TRANSMISSION_COLOR_ID 11
   transmission.add_input<decl::Float>("Transmission Depth"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_DISTANCE);
+      .subtype(PROP_DISTANCE)
+      .description(
+          "Controls the depth into the medium at which the transmission color is realized; if "
+          "zero, interior medium is absent, and transmission color acts as a constant "
+          "(on-surface) transmission tint");
 #define OPENPBR_SOCK_TRANSMISSION_DEPTH_ID 12
   transmission.add_input<decl::Color>("Transmission Scatter"_ustr)
-      .default_value({0.0f, 0.0f, 0.0f, 1.0f});
+      .default_value({0.0f, 0.0f, 0.0f, 1.0f})
+      .description("Scattering coefficient of the interior medium");
 #define OPENPBR_SOCK_TRANSMISSION_SCATTER_ID 13
   transmission.add_input<decl::Float>("Transmission Scatter Anisotropy"_ustr)
       .default_value(0.0f)
       .min(-1.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Directionality of the scattering of the interior medium. Zero is isotropic, negative "
+          "is backward, positive is forward");
 #define OPENPBR_SOCK_TRANSMISSION_SCATTER_ANISOTROPY_ID 14
   transmission.add_input<decl::Float>("Transmission Dispersion Scale"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
+      .description("Linearly scales the amount of dispersion. Not implemented yet")
       .not_implemented();
 #define OPENPBR_SOCK_TRANSMISSION_DISPERSION_SCALE_ID 15
   transmission.add_input<decl::Float>("Transmission Dispersion Abbe Number"_ustr)
@@ -119,122 +168,173 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(91.0f)
       .subtype(PROP_FACTOR)
+      .description("Abbe number of the base dielectric medium. Not implemented yet")
       .not_implemented();
 #define OPENPBR_SOCK_TRANSMISSION_DISPERSION_ABBE_NUMBER_ID 16
-  /********************************************************************
+  /* --------------------------------------------------------------------
    * Subsurface Component
-   * *****************************************************************/
+   */
   PanelDeclarationBuilder &subsurface = b.add_panel("Subsurface"_ustr).default_closed(false);
+  subsurface.description(
+      "Generates a soft appearance due to light scattering under the surface. Used to render "
+      "materials such as skin, milk and wax");
   subsurface.add_input<decl::Float>("Subsurface Weight"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description("Blends between diffuse-glossy and subsurface components");
 #define OPENPBR_SOCK_SUBSURFACE_WEIGHT_ID 17
   subsurface.add_input<decl::Color>("Subsurface Color"_ustr)
-      .default_value({0.8f, 0.8f, 0.8f, 1.0f});
+      .default_value({0.8f, 0.8f, 0.8f, 1.0f})
+      .description("The observed reflection albedo color of the subsurface");
 #define OPENPBR_SOCK_SUBSURFACE_COLOR_ID 18
   subsurface.add_input<decl::Float>("Subsurface Radius"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .usage_by_bool("Geometry Thin Walled"_ustr, false);
+      .usage_by_bool("Geometry Thin Walled"_ustr, false)
+      .description(
+          "The average distance that a ray travels through the medium before being absorbed or "
+          "scattered. Together with Subsurface Radius Scale, this controls the apparent density "
+          "of the medium");
 #define OPENPBR_SOCK_SUBSURFACE_RADIUS_ID 19
   subsurface.add_input<decl::Color>("Subsurface Radius Scale"_ustr)
       .default_value({1.0f, 0.5f, 0.25f, 1.0f})
+      .description(
+          "Multiplier to Subsurface Radius per color channel. The default value approximates "
+          "Rayleigh scattering")
       .usage_by_bool("Geometry Thin Walled"_ustr, false);
 #define OPENPBR_SOCK_SUBSURFACE_RADIUS_SCALE_ID 20
   subsurface.add_input<decl::Float>("Subsurface Scatter Anisotropy"_ustr)
       .default_value(0.0f)
       .min(-1.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Directionality of scattering within the subsurface medium. "
+          "Zero scatters uniformly in all directions, positive values scatter more in the forward "
+          "direction, and negative values scatter more backwards. "
+          "For example, skin has been measured to have an anisotropy of 0.8");
 #define OPENPBR_SOCK_SUBSURFACE_SCATTER_ANISOTROPY_ID 21
-  /********************************************************************
+  /* --------------------------------------------------------------------
    * Coat Component
-   * *****************************************************************/
+   */
   PanelDeclarationBuilder &coat = b.add_panel("Coat"_ustr).default_closed(false);
+  coat.description(
+      "A layer of coat on top of the material that transmits and possibly absorbs light, to "
+      "simulate the appearance of objects with colored varnish or lacquer");
   coat.add_input<decl::Float>("Coat Weight"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description("Coverage weight of the coat layer");
 #define OPENPBR_SOCK_COAT_WEIGHT_ID 22
-  coat.add_input<decl::Color>("Coat Color"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  coat.add_input<decl::Color>("Coat Color"_ustr)
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .description(
+          "Observed tint color of the underlying base at normal incidence due to absorption in "
+          "the coat");
 #define OPENPBR_SOCK_COAT_COLOR_ID 23
   coat.add_input<decl::Float>("Coat Roughness"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description("Roughness of the coat layer");
 #define OPENPBR_SOCK_COAT_ROUGHNESS_ID 24
   coat.add_input<decl::Float>("Coat Roughness Anisotropy"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .not_implemented();
+      .not_implemented()
+      .description("Anisotropy of the coat layer");
 #define OPENPBR_SOCK_COAT_ROUGHNESS_ANISOTROPY_ID 25
   coat.add_input<decl::Float>("Coat IOR"_ustr)
       .default_value(1.6f)
       .min(0.0f)
       .max(3.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description("Refractive index of the coat layer");
 #define OPENPBR_SOCK_COAT_IOR_ID 26
   coat.add_input<decl::Float>("Coat Darkening"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Default to 1 for physically correct darkening effect due to internal reflections in "
+          "the coat. When set to 0, the base albedo is boosted so that the observed coated color "
+          "matches the specified base layer color");
 #define OPENPBR_SOCK_COAT_DARKENING_ID 27
-  /********************************************************************
+  /* --------------------------------------------------------------------
    * Fuzz Component
-   * *****************************************************************/
+   */
   PanelDeclarationBuilder &fuzz = b.add_panel("Fuzz"_ustr).default_closed(false);
+  fuzz.description(
+      "The topmost scattering layer simulating fuzzy or dusty appearance, producing a specular "
+      "highlight at grazing angles");
   fuzz.add_input<decl::Float>("Fuzz Weight"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description("Coverage weight of the fuzz layer");
 #define OPENPBR_SOCK_FUZZ_WEIGHT_ID 28
-  fuzz.add_input<decl::Color>("Fuzz Color"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  fuzz.add_input<decl::Color>("Fuzz Color"_ustr)
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .description("Color of the fuzz reflection");
 #define OPENPBR_SOCK_FUZZ_COLOR_ID 29
   fuzz.add_input<decl::Float>("Fuzz Roughness"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Controls how fiber-like the fuzz layer is. At low roughness the fuzz produces a "
+          "high-sheen fabric appearance, while at high roughness it produces a dusty appearance");
 #define OPENPBR_SOCK_FUZZ_ROUGHNESS_ID 30
-  /********************************************************************
+  /* --------------------------------------------------------------------
    * Emission Component
-   * *****************************************************************/
+   */
   PanelDeclarationBuilder &emission = b.add_panel("Emission"_ustr).default_closed(false);
+  emission.description("Light emission from the base substrate");
   emission.add_input<decl::Float>("Emission Luminance"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1000.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description("Emission luminance, in cd/m^2 (aka. nits)");
+  /* TODO(OpenPBR): our emission actually doesn't have a unit. */
 #define OPENPBR_SOCK_EMISSION_LUMINANCE_ID 31
-  emission.add_input<decl::Color>("Emission Color"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  emission.add_input<decl::Color>("Emission Color"_ustr)
+      .default_value({1.0f, 1.0f, 1.0f, 1.0f})
+      .description("Color of light emission from the surface");
 #define OPENPBR_SOCK_EMISSION_COLOR_ID 32
-  /********************************************************************
+  /* --------------------------------------------------------------------
    * Thin-film Component
-   * *****************************************************************/
+   */
   PanelDeclarationBuilder &thinfilm = b.add_panel("Thin Film"_ustr).default_closed(true);
+  thinfilm.description(
+      "Simulates the effect of rainbow-like color fringes due to inteference of a thin film "
+      "sitting on top of the material");
   thinfilm.add_input<decl::Float>("Thin Film Weight"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .not_implemented();
+      .not_implemented()
+      .description("Coverage weight of the thin film");
 #define OPENPBR_SOCK_THIN_FILM_WEIGHT_ID 33
   thinfilm.add_input<decl::Float>("Thin Film Thickness"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .max(100000.0f)
       .not_implemented()
-      .description("Thickness of the film in micrometers");
+      .description("Thickness of the thin film in micrometers (μm)");
   /* TODO(weizhen): OpenPBR unit for thin film is micrometer, but our default is nanometer. Need to
    * address this discrepancy. */
 #define OPENPBR_SOCK_THIN_FILM_THICKNESS_ID 34
@@ -243,27 +343,44 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(3.0f)
       .subtype(PROP_FACTOR)
-      .not_implemented();
+      .not_implemented()
+      .description("Refractive index of the thin film");
 #define OPENPBR_SOCK_THIN_FILM_IOR_ID 35
-  /********************************************************************
+  /* --------------------------------------------------------------------
    * Geometry Component
-   * *****************************************************************/
+   */
   PanelDeclarationBuilder &geometry = b.add_panel("Geometry"_ustr).default_closed(false);
+  geometry.description("Geometry-related properties");
   geometry.add_input<decl::Float>("Geometry Opacity"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description(
+          "Controls the transparency of the material, at 0.0 it is fully transparent, and at 1.0 "
+          "fully opaque");
 #define OPENPBR_SOCK_GEOMETRY_OPACITY_ID 36
-  geometry.add_input<decl::Bool>("Geometry Thin Walled"_ustr).default_value(false);
+  geometry.add_input<decl::Bool>("Geometry Thin Walled"_ustr)
+      .default_value(false)
+      .description(
+          "When enabled, the geometry becomes a thin structure with the same material on both "
+          "sides. Useful for modeling thin objects such as window, papers and leaves");
 #define OPENPBR_SOCK_GEOMETRY_THIN_WALLED_ID 37
-  geometry.add_input<decl::Vector>("Geometry Normal"_ustr).hide_value();
+  geometry.add_input<decl::Vector>("Geometry Normal"_ustr)
+      .hide_value()
+      .description("Shading normal of the base layer");
 #define OPENPBR_SOCK_GEOMETRY_NORMAL_ID 38
-  geometry.add_input<decl::Vector>("Geometry Tangent"_ustr).hide_value();
+  geometry.add_input<decl::Vector>("Geometry Tangent"_ustr)
+      .hide_value()
+      .description("Tangent direction of the anisotropy on the base layer");
 #define OPENPBR_SOCK_GEOMETRY_TANGENT_ID 39
-  geometry.add_input<decl::Vector>("Geometry Coat Normal"_ustr).hide_value();
+  geometry.add_input<decl::Vector>("Geometry Coat Normal"_ustr)
+      .hide_value()
+      .description("Shading normal of the coat layer");
 #define OPENPBR_SOCK_GEOMETRY_COAT_NORMAL_ID 40
-  geometry.add_input<decl::Vector>("Geometry Coat Tangent"_ustr).hide_value();
+  geometry.add_input<decl::Vector>("Geometry Coat Tangent"_ustr)
+      .hide_value()
+      .description("Tangent direction of the anisotropy on the coat layer");
 #define OPENPBR_SOCK_GEOMETRY_COAT_TANGENT_ID 41
 }
 
