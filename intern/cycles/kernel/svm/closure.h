@@ -775,7 +775,7 @@ ccl_device
       const float base_metalness = saturatef(stack_load(stack, data.base_metalness));
       const float base_diffuse_roughness = stack_load(stack, data.base_diffuse_roughness);
 
-      const float specular_weight = saturatef(stack_load(stack, data.specular_weight));
+      const float specular_weight = max(stack_load(stack, data.specular_weight), 0.0f);
       const float3 specular_color = saturate(stack_load(stack, data.specular_color));
 
 #ifdef __SUBSURFACE__
@@ -827,10 +827,11 @@ ccl_device
       /* Metallic component */
       if (base_metalness > CLOSURE_WEIGHT_CUTOFF) {
         if (reflective_caustics) {
-          /* In OpenPBR v1.1 Eq. 32 the Fresnel_82 term is multiplied with the specular_weight.
-           * We can achieve the same effect by mutl*/
+          /* NOTE: OpenPBR v1.1.1 mentioned that specular_weight can go above 1 for modulating the
+           * IOR, but it was not clear enough about the metal case. v1.2 explicitly said that this
+           * also applies to metal, but it's not very practical, so just clamp for now. */
           ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-              sd, sizeof(MicrofacetBsdf), specular_weight * base_metalness * weight);
+              sd, sizeof(MicrofacetBsdf), min(specular_weight, 1.0f) * base_metalness * weight);
           ccl_private FresnelF82Tint *fresnel =
               (bsdf != nullptr) ?
                   (ccl_private FresnelF82Tint *)closure_alloc_extra(sd, sizeof(FresnelF82Tint)) :
