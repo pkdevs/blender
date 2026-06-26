@@ -776,7 +776,8 @@ ccl_device
       const float base_diffuse_roughness = stack_load(stack, data.base_diffuse_roughness);
 
       const float specular_weight = max(stack_load(stack, data.specular_weight), 0.0f);
-      const float3 specular_color = saturate(stack_load(stack, data.specular_color));
+      const Spectrum specular_color = rgb_to_spectrum(
+          saturate(stack_load(stack, data.specular_color)));
 
 #ifdef __SUBSURFACE__
       const float subsurface_weight = saturatef(stack_load(stack, data.subsurface_weight));
