@@ -107,7 +107,7 @@ static int t_around_get(TransInfo *t)
       return sclip->around;
     }
     case SPACE_SEQ: {
-      if (t->region->regiontype == RGN_TYPE_PREVIEW) {
+      if (t->region->regiontype == RGN_TYPE_PREVIEW && t->scene) {
         return seq::tool_settings_pivot_point_get(t->scene);
       }
       break;

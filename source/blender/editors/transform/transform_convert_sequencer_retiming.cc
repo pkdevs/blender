@@ -171,6 +171,9 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 
 static void createTransSeqRetimingData(bContext * /*C*/, TransInfo *t)
 {
+  if (!t->scene) {
+    return;
+  }
   const Editing *ed = seq::editing_get(t->scene);
   if (ed == nullptr) {
     return;

@@ -141,9 +141,12 @@ static void freeSeqData(TransInfo * /*t*/,
   }
 }
 
-static void createTransSeqImageData(bContext *C, TransInfo *t)
+static void createTransSeqImageData(bContext * /*C*/, TransInfo *t)
 {
-  Scene *scene = CTX_data_sequencer_scene(C);
+  if (!t->scene) {
+    return;
+  }
+  Scene *scene = t->scene;
   Editing *ed = seq::editing_get(scene);
   const SpaceSeq *sseq = static_cast<const SpaceSeq *>(t->area->spacedata.first);
   const ARegion *region = t->region;
