@@ -137,16 +137,14 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_scene_parameters(Scene *scene);
   virtual void build_scene_compositor(Scene *scene);
 
-  virtual bool build_layer_collection(LayerCollection *layer_collection);
   virtual void build_view_layer_collections(ViewLayer *view_layer);
 
  private:
-  /* Walk a LayerCollection sub-tree, building only non-excluded layer collections but
-   * recursing through excluded ones. Non-excluded descendants of an excluded ancestor
-   * attach their hierarchy relation to `parent_hierarchy_key` (the nearest non-excluded
-   * ancestor, or the scene). Mirrors the recursion shape of
-   * DepsgraphNodeBuilder::build_layer_collections, restoring the symmetry that
-   * `do_sanity_checks` (pipeline.cc) expects between node and relation builders. */
+  /* Build relations for a layer collection sub-tree, mirroring the recursion of
+   * DepsgraphNodeBuilder::build_layer_collections so both builders cover the same
+   * collections. Excluded collections are skipped but still recursed through; a
+   * descendant attaches to `parent_hierarchy_key`, the nearest non-excluded ancestor
+   * (or the scene). */
   void build_layer_collection_recursive(LayerCollection *layer_collection,
                                         const ComponentKey &parent_hierarchy_key);
 

@@ -42,23 +42,17 @@ void DepsgraphRelationBuilder::build_layer_collection_recursive(
 
   Collection *collection = layer_collection->collection;
 
-  /* Hidden collections (COLLECTION_HIDE_VIEWPORT / COLLECTION_HIDE_RENDER) are a hard stop:
-   * DepsgraphNodeBuilder::build_layer_collections() also `continue`s on this flag without
-   * recursing into children, so we mirror that here. */
+  /* Hidden collections are a hard stop, matching the node builder which does not recurse
+   * into children of a hidden collection. */
   if (collection->flag & hide_flag) {
     return;
   }
 
+  /* Exclude is not inherited (see BKE_layer.cc), so a non-excluded descendant of an excluded
+   * collection still contributes objects and is built by the node builder. Recurse through
+   * the excluded collection without building it, keeping the parent hierarchy key so the
+   * descendant attaches to the nearest non-excluded ancestor. */
   if (layer_collection->flag & LAYER_COLLECTION_EXCLUDE) {
-    /* Exclude is per-LayerCollection and not inherited (see BKE layer.cc): non-excluded
-     * descendants of an excluded ancestor still contribute objects to the view layer base
-     * list, and DepsgraphNodeBuilder::build_layer_collections() builds those collections.
-     * Recurse through this excluded LC so the relation builder visits the same set of
-     * collections, and propagate the unchanged parent hierarchy key so a non-excluded
-     * descendant attaches its hierarchy relation to the nearest non-excluded ancestor
-     * (or scene). This avoids the `do_sanity_checks` mismatch ("Some IDs missed nodes or
-     * relations building") that previously left collection IDs without HIERARCHY relations,
-     * which in turn caused a parallel-evaluation race in Mesh::bounds_min_max(). */
     for (LayerCollection &child : layer_collection->layer_collections) {
       build_layer_collection_recursive(&child, parent_hierarchy_key);
     }
@@ -68,10 +62,7 @@ void DepsgraphRelationBuilder::build_layer_collection_recursive(
   build_collection(layer_collection, collection);
 
   const ComponentKey collection_hierarchy_key{&collection->id, NodeType::HIERARCHY};
-  /* Preserve the pre-fix "Scene -> Collection hierarchy" / "Collection hierarchy" diagnostic
-   * strings depending on whether the parent edge is the scene or another collection. The
-   * dependency graph itself is identified by ComponentKey, not by description, but keeping
-   * the descriptions stable helps when diffing depsgraph dumps against older builds. */
+  /* Keep the historic relation descriptions stable for depsgraph dumps. */
   const char *relation_description = (parent_hierarchy_key.id == &scene_->id) ?
                                          "Scene -> Collection hierarchy" :
                                          "Collection hierarchy";
@@ -80,26 +71,6 @@ void DepsgraphRelationBuilder::build_layer_collection_recursive(
   for (LayerCollection &child : layer_collection->layer_collections) {
     build_layer_collection_recursive(&child, collection_hierarchy_key);
   }
-}
-
-bool DepsgraphRelationBuilder::build_layer_collection(LayerCollection *layer_collection)
-{
-  const int hide_flag = (graph_->mode == DAG_EVAL_VIEWPORT) ? COLLECTION_HIDE_VIEWPORT :
-                                                              COLLECTION_HIDE_RENDER;
-
-  Collection *collection = layer_collection->collection;
-
-  const bool is_collection_hidden = collection->flag & hide_flag;
-  const bool is_layer_collection_excluded = layer_collection->flag & LAYER_COLLECTION_EXCLUDE;
-
-  if (is_collection_hidden) {
-    return false;
-  }
-
-  const ComponentKey scene_hierarchy_key{&scene_->id, NodeType::HIERARCHY};
-  build_layer_collection_recursive(layer_collection, scene_hierarchy_key);
-
-  return !is_layer_collection_excluded;
 }
 
 void DepsgraphRelationBuilder::build_view_layer_collections(ViewLayer *view_layer)
