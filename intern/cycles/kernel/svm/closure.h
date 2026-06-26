@@ -775,7 +775,8 @@ ccl_device
           kg, sd, stack, data, &N, reflective_caustics, path_flag, mix_weight);
 
       const float base_weight = saturatef(stack_load(stack, data.base_weight));
-      const float3 base_color = max(stack_load(stack, data.base_color), zero_float3());
+      const float3 weighted_base_color = saturate(stack_load(stack, data.base_color)) *
+                                         base_weight;
       const float base_metalness = saturatef(stack_load(stack, data.base_metalness));
       const float base_diffuse_roughness = stack_load(stack, data.base_diffuse_roughness);
 
@@ -812,7 +813,7 @@ ccl_device
 
       weight *= openpbr_coat_darkening(data,
                                        stack,
-                                       base_color,
+                                       weighted_base_color,
                                        base_metalness,
                                        specular_weight,
                                        subsurface_color,
@@ -849,7 +850,7 @@ ccl_device
             bsdf->alpha_x = specular_alpha.x;
             bsdf->alpha_y = specular_alpha.y;
 
-            fresnel->f0 = rgb_to_spectrum(base_color) * base_weight;
+            fresnel->f0 = rgb_to_spectrum(weighted_base_color);
 #ifdef OPENPBR_SPEC_COMPLIANT
             const Spectrum f82 = min(specular_color, white);
 #else
@@ -1097,14 +1098,14 @@ ccl_device
 #endif
       if (base_weight > CLOSURE_WEIGHT_CUTOFF) {
         /* Diffuse Component*/
-        const Spectrum diffuse_weight = (base_color * base_weight) * (1.0f - subsurface_weight) *
-                                        weight;
+        const Spectrum base_spectrum_color = rgb_to_spectrum(weighted_base_color);
+        const Spectrum diffuse_weight = base_spectrum_color * (1.0f - subsurface_weight) * weight;
         if (diffuse_roughness_is_almost_zero(base_diffuse_roughness)) {
           bsdf_diffuse_setup(sd, N, diffuse_weight);
         }
         else {
           bsdf_oren_nayar_setup(
-              sd, N, diffuse_weight, base_diffuse_roughness, (base_color * base_weight));
+              sd, N, diffuse_weight, base_diffuse_roughness, base_spectrum_color);
         }
       }
       break;
