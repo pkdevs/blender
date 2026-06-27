@@ -33,10 +33,10 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
     if (shadow_queued_kernel) {
       switch (shadow_queued_kernel) {
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW:
-          integrator_intersect_shadow(kg, &state->shadow);
+          integrator_intersect_shadow(kg, &state->shadow, nullptr); // TODO(Tri): handle CPU reservoir buffers
           continue;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-          integrator_shade_shadow(kg, &state->shadow, render_buffer);
+          integrator_shade_shadow(kg, &state->shadow, render_buffer, nullptr, nullptr); // TODO(Tri): handle CPU reservoir buffers
           continue;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
           integrator_shade_light_nee(kg, &state->shadow, render_buffer);
@@ -56,10 +56,10 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
     if (ao_queued_kernel) {
       switch (ao_queued_kernel) {
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW:
-          integrator_intersect_shadow(kg, &state->ao);
+          integrator_intersect_shadow(kg, &state->ao, nullptr); // TODO(Tri): handle CPU reservoir buffers
           break;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-          integrator_shade_shadow(kg, &state->ao, render_buffer);
+          integrator_shade_shadow(kg, &state->ao, render_buffer, nullptr, nullptr); // TODO(Tri): handle CPU reservoir buffers
           break;
         default:
           kernel_assert(0);
@@ -79,7 +79,7 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
           integrator_shade_background(kg, state, render_buffer);
           break;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE:
-          integrator_shade_surface(kg, state, render_buffer, nullptr, nullptr); // TODO(Tri): implement CPU reservoir buffers
+          integrator_shade_surface(kg, state, render_buffer, nullptr, nullptr); // TODO(Tri): handle CPU reservoir buffers
           break;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME:
           integrator_shade_volume(kg, state, render_buffer);

@@ -9,6 +9,7 @@
 
 #include "kernel/bvh/bvh.h"
 
+#include "kernel/integrator/restir.h"
 #include "kernel/integrator/state.h"
 #include "kernel/integrator/state_flow.h"
 #include "kernel/integrator/state_util.h"
@@ -28,6 +29,7 @@ ccl_device_forceinline uint integrate_intersect_shadow_visibility(ConstIntegrato
   return visibility;
 }
 
+// !!!
 ccl_device bool integrate_intersect_shadow_opaque(KernelGlobals kg,
                                                   IntegratorShadowState state,
                                                   const ccl_private Ray *ray,
@@ -147,7 +149,9 @@ ccl_device bool integrate_intersect_shadow_transparent(KernelGlobals kg,
 }
 #endif
 
-ccl_device void integrator_intersect_shadow(KernelGlobals kg, IntegratorShadowState state)
+ccl_device void integrator_intersect_shadow(KernelGlobals kg, 
+                                            IntegratorShadowState state,
+                                            ccl_global ReSTIRReservoir *restir_reservoirs)
 {
   PROFILING_INIT(kg, PROFILING_INTERSECT_SHADOW);
 
@@ -169,6 +173,9 @@ ccl_device void integrator_intersect_shadow(KernelGlobals kg, IntegratorShadowSt
 #endif
 
   if (opaque_hit) {
+  #ifdef __RESTIR_DI__
+    restir_di_shadow_set_visible(state, restir_reservoirs, false);
+  #endif
     /* Hit an opaque surface, shadow path ends here. */
     integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW);
     return;

@@ -29,6 +29,8 @@ KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, volume_bounds_bounce, KERNEL_FEATURE
 KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, portal_bounce, KERNEL_FEATURE_NODE_PORTAL)
 /* DeviceKernel bit indicating queued kernels. */
 KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, queued_kernel, KERNEL_FEATURE_PATH_TRACING)
+/* True when this shadow ray tests visibility for a ReSTIR DI selected light sample. */
+KERNEL_STRUCT_MEMBER(shadow_path, uint8_t, restir_di, KERNEL_FEATURE_PATH_TRACING)
 /* enum PathRayVisibilityFlag, limited to bits from PATH_RAY_VISIBILITY_ALL  */
 KERNEL_STRUCT_MEMBER(shadow_path, uint8_t, visibility, KERNEL_FEATURE_PATH_TRACING)
 /* enum PathRayFlag */

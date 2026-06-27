@@ -20,7 +20,7 @@ ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
 
   r.W = 0.0f;
   r.M = 0;
-  r.visible = true; // necessarily optimistic here; visibility is known only after the shadow ray. Later
+  r.visible = false; // this used to be true; Old comment: necessarily optimistic here; visibility is known only after the shadow ray. Later
 
   return r;
 }
@@ -30,10 +30,10 @@ ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
 struct ReSTIRRisState {
     LightSample light;
 
-    float weight_sum;       // Sum of (target/source); only exists while streaming candidates.
+    float weight_sum;           // Sum of (target/source); only exists while streaming candidates.
     float selected_target_pdf;  // selected RIS weight (target)
 
-    uint M;                 // Sample count
+    uint M;                     // Sample count
 };
 
 ccl_device_inline ReSTIRRisState restir_ris_empty()
@@ -55,13 +55,27 @@ ccl_device_inline void restir_streaming_resample_step(
     const float source_pdf,
     const float random)
 {
+  // restir_streaming_resample_step(&ris, &candidate, target, source, random);
   // candidate weights
   if (source_pdf <= 0.0f || target_pdf <= 0.0f) {
     ris->M++;
     return;
   }
 
+  // NaN / Inf
+  if (!(isfinite(source_pdf) && source_pdf > 0.0f &&
+        isfinite(target_pdf) && target_pdf > 0.0f)) {
+    ris->M++;
+    return;
+  }
+
   const float sample_weight = target_pdf / source_pdf;
+
+  // See if necessary!
+  if (!(isfinite(sample_weight) && sample_weight > 0.0f)) {
+    ris->M++;
+    return;
+  }
 
   ris->weight_sum += sample_weight;
   ris->M++;
@@ -72,27 +86,69 @@ ccl_device_inline void restir_streaming_resample_step(
   }
 }
 
-/* Matches Falcor: toReservoir() logic and Finalize weight calculation */
-ccl_device_inline ReSTIRReservoir restir_finalize(
+// /* Matches Falcor: toReservoir() logic and Finalize weight calculation */
+// ccl_device_inline ReSTIRReservoir restir_finalize(
+//     const ccl_private ReSTIRRisState *ris)
+// {
+//   ReSTIRReservoir reservoir;
+
+//   reservoir.light = ris->light;
+//   reservoir.M = ris->M;
+//   reservoir.visible = true;
+
+//   /* Falcor InitialResampling.cs.slang: 
+//    * risState.weight = risState.weight > 0.f ? (risState.weightSum / risState.M) / risState.weight : 0.f; */
+//   if (ris->selected_target_pdf > 0.0f && ris->M > 0)
+//   {
+//     reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
+//   }
+//   else {
+//     reservoir.W = 0.0f;
+//   }
+
+//   return reservoir;
+// }
+ccl_device_inline ReSTIRReservoir restir_finalize( // !!!: Migth be unnecessary
     const ccl_private ReSTIRRisState *ris)
 {
-  ReSTIRReservoir reservoir;
+  ReSTIRReservoir reservoir = restir_reservoir_empty();
+
+  if (ris->selected_target_pdf <= 0.0f || ris->M == 0) {
+    return reservoir;
+  }
 
   reservoir.light = ris->light;
   reservoir.M = ris->M;
   reservoir.visible = true;
+  reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
 
-  /* Falcor InitialResampling.cs.slang: 
-   * risState.weight = risState.weight > 0.f ? (risState.weightSum / risState.M) / risState.weight : 0.f; */
-  if (ris->selected_target_pdf > 0.0f && ris->M > 0)
-  {
-    reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
-  }
-  else {
-    reservoir.W = 0.0f;
+  if (!(isfinite(reservoir.W) && reservoir.W > 0.0f)) {
+    return restir_reservoir_empty();
   }
 
   return reservoir;
+}
+
+ccl_device_inline void restir_di_shadow_set_visible(IntegratorShadowState state, // New
+                                                    ccl_global ReSTIRReservoir *restir_reservoirs,
+                                                    const bool visible)
+{
+#ifdef __RESTIR_DI__
+  if (restir_reservoirs == nullptr) {
+    return;
+  }
+
+  if (INTEGRATOR_STATE(state, shadow_path, restir_di) == 0) {
+    return;
+  }
+
+  const uint pixel_index = INTEGRATOR_STATE(state, shadow_path, render_pixel_index);
+  restir_reservoirs[pixel_index].visible = visible;
+#else
+  (void)state;
+  (void)restir_reservoirs;
+  (void)visible;
+#endif
 }
 
 // TODO: Should become the kernel?:
@@ -108,7 +164,7 @@ ccl_device void integrator_restir_test(KernelGlobals kg,
 
 ccl_device_inline bool restir_reservoir_is_valid(const ccl_private ReSTIRReservoir *r) // New
 {
-  return r->M > 0 && r->W > 0.0f && r->visible;
+  return r->M > 0 && r->W > 0.0f && r->visible; // rejects invisible reservoirs
 }
 
 // This is the math that actually chooses which light to keep (streamingResampleStep).

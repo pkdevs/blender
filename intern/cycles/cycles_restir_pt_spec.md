@@ -17,14 +17,17 @@ Phase A:
 [x] Remove redundant classic NEE sampling in ReSTIR mode
 [x] Add GPU per-pixel reservoir buffers and surface-shading kernel plumbing
 [x] Add first-hit reservoir write-back for temporal reuse
-[ ] Prepare visibility-aware validation hook
+[x] Prepare visibility-aware validation hook
 
 Phase B:
 [x] Initial temporal reuse merge from previous per-pixel reservoir
 [x] Add current/previous reservoir ping-pong buffers
 [x] Validate temporal reuse effectiveness with debug visualizations
 [ ] Reprojection using motion vectors (Cross-pixel reuse when camera moves)
-[ ] Shadow-visibility-aware temporal validation
+[x] Shadow-visibility-aware temporal validation
+    Note:
+    Current shadow visibility updates are wired for the wavefront ReSTIR DI path.
+    CPU megakernel currently passes null reservoir buffers, so CPU visibility mutation is not yet active.
 
 Phase C:
 Spatial reuse.

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "kernel/integrator/guiding.h"
+#include "kernel/integrator/restir.h"
 #include "kernel/integrator/shade_volume.h"
 #include "kernel/integrator/surface_shader.h"
 #include "kernel/integrator/volume_stack.h"
@@ -79,6 +80,7 @@ ccl_device_inline uint shadow_num_hits_pack(const uint num_hits,
 #endif
 }
 
+// !!!: 
 ccl_device_inline bool shadow_intersections_has_remaining(const uint packed_num_hits)
 {
   return shadow_num_hits_get(packed_num_hits) >= INTEGRATOR_SHADOW_ISECT_SIZE;
@@ -262,22 +264,43 @@ ccl_device_inline TransparentShadowEvalResult integrate_transparent_shadow(
 }
 #endif /* __TRANSPARENT_SHADOWS__ */
 
+// !!!: ReSTIR Visibility should be determined here for transparent shadows
+// TODO: implement the shadow hook: if (shadow_occluded) reservoir.visible = false;
 ccl_device void integrator_shade_shadow(KernelGlobals kg,
                                         IntegratorShadowState state,
-                                        ccl_global float *ccl_restrict render_buffer)
+                                        ccl_global float *ccl_restrict render_buffer,
+                                        ccl_global ReSTIRReservoir *restir_reservoirs,
+                                        ccl_global const ReSTIRReservoir *restir_reservoirs_prev)
 {
   PROFILING_INIT(kg, PROFILING_SHADE_SHADOW_SETUP);
   const uint packed_num_hits = INTEGRATOR_STATE(state, shadow_path, packed_num_hits);
+  // printf("integrator_shade_shadow() successfully ran!\n");
 
 #ifdef __TRANSPARENT_SHADOWS__
   /* Evaluate transparent shadows. */
   const TransparentShadowEvalResult result = integrate_transparent_shadow(
       kg, state, packed_num_hits);
   if (result == TRANSPARENT_SHADOW_EVAL_CACHE_MISS) {
+    printf("integrator_shade_shadow() TRANSPARENT_SHADOW_EVAL_CACHE_MISS!");
     integrator_shadow_path_cache_miss(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;
   }
-  if (result == TRANSPARENT_SHADOW_EVAL_OPAQUE) {
+  if (result == TRANSPARENT_SHADOW_EVAL_OPAQUE) { // occluded branch
+    printf("integrator_shade_shadow() TRANSPARENT_SHADOW_EVAL_OPAQUE!");
+    // Mark path as invisible
+    restir_di_shadow_set_visible(state, restir_reservoirs, false); // only for transparency handling, not for ReSTIR bookkeeping.
+
+    // #ifndef __KERNEL_GPU__ // DEBUG ONLY
+    // if (INTEGRATOR_STATE(state, shadow_path, restir_di)) {
+    //   const uint pixel_index = INTEGRATOR_STATE(state, shadow_path, render_pixel_index);
+    //   const uint sample = INTEGRATOR_STATE(state, shadow_path, sample);
+    //   printf("ReSTIR shadow sample=%u\n", sample);
+    //   if (sample < 8) {
+    //     printf("ReSTIR shadow rejected pixel=%u sample=%u\n", pixel_index, sample);
+    //   }
+    // }
+    // #endif
+
     integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;
   }
@@ -291,6 +314,7 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
   }
 
   guiding_record_direct_light(kg, state);
+  restir_di_shadow_set_visible(state, restir_reservoirs, true);
   film_write_direct_light(kg, state, render_buffer);
   integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
 }

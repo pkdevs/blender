@@ -316,9 +316,6 @@ void PathTraceWorkGPU::alloc_work_memory() // !!!
   alloc_integrator_path_split();
 
 // >>> New
-  // const int2 res = film_->get_render_resolution(); // err: No member named `get_render_resolution` n `ccl:Film`
-  // const int pixel_count = res.x * res.y;
-
   // Allocate per-pixel reservoir buffers for ReSTIR DI. 
   // We use two buffers (current/previous) to allow temporal reuse across frames/samples.
   const int pixel_count = effective_buffer_params_.width * effective_buffer_params_.height;
@@ -427,20 +424,6 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
   }
 
 // >>> New
-  // At the end of each sample iteration, where a sample batch finalizes
-  // swap(restir_reservoirs_, restir_reservoirs_prev_); // New // Err here as well
-
-  // // enqueueing
-  // device_vector<ReSTIRReservoir> &current = restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
-  // device_vector<ReSTIRReservoir> &previous = restir_pingpong_ ? restir_reservoirs_ : restir_reservoirs_prev_;
-  // // pass
-  // device_ptr restir_current = current.device_pointer;
-  // device_ptr restir_prev = previous.device_pointer;
-
-  // restir_pingpong_ = !restir_pingpong_;
-  // device_vector<ReSTIRReservoir> &next_current = restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
-  // next_current.zero_to_device();
-
 
   // Ping-pong the ReSTIR reservoirs: The 'current' buffer from this sample 
   // becomes the 'previous' buffer for the next sample to enable temporal resampling.
@@ -450,9 +433,6 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
   device_vector<ReSTIRReservoir> &next_current = restir_pingpong_ ? 
                                                  restir_reservoirs_prev_ : restir_reservoirs_;
   next_current.zero_to_device();
-
-  // restir_reservoirs_.zero_to_device(); // after swap, the new current buffer should usually be cleared before reuse // !!!: Wrong
-
 // <<<
   if (num_iterations) {
     statistics.occupancy = float(num_busy_accum) / num_iterations / max_num_paths_;

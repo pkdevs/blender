@@ -201,6 +201,7 @@ ccl_device int integrate_surface_ray_portal(KernelGlobals kg,
   return label;
 }
 
+// !!!: where shadow state payload is initialized.
 /* Branch off a shadow path and initialize common part of it.
  * THe common is between the surface shading and configuration of a special shadow ray for the
  * shadow linking. */
@@ -264,6 +265,7 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
       state, path, volume_bounds_bounce);
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, glossy_bounce) = INTEGRATOR_STATE(
       state, path, glossy_bounce);
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, restir_di) = 0; // !!!(Tri):
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, throughput) = throughput;
 
   if ((kernel_data.kernel_features & KERNEL_FEATURE_NODE_PORTAL)) {
@@ -334,13 +336,6 @@ ccl_device
   LightSample ls ccl_optional_struct_init;
   int mnee_vertex_count = 0;  // NOLINT
 
-
-// // #if defined(__KERNEL_GPU__) // !!!: DEBUG ONLY
-//   if (INTEGRATOR_STATE(state, path, bounce) == 0) {
-//     return SHADER_EVAL_EMPTY;
-//   }
-// // #endif
-
 #ifdef __MNEE__
   if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
       (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
@@ -375,6 +370,7 @@ ccl_device
 
   float restir_W = 0.0f;
 
+// TODO(Tri): Wrap in a helper?
 #ifdef __RESTIR_DI__ // ReSTIR is now the only direct light estimator
   const uint candidate_count = 8;
   ReSTIRRisState ris = restir_ris_empty();
@@ -415,6 +411,9 @@ ccl_device
                                           candidate.type != LIGHT_TRIANGLE,
                                           candidate_light_eval);
 
+
+    // TODO(Tri): reject !isfinite(candidate_light_eval) lights
+
     BsdfEval candidate_bsdf_eval ccl_optional_struct_init;
     surface_shader_bsdf_eval(kg,
                              state,
@@ -446,17 +445,15 @@ ccl_device
     restir_streaming_resample_step(&ris, &candidate, target, source, random);
   }
 
-  // DEBUG
+// >>> DEBUG
   kernel_assert(ris.M == candidate_count);
   kernel_assert(isfinite(ris.weight_sum));
   kernel_assert(ris.weight_sum >= 0.0f);
+// <<<
 
   ReSTIRReservoir reservoir = restir_finalize(&ris);
 
-// #ifdef __RESTIR_DI_TEMPORAL__
-  // ccl_global const ReSTIRReservoir *prev_reservoirs = nullptr; // Temporarily disable temporal buffer access, Until the kernel-argument plumbing is done
-
-  reservoir = restir_temporal_reuse( // New
+  reservoir = restir_temporal_reuse( // Temporal reuse stage
       kg,
       state,
       sd,
@@ -464,33 +461,62 @@ ccl_device
       &reservoir,
       // kernel_data_fetch(PathTraceWorkGPU::restir_reservoirs_prev_, 0));
       restir_reservoirs_prev);
-// #endif
 
   // kernel_assert(reservoir.M == candidate_count); // No longer valid after temporal reuse
   kernel_assert(reservoir.M > 0 || reservoir.W == 0.0f);
   kernel_assert(isfinite(reservoir.W));
   kernel_assert(reservoir.W >= 0.0f);
 
-  // // To verify resevoir.light
-  // kernel_assert(reservoir.M == candidate_count);
-  // if (reservoir.W > 0.0f) {
-  //     kernel_assert(reservoir.light.pdf > 0.0f);
+  // if (reservoir.W == 0.0f) {
+  //     return SHADER_EVAL_EMPTY;
   // }
-
-  if (reservoir.W == 0.0f) {
-      return SHADER_EVAL_EMPTY;
-  }
 
   // !!!: NOTE: Visibility is NOT included in target.
   // Shadow test is done after selection.
   // Required before temporal reuse.
 
-// >>> New
-  // Store the selected reservoir after temporal reuse/finalization and before assigning ls; // ???: Move outside?
+
+// // >>> Temporal stage
+
+//   // Store the selected reservoir after temporal reuse/finalization and before assigning ls; // ???: Move outside?
+//   const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+//   // !!!: Only store the reservoir for the first hit (primary visibility).
+//   if (restir_reservoirs != nullptr && bounce == 0) {
+//     restir_reservoirs[pixel_index] = reservoir;
+//   }
+// // <<<
+
+// >>> Enhanced temporal stage
+  if (!restir_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) {
+    const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+
+    if (restir_reservoirs != nullptr && bounce == 0) {
+      restir_reservoirs[pixel_index] = restir_reservoir_empty();
+    }
+
+//     // DEBUG ONLY
+// #ifndef __KERNEL_GPU__
+//     const uint sample = INTEGRATOR_STATE(state, path, sample);
+
+//     if ((!restir_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) && sample < 3) {
+//       printf("ReSTIR rejected pixel=%u sample=%u M=%u W=%f visible=%d pdf=%f\n",
+//             pixel_index,
+//             sample,
+//             reservoir.M,
+//             (double)reservoir.W,
+//             reservoir.visible,
+//             (double)reservoir.light.pdf);
+//     }
+// #endif
+// <<<
+
+    return SHADER_EVAL_EMPTY;
+  }
+
   const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-  // !!!: Only store the reservoir for the first hit (primary visibility).
-  if (restir_reservoirs != nullptr && bounce == 0) {
-    restir_reservoirs[pixel_index] = reservoir;
+  // if (restir_reservoirs != nullptr && bounce == 0) {
+  if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) { // storage and shadow validation are matched
+  restir_reservoirs[pixel_index] = reservoir;
   }
 // <<<
 
@@ -604,6 +630,15 @@ ccl_device
       ls.group,
       mnee_vertex_count,
       is_constant_light_shader);
+
+#ifdef __RESTIR_DI__ // Shadow ray visibility
+// !!!: MNEE path should not be allowed to mutate the normal per-pixel ReSTIR reservoir unless 
+// TODO(Tri): ReSTIR+MNEE is explicitly supported
+// TODO(Tri): exclude AO/shadow catcher paths ...
+  if (bounce == 0 && mnee_vertex_count == 0) {
+    INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, restir_di) = 1;
+  }
+#endif
 
   if (is_transmission) {
 #ifdef __VOLUME__

@@ -549,7 +549,7 @@ struct ReSTIRReservoir {
 
     float W;        // Final Probabilistic reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_target_pdf;
     uint M;
-    bool visible;   // To rejected occuluded paths // New // TODO(Tri): Change to uint for safety?
+    bool visible;   // To rejected occuluded paths // TODO(Tri): Change to uint for safety?
 };
 
 /* Guiding Distribution Type */
