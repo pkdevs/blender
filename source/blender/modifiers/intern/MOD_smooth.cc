@@ -238,12 +238,10 @@ static void smoothModifier_do(SmoothModifierData *smd,
     }
     case MOD_SMOOTH_METHOD_TAUBIN: {
       for (int j = 0; j < smd->repeat; j++) {
-        gather_avg_pass(
-            edges, vert_to_edge_map, vertexCos, weights_span, false, accumulated_vecs);
+        gather_avg_pass(edges, vert_to_edge_map, vertexCos, weights_span, false, accumulated_vecs);
         apply_blend(
             vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
-        gather_avg_pass(
-            edges, vert_to_edge_map, vertexCos, weights_span, false, accumulated_vecs);
+        gather_avg_pass(edges, vert_to_edge_map, vertexCos, weights_span, false, accumulated_vecs);
         apply_blend(vertexCos,
                     accumulated_vecs,
                     smd->taubin_mu,
