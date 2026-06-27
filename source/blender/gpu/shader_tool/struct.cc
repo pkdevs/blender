@@ -15,6 +15,7 @@
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
+using namespace shader::parser::ast;
 using namespace metadata;
 
 /* `class` -> `struct` */
@@ -193,6 +194,89 @@ void SourceProcessor::lower_implicit_member(Parser &parser)
   parser.apply_mutations();
 }
 
+/* Make all members of a class to be referenced using `this->`. */
+void SourceProcessor::lower_implicit_member_ast(Parser &parser)
+{
+  parser.root().foreach_recursive<ClassDecl>([&](ClassDecl decl) {
+    if (decl.front() == Enum) {
+      return;
+    }
+
+    vector<Token> members_id;
+    vector<Token> methods_id;
+
+    auto is_class_token = [&](const vector<Token> &members, const string_view id) {
+      for (const Token &member : members) {
+        if (id == member.str()) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    auto check_shadowing = [&](Declarator var_decl) {
+      if (is_class_token(members_id, var_decl.identifier().str())) {
+        report_error(var_decl, "Class member shadowing.");
+      }
+    };
+
+    decl.body().foreach<VarDecl>([&](VarDecl var) {
+      if (var.type().str() != "ShaderCreateInfo") {
+        /* Do not match legacy infos in order to allow resource getter to work. */
+        return;
+      }
+      var.foreach<Declarator>(
+          [&](Declarator var_decl) { members_id.emplace_back(var_decl.identifier().front()); });
+    });
+
+    decl.body().foreach<FuncDecl>([&](FuncDecl func) {
+      if (func.is_static()) {
+        return;
+      }
+      func.arguments().foreach_recursive<Declarator>(
+          [&](Declarator var_decl) { check_shadowing(var_decl); });
+      func.body().foreach_recursive<Declarator>(
+          [&](Declarator var_decl) { check_shadowing(var_decl); });
+
+      methods_id.emplace_back(func.identifier().name().front());
+    });
+
+    decl.body().foreach<FuncDecl>([&](FuncDecl func) {
+      if (func.is_static()) {
+        return;
+      }
+
+      /* Function calls. */
+      func.body().foreach<FuncCall>([&](FuncCall call) {
+        IdQualified id = call.identifier();
+        /* Reject namespace qualified symbols. */
+        if (id.has_namespace() || call.front().prev() == '.' || OpDeref(call.prev()).is_valid()) {
+          return;
+        }
+        if (!is_class_token(methods_id, call.identifier().name().str())) {
+          return;
+        }
+        parser.insert_before(call.front(), "this->");
+      });
+
+      /* Members variables. */
+      func.body().foreach<LocalVar>([&](LocalVar var) {
+        IdQualified id = var.identifier();
+        /* Reject namespace qualified symbols. */
+        if (id.has_namespace() || var.front().prev() == '.' || OpDeref(var.prev()).is_valid()) {
+          return;
+        }
+        if (!is_class_token(methods_id, var.identifier().name().str())) {
+          return;
+        }
+        parser.insert_before(var.front(), "this->");
+      });
+    });
+  });
+
+  parser.apply_mutations();
+}
+
 /* Move all method definition outside of struct definition blocks. */
 void SourceProcessor::lower_method_definitions(Parser &parser)
 {
@@ -215,7 +299,7 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
   });
 
   parser().foreach_match("cAA(..)c?{..}", [&](const Tokens &toks) {
-    if (toks[0].prev() == Const) {
+    if (toks[0].prev() == TokenType::Const) {
       report_error(toks[0],
                    "function return type is marked `const` but it makes no sense for values "
                    "and returning reference is not supported");

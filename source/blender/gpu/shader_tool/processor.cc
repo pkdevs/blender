@@ -241,28 +241,27 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     parse_includes(parser);
     parse_defines(parser);
 
+    parser.only_apply_mutations();
     parser.language = Language::BSL;
-    parser.apply_mutations();
+    parser.parse(error_handler);
 
-    parse_library_functions(parser);
-    lower_preprocessor(parser);
+    parse_library_functions_ast(parser);
+    lower_preprocessor_ast(parser);
 
     /* Lower high level parsing complexity.
      * Merge tokens that can be combined together,
      * remove the token that are unsupported or that are noop.
      * All these steps should be independent. */
-    // lower_namesless_parameters(parser);
-    // lower_attribute_sequences(parser);
-    // lower_strings_sequences(parser);
-    // lower_swizzle_methods(parser);
-    // lower_binary_literals(parser);
-    // lower_classes(parser);
-    // lower_noop_keywords(parser);
-    // lower_trailing_comma_in_list(parser);
-    // lower_comma_separated_declarations(parser);
-    // lower_assert(parser, filename);
+    lower_namesless_parameters_ast(parser);
+    lower_attribute_sequences_ast(parser);
+    lower_strings_sequences(parser);
+    lower_swizzle_methods_ast(parser);
+    lower_binary_literals(parser);
+    lower_noop_keywords_ast(parser);
+    lower_trailing_comma_in_list_ast(parser);
+    lower_assert_ast(parser, filename);
     /* Lower implicit members before we remove SRT member from their struct. */
-    // lower_implicit_member(parser);
+    lower_implicit_member(parser);
 
     parser.apply_mutations();
 
@@ -850,6 +849,27 @@ void SourceProcessor::lower_preprocessor(Parser &parser)
   parser.apply_mutations();
 }
 
+void SourceProcessor::lower_preprocessor_ast(Parser &parser)
+{
+  /* Remove unsupported directives. */
+  parser.root().foreach_recursive<Preprocessor>([&](Preprocessor directive) {
+    Token type = directive.front().next();
+    if (type.str() == "pragma") {
+      Token pragma = type.next();
+      if (pragma.str() == "once") {
+        parser.erase(directive);
+      }
+      else if (pragma.str() == "runtime_generated") {
+        parser.erase(directive);
+      }
+    }
+    else if (type.str() == "include" && type.next() == String) {
+      parser.erase(directive);
+    }
+  });
+  parser.apply_mutations();
+}
+
 /* Support for BLI swizzle syntax. */
 void SourceProcessor::lower_swizzle_methods(Parser &parser)
 {
@@ -984,6 +1004,46 @@ void SourceProcessor::parse_library_functions(Parser &parser)
 
         metadata_.functions.emplace_back(fn);
       });
+}
+
+void SourceProcessor::parse_library_functions_ast(Parser &parser)
+{
+  using namespace metadata;
+  parser.root().foreach<FuncDecl>([&](FuncDecl func) {
+    if (!func.attributes().contains_attr("node")) {
+      return;
+    }
+    if (func.return_type().str() != "void") {
+      report_error(func.return_type(), "Expected void return type for node function");
+      return;
+    }
+    if (func.arguments().is_empty()) {
+      report_error(func.identifier(), "Expected at least one argument for node function");
+      return;
+    }
+
+    FunctionFormat fn;
+    fn.name = func.identifier().str();
+
+    func.arguments().foreach<FuncArg>([&](FuncArg arg) {
+      if (arg.declarator().array().is_valid()) {
+        report_error(arg.declarator().array(),
+                     "Array arguments are not supported in node functions.");
+      }
+
+      Type type = Type(hash(string(arg.type().str())));
+      Qualifier qualifier;
+      if (arg.is_reference() && !arg.is_const()) {
+        qualifier = Qualifier(hash("inout"));
+      }
+      else {
+        qualifier = Qualifier(hash("in"));
+      }
+
+      fn.arguments.emplace_back(qualifier, type);
+    });
+    metadata_.functions.emplace_back(fn);
+  });
 }
 
 void SourceProcessor::parse_builtins(const string &str, const string &filename, bool pure_glsl)
@@ -1492,9 +1552,36 @@ void SourceProcessor::lower_noop_keywords(Parser &parser)
   lower_template_dependent_names(parser);
 }
 
+void SourceProcessor::lower_noop_keywords_ast(Parser &parser)
+{
+  /* inline has no equivalent in GLSL and is making parsing more complicated. */
+  parser().foreach_token(Inline, [&](Token tok) { parser.erase(tok); });
+  /* Erase `public:` and `private:` keywords. Access is checked by C++ compilation. */
+  parser.root().foreach_recursive<AccessSpecifier>(
+      [&](AccessSpecifier node) { parser.erase(node); });
+  /* Given our code-style, we don't need the disambiguation. */
+  parser.root().foreach_recursive<TemplateExplicit>(
+      [&](TemplateExplicit node) { parser.erase(node.front()); });
+  /* Replace `class` by `struct`. */
+  parser.root().foreach_recursive<ClassDecl>([&](ClassDecl decl) {
+    if (decl.front() == Class) {
+      parser.replace(decl.front(), "struct", true);
+    }
+  });
+}
+
 void SourceProcessor::lower_trailing_comma_in_list(Parser &parser)
 {
   parser().foreach_match(",}", [&](const Tokens &t) { parser.erase(t[0]); });
+}
+
+void SourceProcessor::lower_trailing_comma_in_list_ast(Parser &parser)
+{
+  parser.root().foreach_recursive<InitializerList>([&](InitializerList decl) {
+    if (decl.back().prev() == ',') {
+      parser.erase(decl.back().prev());
+    }
+  });
 }
 
 /* Allow easier parsing of struct member declaration.

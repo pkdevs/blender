@@ -72,7 +72,7 @@ struct BSLParser {
 
   void translation_unit()
   {
-    NODE(Namespace);
+    NODE(LocalScope);
 
     /* Skip first whitespace token if it exists. */
     if (peek() == NewLine || peek() == Space) {
@@ -157,9 +157,12 @@ struct BSLParser {
     NODE(Namespace);
     match(Namespace);
     qualified_id();
-    match('{');
-    external_decl();
-    match('}');
+    {
+      NODE(LocalScope);
+      match('{');
+      external_decl();
+      match('}');
+    }
   }
 
   /* Example : `struct [[a]] A {}`. */
@@ -190,9 +193,12 @@ struct BSLParser {
         return;
       }
     }
-    match('{');
-    members_decl();
-    match('}');
+    {
+      NODE(LocalScope);
+      match('{');
+      members_decl();
+      match('}');
+    }
     match(';');
   }
 
@@ -296,7 +302,7 @@ struct BSLParser {
       qualified_id();
     }
     do {
-      declarator();
+      declarator(false);
     } while (match_if(','));
     /* Check if current token is valid. Otherwise we could be at end of file after the last
      * semicolon. */
@@ -307,7 +313,7 @@ struct BSLParser {
     return valid;
   }
 
-  void declarator()
+  void declarator(bool optional_id_name = true)
   {
     NODE(Declarator);
     bool par = match_if('(');
@@ -316,7 +322,12 @@ struct BSLParser {
       NODE(Reference);
       match('&');
     }
-    unqualified_id_optional();
+    if (optional_id_name) {
+      unqualified_id_optional();
+    }
+    else {
+      unqualified_id();
+    }
 
     if (par) {
       match(')');
@@ -1102,7 +1113,7 @@ struct BSLParser {
       match(':');
       match(':');
     }
-    match(Word);
+    unqualified_id();
     bool ends_with_template = template_parameter_list_optional();
     while (peek() == ':' && peek_next(1) == ':') {
       {
@@ -1221,9 +1232,9 @@ void ParserBase::print_ast() const
   ast::Node(this, 0).print_ast();
 }
 
-ast::Namespace ParserBase::root() const
+ast::LocalScope ParserBase::root() const
 {
-  return ast::Namespace(ast::Node(this, 0));
+  return ast::LocalScope(ast::Node(this, 0));
 }
 
 }  // namespace blender::gpu::shader::parser

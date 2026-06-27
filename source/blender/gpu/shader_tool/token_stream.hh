@@ -103,7 +103,7 @@ struct ParserBase : LexerBase {
   void build_token_to_scope_map();
   void parse_bsl(ErrorHandler &err_handler);
 
-  ast::Namespace root() const;
+  ast::LocalScope root() const;
   void print_ast() const;
 
  private:

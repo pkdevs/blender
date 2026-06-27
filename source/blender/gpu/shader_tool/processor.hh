@@ -63,6 +63,11 @@ class SourceProcessor {
   parser::ErrorHandler error_handler = {
       .default_filename = filepath_.substr(filepath_.find_last_of('/') + 1)};
 
+  void report_error(parser::ast::Node node, const std::string &message)
+  {
+    error_handler.report(node.front(), message);
+  }
+
   void report_error(Token tok, const std::string &message)
   {
     error_handler.report(tok, message);
@@ -152,6 +157,7 @@ class SourceProcessor {
   void parse_pragma_runtime_generated(Parser &parser);
   /** Populate metadata::functions for runtime node-tree compilation. */
   void parse_library_functions(Parser &parser);
+  void parse_library_functions_ast(Parser &parser);
   /* Populate metadata::builtins by scanning source for keywords. Can trigger false positive.
    * This is mostly legacy path as most builtin should be explicitly defined inside the BSL entry
    * points. */
@@ -225,6 +231,7 @@ class SourceProcessor {
   /* Remove preprocessor directives unsupported by target shading languages.
    * Examples `#includes`, `#pragma once`. */
   void lower_preprocessor(Parser &parser);
+  void lower_preprocessor_ast(Parser &parser);
   /* Support for BLI swizzle syntax.
    * Examples `a.xy()` --> `a.xy`. */
   void lower_swizzle_methods(Parser &parser);
@@ -237,10 +244,12 @@ class SourceProcessor {
   void lower_printf(Parser &parser);
   /* Turn assert into a printf. */
   void lower_assert(Parser &parser, const std::string &filename);
+  void lower_assert_ast(Parser &parser, const std::string &filename);
   /* Parse SRT and interfaces, remove their attributes and create init function for SRT structs. */
   void lower_resource_table(Parser &parser);
   /* Examples `string_t s = "a" "b"` --> `string_t s = "ab"`. */
   void lower_strings_sequences(Parser &parser);
+  void lower_strings_sequences_ast(Parser &parser);
   /* Replace string literals by their hash and store the original string in the file metadata. */
   void lower_strings(Parser &parser);
   /* `class` -> `struct` */
@@ -249,6 +258,7 @@ class SourceProcessor {
   void lower_default_constructors(Parser &parser);
   /* Make all members of a class to be referenced using `this->`. */
   void lower_implicit_member(Parser &parser);
+  void lower_implicit_member_ast(Parser &parser);
   /* Move all method definition outside of struct definition blocks. */
   void lower_method_definitions(Parser &parser);
   /* Add padding member to empty structs. */
@@ -279,8 +289,10 @@ class SourceProcessor {
   void lower_host_shared_structures(Parser &parser);
   /* Remove noop keywords that makes subsequent lowering passes more complicated. */
   void lower_noop_keywords(Parser &parser);
+  void lower_noop_keywords_ast(Parser &parser);
   /* Example: `int a[] = {1,2,};` --> `int a[] = {1,2 };` */
   void lower_trailing_comma_in_list(Parser &parser);
+  void lower_trailing_comma_in_list_ast(Parser &parser);
   /* Allow easier parsing of struct member declaration.
    * Example: `int a, b;` --> `int a; int b;` */
   void lower_comma_separated_declarations(Parser &parser);

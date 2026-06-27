@@ -199,7 +199,9 @@ struct Node {
 
   template<typename NodeT, typename CallbackT> void foreach(CallbackT cb) const
   {
-    for (Node node = children(); node.is_valid(); node = node.next(NodeT::NodeEnumVal)) {
+    for (Node node = child_first(NodeT::NodeEnumVal); node.is_valid();
+         node = node.next(NodeT::NodeEnumVal))
+    {
       cb(NodeT(node));
     }
   }
@@ -254,8 +256,7 @@ struct IdQualified : Node {
 
   Id name() const
   {
-    Node node = children().child_last();
-    return Id(node);
+    return child_last();
   }
 };
 
@@ -597,7 +598,15 @@ inline LocalScope FuncDecl::body() const
 struct Namespace : Node {
   NODE_COMMON(Namespace);
 
-  IdType name() const;
+  LocalScope body() const
+  {
+    return child_last();
+  }
+
+  IdQualified identifier() const
+  {
+    return child_first();
+  }
 };
 
 #undef NODE_COMMON
