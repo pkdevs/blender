@@ -22,6 +22,7 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_deform.hh"
+#include "BKE_mesh_mapping.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -107,43 +108,31 @@ static Array<float> compute_edge_cotangent_weights(const Mesh &mesh, const Span<
   return weights;
 }
 
-static void scatter_avg_pass(const Span<int2> edges,
-                             const Span<float3> src,
-                             const Span<float> edge_weights,
-                             const bool use_midpoint,
-                             MutableSpan<float3> dst_avg,
-                             MutableSpan<float> dst_weight_sum)
+static void gather_avg_pass(const Span<int2> edges,
+                            const GroupedSpan<int> vert_to_edge_map,
+                            const Span<float3> src,
+                            const Span<float> edge_weights,
+                            const bool use_midpoint,
+                            MutableSpan<float3> dst_avg)
 {
-  dst_avg.fill(float3(0.0f));
-  dst_weight_sum.fill(0.0f);
   const bool weighted = !edge_weights.is_empty();
-  for (const int i : edges.index_range()) {
-    const int idx1 = edges[i][0];
-    const int idx2 = edges[i][1];
-    const float w = weighted ? edge_weights[i] : 1.0f;
-    if (w == 0.0f) {
-      continue;
-    }
-    if (use_midpoint) {
-      const float3 mid = (src[idx1] + src[idx2]) * 0.5f;
-      dst_avg[idx1] += w * mid;
-      dst_avg[idx2] += w * mid;
-    }
-    else {
-      dst_avg[idx1] += w * src[idx2];
-      dst_avg[idx2] += w * src[idx1];
-    }
-    dst_weight_sum[idx1] += w;
-    dst_weight_sum[idx2] += w;
-  }
-  threading::parallel_for(src.index_range(), 4096, [&](const IndexRange range) {
+  threading::parallel_for(src.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
-      if (dst_weight_sum[i] > 0.0f) {
-        dst_avg[i] *= 1.0f / dst_weight_sum[i];
+      const Span<int> incident = vert_to_edge_map[i];
+      float3 sum(0.0f);
+      float wsum = 0.0f;
+      for (const int e : incident) {
+        const int2 edge = edges[e];
+        const int other = (edge[0] == i) ? edge[1] : edge[0];
+        const float w = weighted ? edge_weights[e] : 1.0f;
+        if (w == 0.0f) {
+          continue;
+        }
+        const float3 contribution = use_midpoint ? (src[i] + src[other]) * 0.5f : src[other];
+        sum += w * contribution;
+        wsum += w;
       }
-      else {
-        dst_avg[i] = src[i];
-      }
+      dst_avg[i] = (wsum > 0.0f) ? sum * (1.0f / wsum) : src[i];
     }
   });
 }
@@ -184,12 +173,12 @@ static void hc_correction_pass(MutableSpan<float3> p,
                                const Span<float3> q,
                                const Span<float3> orig,
                                const Span<int2> edges,
+                               const GroupedSpan<int> vert_to_edge_map,
                                const Span<float> edge_weights,
                                const float alpha,
                                const float beta,
                                MutableSpan<float3> b,
-                               MutableSpan<float3> b_avg,
-                               MutableSpan<float> b_weight_sum)
+                               MutableSpan<float3> b_avg)
 {
   threading::parallel_for(p.index_range(), 4096, [&](const IndexRange range) {
     for (const int i : range) {
@@ -197,7 +186,7 @@ static void hc_correction_pass(MutableSpan<float3> p,
     }
   });
 
-  scatter_avg_pass(edges, b, edge_weights, false, b_avg, b_weight_sum);
+  gather_avg_pass(edges, vert_to_edge_map, b, edge_weights, false, b_avg);
 
   const float ombeta = 1.0f - beta;
   threading::parallel_for(p.index_range(), 4096, [&](const IndexRange range) {
@@ -218,10 +207,13 @@ static void smoothModifier_do(SmoothModifierData *smd,
 
   const int verts_num = vertexCos.size();
   Array<float3> accumulated_vecs(verts_num);
-  Array<float> accumulated_weights(verts_num);
 
   const bool invert_vgroup = (smd->flag & MOD_SMOOTH_INVERT_VGROUP) != 0;
   const Span<int2> edges = mesh->edges();
+
+  Array<int> v2e_offsets, v2e_indices;
+  const GroupedSpan<int> vert_to_edge_map = bke::mesh::build_vert_to_edge_map(
+      edges, verts_num, v2e_offsets, v2e_indices);
 
   const bool use_cotan = (smd->flag & MOD_SMOOTH_USE_COTAN) &&
                          smd->method != MOD_SMOOTH_METHOD_SIMPLE;
@@ -238,7 +230,7 @@ static void smoothModifier_do(SmoothModifierData *smd,
   switch (smd->method) {
     case MOD_SMOOTH_METHOD_SIMPLE: {
       for (int j = 0; j < smd->repeat; j++) {
-        scatter_avg_pass(edges, vertexCos, {}, true, accumulated_vecs, accumulated_weights);
+        gather_avg_pass(edges, vert_to_edge_map, vertexCos, {}, true, accumulated_vecs);
         apply_blend(
             vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
       }
@@ -246,12 +238,12 @@ static void smoothModifier_do(SmoothModifierData *smd,
     }
     case MOD_SMOOTH_METHOD_TAUBIN: {
       for (int j = 0; j < smd->repeat; j++) {
-        scatter_avg_pass(
-            edges, vertexCos, weights_span, false, accumulated_vecs, accumulated_weights);
+        gather_avg_pass(
+            edges, vert_to_edge_map, vertexCos, weights_span, false, accumulated_vecs);
         apply_blend(
             vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
-        scatter_avg_pass(
-            edges, vertexCos, weights_span, false, accumulated_vecs, accumulated_weights);
+        gather_avg_pass(
+            edges, vert_to_edge_map, vertexCos, weights_span, false, accumulated_vecs);
         apply_blend(vertexCos,
                     accumulated_vecs,
                     smd->taubin_mu,
@@ -266,19 +258,18 @@ static void smoothModifier_do(SmoothModifierData *smd,
       Array<float3> hc_p(vertexCos.as_span());
       Array<float3> hc_b(verts_num);
       Array<float3> hc_b_avg(verts_num);
-      Array<float> hc_b_weight_sum(verts_num);
       for (int j = 0; j < smd->repeat; j++) {
-        scatter_avg_pass(edges, hc_p, weights_span, false, accumulated_vecs, accumulated_weights);
+        gather_avg_pass(edges, vert_to_edge_map, hc_p, weights_span, false, accumulated_vecs);
         hc_correction_pass(accumulated_vecs,
                            hc_p,
                            vertexCos.as_span(),
                            edges,
+                           vert_to_edge_map,
                            weights_span,
                            smd->hc_alpha,
                            smd->hc_beta,
                            hc_b,
-                           hc_b_avg,
-                           hc_b_weight_sum);
+                           hc_b_avg);
         hc_p.as_mutable_span().copy_from(accumulated_vecs);
       }
       apply_blend(vertexCos, hc_p, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
