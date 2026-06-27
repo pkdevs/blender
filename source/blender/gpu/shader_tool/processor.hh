@@ -113,6 +113,7 @@ class SourceProcessor {
   }
 
  private:
+  Result convert_bsl();
   Result convert_info();
   Result convert_glsl();
   Result convert_msl();

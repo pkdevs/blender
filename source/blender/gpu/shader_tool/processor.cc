@@ -222,6 +222,127 @@ SourceProcessor::Result SourceProcessor::convert_bsl_legacy(
   return {str, metadata_, error_handler.err};
 }
 
+SourceProcessor::Result SourceProcessor::convert_bsl()
+{
+  metadata_ = {};
+
+  string str = remove_comments(this->source_);
+
+  Parser parser(error_handler);
+  try {
+    /* Allow CPP grammar until we remove #ifndef GPU_SHADER blocks. */
+    parser.language = Language::CPP;
+    parser.set_str(str);
+
+    disabled_code_mutation(parser);
+    /* Preprocessor directive parsing & linting. */
+    lint_pragma_once(parser, filename);
+    parse_pragma_runtime_generated(parser);
+    parse_includes(parser);
+    parse_defines(parser);
+
+    parser.language = Language::BSL;
+    parser.apply_mutations();
+
+    parse_library_functions(parser);
+    lower_preprocessor(parser);
+
+    /* Lower high level parsing complexity.
+     * Merge tokens that can be combined together,
+     * remove the token that are unsupported or that are noop.
+     * All these steps should be independent. */
+    // lower_namesless_parameters(parser);
+    // lower_attribute_sequences(parser);
+    // lower_strings_sequences(parser);
+    // lower_swizzle_methods(parser);
+    // lower_binary_literals(parser);
+    // lower_classes(parser);
+    // lower_noop_keywords(parser);
+    // lower_trailing_comma_in_list(parser);
+    // lower_comma_separated_declarations(parser);
+    // lower_assert(parser, filename);
+    /* Lower implicit members before we remove SRT member from their struct. */
+    // lower_implicit_member(parser);
+
+    parser.apply_mutations();
+
+    // parse_local_symbols(parser);
+
+    /* Linting phase. Detect valid syntax with invalid usage. */
+    // lint_unbraced_statements(parser);
+    // lint_reserved_tokens(parser);
+    // lint_attributes(parser);
+    // lint_global_scope_constants(parser);
+    // lint_constructors(parser);
+    // lint_forward_declared_structs(parser);
+
+    /* All mutations that needs to also be applied on template definitions. */
+    // lower_pre_template(parser);
+    /* Lower templates. */
+    // lower_templates(parser);
+    /* Lower unions and then lint shared structures. */
+    // lower_unions(parser);
+    // lower_host_shared_structures(parser);
+    /* Lower enums. */
+    // lower_enums(parser);
+    /* Lower SRT and Interfaces. */
+    // lower_entry_points(parser);
+    // lower_pipeline_definition(parser, filename);
+    // lower_resource_table(parser);
+    // lower_resource_access_functions(parser);
+    /* Lower class methods. */
+    // lower_default_constructors(parser);
+    // lower_function_default_arguments(parser);
+    // lower_method_definitions(parser);
+    // lower_method_calls(parser);
+    // lower_empty_struct(parser);
+    /* Lower SRT accesses. */
+    // lower_srt_member_access(parser);
+    // lower_srt_arguments(parser);
+    // lower_entry_points_signature(parser);
+    // lower_stage_function(parser);
+    /* Lower string, assert, printf. */
+    // lower_strings(parser);
+    // lower_printf(parser);
+    /* Lower other C++ constructs. */
+    // lower_implicit_return_types(parser);
+    // lower_initializer_implicit_types(parser);
+    // lower_designated_initializers(parser);
+    // lower_aggregate_initializers(parser);
+    // lower_array_initializations(parser);
+    // lower_scope_resolution_operators(parser);
+    // lower_structured_bindings(parser);
+    // lower_tests(parser);
+    /* Lower references. */
+    // lower_reference_arguments(parser);
+    // lower_reference_variables(parser);
+    /* Lower control flow. */
+    // lower_static_branch(parser);
+    /* Unroll last to avoid processing more tokens in other phases. */
+    // lower_loop_unroll(parser);
+
+    parser.language = Language::IL;
+    parser.apply_mutations();
+
+    /* GLSL syntax compatibility.
+     * TODO(fclem): Remove. */
+    // lower_argument_qualifiers(parser);
+    // lower_gather_component(parser);
+
+    /* Cleanup to make output more human readable and smaller for runtime. */
+    cleanup_whitespace(parser);
+    cleanup_empty_lines(parser);
+    cleanup_line_directives(parser);
+  }
+  catch (ParserException &e) {
+    /* Output the current source state for inspection. */
+    return {parser.result_get(), metadata_, error_handler.err};
+  }
+
+  str = line_directive_prefix(filename) + str;
+  return {str, metadata_, error_handler.err};
+}
+
 SourceProcessor::Result SourceProcessor::convert_info()
 {
   metadata_ = {};
@@ -268,6 +389,7 @@ SourceProcessor::Result SourceProcessor::convert(metadata::Source external_sourc
       return convert_info();
     case Language::CPP:
     case Language::BSL:
+      // return convert_bsl(); /* WIP */
     case Language::BLENDER_GLSL:
       return convert_bsl_legacy(external_sources_symbols);
     case Language::MSL:
