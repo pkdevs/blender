@@ -4389,21 +4389,29 @@ static void rna_def_modifier_smooth(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, nullptr, "taubin_mu");
   RNA_def_property_range(prop, -1.0f, 0.0f);
   RNA_def_property_ui_range(prop, -1.0f, 0.0f, 0.01f, 3);
-  RNA_def_property_ui_text(prop, "Mu", "Negative second-pass factor that counters shrinkage");
+  RNA_def_property_ui_text(
+      prop,
+      "Shrinkage Compensation",
+      "Negative second-pass factor (Mu) that counters the shrinkage caused by the smoothing pass");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "hc_alpha", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, nullptr, "hc_alpha");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.01f, 3);
-  RNA_def_property_ui_text(prop, "Alpha", "Pull-back bias toward the original positions");
+  RNA_def_property_ui_text(
+      prop,
+      "Original Bias",
+      "Bias of the per-vertex pull-back toward the original positions (Alpha); 0 pulls toward "
+      "the previous iteration, 1 pulls toward the original mesh");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "hc_beta", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, nullptr, "hc_beta");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.01f, 3);
-  RNA_def_property_ui_text(prop, "Beta", "Pull-back strength");
+  RNA_def_property_ui_text(
+      prop, "Pull-back Strength", "Strength of the volume-preserving pull-back correction (Beta)");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "use_cotangent_weights", PROP_BOOLEAN, PROP_NONE);
