@@ -7,6 +7,7 @@
  */
 
 #include "ast.hh"
+#include "symbol.hh"
 #include "token.hh"
 
 namespace blender::gpu::shader::parser::ast {
@@ -53,9 +54,25 @@ Node Node::parent() const
   return is_valid() ? Node{p, p->ast_nodes[id].parent} : Node{};
 }
 
+Node Node::parent(NodeType type) const
+{
+  Node node = *this;
+  do {
+    node = node.parent();
+  } while (node.is_valid() && node.type() != type);
+  return node;
+}
+
 Node Node::children() const
 {
   return is_valid() ? Node{p, p->ast_nodes[id].child_first} : Node{};
+}
+
+int Node::child_count() const
+{
+  int count = 0;
+  foreach_child([&](Node) { count++; });
+  return count;
 }
 
 Node Node::child_first() const
@@ -80,12 +97,12 @@ bool Node::is_empty() const
 
 Token Node::front() const
 {
-  return (*p)[p->ast_nodes[id].front];
+  return is_valid() ? (*p)[p->ast_nodes[id].front] : Token::invalid(p);
 }
 
 Token Node::back() const
 {
-  return (*p)[p->ast_nodes[id].back];
+  return is_valid() ? (*p)[p->ast_nodes[id].back] : Token::invalid(p);
 }
 
 std::string_view Node::str() const
@@ -96,6 +113,21 @@ std::string_view Node::str() const
 bool FuncParamList::is_empty() const
 {
   return back().index_ - front().index_ == 1;
+}
+
+bool ClassDecl::is_enum() const
+{
+  return front() == Enum;
+}
+
+bool ClassDecl::is_enum_class() const
+{
+  return front().next() == Class;
+}
+
+bool ClassDecl::is_union() const
+{
+  return front() == Union;
 }
 
 IdQualified ClassDecl::identifier() const
@@ -109,6 +141,17 @@ IdQualified ClassDecl::parent_class() const
   Node node = body().prev();
   return IdQualified(node.front().prev() == Colon ? node : Node{});
 }
+
+bool UsingStmt::is_namespace() const
+{
+  return front().next() == TokenType::Namespace;
+}
+
+bool IdType::is_constexpr() const
+{
+  return is_const() && constant().front() == Constexpr;
+}
+
 static std::string to_string(ast::NodeType type);
 static bool display_type(ast::NodeType type);
 
@@ -253,6 +296,10 @@ static std::string to_string(ast::NodeType type)
       return "TemplateArg";
     case ast::NodeType::ReturnStmt:
       return "ReturnStmt";
+    case ast::NodeType::ContinueStmt:
+      return "ContinueStmt";
+    case ast::NodeType::BreakStmt:
+      return "BreakStmt";
     case ast::NodeType::UsingStmt:
       return "UsingStmt";
     case ast::NodeType::FuncForwardDecl:
@@ -263,8 +310,8 @@ static std::string to_string(ast::NodeType type)
       return "FuncCall";
     case ast::NodeType::LocalVar:
       return "LocalVar";
-    case ast::NodeType::Switch:
-      return "Switch";
+    case ast::NodeType::SwitchStmt:
+      return "SwitchStmt";
     case ast::NodeType::SwitchCase:
       return "SwitchCase";
     case ast::NodeType::ForLoop:
@@ -301,6 +348,8 @@ static std::string to_string(ast::NodeType type)
       return "TemplateExplicit";
     case ast::NodeType::Declarator:
       return "Declarator";
+    case ast::NodeType::ExprSub:
+      return "ExprSub";
   }
   return "Error";
 }
@@ -376,6 +425,10 @@ static bool display_type(ast::NodeType type)
       return false;
     case ast::NodeType::ReturnStmt:
       return false;
+    case ast::NodeType::ContinueStmt:
+      return false;
+    case ast::NodeType::BreakStmt:
+      return false;
     case ast::NodeType::UsingStmt:
       return false;
     case ast::NodeType::FuncForwardDecl:
@@ -386,7 +439,7 @@ static bool display_type(ast::NodeType type)
       return false;
     case ast::NodeType::LocalVar:
       return false;
-    case ast::NodeType::Switch:
+    case ast::NodeType::SwitchStmt:
       return false;
     case ast::NodeType::SwitchCase:
       return false;
@@ -421,6 +474,8 @@ static bool display_type(ast::NodeType type)
     case ast::NodeType::Constructor:
       return false;
     case ast::NodeType::Declarator:
+      return false;
+    case ast::NodeType::ExprSub:
       return false;
   }
   return false;

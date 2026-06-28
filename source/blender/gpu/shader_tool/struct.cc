@@ -277,8 +277,7 @@ void SourceProcessor::lower_implicit_member_ast(Parser &parser)
   parser.apply_mutations();
 }
 
-/* Move all method definition outside of struct definition blocks. */
-void SourceProcessor::lower_method_definitions(Parser &parser)
+void SourceProcessor::lower_this_keyword(Parser &parser)
 {
   /* NOTE: We need to avoid the case of `a * this->b` being replaced as 2 dereferences. */
 
@@ -288,7 +287,12 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
   parser().foreach_match("*T;", [&](const Tokens &t) { parser.replace(t[0], t[1], "this_"); });
   /* `this->` -> `this_.` */
   parser().foreach_match("T->", [&](const Tokens &t) { parser.replace(t[0], t[2], "this_."); });
+}
 
+/* Move all method definition outside of struct definition blocks. */
+void SourceProcessor::lower_method_definitions(Parser &parser)
+{
+  lower_this_keyword(parser);
   parser.apply_mutations();
 
   parser().foreach_match("sA:", [&](const Tokens &toks) {

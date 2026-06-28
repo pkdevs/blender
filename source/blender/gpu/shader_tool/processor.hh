@@ -10,6 +10,9 @@
 
 #include "intermediate.hh"
 #include "metadata.hh"
+#include "symbol.hh"
+
+#include <map>
 
 namespace blender::gpu::shader {
 
@@ -57,6 +60,8 @@ class SourceProcessor {
   const std::string filepath_;
   const std::string filename;
   metadata::Source metadata_;
+  /* List of file that can be used in include directives. */
+  const std::vector<std::string> file_list_;
 
   Language language_;
 
@@ -78,11 +83,34 @@ class SourceProcessor {
     error_handler.report(row, column, line, message);
   }
 
+  struct SourceManager {
+   private:
+    std::vector<std::unique_ptr<Parser>> parsers_;
+
+    int include_id_ = 0;
+
+   public:
+    Parser &new_source(ErrorHandler &error_handler)
+    {
+      return *parsers_.emplace_back(std::make_unique<Parser>(error_handler));
+    }
+
+    /* To be called after all own include of a file have been processed. */
+    int include_id_get()
+    {
+      return include_id_++;
+    }
+  };
+
  public:
-  SourceProcessor(const std::string &source, const std::string &filepath, Language language)
+  SourceProcessor(const std::string &source,
+                  const std::string &filepath,
+                  Language language,
+                  const std::vector<std::string> &file_list)
       : source_(source),
         filepath_(filepath),
         filename(filepath_.substr(filepath_.find_last_of('/') + 1)),
+        file_list_(file_list),
         language_(language)
   {
   }
@@ -102,6 +130,9 @@ class SourceProcessor {
 
   /* Lightweight parsing. Only Source::dependencies and Source::symbol_table are populated. */
   metadata::Source parse_include_and_symbols();
+  metadata::Source parse_include_and_symbols(SourceManager &sources,
+                                             parser::SymbolTable &symbols,
+                                             std::vector<std::string> &visited_files);
 
   /* Return the input string with comments removed. */
   std::string remove_comments()
@@ -168,6 +199,10 @@ class SourceProcessor {
   std::string threadgroup_variables_parse_and_remove(const std::string &str);
   void threadgroup_variables_parse_and_remove(Parser &parser);
 
+  void scan_external_symbols(SourceManager &sources,
+                             parser::SymbolTable &symbols,
+                             std::vector<std::string> &visited_files);
+
   /* --- Linting --- */
 
   /* Make sure `if`, `else`, `for` statements are followed by braces. */
@@ -176,8 +211,10 @@ class SourceProcessor {
   void lint_reserved_tokens(Parser &parser);
   /* Lint for valid BSL attributes. */
   void lint_attributes(Parser &parser);
+  void lint_attributes_ast(Parser &parser);
   /* Assume formatted source with our code style. Cannot be applied to python shaders. */
   void lint_global_scope_constants(Parser &parser);
+  void lint_global_scope_constants_ast(Parser &parser);
   /* Search for constructor definition in active code. These are not supported. */
   void lint_constructors(Parser &parser);
   /* Forward declaration of types are not supported and makes no sense in a shader program where
@@ -200,7 +237,9 @@ class SourceProcessor {
    * substitution. */
   void lower_templates(Parser &parser);
   void lower_template_calls(Parser &parser);
+  void lower_template_calls_ast(Parser &parser);
   void lower_template_specialization(Parser &parser);
+  void lower_template_specialization_ast(Parser &parser);
   /* Ensures pragma once is present in headers to comply to our include semantic. */
   void lint_pragma_once(Parser &parser, const std::string &filename);
   /* Unroll loops by copy pasting content. */
@@ -209,6 +248,10 @@ class SourceProcessor {
   void lower_static_branch(Parser &parser);
   /* Lower namespaces by adding namespace prefix to all the contained structs and functions. */
   void lower_namespaces(Parser &parser);
+  void lower_namespaces_ast(Parser &parser, parser::SymbolTable &symbols);
+  /* Lower namespaces by adding namespace prefix to all the contained structs and functions.
+   * Also mangle template parameters. */
+  void lower_namespaces_and_explicit_templates(Parser &parser);
   /**
    * Needs to run before namespace mutation so that `using` have more precedence.
    * Otherwise the following would fail.
@@ -261,6 +304,7 @@ class SourceProcessor {
   void lower_implicit_member_ast(Parser &parser);
   /* Move all method definition outside of struct definition blocks. */
   void lower_method_definitions(Parser &parser);
+  void lower_this_keyword(Parser &parser);
   /* Add padding member to empty structs. */
   void lower_empty_struct(Parser &parser);
   /* Transform `a.fn(b)` into `fn(a, b)`. */
@@ -327,6 +371,7 @@ class SourceProcessor {
    * Need to run before lower_unions.
    */
   void lower_union_accessor_templates(Parser &parser);
+  void lower_union_accessor_templates_ast(Parser &parser);
   /**
    * For safety reason, nested resource tables need to be declared with the srt_t template.
    * This avoid chained member access which isn't well defined with the preprocessing we are doing.
@@ -337,6 +382,7 @@ class SourceProcessor {
    * Need to run before lower_resource_table.
    */
   void lower_srt_accessor_templates(Parser &parser);
+  void lower_srt_accessor_templates_ast(Parser &parser);
   /* Add `srt_access` around all member access of SRT variables.
    * Need to run before local reference mutations. */
   void lower_srt_member_access(Parser &parser);
@@ -384,6 +430,11 @@ class SourceProcessor {
                                  const Token method_end);
 
   void lower_pre_template(Parser &parser);
+  void lower_pre_template_ast(Parser &parser, parser::SymbolTable &symbols);
+
+  void instantiate_recursive(Parser &parser,
+                             parser::SymbolScope &current_scope,
+                             std::map<parser::NodeID, std::string> &output);
 
   void lower_template_instantiation(
       Parser &parser,
@@ -417,8 +468,12 @@ class SourceProcessor {
   /** Remove trailing white-spaces. */
   static std::string strip_whitespace(const std::string &str);
 
-  /* Example: `VertOut<float, 1>` > `VertOutTfloatT1` */
+  /* Example: `<float, 1>` > `TfloatT1` */
   static std::string template_arguments_mangle(const Scope template_args);
+  static std::string template_arguments_mangle_ast(
+      const parser::ast::TemplateParamList template_args);
+
+  static std::string namespace_mangle_ast(const parser::ast::IdQualified id);
 
   /* Create placeholder for GLSL declarations generated by the GPU backends (VK/GL). */
   static std::string get_create_info_placeholder(const std::string &name);

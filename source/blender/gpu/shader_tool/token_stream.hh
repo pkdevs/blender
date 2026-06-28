@@ -79,6 +79,8 @@ struct ScopeLinks {
  * Also creates mapping table from token to scope to have bi-directional mapping.
  */
 struct ParserBase : LexerBase {
+  /* Used to order tokens from different included file. */
+  int include_id = 0;
 
   /** Compact visualization of scope_types.  */
   std::string_view scope_types_str;

@@ -10,6 +10,8 @@
 #include "metadata.hh"
 #include "processor.hh"
 
+#include <unordered_set>
+
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
@@ -164,6 +166,136 @@ void SourceProcessor::lint_attributes(Parser &parser)
     }
   });
   parser.apply_mutations();
+}
+
+void SourceProcessor::lint_attributes_ast(Parser &parser)
+{
+  struct ArgCount {
+    int start, size;
+
+    int last() const
+    {
+      return start + size - 1;
+    }
+  };
+
+  unordered_map<string, ArgCount> attr_map = {
+      /* No argument. */
+      {"base_instance", ArgCount(0, 0)},
+      {"clip_control", ArgCount(0, 0)},
+      {"clip_distance", ArgCount(0, 0)},
+      {"compilation_constant", ArgCount(0, 0)},
+      {"compute", ArgCount(0, 0)},
+      {"early_fragment_tests", ArgCount(0, 0)},
+      {"fallthrough", ArgCount(0, 0)},
+      {"flat", ArgCount(0, 0)},
+      {"frag_coord", ArgCount(0, 0)},
+      {"frag_stencil_ref", ArgCount(0, 0)},
+      {"fragment", ArgCount(0, 0)},
+      {"front_facing", ArgCount(0, 0)},
+      {"global_invocation_id", ArgCount(0, 0)},
+      {"host_shared", ArgCount(0, 0)},
+      {"in", ArgCount(0, 0)},
+      {"instance_id", ArgCount(0, 0)},
+      {"instance_index", ArgCount(0, 0)},
+      {"layer", ArgCount(0, 0)},
+      {"legacy_info", ArgCount(0, 0)},
+      {"local_invocation_id", ArgCount(0, 0)},
+      {"local_invocation_index", ArgCount(0, 0)},
+      {"maybe_unused", ArgCount(0, 0)},
+      {"no_perspective", ArgCount(0, 0)},
+      {"node", ArgCount(0, 0)},
+      {"nodiscard", ArgCount(0, 0)},
+      {"num_work_groups", ArgCount(0, 0)},
+      {"out", ArgCount(0, 0)},
+      {"point_coord", ArgCount(0, 0)},
+      {"point_size", ArgCount(0, 0)},
+      {"position", ArgCount(0, 0)},
+      {"push_constant", ArgCount(0, 0)},
+      {"resource_table", ArgCount(0, 0)},
+      {"shared", ArgCount(0, 0)},
+      {"smooth", ArgCount(0, 0)},
+      {"static_branch", ArgCount(0, 0)},
+      {"subpass_in", ArgCount(0, 0)},
+      {"texture_atomic", ArgCount(0, 0)},
+      {"unroll", ArgCount(0, 0)},
+      {"vertex", ArgCount(0, 0)},
+      {"vertex_id", ArgCount(0, 0)},
+      {"viewport_index", ArgCount(0, 0)},
+      {"work_group_id", ArgCount(0, 0)},
+      /* 1 argument. */
+      {"attribute", ArgCount(1, 1)},
+      {"condition", ArgCount(1, 1)},
+      {"frag_color", ArgCount(1, 1)},
+      {"frag_depth", ArgCount(1, 1)},
+      {"frequency", ArgCount(1, 1)},
+      {"unroll_n", ArgCount(1, 1)},
+      {"index", ArgCount(1, 1)},
+      {"metal_max_total_threads_per_threadgroup", ArgCount(1, 1)},
+      {"raster_order_group", ArgCount(1, 1)},
+      {"sampler", ArgCount(1, 1)},
+      {"specialization_constant", ArgCount(1, 1)},
+      {"uniform", ArgCount(1, 1)},
+      /* 2 arguments. */
+      {"storage", ArgCount(2, 1)},
+      {"subpass_input", ArgCount(2, 1)},
+      /* 3 arguments. */
+      {"image", ArgCount(3, 1)},
+      /* 1-3 arguments. */
+      {"local_size", ArgCount(1, 3)},
+  };
+
+  parser.root().foreach<Attr>([&](Attr attr) {
+    FuncParamList param = attr.parameters();
+    string attr_str(attr.identifier().str());
+    if (!attr_map.contains(attr_str)) {
+      report_error(attr, "Unrecognized attribute");
+      return;
+    }
+
+    const auto &param_range = attr_map[string(attr.identifier().str())];
+    if (param_range.size == 0 && param.is_valid()) {
+      report_error(param, "This attribute requires no argument");
+      return;
+    }
+
+    int arg_count = param.child_count();
+    if (param_range.size == 1 && arg_count != param_range.start) {
+      report_error(param,
+                   "This attribute requires " + to_string(param_range.start) + " argument(s)");
+      return;
+    }
+    if (param_range.size != 1 && arg_count < param_range.start && arg_count > param_range.last()) {
+      report_error(param,
+                   "This attribute requires between " + to_string(param_range.start) + " and " +
+                       to_string(param_range.last()) + " argument(s)");
+      return;
+    }
+
+    NodeType parent_type = attr.parent().type();
+
+    if (attr_str == "host_shared" && parent_type != NodeType::ClassDecl) {
+      report_error(attr, "host_shared attribute must be inside a struct or an enum definition");
+      return;
+    }
+
+    NodeType parent_parent_type = attr.parent().parent().type();
+
+    if ((attr_str == "unroll" || attr_str == "unroll_n") &&
+        ((parent_type != NodeType::Condition) || (parent_parent_type != NodeType::ForLoop)))
+    {
+      report_error(attr, "unroll attribute must be declared after a for loop statement");
+      return;
+    }
+
+    if (attr_str == "static_branch" &&
+        ((parent_type != NodeType::Condition) ||
+         (parent_parent_type != NodeType::IfStmt || parent_parent_type != NodeType::ElseIfStmt)))
+    {
+      report_error(attr, "static_branch attribute must be declared after a condition");
+      return;
+    }
+  });
 }
 
 /* Merge attribute scopes. They are equivalent in the C++ standard.

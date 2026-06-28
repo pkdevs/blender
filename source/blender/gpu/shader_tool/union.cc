@@ -15,6 +15,7 @@
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
+using namespace shader::parser::ast;
 using namespace metadata;
 
 void SourceProcessor::lower_unions(Parser &parser)
@@ -455,6 +456,42 @@ void SourceProcessor::lower_union_accessor_templates(Parser &parser)
           });
     });
   });
+  parser.apply_mutations();
+}
+
+/**
+ * For safety reason, union members need to be declared with the union_t template.
+ * This avoid raw member access which we cannot emulate. Instead this forces the use of the `()`
+ * operator for accessing the members of the enum.
+ *
+ * Need to run before lower_unions.
+ */
+void SourceProcessor::lower_union_accessor_templates_ast(Parser &parser)
+{
+  parser.root().foreach_recursive<ClassDecl>([&](ClassDecl decl) {
+    if (decl.front() != Union) {
+      return;
+    }
+    decl.foreach<VarDecl>([&](VarDecl var) {
+      IdType type = var.type();
+      Id name = type.id().name();
+
+      if (name.str() != "union_t") {
+        report_error(
+            name, "All union members must have their type wrapped using the union_t<T> template.");
+        return;
+      }
+
+      /* Remove the template but not the wrapped type. */
+      parser.erase(name);
+      TemplateParamList param = type.id().template_params();
+      if (param.is_valid()) {
+        parser.erase(param.front());
+        parser.erase(param.back());
+      }
+    });
+  });
+
   parser.apply_mutations();
 }
 

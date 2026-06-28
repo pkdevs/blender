@@ -15,6 +15,7 @@
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
+using namespace shader::parser::ast;
 using namespace metadata;
 
 string SourceProcessor::template_arguments_mangle(const Scope template_args)
@@ -31,6 +32,31 @@ string SourceProcessor::template_arguments_mangle(const Scope template_args)
     /* In order to support negative integer literals. Replace minus sign by underscore. */
     replace(str.begin(), str.end(), '-', '_');
     args_concat += 'T' + str;
+  });
+  return args_concat;
+}
+
+string SourceProcessor::template_arguments_mangle_ast(
+    const parser::ast::TemplateParamList template_args)
+{
+  string args_concat;
+  template_args.foreach_child([&](Node node) {
+    args_concat += 'T';
+    if (node.type() == NodeType::NumConst) {
+      if (node.front() == Minus) {
+        /* In order to support negative integer literals. Replace minus sign by underscore. */
+        args_concat += '_';
+      }
+      args_concat += string(node.back().str());
+    }
+    else if (node.type() == NodeType::IdQualified) {
+      IdQualified id(node);
+      /* Assumes namespaces have been mangled already. */
+      args_concat += string(id.name().str()) + template_arguments_mangle_ast(id.template_params());
+    }
+    else {
+      assert(0);
+    }
   });
   return args_concat;
 }
@@ -256,6 +282,15 @@ void SourceProcessor::lower_pre_template(Parser &parser)
   lower_template_specialization(parser);
 }
 
+void SourceProcessor::lower_pre_template_ast(Parser &parser, SymbolTable &symbols)
+{
+  /* Lint and remove C++ accessor templates before lowering template. */
+  lower_srt_accessor_templates_ast(parser);   /* Legacy. To remove. */
+  lower_union_accessor_templates_ast(parser); /* Legacy. To remove. */
+  lower_namespaces_ast(parser, symbols);
+  // lower_template_specialization_ast(parser);
+}
+
 /* Mangle template parameter into the symbol name. */
 void SourceProcessor::lower_template_calls(Parser &parser)
 {
@@ -270,6 +305,31 @@ void SourceProcessor::lower_template_calls(Parser &parser)
   parser().foreach_match("A<..>A<", [&](const vector<Token> &tokens) {
     parser.replace(tokens[1].scope(), template_arguments_mangle(tokens[1].scope()), true);
   });
+
+  parser.apply_mutations();
+}
+
+/* Mangle template parameter into the symbol name. */
+void SourceProcessor::lower_namespaces_and_explicit_templates(Parser &parser)
+{
+  // parser.root().foreach_recursive<IdQualified>([&](IdQualified id) {
+  //   Node parent = id.parent();
+  //   switch (parent.type()) {
+  //     case NodeType::ClassDecl:
+  //     case NodeType::IdType:
+  //       parser.symbols.resolve_type(id);
+  //       break;
+  //     case NodeType::FuncDecl:
+  //     case NodeType::FuncCall:
+  //       resolve_function(id);
+  //       break;
+  //     case NodeType::Expr:
+  //       resolve_member(id);
+  //       break;
+  //     default:
+  //       break;
+  //   }
+  // });
 
   parser.apply_mutations();
 }
@@ -289,6 +349,16 @@ void SourceProcessor::lower_template_specialization(Parser &parser)
     process_specialization(tokens[0], tokens[5].scope());
   });
 
+  parser.apply_mutations();
+}
+
+void SourceProcessor::lower_template_specialization_ast(Parser &parser)
+{
+  parser.root().foreach<TemplateSpec>([&](TemplateSpec spec) {
+    TemplateParamList list = spec.parameters();
+    parser.erase(spec.front(), spec.front().next(2));
+    parser.replace(list, template_arguments_mangle_ast(list), true);
+  });
   parser.apply_mutations();
 }
 

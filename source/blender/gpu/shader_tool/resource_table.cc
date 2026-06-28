@@ -74,6 +74,59 @@ void SourceProcessor::lower_srt_accessor_templates(Parser &parser)
   parser.apply_mutations();
 }
 
+/**
+ * For safety reason, nested resource tables need to be declared with the srt_t template.
+ * This avoid chained member access which isn't well defined with the preprocessing we are doing.
+ *
+ * This linting phase make sure that [[resource_table]] members uses it and that no incorrect
+ * usage is made. We also remove this template because it has no real meaning.
+ *
+ * Need to run before lower_resource_table.
+ */
+void SourceProcessor::lower_srt_accessor_templates_ast(Parser &parser)
+{
+  parser.root().foreach<ClassDecl>([&](ClassDecl decl) {
+    decl.foreach<VarDecl>([&](VarDecl var) {
+      IdType type = var.type();
+      bool is_resource_table = decl.attributes().contains_attr("resource_table");
+      bool is_srt = type.id().name().str() == "srt_t";
+
+      if (!is_resource_table && is_srt) {
+        report_error(var,
+                     "The srt_t<T> template is only to be used with members declared with the "
+                     "[[resource_table]] attribute.");
+        return;
+      }
+
+      if (is_resource_table && !is_srt) {
+        report_error(var,
+                     "Members declared with the [[resource_table]] attribute must wrap their type "
+                     "with the srt_t<T> template.");
+        return;
+      }
+
+      var.foreach<Declarator>([&](Declarator decl) {
+        if (decl.is_array()) {
+          report_error(decl, "[[resource_table]] members cannot be arrays.");
+        }
+        if (decl.is_reference()) {
+          report_error(decl, "[[resource_table]] members cannot be references.");
+        }
+      });
+
+      /* Remove the template but not the wrapped type. */
+      parser.erase(type.id().name());
+      TemplateParamList list = type.id().template_params();
+      if (list.is_valid()) {
+        parser.erase(list.front());
+        parser.erase(list.back());
+      }
+    });
+  });
+
+  parser.apply_mutations();
+}
+
 /* Add `srt_access` around all member access of SRT variables.
  * Need to run before local reference mutations. */
 void SourceProcessor::lower_srt_member_access(Parser &parser)

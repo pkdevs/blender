@@ -81,7 +81,7 @@ enum TokenType : uint8_t {
   LogicalAnd = 'a',
   // Word = 'A',
   Break = 'b',
-  // Unused = 'B',
+  Typename = 'B',
   Const = 'c',
   Constexpr = 'C',
   Do = 'd',

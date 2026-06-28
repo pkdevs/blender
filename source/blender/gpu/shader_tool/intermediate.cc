@@ -220,7 +220,7 @@ static always_inline TokenType multi_tok_lookup(TokenType input, std::string_vie
 
 constexpr always_inline uint8_t perfect_hash(std::string_view s)
 {
-  return s.size() * (s[0] - s.back() * 3);
+  return s.size() * (s[0] - s[1] * 2 - s.back() * 2);
 }
 
 static always_inline TokenType type_lookup(std::string_view s)
@@ -272,6 +272,8 @@ static always_inline TokenType type_lookup(std::string_view s)
       return (s == "continue") ? Continue : Word;
     case perfect_hash("template"):
       return (s == "template") ? Template : Word;
+    case perfect_hash("typename"):
+      return (s == "typename") ? Typename : Word;
     case perfect_hash("constexpr"):
       return (s == "constexpr") ? Constexpr : Word;
     case perfect_hash("namespace"):

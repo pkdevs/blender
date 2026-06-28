@@ -126,9 +126,6 @@ struct A {
 
 TEST(shader_tool, Reference)
 {
-  using namespace shader;
-  using namespace std;
-
   {
     string input = R"(void func() { auto &a = b; a.a = 0; c = a(a); a_c_a = a; })";
     string expect = R"(void func() {              b.a = 0; c = a(b); a_c_a = b; })";
@@ -193,6 +190,32 @@ TEST(shader_tool, Reference)
     string error;
     string output = process_test_string(input, error);
     EXPECT_EQ(error, "Unexpected token \"&\": Expecting declaration");
+  }
+}
+
+TEST(shader_tool, Constexpr)
+{
+  {
+    string input =
+        "static constexpr int a{1};\n"
+        "static constexpr int b = {3};\n"
+        "// static constexpr int c = int{3}; /* TODO */\n"
+        "static constexpr int d = 4;\n"
+        "static constexpr int e = {{4}};\n"
+        "static constexpr int f = (a + b / 2) * d - e;\n"
+        "int func() { return f; }\n";
+    string expect =
+        "       constexpr int a= 1;\n"
+        "       constexpr int b = 3;\n"
+        "\n"
+        "       constexpr int d = 4;\n"
+        "       constexpr int e = 4;\n"
+        "       constexpr int f = 4;\n"
+        "int func() { return 4; }\n";
+    string error;
+    string output = process_test_string(input, error);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
   }
 }
 

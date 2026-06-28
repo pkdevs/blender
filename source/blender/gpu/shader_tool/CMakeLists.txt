@@ -13,6 +13,7 @@ set(SRC
   function.cc
   grammar.cc
   grammar_bsl.cc
+  instantiation.cc
   intermediate.cc
   metadata.cc
   namespace.cc
@@ -20,6 +21,7 @@ set(SRC
   resource_table.cc
   string.cc
   struct.cc
+  symbol.cc
   template.cc
   union.cc
 

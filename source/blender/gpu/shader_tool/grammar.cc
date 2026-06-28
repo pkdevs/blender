@@ -103,6 +103,8 @@ std::string to_str(TokenType type)
       return "class";
     case Template:
       return "template";
+    case Typename:
+      return "typename";
     case This:
       return "this";
     case Using:
@@ -113,6 +115,8 @@ std::string to_str(TokenType type)
       return "private";
     case Public:
       return "public";
+    case Invalid:
+      return "EOF";
     default:
       return std::string(1, char(type));
   }
@@ -311,7 +315,7 @@ struct ScopeParser {
           // error("Nested enum declaration not supported");
           // return;
           /* Supported because of explicit host shared struct members. */
-          next();
+          enum_declaration();
           break;
         case Union:
           union_declaration();
@@ -331,6 +335,9 @@ struct ScopeParser {
           assignment();
           break;
         case Using:
+          next();
+          match_if(Namespace);
+          break;
         case Const:
         case Constexpr:
         case Static:
@@ -364,7 +371,7 @@ struct ScopeParser {
       attribute();
     }
     /* Note we allow `struct A::B` syntax because it is used during namespace lowering. */
-    match(Word);
+    match_if(Word);
     if (match_if(':')) {
       /* Underlying type. */
       match(Word);
@@ -491,6 +498,7 @@ struct ScopeParser {
         case Word:
         case Number:
         case Enum:
+        case Typename:
           if (!in_argument) {
             open_scope(curr, ScopeType::TemplateArg);
             in_argument = true;
@@ -627,6 +635,11 @@ struct ScopeParser {
           local_scope(ScopeType::Local);
           break;
         case Using:
+          next();
+          match_if(Namespace);
+          qualified_id();
+          break;
+        case Static:
         case This:
         case Case:    /* For switch cases. */
         case Default: /* For switch cases. */

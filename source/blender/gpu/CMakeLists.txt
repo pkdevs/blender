@@ -123,6 +123,7 @@ set(SRC
   shader_tool/resource_table.cc
   shader_tool/string.cc
   shader_tool/struct.cc
+  shader_tool/symbol.cc
   shader_tool/template.cc
   shader_tool/union.cc
 

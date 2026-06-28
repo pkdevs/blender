@@ -8,8 +8,8 @@
 
 #include <cctype>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -227,8 +227,20 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
   metadata_ = {};
 
   string str = remove_comments(this->source_);
+  /* Add source file line directive first so that error lines are correct. */
+  str = line_directive_prefix(filename) + str;
 
-  Parser parser(error_handler);
+  SourceManager sources;
+
+  /* Init builtin parser to add builtin symbols. */
+  Parser &builtin_parser = sources.new_source(error_handler);
+  builtin_parser.language = Language::BSL;
+  builtin_parser.set_str("#line 1 \"builtin\"\n#error This should not be emitted\n");
+  builtin_parser.include_id = sources.include_id_get();
+  /* Init symbol table and add builtin symbols. */
+  SymbolTable symbols(builtin_parser);
+
+  Parser &parser = sources.new_source(error_handler);
   try {
     /* Allow CPP grammar until we remove #ifndef GPU_SHADER blocks. */
     parser.language = Language::CPP;
@@ -242,6 +254,12 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     parse_defines(parser);
 
     parser.only_apply_mutations();
+
+    vector<string> visited_files;
+    scan_external_symbols(sources, symbols, visited_files);
+
+    parser.include_id = sources.include_id_get();
+
     parser.language = Language::BSL;
     parser.parse(error_handler);
 
@@ -260,41 +278,28 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     lower_noop_keywords_ast(parser);
     lower_trailing_comma_in_list_ast(parser);
     lower_assert_ast(parser, filename);
-    /* Lower implicit members before we remove SRT member from their struct. */
-    lower_implicit_member(parser);
+    lower_this_keyword(parser);
 
     parser.apply_mutations();
 
-    // parse_local_symbols(parser);
-
     /* Linting phase. Detect valid syntax with invalid usage. */
-    // lint_unbraced_statements(parser);
-    // lint_reserved_tokens(parser);
-    // lint_attributes(parser);
-    // lint_global_scope_constants(parser);
-    // lint_constructors(parser);
-    // lint_forward_declared_structs(parser);
+    lint_reserved_tokens(parser);
+    lint_attributes_ast(parser);
+
+    symbols.parse(parser.root(), error_handler);
 
     /* All mutations that needs to also be applied on template definitions. */
-    // lower_pre_template(parser);
+    lower_pre_template_ast(parser, symbols);
     /* Lower templates. */
     // lower_templates(parser);
-    /* Lower unions and then lint shared structures. */
-    // lower_unions(parser);
-    // lower_host_shared_structures(parser);
-    /* Lower enums. */
-    // lower_enums(parser);
     /* Lower SRT and Interfaces. */
     // lower_entry_points(parser);
     // lower_pipeline_definition(parser, filename);
     // lower_resource_table(parser);
     // lower_resource_access_functions(parser);
     /* Lower class methods. */
-    // lower_default_constructors(parser);
     // lower_function_default_arguments(parser);
-    // lower_method_definitions(parser);
     // lower_method_calls(parser);
-    // lower_empty_struct(parser);
     /* Lower SRT accesses. */
     // lower_srt_member_access(parser);
     // lower_srt_arguments(parser);
@@ -332,13 +337,13 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     cleanup_whitespace(parser);
     cleanup_empty_lines(parser);
     cleanup_line_directives(parser);
+
+    str = parser.result_get();
   }
   catch (ParserException &e) {
     /* Output the current source state for inspection. */
     return {parser.result_get(), metadata_, error_handler.err};
   }
-
-  str = line_directive_prefix(filename) + str;
   return {str, metadata_, error_handler.err};
 }
 
@@ -377,7 +382,6 @@ SourceProcessor::Result SourceProcessor::convert_info()
     return {parser.result_get(), metadata_, error_handler.err};
   }
 
-  str = line_directive_prefix(filename) + str;
   return {str, metadata_, error_handler.err};
 }
 
@@ -388,7 +392,7 @@ SourceProcessor::Result SourceProcessor::convert(metadata::Source external_sourc
       return convert_info();
     case Language::CPP:
     case Language::BSL:
-      // return convert_bsl(); /* WIP */
+      return convert_bsl(); /* WIP */
     case Language::BLENDER_GLSL:
       return convert_bsl_legacy(external_sources_symbols);
     case Language::MSL:
@@ -437,14 +441,106 @@ metadata::Source SourceProcessor::parse_include_and_symbols()
     lower_trailing_comma_in_list(parser);
     lower_comma_separated_declarations(parser);
     lower_assert(parser, filename);
-    /* Lower implicit members before we remove SRT member from their struct. */
-    lower_implicit_member(parser);
 
     parser.apply_mutations();
 
     parse_local_symbols(parser);
   }
   catch (ParserException & /*e*/) {
+    /* Expect that the parsing will generate error when the file itself is compiled. */
+    return {};
+  }
+
+  return metadata_;
+}
+
+void SourceProcessor::scan_external_symbols(SourceManager &sources,
+                                            SymbolTable &symbols,
+                                            vector<string> &visited_files)
+{
+  for (const auto &dep : metadata_.dependencies) {
+    string file;
+    for (const auto &filename : file_list_) {
+      if (filename.find(dep) != string::npos) {
+        file = filename;
+      }
+    }
+
+    if (file.empty()) {
+      cout << "Error: Included file not found " << dep << endl;
+      exit(1);
+    }
+    else if (ranges::find(visited_files, file) == visited_files.end()) {
+      visited_files.emplace_back(file);
+
+      ifstream input_file(file);
+      if (!input_file) {
+        cerr << "Error: Could not open file " << file << endl;
+        exit(1);
+      }
+      else {
+        stringstream buffer;
+        buffer << input_file.rdbuf();
+
+        Language language = language_from_filename(file);
+        SourceProcessor processor(buffer.str(), file, language, file_list_);
+        /* Recursive. */
+        processor.parse_include_and_symbols(sources, symbols, visited_files);
+      }
+    }
+  }
+}
+
+metadata::Source SourceProcessor::parse_include_and_symbols(SourceManager &sources,
+                                                            SymbolTable &symbols,
+                                                            vector<string> &visited_files)
+{
+  string str = remove_comments(this->source_);
+  /* Add source file line directive first so that error lines are correct. */
+  str = line_directive_prefix(filename) + str;
+
+  Parser &parser = sources.new_source(error_handler);
+  try {
+    parser.set_str(str);
+    disabled_code_mutation(parser);
+    parse_pragma_runtime_generated(parser);
+    parse_includes(parser);
+
+    if (language_ == Language::INFO) {
+      return metadata_;
+    }
+
+    if (language_ == Language::GLSL || language_ == Language::BLENDER_GLSL) {
+      parser().foreach_match("A(A)", [&](Tokens toks) {
+        string_view fn_name = toks[0].str();
+        if (fn_name == "SHADER_LIBRARY_CREATE_INFO" || fn_name == "VERTEX_SHADER_CREATE_INFO" ||
+            fn_name == "FRAGMENT_SHADER_CREATE_INFO" || fn_name == "COMPUTE_SHADER_CREATE_INFO")
+        {
+          parser.erase(toks.front(), toks.back().next() == ';' ? toks.back().next() : toks.back());
+        }
+      });
+    }
+
+    parser.apply_mutations();
+
+    lower_preprocessor(parser);
+
+    parser.language = Language::BSL;
+    parser.only_apply_mutations();
+    parser.parse(error_handler);
+
+    lower_namesless_parameters_ast(parser);
+    lower_attribute_sequences_ast(parser);
+
+    parser.apply_mutations();
+
+    scan_external_symbols(sources, symbols, visited_files);
+
+    parser.include_id = sources.include_id_get();
+
+    symbols.parse(parser.root(), error_handler);
+  }
+  catch (ParserException &e) {
     /* Expect that the parsing will generate error when the file itself is compiled. */
     return {};
   }
@@ -1562,10 +1658,11 @@ void SourceProcessor::lower_noop_keywords_ast(Parser &parser)
   /* Given our code-style, we don't need the disambiguation. */
   parser.root().foreach_recursive<TemplateExplicit>(
       [&](TemplateExplicit node) { parser.erase(node.front()); });
-  /* Replace `class` by `struct`. */
-  parser.root().foreach_recursive<ClassDecl>([&](ClassDecl decl) {
-    if (decl.front() == Class) {
-      parser.replace(decl.front(), "struct", true);
+  /* Remove `struct`, `class`, `enum`, `union` from type declaration. */
+  parser.root().foreach_recursive<IdType>([&](IdType type) {
+    Token tok = type.id().front().prev();
+    if (tok == Struct || tok == Class || tok == Enum || tok == Union) {
+      parser.erase(tok);
     }
   });
 }
@@ -2017,9 +2114,19 @@ void SourceProcessor::cleanup_line_directives(Parser &parser)
     if (toks[1].str() != "line") {
       return;
     }
+    int line = toks[0].line_number();
+    int value = stol(string(toks[2].str()));
     /* True if directive is noop. */
-    if (toks[0].line_number() == stol(string(toks[2].str()))) {
+    if (line == value) {
       parser.replace(toks[0].line_start(), toks[0].line_end() + 1, "");
+    }
+    /* True if directive is not better than 1 newline. */
+    if (line == value - 1) {
+      parser.replace(toks[0].line_start(), toks[0].line_end(), "");
+    }
+    /* True if directive is not better than 2 newline. */
+    if (line == value - 2) {
+      parser.replace(toks[0].line_start(), toks[0].line_end(), "\n");
     }
   });
   parser.apply_mutations();
@@ -2302,6 +2409,19 @@ void SourceProcessor::lint_global_scope_constants(Parser &parser)
     if (tokens[0].scope().type() == ScopeType::Global) {
       report_error(
           tokens[2],
+          "Global scope constant expression found. These get allocated per-thread in MSL. "
+          "Use Macro's or uniforms instead.");
+    }
+  });
+}
+
+void SourceProcessor::lint_global_scope_constants_ast(Parser &parser)
+{
+  /* Example: `const uint global_var = 1u;`. */
+  parser.root().foreach<VarDecl>([&](VarDecl decl) {
+    if (decl.is_const()) {
+      report_error(
+          decl,
           "Global scope constant expression found. These get allocated per-thread in MSL. "
           "Use Macro's or uniforms instead.");
     }
