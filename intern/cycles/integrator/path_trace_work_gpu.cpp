@@ -308,17 +308,10 @@ void PathTraceWorkGPU::alloc_integrator_path_split()
   }
 }
 
-void PathTraceWorkGPU::alloc_work_memory() // !!!
+void PathTraceWorkGPU::alloc_restir_buffers()
 {
-  alloc_integrator_soa();
-  alloc_integrator_queue();
-  alloc_integrator_sorting();
-  alloc_integrator_path_split();
-
-// >>> New
-  // Allocate per-pixel reservoir buffers for ReSTIR DI. 
-  // We use two buffers (current/previous) to allow temporal reuse across frames/samples.
-  const int pixel_count = effective_buffer_params_.width * effective_buffer_params_.height;
+  const int pixel_count =
+      effective_buffer_params_.width * effective_buffer_params_.height;
 
   if (restir_reservoirs_.size() != pixel_count) {
     restir_reservoirs_.alloc(pixel_count);
@@ -327,9 +320,17 @@ void PathTraceWorkGPU::alloc_work_memory() // !!!
 
   if (restir_reservoirs_prev_.size() != pixel_count) {
     restir_reservoirs_prev_.alloc(pixel_count);
-    restir_reservoirs_prev_.zero_to_device(); // ensures first sample has empty reservoirs.
+    restir_reservoirs_prev_.zero_to_device();
   }
-// <<<
+}
+
+void PathTraceWorkGPU::alloc_work_memory()
+{
+  alloc_integrator_soa();
+  alloc_integrator_queue();
+  alloc_integrator_sorting();
+  alloc_integrator_path_split();
+  alloc_restir_buffers();
 }
 
 void PathTraceWorkGPU::init_execution()
@@ -363,6 +364,19 @@ bool PathTraceWorkGPU::update_queue_counter_and_cache()
   }
 
   return true;
+}
+
+void PathTraceWorkGPU::restir_swap_and_clear()
+{
+  // Ping-pong the ReSTIR reservoirs: The 'current' buffer from this sample 
+  // becomes the 'previous' buffer for the next sample to enable temporal resampling.
+  restir_pingpong_ = !restir_pingpong_;
+
+  // Clear the new 'current' buffer so it doesn't contain stale data from two samples ago.
+  device_vector<ReSTIRReservoir> &next_current = restir_pingpong_ ? 
+                                                 restir_reservoirs_prev_ : restir_reservoirs_;
+
+  next_current.zero_to_device();
 }
 
 void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
@@ -423,17 +437,8 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
     ++num_iterations;
   }
 
-// >>> New
+  restir_swap_and_clear();
 
-  // Ping-pong the ReSTIR reservoirs: The 'current' buffer from this sample 
-  // becomes the 'previous' buffer for the next sample to enable temporal resampling.
-  restir_pingpong_ = !restir_pingpong_;
-  
-  // Clear the new 'current' buffer so it doesn't contain stale data from two samples ago.
-  device_vector<ReSTIRReservoir> &next_current = restir_pingpong_ ? 
-                                                 restir_reservoirs_prev_ : restir_reservoirs_;
-  next_current.zero_to_device();
-// <<<
   if (num_iterations) {
     statistics.occupancy = float(num_busy_accum) / num_iterations / max_num_paths_;
   }
@@ -637,17 +642,7 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-    // case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: {
-    //   device_ptr restir_current = restir_reservoirs_.device_pointer;
-    //   device_ptr restir_prev = restir_reservoirs_prev_.device_pointer;
-
-    //   const DeviceKernelArguments args(&d_path_index, &buffers_->buffer.device_pointer, 
-    //                                   &work_size, &restir_current, &restir_prev);
-
-    //   queue_->enqueue(kernel, work_size, args);
-    //   break;
-    // }
-    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: {
+    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: { // !!!
       device_vector<ReSTIRReservoir> &current =
           restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
       device_vector<ReSTIRReservoir> &previous =
@@ -669,14 +664,6 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME_RAY_MARCHING:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT:
-    case DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST: { // !!!: To launch and test integrator_restir_test function
-      /* Shading kernels with integrator state and render buffer. */
-      const DeviceKernelArguments args(
-          &d_path_index, &buffers_->buffer.device_pointer, &work_size);
-
-      queue_->enqueue(kernel, work_size, args);
-      break;
-    }
     default:
       LOG_FATAL << "Unhandled kernel " << device_kernel_as_string(kernel)
                 << " used for path iteration, should never happen.";

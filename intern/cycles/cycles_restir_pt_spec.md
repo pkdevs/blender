@@ -10,7 +10,9 @@ Architecture:
 - Add temporal/spatial reuse passes.
 
 Phase A:
-[x] Proof-of-concept `DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST` branch
+[x] Proof-of-concept `DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST` branch; 
+    Note: ReSTIR DI is not its own kernel stage.
+    It runs inside `DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE`
 [x] Direct-light-only RIS candidate gen (No temporal reuse. No spatial reuse, No replay shifts).
 [x] (Reservoir selection) Recompute direct-light shading from the reservoir-selected sample
 [x] Apply finalized reservoir weight to direct-light throughput

@@ -310,69 +310,24 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg,
   return shadow_state;
 }
 
-// !!!: Holds the Direct-Light Logic Path; wavefront scheduler stage.
-/* Path tracing: sample point on light and evaluate light shader, then
- * queue shadow ray to be traced. */
-template<uint node_feature_mask>
-#if defined(__KERNEL_GPU__)
+#ifdef __RESTIR_DI__
 ccl_device_forceinline
-#else
-/* MSVC has very long compilation time (x20) if we force inline this function */
-ccl_device
-#endif
-    ShaderEvalResult
-    integrate_surface_direct_light(KernelGlobals kg,
-                                   IntegratorState state,
-                                   ccl_private ShaderData *sd,
-                                   const ccl_private RNGState *rng_state,
-                                   ccl_global ReSTIRReservoir *restir_reservoirs,
-                                   ccl_global const ReSTIRReservoir *restir_reservoirs_prev)
+// ccl_device // !!!: stack size
+bool restir_di_select_light(KernelGlobals kg,
+                            IntegratorState state,
+                            ccl_private ShaderData *sd,
+                            const ccl_private RNGState *rng_state,
+                            ccl_global ReSTIRReservoir *restir_reservoirs,
+                            ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                            ccl_private LightSample *r_ls,
+                            ccl_private float *r_restir_W,
+                            int mnee_vertex_count)
 {
-  /* Test if there is a light or BSDF that needs direct light. */
-  if (!(kernel_data.integrator.use_direct_light && (sd->flag & SD_BSDF_HAS_EVAL))) {
-    return SHADER_EVAL_EMPTY;
-  }
+  /* initialize the output immediately! */
+  *r_restir_W = 0.0f;
+  r_ls->pdf = 0.0f;
 
-  LightSample ls ccl_optional_struct_init;
-  int mnee_vertex_count = 0;  // NOLINT
-
-#ifdef __MNEE__
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
-      (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
-  {
-    /* MNEE already sampled a light and caustics casters. */
-    integrator_state_read_mnee(state, &ls, &mnee_vertex_count);
-  }
-  else
-#endif
-  {
-#ifndef __RESTIR_DI__ // Remove the old random initial NEE sample when ReSTIR is enabled
-    /* Sample position on a light. */
-    const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-    const uint bounce = INTEGRATOR_STATE(state, path, bounce);
-    const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
-
-    if (!light_sample_from_position(kg, // !!!: The light sample and its selection probability are generated here (sourcePdf)
-                                    rand_light,
-                                    sd->time,
-                                    sd->P,
-                                    sd->N,
-                                    light_link_receiver_nee(kg, sd),
-                                    sd->flag,
-                                    bounce,
-                                    path_flag,
-                                    &ls))
-    {
-      return SHADER_EVAL_EMPTY;
-    }
-#endif
-  }
-
-  float restir_W = 0.0f;
-
-// TODO(Tri): Wrap in a helper?
-#ifdef __RESTIR_DI__ // ReSTIR is now the only direct light estimator
-  const uint candidate_count = 8;
+  const uint candidate_count = 8; // TODO(Tri): UI control
   ReSTIRRisState ris = restir_ris_empty();
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
@@ -411,8 +366,11 @@ ccl_device
                                           candidate.type != LIGHT_TRIANGLE,
                                           candidate_light_eval);
 
-
-    // TODO(Tri): reject !isfinite(candidate_light_eval) lights
+    // reject !isfinite(candidate_light_eval) lights
+    if (!isfinite(spectrum_to_gray(kg, candidate_light_eval))) { // !!!: New
+        ris.M++;
+        continue;
+    }
 
     BsdfEval candidate_bsdf_eval ccl_optional_struct_init;
     surface_shader_bsdf_eval(kg,
@@ -453,14 +411,17 @@ ccl_device
 
   ReSTIRReservoir reservoir = restir_finalize(&ris);
 
-  reservoir = restir_temporal_reuse( // Temporal reuse stage
-      kg,
-      state,
-      sd,
-      rng_state,
-      &reservoir,
-      // kernel_data_fetch(PathTraceWorkGPU::restir_reservoirs_prev_, 0));
-      restir_reservoirs_prev);
+  // !!!: For now, keep ReSTIR DI temporal reuse first-hit only.
+  if (bounce == 0 && mnee_vertex_count == 0) {
+    reservoir = restir_temporal_reuse( // Temporal reuse stage
+        kg,
+        state,
+        sd,
+        rng_state,
+        &reservoir,
+        // kernel_data_fetch(PathTraceWorkGPU::restir_reservoirs_prev_, 0));
+        restir_reservoirs_prev);
+  }
 
   // kernel_assert(reservoir.M == candidate_count); // No longer valid after temporal reuse
   kernel_assert(reservoir.M > 0 || reservoir.W == 0.0f);
@@ -471,22 +432,10 @@ ccl_device
   //     return SHADER_EVAL_EMPTY;
   // }
 
-  // !!!: NOTE: Visibility is NOT included in target.
   // Shadow test is done after selection.
   // Required before temporal reuse.
 
-
-// // >>> Temporal stage
-
-//   // Store the selected reservoir after temporal reuse/finalization and before assigning ls; // ???: Move outside?
-//   const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-//   // !!!: Only store the reservoir for the first hit (primary visibility).
-//   if (restir_reservoirs != nullptr && bounce == 0) {
-//     restir_reservoirs[pixel_index] = reservoir;
-//   }
-// // <<<
-
-// >>> Enhanced temporal stage
+// >>> Temporal stage
   if (!restir_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) {
     const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
 
@@ -510,28 +459,100 @@ ccl_device
 // #endif
 // <<<
 
+    // return SHADER_EVAL_EMPTY;
+    return false;
+  }
+
+  const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index); // !!!: render_pixel_index must be < restir_reservoir_count
+  // if (restir_reservoirs != nullptr && bounce == 0) {
+  if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) { // storage and shadow validation are matched
+      // kernel_assert(pixel_index < kernel_data.film.pass_stride); // if pixel_index somehow becomes invalid during camera motion
+      // if(pixel_index >= kernel_data.film.pass_stride) { // !!!: New; Wrong? It totally discards the DI; Only IDI would survive
+      //     return false;
+      // }
+
+      restir_reservoirs[pixel_index] = reservoir; // !!!: corrupts unrelated GPU memory; 
+  }
+
+  kernel_assert(isfinite(reservoir.light.pdf));
+  kernel_assert(reservoir.light.pdf >= 0.0f);
+
+  *r_ls = reservoir.light;
+  *r_restir_W = reservoir.W;
+
+  return true;
+}
+#endif
+
+// !!!: Holds the Direct-Light Logic Path; wavefront scheduler stage.
+/* Path tracing: sample point on light and evaluate light shader, then
+ * queue shadow ray to be traced. */
+template<uint node_feature_mask>
+#if defined(__KERNEL_GPU__)
+ccl_device_forceinline
+#else
+/* MSVC has very long compilation time (x20) if we force inline this function */
+ccl_device
+#endif
+    ShaderEvalResult
+    integrate_surface_direct_light(KernelGlobals kg,
+                                   IntegratorState state,
+                                   ccl_private ShaderData *sd,
+                                   const ccl_private RNGState *rng_state,
+                                   ccl_global ReSTIRReservoir *restir_reservoirs,
+                                   ccl_global const ReSTIRReservoir *restir_reservoirs_prev)
+{
+  /* Test if there is a light or BSDF that needs direct light. */
+  if (!(kernel_data.integrator.use_direct_light && (sd->flag & SD_BSDF_HAS_EVAL))) {
     return SHADER_EVAL_EMPTY;
   }
 
-  const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-  // if (restir_reservoirs != nullptr && bounce == 0) {
-  if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) { // storage and shadow validation are matched
-  restir_reservoirs[pixel_index] = reservoir;
+  LightSample ls ccl_optional_struct_init;
+  // LightSample ls = {}; // Not Necessary....
+  int mnee_vertex_count = 0;  // NOLINT
+
+  const uint bounce = INTEGRATOR_STATE(state, path, bounce);
+
+/* Select light sample (classic NEE or ReSTIR) */
+#ifdef __RESTIR_DI__
+
+  float restir_W = 0.0f;
+
+  if (!restir_di_select_light(kg, state, sd, rng_state, 
+                              restir_reservoirs, restir_reservoirs_prev, 
+                              &ls, &restir_W, mnee_vertex_count)) {
+      return SHADER_EVAL_EMPTY;
   }
-// <<<
 
-  ls = reservoir.light;
-  restir_W = reservoir.W;
-// }
+#else
 
-// // Prove GPU enters the ReSTIR path
-// #if defined(__KERNEL_GPU__) // !!!: DEBUG ONLY
-//   if (restir_reservoirs != nullptr && bounce == 0) {
-//     // Do some impossible-to-miss visual mutation.
-//     restir_W *= 6.0f;
-//   }
-// #endif
+  /* Sample position on a light. */
+  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+  const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
 
+#ifdef __MNEE__
+  if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
+      (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
+  {
+    /* MNEE already sampled a light and caustics casters. */
+    integrator_state_read_mnee(state, &ls, &mnee_vertex_count);
+  }
+  else
+#endif
+  {
+  if (!light_sample_from_position(kg,
+                                  rand_light,
+                                  sd->time,
+                                  sd->P,
+                                  sd->N,
+                                  light_link_receiver_nee(kg, sd),
+                                  sd->flag,
+                                  bounce,
+                                  path_flag,
+                                  &ls))
+  {
+    return SHADER_EVAL_EMPTY;
+  }
 
 #endif
 

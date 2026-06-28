@@ -151,17 +151,6 @@ ccl_device_inline void restir_di_shadow_set_visible(IntegratorShadowState state,
 #endif
 }
 
-// TODO: Should become the kernel?:
-ccl_device void integrator_restir_test(KernelGlobals kg,
-                                       IntegratorState state,
-                                       ccl_global float *ccl_restrict render_buffer)
-{
-  // Simply transition the path to the next stage
-  integrator_path_next(state, 
-                       DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST, 
-                       DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST);
-}
-
 ccl_device_inline bool restir_reservoir_is_valid(const ccl_private ReSTIRReservoir *r) // New
 {
   return r->M > 0 && r->W > 0.0f && r->visible; // rejects invisible reservoirs

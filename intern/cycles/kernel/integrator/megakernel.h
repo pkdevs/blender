@@ -36,7 +36,7 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
           integrator_intersect_shadow(kg, &state->shadow, nullptr); // TODO(Tri): handle CPU reservoir buffers
           continue;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-          integrator_shade_shadow(kg, &state->shadow, render_buffer, nullptr, nullptr); // TODO(Tri): handle CPU reservoir buffers
+          integrator_shade_shadow(kg, &state->shadow, render_buffer, nullptr); // TODO(Tri): handle CPU reservoir buffers
           continue;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
           integrator_shade_light_nee(kg, &state->shadow, render_buffer);
@@ -59,7 +59,7 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
           integrator_intersect_shadow(kg, &state->ao, nullptr); // TODO(Tri): handle CPU reservoir buffers
           break;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-          integrator_shade_shadow(kg, &state->ao, render_buffer, nullptr, nullptr); // TODO(Tri): handle CPU reservoir buffers
+          integrator_shade_shadow(kg, &state->ao, render_buffer, nullptr); // TODO(Tri): handle CPU reservoir buffers
           break;
         default:
           kernel_assert(0);
@@ -107,9 +107,6 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
           break;
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE:
           integrator_intersect_mnee(kg, state);
-          break;
-        case DEVICE_KERNEL_INTEGRATOR_RESTIR_TEST:
-          integrator_restir_test(kg, state, render_buffer); // !!!
           break;
         default:
           kernel_assert(0);
