@@ -162,6 +162,9 @@ template<typename T>
 void attach_foreign_metadata_strip(const Strip *strip, SerializableObject::Retainer<T> &clip);
 
 template<typename T>
+void add_strip_metadata(const Strip *strip, SerializableObject::Retainer<T> &clip);
+
+template<typename T>
 void add_effects_to_clip(
     const Scene *scene,
     Strip *strip,

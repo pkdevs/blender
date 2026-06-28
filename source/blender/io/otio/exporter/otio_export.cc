@@ -13,7 +13,6 @@
 #include "BKE_report.hh"
 
 #include "BLI_listbase_iterator.hh"
-#include "BLI_math_base.h"
 
 #include "DNA_listBase.h"
 #include "DNA_scene_types.h"
@@ -25,11 +24,7 @@
 
 #include "WM_types.hh"
 
-#include "opentime/rationalTime.h"
-#include "opentime/timeRange.h"
-#include "opentimelineio/clip.h"
-#include "opentimelineio/externalReference.h"
-#include "opentimelineio/gap.h"
+#include "opentimelineio/color.h"
 #include "opentimelineio/marker.h"
 #include "opentimelineio/timeline.h"
 #include "opentimelineio/track.h"
@@ -37,62 +32,12 @@
 
 #include "IO_otio.hh"
 #include "otio_export.hh"
-#include "otio_strip.hh"
+#include "otio_export_strip.hh"
 
 namespace blender {
 namespace io::otio {
 
 using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
-
-static bool validate_transitions(ReportList *reports, ListBaseT<Strip> *seqbase)
-{
-  /* Used to check for multiple transitions at left and right ends of a strip. */
-  std::unordered_map<Strip *, bool> strip_lookup_left;
-  std::unordered_map<Strip *, bool> strip_lookup_right;
-
-  for (Strip &strip : *seqbase) {
-    if (!seq::effect_is_transition(strip.type)) {
-      continue;
-    }
-    if (!strip.input1 || !strip.input2) {
-      BKE_report(reports, RPT_ERROR, "Insufficient Inputs Transition Strip");
-      return false;
-    }
-    /* Check if any strip contains more than one transition at either end. */
-    if (strip_lookup_left[strip.input2] || strip_lookup_right[strip.input1]) {
-      BKE_report(reports, RPT_ERROR, "Strip(s) contains more than one transition at a end");
-      return false;
-    }
-    /* All three strips (input1, transition strip and input2) should be on the same channel. */
-    if (strip.channel != strip.input1->channel || strip.channel != strip.input2->channel) {
-      BKE_report(reports,
-                 RPT_ERROR,
-                 "The Transition and the Input Strips Should be placed on the Same Channel");
-      return false;
-    }
-
-    strip_lookup_left[strip.input2] = true;
-    strip_lookup_right[strip.input1] = true;
-  }
-  return true;
-}
-
-bool validate_timeline_blender(ReportList *reports, const Scene *scene)
-{
-  Editing *ed = seq::editing_get(scene);
-  if (!scene || !ed) {
-    BKE_report(reports, RPT_ERROR, "No Sequencer Scene found");
-    return false;
-  }
-
-  ListBaseT<Strip> *seqbase = &ed->seqbase;
-
-  if (!validate_transitions(reports, seqbase)) {
-    return false;
-  }
-
-  return true;
-}
 
 static void export_scene_markers(const Scene *scene, SerializableObject::Retainer<Stack> &stack)
 {
@@ -104,7 +49,7 @@ static void export_scene_markers(const Scene *scene, SerializableObject::Retaine
         RationalTime(1, scene->frames_per_second()));
 
     auto marker = SerializableObject::Retainer<Marker>(
-        new Marker(blender_marker.name, marked_range, Marker::Color::white));
+        new Marker(blender_marker.name, marked_range, Color::white));
 
     otio_markers.push_back(marker);
   }
@@ -226,10 +171,14 @@ static void otio_export_recursive(Main *bmain,
     /* Append all the strips of this channel in the track. */
     for (Strip *strip : strips) {
       if (transition_effects.contains(strip)) {
+        CLOG_INFO(&LOG, "Exporting Transition '%s'...", transition_effects[strip]->name + 2);
         export_transition(transition_effects[strip],
                           scene,
                           inside_meta ? meta_video_track : track,
                           last_strip_end);
+      }
+      else {
+        CLOG_INFO(&LOG, "Exporting Strip '%s'...", strip->name + 2);
       }
 
       StripExporter *strip_exporter = nullptr;
@@ -250,67 +199,65 @@ static void otio_export_recursive(Main *bmain,
       else if (strip->type == STRIP_TYPE_META ||
                ((strip->type == STRIP_TYPE_SCENE) && (strip->flag & SEQ_SCENE_STRIPS)))
       {
-        if (export_params->meta_strip_export == ExportOption::RENDER_MOVIE) {
-          strip_exporter = new RenderAsMovieExporter(
-              strip, scene, inside_meta ? meta_video_track : track, last_strip_end, filepath);
+        if (inside_meta) {
+          StripExporter::add_gap_if_necessary(meta_video_track,
+                                              last_strip_end + 1,
+                                              strip->left_handle() - 1,
+                                              scene->frames_per_second());
+
+          StripExporter::add_gap_if_necessary(meta_audio_track,
+                                              last_strip_end + 1,
+                                              strip->left_handle() - 1,
+                                              scene->frames_per_second());
         }
         else {
-          if (inside_meta) {
-            StripExporter::add_gap_if_necessary(meta_video_track,
-                                                last_strip_end + 1,
-                                                strip->left_handle() - 1,
-                                                scene->frames_per_second());
+          StripExporter::add_gap_if_necessary(
+              track, last_strip_end + 1, strip->left_handle() - 1, scene->frames_per_second());
+        }
 
-            StripExporter::add_gap_if_necessary(meta_audio_track,
-                                                last_strip_end + 1,
-                                                strip->left_handle() - 1,
-                                                scene->frames_per_second());
+        int r_offset;
+        ListBaseT<SeqTimelineChannel> *r_channels;
+        ListBaseT<Strip> *seqbase = seq::get_seqbase_from_strip(strip, &r_channels, &r_offset);
+
+        if (!seqbase) {
+          CLOG_WARN(&LOG, "No seqbase in Meta Strip / Sequencer Strip '%s' ", strip->name + 2);
+
+          StripExporter missing_reference_exporter_video = StripExporter(
+              strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
+
+          StripExporter missing_reference_exporter_audio = StripExporter(
+              strip, scene, inside_meta ? meta_audio_track : track, last_strip_end);
+
+          missing_reference_exporter_video.export_with_missing_reference(single_input_effects);
+          missing_reference_exporter_audio.export_with_missing_reference(single_input_effects);
+        }
+        else {
+          auto primary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
+          auto secondary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
+
+          otio_export_recursive(bmain,
+                                scene,
+                                export_params,
+                                filepath,
+                                &primary_meta_stack,
+                                &secondary_meta_stack,
+                                seqbase,
+                                strip->left_handle() - 1,
+                                strip->right_handle(scene));
+
+          last_strip_end = strip->right_handle(scene);
+
+          if (!primary_meta_stack->children().empty()) {
+            add_strip_metadata(strip, primary_meta_stack);
+            attach_foreign_metadata_strip(strip, primary_meta_stack);
+            add_effects_to_clip(scene, strip, primary_meta_stack, single_input_effects);
+            meta_video_track->append_child(primary_meta_stack);
           }
-          else {
-            StripExporter::add_gap_if_necessary(
-                track, last_strip_end + 1, strip->left_handle() - 1, scene->frames_per_second());
-          }
-
-          int r_offset;
-          ListBaseT<SeqTimelineChannel> *r_channels;
-          ListBaseT<Strip> *seqbase = seq::get_seqbase_from_strip(strip, &r_channels, &r_offset);
-
-          if (!seqbase) {
-            StripExporter missing_reference_exporter_video = StripExporter(
-                strip, scene, inside_meta ? meta_video_track : track, last_strip_end);
-
-            StripExporter missing_reference_exporter_audio = StripExporter(
-                strip, scene, inside_meta ? meta_audio_track : track, last_strip_end);
-
-            missing_reference_exporter_video.export_with_missing_reference(single_input_effects);
-            missing_reference_exporter_audio.export_with_missing_reference(single_input_effects);
-          }
-          else {
-            auto primary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
-            auto secondary_meta_stack = SerializableObject::Retainer<Stack>(new Stack());
-
-            otio_export_recursive(bmain,
-                                  scene,
-                                  export_params,
-                                  filepath,
-                                  &primary_meta_stack,
-                                  &secondary_meta_stack,
-                                  seqbase,
-                                  strip->left_handle() - 1,
-                                  strip->right_handle(scene));
-
-            last_strip_end = strip->right_handle(scene);
-
-            if (!primary_meta_stack->children().empty()) {
-              attach_foreign_metadata_strip(strip, primary_meta_stack);
-              add_effects_to_clip(scene, strip, primary_meta_stack, single_input_effects);
-              meta_video_track->append_child(primary_meta_stack);
-            }
-            if (!secondary_meta_stack->children().empty()) {
-              attach_foreign_metadata_strip(strip, secondary_meta_stack);
-              add_effects_to_clip(scene, strip, secondary_meta_stack, single_input_effects);
-              meta_audio_track->append_child(secondary_meta_stack);
-            }
+          if (!secondary_meta_stack->children().empty()) {
+            add_strip_metadata(strip, secondary_meta_stack);
+            attach_foreign_metadata_strip(strip, secondary_meta_stack);
+            add_effects_to_clip(scene, strip, secondary_meta_stack, single_input_effects);
+            meta_audio_track->append_child(secondary_meta_stack);
           }
         }
       }
@@ -395,11 +342,6 @@ void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
   Main *bmain = job_data->bmain;
   Scene *scene = job_data->scene;
   Editing *editing = seq::editing_get(scene);
-
-  if (!scene || !editing) {
-    BKE_report(worker_status->reports, RPT_ERROR, "No Sequencer Scene found");
-    return;
-  }
 
   ListBaseT<Strip> *seqbase = &editing->seqbase;
 

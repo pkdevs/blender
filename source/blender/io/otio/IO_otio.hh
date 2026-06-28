@@ -10,7 +10,7 @@
 
 #include "BLI_path_utils.hh"
 
-#include "DNA_windowmanager_enums.h"
+#include "CLG_log.h"
 
 namespace blender {
 
@@ -23,22 +23,16 @@ struct wmOperator;
 namespace io::otio {
 
 enum class SceneStripRes {
-  PERCENT_25,
-  PERCENT_50,
-  PERCENT_75,
-  PERCENT_100,
-};
-
-enum class ExportOption {
-  DEFAULT,
-  RENDER_MOVIE,
-  MISSING_REFERENCE,
+  Percent25,
+  Percent50,
+  Percent75,
+  Percent100,
 };
 
 enum class ImgSeqFallback {
-  RENAME,
-  SYMLINK,
-  RENDER_MOVIE,
+  Rename,
+  Symlink,
+  RenderMovie,
 };
 
 short get_scene_strip_resolution_percent(SceneStripRes resolution);
@@ -48,13 +42,10 @@ short get_scene_strip_resolution_percent(SceneStripRes resolution);
 struct OTIOExportParams {
   /* Scene Strip Options. */
   bool bake_scene_strips = true;
-  io::otio::SceneStripRes scene_strip_res = io::otio::SceneStripRes::PERCENT_100;
+  io::otio::SceneStripRes scene_strip_res = io::otio::SceneStripRes::Percent100;
 
-  /* Export Options. */
-  io::otio::ExportOption img_sequence_export = io::otio::ExportOption::DEFAULT;
-  io::otio::ImgSeqFallback img_sequence_fallback = io::otio::ImgSeqFallback::SYMLINK;
-
-  io::otio::ExportOption meta_strip_export = io::otio::ExportOption::DEFAULT;
+  /* Image Sequence Options. */
+  io::otio::ImgSeqFallback img_sequence_fallback = io::otio::ImgSeqFallback::Symlink;
 };
 
 namespace io::otio {
@@ -69,9 +60,10 @@ struct ExportJobData {
 
 }  // namespace io::otio
 
-wmOperatorStatus OTIO_export(const bContext *C,
-                             wmOperator *op,
-                             const char *filepath,
-                             const OTIOExportParams *export_params);
+static CLG_LogRef LOG = {"io.otio"};
+
+void OTIO_export(const bContext *C, const char *filepath, const OTIOExportParams *export_params);
+
+bool OTIO_validate_timeline_blender(ReportList *reports, const Scene *scene);
 
 }  // namespace blender
