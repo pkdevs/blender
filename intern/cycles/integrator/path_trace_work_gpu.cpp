@@ -310,8 +310,11 @@ void PathTraceWorkGPU::alloc_integrator_path_split()
 
 void PathTraceWorkGPU::alloc_restir_buffers()
 {
+  // const int pixel_count =
+  //     effective_buffer_params_.width * effective_buffer_params_.height;
   const int pixel_count =
-      effective_buffer_params_.width * effective_buffer_params_.height;
+    effective_buffer_params_.stride * effective_buffer_params_.height;
+
 
   if (restir_reservoirs_.size() != pixel_count) {
     restir_reservoirs_.alloc(pixel_count);
@@ -627,7 +630,22 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
       break;
     }
 
-    case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW:
+    case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW: {
+      device_vector<ReSTIRReservoir> &current =
+          restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
+
+      device_ptr restir_current = current.device_pointer;
+      const int restir_reservoir_count = current.size();
+
+      const DeviceKernelArguments args(&d_path_index,
+                                      &buffers_->buffer.device_pointer,
+                                      &work_size,
+                                      &restir_current,
+                                      &restir_reservoir_count);
+
+      queue_->enqueue(kernel, work_size, args);
+      break;
+    }
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE:
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK:
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_DEDICATED_LIGHT:
@@ -642,7 +660,7 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: { // !!!
+    case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: {
       device_vector<ReSTIRReservoir> &current =
           restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
       device_vector<ReSTIRReservoir> &previous =
@@ -650,12 +668,14 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
 
       device_ptr restir_current = current.device_pointer;
       device_ptr restir_prev = previous.device_pointer;
+      const int restir_reservoir_count = current.size();
 
       const DeviceKernelArguments args(&d_path_index,
                                       &buffers_->buffer.device_pointer,
                                       &work_size,
                                       &restir_current,
-                                      &restir_prev);
+                                      &restir_prev,
+                                      &restir_reservoir_count);
 
       queue_->enqueue(kernel, work_size, args);
       break;

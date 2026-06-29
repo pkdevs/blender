@@ -129,8 +129,9 @@ ccl_device_inline ReSTIRReservoir restir_finalize( // !!!: Migth be unnecessary
   return reservoir;
 }
 
-ccl_device_inline void restir_di_shadow_set_visible(IntegratorShadowState state, // New
+ccl_device_inline void restir_di_shadow_set_visible(IntegratorShadowState state,
                                                     ccl_global ReSTIRReservoir *restir_reservoirs,
+                                                    const int restir_reservoir_count,
                                                     const bool visible)
 {
 #ifdef __RESTIR_DI__
@@ -143,6 +144,10 @@ ccl_device_inline void restir_di_shadow_set_visible(IntegratorShadowState state,
   }
 
   const uint pixel_index = INTEGRATOR_STATE(state, shadow_path, render_pixel_index);
+  if (pixel_index >= (uint)restir_reservoir_count) {
+    return;
+  }
+
   restir_reservoirs[pixel_index].visible = visible;
 #else
   (void)state;

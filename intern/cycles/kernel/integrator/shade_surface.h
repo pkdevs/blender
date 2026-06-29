@@ -319,6 +319,7 @@ bool restir_di_select_light(KernelGlobals kg,
                             const ccl_private RNGState *rng_state,
                             ccl_global ReSTIRReservoir *restir_reservoirs,
                             ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                            const int restir_reservoir_count,
                             ccl_private LightSample *r_ls,
                             ccl_private float *r_restir_W,
                             int mnee_vertex_count)
@@ -332,6 +333,11 @@ bool restir_di_select_light(KernelGlobals kg,
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
+
+  const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+  if (UNLIKELY(pixel_index >= (uint)restir_reservoir_count)) {
+    return false;
+  }
 
   for (uint i = 0; i < candidate_count; i++) {
     LightSample candidate ccl_optional_struct_init;
@@ -420,7 +426,8 @@ bool restir_di_select_light(KernelGlobals kg,
         rng_state,
         &reservoir,
         // kernel_data_fetch(PathTraceWorkGPU::restir_reservoirs_prev_, 0));
-        restir_reservoirs_prev);
+        restir_reservoirs_prev,
+        restir_reservoir_count);
   }
 
   // kernel_assert(reservoir.M == candidate_count); // No longer valid after temporal reuse
@@ -437,9 +444,7 @@ bool restir_di_select_light(KernelGlobals kg,
 
 // >>> Temporal stage
   if (!restir_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) {
-    const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-
-    if (restir_reservoirs != nullptr && bounce == 0) {
+    if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
       restir_reservoirs[pixel_index] = restir_reservoir_empty();
     }
 
@@ -463,15 +468,8 @@ bool restir_di_select_light(KernelGlobals kg,
     return false;
   }
 
-  const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index); // !!!: render_pixel_index must be < restir_reservoir_count
-  // if (restir_reservoirs != nullptr && bounce == 0) {
   if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) { // storage and shadow validation are matched
-      // kernel_assert(pixel_index < kernel_data.film.pass_stride); // if pixel_index somehow becomes invalid during camera motion
-      // if(pixel_index >= kernel_data.film.pass_stride) { // !!!: New; Wrong? It totally discards the DI; Only IDI would survive
-      //     return false;
-      // }
-
-      restir_reservoirs[pixel_index] = reservoir; // !!!: corrupts unrelated GPU memory; 
+      restir_reservoirs[pixel_index] = reservoir;
   }
 
   kernel_assert(isfinite(reservoir.light.pdf));
@@ -500,7 +498,8 @@ ccl_device
                                    ccl_private ShaderData *sd,
                                    const ccl_private RNGState *rng_state,
                                    ccl_global ReSTIRReservoir *restir_reservoirs,
-                                   ccl_global const ReSTIRReservoir *restir_reservoirs_prev)
+                                   ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                                   const int restir_reservoir_count)
 {
   /* Test if there is a light or BSDF that needs direct light. */
   if (!(kernel_data.integrator.use_direct_light && (sd->flag & SD_BSDF_HAS_EVAL))) {
@@ -519,7 +518,7 @@ ccl_device
   float restir_W = 0.0f;
 
   if (!restir_di_select_light(kg, state, sd, rng_state, 
-                              restir_reservoirs, restir_reservoirs_prev, 
+                              restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count,
                               &ls, &restir_W, mnee_vertex_count)) {
       return SHADER_EVAL_EMPTY;
   }
@@ -964,7 +963,8 @@ ccl_device int integrate_surface(KernelGlobals kg,
                                  IntegratorState state,
                                  ccl_global float *ccl_restrict render_buffer, 
                                  ccl_global ReSTIRReservoir *restir_reservoirs,
-                                 ccl_global const ReSTIRReservoir *restir_reservoirs_prev)
+                                 ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                                 const int restir_reservoir_count)
 
 {
   PROFILING_INIT_FOR_SHADER(kg, PROFILING_SHADE_SURFACE_SETUP);
@@ -1057,7 +1057,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
     /* Direct light. */
     PROFILING_EVENT(PROFILING_SHADE_SURFACE_DIRECT_LIGHT);
     const ShaderEvalResult result = integrate_surface_direct_light<node_feature_mask>(
-        kg, state, &sd, &rng_state, restir_reservoirs, restir_reservoirs_prev);
+        kg, state, &sd, &rng_state, restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count);
     if (result == SHADER_EVAL_CACHE_MISS) {
       return LABEL_CACHE_MISS;
     }
@@ -1117,9 +1117,11 @@ ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
                                                      IntegratorState state,
                                                      ccl_global float *ccl_restrict render_buffer,
                                                      ccl_global ReSTIRReservoir *restir_reservoirs,
-                                                     ccl_global const ReSTIRReservoir *restir_reservoirs_prev)
+                                                     ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                                                     const int restir_reservoir_count)
 {
-  const int continue_path_label = integrate_surface<node_feature_mask>(kg, state, render_buffer, restir_reservoirs, restir_reservoirs_prev); // !!!: Main Actor
+  const int continue_path_label = integrate_surface<node_feature_mask>(kg, state, render_buffer, 
+      restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count); // !!!: Main Actor
   if (continue_path_label == LABEL_CACHE_MISS) {
     integrator_path_cache_miss_sorted(state, current_kernel);
     return;
@@ -1168,7 +1170,7 @@ ccl_device_forceinline void integrator_shade_surface_raytrace(
 {
   integrator_shade_surface<KERNEL_FEATURE_NODE_MASK_SURFACE,
                            DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE>(
-      kg, state, render_buffer, nullptr, nullptr); // TODO(Tri): restir_reservoirs?
+      kg, state, render_buffer, nullptr, nullptr, 0); // TODO(Tri): restir_reservoirs?
 }
 
 CCL_NAMESPACE_END

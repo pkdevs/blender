@@ -267,7 +267,8 @@ ccl_device_inline TransparentShadowEvalResult integrate_transparent_shadow(
 ccl_device void integrator_shade_shadow(KernelGlobals kg,
                                         IntegratorShadowState state,
                                         ccl_global float *ccl_restrict render_buffer,
-                                        ccl_global ReSTIRReservoir *restir_reservoirs)
+                                        ccl_global ReSTIRReservoir *restir_reservoirs,
+                                        const int restir_reservoir_count)
 {
   PROFILING_INIT(kg, PROFILING_SHADE_SHADOW_SETUP);
   const uint packed_num_hits = INTEGRATOR_STATE(state, shadow_path, packed_num_hits);
@@ -284,7 +285,7 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
   if (result == TRANSPARENT_SHADOW_EVAL_OPAQUE) { // occluded branch
     printf("integrator_shade_shadow() TRANSPARENT_SHADOW_EVAL_OPAQUE!");
     // Mark path as invisible
-    restir_di_shadow_set_visible(state, restir_reservoirs, false); // only for transparency handling, not for ReSTIR bookkeeping.
+    restir_di_shadow_set_visible(state, restir_reservoirs, restir_reservoir_count, false); // only for transparency handling, not for ReSTIR bookkeeping.
     integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;
   }
@@ -298,7 +299,7 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
   }
 
   guiding_record_direct_light(kg, state);
-  restir_di_shadow_set_visible(state, restir_reservoirs, true);
+  restir_di_shadow_set_visible(state, restir_reservoirs, restir_reservoir_count, true);
   film_write_direct_light(kg, state, render_buffer);
   integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
 }

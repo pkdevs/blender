@@ -17,6 +17,7 @@ RIS candidates
 
 #include "kernel/integrator/restir.h"
 #include "kernel/integrator/path_state.h" // RNGState
+#include "util/defines.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -53,13 +54,18 @@ ccl_device_inline ReSTIRReservoir restir_temporal_reuse(
     ccl_private ShaderData *sd,
     const ccl_private RNGState *rng_state,
     const ccl_private ReSTIRReservoir *current,
-    ccl_global const ReSTIRReservoir *prev_reservoirs)
+    ccl_global const ReSTIRReservoir *prev_reservoirs,
+    const int restir_reservoir_count)
 {
   if (prev_reservoirs == nullptr || !restir_reservoir_is_valid(current)) {
     return *current;
   }
 
   const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+  if (pixel_index >= (uint)restir_reservoir_count) {
+    return *current;
+  }
+
   const ReSTIRReservoir prev = prev_reservoirs[pixel_index];
 
   if (!restir_reservoir_is_valid(&prev)) {
