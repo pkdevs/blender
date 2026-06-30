@@ -118,14 +118,6 @@ def enum_sampling_pattern(self, context):
         return items + non_debug_items
 
 
-def enum_integrator_method(self, context): # New
-    items = [
-        ('PATH', "Path Tracing", "Standard unbiased path tracing", 0),
-        ('RESTIR', "ReSTIR PT", "Reservoir-based Spatio-Temporal Importance Resampling", 1),
-    ]
-    return items
-
-
 enum_emission_sampling = (
     ('NONE',
      'None',
@@ -555,12 +547,19 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=5,
     )
 
-    integrator_method: EnumProperty( # New
-        name="Integrator Method",
-        description="Technique used for light transport integration",
-        items=enum_integrator_method,
-        default=0,
-        update=update_integrator_method,
+    use_restir: BoolProperty(
+        name="ReSTIR",
+        description="Reservoir-based SpatioTemporal Importance Resampling",
+        default=True,
+    )
+
+    # restir_light_samples
+    restir_candidate_count: IntProperty(
+        name="Candidates",
+        description="Number of light candidates evaluated per shading point",
+        min=1,
+        max=128, # !!!: 
+        default=8,
     )
 
     scrambling_distance: FloatProperty(

@@ -97,15 +97,8 @@ NODE_DEFINE(Integrator)
   guiding_directional_sampling_type_enum.insert("ROUGHNESS",
                                                 GUIDING_DIRECTIONAL_SAMPLING_TYPE_ROUGHNESS);
 
-
-// TODO(Tri): Use bool? Not rn
-  static NodeEnum integrator_method_enum;
-  integrator_method_enum.insert("regular_pt", INTEGRATOR_METHOD_PATH);
-  integrator_method_enum.insert("restir_pt", INTEGRATOR_METHOD_RESTIR_PT);
-  SOCKET_ENUM(integrator_method,
-              "Integrator Method",
-              integrator_method_enum,
-              INTEGRATOR_METHOD_RESTIR_PT);
+  SOCKET_BOOLEAN(use_restir, "ReSTIR", true);
+  SOCKET_INT(restir_candidate_count, "Light Candidates", 8);
 
   SOCKET_BOOLEAN(use_guiding, "Guiding", false);
   SOCKET_BOOLEAN(deterministic_guiding, "Deterministic Guiding", true);
@@ -303,6 +296,9 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
      * the object itself. */
     kintegrator->filter_closures |= FILTER_CLOSURE_TRANSPARENT;
   }
+
+  kintegrator->use_restir = use_restir;
+  kintegrator->restir_candidate_count = restir_candidate_count;
 
   const GuidingParams guiding_params = get_guiding_params(device);
   kintegrator->use_guiding = guiding_params.use;

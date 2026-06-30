@@ -308,7 +308,6 @@ class CYCLES_RENDER_PT_sampling_render(CyclesButtonsPanel, Panel):
         sub.prop(cscene, "adaptive_threshold", text="")
 
         col = layout.column(align=True)
-        col.prop(cscene, "integrator_method")
 
         if cscene.use_adaptive_sampling:
             col.prop(cscene, "samples", text="Max Samples")
@@ -522,6 +521,10 @@ class CYCLES_RENDER_PT_sampling_lights(CyclesButtonsPanel, Panel):
         cscene = scene.cycles
 
         col = layout.column(align=True)
+
+        col.prop(cscene, "use_restir")
+        col.prop(cscene, "restir_candidate_count")
+
         col.prop(cscene, "use_light_tree")
         sub = col.row()
         sub.prop(cscene, "light_sampling_threshold", text="Light Threshold")

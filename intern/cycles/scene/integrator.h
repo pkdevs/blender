@@ -64,8 +64,6 @@ class Integrator : public Node {
   NODE_SOCKET_API(int, volume_max_steps)
   NODE_SOCKET_API(float, volume_step_rate)
 
-  NODE_SOCKET_API(IntegratorMethod, integrator_method)
-
   NODE_SOCKET_API(bool, use_guiding);
   NODE_SOCKET_API(bool, deterministic_guiding);
   NODE_SOCKET_API(bool, use_surface_guiding);
@@ -112,6 +110,9 @@ class Integrator : public Node {
   NODE_SOCKET_API(bool, use_adaptive_sampling)
   NODE_SOCKET_API(int, adaptive_min_samples)
   NODE_SOCKET_API(float, adaptive_threshold)
+
+  NODE_SOCKET_API(bool, use_restir)
+  NODE_SOCKET_API(int, restir_candidate_count)
 
   NODE_SOCKET_API(SamplingPattern, sampling_pattern)
   NODE_SOCKET_API(float, scrambling_distance)

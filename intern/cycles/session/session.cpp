@@ -757,13 +757,19 @@ void Session::update_status_time(bool show_pause, bool show_done)
                               string_printf("Rendered %d/%d Tiles", current_tile, num_tiles));
   }
 
-  /* Sample. */
+ /* Sample. */
   if (!params.background && num_samples == Integrator::MAX_SAMPLES) {
     substatus = status_append(substatus, string_printf("Sample %d", current_sample));
   }
   else {
     substatus = status_append(substatus,
                               string_printf("Sample %d/%d", current_sample, num_samples));
+  }
+
+  /* Show ReSTIR active state and candidate count. */
+  if (scene->integrator->get_use_restir()) {
+    substatus += string_printf(" | ReSTIR: %d candidates",
+                               scene->integrator->get_restir_candidate_count());
   }
 
   /* Append any device-specific status (such as background kernel optimization) */

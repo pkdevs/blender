@@ -430,13 +430,11 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer, // !!!
     scene->light_manager->tag_update(scene, LightManager::UPDATE_ALL);
   }
 
-  IntegratorMethod integrator_method = (IntegratorMethod)get_enum(
-      cscene, 
-      "integrator_method", 
-      2, // Number of items
-      INTEGRATOR_METHOD_PATH); // Default
+  const bool use_restir = get_boolean(cscene, "use_restir");
+  integrator->set_use_restir(use_restir);
 
-  integrator->set_integrator_method(integrator_method);
+  // restir_light_samples
+  integrator->set_restir_candidate_count(get_int(cscene, "restir_candidate_count"));
 
   SamplingPattern sampling_pattern = (SamplingPattern)get_enum(
       cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_TABULATED_SOBOL);

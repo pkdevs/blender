@@ -66,12 +66,6 @@ CCL_NAMESPACE_BEGIN
 
 // NOLINTEND
 
-// !!!: Possibly not required; a boolean would do...
-enum IntegratorMethod {
-  INTEGRATOR_METHOD_PATH,
-  INTEGRATOR_METHOD_RESTIR_PT
-};
-
 /* Sampling Patterns */
 
 /* Unique numbers for sampling patterns in each bounce. */

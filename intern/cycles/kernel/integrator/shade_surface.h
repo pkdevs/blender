@@ -324,11 +324,13 @@ bool restir_di_select_light(KernelGlobals kg,
                             ccl_private float *r_restir_W,
                             int mnee_vertex_count)
 {
+  kernel_assert(kernel_data.integrator.use_restir);
+
   /* initialize the output immediately! */
   *r_restir_W = 0.0f;
   r_ls->pdf = 0.0f;
 
-  const uint candidate_count = 8; // TODO(Tri): UI control
+  const uint candidate_count = kernel_data.integrator.restir_candidate_count; // TODO(Tri): UI control
   ReSTIRRisState ris = restir_ris_empty();
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
@@ -493,6 +495,43 @@ bool restir_di_select_light(KernelGlobals kg,
 }
 #endif
 
+ccl_device_forceinline 
+bool integrate_surface_sample_light_nee(KernelGlobals kg,
+                                        IntegratorState state,
+                                        ccl_private ShaderData *sd,
+                                        ccl_private LightSample *ls,
+                                        const uint bounce,
+                                        const uint32_t path_flag,
+                                        const ccl_private RNGState *rng_state,
+                                        ccl_private int *mnee_vertex_count)
+{
+#ifdef __MNEE__
+  if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
+      (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
+  {
+    /* MNEE already sampled a light and caustics casters. */
+    integrator_state_read_mnee(state, ls, mnee_vertex_count);
+  }
+  else
+#endif
+  {
+    /* Sample position on a light. */
+    const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
+
+    return light_sample_from_position(kg,
+                                      rand_light,
+                                      sd->time,
+                                      sd->P,
+                                      sd->N,
+                                      light_link_receiver_nee(kg, sd),
+                                      sd->flag,
+                                      bounce,
+                                      path_flag,
+                                      ls);
+  }
+}
+
+
 // !!!: Holds the Direct-Light Logic Path; wavefront scheduler stage.
 /* Path tracing: sample point on light and evaluate light shader, then
  * queue shadow ray to be traced. */
@@ -518,50 +557,38 @@ ccl_device
   }
 
   LightSample ls ccl_optional_struct_init;
-  // LightSample ls = {}; // Not Necessary....
   int mnee_vertex_count = 0;  // NOLINT
 
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
+  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
 
 /* Select light sample (classic NEE or ReSTIR) */
 #ifdef __RESTIR_DI__
 
+  const bool use_restir = kernel_data.integrator.use_restir;
+
   float restir_W = 0.0f;
 
-  if (!restir_di_select_light(kg, state, sd, rng_state, 
-                              restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count,
-                              &ls, &restir_W, mnee_vertex_count)) {
-      return SHADER_EVAL_EMPTY;
+  printf("integrate_surface_direct_light(); use_restir:%d\n", use_restir); // DEBUG ONLY
+  if (use_restir) {
+    if (!restir_di_select_light(kg, state, sd, rng_state, 
+                                restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count,
+                                &ls, &restir_W, mnee_vertex_count)) {
+        return SHADER_EVAL_EMPTY;
+    }
+  }
+  else {
+    if (!integrate_surface_sample_light_nee(kg, state, sd, &ls, bounce, path_flag, 
+                                            rng_state, &mnee_vertex_count)) {
+        return SHADER_EVAL_EMPTY;
+    }
   }
 
 #else
 
-  /* Sample position on a light. */
-  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-  const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
-
-#ifdef __MNEE__
-  if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
-      (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
-  {
-    /* MNEE already sampled a light and caustics casters. */
-    integrator_state_read_mnee(state, &ls, &mnee_vertex_count);
-  }
-  else
-#endif
-  {
-  if (!light_sample_from_position(kg,
-                                  rand_light,
-                                  sd->time,
-                                  sd->P,
-                                  sd->N,
-                                  light_link_receiver_nee(kg, sd),
-                                  sd->flag,
-                                  bounce,
-                                  path_flag,
-                                  &ls))
-  {
-    return SHADER_EVAL_EMPTY;
+  if (!integrate_surface_sample_light_nee(kg, state, sd, &ls, bounce, path_flag, 
+                                          rng_state, &mnee_vertex_count)) {
+      return SHADER_EVAL_EMPTY;
   }
 
 #endif

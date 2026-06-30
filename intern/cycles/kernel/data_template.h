@@ -234,6 +234,10 @@ KERNEL_STRUCT_MEMBER(integrator, int, use_volume_guiding)
 KERNEL_STRUCT_MEMBER(integrator, int, use_guiding_direct_light)
 KERNEL_STRUCT_MEMBER(integrator, int, use_guiding_mis_weights)
 
+/* ReSTIR */
+KERNEL_STRUCT_MEMBER(integrator, int, use_restir)
+KERNEL_STRUCT_MEMBER(integrator, int, restir_candidate_count)
+
 KERNEL_STRUCT_MEMBER(integrator, float2, pixel_jitter)
 KERNEL_STRUCT_END(KernelIntegrator)
 
