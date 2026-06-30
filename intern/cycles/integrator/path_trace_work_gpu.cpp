@@ -310,11 +310,9 @@ void PathTraceWorkGPU::alloc_integrator_path_split()
 
 void PathTraceWorkGPU::alloc_restir_buffers()
 {
-  // const int pixel_count =
-  //     effective_buffer_params_.width * effective_buffer_params_.height;
-  const int pixel_count =
-    effective_buffer_params_.stride * effective_buffer_params_.height;
+  const int pixel_count = max_num_paths_;
 
+  // printf("PathTraceWorkGPU::alloc_restir_buffers() ---> pixel_count:%d\n", pixel_count); // DEBUG ONLY
 
   if (restir_reservoirs_.size() != pixel_count) {
     restir_reservoirs_.alloc(pixel_count);
@@ -592,7 +590,7 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     work_size = num_queued;
     d_path_index = queued_paths_.device_pointer;
 
-    if (kernel_is_shadow_path(kernel)) {
+    if (kernel_is_shadow_path(kernel)) { // !!!
       /* Compute array of active shadow paths for specific kernel. */
       compute_queued_paths(DEVICE_KERNEL_INTEGRATOR_QUEUED_SHADOW_PATHS_ARRAY, kernel);
     }
@@ -658,7 +656,14 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     }
     case DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
-    case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD:
+    case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD: {
+      const DeviceKernelArguments args(&d_path_index,
+                                      &buffers_->buffer.device_pointer,
+                                      &work_size);
+
+      queue_->enqueue(kernel, work_size, args);
+      break;
+    }
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: {
       device_vector<ReSTIRReservoir> &current =

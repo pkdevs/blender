@@ -335,6 +335,7 @@ bool restir_di_select_light(KernelGlobals kg,
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
 
   const uint pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+  // !!!:
   if (UNLIKELY(pixel_index >= (uint)restir_reservoir_count)) {
     return false;
   }
@@ -416,6 +417,7 @@ bool restir_di_select_light(KernelGlobals kg,
 // <<<
 
   ReSTIRReservoir reservoir = restir_finalize(&ris);
+  reservoir.visible = true; // So it never starts as garbage.
 
   // !!!: For now, keep ReSTIR DI temporal reuse first-hit only.
   if (bounce == 0 && mnee_vertex_count == 0) {
@@ -474,6 +476,15 @@ bool restir_di_select_light(KernelGlobals kg,
 
   kernel_assert(isfinite(reservoir.light.pdf));
   kernel_assert(reservoir.light.pdf >= 0.0f);
+
+  kernel_assert(reservoir.M >= candidate_count);
+  kernel_assert(isfinite(reservoir.W));
+  kernel_assert(reservoir.W >= 0.0f);
+  if (bounce == 0) { // Debug Only
+    if (!isfinite(reservoir.W) || reservoir.W < 0.0f) {
+      printf("Bad reservoir at pixel %u\n", pixel_index);
+    }
+  }
 
   *r_ls = reservoir.light;
   *r_restir_W = reservoir.W;

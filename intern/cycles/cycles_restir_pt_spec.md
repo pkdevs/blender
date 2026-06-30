@@ -34,6 +34,13 @@ Phase B:
 Phase C:
 Spatial reuse.
 
+Phase C.x / Post-stability cleanup:
+[ ] Compact reservoir payload (avoid storing full LightSample; use `light_id`)
+[ ] Cheaper target function for RIS/temporal evaluation
+    Note: (`target = luminance(candidate_light_eval) * abs(dot(N,L))`)
+    Deferred until DI temporal reuse is stable and spatial reuse is integrated,
+    to avoid conflating performance refactors with correctness debugging.
+
 Phase D:
 Path replay.
 

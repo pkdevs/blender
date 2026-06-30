@@ -144,9 +144,14 @@ ccl_device_inline void restir_di_shadow_set_visible(IntegratorShadowState state,
   }
 
   const uint pixel_index = INTEGRATOR_STATE(state, shadow_path, render_pixel_index);
-  if (pixel_index >= (uint)restir_reservoir_count) {
+  if (pixel_index >= (uint)restir_reservoir_count) { // New
     return;
   }
+
+  // TODO:
+  // if (restir_reservoirs == prev_reservoirs) {
+  //   return;
+  // }
 
   restir_reservoirs[pixel_index].visible = visible;
 #else
@@ -156,9 +161,18 @@ ccl_device_inline void restir_di_shadow_set_visible(IntegratorShadowState state,
 #endif
 }
 
-ccl_device_inline bool restir_reservoir_is_valid(const ccl_private ReSTIRReservoir *r) // New
+ccl_device_inline bool restir_reservoir_is_valid(const ccl_private ReSTIRReservoir *r) // !!!: Fix visibility
 {
-  return r->M > 0 && r->W > 0.0f && r->visible; // rejects invisible reservoirs
+  // return r->M > 0 && r->W > 0.0f && r->visible; // rejects invisible reservoirs // !!!: But visibility is not known during reservoir construction.
+  /**
+1. restir_di_select_light builds reservoir
+2. reservoir stored
+3. shadow ray traced
+4. integrator_shade_shadow sets visible
+5. film write
+   */
+
+   return r->M > 0 && r->W > 0.0f;
 }
 
 // This is the math that actually chooses which light to keep (streamingResampleStep).
