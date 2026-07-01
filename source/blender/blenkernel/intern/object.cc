@@ -66,7 +66,7 @@
 #include "BKE_anim_data.hh"
 #include "BKE_anim_path.h"
 #include "BKE_anim_visualization.h"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_asset.hh"
 #include "BKE_bpath.hh"
@@ -4148,16 +4148,16 @@ void BKE_object_protected_scale_set(Object *ob, const float scale[3])
 
 void BKE_object_protected_rotation_quaternion_set(Object *ob, const float quat[4])
 {
-  if ((ob->protectflag & OB_LOCK_ROTX) == 0) {
+  if ((ob->protectflag & OB_LOCK_ROTW) == 0) {
     ob->quat[0] = quat[0];
   }
-  if ((ob->protectflag & OB_LOCK_ROTY) == 0) {
+  if ((ob->protectflag & OB_LOCK_ROTX) == 0) {
     ob->quat[1] = quat[1];
   }
-  if ((ob->protectflag & OB_LOCK_ROTZ) == 0) {
+  if ((ob->protectflag & OB_LOCK_ROTY) == 0) {
     ob->quat[2] = quat[2];
   }
-  if ((ob->protectflag & OB_LOCK_ROTW) == 0) {
+  if ((ob->protectflag & OB_LOCK_ROTZ) == 0) {
     ob->quat[3] = quat[3];
   }
 }
@@ -4412,9 +4412,6 @@ const Mesh *BKE_object_get_editmesh_eval_cage(const Object *object)
   BLI_assert(!DEG_is_original(&object->id));
   BLI_assert(object->type == OB_MESH);
 
-  const Mesh &mesh = *id_cast<const Mesh *>(object->data);
-  BLI_assert(mesh.runtime->edit_mesh != nullptr);
-  UNUSED_VARS_NDEBUG(mesh);
   const GeometrySet *geometry_set = object->runtime->geometry_set_eval;
   if (!geometry_set) {
     return nullptr;
