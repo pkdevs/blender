@@ -106,13 +106,26 @@ struct DirichletBoundaryOp {
                   double &source,
                   double &diagonal) const
   {
-    //   if (neighbor.x() == ijk.x() && neighbor.z() == ijk.z()) {
-    // if (neighbor.y() < ijk.y())
-    //   source -= 1.0;
-    // else
     diagonal -= 1.0;
     source += fixed_value_accessor_.getValue(neighbor);
-    //   }
+  };
+};
+
+struct NeumannBoundaryOp {
+  const openvdb::Vec3SGrid::ConstAccessor normal_vector_accessor_;
+
+  NeumannBoundaryOp(const openvdb::Vec3SGrid &normal_vector_grid)
+      : normal_vector_accessor_(normal_vector_grid.getConstAccessor())
+  {
+  }
+
+  void operator()(const openvdb::Coord &ijk,
+                  const openvdb::Coord &neighbor,
+                  double &source,
+                  double & /*diagonal*/) const
+  {
+    const openvdb::math::Vec3s normal = neighbor.asVec3s() - ijk.asVec3s();
+    source += normal_vector_accessor_.getValue(neighbor).dot(normal);
   };
 };
 
@@ -168,6 +181,23 @@ static void node_geo_exec(GeoNodeExecParams params)
 
       bke::VolumeTreeAccessToken fixed_value_token;
       DirichletBoundaryOp boundary_op(fixed_value_grid[0].typed<float>().grid(fixed_value_token));
+      solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
+          PreconditionerType>(
+          source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
+      break;
+    }
+
+    case Boundary::Normal: {
+      const Field<float3> normal_vector_field = params.extract_input<Field<float3>>(
+          "Normal Vector"_ustr);
+      const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
+      Vector<bke::GVolumeGrid> normal_vector_grid(1);
+      bke::volume_grid::evaluate_fields_to_grid(
+          *mask_tree, grid_transform, {normal_vector_field}, normal_vector_grid);
+
+      bke::VolumeTreeAccessToken normal_vector_token;
+      NeumannBoundaryOp boundary_op(
+          normal_vector_grid[0].typed<float3>().grid(normal_vector_token));
       solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
           PreconditionerType>(
           source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
