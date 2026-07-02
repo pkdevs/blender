@@ -12,6 +12,7 @@
 #include "BKE_curves_utils.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_grease_pencil_fills.hh"
+#include "BKE_layer.hh"
 #include "BKE_object.hh"
 
 #include "BLI_enumerable_thread_specific.hh"
@@ -472,6 +473,49 @@ static void GREASE_PENCIL_OT_select_linked(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
+
+static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_Params &params)
+{
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(&C);
+  const ViewContext vc = ED_view3d_viewcontext_init(&C, depsgraph);
+  // get all objects currently in editmode
+  const Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
+      *vc.bmain, vc.scene, vc.view_layer, vc.v3d);
+
+
+  const ClosestCurveDataBlock closest = find_closest_curve(*depsgraph, vc, bases, mval);
+  if (!closest.curves_id) {
+    return false;
+  }
+
+  bke::CurvesGeometry &closest_curves = closest.curves_id->geometry.wrap();
+  const bke::AttrDomain selection_domain = bke::AttrDomain(closest.curves_id->selection_domain);
+
+  if (selection_domain == bke::AttrDomain::Point) {
+    const OffsetIndices points_by_curve = closest_curves.points_by_curve();
+    foreach_selection_attribute_writer(
+        closest_curves, bke::AttrDomain::Point, [&](bke::GSpanAttributeWriter &selection) {
+          for (const int point : points_by_curve[closest.elem.index]) {
+            apply_selection_operation_at_index(selection.span, point, params.sel_op);
+          }
+        });
+  }
+  else if (selection_domain == bke::AttrDomain::Curve) {
+    bke::GSpanAttributeWriter selection = ensure_selection_attribute(
+        closest_curves, bke::AttrDomain::Curve, bke::AttrType::Bool);
+    apply_selection_operation_at_index(selection.span, closest.elem.index, params.sel_op);
+    selection.finish();
+  }
+
+  /* Use #ID_RECALC_GEOMETRY instead of #ID_RECALC_SELECT because it is handled as a
+   * generic attribute for now. */
+  DEG_id_tag_update(&closest.curves_id->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(&C, NC_GEOM | ND_DATA, closest.curves_id);
+
+  return true;
+}
+
+#if 0
 static wmOperatorStatus select_linked_pick_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
@@ -497,22 +541,43 @@ static wmOperatorStatus select_linked_pick_exec(bContext *C, wmOperator *op)
 
   return OPERATOR_FINISHED;
 }
+#endif
 
-static void GREASE_PENCIL_OT_select_linked_pick(wmOperatorType *ot)
+
+static wmOperatorStatus select_linked_pick_invoke(bContext *C,
+                                                  wmOperator *op,
+                                                  const wmEvent *event)
+{
+  SelectPick_Params params{};
+  params.sel_op = RNA_boolean_get(op->ptr, "deselect") ? SEL_OP_SUB : SEL_OP_ADD;
+  params.deselect_all = false;
+  params.select_passthrough = false;
+
+  if (!select_linked_pick(*C, event->mval, params)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+void CURVES_OT_select_linked_pick(wmOperatorType *ot)
 {
   ot->name = "Select Linked Pick";
   ot->idname = "GREASE_PENCIL_OT_select_linked_pick";
-  ot->description = "Select all points in curves with any point selection";
+  ot->description = "Select all points in the stroke under the cursor";
 
-  ot->exec = select_linked_pick_exec;
-  ot->poll = editable_grease_pencil_point_selection_poll;
+  ot->invoke = select_linked_pick_invoke;
+  ot->poll = editable_grease_pencil_point_selection_poll; // todo! do correct poll
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-  PropertyRNA *prop = RNA_def_boolean(
-      ot->srna, "deselect", false, "Deselect linked", "Deselect linked strokes");
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  RNA_def_boolean(ot->srna,
+                  "deselect",
+                  false,
+                  "Deselect",
+                  "Deselect stroke points rather than selecting them");
 }
+
 
 static wmOperatorStatus select_random_exec(bContext *C, wmOperator *op)
 {
