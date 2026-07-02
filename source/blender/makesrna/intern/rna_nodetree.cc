@@ -38,6 +38,8 @@
 
 #include "IMB_colormanagement.hh"
 
+#include "UI_interface_c.hh"
+
 #include "WM_types.hh"
 
 namespace blender {
@@ -1078,6 +1080,7 @@ static bool rna_NodeTree_unregister(Main *bmain, StructRNA *type)
   if (!nt) {
     return false;
   }
+  ui::refresh_for_srna_unregister(bmain, type);
 
   RNA_struct_free_extension(type, &nt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
@@ -2002,6 +2005,7 @@ static bool rna_Node_unregister(Main *bmain, StructRNA *type)
   if (!nt || rna_Node_is_builtin(nt)) {
     return false;
   }
+  ui::refresh_for_srna_unregister(bmain, type);
 
   RNA_struct_free_extension(type, &nt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
