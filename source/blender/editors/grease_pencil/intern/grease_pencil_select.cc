@@ -472,6 +472,48 @@ static void GREASE_PENCIL_OT_select_linked(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
+static wmOperatorStatus select_linked_pick_exec(bContext *C, wmOperator *op)
+{
+  Scene *scene = CTX_data_scene(C);
+  Object *object = CTX_data_active_object(C);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
+  const bool unselect = RNA_boolean_get(op->ptr, "deselect");
+
+  const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(*scene, grease_pencil);
+  threading::parallel_for_each(drawings, [&](const MutableDrawingInfo &info) {
+    IndexMaskMemory memory;
+    const IndexMask selectable_strokes = ed::greasepencil::retrieve_editable_strokes(
+        *object, info.drawing, info.layer_index, memory);
+    if (selectable_strokes.is_empty()) {
+      return;
+    }
+    ed::curves::select_linked_pick(info.drawing.strokes_for_write(), selectable_strokes, unselect);
+  });
+
+  /* Use #ID_RECALC_GEOMETRY instead of #ID_RECALC_SELECT because it is handled as a generic
+   * attribute for now. */
+  DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GEOM | ND_DATA, &grease_pencil);
+
+  return OPERATOR_FINISHED;
+}
+
+static void GREASE_PENCIL_OT_select_linked_pick(wmOperatorType *ot)
+{
+  ot->name = "Select Linked Pick";
+  ot->idname = "GREASE_PENCIL_OT_select_linked_pick";
+  ot->description = "Select all points in curves with any point selection";
+
+  ot->exec = select_linked_pick_exec;
+  ot->poll = editable_grease_pencil_point_selection_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  PropertyRNA *prop = RNA_def_boolean(
+      ot->srna, "deselect", false, "Deselect linked", "Deselect linked strokes");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+}
+
 static wmOperatorStatus select_random_exec(bContext *C, wmOperator *op)
 {
   const float ratio = RNA_float_get(op->ptr, "ratio");
