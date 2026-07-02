@@ -10,6 +10,7 @@
 
 #include "BLI_path_utils.hh"
 
+#include "opentimelineio/clip.h"
 #include "opentimelineio/serializableObject.h"
 #include "opentimelineio/track.h"
 
@@ -21,13 +22,6 @@ struct OTIOExportParams;
 
 namespace io::otio {
 using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
-
-struct CompareStripStart {
-  bool operator()(const Strip *a, const Strip *b) const
-  {
-    return a->start < b->start;
-  }
-};
 
 struct CompareStripChannel {
   bool operator()(const Strip *a, const Strip *b) const
@@ -55,10 +49,14 @@ class StripExporter {
 
   virtual ~StripExporter() {};
 
-  virtual void export_strip(Main * /*bmain*/,
-                            const OTIOExportParams * /*export_params*/,
-                            std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>>
-                                & /*single_input_effects*/) {};
+  virtual SerializableObject::Retainer<Clip> export_strip(
+      Main * /*bmain*/,
+      const OTIOExportParams * /*export_params*/,
+      std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>>
+          & /*single_input_effects*/)
+  {
+    return SerializableObject::Retainer<Clip>(new Clip());
+  };
 
   void add_gap_if_necessary();
   static void add_gap_if_necessary(SerializableObject::Retainer<Track> &track_,
@@ -66,7 +64,7 @@ class StripExporter {
                                    int end_frame,
                                    double scene_fps);
 
-  void export_with_missing_reference(
+  SerializableObject::Retainer<Clip> export_with_missing_reference(
       std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects);
 
  protected:
@@ -85,10 +83,11 @@ class MovieStripExporter : public StripExporter {
                      const char *filepath = nullptr)
       : StripExporter(strip, scene, track, last_strip_end, filepath) {};
 
-  void export_strip(Main *bmain,
-                    const OTIOExportParams *export_params,
-                    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>>
-                        &single_input_effects) override;
+  SerializableObject::Retainer<Clip> export_strip(
+      Main *bmain,
+      const OTIOExportParams *export_params,
+      std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
+      override;
 };
 
 class SoundStripExporter : public StripExporter {
@@ -99,10 +98,11 @@ class SoundStripExporter : public StripExporter {
                      int last_strip_end = 0)
       : StripExporter(strip, scene, track, last_strip_end) {};
 
-  void export_strip(Main *bmain,
-                    const OTIOExportParams *export_params,
-                    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>>
-                        &single_input_effects) override;
+  SerializableObject::Retainer<Clip> export_strip(
+      Main *bmain,
+      const OTIOExportParams *export_params,
+      std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
+      override;
 };
 
 class ImageStripExporter : public StripExporter {
@@ -114,10 +114,11 @@ class ImageStripExporter : public StripExporter {
                      const char *filepath = nullptr)
       : StripExporter(strip, scene, track, last_strip_end, filepath) {};
 
-  void export_strip(Main *bmain,
-                    const OTIOExportParams *export_params,
-                    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>>
-                        &single_input_effects) override;
+  SerializableObject::Retainer<Clip> export_strip(
+      Main *bmain,
+      const OTIOExportParams *export_params,
+      std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
+      override;
 };
 
 class RenderAsMovieExporter : public StripExporter {
@@ -131,10 +132,11 @@ class RenderAsMovieExporter : public StripExporter {
       : StripExporter(strip, scene, track, last_strip_end, filepath),
         include_audio_(include_audio) {};
 
-  void export_strip(Main *bmain,
-                    const OTIOExportParams *export_params,
-                    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>>
-                        &single_input_effects) override;
+  SerializableObject::Retainer<Clip> export_strip(
+      Main *bmain,
+      const OTIOExportParams *export_params,
+      std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
+      override;
 
  private:
   bool include_audio_ = false;
@@ -149,10 +151,11 @@ class GeneratorStripExporter : public StripExporter {
                          const char *filepath = nullptr)
       : StripExporter(strip, scene, track, last_strip_end, filepath) {};
 
-  void export_strip(Main * /*bmain*/,
-                    const OTIOExportParams * /*export_params*/,
-                    std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>>
-                        &single_input_effects) override;
+  SerializableObject::Retainer<Clip> export_strip(
+      Main * /*bmain*/,
+      const OTIOExportParams * /*export_params*/,
+      std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> &single_input_effects)
+      override;
 };
 
 void attach_foreign_metadata_scene(const Scene *scene,

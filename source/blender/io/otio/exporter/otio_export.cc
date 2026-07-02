@@ -6,26 +6,31 @@
  * \ingroup otio
  */
 
+#include <algorithm>
 #include <map>
 
 #include "BKE_context.hh"
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 
+#include "BLI_listbase.hh"
 #include "BLI_listbase_iterator.hh"
 
 #include "DNA_listBase.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
+#include "SEQ_channels.hh"
 #include "SEQ_effects.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_utils.hh"
 
 #include "WM_types.hh"
 
+#include "opentimelineio/clip.h"
 #include "opentimelineio/color.h"
 #include "opentimelineio/marker.h"
+#include "opentimelineio/serializableObject.h"
 #include "opentimelineio/timeline.h"
 #include "opentimelineio/track.h"
 #include "opentimelineio/transition.h"
@@ -93,6 +98,13 @@ static void export_transition(const Strip *strip,
   last_strip_end = strip->right_handle(scene);
 }
 
+static void increment_progress(wmJobWorkerStatus *worker_status, float progress_per_strip)
+{
+  worker_status->progress += progress_per_strip;
+  math::clamp(worker_status->progress, 0.0f, 1.0f);
+  worker_status->do_update = true;
+}
+
 /**
  * We need two stacks when we have meta strips with both video and audio strips. It is not as
  * straight forward as separating clips to video or audio channels as metastrips can also contain
@@ -119,21 +131,26 @@ static void otio_export_recursive(Main *bmain,
                                   SerializableObject::Retainer<Stack> *secondary_stack,
                                   ListBaseT<Strip> *strips,
                                   int _last_strip_end,
-                                  int stack_end)
+                                  int stack_end,
+                                  const ListBaseT<SeqTimelineChannel> *channel_listbase,
+                                  wmJobWorkerStatus *worker_status,
+                                  float progress_per_strip)
 {
   bool inside_meta = secondary_stack != nullptr;
 
   /* Separate video and audio channels.
    * Use negative channel number as key in std::map to store the sound strips.
    */
-  std::map<int, std::set<Strip *, CompareStripStart>> channels;
+  std::map<int, std::vector<Strip *>> channels;
   std::unordered_map<Strip *, std::set<Strip *, CompareStripChannel>> single_input_effects;
+  /* Store input1 -> transition strip mapping. */
+  std::unordered_map<Strip *, Strip *> transition_effects_1;
   /* Store input2 -> transition strip mapping. */
-  std::unordered_map<Strip *, Strip *> transition_effects;
+  std::unordered_map<Strip *, Strip *> transition_effects_2;
 
   for (Strip &strip : *strips) {
     if (ELEM(strip.type, STRIP_TYPE_SOUND)) {
-      channels[-strip.channel].insert(&strip);
+      channels[-strip.channel].push_back(&strip);
     }
     else if (ELEM(strip.type, STRIP_TYPE_GAUSSIAN_BLUR, STRIP_TYPE_GLOW, STRIP_TYPE_SPEED)) {
       if (strip.input1) {
@@ -141,15 +158,34 @@ static void otio_export_recursive(Main *bmain,
       }
     }
     else if (seq::effect_is_transition(strip.type) && strip.type != STRIP_TYPE_COMPOSITOR) {
-      transition_effects[strip.input2] = &strip;
+      transition_effects_1[strip.input1] = &strip;
+      transition_effects_2[strip.input2] = &strip;
     }
     else {
-      channels[strip.channel].insert(&strip);
+      channels[strip.channel].push_back(&strip);
     }
   }
 
   /* Iterate through the channels and strips to create OTIO timeine. */
   for (auto [original_channel, strips] : channels) {
+    /* Sort the strips in the channel. */
+    std::stable_sort(strips.begin(), strips.end(), [scene](const Strip *a, const Strip *b) {
+      if (a->left_handle() != b->left_handle()) {
+        return a->left_handle() < b->left_handle();
+      }
+      if (a->right_handle(scene) != b->right_handle(scene)) {
+        return a->right_handle(scene) < b->right_handle(scene);
+      }
+      return false;
+    });
+
+    bool is_enabled = true;
+    if (channel_listbase) {
+      const SeqTimelineChannel *ch = seq::channel_get_by_index(channel_listbase, original_channel);
+      if (ch && ch->is_muted()) {
+        is_enabled = false;
+      }
+    }
 
     const std::string track_type = original_channel < 0 ? Track::Kind::audio : Track::Kind::video;
 
@@ -166,20 +202,22 @@ static void otio_export_recursive(Main *bmain,
     auto meta_audio_track = SerializableObject::Retainer<Track>(
         new Track("", track_source_range, Track::Kind::audio));
 
-    int last_strip_end = _last_strip_end;
+    track->set_enabled(is_enabled);
+    meta_video_track->set_enabled(is_enabled);
+    meta_audio_track->set_enabled(is_enabled);
+
+    int last_strip_end = 0;
 
     /* Append all the strips of this channel in the track. */
     for (Strip *strip : strips) {
-      if (transition_effects.contains(strip)) {
-        CLOG_INFO(&LOG, "Exporting Transition '%s'...", transition_effects[strip]->name + 2);
-        export_transition(transition_effects[strip],
+      if (transition_effects_2.contains(strip)) {
+        CLOG_INFO(&LOG, "Exporting Transition '%s'...", transition_effects_2[strip]->name + 2);
+        export_transition(transition_effects_2[strip],
                           scene,
                           inside_meta ? meta_video_track : track,
                           last_strip_end);
       }
-      else {
-        CLOG_INFO(&LOG, "Exporting Strip '%s'...", strip->name + 2);
-      }
+      CLOG_INFO(&LOG, "Exporting Strip '%s'...", strip->name + 2);
 
       StripExporter *strip_exporter = nullptr;
 
@@ -199,22 +237,6 @@ static void otio_export_recursive(Main *bmain,
       else if (strip->type == STRIP_TYPE_META ||
                ((strip->type == STRIP_TYPE_SCENE) && (strip->flag & SEQ_SCENE_STRIPS)))
       {
-        if (inside_meta) {
-          StripExporter::add_gap_if_necessary(meta_video_track,
-                                              last_strip_end + 1,
-                                              strip->left_handle() - 1,
-                                              scene->frames_per_second());
-
-          StripExporter::add_gap_if_necessary(meta_audio_track,
-                                              last_strip_end + 1,
-                                              strip->left_handle() - 1,
-                                              scene->frames_per_second());
-        }
-        else {
-          StripExporter::add_gap_if_necessary(
-              track, last_strip_end + 1, strip->left_handle() - 1, scene->frames_per_second());
-        }
-
         int r_offset;
         ListBaseT<SeqTimelineChannel> *r_channels;
         ListBaseT<Strip> *seqbase = seq::get_seqbase_from_strip(strip, &r_channels, &r_offset);
@@ -243,22 +265,36 @@ static void otio_export_recursive(Main *bmain,
                                 &secondary_meta_stack,
                                 seqbase,
                                 strip->left_handle() - 1,
-                                strip->right_handle(scene));
-
-          last_strip_end = strip->right_handle(scene);
+                                strip->right_handle(scene) - 1,
+                                r_channels,
+                                worker_status,
+                                0.0f);
 
           if (!primary_meta_stack->children().empty()) {
+            primary_meta_stack->set_enabled(!(strip->flag & SEQ_MUTE));
             add_strip_metadata(strip, primary_meta_stack);
             attach_foreign_metadata_strip(strip, primary_meta_stack);
             add_effects_to_clip(scene, strip, primary_meta_stack, single_input_effects);
+            StripExporter::add_gap_if_necessary(meta_video_track,
+                                                last_strip_end + 1,
+                                                strip->left_handle() - 1,
+                                                scene->frames_per_second());
             meta_video_track->append_child(primary_meta_stack);
           }
+
           if (!secondary_meta_stack->children().empty()) {
+            secondary_meta_stack->set_enabled(!(strip->flag & SEQ_MUTE));
             add_strip_metadata(strip, secondary_meta_stack);
             attach_foreign_metadata_strip(strip, secondary_meta_stack);
             add_effects_to_clip(scene, strip, secondary_meta_stack, single_input_effects);
+            StripExporter::add_gap_if_necessary(meta_audio_track,
+                                                last_strip_end + 1,
+                                                strip->left_handle() - 1,
+                                                scene->frames_per_second());
             meta_audio_track->append_child(secondary_meta_stack);
           }
+
+          last_strip_end = strip->right_handle(scene) - 1;
         }
       }
       /* 3D Scene Strip. */
@@ -293,11 +329,30 @@ static void otio_export_recursive(Main *bmain,
       }
 
       if (strip_exporter) {
-        strip_exporter->export_strip(bmain, export_params, single_input_effects);
+        SerializableObject::Retainer<Clip> clip = strip_exporter->export_strip(
+            bmain, export_params, single_input_effects);
+        std::optional<TimeRange> source_range = clip->source_range();
         last_strip_end = strip_exporter->last_strip_end;
+
+        if (source_range && transition_effects_1.contains(strip)) {
+          Strip *transition_strip = transition_effects_1[strip];
+          int strip_len = transition_strip->right_handle(scene) - transition_strip->left_handle();
+          clip->set_source_range(
+              TimeRange{source_range->start_time(),
+                        RationalTime(source_range->duration().to_frames() + strip_len / 2)});
+        }
+        else if (source_range && transition_effects_2.contains(strip)) {
+          Strip *transition_strip = transition_effects_2[strip];
+          int strip_len = transition_strip->right_handle(scene) - transition_strip->left_handle();
+          clip->set_source_range(
+              TimeRange{RationalTime(source_range->start_time().to_frames() - strip_len / 2),
+                        RationalTime(source_range->duration().to_frames() + strip_len / 2)});
+        }
 
         delete strip_exporter;
       }
+      /* wmJob progress. */
+      increment_progress(worker_status, progress_per_strip);
     }
 
     if (!track->children().empty()) {
@@ -348,6 +403,8 @@ void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
   worker_status->progress = 0.0f;
   worker_status->do_update = true;
 
+  float progress_per_strip = 1.0f / BLI_listbase_count(seqbase);
+
   auto timeline = SerializableObject::Retainer<Timeline>(
       new Timeline(scene->id.name + 2, RationalTime(0, scene->frames_per_second())));
 
@@ -360,7 +417,10 @@ void otio_export_job_start(void *custom_data, wmJobWorkerStatus *worker_status)
                         nullptr,
                         seqbase,
                         0,
-                        scene->r.efra);
+                        scene->r.efra,
+                        &editing->channels,
+                        worker_status,
+                        progress_per_strip);
 
   attach_foreign_metadata_scene(scene, timeline);
   export_scene_markers(scene, main_stack);
