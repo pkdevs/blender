@@ -172,6 +172,7 @@ struct MixedBoundaryOp {
     diagonal -= 1.0 * (1.0f - factor);
     source += math::interpolate(
         value * voxel_volume_, (gradient * voxel_size_).dot(normal), factor);
+    // std::cout << "A" << ijk << "=" << diagonal << ", b=" << source << std::endl;
   };
 };
 
