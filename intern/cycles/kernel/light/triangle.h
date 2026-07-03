@@ -274,6 +274,40 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
   return (ls->pdf > 0.0f);
 }
 
+/* uv, object and lamp should already be set at this point. */
+ccl_device_forceinline void triangle_light_sample_from_uv(KernelGlobals kg,
+                                                          float time,
+                                                          const float2 uv_, // reservoir.uv
+                                                          ccl_private LightSample *ls,
+                                                          const float3 P)
+{
+  float3 V[3];
+  triangle_world_space_vertices(kg, ls->object, ls->prim, time, V);
+
+  const float3 e0 = V[1] - V[0];
+  const float3 e1 = V[2] - V[0];
+
+  ls->Ng = safe_normalize(cross(e0, e1));
+  /* Flip normal if necessary. */
+  const int object_flag = kernel_data_fetch(object_flag, ls->object);
+  if (object_flag & SD_OBJECT_NEGATIVE_SCALE) {
+    ls->Ng = -ls->Ng;
+  }
+
+  ls->eval_fac = 1.0f;
+
+  // TODO(Tri): MIS. Side of triangle
+  ls->shader = kernel_data_fetch(tri_shader, ls->prim) | SHADER_USE_MIS;
+  ls->type = LIGHT_TRIANGLE;
+  ls->group = object_lightgroup(kg, ls->object);
+
+  const float t = 1.0f - uv_.x - uv_.y;
+  ls->P = t * V[0] + uv_.x * V[1] + uv_.y * V[2];
+  ls->D = safe_normalize_len(ls->P - P, &ls->t);
+
+  ls->pdf *= (ls->t > 0.0f);
+}
+
 /* Find the ray segment lit by the triangle light. */
 ccl_device_inline bool triangle_light_valid_ray_segment(KernelGlobals kg,
                                                         const float3 P,

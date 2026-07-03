@@ -320,6 +320,7 @@ bool restir_di_select_light(KernelGlobals kg,
                             ccl_global ReSTIRReservoir *restir_reservoirs,
                             ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
                             const int restir_reservoir_count,
+                            ccl_global float *ccl_restrict render_buffer,
                             ccl_private LightSample *r_ls,
                             ccl_private float *r_restir_W,
                             int mnee_vertex_count)
@@ -346,8 +347,10 @@ bool restir_di_select_light(KernelGlobals kg,
     LightSample candidate ccl_optional_struct_init;
 
     const float3 rand_light = path_branched_rng_3D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_LIGHT);
+    // Emitter sample parameters; light sampler should use these values directly as emmiter UVs
+    const float2 candidate_uv = make_float2(rand_light.x, rand_light.y);
 
-
+    // Selected candidate is generated during the current path trace step:
     if (!light_sample_from_position(kg,
                                     rand_light,
                                     sd->time,
@@ -357,7 +360,7 @@ bool restir_di_select_light(KernelGlobals kg,
                                     sd->flag,
                                     bounce,
                                     path_flag,
-                                    &candidate))
+                                    &candidate)) // Relocation is needed only when we evaluate or output a reused reservoir sample
     {
       ris.M++;
       continue;
@@ -409,7 +412,8 @@ bool restir_di_select_light(KernelGlobals kg,
     const float random = path_branched_rng_1D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_RESAMPLE);
 
 
-    restir_streaming_resample_step(&ris, &candidate, target, source, random);
+    restir_streaming_resample_step(&ris, &candidate, candidate_uv, 
+                                   target, source, random);
   }
 
 // >>> DEBUG
@@ -419,11 +423,13 @@ bool restir_di_select_light(KernelGlobals kg,
 // <<<
 
   ReSTIRReservoir reservoir = restir_finalize(&ris);
+  // To detect tempral reuse
+  bool reused_temporally = false;
   reservoir.visible = true; // So it never starts as garbage.
 
   // !!!: For now, keep ReSTIR DI temporal reuse first-hit only.
   if (bounce == 0 && mnee_vertex_count == 0) {
-    reservoir = restir_temporal_reuse( // Temporal reuse stage
+    ReSTIRReservoir new_res = restir_temporal_reuse( // Temporal reuse stage
         kg,
         state,
         sd,
@@ -431,7 +437,13 @@ bool restir_di_select_light(KernelGlobals kg,
         &reservoir,
         // kernel_data_fetch(PathTraceWorkGPU::restir_reservoirs_prev_, 0));
         restir_reservoirs_prev,
-        restir_reservoir_count);
+        restir_reservoir_count,
+        render_buffer);
+
+    // Or: check new_res.visible, or compare uv, or simply:
+    reused_temporally = true;  // since temporal reuse attempted
+
+    reservoir = new_res;
   }
 
   // kernel_assert(reservoir.M == candidate_count); // No longer valid after temporal reuse
@@ -466,16 +478,56 @@ bool restir_di_select_light(KernelGlobals kg,
 //             (double)reservoir.light.pdf);
 //     }
 // #endif
+
+
 // <<<
 
     // return SHADER_EVAL_EMPTY;
+    return false; // Invalid reservoir
+  }
+
+// >>> Relocation for re-used reservoirs
+// >>> DEBUG
+// #ifdef WITH_CYCLES_DEBUG
+  float pdf_val = reservoir.light.pdf;
+  // Split into integer part and 3 decimal places
+  int pdf_int = (int)pdf_val;
+  int pdf_frac = (int)((pdf_val - pdf_int) * 1000.0f);
+  if (pdf_frac < 0) { pdf_frac = -pdf_frac; }
+// #endif
+
+  printf("restir_di_select_light(); analytic selected: prim=%d type=%d shader=%d pdf=%d.%03d\n",
+         reservoir.light.prim,
+         reservoir.light.type,
+         reservoir.light.shader,
+         pdf_int,
+         pdf_frac);
+// <<<
+
+  LightSample relocated_ls = reservoir.light;
+// >>> New
+  if (reused_temporally) {
+      relocated_ls = reservoir.light;
+      restir_light_sample_from_uv(kg, sd, path_flag, &relocated_ls, reservoir.uv); // !!!
+  }
+  else {
+      relocated_ls = reservoir.light; // KEEP ORIGINAL RIS SAMPLE
+  }
+// <<<
+
+  if (relocated_ls.pdf <= 0.0f) {
+    if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
+      restir_reservoirs[pixel_index] = restir_reservoir_empty();
+    }
     return false;
   }
+// <<<
 
   if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) { // storage and shadow validation are matched
       restir_reservoirs[pixel_index] = reservoir;
   }
 
+// >>> Debug
   kernel_assert(isfinite(reservoir.light.pdf));
   kernel_assert(reservoir.light.pdf >= 0.0f);
 
@@ -487,8 +539,10 @@ bool restir_di_select_light(KernelGlobals kg,
       printf("Bad reservoir at pixel %u\n", pixel_index);
     }
   }
+// <<<
 
-  *r_ls = reservoir.light;
+  // *r_ls = reservoir.light;
+  *r_ls = relocated_ls; 
   *r_restir_W = reservoir.W;
 
   return true;
@@ -511,6 +565,7 @@ bool integrate_surface_sample_light_nee(KernelGlobals kg,
   {
     /* MNEE already sampled a light and caustics casters. */
     integrator_state_read_mnee(state, ls, mnee_vertex_count);
+    return true;
   }
   else
 #endif
@@ -549,7 +604,8 @@ ccl_device
                                    const ccl_private RNGState *rng_state,
                                    ccl_global ReSTIRReservoir *restir_reservoirs,
                                    ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
-                                   const int restir_reservoir_count)
+                                   const int restir_reservoir_count,
+                                   ccl_global float *ccl_restrict render_buffer)
 {
   /* Test if there is a light or BSDF that needs direct light. */
   if (!(kernel_data.integrator.use_direct_light && (sd->flag & SD_BSDF_HAS_EVAL))) {
@@ -571,9 +627,11 @@ ccl_device
 
   printf("integrate_surface_direct_light(); use_restir:%d\n", use_restir); // DEBUG ONLY
   if (use_restir) {
+    PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
+
     if (!restir_di_select_light(kg, state, sd, rng_state, 
-                                restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count,
-                                &ls, &restir_W, mnee_vertex_count)) {
+                                restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count, 
+                                render_buffer,&ls, &restir_W, mnee_vertex_count)) { // !!!
         return SHADER_EVAL_EMPTY;
     }
   }
@@ -1095,7 +1153,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
     /* Direct light. */
     PROFILING_EVENT(PROFILING_SHADE_SURFACE_DIRECT_LIGHT);
     const ShaderEvalResult result = integrate_surface_direct_light<node_feature_mask>(
-        kg, state, &sd, &rng_state, restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count);
+        kg, state, &sd, &rng_state, restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count, render_buffer);
     if (result == SHADER_EVAL_CACHE_MISS) {
       return LABEL_CACHE_MISS;
     }

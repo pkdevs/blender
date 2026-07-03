@@ -100,7 +100,7 @@ ccl_device_inline bool light_sample(KernelGlobals kg,
   ls->type = type;
   ls->shader = klight->shader_id;
   ls->object = klight->object_id;
-  ls->prim = lamp;
+  ls->prim = lamp; // !!!
   ls->group = object_lightgroup(kg, ls->object);
 
   if (in_volume_segment && (type == LIGHT_SUN || type == LIGHT_BACKGROUND)) {
@@ -153,7 +153,7 @@ ccl_device_inline bool light_sample(KernelGlobals kg,
 
 /* Sample a point on the chosen emitter. */
 
-template<bool in_volume_segment>
+template<bool in_volume_segment> // !!!
 ccl_device bool light_sample(KernelGlobals kg,
                              const float3 rand_light,
                              const float time,
@@ -487,6 +487,84 @@ ccl_device void light_normal_uv_from_position(KernelGlobals kg,
   }
   else {
     kernel_assert(0);
+  }
+}
+
+/**
+ * Does (uv → position); opposite of `light_normal_uv_from_position`
+ * Enables light sample relocation!
+ */
+ccl_device_inline void restir_light_sample_from_uv(
+    KernelGlobals kg,
+    const ccl_private ShaderData *sd,
+    const uint32_t path_flag,
+    ccl_private LightSample *ls,
+    const float2 uv_)
+{
+  PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_SETUP);
+
+  ls->pdf = 1.0f;
+
+  /* Analytic light */
+  if (ls->object == OBJECT_NONE) {
+  #if defined(__KERNEL_CPU__) // DEBUG ONLY; double is not availble on Metal
+    printf("reloc analytic: lamp=%d type=%d uv=(%f,%f)\n",
+          ls->prim,
+          (int)kernel_data_fetch(lights, ls->prim).type,
+          (double)uv_.x,
+          (double)uv_.y);
+  #endif
+
+    const int lamp = ls->prim;
+    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
+
+    if (path_flag & PATH_RAY_SHADOW_CATCHER_PASS) {
+      if (klight->shader_id & SHADER_EXCLUDE_SHADOW_CATCHER) {
+        ls->pdf = 0.0f;
+        return;
+      }
+    }
+
+    const LightType type = (LightType)klight->type;
+
+    ls->type = type;
+    ls->shader = klight->shader_id;
+
+    // ls->group = object_lightgroup(kg, klight->object_id); // !!!: Wrong
+    // lamp_lightgroup(kg, lamp_index)
+    if (ls->object == OBJECT_NONE) {
+        // analytic light
+        const int lamp = ls->prim;
+        ls->group = object_lightgroup(kg, lamp); // !!!
+    }
+    else {
+        // mesh light
+        ls->group = object_lightgroup(kg, ls->object);
+    }
+
+
+    if (type == LIGHT_POINT) {
+      point_light_sample_from_uv(kg, klight, sd->P, uv_, ls);
+    }
+    else if (type == LIGHT_AREA) {
+      area_light_sample_from_uv(klight, sd->P, ls);
+    }
+    else if (type == LIGHT_SUN) {
+      /* Directional light */
+      ls->D = -klight->co;
+      ls->P = ls->D;
+      ls->Ng = ls->D;
+      ls->t = FLT_MAX;
+      ls->eval_fac = 1.0f;
+    }
+    else if (type == LIGHT_BACKGROUND) {
+
+    }
+  }
+  // TODO: Spot...
+  else {
+    /* Mesh light */
+    triangle_light_sample_from_uv(kg, sd->time, uv_, ls, sd->P);
   }
 }
 

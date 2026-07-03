@@ -88,7 +88,7 @@ ccl_device_forceinline float sphere_light_pdf(
   return has_transmission ? M_1_2PI_F * 0.5f : pdf_cos_hemisphere(N, D);
 }
 
-ccl_device_forceinline float2 point_light_uv(KernelGlobals kg,
+ccl_device_forceinline float2 point_light_uv(KernelGlobals kg, // !!!
                                              const ccl_global KernelLight *klight,
                                              const float3 Ng)
 {
@@ -147,6 +147,55 @@ ccl_device_inline bool point_light_intersect(const ccl_global KernelLight *kligh
   const float3 diskN = normalize(ray->P - klight->co);
   return ray_disk_intersect(
       ray->P, ray->D, ray->tmin, ray->tmax, klight->co, diskN, radius, &P, t);
+}
+
+ccl_device_inline void point_light_sample_from_uv(KernelGlobals kg,
+                                                  const ccl_global KernelLight *klight,
+                                                  const float3 ray_P,
+                                                  const float2 uv_,
+                                                  ccl_private LightSample *ccl_restrict ls)
+{
+  ls->eval_fac = klight->spot.eval_fac;
+  const float radius = klight->spot.radius;
+
+  if (radius == 0.0f) {
+    ls->P = klight->co;
+    ls->D = normalize_len(ls->P - ray_P, &ls->t);
+    ls->Ng = -ls->D;
+    // ls->pdf = 1.0f; // Ensure PDF is set
+
+    /* Recompute texture coordinates from the new direction. */
+    // !!!: remove since we already store UV
+    /**
+     * We store `reservoir.uv` which represents the ORIGINAL sampling parameterization
+     * The reservoirs' UVs no longer require any updates since the ORIGINAL sampling param is stored!
+     * So, the following call is removed:
+     ```
+      point_light_uv(kg, klight, ls->Ng);
+     ```
+    */
+    return;
+  }
+
+  const Transform itfm = lamp_get_inverse_transform(kg, klight);
+  const Transform tfm = transform_inverse(itfm);
+
+  const float2 uv = make_float2(1.0f - uv_.x - uv_.y, uv_.x);
+  ls->Ng = normalize(transform_direction(&tfm, map_to_sphere(uv)));
+
+  if (klight->spot.is_sphere) {
+    ls->P = klight->co + radius * ls->Ng;
+    ls->D = normalize_len(ls->P - ray_P, &ls->t);
+    // TODO: what if uv is not visible from the new point?
+  }
+  else {
+    ls->D = -ls->Ng;
+    if (!ray_aligned_disk_intersect(
+            ray_P, ls->D, 0.0f, FLT_MAX, klight->co, radius, &ls->P, &ls->t))
+    {
+      ls->pdf = 0.0f; // !!!: See if `pdf` is needed here
+    }
+  }
 }
 
 ccl_device_inline LightEval

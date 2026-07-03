@@ -102,6 +102,8 @@ const NodeEnum *Pass::get_type_enum()
     pass_type_enum.insert("shadow_catcher_sample_count", PASS_SHADOW_CATCHER_SAMPLE_COUNT);
     pass_type_enum.insert("shadow_catcher_matte", PASS_SHADOW_CATCHER_MATTE);
 
+    pass_type_enum.insert("surface_data", PASS_SURFACE_DATA);
+
     pass_type_enum.insert("bake_primitive", PASS_BAKE_PRIMITIVE);
     pass_type_enum.insert("bake_seed", PASS_BAKE_SEED);
     pass_type_enum.insert("bake_differential", PASS_BAKE_DIFFERENTIAL);
@@ -388,6 +390,10 @@ PassInfo Pass::get_info(const PassType type,
       break;
     case PASS_GUIDING_AVG_ROUGHNESS:
       pass_info.num_components = 1;
+      break;
+
+	  case PASS_SURFACE_DATA:
+      pass_info.num_components = 7;
       break;
 
     default:

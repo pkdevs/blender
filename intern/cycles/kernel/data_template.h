@@ -115,6 +115,10 @@ KERNEL_STRUCT_MEMBER(film, float, pass_alpha_threshold)
 KERNEL_STRUCT_MEMBER(film, int, pass_shadow_catcher)
 KERNEL_STRUCT_MEMBER(film, int, pass_shadow_catcher_sample_count)
 KERNEL_STRUCT_MEMBER(film, int, pass_shadow_catcher_matte)
+
+/* ReSTIR. */
+KERNEL_STRUCT_MEMBER(film, int, pass_surface_data) // !!!
+
 KERNEL_STRUCT_MEMBER(film, int, pass_render_time)
 /* Cryptomatte. */
 KERNEL_STRUCT_MEMBER(film, int, cryptomatte_passes)

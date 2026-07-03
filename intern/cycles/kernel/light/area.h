@@ -387,6 +387,20 @@ ccl_device_forceinline void area_light_mnee_sample_update(const ccl_global Kerne
   }
 }
 
+// TODO: Fully Implement 
+/* NOTE: `ls->pdf` is skipped. */
+ccl_device_inline void area_light_sample_from_uv(const ccl_global KernelLight *klight,
+                                                 const float3 ray_P,
+                                                 ccl_private LightSample *ccl_restrict ls)
+{
+  ls->Ng = klight->area.dir;
+  float3 light_P = klight->co;
+  // !!!: area_light_eval<false, true>;
+  if (!area_light_eval<false>(klight, ray_P, &light_P, ls, zero_float2(), false)) {
+    ls->pdf = 0.0f;
+  }
+}
+
 ccl_device_inline bool area_light_intersect(const ccl_global KernelLight *klight,
                                             const ccl_private Ray *ccl_restrict ray,
                                             ccl_private float *t)

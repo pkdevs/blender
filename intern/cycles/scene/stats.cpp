@@ -372,6 +372,15 @@ void RenderStats::collect_profiling(Scene *scene, Profiler &prof)
   light.add_entry("Setup", prof.get_event(PROFILING_SHADE_LIGHT_SETUP));
   light.add_entry("Shader Evaluation", prof.get_event(PROFILING_SHADE_LIGHT_EVAL));
 
+  NamedNestedSampleStats &restir = kernel.add_entry("ReSTIR", 0);
+
+  // TODO: RIS, TEMPORAL...
+
+  NamedNestedSampleStats &spatial_resampling = restir.add_entry(
+      "Spatial Resampling", prof.get_event(PROFILING_RESTIR_SPATIAL_RESAMPLING));
+  spatial_resampling.add_entry("Reservoir Passes",
+                               prof.get_event(PROFILING_RESTIR_RESERVOIR_PASSES));
+
   shaders.entries.clear();
   for (Shader *shader : scene->shaders) {
     uint64_t samples;

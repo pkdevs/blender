@@ -410,6 +410,8 @@ enum PassType {
   PASS_SHADOW_CATCHER,
   PASS_SHADOW_CATCHER_SAMPLE_COUNT,
   PASS_SHADOW_CATCHER_MATTE,
+  
+  PASS_SURFACE_DATA, // !!!
 
   /* Guiding related debug rendering passes */
   /* The estimated sample color from the PathSegmentStorage. If everything is integrated correctly
@@ -511,7 +513,7 @@ enum EmissionSampling {
 
 enum LightType {
   LIGHT_POINT,
-  LIGHT_SUN,
+  LIGHT_SUN, // !!!
   LIGHT_BACKGROUND,
   LIGHT_AREA,
   LIGHT_SPOT,
@@ -541,8 +543,11 @@ struct LightSample {
 struct ReSTIRReservoir {
     LightSample light;
 
+    float2 uv;      // Required for relocation, must be stored before RIS; used to be part of LS
+
     float W;        // Final Probabilistic reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_target_pdf;
     uint M;
+    // TODO: Remove
     bool visible;   // To rejected occuluded paths // TODO(Tri): Change to uint for safety?
 };
 
@@ -1542,6 +1547,28 @@ struct KernelSunLight {
   float pad[3];
 };
 
+/**
+typedef struct KernelLight {
+  int type;
+  packed_float3 co;
+  int shader_id;
+  float max_bounces;
+  float random;
+  float strength[3];
+  int use_caustics;
+  int lightgroup;
+  Transform tfm;
+  Transform itfm;
+union {
+    KernelSpotLight spot;
+    KernelAreaLight area;
+    KernelDistantLight distant;
+  };
+  uint64_t light_set_membership;
+  uint64_t shadow_set_membership;
+} KernelLight;
+static_assert_align(KernelLight, 16);
+ */
 struct KernelLight {
   int type;
   packed_float3 co;

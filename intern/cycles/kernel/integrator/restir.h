@@ -11,6 +11,7 @@
 #include "kernel/integrator/state_flow.h" // integrator_path_next
 
 #include "kernel/sample/pattern.h"
+#include "util/math_float2.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -18,6 +19,7 @@ ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
 {
   ReSTIRReservoir r{};      // Optional
 
+  r.uv = zero_float2();
   r.W = 0.0f;
   r.M = 0;
   r.visible = false; // this used to be true; Old comment: necessarily optimistic here; visibility is known only after the shadow ray. Later
@@ -30,6 +32,8 @@ ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
 struct ReSTIRRisState {
     LightSample light;
 
+    float2 uv;
+
     float weight_sum;           // Sum of (target/source); only exists while streaming candidates.
     float selected_target_pdf;  // selected RIS weight (target)
 
@@ -39,6 +43,8 @@ struct ReSTIRRisState {
 ccl_device_inline ReSTIRRisState restir_ris_empty()
 {
   ReSTIRRisState s;
+
+  s.uv = zero_float2();
 
   s.weight_sum = 0.0f;
   s.selected_target_pdf = 0.0f;
@@ -51,6 +57,7 @@ ccl_device_inline ReSTIRRisState restir_ris_empty()
 ccl_device_inline void restir_streaming_resample_step(
     ccl_private ReSTIRRisState *ris,
     ccl_private const LightSample *candidate,
+    const float2 candidate_uv,
     const float target_pdf,
     const float source_pdf,
     const float random)
@@ -82,6 +89,7 @@ ccl_device_inline void restir_streaming_resample_step(
 
   if (random * ris->weight_sum < sample_weight) {
     ris->light = *candidate;
+    ris->uv = candidate_uv; // !!!
     ris->selected_target_pdf = target_pdf;
   }
 }
@@ -108,7 +116,7 @@ ccl_device_inline void restir_streaming_resample_step(
 
 //   return reservoir;
 // }
-ccl_device_inline ReSTIRReservoir restir_finalize( // !!!: Migth be unnecessary
+ccl_device_inline ReSTIRReservoir restir_finalize(
     const ccl_private ReSTIRRisState *ris)
 {
   ReSTIRReservoir reservoir = restir_reservoir_empty();
@@ -118,6 +126,8 @@ ccl_device_inline ReSTIRReservoir restir_finalize( // !!!: Migth be unnecessary
   }
 
   reservoir.light = ris->light;
+  reservoir.uv = ris->uv;
+
   reservoir.M = ris->M;
   reservoir.visible = true;
   reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
@@ -175,8 +185,50 @@ ccl_device_inline bool restir_reservoir_is_valid(const ccl_private ReSTIRReservo
    return r->M > 0 && r->W > 0.0f;
 }
 
+ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *sd,
+                                                       ccl_private uint32_t *path_flag,
+                                                       const ccl_global float *buffer)
+{
+  int i = 0;
+
+  *path_flag = (uint32_t)buffer[i++];
+
+  sd->u = buffer[i++];
+  sd->v = buffer[i++];
+  sd->type = (uint)buffer[i++];
+  sd->object = (int)buffer[i++];
+  sd->prim = (int)buffer[i++];
+  sd->lcg_state = (uint)buffer[i];
+
+  /* Returns true if we have a valid intersection at the shading point */
+  return sd->type != 0;
+}
+
+ccl_device_forceinline ccl_global float *pixel_render_buffer( // !!!: See if correct!
+    KernelGlobals kg, uint32_t render_pixel_index, ccl_global float *ccl_restrict render_buffer)
+{
+  const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
+                                        kernel_data.film.pass_stride;
+  return render_buffer + render_buffer_offset;
+}
+
+ccl_device_inline bool integrator_restir_unpack_shader(KernelGlobals kg,
+                                                       ccl_private ShaderData *sd,
+                                                       uint32_t render_pixel_index,
+                                                       ccl_global float *ccl_restrict render_buffer,
+                                                       ccl_private uint32_t *path_flag)
+{
+  PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
+  ccl_global const float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+                                   kernel_data.film.pass_surface_data;
+
+  return integrator_restir_unpack_shader(sd, path_flag, buffer);
+}
+
+// MARK: - 
+
 // This is the math that actually chooses which light to keep (streamingResampleStep).
-ccl_device_inline bool restir_streaming_resample_reservoir( // New
+ccl_device_inline bool restir_streaming_resample_reservoir(
     ccl_private ReSTIRRisState *ris,
     const ccl_private ReSTIRReservoir *reservoir,
     const float target_pdf,
@@ -197,6 +249,7 @@ ccl_device_inline bool restir_streaming_resample_reservoir( // New
 
   if (random * ris->weight_sum < sample_weight) {
     ris->light = reservoir->light;
+    ris->uv = reservoir->uv;
     ris->selected_target_pdf = target_pdf;
     return true;
   }
@@ -204,7 +257,7 @@ ccl_device_inline bool restir_streaming_resample_reservoir( // New
   return false;
 }
 
-ccl_device_inline ReSTIRReservoir restir_finalize_temporal(const ccl_private ReSTIRRisState *ris) // New
+ccl_device_inline ReSTIRReservoir restir_finalize_temporal(const ccl_private ReSTIRRisState *ris)
 {
   ReSTIRReservoir reservoir = restir_reservoir_empty();
 
@@ -213,6 +266,8 @@ ccl_device_inline ReSTIRReservoir restir_finalize_temporal(const ccl_private ReS
   }
 
   reservoir.light = ris->light;
+
+  reservoir.uv = ris->uv;
   reservoir.M = ris->M;
   reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
   reservoir.visible = true;
