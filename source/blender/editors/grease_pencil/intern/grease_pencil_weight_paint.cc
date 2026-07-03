@@ -448,28 +448,15 @@ struct ClosestGreasePencilDrawing {
   ed::curves::FindClosestData elem;
 };
 
-static wmOperatorStatus weight_sample_invoke(bContext *C,
-                                             wmOperator * /*op*/,
-                                             const wmEvent *event)
-{
-  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
-
-  /* Get the active vertex group. */
-  const int object_defgroup_nr = BKE_object_defgroup_active_index_get(vc.obact) - 1;
-  if (object_defgroup_nr == -1) {
-    return OPERATOR_CANCELLED;
-  }
-  const bDeformGroup *object_defgroup = static_cast<const bDeformGroup *>(
-      BLI_findlink(BKE_object_defgroup_list(vc.obact), object_defgroup_nr));
+static const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name) {
 
   /* Collect visible drawings. */
-  const Object *ob_eval = DEG_get_evaluated(vc.depsgraph, vc.obact);
-  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(vc.obact->data);
+  const Object *ob_eval = DEG_get_evaluated(vc.depsgraph, obj);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(obj->data);
   const Vector<DrawingInfo> drawings = retrieve_visible_drawings(*vc.scene, grease_pencil, false);
 
   /* Find stroke points closest to mouse cursor position. */
-  const ClosestGreasePencilDrawing closest = threading::parallel_reduce(
+  return threading::parallel_reduce(
       drawings.index_range(),
       1L,
       ClosestGreasePencilDrawing(),
@@ -480,9 +467,9 @@ static wmOperatorStatus weight_sample_invoke(bContext *C,
           const bke::greasepencil::Layer &layer = grease_pencil.layer(info.layer_index);
 
           /* Skip drawing when it doesn't use the active vertex group. */
-          const int drawing_defgroup_nr = BKE_defgroup_name_index(
-              &info.drawing.strokes().vertex_group_names, object_defgroup->name);
-          if (drawing_defgroup_nr == -1) {
+          const int drawing_defgroup_nr = vertex_group_name ? BKE_defgroup_name_index(
+              &info.drawing.strokes().vertex_group_names, vertex_group_name) : -1;
+          if (vertex_group_name && drawing_defgroup_nr == -1) {
             continue;
           }
 
@@ -508,7 +495,7 @@ static wmOperatorStatus weight_sample_invoke(bContext *C,
                                                          projection,
                                                          points,
                                                          bke::AttrDomain::Point,
-                                                         event->mval,
+                                                         screen_pos,
                                                          new_closest.elem);
           if (new_closest_elem) {
             new_closest.elem = *new_closest_elem;
@@ -522,6 +509,27 @@ static wmOperatorStatus weight_sample_invoke(bContext *C,
         return (a.elem.distance_sq < b.elem.distance_sq) ? a : b;
       });
 
+
+}
+
+
+static wmOperatorStatus weight_sample_invoke(bContext *C,
+                                             wmOperator * /*op*/,
+                                             const wmEvent *event)
+{
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
+
+  /* Get the active vertex group. */
+  const int object_defgroup_nr = BKE_object_defgroup_active_index_get(vc.obact) - 1;
+  if (object_defgroup_nr == -1) {
+    return OPERATOR_CANCELLED;
+  }
+  const bDeformGroup *object_defgroup = static_cast<const bDeformGroup *>(
+      BLI_findlink(BKE_object_defgroup_list(vc.obact), object_defgroup_nr));
+
+  /* Find stroke points closest to mouse cursor position. */
+  const ClosestGreasePencilDrawing closest = find_closest_greasepencil_drawing_screen_space(vc, vc.obact, event->mval, object_defgroup->name);
   if (!closest.drawing) {
     return OPERATOR_CANCELLED;
   }
