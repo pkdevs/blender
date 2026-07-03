@@ -404,13 +404,13 @@ gpu::Texture *IMB_touch_gpu_texture(const char *name,
                                     int layers,
                                     bool use_high_bitdepth,
                                     bool use_grayscale,
-                                    bool /*writable*/)
+                                    bool writable)
 {
   gpu::TextureFormat tex_format;
   imb_gpu_get_format(ibuf, use_high_bitdepth, use_grayscale, &tex_format);
 
   const eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ |
-                                 GPU_texture_mipmap_usage(tex_format);
+                                 GPU_texture_mipmap_usage(tex_format, writable);
 
   gpu::Texture *tex;
   if (layers > 0) {
@@ -532,7 +532,8 @@ gpu::Texture *IMB_create_gpu_texture(const char *name,
    * by the GPU compositor. Mipmaps need additional usage flags. */
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_HOST_READ;
   if (use_mipmap) {
-    usage |= GPU_texture_mipmap_usage(tex_format);
+    usage |= GPU_texture_mipmap_usage(tex_format,
+                                      flag_is_set(flags, GPUTextureCreateFlags::Writable));
   }
   tex = GPU_texture_create_2d(
       name, UNPACK2(size), use_mipmap ? 9999 : 1, tex_format, usage, nullptr);
@@ -700,7 +701,8 @@ static void imb_gpu_texture_make_writable(const char *name, ImBuf *ibuf)
   const int h = GPU_texture_height(old_tex);
   const int mip_count = GPU_texture_mip_count(old_tex);
   const gpu::TextureFormat format = GPU_texture_format(old_tex);
-  const eGPUTextureUsage usage = GPU_texture_usage(old_tex) | GPU_texture_mipmap_usage(format);
+  const eGPUTextureUsage usage = GPU_texture_usage(old_tex) |
+                                 GPU_texture_mipmap_usage(format, true);
   const bool is_array = GPU_texture_is_array(old_tex);
 
   gpu::Texture *new_tex =
@@ -777,7 +779,8 @@ gpu::Texture *IMB_acquire_gpu_texture(const char *name,
     /* Ensure the texture is writable when it needs to be. */
     if (ibuf->gpu.flag & IMB_GPU_WRITABLE) {
       gpu::Texture *tex = ibuf->gpu.texture;
-      const eGPUTextureUsage mipmap_usage = GPU_texture_mipmap_usage(GPU_texture_format(tex));
+      const eGPUTextureUsage mipmap_usage = GPU_texture_mipmap_usage(GPU_texture_format(tex),
+                                                                     true);
       if (GPU_texture_has_compressed_format(tex) ||
           (GPU_texture_usage(tex) & mipmap_usage) != mipmap_usage)
       {

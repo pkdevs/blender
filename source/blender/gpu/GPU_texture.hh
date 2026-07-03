@@ -1019,9 +1019,11 @@ void GPU_texture_copy(gpu::Texture *dst, gpu::Texture *src);
 void GPU_texture_copy_mipmap_chain(gpu::Texture *dst, gpu::Texture *src);
 
 /**
- * Returns the texture usage flags needed for generating a mipmap.
+ * Returns the texture usage flags needed for generating a mipmap. If \a writable is true, the
+ * texture is expected to be updated in place (e.g. painting) and may request extra usage that
+ * enables a faster in-place path at the cost of disabling some hardware compression.
  */
-eGPUTextureUsage GPU_texture_mipmap_usage(gpu::TextureFormat format);
+eGPUTextureUsage GPU_texture_mipmap_usage(gpu::TextureFormat format, bool writable);
 
 /**
  * Update the mip-map levels using the mip 0 data.

@@ -650,6 +650,8 @@ void GLBackend::capabilities_init()
   GCaps.geometry_shader_support = true;
   GCaps.hdr_viewport_support = false;
 
+  GCaps.srgb_write_view_support = true;
+
   glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &GCaps.max_work_group_count[0]);
   glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 1, &GCaps.max_work_group_count[1]);
   glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, &GCaps.max_work_group_count[2]);
