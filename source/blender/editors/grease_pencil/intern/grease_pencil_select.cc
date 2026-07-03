@@ -473,7 +473,7 @@ static void GREASE_PENCIL_OT_select_linked(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
-
+#if 0
 static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_Params &params)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(&C);
@@ -483,7 +483,7 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
       *vc.bmain, vc.scene, vc.view_layer, vc.v3d);
 
 
-  const ClosestCurveDataBlock closest = find_closest_curve(*depsgraph, vc, bases, mval);
+  const ClosesGPDataBlock closest = find_closest_curve(*depsgraph, vc, bases, mval);
   if (!closest.curves_id) {
     return false;
   }
@@ -514,6 +514,7 @@ static bool select_linked_pick(bContext &C, const int2 &mval, const SelectPick_P
 
   return true;
 }
+#endif
 
 #if 0
 static wmOperatorStatus select_linked_pick_exec(bContext *C, wmOperator *op)
@@ -544,6 +545,7 @@ static wmOperatorStatus select_linked_pick_exec(bContext *C, wmOperator *op)
 #endif
 
 
+#if 0
 static wmOperatorStatus select_linked_pick_invoke(bContext *C,
                                                   wmOperator *op,
                                                   const wmEvent *event)
@@ -578,6 +580,7 @@ void CURVES_OT_select_linked_pick(wmOperatorType *ot)
                   "Deselect stroke points rather than selecting them");
 }
 
+#endif
 
 static wmOperatorStatus select_random_exec(bContext *C, wmOperator *op)
 {
