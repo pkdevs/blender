@@ -689,10 +689,8 @@ static void imb_gpu_texture_apply_partial_updates(ImBuf *ibuf, const bool use_pr
     case Changes::Kind::Partial:
       IMB_gpu_texture_apply_partial_update(
           ibuf->gpu.texture, ibuf, use_premult, changes, -1, int2(0), int2(0));
-      if (!(ibuf->gpu.flag & IMB_GPU_DISABLE_MIPMAP_UPDATE)) {
-        GPU_texture_update_mipmap_chain(ibuf->gpu.texture);
-        ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
-      }
+      GPU_texture_update_mipmap_chain(ibuf->gpu.texture);
+      ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
       ibuf->gpu.partial_update_changeset = new_changeset_id;
       break;
     case Changes::Kind::None:
@@ -749,14 +747,9 @@ gpu::Texture *IMB_acquire_gpu_texture(const char *name,
 
   GPU_texture_extend_mode(tex, GPU_SAMPLER_EXTEND_MODE_REPEAT);
 
-  if (!(ibuf->gpu.flag & IMB_GPU_DISABLE_MIPMAP_UPDATE)) {
-    GPU_texture_update_mipmap_chain(tex);
-    GPU_texture_mipmap_mode(tex, true, true);
-    ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
-  }
-  else {
-    GPU_texture_mipmap_mode(tex, false, true);
-  }
+  GPU_texture_update_mipmap_chain(tex);
+  GPU_texture_mipmap_mode(tex, true, true);
+  ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
 
   ibuf->gpu.partial_update_changeset = changeset_id;
   ibuf->gpu.texture = tex;
