@@ -531,6 +531,32 @@ class CYCLES_RENDER_PT_sampling_lights(CyclesButtonsPanel, Panel):
         sub.active = not cscene.use_light_tree
 
 
+# TODO: CYCLES_RENDER_PT_sampling_lights_restir_temporal
+class CYCLES_RENDER_PT_sampling_lights_restir_temporal(CyclesButtonsPanel, Panel):
+    bl_label = "Temporal Resampling"
+    bl_parent_id = 'CYCLES_RENDER_PT_sampling_lights'
+
+    def draw_header(self, context):
+        scene = context.scene
+        cscene = scene.cycles
+
+        self.layout.active = cscene.use_restir
+        self.layout.prop(cscene, "use_temporal_resampling", text="")
+
+    def draw(self, context):
+        scene = context.scene
+        cscene = scene.cycles
+
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.active = cscene.use_restir
+
+        col = layout.column(align=True)
+        col.active = cscene.use_temporal_resampling
+        col.prop(cscene, "restir_temporal_history_limit", text="History Limit")
+
+
 class CYCLES_RENDER_PT_subdivision(CyclesButtonsPanel, Panel):
     bl_label = "Subdivision"
     bl_options = {'DEFAULT_CLOSED'}
@@ -2594,6 +2620,7 @@ classes = (
     CYCLES_RENDER_PT_sampling_path_guiding,
     CYCLES_RENDER_PT_sampling_path_guiding_debug,
     CYCLES_RENDER_PT_sampling_lights,
+    CYCLES_RENDER_PT_sampling_lights_restir_temporal,
     CYCLES_RENDER_PT_sampling_advanced,
     CYCLES_RENDER_PT_sampling_advanced_sample_subset,
     CYCLES_RENDER_PT_light_paths,

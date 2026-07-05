@@ -562,6 +562,21 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=8,
     )
 
+    use_temporal_resampling: BoolProperty(
+        name="Temporal Resampling",
+        description="Reuse samples from the previous frame's reservoirs",
+        default=True,
+    )
+
+    # TODO
+    restir_temporal_history_limit: IntProperty(
+        name="History Limit",
+        description="Maximum length of temporal history to accumulate (in frames)",
+        min=1,
+        max=64,
+        default=16,
+    )
+
     scrambling_distance: FloatProperty(
         name="Scrambling Distance",
         default=1.0,

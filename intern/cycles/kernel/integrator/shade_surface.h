@@ -427,8 +427,11 @@ bool restir_di_select_light(KernelGlobals kg,
   bool reused_temporally = false;
   reservoir.visible = true; // So it never starts as garbage.
 
+  const bool use_temporal = kernel_data.integrator.use_temporal_resampling &&
+                            bounce == 0 && mnee_vertex_count == 0;
+
   // !!!: For now, keep ReSTIR DI temporal reuse first-hit only.
-  if (bounce == 0 && mnee_vertex_count == 0) {
+  if (use_temporal) {
     ReSTIRReservoir new_res = restir_temporal_reuse( // Temporal reuse stage
         kg,
         state,
@@ -437,9 +440,12 @@ bool restir_di_select_light(KernelGlobals kg,
         &reservoir,
         // kernel_data_fetch(PathTraceWorkGPU::restir_reservoirs_prev_, 0));
         restir_reservoirs_prev,
-        restir_reservoir_count,
-        render_buffer);
+        restir_reservoir_count
+        // render_buffer
+      );
 
+// TODO: Set it only if the selected sample in final reservoir actually came from previous reservoir 
+// or if you can detect a changed canonical sample source.
     // Or: check new_res.visible, or compare uv, or simply:
     reused_temporally = true;  // since temporal reuse attempted
 
@@ -481,39 +487,38 @@ bool restir_di_select_light(KernelGlobals kg,
 
 
 // <<<
-
-    // return SHADER_EVAL_EMPTY;
     return false; // Invalid reservoir
   }
 
 // >>> Relocation for re-used reservoirs
-// >>> DEBUG
-// #ifdef WITH_CYCLES_DEBUG
-  float pdf_val = reservoir.light.pdf;
-  // Split into integer part and 3 decimal places
-  int pdf_int = (int)pdf_val;
-  int pdf_frac = (int)((pdf_val - pdf_int) * 1000.0f);
-  if (pdf_frac < 0) { pdf_frac = -pdf_frac; }
-// #endif
+// // >>> DEBUG
+// // #ifdef WITH_CYCLES_DEBUG
+//   float pdf_val = reservoir.light.pdf;
+//   // Split into integer part and 3 decimal places
+//   int pdf_int = (int)pdf_val;
+//   int pdf_frac = (int)((pdf_val - pdf_int) * 1000.0f);
+//   if (pdf_frac < 0) { pdf_frac = -pdf_frac; }
+// // #endif
 
-  printf("restir_di_select_light(); analytic selected: prim=%d type=%d shader=%d pdf=%d.%03d\n",
-         reservoir.light.prim,
-         reservoir.light.type,
-         reservoir.light.shader,
-         pdf_int,
-         pdf_frac);
-// <<<
+//   printf("restir_di_select_light(); analytic selected: prim=%d type=%d shader=%d pdf=%d.%03d\n",
+//          reservoir.light.prim,
+//          reservoir.light.type,
+//          reservoir.light.shader,
+//          pdf_int,
+//          pdf_frac);
+// // <<<
+
 
   LightSample relocated_ls = reservoir.light;
-// >>> New
+
   if (reused_temporally) {
       relocated_ls = reservoir.light;
       restir_light_sample_from_uv(kg, sd, path_flag, &relocated_ls, reservoir.uv); // !!!
   }
   else {
+// !!!: Brings back the issue of multiple DI reflections for analytic lights, seem to be only for area light!
       relocated_ls = reservoir.light; // KEEP ORIGINAL RIS SAMPLE
   }
-// <<<
 
   if (relocated_ls.pdf <= 0.0f) {
     if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
@@ -541,8 +546,8 @@ bool restir_di_select_light(KernelGlobals kg,
   }
 // <<<
 
-  // *r_ls = reservoir.light;
-  *r_ls = relocated_ls; 
+  *r_ls = reservoir.light;
+  // *r_ls = relocated_ls; 
   *r_restir_W = reservoir.W;
 
   return true;

@@ -490,6 +490,7 @@ ccl_device void light_normal_uv_from_position(KernelGlobals kg,
   }
 }
 
+// TODO(Tri): WIP: Will require multiple new features in LS & possibly SD
 /**
  * Does (uv → position); opposite of `light_normal_uv_from_position`
  * Enables light sample relocation!
@@ -502,6 +503,11 @@ ccl_device_inline void restir_light_sample_from_uv(
     const float2 uv_)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_SETUP);
+
+  if (ls->object == OBJECT_NONE) {
+// !!! analytic light → do NOTHING; we need * a new analytic-light 2D parameterization per lamp type
+      return;
+  }
 
   ls->pdf = 1.0f;
 
@@ -531,7 +537,7 @@ ccl_device_inline void restir_light_sample_from_uv(
     ls->shader = klight->shader_id;
 
     // ls->group = object_lightgroup(kg, klight->object_id); // !!!: Wrong
-    // lamp_lightgroup(kg, lamp_index)
+    // lamp_lightgroup(kg, lamp_index) // Deprecated
     if (ls->object == OBJECT_NONE) {
         // analytic light
         const int lamp = ls->prim;

@@ -430,8 +430,14 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer, // !!!
     scene->light_manager->tag_update(scene, LightManager::UPDATE_ALL);
   }
 
+	/* ReSTIR. */
   const bool use_restir = get_boolean(cscene, "use_restir");
+
+  bool use_temporal_resampling = get_boolean(cscene, "use_temporal_resampling");
+  // bool use_spatial_resampling = get_boolean(cscene, "use_spatial_resampling");
+
   integrator->set_use_restir(use_restir);
+  integrator->set_use_temporal_resampling(use_temporal_resampling);
 
   // restir_light_samples
   integrator->set_restir_candidate_count(get_int(cscene, "restir_candidate_count"));

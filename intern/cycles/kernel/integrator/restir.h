@@ -42,7 +42,7 @@ struct ReSTIRRisState {
 
 ccl_device_inline ReSTIRRisState restir_ris_empty()
 {
-  ReSTIRRisState s;
+  ReSTIRRisState s{}; // Initialize s.light
 
   s.uv = zero_float2();
 
@@ -185,24 +185,25 @@ ccl_device_inline bool restir_reservoir_is_valid(const ccl_private ReSTIRReservo
    return r->M > 0 && r->W > 0.0f;
 }
 
-ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *sd,
-                                                       ccl_private uint32_t *path_flag,
-                                                       const ccl_global float *buffer)
-{
-  int i = 0;
+// !!!: Not needed until relocation is deployed. 
+// ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *sd,
+//                                                        ccl_private uint32_t *path_flag,
+//                                                        const ccl_global float *buffer)
+// {
+//   int i = 0;
 
-  *path_flag = (uint32_t)buffer[i++];
+//   *path_flag = (uint32_t)buffer[i++];
 
-  sd->u = buffer[i++];
-  sd->v = buffer[i++];
-  sd->type = (uint)buffer[i++];
-  sd->object = (int)buffer[i++];
-  sd->prim = (int)buffer[i++];
-  sd->lcg_state = (uint)buffer[i];
+//   sd->u = buffer[i++];
+//   sd->v = buffer[i++];
+//   sd->type = (uint)buffer[i++];
+//   sd->object = (int)buffer[i++];
+//   sd->prim = (int)buffer[i++];
+//   sd->lcg_state = (uint)buffer[i];
 
-  /* Returns true if we have a valid intersection at the shading point */
-  return sd->type != 0;
-}
+//   /* Returns true if we have a valid intersection at the shading point */
+//   return sd->type != 0;
+// }
 
 ccl_device_forceinline ccl_global float *pixel_render_buffer( // !!!: See if correct!
     KernelGlobals kg, uint32_t render_pixel_index, ccl_global float *ccl_restrict render_buffer)
@@ -212,18 +213,18 @@ ccl_device_forceinline ccl_global float *pixel_render_buffer( // !!!: See if cor
   return render_buffer + render_buffer_offset;
 }
 
-ccl_device_inline bool integrator_restir_unpack_shader(KernelGlobals kg,
-                                                       ccl_private ShaderData *sd,
-                                                       uint32_t render_pixel_index,
-                                                       ccl_global float *ccl_restrict render_buffer,
-                                                       ccl_private uint32_t *path_flag)
-{
-  PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
-  ccl_global const float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-                                   kernel_data.film.pass_surface_data;
+// ccl_device_inline bool integrator_restir_unpack_shader(KernelGlobals kg,
+//                                                        ccl_private ShaderData *sd,
+//                                                        uint32_t render_pixel_index,
+//                                                        ccl_global float *ccl_restrict render_buffer,
+//                                                        ccl_private uint32_t *path_flag)
+// {
+//   PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
+//   ccl_global const float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+//                                    kernel_data.film.pass_surface_data;
 
-  return integrator_restir_unpack_shader(sd, path_flag, buffer);
-}
+//   return integrator_restir_unpack_shader(sd, path_flag, buffer);
+// }
 
 // MARK: - 
 
