@@ -1453,3 +1453,45 @@ def expose_bundled_modules():
 
     if packages_dir not in _sys.path:
         _sys.path.insert(0, packages_dir)
+
+
+def deep_module_reload(mod):
+    """
+    Clear the sub-module cache of *mod* and set a flag so that the
+    next "Reload Scripts" re-executes this add-on even when the
+    ``mtime`` of ``__init__.py`` has not changed.
+
+    Usage — at the top of an add-on's ``__init__.py`` **before**
+    importing sub-modules::
+
+        import bpy
+        if hasattr(bpy.utils, 'deep_module_reload'):
+            bpy.utils.deep_module_reload(__name__)
+
+        from . import operators
+
+    The ``hasattr`` guard keeps the add-on compatible with Blender
+    versions that do not include this function.
+
+    .. note::
+
+       Only use for add-on development.  Built-in Blender modules
+       must never be passed to this function.
+    """
+    import sys as _sys
+
+    mod_obj = _sys.modules.get(mod)
+    if mod_obj is None:
+        raise ValueError("Module %r is not loaded" % mod)
+
+    # Evict sub-modules so the subsequent imports in ``__init__.py``
+    # read fresh code from disk.
+    prefix = mod + "."
+    for name in list(_sys.modules):
+        if name.startswith(prefix):
+            del _sys.modules[name]
+
+    # Flag so ``addon_utils.enable`` skips the ``mtime`` gate on the
+    # next "Reload Scripts", ensuring ``__init__.py`` is re-executed
+    # and our eviction logic above runs again.
+    mod_obj.__deep_reload__ = True

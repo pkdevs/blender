@@ -403,6 +403,16 @@ def enable(module_name, *, default_set=False, persistent=False, refresh_handled=
     mod = sys.modules.get(module_name)
     # chances of the file _not_ existing are low, but it could be removed
 
+    if mod is not None and getattr(mod, "__deep_reload__", False):
+        mod.__deep_reload__ = False
+        prefix = module_name + "."
+        for name in list(sys.modules):
+            if name.startswith(prefix) or name == module_name:
+                del sys.modules[name]
+        # Clear so the mtime / addon_enabled checks below are skipped.
+        mod = None
+    # chances of the file _not_ existing are low, but it could be removed
+
     # Set to `mod.__file__` or None.
     mod_file = None
 
@@ -429,7 +439,14 @@ def enable(module_name, *, default_set=False, persistent=False, refresh_handled=
         mod.__addon_enabled__ = False
         mtime_orig = getattr(mod, "__time__", 0)
         mtime_new = os.path.getmtime(mod_file)
-        if mtime_orig != mtime_new:
+
+        # Also check the `__deep_reload__` flag set by
+        # `bpy.utils.deep_module_reload()`, so that add-ons which opt-in
+        # get reloaded even when only sub-modules changed.
+        deep_reload = getattr(mod, "__deep_reload__", False)
+        if (mtime_orig != mtime_new) or deep_reload:
+            if deep_reload:
+                mod.__deep_reload__ = False
             print("module changed on disk:", repr(mod_file), "reloading...")
 
             try:
