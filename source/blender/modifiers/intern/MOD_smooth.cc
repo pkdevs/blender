@@ -105,28 +105,37 @@ static Array<float> compute_edge_cotangent_weights(const Mesh &mesh, const Span<
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<int> corner_edges = mesh.corner_edges();
 
+  Array<int> e2c_offsets, e2c_indices;
+  const GroupedSpan<int> edge_to_corner_map = bke::mesh::build_edge_to_corner_map(
+      corner_edges, edges.size(), e2c_offsets, e2c_indices);
+  const Array<int> corner_to_face_map = bke::mesh::build_corner_to_face_map(faces);
+
   Array<float> weights(edges.size(), 0.0f);
 
-  for (const int f : faces.index_range()) {
-    const IndexRange face = faces[f];
-    const int n = face.size();
-    if (n < 3) {
-      continue;
-    }
-    for (int k = 0; k < n; k++) {
-      const int corner_curr = int(face[k]);
-      const int corner_next = int(face[(k + 1) % n]);
-      const int corner_prev = int(face[(k + n - 1) % n]);
-      const float3 &p_prev = positions[corner_verts[corner_prev]];
-      const float3 &p_curr = positions[corner_verts[corner_curr]];
-      const float3 &p_next = positions[corner_verts[corner_next]];
-      const float cot = cotangent_tri_weight_v3(p_prev, p_curr, p_next) * 0.5f;
-      if (cot <= 0.0f) {
-        continue;
+  threading::parallel_for(edges.index_range(), 2048, [&](const IndexRange range) {
+    for (const int e : range) {
+      float w = 0.0f;
+      for (const int corner_curr : edge_to_corner_map[e]) {
+        const IndexRange face = faces[corner_to_face_map[corner_curr]];
+        const int n = face.size();
+        if (n < 3) {
+          continue;
+        }
+        const int k = corner_curr - int(face.start());
+        const int corner_next = int(face[(k + 1) % n]);
+        const int corner_prev = int(face[(k + n - 1) % n]);
+        const float3 &p_prev = positions[corner_verts[corner_prev]];
+        const float3 &p_curr = positions[corner_verts[corner_curr]];
+        const float3 &p_next = positions[corner_verts[corner_next]];
+        const float cot = cotangent_tri_weight_v3(p_prev, p_curr, p_next) * 0.5f;
+        if (cot <= 0.0f) {
+          continue;
+        }
+        w += cot;
       }
-      weights[corner_edges[corner_curr]] += cot;
+      weights[e] = w;
     }
-  }
+  });
 
   return weights;
 }
