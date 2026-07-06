@@ -75,6 +75,29 @@ static float vgroup_weight(const MDeformVert &dv, const int defgrp_index, const 
   return invert ? 1.0f - w : w;
 }
 
+static Array<bool> compute_boundary_vertex_mask(const Mesh &mesh)
+{
+  const Span<int2> edges = mesh.edges();
+  const OffsetIndices<int> faces = mesh.faces();
+  const Span<int> corner_edges = mesh.corner_edges();
+
+  Array<int> edge_face_count(edges.size(), 0);
+  for (const int f : faces.index_range()) {
+    for (const int edge : corner_edges.slice(faces[f])) {
+      edge_face_count[edge]++;
+    }
+  }
+
+  Array<bool> is_boundary(mesh.verts_num, false);
+  for (const int e : edges.index_range()) {
+    if (edge_face_count[e] == 1) {
+      is_boundary[edges[e][0]] = true;
+      is_boundary[edges[e][1]] = true;
+    }
+  }
+  return is_boundary;
+}
+
 static Array<float> compute_edge_cotangent_weights(const Mesh &mesh, const Span<float3> positions)
 {
   const Span<int2> edges = mesh.edges();
@@ -112,12 +135,18 @@ static void gather_avg_pass(const Span<int2> edges,
                             const GroupedSpan<int> vert_to_edge_map,
                             const Span<float3> src,
                             const Span<float> edge_weights,
+                            const Span<bool> pinned,
                             const bool use_midpoint,
                             MutableSpan<float3> dst_avg)
 {
   const bool weighted = !edge_weights.is_empty();
+  const bool has_pin = !pinned.is_empty();
   threading::parallel_for(src.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
+      if (has_pin && pinned[i]) {
+        dst_avg[i] = src[i];
+        continue;
+      }
       const Span<int> incident = vert_to_edge_map[i];
       float3 sum(0.0f);
       float wsum = 0.0f;
@@ -175,6 +204,7 @@ static void hc_correction_pass(MutableSpan<float3> p,
                                const Span<int2> edges,
                                const GroupedSpan<int> vert_to_edge_map,
                                const Span<float> edge_weights,
+                               const Span<bool> pinned,
                                const float alpha,
                                const float beta,
                                MutableSpan<float3> b,
@@ -186,7 +216,7 @@ static void hc_correction_pass(MutableSpan<float3> p,
     }
   });
 
-  gather_avg_pass(edges, vert_to_edge_map, b, edge_weights, false, b_avg);
+  gather_avg_pass(edges, vert_to_edge_map, b, edge_weights, pinned, false, b_avg);
 
   const float ombeta = 1.0f - beta;
   threading::parallel_for(p.index_range(), 4096, [&](const IndexRange range) {
@@ -223,6 +253,13 @@ static void smoothModifier_do(SmoothModifierData *smd,
   }
   const Span<float> weights_span = use_cotan ? edge_weights.as_span() : Span<float>{};
 
+  Array<bool> boundary_mask;
+  if (smd->flag & MOD_SMOOTH_PIN_BOUNDARY) {
+    boundary_mask = compute_boundary_vertex_mask(*mesh);
+  }
+  const Span<bool> pinned_span = boundary_mask.is_empty() ? Span<bool>{} :
+                                                            boundary_mask.as_span();
+
   const MDeformVert *dvert;
   int defgrp_index;
   MOD_get_vgroup(ob, mesh, smd->defgrp_name, &dvert, &defgrp_index);
@@ -230,7 +267,8 @@ static void smoothModifier_do(SmoothModifierData *smd,
   switch (smd->method) {
     case MOD_SMOOTH_METHOD_SIMPLE: {
       for (int j = 0; j < smd->repeat; j++) {
-        gather_avg_pass(edges, vert_to_edge_map, vertexCos, {}, true, accumulated_vecs);
+        gather_avg_pass(
+            edges, vert_to_edge_map, vertexCos, {}, pinned_span, true, accumulated_vecs);
         apply_blend(
             vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
       }
@@ -238,10 +276,22 @@ static void smoothModifier_do(SmoothModifierData *smd,
     }
     case MOD_SMOOTH_METHOD_TAUBIN: {
       for (int j = 0; j < smd->repeat; j++) {
-        gather_avg_pass(edges, vert_to_edge_map, vertexCos, weights_span, false, accumulated_vecs);
+        gather_avg_pass(edges,
+                        vert_to_edge_map,
+                        vertexCos,
+                        weights_span,
+                        pinned_span,
+                        false,
+                        accumulated_vecs);
         apply_blend(
             vertexCos, accumulated_vecs, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
-        gather_avg_pass(edges, vert_to_edge_map, vertexCos, weights_span, false, accumulated_vecs);
+        gather_avg_pass(edges,
+                        vert_to_edge_map,
+                        vertexCos,
+                        weights_span,
+                        pinned_span,
+                        false,
+                        accumulated_vecs);
         apply_blend(vertexCos,
                     accumulated_vecs,
                     smd->taubin_mu,
@@ -257,13 +307,15 @@ static void smoothModifier_do(SmoothModifierData *smd,
       Array<float3> hc_b(verts_num);
       Array<float3> hc_b_avg(verts_num);
       for (int j = 0; j < smd->repeat; j++) {
-        gather_avg_pass(edges, vert_to_edge_map, hc_p, weights_span, false, accumulated_vecs);
+        gather_avg_pass(
+            edges, vert_to_edge_map, hc_p, weights_span, pinned_span, false, accumulated_vecs);
         hc_correction_pass(accumulated_vecs,
                            hc_p,
                            vertexCos.as_span(),
                            edges,
                            vert_to_edge_map,
                            weights_span,
+                           pinned_span,
                            smd->hc_alpha,
                            smd->hc_beta,
                            hc_b,
@@ -319,6 +371,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   }
 
   col.prop(ptr, "iterations", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "use_pin_boundary", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
 
