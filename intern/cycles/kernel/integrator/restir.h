@@ -19,10 +19,8 @@ ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
 {
   ReSTIRReservoir r{};      // Optional
 
-  r.uv = zero_float2();
   r.W = 0.0f;
   r.M = 0;
-  r.visible = false; // this used to be true; Old comment: necessarily optimistic here; visibility is known only after the shadow ray. Later
 
   return r;
 }
@@ -31,8 +29,6 @@ ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
 
 struct ReSTIRRisState {
     LightSample light;
-
-    float2 uv;
 
     float weight_sum;           // Sum of (target/source); only exists while streaming candidates.
     float selected_target_pdf;  // selected RIS weight (target)
@@ -43,8 +39,6 @@ struct ReSTIRRisState {
 ccl_device_inline ReSTIRRisState restir_ris_empty()
 {
   ReSTIRRisState s{}; // Initialize s.light
-
-  s.uv = zero_float2();
 
   s.weight_sum = 0.0f;
   s.selected_target_pdf = 0.0f;
@@ -57,13 +51,12 @@ ccl_device_inline ReSTIRRisState restir_ris_empty()
 ccl_device_inline void restir_streaming_resample_step(
     ccl_private ReSTIRRisState *ris,
     ccl_private const LightSample *candidate,
-    const float2 candidate_uv,
     const float target_pdf,
     const float source_pdf,
     const float random)
 {
   // restir_streaming_resample_step(&ris, &candidate, target, source, random);
-  // candidate weights
+  // Candidate weight is target_pdf / source_pdf.
   if (source_pdf <= 0.0f || target_pdf <= 0.0f) {
     ris->M++;
     return;
@@ -89,7 +82,6 @@ ccl_device_inline void restir_streaming_resample_step(
 
   if (random * ris->weight_sum < sample_weight) {
     ris->light = *candidate;
-    ris->uv = candidate_uv; // !!!
     ris->selected_target_pdf = target_pdf;
   }
 }
@@ -126,10 +118,8 @@ ccl_device_inline ReSTIRReservoir restir_finalize(
   }
 
   reservoir.light = ris->light;
-  reservoir.uv = ris->uv;
 
   reservoir.M = ris->M;
-  reservoir.visible = true;
   reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
 
   if (!(isfinite(reservoir.W) && reservoir.W > 0.0f)) {
@@ -144,31 +134,7 @@ ccl_device_inline void restir_di_shadow_set_visible(IntegratorShadowState state,
                                                     const int restir_reservoir_count,
                                                     const bool visible)
 {
-#ifdef __RESTIR_DI__
-  if (restir_reservoirs == nullptr) {
-    return;
-  }
-
-  if (INTEGRATOR_STATE(state, shadow_path, restir_di) == 0) {
-    return;
-  }
-
-  const uint pixel_index = INTEGRATOR_STATE(state, shadow_path, render_pixel_index);
-  if (pixel_index >= (uint)restir_reservoir_count) { // New
-    return;
-  }
-
-  // TODO:
-  // if (restir_reservoirs == prev_reservoirs) {
-  //   return;
-  // }
-
-  restir_reservoirs[pixel_index].visible = visible;
-#else
-  (void)state;
-  (void)restir_reservoirs;
-  (void)visible;
-#endif
+  // TODO: visibility payload returns in spatial phase...
 }
 
 ccl_device_inline bool restir_reservoir_is_valid(const ccl_private ReSTIRReservoir *r) // !!!: Fix visibility
@@ -235,13 +201,14 @@ ccl_device_inline bool restir_streaming_resample_reservoir(
     const float target_pdf,
     const float random)
 {
-  if (!restir_reservoir_is_valid(reservoir) || target_pdf <= 0.0f) {
+  if (!restir_reservoir_is_valid(reservoir) ||
+      !(isfinite(target_pdf) && target_pdf > 0.0f)) {
     return false;
   }
 
   const float sample_weight = target_pdf * reservoir->W * float(reservoir->M);
 
-  if (sample_weight <= 0.0f || !isfinite(sample_weight)) {
+  if (!(isfinite(sample_weight) && sample_weight > 0.0f)) {
     return false;
   }
 
@@ -250,7 +217,6 @@ ccl_device_inline bool restir_streaming_resample_reservoir(
 
   if (random * ris->weight_sum < sample_weight) {
     ris->light = reservoir->light;
-    ris->uv = reservoir->uv;
     ris->selected_target_pdf = target_pdf;
     return true;
   }
@@ -268,12 +234,11 @@ ccl_device_inline ReSTIRReservoir restir_finalize_temporal(const ccl_private ReS
 
   reservoir.light = ris->light;
 
-  reservoir.uv = ris->uv;
   reservoir.M = ris->M;
   reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
-  reservoir.visible = true;
 
-  if (!isfinite(reservoir.W)) {
+  // should mirror restir_finalize()
+  if (!(isfinite(reservoir.W) && reservoir.W > 0.0f)) {
     return restir_reservoir_empty();
   }
 

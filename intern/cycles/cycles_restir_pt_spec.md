@@ -31,8 +31,39 @@ Phase B:
     Current shadow visibility updates are wired for the wavefront ReSTIR DI path.
     CPU megakernel currently passes null reservoir buffers, so CPU visibility mutation is not yet active.
 
+Phase B.5: RIS Baseline Cleanup
+[x] Remove dead uv/visible fields from RIS/reservoir
+[x] Make ReSTIR final weighting internally consistent
+    Note: Temporal reuse is disbaled in runs until sample reconstruction exists!
+    Note: Current RIS validation baseline assumes direct light sampling without light tree.
+        Light tree integration requires auditing proposal pdf semantics and MIS consistency.
+
+
+
 Phase C:
 Spatial reuse.
+
+Phase C.0: New reservoir structs
+[ ] Add radiance/luminance/total_weight reservoir variant
+[ ] Add MIS-aware add_light_sample()
+[ ] Add direct-light sampling method awareness
+[ ] Add measure/Jacobian audit
+
+Phase C.1: Spatial surface payload
+[ ] Store/unpack current surface data
+[ ] Reconstruct ShaderData for neighbor/current
+[ ] Add neighbor validity checks
+
+Phase C.2: Spatial reuse prototype
+[ ] Merge compatible reservoirs
+[ ] Pairwise MIS weight
+[ ] Visibility option
+[ ] Final sample evaluation
+
+Phase C.x:
+[ ] Proper compact canonical sample identity
+[ ] Proper UV/sample parameterization for current LightSample
+[ ] Real light_sample_from_uv replacement for new Cycles
 
 Phase C.x / Post-stability cleanup:
 [ ] Compact reservoir payload (avoid storing full LightSample; use `light_id`)
@@ -40,6 +71,7 @@ Phase C.x / Post-stability cleanup:
     Note: (`target = luminance(candidate_light_eval) * abs(dot(N,L))`)
     Deferred until DI temporal reuse is stable and spatial reuse is integrated,
     to avoid conflating performance refactors with correctness debugging.
+
 
 Phase D:
 Path replay.

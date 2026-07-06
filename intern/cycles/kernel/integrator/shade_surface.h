@@ -347,8 +347,9 @@ bool restir_di_select_light(KernelGlobals kg,
     LightSample candidate ccl_optional_struct_init;
 
     const float3 rand_light = path_branched_rng_3D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_LIGHT);
-    // Emitter sample parameters; light sampler should use these values directly as emmiter UVs
-    const float2 candidate_uv = make_float2(rand_light.x, rand_light.y);
+
+    // // Emitter sample parameters; light sampler should use these values directly as emmiter UVs
+    // const float2 candidate_uv = make_float2(rand_light.x, rand_light.y);
 
     // Selected candidate is generated during the current path trace step:
     if (!light_sample_from_position(kg,
@@ -385,12 +386,23 @@ bool restir_di_select_light(KernelGlobals kg,
     }
 
     BsdfEval candidate_bsdf_eval ccl_optional_struct_init;
-    surface_shader_bsdf_eval(kg,
-                             state,
-                             sd,
-                             candidate.D,
-                             &candidate_bsdf_eval,
-                             candidate.shader);
+    const float bsdf_pdf = surface_shader_bsdf_eval(kg,
+                                                    state,
+                                                    sd,
+                                                    candidate.D,
+                                                    &candidate_bsdf_eval,
+                                                    candidate.shader);
+
+    /** 
+     * !!!: Current RIS baseline is NEE-only. For forward direct-light sampling this must use the
+     * corresponding forward MIS formulation. */
+    const float mis_weight = light_sample_mis_weight_nee(kg, candidate.pdf, bsdf_pdf);
+    /** 
+     * !!!: It may still need a broader audit later depending on:
+     * what measure ls.pdf really means for each emitter type
+     * whether the light tree changes proposal semantics
+     * whether future spatial relocation reconstructs a proposal in a canonical measure
+     */
 
     // Computing target
     /* ReSTIR DI prototype target.
@@ -404,7 +416,9 @@ bool restir_di_select_light(KernelGlobals kg,
     * is acceptable for initial RIS infrastructure validation.
     */
     const Spectrum contribution = bsdf_eval_sum(&candidate_bsdf_eval) *
-                                                candidate_light_eval * candidate.eval_fac;
+                                                candidate_light_eval * 
+                                                candidate.eval_fac *
+                                                mis_weight;
 
     const float target = spectrum_to_gray(kg, contribution);
     const float source = candidate.pdf;
@@ -412,7 +426,7 @@ bool restir_di_select_light(KernelGlobals kg,
     const float random = path_branched_rng_1D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_RESAMPLE);
 
 
-    restir_streaming_resample_step(&ris, &candidate, candidate_uv, 
+    restir_streaming_resample_step(&ris, &candidate, 
                                    target, source, random);
   }
 
@@ -423,9 +437,6 @@ bool restir_di_select_light(KernelGlobals kg,
 // <<<
 
   ReSTIRReservoir reservoir = restir_finalize(&ris);
-  // To detect tempral reuse
-  bool reused_temporally = false;
-  reservoir.visible = true; // So it never starts as garbage.
 
   const bool use_temporal = kernel_data.integrator.use_temporal_resampling &&
                             bounce == 0 && mnee_vertex_count == 0;
@@ -443,11 +454,6 @@ bool restir_di_select_light(KernelGlobals kg,
         restir_reservoir_count
         // render_buffer
       );
-
-// TODO: Set it only if the selected sample in final reservoir actually came from previous reservoir 
-// or if you can detect a changed canonical sample source.
-    // Or: check new_res.visible, or compare uv, or simply:
-    reused_temporally = true;  // since temporal reuse attempted
 
     reservoir = new_res;
   }
@@ -470,23 +476,6 @@ bool restir_di_select_light(KernelGlobals kg,
       restir_reservoirs[pixel_index] = restir_reservoir_empty();
     }
 
-//     // DEBUG ONLY
-// #ifndef __KERNEL_GPU__
-//     const uint sample = INTEGRATOR_STATE(state, path, sample);
-
-//     if ((!restir_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) && sample < 3) {
-//       printf("ReSTIR rejected pixel=%u sample=%u M=%u W=%f visible=%d pdf=%f\n",
-//             pixel_index,
-//             sample,
-//             reservoir.M,
-//             (double)reservoir.W,
-//             reservoir.visible,
-//             (double)reservoir.light.pdf);
-//     }
-// #endif
-
-
-// <<<
     return false; // Invalid reservoir
   }
 
@@ -507,25 +496,6 @@ bool restir_di_select_light(KernelGlobals kg,
 //          pdf_int,
 //          pdf_frac);
 // // <<<
-
-
-  LightSample relocated_ls = reservoir.light;
-
-  if (reused_temporally) {
-      relocated_ls = reservoir.light;
-      restir_light_sample_from_uv(kg, sd, path_flag, &relocated_ls, reservoir.uv); // !!!
-  }
-  else {
-// !!!: Brings back the issue of multiple DI reflections for analytic lights, seem to be only for area light!
-      relocated_ls = reservoir.light; // KEEP ORIGINAL RIS SAMPLE
-  }
-
-  if (relocated_ls.pdf <= 0.0f) {
-    if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
-      restir_reservoirs[pixel_index] = restir_reservoir_empty();
-    }
-    return false;
-  }
 // <<<
 
   if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) { // storage and shadow validation are matched
@@ -536,18 +506,11 @@ bool restir_di_select_light(KernelGlobals kg,
   kernel_assert(isfinite(reservoir.light.pdf));
   kernel_assert(reservoir.light.pdf >= 0.0f);
 
-  kernel_assert(reservoir.M >= candidate_count);
   kernel_assert(isfinite(reservoir.W));
   kernel_assert(reservoir.W >= 0.0f);
-  if (bounce == 0) { // Debug Only
-    if (!isfinite(reservoir.W) || reservoir.W < 0.0f) {
-      printf("Bad reservoir at pixel %u\n", pixel_index);
-    }
-  }
 // <<<
 
   *r_ls = reservoir.light;
-  // *r_ls = relocated_ls; 
   *r_restir_W = reservoir.W;
 
   return true;
@@ -708,13 +671,20 @@ ccl_device
 #endif /* __MNEE__ */
   {
     const float mis_weight = light_sample_mis_weight_nee(kg, ls.pdf, bsdf_pdf);
-    // bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight); // !!!: The final throughput
 #ifdef __RESTIR_DI__
-    if (restir_W > 0.0f) { // restir_reservoir_weight
-      bsdf_eval_mul(&bsdf_eval,
-                    light_shader_eval * ls.eval_fac * restir_W * mis_weight);
+    const bool use_restir = kernel_data.integrator.use_restir;
+
+    if (restir_W > 0.0f) {
+      if (use_restir) {
+        bsdf_eval_mul(&bsdf_eval,
+                      light_shader_eval * ls.eval_fac * restir_W);
+      }
     }
     else
+    /**
+     * RIS/temporal path: restir_W already contains the normalization implied by selected target
+     * fallback non-ReSTIR path: still uses ordinary direct-light evaluation with / ls.pdf * mis_weight
+     */
 #endif
     {
       bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight);

@@ -23,6 +23,7 @@ RIS candidates
 
 CCL_NAMESPACE_BEGIN
 
+// TODO: Rename to restir_evaluate_target
 ccl_device_inline float restir_evaluate_target_pdf(KernelGlobals kg,
                                                    IntegratorState state,
                                                    ccl_private ShaderData *sd,
@@ -36,18 +37,30 @@ ccl_device_inline float restir_evaluate_target_pdf(KernelGlobals kg,
                                         light_eval);
 
   BsdfEval bsdf_eval ccl_optional_struct_init;
-  surface_shader_bsdf_eval(kg,
-                           state,
-                           sd,
-                           reservoir->light.D,
-                           &bsdf_eval,
-                           reservoir->light.shader);
+  const float bsdf_pdf = surface_shader_bsdf_eval(kg,
+                                                  state,
+                                                  sd,
+                                                  reservoir->light.D,
+                                                  &bsdf_eval,
+                                                  reservoir->light.shader);
 
-// !!!: evaluating the previous frame’s stored LS directly at the current shading point using its stored direction & metadata
-  const Spectrum contribution = bsdf_eval_sum(&bsdf_eval) *
-                                light_eval * reservoir->light.eval_fac;
+  const float mis_weight = light_sample_mis_weight_nee(kg, reservoir->light.pdf, bsdf_pdf);
 
-  return spectrum_to_gray(kg, contribution);
+  const Spectrum radiance = bsdf_eval_sum(&bsdf_eval) *
+                            light_eval *
+                            reservoir->light.eval_fac;
+
+  const float jacobian = reservoir->light.jacobian_solid_angle_to_area();
+  float pdf_in_area = reservoir->light.pdf;
+  if (jacobian > 0.0f) {
+    pdf_in_area *= jacobian;
+  }
+
+  if (!(isfinite(pdf_in_area) && pdf_in_area > 0.0f)) {
+    return 0.0f;
+  }
+
+  return spectrum_to_gray(kg, radiance) * mis_weight / pdf_in_area;
 }
 
 ccl_device_inline ReSTIRReservoir restir_temporal_reuse(
@@ -77,6 +90,11 @@ ccl_device_inline ReSTIRReservoir restir_temporal_reuse(
   ReSTIRRisState ris = restir_ris_empty();
 
   const float current_target = restir_evaluate_target_pdf(kg, state, sd, current);
+/**
+ * Current `prev_target` is not correct & temporal reuse is false...
+ * Because it evaluates: prev.light.D, .eval_fac, .shader, .prim
+ * at the current shading point without reconstructing the sample.
+ */
   const float prev_target = restir_evaluate_target_pdf(kg, state, sd, &prev); // !!!
 
   const float rand_current = path_state_rng_1D(kg, rng_state, PRNG_SURFACE_RESTIR_TEMPORAL);

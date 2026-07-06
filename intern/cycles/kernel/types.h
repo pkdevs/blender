@@ -538,17 +538,44 @@ struct LightSample {
   int group;           /* lightgroup */
   LightType type;      /* type of light */
   int emitter_id;      /* index in the emitter array */
+
+  float jacobian_area_to_solid_angle() const
+  {
+    float cos_pi = dot(Ng, -D);
+
+    if (cos_pi <= 0.0f) {
+      return 0.0f;
+    }
+
+    return sqr(t) / cos_pi;
+  }
+
+  /**
+   * Is invalid for local finite emitters (t <= 0) and also invalid for
+   * Distant/Background lights (t == FLT_MAX)
+   */
+  float jacobian_solid_angle_to_area() const
+  {
+    if (!(t > 0.0f) || !isfinite_safe(t)) {
+      return 0.0f;
+    }
+
+    const float cos_pi = dot(Ng, -D);
+
+    if (!(cos_pi > 0.0f)) {
+      return 0.0f;
+    }
+
+    return cos_pi / sqr(t);
+  }
+
 };
 
 struct ReSTIRReservoir {
     LightSample light;
 
-    float2 uv;      // Required for relocation, must be stored before RIS; used to be part of LS
-
     float W;        // Final Probabilistic reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_target_pdf;
     uint M;
-    // TODO: Remove
-    bool visible;   // To rejected occuluded paths // TODO(Tri): Change to uint for safety?
 };
 
 /* Guiding Distribution Type */

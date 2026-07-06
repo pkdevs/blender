@@ -98,6 +98,7 @@ NODE_DEFINE(Integrator)
                                                 GUIDING_DIRECTIONAL_SAMPLING_TYPE_ROUGHNESS);
 
   SOCKET_BOOLEAN(use_restir, "ReSTIR", true);
+  SOCKET_BOOLEAN(use_temporal_resampling, "Temporal Re-use", true); // !!!: Remove
   SOCKET_INT(restir_candidate_count, "Light Candidates", 8);
 
   SOCKET_BOOLEAN(use_guiding, "Guiding", false);
@@ -298,6 +299,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   }
 
   kintegrator->use_restir = use_restir;
+  kintegrator->use_temporal_resampling = use_temporal_resampling;
   kintegrator->restir_candidate_count = restir_candidate_count;
 
   const GuidingParams guiding_params = get_guiding_params(device);
