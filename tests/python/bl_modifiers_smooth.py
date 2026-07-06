@@ -32,6 +32,25 @@ def _make_uv_sphere(radius=1.0, u_segments=24, v_segments=16):
     return obj
 
 
+def _make_grid(size=1.0, x_segments=8, y_segments=8):
+    """Flat quad grid — every border vertex is on the mesh boundary."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    mesh = bpy.data.meshes.new("grid")
+    bm = bmesh.new()
+    bmesh.ops.create_grid(
+        bm,
+        x_segments=x_segments,
+        y_segments=y_segments,
+        size=size,
+    )
+    boundary = {v.index for v in bm.verts if any(e.is_boundary for e in v.link_edges)}
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new("grid", mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    return obj, boundary
+
+
 def _add_smooth(obj, **params):
     mod = obj.modifiers.new("smooth", 'SMOOTH')
     for key, value in params.items():
@@ -189,6 +208,63 @@ class TestSmoothDeterminism(unittest.TestCase):
 
     def test_hc(self):
         self._assert_deterministic('HC', factor=1.0, hc_alpha=0.0, hc_beta=0.5)
+
+
+class TestSmoothPinBoundary(unittest.TestCase):
+    """`use_pin_boundary` must freeze boundary verts while interior smoothing still runs."""
+
+    @staticmethod
+    def _perturb_interior_z(obj, boundary):
+        for i, v in enumerate(obj.data.vertices):
+            if i not in boundary:
+                v.co.z += 0.3 if (i % 2 == 0) else -0.3
+
+    def _assert_boundary_pinned(self, method, **params):
+        obj, boundary = _make_grid()
+        self._perturb_interior_z(obj, boundary)
+        original = _evaluated_positions(obj)
+        _add_smooth(obj, method=method, use_pin_boundary=True, iterations=5, **params)
+        deformed = _evaluated_positions(obj)
+
+        max_boundary_drift = max((original[i] - deformed[i]).length for i in boundary)
+        self.assertLess(max_boundary_drift, 1e-5)
+
+        interior = [i for i in range(len(original)) if i not in boundary]
+        max_interior_move = max((original[i] - deformed[i]).length for i in interior)
+        self.assertGreater(max_interior_move, 1e-3)
+
+    def test_simple(self):
+        self._assert_boundary_pinned('SIMPLE', factor=0.5)
+
+    def test_taubin(self):
+        self._assert_boundary_pinned('TAUBIN', factor=0.5, taubin_mu=-0.53)
+
+    def test_hc(self):
+        self._assert_boundary_pinned('HC', factor=1.0, hc_alpha=0.0, hc_beta=0.5)
+
+    def test_off_by_default_boundaries_move(self):
+        """Without the toggle, boundary verts must be free to drift (regression guard)."""
+        obj, boundary = _make_grid()
+        self._perturb_interior_z(obj, boundary)
+        original = _evaluated_positions(obj)
+        _add_smooth(obj, method='SIMPLE', factor=0.5, iterations=5)
+        deformed = _evaluated_positions(obj)
+        max_boundary_drift = max((original[i] - deformed[i]).length for i in boundary)
+        self.assertGreater(max_boundary_drift, 1e-3)
+
+    def test_closed_mesh_pin_is_noop(self):
+        """A closed mesh has no boundary — pinning must not affect the output."""
+        params = {'method': 'TAUBIN', 'factor': 0.5, 'taubin_mu': -0.53, 'iterations': 5}
+        obj_off = _make_uv_sphere()
+        _add_smooth(obj_off, use_pin_boundary=False, **params)
+        off = _evaluated_positions(obj_off)
+
+        obj_on = _make_uv_sphere()
+        _add_smooth(obj_on, use_pin_boundary=True, **params)
+        on = _evaluated_positions(obj_on)
+
+        for a, b in zip(off, on):
+            self.assertAlmostEqual((a - b).length, 0.0, places=6)
 
 
 class TestSmoothCotangentWeights(unittest.TestCase):
