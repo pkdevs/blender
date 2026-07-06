@@ -756,6 +756,8 @@ ccl_device
       break;
     }
     case CLOSURE_BSDF_OPEN_PBR_ID: {
+#define white one_spectrum()
+#define black zero_spectrum()
       const ccl_global SVMNodeOpenPBRBsdfData &data = svm_node_get<SVMNodeOpenPBRBsdfData>(
           kg, &offset);
 
@@ -847,9 +849,9 @@ ccl_device
 
             fresnel->f0 = rgb_to_spectrum(base_color) * base_weight;
 #ifdef OPENPBR_SPEC_COMPLIANT
-            const Spectrum f82 = min(specular_color, one_spectrum());
+            const Spectrum f82 = min(specular_color, white);
 #else
-            const Spectrum f82 = min(specular_color * specular_weight, one_spectrum());
+            const Spectrum f82 = min(specular_color * specular_weight, white);
 #endif
             fresnel->thin_film.thickness = thin_film_thickness;
             /* TODO(OpenPBR): check if thin film_ior needs to be adjusted at backface. */
@@ -921,14 +923,9 @@ ccl_device
                   closure_alloc_extra(sd, sizeof(FresnelDielectricTint));
 
               if (fresnel) {
-                fresnel->reflection_tint = specular_color;
-                fresnel->transmission_tint = transmission_color;
                 fresnel->thin_film = thinfilm;
-
-                /* setup bsdf */
-                sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
-                bsdf_microfacet_setup_fresnel_dielectric_tint(
-                    kg, bsdf, sd->wi, fresnel, is_multiggx);
+                bsdf_dielectric_tint_setup(
+                    kg, bsdf, sd, fresnel, specular_color, transmission_color);
               }
             }
             else {
@@ -977,14 +974,8 @@ ccl_device
           bsdf->alpha_x = specular_alpha.x;
           bsdf->alpha_y = specular_alpha.y;
 
-          fresnel->reflection_tint = specular_color;
-          fresnel->transmission_tint = zero_spectrum();
-          fresnel->thin_film.thickness = thin_film_thickness;
-          fresnel->thin_film.ior = thin_film_ior;
-
-          /* setup bsdf */
-          sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
-          bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd->wi, fresnel, is_multiggx);
+          fresnel->thin_film = {thin_film_thickness, thin_film_ior};
+          bsdf_dielectric_tint_setup(kg, bsdf, sd, fresnel, specular_color, black);
 
           /* Attenuate lower layers */
           const Spectrum albedo = bsdf_albedo(
@@ -1013,14 +1004,8 @@ ccl_device
           bsdf->alpha_x = specular_alpha.x;
           bsdf->alpha_y = specular_alpha.y;
 
-          fresnel->reflection_tint = specular_color;
-          fresnel->transmission_tint = zero_spectrum();
-          fresnel->thin_film.thickness = thin_film_thickness;
-          fresnel->thin_film.ior = thin_film_ior;
-
-          /* setup bsdf */
-          sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
-          bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
+          fresnel->thin_film = {thin_film_thickness, thin_film_ior};
+          bsdf_dielectric_tint_setup(kg, bsdf, sd, fresnel, specular_color, black);
 
           /* Attenuate lower layers */
           const Spectrum albedo = bsdf_albedo(
@@ -1049,17 +1034,13 @@ ccl_device
           bsdf->alpha_x = specular_alpha.x;
           bsdf->alpha_y = specular_alpha.y;
 
-          fresnel->reflection_tint = zero_float3();
-          fresnel->transmission_tint = transmission_color;
-          fresnel->thin_film.thickness = thin_film_thickness;
-          fresnel->thin_film.ior = thin_film_ior;
+          fresnel->thin_film = {thin_film_thickness, thin_film_ior};
           if (backfacing) {
             adjust_thin_film_ior_at_backface(fresnel->thin_film.ior, modulated_specular_ior);
           }
 
-          /* setup bsdf */
-          sd->flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
-          bsdf_microfacet_setup_fresnel_dielectric_tint(kg, bsdf, sd, fresnel, is_multiggx);
+          const float3 transmission_color = saturate(stack_load(stack, data.transmission_color));
+          bsdf_dielectric_tint_setup(kg, bsdf, sd, fresnel, black, transmission_color);
 
           /* Attenuate lower layers */
           // const Spectrum albedo = bsdf_albedo(
@@ -1116,6 +1097,8 @@ ccl_device
               sd, N, diffuse_weight, base_diffuse_roughness, (base_color * base_weight));
         }
       }
+#undef white
+#undef black
       break;
     }
     case CLOSURE_BSDF_DIFFUSE_ID: {
