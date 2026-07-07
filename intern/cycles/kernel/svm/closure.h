@@ -916,6 +916,7 @@ ccl_device
               adjust_thin_film_ior_at_backface(thinfilm.ior, modulated_specular_ior);
             }
 
+            const Spectrum specular_tint = backfacing ? white : specular_color;
             const float transmission_depth = max(stack_load(stack, data.transmission_depth), 0.0f);
 
             if (transmission_depth == 0.0f) {
@@ -925,7 +926,7 @@ ccl_device
               if (fresnel) {
                 fresnel->thin_film = thinfilm;
                 bsdf_dielectric_tint_setup(
-                    kg, bsdf, sd, fresnel, specular_color, transmission_color);
+                    kg, bsdf, sd, fresnel, specular_tint, transmission_color);
               }
             }
             else {
@@ -934,9 +935,10 @@ ccl_device
                       sd, sizeof(FresnelDielectricVolumetric));
 
               if (fresnel) {
+                /* TODO(OpenPBR): no need to allocate volume for backfacing transmission. */
                 const Spectrum transmission_scatter = rgb_to_spectrum(
                     saturate(stack_load(stack, data.transmission_scatter)));
-                fresnel->reflection_tint = specular_color;
+                fresnel->reflection_tint = specular_tint;
                 fresnel->thin_film = thinfilm;
                 fresnel->anisotropy = clamp(
                     stack_load(stack, data.transmission_scatter_anisotropy), -1.0f, 1.0f);

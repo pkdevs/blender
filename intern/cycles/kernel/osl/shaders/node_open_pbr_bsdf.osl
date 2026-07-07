@@ -256,9 +256,10 @@ shader node_open_pbr_bsdf(float BaseWeight = 1.0,
     else {
       float depth = max(TransmissionDepth, 0.0);
       color transmission_tint = (depth == 0.0) ? transmission_color : color(1.0);
+      color specular_tint = is_backfacing ? color(1.0) : specular_color;
       vector T = GeometryTangent;
       BSDF_T Transmission = dielectric_bsdf(
-          GeometryNormal, T, specular_color, transmission_tint, r2, r2, specular_ior, "multi_ggx");
+          GeometryNormal, T, specular_tint, transmission_tint, r2, r2, specular_ior, "multi_ggx");
 
       if (depth == 0.0) {
         BSDF = transmission_weight * Transmission;
