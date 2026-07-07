@@ -6,6 +6,7 @@ set(INC
   .
   exporter
   intern
+  importer
   ../../editors/include
   ../../makesrna
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
@@ -20,21 +21,26 @@ set(SRC
   exporter/otio_export_resolve.cc
   intern/otio_metadata.cc
   intern/otio_resolve.cc
+  importer/otio_import.cc
 
   IO_otio.hh
   exporter/otio_export.hh
   exporter/otio_export_resolve.hh
   intern/otio_metadata.hh
   intern/otio_resolve.hh
+  importer/otio_import.hh
 )
 
 set(LIB
   PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::blentranslation
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::gpu
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::imbuf
   PRIVATE bf::sequencer
   PRIVATE bf::windowmanager
   PRIVATE bf::dependencies::optional::opentimelineio

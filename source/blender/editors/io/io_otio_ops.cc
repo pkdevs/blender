@@ -20,6 +20,11 @@
 
 #  include "BLI_listbase.hh"
 #  include "BLI_path_utils.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
+#  include "BLI_vector.hh"
+
+#  include "BLT_translation.hh"
 
 #  include "RNA_access.hh"
 #  include "RNA_define.hh"
@@ -139,6 +144,52 @@ void WM_OT_otio_export(wmOperatorType *ot)
                   "transforms, blending, audio levels and more");
 }
 
+static wmOperatorStatus wm_otio_import_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  return ed::io::filesel_drop_import_invoke(C, op, event);
+}
+
+static wmOperatorStatus wm_otio_import_exec(bContext *C, wmOperator *op)
+{
+  const auto paths = ed::io::paths_from_operator_properties(op->ptr);
+
+  if (paths.is_empty()) {
+    BKE_report(op->reports, RPT_ERROR, "No filepath given");
+    return OPERATOR_CANCELLED;
+  }
+
+  for (const auto &path : paths) {
+    char filepath[FILE_MAX];
+    STRNCPY(filepath, path.c_str());
+    OTIO_import(C, filepath, op->reports);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+void WM_OT_otio_import(wmOperatorType *ot)
+{
+  ot->name = "Import OTIO";
+  ot->description = "Import OpenTimelineIO Timeline into Sequencer Scene";
+  ot->idname = "WM_OT_otio_import";
+
+  ot->invoke = wm_otio_import_invoke;
+  ot->exec = wm_otio_import_exec;
+  ot->poll = WM_operator_winactive;
+  ot->flag = OPTYPE_UNDO | OPTYPE_PRESET;
+
+  WM_operator_properties_filesel(ot,
+                                 FILE_TYPE_FOLDER | FILE_TYPE_OTIO,
+                                 FILE_BLENDER,
+                                 FILE_OPENFILE,
+                                 WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH | WM_FILESEL_SHOW_PROPS |
+                                     WM_FILESEL_DIRECTORY | WM_FILESEL_FILES,
+                                 FILE_DEFAULTDISPLAY,
+                                 FILE_SORT_DEFAULT);
+
+  PropertyRNA *prop = RNA_def_string(ot->srna, "filter_glob", "*.otio", 0, "", "");
+  RNA_def_property_flag(prop, PROP_HIDDEN);
+}
 }  // namespace blender
 
 #endif

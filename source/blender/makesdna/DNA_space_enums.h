@@ -718,6 +718,7 @@ enum eFileSel_File_Types : int {
   FILE_TYPE_OBJECT_IO = (1 << 17),
   FILE_TYPE_USD = (1 << 18),
   FILE_TYPE_VOLUME = (1 << 19),
+  FILE_TYPE_OTIO = (1 << 20),
 
   FILE_TYPE_ASSET = (1 << 28),
   /** Set together with #FILE_TYPE_ASSET when the asset is hosted online, not on disk. */

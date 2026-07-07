@@ -12,5 +12,6 @@ namespace blender {
 struct wmOperatorType;
 
 void WM_OT_otio_export(wmOperatorType *ot);
+void WM_OT_otio_import(wmOperatorType *ot);
 
 }  // namespace blender
