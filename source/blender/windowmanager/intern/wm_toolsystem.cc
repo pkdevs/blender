@@ -303,6 +303,13 @@ bool WM_toolsystem_activate_brush_and_tool(bContext *C, Paint *paint, Brush *bru
   const bToolRef *active_tool = toolsystem_active_tool_from_context_or_view3d(C);
   const PaintMode paint_mode = BKE_paintmode_get_active_from_context(C);
 
+  if (brush == nullptr) {
+    /* The brush may fail to resolve, e.g. when its asset weak reference can no longer be found
+     * (the asset library path was changed while the reference still points at the old location).
+     * Bail out instead of dereferencing a null brush below. */
+    return false;
+  }
+
   if (!BKE_paint_can_use_brush(paint, brush)) {
     /* Avoid switching tool when brush isn't valid for this mode anyway. */
     return false;
