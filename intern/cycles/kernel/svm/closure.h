@@ -269,6 +269,8 @@ ccl_device
     return svm_node_closure_bsdf_skip(offset, type);
   }
 
+#define white one_spectrum()
+#define black zero_spectrum()
   switch (type) {
     case CLOSURE_BSDF_PRINCIPLED_ID: {
       const ccl_global SVMNodePrincipledBsdfData &data = svm_node_get<SVMNodePrincipledBsdfData>(
@@ -364,22 +366,17 @@ ccl_device
       if (transmission_weight > CLOSURE_WEIGHT_CUTOFF) {
         if (reflective_caustics || refractive_caustics) {
           FresnelThinFilm thinfilm = {thinfilm_thickness, thinfilm_ior};
-
           if (thin_wall) {
-            Spectrum reflectance, transmittance;
             bsdf_thin_glass_setup(kg,
                                   sd,
                                   reflective_caustics,
                                   refractive_caustics,
-                                  specular_tint,
-                                  clamped_base_color,
+                                  {specular_tint, clamped_base_color},
                                   transmission_weight * weight,
                                   valid_reflection_N,
                                   sqr(roughness),
                                   ior,
                                   thinfilm,
-                                  &reflectance,
-                                  &transmittance,
                                   ray_visibility,
                                   path_flag);
           }
@@ -453,10 +450,8 @@ ccl_device
           fresnel->f0 = f0 * specular_tint;
           fresnel->f90 = one_spectrum();
           fresnel->exponent = -eta;
-          fresnel->reflection_tint = one_spectrum();
-          fresnel->transmission_tint = zero_spectrum();
-          fresnel->thin_film.thickness = thinfilm_thickness;
-          fresnel->thin_film.ior = thinfilm_ior;
+          fresnel->tint = {white, black};
+          fresnel->thin_film = {thinfilm_thickness, thinfilm_ior};
 
           /* setup bsdf */
           sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
@@ -819,10 +814,8 @@ ccl_device
         fresnel->f0 = make_float3(F0_from_ior(ior));
         fresnel->f90 = one_spectrum();
         fresnel->exponent = -ior;
-        const float3 color = max(stack_load(stack, bsdf_data.color), zero_float3());
-        fresnel->reflection_tint = reflective_caustics ? rgb_to_spectrum(color) : zero_spectrum();
-        fresnel->transmission_tint = refractive_caustics ? rgb_to_spectrum(color) :
-                                                           zero_spectrum();
+        const Spectrum color = max(rgb_to_spectrum(stack_load(stack, bsdf_data.color)), black);
+        fresnel->tint = {float(reflective_caustics) * color, float(refractive_caustics) * color};
         fresnel->thin_film.thickness = thinfilm_thickness;
         fresnel->thin_film.ior = (sd->flag & SD_BACKFACING) ? thinfilm_ior / ior : thinfilm_ior;
         /* setup bsdf */
@@ -1134,6 +1127,8 @@ ccl_device
       svm_node_get<SVMNodeSimpleBsdfData>(kg, &offset);
       break;
   }
+#undef white
+#undef black
 
   return offset;
 }
