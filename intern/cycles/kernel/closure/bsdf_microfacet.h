@@ -1444,6 +1444,29 @@ ccl_device_inline FresnelCoeff bsdf_thin_glass_fresnel(KernelGlobals kg,
   return {reflectance, transmittance};
 }
 
+ccl_device_inline FresnelCoeff bsdf_thin_glass_tinted(const bool reflective,
+                                                      const bool refractive,
+                                                      const FresnelCoeff tint,
+                                                      const float ior,
+                                                      const float cos_theta_i)
+{
+  /* TODO(OpenPBR): need to revisit when we add thin film to dielectric tint. */
+  float cos_theta_t;
+  const FresnelCoeff f = FresnelCoeff(reflective, refractive) *
+                         fresnel_dielectric(cos_theta_i, ior, &cos_theta_t);
+
+  /* `tint.transmittance` gives the transmittance through the thin glass at normal incidence due to
+   * absorption. Compute the transmittance at oblique angle according to Beer-Lambert law. */
+  const Spectrum c = is_zero(cos_theta_t) ? zero_spectrum() : power(tint.t, -1.0f / cos_theta_t);
+
+  /* Account for internal reflections, t' = ct1t2 + ct1(r2c)^2t2 + ct1(r2c)^4t2 + ... */
+  const Spectrum transmittance = safe_divide(c * sqr(f.t), 1.0f - sqr(f.r * c));
+  /* r' = r1 + ct1r2ct2 + ct1(r2c)^3t2 + ... */
+  const Spectrum reflectance = f.r * (tint.r + transmittance * c);
+
+  return {reflectance, transmittance};
+}
+
 ccl_device_inline void bsdf_thin_glass_reflection_setup(KernelGlobals kg,
                                                         ccl_private ShaderData *sd,
                                                         const Spectrum color,
@@ -1556,6 +1579,7 @@ ccl_device FresnelCoeff bsdf_thin_glass_setup(KernelGlobals kg,
                                               ccl_private ShaderData *sd,
                                               const bool reflective,
                                               const bool refractive,
+                                              const MicrofacetFresnel fresnel_type,
                                               const FresnelCoeff tint,
                                               const Spectrum weight,
                                               const float3 N,
@@ -1566,8 +1590,10 @@ ccl_device FresnelCoeff bsdf_thin_glass_setup(KernelGlobals kg,
                                               const uint32_t path_flag)
 {
   const float cos_theta_i = dot(N, sd->wi);
-  const FresnelCoeff fresnel = bsdf_thin_glass_fresnel(
-      kg, reflective, refractive, tint, thinfilm, ior, cos_theta_i);
+  const FresnelCoeff fresnel =
+      (fresnel_type == GENERALIZED_SCHLICK) ?
+          bsdf_thin_glass_fresnel(kg, reflective, refractive, tint, thinfilm, ior, cos_theta_i) :
+          bsdf_thin_glass_tinted(reflective, refractive, tint, ior, cos_theta_i);
 
   bsdf_thin_glass_reflection_setup(
       kg, sd, tint.reflectance, fresnel.reflectance * weight, N, roughness);

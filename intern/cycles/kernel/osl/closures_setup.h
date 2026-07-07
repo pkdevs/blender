@@ -540,10 +540,12 @@ ccl_device void osl_closure_thin_glass_setup(KernelGlobals kg,
   const FresnelThinFilm thinfilm = {closure->thinfilm_thickness, closure->thinfilm_ior};
   const FresnelCoeff tint = {rgb_to_spectrum(closure->reflection_tint),
                              rgb_to_spectrum(closure->transmission_tint)};
+  const MicrofacetFresnel type = closure->dielectric_tint ? DIELECTRIC_TINT : GENERALIZED_SCHLICK;
   const FresnelCoeff fresnel = bsdf_thin_glass_setup(kg,
                                                      sd,
                                                      reflective_caustics,
                                                      refractive_caustics,
+                                                     type,
                                                      tint,
                                                      rgb_to_spectrum(weight),
                                                      valid_reflection_N,

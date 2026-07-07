@@ -143,14 +143,8 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
     float thinfilm_ior = is_backfacing ? ThinFilmIOR / eta : ThinFilmIOR;
     eta = is_backfacing ? 1.0 / eta : eta;
     if (ThinWall) {
-      closure color ThinGlassBSDF = thin_glass(Normal,
-                                               vector(0.0),
-                                               specular_tint,
-                                               clamped_base_color,
-                                               eta,
-                                               r2,
-                                               ThinFilmThickness,
-                                               thinfilm_ior);
+      closure color ThinGlassBSDF = thin_glass(
+          Normal, specular_tint, clamped_base_color, eta, r2, ThinFilmThickness, thinfilm_ior, 0);
       BSDF = mix(ThinGlassBSDF, BSDF, 1.0 - transmission);
     }
     else {
