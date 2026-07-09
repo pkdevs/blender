@@ -376,6 +376,11 @@ void RenderStats::collect_profiling(Scene *scene, Profiler &prof)
 
   // TODO: RIS, TEMPORAL...
 
+	NamedNestedSampleStats &initial_resampling = restir.add_entry(
+      "Initial Resampling", prof.get_event(PROFILING_RESTIR_INITIAL_RESAMPLING));
+  initial_resampling.add_entry("Light Resampling",
+                               prof.get_event(PROFILING_RESTIR_LIGHT_RESAMPLING));
+
   NamedNestedSampleStats &spatial_resampling = restir.add_entry(
       "Spatial Resampling", prof.get_event(PROFILING_RESTIR_SPATIAL_RESAMPLING));
   spatial_resampling.add_entry("Reservoir Passes",

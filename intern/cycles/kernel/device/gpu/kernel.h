@@ -175,7 +175,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
     ccl_gpu_kernel_signature(integrator_intersect_shadow,
                              const ccl_global int *path_index_array,
                              const int work_size,
-                             ccl_global ReSTIRReservoir *restir_reservoirs,
+                             ccl_global ReSTIRDIReservoir *restir_reservoirs,
                              const int restir_reservoir_count)
 {
   const int global_index = ccl_gpu_global_id_x();
@@ -303,7 +303,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
                              const ccl_global int *path_index_array,
                              ccl_global float *render_buffer,
                              const int work_size,
-                             ccl_global ReSTIRReservoir *restir_reservoirs,
+                             ccl_global ReSTIRDIReservoir *restir_reservoirs,
                              const int restir_reservoir_count)
 {
   const int global_index = ccl_gpu_global_id_x();
@@ -320,8 +320,8 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
                              const ccl_global int *path_index_array,
                              ccl_global float *render_buffer,
                              const int work_size,
-                             ccl_global ReSTIRReservoir *restir_reservoirs,
-                             ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                             ccl_global ReSTIRDIReservoir *restir_reservoirs,
+                             ccl_global const ReSTIRDIReservoir *restir_reservoirs_prev,
                              const int restir_reservoir_count)
 {
   const int global_index = ccl_gpu_global_id_x();

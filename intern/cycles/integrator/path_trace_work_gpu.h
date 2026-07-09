@@ -150,8 +150,10 @@ class PathTraceWorkGPU : public PathTraceWork {
   device_vector<int> num_queued_paths_;
 
   /* Spatio temporal resevoir resampling buffers. */
-  device_vector<ReSTIRReservoir> restir_reservoirs_; // per-pixel
-  device_vector<ReSTIRReservoir> restir_reservoirs_prev_;
+  // device_vector<ReSTIRReservoir> restir_reservoirs_; // per-pixel
+  // device_vector<ReSTIRReservoir> restir_reservoirs_prev_;
+  device_vector<ReSTIRDIReservoir> restir_reservoirs_; // per-pixel
+  device_vector<ReSTIRDIReservoir> restir_reservoirs_prev_;
 
   /* Temporary buffer for passing work tiles to kernel. */
   device_vector<KernelWorkTile> work_tiles_;

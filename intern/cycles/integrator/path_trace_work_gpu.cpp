@@ -371,10 +371,10 @@ void PathTraceWorkGPU::restir_swap_and_clear()
 {
   // Ping-pong the ReSTIR reservoirs: The 'current' buffer from this sample 
   // becomes the 'previous' buffer for the next sample to enable temporal resampling.
-  restir_pingpong_ = !restir_pingpong_;
+  restir_pingpong_ = !restir_pingpong_; // !!!
 
   // Clear the new 'current' buffer so it doesn't contain stale data from two samples ago.
-  device_vector<ReSTIRReservoir> &next_current = restir_pingpong_ ? 
+  device_vector<ReSTIRDIReservoir> &next_current = restir_pingpong_ ? 
                                                  restir_reservoirs_prev_ : restir_reservoirs_;
 
   next_current.zero_to_device();
@@ -629,7 +629,7 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     }
 
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW: {
-      device_vector<ReSTIRReservoir> &current =
+      device_vector<ReSTIRDIReservoir> &current =
           restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
 
       device_ptr restir_current = current.device_pointer;
@@ -666,9 +666,9 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
     }
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE: {
-      device_vector<ReSTIRReservoir> &current =
+      device_vector<ReSTIRDIReservoir> &current =
           restir_pingpong_ ? restir_reservoirs_prev_ : restir_reservoirs_;
-      device_vector<ReSTIRReservoir> &previous =
+      device_vector<ReSTIRDIReservoir> &previous =
           restir_pingpong_ ? restir_reservoirs_ : restir_reservoirs_prev_;
 
       device_ptr restir_current = current.device_pointer;

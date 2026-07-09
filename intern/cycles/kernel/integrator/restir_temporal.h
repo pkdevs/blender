@@ -103,7 +103,7 @@ ccl_device_inline ReSTIRReservoir restir_temporal_reuse(
   restir_streaming_resample_reservoir(&ris, current, current_target, rand_current);
   restir_streaming_resample_reservoir(&ris, &prev, prev_target, rand_prev);
 
-  return restir_finalize_temporal(&ris);
+  // return restir_finalize_temporal(&ris);
 }
 
 // ccl_device_inline float restir_evaluate_target_pdf(KernelGlobals kg,

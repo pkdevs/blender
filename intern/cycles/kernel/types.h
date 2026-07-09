@@ -578,6 +578,19 @@ struct ReSTIRReservoir {
     uint M;
 };
 
+// To replace ReSTIRReservoir
+/**
+ * @brief Finalized ReSTIR DI reservoir for the selected light candidate.
+ */
+struct ReSTIRDIReservoir {
+  LightSample light;
+  // TODO: ranking_radiance and ranking_luminance
+  BsdfEval radiance;      // Selected ranking payload: BSDF * light_eval * eval_fac.
+  float luminance;        // Luminance of radiance, used for RIS normalization.
+  float total_weight;     // Final RIS multiplier applied to radiance.
+  uint M;                 // Number of candidates in the proposal stream.
+};
+
 /* Guiding Distribution Type */
 
 enum GuidingDistributionType {

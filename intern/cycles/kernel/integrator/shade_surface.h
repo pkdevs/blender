@@ -317,22 +317,29 @@ bool restir_di_select_light(KernelGlobals kg,
                             IntegratorState state,
                             ccl_private ShaderData *sd,
                             const ccl_private RNGState *rng_state,
-                            ccl_global ReSTIRReservoir *restir_reservoirs,
-                            ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                            ccl_global ReSTIRDIReservoir *restir_reservoirs,
+                            ccl_global const ReSTIRDIReservoir *restir_reservoirs_prev,
                             const int restir_reservoir_count,
                             ccl_global float *ccl_restrict render_buffer,
                             ccl_private LightSample *r_ls,
-                            ccl_private float *r_restir_W,
+                            ccl_private BsdfEval *r_radiance,
+                            ccl_private float *r_total_weight,
                             int mnee_vertex_count)
 {
   kernel_assert(kernel_data.integrator.use_restir);
 
   /* initialize the output immediately! */
-  *r_restir_W = 0.0f;
+  // *r_restir_W = 0.0f;
   r_ls->pdf = 0.0f;
+  *r_radiance = BsdfEval();
+  *r_total_weight = 0.0f;
 
-  const uint candidate_count = kernel_data.integrator.restir_candidate_count; // TODO(Tri): UI control
-  ReSTIRRisState ris = restir_ris_empty();
+
+  const uint candidate_count = kernel_data.integrator.restir_candidate_count;
+
+
+  // ReSTIRRisState ris = restir_ris_empty();
+  ReSTIRDIRisState ris = restir_di_ris_empty();
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
@@ -344,6 +351,8 @@ bool restir_di_select_light(KernelGlobals kg,
   }
 
   for (uint i = 0; i < candidate_count; i++) {
+    // PROFILING_EVENT(PROFILING_RESTIR_LIGHT_RESAMPLING);
+
     LightSample candidate ccl_optional_struct_init;
 
     const float3 rand_light = path_branched_rng_3D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_LIGHT);
@@ -393,10 +402,15 @@ bool restir_di_select_light(KernelGlobals kg,
                                                     &candidate_bsdf_eval,
                                                     candidate.shader);
 
+    // Approximate radiance payload
+    BsdfEval candidate_radiance = candidate_bsdf_eval;
+    bsdf_eval_mul(&candidate_radiance, candidate_light_eval * candidate.eval_fac);
+
+
     /** 
      * !!!: Current RIS baseline is NEE-only. For forward direct-light sampling this must use the
      * corresponding forward MIS formulation. */
-    const float mis_weight = light_sample_mis_weight_nee(kg, candidate.pdf, bsdf_pdf);
+    // const float mis_weight = light_sample_mis_weight_nee(kg, candidate.pdf, bsdf_pdf);
     /** 
      * !!!: It may still need a broader audit later depending on:
      * what measure ls.pdf really means for each emitter type
@@ -415,53 +429,58 @@ bool restir_di_select_light(KernelGlobals kg,
     * This target is therefore approximate for textured/procedural emitters, which
     * is acceptable for initial RIS infrastructure validation.
     */
-    const Spectrum contribution = bsdf_eval_sum(&candidate_bsdf_eval) *
-                                                candidate_light_eval * 
-                                                candidate.eval_fac *
-                                                mis_weight;
+    // const Spectrum contribution = bsdf_eval_sum(&candidate_bsdf_eval) *
+    //                                             candidate_light_eval * 
+    //                                             candidate.eval_fac *
+    //                                             mis_weight;
 
-    const float target = spectrum_to_gray(kg, contribution);
-    const float source = candidate.pdf;
+    // const float target = spectrum_to_gray(kg, contribution);
+    // const float source = candidate.pdf;
 
-    const float random = path_branched_rng_1D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_RESAMPLE);
+    // const float random = path_branched_rng_1D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_RESAMPLE);
 
 
-    restir_streaming_resample_step(&ris, &candidate, 
-                                   target, source, random);
+    // restir_streaming_resample_step(&ris, &candidate, 
+    //                                target, source, random);
+    const float random = path_branched_rng_1D(
+        kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_RESAMPLE);
+
+    restir_di_add_light_sample(
+        kg, &ris, &candidate, &candidate_radiance, bsdf_pdf, random);
   }
 
 // >>> DEBUG
   kernel_assert(ris.M == candidate_count);
-  kernel_assert(isfinite(ris.weight_sum));
-  kernel_assert(ris.weight_sum >= 0.0f);
+//   kernel_assert(isfinite(ris.weight_sum));
+//   kernel_assert(ris.weight_sum >= 0.0f);
+kernel_assert(isfinite(ris.total_weight));
+kernel_assert(ris.total_weight >= 0.0f);
 // <<<
 
-  ReSTIRReservoir reservoir = restir_finalize(&ris);
+  // ReSTIRReservoir reservoir = restir_finalize(&ris);
+  ReSTIRDIReservoir reservoir;
+  const bool valid = restir_di_finalize(&reservoir, &ris);
 
   const bool use_temporal = kernel_data.integrator.use_temporal_resampling &&
                             bounce == 0 && mnee_vertex_count == 0;
 
   // !!!: For now, keep ReSTIR DI temporal reuse first-hit only.
   if (use_temporal) {
-    ReSTIRReservoir new_res = restir_temporal_reuse( // Temporal reuse stage
-        kg,
-        state,
-        sd,
-        rng_state,
-        &reservoir,
-        // kernel_data_fetch(PathTraceWorkGPU::restir_reservoirs_prev_, 0));
-        restir_reservoirs_prev,
-        restir_reservoir_count
-        // render_buffer
-      );
+    // !!!: Temporal reuse is disabled until it is ported to ReSTIRDIReservoir semantics.
+    // ReSTIRReservoir new_res = restir_temporal_reuse( // Temporal reuse stage
+    //     kg,
+    //     state,
+    //     sd,
+    //     rng_state,
+    //     &reservoir,
+    //     // kernel_data_fetch(PathTraceWorkGPU::restir_reservoirs_prev_, 0));
+    //     restir_reservoirs_prev,
+    //     restir_reservoir_count
+    //     // render_buffer
+    //   );
 
-    reservoir = new_res;
+    // reservoir = new_res;
   }
-
-  // kernel_assert(reservoir.M == candidate_count); // No longer valid after temporal reuse
-  kernel_assert(reservoir.M > 0 || reservoir.W == 0.0f);
-  kernel_assert(isfinite(reservoir.W));
-  kernel_assert(reservoir.W >= 0.0f);
 
   // if (reservoir.W == 0.0f) {
   //     return SHADER_EVAL_EMPTY;
@@ -470,13 +489,18 @@ bool restir_di_select_light(KernelGlobals kg,
   // Shadow test is done after selection.
   // Required before temporal reuse.
 
-// >>> Temporal stage
-  if (!restir_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) {
-    if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
-      restir_reservoirs[pixel_index] = restir_reservoir_empty();
-    }
+  // if (!restir_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) {
+  //   if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
+  //     restir_reservoirs[pixel_index] = restir_reservoir_empty();
+  //   }
 
-    return false; // Invalid reservoir
+  //   return false; // Invalid reservoir
+  // }
+  if (!valid || !restir_di_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) {
+    if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
+      restir_reservoirs[pixel_index] = restir_di_reservoir_empty();
+    }
+    return false;
   }
 
 // >>> Relocation for re-used reservoirs
@@ -506,12 +530,14 @@ bool restir_di_select_light(KernelGlobals kg,
   kernel_assert(isfinite(reservoir.light.pdf));
   kernel_assert(reservoir.light.pdf >= 0.0f);
 
-  kernel_assert(isfinite(reservoir.W));
-  kernel_assert(reservoir.W >= 0.0f);
+  // kernel_assert(isfinite(reservoir.W));
+  // kernel_assert(reservoir.W >= 0.0f);
 // <<<
 
   *r_ls = reservoir.light;
-  *r_restir_W = reservoir.W;
+  // *r_restir_W = reservoir.total_weight; // For a low-disruption bridge to new structures
+  *r_radiance = reservoir.radiance;
+  *r_total_weight = reservoir.total_weight;
 
   return true;
 }
@@ -570,11 +596,13 @@ ccl_device
                                    IntegratorState state,
                                    ccl_private ShaderData *sd,
                                    const ccl_private RNGState *rng_state,
-                                   ccl_global ReSTIRReservoir *restir_reservoirs,
-                                   ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                                   ccl_global ReSTIRDIReservoir *restir_reservoirs,
+                                   ccl_global const ReSTIRDIReservoir *restir_reservoirs_prev,
                                    const int restir_reservoir_count,
                                    ccl_global float *ccl_restrict render_buffer)
-{
+{ // integrate_surface_direct_light
+  PROFILING_INIT(kg, PROFILING_RESTIR_INITIAL_RESAMPLING);
+
   /* Test if there is a light or BSDF that needs direct light. */
   if (!(kernel_data.integrator.use_direct_light && (sd->flag & SD_BSDF_HAS_EVAL))) {
     return SHADER_EVAL_EMPTY;
@@ -591,15 +619,29 @@ ccl_device
 
   const bool use_restir = kernel_data.integrator.use_restir;
 
-  float restir_W = 0.0f;
+  // float restir_W = 0.0f;
+  float restir_total_weight = 0.0f;
+  BsdfEval restir_radiance ccl_optional_struct_init;
 
   printf("integrate_surface_direct_light(); use_restir:%d\n", use_restir); // DEBUG ONLY
   if (use_restir) {
     PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
 
-    if (!restir_di_select_light(kg, state, sd, rng_state, 
-                                restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count, 
-                                render_buffer,&ls, &restir_W, mnee_vertex_count)) { // !!!
+    // if (!restir_di_select_light(kg, state, sd, rng_state, 
+    //                             restir_reservoirs, restir_reservoirs_prev, restir_reservoir_count, 
+    //                             render_buffer,&ls, &restir_W, mnee_vertex_count)) { // !!!
+    if (!restir_di_select_light(kg,
+                                state,
+                                sd,
+                                rng_state,
+                                restir_reservoirs,
+                                restir_reservoirs_prev,
+                                restir_reservoir_count,
+                                render_buffer,
+                                &ls,
+                                &restir_radiance,
+                                &restir_total_weight,
+                                mnee_vertex_count)) {
         return SHADER_EVAL_EMPTY;
     }
   }
@@ -674,11 +716,16 @@ ccl_device
 #ifdef __RESTIR_DI__
     const bool use_restir = kernel_data.integrator.use_restir;
 
-    if (restir_W > 0.0f) {
-      if (use_restir) {
-        bsdf_eval_mul(&bsdf_eval,
-                      light_shader_eval * ls.eval_fac * restir_W);
-      }
+    // if (restir_W > 0.0f) {
+    //   if (use_restir) {
+    //     bsdf_eval_mul(&bsdf_eval,
+    //                   light_shader_eval * ls.eval_fac * restir_W);
+    //   }
+    // }
+
+    if (use_restir && restir_total_weight > 0.0f) {
+      bsdf_eval = restir_radiance;
+      bsdf_eval_mul(&bsdf_eval, restir_total_weight);
     }
     else
     /**
@@ -726,7 +773,7 @@ ccl_device
 // !!!: MNEE path should not be allowed to mutate the normal per-pixel ReSTIR reservoir unless 
 // TODO(Tri): ReSTIR+MNEE is explicitly supported
 // TODO(Tri): exclude AO/shadow catcher paths ...
-  if (bounce == 0 && mnee_vertex_count == 0) {
+  if (use_restir && bounce == 0 && mnee_vertex_count == 0) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, restir_di) = 1;
   }
 #endif
@@ -766,6 +813,7 @@ ccl_device
   return SHADER_EVAL_OK;
 }
 
+// TODO: For ReSTIR, this needs special handling
 /* Path tracing: bounce off or through surface with new direction. */
 ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
     KernelGlobals kg,
@@ -1033,8 +1081,8 @@ template<uint node_feature_mask>
 ccl_device int integrate_surface(KernelGlobals kg,
                                  IntegratorState state,
                                  ccl_global float *ccl_restrict render_buffer, 
-                                 ccl_global ReSTIRReservoir *restir_reservoirs,
-                                 ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                                 ccl_global ReSTIRDIReservoir *restir_reservoirs,
+                                 ccl_global const ReSTIRDIReservoir *restir_reservoirs_prev,
                                  const int restir_reservoir_count)
 
 {
@@ -1179,6 +1227,7 @@ ccl_device_forceinline void integrator_shade_surface_next_kernel(IntegratorState
   }
 }
 
+// TODO: integrator_finalize_reservoir; used or not to be used
 /**
   mostly a scheduler/dispatch function (The BSDF evaluation has already happened.)
  */
@@ -1187,8 +1236,8 @@ template<uint node_feature_mask = KERNEL_FEATURE_NODE_MASK_SURFACE & ~KERNEL_FEA
 ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
                                                      IntegratorState state,
                                                      ccl_global float *ccl_restrict render_buffer,
-                                                     ccl_global ReSTIRReservoir *restir_reservoirs,
-                                                     ccl_global const ReSTIRReservoir *restir_reservoirs_prev,
+                                                     ccl_global ReSTIRDIReservoir *restir_reservoirs,
+                                                     ccl_global const ReSTIRDIReservoir *restir_reservoirs_prev,
                                                      const int restir_reservoir_count)
 {
   const int continue_path_label = integrate_surface<node_feature_mask>(kg, state, render_buffer, 

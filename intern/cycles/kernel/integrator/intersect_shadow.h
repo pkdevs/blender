@@ -151,7 +151,7 @@ ccl_device bool integrate_intersect_shadow_transparent(KernelGlobals kg,
 
 ccl_device void integrator_intersect_shadow(KernelGlobals kg, 
                                             IntegratorShadowState state,
-                                            ccl_global ReSTIRReservoir *restir_reservoirs,
+                                            ccl_global ReSTIRDIReservoir *restir_reservoirs,
                                             const int restir_reservoir_count)
 {
   PROFILING_INIT(kg, PROFILING_INTERSECT_SHADOW);
@@ -175,7 +175,7 @@ ccl_device void integrator_intersect_shadow(KernelGlobals kg,
 
   if (opaque_hit) {
   #ifdef __RESTIR_DI__
-    restir_di_shadow_set_visible(state, restir_reservoirs, restir_reservoir_count, false);
+    // restir_di_shadow_set_visible(state, restir_reservoirs, restir_reservoir_count, false);
   #endif
     /* Hit an opaque surface, shadow path ends here. */
     integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW);
