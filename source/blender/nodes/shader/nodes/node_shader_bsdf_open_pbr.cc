@@ -255,7 +255,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 #define OPENPBR_SOCK_COAT_ROUGHNESS_ANISOTROPY_ID 25
   coat.add_input<decl::Float>("Coat IOR"_ustr)
       .default_value(1.6f)
-      .min(0.0f)
+      .min(1.0f)
       .max(3.0f)
       .subtype(PROP_FACTOR)
       .description("Refractive index of the coat layer");
