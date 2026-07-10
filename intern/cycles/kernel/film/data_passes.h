@@ -70,6 +70,19 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
       }
     }
 
+  // !!!: Store first-hit receiver data for later ReSTIR surface reconstruction.
+  if (flag & PASSMASK(SURFACE_DATA)) {
+      float *ptr = buffer + kernel_data.film.pass_surface_data;
+      film_overwrite_pass_float(ptr++, (float)path_flag);
+
+      film_overwrite_pass_float(ptr++, sd->u);
+      film_overwrite_pass_float(ptr++, sd->v);
+      film_overwrite_pass_float(ptr++, (float)sd->type);
+      film_overwrite_pass_float(ptr++, (float)sd->object);
+      film_overwrite_pass_float(ptr++, (float)sd->prim);
+      film_overwrite_pass_float(ptr, (float)sd->lcg_state);
+    }
+
     if (!(sd->flag & (SD_TRANSPARENT | SD_RAY_PORTAL)) ||
         kernel_data.film.pass_alpha_threshold == 0.0f ||
         average(surface_shader_alpha(sd)) >= kernel_data.film.pass_alpha_threshold)

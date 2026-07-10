@@ -9,6 +9,7 @@
 #include "kernel/integrator/shadow_catcher.h"
 
 #include "kernel/sample/pattern.h"
+#include "kernel/types.h"
 #include "util/atomic.h"
 
 CCL_NAMESPACE_BEGIN
@@ -155,6 +156,7 @@ ccl_device_forceinline void film_clamp_light(KernelGlobals kg,
  * Adaptive sampling.
  */
 
+// This is where the sample count is incremented in the buffer using an atomic add. This is technically the “commit” of the sample’s existence, rather than its color.
 ccl_device_inline int film_write_sample(KernelGlobals kg,
                                         ConstIntegratorState state,
                                         ccl_global float *ccl_restrict render_buffer,
@@ -172,6 +174,7 @@ ccl_device_inline int film_write_sample(KernelGlobals kg,
          sample_offset;
 }
 
+// This is a secondary commit used for adaptive sampling. It writes the contribution to a separate buffer to help Cycles determine if the pixel has converged.
 ccl_device void film_write_adaptive_buffer(KernelGlobals kg,
                                            const int sample,
                                            const Spectrum contribution,
@@ -341,7 +344,7 @@ ccl_device_forceinline void film_write_shadow_catcher_bounce_data(
  */
 
 /* Write combined pass. */
-ccl_device_inline void film_write_combined_pass(KernelGlobals kg,
+ccl_device_inline void film_write_combined_pass(KernelGlobals kg, // !!!
                                                 const PathRayVisibility path_visibility,
                                                 const uint32_t path_flag,
                                                 const int sample,
@@ -492,7 +495,7 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
 {
   /* The throughput for shadow paths already contains the light shader evaluation. */
   Spectrum contribution = INTEGRATOR_STATE(state, shadow_path, throughput);
-  film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce));
+  film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce)); // !!!: Remove
 
   ccl_global float *buffer = film_pass_pixel_render_buffer_shadow(kg, state, render_buffer);
 
@@ -657,6 +660,77 @@ ccl_device_inline void film_write_background(KernelGlobals kg,
                                          kernel_data.background.lightgroup);
 }
 
+// TODO: film_add_reservoir_pt
+
+// TODO: film_write_pass_reservoir_pt
+
+// !!!: Needs a rewrite
+ccl_device_inline void film_write_pass_reservoir(
+    KernelGlobals kg,
+    ConstIntegratorState state,
+    ccl_private const ReSTIRDIReservoir *reservoir,
+    ccl_global float *ccl_restrict render_buffer,
+    const bool write_prev = false)
+{
+  kernel_assert(kernel_data.integrator.use_restir);
+
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+
+  ccl_global float *ptr = buffer +
+                          (write_prev ? kernel_data.film.pass_restir_previous_reservoir :
+                                        kernel_data.film.pass_restir_reservoir);
+
+  // TODO: it is possible to compress the LightSample.
+
+  /* Preserve the legacy six-float reservoir-pass layout. LightSample currently does not
+   * provide canonical light parameters or persistent analytic-light identity. */
+  film_overwrite_pass_float(ptr++, (float)reservoir->light.object);
+  film_overwrite_pass_float(
+      ptr++,
+      (float)(reservoir->light.object != OBJECT_NONE ? reservoir->light.prim : PRIM_NONE));
+
+  // film_overwrite_pass_float(ptr++, reservoir->light.u);
+  // film_overwrite_pass_float(ptr++, reservoir->light.v);
+  film_overwrite_pass_float(ptr++, -1.0f);
+  film_overwrite_pass_float(ptr++, -1.0f);
+
+  film_overwrite_pass_float(ptr++, reservoir->total_weight);
+  film_overwrite_pass_float(ptr, reservoir->luminance);
+
+  // film_overwrite_pass_float(ptr, (float)reservoir->M);
+}
+
+ccl_device_inline void film_clear_pass_reservoir(
+    KernelGlobals kg,
+    ConstIntegratorState state,
+    ccl_global float *ccl_restrict render_buffer)
+{
+  if (!kernel_data.integrator.use_restir) {
+    return;
+  }
+
+  /* Set weight to zero. */
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+
+  /* Set weight to zero. */
+  float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 4;
+  film_overwrite_pass_float(ptr, 0.0f);
+
+  ptr = buffer + kernel_data.film.pass_restir_previous_reservoir + 4;
+  film_overwrite_pass_float(ptr, 0.0f);
+
+  ptr = buffer + kernel_data.film.pass_restir_pt_reservoir;
+  film_overwrite_pass_float(ptr, 0.0f);
+  film_overwrite_pass_float(ptr + 2, 0.0f);
+
+  ptr = buffer + kernel_data.film.pass_restir_pt_previous_reservoir;
+  film_overwrite_pass_float(ptr, 0.0f);
+
+  /* Set sd.type to zero. */
+  ptr = buffer + kernel_data.film.pass_surface_data + 3;
+  film_overwrite_pass_float(ptr, 0.0f);
+}
+
 /* Write emission to render buffer. */
 ccl_device_inline void film_write_volume_emission(KernelGlobals kg,
                                                   ConstIntegratorState state,
@@ -677,7 +751,7 @@ ccl_device_inline void film_write_volume_emission(KernelGlobals kg,
       kg, state, contribution, buffer, kernel_data.film.pass_emission, lightgroup);
 }
 
-ccl_device_inline void film_write_surface_emission(KernelGlobals kg,
+ccl_device_inline void film_write_surface_emission(KernelGlobals kg, // !!!
                                                    ConstIntegratorState state,
                                                    const Spectrum L,
                                                    const float mis_weight,

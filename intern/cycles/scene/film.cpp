@@ -215,6 +215,10 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->pass_shadow_catcher_matte = PASS_UNUSED;
 
   /* ReSTIR. */
+  kfilm->pass_restir_previous_reservoir = PASS_UNUSED;
+  kfilm->pass_restir_reservoir = PASS_UNUSED;
+  kfilm->pass_restir_pt_previous_reservoir = PASS_UNUSED;
+  kfilm->pass_restir_pt_reservoir = PASS_UNUSED;
   kfilm->pass_surface_data = PASS_UNUSED;
 
   kfilm->pass_guiding_color = PASS_UNUSED;
@@ -620,6 +624,15 @@ void Film::update_passes(Scene *scene)
   else if (Pass::contains(scene->passes, PASS_SHADOW_CATCHER)) {
     add_auto_pass(scene, PASS_SHADOW_CATCHER);
     add_auto_pass(scene, PASS_SHADOW_CATCHER_SAMPLE_COUNT);
+  }
+
+  /* Add reservoir pass if spatial resampling is used. */
+  if (integrator->get_use_restir()) {
+    add_auto_pass(scene, PASS_RESTIR_PT_PREVIOUS_RESERVOIR);
+    add_auto_pass(scene, PASS_RESTIR_PT_RESERVOIR);
+    add_auto_pass(scene, PASS_RESTIR_PREVIOUS_RESERVOIR);
+    add_auto_pass(scene, PASS_RESTIR_RESERVOIR);
+    add_auto_pass(scene, PASS_SURFACE_DATA);
   }
 
   const vector<Pass *> passes_immutable = scene->passes;

@@ -117,7 +117,12 @@ KERNEL_STRUCT_MEMBER(film, int, pass_shadow_catcher_sample_count)
 KERNEL_STRUCT_MEMBER(film, int, pass_shadow_catcher_matte)
 
 /* ReSTIR. */
-KERNEL_STRUCT_MEMBER(film, int, pass_surface_data) // !!!
+KERNEL_STRUCT_MEMBER(film, int, pass_restir_previous_reservoir)
+KERNEL_STRUCT_MEMBER(film, int, pass_restir_reservoir)
+// ???: Use pass_normal/position/uv?
+KERNEL_STRUCT_MEMBER(film, int, pass_restir_pt_previous_reservoir)
+KERNEL_STRUCT_MEMBER(film, int, pass_restir_pt_reservoir)
+KERNEL_STRUCT_MEMBER(film, int, pass_surface_data)
 
 KERNEL_STRUCT_MEMBER(film, int, pass_render_time)
 /* Cryptomatte. */

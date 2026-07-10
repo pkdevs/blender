@@ -329,7 +329,6 @@ bool restir_di_select_light(KernelGlobals kg,
   kernel_assert(kernel_data.integrator.use_restir);
 
   /* initialize the output immediately! */
-  // *r_restir_W = 0.0f;
   r_ls->pdf = 0.0f;
   *r_radiance = BsdfEval();
   *r_total_weight = 0.0f;
@@ -418,30 +417,6 @@ bool restir_di_select_light(KernelGlobals kg,
      * whether future spatial relocation reconstructs a proposal in a canonical measure
      */
 
-    // Computing target
-    /* ReSTIR DI prototype target.
-    *
-    * `light_shader_eval` contains the constant part of the light shader. For
-    * constant-emission lights this is the full emitted radiance. For non-constant
-    * emission shaders, the remaining radiance is evaluated later in
-    * SHADE_LIGHT_NEE after the shadow ray reaches the light shading stage.
-    *
-    * This target is therefore approximate for textured/procedural emitters, which
-    * is acceptable for initial RIS infrastructure validation.
-    */
-    // const Spectrum contribution = bsdf_eval_sum(&candidate_bsdf_eval) *
-    //                                             candidate_light_eval * 
-    //                                             candidate.eval_fac *
-    //                                             mis_weight;
-
-    // const float target = spectrum_to_gray(kg, contribution);
-    // const float source = candidate.pdf;
-
-    // const float random = path_branched_rng_1D(kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_RESAMPLE);
-
-
-    // restir_streaming_resample_step(&ris, &candidate, 
-    //                                target, source, random);
     const float random = path_branched_rng_1D(
         kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_RESAMPLE);
 
@@ -482,45 +457,15 @@ kernel_assert(ris.total_weight >= 0.0f);
     // reservoir = new_res;
   }
 
-  // if (reservoir.W == 0.0f) {
-  //     return SHADER_EVAL_EMPTY;
-  // }
-
   // Shadow test is done after selection.
   // Required before temporal reuse.
 
-  // if (!restir_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) {
-  //   if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
-  //     restir_reservoirs[pixel_index] = restir_reservoir_empty();
-  //   }
-
-  //   return false; // Invalid reservoir
-  // }
   if (!valid || !restir_di_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) {
     if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
       restir_reservoirs[pixel_index] = restir_di_reservoir_empty();
     }
-    return false;
+    return false; // Invalid reservoir
   }
-
-// >>> Relocation for re-used reservoirs
-// // >>> DEBUG
-// // #ifdef WITH_CYCLES_DEBUG
-//   float pdf_val = reservoir.light.pdf;
-//   // Split into integer part and 3 decimal places
-//   int pdf_int = (int)pdf_val;
-//   int pdf_frac = (int)((pdf_val - pdf_int) * 1000.0f);
-//   if (pdf_frac < 0) { pdf_frac = -pdf_frac; }
-// // #endif
-
-//   printf("restir_di_select_light(); analytic selected: prim=%d type=%d shader=%d pdf=%d.%03d\n",
-//          reservoir.light.prim,
-//          reservoir.light.type,
-//          reservoir.light.shader,
-//          pdf_int,
-//          pdf_frac);
-// // <<<
-// <<<
 
   if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) { // storage and shadow validation are matched
       restir_reservoirs[pixel_index] = reservoir;
@@ -529,13 +474,9 @@ kernel_assert(ris.total_weight >= 0.0f);
 // >>> Debug
   kernel_assert(isfinite(reservoir.light.pdf));
   kernel_assert(reservoir.light.pdf >= 0.0f);
-
-  // kernel_assert(isfinite(reservoir.W));
-  // kernel_assert(reservoir.W >= 0.0f);
 // <<<
 
   *r_ls = reservoir.light;
-  // *r_restir_W = reservoir.total_weight; // For a low-disruption bridge to new structures
   *r_radiance = reservoir.radiance;
   *r_total_weight = reservoir.total_weight;
 

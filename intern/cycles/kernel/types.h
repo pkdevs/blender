@@ -421,6 +421,12 @@ enum PassType {
   PASS_GUIDING_PROBABILITY,
   /* The avg. roughness at the first bounce. */
   PASS_GUIDING_AVG_ROUGHNESS,
+
+  PASS_RESTIR_PT_PREVIOUS_RESERVOIR,
+  PASS_RESTIR_PT_RESERVOIR,
+  PASS_RESTIR_PREVIOUS_RESERVOIR,
+  PASS_RESTIR_RESERVOIR,
+
   /* The majorant optical depth along the ray, for volume scattering probability guiding.
    * When reading this pass, it is converted to majorant transmittance */
   PASS_VOLUME_MAJORANT,
