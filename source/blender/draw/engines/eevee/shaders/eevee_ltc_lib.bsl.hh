@@ -13,6 +13,7 @@
 
 #include "eevee_bxdf_types.bsl.hh"
 #include "eevee_defines.hh"
+#include "eevee_light_lib.bsl.hh"
 #include "eevee_ltc_lut_lib.bsl.hh"
 #include "gpu_shader_compat.hh"
 #include "gpu_shader_math_constants.bsl.hh"
@@ -154,13 +155,13 @@ float3 edge_integral_vec(float3 v1, float3 v2)
 /**
  * Evaluate contribution of rectangle light.
  */
-float evaluate_quad(sampler2DArray util_tx, LTCData ltc_data, float3 corners[4])
+float evaluate_quad(sampler2DArray util_tx, LightShape shape, LightVector lv, LTCData ltc_data)
 {
   /* Transform the quad corners into LTC space, and project on to sphere. */
-  float3 V[4] = {normalize(ltc_data.Minv * corners[0]),
-                 normalize(ltc_data.Minv * corners[1]),
-                 normalize(ltc_data.Minv * corners[2]),
-                 normalize(ltc_data.Minv * corners[3])};
+  float3 V[4] = {normalize(ltc_data.Minv * shape.v[0]),
+                 normalize(ltc_data.Minv * shape.v[1]),
+                 normalize(ltc_data.Minv * shape.v[2]),
+                 normalize(ltc_data.Minv * shape.v[3])};
 
   /* Approximation using a sphere with the same form factor as the unclipped quad.
    * Finding a clipped sphere's form factor is easier than clipping the quad. */
@@ -194,12 +195,12 @@ float evaluate_quad(sampler2DArray util_tx, LTCData ltc_data, float3 corners[4])
  *
  * disk_points are WS vectors from the shading point to the disk "bounding domain".
  */
-float evaluate_disk(sampler2DArray util_tx, LTCData ltc_data, float3 disk_points[4])
+float evaluate_disk(sampler2DArray util_tx, LightShape shape, LightVector lv, LTCData ltc_data)
 {
   /* Intermediate step: init ellipse. */
-  float3 C = 0.5f * (disk_points[0] + disk_points[2]);
-  float3 V1 = 0.5f * (disk_points[1] - disk_points[2]);
-  float3 V2 = 0.5f * (disk_points[1] - disk_points[0]);
+  float3 C = 0.5f * (shape.v[0] + shape.v[2]);
+  float3 V1 = 0.5f * (shape.v[1] - shape.v[2]);
+  float3 V2 = 0.5f * (shape.v[1] - shape.v[0]);
 
   /* Transform ellipse into LTC space. */
   C = ltc_data.Minv * C;
@@ -303,6 +304,24 @@ float evaluate_disk(sampler2DArray util_tx, LTCData ltc_data, float3 disk_points
   }
 
   return form_factor;
+}
+
+/**
+ * Perform LTC evaluation, returning the form factor of the light's shape to the shading point.
+ * When multiplied by emission, this approximates the light's contributed irradiance.
+ */
+float evaluate(
+    sampler2DArray util_tx, LightData light, LightShape shape, LightVector lv, LTCData ltc_data)
+{
+  if (is_sphere_light(light.type) && lv.dist < light.local().local.shape_radius) {
+    /* Inside the sphere light, integrate over the hemisphere. */
+    return 1.0f;
+  }
+
+  if (light.type == LIGHT_RECT) {
+    return evaluate_quad(util_tx, shape, lv, ltc_data);
+  }
+  return evaluate_disk(util_tx, shape, lv, ltc_data);
 }
 
 }  // namespace eevee::ltc
