@@ -18,6 +18,7 @@
 #include "gpu_shader_compat.hh"
 #include "gpu_shader_math_constants.bsl.hh"
 #include "gpu_shader_math_matrix_construct.bsl.hh"
+#include "gpu_shader_math_safe.bsl.hh"
 #include "gpu_shader_utildefines.bsl.hh" /* IWYU pragma: export. FLT_MAX */
 
 namespace eevee::ltc {
@@ -150,6 +151,57 @@ float3 edge_integral_vec(float3 v1, float3 v2)
   return cross(v1, v2) * theta_sintheta;
 }
 
+/**
+ * Upper parabolic curve of the form `x/(1+x)`, going through `y_1` at `x=1`,
+ * with `scale` determining the curve shape.
+ */
+float upper_parabole(float x, float scale, float y_1)
+{
+  x = saturate(x / y_1);
+  return saturate((x * scale + x) / (scale + x));
+}
+
+/**
+ * Get the 3rd column of the inverse of 3x3 matrix M^{-1}, normalized. We can avoid
+ * computing the reciprocal determinant as we need a unit vector.
+ */
+float3 dominant_bxdf_direction(float3x3 Minv)
+{
+  float3 adjoint_z = float3(+(Minv[1][0] * Minv[2][1] - Minv[2][0] * Minv[1][1]),
+                            -(Minv[0][0] * Minv[2][1] - Minv[2][0] * Minv[0][1]),
+                            +(Minv[0][0] * Minv[1][1] - Minv[1][0] * Minv[0][1]));
+  return normalize(adjoint_z);
+}
+
+/**
+ * Fitted function to attenuation light leakage caused by the sphere integral approximation.
+ */
+float form_factor_attenuation(LightShape shape, LTCData ltc_data, float3 L)
+{
+  /* First, find an approximate dominant BxDF direction D. Then, find a vector T on the light
+   * plane, coplanar with D and L, i.e. T = cross(cross(L, D), shape.N). */
+  float3 D = dominant_bxdf_direction(ltc_data.Minv);
+  float3 T = normalize(D * dot(L, shape.N) - L * dot(D, shape.N));
+
+  /* Find t where D intersects the line L + t*T. */
+  float TD = dot(T, D);
+  float t = safe_divide(dot(D, L) * TD - dot(T, L), 1.0f - square(TD));
+
+  if (t > 0.0 && t < shape.disk_radius_projected) {
+    /* If t lies within the disk radius on the positive side, we do not attenuate. */
+    return 1.0;
+  }
+  /* Otherwise, restrict t to within on the disk radius. */
+  t = min(abs(t), shape.disk_radius_projected);
+
+  /* Compute L + t*T and warp it into LTC space. This disk point bounds the light shape in LTC
+   * space, so we can use its z-component to safely fit an attenuation factor. */
+  float attenuation = saturate(normalize(ltc_data.Minv * (L + t * T)).z);
+  attenuation = upper_parabole(attenuation, 0.15f, 0.5f);
+  attenuation += (1.0f - attenuation) * ltc_data.attenuation_factor;
+
+  return attenuation;
+}
 }  // namespace detail
 
 /**
