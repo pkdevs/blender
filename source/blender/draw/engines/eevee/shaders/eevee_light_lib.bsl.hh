@@ -114,10 +114,8 @@ float light_shape_radius(LightData light)
 
 /**
  * Fade light influence when surface is not facing the light.
- * This is needed because LTC leaks light at roughness not 0 or 1
- * when the light is below the horizon.
- * L is normalized vector to light shape center.
- * Ng is ideally the geometric normal.
+ * This is used in thickness from shadow.
+ * Note: Ng is ideally the geometric normal.
  */
 float light_attenuation_facing(
     LightData light, float3 L, float distance_to_light, float3 Ng, const bool is_transmission)

@@ -135,8 +135,14 @@ float3 solve_cubic(float4 coefs)
   return root;
 }
 
-/* from Real-Time Area Lighting: a Journey from Research to Production
- * Stephen Hill and Eric Heitz */
+/**
+ * Approximate edge integral as part of a polygon area integral over a cosine (hemi)sphere.
+
+ * 1. This dates back to Lambert, see: [Geometric Derivation of the Irradiance of  Polygonal
+ *    Lights](https://hal.science/hal-01458129/document).
+ * 2. This is a fitting that avoids precision issues, see: [Real-Time Area Lighting: a Journey from
+ *    Research to Production](https://advances.realtimerendering.com/s2016/s2016_ltc_rnd.pdf)
+ */
 float3 edge_integral_vec(float3 v1, float3 v2)
 {
   float x = dot(v1, v2);
@@ -231,7 +237,9 @@ float evaluate_quad(sampler2DArray util_tx, LightShape shape, LightVector lv, LT
 
   switch (ltc_data.form_factor_type) {
     case LTCFormFactorType::OneSidedCosineSphereClipped:
-      /* TODO(not_mark): apply attenuation here as LTC bleed fix. */
+      /* The clipped sphere approximation causes light leakage for low roughness;
+       * we attenuate with a fitted function that removes some energy below the horizon. */
+      form_factor *= detail::form_factor_attenuation(shape, ltc_data, lv.L);
       form_factor *= detail::diffuse_sphere_integral(util_tx, avg_dir_z, form_factor);
       break;
     default: /* LTCFormFactorType::TwoSidedCosineSphere */
@@ -347,7 +355,9 @@ float evaluate_disk(sampler2DArray util_tx, LightShape shape, LightVector lv, LT
 
   switch (ltc_data.form_factor_type) {
     case LTCFormFactorType::OneSidedCosineSphereClipped:
-      /* TODO(not_mark): apply attenuation here as LTC bleed fix. */
+      /* The clipped sphere approximation causes light leakage for low roughness;
+       * we attenuate with a fitted function that removes some energy below the horizon. */
+      form_factor *= detail::form_factor_attenuation(shape, ltc_data, lv.L);
       form_factor *= detail::diffuse_sphere_integral(util_tx, avg_dir.z, form_factor);
       break;
     default: /* LTCFormFactorType::TwoSidedCosineSphere */
