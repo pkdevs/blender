@@ -41,6 +41,18 @@ if(WITH_CODEC_FFMPEG)
   list(APPEND SRC
     intern/ffmpeg_swscale.cc
     intern/ffmpeg_swscale.hh
+    intern/ffmpeg_vulkan.cc
+    intern/ffmpeg_vulkan.hh
+  )
+endif()
+
+if(WITH_FFMPEG_VULKAN)
+  add_definitions(-DWITH_FFMPEG_VULKAN)
+  # bf::gpu provides the Vulkan device handles (see GPU_vulkan_interop.hh); the Vulkan headers are
+  # needed to build the AVVulkanDeviceContext.
+  list(APPEND LIB
+    PRIVATE bf::gpu
+    PRIVATE bf::dependencies::optional::vulkan
   )
 endif()
 

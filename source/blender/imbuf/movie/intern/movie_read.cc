@@ -38,11 +38,13 @@
 
 #ifdef WITH_FFMPEG
 #  include "ffmpeg_swscale.hh"
+#  include "ffmpeg_vulkan.hh"
 #  include "movie_util.hh"
 
 extern "C" {
 #  include <libavcodec/avcodec.h>
 #  include <libavformat/avformat.h>
+#  include <libavutil/hwcontext.h>
 #  include <libavutil/imgutils.h>
 #  include <libavutil/rational.h>
 #  include <libswscale/swscale.h>
@@ -188,6 +190,19 @@ bool MOV_is_initialized_and_valid(const MovieReader *anim)
   }
 #endif
   return false;
+}
+
+bool MOV_is_hardware_decoding(const MovieReader *anim)
+{
+#ifdef WITH_FFMPEG_VULKAN
+  /* Optimistic: a strip whose device attached is treated as hardware decoding until a frame is
+   * actually seen falling back to software (see #MovieReader::hw_decode_fallback). This avoids a
+   * chicken-and-egg where a proxy would be used before the original is ever decoded. */
+  return anim != nullptr && anim->is_hwaccel && !anim->hw_decode_fallback;
+#else
+  UNUSED_VARS(anim);
+  return false;
+#endif
 }
 
 void MOV_set_multiview_suffix(MovieReader *anim, const char *suffix)
@@ -406,15 +421,49 @@ static int startffmpeg(MovieReader *anim)
     pCodecCtx->thread_type = FF_THREAD_SLICE;
   }
 
+#ifdef WITH_FFMPEG_VULKAN
+  /* Try to enable Vulkan compute hardware decoding. When attached, frames are decoded on the GPU
+   * and downloaded in ffmpeg_postprocess(); on failure decoding silently stays on the software
+   * path. Hardware decoding does not support frame/slice threading. */
+  if (movie_ffmpeg_vulkan_attach(pCodecCtx, pCodec, &anim->hw_device_ctx)) {
+    anim->is_hwaccel = true;
+    pCodecCtx->thread_count = 1;
+    pCodecCtx->thread_type = 0;
+  }
+#endif
+
   if (avcodec_open2(pCodecCtx, pCodec, nullptr) < 0) {
+#ifdef WITH_FFMPEG_VULKAN
+    av_buffer_unref(&anim->hw_device_ctx);
+#endif
+    avcodec_free_context(&pCodecCtx);
     avformat_close_input(&pFormatCtx);
     return -1;
   }
   if (pCodecCtx->pix_fmt == AV_PIX_FMT_NONE) {
-    avcodec_free_context(&anim->pCodecCtx);
+#ifdef WITH_FFMPEG_VULKAN
+    av_buffer_unref(&anim->hw_device_ctx);
+#endif
+    avcodec_free_context(&pCodecCtx);
     avformat_close_input(&pFormatCtx);
     return -1;
   }
+
+  /* The software pixel format that decoded frames are processed in. For software decoding this is
+   * the codec's pixel format. For hardware (Vulkan) decoding the true software format is only known
+   * once a frame has been downloaded, so `effective_pix_fmt` here is just an initial best guess used
+   * to set up the conversion; ffmpeg_postprocess() revalidates it against the first downloaded frame
+   * and rebuilds the swscale context if it differs. */
+  AVPixelFormat effective_pix_fmt = pCodecCtx->pix_fmt;
+#ifdef WITH_FFMPEG_VULKAN
+  if (anim->is_hwaccel) {
+    if (pCodecCtx->pix_fmt == AV_PIX_FMT_VULKAN) {
+      effective_pix_fmt = pCodecCtx->sw_pix_fmt;
+    }
+    anim->hw_download_format = effective_pix_fmt;
+    anim->hw_sw_frame = av_frame_alloc();
+  }
+#endif
 
   /* Check if we need the "never seek, only decode one frame" ffmpeg bug workaround. */
   const bool is_ogg_container = STREQ(pFormatCtx->iformat->name, "ogg");
@@ -451,7 +500,7 @@ static int startffmpeg(MovieReader *anim)
   anim->video_rotation = ffmpeg_get_video_rotation(video_stream);
 
   /* Decode >8bit videos into floating point image. */
-  anim->is_float = calc_pix_fmt_max_component_bits(pCodecCtx->pix_fmt) > 8;
+  anim->is_float = calc_pix_fmt_max_component_bits(effective_pix_fmt) > 8;
 
   anim->pFormatCtx = pFormatCtx;
   anim->pCodecCtx = pCodecCtx;
@@ -487,12 +536,16 @@ static int startffmpeg(MovieReader *anim)
     av_frame_free(&anim->pFrameDeinterlaced);
     av_frame_free(&anim->pFrame);
     av_frame_free(&anim->pFrame_backup);
+#ifdef WITH_FFMPEG_VULKAN
+    av_buffer_unref(&anim->hw_device_ctx);
+    av_frame_free(&anim->hw_sw_frame);
+#endif
     anim->pCodecCtx = nullptr;
     return -1;
   }
 
   if (flag_is_set(anim->ib_flags, ImBufFlags::Deinterlace)) {
-    anim->pFrameDeinterlaced->format = anim->pCodecCtx->pix_fmt;
+    anim->pFrameDeinterlaced->format = effective_pix_fmt;
     anim->pFrameDeinterlaced->width = anim->pCodecCtx->width;
     anim->pFrameDeinterlaced->height = anim->pCodecCtx->height;
     av_image_fill_arrays(
@@ -500,9 +553,9 @@ static int startffmpeg(MovieReader *anim)
         anim->pFrameDeinterlaced->linesize,
         MEM_new_array_zeroed<uint8_t>(
             av_image_get_buffer_size(
-                anim->pCodecCtx->pix_fmt, anim->pCodecCtx->width, anim->pCodecCtx->height, 1),
+                effective_pix_fmt, anim->pCodecCtx->width, anim->pCodecCtx->height, 1),
             "ffmpeg deinterlace"),
-        anim->pCodecCtx->pix_fmt,
+        effective_pix_fmt,
         anim->pCodecCtx->width,
         anim->pCodecCtx->height,
         1);
@@ -514,7 +567,7 @@ static int startffmpeg(MovieReader *anim)
    * ffmpeg ticket https://trac.ffmpeg.org/ticket/1582 */
   anim->img_convert_ctx = ffmpeg_sws_get_context(anim->x,
                                                  anim->y,
-                                                 anim->pCodecCtx->pix_fmt,
+                                                 effective_pix_fmt,
                                                  anim->pCodecCtx->color_range == AVCOL_RANGE_JPEG,
                                                  anim->pCodecCtx->colorspace,
                                                  anim->x,
@@ -538,6 +591,10 @@ static int startffmpeg(MovieReader *anim)
     av_frame_free(&anim->pFrameDeinterlaced);
     av_frame_free(&anim->pFrame);
     av_frame_free(&anim->pFrame_backup);
+#ifdef WITH_FFMPEG_VULKAN
+    av_buffer_unref(&anim->hw_device_ctx);
+    av_frame_free(&anim->hw_sw_frame);
+#endif
     anim->pCodecCtx = nullptr;
     return -1;
   }
@@ -697,6 +754,56 @@ static void ffmpeg_postprocess(MovieReader *anim, AVFrame *input, ImBuf *ibuf)
 {
   int filter_y = 0;
 
+#ifdef WITH_FFMPEG_VULKAN
+  /* Hardware decoded frames live in GPU memory as AV_PIX_FMT_VULKAN. Download them to a software
+   * frame (libavutil waits on the frame's timeline semaphores internally) so the existing swscale
+   * conversion below can run unchanged. The real software format is only known after the download,
+   * so let libavutil choose it (leave the destination format unset) and rebuild the swscale context
+   * whenever it differs from what we configured (initial guess, or a mid-stream format change). */
+  /* If the device attached but this frame is not a GPU frame, the codec fell back to software
+   * (e.g. H.264 needs a video-decode queue we do not provide) - hardware decoding is not actually
+   * happening, so remember that and let proxies be used for this strip. */
+  if (anim->is_hwaccel && input->format != AV_PIX_FMT_VULKAN) {
+    anim->hw_decode_fallback = true;
+  }
+
+  if (input->format == AV_PIX_FMT_VULKAN) {
+    av_frame_unref(anim->hw_sw_frame);
+    anim->hw_sw_frame->format = AV_PIX_FMT_NONE;
+    const int ret = av_hwframe_transfer_data(anim->hw_sw_frame, input, 0);
+    if (ret < 0) {
+      CLOG_ERROR(&LOG, "ffmpeg: failed to download Vulkan frame to system memory");
+      return;
+    }
+    av_frame_copy_props(anim->hw_sw_frame, input);
+
+    const AVPixelFormat downloaded_format = AVPixelFormat(anim->hw_sw_frame->format);
+    if (downloaded_format != anim->hw_download_format) {
+      anim->hw_download_format = downloaded_format;
+      ffmpeg_sws_release_context(anim->img_convert_ctx);
+      anim->img_convert_ctx = ffmpeg_sws_get_context(
+          anim->x,
+          anim->y,
+          downloaded_format,
+          anim->pCodecCtx->color_range == AVCOL_RANGE_JPEG,
+          anim->pCodecCtx->colorspace,
+          anim->x,
+          anim->y,
+          anim->pFrameRGB->format,
+          false,
+          -1,
+          SWS_POINT | SWS_FULL_CHR_H_INT | SWS_ACCURATE_RND);
+      if (anim->img_convert_ctx == nullptr) {
+        CLOG_ERROR(&LOG,
+                   "ffmpeg: swscale can't convert downloaded Vulkan frame (format %s)",
+                   av_get_pix_fmt_name(downloaded_format));
+        return;
+      }
+    }
+    input = anim->hw_sw_frame;
+  }
+#endif
+
   /* This means the data wasn't read properly,
    * this check stops crashing */
   if (input->data[0] == nullptr && input->data[1] == nullptr && input->data[2] == nullptr &&
@@ -717,9 +824,19 @@ static void ffmpeg_postprocess(MovieReader *anim, AVFrame *input, ImBuf *ibuf)
          input->data[3]);
 
   if (flag_is_set(anim->ib_flags, ImBufFlags::Deinterlace)) {
+    AVFrame *deinterlace_src = anim->pFrame;
+    AVPixelFormat deinterlace_format = anim->pCodecCtx->pix_fmt;
+#ifdef WITH_FFMPEG_VULKAN
+    if (anim->is_hwaccel) {
+      /* The raw decoded frame is on the GPU (AV_PIX_FMT_VULKAN); deinterlace the downloaded
+       * software frame (`input`) in its real software format instead. */
+      deinterlace_src = input;
+      deinterlace_format = AVPixelFormat(anim->hw_download_format);
+    }
+#endif
     if (ffmpeg_deinterlace(anim->pFrameDeinterlaced,
-                           anim->pFrame,
-                           anim->pCodecCtx->pix_fmt,
+                           deinterlace_src,
+                           deinterlace_format,
                            anim->pCodecCtx->width,
                            anim->pCodecCtx->height) < 0)
     {
@@ -1244,7 +1361,17 @@ static ImBuf *ffmpeg_fetchibuf(MovieReader *anim, int position)
   anim->x = anim->pCodecCtx->width;
   anim->y = anim->pCodecCtx->height;
 
-  const AVPixFmtDescriptor *pix_fmt_descriptor = av_pix_fmt_desc_get(anim->pCodecCtx->pix_fmt);
+  AVPixelFormat descriptor_pix_fmt = anim->pCodecCtx->pix_fmt;
+#ifdef WITH_FFMPEG_VULKAN
+  /* For hardware decoding the codec reports AV_PIX_FMT_VULKAN; use the negotiated software format
+   * (valid once decoding has started) so the alpha/color-mode detection below is correct. */
+  if (anim->is_hwaccel) {
+    descriptor_pix_fmt = anim->pCodecCtx->sw_pix_fmt != AV_PIX_FMT_NONE ?
+                             anim->pCodecCtx->sw_pix_fmt :
+                             AVPixelFormat(anim->hw_download_format);
+  }
+#endif
+  const AVPixFmtDescriptor *pix_fmt_descriptor = av_pix_fmt_desc_get(descriptor_pix_fmt);
 
   ImColorMode color_mode = ImColorMode::RGBA;
   if ((pix_fmt_descriptor->flags & AV_PIX_FMT_FLAG_ALPHA) == 0) {
@@ -1329,6 +1456,13 @@ static void free_anim_ffmpeg(MovieReader *anim)
     av_frame_free(&anim->pFrameDeinterlaced);
     ffmpeg_sws_release_context(anim->img_convert_ctx);
   }
+#ifdef WITH_FFMPEG_VULKAN
+  /* Not guarded by pCodecCtx: a Vulkan device/frame may have been attached even if startffmpeg()
+   * failed before assigning pCodecCtx. av_buffer_unref/av_frame_free are no-ops on null. */
+  av_buffer_unref(&anim->hw_device_ctx);
+  av_frame_free(&anim->hw_sw_frame);
+  anim->is_hwaccel = false;
+#endif
   anim->duration_in_frames = 0;
 }
 

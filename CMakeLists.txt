@@ -968,6 +968,16 @@ else()
   mark_as_advanced(WITH_VULKAN_BACKEND)
 endif()
 
+# FFmpeg Vulkan compute hardware accelerated video decoding (ProRes, ProRes RAW, FFV1, APV, DPX).
+# Requires both FFmpeg and the Vulkan backend, plus an FFmpeg new enough to provide the Vulkan
+# compute decoders and the libavutil Vulkan queue-family API.
+option(WITH_FFMPEG_VULKAN "Enable Vulkan compute hardware accelerated video decoding via FFmpeg" OFF)
+mark_as_advanced(WITH_FFMPEG_VULKAN)
+if(WITH_FFMPEG_VULKAN AND NOT (WITH_CODEC_FFMPEG AND WITH_VULKAN_BACKEND))
+  message(STATUS "WITH_FFMPEG_VULKAN requires WITH_CODEC_FFMPEG and WITH_VULKAN_BACKEND, disabling")
+  set(WITH_FFMPEG_VULKAN OFF)
+endif()
+
 # Metal
 if(APPLE)
   option(WITH_METAL_BACKEND "\

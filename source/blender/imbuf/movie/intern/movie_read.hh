@@ -18,6 +18,7 @@ struct AVCodecContext;
 struct AVCodec;
 struct AVFrame;
 struct AVPacket;
+struct AVBufferRef;
 struct SwsContext;
 
 #ifdef WITH_FFMPEG
@@ -74,6 +75,25 @@ struct MovieReader {
 
   bool seek_before_decode = false;
   bool is_float = false;
+
+#  ifdef WITH_FFMPEG_VULKAN
+  /* Hardware (Vulkan compute) decoding. When #is_hwaccel is set, decoded frames come out as
+   * AV_PIX_FMT_VULKAN and are downloaded into #hw_sw_frame (a software frame in
+   * #hw_download_format) before the usual swscale conversion. */
+  bool is_hwaccel = false;
+  /* Set true if a strip that attached a Vulkan device (#is_hwaccel) nonetheless produced a software
+   * frame - i.e. the codec advertised a Vulkan config but fell back to software (e.g. H.264/HEVC,
+   * which need a video-decode queue we do not provide). Hardware decoding is then considered active
+   * when `is_hwaccel && !hw_decode_fallback`: optimistic until a fallback frame is actually seen, so
+   * the first original frame is decoded (rather than a proxy) to discover the codec's real path. */
+  bool hw_decode_fallback = false;
+  /* Owned reference to the shared Vulkan AVHWDeviceContext. */
+  AVBufferRef *hw_device_ctx = nullptr;
+  /* Reusable destination for av_hwframe_transfer_data. */
+  AVFrame *hw_sw_frame = nullptr;
+  /* The software pixel format (an AVPixelFormat) that hardware frames are downloaded into. */
+  int hw_download_format = -1 /*AV_PIX_FMT_NONE*/;
+#  endif
 
   /* When set, never seek within the video, and only ever decode one frame.
    * This is a workaround for some Ogg files that have full audio but only

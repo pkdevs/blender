@@ -126,6 +126,15 @@ int MOV_get_image_height(const MovieReader *anim);
 bool MOV_is_initialized_and_valid(const MovieReader *anim);
 
 /**
+ * Returns true if this movie is actually being decoded on the GPU (Vulkan compute hardware
+ * decoding is active and has produced at least one frame). False for software decoding, when no
+ * Vulkan-capable GPU backend is active, or for codecs that fall back to software. Intended for
+ * deciding whether proxies are still worthwhile: when true, decoding the original is fast enough
+ * that a proxy is unnecessary.
+ */
+bool MOV_is_hardware_decoding(const MovieReader *anim);
+
+/**
  * Gets filename (without the folder) part of the movie.
  */
 void MOV_get_filename(const MovieReader *anim, char *filename, int filename_maxncpy);

@@ -173,6 +173,16 @@ class VKDevice : public NonCopyable {
   VkQueue vk_queue_ = VK_NULL_HANDLE;
   std::mutex *queue_mutex_ = nullptr;
 
+#ifdef WITH_FFMPEG_VULKAN
+  /* Vulkan device metadata for FFmpeg hardware video decoding (see #GPU_vulkan_interop.hh).
+   * Sourced from GHOST in #init; the extension list and feature chain are owned by GHOST. */
+  bool vk_ffmpeg_ready_ = false;
+  PFN_vkGetInstanceProcAddr vk_ffmpeg_get_instance_proc_addr_ = nullptr;
+  const char *const *vk_ffmpeg_enabled_extensions_ = nullptr;
+  uint32_t vk_ffmpeg_enabled_extensions_count_ = 0;
+  const VkPhysicalDeviceFeatures2 *vk_ffmpeg_device_features_ = nullptr;
+#endif
+
   bool is_initialized_ = false;
 
   /**
@@ -330,6 +340,30 @@ class VKDevice : public NonCopyable {
   {
     return vk_queue_family_;
   }
+
+#ifdef WITH_FFMPEG_VULKAN
+  /* See #GPU_vulkan_interop.hh. */
+  bool vulkan_ffmpeg_ready() const
+  {
+    return vk_ffmpeg_ready_;
+  }
+  PFN_vkGetInstanceProcAddr ffmpeg_get_instance_proc_addr() const
+  {
+    return vk_ffmpeg_get_instance_proc_addr_;
+  }
+  const char *const *ffmpeg_enabled_extensions() const
+  {
+    return vk_ffmpeg_enabled_extensions_;
+  }
+  uint32_t ffmpeg_enabled_extensions_count() const
+  {
+    return vk_ffmpeg_enabled_extensions_count_;
+  }
+  const VkPhysicalDeviceFeatures2 *ffmpeg_device_features() const
+  {
+    return vk_ffmpeg_device_features_;
+  }
+#endif
 
   inline VmaAllocator mem_allocator_get() const
   {

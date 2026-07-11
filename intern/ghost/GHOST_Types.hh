@@ -1044,6 +1044,26 @@ struct GHOST_VulkanHandles {
   void *queue_mutex;
   /** Vulkan memory allocator of the device. */
   VmaAllocator vma_allocator;
+
+  /* The fields below are used to hand the device to FFmpeg's libavutil Vulkan hardware
+   * context (#AV_HWDEVICE_TYPE_VULKAN) for hardware accelerated video decoding. They are only
+   * meaningfully populated in builds with `WITH_FFMPEG_VULKAN`; otherwise `vulkan_ffmpeg_ready`
+   * is false and the remaining fields are null/zero. */
+
+  /** `vkGetInstanceProcAddr` loader, required by libavutil to load Vulkan functions. */
+  PFN_vkGetInstanceProcAddr get_instance_proc_addr;
+  /** True when the device was created with every feature, extension and queue-create flag that
+   * FFmpeg's Vulkan compute decoders require (see #GHOST_DeviceVK). When false the FFmpeg Vulkan
+   * path must not be used and decoding falls back to software. */
+  bool vulkan_ffmpeg_ready;
+  /** The device extensions enabled at device creation (persistent storage owned by GHOST),
+   * passed through to `AVVulkanDeviceContext::enabled_dev_extensions`. */
+  const char *const *enabled_extensions;
+  /** Number of entries in #enabled_extensions. */
+  uint32_t enabled_extensions_count;
+  /** Feature chain (persistent storage owned by GHOST) describing the features that were enabled
+   * at device creation, passed through to `AVVulkanDeviceContext::device_features`. */
+  const VkPhysicalDeviceFeatures2 *device_features;
 };
 
 #endif

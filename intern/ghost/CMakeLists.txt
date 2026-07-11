@@ -98,6 +98,10 @@ if(WITH_VULKAN_BACKEND)
   )
 
   add_definitions(-DWITH_VULKAN_BACKEND)
+
+  if(WITH_FFMPEG_VULKAN)
+    add_definitions(-DWITH_FFMPEG_VULKAN)
+  endif()
 endif()
 
 if(WITH_GHOST_DEBUG)

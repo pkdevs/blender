@@ -237,6 +237,32 @@ class GHOST_DeviceVK {
   bool use_vk_ext_swapchain_maintenance_1 = false;
   bool use_vk_ext_swapchain_colorspace = false;
 
+#ifdef WITH_FFMPEG_VULKAN
+  /**
+   * True when this device was created with everything FFmpeg's Vulkan compute decoders require
+   * (Vulkan 1.3, internally synchronized queues, and the needed physical-device features). When
+   * false the FFmpeg Vulkan path must not be used.
+   */
+  bool vulkan_ffmpeg_ready = false;
+  /**
+   * Persistent feature chain mirroring the features that were enabled at device creation, handed
+   * to libavutil via #GHOST_VulkanHandles::device_features. Kept alive for the device lifetime.
+   */
+  VkPhysicalDeviceFeatures2 ffmpeg_features2 = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+  VkPhysicalDeviceVulkan11Features ffmpeg_features_11 = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
+  VkPhysicalDeviceVulkan12Features ffmpeg_features_12 = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+  /* libavutil inspects device_features.pNext for these, e.g. to decide whether queues are
+   * internally synchronized (vulkan.c ff_vk_exec_pool_init), so they must be in the chain. */
+  VkPhysicalDeviceSynchronization2Features ffmpeg_features_sync2 = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES};
+  VkPhysicalDeviceSubgroupSizeControlFeatures ffmpeg_features_subgroup = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES};
+  VkPhysicalDeviceInternallySynchronizedQueuesFeaturesKHR ffmpeg_features_internal_sync = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INTERNALLY_SYNCHRONIZED_QUEUES_FEATURES_KHR};
+#endif
+
  public:
   GHOST_DeviceVK(VkPhysicalDevice vk_physical_device, const bool use_vk_ext_swapchain_colorspace)
       : vk_physical_device(vk_physical_device),
@@ -316,6 +342,19 @@ class GHOST_DeviceVK {
 
   void init_generic_queue()
   {
+#ifdef WITH_FFMPEG_VULKAN
+    if (vulkan_ffmpeg_ready) {
+      /* The queue was created with a non-zero flag (internally synchronized), so per the Vulkan
+       * spec it must be retrieved with vkGetDeviceQueue2 (vkGetDeviceQueue only returns queues
+       * created with flags == 0, otherwise the handle is null). */
+      VkDeviceQueueInfo2 queue_info = {VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2};
+      queue_info.flags = VK_DEVICE_QUEUE_CREATE_INTERNALLY_SYNCHRONIZED_BIT_KHR;
+      queue_info.queueFamilyIndex = generic_queue_family;
+      queue_info.queueIndex = 0;
+      functions.vkGetDeviceQueue2(vk_device, &queue_info, &generic_queue);
+      return;
+    }
+#endif
     functions.vkGetDeviceQueue(vk_device, generic_queue_family, 0, &generic_queue);
   }
 
@@ -323,6 +362,12 @@ class GHOST_DeviceVK {
   {
     VmaAllocatorCreateInfo vma_allocator_create_info = {};
     vma_allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_1;
+#ifdef WITH_FFMPEG_VULKAN
+    /* FFmpeg-ready devices request a Vulkan 1.3 instance and device, so VMA may target 1.3. */
+    if (vulkan_ffmpeg_ready) {
+      vma_allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_3;
+    }
+#endif
     vma_allocator_create_info.physicalDevice = vk_physical_device;
     vma_allocator_create_info.device = vk_device;
     vma_allocator_create_info.instance = vk_instance;
@@ -609,6 +654,45 @@ struct GHOST_InstanceVK {
 
     device.init_generic_queue_family();
 
+#ifdef WITH_FFMPEG_VULKAN
+    /* Query the support of the extra features FFmpeg's Vulkan compute decoders need. These (and the
+     * internally-synchronized-queues extension) must be enabled now, at device creation; they
+     * cannot be added afterwards. We only ever enable what the physical device actually supports,
+     * and mark the device as FFmpeg-ready only when every hard requirement is met, so a device
+     * that lacks them still creates successfully and keeps working for regular rendering. */
+    VkPhysicalDeviceVulkan12Features ffmpeg_sup_12 = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    VkPhysicalDeviceSynchronization2Features ffmpeg_sup_sync2 = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES};
+    VkPhysicalDeviceSubgroupSizeControlFeatures ffmpeg_sup_subgroup = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES};
+    VkPhysicalDeviceInternallySynchronizedQueuesFeaturesKHR ffmpeg_sup_internal_sync = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INTERNALLY_SYNCHRONIZED_QUEUES_FEATURES_KHR};
+    /* Blender's baseline is Vulkan 1.1; the 1.2/1.3-era structs are only queried on devices that
+     * can be FFmpeg-ready in the first place. */
+    const bool ffmpeg_api_version_ok = device.properties.properties.apiVersion >=
+                                       VK_API_VERSION_1_3;
+    if (ffmpeg_api_version_ok) {
+      VkPhysicalDeviceFeatures2 ffmpeg_query = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+      ffmpeg_query.pNext = &ffmpeg_sup_12;
+      ffmpeg_sup_12.pNext = &ffmpeg_sup_sync2;
+      ffmpeg_sup_sync2.pNext = &ffmpeg_sup_subgroup;
+      ffmpeg_sup_subgroup.pNext = &ffmpeg_sup_internal_sync;
+      volk::vkGetPhysicalDeviceFeatures2(vk_physical_device, &ffmpeg_query);
+    }
+    {
+      const VkPhysicalDeviceFeatures &core = device.features.features;
+      const VkPhysicalDeviceVulkan12Features &f12 = ffmpeg_sup_12;
+      device.vulkan_ffmpeg_ready = ffmpeg_api_version_ok &&
+                                   device.extensions.is_enabled(
+                                       VK_KHR_INTERNALLY_SYNCHRONIZED_QUEUES_EXTENSION_NAME) &&
+                                   ffmpeg_sup_internal_sync.internallySynchronizedQueues &&
+                                   ffmpeg_sup_sync2.synchronization2 && core.shaderInt64 &&
+                                   f12.scalarBlockLayout && f12.bufferDeviceAddress &&
+                                   f12.vulkanMemoryModel && f12.timelineSemaphore;
+    }
+#endif
+
     float queue_priorities[] = {1.0f};
     vector<VkDeviceQueueCreateInfo> queue_create_infos;
     VkDeviceQueueCreateInfo graphic_queue_create_info = {};
@@ -616,6 +700,14 @@ struct GHOST_InstanceVK {
     graphic_queue_create_info.queueFamilyIndex = device.generic_queue_family;
     graphic_queue_create_info.queueCount = 1;
     graphic_queue_create_info.pQueuePriorities = queue_priorities;
+#ifdef WITH_FFMPEG_VULKAN
+    if (device.vulkan_ffmpeg_ready) {
+      /* FFmpeg submits decode work to this queue from the video decode thread while Blender submits
+       * rendering work from its own thread. Creating the queue as internally synchronized lets both
+       * submit concurrently without external locking (FFmpeg then skips its own queue mutex). */
+      graphic_queue_create_info.flags |= VK_DEVICE_QUEUE_CREATE_INTERNALLY_SYNCHRONIZED_BIT_KHR;
+    }
+#endif
     queue_create_infos.push_back(graphic_queue_create_info);
 
     VkPhysicalDeviceFeatures device_features = {};
@@ -800,6 +892,118 @@ struct GHOST_InstanceVK {
     if (device.extensions.is_enabled(VK_KHR_RAY_QUERY_EXTENSION_NAME)) {
       feature_struct_ptr.push_back(&ray_query);
     }
+#ifdef WITH_FFMPEG_VULKAN
+    /* Enable the features FFmpeg's Vulkan compute decoders need. Mirror-when-supported into the
+     * core feature set and the aggregate 1.1/1.2 feature structs, and add the individual structs
+     * for the 1.3-era features (synchronization2, subgroup size control) plus internally
+     * synchronized queues. Individual structs are used rather than VkPhysicalDeviceVulkan13Features
+     * so they coexist with the dynamic-rendering and maintenance4 structs already in this pNext
+     * chain. */
+    VkPhysicalDeviceVulkan11Features vulkan_11_features = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
+    VkPhysicalDeviceVulkan12Features vulkan_12_features = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    VkPhysicalDeviceSynchronization2Features ffmpeg_sync2 = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES};
+    VkPhysicalDeviceSubgroupSizeControlFeatures ffmpeg_subgroup = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES};
+    VkPhysicalDeviceInternallySynchronizedQueuesFeaturesKHR ffmpeg_internal_sync = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INTERNALLY_SYNCHRONIZED_QUEUES_FEATURES_KHR};
+    if (device.vulkan_ffmpeg_ready) {
+      const VkPhysicalDeviceFeatures &sup_core = device.features.features;
+      const VkPhysicalDeviceVulkan11Features &sup11 = device.features_11;
+      const VkPhysicalDeviceVulkan12Features &sup12 = ffmpeg_sup_12;
+
+      /* The aggregate 1.2 struct may not be chained together with the individual structs it
+       * promotes (VUID-VkDeviceCreateInfo-pNext-02830), so take over the timeline semaphore and
+       * buffer device address structs registered above and enable those features here instead. */
+      std::erase(feature_struct_ptr, static_cast<void *>(&timeline_semaphore_features));
+      std::erase(feature_struct_ptr, static_cast<void *>(&buffer_device_address_features));
+      vulkan_12_features.timelineSemaphore = VK_TRUE;
+      vulkan_12_features.bufferDeviceAddress = VK_TRUE;
+      feature_struct_ptr.push_back(&vulkan_11_features);
+      feature_struct_ptr.push_back(&vulkan_12_features);
+
+      /* Core features. */
+      device_features.shaderInt64 = sup_core.shaderInt64;
+      device_features.shaderInt16 = sup_core.shaderInt16;
+      device_features.shaderFloat64 = sup_core.shaderFloat64;
+      device_features.shaderImageGatherExtended = sup_core.shaderImageGatherExtended;
+      device_features.shaderStorageImageReadWithoutFormat =
+          sup_core.shaderStorageImageReadWithoutFormat;
+      device_features.shaderStorageImageWriteWithoutFormat =
+          sup_core.shaderStorageImageWriteWithoutFormat;
+
+      /* Vulkan 1.1 features. */
+      vulkan_11_features.samplerYcbcrConversion = sup11.samplerYcbcrConversion;
+      vulkan_11_features.storageBuffer16BitAccess = sup11.storageBuffer16BitAccess;
+      vulkan_11_features.uniformAndStorageBuffer16BitAccess =
+          sup11.uniformAndStorageBuffer16BitAccess;
+      vulkan_11_features.storagePushConstant16 = sup11.storagePushConstant16;
+
+      /* Vulkan 1.2 features. */
+      vulkan_12_features.shaderInt8 = sup12.shaderInt8;
+      vulkan_12_features.storageBuffer8BitAccess = sup12.storageBuffer8BitAccess;
+      vulkan_12_features.uniformAndStorageBuffer8BitAccess =
+          sup12.uniformAndStorageBuffer8BitAccess;
+      vulkan_12_features.storagePushConstant8 = sup12.storagePushConstant8;
+      vulkan_12_features.scalarBlockLayout = sup12.scalarBlockLayout;
+      vulkan_12_features.shaderFloat16 = sup12.shaderFloat16;
+      vulkan_12_features.shaderBufferInt64Atomics = sup12.shaderBufferInt64Atomics;
+      vulkan_12_features.shaderSharedInt64Atomics = sup12.shaderSharedInt64Atomics;
+      vulkan_12_features.vulkanMemoryModel = sup12.vulkanMemoryModel;
+      vulkan_12_features.vulkanMemoryModelDeviceScope = sup12.vulkanMemoryModelDeviceScope;
+      vulkan_12_features.vulkanMemoryModelAvailabilityVisibilityChains =
+          sup12.vulkanMemoryModelAvailabilityVisibilityChains;
+      vulkan_12_features.uniformBufferStandardLayout = sup12.uniformBufferStandardLayout;
+      vulkan_12_features.runtimeDescriptorArray = sup12.runtimeDescriptorArray;
+      vulkan_12_features.shaderSubgroupExtendedTypes = sup12.shaderSubgroupExtendedTypes;
+      vulkan_12_features.shaderUniformBufferArrayNonUniformIndexing =
+          sup12.shaderUniformBufferArrayNonUniformIndexing;
+      vulkan_12_features.shaderSampledImageArrayNonUniformIndexing =
+          sup12.shaderSampledImageArrayNonUniformIndexing;
+      vulkan_12_features.shaderStorageBufferArrayNonUniformIndexing =
+          sup12.shaderStorageBufferArrayNonUniformIndexing;
+      vulkan_12_features.shaderStorageImageArrayNonUniformIndexing =
+          sup12.shaderStorageImageArrayNonUniformIndexing;
+      vulkan_12_features.hostQueryReset = sup12.hostQueryReset;
+
+      /* Individual 1.3-era feature structs (hard-required synchronization2 is guaranteed by the
+       * ready check; subgroup size control is enabled only when both supported and its extension
+       * is active). */
+      ffmpeg_sync2.synchronization2 = ffmpeg_sup_sync2.synchronization2;
+      feature_struct_ptr.push_back(&ffmpeg_sync2);
+
+      if (ffmpeg_sup_subgroup.subgroupSizeControl &&
+          device.extensions.is_enabled(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME))
+      {
+        ffmpeg_subgroup.subgroupSizeControl = ffmpeg_sup_subgroup.subgroupSizeControl;
+        ffmpeg_subgroup.computeFullSubgroups = ffmpeg_sup_subgroup.computeFullSubgroups;
+        feature_struct_ptr.push_back(&ffmpeg_subgroup);
+      }
+
+      ffmpeg_internal_sync.internallySynchronizedQueues =
+          ffmpeg_sup_internal_sync.internallySynchronizedQueues;
+      feature_struct_ptr.push_back(&ffmpeg_internal_sync);
+
+      /* Build the persistent feature chain handed to libavutil. libavutil inspects this chain (for
+       * example to detect internally synchronized queues in ff_vk_exec_pool_init), so it must
+       * include the individual feature structs, not just core/1.1/1.2. Copied before the link loop
+       * below rewrites the live pNext chain. */
+      device.ffmpeg_features2.features = device_features;
+      device.ffmpeg_features_11 = vulkan_11_features;
+      device.ffmpeg_features_12 = vulkan_12_features;
+      device.ffmpeg_features_sync2 = ffmpeg_sync2;
+      device.ffmpeg_features_subgroup = ffmpeg_subgroup;
+      device.ffmpeg_features_internal_sync = ffmpeg_internal_sync;
+      device.ffmpeg_features2.pNext = &device.ffmpeg_features_11;
+      device.ffmpeg_features_11.pNext = &device.ffmpeg_features_12;
+      device.ffmpeg_features_12.pNext = &device.ffmpeg_features_sync2;
+      device.ffmpeg_features_sync2.pNext = &device.ffmpeg_features_subgroup;
+      device.ffmpeg_features_subgroup.pNext = &device.ffmpeg_features_internal_sync;
+      device.ffmpeg_features_internal_sync.pNext = nullptr;
+    }
+#endif
 
     /* Link all registered feature structs. */
     for (int i = 1; i < feature_struct_ptr.size(); i++) {
@@ -1221,6 +1425,11 @@ GHOST_TSuccess GHOST_ContextVK::getVulkanHandles(GHOST_VulkanHandles &r_handles)
       VK_NULL_HANDLE, /* queue */
       nullptr,        /* queue_mutex */
       VK_NULL_HANDLE, /* vma_allocator */
+      nullptr,        /* get_instance_proc_addr */
+      false,          /* vulkan_ffmpeg_ready */
+      nullptr,        /* enabled_extensions */
+      0,              /* enabled_extensions_count */
+      nullptr,        /* device_features */
   };
 
   if (vulkan_instance.has_value() && vulkan_instance.value().device.has_value()) {
@@ -1234,6 +1443,19 @@ GHOST_TSuccess GHOST_ContextVK::getVulkanHandles(GHOST_VulkanHandles &r_handles)
         device_vk.generic_queue,
         &device_vk.queue_mutex,
         device_vk.vma_allocator,
+#ifdef WITH_FFMPEG_VULKAN
+        volk::vkGetInstanceProcAddr,
+        device_vk.vulkan_ffmpeg_ready,
+        device_vk.extensions.enabled.data(),
+        uint32_t(device_vk.extensions.enabled.size()),
+        &device_vk.ffmpeg_features2,
+#else
+        nullptr,
+        false,
+        nullptr,
+        0,
+        nullptr,
+#endif
     };
   }
 
@@ -1834,9 +2056,18 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
       required_device_extensions.append(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     }
 
-    if (!instance_vk.create_instance(
-            VK_MAKE_VERSION(context_major_version_, context_minor_version_, 0)))
-    {
+    uint32_t requested_api_version = VK_MAKE_VERSION(
+        context_major_version_, context_minor_version_, 0);
+#ifdef WITH_FFMPEG_VULKAN
+    /* FFmpeg's Vulkan hardware context (libavutil) requires at least a Vulkan 1.3 instance. The
+     * device is only flagged FFmpeg-ready when it actually supports 1.3 and the needed features,
+     * so requesting a 1.3 instance here does not regress older devices (a 1.1 device works fine
+     * under a 1.3 instance). */
+    if (requested_api_version < VK_MAKE_VERSION(1, 3, 0)) {
+      requested_api_version = VK_MAKE_VERSION(1, 3, 0);
+    }
+#endif
+    if (!instance_vk.create_instance(requested_api_version)) {
       vulkan_instance.reset();
       return GHOST_kFailure;
     }
@@ -1942,6 +2173,16 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
 #if 0
     /* VK_EXT_host_image_copy isn't supported by Renderdoc and also isn't working as expected. */
     optional_device_extensions.append(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
+#endif
+
+#ifdef WITH_FFMPEG_VULKAN
+    /* Extensions used by FFmpeg's Vulkan compute decoders. Appended as optional, so they are only
+     * enabled when the driver supports them; the device is flagged FFmpeg-ready (in create_device)
+     * only when the required ones are present. Internally synchronized queues lets FFmpeg and
+     * Blender share a queue without external locking. */
+    optional_device_extensions.append(VK_KHR_INTERNALLY_SYNCHRONIZED_QUEUES_EXTENSION_NAME);
+    optional_device_extensions.append(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME);
+    optional_device_extensions.append(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
 #endif
 
 #ifdef WITH_XR_OPENXR

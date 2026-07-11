@@ -180,6 +180,7 @@ set(SRC
   GPU_vertex_buffer.hh
   GPU_vertex_format.hh
   GPU_viewport.hh
+  GPU_vulkan_interop.hh
   GPU_work_in_flight.hh
   GPU_worker.hh
 
@@ -293,6 +294,7 @@ set(VULKAN_SRC
   vulkan/vk_device.cc
   vulkan/vk_device_submission.cc
   vulkan/vk_fence.cc
+  vulkan/vk_ffmpeg_interop.cc
   vulkan/vk_framebuffer.cc
   vulkan/vk_image_view.cc
   vulkan/vk_immediate.cc
@@ -527,6 +529,10 @@ if(WITH_VULKAN_BACKEND)
   )
 
   add_definitions(-DWITH_VULKAN_BACKEND)
+
+  if(WITH_FFMPEG_VULKAN)
+    add_definitions(-DWITH_FFMPEG_VULKAN)
+  endif()
 endif()
 
 set(GLSL_SRC

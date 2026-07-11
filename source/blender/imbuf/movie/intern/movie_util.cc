@@ -17,6 +17,7 @@
 #include "MOV_util.hh"
 
 #include "ffmpeg_swscale.hh"
+#include "ffmpeg_vulkan.hh"
 #include "movie_util.hh"
 #include <mutex>
 
@@ -622,6 +623,9 @@ void MOV_exit()
 {
 #ifdef WITH_FFMPEG
   ffmpeg_sws_exit();
+#  ifdef WITH_FFMPEG_VULKAN
+  movie_ffmpeg_vulkan_exit();
+#  endif
 #endif
 }
 

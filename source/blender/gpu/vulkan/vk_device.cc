@@ -159,6 +159,13 @@ void VKDevice::init(GHOST_IContext *ghost_context)
   queue_mutex_ = static_cast<std::mutex *>(handles.queue_mutex);
 
   volkLoadDeviceTable(&functions, vk_device_);
+#ifdef WITH_FFMPEG_VULKAN
+  vk_ffmpeg_ready_ = handles.vulkan_ffmpeg_ready;
+  vk_ffmpeg_get_instance_proc_addr_ = handles.get_instance_proc_addr;
+  vk_ffmpeg_enabled_extensions_ = handles.enabled_extensions;
+  vk_ffmpeg_enabled_extensions_count_ = handles.enabled_extensions_count;
+  vk_ffmpeg_device_features_ = handles.device_features;
+#endif
 
   init_physical_device_extensions();
   init_physical_device_properties();
