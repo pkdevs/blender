@@ -32,6 +32,7 @@
 #include "IMB_imbuf.hh"
 
 #include "BKE_brush.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_image_wrappers.hh"
 #include "BKE_object_types.hh"
 #include "BKE_paint_bvh.hh"
@@ -89,6 +90,9 @@ static void fetch_image_buffers(ImageData &image_data,
       tile_user.tile = tile.tile_number;
 
       ImBuf *ibuf = BKE_image_acquire_ibuf(image_data.image, &tile_user, nullptr);
+      if (ibuf != nullptr) {
+        BKE_image_paint_ensure_gpu_writable(image_data.image, ibuf);
+      }
       return ibuf;
     });
 

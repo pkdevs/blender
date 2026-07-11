@@ -375,41 +375,52 @@ static void get_gpu_texture_data(ImBuf *source_buffer,
   r_upload.size = size;
 }
 
+static void imb_gpu_texture_default_init(gpu::Texture *tex, const ImBuf *ibuf)
+{
+  GPU_texture_swizzle_set(tex, imb_gpu_get_swizzle(ibuf));
+  GPU_texture_anisotropic_filter(tex, true);
+}
+
+static void imb_gpu_texture_default_init_mipmap(gpu::Texture *tex)
+{
+  GPU_texture_extend_mode(tex, GPU_SAMPLER_EXTEND_MODE_REPEAT);
+  GPU_texture_mipmap_mode(tex, true, true);
+}
+
+static void imb_gpu_texture_default_init_array(gpu::Texture *tex)
+{
+  const char *swizzle = (GPU_texture_component_len(GPU_texture_format(tex)) == 1) ? "rrra" :
+                                                                                    "rgba";
+  GPU_texture_swizzle_set(tex, swizzle);
+  GPU_texture_anisotropic_filter(tex, true);
+  GPU_texture_extend_mode(tex, GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+  GPU_texture_mipmap_mode(tex, true, true);
+}
+
 gpu::Texture *IMB_touch_gpu_texture(const char *name,
                                     ImBuf *ibuf,
                                     int w,
                                     int h,
                                     int layers,
                                     bool use_high_bitdepth,
-                                    bool use_grayscale)
+                                    bool use_grayscale,
+                                    bool /*writable*/)
 {
   gpu::TextureFormat tex_format;
   imb_gpu_get_format(ibuf, use_high_bitdepth, use_grayscale, &tex_format);
 
+  const eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ |
+                                 GPU_texture_mipmap_usage(tex_format);
+
   gpu::Texture *tex;
   if (layers > 0) {
-    tex = GPU_texture_create_2d_array(name,
-                                      w,
-                                      h,
-                                      layers,
-                                      9999,
-                                      tex_format,
-                                      GPU_TEXTURE_USAGE_SHADER_READ |
-                                          GPU_TEXTURE_USAGE_SHADER_WRITE,
-                                      nullptr);
+    tex = GPU_texture_create_2d_array(name, w, h, layers, 9999, tex_format, usage, nullptr);
+    imb_gpu_texture_default_init_array(tex);
   }
   else {
-    tex = GPU_texture_create_2d(name,
-                                w,
-                                h,
-                                9999,
-                                tex_format,
-                                GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE,
-                                nullptr);
+    tex = GPU_texture_create_2d(name, w, h, 9999, tex_format, usage, nullptr);
+    imb_gpu_texture_default_init(tex, ibuf);
   }
-
-  GPU_texture_swizzle_set(tex, imb_gpu_get_swizzle(ibuf));
-  GPU_texture_anisotropic_filter(tex, true);
   return tex;
 }
 
@@ -463,7 +474,8 @@ gpu::Texture *IMB_create_gpu_texture(const char *name,
     }
   }
 
-  if (ibuf->ftype == IMB_FTYPE_DDS) {
+  /* Compressed textures can't be written to, so upload uncompressed when e.g. painting. */
+  if (ibuf->ftype == IMB_FTYPE_DDS && !flag_is_set(flags, GPUTextureCreateFlags::Writable)) {
     gpu::TextureFormat compressed_format;
     if (!IMB_gpu_get_compressed_format(ibuf, &compressed_format)) {
       CLOG_WARN(&LOG,
@@ -517,12 +529,11 @@ gpu::Texture *IMB_create_gpu_texture(const char *name,
       ibuf, flag_is_set(flags, GPUTextureCreateFlags::HighBitDepth), true, &tex_format);
 
   /* Create Texture. Specify read usage to allow both shader and host reads, the latter is needed
-   * by the GPU compositor. */
-  const eGPUTextureUsage usage = use_mipmap ?
-                                     GPU_TEXTURE_USAGE_SHADER_READ |
-                                         GPU_TEXTURE_USAGE_SHADER_WRITE |
-                                         GPU_TEXTURE_USAGE_HOST_READ :
-                                     GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_HOST_READ;
+   * by the GPU compositor. Mipmaps need additional usage flags. */
+  eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_HOST_READ;
+  if (use_mipmap) {
+    usage |= GPU_texture_mipmap_usage(tex_format);
+  }
   tex = GPU_texture_create_2d(
       name, UNPACK2(size), use_mipmap ? 9999 : 1, tex_format, usage, nullptr);
   if (tex == nullptr) {
@@ -549,8 +560,7 @@ gpu::Texture *IMB_create_gpu_texture(const char *name,
     GPU_texture_update(tex, upload.format, upload.data);
   }
 
-  GPU_texture_swizzle_set(tex, imb_gpu_get_swizzle(ibuf));
-  GPU_texture_anisotropic_filter(tex, true);
+  imb_gpu_texture_default_init(tex, ibuf);
 
   return tex;
 }
@@ -669,6 +679,58 @@ void IMB_gpu_texture_apply_partial_update(gpu::Texture *tex,
   }
 }
 
+static void imb_gpu_texture_make_writable(const char *name, ImBuf *ibuf)
+{
+  gpu::Texture *old_tex = ibuf->gpu.texture;
+  BLI_assert(old_tex != nullptr);
+
+  /* Compressed textures can't be written to, so fully recreate them uncompressed. */
+  if (GPU_texture_has_compressed_format(old_tex)) {
+    if (ibuf->byte_data() == nullptr && ibuf->float_data() == nullptr) {
+      return;
+    }
+    GPU_texture_free(old_tex);
+    ibuf->gpu.texture = nullptr;
+    ibuf->gpu.flag &= IMB_GPU_WRITABLE;
+    return;
+  }
+
+  /* Recreate texture, with GPU copy to avoid host roundtrip. */
+  const int w = GPU_texture_width(old_tex);
+  const int h = GPU_texture_height(old_tex);
+  const int mip_count = GPU_texture_mip_count(old_tex);
+  const gpu::TextureFormat format = GPU_texture_format(old_tex);
+  const eGPUTextureUsage usage = GPU_texture_usage(old_tex) | GPU_texture_mipmap_usage(format);
+  const bool is_array = GPU_texture_is_array(old_tex);
+
+  gpu::Texture *new_tex =
+      is_array ?
+          GPU_texture_create_2d_array(
+              name, w, h, GPU_texture_layer_count(old_tex), mip_count, format, usage, nullptr) :
+          GPU_texture_create_2d(name, w, h, mip_count, format, usage, nullptr);
+  if (new_tex == nullptr) {
+    return;
+  }
+
+  /* GPU pixel copy from old to new texture, including all mipmap levels and layers. */
+  GPU_texture_copy_mipmap_chain(new_tex, old_tex);
+
+  /* Initialize matching texture settings. */
+  if (is_array) {
+    imb_gpu_texture_default_init_array(new_tex);
+  }
+  else {
+    imb_gpu_texture_default_init(new_tex, ibuf);
+    imb_gpu_texture_default_init_mipmap(new_tex);
+  }
+
+  GPU_texture_original_size_set(
+      new_tex, GPU_texture_original_width(old_tex), GPU_texture_original_height(old_tex));
+
+  GPU_texture_free(old_tex);
+  ibuf->gpu.texture = new_tex;
+}
+
 static void imb_gpu_texture_apply_partial_updates(ImBuf *ibuf, const bool use_premult)
 {
   if (ibuf->byte_data() == nullptr && ibuf->float_data() == nullptr) {
@@ -684,13 +746,11 @@ static void imb_gpu_texture_apply_partial_updates(ImBuf *ibuf, const bool use_pr
     case Changes::Kind::Resized:
       GPU_texture_free(ibuf->gpu.texture);
       ibuf->gpu.texture = nullptr;
-      ibuf->gpu.flag = ImBufGPUFlag(0);
+      ibuf->gpu.flag &= IMB_GPU_WRITABLE;
       break;
     case Changes::Kind::Partial:
       IMB_gpu_texture_apply_partial_update(
           ibuf->gpu.texture, ibuf, use_premult, changes, -1, int2(0), int2(0));
-      GPU_texture_update_mipmap_chain(ibuf->gpu.texture);
-      ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
       ibuf->gpu.partial_update_changeset = new_changeset_id;
       break;
     case Changes::Kind::None:
@@ -714,7 +774,19 @@ gpu::Texture *IMB_acquire_gpu_texture(const char *name,
 
   std::scoped_lock lock(ibuf->gpu.mutex);
   if (ibuf->gpu.texture != nullptr) {
-    imb_gpu_texture_apply_partial_updates(ibuf, use_premult);
+    /* Ensure the texture is writable when it needs to be. */
+    if (ibuf->gpu.flag & IMB_GPU_WRITABLE) {
+      gpu::Texture *tex = ibuf->gpu.texture;
+      const eGPUTextureUsage mipmap_usage = GPU_texture_mipmap_usage(GPU_texture_format(tex));
+      if (GPU_texture_has_compressed_format(tex) ||
+          (GPU_texture_usage(tex) & mipmap_usage) != mipmap_usage)
+      {
+        imb_gpu_texture_make_writable(name, ibuf);
+      }
+    }
+    if (ibuf->gpu.texture != nullptr) {
+      imb_gpu_texture_apply_partial_updates(ibuf, use_premult);
+    }
     if (ibuf->gpu.texture != nullptr) {
       ibuf->gpu.lastused = BLI_time_now_seconds_i();
       GPU_texture_ref(ibuf->gpu.texture);
@@ -737,6 +809,9 @@ gpu::Texture *IMB_acquire_gpu_texture(const char *name,
   if (limit_size) {
     create_flags |= GPUTextureCreateFlags::LimitSize;
   }
+  if (ibuf->gpu.flag & IMB_GPU_WRITABLE) {
+    create_flags |= GPUTextureCreateFlags::Writable;
+  }
   gpu::Texture *tex = IMB_create_gpu_texture(name, ibuf, create_flags);
   if (tex == nullptr) {
     ibuf->gpu.flag |= IMB_GPU_LOAD_FAILED;
@@ -745,11 +820,8 @@ gpu::Texture *IMB_acquire_gpu_texture(const char *name,
   }
   ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
 
-  GPU_texture_extend_mode(tex, GPU_SAMPLER_EXTEND_MODE_REPEAT);
-
   GPU_texture_update_mipmap_chain(tex);
-  GPU_texture_mipmap_mode(tex, true, true);
-  ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
+  imb_gpu_texture_default_init_mipmap(tex);
 
   ibuf->gpu.partial_update_changeset = changeset_id;
   ibuf->gpu.texture = tex;
@@ -778,7 +850,14 @@ void IMB_free_gpu_textures(ImBuf *ibuf)
     GPU_texture_free(ibuf->gpu.texture);
     ibuf->gpu.texture = nullptr;
   }
-  ibuf->gpu.flag = ImBufGPUFlag(0);
+  ibuf->gpu.flag &= IMB_GPU_WRITABLE;
+}
+
+void IMB_gpu_texture_ensure_writable(ImBuf *ibuf)
+{
+  /* Only set the flag here, #IMB_acquire_gpu_texture will take it into account. */
+  std::scoped_lock lock(ibuf->gpu.mutex);
+  ibuf->gpu.flag |= IMB_GPU_WRITABLE;
 }
 
 void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture)
@@ -792,7 +871,7 @@ void IMB_assign_gpu_texture(ImBuf *ibuf, gpu::Texture *texture)
     GPU_texture_free(ibuf->gpu.texture);
     ibuf->gpu.texture = nullptr;
   }
-  ibuf->gpu.flag = ImBufGPUFlag(0);
+  ibuf->gpu.flag &= ~IMB_GPU_LOAD_FAILED;
   ibuf->gpu.partial_update_changeset = IMB_partial_update_changeset_id_current();
   ibuf->gpu.texture = texture;
 }

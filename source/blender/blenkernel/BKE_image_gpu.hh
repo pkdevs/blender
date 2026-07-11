@@ -70,6 +70,12 @@ void BKE_image_ensure_gpu_material_texture(Image *image,
                                            const bool use_tile_mapping);
 
 /**
+ * Mark the GPU texture of an image buffer as writable, so its mipmaps can be
+ * partially regenerated in-place instead of a full regeneration.
+ */
+void BKE_image_paint_ensure_gpu_writable(Image *image, ImBuf *ibuf);
+
+/**
  * Is the alpha of the `gpu::Texture` for a given image/ibuf premultiplied.
  */
 bool BKE_image_has_gpu_texture_premultiplied_alpha(Image *image, ImBuf *ibuf);

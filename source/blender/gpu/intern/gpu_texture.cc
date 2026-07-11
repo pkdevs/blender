@@ -669,6 +669,14 @@ void GPU_texture_copy(gpu::Texture *dst_, gpu::Texture *src_)
   src->copy_to(dst, IndexRange(1));
 }
 
+void GPU_texture_copy_mipmap_chain(gpu::Texture *dst_, gpu::Texture *src_)
+{
+  Texture *src = src_;
+  Texture *dst = dst_;
+  BLI_assert(GPU_texture_mip_count(src_) == GPU_texture_mip_count(dst_));
+  src->copy_to(dst, IndexRange(GPU_texture_mip_count(src_)));
+}
+
 void GPU_texture_compare_mode(gpu::Texture *texture, bool use_compare)
 {
   Texture *tex = texture;
@@ -987,6 +995,11 @@ bool GPU_texture_has_normalized_format(const gpu::Texture *texture)
 bool GPU_texture_has_signed_format(const gpu::Texture *texture)
 {
   return (texture->format_flag_get() & GPU_FORMAT_SIGNED) != 0;
+}
+
+bool GPU_texture_has_compressed_format(const gpu::Texture *texture)
+{
+  return (texture->format_flag_get() & GPU_FORMAT_COMPRESSED) != 0;
 }
 
 bool GPU_texture_is_cube(const gpu::Texture *texture)

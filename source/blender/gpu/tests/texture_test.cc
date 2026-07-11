@@ -6,6 +6,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_array.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "GPU_context.hh"
@@ -313,6 +314,53 @@ static void test_texture_copy()
   GPU_render_end();
 }
 GPU_TEST(texture_copy)
+
+static void test_texture_copy_mipmap_chain()
+{
+  const int SIZE = 128;
+  GPU_render_begin();
+
+  const eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_HOST_READ;
+  gpu::Texture *src_tx = GPU_texture_create_2d(
+      "src", SIZE, SIZE, 9999, TextureFormat::UNORM_8_8_8_8, usage, nullptr);
+  gpu::Texture *dst_tx = GPU_texture_create_2d(
+      "dst", SIZE, SIZE, 9999, TextureFormat::UNORM_8_8_8_8, usage, nullptr);
+
+  Array<float4> src_data(SIZE * SIZE);
+  for (const int y : IndexRange(SIZE)) {
+    for (const int x : IndexRange(SIZE)) {
+      src_data[y * SIZE + x] = float4(
+          x / float(SIZE), y / float(SIZE), (x + y) / float(2 * SIZE), 1.0f);
+    }
+  }
+  GPU_texture_update(src_tx, GPU_DATA_FLOAT, src_data.data());
+  GPU_texture_update_mipmap_chain(src_tx);
+
+  const float4 clear_color(0.0f);
+  GPU_texture_clear(dst_tx, GPU_DATA_FLOAT, clear_color);
+
+  GPU_texture_copy_mipmap_chain(dst_tx, src_tx);
+  GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
+
+  const int mip_count = GPU_texture_mip_count(src_tx);
+  EXPECT_EQ(mip_count, GPU_texture_mip_count(dst_tx));
+  EXPECT_GT(mip_count, 1);
+  for (const int mip : IndexRange(mip_count)) {
+    const int mip_size = (SIZE >> mip) > 0 ? (SIZE >> mip) : 1;
+    float4 *src_read = static_cast<float4 *>(GPU_texture_read(src_tx, GPU_DATA_FLOAT, mip));
+    float4 *dst_read = static_cast<float4 *>(GPU_texture_read(dst_tx, GPU_DATA_FLOAT, mip));
+    for (const int index : IndexRange(mip_size * mip_size)) {
+      EXPECT_EQ(src_read[index], dst_read[index]) << "mip " << mip << " index " << index;
+    }
+    MEM_delete(src_read);
+    MEM_delete(dst_read);
+  }
+
+  GPU_texture_free(src_tx);
+  GPU_texture_free(dst_tx);
+  GPU_render_end();
+}
+GPU_TEST(texture_copy_mipmap_chain)
 
 template<typename DataType> static DataType *generate_test_data(size_t data_len)
 {

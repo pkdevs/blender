@@ -212,7 +212,7 @@ static int compare_packtile(const void *a, const void *b)
   return tile_a->pack_score < tile_b->pack_score;
 }
 
-static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf)
+static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf, bool writable)
 {
   int arraywidth = 0, arrayheight = 0;
   ListBaseT<FixedSizeBoxPack> boxes = {nullptr};
@@ -288,7 +288,8 @@ static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf)
                                             arrayheight,
                                             arraylayers,
                                             use_high_bitdepth,
-                                            use_grayscale);
+                                            use_grayscale,
+                                            writable);
 
   if (!tex) {
     return nullptr;
@@ -325,8 +326,6 @@ static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf)
   }
 
   GPU_texture_update_mipmap_chain(tex);
-  GPU_texture_mipmap_mode(tex, true, true);
-  main_ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
   GPU_texture_original_size_set(tex, main_ibuf->x, main_ibuf->y);
 
   return tex;
@@ -495,13 +494,6 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
     }
   }
 
-  if (!need_full_rebuild) {
-    if (atlas_tex != nullptr) {
-      GPU_texture_update_mipmap_chain(atlas_tex);
-    }
-    atlas_ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
-  }
-
   atlas_ibuf->gpu.partial_update_changeset = new_changeset_id;
   IMB_freeImBuf(atlas_ibuf);
 
@@ -565,7 +557,8 @@ static ImageGPUTextures image_get_gpu_texture_tiled(Image *ima,
   }
   else {
     /* Create atlas and tile mapping textures. */
-    atlas_tex = gpu_texture_create_tile_array(ima, ibuf);
+    const bool writable = (atlas_ibuf->gpu.flag & IMB_GPU_WRITABLE);
+    atlas_tex = gpu_texture_create_tile_array(ima, ibuf, writable);
     if (atlas_tex) {
       mapping_tex = gpu_texture_create_tile_mapping(ima, atlas_tex);
     }
@@ -718,6 +711,21 @@ void BKE_image_assign_gpu_texture(Image *image, gpu::Texture *texture)
     IMB_assign_gpu_texture(ibuf, texture);
   }
   BKE_image_release_ibuf(image, ibuf, lock);
+}
+
+void BKE_image_paint_ensure_gpu_writable(Image *image, ImBuf *ibuf)
+{
+  if (image->source == IMA_SRC_TILED) {
+    ImBuf *atlas_ibuf;
+    {
+      std::scoped_lock lock(image->runtime->cache_mutex);
+      atlas_ibuf = image_udim_gpu_ibuf_ensure(image, IMA_INDEX_UDIM_ATLAS);
+    }
+    IMB_gpu_texture_ensure_writable(atlas_ibuf);
+    IMB_freeImBuf(atlas_ibuf);
+  }
+
+  IMB_gpu_texture_ensure_writable(ibuf);
 }
 
 gpu::Texture *BKE_image_acquire_gpu_viewer_texture(Image *image,

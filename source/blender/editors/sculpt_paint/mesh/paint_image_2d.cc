@@ -1665,6 +1665,8 @@ void *paint_2d_new_stroke(bContext *C, wmOperator *op, const BrushStrokeMode mod
     return nullptr;
   }
 
+  BKE_image_paint_ensure_gpu_writable(s->image, ibuf);
+
   s->tiles[0].size[0] = ibuf->x;
   s->tiles[0].size[1] = ibuf->y;
   s->tiles[0].radius_fac = 1.0f;
