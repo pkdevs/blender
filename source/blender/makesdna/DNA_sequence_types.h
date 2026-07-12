@@ -110,6 +110,14 @@ enum eStripProxyBuildFlag : uint16_t {
 };
 ENUM_OPERATORS(eStripProxyBuildFlag);
 
+enum eStripProxyFlag : uint8_t {
+  SEQ_PROXY_FLAG_NONE = 0,
+  /* Use proxies even when the strip's codec is hardware decoded, which otherwise prefers decoding
+   * the original directly (see #can_use_proxy). */
+  SEQ_PROXY_FLAG_FORCE = (1 << 0),
+};
+ENUM_OPERATORS(eStripProxyFlag);
+
 enum eStripAlphaMode : uint8_t {
   SEQ_ALPHA_STRAIGHT = 0,
   SEQ_ALPHA_PREMUL = 1,
@@ -302,7 +310,7 @@ struct StripProxy {
       SEQ_PROXY_IMAGE_SIZE_NONE; /* which proxy sizes to build. */
   eStripProxyBuildFlag build_flags = SEQ_PROXY_BUILD_FLAG_NONE;
   eStripProxyStorageFlag storage = SEQ_STORAGE_PROXY_NONE;
-  char _pad = 0;
+  eStripProxyFlag flag = SEQ_PROXY_FLAG_NONE;
 };
 
 struct StripData {

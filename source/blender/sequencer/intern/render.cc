@@ -1064,7 +1064,13 @@ static ImBuf *seq_render_movie_strip_view(const RenderData *context,
   IMB_Proxy_Size psize = rendersize_to_proxysize(context->preview_render_size);
   const int frame_index = round_fl_to_int(give_frame_index(context->scene, strip, timeline_frame));
 
-  if (can_use_proxy(context, strip, psize)) {
+  /* When the original is being hardware (Vulkan compute) decoded, decoding it is fast enough that a
+   * proxy only costs quality, so prefer the original - unless the user explicitly forced proxies. */
+  const bool force_proxy = strip->data->proxy != nullptr &&
+                           (strip->data->proxy->flag & SEQ_PROXY_FLAG_FORCE) != 0;
+  const bool prefer_original = MOV_is_hardware_decoding(reader.reader()) && !force_proxy;
+
+  if (can_use_proxy(context, strip, psize) && !prefer_original) {
     /* Try to get a proxy image.
      * Movie proxies are handled by ImBuf module with exception of `custom file` setting. */
     if (context->scene->ed->proxy_storage != SEQ_EDIT_PROXY_DIR_STORAGE &&

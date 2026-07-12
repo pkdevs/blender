@@ -2364,6 +2364,16 @@ static void rna_def_strip_proxy(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Proxy Custom File", "Use a custom file to read proxy data from");
   RNA_def_property_update(
       prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_preprocessed_update");
+
+  prop = RNA_def_property(srna, "use_force_proxy", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", SEQ_PROXY_FLAG_FORCE);
+  RNA_def_property_ui_text(
+      prop,
+      "Force Proxy",
+      "Use proxies even when the strip's codec is hardware decoded, which otherwise decodes the "
+      "original directly for higher quality");
+  RNA_def_property_update(
+      prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_preprocessed_update");
 }
 
 static void rna_def_color_balance(BlenderRNA *brna)

@@ -1770,6 +1770,9 @@ class SEQUENCER_PT_strip_proxy(SequencerButtonsPanel, Panel):
             col = layout.column()
             col.prop(proxy, "quality", text="Quality")
 
+            if strip.type == 'MOVIE':
+                col.prop(proxy, "use_force_proxy")
+
 
 class SEQUENCER_PT_preview(SequencerButtonsPanel_Output, Panel):
     bl_label = "Scene Strip Display"
