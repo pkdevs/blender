@@ -16,15 +16,20 @@
 
 CCL_NAMESPACE_BEGIN
 
-// ccl_device_inline ReSTIRReservoir restir_reservoir_empty()
-// {
-//   ReSTIRReservoir r{};      // Optional
+// Should be added to ReSTIRReservoir eventually?
+ccl_device_inline ReSTIRLightSampleReference restir_light_reference_empty()
+{
+  ReSTIRLightSampleReference reference{};
+  reference.object = OBJECT_NONE;
+  reference.prim = PRIM_NONE;
+  return reference;
+}
 
-//   r.W = 0.0f;
-//   r.M = 0;
-
-//   return r;
-// }
+ccl_device_inline bool restir_light_reference_is_valid(
+    const ccl_private ReSTIRLightSampleReference *reference)
+{
+  return (reference->flags & RESTIR_LIGHT_REFERENCE_VALID) != 0;
+}
 
 ccl_device_inline ReSTIRDIReservoir restir_di_reservoir_empty()
 {
@@ -73,6 +78,8 @@ struct ReSTIRRisState {
  */
 struct ReSTIRDIRisState {
   LightSample light;
+  ReSTIRLightSampleReference reference;
+
   // !!!: light_sample_shader_eval_nee_constant only captures the constant light shader part for some emitters
   BsdfEval radiance;          // Currently selected candidate payload.
   float luminance;            // Luminance of the selected payload.
@@ -94,6 +101,7 @@ ccl_device_inline ReSTIRRisState restir_ris_empty()
 ccl_device_inline ReSTIRDIRisState restir_di_ris_empty()
 {
   ReSTIRDIRisState s{};
+  s.reference = restir_light_reference_empty();
   s.luminance = 0.0f;
   s.total_weight = 0.0f;
   s.M = 0;
@@ -154,6 +162,7 @@ ccl_device_inline void restir_di_add_sample(
     KernelGlobals kg,
     ccl_private ReSTIRDIRisState *ris,
     const ccl_private LightSample *ls,
+    const ccl_private ReSTIRLightSampleReference *reference, // reference availability independent of sample eligibility
     const ccl_private BsdfEval *radiance,
     const float mis_weight,
     const float random)
@@ -176,6 +185,7 @@ ccl_device_inline void restir_di_add_sample(
 
   if (random * ris->total_weight <= weight) {
     ris->light = *ls;
+    ris->reference = reference ? *reference : restir_light_reference_empty();
     ris->radiance = *radiance;
     ris->luminance = luminance;
   }
@@ -189,6 +199,7 @@ ccl_device_inline void restir_di_add_light_sample(
     KernelGlobals kg,
     ccl_private ReSTIRDIRisState *ris,
     const ccl_private LightSample *ls,
+    const ccl_private ReSTIRLightSampleReference *reference,
     const ccl_private BsdfEval *radiance,
     const float bsdf_pdf,
     const float random)
@@ -215,32 +226,10 @@ ccl_device_inline void restir_di_add_light_sample(
     return;
   }
 
-  restir_di_add_sample(kg, ris, ls, radiance, mis_weight / ls->pdf, random);
+  restir_di_add_sample(kg, ris, ls, reference, radiance, mis_weight / ls->pdf, random);
 }
 
 // MARK: - 
-
-// /* Matches Falcor: toReservoir() logic and Finalize weight calculation */
-// ccl_device_inline ReSTIRReservoir restir_finalize(
-//     const ccl_private ReSTIRRisState *ris)
-// {
-//   ReSTIRReservoir reservoir = restir_reservoir_empty();
-
-//   if (ris->selected_target_pdf <= 0.0f || ris->M == 0) {
-//     return reservoir;
-//   }
-
-//   reservoir.light = ris->light;
-
-//   reservoir.M = ris->M;
-//   reservoir.W = (ris->weight_sum / float(ris->M)) / ris->selected_target_pdf;
-
-//   if (!(isfinite(reservoir.W) && reservoir.W > 0.0f)) {
-//     return restir_reservoir_empty();
-//   }
-
-//   return reservoir;
-// }
 
 // !!!: total_weight /= luminance;
 ccl_device_inline bool restir_di_finalize(
@@ -253,6 +242,7 @@ ccl_device_inline bool restir_di_finalize(
   }
 
   reservoir->light = ris->light;
+  reservoir->reference = ris->reference;
   reservoir->radiance = ris->radiance;
   reservoir->luminance = ris->luminance;
 // RIS final weight uses the mean proposal weight, not the raw sum.

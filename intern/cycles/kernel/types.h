@@ -153,7 +153,7 @@ enum SamplingPattern {
  * Keep in sync with the raytype mapping in the osl.cpp OSLManager::shading_system_init().
  *
  * NOTE: Recalculated after a surface bounce. */
-enum PathRayVisibilityFlag : uint32_t {
+enum PathRayVisibilityFlag : uint32_t { // !!!
   PATH_RAY_VISIBILITY_NONE = 0,
 
   PATH_RAY_VISIBILITY_CAMERA = (1U << 0U),
@@ -528,6 +528,9 @@ enum LightType {
 
 /* Result from light sampling with next event estimation.
  *
+ * Position, direction, distance, PDF and evaluation factor are target-dependent
+ * and must be recomputed when a persistent sample is relocated.
+ *
  * TODO: It may be possible to reduce the size of this struct now that shader evaluation
  * no longer uses this. For example D, Ng or P, though it's not trivial. */
 struct LightSample {
@@ -577,7 +580,42 @@ struct LightSample {
 
 };
 
+enum ReSTIRLightReferenceFlag : uint {
+  RESTIR_LIGHT_REFERENCE_VALID = (1u << 0),
+  RESTIR_LIGHT_REFERENCE_HAS_PARAM = (1u << 1),
+};
+
+/**
+ * Persistent identity and emitter-local parameterization of a selected light sample.
+ * Target-dependent LightSample fields are reconstructed when the sample is reused.
+ */
+struct ReSTIRLightSampleReference {
+  LightType type;     // May eventually need a dedicated ReSTIRLightReferenceType (If KernelLight can't derive some distinctions...)
+  uint flags;
+
+  /* Current Cycles identity convention:
+   *
+   * Analytic light:
+   *   object == OBJECT_NONE
+   *   prim   == KernelLight index
+   *
+   * Geometric emitter:
+   *   object == object index
+   *   prim   == primitive index
+   */
+  int object;
+  int prim;
+
+  /* Emitter-specific canonical parameters.
+   *
+   * LIGHT_POINT sphere: encoded light-local surface normal.
+   * LIGHT_POINT delta: unused
+   */
+  float2 param;
+};
+
 struct ReSTIRReservoir {
+    // !!!: we may stop persisting LS here once ref lands, but not necessary for the initial transition.
     LightSample light;
 
     float W;        // Final Probabilistic reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_target_pdf;
@@ -590,6 +628,8 @@ struct ReSTIRReservoir {
  */
 struct ReSTIRDIReservoir {
   LightSample light;
+  ReSTIRLightSampleReference reference;
+
   // TODO: ranking_radiance and ranking_luminance
   BsdfEval radiance;      // Selected ranking payload: BSDF * light_eval * eval_fac.
   float luminance;        // Luminance of radiance, used for RIS normalization.
@@ -648,7 +688,7 @@ enum MotionPosition {
 
 /* Direct Light Sampling */
 
-enum DirectLightSamplingType {
+enum DirectLightSamplingType { // !!!
   DIRECT_LIGHT_SAMPLING_MIS = 0,
   DIRECT_LIGHT_SAMPLING_FORWARD = 1,
   DIRECT_LIGHT_SAMPLING_NEE = 2,
@@ -1817,7 +1857,7 @@ struct KernelShaderEvalInput {
 };
 static_assert_align(KernelShaderEvalInput, 16);
 
-enum ShaderEvalResult {
+enum ShaderEvalResult { // !!!
   /* Shader evaluation is empty (e.g. no volume density, no emission from light, ..). */
   SHADER_EVAL_EMPTY = 0,
   /* Shader evaluation succeeded. */

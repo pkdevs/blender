@@ -72,7 +72,7 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
 
   // !!!: Store first-hit receiver data for later ReSTIR surface reconstruction.
   if (flag & PASSMASK(SURFACE_DATA)) {
-      float *ptr = buffer + kernel_data.film.pass_surface_data;
+      ccl_global float *ptr = buffer + kernel_data.film.pass_surface_data;
       film_overwrite_pass_float(ptr++, (float)path_flag);
 
       film_overwrite_pass_float(ptr++, sd->u);

@@ -12,6 +12,7 @@
 #include "kernel/film/light_passes.h"
 
 #include "kernel/light/sample.h"
+#include "kernel/light/sample_reference.h"
 
 #include "kernel/geom/motion_triangle.h"
 #include "kernel/geom/triangle.h"
@@ -420,8 +421,21 @@ bool restir_di_select_light(KernelGlobals kg,
     const float random = path_branched_rng_1D(
         kg, rng_state, i, candidate_count, PRNG_SURFACE_RESTIR_RESAMPLE);
 
+
+    ReSTIRLightSampleReference candidate_reference = restir_light_reference_empty();
+
+    const bool has_reference = restir_light_reference_from_sample(
+        kg, &candidate, &candidate_reference);
+
+    if (has_reference) {
+      restir_debug_validate_light_reference_roundtrip(
+          kg, &candidate, sd->P, sd->N, sd->flag, path_flag);
+    } else {
+      printf("restir_di_select_light(); restir_debug_validate_light_reference_roundtrip() was not executed\n");
+    }
+
     restir_di_add_light_sample(
-        kg, &ris, &candidate, &candidate_radiance, bsdf_pdf, random);
+        kg, &ris, &candidate, &candidate_reference, &candidate_radiance, bsdf_pdf, random);
   }
 
 // >>> DEBUG

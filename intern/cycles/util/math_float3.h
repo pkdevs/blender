@@ -710,6 +710,11 @@ ccl_device_inline float3 ensure_finite(const float3 v)
   return r;
 }
 
+ccl_device_inline float3 float4_to_float3(const float4 a)
+{
+  return make_float3(a.x, a.y, a.z);
+}
+
 /* Triangle */
 
 ccl_device_inline float triangle_area(const ccl_private float3 &v1,
@@ -823,6 +828,19 @@ ccl_device_inline float2 map_to_sphere(const float3 co)
     u = v = 0.0f;
   }
   return make_float2(u, v);
+}
+
+ccl_device_inline float3 map_to_sphere(const float2 uv)
+{
+  /* [0, 1] -> [\pi, -\pi]. */
+  const float theta = M_PI_F - M_2PI_F * uv.x;
+  const float x = sinf(theta);
+  const float y = cosf(theta);
+  /* [0, 1] -> [\pi, 0]. */
+  const float phi = M_PI_F - M_PI_F * uv.y;
+  const float sin_phi = sinf(phi);
+  const float z = cosf(phi);
+  return make_float3(x * sin_phi, y * sin_phi, z);
 }
 
 ccl_device_inline void copy_v3_v3(ccl_private float *r, const float3 val)

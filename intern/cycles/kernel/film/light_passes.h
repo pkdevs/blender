@@ -713,7 +713,7 @@ ccl_device_inline void film_clear_pass_reservoir(
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
 
   /* Set weight to zero. */
-  float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 4;
+  ccl_global float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 4;
   film_overwrite_pass_float(ptr, 0.0f);
 
   ptr = buffer + kernel_data.film.pass_restir_previous_reservoir + 4;

@@ -452,11 +452,24 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
       case PASS_GUIDING_AVG_ROUGHNESS:
         kfilm->pass_guiding_avg_roughness = kfilm->pass_stride;
         break;
+
+      case PASS_RESTIR_PT_PREVIOUS_RESERVOIR:
+        kfilm->pass_restir_pt_previous_reservoir = kfilm->pass_stride;
+        break;
+      case PASS_RESTIR_PT_RESERVOIR:
+        kfilm->pass_restir_pt_reservoir = kfilm->pass_stride;
+        break;
+      case PASS_RESTIR_PREVIOUS_RESERVOIR:
+        kfilm->pass_restir_previous_reservoir = kfilm->pass_stride;
+        break;
+      case PASS_RESTIR_RESERVOIR:
+        kfilm->pass_restir_reservoir = kfilm->pass_stride;
+        break;
       case PASS_SURFACE_DATA:
         kfilm->pass_surface_data = kfilm->pass_stride;
         break;
       default:
-        assert(false);
+        assert(false); // !!!: Crashes!
         break;
     }
 

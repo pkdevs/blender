@@ -193,7 +193,7 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
   integrator/mnee.h
   integrator/path_state.h
   integrator/restir.h
-integrator/restir_temporal.h
+  integrator/restir_temporal.h
   integrator/shade_background.h
   integrator/shade_light.h
   integrator/shade_shadow.h
@@ -223,6 +223,7 @@ set(SRC_KERNEL_LIGHT_HEADERS
   light/light.h
   light/point.h
   light/sample.h
+  light/sample_reference.h
   light/spot.h
   light/sun.h
   light/tree.h
