@@ -51,6 +51,34 @@ def _make_grid(size=1.0, x_segments=8, y_segments=8):
     return obj, boundary
 
 
+def _make_grid_marked(mark, size=1.0, x_segments=8, y_segments=8):
+    """Flat quad grid with the interior `y == 0` edge line marked as `seam` or `sharp`.
+
+    Returns (obj, marked, boundary): `marked` is the set of vertex indices touched by a
+    marked edge, `boundary` the set of open-boundary vertex indices.
+    """
+    assert mark in {'seam', 'sharp'}
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    mesh = bpy.data.meshes.new("grid")
+    bm = bmesh.new()
+    bmesh.ops.create_grid(bm, x_segments=x_segments, y_segments=y_segments, size=size)
+    boundary = {v.index for v in bm.verts if any(e.is_boundary for e in v.link_edges)}
+    marked = set()
+    for e in bm.edges:
+        v0, v1 = e.verts
+        if abs(v0.co.y) < 1e-6 and abs(v1.co.y) < 1e-6:
+            if mark == 'seam':
+                e.seam = True
+            else:
+                e.smooth = False
+            marked.update((v0.index, v1.index))
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new("grid", mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    return obj, marked, boundary
+
+
 def _add_smooth(obj, **params):
     mod = obj.modifiers.new("smooth", 'SMOOTH')
     for key, value in params.items():
@@ -265,6 +293,75 @@ class TestSmoothPinBoundary(unittest.TestCase):
 
         for a, b in zip(off, on):
             self.assertAlmostEqual((a - b).length, 0.0, places=6)
+
+
+class TestSmoothPinEdgeMarks(unittest.TestCase):
+    """`use_pin_seam` / `use_pin_sharp` must freeze verts on marked edges."""
+
+    @staticmethod
+    def _perturb_z(obj):
+        for i, v in enumerate(obj.data.vertices):
+            v.co.z += 0.3 if (i % 2 == 0) else -0.3
+
+    def _assert_marked_pinned(self, mark, pin_param, method, **params):
+        obj, marked, _boundary = _make_grid_marked(mark)
+        self._perturb_z(obj)
+        original = _evaluated_positions(obj)
+        _add_smooth(obj, method=method, iterations=5, **{pin_param: True}, **params)
+        deformed = _evaluated_positions(obj)
+
+        max_marked_drift = max((original[i] - deformed[i]).length for i in marked)
+        self.assertLess(max_marked_drift, 1e-5)
+
+        free = [i for i in range(len(original)) if i not in marked]
+        max_free_move = max((original[i] - deformed[i]).length for i in free)
+        self.assertGreater(max_free_move, 1e-3)
+
+    def test_seam_simple(self):
+        self._assert_marked_pinned('seam', 'use_pin_seam', 'SIMPLE', factor=0.5)
+
+    def test_seam_taubin(self):
+        self._assert_marked_pinned('seam', 'use_pin_seam', 'TAUBIN', factor=0.5, taubin_mu=-0.53)
+
+    def test_seam_hc(self):
+        self._assert_marked_pinned('seam', 'use_pin_seam', 'HC', factor=1.0, hc_alpha=0.0, hc_beta=0.5)
+
+    def test_sharp_simple(self):
+        self._assert_marked_pinned('sharp', 'use_pin_sharp', 'SIMPLE', factor=0.5)
+
+    def test_sharp_taubin(self):
+        self._assert_marked_pinned('sharp', 'use_pin_sharp', 'TAUBIN', factor=0.5, taubin_mu=-0.53)
+
+    def test_sharp_hc(self):
+        self._assert_marked_pinned('sharp', 'use_pin_sharp', 'HC', factor=1.0, hc_alpha=0.0, hc_beta=0.5)
+
+    def test_seam_off_by_default_marked_verts_move(self):
+        """Interior seam verts must drift when the toggle is off (regression guard)."""
+        obj, marked, boundary = _make_grid_marked('seam')
+        self._perturb_z(obj)
+        original = _evaluated_positions(obj)
+        _add_smooth(obj, method='SIMPLE', factor=0.5, iterations=5)
+        deformed = _evaluated_positions(obj)
+        interior_marked = [i for i in marked if i not in boundary]
+        max_drift = max((original[i] - deformed[i]).length for i in interior_marked)
+        self.assertGreater(max_drift, 1e-3)
+
+    def test_pins_combine(self):
+        """Enabling seam and sharp together pins the union of both edge sets."""
+        obj, marked, _boundary = _make_grid_marked('seam')
+        for e in obj.data.edges:
+            v0, v1 = (obj.data.vertices[i].co for i in e.vertices)
+            if abs(v0.x) < 1e-6 and abs(v1.x) < 1e-6:
+                e.use_edge_sharp = True
+        sharp_verts = {i for e in obj.data.edges if e.use_edge_sharp for i in e.vertices}
+        self._perturb_z(obj)
+        original = _evaluated_positions(obj)
+        _add_smooth(obj, method='SIMPLE', factor=0.5, iterations=5,
+                    use_pin_seam=True, use_pin_sharp=True)
+        deformed = _evaluated_positions(obj)
+        pinned = marked | sharp_verts
+        max_pinned_drift = max((original[i] - deformed[i]).length for i in pinned)
+        self.assertLess(max_pinned_drift, 1e-5)
 
 
 class TestSmoothCotangentWeights(unittest.TestCase):
