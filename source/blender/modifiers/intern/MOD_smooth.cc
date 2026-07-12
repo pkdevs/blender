@@ -21,6 +21,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_screen_types.h"
 
+#include "BKE_attribute.hh"
 #include "BKE_deform.hh"
 #include "BKE_mesh_mapping.hh"
 
@@ -63,7 +64,6 @@ static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_
 {
   SmoothModifierData *smd = reinterpret_cast<SmoothModifierData *>(md);
 
-  /* Ask for vertex-groups if we need them. */
   if (smd->defgrp_name[0] != '\0') {
     r_cddata_masks->vmask |= CD_MASK_MDEFORMVERT;
   }
@@ -75,27 +75,52 @@ static float vgroup_weight(const MDeformVert &dv, const int defgrp_index, const 
   return invert ? 1.0f - w : w;
 }
 
-static Array<bool> compute_boundary_vertex_mask(const Mesh &mesh)
+template<typename Fn>
+static void pin_edge_endpoints(const Span<int2> edges, MutableSpan<bool> is_pinned, const Fn &edge_selected)
+{
+  for (const int e : edges.index_range()) {
+    if (edge_selected(e)) {
+      is_pinned[edges[e][0]] = true;
+      is_pinned[edges[e][1]] = true;
+    }
+  }
+}
+
+static Array<bool> compute_pinned_vertex_mask(const Mesh &mesh, const short pin_flags)
 {
   const Span<int2> edges = mesh.edges();
-  const OffsetIndices<int> faces = mesh.faces();
-  const Span<int> corner_edges = mesh.corner_edges();
+  Array<bool> is_pinned(mesh.verts_num, false);
 
-  Array<int> edge_face_count(edges.size(), 0);
-  for (const int f : faces.index_range()) {
-    for (const int edge : corner_edges.slice(faces[f])) {
-      edge_face_count[edge]++;
+  if (pin_flags & MOD_SMOOTH_PIN_BOUNDARY) {
+    const OffsetIndices<int> faces = mesh.faces();
+    const Span<int> corner_edges = mesh.corner_edges();
+
+    Array<int> edge_face_count(edges.size(), 0);
+    for (const int f : faces.index_range()) {
+      for (const int edge : corner_edges.slice(faces[f])) {
+        edge_face_count[edge]++;
+      }
+    }
+    pin_edge_endpoints(edges, is_pinned, [&](const int e) { return edge_face_count[e] == 1; });
+  }
+
+  const bke::AttributeAccessor attributes = mesh.attributes();
+
+  if (pin_flags & MOD_SMOOTH_PIN_SEAM) {
+    if (const VArray<bool> seams = *attributes.lookup<bool>("uv_seam", bke::AttrDomain::Edge)) {
+      const VArraySpan<bool> seam_span(seams);
+      pin_edge_endpoints(edges, is_pinned, [&](const int e) { return seam_span[e]; });
     }
   }
 
-  Array<bool> is_boundary(mesh.verts_num, false);
-  for (const int e : edges.index_range()) {
-    if (edge_face_count[e] == 1) {
-      is_boundary[edges[e][0]] = true;
-      is_boundary[edges[e][1]] = true;
+  if (pin_flags & MOD_SMOOTH_PIN_SHARP) {
+    if (const VArray<bool> sharp = *attributes.lookup<bool>("sharp_edge", bke::AttrDomain::Edge)) {
+      const VArraySpan<bool> sharp_span(sharp);
+      pin_edge_endpoints(edges, is_pinned, [&](const int e) { return sharp_span[e]; });
     }
   }
-  return is_boundary;
+
+  return is_pinned;
 }
 
 static Array<float> compute_edge_cotangent_weights(const Mesh &mesh, const Span<float3> positions)
@@ -262,12 +287,13 @@ static void smoothModifier_do(SmoothModifierData *smd,
   }
   const Span<float> weights_span = use_cotan ? edge_weights.as_span() : Span<float>{};
 
-  Array<bool> boundary_mask;
-  if (smd->flag & MOD_SMOOTH_PIN_BOUNDARY) {
-    boundary_mask = compute_boundary_vertex_mask(*mesh);
+  const short pin_flags = smd->flag &
+                          (MOD_SMOOTH_PIN_BOUNDARY | MOD_SMOOTH_PIN_SEAM | MOD_SMOOTH_PIN_SHARP);
+  Array<bool> pinned_mask;
+  if (pin_flags) {
+    pinned_mask = compute_pinned_vertex_mask(*mesh, pin_flags);
   }
-  const Span<bool> pinned_span = boundary_mask.is_empty() ? Span<bool>{} :
-                                                            boundary_mask.as_span();
+  const Span<bool> pinned_span = pinned_mask.is_empty() ? Span<bool>{} : pinned_mask.as_span();
 
   const MDeformVert *dvert;
   int defgrp_index;
@@ -380,7 +406,11 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   }
 
   col.prop(ptr, "iterations", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(ptr, "use_pin_boundary", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  ui::Layout &pin_col = layout.column(true, IFACE_("Pin"));
+  pin_col.prop(ptr, "use_pin_boundary", UI_ITEM_NONE, IFACE_("Boundaries"), ICON_NONE);
+  pin_col.prop(ptr, "use_pin_seam", UI_ITEM_NONE, IFACE_("Seams"), ICON_NONE);
+  pin_col.prop(ptr, "use_pin_sharp", UI_ITEM_NONE, IFACE_("Sharp"), ICON_NONE);
 
   modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
 
