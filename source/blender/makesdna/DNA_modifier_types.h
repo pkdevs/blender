@@ -764,6 +764,8 @@ enum SmoothModifierFlag : short {
   MOD_SMOOTH_Z = (1 << 3),
   MOD_SMOOTH_USE_COTAN = (1 << 4),
   MOD_SMOOTH_PIN_BOUNDARY = (1 << 5),
+  MOD_SMOOTH_PIN_SEAM = (1 << 6),
+  MOD_SMOOTH_PIN_SHARP = (1 << 7),
 };
 ENUM_OPERATORS(SmoothModifierFlag);
 

@@ -4432,6 +4432,23 @@ static void rna_def_modifier_smooth(BlenderRNA *brna)
       "as neighbors");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
+  prop = RNA_def_property(srna, "use_pin_seam", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", MOD_SMOOTH_PIN_SEAM);
+  RNA_def_property_ui_text(
+      prop,
+      "Pin Seams",
+      "Keep vertices on UV seams fixed in place; interior smoothing still uses them as neighbors");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "use_pin_sharp", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", MOD_SMOOTH_PIN_SHARP);
+  RNA_def_property_ui_text(
+      prop,
+      "Pin Sharp Edges",
+      "Keep vertices on sharp-marked edges fixed in place; interior smoothing still uses them "
+      "as neighbors");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
   prop = RNA_def_property(srna, "iterations", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "repeat");
   RNA_def_property_ui_range(prop, 0, 30, 1, -1);
