@@ -824,7 +824,7 @@ bool WM_operator_properties_default(PointerRNA *ptr, const bool do_update)
       }
       default:
         if ((do_update == false) || (RNA_property_is_set(ptr, prop) == false)) {
-          if (RNA_property_reset(ptr, prop, -1)) {
+          if (RNA_property_reset(nullptr, ptr, prop, -1)) {
             changed = true;
           }
         }
@@ -3523,7 +3523,7 @@ static wmOperatorStatus radial_control_modal(bContext *C, wmOperator *op, const 
     wmWindowManager *wm = CTX_wm_manager(C);
     if (wm->op_undo_depth == 0) {
       ID *id = rc->ptr.owner_id;
-      if (ED_undo_is_legacy_compatible_for_property(C, id, rc->ptr)) {
+      if (ED_undo_is_legacy_compatible_for_property(C, id, rc->ptr, *rc->prop)) {
         ED_undo_push(C, op->type->name);
       }
     }

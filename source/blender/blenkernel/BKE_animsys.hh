@@ -131,14 +131,8 @@ void BKE_keyingsets_blend_read_data(BlendDataReader *reader, ListBaseT<KeyingSet
  * \note it is assumed that the structure we're replacing is `<prefix><["><name><"]>`
  * i.e. `pose.bones["Bone"]`.
  */
-char *BKE_animsys_fix_rna_path_rename(ID *owner_id,
-                                      char *old_path,
-                                      StringRef prefix,
-                                      const char *oldName,
-                                      const char *newName,
-                                      int oldSubscript,
-                                      int newSubscript,
-                                      bool verify_paths);
+char *BKE_animsys_fix_rna_path_rename(
+    ID *owner_id, char *old_path, StringRef prefix, StringRefNull old_name, StringRefNull newName);
 
 /**
  * Fix all the paths for the given ID + Action.
@@ -153,10 +147,8 @@ void BKE_action_fix_paths_rename(ID *owner_id,
                                  bAction *act,
                                  int32_t /*slot_handle_t*/ slot_handle,
                                  StringRef prefix,
-                                 const char *oldName,
-                                 const char *newName,
-                                 int oldSubscript,
-                                 int newSubscript,
+                                 StringRefNull oldName,
+                                 StringRefNull newName,
                                  bool verify_paths);
 
 /**
@@ -339,16 +331,6 @@ void BKE_animsys_evaluate_animdata(ID *id,
                                    const AnimationEvalContext *anim_eval_context,
                                    eAnimData_Recalc recalc,
                                    bool flush_to_original);
-
-/**
- * Evaluation of all ID-blocks with Animation Data blocks - Animation Data Only
- *
- * This will evaluate only the animation info available in the animation data-blocks
- * encountered. In order to enforce the system by which some settings controlled by a
- * 'local' (i.e. belonging in the nearest ID-block that setting is related to, not a
- * standard 'root') block are overridden by a larger 'user'
- */
-void BKE_animsys_evaluate_all_animation(Main *main, Depsgraph *depsgraph, float ctime);
 
 /* ------------ Specialized API --------------- */
 /* There are a few special tools which require these following functions. They are NOT to be used
