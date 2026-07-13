@@ -428,8 +428,8 @@ bool restir_di_select_light(KernelGlobals kg,
         kg, &candidate, &candidate_reference);
 
     if (has_reference) {
-      restir_debug_validate_light_reference_roundtrip(
-          kg, &candidate, sd->P, sd->N, sd->flag, path_flag);
+      restir_debug_validate_light_reference_roundtrip_from_reference(
+          kg, &candidate, &candidate_reference, sd->P, sd->N, sd->flag, path_flag);
     } else {
       printf("restir_di_select_light(); restir_debug_validate_light_reference_roundtrip() was not executed\n");
     }

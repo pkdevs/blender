@@ -606,11 +606,20 @@ struct ReSTIRLightSampleReference {
   int object;
   int prim;
 
-  /* Emitter-specific canonical parameters.
-   *
-   * LIGHT_POINT sphere: encoded light-local surface normal.
-   * LIGHT_POINT delta: unused
-   */
+/** @short Emitter-specific canonical parameters.
+  *
+  * LIGHT_POINT sphere:
+  *   encoded light-local surface normal.
+  *
+  * LIGHT_POINT delta:
+  *   unused.
+  *
+  * LIGHT_SUN:
+  *   encoded light-local sampled sun normal/direction, corresponding to ls->Ng.
+  *
+  * LIGHT_AREA:
+  *   canonical emitter uv recovered from sampled world-space position ls->P.
+  */
   float2 param;
 };
 

@@ -13,24 +13,31 @@
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device_inline float2 restir_point_direction_encode(const float3 direction)
+ccl_device_inline float2 restir_direction_encode(const float3 direction)
 {
   return map_to_sphere(direction);
 }
 
-// TODO: Verify correctness
-ccl_device_inline float3 restir_point_direction_decode(const float2 uv)
+ccl_device_inline float3 restir_direction_decode(const float2 uv)
 {
-  // /* inverse of map_to_sphere(). */
-  // const float phi = M_2PI_F * uv.x;
-  // const float theta = M_PI_F * uv.y;
-  // const float sin_theta = sinf(theta);
+  return map_to_sphere(uv); // !!! 
+}
 
-  // return make_float3(
-  //     sin_theta * cosf(phi), sin_theta * sinf(phi), cosf(theta));
+ccl_device_inline float2 restir_area_position_encode(const ccl_global KernelLight *klight,
+                                                     const float3 light_P)
+{
+  return area_light_uv(klight, light_P);
+}
 
-  // !!!
-  return map_to_sphere(uv);
+ccl_device_inline float3 restir_area_position_decode(const ccl_global KernelLight *klight,
+                                                     const float2 uv)
+{
+  const float v = uv.x - 0.5f;
+  const float u = -uv.y - v;
+
+  return klight->co +
+         u * klight->area.len_u * klight->area.axis_u +
+         v * klight->area.len_v * klight->area.axis_v;
 }
 
 /**
@@ -61,7 +68,7 @@ ccl_device_inline bool restir_point_light_reference_from_sample(
     const Transform itfm = lamp_get_inverse_transform(kg, klight);
     const float3 local_Ng = normalize(transform_direction(&itfm, ls->Ng));
 
-    reference->param = restir_point_direction_encode(local_Ng);
+    reference->param = restir_direction_encode(local_Ng);
     reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
                        RESTIR_LIGHT_REFERENCE_HAS_PARAM;
     return true;
@@ -93,6 +100,71 @@ ls->eval_fac = klight->spot.eval_fac;
   return false;
 }
 
+ccl_device_inline bool restir_sun_light_reference_from_sample(
+    KernelGlobals kg,
+    const ccl_private LightSample *ls,
+    ccl_private ReSTIRLightSampleReference *reference)
+{
+  *reference = restir_light_reference_empty();
+
+  if (ls->type != LIGHT_SUN || ls->prim < 0) {
+    return false;
+  }
+
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
+  if ((LightType)klight->type != LIGHT_SUN) {
+    return false;
+  }
+
+  reference->type = LIGHT_SUN;
+  reference->object = ls->object;
+  reference->prim = ls->prim;
+
+  // store light-local cone direction
+  const Transform itfm = lamp_get_inverse_transform(kg, klight);
+  const float3 local_Ng = normalize(transform_direction(&itfm, ls->Ng));
+
+  // reference->param = restir_direction_encode(local_Ng);
+  reference->param = restir_area_position_encode(klight, ls->P);
+  reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
+                     RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+
+  return true;
+}
+
+
+/** TODO: Investigate whether light_normal_uv_from_position() can be used
+ * as a common producer-side *canonicalization* path for emitter-local references.
+ * It currently provides the exact area-light UV we need, but other light types
+ * still require explicit per-type encode/decode validation.
+ */
+ccl_device_inline bool restir_area_light_reference_from_sample(
+    KernelGlobals kg,
+    const ccl_private LightSample *ls,
+    ccl_private ReSTIRLightSampleReference *reference)
+{
+  *reference = restir_light_reference_empty();
+
+  if (ls->type != LIGHT_AREA || ls->prim < 0) {
+    return false;
+  }
+
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
+  if ((LightType)klight->type != LIGHT_AREA) {
+    return false;
+  }
+
+  reference->type = LIGHT_AREA;
+  reference->object = ls->object;
+  reference->prim = ls->prim;
+// param stores the same barycentric-style emitter coordinates `float2(v + 0.5f, -u - v)`.
+  reference->param = area_light_uv(klight, ls->P);
+  reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
+                     RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+
+  return true;
+}
+
 
 // TODO: Handle all analytic lights
 ccl_device_inline bool restir_light_reference_from_sample(
@@ -103,6 +175,13 @@ ccl_device_inline bool restir_light_reference_from_sample(
   switch (ls->type) {
     case LIGHT_POINT:
       return restir_point_light_reference_from_sample(kg, ls, reference);
+
+    case LIGHT_SUN:
+      return restir_sun_light_reference_from_sample(kg, ls, reference);
+
+    case LIGHT_AREA:
+      return restir_area_light_reference_from_sample(kg, ls, reference);
+
     default:
       *reference = restir_light_reference_empty();
       return false;
@@ -171,7 +250,7 @@ ccl_device_inline bool restir_point_light_sample_from_reference(
       return false;
     }
 
-    const float3 local_Ng = restir_point_direction_decode(reference->param);
+    const float3 local_Ng = restir_direction_decode(reference->param);
     // const Transform tfm = lamp_get_transform(kg, klight); // lamp_get_transform deprecated
     const Transform itfm = lamp_get_inverse_transform(kg, klight);
     const Transform tfm = transform_inverse(itfm);
@@ -205,6 +284,188 @@ ccl_device_inline bool restir_point_light_sample_from_reference(
   return isfinite(ls->pdf) && ls->pdf > 0.0f && ls->t >= 0.0f;
 }
 
+ccl_device_inline bool restir_sun_light_sample_from_reference(
+    KernelGlobals kg,
+    const ccl_private ReSTIRLightSampleReference *reference,
+    const float3 P,
+    const float3 N,
+    const int shader_flags,
+    const uint32_t path_flag,
+    ccl_private LightSample *ls)
+{
+  *ls = {};
+
+  // Unused vars
+  (void)P;
+  (void)N;
+  (void)shader_flags;
+  (void)path_flag;
+
+  if (!restir_light_reference_is_valid(reference) ||
+      reference->type != LIGHT_SUN ||
+      reference->prim < 0)
+  {
+    return false;
+  }
+
+  if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)) {
+    return false;
+  }
+
+  const ccl_global KernelLight *klight =
+      &kernel_data_fetch(lights, reference->prim);
+
+  if ((LightType)klight->type != LIGHT_SUN) {
+    return false;
+  }
+
+  const float3 local_Ng = restir_direction_decode(reference->param);
+
+  const Transform itfm = lamp_get_inverse_transform(kg, klight);
+  const Transform tfm = transform_inverse(itfm);
+
+  const float3 Ng = normalize(transform_direction(&tfm, local_Ng));
+  const float3 D = -Ng;
+
+  // /*
+  //  * The persisted direction should still lie inside the current sun cone.
+  //  * This matters for relocated/reused samples and for animated or changed lights.
+  //  */
+  // if (klight->sun.angle == 0.0f) {
+  //   return false;
+  // }
+
+  // if (vector_angle(-klight->co, D) > klight->sun.angle) {
+  //   return false;
+  // }
+
+  // Allow zero-angle and reconstruct the delta sun direction:
+  if (klight->sun.angle != 0.0f &&
+      vector_angle(-klight->co, D) > klight->sun.angle)
+  {
+    return false;
+  }
+
+
+  ls->type = LIGHT_SUN;
+  ls->shader = klight->shader_id;
+  ls->object = klight->object_id;
+  ls->prim = reference->prim;
+  ls->group = object_lightgroup(kg, ls->object);
+
+  ls->Ng = Ng;
+  ls->P = Ng;
+  ls->D = D;
+  ls->t = FLT_MAX;
+
+  ls->pdf = klight->sun.pdf; // !!!: og sample gets pdf from sample_uniform_cone, should match klight->sun.pdf
+  ls->eval_fac = klight->sun.eval_fac;
+
+  ls->pdf_selection = 0.0f;
+  ls->emitter_id = EMITTER_NONE; /* Replace if Cycles has a more specific invalid value. */
+
+  return isfinite(ls->pdf) && ls->pdf > 0.0f;
+}
+
+/**
+ * reconstructs exactly the two pieces that matter:
+ * 1. Chosen point on emitter geometry
+ * 2. Current target-dependent evaluation
+ *
+ */
+ccl_device_inline bool restir_area_light_sample_from_reference(
+    KernelGlobals kg,
+    const ccl_private ReSTIRLightSampleReference *reference,
+    const float3 P,
+    const float3 N,
+    const int shader_flags,
+    const uint32_t path_flag,
+    ccl_private LightSample *ls)
+{
+  *ls = {};
+
+  (void)N;
+  (void)shader_flags;
+  (void)path_flag;
+
+  if (!restir_light_reference_is_valid(reference) ||
+      reference->type != LIGHT_AREA ||
+      reference->prim < 0)
+  {
+    return false;
+  }
+
+  if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)) {
+    return false;
+  }
+
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reference->prim);
+
+  if ((LightType)klight->type != LIGHT_AREA) {
+    return false;
+  }
+
+  const float2 uv = reference->param;
+
+  /* Invert area_light_uv():
+   * uv.x = v + 0.5
+   * uv.y = -u - v
+   */
+  const float v = uv.x - 0.5f;
+  const float u = -uv.y - v;
+
+  /**
+  * Ellipse Validity: area_light_uv() clamps coordinates to [-0.5, 0.5], 
+  * but for ellipse lights not every point in the rectangle is valid. 
+  */
+  if (area_light_is_ellipse(&klight->area)) {
+    const float ellipse_u = (2.0f * u);
+    const float ellipse_v = (2.0f * v);
+    if (sqr(ellipse_u) + sqr(ellipse_v) > 1.0f + 1e-5f) {
+      *ls = {};
+      return false;
+    }
+  }
+
+
+  /* Reconstruct emitter point from normalized in-plane coordinates. */
+  // const float3 light_P = klight->co +
+  //                        u * klight->area.len_u * klight->area.axis_u +
+  //                        v * klight->area.len_v * klight->area.axis_v;
+  const float3 light_P = restir_area_position_decode(klight, uv);
+
+  ls->type = LIGHT_AREA;
+  ls->shader = klight->shader_id;
+  ls->object = klight->object_id;
+  ls->prim = reference->prim;
+  ls->group = object_lightgroup(kg, ls->object);
+
+  ls->P = light_P;
+  ls->Ng = klight->area.dir;
+  ls->D = safe_normalize_len(ls->P - P, &ls->t);
+
+  ls->pdf_selection = 0.0f;
+  ls->emitter_id = EMITTER_NONE;
+
+  /* Match area_light_sample(): one-sided surface light rejection. */
+  if (dot(ls->P - P, ls->Ng) > 0.0f) {
+    *ls = {};
+    return false;
+  }
+
+// instead of hand-rebuilding pdf & eval_fac, use the existing eval (area_light_eval()) after reconstructing ls->P, ls->D, ls->t, and ls->Ng.
+  float3 eval_light_P = ls->P;
+  if (!area_light_eval<false>(klight, P, &eval_light_P, ls, zero_float2(), false)) {
+    *ls = {};
+    return false;
+  }
+
+  return isfinite(ls->pdf) && ls->pdf > 0.0f &&
+         isfinite(ls->eval_fac) && ls->eval_fac >= 0.0f &&
+         ls->t >= 0.0f;
+}
+
+
 // Dispatcher
 ccl_device_inline bool restir_light_sample_from_reference(
     KernelGlobals kg,
@@ -225,6 +486,15 @@ ccl_device_inline bool restir_light_sample_from_reference(
     case LIGHT_POINT:
       return restir_point_light_sample_from_reference(
           kg, reference, P, N, shader_flags, path_flag, ls);
+
+    case LIGHT_SUN:
+      return restir_sun_light_sample_from_reference(
+          kg, reference, P, N, shader_flags, path_flag, ls);
+
+    case LIGHT_AREA:
+      return restir_area_light_sample_from_reference(
+          kg, reference, P, N, shader_flags, path_flag, ls);
+
     default:
       *ls = {};
       return false;
@@ -232,7 +502,7 @@ ccl_device_inline bool restir_light_sample_from_reference(
 }
 
 
-// MARK: - DEBUG
+// MARK: --- Debug ---
 
 ccl_device_inline bool restir_debug_compare_float3(const float3 a,
                                                    const float3 b,
@@ -245,31 +515,32 @@ ccl_device_inline bool restir_debug_compare_float(const float a,
                                                   const float b,
                                                   const float rel_eps)
 {
+  if (a == FLT_MAX || b == FLT_MAX) {
+    return a == b;
+  }
+
   const float scale = fmaxf(fmaxf(fabsf(a), fabsf(b)), 1.0f);
   return fabsf(a - b) <= rel_eps * scale;
 }
 
-// MARK: - Debug
 
-ccl_device_inline void restir_debug_validate_light_reference_roundtrip(
+ccl_device_inline void restir_debug_validate_light_reference_roundtrip_from_reference(
     KernelGlobals kg,
     const ccl_private LightSample *original,
+    const ccl_private ReSTIRLightSampleReference *reference,
     const float3 P,
     const float3 N,
     const int shader_flags,
     const uint32_t path_flag)
 {
-// #ifdef WITH_CYCLES_DEBUG
-  ReSTIRLightSampleReference reference = restir_light_reference_empty();
   LightSample reconstructed;
 
-  const bool encoded = restir_light_reference_from_sample(kg, original, &reference);
-  if (!encoded) {
+  if (!restir_light_reference_is_valid(reference)) {
     return;
   }
 
   const bool decoded = restir_light_sample_from_reference(
-      kg, &reference, P, N, shader_flags, path_flag, &reconstructed);
+      kg, reference, P, N, shader_flags, path_flag, &reconstructed);
 
   if (!decoded) {
     printf("ReSTIR roundtrip decode failed: type=%d prim=%d object=%d\n",
@@ -308,7 +579,25 @@ ccl_device_inline void restir_debug_validate_light_reference_roundtrip(
     assert(false);
 #endif
   }
-// #endif
+}
+
+ccl_device_inline void restir_debug_validate_light_reference_roundtrip(
+    KernelGlobals kg,
+    const ccl_private LightSample *original,
+    const float3 P,
+    const float3 N,
+    const int shader_flags,
+    const uint32_t path_flag)
+{
+  ReSTIRLightSampleReference reference = restir_light_reference_empty();
+
+  const bool encoded = restir_light_reference_from_sample(kg, original, &reference);
+  if (!encoded) {
+    return;
+  }
+
+  restir_debug_validate_light_reference_roundtrip_from_reference(
+      kg, original, &reference, P, N, shader_flags, path_flag);
 }
 
 CCL_NAMESPACE_END
