@@ -691,50 +691,39 @@ static void drawEdgeSlide(TransInfo *t)
   }
   else if (slp->use_clone) {
     if (!sld->original_verts.is_empty()) {
-      const int keep_side = (slp->perc >= 0.0f) ? 0 : 1;
-
-      const Vector<CloneNeighborInfo> neighbor_infos = edge_slide_clone_neighbors_calc(sld);
-
-      Set<BMVert *> keep_nb_set;
-      for (const CloneNeighborInfo &nd : neighbor_infos) {
-        for (BMVert *nb : nd.neighbors[keep_side]) {
-          keep_nb_set.add(nb);
-        }
-      }
-      Set<BMVert *> keep_nbs;
-      for (BMVert *nb : keep_nb_set) {
-        BMEdge *e;
-        BMIter e_iter;
-        BM_ITER_ELEM (e, &e_iter, nb, BM_EDGES_OF_VERT) {
-          if (keep_nb_set.contains(BM_edge_other_vert(e, nb))) {
-            keep_nbs.add(nb);
-            break;
-          }
-        }
+      Map<BMVert *, BMVert *> orig_to_clone;
+      orig_to_clone.reserve(sld->sv.size());
+      for (int i = 0; i < int(sld->sv.size()); i++) {
+        orig_to_clone.add(sld->original_verts[i], static_cast<BMVert *>(sld->sv[i].td->extra));
       }
 
-      int edge_count = 0;
-      for (const CloneNeighborInfo &nd : neighbor_infos) {
-        for (BMVert *nb : nd.neighbors[keep_side]) {
-          if (keep_nbs.contains(nb)) {
-            edge_count++;
-          }
-        }
-      }
-
-      if (edge_count > 0) {
+      Set<BMVert *> chained_verts;
+      if (!sld->clone_chain_edges.is_empty()) {
         GPU_line_width(line_size);
         immUniformThemeColorShadeAlpha(TH_EDGE_SELECT, 80, -100);
-        immBegin(GPU_PRIM_LINES, edge_count * 2);
+        immBeginAtMost(GPU_PRIM_LINES, sld->clone_chain_edges.size() * 2);
+        for (const EdgeSlideData::CloneChainEdge &ce : sld->clone_chain_edges) {
+          BMVert *v1_clone = orig_to_clone.lookup_default(ce.v1, nullptr);
+          BMVert *v2_clone = orig_to_clone.lookup_default(ce.v2, nullptr);
+          if (v1_clone && v2_clone) {
+            chained_verts.add(ce.v1);
+            chained_verts.add(ce.v2);
+            immVertex3fv(pos, v1_clone->co);
+            immVertex3fv(pos, v2_clone->co);
+          }
+        }
+        immEnd();
+      }
 
-        for (int i = 0; i < int(neighbor_infos.size()); i++) {
-          BMVert *v_clone = static_cast<BMVert *>(sld->sv[i].td->extra);
-          const CloneNeighborInfo &nd = neighbor_infos[i];
-          for (BMVert *nb : nd.neighbors[keep_side]) {
-            if (keep_nbs.contains(nb)) {
-              immVertex3fv(pos, v_clone->co);
-              immVertex3fv(pos, nb->co);
-            }
+      if (chained_verts.size() < sld->original_verts.size()) {
+        immUnbindProgram();
+        immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
+        immUniformThemeColorShadeAlpha(TH_SELECT, 255, -30);
+        GPU_point_size(ui::theme::get_value_f(TH_FACEDOT_SIZE) + 1.5f);
+        immBeginAtMost(GPU_PRIM_POINTS, sld->original_verts.size());
+        for (int i = 0; i < int(sld->original_verts.size()); i++) {
+          if (!chained_verts.contains(sld->original_verts[i])) {
+            immVertex3fv(pos, static_cast<BMVert *>(sld->sv[i].td->extra)->co);
           }
         }
         immEnd();
@@ -1434,7 +1423,7 @@ static void initEdgeSlide(TransInfo *t, wmOperator *op)
   bool use_even = false;
   bool flipped = false;
   bool use_clamp = true;
-  bool use_clone = true;  // need to set to false later on
+  bool use_clone = false;
   if (op) {
     PropertyRNA *prop;
     /* The following properties could be unset when transitioning from this
@@ -1449,8 +1438,7 @@ static void initEdgeSlide(TransInfo *t, wmOperator *op)
     prop = RNA_struct_find_property(op->ptr, "use_clamp");
     use_clamp = (prop) ? RNA_property_boolean_get(op->ptr, prop) : true;
     prop = RNA_struct_find_property(op->ptr, "use_clone");
-    use_clone = (prop) ? RNA_property_boolean_get(op->ptr, prop) :
-                         true;  // need to set to false later on
+    use_clone = (prop) ? RNA_property_boolean_get(op->ptr, prop) : false;
   }
   initEdgeSlide_ex(t, op, use_double_side, use_even, flipped, use_clamp, use_clone);
 }

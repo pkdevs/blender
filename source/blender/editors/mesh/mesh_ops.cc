@@ -223,7 +223,8 @@ void ED_operatormacros_mesh()
                                     "Cut mesh loop and slide it",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   WM_operatortype_macro_define(ot, "MESH_OT_loopcut");
-  WM_operatortype_macro_define(ot, "TRANSFORM_OT_edge_slide");
+  otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_edge_slide");
+  RNA_boolean_set(otmacro->ptr, "use_clone", false);
 
   ot = WM_operatortype_append_macro("MESH_OT_offset_edge_loops_slide",
                                     "Offset Edge Slide",
@@ -232,6 +233,7 @@ void ED_operatormacros_mesh()
   WM_operatortype_macro_define(ot, "MESH_OT_offset_edge_loops");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_edge_slide");
   RNA_boolean_set(otmacro->ptr, "single_side", true);
+  RNA_boolean_set(otmacro->ptr, "use_clone", false);
 
   ot = WM_operatortype_append_macro("MESH_OT_duplicate_move",
                                     "Add Duplicate",
