@@ -418,8 +418,9 @@ static void edge_flow_blend_ends(const EdgeFlowLoop &loop, const Array<float3> &
 
 static void edge_flow_sample_bezier(const float3 &p1, const float3 &p2, const float3 &p3, const float3 &p4, MutableSpan<float3> r_result)
 {
-  BLI_assert(r_result.size() >= 2);
-  bke::curves::bezier::evaluate_segment(p1, p2, p3, p4, r_result);
+  BLI_assert(int(r_result.size()) >= 2);
+  bke::curves::bezier::evaluate_segment(p1, p2, p3, p4, r_result.drop_back(1));
+  r_result.last() = p4;
 }
 
 static void edge_flow_map_onto_spline(Span<BMVert *> loop_verts, Span<float3> spline) 
