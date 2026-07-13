@@ -78,7 +78,7 @@ ccl_device void primitive_normal_set_undisplaced(KernelGlobals kg,
   }
 
   object_normal_transform(kg, sd, &N);
-  sd->N = (sd->flag & SD_BACKFACING) ? -N : N;
+  sd->N = (sd->closure_flag & SD_BACKFACING) ? -N : N;
 }
 
 #ifdef __VOLUME__

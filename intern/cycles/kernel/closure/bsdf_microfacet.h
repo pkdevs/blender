@@ -1269,7 +1269,7 @@ ccl_device_inline void bsdf_thin_glass_reflection_setup(KernelGlobals kg,
     bsdf->T = zero_float3();
     bsdf->alpha_x = bsdf->alpha_y = roughness;
     bsdf->ior = 1.0f;
-    sd->flag |= bsdf_microfacet_ggx_setup(bsdf);
+    sd->closure_flag |= bsdf_microfacet_ggx_setup(bsdf);
     bsdf_microfacet_setup_fresnel_constant(kg, bsdf, sd->wi, color);
   }
 }
@@ -1314,7 +1314,7 @@ ccl_device_inline void bsdf_thin_glass_transmission_setup(KernelGlobals kg,
     bsdf->fresnel_type = MicrofacetFresnel::NONE;
     bsdf->energy_scale = 1.0f;
     bsdf->type = CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID;
-    sd->flag |= (SD_BSDF | SD_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf));
+    sd->closure_flag |= (SD_BSDF | SD_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf));
     bsdf_microfacet_setup_fresnel_constant(kg, bsdf, reflect(sd->wi, N), one_spectrum());
   }
 }

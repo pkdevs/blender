@@ -94,7 +94,7 @@ ccl_device_inline Spectrum volume_shader_eval_extinction(KernelGlobals kg,
 
   volume_shader_eval<shadow>(kg, state, sd, path_visibility, path_flag);
 
-  return (sd->flag & SD_EXTINCTION) ? sd->closure_transparent_extinction : zero_spectrum();
+  return (sd->closure_flag & SD_EXTINCTION) ? sd->closure_transparent_extinction : zero_spectrum();
 }
 
 /* Evaluate shader to get absorption, scattering and emission at P. */
@@ -107,16 +107,17 @@ ccl_device_inline bool volume_shader_sample(KernelGlobals kg,
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   volume_shader_eval<false>(kg, state, sd, path_visibility, path_flag);
 
-  if (!(sd->flag & (SD_EXTINCTION | SD_SCATTER | SD_EMISSION))) {
+  if (!(sd->closure_flag & (SD_EXTINCTION | SD_SCATTER | SD_EMISSION))) {
     return false;
   }
 
   coeff->sigma_s = zero_spectrum();
-  coeff->sigma_t = (sd->flag & SD_EXTINCTION) ? sd->closure_transparent_extinction :
-                                                zero_spectrum();
-  coeff->emission = (sd->flag & SD_EMISSION) ? sd->closure_emission_background : zero_spectrum();
+  coeff->sigma_t = (sd->closure_flag & SD_EXTINCTION) ? sd->closure_transparent_extinction :
+                                                        zero_spectrum();
+  coeff->emission = (sd->closure_flag & SD_EMISSION) ? sd->closure_emission_background :
+                                                       zero_spectrum();
 
-  if (sd->flag & SD_SCATTER) {
+  if (sd->closure_flag & SD_SCATTER) {
     for (int i = 0; i < sd->num_closure; i++) {
       const ccl_private ShaderClosure *sc = &sd->closure[i];
 
@@ -1215,7 +1216,7 @@ ccl_device_inline void volume_distance_sampling_finalize(
     return;
   }
 
-  kernel_assert(sd->flag & SD_SCATTER);
+  kernel_assert(sd->closure_flag & SD_SCATTER);
   if (sample_distance) {
     /* Direct scatter. */
     result.direct_scatter = true;
@@ -1460,7 +1461,7 @@ ccl_device void volume_integrate_step_scattering(
   }
 
   /* Emission. */
-  if (sd->flag & SD_EMISSION) {
+  if (sd->closure_flag & SD_EMISSION) {
     /* Emission = inv_sigma * (L_e + sigma_n * (inv_sigma * (L_e + sigma_n * ···))). */
     vstate.emission += result.indirect_throughput * coeff.emission;
     if (!result.indirect_scatter) {
@@ -1509,7 +1510,7 @@ ccl_device_inline void volume_equiangular_direct_scatter(
 
   sd->P = ray->P + ray->D * result.direct_t;
   VolumeShaderCoefficients coeff ccl_optional_struct_init;
-  if (volume_shader_sample(kg, state, sd, &coeff) && (sd->flag & SD_SCATTER)) {
+  if (volume_shader_sample(kg, state, sd, &coeff) && (sd->closure_flag & SD_SCATTER)) {
     volume_shader_copy_phases(&result.direct_phases, sd);
 
     if (vstate.use_mis) {
@@ -1734,8 +1735,8 @@ ccl_device_forceinline void volume_integrate_homogeneous(KernelGlobals kg,
 
   /* Emission. */
   const Spectrum throughput = INTEGRATOR_STATE(state, path, throughput);
-  if (sd->flag & SD_EMISSION) {
-    const Spectrum emission = volume_emission_integrate(&coeff, sd->flag, ray_length);
+  if (sd->closure_flag & SD_EMISSION) {
+    const Spectrum emission = volume_emission_integrate(&coeff, sd->closure_flag, ray_length);
     vstate.emission = throughput * emission;
     guiding_record_volume_emission(kg, state, emission);
   }
@@ -2355,7 +2356,7 @@ ccl_device_forceinline void volume_integrate_ray_marching(
     /* compute segment */
     VolumeShaderCoefficients coeff ccl_optional_struct_init;
     if (volume_shader_sample(kg, state, sd, &coeff)) {
-      const int closure_flag = sd->flag;
+      const int closure_flag = sd->closure_flag;
 
       /* Evaluate transmittance over segment. */
       const float dt = vstep.t.length();
@@ -2446,10 +2447,18 @@ ccl_device_forceinline void integrate_volume_direct_light(
     const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
     const float3 N = zero_float3();
     const int object_receiver = light_link_receiver_nee(kg, sd);
-    const int shader_flags = SD_BSDF_HAS_TRANSMISSION;
+    const int closure_flags = SD_BSDF_HAS_TRANSMISSION;
 
-    if (!light_sample<false>(
-            kg, rand_light, sd->time, P, N, object_receiver, shader_flags, bounce, path_flag, &ls))
+    if (!light_sample<false>(kg,
+                             rand_light,
+                             sd->time,
+                             P,
+                             N,
+                             object_receiver,
+                             closure_flags,
+                             bounce,
+                             path_flag,
+                             &ls))
     {
       return;
     }
@@ -2681,7 +2690,7 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   }
 #  endif
 
-  path_state_next(kg, state, label, sd->flag);
+  path_state_next(kg, state, label, sd->closure_flag);
   return true;
 }
 
@@ -2862,7 +2871,7 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
   VolumeIntegrateResult result = {};
   volume_integrate_null_scattering(kg, state, ray, &sd, &rng_state, render_buffer, &ls, result);
 
-  if (sd.flag & SD_CACHE_MISS) {
+  if (sd.closure_flag & SD_CACHE_MISS) {
     return VOLUME_PATH_CACHE_MISS;
   }
 
@@ -2903,7 +2912,7 @@ volume_integrate_ray_marching(KernelGlobals kg,
   volume_integrate_ray_marching(
       kg, state, ray, &sd, &rng_state, render_buffer, step_size, &ls, result);
 
-  if (sd.flag & SD_CACHE_MISS) {
+  if (sd.closure_flag & SD_CACHE_MISS) {
     return VOLUME_PATH_CACHE_MISS;
   }
 

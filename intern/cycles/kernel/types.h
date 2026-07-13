@@ -900,9 +900,8 @@ struct ccl_align(16) ShaderClosure {
  * are in world space.
  */
 
-enum ShaderDataFlag {
-  /* Runtime flags. */
-
+/* Shader closure flags, determined during rendering. */
+enum ShaderClosureFlag {
   /* Set when ray hits backside of surface. */
   SD_BACKFACING = (1 << 0),
   /* Shader has non-zero emission. */
@@ -929,13 +928,10 @@ enum ShaderDataFlag {
   SD_RAY_PORTAL = (1 << 11),
   /* Shader evaluation needs to be redone, because of texture cache miss */
   SD_CACHE_MISS = (1 << 12),
+};
 
-  SD_CLOSURE_FLAGS = (SD_EMISSION | SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSSRDF | SD_HOLDOUT |
-                      SD_EXTINCTION | SD_SCATTER | SD_IS_VOLUME_SHADER_EVAL |
-                      SD_BSDF_HAS_TRANSMISSION | SD_RAY_PORTAL | SD_CACHE_MISS),
-
-  /* Shader flags. */
-
+/* Shader flags that are set after compiling the shaders. */
+enum ShaderDataFlag {
   /* If Light Path Node is present in the shader graph. */
   SD_HAS_LIGHT_PATH_NODE = (1 << 13),
   /* Has bump mapping from BSDF connected to surface socket. */
@@ -975,12 +971,6 @@ enum ShaderDataFlag {
   SD_HAS_RAYTRACE = (1 << 30),
   /* Use back side for direct light sampling. */
   SD_MIS_BACK = (1 << 31),
-
-  SD_SHADER_FLAGS = (SD_MIS_FRONT | SD_HAS_TRANSPARENT_SHADOW | SD_HAS_VOLUME |
-                     SD_HAS_ONLY_VOLUME | SD_HETEROGENEOUS_VOLUME | SD_HAS_BSSRDF_BUMP |
-                     SD_VOLUME_EQUIANGULAR | SD_VOLUME_MIS | SD_VOLUME_CUBIC | SD_HAS_BUMP |
-                     SD_HAS_DISPLACEMENT | SD_HAS_CONSTANT_EMISSION | SD_NEED_VOLUME_ATTRIBUTES |
-                     SD_HAS_EMISSION | SD_HAS_RAYTRACE | SD_MIS_BACK)
 };
 
 /* Object flags. */
@@ -1037,8 +1027,10 @@ struct ccl_align(16) ShaderData {
 
   /* shader id */
   int shader;
+  /* booleans describing shader, see ShaderClosureFlag */
+  int closure_flag;
   /* booleans describing shader, see ShaderDataFlag */
-  int flag;
+  int shader_flag;
   /* booleans describing object of the shader, see ShaderDataObjectFlag */
   uint object_flag;
 

@@ -531,7 +531,7 @@ ccl_device bool attribute_bump_map_normal(KernelGlobals kg,
     return false;
   }
 
-  const bool backfacing = (sd->flag & SD_BACKFACING);
+  const bool backfacing = (sd->closure_flag & SD_BACKFACING);
 
   /* Fallback when the smooth normal is zero. */
   float3 Ng = backfacing ? -sd->Ng : sd->Ng;
