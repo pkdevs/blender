@@ -73,6 +73,23 @@ const EnumPropertyItem rna_enum_nla_mode_extend_items[] = {
 
 }  // namespace blender
 
+/* Enum definitions. */
+const EnumPropertyItem rna_enum_nla_strip_type_items[] = {
+    {NLASTRIP_TYPE_CLIP, "CLIP", 0, "Action Clip", "NLA Strip references some Action"},
+    {NLASTRIP_TYPE_TRANSITION,
+     "TRANSITION",
+     0,
+     "Transition",
+     "NLA Strip 'transitions' between adjacent strips"},
+    {NLASTRIP_TYPE_META, "META", 0, "Meta", "NLA Strip acts as a container for adjacent strips"},
+    {NLASTRIP_TYPE_SOUND,
+     "SOUND",
+     0,
+     "Sound Clip",
+     "NLA Strip representing a sound event for speakers"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 #ifdef RNA_RUNTIME
 
 #  include <fmt/format.h>
@@ -612,11 +629,34 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
                                   bContext *C,
                                   ReportList *reports,
                                   const char *name,
+                                  int type,
                                   int start,
-                                  bAction *action)
+                                  bAction *action,
+                                  Speaker *speaker)
 {
   BLI_assert(id);
-  NlaStrip *strip = BKE_nlastrip_new(action, *id);
+
+  NlaStrip *strip;
+
+  switch (type) {
+    case NLASTRIP_TYPE_CLIP:
+      if (action == nullptr) {
+        BKE_report(reports, RPT_ERROR, "Action can't be None for this NLA Strip 'type'");
+        return nullptr;
+      }
+      strip = BKE_nlastrip_new(action, *id);
+      break;
+    case NLASTRIP_TYPE_SOUND:
+      if (speaker == nullptr) {
+        BKE_report(reports, RPT_ERROR, "Speaker can't be None for this NLA Strip 'type'");
+        return nullptr;
+      }
+      strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), speaker);
+      break;
+    default:
+      BKE_report(reports, RPT_ERROR, "Can only create 'CLIP' and 'SOUND' for now");
+      return nullptr;
+  }
 
   if (strip == nullptr) {
     BKE_report(reports, RPT_ERROR, "Unable to create new strip");
@@ -781,23 +821,6 @@ static void rna_def_nlastrip(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
 
-  /* Enum definitions. */
-  static const EnumPropertyItem prop_type_items[] = {
-      {NLASTRIP_TYPE_CLIP, "CLIP", 0, "Action Clip", "NLA Strip references some Action"},
-      {NLASTRIP_TYPE_TRANSITION,
-       "TRANSITION",
-       0,
-       "Transition",
-       "NLA Strip 'transitions' between adjacent strips"},
-      {NLASTRIP_TYPE_META, "META", 0, "Meta", "NLA Strip acts as a container for adjacent strips"},
-      {NLASTRIP_TYPE_SOUND,
-       "SOUND",
-       0,
-       "Sound Clip",
-       "NLA Strip representing a sound event for speakers"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
   /* struct definition */
   srna = RNA_def_struct(brna, "NlaStrip", nullptr);
   RNA_def_struct_ui_text(srna, "NLA Strip", "A container referencing an existing Action");
@@ -818,7 +841,7 @@ static void rna_def_nlastrip(BlenderRNA *brna)
   RNA_def_property_enum_sdna(prop, nullptr, "type");
   RNA_def_property_clear_flag(
       prop, PROP_EDITABLE); /* XXX for now, not editable, since this is dangerous */
-  RNA_def_property_enum_items(prop, prop_type_items);
+  RNA_def_property_enum_items(prop, rna_enum_nla_strip_type_items);
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_ACTION);
   RNA_def_property_ui_text(prop, "Type", "Type of NLA Strip");
   RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_update");
@@ -1162,9 +1185,11 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
   func = RNA_def_function(srna, "new", "rna_NlaStrip_new");
   RNA_def_function_flag(func,
                         FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
-  RNA_def_function_ui_description(func, "Add a new Action-Clip strip to the track");
+  RNA_def_function_ui_description(func, "Add a new strip to the NLA track");
   parm = RNA_def_string(func, "name", "NlaStrip", 0, "", "Name for the NLA Strip");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_enum(func, "type", rna_enum_nla_strip_type_items, 1, "", "Type of NLA Strip to add");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   parm = RNA_def_int(func,
                      "start",
                      0,
@@ -1175,8 +1200,10 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
                      INT_MIN,
                      INT_MAX);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_pointer(func, "action", "Action", "", "Action to assign to this strip");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "action", "Action", "", "Action to assign to this strip. Required when type is 'CLIP'");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
+  parm = RNA_def_pointer(func, "speaker", "Speaker", "", "Speaker to source to this strip. Required when type is 'SOUND'");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   /* return type */
   parm = RNA_def_pointer(func, "strip", "NlaStrip", "", "New NLA Strip");
   RNA_def_function_return(func, parm);
