@@ -288,7 +288,6 @@ DEF_ENUM(rna_enum_transform_mode_type_items)
 /* In the runtime part of RNA, could be removed from this section. */
 DEF_ENUM(rna_enum_nla_mode_extend_items)
 DEF_ENUM(rna_enum_nla_mode_blend_items)
-DEF_ENUM(rna_enum_nla_strip_type_items)
 DEF_ENUM(rna_enum_keyblock_type_items)
 
 DEF_ENUM(rna_enum_asset_library_type_items)
