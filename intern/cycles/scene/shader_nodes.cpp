@@ -2847,6 +2847,12 @@ bool OpenPBRBsdfNode::has_medium()
   return has_nonzero_weight("Transmission Weight") && has_nonzero_weight("Transmission Depth");
 }
 
+bool OpenPBRBsdfNode::has_dispersion()
+{
+  return has_nonzero_weight("Transmission Dispersion Scale") &&
+         has_nonzero_weight("Transmission Weight");
+}
+
 /* TODO(weizhen): share the same function with Principled. */
 bool OpenPBRBsdfNode::has_nonzero_weight(const char *name)
 {
@@ -2860,7 +2866,8 @@ bool OpenPBRBsdfNode::has_nonzero_weight(const char *name)
 
 void OpenPBRBsdfNode::simplify_settings(Scene * /* scene */)
 {
-  /* TODO(weizhen): disconnect unused inputs. */
+  /* TODO(weizhen): disconnect unused inputs.
+   * - disconnect dispersion when there is no transmission. */
 }
 
 /* Disney principled BSDF Closure */

@@ -75,8 +75,10 @@ OSL_CLOSURE_STRUCT_BEGIN(DielectricBSDF, dielectric_bsdf)
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, alpha_y, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, ior, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, STRING, DeviceString, distribution, nullptr)
+  /* Optional parameters. */
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, thinfilm_thickness, "thinfilm_thickness")
   OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, thinfilm_ior, "thinfilm_ior")
+  OSL_CLOSURE_STRUCT_MEMBER(DielectricBSDF, FLOAT, float, inv_abbe, "inv_abbe")
 OSL_CLOSURE_STRUCT_END(DielectricBSDF, dielectric_bsdf)
 
 OSL_CLOSURE_STRUCT_BEGIN(ConductorBSDF, conductor_bsdf)

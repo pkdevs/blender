@@ -906,7 +906,12 @@ ccl_device
               sd, sizeof(MicrofacetBsdf), weight * transmission_weight);
           if (bsdf) {
             bsdf->N = valid_reflection_N;
-            bsdf->ior = modulated_specular_ior;
+            const float dispersion_scale = saturatef(
+                stack_load(stack, data.transmission_dispersion_scale));
+            const float abbe_number = fmaxf(
+                stack_load(stack, data.transmission_dispersion_abbe_number), 0.0f);
+            const float inv_abbe = safe_divide(dispersion_scale, abbe_number);
+            bsdf->ior = bsdf_glass_ior(sd, modulated_specular_ior, inv_abbe);
             bsdf->T = geometry_tangent;
             bsdf->alpha_x = specular_alpha.x;
             bsdf->alpha_y = specular_alpha.y;

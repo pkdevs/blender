@@ -160,16 +160,15 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .description("Linearly scales the amount of dispersion. Not implemented yet")
-      .not_implemented();
+      .description("Linearly scales the amount of dispersion");
 #define OPENPBR_SOCK_TRANSMISSION_DISPERSION_SCALE_ID 15
   transmission.add_input<decl::Float>("Transmission Dispersion Abbe Number"_ustr)
       .default_value(20.0f)
       .min(9.0f)
       .max(91.0f)
       .subtype(PROP_FACTOR)
-      .description("Abbe number of the base dielectric medium. Not implemented yet")
-      .not_implemented();
+      .description(
+          "Abbe number of the base dielectric medium. Smaller number gives stronger dispersion");
 #define OPENPBR_SOCK_TRANSMISSION_DISPERSION_ABBE_NUMBER_ID 16
   /* --------------------------------------------------------------------
    * Subsurface Component

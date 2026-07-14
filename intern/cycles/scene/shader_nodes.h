@@ -603,6 +603,7 @@ class OpenPBRBsdfNode : public BsdfBaseNode {
   bool has_surface_emission() override;
   bool has_surface_bssrdf() override;
   bool has_medium() override;
+  bool has_dispersion() override;
   void simplify_settings(Scene *scene) override;
 
  protected:
