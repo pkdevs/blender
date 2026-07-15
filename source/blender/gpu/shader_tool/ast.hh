@@ -846,7 +846,7 @@ struct FuncCall : Node {
 struct EnumValue : Node {
   NODE_COMMON(EnumValue);
 
-  Id identifier() const
+  IdQualified identifier() const
   {
     return child_first();
   }

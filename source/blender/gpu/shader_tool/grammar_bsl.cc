@@ -437,7 +437,7 @@ struct BSLParser {
           break;
         case Word: {
           NODE(EnumValue);
-          unqualified_id();
+          qualified_id();
           assignment_optional();
           match_if(',');
           break;

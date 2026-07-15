@@ -331,8 +331,7 @@ struct InstantiationContext {
     IdQualified type = decl.parent_class();
     jump_to(decl.front());
 
-    string last_id;
-    /* Treat as enum values as static variables. */
+    /* Treat enum values as static variables. */
     body.foreach<EnumValue>([&](EnumValue val) {
       line(val.front());
       string type_str = string("const ") + string(type.str());
@@ -340,22 +339,9 @@ struct InstantiationContext {
       /* Pretty align. */
       builder.ss << string(max(size_t(0), val.front().char_number() - type_str.size()), ' ');
 
-      string id_str = id_var_decl_resolved(val.identifier(), true, body_scope);
-      if (val.value().is_valid()) {
-        assignment(val.value(), scope);
-      }
-      else {
-        builder << string(" = ");
-        if (last_id.empty()) {
-          builder << to_string(0);
-        }
-        else {
-          builder << last_id << string(" + 1");
-        }
-      }
+      SymbolVariable *var = id_var_decl_resolved(val.identifier(), body_scope);
+      builder << string(" = ") + to_string(var->value);
       builder << string(";");
-
-      last_id = id_str;
     });
   }
 
@@ -1027,7 +1013,7 @@ struct InstantiationContext {
   {
     const bool par = match_if('(');
     match_if('&');
-    id_var_decl_resolved(decl.identifier(), decl.type().is_static(), scope);
+    id_var_decl_resolved(decl.identifier(), scope);
     if (par) {
       match_if(')');
     }
@@ -1184,20 +1170,24 @@ struct InstantiationContext {
   }
 
   /* Resolve a variable in a declaration. */
-  string id_var_decl_resolved(IdQualified id, bool is_static, const SymbolScope &scope)
+  SymbolVariable *id_var_decl_resolved(IdQualified id, const SymbolScope &scope)
   {
     assert(id.is_valid());
-    auto it = scope.variables.find(string(id.str()));
-    /* Note we only resolve static variable. */
-    if (is_static && it != scope.variables.end() && it->second->resolved) {
-      builder.curr = id.back();
-      string id_str = it->second->resolved->identifier;
-      builder << id_str + trivia(id);
-      return id_str;
+    SymbolVariable *var = scope.lookup_variable(id);
+    if (var->is_error) {
+      error(id, "Unknown variable");
+      builder << id;
+      return var;
     }
-    /* Non static var. */
-    builder << id;
-    return string(id.str());
+    /* Note we only resolve static variable. */
+    if (var->is_static) {
+      builder.curr = id.back();
+      builder << var->resolved->identifier + trivia(id);
+    }
+    else {
+      builder << id;
+    }
+    return var;
   }
 };
 

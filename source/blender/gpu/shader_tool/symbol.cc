@@ -175,7 +175,7 @@ struct SymbolParser {
             parse_class_decl(scope, child, parent, offset, prefix);
             break;
           case NodeType::EnumValue:
-            parse_enum_value(scope, child, parent);
+            parse_enum_value(scope, child, parent, prefix);
             break;
           case NodeType::FuncDecl:
             parse_func_decl(scope, child, prefix);
@@ -328,16 +328,39 @@ struct SymbolParser {
     }
   }
 
-  void parse_enum_value(SymbolScope &scope, EnumValue val, ClassDecl cls)
+  void parse_enum_value(SymbolScope &scope, EnumValue val, ClassDecl cls, const string &prefix)
   {
+    SymbolClass *enum_cls = scope.lookup_class(cls.identifier());
     SymbolClass *type = scope.lookup_class(cls.parent_class());
-    SymbolVariable sym(&scope, type, val);
-    SymbolVariable *ptr = table.var_arena.alloc(sym);
-    scope.variables.emplace(sym.identifier, ptr);
+    SymbolVariable *sym = table.var_arena.alloc(&scope, type, val);
+    sym->is_static = true;
+    sym->is_constexpr = true;
+    /* Resolve its value. */
+    if (AssignStmt assign = val.value(); assign.is_valid()) {
+      if (InitializerList list = assign.initializer_list(); list.is_valid()) {
+        sym->value = eval_scalar_initializer_list(scope, list);
+      }
+      sym->value = evaluate_constexpr(scope, assign.expr());
+    }
+    else {
+      sym->value = enum_cls->enum_last_val + 1;
+    }
+    scope.variables.emplace(sym->identifier, sym);
+    /* Save value for the next member. */
+    enum_cls->enum_last_val = sym->value;
+
+    /* Instantiate in global resolved namespace. */
+    {
+      SymbolVariable *flat_sym = table.var_arena.alloc(*sym);
+      sym->resolved = flat_sym;
+      flat_sym->resolved = sym;
+      flat_sym->identifier = prefix + sym->identifier;
+      global.variables.try_emplace(flat_sym->identifier, flat_sym);
+    }
 
     if (!cls.is_enum_class()) {
       /* Alias to the parent namespace for non-anonymous, non-class enum. */
-      scope.parent->variables.emplace(sym.identifier, ptr);
+      scope.parent->variables.emplace(sym->identifier, sym);
     }
   }
 
