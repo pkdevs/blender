@@ -71,7 +71,7 @@ const EnumPropertyItem rna_enum_nla_mode_extend_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static const EnumPropertyItem rna_enum_nla_strip_type_items[] = {
+static const EnumPropertyItem prop_type_items[] = {
     {NLASTRIP_TYPE_CLIP, "CLIP", 0, "Action Clip", "NLA Strip references some Action"},
     {NLASTRIP_TYPE_TRANSITION,
      "TRANSITION",
@@ -839,7 +839,7 @@ static void rna_def_nlastrip(BlenderRNA *brna)
   RNA_def_property_enum_sdna(prop, nullptr, "type");
   RNA_def_property_clear_flag(
       prop, PROP_EDITABLE); /* XXX for now, not editable, since this is dangerous */
-  RNA_def_property_enum_items(prop, rna_enum_nla_strip_type_items);
+  RNA_def_property_enum_items(prop, prop_type_items);
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_ACTION);
   RNA_def_property_ui_text(prop, "Type", "Type of NLA Strip");
   RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_update");
@@ -1196,7 +1196,7 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
                      INT_MIN,
                      INT_MAX);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_enum(func, "type", rna_enum_nla_strip_type_items, 1, "", "Type of NLA Strip to add. When unspecified, defaults to 'CLIP'");
+  parm = RNA_def_enum(func, "type", prop_type_items, 1, "", "Type of NLA Strip to add. When unspecified, defaults to 'CLIP'");
   RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   parm = RNA_def_pointer(func, "action", "Action", "", "Action to assign to this strip. Required when type is 'CLIP'");
   RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
