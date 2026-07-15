@@ -220,7 +220,8 @@ static always_inline TokenType multi_tok_lookup(TokenType input, std::string_vie
 
 constexpr always_inline uint8_t perfect_hash(std::string_view s)
 {
-  return s.size() * (s[0] - s[1] * 2 - s.back() * 2);
+  int sz = s.size();
+  return s.size() * (s[0] - s[std::min(1, sz - 1)] * 2 - s.back() * 2);
 }
 
 static always_inline TokenType type_lookup(std::string_view s)

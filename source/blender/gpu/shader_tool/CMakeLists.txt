@@ -17,6 +17,7 @@ set(SRC
   intermediate.cc
   metadata.cc
   namespace.cc
+  operator.cc
   processor.cc
   resource_table.cc
   string.cc

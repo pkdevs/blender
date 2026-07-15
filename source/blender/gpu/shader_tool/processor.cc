@@ -33,12 +33,18 @@ SourceProcessor::Result SourceProcessor::convert_glsl()
 
   str = remove_comments(str);
 
-  {
-    IntermediateForm<SimpleLexer, DummyParser> parser(str, error_handler);
+  IntermediateForm<SimpleLexer, DummyParser> parser(error_handler);
+  try {
+    parser.language = Language::GLSL;
+    parser.set_str(str);
     /* Remove trailing white space as they make the subsequent transformation much slower. */
     cleanup_whitespace(parser);
     str = parser.result_get();
     str = threadgroup_variables_parse_and_remove(str);
+  }
+  catch (ParserException &e) {
+    /* Output the current source state for inspection. */
+    return {parser.result_get(), metadata_, error_handler.err};
   }
 
   parse_builtins(str, filename, true);
@@ -68,12 +74,18 @@ SourceProcessor::Result SourceProcessor::convert_msl()
 
   str = threadgroup_variables_parse_and_remove(str);
 
-  {
-    Parser parser(str, error_handler);
+  Parser parser(error_handler);
+  try {
+    parser.language = Language::MSL;
+    parser.set_str(str);
     parse_pragma_runtime_generated(parser);
     parse_includes(parser);
     lower_preprocessor(parser);
     str = parser.result_get();
+  }
+  catch (ParserException &e) {
+    /* Output the current source state for inspection. */
+    return {parser.result_get(), metadata_, error_handler.err};
   }
 
   str = argument_decorator_macro_injection(str);
@@ -334,7 +346,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     // lower_gather_component(parser);
 
     /* Cleanup to make output more human readable and smaller for runtime. */
-    cleanup_whitespace(parser);
+    cleanup_whitespace(parser, true);
     cleanup_empty_lines(parser);
     cleanup_line_directives(parser);
 
@@ -391,6 +403,9 @@ SourceProcessor::Result SourceProcessor::convert(metadata::Source external_sourc
     case Language::INFO:
       return convert_info();
     case Language::CPP:
+      /* Should become BSL, but until the new compiler is fully working, fallback
+       * to the legacy path. */
+      return convert_bsl_legacy(external_sources_symbols);
     case Language::BSL:
       return convert_bsl(); /* WIP */
     case Language::BLENDER_GLSL:
@@ -441,6 +456,8 @@ metadata::Source SourceProcessor::parse_include_and_symbols()
     lower_trailing_comma_in_list(parser);
     lower_comma_separated_declarations(parser);
     lower_assert(parser, filename);
+    /* Lower implicit members before we remove SRT member from their struct. */
+    lower_implicit_member(parser);
 
     parser.apply_mutations();
 
@@ -597,9 +614,19 @@ void SourceProcessor::remove_comments(Parser &parser)
 }
 
 /* Remove trailing white spaces. */
-template<typename ParserT> void SourceProcessor::cleanup_whitespace(ParserT &parser)
+template<typename ParserT>
+void SourceProcessor::cleanup_whitespace(ParserT &parser, bool do_leading)
 {
   const string &str = parser.str();
+
+  if (do_leading) {
+    /* Cleanup leading whitespaces at the start of the file.
+     * Only to be done if there is a line directive at the top of the file. */
+    size_t first_char = str.find_first_not_of(" \n");
+    if (first_char != 0 && first_char != string::npos) {
+      parser.replace(0, first_char - 1, "");
+    }
+  }
 
   size_t last_whitespace = -1;
   while ((last_whitespace = str.find(" \n", last_whitespace + 1)) != string::npos) {
@@ -2088,6 +2115,10 @@ void SourceProcessor::cleanup_line_directives(Parser &parser)
     if (toks[1].str() != "line") {
       return;
     }
+    if (toks[2].next() == String) {
+      /* Do not process directives with filenames. */
+      return;
+    }
     /* Workaround the foreach_match not matching overlapping patterns. */
     if (toks.back().next() == '#' && toks.back().next().next() == Word &&
         toks.back().next().next().next() == Number)
@@ -2112,6 +2143,10 @@ void SourceProcessor::cleanup_line_directives(Parser &parser)
 
   parser().foreach_match<true>("#A1", [&](vector<Token> toks) {
     if (toks[1].str() != "line") {
+      return;
+    }
+    if (toks[2].next() == String) {
+      /* Do not process directives with filenames. */
       return;
     }
     int line = toks[0].line_number();

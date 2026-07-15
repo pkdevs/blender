@@ -185,8 +185,7 @@ int b = 0;
 int a = 0;
 #endif
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }

@@ -19,12 +19,11 @@ void func() { T::fn(); }
 template void func<A>();
 )";
     string expect = R"(
-#line 3
+
 void funcTA() { A_fn(); }
-#line 5
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -44,19 +43,20 @@ void f(float a)
 }
 )";
     string expect = R"(
-#line 3
+
 void func(float a) {a;}
-#line 6
+
+
 void foo(_ref(float ,a)) {a;}
-#line 9
+
+
 void f(float a)
 {
   func(a);
   foo(a);
 }
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -69,14 +69,13 @@ void func(T a) {
 template void func<float, 1>(float a);
 )";
     string expect = R"(
-#line 3
+
 void funcTfloatT1(float a) {
   a;
 }
-#line 7
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -87,10 +86,9 @@ template E func<0x1, 2, -1>();
 )";
     string expect = R"(
 E funcT0x1T2T_1() { return E(0x1 + 2 + -1); }
-#line 4
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -101,10 +99,9 @@ template E func<v, 2>();
 )";
     string expect = R"(
 E funcTvT2() { return E(v + 2); }
-#line 4
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -115,8 +112,7 @@ template<> void func<T, Q>(T a) {a}
     string expect = R"(
            void funcTTTQ(T a) {a}
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -124,16 +120,14 @@ template<> void func<T, Q>(T a) {a}
     string input = R"(
 template<typename T, int i = 0> void func(T a) {a;}
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "Default arguments are not supported inside template declaration");
   }
   {
     string input = R"(
 template void func(float a);
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error,
               "Template instantiation and specialization require explicit template arguments");
   }
@@ -141,8 +135,7 @@ template void func(float a);
     string input = R"(
 template A<f> fn(A<f> a);
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error,
               "Template instantiation and specialization require explicit template arguments");
   }
@@ -150,8 +143,7 @@ template A<f> fn(A<f> a);
     string input = R"(
 template<> A fn(A a) {}
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error,
               "Template instantiation and specialization require explicit template arguments");
   }
@@ -159,40 +151,35 @@ template<> A fn(A a) {}
     string input = R"(
 template<> A<f> fn(A<f> a) {}
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error,
               "Template instantiation and specialization require explicit template arguments");
   }
   {
     string input = R"(func<float, 1>(a);)";
     string expect = R"(funcTfloatT1(a);)";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
   {
     string input = R"(a.template func<float, 1>(a);)";
     string expect = R"(_funcTfloatT1(a, a);)";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
   {
     string input = R"(this->template func<float, 1>(a);)";
     string expect = R"(_funcTfloatT1(this_, a);)";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
   {
     string input = R"(A<B<1, 2>, C<1, D<T, -1>>> a;)";
     string expect = R"(ATBT1T2TCT1TDTTT_1 a;)";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -213,27 +200,28 @@ struct A {
 template struct A<float>;
 )";
     string expect = R"(
-#line 3
+
 struct ATfloat {
   float a;
 #line 9
 };
-#line 12
+
+
 #ifndef GPU_METAL
 ATfloat ATfloat_ctor_();
 ATfloat _method(const ATfloat this_, float b);
 #endif
 #line 3
                        ATfloat ATfloat_ctor_() {ATfloat r;r.a=0.0f;return r;}
-#line 5
+
   ATfloat _method(const ATfloat this_, float b)
   {
     return _ctor(ATfloat) b _rotc() ;
   }
-#line 11
+
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -244,14 +232,13 @@ struct A { T a; };
 template struct A<float>;
 )";
     string expect = R"(
-#line 3
+
 struct ATfloat {                                                              float a; };
 #line 3
                        ATfloat ATfloat_ctor_() {ATfloat r;r.a=0.0f;return r;}
-#line 5
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -267,10 +254,10 @@ template<> struct A<float>{
 };
 #line 2
                                  ATfloat ATfloat_ctor_() {ATfloat r;r.a=0.0f;return r;}
-#line 5
+
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -281,8 +268,7 @@ void func(A<float> a) {}
     string expect = R"(
 void func(ATfloat a) {}
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -317,7 +303,8 @@ void fn(A<int> a)
 }
 )";
     string expect = R"(
-#line 4
+
+
 struct N_ATint {
   int i;
 #line 10
@@ -332,7 +319,7 @@ int _fn4Tint(_ref(N_ATint ,this_));
 #endif
 #line 4
                        N_ATint N_ATint_ctor_() {N_ATint r;r.i=0;return r;}
-#line 6
+
        void N_ATint_fn1(int a) {}
        int N_ATint_fn2Tint() { return int(0); }
 void _fn3(_ref(N_ATint ,this_), int a) { this_.i += int(_fn4Tint(this_)); }
@@ -348,8 +335,7 @@ void N_fn(N_ATint a)
 
 
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }

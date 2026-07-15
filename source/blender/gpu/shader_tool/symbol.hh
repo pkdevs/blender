@@ -10,11 +10,28 @@
 
 #include "ast.hh"
 #include "token.hh"
+#include <unordered_map>
 
 namespace blender::gpu::shader::parser {
 
 using namespace ast;
 using namespace std;
+
+struct SymbolParser;
+struct SymbolTable;
+
+struct AstNodeException {
+  Node node;
+  string msg;
+
+  AstNodeException(Node node, const string &msg) : node(node), msg(msg) {}
+};
+
+template<typename T> struct Result {
+  T value;
+  /* TODO better error class */
+  std::optional<AstNodeException> err;
+};
 
 struct SourceLocation {
   Token tok;
@@ -47,31 +64,25 @@ struct SourceLocation {
 };
 
 struct Symbol {
-  SymbolScope *parent = nullptr;
-  SourceLocation loc;
   string identifier;
+  SourceLocation loc;
+  SymbolScope *parent = nullptr;
 };
 
-struct SymbolTemplate {
+template<typename T> struct SymbolTemplate {
   /* Definition. */
   TemplateDecl decl;
 
   /* TODO(fclem): This is a bit stupid. */
-  unordered_map<string, SymbolClass *> instances_cls;
-  unordered_map<string, SymbolFunction *> instances_fn;
+  unordered_map<string, T *> instances;
 
   SymbolTemplate(TemplateDecl temp) : decl(temp) {}
 
-  SymbolClass *lookup_inst_cls(TemplateParamList list, const SymbolScope &scope) const;
-
-  SymbolFunction *lookup_inst_fn(TemplateParamList list, const SymbolScope &scope) const;
-
-  static string mangle_identifier(TemplateParamList list,
-                                  const SymbolScope &scope,
-                                  const string &sep = "T");
+  T *lookup_inst(TemplateParamList list, const SymbolScope &scope) const;
 };
 
-struct SymbolParser;
+using SymbolClassTemplate = SymbolTemplate<SymbolClass>;
+using SymbolFunctionTemplate = SymbolTemplate<SymbolFunction>;
 
 struct SymbolScope : Symbol {
   friend SymbolParser;
@@ -86,10 +97,10 @@ struct SymbolScope : Symbol {
   /* Function scope act as anonymous scopes but still have identifier. */
   enum Type { FUNCTION, CLASS, NAMESPACE, LOCAL, ROOT } type = ROOT;
 
-  SymbolScope(LocalScope decl) : Symbol(nullptr, decl.back(), "" /* Root */) {}
+  SymbolScope(LocalScope decl) : Symbol("" /* Root */, decl.back(), nullptr) {}
 
   SymbolScope(SymbolScope *parent, Token tok, const string &id, Type type)
-      : Symbol(parent, tok, id), type(type)
+      : Symbol(id, tok, parent), type(type)
   {
   }
 
@@ -147,7 +158,7 @@ struct SymbolClass : SymbolScope {
   SymbolClass *resolved = nullptr;
 
   SymbolFunction *operator_subscript = nullptr;
-  SymbolTemplate *template_data = nullptr;
+  SymbolClassTemplate *template_data = nullptr;
 
   bool is_builtin = false;
   bool is_anonymous = false;
@@ -181,9 +192,13 @@ struct SymbolClass : SymbolScope {
 
 struct SymbolFunction : SymbolScope {
   SymbolFunction *resolved = nullptr;
+  /* Single linked list of overloads. */
+  SymbolFunction *overload_next = nullptr;
 
-  SymbolTemplate *template_data = nullptr;
+  SymbolFunctionTemplate *template_data = nullptr;
   SymbolClass *return_type = nullptr;
+
+  vector<SymbolClass *> arg_types;
 
   bool is_error = false;
 
@@ -206,6 +221,19 @@ struct SymbolFunction : SymbolScope {
   {
     return this->parent->as_class();
   }
+
+  /* To be called on the first registered overload. */
+  SymbolFunction *lookup_overload(const vector<SymbolClass *> &arg_types);
+
+  /* Return true if the given argument types are compatible */
+  bool argument_matches(const vector<SymbolClass *> &arg_types) const;
+
+  static vector<SymbolClass *> to_arg_types(const SymbolTable &table,
+                                            const SymbolScope &scope,
+                                            FuncParamList list);
+  static vector<SymbolClass *> to_arg_types(const SymbolTable &table,
+                                            const SymbolScope &scope,
+                                            FuncArgList list);
 };
 
 struct SymbolVariable : Symbol {
@@ -224,7 +252,7 @@ struct SymbolVariable : Symbol {
   bool is_constexpr = false;
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarator decl)
-      : Symbol(parent, decl.front(), string(decl.identifier().str())),
+      : Symbol(string(decl.identifier().str()), decl.front(), parent),
         type(type),
         array_dimensions(decl.array().dimensions()),
         is_static(decl.type().is_static()),
@@ -235,12 +263,12 @@ struct SymbolVariable : Symbol {
   }
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, EnumValue decl)
-      : Symbol(parent, decl.front(), string(decl.identifier().str())), type(type), is_static(true)
+      : Symbol(string(decl.identifier().str()), decl.front(), parent), type(type), is_static(true)
   {
   }
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, Token id, const string &str)
-      : Symbol(parent, id, str), type(type)
+      : Symbol(str, id, parent), type(type)
   {
   }
 
@@ -263,7 +291,31 @@ inline SymbolFunction *SymbolScope::as_function()
   return type == FUNCTION ? static_cast<SymbolFunction *>(this) : nullptr;
 }
 
+/* Left is nullptr for unary operators. */
+using OperatorKey = tuple<SymbolClass * /* Left */, TokenType, SymbolClass * /* Right */>;
+
+struct OperatorKeyHasher {
+  template<class T> static void hash_combine(std::size_t &seed, const T &v)
+  {
+    std::hash<T> hasher;
+    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+  }
+
+  std::size_t operator()(const OperatorKey &t) const
+  {
+    std::size_t seed = 0;
+    hash_combine(seed, std::get<0>(t));
+    hash_combine(seed, std::get<1>(t));
+    hash_combine(seed, std::get<2>(t));
+    return seed;
+  }
+};
+
+using OperatorMap = unordered_map<OperatorKey, SymbolFunction *, OperatorKeyHasher>;
+
 struct SymbolTable {
+  static constexpr string err_symbol = "ERROR_SYMBOL";
+
   /* TODO(fclem): Real memory arena. */
   template<typename T> struct Allocator {
    private:
@@ -279,9 +331,12 @@ struct SymbolTable {
 
   Allocator<SymbolVariable> var_arena;
   Allocator<SymbolFunction> fun_arena;
-  Allocator<SymbolTemplate> tmp_arena;
   Allocator<SymbolClass> cls_arena;
   Allocator<SymbolScope> scp_arena;
+  Allocator<SymbolClassTemplate> tmp_cls_arena;
+  Allocator<SymbolFunctionTemplate> tmp_fun_arena;
+
+  OperatorMap operators;
 
   template<typename SymbolT> SymbolT *alloc(SymbolT &&sym);
 
@@ -292,8 +347,24 @@ struct SymbolTable {
 
   void parse(LocalScope node, ErrorHandler &err_handler);
 
+  static string mangle_identifier(TemplateParamList list,
+                                  const SymbolScope &scope,
+                                  const string &sep = "T");
+
+  SymbolClass *expr_type_analysis(const SymbolScope &scope, Expr expr) const;
+
+  Result<SymbolClass *> resolve_auto_type(SymbolScope &scope, Declarator decl) const;
+
  private:
+  struct BuiltinOp {
+    string left;
+    TokenType op;
+    string right;
+    string result;
+  };
+
   void register_builtins(LocalScope node);
+  static vector<BuiltinOp> generate_all_operators();
 };
 
 }  // namespace blender::gpu::shader::parser

@@ -116,9 +116,11 @@ set(SRC
   shader_tool/function.cc
   shader_tool/grammar.cc
   shader_tool/grammar_bsl.cc
+  shader_tool/instantiation.cc
   shader_tool/intermediate.cc
   shader_tool/metadata.cc
   shader_tool/namespace.cc
+  shader_tool/operator.cc
   shader_tool/processor.cc
   shader_tool/resource_table.cc
   shader_tool/string.cc

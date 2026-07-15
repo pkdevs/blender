@@ -19,6 +19,7 @@ using namespace metadata;
 
 struct InstantiationContext {
   SourceProcessor::Parser &parser;
+  SymbolTable &symbols;
   SourceProcessor::ErrorHandler &error_handler;
 
   void error(ast::Node node, const string &str)
@@ -67,8 +68,12 @@ struct InstantiationContext {
   } builder;
 
   InstantiationContext(SourceProcessor::Parser &parser,
+                       SymbolTable &symbols,
                        SourceProcessor::ErrorHandler &error_handler)
-      : parser(parser), error_handler(error_handler), builder(Token::invalid(&parser))
+      : parser(parser),
+        symbols(symbols),
+        error_handler(error_handler),
+        builder(Token::invalid(&parser))
   {
   }
 
@@ -714,23 +719,22 @@ struct InstantiationContext {
     // jump_to(decl.front()); /* Adds too many directives. */
     skip_node(decl.attributes());
     id_type(decl.return_type(), scope);
-    id_func_resolved(decl.identifier(), scope);
+    id_func_resolved(decl.identifier(), decl.arguments(), scope);
     func_arg_list(decl.arguments(), body_scope, false);
     builder << string(";\n");
   }
 
   void func_decl(FuncDecl decl, SymbolScope &scope)
   {
-    SymbolScope &body_scope = *scope.functions[string(decl.identifier().str())];
     LocalScope body = decl.body();
 
     jump_to(decl.front());
     skip_node(decl.attributes());
     id_type(decl.return_type(), scope);
-    id_func_resolved(decl.identifier(), scope);
-    func_arg_list(decl.arguments(), body_scope);
+    SymbolFunction *fn = id_func_resolved(decl.identifier(), decl.arguments(), scope);
+    func_arg_list(decl.arguments(), *fn);
 
-    local_scope(body, body_scope);
+    local_scope(body, *fn);
   }
 
   void func_arg_list(FuncArgList list, SymbolScope &scope, bool with_trivia = true)
@@ -777,8 +781,7 @@ struct InstantiationContext {
     if (temp_decl.is_class()) {
       ClassDecl decl = temp_decl.decl();
       SymbolClass *base_cls = scope.lookup_class(decl.identifier());
-      SymbolClass *temp_cls = base_cls->template_data->lookup_inst_cls(temp_decl.parameters(),
-                                                                       scope);
+      SymbolClass *temp_cls = base_cls->template_data->lookup_inst(temp_decl.parameters(), scope);
       Node decl_cls = base_cls->template_data->decl.decl();
       /* TODO. */
       class_decl(decl_cls, scope, 0, temp_cls);
@@ -888,7 +891,17 @@ struct InstantiationContext {
       jump_to(decl.front());
     }
     skip_node(decl.attributes());
-    id_type(decl.type(), scope);
+
+    if (decl.type().id().str() == "auto") {
+      auto [cls, err] = symbols.resolve_auto_type(scope, decl.child_first(NodeType::Declarator));
+      if (err) {
+        error(err->node, err->msg);
+      }
+      builder << cls->resolved->identifier + trivia(decl.type().id());
+    }
+    else {
+      id_type(decl.type(), scope);
+    }
     decl.foreach<Declarator>([&](Declarator d) {
       declarator(d, scope);
       match_if(',');
@@ -979,7 +992,7 @@ struct InstantiationContext {
       return;
     }
 
-    SymbolFunction *sym = id_func_resolved(call.identifier(), scope);
+    SymbolFunction *sym = id_func_resolved(call.identifier(), call.parameters(), scope);
     func_param_list(call.parameters(), expr_scope, sym);
 
     member_access(expr_scope, call, sym->return_type);
@@ -1076,9 +1089,9 @@ struct InstantiationContext {
     SymbolClass *cls = scope.lookup_class(id);
     if (TemplateParamList param = id.template_params(); param.is_valid()) {
       SymbolClass *base_cls = cls;
-      cls = base_cls->template_data->lookup_inst_cls(param, scope);
+      cls = base_cls->template_data->lookup_inst(param, scope);
       if (cls->is_error) {
-        string args = SymbolTemplate::mangle_identifier(param, scope, ", ");
+        string args = SymbolTable::mangle_identifier(param, scope, ", ");
         error(param,
               "Missing explicit instantiation of template " + base_cls->identifier + "<" +
                   args.substr(2) + ">");
@@ -1090,7 +1103,7 @@ struct InstantiationContext {
       }
     }
     if (cls->resolved) {
-      return static_cast<SymbolClass *>(cls->resolved);
+      return cls->resolved;
     }
     return cls;
   }
@@ -1111,15 +1124,16 @@ struct InstantiationContext {
     return cls;
   }
 
-  SymbolFunction *id_func_resolved(IdQualified id, const SymbolScope &scope)
+  template<typename ArgOrParamList>
+  SymbolFunction *id_func_resolved(IdQualified id, ArgOrParamList params, const SymbolScope &scope)
   {
     assert(id.is_valid());
     SymbolFunction *func = scope.lookup_function(id);
     if (TemplateParamList param = id.template_params(); param.is_valid()) {
       SymbolFunction *base_func = func;
-      func = base_func->template_data->lookup_inst_fn(param, scope);
+      func = base_func->template_data->lookup_inst(param, scope);
       if (func->is_error) {
-        string args = SymbolTemplate::mangle_identifier(param, scope, ", ");
+        string args = SymbolTable::mangle_identifier(param, scope, ", ");
         error(param,
               "Missing explicit instantiation of template " + base_func->identifier + "<" +
                   args.substr(2) + ">");
@@ -1128,9 +1142,23 @@ struct InstantiationContext {
     else if (func->template_data /* TODO check if all args are in signature */) {
       error(id, "Missing explicit template arguments");
     }
+    else if (func->overload_next) {
+      try {
+        vector<SymbolClass *> arg_types = SymbolFunction::to_arg_types(symbols, scope, params);
+        SymbolFunction *overload = func->lookup_overload(arg_types);
+        if (overload->is_error) {
+          error(id, "No matching function for call to '" + func->identifier + "'");
+        }
+        func = overload;
+      }
+      catch (AstNodeException &e) {
+        error(e.node, e.msg);
+      }
+    }
     else {
+      /* TODO(fclem): Resolve builtin type constructors. */
       if (func->is_error) {
-        error(id, "Unknown type name");
+        error(id, "Unknown function name");
       }
     }
     builder.curr = id.back();
@@ -1199,11 +1227,11 @@ void SourceProcessor::lower_namespaces_ast(Parser &parser, SymbolTable &symbols)
   // auto new_root = make_unique<SymbolScope>(fn, LocalScope(parser.root()), nullptr);
   // flatten_symbols_recursive(*symbols.root, *new_root, "");
 
-  symbols.root->print();
-  symbols.flatten_root->print();
+  // symbols.root->print();
+  // symbols.flatten_root->print();
   // new_root->print();
 
-  InstantiationContext ctx(parser, error_handler);
+  InstantiationContext ctx(parser, symbols, error_handler);
   string str = ctx.process(*symbols.root, LocalScope(Node(&parser, 0)));
 
   if (error_handler.err.has_value()) {

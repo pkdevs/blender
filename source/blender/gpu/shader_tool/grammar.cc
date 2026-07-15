@@ -231,6 +231,7 @@ struct ScopeParser {
         case Static:   /* For C++ compatibility. */
         case NotEqual: /* For MSL matrix operators. */
         case Minus:    /* For MSL matrix operators. */
+        case Typename: /* For MSL / C++. */
         case Word:
           next();
           break;
@@ -315,7 +316,12 @@ struct ScopeParser {
           // error("Nested enum declaration not supported");
           // return;
           /* Supported because of explicit host shared struct members. */
-          enum_declaration();
+          if (curr.next(2) == Word) {
+            next();
+          }
+          else {
+            enum_declaration();
+          }
           break;
         case Union:
           union_declaration();
@@ -345,6 +351,7 @@ struct ScopeParser {
         case Colon:
         case Ampersand: /* For references. */
         case Inline:    /* For MSL / C++. */
+        case Typename:  /* For MSL / C++. */
         case Number:    /* For C++ bit-flags. */
         case Star:      /* For C++ pointers. */
         case Default:   /* For C++ constructor. */
@@ -566,7 +573,8 @@ struct ScopeParser {
           close_scope(curr.prev(), ScopeType::Assignment);
           return;
         case This:
-        case Default: /* For C++ constructor. */
+        case Default:  /* For C++ constructor. */
+        case Typename: /* For MSL / C++. */
         case Word:
         case Number:
         case EXPRESSION_TOKENS:
@@ -652,6 +660,7 @@ struct ScopeParser {
         case SemiColon:
         case Word:
         case Number:
+        case Typename: /* For MSL / C++. */
         case EXPRESSION_TOKENS:
           next();
           break;

@@ -24,8 +24,7 @@ for (int i = 2; i < 4; i++) [[unroll]] { content += i; })";
                                        { content += 3; }
 #line 2
                                                        })";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -44,8 +43,7 @@ for (int i = 2; i < 4; i++, y++) [[unroll]] { content += i; })";
                        i++, y++;
 #line 2
                                                             })";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -68,8 +66,7 @@ for (int i = 2; i < 4 && i < y; i++, y++) [[unroll]] { cont += i; })";
                                 i++, y++;
 #line 2
                                                                   })";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -89,8 +86,7 @@ for (; i < j;) [[unroll_n(2)]] { content += i; })";
                                { content += i; }
 #line 2
                                                })";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -132,21 +128,18 @@ for (; i < j;) [[unroll_n(2)]] { for (; j < k;) [[unroll_n(2)]] {} })";
                                                                  } }
 #line 2
                                                                    })";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
   {
     string input = R"(for (; i < j;) [[unroll_n(2)]] { break; })";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(error, "Unrolled loop cannot contain \"break\" statement.");
   }
   {
     string input = R"(for (; i < j;) [[unroll_n(2)]] { continue; })";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(error, "Unrolled loop cannot contain \"continue\" statement.");
   }
   {
@@ -165,15 +158,13 @@ for (; i < j;) [[unroll_n(2)]] { for (; j < k;) {break;continue;} })";
                                { for (; j < k;) {break;continue;} }
 #line 2
                                                                   })";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
   {
     string input = R"(for (int i = 3; i > 2; i++) [[unroll]] {})";
-    string error;
-    string output = process_test_local(input, error);
+    auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(error, "Unsupported condition in unrolled loop.");
   }
 }
@@ -243,7 +234,8 @@ CREATE_INFO_RES_SHARED_VARS_Resources
 struct Resources {
 #line 18
 int _pad;};
-#line 21
+
+
 #ifndef GPU_METAL
 Resources Resources_ctor_();
 void _fn(Resources  this_);
@@ -251,7 +243,8 @@ Resources Resources_new_();
 #endif
 #line 2
                          Resources Resources_ctor_() {Resources r;r._pad=0;return r;}
-#line 5
+
+
 
 #if defined(CREATE_INFO_Resources)
 #line 5
@@ -274,7 +267,8 @@ Resources Resources_new_();
   return result;
 #line 9
 }
-#line 12
+
+
 
 #if defined(CREATE_INFO_Resources)
 #line 12
@@ -350,8 +344,7 @@ void func(Resources  srt)
 #endif
 #line 44
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -366,8 +359,7 @@ void func([[resource_table]] Resources &srt)
   }
 }
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "Expecting next if statement to also be a static branch.");
   }
   {
@@ -379,8 +371,7 @@ void func([[resource_table]] Resources &srt)
   }
 }
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error,
               "Expecting compilation or specialization constant. Make sure SRT arguments "
               "have the [[resource_table]] attribute.");
@@ -394,8 +385,7 @@ void func([[resource_table]] Resources &srt)
   }
 }
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "Expecting single condition.");
   }
 }

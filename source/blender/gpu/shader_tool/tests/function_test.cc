@@ -66,7 +66,8 @@ struct S {
   int another_member;
 #line 29
 };
-#line 32
+
+
 #ifndef GPU_METAL
 S S_ctor_();
 S S_construct();
@@ -90,12 +91,13 @@ int _size(const S this_);
     this_.this_member++;
     return this_;
   }
-#line 25
+
   int _size(const S this_)
   {
     return this_.member;
   }
-#line 31
+
+
 void main()
 {
   S s = S_construct();
@@ -110,8 +112,7 @@ void main()
   _o(l).t[0];
 }
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -140,14 +141,14 @@ float A_fn3();
 #endif
 #line 2
                  A A_ctor_() {A r;r.a=0;r.b=0u;return r;}
-#line 5
+
+
   float _fn1(_ref(A ,this_)) { return this_.a; }
   float _fn2(_ref(A ,this_)) { int fn2; return _fn1(this_); }
          float A_fn3() { int a; return a; }
-#line 9
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -158,8 +159,7 @@ struct A {
   float fn1(int a) { return a; }
 };
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "Class member shadowing.");
   }
   {
@@ -169,8 +169,7 @@ struct A {
   float fn1() { int a; return a; }
 };
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "Class member shadowing.");
   }
   {
@@ -183,8 +182,7 @@ class S {
 )";
     string expect = R"(
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "Method name matching swizzles accessor are forbidden.");
   }
 }
@@ -209,10 +207,10 @@ int func(int a)
 #line 2
   return func(a, 0);
 }
-#line 6
+
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -240,10 +238,10 @@ int func()
 #line 2
   return func(0);
 }
-#line 6
+
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -263,10 +261,9 @@ int2 func()
 #line 2
   return func(int2(0, 0));
 }
-#line 5
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -286,10 +283,62 @@ void func()
 #line 2
   func(0);
 }
-#line 5
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+}
+
+TEST(shader_tool, FunctionOverloads)
+{
+  {
+    string input =
+        "struct A {};\n"
+        "void f() {}\n"
+        "void f(int a) {}\n"
+        "void f(int a, float b) {}\n"
+        "void f(float2 a, float b) {}\n"
+        "void f(float a) {}\n"
+        "void func()\n"
+        "{\n"
+        "int a;\n"
+        "float b;\n"
+        "float2 c;\n"
+        "A d;\n"
+        "f();\n"
+        "f(a);\n"
+        "f(a, b);\n"
+        "f(c, b);\n"
+        "f(c + 1 * 0.5f, b);\n"
+        "}\n";
+    string expect =
+        "struct A {int _pad;\n"
+        "#line 1\n"
+        "          };\n"
+        "#line 1\n"
+        "\n"
+        "A A_ctor_() {A r;r._pad=0;return r;}\n"
+        "#line 2\n"
+        "void f() {}\n"
+        "void f1(int a) {}\n"
+        "void f2(int a, float b) {}\n"
+        "void f3(float2 a, float b) {}\n"
+        "void f4(float a) {}\n"
+        "void func()\n"
+        "{\n"
+        "int a;\n"
+        "float b;\n"
+        "float2 c;\n"
+        "A d;\n"
+        "f();\n"
+        "f1(a);\n"
+        "f2(a, b);\n"
+        "f3(c, b);\n"
+        "f3(c + 1 * 0.5f, b);\n"
+        "}\n";
+    auto [output, _, error] = process_test_string(input, shader::Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }

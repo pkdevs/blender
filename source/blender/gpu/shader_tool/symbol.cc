@@ -9,15 +9,300 @@
 #include "expression.hh"
 #include "processor.hh"
 #include "symbol.hh"
+#include <variant>
 
 namespace blender::gpu::shader::parser {
 
 using namespace ast;
 using namespace std;
 
-static const char *err_symbol = "ERROR_SYMBOL";
-static const char *subscript_operator_id = "sub_op_";
+static const char *subscript_operator_id = "arr_op_";
 static const char *ns_sep = SourceProcessor::namespace_separator;
+
+/**
+ * Type resolution parser.
+ * Will evaluate each operand type and return the type of the expression result.
+ */
+class ExpressionTypeParser {
+ public:
+  SymbolClass *eval(const SymbolTable &table, const SymbolScope &scope, Expr expr) const
+  {
+    EvalContext ctx(&table, &scope, expr.child_first());
+
+    SymbolClass *cls = ctx.expr(0);
+    if (ctx.peek().is_valid()) {
+      throw AstNodeException(ctx.peek(), "Trailing input");
+    }
+    return cls;
+  }
+
+ private:
+  struct EvalContext {
+   private:
+    const SymbolTable *table;
+    const SymbolScope *scope;
+    Node node;
+    SymbolClass *float_cls;
+    SymbolClass *int_cls;
+    SymbolClass *uint_cls;
+    SymbolClass *str_cls;
+    SymbolClass *err_cls;
+
+   public:
+    EvalContext(const SymbolTable *table, const SymbolScope *scope, Node node)
+        : table(table), scope(scope), node(node)
+    {
+      const SymbolScope &root = *scope->root_scope();
+      float_cls = root.lookup_class("float");
+      int_cls = root.lookup_class("int");
+      uint_cls = root.lookup_class("uint");
+      // str_cls = root.lookup_class("string");
+      err_cls = root.lookup_class(SymbolTable::err_symbol);
+    }
+
+    SymbolClass *expr(int right_binding_power)
+    {
+      /* Parse unary operator, evaluate parenthesis, evaluate constant. */
+      SymbolClass *left = nud(consume());
+      /* While left binding power is greater than the right, continue consuming binary operations.
+       */
+      while (left_binding_power(peek()) > right_binding_power) {
+        left = led(left, consume());
+      }
+      return left;
+    }
+
+    /* How a token evaluates without left context (e.g. unary operator).
+     * Also known as Null-Denotation or NUD. */
+    SymbolClass *nud(ast::Node node)
+    {
+      /* Unary operators must have the highest precedence. */
+      static constexpr int unary_binding_power = 1000;
+
+      switch (node.type()) {
+        // case NodeType::TemplateExplicit: /* Should have already been removed. */
+        case NodeType::FuncCall:
+          return fun_call(node);
+          // case NodeType::Constructor: /* TODO */
+        case NodeType::StringConst:
+          return str_cls;
+        case NodeType::LocalVar:
+          return local_var(node);
+        case NodeType::NumConst:
+          return num_const(node);
+        case NodeType::Op:
+          return op(node, expr(unary_binding_power));
+        case NodeType::ExprSub: {
+          EvalContext ctx(table, scope, ExprSub(node).expr().child_first());
+          return ctx.expr(0);
+        }
+        default:
+          throw AstNodeException(node, "Invalid expression");
+      }
+    }
+
+    /* How a token evaluates from left-to-right, on two operands.
+     * Also known as Left-Denotation or LED. */
+    SymbolClass *led(SymbolClass *left, Node node)
+    {
+      if (node.type() != NodeType::Op) {
+        throw AstNodeException(node, "Invalid operator");
+      }
+
+      /* Binary operator. */
+      if (node.front() != '?') {
+        return op(node, left, expr(left_binding_power(node)));
+      }
+
+      /* Ternary operator. */
+
+      /* The middle expression can be almost anything.
+       * We use 0 so it only stops at the ':' (since Colon has a precedence of 0). */
+      SymbolClass *tval = expr(0);
+
+      consume(); /* ':' */
+
+      /* Use (Precedence - 1) to handle right-associativity. */
+      SymbolClass *fval = expr(left_binding_power(Question) - 1);
+
+      if (tval != fval) {
+        throw AstNodeException(node, "Incompatible operand types");
+      }
+      /* Operand types match. We can return either. */
+      return fval;
+    }
+
+    int left_binding_power(Node node)
+    {
+      return left_binding_power(node.front().type());
+    }
+
+    int left_binding_power(TokenType type)
+    {
+      switch (type) {
+        case Multiply:
+        case Divide:
+        case Modulo:
+          return 110;
+        case Plus:
+        case Minus:
+          return 100;
+        // case LShift: /* TODO: Not a token yet */
+        // case RShift:
+        //   return 90;
+        case LThan:
+        case LEqual:
+        case GThan:
+        case GEqual:
+          return 80;
+        case Equal:
+        case NotEqual:
+          return 70;
+        case And:
+          return 60;
+        case Xor:
+          return 50;
+        case Or:
+          return 40;
+        case LogicalAnd:
+          return 30;
+        case LogicalOr:
+          return 20;
+        case Question:
+          return 10;
+        case Colon:
+        case ParOpen:
+        case ParClose:
+          return 0;
+        case Not:
+        case BitwiseNot:
+          /* Prefix operators don't bind to the left! */
+          return 0;
+        case Invalid: /* EndOfFile */
+          return -1;
+        default:
+          break;
+      }
+      throw AstNodeException(Node{}, "Invalid operator token");
+    }
+
+    Node peek() const
+    {
+      return node;
+    }
+
+    Node consume()
+    {
+      Node n = node;
+      node = node.next();
+      return n;
+    }
+
+    SymbolClass *op(Node operator_type, SymbolClass *left_type, SymbolClass *right_type)
+    {
+      OperatorKey key{left_type, operator_type.front().type(), right_type};
+      if (auto it = table->operators.find(key); it != table->operators.end()) {
+        return it->second->return_type;
+      }
+      throw AstNodeException(operator_type,
+                             "Invalid operands to binary expression ('" + left_type->identifier +
+                                 "' and '" + right_type->identifier + "')");
+    }
+
+    SymbolClass *op(Node operator_type, SymbolClass *right_type)
+    {
+      throw AstNodeException(operator_type,
+                             "Invalid argument type '" + right_type->identifier +
+                                 "' to unary expression");
+    }
+
+    SymbolClass *fun_call(FuncCall call)
+    {
+      SymbolFunction *fn = scope->lookup_function(call.identifier());
+      vector<SymbolClass *> arg_types = SymbolFunction::to_arg_types(
+          *table, *scope, call.parameters());
+      fn->lookup_overload(arg_types);
+      SymbolClass *type = fn->return_type;
+
+      Node next = call.next();
+      if (next.type() == NodeType::Op && next.front() == Dot) {
+        /* Member access */
+        throw AstNodeException(Node{}, "Not implemented yet");
+      }
+      if (next.type() == NodeType::Subscript) {
+        /* Subscript. */
+        throw AstNodeException(Node{}, "Not implemented yet");
+      }
+      return type;
+    }
+
+    SymbolClass *local_var(LocalVar var)
+    {
+      SymbolVariable *sym = scope->lookup_variable(var.identifier());
+      SymbolClass *type = sym->type;
+      /* TODO member access */
+      return type;
+    }
+
+    // SymbolClass *member_access(SymbolClass *left, LocalVar var) {/* TODO */}
+
+    // SymbolClass *subscript(SymbolClass *left, LocalVar var) {/* TODO */}
+
+    SymbolClass *num_const(NumConst num)
+    {
+      string_view lit = num.str();
+      /* Convert to lowercase helper for easier suffix matching */
+      string str;
+      str.reserve(lit.size());
+      for (char c : lit) {
+        str.push_back(tolower(static_cast<unsigned char>(c)));
+      }
+
+      bool has_decimal = (str.find('.') != string_view::npos);
+      bool has_exponent = !str.starts_with("0x") && (str.find('e') != string_view::npos);
+
+      if (has_decimal || has_exponent || str.back() == 'f') {
+        return float_cls;
+      }
+      if (str.back() == 'u') {
+        return uint_cls;
+      }
+      return int_cls;
+    }
+  };
+};
+
+SymbolClass *SymbolTable::expr_type_analysis(const SymbolScope &scope, Expr expr) const
+{
+  ExpressionTypeParser parser;
+  return parser.eval(*this, scope, expr);
+}
+
+Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declarator decl) const
+{
+  std::optional<AstNodeException> err;
+  Node node = decl.child_last();
+  if (node.type() == NodeType::InitializerList) {
+    Initializer init(InitializerList(node).child_first());
+    if (init.child_first().type() == NodeType::InitializerList) {
+      err = {init.child_first(),
+             "Cannot deduce type for variable '" + string(decl.identifier().str()) +
+                 "' with type 'auto' from nested initializer list"};
+    }
+    else if (init.next().is_valid()) {
+      err = {init.next(),
+             "Initializer for variable '" + string(decl.identifier().str()) +
+                 "' with type 'auto' contains multiple expressions"};
+    }
+    else {
+      return {expr_type_analysis(scope, Expr(init.child_first())), err};
+    }
+  }
+  else {
+    return {expr_type_analysis(scope, AssignStmt(node).expr()), err};
+  }
+  return {scope.root_scope()->lookup_class(SymbolTable::err_symbol), err};
+}
 
 /* Return size padded to the given alignment. */
 static int pad(int size, int align)
@@ -25,9 +310,9 @@ static int pad(int size, int align)
   return ((size + align - 1) / align) * align;
 }
 
-string SymbolTemplate::mangle_identifier(TemplateParamList list,
-                                         const SymbolScope &scope,
-                                         const string &sep)
+string SymbolTable::mangle_identifier(TemplateParamList list,
+                                      const SymbolScope &scope,
+                                      const string &sep)
 {
   string str;
   list.foreach_child([&](Node node) {
@@ -37,27 +322,24 @@ string SymbolTemplate::mangle_identifier(TemplateParamList list,
   return str;
 }
 
-SymbolClass *SymbolTemplate::lookup_inst_cls(TemplateParamList list,
-                                             const SymbolScope &scope) const
+template<typename T>
+T *SymbolTemplate<T>::lookup_inst(TemplateParamList list, const SymbolScope &scope) const
 {
-  string id = mangle_identifier(list, scope);
-  auto it = instances_cls.find(id);
-  if (it == instances_cls.end()) {
-    return scope.root_scope()->lookup_class(err_symbol);
+  string id = SymbolTable::mangle_identifier(list, scope);
+  auto it = instances.find(id);
+  if (it == instances.end()) {
+    if constexpr (is_same_v<T, SymbolFunction>) {
+      return scope.root_scope()->lookup_function(SymbolTable::err_symbol);
+    }
+    else {
+      return scope.root_scope()->lookup_class(SymbolTable::err_symbol);
+    }
   }
   return it->second;
 }
 
-SymbolFunction *SymbolTemplate::lookup_inst_fn(TemplateParamList list,
-                                               const SymbolScope &scope) const
-{
-  string id = mangle_identifier(list, scope);
-  auto it = instances_fn.find(id);
-  if (it == instances_fn.end()) {
-    return scope.root_scope()->lookup_function(err_symbol);
-  }
-  return it->second;
-}
+template struct SymbolTemplate<SymbolClass>;
+template struct SymbolTemplate<SymbolFunction>;
 
 SymbolClass::SymbolClass(SymbolScope *parent, ClassDecl decl, const string &suffix)
     : SymbolScope(parent,
@@ -259,11 +541,14 @@ struct SymbolParser {
    * Also create declaration for `this_`. */
   void parse_function_arguments(SymbolScope &scope, FuncDecl decl)
   {
+    SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
     decl.arguments().foreach<FuncArg>([&](FuncArg arg) {
       SymbolClass *type = scope.lookup_class(arg.type().id());
       SymbolVariable var(&scope, type, arg.declarator());
       var.type = scope.lookup_class(arg.type().id());
       scope.variables.emplace(var.identifier, table.var_arena.alloc(var));
+      /* Register argument type for argument resolution. */
+      fn_sym->arg_types.emplace_back(type);
     });
 
     if (scope.parent != nullptr) {
@@ -406,9 +691,16 @@ struct SymbolParser {
                                   const std::string &suffix = "",
                                   TemplateInst temp = {})
   {
+    string unique_id = scope.unique_id();
+    string overlad_suffix;
     SymbolFunction *fn = table.fun_arena.alloc(&scope, func, suffix);
-    scope.functions.emplace(fn->identifier, fn);
-    scope.scopes.emplace(scope.unique_id(), fn);
+    if (auto it = scope.functions.try_emplace(fn->identifier, fn); !it.second) {
+      /* If function already exists, insert overload in the linked list. */
+      fn->overload_next = it.first->second->overload_next;
+      it.first->second->overload_next = fn;
+      overlad_suffix = unique_id;
+    }
+    scope.scopes.emplace(unique_id, fn);
     parse_scope(*fn, func.body(), prefix + fn->identifier + ns_sep, temp);
 
     {
@@ -427,7 +719,7 @@ struct SymbolParser {
       SymbolFunction *flat_func = table.fun_arena.alloc(*fn);
       fn->resolved = flat_func;
       flat_func->resolved = fn;
-      flat_func->identifier = identifier_mangled;
+      flat_func->identifier = identifier_mangled + overlad_suffix;
       global.functions.try_emplace(identifier_mangled, flat_func);
     }
 
@@ -436,15 +728,15 @@ struct SymbolParser {
 
   void parse_template_decl(SymbolScope &scope, TemplateDecl decl)
   {
-    /* Container for template data. */
-    SymbolTemplate *temp = table.tmp_arena.alloc(decl);
     /* Do not parse. Only keep the symbol definition. The instantiation will do the parsing. */
     if (decl.is_function()) {
+      SymbolFunctionTemplate *temp = table.tmp_fun_arena.alloc(decl);
       SymbolFunction *fn = table.fun_arena.alloc(&scope, decl.decl());
       fn->template_data = temp;
       scope.functions.emplace(fn->identifier, fn);
     }
     else {
+      SymbolClassTemplate *temp = table.tmp_cls_arena.alloc(decl);
       SymbolClass *cls = table.cls_arena.alloc(&scope, decl.decl());
       cls->template_data = temp;
       scope.classes.emplace(cls->identifier, cls);
@@ -483,11 +775,11 @@ struct SymbolParser {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *fn);
           temp_decl.is_valid())
       {
-        string arg_mangled = SymbolTemplate::mangle_identifier(temp_params, scope);
+        string arg_mangled = SymbolTable::mangle_identifier(temp_params, scope);
 
         SymbolFunction *fn_inst = parse_func_decl(scope, temp_decl.decl(), "", arg_mangled, temp);
 
-        fn->template_data->instances_fn.emplace(arg_mangled, fn_inst);
+        fn->template_data->instances.emplace(arg_mangled, fn_inst);
       }
     }
     else {
@@ -497,13 +789,13 @@ struct SymbolParser {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *cls);
           temp_decl.is_valid())
       {
-        string arg_mangled = SymbolTemplate::mangle_identifier(temp_params, scope);
+        string arg_mangled = SymbolTable::mangle_identifier(temp_params, scope);
 
         int unused_offset = 0;
         SymbolClass *cls_inst = parse_class_decl(
             scope, temp_decl.decl(), Node{}, unused_offset, prefix, arg_mangled, temp);
 
-        cls->template_data->instances_cls.emplace(arg_mangled, cls_inst);
+        cls->template_data->instances.emplace(arg_mangled, cls_inst);
       }
     }
   }
@@ -519,11 +811,11 @@ struct SymbolParser {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *fn);
           temp_decl.is_valid())
       {
-        string arg_mangled = SymbolTemplate::mangle_identifier(temp_params, scope);
+        string arg_mangled = SymbolTable::mangle_identifier(temp_params, scope);
 
         SymbolFunction *spec = parse_func_decl(scope, decl, prefix, arg_mangled);
 
-        fn->template_data->instances_fn.emplace(arg_mangled, spec);
+        fn->template_data->instances.emplace(arg_mangled, spec);
       }
     }
     else {
@@ -533,35 +825,51 @@ struct SymbolParser {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *cls);
           temp_decl.is_valid())
       {
-        string arg_mangled = SymbolTemplate::mangle_identifier(temp_params, scope);
+        string arg_mangled = SymbolTable::mangle_identifier(temp_params, scope);
 
         int unused_offset = 0;
         SymbolClass *spec = parse_class_decl(
             scope, decl, Node{}, unused_offset, prefix, arg_mangled);
 
-        cls->template_data->instances_cls.emplace(arg_mangled, spec);
+        cls->template_data->instances.emplace(arg_mangled, spec);
       }
     }
   }
 
   void parse_var_decl(SymbolScope &scope, VarDecl var, int &offset, const std::string &prefix)
   {
-    SymbolClass *type = scope.lookup_class(var.type().id());
-    if (type->template_data) {
-      TemplateParamList param = var.type().id().template_params();
+    IdQualified type_id = var.type().id();
+    string_view type_id_str = type_id.str();
 
-      SymbolClass *base_type = type;
-      type = base_type->template_data->lookup_inst_cls(param, scope);
-      if (type->is_error) {
-        string args = SymbolTemplate::mangle_identifier(param, scope, ", ");
-        error(param,
-              "Missing explicit instantiation of template " + base_type->identifier + "<" +
-                  args.substr(2) + ">");
+    SymbolClass *type = nullptr;
+    if (type_id_str == "auto") {
+      /* Assumes C++ compilation already checked that all declarator uses the same type.
+       * Deduce type using only the first declarator. */
+      Declarator decl = var.child_first(NodeType::Declarator);
+      auto [resolved_type, err] = table.resolve_auto_type(scope, decl);
+      if (err) {
+        error(err->node, err->msg);
+      }
+      type = resolved_type;
+    }
+    else {
+      type = scope.lookup_class(type_id);
+      if (type->template_data) {
+        TemplateParamList param = type_id.template_params();
+
+        SymbolClass *base_type = type;
+        type = base_type->template_data->lookup_inst(param, scope);
+        if (type->is_error) {
+          string args = SymbolTable::mangle_identifier(param, scope, ", ");
+          error(param,
+                "Missing explicit instantiation of template '" + base_type->identifier + "<" +
+                    args.substr(2) + ">'");
+        }
       }
     }
 
     if (type->is_error) {
-      error(var, "Unknown type");
+      error(var, "Unknown type name '" + string(type_id_str) + "'");
       return;
     }
 
@@ -752,6 +1060,46 @@ void SymbolVariable::set_offset(bool is_union, int &offset)
   }
 }
 
+vector<SymbolClass *> SymbolFunction::to_arg_types(const SymbolTable &table,
+                                                   const SymbolScope &scope,
+                                                   FuncParamList list)
+{
+  vector<SymbolClass *> arg_types;
+  list.foreach<Expr>([&](Expr expr) {
+    SymbolClass *cls = table.expr_type_analysis(scope, expr);
+    arg_types.emplace_back(cls);
+  });
+  return arg_types;
+}
+
+vector<SymbolClass *> SymbolFunction::to_arg_types(const SymbolTable & /*table*/,
+                                                   const SymbolScope &scope,
+                                                   FuncArgList list)
+{
+  vector<SymbolClass *> arg_types;
+  list.foreach<FuncArg>([&](FuncArg arg) {
+    SymbolClass *cls = scope.lookup_class(arg.type().id());
+    arg_types.emplace_back(cls);
+  });
+  return arg_types;
+}
+
+SymbolFunction *SymbolFunction::lookup_overload(const vector<SymbolClass *> &arg_types)
+{
+  for (SymbolFunction *fn = this; fn; fn = fn->overload_next) {
+    if (fn->argument_matches(arg_types)) {
+      return fn;
+    }
+  }
+  return root_scope()->lookup_function(SymbolTable::err_symbol);
+}
+
+bool SymbolFunction::argument_matches(const vector<SymbolClass *> &arg_types) const
+{
+  /* Use GLSL strict matching for now, no implicit conversion. */
+  return this->arg_types == arg_types;
+}
+
 SymbolFunction *SymbolScope::lookup_function(IdQualified id) const
 {
   return lookup_generic<SymbolFunction>(id, id.front());
@@ -792,17 +1140,17 @@ T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
   }
   /* Lookup failure at root level, try to return error symbol. */
   if constexpr (is_same_v<T, SymbolFunction>) {
-    if (auto it = functions.find(err_symbol); it != functions.end()) {
+    if (auto it = functions.find(SymbolTable::err_symbol); it != functions.end()) {
       return it->second;
     }
   }
   else if constexpr (is_same_v<T, SymbolClass>) {
-    if (auto it = classes.find(err_symbol); it != classes.end()) {
+    if (auto it = classes.find(SymbolTable::err_symbol); it != classes.end()) {
       return it->second;
     }
   }
   else if constexpr (is_same_v<T, SymbolVariable>) {
-    if (auto it = variables.find(err_symbol); it != variables.end()) {
+    if (auto it = variables.find(SymbolTable::err_symbol); it != variables.end()) {
       return it->second;
     }
   }
@@ -1146,13 +1494,30 @@ void SymbolTable::register_builtins(LocalScope node)
   };
 
   const std::vector<BuiltinVector> vectors = {
-      {"float2", "float", 2, 8},     {"float3", "float", 3, 16},    {"float4", "float", 4, 16},
-      {"float2x2", "float2", 2, 16}, {"float2x3", "float3", 2, 16}, {"float2x4", "float4", 2, 16},
-      {"float3x2", "float2", 3, 16}, {"float3x3", "float3", 3, 16}, {"float3x4", "float4", 3, 16},
-      {"float4x2", "float2", 4, 16}, {"float4x3", "float3", 4, 16}, {"float4x4", "float4", 4, 16},
-      {"int2", "int", 2, 8},         {"int3", "int", 3, 16},        {"int4", "int", 4, 16},
-      {"uint2", "uint", 2, 8},       {"uint3", "uint", 3, 16},      {"uint4", "uint", 4, 16},
-      {"bool2", "bool", 2, 2},       {"bool3", "bool", 3, 3},       {"bool4", "bool", 4, 4},
+      {"float2", "float", 2, 8},
+      {"float3", "float", 3, 16},
+      {"float4", "float", 4, 16},
+      {"float2x2", "float2", 2, 16},
+      {"float2x3", "float3", 2, 16},
+      {"float2x4", "float4", 2, 16},
+      {"float3x2", "float2", 3, 16},
+      {"float3x3", "float3", 3, 16},
+      {"float3x4", "float4", 3, 16},
+      {"float4x2", "float2", 4, 16},
+      {"float4x3", "float3", 4, 16},
+      {"float4x4", "float4", 4, 16},
+      {"int2", "int", 2, 8},
+      {"int3", "int", 3, 16},
+      {"int4", "int", 4, 16},
+      {"uint2", "uint", 2, 8},
+      {"uint3", "uint", 3, 16},
+      {"uint4", "uint", 4, 16},
+      {"bool2", "bool", 2, 2},
+      {"bool3", "bool", 3, 3},
+      {"bool4", "bool", 4, 4},
+      {"packed_float2", "float", 2, 8},
+      {"packed_float3", "float", 3, 12},
+      {"packed_float4", "float", 4, 16},
   };
 
   const char *comp_name[4] = {"x", "y", "z", "w"};
@@ -1216,23 +1581,141 @@ void SymbolTable::register_builtins(LocalScope node)
     }
   }
 
-  /* Error function symbol. */
-  {
-    SymbolFunction *sym = fun_arena.alloc(root, tok, string(err_symbol), SymbolFunction::GLOBAL);
-    sym->is_error = true;
+  struct BuiltinFunc {
+    string return_type;
+    string id;
+    vector<string> arg_types;
+  };
+
+  const std::vector<BuiltinFunc> functions = {
+      /* Error variable symbol. */
+      {"void", err_symbol, {}},
+
+      {"float3", "reflect", {"float3", "float3"}},
+      {"float3", "refract", {"float3", "float3", "float"}},
+
+      {"bool", "greaterThan", {"float3", "float3"}},
+      {"bool", "lessThan", {"float3", "float3"}},
+      {"bool", "lessThanEqual", {"float3", "float3"}},
+      {"bool", "greaterThanEqual", {"float3", "float3"}},
+      {"bool", "equal", {"float3", "float3"}},
+      {"bool", "notEqual", {"float3", "float3"}},
+
+      {"bool3", "not", {"bool3"}},
+      {"bool3", "any", {"bool3"}},
+      {"bool", "all", {"bool3"}},
+
+      {"int", "bitCount", {"int"}},
+      {"uint", "bitCount", {"uint"}},
+      {"int", "bitfieldExtract", {"int"}},
+      {"uint", "bitfieldExtract", {"uint"}},
+      {"int", "bitfieldInsert", {"int"}},
+      {"uint", "bitfieldInsert", {"uint"}},
+      {"int", "bitfieldReverse", {"int"}},
+      {"uint", "bitfieldReverse", {"uint"}},
+
+      {"int", "atomicAdd", {"int", "int"}},
+      {"int", "atomicAnd", {"int", "int"}},
+      {"int", "atomicOr", {"int", "int"}},
+      {"int", "atomicXor", {"int", "int"}},
+      {"int", "atomicMin", {"int", "int"}},
+      {"int", "atomicMax", {"int", "int"}},
+      {"int", "atomicExchange", {"int", "int"}},
+      {"int", "atomicCompSwap", {"int", "int", "int"}},
+      {"uint", "atomicAdd", {"uint", "uint"}},
+      {"uint", "atomicAnd", {"uint", "uint"}},
+      {"uint", "atomicOr", {"uint", "uint"}},
+      {"uint", "atomicXor", {"uint", "uint"}},
+      {"uint", "atomicMin", {"uint", "uint"}},
+      {"uint", "atomicMax", {"uint", "uint"}},
+      {"uint", "atomicExchange", {"uint", "uint"}},
+      {"uint", "atomicCompSwap", {"uint", "uint", "uint"}},
+      {"uint", "packHalf2x16", {"float2"}},
+      {"uint", "packUnorm2x16", {"float2"}},
+      {"uint", "packSnorm2x16", {"float2"}},
+      {"uint", "packUnorm4x8", {"float4"}},
+      {"uint", "packSnorm4x8", {"float4"}},
+      {"float2", "unpackHalf2x16", {"uint"}},
+      {"float2", "unpackUnorm2x16", {"uint"}},
+      {"float2", "unpackSnorm2x16", {"uint"}},
+      {"float4", "unpackUnorm4x8", {"uint"}},
+      {"float4", "unpackSnorm4x8", {"uint"}},
+  };
+  /* Builtin functions. */
+  for (auto f : functions) {
+    SymbolFunction *sym = fun_arena.alloc(root, tok, string(f.id), SymbolFunction::GLOBAL);
+    sym->is_error = f.id == err_symbol;
+    sym->return_type = root->lookup_class(f.return_type);
     SymbolFunction *sym_resolved = fun_arena.alloc(*sym);
     sym->resolved = sym_resolved;
     root->functions.emplace(sym->identifier, sym);
     flatten_root->functions.emplace(sym->identifier, sym_resolved);
   }
 
-  /* Error variable symbol. */
-  {
-    SymbolVariable *sym = var_arena.alloc(
-        root, root->lookup_class(err_symbol), tok, string(err_symbol));
-    sym->is_error = true;
+  /* Builtin operators. */
+
+  const unordered_map<TokenType, const char *> unary_type_to_id = {
+      {Plus, "pos_op_"},
+      {Minus, "neg_op_"},
+      {BitwiseNot, "bitnot_op_"},
+      {Not, "not_op_"},
+  };
+
+  const unordered_map<TokenType, const char *> binary_type_to_id = {
+      {Plus, "add_op_"},
+      {Minus, "sub_op_"},
+      {Multiply, "mul_op_"},
+      {Divide, "div_op_"},
+      {Modulo, "mod_op_"},
+      {And, "bitand_op_"},
+      {Or, "bitor_op_"},
+      {Xor, "bitxor_op_"},
+      // {LeftShift, "lshift_op_"},
+      // {RightShift, "rshift_op_"},
+      {Equal, "eq_op_"},
+      {NotEqual, "neq_op_"},
+      {LThan, "lte_op_"},
+      {GThan, "gte_op_"},
+      {LEqual, "leq_op_"},
+      {GEqual, "geq_op_"},
+      {LogicalAnd, "and_op_"},
+      {LogicalOr, "or_op_"},
+  };
+
+  const vector<BuiltinOp> operators_desc = generate_all_operators();
+  for (const auto &op : operators_desc) {
+    string id((op.left.empty() ? unary_type_to_id : binary_type_to_id).find(op.op)->second);
+    SymbolFunction *sym = fun_arena.alloc(root, tok, id, SymbolFunction::GLOBAL);
+    sym->return_type = root->lookup_class(op.result);
+    SymbolClass *left = op.left.empty() ? nullptr : root->lookup_class(op.left);
+    SymbolClass *right = root->lookup_class(op.right);
+
+    OperatorKey key(left, op.op, right);
+    operators.emplace(key, sym);
+  }
+
+  struct BuiltinConst {
+    string id;
+    string type;
+    bool is_constexpr;
+    int value;
+  };
+
+  const std::vector<BuiltinConst> consts = {
+      /* Error variable symbol. */
+      {err_symbol, "int", false, 1},
+
+      {"true", "bool", true, 1},
+      {"false", "bool", true, 0},
+  };
+  /* Boolean constants. */
+  for (auto c : consts) {
+    SymbolVariable *sym = var_arena.alloc(root, root->lookup_class(c.type), tok, string(c.id));
     SymbolVariable *sym_resolved = var_arena.alloc(*sym);
+    sym->is_error = c.id == err_symbol;
     sym->resolved = sym_resolved;
+    sym->is_static = c.is_constexpr;
+    sym->is_constexpr = c.is_constexpr;
     root->variables.emplace(sym->identifier, sym);
     flatten_root->variables.emplace(sym->identifier, sym_resolved);
   }

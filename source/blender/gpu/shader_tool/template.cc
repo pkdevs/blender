@@ -36,31 +36,6 @@ string SourceProcessor::template_arguments_mangle(const Scope template_args)
   return args_concat;
 }
 
-string SourceProcessor::template_arguments_mangle_ast(
-    const parser::ast::TemplateParamList template_args)
-{
-  string args_concat;
-  template_args.foreach_child([&](Node node) {
-    args_concat += 'T';
-    if (node.type() == NodeType::NumConst) {
-      if (node.front() == Minus) {
-        /* In order to support negative integer literals. Replace minus sign by underscore. */
-        args_concat += '_';
-      }
-      args_concat += string(node.back().str());
-    }
-    else if (node.type() == NodeType::IdQualified) {
-      IdQualified id(node);
-      /* Assumes namespaces have been mangled already. */
-      args_concat += string(id.name().str()) + template_arguments_mangle_ast(id.template_params());
-    }
-    else {
-      assert(0);
-    }
-  });
-  return args_concat;
-}
-
 string SourceProcessor::template_full_specified_name(metadata::TemplateDefinition &template_def)
 {
   SourceProcessor::Parser name_parser(template_def.name_space + template_def.identifier,
@@ -288,7 +263,6 @@ void SourceProcessor::lower_pre_template_ast(Parser &parser, SymbolTable &symbol
   lower_srt_accessor_templates_ast(parser);   /* Legacy. To remove. */
   lower_union_accessor_templates_ast(parser); /* Legacy. To remove. */
   lower_namespaces_ast(parser, symbols);
-  // lower_template_specialization_ast(parser);
 }
 
 /* Mangle template parameter into the symbol name. */
@@ -349,16 +323,6 @@ void SourceProcessor::lower_template_specialization(Parser &parser)
     process_specialization(tokens[0], tokens[5].scope());
   });
 
-  parser.apply_mutations();
-}
-
-void SourceProcessor::lower_template_specialization_ast(Parser &parser)
-{
-  parser.root().foreach<TemplateSpec>([&](TemplateSpec spec) {
-    TemplateParamList list = spec.parameters();
-    parser.erase(spec.front(), spec.front().next(2));
-    parser.replace(list, template_arguments_mangle_ast(list), true);
-  });
   parser.apply_mutations();
 }
 

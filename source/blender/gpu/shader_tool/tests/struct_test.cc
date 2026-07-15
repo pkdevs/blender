@@ -26,7 +26,7 @@ struct [[host_shared]] T {
 )";
     string expect =
         R"(
-#line 3
+
 
 #define T_union0_host_shared_ T_union0
 #define T_union0_host_shared_uniform_ T_union0
@@ -64,34 +64,33 @@ uint4 _a(const T this_)       {
   val = floatBitsToUint(this_.union0.data0);
   return val;
 }
-#line 15
+
 void _a_set_(_ref(T ,this_), uint4 value) {
   this_.union0.data0 = uintBitsToFloat(value);
 }
-#line 19
+
 int4 _b(const T this_)       {
   int4 val;
   val = floatBitsToInt(this_.union0.data0);
   return val;
 }
-#line 25
+
 void _b_set_(_ref(T ,this_), int4 value) {
   this_.union0.data0 = intBitsToFloat(value);
 }
-#line 29
+
 float4 _c(const T this_)       {
   float4 val;
   val = this_.union0.data0;
   return val;
 }
-#line 35
+
 void _c_set_(_ref(T ,this_), float4 value) {
   this_.union0.data0 = value;
 }
-#line 39
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -121,7 +120,8 @@ struct                 T_union0 {
 };
 #line 5
                                         T_union0 T_union0_ctor_() {T_union0 r;r.data0=float4(0);return r;}
-#line 8
+
+
 
 #define T_union1_host_shared_ T_union1
 #define T_union1_host_shared_uniform_ T_union1
@@ -141,7 +141,8 @@ struct                 T {
   float2 foo;
   float2 bar;
          T_union0 union0;
-#line 8
+
+
          T_union1 union1;
 #line 31
 };
@@ -161,24 +162,23 @@ uint4 _a(const T this_)       {
   val = floatBitsToUint(this_.union0.data0);
   return val;
 }
-#line 18
+
 void _a_set_(_ref(T ,this_), uint4 value) {
   this_.union0.data0 = uintBitsToFloat(value);
 }
-#line 22
+
 uint4 _b(const T this_)       {
   uint4 val;
   val = floatBitsToUint(this_.union1.data0);
   return val;
 }
-#line 28
+
 void _b_set_(_ref(T ,this_), uint4 value) {
   this_.union1.data0 = uintBitsToFloat(value);
 }
-#line 32
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -254,15 +254,14 @@ A _a(const T this_)       {
   val.e.b = this_.union0.data0.w;
   return val;
 }
-#line 23
+
 void _a_set_(_ref(T ,this_), A value) {
   this_.union0.data0.xyz = value.e.a;
   this_.union0.data0.w = value.e.b;
 }
-#line 28
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -275,7 +274,7 @@ struct [[host_shared]] T {
 };
 )";
     string expect = R"(
-#line 3
+
 
 #define T_union0_host_shared_ T_union0
 #define T_union0_host_shared_uniform_ T_union0
@@ -315,17 +314,16 @@ float4x4 _a(const T this_)       {
   val[3] = this_.union0.data3;
   return val;
 }
-#line 16
+
 void _a_set_(_ref(T ,this_), float4x4 value) {
   this_.union0.data0 = value[0];
   this_.union0.data1 = value[1];
   this_.union0.data2 = value[2];
   this_.union0.data3 = value[3];
 }
-#line 23
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -337,8 +335,7 @@ struct [[host_shared]] T {
   };
 };
 )";
-    string error;
-    process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error,
               "All union members must have their type wrapped using the union_t<T> template.");
   }
@@ -356,7 +353,7 @@ enum class enum_class : int {
 };
 )";
     string expect = R"(
-#line 3
+
 constant static constexpr int enum_class_VALUE = 0;
 
 #define enum_class int
@@ -368,8 +365,7 @@ enum_class enum_class_ctor_() { return enum_class(0); }
 
 
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -396,8 +392,7 @@ E E_ctor_() { return E(0); }
 #line 2
 
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -408,7 +403,7 @@ enum class enum_class : int {
 };
 )";
     string expect = R"(
-#line 3
+
 constant static constexpr int enum_class_VALUE = 0;
 
 #define enum_class int
@@ -420,8 +415,7 @@ enum_class enum_class_ctor_() { return enum_class(0); }
 
 
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -431,8 +425,7 @@ enum class enum_class {
   VALUE = 0,
 };
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "enum declaration must explicitly use an underlying type");
   }
 }
@@ -468,10 +461,9 @@ void U_fn();
 #line 4
                  U U_ctor_() {U r;r._pad=0;return r;}
          void U_fn() {}
-#line 7
+
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -539,8 +531,7 @@ void fn(S u, _ref(S ,v))
   S _u5= v;int k=_u5.i;float l=_u5.b;
 }
 )";
-    string error;
-    string output = process_test_string(input, error);
+    auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
