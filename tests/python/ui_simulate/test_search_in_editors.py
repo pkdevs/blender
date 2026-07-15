@@ -64,11 +64,17 @@ def test_properties_search():
     bpy.context.view_layer.objects.active = bpy.data.objects["__search_test_cube__"]
     yield
 
+    space.show_region_header = False
+    yield
+
     e.cursor_position_set(*ui.get_area_center(area), move=True)
     yield e.ctrl.f()
     yield e.text("subdivision")
     yield e.ret()
     t.assertEqual(space.search_filter, "subdivision", "Properties: search_filter was not set by Ctrl+F")
+
+    space.show_region_header = False
+    yield
 
     yield e.ctrl.f()
     yield e.back_space()
@@ -91,11 +97,17 @@ def test_outliner_search():
     t.assertIsInstance(space, bpy.types.SpaceOutliner, "Area did not switch to Outliner")
     t.assertIn("__search_test_cube__", bpy.data.objects, "Blend file is missing __search_test_cube__")
 
+    space.show_region_header = False
+    yield
+
     e.cursor_position_set(*ui.get_area_center(area), move=True)
     yield e.ctrl.f()
     yield e.text("__search_test_cube__")
     yield e.ret()
     t.assertEqual(space.filter_text, "__search_test_cube__", "Outliner: filter_text was not set by Ctrl+F")
+
+    space.show_region_header = False
+    yield
 
     yield e.ctrl.f()
     yield e.back_space()
@@ -119,12 +131,18 @@ def test_dopesheet_search():
     space = area.spaces.active
     t.assertIsInstance(space, bpy.types.SpaceDopeSheetEditor, "Area did not switch to Dope Sheet")
 
+    space.show_region_channels = False
+    yield
+
     e.cursor_position_set(*ui.get_area_center(area), move=True)
     yield e.ctrl.f()
     yield e.text("location")
     yield e.ret()
     t.assertEqual(space.dopesheet.filter_text, "location",
                   "Dope Sheet: filter_text was not set by Ctrl+F")
+
+    space.show_region_channels = False
+    yield
 
     yield e.ctrl.f()
     yield e.back_space()
@@ -146,12 +164,18 @@ def test_graph_editor_search():
     space = area.spaces.active
     t.assertIsInstance(space, bpy.types.SpaceGraphEditor, "Area did not switch to Graph Editor")
 
+    space.show_region_channels = False
+    yield
+
     e.cursor_position_set(*ui.get_area_center(area), move=True)
     yield e.ctrl.f()
     yield e.text("location")
     yield e.ret()
     t.assertEqual(space.dopesheet.filter_text, "location",
                   "Graph Editor: filter_text was not set by Ctrl+F")
+
+    space.show_region_channels = False
+    yield
 
     yield e.ctrl.f()
     yield e.back_space()
@@ -181,12 +205,18 @@ def test_file_browser_search():
     params = space.params
     t.assertIsNotNone(params, "File Browser: params is None after navigation")
 
+    space.show_region_ui = False
+    yield
+
     e.cursor_position_set(*ui.get_area_center(area), move=True)
     yield e.ctrl.f()
     yield e.text("search_target")
     yield e.ret()
     t.assertEqual(params.filter_search, "search_target",
                   "File Browser: filter_search was not set by Ctrl+F")
+
+    space.show_region_ui = False
+    yield
 
     yield e.ctrl.f()
     yield e.back_space()
