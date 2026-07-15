@@ -71,10 +71,7 @@ const EnumPropertyItem rna_enum_nla_mode_extend_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-}  // namespace blender
-
-/* Enum definitions. */
-const EnumPropertyItem rna_enum_nla_strip_type_items[] = {
+static const EnumPropertyItem rna_enum_nla_strip_type_items[] = {
     {NLASTRIP_TYPE_CLIP, "CLIP", 0, "Action Clip", "NLA Strip references some Action"},
     {NLASTRIP_TYPE_TRANSITION,
      "TRANSITION",
@@ -89,6 +86,8 @@ const EnumPropertyItem rna_enum_nla_strip_type_items[] = {
      "NLA Strip representing a sound event for speakers"},
     {0, nullptr, 0, nullptr, nullptr},
 };
+
+}  // namespace blender
 
 #ifdef RNA_RUNTIME
 
@@ -629,8 +628,8 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
                                   bContext *C,
                                   ReportList *reports,
                                   const char *name,
-                                  int type,
                                   int start,
+                                  int type,
                                   bAction *action,
                                   Speaker *speaker)
 {
@@ -639,23 +638,22 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
   NlaStrip *strip;
 
   switch (type) {
-    case NLASTRIP_TYPE_CLIP:
-      if (action == nullptr) {
-        BKE_report(reports, RPT_ERROR, "Action can't be None for this NLA Strip 'type'");
-        return nullptr;
-      }
-      strip = BKE_nlastrip_new(action, *id);
-      break;
     case NLASTRIP_TYPE_SOUND:
       if (speaker == nullptr) {
-        BKE_report(reports, RPT_ERROR, "Speaker can't be None for this NLA Strip 'type'");
+        BKE_report(reports, RPT_ERROR, "Speaker can't be None for 'SOUND' NLA Strips");
         return nullptr;
       }
       strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), speaker);
       break;
+    /* If no type is specified or by default, pick 'CLIP' in order to not break backward-compatibility with addons. */
+    case NLASTRIP_TYPE_CLIP:
     default:
-      BKE_report(reports, RPT_ERROR, "Can only create 'CLIP' and 'SOUND' for now");
-      return nullptr;
+      if (action == nullptr) {
+        BKE_report(reports, RPT_ERROR, "Action can't be None for 'CLIP' NLA Strips");
+        return nullptr;
+      }
+      strip = BKE_nlastrip_new(action, *id);
+      break;
   }
 
   if (strip == nullptr) {
@@ -1188,8 +1186,6 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Add a new strip to the NLA track");
   parm = RNA_def_string(func, "name", "NlaStrip", 0, "", "Name for the NLA Strip");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_enum(func, "type", rna_enum_nla_strip_type_items, 1, "", "Type of NLA Strip to add");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   parm = RNA_def_int(func,
                      "start",
                      0,
@@ -1200,6 +1196,8 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
                      INT_MIN,
                      INT_MAX);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_enum(func, "type", rna_enum_nla_strip_type_items, 1, "", "Type of NLA Strip to add. When unspecified, defaults to 'CLIP'");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   parm = RNA_def_pointer(func, "action", "Action", "", "Action to assign to this strip. Required when type is 'CLIP'");
   RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   parm = RNA_def_pointer(func, "speaker", "Speaker", "", "Speaker to source to this strip. Required when type is 'SOUND'");
