@@ -98,6 +98,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Final absolute error of the solution");
   b.add_output<decl::Float>("Relative Error"_ustr)
       .description("Final relative error of the solution");
+
+  auto &p = b.add_panel("Debug"_ustr);
+  p.add_output<decl::Float>("Debug Boundary Value"_ustr).structure_type(StructureType::Grid);
+  p.add_output<decl::Vector>("Debug Boundary Gradient"_ustr).structure_type(StructureType::Grid);
+  p.add_output<decl::Float>("Debug Boundary Factor"_ustr).structure_type(StructureType::Grid);
 }
 
 struct DirichletBoundaryOp {
@@ -278,6 +283,10 @@ static void node_geo_exec(GeoNodeExecParams params)
       solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
           PreconditionerType>(
           source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
+
+      params.set_output("Debug Boundary Value"_ustr, grids[0]);
+      params.set_output("Debug Boundary Gradient"_ustr, grids[1]);
+      params.set_output("Debug Boundary Factor"_ustr, grids[2]);
       break;
     }
 
