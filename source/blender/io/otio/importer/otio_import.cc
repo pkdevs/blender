@@ -28,9 +28,12 @@
 #include <opentimelineio/clip.h>
 #include <opentimelineio/errorStatus.h>
 #include <opentimelineio/externalReference.h>
+#include <opentimelineio/freezeFrame.h>
 #include <opentimelineio/gap.h>
+#include <opentimelineio/generatorReference.h>
 #include <opentimelineio/imageSequenceReference.h>
 #include <opentimelineio/item.h>
+#include <opentimelineio/linearTimeWarp.h>
 #include <opentimelineio/marker.h>
 #include <opentimelineio/serializableObject.h>
 #include <opentimelineio/stack.h>
@@ -39,6 +42,7 @@
 #include <opentimelineio/transition.h>
 
 #include "SEQ_add.hh"
+#include "SEQ_sequencer.hh"
 #include "SEQ_utils.hh"
 
 #include "IO_otio.hh"
@@ -173,6 +177,189 @@ static void add_transitions(Scene *scene,
   }
 }
 
+static int find_free_effect_channel(const Scene *scene,
+                                    const ListBaseT<Strip> *seqbase,
+                                    const Strip *input)
+{
+  const int effect_left = input->left_handle();
+  const int effect_right = input->right_handle(scene);
+
+  for (int channel = input->channel + 1; channel <= seq::MAX_CHANNELS; channel++) {
+    bool occupied = false;
+
+    for (const Strip &strip : *seqbase) {
+      if (strip.channel != channel) {
+        continue;
+      }
+
+      const bool overlaps = effect_left < strip.right_handle(scene) &&
+                            effect_right > strip.left_handle();
+
+      if (overlaps) {
+        occupied = true;
+        break;
+      }
+    }
+
+    if (!occupied) {
+      return channel;
+    }
+  }
+
+  /* No free channel found. */
+  return 0;
+}
+
+static void add_effect(Scene *scene, EffectParams &params)
+{
+  int channel = find_free_effect_channel(scene, params.seqbase, params.input);
+  if (!channel) {
+    CLOG_WARN(&LOG,
+              "No free channel above strip '%s' for effect '%s'",
+              params.input->name,
+              params.otio_effect->name().c_str());
+    return;
+  }
+
+  seq::LoadData load_data;
+  memset(&load_data, 0, sizeof(seq::LoadData));
+  load_data.start_frame = params.input->left_handle();
+  load_data.channel = channel;
+  load_data.allow_invalid_file = true;
+  load_data.fit_method = SEQ_SCALE_TO_FIT;
+  load_data.flags |= seq::SEQ_LOAD_SET_VIEW_TRANSFORM;
+  load_data.flags &= ~seq::SEQ_LOAD_MOVIE_SYNC_FPS;
+  load_data.image.count = 1;
+  load_data.image.length = 1;
+  STRNCPY(load_data.name, params.otio_effect->name().c_str());
+  load_data.effect.input1 = params.input;
+  load_data.effect.input2 = nullptr;
+  load_data.effect.length = params.input->right_handle(scene) - params.input->left_handle();
+
+  if (STREQ(params.otio_effect->effect_name().c_str(), "Speed")) {
+    load_data.effect.type = STRIP_TYPE_SPEED;
+    Strip *effect_strip = seq::add_effect_strip(scene, params.seqbase, &load_data);
+    SpeedControlVars *speed = static_cast<SpeedControlVars *>(effect_strip->effectdata);
+
+    if (dynamic_cast<FreezeFrame *>(params.otio_effect)) {
+      speed->speed_control_type = SEQ_SPEED_LENGTH;
+    }
+    else if (auto ltw = dynamic_cast<LinearTimeWarp *>(params.otio_effect)) {
+      speed->speed_control_type = SEQ_SPEED_MULTIPLY;
+      speed->speed_fader = ltw->time_scalar();
+    }
+  }
+
+  else if (STREQ(params.otio_effect->effect_name().c_str(), "Gaussian Blur")) {
+    load_data.effect.type = STRIP_TYPE_GAUSSIAN_BLUR;
+    Strip *effect_strip = seq::add_effect_strip(scene, params.seqbase, &load_data);
+    set_gaussian_blur_metadata(params.otio_effect, effect_strip);
+  }
+
+  else if (STREQ(params.otio_effect->effect_name().c_str(), "Glow")) {
+    load_data.effect.type = STRIP_TYPE_GLOW;
+    Strip *effect_strip = seq::add_effect_strip(scene, params.seqbase, &load_data);
+    set_glow_metadata(params.otio_effect, effect_strip);
+  }
+}
+
+static void add_effects(Scene *scene, std::vector<EffectParams> &effect_params)
+{
+  for (EffectParams &params : effect_params) {
+    add_effect(scene, params);
+  }
+}
+
+static void handle_strip_effects(Item *item,
+                                 Strip *strip,
+                                 ListBaseT<Strip> *seqbase,
+                                 std::vector<EffectParams> &effect_params)
+{
+  for (auto &effect : item->effects()) {
+    effect_params.push_back({effect.value, strip, seqbase});
+  }
+}
+
+static Strip *add_generator_reference_effect(
+    Scene *scene,
+    ListBaseT<Strip> *seqbase,
+    seq::LoadData &load_data,
+    GeneratorReference *gen_ref,
+    std::vector<EffectStripWithInputsParams> &input_effects,
+    StripType &strip_type)
+{
+  std::string kind = gen_ref->generator_kind();
+
+  if (kind == "Color") {
+    load_data.effect.type = STRIP_TYPE_COLOR;
+  }
+  else if (kind == "Text") {
+    load_data.effect.type = STRIP_TYPE_TEXT;
+  }
+  else if (kind == "Adjustment") {
+    load_data.effect.type = STRIP_TYPE_ADJUSTMENT;
+  }
+  else if (kind == "Add") {
+    load_data.effect.type = STRIP_TYPE_ADD;
+  }
+  else if (kind == "Subtract") {
+    load_data.effect.type = STRIP_TYPE_SUB;
+  }
+  else if (kind == "Multiply") {
+    load_data.effect.type = STRIP_TYPE_MUL;
+  }
+  else if (kind == "Alpha Over") {
+    load_data.effect.type = STRIP_TYPE_ALPHAOVER;
+  }
+  else if (kind == "Alpha Under") {
+    load_data.effect.type = STRIP_TYPE_ALPHAUNDER;
+  }
+  else if (kind == "Color Mix") {
+    load_data.effect.type = STRIP_TYPE_COLORMIX;
+  }
+
+  if (ELEM(load_data.effect.type,
+           STRIP_TYPE_COLOR,
+           STRIP_TYPE_TEXT,
+           STRIP_TYPE_ADJUSTMENT,
+           STRIP_TYPE_ADD,
+           STRIP_TYPE_SUB,
+           STRIP_TYPE_MUL,
+           STRIP_TYPE_ALPHAOVER,
+           STRIP_TYPE_ALPHAUNDER,
+           STRIP_TYPE_COLORMIX))
+  {
+    Strip *strip = seq::add_effect_strip(scene, seqbase, &load_data);
+
+    /* Inputs will be resolved later based on the name of input strips after all the strips are
+     * created in the seqbase. */
+    EffectStripWithInputsParams eswip;
+    eswip.effect_strip = strip;
+    eswip.seqbase = seqbase;
+    set_effect_strip_params(gen_ref->parameters(), strip, eswip);
+    input_effects.push_back(eswip);
+
+    strip_type = strip->type;
+    return strip;
+  }
+
+  return nullptr;
+}
+
+static void resolve_effects_inputs(std::vector<EffectStripWithInputsParams> &input_effects)
+{
+  for (const EffectStripWithInputsParams &params : input_effects) {
+    for (Strip &strip : *params.seqbase) {
+      if (!params.effect_strip->input1 && STREQ(strip.name, params.input1)) {
+        params.effect_strip->input1 = &strip;
+      }
+      else if (!params.effect_strip->input2 && STREQ(strip.name, params.input2)) {
+        params.effect_strip->input2 = &strip;
+      }
+    }
+  }
+}
+
 static Strip *add_item_recursive(Main *bmain,
                                  Scene *scene,
                                  ListBaseT<Strip> *seqbase,
@@ -180,6 +367,8 @@ static Strip *add_item_recursive(Main *bmain,
                                  int channel,
                                  int left_handle,
                                  bool is_sound_clip,
+                                 std::vector<EffectParams> &effect_params,
+                                 std::vector<EffectStripWithInputsParams> &input_effects,
                                  ReportList *reports)
 {
   TimeRange range = item->trimmed_range();
@@ -230,6 +419,10 @@ static Strip *add_item_recursive(Main *bmain,
           load_data.path, load_data.path, image_params.start_frame, image_params.padding, false);
       BLI_strncat(load_data.path, image_params.name_suffix, sizeof(load_data.path));
     }
+    else if (auto gen_ref = dynamic_cast<GeneratorReference *>(clip->media_reference())) {
+      strip = add_generator_reference_effect(
+          scene, seqbase, load_data, gen_ref, input_effects, strip_type);
+    }
     STRNCPY(image_params.path, load_data.path);
 
     switch (strip_type) {
@@ -258,6 +451,8 @@ static Strip *add_item_recursive(Main *bmain,
     strip = seq::add_meta_strip(scene, seqbase, &load_data);
     int meta_end_frame = std::numeric_limits<int>::min();
     int channel_meta = 1;
+    std::vector<EffectParams> effect_params_meta;
+    std::vector<EffectStripWithInputsParams> input_effects_meta;
 
     for (const auto &t : stack->children()) {
       if (auto track = dynamic_cast<Track *>(t.value)) {
@@ -279,6 +474,8 @@ static Strip *add_item_recursive(Main *bmain,
                                                     channel_meta,
                                                     left_handle_meta,
                                                     is_sound_clip,
+                                                    effect_params_meta,
+                                                    input_effects_meta,
                                                     reports);
 
             if (strip_child) {
@@ -301,6 +498,8 @@ static Strip *add_item_recursive(Main *bmain,
       }
     }
     strip->len = meta_end_frame - load_data.start_frame;
+    add_effects(scene, effect_params_meta);
+    resolve_effects_inputs(input_effects_meta);
   }
 
   if (strip) {
@@ -308,6 +507,9 @@ static Strip *add_item_recursive(Main *bmain,
     if (!item->enabled()) {
       strip->flag |= SEQ_MUTE;
     }
+
+    set_strip_metadata(item, strip);
+    handle_strip_effects(item, strip, seqbase, effect_params);
   }
   else {
     CLOG_ERROR(&LOG, "File '%s' could not be loaded", load_data.path);
@@ -367,6 +569,9 @@ void build_blender_timeline(Main *bmain,
     scene->r.frs_sec = static_cast<short>(rate);
     scene->r.frs_sec_base = static_cast<float>(scene->r.frs_sec / rate);
   }
+
+  std::vector<EffectParams> effect_params;
+  std::vector<EffectStripWithInputsParams> input_effects;
   int channel = 1;
   for (const auto &t : timeline->tracks()->children()) {
     if (auto track = dynamic_cast<Track *>(t.value)) {
@@ -388,6 +593,8 @@ void build_blender_timeline(Main *bmain,
                                                   channel,
                                                   left_handle,
                                                   is_sound_clip,
+                                                  effect_params,
+                                                  input_effects,
                                                   reports);
 
           left_handle += item->trimmed_range().duration().to_frames();
@@ -407,6 +614,8 @@ void build_blender_timeline(Main *bmain,
   }
 
   add_scene_markers(scene, timeline);
+  add_effects(scene, effect_params);
+  resolve_effects_inputs(input_effects);
 }
 
 }  // namespace blender::io::otio

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <opentimelineio/effect.h>
 #include <opentimelineio/imageSequenceReference.h>
 #include <opentimelineio/serializableObject.h>
 #include <opentimelineio/timeline.h>
@@ -78,6 +79,12 @@ struct TransitionParams {
     input2 = nullptr;
     channel = 1;
   }
+};
+
+struct EffectParams {
+  otio::Effect *otio_effect = nullptr;
+  Strip *input = nullptr;
+  ListBaseT<Strip> *seqbase = nullptr;
 };
 
 void build_blender_timeline(Main *bmain,
