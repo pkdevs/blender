@@ -88,12 +88,14 @@ struct ThumbnailCache {
     int stream_index = 0; /* Stream index (only for multi-stream movies). */
     ImBuf *thumb = nullptr;
     int64_t used_at = 0;
+    bool stale = false; /* Thumbnail does not match source content, but has to be kept around until a newly generated thumbnail replaces it to avoid flickering (see #161249)*/
   };
 
   struct SourceEntry {
     Vector<FrameEntry> frames;
     int64_t used_at = 0;
   };
+
 
   struct Request {
     explicit Request(const SourceKey &source_key,
@@ -148,6 +150,27 @@ struct ThumbnailCache {
   Set<Request> scene_requests_;
   int64_t logical_time_ = 0;
 
+  /*
+  Mark all thumbnails of the entry as stale. they keep being displayed, but new thumbnail generation requests will be issued for them, and once done they replace the stale ones
+  returns true if any frame gets newly marked as stale.
+  */
+  bool mark_entry_stale(const SourceKey &key)
+  {
+    SourceEntry *entry = map_.lookup_ptr(key);
+    if(entry == nullptr)
+    {
+      return false;
+    }
+    bool marked = false;
+    for (FrameEntry &thumb : entry->frames)
+    {
+      marked |= !thumb.stale;
+      thumb.stale = true;
+    }
+    return marked;
+
+  }
+
   ~ThumbnailCache()
   {
     clear();
@@ -183,6 +206,24 @@ struct ThumbnailCache {
     return true;
   }
 };
+
+/*
+  Add a newly generated thumbnail to the entry, however first we check if a (stale) thumbnail for the same frame already exists, if it is, then replace it in-place and return.
+*/
+static void entry_add_or_replace_frame(ThumbnailCache::SourceEntry &entry, int frame_index, int stream_index, ImBuf *thumb, int64_t used_at)
+{
+  for (ThumbnailCache::FrameEntry &frame : entry.frames){
+    if (frame.frame_index == frame_index && frame.stream_index == stream_index)
+    {
+      IMB_freeImBuf(frame.thumb);
+      frame.thumb = thumb;
+      frame.used_at = math::max(frame.used_at, used_at);
+      frame.stale = false;
+      return;
+    }
+  }
+  entry.frames.append({frame_index, stream_index, thumb, used_at, false});
+}
 
 static ThumbnailCache *ensure_thumbnail_cache(Scene *scene)
 {
@@ -575,8 +616,7 @@ void ThumbGenerationJob::run_fn(void *customdata, wmJobWorkerStatus *worker_stat
           ThumbnailCache::SourceEntry *val = job->cache_->map_.lookup_ptr(request.source_key);
           if (val != nullptr) {
             val->used_at = math::max(val->used_at, request.requested_at);
-            val->frames.append(
-                {request.frame_index, request.stream_index, thumb, request.requested_at});
+            entry_add_or_replace_frame(*val, request.frame_index, request.stream_index, thumb, request.requested_at);
           }
           else {
             IMB_freeImBuf(thumb);
@@ -652,7 +692,11 @@ static ImBuf *query_thumbnail(ThumbnailCache &cache,
     }
   }
 
-  if (best_score > 0 && strip->type == STRIP_TYPE_SCENE) {
+  /*
+  Generates a new thumb if we can't find an exact match OR if we have one but its stale
+  */
+  const bool needs_new_thumb = (best_score > 0) || (best_index >= 0 && val->frames[best_index].stale);
+  if (needs_new_thumb && strip->type == STRIP_TYPE_SCENE) {
     /* Add thumb generation request for a scene strip. */
     ThumbnailCache::Request request(key,
                                     frame_index,
@@ -664,8 +708,8 @@ static ImBuf *query_thumbnail(ThumbnailCache &cache,
     request.scene_strip = strip;
     cache.scene_requests_.add(request);
   }
-  else if (best_score > 0) {
-    /* We do not have an exact frame match, add a thumb generation request. */
+  else if (needs_new_thumb) {
+    /* We do not have an exact frame match or we have a match that is stale, add a thumb generation request. */
 
     /* For ID-based sources, make a copy of the ID so that the worker thread can safely access it.
      * One copy per source is shared across all frame requests. Lifetime is handled in
@@ -799,7 +843,7 @@ bool thumbnail_cache_update_scene_thumbs(const bContext *C, Scene *scene)
       }
       else {
         val->used_at = math::max(val->used_at, cache->logical_time_);
-        val->frames.append({frame_index, 0, thumb, cache->logical_time_});
+        entry_add_or_replace_frame(*val, frame_index, 0, thumb, cache->logical_time_);
         rendered_thumb = true;
       }
     }
@@ -808,13 +852,16 @@ bool thumbnail_cache_update_scene_thumbs(const bContext *C, Scene *scene)
   return rendered_thumb || more_pending;
 }
 
+/*
+Instead of removing thumbnails when cache is invalidated we mark them as stale instead, so they keep being displayed until a newly generated thumbnail replaces them (see #161249)
+*/
 void thumbnail_cache_invalidate_strip(Scene *scene, const Strip *strip)
 {
   if (!strip_can_have_thumbnail(scene, strip)) {
     return;
   }
 
-  bool removed = false;
+  bool marked_stale = false;
   {
     std::scoped_lock lock(thumb_cache_mutex);
     ThumbnailCache *cache = query_thumbnail_cache(scene);
@@ -832,23 +879,23 @@ void thumbnail_cache_invalidate_strip(Scene *scene, const Strip *strip)
           for (int i = 0; i < paths_count; i++, elem++) {
             BLI_path_join(filepath, sizeof(filepath), strip->data->dirpath, elem->filename);
             BLI_path_abs(filepath, basepath);
-            removed |= cache->remove_entry(ThumbnailCache::SourceKey(filepath));
+            marked_stale |= cache->mark_entry_stale(ThumbnailCache::SourceKey(filepath));
           }
         }
       }
       else if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip) {
-        removed |= cache->remove_entry(ThumbnailCache::SourceKey(&strip->clip->id));
+          marked_stale |= cache->mark_entry_stale(ThumbnailCache::SourceKey(&strip->clip->id));
       }
       else if (strip->type == STRIP_TYPE_MASK && strip->mask) {
-        removed |= cache->remove_entry(ThumbnailCache::SourceKey(&strip->mask->id));
+          marked_stale |= cache->mark_entry_stale(ThumbnailCache::SourceKey(&strip->mask->id));
       }
       else if (strip->type == STRIP_TYPE_SCENE && strip->scene) {
-        removed |= cache->remove_entry(get_key_from_scene_strip(strip));
+          marked_stale |= cache->mark_entry_stale(get_key_from_scene_strip(strip));
       }
     }
   }
 
-  if (removed) {
+  if (marked_stale) {
     WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, &scene->id);
   }
 }
