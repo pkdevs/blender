@@ -171,9 +171,9 @@ struct MixedBoundaryOp {
                   double &diagonal) const
   {
     const openvdb::math::Vec3s normal = ijk.asVec3s() - neighbor.asVec3s();
-    const float value = value_accessor_.getValue(ijk);
-    const openvdb::math::Vec3s gradient = gradient_accessor_.getValue(ijk);
-    const float factor = factor_accessor_.getValue(ijk);
+    const float value = value_accessor_.getValue(neighbor);
+    const openvdb::math::Vec3s gradient = gradient_accessor_.getValue(neighbor);
+    const float factor = factor_accessor_.getValue(neighbor);
     diagonal -= 1.0 * (1.0f - factor);
     source += math::interpolate(
         value * voxel_volume_, (gradient * voxel_size_).dot(normal), factor);
@@ -188,9 +188,12 @@ static openvdb::MaskTree::Ptr get_boundary_mask(const openvdb::FloatTree &tree)
   typename MaskTreeT::Ptr interior_mask(new MaskTreeT(tree, false, openvdb::TopologyCopy()));
   typename MaskTreeT::Ptr boundary_mask(new MaskTreeT(tree, false, openvdb::TopologyCopy()));
 
-  openvdb::tools::erodeActiveValues(
-      *interior_mask, /*iterations=*/1, openvdb::tools::NN_FACE, openvdb::tools::IGNORE_TILES);
-  openvdb::tools::pruneInactive(*interior_mask);
+  //   openvdb::tools::erodeActiveValues(
+  //       *interior_mask, /*iterations=*/1, openvdb::tools::NN_FACE,
+  //       openvdb::tools::IGNORE_TILES);
+  // openvdb::tools::pruneInactive(*interior_mask);
+  openvdb::tools::dilateActiveValues(
+      *boundary_mask, /*iterations=*/1, openvdb::tools::NN_FACE, openvdb::tools::IGNORE_TILES);
   boundary_mask->topologyDifference(*interior_mask);
   return boundary_mask;
 }
@@ -284,9 +287,15 @@ static void node_geo_exec(GeoNodeExecParams params)
           PreconditionerType>(
           source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
 
-      params.set_output("Debug Boundary Value"_ustr, grids[0]);
-      params.set_output("Debug Boundary Gradient"_ustr, grids[1]);
-      params.set_output("Debug Boundary Factor"_ustr, grids[2]);
+      if (params.output_is_required("Debug Boundary Value"_ustr)) {
+        params.set_output("Debug Boundary Value"_ustr, grids[0]);
+      }
+      if (params.output_is_required("Debug Boundary Gradient"_ustr)) {
+        params.set_output("Debug Boundary Gradient"_ustr, grids[1]);
+      }
+      if (params.output_is_required("Debug Boundary Factor"_ustr)) {
+        params.set_output("Debug Boundary Factor"_ustr, grids[2]);
+      }
       break;
     }
 
