@@ -20,6 +20,8 @@
 #include "BKE_image_wrappers.hh"
 #include "BKE_paint.hh"
 
+#include "IMB_partial_update.hh"
+
 #include "PRF_profile.hh"
 
 #include "pbvh_intern.hh"
@@ -86,7 +88,6 @@ static void extract_barycentric_pixels(UDIMTilePixels &tile_data,
   const TriRasterizer rasterizer(
       uvs[0] * image_dimensions, uvs[1] * image_dimensions, uvs[2] * image_dimensions);
 
-  float3 row_edge_vals = rasterizer.edge_values(minx, miny);
   for (int y = miny; y < maxy; y++) {
     bool start_detected = false;
     PackedPixelRow pixel_row;
@@ -97,14 +98,13 @@ static void extract_barycentric_pixels(UDIMTilePixels &tile_data,
     const float fy = float(y) + 0.5f;
     const int mask_y = std::clamp(int(fy * mask_scale_y), 0, mask_resolution_y - 1);
 
-    float3 edge_vals = row_edge_vals;
     for (x = minx; x < maxx; x++) {
       const float fx = float(x) + 0.5f;
 
       /* The mask UV is always in range, since loop pixels are inside the clamped bounding box. */
       const int mask_x = std::clamp(int(fx * mask_scale_x), 0, mask_resolution_x - 1);
       const bool is_masked = mask_tile.is_masked(uv_island_index, mask_x, mask_y);
-      const bool is_inside = rasterizer.inside(edge_vals);
+      const bool is_inside = rasterizer.inside(x, y);
 
       if (!start_detected && is_inside && is_masked) {
         start_detected = true;
@@ -117,10 +117,8 @@ static void extract_barycentric_pixels(UDIMTilePixels &tile_data,
       else if (start_detected && (!is_inside || !is_masked)) {
         break;
       }
-      edge_vals += rasterizer.dx_step;
     }
 
-    row_edge_vals += rasterizer.dy_step;
     if (!start_detected) {
       continue;
     }
@@ -152,12 +150,13 @@ struct UVPrimitiveLookup {
 
   Vector<Vector<Entry>> lookup;
 
-  UVPrimitiveLookup(const uint64_t geom_primitive_len, uv_islands::UVIslands &uv_islands)
+  UVPrimitiveLookup(const uint64_t geom_primitive_len,
+                    MutableSpan<uv_islands::UVIsland> uv_islands)
   {
     lookup.append_n_times(Vector<Entry>(), geom_primitive_len);
 
     uint64_t uv_island_index = 0;
-    for (uv_islands::UVIsland &uv_island : uv_islands.islands) {
+    for (uv_islands::UVIsland &uv_island : uv_islands) {
       for (uv_islands::UVPrimitive &uv_primitive : uv_island.uv_primitives) {
         lookup[uv_primitive.primitive_i].append_as(Entry(&uv_primitive, uv_island_index));
       }
@@ -183,6 +182,8 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
   pixel_node.uv_primitives.tri_indices.reserve(node.faces().size() * 2);
   pixel_node.uv_primitives.delta_barycentric_coords.reserve(node.faces().size() * 2);
 
+  const Span<int3> corner_tris = mesh_data.corner_tris;
+  const Span<float2> uv_map = mesh_data.uv_map;
   for (ImageTile &tile : image.tiles) {
     image::ImageTileWrapper image_tile(&tile);
     image_user.tile = image_tile.get_tile_number();
@@ -201,25 +202,24 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
 
     for (const int face : node.faces()) {
       for (const int tri : bke::mesh::face_triangles_range(mesh_data.faces, face)) {
+        const std::array<float2, 3> uvs{
+            uv_map[corner_tris[tri][0]] - tile_offset,
+            uv_map[corner_tris[tri][1]] - tile_offset,
+            uv_map[corner_tris[tri][2]] - tile_offset,
+        };
+        const float minv = clamp_f(std::min({uvs[0].y, uvs[1].y, uvs[2].y}), 0.0f, 1.0f);
+        const int miny = floor(minv * image_buffer->y);
+        const float maxv = clamp_f(std::max({uvs[0].y, uvs[1].y, uvs[2].y}), 0.0f, 1.0f);
+        const int maxy = min_ii(ceil(maxv * image_buffer->y), image_buffer->y);
+        const float minu = clamp_f(std::min({uvs[0].x, uvs[1].x, uvs[2].x}), 0.0f, 1.0f);
+        const int minx = floor(minu * image_buffer->x);
+        const float maxu = clamp_f(std::max({uvs[0].x, uvs[1].x, uvs[2].x}), 0.0f, 1.0f);
+        const int maxx = min_ii(ceil(maxu * image_buffer->x), image_buffer->x);
         for (const UVPrimitiveLookup::Entry &entry : uv_prim_lookup.lookup[tri]) {
-          float2 uvs[3] = {
-              entry.uv_primitive->get_uv_vertex(mesh_data, 0)->uv - tile_offset,
-              entry.uv_primitive->get_uv_vertex(mesh_data, 1)->uv - tile_offset,
-              entry.uv_primitive->get_uv_vertex(mesh_data, 2)->uv - tile_offset,
-          };
-          const float minv = clamp_f(std::min({uvs[0].y, uvs[1].y, uvs[2].y}), 0.0f, 1.0f);
-          const int miny = floor(minv * image_buffer->y);
-          const float maxv = clamp_f(std::max({uvs[0].y, uvs[1].y, uvs[2].y}), 0.0f, 1.0f);
-          const int maxy = min_ii(ceil(maxv * image_buffer->y), image_buffer->y);
-          const float minu = clamp_f(std::min({uvs[0].x, uvs[1].x, uvs[2].x}), 0.0f, 1.0f);
-          const int minx = floor(minu * image_buffer->x);
-          const float maxu = clamp_f(std::max({uvs[0].x, uvs[1].x, uvs[2].x}), 0.0f, 1.0f);
-          const int maxx = min_ii(ceil(maxu * image_buffer->x), image_buffer->x);
-
           const int uv_prim_index = pixel_node.uv_primitives.tri_indices.size();
           pixel_node.uv_primitives.tri_indices.append(tri);
           pixel_node.uv_primitives.delta_barycentric_coords.append(
-              calc_barycentric_delta_x(image_buffer, uvs, minx, miny));
+              calc_barycentric_delta_x(image_buffer, uvs.data(), minx, miny));
 
           /* Extract the pixels. */
           if (mask_tile != nullptr) {
@@ -228,7 +228,7 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
                                        *mask_tile,
                                        entry.uv_island_index,
                                        uv_prim_index,
-                                       uvs,
+                                       uvs.data(),
                                        minx,
                                        miny,
                                        maxx,
@@ -320,9 +320,10 @@ static void apply_watertight_check(Tree &pbvh, Image &image, ImageUser &image_us
         }
       }
     });
+    IMB_partial_update_mark_full(image_buffer);
+    IMB_mark_dirty(image_buffer);
     BKE_image_release_ibuf(&image, image_buffer, nullptr);
   }
-  BKE_image_partial_update_mark_full_update(&image);
 }
 
 static float3 calc_pixel_position(const Span<float3> vert_positions,
@@ -403,7 +404,15 @@ static bool update_pixels(const Depsgraph &depsgraph,
                                  mesh.corner_verts(),
                                  uv_map,
                                  bke::pbvh::vert_positions_eval(depsgraph, object));
-  uv_islands::UVIslands islands(mesh_data);
+
+  /* Group primitives by island. */
+  Array<int> island_tri_offset_data;
+  Array<int> island_tri_index_data;
+  const GroupedSpan<int> tris_by_island = offset_indices::build_groups_from_indices(
+      mesh_data.uv_island_ids,
+      mesh_data.uv_island_len,
+      island_tri_offset_data,
+      island_tri_index_data);
 
   uv_islands::UVIslandsMask uv_masks;
   ImageUser tile_user = image_user;
@@ -418,11 +427,12 @@ static bool update_pixels(const Depsgraph &depsgraph,
                       ushort2(tile_buffer->x, tile_buffer->y));
     BKE_image_release_ibuf(&image, tile_buffer, nullptr);
   }
-  uv_masks.add(mesh_data, islands);
+  uv_masks.add(mesh_data, tris_by_island);
   uv_masks.dilate(image.seam_margin);
 
-  islands.extract_borders();
-  islands.extend_borders(mesh_data, uv_masks);
+  Array<uv_islands::UVIsland> islands = uv_islands::build_uv_islands(
+      mesh_data, tris_by_island, uv_masks);
+
   update_geom_primitives(pbvh, mesh_data);
 
   UVPrimitiveLookup uv_primitive_lookup(mesh_data.corner_tris.size(), islands);
@@ -461,6 +471,7 @@ static bool update_pixels(const Depsgraph &depsgraph,
     for (const PixelNode &pixel_node : pbvh.pixels_->nodes) {
       for (const UDIMTilePixels &tile : pixel_node.tiles) {
         rows_bytes += int64_t(tile.pixel_rows.size()) * sizeof(PackedPixelRow);
+        rows_bytes += int64_t(tile.pixel_row_positions.size()) * sizeof(PackedPixelRowPosition);
         for (const PackedPixelRow &row : tile.pixel_rows) {
           num_pixels += row.num_pixels;
         }
@@ -515,7 +526,7 @@ void mark_image_dirty(bke::pbvh::Node & /*node*/,
         continue;
       }
 
-      pixel_node.mark_region(tile, image, *image_tile, *image_buffer);
+      pixel_node.mark_region(tile, *image_buffer);
     }
     pixel_node.flags.dirty = false;
   }
