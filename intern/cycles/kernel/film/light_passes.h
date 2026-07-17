@@ -10,6 +10,7 @@
 
 #include "kernel/sample/pattern.h"
 #include "util/atomic.h"
+#include "util/types_float3.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -635,6 +636,19 @@ ccl_device_inline void film_write_background(KernelGlobals kg,
                                              ccl_global float *ccl_restrict render_buffer)
 {
   Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L;
+  const Spectrum spectrum_throughput = INTEGRATOR_STATE(state, path, spectrum_throughput);
+  if (!isequal(spectrum_throughput, one_spectrum())) {
+    /* Convert spectrum to rgb. */
+    const uint pixel = INTEGRATOR_STATE(state, path, rng_pixel);
+    const uint sample = INTEGRATOR_STATE(state, path, sample);
+    const float rand = path_rng_1D(kg, pixel, sample, PRNG_BOUNCE_NUM + PRNG_WAVELENGTH);
+    const float3 wavelength = sample_wavelengths(rand);
+    const float3 rgb_x = wavelength_to_rgb_d65(kg, wavelength.x);
+    const float3 rgb_y = wavelength_to_rgb_d65(kg, wavelength.y);
+    const float3 rgb_z = wavelength_to_rgb_d65(kg, wavelength.z);
+
+    contribution *= to_global(spectrum_throughput, rgb_x, rgb_y, rgb_z) / 3.0f;
+  }
   film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, path, bounce) - 1);
 
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
@@ -685,6 +699,18 @@ ccl_device_inline void film_write_surface_emission(KernelGlobals kg,
                                                    const int lightgroup = LIGHTGROUP_NONE)
 {
   Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L * mis_weight;
+  const Spectrum spectrum_throughput = INTEGRATOR_STATE(state, path, spectrum_throughput);
+  if (!isequal(spectrum_throughput, one_spectrum())) {
+    /* Convert spectrum to rgb. */
+    const uint pixel = INTEGRATOR_STATE(state, path, rng_pixel);
+    const uint sample = INTEGRATOR_STATE(state, path, sample);
+    const float rand = path_rng_1D(kg, pixel, sample, PRNG_BOUNCE_NUM + PRNG_WAVELENGTH);
+    const float3 wavelength = sample_wavelengths(rand);
+    const float3 rgb_x = wavelength_to_rgb_d65(kg, wavelength.x);
+    const float3 rgb_y = wavelength_to_rgb_d65(kg, wavelength.y);
+    const float3 rgb_z = wavelength_to_rgb_d65(kg, wavelength.z);
+    contribution *= to_global(spectrum_throughput, rgb_x, rgb_y, rgb_z) / 3.0f;
+  }
   film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, path, bounce) - 1);
 
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);

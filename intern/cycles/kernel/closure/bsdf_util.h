@@ -13,6 +13,7 @@
 #include "kernel/util/lookup_table.h"
 
 #include "util/color.h"
+#include "util/types_float3.h"
 #include "util/types_spectrum.h"
 
 CCL_NAMESPACE_BEGIN
@@ -90,12 +91,78 @@ ccl_device float2 fresnel_dielectric_polarized(float cos_theta_i,
   return make_float2(sqr(r_s), sqr(r_p));
 }
 
+/* Computes the Fresnel coefficients given the incoming direction `wi`, the outgoing direction
+ * `wo`, and the relative refractive index `eta` between the medium of `wo` and the medium of `wi`.
+ * Returns the reflectance. */
+ccl_device Spectrum fresnel_dielectric(const float3 wi,
+                                       const float3 wo,
+                                       const Spectrum eta,
+                                       ccl_private Spectrum *r_cos_theta_i,
+                                       ccl_private Spectrum *r_cos_theta_o,
+                                       const bool is_transmission)
+{
+  kernel_assert(all(eta >= one_spectrum()) || all(eta < one_spectrum()));
+
+  const float dot_i_o = dot(wi, wo);
+
+  const Spectrum cos_theta_i_sq = is_transmission ? sqr(eta * dot_i_o + 1.0f) /
+                                                        (eta * (eta + 2.0f * dot_i_o) + 1.0f) :
+                                                    make_spectrum(0.5f * (dot_i_o + 1.0f));
+
+  const Spectrum cos_theta_t_sq = 1.0f - (1.0f - cos_theta_i_sq) / sqr(eta);
+
+  /* Dot product of `wi` and the surface normal. */
+  const Spectrum cos_theta_i = sqrt(cos_theta_i_sq);
+
+  /* Dot product of the refracted direction and the surface normal. */
+  const Spectrum cos_theta_t = -sqrt(cos_theta_t_sq);
+
+  /* Amplitudes of reflected waves. */
+  const Spectrum r_s = (eta * cos_theta_t + cos_theta_i) / (eta * cos_theta_t - cos_theta_i);
+  const Spectrum r_p = (eta * cos_theta_i + cos_theta_t) / (eta * cos_theta_i - cos_theta_t);
+
+  /* Unpolarized reflectance. */
+  const Spectrum R = select(cos_theta_t_sq > 0, 0.5f * (sqr(r_s) + sqr(r_p)), one_spectrum());
+
+  if (r_cos_theta_i) {
+    *r_cos_theta_i = cos_theta_i;
+  }
+
+  if (is_transmission) {
+    if (r_cos_theta_o) {
+      /* TODO(spectral): deal with NaN. */
+      *r_cos_theta_o = cos_theta_t;
+    }
+    /* Impossible configuration for transmission due to total internal reflection. */
+    const auto valid = all(eta >= one_spectrum()) ? (dot_i_o * eta < -one_spectrum()) :
+                                                    (make_spectrum(dot_i_o) < -eta);
+    return mask(valid, R);
+  }
+
+  if (r_cos_theta_o) {
+    *r_cos_theta_o = cos_theta_i;
+  }
+
+  return R;
+}
+
 /* Compute fresnel reflectance for unpolarized light. */
 ccl_device_forceinline float fresnel_dielectric(const float cos_theta_i,
                                                 const float eta,
                                                 ccl_private float *r_cos_theta_t)
 {
   return average(fresnel_dielectric_polarized(cos_theta_i, eta, r_cos_theta_t, nullptr));
+}
+
+ccl_device_forceinline float3 fresnel_dielectric(const float cos_theta_i,
+                                                 const float3 eta,
+                                                 ccl_private float *r_cos_theta_t)
+{
+  float3 result;
+  result.z = average(fresnel_dielectric_polarized(cos_theta_i, eta.z, r_cos_theta_t, nullptr));
+  result.y = average(fresnel_dielectric_polarized(cos_theta_i, eta.y, r_cos_theta_t, nullptr));
+  result.x = average(fresnel_dielectric_polarized(cos_theta_i, eta.x, r_cos_theta_t, nullptr));
+  return result;
 }
 
 /* Refract the incident ray, given the cosine of the refraction angle and the relative refractive

@@ -6,6 +6,7 @@
 
 #include "kernel/closure/alloc.h"
 #include "kernel/closure/bsdf.h"
+#include "kernel/closure/bsdf_microfacet.h"
 #include "kernel/closure/bsdf_util.h"
 #include "kernel/closure/bssrdf.h"
 #include "kernel/closure/emissive.h"
@@ -636,7 +637,7 @@ ccl_device
                   stack_load(stack, data.transmission_dispersion_abbe_number), 0.0f);
               const float inv_abbe = safe_divide(dispersion_scale, abbe_number);
               bsdf->ior = backfacing ? 1.0f / ior : ior;
-              bsdf->ior = bsdf_glass_ior(sd, bsdf->ior, inv_abbe);
+              bsdf->ior = bsdf_glass_ior(sd, bsdf->ior, inv_abbe).x;
 
               if (backfacing) {
                 adjust_thin_film_ior_at_backface(thinfilm.ior, bsdf->ior);
@@ -911,7 +912,7 @@ ccl_device
             const float abbe_number = fmaxf(
                 stack_load(stack, data.transmission_dispersion_abbe_number), 0.0f);
             const float inv_abbe = safe_divide(dispersion_scale, abbe_number);
-            bsdf->ior = bsdf_glass_ior(sd, modulated_specular_ior, inv_abbe);
+            bsdf->ior = bsdf_glass_ior(sd, modulated_specular_ior, inv_abbe).x;
             bsdf->T = geometry_tangent;
             bsdf->alpha_x = specular_alpha.x;
             bsdf->alpha_y = specular_alpha.y;
@@ -928,6 +929,9 @@ ccl_device
                   closure_alloc_extra(sd, sizeof(FresnelDielectricTint));
 
               if (fresnel) {
+                /* TODO(weizhen): also for the medium. */
+                fresnel->inv_abbe = inv_abbe;
+                fresnel->ior = bsdf_glass_ior(sd, modulated_specular_ior, inv_abbe);
                 fresnel->thin_film = thinfilm;
                 fresnel->tint = {specular_tint, transmission_color};
                 bsdf_dielectric_tint_setup(kg, bsdf, sd, fresnel);

@@ -559,6 +559,11 @@ ccl_device_inline float3 interp(const float3 a, const float3 b, const float t)
   return a + t * (b - a);
 }
 
+ccl_device_inline float3 mix(const float a, const float b, const float3 t)
+{
+  return t * (b - a) + a;
+}
+
 ccl_device_inline float3 sqr(const float3 a)
 {
   return a * a;
