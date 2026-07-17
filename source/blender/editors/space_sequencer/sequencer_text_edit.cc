@@ -82,14 +82,19 @@ bool sequencer_text_editing_active_poll(bContext *C)
 }
 
 std::optional<int2> sequencer_text_editing_cursor_region_xy_get(const Scene *scene,
-                                                                const ARegion *region)
+                                                                const ARegion *region,
+                                                                bool &r_text_editing_active)
 {
+  r_text_editing_active = false;
   if (const Strip *strip = seq::select_active_get(scene)) {
-    if (strip->type == STRIP_TYPE_TEXT && (strip->flag & SEQ_FLAG_TEXT_EDITING_ACTIVE) &&
-        strip->intersects_frame(scene, BKE_scene_frame_get(scene)))
-    {
+    if (strip->type == STRIP_TYPE_TEXT && (strip->flag & SEQ_FLAG_TEXT_EDITING_ACTIVE)) {
+      /* Set even when no position is found below: the play-head may be off the strip or the
+       * runtime not built until the strip renders. Both recover while editing stays active. */
+      r_text_editing_active = true;
       const TextVars *data = static_cast<const TextVars *>(strip->effectdata);
-      if (data && data->runtime && !data->runtime->lines.is_empty()) {
+      if (strip->intersects_frame(scene, BKE_scene_frame_get(scene)) && data && data->runtime &&
+          !data->runtime->lines.is_empty())
+      {
         const seq::TextVarsRuntime *runtime = data->runtime;
         const int2 cursor_pos = strip_text_cursor_offset_to_position(runtime, data->cursor_offset);
         float2 co = runtime->lines[cursor_pos.y].characters[cursor_pos.x].position;

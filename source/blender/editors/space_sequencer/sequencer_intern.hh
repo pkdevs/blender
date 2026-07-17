@@ -422,8 +422,14 @@ bool retiming_overlay_enabled(const SpaceSeq *sseq);
 
 /* `sequencer_text_edit.cc` */
 bool sequencer_text_editing_active_poll(bContext *C);
+/**
+ * Return the text cursor of the active text strip, in region pixels.
+ * \param r_text_editing_active: Set when the strip is in text editing mode, which can be
+ * true without a position, e.g. the current-frame moved outside the strip.
+ */
 std::optional<int2> sequencer_text_editing_cursor_region_xy_get(const Scene *scene,
-                                                                const ARegion *region);
+                                                                const ARegion *region,
+                                                                bool &r_text_editing_active);
 void SEQUENCER_OT_text_cursor_move(wmOperatorType *ot);
 void SEQUENCER_OT_text_insert(wmOperatorType *ot);
 void SEQUENCER_OT_text_delete(wmOperatorType *ot);
