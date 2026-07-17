@@ -1642,28 +1642,6 @@ struct KernelSunLight {
   float pad[3];
 };
 
-/**
-typedef struct KernelLight {
-  int type;
-  packed_float3 co;
-  int shader_id;
-  float max_bounces;
-  float random;
-  float strength[3];
-  int use_caustics;
-  int lightgroup;
-  Transform tfm;
-  Transform itfm;
-union {
-    KernelSpotLight spot;
-    KernelAreaLight area;
-    KernelDistantLight distant;
-  };
-  uint64_t light_set_membership;
-  uint64_t shadow_set_membership;
-} KernelLight;
-static_assert_align(KernelLight, 16);
- */
 struct KernelLight {
   int type;
   packed_float3 co;

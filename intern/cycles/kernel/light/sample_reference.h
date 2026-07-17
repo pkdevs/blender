@@ -167,7 +167,7 @@ ccl_device_inline bool restir_area_light_reference_from_sample(
 
 
 // TODO: Handle all analytic lights
-ccl_device_inline bool restir_light_reference_from_sample(
+ccl_device_inline bool restir_light_reference_from_sample( // !!!
     KernelGlobals kg,
     const ccl_private LightSample *ls,
     ccl_private ReSTIRLightSampleReference *reference)
@@ -187,6 +187,40 @@ ccl_device_inline bool restir_light_reference_from_sample(
       return false;
   }
 }
+
+ccl_device_inline bool restir_light_reference_restore_metadata(
+    KernelGlobals kg,
+    ccl_private ReSTIRLightSampleReference *reference)
+{
+  reference->flags = 0;
+
+  if (reference->object != OBJECT_NONE) {
+    return false;
+  }
+
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reference->prim);
+
+  reference->type = (LightType)klight->type;
+  reference->flags = RESTIR_LIGHT_REFERENCE_VALID;
+
+  if (reference->type == LIGHT_SUN || reference->type == LIGHT_AREA ||
+      (reference->type == LIGHT_POINT && klight->spot.is_sphere))
+  {
+    reference->flags |= RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+  }
+
+  switch (reference->type) {
+    case LIGHT_POINT:
+    case LIGHT_SUN:
+    case LIGHT_AREA:
+      return true;
+    default:
+      *reference = restir_light_reference_empty();
+      return false;
+  }
+}
+
+
 
 // MARK: - Consumption
 

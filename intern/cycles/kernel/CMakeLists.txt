@@ -192,6 +192,7 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
   integrator/megakernel.h
   integrator/mnee.h
   integrator/path_state.h
+  integrator/reservoir.h
   integrator/restir.h
   integrator/restir_temporal.h
   integrator/shade_background.h
