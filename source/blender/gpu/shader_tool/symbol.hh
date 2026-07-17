@@ -296,6 +296,12 @@ inline void SymbolScope::function_emplace(SymbolFunction *fn)
     /* If function already exists, insert overload in the linked list. */
     fn->overload_next = it.first->second->overload_next;
     it.first->second->overload_next = fn;
+    /* Add suffix to the function identifier to reduce chance of hitting an overload at runtime.
+     * This way, the dead code eliminator can discard more functions.
+     * This suffix needs to be the same whatever the file include order is, as it can differ from
+     * shader to shader. We use the line index for that. It is short enough to not clutter the
+     * resulting source file. */
+    fn->identifier += to_string(fn->loc.tok.line_number());
   }
   scopes.emplace(unique_id(), fn);
 }
