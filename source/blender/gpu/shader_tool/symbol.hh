@@ -118,6 +118,7 @@ struct SymbolScope : Symbol {
   SymbolFunction *lookup_function(IdQualified id) const;
   SymbolClass *lookup_class(IdQualified id) const;
 
+  SymbolVariable *lookup_variable(string id) const;
   SymbolFunction *lookup_function(string id) const;
   SymbolClass *lookup_class(string id) const;
 

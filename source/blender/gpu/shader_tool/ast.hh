@@ -88,6 +88,7 @@ enum class NodeType : char {
   Op,
   OpDeref,
   Constructor,
+  StructuredBinding,
 };
 
 using TokenID = int;
@@ -195,7 +196,7 @@ struct Node {
 
   /* Traversal. */
 
-  template<typename NodeT, typename CallbackT> void foreach_recursive(CallbackT cb) const
+  template<typename NodeT, typename CallbackT> void foreach_recursive(CallbackT &&cb) const
   {
     for (Node end = find_recursion_end(),
               node = first_node_of_type(children(), NodeT::NodeEnumVal, end);
@@ -206,7 +207,7 @@ struct Node {
     }
   }
 
-  template<typename NodeT, typename CallbackT> void foreach(CallbackT cb) const
+  template<typename NodeT, typename CallbackT> void foreach(CallbackT &&cb) const
   {
     for (Node node = child_first(NodeT::NodeEnumVal); node.is_valid();
          node = node.next(NodeT::NodeEnumVal))
@@ -215,7 +216,7 @@ struct Node {
     }
   }
 
-  template<typename CallbackT> void foreach_child(CallbackT cb) const
+  template<typename CallbackT> void foreach_child(CallbackT &&cb) const
   {
     for (Node node = child_first(); node.is_valid(); node = node.next()) {
       cb(node);
@@ -613,6 +614,18 @@ struct AssignStmt : Node {
   Expr expr() const
   {
     return child_first();
+  }
+};
+
+struct StructuredBinding : Node {
+  NODE_COMMON(StructuredBinding);
+
+  /* Unique identified used to name the temporary variable. */
+  std::string tmp_id() const;
+
+  AssignStmt assign() const
+  {
+    return child_last();
   }
 };
 

@@ -115,6 +115,11 @@ bool FuncParamList::is_empty() const
   return back().index_ - front().index_ == 1;
 }
 
+string StructuredBinding::tmp_id() const
+{
+  return "_" + to_string(front().index_ - parent().front().index_);
+}
+
 bool ClassDecl::is_enum() const
 {
   return front() == Enum;
@@ -175,7 +180,7 @@ void Node::print_ast() const
 
     std::string loc = node.location(parser);
     /* Create indentation based on tree depth. */
-    int padding_size = std::max(0, 20 - static_cast<int>(loc.size()));
+    int padding_size = std::max(0, 55 - static_cast<int>(loc.size()));
     std::string padding(padding_size, ' ');
 
     std::cout << loc << padding;
@@ -350,6 +355,8 @@ static std::string to_string(ast::NodeType type)
       return "Declarator";
     case ast::NodeType::ExprSub:
       return "ExprSub";
+    case ast::NodeType::StructuredBinding:
+      return "StructuredBinding";
   }
   return "Error";
 }
@@ -476,6 +483,8 @@ static bool display_type(ast::NodeType type)
     case ast::NodeType::Declarator:
       return false;
     case ast::NodeType::ExprSub:
+      return false;
+    case ast::NodeType::StructuredBinding:
       return false;
   }
   return false;

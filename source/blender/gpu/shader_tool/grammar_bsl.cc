@@ -937,7 +937,11 @@ struct BSLParser {
     }
     /* Restore state after failing to parse a declaration. */
     restore_state(state);
-    /* TODO: structured bindings. */
+
+    if (curr.str() == "auto" && peek_next(1) == '[') {
+      structured_bindings();
+      return;
+    }
 
     NODE(LocalStmt);
     attribute_optional();
@@ -945,6 +949,18 @@ struct BSLParser {
     if (expect_semicolon) {
       match(';');
     }
+  }
+
+  void structured_bindings()
+  {
+    NODE(StructuredBinding);
+    match(Word); /* auto */
+    match('[');
+    do {
+      unqualified_id();
+    } while (match_if(','));
+    match(']');
+    assignment();
   }
 
   void using_statement()

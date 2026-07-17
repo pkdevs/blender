@@ -219,6 +219,9 @@ struct InstantiationContext {
         case NodeType::ReturnStmt:
           return_statement(node, symbol);
           break;
+        case NodeType::StructuredBinding:
+          structured_binding(node, symbol);
+          break;
         case NodeType::IfStmt:
         case NodeType::ElseIfStmt:
         case NodeType::ElseStmt:
@@ -250,6 +253,28 @@ struct InstantiationContext {
   {
     match_if(Return);
     expr(stmt.expression(), scope);
+    match_if(';');
+  }
+
+  void structured_binding(StructuredBinding decl, SymbolScope &scope)
+  {
+    SymbolVariable *tmp_var = scope.lookup_variable(decl.tmp_id());
+
+    AssignStmt assign = decl.assign();
+
+    Token decl_front = decl.front();
+    Token assign_front = assign.front();
+
+    int pad = assign_front.char_number() - decl_front.char_number();
+
+    jump_to(decl_front);
+    /* Replace 'auto [a, b]' by the tmp variable declaration. */
+    string decl_str = tmp_var->type->resolved->identifier + " " + tmp_var->identifier;
+    /* Add padding until the assign statement. */
+    builder.ss << decl_str + string(max(0, pad - int(decl_str.size())), ' ');
+
+    builder.curr = assign_front;
+    assignment(assign, scope);
     match_if(';');
   }
 
@@ -1187,7 +1212,7 @@ struct InstantiationContext {
       builder.ss << "this_.";
     }
 
-    if (var->is_static) {
+    if (var->resolved) {
       builder.curr = id.back();
       builder << var->resolved->identifier + trivia(id);
     }

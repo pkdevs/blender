@@ -471,9 +471,6 @@ void U_fn();
 
 TEST(shader_tool, StructuredBindings)
 {
-  using namespace shader;
-  using namespace std;
-
   {
     string input = R"(
 struct S {
@@ -532,6 +529,39 @@ void fn(S u, _ref(S ,v))
 }
 )";
     auto [output, _, error] = process_test_string(input);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+struct A {
+  int foo, bar;
+};
+
+void f()
+{
+  A c;
+  auto [a, b] = c;
+  a + b;
+}
+)";
+    string expect = R"(
+struct A {
+  int foo, bar;
+};
+#line 2
+
+A A_ctor_() {A r;r.foo=0;r.bar=0;return r;}
+
+
+void f()
+{
+  A c;
+  A _4        = c;
+  _4.foo + _4.bar;
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }

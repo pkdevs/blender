@@ -9,7 +9,6 @@
 #include "expression.hh"
 #include "processor.hh"
 #include "symbol.hh"
-#include <variant>
 
 namespace blender::gpu::shader::parser {
 
@@ -275,7 +274,12 @@ class ExpressionTypeParser {
 SymbolClass *SymbolTable::expr_type_analysis(const SymbolScope &scope, Expr expr) const
 {
   ExpressionTypeParser parser;
-  return parser.eval(*this, scope, expr);
+  try {
+    return parser.eval(*this, scope, expr);
+  }
+  catch (AstNodeException &e) {
+    return scope.root_scope()->lookup_class(err_symbol);
+  }
 }
 
 Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declarator decl) const
@@ -464,6 +468,9 @@ struct SymbolParser {
             break;
           case NodeType::VarDecl:
             parse_var_decl(scope, child, offset, prefix);
+            break;
+          case NodeType::StructuredBinding:
+            parse_structured_binding(scope, child);
             break;
           case NodeType::TemplateDecl:
             parse_template_decl(scope, child);
@@ -825,6 +832,51 @@ struct SymbolParser {
 
         cls->template_data->instances.emplace(arg_mangled, spec);
       }
+    }
+  }
+
+  void parse_structured_binding(SymbolScope &scope, StructuredBinding decl)
+  {
+    AssignStmt assign = decl.assign();
+    Expr expr = assign.expr();
+    if (!expr.is_valid()) {
+      error(decl, "Cannot deduce actual type for variable '' with type 'auto'");
+      return;
+    }
+
+    SymbolClass *cls = table.expr_type_analysis(scope, expr);
+    if (cls->is_error) {
+      error(decl, "Cannot deduce actual type for variable '' with type 'auto'");
+      return;
+    }
+
+    Id id = decl.child_first();
+
+    /* Create temp variable to write to. */
+    SymbolVariable *tmp = table.var_arena.alloc(&scope, cls, decl.front(), decl.tmp_id());
+    scope.variables.emplace(tmp->identifier, tmp);
+
+    cls->visit_variables([&](SymbolVariable &var) {
+      if (!id.is_valid()) {
+        error(decl, "Not enough names in structure binding");
+        return;
+      }
+      /* Make copy of the variable in local scope. */
+      SymbolVariable *sym = table.var_arena.alloc(var);
+      sym->identifier = id.str();
+      sym->parent = &scope;
+      scope.variables.emplace(sym->identifier, sym);
+      /* Resolve to the tmp variable member. */
+      SymbolVariable *res = table.var_arena.alloc(var);
+      res->identifier = tmp->identifier + '.' + var.identifier;
+      res->parent = &scope;
+      sym->resolved = res;
+
+      id = id.next();
+    });
+    if (id.is_valid()) {
+      error(decl, "Too many names in structure binding");
+      return;
     }
   }
 
@@ -1198,6 +1250,24 @@ template<typename T> T *SymbolScope::lookup_generic_nested(Id id, const SourceLo
   return nullptr;
 }
 
+template<typename Callback> void SymbolScope::visit_variables(Callback &&callback)
+{
+  assert(this->type == CLASS);
+  vector<SymbolVariable *> members;
+  for (auto &[k, v] : variables) {
+    members.emplace_back(v);
+  }
+
+  /* Sort elements to guarantee deterministic order. */
+  sort(members.begin(), members.end(), [](const SymbolVariable *a, const SymbolVariable *b) {
+    return a->loc < b->loc;
+  });
+
+  for (auto *m : members) {
+    callback(*m);
+  }
+}
+
 SymbolClass *SymbolScope::lookup_class(string id) const
 {
   return classes.find(id)->second;
@@ -1206,6 +1276,11 @@ SymbolClass *SymbolScope::lookup_class(string id) const
 SymbolFunction *SymbolScope::lookup_function(string id) const
 {
   return functions.find(id)->second;
+}
+
+SymbolVariable *SymbolScope::lookup_variable(string id) const
+{
+  return variables.find(id)->second;
 }
 
 void SymbolScope::print() const
@@ -1295,19 +1370,6 @@ void SymbolScope::print() const
 
   /* Recursive lambda to traverse all symbol branches. */
   auto print_node = [&](auto &self, auto *node, int depth, const vector<bool> &is_last) -> void {
-    struct Element {
-      string *file;
-      int row;
-      int col;
-      string type;
-      string identifier;
-      variant<const SymbolScope *,
-              const SymbolClass *,
-              const SymbolFunction *,
-              const SymbolVariable *>
-          ptr;
-    };
-
     struct Child {
       SymbolType type;
       const Symbol *sym;
