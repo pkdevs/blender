@@ -289,8 +289,8 @@ void SourceProcessor::lint_attributes_ast(Parser &parser)
     }
 
     if (attr_str == "static_branch" &&
-        ((parent_type != NodeType::Condition) ||
-         (parent_parent_type != NodeType::IfStmt || parent_parent_type != NodeType::ElseIfStmt)))
+        (parent_type != NodeType::Condition || parent_parent_type != NodeType::IfStmt ||
+         parent_parent_type != NodeType::ElseIfStmt))
     {
       report_error(attr, "static_branch attribute must be declared after a condition");
       return;
