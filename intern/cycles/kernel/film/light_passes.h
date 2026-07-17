@@ -6,6 +6,7 @@
 
 #include "kernel/film/write.h"
 
+// #include "kernel/integrator/reservoir.h"
 #include "kernel/integrator/shadow_catcher.h"
 
 #include "kernel/sample/pattern.h"
@@ -345,7 +346,7 @@ ccl_device_forceinline void film_write_shadow_catcher_bounce_data(
 
 /* Write combined pass. */
 ccl_device_inline void film_write_combined_pass(KernelGlobals kg, // !!!
-                                                const PathRayVisibility path_visibility,
+                                                const PathRayVisibility path_visibility, // !!!
                                                 const uint32_t path_flag,
                                                 const int sample,
                                                 const Spectrum contribution,
@@ -519,7 +520,7 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
   }
 
   /* Direct light shadow. */
-  film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer);
+  film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer); // !!!: Remove
 
 #ifdef __PASSES__
   if (kernel_data.film.light_pass_flag & PASS_ANY) {
@@ -660,15 +661,49 @@ ccl_device_inline void film_write_background(KernelGlobals kg,
                                          kernel_data.background.lightgroup);
 }
 
-// TODO: film_add_reservoir_pt
+// MARK: - 
 
-// TODO: film_write_pass_reservoir_pt
+// // TODO: film_add_reservoir_pt
 
-// !!!: Needs a rewrite
+// // TODO: film_write_pass_reservoir_pt
+
+
+// ccl_device_inline void film_write_pass_reservoir(
+//     KernelGlobals kg,
+//     ConstIntegratorState state,
+//     ccl_private const ReSTIRDIReservoir *reservoir,
+//     ccl_global float *ccl_restrict render_buffer,
+//     const bool write_prev = false)
+// {
+//   kernel_assert(kernel_data.integrator.use_restir);
+
+//   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+
+//   ccl_global float *ptr = buffer + (write_prev ? 
+//                                       kernel_data.film.pass_restir_previous_reservoir :
+//                                       kernel_data.film.pass_restir_reservoir);
+
+//   // TODO: it is possible to compress the LightSample.
+
+//   const ReSTIRLightSampleReference reference = reservoir->light_reference;
+
+//   /* Preserve the legacy six-float reservoir layout. For analytic lights,
+//    * reference type and flags are reconstructed from the light identified by prim. */
+//   film_overwrite_pass_float(ptr++, (float)reference.object);
+//   film_overwrite_pass_float(ptr++, (float)reference.prim);
+//   // TODO: `(float)` only exactly preserves integer values up to 2^24; Future fix...
+
+//   film_overwrite_pass_float(ptr++, reference.param.x); // light.u
+//   film_overwrite_pass_float(ptr++, reference.param.y); // light.v
+
+//   film_overwrite_pass_float(ptr++, reservoir->total_weight);
+
+//   film_overwrite_pass_float(ptr, reservoir->luminance);
+// }
 ccl_device_inline void film_write_pass_reservoir(
     KernelGlobals kg,
     ConstIntegratorState state,
-    ccl_private const ReSTIRDIReservoir *reservoir,
+    ccl_private const Reservoir *reservoir,
     ccl_global float *ccl_restrict render_buffer,
     const bool write_prev = false)
 {
@@ -676,49 +711,74 @@ ccl_device_inline void film_write_pass_reservoir(
 
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
 
-  ccl_global float *ptr = buffer +
-                          (write_prev ? kernel_data.film.pass_restir_previous_reservoir :
+  ccl_global float *ptr = buffer + (write_prev ?
+                                        kernel_data.film.pass_restir_previous_reservoir :
                                         kernel_data.film.pass_restir_reservoir);
 
-  // TODO: it is possible to compress the LightSample.
+  // TODO(weizhen): it is possible to compress the light sample reference.
 
-  /* Preserve the legacy six-float reservoir-pass layout. LightSample currently does not
-   * provide canonical light parameters or persistent analytic-light identity. */
-  film_overwrite_pass_float(ptr++, (float)reservoir->light.object);
-  film_overwrite_pass_float(
-      ptr++,
-      (float)(reservoir->light.object != OBJECT_NONE ? reservoir->light.prim : PRIM_NONE));
+  film_overwrite_pass_float(ptr++, (float)reservoir->reference.object);
+  film_overwrite_pass_float(ptr++, (float)reservoir->reference.prim);
 
-  // film_overwrite_pass_float(ptr++, reservoir->light.u);
-  // film_overwrite_pass_float(ptr++, reservoir->light.v);
-  film_overwrite_pass_float(ptr++, -1.0f);
-  film_overwrite_pass_float(ptr++, -1.0f);
+  film_overwrite_pass_float(ptr++, reservoir->reference.param.x);
+  film_overwrite_pass_float(ptr++, reservoir->reference.param.y);
 
   film_overwrite_pass_float(ptr++, reservoir->total_weight);
   film_overwrite_pass_float(ptr, reservoir->luminance);
-
-  // film_overwrite_pass_float(ptr, (float)reservoir->M);
 }
 
-ccl_device_inline void film_clear_pass_reservoir(
-    KernelGlobals kg,
-    ConstIntegratorState state,
-    ccl_global float *ccl_restrict render_buffer)
+
+
+
+// ccl_device_inline void film_clear_pass_reservoir(
+//     KernelGlobals kg,
+//     ConstIntegratorState state,
+//     ccl_global float *ccl_restrict render_buffer)
+// {
+//   if (!kernel_data.integrator.use_restir) {
+//     return;
+//   }
+
+//   /* Set weight to zero. */
+//   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+
+//   /* Set weight to zero. */
+//   ccl_global float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 4;
+//   film_overwrite_pass_float(ptr, 0.0f);
+
+//   ptr = buffer + kernel_data.film.pass_restir_previous_reservoir + 4;
+//   film_overwrite_pass_float(ptr, 0.0f);
+
+//   ptr = buffer + kernel_data.film.pass_restir_pt_reservoir;
+//   film_overwrite_pass_float(ptr, 0.0f);
+//   film_overwrite_pass_float(ptr + 2, 0.0f);
+
+//   ptr = buffer + kernel_data.film.pass_restir_pt_previous_reservoir;
+//   film_overwrite_pass_float(ptr, 0.0f);
+
+//   /* Set sd.type to zero. */
+//   ptr = buffer + kernel_data.film.pass_surface_data + 3;
+//   film_overwrite_pass_float(ptr, 0.0f);
+// }
+/* TODO(weizhen): clear data properly. */
+ccl_device_inline void film_clear_pass_reservoir(KernelGlobals kg,
+                                                 ConstIntegratorState state,
+                                                 ccl_global float *ccl_restrict render_buffer)
 {
   if (!kernel_data.integrator.use_restir) {
     return;
   }
 
-  /* Set weight to zero. */
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
 
-  /* Set weight to zero. */
+  /* Set DI reservoir weights to zero. */
   ccl_global float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 4;
   film_overwrite_pass_float(ptr, 0.0f);
 
   ptr = buffer + kernel_data.film.pass_restir_previous_reservoir + 4;
   film_overwrite_pass_float(ptr, 0.0f);
 
+  /* Set PT reservoir weights to zero. */
   ptr = buffer + kernel_data.film.pass_restir_pt_reservoir;
   film_overwrite_pass_float(ptr, 0.0f);
   film_overwrite_pass_float(ptr + 2, 0.0f);
@@ -730,6 +790,57 @@ ccl_device_inline void film_clear_pass_reservoir(
   ptr = buffer + kernel_data.film.pass_surface_data + 3;
   film_overwrite_pass_float(ptr, 0.0f);
 }
+
+
+
+// MARK: - 
+
+
+// ccl_device_inline void integrator_finalize_reservoir(
+//     KernelGlobals kg,
+//     IntegratorState state,
+//     ccl_global float *ccl_restrict render_buffer)
+// {
+//   if (!kernel_data.integrator.use_restir) {
+//     return;
+//   }
+
+//   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer) +
+//                              kernel_data.film.pass_restir_reservoir;
+
+//   ReSTIRDIReservoir reservoir(kg);
+//   restir_unpack_reservoir(kg, &reservoir, buffer);
+
+//   // reservoir.finalize();
+//   reservoir.restir_di_finalize();
+//   film_write_pass_reservoir(kg, state, &reservoir, render_buffer);
+// }
+/* TODO(weizhen): this function is called before terminating the path. Better to move this function
+ * inside of `integrator_path_terminate()`. And what if multiple threads render the same pixel? */
+ccl_device_inline void integrator_finalize_reservoir(
+    KernelGlobals kg,
+    IntegratorState state,
+    ccl_global float *ccl_restrict render_buffer)
+{
+  if (!kernel_data.integrator.use_restir) {
+    return;
+  }
+
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer) +
+                             kernel_data.film.pass_restir_reservoir;
+
+  Reservoir reservoir(kg);
+
+  if (!restir_unpack_reservoir(kg, &reservoir, buffer)) {
+    return;
+  }
+
+  reservoir.finalize();
+  film_write_pass_reservoir(kg, state, &reservoir, render_buffer);
+}
+
+
+// MARK: - 
 
 /* Write emission to render buffer. */
 ccl_device_inline void film_write_volume_emission(KernelGlobals kg,
@@ -766,7 +877,7 @@ ccl_device_inline void film_write_surface_emission(KernelGlobals kg, // !!!
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const int sample = INTEGRATOR_STATE(state, path, sample);
 
-  film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer);
+  film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer); // !!!
   film_write_emission_or_background_pass(
       kg, state, contribution, buffer, kernel_data.film.pass_emission, lightgroup);
 }

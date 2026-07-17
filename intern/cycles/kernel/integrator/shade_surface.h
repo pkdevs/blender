@@ -20,6 +20,8 @@
 #include "kernel/integrator/guiding.h"
 #include "kernel/integrator/shadow_linking.h"
 #include "kernel/integrator/subsurface.h"
+
+#include "kernel/integrator/reservoir.h"
 #include "kernel/integrator/restir.h"
 #include "kernel/integrator/restir_temporal.h"
 #include "kernel/integrator/volume_stack.h"
@@ -335,7 +337,7 @@ bool restir_di_select_light(KernelGlobals kg,
   *r_total_weight = 0.0f;
 
 
-  const uint candidate_count = kernel_data.integrator.restir_candidate_count;
+  const uint candidate_count = kernel_data.integrator.restir_light_samples;
 
 
   // ReSTIRRisState ris = restir_ris_empty();
@@ -432,6 +434,7 @@ bool restir_di_select_light(KernelGlobals kg,
           kg, &candidate, &candidate_reference, sd->P, sd->N, sd->flag, path_flag);
     } else {
       printf("restir_di_select_light(); restir_debug_validate_light_reference_roundtrip() was not executed\n");
+      // assert(false);
     }
 
     restir_di_add_light_sample(
@@ -450,11 +453,11 @@ kernel_assert(ris.total_weight >= 0.0f);
   ReSTIRDIReservoir reservoir;
   const bool valid = restir_di_finalize(&reservoir, &ris);
 
-  const bool use_temporal = kernel_data.integrator.use_temporal_resampling &&
-                            bounce == 0 && mnee_vertex_count == 0;
+  // const bool use_temporal = kernel_data.integrator.use_temporal_resampling &&
+  //                               bounce == 0 && mnee_vertex_count == 0;
 
   // !!!: For now, keep ReSTIR DI temporal reuse first-hit only.
-  if (use_temporal) {
+  if (false) {
     // !!!: Temporal reuse is disabled until it is ported to ReSTIRDIReservoir semantics.
     // ReSTIRReservoir new_res = restir_temporal_reuse( // Temporal reuse stage
     //     kg,
@@ -578,7 +581,8 @@ ccl_device
   float restir_total_weight = 0.0f;
   BsdfEval restir_radiance ccl_optional_struct_init;
 
-  printf("integrate_surface_direct_light(); use_restir:%d\n", use_restir); // DEBUG ONLY
+  // printf("integrate_surface_direct_light(); use_restir:%d\n", use_restir); // DEBUG ONLY
+
   if (use_restir) {
     PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
 

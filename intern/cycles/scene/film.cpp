@@ -640,7 +640,7 @@ void Film::update_passes(Scene *scene)
   }
 
   /* Add reservoir pass if spatial resampling is used. */
-  if (integrator->get_use_restir()) {
+  if (integrator->get_use_restir() & 0b11) {
     add_auto_pass(scene, PASS_RESTIR_PT_PREVIOUS_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_PT_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_PREVIOUS_RESERVOIR);

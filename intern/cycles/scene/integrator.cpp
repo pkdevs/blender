@@ -97,7 +97,14 @@ NODE_DEFINE(Integrator)
   guiding_directional_sampling_type_enum.insert("ROUGHNESS",
                                                 GUIDING_DIRECTIONAL_SAMPLING_TYPE_ROUGHNESS);
 
+  /* ReSTIR. */
   SOCKET_BOOLEAN(use_restir, "ReSTIR", true);
+  SOCKET_BOOLEAN(restir_unbiased, "Unbiased", true);
+  SOCKET_INT(restir_light_samples, "Light", 4);
+  SOCKET_INT(restir_spatial_radius, "Radius", 10);
+  SOCKET_INT(restir_spatial_neighbors, "Samples", 6);
+  SOCKET_INT(restir_spatial_iterations, "Iterations", 2);
+
   SOCKET_BOOLEAN(use_temporal_resampling, "Temporal Re-use", true); // !!!: Remove
   SOCKET_INT(restir_candidate_count, "Light Candidates", 8);
 

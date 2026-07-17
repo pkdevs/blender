@@ -267,6 +267,11 @@ enum_guiding_directional_sampling_types = (
      2),
 )
 
+enum_restir_heuristics = (
+    ('BALANCE_HEURISTIC', "Balance Heuristic", ""),
+    ('POWER_HEURISTIC', "Power Heuristic", ""),
+)
+
 
 def enum_openimagedenoise_denoiser(self, context):
     import _cycles
@@ -553,13 +558,58 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=True,
     )
 
-    # restir_light_samples
-    restir_candidate_count: IntProperty(
-        name="Candidates",
-        description="Number of light candidates evaluated per shading point",
-        min=1,
-        max=128, # !!!: 
-        default=8,
+    use_initial_resampling: BoolProperty(
+        name="Initial Resampling",
+        description="Process several light or BSDF samples using Resampled Importance Sampling",
+        default=True,
+    )
+
+    use_spatial_resampling: BoolProperty(
+        name="Spatial Resampling",
+        description="Reuse samples from neighboring pixels",
+        default=True,
+    )
+
+    restir_light_samples: IntProperty(
+        name="Light",
+        description="Number of light samples",
+        min=1, max=64,
+        default=4,
+    )
+
+    restir_spatial_iterations: IntProperty(
+        name="Iterations",
+        description="Perform multiple iterations of spatial resampling, at the cost of increased correlation",
+        min=0, max=5,
+        default=2,
+    )
+
+    restir_spatial_radius: IntProperty(
+        name="Radius",
+        description="Pixel radius to gather samples from",
+        min=1, max=50,
+        default=10,
+    )
+
+    restir_spatial_neighbors: IntProperty(
+        name="Samples",
+        description="Number of neighboring samples to draw per pixel per iteration",
+        min=0, max=16,
+        default=6,
+    )
+
+    restir_unbiased: BoolProperty(
+        name="Unbiased",
+        description="Querying extra visibility rays, render is unbiased but slower",
+        default=True)
+    restir_pairwise: BoolProperty(
+        name="Pairwise",
+        description="Use pairwise MIS when combining samples (TODO): probably remove this option",
+        default=True)
+    restir_heuristics: EnumProperty(
+        name=" ",
+        items=enum_restir_heuristics,
+        default='POWER_HEURISTIC',
     )
 
     use_temporal_resampling: BoolProperty(

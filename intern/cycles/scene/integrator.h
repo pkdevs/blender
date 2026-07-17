@@ -107,13 +107,20 @@ class Integrator : public Node {
   NODE_SOCKET_API(bool, use_light_tree)
   NODE_SOCKET_API(float, light_sampling_threshold)
 
+  /* ReSTIR. */
+  NODE_SOCKET_API(bool, use_restir)
+  NODE_SOCKET_API(bool, restir_unbiased)
+  NODE_SOCKET_API(int, restir_light_samples)
+  NODE_SOCKET_API(int, restir_spatial_radius)
+  NODE_SOCKET_API(int, restir_spatial_neighbors)
+  NODE_SOCKET_API(int, restir_spatial_iterations)
+
+  NODE_SOCKET_API(int, restir_candidate_count)
+  NODE_SOCKET_API(bool, use_temporal_resampling) // !!!: Remove
+
   NODE_SOCKET_API(bool, use_adaptive_sampling)
   NODE_SOCKET_API(int, adaptive_min_samples)
   NODE_SOCKET_API(float, adaptive_threshold)
-
-  NODE_SOCKET_API(bool, use_restir)
-  NODE_SOCKET_API(int, restir_candidate_count)
-  NODE_SOCKET_API(bool, use_temporal_resampling) // !!!: Remove
 
   NODE_SOCKET_API(SamplingPattern, sampling_pattern)
   NODE_SOCKET_API(float, scrambling_distance)
