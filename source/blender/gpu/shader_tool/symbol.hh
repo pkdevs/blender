@@ -130,9 +130,7 @@ struct SymbolScope : Symbol {
   /* Can be null if this is not a function. */
   SymbolFunction *as_function();
 
-  /* TODO */
-  /* Built the symbol prefix for a symbol declared in this scope. */
-  string make_prefix() const;
+  void function_emplace(SymbolFunction *fn);
 
  private:
   SymbolVariable *lookup_variable_nested(Id id) const;
@@ -291,6 +289,16 @@ inline SymbolFunction *SymbolScope::as_function()
   return type == FUNCTION ? static_cast<SymbolFunction *>(this) : nullptr;
 }
 
+inline void SymbolScope::function_emplace(SymbolFunction *fn)
+{
+  if (auto it = functions.try_emplace(fn->identifier, fn); !it.second) {
+    /* If function already exists, insert overload in the linked list. */
+    fn->overload_next = it.first->second->overload_next;
+    it.first->second->overload_next = fn;
+  }
+  scopes.emplace(unique_id(), fn);
+}
+
 /* Left is nullptr for unary operators. */
 using OperatorKey = tuple<SymbolClass * /* Left */, TokenType, SymbolClass * /* Right */>;
 
@@ -356,6 +364,15 @@ struct SymbolTable {
   Result<SymbolClass *> resolve_auto_type(SymbolScope &scope, Declarator decl) const;
 
  private:
+  struct BuiltinType {
+    /* "int", "int2", ... */
+    string name;
+    /* "int", "uint", "float", "bool", ... */
+    string base;
+    /* 1 (scalar), 2, 3, 4 */
+    int size;
+  };
+
   struct BuiltinOp {
     string left;
     TokenType op;
@@ -363,8 +380,16 @@ struct SymbolTable {
     string result;
   };
 
+  struct BuiltinFunc {
+    string return_type;
+    string id;
+    vector<string> arg_types;
+  };
+
   void register_builtins(LocalScope node);
-  static vector<BuiltinOp> generate_all_operators();
+  static vector<BuiltinType> generate_builtin_types();
+  static vector<BuiltinOp> generate_all_operators(const vector<BuiltinType> &types);
+  static vector<BuiltinFunc> generate_all_constructors(const vector<BuiltinType> &types);
 };
 
 }  // namespace blender::gpu::shader::parser

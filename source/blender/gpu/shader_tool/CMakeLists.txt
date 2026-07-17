@@ -8,6 +8,7 @@
 set(SRC
   ast.cc
   attribute.cc
+  constructor.cc
   enum.cc
   flow_control.cc
   function.cc

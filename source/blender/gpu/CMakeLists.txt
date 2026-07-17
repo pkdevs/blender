@@ -111,6 +111,7 @@ set(SRC
 
   shader_tool/ast.cc
   shader_tool/attribute.cc
+  shader_tool/constructor.cc
   shader_tool/enum.cc
   shader_tool/flow_control.cc
   shader_tool/function.cc

@@ -691,16 +691,8 @@ struct SymbolParser {
                                   const std::string &suffix = "",
                                   TemplateInst temp = {})
   {
-    string unique_id = scope.unique_id();
-    string overlad_suffix;
     SymbolFunction *fn = table.fun_arena.alloc(&scope, func, suffix);
-    if (auto it = scope.functions.try_emplace(fn->identifier, fn); !it.second) {
-      /* If function already exists, insert overload in the linked list. */
-      fn->overload_next = it.first->second->overload_next;
-      it.first->second->overload_next = fn;
-      overlad_suffix = unique_id;
-    }
-    scope.scopes.emplace(unique_id, fn);
+    scope.function_emplace(fn);
     parse_scope(*fn, func.body(), prefix + fn->identifier + ns_sep, temp);
 
     {
@@ -719,7 +711,7 @@ struct SymbolParser {
       SymbolFunction *flat_func = table.fun_arena.alloc(*fn);
       fn->resolved = flat_func;
       flat_func->resolved = fn;
-      flat_func->identifier = identifier_mangled + overlad_suffix;
+      flat_func->identifier = identifier_mangled;
       global.functions.try_emplace(identifier_mangled, flat_func);
     }
 
@@ -1390,13 +1382,13 @@ void SymbolTable::register_builtins(LocalScope node)
 {
   Token tok = node.back();
 
-  struct BuiltinType {
+  struct BuiltinBasicType {
     string id;
     size_t size;
     size_t align;
   };
 
-  const vector<BuiltinType> types = {
+  const vector<BuiltinBasicType> types = {
       {err_symbol, 1, 1},
 
       {"void", 1, 1}, /* Only for function return type. */
@@ -1581,12 +1573,6 @@ void SymbolTable::register_builtins(LocalScope node)
     }
   }
 
-  struct BuiltinFunc {
-    string return_type;
-    string id;
-    vector<string> arg_types;
-  };
-
   const std::vector<BuiltinFunc> functions = {
       /* Error variable symbol. */
       {"void", err_symbol, {}},
@@ -1682,7 +1668,9 @@ void SymbolTable::register_builtins(LocalScope node)
       {LogicalOr, "or_op_"},
   };
 
-  const vector<BuiltinOp> operators_desc = generate_all_operators();
+  const vector<BuiltinType> builtin_types = generate_builtin_types();
+
+  const vector<BuiltinOp> operators_desc = generate_all_operators(builtin_types);
   for (const auto &op : operators_desc) {
     string id((op.left.empty() ? unary_type_to_id : binary_type_to_id).find(op.op)->second);
     SymbolFunction *sym = fun_arena.alloc(root, tok, id, SymbolFunction::GLOBAL);
@@ -1694,6 +1682,17 @@ void SymbolTable::register_builtins(LocalScope node)
     operators.emplace(key, sym);
   }
 
+  const vector<BuiltinFunc> builtin_constructors = generate_all_constructors(builtin_types);
+  for (const auto &fn : builtin_constructors) {
+    SymbolFunction *sym = fun_arena.alloc(root, tok, fn.id, SymbolFunction::GLOBAL);
+    sym->return_type = root->lookup_class(fn.return_type);
+    for (auto arg : fn.arg_types) {
+      sym->arg_types.emplace_back(root->lookup_class(arg));
+    }
+    sym->resolved = sym;
+    root->function_emplace(sym);
+  }
+
   struct BuiltinConst {
     string id;
     string type;
@@ -1703,7 +1702,7 @@ void SymbolTable::register_builtins(LocalScope node)
 
   const std::vector<BuiltinConst> consts = {
       /* Error variable symbol. */
-      {err_symbol, "int", false, 1},
+      {err_symbol, err_symbol, false, 1},
 
       {"true", "bool", true, 1},
       {"false", "bool", true, 0},

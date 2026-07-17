@@ -10,14 +10,8 @@
 
 namespace blender::gpu::shader::parser {
 
-struct BuiltinType {
-  string name;
-  string base; /* "int", "uint", "float", "bool" */
-  int size;    /* 1 (scalar), 2, 3, 4 */
-};
-
 /* Generates all scalar and vector types (e.g. int, int2, int3, int4). */
-static vector<BuiltinType> generate_builtin_types()
+vector<SymbolTable::BuiltinType> SymbolTable::generate_builtin_types()
 {
   vector<BuiltinType> types;
   vector<string> bases = {"int", "uint", "float", "bool"};
@@ -71,10 +65,10 @@ static string make_type_name(const string &base, int size)
 }
 
 /* Generates every single legal BSL operator overload dynamically. */
-vector<SymbolTable::BuiltinOp> SymbolTable::generate_all_operators()
+vector<SymbolTable::BuiltinOp> SymbolTable::generate_all_operators(
+    const vector<BuiltinType> &types)
 {
   vector<BuiltinOp> ops;
-  auto types = generate_builtin_types();
 
   /* Unary Operators */
   for (const auto &t : types) {
