@@ -114,7 +114,6 @@ struct A {
 
 };
 #line 2
-
 A A_ctor_() {A r;r._0=float4(0);return r;}
 
 uint4 _a(A this_) {
@@ -161,7 +160,6 @@ void f(A a) {
 
   };
 #line 3
-
 A_a0 A_a0_ctor_() {A_a0 r;r._0=float4(0);return r;}
 
 uint4 _a(A_a0 this_) {
@@ -182,8 +180,7 @@ struct A {
 #line 7
 };
 #line 3
-
-A A_ctor_() {A r;r.a0_=a0_ctor_();return r;}
+  A A_ctor_() {A r;r.a0_=A_a0_ctor_();return r;}
 #line 9
 void f(A a) {
   a.a0_.a();
@@ -398,7 +395,6 @@ struct T {
   int i;
 };
 #line 2
-
 T T_ctor_() {T r;r.i=0;return r;}
 #line 7
     struct A_a0_a0 {
@@ -406,7 +402,6 @@ T T_ctor_() {T r;r.i=0;return r;}
       int4 b;
     };
 #line 7
-
 A_a0_a0 A_a0_a0_ctor_() {A_a0_a0 r;r.a=uint4(0);r.b=int4(0);return r;}
 #line 6
   struct A_a0 {
@@ -414,7 +409,6 @@ A_a0_a0 A_a0_a0_ctor_() {A_a0_a0 r;r.a=uint4(0);r.b=int4(0);return r;}
 #line 12
   };
 #line 6
-
 A_a0 A_a0_ctor_() {A_a0 r;r._0=float4(0);r._1=float4(0);return r;}
 
 A_a0_a0 _a0_(A_a0 this_) {
@@ -439,7 +433,6 @@ void _c_set_(A_a0 &this_, uint4 v) {
 
   };
 #line 13
-
 A_a1 A_a1_ctor_() {A_a1 r;r._0=float4(0);return r;}
 
 T _d(A_a1 this_) {
@@ -464,8 +457,7 @@ struct A {
 #line 17
 };
 #line 13
-
-A A_ctor_() {A r;r.a0_=a0_ctor_();r.a1_=a1_ctor_();return r;}
+  A A_ctor_() {A r;r.a0_=A_a0_ctor_();r.a1_=A_a1_ctor_();return r;}
 #line 19
 void f(A a) {
 a.a0_.a0_().a();
@@ -646,9 +638,6 @@ enum class enum_class {
 
 TEST(shader_tool, EmptyStruct)
 {
-  using namespace shader;
-  using namespace std;
-
   {
     string input = R"(
 class S {};
@@ -678,6 +667,85 @@ void U_fn();
 
 )";
     auto [output, _, error] = process_test_string(input);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+class S {};
+struct T {};
+struct U {
+  static void fn() {}
+};
+)";
+    string expect = R"(
+struct S {int _pad;
+#line 2
+         };
+#line 2
+S S_ctor_() {S r;r._pad=0;return r;}
+struct T {int _pad;
+#line 3
+          };
+#line 3
+T T_ctor_() {T r;r._pad=0;return r;}
+struct U {
+  int _pad;
+};
+#line 4
+U U_ctor_() {U r;r._pad=0;return r;}
+
+#ifndef GPU_METAL
+void U_fn();
+#endif
+#line 5
+         void U_fn() {}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+}
+
+TEST(shader_tool, NestedStruct)
+{
+  {
+    string input = R"(
+struct S {
+  int i;
+  struct {
+    int b;
+  };
+  struct C {
+    int b;
+  };
+  C c;
+};
+)";
+    string expect = R"(#line 4
+  struct S_a0 {
+    int b;
+  };
+#line 4
+S_a0 S_a0_ctor_() {S_a0 r;r.b=0;return r;}
+
+
+  struct S_C {
+    int b;
+  };
+#line 7
+S_C S_C_ctor_() {S_C r;r.b=0;return r;}
+#line 2
+struct S {
+  int i;
+  S_a0 a0_;
+#line 10
+  S_C c;
+};
+#line 4
+  S S_ctor_() {S r;r.i=0;r.a0_=S_a0_ctor_();r.c=S_C_ctor_();return r;}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -764,10 +832,8 @@ struct A {
   int foo, bar;
 };
 #line 2
-
 A A_ctor_() {A r;r.foo=0;r.bar=0;return r;}
-
-
+#line 6
 void f()
 {
   A c;

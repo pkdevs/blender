@@ -428,12 +428,13 @@ struct InstantiationContext {
     match_if('}');
     match_if(';');
 
-    if (cls.is_union) {
-      if (!decl.attributes().contains_attr("host_shared")) {
-        line(body.front());
-        builder.ss << class_default_constructor(decl, cls) + "\n";
-      }
+    /* Don't do host shared structures. */
+    if (!decl.attributes().contains_attr("host_shared")) {
+      line(body.front());
+      builder.ss << class_default_constructor(decl, cls) + "\n";
+    }
 
+    if (cls.is_union) {
       builder.ss << "\n";
 
       /* Emit getter and setters. */
@@ -443,12 +444,6 @@ struct InstantiationContext {
       });
     }
     else {
-      /* Don't do host shared structures. */
-      if (!decl.attributes().contains_attr("host_shared")) {
-        line(body.front());
-        builder.ss << class_default_constructor(decl, cls) + "\n";
-      }
-
       /* Emit static variables. */
       body.foreach<VarDecl>([&](VarDecl decl) {
         if (decl.type().is_static()) {
@@ -623,7 +618,7 @@ struct InstantiationContext {
               /* Anonymous class are instantiated as regular members. */
               jump_to(decl.front());
               string type_id = "a" + to_string(class_id);
-              SymbolClass *type = cls.lookup_class(type_id);
+              SymbolClass *type = cls.lookup_class(type_id)->resolved;
               string member_id = type_id + "_";
 
               members += "r." + member_id + "=" + default_value(*type) + ";";
@@ -642,7 +637,7 @@ struct InstantiationContext {
       }
     }
 
-    return "\n" + cls_id + " " + cls_id + "_ctor_() {" + cls_id + " r;" + members + "return r;}";
+    return cls_id + " " + cls_id + "_ctor_() {" + cls_id + " r;" + members + "return r;}";
   }
 
   string union_data_access(const SymbolVariable &var, const size_t union_size)
