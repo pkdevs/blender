@@ -32,17 +32,11 @@ for (int i = 2; i < 4; i++) [[unroll]] { content += i; })";
     string input = R"(
 for (int i = 2; i < 4; i++, y++) [[unroll]] { content += i; })";
     string expect = R"(
-    {int i = 2;
+    {int i = 2;                             { content += i; }
 #line 2
-                                            { content += i; }
+                       i++, y++;            { content += i; }
 #line 2
-                       i++, y++;
-#line 2
-                                            { content += i; }
-#line 2
-                       i++, y++;
-#line 2
-                                                            })";
+                       i++, y++;                            })";
     auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
@@ -53,19 +47,13 @@ for (int i = 2; i < 4 && i < y; i++, y++) [[unroll]] { cont += i; })";
     string expect = R"(
     {int i = 2;
 #line 2
-             if(i < 4 && i < y)
-#line 2
-                                                     { cont += i; }
+             if(i < 4 && i < y)                      { cont += i; }
 #line 2
                                 i++, y++;
 #line 2
-             if(i < 4 && i < y)
+             if(i < 4 && i < y)                      { cont += i; }
 #line 2
-                                                     { cont += i; }
-#line 2
-                                i++, y++;
-#line 2
-                                                                  })";
+                                i++, y++;                         })";
     auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
@@ -77,13 +65,9 @@ for (; i < j;) [[unroll_n(2)]] { content += i; })";
 
 {
 #line 2
-    if(i < j)
+    if(i < j)                  { content += i; }
 #line 2
-                               { content += i; }
-#line 2
-    if(i < j)
-#line 2
-                               { content += i; }
+    if(i < j)                  { content += i; }
 #line 2
                                                })";
     auto [output, _, error] = process_test_local(input);
@@ -97,33 +81,21 @@ for (; i < j;) [[unroll_n(2)]] { for (; j < k;) [[unroll_n(2)]] {} })";
 
 {
 #line 2
-    if(i < j)
-#line 2
-                               {
+    if(i < j)                  {
 {
 #line 2
-                                     if(j < k)
+                                     if(j < k)                  {}
 #line 2
-                                                                {}
-#line 2
-                                     if(j < k)
-#line 2
-                                                                {}
+                                     if(j < k)                  {}
 #line 2
                                                                  } }
 #line 2
-    if(i < j)
-#line 2
-                               {
+    if(i < j)                  {
 {
 #line 2
-                                     if(j < k)
+                                     if(j < k)                  {}
 #line 2
-                                                                {}
-#line 2
-                                     if(j < k)
-#line 2
-                                                                {}
+                                     if(j < k)                  {}
 #line 2
                                                                  } }
 #line 2
@@ -149,13 +121,9 @@ for (; i < j;) [[unroll_n(2)]] { for (; j < k;) {break;continue;} })";
 
 {
 #line 2
-    if(i < j)
+    if(i < j)                  { for (; j < k;) {break;continue;} }
 #line 2
-                               { for (; j < k;) {break;continue;} }
-#line 2
-    if(i < j)
-#line 2
-                               { for (; j < k;) {break;continue;} }
+    if(i < j)                  { for (; j < k;) {break;continue;} }
 #line 2
                                                                   })";
     auto [output, _, error] = process_test_local(input);

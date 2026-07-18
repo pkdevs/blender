@@ -2151,6 +2151,22 @@ void SourceProcessor::cleanup_line_directives(Parser &parser)
     }
     int line = toks[0].line_number();
     int value = stol(string(toks[2].str()));
+
+    Token prev = toks[0].prev();
+    Token next = toks[2].next();
+    /* True if the directive splits a logical line and the parts do not overlap. */
+    if (prev.line_number() == value) {
+      int prev_end_col = prev.char_number() + prev.str().length();
+      int next_start_col = next.char_number();
+
+      if (prev_end_col < next_start_col) {
+        int spaces_needed = next_start_col - prev_end_col;
+        parser.replace(prev.str_index_last_no_whitespace() + 1,
+                       next.str_index_start() - 1,
+                       std::string(spaces_needed, ' '));
+        return;
+      }
+    }
     /* True if directive is noop. */
     if (line == value) {
       parser.replace(toks[0].line_start(), toks[0].line_end() + 1, "");

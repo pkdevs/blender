@@ -194,9 +194,7 @@ TEST(shader_tool, Constexpr)
         "       constexpr int d = 4;\n"
         "       constexpr int e = 4;\n"
         "       constexpr int f = 4;\n"
-        "int func() {\n"
-        "#line 6\n"
-        "             return 4; }\n";
+        "int func() { return 4; }\n";
     auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
