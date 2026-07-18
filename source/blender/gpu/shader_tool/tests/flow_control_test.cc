@@ -135,6 +135,150 @@ for (; i < j;) [[unroll_n(2)]] { for (; j < k;) {break;continue;} })";
     auto [output, _, error] = process_test_local(input);
     EXPECT_EQ(error, "Unsupported condition in unrolled loop.");
   }
+  {
+    string input = R"(
+for (int a = 0; a < 2; a += 1) [[unroll]] { a; }
+for (uint b = 1; b < 3; ++b  ) [[unroll]] { b; }
+for (int c = 2; c > 0; c--   ) [[unroll]] { c; }
+for (int d = 2; d > 0; --d   ) [[unroll]] { d; }
+for (int e = 0; e < 4; e += 2) [[unroll]] { e; }
+for (int f = 4; f > 0; f -= 2) [[unroll]] { f; }
+for (int g = 1; g < 4; g *= 2) [[unroll]] { g; }
+for (int h = 4; h > 1; h /= 2) [[unroll]] { h; }
+for (int i = 0; i < 2; i=i+1 ) [[unroll]] { i; }
+)";
+    string expect = R"(
+                                          { 0; }
+#line 2
+                                          { 1; }
+                                          { 1; }
+#line 3
+                                          { 2; }
+                                          { 2; }
+#line 4
+                                          { 1; }
+                                          { 2; }
+#line 5
+                                          { 1; }
+                                          { 0; }
+#line 6
+                                          { 2; }
+                                          { 4; }
+#line 7
+                                          { 2; }
+                                          { 1; }
+#line 8
+                                          { 2; }
+                                          { 4; }
+#line 9
+                                          { 2; }
+                                          { 0; }
+#line 10
+                                          { 1; }
+)";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+int i;
+for (; i < 2; i++) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Init statement needs to define the loop variable for unrolled loops");
+  }
+  {
+    string input = R"(
+for (float i = 0; i < 2; i++) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Loop variable needs to be an integer type for unrolled loops");
+  }
+  {
+    string input = R"(
+for (int i = 0, j = 0; i < 2; i++) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Multiple variable declared in unrolled loop");
+  }
+  {
+    string input = R"(
+for (float i = 0.0; i < 2.0; i += 1.0) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Loop variable needs to be an integer type for unrolled loops");
+  }
+  {
+    string input = R"(
+for (int i; i < 2; i++) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error,
+              "Loop variable needs to be assigned a value (using assignment) for "
+              "unrolled loops");
+  }
+  {
+    string input = R"(
+for (int i = atomicAdd(i, i); i < 2; i++) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Constexpr cannot contain function calls");
+  }
+  {
+    string input = R"(
+for (int i = 0; i < 2; i++, i++) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Comma operator is not allowed in unrolled loop statement");
+  }
+  {
+    string input = R"(
+for (int i = 0; i < atomicAdd(i, i); i++) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Constexpr cannot contain function calls");
+  }
+  {
+    string input = R"(
+for (int i = 0; i < 65; i++) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Loop unrolling generates too many iterations (over 64)");
+  }
+  {
+    string input = R"(
+int j = 0;
+for (int i = 0; i < 2; j++) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Unrolled loop expression must assign to 'i'");
+  }
+  {
+    string input = R"(
+for (int i = 0; i < 2; i + 1) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error,
+              "Expected '++i', '--i', 'i++', 'i--' or 'i = expr', 'i += expr', 'i -= expr', 'i /= "
+              "expr', 'i *= expr' for unrolled loop expression");
+  }
+  {
+    string input = R"(
+for (int i = 1; i < 2; i <<= 1) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error,
+              "Expected '++i', '--i', 'i++', 'i--' or 'i = expr', 'i += expr', 'i -= expr', 'i /= "
+              "expr', 'i *= expr' for unrolled loop expression");
+  }
+  {
+    string input = R"(
+for (int i = 0; i < 2; i += atomicAdd(i, i)) [[unroll]] { i; }
+  )";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Constexpr cannot contain function calls");
+  }
 }
 
 TEST(shader_tool, StaticBranch)

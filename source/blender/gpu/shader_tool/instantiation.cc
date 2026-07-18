@@ -314,8 +314,185 @@ struct InstantiationContext {
     match_if('}');
   }
 
+  void loop_unroll(ForLoop stmt, SymbolScope &scope)
+  {
+    VarDecl init_stmt = stmt.condition().child_first();
+    LocalStmt cond_stmt = init_stmt.next();
+    LocalStmt end_stmt = cond_stmt.next();
+    Expr cond_expr = cond_stmt.expr();
+    Expr end_expr = end_stmt.expr();
+    if (!init_stmt.is_valid()) {
+      error(stmt, "Init statement needs to define the loop variable for unrolled loops");
+      return;
+    }
+    Declarator decl = init_stmt.child_first(NodeType::Declarator);
+    SymbolVariable *var = scope.lookup_variable(decl.identifier());
+    if (var->is_error) {
+      error(decl.identifier(), "Unknown variable");
+      return;
+    }
+    /* Check if only a single var is declared. */
+    if (decl.next(NodeType::Declarator).is_valid()) {
+      error(init_stmt.type(), "Multiple variable declared in unrolled loop");
+      return;
+    }
+    /* Check if loop variable is of integer type. */
+    SymbolClass *cls = var->type;
+    if (cls->identifier != "int" && cls->identifier != "uint") {
+      error(init_stmt.type(), "Loop variable needs to be an integer type for unrolled loops");
+      return;
+    }
+    /* Check if loop variable is init by constexpr. */
+    Expr init_expr = decl.initial_value().expr();
+    if (!init_expr.is_valid()) {
+      error(decl,
+            "Loop variable needs to be assigned a value (using assignment) for unrolled loops");
+      return;
+    }
+    auto [val, err] = SymbolTable::evaluate_constexpr(scope, init_expr.child_first());
+    if (err) {
+      error(err->node, err->msg);
+      return;
+    }
+    /* Check if loop statement assign to and only to the loop variable. */
+    end_expr.foreach_child([&](Node node) {
+      if (node.type() == NodeType::Op && node.front() == ',') {
+        error(end_stmt, "Comma operator is not allowed in unrolled loop statement");
+      }
+    });
+    if (error_handler.err) {
+      return;
+    }
+
+    /* Replace loop variable resolved value with constexpr value. */
+    var->is_constexpr = true;
+    var->value = val;
+    /* Run a small virtual machine. For each iteration, check the condition, and run the loop
+     * statement. Break only if we  */
+    for (int i = 0;; i++) {
+      auto [cond_val, err] = SymbolTable::evaluate_constexpr(scope, cond_expr.child_first());
+      if (err) {
+        error(err->node, err->msg);
+        break;
+      }
+      /* Break if condition is false. */
+      if (cond_val == 0) {
+        break;
+      }
+      /* Break if too many iterations. */
+      if (i >= 64) {
+        error(stmt, "Loop unrolling generates too many iterations (over 64)");
+        break;
+      }
+      /* Generate the loop body. */
+      jump_to(stmt.body().front());
+      local_scope(stmt.body(), scope);
+
+      auto [loop_val, err_val] = eval_constexpr_with_side_effects(var, end_expr, scope);
+      if (err_val) {
+        error(err_val->node, err_val->msg);
+        break;
+      }
+      /* Evaluate the loop statement. */
+      var->value = loop_val;
+    }
+
+    /* Restore. */
+    var->is_constexpr = false;
+
+    jump_to(stmt.back().next());
+  }
+
+  Result<int64_t> eval_constexpr_with_side_effects(SymbolVariable *var,
+                                                   Expr expr,
+                                                   SymbolScope &scope)
+  {
+    if (expr.child_count() == 2) {
+      /* ExpressionParser will not evaluate increment and decrement operators.
+       * We have to handle it ourselves. */
+      if (expr.child_last().type() == NodeType::Op) {
+        LocalVar local_var = expr.child_first();
+        if (local_var.is_valid()) {
+          if (scope.lookup_variable(local_var.identifier()) != var) {
+            return {0,
+                    AstNodeException(expr,
+                                     "Unrolled loop expression must assign to '" +
+                                         var->identifier + "'")};
+          }
+          if (expr.back() == Decrement) {
+            return {var->value - 1, {}};
+          }
+          if (expr.back() == Increment) {
+            return {var->value + 1, {}};
+          }
+        }
+      }
+      else if (expr.child_first().type() == NodeType::Op) {
+        LocalVar local_var = expr.child_last();
+        if (local_var.is_valid()) {
+          if (scope.lookup_variable(local_var.identifier()) != var) {
+            return {0,
+                    AstNodeException(expr,
+                                     "Unrolled loop expression must assign to '" +
+                                         var->identifier + "'")};
+          }
+          if (expr.front() == Decrement) {
+            return {var->value - 1, {}};
+          }
+          if (expr.front() == Increment) {
+            return {var->value + 1, {}};
+          }
+        }
+      }
+    }
+    else {
+      /* ExpressionParser will not evaluate assignment operator (=,+=,-=, ..)s.
+       * We have to handle it ourselves. */
+      LocalVar local_var = expr.child_first();
+      if (local_var.is_valid()) {
+        if (scope.lookup_variable(local_var.identifier()) != var) {
+          return {0,
+                  AstNodeException(
+                      expr, "Unrolled loop expression must assign to '" + var->identifier + "'")};
+        }
+        Node op = local_var.next();
+        if (op.type() == NodeType::Op) {
+          Node node = op.next();
+
+          auto [loop_val, err_val] = SymbolTable::evaluate_constexpr(scope, node);
+
+          switch (op.front().type()) {
+            case Assign:
+              return {loop_val, err_val};
+            case AssignAdd:
+              return {var->value + loop_val, err_val};
+            case AssignSub:
+              return {var->value - loop_val, err_val};
+            case AssignMul:
+              return {var->value * loop_val, err_val};
+            case AssignDiv:
+              return {var->value / loop_val, err_val};
+            default:
+              break;
+          }
+        }
+      }
+    }
+    string id = var->identifier;
+    return {0,
+            AstNodeException(expr,
+                             "Expected '++" + id + "', '--" + id + "', '" + id + "++', '" + id +
+                                 "--' or '" + id + " = expr', '" + id + " += expr', '" + id +
+                                 " -= expr', '" + id + " /= expr', '" + id +
+                                 " *= expr' for unrolled loop expression")};
+  }
+
   void for_loop(ForLoop stmt, SymbolScope &scope)
   {
+    if (stmt.condition().attributes().contains_attr("unroll")) {
+      loop_unroll(stmt, scope);
+      return;
+    }
     match_if(For);
     condition(stmt.condition(), scope);
     local_scope(stmt.body(), scope);
