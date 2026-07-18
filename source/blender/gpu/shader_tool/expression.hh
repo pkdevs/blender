@@ -135,12 +135,10 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
           return left + expr(left_binding_power(Plus));
         case Minus:
           return left - expr(left_binding_power(Minus));
-#if 0 /* Not implemented yet. */
-      case LShift:
-        return left << expression(binding_power(LShift));
-      case RShift:
-        return left >> expression(binding_power(RShift));
-#endif
+        case LShift:
+          return left << expr(left_binding_power(LShift));
+        case RShift:
+          return left >> expr(left_binding_power(RShift));
         case LThan:
           return left < expr(left_binding_power(LThan));
         case LEqual:

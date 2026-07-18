@@ -152,9 +152,9 @@ class ExpressionTypeParser {
         case Plus:
         case Minus:
           return 100;
-        // case LShift: /* TODO: Not a token yet */
-        // case RShift:
-        //   return 90;
+        case LShift:
+        case RShift:
+          return 90;
         case LThan:
         case LEqual:
         case GThan:
