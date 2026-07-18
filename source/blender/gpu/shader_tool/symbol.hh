@@ -388,6 +388,10 @@ struct SymbolTable {
 
   Result<SymbolClass *> resolve_auto_type(SymbolScope &scope, Declarator decl) const;
 
+  static Result<int64_t> evaluate_constexpr(const SymbolScope &scope, Node start);
+
+  static Result<string> expr_to_string(const SymbolScope &scope, Node start, int &node_count);
+
  private:
   struct BuiltinType {
     /* "int", "int2", ... */

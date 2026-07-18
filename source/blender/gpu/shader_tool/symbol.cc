@@ -644,7 +644,11 @@ struct SymbolParser {
       if (InitializerList list = assign.initializer_list(); list.is_valid()) {
         sym->value = eval_scalar_initializer_list(scope, list);
       }
-      sym->value = evaluate_constexpr(scope, assign.expr());
+      auto [val, err] = SymbolTable::evaluate_constexpr(scope, assign.expr().child_first());
+      if (err) {
+        error(err->node, err->msg);
+      }
+      sym->value = val;
     }
     else {
       sym->value = enum_cls->enum_last_val + 1;
@@ -1000,7 +1004,11 @@ struct SymbolParser {
       if (node.type() == NodeType::InitializerList) {
         return eval_scalar_initializer_list(scope, node);
       }
-      return evaluate_constexpr(scope, node);
+      auto [val, err] = SymbolTable::evaluate_constexpr(scope, node.child_first());
+      if (err) {
+        error(err->node, err->msg);
+      }
+      return val;
     }
     return 0;
   }
@@ -1015,7 +1023,11 @@ struct SymbolParser {
       if (InitializerList list = assign.initializer_list(); list.is_valid()) {
         return eval_scalar_initializer_list(scope, list);
       }
-      return evaluate_constexpr(scope, assign.expr());
+      auto [val, err] = SymbolTable::evaluate_constexpr(scope, assign.expr().child_first());
+      if (err) {
+        error(err->node, err->msg);
+      }
+      return val;
     }
     if (InitializerList list = decl.initializer_list(); list.is_valid()) {
       return eval_scalar_initializer_list(scope, list);
@@ -1023,74 +1035,6 @@ struct SymbolParser {
     error(decl,
           "Constexpr variable '" + string(decl.identifier().str()) +
               "' must be initialized by a constant expression");
-    return 0;
-  }
-
-  string expr_to_string(const SymbolScope &scope, Expr expr, int &node_count)
-  {
-    string expr_str;
-    expr.foreach_child([&](Node child) {
-      switch (child.type()) {
-        /* TODO member access. */
-        case NodeType::LocalVar: {
-          SymbolVariable *var = scope.lookup_variable(LocalVar(child).identifier());
-          if (var->is_constexpr) {
-            expr_str += to_string(var->value);
-          }
-          else {
-            error(child, "Read of non-const variable is not allowed in a constant expression");
-            expr_str += "0";
-          }
-          node_count++;
-          break;
-        }
-        case NodeType::FuncCall:
-          error(child, "Constexpr cannot contain function calls");
-          expr_str += "0";
-          node_count++;
-          break;
-        case NodeType::ExprSub:
-          expr_str += '(';
-          expr_str += expr_to_string(scope, ExprSub(child).expr(), node_count);
-          expr_str += ')';
-          node_count++;
-          break;
-        case NodeType::Op:
-        case NodeType::NumConst:
-          expr_str += child.str();
-          node_count++;
-          break;
-        default:
-          error(child, "Unsupported symbol inside constexpr definition");
-          expr_str += "0";
-          node_count++;
-          break;
-      }
-    });
-    return expr_str;
-  }
-
-  int64_t evaluate_constexpr(const SymbolScope &scope, Expr expr)
-  {
-    /* First build a string containing only numerical constants by substituting all the symbols. */
-    int count = 0;
-    string expr_str = expr_to_string(scope, expr, count);
-
-    /* Fast path. */
-    if (count == 1) {
-      return stoll(expr_str);
-    }
-
-    /* Then use the expression parser to evaluate it. */
-    try {
-      ExpressionParser expression_parser;
-      expression_parser.lexical_analysis(expr_str);
-      return expression_parser.eval();
-    }
-    catch (const std::exception &e) {
-      error(expr, "Failed to evaluate expanded expression '" + expr_str + "'");
-      return 0;
-    }
     return 0;
   }
 
@@ -1130,6 +1074,81 @@ void SymbolVariable::set_offset(bool is_union, int &offset)
     this->offset = pad(offset, this->type->align);
     offset = this->offset;
     offset += this->type->size;
+  }
+}
+
+Result<string> SymbolTable::expr_to_string(const SymbolScope &scope, Node start, int &node_count)
+{
+  std::optional<AstNodeException> error;
+  string expr_str;
+  for (Node child = start; child.is_valid(); child = child.next()) {
+    switch (child.type()) {
+      /* TODO member access. */
+      case NodeType::LocalVar: {
+        SymbolVariable *var = scope.lookup_variable(LocalVar(child).identifier());
+        if (!var->is_constexpr) {
+          return {
+              "0",
+              AstNodeException(
+                  child, "Read of non-const variable is not allowed in a constant expression")};
+        }
+        expr_str += to_string(var->value);
+        node_count++;
+        break;
+      }
+      case NodeType::FuncCall:
+        return {"0", AstNodeException(child, "Constexpr cannot contain function calls")};
+      case NodeType::ExprSub: {
+        auto [str, err] = expr_to_string(scope, ExprSub(child).expr().child_first(), node_count);
+        expr_str += '(';
+        expr_str += str;
+        expr_str += ')';
+        node_count++;
+        if (err) {
+          return {"0", err};
+        }
+        break;
+      }
+      case NodeType::Op:
+      case NodeType::NumConst:
+        expr_str += child.str();
+        node_count++;
+        break;
+      default:
+        return {"0", AstNodeException(child, "Unsupported symbol inside constexpr definition")};
+    }
+  }
+  return {expr_str, error};
+}
+
+Result<int64_t> SymbolTable::evaluate_constexpr(const SymbolScope &scope, Node start)
+{
+  /* First build a string containing only numerical constants by substituting all the symbols. */
+  int count = 0;
+  auto [expr_str, error] = expr_to_string(scope, start, count);
+  if (error) {
+    return {0, error};
+  }
+
+  /* Fast path. */
+  if (count == 1) {
+    try {
+      return {stoll(expr_str), {}};
+    }
+    catch (...) {
+      return {0, AstNodeException(start, "Error parsing integer literal")};
+    }
+  }
+
+  /* Then use the expression parser to evaluate it. */
+  try {
+    ExpressionParser expression_parser;
+    expression_parser.lexical_analysis(expr_str);
+    return {expression_parser.eval(), {}};
+  }
+  catch (const std::exception &e) {
+    return {0,
+            AstNodeException(start, "Failed to evaluate expanded expression '" + expr_str + "'")};
   }
 }
 

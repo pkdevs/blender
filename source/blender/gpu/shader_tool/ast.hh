@@ -579,6 +579,9 @@ struct AttrList : Node {
 
   bool contains_attr(std::string_view attr_name) const
   {
+    if (!is_valid()) {
+      return false;
+    }
     bool found = false;
     foreach<Attr>([&](Attr attr) {
       if (attr.identifier().str() == attr_name) {
@@ -876,6 +879,11 @@ struct LocalScope : Node {
 
 struct Condition : Node {
   NODE_COMMON(Condition);
+
+  AttrList attributes() const
+  {
+    return next();
+  }
 };
 
 struct IfStmt : Node {
