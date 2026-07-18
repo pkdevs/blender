@@ -785,6 +785,10 @@ struct BSLParser {
           break;
         }
         case Assign:
+        case AssignAdd:
+        case AssignSub:
+        case AssignMul:
+        case AssignDiv:
         case Ampersand:
         case BitwiseNot:
         case Decrement:

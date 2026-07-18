@@ -145,6 +145,10 @@ std::string to_str(TokenType type)
   case Or: \
   case Plus: \
   case Question: \
+  case AssignAdd: \
+  case AssignSub: \
+  case AssignMul: \
+  case AssignDiv: \
   case Xor
 
 /*
