@@ -1196,17 +1196,16 @@ struct InstantiationContext {
       error(id, "Missing explicit template arguments");
     }
     else if (func->overload_next) {
-      try {
-        vector<SymbolClass *> arg_types = SymbolFunction::to_arg_types(symbols, scope, params);
-        SymbolFunction *overload = func->lookup_overload(arg_types);
-        if (overload->is_error) {
-          error(id, "No matching function for call to '" + func->identifier + "'");
-        }
-        func = overload;
+      auto [arg_types, err] = SymbolFunction::to_arg_types(symbols, scope, params);
+      if (err) {
+        error(err->node, err->msg);
       }
-      catch (AstNodeException &e) {
-        error(e.node, e.msg);
+
+      SymbolFunction *overload = func->lookup_overload(arg_types);
+      if (overload->is_error) {
+        error(id, "No matching function for call to '" + func->identifier + "'");
       }
+      func = overload;
     }
     else {
       /* TODO(fclem): Resolve builtin type constructors. */

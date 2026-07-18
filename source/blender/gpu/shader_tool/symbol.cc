@@ -24,19 +24,24 @@ static const char *ns_sep = SourceProcessor::namespace_separator;
  */
 class ExpressionTypeParser {
  public:
-  SymbolClass *eval(const SymbolTable &table, const SymbolScope &scope, Expr expr) const
+  Result<SymbolClass *> eval(const SymbolTable &table, const SymbolScope &scope, Expr expr) const
   {
     EvalContext ctx(&table, &scope, expr.child_first());
 
-    SymbolClass *cls = ctx.expr(0);
-    if (ctx.peek().is_valid()) {
-      throw AstNodeException(ctx.peek(), "Trailing input");
+    Result<SymbolClass *> result;
+    result.value = ctx.expr(0);
+    result.err = ctx.error;
+
+    if (ctx.peek().is_valid() && !result.err.has_value()) {
+      result.err = AstNodeException(ctx.peek(), "Trailing input");
     }
-    return cls;
+    return result;
   }
 
  private:
   struct EvalContext {
+    std::optional<AstNodeException> error;
+
    private:
     const SymbolTable *table;
     const SymbolScope *scope;
@@ -96,7 +101,8 @@ class ExpressionTypeParser {
           return ctx.expr(0);
         }
         default:
-          throw AstNodeException(node, "Invalid expression");
+          error = AstNodeException(node, "Invalid expression");
+          return err_cls;
       }
     }
 
@@ -105,7 +111,7 @@ class ExpressionTypeParser {
     SymbolClass *led(SymbolClass *left, Node node)
     {
       if (node.type() != NodeType::Op) {
-        throw AstNodeException(node, "Invalid operator");
+        error = AstNodeException(node, "Invalid operator");
       }
 
       /* Binary operator. */
@@ -125,7 +131,7 @@ class ExpressionTypeParser {
       SymbolClass *fval = expr(left_binding_power(Question) - 1);
 
       if (tval != fval) {
-        throw AstNodeException(node, "Incompatible operand types");
+        error = AstNodeException(node, "Incompatible operand types");
       }
       /* Operand types match. We can return either. */
       return fval;
@@ -182,7 +188,8 @@ class ExpressionTypeParser {
         default:
           break;
       }
-      throw AstNodeException(Node{}, "Invalid operator token");
+      error = AstNodeException(Node{}, "Invalid operator token");
+      return -1;
     }
 
     Node peek() const
@@ -203,34 +210,44 @@ class ExpressionTypeParser {
       if (auto it = table->operators.find(key); it != table->operators.end()) {
         return it->second->return_type;
       }
-      throw AstNodeException(operator_type,
-                             "Invalid operands to binary expression ('" + left_type->identifier +
-                                 "' and '" + right_type->identifier + "')");
+      error = AstNodeException(operator_type,
+                               "Invalid operands to binary expression ('" + left_type->identifier +
+                                   "' and '" + right_type->identifier + "')");
+      return err_cls;
     }
 
     SymbolClass *op(Node operator_type, SymbolClass *right_type)
     {
-      throw AstNodeException(operator_type,
-                             "Invalid argument type '" + right_type->identifier +
-                                 "' to unary expression");
+      OperatorKey key{nullptr, operator_type.front().type(), right_type};
+      if (auto it = table->operators.find(key); it != table->operators.end()) {
+        return it->second->return_type;
+      }
+      error = AstNodeException(operator_type,
+                               "Invalid argument type '" + right_type->identifier +
+                                   "' to unary expression");
+      return err_cls;
     }
 
     SymbolClass *fun_call(FuncCall call)
     {
       SymbolFunction *fn = scope->lookup_function(call.identifier());
-      vector<SymbolClass *> arg_types = SymbolFunction::to_arg_types(
-          *table, *scope, call.parameters());
+      auto [arg_types, err] = SymbolFunction::to_arg_types(*table, *scope, call.parameters());
+      if (err) {
+        error = err;
+        return err_cls;
+      }
+
       fn->lookup_overload(arg_types);
       SymbolClass *type = fn->return_type;
 
       Node next = call.next();
       if (next.type() == NodeType::Op && next.front() == Dot) {
         /* Member access */
-        throw AstNodeException(Node{}, "Not implemented yet");
+        error = AstNodeException(Node{}, "Not implemented yet");
       }
       if (next.type() == NodeType::Subscript) {
         /* Subscript. */
-        throw AstNodeException(Node{}, "Not implemented yet");
+        error = AstNodeException(Node{}, "Not implemented yet");
       }
       return type;
     }
@@ -271,15 +288,10 @@ class ExpressionTypeParser {
   };
 };
 
-SymbolClass *SymbolTable::expr_type_analysis(const SymbolScope &scope, Expr expr) const
+Result<SymbolClass *> SymbolTable::expr_type_analysis(const SymbolScope &scope, Expr expr) const
 {
   ExpressionTypeParser parser;
-  try {
-    return parser.eval(*this, scope, expr);
-  }
-  catch (AstNodeException &e) {
-    return scope.root_scope()->lookup_class(err_symbol);
-  }
+  return parser.eval(*this, scope, expr);
 }
 
 Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declarator decl) const
@@ -299,11 +311,11 @@ Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declara
                  "' with type 'auto' contains multiple expressions"};
     }
     else {
-      return {expr_type_analysis(scope, Expr(init.child_first())), err};
+      return expr_type_analysis(scope, Expr(init.child_first()));
     }
   }
   else {
-    return {expr_type_analysis(scope, AssignStmt(node).expr()), err};
+    return expr_type_analysis(scope, AssignStmt(node).expr());
   }
   return {scope.root_scope()->lookup_class(SymbolTable::err_symbol), err};
 }
@@ -849,7 +861,11 @@ struct SymbolParser {
       return;
     }
 
-    SymbolClass *cls = table.expr_type_analysis(scope, expr);
+    auto [cls, err] = table.expr_type_analysis(scope, expr);
+    if (err) {
+      error(err->node, err->msg);
+      return;
+    }
     if (cls->is_error) {
       error(decl, "Cannot deduce actual type for variable '' with type 'auto'");
       return;
@@ -1117,28 +1133,32 @@ void SymbolVariable::set_offset(bool is_union, int &offset)
   }
 }
 
-vector<SymbolClass *> SymbolFunction::to_arg_types(const SymbolTable &table,
-                                                   const SymbolScope &scope,
-                                                   FuncParamList list)
+Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable &table,
+                                                           const SymbolScope &scope,
+                                                           FuncParamList list)
 {
+  std::optional<AstNodeException> error;
   vector<SymbolClass *> arg_types;
   list.foreach<Expr>([&](Expr expr) {
-    SymbolClass *cls = table.expr_type_analysis(scope, expr);
+    auto [cls, err] = table.expr_type_analysis(scope, expr);
     arg_types.emplace_back(cls);
+    if (err && !error) {
+      error = err;
+    }
   });
-  return arg_types;
+  return {arg_types, error};
 }
 
-vector<SymbolClass *> SymbolFunction::to_arg_types(const SymbolTable & /*table*/,
-                                                   const SymbolScope &scope,
-                                                   FuncArgList list)
+Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable & /*table*/,
+                                                           const SymbolScope &scope,
+                                                           FuncArgList list)
 {
   vector<SymbolClass *> arg_types;
   list.foreach<FuncArg>([&](FuncArg arg) {
     SymbolClass *cls = scope.lookup_class(arg.type().id());
     arg_types.emplace_back(cls);
   });
-  return arg_types;
+  return {arg_types, std::nullopt};
 }
 
 SymbolFunction *SymbolFunction::lookup_overload(const vector<SymbolClass *> &arg_types)

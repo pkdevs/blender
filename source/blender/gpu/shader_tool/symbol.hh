@@ -227,12 +227,12 @@ struct SymbolFunction : SymbolScope {
   /* Return true if the given argument types are compatible */
   bool argument_matches(const vector<SymbolClass *> &arg_types) const;
 
-  static vector<SymbolClass *> to_arg_types(const SymbolTable &table,
-                                            const SymbolScope &scope,
-                                            FuncParamList list);
-  static vector<SymbolClass *> to_arg_types(const SymbolTable &table,
-                                            const SymbolScope &scope,
-                                            FuncArgList list);
+  static Result<vector<SymbolClass *>> to_arg_types(const SymbolTable &table,
+                                                    const SymbolScope &scope,
+                                                    FuncParamList list);
+  static Result<vector<SymbolClass *>> to_arg_types(const SymbolTable &table,
+                                                    const SymbolScope &scope,
+                                                    FuncArgList list);
 };
 
 struct SymbolVariable : Symbol {
@@ -384,7 +384,7 @@ struct SymbolTable {
                                   const SymbolScope &scope,
                                   const string &sep = "T");
 
-  SymbolClass *expr_type_analysis(const SymbolScope &scope, Expr expr) const;
+  Result<SymbolClass *> expr_type_analysis(const SymbolScope &scope, Expr expr) const;
 
   Result<SymbolClass *> resolve_auto_type(SymbolScope &scope, Declarator decl) const;
 
