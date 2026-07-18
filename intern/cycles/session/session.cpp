@@ -769,7 +769,7 @@ void Session::update_status_time(bool show_pause, bool show_done)
   /* Show ReSTIR active state and candidate count. */
   if (scene->integrator->get_use_restir()) {
     substatus += string_printf(" | ReSTIR: %d candidates",
-                               scene->integrator->get_restir_candidate_count());
+                               scene->integrator->get_restir_light_samples());
   }
 
   /* Append any device-specific status (such as background kernel optimization) */

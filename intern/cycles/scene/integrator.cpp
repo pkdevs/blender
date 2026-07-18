@@ -105,9 +105,6 @@ NODE_DEFINE(Integrator)
   SOCKET_INT(restir_spatial_neighbors, "Samples", 6);
   SOCKET_INT(restir_spatial_iterations, "Iterations", 2);
 
-  SOCKET_BOOLEAN(use_temporal_resampling, "Temporal Re-use", true); // !!!: Remove
-  SOCKET_INT(restir_candidate_count, "Light Candidates", 8);
-
   SOCKET_BOOLEAN(use_guiding, "Guiding", false);
   SOCKET_BOOLEAN(deterministic_guiding, "Deterministic Guiding", true);
   SOCKET_BOOLEAN(use_surface_guiding, "Surface Guiding", true);
@@ -305,10 +302,6 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
     kintegrator->filter_closures |= FILTER_CLOSURE_TRANSPARENT;
   }
 
-  kintegrator->use_restir = use_restir;
-  kintegrator->use_temporal_resampling = use_temporal_resampling;
-  kintegrator->restir_candidate_count = restir_candidate_count;
-
   const GuidingParams guiding_params = get_guiding_params(device);
   kintegrator->use_guiding = guiding_params.use;
   kintegrator->train_guiding = kintegrator->use_guiding;
@@ -416,6 +409,15 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
     kintegrator->pixel_jitter = make_float2(FLT_MAX);
     pixel_jitter_state.reset();
   }
+
+  /* ReSTIR. */
+  kintegrator->use_restir = use_restir & 0b11;
+  kintegrator->restir_unbiased = restir_unbiased;
+  kintegrator->restir_light_samples = restir_light_samples;
+  kintegrator->restir_spatial_radius = restir_spatial_radius;
+  kintegrator->restir_spatial_neighbors = restir_spatial_neighbors;
+  kintegrator->restir_spatial_iterations = restir_spatial_iterations;
+  kintegrator->restir_pairwise_mis = (use_restir >> 2) & 1;
 
   dscene->sample_pattern_lut.clear_modified();
   clear_modified();

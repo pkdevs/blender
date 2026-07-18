@@ -439,6 +439,7 @@ static PyObject *available_devices_func(PyObject * /*self*/, PyObject *args)
         device_tuple, 5, PyBool_FromLong(device.denoisers & DENOISER_OPENIMAGEDENOISE));
     PyTuple_SET_ITEM(device_tuple, 6, PyBool_FromLong(device.denoisers & DENOISER_OPTIX));
     PyTuple_SET_ITEM(device_tuple, 7, PyBool_FromLong(device.has_execution_optimization));
+    // Add ReSTIR tuple
     PyTuple_SET_ITEM(ret, i, device_tuple);
   }
 
@@ -928,6 +929,8 @@ void *blender::CCL_python_module_init()
   else {
     PyModule_AddObjectRef(mod, "with_openimagedenoise", Py_False);
   }
+
+// TODO(Tri): ifdef WITH_RESTIR ?
 
 #ifdef WITH_CYCLES_DEBUG
   PyModule_AddObjectRef(mod, "with_debug", Py_True);

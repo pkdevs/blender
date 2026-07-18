@@ -570,6 +570,12 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=True,
     )
 
+    use_temporal_resampling: BoolProperty(
+        name="Temporal Resampling",
+        description="Reuse samples from the previous frame's reservoirs", # !!!: prev frame/sample! 
+        default=True,
+    )
+
     restir_light_samples: IntProperty(
         name="Light",
         description="Number of light samples",
@@ -612,13 +618,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default='POWER_HEURISTIC',
     )
 
-    use_temporal_resampling: BoolProperty(
-        name="Temporal Resampling",
-        description="Reuse samples from the previous frame's reservoirs",
-        default=True,
-    )
-
-    # TODO
+    # TODO(Tri)
     restir_temporal_history_limit: IntProperty(
         name="History Limit",
         description="Maximum length of temporal history to accumulate (in frames)",
