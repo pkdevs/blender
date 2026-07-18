@@ -115,6 +115,11 @@ enum PathTraceDimension {
   PRNG_SUBSURFACE_DISK = 0,
   PRNG_SUBSURFACE_DISK_RESAMPLE = 1,
 
+  // TODO(weizhen): Temp for RIS, revisit later for stratified sampling.
+  PRNG_RIS = 12,
+  PRNG_PICK = 13,
+  PRNG_SPATIAL_RESAMPLING = 14,
+
   /* Volume density baking. */
   PRNG_BAKE_VOLUME_DENSITY_EVAL = 0,
 
@@ -623,6 +628,7 @@ struct ReSTIRLightSampleReference {
   float2 param;
 };
 
+// TODO: Remove
 struct ReSTIRReservoir {
     // !!!: we may stop persisting LS here once ref lands, but not necessary for the initial transition.
     LightSample light;

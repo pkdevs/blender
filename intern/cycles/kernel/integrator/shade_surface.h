@@ -21,9 +21,9 @@
 #include "kernel/integrator/shadow_linking.h"
 #include "kernel/integrator/subsurface.h"
 
-#include "kernel/integrator/reservoir.h"
-#include "kernel/integrator/restir.h"
-#include "kernel/integrator/restir_temporal.h"
+// #include "kernel/integrator/reservoir.h"
+#include "kernel/integrator/restir.h" // !!!: Remove!
+// #include "kernel/integrator/restir_temporal.h"
 #include "kernel/integrator/volume_stack.h"
 
 #include "kernel/types.h"
@@ -339,9 +339,7 @@ bool restir_di_select_light(KernelGlobals kg,
 
   const uint candidate_count = kernel_data.integrator.restir_light_samples;
 
-
-  // ReSTIRRisState ris = restir_ris_empty();
-  ReSTIRDIRisState ris = restir_di_ris_empty();
+  ReSTIRDIRisState ris = restir_di_ris_empty(); // !!!: Removing restir_.h
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
@@ -479,7 +477,7 @@ kernel_assert(ris.total_weight >= 0.0f);
 
   if (!valid || !restir_di_reservoir_is_valid(&reservoir) || reservoir.light.pdf <= 0.0f) {
     if (restir_reservoirs != nullptr && bounce == 0 && mnee_vertex_count == 0) {
-      restir_reservoirs[pixel_index] = restir_di_reservoir_empty();
+      restir_reservoirs[pixel_index] = restir_di_reservoir_empty(); // !!!: Removing restir_.h
     }
     return false; // Invalid reservoir
   }

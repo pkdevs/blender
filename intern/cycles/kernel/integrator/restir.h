@@ -16,21 +16,6 @@
 
 CCL_NAMESPACE_BEGIN
 
-// Should be added to ReSTIRReservoir eventually?
-ccl_device_inline ReSTIRLightSampleReference restir_light_reference_empty()
-{
-  ReSTIRLightSampleReference reference{};
-  reference.object = OBJECT_NONE;
-  reference.prim = PRIM_NONE;
-  return reference;
-}
-
-ccl_device_inline bool restir_light_reference_is_valid(
-    const ccl_private ReSTIRLightSampleReference *reference)
-{
-  return (reference->flags & RESTIR_LIGHT_REFERENCE_VALID) != 0;
-}
-
 ccl_device_inline ReSTIRDIReservoir restir_di_reservoir_empty()
 {
   ReSTIRDIReservoir r{};
@@ -229,8 +214,10 @@ ccl_device_inline void restir_di_add_light_sample(
   restir_di_add_sample(kg, ris, ls, reference, radiance, mis_weight / ls->pdf, random);
 }
 
+
 // MARK: - 
 
+// Reservoir.finalize()
 // !!!: total_weight /= luminance;
 ccl_device_inline bool restir_di_finalize(
     ccl_private ReSTIRDIReservoir *reservoir,

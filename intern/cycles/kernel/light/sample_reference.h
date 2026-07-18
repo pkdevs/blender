@@ -7,8 +7,18 @@
 
 #pragma once
 
+#include "kernel/light/common.h"
+
+#include "kernel/light/area.h"
+#include "kernel/light/background.h"
+#include "kernel/light/point.h"
+#include "kernel/light/spot.h"
+#include "kernel/light/sun.h"
+#include "kernel/light/triangle.h"
+#include "kernel/sample/lcg.h"
 #include "kernel/types.h"
-#include "kernel/integrator/restir.h"
+
+#include "kernel/types.h"
 #include "util/math_float2.h"
 
 CCL_NAMESPACE_BEGIN
@@ -39,6 +49,25 @@ ccl_device_inline float3 restir_area_position_decode(const ccl_global KernelLigh
          u * klight->area.len_u * klight->area.axis_u +
          v * klight->area.len_v * klight->area.axis_v;
 }
+
+// MARK: - Move elsewhere?
+
+// Should be added to ReSTIRReservoir eventually?
+ccl_device_inline ReSTIRLightSampleReference restir_light_reference_empty()
+{
+  ReSTIRLightSampleReference reference{};
+  reference.object = OBJECT_NONE;
+  reference.prim = PRIM_NONE;
+  return reference;
+}
+
+ccl_device_inline bool restir_light_reference_is_valid(
+    const ccl_private ReSTIRLightSampleReference *reference)
+{
+  return (reference->flags & RESTIR_LIGHT_REFERENCE_VALID) != 0;
+}
+
+// MARK: - Producers
 
 /**
  * Producer
@@ -188,6 +217,7 @@ ccl_device_inline bool restir_light_reference_from_sample( // !!!
   }
 }
 
+// !!!: Temporarily rejects geometric emitters
 ccl_device_inline bool restir_light_reference_restore_metadata(
     KernelGlobals kg,
     ccl_private ReSTIRLightSampleReference *reference)
