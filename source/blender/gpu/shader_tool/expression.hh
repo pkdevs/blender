@@ -193,11 +193,9 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
         case Plus:
         case Minus:
           return 100;
-#if 0 /* Not implemented yet. */
-      case LShift:
-      case RShift:
-        return 90;
-#endif
+        case LShift:
+        case RShift:
+          return 90;
         case LThan:
         case LEqual:
         case GThan:
