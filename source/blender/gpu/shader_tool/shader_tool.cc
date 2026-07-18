@@ -181,10 +181,10 @@ int main(int argc, char **argv)
     language = Language::BLENDER_GLSL;
   }
 
-  // if (language == Language::BSL) {
-  //   /* Until the new BSL compiler is fully working, use the legacy one. */
-  //   language = Language::BLENDER_GLSL;
-  // }
+  if (language == Language::BSL) {
+    /* Until the new BSL compiler is fully working, use the legacy one. */
+    language = Language::BLENDER_GLSL;
+  }
 
   metadata::Source external_symbols;
   std::vector<std::string> visited_files{input_file_name};
