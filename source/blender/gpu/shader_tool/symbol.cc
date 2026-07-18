@@ -668,6 +668,11 @@ struct SymbolParser {
     scope.classes.emplace(cls->identifier, cls);
     scope.scopes.emplace(cls->identifier, cls);
 
+    if (cls->is_anonymous && anonymous_scope_prefix(cls).non_anonymous_parent == nullptr) {
+      error(decl, "Anonymous unions at namespace or global scope are not supported");
+      return scope.root_scope()->lookup_class(SymbolTable::err_symbol);
+    }
+
     parse_scope(*cls, decl.body(), prefix + cls->identifier + ns_sep, temp);
 
     cls->ensure_size_and_align();
@@ -917,21 +922,27 @@ struct SymbolParser {
       return;
     }
 
+    SymbolClass *cls = scope.as_class();
+
+    string anon_prefix;
+    SymbolScope *named_parent = nullptr;
+    if (cls && cls->is_anonymous) {
+      auto prefix = anonymous_scope_prefix(cls);
+      anon_prefix = prefix.prefix, named_parent = prefix.non_anonymous_parent;
+    }
+
     var.foreach<Declarator>([&](Declarator decl) {
       SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl);
       scope.variables.emplace(sym->identifier, sym);
-
-      SymbolClass *cls = scope.as_class();
 
       if (cls) {
         sym->set_offset(cls->is_union, offset);
 
         /* Alias to the parent class for anonymous structs. */
         if (cls->is_anonymous) {
-          auto [anon_prefix, named_parent] = anonymous_scope_prefix(cls);
           /* Create a resolved symbol. */
           SymbolVariable *resolved = table.var_arena.alloc(&scope, type, decl);
-          resolved->identifier = anon_prefix + resolved->identifier;
+          resolved->identifier = anon_prefix + resolved->identifier + "()";
           sym->resolved = resolved;
           /* Alias to the first, non-anonymous parent. */
           named_parent->variables.emplace(sym->identifier, sym);
@@ -1075,12 +1086,14 @@ struct SymbolParser {
   static AnonScopePrefix anonymous_scope_prefix(SymbolClass *cls)
   {
     string prefix;
+    SymbolClass *parent = nullptr;
     /* Support multiple nesting level. */
     do {
       /* Union members need to go through the getter functions. */
-      string access = cls->is_union ? "()" : "";
+      parent = cls->parent->as_class();
+      string access = parent && parent->is_union && parent->is_anonymous ? "()" : "";
       prefix = cls->identifier + "_" + access + "." + prefix;
-    } while ((cls = cls->parent->as_class(), cls->is_anonymous));
+    } while ((cls = parent, cls && cls->is_anonymous));
 
     return {prefix, cls};
   }
@@ -1248,24 +1261,6 @@ template<typename T> T *SymbolScope::lookup_generic_nested(Id id, const SourceLo
     }
   }
   return nullptr;
-}
-
-template<typename Callback> void SymbolScope::visit_variables(Callback &&callback)
-{
-  assert(this->type == CLASS);
-  vector<SymbolVariable *> members;
-  for (auto &[k, v] : variables) {
-    members.emplace_back(v);
-  }
-
-  /* Sort elements to guarantee deterministic order. */
-  sort(members.begin(), members.end(), [](const SymbolVariable *a, const SymbolVariable *b) {
-    return a->loc < b->loc;
-  });
-
-  for (auto *m : members) {
-    callback(*m);
-  }
 }
 
 SymbolClass *SymbolScope::lookup_class(string id) const

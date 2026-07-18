@@ -133,6 +133,8 @@ struct SymbolScope : Symbol {
 
   void function_emplace(SymbolFunction *fn);
 
+  template<typename Callback> void visit_variables(Callback &&callback);
+
  private:
   SymbolVariable *lookup_variable_nested(Id id) const;
   SymbolFunction *lookup_function_nested(Id id) const;
@@ -140,8 +142,6 @@ struct SymbolScope : Symbol {
 
   template<typename T> T *lookup_generic(IdQualified id, const SourceLocation &loc) const;
   template<typename T> T *lookup_generic_nested(Id id, const SourceLocation &loc) const;
-
-  template<typename Callback> void visit_variables(Callback &&callback);
 
   int id = 0;
   /* Create a unique, non-reachable key.
@@ -304,6 +304,24 @@ inline void SymbolScope::function_emplace(SymbolFunction *fn)
     fn->identifier += to_string(fn->loc.tok.line_number());
   }
   scopes.emplace(unique_id(), fn);
+}
+
+template<typename Callback> inline void SymbolScope::visit_variables(Callback &&callback)
+{
+  assert(this->type == CLASS);
+  vector<SymbolVariable *> members;
+  for (auto &[k, v] : variables) {
+    members.emplace_back(v);
+  }
+
+  /* Sort elements to guarantee deterministic order. */
+  sort(members.begin(), members.end(), [](const SymbolVariable *a, const SymbolVariable *b) {
+    return a->loc < b->loc;
+  });
+
+  for (auto *m : members) {
+    callback(*m);
+  }
 }
 
 /* Left is nullptr for unary operators. */

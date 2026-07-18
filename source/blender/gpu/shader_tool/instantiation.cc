@@ -429,12 +429,18 @@ struct InstantiationContext {
     match_if(';');
 
     if (cls.is_union) {
-      builder.ss << "\n";
-      /* Emit getter and setters. */
-      for (auto &[_, var] : cls.variables) {
-        builder.ss << union_getter(cls, *var) + "\n";
-        builder.ss << union_setter(cls, *var) + "\n";
+      if (!decl.attributes().contains_attr("host_shared")) {
+        line(body.front());
+        builder.ss << class_default_constructor(decl, cls) + "\n";
       }
+
+      builder.ss << "\n";
+
+      /* Emit getter and setters. */
+      cls.visit_variables([&](SymbolVariable &var) {
+        builder.ss << union_getter(cls, var) + "\n";
+        builder.ss << union_setter(cls, var) + "\n";
+      });
     }
     else {
       /* Don't do host shared structures. */
@@ -486,6 +492,7 @@ struct InstantiationContext {
             string id = "a" + to_string(class_id);
             id_type_resolved(id, cls);
             builder.ss << " " << id << "_;";
+            member_count++;
           }
           ++class_id;
           break;
@@ -517,6 +524,27 @@ struct InstantiationContext {
       }
       builder.ss << string(data_type) << " _" << to_string(i / 16) << "; ";
     }
+  }
+
+  string union_ctor(SymbolClass &cls)
+  {
+    string members;
+    for (int i = 0; i < cls.size; i += 16) {
+      size_t member_size = cls.size - i;
+      const char *data_type = "float4";
+      if (member_size == 4) {
+        data_type = "float";
+      }
+      else if (member_size == 8) {
+        data_type = "float2";
+      }
+      else if (member_size == 12) {
+        data_type = "float3";
+      }
+      SymbolClass *type = cls.root_scope()->lookup_class(data_type);
+      members += "r._" + to_string(i / 16) + "=" + default_value(*type) + ";";
+    }
+    return members;
   }
 
   string default_value(const SymbolClass &type)
@@ -558,55 +586,60 @@ struct InstantiationContext {
     const string &cls_id = cls.resolved->identifier;
 
     string members;
-    int class_id = 0;
-    decl.body().foreach_child([&](Node node) {
-      switch (node.type()) {
-        case NodeType::VarDecl: {
-          VarDecl decl = node;
-          if (!decl.type().is_static()) {
-            SymbolClass *type = id_type_lookup_resolved(decl.type().id(), cls);
-            decl.foreach<Declarator>([&](Declarator d) {
-              SymbolVariable *var = cls.lookup_variable(d.identifier());
-              string access;
-              string close;
-              int dim = 0;
-              Subscript sub = d.array();
-              while (sub.is_valid()) {
-                string var = get_temp_name(dim++);
-                string len = string(sub.expr().str());
-                members += "for(int " + var + " =0;" + var + " < " + len + ";++" + var + ") {";
-                close += "}";
-                access += "[" + var + "]";
-                sub = sub.sub();
-              }
-              members += "r." + var->identifier + access + "=" + default_value(*type) + ";";
-              members += close;
-            });
+    if (cls.is_union) {
+      members = union_ctor(cls);
+    }
+    else {
+      int class_id = 0;
+      decl.body().foreach_child([&](Node node) {
+        switch (node.type()) {
+          case NodeType::VarDecl: {
+            VarDecl decl = node;
+            if (!decl.type().is_static()) {
+              SymbolClass *type = id_type_lookup_resolved(decl.type().id(), cls);
+              decl.foreach<Declarator>([&](Declarator d) {
+                SymbolVariable *var = cls.lookup_variable(d.identifier());
+                string access;
+                string close;
+                int dim = 0;
+                Subscript sub = d.array();
+                while (sub.is_valid()) {
+                  string var = get_temp_name(dim++);
+                  string len = string(sub.expr().str());
+                  members += "for(int " + var + " =0;" + var + " < " + len + ";++" + var + ") {";
+                  close += "}";
+                  access += "[" + var + "]";
+                  sub = sub.sub();
+                }
+                members += "r." + var->identifier + access + "=" + default_value(*type) + ";";
+                members += close;
+              });
+            }
+            break;
           }
-          break;
-        }
-        case NodeType::ClassDecl: {
-          ClassDecl decl = node;
-          if (decl.is_anonymous() && !decl.is_enum()) {
-            /* Anonymous class are instantiated as regular members. */
-            jump_to(decl.front());
-            string type_id = "a" + to_string(class_id);
-            SymbolClass *type = cls.lookup_class(type_id);
-            string member_id = type_id + "_";
+          case NodeType::ClassDecl: {
+            ClassDecl decl = node;
+            if (decl.is_anonymous() && !decl.is_enum()) {
+              /* Anonymous class are instantiated as regular members. */
+              jump_to(decl.front());
+              string type_id = "a" + to_string(class_id);
+              SymbolClass *type = cls.lookup_class(type_id);
+              string member_id = type_id + "_";
 
-            members += "r." + member_id + "=" + default_value(*type) + ";";
+              members += "r." + member_id + "=" + default_value(*type) + ";";
+            }
+            ++class_id;
+            break;
           }
-          ++class_id;
-          break;
+          default:
+            break;
         }
-        default:
-          break;
+      });
+
+      if (members.empty()) {
+        /* Empty struct will have a padding int. */
+        members += "r._pad=0;";
       }
-    });
-
-    if (members.empty()) {
-      /* Empty struct will have a padding int. */
-      members += "r._pad=0;";
     }
 
     return "\n" + cls_id + " " + cls_id + "_ctor_() {" + cls_id + " r;" + members + "return r;}";
@@ -685,7 +718,7 @@ struct InstantiationContext {
     string union_type_id = union_type.resolved->identifier;
     string fn_type_id = member_type.resolved->identifier;
     string fn_name = "_" + member_id;
-    string fn_args = "(const " + union_type_id + " &this_)";
+    string fn_args = "(" + union_type_id + " this_)";
     string fn_body = "{\n";
     if (member_type.is_builtin) {
       string access = "this_." + union_data_access(member, union_type.size);
@@ -693,15 +726,15 @@ struct InstantiationContext {
     }
     else {
       /* Declare return variable of the same type as the accessed member. */
-      fn_body += "  " + fn_type_id + " val;\n";
-      for (const auto &[_, var] : member_type.variables) {
-        if (var->is_static) {
-          continue;
+      fn_body += "  " + fn_type_id + " r;\n";
+      member_type.visit_variables([&](SymbolVariable &var) {
+        if (var.is_static) {
+          return;
         }
-        string to_var = "val." + var->identifier;
-        string access = "this_." + union_data_access(*var, union_type.size);
-        fn_body += "  " + to_var + " = " + member_from_float(*var->type, access) + ";\n";
-      }
+        string to_var = "r." + var.identifier;
+        string access = "this_." + union_data_access(var, union_type.size);
+        fn_body += "  " + to_var + " = " + member_from_float(*var.type, access) + ";\n";
+      });
       fn_body += "  return val;\n";
     }
     fn_body += "}";
@@ -715,23 +748,23 @@ struct InstantiationContext {
     string union_type_id = union_type.resolved->identifier;
     string member_type_id = member_type.resolved->identifier;
     string fn_name = "_" + member_id + "_set_";
-    string fn_args = "(" + union_type_id + " &this_, " + member_type_id + " value)";
+    string fn_args = "(" + union_type_id + " &this_, " + member_type_id + " v)";
     string fn_body = "{\n";
     if (member_type.is_builtin) {
       string to_var = "this_." + union_data_access(member, union_type.size);
-      string access = "val." + member.identifier;
+      string access = "v." + member.identifier;
       fn_body += "  " + to_var + " = " + member_to_float(*member.type, access) + ";\n";
     }
     else {
       /* Declare return variable of the same type as the accessed member. */
-      for (const auto &[_, var] : member_type.variables) {
-        if (var->is_static) {
-          continue;
+      member_type.visit_variables([&](SymbolVariable &var) {
+        if (var.is_static) {
+          return;
         }
-        string to_var = "this_." + union_data_access(*var, union_type.size);
-        string access = "val." + var->identifier;
-        fn_body += "  " + to_var + " = " + member_to_float(*var->type, access) + ";\n";
-      }
+        string to_var = "this_." + union_data_access(var, union_type.size);
+        string access = "val." + var.identifier;
+        fn_body += "  " + to_var + " = " + member_to_float(*var.type, access) + ";\n";
+      });
     }
     fn_body += "}";
     return "void " + fn_name + fn_args + " " + fn_body;

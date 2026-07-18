@@ -197,6 +197,7 @@ struct ScopeParser {
           break;
         case Class:
         case Struct:
+        case Union:
           struct_declaration();
           break;
         case Enum:
@@ -248,7 +249,7 @@ struct ScopeParser {
   /* Example: `struct [[a]] A {}`. */
   void struct_declaration()
   {
-    match(Struct, Class);
+    match(Struct, Class, Union);
     /* Optional attributes. */
     if (peek() == '[') {
       attribute();
@@ -1193,6 +1194,18 @@ struct ScopeParser {
     if (curr != TokenType(expected) && curr != TokenType(expected2)) {
       error("Syntax Error: Expected token \"" + to_str(TokenType(expected)) + "\" or \"" +
             to_str(TokenType(expected2)) + "\" but got \"" + to_str(curr.type()) + "\"");
+    }
+    next();
+  }
+
+  void match(char expected, char expected2, char expected3)
+  {
+    if (curr != TokenType(expected) && curr != TokenType(expected2) &&
+        curr != TokenType(expected3))
+    {
+      error("Syntax Error: Expected token \"" + to_str(TokenType(expected)) + "\" or \"" +
+            to_str(TokenType(expected2)) + "\" or \"" + to_str(TokenType(expected3)) +
+            "\" but got \"" + to_str(curr.type()) + "\"");
     }
     next();
   }

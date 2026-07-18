@@ -12,8 +12,6 @@ using namespace std;
 
 TEST(shader_tool, Union)
 {
-  using namespace shader;
-  using namespace std;
   {
     string input = R"(
 struct [[host_shared]] T {
@@ -91,6 +89,108 @@ void _c_set_(_ref(T ,this_), float4 value) {
 
 )";
     auto [output, _, error] = process_test_string(input);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+union {};
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Anonymous unions at namespace or global scope are not supported");
+  }
+  {
+    string input = R"(
+union A {
+  uint4 a;
+  int4 b;
+  float4 c;
+};
+)";
+    string expect = R"(
+struct A {
+  float4 _0;
+
+
+};
+#line 2
+
+A A_ctor_() {A r;r._0=float4(0);return r;}
+
+uint4 _a(A this_) {
+  return floatBitsToUint(this_._0);
+}
+void _a_set_(A &this_, uint4 v) {
+  this_._0 = uintBitsToFloat(v.a);
+}
+int4 _b(A this_) {
+  return floatBitsToInt(this_._0);
+}
+void _b_set_(A &this_, int4 v) {
+  this_._0 = intBitsToFloat(v.b);
+}
+float4 _c(A this_) {
+  return this_._0;
+}
+void _c_set_(A &this_, float4 v) {
+  this_._0 = v.c;
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+struct A {
+  union {
+    uint4 a;
+    int4 b;
+  };
+};
+
+void f(A a) {
+  a.a;
+  a.b;
+}
+)";
+    string expect = R"(
+
+  struct A_a0 {
+    float4 _0;
+
+  };
+#line 3
+
+A_a0 A_a0_ctor_() {A_a0 r;r._0=float4(0);return r;}
+
+uint4 _a(A_a0 this_) {
+  return floatBitsToUint(this_._0);
+}
+void _a_set_(A_a0 &this_, uint4 v) {
+  this_._0 = uintBitsToFloat(v.a);
+}
+int4 _b(A_a0 this_) {
+  return floatBitsToInt(this_._0);
+}
+void _b_set_(A_a0 &this_, int4 v) {
+  this_._0 = intBitsToFloat(v.b);
+}
+#line 2
+struct A {
+  A_a0 a0_;
+#line 7
+};
+#line 3
+
+A A_ctor_() {A r;r.a0_=a0_ctor_();return r;}
+#line 9
+void f(A a) {
+  a.a0_.a();
+  a.a0_.b();
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
@@ -262,6 +362,120 @@ void _a_set_(_ref(T ,this_), A value) {
 
 )";
     auto [output, _, error] = process_test_string(input);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+
+  {
+    string input = R"(
+struct T {
+  int i;
+};
+struct A {
+  union {
+    struct {
+      uint4 a;
+      int4 b;
+    };
+    uint4 c;
+  };
+  union {
+    T d;
+    uint4 e;
+  };
+};
+
+void f(A a) {
+a.a;
+a.b;
+a.c;
+a.d.i;
+a.e;
+}
+)";
+    string expect = R"(
+struct T {
+  int i;
+};
+#line 2
+
+T T_ctor_() {T r;r.i=0;return r;}
+#line 7
+    struct A_a0_a0 {
+      uint4 a;
+      int4 b;
+    };
+#line 7
+
+A_a0_a0 A_a0_a0_ctor_() {A_a0_a0 r;r.a=uint4(0);r.b=int4(0);return r;}
+#line 6
+  struct A_a0 {
+    float4 _0; float4 _1;
+#line 12
+  };
+#line 6
+
+A_a0 A_a0_ctor_() {A_a0 r;r._0=float4(0);r._1=float4(0);return r;}
+
+A_a0_a0 _a0_(A_a0 this_) {
+  A_a0_a0 r;
+  r.a = floatBitsToUint(this_._0);
+  r.b = floatBitsToInt(this_._1);
+  return val;
+}
+void _a0__set_(A_a0 &this_, A_a0_a0 v) {
+  this_._0 = uintBitsToFloat(val.a);
+  this_._1 = intBitsToFloat(val.b);
+}
+uint4 _c(A_a0 this_) {
+  return floatBitsToUint(this_._0);
+}
+void _c_set_(A_a0 &this_, uint4 v) {
+  this_._0 = uintBitsToFloat(v.c);
+}
+#line 13
+  struct A_a1 {
+    float4 _0;
+
+  };
+#line 13
+
+A_a1 A_a1_ctor_() {A_a1 r;r._0=float4(0);return r;}
+
+T _d(A_a1 this_) {
+  T r;
+  r.i = floatBitsToInt(this_._0.x);
+  return val;
+}
+void _d_set_(A_a1 &this_, T v) {
+  this_._0.x = intBitsToFloat(val.i);
+}
+uint4 _e(A_a1 this_) {
+  return floatBitsToUint(this_._0);
+}
+void _e_set_(A_a1 &this_, uint4 v) {
+  this_._0 = uintBitsToFloat(v.e);
+}
+#line 5
+struct A {
+  A_a0 a0_;
+#line 13
+  A_a1 a1_;
+#line 17
+};
+#line 13
+
+A A_ctor_() {A r;r.a0_=a0_ctor_();r.a1_=a1_ctor_();return r;}
+#line 19
+void f(A a) {
+a.a0_.a0_().a();
+a.a0_.a0_().b();
+a.a0_.c();
+a.a1_.d().i;
+a.a1_.e();
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
