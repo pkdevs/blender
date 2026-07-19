@@ -84,7 +84,7 @@ class ExpressionParser : public Parser<ExpressionLexer, NullParser> {
           /* Undefined identifier (not macro substituted). Evaluate to 0. */
           return 0;
         case Number:
-          return std::stol(std::string(t.str()));
+          return static_cast<int64_t>(std::stoull(std::string(t.str()), nullptr, 0));
         case Plus:
           return +expr(unary_binding_power);
         case Minus:
