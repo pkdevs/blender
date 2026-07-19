@@ -9,6 +9,7 @@ __all__ = (
 )
 
 import unittest
+from math import cos, pi, sin
 
 import bmesh
 import bpy
@@ -79,6 +80,21 @@ def _make_grid_marked(mark, size=1.0, x_segments=8, y_segments=8):
     return obj, marked, boundary
 
 
+def _make_frequency_ring(mode, verts_num=32):
+    """Wire ring with a single discrete Fourier mode stored in Z."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    mesh = bpy.data.meshes.new("frequency_ring")
+    verts = []
+    for i in range(verts_num):
+        angle = 2.0 * pi * i / verts_num
+        verts.append((cos(angle), sin(angle), sin(mode * angle)))
+    edges = [(i, (i + 1) % verts_num) for i in range(verts_num)]
+    mesh.from_pydata(verts, edges, [])
+    obj = bpy.data.objects.new("frequency_ring", mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    return obj
+
+
 def _add_smooth(obj, **params):
     mod = obj.modifiers.new("smooth", 'SMOOTH')
     for key, value in params.items():
@@ -106,6 +122,14 @@ def _max_distance(a, b):
     return max((p - q).length for p, q in zip(a, b))
 
 
+def _frequency_amplitude(positions, mode):
+    """Project Z coordinates onto one sine mode of the ring."""
+    verts_num = len(positions)
+    return 2.0 / verts_num * sum(
+        p.z * sin(2.0 * pi * mode * i / verts_num) for i, p in enumerate(positions)
+    )
+
+
 class TestSmoothDisabled(unittest.TestCase):
     """The modifier must be a true no-op when its parameters cancel out."""
 
@@ -127,6 +151,11 @@ class TestSmoothDisabled(unittest.TestCase):
     def test_hc_zero_factor(self):
         self._assert_unchanged(
             {'method': 'HC', 'factor': 0.0, 'hc_alpha': 0.5, 'hc_beta': 0.5, 'iterations': 5}
+        )
+
+    def test_frequency_zero_factor(self):
+        self._assert_unchanged(
+            {'method': 'FREQUENCY', 'factor': 0.0, 'frequency_cutoff': 0.25, 'iterations': 5}
         )
 
     def test_all_axes_off(self):
@@ -162,6 +191,49 @@ class TestSmoothZeroIterations(unittest.TestCase):
         self._assert_zero_iter_is_noop(
             {'method': 'HC', 'factor': 1.0, 'hc_alpha': 0.5, 'hc_beta': 0.5}
         )
+
+    def test_frequency(self):
+        self._assert_zero_iter_is_noop(
+            {'method': 'FREQUENCY', 'factor': 1.0, 'frequency_cutoff': 0.25}
+        )
+
+
+class TestSmoothFrequencyResponse(unittest.TestCase):
+    """The implicit biharmonic filter must discriminate Laplacian frequencies."""
+
+    @staticmethod
+    def _retained_amplitude(mode, cutoff, iterations=1):
+        obj = _make_frequency_ring(mode)
+        original = _frequency_amplitude(_evaluated_positions(obj), mode)
+        _add_smooth(
+            obj,
+            method='FREQUENCY',
+            factor=1.0,
+            frequency_cutoff=cutoff,
+            iterations=iterations,
+            use_x=False,
+            use_y=False,
+            use_z=True,
+        )
+        filtered = _frequency_amplitude(_evaluated_positions(obj), mode)
+        return abs(filtered / original)
+
+    def test_cutoff_is_half_power_frequency(self):
+        """On a 32-ring, mode 8 has normalized Laplacian frequency exactly 1."""
+        retained = self._retained_amplitude(mode=8, cutoff=1.0)
+        self.assertAlmostEqual(retained, 0.5, places=4)
+
+    def test_high_frequency_is_attenuated_more(self):
+        low = self._retained_amplitude(mode=1, cutoff=0.25)
+        high = self._retained_amplitude(mode=8, cutoff=0.25)
+        self.assertGreater(low, 0.98)
+        self.assertLess(high, 0.1)
+        self.assertLess(high, low * 0.1)
+
+    def test_lower_cutoff_removes_more_detail(self):
+        lower_cutoff = self._retained_amplitude(mode=8, cutoff=0.1)
+        higher_cutoff = self._retained_amplitude(mode=8, cutoff=0.8)
+        self.assertLess(lower_cutoff, higher_cutoff)
 
 
 class TestSmoothVolumePreservation(unittest.TestCase):
@@ -237,6 +309,9 @@ class TestSmoothDeterminism(unittest.TestCase):
     def test_hc(self):
         self._assert_deterministic('HC', factor=1.0, hc_alpha=0.0, hc_beta=0.5)
 
+    def test_frequency(self):
+        self._assert_deterministic('FREQUENCY', factor=1.0, frequency_cutoff=0.25)
+
 
 class TestSmoothPinBoundary(unittest.TestCase):
     """`use_pin_boundary` must freeze boundary verts while interior smoothing still runs."""
@@ -269,6 +344,9 @@ class TestSmoothPinBoundary(unittest.TestCase):
 
     def test_hc(self):
         self._assert_boundary_pinned('HC', factor=1.0, hc_alpha=0.0, hc_beta=0.5)
+
+    def test_frequency(self):
+        self._assert_boundary_pinned('FREQUENCY', factor=1.0, frequency_cutoff=0.25)
 
     def test_off_by_default_boundaries_move(self):
         """Without the toggle, boundary verts must be free to drift (regression guard)."""
