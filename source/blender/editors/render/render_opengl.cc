@@ -50,13 +50,12 @@
 
 #include "DRW_engine.hh"
 
-#include "ED_util.hh"
-
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "ED_gpencil_legacy.hh"
 #include "ED_screen.hh"
+#include "ED_util.hh"
 #include "ED_view3d.hh"
 #include "ED_view3d_offscreen.hh"
 
