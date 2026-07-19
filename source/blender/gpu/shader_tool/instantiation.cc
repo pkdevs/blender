@@ -954,17 +954,29 @@ struct InstantiationContext {
     builder << string(";\n");
   }
 
-  void func_decl(FuncDecl decl, SymbolScope &scope)
+  void func_decl(FuncDecl decl,
+                 SymbolScope &scope,
+                 /* Resolved, templated function instance. */
+                 SymbolFunction *inst_fn = nullptr)
   {
     LocalScope body = decl.body();
 
+    if (inst_fn == nullptr) {
+      inst_fn = id_func_resolved_lookup(decl.identifier(), decl.arguments(), scope);
+    }
+
     jump_to(decl.front());
     skip_node(decl.attributes());
-    id_type(decl.return_type(), scope);
-    SymbolFunction *fn = id_func_resolved(decl.identifier(), decl.arguments(), scope);
-    func_arg_list(decl.arguments(), *fn);
+    /* Note that we match the id type from inside the function scope in order to match template
+     * argument aliases.  */
+    id_type(decl.return_type(), *inst_fn);
 
-    local_scope(body, *fn);
+    builder.curr = decl.identifier().back();
+    builder << inst_fn->resolved->identifier + trivia(decl.identifier());
+
+    func_arg_list(decl.arguments(), *inst_fn);
+
+    local_scope(body, *inst_fn);
   }
 
   void func_arg_list(FuncArgList list, SymbolScope &scope, bool with_trivia = true)
@@ -1011,16 +1023,37 @@ struct InstantiationContext {
     if (temp_decl.is_class()) {
       ClassDecl decl = temp_decl.decl();
       SymbolClass *base_cls = scope.lookup_class(decl.identifier());
-      SymbolClass *temp_cls = base_cls->template_data->lookup_inst(temp_decl.parameters(), scope);
-      Node decl_cls = base_cls->template_data->decl.decl();
-      /* TODO. */
-      class_decl(decl_cls, scope, 0, temp_cls);
+      /* Instantiation should have been checked already. */
+      auto [temp_cls, _] = base_cls->template_data->lookup_inst(temp_decl.parameters(), scope);
+      Node decl_tmp = base_cls->template_data->decl.decl();
+      class_decl(decl_tmp, scope, 0, temp_cls);
+    }
+    else {
+      FuncForwardDecl decl = temp_decl.decl();
+      SymbolFunction *base_fn = scope.lookup_function(decl.identifier());
+      /* Instantiation should have been checked already. */
+      auto [temp_fn, _] = base_fn->template_data->lookup_inst(temp_decl.parameters(), scope);
+      Node decl_tmp = base_fn->template_data->decl.decl();
+      func_decl(decl_tmp, scope, temp_fn);
     }
   }
 
-  void template_spec(TemplateSpec /*decl*/, SymbolScope & /*scope*/)
+  void template_spec(TemplateSpec temp_spec, SymbolScope &scope)
   {
-    // builder << decl;
+    if (temp_spec.is_class()) {
+      ClassDecl decl = temp_spec.decl();
+      SymbolClass *base_cls = scope.lookup_class(decl.identifier());
+      /* Instantiation should have been checked already. */
+      auto [temp_cls, _] = base_cls->template_data->lookup_inst(temp_spec.parameters(), scope);
+      class_decl(decl, scope, 0, temp_cls);
+    }
+    else {
+      FuncDecl decl = temp_spec.decl();
+      SymbolFunction *base_fn = scope.lookup_function(decl.identifier());
+      /* Instantiation should have been checked already. */
+      auto [temp_fn, _] = base_fn->template_data->lookup_inst(temp_spec.parameters(), scope);
+      func_decl(decl, scope, temp_fn);
+    }
   }
 
   /* Match if/else if/else statements */
@@ -1319,12 +1352,19 @@ struct InstantiationContext {
     SymbolClass *cls = scope.lookup_class(id);
     if (TemplateParamList param = id.template_params(); param.is_valid()) {
       SymbolClass *base_cls = cls;
-      cls = base_cls->template_data->lookup_inst(param, scope);
+      auto [cls_, _] = base_cls->template_data->lookup_inst(param, scope);
+      cls = cls_;
       if (cls->is_error) {
-        string args = SymbolTable::mangle_identifier(param, scope, ", ");
-        error(param,
-              "Missing explicit instantiation of template " + base_cls->identifier + "<" +
-                  args.substr(2) + ">");
+        auto [args, err] = SymbolTable::mangle_identifier(
+            base_cls->template_data->decl.arguments(), param, scope, ", ");
+        if (err) {
+          error(err->node, err->msg);
+        }
+        else {
+          error(param,
+                "Missing explicit instantiation of template '" + base_cls->identifier + "<" +
+                    args.substr(2) + ">'");
+        }
       }
     }
     else {
@@ -1355,22 +1395,51 @@ struct InstantiationContext {
   }
 
   template<typename ArgOrParamList>
-  SymbolFunction *id_func_resolved(IdQualified id, ArgOrParamList params, const SymbolScope &scope)
+  SymbolFunction *id_func_resolved_lookup(IdQualified id,
+                                          ArgOrParamList params,
+                                          const SymbolScope &scope)
   {
     assert(id.is_valid());
     SymbolFunction *func = scope.lookup_function(id);
     if (TemplateParamList param = id.template_params(); param.is_valid()) {
       SymbolFunction *base_func = func;
-      func = base_func->template_data->lookup_inst(param, scope);
+      auto [func_, _] = base_func->template_data->lookup_inst(param, scope);
+      func = func_;
       if (func->is_error) {
-        string args = SymbolTable::mangle_identifier(param, scope, ", ");
-        error(param,
-              "Missing explicit instantiation of template " + base_func->identifier + "<" +
-                  args.substr(2) + ">");
+        auto [args, err] = SymbolTable::mangle_identifier(
+            base_func->template_data->decl.arguments(), param, scope, ", ");
+        if (err) {
+          error(err->node, err->msg);
+        }
+        else {
+          error(param,
+                "Missing explicit instantiation of template '" + base_func->identifier + "<" +
+                    args.substr(2) + ">'");
+        }
       }
     }
-    else if (func->template_data /* TODO check if all args are in signature */) {
-      error(id, "Missing explicit template arguments");
+    else if (func->template_data) {
+      if (func->template_data->is_adl_possible()) {
+        SymbolFunction *base_func = func;
+        auto [func_, err] = base_func->template_data->lookup_adl(symbols, params, scope);
+        func = func_;
+        if (func->is_error) {
+          auto [args,
+                err] = symbols.mangle_identifier(*base_func->template_data, params, scope, ", ");
+          if (err) {
+            error(err->node, err->msg);
+          }
+          else {
+            error(id,
+                  "Missing explicit instantiation of template '" + base_func->identifier + "<" +
+                      args.substr(2) + ">'");
+          }
+        }
+      }
+      else {
+        error(id, "Missing explicit template arguments");
+        func = scope.root_scope()->lookup_function(SymbolTable::err_symbol);
+      }
     }
     else if (func->overload_next) {
       auto [arg_types, err] = SymbolFunction::to_arg_types(symbols, scope, params);
@@ -1390,6 +1459,13 @@ struct InstantiationContext {
         error(id, "Unknown function name");
       }
     }
+    return func;
+  }
+
+  template<typename ArgOrParamList>
+  SymbolFunction *id_func_resolved(IdQualified id, ArgOrParamList params, const SymbolScope &scope)
+  {
+    SymbolFunction *func = id_func_resolved_lookup(id, params, scope);
     builder.curr = id.back();
     builder << func->resolved->identifier + trivia(id);
     return func;
@@ -1407,7 +1483,7 @@ struct InstantiationContext {
     }
 
     if (var->is_constexpr) {
-      builder.ss << to_string(var->value);
+      builder.ss << to_string(var->value) + trivia(id);
       return var;
     }
 

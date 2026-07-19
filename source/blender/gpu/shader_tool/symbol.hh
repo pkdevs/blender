@@ -76,9 +76,25 @@ template<typename T> struct SymbolTemplate {
   /* TODO(fclem): This is a bit stupid. */
   unordered_map<string, T *> instances;
 
-  SymbolTemplate(TemplateDecl temp) : decl(temp) {}
+  /* For argument dependent lookup. Maps a template argument to a function argument. */
+  vector<int> temp_arg_index_in_fn_arg;
 
-  T *lookup_inst(TemplateParamList list, const SymbolScope &scope) const;
+  SymbolTemplate(TemplateDecl temp) : decl(temp)
+  {
+    init_adl();
+  }
+
+  bool is_adl_possible() const
+  {
+    return !temp_arg_index_in_fn_arg.empty();
+  }
+
+  Result<T *> lookup_inst(TemplateParamList list, const SymbolScope &scope) const;
+  Result<T *> lookup_adl(const SymbolTable &symbols,
+                         FuncParamList list,
+                         const SymbolScope &scope) const;
+
+  void init_adl();
 };
 
 using SymbolClassTemplate = SymbolTemplate<SymbolClass>;
@@ -380,9 +396,14 @@ struct SymbolTable {
 
   void parse(LocalScope node, ErrorHandler &err_handler);
 
-  static string mangle_identifier(TemplateParamList list,
-                                  const SymbolScope &scope,
-                                  const string &sep = "T");
+  static Result<string> mangle_identifier(TemplateArgList args,
+                                          TemplateParamList list,
+                                          const SymbolScope &scope,
+                                          const string &sep = "T");
+  Result<string> mangle_identifier(const SymbolFunctionTemplate &tmp,
+                                   FuncParamList list,
+                                   const SymbolScope &scope,
+                                   const string &sep = "T") const;
 
   Result<SymbolClass *> expr_type_analysis(const SymbolScope &scope, Expr expr) const;
 

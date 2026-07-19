@@ -183,7 +183,7 @@ int main(int argc, char **argv)
 
   if (language == Language::BSL) {
     /* Until the new BSL compiler is fully working, use the legacy one. */
-    language = Language::BLENDER_GLSL;
+    // language = Language::BLENDER_GLSL;
   }
 
   metadata::Source external_symbols;

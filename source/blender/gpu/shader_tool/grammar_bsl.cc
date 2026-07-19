@@ -167,21 +167,24 @@ struct BSLParser {
   }
 
   /* Example : `struct [[a]] A {}`. */
-  void struct_decl(bool is_template_inst = false)
+  void struct_decl(bool expect_template_params = false, bool expect_body = true)
   {
     NODE(ClassDecl);
     match(Union, Struct, Class);
     /* Optional attributes. */
     attribute_optional();
 
-    if (peek() == '{' && !is_template_inst) {
+    if (peek() == '{' && !expect_template_params && expect_body) {
       /* Nameless struct */
     }
     else {
-      /* Note we allow `struct A::B` syntax because it is used during namespace lowering. */
-      qualified_id(is_template_inst);
+      qualified_id(expect_template_params);
+      if (!expect_body) {
+        match(';');
+        return;
+      }
       if (match_if(';')) {
-        if (is_template_inst) {
+        if (!expect_body) {
           return; /* Template explicit instantiation. */
         }
         curr = curr.prev(2); /* For correct error token. */
@@ -374,7 +377,7 @@ struct BSLParser {
     }
   }
 
-  void func_decl(bool is_template_inst = false)
+  void func_decl(bool expect_template_params = false, bool expect_body = true)
   {
     NODE(FuncDecl);
     attribute_optional();
@@ -387,11 +390,16 @@ struct BSLParser {
       NODE(IdType);
       qualified_id();
     }
-    qualified_id(is_template_inst);
+    qualified_id(expect_template_params);
     function_argument_list();
     if (peek() == Const) {
       NODE(Const);
       match(Const);
+    }
+    if (!expect_body) {
+      nodes[curr_node].type = NodeType::FuncForwardDecl;
+      match(';');
+      return;
     }
     if (match_if(';')) {
       /* Template instantiation or forward declaration. */
@@ -571,10 +579,10 @@ struct BSLParser {
       case Class:
       case Struct:
       case Union:
-        struct_decl(true);
+        struct_decl(true, false);
         break;
       case Word:
-        func_decl(true);
+        func_decl(true, false);
         break;
       default:
         error("Unexpected token \"" + to_str(peek()) + "\", expected template instantiation");
@@ -590,10 +598,10 @@ struct BSLParser {
     switch (peek()) {
       case Class:
       case Struct:
-        struct_decl(true);
+        struct_decl(true, true);
         break;
       case Word:
-        func_decl(true);
+        func_decl(true, true);
         break;
       default:
         error("Unexpected token \"" + to_str(peek()) + "\", expected template specialization");
@@ -609,10 +617,10 @@ struct BSLParser {
     switch (peek()) {
       case Class:
       case Struct:
-        struct_decl(false);
+        struct_decl(false, true);
         break;
       case Word:
-        func_decl(false);
+        func_decl(false, true);
         break;
       default:
         error("Unexpected token \"" + to_str(peek()) + "\", expected template declaration");
@@ -671,33 +679,13 @@ struct BSLParser {
   {
     NODE(TemplateParamList);
     match(TemplateOpen);
-    while (true) {
-      switch (peek()) {
-        case Minus:
-        case Number: {
-          numerical_constant();
-          match_if(',');
-          break;
-        }
-        case Struct:
-          match(Struct);
-          break;
-        case Enum:
-          match(Enum);
-          break;
-        case Word:
-          /* TODO(fclem): Differentiate true/false from IDs. Does it matter? */
-          qualified_id();
-          match_if(',');
-          break;
-        case TemplateClose:
-          match(TemplateClose);
-          return;
-        default:
-          error("Unexpected token \"" + to_str(peek()) + "\", expected template parameter");
-          return;
-      }
+    if (match_if(TemplateClose)) {
+      return;
     }
+    do {
+      expression(true);
+    } while (match_if(','));
+    match(TemplateClose);
   }
 
   void numerical_constant()
@@ -1215,7 +1203,7 @@ struct BSLParser {
     }
 
     if (must_end_with_template_arg && !ends_with_template) {
-      error("Expected Template arguments");
+      error("Expected template arguments");
     }
   }
 

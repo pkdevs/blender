@@ -30,6 +30,38 @@ void funcTA() { A_fn(); }
   {
     string input = R"(
 template<typename T>
+void func() { T a; }
+template void func<float>();
+)";
+    string expect = R"(
+
+void funcTfloat() {
+#line 3
+              float a; }
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+template<int U>
+int func() { return U; }
+template void func<1 + 3>();
+)";
+    string expect = R"(
+
+int funcT4() {
+#line 3
+             return 4; }
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+template<typename T>
 void func(T a) {a;}
 template void func<float>(float a);
 template<typename T>
@@ -62,6 +94,49 @@ void f(float a)
   }
   {
     string input = R"(
+template<typename T> void foo(T a) { a; }
+template void foo<float>(float a);
+template void foo<int>(int a);
+template<> void foo<uint>(uint a) {}
+
+void f(float a, int b, uint c)
+{
+  foo(a);
+  foo(b);
+  foo(c);
+  foo<int>(a);
+  foo<float>(b);
+  foo<uint>(c);
+}
+)";
+    string expect = R"(
+                     void fooTfloat(float a) {
+#line 2
+                                     a; }
+#line 2
+                     void fooTint(int a) {
+#line 2
+                                     a; }
+
+
+           void fooTuint(uint a) {}
+
+void f(float a, int b, uint c)
+{
+  fooTfloat(a);
+  fooTint(b);
+  fooTuint(c);
+  fooTint(a);
+  fooTfloat(b);
+  fooTuint(c);
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
 template<typename T, int i>
 void func(T a) {
   a;
@@ -76,6 +151,31 @@ void funcTfloatT1(float a) {
 
 )";
     auto [output, _, error] = process_test_string(input);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+template<int i, uint j, int k> int foo() { return int(i + j + k); }
+template int foo<0xF + 2, 2, -1 - 2>();
+
+int bar()
+{
+  return foo<0xF + 2, 2, -1 - 2>();
+}
+)";
+    string expect = R"(
+                                int fooT17T2T_3() {
+#line 2
+                                            return int1(17 + 2 + -3); }
+
+
+int bar()
+{
+  return fooT17T2T_3();
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }

@@ -326,32 +326,155 @@ static int pad(int size, int align)
   return ((size + align - 1) / align) * align;
 }
 
-string SymbolTable::mangle_identifier(TemplateParamList list,
-                                      const SymbolScope &scope,
-                                      const string &sep)
+Result<string> SymbolTable::mangle_identifier(TemplateArgList args,
+                                              TemplateParamList list,
+                                              const SymbolScope &scope,
+                                              const string &sep)
 {
+  Expr param = list.child_first();
+
+  std::optional<AstNodeException> err;
+
   string str;
-  list.foreach_child([&](Node node) {
-    SymbolClass *type = scope.lookup_class(IdQualified(node));
-    str += sep + type->resolved->identifier;
+  args.foreach_child([&](TemplateArg arg) {
+    assert(arg.is_valid());
+    if (!param.is_valid()) {
+      err = AstNodeException(
+          list, "Missing argument for template parameter '" + string(arg.type().str()) + "'");
+    }
+    else if (arg.front() == Typename) {
+      if (param.child_count() != 1 || param.child_first().type() != NodeType::LocalVar) {
+        err = AstNodeException(
+            param, "Invalid argument for template parameter '" + string(arg.type().str()) + "'");
+      }
+      else {
+        IdQualified type_id(LocalVar(param.child_first()).identifier());
+        SymbolClass *type = scope.lookup_class(type_id);
+        if (type->is_error) {
+          err = AstNodeException(param,
+                                 "Use of undeclared identifier '" + string(type_id.str()) + "'");
+        }
+        else {
+          str += sep + type->resolved->identifier;
+        }
+      }
+    }
+    else {
+      auto [val, err_] = SymbolTable::evaluate_constexpr(scope, param.child_first());
+      if (err_) {
+        err = err_;
+      }
+      /* Replace minus sign by underscore. */
+      str += sep + (val < 0 ? "_" : "") + to_string(abs(val));
+    }
+    param = param.next();
   });
-  return str;
+  return {str, err};
 }
 
 template<typename T>
-T *SymbolTemplate<T>::lookup_inst(TemplateParamList list, const SymbolScope &scope) const
+Result<T *> SymbolTemplate<T>::lookup_inst(TemplateParamList list, const SymbolScope &scope) const
 {
-  string id = SymbolTable::mangle_identifier(list, scope);
+  auto [id, err] = SymbolTable::mangle_identifier(decl.arguments(), list, scope);
   auto it = instances.find(id);
-  if (it == instances.end()) {
+  if (it == instances.end() && !err) {
     if constexpr (is_same_v<T, SymbolFunction>) {
-      return scope.root_scope()->lookup_function(SymbolTable::err_symbol);
+      err = {list, "No matching function for the given template parameters"};
     }
     else {
-      return scope.root_scope()->lookup_class(SymbolTable::err_symbol);
+      err = {list, "No matching class for the given template parameters"};
     }
   }
-  return it->second;
+
+  if (err) {
+    if constexpr (is_same_v<T, SymbolFunction>) {
+      return {scope.root_scope()->lookup_function(SymbolTable::err_symbol), err};
+    }
+    else {
+      return {scope.root_scope()->lookup_class(SymbolTable::err_symbol), err};
+    }
+  }
+  return {it->second, err};
+}
+
+template<typename T> void SymbolTemplate<T>::init_adl()
+{
+  TemplateDecl temp = this->decl;
+  if (temp.is_class()) {
+    return;
+  }
+  TemplateArgList tmp_args(temp.arguments());
+
+  int tmp_arg_count = tmp_args.child_count();
+  if (tmp_arg_count == 0) {
+    return;
+  }
+  temp_arg_index_in_fn_arg.reserve(tmp_arg_count);
+
+  FuncDecl decl(temp.decl());
+  decl.arguments().foreach<FuncArg>([&](FuncArg arg) {
+    int arg_id = -1;
+    int id = 0;
+    tmp_args.foreach<TemplateArg>([&](TemplateArg tmp_arg) {
+      if (tmp_arg.id().str() == arg.type().id().str()) {
+        arg_id = id;
+      }
+      ++id;
+    });
+    if (arg_id != -1) {
+      temp_arg_index_in_fn_arg.emplace_back(arg_id);
+    }
+  });
+
+  if (temp_arg_index_in_fn_arg.size() != tmp_arg_count) {
+    temp_arg_index_in_fn_arg.clear();
+  }
+}
+
+Result<string> SymbolTable::mangle_identifier(const SymbolFunctionTemplate &tmp,
+                                              FuncParamList list,
+                                              const SymbolScope &scope,
+                                              const string &sep) const
+{
+  vector<SymbolClass *> arg_cls;
+  list.foreach<Expr>([&](Expr expr) {
+    auto [type, _] = expr_type_analysis(scope, expr);
+    arg_cls.emplace_back(type);
+  });
+
+  string str;
+  for (int i : tmp.temp_arg_index_in_fn_arg) {
+    if (i < arg_cls.size()) {
+      str += sep + arg_cls[i]->resolved->identifier;
+    }
+    else {
+      str += sep + err_symbol;
+    }
+  }
+  return {str, {}};
+}
+
+template<typename T>
+Result<T *> SymbolTemplate<T>::lookup_adl(const SymbolTable &symbols,
+                                          FuncParamList list,
+                                          const SymbolScope &scope) const
+{
+  if constexpr (is_same_v<T, SymbolClass>) {
+    return {scope.root_scope()->lookup_class(SymbolTable::err_symbol),
+            AstNodeException(list, "Cannot use ADL on types")};
+  }
+  else {
+    auto [id, err] = symbols.mangle_identifier(*this, list, scope);
+    auto it = instances.find(id);
+    if (it == instances.end() && !err) {
+      err = {list, "No matching function for the given template parameters"};
+    }
+
+    if (err) {
+      return {scope.root_scope()->lookup_function(SymbolTable::err_symbol), err};
+    }
+    return {it->second, err};
+  }
 }
 
 template struct SymbolTemplate<SymbolClass>;
@@ -530,15 +653,20 @@ struct SymbolParser {
   void parse_template_arguments(SymbolScope &scope, TemplateDecl decl, TemplateInst inst)
   {
     TemplateParamList params = inst.parameters();
-    Node param = params.child_first();
+    Expr param = params.child_first();
 
     decl.arguments().foreach_child([&](TemplateArg arg) {
       assert(arg.is_valid());
-      IdQualified type = arg.type();
-      string id(arg.id().str());
-      if (type.str() == "typename") {
+      if (arg.front() == Typename) {
+        IdQualified arg_id = arg.type();
+        string id(arg_id.str());
+        if (param.child_count() != 1 || param.child_first().type() != NodeType::LocalVar) {
+          error(param, "Invalid argument for template parameter '" + id + "'");
+          return;
+        }
+        IdQualified type_id(LocalVar(param.child_first()).identifier());
         SymbolClass *cls = table.cls_arena.alloc(&scope, arg.id().front(), id);
-        SymbolClass *resolved = scope.lookup_class(param);
+        SymbolClass *resolved = scope.lookup_class(type_id);
         cls->resolved = resolved;
         if (resolved->is_error) {
           error(param, "Unknown type in template instantiation");
@@ -546,11 +674,17 @@ struct SymbolParser {
         scope.classes.emplace(id, cls);
       }
       else {
+        IdQualified type = arg.type();
+        string id(arg.id().str());
         SymbolClass *cls = scope.lookup_class(type);
         SymbolVariable *var = table.var_arena.alloc(&scope, cls, arg.id().front(), id);
+        var->is_constexpr = true;
+        auto [val, err] = SymbolTable::evaluate_constexpr(scope, param.child_first());
+        if (err) {
+          error(err->node, err->msg);
+        }
+        var->value = val;
         scope.variables.emplace(id, var);
-        /* TODO(fclem): Fold constexpr. */
-        error(param, "Unsupported TODO");
       }
       param = param.next();
     });
@@ -795,10 +929,12 @@ struct SymbolParser {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *fn);
           temp_decl.is_valid())
       {
-        string arg_mangled = SymbolTable::mangle_identifier(temp_params, scope);
-
+        auto [arg_mangled,
+              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
+        if (err) {
+          error(err->node, err->msg);
+        }
         SymbolFunction *fn_inst = parse_func_decl(scope, temp_decl.decl(), "", arg_mangled, temp);
-
         fn->template_data->instances.emplace(arg_mangled, fn_inst);
       }
     }
@@ -809,12 +945,14 @@ struct SymbolParser {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *cls);
           temp_decl.is_valid())
       {
-        string arg_mangled = SymbolTable::mangle_identifier(temp_params, scope);
-
+        auto [arg_mangled,
+              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
+        if (err) {
+          error(err->node, err->msg);
+        }
         int unused_offset = 0;
         SymbolClass *cls_inst = parse_class_decl(
             scope, temp_decl.decl(), Node{}, unused_offset, prefix, arg_mangled, temp);
-
         cls->template_data->instances.emplace(arg_mangled, cls_inst);
       }
     }
@@ -831,10 +969,12 @@ struct SymbolParser {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *fn);
           temp_decl.is_valid())
       {
-        string arg_mangled = SymbolTable::mangle_identifier(temp_params, scope);
-
+        auto [arg_mangled,
+              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
+        if (err) {
+          error(err->node, err->msg);
+        }
         SymbolFunction *spec = parse_func_decl(scope, decl, prefix, arg_mangled);
-
         fn->template_data->instances.emplace(arg_mangled, spec);
       }
     }
@@ -845,12 +985,14 @@ struct SymbolParser {
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *cls);
           temp_decl.is_valid())
       {
-        string arg_mangled = SymbolTable::mangle_identifier(temp_params, scope);
-
+        auto [arg_mangled,
+              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
+        if (err) {
+          error(err->node, err->msg);
+        }
         int unused_offset = 0;
         SymbolClass *spec = parse_class_decl(
             scope, decl, Node{}, unused_offset, prefix, arg_mangled);
-
         cls->template_data->instances.emplace(arg_mangled, spec);
       }
     }
@@ -927,12 +1069,18 @@ struct SymbolParser {
         TemplateParamList param = type_id.template_params();
 
         SymbolClass *base_type = type;
-        type = base_type->template_data->lookup_inst(param, scope);
+        auto [type, _] = base_type->template_data->lookup_inst(param, scope);
         if (type->is_error) {
-          string args = SymbolTable::mangle_identifier(param, scope, ", ");
-          error(param,
-                "Missing explicit instantiation of template '" + base_type->identifier + "<" +
-                    args.substr(2) + ">'");
+          auto [args, err] = SymbolTable::mangle_identifier(
+              base_type->template_data->decl.arguments(), param, scope, ", ");
+          if (err) {
+            error(err->node, err->msg);
+          }
+          else {
+            error(param,
+                  "Missing explicit instantiation of template '" + base_type->identifier + "<" +
+                      args.substr(2) + ">'");
+          }
         }
       }
     }
@@ -1811,6 +1959,7 @@ void SymbolTable::register_builtins(LocalScope node)
     sym->resolved = sym_resolved;
     sym->is_static = c.is_constexpr;
     sym->is_constexpr = c.is_constexpr;
+    sym->value = c.value;
     root->variables.emplace(sym->identifier, sym);
     flatten_root->variables.emplace(sym->identifier, sym_resolved);
   }
