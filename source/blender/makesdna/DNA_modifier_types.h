@@ -773,6 +773,7 @@ enum SmoothModifierMethod : short {
   MOD_SMOOTH_METHOD_SIMPLE = 0,
   MOD_SMOOTH_METHOD_TAUBIN = 1,
   MOD_SMOOTH_METHOD_HC = 2,
+  MOD_SMOOTH_METHOD_FREQUENCY = 3,
 };
 
 struct SmoothModifierData {
@@ -789,6 +790,9 @@ struct SmoothModifierData {
 
   float hc_alpha = 0.0f;
   float hc_beta = 0.5f;
+
+  float frequency_cutoff = 0.25f;
+  char _pad1[4] = {};
 };
 
 /** #CastModifierData.flag */

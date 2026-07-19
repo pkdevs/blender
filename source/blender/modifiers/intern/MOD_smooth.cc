@@ -36,6 +36,8 @@
 #include "MOD_ui_common.hh"
 #include "MOD_util.hh"
 
+#include "eigen_capi.h"
+
 namespace blender {
 
 static void init_data(ModifierData *md)
@@ -260,6 +262,77 @@ static void hc_correction_pass(MutableSpan<float3> p,
   });
 }
 
+static bool frequency_filter(const Span<int2> edges,
+                             const GroupedSpan<int> vert_to_edge_map,
+                             const Span<float> edge_weights,
+                             const Span<bool> pinned,
+                             const float cutoff,
+                             const int iterations,
+                             MutableSpan<float3> positions)
+{
+  const int verts_num = positions.size();
+  if (verts_num == 0 || iterations == 0) {
+    return true;
+  }
+
+  LinearSolver *solver = EIG_linear_least_squares_solver_new(2 * verts_num, verts_num, 3);
+  const bool has_pin = !pinned.is_empty();
+  for (const int i : positions.index_range()) {
+    EIG_linear_solver_variable_set(solver, 0, i, positions[i].x);
+    EIG_linear_solver_variable_set(solver, 1, i, positions[i].y);
+    EIG_linear_solver_variable_set(solver, 2, i, positions[i].z);
+    if (has_pin && pinned[i]) {
+      EIG_linear_solver_variable_lock(solver, i);
+    }
+  }
+
+  const bool weighted = !edge_weights.is_empty();
+  const float laplacian_scale = 1.0f / ((cutoff > 1e-6f) ? cutoff : 1e-6f);
+  for (const int i : positions.index_range()) {
+    EIG_linear_solver_matrix_add(solver, i, i, 1.0);
+
+    const Span<int> incident = vert_to_edge_map[i];
+    float weight_sum = 0.0f;
+    for (const int e : incident) {
+      weight_sum += weighted ? edge_weights[e] : 1.0f;
+    }
+    if (weight_sum <= 0.0f) {
+      continue;
+    }
+
+    const int row = verts_num + i;
+    EIG_linear_solver_matrix_add(solver, row, i, laplacian_scale);
+    for (const int e : incident) {
+      const int2 edge = edges[e];
+      const int other = (edge[0] == i) ? edge[1] : edge[0];
+      const float weight = weighted ? edge_weights[e] : 1.0f;
+      EIG_linear_solver_matrix_add(
+          solver, row, other, -laplacian_scale * weight / weight_sum);
+    }
+  }
+
+  bool success = true;
+  for (int iteration = 0; iteration < iterations; iteration++) {
+    for (const int i : positions.index_range()) {
+      EIG_linear_solver_right_hand_side_add(solver, 0, i, positions[i].x);
+      EIG_linear_solver_right_hand_side_add(solver, 1, i, positions[i].y);
+      EIG_linear_solver_right_hand_side_add(solver, 2, i, positions[i].z);
+    }
+    if (!EIG_linear_solver_solve(solver)) {
+      success = false;
+      break;
+    }
+    for (const int i : positions.index_range()) {
+      positions[i].x = EIG_linear_solver_variable_get(solver, 0, i);
+      positions[i].y = EIG_linear_solver_variable_get(solver, 1, i);
+      positions[i].z = EIG_linear_solver_variable_get(solver, 2, i);
+    }
+  }
+
+  EIG_linear_solver_delete(solver);
+  return success;
+}
+
 static void smoothModifier_do(SmoothModifierData *smd,
                               Object *ob,
                               Mesh *mesh,
@@ -360,6 +433,26 @@ static void smoothModifier_do(SmoothModifierData *smd,
       apply_blend(vertexCos, hc_p, smd->fac, smd->flag, dvert, defgrp_index, invert_vgroup);
       break;
     }
+    case MOD_SMOOTH_METHOD_FREQUENCY: {
+      Array<float3> filtered_positions(vertexCos.as_span());
+      if (frequency_filter(edges,
+                           vert_to_edge_map,
+                           weights_span,
+                           pinned_span,
+                           smd->frequency_cutoff,
+                           smd->repeat,
+                           filtered_positions))
+      {
+        apply_blend(vertexCos,
+                    filtered_positions,
+                    smd->fac,
+                    smd->flag,
+                    dvert,
+                    defgrp_index,
+                    invert_vgroup);
+      }
+      break;
+    }
   }
 }
 
@@ -400,8 +493,15 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
     col.prop(ptr, "hc_alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col.prop(ptr, "hc_beta", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
+  else if (method == MOD_SMOOTH_METHOD_FREQUENCY) {
+    col.prop(ptr, "frequency_cutoff", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
 
-  if (method == MOD_SMOOTH_METHOD_TAUBIN || method == MOD_SMOOTH_METHOD_HC) {
+  if (ELEM(method,
+           MOD_SMOOTH_METHOD_TAUBIN,
+           MOD_SMOOTH_METHOD_HC,
+           MOD_SMOOTH_METHOD_FREQUENCY))
+  {
     col.prop(ptr, "use_cotangent_weights", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 

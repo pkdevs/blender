@@ -4347,6 +4347,12 @@ static void rna_def_modifier_smooth(BlenderRNA *brna)
        0,
        "HC",
        "Smooth then pull vertices back toward the originals to preserve volume"},
+      {MOD_SMOOTH_METHOD_FREQUENCY,
+       "FREQUENCY",
+       0,
+       "Frequency",
+       "Implicit biharmonic filtering that removes high-frequency detail while retaining the "
+       "broad shape"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -4412,6 +4418,17 @@ static void rna_def_modifier_smooth(BlenderRNA *brna)
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.01f, 3);
   RNA_def_property_ui_text(
       prop, "Pull-back Strength", "Strength of the volume-preserving pull-back correction (Beta)");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "frequency_cutoff", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_float_sdna(prop, nullptr, "frequency_cutoff");
+  RNA_def_property_range(prop, 0.001f, 1.0f);
+  RNA_def_property_ui_range(prop, 0.01f, 1.0f, 0.01f, 3);
+  RNA_def_property_ui_text(
+      prop,
+      "Frequency Cutoff",
+      "Frequency at which detail is reduced to half strength in one iteration; lower values "
+      "remove coarser detail");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "use_cotangent_weights", PROP_BOOLEAN, PROP_NONE);
