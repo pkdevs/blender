@@ -150,9 +150,7 @@ ccl_device bool integrate_intersect_shadow_transparent(KernelGlobals kg,
 #endif
 
 ccl_device void integrator_intersect_shadow(KernelGlobals kg, 
-                                            IntegratorShadowState state,
-                                            ccl_global ReSTIRDIReservoir *restir_reservoirs,
-                                            const int restir_reservoir_count)
+                                            IntegratorShadowState state)
 {
   PROFILING_INIT(kg, PROFILING_INTERSECT_SHADOW);
 

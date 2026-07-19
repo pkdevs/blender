@@ -33,10 +33,10 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
     if (shadow_queued_kernel) {
       switch (shadow_queued_kernel) {
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW:
-          integrator_intersect_shadow(kg, &state->shadow, nullptr, 0); // TODO(Tri): handle CPU reservoir buffers
+          integrator_intersect_shadow(kg, &state->shadow); 
           continue;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-          integrator_shade_shadow(kg, &state->shadow, render_buffer, nullptr, 0); // TODO(Tri): handle CPU reservoir buffers
+          integrator_shade_shadow(kg, &state->shadow, render_buffer);
           continue;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
           integrator_shade_light_nee(kg, &state->shadow, render_buffer);
@@ -56,10 +56,10 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
     if (ao_queued_kernel) {
       switch (ao_queued_kernel) {
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW:
-          integrator_intersect_shadow(kg, &state->ao, nullptr, 0); // TODO(Tri): handle CPU reservoir buffers
+          integrator_intersect_shadow(kg, &state->ao);
           break;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW:
-          integrator_shade_shadow(kg, &state->ao, render_buffer, nullptr, 0); // TODO(Tri): handle CPU reservoir buffers
+          integrator_shade_shadow(kg, &state->ao, render_buffer);
           break;
         default:
           kernel_assert(0);
@@ -79,7 +79,7 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
           integrator_shade_background(kg, state, render_buffer);
           break;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE:
-          integrator_shade_surface(kg, state, render_buffer, nullptr, nullptr, 0); // TODO(Tri): handle CPU reservoir buffers
+          integrator_shade_surface(kg, state, render_buffer);
           break;
         case DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME:
           integrator_shade_volume(kg, state, render_buffer);
@@ -108,6 +108,9 @@ ccl_device void integrator_megakernel(KernelGlobals kg,
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE:
           integrator_intersect_mnee(kg, state);
           break;
+
+        // TODO:
+
         default:
           kernel_assert(0);
           break;

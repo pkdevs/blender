@@ -5,7 +5,7 @@
 #pragma once
 
 #include "kernel/integrator/guiding.h"
-#include "kernel/integrator/restir.h"
+// #include "kernel/integrator/restir.h"
 #include "kernel/integrator/shade_volume.h"
 #include "kernel/integrator/surface_shader.h"
 #include "kernel/integrator/volume_stack.h"
@@ -266,9 +266,7 @@ ccl_device_inline TransparentShadowEvalResult integrate_transparent_shadow(
 
 ccl_device void integrator_shade_shadow(KernelGlobals kg,
                                         IntegratorShadowState state,
-                                        ccl_global float *ccl_restrict render_buffer,
-                                        ccl_global ReSTIRDIReservoir *restir_reservoirs,
-                                        const int restir_reservoir_count)
+                                        ccl_global float *ccl_restrict render_buffer)
 {
   PROFILING_INIT(kg, PROFILING_SHADE_SHADOW_SETUP);
   const uint packed_num_hits = INTEGRATOR_STATE(state, shadow_path, packed_num_hits);
@@ -278,14 +276,10 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
   const TransparentShadowEvalResult result = integrate_transparent_shadow(
       kg, state, packed_num_hits);
   if (result == TRANSPARENT_SHADOW_EVAL_CACHE_MISS) {
-    printf("integrator_shade_shadow() TRANSPARENT_SHADOW_EVAL_CACHE_MISS!");
     integrator_shadow_path_cache_miss(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;
   }
-  if (result == TRANSPARENT_SHADOW_EVAL_OPAQUE) { // occluded branch
-    printf("integrator_shade_shadow() TRANSPARENT_SHADOW_EVAL_OPAQUE!");
-    // Mark path as invisible
-    // restir_di_shadow_set_visible(state, restir_reservoirs, restir_reservoir_count, false); // only for transparency handling, not for ReSTIR bookkeeping.
+  if (result == TRANSPARENT_SHADOW_EVAL_OPAQUE) {
     integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;
   }
@@ -299,7 +293,6 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
   }
 
   guiding_record_direct_light(kg, state);
-  // restir_di_shadow_set_visible(state, restir_reservoirs, restir_reservoir_count, true);
   film_write_direct_light(kg, state, render_buffer);
   integrator_shadow_path_terminate(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
 }
