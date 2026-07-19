@@ -350,6 +350,21 @@ Result<string> SymbolTable::mangle_identifier(TemplateArgList args,
       else {
         IdQualified type_id(LocalVar(param.child_first()).identifier());
         SymbolClass *type = scope.lookup_class(type_id);
+        if (type->template_data) {
+          TemplateParamList list_nested = type_id.template_params();
+          if (!list_nested.is_valid()) {
+            err = AstNodeException(type_id,
+                                   "Use of undeclared identifier '" + string(type_id.str()) + "'");
+          }
+          else {
+            /* Recursive. */
+            auto [type_, err_] = type->template_data->lookup_inst(list_nested, scope);
+            if (err_) {
+              err = err_;
+            }
+            type = type_;
+          }
+        }
         if (type->is_error) {
           err = AstNodeException(param,
                                  "Use of undeclared identifier '" + string(type_id.str()) + "'");
@@ -812,7 +827,8 @@ struct SymbolParser {
                                 int &offset,
                                 const std::string &prefix,
                                 const std::string &suffix = "",
-                                TemplateInst temp = {})
+                                TemplateInst temp = {},
+                                SymbolClassTemplate *cls_template = nullptr)
   {
     SymbolClass *cls = table.cls_arena.alloc(&scope, decl, suffix);
     scope.classes.emplace(cls->identifier, cls);
@@ -821,6 +837,22 @@ struct SymbolParser {
     if (cls->is_anonymous && anonymous_scope_prefix(cls).non_anonymous_parent == nullptr) {
       error(decl, "Anonymous unions at namespace or global scope are not supported");
       return scope.root_scope()->lookup_class(SymbolTable::err_symbol);
+    }
+
+    /* Instantiate in global resolved namespace. */
+    SymbolClass *flat_cls = table.cls_arena.alloc(*cls);
+    cls->resolved = flat_cls;
+    flat_cls->resolved = cls;
+    flat_cls->identifier = prefix + cls->identifier;
+    global.classes.try_emplace(flat_cls->identifier, flat_cls);
+
+    if (cls_template) {
+      /* Add the template definition early so it can be queried during instantiation. */
+      cls_template->instances.emplace(suffix, cls);
+      /* Create an alias to the unspecified class name (no template arg): e.g. `A` > `A<T>`. */
+      SymbolClass *alias = table.cls_arena.alloc(&scope, decl);
+      alias->resolved = flat_cls;
+      cls->classes.emplace(alias->identifier, alias);
     }
 
     parse_scope(*cls, decl.body(), prefix + cls->identifier + ns_sep, temp);
@@ -835,14 +867,6 @@ struct SymbolParser {
 
       var->type = cls;
       var->set_offset(parent_class.is_union(), offset);
-    }
-    {
-      /* Instantiate in global resolved namespace. */
-      SymbolClass *flat_cls = table.cls_arena.alloc(*cls);
-      cls->resolved = flat_cls;
-      flat_cls->resolved = cls;
-      flat_cls->identifier = prefix + cls->identifier;
-      global.classes.try_emplace(flat_cls->identifier, flat_cls);
     }
     return cls;
   }
@@ -934,7 +958,53 @@ struct SymbolParser {
         if (err) {
           error(err->node, err->msg);
         }
-        SymbolFunction *fn_inst = parse_func_decl(scope, temp_decl.decl(), "", arg_mangled, temp);
+
+        SymbolScope *parent = &scope;
+        if (fn->fn_type == SymbolFunction::MEMBER) {
+          parent = nullptr;
+          /* Set the instantiated method parent to the container class. Note that it can also
+           * be templated. So we need to resolve it too. Lookup partial identifier. */
+          IdQualified id = decl.identifier();
+          Id start = id.namespace_start();
+          Id last = id.child_last(NodeType::Id).prev(NodeType::Id);
+          if (SymbolClass *parent_cls = scope.lookup_class(start, last); parent_cls) {
+            if (parent_cls->template_data) {
+              if (TemplateParamList param = last.template_params(); param.is_valid()) {
+                SymbolClass *base_type = parent_cls;
+                auto [type_, _] = base_type->template_data->lookup_inst(param, scope);
+                parent = type_;
+
+                if (type_->is_error) {
+                  auto [args, err] = SymbolTable::mangle_identifier(
+                      base_type->template_data->decl.arguments(), param, scope, ", ");
+                  if (err) {
+                    error(err->node, err->msg);
+                  }
+                  else {
+                    error(param,
+                          "Missing explicit instantiation of template '" + base_type->identifier +
+                              "<" + args.substr(2) + ">'");
+                  }
+                }
+              }
+              else {
+                error(last, "Missing template parameters");
+              }
+            }
+            else {
+              parent = parent_cls;
+            }
+          }
+
+          if (parent == nullptr) {
+            error(id,
+                  "Missing instantiation of parent class for instantiation of '" +
+                      string(id.str()) + "'");
+            return;
+          }
+        }
+        SymbolFunction *fn_inst = parse_func_decl(
+            *parent, temp_decl.decl(), prefix, arg_mangled, temp);
         fn->template_data->instances.emplace(arg_mangled, fn_inst);
       }
     }
@@ -951,9 +1021,14 @@ struct SymbolParser {
           error(err->node, err->msg);
         }
         int unused_offset = 0;
-        SymbolClass *cls_inst = parse_class_decl(
-            scope, temp_decl.decl(), Node{}, unused_offset, prefix, arg_mangled, temp);
-        cls->template_data->instances.emplace(arg_mangled, cls_inst);
+        parse_class_decl(scope,
+                         temp_decl.decl(),
+                         Node{},
+                         unused_offset,
+                         prefix,
+                         arg_mangled,
+                         temp,
+                         cls->template_data);
       }
     }
   }
@@ -1069,7 +1144,8 @@ struct SymbolParser {
         TemplateParamList param = type_id.template_params();
 
         SymbolClass *base_type = type;
-        auto [type, _] = base_type->template_data->lookup_inst(param, scope);
+        auto [type_, _] = base_type->template_data->lookup_inst(param, scope);
+        type = type_;
         if (type->is_error) {
           auto [args, err] = SymbolTable::mangle_identifier(
               base_type->template_data->decl.arguments(), param, scope, ", ");
@@ -1357,6 +1433,11 @@ SymbolVariable *SymbolScope::lookup_variable(IdQualified id) const
   return lookup_generic<SymbolVariable>(id, id.front());
 }
 
+SymbolClass *SymbolScope::lookup_class(Id id, Id last) const
+{
+  return lookup_generic_nested<SymbolClass>(id, last, id.front());
+}
+
 const SymbolScope *SymbolScope::root_scope() const
 {
   const SymbolScope *scope = this;
@@ -1375,8 +1456,8 @@ T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
     return parent->lookup_generic<T>(id, loc);
   }
   /* Try to match within this scope. */
-  if (auto var = lookup_generic_nested<T>(id.namespace_start(), loc)) {
-    return var;
+  if (auto v = lookup_generic_nested<T>(id.namespace_start(), id.child_last(NodeType::Id), loc)) {
+    return v;
   }
   /* Delegate to parent scope if not found locally. */
   if (parent) {
@@ -1406,46 +1487,67 @@ T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
   return nullptr;
 }
 
-template<typename T> T *SymbolScope::lookup_generic_nested(Id id, const SourceLocation &loc) const
+template<typename T>
+T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc) const
 {
   /* Look up anonymous namespace first. */
   if (auto it = scopes.find(""); it != scopes.end()) {
-    Id next_search_id = id.is_namespace() ? id.next_id() : id;
-    if (auto ret = it->second->lookup_generic_nested<T>(next_search_id, loc)) {
+    Id next_search_id = id.id != last.id ? id.next_id() : id;
+    if (auto ret = it->second->lookup_generic_nested<T>(next_search_id, last, loc)) {
       return ret;
     }
   }
   /* Resolve target based on whether it's a namespace or the final symbol. */
-  if (id.is_namespace()) {
+  if (id.id != last.id) {
+    /* Only classes can have template specifiers. */
+    if (TemplateParamList list = id.template_params(); list.is_valid()) {
+      if (auto it = classes.find(string(id.str())); it != classes.end()) {
+        if (SymbolClass *cls = it->second->as_class(); cls && cls->template_data) {
+          if (auto [tmp, err] = cls->template_data->lookup_inst(list, *this); !tmp->is_error) {
+            return tmp->lookup_generic_nested<T>(id.next_id(), last, loc);
+          }
+        }
+      }
+      return nullptr;
+    }
     if (auto it = scopes.find(string(id.str())); it != scopes.end()) {
-      return it->second->lookup_generic_nested<T>(id.next_id(), loc);
+      return it->second->lookup_generic_nested<T>(id.next_id(), last, loc);
+    }
+    return nullptr;
+  }
+
+  if constexpr (is_same_v<T, SymbolFunction>) {
+    if (auto it = functions.find(string(id.str())); it != functions.end()) {
+      if (it->second->loc <= loc) {
+        // if (TemplateParamList list = id.template_params(); list.is_valid()) {
+        //   return (it->second->template_data) ? it->second : nullptr;
+        // }
+        return it->second;
+      }
+    }
+  }
+  else if constexpr (is_same_v<T, SymbolClass>) {
+    if (auto it = classes.find(string(id.str())); it != classes.end()) {
+      if (it->second->loc <= loc) {
+        // if (TemplateParamList list = id.template_params(); list.is_valid()) {
+        //   return (it->second->template_data) ? it->second : nullptr;
+        // }
+        return it->second;
+      }
+    }
+  }
+  else if constexpr (is_same_v<T, SymbolVariable>) {
+    if (auto it = variables.find(string(id.str())); it != variables.end()) {
+      if (it->second->loc <= loc) {
+        if (TemplateParamList list = id.template_params(); list.is_valid()) {
+          return nullptr; /* Variable cannot be templated (only their types can). */
+        }
+        return it->second;
+      }
     }
   }
   else {
-    if constexpr (is_same_v<T, SymbolFunction>) {
-      if (auto it = functions.find(string(id.str())); it != functions.end()) {
-        if (it->second->loc <= loc) {
-          return it->second;
-        }
-      }
-    }
-    else if constexpr (is_same_v<T, SymbolClass>) {
-      if (auto it = classes.find(string(id.str())); it != classes.end()) {
-        if (it->second->loc <= loc) {
-          return it->second;
-        }
-      }
-    }
-    else if constexpr (is_same_v<T, SymbolVariable>) {
-      if (auto it = variables.find(string(id.str())); it != variables.end()) {
-        if (it->second->loc <= loc) {
-          return it->second;
-        }
-      }
-    }
-    else {
-      static_assert(false);
-    }
+    static_assert(false);
   }
   return nullptr;
 }

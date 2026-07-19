@@ -295,13 +295,17 @@ struct Id : Node {
   /* Return the next Id in an IdQualified.  */
   Id next_id() const
   {
-    return next().type() == NodeType::NamespaceSeparator ? next().next() : Node{};
+    Node next_node = next();
+    next_node = (next_node.type() == NodeType::TemplateParamList) ? next_node.next() : next_node;
+    return next_node.type() == NodeType::NamespaceSeparator ? next_node.next() : Node{};
   }
 
   bool is_namespace() const
   {
-    return next().type() == NodeType::NamespaceSeparator;
+    return next_id().is_valid();
   }
+
+  TemplateParamList template_params() const;
 };
 
 struct IdQualified : Node {
@@ -337,6 +341,11 @@ struct TemplateParamList : Node {
 inline TemplateParamList IdQualified::template_params() const
 {
   return child_last(NodeType::TemplateParamList);
+}
+
+inline TemplateParamList Id::template_params() const
+{
+  return next();
 }
 
 struct OpDeref : Node {
@@ -819,6 +828,11 @@ struct FuncDecl : Node {
     return child_last(NodeType::Const).is_valid();
   }
 
+  bool is_template() const
+  {
+    return TemplateDecl(parent()).is_valid();
+  }
+
   AttrList attributes() const
   {
     return child_first();
@@ -1034,7 +1048,7 @@ struct ClassDecl : Node {
 
 inline ClassDecl FuncDecl::parent_class() const
 {
-  return parent().parent();
+  return is_template() ? parent().parent().parent() : parent().parent();
 }
 
 inline LocalScope FuncDecl::body() const

@@ -134,6 +134,8 @@ struct SymbolScope : Symbol {
   SymbolFunction *lookup_function(IdQualified id) const;
   SymbolClass *lookup_class(IdQualified id) const;
 
+  SymbolClass *lookup_class(Id id, Id last) const;
+
   SymbolVariable *lookup_variable(string id) const;
   SymbolFunction *lookup_function(string id) const;
   SymbolClass *lookup_class(string id) const;
@@ -152,12 +154,8 @@ struct SymbolScope : Symbol {
   template<typename Callback> void visit_variables(Callback &&callback);
 
  private:
-  SymbolVariable *lookup_variable_nested(Id id) const;
-  SymbolFunction *lookup_function_nested(Id id) const;
-  SymbolClass *lookup_class_nested(Id id) const;
-
   template<typename T> T *lookup_generic(IdQualified id, const SourceLocation &loc) const;
-  template<typename T> T *lookup_generic_nested(Id id, const SourceLocation &loc) const;
+  template<typename T> T *lookup_generic_nested(Id id, Id last, const SourceLocation &loc) const;
 
   int id = 0;
   /* Create a unique, non-reachable key.

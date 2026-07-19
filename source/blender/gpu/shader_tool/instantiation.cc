@@ -27,6 +27,13 @@ struct InstantiationContext {
     error_handler.report(node.front(), str);
   }
 
+  void error(std::optional<AstNodeException> &err)
+  {
+    if (err) {
+      error(err->node, err->msg);
+    }
+  }
+
   struct StringBuilder {
     Token curr;
     stringstream ss;
@@ -1034,7 +1041,7 @@ struct InstantiationContext {
       /* Instantiation should have been checked already. */
       auto [temp_fn, _] = base_fn->template_data->lookup_inst(temp_decl.parameters(), scope);
       Node decl_tmp = base_fn->template_data->decl.decl();
-      func_decl(decl_tmp, scope, temp_fn);
+      func_decl(decl_tmp, *temp_fn->parent, temp_fn);
     }
   }
 
@@ -1052,7 +1059,7 @@ struct InstantiationContext {
       SymbolFunction *base_fn = scope.lookup_function(decl.identifier());
       /* Instantiation should have been checked already. */
       auto [temp_fn, _] = base_fn->template_data->lookup_inst(temp_spec.parameters(), scope);
-      func_decl(decl, scope, temp_fn);
+      func_decl(decl, *temp_fn->parent, temp_fn);
     }
   }
 
@@ -1367,6 +1374,9 @@ struct InstantiationContext {
         }
       }
     }
+    else if (cls->template_data) {
+      error(id, "Missing explicit template arguments");
+    }
     else {
       if (cls->is_error) {
         error(id, "Unknown type name");
@@ -1401,7 +1411,7 @@ struct InstantiationContext {
   {
     assert(id.is_valid());
     SymbolFunction *func = scope.lookup_function(id);
-    if (TemplateParamList param = id.template_params(); param.is_valid()) {
+    if (TemplateParamList param = id.template_params(); param.is_valid() && !func->is_error) {
       SymbolFunction *base_func = func;
       auto [func_, _] = base_func->template_data->lookup_inst(param, scope);
       func = func_;
@@ -1453,11 +1463,12 @@ struct InstantiationContext {
       }
       func = overload;
     }
-    else {
-      /* TODO(fclem): Resolve builtin type constructors. */
-      if (func->is_error) {
-        error(id, "Unknown function name");
+    else if (func->is_error) {
+      /* Try to resolve type constructors (only for builtins for now). */
+      if (SymbolClass *cls = scope.lookup_class(id); cls->resolved && cls->resolved->is_builtin) {
+        return scope.root_scope()->lookup_function(cls->resolved->identifier);
       }
+      error(id, "Unknown function name");
     }
     return func;
   }

@@ -619,6 +619,7 @@ struct BSLParser {
       case Struct:
         struct_decl(false, true);
         break;
+      case Static:
       case Word:
         func_decl(false, true);
         break;
@@ -652,6 +653,9 @@ struct BSLParser {
             match_if(Struct, Class, Enum);
             qualified_id(); /* Type. */
             qualified_id(); /* ID. */
+          }
+          if (peek() == '=') {
+            error("Default arguments are not supported inside template declaration");
           }
           match_if(',');
           break;
