@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include "BLI_array.hh"
@@ -13,6 +14,8 @@
 #include "BKE_sound.hh"
 
 namespace blender::bke {
+
+class SoundReaderCache;
 
 /**
  * This class allows efficiently sampling an arbitrary frequency range at an arbitrary point in
@@ -81,6 +84,9 @@ class bSoundFrequencySampler {
 
   AUD_Sound sound_;
   Key key_;
+#if defined(WITH_AUDASPACE)
+  std::shared_ptr<SoundReaderCache> readers_;
+#endif
   /** Derived from the sound. */
   int samples_per_second_;
   /**
@@ -96,7 +102,11 @@ class bSoundFrequencySampler {
   const WindowWeights &window_weights_;
 
  public:
-  /** Construct a new sampler, prefer using #get_cached instead. */
+  /**
+   * Construct a standalone sampler with its own reusable reader cache.
+   * For a #bSound,
+   * prefer #get_cached so consumers share its runtime cache.
+   */
   bSoundFrequencySampler(AUD_Sound sound, const Key &key);
 
   /** Access a reusable frequency sampler for the given sound.  */
@@ -110,6 +120,12 @@ class bSoundFrequencySampler {
                InterpolationMethod frequency_interpolation) const;
 
  private:
+#if defined(WITH_AUDASPACE)
+  /** Construct a cached sampler sharing the reader cache owned by its #bSound runtime. */
+  bSoundFrequencySampler(AUD_Sound sound,
+                         std::shared_ptr<SoundReaderCache> readers,
+                         const Key &key);
+#endif
   float sample_frequency_range_in_window(int window_i,
                                          float low,
                                          float high,
