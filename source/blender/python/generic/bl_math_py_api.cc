@@ -133,6 +133,11 @@ static PyObject *py_bl_math_smoothstep(PyObject * /*self*/, PyObject *args)
     return nullptr;
   }
 
+  /* Zero width range gives 0/0, step at the edge instead of returning NAN. */
+  if (a == b) [[unlikely]] {
+    return PyFloat_FromDouble((x < a) ? 0.0 : 1.0);
+  }
+
   double t = (x - a) / (b - a);
 
   CLAMP(t, 0.0, 1.0);
