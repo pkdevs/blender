@@ -244,6 +244,9 @@ struct SymbolFunction : SymbolScope {
             parent, decl.front(), string(decl.identifier().name().str()) + suffix, FUNCTION),
         fn_type(decl.is_method() ? (decl.is_static() ? STATIC : MEMBER) : GLOBAL)
   {
+    if (decl.is_method()) {
+      loc = decl.parent(NodeType::ClassDecl).front();
+    }
   }
 
   SymbolFunction(SymbolScope *parent, Token tok, const string &id, Type fn_type)
