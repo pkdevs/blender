@@ -39,6 +39,11 @@ class UniformBuf {
   virtual void clear_to_zero() = 0;
   virtual void bind(int slot) = 0;
   virtual void bind_as_ssbo(int slot) = 0;
+
+  size_t size_in_bytes() const
+  {
+    return size_in_bytes_;
+  }
   virtual void unbind() = 0;
 
   /**

@@ -152,11 +152,13 @@ static bool pygpu_vertbuf_fill_impl(gpu::VertBuf *vbo,
 
     const uint seq_len = PySequence_Fast_GET_SIZE(seq_fast);
 
+    PyObject **seq_items = PySequence_Fast_ITEMS(seq_fast);
+
     if (seq_len != vert_len) {
       PyErr_Format(PyExc_ValueError, exc_str_size_mismatch, "sequence", vert_len, seq_len);
+      ok = false;
+      goto finally;
     }
-
-    PyObject **seq_items = PySequence_Fast_ITEMS(seq_fast);
 
     if (attr->type.comp_len() == 1) {
       for (uint i = 0; i < seq_len; i++) {

@@ -127,7 +127,8 @@ static PyObject *pygpu_IndexBuf__tp_new(PyTypeObject * /*type*/, PyObject *args,
       }
     }
     else {
-      int values[4];
+      /* Large enough for any #indices_per_primitive result, TRIS_ADJ being the largest at 6. */
+      int values[6];
       for (uint i = 0; i < seq_len; i++) {
         PyObject *seq_fast_item = PySequence_Fast(seq_items[i], error_prefix);
         if (seq_fast_item == nullptr) {

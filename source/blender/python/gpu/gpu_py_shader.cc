@@ -214,12 +214,21 @@ static bool pygpu_shader_uniform_vector_impl(PyObject *args,
     return false;
   }
 
+  /* Negative values wrap when multiplied out below, zero is a no-op which callers may
+   * legitimately pass (an empty instance list for example). */
+  if ((*r_length < 0) || (*r_count < 0)) [[unlikely]] {
+    PyErr_SetString(PyExc_ValueError,
+                    "GPUShader.uniform_vector_*: length & count cannot be negative.");
+    return false;
+  }
+
   if (PyObject_GetBuffer(buffer, r_pybuffer, PyBUF_SIMPLE) == -1) {
     /* PyObject_GetBuffer raise a PyExc_BufferError */
     return false;
   }
 
-  if (r_pybuffer->len < (*r_length * *r_count * elem_size)) {
+  /* Compute in 64bit, the product overflows `int` for large values. */
+  if (r_pybuffer->len < (int64_t(*r_length) * int64_t(*r_count) * int64_t(elem_size))) {
     PyErr_SetString(PyExc_OverflowError,
                     "GPUShader.uniform_vector_*: buffer size smaller than required.");
     PyBuffer_Release(r_pybuffer);

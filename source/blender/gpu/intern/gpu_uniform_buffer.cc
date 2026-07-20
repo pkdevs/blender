@@ -346,6 +346,11 @@ void GPU_uniformbuf_update(gpu::UniformBuf *ubo, const void *data)
   ubo->update(data);
 }
 
+size_t GPU_uniformbuf_size_get(const gpu::UniformBuf *ubo)
+{
+  return ubo->size_in_bytes();
+}
+
 void GPU_uniformbuf_bind(gpu::UniformBuf *ubo, int slot)
 {
   ubo->bind(slot);

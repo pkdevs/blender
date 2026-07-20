@@ -125,6 +125,17 @@ static PyObject *pygpu_uniformbuffer_update(BPyGPUUniformBuf *self, PyObject *ob
     return nullptr;
   }
 
+  const size_t ubo_size = GPU_uniformbuf_size_get(self->ubo);
+  if (size_t(pybuffer.len) < ubo_size) [[unlikely]] {
+    PyErr_Format(PyExc_ValueError,
+                 "GPUUniformBuf.update: buffer of %zd bytes is smaller than "
+                 "the uniform buffer's %zu bytes",
+                 pybuffer.len,
+                 ubo_size);
+    PyBuffer_Release(&pybuffer);
+    return nullptr;
+  }
+
   GPU_uniformbuf_update(self->ubo, pybuffer.buf);
   PyBuffer_Release(&pybuffer);
   Py_RETURN_NONE;

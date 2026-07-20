@@ -41,6 +41,8 @@ gpu::UniformBuf *GPU_uniformbuf_create_from_list(ListBaseT<LinkData> *inputs, co
 void GPU_uniformbuf_free(gpu::UniformBuf *ubo);
 
 void GPU_uniformbuf_update(gpu::UniformBuf *ubo, const void *data);
+/** The size in bytes the buffer was created with, #GPU_uniformbuf_update copies this much. */
+size_t GPU_uniformbuf_size_get(const gpu::UniformBuf *ubo);
 
 void GPU_uniformbuf_bind(gpu::UniformBuf *ubo, int slot);
 void GPU_uniformbuf_bind_as_ssbo(gpu::UniformBuf *ubo, int slot);
