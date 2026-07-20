@@ -686,7 +686,11 @@ static PyObject *pygpu_texture_read(BPyGPUTexture *self)
   }
 
   void *buf = GPU_texture_read(self->tex, best_data_format, 0);
-  const Py_ssize_t component_len = GPU_texture_component_len(tex_format);
+  /* Packed formats store every component in a single element, using the texture's
+   * component count would describe a buffer several times the size read back. */
+  const Py_ssize_t component_len = (best_data_format == GPU_DATA_10_11_11_REV) ?
+                                       1 :
+                                       GPU_texture_component_len(tex_format);
   Py_ssize_t shape[4];
   int shape_len;
   if (GPU_texture_dimensions(self->tex) == 3) {
