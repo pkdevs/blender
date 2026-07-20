@@ -524,7 +524,9 @@ template<typename T> struct A {
   A method(T b) const
   {
     A<T> a;
+    A c;
     a.a = b;
+    c.a = b;
     return a;
   }
 };
@@ -533,7 +535,7 @@ template struct A<float>;
     string expect = R"(
                      struct ATfloat {
   float a;
-#line 10
+#line 12
 };
 #line 2
 ATfloat ATfloat_ctor_() {ATfloat r;r.a=0.0f;return r;}
@@ -545,7 +547,9 @@ ATfloat _method(const ATfloat &this_, float b);
   ATfloat _method(const ATfloat &this_, float b)
   {
     ATfloat a;
+    ATfloat c;
     a.a = b;
+    c.a = b;
     return a;
   }
 )";

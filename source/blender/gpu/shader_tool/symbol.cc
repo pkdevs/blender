@@ -859,21 +859,20 @@ struct SymbolParser {
       return scope.root_scope()->lookup_class(SymbolTable::err_symbol);
     }
 
+    if (cls_template) {
+      /* Add the template definition early so it can be queried during instantiation. */
+      cls_template->instances.emplace(suffix, cls);
+      /* Create an alias to the unspecified class name (no template arg): e.g. `A` -> `A<T>`. */
+      string alias_name = cls->identifier.substr(0, cls->identifier.size() - suffix.size());
+      cls->classes.emplace(alias_name, cls);
+    }
+
     /* Instantiate in global resolved namespace. */
     SymbolClass *flat_cls = table.cls_arena.alloc(*cls);
     cls->resolved = flat_cls;
     flat_cls->resolved = cls;
     flat_cls->identifier = prefix + cls->identifier;
     global.classes.try_emplace(flat_cls->identifier, flat_cls);
-
-    if (cls_template) {
-      /* Add the template definition early so it can be queried during instantiation. */
-      cls_template->instances.emplace(suffix, cls);
-      /* Create an alias to the unspecified class name (no template arg): e.g. `A` > `A<T>`. */
-      SymbolClass *alias = table.cls_arena.alloc(&scope, decl);
-      alias->resolved = flat_cls;
-      cls->classes.emplace(alias->identifier, alias);
-    }
 
     parse_scope(*cls, decl.body(), prefix + cls->identifier + ns_sep, temp);
 
