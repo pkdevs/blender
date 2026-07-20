@@ -1403,8 +1403,9 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id) const
   return resolve_template_instantiation(func, id, *this);
 }
 
+template<typename ArgOrParamList>
 Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
-                                                      FuncParamList params,
+                                                      ArgOrParamList params,
                                                       const SymbolTable &table) const
 {
   auto [func, err] = lookup_function(id);
@@ -1442,6 +1443,13 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
   }
   return {func, err};
 }
+
+template Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
+                                                               FuncParamList params,
+                                                               const SymbolTable &table) const;
+template Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
+                                                               FuncArgList params,
+                                                               const SymbolTable &table) const;
 
 Result<SymbolClass *> SymbolScope::lookup_class(IdQualified id) const
 {
