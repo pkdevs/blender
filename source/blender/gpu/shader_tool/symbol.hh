@@ -146,6 +146,9 @@ struct SymbolScope : Symbol {
 
   SymbolVariable *lookup_variable(IdQualified id) const;
   Result<SymbolFunction *> lookup_function(IdQualified id) const;
+  Result<SymbolFunction *> lookup_function(IdQualified id,
+                                           FuncParamList params,
+                                           const SymbolTable &table) const;
   Result<SymbolClass *> lookup_class(IdQualified id) const;
 
   Result<SymbolClass *> lookup_class(Id id, Id last) const;

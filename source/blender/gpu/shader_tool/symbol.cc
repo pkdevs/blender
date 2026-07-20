@@ -230,18 +230,12 @@ class ExpressionTypeParser {
 
     SymbolClass *fun_call(FuncCall call)
     {
-      auto [fn, err_fn] = scope->lookup_function(call.identifier());
+      auto [fn, err_fn] = scope->lookup_function(call.identifier(), call.parameters(), *table);
       if (err_fn) {
         error = err_fn;
         return err_cls;
       }
-      auto [arg_types, err] = SymbolFunction::to_arg_types(*table, *scope, call.parameters());
-      if (err) {
-        error = err;
-        return err_cls;
-      }
 
-      fn->lookup_overload(arg_types);
       SymbolClass *type = fn->return_type;
 
       Node next = call.next();
@@ -1394,36 +1388,100 @@ static Result<T *> resolve_template_instantiation(T *sym, AstNodeT id, const Sym
   return {sym, std::nullopt};
 }
 
+#if 0 /* For debugging. */
+#  define LOOKUP_LOG(a) cerr << a;
+#else
+#  define LOOKUP_LOG(a)
+#endif
+
 Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id) const
 {
+#ifdef DEBUG_SYMBOL_LOOKUP
+  LOOKUP_LOG("\n")
+#endif
   SymbolFunction *func = lookup_generic<SymbolFunction>(id, id.front());
   return resolve_template_instantiation(func, id, *this);
 }
 
+Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
+                                                      FuncParamList params,
+                                                      const SymbolTable &table) const
+{
+  auto [func, err] = lookup_function(id);
+  if (func->template_data && !id.template_params().is_valid()) {
+    auto [func_, err_adl] = func->template_data->lookup_adl(table, params, *this);
+    err = err ? err : err_adl;
+    func = func_;
+  }
+  else if (func->overload_next) {
+    auto [arg_types, err_args] = SymbolFunction::to_arg_types(table, *this, params);
+    err = err ? err : err_args;
+    SymbolFunction *overload = func->lookup_overload(arg_types);
+    if (overload->is_error) {
+      string parameters = arg_types.empty() ? ", " : "";
+      for (SymbolClass *cls : arg_types) {
+        parameters += ", '" + cls->identifier + "'";
+      }
+      err = {id,
+             "No matching function for call to '" + func->identifier + "' for parameters " +
+                 parameters.substr(2)};
+    }
+    func = overload;
+  }
+  else if (func->is_error) {
+    /* Try to resolve type constructors (only for builtins for now). */
+    if (auto [cls, err_cls] = lookup_class(id);
+        !cls->is_error && cls->resolved && cls->resolved->is_builtin)
+    {
+      func = root_scope()->lookup_function(cls->resolved->identifier);
+      err = {};
+    }
+    else {
+      err = {id, "Unknown function name"};
+    }
+  }
+  return {func, err};
+}
+
 Result<SymbolClass *> SymbolScope::lookup_class(IdQualified id) const
 {
+#ifdef DEBUG_SYMBOL_LOOKUP
+  LOOKUP_LOG("\n")
+#endif
   SymbolClass *cls = lookup_generic<SymbolClass>(id, id.front());
   return resolve_template_instantiation(cls, id, *this);
 }
 
 Result<SymbolClass *> SymbolScope::lookup_class(Id id, Id last) const
 {
+#ifdef DEBUG_SYMBOL_LOOKUP
+  LOOKUP_LOG("\n")
+#endif
   SymbolClass *cls = lookup_generic_nested<SymbolClass>(id, last, id.front());
   return resolve_template_instantiation(cls, last, *this);
 }
 
 SymbolFunction *SymbolScope::lookup_function_base(IdQualified id) const
 {
+#ifdef DEBUG_SYMBOL_LOOKUP
+  LOOKUP_LOG("\n")
+#endif
   return lookup_generic<SymbolFunction>(id, id.front());
 }
 
 SymbolClass *SymbolScope::lookup_class_base(IdQualified id) const
 {
+#ifdef DEBUG_SYMBOL_LOOKUP
+  LOOKUP_LOG("\n")
+#endif
   return lookup_generic<SymbolClass>(id, id.front());
 }
 
 SymbolVariable *SymbolScope::lookup_variable(IdQualified id) const
 {
+#ifdef DEBUG_SYMBOL_LOOKUP
+  LOOKUP_LOG("\n")
+#endif
   return lookup_generic<SymbolVariable>(id, id.front());
 }
 
@@ -1436,23 +1494,53 @@ const SymbolScope *SymbolScope::root_scope() const
   return scope;
 }
 
+/* Helper for debug print. */
+template<typename T> const char *get_symbol_type_name()
+{
+  if constexpr (std::is_same_v<T, SymbolFunction>) {
+    return "Function";
+  }
+  else if constexpr (std::is_same_v<T, SymbolClass>) {
+    return "Class";
+  }
+  else if constexpr (std::is_same_v<T, SymbolVariable>) {
+    return "Variable";
+  }
+  else {
+    return "Unknown";
+  }
+}
+
 template<typename T>
 T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
 {
   assert(id.is_valid());
+
+  LOOKUP_LOG("[Lookup] Looking up " << get_symbol_type_name<T>() << " '" << id.str()
+                                    << "' in scope '" << identifier << "'\n")
+
   /* Bubble up immediately if it's a global lookup. */
   if (id.is_global() && parent) {
+    LOOKUP_LOG("[Lookup] Global lookup: Bubbling up to parent scope " << parent->identifier
+                                                                      << "\n")
     return parent->lookup_generic<T>(id, loc);
   }
+
   /* Try to match within this scope. */
   if (auto v = lookup_generic_nested<T>(id.namespace_start(), id.child_last(NodeType::Id), loc)) {
+    LOOKUP_LOG("[Lookup] Symbol found locally '" << identifier << "'.\n")
     return v;
   }
+
   /* Delegate to parent scope if not found locally. */
   if (parent) {
+    LOOKUP_LOG("[Lookup] Not found locally. Delegating to parent scope\n")
     return parent->lookup_generic<T>(id, loc);
   }
+
   /* Lookup failure at root level, try to return error symbol. */
+  LOOKUP_LOG("[Lookup] FAILED at root scope.\n")
+
   if constexpr (is_same_v<T, SymbolFunction>) {
     if (auto it = functions.find(SymbolTable::err_symbol); it != functions.end()) {
       return it->second;
@@ -1479,60 +1567,81 @@ T *SymbolScope::lookup_generic(IdQualified id, const SourceLocation &loc) const
 template<typename T>
 T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc) const
 {
+  LOOKUP_LOG("[Nested] Looking up " << get_symbol_type_name<T>() << " '"
+                                    << id.front().buf_->substr(id.front(), last.front())
+                                    << "' in scope '" << identifier << "'\n")
+
   /* Look up anonymous namespace first. */
   if (auto it = scopes.find(""); it != scopes.end()) {
+    LOOKUP_LOG("[Nested] Looking up anonymous namespace scope\n")
     Id next_search_id = id.id != last.id ? id.next_id() : id;
     if (auto ret = it->second->lookup_generic_nested<T>(next_search_id, last, loc)) {
       return ret;
     }
   }
+
   /* Resolve target based on whether it's a namespace or the final symbol. */
   if (id.id != last.id) {
     /* Only classes can have template specifiers. */
     if (TemplateParamList list = id.template_params(); list.is_valid()) {
+      LOOKUP_LOG("[Nested] Segment '" << id.str() << "' has template params. Checking classes.\n")
       if (auto it = classes.find(string(id.str())); it != classes.end()) {
         if (SymbolClass *cls = it->second->as_class(); cls && cls->template_data) {
           if (auto [tmp, err] = cls->template_data->lookup_inst(list, *this); !tmp->is_error) {
+            LOOKUP_LOG("[Nested] Found template instance scope '" << tmp->identifier << "'.\n")
             return tmp->lookup_generic_nested<T>(id.next_id(), last, loc);
           }
         }
       }
+      LOOKUP_LOG("[Nested] Template instance lookup failed for '" << id.str() << "'.\n")
       return nullptr;
     }
+
     if (auto it = scopes.find(string(id.str())); it != scopes.end()) {
+      LOOKUP_LOG("[Nested] Match sub-scope/namespace '"
+                 << id.str() << "' at " << it->second->identifier << ". Descending...\n")
       return it->second->lookup_generic_nested<T>(id.next_id(), last, loc);
     }
+    LOOKUP_LOG("[Nested] Mid-segment '" << id.str() << "' could not be resolved as a scope.\n")
     return nullptr;
   }
 
   if constexpr (is_same_v<T, SymbolFunction>) {
     if (auto it = functions.find(string(id.str())); it != functions.end()) {
       if (it->second->loc <= loc) {
-        // if (TemplateParamList list = id.template_params(); list.is_valid()) {
-        //   return (it->second->template_data) ? it->second : nullptr;
-        // }
+        LOOKUP_LOG("[Nested] Found function match: " << it->second->identifier << "\n")
         return it->second;
       }
+      LOOKUP_LOG(
+          "[Nested] Found function, but declared AFTER current source location "
+          "(shadowed/invisible).\n")
     }
   }
   else if constexpr (is_same_v<T, SymbolClass>) {
     if (auto it = classes.find(string(id.str())); it != classes.end()) {
       if (it->second->loc <= loc) {
-        // if (TemplateParamList list = id.template_params(); list.is_valid()) {
-        //   return (it->second->template_data) ? it->second : nullptr;
-        // }
+        LOOKUP_LOG("[Nested] Found class match: " << it->second->identifier << "\n")
         return it->second;
       }
+      LOOKUP_LOG(
+          "[Nested] Found class, but declared AFTER current source location "
+          "(shadowed/invisible).\n")
     }
   }
   else if constexpr (is_same_v<T, SymbolVariable>) {
     if (auto it = variables.find(string(id.str())); it != variables.end()) {
       if (it->second->loc <= loc) {
         if (TemplateParamList list = id.template_params(); list.is_valid()) {
-          return nullptr; /* Variable cannot be templated (only their types can). */
+          LOOKUP_LOG(
+              "[Nested] Found variable match, but rejected: Variables cannot be templated.\n")
+          return nullptr;
         }
+        LOOKUP_LOG("[Nested] Found variable match: " << it->second->identifier << "\n")
         return it->second;
       }
+      LOOKUP_LOG(
+          "[Nested] Found variable, but declared AFTER current source location "
+          "(shadowed/invisible).\n")
     }
   }
   else {

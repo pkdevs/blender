@@ -1407,30 +1407,8 @@ struct InstantiationContext {
                                           const SymbolScope &scope)
   {
     assert(id.is_valid());
-    auto [func, err] = scope.lookup_function(id);
+    auto [func, err] = scope.lookup_function(id, params, symbols);
     error(err);
-    if (func->template_data && !id.template_params().is_valid()) {
-      auto [func_, err_adl] = func->template_data->lookup_adl(symbols, params, scope);
-      error(err_adl);
-      func = func_;
-    }
-    else if (func->overload_next) {
-      auto [arg_types, err_args] = SymbolFunction::to_arg_types(symbols, scope, params);
-      error(err_args);
-      SymbolFunction *overload = func->lookup_overload(arg_types);
-      if (overload->is_error) {
-        error(id, "No matching function for call to '" + func->identifier + "'");
-      }
-      func = overload;
-    }
-    else if (func->is_error) {
-      /* Try to resolve type constructors (only for builtins for now). */
-      if (auto [cls, err_cls] = scope.lookup_class(id); cls->resolved && cls->resolved->is_builtin)
-      {
-        return scope.root_scope()->lookup_function(cls->resolved->identifier);
-      }
-      error(id, "Unknown function name");
-    }
     return func;
   }
 
