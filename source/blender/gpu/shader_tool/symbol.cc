@@ -230,7 +230,11 @@ class ExpressionTypeParser {
 
     SymbolClass *fun_call(FuncCall call)
     {
-      SymbolFunction *fn = scope->lookup_function(call.identifier());
+      auto [fn, err_fn] = scope->lookup_function(call.identifier());
+      if (err_fn) {
+        error = err_fn;
+        return err_cls;
+      }
       auto [arg_types, err] = SymbolFunction::to_arg_types(*table, *scope, call.parameters());
       if (err) {
         error = err;
@@ -326,17 +330,16 @@ static int pad(int size, int align)
   return ((size + align - 1) / align) * align;
 }
 
-Result<string> SymbolTable::mangle_identifier(TemplateArgList args,
-                                              TemplateParamList list,
-                                              const SymbolScope &scope,
-                                              const string &sep)
+Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
+                                                  TemplateParamList list,
+                                                  const SymbolScope &scope)
 {
   Expr param = list.child_first();
 
   std::optional<AstNodeException> err;
 
-  string str;
-  args.foreach_child([&](TemplateArg arg) {
+  StringPair result = {};
+  for (TemplateArg arg : args.children_range()) {
     assert(arg.is_valid());
     if (!param.is_valid()) {
       err = AstNodeException(
@@ -349,20 +352,20 @@ Result<string> SymbolTable::mangle_identifier(TemplateArgList args,
       }
       else {
         IdQualified type_id(LocalVar(param.child_first()).identifier());
-        SymbolClass *type = scope.lookup_class(type_id);
+        auto *type = scope.lookup_class_base(type_id);
         if (type->template_data) {
           TemplateParamList list_nested = type_id.template_params();
           if (!list_nested.is_valid()) {
-            err = AstNodeException(type_id,
-                                   "Use of undeclared identifier '" + string(type_id.str()) + "'");
+            err = AstNodeException(
+                type_id, "Missing template parameters for '" + string(type_id.str()) + "'");
           }
           else {
             /* Recursive. */
             auto [type_, err_] = type->template_data->lookup_inst(list_nested, scope);
+            type = type_;
             if (err_) {
               err = err_;
             }
-            type = type_;
           }
         }
         if (type->is_error) {
@@ -370,7 +373,8 @@ Result<string> SymbolTable::mangle_identifier(TemplateArgList args,
                                  "Use of undeclared identifier '" + string(type_id.str()) + "'");
         }
         else {
-          str += sep + type->resolved->identifier;
+          result.str += "T" + type->resolved->identifier;
+          result.str_debug += ", " + type->resolved->identifier;
         }
       }
     }
@@ -380,25 +384,24 @@ Result<string> SymbolTable::mangle_identifier(TemplateArgList args,
         err = err_;
       }
       /* Replace minus sign by underscore. */
-      str += sep + (val < 0 ? "_" : "") + to_string(abs(val));
+      result.str += string("T") + (val < 0 ? "_" : "") + to_string(abs(val));
+      result.str_debug += ", " + to_string(val);
     }
     param = param.next();
-  });
-  return {str, err};
+  }
+  return {result, err};
 }
 
 template<typename T>
 Result<T *> SymbolTemplate<T>::lookup_inst(TemplateParamList list, const SymbolScope &scope) const
 {
-  auto [id, err] = SymbolTable::mangle_identifier(decl.arguments(), list, scope);
-  auto it = instances.find(id);
+  auto [mangled, err] = SymbolTable::mangle_identifier(decl.arguments(), list, scope);
+  auto [args, args_debug] = mangled;
+  auto it = instances.find(args);
   if (it == instances.end() && !err) {
-    if constexpr (is_same_v<T, SymbolFunction>) {
-      err = {list, "No matching function for the given template parameters"};
-    }
-    else {
-      err = {list, "No matching class for the given template parameters"};
-    }
+    err = {list,
+           "Missing explicit instantiation of template '" + string(id().str()) + "<" +
+               args_debug.substr(2) + ">'"};
   }
 
   if (err) {
@@ -446,10 +449,9 @@ template<typename T> void SymbolTemplate<T>::init_adl()
   }
 }
 
-Result<string> SymbolTable::mangle_identifier(const SymbolFunctionTemplate &tmp,
-                                              FuncParamList list,
-                                              const SymbolScope &scope,
-                                              const string &sep) const
+Result<StringPair> SymbolTable::mangle_identifier(const SymbolFunctionTemplate &tmp,
+                                                  FuncParamList list,
+                                                  const SymbolScope &scope) const
 {
   vector<SymbolClass *> arg_cls;
   list.foreach<Expr>([&](Expr expr) {
@@ -457,16 +459,18 @@ Result<string> SymbolTable::mangle_identifier(const SymbolFunctionTemplate &tmp,
     arg_cls.emplace_back(type);
   });
 
-  string str;
+  StringPair result;
   for (int i : tmp.temp_arg_index_in_fn_arg) {
     if (i < arg_cls.size()) {
-      str += sep + arg_cls[i]->resolved->identifier;
+      result.str += "T" + err_symbol;
+      result.str_debug += ", " + arg_cls[i]->resolved->identifier;
     }
     else {
-      str += sep + err_symbol;
+      result.str += "T" + err_symbol;
+      result.str_debug += ", " + err_symbol;
     }
   }
-  return {str, {}};
+  return {result, {}};
 }
 
 template<typename T>
@@ -479,10 +483,13 @@ Result<T *> SymbolTemplate<T>::lookup_adl(const SymbolTable &symbols,
             AstNodeException(list, "Cannot use ADL on types")};
   }
   else {
-    auto [id, err] = symbols.mangle_identifier(*this, list, scope);
-    auto it = instances.find(id);
+    auto [mangled, err] = symbols.mangle_identifier(*this, list, scope);
+    auto [args, args_debug] = mangled;
+    auto it = instances.find(args);
     if (it == instances.end() && !err) {
-      err = {list, "No matching function for the given template parameters"};
+      err = {list,
+             "Missing explicit instantiation of template '" + string(id().str()) + "<" +
+                 args_debug.substr(2) + ">'"};
     }
 
     if (err) {
@@ -670,6 +677,10 @@ struct SymbolParser {
     TemplateParamList params = inst.parameters();
     Expr param = params.child_first();
 
+    assert(scope.parent != nullptr);
+    /* Search for types in the parent namespace, where the instantiation resides. */
+    SymbolScope &inst_scope = *scope.parent;
+
     decl.arguments().foreach_child([&](TemplateArg arg) {
       assert(arg.is_valid());
       if (arg.front() == Typename) {
@@ -681,7 +692,8 @@ struct SymbolParser {
         }
         IdQualified type_id(LocalVar(param.child_first()).identifier());
         SymbolClass *cls = table.cls_arena.alloc(&scope, arg.id().front(), id);
-        SymbolClass *resolved = scope.lookup_class(type_id);
+        auto [resolved, err] = inst_scope.lookup_class(type_id);
+        error(err);
         cls->resolved = resolved;
         if (resolved->is_error) {
           error(param, "Unknown type in template instantiation");
@@ -691,13 +703,12 @@ struct SymbolParser {
       else {
         IdQualified type = arg.type();
         string id(arg.id().str());
-        SymbolClass *cls = scope.lookup_class(type);
+        auto [cls, err] = inst_scope.lookup_class(type);
+        error(err);
         SymbolVariable *var = table.var_arena.alloc(&scope, cls, arg.id().front(), id);
         var->is_constexpr = true;
-        auto [val, err] = SymbolTable::evaluate_constexpr(scope, param.child_first());
-        if (err) {
-          error(err->node, err->msg);
-        }
+        auto [val, err_expr] = SymbolTable::evaluate_constexpr(scope, param.child_first());
+        error(err_expr);
         var->value = val;
         scope.variables.emplace(id, var);
       }
@@ -711,9 +722,10 @@ struct SymbolParser {
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
     decl.arguments().foreach<FuncArg>([&](FuncArg arg) {
-      SymbolClass *type = scope.lookup_class(arg.type().id());
+      auto [type, err] = scope.lookup_class(arg.type().id());
+      error(err);
       SymbolVariable var(&scope, type, arg.declarator());
-      var.type = scope.lookup_class(arg.type().id());
+      var.type = type;
       scope.variables.emplace(var.identifier, table.var_arena.alloc(var));
       /* Register argument type for argument resolution. */
       fn_sym->arg_types.emplace_back(type);
@@ -737,7 +749,8 @@ struct SymbolParser {
   void parse_loop_arguments(SymbolScope &scope, ForLoop loop)
   {
     loop.condition().foreach_recursive<VarDecl>([&](VarDecl var) {
-      SymbolClass *type = scope.lookup_class(var.type().id());
+      auto [type, err] = scope.lookup_class(var.type().id());
+      error(err);
       var.foreach<Declarator>([&](Declarator decl) {
         SymbolVariable sym(&scope, type, decl);
         sym.type = type;
@@ -768,7 +781,8 @@ struct SymbolParser {
     else {
       IdQualified aliased(stmt.aliased());
       IdQualified name(stmt.id());
-      SymbolClass *type = scope.lookup_class(aliased);
+      auto [type, err] = scope.lookup_class(aliased);
+      error(err);
       if (type->is_error) {
         error(aliased, "Unknown Type");
         return;
@@ -783,8 +797,10 @@ struct SymbolParser {
 
   void parse_enum_value(SymbolScope &scope, EnumValue val, ClassDecl cls, const string &prefix)
   {
-    SymbolClass *enum_cls = scope.lookup_class(cls.identifier());
-    SymbolClass *type = scope.lookup_class(cls.parent_class());
+    auto [enum_cls, err_enum] = scope.lookup_class(cls.identifier());
+    error(err_enum);
+    auto [type, err_type] = scope.lookup_class(cls.parent_class());
+    error(err_type);
     SymbolVariable *sym = table.var_arena.alloc(&scope, type, val);
     sym->is_static = true;
     sym->is_constexpr = true;
@@ -794,9 +810,7 @@ struct SymbolParser {
         sym->value = eval_scalar_initializer_list(scope, list);
       }
       auto [val, err] = SymbolTable::evaluate_constexpr(scope, assign.expr().child_first());
-      if (err) {
-        error(err->node, err->msg);
-      }
+      error(err);
       sym->value = val;
     }
     else {
@@ -944,56 +958,31 @@ struct SymbolParser {
 
   void parse_template_inst(SymbolScope &scope, TemplateInst temp, const std::string &prefix)
   {
-    TemplateParamList temp_params = temp.parameters();
+    TemplateParamList tmp_params = temp.parameters();
 
     if (temp.is_function()) {
-      const FuncForwardDecl decl(temp.decl());
-      SymbolFunction *fn = scope.lookup_function(decl.identifier());
+      const FuncForwardDecl decl = temp.decl();
+      const IdQualified id = decl.identifier();
+      SymbolFunction *fn = scope.lookup_function_base(id);
 
-      if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *fn);
+      if (TemplateDecl temp_decl = check_template_instance(tmp_params, decl, *fn);
           temp_decl.is_valid())
       {
-        auto [arg_mangled,
-              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
-        if (err) {
-          error(err->node, err->msg);
-        }
+        auto [mangled,
+              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), tmp_params, scope);
+        error(err);
 
         SymbolScope *parent = &scope;
         if (fn->fn_type == SymbolFunction::MEMBER) {
           parent = nullptr;
-          /* Set the instantiated method parent to the container class. Note that it can also
-           * be templated. So we need to resolve it too. Lookup partial identifier. */
-          IdQualified id = decl.identifier();
           Id start = id.namespace_start();
           Id last = id.child_last(NodeType::Id).prev(NodeType::Id);
-          if (SymbolClass *parent_cls = scope.lookup_class(start, last); parent_cls) {
-            if (parent_cls->template_data) {
-              if (TemplateParamList param = last.template_params(); param.is_valid()) {
-                SymbolClass *base_type = parent_cls;
-                auto [type_, _] = base_type->template_data->lookup_inst(param, scope);
-                parent = type_;
-
-                if (type_->is_error) {
-                  auto [args, err] = SymbolTable::mangle_identifier(
-                      base_type->template_data->decl.arguments(), param, scope, ", ");
-                  if (err) {
-                    error(err->node, err->msg);
-                  }
-                  else {
-                    error(param,
-                          "Missing explicit instantiation of template '" + base_type->identifier +
-                              "<" + args.substr(2) + ">'");
-                  }
-                }
-              }
-              else {
-                error(last, "Missing template parameters");
-              }
+          if (auto [parent_cls, err_cls] = scope.lookup_class(start, last); parent_cls) {
+            error(err_cls);
+            if (parent_cls->template_data && !last.template_params().is_valid()) {
+              error(last, "Missing template parameters");
             }
-            else {
-              parent = parent_cls;
-            }
+            parent = parent_cls;
           }
 
           if (parent == nullptr) {
@@ -1004,29 +993,27 @@ struct SymbolParser {
           }
         }
         SymbolFunction *fn_inst = parse_func_decl(
-            *parent, temp_decl.decl(), prefix, arg_mangled, temp);
-        fn->template_data->instances.emplace(arg_mangled, fn_inst);
+            *parent, temp_decl.decl(), prefix, mangled.str, temp);
+        fn->template_data->instances.emplace(mangled.str, fn_inst);
       }
     }
     else {
       const ClassDecl decl(temp.decl());
-      SymbolClass *cls = scope.lookup_class(decl.identifier());
+      auto *cls = scope.lookup_class_base(decl.identifier());
 
-      if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *cls);
+      if (TemplateDecl temp_decl = check_template_instance(tmp_params, decl, *cls);
           temp_decl.is_valid())
       {
-        auto [arg_mangled,
-              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
-        if (err) {
-          error(err->node, err->msg);
-        }
+        auto [mangled,
+              err] = SymbolTable::mangle_identifier(temp_decl.arguments(), tmp_params, scope);
+        error(err);
         int unused_offset = 0;
         parse_class_decl(scope,
                          temp_decl.decl(),
                          Node{},
                          unused_offset,
                          prefix,
-                         arg_mangled,
+                         mangled.str,
                          temp,
                          cls->template_data);
       }
@@ -1039,36 +1026,32 @@ struct SymbolParser {
     /* Instantiate the whole symbol into the current namespace. */
     if (temp.is_function()) {
       const FuncDecl decl(temp.decl());
-      SymbolFunction *fn = scope.lookup_function(decl.identifier());
+      auto *fn = scope.lookup_function_base(decl.identifier());
 
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *fn);
           temp_decl.is_valid())
       {
-        auto [arg_mangled,
+        auto [mangled,
               err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
-        if (err) {
-          error(err->node, err->msg);
-        }
-        SymbolFunction *spec = parse_func_decl(scope, decl, prefix, arg_mangled);
-        fn->template_data->instances.emplace(arg_mangled, spec);
+        error(err);
+        SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str);
+        fn->template_data->instances.emplace(mangled.str, spec);
       }
     }
     else {
       const ClassDecl decl(temp.decl());
-      SymbolClass *cls = scope.lookup_class(decl.identifier());
+      auto *cls = scope.lookup_class_base(decl.identifier());
 
       if (TemplateDecl temp_decl = check_template_instance(temp_params, decl, *cls);
           temp_decl.is_valid())
       {
-        auto [arg_mangled,
+        auto [mangled,
               err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
-        if (err) {
-          error(err->node, err->msg);
-        }
+        error(err);
         int unused_offset = 0;
         SymbolClass *spec = parse_class_decl(
-            scope, decl, Node{}, unused_offset, prefix, arg_mangled);
-        cls->template_data->instances.emplace(arg_mangled, spec);
+            scope, decl, Node{}, unused_offset, prefix, mangled.str);
+        cls->template_data->instances.emplace(mangled.str, spec);
       }
     }
   }
@@ -1083,10 +1066,7 @@ struct SymbolParser {
     }
 
     auto [cls, err] = table.expr_type_analysis(scope, expr);
-    if (err) {
-      error(err->node, err->msg);
-      return;
-    }
+    error(err);
     if (cls->is_error) {
       error(decl, "Cannot deduce actual type for variable '' with type 'auto'");
       return;
@@ -1127,39 +1107,13 @@ struct SymbolParser {
     IdQualified type_id = var.type().id();
     string_view type_id_str = type_id.str();
 
-    SymbolClass *type = nullptr;
-    if (type_id_str == "auto") {
-      /* Assumes C++ compilation already checked that all declarator uses the same type.
-       * Deduce type using only the first declarator. */
-      Declarator decl = var.child_first(NodeType::Declarator);
-      auto [resolved_type, err] = table.resolve_auto_type(scope, decl);
-      if (err) {
-        error(err->node, err->msg);
-      }
-      type = resolved_type;
-    }
-    else {
-      type = scope.lookup_class(type_id);
-      if (type->template_data) {
-        TemplateParamList param = type_id.template_params();
+    /* Assumes C++ compilation already checked that all declarator uses the same type.
+     * Deduce type using only the first declarator. */
+    Declarator first_decl = var.child_first(NodeType::Declarator);
 
-        SymbolClass *base_type = type;
-        auto [type_, _] = base_type->template_data->lookup_inst(param, scope);
-        type = type_;
-        if (type->is_error) {
-          auto [args, err] = SymbolTable::mangle_identifier(
-              base_type->template_data->decl.arguments(), param, scope, ", ");
-          if (err) {
-            error(err->node, err->msg);
-          }
-          else {
-            error(param,
-                  "Missing explicit instantiation of template '" + base_type->identifier + "<" +
-                      args.substr(2) + ">'");
-          }
-        }
-      }
-    }
+    auto [type, err] = (type_id_str == "auto") ? table.resolve_auto_type(scope, first_decl) :
+                                                 scope.lookup_class(type_id);
+    error(err);
 
     if (type->is_error) {
       error(var, "Unknown type name '" + string(type_id_str) + "'");
@@ -1229,9 +1183,7 @@ struct SymbolParser {
         return eval_scalar_initializer_list(scope, node);
       }
       auto [val, err] = SymbolTable::evaluate_constexpr(scope, node.child_first());
-      if (err) {
-        error(err->node, err->msg);
-      }
+      error(err);
       return val;
     }
     return 0;
@@ -1248,9 +1200,7 @@ struct SymbolParser {
         return eval_scalar_initializer_list(scope, list);
       }
       auto [val, err] = SymbolTable::evaluate_constexpr(scope, assign.expr().child_first());
-      if (err) {
-        error(err->node, err->msg);
-      }
+      error(err);
       return val;
     }
     if (InitializerList list = decl.initializer_list(); list.is_valid()) {
@@ -1286,6 +1236,14 @@ struct SymbolParser {
   void error(ast::Node node, const string &msg)
   {
     err_handler.report(node.front(), msg);
+  }
+
+  /* Pipe error if existing. */
+  void error(std::optional<AstNodeException> &err)
+  {
+    if (err) {
+      error(err->node, err->msg);
+    }
   }
 };
 
@@ -1398,7 +1356,7 @@ Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable & /
 {
   vector<SymbolClass *> arg_types;
   list.foreach<FuncArg>([&](FuncArg arg) {
-    SymbolClass *cls = scope.lookup_class(arg.type().id());
+    auto [cls, _] = scope.lookup_class(arg.type().id());
     arg_types.emplace_back(cls);
   });
   return {arg_types, std::nullopt};
@@ -1420,22 +1378,46 @@ bool SymbolFunction::argument_matches(const vector<SymbolClass *> &arg_types) co
   return this->arg_types == arg_types;
 }
 
-SymbolFunction *SymbolScope::lookup_function(IdQualified id) const
+template<typename T, typename AstNodeT>
+static Result<T *> resolve_template_instantiation(T *sym, AstNodeT id, const SymbolScope &scope)
+{
+  if (TemplateParamList param = id.template_params(); param.is_valid() && sym && !sym->is_error) {
+    return sym->template_data->lookup_inst(param, scope);
+  }
+  return {sym, std::nullopt};
+}
+
+Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id) const
+{
+  SymbolFunction *func = lookup_generic<SymbolFunction>(id, id.front());
+  return resolve_template_instantiation(func, id, *this);
+}
+
+Result<SymbolClass *> SymbolScope::lookup_class(IdQualified id) const
+{
+  SymbolClass *cls = lookup_generic<SymbolClass>(id, id.front());
+  return resolve_template_instantiation(cls, id, *this);
+}
+
+Result<SymbolClass *> SymbolScope::lookup_class(Id id, Id last) const
+{
+  SymbolClass *cls = lookup_generic_nested<SymbolClass>(id, last, id.front());
+  return resolve_template_instantiation(cls, last, *this);
+}
+
+SymbolFunction *SymbolScope::lookup_function_base(IdQualified id) const
 {
   return lookup_generic<SymbolFunction>(id, id.front());
 }
-SymbolClass *SymbolScope::lookup_class(IdQualified id) const
+
+SymbolClass *SymbolScope::lookup_class_base(IdQualified id) const
 {
   return lookup_generic<SymbolClass>(id, id.front());
 }
+
 SymbolVariable *SymbolScope::lookup_variable(IdQualified id) const
 {
   return lookup_generic<SymbolVariable>(id, id.front());
-}
-
-SymbolClass *SymbolScope::lookup_class(Id id, Id last) const
-{
-  return lookup_generic_nested<SymbolClass>(id, last, id.front());
 }
 
 const SymbolScope *SymbolScope::root_scope() const

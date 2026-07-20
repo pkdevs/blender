@@ -27,6 +27,7 @@ struct InstantiationContext {
     error_handler.report(node.front(), str);
   }
 
+  /* Pipe error if existing. */
   void error(std::optional<AstNodeException> &err)
   {
     if (err) {
@@ -570,10 +571,18 @@ struct InstantiationContext {
       return;
     }
 
-    SymbolClass &cls = inst_cls ? *inst_cls :
-                                  ((decl.identifier().is_valid()) ?
-                                       *scope.lookup_class(decl.identifier()) :
-                                       *scope.lookup_class("a" + to_string(nested_id)));
+    SymbolClass *cls_ptr = inst_cls;
+    if (!cls_ptr) {
+      if (decl.identifier().is_valid()) {
+        auto [res, err] = scope.lookup_class(decl.identifier());
+        error(err);
+        cls_ptr = res;
+      }
+      else {
+        cls_ptr = scope.lookup_class("a" + to_string(nested_id));
+      }
+    }
+    SymbolClass &cls = *cls_ptr;
 
     LocalScope body = decl.body();
 
@@ -1029,7 +1038,7 @@ struct InstantiationContext {
   {
     if (temp_decl.is_class()) {
       ClassDecl decl = temp_decl.decl();
-      SymbolClass *base_cls = scope.lookup_class(decl.identifier());
+      auto *base_cls = scope.lookup_class_base(decl.identifier());
       /* Instantiation should have been checked already. */
       auto [temp_cls, _] = base_cls->template_data->lookup_inst(temp_decl.parameters(), scope);
       Node decl_tmp = base_cls->template_data->decl.decl();
@@ -1037,7 +1046,7 @@ struct InstantiationContext {
     }
     else {
       FuncForwardDecl decl = temp_decl.decl();
-      SymbolFunction *base_fn = scope.lookup_function(decl.identifier());
+      auto *base_fn = scope.lookup_function_base(decl.identifier());
       /* Instantiation should have been checked already. */
       auto [temp_fn, _] = base_fn->template_data->lookup_inst(temp_decl.parameters(), scope);
       Node decl_tmp = base_fn->template_data->decl.decl();
@@ -1049,14 +1058,14 @@ struct InstantiationContext {
   {
     if (temp_spec.is_class()) {
       ClassDecl decl = temp_spec.decl();
-      SymbolClass *base_cls = scope.lookup_class(decl.identifier());
+      auto *base_cls = scope.lookup_class_base(decl.identifier());
       /* Instantiation should have been checked already. */
       auto [temp_cls, _] = base_cls->template_data->lookup_inst(temp_spec.parameters(), scope);
       class_decl(decl, scope, 0, temp_cls);
     }
     else {
       FuncDecl decl = temp_spec.decl();
-      SymbolFunction *base_fn = scope.lookup_function(decl.identifier());
+      auto *base_fn = scope.lookup_function_base(decl.identifier());
       /* Instantiation should have been checked already. */
       auto [temp_fn, _] = base_fn->template_data->lookup_inst(temp_spec.parameters(), scope);
       func_decl(decl, *temp_fn->parent, temp_fn);
@@ -1356,31 +1365,13 @@ struct InstantiationContext {
   SymbolClass *id_type_lookup_resolved(IdQualified id, const SymbolScope &scope)
   {
     assert(id.is_valid());
-    SymbolClass *cls = scope.lookup_class(id);
-    if (TemplateParamList param = id.template_params(); param.is_valid()) {
-      SymbolClass *base_cls = cls;
-      auto [cls_, _] = base_cls->template_data->lookup_inst(param, scope);
-      cls = cls_;
-      if (cls->is_error) {
-        auto [args, err] = SymbolTable::mangle_identifier(
-            base_cls->template_data->decl.arguments(), param, scope, ", ");
-        if (err) {
-          error(err->node, err->msg);
-        }
-        else {
-          error(param,
-                "Missing explicit instantiation of template '" + base_cls->identifier + "<" +
-                    args.substr(2) + ">'");
-        }
-      }
-    }
-    else if (cls->template_data) {
+    auto [cls, err] = scope.lookup_class(id);
+    error(err);
+    if (cls->template_data && !id.template_params().is_valid()) {
       error(id, "Missing explicit template arguments");
     }
-    else {
-      if (cls->is_error) {
-        error(id, "Unknown type name");
-      }
+    else if (cls->is_error) {
+      error(id, "Unknown type name");
     }
     if (cls->resolved) {
       return cls->resolved;
@@ -1410,41 +1401,12 @@ struct InstantiationContext {
                                           const SymbolScope &scope)
   {
     assert(id.is_valid());
-    SymbolFunction *func = scope.lookup_function(id);
-    if (TemplateParamList param = id.template_params(); param.is_valid() && !func->is_error) {
-      SymbolFunction *base_func = func;
-      auto [func_, _] = base_func->template_data->lookup_inst(param, scope);
-      func = func_;
-      if (func->is_error) {
-        auto [args, err] = SymbolTable::mangle_identifier(
-            base_func->template_data->decl.arguments(), param, scope, ", ");
-        if (err) {
-          error(err->node, err->msg);
-        }
-        else {
-          error(param,
-                "Missing explicit instantiation of template '" + base_func->identifier + "<" +
-                    args.substr(2) + ">'");
-        }
-      }
-    }
-    else if (func->template_data) {
+    auto [func, err] = scope.lookup_function(id);
+    error(err);
+    if (func->template_data && !id.template_params().is_valid()) {
       if (func->template_data->is_adl_possible()) {
-        SymbolFunction *base_func = func;
-        auto [func_, err] = base_func->template_data->lookup_adl(symbols, params, scope);
+        auto [func_, err_adl] = func->template_data->lookup_adl(symbols, params, scope);
         func = func_;
-        if (func->is_error) {
-          auto [args,
-                err] = symbols.mangle_identifier(*base_func->template_data, params, scope, ", ");
-          if (err) {
-            error(err->node, err->msg);
-          }
-          else {
-            error(id,
-                  "Missing explicit instantiation of template '" + base_func->identifier + "<" +
-                      args.substr(2) + ">'");
-          }
-        }
       }
       else {
         error(id, "Missing explicit template arguments");
@@ -1452,11 +1414,8 @@ struct InstantiationContext {
       }
     }
     else if (func->overload_next) {
-      auto [arg_types, err] = SymbolFunction::to_arg_types(symbols, scope, params);
-      if (err) {
-        error(err->node, err->msg);
-      }
-
+      auto [arg_types, err_args] = SymbolFunction::to_arg_types(symbols, scope, params);
+      error(err_args);
       SymbolFunction *overload = func->lookup_overload(arg_types);
       if (overload->is_error) {
         error(id, "No matching function for call to '" + func->identifier + "'");
@@ -1465,7 +1424,8 @@ struct InstantiationContext {
     }
     else if (func->is_error) {
       /* Try to resolve type constructors (only for builtins for now). */
-      if (SymbolClass *cls = scope.lookup_class(id); cls->resolved && cls->resolved->is_builtin) {
+      if (auto [cls, err_cls] = scope.lookup_class(id); cls->resolved && cls->resolved->is_builtin)
+      {
         return scope.root_scope()->lookup_function(cls->resolved->identifier);
       }
       error(id, "Unknown function name");

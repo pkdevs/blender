@@ -20,6 +20,11 @@ using namespace std;
 struct SymbolParser;
 struct SymbolTable;
 
+struct StringPair {
+  string str;
+  string str_debug;
+};
+
 struct AstNodeException {
   Node node;
   string msg;
@@ -95,6 +100,15 @@ template<typename T> struct SymbolTemplate {
                          const SymbolScope &scope) const;
 
   void init_adl();
+
+ private:
+  IdQualified id() const
+  {
+    if (decl.is_class()) {
+      return ClassDecl(decl.decl()).identifier();
+    }
+    return FuncDecl(decl.decl()).identifier();
+  }
 };
 
 using SymbolClassTemplate = SymbolTemplate<SymbolClass>;
@@ -131,14 +145,18 @@ struct SymbolScope : Symbol {
   }
 
   SymbolVariable *lookup_variable(IdQualified id) const;
-  SymbolFunction *lookup_function(IdQualified id) const;
-  SymbolClass *lookup_class(IdQualified id) const;
+  Result<SymbolFunction *> lookup_function(IdQualified id) const;
+  Result<SymbolClass *> lookup_class(IdQualified id) const;
 
-  SymbolClass *lookup_class(Id id, Id last) const;
+  Result<SymbolClass *> lookup_class(Id id, Id last) const;
 
   SymbolVariable *lookup_variable(string id) const;
   SymbolFunction *lookup_function(string id) const;
   SymbolClass *lookup_class(string id) const;
+
+  /* Doesn't match last template in identifier. */
+  SymbolFunction *lookup_function_base(IdQualified id) const;
+  SymbolClass *lookup_class_base(IdQualified id) const;
 
   void print() const;
 
@@ -394,14 +412,12 @@ struct SymbolTable {
 
   void parse(LocalScope node, ErrorHandler &err_handler);
 
-  static Result<string> mangle_identifier(TemplateArgList args,
-                                          TemplateParamList list,
-                                          const SymbolScope &scope,
-                                          const string &sep = "T");
-  Result<string> mangle_identifier(const SymbolFunctionTemplate &tmp,
-                                   FuncParamList list,
-                                   const SymbolScope &scope,
-                                   const string &sep = "T") const;
+  static Result<StringPair> mangle_identifier(TemplateArgList args,
+                                              TemplateParamList list,
+                                              const SymbolScope &scope);
+  Result<StringPair> mangle_identifier(const SymbolFunctionTemplate &tmp,
+                                       FuncParamList list,
+                                       const SymbolScope &scope) const;
 
   Result<SymbolClass *> expr_type_analysis(const SymbolScope &scope, Expr expr) const;
 
