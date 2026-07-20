@@ -300,7 +300,6 @@ class SourceProcessor {
   void lower_default_constructors(Parser &parser);
   /* Make all members of a class to be referenced using `this->`. */
   void lower_implicit_member(Parser &parser);
-  void lower_implicit_member_ast(Parser &parser);
   /* Move all method definition outside of struct definition blocks. */
   void lower_method_definitions(Parser &parser);
   void lower_this_keyword(Parser &parser);

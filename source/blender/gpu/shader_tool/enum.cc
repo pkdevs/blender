@@ -170,7 +170,7 @@ void SourceProcessor::lower_enums_ast(Parser &parser)
    * - Enums needs to have underlying types set to uint32_t to make them usable in UBO and SSBO.
    */
 
-  parser.root().foreach_recursive<ClassDecl>([&](ClassDecl cl) {
+  for (ClassDecl cl : parser.root().descendants_of_type<ClassDecl>()) {
     if (cl.front() != Enum) {
       return;
     }
@@ -184,7 +184,7 @@ void SourceProcessor::lower_enums_ast(Parser &parser)
     string class_prefix = is_enum_class ? enum_name + namespace_separator : "";
 
     Id last_id;
-    cl.body().foreach<EnumValue>([&](EnumValue val) {
+    for (EnumValue val : cl.body().children_of_type<EnumValue>()) {
       Id id = val.identifier();
 
       /* Convert to static constant. */
@@ -213,7 +213,7 @@ void SourceProcessor::lower_enums_ast(Parser &parser)
       }
 
       last_id = id;
-    });
+    }
 
     Token enum_tok = cl.front();
 
@@ -242,7 +242,7 @@ void SourceProcessor::lower_enums_ast(Parser &parser)
     /* Erase original class declaration. */
     parser.erase(enum_tok, cl.body().front());
     parser.erase(cl.body().back(), cl.back());
-  });
+  }
 
   parser.apply_mutations();
 }

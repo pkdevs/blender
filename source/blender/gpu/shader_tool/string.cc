@@ -83,7 +83,7 @@ void SourceProcessor::lower_assert(Parser &parser, [[maybe_unused]] const string
 void SourceProcessor::lower_assert_ast(Parser &parser, [[maybe_unused]] const string &filename)
 {
   /* Example: `assert(i < 0)` > `if (!(i < 0)) { printf(...); }` */
-  parser.root().foreach_recursive<FuncCall>([&](FuncCall call) {
+  for (FuncCall call : parser.root().descendants_of_type<FuncCall>()) {
     if (call.identifier().str() != "assert") {
       return;
     }
@@ -123,7 +123,7 @@ void SourceProcessor::lower_assert_ast(Parser &parser, [[maybe_unused]] const st
     replacement += "}";
 #endif
     parser.replace(call, replacement);
-  });
+  }
 
   parser.apply_mutations();
 }

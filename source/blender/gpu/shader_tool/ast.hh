@@ -196,34 +196,6 @@ struct Node {
 
   /* Traversal. */
 
-  template<typename NodeT, typename CallbackT> void foreach_recursive(CallbackT &&cb) const
-  {
-    for (Node end = find_recursion_end(),
-              node = first_node_of_type(children(), NodeT::NodeEnumVal, end);
-         node.id != end.id;
-         node = next_node_of_type(node, NodeT::NodeEnumVal, end))
-    {
-      cb(NodeT(node));
-    }
-  }
-
-  template<typename NodeT, typename CallbackT> void foreach(CallbackT &&cb) const
-  {
-    for (Node node = child_first(NodeT::NodeEnumVal); node.is_valid();
-         node = node.next(NodeT::NodeEnumVal))
-    {
-      cb(NodeT(node));
-    }
-  }
-
-  template<typename CallbackT> void foreach_child(CallbackT &&cb) const
-  {
-    for (Node node = child_first(); node.is_valid(); node = node.next()) {
-      cb(node);
-    }
-  }
-
-  /* --- Iterators --- */
   struct ChildIterator;
   struct ChildRange;
   ChildRange children_range() const;
@@ -742,11 +714,11 @@ struct AttrList : Node {
       return false;
     }
     bool found = false;
-    foreach<Attr>([&](Attr attr) {
+    for (Attr attr : children_of_type<Attr>()) {
       if (attr.identifier().str() == attr_name) {
         found = true;
       }
-    });
+    }
     return found;
   }
 };

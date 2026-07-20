@@ -430,19 +430,19 @@ template<typename T> void SymbolTemplate<T>::init_adl()
   temp_arg_index_in_fn_arg.reserve(tmp_arg_count);
 
   FuncDecl decl(temp.decl());
-  decl.arguments().foreach<FuncArg>([&](FuncArg arg) {
+  for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
     int arg_id = -1;
     int id = 0;
-    tmp_args.foreach<TemplateArg>([&](TemplateArg tmp_arg) {
+    for (TemplateArg tmp_arg : tmp_args.children_of_type<TemplateArg>()) {
       if (tmp_arg.id().str() == arg.type().id().str()) {
         arg_id = id;
       }
       ++id;
-    });
+    }
     if (arg_id != -1) {
       temp_arg_index_in_fn_arg.emplace_back(arg_id);
     }
-  });
+  }
 
   if (temp_arg_index_in_fn_arg.size() != tmp_arg_count) {
     temp_arg_index_in_fn_arg.clear();
@@ -454,10 +454,10 @@ Result<StringPair> SymbolTable::mangle_identifier(const SymbolFunctionTemplate &
                                                   const SymbolScope &scope) const
 {
   vector<SymbolClass *> arg_cls;
-  list.foreach<Expr>([&](Expr expr) {
+  for (Expr expr : list.children_of_type<Expr>()) {
     auto [type, _] = expr_type_analysis(scope, expr);
     arg_cls.emplace_back(type);
-  });
+  }
 
   StringPair result;
   for (int i : tmp.temp_arg_index_in_fn_arg) {
@@ -640,10 +640,11 @@ struct SymbolParser {
             break;
           case NodeType::SwitchStmt:
             /* Special case for switch statements which are 3 level deep. */
-            child.foreach<SwitchCase>([&](SwitchCase stmt) {
-              stmt.foreach<LocalScope>(
-                  [&](LocalScope local) { parse_local_scope(scope, local, prefix); });
-            });
+            for (SwitchCase stmt : child.children_of_type<SwitchCase>()) {
+              for (LocalScope local : stmt.children_of_type<LocalScope>()) {
+                parse_local_scope(scope, local, prefix);
+              }
+            }
             break;
           case NodeType::ForLoop:
           case NodeType::DoWhileLoop:
@@ -653,8 +654,9 @@ struct SymbolParser {
           case NodeType::ElseStmt:
           case NodeType::ReturnStmt:
             /* Convert local scopes that are nested one level deeper (eg.  if, etc...). */
-            child.foreach<LocalScope>(
-                [&](LocalScope local) { parse_local_scope(scope, local, prefix); });
+            for (LocalScope local : child.children_of_type<LocalScope>()) {
+              parse_local_scope(scope, local, prefix);
+            }
             break;
           default:
             break;
@@ -681,7 +683,7 @@ struct SymbolParser {
     /* Search for types in the parent namespace, where the instantiation resides. */
     SymbolScope &inst_scope = *scope.parent;
 
-    decl.arguments().foreach_child([&](TemplateArg arg) {
+    for (TemplateArg arg : decl.arguments().children_range()) {
       assert(arg.is_valid());
       if (arg.front() == Typename) {
         IdQualified arg_id = arg.type();
@@ -713,7 +715,7 @@ struct SymbolParser {
         scope.variables.emplace(id, var);
       }
       param = param.next();
-    });
+    }
   }
 
   /* Create declaration for each function argument so name lookup will work with these.
@@ -721,7 +723,7 @@ struct SymbolParser {
   void parse_function_arguments(SymbolScope &scope, FuncDecl decl)
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
-    decl.arguments().foreach<FuncArg>([&](FuncArg arg) {
+    for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
       auto [type, err] = scope.lookup_class(arg.type().id());
       error(err);
       SymbolVariable var(&scope, type, arg.declarator());
@@ -729,7 +731,7 @@ struct SymbolParser {
       scope.variables.emplace(var.identifier, table.var_arena.alloc(var));
       /* Register argument type for argument resolution. */
       fn_sym->arg_types.emplace_back(type);
-    });
+    }
 
     if (scope.parent != nullptr) {
       /* Add `this_` to the var declarations. */
@@ -748,15 +750,15 @@ struct SymbolParser {
   /* Parse declarators inside for loop conditions. */
   void parse_loop_arguments(SymbolScope &scope, ForLoop loop)
   {
-    loop.condition().foreach_recursive<VarDecl>([&](VarDecl var) {
+    for (VarDecl var : loop.condition().descendants_of_type<VarDecl>()) {
       auto [type, err] = scope.lookup_class(var.type().id());
       error(err);
-      var.foreach<Declarator>([&](Declarator decl) {
+      for (Declarator decl : var.children_of_type<Declarator>()) {
         SymbolVariable sym(&scope, type, decl);
         sym.type = type;
         scope.variables.emplace(sym.identifier, table.var_arena.alloc(sym));
-      });
-    });
+      }
+    }
   }
 
   void parse_namespace(SymbolScope &scope, Namespace decl, string ns_prefix)
@@ -764,12 +766,12 @@ struct SymbolParser {
     IdQualified ns = decl.identifier();
     /* Walk nested identifier */
     SymbolScope *ns_scope = &scope;
-    ns.foreach<Id>([&](Id id) {
+    for (Id id : ns.children_of_type<Id>()) {
       SymbolScope *sym = table.scp_arena.alloc(ns_scope, id, SymbolScope::NAMESPACE);
       scope.scopes.emplace(sym->identifier, sym);
       ns_scope = sym;
       ns_prefix = ns_prefix + sym->identifier + ns_sep;
-    });
+    }
     parse_scope(*ns_scope, decl.body(), ns_prefix);
   }
 
@@ -1129,7 +1131,7 @@ struct SymbolParser {
       anon_prefix = prefix.prefix, named_parent = prefix.non_anonymous_parent;
     }
 
-    var.foreach<Declarator>([&](Declarator decl) {
+    for (Declarator decl : var.children_of_type<Declarator>()) {
       SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl);
       scope.variables.emplace(sym->identifier, sym);
 
@@ -1165,7 +1167,7 @@ struct SymbolParser {
           error(var.type(), "Constexpr declaration must also be static");
         }
       }
-    });
+    }
   }
 
   int64_t eval_scalar_initializer_list(const SymbolScope &scope, InitializerList list)
@@ -1340,13 +1342,13 @@ Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable &ta
 {
   std::optional<AstNodeException> error;
   vector<SymbolClass *> arg_types;
-  list.foreach<Expr>([&](Expr expr) {
+  for (Expr expr : list.children_of_type<Expr>()) {
     auto [cls, err] = table.expr_type_analysis(scope, expr);
     arg_types.emplace_back(cls);
     if (err && !error) {
       error = err;
     }
-  });
+  }
   return {arg_types, error};
 }
 
@@ -1355,10 +1357,10 @@ Result<vector<SymbolClass *>> SymbolFunction::to_arg_types(const SymbolTable & /
                                                            FuncArgList list)
 {
   vector<SymbolClass *> arg_types;
-  list.foreach<FuncArg>([&](FuncArg arg) {
+  for (FuncArg arg : list.children_of_type<FuncArg>()) {
     auto [cls, _] = scope.lookup_class(arg.type().id());
     arg_types.emplace_back(cls);
-  });
+  }
   return {arg_types, std::nullopt};
 }
 
@@ -1381,7 +1383,9 @@ bool SymbolFunction::argument_matches(const vector<SymbolClass *> &arg_types) co
 template<typename T, typename AstNodeT>
 static Result<T *> resolve_template_instantiation(T *sym, AstNodeT id, const SymbolScope &scope)
 {
-  if (TemplateParamList param = id.template_params(); param.is_valid() && sym && !sym->is_error) {
+  if (TemplateParamList param = id.template_params();
+      param.is_valid() && sym && sym->template_data)
+  {
     return sym->template_data->lookup_inst(param, scope);
   }
   return {sym, std::nullopt};

@@ -468,11 +468,11 @@ void SourceProcessor::lower_union_accessor_templates(Parser &parser)
  */
 void SourceProcessor::lower_union_accessor_templates_ast(Parser &parser)
 {
-  parser.root().foreach_recursive<ClassDecl>([&](ClassDecl decl) {
+  for (ClassDecl decl : parser.root().descendants_of_type<ClassDecl>()) {
     if (decl.front() != Union) {
       return;
     }
-    decl.foreach<VarDecl>([&](VarDecl var) {
+    for (VarDecl var : decl.children_of_type<VarDecl>()) {
       IdType type = var.type();
       Id name = type.id().name();
 
@@ -489,8 +489,8 @@ void SourceProcessor::lower_union_accessor_templates_ast(Parser &parser)
         parser.erase(param.front());
         parser.erase(param.back());
       }
-    });
-  });
+    }
+  }
 
   parser.apply_mutations();
 }

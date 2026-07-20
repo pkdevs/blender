@@ -85,8 +85,8 @@ void SourceProcessor::lower_srt_accessor_templates(Parser &parser)
  */
 void SourceProcessor::lower_srt_accessor_templates_ast(Parser &parser)
 {
-  parser.root().foreach<ClassDecl>([&](ClassDecl decl) {
-    decl.foreach<VarDecl>([&](VarDecl var) {
+  for (ClassDecl decl : parser.root().children_of_type<ClassDecl>()) {
+    for (VarDecl var : decl.children_of_type<VarDecl>()) {
       IdType type = var.type();
       bool is_resource_table = decl.attributes().contains_attr("resource_table");
       bool is_srt = type.id().name().str() == "srt_t";
@@ -105,14 +105,14 @@ void SourceProcessor::lower_srt_accessor_templates_ast(Parser &parser)
         return;
       }
 
-      var.foreach<Declarator>([&](Declarator decl) {
+      for (Declarator decl : var.children_of_type<Declarator>()) {
         if (decl.is_array()) {
           report_error(decl, "[[resource_table]] members cannot be arrays.");
         }
         if (decl.is_reference()) {
           report_error(decl, "[[resource_table]] members cannot be references.");
         }
-      });
+      }
 
       /* Remove the template but not the wrapped type. */
       parser.erase(type.id().name());
@@ -121,8 +121,8 @@ void SourceProcessor::lower_srt_accessor_templates_ast(Parser &parser)
         parser.erase(list.front());
         parser.erase(list.back());
       }
-    });
-  });
+    }
+  }
 
   parser.apply_mutations();
 }
@@ -833,7 +833,7 @@ void SourceProcessor::lower_resource_macro_placeholder_ast(Parser &parser)
     return result;
   };
 
-  parser.root().foreach_recursive<Preprocessor>([&](Preprocessor directive) {
+  for (Preprocessor directive : parser.root().descendants_of_type<Preprocessor>()) {
     string_view dir_str = directive.str();
     if (dir_str.starts_with("#pragma resource_access ")) {
       auto pairs = split_into_pairs(string(dir_str));
@@ -847,7 +847,7 @@ void SourceProcessor::lower_resource_macro_placeholder_ast(Parser &parser)
       string_view str_name = directive.back().str();
       parser.replace(directive, get_create_info_placeholder(string(str_name)));
     }
-  });
+  }
 }
 
 }  // namespace blender::gpu::shader

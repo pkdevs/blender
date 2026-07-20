@@ -180,7 +180,7 @@ struct InstantiationContext {
     }
 
     int local_scope_id = 0;
-    node.foreach_child([&](Node node) {
+    for (Node node : node.children_range()) {
       switch (node.type()) {
         case NodeType::Preprocessor:
           builder << node;
@@ -245,7 +245,7 @@ struct InstantiationContext {
           builder << node;
           break;
       }
-    });
+    }
 
     if (symbol.parent != nullptr) {
       if (symbol.type == SymbolScope::NAMESPACE) {
@@ -292,7 +292,7 @@ struct InstantiationContext {
     condition(stmt.condition(), scope);
     match_if('{');
 
-    stmt.foreach_child([&](Node node) {
+    for (Node node : stmt.children_range()) {
       switch (node.type()) {
         case NodeType::Preprocessor:
           builder << node;
@@ -318,7 +318,7 @@ struct InstantiationContext {
         default:
           assert(0);
       }
-    });
+    }
     match_if('}');
   }
 
@@ -363,11 +363,11 @@ struct InstantiationContext {
       return;
     }
     /* Check if loop statement assign to and only to the loop variable. */
-    end_expr.foreach_child([&](Node node) {
+    for (Node node : end_expr.children_range()) {
       if (node.type() == NodeType::Op && node.front() == ',') {
         error(end_stmt, "Comma operator is not allowed in unrolled loop statement");
       }
-    });
+    }
     if (error_handler.err) {
       return;
     }
@@ -532,7 +532,9 @@ struct InstantiationContext {
   void namespace_decl(Namespace ns, SymbolScope &scope)
   {
     SymbolScope *sym = &scope;
-    ns.identifier().foreach<Id>([&](Id id) { sym = sym->scopes[string(id.str())]; });
+    for (Id id : ns.identifier().children_of_type<Id>()) {
+      sym = sym->scopes[string(id.str())];
+    }
     skip_if(TokenType::Namespace);
     skip_node(ns.identifier());
     local_scope(ns.body(), *sym);
@@ -547,7 +549,7 @@ struct InstantiationContext {
     jump_to(decl.front());
 
     /* Treat enum values as static variables. */
-    body.foreach<EnumValue>([&](EnumValue val) {
+    for (EnumValue val : body.children_of_type<EnumValue>()) {
       line(val.front());
       string type_str = string("const ") + string(type.str());
       builder << type_str;
@@ -557,7 +559,7 @@ struct InstantiationContext {
       SymbolVariable *var = id_var_decl_resolved(val.identifier(), body_scope);
       builder << string(" = ") + to_string(var->value);
       builder << string(";");
-    });
+    }
   }
 
   void class_decl(ClassDecl decl,
@@ -589,10 +591,10 @@ struct InstantiationContext {
     {
       /* First emit nested classes. */
       int class_id = 0;
-      body.foreach<ClassDecl>([&](ClassDecl decl) {
+      for (ClassDecl decl : body.children_of_type<ClassDecl>()) {
         class_decl(decl, cls, class_id);
         ++class_id;
-      });
+      }
     }
 
     /* Rollback to front. */
@@ -638,21 +640,25 @@ struct InstantiationContext {
     }
     else {
       /* Emit static variables. */
-      body.foreach<VarDecl>([&](VarDecl decl) {
+      for (VarDecl decl : body.children_of_type<VarDecl>()) {
         if (decl.type().is_static()) {
           var_decl(decl, cls);
         }
-      });
+      }
 
       /* Emit function prototypes. */
       if (body.child_first(NodeType::FuncDecl).is_valid()) {
         /* Prototypes are not needed with MSL wrapper class. */
         builder.ss << "\n#ifndef GPU_METAL\n";
-        body.foreach<FuncDecl>([&](FuncDecl decl) { func_forward_decl(decl, cls); });
+        for (FuncDecl decl : body.children_of_type<FuncDecl>()) {
+          func_forward_decl(decl, cls);
+        }
         builder.ss << "#endif\n";
       }
       /* Emit function members. */
-      body.foreach<FuncDecl>([&](FuncDecl decl) { func_decl(decl, cls); });
+      for (FuncDecl decl : body.children_of_type<FuncDecl>()) {
+        func_decl(decl, cls);
+      }
     }
   }
 
@@ -662,7 +668,7 @@ struct InstantiationContext {
     /* Emit member variables. */
     int member_count = 0;
     int class_id = 0;
-    body.foreach_child([&](Node node) {
+    for (Node node : body.children_range()) {
       switch (node.type()) {
         case NodeType::VarDecl: {
           VarDecl decl = node;
@@ -688,7 +694,7 @@ struct InstantiationContext {
         default:
           break;
       }
-    });
+    }
 
     if (member_count == 0) {
       /* Add padding member. Empty class are invalid in GLSL. */
@@ -779,13 +785,13 @@ struct InstantiationContext {
     }
     else {
       int class_id = 0;
-      decl.body().foreach_child([&](Node node) {
+      for (Node node : decl.body().children_range()) {
         switch (node.type()) {
           case NodeType::VarDecl: {
             VarDecl decl = node;
             if (!decl.type().is_static()) {
               SymbolClass *type = id_type_lookup_resolved(decl.type().id(), cls);
-              decl.foreach<Declarator>([&](Declarator d) {
+              for (Declarator d : decl.children_of_type<Declarator>()) {
                 SymbolVariable *var = cls.lookup_variable(d.identifier());
                 string access;
                 string close;
@@ -801,7 +807,7 @@ struct InstantiationContext {
                 }
                 members += "r." + var->identifier + access + "=" + default_value(*type) + ";";
                 members += close;
-              });
+              }
             }
             break;
           }
@@ -822,7 +828,7 @@ struct InstantiationContext {
           default:
             break;
         }
-      });
+      }
 
       if (members.empty()) {
         /* Empty struct will have a padding int. */
@@ -1014,12 +1020,12 @@ struct InstantiationContext {
     }
 
     if (builder.curr != ')') {
-      list.foreach<FuncArg>([&](FuncArg arg) {
+      for (FuncArg arg : list.children_of_type<FuncArg>()) {
         skip_node(arg.attributes());
         id_type(arg.type(), scope);
         declarator(arg.declarator(), scope);
         match_if(',');
-      });
+      }
     }
 
     if (with_trivia) {
@@ -1089,7 +1095,7 @@ struct InstantiationContext {
   void condition(Condition cond, SymbolScope &scope)
   {
     match_if('(');
-    cond.foreach_child([&](Node child) {
+    for (Node child : cond.children_range()) {
       if (child.type() == NodeType::VarDecl) {
         var_decl(child, scope, false);
       }
@@ -1101,14 +1107,14 @@ struct InstantiationContext {
         assert(0);
       }
       match_if(';');
-    });
+    }
     match_if(')');
     skip_node(AttrList(cond.next()));
   }
 
   void expr(Node decl, SymbolScope &scope)
   {
-    decl.foreach_child([&](Node child) {
+    for (Node child : decl.children_range()) {
       switch (child.type()) {
         case NodeType::LocalVar:
           local_var(scope, child, scope);
@@ -1149,7 +1155,7 @@ struct InstantiationContext {
           builder << child;
           break;
       }
-    });
+    }
   }
 
   void subscript(Subscript stmt, SymbolScope &scope)
@@ -1181,10 +1187,10 @@ struct InstantiationContext {
     else {
       id_type(decl.type(), scope);
     }
-    decl.foreach<Declarator>([&](Declarator d) {
+    for (Declarator d : decl.children_of_type<Declarator>()) {
       declarator(d, scope);
       match_if(',');
-    });
+    }
     match_if(';');
   }
 
@@ -1292,10 +1298,10 @@ struct InstantiationContext {
     }
 
     if (builder.curr != ')') {
-      list.foreach<Expr>([&](Expr param) {
+      for (Expr param : list.children_of_type<Expr>()) {
         expr(param, scope);
         match_if(',');
-      });
+      }
     }
 
     match_if(')');
@@ -1348,7 +1354,7 @@ struct InstantiationContext {
   {
     match_if('{');
     const bool designated = (list.child_first().type() == NodeType::DesignatedInitializer);
-    list.foreach_child([&](Node child) {
+    for (Node child : list.children_range()) {
       if (designated) {
         match_if('.');
         match_if(Word);
@@ -1358,7 +1364,7 @@ struct InstantiationContext {
         init_expression_or_initializer_list(child.child_last(), scope);
       }
       match_if(',');
-    });
+    }
     match_if('}');
   }
 

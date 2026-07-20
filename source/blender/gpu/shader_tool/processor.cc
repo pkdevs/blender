@@ -886,9 +886,9 @@ void SourceProcessor::lower_namesless_parameters(Parser &parser)
 
 void SourceProcessor::lower_namesless_parameters_ast(Parser &parser)
 {
-  parser.root().foreach_recursive<FuncDecl>([&](FuncDecl fn) {
+  for (FuncDecl fn : parser.root().descendants_of_type<FuncDecl>()) {
     int i = 0;
-    fn.arguments().foreach<FuncArg>([&](FuncArg arg) {
+    for (FuncArg arg : fn.arguments().children_of_type<FuncArg>()) {
       if (!arg.identifier().is_valid()) {
         bool is_ref = arg.is_reference();
         Token arg_back(is_ref ? arg.declarator().reference().back() : arg.back());
@@ -897,8 +897,8 @@ void SourceProcessor::lower_namesless_parameters_ast(Parser &parser)
                        arg_back.str_index_last(),
                        " _" + std::to_string(i++));
       }
-    });
-  });
+    }
+  }
 }
 
 void SourceProcessor::disabled_code_mutation(Parser &parser)
@@ -975,7 +975,7 @@ void SourceProcessor::lower_preprocessor(Parser &parser)
 void SourceProcessor::lower_preprocessor_ast(Parser &parser)
 {
   /* Remove unsupported directives. */
-  parser.root().foreach_recursive<Preprocessor>([&](Preprocessor directive) {
+  for (Preprocessor directive : parser.root().descendants_of_type<Preprocessor>()) {
     Token type = directive.front().next();
     if (type.str() == "pragma") {
       Token pragma = type.next();
@@ -989,7 +989,7 @@ void SourceProcessor::lower_preprocessor_ast(Parser &parser)
     else if (type.str() == "include" && type.next() == String) {
       parser.erase(directive);
     }
-  });
+  }
   parser.apply_mutations();
 }
 
@@ -1015,7 +1015,7 @@ void SourceProcessor::lower_swizzle_methods_ast(Parser &parser)
 {
   /* Change C++ swizzle functions into plain swizzle. */
   /** IMPORTANT: This prevent the usage of any method with a swizzle name. */
-  parser.root().foreach_recursive<FuncCall>([&](FuncCall call) {
+  for (FuncCall call : parser.root().descendants_of_type<FuncCall>()) {
     ast::FuncParamList params = call.parameters();
     if (call.front().prev() != Dot || !params.is_empty()) {
       return;
@@ -1029,7 +1029,7 @@ void SourceProcessor::lower_swizzle_methods_ast(Parser &parser)
       /* `.xyz()` -> `.xyz  ` */
       parser.erase(params);
     }
-  });
+  }
 }
 
 /* Support for C++ binary literal syntax for integers. */
@@ -1132,7 +1132,7 @@ void SourceProcessor::parse_library_functions(Parser &parser)
 void SourceProcessor::parse_library_functions_ast(Parser &parser)
 {
   using namespace metadata;
-  parser.root().foreach<FuncDecl>([&](FuncDecl func) {
+  for (FuncDecl func : parser.root().children_of_type<FuncDecl>()) {
     if (!func.attributes().contains_attr("node")) {
       return;
     }
@@ -1148,7 +1148,7 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
     FunctionFormat fn;
     fn.name = func.identifier().str();
 
-    func.arguments().foreach<FuncArg>([&](FuncArg arg) {
+    for (FuncArg arg : func.arguments().children_of_type<FuncArg>()) {
       if (arg.declarator().array().is_valid()) {
         report_error(arg.declarator().array(),
                      "Array arguments are not supported in node functions.");
@@ -1164,9 +1164,9 @@ void SourceProcessor::parse_library_functions_ast(Parser &parser)
       }
 
       fn.arguments.emplace_back(qualifier, type);
-    });
+    }
     metadata_.functions.emplace_back(fn);
-  });
+  }
 }
 
 void SourceProcessor::parse_builtins(const string &str, const string &filename, bool pure_glsl)
@@ -1680,18 +1680,20 @@ void SourceProcessor::lower_noop_keywords_ast(Parser &parser)
   /* inline has no equivalent in GLSL and is making parsing more complicated. */
   parser().foreach_token(Inline, [&](Token tok) { parser.erase(tok); });
   /* Erase `public:` and `private:` keywords. Access is checked by C++ compilation. */
-  parser.root().foreach_recursive<AccessSpecifier>(
-      [&](AccessSpecifier node) { parser.erase(node); });
+  for (AccessSpecifier node : parser.root().descendants_of_type<AccessSpecifier>()) {
+    parser.erase(node);
+  }
   /* Given our code-style, we don't need the disambiguation. */
-  parser.root().foreach_recursive<TemplateExplicit>(
-      [&](TemplateExplicit node) { parser.erase(node.front()); });
+  for (TemplateExplicit node : parser.root().descendants_of_type<TemplateExplicit>()) {
+    parser.erase(node.front());
+  }
   /* Remove `struct`, `class`, `enum`, `union` from type declaration. */
-  parser.root().foreach_recursive<IdType>([&](IdType type) {
+  for (IdType type : parser.root().descendants_of_type<IdType>()) {
     Token tok = type.id().front().prev();
     if (tok == Struct || tok == Class || tok == Enum || tok == Union) {
       parser.erase(tok);
     }
-  });
+  }
 }
 
 void SourceProcessor::lower_trailing_comma_in_list(Parser &parser)
@@ -1701,11 +1703,11 @@ void SourceProcessor::lower_trailing_comma_in_list(Parser &parser)
 
 void SourceProcessor::lower_trailing_comma_in_list_ast(Parser &parser)
 {
-  parser.root().foreach_recursive<InitializerList>([&](InitializerList decl) {
+  for (InitializerList decl : parser.root().descendants_of_type<InitializerList>()) {
     if (decl.back().prev() == ',') {
       parser.erase(decl.back().prev());
     }
-  });
+  }
 }
 
 /* Allow easier parsing of struct member declaration.
@@ -1756,8 +1758,8 @@ void SourceProcessor::lower_implicit_return_types(Parser &parser)
 
 void SourceProcessor::lower_implicit_return_types_ast(Parser &parser)
 {
-  parser.root().foreach_recursive<FuncDecl>([&](FuncDecl func) {
-    func.body().foreach_recursive<ReturnStmt>([&](ReturnStmt stmt) {
+  for (FuncDecl func : parser.root().descendants_of_type<FuncDecl>()) {
+    for (ReturnStmt stmt : func.body().descendants_of_type<ReturnStmt>()) {
       Expr expr = stmt.expression();
       if (!expr.is_valid()) {
         return;
@@ -1785,8 +1787,8 @@ void SourceProcessor::lower_implicit_return_types_ast(Parser &parser)
         /* Regular initializer list. Keep it simple. */
         parser.insert_before(list.front(), type_str);
       }
-    });
-  });
+    }
+  }
 }
 
 void SourceProcessor::lower_initializer_implicit_types(Parser &parser)
@@ -1806,8 +1808,8 @@ void SourceProcessor::lower_initializer_implicit_types(Parser &parser)
 
 void SourceProcessor::lower_initializer_implicit_types_ast(Parser &parser)
 {
-  parser.root().foreach_recursive<VarDecl>([&](VarDecl decl) {
-    decl.foreach<Declarator>([&](Declarator var) {
+  for (VarDecl decl : parser.root().descendants_of_type<VarDecl>()) {
+    for (Declarator var : decl.children_of_type<Declarator>()) {
       InitializerList init_list = var.initializer_list();
       if (init_list.is_valid()) {
         /* Insert assignment. */
@@ -1824,8 +1826,8 @@ void SourceProcessor::lower_initializer_implicit_types_ast(Parser &parser)
           return;
         }
       }
-    });
-  });
+    }
+  }
 
   parser.apply_mutations();
 }
@@ -1935,7 +1937,7 @@ void SourceProcessor::lower_aggregate_initializers_ast(Parser &parser)
   };
 
   /* Transform aggregate to compatibility macro. */
-  parser.root().foreach_recursive<InitializerList>([&](InitializerList list) {
+  for (InitializerList list : parser.root().descendants_of_type<InitializerList>()) {
     IdType type(list.prev());
     if (!type.is_valid()) {
       return;
@@ -1953,11 +1955,11 @@ void SourceProcessor::lower_aggregate_initializers_ast(Parser &parser)
       return;
     }
     /* Lint for nested aggregates. */
-    list.foreach_recursive<InitializerList>([&](InitializerList nested_list) {
+    for (InitializerList nested_list : list.descendants_of_type<InitializerList>()) {
       if (!IdType(nested_list.prev()).is_valid()) {
         report_error(nested_list.front(), "Nested anonymous aggregate is not supported");
       }
-    });
+    }
     /* `A{1,}` -> `_agg(A,1)` */
     parser.insert_before(type.front(), "_ctor(");
     parser.insert_after(type.back(), ",");
@@ -1967,7 +1969,7 @@ void SourceProcessor::lower_aggregate_initializers_ast(Parser &parser)
     }
     parser.insert_before(list.back(), " _rotc()");
     parser.erase(list.back());
-  });
+  }
 
   parser.apply_mutations();
 }
@@ -2469,14 +2471,14 @@ void SourceProcessor::lint_global_scope_constants(Parser &parser)
 void SourceProcessor::lint_global_scope_constants_ast(Parser &parser)
 {
   /* Example: `const uint global_var = 1u;`. */
-  parser.root().foreach<VarDecl>([&](VarDecl decl) {
+  for (VarDecl decl : parser.root().children_of_type<VarDecl>()) {
     if (decl.is_const()) {
       report_error(
           decl,
           "Global scope constant expression found. These get allocated per-thread in MSL. "
           "Use Macro's or uniforms instead.");
     }
-  });
+  }
 }
 
 int SourceProcessor::static_array_size(const Scope &array, int fallback_value)

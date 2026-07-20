@@ -71,7 +71,9 @@ Node Node::children() const
 int Node::child_count() const
 {
   int count = 0;
-  foreach_child([&](Node) { count++; });
+  for ([[maybe_unused]] Node node : this->children_range()) {
+    count++;
+  }
   return count;
 }
 

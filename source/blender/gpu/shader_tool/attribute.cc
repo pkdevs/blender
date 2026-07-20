@@ -245,7 +245,7 @@ void SourceProcessor::lint_attributes_ast(Parser &parser)
       {"local_size", ArgCount(1, 3)},
   };
 
-  parser.root().foreach<Attr>([&](Attr attr) {
+  for (Attr attr : parser.root().children_of_type<Attr>()) {
     FuncParamList param = attr.parameters();
     string attr_str(attr.identifier().str());
     if (!attr_map.contains(attr_str)) {
@@ -295,7 +295,7 @@ void SourceProcessor::lint_attributes_ast(Parser &parser)
       report_error(attr, "static_branch attribute must be declared after a condition");
       return;
     }
-  });
+  }
 }
 
 /* Merge attribute scopes. They are equivalent in the C++ standard.
@@ -313,13 +313,13 @@ void SourceProcessor::lower_attribute_sequences(Parser &parser)
 
 void SourceProcessor::lower_attribute_sequences_ast(Parser &parser)
 {
-  parser.root().foreach_recursive<AttrList>([&](AttrList list) {
+  for (AttrList list : parser.root().descendants_of_type<AttrList>()) {
     if (list.parent().type() == NodeType::AttrList) {
       Token front = list.front().prev(2);
       parser.replace(front, ",");
       parser.erase(front.next(1), front.next(3));
     }
-  });
+  }
 }
 
 }  // namespace blender::gpu::shader
