@@ -630,8 +630,7 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
                                   const char *name,
                                   int start,
                                   int type,
-                                  bAction *action,
-                                  Speaker *speaker)
+                                  bAction *action)
 {
   BLI_assert(id);
 
@@ -646,12 +645,16 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
       strip = BKE_nlastrip_new(action, *id);
       break;
     case NLASTRIP_TYPE_SOUND:
-      if (speaker == nullptr) {
-        BKE_report(reports, RPT_ERROR, "Speaker can't be None for 'SOUND' NLA Strips");
+    {
+      BLI_assert(GS(id->name) == ID_OB);
+      Object *const ob = blender::id_cast<Object*>(id);
+      if (ob->type != OB_SPEAKER) {
+        BKE_report(reports, RPT_ERROR, "You can only create 'SOUND' NLA Strips on Speaker anim data");
         return nullptr;
       }
-      strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), speaker);
+      strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), static_cast<Speaker*>(ob->data));
       break;
+    }
     default:
       BKE_report(reports, RPT_ERROR, "Can only create 'CLIP' and 'SOUND' for now");
       return nullptr;
@@ -1200,8 +1203,6 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
   parm = RNA_def_enum(func, "type", prop_type_items, NLASTRIP_TYPE_CLIP, "", "Type of NLA Strip to add. When unspecified, defaults to 'CLIP'");
   RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   parm = RNA_def_pointer(func, "action", "Action", "", "Action to assign to this strip. Required when type is 'CLIP'");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
-  parm = RNA_def_pointer(func, "speaker", "Speaker", "", "Speaker to source to this strip. Required when type is 'SOUND'");
   RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   /* return type */
   parm = RNA_def_pointer(func, "strip", "NlaStrip", "", "New NLA Strip");
