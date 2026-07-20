@@ -5028,6 +5028,13 @@ static PyObject *BPy_StringProperty(PyObject *self, PyObject *args, PyObject *kw
     return nullptr;
   }
 
+  /* Negative lengths are meaningless & `maxlen + 1` below must not overflow. */
+  if ((maxlen < 0) || (maxlen >= INT32_MAX)) [[unlikely]] {
+    PyErr_Format(
+        PyExc_ValueError, "maxlen must be between 0 and %d, got %d", INT32_MAX - 1, maxlen);
+    return nullptr;
+  }
+
   if (id_data.prop_free_handle != nullptr) {
     RNA_def_property_free_identifier_deferred_finish(srna, id_data.prop_free_handle);
   }
