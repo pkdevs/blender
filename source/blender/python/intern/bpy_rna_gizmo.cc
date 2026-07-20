@@ -49,9 +49,14 @@ struct BPyGizmoWithTargetType {
 
 static int py_rna_gizmo_parse(PyObject *o, void *p)
 {
-  /* No type checking (this is `self` not a user defined argument). */
-  BLI_assert(BPy_StructRNA_Check(o));
-  BLI_assert(RNA_struct_is_a(((const BPy_StructRNA *)o)->ptr->type, RNA_Gizmo));
+  /* While this is `self` and not a user defined argument, these are plain instance
+   * methods so any object can be passed in as `self`, see `_bpy_types.py`. */
+  if (!BPy_StructRNA_Check(o) ||
+      !RNA_struct_is_a((reinterpret_cast<const BPy_StructRNA *>(o))->ptr->type, RNA_Gizmo))
+  {
+    PyErr_Format(PyExc_TypeError, "expected a Gizmo, not %.200s", Py_TYPE(o)->tp_name);
+    return 0;
+  }
 
   wmGizmo **gz_p = static_cast<wmGizmo **>(p);
   *gz_p = static_cast<wmGizmo *>((reinterpret_cast<const BPy_StructRNA *>(o))->ptr->data);
