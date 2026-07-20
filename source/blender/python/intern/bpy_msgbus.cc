@@ -106,14 +106,19 @@ static int py_msgbus_rna_key_from_py(PyObject *py_sub,
       data_type_ptr.type = data_type;
 
       const char *data_prop_str = PyUnicode_AsUTF8(data_prop_py);
-      PropertyRNA *data_prop = RNA_struct_find_property(&data_type_ptr, data_prop_str);
+      /* A string that can't be encoded as UTF-8 (lone surrogates) can never match an
+       * identifier, handle it as "not found" instead of raising the pending
+       * UnicodeEncodeError. */
+      PropertyRNA *data_prop = data_prop_str ?
+                                   RNA_struct_find_property(&data_type_ptr, data_prop_str) :
+                                   nullptr;
 
       if (data_prop == nullptr) {
         PyErr_Format(PyExc_TypeError,
-                     "%s: struct %.200s does not contain property %.200s",
+                     "%s: struct %.200s does not contain property %R",
                      error_prefix,
                      RNA_struct_identifier(data_type),
-                     data_prop_str);
+                     data_prop_py);
         return -1;
       }
 
@@ -124,6 +129,13 @@ static int py_msgbus_rna_key_from_py(PyObject *py_sub,
       PyErr_Format(PyExc_ValueError, "%s: Expected a pair (type, property_id)", error_prefix);
       return -1;
     }
+  }
+  else {
+    PyErr_Format(PyExc_TypeError,
+                 "%s: expected a property, struct, type or a pair (type, property_id), not %.200s",
+                 error_prefix,
+                 Py_TYPE(py_sub)->tp_name);
+    return -1;
   }
   return 0;
 }
