@@ -2413,10 +2413,11 @@ static int pyrna_prop_collection_bool(BPy_PropertyRNA *self)
 #define PYRNA_PROP_COLLECTION_ABS_INDEX(ret_err) \
   if (keynum < 0) { \
     keynum_abs += RNA_property_collection_length(&self->ptr.value(), self->prop); \
-    if (keynum_abs < 0) { \
-      PyErr_Format(PyExc_IndexError, "bpy_prop_collection[%d]: out of range.", keynum); \
-      return ret_err; \
-    } \
+  } \
+  /* Lookups take an `int`, a larger index would truncate to an unrelated item. */ \
+  if ((keynum_abs < 0) || (keynum_abs > Py_ssize_t(INT32_MAX))) { \
+    PyErr_Format(PyExc_IndexError, "bpy_prop_collection[%zd]: out of range.", keynum); \
+    return ret_err; \
   } \
   (void)0
 
@@ -2506,14 +2507,14 @@ static PyObject *pyrna_prop_collection_subscript_int(BPy_PropertyRNA *self, Py_s
   if (keynum_abs >= len) {
     PyErr_Format(PyExc_IndexError,
                  "bpy_prop_collection[index]: "
-                 "index %d out of range, size %d",
+                 "index %zd out of range, size %d",
                  keynum,
                  len);
   }
   else {
     PyErr_Format(PyExc_RuntimeError,
                  "bpy_prop_collection[index]: internal error, "
-                 "valid index %d given in %d sized collection, but value not found",
+                 "valid index %zd given in %d sized collection, but value not found",
                  keynum_abs,
                  len);
   }
@@ -2541,14 +2542,14 @@ static int pyrna_prop_collection_ass_subscript_int(BPy_PropertyRNA *self,
     if (keynum_abs >= len) {
       PyErr_Format(PyExc_IndexError,
                    "bpy_prop_collection[index] = value: "
-                   "index %d out of range, size %d",
+                   "index %zd out of range, size %d",
                    keynum,
                    len);
     }
     else {
       PyErr_Format(PyExc_IndexError,
                    "bpy_prop_collection[index] = value: "
-                   "index %d failed assignment (unknown reason)",
+                   "index %zd failed assignment (unknown reason)",
                    keynum);
     }
     return -1;
@@ -2573,7 +2574,7 @@ static PyObject *pyrna_prop_array_subscript_int(BPy_PropertyArrayRNA *self, Py_s
     return pyrna_prop_array_to_py_index(self, keynum);
   }
 
-  PyErr_Format(PyExc_IndexError, "bpy_prop_array[index]: index %d out of range", keynum);
+  PyErr_Format(PyExc_IndexError, "bpy_prop_array[index]: index %zd out of range", keynum);
   return nullptr;
 }
 
