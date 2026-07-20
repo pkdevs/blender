@@ -223,6 +223,19 @@ struct Node {
     }
   }
 
+  /* --- Iterators --- */
+  struct ChildIterator;
+  struct ChildRange;
+  ChildRange children_range() const;
+
+  template<typename NodeT> struct TypedChildIterator;
+  template<typename NodeT> struct TypedChildRange;
+  template<typename NodeT> TypedChildRange<NodeT> children_of_type() const;
+
+  template<typename NodeT> struct RecursiveTypedIterator;
+  template<typename NodeT> struct RecursiveTypedRange;
+  template<typename NodeT> RecursiveTypedRange<NodeT> descendants_of_type() const;
+
  private:
   static Node first_node_of_type(Node node, NodeType type, Node end)
   {
@@ -267,6 +280,143 @@ struct Node {
     return *this;
   }
 };
+
+struct Node::ChildIterator {
+  Node current;
+
+  ChildIterator &operator++()
+  {
+    current = current.next();
+    return *this;
+  }
+  ChildIterator operator++(int)
+  {
+    ChildIterator tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+  Node operator*() const
+  {
+    return current;
+  }
+  bool operator!=(const ChildIterator &other) const
+  {
+    return current.id != other.current.id;
+  }
+  bool operator==(const ChildIterator &other) const
+  {
+    return current.id == other.current.id;
+  }
+};
+
+struct Node::ChildRange {
+  Node parent;
+  ChildIterator begin() const
+  {
+    return {parent.child_first()};
+  }
+  ChildIterator end() const
+  {
+    return {Node()};
+  }
+};
+
+inline Node::ChildRange Node::children_range() const
+{
+  return {*this};
+}
+
+template<typename NodeT> struct Node::TypedChildIterator {
+  Node current;
+
+  TypedChildIterator &operator++()
+  {
+    current = current.next(NodeT::NodeEnumVal);
+    return *this;
+  }
+  TypedChildIterator operator++(int)
+  {
+    TypedChildIterator tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+  NodeT operator*() const
+  {
+    return NodeT(current);
+  }
+  bool operator!=(const TypedChildIterator &other) const
+  {
+    return current.id != other.current.id;
+  }
+  bool operator==(const TypedChildIterator &other) const
+  {
+    return current.id == other.current.id;
+  }
+};
+
+template<typename NodeT> struct Node::TypedChildRange {
+  Node parent;
+  TypedChildIterator<NodeT> begin() const
+  {
+    return {parent.child_first(NodeT::NodeEnumVal)};
+  }
+  TypedChildIterator<NodeT> end() const
+  {
+    return {Node()};
+  }
+};
+
+template<typename NodeT> inline Node::TypedChildRange<NodeT> Node::children_of_type() const
+{
+  return {*this};
+}
+
+template<typename NodeT> struct Node::RecursiveTypedIterator {
+  Node current;
+  Node end_node;
+
+  RecursiveTypedIterator &operator++()
+  {
+    current = Node::next_node_of_type(current, NodeT::NodeEnumVal, end_node);
+    return *this;
+  }
+  RecursiveTypedIterator operator++(int)
+  {
+    RecursiveTypedIterator tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+  NodeT operator*() const
+  {
+    return NodeT(current);
+  }
+  bool operator!=(const RecursiveTypedIterator &other) const
+  {
+    return current.id != other.current.id;
+  }
+  bool operator==(const RecursiveTypedIterator &other) const
+  {
+    return current.id == other.current.id;
+  }
+};
+
+template<typename NodeT> struct Node::RecursiveTypedRange {
+  Node start;
+  Node end_node;
+  RecursiveTypedIterator<NodeT> begin() const
+  {
+    return {Node::first_node_of_type(start.children(), NodeT::NodeEnumVal, end_node), end_node};
+  }
+  RecursiveTypedIterator<NodeT> end() const
+  {
+    return {end_node, end_node};
+  }
+};
+
+template<typename NodeT> inline Node::RecursiveTypedRange<NodeT> Node::descendants_of_type() const
+{
+  return {*this, find_recursion_end()};
+}
 
 #define NODE_COMMON(Type) \
   static constexpr NodeType NodeEnumVal = NodeType::Type; \
