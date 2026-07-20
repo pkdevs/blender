@@ -1410,14 +1410,9 @@ struct InstantiationContext {
     auto [func, err] = scope.lookup_function(id);
     error(err);
     if (func->template_data && !id.template_params().is_valid()) {
-      if (func->template_data->is_adl_possible()) {
-        auto [func_, err_adl] = func->template_data->lookup_adl(symbols, params, scope);
-        func = func_;
-      }
-      else {
-        error(id, "Missing explicit template arguments");
-        func = scope.root_scope()->lookup_function(SymbolTable::err_symbol);
-      }
+      auto [func_, err_adl] = func->template_data->lookup_adl(symbols, params, scope);
+      error(err_adl);
+      func = func_;
     }
     else if (func->overload_next) {
       auto [arg_types, err_args] = SymbolFunction::to_arg_types(symbols, scope, params);

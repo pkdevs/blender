@@ -462,7 +462,7 @@ Result<StringPair> SymbolTable::mangle_identifier(const SymbolFunctionTemplate &
   StringPair result;
   for (int i : tmp.temp_arg_index_in_fn_arg) {
     if (i < arg_cls.size()) {
-      result.str += "T" + err_symbol;
+      result.str += "T" + arg_cls[i]->resolved->identifier;
       result.str_debug += ", " + arg_cls[i]->resolved->identifier;
     }
     else {
@@ -483,6 +483,10 @@ Result<T *> SymbolTemplate<T>::lookup_adl(const SymbolTable &symbols,
             AstNodeException(list, "Cannot use ADL on types")};
   }
   else {
+    if (!is_adl_possible()) {
+      return {scope.root_scope()->lookup_function(SymbolTable::err_symbol),
+              AstNodeException(list.prev(), "Missing explicit template arguments")};
+    }
     auto [mangled, err] = symbols.mangle_identifier(*this, list, scope);
     auto [args, args_debug] = mangled;
     auto it = instances.find(args);
