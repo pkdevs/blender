@@ -324,7 +324,7 @@ ccl_device_inline void light_sample_to_volume_shadow_ray(
 
 /* Multiple importance sampling weights. */
 
-ccl_device_inline float light_sample_mis_weight_forward(KernelGlobals kg,
+ccl_device_inline float light_sample_mis_weight_forward(KernelGlobals kg, // !!!
                                                         const float forward_pdf,
                                                         const float nee_pdf)
 {
@@ -333,7 +333,7 @@ ccl_device_inline float light_sample_mis_weight_forward(KernelGlobals kg,
     return 1.0f;
   }
   if (kernel_data.integrator.direct_light_sampling_type == DIRECT_LIGHT_SAMPLING_NEE) {
-    return 0.0f;
+    return (nee_pdf == 0.0f);
   }
 #else
   (void)kg;
@@ -458,20 +458,34 @@ ccl_device_forceinline void light_sample_update(KernelGlobals kg,
   ls->pdf *= ls->pdf_selection;
 }
 
-/* Forward sampling.
- *
- * Multiple importance sampling weights for hitting surface, light or background
- * through indirect light ray.
- *
- * The BSDF or phase pdf from the previous bounce was stored in mis_ray_pdf and
- * is used for balancing with the light sampling pdf. */
+// ------
 
-ccl_device_inline float light_sample_mis_weight_forward_surface(
-    KernelGlobals kg,
-    IntegratorState state,
-    const PathRayVisibility path_visibility,
-    const uint32_t path_flag,
-    const ccl_private ShaderData *sd)
+// /* Forward sampling.
+//  *
+//  * Multiple importance sampling weights for hitting surface, light or background
+//  * through indirect light ray.
+//  *
+//  * The BSDF or phase pdf from the previous bounce was stored in mis_ray_pdf and
+//  * is used for balancing with the light sampling pdf. */
+
+// ccl_device_inline float light_sample_mis_weight_forward_surface( // !!!: 
+//     KernelGlobals kg,
+//     IntegratorState state,
+//     const PathRayVisibility path_visibility,
+//     const uint32_t path_flag,
+//     const ccl_private ShaderData *sd)
+// {
+/* Probability of sampling an emissive surface, analytic light, or background
+ * from a shading point.
+ *
+ * This function returns only the NEE PDF. MIS weighting is performed by
+ * light_sample_mis_weight_forward_surface().
+ */
+ccl_device_inline float light_sample_pdf_surface(KernelGlobals kg,
+                                                 IntegratorState state,
+                                                 const PathRayVisibility path_visibility,
+                                                 const uint32_t path_flag,
+                                                 const ccl_private ShaderData *ccl_restrict sd)
 {
   bool has_mis = !(path_flag & PATH_RAY_MIS_SKIP) &&
                  (sd->flag & ((sd->flag & SD_BACKFACING) ? SD_MIS_BACK : SD_MIS_FRONT));
@@ -481,10 +495,9 @@ ccl_device_inline float light_sample_mis_weight_forward_surface(
 #endif
 
   if (!has_mis) {
-    return 1.0f;
+    return 0.0f;
   }
 
-  const float bsdf_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
   const float t = sd->ray_length;
   float pdf = triangle_light_pdf(kg, sd, t);
 
@@ -496,19 +509,22 @@ ccl_device_inline float light_sample_mis_weight_forward_surface(
     const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
 
     const uint lookup_offset = kernel_data_fetch(object_lookup_offset, sd->object);
+
     const uint prim_offset = kernel_data_fetch(object_prim_offset, sd->object);
+
     const uint triangle = kernel_data_fetch(triangle_to_tree,
                                             sd->prim - prim_offset + lookup_offset);
 
-    pdf *= light_tree_pdf(kg,
-                          ray_P,
-                          N,
-                          dt,
-                          path_visibility,
-                          path_flag,
-                          sd->object,
-                          triangle,
-                          light_link_receiver_forward(kg, state));
+    pdf *= light_tree_pdf( // !!!: Keypoint
+        kg,
+        ray_P,
+        N,
+        dt,
+        path_visibility,
+        path_flag,
+        sd->object,
+        triangle,
+        light_link_receiver_forward(kg, state));
   }
   else
 #endif
@@ -516,23 +532,35 @@ ccl_device_inline float light_sample_mis_weight_forward_surface(
     /* Handled in triangle_light_pdf for efficiency. */
   }
 
-  return light_sample_mis_weight_forward(kg, bsdf_pdf, pdf);
+  return pdf;
 }
 
-ccl_device_inline float light_sample_mis_weight_forward_lamp(
-    KernelGlobals kg,
-    IntegratorState state,
-    const PathRayVisibility path_visibility,
-    const uint32_t path_flag,
-    const int object_id,
-    const float light_sample_pdf,
-    const float3 P)
+// ccl_device_inline float light_sample_mis_weight_forward_lamp(
+//     KernelGlobals kg,
+//     IntegratorState state,
+//     const PathRayVisibility path_visibility,
+//     const uint32_t path_flag,
+//     const int object_id,
+//     const float light_sample_pdf,
+//     const float3 P)
+// {
+/* Probability of sampling an analytic light from a shading point.
+ *
+ * `lamp` is the KernelLight index. `light_sample_pdf` is the conditional
+ * sampling PDF before multiplication by the light-selection probability.
+ */
+ccl_device_inline float light_sample_pdf_lamp(KernelGlobals kg,
+                                              IntegratorState state,
+                                              const PathRayVisibility path_visibility,
+                                              const uint32_t path_flag,
+                                              const int lamp,
+                                              const float light_sample_pdf,
+                                              const float3 P)
 {
   if (path_flag & PATH_RAY_MIS_SKIP) {
-    return 1.0f;
+    return 0.0f;
   }
 
-  const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
   float pdf = light_sample_pdf;
 
   /* Light selection pdf. */
@@ -540,6 +568,7 @@ ccl_device_inline float light_sample_mis_weight_forward_lamp(
   if (kernel_data.integrator.use_light_tree) {
     const float3 N = INTEGRATOR_STATE(state, path, mis_origin_n);
     const float dt = INTEGRATOR_STATE(state, ray, previous_dt);
+
     pdf *= light_tree_pdf(kg,
                           P,
                           N,
@@ -547,7 +576,7 @@ ccl_device_inline float light_sample_mis_weight_forward_lamp(
                           path_visibility,
                           path_flag,
                           0,
-                          kernel_data_fetch(light_to_tree, object_id),
+                          kernel_data_fetch(light_to_tree, lamp), // !!!: Ensure correctness
                           light_link_receiver_forward(kg, state));
   }
   else
@@ -556,20 +585,58 @@ ccl_device_inline float light_sample_mis_weight_forward_lamp(
     pdf *= light_distribution_pdf_lamp(kg);
   }
 
-  return light_sample_mis_weight_forward(kg, mis_ray_pdf, pdf);
+  return pdf;
 }
+
+/* Forward sampling.
+ *
+ * Multiple importance sampling weights for hitting surface, light or background
+ * through indirect light ray.
+ *
+ * The BSDF or phase pdf from the previous bounce was stored in mis_ray_pdf and
+ * is used for balancing with the light sampling pdf. */
+ccl_device_inline float light_sample_mis_weight_forward_surface(KernelGlobals kg,
+                                                                IntegratorState state,
+                                                                const PathRayVisibility path_visibility,
+                                                                const uint32_t path_flag,
+                                                                const ccl_private ShaderData *ccl_restrict sd)
+{
+  const float nee_pdf = light_sample_pdf_surface(kg, state, path_visibility, path_flag, sd);
+
+  const float forward_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
+
+  return light_sample_mis_weight_forward(kg, forward_pdf, nee_pdf);
+}
+
+ccl_device_inline float light_sample_mis_weight_forward_lamp(KernelGlobals kg,
+                                                             IntegratorState state,
+                                                             const PathRayVisibility path_visibility,
+                                                             const uint32_t path_flag,
+                                                             const int lamp,
+                                                             const float light_sample_pdf,
+                                                             const float3 P)
+{
+  const float nee_pdf = light_sample_pdf_lamp(kg, state, path_visibility, path_flag, lamp, light_sample_pdf, P);
+
+  const float forward_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
+
+  return light_sample_mis_weight_forward(kg, forward_pdf, nee_pdf);
+}
+
+// ---
 
 ccl_device_inline float light_sample_mis_weight_forward_distant(
     KernelGlobals kg,
     IntegratorState state,
     const PathRayVisibility path_visibility,
     const uint32_t path_flag,
-    const int object_id,
+    const int lamp,
     const float light_sample_pdf)
 {
   const float3 ray_P = INTEGRATOR_STATE(state, ray, P);
-  return light_sample_mis_weight_forward_lamp(
-      kg, state, path_visibility, path_flag, object_id, light_sample_pdf, ray_P);
+
+  return light_sample_mis_weight_forward_lamp( // !!!:
+      kg, state, path_visibility, path_flag, lamp, light_sample_pdf, ray_P);
 }
 
 ccl_device_inline float light_sample_mis_weight_forward_background(

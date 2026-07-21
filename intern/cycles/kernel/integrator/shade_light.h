@@ -16,6 +16,38 @@
 
 CCL_NAMESPACE_BEGIN
 
+// TODO(Tri): Move elsewhere
+/* Reconstruct a ReSTIR light sample reference from a forward intersection. 
+ * This is the inverse of 'reconstruct_light_sample' and is used to 
+ * serialize a light hit into a reservoir. */
+ccl_device_inline ReSTIRLightSampleReference restir_light_sample_reference_from_isect(
+    KernelGlobals kg, 
+    ccl_private const Intersection *isect)
+{
+  ReSTIRLightSampleReference ref;
+
+  /* For mesh lights, isect.prim is the triangle index.
+   * For analytic lights, isect.prim is the ~lamp index (negative). */
+  if (isect->prim >= 0) {
+    /* Mesh Emitter */
+    ref.object = isect->object; // Storing object ID for mesh lights
+    ref.prim = isect->prim;
+  }
+  else {
+    /* Analytic Light (Lamp) */
+    ref.object = ~isect->prim;
+    ref.prim = -1;
+  }
+
+  /* Store barycentrics/UVs for the hit point */
+  ref.param.x = isect->u;
+  ref.param.y = isect->v;
+
+  return ref;
+}
+
+// MARK: - 
+
 ccl_device_inline ShaderEvalResult integrate_light_forward(
     KernelGlobals kg, IntegratorState state, ccl_global float *ccl_restrict render_buffer)
 {
@@ -35,8 +67,7 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
   /* Advance ray to new start distance. */
   INTEGRATOR_STATE_WRITE(state, ray, tmin) = intersection_t_offset(isect.t);
 
-  const LightEval light_eval = light_eval_from_intersection(
-      kg, &isect, ray_P, ray_D, N, path_flag);
+  LightEval light_eval = light_eval_from_intersection(kg, &isect, ray_P, ray_D, N, path_flag);
   if (light_eval.eval_fac == 0.0f) {
     return SHADER_EVAL_EMPTY;
   }
@@ -64,17 +95,65 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
   }
 
   /* MIS weighting. */
-  const float mis_weight = light_sample_mis_weight_forward_lamp(
-      kg, state, path_visibility, path_flag, isect.object, light_eval.pdf, ray_P);
+  const float forward_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
+  const float nee_pdf = light_sample_pdf_lamp(kg,
+                                              state,
+                                              path_visibility,
+                                              path_flag,
+                                              isect.prim,
+                                              light_eval.pdf,
+                                              ray_P);
+  const float mis_weight = light_sample_mis_weight_forward(kg, forward_pdf, nee_pdf);
+
+  guiding_record_surface_emission(kg, state, eval, mis_weight);
 
   /* Write to render buffer. */
-  guiding_record_surface_emission(kg, state, eval, mis_weight);
-  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, isect.prim);
-  film_write_surface_emission(
-      kg, state, eval, mis_weight, render_buffer, object_lightgroup(kg, klight->object_id));
+  if (path_use_restir(kg, state)) {
+    /* Load random number state. */
+    RNGState rng_state;
+    path_state_rng_load(state, &rng_state);
+
+    /* TODO(weizhen): this has artefacts when `num_hits > 1` due to transparent lights. */
+    if (INTEGRATOR_STATE(state, path, bounce) == 1) {
+        // TODO: Reconstruct the ReSTIR candidate here.
+      // film_add_reservoir_di( // !!!: light_eval.ls
+      //     kg, state, eval, light_eval.ls, &rng_state, render_buffer);  // light_pass
+
+    /* TODO: Add forward light-intersection serialization for ReSTIR DI.
+    *
+    * This path must convert the intersected emitter (`isect.prim`) and
+    * intersection geometry into a complete LightSample, including its
+    * emitter-local canonical parameterization, and then construct a
+    * ReSTIRLightSampleReference for film_add_reservoir_di().
+    *
+    * Do not use restir_light_sample_from_uv() here: that function performs
+    * the inverse operation. It reconstructs/relocates an existing persistent
+    * sample reference relative to a shading point and therefore requires the
+    * emitter identity and canonical parameters to have already been stored.
+    *
+    * The removed light_sample_from_intersection() provided this operation in
+    * the original ReSTIR DI implementation. A modern equivalent should reuse
+    * the per-light intersection-evaluation routines or introduce explicit
+    * per-light intersection-to-reference helpers without expanding LightEval
+    * with a transient LightSample.
+    */
+    }
+    else {
+      const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * eval * mis_weight;
+      ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+      film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
+    }
+  }
+  else {
+    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, isect.prim);
+    film_write_surface_emission(
+        kg, state, eval, mis_weight, render_buffer, object_lightgroup(kg, klight->object_id));
+  }
+
   return SHADER_EVAL_OK;
 }
 
+// TODO: Ensure Correctness
 /* Evaluate light shader at intersection in forward path tracing. */
 ccl_device void integrator_shade_light_forward(KernelGlobals kg,
                                                IntegratorState state,
@@ -98,6 +177,8 @@ ccl_device void integrator_shade_light_forward(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, transparent_bounce) = transparent_bounce;
 
   if (transparent_bounce >= kernel_data.integrator.transparent_max_bounce) {
+    integrator_finalize_reservoir(kg, state, render_buffer);
+
     integrator_path_terminate(
         kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD);
     return;
