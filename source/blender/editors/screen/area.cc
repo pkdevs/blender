@@ -3637,9 +3637,7 @@ void ED_region_panels_layout_ex(const bContext *C,
   if (use_categories) {
     region->runtime->category = category;
   }
-  for (ui::Block &block : region->runtime->uiblocks) {
-    block_post_layout_callbacks_exec(C, region, &block);
-  }
+  ui::panels_do_after_block_fn(C, region);
 }
 
 void ED_region_draw_overflow_indication(const ScrArea *area,

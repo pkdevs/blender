@@ -1056,6 +1056,16 @@ void panels_draw(const bContext *C, ARegion *region)
     }
   }
 }
+void panels_do_after_block_fn(const bContext *C, ARegion *region)
+{
+  for (ui::Block &block : region->runtime->uiblocks) {
+    if (block.active && block.panel && panel_is_dragging(block.panel) &&
+        !block_is_search_only(&block))
+    {
+      block_post_layout_callbacks_exec(C, region, &block);
+    }
+  }
+}
 
 #define PNL_ICON UI_UNIT_X /* Could be UI_UNIT_Y too. */
 
