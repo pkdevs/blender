@@ -234,6 +234,7 @@ struct SymbolFunction : SymbolScope {
   SymbolClass *return_type = nullptr;
 
   vector<SymbolClass *> arg_types;
+  vector<Expr> arg_defaults;
 
   bool is_error = false;
 

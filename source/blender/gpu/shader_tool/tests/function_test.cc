@@ -289,6 +289,67 @@ void func()
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
   }
+
+  {
+    string input = R"(
+int func(int a, int b = 0)
+{
+  return a + b;
+}
+
+void f()
+{
+  func(1);
+  func(1, 1);
+}
+)";
+    string expect = R"(
+int func(int a, int b    )
+{
+  return a + b;
+}
+
+void f()
+{
+  func(1, 0);
+  func(1, 1);
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+int func(int a = 0, const int b = 2)
+{
+  return a + b;
+}
+
+void f()
+{
+  func();
+  func(1);
+  func(1, 1);
+}
+)";
+    string expect = R"(
+int func(int a    , const int b    )
+{
+  return a + b;
+}
+
+void f()
+{
+  func(0, 2);
+  func(1, 2);
+  func(1, 1);
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
 }
 
 TEST(shader_tool, FunctionOverloads)

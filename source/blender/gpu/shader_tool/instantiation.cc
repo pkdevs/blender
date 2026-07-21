@@ -1023,7 +1023,7 @@ struct InstantiationContext {
       for (FuncArg arg : list.children_of_type<FuncArg>()) {
         skip_node(arg.attributes());
         id_type(arg.type(), scope);
-        declarator(arg.declarator(), scope);
+        declarator(arg.declarator(), scope, true);
         match_if(',');
       }
     }
@@ -1297,17 +1297,34 @@ struct InstantiationContext {
       builder.curr = list.front().next();
     }
 
+    int param_count = 0;
     if (builder.curr != ')') {
       for (Expr param : list.children_of_type<Expr>()) {
         expr(param, scope);
         match_if(',');
+        ++param_count;
       }
+    }
+
+    /* Default arguments. */
+    for (; param_count < sym->arg_defaults.size(); ++param_count) {
+      if (sym->arg_defaults[param_count].is_valid()) {
+        if (param_count != 0) {
+          builder.ss << ", ";
+        }
+        /* Note: We evaluate the expression from where it was defined, in the function scope. */
+        expr(sym->arg_defaults[param_count], *sym);
+      }
+      else {
+        error(list, "Missing parameter for call to '" + sym->identifier + "'");
+      }
+      builder.curr = list.back();
     }
 
     match_if(')');
   }
 
-  void declarator(Declarator decl, SymbolScope &scope)
+  void declarator(Declarator decl, SymbolScope &scope, bool skip_value = false)
   {
     const bool par = match_if('(');
     match_if('&');
@@ -1326,7 +1343,10 @@ struct InstantiationContext {
       return;
     }
 
-    if (decl.initial_value().is_valid()) {
+    if (skip_value) {
+      skip_node(decl.initial_value());
+    }
+    else if (decl.initial_value().is_valid()) {
       assignment(decl.initial_value(), scope);
     }
     else if (decl.initializer_list().is_valid()) {

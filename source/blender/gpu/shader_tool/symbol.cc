@@ -729,6 +729,7 @@ struct SymbolParser {
       scope.variables.emplace(var.identifier, table.var_arena.alloc(var));
       /* Register argument type for argument resolution. */
       fn_sym->arg_types.emplace_back(type);
+      fn_sym->arg_defaults.emplace_back(arg.declarator().initial_value().expr());
     }
 
     if (scope.parent != nullptr) {
