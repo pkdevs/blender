@@ -105,6 +105,7 @@ static const EnumPropertyItem prop_type_items[] = {
 #  include "BKE_nla.hh"
 
 #  include "DNA_object_types.h"
+#  include "DNA_speaker_types.h"
 
 #  include "ED_anim_api.hh"
 
@@ -652,7 +653,7 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
         BKE_report(reports, RPT_ERROR, "You can only create 'SOUND' NLA Strips on Speaker anim data");
         return nullptr;
       }
-      strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), static_cast<Speaker*>(ob->data));
+      strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), blender::id_cast<Speaker*>(ob->data));
       break;
     }
     default:
