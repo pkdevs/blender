@@ -2211,7 +2211,7 @@ void panels_end(const bContext *C, ARegion *region, int *r_x, int *r_y);
  */
 void panels_draw(const bContext *C, ARegion *region);
 
-void panels_do_after_block_fn(const bContext *C, ARegion *region);
+void panels_do_after_block_layout_fns(const bContext *C, ARegion *region);
 
 Panel *panel_find_by_type(ListBaseT<Panel> *lb, const PanelType *pt);
 /**
