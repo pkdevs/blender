@@ -58,7 +58,7 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, rng_offset) = PRNG_BOUNCE_NUM;
   INTEGRATOR_STATE_WRITE(state, path, visibility) = PATH_RAY_VISIBILITY_CAMERA;
   INTEGRATOR_STATE_WRITE(state, path, flag) = PATH_RAY_MIS_SKIP | PATH_RAY_TRANSPARENT_BACKGROUND;
-  INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = 0.0f;
+  INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = 1.0f;
   INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = FLT_MAX;
   INTEGRATOR_STATE_WRITE(state, path, continuation_probability) = 1.0f;
   INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
@@ -105,6 +105,11 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
     INTEGRATOR_STATE_WRITE(state, path, mis_ray_object) = kernel_data.background.object_index;
   }
 #endif
+
+  /* TODO(weizhen): if has kernel features. */
+  if (true) {
+    INTEGRATOR_STATE_WRITE(state, path, last_bounce_is_rough) = false;
+  }
 }
 
 ccl_device_inline void path_state_next(KernelGlobals kg,
@@ -380,6 +385,14 @@ ccl_device_inline float3 path_state_rng_3D(KernelGlobals kg,
       kg, rng_state->rng_pixel, rng_state->sample, rng_state->rng_offset + dimension);
 }
 
+ccl_device_inline float4 path_state_rng_4D(KernelGlobals kg,
+                                           ccl_private const RNGState *rng_state,
+                                           const int dimension)
+{
+  return path_rng_4D(
+      kg, rng_state->rng_pixel, rng_state->sample, rng_state->rng_offset + dimension);
+}
+
 ccl_device_inline float path_branched_rng_1D(KernelGlobals kg,
                                              const ccl_private RNGState *rng_state,
                                              const int branch,
@@ -416,6 +429,18 @@ ccl_device_inline float3 path_branched_rng_3D(KernelGlobals kg,
                      rng_state->rng_offset + dimension);
 }
 
+ccl_device_inline float4 path_branched_rng_4D(KernelGlobals kg,
+                                              ccl_private const RNGState *rng_state,
+                                              const int branch,
+                                              const int num_branches,
+                                              const int dimension)
+{
+  return path_rng_4D(kg,
+                     rng_state->rng_pixel,
+                     rng_state->sample * num_branches + branch,
+                     rng_state->rng_offset + dimension);
+}
+
 /* Utility functions to get light termination value,
  * since it might not be needed in many cases.
  */
@@ -426,6 +451,19 @@ ccl_device_inline float path_state_rng_light_termination(KernelGlobals kg,
     return path_state_rng_1D(kg, state, PRNG_LIGHT_TERMINATE);
   }
   return 0.0f;
+}
+
+/* TODO(weizhen): move these radiance functions to somewhere more appropriate. Revisit when 
+    implementing ReSTIR PT. */
+ccl_device_forceinline bool light_is_direct_illumination(IntegratorState state)
+{
+  return !(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_ANY_PASS);
+}
+
+ccl_device_forceinline bool path_use_restir(KernelGlobals kg, IntegratorState state)
+{
+  return INTEGRATOR_STATE(state, path, bounce) >= 1 && kernel_data.integrator.use_restir &&
+         kernel_data.integrator.use_direct_light;
 }
 
 CCL_NAMESPACE_END

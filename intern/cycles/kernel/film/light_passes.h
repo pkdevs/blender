@@ -865,4 +865,67 @@ ccl_device_inline void film_write_surface_emission(KernelGlobals kg, // !!!
       kg, state, contribution, buffer, kernel_data.film.pass_emission, lightgroup);
 }
 
+ccl_device_inline void film_add_reservoir_di(
+    KernelGlobals kg,
+    ConstIntegratorState state,
+    const Spectrum L,
+    ccl_private const LightSample &ls,
+    ccl_private const RNGState *rng_state,
+    ccl_global float *ccl_restrict render_buffer)
+{
+  /* TODO(weizhen): This might not work correctly with path guiding because
+   * the value was assigned using `mis_pdf` instead of `bsdf_pdf`. */
+  const float bsdf_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
+
+  const bool is_direct_illumination = (INTEGRATOR_STATE(state, path, bounce) == 1);
+
+  Reservoir reservoir;
+  reservoir_init(kg, &reservoir, is_direct_illumination);
+
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer) +
+                             kernel_data.film.pass_restir_reservoir;
+
+  restir_unpack_reservoir(kg, &reservoir, buffer);
+
+  /*
+   * Reconstruct the canonical reference for this candidate.
+
+   * The reference is stored separately from LightSample because the
+   * reservoir only serializes the compact emitter identity/parameters.
+   */
+  ReSTIRLightSampleReference candidate_reference = restir_light_reference_empty();
+
+  if (!restir_light_reference_from_sample(kg, &ls, &candidate_reference)) {
+    return;
+  }
+  
+  kernel_assert(restir_light_reference_is_valid(&candidate_reference)); // !!!: Temp
+
+  const float geometry_term = ls.jacobian_solid_angle_to_area();
+
+  Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) *
+      bsdf_pdf * L * geometry_term;
+
+  /* TODO(weizhen): Handle diffuse/glossy pass decomposition properly. */
+  BsdfEval radiance;
+  bsdf_eval_init(&radiance, contribution);
+
+  const float rand_pick = path_branched_rng_1D(
+      kg, rng_state, reservoir.num_light_samples, reservoir.max_samples, PRNG_PICK);
+
+  reservoir_add_bsdf_sample(&reservoir,
+                            ls,
+                            candidate_reference,
+                            radiance,
+                            bsdf_pdf,
+                            rand_pick);
+
+/**
+ * because film_write_pass_reservoir() writes only the serialized reference, weight, and luminance, 
+ * the Reservoir must contain the candidate reference selected by reservoir_add_sample(). 
+ * The function must therefore receive the candidate reference explicitly
+ */
+  film_write_pass_reservoir(kg, state, &reservoir, render_buffer);
+}
+
 CCL_NAMESPACE_END
