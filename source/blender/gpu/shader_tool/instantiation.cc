@@ -259,9 +259,14 @@ struct InstantiationContext {
 
   void return_statement(ReturnStmt stmt, SymbolScope &scope)
   {
-    match_if(Return);
-    expr(stmt.expression(), scope);
-    match_if(';');
+    if (SymbolFunction *fn = scope.parent_function(); fn) {
+      match_if(Return);
+      expr(stmt.expression(), scope, fn->return_type);
+      match_if(';');
+    }
+    else {
+      error(stmt, "Return statement outside of a function");
+    }
   }
 
   void structured_binding(StructuredBinding decl, SymbolScope &scope)
@@ -282,7 +287,7 @@ struct InstantiationContext {
     builder.ss << decl_str + string(max(0, pad - int(decl_str.size())), ' ');
 
     builder.curr = assign_front;
-    assignment(assign, scope);
+    assignment(assign, scope, tmp_var->type);
     match_if(';');
   }
 
@@ -1112,7 +1117,7 @@ struct InstantiationContext {
     skip_node(AttrList(cond.next()));
   }
 
-  void expr(Node decl, SymbolScope &scope)
+  void expr(Node decl, SymbolScope &scope, SymbolClass *cls = nullptr)
   {
     for (Node child : decl.children_range()) {
       switch (child.type()) {
@@ -1123,9 +1128,11 @@ struct InstantiationContext {
           func_call(scope, child, scope);
           break;
         case NodeType::InitializerList:
-          initializer_list(child, scope);
+          initializer_list(child, scope, cls);
           break;
         case NodeType::Constructor:
+          constructor(child, scope);
+          break;
         case NodeType::Expr:
           expr(child, scope);
           break;
@@ -1347,41 +1354,63 @@ struct InstantiationContext {
       skip_node(decl.initial_value());
     }
     else if (decl.initial_value().is_valid()) {
-      assignment(decl.initial_value(), scope);
+      assignment(decl.initial_value(), scope, var->type);
     }
     else if (decl.initializer_list().is_valid()) {
-      initializer_list(decl.initializer_list(), scope);
+      builder.ss << "=";
+      initializer_list(decl.initializer_list(), scope, var->type);
     }
   }
 
-  void assignment(AssignStmt stmt, SymbolScope &scope)
+  void assignment(AssignStmt stmt, SymbolScope &scope, SymbolClass *cls)
   {
     match_if('=');
-    init_expression_or_initializer_list(stmt.child_first(), scope);
+    init_expression_or_initializer_list(stmt.child_first(), scope, cls);
   }
 
-  void init_expression_or_initializer_list(Node node, SymbolScope &scope)
+  void init_expression_or_initializer_list(Node node, SymbolScope &scope, SymbolClass *cls)
   {
     if (node == NodeType::InitializerList) {
-      initializer_list(node, scope);
+      initializer_list(node, scope, cls);
     }
     else if (node == NodeType::Expr) {
       expr(node, scope);
     }
   }
 
-  void initializer_list(InitializerList list, SymbolScope &scope)
+  void constructor(Constructor construct, SymbolScope &scope)
   {
+    auto [cls, err] = scope.lookup_class(construct.id());
+    error(err);
+    initializer_list(construct.initializer_list(), scope, cls);
+
+    member_access(scope, construct, cls);
+
+    builder.curr = construct.back().next();
+  }
+
+  void initializer_list(InitializerList list, SymbolScope &scope, SymbolClass *cls)
+  {
+    if (cls && !cls->is_error) {
+      builder.ss << cls->resolved->identifier;
+    }
+    else {
+      /* TODO(fclem): Long term, we can lookup what is the expected type of the expression and pass
+       * it down the initializer tree. */
+      error(list, "This initializer list requires explicit type");
+    }
+    builder.curr = list.front();
+
     match_if('{');
     const bool designated = (list.child_first().type() == NodeType::DesignatedInitializer);
     for (Node child : list.children_range()) {
       if (designated) {
         match_if('.');
         match_if(Word);
-        assignment(child.child_last(), scope);
+        assignment(child.child_last(), scope, nullptr /* TODO */);
       }
       else {
-        init_expression_or_initializer_list(child.child_last(), scope);
+        init_expression_or_initializer_list(child.child_last(), scope, nullptr /* TODO */);
       }
       match_if(',');
     }

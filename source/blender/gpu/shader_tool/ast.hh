@@ -694,6 +694,20 @@ struct InitializerList : Node {
   NODE_COMMON(InitializerList);
 };
 
+struct Constructor : Node {
+  NODE_COMMON(Constructor);
+
+  IdQualified id() const
+  {
+    return child_first();
+  }
+
+  InitializerList initializer_list() const
+  {
+    return child_last();
+  }
+};
+
 struct Attr : Node {
   NODE_COMMON(Attr);
 

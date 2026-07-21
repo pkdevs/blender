@@ -214,9 +214,9 @@ TEST(shader_tool, Auto)
         "auto g = a * b;\n"
         "auto h = a * a;\n";
     string expect =
-        "int a{0};\n"
-        "float b{0.0f};\n"
-        "float c{0.0f + 0};\n"
+        "int a=int{0};\n"
+        "float b=float{0.0f};\n"
+        "float c=float{0.0f + 0};\n"
         "int d = 0;\n"
         "float e = 0.0f;\n"
         "float f = 0.0f + 0;\n"

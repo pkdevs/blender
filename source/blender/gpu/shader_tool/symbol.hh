@@ -171,6 +171,10 @@ struct SymbolScope : Symbol {
   /* Can be null if this is not a function. */
   SymbolFunction *as_function();
 
+  /* Return the function containing this scope or the scope itself if it is a function.
+   * Return nullptr if this scope is not inside a function. */
+  SymbolFunction *parent_function();
+
   void function_emplace(SymbolFunction *fn);
 
   template<typename Callback> void visit_variables(Callback &&callback);
@@ -328,6 +332,15 @@ inline SymbolClass *SymbolScope::as_class()
 inline SymbolFunction *SymbolScope::as_function()
 {
   return type == FUNCTION ? static_cast<SymbolFunction *>(this) : nullptr;
+}
+
+inline SymbolFunction *SymbolScope::parent_function()
+{
+  SymbolScope *fn = this;
+  while (fn && fn->type != FUNCTION) {
+    fn = fn->parent;
+  }
+  return fn ? fn->as_function() : nullptr;
 }
 
 inline void SymbolScope::function_emplace(SymbolFunction *fn)

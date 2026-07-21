@@ -590,6 +590,7 @@ struct SymbolParser {
     }
 
     if (parent.type() == NodeType::FuncDecl) {
+      parse_function_return_type(scope, parent);
       parse_function_arguments(scope, parent);
     }
     if (parent.type() == NodeType::ForLoop) {
@@ -714,6 +715,14 @@ struct SymbolParser {
       }
       param = param.next();
     }
+  }
+
+  void parse_function_return_type(SymbolScope &scope, FuncDecl decl)
+  {
+    SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
+    auto [type, err] = fn_sym->lookup_class(decl.return_type().id());
+    error(err);
+    fn_sym->return_type = type;
   }
 
   /* Create declaration for each function argument so name lookup will work with these.
