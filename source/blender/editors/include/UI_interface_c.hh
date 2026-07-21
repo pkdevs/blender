@@ -2109,8 +2109,12 @@ void button_tooltip_timer_remove(bContext *C, Button *but);
 bool textbutton_activate_rna(const bContext *C,
                              ARegion *region,
                              const void *rna_poin_data,
+                             const char *rna_prop_id);
+bool textbutton_activate_rna(const bContext *C,
+                             ARegion *region,
+                             const void *rna_poin_data,
                              const char *rna_prop_id,
-                             std::optional<StringRefNull> block_name = std::nullopt);
+                             Block &block);
 
 bool textbutton_activate_but(const bContext *C, Button *actbut);
 

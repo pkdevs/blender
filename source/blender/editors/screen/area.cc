@@ -696,21 +696,19 @@ void ED_region_tag_redraw(ARegion *region)
 void ED_region_activate_rna_prop(bContext *C,
                                  ARegion *region,
                                  const void *data,
-                                 StringRefNull prop_name,
-                                 StringRefNull block_name)
+                                 StringRefNull prop_name)
 {
   /* Try first to open the button, otherwise try after region redraw. */
   if (!(region->runtime->do_draw & (RGN_DRAW | RGN_DRAWING)) &&
-      ui::textbutton_activate_rna(C, region, data, prop_name.data(), block_name))
+      ui::textbutton_activate_rna(C, region, data, prop_name.data()))
   {
     return;
   }
-  region->runtime->post_block_layout_fns
-      .lookup_or_add_cb_as(block_name,
-                           []() { return Vector<std::function<void(const bContext &C)>>{}; })
-      .append([data, prop_name = std::string(prop_name), block_name](const bContext &C) {
+  region->runtime->post_block_layout_fns.append(
+      [data, prop_name = std::string(prop_name), found = false](const bContext &C,
+                                                                ui::Block &block) mutable {
         ARegion *region = CTX_wm_region(&C);
-        ui::textbutton_activate_rna(&C, region, data, prop_name.c_str(), block_name);
+        found = found || ui::textbutton_activate_rna(&C, region, data, prop_name.c_str(), block);
       });
 
   if (region->flag & RGN_FLAG_HIDDEN) {

@@ -607,7 +607,7 @@ struct ARegionRuntime {
   wmTimer *regiontimer = nullptr;
 
   /** For calling after building a named block. */
-  Map<std::string, Vector<std::function<void(const bContext &C)>>> post_block_layout_fns;
+  Vector<std::function<void(const bContext &C, ui::Block &Block)>> post_block_layout_fns;
 
   wmDrawBuffer *draw_buffer = nullptr;
 

@@ -3385,13 +3385,7 @@ static wmOperatorStatus file_start_filter_exec(bContext *C, wmOperator * /*op*/)
     int regiontype = sfile->browse_mode == FILE_BROWSE_MODE_FILES ? RGN_TYPE_UI : RGN_TYPE_HEADER;
     ARegion *region = BKE_region_find_in_listbase_by_type(&area->regionbase, regiontype);
     if (region) {
-      ED_region_activate_rna_prop(C,
-                                  region,
-                                  params,
-                                  "filter_search",
-                                  sfile->browse_mode == FILE_BROWSE_MODE_FILES ?
-                                      "FILEBROWSER_PT_directory_path" :
-                                      "FILEBROWSER_HT_header");
+      ED_region_activate_rna_prop(C, region, params, "filter_search");
     }
   }
 

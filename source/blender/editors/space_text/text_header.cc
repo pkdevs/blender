@@ -88,7 +88,7 @@ static wmOperatorStatus text_text_search_exec(bContext *C, wmOperator * /*op*/)
       ui::panel_category_active_set(region, "Text");
     }
 
-    ED_region_activate_rna_prop(C, region, st, "find_text", "TEXT_PT_find");
+    ED_region_activate_rna_prop(C, region, st, "find_text");
   }
   return OPERATOR_FINISHED;
 }

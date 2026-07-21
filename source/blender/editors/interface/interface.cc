@@ -2136,14 +2136,13 @@ bool button_context_poll_operator(bContext *C, wmOperatorType *ot, const Button 
 
 void block_post_layout_callbacks_exec(const bContext *C, ARegion *region, Block *block)
 {
-  if (const Vector<std::function<void(const bContext &C)>> *callbacks =
-          region->runtime->post_block_layout_fns.lookup_ptr_as(block->name))
+  for (const std::function<void(const bContext &C, ui::Block &block)> &callback :
+       region->runtime->post_block_layout_fns)
   {
-    for (const std::function<void(const bContext &C)> &callback : *callbacks) {
-      callback(*C);
+    if (!block_is_search_only(block)) {
+      callback(*C, *block);
     }
   }
-  region->runtime->post_block_layout_fns.remove_as(block->name);
 }
 
 void block_end_ex(const bContext *C,
