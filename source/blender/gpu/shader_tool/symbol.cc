@@ -1087,24 +1087,24 @@ struct SymbolParser {
     SymbolVariable *tmp = table.var_arena.alloc(&scope, cls, decl.front(), decl.tmp_id());
     scope.variables.emplace(tmp->identifier, tmp);
 
-    cls->visit_variables([&](SymbolVariable &var) {
+    for (SymbolVariable *var : cls->non_static_variables_in_declaration_order()) {
       if (!id.is_valid()) {
         error(decl, "Not enough names in structure binding");
         return;
       }
       /* Make copy of the variable in local scope. */
-      SymbolVariable *sym = table.var_arena.alloc(var);
+      SymbolVariable *sym = table.var_arena.alloc(*var);
       sym->identifier = id.str();
       sym->parent = &scope;
       scope.variables.emplace(sym->identifier, sym);
       /* Resolve to the tmp variable member. */
-      SymbolVariable *res = table.var_arena.alloc(var);
-      res->identifier = tmp->identifier + '.' + var.identifier;
+      SymbolVariable *res = table.var_arena.alloc(*var);
+      res->identifier = tmp->identifier + '.' + var->identifier;
       res->parent = &scope;
       sym->resolved = res;
 
       id = id.next();
-    });
+    }
     if (id.is_valid()) {
       error(decl, "Too many names in structure binding");
       return;

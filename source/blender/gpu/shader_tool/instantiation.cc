@@ -638,10 +638,10 @@ struct InstantiationContext {
       builder.ss << "\n";
 
       /* Emit getter and setters. */
-      cls.visit_variables([&](SymbolVariable &var) {
-        builder.ss << union_getter(cls, var) + "\n";
-        builder.ss << union_setter(cls, var) + "\n";
-      });
+      for (SymbolVariable *var : cls.non_static_variables_in_declaration_order()) {
+        builder.ss << union_getter(cls, *var) + "\n";
+        builder.ss << union_setter(cls, *var) + "\n";
+      }
     }
     else {
       /* Emit static variables. */
@@ -926,14 +926,11 @@ struct InstantiationContext {
     else {
       /* Declare return variable of the same type as the accessed member. */
       fn_body += "  " + fn_type_id + " r;\n";
-      member_type.visit_variables([&](SymbolVariable &var) {
-        if (var.is_static) {
-          return;
-        }
-        string to_var = "r." + var.identifier;
-        string access = "this_." + union_data_access(var, union_type.size);
-        fn_body += "  " + to_var + " = " + member_from_float(*var.type, access) + ";\n";
-      });
+      for (SymbolVariable *var : member_type.non_static_variables_in_declaration_order()) {
+        string to_var = "r." + var->identifier;
+        string access = "this_." + union_data_access(*var, union_type.size);
+        fn_body += "  " + to_var + " = " + member_from_float(*var->type, access) + ";\n";
+      }
       fn_body += "  return val;\n";
     }
     fn_body += "}";
@@ -956,14 +953,11 @@ struct InstantiationContext {
     }
     else {
       /* Declare return variable of the same type as the accessed member. */
-      member_type.visit_variables([&](SymbolVariable &var) {
-        if (var.is_static) {
-          return;
-        }
-        string to_var = "this_." + union_data_access(var, union_type.size);
-        string access = "val." + var.identifier;
-        fn_body += "  " + to_var + " = " + member_to_float(*var.type, access) + ";\n";
-      });
+      for (SymbolVariable *var : member_type.non_static_variables_in_declaration_order()) {
+        string to_var = "this_." + union_data_access(*var, union_type.size);
+        string access = "val." + var->identifier;
+        fn_body += "  " + to_var + " = " + member_to_float(*var->type, access) + ";\n";
+      }
     }
     fn_body += "}";
     return "void " + fn_name + fn_args + " " + fn_body;
@@ -1407,18 +1401,18 @@ struct InstantiationContext {
     if (designated.is_valid()) {
       /* Iterate over the list of members, zero initializing the omitted members, until we find
        * the given initializer. If member is out of order or not existing, raise an error. */
-      cls->visit_variables([&](SymbolVariable &var) {
-        if (designated.is_valid() && var.identifier == designated.id().str()) {
+      for (SymbolVariable *var : cls->non_static_variables_in_declaration_order()) {
+        if (designated.is_valid() && var->identifier == designated.id().str()) {
           AssignStmt stmt = designated.assign();
           builder.curr = stmt.child_first().front();
-          init_expression_or_initializer_list(stmt.child_first(), scope, var.type);
+          init_expression_or_initializer_list(stmt.child_first(), scope, var->type);
           match_if(',');
           designated = designated.next();
         }
         else {
-          builder.ss << default_value(*var.type) + ", ";
+          builder.ss << default_value(*var->type) + ", ";
         }
-      });
+      }
       if (designated.is_valid()) {
         if (auto *var = cls->lookup_variable(string(designated.id().str())); var && !var->is_error)
         {

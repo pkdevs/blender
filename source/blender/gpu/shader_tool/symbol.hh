@@ -177,7 +177,7 @@ struct SymbolScope : Symbol {
 
   void function_emplace(SymbolFunction *fn);
 
-  template<typename Callback> void visit_variables(Callback &&callback);
+  vector<SymbolVariable *> non_static_variables_in_declaration_order();
 
  private:
   template<typename T> T *lookup_generic(IdQualified id, const SourceLocation &loc) const;
@@ -359,7 +359,7 @@ inline void SymbolScope::function_emplace(SymbolFunction *fn)
   scopes.emplace(unique_id(), fn);
 }
 
-template<typename Callback> inline void SymbolScope::visit_variables(Callback &&callback)
+inline vector<SymbolVariable *> SymbolScope::non_static_variables_in_declaration_order()
 {
   assert(this->type == CLASS);
   vector<SymbolVariable *> members;
@@ -372,9 +372,7 @@ template<typename Callback> inline void SymbolScope::visit_variables(Callback &&
     return a->loc < b->loc;
   });
 
-  for (auto *m : members) {
-    callback(*m);
-  }
+  return members;
 }
 
 /* Left is nullptr for unary operators. */
