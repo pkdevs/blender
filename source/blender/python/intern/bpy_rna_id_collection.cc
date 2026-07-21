@@ -454,10 +454,6 @@ static PyObject *bpy_file_path_map(PyObject *self, PyObject *args, PyObject *kwd
 
     filepathmap_data.file_path_map = _PyDict_NewPresized(subset_len);
     for (; subset_len; subset_array++, subset_len--) {
-      if (PyDict_Contains(filepathmap_data.file_path_map, *subset_array)) {
-        continue;
-      }
-
       ID *id;
       if (!pyrna_id_FromPyObject(*subset_array, &id)) {
         PyErr_Format(PyExc_TypeError,
@@ -466,6 +462,16 @@ static PyObject *bpy_file_path_map(PyObject *self, PyObject *args, PyObject *kwd
         Py_DECREF(subset_fast);
         Py_DECREF(filepathmap_data.file_path_map);
         goto error;
+      }
+
+      const int contains = PyDict_Contains(filepathmap_data.file_path_map, *subset_array);
+      if (contains == -1) [[unlikely]] {
+        Py_DECREF(subset_fast);
+        Py_DECREF(filepathmap_data.file_path_map);
+        goto error;
+      }
+      if (contains) {
+        continue;
       }
 
       filepathmap_data.id_file_path_set = PySet_New(nullptr);
