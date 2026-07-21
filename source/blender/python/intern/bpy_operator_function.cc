@@ -129,6 +129,10 @@ static bool bpy_op_parse_args(PyObject *args, const char **r_context_str, bool *
         return false;
       }
       C_exec = PyUnicode_AsUTF8(arg);
+      if (C_exec == nullptr) [[unlikely]] {
+        /* The error will have been set (non UTF-8 compatible string). */
+        return false;
+      }
       is_exec = true;
     }
     else if ((r_is_undo != nullptr) && (!is_undo_set && (PyBool_Check(arg) || PyLong_Check(arg))))
