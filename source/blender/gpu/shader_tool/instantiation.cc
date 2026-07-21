@@ -1397,22 +1397,48 @@ struct InstantiationContext {
     else {
       /* TODO(fclem): Long term, we can lookup what is the expected type of the expression and pass
        * it down the initializer tree. */
-      error(list, "This initializer list requires explicit type");
+      error(list, "Initializer list requires explicit type");
+      return;
     }
     builder.curr = list.front();
 
     match_if('{');
-    const bool designated = (list.child_first().type() == NodeType::DesignatedInitializer);
-    for (Node child : list.children_range()) {
-      if (designated) {
-        match_if('.');
-        match_if(Word);
-        assignment(child.child_last(), scope, nullptr /* TODO */);
+    DesignatedInitializer designated(list.child_first());
+    if (designated.is_valid()) {
+      /* Iterate over the list of members, zero initializing the omitted members, until we find
+       * the given initializer. If member is out of order or not existing, raise an error. */
+      cls->visit_variables([&](SymbolVariable &var) {
+        if (designated.is_valid() && var.identifier == designated.id().str()) {
+          AssignStmt stmt = designated.assign();
+          builder.curr = stmt.child_first().front();
+          init_expression_or_initializer_list(stmt.child_first(), scope, var.type);
+          match_if(',');
+          designated = designated.next();
+        }
+        else {
+          builder.ss << default_value(*var.type) + ", ";
+        }
+      });
+      if (designated.is_valid()) {
+        if (auto *var = cls->lookup_variable(string(designated.id().str())); var && !var->is_error)
+        {
+          error(designated,
+                "Field designator '" + string(designated.id().str()) +
+                    "' needs to be specified in declaration order");
+        }
+        else {
+          /* Note, can also happen. */
+          error(designated,
+                "Field designator '" + string(designated.id().str()) +
+                    "' does not refer to any field in type '" + cls->identifier + "'");
+        }
       }
-      else {
+    }
+    else {
+      for (Node child : list.children_range()) {
         init_expression_or_initializer_list(child.child_last(), scope, nullptr /* TODO */);
+        match_if(',');
       }
-      match_if(',');
     }
     match_if('}');
   }

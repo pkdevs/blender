@@ -975,22 +975,22 @@ struct T{
 T T_ctor_() {T r;r.a=0;r.b=0;return r;}
 T fn1() { return T{1, 2}; }
 T fn2() { return T{1, 2  }; }
-T fn3() { return T{.a=1, .b=2}; }
-T fn4() { return T{.a=1, .b=2  }; }
+T fn3() { return T{1, 2}; }
+T fn4() { return T{1, 2  }; }
 T fn5() { return T{1, 2}; }
 T fn6() { return T{1, 2  }; }
-T fn7() { return T{.a=1, .b=2}; }
-T fn8() { return T{.a=1, .b=2  }; }
+T fn7() { return T{1, 2}; }
+T fn8() { return T{1, 2  }; }
 void fn() {
   T t1=T{1, 2};
   T t2=T{1, 2  };
-  T t3=T{.a=1, .b=2};
-  T t4=T{.a=1, .b=2  };
+  T t3=T{1, 2};
+  T t4=T{1, 2  };
   T t5=T{1, 2};
   T t6=T{1, 2  };
-  T t7=T{.a=1, .b=2};
-  T t8=T{.a=1, .b=2  };
-  T t9=T{.a=1, .b=T{0, 2}.a};
+  T t7=T{1, 2};
+  T t8=T{1, 2  };
+  T t9=T{1, T{0, 2}.a};
   T t10=T{1, T{0, 2}.a};
 }
 )";

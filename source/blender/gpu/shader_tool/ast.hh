@@ -682,10 +682,6 @@ struct Subscript : Node {
   }
 };
 
-struct DesignatedInitializer : Node {
-  NODE_COMMON(DesignatedInitializer);
-};
-
 struct Initializer : Node {
   NODE_COMMON(Initializer);
 };
@@ -762,6 +758,20 @@ struct AssignStmt : Node {
   Expr expr() const
   {
     return child_first();
+  }
+};
+
+struct DesignatedInitializer : Node {
+  NODE_COMMON(DesignatedInitializer);
+
+  Id id() const
+  {
+    return child_first();
+  }
+
+  AssignStmt assign() const
+  {
+    return child_last();
   }
 };
 
