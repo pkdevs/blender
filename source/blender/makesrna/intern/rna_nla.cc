@@ -645,19 +645,20 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
       }
       strip = BKE_nlastrip_new(action, *id);
       break;
-    case NLASTRIP_TYPE_SOUND:
-    {
+    case NLASTRIP_TYPE_SOUND: {
       BLI_assert(GS(id->name) == ID_OB);
-      Object *const ob = blender::id_cast<Object*>(id);
+      Object *const ob = blender::id_cast<Object *>(id);
       if (ob->type != OB_SPEAKER) {
-        BKE_report(reports, RPT_ERROR, "You can only create 'SOUND' NLA Strips on Speaker anim data");
+        BKE_report(
+            reports, RPT_ERROR, "You can only create 'SOUND' NLA Strips on Speaker anim data");
         return nullptr;
       }
-      strip = BKE_nla_add_soundstrip(bmain, CTX_data_scene(C), blender::id_cast<Speaker*>(ob->data));
+      strip = BKE_nla_add_soundstrip(
+          bmain, CTX_data_scene(C), blender::id_cast<Speaker *>(ob->data));
       break;
     }
     default:
-      BKE_report(reports, RPT_ERROR, "Can only create 'CLIP' and 'SOUND' for now");
+      BKE_report(reports, RPT_ERROR, "Can only create 'CLIP' and 'SOUND' NLA Strips");
       return nullptr;
   }
 
@@ -1201,9 +1202,18 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
                      INT_MIN,
                      INT_MAX);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_enum(func, "type", prop_type_items, NLASTRIP_TYPE_CLIP, "", "Type of NLA Strip to add. When unspecified, defaults to 'CLIP'");
+  parm = RNA_def_enum(func,
+                      "type",
+                      prop_type_items,
+                      NLASTRIP_TYPE_CLIP,
+                      "",
+                      "Type of NLA Strip to add. When unspecified, defaults to 'CLIP'");
   RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
-  parm = RNA_def_pointer(func, "action", "Action", "", "Action to assign to this strip. Required when type is 'CLIP'");
+  parm = RNA_def_pointer(func,
+                         "action",
+                         "Action",
+                         "",
+                         "Action to assign to this strip. Required when type is 'CLIP'");
   RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   /* return type */
   parm = RNA_def_pointer(func, "strip", "NlaStrip", "", "New NLA Strip");
