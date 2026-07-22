@@ -620,17 +620,9 @@ static void update_callback(ID &id, void *buffer_data, Bounds<int> evaluated_ran
   WM_main_add_notifier(NC_OBJECT | ND_DRAW_ANIMVIZ, ob);
 }
 
-static void finish_callback(ID &id, void *buffer_data)
+static void free_buffer_callback(void *buffer_data)
 {
   MotionPathBuffer *buffer = static_cast<MotionPathBuffer *>(buffer_data);
-  Object *ob = id_cast<Object *>(&id);
-  bMotionPath *mpath = get_motion_path(*ob, buffer->bone_name);
-  if (mpath == nullptr) {
-    BLI_assert_unreachable();
-    return;
-  }
-  /* One last update to ensure everything is copied. */
-  update_callback(id, buffer_data, {mpath->start_frame, mpath->start_frame + mpath->length});
   MEM_delete(buffer);
 }
 
@@ -663,7 +655,7 @@ void register_motionpath_async(Main &bmain,
                                     buffer,
                                     eval_callback,
                                     update_callback,
-                                    finish_callback);
+                                    free_buffer_callback);
 }
 
 }  // namespace motionpath

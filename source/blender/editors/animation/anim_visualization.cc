@@ -27,7 +27,7 @@ struct TargetData {
   void *buffer;
   EvalCallback eval;
   UpdateCallback update;
-  FinishCallback finish;
+  FreeBufferCallback free_buffer;
   bool finished_left = false;
   bool finished_right = false;
 
@@ -35,8 +35,8 @@ struct TargetData {
              void *buffer,
              EvalCallback eval,
              UpdateCallback update,
-             FinishCallback finish)
-      : target(target), buffer(buffer), eval(eval), update(update), finish(finish)
+             FreeBufferCallback free_buffer)
+      : target(target), buffer(buffer), eval(eval), update(update), free_buffer(free_buffer)
   {
   }
 };
@@ -196,7 +196,7 @@ static void finish_job(void *job_data)
 {
   WorkerData *eval_data = static_cast<WorkerData *>(job_data);
   for (TargetData &target_data : eval_data->target_data) {
-    target_data.finish(*target_data.target.id, target_data.buffer);
+    target_data.free_buffer(target_data.buffer);
   }
 }
 
@@ -218,7 +218,7 @@ void background_eval_register(Main &bmain,
                               void *target_buffer,
                               EvalCallback eval_cb,
                               UpdateCallback update_cb,
-                              FinishCallback finish_cb)
+                              FreeBufferCallback free_cb)
 {
   /* TODO dont rebuild DG every time. Keep data around for a while before ending worker. This will
    * mean regular updates to the same data are more efficient. */
@@ -227,12 +227,13 @@ void background_eval_register(Main &bmain,
 
   if (WM_jobs_is_running(wm_job)) {
     BGEvalJobData *eval_data = static_cast<BGEvalJobData *>(WM_jobs_customdata_get(wm_job));
+
     if (eval_data->active_targets.contains(target)) {
       eval_data->worker_data.lock();
       const int target_index = eval_data->worker_data.find_target_index(target);
       BLI_assert(target_index != -1);
       TargetData &data = eval_data->worker_data.target_data[target_index];
-      data.finish(*target.id, data.buffer);
+      data.free_buffer(data.buffer);
       data.buffer = target_buffer;
       data.finished_left = false;
       data.finished_right = false;
@@ -249,7 +250,7 @@ void background_eval_register(Main &bmain,
     eval_data->worker_data.dg = build_worker_depsgraph(
         bmain, scene, view_layer, eval_data->active_targets);
     eval_data->worker_data.target_data.append(
-        {target, target_buffer, eval_cb, update_cb, finish_cb});
+        {target, target_buffer, eval_cb, update_cb, free_cb});
 
     eval_data->worker_data.restart.store(true, std::memory_order_release);
     eval_data->worker_data.unlock();
@@ -258,8 +259,7 @@ void background_eval_register(Main &bmain,
 
   BGEvalJobData *eval_data = MEM_new<BGEvalJobData>(__func__);
   eval_data->active_targets.add(target);
-  eval_data->worker_data.target_data.append(
-      {target, target_buffer, eval_cb, update_cb, finish_cb});
+  eval_data->worker_data.target_data.append({target, target_buffer, eval_cb, update_cb, free_cb});
   eval_data->worker_data.dg = build_worker_depsgraph(
       bmain, scene, view_layer, eval_data->active_targets);
   const int center_frame = BKE_scene_frame_get(&scene);

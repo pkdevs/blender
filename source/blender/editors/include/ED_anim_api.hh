@@ -1351,7 +1351,7 @@ using EvalCallback = FunctionRef<bool(Depsgraph *dg, ID &id, int frame, void *bu
 using UpdateCallback = FunctionRef<void(ID &id, void *buffer_data, Bounds<int> evaluated_range)>;
 /* Called when the given target is done with the evaluation. Use to free any heap allocated data
  * passed into the system. */
-using FinishCallback = FunctionRef<void(ID &id, void *buffer_data)>;
+using FreeBufferCallback = FunctionRef<void(void *buffer_data)>;
 
 /**
  * Uniquely identifies an entity to evaluate over a frame range.
@@ -1387,7 +1387,7 @@ void background_eval_register(Main &bmain,
                               void *target_buffer,
                               EvalCallback eval_cb,
                               UpdateCallback update_cb,
-                              FinishCallback finish_cb);
+                              FreeBufferCallback finish_cb);
 
 /**
  * Manually deregister a target from background evaluation. This is a no-op if the target is not
