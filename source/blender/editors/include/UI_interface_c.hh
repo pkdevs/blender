@@ -1083,6 +1083,9 @@ void block_post_layout_callbacks_exec(const bContext *C, ARegion *region, Block 
 /**
  * \param postpone_callbacks: After block layout callbacks are not executed, caller should execute
  * them with #block_post_layout_callbacks_exec.
+ * This is necessary if a callback requires to access the region bounds but they might be no known
+ * yet. For example: activating a button may scroll the region view so it can get properly focused,
+ * but that requires to build all panels in a region.
  */
 void block_end_ex(const bContext *C,
                   Main *bmain,
