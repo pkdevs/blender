@@ -1005,10 +1005,10 @@ class USERPREF_MT_interface_theme_presets(Menu):
     bl_label = "Presets"
 
     preset_subdir = "interface_theme"
-    preset_operator = "script.execute_preset"
+    preset_operator = "wm.interface_theme_preset_set"
     preset_type = 'XML'
     preset_xml_map = (
-        ("preferences.themes[0]", "Theme"),
+        ("preferences.active_theme", "Theme"),
         ("preferences.ui_styles[0]", "ThemeStyle"),
     )
     # Prevent untrusted XML files "escaping" from these types.
@@ -1056,14 +1056,6 @@ class USERPREF_MT_interface_theme_presets(Menu):
 
     draw = Menu.draw_preset
 
-    @staticmethod
-    def reset_cb(_context, _filepath):
-        bpy.ops.preferences.reset_default_theme()
-
-    @staticmethod
-    def post_cb(context, filepath):
-        context.preferences.themes[0].filepath = filepath
-
 
 class USERPREF_PT_theme(ThemePanel, Panel):
     bl_label = "Themes"
@@ -1071,8 +1063,12 @@ class USERPREF_PT_theme(ThemePanel, Panel):
 
     def draw(self, context):
         import os
+        prefs = context.preferences
 
         layout = self.layout
+
+        row = layout.row()
+        row.prop(prefs, "active_theme_type", text="")
 
         split = layout.split(factor=0.6)
 
@@ -1080,14 +1076,13 @@ class USERPREF_PT_theme(ThemePanel, Panel):
 
         # Unlike most presets (which use the classes bl_label),
         # themes store the path, use this when set.
-        if filepath := context.preferences.themes[0].filepath:
+        if filepath := context.preferences.active_theme.filepath:
             preset_label = bpy.path.display_name(os.path.basename(filepath))
         else:
-            # If the `filepath` is empty, assume the theme was reset and use the default theme name as a label.
-            # This would typically be:
-            # `preset_label = USERPREF_MT_interface_theme_presets.bl_label`
-            # However the operator to reset the preferences doesn't clear the value,
-            # so it's simplest to hard-code "Presets" here.
+            # The only remaining way to reach an empty `filepath` is a theme that was never
+            # associated with a preset at all, e.g. a brand new preferences before the theme
+            # system has been touched (`preferences.reset_default_theme` and picking a preset
+            # from the menu both always stamp a real `filepath`).
             preset_label = "Presets"
 
         row.menu("USERPREF_MT_interface_theme_presets", text=preset_label)
@@ -1116,7 +1111,7 @@ class PreferenceThemeWidgetColorPanel:
     bl_parent_id = "USERPREF_PT_theme_user_interface"
 
     def draw(self, context):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
         ui = theme.user_interface
         widget_style = getattr(ui, self.wcol)
         layout = self.layout
@@ -1148,7 +1143,7 @@ class PreferenceThemeWidgetColorPanel:
 class PreferenceThemeWidgetShadePanel:
 
     def draw(self, context):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
         ui = theme.user_interface
         widget_style = getattr(ui, self.wcol)
         layout = self.layout
@@ -1161,7 +1156,7 @@ class PreferenceThemeWidgetShadePanel:
         col.prop(widget_style, "shadedown", text="Down")
 
     def draw_header(self, context):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
         ui = theme.user_interface
         widget_style = getattr(ui, self.wcol)
 
@@ -1174,7 +1169,7 @@ class USERPREF_PT_theme_interface_panel(ThemePanel, CenterAlignMixIn, Panel):
     bl_parent_id = "USERPREF_PT_theme_user_interface"
 
     def draw_centered(self, context, layout):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
         ui = theme.user_interface
 
         flow = layout.grid_flow(row_major=False, columns=2, even_columns=True, even_rows=False, align=False)
@@ -1204,7 +1199,7 @@ class USERPREF_PT_theme_interface_state(ThemePanel, CenterAlignMixIn, Panel):
     bl_parent_id = "USERPREF_PT_theme_user_interface"
 
     def draw_centered(self, context, layout):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
         ui_state = theme.user_interface.wcol_state
 
         flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
@@ -1246,7 +1241,7 @@ class USERPREF_PT_theme_interface_styles(ThemePanel, CenterAlignMixIn, Panel):
     bl_parent_id = "USERPREF_PT_theme_user_interface"
 
     def draw_centered(self, context, layout):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
         ui = theme.user_interface
 
         flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
@@ -1273,7 +1268,7 @@ class USERPREF_PT_theme_interface_transparent_checker(ThemePanel, CenterAlignMix
     bl_parent_id = "USERPREF_PT_theme_interface_styles"
 
     def draw_centered(self, context, layout):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
         ui = theme.user_interface
 
         flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
@@ -1292,7 +1287,7 @@ class USERPREF_PT_theme_interface_gizmos(ThemePanel, CenterAlignMixIn, Panel):
     bl_parent_id = "USERPREF_PT_theme_user_interface"
 
     def draw_centered(self, context, layout):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
         ui = theme.user_interface
 
         flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
@@ -1321,7 +1316,7 @@ class USERPREF_PT_theme_interface_icons(ThemePanel, CenterAlignMixIn, Panel):
     bl_parent_id = "USERPREF_PT_theme_user_interface"
 
     def draw_centered(self, context, layout):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
         ui = theme.user_interface
 
         flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
@@ -1393,7 +1388,7 @@ class USERPREF_PT_theme_bone_color_sets(ThemePanel, CenterAlignMixIn, Panel):
     bl_parent_id = "USERPREF_PT_theme_color_sets"
 
     def draw_centered(self, context, layout):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
 
         layout.use_property_split = True
 
@@ -1414,7 +1409,7 @@ class USERPREF_PT_theme_collection_colors(ThemePanel, CenterAlignMixIn, Panel):
     bl_parent_id = "USERPREF_PT_theme_color_sets"
 
     def draw_centered(self, context, layout):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
 
         layout.use_property_split = True
 
@@ -1429,7 +1424,7 @@ class USERPREF_PT_theme_strip_colors(ThemePanel, CenterAlignMixIn, Panel):
     bl_parent_id = "USERPREF_PT_theme_color_sets"
 
     def draw_centered(self, context, layout):
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
 
         layout.use_property_split = True
 
@@ -1471,7 +1466,7 @@ class PreferenceThemeSpacePanel:
 
     def draw(self, context):
         layout = self.layout
-        theme = context.preferences.themes[0]
+        theme = context.preferences.active_theme
 
         datapath_list = self.datapath.split(".")
         data = theme

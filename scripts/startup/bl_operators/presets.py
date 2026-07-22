@@ -694,6 +694,101 @@ class AddPresetNodeColor(AddPresetBase, Operator):
     preset_subdir = "node_color"
 
 
+class SetPresetInterfaceTheme(Operator):
+    """Make a theme preset active for the current theme type (light/dark), loading it for
+    the first time if it hasn't been loaded yet"""
+    bl_idname = "wm.interface_theme_preset_set"
+    bl_label = "Set Theme"
+
+    filepath: StringProperty(
+        subtype='FILE_PATH',
+        options={'SKIP_SAVE'},
+    )
+    menu_idname: StringProperty(
+        name="Menu ID Name",
+        description="ID name of the menu this was called from",
+        options={'SKIP_SAVE'},
+    )
+    force_reset: BoolProperty(
+        default=False,
+        options={'HIDDEN', 'SKIP_SAVE'},
+        description="Reload the preset's values even if it was already loaded, "
+        "discarding any live edits",
+    )
+
+    def execute(self, context):
+        from os.path import basename
+        filepath = self.filepath
+
+        # change the menu title to the most recently chosen option
+        preset_class = getattr(bpy.types, self.menu_idname)
+        preset_class.bl_label = bpy.path.display_name(basename(filepath), title_case=False)
+
+        # A theme already loaded for `filepath` only has its values (re)loaded from the XML
+        # below when `force_reset` is set, keeping any live edits otherwise. A brand new one
+        # always needs its values loaded, since `ensure_theme` only resets it to a baseline.
+        is_new = not any(theme.filepath == filepath for theme in context.preferences.themes)
+
+        bpy.ops.preferences.ensure_theme(filepath=filepath, force_reset=self.force_reset)
+
+        if is_new or self.force_reset:
+            import _rna_xml as rna_xml
+            try:
+                rna_xml.xml_file_run(
+                    context,
+                    filepath,
+                    preset_class.preset_xml_map,
+                    secure_types=getattr(preset_class, "preset_xml_secure_types", None),
+                )
+            except Exception as ex:
+                self.report({'ERROR'}, rpt_("Failed to execute the preset: {:s}").format(repr(ex)))
+                return {'CANCELLED'}
+
+        return {'FINISHED'}
+
+
+class ResetTheme(Operator):
+    """Reset the active theme's current values to the properties saved in its theme file"""
+    bl_idname = "preferences.reset_theme"
+    bl_label = "Reset Theme"
+
+    def execute(self, context):
+        filepath = context.preferences.active_theme.filepath
+        if not filepath:
+            self.report({'ERROR'}, "The active theme has no saved preset to reset to")
+            return {'CANCELLED'}
+
+        return bpy.ops.wm.interface_theme_preset_set(
+            filepath=filepath,
+            menu_idname="USERPREF_MT_interface_theme_presets",
+            force_reset=True,
+        )
+
+
+class ResetDefaultTheme(Operator):
+    """Reset the active theme to Blender's built-in default colors"""
+    bl_idname = "preferences.reset_default_theme"
+    bl_label = "Reset to Default Theme"
+
+    def execute(self, context):
+        prefs = context.preferences
+        is_dark = prefs.active_theme.as_pointer() == prefs.active_theme_dark.as_pointer()
+        filename = "Blender_Dark" if is_dark else "Blender_Light"
+
+        filepath = bpy.utils.preset_find(filename, "interface_theme", ext=".xml")
+        if not filepath:
+            self.report({'ERROR'}, "Could not find the built-in theme preset")
+            return {'CANCELLED'}
+
+        bpy.ops.preferences.reset_default_ui_style()
+
+        return bpy.ops.wm.interface_theme_preset_set(
+            filepath=filepath,
+            menu_idname="USERPREF_MT_interface_theme_presets",
+            force_reset=True,
+        )
+
+
 class AddPresetInterfaceTheme(AddPresetBase, Operator):
     """Add a custom theme to the preset list"""
     bl_idname = "wm.interface_theme_preset_add"
@@ -704,7 +799,7 @@ class AddPresetInterfaceTheme(AddPresetBase, Operator):
     def post_cb(self, context, filepath):
         # Ensure the saved preset is considered "active" after saving.
         # Typically handled by the classes `bl_label` however themes use the `filepath` instead.
-        context.preferences.themes[0].filepath = filepath
+        context.preferences.active_theme.filepath = filepath
 
 
 class RemovePresetInterfaceTheme(AddPresetBase, Operator):
@@ -723,7 +818,7 @@ class RemovePresetInterfaceTheme(AddPresetBase, Operator):
     # while redrawing as it may involve remote file-system access.
 
     def invoke(self, context, event):
-        filepath = context.preferences.themes[0].filepath
+        filepath = context.preferences.active_theme.filepath
         if (not filepath) or _is_path_readonly(filepath):
             self.report({'ERROR'}, "Built-in themes cannot be removed")
             return {'CANCELLED'}
@@ -753,7 +848,7 @@ class SavePresetInterfaceTheme(AddPresetBase, Operator):
 
     def execute(self, context):
         import _rna_xml as rna_xml
-        filepath = context.preferences.themes[0].filepath
+        filepath = context.preferences.active_theme.filepath
         if (not filepath) or _is_path_readonly(filepath):
             self.report({'ERROR'}, "Built-in themes cannot be overwritten")
             return {'CANCELLED'}
@@ -767,12 +862,12 @@ class SavePresetInterfaceTheme(AddPresetBase, Operator):
             traceback.print_exc()
             return {'CANCELLED'}
 
-        context.preferences.themes[0].filepath = filepath
+        context.preferences.active_theme.filepath = filepath
 
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        filepath = context.preferences.themes[0].filepath
+        filepath = context.preferences.active_theme.filepath
         if (not filepath) or _is_path_readonly(filepath):
             self.report({'ERROR'}, "Built-in themes cannot be overwritten")
             return {'CANCELLED'}
@@ -1076,6 +1171,9 @@ classes = (
     AddPresetCloth,
     AddPresetFluid,
     AddPresetHairDynamics,
+    SetPresetInterfaceTheme,
+    ResetTheme,
+    ResetDefaultTheme,
     AddPresetInterfaceTheme,
     RemovePresetInterfaceTheme,
     SavePresetInterfaceTheme,

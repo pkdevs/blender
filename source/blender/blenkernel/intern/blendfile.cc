@@ -1548,6 +1548,7 @@ UserDef *BKE_blendfile_userdef_from_defaults()
     memcpy(btheme, &U_theme_default, sizeof(*btheme));
 
     BLI_addtail(&userdef->themes, btheme);
+    userdef->active_theme_dark = btheme;
   }
 
 #ifdef WITH_PYTHON_SECURITY

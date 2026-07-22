@@ -1529,7 +1529,7 @@ void view2d_scrollers_draw(View2D *v2d, const rcti *mask_custom)
     }
     wcol.item[3] *= alpha_fac;
     wcol.outline[3] = 0;
-    btheme->tui.widget_emboss[3] = 0; /* will be reset later */
+    const_cast<bTheme *>(btheme)->tui.widget_emboss[3] = 0; /* will be reset later */
 
     /* show zoom handles if:
      * - zooming on x-axis is allowed (no scroll otherwise)
@@ -1573,7 +1573,7 @@ void view2d_scrollers_draw(View2D *v2d, const rcti *mask_custom)
     }
     wcol.item[3] *= alpha_fac;
     wcol.outline[3] = 0;
-    btheme->tui.widget_emboss[3] = 0; /* will be reset later */
+    const_cast<bTheme *>(btheme)->tui.widget_emboss[3] = 0; /* will be reset later */
 
     /* show zoom handles if:
      * - zooming on y-axis is allowed (no scroll otherwise)
@@ -1592,7 +1592,7 @@ void view2d_scrollers_draw(View2D *v2d, const rcti *mask_custom)
   }
 
   /* Was changed above, so reset. */
-  btheme->tui.widget_emboss[3] = emboss_alpha;
+  const_cast<bTheme *>(btheme)->tui.widget_emboss[3] = emboss_alpha;
 }
 
 /** \} */

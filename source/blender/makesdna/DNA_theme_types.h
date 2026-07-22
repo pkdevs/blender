@@ -501,7 +501,7 @@ typedef struct ThemeStripColor {
  * \note Currently only the first theme is used at once.
  * Different theme presets are stored as external files now.
  */
-struct bTheme {
+typedef struct bTheme {
   struct bTheme *next, *prev;
   char name[/*MAX_NAME*/ 64];
 
@@ -554,7 +554,7 @@ struct bTheme {
   ThemeStripColor strip_color[9];
 
   int active_theme_area;
-};
+} bTheme;
 
 #define UI_THEMESPACE_START(btheme) \
   (CHECK_TYPE_INLINE(btheme, bTheme *), &((btheme)->space_properties))

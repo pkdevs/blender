@@ -78,9 +78,9 @@ namespace theme {
 /** \name Themes
  * \{ */
 
-const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
+const uchar *get_color_ptr(const bTheme *btheme, int spacetype, int colorid)
 {
-  ThemeSpace *ts = nullptr;
+  const ThemeSpace *ts = nullptr;
   static uchar error[4] = {240, 0, 240, 255};
   static uchar back[4] = {0, 0, 0, 255};
   static uchar none[4] = {0, 0, 0, 0};
@@ -1112,6 +1112,8 @@ void init_default()
   /* Must be first, see `U.themes` docstring. */
   BLI_listbase_rotate_first(&U.themes, btheme);
 
+  U.active_theme_dark = btheme;
+
   theme_set(0, 0); /* make sure the global used in this file is set */
 
   const int active_theme_area = btheme->active_theme_area;
@@ -1144,7 +1146,7 @@ void theme_set(int spacetype, int regionid)
 
 const bTheme *theme_get()
 {
-  return static_cast<bTheme *>(U.themes.first);
+  return &bke::active_theme_get();
 }
 
 void theme_store(bThemeState *theme_state)

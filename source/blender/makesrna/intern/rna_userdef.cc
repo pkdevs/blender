@@ -25,6 +25,7 @@
 #include "BLT_translation.hh"
 
 #include "BKE_studiolight.h"
+#include "BKE_theme.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -938,6 +939,12 @@ static const EnumPropertyItem *rna_UseDef_active_section_itemf(bContext * /*C*/,
 {
   UserDef *userdef = static_cast<UserDef *>(ptr->data);
   return BKE_preferences_active_section_itemf(userdef, r_free);
+}
+
+static PointerRNA rna_UserDef_active_theme_get(PointerRNA *ptr)
+{
+  bTheme *btheme = const_cast<bTheme *>(&blender::bke::active_theme_get());
+  return RNA_pointer_create_with_parent(*ptr, RNA_Theme, btheme);
 }
 
 static PointerRNA rna_UserDef_view_get(PointerRNA *ptr)
@@ -7800,6 +7807,15 @@ void RNA_def_userdef(BlenderRNA *brna)
   RNA_def_property_string_sdna(prop, nullptr, "app_template");
   RNA_def_property_ui_text(prop, "Application Template", "");
 
+  prop = RNA_def_property(srna, "active_theme", PROP_POINTER, PROP_NONE);
+  RNA_def_property_pointer_funcs(prop, "rna_UserDef_active_theme_get", nullptr, nullptr, nullptr);
+  RNA_def_property_struct_type(prop, "Theme");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop,
+      "Active Theme",
+      "The theme currently in use, resolved from Active Theme Type/Dark Theme/Light Theme");
+
   prop = RNA_def_property(srna, "themes", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_collection_sdna(prop, nullptr, "themes", nullptr);
   RNA_def_property_struct_type(prop, "Theme");
@@ -7945,9 +7961,9 @@ void RNA_def_userdef(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
   prop = RNA_def_property(srna, "active_theme_light", PROP_POINTER, PROP_NONE);
-  RNA_def_property_flag(prop, PROP_NEVER_NULL);
   RNA_def_property_struct_type(prop, "Theme");
-  RNA_def_property_ui_text(prop, "Light Theme", "");
+  RNA_def_property_ui_text(
+      prop, "Light Theme", "Falls back to the dark theme when unset");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
   /* Preferences Flags */

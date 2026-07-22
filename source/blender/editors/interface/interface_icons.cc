@@ -1509,7 +1509,7 @@ static void svg_replace_color_attributes(std::string &svg,
 
   const struct ColorItem {
     const char *name;
-    uchar *col = nullptr;
+    const uchar *col = nullptr;
     int colorid = TH_UNDEFINED;
     int spacetype = SPACE_TYPE_ANY;
   } items[] = {

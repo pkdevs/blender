@@ -735,7 +735,7 @@ class DATA_OT_rigify_color_set_add_theme(bpy.types.Operator):
 
             color_id = int(self.theme[-2:]) - 1
 
-            theme_color_set = bpy.context.preferences.themes[0].bone_color_sets[color_id]
+            theme_color_set = bpy.context.preferences.active_theme.bone_color_sets[color_id]
 
             rigify_colors[-1].normal = theme_color_set.normal
             rigify_colors[-1].select = theme_color_set.select

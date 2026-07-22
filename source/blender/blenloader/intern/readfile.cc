@@ -4051,6 +4051,8 @@ static BHead *read_userdef(BlendFileData *bfd, FileData *fd, BHead *bhead)
   BlendDataReader *reader = &reader_;
 
   BLO_read_struct_list(reader, bTheme, &user->themes);
+  BLO_read_struct(reader, bTheme, &user->active_theme_dark);
+  BLO_read_struct(reader, bTheme, &user->active_theme_light);
   BLO_read_struct_list(reader, wmKeyMap, &user->user_keymaps);
   BLO_read_struct_list(reader, wmKeyConfigPref, &user->user_keyconfig_prefs);
   BLO_read_struct_list(reader, bUserMenu, &user->user_menus);

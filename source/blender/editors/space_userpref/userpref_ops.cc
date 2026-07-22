@@ -60,10 +60,9 @@ namespace blender {
 /** \name Theme Operators
  * \{ */
 
-static wmOperatorStatus preferences_reset_default_theme_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus preferences_reset_default_ui_style_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
-  ui::theme::init_default();
   ui::style_init_default();
   WM_reinit_gizmomap_all(bmain);
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
@@ -72,45 +71,29 @@ static wmOperatorStatus preferences_reset_default_theme_exec(bContext *C, wmOper
   return OPERATOR_FINISHED;
 }
 
-static void PREFERENCES_OT_reset_default_theme(wmOperatorType *ot)
+static void PREFERENCES_OT_reset_default_ui_style(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Reset to Default Theme";
-  ot->idname = "PREFERENCES_OT_reset_default_theme";
-  ot->description = "Reset to the default theme colors";
+  ot->name = "Reset to Default UI Style";
+  ot->idname = "PREFERENCES_OT_reset_default_ui_style";
+  ot->description = "Reset the interface font style to its default settings";
 
   /* callbacks */
-  ot->exec = preferences_reset_default_theme_exec;
+  ot->exec = preferences_reset_default_ui_style_exec;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER;
 }
 
-static wmOperatorStatus preferences_reset_theme_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus preferences_ensure_theme_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  bke::reset_theme(const_cast<bTheme &>(bke::active_theme_get()));
-  WM_reinit_gizmomap_all(bmain);
-  WM_event_add_notifier(C, NC_WINDOW, nullptr);
-  U.runtime.is_dirty = true;
-  return OPERATOR_FINISHED;
-}
 
-static void PREFERENCES_OT_reset_theme(wmOperatorType *ot)
-{
-  ot->name = "Reset Theme";
-  ot->idname = "PREFERENCES_OT_reset_theme";
-  ot->description = "Reset to the saved theme state";
+  char filepath[FILE_MAX];
+  RNA_string_get(op->ptr, "filepath", filepath);
+  const bool force_reset = RNA_boolean_get(op->ptr, "force_reset");
+  bke::ensure_theme(filepath, bke::resolve_active_theme_type(), force_reset);
 
-  ot->exec = preferences_reset_theme_exec;
-
-  ot->flag = OPTYPE_REGISTER;
-}
-
-static wmOperatorStatus preferences_ensure_theme_exec(bContext *C, wmOperator * /*op*/)
-{
-  Main *bmain = CTX_data_main(C);
-  // TODO
   WM_reinit_gizmomap_all(bmain);
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
   U.runtime.is_dirty = true;
@@ -121,32 +104,22 @@ static void PREFERENCES_OT_ensure_theme(wmOperatorType *ot)
 {
   ot->name = "Ensure Theme";
   ot->idname = "PREFERENCES_OT_ensure_theme";
-  ot->description = "Reset to the saved theme state";
+  ot->description =
+      "Make sure the currently active (light or dark) theme is backed by a theme preset at the "
+      "given file path, creating one if it doesn't exist yet";
 
   ot->exec = preferences_ensure_theme_exec;
 
   ot->flag = OPTYPE_REGISTER;
-}
 
-static wmOperatorStatus preferences_save_theme_exec(bContext *C, wmOperator * /*op*/)
-{
-  Main *bmain = CTX_data_main(C);
-  bke::save_theme(const_cast<bTheme &>(bke::active_theme_get()));
-  WM_reinit_gizmomap_all(bmain);
-  WM_event_add_notifier(C, NC_WINDOW, nullptr);
-  U.runtime.is_dirty = true;
-  return OPERATOR_FINISHED;
-}
-
-static void PREFERENCES_OT_save_theme(wmOperatorType *ot)
-{
-  ot->name = "Save Theme";
-  ot->idname = "PREFERENCES_OT_save_theme";
-  ot->description = "Reset to the saved theme state";
-
-  ot->exec = preferences_save_theme_exec;
-
-  ot->flag = OPTYPE_REGISTER;
+  RNA_def_string_file_path(
+      ot->srna, "filepath", nullptr, FILE_MAX, "File Path", "Path of the theme preset");
+  RNA_def_boolean(ot->srna,
+                   "force_reset",
+                   false,
+                   "Force Reset",
+                   "Reset the theme's values to the compiled-in baseline even if it was "
+                   "already loaded, discarding any live edits");
 }
 
 /** \} */
@@ -1365,10 +1338,8 @@ void PREFERENCES_OT_clear_filter(wmOperatorType *ot)
 
 void ED_operatortypes_userpref()
 {
-  WM_operatortype_append(PREFERENCES_OT_reset_default_theme);
-  WM_operatortype_append(PREFERENCES_OT_reset_theme);
+  WM_operatortype_append(PREFERENCES_OT_reset_default_ui_style);
   WM_operatortype_append(PREFERENCES_OT_ensure_theme);
-  WM_operatortype_append(PREFERENCES_OT_save_theme);
 
   WM_operatortype_append(PREFERENCES_OT_autoexec_path_add);
   WM_operatortype_append(PREFERENCES_OT_autoexec_path_remove);

@@ -1040,12 +1040,15 @@ struct UserDef {
 
   UserPrefActiveThemeType active_theme_type = UserPrefActiveThemeType::System;
 
+  char _pad[7] = {};
+
+  /** Theme for dark mode of #UserPrefActiveThemeType, referencing #themes. */
   bTheme *active_theme_dark;
+  /** Theme for light mode of #UserPrefActiveThemeType, referencing #themes. */
   bTheme *active_theme_light;
 
   /**
-   * A list of themes (#bTheme), the first is only used currently.
-   * But there may be multiple themes in the list.
+   * A list of themes (#bTheme).
    */
   ListBaseT<bTheme> themes = {nullptr, nullptr};
   ListBaseT<uiFont> uifonts = {nullptr, nullptr};

@@ -1785,6 +1785,16 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->asset_flag |= USER_ASSETS_USE_ONLINE_ESSENTIALS;
   }
 
+  if (!USER_VERSION_ATLEAST(503, 9)) {
+    /* The dark/light theme split is new: preferences saved before it predate
+     * `active_theme_dark`/`active_theme_light`, so point the (until now, only) dark slot at the
+     * existing theme. The light slot is left unset, falling back to the dark theme until the
+     * user picks one, see #blender::bke::active_theme_get. */
+    if (!userdef->active_theme_dark) {
+      userdef->active_theme_dark = static_cast<bTheme *>(userdef->themes.first);
+    }
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.

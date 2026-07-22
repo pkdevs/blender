@@ -621,7 +621,7 @@ class PREFERENCES_OT_theme_install(Operator):
 
         try:
             shutil.copyfile(xmlfile, path_dest)
-            bpy.ops.script.execute_preset(
+            bpy.ops.wm.interface_theme_preset_set(
                 filepath=path_dest,
                 menu_idname="USERPREF_MT_interface_theme_presets",
             )
