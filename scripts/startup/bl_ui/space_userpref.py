@@ -1099,7 +1099,7 @@ class USERPREF_PT_theme(ThemePanel, Panel):
 
         row = split.row(align=True)
         row.operator("preferences.theme_install", text="Install...", icon='IMPORT')
-        row.operator("preferences.reset_default_theme", text="Reset", icon='LOOP_BACK')
+        row.operator("preferences.reset_theme", text="Reset", icon='LOOP_BACK')
 
 
 class USERPREF_PT_theme_user_interface(ThemePanel, CenterAlignMixIn, Panel):

@@ -7926,6 +7926,30 @@ void RNA_def_userdef(BlenderRNA *brna)
                                     nullptr);
   RNA_def_property_ui_text(prop, "Studio Lights", "");
 
+  static const EnumPropertyItem active_theme_type_items[] = {
+      {int(UserPrefActiveThemeType::Dark), "DARK", 0, "Dark", ""},
+      {int(UserPrefActiveThemeType::Light), "LIGHT", 0, "Light", ""},
+      {int(UserPrefActiveThemeType::System), "SYSTEM", 0, "System", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  prop = RNA_def_property(srna, "active_theme_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, active_theme_type_items);
+  RNA_def_property_ui_text(prop, "Active Theme Type", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
+  prop = RNA_def_property(srna, "active_theme_dark", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_NEVER_NULL);
+  RNA_def_property_struct_type(prop, "Theme");
+  RNA_def_property_ui_text(prop, "Dark Theme", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
+  prop = RNA_def_property(srna, "active_theme_light", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_NEVER_NULL);
+  RNA_def_property_struct_type(prop, "Theme");
+  RNA_def_property_ui_text(prop, "Light Theme", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
   /* Preferences Flags */
   prop = RNA_def_property(srna, "use_preferences_save", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "pref_flag", USER_PREF_FLAG_SAVE);

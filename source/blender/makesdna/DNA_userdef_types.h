@@ -799,6 +799,12 @@ enum eUserPref_SpaceData_Flag : char {
 };
 ENUM_OPERATORS(eUserPref_SpaceData_Flag)
 
+enum class UserPrefActiveThemeType : int8_t {
+  Dark = 0,
+  Light = 1,
+  System = 2,
+};
+
 /**
  * Store UI data here instead of the space
  * since the space is typically a window which is freed.
@@ -1031,6 +1037,11 @@ struct UserDef {
 
   /** Startup application template. */
   char app_template[64] = "";
+
+  UserPrefActiveThemeType active_theme_type = UserPrefActiveThemeType::System;
+
+  bTheme *active_theme_dark;
+  bTheme *active_theme_light;
 
   /**
    * A list of themes (#bTheme), the first is only used currently.

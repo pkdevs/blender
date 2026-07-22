@@ -23,6 +23,7 @@
 
 #include "BKE_addon.h"
 #include "BKE_appdir.hh"
+#include "BKE_theme.hh"
 
 #include "BLO_userdef_default.h"
 
@@ -1120,27 +1121,28 @@ void init_default()
 
 void theme_set(int spacetype, int regionid)
 {
+  const bTheme &theme = bke::active_theme_get();
   if (spacetype) {
     /* later on, a local theme can be found too */
-    g_theme_state.theme = static_cast<bTheme *>(U.themes.first);
+    g_theme_state.theme = &theme;
     g_theme_state.spacetype = spacetype;
     g_theme_state.regionid = regionid;
   }
   else if (regionid) {
     /* popups */
-    g_theme_state.theme = static_cast<bTheme *>(U.themes.first);
+    g_theme_state.theme = &theme;
     g_theme_state.spacetype = SPACE_PROPERTIES;
     g_theme_state.regionid = regionid;
   }
   else {
     /* for safety, when theme was deleted */
-    g_theme_state.theme = static_cast<bTheme *>(U.themes.first);
+    g_theme_state.theme = &theme;
     g_theme_state.spacetype = SPACE_VIEW3D;
     g_theme_state.regionid = RGN_TYPE_WINDOW;
   }
 }
 
-bTheme *theme_get()
+const bTheme *theme_get()
 {
   return static_cast<bTheme *>(U.themes.first);
 }

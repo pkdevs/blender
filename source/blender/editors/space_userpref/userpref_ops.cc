@@ -29,6 +29,7 @@
 #include "BKE_main.hh"
 #include "BKE_preferences.h"
 #include "BKE_screen.hh"
+#include "BKE_theme.hh"
 
 #include "BKE_report.hh"
 
@@ -56,7 +57,7 @@
 namespace blender {
 
 /* -------------------------------------------------------------------- */
-/** \name Reset Default Theme Operator
+/** \name Theme Operators
  * \{ */
 
 static wmOperatorStatus preferences_reset_default_theme_exec(bContext *C, wmOperator * /*op*/)
@@ -82,6 +83,69 @@ static void PREFERENCES_OT_reset_default_theme(wmOperatorType *ot)
   ot->exec = preferences_reset_default_theme_exec;
 
   /* flags */
+  ot->flag = OPTYPE_REGISTER;
+}
+
+static wmOperatorStatus preferences_reset_theme_exec(bContext *C, wmOperator * /*op*/)
+{
+  Main *bmain = CTX_data_main(C);
+  bke::reset_theme(const_cast<bTheme &>(bke::active_theme_get()));
+  WM_reinit_gizmomap_all(bmain);
+  WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  U.runtime.is_dirty = true;
+  return OPERATOR_FINISHED;
+}
+
+static void PREFERENCES_OT_reset_theme(wmOperatorType *ot)
+{
+  ot->name = "Reset Theme";
+  ot->idname = "PREFERENCES_OT_reset_theme";
+  ot->description = "Reset to the saved theme state";
+
+  ot->exec = preferences_reset_theme_exec;
+
+  ot->flag = OPTYPE_REGISTER;
+}
+
+static wmOperatorStatus preferences_ensure_theme_exec(bContext *C, wmOperator * /*op*/)
+{
+  Main *bmain = CTX_data_main(C);
+  // TODO
+  WM_reinit_gizmomap_all(bmain);
+  WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  U.runtime.is_dirty = true;
+  return OPERATOR_FINISHED;
+}
+
+static void PREFERENCES_OT_ensure_theme(wmOperatorType *ot)
+{
+  ot->name = "Ensure Theme";
+  ot->idname = "PREFERENCES_OT_ensure_theme";
+  ot->description = "Reset to the saved theme state";
+
+  ot->exec = preferences_ensure_theme_exec;
+
+  ot->flag = OPTYPE_REGISTER;
+}
+
+static wmOperatorStatus preferences_save_theme_exec(bContext *C, wmOperator * /*op*/)
+{
+  Main *bmain = CTX_data_main(C);
+  bke::save_theme(const_cast<bTheme &>(bke::active_theme_get()));
+  WM_reinit_gizmomap_all(bmain);
+  WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  U.runtime.is_dirty = true;
+  return OPERATOR_FINISHED;
+}
+
+static void PREFERENCES_OT_save_theme(wmOperatorType *ot)
+{
+  ot->name = "Save Theme";
+  ot->idname = "PREFERENCES_OT_save_theme";
+  ot->description = "Reset to the saved theme state";
+
+  ot->exec = preferences_save_theme_exec;
+
   ot->flag = OPTYPE_REGISTER;
 }
 
@@ -1302,6 +1366,9 @@ void PREFERENCES_OT_clear_filter(wmOperatorType *ot)
 void ED_operatortypes_userpref()
 {
   WM_operatortype_append(PREFERENCES_OT_reset_default_theme);
+  WM_operatortype_append(PREFERENCES_OT_reset_theme);
+  WM_operatortype_append(PREFERENCES_OT_ensure_theme);
+  WM_operatortype_append(PREFERENCES_OT_save_theme);
 
   WM_operatortype_append(PREFERENCES_OT_autoexec_path_add);
   WM_operatortype_append(PREFERENCES_OT_autoexec_path_remove);

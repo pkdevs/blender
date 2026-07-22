@@ -56,6 +56,7 @@
 #include "BKE_object_types.hh"
 #include "BKE_pose.hh"
 #include "BKE_preview_image.hh"
+#include "BKE_theme.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -791,7 +792,7 @@ void action_group_colors_sync(bActionGroup *grp)
   }
   if (grp->customCol > 0) {
     /* Copy theme colors on-to group's custom color in case user tries to edit color. */
-    const bTheme *btheme = static_cast<const bTheme *>(U.themes.first);
+    const bTheme *btheme = &bke::active_theme_get();
     const ThemeWireColor *col_set = &btheme->tarm[(grp->customCol - 1)];
 
     memcpy(&grp->cs, col_set, sizeof(ThemeWireColor));
