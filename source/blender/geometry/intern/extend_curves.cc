@@ -48,7 +48,7 @@ static void extend_curve_straight(const float used_percent_length,
                                       positions[new_curve[index2]],
                                       fmodf(overshoot_point_param, 1.0f));
     result -= positions[new_curve.first()];
-    if (UNLIKELY(math::is_zero(result))) {
+    if (math::is_zero(result)) [[unlikely]] {
       result = positions[new_curve[1]] - positions[new_curve[0]];
     }
     positions[new_curve[0]] += result * (-use_start_lengths[curve] / math::length(result));
@@ -61,7 +61,7 @@ static void extend_curve_straight(const float used_percent_length,
                                       positions[new_curve[index2]],
                                       fmodf(overshoot_point_param, 1.0f));
     result -= positions[new_curve.last()];
-    if (UNLIKELY(math::is_zero(result))) {
+    if (math::is_zero(result)) [[unlikely]] {
       result = positions[new_curve[new_size - 2]] - positions[new_curve[new_size - 1]];
     }
     positions[new_curve[new_size - 1]] += result *
@@ -145,7 +145,7 @@ static void extend_curve_curved(const float used_percent_length,
       total_angle += no;
     }
 
-    if (UNLIKELY(overshoot_length == 0.0f)) {
+    if (overshoot_length == 0.0f) [[unlikely]] {
       /* Don't do a proper extension if the used points are all in the same position. */
       continue;
     }
@@ -220,7 +220,7 @@ bke::CurvesGeometry extend_curves(bke::CurvesGeometry &src_curves,
 
   /* Extra point count at the start/end of extended strokes. For straight extension, or for strokes
    * with only 2 points (thus unable to curve), the value of their respective index should be set
-   * to 1 to allow #extend_curves_straight() to identify strokes to work on.  */
+   * to 1 to allow #extend_curves_straight() to identify strokes to work on. */
   Array<int> start_points(src_curves_num, 0);
   Array<int> end_points(src_curves_num, 0);
 
@@ -360,7 +360,10 @@ bke::CurvesGeometry extend_curves(bke::CurvesGeometry &src_curves,
       }
     }
   });
-
+  if (src_curves.nurbs_has_custom_knots()) {
+    bke::curves::nurbs::update_custom_knot_modes(
+        dst_curves.curves_range(), NURBS_KNOT_MODE_NORMAL, NURBS_KNOT_MODE_NORMAL, dst_curves);
+  }
   return dst_curves;
 }
 

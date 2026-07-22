@@ -19,11 +19,15 @@
 #ifdef RNA_RUNTIME
 
 #  include "BKE_idprop.hh"
+#  include "BKE_main.hh"
 #  include "BKE_scene.hh"
 #  include "BKE_screen.hh"
+
 #  include "WM_api.hh"
 
 #  include "DEG_depsgraph_build.hh"
+
+namespace blender {
 
 static IDProperty **rna_TimelineMarker_idprops(PointerRNA *ptr)
 {
@@ -40,7 +44,7 @@ static void rna_TimelineMarker_update(Main * /*bmain*/, Scene * /*scene*/, Point
 static void rna_TimelineMarker_camera_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 {
   wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
-  Scene *scene = (Scene *)ptr->owner_id;
+  Scene *scene = id_cast<Scene *>(ptr->owner_id);
 
   BKE_scene_camera_switch_update(scene);
   WM_windows_scene_data_sync(&wm->windows, scene);
@@ -51,7 +55,11 @@ static void rna_TimelineMarker_camera_update(Main *bmain, Scene * /*scene*/, Poi
   WM_main_add_notifier(NC_SCENE | NA_EDITED, scene); /* so we get view3d redraws */
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_timeline_marker(BlenderRNA *brna)
 {
@@ -61,7 +69,7 @@ static void rna_def_timeline_marker(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "TimelineMarker", nullptr);
   RNA_def_struct_sdna(srna, "TimeMarker");
   RNA_def_struct_ui_text(srna, "Marker", "Marker for noting points in the timeline");
-  RNA_def_struct_idprops_func(srna, "rna_TimelineMarker_idprops");
+  RNA_def_struct_system_idprops_func(srna, "rna_TimelineMarker_idprops");
 
   /* String values */
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
@@ -90,5 +98,7 @@ void RNA_def_timeline_marker(BlenderRNA *brna)
 {
   rna_def_timeline_marker(brna);
 }
+
+}  // namespace blender
 
 #endif

@@ -4,10 +4,14 @@
 
 #include "workbench_private.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_hash.h"
-#include "BLI_math_color.h"
+#include "BLI_ghash.hh"
+#include "BLI_hash_c.hh"
+#include "BLI_math_color_c.hh"
+
+#include "IMB_colormanagement.hh"
+
 /* get_image */
+#include "BKE_image_gpu.hh"
 #include "BKE_node_legacy_types.hh"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
@@ -16,15 +20,7 @@
 
 namespace blender::workbench {
 
-Material::Material() = default;
-
-Material::Material(float3 color)
-{
-  base_color = color;
-  packed_data = Material::pack_data(0.0f, 0.4f, 1.0f);
-}
-
-Material::Material(::Object &ob, bool random)
+Material::Material(blender::Object &ob, bool random)
 {
   if (random) {
     uint hash = BLI_ghashutil_strhash_p_murmur(ob.id.name);
@@ -33,6 +29,7 @@ Material::Material(::Object &ob, bool random)
     }
     float3 hsv = float3(BLI_hash_int_01(hash), 0.5f, 0.8f);
     hsv_to_rgb_v(hsv, base_color);
+    IMB_colormanagement_rec709_to_scene_linear(base_color, base_color);
   }
   else {
     base_color = ob.color;
@@ -40,33 +37,11 @@ Material::Material(::Object &ob, bool random)
   packed_data = Material::pack_data(0.0f, 0.4f, ob.color[3]);
 }
 
-Material::Material(::Material &mat)
+MaterialTexture::MaterialTexture(Manager &manager, Object *ob, int material_index)
 {
-  base_color = &mat.r;
-  packed_data = Material::pack_data(mat.metallic, mat.roughness, mat.a);
-}
+  const blender::bNode *node = nullptr;
 
-bool Material::is_transparent()
-{
-  uint32_t full_alpha_ref = 0x00ff0000;
-  return (packed_data & full_alpha_ref) != full_alpha_ref;
-}
-
-uint32_t Material::pack_data(float metallic, float roughness, float alpha)
-{
-  /* Remap to Disney roughness. */
-  roughness = sqrtf(roughness);
-  uint32_t packed_roughness = unit_float_to_uchar_clamp(roughness);
-  uint32_t packed_metallic = unit_float_to_uchar_clamp(metallic);
-  uint32_t packed_alpha = unit_float_to_uchar_clamp(alpha);
-  return (packed_alpha << 16u) | (packed_roughness << 8u) | packed_metallic;
-}
-
-MaterialTexture::MaterialTexture(Object *ob, int material_index)
-{
-  const ::bNode *node = nullptr;
-
-  ::Image *image = nullptr;
+  blender::Image *image = nullptr;
   ImageUser *user = nullptr;
   ED_object_get_active_image(ob, material_index + 1, &image, &user, &node, nullptr);
   if (!node || !image) {
@@ -109,15 +84,21 @@ MaterialTexture::MaterialTexture(Object *ob, int material_index)
       BLI_assert_msg(0, "Node type not supported by workbench");
   }
 
-  gpu = BKE_image_get_gpu_material_texture(image, user, true);
+  gpu = BKE_image_acquire_gpu_material_texture(image, user, true, false);
+  manager.hold_texture(gpu.texture);
+  manager.hold_texture(gpu.tile_mapping);
   premultiplied = image->alpha_mode == IMA_ALPHA_PREMUL;
   alpha_cutoff = !ELEM(image->alpha_mode, IMA_ALPHA_IGNORE, IMA_ALPHA_CHANNEL_PACKED);
   name = image->id.name;
 }
 
-MaterialTexture::MaterialTexture(::Image *image, ImageUser *user /* = nullptr */)
+MaterialTexture::MaterialTexture(Manager &manager,
+                                 blender::Image *image,
+                                 ImageUser *user /* = nullptr */)
 {
-  gpu = BKE_image_get_gpu_material_texture(image, user, true);
+  gpu = BKE_image_acquire_gpu_material_texture(image, user, true, false);
+  manager.hold_texture(gpu.texture);
+  manager.hold_texture(gpu.tile_mapping);
   premultiplied = image->alpha_mode == IMA_ALPHA_PREMUL;
   alpha_cutoff = !ELEM(image->alpha_mode, IMA_ALPHA_IGNORE, IMA_ALPHA_CHANNEL_PACKED);
   name = image->id.name;

@@ -10,7 +10,7 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* Initialize queues, so that the this path is considered terminated.
+/* Initialize queues, so that this path is considered terminated.
  * Used for early outputs in the camera ray initialization, as well as initialization of split
  * states for shadow catcher. */
 ccl_device_inline void path_state_init_queues(IntegratorState state)
@@ -51,14 +51,18 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, transparent_bounce) = 0;
   INTEGRATOR_STATE_WRITE(state, path, volume_bounce) = 0;
   INTEGRATOR_STATE_WRITE(state, path, volume_bounds_bounce) = 0;
+  if ((kernel_data.kernel_features & KERNEL_FEATURE_NODE_PORTAL)) {
+    INTEGRATOR_STATE_WRITE(state, path, portal_bounce) = 0;
+  }
   INTEGRATOR_STATE_WRITE(state, path, rng_pixel) = rng_pixel;
   INTEGRATOR_STATE_WRITE(state, path, rng_offset) = PRNG_BOUNCE_NUM;
-  INTEGRATOR_STATE_WRITE(state, path, flag) = PATH_RAY_CAMERA | PATH_RAY_MIS_SKIP |
-                                              PATH_RAY_TRANSPARENT_BACKGROUND;
+  INTEGRATOR_STATE_WRITE(state, path, visibility) = PATH_RAY_VISIBILITY_CAMERA;
+  INTEGRATOR_STATE_WRITE(state, path, flag) = PATH_RAY_MIS_SKIP | PATH_RAY_TRANSPARENT_BACKGROUND;
   INTEGRATOR_STATE_WRITE(state, path, mis_ray_pdf) = 0.0f;
   INTEGRATOR_STATE_WRITE(state, path, min_ray_pdf) = FLT_MAX;
   INTEGRATOR_STATE_WRITE(state, path, continuation_probability) = 1.0f;
   INTEGRATOR_STATE_WRITE(state, path, throughput) = throughput;
+  INTEGRATOR_STATE_WRITE(state, path, optical_depth) = 0.0f;
 #if defined(__PATH_GUIDING__)
   if ((kernel_data.kernel_features & KERNEL_FEATURE_PATH_GUIDING)) {
     INTEGRATOR_STATE_WRITE(state, path, unguided_throughput) = 1.0f;
@@ -81,7 +85,8 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, isect, type) = PRIMITIVE_NONE;
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_VOLUME) {
-    INTEGRATOR_STATE_ARRAY_WRITE(state, volume_stack, 0, object) = OBJECT_NONE;
+    INTEGRATOR_STATE_ARRAY_WRITE(
+        state, volume_stack, 0, object) = kernel_data.background.object_index;
     INTEGRATOR_STATE_ARRAY_WRITE(
         state, volume_stack, 0, shader) = kernel_data.background.volume_shader;
     INTEGRATOR_STATE_ARRAY_WRITE(state, volume_stack, 1, object) = OBJECT_NONE;
@@ -97,7 +102,7 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
 
 #ifdef __LIGHT_LINKING__
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_LINKING) {
-    INTEGRATOR_STATE_WRITE(state, path, mis_ray_object) = OBJECT_NONE;
+    INTEGRATOR_STATE_WRITE(state, path, mis_ray_object) = kernel_data.background.object_index;
   }
 #endif
 }
@@ -107,12 +112,13 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
                                        const int label,
                                        const int shader_flag)
 {
+  PathRayVisibility visibility = INTEGRATOR_STATE(state, path, visibility);
   uint32_t flag = INTEGRATOR_STATE(state, path, flag);
 
   /* ray through transparent keeps same flags from previous ray and is
    * not counted as a regular bounce, transparent has separate max */
   if (label & (LABEL_TRANSPARENT | LABEL_RAY_PORTAL)) {
-    const uint32_t transparent_bounce = INTEGRATOR_STATE(state, path, transparent_bounce) + 1;
+    const int transparent_bounce = INTEGRATOR_STATE(state, path, transparent_bounce) + 1;
 
     flag |= PATH_RAY_TRANSPARENT;
     if (transparent_bounce >= kernel_data.integrator.transparent_max_bounce) {
@@ -123,6 +129,8 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
 
     if (shader_flag & SD_RAY_PORTAL) {
       flag |= PATH_RAY_MIS_SKIP;
+      INTEGRATOR_STATE_WRITE(
+          state, path, portal_bounce) = INTEGRATOR_STATE(state, path, portal_bounce) + 1;
     }
 
     INTEGRATOR_STATE_WRITE(state, path, flag) = flag;
@@ -132,17 +140,20 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
     return;
   }
 
-  const uint32_t bounce = INTEGRATOR_STATE(state, path, bounce) + 1;
+  const int bounce = INTEGRATOR_STATE(state, path, bounce) + 1;
   if (bounce >= kernel_data.integrator.max_bounce) {
     flag |= PATH_RAY_TERMINATE_AFTER_TRANSPARENT;
   }
 
-  flag &= ~(PATH_RAY_ALL_VISIBILITY | PATH_RAY_MIS_SKIP | PATH_RAY_MIS_HAD_TRANSMISSION);
+  visibility = PATH_RAY_VISIBILITY_NONE;
+  flag &= ~(PATH_RAY_REFLECT | PATH_RAY_SINGULAR | PATH_RAY_TRANSPARENT |
+            PATH_RAY_IMPORTANCE_BAKE | PATH_RAY_MIS_SKIP | PATH_RAY_MIS_HAD_TRANSMISSION);
 
 #ifdef __VOLUME__
   if (label & LABEL_VOLUME_SCATTER) {
     /* volume scatter */
-    flag |= PATH_RAY_VOLUME_SCATTER | PATH_RAY_MIS_HAD_TRANSMISSION;
+    visibility |= PATH_RAY_VISIBILITY_VOLUME_SCATTER;
+    flag |= PATH_RAY_MIS_HAD_TRANSMISSION;
     flag &= ~PATH_RAY_TRANSPARENT_BACKGROUND;
     if (!(flag & PATH_RAY_ANY_PASS)) {
       flag |= PATH_RAY_VOLUME_PASS;
@@ -152,6 +163,10 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
     INTEGRATOR_STATE_WRITE(state, path, volume_bounce) = volume_bounce;
     if (volume_bounce >= kernel_data.integrator.max_volume_bounce) {
       flag |= PATH_RAY_TERMINATE_AFTER_TRANSPARENT;
+    }
+
+    if (bounce == 1) {
+      flag &= ~PATH_RAY_VOLUME_PRIMARY_TRANSMIT;
     }
   }
   else
@@ -180,7 +195,7 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
     else {
       kernel_assert(label & LABEL_TRANSMIT);
 
-      flag |= PATH_RAY_TRANSMIT;
+      visibility |= PATH_RAY_VISIBILITY_TRANSMIT;
 
       if (!(label & LABEL_TRANSMIT_TRANSPARENT)) {
         flag &= ~PATH_RAY_TRANSPARENT_BACKGROUND;
@@ -195,14 +210,16 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
 
     /* diffuse/glossy/singular */
     if (label & LABEL_DIFFUSE) {
-      flag |= PATH_RAY_DIFFUSE | PATH_RAY_DIFFUSE_ANCESTOR;
+      visibility |= PATH_RAY_VISIBILITY_DIFFUSE;
+      flag |= PATH_RAY_DIFFUSE_ANCESTOR;
     }
     else if (label & LABEL_GLOSSY) {
-      flag |= PATH_RAY_GLOSSY;
+      visibility |= PATH_RAY_VISIBILITY_GLOSSY;
     }
     else {
       kernel_assert(label & LABEL_SINGULAR);
-      flag |= PATH_RAY_GLOSSY | PATH_RAY_SINGULAR | PATH_RAY_MIS_SKIP;
+      visibility |= PATH_RAY_VISIBILITY_GLOSSY;
+      flag |= PATH_RAY_SINGULAR | PATH_RAY_MIS_SKIP;
     }
 
     /* Flag for consistent MIS weights with light tree. */
@@ -216,6 +233,7 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
     }
   }
 
+  INTEGRATOR_STATE_WRITE(state, path, visibility) = visibility;
   INTEGRATOR_STATE_WRITE(state, path, flag) = flag;
   INTEGRATOR_STATE_WRITE(state, path, bounce) = bounce;
 
@@ -241,17 +259,16 @@ ccl_device_inline bool path_state_volume_next(IntegratorState state)
 }
 #endif
 
-ccl_device_inline uint path_state_ray_visibility(ConstIntegratorState state)
+ccl_device_inline PathRayVisibility path_state_ray_visibility(ConstIntegratorState state)
 {
-  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-
-  uint32_t visibility = path_flag & PATH_RAY_ALL_VISIBILITY;
+  PathRayVisibility visibility = INTEGRATOR_STATE(state, path, visibility);
 
   /* For visibility, diffuse/glossy are for reflection only. */
-  if (visibility & PATH_RAY_TRANSMIT) {
-    visibility &= ~(PATH_RAY_DIFFUSE | PATH_RAY_GLOSSY);
+  if (visibility & PATH_RAY_VISIBILITY_TRANSMIT) {
+    visibility &= ~(PATH_RAY_VISIBILITY_DIFFUSE | PATH_RAY_VISIBILITY_GLOSSY);
   }
 
+  const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag, visibility);
 
   return visibility;
@@ -262,14 +279,14 @@ ccl_device_inline float path_state_continuation_probability(KernelGlobals kg,
                                                             const uint32_t path_flag)
 {
   if (path_flag & PATH_RAY_TRANSPARENT) {
-    const uint32_t transparent_bounce = INTEGRATOR_STATE(state, path, transparent_bounce);
+    const int transparent_bounce = INTEGRATOR_STATE(state, path, transparent_bounce);
     /* Do at least specified number of bounces without RR. */
     if (transparent_bounce <= kernel_data.integrator.transparent_min_bounce) {
       return 1.0f;
     }
   }
   else {
-    const uint32_t bounce = INTEGRATOR_STATE(state, path, bounce);
+    const int bounce = INTEGRATOR_STATE(state, path, bounce);
     /* Do at least specified number of bounces without RR. */
     if (bounce <= kernel_data.integrator.min_bounce) {
       return 1.0f;
@@ -335,7 +352,7 @@ ccl_device_inline void path_state_rng_scramble(ccl_private RNGState *rng_state, 
 {
   /* To get an uncorrelated sequence of samples (e.g. for subsurface random walk), just change
    * the dimension offset since all implemented samplers can generate unlimited numbers of
-   * dimensions anyways. The only thing to ensure is that the offset is divisible by 4. */
+   * dimensions anyway. The only thing to ensure is that the offset is divisible by 4. */
   rng_state->rng_offset = hash_hp_seeded_uint(rng_state->rng_offset, seed) & ~0x3;
 }
 

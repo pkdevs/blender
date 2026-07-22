@@ -8,18 +8,18 @@
 
 #include <cstdlib>
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 
 #include "BKE_unit.hh"
 
 #include "ED_screen.hh"
 
-#include "UI_interface.hh"
-
 #include "BLT_translation.hh"
+
+#include "UI_interface_types.hh"
 
 #include "transform.hh"
 #include "transform_constraints.hh"
@@ -47,7 +47,7 @@ static void transdata_elem_push_pull(const TransInfo *t,
   if (t->con.applyRot && t->con.mode & CON_APPLY) {
     float axis[3];
     copy_v3_v3(axis, axis_global);
-    t->con.applyRot(t, tc, td, axis, nullptr);
+    t->con.applyRot(t, tc, td, axis);
 
     mul_m3_v3(td->smtx, axis);
     if (is_lock_constraint) {
@@ -87,15 +87,15 @@ static void applyPushPull(TransInfo *t)
 
     outputNumInput(&(t->num), c, t->scene->unit);
 
-    SNPRINTF(str, IFACE_("Push/Pull: %s%s %s"), c, t->con.text, t->proptext);
+    SNPRINTF_UTF8(str, IFACE_("Push/Pull: %s%s %s"), c, t->con.text, t->proptext);
   }
   else {
     /* Default header print. */
-    SNPRINTF(str, IFACE_("Push/Pull: %.4f%s %s"), distance, t->con.text, t->proptext);
+    SNPRINTF_UTF8(str, IFACE_("Push/Pull: %.4f%s %s"), distance, t->con.text, t->proptext);
   }
 
   if (t->con.applyRot && t->con.mode & CON_APPLY) {
-    t->con.applyRot(t, nullptr, nullptr, axis_global, nullptr);
+    t->con.applyRot(t, nullptr, nullptr, axis_global);
   }
 
   const bool is_lock_constraint = isLockConstraint(t);
@@ -127,10 +127,10 @@ static void initPushPull(TransInfo *t, wmOperator * /*op*/)
 
   t->idx_max = 0;
   t->num.idx_max = 0;
-  t->snap[0] = 1.0f;
-  t->snap[1] = t->snap[0] * 0.1f;
+  t->increment[0] = 1.0f;
+  t->increment_precision = 0.1f;
 
-  copy_v3_fl(t->num.val_inc, t->snap[0]);
+  copy_v3_fl(t->num.val_inc, t->increment[0]);
   t->num.unit_sys = t->scene->unit.system;
   t->num.unit_type[0] = B_UNIT_LENGTH;
 }

@@ -10,13 +10,16 @@
 
 #include "BLI_fileops.hh"
 #include "BLI_map.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
+#include "BLI_mmap.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
 #include "IO_string_utils.hh"
+#include "IO_validate.hh"
 
 #include "obj_export_mtl.hh"
 #include "obj_import_file_reader.hh"
@@ -24,10 +27,20 @@
 #include <algorithm>
 #include <charconv>
 
+#include <fcntl.h>
+#ifndef WIN32
+#  include <unistd.h>
+#else
+#  include <io.h>
+#endif
+
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.obj"};
 
-namespace blender::io::obj {
+namespace io::obj {
 
 using std::string;
 
@@ -65,10 +78,6 @@ static Geometry *create_geometry(Geometry *const prev_geometry,
       prev_geometry->geom_type_ = GEOM_CURVE;
       return prev_geometry;
     }
-  }
-
-  if (prev_geometry && prev_geometry->geom_type_ == GEOM_CURVE) {
-    return new_geometry();
   }
 
   return new_geometry();
@@ -324,7 +333,7 @@ static Geometry *geom_set_curve_type(Geometry *geom,
 {
   p = drop_whitespace(p, end);
   if (!StringRef(p, end).startswith("bspline") && !StringRef(p, end).startswith("rat bspline")) {
-    CLOG_WARN(&LOG, "Curve type not supported: '%s'", std::string(p, end).c_str());
+    CLOG_WARN(&LOG, "Curve type not supported: '%s'", string(p, end).c_str());
     return geom;
   }
   geom = create_geometry(geom, GEOM_CURVE, group_name, r_all_geometries);
@@ -353,6 +362,9 @@ static void geom_add_curve_vertex_indices(Geometry *geom,
     }
     /* Always keep stored indices non-negative and zero-based. */
     index += index < 0 ? global_vertices.vertices.size() : -1;
+    if (!validate::index_in_range(index, global_vertices.vertices.size())) {
+      index = 0;
+    }
     geom->nurbs_element_.curv_indices.append(index);
   }
 }
@@ -383,7 +395,7 @@ static void geom_add_curve_parameters(Geometry *geom, const char *p, const char 
   }
 }
 
-static void geom_update_group(const StringRef rest_line, std::string &r_group_name)
+static void geom_update_group(const StringRef rest_line, string &r_group_name)
 {
   if (rest_line.find("off") != string::npos || rest_line.find("null") != string::npos ||
       rest_line.find("default") != string::npos)
@@ -413,7 +425,7 @@ static void geom_update_smooth_group(const char *p, const char *end, bool &r_sta
 static void geom_new_object(const char *p,
                             const char *end,
                             bool &r_state_shaded_smooth,
-                            std::string &r_state_group_name,
+                            string &r_state_group_name,
                             int &r_state_material_index,
                             Geometry *&r_curr_geom,
                             Vector<std::unique_ptr<Geometry>> &r_all_geometries)
@@ -428,15 +440,24 @@ static void geom_new_object(const char *p,
       r_curr_geom, GEOM_MESH, StringRef(p, end).trim(), r_all_geometries);
 }
 
-OBJParser::OBJParser(const OBJImportParams &import_params, size_t read_buffer_size)
-    : import_params_(import_params), read_buffer_size_(read_buffer_size)
+OBJParser::OBJParser(const OBJImportParams &import_params) : import_params_(import_params)
 {
-  obj_file_ = BLI_fopen(import_params_.filepath, "rb");
-  if (!obj_file_) {
-    CLOG_ERROR(&LOG, "Cannot read from OBJ file:'%s'.\n", import_params_.filepath);
+  const int obj_file = BLI_open(import_params_.filepath, O_BINARY | O_RDONLY, 0);
+  if (obj_file == -1) {
+    CLOG_ERROR(&LOG, "Cannot read from OBJ file:'%s'.", import_params_.filepath);
     BKE_reportf(import_params_.reports,
                 RPT_ERROR,
                 "OBJ Import: Cannot open file '%s'",
+                import_params_.filepath);
+    return;
+  }
+  mmap_file_ = BLI_mmap_open(obj_file);
+  close(obj_file);
+  if (mmap_file_ == nullptr) {
+    CLOG_ERROR(&LOG, "Cannot mmap OBJ file:'%s'.", import_params_.filepath);
+    BKE_reportf(import_params_.reports,
+                RPT_ERROR,
+                "OBJ Import: Cannot mmap file '%s'",
                 import_params_.filepath);
     return;
   }
@@ -444,8 +465,8 @@ OBJParser::OBJParser(const OBJImportParams &import_params, size_t read_buffer_si
 
 OBJParser::~OBJParser()
 {
-  if (obj_file_) {
-    fclose(obj_file_);
+  if (mmap_file_ != nullptr) {
+    BLI_mmap_free(mmap_file_);
   }
 }
 
@@ -484,10 +505,200 @@ static void use_all_vertices_if_no_faces(Geometry *geom,
   }
 }
 
+/* OBJ file format supports "line continuations", which
+ * are back-slashes, optionally followed by whitespace.
+ * The line virtually extends to the next line in that case. */
+StringRef OBJParser::read_next_obj_line(StringRef &buffer)
+{
+  const char *start = buffer.begin();
+  const char *end = buffer.end();
+  const char *ptr = start;
+
+  /* Scan until newline or backslash. */
+  while (ptr < end && *ptr != '\n' && *ptr != '\\') {
+    ++ptr;
+  }
+
+  /* Common case: no backslash found, return reference to input data. */
+  if (ptr >= end || *ptr == '\n') {
+    size_t len = ptr - start;
+    buffer = StringRef(ptr < end ? ptr + 1 : ptr, end);
+    return StringRef(start, len);
+  }
+
+  /* We have backslash. Copy into line buffer, replace
+   * line continuation with space, return result. */
+
+  line_buffer_.assign(start, ptr);
+
+  while (ptr < end) {
+    char c = *ptr++;
+    if (c == '\\') {
+      /* Scan ahead, skipping whitespace until newline. */
+      const char *ahead = ptr;
+      while (ahead < end && *ahead <= ' ' && *ahead != '\n') {
+        ++ahead;
+      }
+      if (ahead < end && *ahead == '\n') {
+        /* Line continuation: replace backslash & newline with space. */
+        line_buffer_ += ' ';
+        ptr = ahead + 1; /* Continue after the newline. */
+      }
+      else {
+        /* Not a continuation: keep the backslash. */
+        line_buffer_ += c;
+      }
+    }
+    else if (c == '\n') {
+      break;
+    }
+    else {
+      line_buffer_ += c;
+    }
+  }
+
+  buffer = StringRef(ptr, end);
+  return line_buffer_;
+}
+
+void OBJParser::parse_string_buffer(StringRef &buffer_str,
+                                    Vector<std::unique_ptr<Geometry>> &r_all_geometries,
+                                    GlobalVertices &r_global_vertices,
+                                    Geometry *&curr_geom)
+{
+  /* State variables: once set, they remain the same for the remaining
+   * elements in the object. */
+  bool state_shaded_smooth = false;
+  string state_group_name;
+  int state_group_index = -1;
+  string state_material_name;
+  int state_material_index = -1;
+
+  while (!buffer_str.is_empty()) {
+    StringRef line = read_next_obj_line(buffer_str);
+    const char *p = line.begin(), *end = line.end();
+    p = drop_whitespace(p, end);
+    if (p == end) {
+      continue;
+    }
+    /* Most common things that start with 'v': vertices, normals, UVs. */
+    if (*p == 'v') {
+      if (parse_keyword(p, end, "v")) {
+        geom_add_vertex(p, end, r_global_vertices);
+      }
+      else if (parse_keyword(p, end, "vn")) {
+        geom_add_vertex_normal(p, end, r_global_vertices);
+      }
+      else if (parse_keyword(p, end, "vt")) {
+        geom_add_uv_vertex(p, end, r_global_vertices);
+      }
+    }
+    /* Faces. */
+    else if (parse_keyword(p, end, "f")) {
+      /* If we don't have a material index assigned yet, get one.
+       * It means "usemtl" state came from the previous object. */
+      if (state_material_index == -1 && !state_material_name.empty() &&
+          curr_geom->material_indices_.is_empty())
+      {
+        curr_geom->material_indices_.add_new(state_material_name, 0);
+        curr_geom->material_order_.append(state_material_name);
+        state_material_index = 0;
+      }
+
+      geom_add_polygon(curr_geom,
+                       p,
+                       end,
+                       r_global_vertices,
+                       state_material_index,
+                       state_group_index,
+                       state_shaded_smooth);
+    }
+    /* Faces. */
+    else if (parse_keyword(p, end, "l")) {
+      geom_add_polyline(curr_geom, p, end, r_global_vertices);
+    }
+    /* Objects. */
+    else if (parse_keyword(p, end, "o")) {
+      if (import_params_.use_split_objects) {
+        geom_new_object(p,
+                        end,
+                        state_shaded_smooth,
+                        state_group_name,
+                        state_material_index,
+                        curr_geom,
+                        r_all_geometries);
+      }
+    }
+    /* Groups. */
+    else if (parse_keyword(p, end, "g")) {
+      if (import_params_.use_split_groups) {
+        geom_new_object(p,
+                        end,
+                        state_shaded_smooth,
+                        state_group_name,
+                        state_material_index,
+                        curr_geom,
+                        r_all_geometries);
+      }
+      else {
+        geom_update_group(StringRef(p, end).trim(), state_group_name);
+        int new_index = curr_geom->group_indices_.size();
+        state_group_index = curr_geom->group_indices_.lookup_or_add(state_group_name, new_index);
+        if (new_index == state_group_index) {
+          curr_geom->group_order_.append(state_group_name);
+        }
+      }
+    }
+    /* Smoothing groups. */
+    else if (parse_keyword(p, end, "s")) {
+      geom_update_smooth_group(p, end, state_shaded_smooth);
+    }
+    /* Materials and their libraries. */
+    else if (parse_keyword(p, end, "usemtl")) {
+      state_material_name = StringRef(p, end).trim();
+      int new_mat_index = curr_geom->material_indices_.size();
+      state_material_index = curr_geom->material_indices_.lookup_or_add(state_material_name,
+                                                                        new_mat_index);
+      if (new_mat_index == state_material_index) {
+        curr_geom->material_order_.append(state_material_name);
+      }
+    }
+    else if (parse_keyword(p, end, "mtllib")) {
+      add_mtl_library(StringRef(p, end).trim());
+    }
+    else if (parse_keyword(p, end, "#MRGB")) {
+      geom_add_mrgb_colors(p, end, r_global_vertices);
+    }
+    /* Comments. */
+    else if (*p == '#') {
+      /* Nothing to do. */
+    }
+    /* Curve related things. */
+    else if (parse_keyword(p, end, "cstype")) {
+      curr_geom = geom_set_curve_type(curr_geom, p, end, state_group_name, r_all_geometries);
+    }
+    else if (parse_keyword(p, end, "deg")) {
+      geom_set_curve_degree(curr_geom, p, end);
+    }
+    else if (parse_keyword(p, end, "curv")) {
+      geom_add_curve_vertex_indices(curr_geom, p, end, r_global_vertices);
+    }
+    else if (parse_keyword(p, end, "parm")) {
+      geom_add_curve_parameters(curr_geom, p, end);
+    }
+    else if (StringRef(p, end).startswith("end")) {
+      /* End of curve definition, nothing else to do. */
+    }
+    else {
+      CLOG_WARN(&LOG, "OBJ element not recognized: '%s'", string(p, end).c_str());
+    }
+  }
+}
+
 void OBJParser::parse(Vector<std::unique_ptr<Geometry>> &r_all_geometries,
                       GlobalVertices &r_global_vertices)
 {
-  if (!obj_file_) {
+  if (!mmap_file_) {
     return;
   }
 
@@ -498,193 +709,10 @@ void OBJParser::parse(Vector<std::unique_ptr<Geometry>> &r_all_geometries,
 
   Geometry *curr_geom = create_geometry(nullptr, GEOM_MESH, ob_name, r_all_geometries);
 
-  /* State variables: once set, they remain the same for the remaining
-   * elements in the object. */
-  bool state_shaded_smooth = false;
-  string state_group_name;
-  int state_group_index = -1;
-  string state_material_name;
-  int state_material_index = -1;
-
-  /* Read the input file in chunks. We need up to twice the possible chunk size,
-   * to possibly store remainder of the previous input line that got broken mid-chunk. */
-  Array<char> buffer(read_buffer_size_ * 2);
-
-  size_t buffer_offset = 0;
-  size_t line_number = 0;
-  while (true) {
-    /* Read a chunk of input from the file. */
-    size_t bytes_read = fread(buffer.data() + buffer_offset, 1, read_buffer_size_, obj_file_);
-    if (bytes_read == 0 && buffer_offset == 0) {
-      break; /* No more data to read. */
-    }
-
-    /* Take care of line continuations now (turn them into spaces);
-     * the rest of the parsing code does not need to worry about them anymore. */
-    fixup_line_continuations(buffer.data() + buffer_offset,
-                             buffer.data() + buffer_offset + bytes_read);
-
-    /* Ensure buffer ends in a newline. */
-    if (bytes_read < read_buffer_size_) {
-      if (bytes_read == 0 || buffer[buffer_offset + bytes_read - 1] != '\n') {
-        buffer[buffer_offset + bytes_read] = '\n';
-        bytes_read++;
-      }
-    }
-
-    size_t buffer_end = buffer_offset + bytes_read;
-    if (buffer_end == 0) {
-      break;
-    }
-
-    /* Find last newline. */
-    size_t last_nl = buffer_end;
-    while (last_nl > 0) {
-      --last_nl;
-      if (buffer[last_nl] == '\n') {
-        break;
-      }
-    }
-    if (buffer[last_nl] != '\n') {
-      /* Whole line did not fit into our read buffer. Warn and exit. */
-      CLOG_ERROR(&LOG,
-                 "OBJ file contains a line #%zu that is too long (max. length %zu)",
-                 line_number,
-                 read_buffer_size_);
-      break;
-    }
-    ++last_nl;
-
-    /* Parse the buffer (until last newline) that we have so far,
-     * line by line. */
-    StringRef buffer_str{buffer.data(), int64_t(last_nl)};
-    while (!buffer_str.is_empty()) {
-      StringRef line = read_next_line(buffer_str);
-      const char *p = line.begin(), *end = line.end();
-      p = drop_whitespace(p, end);
-      ++line_number;
-      if (p == end) {
-        continue;
-      }
-      /* Most common things that start with 'v': vertices, normals, UVs. */
-      if (*p == 'v') {
-        if (parse_keyword(p, end, "v")) {
-          geom_add_vertex(p, end, r_global_vertices);
-        }
-        else if (parse_keyword(p, end, "vn")) {
-          geom_add_vertex_normal(p, end, r_global_vertices);
-        }
-        else if (parse_keyword(p, end, "vt")) {
-          geom_add_uv_vertex(p, end, r_global_vertices);
-        }
-      }
-      /* Faces. */
-      else if (parse_keyword(p, end, "f")) {
-        /* If we don't have a material index assigned yet, get one.
-         * It means "usemtl" state came from the previous object. */
-        if (state_material_index == -1 && !state_material_name.empty() &&
-            curr_geom->material_indices_.is_empty())
-        {
-          curr_geom->material_indices_.add_new(state_material_name, 0);
-          curr_geom->material_order_.append(state_material_name);
-          state_material_index = 0;
-        }
-
-        geom_add_polygon(curr_geom,
-                         p,
-                         end,
-                         r_global_vertices,
-                         state_material_index,
-                         state_group_index,
-                         state_shaded_smooth);
-      }
-      /* Faces. */
-      else if (parse_keyword(p, end, "l")) {
-        geom_add_polyline(curr_geom, p, end, r_global_vertices);
-      }
-      /* Objects. */
-      else if (parse_keyword(p, end, "o")) {
-        if (import_params_.use_split_objects) {
-          geom_new_object(p,
-                          end,
-                          state_shaded_smooth,
-                          state_group_name,
-                          state_material_index,
-                          curr_geom,
-                          r_all_geometries);
-        }
-      }
-      /* Groups. */
-      else if (parse_keyword(p, end, "g")) {
-        if (import_params_.use_split_groups) {
-          geom_new_object(p,
-                          end,
-                          state_shaded_smooth,
-                          state_group_name,
-                          state_material_index,
-                          curr_geom,
-                          r_all_geometries);
-        }
-        else {
-          geom_update_group(StringRef(p, end).trim(), state_group_name);
-          int new_index = curr_geom->group_indices_.size();
-          state_group_index = curr_geom->group_indices_.lookup_or_add(state_group_name, new_index);
-          if (new_index == state_group_index) {
-            curr_geom->group_order_.append(state_group_name);
-          }
-        }
-      }
-      /* Smoothing groups. */
-      else if (parse_keyword(p, end, "s")) {
-        geom_update_smooth_group(p, end, state_shaded_smooth);
-      }
-      /* Materials and their libraries. */
-      else if (parse_keyword(p, end, "usemtl")) {
-        state_material_name = StringRef(p, end).trim();
-        int new_mat_index = curr_geom->material_indices_.size();
-        state_material_index = curr_geom->material_indices_.lookup_or_add(state_material_name,
-                                                                          new_mat_index);
-        if (new_mat_index == state_material_index) {
-          curr_geom->material_order_.append(state_material_name);
-        }
-      }
-      else if (parse_keyword(p, end, "mtllib")) {
-        add_mtl_library(StringRef(p, end).trim());
-      }
-      else if (parse_keyword(p, end, "#MRGB")) {
-        geom_add_mrgb_colors(p, end, r_global_vertices);
-      }
-      /* Comments. */
-      else if (*p == '#') {
-        /* Nothing to do. */
-      }
-      /* Curve related things. */
-      else if (parse_keyword(p, end, "cstype")) {
-        curr_geom = geom_set_curve_type(curr_geom, p, end, state_group_name, r_all_geometries);
-      }
-      else if (parse_keyword(p, end, "deg")) {
-        geom_set_curve_degree(curr_geom, p, end);
-      }
-      else if (parse_keyword(p, end, "curv")) {
-        geom_add_curve_vertex_indices(curr_geom, p, end, r_global_vertices);
-      }
-      else if (parse_keyword(p, end, "parm")) {
-        geom_add_curve_parameters(curr_geom, p, end);
-      }
-      else if (StringRef(p, end).startswith("end")) {
-        /* End of curve definition, nothing else to do. */
-      }
-      else {
-        CLOG_WARN(&LOG, "OBJ element not recognized: '%s'", std::string(p, end).c_str());
-      }
-    }
-
-    /* We might have a line that was cut in the middle by the previous buffer;
-     * copy it over for next chunk reading. */
-    size_t left_size = buffer_end - last_nl;
-    memmove(buffer.data(), buffer.data() + last_nl, left_size);
-    buffer_offset = left_size;
-  }
+  const char *file_data = static_cast<const char *>(BLI_mmap_get_pointer(mmap_file_));
+  size_t file_size = BLI_mmap_get_length(mmap_file_);
+  StringRef buffer_str{file_data, int64_t(file_size)};
+  OBJParser::parse_string_buffer(buffer_str, r_all_geometries, r_global_vertices, curr_geom);
 
   r_global_vertices.flush_mrgb_block();
   use_all_vertices_if_no_faces(curr_geom, r_all_geometries, r_global_vertices);
@@ -766,7 +794,7 @@ static bool parse_texture_option(const char *&p,
     if (!line.startswith("sphere")) {
       CLOG_WARN(&LOG,
                 "Only the 'sphere' MTL projection type is supported, found: '%s'",
-                std::string(line).c_str());
+                string(line).c_str());
     }
     p = drop_non_whitespace(p, end);
     return true;
@@ -801,7 +829,7 @@ static void parse_texture_map(const char *p,
   MTLTexMapType key = mtl_line_start_to_texture_type(p, end);
   if (key == MTLTexMapType::Count) {
     /* No supported texture map found. */
-    CLOG_WARN(&LOG, "MTL texture map type not supported: '%s'", std::string(line).c_str());
+    CLOG_WARN(&LOG, "MTL texture map type not supported: '%s'", string(line).c_str());
     return;
   }
   MTLTexMap &tex_map = material->tex_map_of_type(key);
@@ -815,7 +843,7 @@ static void parse_texture_map(const char *p,
   tex_map.image_path = StringRef(p, end).trim();
 }
 
-Span<std::string> OBJParser::mtl_libraries() const
+Span<string> OBJParser::mtl_libraries() const
 {
   return mtl_libraries_;
 }
@@ -854,13 +882,17 @@ MTLParser::MTLParser(StringRefNull mtl_library, StringRefNull obj_filepath)
   char obj_file_dir[FILE_MAXDIR];
   BLI_path_split_dir_part(obj_filepath.data(), obj_file_dir, FILE_MAXDIR);
   BLI_path_join(mtl_file_path_, FILE_MAX, obj_file_dir, mtl_library.data());
+
+  /* Normalize the path to handle different paths pointing to the same file */
+  BLI_path_normalize(mtl_file_path_);
+
   BLI_path_split_dir_part(mtl_file_path_, mtl_dir_path_, FILE_MAXDIR);
 }
 
 void MTLParser::parse_and_store(Map<string, std::unique_ptr<MTLMaterial>> &r_materials)
 {
   size_t buffer_len;
-  void *buffer = BLI_file_read_text_as_mem(mtl_file_path_, 0, &buffer_len);
+  char *buffer = BLI_file_read_text_as_mem(mtl_file_path_, 0, &buffer_len);
   if (buffer == nullptr) {
     CLOG_ERROR(&LOG, "OBJ import: cannot read from MTL file: '%s'", mtl_file_path_);
     return;
@@ -868,7 +900,7 @@ void MTLParser::parse_and_store(Map<string, std::unique_ptr<MTLMaterial>> &r_mat
 
   MTLMaterial *material = nullptr;
 
-  StringRef buffer_str{(const char *)buffer, int64_t(buffer_len)};
+  StringRef buffer_str{buffer, int64_t(buffer_len)};
   while (!buffer_str.is_empty()) {
     const StringRef line = read_next_line(buffer_str);
     const char *p = line.begin(), *end = line.end();
@@ -879,13 +911,9 @@ void MTLParser::parse_and_store(Map<string, std::unique_ptr<MTLMaterial>> &r_mat
 
     if (parse_keyword(p, end, "newmtl")) {
       StringRef mat_name = StringRef(p, end).trim();
-      if (r_materials.contains(mat_name)) {
-        material = nullptr;
-      }
-      else {
-        material =
-            r_materials.lookup_or_add(string(mat_name), std::make_unique<MTLMaterial>()).get();
-      }
+      /* Always try to get or create the material, even if it already exists */
+      material =
+          r_materials.lookup_or_add(string(mat_name), std::make_unique<MTLMaterial>()).get();
     }
     else if (material != nullptr) {
       if (parse_keyword(p, end, "Ns")) {
@@ -945,6 +973,7 @@ void MTLParser::parse_and_store(Map<string, std::unique_ptr<MTLMaterial>> &r_mat
     }
   }
 
-  MEM_freeN(buffer);
+  MEM_delete(buffer);
 }
-}  // namespace blender::io::obj
+}  // namespace io::obj
+}  // namespace blender

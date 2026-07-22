@@ -9,6 +9,7 @@
  * \brief Low-level operations for curves.
  */
 
+#include "BLI_array_utils.hh"
 #include "BLI_bounds_types.hh"
 #include "BLI_implicit_sharing_ptr.hh"
 #include "BLI_index_mask_fwd.hh"
@@ -25,23 +26,24 @@
 #include "BKE_attribute_storage.hh"
 #include "BKE_curves.h"
 
+namespace blender {
+
 struct BlendDataReader;
 struct BlendWriter;
 struct MDeformVert;
-namespace blender::bke {
+namespace bke {
+struct GeometrySet;
 class AttributeAccessor;
 class MutableAttributeAccessor;
 enum class AttrDomain : int8_t;
 struct AttributeAccessorFunctions;
-}  // namespace blender::bke
-namespace blender::bke::bake {
+}  // namespace bke
+namespace bke::bake {
 struct BakeMaterialsList;
 }
-namespace blender {
 class GVArray;
-}
 
-namespace blender::bke {
+namespace bke {
 
 namespace curves::nurbs {
 
@@ -58,7 +60,7 @@ struct BasisCache {
   Vector<int> start_indices;
 
   /**
-   * The result of #check_valid_num_and_order, to avoid retrieving its inputs later on.
+   * The result of #check_valid_eval_params, to avoid retrieving its inputs later on.
    * If this is true, the data above will be invalid, and original data should be copied
    * to the evaluated result.
    */
@@ -93,6 +95,8 @@ class CurvesGeometryRuntime {
     Vector<int> all_bezier_offsets;
   };
   mutable SharedCache<EvaluatedOffsets> evaluated_offsets_cache;
+
+  mutable SharedCache<bool> has_cyclic_curve_cache;
 
   mutable SharedCache<Vector<curves::nurbs::BasisCache>> nurbs_basis_cache;
 
@@ -149,7 +153,7 @@ class CurvesGeometryRuntime {
  * directly from the struct rather than storing a pointer to avoid more complicated ownership
  * handling.
  */
-class CurvesGeometry : public ::CurvesGeometry {
+class CurvesGeometry : public blender::CurvesGeometry {
  public:
   CurvesGeometry();
   /**
@@ -274,9 +278,9 @@ class CurvesGeometry : public ::CurvesGeometry {
    * values may be generated automatically based on the handle types. Call #tag_positions_changed
    * after changes.
    */
-  Span<float3> handle_positions_left() const;
+  std::optional<Span<float3>> handle_positions_left() const;
   MutableSpan<float3> handle_positions_left_for_write();
-  Span<float3> handle_positions_right() const;
+  std::optional<Span<float3>> handle_positions_right() const;
   MutableSpan<float3> handle_positions_right_for_write();
 
   /**
@@ -296,13 +300,13 @@ class CurvesGeometry : public ::CurvesGeometry {
   /**
    * The weight for each control point for NURBS curves. Call #tag_positions_changed after changes.
    */
-  Span<float> nurbs_weights() const;
+  std::optional<Span<float>> nurbs_weights() const;
   MutableSpan<float> nurbs_weights_for_write();
 
   /**
    * UV coordinate for each curve that encodes where the curve is attached to the surface mesh.
    */
-  Span<float2> surface_uv_coords() const;
+  std::optional<Span<float2>> surface_uv_coords() const;
   MutableSpan<float2> surface_uv_coords_for_write();
 
   /**
@@ -382,6 +386,8 @@ class CurvesGeometry : public ::CurvesGeometry {
    */
   Span<int> bezier_evaluated_offsets_for_curve(int curve_index) const;
 
+  bool has_cyclic_curve() const;
+
   Span<float3> evaluated_positions() const;
   Span<float3> evaluated_tangents() const;
   Span<float3> evaluated_normals() const;
@@ -458,7 +464,15 @@ class CurvesGeometry : public ::CurvesGeometry {
   void translate(const float3 &translation);
   void transform(const float4x4 &matrix);
 
+  /**
+   * Calculate handle positions for `Auto`, `Vector` handle types.
+   */
   void calculate_bezier_auto_handles();
+  /**
+   * Calculate handle positions for `Align` handle types. Ensure that both handles position fall on
+   * the same line, both handle will be moved unless the handles are already aligned.
+   */
+  void calculate_bezier_aligned_handles();
 
   void remove_points(const IndexMask &points_to_delete, const AttributeFilter &attribute_filter);
   void remove_curves(const IndexMask &curves_to_delete, const AttributeFilter &attribute_filter);
@@ -496,20 +510,21 @@ class CurvesGeometry : public ::CurvesGeometry {
    * Helper struct for `CurvesGeometry::blend_write_*` functions.
    */
   struct BlendWriteData {
-    Vector<CustomDataLayer, 16> point_layers;
-    Vector<CustomDataLayer, 16> curve_layers;
+    ResourceScope &scope;
+    Vector<CustomDataLayer, 16> &point_layers;
+    Vector<CustomDataLayer, 16> &curve_layers;
     AttributeStorage::BlendWriteData attribute_data;
-    explicit BlendWriteData(ResourceScope &scope) : attribute_data{scope} {}
+    explicit BlendWriteData(BlendWriter *writer, ResourceScope &scope);
   };
   /**
    * This function needs to be called before `blend_write` and before the `CurvesGeometry` struct
    * is written because it can mutate the `CustomData` and `AttributeStorage` structs.
    */
-  void blend_write_prepare(BlendWriteData &write_data);
+  void blend_write_prepare(BlendWriteData &write_data, bool use_5_0_compatibility);
   void blend_write(BlendWriter &writer, ID &id, const BlendWriteData &write_data);
 };
 
-static_assert(sizeof(blender::bke::CurvesGeometry) == sizeof(::CurvesGeometry));
+static_assert(sizeof(bke::CurvesGeometry) == sizeof(CurvesGeometry));
 
 /**
  * Used to propagate deformation data through modifier evaluation so that sculpt tools can work on
@@ -726,11 +741,17 @@ void calculate_auto_handles(bool cyclic,
                             MutableSpan<float3> positions_left,
                             MutableSpan<float3> positions_right);
 
+void calculate_single_aligned_handles(const IndexMask &selection,
+                                      Span<float3> positions,
+                                      Span<float3> align_with,
+                                      MutableSpan<float3> align_handles);
+
 void calculate_aligned_handles(const IndexMask &selection,
                                Span<float3> positions,
-                               Span<float3> align_by,
-                               MutableSpan<float3> align);
-
+                               Span<float3> handles_left,
+                               Span<float3> handles_right,
+                               MutableSpan<float3> align_handles_left,
+                               MutableSpan<float3> align_handles_right);
 /**
  * Change the handles of a single control point, aligning any aligned (#BEZIER_HANDLE_ALIGN)
  * handles on the other side of the control point.
@@ -844,7 +865,8 @@ namespace nurbs {
 /**
  * Checks the conditions that a NURBS curve needs to evaluate.
  */
-bool check_valid_num_and_order(int points_num, int8_t order, bool cyclic, KnotsMode knots_mode);
+bool check_valid_eval_params(
+    int points_num, int8_t order, bool cyclic, KnotsMode knots_mode, int resolution);
 
 /**
  * Calculate the standard evaluated size for a NURBS curve, using the standard that
@@ -854,8 +876,12 @@ bool check_valid_num_and_order(int points_num, int8_t order, bool cyclic, KnotsM
  * for predictability and so that cached basis weights of NURBS curves with these properties can be
  * shared.
  */
-int calculate_evaluated_num(
-    int points_num, int8_t order, bool cyclic, int resolution, KnotsMode knots_mode);
+int calculate_evaluated_num(int points_num,
+                            int8_t order,
+                            bool cyclic,
+                            int resolution,
+                            KnotsMode knots_mode,
+                            Span<float> knots);
 
 /**
  * Calculate the length of the knot vector for a NURBS curve with the given properties.
@@ -865,13 +891,22 @@ int calculate_evaluated_num(
 int knots_num(int points_num, int8_t order, bool cyclic);
 
 /**
- * Copies custom knots into given `MutableSpan`.
+ * Calculate the total number of control points for a NURBS curve including virtual/repeated points
+ * for a cyclic/closed curve.
+ */
+int control_points_num(int points_num, int8_t order, bool cyclic);
+
+/**
+ * Depending on KnotsMode calculates knots or copies custom knots into given `MutableSpan`.
  * Adds `order - 1` length tail for cyclic curves.
  */
-void copy_custom_knots(const int8_t order,
-                       const bool cyclic,
-                       Span<float> custom_knots,
-                       MutableSpan<float> knots);
+void load_curve_knots(KnotsMode mode,
+                      int points_num,
+                      int8_t order,
+                      bool cyclic,
+                      IndexRange curve_knots,
+                      Span<float> custom_knots,
+                      MutableSpan<float> knots);
 
 /**
  * Calculate the knots for a curve given its properties, based on built-in standards defined by
@@ -885,6 +920,16 @@ void calculate_knots(
     int points_num, KnotsMode mode, int8_t order, bool cyclic, MutableSpan<float> knots);
 
 /**
+ * Compute the number of occurrences of each unique knot value (so knot multiplicity),
+ * forming a sequence for which: `sum(multiplicity) == knots.size()`.
+ *
+ * Example:
+ * Knots: [0, 0, 0, 0.1, 0.3, 0.4, 0.4, 0.4]
+ * Result: [3, 1, 1, 3]
+ */
+Vector<int> calculate_multiplicity_sequence(Span<float> knots);
+
+/**
  * Based on the knots, the order, and other properties of a NURBS curve, calculate a cache that can
  * be used to more simply interpolate attributes to the evaluated points later. The cache includes
  * two pieces of information for every evaluated point: the first control point that influences it,
@@ -893,7 +938,9 @@ void calculate_knots(
 void calculate_basis_cache(int points_num,
                            int evaluated_num,
                            int8_t order,
+                           int resolution,
                            bool cyclic,
+                           KnotsMode knots_mode,
                            Span<float> knots,
                            BasisCache &basis_cache);
 
@@ -930,6 +977,10 @@ Curves *curves_new_nomain_single(int points_num, CurveType type);
  * copy high-level parameters when a geometry-altering operation creates a new curves data-block.
  */
 void curves_copy_parameters(const Curves &src, Curves &dst);
+
+void curves_store_surface_in_geometry_bundle(const Depsgraph &depsgraph,
+                                             const Curves &curves,
+                                             GeometrySet &geometry);
 
 CurvesGeometry curves_copy_point_selection(const CurvesGeometry &curves,
                                            const IndexMask &points_to_copy,
@@ -1096,6 +1147,27 @@ inline float3 calculate_vector_handle(const float3 &point, const float3 &next_po
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name NURBS Inline Methods
+ * \{ */
+
+namespace nurbs {
+
+inline int knots_num(const int points_num, const int8_t order, const bool cyclic)
+{
+  /* Cyclic: points_num + order * 2 - 1 */
+  return points_num + order + cyclic * (order - 1);
+}
+
+inline int control_points_num(const int points_num, const int8_t order, const bool cyclic)
+{
+  return points_num + cyclic * (order - 1);
+}
+
+}  // namespace nurbs
+
+/** \} */
+
 const AttributeAccessorFunctions &get_attribute_accessor_functions();
 
 }  // namespace curves
@@ -1113,13 +1185,15 @@ struct CurvesSurfaceTransforms {
   CurvesSurfaceTransforms(const Object &curves_ob, const Object *surface_ob);
 };
 
-}  // namespace blender::bke
+}  // namespace bke
 
-inline blender::bke::CurvesGeometry &CurvesGeometry::wrap()
+inline bke::CurvesGeometry &CurvesGeometry::wrap()
 {
-  return *reinterpret_cast<blender::bke::CurvesGeometry *>(this);
+  return *reinterpret_cast<bke::CurvesGeometry *>(this);
 }
-inline const blender::bke::CurvesGeometry &CurvesGeometry::wrap() const
+inline const bke::CurvesGeometry &CurvesGeometry::wrap() const
 {
-  return *reinterpret_cast<const blender::bke::CurvesGeometry *>(this);
+  return *reinterpret_cast<const bke::CurvesGeometry *>(this);
 }
+
+}  // namespace blender

@@ -81,6 +81,60 @@ void Geometry::clear(bool preserve_shaders)
   tag_modified();
 }
 
+const packed_float3 *Geometry::get_position() const
+{
+  const Attribute *attr = attributes.find(ATTR_STD_POSITION);
+  return attr ? attr->data<packed_float3>() : nullptr;
+}
+
+packed_float3 *Geometry::get_position_for_write()
+{
+  Attribute *attr = attributes.add(ATTR_STD_POSITION);
+  attr->modified = true;
+  tag_modified();
+  return attr->data_for_write<packed_float3>();
+}
+
+void Geometry::tag_position_modified()
+{
+  Attribute *attr = attributes.add(ATTR_STD_POSITION);
+  attr->modified = true;
+  tag_modified();
+}
+
+bool Geometry::position_is_modified() const
+{
+  Attribute *attr = attributes.find(ATTR_STD_POSITION);
+  return (attr) ? attr->modified : false;
+}
+
+const float *Geometry::get_radius() const
+{
+  const Attribute *attr = attributes.find(ATTR_STD_RADIUS);
+  return attr ? attr->data<float>() : nullptr;
+}
+
+float *Geometry::get_radius_for_write()
+{
+  Attribute *attr = attributes.add(ATTR_STD_RADIUS);
+  attr->modified = true;
+  tag_modified();
+  return attr->data_for_write<float>();
+}
+
+void Geometry::tag_radius_modified()
+{
+  Attribute *attr = attributes.add(ATTR_STD_RADIUS);
+  attr->modified = true;
+  tag_modified();
+}
+
+bool Geometry::radius_is_modified() const
+{
+  Attribute *attr = attributes.find(ATTR_STD_RADIUS);
+  return (attr) ? attr->modified : false;
+}
+
 float Geometry::motion_time(const int step) const
 {
   return (motion_steps > 1) ? 2.0f * step / (motion_steps - 1) - 1.0f : 0.0f;
@@ -141,7 +195,11 @@ bool Geometry::has_true_displacement() const
 
 bool Geometry::has_motion_blur() const
 {
-  return (use_motion_blur && attributes.find(ATTR_STD_MOTION_VERTEX_POSITION));
+  if (!use_motion_blur) {
+    return false;
+  }
+  const Attribute *attr_P = attributes.find(ATTR_STD_POSITION);
+  return attr_P && attr_P->has_motion();
 }
 
 void Geometry::tag_update(Scene *scene, bool rebuild)
@@ -172,6 +230,46 @@ GeometryManager::GeometryManager()
 }
 
 GeometryManager::~GeometryManager() = default;
+
+void GeometryManager::update_interactive_motion(Scene *scene)
+{
+  bool update = false;
+
+  parallel_for(blocked_range<size_t>(0, scene->geometry.size(), 32),
+               [&](const blocked_range<size_t> &r) {
+                 for (size_t i = r.begin(); i != r.end(); i++) {
+                   Geometry *geom = scene->geometry[i];
+
+                   Attribute *attr_P = geom->attributes.find(ATTR_STD_POSITION);
+                   if (attr_P == nullptr || !attr_P->has_motion()) {
+                     continue;
+                   }
+
+                   /* Compares pointers in case center and prev are implicitly shared. */
+                   const void *center = attr_P->data();
+                   const void *prev = attr_P->data(1);
+                   if (center == prev ||
+                       std::memcmp(center, prev, attr_P->data_sizeof() * attr_P->size) == 0) {
+                     continue;
+                   }
+
+                   if (geom->is_mesh()) {
+                     static_cast<Mesh *>(geom)->copy_center_to_motion_step(0);
+                   }
+                   else if (geom->is_hair()) {
+                     static_cast<Hair *>(geom)->copy_center_to_motion_step(0);
+                   }
+                   else if (geom->is_pointcloud()) {
+                     static_cast<PointCloud *>(geom)->copy_center_to_motion_step(0);
+                   }
+                   attr_P->modified = update = true;
+                 }
+               });
+
+  if (update) {
+    tag_update(scene, TRANSFORM_MODIFIED);
+  }
+}
 
 void GeometryManager::update_osl_globals(Device *device, Scene *scene)
 {
@@ -229,6 +327,10 @@ static void update_device_flags_attribute(uint32_t &device_update_flags,
         device_update_flags |= ATTR_UCHAR4_MODIFIED;
         break;
       }
+      case AttrKernelDataType::NORMAL: {
+        device_update_flags |= ATTR_NORMAL_MODIFIED;
+        break;
+      }
       case AttrKernelDataType::NUM: {
         break;
       }
@@ -254,15 +356,16 @@ static void update_attribute_realloc_flags(uint32_t &device_update_flags,
   if (attributes.modified(AttrKernelDataType::UCHAR4)) {
     device_update_flags |= ATTR_UCHAR4_NEEDS_REALLOC;
   }
+  if (attributes.modified(AttrKernelDataType::NORMAL)) {
+    device_update_flags |= ATTR_NORMAL_NEEDS_REALLOC;
+  }
 }
 
 void GeometryManager::geom_calc_offset(Scene *scene, BVHLayout bvh_layout)
 {
-  size_t vert_size = 0;
   size_t tri_size = 0;
 
   size_t curve_size = 0;
-  size_t curve_key_size = 0;
   size_t curve_segment_size = 0;
 
   size_t point_size = 0;
@@ -278,13 +381,11 @@ void GeometryManager::geom_calc_offset(Scene *scene, BVHLayout bvh_layout)
 
       prim_offset_changed = (mesh->prim_offset != tri_size);
 
-      mesh->vert_offset = vert_size;
       mesh->prim_offset = tri_size;
 
       mesh->face_offset = face_size;
       mesh->corner_offset = corner_size;
 
-      vert_size += mesh->verts.size();
       tri_size += mesh->num_triangles();
 
       face_size += mesh->get_num_subd_faces();
@@ -294,12 +395,10 @@ void GeometryManager::geom_calc_offset(Scene *scene, BVHLayout bvh_layout)
       Hair *hair = static_cast<Hair *>(geom);
 
       prim_offset_changed = (hair->curve_segment_offset != curve_segment_size);
-      hair->curve_key_offset = curve_key_size;
       hair->curve_segment_offset = curve_segment_size;
       hair->prim_offset = curve_size;
 
       curve_size += hair->num_curves();
-      curve_key_size += hair->get_curve_keys().size();
       curve_segment_size += hair->num_segments();
     }
     else if (geom->is_pointcloud()) {
@@ -347,6 +446,7 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
   bool volume_images_updated = false;
 
   for (Geometry *geom : scene->geometry) {
+    const bool prev_has_volume = geom->has_volume;
     geom->has_volume = false;
 
     update_attribute_realloc_flags(device_update_flags, geom->attributes);
@@ -394,12 +494,24 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
         /* tag displacement related sockets as modified */
         if (geom->is_mesh()) {
           Mesh *mesh = static_cast<Mesh *>(geom);
-          mesh->tag_verts_modified();
+          mesh->tag_position_modified();
           mesh->tag_subd_dicing_rate_modified();
           mesh->tag_subd_max_level_modified();
           mesh->tag_subd_objecttoworld_modified();
 
           device_update_flags |= ATTRS_NEED_REALLOC;
+        }
+      }
+
+      if (geom->is_hair()) {
+        if (shader->shadow_transparency_needs_realloc) {
+          device_update_flags |= ATTR_FLOAT_NEEDS_REALLOC;
+        }
+        if (shader->need_update_shadow_transparency) {
+          Attribute *attr = geom->attributes.find(ATTR_STD_SHADOW_TRANSPARENCY);
+          if (attr) {
+            attr->modified = true;
+          }
         }
       }
     }
@@ -414,7 +526,7 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
     /* Re-create volume mesh if we will rebuild or refit the BVH. Note we
      * should only do it in that case, otherwise the BVH and mesh can go
      * out of sync. */
-    if (geom->is_modified() && geom->is_volume()) {
+    if (geom->is_volume() && (geom->is_modified() || (update_flags & VOLUME_MODIFIED))) {
       /* Create volume meshes if there is voxel data. */
       if (!volume_images_updated) {
         progress.set_status("Updating Meshes Volume Bounds");
@@ -429,10 +541,20 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
       device_update_flags |= DEVICE_MESH_DATA_NEEDS_REALLOC;
     }
 
+    if (geom->has_volume) {
+      if (geom->is_modified()) {
+        scene->volume_manager->tag_update({geom});
+      }
+      if (!prev_has_volume) {
+        scene->volume_manager->tag_update();
+      }
+    }
+    else if (prev_has_volume) {
+      scene->volume_manager->tag_update({geom});
+    }
+
     if (geom->is_hair()) {
-      /* Set curve shape, still a global scene setting for now. */
       Hair *hair = static_cast<Hair *>(geom);
-      hair->curve_shape = scene->params.hair_shape;
 
       if (hair->need_update_rebuild) {
         device_update_flags |= DEVICE_CURVE_DATA_NEEDS_REALLOC;
@@ -465,15 +587,15 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
     }
   }
 
-  if (update_flags & (MESH_ADDED | MESH_REMOVED)) {
+  if (update_flags & (MESH_ADDED | MESH_REMOVED | MOTION_PASS_NEEDED)) {
     device_update_flags |= DEVICE_MESH_DATA_NEEDS_REALLOC;
   }
 
-  if (update_flags & (HAIR_ADDED | HAIR_REMOVED)) {
+  if (update_flags & (HAIR_ADDED | HAIR_REMOVED | MOTION_PASS_NEEDED)) {
     device_update_flags |= DEVICE_CURVE_DATA_NEEDS_REALLOC;
   }
 
-  if (update_flags & (POINT_ADDED | POINT_REMOVED)) {
+  if (update_flags & (POINT_ADDED | POINT_REMOVED | MOTION_PASS_NEEDED)) {
     device_update_flags |= DEVICE_POINT_DATA_NEEDS_REALLOC;
   }
 
@@ -495,20 +617,16 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
     dscene->prim_time.tag_realloc();
 
     if (device_update_flags & DEVICE_MESH_DATA_NEEDS_REALLOC) {
-      dscene->tri_verts.tag_realloc();
-      dscene->tri_vnormal.tag_realloc();
       dscene->tri_vindex.tag_realloc();
       dscene->tri_shader.tag_realloc();
     }
 
     if (device_update_flags & DEVICE_CURVE_DATA_NEEDS_REALLOC) {
       dscene->curves.tag_realloc();
-      dscene->curve_keys.tag_realloc();
       dscene->curve_segments.tag_realloc();
     }
 
     if (device_update_flags & DEVICE_POINT_DATA_NEEDS_REALLOC) {
-      dscene->points.tag_realloc();
       dscene->points_shader.tag_realloc();
     }
   }
@@ -536,6 +654,9 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
   if (device_update_flags & ATTR_FLOAT3_NEEDS_REALLOC) {
     dscene->attributes_map.tag_realloc();
     dscene->attributes_float3.tag_realloc();
+    dscene->tri_verts.tag_realloc();
+    dscene->curve_keys.tag_realloc();
+    dscene->points.tag_realloc();
   }
   else if (device_update_flags & ATTR_FLOAT3_MODIFIED) {
     dscene->attributes_float3.tag_modified();
@@ -557,22 +678,26 @@ void GeometryManager::device_update_preprocess(Device *device, Scene *scene, Pro
     dscene->attributes_uchar4.tag_modified();
   }
 
+  if (device_update_flags & ATTR_NORMAL_NEEDS_REALLOC) {
+    dscene->attributes_map.tag_realloc();
+    dscene->attributes_normal.tag_realloc();
+  }
+  else if (device_update_flags & ATTR_NORMAL_MODIFIED) {
+    dscene->attributes_normal.tag_modified();
+  }
+
   if (device_update_flags & DEVICE_MESH_DATA_MODIFIED) {
     /* if anything else than vertices or shaders are modified, we would need to reallocate, so
      * these are the only arrays that can be updated */
-    dscene->tri_verts.tag_modified();
-    dscene->tri_vnormal.tag_modified();
     dscene->tri_shader.tag_modified();
   }
 
   if (device_update_flags & DEVICE_CURVE_DATA_MODIFIED) {
-    dscene->curve_keys.tag_modified();
     dscene->curves.tag_modified();
     dscene->curve_segments.tag_modified();
   }
 
   if (device_update_flags & DEVICE_POINT_DATA_MODIFIED) {
-    dscene->points.tag_modified();
     dscene->points_shader.tag_modified();
   }
 
@@ -584,9 +709,8 @@ void GeometryManager::device_update_displacement_images(Device *device,
                                                         Progress &progress)
 {
   progress.set_status("Updating Displacement Images");
-  TaskPool pool;
   ImageManager *image_manager = scene->image_manager.get();
-  set<int> bump_images;
+  set<const ImageSingle *> bump_images;
 #ifdef WITH_OSL
   bool has_osl_node = false;
 #endif
@@ -619,11 +743,8 @@ void GeometryManager::device_update_displacement_images(Device *device,
           }
 
           ImageSlotTextureNode *image_node = static_cast<ImageSlotTextureNode *>(node);
-          for (int i = 0; i < image_node->handle.num_svm_slots(); i++) {
-            const int slot = image_node->handle.svm_slot(i);
-            if (slot != -1) {
-              bump_images.insert(slot);
-            }
+          if (!image_node->handle.empty()) {
+            image_node->handle.add_to_set(bump_images);
           }
         }
       }
@@ -634,16 +755,11 @@ void GeometryManager::device_update_displacement_images(Device *device,
   /* If any OSL node is used for displacement, it may reference a texture. But it's
    * unknown which ones, so have to load them all. */
   if (has_osl_node) {
-    OSLShaderManager::osl_image_slots(device, image_manager, bump_images);
+    OSLShaderManager::osl_image_handles(device, image_manager, bump_images);
   }
 #endif
 
-  for (const int slot : bump_images) {
-    pool.push([image_manager, device, scene, slot, &progress] {
-      image_manager->device_update_slot(device, scene, slot, progress);
-    });
-  }
-  pool.wait_work();
+  image_manager->device_load_images(device, scene, progress, bump_images);
 }
 
 void GeometryManager::device_update_volume_images(Device *device, Scene *scene, Progress &progress)
@@ -651,7 +767,7 @@ void GeometryManager::device_update_volume_images(Device *device, Scene *scene, 
   progress.set_status("Updating Volume Images");
   TaskPool pool;
   ImageManager *image_manager = scene->image_manager.get();
-  set<int> volume_images;
+  set<const ImageSingle *> volume_images;
 
   for (Geometry *geom : scene->geometry) {
     if (!geom->is_modified()) {
@@ -659,28 +775,18 @@ void GeometryManager::device_update_volume_images(Device *device, Scene *scene, 
     }
 
     for (Attribute &attr : geom->attributes.attributes) {
-      if (attr.element != ATTR_ELEMENT_VOXEL) {
+      if (!(attr.element & ATTR_ELEMENT_VOXEL)) {
         continue;
       }
 
       const ImageHandle &handle = attr.data_voxel();
-      /* We can build directly from OpenVDB data structures, no need to
-       * load such images early. */
-      if (!handle.vdb_loader()) {
-        const int slot = handle.svm_slot();
-        if (slot != -1) {
-          volume_images.insert(slot);
-        }
+      if (!handle.empty()) {
+        handle.add_to_set(volume_images);
       }
     }
   }
 
-  for (const int slot : volume_images) {
-    pool.push([image_manager, device, scene, slot, &progress] {
-      image_manager->device_update_slot(device, scene, slot, progress);
-    });
-  }
-  pool.wait_work();
+  image_manager->device_load_images(device, scene, progress, volume_images);
 }
 
 void GeometryManager::device_update(Device *device,
@@ -692,10 +798,10 @@ void GeometryManager::device_update(Device *device,
     return;
   }
 
-  VLOG_INFO << "Total " << scene->geometry.size() << " meshes.";
+  LOG_INFO << "Total " << scene->geometry.size() << " meshes.";
 
   bool true_displacement_used = false;
-  bool curve_shadow_transparency_used = false;
+  bool curve_need_update_shadow_transparency = false;
   size_t num_tessellation = 0;
 
   {
@@ -709,10 +815,6 @@ void GeometryManager::device_update(Device *device,
       if (geom->is_modified()) {
         if (geom->is_mesh() || geom->is_volume()) {
           Mesh *mesh = static_cast<Mesh *>(geom);
-
-          if (mesh->need_attribute(scene, ATTR_STD_POSITION_UNDISPLACED)) {
-            mesh->add_undisplaced();
-          }
 
           /* Test if we need tessellation and setup normals if required. */
           if (mesh->need_tesselation()) {
@@ -735,16 +837,26 @@ void GeometryManager::device_update(Device *device,
             true_displacement_used = true;
           }
         }
-        else if (geom->is_hair()) {
-          Hair *hair = static_cast<Hair *>(geom);
-          if (hair->need_shadow_transparency()) {
-            curve_shadow_transparency_used = true;
-          }
-        }
+      }
 
-        if (progress.get_cancel()) {
-          return;
+      if (progress.get_cancel()) {
+        return;
+      }
+    }
+
+    for (Geometry *geom : scene->geometry) {
+      if (geom->is_hair()) {
+        Hair *hair = static_cast<Hair *>(geom);
+        if (hair->need_shadow_transparency() &&
+            (geom->is_modified() || hair->need_update_shadow_transparency()))
+        {
+          curve_need_update_shadow_transparency = true;
+          break;
         }
+      }
+
+      if (progress.get_cancel()) {
+        return;
       }
     }
   }
@@ -771,52 +883,60 @@ void GeometryManager::device_update(Device *device,
   }
 
   size_t i = 0;
-  for (Geometry *geom : scene->geometry) {
+  thread_mutex status_mutex;
+  parallel_for_each(scene->geometry.begin(), scene->geometry.end(), [&](Geometry *geom) {
+    if (progress.get_cancel()) {
+      return;
+    }
+
     if (!(geom->is_modified() && geom->is_mesh())) {
-      continue;
+      return;
     }
 
     Mesh *mesh = static_cast<Mesh *>(geom);
+    /* Apply generated attribute if needed or remove if not needed */
+    mesh->update_generated(scene);
 
     if (num_tessellation && mesh->need_tesselation()) {
-      string msg = "Tessellating ";
-      if (mesh->name.empty()) {
-        msg += string_printf("%u/%u", (uint)(i + 1), (uint)num_tessellation);
-      }
-      else {
-        msg += string_printf(
-            "%s %u/%u", mesh->name.c_str(), (uint)(i + 1), (uint)num_tessellation);
-      }
+      {
+        const thread_scoped_lock status_lock(status_mutex);
+        string msg = "Tessellating ";
+        if (mesh->name.empty()) {
+          msg += string_printf("%u/%u", (uint)(i + 1), (uint)num_tessellation);
+        }
+        else {
+          msg += string_printf(
+              "%s %u/%u", mesh->name.c_str(), (uint)(i + 1), (uint)num_tessellation);
+        }
 
-      progress.set_status("Updating Mesh", msg);
+        progress.set_status("Updating Mesh", msg);
+        i++;
+      }
 
       SubdParams subd_params(mesh);
       subd_params.dicing_rate = mesh->get_subd_dicing_rate();
       subd_params.max_level = mesh->get_subd_max_level();
-      subd_params.objecttoworld = mesh->get_subd_objecttoworld();
-      subd_params.camera = dicing_camera;
+      if (mesh->get_subd_adaptive_space() == Mesh::SUBDIVISION_ADAPTIVE_SPACE_PIXEL) {
+        subd_params.objecttoworld = mesh->get_subd_objecttoworld();
+        subd_params.camera = dicing_camera;
+      }
 
       mesh->tessellate(subd_params);
-
-      i++;
     }
 
-    /* Apply generated attribute if needed or remove if not needed */
-    mesh->update_generated(scene);
     /* Apply tangents for generated and UVs (if any need them) or remove if not needed */
-    mesh->update_tangents(scene);
-
-    if (progress.get_cancel()) {
-      return;
+    mesh->update_tangents(scene, true);
+    if (!mesh->has_true_displacement()) {
+      mesh->update_tangents(scene, false);
     }
-  }
+  });
 
   if (progress.get_cancel()) {
     return;
   }
 
   /* Update images needed for true displacement. */
-  if (true_displacement_used || curve_shadow_transparency_used) {
+  if (true_displacement_used || curve_need_update_shadow_transparency) {
     const scoped_callback_timer timer([scene](double time) {
       if (scene->update_stats) {
         scene->update_stats->geometry.times.add_entry(
@@ -833,7 +953,7 @@ void GeometryManager::device_update(Device *device,
   const BVHLayout bvh_layout = BVHParams::best_bvh_layout(
       scene->params.bvh_layout, device->get_bvh_layout_mask(dscene->data.kernel_features));
   geom_calc_offset(scene, bvh_layout);
-  if (true_displacement_used || curve_shadow_transparency_used) {
+  if (true_displacement_used || curve_need_update_shadow_transparency) {
     const scoped_callback_timer timer([scene](double time) {
       if (scene->update_stats) {
         scene->update_stats->geometry.times.add_entry(
@@ -864,7 +984,13 @@ void GeometryManager::device_update(Device *device,
     return;
   }
 
-  {
+  /* Attributes must be uploaded to the device before displacement and hair shadow
+   * transparency, which run shader evaluation. Otherwise the upload is deferred
+   * until after BVH building. */
+  const bool need_attributes_before_bvh = true_displacement_used ||
+                                          curve_need_update_shadow_transparency;
+
+  if (need_attributes_before_bvh) {
     const scoped_callback_timer timer([scene](double time) {
       if (scene->update_stats) {
         scene->update_stats->geometry.times.add_entry({"device_update (attributes)", time});
@@ -876,10 +1002,8 @@ void GeometryManager::device_update(Device *device,
     }
   }
 
-  /* Update displacement and hair shadow transparency. */
+  /* Update displacement. */
   bool displacement_done = false;
-  bool curve_shadow_transparency_done = false;
-
   {
     /* Copy constant data needed by shader evaluation. */
     device->const_copy_to("data", &dscene->data, sizeof(dscene->data));
@@ -896,12 +1020,7 @@ void GeometryManager::device_update(Device *device,
           Mesh *mesh = static_cast<Mesh *>(geom);
           if (displace(device, scene, mesh, progress)) {
             displacement_done = true;
-          }
-        }
-        else if (geom->is_hair()) {
-          Hair *hair = static_cast<Hair *>(geom);
-          if (hair->update_shadow_transparency(device, scene, progress)) {
-            curve_shadow_transparency_done = true;
+            need_flags_update = true;
           }
         }
       }
@@ -916,20 +1035,40 @@ void GeometryManager::device_update(Device *device,
     return;
   }
 
-  /* Device re-update after applying transforms and displacement. */
-  if (displacement_done || curve_shadow_transparency_done) {
+  /* Update hair shadow transparency. */
+  bool curve_shadow_transparency_done = false;
+  {
     const scoped_callback_timer timer([scene](double time) {
       if (scene->update_stats) {
         scene->update_stats->geometry.times.add_entry(
-            {"device_update (displacement: attributes)", time});
+            {"device_update (curve shadow transparency)", time});
       }
     });
-    device_free(device, dscene, false);
 
-    device_update_attributes(device, dscene, scene, progress);
-    if (progress.get_cancel()) {
-      return;
+    for (Geometry *geom : scene->geometry) {
+      if (geom->is_hair()) {
+        Hair *hair = static_cast<Hair *>(geom);
+        if (hair->update_shadow_transparency(device, scene, progress)) {
+          curve_shadow_transparency_done = true;
+        }
+      }
+
+      if (progress.get_cancel()) {
+        return;
+      }
     }
+  }
+
+  if (progress.get_cancel()) {
+    return;
+  }
+
+  /* Displacement and hair shadow transparency modified the geometry. Free device buffers
+   * that need to be reallocated, so the BVH and attributes are rebuilt from the updated
+   * data below. Freeing the attribute buffers uploaded earlier also keeps them from
+   * overlapping with the temporary BVH building buffers, lowering peak memory usage. */
+  if (displacement_done || curve_shadow_transparency_done) {
+    device_free(device, dscene, false);
   }
 
   /* Update the BVH even when there is no geometry so the kernel's BVH data is still valid,
@@ -945,12 +1084,6 @@ void GeometryManager::device_update(Device *device,
         scene->update_stats->geometry.times.add_entry({"device_update (build object BVHs)", time});
       }
     });
-    TaskPool pool;
-
-    /* Work around Embree/oneAPI bug #129596 with BVH updates. */
-    const bool use_multithreaded_build = first_bvh_build ||
-                                         !device->info.contains_device_type(DEVICE_ONEAPI);
-    first_bvh_build = false;
 
     size_t i = 0;
     size_t num_bvh = 0;
@@ -963,26 +1096,24 @@ void GeometryManager::device_update(Device *device,
           num_bvh++;
         }
 
-        if (use_multithreaded_build) {
-          pool.push([geom, device, dscene, scene, &progress, i, &num_bvh] {
-            geom->compute_bvh(device, dscene, &scene->params, &progress, i, num_bvh);
-          });
-        }
-        else {
+        /* Note the use of #bvh_task_pool_, see its definition for details. */
+        bvh_task_pool_.push([geom, device, dscene, scene, &progress, i, &num_bvh] {
           geom->compute_bvh(device, dscene, &scene->params, &progress, i, num_bvh);
-        }
+        });
       }
     }
 
     TaskPool::Summary summary;
-    pool.wait_work(&summary);
-    VLOG_WORK << "Objects BVH build pool statistics:\n" << summary.full_report();
+    bvh_task_pool_.wait_work(&summary);
+    LOG_DEBUG << "Objects BVH build pool statistics:\n" << summary.full_report();
   }
 
   for (Shader *shader : scene->shaders) {
     shader->need_update_uvs = false;
     shader->need_update_attribute = false;
     shader->need_update_displacement = false;
+    shader->need_update_shadow_transparency = false;
+    shader->shadow_transparency_needs_realloc = false;
   }
 
   const Scene::MotionType need_motion = scene->need_motion();
@@ -1021,6 +1152,22 @@ void GeometryManager::device_update(Device *device,
   dscene->data.bvh.bvh_layout = BVHParams::best_bvh_layout(
       scene->params.bvh_layout, device->get_bvh_layout_mask(dscene->data.kernel_features));
 
+  /* Upload attributes to the device.
+   *
+   * This is deferred until after BVH building so the attribute buffers do not overlap with
+   * the temporary buffers allocated during BVH building. */
+  {
+    const scoped_callback_timer timer([scene](double time) {
+      if (scene->update_stats) {
+        scene->update_stats->geometry.times.add_entry({"device_update (attributes)", time});
+      }
+    });
+    device_update_attributes(device, dscene, scene, progress);
+    if (progress.get_cancel()) {
+      return;
+    }
+  }
+
   {
     const scoped_callback_timer timer([scene](double time) {
       if (scene->update_stats) {
@@ -1056,10 +1203,9 @@ void GeometryManager::device_update(Device *device,
   dscene->prim_index.clear_modified();
   dscene->prim_object.clear_modified();
   dscene->prim_time.clear_modified();
-  dscene->tri_verts.clear_modified();
   dscene->tri_shader.clear_modified();
   dscene->tri_vindex.clear_modified();
-  dscene->tri_vnormal.clear_modified();
+  dscene->tri_verts.clear_modified();
   dscene->curves.clear_modified();
   dscene->curve_keys.clear_modified();
   dscene->curve_segments.clear_modified();
@@ -1071,6 +1217,7 @@ void GeometryManager::device_update(Device *device,
   dscene->attributes_float3.clear_modified();
   dscene->attributes_float4.clear_modified();
   dscene->attributes_uchar4.clear_modified();
+  dscene->attributes_normal.clear_modified();
 }
 
 void GeometryManager::device_free(Device *device, DeviceScene *dscene, bool force_free)
@@ -1083,10 +1230,9 @@ void GeometryManager::device_free(Device *device, DeviceScene *dscene, bool forc
   dscene->prim_index.free_if_need_realloc(force_free);
   dscene->prim_object.free_if_need_realloc(force_free);
   dscene->prim_time.free_if_need_realloc(force_free);
-  dscene->tri_verts.free_if_need_realloc(force_free);
   dscene->tri_shader.free_if_need_realloc(force_free);
-  dscene->tri_vnormal.free_if_need_realloc(force_free);
   dscene->tri_vindex.free_if_need_realloc(force_free);
+  dscene->tri_verts.free_if_need_realloc(force_free);
   dscene->curves.free_if_need_realloc(force_free);
   dscene->curve_keys.free_if_need_realloc(force_free);
   dscene->curve_segments.free_if_need_realloc(force_free);
@@ -1098,6 +1244,7 @@ void GeometryManager::device_free(Device *device, DeviceScene *dscene, bool forc
   dscene->attributes_float3.free_if_need_realloc(force_free);
   dscene->attributes_float4.free_if_need_realloc(force_free);
   dscene->attributes_uchar4.free_if_need_realloc(force_free);
+  dscene->attributes_normal.free_if_need_realloc(force_free);
 
   /* Signal for shaders like displacement not to do ray tracing. */
   dscene->data.bvh.bvh_layout = BVH_LAYOUT_NONE;

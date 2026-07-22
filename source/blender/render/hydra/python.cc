@@ -19,7 +19,9 @@
 
 #include "hydra/image.hh"
 
-namespace blender::render::hydra {
+namespace blender {
+
+namespace render::hydra {
 
 template<typename T> T *pyrna_to_pointer(PyObject *pyobject, const StructRNA *rnatype)
 {
@@ -31,13 +33,21 @@ static PyObject *engine_create_func(PyObject * /*self*/, PyObject *args)
 {
   PyObject *pyengine;
   char *engine_type, *render_delegate_id;
-  if (!PyArg_ParseTuple(args, "Oss", &pyengine, &engine_type, &render_delegate_id)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `engine` */
+                        "s" /* `engine_type` */
+                        "s" /* `render_delegate_id` */
+                        ":engine_create",
+                        &pyengine,
+                        &engine_type,
+                        &render_delegate_id))
+  {
     return nullptr;
   }
 
-  RenderEngine *bl_engine = pyrna_to_pointer<RenderEngine>(pyengine, &RNA_RenderEngine);
+  RenderEngine *bl_engine = pyrna_to_pointer<RenderEngine>(pyengine, RNA_RenderEngine);
 
-  CLOG_INFO(LOG_HYDRA_RENDER, 1, "Engine %s", engine_type);
+  CLOG_DEBUG(LOG_HYDRA_RENDER, "Engine %s", engine_type);
   Engine *engine = nullptr;
   try {
     if (STREQ(engine_type, "VIEWPORT")) {
@@ -54,19 +64,23 @@ static PyObject *engine_create_func(PyObject * /*self*/, PyObject *args)
     CLOG_ERROR(LOG_HYDRA_RENDER, "%s", e.what());
   }
 
-  CLOG_INFO(LOG_HYDRA_RENDER, 1, "Engine %p", engine);
+  CLOG_DEBUG(LOG_HYDRA_RENDER, "Engine %p", engine);
   return PyLong_FromVoidPtr(engine);
 }
 
 static PyObject *engine_free_func(PyObject * /*self*/, PyObject *args)
 {
   PyObject *pyengine;
-  if (!PyArg_ParseTuple(args, "O", &pyengine)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `engine` */
+                        ":engine_free",
+                        &pyengine))
+  {
     return nullptr;
   }
 
   Engine *engine = static_cast<Engine *>(PyLong_AsVoidPtr(pyengine));
-  CLOG_INFO(LOG_HYDRA_RENDER, 1, "Engine %p", engine);
+  CLOG_DEBUG(LOG_HYDRA_RENDER, "Engine %p", engine);
   delete engine;
 
   Py_RETURN_NONE;
@@ -75,15 +89,23 @@ static PyObject *engine_free_func(PyObject * /*self*/, PyObject *args)
 static PyObject *engine_update_func(PyObject * /*self*/, PyObject *args)
 {
   PyObject *pyengine, *pydepsgraph, *pycontext;
-  if (!PyArg_ParseTuple(args, "OOO", &pyengine, &pydepsgraph, &pycontext)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `engine` */
+                        "O" /* `depsgraph` */
+                        "O" /* `context` */
+                        ":engine_update",
+                        &pyengine,
+                        &pydepsgraph,
+                        &pycontext))
+  {
     return nullptr;
   }
 
   Engine *engine = static_cast<Engine *>(PyLong_AsVoidPtr(pyengine));
-  Depsgraph *depsgraph = pyrna_to_pointer<Depsgraph>(pydepsgraph, &RNA_Depsgraph);
-  bContext *context = pyrna_to_pointer<bContext>(pycontext, &RNA_Context);
+  Depsgraph *depsgraph = pyrna_to_pointer<Depsgraph>(pydepsgraph, RNA_Depsgraph);
+  bContext *context = pyrna_to_pointer<bContext>(pycontext, RNA_Context);
 
-  CLOG_INFO(LOG_HYDRA_RENDER, 2, "Engine %p", engine);
+  CLOG_DEBUG(LOG_HYDRA_RENDER, "Engine %p", engine);
   engine->sync(depsgraph, context);
 
   Py_RETURN_NONE;
@@ -92,13 +114,17 @@ static PyObject *engine_update_func(PyObject * /*self*/, PyObject *args)
 static PyObject *engine_render_func(PyObject * /*self*/, PyObject *args)
 {
   PyObject *pyengine;
-  if (!PyArg_ParseTuple(args, "O", &pyengine)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `engine` */
+                        ":engine_render",
+                        &pyengine))
+  {
     return nullptr;
   }
 
   Engine *engine = static_cast<Engine *>(PyLong_AsVoidPtr(pyengine));
 
-  CLOG_INFO(LOG_HYDRA_RENDER, 2, "Engine %p", engine);
+  CLOG_DEBUG(LOG_HYDRA_RENDER, "Engine %p", engine);
 
   /* Allow Blender to execute other Python scripts. */
   Py_BEGIN_ALLOW_THREADS;
@@ -111,14 +137,20 @@ static PyObject *engine_render_func(PyObject * /*self*/, PyObject *args)
 static PyObject *engine_view_draw_func(PyObject * /*self*/, PyObject *args)
 {
   PyObject *pyengine, *pycontext;
-  if (!PyArg_ParseTuple(args, "OO", &pyengine, &pycontext)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `engine` */
+                        "O" /* `context` */
+                        ":engine_view_draw",
+                        &pyengine,
+                        &pycontext))
+  {
     return nullptr;
   }
 
   ViewportEngine *engine = static_cast<ViewportEngine *>(PyLong_AsVoidPtr(pyengine));
-  bContext *context = pyrna_to_pointer<bContext>(pycontext, &RNA_Context);
+  bContext *context = pyrna_to_pointer<bContext>(pycontext, RNA_Context);
 
-  CLOG_INFO(LOG_HYDRA_RENDER, 3, "Engine %p", engine);
+  CLOG_DEBUG(LOG_HYDRA_RENDER, "Engine %p", engine);
 
   /* Allow Blender to execute other Python scripts. */
   Py_BEGIN_ALLOW_THREADS;
@@ -150,13 +182,21 @@ static PyObject *engine_set_render_setting_func(PyObject * /*self*/, PyObject *a
 {
   PyObject *pyengine, *pyval;
   char *key;
-  if (!PyArg_ParseTuple(args, "OsO", &pyengine, &key, &pyval)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `engine` */
+                        "s" /* `key` */
+                        "O" /* `value` */
+                        ":engine_set_render_setting",
+                        &pyengine,
+                        &key,
+                        &pyval))
+  {
     return nullptr;
   }
 
   Engine *engine = static_cast<Engine *>(PyLong_AsVoidPtr(pyengine));
 
-  CLOG_INFO(LOG_HYDRA_RENDER, 3, "Engine %p: %s", engine, key);
+  CLOG_DEBUG(LOG_HYDRA_RENDER, "Engine %p: %s", engine, key);
   engine->set_render_setting(key, get_setting_val(pyval));
 
   Py_RETURN_NONE;
@@ -165,7 +205,13 @@ static PyObject *engine_set_render_setting_func(PyObject * /*self*/, PyObject *a
 static PyObject *cache_or_get_image_file_func(PyObject * /*self*/, PyObject *args)
 {
   PyObject *pycontext, *pyimage;
-  if (!PyArg_ParseTuple(args, "OO", &pycontext, &pyimage)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `context` */
+                        "O" /* `image` */
+                        ":cache_or_get_image_file",
+                        &pycontext,
+                        &pyimage))
+  {
     return nullptr;
   }
 
@@ -202,12 +248,14 @@ static PyModuleDef module = {
     nullptr,
 };
 
-}  // namespace blender::render::hydra
+}  // namespace render::hydra
 
 PyObject *BPyInit_hydra();
 
 PyObject *BPyInit_hydra()
 {
-  PyObject *mod = PyModule_Create(&blender::render::hydra::module);
+  PyObject *mod = PyModule_Create(&render::hydra::module);
   return mod;
 }
+
+}  // namespace blender

@@ -6,11 +6,15 @@
  * \ingroup asset_system
  */
 
+#include <memory>
+
 #include "BKE_blender.hh"
 #include "BKE_preferences.h"
 
+#include "BLI_fileops.hh"  // IWYU pragma: keep
 #include "BLI_path_utils.hh"
 #include "BLI_string_ref.hh"
+#include "BLI_vector.hh"
 
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
@@ -20,12 +24,17 @@
 #include "AS_asset_library.hh"
 #include "AS_essentials_library.hh"
 #include "all_library.hh"
+#include "asset_catalog_collection.hh"
+#include "asset_catalog_definition_file.hh"  // IWYU pragma: keep
 #include "asset_library_service.hh"
 #include "essentials_library.hh"
 #include "on_disk_library.hh"
 #include "preferences_on_disk_library.hh"
+#include "remote_library.hh"
 #include "runtime_library.hh"
 #include "utils.hh"
+
+namespace blender {
 
 /* When enabled, use a pre file load handler (#BKE_CB_EVT_LOAD_PRE) callback to destroy the asset
  * library service. Without this an explicit call from the file loading code is needed to do this,
@@ -38,9 +47,9 @@
  */
 // #define WITH_DESTROY_VIA_LOAD_HANDLER
 
-static CLG_LogRef LOG = {"asset_system.asset_library_service"};
+static CLG_LogRef LOG = {"asset.library"};
 
-namespace blender::asset_system {
+namespace asset_system {
 
 std::unique_ptr<AssetLibraryService> AssetLibraryService::instance_;
 bool AssetLibraryService::atexit_handler_registered_ = false;
@@ -76,8 +85,11 @@ AssetLibrary *AssetLibraryService::get_asset_library(
 
       return this->get_asset_library_on_disk_builtin(type, root_path);
     }
+    case ASSET_LIBRARY_ONLINE_ESSENTIALS: {
+      return this->get_online_essentials_asset_library();
+    }
     case ASSET_LIBRARY_LOCAL: {
-      /* For the "Current File" library  we get the asset library root path based on main. */
+      /* For the "Current File" library we get the asset library root path based on main. */
       std::string root_path = bmain ? AS_asset_library_find_suitable_root_path_from_main(bmain) :
                                       "";
 
@@ -96,16 +108,20 @@ AssetLibrary *AssetLibraryService::get_asset_library(
         return nullptr;
       }
 
+      if (custom_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
+        if (is_online_essentials_url(custom_library->remote_url)) {
+          return this->get_online_essentials_asset_library();
+        }
+        return this->get_preferences_remote_asset_library(*custom_library);
+      }
+
       std::string root_path = custom_library->dirpath;
       if (root_path.empty()) {
         return nullptr;
       }
 
-      AssetLibrary *library = this->get_asset_library_on_disk_custom(custom_library->name,
-                                                                     root_path);
-      library->import_method_ = eAssetImportMethod(custom_library->import_method);
+      AssetLibrary *library = this->get_asset_library_on_disk_custom_preferences(custom_library);
       library->may_override_import_method_ = true;
-      library->use_relative_path_ = (custom_library->flag & ASSET_LIBRARY_RELATIVE_PATH) != 0;
 
       return library;
     }
@@ -114,42 +130,108 @@ AssetLibrary *AssetLibraryService::get_asset_library(
   return nullptr;
 }
 
-AssetLibrary *AssetLibraryService::get_asset_library_on_disk(eAssetLibraryType library_type,
-                                                             StringRef name,
-                                                             StringRefNull root_path,
-                                                             const bool load_catalogs)
+AssetLibrary *AssetLibraryService::get_online_essentials_asset_library()
 {
-  if (OnDiskAssetLibrary *lib = this->lookup_on_disk_library(library_type, root_path)) {
-    CLOG_INFO(&LOG, 2, "get \"%s\" (cached)", root_path.c_str());
+  if (online_essentials_library_) {
+    CLOG_DEBUG(&LOG, "get online essentials lib (cached)");
+    online_essentials_library_->load_or_reload_catalogs();
+  }
+  else {
+    CLOG_DEBUG(&LOG, "get online essentials lib (loaded)");
+    online_essentials_library_ = std::make_unique<OnlineEssentialsLibrary>();
+  }
+
+  AssetLibrary *lib = online_essentials_library_.get();
+  return lib;
+}
+
+AssetLibrary *AssetLibraryService::get_preferences_remote_asset_library(
+    const bUserAssetLibrary &custom_library)
+{
+  if (!custom_library.remote_url[0]) {
+    return nullptr;
+  }
+
+  const StringRefNull remote_url = custom_library.remote_url;
+
+  /* Lock for the entire "lookup and if not found -> create and insert" scope, so no two threads do
+   * this in parallel and interfere with each other. */
+  std::scoped_lock lock{remote_libraries_mutex_};
+
+  std::unique_ptr<PreferencesRemoteAssetLibrary> *lib_uptr_ptr = remote_libraries_.lookup_ptr(
+      remote_url);
+  if (lib_uptr_ptr != nullptr) {
+    CLOG_DEBUG(&LOG, "get \"%s\" (cached)", remote_url.c_str());
+    AssetLibrary *lib = lib_uptr_ptr->get();
+    lib->load_or_reload_catalogs();
+    return lib;
+  }
+
+  std::unique_ptr<PreferencesRemoteAssetLibrary> lib_uptr =
+      std::make_unique<PreferencesRemoteAssetLibrary>(custom_library);
+  AssetLibrary *lib = lib_uptr.get();
+  lib->load_or_reload_catalogs();
+
+  remote_libraries_.add_new(remote_url, std::move(lib_uptr));
+  CLOG_DEBUG(&LOG, "get \"%s\" (loaded)", remote_url.c_str());
+  return lib;
+}
+
+AssetLibrary *AssetLibraryService::get_asset_library_on_disk(
+    eAssetLibraryType library_type,
+    StringRef name,
+    StringRefNull root_path,
+    const bool load_catalogs,
+    bUserAssetLibrary *preferences_library)
+{
+  const std::string normalized_root_path = utils::normalize_directory_path(root_path);
+
+  /* Lock for the entire "lookup and if not found -> create and insert" scope, so no two threads do
+   * this in parallel and interfere with each other. */
+  std::scoped_lock lock{on_disk_libraries_mutex_};
+
+  if (OnDiskAssetLibrary *lib = this->lookup_on_disk_library(library_type, normalized_root_path)) {
+    CLOG_DEBUG(&LOG, "get \"%s\" (cached)", normalized_root_path.c_str());
     if (load_catalogs) {
       lib->load_or_reload_catalogs();
     }
     return lib;
   }
 
-  const std::string normalized_root_path = utils::normalize_directory_path(root_path);
-
   std::unique_ptr<OnDiskAssetLibrary> lib_uptr;
   switch (library_type) {
     case ASSET_LIBRARY_CUSTOM:
-      lib_uptr = std::make_unique<PreferencesOnDiskAssetLibrary>(name, normalized_root_path);
+      if (preferences_library) {
+        lib_uptr = std::make_unique<PreferencesOnDiskAssetLibrary>(*preferences_library);
+      }
+      else {
+        /* Only used by unit tests. */
+        lib_uptr = std::make_unique<OnDiskAssetLibrary>(
+            library_type, name, normalized_root_path, /*is_read_only=*/false);
+      }
       break;
     case ASSET_LIBRARY_ESSENTIALS:
       lib_uptr = std::make_unique<EssentialsAssetLibrary>();
       break;
+    case ASSET_LIBRARY_LOCAL:
+      lib_uptr = std::make_unique<OnDiskAssetLibrary>(
+          library_type, name, normalized_root_path, /*is_read_only=*/false);
+      break;
     default:
-      lib_uptr = std::make_unique<OnDiskAssetLibrary>(library_type, name, normalized_root_path);
+      lib_uptr = std::make_unique<OnDiskAssetLibrary>(
+          library_type, name, normalized_root_path, /*is_read_only=*/true);
       break;
   }
 
+  /* Get underlying pointer before moving. */
   AssetLibrary *lib = lib_uptr.get();
+  on_disk_libraries_.add_new({library_type, normalized_root_path}, std::move(lib_uptr));
+  CLOG_DEBUG(&LOG, "get \"%s\" (loaded)", normalized_root_path.c_str());
 
   if (load_catalogs) {
     lib->load_or_reload_catalogs();
   }
 
-  on_disk_libraries_.add_new({library_type, normalized_root_path}, std::move(lib_uptr));
-  CLOG_INFO(&LOG, 2, "get \"%s\" (loaded)", normalized_root_path.c_str());
   return lib;
 }
 
@@ -157,6 +239,13 @@ AssetLibrary *AssetLibraryService::get_asset_library_on_disk_custom(StringRef na
                                                                     StringRefNull root_path)
 {
   return this->get_asset_library_on_disk(ASSET_LIBRARY_CUSTOM, name, root_path);
+}
+
+AssetLibrary *AssetLibraryService::get_asset_library_on_disk_custom_preferences(
+    bUserAssetLibrary *custom_library)
+{
+  return this->get_asset_library_on_disk(
+      ASSET_LIBRARY_CUSTOM, custom_library->name, custom_library->dirpath, true, custom_library);
 }
 
 AssetLibrary *AssetLibraryService::get_asset_library_on_disk_builtin(eAssetLibraryType type,
@@ -174,11 +263,11 @@ AssetLibrary *AssetLibraryService::get_asset_library_on_disk_builtin(eAssetLibra
 AssetLibrary *AssetLibraryService::get_asset_library_current_file()
 {
   if (current_file_library_) {
-    CLOG_INFO(&LOG, 2, "get current file lib (cached)");
+    CLOG_DEBUG(&LOG, "get current file lib (cached)");
     current_file_library_->refresh_catalogs();
   }
   else {
-    CLOG_INFO(&LOG, 2, "get current file lib (loaded)");
+    CLOG_DEBUG(&LOG, "get current file lib (loaded)");
     current_file_library_ = std::make_unique<RuntimeAssetLibrary>();
   }
 
@@ -214,10 +303,15 @@ AssetLibrary *AssetLibraryService::move_runtime_current_file_into_on_disk_librar
     return nullptr;
   }
 
-  BLI_assert_msg(!library_service.lookup_on_disk_library(ASSET_LIBRARY_LOCAL, root_path),
-                 "On-disk \"Current File\" asset library shouldn't exist yet, it should only be "
-                 "created now in response to initially saving the file - catalog service "
-                 "will be overridden");
+#ifndef NDEBUG
+  {
+    std::scoped_lock lock{library_service.on_disk_libraries_mutex_};
+    BLI_assert_msg(!library_service.lookup_on_disk_library(ASSET_LIBRARY_LOCAL, root_path),
+                   "On-disk \"Current File\" asset library shouldn't exist yet, it should only be "
+                   "created now in response to initially saving the file - catalog service "
+                   "will be overridden");
+  }
+#endif
 
   /* Create on disk library without loading catalogs. We'll steal the catalog service from the
    * runtime library below. */
@@ -238,12 +332,25 @@ AssetLibrary *AssetLibraryService::move_runtime_current_file_into_on_disk_librar
         library_service.current_file_library_->catalog_service_);
   }
 
-  on_disk_library->catalog_service().asset_library_root_ = on_disk_library->root_path();
+  AssetCatalogService &catalog_service = on_disk_library->catalog_service();
+  catalog_service.asset_library_root_ = on_disk_library->root_path();
   /* The catalogs are not stored on disk, so there should not be any CDF. Otherwise, we'd have to
    * remap their stored file-path too (#AssetCatalogDefinitionFile.file_path). */
-  BLI_assert_msg(on_disk_library->catalog_service().get_catalog_definition_file() == nullptr,
+  BLI_assert_msg(catalog_service.get_catalog_definition_file() == nullptr,
                  "new on-disk library shouldn't have catalog definition files - root path "
                  "changed, so they would have to be relocated");
+
+  /* Create a CDF with the runtime catalogs that on-disk catalogs can be merged into. Only do if
+   * there's catalogs to write, otherwise we create empty CDFs on disk on every new .blend save. */
+  if (!catalog_service.catalog_collection_->is_empty()) {
+    char asset_lib_cdf_path[PATH_MAX];
+    BLI_path_join(asset_lib_cdf_path,
+                  sizeof(asset_lib_cdf_path),
+                  on_disk_library->root_path().c_str(),
+                  AssetCatalogService::DEFAULT_CATALOG_FILENAME.c_str());
+    catalog_service.catalog_collection_->catalog_definition_file_ =
+        catalog_service.construct_cdf_in_memory(asset_lib_cdf_path);
+  }
 
   library_service.current_file_library_ = nullptr;
 
@@ -264,11 +371,11 @@ AssetLibrary *AssetLibraryService::get_asset_library_all(const Main *bmain)
   }
 
   if (!all_library_) {
-    CLOG_INFO(&LOG, 2, "get all lib (loaded)");
+    CLOG_DEBUG(&LOG, "get all lib (loaded)");
     all_library_ = std::make_unique<AllAssetLibrary>();
   }
   else {
-    CLOG_INFO(&LOG, 2, "get all lib (cached)");
+    CLOG_DEBUG(&LOG, "get all lib (cached)");
   }
 
   /* Don't reload catalogs, they've just been loaded above. */
@@ -285,6 +392,7 @@ OnDiskAssetLibrary *AssetLibraryService::lookup_on_disk_library(eAssetLibraryTyp
 
   std::string normalized_root_path = utils::normalize_directory_path(root_path);
 
+  std::scoped_lock lock{on_disk_libraries_mutex_};
   std::unique_ptr<OnDiskAssetLibrary> *lib_uptr_ptr = on_disk_libraries_.lookup_ptr(
       {library_type, normalized_root_path});
   return lib_uptr_ptr ? lib_uptr_ptr->get() : nullptr;
@@ -303,6 +411,7 @@ bUserAssetLibrary *AssetLibraryService::find_custom_preferences_asset_library_fr
 AssetLibrary *AssetLibraryService::find_loaded_on_disk_asset_library_from_name(
     StringRef name) const
 {
+  std::scoped_lock lock{on_disk_libraries_mutex_};
   for (const std::unique_ptr<OnDiskAssetLibrary> &library : on_disk_libraries_.values()) {
     if (library->name_ == name) {
       return library.get();
@@ -338,6 +447,9 @@ std::string AssetLibraryService::resolve_asset_weak_reference_to_library_path(
     }
     case ASSET_LIBRARY_ESSENTIALS:
       library_dirpath = essentials_directory_path();
+      break;
+    case ASSET_LIBRARY_ONLINE_ESSENTIALS:
+      library_dirpath = online_essentials_cache_directory_path();
       break;
     case ASSET_LIBRARY_LOCAL:
     case ASSET_LIBRARY_ALL:
@@ -450,7 +562,8 @@ std::optional<AssetLibraryService::ExplodedPath> AssetLibraryService::
       return exploded;
     }
     case ASSET_LIBRARY_CUSTOM:
-    case ASSET_LIBRARY_ESSENTIALS: {
+    case ASSET_LIBRARY_ESSENTIALS:
+    case ASSET_LIBRARY_ONLINE_ESSENTIALS: {
       std::string full_path = this->resolve_asset_weak_reference_to_full_path(asset_reference);
       /* #full_path uses native slashes, so others don't need to be considered in the following. */
 
@@ -503,6 +616,9 @@ std::string AssetLibraryService::root_path_from_library_ref(
   }
   if (ELEM(library_reference.type, ASSET_LIBRARY_ESSENTIALS)) {
     return essentials_directory_path();
+  }
+  if (library_reference.type == ASSET_LIBRARY_ONLINE_ESSENTIALS) {
+    return online_essentials_cache_directory_path();
   }
 
   bUserAssetLibrary *custom_library = find_custom_asset_library_from_library_ref(
@@ -572,17 +688,76 @@ bool AssetLibraryService::has_any_unsaved_catalogs() const
 void AssetLibraryService::foreach_loaded_asset_library(FunctionRef<void(AssetLibrary &)> fn,
                                                        const bool include_all_library) const
 {
+  /* Collect the libraries to visit first, then invoke the callback without holding any of the
+   * library mutexes. The callback may re-enter the asset library service, e.g. the "All" library
+   * reading triggers a catalog rebuild, which itself calls #foreach_loaded() - so running it while
+   * holding these mutexes can deadlock.
+   *
+   * Holding on to the raw pointers is safe as long as loaded libraries are not freed concurrently.
+   */
+  Vector<AssetLibrary *, 16> libraries;
+
   if (include_all_library && all_library_) {
-    fn(*all_library_);
+    libraries.append(all_library_.get());
   }
 
   if (current_file_library_) {
-    fn(*current_file_library_);
+    libraries.append(current_file_library_.get());
   }
 
-  for (const auto &asset_lib_uptr : on_disk_libraries_.values()) {
-    fn(*asset_lib_uptr);
+  {
+    std::scoped_lock lock{on_disk_libraries_mutex_};
+    /* Do essentials library first. Plenty of general features use the essentials, these features
+     * should be available as soon as possible. Not only after other, potentially big libraries are
+     * loaded. */
+    for (const auto &asset_lib_uptr : on_disk_libraries_.values()) {
+      if (asset_lib_uptr->library_type() != ASSET_LIBRARY_ESSENTIALS) {
+        continue;
+      }
+
+      if (asset_lib_uptr->is_enabled()) {
+        libraries.append(asset_lib_uptr.get());
+      }
+      break;
+    }
+  }
+
+  const bool include_remote_libraries = USER_EXPERIMENTAL_TEST(&U, use_remote_asset_libraries);
+
+  if (include_remote_libraries && online_essentials_library_ &&
+      (U.asset_flag & USER_ASSETS_USE_ONLINE_ESSENTIALS))
+  {
+    libraries.append(online_essentials_library_.get());
+  }
+
+  {
+    std::scoped_lock lock{on_disk_libraries_mutex_};
+    for (const auto &asset_lib_uptr : on_disk_libraries_.values()) {
+      /* Already handled above. */
+      if (asset_lib_uptr->library_type() == ASSET_LIBRARY_ESSENTIALS) {
+        continue;
+      }
+
+      if (asset_lib_uptr->is_enabled()) {
+        libraries.append(asset_lib_uptr.get());
+      }
+    }
+  }
+
+  if (include_remote_libraries) {
+    std::scoped_lock lock{remote_libraries_mutex_};
+    for (const auto &asset_lib_uptr : remote_libraries_.values()) {
+      if (asset_lib_uptr->is_enabled()) {
+        libraries.append(asset_lib_uptr.get());
+      }
+    }
+  }
+
+  for (AssetLibrary *library : libraries) {
+    fn(*library);
   }
 }
 
-}  // namespace blender::asset_system
+}  // namespace asset_system
+
+}  // namespace blender

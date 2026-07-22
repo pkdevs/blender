@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "BKE_global.hh"
+#include "BLI_utildefines.hh"
 #include "CLG_log.h"
 
 #include "vk_backend.hh"
@@ -16,23 +17,84 @@
 #include "vk_debug.hh"
 #include "vk_to_string.hh"
 
+#include "gpu_profile_report.hh"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"gpu.vulkan"};
 
-namespace blender::gpu {
-void VKContext::debug_group_begin(const char *name, int)
+namespace gpu {
+void VKContext::debug_group_begin(const char *name, int index)
 {
+  UNUSED_VARS(index);
   render_graph().debug_group_begin(name, debug::get_debug_group_color(name));
+
+  if (!G.profile_gpu) {
+    return;
+  }
+
+  ScopeTimings timings = {};
+  timings.name = name;
+  timings.finished = false;
+  timings.cpu_start = ScopeTimings::Clock::now();
+
+  scope_timings.append(timings);
 }
 
 void VKContext::debug_group_end()
 {
   render_graph().debug_group_end();
+
+  if (!G.profile_gpu) {
+    return;
+  }
+
+  for (int i = scope_timings.size() - 1; i >= 0; i--) {
+    ScopeTimings &query = scope_timings[i];
+    if (!query.finished) {
+      query.finished = true;
+      query.cpu_end = ScopeTimings::Clock::now();
+      break;
+    }
+    if (i == 0) {
+      CLOG_ERROR(&LOG, "Profile GPU error: Extra GPU_debug_group_end() call.");
+    }
+  }
+}
+
+void VKContext::process_frame_timings()
+{
+  if (!G.profile_gpu) {
+    return;
+  }
+
+  Vector<ScopeTimings> &queries = scope_timings;
+
+  bool frame_is_valid = !queries.is_empty();
+
+  for (int i = queries.size() - 1; i >= 0; i--) {
+    if (!queries[i].finished) {
+      frame_is_valid = false;
+      CLOG_ERROR(&LOG, "Profile GPU error: Missing GPU_debug_group_end() call");
+    }
+    break;
+  }
+
+  if (!frame_is_valid) {
+    return;
+  }
+
+  for (ScopeTimings &query : queries) {
+    ProfileReport::get().add_group_cpu(query.name,
+                                       query.cpu_start.time_since_epoch().count(),
+                                       query.cpu_end.time_since_epoch().count());
+  }
+
+  queries.clear();
 }
 
 bool VKContext::debug_capture_begin(const char *title)
 {
-  flush_render_graph(RenderGraphFlushFlags::SUBMIT | RenderGraphFlushFlags::WAIT_FOR_COMPLETION |
-                     RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
   return VKBackend::get().debug_capture_begin(title);
 }
 
@@ -52,8 +114,6 @@ bool VKBackend::debug_capture_begin(const char *title)
 
 void VKContext::debug_capture_end()
 {
-  flush_render_graph(RenderGraphFlushFlags::SUBMIT | RenderGraphFlushFlags::WAIT_FOR_COMPLETION |
-                     RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
   VKBackend::get().debug_capture_end();
 }
 
@@ -95,9 +155,9 @@ void VKContext::debug_capture_scope_end(void *scope)
 #endif
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
 
-namespace blender::gpu::debug {
+namespace gpu::debug {
 
 void VKDebuggingTools::init(VkInstance vk_instance)
 {
@@ -113,19 +173,19 @@ void VKDebuggingTools::deinit(VkInstance vk_instance)
 void object_label(VkObjectType vk_object_type, uint64_t object_handle, const char *name)
 {
   const VKDevice &device = VKBackend::get().device;
-  if (G.debug & G_DEBUG_GPU && device.functions.vkSetDebugUtilsObjectName) {
+  if (G.debug & G_DEBUG_GPU && volk::vkSetDebugUtilsObjectNameEXT && object_handle != 0) {
     VkDebugUtilsObjectNameInfoEXT info = {};
     info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
     info.objectType = vk_object_type;
     info.objectHandle = object_handle;
     info.pObjectName = name;
-    device.functions.vkSetDebugUtilsObjectName(device.vk_handle(), &info);
+    volk::vkSetDebugUtilsObjectNameEXT(device.vk_handle(), &info);
   }
 }
 
-}  // namespace blender::gpu::debug
+}  // namespace gpu::debug
 
-namespace blender::gpu::debug {
+namespace gpu::debug {
 
 void VKDebuggingTools::print_labels(const VkDebugUtilsMessengerCallbackDataEXT *callback_data)
 {
@@ -155,41 +215,42 @@ void VKDebuggingTools::print_labels(const VkDebugUtilsMessengerCallbackDataEXT *
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-                   VkDebugUtilsMessageTypeFlagsEXT /*message_type*/,
+                   VkDebugUtilsMessageTypeFlagsEXT message_type,
                    const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
                    void *user_data)
 {
-
-  CLG_Severity severity = CLG_SEVERITY_INFO;
+  CLG_Level level = CLG_LEVEL_INFO;
   if (message_severity & (VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT))
   {
-    severity = CLG_SEVERITY_INFO;
+    level = CLG_LEVEL_INFO;
   }
   if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-    severity = CLG_SEVERITY_WARN;
+    level = CLG_LEVEL_WARN;
   }
   if (message_severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-    severity = CLG_SEVERITY_ERROR;
+    level = CLG_LEVEL_ERROR;
   }
 
-  if ((LOG.type->flag & CLG_FLAG_USE) && (LOG.type->level <= severity)) {
-    const char *format = "{0x%x}% s\n %s ";
-    CLG_logf(LOG.type,
-             severity,
-             "",
-             "",
-             format,
-             callback_data->messageIdNumber,
-             callback_data->pMessageIdName,
-             callback_data->pMessage);
+  if (bool(message_type & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)) {
+    const char *format = "{0x%x}%s\n %s";
+    CLOG_AT_LEVEL(&LOG,
+                  level,
+                  format,
+                  callback_data->messageIdNumber,
+                  callback_data->pMessageIdName,
+                  callback_data->pMessage);
+    const bool do_labels = (callback_data->objectCount + callback_data->cmdBufLabelCount +
+                            callback_data->queueLabelCount) > 0;
+    const bool log_active = CLOG_CHECK(&LOG, level);
+    if (do_labels && log_active) {
+      VKDebuggingTools &debugging_tools = *reinterpret_cast<VKDebuggingTools *>(user_data);
+      debugging_tools.print_labels(callback_data);
+    }
   }
-
-  const bool do_labels = (callback_data->objectCount + callback_data->cmdBufLabelCount +
-                          callback_data->queueLabelCount) > 0;
-  if (do_labels) {
-    VKDebuggingTools &debugging_tools = *reinterpret_cast<VKDebuggingTools *>(user_data);
-    debugging_tools.print_labels(callback_data);
+  else {
+    const char *format = "%s: %s";
+    CLOG_AT_LEVEL(&LOG, level, format, callback_data->pMessageIdName, callback_data->pMessage);
   }
 
   return VK_FALSE;
@@ -197,12 +258,11 @@ messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
 
 void VKDebuggingTools::init_messenger(VkInstance vk_instance)
 {
-  if (vk_debug_utils_messenger) {
+  if (vk_debug_utils_messenger != VK_NULL_HANDLE) {
     return;
   }
 
-  VKDevice &device = VKBackend::get().device;
-  if (!device.functions.vkCreateDebugUtilsMessenger) {
+  if (!volk::vkCreateDebugUtilsMessengerEXT) {
     return;
   }
 
@@ -219,21 +279,20 @@ void VKDebuggingTools::init_messenger(VkInstance vk_instance)
                             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
   create_info.pfnUserCallback = messenger_callback;
   create_info.pUserData = this;
-  device.functions.vkCreateDebugUtilsMessenger(
+  volk::vkCreateDebugUtilsMessengerEXT(
       vk_instance, &create_info, nullptr, &vk_debug_utils_messenger);
-  return;
 }
 
 void VKDebuggingTools::destroy_messenger(VkInstance vk_instance)
 {
-  if (vk_debug_utils_messenger == nullptr) {
+  if (vk_debug_utils_messenger == VK_NULL_HANDLE) {
     return;
   }
 
-  VKDevice &device = VKBackend::get().device;
-  device.functions.vkDestroyDebugUtilsMessenger(vk_instance, vk_debug_utils_messenger, nullptr);
-  vk_debug_utils_messenger = nullptr;
-  return;
+  volk::vkDestroyDebugUtilsMessengerEXT(vk_instance, vk_debug_utils_messenger, nullptr);
+  vk_debug_utils_messenger = VK_NULL_HANDLE;
 }
 
-};  // namespace blender::gpu::debug
+};  // namespace gpu::debug
+
+}  // namespace blender

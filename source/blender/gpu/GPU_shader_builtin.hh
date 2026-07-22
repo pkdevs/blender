@@ -20,9 +20,12 @@
 
 #pragma once
 
-struct GPUShader;
+namespace blender {
+namespace gpu {
+class Shader;
+}  // namespace gpu
 
-enum eGPUBuiltinShader {
+enum GPUBuiltinShader {
   /** Glyph drawing shader used by the BLF module. */
   GPU_SHADER_TEXT = 0,
   /** Draws keyframe markers. All markers shapes are supported through a single shader. */
@@ -64,7 +67,6 @@ enum eGPUBuiltinShader {
   GPU_SHADER_2D_NODE_SOCKET_INST,
   /** Draw a node link given an input quadratic Bezier curve. */
   GPU_SHADER_2D_NODELINK,
-  GPU_SHADER_2D_NODELINK_INST,
 
   /** Draw round points with per vertex size and color. */
   GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR,
@@ -83,11 +85,33 @@ enum eGPUBuiltinShader {
   GPU_SHADER_SEQUENCER_STRIPS,
   /** Draw strip thumbnails in sequencer timeline. */
   GPU_SHADER_SEQUENCER_THUMBS,
+  /** Rasterize sequencer scope points into buffers via compute. */
+  GPU_SHADER_SEQUENCER_SCOPE_RASTER,
+  /** Resolve rasterized scope point buffers to display. */
+  GPU_SHADER_SEQUENCER_SCOPE_RESOLVE,
+  /** Draw sequencer zebra pattern (overexposed regions). */
+  GPU_SHADER_SEQUENCER_ZEBRA,
 
   /** Compute shaders to generate 2d index buffers (mainly for curve drawing). */
   GPU_SHADER_INDEXBUF_POINTS,
   GPU_SHADER_INDEXBUF_LINES,
   GPU_SHADER_INDEXBUF_TRIS,
+
+  /** Compute shaders to generate mipmaps. */
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_UNORM_8_8_8_8_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_16_16_16_16_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SFLOAT_32_32_32_32_LAYERED,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8,
+  GPU_SHADER_2D_UPDATE_MIPMAPS_SRGBA_8_8_8_8_LAYERED,
 
   /**
    * ----------------------- Shaders exposed through pyGPU module -----------------------
@@ -104,6 +128,8 @@ enum eGPUBuiltinShader {
    */
   GPU_SHADER_3D_FLAT_COLOR,
   GPU_SHADER_3D_POLYLINE_FLAT_COLOR,
+  GPU_SHADER_3D_POINT_FLAT_COLOR,
+
   /**
    * Take a 3D position and color for each vertex with perspective correct interpolation.
    *
@@ -112,6 +138,7 @@ enum eGPUBuiltinShader {
    */
   GPU_SHADER_3D_SMOOTH_COLOR,
   GPU_SHADER_3D_POLYLINE_SMOOTH_COLOR,
+
   /**
    * Take a single color for all the vertices and a 3D position for each vertex.
    *
@@ -120,8 +147,12 @@ enum eGPUBuiltinShader {
    */
   GPU_SHADER_3D_UNIFORM_COLOR,
   GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR,
+  GPU_SHADER_3D_POINT_UNIFORM_COLOR,
+
   /**
-   * Draw a texture in 3D. Take a 3D position and a 2D texture coordinate for each vertex.
+   * Draw a sRGB color space texture in 3D.
+   * Texture color space is assumed to match the frame-buffer.
+   * Take a 3D position and a 2D texture coordinate for each vertex.
    *
    * \param image: uniform sampler2D
    * \param texCoord: in vec2
@@ -129,6 +160,17 @@ enum eGPUBuiltinShader {
    */
   GPU_SHADER_3D_IMAGE,
   /**
+   * Draw a scene linear color space texture in 3D.
+   * Texture value is transformed to the Rec.709 sRGB color space.
+   * Take a 3D position and a 2D texture coordinate for each vertex.
+   *
+   * \param image: uniform sampler2D
+   * \param texCoord: in vec2
+   * \param pos: in vec3
+   */
+  GPU_SHADER_3D_IMAGE_SCENE_LINEAR_TO_REC709_SRGB,
+  /**
+   * Draw a sRGB color space (with Rec.709 primaries) texture in 3D.
    * Take a 3D position and color for each vertex with linear interpolation in window space.
    *
    * \param color: uniform vec4
@@ -137,18 +179,33 @@ enum eGPUBuiltinShader {
    * \param pos: in vec3
    */
   GPU_SHADER_3D_IMAGE_COLOR,
+  /**
+   * Draw a scene linear color space texture in 3D.
+   * Texture value is transformed to the Rec.709 sRGB color space.
+   * Take a 3D position and color for each vertex with linear interpolation in window space.
+   *
+   * \param color: uniform vec4
+   * \param image: uniform sampler2D
+   * \param texCoord: in vec2
+   * \param pos: in vec3
+   */
+  GPU_SHADER_3D_IMAGE_COLOR_SCENE_LINEAR_TO_REC709_SRGB,
 };
-#define GPU_SHADER_BUILTIN_LEN (GPU_SHADER_3D_IMAGE_COLOR + 1)
+#define GPU_SHADER_BUILTIN_LEN (GPU_SHADER_3D_IMAGE_COLOR_SCENE_LINEAR_TO_REC709_SRGB + 1)
 
 /** Support multiple configurations. */
-enum eGPUShaderConfig {
+enum GPUShaderConfig {
   GPU_SHADER_CFG_DEFAULT = 0,
   GPU_SHADER_CFG_CLIPPED = 1,
 };
 #define GPU_SHADER_CFG_LEN (GPU_SHADER_CFG_CLIPPED + 1)
 
-GPUShader *GPU_shader_get_builtin_shader_with_config(eGPUBuiltinShader shader,
-                                                     eGPUShaderConfig sh_cfg);
-GPUShader *GPU_shader_get_builtin_shader(eGPUBuiltinShader shader);
+gpu::Shader *GPU_shader_get_builtin_shader_with_config(GPUBuiltinShader shader,
+                                                       GPUShaderConfig sh_cfg);
+gpu::Shader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader);
+
+void GPU_shader_builtin_warm_up();
 
 void GPU_shader_free_builtin_shaders();
+
+}  // namespace blender

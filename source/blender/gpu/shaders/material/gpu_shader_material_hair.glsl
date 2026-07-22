@@ -2,13 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+[[node]]
 void node_bsdf_hair(float4 color,
                     float offset,
                     float roughness_u,
                     float roughness_v,
                     float3 T,
                     float weight,
-                    out Closure result)
+                    Closure &result)
 {
   color = max(color, float4(0.0f));
 
@@ -17,20 +18,19 @@ void node_bsdf_hair(float4 color,
    * closure yet. For now fall back to a simpler diffuse surface so that we have at least a color
    * feedback. */
   ClosureHair hair_data;
-  hair_data.weight = weight;
-  hair_data.color = color.rgb;
+  hair_data.color = color.rgb * weight;
   hair_data.offset = offset;
   hair_data.roughness = float2(roughness_u, roughness_v);
   hair_data.T = T;
 #else
   ClosureDiffuse hair_data;
-  hair_data.weight = weight;
-  hair_data.color = color.rgb;
+  hair_data.color = color.rgb * weight;
   hair_data.N = g_data.N;
 #endif
   result = closure_eval(hair_data);
 }
 
+[[node]]
 void node_bsdf_hair_principled(float4 color,
                                float melanin,
                                float melanin_redness,
@@ -49,22 +49,20 @@ void node_bsdf_hair_principled(float4 color,
                                float random_roughness,
                                float random,
                                float weight,
-                               out Closure result)
+                               Closure &result)
 {
   /* Placeholder closure.
    * Some computation will have to happen here just like the Principled BSDF.
    * For now fall back to a simpler diffuse surface so that we have at least a color feedback. */
 #if 0
   ClosureHair hair_data;
-  hair_data.weight = weight;
-  hair_data.color = color.rgb;
+  hair_data.color = color.rgb * weight;
   hair_data.offset = offset;
   hair_data.roughness = float2(0.0f);
   hair_data.T = g_data.curve_B;
 #else
   ClosureDiffuse hair_data;
-  hair_data.weight = weight;
-  hair_data.color = color.rgb;
+  hair_data.color = color.rgb * weight;
   hair_data.N = g_data.N;
 #endif
   result = closure_eval(hair_data);

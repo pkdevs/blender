@@ -17,10 +17,16 @@
 
 #include <optional>
 #include <string>
+#include <utility>
+
+#include "DNA_listBase.h"
 
 #include "RNA_types.hh"
 
-struct ListBase;
+#include "BLI_string_ref.hh"
+
+namespace blender {
+
 struct IDProperty;
 
 /**
@@ -209,7 +215,6 @@ bool RNA_path_resolve_property_and_item_pointer_full(const PointerRNA *ptr,
                                                      PointerRNA *r_item_ptr);
 
 struct PropertyElemRNA {
-  PropertyElemRNA *next, *prev;
   PointerRNA ptr;
   PropertyRNA *prop;
   int index;
@@ -223,7 +228,9 @@ struct PropertyElemRNA {
  * \return True if there was no error while resolving the path
  * \note Assumes all pointers provided are valid
  */
-bool RNA_path_resolve_elements(PointerRNA *ptr, const char *path, ListBase *r_elements);
+bool RNA_path_resolve_elements(PointerRNA *ptr,
+                               const char *path,
+                               Vector<PropertyElemRNA> *r_elements);
 
 /**
  * Find the path from the structure referenced by the pointer to the runtime RNA-defined
@@ -317,3 +324,36 @@ std::optional<std::string> RNA_path_struct_property_py(PointerRNA *ptr,
  *   some_prop[10]
  */
 std::string RNA_path_property_py(const PointerRNA *ptr, PropertyRNA *prop, int index);
+/**
+ * Escapes the given string and formats it to be within square brackets and quotation marks.
+ * For example `Bone "test"` -> `["Bone \"test\""]`.
+ */
+std::string RNA_path_name_to_infix(StringRefNull string);
+/**
+ * Turns the number into a string surrounded by square brackets.
+ * For example `1` -> `[1]`.
+ */
+std::string RNA_path_number_to_infix(int number);
+/**
+ * Generate RNA path keys matching the given infixes (or subscript if the infixes are empty),
+ * including the opening and closing braces (e.g. `["OldModifierName"]` and `["NewModifierName"]`).
+ *
+ * Typically used by code updating RNA paths after some sub-data (modifier, bone...) has been
+ * renamed or re-arranged inside a collection.
+ *
+ * \param old_infix Old string form of the renamed item identifier.
+ * \param new_infix New string form of the renamed item identifier.
+ * \param old_subscript Old numeric index of the renamed item identifier.
+ * \param new_subscript New numeric index of the renamed item identifier.
+ * \param infix_is_name Whether the given infixes are actual item names (need to be escaped and
+ * quoted) or not.
+ * \return A pair of old & new std::string keys.
+ */
+std::pair<std::string, std::string> RNA_generate_keys_for_path_rename(
+    const StringRefNull old_infix,
+    const StringRefNull new_infix,
+    int old_subscript,
+    int new_subscript,
+    bool infix_is_name);
+
+}  // namespace blender

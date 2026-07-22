@@ -4,12 +4,13 @@
 
 #include "asset_library_service.hh"
 
-#include "BLI_fileops.h" /* For PATH_MAX (at least on Windows). */
+#include "BLI_fileops.hh" /* For PATH_MAX (at least on Windows). */
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_callbacks.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_main.hh"
 
 #include "DNA_asset_types.h"
@@ -20,23 +21,12 @@
 
 namespace blender::asset_system::tests {
 
-const bUUID UUID_POSES_ELLIE("df60e1f6-2259-475b-93d9-69a1b4a8db78");
+const UUID UUID_POSES_ELLIE("df60e1f6-2259-475b-93d9-69a1b4a8db78");
 
-class AssetLibraryServiceTest : public testing::Test {
+class AssetLibraryServiceTest : public bke::BlenderGTestBase {
  public:
   CatalogFilePath asset_library_root_;
   CatalogFilePath temp_library_path_;
-
-  static void SetUpTestSuite()
-  {
-    CLG_init();
-    BKE_callback_global_init();
-  }
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-    BKE_callback_global_finalize();
-  }
 
   void SetUp() override
   {
@@ -175,7 +165,7 @@ TEST_F(AssetLibraryServiceTest, catalogs_loaded)
                                                                       asset_library_root_);
   AssetCatalogService &cat_service = lib->catalog_service();
 
-  const bUUID UUID_POSES_ELLIE("df60e1f6-2259-475b-93d9-69a1b4a8db78");
+  const UUID UUID_POSES_ELLIE("df60e1f6-2259-475b-93d9-69a1b4a8db78");
   EXPECT_NE(nullptr, cat_service.find_catalog(UUID_POSES_ELLIE))
       << "Catalogs should be loaded after getting an asset library from disk.";
 }
@@ -192,13 +182,13 @@ TEST_F(AssetLibraryServiceTest, has_any_unsaved_catalogs)
   EXPECT_FALSE(service->has_any_unsaved_catalogs())
       << "Unchanged AssetLibrary should have no unsaved catalogs";
 
-  const bUUID UUID_POSES_ELLIE("df60e1f6-2259-475b-93d9-69a1b4a8db78");
+  const UUID UUID_POSES_ELLIE("df60e1f6-2259-475b-93d9-69a1b4a8db78");
   cat_service.prune_catalogs_by_id(UUID_POSES_ELLIE);
   EXPECT_FALSE(service->has_any_unsaved_catalogs())
       << "Deletion of catalogs via AssetCatalogService should not automatically tag as 'unsaved "
          "changes'.";
 
-  const bUUID UUID_POSES_RUZENA("79a4f887-ab60-4bd4-94da-d572e27d6aed");
+  const UUID UUID_POSES_RUZENA("79a4f887-ab60-4bd4-94da-d572e27d6aed");
   AssetCatalog *cat = cat_service.find_catalog(UUID_POSES_RUZENA);
   ASSERT_NE(nullptr, cat) << "Catalog " << UUID_POSES_RUZENA << " should be known";
 
@@ -240,8 +230,10 @@ TEST_F(AssetLibraryServiceTest, has_any_unsaved_catalogs_after_write)
   EXPECT_FALSE(cat->flags.has_unsaved_changes);
 }
 
-/** Call #AssetLibraryService::move_runtime_current_file_into_on_disk_library() with a on disk
- * location that contains no existing asset catalog definition file. */
+/**
+ * Call #AssetLibraryService::move_runtime_current_file_into_on_disk_library() with an on disk
+ * location that contains no existing asset catalog definition file.
+ */
 TEST_F(AssetLibraryServiceTest, move_runtime_current_file_into_on_disk_library__empty_directory)
 {
   AssetLibraryService *service = AssetLibraryService::get();
@@ -309,9 +301,11 @@ TEST_F(AssetLibraryServiceTest, move_runtime_current_file_into_on_disk_library__
   }
 }
 
-/** Call #AssetLibraryService::move_runtime_current_file_into_on_disk_library() with a on disk
- * location that contains an existing asset catalog definition file. Result should be merged
- * libraries. */
+/**
+ * Call #AssetLibraryService::move_runtime_current_file_into_on_disk_library() with an on disk
+ * location that contains an existing asset catalog definition file.
+ * Result should be merged libraries.
+ */
 TEST_F(AssetLibraryServiceTest,
        move_runtime_current_file_into_on_disk_library__directory_with_catalogs)
 {

@@ -5,13 +5,14 @@
 #include <memory>
 #include <string>
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -29,6 +30,7 @@
 #include "RE_pipeline.h"
 
 #include "COM_render_context.hh"
+#include "COM_result.hh"
 
 namespace blender::compositor {
 
@@ -42,7 +44,7 @@ FileOutput::FileOutput(const std::string &path,
                        bool save_as_render)
     : path_(path), format_(format), save_as_render_(save_as_render)
 {
-  render_result_ = MEM_callocN<RenderResult>("Temporary Render Result For File Output");
+  render_result_ = MEM_new<RenderResult>("Temporary Render Result For File Output");
 
   render_result_->rectx = size.x;
   render_result_->recty = size.y;
@@ -58,7 +60,7 @@ FileOutput::FileOutput(const std::string &path,
    * by the EXR writer as a special case where the channel names take the form:
    *   <pass-name>.<view-name>.<channel-id>
    * Otherwise, the layer name would have preceded in the pass name in yet another section. */
-  RenderLayer *render_layer = MEM_callocN<RenderLayer>("Render Layer For File Output.");
+  RenderLayer *render_layer = MEM_new<RenderLayer>("Render Layer For File Output.");
   BLI_addtail(&render_result_->layers, render_layer);
   render_layer->name[0] = '\0';
 
@@ -76,48 +78,81 @@ void FileOutput::add_view(const char *view_name)
   /* Empty views can only be added for EXR images. */
   BLI_assert(ELEM(format_.imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER));
 
-  RenderView *render_view = MEM_callocN<RenderView>("Render View For File Output.");
+  RenderView *render_view = MEM_new<RenderView>("Render View For File Output.");
   BLI_addtail(&render_result_->views, render_view);
-  STRNCPY(render_view->name, view_name);
+  STRNCPY_UTF8(render_view->name, view_name);
 }
 
-void FileOutput::add_view(const char *view_name, int channels, float *buffer)
+void FileOutput::add_view(const char *view_name, const Result &data)
 {
-  RenderView *render_view = MEM_callocN<RenderView>("Render View For File Output.");
+  RenderView *render_view = MEM_new<RenderView>("Render View For File Output.");
   BLI_addtail(&render_result_->views, render_view);
-  STRNCPY(render_view->name, view_name);
+  STRNCPY_UTF8(render_view->name, view_name);
 
-  render_view->ibuf = IMB_allocImBuf(
-      render_result_->rectx, render_result_->recty, channels * 8, 0);
-  render_view->ibuf->channels = channels;
-  IMB_assign_float_buffer(render_view->ibuf, buffer, IB_TAKE_OWNERSHIP);
+  ImColorMode color_mode = ImColorMode::RGBA;
+  if (data.channels_count() == 1) {
+    color_mode = ImColorMode::BW;
+  }
+  else if (data.channels_count() == 3) {
+    color_mode = ImColorMode::RGB;
+  }
+  render_view->ibuf = IMB_allocImBuf(UNPACK2(data.domain().data_size), ImBufFlags::Zero);
+  render_view->ibuf->color_mode = color_mode;
+  if (data.sharing_info()) {
+    render_view->ibuf->channels = data.channels_count();
+    render_view->ibuf->float_buffer = ImBufFloatBuffer{
+        .data = static_cast<const float *>(data.cpu_data().data()),
+        .sharing_info = data.sharing_info(),
+        .colorspace = nullptr};
+  }
+  else if (data.cpu_data().data() != render_view->ibuf->float_data()) {
+    IMB_alloc_float_pixels(render_view->ibuf, data.channels_count(), false);
+    std::memcpy(
+        render_view->ibuf->float_data_for_write(), data.cpu_data().data(), data.size_in_bytes());
+  }
 }
 
 void FileOutput::add_pass(const char *pass_name,
                           const char *view_name,
                           const char *channels,
-                          float *buffer)
+                          const Result &data)
 {
   /* Passes can only be added for EXR images. */
   BLI_assert(ELEM(format_.imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER));
 
   RenderLayer *render_layer = static_cast<RenderLayer *>(render_result_->layers.first);
-  RenderPass *render_pass = MEM_callocN<RenderPass>("Render Pass For File Output.");
+  RenderPass *render_pass = MEM_new<RenderPass>("Render Pass For File Output.");
   BLI_addtail(&render_layer->passes, render_pass);
   STRNCPY(render_pass->name, pass_name);
   STRNCPY(render_pass->view, view_name);
   STRNCPY(render_pass->chan_id, channels);
 
-  const int channels_count = BLI_strnlen(channels, 4);
-  render_pass->rectx = render_result_->rectx;
-  render_pass->recty = render_result_->recty;
-  render_pass->channels = channels_count;
+  render_pass->rectx = data.domain().data_size.x;
+  render_pass->recty = data.domain().data_size.y;
+  render_pass->channels = data.channels_count();
 
-  render_pass->ibuf = IMB_allocImBuf(
-      render_result_->rectx, render_result_->recty, channels_count * 8, 0);
-  render_pass->ibuf->channels = channels_count;
+  ImColorMode color_mode = ImColorMode::RGBA;
+  if (render_pass->channels == 1) {
+    color_mode = ImColorMode::BW;
+  }
+  else if (render_pass->channels == 3) {
+    color_mode = ImColorMode::RGB;
+  }
+  render_pass->ibuf = IMB_allocImBuf(UNPACK2(data.domain().data_size), ImBufFlags::Zero);
+  render_pass->ibuf->color_mode = color_mode;
+  if (data.sharing_info()) {
+    render_pass->ibuf->channels = data.channels_count();
+    render_pass->ibuf->float_buffer = ImBufFloatBuffer{
+        .data = static_cast<const float *>(data.cpu_data().data()),
+        .sharing_info = data.sharing_info(),
+        .colorspace = nullptr};
+  }
+  else if (data.cpu_data().data() != render_pass->ibuf->float_data()) {
+    IMB_alloc_float_pixels(render_pass->ibuf, data.channels_count(), false);
+    std::memcpy(
+        render_pass->ibuf->float_data_for_write(), data.cpu_data().data(), data.size_in_bytes());
+  }
   copy_v2_v2_db(render_pass->ibuf->ppm, render_result_->ppm);
-  IMB_assign_float_buffer(render_pass->ibuf, buffer, IB_TAKE_OWNERSHIP);
 }
 
 void FileOutput::add_meta_data(std::string key, std::string value)

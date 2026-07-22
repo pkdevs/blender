@@ -8,7 +8,7 @@
  * \ingroup bli
  *
  * This file implements different probing strategies. Those can be used by different hash table
- * implementations like blender::Set and blender::Map. A probing strategy produces a sequence of
+ * implementations like Set and Map. A probing strategy produces a sequence of
  * values based on an initial hash value.
  *
  * A probing strategy has to implement the following methods:
@@ -43,7 +43,7 @@
 
 #include <limits>
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace blender {
 
@@ -155,7 +155,7 @@ template<uint64_t LinearSteps = 1, bool PreShuffle = false> class PythonProbingS
 /**
  * Similar to the Python probing strategy. However, it does a bit more shuffling in the next()
  * method. This way more bits are taken into account earlier. After a couple of collisions (that
- * should happen rarely), it will fallback to a sequence that hits every slot.
+ * should happen rarely), it will fall back to a sequence that hits every slot.
  */
 template<uint64_t LinearSteps = 2, bool PreShuffle = false> class ShuffleProbingStrategy {
  private:

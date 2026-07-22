@@ -8,7 +8,9 @@
  */
 
 #ifdef WIN32
-
+#  ifdef WIN32_LEAN_AND_MEAN
+#    undef WIN32_LEAN_AND_MEAN
+#  endif
 #  include <conio.h>
 #  include <shlwapi.h>
 #  include <stdio.h>
@@ -19,14 +21,16 @@
 #  include "MEM_guardedalloc.h"
 
 #  define WIN32_SKIP_HKEY_PROTECTION /* Need to use HKEY. */
-#  include "BLI_fileops.h"
+#  include "BLI_fileops.hh"
 #  include "BLI_path_utils.hh"
-#  include "BLI_string.h"
-#  include "BLI_utildefines.h"
-#  include "BLI_winstuff.h"
+#  include "BLI_string.hh"
+#  include "BLI_utildefines.hh"
+#  include "BLI_winstuff.hh"
 
 #  include "utf_winfunc.hh"
 #  include "utfconv.hh"
+
+namespace blender {
 
 /* FILE_MAXDIR + FILE_MAXFILE */
 
@@ -193,8 +197,9 @@ bool BLI_windows_register_blend_extension(const bool all_users)
   GetModuleFileName(0, blender_path, sizeof(blender_path));
 
   /* Prevent overflow when we add -launcher to the executable name. */
-  if (strlen(blender_path) > (sizeof(blender_path) - 10))
+  if (strlen(blender_path) > (sizeof(blender_path) - 10)) {
     return false;
+  }
 
   /* Replace the actual app name with the wrapper. */
   blender_app = strstr(blender_path, "blender.exe");
@@ -208,7 +213,7 @@ bool BLI_windows_register_blend_extension(const bool all_users)
   }
 
   if (!register_blender_prog_id(prog_id, blender_path, friendly_name, all_users)) {
-    registry_error(root, "Unable to register Blend document type");
+    registry_error(root, "Unable to register Blender file type");
     return false;
   }
 
@@ -219,7 +224,7 @@ bool BLI_windows_register_blend_extension(const bool all_users)
     lresult = RegSetValueEx(hkey, nullptr, 0, REG_SZ, (BYTE *)prog_id, strlen(prog_id) + 1);
 
     if (lresult != ERROR_SUCCESS) {
-      registry_error(root, "Unable to register Blend document type");
+      registry_error(root, "Unable to register Blender file type");
       RegCloseKey(hkey);
       return false;
     }
@@ -236,7 +241,7 @@ bool BLI_windows_register_blend_extension(const bool all_users)
                              &dwd);
 
     if (lresult != ERROR_SUCCESS) {
-      registry_error(root, "Unable to register Blend document type");
+      registry_error(root, "Unable to register Blender file type");
       RegCloseKey(hkey);
       return false;
     }
@@ -245,7 +250,7 @@ bool BLI_windows_register_blend_extension(const bool all_users)
   }
 
   if (lresult != ERROR_SUCCESS) {
-    registry_error(root, "Unable to register Blend document type");
+    registry_error(root, "Unable to register Blender file type");
     return false;
   }
 
@@ -476,7 +481,7 @@ void BLI_windows_get_default_root_dir(char root[4])
         }
       }
       if (0 == rc) {
-        printf("ERROR in 'BLI_windows_get_default_root_dir': can't find a valid drive!\n");
+        printf("ERROR in 'BLI_windows_get_default_root_dir': cannot find a valid drive!\n");
         root[0] = 'C';
         root[1] = ':';
         root[2] = '\\';
@@ -514,6 +519,118 @@ bool BLI_windows_get_directx_driver_version(const wchar_t *deviceSubString,
 
   return false;
 }
+
+bool BLI_windows_get_directx_intel_driver_info(uint64_t device_luid,
+                                               int *driver_version_minor,
+                                               int *driver_version_major,
+                                               uint32_t *device_id)
+{
+  IDXGIFactory *pFactory = nullptr;
+  IDXGIAdapter *pAdapter = nullptr;
+  if (CreateDXGIFactory(__uuidof(IDXGIFactory), (void **)&pFactory) == S_OK) {
+    for (UINT i = 0; pFactory->EnumAdapters(i, &pAdapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+      LARGE_INTEGER version;
+      if (pAdapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &version) == S_OK) {
+        DXGI_ADAPTER_DESC desc;
+        if (pAdapter->GetDesc(&desc) == S_OK) {
+          uint64_t adapter_luid = (uint64_t(desc.AdapterLuid.HighPart) << uint64_t(32)) |
+                                  uint64_t(desc.AdapterLuid.LowPart);
+          if (device_luid == adapter_luid) {
+            *device_id = desc.DeviceId;
+            *driver_version_major = int((version.QuadPart >> 16) & 0xFFFF);
+            *driver_version_minor = int(version.QuadPart & 0xFFFF);
+
+            pAdapter->Release();
+            pFactory->Release();
+            return true;
+          }
+        }
+      }
+
+      pAdapter->Release();
+    }
+    pFactory->Release();
+  }
+
+  return false;
+}
+
+bool BLI_windows_is_build_version_greater_or_equal(DWORD majorVersion,
+                                                   DWORD minorVersion,
+                                                   DWORD buildNumber)
+{
+  HMODULE hMod = ::GetModuleHandleW(L"ntdll.dll");
+  if (hMod == 0) {
+    return false;
+  }
+
+  typedef NTSTATUS(WINAPI * RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+  RtlGetVersionPtr rtl_get_version = (RtlGetVersionPtr)::GetProcAddress(hMod, "RtlGetVersion");
+  if (rtl_get_version == nullptr) {
+    fprintf(stderr, "BLI_windows_is_build_version_greater_or_equal: RtlGetVersion not found.");
+    return false;
+  }
+
+  RTL_OSVERSIONINFOW osVersioninfo{};
+  osVersioninfo.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOW);
+  if (rtl_get_version(&osVersioninfo) != 0) {
+    fprintf(stderr, "BLI_windows_is_build_version_greater_or_equal: RtlGetVersion failed.");
+    return false;
+  }
+  if (majorVersion != osVersioninfo.dwMajorVersion) {
+    return osVersioninfo.dwMajorVersion > majorVersion;
+  }
+  if (minorVersion != osVersioninfo.dwMinorVersion) {
+    return osVersioninfo.dwMajorVersion > minorVersion;
+  }
+  return osVersioninfo.dwBuildNumber >= buildNumber;
+}
+
+void BLI_windows_process_set_qos(QoSMode qos_mode, QoSPrecedence qos_precedence)
+{
+  static QoSPrecedence qos_precedence_last = QoSPrecedence::JOB;
+  if (int(qos_precedence) < int(qos_precedence_last)) {
+    return;
+  }
+
+  /* Only supported on Windows build >= 10.0.22000, i.e., Windows 11 21H2:
+   * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/ne-processthreadsapi-process_information_class
+   */
+  if (!BLI_windows_is_build_version_greater_or_equal(10, 0, 22000)) {
+    return;
+  }
+
+  PROCESS_POWER_THROTTLING_STATE processPowerThrottlingState{};
+  processPowerThrottlingState.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+  switch (qos_mode) {
+    case QoSMode::DEFAULT:
+      processPowerThrottlingState.ControlMask = 0;
+      processPowerThrottlingState.StateMask = 0;
+      break;
+    case QoSMode::HIGH:
+      processPowerThrottlingState.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+      processPowerThrottlingState.StateMask = 0;
+      break;
+    case QoSMode::ECO:
+      processPowerThrottlingState.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+      processPowerThrottlingState.StateMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+      break;
+  }
+  HANDLE hProcess = GetCurrentProcess();
+  if (!SetProcessInformation(hProcess,
+                             ProcessPowerThrottling,
+                             &processPowerThrottlingState,
+                             sizeof(PROCESS_POWER_THROTTLING_STATE)))
+  {
+    fprintf(stderr,
+            "BLI_windows_set_process_qos: SetProcessInformation failed: %lx\n",
+            GetLastError());
+    return;
+  }
+  qos_precedence_last = qos_precedence;
+}
+
+}  // namespace blender
 
 #else
 

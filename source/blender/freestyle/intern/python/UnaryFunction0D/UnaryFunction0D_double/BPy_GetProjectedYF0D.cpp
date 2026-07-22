@@ -31,11 +31,10 @@ PyDoc_STRVAR(
     "   Returns the Y 3D projected coordinate of the :class:`freestyle.types.Interface0D`\n"
     "   pointed by the Interface0DIterator.\n"
     "\n"
-    "   :arg it: An Interface0DIterator object.\n"
+    "   :param it: An Interface0DIterator object.\n"
     "   :type it: :class:`freestyle.types.Interface0DIterator`\n"
     "   :return: The Y 3D projected coordinate of the pointed Interface0D.\n"
     "   :rtype: float\n");
-
 static int GetProjectedYF0D___init__(BPy_GetProjectedYF0D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};

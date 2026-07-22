@@ -9,14 +9,15 @@
 #include <pxr/imaging/glf/drawTarget.h>
 #include <pxr/usd/usdGeom/camera.h>
 
+#include "DNA_camera_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_vec_types.h" /* This include must be before `BKE_camera.h` due to `rctf` type. */
 #include "DNA_view3d_types.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_time.h"
-#include "BLI_timecode.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_time.hh"
+#include "BLI_timecode.hh"
 
 #include "BKE_camera.h"
 #include "BKE_context.hh"
@@ -61,7 +62,7 @@ ViewSettings::ViewSettings(bContext *context)
     Object *camera_obj = scene->camera;
     if ((scene->r.mode & R_BORDER) && camera_obj && camera_obj->type == OB_CAMERA) {
       float camera_points[4][3];
-      BKE_camera_view_frame(scene, static_cast<Camera *>(camera_obj->data), camera_points);
+      BKE_camera_view_frame(scene, id_cast<Camera *>(camera_obj->data), camera_points);
 
       float screen_points[4][2];
       for (int i = 0; i < 4; i++) {
@@ -139,8 +140,8 @@ DrawTexture::DrawTexture()
   float coords[8] = {0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0};
 
   GPUVertFormat format = {0};
-  GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-  GPU_vertformat_attr_add(&format, "texCoord", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  GPU_vertformat_attr_add(&format, "texCoord", gpu::VertAttrType::SFLOAT_32_32);
   gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
   GPU_vertbuf_data_alloc(*vbo, 4);
   GPU_vertbuf_attr_fill(vbo, 0, coords);
@@ -163,15 +164,15 @@ void DrawTexture::create_from_buffer(pxr::HdRenderBuffer *buffer)
     return;
   }
 
-  eGPUTextureFormat texture_format;
+  gpu::TextureFormat texture_format;
   eGPUDataFormat data_format;
 
   if (buffer->GetFormat() == pxr::HdFormat::HdFormatFloat16Vec4) {
-    texture_format = GPU_RGBA16F;
+    texture_format = gpu::TextureFormat::SFLOAT_16_16_16_16;
     data_format = GPU_DATA_HALF_FLOAT;
   }
   else {
-    texture_format = GPU_RGBA32F;
+    texture_format = gpu::TextureFormat::SFLOAT_32_32_32_32;
     data_format = GPU_DATA_FLOAT;
   }
 
@@ -198,7 +199,7 @@ void DrawTexture::create_from_buffer(pxr::HdRenderBuffer *buffer)
   buffer->Unmap();
 }
 
-void DrawTexture::draw(GPUShader *shader, const pxr::GfVec4d &viewport, GPUTexture *tex)
+void DrawTexture::draw(gpu::Shader *shader, const pxr::GfVec4d &viewport, gpu::Texture *tex)
 {
   if (!tex) {
     tex = texture_;
@@ -215,7 +216,7 @@ void DrawTexture::draw(GPUShader *shader, const pxr::GfVec4d &viewport, GPUTextu
   GPU_matrix_pop();
 }
 
-GPUTexture *DrawTexture::texture() const
+gpu::Texture *DrawTexture::texture() const
 {
   return texture_;
 }
@@ -238,7 +239,7 @@ void ViewportEngine::render()
   render_task_delegate_->add_aov(pxr::HdAovTokens->color);
   render_task_delegate_->add_aov(pxr::HdAovTokens->depth);
 
-  GPUFrameBuffer *view_framebuffer = GPU_framebuffer_active_get();
+  gpu::FrameBuffer *view_framebuffer = GPU_framebuffer_active_get();
   render_task_delegate_->bind();
 
   auto t = tasks();
@@ -247,7 +248,7 @@ void ViewportEngine::render()
   render_task_delegate_->unbind();
 
   GPU_framebuffer_bind(view_framebuffer);
-  GPUShader *shader = GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE);
+  gpu::Shader *shader = GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE);
   GPU_shader_bind(shader);
 
   pxr::GfVec4d draw_viewport(view_settings.border[0],

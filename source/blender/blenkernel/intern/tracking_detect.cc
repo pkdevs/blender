@@ -12,11 +12,13 @@
 #include "DNA_movieclip_types.h"
 #include "DNA_object_types.h" /* SELECT */
 
-#include "BKE_tracking.h"
+#include "BKE_tracking.hh"
 
 #include "IMB_imbuf_types.hh"
 
 #include "libmv-capi.h"
+
+namespace blender {
 
 /* Check whether point is inside grease pencil stroke. */
 static bool check_point_in_stroke(bGPDstroke *stroke, float x, float y)
@@ -68,7 +70,7 @@ static bool check_point_in_layer(bGPDlayer *layer, float x, float y)
 
 /* Get features detected by libmv and create tracks on the clip for them. */
 static void detect_retrieve_libmv_features(MovieTracking *tracking,
-                                           ListBase *tracksbase,
+                                           ListBaseT<MovieTrackingTrack> *tracksbase,
                                            libmv_Features *features,
                                            int framenr,
                                            int width,
@@ -99,15 +101,15 @@ static void detect_retrieve_libmv_features(MovieTracking *tracking,
     if (ok) {
       MovieTrackingTrack *track = BKE_tracking_track_add(
           tracking, tracksbase, xu, yu, framenr, width, height);
-      track->flag |= SELECT;
-      track->pat_flag |= SELECT;
-      track->search_flag |= SELECT;
+      track->flag |= TRACK_SELECT;
+      track->pat_flag |= TRACK_SELECT;
+      track->search_flag |= TRACK_SELECT;
     }
   }
 }
 
 static void run_configured_detector(MovieTracking *tracking,
-                                    ListBase *tracksbase,
+                                    ListBaseT<MovieTrackingTrack> *tracksbase,
                                     ImBuf *ibuf,
                                     int framenr,
                                     bGPDlayer *layer,
@@ -116,11 +118,11 @@ static void run_configured_detector(MovieTracking *tracking,
 {
   libmv_Features *features = nullptr;
 
-  if (ibuf->float_buffer.data) {
-    features = libmv_detectFeaturesFloat(ibuf->float_buffer.data, ibuf->x, ibuf->y, 4, options);
+  if (ibuf->float_data()) {
+    features = libmv_detectFeaturesFloat(ibuf->float_data(), ibuf->x, ibuf->y, 4, options);
   }
-  else if (ibuf->byte_buffer.data) {
-    features = libmv_detectFeaturesByte(ibuf->byte_buffer.data, ibuf->x, ibuf->y, 4, options);
+  else if (ibuf->byte_data()) {
+    features = libmv_detectFeaturesByte(ibuf->byte_data(), ibuf->x, ibuf->y, 4, options);
   }
 
   if (features != nullptr) {
@@ -132,7 +134,7 @@ static void run_configured_detector(MovieTracking *tracking,
 }
 
 void BKE_tracking_detect_fast(MovieTracking *tracking,
-                              ListBase *tracksbase,
+                              ListBaseT<MovieTrackingTrack> *tracksbase,
                               ImBuf *ibuf,
                               int framenr,
                               int margin,
@@ -153,7 +155,7 @@ void BKE_tracking_detect_fast(MovieTracking *tracking,
 }
 
 void BKE_tracking_detect_harris(MovieTracking *tracking,
-                                ListBase *tracksbase,
+                                ListBaseT<MovieTrackingTrack> *tracksbase,
                                 ImBuf *ibuf,
                                 int framenr,
                                 int margin,
@@ -172,3 +174,5 @@ void BKE_tracking_detect_harris(MovieTracking *tracking,
   run_configured_detector(
       tracking, tracksbase, ibuf, framenr, layer, place_outside_layer, &options);
 }
+
+}  // namespace blender

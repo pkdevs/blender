@@ -8,31 +8,37 @@
  * \ingroup sequencer
  */
 
+#include "DNA_listBase.h"
 #include "DNA_scene_types.h"
 
+namespace blender {
+
 struct bSound;
-struct ListBase;
 struct Mask;
 struct Scene;
+struct SeqTimelineChannel;
 struct Strip;
 struct StripElem;
 
-namespace blender::seq {
+namespace seq {
 
-void strip_unique_name_set(Scene *scene, ListBase *seqbasep, Strip *strip);
+void strip_unique_name_set(Scene *scene, ListBaseT<Strip> *seqbasep, Strip *strip);
+const char *get_default_stripname_by_type(int type);
 const char *strip_give_name(const Strip *strip);
-ListBase *get_seqbase_from_strip(Strip *strip, ListBase **r_channels, int *r_offset);
+ListBaseT<Strip> *get_seqbase_from_strip(Strip *strip,
+                                         ListBaseT<SeqTimelineChannel> **r_channels,
+                                         int *r_offset);
 const Strip *strip_topmost_get(const Scene *scene, int frame);
 /**
  * In cases where we don't know the strip's listbase.
  */
-ListBase *get_seqbase_by_strip(const Scene *scene, Strip *strip);
+ListBaseT<Strip> *get_seqbase_by_strip(const Scene *scene, Strip *strip);
 /**
  * Only use as last resort when the StripElem is available but not the Strip.
  * (needed for RNA)
  */
-Strip *strip_from_strip_elem(ListBase *seqbase, StripElem *se);
-Strip *get_strip_by_name(ListBase *seqbase, const char *name, bool recursive);
+Strip *strip_from_strip_elem(ListBaseT<Strip> *seqbase, StripElem *se);
+Strip *get_strip_by_name(ListBaseT<Strip> *seqbase, const char *name, bool recursive);
 Mask *active_mask_get(Scene *scene);
 void alpha_mode_from_file_extension(Strip *strip);
 
@@ -56,7 +62,7 @@ void set_scale_to_fit(const Strip *strip,
  * \param strip: Strip which name will be ensured to be unique
  * \param scene: Scene in which name must be unique
  */
-void ensure_unique_name(Strip *strip, Scene *scene);
+void ensure_unique_name(Main &bmain, Strip *strip, Scene *scene);
 
 void fontmap_clear();
 
@@ -66,7 +72,7 @@ void fontmap_clear();
  * will be created on demand.
  *
  * \param scene: Scene to query.
- * \param seq: Sequencer strip.
+ * \param strip: Sequencer strip.
  * \return True if media file is missing.
  */
 bool media_presence_is_missing(Scene *scene, const Strip *strip);
@@ -91,4 +97,5 @@ void media_presence_invalidate_sound(Scene *scene, const bSound *sound);
  */
 void media_presence_free(Scene *scene);
 
-}  // namespace blender::seq
+}  // namespace seq
+}  // namespace blender

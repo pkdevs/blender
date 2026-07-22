@@ -6,10 +6,6 @@
 
 #include "BKE_attribute_storage.hh"
 
-#include "BLI_map.hh"
-
-#include "DNA_customdata_types.h"
-
 namespace blender::bke {
 
 /**
@@ -17,10 +13,13 @@ namespace blender::bke {
  * because the #AttributeStorage implementation doesn't use the DNA structs at runtime, they are
  * created just for the writing process. Creating them mutates the struct, which must be done
  * before writing the struct that embeds it.
+ *
+ * \param use_5_0_compatibility: If true, the attribute storage will be written in a way that is
+ * compatible with Blender 5.0.
  */
-void attribute_storage_blend_write_prepare(
-    AttributeStorage &data,
-    const Map<AttrDomain, Vector<CustomDataLayer, 16> *> &layers_to_write,
-    AttributeStorage::BlendWriteData &write_data);
+void attribute_storage_blend_write_prepare(AttributeStorage &data,
+                                           bool use_5_0_compatibility,
+                                           FunctionRef<int(AttrDomain)> get_domain_size,
+                                           AttributeStorage::BlendWriteData &write_data);
 
 }  // namespace blender::bke

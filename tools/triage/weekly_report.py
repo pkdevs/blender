@@ -62,6 +62,14 @@ else:
 
 
 def argparse_create() -> argparse.ArgumentParser:
+
+    def str_as_isodate(value: str) -> datetime.datetime:
+        try:
+            value_as_date = datetime.datetime.fromisoformat(value)
+        except Exception as ex:
+            raise argparse.ArgumentTypeError("Must be a valid ISO date (YYYY-MM-DD), failed: {!s}".format(ex))
+        return value_as_date
+
     parser = argparse.ArgumentParser(
         description="Generate Weekly Report",
         epilog="This script is typically used to help write weekly reports",
@@ -88,6 +96,14 @@ def argparse_create() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--date",
+        dest="date",
+        type=str_as_isodate,
+        default=None,
+        help="Show only for this day (YYYY-MM-DD), and not for an entire week."
+    )
+
+    parser.add_argument(
         "--hash-length",
         dest="hash_length",
         type=int,
@@ -108,6 +124,7 @@ def argparse_create() -> argparse.ArgumentParser:
 def report_personal_weekly_get(
         username: str,
         start: datetime.datetime,
+        num_days: int,
         *,
         hash_length: int,
         verbose: bool = True,
@@ -130,7 +147,7 @@ def report_personal_weekly_get(
     issues_commented: set[str] = set()
     issues_created: set[str] = set()
 
-    pulls_reviewed: list[str] = []
+    pulls_reviewed: set[str] = set()
 
     issues_confirmed: list[str] = []
     issues_needing_user_info: list[str] = []
@@ -162,7 +179,7 @@ def report_personal_weekly_get(
 
     user_data: dict[str, Any] = gitea_user_get(username)
 
-    for i in range(7):
+    for i in range(num_days):
         date_curr = start + datetime.timedelta(days=i)
         date_curr_str = date_curr.strftime("%Y-%m-%d")
         print_progress(f"Requesting activity of {date_curr_str}")
@@ -188,7 +205,7 @@ def report_personal_weekly_get(
                 pulls_created.add(fullname)
             elif op_type in {"approve_pull_request", "reject_pull_request"}:
                 fullname = activity["repo"]["full_name"] + "/pulls/" + activity["content"].split('|')[0]
-                pulls_reviewed.append(fullname)
+                pulls_reviewed.add(fullname)
             elif op_type == "commit_repo":
                 if (
                         activity["content"] and
@@ -198,7 +215,7 @@ def report_personal_weekly_get(
                     assert isinstance(content_json, dict)
                     repo = activity["repo"]
                     repo_fullname = repo["full_name"]
-                    content_json_commits: list[dict[str, Any]] = content_json["Commits"]
+                    content_json_commits: list[dict[str, Any]] = content_json.get("Commits", [])
                     for commit_json in content_json_commits:
                         # Skip commits that were not made by this user. Using email doesn't seem to
                         # be possible unfortunately.
@@ -224,11 +241,7 @@ def report_personal_weekly_get(
                         # PRs related to a single repository together, regardless of who happens to own them.
                         #
                         # So the following adds branches and PRs to a "target" repository, not the owning one.
-
-                        target_repo_json = repo["parent"]
-                        # There's no parent repo if the branch is on the same repo. Treat the repo itself as target.
-                        if not target_repo_json and branch_name != repo["default_branch"]:
-                            target_repo_json = repo
+                        target_repo_json = repo.get("parent", repo)
                         target_repo_fullname = target_repo_json["full_name"] if target_repo_json else repo_fullname
 
                         # Substitute occurrences of "#\d+" with "repo#\d+"
@@ -323,7 +336,7 @@ def report_personal_weekly_get(
         if pull_events:
             pull_data = gitea_json_issue_get_cached(pull)
             if pull_data["user"]["login"] != username:
-                pulls_reviewed.append(pull)
+                pulls_reviewed.add(pull)
 
     # Print triaging stats
 
@@ -344,11 +357,22 @@ def report_personal_weekly_get(
 
     # Print review stats
     def print_pulls(pulls: Iterable[str]) -> None:
+        display_list = []
+
         for pull in pulls:
             pull_data = gitea_json_issue_get_cached(pull)
-            title = pull_data["title"]
             owner, repo, _, number = pull.split('/')
-            print(f"* {title} ({owner}/{repo}!{number})")
+
+            display_list.append({
+                "title": pull_data["title"],
+                "formatted_ref": f"{owner}/{repo}!{number}"
+            })
+
+        # Sort the list by the "title" key. Use .lower() to ensure case insensitiveness.
+        display_list.sort(key=lambda x: x["title"].lower())
+
+        for item in display_list:
+            print(f"* {item['title']} ({item['formatted_ref']})")
 
     print("**Review: {:d}**".format(len(pulls_reviewed)))
     print_pulls(pulls_reviewed)
@@ -440,28 +464,39 @@ def main() -> None:
         if not username:
             return
 
-    # end_date = datetime.datetime(2020, 3, 14)
-    end_date = datetime.datetime.now() - datetime.timedelta(weeks=(args.weeks_ago - 1))
-    weekday = end_date.weekday()
+    if args.date:
+        num_days = 1  # Show only one day.
+        start_date = args.date
+        start_date_str = start_date.strftime('%B ') + str(start_date.day)
 
-    # Assuming I am lazy and making this at last moment or even later in worst case
-    if weekday < 2:
-        time_delta = 7 + weekday
-        start_date = end_date - datetime.timedelta(days=time_delta, hours=end_date.hour)
-        end_date -= datetime.timedelta(days=weekday, hours=end_date.hour)
+        print(f"## {start_date_str}\n")
     else:
-        time_delta = weekday
-        start_date = end_date - datetime.timedelta(days=time_delta, hours=end_date.hour)
+        num_days = 7  # Show an entire week.
+        # end_date = datetime.datetime(2020, 3, 14)
+        end_date = datetime.datetime.now() - datetime.timedelta(weeks=(args.weeks_ago - 1))
+        weekday = end_date.weekday()
 
-    sunday = start_date + datetime.timedelta(days=6)
-    # week = start_date.isocalendar()[1]
-    start_date_str = start_date.strftime('%B ') + str(start_date.day)
-    end_date_str = str(sunday.day) if start_date.month == sunday.month else sunday.strftime('%B ') + str(sunday.day)
+        # Assuming I am lazy and making this at last moment or even later in worst case
+        if weekday < 2:
+            time_delta = 7 + weekday
+            start_date = end_date - datetime.timedelta(days=time_delta, hours=end_date.hour)
+            end_date -= datetime.timedelta(days=weekday, hours=end_date.hour)
+        else:
+            time_delta = weekday
+            start_date = end_date - datetime.timedelta(days=time_delta, hours=end_date.hour)
 
-    print(f"## {start_date_str} - {end_date_str}\n")
+        sunday = start_date + datetime.timedelta(days=6)
+
+        # week = start_date.isocalendar()[1]
+        start_date_str = start_date.strftime('%B ') + str(start_date.day)
+        end_date_str = str(sunday.day) if start_date.month == sunday.month else sunday.strftime('%B ') + str(sunday.day)
+
+        print(f"## {start_date_str} - {end_date_str}\n")
+
     report_personal_weekly_get(
         username,
         start_date,
+        num_days,
         hash_length=args.hash_length,
         verbose=args.verbose,
     )

@@ -5,7 +5,6 @@
 set(INC
   ../include
   ../../io/alembic
-  ../../io/collada
   ../../io/common
   ../../io/fbx
   ../../io/grease_pencil
@@ -18,13 +17,11 @@ set(INC
 )
 
 set(INC_SYS
-
 )
 
 set(SRC
   io_alembic.cc
   io_cache.cc
-  io_collada.cc
   io_drop_import_file.cc
   io_fbx_ops.cc
   io_grease_pencil.cc
@@ -37,7 +34,6 @@ set(SRC
 
   io_alembic.hh
   io_cache.hh
-  io_collada.hh
   io_drop_import_file.hh
   io_fbx_ops.hh
   io_grease_pencil.hh
@@ -56,18 +52,10 @@ set(LIB
   PRIVATE bf::bmesh
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
-  PRIVATE bf::extern::fmtlib
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::intern::clog
   PRIVATE bf::windowmanager
 )
-
-if(WITH_OPENCOLLADA)
-  list(APPEND LIB
-    bf_io_collada
-  )
-  add_definitions(-DWITH_COLLADA)
-endif()
 
 if(WITH_IO_WAVEFRONT_OBJ)
   list(APPEND LIB
@@ -112,11 +100,9 @@ if(WITH_ALEMBIC)
 endif()
 
 if(WITH_USD)
-  list(APPEND INC_SYS
-    ${USD_INCLUDE_DIRS}
-  )
   list(APPEND LIB
     bf_io_usd
+    PRIVATE bf::dependencies::optional::usd
   )
   add_definitions(-DWITH_USD)
 endif()

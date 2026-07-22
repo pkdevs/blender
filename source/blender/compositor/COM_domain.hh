@@ -8,6 +8,9 @@
 
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_string_ref.hh"
+
+#include "GPU_texture.hh"
 
 namespace blender::compositor {
 
@@ -17,6 +20,17 @@ enum class Interpolation : uint8_t {
   Nearest,
   Bilinear,
   Bicubic,
+  Anisotropic,
+};
+
+/* Possible extensions when computing samples in the domain's exterior. */
+enum class Extension : uint8_t {
+  /* Areas outside of the image are filled with the closest boundary pixel in the image. */
+  Extend,
+  /* Areas outside of the image are filled with repetitions of the image. */
+  Repeat,
+  /* Areas outside of the image are filled with zero. */
+  Clip,
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -31,14 +45,10 @@ struct RealizationOptions {
    * result at arbitrary locations, the interpolation identifies the method used for computing the
    * value at those arbitrary locations. */
   Interpolation interpolation = Interpolation::Bilinear;
-  /* If true, the result will be repeated infinitely along the horizontal axis when realizing the
-   * result. If false, regions outside of bounds of the result along the horizontal axis will be
-   * filled with zeros. */
-  bool repeat_x = false;
-  /* If true, the result will be repeated infinitely along the vertical axis when realizing the
-   * result. If false, regions outside of bounds of the result along the vertical axis will be
-   * filled with zeros. */
-  bool repeat_y = false;
+  /* The extend mode for the x-axis. Defaults to Zero padding. */
+  Extension extension_x = Extension::Clip;
+  /* The extend mode for the y-axis. Defaults to Zero padding. */
+  Extension extension_y = Extension::Clip;
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -46,14 +56,14 @@ struct RealizationOptions {
  *
  * The compositor is designed in such a way as to allow compositing in an infinite virtual
  * compositing space. Consequently, any result of an operation is not only represented by its image
- * output, but also by its transformation in that virtual space. The transformation of the result
- * together with the dimension of its image is stored and represented by a Domain. In the figure
- * below, two results of different domains are illustrated on the virtual compositing space. One of
- * the results is centered in space with an image dimension of 800px x 600px, and the other result
- * is scaled down and translated such that it lies in the upper right quadrant of the space with an
- * image dimension of 800px × 400px. The position of the domain is in pixel space, and the domain
- * is considered centered if it has an identity transformation. Note that both results have the
- * same resolution, but occupy different areas of the virtual compositing space.
+ * pixel data, but also by its transformation in that virtual space, both of which are stored and
+ * represented by a Domain. In the figure below, two results of different domains are illustrated
+ * on the virtual compositing space. One of the results is centered in space with an image
+ * dimension of 800px x 600px, and the other result is scaled down and translated such that it lies
+ * in the upper right quadrant of the space with an image dimension of 800px × 400px. The position
+ * of the domain is in pixel space, and the domain is considered centered if it has an identity
+ * transformation. Note that both results have the same resolution, but occupy different areas of
+ * the virtual compositing space.
  *
  *                                          y
  *                                          ^
@@ -70,6 +80,19 @@ struct RealizationOptions {
  *                    |                     |                     |
  *                    '---------------------|---------------------'
  *                                          |
+ *
+ * Additionally, the image might not have pixel data defined everywhere or might have data that
+ * extends outside of boundary of the image, the latter is typically known as over-scan. Therefore,
+ * the domain stores the image information as:
+ *
+ * - data_size: Which is the size of the data that actually exists in pixels.
+ * - display_size: Which is the conceptual and visual size of the image in pixels.
+ * - data_offset: Which is the offset from the lower left corner of the display region to the data
+ *   region in pixels. See the member documentation for more information.
+ *
+ * See the EXR Data/Display Window specification for more information on this formulation. The only
+ * deviation from EXR is that we store the offset of the display window as the translation of the
+ * transformation, which works better in practice.
  *
  * By default, results have domains of identity transformations, that is, they are centered in
  * space, but a transformation operation like the rotate, translate, or transform operations will
@@ -134,8 +157,14 @@ struct RealizationOptions {
  * and is irrelevant, because the output will be a domain-less single value. */
 class Domain {
  public:
-  /* The size of the domain in pixels. */
-  int2 size;
+  /* The size of the data that actually exists in pixels. */
+  int2 data_size;
+  /* The conceptual/visual size or of the image in pixels. */
+  int2 display_size;
+  /* The offset from the display region to the data region. A positive data offset means the data
+   * only covers a portion of the display, while a negative data offset means that the data extends
+   * past the boundary of the display, that is, over-scan exists. */
+  int2 data_offset;
   /* The 2D transformation of the domain defining its translation in pixels, rotation, and scale in
    * the virtual compositing space. */
   float3x3 transformation;
@@ -152,17 +181,32 @@ class Domain {
    * transformation by the current transformation of the domain. */
   void transform(const float3x3 &input_transformation);
 
+  /* Returns a transposed version of itself, that is, with the x and y sizes swapped. */
+  Domain transposed() const;
+
+  /* Compute a domain from this potential transformed domain such that its rotation and scale
+   * become identity and the size of the domain is increased/reduced to adapt to the new
+   * transformation. For instance, if the domain is rotated, the returned domain will have zero
+   * rotation but expanded size to account for the bounding box of the domain after rotation.
+   * Similarly, if the realize_translation argument is true, translation will be set to zero,
+   * though this will not affect the size of the domain in any way. */
+  Domain realize_transformation(const bool realize_translation = false) const;
+
   /* Returns a domain of size 1x1 and an identity transformation. */
   static Domain identity();
 
   /* Compare the size and transformation of the domain. Transformations are compared within the
    * given epsilon. The realization_options are not compared because they only describe the method
    * of realization on another domain, which is not technically a property of the domain itself. */
-  static bool is_equal(const Domain &a, const Domain &b, const float epsilon = 0.0f);
+  static bool is_equal(const Domain &a, const Domain &b, const float epsilon = 10e-6f);
 };
 
 /* Identical to the is_equal static method with zero epsilon. */
 bool operator==(const Domain &a, const Domain &b);
 bool operator!=(const Domain &a, const Domain &b);
+
+StringRefNull to_string(const Interpolation &interpolation);
+StringRefNull to_string(const Extension &extension);
+GPUSamplerExtendMode map_extension_mode_to_extend_mode(const Extension &mode);
 
 }  // namespace blender::compositor

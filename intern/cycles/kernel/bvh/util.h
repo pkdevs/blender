@@ -7,6 +7,7 @@
 #include "kernel/globals.h"
 #include "kernel/integrator/state.h"
 #include "kernel/types.h"
+#include "util/types_rgbe.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -22,7 +23,8 @@ ccl_device_inline bool intersection_ray_valid(const ccl_private Ray *ray)
    * Scene intersection may also called with empty rays for conditional trace
    * calls that evaluate to false, so filter those out.
    */
-  return isfinite_safe(ray->P.x) && isfinite_safe(ray->D.x) && len_squared(ray->D) != 0.0f;
+  return isfinite_safe(ray->P.x) && isfinite_safe(ray->D.x) && len_squared(ray->D) != 0.0f &&
+         ray->tmin < FLT_MAX;
 }
 
 /* Offset intersection distance by the smallest possible amount, to skip
@@ -108,7 +110,7 @@ ccl_device_inline void sort_intersections_and_normals(ccl_private Intersection *
   bool swapped;
   do {
     swapped = false;
-    for (int j = 0; j < num_hits - 1; ++j) {
+    for (uint j = 0; j < num_hits - 1; ++j) {
       if (hits[j].t > hits[j + 1].t) {
         Intersection tmp_hit = hits[j];
         float3 tmp_Ng = Ng[j];
@@ -177,8 +179,8 @@ ccl_device_forceinline int intersection_get_shader(
   return intersection_get_shader_from_isect_prim(kg, isect->prim, isect->type);
 }
 
-ccl_device_forceinline int intersection_get_object_flags(
-    KernelGlobals kg, const ccl_private Intersection *ccl_restrict isect)
+ccl_device_forceinline uint
+intersection_get_object_flags(KernelGlobals kg, const ccl_private Intersection *ccl_restrict isect)
 {
   return kernel_data_fetch(object_flag, isect->object);
 }
@@ -215,14 +217,14 @@ ccl_device_inline int intersection_find_attribute(KernelGlobals kg,
 /* Cut-off value to stop transparent shadow tracing when practically opaque. */
 #define CURVE_SHADOW_TRANSPARENCY_CUTOFF 0.001f
 
-ccl_device_inline float intersection_curve_shadow_transparency(
+ccl_device_inline float3 intersection_curve_shadow_transparency(
     KernelGlobals kg, const int object, const int prim, const int type, const float u)
 {
   /* Find attribute. */
   const int offset = intersection_find_attribute(kg, object, ATTR_STD_SHADOW_TRANSPARENCY);
   if (offset == ATTR_STD_NOT_FOUND) {
     /* If no shadow transparency attribute, assume opaque. */
-    return 0.0f;
+    return zero_float3();
   }
 
   /* Interpolate transparency between curve keys. */
@@ -230,8 +232,11 @@ ccl_device_inline float intersection_curve_shadow_transparency(
   const int k0 = kcurve.first_key + PRIMITIVE_UNPACK_SEGMENT(type);
   const int k1 = k0 + 1;
 
-  const float f0 = kernel_data_fetch(attributes_float, offset + k0);
-  const float f1 = kernel_data_fetch(attributes_float, offset + k1);
+  const float f0_encoded = kernel_data_fetch(attributes_float, offset + k0);
+  const float f1_encoded = kernel_data_fetch(attributes_float, offset + k1);
+
+  const float3 f0 = rgbe_to_rgb(RGBE(f0_encoded));
+  const float3 f1 = rgbe_to_rgb(RGBE(f1_encoded));
 
   return (1.0f - u) * f0 + u * f1;
 }
@@ -293,14 +298,13 @@ ccl_device_inline bool intersection_skip_shadow_link(KernelGlobals kg,
 /* Check whether an intersection denoted by its object and primitive is to be skipped due to it
  * being already recoded.
  * The situation when primitive is already recoded happens when BVH spatial splits are used. */
-ccl_device_forceinline bool intersection_skip_shadow_already_recoded(KernelGlobals kg,
-                                                                     IntegratorShadowState state,
+ccl_device_forceinline bool intersection_skip_shadow_already_recoded(IntegratorShadowState state,
                                                                      const int object,
                                                                      const int prim,
-                                                                     const int num_hits)
+                                                                     const uint num_hits)
 {
-  const int num_recorded_hits = min(num_hits, int(INTEGRATOR_SHADOW_ISECT_SIZE));
-  for (int i = 0; i < num_recorded_hits; ++i) {
+  const uint num_recorded_hits = min(num_hits, INTEGRATOR_SHADOW_ISECT_SIZE);
+  for (uint i = 0; i < num_recorded_hits; ++i) {
     const int isect_object = INTEGRATOR_STATE_ARRAY(state, shadow_isect, i, object);
     const int isect_prim = INTEGRATOR_STATE_ARRAY(state, shadow_isect, i, prim);
     if (object == isect_object && prim == isect_prim) {

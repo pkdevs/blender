@@ -8,30 +8,28 @@
 
 #include "BKE_material.hh"
 #include "BKE_texture.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "DNA_material_types.h"
 #include "node_texture_util.hh"
 #include "node_util.hh"
 
 #include "RE_texture.h"
 
+namespace blender {
+
 /*
  * In this file: wrappers to use procedural textures as nodes
  */
 
-static blender::bke::bNodeSocketTemplate outputs_both[] = {
-    {SOCK_RGBA, N_("Color"), 1.0f, 0.0f, 0.0f, 1.0f}, {-1, ""}};
-static blender::bke::bNodeSocketTemplate outputs_color_only[] = {{SOCK_RGBA, N_("Color")},
-                                                                 {-1, ""}};
+static bke::bNodeSocketTemplate outputs_both[] = {{SOCK_RGBA, N_("Color"), 1.0f, 0.0f, 0.0f, 1.0f},
+                                                  {-1, ""}};
+static bke::bNodeSocketTemplate outputs_color_only[] = {{SOCK_RGBA, N_("Color")}, {-1, ""}};
 
 /* Inputs common to all, #defined because nodes will need their own inputs too */
 #define I 2 /* count */
 #define COMMON_INPUTS \
-  {SOCK_RGBA, "Color 1", 0.0f, 0.0f, 0.0f, 1.0f}, \
-  { \
-    SOCK_RGBA, "Color 2", 1.0f, 1.0f, 1.0f, 1.0f \
-  }
+  {SOCK_RGBA, "Color 1", 0.0f, 0.0f, 0.0f, 1.0f}, {SOCK_RGBA, "Color 2", 1.0f, 1.0f, 1.0f, 1.0f}
 
 /* Calls multitex and copies the result to the outputs.
  * Called by xxx_exec, which handles inputs. */
@@ -45,8 +43,7 @@ static void do_proc(float *result,
   TexResult texres;
   int textype;
 
-  textype = multitex_nodes(
-      tex, p->co, p->dxt, p->dyt, p->osatex, &texres, thread, 0, p->mtex, nullptr);
+  textype = multitex_nodes(tex, p->co, &texres, thread, 0, p->mtex, nullptr);
 
   if (textype & TEX_RGB) {
     copy_v4_v4(result, texres.trgba);
@@ -62,7 +59,7 @@ using MapFn = void (*)(Tex *tex, bNodeStack **in, TexParams *p, const short thre
 static void texfn(
     float *result, TexParams *p, bNode *node, bNodeStack **in, MapFn map_inputs, short thread)
 {
-  Tex tex = blender::dna::shallow_copy(*((Tex *)(node->storage)));
+  Tex tex = dna::shallow_copy(*(static_cast<Tex *>(node->storage)));
   float col1[4], col2[4];
   tex_input_rgba(col1, in[0], p, thread);
   tex_input_rgba(col2, in[1], p, thread);
@@ -74,11 +71,7 @@ static void texfn(
 
 static int count_outputs(bNode *node)
 {
-  int num = 0;
-  LISTBASE_FOREACH (bNodeSocket *, sock, &node->outputs) {
-    num++;
-  }
-  return num;
+  return node->outputs.count();
 }
 
 /* Boilerplate generators */
@@ -109,7 +102,7 @@ static int count_outputs(bNode *node)
   }
 
 /* --- VORONOI -- */
-static blender::bke::bNodeSocketTemplate voronoi_inputs[] = {
+static bke::bNodeSocketTemplate voronoi_inputs[] = {
     COMMON_INPUTS,
     {SOCK_FLOAT, N_("W1"), 1.0f, 0.0f, 0.0f, 0.0f, -2.0f, 2.0f, PROP_NONE},
     {SOCK_FLOAT, N_("W2"), 0.0f, 0.0f, 0.0f, 0.0f, -2.0f, 2.0f, PROP_NONE},
@@ -133,12 +126,12 @@ static void voronoi_map_inputs(Tex *tex, bNodeStack **in, TexParams *p, short th
 ProcDef(voronoi);
 
 /* --- BLEND -- */
-static blender::bke::bNodeSocketTemplate blend_inputs[] = {COMMON_INPUTS, {-1, ""}};
+static bke::bNodeSocketTemplate blend_inputs[] = {COMMON_INPUTS, {-1, ""}};
 ProcNoInputs(blend);
 ProcDef(blend);
 
 /* -- MAGIC -- */
-static blender::bke::bNodeSocketTemplate magic_inputs[] = {
+static bke::bNodeSocketTemplate magic_inputs[] = {
     COMMON_INPUTS,
     {SOCK_FLOAT, N_("Turbulence"), 5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 200.0f, PROP_UNSIGNED},
     {-1, ""}};
@@ -149,7 +142,7 @@ static void magic_map_inputs(Tex *tex, bNodeStack **in, TexParams *p, short thre
 ProcDef(magic);
 
 /* --- MARBLE --- */
-static blender::bke::bNodeSocketTemplate marble_inputs[] = {
+static bke::bNodeSocketTemplate marble_inputs[] = {
     COMMON_INPUTS,
     {SOCK_FLOAT, N_("Size"), 0.25f, 0.0f, 0.0f, 0.0f, 0.0001f, 2.0f, PROP_UNSIGNED},
     {SOCK_FLOAT, N_("Turbulence"), 5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 200.0f, PROP_UNSIGNED},
@@ -162,7 +155,7 @@ static void marble_map_inputs(Tex *tex, bNodeStack **in, TexParams *p, short thr
 ProcDef(marble);
 
 /* --- CLOUDS --- */
-static blender::bke::bNodeSocketTemplate clouds_inputs[] = {
+static bke::bNodeSocketTemplate clouds_inputs[] = {
     COMMON_INPUTS,
     {SOCK_FLOAT, N_("Size"), 0.25f, 0.0f, 0.0f, 0.0f, 0.0001f, 2.0f, PROP_UNSIGNED},
     {-1, ""}};
@@ -173,7 +166,7 @@ static void clouds_map_inputs(Tex *tex, bNodeStack **in, TexParams *p, short thr
 ProcDef(clouds);
 
 /* --- DISTORTED NOISE --- */
-static blender::bke::bNodeSocketTemplate distnoise_inputs[] = {
+static bke::bNodeSocketTemplate distnoise_inputs[] = {
     COMMON_INPUTS,
     {SOCK_FLOAT, N_("Size"), 0.25f, 0.0f, 0.0f, 0.0f, 0.0001f, 2.0f, PROP_UNSIGNED},
     {SOCK_FLOAT, N_("Distortion"), 1.00f, 0.0f, 0.0f, 0.0f, 0.0000f, 10.0f, PROP_UNSIGNED},
@@ -186,7 +179,7 @@ static void distnoise_map_inputs(Tex *tex, bNodeStack **in, TexParams *p, short 
 ProcDef(distnoise);
 
 /* --- WOOD --- */
-static blender::bke::bNodeSocketTemplate wood_inputs[] = {
+static bke::bNodeSocketTemplate wood_inputs[] = {
     COMMON_INPUTS,
     {SOCK_FLOAT, N_("Size"), 0.25f, 0.0f, 0.0f, 0.0f, 0.0001f, 2.0f, PROP_UNSIGNED},
     {SOCK_FLOAT, N_("Turbulence"), 5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 200.0f, PROP_UNSIGNED},
@@ -199,7 +192,7 @@ static void wood_map_inputs(Tex *tex, bNodeStack **in, TexParams *p, short threa
 ProcDef(wood);
 
 /* --- MUSGRAVE --- */
-static blender::bke::bNodeSocketTemplate musgrave_inputs[] = {
+static bke::bNodeSocketTemplate musgrave_inputs[] = {
     COMMON_INPUTS,
     {SOCK_FLOAT, N_("H"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0001f, 2.0f, PROP_UNSIGNED},
     {SOCK_FLOAT, N_("Lacunarity"), 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 6.0f, PROP_UNSIGNED},
@@ -219,12 +212,12 @@ static void musgrave_map_inputs(Tex *tex, bNodeStack **in, TexParams *p, short t
 ProcDef(musgrave);
 
 /* --- NOISE --- */
-static blender::bke::bNodeSocketTemplate noise_inputs[] = {COMMON_INPUTS, {-1, ""}};
+static bke::bNodeSocketTemplate noise_inputs[] = {COMMON_INPUTS, {-1, ""}};
 ProcNoInputs(noise);
 ProcDef(noise);
 
 /* --- STUCCI --- */
-static blender::bke::bNodeSocketTemplate stucci_inputs[] = {
+static bke::bNodeSocketTemplate stucci_inputs[] = {
     COMMON_INPUTS,
     {SOCK_FLOAT, N_("Size"), 0.25f, 0.0f, 0.0f, 0.0f, 0.0001f, 2.0f, PROP_UNSIGNED},
     {SOCK_FLOAT, N_("Turbulence"), 5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 200.0f, PROP_UNSIGNED},
@@ -240,11 +233,11 @@ ProcDef(stucci);
 
 static void init(bNodeTree * /*ntree*/, bNode *node)
 {
-  Tex *tex = MEM_callocN<Tex>("Tex");
+  Tex *tex = MEM_new<Tex>("Tex");
   node->storage = tex;
 
   BKE_texture_default(tex);
-  tex->type = node->type_legacy - TEX_NODE_PROC;
+  tex->type = eTex_Type(node->type_legacy - TEX_NODE_PROC);
 
   if (tex->type == TEX_WOOD) {
     tex->stype = TEX_BANDNOISE;
@@ -255,21 +248,20 @@ static void init(bNodeTree * /*ntree*/, bNode *node)
 #define TexDef(TEXTYPE, idname, outputs, name, Name, EnumNameLegacy) \
   void register_node_type_tex_proc_##name(void) \
   { \
-    static blender::bke::bNodeType ntype; \
+    static bke::bNodeType ntype; \
 \
-    tex_node_type_base(&ntype, idname, TEX_NODE_PROC + TEXTYPE); \
+    tex_node_type_base(&ntype, UString(idname), TEX_NODE_PROC + TEXTYPE); \
     ntype.ui_name = Name; \
     ntype.enum_name_legacy = EnumNameLegacy; \
     ntype.nclass = NODE_CLASS_TEXTURE; \
-    blender::bke::node_type_socket_templates(&ntype, name##_inputs, outputs); \
-    blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Middle); \
+    bke::node_type_socket_templates(&ntype, name##_inputs, outputs); \
+    ntype.default_width = bke::NodeWidth::_160; \
     ntype.initfunc = init; \
-    blender::bke::node_type_storage( \
-        ntype, "Tex", node_free_standard_storage, node_copy_standard_storage); \
+    bke::node_type_storage(ntype, "Tex", node_free_standard_storage, node_copy_standard_storage); \
     ntype.exec_fn = name##_exec; \
     ntype.flag |= NODE_PREVIEW; \
 \
-    blender::bke::node_register_type(ntype); \
+    bke::node_register_type(ntype); \
   }
 
 #define C outputs_color_only
@@ -286,3 +278,5 @@ TexDef(TEX_NOISE, "TextureNodeTexNoise", C, noise, "Noise", "TEX_NOISE");
 TexDef(TEX_STUCCI, "TextureNodeTexStucci", CV, stucci, "Stucci", "TEX_STUCCI");
 TexDef(
     TEX_DISTNOISE, "TextureNodeTexDistNoise", CV, distnoise, "Distorted Noise", "TEX_DISTNOISE");
+
+}  // namespace blender

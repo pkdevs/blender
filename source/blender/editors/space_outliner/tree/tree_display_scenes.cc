@@ -9,7 +9,7 @@
 #include "DNA_space_types.h"
 
 #include "BLI_listbase_wrapper.hh"
-#include "BLI_mempool.h"
+#include "BLI_mempool.hh"
 
 #include "BKE_main.hh"
 
@@ -31,12 +31,12 @@ bool TreeDisplayScenes::supports_mode_column() const
   return true;
 }
 
-ListBase TreeDisplayScenes::build_tree(const TreeSourceData &source_data)
+ListBaseT<TreeElement> TreeDisplayScenes::build_tree(const TreeSourceData &source_data)
 {
   /* On first view we open scenes. */
   const int show_opened = !space_outliner_.treestore ||
                           !BLI_mempool_len(space_outliner_.treestore);
-  ListBase tree = {nullptr};
+  ListBaseT<TreeElement> tree = {nullptr};
 
   for (ID *id : List<ID>(source_data.bmain->scenes)) {
     Scene *scene = reinterpret_cast<Scene *>(id);

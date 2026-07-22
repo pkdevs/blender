@@ -6,15 +6,18 @@
  * \ingroup bli
  */
 
-#include "BLI_math_base.h"
-#include "BLI_math_color.h"
+#pragma once
+
+#include "BLI_math_base_c.hh"
+#include "BLI_math_color_c.hh"
 
 #include <cmath>
 
-#ifndef __MATH_COLOR_INLINE_C__
-#  define __MATH_COLOR_INLINE_C__
+namespace blender {
 
-/******************************** Color Space ********************************/
+/* -------------------------------------------------------------------- */
+/** \name Color Space
+ * \{ */
 
 MINLINE void srgb_to_linearrgb_v4(float linear[4], const float srgb[4])
 {
@@ -98,30 +101,6 @@ MINLINE void linearrgb_to_srgb_predivide_v4(float srgb[4], const float linear[4]
 /* LUT accelerated conversions */
 
 extern float BLI_color_from_srgb_table[256];
-extern unsigned short BLI_color_to_srgb_table[0x10000];
-
-MINLINE unsigned short to_srgb_table_lookup(const float f)
-{
-
-  union {
-    float f;
-    unsigned short us[2];
-  } tmp;
-  tmp.f = f;
-#  ifdef __BIG_ENDIAN__
-  return BLI_color_to_srgb_table[tmp.us[0]];
-#  else
-  return BLI_color_to_srgb_table[tmp.us[1]];
-#  endif
-}
-
-MINLINE void linearrgb_to_srgb_ushort4(unsigned short srgb[4], const float linear[4])
-{
-  srgb[0] = to_srgb_table_lookup(linear[0]);
-  srgb[1] = to_srgb_table_lookup(linear[1]);
-  srgb[2] = to_srgb_table_lookup(linear[2]);
-  srgb[3] = unit_float_to_ushort_clamp(linear[3]);
-}
 
 MINLINE void srgb_to_linearrgb_uchar4(float linear[4], const unsigned char srgb[4])
 {
@@ -146,6 +125,31 @@ MINLINE void srgb_to_linearrgb_uchar4_predivide(float linear[4], const unsigned 
   }
 
   srgb_to_linearrgb_predivide_v4(linear, fsrgb);
+}
+
+MINLINE void rgb_uchar_to_float(float r_col[3], const uchar col_ub[3])
+{
+  r_col[0] = float(col_ub[0]) * (1.0f / 255.0f);
+  r_col[1] = float(col_ub[1]) * (1.0f / 255.0f);
+  r_col[2] = float(col_ub[2]) * (1.0f / 255.0f);
+}
+
+MINLINE void rgba_uchar_to_float(float r_col[4], const uchar col_ub[4])
+{
+  r_col[0] = float(col_ub[0]) * (1.0f / 255.0f);
+  r_col[1] = float(col_ub[1]) * (1.0f / 255.0f);
+  r_col[2] = float(col_ub[2]) * (1.0f / 255.0f);
+  r_col[3] = float(col_ub[3]) * (1.0f / 255.0f);
+}
+
+MINLINE void rgb_float_to_uchar(uchar r_col[3], const float col_f[3])
+{
+  unit_float_to_uchar_clamp_v3(r_col, col_f);
+}
+
+MINLINE void rgba_float_to_uchar(uchar r_col[4], const float col_f[4])
+{
+  unit_float_to_uchar_clamp_v4(r_col, col_f);
 }
 
 MINLINE void rgba_uchar_args_set(
@@ -184,6 +188,8 @@ MINLINE void cpack_cpy_3ub(unsigned char r_col[3], const unsigned int pack)
   r_col[2] = ((pack) >> 16) & 0xFF;
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name sRGB/Gray-Scale Functions
  *
@@ -208,22 +214,27 @@ MINLINE unsigned char srgb_to_grayscale_byte(const unsigned char rgb[3])
 {
   /* The high precision values are used to calculate the rounded byte weights so they add up to
    * 255: `54(R) + 182(G) + 19(B)` */
-  return (unsigned char)(((54 * (unsigned short)rgb[0]) + (182 * (unsigned short)rgb[1]) +
-                          (19 * (unsigned short)rgb[2])) /
-                         255);
+  return static_cast<unsigned char>(((54 * static_cast<unsigned short>(rgb[0])) +
+                                     (182 * static_cast<unsigned short>(rgb[1])) +
+                                     (19 * static_cast<unsigned short>(rgb[2]))) /
+                                    255);
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Color Compare / Pack
+ * \{ */
 
 MINLINE int compare_rgb_uchar(const unsigned char col_a[3],
                               const unsigned char col_b[3],
                               const int limit)
 {
-  const int r = (int)col_a[0] - (int)col_b[0];
+  const int r = int(col_a[0]) - int(col_b[0]);
   if (abs(r) < limit) {
-    const int g = (int)col_a[1] - (int)col_b[1];
+    const int g = int(col_a[1]) - int(col_b[1]);
     if (abs(g) < limit) {
-      const int b = (int)col_a[2] - (int)col_b[2];
+      const int b = int(col_a[2]) - int(col_b[2]);
       if (abs(b) < limit) {
         return 1;
       }
@@ -263,7 +274,11 @@ MINLINE void float_to_byte_dither_v3(
   b[2] = unit_float_to_uchar_clamp(dither_value + f[2]);
 }
 
-/**************** Alpha Transformations *****************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Alpha Transformations
+ * \{ */
 
 MINLINE void premul_to_straight_v4_v4(float straight[4], const float premul[4])
 {
@@ -331,4 +346,6 @@ MINLINE void premul_float_to_straight_uchar(unsigned char *result, const float c
   }
 }
 
-#endif /* !__MATH_COLOR_INLINE_C__ */
+/** \} */
+
+}  // namespace blender

@@ -6,10 +6,10 @@
  * \ingroup spview3d
  */
 
-#include "BLI_dial_2d.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_dial_2d.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 
@@ -22,6 +22,8 @@
 
 #include "view3d_intern.hh"
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Roll Operator
@@ -99,11 +101,13 @@ static wmOperatorStatus viewroll_modal(bContext *C, wmOperator *op, const wmEven
         event_code = VIEW_CANCEL;
         break;
       case VIEWROT_MODAL_SWITCH_MOVE:
-        WM_operator_name_call(C, "VIEW3D_OT_move", WM_OP_INVOKE_DEFAULT, nullptr, event);
+        WM_operator_name_call(
+            C, "VIEW3D_OT_move", wm::OpCallContext::InvokeDefault, nullptr, event);
         event_code = VIEW_CONFIRM;
         break;
       case VIEWROT_MODAL_SWITCH_ROTATE:
-        WM_operator_name_call(C, "VIEW3D_OT_rotate", WM_OP_INVOKE_DEFAULT, nullptr, event);
+        WM_operator_name_call(
+            C, "VIEW3D_OT_rotate", wm::OpCallContext::InvokeDefault, nullptr, event);
         event_code = VIEW_CONFIRM;
         break;
     }
@@ -326,3 +330,5 @@ const ViewOpsType ViewOpsType_roll = {
     /*init_fn*/ nullptr,
     /*apply_fn*/ nullptr,
 };
+
+}  // namespace blender

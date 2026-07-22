@@ -11,7 +11,7 @@
  * means it is still very little (for example 256 bytes).
  *
  * Due to this size requirements we try to use push constants when it fits on the device. If it
- * doesn't fit we fallback to use an uniform buffer.
+ * doesn't fit we fall back to use an uniform buffer.
  *
  * Shader developers are responsible to fine-tune the performance of the shader. One way to do this
  * is to tailor what will be sent as a push constant to keep the push constants within the limits.
@@ -19,12 +19,11 @@
 
 #pragma once
 
-#include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
 #include "gpu_shader_create_info.hh"
 
-#include "vk_common.hh"
+#include "vk_buffer.hh"
 #include "vk_descriptor_set.hh"
 
 namespace blender::gpu {
@@ -45,7 +44,7 @@ class VKDevice;
  * It should also keep track of the submissions in order to reuse the allocated
  * data.
  */
-class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
+class VKPushConstants {
   friend class VKContext;
 
  public:
@@ -60,7 +59,7 @@ class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
     /**
      * Fallback when push constants doesn't meet the device requirements.
      */
-    UNIFORM_BUFFER,
+    BUFFER,
   };
 
   /**
@@ -68,7 +67,7 @@ class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
    */
   struct Layout {
     static constexpr StorageType STORAGE_TYPE_DEFAULT = StorageType::PUSH_CONSTANTS;
-    static constexpr StorageType STORAGE_TYPE_FALLBACK = StorageType::UNIFORM_BUFFER;
+    static constexpr StorageType STORAGE_TYPE_FALLBACK = StorageType::BUFFER;
 
     struct PushConstant {
       /* Used as lookup based on ShaderInput. */
@@ -98,8 +97,8 @@ class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
      * Returns:
      * - StorageType::NONE: No push constants are needed.
      * - StorageType::PUSH_CONSTANTS: Regular vulkan push constants can be used.
-     * - StorageType::UNIFORM_BUFFER: The push constants don't fit in the limits of the given
-     *   device. A uniform buffer should be used as a fallback method.
+     * - StorageType::BUFFER: The push constants don't fit in the limits of the given
+     *   device. A buffer should be used as a fallback method.
      */
     static StorageType determine_storage_type(const shader::ShaderCreateInfo &info,
                                               const VKDevice &device);
@@ -110,8 +109,8 @@ class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
      *
      * interface: Uniform locations of the interface are used as lookup key.
      * storage_type: The type of storage for push constants to use.
-     * location: When storage_type=StorageType::UNIFORM_BUFFER this contains
-     *    the location in the descriptor set where the uniform buffer can be
+     * location: When storage_type=StorageType::BUFFER this contains
+     *    the location in the descriptor set where the buffer can be
      *    bound.
      */
     void init(const shader::ShaderCreateInfo &info,
@@ -128,9 +127,9 @@ class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
     }
 
     /**
-     * Get the binding location for the uniform buffer.
+     * Get the binding location for the buffer.
      *
-     * Only valid when storage_type=StorageType::UNIFORM_BUFFER.
+     * Only valid when storage_type=StorageType::BUFFER.
      */
     VKDescriptorSet::Location descriptor_set_location_get() const
     {
@@ -157,7 +156,6 @@ class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
  private:
   const Layout *layout_ = nullptr;
   void *data_ = nullptr;
-  bool is_dirty_ = false;
 
  public:
   VKPushConstants();
@@ -176,11 +174,6 @@ class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
   {
     return *layout_;
   }
-
-  /**
-   * Part of Resource Tracking API is called when new resource is needed.
-   */
-  std::unique_ptr<VKUniformBuffer> create_resource(VKContext &context) override;
 
   /**
    * Get the reference to the active data.
@@ -231,11 +224,10 @@ class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
       BLI_assert_msg(push_constant_layout->offset + copy_size_in_bytes <= layout_->size_in_bytes(),
                      "Tried to write outside the push constant allocated memory.");
       memcpy(dst, input_data, copy_size_in_bytes);
-      is_dirty_ = true;
       return;
     }
 
-    /* Store elements in uniform buffer as array. In Std140 arrays have an element stride of 16
+    /* Store elements in buffer as array. In Std140 arrays have an element stride of 16
      * bytes. */
     BLI_assert(sizeof(T) == 4);
     const T *src = input_data;
@@ -258,24 +250,14 @@ class VKPushConstants : VKResourceTracker<VKUniformBuffer> {
         }
       }
     }
-
-    is_dirty_ = true;
   }
 
   /**
-   * When storage type = StorageType::UNIFORM_BUFFER use this method to update the uniform
-   * buffer.
+   * When storage type = StorageType::BUFFER use this method to update the buffer.
    *
    * It must be called just before adding a draw/compute command to the command queue.
    */
-  void update_uniform_buffer();
-
-  /**
-   * Get a reference to the uniform buffer.
-   *
-   * Only valid when storage type = StorageType::UNIFORM_BUFFER.
-   */
-  std::unique_ptr<VKUniformBuffer> &uniform_buffer_get();
+  VKBufferWithOffset update_uniform_buffer(VKContext &context);
 };
 
 }  // namespace blender::gpu

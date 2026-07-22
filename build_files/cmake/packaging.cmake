@@ -92,7 +92,7 @@ if(WIN32)
   set(CPACK_NSIS_MUI_ICON ${CMAKE_SOURCE_DIR}/release/windows/icons/winblender.ico)
   set(CPACK_NSIS_COMPRESSOR "/SOLID lzma")
 
-  # Eventhough we no longer display this, we still need to set it otherwise it'll throw an error
+  # Even though we no longer display this, we still need to set it otherwise it'll throw an error
   # during the msi build.
   set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_SOURCE_DIR}/release/license/spdx/GPL-3.0-or-later.txt)
   set(CPACK_WIX_PRODUCT_ICON ${CMAKE_SOURCE_DIR}/release/windows/icons/winblender.ico)
@@ -120,7 +120,7 @@ include(CPack)
 
 # Target for build_archive.py script, to automatically pass along
 # version, revision, platform, build directory
-macro(add_package_archive packagename extension)
+function(add_package_archive packagename extension)
   set(build_archive python ${CMAKE_SOURCE_DIR}/build_files/package_spec/build_archive.py)
   set(package_output ${CMAKE_BINARY_DIR}/release/${packagename}.${extension})
 
@@ -131,9 +131,7 @@ macro(add_package_archive packagename extension)
     COMMAND ${build_archive} ${packagename} ${extension} bin release
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
-  unset(build_archive)
-  unset(package_output)
-endmacro()
+endfunction()
 
 if(APPLE)
   add_package_archive(

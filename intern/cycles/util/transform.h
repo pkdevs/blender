@@ -17,6 +17,36 @@
 
 CCL_NAMESPACE_BEGIN
 
+/* Transform p from a local coordinate system (spanned by X and Y) into global coordinates. */
+template<class T> ccl_device_inline T to_global(const float2 p, const T X, const T Y)
+{
+  return p.x * X + p.y * Y;
+}
+
+/* Transform p from a local coordinate system (spanned by X, Y and Z) into global coordinates. */
+template<class T> ccl_device_inline T to_global(const float3 p, const T X, const T Y, const T Z)
+{
+  return p.x * X + p.y * Y + p.z * Z;
+}
+
+/* Transform p from global coordinates into a local coordinate system (spanned by X and Y). */
+template<class T> ccl_device_inline float2 to_local(const T p, const T X, const T Y)
+{
+  return make_float2(dot(p, X), dot(p, Y));
+}
+
+/* Transform p from global coordinates into a local coordinate system (spanned by X, Y and Z). */
+template<class T> ccl_device_inline float3 to_local(const T p, const T X, const T Y, const T Z)
+{
+  return make_float3(dot(p, X), dot(p, Y), dot(p, Z));
+}
+
+template<class T>
+ccl_device_inline dual3 to_local(const dual<T> p, const T X, const T Y, const T Z)
+{
+  return make_float3(dot(p, X), dot(p, Y), dot(p, Z));
+}
+
 /* Affine transformation, stored as 4x3 matrix. */
 
 struct Transform {
@@ -55,32 +85,72 @@ ccl_device_inline float3 transform_point(const ccl_global Transform *t, const fl
 
 ccl_device_inline float3 transform_point(const ccl_private Transform *t, const float3 a)
 {
-  /* TODO(sergey): Disabled for now, causes crashes in certain cases. */
 #if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE2__)
   const float4 aa(a.m128);
-
-  float4 x(_mm_loadu_ps(&t->x.x));
-  float4 y(_mm_loadu_ps(&t->y.x));
-  float4 z(_mm_loadu_ps(&t->z.x));
+  float4 x = t->x;
+  float4 y = t->y;
+  float4 z = t->z;
   float4 w(_mm_set_ps(1.0f, 0.0f, 0.0f, 0.0f));
-
   _MM_TRANSPOSE4_PS(x.m128, y.m128, z.m128, w.m128);
-
   float4 tmp = w;
   tmp = madd(shuffle<2>(aa), z, tmp);
   tmp = madd(shuffle<1>(aa), y, tmp);
   tmp = madd(shuffle<0>(aa), x, tmp);
-
   return float3(tmp.m128);
 #elif defined(__KERNEL_METAL__)
   const ccl_private float3x3 &b(*(const ccl_private float3x3 *)t);
   return (a * b).xyz + make_float3(t->x.w, t->y.w, t->z.w);
 #else
-  float3 c = make_float3(a.x * t->x.x + a.y * t->x.y + a.z * t->x.z + t->x.w,
-                         a.x * t->y.x + a.y * t->y.y + a.z * t->y.z + t->y.w,
-                         a.x * t->z.x + a.y * t->z.y + a.z * t->z.z + t->z.w);
+  const float4 a_ = make_homogeneous(a);
+  return make_float3(dot(a_, t->x), dot(a_, t->y), dot(a_, t->z));
+#endif
+}
 
-  return c;
+ccl_device_inline dual3 transform_point(const ccl_private Transform *t, const dual3 a)
+{
+#if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE2__)
+  /* NOTE: `dot()` has large latency on Intel platforms, the following method of transpose + madd
+   * is faster. However, we did not measure on Neon platforms, it might be that `dot()` is fine
+   * there, and we can use the simpler implementation at the end of the function. */
+  float4 x = t->x;
+  float4 y = t->y;
+  float4 z = t->z;
+  float4 w(_mm_set_ps(1.0f, 0.0f, 0.0f, 0.0f));
+  _MM_TRANSPOSE4_PS(x.m128, y.m128, z.m128, w.m128);
+
+  float4 tmp = w;
+  dual3 result;
+  {
+    const float4 aa(a.val.m128);
+    tmp = madd(shuffle<2>(aa), z, tmp);
+    tmp = madd(shuffle<1>(aa), y, tmp);
+    tmp = madd(shuffle<0>(aa), x, tmp);
+    result.val = float3(tmp.m128);
+  }
+
+  {
+    const float4 dx(a.dx.m128);
+    tmp = shuffle<2>(dx) * z;
+    tmp = madd(shuffle<1>(dx), y, tmp);
+    tmp = madd(shuffle<0>(dx), x, tmp);
+    result.dx = float3(tmp.m128);
+  }
+
+  {
+    const float4 dy(a.dy.m128);
+    tmp = shuffle<2>(dy) * z;
+    tmp = madd(shuffle<1>(dy), y, tmp);
+    tmp = madd(shuffle<0>(dy), x, tmp);
+    result.dy = float3(tmp.m128);
+  }
+
+  return result;
+#elif defined(__KERNEL_METAL__)
+  const ccl_private float3x3 &b(*(const ccl_private float3x3 *)t);
+  return {(a.val * b).xyz + make_float3(t->x.w, t->y.w, t->z.w), (a.dx * b).xyz, (a.dy * b).xyz};
+#else
+  const dual4 a_ = make_homogeneous(a);
+  return make_float3(dot(a_, t->x), dot(a_, t->y), dot(a_, t->z));
 #endif
 }
 
@@ -88,39 +158,37 @@ ccl_device_inline float3 transform_direction(const ccl_private Transform *t, con
 {
 #if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE2__)
   const float4 aa(a.m128);
-
-  float4 x(_mm_loadu_ps(&t->x.x));
-  float4 y(_mm_loadu_ps(&t->y.x));
-  float4 z(_mm_loadu_ps(&t->z.x));
+  float4 x = t->x;
+  float4 y = t->y;
+  float4 z = t->z;
   float4 w(_mm_setzero_ps());
-
   _MM_TRANSPOSE4_PS(x.m128, y.m128, z.m128, w.m128);
-
   float4 tmp = shuffle<2>(aa) * z;
   tmp = madd(shuffle<1>(aa), y, tmp);
   tmp = madd(shuffle<0>(aa), x, tmp);
-
   return float3(tmp.m128);
 #elif defined(__KERNEL_METAL__)
   const ccl_private float3x3 &b(*(const ccl_private float3x3 *)t);
   return (a * b).xyz;
 #else
-  float3 c = make_float3(a.x * t->x.x + a.y * t->x.y + a.z * t->x.z,
-                         a.x * t->y.x + a.y * t->y.y + a.z * t->y.z,
-                         a.x * t->z.x + a.y * t->z.y + a.z * t->z.z);
-
-  return c;
+  const float4 a_ = make_float4(a, 0.0f);
+  return make_float3(dot(a_, t->x), dot(a_, t->y), dot(a_, t->z));
 #endif
 }
 
-ccl_device_inline float3 transform_direction_transposed(const ccl_private Transform *t,
-                                                        const float3 a)
+ccl_device_inline dual3 transform_direction(const ccl_private Transform *t, const dual3 a)
+{
+  return to_local(a, make_float3(t->x), make_float3(t->y), make_float3(t->z));
+}
+
+template<class T>
+ccl_device_inline T transform_direction_transposed(const ccl_private Transform *t, const T a)
 {
   const float3 x = make_float3(t->x.x, t->y.x, t->z.x);
   const float3 y = make_float3(t->x.y, t->y.y, t->z.y);
   const float3 z = make_float3(t->x.z, t->y.z, t->z.z);
 
-  return make_float3(dot(x, a), dot(y, a), dot(z, a));
+  return to_local(a, x, y, z);
 }
 
 ccl_device_inline Transform make_transform(const float a,
@@ -244,6 +312,13 @@ ccl_device_inline Transform transform_translate(const float x, const float y, fl
   return transform_translate(make_float3(x, y, z));
 }
 
+ccl_device_inline void transform_translate(Transform &T, const float3 t)
+{
+  T.x.w += t.x;
+  T.y.w += t.y;
+  T.z.w += t.z;
+}
+
 ccl_device_inline Transform transform_scale(const float3 s)
 {
   return make_transform(s.x, 0, 0, 0, 0, s.y, 0, 0, 0, 0, s.z, 0);
@@ -328,6 +403,11 @@ ccl_device_inline void transform_set_column(Transform *t, const int column, cons
   t->x[column] = value.x;
   t->y[column] = value.y;
   t->z[column] = value.z;
+}
+
+ccl_device_inline float3 transform_get_translation(const Transform *t)
+{
+  return transform_get_column(t, 3);
 }
 
 Transform transform_transposed_inverse(const Transform &tfm);
@@ -557,7 +637,7 @@ ccl_device_inline void transform_compose(ccl_private Transform *tfm,
 /* Interpolate from array of decomposed transforms. */
 ccl_device void transform_motion_array_interpolate(ccl_private Transform *tfm,
                                                    const ccl_global DecomposedTransform *motion,
-                                                   const uint numsteps,
+                                                   const int numsteps,
                                                    const float time)
 {
   /* Figure out which steps we need to interpolate. */
@@ -606,6 +686,39 @@ void transform_motion_decompose(DecomposedTransform *decomp,
 Transform transform_from_viewplane(BoundBox2D &viewplane);
 
 #endif
+
+/* Packed Transform.
+ *
+ * Transform type with no alignment requirements.
+ * It does not support any mathematical operations, only conversion to Transform. */
+
+struct PackedTransform {
+  PackedTransform() = default;
+
+  ccl_device_inline_method PackedTransform(const Transform a) : x(a.x), y(a.y), z(a.z) {}
+
+  ccl_device_inline_method PackedTransform operator=(const Transform a)
+  {
+    x = a.x;
+    y = a.y;
+    z = a.z;
+    return *this;
+  }
+
+  packed_float4 x, y, z;
+};
+static_assert(alignof(PackedTransform) == alignof(float),
+              "PackedTransform expected to have the same alignment as float");
+static_assert(sizeof(PackedTransform) == 48, "packed_float4 expected to be exactly 48 bytes");
+
+ccl_device_inline Transform make_transform(const PackedTransform packed_tfm)
+{
+  Transform tfm;
+  tfm.x = packed_tfm.x;
+  tfm.y = packed_tfm.y;
+  tfm.z = packed_tfm.z;
+  return tfm;
+}
 
 /* TODO: This can be removed when we know if no devices will require explicit
  * address space qualifiers for this case. */

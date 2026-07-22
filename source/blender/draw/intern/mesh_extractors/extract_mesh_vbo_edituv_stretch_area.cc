@@ -6,7 +6,7 @@
  * \ingroup draw
  */
 
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "BKE_attribute.hh"
@@ -40,7 +40,8 @@ static AreaInfo compute_area_ratio(const MeshRenderData &mr, MutableSpan<float> 
 {
   if (mr.extract_type == MeshExtractType::BMesh) {
     const BMesh &bm = *mr.bm;
-    const int uv_offset = CustomData_get_offset(&bm.ldata, CD_PROP_FLOAT2);
+    const StringRef active_name = mr.mesh->active_uv_map_name();
+    const int uv_offset = CustomData_get_offset_named(&bm.ldata, CD_PROP_FLOAT2, active_name);
     return threading::parallel_reduce(
         IndexRange(bm.totface),
         1024,
@@ -66,7 +67,7 @@ static AreaInfo compute_area_ratio(const MeshRenderData &mr, MutableSpan<float> 
   const Span<int> corner_verts = mr.corner_verts;
   const Mesh &mesh = *mr.mesh;
   const bke::AttributeAccessor attributes = mesh.attributes();
-  const StringRef name = CustomData_get_active_layer_name(&mesh.corner_data, CD_PROP_FLOAT2);
+  const StringRef name = mesh.active_uv_map_name();
   const VArraySpan uv_map = *attributes.lookup<float2>(name, bke::AttrDomain::Corner);
 
   return threading::parallel_reduce(
@@ -77,7 +78,7 @@ static AreaInfo compute_area_ratio(const MeshRenderData &mr, MutableSpan<float> 
         for (const int face_index : range) {
           const IndexRange face = faces[face_index];
           const float area = bke::mesh::face_area_calc(positions, corner_verts.slice(face));
-          float uvarea = area_poly_v2(reinterpret_cast<const float(*)[2]>(&uv_map[face.start()]),
+          float uvarea = area_poly_v2(reinterpret_cast<const float (*)[2]>(&uv_map[face.start()]),
                                       face.size());
           info.tot_area += area;
           info.tot_uv_area += uvarea;
@@ -99,8 +100,8 @@ gpu::VertBufPtr extract_edituv_stretch_area(const MeshRenderData &mr,
   tot_area = info.tot_area;
   tot_uv_area = info.tot_uv_area;
 
-  static const GPUVertFormat format = GPU_vertformat_from_attribute(
-      "ratio", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  static const GPUVertFormat format = GPU_vertformat_from_attribute("ratio",
+                                                                    gpu::VertAttrType::SFLOAT_32);
   gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
   GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
   MutableSpan<float> vbo_data = vbo->data<float>();
@@ -135,8 +136,8 @@ gpu::VertBufPtr extract_edituv_stretch_area_subdiv(const MeshRenderData &mr,
                                                    float &tot_area,
                                                    float &tot_uv_area)
 {
-  static const GPUVertFormat format = GPU_vertformat_from_attribute(
-      "ratio", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  static const GPUVertFormat format = GPU_vertformat_from_attribute("ratio",
+                                                                    gpu::VertAttrType::SFLOAT_32);
   gpu::VertBufPtr vbo = gpu::VertBufPtr(
       GPU_vertbuf_create_on_device(format, subdiv_cache.num_subdiv_loops));
 

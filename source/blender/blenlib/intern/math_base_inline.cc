@@ -6,8 +6,7 @@
  * \ingroup bli
  */
 
-#ifndef __MATH_BASE_INLINE_C__
-#define __MATH_BASE_INLINE_C__
+#pragma once
 
 #include <float.h>
 #include <limits.h>
@@ -15,11 +14,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "BLI_assert.h"
-#include "BLI_math_inline.h"
-#include "BLI_sys_types.h"
+#include "BLI_assert.hh"
+#include "BLI_math_inline.hh"
+#include "BLI_sys_types.hh"
 
-/* copied from BLI_utildefines.h */
+namespace blender {
+
+/* copied from BLI_utildefines.hh */
 #ifdef __GNUC__
 #  define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #else
@@ -49,21 +50,21 @@ MINLINE float pow7f(float x)
 
 MINLINE float sqrt3f(float f)
 {
-  if (UNLIKELY(f == 0.0f)) {
+  if (f == 0.0f) [[unlikely]] {
     return 0.0f;
   }
-  if (UNLIKELY(f < 0.0f)) {
-    return -(float)(exp(log(-f) / 3.0));
+  if (f < 0.0f) [[unlikely]] {
+    return -float(exp(log(-f) / 3.0));
   }
-  return (float)(exp(log(f) / 3.0));
+  return float(exp(log(f) / 3.0));
 }
 
 MINLINE double sqrt3d(double d)
 {
-  if (UNLIKELY(d == 0.0)) {
+  if (d == 0.0) [[unlikely]] {
     return 0.0;
   }
-  if (UNLIKELY(d < 0.0)) {
+  if (d < 0.0) [[unlikely]] {
     return -exp(log(-d) / 3.0);
   }
   return exp(log(d) / 3.0);
@@ -98,7 +99,7 @@ MINLINE double ratiod(double min, double max, double pos)
 
 MINLINE float power_of_2(float val)
 {
-  return (float)pow(2.0, ceil(log((double)val) / M_LN2));
+  return float(pow(2.0, ceil(log(double(val)) / M_LN2)));
 }
 
 MINLINE int is_power_of_2_i(int n)
@@ -146,7 +147,7 @@ MINLINE unsigned int log2_floor_u(unsigned int x)
 
 MINLINE unsigned int log2_ceil_u(unsigned int x)
 {
-  if (is_power_of_2_i((int)x)) {
+  if (is_power_of_2_i(int(x))) {
     return log2_floor_u(x);
   }
   return log2_floor_u(x) + 1;
@@ -157,10 +158,10 @@ MINLINE unsigned int log2_ceil_u(unsigned int x)
 #define _round_clamp_fl_impl(arg, ty, min, max) \
   { \
     float r = floorf(arg + 0.5f); \
-    if (UNLIKELY(r <= (float)min)) { \
+    if (r <= float(min)) [[unlikely]] { \
       return (ty)min; \
     } \
-    if (UNLIKELY(r >= (float)max)) { \
+    if (r >= float(max)) [[unlikely]] { \
       return (ty)max; \
     } \
     return (ty)r; \
@@ -169,10 +170,10 @@ MINLINE unsigned int log2_ceil_u(unsigned int x)
 #define _round_clamp_db_impl(arg, ty, min, max) \
   { \
     double r = floor(arg + 0.5); \
-    if (UNLIKELY(r <= (double)min)) { \
+    if (r <= double(min)) [[unlikely]] { \
       return (ty)min; \
     } \
-    if (UNLIKELY(r >= (double)max)) { \
+    if (r >= double(max)) [[unlikely]] { \
       return (ty)max; \
     } \
     return (ty)r; \
@@ -387,47 +388,6 @@ MINLINE unsigned long long max_ulul(unsigned long long a, unsigned long long b)
   return (b < a) ? a : b;
 }
 
-MINLINE double max_ddd(double a, double b, double c)
-{
-  return max_dd(max_dd(a, b), c);
-}
-
-MINLINE float min_fff(float a, float b, float c)
-{
-  return min_ff(min_ff(a, b), c);
-}
-MINLINE float max_fff(float a, float b, float c)
-{
-  return max_ff(max_ff(a, b), c);
-}
-
-MINLINE int min_iii(int a, int b, int c)
-{
-  return min_ii(min_ii(a, b), c);
-}
-MINLINE int max_iii(int a, int b, int c)
-{
-  return max_ii(max_ii(a, b), c);
-}
-
-MINLINE float min_ffff(float a, float b, float c, float d)
-{
-  return min_ff(min_fff(a, b, c), d);
-}
-MINLINE float max_ffff(float a, float b, float c, float d)
-{
-  return max_ff(max_fff(a, b, c), d);
-}
-
-MINLINE int min_iiii(int a, int b, int c, int d)
-{
-  return min_ii(min_iii(a, b, c), d);
-}
-MINLINE int max_iiii(int a, int b, int c, int d)
-{
-  return max_ii(max_iii(a, b, c), d);
-}
-
 MINLINE size_t min_zz(size_t a, size_t b)
 {
   return (a < b) ? a : b;
@@ -497,7 +457,7 @@ MINLINE int compare_ff_relative(float a, float b, const float max_diff, const in
     return 1;
   }
 
-  return (ulp_diff_ff(a, b) <= (uint)max_ulps) ? 1 : 0;
+  return (ulp_diff_ff(a, b) <= uint(max_ulps)) ? 1 : 0;
 }
 
 MINLINE bool compare_threshold_relative(const float value1, const float value2, const float thresh)
@@ -510,6 +470,56 @@ MINLINE bool compare_threshold_relative(const float value1, const float value2, 
   }
   /* Using relative threshold in general. */
   return abs_diff > thresh * fabsf(value2);
+}
+
+MINLINE float increment_ulp(const float value)
+{
+  if (!isfinite(value)) {
+    return value;
+  }
+
+  union {
+    float f;
+    uint i;
+  } v;
+  v.f = value;
+
+  if (v.f > 0.0f) {
+    v.i += 1;
+  }
+  else if (v.f < -0.0f) {
+    v.i -= 1;
+  }
+  else {
+    v.i = 0x00000001;
+  }
+
+  return v.f;
+}
+
+MINLINE float decrement_ulp(const float value)
+{
+  if (!isfinite(value)) {
+    return value;
+  }
+
+  union {
+    float f;
+    uint i;
+  } v;
+  v.f = value;
+
+  if (v.f > 0.0f) {
+    v.i -= 1;
+  }
+  else if (v.f < -0.0f) {
+    v.i += 1;
+  }
+  else {
+    v.i = 0x80000001;
+  }
+
+  return v.f;
 }
 
 MINLINE float signf(float f)
@@ -552,36 +562,36 @@ MINLINE int signum_i(float a)
 
 MINLINE int integer_digits_f(const float f)
 {
-  return (f == 0.0f) ? 0 : (int)floor(log10(fabs(f))) + 1;
+  return (f == 0.0f) ? 0 : int(floor(log10(fabs(f)))) + 1;
 }
 
 MINLINE int integer_digits_d(const double d)
 {
-  return (d == 0.0) ? 0 : (int)floor(log10(fabs(d))) + 1;
+  return (d == 0.0) ? 0 : int(floor(log10(fabs(d)))) + 1;
 }
 
 MINLINE int integer_digits_i(const int i)
 {
-  return (int)log10((double)i) + 1;
+  return int(log10(double(i))) + 1;
 }
 
 /* Low level conversion functions */
 MINLINE unsigned char unit_float_to_uchar_clamp(float val)
 {
-  return (unsigned char)((
-      (val <= 0.0f) ? 0 : ((val > (1.0f - 0.5f / 255.0f)) ? 255 : ((255.0f * val) + 0.5f))));
+  return static_cast<unsigned char>(
+      ((val <= 0.0f) ? 0 : ((val > (1.0f - 0.5f / 255.0f)) ? 255 : ((255.0f * val) + 0.5f))));
 }
 
 MINLINE unsigned short unit_float_to_ushort_clamp(float val)
 {
-  return (unsigned short)((val >= 1.0f - 0.5f / 65535) ? 65535 :
-                          (val <= 0.0f)                ? 0 :
-                                                         (val * 65535.0f + 0.5f));
+  return static_cast<unsigned short>((val >= 1.0f - 0.5f / 65535) ? 65535 :
+                                     (val <= 0.0f)                ? 0 :
+                                                                    (val * 65535.0f + 0.5f));
 }
 
 MINLINE unsigned char unit_ushort_to_uchar(unsigned short val)
 {
-  return (unsigned char)(((val) >= 65535 - 128) ? 255 : ((val) + 128) >> 8);
+  return static_cast<unsigned char>(((val) >= 65535 - 128) ? 255 : ((val) + 128) >> 8);
 }
 
 #define unit_float_to_uchar_clamp_v3(v1, v2) \
@@ -600,4 +610,4 @@ MINLINE unsigned char unit_ushort_to_uchar(unsigned short val)
   } \
   ((void)0)
 
-#endif /* __MATH_BASE_INLINE_C__ */
+}  // namespace blender

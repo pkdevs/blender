@@ -72,12 +72,20 @@
  *    pointers to virtual member functions.
  */
 
+#include <atomic>
+
+#include "BLI_dynamic_stack_buffer.hh"  // IWYU pragma: keep
+#include "BLI_enum_flags.hh"
 #include "BLI_hash.hh"
 #include "BLI_index_mask_fwd.hh"
 #include "BLI_map.hh"
 #include "BLI_parameter_pack_utils.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_utility_mixins.hh"
+
+namespace blender {
+
+struct UniqueHashBytes;
 
 /**
  * Different types support different features. Features like copy constructability can be detected
@@ -93,9 +101,7 @@ enum class CPPTypeFlags {
 
   BasicType = Hashable | Printable | EqualityComparable,
 };
-ENUM_OPERATORS(CPPTypeFlags, CPPTypeFlags::EqualityComparable)
-
-namespace blender {
+ENUM_OPERATORS(CPPTypeFlags)
 
 class CPPType : NonCopyable, NonMovable {
  public:
@@ -111,7 +117,7 @@ class CPPType : NonCopyable, NonMovable {
    * Required memory alignment for an instance of this type.
    *
    * C++ equivalent:
-   *   alignof(T);
+   *   `alignof(T);`
    */
   int64_t alignment = 0;
 
@@ -120,7 +126,7 @@ class CPPType : NonCopyable, NonMovable {
    * not have to be destructed.
    *
    * C++ equivalent:
-   *   std::is_trivial_v<T>;
+   *   `std::is_trivial_v<T>;`
    */
   bool is_trivial = false;
 
@@ -129,7 +135,7 @@ class CPPType : NonCopyable, NonMovable {
    * for optimization purposes.
    *
    * C++ equivalent:
-   *   std::is_trivially_destructible_v<T>;
+   *   `std::is_trivially_destructible_v<T>;`
    */
   bool is_trivially_destructible = false;
 
@@ -150,6 +156,13 @@ class CPPType : NonCopyable, NonMovable {
   bool is_destructible = false;
   bool is_copy_assignable = false;
   bool is_move_assignable = false;
+
+  /**
+   * An index that is assigned when the type is registered. Each #CPPtype has a unique index.
+   * While the pointer of a #CPPType is also unique, sometimes it's easier to work with an index
+   * that is a relatively small number (generally <100).
+   */
+  int type_index = -1;
 
  private:
   uintptr_t alignment_mask_ = 0;
@@ -201,6 +214,7 @@ class CPPType : NonCopyable, NonMovable {
   void (*print_)(const void *value, std::stringstream &ss) = nullptr;
   bool (*is_equal_)(const void *a, const void *b) = nullptr;
   uint64_t (*hash_)(const void *value) = nullptr;
+  void (*hash_unique_)(const void *value, UniqueHashBytes &hash) = nullptr;
 
   const void *default_value_ = nullptr;
   std::string debug_name_;
@@ -213,10 +227,9 @@ class CPPType : NonCopyable, NonMovable {
   /**
    * Get the `CPPType` that corresponds to a specific static type.
    * This only works for types that actually implement the template specialization using
-   * `BLI_CPP_TYPE_MAKE`.
+   * `BLI_CPP_TYPE_REGISTER`.
    */
   template<typename T> static const CPPType &get();
-  template<typename T> static const CPPType &get_impl();
 
   /**
    * Returns the name of the type for debugging purposes. This name should not be used as
@@ -240,7 +253,7 @@ class CPPType : NonCopyable, NonMovable {
    * For some trivial types (like int), this method does nothing.
    *
    * C++ equivalent:
-   *   new (ptr) T;
+   *   `new (ptr) T;`
    */
   void default_construct(void *ptr) const;
   void default_construct_n(void *ptr, int64_t n) const;
@@ -250,7 +263,7 @@ class CPPType : NonCopyable, NonMovable {
    * Same as #default_construct, but does zero initialization for trivial types.
    *
    * C++ equivalent:
-   *   new (ptr) T();
+   *   `new (ptr) T();`
    */
   void value_initialize(void *ptr) const;
   void value_initialize_n(void *ptr, int64_t n) const;
@@ -262,7 +275,7 @@ class CPPType : NonCopyable, NonMovable {
    * For some trivial types, this does nothing.
    *
    * C++ equivalent:
-   *   ptr->~T();
+   *   `ptr->~T();`
    */
   void destruct(void *ptr) const;
   void destruct_n(void *ptr, int64_t n) const;
@@ -272,7 +285,7 @@ class CPPType : NonCopyable, NonMovable {
    * Copy an instance of this type from src to dst.
    *
    * C++ equivalent:
-   *   dst = src;
+   *   `dst = src;`
    */
   void copy_assign(const void *src, void *dst) const;
   void copy_assign_n(const void *src, void *dst, int64_t n) const;
@@ -289,7 +302,7 @@ class CPPType : NonCopyable, NonMovable {
    * The memory pointed to by dst should be uninitialized.
    *
    * C++ equivalent:
-   *   new (dst) T(src);
+   *   `new (dst) T(src);`
    */
   void copy_construct(const void *src, void *dst) const;
   void copy_construct_n(const void *src, void *dst, int64_t n) const;
@@ -306,7 +319,7 @@ class CPPType : NonCopyable, NonMovable {
    * The memory pointed to by dst should be initialized.
    *
    * C++ equivalent:
-   *   dst = std::move(src);
+   *   `dst = std::move(src);`
    */
   void move_assign(void *src, void *dst) const;
   void move_assign_n(void *src, void *dst, int64_t n) const;
@@ -318,7 +331,7 @@ class CPPType : NonCopyable, NonMovable {
    * The memory pointed to by dst should be uninitialized.
    *
    * C++ equivalent:
-   *   new (dst) T(std::move(src));
+   *   `new (dst) T(std::move(src));`
    */
   void move_construct(void *src, void *dst) const;
   void move_construct_n(void *src, void *dst, int64_t n) const;
@@ -329,8 +342,8 @@ class CPPType : NonCopyable, NonMovable {
    * afterwards.
    *
    * C++ equivalent:
-   *   dst = std::move(src);
-   *   src->~T();
+   *   `dst = std::move(src);`
+   *   `src->~T();`
    */
   void relocate_assign(void *src, void *dst) const;
   void relocate_assign_n(void *src, void *dst, int64_t n) const;
@@ -341,8 +354,8 @@ class CPPType : NonCopyable, NonMovable {
    * afterwards.
    *
    * C++ equivalent:
-   *   new (dst) T(std::move(src))
-   *   src->~T();
+   *   `new (dst) T(std::move(src))`
+   *   `src->~T();`
    */
   void relocate_construct(void *src, void *dst) const;
   void relocate_construct_n(void *src, void *dst, int64_t n) const;
@@ -375,6 +388,7 @@ class CPPType : NonCopyable, NonMovable {
 
   uint64_t hash(const void *value) const;
   uint64_t hash_or_fallback(const void *value, uint64_t fallback_hash) const;
+  void hash_unique(const void *value, UniqueHashBytes &hash) const;
 
   /**
    * Get a pointer to a constant value of this type. The specific value depends on the type.
@@ -395,57 +409,49 @@ class CPPType : NonCopyable, NonMovable {
    * compile-time. This allows the compiler to optimize a function for specific types, while all
    * other types can still use a generic fallback function.
    *
-   * \param Types: The types that code should be generated for.
+   * \tparam Types: The types that code should be generated for.
    * \param fn: The function object to call. This is expected to have a templated `operator()` and
    * a non-templated `operator()`. The templated version will be called if the current #CPPType
-   *   matches any of the given types. Otherwise, the non-templated function is called.
+   *   matches any of the given types.
+   * \return True if the function was called.
    */
-  template<typename... Types, typename Fn> void to_static_type(const Fn &fn) const;
+  template<typename... Types, typename Fn> bool to_static_type_try(Fn &&fn) const;
+
+  /** Same as #to_static_type_try, but asserts if the type is valid. */
+  template<typename... Types, typename Fn> void to_static_type(Fn &&fn) const;
 
  private:
-  template<typename Fn> struct TypeTagExecutor {
-    const Fn &fn;
-
-    template<typename T> void operator()() const
-    {
-      fn(TypeTag<T>{});
-    }
-
-    void operator()() const
-    {
-      fn(TypeTag<void>{});
-    }
-  };
-
- public:
   /**
-   * Similar to #to_static_type but is easier to use with a lambda function. The function is
-   * expected to take a single `auto TypeTag` parameter. To extract the static type, use:
-   * `using T = typename decltype(TypeTag)::type;`
-   *
-   * If the current #CPPType is not in #Types, the type tag is `void`.
+   * Helper used in #to_static_type_try as a typed function pointer for each type in the list.
+   * A named static function is used instead of a lambda to avoid a known MSVC bug where a
+   * non-capturing lambda inside a comma fold expression that references the pack parameter
+   * causes MSVC to generate zero iterations, leaving the map empty.
    */
-  template<typename... Types, typename Fn> void to_static_type_tag(const Fn &fn) const
+  template<typename T, typename Fn> static void call_with_type_impl_(const Fn &fn)
   {
-    TypeTagExecutor<Fn> executor{fn};
-    this->to_static_type<Types...>(executor);
+    fn.template operator()<T>();
   }
 };
+
+namespace detail {
+/**
+ * Global static variable that contains the #CPPType for a given type after it has been registered
+ * with #BLI_CPP_TYPE_REGISTER. This should generally be accessed through #CPPType::get<T>. */
+template<typename T> inline TypedBuffer<CPPType> cpp_type_impl{};
+}  // namespace detail
 
 /**
  * Initialize and register basic cpp types.
  */
 void register_cpp_types();
 
-}  // namespace blender
-
 /* Utility for allocating an uninitialized buffer for a single value of the given #CPPType. */
 #define BUFFER_FOR_CPP_TYPE_VALUE(type, variable_name) \
-  blender::DynamicStackBuffer<64, 64> stack_buffer_for_##variable_name((type).size, \
-                                                                       (type).alignment); \
+  DynamicStackBuffer<64, 64> stack_buffer_for_##variable_name((type).size, (type).alignment); \
   void *variable_name = stack_buffer_for_##variable_name.buffer();
 
-namespace blender {
+/* Give a compile error instead of a link error when type information is missing. */
+template<> const CPPType &CPPType::get<void>() = delete;
 
 /**
  * Two types only compare equal when their pointer is equal. No two instances of CPPType for the
@@ -463,8 +469,11 @@ inline bool operator!=(const CPPType &a, const CPPType &b)
 
 template<typename T> inline const CPPType &CPPType::get()
 {
-  /* Store the #CPPType locally to avoid making the function call in most cases. */
-  static const CPPType &type = CPPType::get_impl<std::decay_t<T>>();
+  const CPPType &type = detail::cpp_type_impl<std::decay_t<T>>.ref();
+  /* Should have been initialized by #BLI_CPP_TYPE_REGISTER.
+   * If this is hit in test code, make sure the test calls `register_cpp_types` (for blenlib
+   * tests) or `BKE_cpp_types_init` (for general tests). */
+  BLI_assert(type.size > 0);
   return type;
 }
 
@@ -709,6 +718,11 @@ inline uint64_t CPPType::hash_or_fallback(const void *value, uint64_t fallback_h
   return fallback_hash;
 }
 
+inline void CPPType::hash_unique(const void *value, UniqueHashBytes &hash) const
+{
+  this->hash_unique_(value, hash);
+}
+
 inline const void *CPPType::default_value() const
 {
   return default_value_;
@@ -734,32 +748,44 @@ template<typename... T> inline bool CPPType::is_any() const
   return (this->is<T>() || ...);
 }
 
-template<typename... Types, typename Fn> inline void CPPType::to_static_type(const Fn &fn) const
+template<typename... Types, typename Fn> inline void CPPType::to_static_type(Fn &&fn) const
 {
-  using Callback = void (*)(const Fn &fn);
+  if (this->to_static_type_try<Types...>(fn)) {
+    return;
+  }
+  BLI_assert_unreachable();
+}
 
-  /* Build a lookup table to avoid having to compare the current #CPPType with every type in
-   * #Types one after another. */
-  static const Map<const CPPType *, Callback> callback_map = []() {
-    Map<const CPPType *, Callback> callback_map;
-    /* This adds an entry in the map for every type in #Types. */
-    (callback_map.add_new(&CPPType::get<Types>(),
-                          [](const Fn &fn) {
-                            /* Call the templated `operator()` of the given function object. */
-                            fn.template operator()<Types>();
-                          }),
-     ...);
-    return callback_map;
+template<typename... Types, typename Fn> inline bool CPPType::to_static_type_try(Fn &&fn) const
+{
+  /* Strip any reference from Fn to normalize the type used for the static map, ensuring the
+   * same static is used regardless of whether fn is an lvalue or rvalue. */
+  using Fn_ = std::remove_reference_t<Fn>;
+  using Callback = void (*)(const Fn_ &);
+
+  /* Use an array indexed by #CPPType::type_index instead of a #Map for faster lookup and less
+   * generated code. The array can be quite a bit larger at run-time than the number of types but
+   * the total number of types is fairly limited, so that should be fine. */
+  static Array<Callback, 0> callback_array = [&]() {
+    /* This way to compute the max generates less code than using std::max with an initializer
+     * list. */
+    int max_type_index = 0;
+    ((max_type_index = std::max(max_type_index, CPPType::get<Types>().type_index)), ...);
+    Array<Callback, 0> array(max_type_index + 1, nullptr);
+    /* Using call_with_type_impl_ instead of a lambda due to an MSVC bug.  */
+    ((array[CPPType::get<Types>().type_index] = call_with_type_impl_<Types, Fn_>), ...);
+    return array;
   }();
 
-  const Callback callback = callback_map.lookup_default(this, nullptr);
-  if (callback != nullptr) {
-    callback(fn);
+  if (this->type_index >= callback_array.size()) {
+    return false;
   }
-  else {
-    /* Call the non-templated `operator()` of the given function object. */
-    fn();
+  const Callback callback = callback_array[this->type_index];
+  if (!callback) {
+    return false;
   }
+  callback(fn);
+  return true;
 }
 
 }  // namespace blender

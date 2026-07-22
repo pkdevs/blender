@@ -38,7 +38,8 @@ struct PointCloudModule {
   gpu::VertBuf *create_dummy_vbo()
   {
     GPUVertFormat format = {0};
-    uint dummy_id = GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+    uint dummy_id = GPU_vertformat_attr_add(
+        &format, "dummy", gpu::VertAttrType::SFLOAT_32_32_32_32);
 
     gpu::VertBuf *vbo = GPU_vertbuf_create_with_format_ex(
         format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
@@ -77,10 +78,12 @@ gpu::Batch *pointcloud_sub_pass_setup_implementation(PassT &sub_ps,
   bool is_empty = pointcloud.totpoint == 0;
 
   PointCloudModule &module = *drw_get().data->pointcloud_module;
-  /* Fix issue with certain driver not drawing anything if there is no texture bound to
-   * "ac", "au", "u" or "c". */
+  /* Ensure we have no unbound resources.
+   * Required for Vulkan.
+   * Fixes issues with certain GL drivers not drawing anything. */
   sub_ps.bind_texture("u", module.dummy_vbo);
   sub_ps.bind_texture("au", module.dummy_vbo);
+  sub_ps.bind_texture("a", module.dummy_vbo);
   sub_ps.bind_texture("c", module.dummy_vbo);
   sub_ps.bind_texture("ac", module.dummy_vbo);
 
@@ -88,14 +91,14 @@ gpu::Batch *pointcloud_sub_pass_setup_implementation(PassT &sub_ps,
   sub_ps.bind_texture("ptcloud_pos_rad_tx", is_empty ? module.dummy_vbo : pos_rad_buf);
 
   if (gpu_material != nullptr) {
-    ListBase gpu_attrs = GPU_material_attributes(gpu_material);
-    LISTBASE_FOREACH (GPUMaterialAttribute *, gpu_attr, &gpu_attrs) {
+    ListBaseT<GPUMaterialAttribute> gpu_attrs = GPU_material_attributes(gpu_material);
+    for (GPUMaterialAttribute &gpu_attr : gpu_attrs) {
       char sampler_name[32];
       /** NOTE: Reusing curve attribute function. */
-      drw_curves_get_attribute_sampler_name(gpu_attr->name, sampler_name);
+      drw_curves_get_attribute_sampler_name(gpu_attr.name, sampler_name);
 
       gpu::VertBuf **attribute_buf = DRW_pointcloud_evaluated_attribute(&pointcloud,
-                                                                        gpu_attr->name);
+                                                                        gpu_attr.name);
       sub_ps.bind_texture(sampler_name,
                           (attribute_buf && !is_empty) ? attribute_buf : &module.dummy_vbo);
     }

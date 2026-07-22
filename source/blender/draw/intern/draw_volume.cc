@@ -14,7 +14,7 @@
 #include "DNA_fluid_types.h"
 #include "DNA_volume_types.h"
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_global.hh"
 #include "BKE_mesh.hh"
@@ -32,7 +32,7 @@
 
 namespace blender::draw {
 
-using VolumeInfosBuf = blender::draw::UniformBuffer<VolumeInfos>;
+using VolumeInfosBuf = draw::UniformBuffer<VolumeInfos>;
 
 struct VolumeUniformBufPool {
   Vector<VolumeInfosBuf *> ubos;
@@ -71,13 +71,13 @@ struct VolumeModule {
     const float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     const float one[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     const eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ;
-    dummy_zero.ensure_3d(GPU_RGBA32F, int3(1), usage, zero);
-    dummy_one.ensure_3d(GPU_RGBA32F, int3(1), usage, one);
+    dummy_zero.ensure_3d(gpu::TextureFormat::SFLOAT_32_32_32_32, int3(1), usage, zero);
+    dummy_one.ensure_3d(gpu::TextureFormat::SFLOAT_32_32_32_32, int3(1), usage, one);
     GPU_texture_extend_mode(dummy_zero, GPU_SAMPLER_EXTEND_MODE_REPEAT);
     GPU_texture_extend_mode(dummy_one, GPU_SAMPLER_EXTEND_MODE_REPEAT);
   }
 
-  GPUTexture *grid_default_texture(eGPUDefaultValue default_value)
+  gpu::Texture *grid_default_texture(GPUDefaultValue default_value)
   {
     switch (default_value) {
       case GPU_DEFAULT_0:
@@ -97,6 +97,7 @@ void DRW_volume_init(DRWData *drw_data)
   if (drw_data->volume_module == nullptr) {
     drw_data->volume_module = MEM_new<VolumeModule>("VolumeModule");
   }
+  drw_data->volume_module->ubo_pool.reset();
 }
 
 void DRW_volume_module_free(draw::VolumeModule *module)
@@ -155,11 +156,12 @@ PassType *volume_object_grids_init(PassType &ps,
      * - Grid exists and texture was loaded -> use texture.
      * - Grid exists but has zero size or failed to load -> use zero.
      * - Grid does not exist -> use default value. */
-    const GPUTexture *grid_tex = (drw_grid)    ? drw_grid->texture :
-                                 (volume_grid) ? module.dummy_zero :
-                                                 module.grid_default_texture(attr->default_value);
+    const gpu::Texture *grid_tex = (drw_grid) ? drw_grid->texture :
+                                   (volume_grid) ?
+                                                module.dummy_zero :
+                                                module.grid_default_texture(attr->default_value);
     /* TODO(@pragma37): bind_texture const support ? */
-    sub->bind_texture(attr->input_name, (GPUTexture *)grid_tex);
+    sub->bind_texture(attr->input_name, const_cast<gpu::Texture *>(grid_tex));
 
     volume_infos.grids_xform[grid_id++] = drw_grid ? float4x4(drw_grid->object_to_texture) :
                                                      float4x4::identity();
@@ -190,8 +192,9 @@ PassType *drw_volume_object_mesh_init(PassType &ps,
 
   bool has_fluid_modifier = (md = BKE_modifiers_findby_type(ob, eModifierType_Fluid)) &&
                             BKE_modifier_is_enabled(scene, md, eModifierMode_Realtime) &&
-                            ((FluidModifierData *)md)->domain != nullptr;
-  FluidModifierData *fmd = has_fluid_modifier ? (FluidModifierData *)md : nullptr;
+                            (reinterpret_cast<FluidModifierData *>(md))->domain != nullptr;
+  FluidModifierData *fmd = has_fluid_modifier ? reinterpret_cast<FluidModifierData *>(md) :
+                                                nullptr;
   FluidDomainSettings *fds = has_fluid_modifier ? fmd->domain : nullptr;
 
   PassType *sub = nullptr;
@@ -262,7 +265,7 @@ PassType *volume_sub_pass_implementation(PassType &ps,
                                          Object *ob,
                                          GPUMaterial *gpu_material)
 {
-  ListBase attr_list = GPU_material_attributes(gpu_material);
+  ListBaseT<GPUMaterialAttribute> attr_list = GPU_material_attributes(gpu_material);
   ListBaseWrapper<GPUMaterialAttribute> attrs(attr_list);
   if (ob == nullptr) {
     return volume_world_grids_init(ps, attrs);

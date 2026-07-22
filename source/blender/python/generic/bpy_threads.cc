@@ -11,7 +11,11 @@
 
 #include <Python.h>
 
+#include "python_compat.hh" /* IWYU pragma: keep. */
+
 #include "../BPY_extern.hh"
+
+namespace blender {
 
 BPy_ThreadStatePtr BPY_thread_save()
 {
@@ -20,8 +24,8 @@ BPy_ThreadStatePtr BPY_thread_save()
    *
    * `PyEval_SaveThread()` will release the GIL, so this thread has to have the GIL to begin with
    * or badness will ensue. */
-  if (_PyThreadState_UncheckedGet() && PyGILState_Check()) {
-    return (BPy_ThreadStatePtr)PyEval_SaveThread();
+  if (PyThreadState_GetUnchecked() && PyGILState_Check()) {
+    return static_cast<BPy_ThreadStatePtr>(PyEval_SaveThread());
   }
   return nullptr;
 }
@@ -29,7 +33,7 @@ BPy_ThreadStatePtr BPY_thread_save()
 void BPY_thread_restore(BPy_ThreadStatePtr tstate)
 {
   if (tstate) {
-    PyEval_RestoreThread((PyThreadState *)tstate);
+    PyEval_RestoreThread(static_cast<PyThreadState *>(tstate));
   }
 }
 
@@ -59,3 +63,5 @@ void BPY_thread_backtrace_print()
     printf("No Python thread state available.\n");
   }
 }
+
+}  // namespace blender

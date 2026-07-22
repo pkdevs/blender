@@ -14,10 +14,14 @@
 #include "RE_bake.h"
 #include "RNA_types.hh"
 
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 
-struct BakeTargets;
+namespace blender {
+
 struct BakePixel;
+struct BakeTargets;
+struct bNode;
+struct bNodeTree;
 struct Depsgraph;
 struct GPUContext;
 struct Main;
@@ -33,8 +37,6 @@ struct ReportList;
 struct Scene;
 struct ViewLayer;
 struct ViewRender;
-struct bNode;
-struct bNodeTree;
 
 /* External Engine */
 
@@ -50,8 +52,7 @@ enum RenderEngineTypeFlag {
   RE_USE_GPU_CONTEXT = (1 << 7),
   RE_USE_CUSTOM_FREESTYLE = (1 << 8),
   RE_USE_NO_IMAGE_SAVE = (1 << 9),
-  RE_USE_ALEMBIC_PROCEDURAL = (1 << 10),
-  RE_USE_MATERIALX = (1 << 11),
+  RE_USE_MATERIALX = (1 << 10),
 };
 
 /** #RenderEngine.flag */
@@ -65,13 +66,13 @@ enum RenderEngineFlag {
   RE_ENGINE_CAN_DRAW = (1 << 6),
 };
 
-extern ListBase R_engines;
+extern ListBaseT<RenderEngineType> R_engines;
 
 struct RenderEngineType {
   struct RenderEngineType *next, *prev;
 
-  /* type info */
-  char idname[64]; /* best keep the same size as BKE_ST_MAXNAME. */
+  /* Type info. */
+  char idname[/*BKE_ST_MAXNAME*/ 64];
   char name[64];
   int flag;
 
@@ -136,8 +137,8 @@ struct RenderEngine {
   unsigned int layer_override;
 
   struct Render *re;
-  ListBase fullresult;
-  char text[512]; /* IMA_MAX_RENDER_TEXT_SIZE */
+  ListBaseT<RenderResult> fullresult;
+  char text[/*IMA_MAX_RENDER_TEXT_SIZE*/ 512];
 
   int resolution_x, resolution_y;
 
@@ -161,7 +162,7 @@ struct RenderEngine {
   void *update_render_passes_data;
 
   /* GPU context. */
-  void *system_gpu_context; /* WindowManager GPU context -> GHOSTContext. */
+  GHOST_IContext *system_gpu_context; /* WindowManager GPU context -> GHOSTContext. */
   ThreadMutex blender_gpu_context_mutex;
   bool use_drw_render_context;
   struct GPUContext *blender_gpu_context;
@@ -271,17 +272,12 @@ void RE_engine_gpu_context_unlock(struct RenderEngine *engine);
 
 /* Engine Types */
 
-void RE_engines_init(void);
-void RE_engines_exit(void);
+void RE_engines_init();
+void RE_engines_exit();
 void RE_engines_register(RenderEngineType *render_type);
 
-/**
- * Return true if the RenderEngineType has native support for direct loading of Alembic data. For
- * Cycles, this also checks that the experimental feature set is enabled.
- */
-bool RE_engine_supports_alembic_procedural(const RenderEngineType *render_type, Scene *scene);
-
 RenderEngineType *RE_engines_find(const char *idname);
+bool RE_engines_is_registered(const char *idname);
 
 const rcti *RE_engine_get_current_tiles(struct Render *re, int *r_total_tiles);
 struct RenderData *RE_engine_get_render_data(struct Render *re);
@@ -294,3 +290,5 @@ void RE_engine_free_blender_memory(struct RenderEngine *engine);
 void RE_engine_tile_highlight_set(
     struct RenderEngine *engine, int x, int y, int width, int height, bool highlight);
 void RE_engine_tile_highlight_clear_all(struct RenderEngine *engine);
+
+}  // namespace blender

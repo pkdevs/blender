@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "draw_view_info.hh"
+#include "draw_view_infos.hh"
 
 #include "draw_view_lib.glsl"
 
@@ -23,23 +23,15 @@ SHADER_LIBRARY_CREATE_INFO(draw_resource_id_varying)
 uint drw_resource_id_raw()
 {
 #if defined(GPU_VERTEX_SHADER)
-#  if defined(RESOURCE_ID_FALLBACK)
-#    ifdef WITH_CUSTOM_IDS
-  uint id = in_resource_id.x;
-#    else
-  uint id = in_resource_id;
-#    endif
+#  ifdef WITH_CUSTOM_IDS
+  uint id = res_id_with_custom_id_buf[gpu_BaseInstance + gl_InstanceID].x;
 #  else
-#    ifdef WITH_CUSTOM_IDS
-  uint id = resource_id_buf[gpu_BaseInstance + gl_InstanceID].x;
-#    else
-  uint id = resource_id_buf[gpu_BaseInstance + gl_InstanceID];
-#    endif
+  uint id = res_id_buf[gpu_BaseInstance + gl_InstanceID];
 #  endif
   return id;
 
-#elif defined(GPU_FRAGMENT_SHADER) || defined(GPU_LIBRARY_SHADER)
-  return drw_ResourceID_iface.resource_index;
+#elif (defined(GPU_FRAGMENT_SHADER) || defined(GPU_LIBRARY_SHADER)) && defined(RESOURCE_ID_VARYING)
+  return drw_ResourceID_iface.resource_id;
 #endif
   return 0;
 }
@@ -53,12 +45,8 @@ uint drw_custom_id()
 {
 #ifdef WITH_CUSTOM_IDS
 #  if defined(GPU_VERTEX_SHADER)
-#    if defined(RESOURCE_ID_FALLBACK)
-  return in_resource_id.y;
-#    else
   uint inst_id = gpu_BaseInstance + gl_InstanceID;
-  return resource_id_buf[gpu_BaseInstance + gl_InstanceID].y;
-#    endif
+  return res_id_with_custom_id_buf[gpu_BaseInstance + gl_InstanceID].y;
 #  endif
 #endif
   return 0;
@@ -66,11 +54,13 @@ uint drw_custom_id()
 
 float4x4 drw_modelmat()
 {
-  return drw_matrix_buf[drw_resource_id()].model;
+  const auto &matrix_buf = buffer_get(draw_modelmat_common, drw_matrix_buf);
+  return matrix_buf[drw_resource_id()].model;
 }
 float4x4 drw_modelinv()
 {
-  return drw_matrix_buf[drw_resource_id()].model_inverse;
+  const auto &matrix_buf = buffer_get(draw_modelmat_common, drw_matrix_buf);
+  return matrix_buf[drw_resource_id()].model_inverse;
 }
 
 /**

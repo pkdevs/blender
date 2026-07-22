@@ -8,10 +8,10 @@
 
 #include <cstdlib>
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 
 #include "BKE_unit.hh"
@@ -37,17 +37,18 @@ namespace blender::ed::transform {
 static void transdata_elem_trackball(const TransInfo *t,
                                      const TransDataContainer *tc,
                                      TransData *td,
+                                     TransDataExtension *td_ext,
                                      const float axis[3],
                                      const float angle,
                                      const float mat_final[3][3])
 {
   float mat_buf[3][3];
-  const float(*mat)[3] = mat_final;
+  const float (*mat)[3] = mat_final;
   if (t->flag & T_PROP_EDIT) {
     axis_angle_normalized_to_mat3(mat_buf, axis, td->factor * angle);
     mat = mat_buf;
   }
-  ElementRotation(t, tc, td, mat, t->around);
+  ElementRotation(t, tc, td, td_ext, mat, t->around);
 }
 
 static void applyTrackballValue_calc_axis_angle(const TransInfo *t,
@@ -74,10 +75,11 @@ static void applyTrackballValue(TransInfo *t, const float axis[3], const float a
     threading::parallel_for(IndexRange(tc->data_len), 1024, [&](const IndexRange range) {
       for (const int i : range) {
         TransData *td = &tc->data[i];
+        TransDataExtension *td_ext = tc->data_ext ? &tc->data_ext[i] : nullptr;
         if (td->flag & TD_SKIP) {
           continue;
         }
-        transdata_elem_trackball(t, tc, td, axis, angle, mat_final);
+        transdata_elem_trackball(t, tc, td, td_ext, axis, angle, mat_final);
       }
     });
   }
@@ -102,24 +104,24 @@ static void applyTrackball(TransInfo *t)
 
     outputNumInput(&(t->num), c, t->scene->unit);
 
-    ofs += BLI_snprintf_rlen(str + ofs,
-                             sizeof(str) - ofs,
-                             IFACE_("Trackball: %s %s %s"),
-                             &c[0],
-                             &c[NUM_STR_REP_LEN],
-                             t->proptext);
+    ofs += BLI_snprintf_utf8_rlen(str + ofs,
+                                  sizeof(str) - ofs,
+                                  IFACE_("Trackball: %s %s %s"),
+                                  &c[0],
+                                  &c[NUM_STR_REP_LEN],
+                                  t->proptext);
   }
   else {
-    ofs += BLI_snprintf_rlen(str + ofs,
-                             sizeof(str) - ofs,
-                             IFACE_("Trackball: %.2f %.2f %s"),
-                             RAD2DEGF(phi[0]),
-                             RAD2DEGF(phi[1]),
-                             t->proptext);
+    ofs += BLI_snprintf_utf8_rlen(str + ofs,
+                                  sizeof(str) - ofs,
+                                  IFACE_("Trackball: %.2f %.2f %s"),
+                                  RAD2DEGF(phi[0]),
+                                  RAD2DEGF(phi[1]),
+                                  t->proptext);
   }
 
   if (t->flag & T_PROP_EDIT_ALL) {
-    ofs += BLI_snprintf_rlen(
+    ofs += BLI_snprintf_utf8_rlen(
         str + ofs, sizeof(str) - ofs, IFACE_(" Proportional size: %.2f"), t->prop_size);
   }
 
@@ -153,7 +155,7 @@ static void initTrackball(TransInfo *t, wmOperator * /*op*/)
 
   if (transform_mode_affect_only_locations(t)) {
     WorkspaceStatus status(t->context);
-    status.item(TIP_("Transform is set to only affect location"), ICON_ERROR);
+    status.item(TIP_("Transform is set to only affect location"), ICON_STATUS_WARNING_FILLED);
     initMouseInputMode(t, &t->mouse, INPUT_ERROR);
   }
   else {
@@ -162,10 +164,10 @@ static void initTrackball(TransInfo *t, wmOperator * /*op*/)
 
   t->idx_max = 1;
   t->num.idx_max = 1;
-  t->snap[0] = DEG2RAD(5.0);
-  t->snap[1] = DEG2RAD(1.0);
+  t->increment = float3(DEG2RAD(5.0));
+  t->increment_precision = 0.2f;
 
-  copy_v3_fl(t->num.val_inc, t->snap[1]);
+  copy_v3_fl(t->num.val_inc, t->increment[0] * t->increment_precision);
   t->num.unit_sys = t->scene->unit.system;
   t->num.unit_use_radians = (t->scene->unit.system_rotation == USER_UNIT_ROT_RADIANS);
   t->num.unit_type[0] = B_UNIT_ROTATION;

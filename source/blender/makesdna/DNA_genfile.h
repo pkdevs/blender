@@ -11,8 +11,6 @@
 
 #include "intern/dna_utils.h"
 
-struct SDNA;
-
 /**
  * DNAstr contains the prebuilt SDNA structure defining the layouts of the types
  * used by this version of Blender. It is defined in a file dna.c, which is
@@ -22,14 +20,19 @@ extern const unsigned char DNAstr[];
 /** Length of DNAstr. */
 extern const int DNAlen;
 
+namespace blender {
+
+struct SDNA;
+
 /**
  * Primitive (non-struct, non-pointer/function/array) types,
+ *
+ * NOTE: this is endianness-sensitive.
  * \warning Don't change these values!
- * Currently changes here will work on native endianness,
- * however #DNA_struct_switch_endian currently checks these
- * hard-coded values against those from old files.
+ * Currently changes here will work on native endianness, however before 5.0,
+ * #DNA_struct_switch_endian used to check these hard-coded values against those from old files.
  */
-typedef enum eSDNA_Type {
+enum eSDNA_Type {
   SDNA_TYPE_CHAR = 0,
   SDNA_TYPE_UCHAR = 1,
   SDNA_TYPE_SHORT = 2,
@@ -39,20 +42,18 @@ typedef enum eSDNA_Type {
   /* SDNA_TYPE_ULONG    = 6, */ /* deprecated (use as int) */
   SDNA_TYPE_FLOAT = 7,
   SDNA_TYPE_DOUBLE = 8,
-/* ,SDNA_TYPE_VOID = 9 */
-/* define so switch statements don't complain */
-#define SDNA_TYPE_VOID 9
-  SDNA_TYPE_INT64 = 10,
-  SDNA_TYPE_UINT64 = 11,
+  SDNA_TYPE_INT64 = 9,
+  SDNA_TYPE_UINT64 = 10,
+  SDNA_TYPE_VOID = 11,
   SDNA_TYPE_INT8 = 12,
   /**
-   * Type used for untyped raw bytes buffers (written by #BLO_write_raw and read by
-   * #BLO_read_data_address).
+   * Type used for untyped raw bytes buffers (written by #BlendWriter::write_raw and read by
+   * #BLO_read_raw_address).
    *
    * Technically, it also covers all 'raw data' types above.
    */
   SDNA_TYPE_RAW_DATA = 13,
-} eSDNA_Type;
+};
 
 /**
  * For use with #DNA_struct_reconstruct & #DNA_struct_get_compareflags
@@ -61,8 +62,7 @@ enum eSDNA_StructCompare {
   /* Struct has disappeared
    * (values of this struct type will not be loaded by the current Blender) */
   SDNA_CMP_REMOVED = 0,
-  /* Struct is the same
-   * (can be loaded with straight memory copy after any necessary endian conversion) */
+  /* Struct is the same (can be loaded with straight memory copy). */
   SDNA_CMP_EQUAL = 1,
   /* Struct is different in some way
    * (needs to be copied/converted field by field) */
@@ -74,19 +74,11 @@ enum eSDNA_StructCompare {
 /**
  * Constructs and returns a decoded SDNA structure from the given encoded SDNA data block.
  */
-struct SDNA *DNA_sdna_from_data(const void *data,
-                                int data_len,
-                                bool do_endian_swap,
-                                bool data_alloc,
-                                bool do_alias,
-                                const char **r_error_message);
-void DNA_sdna_free(struct SDNA *sdna);
+std::unique_ptr<SDNA> DNA_sdna_from_data(
+    const void *data, int data_len, bool data_alloc, bool do_alias, const char **r_error_message);
 
 /* Access for current Blender versions SDNA. */
-void DNA_sdna_current_init(void);
-/* borrowed reference */
-const struct SDNA *DNA_sdna_current_get(void);
-void DNA_sdna_current_free(void);
+const SDNA *DNA_sdna_current_get();
 
 struct DNA_ReconstructInfo;
 /**
@@ -105,46 +97,38 @@ void DNA_reconstruct_info_free(struct DNA_ReconstructInfo *reconstruct_info);
  * \return the index of the struct or -1 on failure.
  */
 int DNA_struct_find_index_with_alias_ex(const struct SDNA *sdna,
-                                        const char *str,
+                                        StringRef str,
                                         unsigned int *struct_index_last);
 /** \note prefer #DNA_struct_find_with_alias_ex unless there is a good reason not to. */
 int DNA_struct_find_index_without_alias_ex(const struct SDNA *sdna,
-                                           const char *str,
+                                           StringRef str,
                                            unsigned int *struct_index_last);
 /**
  * \return the index of the struct or -1 on failure.
  */
-int DNA_struct_find_with_alias(const struct SDNA *sdna, const char *str);
+int DNA_struct_find_with_alias(const struct SDNA *sdna, StringRef str);
 /** \note prefer #DNA_struct_find_with_alias unless there is a good reason not to. */
-int DNA_struct_find_index_without_alias(const struct SDNA *sdna, const char *str);
+int DNA_struct_find_index_without_alias(const struct SDNA *sdna, StringRef str);
 
 /**
  * A convenience function, the equivalent of: `DNA_struct_find_with_alias(..) != -1`
  */
-bool DNA_struct_exists_with_alias(const struct SDNA *sdna, const char *str);
+bool DNA_struct_exists_with_alias(const struct SDNA *sdna, StringRef str);
 /** \note prefer #DNA_struct_exists_with_alias unless there is a good reason not to. */
-bool DNA_struct_exists_without_alias(const struct SDNA *sdna, const char *stype);
+bool DNA_struct_exists_without_alias(const struct SDNA *sdna, StringRef stype);
 /**
  * A convenience function, the equivalent of: `DNA_struct_member_find_with_alias(..) != -1`
  */
 bool DNA_struct_member_exists_with_alias(const struct SDNA *sdna,
-                                         const char *stype,
-                                         const char *vartype,
-                                         const char *name);
+                                         StringRef stype,
+                                         StringRef vartype,
+                                         StringRef name);
 /** \note prefer #DNA_struct_exists_with_alias unless there is a good reason not to. */
 bool DNA_struct_member_exists_without_alias(const struct SDNA *sdna,
-                                            const char *stype,
-                                            const char *vartype,
-                                            const char *name);
+                                            StringRef stype,
+                                            StringRef vartype,
+                                            StringRef name);
 
-/**
- * Does endian swapping on the fields of a struct value.
- *
- * \param sdna: SDNA of the struct_nr belongs to
- * \param struct_nr: Index of struct info within sdna
- * \param data: Struct data that is to be converted
- */
-void DNA_struct_switch_endian(const struct SDNA *sdna, int struct_index, char *data);
 /**
  * Constructs and returns an array of byte flags with one element for each struct in oldsdna,
  * indicating how it compares to newsdna.
@@ -169,17 +153,17 @@ void *DNA_struct_reconstruct(const struct DNA_ReconstructInfo *reconstruct_info,
  * Always prefer aliased names where possible.
  */
 int DNA_struct_member_offset_by_name_without_alias(const struct SDNA *sdna,
-                                                   const char *stype,
-                                                   const char *vartype,
-                                                   const char *name);
+                                                   StringRef stype,
+                                                   StringRef vartype,
+                                                   StringRef name);
 /**
  * Returns the offset of the field with the specified name and type within the specified
  * struct type in #SDNA, -1 on failure.
  */
 int DNA_struct_member_offset_by_name_with_alias(const struct SDNA *sdna,
-                                                const char *stype,
-                                                const char *vartype,
-                                                const char *name);
+                                                StringRef stype,
+                                                StringRef vartype,
+                                                StringRef name);
 
 /**
  * Returns the size of struct fields of the specified type and member_index.
@@ -210,7 +194,7 @@ int DNA_struct_alignment(const struct SDNA *sdna, int struct_index);
 /**
  * Return the current (alias) type name of the given struct index.
  */
-const char *DNA_struct_identifier(struct SDNA *sdna, int struct_index);
+StringRef DNA_struct_identifier(struct SDNA *sdna, int struct_index);
 
 /**
  * Find the struct matching the given `old_type_name`, and rename its type (referenced by its
@@ -220,8 +204,8 @@ const char *DNA_struct_identifier(struct SDNA *sdna, int struct_index);
  * early 2.80 development.
  */
 bool DNA_sdna_patch_struct_by_name(struct SDNA *sdna,
-                                   const char *old_type_name,
-                                   const char *new_type_name);
+                                   StringRef old_type_name,
+                                   StringRef new_type_name);
 /**
  * Rename \a old_member_name with \a new_member_name for struct matching \a type_name.
  *
@@ -232,9 +216,9 @@ bool DNA_sdna_patch_struct_by_name(struct SDNA *sdna,
  * early 2.80 development.
  */
 bool DNA_sdna_patch_struct_member_by_name(struct SDNA *sdna,
-                                          const char *type_name,
-                                          const char *old_member_name,
-                                          const char *new_member_name);
+                                          StringRef type_name,
+                                          StringRef old_member_name,
+                                          StringRef new_member_name);
 
 void DNA_sdna_alias_data_ensure(struct SDNA *sdna);
 
@@ -246,7 +230,9 @@ void DNA_sdna_alias_data_ensure_structs_map(struct SDNA *sdna);
 
 /* For versioning, avoid verbosity selecting between with/without alias versions of functions. */
 #ifdef DNA_GENFILE_VERSIONING_MACROS
-#  define DNA_struct_exists(sdna, str) DNA_struct_exists_with_alias(sdna, str)
+#  define DNA_struct_exists(sdna, str) DNA_struct_exists_with_alias(sdna.get(), str)
 #  define DNA_struct_member_exists(sdna, stype, vartype, name) \
-    DNA_struct_member_exists_with_alias(sdna, stype, vartype, name)
+    DNA_struct_member_exists_with_alias(sdna.get(), stype, vartype, name)
 #endif
+
+}  // namespace blender

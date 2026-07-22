@@ -12,7 +12,9 @@
 
 #include <fmt/format.h>
 
-#include "BLI_string.h"
+#include "CLG_log.h"
+
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -27,6 +29,7 @@
 #include "eevee_ambient_occlusion.hh"
 #include "eevee_camera.hh"
 #include "eevee_cryptomatte.hh"
+#include "eevee_debug_shared.hh"
 #include "eevee_depth_of_field.hh"
 #include "eevee_film.hh"
 #include "eevee_gbuffer.hh"
@@ -53,18 +56,28 @@
 
 namespace blender::eevee {
 
+using UniformDataBuf = draw::UniformBuffer<UniformData>;
+using PipelineInfoBuf = draw::UniformBuffer<PipelineInfoData>;
+using RaytraceDataBuf = draw::UniformBuffer<RayTraceData>;
+
 /* Combines data from several modules to avoid wasting binding slots. */
 struct UniformDataModule {
-  UniformDataBuf data;
+  UniformDataBuf data{"UniformDataBuf"};
+  PipelineInfoBuf pipeline{"PipelineInfoBuf"};
+  RaytraceDataBuf raytrace{"RaytraceDataBuf"};
 
   void push_update()
   {
     data.push_update();
+    pipeline.push_update();
+    raytrace.push_update();
   }
 
   template<typename PassType> void bind_resources(PassType &pass)
   {
     pass.bind_ubo(UNIFORM_BUF_SLOT, &data);
+    pass.bind_ubo(PIPELINE_BUF_SLOT, &pipeline);
+    pass.bind_ubo(RAYTRACE_BUF_SLOT, &raytrace);
   }
 };
 
@@ -77,13 +90,13 @@ class Instance : public DrawEngine {
   friend MotionBlurModule;
 
   /** Debug scopes. */
+  static void *debug_scope_render_frame;
   static void *debug_scope_render_sample;
   static void *debug_scope_irradiance_setup;
   static void *debug_scope_irradiance_sample;
 
   uint64_t depsgraph_last_update_ = 0;
   bool overlays_enabled_ = false;
-  bool shaders_are_ready_ = true;
   bool skip_render_ = false;
 
   /** Info string displayed at the top of the render / viewport, or the console when baking. */
@@ -120,6 +133,8 @@ class Instance : public DrawEngine {
   VolumeProbeModule volume_probes;
   LightProbeModule light_probes;
   VolumeModule volume;
+
+  static CLG_LogRef log;
 
   /** Input data. */
   Depsgraph *depsgraph;
@@ -159,10 +174,15 @@ class Instance : public DrawEngine {
   /** True if overlays need to be displayed (only for viewport). */
   bool draw_overlays = false;
 
+  ShaderGroups loaded_shaders = ShaderGroups(0);
+  ShaderGroups needed_shaders = ShaderGroups(0);
+
   /** View-layer overrides. */
   bool use_surfaces = true;
   bool use_curves = true;
   bool use_volumes = true;
+
+  GPUSamplerFiltering anisotropic_filtering = GPU_SAMPLER_FILTERING_DEFAULT;
 
   /** Debug mode from debug value. */
   eDebugMode debug_mode = eDebugMode::DEBUG_NONE;
@@ -172,12 +192,12 @@ class Instance : public DrawEngine {
       : shaders(*ShaderModule::module_get()),
         sync(*this),
         materials(*this),
-        subsurface(*this, uniform_data.data.subsurface),
-        pipelines(*this, uniform_data.data.pipeline),
+        subsurface(*this),
+        pipelines(*this, uniform_data.pipeline),
         shadows(*this, uniform_data.data.shadow),
         lights(*this),
         ambient_occlusion(*this, uniform_data.data.ao),
-        raytracing(*this, uniform_data.data.raytrace),
+        raytracing(*this, uniform_data.raytrace),
         velocity(*this),
         motion_blur(*this),
         depth_of_field(*this),
@@ -196,10 +216,10 @@ class Instance : public DrawEngine {
         planar_probes(*this),
         volume_probes(*this),
         light_probes(*this),
-        volume(*this, uniform_data.data.volumes){};
-  ~Instance(){};
+        volume(*this, uniform_data.data.volumes) {};
+  ~Instance() override {};
 
-  blender::StringRefNull name_get() final
+  StringRefNull name_get() final
   {
     return "EEVEE";
   }
@@ -222,6 +242,11 @@ class Instance : public DrawEngine {
   void begin_sync() final;
   void object_sync(ObjectRef &ob_ref, Manager &manager) final;
   void end_sync() final;
+
+  bool is_loaded(ShaderGroups groups) const
+  {
+    return (loaded_shaders & groups) == groups;
+  }
 
   /**
    * Return true when probe pipeline is used during this sample.
@@ -264,8 +289,11 @@ class Instance : public DrawEngine {
   /* Append a new line to the info string. */
   template<typename... Args> void info_append(const char *msg, Args &&...args)
   {
-    info_ += fmt::format(fmt::runtime(msg), args...);
-    info_ += "\n";
+    std::string fmt_msg = fmt::format(fmt::runtime(msg), args...) + "\n";
+    /* Don't print the same error twice. */
+    if (info_ != fmt_msg && !BLI_str_endswith(info_.c_str(), fmt_msg.c_str())) {
+      info_ += fmt_msg;
+    }
   }
 
   /* The same as `info_append`, but `msg` will be translated.
@@ -329,30 +357,14 @@ class Instance : public DrawEngine {
            ((v3d->shading.type == OB_MATERIAL) && (v3d->overlay.flag & V3D_OVERLAY_LOOK_DEV));
   }
 
-  int get_recalc_flags(const ObjectRef &ob_ref)
+  uint get_recalc_flags(const ObjectRef &ob_ref)
   {
-    auto get_flags = [&](const ObjectRuntimeHandle &runtime) {
-      int flags = 0;
-      SET_FLAG_FROM_TEST(
-          flags, runtime.last_update_transform > depsgraph_last_update_, ID_RECALC_TRANSFORM);
-      SET_FLAG_FROM_TEST(
-          flags, runtime.last_update_geometry > depsgraph_last_update_, ID_RECALC_GEOMETRY);
-      SET_FLAG_FROM_TEST(
-          flags, runtime.last_update_shading > depsgraph_last_update_, ID_RECALC_SHADING);
-      return flags;
-    };
-
-    int flags = get_flags(*ob_ref.object->runtime);
-    if (ob_ref.dupli_parent) {
-      flags |= get_flags(*ob_ref.dupli_parent->runtime);
-    }
-
-    return flags;
+    return ob_ref.recalc_flags(depsgraph_last_update_);
   }
 
-  int get_recalc_flags(const ::World &world)
+  uint get_recalc_flags(const blender::World &world)
   {
-    return world.last_update > depsgraph_last_update_ ? int(ID_RECALC_SHADING) : 0;
+    return world.last_update > depsgraph_last_update_ ? uint(ID_RECALC_SHADING) : 0;
   }
 
  private:
@@ -362,8 +374,6 @@ class Instance : public DrawEngine {
    */
   void render_sample();
   void render_read_result(RenderLayer *render_layer, const char *view_name);
-
-  void mesh_sync(Object *ob, ObjectHandle &ob_handle);
 
   void update_eval_members();
 

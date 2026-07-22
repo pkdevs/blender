@@ -16,11 +16,14 @@
 #include <Python.h>
 #include <cstddef>
 
-#include "BLI_linklist.h"
+#include "BLI_linklist.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
+#include "BKE_asset.hh"
+#include "BKE_blender_version.h"
 #include "BKE_blendfile_link_append.hh"
 #include "BKE_context.hh"
 #include "BKE_idtype.hh"
@@ -36,7 +39,7 @@
 #include "bpy_library.hh"
 
 #include "../generic/py_capi_utils.hh"
-#include "../generic/python_compat.hh"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 #include "../generic/python_utildefines.hh"
 
 /* nifty feature. swap out strings for RNA data */
@@ -47,13 +50,92 @@
 #  include "bpy_rna.hh"
 #endif
 
+namespace blender {
+
+/* -------------------------------------------------------------------- */
+/** \name Internal Utilities
+ * \{ */
+
+struct BoolFlagPair {
+  bool value;
+  uint32_t flag;
+};
+static uint32_t bool_flag_pair_as_flag(const BoolFlagPair *bool_flags, int bool_flags_num)
+{
+  uint32_t flag = 0;
+  for (int i = 0; i < bool_flags_num; i++) {
+    BLI_assert(bool_flags[i].flag);
+    if (bool_flags[i].value) {
+      flag |= bool_flags[i].flag;
+    }
+  }
+  return flag;
+}
+
+/** \} */
+
+/* Named tuple to store BLODataBlockInfo::Library data. */
+static PyTypeObject bpy_lib_LibraryType;
+
+static PyStructSequence_Field bpy_lib_LibraryType_fields[] = {
+    {"filepath",
+     "Filepath to the library file, may be relative to the blendfile being loaded"
+     "\n\n:type: str"},
+    {"is_archive",
+     "Whether the Library data-block is an archive one (used as namespace for packed linked "
+     "data-blocks)"
+     "\n\n:type: bool"},
+    {nullptr},
+};
+
+static PyStructSequence_Desc bpy_lib_LibraryType_desc = {
+    /*name*/ "bpy_lib_library",
+    /*doc*/ "Contains information about libraries present in the loaded blendfile",
+    /*fields*/ bpy_lib_LibraryType_fields,
+    /*n_in_sequence*/ ARRAY_SIZE(bpy_lib_LibraryType_fields) - 1,
+};
+
+static PyObject *make_library_info(BLODataBlockInfo &id_info)
+{
+  PyObject *library_info;
+  int pos = 0;
+
+  library_info = PyStructSequence_New(&bpy_lib_LibraryType);
+  if (library_info == nullptr) {
+    return nullptr;
+  }
+
+  PyStructSequence_SET_ITEM(
+      library_info, pos++, PyC_UnicodeFromBytes(id_info.library_data.filepath));
+  PyStructSequence_SET_ITEM(
+      library_info,
+      pos++,
+      PyBool_FromLong((id_info.library_data.flag & LIBRARY_FLAG_IS_ARCHIVE) != 0));
+
+  BLI_assert(pos == bpy_lib_LibraryType_desc.n_in_sequence);
+
+  if (PyErr_Occurred()) [[unlikely]] {
+    Py_DECREF(library_info);
+    return nullptr;
+  }
+  return library_info;
+}
+
+/**
+ * The size to pre-allocate #BPy_Library::dict Add +1 for the "version".
+ */
+static constexpr Py_ssize_t bpy_library_dict_num = INDEX_ID_MAX + 1;
+
 struct BPy_Library {
-  PyObject_HEAD /* Required Python macro. */
-  /* Collection iterator specific parts. */
+  /** Required Python macro. */
+  PyObject_HEAD
+
+  /** The path supplied by the caller (may be relative). */
   char relpath[FILE_MAX];
-  char abspath[FILE_MAX]; /* absolute path */
+  /** The absolute path. */
+  char abspath[FILE_MAX];
   BlendHandle *blo_handle;
-  /* Referenced by `blo_handle`, so stored here to keep alive for long enough. */
+  /** Referenced by `blo_handle`, so stored here to keep alive for long enough. */
   ReportList reports;
   BlendFileReadReport bf_reports;
 
@@ -62,9 +144,19 @@ struct BPy_Library {
   bool create_liboverrides;
   eBKELibLinkOverride liboverride_flags;
 
+  /**
+   * A dictionary, accessed via attributes (so keys are strings).
+   * - Stores the ID types ("meshes", "objects", etc...).
+   * - Also has a "version" attribute to support accessing the blender version.
+   *
+   * Assigned a pre-sized dictionary using #BPY_LIBRARY_DICT_NUM_INIT item.
+   * this will always have these the ID names and some additional slots filled.
+   */
   PyObject *dict;
-  /* Borrowed reference to the `bmain`, taken from the RNA instance of #RNA_BlendDataLibraries.
-   * Defaults to #G.main, Otherwise use a temporary #Main when `bmain_is_temp` is true. */
+  /**
+   * Borrowed reference to the `bmain`, taken from the RNA instance of #RNA_BlendDataLibraries.
+   * Defaults to #G.main, Otherwise use a temporary #Main when `bmain_is_temp` is true.
+   */
   Main *bmain;
   bool bmain_is_temp;
 };
@@ -85,9 +177,9 @@ static PyObject *bpy_lib_dir(BPy_Library *self);
 #endif
 
 static PyMethodDef bpy_lib_methods[] = {
-    {"__enter__", (PyCFunction)bpy_lib_enter, METH_NOARGS},
-    {"__exit__", (PyCFunction)bpy_lib_exit, METH_VARARGS},
-    {"__dir__", (PyCFunction)bpy_lib_dir, METH_NOARGS},
+    {"__enter__", reinterpret_cast<PyCFunction>(bpy_lib_enter), METH_NOARGS},
+    {"__exit__", reinterpret_cast<PyCFunction>(bpy_lib_exit), METH_VARARGS},
+    {"__dir__", reinterpret_cast<PyCFunction>(bpy_lib_dir), METH_NOARGS},
     {nullptr} /* sentinel */
 };
 
@@ -110,7 +202,7 @@ static PyTypeObject bpy_lib_Type = {
     /*tp_name*/ "bpy_lib",
     /*tp_basicsize*/ sizeof(BPy_Library),
     /*tp_itemsize*/ 0,
-    /*tp_dealloc*/ (destructor)bpy_lib_dealloc,
+    /*tp_dealloc*/ reinterpret_cast<destructor>(bpy_lib_dealloc),
     /*tp_vectorcall_offset*/ 0,
     /*tp_getattr*/ nullptr,
     /*tp_setattr*/ nullptr,
@@ -162,31 +254,69 @@ PyDoc_STRVAR(
     bpy_lib_load_doc,
     ".. method:: load("
     "filepath, "
+    "*, "
     "link=False, "
+    "pack=False, "
     "relative=False, "
+    "set_fake=False, "
+    "recursive=False, "
+    "reuse_local_id=False, "
     "assets_only=False, "
+    "clear_asset_data=False, "
     "create_liboverrides=False, "
     "reuse_liboverrides=False, "
     "create_liboverrides_runtime=False)\n"
     "\n"
-    "   Returns a context manager which exposes 2 library objects on entering.\n"
-    "   Each object has attributes matching bpy.data which are lists of strings to be linked.\n"
+    "   Returns a context manager which exposes a pair of library objects (input and output)\n"
+    "   on entering.\n"
     "\n"
-    "   :arg filepath: The path to a blend file.\n"
+    "   The input contains the data-blocks available in the loaded blend-file library and should\n"
+    "   be treated as read-only.\n"
+    "   Data-block names added to the output are linked/appended when the context exits.\n"
+    "\n"
+    "   Each library object contains:\n"
+    "      - Attributes matching ``bpy.data``, which are lists of strings representing linkable\n"
+    "        data-blocks.\n"
+    "      - A ``libraries`` attribute, which for the input is a list of all other libraries\n"
+    "        used by the loaded one, as named tuples (``filepath``, ``is_archive``). The\n"
+    "        filepath may be absolute, or relative to the loaded blend-file. The output\n"
+    "        ``libraries`` attribute is always ``None``.\n"
+    "      - A ``version`` attribute, representing the version of the loaded library blend-file\n"
+    "        (for the input) or the version of the current Blender (for the output).\n"
+    "\n"
+    "   Notes:\n"
+    "      - Not all data-block types are linkable (e.g. WindowManager, Library, ...).\n"
+    "      - Packed linked data-blocks are not linkable and are not listed in the input\n"
+    "        ``libraries`` attribute.\n"
+    "\n"
+    "   :param filepath: The path to a blend file.\n"
     "   :type filepath: str | bytes\n"
-    "   :arg link: When False reference to the original file is lost.\n"
+    "   :param link: When False reference to the original file is lost.\n"
     "   :type link: bool\n"
-    "   :arg relative: When True the path is stored relative to the open blend file.\n"
+    "   :param pack: If True, and ``link`` is also True, pack linked data-blocks into the current "
+    "blend-file.\n"
+    "   :type pack: bool\n"
+    "   :param relative: When True the path is stored relative to the open blend file.\n"
     "   :type relative: bool\n"
-    "   :arg assets_only: If True, only list data-blocks marked as assets.\n"
+    "   :param set_fake: If True, set fake user on appended IDs.\n"
+    "   :type set_fake: bool\n"
+    "   :param recursive: If True, also make indirect dependencies of appended libraries local.\n"
+    "   :type recursive: bool\n"
+    "   :param reuse_local_id: If True,"
+    "try to re-use previously appended matching ID on new append.\n"
+    "   :type reuse_local_id: bool\n"
+    "   :param assets_only: If True, only list data-blocks marked as assets.\n"
     "   :type assets_only: bool\n"
-    "   :arg create_liboverrides: If True and ``link`` is True, liboverrides will\n"
+    "   :param clear_asset_data: If True, "
+    "clear the asset data on append (it is always kept for linked data).\n"
+    "   :type clear_asset_data: bool\n"
+    "   :param create_liboverrides: If True and ``link`` is True, liboverrides will\n"
     "      be created for linked data.\n"
     "   :type create_liboverrides: bool\n"
-    "   :arg reuse_liboverrides: If True and ``create_liboverride`` is True,\n"
+    "   :param reuse_liboverrides: If True and ``create_liboverride`` is True,\n"
     "      search for existing liboverride first.\n"
     "   :type reuse_liboverrides: bool\n"
-    "   :arg create_liboverrides_runtime: If True and ``create_liboverride`` is True,\n"
+    "   :param create_liboverrides_runtime: If True and ``create_liboverride`` is True,\n"
     "      create (or search for existing) runtime liboverride.\n"
     "   :type create_liboverrides_runtime: bool\n");
 static PyObject *bpy_lib_load(BPy_PropertyRNA *self, PyObject *args, PyObject *kw)
@@ -195,28 +325,58 @@ static PyObject *bpy_lib_load(BPy_PropertyRNA *self, PyObject *args, PyObject *k
   Main *bmain = static_cast<Main *>(self->ptr->data); /* Typically #G_MAIN */
   BPy_Library *ret;
   PyC_UnicodeAsBytesAndSize_Data filepath_data = {nullptr};
-  bool is_rel = false, is_link = false, use_assets_only = false;
-  bool create_liboverrides = false, reuse_liboverrides = false,
-       create_liboverrides_runtime = false;
+
+  /* #BPy_Library::flag
+   *
+   * - #BLO_LIBLINK_OBDATA_INSTANCE: The caller must manage instancing.
+   * - #BLO_LIBLINK_COLLECTION_INSTANCE: The caller must manage instancing.
+   */
+  struct {
+    BoolFlagPair is_link = {false, FILE_LINK};
+    BoolFlagPair is_pack = {false, BLO_LIBLINK_PACK};
+    BoolFlagPair is_relative = {false, FILE_RELPATH};
+    BoolFlagPair set_fake = {false, BLO_LIBLINK_APPEND_SET_FAKEUSER};
+    BoolFlagPair recursive = {false, BLO_LIBLINK_APPEND_RECURSIVE};
+    BoolFlagPair reuse_local_id = {false, BLO_LIBLINK_APPEND_LOCAL_ID_REUSE};
+    BoolFlagPair assets_only = {false, FILE_ASSETS_ONLY};
+    BoolFlagPair clear_asset_data = {false, BLO_LIBLINK_APPEND_ASSET_DATA_CLEAR};
+  } flag_vars;
+
+  bool create_liboverrides = false;
+
+  /* #BPy_Library::liboverride_flags */
+  struct {
+    BoolFlagPair reuse_liboverrides = {false, BKE_LIBLINK_OVERRIDE_USE_EXISTING_LIBOVERRIDES};
+    BoolFlagPair create_liboverrides_runtime = {false, BKE_LIBLINK_OVERRIDE_CREATE_RUNTIME};
+  } liboverride_flag_vars;
 
   static const char *_keywords[] = {
       "filepath",
       "link",
+      "pack",
       "relative",
+      "set_fake",
+      "recursive",
+      "reuse_local_id",
       "assets_only",
+      "clear_asset_data",
       "create_liboverrides",
       "reuse_liboverrides",
       "create_liboverrides_runtime",
       nullptr,
   };
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "O&" /* `filepath` */
-      /* Optional keyword only arguments. */
+      /* Optional, keyword only arguments. */
       "|$"
       "O&" /* `link` */
+      "O&" /* `pack` */
       "O&" /* `relative` */
+      "O&" /* `set_fake` */
+      "O&" /* `recursive` */
+      "O&" /* `reuse_local_id` */
       "O&" /* `assets_only` */
+      "O&" /* `clear_asset_data` */
       "O&" /* `create_liboverrides` */
       "O&" /* `reuse_liboverrides` */
       "O&" /* `create_liboverrides_runtime` */
@@ -230,79 +390,159 @@ static PyObject *bpy_lib_load(BPy_PropertyRNA *self, PyObject *args, PyObject *k
                                         PyC_ParseUnicodeAsBytesAndSize,
                                         &filepath_data,
                                         PyC_ParseBool,
-                                        &is_link,
+                                        &flag_vars.is_link,
                                         PyC_ParseBool,
-                                        &is_rel,
+                                        &flag_vars.is_pack,
                                         PyC_ParseBool,
-                                        &use_assets_only,
+                                        &flag_vars.is_relative,
+                                        PyC_ParseBool,
+                                        &flag_vars.set_fake,
+                                        PyC_ParseBool,
+                                        &flag_vars.recursive,
+                                        PyC_ParseBool,
+                                        &flag_vars.reuse_local_id,
+                                        PyC_ParseBool,
+                                        &flag_vars.assets_only,
+                                        PyC_ParseBool,
+                                        &flag_vars.clear_asset_data,
                                         PyC_ParseBool,
                                         &create_liboverrides,
                                         PyC_ParseBool,
-                                        &reuse_liboverrides,
+                                        &liboverride_flag_vars.reuse_liboverrides,
                                         PyC_ParseBool,
-                                        &create_liboverrides_runtime))
+                                        &liboverride_flag_vars.create_liboverrides_runtime))
   {
     return nullptr;
   }
 
-  if (!is_link && create_liboverrides) {
-    PyErr_SetString(PyExc_ValueError, "`link` is False but `create_liboverrides` is True");
-    return nullptr;
+  const char *blendfile_path = BKE_main_blendfile_path(bmain);
+  char filepath_rel[FILE_MAX];
+  char filepath_abs[FILE_MAX];
+
+  STRNCPY(filepath_rel, filepath_data.value);
+  STRNCPY(filepath_abs, filepath_rel);
+  BLI_path_abs(filepath_abs, blendfile_path);
+  Py_XDECREF(filepath_data.value_coerce);
+
+  if (blendfile_path[0]) {
+    /* NOTE: intentionally leave `filepath_abs` and only use normalizing for comparison.
+     * It's important that this comparison matches read-files logic for matching paths.
+     * See the logic inside #BKE_blendfile_link.
+     *
+     * This means it's not necessary to check if the paths are *actually* the same.
+     * It's possible to load from this file if a user makes a symbolic-link - for example.
+     * See #140929. */
+    char filepath_abs_normalized[FILE_MAX];
+    STRNCPY(filepath_abs_normalized, filepath_abs);
+    BLI_path_normalize(filepath_abs_normalized);
+    if (BLI_path_cmp(filepath_abs_normalized, blendfile_path) == 0) {
+      PyErr_SetString(PyExc_ValueError, "Cannot load from the current blend file.");
+      return nullptr;
+    }
   }
-  if (!create_liboverrides && reuse_liboverrides) {
-    PyErr_SetString(PyExc_ValueError,
-                    "`create_liboverrides` is False but `reuse_liboverrides` is True");
-    return nullptr;
+
+  if (flag_vars.is_link.value) {
+    /* Link. */
+    if (flag_vars.set_fake.value) {
+      PyErr_SetString(PyExc_ValueError, "`link` must be False if `set_fake` is True");
+      return nullptr;
+    }
+    if (flag_vars.recursive.value) {
+      PyErr_SetString(PyExc_ValueError, "`link` must be False if `recursive` is True");
+      return nullptr;
+    }
+    if (flag_vars.reuse_local_id.value) {
+      PyErr_SetString(PyExc_ValueError, "`link` must be False if `reuse_local_id` is True");
+      return nullptr;
+    }
+    if (flag_vars.clear_asset_data.value) {
+      PyErr_SetString(PyExc_ValueError, "`link` must be False if `clear_asset_data` is True");
+      return nullptr;
+    }
   }
-  if (!create_liboverrides && create_liboverrides_runtime) {
-    PyErr_SetString(PyExc_ValueError,
-                    "`create_liboverrides` is False but `create_liboverrides_runtime` is True");
-    return nullptr;
+  else {
+    /* Append. */
+    if (create_liboverrides) {
+      PyErr_SetString(PyExc_ValueError, "`link` is False but `create_liboverrides` is True");
+      return nullptr;
+    }
+    if (flag_vars.is_pack.value) {
+      PyErr_SetString(PyExc_ValueError, "`pack` must be False if `link` is False");
+      return nullptr;
+    }
+  }
+
+  if (create_liboverrides) {
+    /* Library overrides. */
+    if (flag_vars.is_pack.value) {
+      PyErr_SetString(PyExc_ValueError, "`create_liboverrides` must be False if `pack` is True");
+      return nullptr;
+    }
+  }
+  else {
+    /* Library overrides (disabled). */
+    if (liboverride_flag_vars.reuse_liboverrides.value) {
+      PyErr_SetString(PyExc_ValueError,
+                      "`create_liboverrides` is False but `reuse_liboverrides` is True");
+      return nullptr;
+    }
+    if (liboverride_flag_vars.create_liboverrides_runtime.value) {
+      PyErr_SetString(PyExc_ValueError,
+                      "`create_liboverrides` is False but `create_liboverrides_runtime` is True");
+      return nullptr;
+    }
   }
 
   ret = PyObject_New(BPy_Library, &bpy_lib_Type);
 
-  STRNCPY(ret->relpath, filepath_data.value);
-  Py_XDECREF(filepath_data.value_coerce);
-
-  STRNCPY(ret->abspath, ret->relpath);
-  BLI_path_abs(ret->abspath, BKE_main_blendfile_path(bmain));
+  STRNCPY(ret->relpath, filepath_rel);
+  STRNCPY(ret->abspath, filepath_abs);
 
   ret->bmain = bmain;
   ret->bmain_is_temp = (bmain != bmain_base);
 
   ret->blo_handle = nullptr;
-  ret->flag = ((is_link ? FILE_LINK : 0) | (is_rel ? FILE_RELPATH : 0) |
-               (use_assets_only ? FILE_ASSETS_ONLY : 0));
+
+  ret->flag = bool_flag_pair_as_flag(reinterpret_cast<const BoolFlagPair *>(&flag_vars),
+                                     sizeof(flag_vars) / sizeof(BoolFlagPair));
+
   ret->create_liboverrides = create_liboverrides;
-  ret->liboverride_flags = eBKELibLinkOverride(
-      create_liboverrides ?
-          ((reuse_liboverrides ? BKE_LIBLINK_OVERRIDE_USE_EXISTING_LIBOVERRIDES : 0) |
-           (create_liboverrides_runtime ? BKE_LIBLINK_OVERRIDE_CREATE_RUNTIME : 0)) :
-          0);
+  ret->liboverride_flags = create_liboverrides ?
+                               eBKELibLinkOverride(bool_flag_pair_as_flag(
+                                   reinterpret_cast<const BoolFlagPair *>(&liboverride_flag_vars),
+                                   sizeof(liboverride_flag_vars) / sizeof(BoolFlagPair))) :
+                               eBKELibLinkOverride(0);
 
-  ret->dict = _PyDict_NewPresized(INDEX_ID_MAX);
+  ret->dict = _PyDict_NewPresized(bpy_library_dict_num);
 
-  return (PyObject *)ret;
+  return reinterpret_cast<PyObject *>(ret);
 }
 
-static PyObject *_bpy_names(BPy_Library *self, int blocktype)
+static PyObject *_bpy_ids_info(BPy_Library *self, int blocktype)
 {
-  PyObject *list;
-  LinkNode *l, *names;
-  int totnames;
+  int ids_info_num;
+  LinkNode *ids_info = BLO_blendhandle_get_datablock_info(
+      self->blo_handle, blocktype, (self->flag & FILE_ASSETS_ONLY) != 0, &ids_info_num);
+  PyObject *list = PyList_New(ids_info_num);
 
-  names = BLO_blendhandle_get_datablock_names(
-      self->blo_handle, blocktype, (self->flag & FILE_ASSETS_ONLY) != 0, &totnames);
-  list = PyList_New(totnames);
-
-  if (names) {
-    int counter = 0;
-    for (l = names; l; l = l->next) {
-      PyList_SET_ITEM(list, counter, PyUnicode_FromString((char *)l->link));
-      counter++;
+  if (ids_info) {
+    int i = 0;
+    for (LinkNode *l = ids_info; l; l = l->next, i++) {
+      BLODataBlockInfo *id_info = static_cast<BLODataBlockInfo *>(l->link);
+      if (blocktype == ID_LI) {
+        PyList_SET_ITEM(list, i, make_library_info(*id_info));
+        continue;
+      }
+      PyList_SET_ITEM(list, i, PyUnicode_FromString(id_info->name));
     }
-    BLI_linklist_freeN(names); /* free linklist *and* each node's data */
+    /* free linklist *and* each node's data */
+    BLI_linklist_free(ids_info, [](void *link) -> void {
+      BLODataBlockInfo *id_info = static_cast<BLODataBlockInfo *>(link);
+      if (id_info->free_asset_data) {
+        BKE_asset_metadata_free(&id_info->asset_data);
+      }
+      MEM_delete(id_info);
+    });
   }
 
   return list;
@@ -310,13 +550,18 @@ static PyObject *_bpy_names(BPy_Library *self, int blocktype)
 
 static PyObject *bpy_lib_enter(BPy_Library *self)
 {
-  PyObject *ret;
-  BPy_Library *self_from;
-  PyObject *from_dict = _PyDict_NewPresized(INDEX_ID_MAX);
+  /* The dummy returned as `data_from` has no `bmain` to link into.
+   * A non-null `blo_handle` means this context is already entered, re-entering
+   * would leak the handle. */
+  if ((self->bmain == nullptr) || (self->blo_handle != nullptr)) [[unlikely]] {
+    PyErr_SetString(PyExc_RuntimeError, "This context manager cannot be entered");
+    return nullptr;
+  }
+
   ReportList *reports = &self->reports;
   BlendFileReadReport *bf_reports = &self->bf_reports;
 
-  BKE_reports_init(reports, RPT_STORE);
+  BKE_reports_init(reports, RPT_STORE | RPT_PRINT_HANDLED_BY_OWNER);
   memset(bf_reports, 0, sizeof(*bf_reports));
   bf_reports->reports = reports;
 
@@ -329,40 +574,81 @@ static PyObject *bpy_lib_enter(BPy_Library *self)
     return nullptr;
   }
 
+  PyObject *dict_src = _PyDict_NewPresized(bpy_library_dict_num);
+  PyObject *dict_dst = self->dict; /* Only for convenience (always `self->dict`). */
+  int dict_num_offset = 0;
+
   int i = 0, code;
   while ((code = BKE_idtype_idcode_iter_step(&i))) {
-    if (BKE_idtype_idcode_is_linkable(code)) {
-      const char *name_plural = BKE_idtype_idcode_to_name_plural(code);
-      PyObject *str = PyUnicode_FromString(name_plural);
-      PyObject *item;
-
-      PyDict_SetItem(self->dict, str, item = PyList_New(0));
-      Py_DECREF(item);
-      PyDict_SetItem(from_dict, str, item = _bpy_names(self, code));
-      Py_DECREF(item);
-
-      Py_DECREF(str);
+    const bool is_library = (code == ID_LI);
+    if (!is_library && !BKE_idtype_idcode_is_linkable(code)) {
+      dict_num_offset += 1;
+      continue;
     }
+    const char *name_plural = BKE_idtype_idcode_to_name_plural(code);
+    PyObject *str = PyUnicode_FromString(name_plural);
+    PyObject *item;
+
+    /* Do not add 'libraries' entry in output data, this would make no sense currently. */
+    if (is_library) {
+      PyDict_SetItem(dict_dst, str, Py_None);
+    }
+    else {
+      PyDict_SetItem(dict_dst, str, item = PyList_New(0));
+      Py_DECREF(item);
+    }
+    PyDict_SetItem(dict_src, str, item = _bpy_ids_info(self, code));
+    Py_DECREF(item);
+
+    Py_DECREF(str);
   }
 
-  /* create a dummy */
-  self_from = PyObject_New(BPy_Library, &bpy_lib_Type);
-  STRNCPY(self_from->relpath, self->relpath);
-  STRNCPY(self_from->abspath, self->abspath);
+  /* Create a dummy. */
+  BPy_Library *self_src = PyObject_New(BPy_Library, &bpy_lib_Type);
+  STRNCPY(self_src->relpath, self->relpath);
+  STRNCPY(self_src->abspath, self->abspath);
 
-  self_from->blo_handle = nullptr;
-  self_from->flag = 0;
-  self_from->create_liboverrides = false;
-  self_from->liboverride_flags = BKE_LIBLINK_OVERRIDE_INIT;
-  self_from->dict = from_dict; /* owns the dict */
+  /* Library blend-file version. */
+  {
+    PyObject *version;
+    PyObject *identifier = PyUnicode_FromString("version");
+    int3 blendfile_version;
 
-  /* return pair */
-  ret = PyTuple_New(2);
-  PyTuple_SET_ITEMS(ret, (PyObject *)self_from, (PyObject *)self);
-  Py_INCREF(self);
+    /* Source. */
+    blendfile_version = BLO_blendhandle_get_version(self->blo_handle);
+    version = PyC_Tuple_PackArray_I32(&blendfile_version[0], 3);
+    PyDict_SetItem(dict_src, identifier, version);
+    Py_DECREF(version);
+
+    /* Destination. */
+    blendfile_version = int3(
+        BLENDER_FILE_VERSION / 100, BLENDER_FILE_VERSION % 100, BLENDER_FILE_SUBVERSION);
+    version = PyC_Tuple_PackArray_I32(&blendfile_version[0], 3);
+    PyDict_SetItem(dict_dst, identifier, version);
+    Py_DECREF(version);
+
+    Py_DECREF(identifier);
+  }
+
+  self_src->bmain = nullptr;
+  self_src->bmain_is_temp = false;
+  self_src->blo_handle = nullptr;
+  self_src->flag = 0;
+  self_src->create_liboverrides = false;
+  self_src->liboverride_flags = BKE_LIBLINK_OVERRIDE_INIT;
+  self_src->dict = dict_src; /* owns the dict */
+
+  /* While it's not a bug if the sizes differ, the size is expected to match.
+   * Ensure `bpy_library_dict_num` gets updated when members are added. */
+  BLI_assert(PyDict_GET_SIZE(self_src->dict) + dict_num_offset == bpy_library_dict_num);
+  BLI_assert(PyDict_GET_SIZE(self->dict) + dict_num_offset == bpy_library_dict_num);
+  UNUSED_VARS_NDEBUG(dict_num_offset);
 
   BKE_reports_clear(reports);
 
+  /* Return a pair. */
+  PyObject *ret = PyTuple_New(2);
+  PyTuple_SET_ITEMS(ret, (PyObject *)self_src, Py_NewRef((PyObject *)self));
   return ret;
 }
 
@@ -381,7 +667,7 @@ static void bpy_lib_exit_warn_idname(BPy_Library *self,
   {
     /* Spurious errors can appear at shutdown */
     if (PyErr_ExceptionMatches(PyExc_Warning)) {
-      PyErr_WriteUnraisable((PyObject *)self);
+      PyErr_WriteUnraisable(reinterpret_cast<PyObject *>(self));
     }
   }
   PyErr_Restore(exc, val, tb);
@@ -399,7 +685,7 @@ static void bpy_lib_exit_warn_type(BPy_Library *self, PyObject *item)
   {
     /* Spurious errors can appear at shutdown */
     if (PyErr_ExceptionMatches(PyExc_Warning)) {
-      PyErr_WriteUnraisable((PyObject *)self);
+      PyErr_WriteUnraisable(reinterpret_cast<PyObject *>(self));
     }
   }
   PyErr_Restore(exc, val, tb);
@@ -466,7 +752,14 @@ static bool bpy_lib_exit_lapp_context_items_cb(BlendfileLinkAppendContext *lapp_
 
 static PyObject *bpy_lib_exit(BPy_Library *self, PyObject * /*args*/)
 {
+  /* Members used below are only initialized by `__enter__`. */
+  if (self->blo_handle == nullptr) [[unlikely]] {
+    PyErr_SetString(PyExc_RuntimeError, "Context manager not entered");
+    return nullptr;
+  }
+
   Main *bmain = self->bmain;
+  const bool do_pack = ((self->flag & BLO_LIBLINK_PACK) != 0);
   const bool do_append = ((self->flag & FILE_LINK) == 0);
   const bool create_liboverrides = self->create_liboverrides;
   /* Code in #bpy_lib_load should have raised exception in case of incompatible parameter values.
@@ -537,7 +830,10 @@ static PyObject *bpy_lib_exit(BPy_Library *self, PyObject * /*args*/)
   BKE_blendfile_link_append_context_init_done(lapp_context);
 
   BKE_blendfile_link(lapp_context, nullptr);
-  if (do_append) {
+  if (do_pack) {
+    BKE_blendfile_link_pack(lapp_context, nullptr);
+  }
+  else if (do_append) {
     BKE_blendfile_append(lapp_context, nullptr);
   }
   else if (create_liboverrides) {
@@ -607,7 +903,7 @@ static PyObject *bpy_lib_dir(BPy_Library *self)
 
 PyMethodDef BPY_library_load_method_def = {
     "load",
-    (PyCFunction)bpy_lib_load,
+    reinterpret_cast<PyCFunction>(bpy_lib_load),
     METH_VARARGS | METH_KEYWORDS,
     bpy_lib_load_doc,
 };
@@ -626,5 +922,9 @@ int BPY_library_load_type_ready()
     return -1;
   }
 
+  PyStructSequence_InitType(&bpy_lib_LibraryType, &bpy_lib_LibraryType_desc);
+
   return 0;
 }
+
+}  // namespace blender

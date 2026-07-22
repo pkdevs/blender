@@ -6,13 +6,15 @@
 
 #include <optional>
 
-#include "BLI_endian_switch.h"
-#include "BLI_sys_types.h"
+#include "BLI_endian_switch.hh"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 struct FileReader;
 
 struct BHead {
-  /** Identifier for this #BHead. Can be any of BLO_CODE_* or an ID code like ID_OB.  */
+  /** Identifier for this #BHead. Can be any of BLO_CODE_* or an ID code like ID_OB. */
   int code;
   /** Identifier of the struct type that is stored in this block. */
   int SDNAnr;
@@ -58,10 +60,10 @@ enum class BHeadType {
 /** Make #BHead.code from 4 chars. */
 #ifdef __BIG_ENDIAN__
 /* Big Endian */
-#  define BLEND_MAKE_ID(a, b, c, d) ((int)(a) << 24 | (int)(b) << 16 | (c) << 8 | (d))
+#  define BLEND_MAKE_ID(a, b, c, d) (int(a) << 24 | int(b) << 16 | (c) << 8 | (d))
 #else
 /* Little Endian */
-#  define BLEND_MAKE_ID(a, b, c, d) ((int)(d) << 24 | (int)(c) << 16 | (b) << 8 | (a))
+#  define BLEND_MAKE_ID(a, b, c, d) (int(d) << 24 | int(c) << 16 | (b) << 8 | (a))
 #endif
 
 /**
@@ -111,9 +113,7 @@ enum {
  *
  * \return The next #BHEad or #std::nullopt if the file is exhausted.
  */
-std::optional<BHead> BLO_readfile_read_bhead(FileReader *file,
-                                             BHeadType type,
-                                             bool do_endian_swap);
+std::optional<BHead> BLO_readfile_read_bhead(FileReader *file, BHeadType type);
 
 /**
  * Converts a BHead.old pointer from 64 to 32 bit. This can't work in the general case, but only
@@ -121,13 +121,14 @@ std::optional<BHead> BLO_readfile_read_bhead(FileReader *file,
  * pointers will map to the same, which will break things later on. There is no way to check for
  * that here unfortunately.
  */
-inline uint32_t uint32_from_uint64_ptr(uint64_t ptr, const bool use_endian_swap)
+inline uint32_t uint32_from_uint64_ptr(uint64_t ptr)
 {
-  if (use_endian_swap) {
-    /* Do endian switch so that the resulting pointer is not all 0. */
-    BLI_endian_switch_uint64(&ptr);
-  }
+  /* NOTE: this is endianness-sensitive. */
+  /* Switching endianness would be required to reduce the risk of two different 64bits pointers
+   * generating the same 32bits value. */
   /* Behavior has to match #cast_pointer_64_to_32. */
   ptr >>= 3;
   return uint32_t(ptr);
 }
+
+}  // namespace blender

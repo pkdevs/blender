@@ -22,13 +22,11 @@ NODE_DEFINE(Background)
   NodeType *type = NodeType::add("background", create);
 
   SOCKET_BOOLEAN(use_shader, "Use Shader", true);
-  SOCKET_UINT(visibility, "Visibility", PATH_RAY_ALL_VISIBILITY);
+  SOCKET_UINT(visibility, "Visibility", PATH_RAY_VISIBILITY_ALL);
 
   SOCKET_BOOLEAN(transparent, "Transparent", false);
   SOCKET_BOOLEAN(transparent_glass, "Transparent Glass", false);
   SOCKET_FLOAT(transparent_roughness_threshold, "Transparent Roughness Threshold", 0.0f);
-
-  SOCKET_FLOAT(volume_step_size, "Volume Step Size", 0.1f);
 
   SOCKET_NODE(shader, "Shader", Shader::get_node_type());
 
@@ -86,27 +84,25 @@ void Background::device_update(Device *device, DeviceScene *dscene, Scene *scene
     kbackground->volume_shader = SHADER_NONE;
   }
 
-  kbackground->volume_step_size = volume_step_size * scene->integrator->get_volume_step_rate();
-
   /* No background node, make world shader invisible to all rays, to skip evaluation in kernel. */
   if (bg_shader->graph->nodes.size() <= 1) {
     kbackground->surface_shader |= SHADER_EXCLUDE_ANY;
   }
   /* Background present, check visibilities */
   else {
-    if (!(visibility & PATH_RAY_DIFFUSE)) {
+    if (!(visibility & PATH_RAY_VISIBILITY_DIFFUSE)) {
       kbackground->surface_shader |= SHADER_EXCLUDE_DIFFUSE;
     }
-    if (!(visibility & PATH_RAY_GLOSSY)) {
+    if (!(visibility & PATH_RAY_VISIBILITY_GLOSSY)) {
       kbackground->surface_shader |= SHADER_EXCLUDE_GLOSSY;
     }
-    if (!(visibility & PATH_RAY_TRANSMIT)) {
+    if (!(visibility & PATH_RAY_VISIBILITY_TRANSMIT)) {
       kbackground->surface_shader |= SHADER_EXCLUDE_TRANSMIT;
     }
-    if (!(visibility & PATH_RAY_VOLUME_SCATTER)) {
+    if (!(visibility & PATH_RAY_VISIBILITY_VOLUME_SCATTER)) {
       kbackground->surface_shader |= SHADER_EXCLUDE_SCATTER;
     }
-    if (!(visibility & PATH_RAY_CAMERA)) {
+    if (!(visibility & PATH_RAY_VISIBILITY_CAMERA)) {
       kbackground->surface_shader |= SHADER_EXCLUDE_CAMERA;
     }
   }

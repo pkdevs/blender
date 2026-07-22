@@ -13,10 +13,10 @@
 
 #include "CLG_log.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_linklist.h"
+#include "BLI_linklist.hh"
 
 #include "DNA_collection_types.h"
 #include "DNA_key_types.h"
@@ -36,16 +36,19 @@
 
 #include "readfile.hh"
 
-static CLG_LogRef LOG = {"blo.blend_validate"};
+namespace blender {
+
+static CLG_LogRef LOG = {"blend.validate"};
 
 bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
 {
-  ListBase mainlist;
+  blo_split_main(bmain);
+  BLI_assert(bmain->split_mains);
+  VectorSet<Main *> &split_mains = *bmain->split_mains;
+  BLI_assert(split_mains[0] == bmain);
   bool is_valid = true;
 
   BKE_main_lock(bmain);
-
-  blo_split_main(&mainlist, bmain);
 
   MainListsArray lbarray = BKE_main_lists_get(*bmain);
   int i = lbarray.size();
@@ -64,7 +67,10 @@ bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
     }
   }
 
-  for (Main *curmain = bmain->next; curmain != nullptr; curmain = curmain->next) {
+  for (Main *curmain : split_mains) {
+    if (curmain == bmain) {
+      continue;
+    }
     Library *curlib = curmain->curlib;
     if (curlib == nullptr) {
       BKE_report(reports, RPT_ERROR, "Library database with null library data-block pointer!");
@@ -123,7 +129,7 @@ bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
 
         LinkNode *name = names;
         for (; name; name = name->next) {
-          const char *str_name = (const char *)name->link;
+          const char *str_name = static_cast<const char *>(name->link);
           if (id->name[2] == str_name[0] && STREQ(str_name, id->name + 2)) {
             break;
           }
@@ -146,10 +152,8 @@ bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
     BLO_blendhandle_close(bh);
   }
 
-  blo_join_main(&mainlist);
-
-  BLI_assert(BLI_listbase_is_single(&mainlist));
-  BLI_assert(mainlist.first == (void *)bmain);
+  blo_join_main(bmain);
+  BLI_assert(!bmain->split_mains);
 
   BKE_main_unlock(bmain);
 
@@ -158,7 +162,7 @@ bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
 
 bool BLO_main_validate_shapekeys(Main *bmain, ReportList *reports)
 {
-  ListBase *lb;
+  ListBaseT<ID> *lb;
   ID *id;
   bool is_valid = true;
 
@@ -192,20 +196,20 @@ bool BLO_main_validate_shapekeys(Main *bmain, ReportList *reports)
 
   /* NOTE: #BKE_id_delete also locks `bmain`, so we need to do this loop outside of the lock here.
    */
-  LISTBASE_FOREACH_MUTABLE (Key *, shapekey, &bmain->shapekeys) {
-    if (shapekey->from != nullptr) {
+  for (Key &shapekey : bmain->shapekeys.items_mutable()) {
+    if (shapekey.from != nullptr) {
       continue;
     }
 
     BKE_reportf(reports,
                 RPT_ERROR,
-                "Shapekey %s has an invalid 'from' pointer (%p), it will be deleted",
-                shapekey->id.name,
-                shapekey->from);
+                "ShapeKey %s has an invalid 'from' pointer (%p), it will be deleted",
+                shapekey.id.name,
+                shapekey.from);
     /* NOTE: also need to remap UI data ID pointers here, since `bmain` is not the current
      * `G_MAIN`, default UI-handling remapping callback (defined by call to
      * `BKE_library_callback_remap_editor_id_reference_set`) won't work on expected data here. */
-    BKE_id_delete_ex(bmain, shapekey, ID_REMAP_FORCE_UI_POINTERS);
+    BKE_id_delete(bmain, &shapekey, {.extra_remapping_flags = ID_REMAP_FORCE_UI_POINTERS});
   }
 
   return is_valid;
@@ -215,7 +219,7 @@ void BLO_main_validate_embedded_liboverrides(Main *bmain, ReportList * /*reports
 {
   ID *id_iter;
   FOREACH_MAIN_ID_BEGIN (bmain, id_iter) {
-    bNodeTree *node_tree = blender::bke::node_tree_from_id(id_iter);
+    bNodeTree *node_tree = bke::node_tree_from_id(id_iter);
     if (node_tree) {
       if (node_tree->id.flag & ID_FLAG_EMBEDDED_DATA_LIB_OVERRIDE) {
         if (!ID_IS_OVERRIDE_LIBRARY(id_iter)) {
@@ -246,7 +250,7 @@ void BLO_main_validate_embedded_flag(Main *bmain, ReportList * /*reports*/)
       id_iter->flag &= ~ID_FLAG_EMBEDDED_DATA;
     }
 
-    bNodeTree *node_tree = blender::bke::node_tree_from_id(id_iter);
+    bNodeTree *node_tree = bke::node_tree_from_id(id_iter);
     if (node_tree) {
       if ((node_tree->id.flag & ID_FLAG_EMBEDDED_DATA) == 0) {
         CLOG_ERROR(&LOG,
@@ -270,3 +274,5 @@ void BLO_main_validate_embedded_flag(Main *bmain, ReportList * /*reports*/)
   }
   FOREACH_MAIN_ID_END;
 }
+
+}  // namespace blender

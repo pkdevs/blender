@@ -6,15 +6,14 @@
  * \ingroup eevee
  */
 
-#include "BLI_bounds.hh"
-#include "BLI_rect.h"
+#include "BKE_screen.hh"
+#include "BLI_math_matrix.hh"
+#include "BLI_rect.hh"
 
 #include "DRW_render.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_view3d_types.h"
-
-#include "BKE_camera.h"
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
@@ -36,7 +35,7 @@ void Camera::init()
   CameraData &data = data_;
 
   if (camera_eval && camera_eval->type == OB_CAMERA) {
-    const ::Camera *cam = reinterpret_cast<const ::Camera *>(camera_eval->data);
+    const blender::Camera *cam = reinterpret_cast<const blender::Camera *>(camera_eval->data);
     switch (cam->type) {
       default:
       case CAM_PERSP:
@@ -133,39 +132,14 @@ void Camera::sync()
   else if (inst_.drw_view) {
     data.viewmat = inst_.drw_view->viewmat();
     data.viewinv = inst_.drw_view->viewinv();
+    data.winmat = inst_.drw_view->winmat();
 
-    CameraParams params;
-    BKE_camera_params_init(&params);
-
-    if (inst_.rv3d->persp == RV3D_CAMOB && inst_.is_viewport_image_render) {
-      /* We are rendering camera view, no need for pan/zoom params from viewport. */
-      BKE_camera_params_from_object(&params, camera_eval);
-    }
-    else {
-      BKE_camera_params_from_view3d(&params, inst_.depsgraph, inst_.v3d, inst_.rv3d);
+    if (film_offset != int2(0) || film_extent != display_extent) {
+      data.winmat = projection_crop_matrix(film_offset, film_extent, display_extent) * data.winmat;
     }
 
-    BKE_camera_params_compute_viewplane(&params, UNPACK2(display_extent), 1.0f, 1.0f);
-
-    BKE_camera_params_crop_viewplane(&params.viewplane, UNPACK2(display_extent), &film_rect);
-
-    RE_GetWindowMatrixWithOverscan(params.is_ortho,
-                                   params.clip_start,
-                                   params.clip_end,
-                                   params.viewplane,
-                                   overscan_,
-                                   data.winmat.ptr());
-
-    if (params.lens == 0.0f) {
-      /* Can happen for the case of XR.
-       * In this case the produced winmat is degenerate. So just revert to the input matrix. */
-      data.winmat = inst_.drw_view->winmat();
-    }
-
-    if (isnan(data.winmat.w.x)) {
-      /* Can happen in weird corner case (see #134320).
-       * Simply fallback to something that we can render with. */
-      data.winmat = math::projection::orthographic(0.01f, 0.01f, 0.01f, 0.01f, -1000.0f, +1000.0f);
+    if (overscan_ != 0.0f) {
+      data.winmat = projection_overscan_matrix(film_extent, int2(film_overscan)) * data.winmat;
     }
   }
   else if (inst_.render) {
@@ -198,7 +172,7 @@ void Camera::sync()
 
   is_camera_object_ = false;
   if (camera_eval && camera_eval->type == OB_CAMERA) {
-    const ::Camera *cam = reinterpret_cast<const ::Camera *>(camera_eval->data);
+    const blender::Camera *cam = reinterpret_cast<const blender::Camera *>(camera_eval->data);
     data.clip_near = cam->clip_start;
     data.clip_far = cam->clip_end;
 #if 0 /* TODO(fclem): Make fisheye properties inside blender. */
@@ -281,6 +255,40 @@ void Camera::update_bounds()
   float2 p0 = float2(bbox.vec[0]) / (this->is_perspective() ? bbox.vec[0][2] : 1.0f);
   float2 p1 = float2(bbox.vec[7]) / (this->is_perspective() ? bbox.vec[7][2] : 1.0f);
   data_.screen_diagonal_length = math::distance(p0, p1);
+}
+
+float4x4 Camera::projection_crop_matrix(int2 film_offset, int2 film_extent, int2 display_extent)
+{
+  float2 uv_min = float2(film_offset) / float2(display_extent);
+  float2 uv_max = float2(film_offset + film_extent) / float2(display_extent);
+
+  float2 ndc_min = uv_min * 2.0f - 1.0f;
+  float2 ndc_max = uv_max * 2.0f - 1.0f;
+
+  float2 ndc_size = ndc_max - ndc_min;
+  float2 ndc_center = (ndc_min + ndc_max) * 0.5f;
+
+  float2 scale = 2.0f / ndc_size;
+  float2 offset = -ndc_center * scale;
+
+  float4x4 crop_matrix = float4x4::identity();
+  crop_matrix[0][0] = scale.x;
+  crop_matrix[1][1] = scale.y;
+  crop_matrix[3][0] = offset.x;
+  crop_matrix[3][1] = offset.y;
+
+  return crop_matrix;
+}
+
+float4x4 Camera::projection_overscan_matrix(int2 film_extent, int2 film_overscan)
+{
+  float2 overscan_scale = float2(film_extent) / float2(film_extent + film_overscan * 2);
+
+  float4x4 overscan_matrix = float4x4::identity();
+  overscan_matrix[0][0] = overscan_scale.x;
+  overscan_matrix[1][1] = overscan_scale.y;
+
+  return overscan_matrix;
 }
 
 /** \} */

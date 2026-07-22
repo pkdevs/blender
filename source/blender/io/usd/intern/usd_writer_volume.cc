@@ -6,25 +6,22 @@
 #include "usd_hierarchy_iterator.hh"
 #include "usd_utils.hh"
 
-#include <pxr/base/gf/vec3f.h>
 #include <pxr/base/tf/pathUtils.h>
-#include <pxr/base/vt/array.h>
 #include <pxr/base/vt/value.h>
 #include <pxr/usd/usdVol/openVDBAsset.h>
 #include <pxr/usd/usdVol/volume.h>
 
 #include "DNA_scene_types.h"
 #include "DNA_volume_types.h"
-#include "DNA_windowmanager_types.h"
 
 #include "BKE_report.hh"
 #include "BKE_volume.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_index_range.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -52,13 +49,13 @@ USDVolumeWriter::USDVolumeWriter(const USDExporterContext &ctx) : USDAbstractWri
 
 bool USDVolumeWriter::check_is_animated(const HierarchyContext &context) const
 {
-  const Volume *volume = static_cast<Volume *>(context.object->data);
+  const Volume *volume = id_cast<Volume *>(context.object->data);
   return volume->is_sequence || has_varying_modifiers(context.object);
 }
 
 void USDVolumeWriter::do_write(HierarchyContext &context)
 {
-  Volume *volume = static_cast<Volume *>(context.object->data);
+  Volume *volume = id_cast<Volume *>(context.object->data);
   if (!BKE_volume_load(volume, usd_export_context_.bmain)) {
     return;
   }
@@ -90,7 +87,7 @@ void USDVolumeWriter::do_write(HierarchyContext &context)
     }
   }
 
-  const pxr::UsdTimeCode timecode = get_export_time_code();
+  const pxr::UsdTimeCode time = get_export_time_code();
   const pxr::SdfPath &volume_path = usd_export_context_.usd_path;
   pxr::UsdStageRefPtr stage = usd_export_context_.stage;
   pxr::UsdVolVolume usd_volume = pxr::UsdVolVolume::Define(stage, volume_path);
@@ -114,13 +111,13 @@ void USDVolumeWriter::do_write(HierarchyContext &context)
       attr_file.Set(asset_path, pxr::UsdTimeCode::Default());
     }
 
-    usd_value_writer_.SetAttribute(attr_field, grid_name_token, timecode);
-    usd_value_writer_.SetAttribute(attr_file, asset_path, timecode);
+    usd_value_writer_.SetAttribute(attr_field, grid_name_token, time);
+    usd_value_writer_.SetAttribute(attr_file, asset_path, time);
 
     usd_volume.CreateFieldRelationship(pxr::TfToken(grid_id), grid_path);
   }
 
-  this->author_extent(usd_volume, BKE_volume_min_max(volume), timecode);
+  this->author_extent(usd_volume, BKE_volume_min_max(volume), time);
 
   BKE_volume_unload(volume);
 }
@@ -185,9 +182,9 @@ std::optional<std::string> USDVolumeWriter::construct_vdb_file_path(const Volume
 
   char vdb_file_name[FILE_MAXFILE];
   STRNCPY(vdb_file_name, volume->id.name + 2);
-  const pxr::UsdTimeCode timecode = get_export_time_code();
-  if (!timecode.IsDefault()) {
-    const int frame = int(timecode.GetValue());
+  const pxr::UsdTimeCode time = get_export_time_code();
+  if (!time.IsDefault()) {
+    const int frame = int(time.GetValue());
     BLI_path_frame(vdb_file_name, sizeof(vdb_file_name), frame, max_frame_digits);
   }
   BLI_strncat(vdb_file_name, ".vdb", sizeof(vdb_file_name));
@@ -214,8 +211,8 @@ std::optional<std::string> USDVolumeWriter::construct_vdb_relative_file_path(
   }
 
   /* Following code was written with an assumption that Blender's relative paths start with
-   * // characters as well as have OS dependent slashes. Inside of USD files those relative
-   * paths should start with either ./ or ../ characters and have always forward slashes (/)
+   * `//` characters as well as have OS dependent slashes. Inside of USD files those relative
+   * paths should start with either `./` or `../` characters and have always forward slashes (`/`)
    * separating directories. This is the convention used in USD documentation (and it seems
    * to be used in other DCC packages as well). */
   std::string relative_path_processed = pxr::TfNormPath(relative_path + 2);

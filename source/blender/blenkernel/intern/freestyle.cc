@@ -11,9 +11,9 @@
 #include "DNA_collection_types.h"
 #include "DNA_freestyle_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BLT_translation.hh"
@@ -21,6 +21,8 @@
 #include "BKE_freestyle.h"
 #include "BKE_lib_id.hh"
 #include "BKE_linestyle.h"
+
+namespace blender {
 
 /* Function declarations. */
 static FreestyleLineSet *alloc_lineset();
@@ -32,33 +34,33 @@ void BKE_freestyle_config_init(FreestyleConfig *config)
 {
   config->mode = FREESTYLE_CONTROL_EDITOR_MODE;
 
-  BLI_listbase_clear(&config->modules);
-  config->flags = 0;
+  config->modules.clear_no_delete();
+  config->flags = eFreestyleConfig_Flags{};
   config->sphere_radius = 0.1f;
   config->dkr_epsilon = 0.0f;
   config->crease_angle = DEG2RADF(134.43f);
 
-  BLI_listbase_clear(&config->linesets);
+  config->linesets.clear_no_delete();
 }
 
 void BKE_freestyle_config_free(FreestyleConfig *config, const bool do_id_user)
 {
-  LISTBASE_FOREACH (FreestyleLineSet *, lineset, &config->linesets) {
-    if (lineset->group) {
+  for (FreestyleLineSet &lineset : config->linesets) {
+    if (lineset.group) {
       if (do_id_user) {
-        id_us_min(&lineset->group->id);
+        id_us_min(&lineset.group->id);
       }
-      lineset->group = nullptr;
+      lineset.group = nullptr;
     }
-    if (lineset->linestyle) {
+    if (lineset.linestyle) {
       if (do_id_user) {
-        id_us_min(&lineset->linestyle->id);
+        id_us_min(&lineset.linestyle->id);
       }
-      lineset->linestyle = nullptr;
+      lineset.linestyle = nullptr;
     }
   }
-  BLI_freelistN(&config->linesets);
-  BLI_freelistN(&config->modules);
+  config->linesets.free_no_destruct();
+  config->modules.free_no_destruct();
 }
 
 void BKE_freestyle_config_copy(FreestyleConfig *new_config,
@@ -74,18 +76,18 @@ void BKE_freestyle_config_copy(FreestyleConfig *new_config,
   new_config->dkr_epsilon = config->dkr_epsilon;
   new_config->crease_angle = config->crease_angle;
 
-  BLI_listbase_clear(&new_config->linesets);
-  LISTBASE_FOREACH (FreestyleLineSet *, lineset, &config->linesets) {
+  new_config->linesets.clear_no_delete();
+  for (FreestyleLineSet &lineset : config->linesets) {
     new_lineset = alloc_lineset();
-    copy_lineset(new_lineset, lineset, flag);
-    BLI_addtail(&new_config->linesets, (void *)new_lineset);
+    copy_lineset(new_lineset, &lineset, flag);
+    BLI_addtail(&new_config->linesets, static_cast<void *>(new_lineset));
   }
 
-  BLI_listbase_clear(&new_config->modules);
-  LISTBASE_FOREACH (FreestyleModuleConfig *, module, &config->modules) {
+  new_config->modules.clear_no_delete();
+  for (FreestyleModuleConfig &module : config->modules) {
     new_module = alloc_module();
-    copy_module(new_module, module);
-    BLI_addtail(&new_config->modules, (void *)new_module);
+    copy_module(new_module, &module);
+    BLI_addtail(&new_config->modules, static_cast<void *>(new_module));
   }
 }
 
@@ -100,23 +102,23 @@ static void copy_lineset(FreestyleLineSet *new_lineset, FreestyleLineSet *linese
   new_lineset->edge_types = lineset->edge_types;
   new_lineset->exclude_edge_types = lineset->exclude_edge_types;
   new_lineset->group = lineset->group;
-  STRNCPY(new_lineset->name, lineset->name);
+  STRNCPY_UTF8(new_lineset->name, lineset->name);
 
   if ((flag & LIB_ID_CREATE_NO_USER_REFCOUNT) == 0) {
-    id_us_plus((ID *)new_lineset->linestyle);
-    id_us_plus((ID *)new_lineset->group);
+    id_us_plus(id_cast<ID *>(new_lineset->linestyle));
+    id_us_plus(id_cast<ID *>(new_lineset->group));
   }
 }
 
 static FreestyleModuleConfig *alloc_module()
 {
-  return MEM_callocN<FreestyleModuleConfig>("style module configuration");
+  return MEM_new<FreestyleModuleConfig>("style module configuration");
 }
 
 FreestyleModuleConfig *BKE_freestyle_module_add(FreestyleConfig *config)
 {
   FreestyleModuleConfig *module_conf = alloc_module();
-  BLI_addtail(&config->modules, (void *)module_conf);
+  BLI_addtail(&config->modules, static_cast<void *>(module_conf));
   module_conf->script = nullptr;
   module_conf->is_displayed = 1;
   return module_conf;
@@ -157,15 +159,15 @@ void BKE_freestyle_lineset_unique_name(FreestyleConfig *config, FreestyleLineSet
 
 static FreestyleLineSet *alloc_lineset()
 {
-  return MEM_callocN<FreestyleLineSet>("Freestyle line set");
+  return MEM_new<FreestyleLineSet>("Freestyle line set");
 }
 
 FreestyleLineSet *BKE_freestyle_lineset_add(Main *bmain, FreestyleConfig *config, const char *name)
 {
-  int lineset_index = BLI_listbase_count(&config->linesets);
+  int lineset_index = config->linesets.count();
 
   FreestyleLineSet *lineset = alloc_lineset();
-  BLI_addtail(&config->linesets, (void *)lineset);
+  BLI_addtail(&config->linesets, static_cast<void *>(lineset));
   BKE_freestyle_lineset_set_active_index(config, lineset_index);
 
   lineset->linestyle = BKE_linestyle_new(bmain, DATA_("LineStyle"));
@@ -176,16 +178,16 @@ FreestyleLineSet *BKE_freestyle_lineset_add(Main *bmain, FreestyleConfig *config
   lineset->qi_start = 0;
   lineset->qi_end = 100;
   lineset->edge_types = FREESTYLE_FE_SILHOUETTE | FREESTYLE_FE_BORDER | FREESTYLE_FE_CREASE;
-  lineset->exclude_edge_types = 0;
+  lineset->exclude_edge_types = eFreestyleLineSet_EdgeTypes{};
   lineset->group = nullptr;
   if (name) {
-    STRNCPY(lineset->name, name);
+    STRNCPY_UTF8(lineset->name, name);
   }
   else if (lineset_index > 0) {
-    SNPRINTF(lineset->name, DATA_("LineSet %i"), lineset_index + 1);
+    SNPRINTF_UTF8(lineset->name, DATA_("LineSet %i"), lineset_index + 1);
   }
   else {
-    STRNCPY(lineset->name, DATA_("LineSet"));
+    STRNCPY_UTF8(lineset->name, DATA_("LineSet"));
   }
   BKE_freestyle_lineset_unique_name(config, lineset);
 
@@ -204,16 +206,16 @@ bool BKE_freestyle_lineset_delete(FreestyleConfig *config, FreestyleLineSet *lin
     id_us_min(&lineset->linestyle->id);
   }
   BLI_remlink(&config->linesets, lineset);
-  MEM_freeN(lineset);
+  MEM_delete(lineset);
   BKE_freestyle_lineset_set_active_index(config, 0);
   return true;
 }
 
 FreestyleLineSet *BKE_freestyle_lineset_get_active(FreestyleConfig *config)
 {
-  LISTBASE_FOREACH (FreestyleLineSet *, lineset, &config->linesets) {
-    if (lineset->flags & FREESTYLE_LINESET_CURRENT) {
-      return lineset;
+  for (FreestyleLineSet &lineset : config->linesets) {
+    if (lineset.flags & FREESTYLE_LINESET_CURRENT) {
+      return &lineset;
     }
   }
   return nullptr;
@@ -224,7 +226,7 @@ short BKE_freestyle_lineset_get_active_index(FreestyleConfig *config)
   FreestyleLineSet *lineset;
   short i;
 
-  for (lineset = (FreestyleLineSet *)config->linesets.first, i = 0; lineset;
+  for (lineset = static_cast<FreestyleLineSet *>(config->linesets.first), i = 0; lineset;
        lineset = lineset->next, i++)
   {
     if (lineset->flags & FREESTYLE_LINESET_CURRENT) {
@@ -239,7 +241,7 @@ void BKE_freestyle_lineset_set_active_index(FreestyleConfig *config, short index
   FreestyleLineSet *lineset;
   short i;
 
-  for (lineset = (FreestyleLineSet *)config->linesets.first, i = 0; lineset;
+  for (lineset = static_cast<FreestyleLineSet *>(config->linesets.first), i = 0; lineset;
        lineset = lineset->next, i++)
   {
     if (i == index) {
@@ -250,3 +252,5 @@ void BKE_freestyle_lineset_set_active_index(FreestyleConfig *config, short index
     }
   }
 }
+
+}  // namespace blender

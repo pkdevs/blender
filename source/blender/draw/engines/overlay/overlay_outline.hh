@@ -55,7 +55,7 @@ class Outline : Overlay {
       return;
     }
 
-    const float outline_width = UI_GetThemeValuef(TH_OUTLINE_WIDTH);
+    const float outline_width = ui::theme::get_value_f(TH_OUTLINE_WIDTH);
     const bool do_smooth_lines = (U.gpu_flag & USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE) != 0;
     const bool do_expand = (U.pixelsize > 1.0) || (outline_width > 2.0f);
     const bool is_transform = (G.moving & G_TRANSFORM_OBJ) != 0;
@@ -141,10 +141,14 @@ class Outline : Overlay {
 
     gpu::Batch *geom;
     switch (ob_ref.object->type) {
-      case OB_CURVES:
-        geom = curves_sub_pass_setup(*prepass_curves_ps_, state.scene, ob_ref.object);
+      case OB_CURVES: {
+        const char *error = nullptr;
+        /* The error string will always have been printed by the engine already.
+         * No need to display it twice. */
+        geom = curves_sub_pass_setup(*prepass_curves_ps_, state.scene, ob_ref.object, error);
         prepass_curves_ps_->draw(geom, manager.unique_handle(ob_ref));
         break;
+      }
       case OB_GREASE_PENCIL:
         GreasePencil::draw_grease_pencil(
             res, *prepass_gpencil_ps_, state.scene, ob_ref.object, manager.unique_handle(ob_ref));
@@ -160,7 +164,7 @@ class Outline : Overlay {
 
           /* Display flat object as a line when view is orthogonal to them.
            * This fixes only the biggest case which is a plane in ortho view. */
-          int flat_axis = FlatObjectRef::flat_axis_index_get(ob_ref.object);
+          int flat_axis = FlatObjectRef::flat_axis_index_get(ob_ref);
           if (flat_axis != -1) {
             geom = DRW_cache_mesh_edge_detection_get(ob_ref.object, nullptr);
             flat_objects_.append({geom, manager.unique_handle(ob_ref), flat_axis});
@@ -210,8 +214,8 @@ class Outline : Overlay {
 
       for (FlatObjectRef flag_ob_ref : flat_objects_) {
         flag_ob_ref.if_flat_axis_orthogonal_to_view(
-            manager, view, [&](gpu::Batch *geom, ResourceHandle handle) {
-              pass.draw_expand(geom, GPU_PRIM_LINES, 1, 1, handle);
+            manager, view, [&](gpu::Batch *geom, ResourceID resource_id) {
+              pass.draw_expand(geom, GPU_PRIM_LINES, 1, 1, resource_id);
             });
       }
     }
@@ -239,8 +243,8 @@ class Outline : Overlay {
     int2 render_size = int2(res.depth_tx.size());
 
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
-    tmp_depth_tx_.acquire(render_size, GPU_DEPTH24_STENCIL8, usage);
-    object_id_tx_.acquire(render_size, GPU_R16UI, usage);
+    tmp_depth_tx_.acquire_2d(render_size, gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8, usage);
+    object_id_tx_.acquire_2d(render_size, gpu::TextureFormat::UINT_16, usage);
 
     prepass_fb_.ensure(GPU_ATTACHMENT_TEXTURE(tmp_depth_tx_),
                        GPU_ATTACHMENT_TEXTURE(object_id_tx_));

@@ -10,9 +10,9 @@
 #pragma once
 
 #include "GHOST_IContext.hh"
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 
-#include <cstdlib>  // for nullptr
+#include <cstdlib> /* For `nullptr`. */
 
 class GHOST_Context : public GHOST_IContext {
  protected:
@@ -21,9 +21,9 @@ class GHOST_Context : public GHOST_IContext {
  public:
   /**
    * Constructor.
-   * \param stereoVisual: Stereo visual for quad buffered stereo.
+   * \param context_params: Parameters to use when initializing the context.
    */
-  GHOST_Context(bool stereoVisual) : m_stereoVisual(stereoVisual) {}
+  GHOST_Context(const GHOST_ContextParams &context_params) : context_params_(context_params) {}
 
   /**
    * Destructor.
@@ -38,27 +38,21 @@ class GHOST_Context : public GHOST_IContext {
   /**
    * Returns the thread's currently active drawing context.
    */
-  static inline GHOST_Context *getActiveDrawingContext()
+  static GHOST_Context *getActiveDrawingContext()
   {
     return active_context_;
   }
 
-  /**
-   * Swaps front and back buffers of a window.
-   * \return A boolean success indicator.
-   */
-  GHOST_TSuccess swapBuffers() override = 0;
+  /** \copydoc #GHOST_IContext::swapBuffersAcquire */
+  GHOST_TSuccess swapBufferAcquire() override = 0;
 
-  /**
-   * Activates the drawing context of this window.
-   * \return A boolean success indicator.
-   */
+  /** \copydoc #GHOST_IContext::swapBuffers */
+  GHOST_TSuccess swapBufferRelease() override = 0;
+
+  /** \copydoc #GHOST_IContext::activateDrawingContext */
   GHOST_TSuccess activateDrawingContext() override = 0;
 
-  /**
-   * Release the drawing context of the calling thread.
-   * \return A boolean success indicator.
-   */
+  /** \copydoc #GHOST_IContext::releaseDrawingContext */
   GHOST_TSuccess releaseDrawingContext() override = 0;
 
   /**
@@ -95,10 +89,10 @@ class GHOST_Context : public GHOST_IContext {
 
   /**
    * Gets the current swap interval for #swapBuffers.
-   * \param intervalOut: Variable to store the swap interval if it can be read.
+   * \param interval_out: Variable to store the swap interval if it can be read.
    * \return Whether the swap interval can be read.
    */
-  virtual GHOST_TSuccess getSwapInterval(int & /*interval*/)
+  virtual GHOST_TSuccess getSwapInterval(int & /*interval_out*/)
   {
     return GHOST_kFailure;
   }
@@ -108,7 +102,7 @@ class GHOST_Context : public GHOST_IContext {
    */
   void *getUserData()
   {
-    return m_user_data;
+    return user_data_;
   }
 
   /**
@@ -116,7 +110,7 @@ class GHOST_Context : public GHOST_IContext {
    */
   void setUserData(void *user_data)
   {
-    m_user_data = user_data;
+    user_data_ = user_data;
   }
 
   /**
@@ -126,7 +120,13 @@ class GHOST_Context : public GHOST_IContext {
    */
   bool isStereoVisual() const
   {
-    return m_stereoVisual;
+    return context_params_.is_stereo_visual;
+  }
+
+  /** Get the VSync value. */
+  virtual GHOST_TVSyncModes getVSync()
+  {
+    return context_params_.vsync;
   }
 
   /**
@@ -137,60 +137,29 @@ class GHOST_Context : public GHOST_IContext {
     return false;
   }
 
-  /**
-   * Gets the OpenGL frame-buffer associated with the OpenGL context
-   * \return The ID of an OpenGL frame-buffer object.
-   */
+  /** \copydoc #GHOST_IContext::getDefaultFramebuffer */
   unsigned int getDefaultFramebuffer() override
   {
     return 0;
   }
 
 #ifdef WITH_VULKAN_BACKEND
-  /**
-   * Get Vulkan handles for the given context.
-   *
-   * These handles are the same for a given context.
-   * Should only be called when using a Vulkan context.
-   * Other contexts will not return any handles and leave the
-   * handles where the parameters are referring to unmodified.
-   *
-   * \param r_instance: After calling this function the VkInstance
-   *     referenced by this parameter will contain the VKInstance handle
-   *     of the context associated with the `context` parameter.
-   * \param r_physical_device: After calling this function the VkPhysicalDevice
-   *     referenced by this parameter will contain the VKPhysicalDevice handle
-   *     of the context associated with the `context` parameter.
-   * \param r_device: After calling this function the VkDevice
-   *     referenced by this parameter will contain the VKDevice handle
-   *     of the context associated with the `context` parameter.
-   * \param r_graphic_queue_family: After calling this function the uint32_t
-   *     referenced by this parameter will contain the graphic queue family id
-   *     of the context associated with the `context` parameter.
-   * \param r_queue: After calling this function the VkQueue
-   *     referenced by this parameter will contain the VKQueue handle
-   *     of the context associated with the `context` parameter.
-   * \param r_queue_mutex: After calling this function the std::mutex referred
-   *     by this parameter will contain the mutex of the context associated
-   *     with the context parameter.
-   * \returns GHOST_kFailure when context isn't a Vulkan context.
-   *     GHOST_kSuccess when the context is a Vulkan context and the
-   *     handles have been set.
-   */
-  virtual GHOST_TSuccess getVulkanHandles(GHOST_VulkanHandles & /* r_handles */) override
+  /** \copydoc #GHOST_IContext::getVulkanHandles */
+  GHOST_TSuccess getVulkanHandles(GHOST_VulkanHandles & /* r_handles */) override
   {
     return GHOST_kFailure;
   };
-
-  virtual GHOST_TSuccess getVulkanSwapChainFormat(
+  /** \copydoc #GHOST_IContext::getVulkanSwapChainFormat */
+  GHOST_TSuccess getVulkanSwapChainFormat(
       GHOST_VulkanSwapChainData * /*r_swap_chain_data*/) override
   {
     return GHOST_kFailure;
   }
 
-  virtual GHOST_TSuccess setVulkanSwapBuffersCallbacks(
-      std::function<void(const GHOST_VulkanSwapChainData *)> /*swap_buffers_pre_callback*/,
-      std::function<void(void)> /*swap_buffers_post_callback*/,
+  /** \copydoc #GHOST_IContext::setVulkanSwapBuffersCallbacks */
+  GHOST_TSuccess setVulkanSwapBuffersCallbacks(
+      std::function<void(const GHOST_VulkanSwapChainData *, bool)> /*swap_buffer_draw_callback*/,
+      std::function<void(void)> /*swap_buffer_acquired_callback*/,
       std::function<void(GHOST_VulkanOpenXRData *)> /*openxr_acquire_framebuffer_image_callback*/,
       std::function<void(GHOST_VulkanOpenXRData *)> /*openxr_release_framebuffer_image_callback*/)
       override
@@ -200,10 +169,10 @@ class GHOST_Context : public GHOST_IContext {
 #endif
 
  protected:
-  bool m_stereoVisual;
+  GHOST_ContextParams context_params_;
 
   /** Caller specified, not for internal use. */
-  void *m_user_data = nullptr;
+  void *user_data_ = nullptr;
 
 #ifdef WITH_OPENGL_BACKEND
   static void initClearGL();

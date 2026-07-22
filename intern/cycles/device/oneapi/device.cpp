@@ -28,8 +28,9 @@ bool device_oneapi_init()
 
   /* NOTE(@nsirgien): we need to enable JIT cache from here and
    * right now this cache policy is controlled by env. variables. */
-  /* NOTE(hallade) we also disable use of copy engine as it
-   * improves stability as of intel/LLVM SYCL-nightly/20220529.
+  /* NOTE(@xavierh-intel) we enable the use of copy engine, incl. for fill
+   * operations as it lowers the overhead from zeCommandListAppendMemoryFill
+   * when running paths_array kernels on Linux+A750.
    * All these env variable can be set beforehand by end-users and
    * will in that case -not- be overwritten. */
   /* By default, enable only Level-Zero and if all devices are allowed, also CUDA and HIP.
@@ -38,7 +39,7 @@ bool device_oneapi_init()
   if (getenv("SYCL_CACHE_PERSISTENT") == nullptr) {
     _putenv_s("SYCL_CACHE_PERSISTENT", "1");
   }
-  if (getenv("SYCL_CACHE_TRESHOLD") == nullptr) {
+  if (getenv("SYCL_CACHE_THRESHOLD") == nullptr) {
     _putenv_s("SYCL_CACHE_THRESHOLD", "0");
   }
   if (getenv("ONEAPI_DEVICE_SELECTOR") == nullptr) {
@@ -53,8 +54,11 @@ bool device_oneapi_init()
   if (getenv("ZES_ENABLE_SYSMAN") == nullptr) {
     _putenv_s("ZES_ENABLE_SYSMAN", "1");
   }
-  if (getenv("SYCL_PI_LEVEL_ZERO_USE_COPY_ENGINE") == nullptr) {
-    _putenv_s("SYCL_PI_LEVEL_ZERO_USE_COPY_ENGINE", "0");
+  if (getenv("UR_L0_USE_COPY_ENGINE") == nullptr) {
+    _putenv_s("UR_L0_USE_COPY_ENGINE", "1");
+  }
+  if (getenv("UR_L0_USE_COPY_ENGINE_FOR_FILL") == nullptr) {
+    _putenv_s("UR_L0_USE_COPY_ENGINE_FOR_FILL", "1");
   }
 #  elif __linux__
   setenv("SYCL_CACHE_PERSISTENT", "1", false);
@@ -67,7 +71,8 @@ bool device_oneapi_init()
   }
   /* SYSMAN is needed for free_memory queries. */
   setenv("ZES_ENABLE_SYSMAN", "1", false);
-  setenv("SYCL_PI_LEVEL_ZERO_USE_COPY_ENGINE", "0", false);
+  setenv("UR_L0_USE_COPY_ENGINE", "1", false);
+  setenv("UR_L0_USE_COPY_ENGINE_FOR_FILL", "1", false);
 #  endif
 
   return true;
@@ -87,7 +92,7 @@ unique_ptr<Device> device_oneapi_create(const DeviceInfo &info,
   (void)profiler;
   (void)headless;
 
-  LOG(FATAL) << "Requested to create oneAPI device while not enabled for this build.";
+  LOG_FATAL << "Requested to create oneAPI device while not enabled for this build.";
 
   return nullptr;
 #endif
@@ -99,6 +104,8 @@ static void device_iterator_cb(const char *id,
                                const int num,
                                bool hwrt_support,
                                bool oidn_support,
+                               bool has_execution_optimization,
+                               bool meets_driver_requirement,
                                void *user_ptr)
 {
   vector<DeviceInfo> *devices = (vector<DeviceInfo> *)user_ptr;
@@ -140,12 +147,15 @@ static void device_iterator_cb(const char *id,
   (void)hwrt_support;
 #  endif
 
+  info.has_execution_optimization = has_execution_optimization;
+  info.meets_driver_requirement = meets_driver_requirement;
+
   devices->push_back(info);
-  VLOG_INFO << "Added device \"" << info.description << "\" with id \"" << info.id << "\".";
+  LOG_INFO << "Added device \"" << info.description << "\" with id \"" << info.id << "\".";
 
   if (info.denoisers & DENOISER_OPENIMAGEDENOISE) {
-    VLOG_INFO << "Device with id \"" << info.id << "\" supports "
-              << denoiserTypeToHumanReadable(DENOISER_OPENIMAGEDENOISE) << ".";
+    LOG_INFO << "Device with id \"" << info.id << "\" supports "
+             << denoiserTypeToHumanReadable(DENOISER_OPENIMAGEDENOISE) << ".";
   }
 }
 #endif

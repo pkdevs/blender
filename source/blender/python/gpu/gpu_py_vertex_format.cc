@@ -12,10 +12,12 @@
 #include <Python.h>
 
 #include "../generic/py_capi_utils.hh"
-#include "../generic/python_compat.hh"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
 #include "gpu_py.hh"
 #include "gpu_py_vertex_format.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Enum Conversion
@@ -35,14 +37,10 @@ static PyC_StringEnumItems pygpu_vertcomptype_items[] = {
     {0, nullptr},
 };
 
-/* Only for pyGPU module. To be removed with 5.0. */
-enum { GPU_FETCH_INT_TO_FLOAT_DEPRECATED = 999 };
-
 static PyC_StringEnumItems pygpu_vertfetchmode_items[] = {
     {GPU_FETCH_FLOAT, "FLOAT"},
     {GPU_FETCH_INT, "INT"},
     {GPU_FETCH_INT_TO_FLOAT_UNIT, "INT_TO_FLOAT_UNIT"},
-    {GPU_FETCH_INT_TO_FLOAT_DEPRECATED, "INT_TO_FLOAT"},
     {0, nullptr},
 };
 
@@ -80,20 +78,18 @@ PyDoc_STRVAR(
     "\n"
     "   Add a new attribute to the format.\n"
     "\n"
-    "   :arg id: Name the attribute. Often `position`, `normal`, ...\n"
+    "   :param id: Name of the attribute. Often ``position``, ``normal``, ...\n"
     "   :type id: str\n"
-    "   :arg comp_type: The data type that will be used store the value in memory.\n"
-    "      Possible values are `I8`, `U8`, `I16`, `U16`, `I32`, `U32`, `F32` and `I10`.\n"
-    "   :type comp_type: str\n"
-    "   :arg len: How many individual values the attribute consists of\n"
+    "   :param comp_type: The data type that will be used to store the value in memory.\n"
+    "   :type comp_type: Literal['I8', 'U8', 'I16', 'U16', 'I32', 'U32', 'F32', 'I10']\n"
+    "   :param len: How many individual values the attribute consists of\n"
     "      (e.g. 2 for uv coordinates).\n"
     "   :type len: int\n"
-    "   :arg fetch_mode: How values from memory will be converted when used in the shader.\n"
+    "   :param fetch_mode: How values from memory will be converted when used in the shader.\n"
     "      This is mainly useful for memory optimizations when you want to store values with\n"
     "      reduced precision. E.g. you can store a float in only 1 byte but it will be\n"
     "      converted to a normal 4 byte float when used.\n"
-    "      Possible values are `FLOAT`, `INT`, `INT_TO_FLOAT_UNIT` and `INT_TO_FLOAT`.\n"
-    "   :type fetch_mode: str\n");
+    "   :type fetch_mode: Literal['FLOAT', 'INT', 'INT_TO_FLOAT_UNIT']\n");
 static PyObject *pygpu_vertformat_attr_add(BPyGPUVertFormat *self, PyObject *args, PyObject *kwds)
 {
   const char *id;
@@ -108,7 +104,6 @@ static PyObject *pygpu_vertformat_attr_add(BPyGPUVertFormat *self, PyObject *arg
 
   static const char *_keywords[] = {"id", "comp_type", "len", "fetch_mode", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "$"  /* Keyword only arguments. */
       "s"  /* `id` */
       "O&" /* `comp_type` */
@@ -149,28 +144,8 @@ static PyObject *pygpu_vertformat_attr_add(BPyGPUVertFormat *self, PyObject *arg
                  1);
   }
 
-  bool int_to_float = (int(fetch_mode_enum) == int(GPU_FETCH_INT_TO_FLOAT_DEPRECATED));
-  /* Fetch int to float is not supported anymore.
-   * Simply store the data as float in the vertex buffer and convert inside `attr_fill`. */
-  if (int_to_float) {
-    if (comp_type_enum == GPU_COMP_F32) {
-      PyErr_Format(PyExc_RuntimeError,
-                   "GPUVertFormat.attr_add(...) fetch_mode set to INT_TO_FLOAT but component type "
-                   "is not integer.");
-      return nullptr;
-    }
-    comp_type_enum = GPU_COMP_F32;
-    fetch_mode_enum = GPU_FETCH_FLOAT;
-    PyErr_WarnEx(
-        PyExc_DeprecationWarning,
-        "Using GPUVertFormat.attr_add(...) with fetch_mode set to INT_TO_FLOAT is deprecated. "
-        "Use 'F32' component type with fetch_mode 'FLOAT' instead.",
-        1);
-  }
-
-  uint attr_id = GPU_vertformat_attr_add(&self->fmt, id, comp_type_enum, len, fetch_mode_enum);
-
-  self->fmt.attrs[attr_id].python_int_to_float = int_to_float;
+  uint attr_id = GPU_vertformat_attr_add_legacy(
+      &self->fmt, id, comp_type_enum, len, fetch_mode_enum);
 
   return PyLong_FromLong(attr_id);
 }
@@ -187,7 +162,7 @@ static PyObject *pygpu_vertformat_attr_add(BPyGPUVertFormat *self, PyObject *arg
 
 static PyMethodDef pygpu_vertformat__tp_methods[] = {
     {"attr_add",
-     (PyCFunction)pygpu_vertformat_attr_add,
+     reinterpret_cast<PyCFunction>(pygpu_vertformat_attr_add),
      METH_VARARGS | METH_KEYWORDS,
      pygpu_vertformat_attr_add_doc},
     {nullptr, nullptr, 0, nullptr},
@@ -217,7 +192,7 @@ PyTypeObject BPyGPUVertFormat_Type = {
     /*tp_name*/ "GPUVertFormat",
     /*tp_basicsize*/ sizeof(BPyGPUVertFormat),
     /*tp_itemsize*/ 0,
-    /*tp_dealloc*/ (destructor)pygpu_vertformat__tp_dealloc,
+    /*tp_dealloc*/ reinterpret_cast<destructor>(pygpu_vertformat__tp_dealloc),
     /*tp_vectorcall_offset*/ 0,
     /*tp_getattr*/ nullptr,
     /*tp_setattr*/ nullptr,
@@ -282,7 +257,9 @@ PyObject *BPyGPUVertFormat_CreatePyObject(GPUVertFormat *fmt)
     memset(&self->fmt, 0, sizeof(self->fmt));
   }
 
-  return (PyObject *)self;
+  return reinterpret_cast<PyObject *>(self);
 }
 
 /** \} */
+
+}  // namespace blender

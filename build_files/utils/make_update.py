@@ -23,6 +23,7 @@ These can be unquoted eventually.
 
 __all__ = (
     "main",
+    "floating_checkout_update",
 )
 
 
@@ -47,7 +48,7 @@ def print_stage(text: str) -> None:
 
 def parse_arguments() -> argparse.Namespace:
     """
-    Parse command line line arguments.
+    Parse command line arguments.
 
     Returns parsed object from which the command line arguments can be accessed
     as properties. The name of the properties matches the command line argument,
@@ -55,12 +56,17 @@ def parse_arguments() -> argparse.Namespace:
     underscore.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--no-libraries", action="store_true")
-    parser.add_argument("--no-blender", action="store_true")
-    parser.add_argument("--no-submodules", action="store_true")
-    parser.add_argument("--no-lfs-fallback", action="store_true")
-    parser.add_argument("--git-command", default="git")
-    parser.add_argument("--use-linux-libraries", action="store_true")
+    parser.add_argument("--no-libraries", action="store_true",
+                        help="Don't fetch precompiled libraries for this system")
+    parser.add_argument("--no-blender", action="store_true", help="Don't update the Blender code repository")
+    parser.add_argument(
+        "--no-lfs-fallback",
+        action="store_true",
+        help="Don't set up fallback URLs for fetching LFS files from projects.blender.org. These are only used when cloning repositories hosted elsewhere.")
+    parser.add_argument(
+        "--git-command",
+        default="git",
+        help="Path to the git binary. (Only useful if it is not in your PATH)")
     parser.add_argument("--architecture", type=str,
                         choices=("x86_64", "amd64", "arm64",))
     parser.add_argument("--prune-destructive", action="store_true",
@@ -68,6 +74,8 @@ def parse_arguments() -> argparse.Namespace:
 
     # Deprecated options, kept for compatibility with old configurations.
     parser.add_argument("--use-tests", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--no-submodules", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--use-linux-libraries", action="store_true", help=argparse.SUPPRESS)
 
     return parser.parse_args()
 
@@ -152,6 +160,23 @@ def ensure_git_lfs(args: argparse.Namespace) -> None:
     call((args.git_command, "lfs", "install", "--skip-repo"), exit_on_error=True)
 
 
+def switch_blender_git_remotes(args: argparse.Namespace) -> None:
+    """
+    Switch remote URLs from projects.blender.org to git.blender.org
+    """
+    remotes = make_utils.git_get_remotes(args.git_command)
+
+    for remote in remotes:
+        url = make_utils.git_get_remote_url(args.git_command, remote)
+        new_url = url.replace("git@projects.blender.org", "git@git.blender.org")
+
+        if new_url == url:
+            continue
+
+        print(f"Replacing {remote} URL from {url} to {new_url}")
+        make_utils.git_set_config(args.git_command, f"remote.{remote}.url", new_url)
+
+
 def prune_stale_files(args: argparse.Namespace) -> None:
     """
     Ensure files from previous Git configurations do not exist anymore
@@ -199,13 +224,15 @@ def initialize_precompiled_libraries(args: argparse.Namespace) -> str:
     print(f"Detected architecture : {arch}")
     print()
 
-    if sys.platform == "linux" and not args.use_linux_libraries:
-        print("Skipping Linux libraries configuration")
-        return ""
-
     submodule_dir = f"lib/{platform}_{arch}"
 
     submodule_directories = get_submodule_directories(args)
+
+    if platform == "macos" and arch == "x64":
+        return ("WARNING: macOS x64/Intel support was dropped in Blender 5.0.\n"
+                "         As such, pre-compiled dependencies are no longer provided.\n"
+                "         You may build the dependencies yourself, or downgrade to Blender 4.5.\n"
+                "         For more details, please see: https://devtalk.blender.org/t/38835")
 
     if Path(submodule_dir) not in submodule_directories:
         return "Skipping libraries update: no configured submodule\n"
@@ -305,6 +332,17 @@ def blender_update(args: argparse.Namespace) -> str:
     print_stage("Updating Blender Git Repository")
 
     return work_tree_update(args)
+
+
+# Extra LFS update for blender repository
+def blender_lfs_update(args: argparse.Namespace) -> None:
+    print_stage("Updating Blender Git LFS")
+
+    # This seems to be required some times, e.g. on initial checkout from third party, non-lfs repository
+    # (like the github one). The fallback repository set by `lfs_fallback_setup` is fetched, but running the
+    # `update_command` above does not seem to do the actual checkout for these LFS-managed files.
+    update_lfs_command = [args.git_command, "lfs", "pull"]
+    call(update_lfs_command)
 
 
 def resolve_external_url(blender_url: str, repo_name: str) -> str:
@@ -550,11 +588,14 @@ def add_submodule_push_url(args: argparse.Namespace) -> None:
 
         push_url = check_output((args.git_command, "config", "--file", str(config),
                                 "--get", "remote.origin.pushURL"), exit_on_error=False)
-        if push_url and push_url != "git@projects.blender.org:blender/lib-darwin_arm64.git":
-            # Ignore modules which have pushURL configured.
-            # Keep special exception, as some debug code sneaked into the production for a short
-            # while.
-            continue
+
+        # Don't modify PushURL if it is set.
+        if push_url:
+            if "projects.blender.org" in push_url:
+                # Allow the code below to replace projects.blender.org with git.blender.org
+                pass
+            else:
+                continue
 
         url = make_utils.git_get_config(args.git_command, "remote.origin.url", str(config))
         if not url.startswith("https:"):
@@ -562,7 +603,12 @@ def add_submodule_push_url(args: argparse.Namespace) -> None:
             continue
 
         url_parts = urlsplit(url)
-        push_url = f"git@{url_parts.netloc}:{url_parts.path[1:]}"
+
+        host = url_parts.hostname
+        if host == "projects.blender.org":
+            host = "git.blender.org"
+
+        push_url = f"git@{host}:{url_parts.path[1:]}"
 
         print(f"Setting pushURL to {push_url} for {submodule_path}")
         make_utils.git_set_config(args.git_command, "remote.origin.pushURL", push_url, str(config))
@@ -601,8 +647,8 @@ def lfs_fallback_setup(args: argparse.Namespace) -> None:
 
     for remote in remotes:
         url = make_utils.git_get_remote_url(args.git_command, remote)
-        if "projects.blender.org" not in url:
-            make_utils.git_set_config(args.git_command, f"lfs.{remote}.searchall", "true")
+        if "projects.blender.org" not in url and "git.blender.org" not in url:
+            make_utils.git_set_config(args.git_command, "lfs.remote.searchall", "true")
         else:
             add_fallback_remote = False
 
@@ -614,13 +660,15 @@ def lfs_fallback_setup(args: argparse.Namespace) -> None:
         push_url = "no_push"
         make_utils.git_add_remote(args.git_command, fallback_remote, url, push_url)
 
+        # Fetch potentially missing files.
+        call((args.git_command, "lfs", "fetch", fallback_remote))
+
 
 def main() -> int:
     args = parse_arguments()
 
     blender_skip_msg = ""
     libraries_skip_msg = ""
-    submodules_skip_msg = ""
 
     blender_version = make_utils. parse_blender_version()
     if blender_version.cycle != 'alpha':
@@ -632,6 +680,8 @@ def main() -> int:
 
     # Submodules and precompiled libraries require Git LFS.
     ensure_git_lfs(args)
+
+    switch_blender_git_remotes(args)
 
     if args.prune_destructive:
         prune_stale_files(args)
@@ -645,13 +695,14 @@ def main() -> int:
             blender_skip_msg = blender_update(args)
         if blender_skip_msg:
             blender_skip_msg = "Blender repository skipped: " + blender_skip_msg + "\n"
+        blender_lfs_update(args)
 
     if not args.no_libraries:
         libraries_skip_msg += initialize_precompiled_libraries(args)
         libraries_skip_msg += submodules_lib_update(args, branch)
 
     # Report any skipped repositories at the end, so it's not as easy to miss.
-    skip_msg = blender_skip_msg + libraries_skip_msg + submodules_skip_msg
+    skip_msg = blender_skip_msg + libraries_skip_msg
     if skip_msg:
         print_stage("Update finished with the following messages")
         print(skip_msg.strip())
@@ -660,11 +711,19 @@ def main() -> int:
         print()
         print('NOTE: --use-tests is a deprecated command line argument, kept for compatibility purposes.')
 
-    # For failed submodule update we throw an error, since not having correct
-    # submodules can make Blender throw errors.
+    if args.no_submodules:
+        print()
+        print('NOTE: --no-submodules is a deprecated command line argument, kept for compatibility purposes.')
+
+    if args.use_linux_libraries:
+        print()
+        print('NOTE: --use-linux-libraries is a deprecated command line argument, kept for compatibility purposes.')
+
+    # For failed library update we throw an error, since not having correct
+    # libraries can make Blender throw errors.
     # For Blender itself we don't and consider "make update" to be a command
     # you can use while working on uncommitted code.
-    if submodules_skip_msg:
+    if libraries_skip_msg:
         return 1
 
     return 0

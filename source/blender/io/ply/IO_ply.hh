@@ -14,6 +14,8 @@
 
 #include "IO_orientation.hh"
 
+namespace blender {
+
 struct Mesh;
 struct bContext;
 struct ReportList;
@@ -49,7 +51,7 @@ struct PLYExportParams {
   ePLYVertexColorMode vertex_colors = ePLYVertexColorMode::sRGB;
   bool export_attributes = true;
   bool export_triangulated_mesh = false;
-  char collection[MAX_IDPROP_NAME] = "";
+  char collection[MAX_ID_NAME - 2] = "";
 
   ReportList *reports = nullptr;
 };
@@ -73,3 +75,5 @@ void PLY_export(bContext *C, const PLYExportParams &params);
 void PLY_import(bContext *C, const PLYImportParams &params);
 
 Mesh *PLY_import_mesh(const PLYImportParams &params);
+
+}  // namespace blender

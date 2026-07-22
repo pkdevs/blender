@@ -9,7 +9,7 @@
 #include <pxr/usd/usdGeom/tokens.h>
 
 #include "BKE_camera.h"
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -22,7 +22,7 @@ USDCameraWriter::USDCameraWriter(const USDExporterContext &ctx) : USDAbstractWri
 
 bool USDCameraWriter::is_supported(const HierarchyContext *context) const
 {
-  const Camera *camera = static_cast<const Camera *>(context->object->data);
+  const Camera *camera = id_cast<const Camera *>(context->object->data);
   return camera->type == CAM_PERSP;
 }
 
@@ -61,11 +61,11 @@ void USDCameraWriter::do_write(HierarchyContext &context)
   const double meters_per_unit = get_meters_per_unit(usd_export_context_.export_params);
   const float unit_scale = float(1.0 / meters_per_unit);
 
-  pxr::UsdTimeCode timecode = get_export_time_code();
+  pxr::UsdTimeCode time = get_export_time_code();
   pxr::UsdGeomCamera usd_camera = pxr::UsdGeomCamera::Define(usd_export_context_.stage,
                                                              usd_export_context_.usd_path);
 
-  const Camera *camera = static_cast<const Camera *>(context.object->data);
+  const Camera *camera = id_cast<const Camera *>(context.object->data);
   const Scene *scene = DEG_get_evaluated_scene(usd_export_context_.depsgraph);
 
   usd_camera.CreateProjectionAttr().Set(pxr::UsdGeomTokens->perspective);
@@ -85,27 +85,27 @@ void USDCameraWriter::do_write(HierarchyContext &context)
 
   set_attribute(usd_camera.CreateFocalLengthAttr(pxr::VtValue(), true),
                 camera->lens / tenth_unit_to_mm,
-                timecode,
+                time,
                 usd_value_writer_);
   set_attribute(usd_camera.CreateHorizontalApertureAttr(pxr::VtValue(), true),
                 aperture_x / tenth_unit_to_mm,
-                timecode,
+                time,
                 usd_value_writer_);
   set_attribute(usd_camera.CreateVerticalApertureAttr(pxr::VtValue(), true),
                 aperture_y / tenth_unit_to_mm,
-                timecode,
+                time,
                 usd_value_writer_);
   set_attribute(usd_camera.CreateHorizontalApertureOffsetAttr(pxr::VtValue(), true),
                 sensor_size * camera->shiftx / tenth_unit_to_mm,
-                timecode,
+                time,
                 usd_value_writer_);
   set_attribute(usd_camera.CreateVerticalApertureOffsetAttr(pxr::VtValue(), true),
                 sensor_size * camera->shifty / tenth_unit_to_mm,
-                timecode,
+                time,
                 usd_value_writer_);
   set_attribute(usd_camera.CreateClippingRangeAttr(pxr::VtValue(), true),
                 pxr::GfVec2f(camera->clip_start * unit_scale, camera->clip_end * unit_scale),
-                timecode,
+                time,
                 usd_value_writer_);
 
   /* Write DoF-related attributes. */
@@ -113,16 +113,20 @@ void USDCameraWriter::do_write(HierarchyContext &context)
     const float focus_distance = BKE_camera_object_dof_distance(context.object);
     set_attribute(usd_camera.CreateFStopAttr(pxr::VtValue(), true),
                   camera->dof.aperture_fstop,
-                  timecode,
+                  time,
                   usd_value_writer_);
     set_attribute(usd_camera.CreateFocusDistanceAttr(pxr::VtValue(), true),
                   focus_distance * unit_scale,
-                  timecode,
+                  time,
                   usd_value_writer_);
+  }
+  else {
+    set_attribute(usd_camera.CreateFStopAttr(pxr::VtValue(), true), 0.0f, time, usd_value_writer_);
   }
 
   auto prim = usd_camera.GetPrim();
-  write_id_properties(prim, camera->id, timecode);
+  add_to_prim_map(prim.GetPath(), &camera->id);
+  write_id_properties(prim, camera->id, time);
 }
 
 }  // namespace blender::io::usd

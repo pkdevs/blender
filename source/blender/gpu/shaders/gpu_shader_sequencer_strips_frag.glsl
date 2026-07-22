@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/gpu_shader_sequencer_info.hh"
+#include "infos/gpu_shader_sequencer_infos.hh"
 
 #include "gpu_shader_sequencer_lib.glsl"
 
@@ -68,10 +68,10 @@ void main()
   if ((strip.flags & GPU_SEQ_FLAG_ANY_HANDLE) != 0) {
     float handle_width = strip.handle_width;
     /* Take left/right handle from horizontal sides. */
-    if ((strip.flags & GPU_SEQ_FLAG_DRAW_LH) != 0) {
+    if ((strip.flags & GPU_SEQ_FLAG_SELECTED_LH) != 0) {
       pos1.x += handle_width;
     }
-    if ((strip.flags & GPU_SEQ_FLAG_DRAW_RH) != 0) {
+    if ((strip.flags & GPU_SEQ_FLAG_SELECTED_RH) != 0) {
       pos2.x -= handle_width;
     }
     /* Reduce vertical size by outline width. */
@@ -193,7 +193,8 @@ void main()
 
     /* 2px outline for all overlapping strips. */
     bool overlaps = (strip.flags & GPU_SEQ_FLAG_OVERLAP) != 0;
-    if (overlaps) {
+    bool clamped = (strip.flags & GPU_SEQ_FLAG_CLAMPED) != 0;
+    if (overlaps || clamped) {
       col = add_outline(sdf, 1.0f, 3.0f, col, col_outline);
     }
 

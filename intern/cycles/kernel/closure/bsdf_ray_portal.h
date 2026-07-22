@@ -21,7 +21,6 @@ static_assert(sizeof(ShaderClosure) >= sizeof(RayPortalClosure), "RayPortalClosu
 
 ccl_device void bsdf_ray_portal_setup(ccl_private ShaderData *sd,
                                       const Spectrum weight,
-                                      const uint32_t path_flag,
                                       const float3 position,
                                       float3 direction)
 {
@@ -44,13 +43,13 @@ ccl_device void bsdf_ray_portal_setup(ccl_private ShaderData *sd,
     pc->sample_weight = sample_weight;
     pc->N = sd->N;
     pc->P = position;
-    pc->D = direction;
+    pc->D = safe_normalize(direction);
   }
 }
 
-ccl_device Spectrum bsdf_ray_portal_eval(const ccl_private ShaderClosure *sc,
-                                         const float3 wi,
-                                         const float3 wo,
+ccl_device Spectrum bsdf_ray_portal_eval(const ccl_private ShaderClosure * /*sc*/,
+                                         const float3 /*wi*/,
+                                         const float3 /*wo*/,
                                          ccl_private float *pdf)
 {
   *pdf = 0.0f;

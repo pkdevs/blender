@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2021-2022 Intel Corporation
+/* SPDX-FileCopyrightText: 2021-2025 Intel Corporation
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -16,14 +16,18 @@ CCL_NAMESPACE_BEGIN
 class DeviceQueue;
 
 using OneAPIDeviceIteratorCallback =
-    void (*)(const char *, const char *, const int, bool, bool, void *);
+    void (*)(const char *, const char *, const int, bool, bool, bool, bool, void *);
 
 class OneapiDevice : public GPUDevice {
  private:
-  SyclQueue *device_queue_;
+  SyclQueue *device_queue_ = nullptr;
 #  ifdef WITH_EMBREE_GPU
-  RTCDevice embree_device;
-  RTCScene embree_scene;
+  RTCDevice embree_device = nullptr;
+#    if RTC_VERSION >= 40400
+  RTCTraversable embree_traversable = nullptr;
+#    else
+  RTCScene embree_traversable = nullptr;
+#    endif
 #    if RTC_VERSION >= 40302
   thread_mutex scene_data_mutex;
   vector<RTCScene> all_embree_scenes;
@@ -31,14 +35,21 @@ class OneapiDevice : public GPUDevice {
 #  endif
   using ConstMemMap = map<string, unique_ptr<device_vector<uchar>>>;
   ConstMemMap const_mem_map_;
-  void *kg_memory_;
-  void *kg_memory_device_;
-  size_t kg_memory_size_ = (size_t)0;
-  size_t max_memory_on_device_ = (size_t)0;
+  void *kg_memory_ = nullptr;
+  void *kg_memory_device_ = nullptr;
+  size_t kg_memory_size_ = 0;
+  size_t max_memory_on_device_ = 0;
   std::string oneapi_error_string_;
   bool use_hardware_raytracing = false;
   unsigned int kernel_features = 0;
   int scene_max_shaders_ = 0;
+  /* On some driver versions, usage of Intel oneAPI extension for host->GPU copy optimization
+   * is causing crashes and failures. As a result, to ensure functionality, we disable
+   * this extension as a workaround. This class member variable is controlling this behavior
+   * and is set appropriately during device enumeration, based on the presented devices
+   * and their driver version (at the moment not checked, no public driver with a fix exists yet).
+   */
+  bool use_intel_copy_optimization = true;
 
   size_t get_free_mem() const;
 
@@ -67,12 +78,15 @@ class OneapiDevice : public GPUDevice {
   void mem_alloc(device_memory &mem) override;
   void mem_copy_to(device_memory &mem) override;
   void mem_move_to_host(device_memory &mem) override;
+  void mem_copy_from(device_memory &mem,
+                     const size_t y,
+                     size_t w,
+                     const size_t h,
+                     size_t elem,
+                     void *host_pointer);
   void mem_copy_from(
       device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem) override;
-  void mem_copy_from(device_memory &mem)
-  {
-    mem_copy_from(mem, 0, 0, 0, 0);
-  }
+  void mem_copy_from(device_memory &mem);
   void mem_zero(device_memory &mem) override;
   void mem_free(device_memory &mem) override;
 
@@ -83,10 +97,10 @@ class OneapiDevice : public GPUDevice {
   void global_copy_to(device_memory &mem);
   void global_free(device_memory &mem);
 
-  /* Texture memory. */
-  void tex_alloc(device_texture &mem);
-  void tex_copy_to(device_texture &mem);
-  void tex_free(device_texture &mem);
+  /* Image memory. */
+  void image_alloc(device_image &mem);
+  void image_copy_to(device_image &mem);
+  void image_free(device_image &mem);
 
   /* Host side memory, override for more efficient copies. */
   void *host_alloc(const MemoryType type, const size_t size) override;
@@ -117,6 +131,7 @@ class OneapiDevice : public GPUDevice {
   void *usm_aligned_alloc_host(const size_t memory_size, const size_t alignment);
   void usm_free(void *usm_ptr);
 
+  static void architecture_information(const SyclDevice *device, string &name, bool &is_optimized);
   static char *device_capabilities();
   static void iterate_devices(OneAPIDeviceIteratorCallback cb, void *user_ptr);
 
@@ -143,7 +158,10 @@ class OneapiDevice : public GPUDevice {
  protected:
   bool can_use_hardware_raytracing_for_features(const uint requested_features) const;
   void check_usm(SyclQueue *queue, const void *usm_ptr, bool allow_host);
-  bool create_queue(SyclQueue *&external_queue, const int device_index, void *embree_device);
+  bool create_queue(SyclQueue *&external_queue,
+                    const int device_index,
+                    void *embree_device,
+                    bool *multiple_level_zero_platforms_detected_pointer);
   void free_queue(SyclQueue *queue);
   void *usm_aligned_alloc_host(SyclQueue *queue, const size_t memory_size, const size_t alignment);
   void *usm_alloc_device(SyclQueue *queue, const size_t memory_size);

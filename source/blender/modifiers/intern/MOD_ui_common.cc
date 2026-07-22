@@ -6,8 +6,8 @@
  * \ingroup modifiers
  */
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -25,6 +25,7 @@
 #include "BLT_translation.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
@@ -35,7 +36,7 @@
 
 #include "MOD_ui_common.hh" /* Self include */
 
-using blender::StringRefNull;
+namespace blender {
 
 /**
  * Poll function so these modifier panels don't show for other object types with modifiers (only
@@ -43,7 +44,7 @@ using blender::StringRefNull;
  */
 static bool modifier_ui_poll(const bContext *C, PanelType * /*pt*/)
 {
-  Object *ob = blender::ed::object::context_active_object(C);
+  Object *ob = ed::object::context_active_object(C);
   return ob != nullptr;
 }
 
@@ -56,29 +57,28 @@ static bool modifier_ui_poll(const bContext *C, PanelType * /*pt*/)
  */
 static void modifier_reorder(bContext *C, Panel *panel, int new_index)
 {
-  PointerRNA *md_ptr = UI_panel_custom_data_get(panel);
-  ModifierData *md = (ModifierData *)md_ptr->data;
+  PointerRNA *md_ptr = ui::panel_custom_data_get(panel);
+  ModifierData *md = static_cast<ModifierData *>(md_ptr->data);
 
-  PointerRNA props_ptr;
   wmOperatorType *ot = WM_operatortype_find("OBJECT_OT_modifier_move_to_index", false);
-  WM_operator_properties_create_ptr(&props_ptr, ot);
+  PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
   RNA_string_set(&props_ptr, "modifier", md->name);
   RNA_int_set(&props_ptr, "index", new_index);
-  WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &props_ptr, nullptr);
+  WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &props_ptr, nullptr);
   WM_operator_properties_free(&props_ptr);
 }
 
 static short get_modifier_expand_flag(const bContext * /*C*/, Panel *panel)
 {
-  PointerRNA *md_ptr = UI_panel_custom_data_get(panel);
-  ModifierData *md = (ModifierData *)md_ptr->data;
+  PointerRNA *md_ptr = ui::panel_custom_data_get(panel);
+  ModifierData *md = static_cast<ModifierData *>(md_ptr->data);
   return md->ui_expand_flag;
 }
 
 static void set_modifier_expand_flag(const bContext * /*C*/, Panel *panel, short expand_flag)
 {
-  PointerRNA *md_ptr = UI_panel_custom_data_get(panel);
-  ModifierData *md = (ModifierData *)md_ptr->data;
+  PointerRNA *md_ptr = ui::panel_custom_data_get(panel);
+  ModifierData *md = static_cast<ModifierData *>(md_ptr->data);
   md->ui_expand_flag = expand_flag;
 }
 
@@ -87,13 +87,12 @@ static void set_modifier_expand_flag(const bContext * /*C*/, Panel *panel, short
 /* -------------------------------------------------------------------- */
 /** \name Modifier Panel Layouts
  * \{ */
-
-void modifier_error_message_draw(uiLayout *layout, PointerRNA *ptr)
+void modifier_error_message_draw(ui::Layout &layout, PointerRNA *ptr)
 {
   ModifierData *md = static_cast<ModifierData *>(ptr->data);
   if (md->error) {
-    uiLayout *row = &layout->row(false);
-    row->label(RPT_(md->error), ICON_ERROR);
+    ui::Layout &row = layout.row(false);
+    row.label(RPT_(md->error), ICON_STATUS_ERROR);
   }
 }
 
@@ -106,23 +105,23 @@ void modifier_error_message_draw(uiLayout *layout, PointerRNA *ptr)
 #define ERROR_LIBDATA_MESSAGE N_("External library data")
 PointerRNA *modifier_panel_get_property_pointers(Panel *panel, PointerRNA *r_ob_ptr)
 {
-  PointerRNA *ptr = UI_panel_custom_data_get(panel);
+  PointerRNA *ptr = ui::panel_custom_data_get(panel);
   BLI_assert(!RNA_pointer_is_null(ptr));
-  BLI_assert(RNA_struct_is_a(ptr->type, &RNA_Modifier));
+  BLI_assert(RNA_struct_is_a(ptr->type, RNA_Modifier));
 
   if (r_ob_ptr != nullptr) {
-    *r_ob_ptr = RNA_pointer_create_discrete(ptr->owner_id, &RNA_Object, ptr->owner_id);
+    *r_ob_ptr = RNA_pointer_create_discrete(ptr->owner_id, RNA_Object, ptr->owner_id);
   }
 
-  uiBlock *block = uiLayoutGetBlock(panel->layout);
-  UI_block_lock_set(block, !ID_IS_EDITABLE((Object *)ptr->owner_id), ERROR_LIBDATA_MESSAGE);
+  ui::Block *block = panel->layout->block();
+  block_lock_set(block, !ID_IS_EDITABLE((Object *)ptr->owner_id), ERROR_LIBDATA_MESSAGE);
 
-  UI_panel_context_pointer_set(panel, "modifier", ptr);
+  ui::panel_context_pointer_set(panel, "modifier", ptr);
 
   return ptr;
 }
 
-void modifier_vgroup_ui(uiLayout *layout,
+void modifier_vgroup_ui(ui::Layout &layout,
                         PointerRNA *ptr,
                         PointerRNA *ob_ptr,
                         const StringRefNull vgroup_prop,
@@ -131,32 +130,32 @@ void modifier_vgroup_ui(uiLayout *layout,
 {
   bool has_vertex_group = RNA_string_length(ptr, vgroup_prop.c_str()) != 0;
 
-  uiLayout *row = &layout->row(true);
-  uiItemPointerR(row, ptr, vgroup_prop, ob_ptr, "vertex_groups", text, ICON_GROUP_VERTEX);
+  ui::Layout &row = layout.row(true);
+  row.prop_search(ptr, vgroup_prop, ob_ptr, "vertex_groups", text, ICON_GROUP_VERTEX);
   if (invert_vgroup_prop) {
-    uiLayout *sub = &row->row(true);
-    uiLayoutSetActive(sub, has_vertex_group);
-    uiLayoutSetPropDecorate(sub, false);
-    sub->prop(ptr, *invert_vgroup_prop, UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
+    ui::Layout &sub = row.row(true);
+    sub.active_set(has_vertex_group);
+    sub.use_property_decorate_set(false);
+    sub.prop(ptr, *invert_vgroup_prop, UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
   }
 }
 
 void modifier_grease_pencil_curve_header_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  layout->prop(ptr, "use_custom_curve", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "use_custom_curve", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 void modifier_grease_pencil_curve_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  uiTemplateCurveMapping(layout, ptr, "curve", 0, false, false, false, false);
+  template_curve_mapping(&layout, ptr, "curve", 0, false, false, false, false, false);
 }
 
 /**
@@ -189,7 +188,7 @@ static bool modifier_can_delete(ModifierData *md)
 {
   /* fluid particle modifier can't be deleted here */
   if (md->type == eModifierType_ParticleSystem) {
-    short particle_type = ((ParticleSystemModifierData *)md)->psys->part->type;
+    short particle_type = (reinterpret_cast<ParticleSystemModifierData *>(md))->psys->part->type;
     if (ELEM(particle_type,
              PART_FLUID,
              PART_FLUID_FLIP,
@@ -208,17 +207,17 @@ static bool modifier_can_delete(ModifierData *md)
   return true;
 }
 
-static void modifier_ops_extra_draw(bContext *C, uiLayout *layout, void *md_v)
+static void modifier_ops_extra_draw(bContext *C, ui::Layout *layout, void *md_v)
 {
   PointerRNA op_ptr;
-  ModifierData *md = (ModifierData *)md_v;
+  ModifierData *md = static_cast<ModifierData *>(md_v);
 
-  Object *ob = blender::ed::object::context_active_object(C);
-  PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, &RNA_Modifier, md);
-  uiLayoutSetContextPointer(layout, "modifier", &ptr);
-  uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_DEFAULT);
+  Object *ob = ed::object::context_active_object(C);
+  PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, RNA_Modifier, md);
+  layout->context_ptr_set("modifier", &ptr);
+  layout->operator_context_set(wm::OpCallContext::InvokeDefault);
 
-  uiLayoutSetUnitsX(layout, 4.0f);
+  layout->ui_units_x_set(4.0f);
 
   /* Apply. */
   if (ob->type == OB_GREASE_PENCIL) {
@@ -229,7 +228,7 @@ static void modifier_ops_extra_draw(bContext *C, uiLayout *layout, void *md_v)
     op_ptr = layout->op("OBJECT_OT_modifier_apply",
                         IFACE_("Apply (All Keyframes)"),
                         ICON_KEYFRAME,
-                        WM_OP_INVOKE_DEFAULT,
+                        wm::OpCallContext::InvokeDefault,
                         UI_ITEM_NONE);
     RNA_boolean_set(&op_ptr, "all_keyframes", true);
   }
@@ -274,20 +273,28 @@ static void modifier_ops_extra_draw(bContext *C, uiLayout *layout, void *md_v)
   layout->separator();
 
   /* Move to first. */
-  op_ptr = layout->op("OBJECT_OT_modifier_move_to_index",
-                      IFACE_("Move to First"),
-                      ICON_TRIA_UP,
-                      WM_OP_INVOKE_DEFAULT,
-                      UI_ITEM_NONE);
-  RNA_int_set(&op_ptr, "index", 0);
+  {
+    ui::Layout &row = layout->row(false);
+    op_ptr = row.op("OBJECT_OT_modifier_move_to_index",
+                    IFACE_("Move to First"),
+                    ICON_TRIA_UP,
+                    wm::OpCallContext::InvokeDefault,
+                    UI_ITEM_NONE);
+    RNA_int_set(&op_ptr, "index", 0);
+    row.enabled_set(md->prev != nullptr);
+  }
 
   /* Move to last. */
-  op_ptr = layout->op("OBJECT_OT_modifier_move_to_index",
-                      IFACE_("Move to Last"),
-                      ICON_TRIA_DOWN,
-                      WM_OP_INVOKE_DEFAULT,
-                      UI_ITEM_NONE);
-  RNA_int_set(&op_ptr, "index", BLI_listbase_count(&ob->modifiers) - 1);
+  {
+    ui::Layout &row = layout->row(false);
+    op_ptr = row.op("OBJECT_OT_modifier_move_to_index",
+                    IFACE_("Move to Last"),
+                    ICON_TRIA_DOWN,
+                    wm::OpCallContext::InvokeDefault,
+                    UI_ITEM_NONE);
+    RNA_int_set(&op_ptr, "index", ob->modifiers.count() - 1);
+    row.enabled_set(md->next != nullptr);
+  }
 
   layout->separator();
 
@@ -298,56 +305,53 @@ static void modifier_ops_extra_draw(bContext *C, uiLayout *layout, void *md_v)
     op_ptr = layout->op("OBJECT_OT_geometry_nodes_move_to_nodes",
                         std::nullopt,
                         ICON_NONE,
-                        WM_OP_INVOKE_DEFAULT,
+                        wm::OpCallContext::InvokeDefault,
                         UI_ITEM_NONE);
     layout->prop(&ptr, "show_group_selector", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout->prop(&ptr, "show_manage_panel", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
 static void modifier_panel_header(const bContext *C, Panel *panel)
 {
-  uiLayout *row, *sub, *name_row;
-  uiLayout *layout = panel->layout;
+  ui::Layout *sub;
+  ui::Layout &layout = *panel->layout;
 
   /* Don't use #modifier_panel_get_property_pointers, we don't want to lock the header. */
-  PointerRNA *ptr = UI_panel_custom_data_get(panel);
-  ModifierData *md = (ModifierData *)ptr->data;
-  Object *ob = (Object *)ptr->owner_id;
+  PointerRNA *ptr = ui::panel_custom_data_get(panel);
+  ModifierData *md = static_cast<ModifierData *>(ptr->data);
+  Object *ob = id_cast<Object *>(ptr->owner_id);
 
-  UI_panel_context_pointer_set(panel, "modifier", ptr);
+  ui::panel_context_pointer_set(panel, "modifier", ptr);
 
-  const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
   Scene *scene = CTX_data_scene(C);
   int index = BLI_findindex(&ob->modifiers, md);
 
   /* Modifier Icon. */
-  sub = &layout->row(true);
-  uiLayoutSetEmboss(sub, blender::ui::EmbossType::None);
+  sub = &layout.row(true);
+  sub->emboss_set(ui::EmbossType::None);
   if (mti->is_disabled && mti->is_disabled(scene, md, false)) {
-    uiLayoutSetRedAlert(sub, true);
+    sub->red_alert_set(true);
   }
-  uiItemStringO(sub,
-                "",
-                RNA_struct_ui_icon(ptr->type),
-                "OBJECT_OT_modifier_set_active",
-                "modifier",
-                md->name);
+  PointerRNA op_ptr = sub->op("OBJECT_OT_modifier_set_active", "", RNA_struct_ui_icon(ptr->type));
+  RNA_string_set(&op_ptr, "modifier", md->name);
 
-  row = &layout->row(true);
+  ui::Layout &row = layout.row(true);
 
   /* Modifier Name.
    * Count how many buttons are added to the header to check if there is enough space. */
   int buttons_number = 0;
-  name_row = &row->row(true);
+  ui::Layout &name_row = row.row(true);
 
   /* Display mode switching buttons. */
   if (ob->type == OB_MESH) {
     int last_cage_index;
     int cage_index = BKE_modifiers_get_cage_index(scene, ob, &last_cage_index, false);
     if (BKE_modifier_supports_cage(scene, md) && (index <= last_cage_index)) {
-      sub = &row->row(true);
+      sub = &row.row(true);
       if (index < cage_index || !BKE_modifier_couldbe_cage(scene, md)) {
-        uiLayoutSetActive(sub, false);
+        sub->active_set(false);
       }
       sub->prop(ptr, "show_on_cage", UI_ITEM_NONE, "", ICON_NONE);
       buttons_number++;
@@ -357,23 +361,22 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
     /* Smooth modifier can work with tessellated curves only (works on mesh edges explicitly). */
     if (md->type == eModifierType_Smooth) {
       /* Add button (appearing to be OFF) and add tip why this can't be changed. */
-      sub = &row->row(true);
-      uiBlock *block = uiLayoutGetBlock(sub);
+      sub = &row.row(true);
+      ui::Block *block = sub->block();
       static int apply_on_spline_always_off_hack = 0;
-      uiBut *but = uiDefIconButBitI(block,
-                                    UI_BTYPE_TOGGLE,
-                                    eModifierMode_ApplyOnSpline,
-                                    0,
-                                    ICON_SURFACE_DATA,
-                                    0,
-                                    0,
-                                    UI_UNIT_X - 2,
-                                    UI_UNIT_Y,
-                                    &apply_on_spline_always_off_hack,
-                                    0.0,
-                                    0.0,
-                                    RPT_("Apply on Spline"));
-      UI_but_disable(but,
+      ui::Button *but = uiDefIconButBit(block,
+                                        ui::ButtonType::Toggle,
+                                        eModifierMode_ApplyOnSpline,
+                                        ICON_SURFACE_DATA,
+                                        0,
+                                        0,
+                                        UI_UNIT_X - 2,
+                                        UI_UNIT_Y,
+                                        &apply_on_spline_always_off_hack,
+                                        0.0,
+                                        0.0,
+                                        RPT_("Apply on Spline"));
+      button_disable(but,
                      "This modifier can only deform filled curve/surface, not the control points");
       buttons_number++;
     }
@@ -381,78 +384,81 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
     else if (ELEM(md->type, eModifierType_Hook, eModifierType_Softbody, eModifierType_MeshDeform))
     {
       /* Add button (appearing to be ON) and add tip why this can't be changed. */
-      sub = &row->row(true);
-      uiBlock *block = uiLayoutGetBlock(sub);
+      sub = &row.row(true);
+      ui::Block *block = sub->block();
       static int apply_on_spline_always_on_hack = eModifierMode_ApplyOnSpline;
-      uiBut *but = uiDefIconButBitI(block,
-                                    UI_BTYPE_TOGGLE,
-                                    eModifierMode_ApplyOnSpline,
-                                    0,
-                                    ICON_SURFACE_DATA,
-                                    0,
-                                    0,
-                                    UI_UNIT_X - 2,
-                                    UI_UNIT_Y,
-                                    &apply_on_spline_always_on_hack,
-                                    0.0,
-                                    0.0,
-                                    RPT_("Apply on Spline"));
-      UI_but_disable(but,
+      ui::Button *but = uiDefIconButBit(block,
+                                        ui::ButtonType::Toggle,
+                                        eModifierMode_ApplyOnSpline,
+                                        ICON_SURFACE_DATA,
+                                        0,
+                                        0,
+                                        UI_UNIT_X - 2,
+                                        UI_UNIT_Y,
+                                        &apply_on_spline_always_on_hack,
+                                        0.0,
+                                        0.0,
+                                        RPT_("Apply on Spline"));
+      button_disable(but,
                      "This modifier can only deform control points, not the filled curve/surface");
       buttons_number++;
     }
     else if (mti->type != ModifierTypeType::Constructive) {
       /* Constructive modifiers tessellates curve before applying. */
-      row->prop(ptr, "use_apply_on_spline", UI_ITEM_NONE, "", ICON_NONE);
+      row.prop(ptr, "use_apply_on_spline", UI_ITEM_NONE, "", ICON_NONE);
       buttons_number++;
     }
   }
   /* Collision and Surface are always enabled, hide buttons. */
   if (!ELEM(md->type, eModifierType_Collision, eModifierType_Surface)) {
-    if (mti->flags & eModifierTypeFlag_SupportsEditmode) {
-      sub = &row->row(true);
-      uiLayoutSetActive(sub, (md->mode & eModifierMode_Realtime));
+    if (ob->type != OB_EMPTY && (mti->flags & eModifierTypeFlag_SupportsEditmode) != 0) {
+      sub = &row.row(true);
+      sub->active_set(md->mode & eModifierMode_Realtime);
       sub->prop(ptr, "show_in_editmode", UI_ITEM_NONE, "", ICON_NONE);
       buttons_number++;
     }
-    row->prop(ptr, "show_viewport", UI_ITEM_NONE, "", ICON_NONE);
-    row->prop(ptr, "show_render", UI_ITEM_NONE, "", ICON_NONE);
+    row.prop(ptr, "show_viewport", UI_ITEM_NONE, "", ICON_NONE);
+    row.prop(ptr, "show_render", UI_ITEM_NONE, "", ICON_NONE);
     buttons_number += 2;
   }
 
   /* Extra operators menu. */
-  row->menu_fn("", ICON_DOWNARROW_HLT, modifier_ops_extra_draw, md);
+  row.menu_fn("", ICON_DOWNARROW_HLT, modifier_ops_extra_draw, md);
 
   /* Delete button. */
   if (modifier_can_delete(md) && !modifier_is_simulation(md)) {
-    sub = &row->row(false);
-    uiLayoutSetEmboss(sub, blender::ui::EmbossType::None);
+    sub = &row.row(false);
+    sub->emboss_set(ui::EmbossType::None);
     sub->op("OBJECT_OT_modifier_remove", "", ICON_X);
     buttons_number++;
   }
 
   /* Switch context buttons. */
   if (modifier_is_simulation(md) == 1) {
-    uiItemStringO(
-        row, "", ICON_PROPERTIES, "WM_OT_properties_context_change", "context", "PHYSICS");
+    PointerRNA op_ptr = row.op("WM_OT_properties_context_change", "", ICON_PROPERTIES);
+    if (!RNA_pointer_is_null(&op_ptr)) {
+      RNA_string_set(&op_ptr, "context", "PHYSICS");
+    }
     buttons_number++;
   }
   else if (modifier_is_simulation(md) == 2) {
-    uiItemStringO(
-        row, "", ICON_PROPERTIES, "WM_OT_properties_context_change", "context", "PARTICLES");
+    PointerRNA op_ptr = row.op("WM_OT_properties_context_change", "", ICON_PROPERTIES);
+    if (!RNA_pointer_is_null(&op_ptr)) {
+      RNA_string_set(&op_ptr, "context", "PARTICLES");
+    }
     buttons_number++;
   }
 
   bool display_name = (panel->sizex / UI_UNIT_X - buttons_number > 5) || (panel->sizex == 0);
   if (display_name) {
-    name_row->prop(ptr, "name", UI_ITEM_NONE, "", ICON_NONE);
+    name_row.prop(ptr, "name", UI_ITEM_NONE, "", ICON_NONE);
   }
   else {
-    uiLayoutSetAlignment(row, UI_LAYOUT_ALIGN_RIGHT);
+    row.alignment_set(ui::LayoutAlign::Right);
   }
 
   /* Extra padding for delete button. */
-  layout->separator();
+  layout.separator();
 }
 
 /** \} */
@@ -463,14 +469,14 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
 
 PanelType *modifier_panel_register(ARegionType *region_type, ModifierType type, PanelDrawFn draw)
 {
-  PanelType *panel_type = MEM_callocN<PanelType>(__func__);
+  PanelType *panel_type = MEM_new_zeroed<PanelType>(__func__);
 
   BKE_modifier_type_panel_id(type, panel_type->idname);
-  STRNCPY(panel_type->label, "");
-  STRNCPY(panel_type->context, "modifier");
-  STRNCPY(panel_type->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
-  STRNCPY(panel_type->active_property, "is_active");
-  STRNCPY(panel_type->pin_to_last_property, "use_pin_to_last");
+  STRNCPY_UTF8(panel_type->label, "");
+  STRNCPY_UTF8(panel_type->context, "modifier");
+  STRNCPY_UTF8(panel_type->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
+  STRNCPY_UTF8(panel_type->active_property, "is_active");
+  STRNCPY_UTF8(panel_type->pin_to_last_property, "use_pin_to_last");
 
   panel_type->draw_header = modifier_panel_header;
   panel_type->draw = draw;
@@ -495,21 +501,21 @@ PanelType *modifier_subpanel_register(ARegionType *region_type,
                                       PanelDrawFn draw,
                                       PanelType *parent)
 {
-  PanelType *panel_type = MEM_callocN<PanelType>(__func__);
+  PanelType *panel_type = MEM_new_zeroed<PanelType>(__func__);
 
   BLI_assert(parent != nullptr);
-  SNPRINTF(panel_type->idname, "%s_%s", parent->idname, name);
-  STRNCPY(panel_type->label, label);
-  STRNCPY(panel_type->context, "modifier");
-  STRNCPY(panel_type->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
-  STRNCPY(panel_type->active_property, "is_active");
+  SNPRINTF_UTF8(panel_type->idname, "%s_%s", parent->idname, name);
+  STRNCPY_UTF8(panel_type->label, label);
+  STRNCPY_UTF8(panel_type->context, "modifier");
+  STRNCPY_UTF8(panel_type->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
+  STRNCPY_UTF8(panel_type->active_property, "is_active");
 
   panel_type->draw_header = draw_header;
   panel_type->draw = draw;
   panel_type->poll = modifier_ui_poll;
   panel_type->flag = PANEL_TYPE_DEFAULT_CLOSED;
 
-  STRNCPY(panel_type->parent_id, parent->idname);
+  STRNCPY_UTF8(panel_type->parent_id, parent->idname);
   panel_type->parent = parent;
   BLI_addtail(&parent->children, BLI_genericNodeN(panel_type));
   BLI_addtail(&region_type->paneltypes, panel_type);
@@ -518,3 +524,5 @@ PanelType *modifier_subpanel_register(ARegionType *region_type,
 }
 
 /** \} */
+
+}  // namespace blender

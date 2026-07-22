@@ -8,15 +8,18 @@
 
 #pragma once
 
+#include "DNA_listBase.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_kdopbvh.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "ED_transform_snap_object_context.hh"
+
+namespace blender {
 
 #define MAX_CLIPPLANE_LEN 6
 
@@ -29,17 +32,14 @@ struct BMFace;
 struct BMVert;
 struct Depsgraph;
 struct ID;
-struct ListBase;
 struct Object;
 struct RegionView3D;
 struct Scene;
 struct View3D;
 
-namespace blender::ed::transform {
+namespace ed::transform {
 
 struct SnapObjectContext {
-  Scene *scene;
-
   struct SnapCache {
     virtual ~SnapCache() = default;
   };
@@ -86,6 +86,8 @@ struct SnapObjectContext {
 
     /* Read/write. */
     uint object_index;
+    /* List of #SnapObjectHitDepth (caller must free). */
+    ListBaseT<SnapObjectHitDepth> *hit_list;
 
     eSnapOcclusionTest occlusion_test_edit;
 
@@ -94,7 +96,7 @@ struct SnapObjectContext {
   } runtime;
 
   /* Output. */
-  struct {
+  struct Output {
     /* Location of snapped point on target surface. */
     float3 loc;
     /* Normal of snapped point on target surface. */
@@ -103,8 +105,6 @@ struct SnapObjectContext {
     int index;
     /* Matrix of target object (may not be #Object.object_to_world with dupli-instances). */
     float4x4 obmat;
-    /* List of #SnapObjectHitDepth (caller must free). */
-    ListBase *hit_list;
     /* Snapped object. */
     const Object *ob;
     /* Snapped data. */
@@ -133,7 +133,7 @@ struct RayCastAll_Data {
   uint ob_uuid;
 
   /* Output data. */
-  ListBase *hit_list;
+  ListBaseT<SnapObjectHitDepth> *hit_list;
 };
 
 class SnapData {
@@ -172,9 +172,11 @@ class SnapData {
                                       const BVHTreeRayHit *hit,
                                       const bool is_in_front);
 
-  virtual void get_vert_co(const int /*index*/, const float ** /*r_co*/){};
-  virtual void get_edge_verts_index(const int /*index*/, int /*r_v_index*/[2]){};
-  virtual void copy_vert_no(const int /*index*/, float /*r_no*/[3]){};
+  virtual void get_vert_co(const int /*index*/, const float ** /*r_co*/) {};
+  virtual void get_edge_verts_index(const int /*index*/, int /*r_v_index*/[2]) {};
+  virtual void copy_vert_no(const int /*index*/, float /*r_no*/[3]) {};
+  virtual void get_face_center(const int /*face_index*/, float3 & /*r_center*/) {};
+  virtual void copy_face_no(const int /*face_index*/, float /*r_no*/[3]) {};
 };
 
 /* `transform_snap_object.cc` */
@@ -198,6 +200,13 @@ void cb_snap_edge(void *userdata,
                   const int clip_plane_len,
                   BVHTreeNearest *nearest);
 
+void cb_snap_face_midpoint(void *userdata,
+                           int face_index,
+                           const DistProjectedAABBPrecalc *precalc,
+                           const float (*clip_plane)[4],
+                           int clip_plane_len,
+                           BVHTreeNearest *nearest);
+
 bool nearest_world_tree(SnapObjectContext *sctx,
                         const BVHTree *tree,
                         BVHTree_NearestPointCallback nearest_cb,
@@ -216,6 +225,10 @@ eSnapMode snapArmature(SnapObjectContext *sctx,
                        const Object *ob_eval,
                        const float4x4 &obmat,
                        bool is_object_active);
+
+/* `transform_snap_object_lattice.cc` */
+
+eSnapMode snapLattice(SnapObjectContext *sctx, const Object *ob_eval, const float4x4 &obmat);
 
 /* `transform_snap_object_camera.cc` */
 
@@ -261,4 +274,5 @@ eSnapMode snap_edge_points_mesh(SnapObjectContext *sctx,
                                 float dist_px_sq_orig,
                                 int edge_index);
 
-}  // namespace blender::ed::transform
+}  // namespace ed::transform
+}  // namespace blender

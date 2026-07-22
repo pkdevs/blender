@@ -10,20 +10,22 @@
 
 #include "DNA_defs.h"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name #ColorBand Types
  * \{ */
 
 /** #ColorBand::color_mode. */
-enum {
-  COLBAND_BLEND_RGB,
+enum eColorBand_ColorMode : char {
+  COLBAND_BLEND_RGB = 0,
   COLBAND_BLEND_HSV = 1,
   COLBAND_BLEND_HSL = 2,
 };
 
 /** #ColorBand::ipotype (interpolation). */
-enum {
-  COLBAND_INTERP_LINEAR,
+enum eColorBand_Interp : char {
+  COLBAND_INTERP_LINEAR = 0,
   COLBAND_INTERP_EASE = 1,
   COLBAND_INTERP_B_SPLINE = 2,
   COLBAND_INTERP_CARDINAL = 3,
@@ -31,8 +33,8 @@ enum {
 };
 
 /** #ColorBand::ipotype_hue (hue interpolation). */
-enum {
-  COLBAND_HUE_NEAR,
+enum eColorBand_HueInterp : char {
+  COLBAND_HUE_NEAR = 0,
   COLBAND_HUE_FAR = 1,
   COLBAND_HUE_CW = 2,
   COLBAND_HUE_CCW = 3,
@@ -54,22 +56,25 @@ enum {
 typedef unsigned short dna_ushort_fix;
 #endif
 
-typedef struct CBData {
-  float r, g, b, a, pos;
-  int cur;
-} CBData;
+struct CBData {
+  float r = 0, g = 0, b = 0, a = 0, pos = 0;
+  int cur = 0;
+};
 
 /**
  * 32 = #MAXCOLORBAND
  * \note that this has to remain a single struct, for UserDef.
  */
-typedef struct ColorBand {
-  short tot, cur;
-  char ipotype, ipotype_hue;
-  char color_mode;
-  char _pad[1];
+struct ColorBand {
+  short tot = 0, cur = 0;
+  eColorBand_Interp ipotype = COLBAND_INTERP_LINEAR;
+  eColorBand_HueInterp ipotype_hue = COLBAND_HUE_NEAR;
+  eColorBand_ColorMode color_mode = COLBAND_BLEND_RGB;
+  char _pad[1] = {};
 
   CBData data[32];
-} ColorBand;
+};
 
 /** \} */
+
+}  // namespace blender

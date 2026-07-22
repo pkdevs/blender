@@ -12,25 +12,29 @@
 #include <cctype>
 #include <cstring>
 
-#include "BLI_alloca.h"
-#include "BLI_endian_defines.h"
-#include "BLI_endian_switch.h"
-#include "BLI_fileops.h"
-#include "BLI_filereader.h"
-#include "BLI_string.h"
+#include "BLI_alloca.hh"
+#include "BLI_endian_defines.hh"
+#include "BLI_fileops.hh"
+#include "BLI_filereader.hh"
+#include "BLI_string.hh"
 
 #include "BLO_core_bhead.hh"
 #include "BLO_core_blend_header.hh"
+#include "BLO_core_file_reader.hh"
 
 #include "blendthumb.hh"
 
+namespace blender {
+
+BLI_STATIC_ASSERT(ENDIAN_ORDER == L_ENDIAN, "Blender only builds on little endian systems")
+
 static void thumb_data_vertical_flip(Thumbnail *thumb)
 {
-  uint32_t *rect = (uint32_t *)thumb->data.data();
+  uint32_t *rect = reinterpret_cast<uint32_t *>(thumb->data.data());
   int x = thumb->width, y = thumb->height;
   uint32_t *top = rect;
   uint32_t *bottom = top + ((y - 1) * x);
-  uint32_t *line = (uint32_t *)malloc(x * sizeof(uint32_t));
+  uint32_t *line = static_cast<uint32_t *>(malloc(x * sizeof(uint32_t)));
 
   y >>= 1;
   for (; y > 0; y--) {
@@ -43,13 +47,12 @@ static void thumb_data_vertical_flip(Thumbnail *thumb)
   free(line);
 }
 
-static int32_t bytes_to_native_i32(const uint8_t bytes[4], bool endian_switch)
+static int32_t bytes_to_native_i32(const uint8_t bytes[4])
 {
   int32_t data;
   memcpy(&data, bytes, 4);
-  if (endian_switch) {
-    BLI_endian_switch_int32(&data);
-  }
+  /* NOTE: this is endianness-sensitive. */
+  /* PNG is always little-endian, and would require switching on a big-endian system. */
   return data;
 }
 
@@ -69,7 +72,7 @@ static bool file_seek(FileReader *file, size_t len)
 
   /* File doesn't support seeking (e.g. gzip), so read and discard in chunks. */
   constexpr size_t dummy_data_size = 4096;
-  blender::Array<char> dummy_data(dummy_data_size);
+  Array<char> dummy_data(dummy_data_size);
   while (len > 0) {
     const size_t len_chunk = std::min(len, dummy_data_size);
     if (size_t(file->read(file, dummy_data.data(), len_chunk)) != len_chunk) {
@@ -84,12 +87,11 @@ static eThumbStatus blendthumb_extract_from_file_impl(FileReader *file,
                                                       Thumbnail *thumb,
                                                       const BlenderHeader &header)
 {
-  const bool endian_switch = header.endian != ENDIAN_ORDER;
+  BLI_assert(header.endian == L_ENDIAN);
   /* Iterate over file blocks until we find the thumbnail or run out of data. */
   while (true) {
     /* Read next BHead. */
-    const std::optional<BHead> bhead = BLO_readfile_read_bhead(
-        file, header.bhead_type(), endian_switch);
+    const std::optional<BHead> bhead = BLO_readfile_read_bhead(file, header.bhead_type());
     if (!bhead.has_value()) {
       /* File has ended. */
       return BT_INVALID_THUMB;
@@ -104,8 +106,8 @@ static eThumbStatus blendthumb_extract_from_file_impl(FileReader *file,
         if (!file_read(file, shape, sizeof(shape))) {
           return BT_INVALID_THUMB;
         }
-        thumb->width = bytes_to_native_i32(&shape[0], endian_switch);
-        thumb->height = bytes_to_native_i32(&shape[4], endian_switch);
+        thumb->width = bytes_to_native_i32(&shape[0]);
+        thumb->height = bytes_to_native_i32(&shape[4]);
 
         /* Verify that image dimensions and data size make sense. */
         size_t data_size = bhead->len - sizeof(shape);
@@ -114,7 +116,7 @@ static eThumbStatus blendthumb_extract_from_file_impl(FileReader *file,
           return BT_INVALID_THUMB;
         }
 
-        thumb->data = blender::Array<uint8_t>(data_size);
+        thumb->data = Array<uint8_t>(data_size);
         if (!file_read(file, thumb->data.data(), data_size)) {
           return BT_INVALID_THUMB;
         }
@@ -139,39 +141,7 @@ static eThumbStatus blendthumb_extract_from_file_impl(FileReader *file,
 
 eThumbStatus blendthumb_create_thumb_from_file(FileReader *rawfile, Thumbnail *thumb)
 {
-  /* Read header in order to identify file type. */
-  char magic_bytes[12];
-  if (rawfile->read(rawfile, magic_bytes, sizeof(magic_bytes)) != sizeof(magic_bytes)) {
-    rawfile->close(rawfile);
-    return BT_ERROR;
-  }
-
-  /* Rewind the file after reading the header. */
-  rawfile->seek(rawfile, 0, SEEK_SET);
-
-  /* Try to identify the file type from the header. */
-  FileReader *file = nullptr;
-  if (BLI_str_startswith(magic_bytes, "BLENDER")) {
-    file = rawfile;
-    rawfile = nullptr;
-  }
-  else if (BLI_file_magic_is_gzip(magic_bytes)) {
-    file = BLI_filereader_new_gzip(rawfile);
-    if (file != nullptr) {
-      rawfile = nullptr; /* The GZIP #FileReader takes ownership of raw-file. */
-    }
-  }
-  else if (BLI_file_magic_is_zstd(magic_bytes)) {
-    file = BLI_filereader_new_zstd(rawfile);
-    if (file != nullptr) {
-      rawfile = nullptr; /* The ZSTD #FileReader takes ownership of raw-file. */
-    }
-  }
-
-  /* Clean up rawfile if it wasn't taken over. */
-  if (rawfile != nullptr) {
-    rawfile->close(rawfile);
-  }
+  FileReader *file = BLO_file_reader_uncompressed(rawfile);
 
   if (file == nullptr) {
     return BT_ERROR;
@@ -190,6 +160,13 @@ eThumbStatus blendthumb_create_thumb_from_file(FileReader *rawfile, Thumbnail *t
     return BT_EARLY_VERSION;
   }
 
+  /* Check if the file was written from a big-endian build. */
+  if (header.endian != L_ENDIAN) {
+    file->close(file);
+    return BT_INVALID_FILE;
+  }
+  BLI_assert(header.endian == ENDIAN_ORDER);
+
   /* Read the thumbnail. */
   eThumbStatus err = blendthumb_extract_from_file_impl(file, thumb, header);
   file->close(file);
@@ -200,3 +177,5 @@ eThumbStatus blendthumb_create_thumb_from_file(FileReader *rawfile, Thumbnail *t
   thumb_data_vertical_flip(thumb);
   return BT_OK;
 }
+
+}  // namespace blender

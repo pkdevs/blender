@@ -16,6 +16,8 @@
 #include "intern/gpu_shader_create_info_private.hh"
 #include "intern/gpu_shader_dependency_private.hh"
 
+namespace blender {
+
 /**
  * although the order of initialization and shutdown should not matter
  * (except for the extensions), I chose alphabetical and reverse alphabetical order
@@ -36,6 +38,7 @@ void GPU_init()
   gpu_shader_dependency_init();
   gpu_shader_create_info_init();
 
+  GPU_shader_builtin_warm_up();
   GPU_pass_cache_init();
 
   gpu_batch_init();
@@ -62,3 +65,5 @@ bool GPU_is_init()
 {
   return initialized;
 }
+
+}  // namespace blender

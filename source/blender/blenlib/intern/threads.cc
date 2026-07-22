@@ -6,18 +6,18 @@
  * \ingroup bli
  */
 
+#include <algorithm>
 #include <cerrno>
+#include <cstdio> /* For `printf`. */
 #include <cstdlib>
-#include <cstring>
+#include <deque>
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_gsqueue.h"
-#include "BLI_listbase.h"
-#include "BLI_system.h"
-#include "BLI_task.h"
-#include "BLI_threads.h"
-#include "BLI_time.h"
+#include "BLI_listbase.hh"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 /* for checking system threads - BLI_system_thread_count */
 #ifdef WIN32
@@ -37,6 +37,8 @@
 
 #include "atomic_ops.h"
 
+namespace blender {
+
 /**
  * Basic Thread Control API
  * ========================
@@ -51,7 +53,7 @@
  *
  * \code{.c}
  *
- *   ListBase lb;
+ *   ListBaseT<ThreadSlot> lb;
  *   int max_threads = 2;
  *   int cont = 1;
  *
@@ -93,7 +95,6 @@ static pthread_mutex_t _viewer_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t _custom1_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t _nodes_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t _movieclip_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t _colormanage_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t _fftw_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t _view3d_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t mainid;
@@ -118,12 +119,12 @@ void BLI_threadapi_init()
 
 void BLI_threadapi_exit() {}
 
-void BLI_threadpool_init(ListBase *threadbase, void *(*do_thread)(void *), int tot)
+void BLI_threadpool_init(ListBaseT<ThreadSlot> *threadbase, void *(*do_thread)(void *), int tot)
 {
   int a;
 
   if (threadbase != nullptr && tot > 0) {
-    BLI_listbase_clear(threadbase);
+    threadbase->clear_no_delete();
 
     if (tot > RE_MAX_THREAD) {
       tot = RE_MAX_THREAD;
@@ -133,7 +134,7 @@ void BLI_threadpool_init(ListBase *threadbase, void *(*do_thread)(void *), int t
     }
 
     for (a = 0; a < tot; a++) {
-      ThreadSlot *tslot = MEM_callocN<ThreadSlot>("threadslot");
+      ThreadSlot *tslot = MEM_new_zeroed<ThreadSlot>("threadslot");
       BLI_addtail(threadbase, tslot);
       tslot->do_thread = do_thread;
       tslot->avail = 1;
@@ -143,12 +144,12 @@ void BLI_threadpool_init(ListBase *threadbase, void *(*do_thread)(void *), int t
   atomic_fetch_and_add_u(&thread_levels, 1);
 }
 
-int BLI_available_threads(ListBase *threadbase)
+int BLI_available_threads(ListBaseT<ThreadSlot> *threadbase)
 {
   int counter = 0;
 
-  LISTBASE_FOREACH (ThreadSlot *, tslot, threadbase) {
-    if (tslot->avail) {
+  for (ThreadSlot &tslot : *threadbase) {
+    if (tslot.avail) {
       counter++;
     }
   }
@@ -156,12 +157,12 @@ int BLI_available_threads(ListBase *threadbase)
   return counter;
 }
 
-int BLI_threadpool_available_thread_index(ListBase *threadbase)
+int BLI_threadpool_available_thread_index(ListBaseT<ThreadSlot> *threadbase)
 {
   int counter = 0;
 
-  LISTBASE_FOREACH (ThreadSlot *, tslot, threadbase) {
-    if (tslot->avail) {
+  for (ThreadSlot &tslot : *threadbase) {
+    if (tslot.avail) {
       return counter;
     }
     ++counter;
@@ -172,7 +173,7 @@ int BLI_threadpool_available_thread_index(ListBase *threadbase)
 
 static void *tslot_thread_start(void *tslot_p)
 {
-  ThreadSlot *tslot = (ThreadSlot *)tslot_p;
+  ThreadSlot *tslot = static_cast<ThreadSlot *>(tslot_p);
   return tslot->do_thread(tslot->callerdata);
 }
 
@@ -181,71 +182,71 @@ int BLI_thread_is_main()
   return pthread_equal(pthread_self(), mainid);
 }
 
-void BLI_threadpool_insert(ListBase *threadbase, void *callerdata)
+void BLI_threadpool_insert(ListBaseT<ThreadSlot> *threadbase, void *callerdata)
 {
-  LISTBASE_FOREACH (ThreadSlot *, tslot, threadbase) {
-    if (tslot->avail) {
-      tslot->avail = 0;
-      tslot->callerdata = callerdata;
-      pthread_create(&tslot->pthread, nullptr, tslot_thread_start, tslot);
+  for (ThreadSlot &tslot : *threadbase) {
+    if (tslot.avail) {
+      tslot.avail = 0;
+      tslot.callerdata = callerdata;
+      pthread_create(&tslot.pthread, nullptr, tslot_thread_start, &tslot);
       return;
     }
   }
   printf("ERROR: could not insert thread slot\n");
 }
 
-void BLI_threadpool_remove(ListBase *threadbase, void *callerdata)
+void BLI_threadpool_remove(ListBaseT<ThreadSlot> *threadbase, void *callerdata)
 {
-  LISTBASE_FOREACH (ThreadSlot *, tslot, threadbase) {
-    if (tslot->callerdata == callerdata) {
-      pthread_join(tslot->pthread, nullptr);
-      tslot->callerdata = nullptr;
-      tslot->avail = 1;
+  for (ThreadSlot &tslot : *threadbase) {
+    if (tslot.callerdata == callerdata) {
+      pthread_join(tslot.pthread, nullptr);
+      tslot.callerdata = nullptr;
+      tslot.avail = 1;
     }
   }
 }
 
-void BLI_threadpool_remove_index(ListBase *threadbase, int index)
+void BLI_threadpool_remove_index(ListBaseT<ThreadSlot> *threadbase, int index)
 {
   int counter = 0;
 
-  LISTBASE_FOREACH (ThreadSlot *, tslot, threadbase) {
-    if (counter == index && tslot->avail == 0) {
-      pthread_join(tslot->pthread, nullptr);
-      tslot->callerdata = nullptr;
-      tslot->avail = 1;
+  for (ThreadSlot &tslot : *threadbase) {
+    if (counter == index && tslot.avail == 0) {
+      pthread_join(tslot.pthread, nullptr);
+      tslot.callerdata = nullptr;
+      tslot.avail = 1;
       break;
     }
     ++counter;
   }
 }
 
-void BLI_threadpool_clear(ListBase *threadbase)
+void BLI_threadpool_clear(ListBaseT<ThreadSlot> *threadbase)
 {
-  LISTBASE_FOREACH (ThreadSlot *, tslot, threadbase) {
-    if (tslot->avail == 0) {
-      pthread_join(tslot->pthread, nullptr);
-      tslot->callerdata = nullptr;
-      tslot->avail = 1;
+  for (ThreadSlot &tslot : *threadbase) {
+    if (tslot.avail == 0) {
+      pthread_join(tslot.pthread, nullptr);
+      tslot.callerdata = nullptr;
+      tslot.avail = 1;
     }
   }
 }
 
-void BLI_threadpool_end(ListBase *threadbase)
+void BLI_threadpool_end(ListBaseT<ThreadSlot> *threadbase)
 {
 
   /* Only needed if there's actually some stuff to end
    * this way we don't end up decrementing thread_levels on an empty `threadbase`. */
-  if (threadbase == nullptr || BLI_listbase_is_empty(threadbase)) {
+  if (threadbase == nullptr || threadbase->is_empty()) {
     return;
   }
 
-  LISTBASE_FOREACH (ThreadSlot *, tslot, threadbase) {
-    if (tslot->avail == 0) {
-      pthread_join(tslot->pthread, nullptr);
+  for (ThreadSlot &tslot : *threadbase) {
+    if (tslot.avail == 0) {
+      pthread_join(tslot.pthread, nullptr);
     }
   }
-  BLI_freelistN(threadbase);
+  threadbase->free_no_destruct();
 }
 
 /* System Information */
@@ -257,7 +258,7 @@ int BLI_system_thread_count()
   if (threads_override_num != 0) {
     return threads_override_num;
   }
-  if (LIKELY(t != -1)) {
+  if (t != -1) [[likely]] {
     return t;
   }
 
@@ -313,8 +314,6 @@ static ThreadMutex *global_mutex_from_type(const int type)
       return &_nodes_lock;
     case LOCK_MOVIECLIP:
       return &_movieclip_lock;
-    case LOCK_COLORMANAGE:
-      return &_colormanage_lock;
     case LOCK_FFTW:
       return &_fftw_lock;
     case LOCK_VIEW3D:
@@ -364,7 +363,7 @@ void BLI_mutex_end(ThreadMutex *mutex)
 
 ThreadMutex *BLI_mutex_alloc()
 {
-  ThreadMutex *mutex = MEM_callocN<ThreadMutex>("ThreadMutex");
+  ThreadMutex *mutex = MEM_new_zeroed<ThreadMutex>("ThreadMutex");
   BLI_mutex_init(mutex);
   return mutex;
 }
@@ -372,7 +371,7 @@ ThreadMutex *BLI_mutex_alloc()
 void BLI_mutex_free(ThreadMutex *mutex)
 {
   BLI_mutex_end(mutex);
-  MEM_freeN(mutex);
+  MEM_delete(mutex);
 }
 
 /* Spin Locks */
@@ -486,7 +485,7 @@ void BLI_rw_mutex_end(ThreadRWMutex *mutex)
 
 ThreadRWMutex *BLI_rw_mutex_alloc()
 {
-  ThreadRWMutex *mutex = MEM_callocN<ThreadRWMutex>("ThreadRWMutex");
+  ThreadRWMutex *mutex = MEM_new_zeroed<ThreadRWMutex>("ThreadRWMutex");
   BLI_rw_mutex_init(mutex);
   return mutex;
 }
@@ -494,7 +493,7 @@ ThreadRWMutex *BLI_rw_mutex_alloc()
 void BLI_rw_mutex_free(ThreadRWMutex *mutex)
 {
   BLI_rw_mutex_end(mutex);
-  MEM_freeN(mutex);
+  MEM_delete(mutex);
 }
 
 /* Ticket Mutex Lock */
@@ -509,7 +508,7 @@ struct TicketMutex {
 
 TicketMutex *BLI_ticket_mutex_alloc()
 {
-  TicketMutex *ticket = MEM_callocN<TicketMutex>("TicketMutex");
+  TicketMutex *ticket = MEM_new_zeroed<TicketMutex>("TicketMutex");
 
   pthread_cond_init(&ticket->cond, nullptr);
   pthread_mutex_init(&ticket->mutex, nullptr);
@@ -521,7 +520,7 @@ void BLI_ticket_mutex_free(TicketMutex *ticket)
 {
   pthread_mutex_destroy(&ticket->mutex);
   pthread_cond_destroy(&ticket->cond);
-  MEM_freeN(ticket);
+  MEM_delete(ticket);
 }
 
 static bool ticket_mutex_lock(TicketMutex *ticket, const bool check_recursive)
@@ -604,21 +603,26 @@ void BLI_condition_end(ThreadCondition *cond)
 
 /* ************************************************ */
 
+struct ThreadQueueWork {
+  void *work;
+  uint64_t id;
+};
+
 struct ThreadQueue {
-  GSQueue *queue;
+  uint64_t current_id = 0;
+  std::deque<ThreadQueueWork> queue_low_priority;
+  std::deque<ThreadQueueWork> queue_normal_priority;
+  std::deque<ThreadQueueWork> queue_high_priority;
   pthread_mutex_t mutex;
   pthread_cond_t push_cond;
   pthread_cond_t finish_cond;
-  volatile int nowait;
-  volatile int canceled;
+  volatile int nowait = 0;
+  volatile int canceled = 0;
 };
 
 ThreadQueue *BLI_thread_queue_init()
 {
-  ThreadQueue *queue;
-
-  queue = MEM_callocN<ThreadQueue>("ThreadQueue");
-  queue->queue = BLI_gsqueue_new(sizeof(void *));
+  ThreadQueue *queue = MEM_new<ThreadQueue>(__func__);
 
   pthread_mutex_init(&queue->mutex, nullptr);
   pthread_cond_init(&queue->push_cond, nullptr);
@@ -634,44 +638,111 @@ void BLI_thread_queue_free(ThreadQueue *queue)
   pthread_cond_destroy(&queue->push_cond);
   pthread_mutex_destroy(&queue->mutex);
 
-  BLI_gsqueue_free(queue->queue);
-
-  MEM_freeN(queue);
+  MEM_delete(queue);
 }
 
-void BLI_thread_queue_push(ThreadQueue *queue, void *work)
+uint64_t BLI_thread_queue_push(ThreadQueue *queue, void *work, ThreadQueueWorkPriority priority)
 {
+  BLI_assert(work);
+
   pthread_mutex_lock(&queue->mutex);
 
-  BLI_gsqueue_push(queue->queue, &work);
+  ThreadQueueWork work_reference;
+  work_reference.work = work;
+  work_reference.id = ++queue->current_id;
+
+  switch (priority) {
+    case BLI_THREAD_QUEUE_WORK_PRIORITY_LOW:
+      queue->queue_low_priority.push_back(work_reference);
+      break;
+    case BLI_THREAD_QUEUE_WORK_PRIORITY_NORMAL:
+      queue->queue_normal_priority.push_back(work_reference);
+      break;
+    case BLI_THREAD_QUEUE_WORK_PRIORITY_HIGH:
+      queue->queue_high_priority.push_back(work_reference);
+      break;
+  }
 
   /* signal threads waiting to pop */
   pthread_cond_signal(&queue->push_cond);
   pthread_mutex_unlock(&queue->mutex);
+
+  return work_reference.id;
 }
 
-void *BLI_thread_queue_pop(ThreadQueue *queue)
+/** WARNING: Assumes the queue is already locked. */
+static void check_finalization(ThreadQueue *queue)
 {
-  void *work = nullptr;
-
-  /* wait until there is work */
-  pthread_mutex_lock(&queue->mutex);
-  while (BLI_gsqueue_is_empty(queue->queue) && !queue->nowait) {
-    pthread_cond_wait(&queue->push_cond, &queue->mutex);
+  if (queue->queue_low_priority.empty() && queue->queue_normal_priority.empty() &&
+      queue->queue_high_priority.empty())
+  {
+    pthread_cond_signal(&queue->finish_cond);
   }
+}
 
-  /* if we have something, pop it */
-  if (!BLI_gsqueue_is_empty(queue->queue)) {
-    BLI_gsqueue_pop(queue->queue, &work);
+bool BLI_thread_queue_cancel_work(ThreadQueue *queue, uint64_t work_id)
+{
+  pthread_mutex_lock(&queue->mutex);
 
-    if (BLI_gsqueue_is_empty(queue->queue)) {
-      pthread_cond_broadcast(&queue->finish_cond);
+  bool found = false;
+  auto check = [&](const ThreadQueueWork &work) {
+    if (work.id == work_id) {
+      found = true;
+      return true;
     }
+    return false;
+  };
+
+  auto cancel = [&](std::deque<ThreadQueueWork> &sub_queue) {
+    sub_queue.erase(std::remove_if(sub_queue.begin(), sub_queue.end(), check), sub_queue.end());
+  };
+
+  cancel(queue->queue_low_priority);
+  cancel(queue->queue_normal_priority);
+  cancel(queue->queue_high_priority);
+
+  if (found) {
+    check_finalization(queue);
   }
 
   pthread_mutex_unlock(&queue->mutex);
 
-  return work;
+  return found;
+}
+
+void *BLI_thread_queue_pop(ThreadQueue *queue)
+{
+  ThreadQueueWork work_reference = {nullptr};
+
+  /* wait until there is work */
+  pthread_mutex_lock(&queue->mutex);
+  while (!queue->nowait && queue->queue_low_priority.empty() &&
+         queue->queue_normal_priority.empty() && queue->queue_high_priority.empty())
+  {
+    pthread_cond_wait(&queue->push_cond, &queue->mutex);
+  }
+
+  /* if we have something, pop it */
+  for (std::deque<ThreadQueueWork> *sub_queue :
+       {&queue->queue_high_priority, &queue->queue_normal_priority, &queue->queue_low_priority})
+  {
+    if (sub_queue->empty()) {
+      continue;
+    }
+    work_reference = sub_queue->front();
+    sub_queue->pop_front();
+
+    /* Don't pop more than one work. */
+    break;
+  }
+
+  if (work_reference.work) {
+    check_finalization(queue);
+  }
+
+  pthread_mutex_unlock(&queue->mutex);
+
+  return work_reference.work;
 }
 
 static void wait_timeout(timespec *timeout, int ms)
@@ -712,7 +783,7 @@ static void wait_timeout(timespec *timeout, int ms)
 void *BLI_thread_queue_pop_timeout(ThreadQueue *queue, int ms)
 {
   double t;
-  void *work = nullptr;
+  ThreadQueueWork work_reference = {nullptr};
   timespec timeout;
 
   t = BLI_time_now_seconds();
@@ -720,7 +791,9 @@ void *BLI_thread_queue_pop_timeout(ThreadQueue *queue, int ms)
 
   /* wait until there is work */
   pthread_mutex_lock(&queue->mutex);
-  while (BLI_gsqueue_is_empty(queue->queue) && !queue->nowait) {
+  while (!queue->nowait && queue->queue_low_priority.empty() &&
+         queue->queue_normal_priority.empty() && queue->queue_high_priority.empty())
+  {
     if (pthread_cond_timedwait(&queue->push_cond, &queue->mutex, &timeout) == ETIMEDOUT) {
       break;
     }
@@ -730,17 +803,26 @@ void *BLI_thread_queue_pop_timeout(ThreadQueue *queue, int ms)
   }
 
   /* if we have something, pop it */
-  if (!BLI_gsqueue_is_empty(queue->queue)) {
-    BLI_gsqueue_pop(queue->queue, &work);
-
-    if (BLI_gsqueue_is_empty(queue->queue)) {
-      pthread_cond_broadcast(&queue->finish_cond);
+  for (std::deque<ThreadQueueWork> *sub_queue :
+       {&queue->queue_high_priority, &queue->queue_normal_priority, &queue->queue_low_priority})
+  {
+    if (sub_queue->empty()) {
+      continue;
     }
+    work_reference = sub_queue->front();
+    sub_queue->pop_front();
+
+    /* Don't pop more than one work. */
+    break;
+  }
+
+  if (work_reference.work) {
+    check_finalization(queue);
   }
 
   pthread_mutex_unlock(&queue->mutex);
 
-  return work;
+  return work_reference.work;
 }
 
 int BLI_thread_queue_len(ThreadQueue *queue)
@@ -748,7 +830,8 @@ int BLI_thread_queue_len(ThreadQueue *queue)
   int size;
 
   pthread_mutex_lock(&queue->mutex);
-  size = BLI_gsqueue_len(queue->queue);
+  size = queue->queue_low_priority.size() + queue->queue_normal_priority.size() +
+         queue->queue_high_priority.size();
   pthread_mutex_unlock(&queue->mutex);
 
   return size;
@@ -759,7 +842,8 @@ bool BLI_thread_queue_is_empty(ThreadQueue *queue)
   bool is_empty;
 
   pthread_mutex_lock(&queue->mutex);
-  is_empty = BLI_gsqueue_is_empty(queue->queue);
+  is_empty = queue->queue_low_priority.empty() && queue->queue_normal_priority.empty() &&
+             queue->queue_high_priority.empty();
   pthread_mutex_unlock(&queue->mutex);
 
   return is_empty;
@@ -781,9 +865,13 @@ void BLI_thread_queue_wait_finish(ThreadQueue *queue)
   /* wait for finish condition */
   pthread_mutex_lock(&queue->mutex);
 
-  while (!BLI_gsqueue_is_empty(queue->queue)) {
+  while (!queue->queue_low_priority.empty() || !queue->queue_normal_priority.empty() ||
+         !queue->queue_high_priority.empty())
+  {
     pthread_cond_wait(&queue->finish_cond, &queue->mutex);
   }
 
   pthread_mutex_unlock(&queue->mutex);
 }
+
+}  // namespace blender

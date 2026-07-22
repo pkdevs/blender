@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/overlay_armature_info.hh"
+#include "infos/overlay_armature_infos.hh"
 
 VERTEX_SHADER_CREATE_INFO(overlay_armature_shape_wire)
 
@@ -106,7 +106,7 @@ void do_vertex(const uint strip_index,
 void geometry_main(VertOut geom_in[2],
                    uint out_vertex_id,
                    uint out_primitive_id,
-                   uint out_invocation_id)
+                   uint /*out_invocation_id*/)
 {
   /* Clip line against near plane to avoid deformed lines. */
   float4 pos0 = geom_in[0].gpu_position;
@@ -192,22 +192,22 @@ void main()
   constexpr uint input_primitive_vertex_count = 2u;
 #endif
   /* Triangle list primitive. */
-  constexpr uint ouput_primitive_vertex_count = 3u;
-  constexpr uint ouput_primitive_count = 2u;
-  constexpr uint ouput_invocation_count = 1u;
-  constexpr uint output_vertex_count_per_invocation = ouput_primitive_count *
-                                                      ouput_primitive_vertex_count;
+  constexpr uint output_primitive_vertex_count = 3u;
+  constexpr uint output_primitive_count = 2u;
+  constexpr uint output_invocation_count = 1u;
+  constexpr uint output_vertex_count_per_invocation = output_primitive_count *
+                                                      output_primitive_vertex_count;
   constexpr uint output_vertex_count_per_input_primitive = output_vertex_count_per_invocation *
-                                                           ouput_invocation_count;
+                                                           output_invocation_count;
 
   uint in_primitive_id = uint(gl_VertexID) / output_vertex_count_per_input_primitive;
   uint in_primitive_first_vertex = in_primitive_id * input_primitive_vertex_count;
 
-  uint out_vertex_id = uint(gl_VertexID) % ouput_primitive_vertex_count;
-  uint out_primitive_id = (uint(gl_VertexID) / ouput_primitive_vertex_count) %
-                          ouput_primitive_count;
+  uint out_vertex_id = uint(gl_VertexID) % output_primitive_vertex_count;
+  uint out_primitive_id = (uint(gl_VertexID) / output_primitive_vertex_count) %
+                          output_primitive_count;
   uint out_invocation_id = (uint(gl_VertexID) / output_vertex_count_per_invocation) %
-                           ouput_invocation_count;
+                           output_invocation_count;
 
   float4x4 inst_obmat = data_buf[gl_InstanceID];
   float4x4 inst_matrix = inst_obmat;

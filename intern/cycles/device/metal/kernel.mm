@@ -46,7 +46,7 @@ struct ShaderCache {
     /* Initialize occupancy tuning LUT. */
 
     // TODO: Look into tuning for DEVICE_KERNEL_INTEGRATOR_INTERSECT_DEDICATED_LIGHT and
-    // DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT.
+    // DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_*.
 
     switch (MetalInfo::get_apple_gpu_architecture(mtlDevice)) {
       default:
@@ -170,12 +170,12 @@ ShaderCache::~ShaderCache()
   running = false;
   cond_var.notify_all();
 
-  metal_printf("Waiting for ShaderCache threads... (incomplete_requests = %d)\n",
+  metal_printf("Waiting for ShaderCache threads... (incomplete_requests = %d)",
                int(incomplete_requests));
   for (auto &thread : compile_threads) {
     thread.join();
   }
-  metal_printf("ShaderCache shut down.\n");
+  metal_printf("ShaderCache shut down.");
 }
 
 void ShaderCache::wait_for_all()
@@ -208,7 +208,7 @@ void ShaderCache::compile_thread_func()
 
     if (MetalDevice::is_device_cancelled(pipeline->originating_device_id)) {
       /* The originating MetalDevice is no longer active, so this request is obsolete. */
-      metal_printf("Cancelling compilation of %s (%s)\n",
+      metal_printf("Cancelling compilation of %s (%s)",
                    device_kernel_as_string(device_kernel),
                    kernel_type_as_string(pso_type));
     }
@@ -225,7 +225,7 @@ void ShaderCache::compile_thread_func()
         if (collection[i]->pso_type == pso_type) {
           max_entries_of_same_pso_type -= 1;
           if (max_entries_of_same_pso_type == 0) {
-            metal_printf("Purging oldest %s:%s kernel from ShaderCache\n",
+            metal_printf("Purging oldest %s:%s kernel from ShaderCache",
                          kernel_type_as_string(pso_type),
                          device_kernel_as_string(device_kernel));
             collection.erase(collection.begin() + i);
@@ -250,8 +250,8 @@ bool ShaderCache::should_load_kernel(DeviceKernel device_kernel,
     return false;
   }
 
-  if (device_kernel == DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL) {
-    /* Skip megakernel. */
+  if (!device_kernel_has_gpu_function(device_kernel)) {
+    /* Skip megakernel and other markers without a GPU function. */
     return false;
   }
 
@@ -262,9 +262,9 @@ bool ShaderCache::should_load_kernel(DeviceKernel device_kernel,
     }
   }
 
-  if (device_kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE) {
+  if (device_kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE) {
     if ((device->kernel_features & KERNEL_FEATURE_MNEE) == 0) {
-      /* Skip shade_surface_mnee kernel if the scene doesn't require it. */
+      /* Skip the MNEE kernel if the scene doesn't require it. */
       return false;
     }
   }
@@ -318,7 +318,7 @@ void ShaderCache::load_kernel(DeviceKernel device_kernel,
       }
 #  endif
 
-      metal_printf("Spawning %d Cycles kernel compilation threads\n", max_mtlcompiler_threads);
+      metal_printf("Spawning %d Cycles kernel compilation threads", max_mtlcompiler_threads);
       for (int i = 0; i < max_mtlcompiler_threads; i++) {
         compile_threads.emplace_back([this] { this->compile_thread_func(); });
       }
@@ -340,7 +340,7 @@ void ShaderCache::load_kernel(DeviceKernel device_kernel,
    * to be active. */
   pipeline->pipeline_id = g_next_pipeline_id.fetch_add(1);
   pipeline->originating_device_id = device->device_id;
-  pipeline->kernel_data_ = device->launch_params.data;
+  pipeline->kernel_data_ = device->launch_params->data;
   pipeline->pso_type = pso_type;
   pipeline->mtlDevice = mtlDevice;
   pipeline->kernels_md5 = device->kernels_md5[pso_type];
@@ -385,7 +385,7 @@ MetalKernelPipeline *ShaderCache::get_best_pipeline(DeviceKernel kernel, const M
 
     if (best_match) {
       if (best_match->usage_count == 0 && best_match->pso_type != PSO_GENERIC) {
-        metal_printf("Swapping in %s version of %s\n",
+        metal_printf("Swapping in %s version of %s",
                      kernel_type_as_string(best_match->pso_type),
                      device_kernel_as_string(kernel));
       }
@@ -423,7 +423,7 @@ bool MetalKernelPipeline::should_use_binary_archive() const
     if ((device_kernel >= DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND &&
          device_kernel <= DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW) ||
         (device_kernel >= DEVICE_KERNEL_SHADER_EVAL_DISPLACE &&
-         device_kernel <= DEVICE_KERNEL_SHADER_EVAL_CURVE_SHADOW_TRANSPARENCY))
+         device_kernel <= DEVICE_KERNEL_SHADER_EVAL_VOLUME_DENSITY))
     {
       /* Archive all shade kernels - they take a long time to compile. */
       return true;
@@ -441,6 +441,7 @@ static MTLFunctionConstantValues *GetConstantValues(const KernelData *data = nul
 
   MTLDataType MTLDataType_int = MTLDataTypeInt;
   MTLDataType MTLDataType_float = MTLDataTypeFloat;
+  MTLDataType MTLDataType_float2 = MTLDataTypeFloat2;
   MTLDataType MTLDataType_float4 = MTLDataTypeFloat4;
   KernelData zero_data = {0};
   if (!data) {
@@ -461,6 +462,10 @@ static MTLFunctionConstantValues *GetConstantValues(const KernelData *data = nul
 
 #  include "kernel/data_template.h"
 
+  [constant_values setConstantValue:&data->kernel_features
+                               type:MTLDataTypeInt
+                            atIndex:KernelData_kernel_features];
+
   return constant_values;
 }
 
@@ -468,7 +473,8 @@ void MetalDispatchPipeline::free_intersection_function_tables()
 {
   for (int table = 0; table < METALRT_TABLE_NUM; table++) {
     if (intersection_func_table[table]) {
-      [intersection_func_table[table] release];
+      /* Add the table to the delayed free list of the device that created it. */
+      metal_device->metal_mem_free(intersection_func_table[table]);
       intersection_func_table[table] = nil;
     }
   }
@@ -481,6 +487,7 @@ MetalDispatchPipeline::~MetalDispatchPipeline()
 
 bool MetalDispatchPipeline::update(MetalDevice *metal_device, DeviceKernel kernel)
 {
+  this->metal_device = metal_device;
   const MetalKernelPipeline *best_pipeline = MetalDeviceKernels::get_best_pipeline(metal_device,
                                                                                    kernel);
   if (!best_pipeline) {
@@ -515,6 +522,15 @@ bool MetalDispatchPipeline::update(MetalDevice *metal_device, DeviceKernel kerne
               functionHandleWithFunction:best_pipeline->table_functions[table][i]];
           [intersection_func_table[table] setFunction:handle atIndex:i];
         }
+
+        /* Bind launch_params into the intersection function table once, when the table is
+         * (re)created. launch_params_buffer is allocated once and never moves, and the binding
+         * persists on the table, so there's no need to rebind it on every dispatch. */
+        [intersection_func_table[table] setBuffer:metal_device->launch_params_buffer
+                                           offset:0
+                                          atIndex:1];
+
+        metal_device->metal_mem_alloc(intersection_func_table[table]);
       }
     }
   }
@@ -694,7 +710,7 @@ void MetalKernelPipeline::compile()
     archive = [mtlDevice newBinaryArchiveWithDescriptor:archiveDesc error:&error];
     if (!archive) {
       const char *err = error ? [[error localizedDescription] UTF8String] : nullptr;
-      metal_printf("newBinaryArchiveWithDescriptor failed: %s\n", err ? err : "nil");
+      metal_printf("newBinaryArchiveWithDescriptor failed: %s", err ? err : "nil");
     }
     [archiveDesc release];
 
@@ -760,7 +776,7 @@ void MetalKernelPipeline::compile()
                                                         error:&error])
       {
         NSString *errStr = [error localizedDescription];
-        metal_printf("Failed to add PSO to archive:\n%s\n", errStr ? [errStr UTF8String] : "nil");
+        metal_printf("Failed to add PSO to archive:\n%s", errStr ? [errStr UTF8String] : "nil");
       }
     }
 
@@ -793,7 +809,7 @@ void MetalKernelPipeline::compile()
   double duration = time_dt() - starttime;
 
   if (pipeline == nil) {
-    metal_printf("%16s | %2d | %-55s | %7.2fs | FAILED!\n",
+    metal_printf("%16s | %2d | %-55s | %7.2fs | FAILED!",
                  kernel_type_as_string(pso_type),
                  device_kernel,
                  device_kernel_as_string(device_kernel),
@@ -811,7 +827,7 @@ void MetalKernelPipeline::compile()
     if (creating_new_archive || recreate_archive) {
       if (![archive serializeToURL:[NSURL fileURLWithPath:@(metalbin_path.c_str())] error:&error])
       {
-        metal_printf("Failed to save binary archive to %s, error:\n%s\n",
+        metal_printf("Failed to save binary archive to %s, error:\n%s",
                      metalbin_path.c_str(),
                      [[error localizedDescription] UTF8String]);
       }
@@ -826,14 +842,14 @@ void MetalKernelPipeline::compile()
   computePipelineStateDescriptor = nil;
 
   if (!use_binary_archive) {
-    metal_printf("%16s | %2d | %-55s | %7.2fs\n",
+    metal_printf("%16s | %2d | %-55s | %7.2fs",
                  kernel_type_as_string(pso_type),
                  int(device_kernel),
                  device_kernel_as_string(device_kernel),
                  duration);
   }
   else {
-    metal_printf("%16s | %2d | %-55s | %7.2fs | %s: %s\n",
+    metal_printf("%16s | %2d | %-55s | %7.2fs | %s: %s",
                  kernel_type_as_string(pso_type),
                  device_kernel,
                  device_kernel_as_string(device_kernel),

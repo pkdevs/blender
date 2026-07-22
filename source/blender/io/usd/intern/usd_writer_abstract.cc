@@ -3,22 +3,28 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "usd_writer_abstract.hh"
 #include "usd_attribute_utils.hh"
+#include "usd_colorspace_utils.hh"
+#include "usd_hierarchy_iterator.hh"
 #include "usd_utils.hh"
 #include "usd_writer_material.hh"
 
 #include <pxr/base/tf/stringUtils.h>
 #include <pxr/usd/usdGeom/bboxCache.h>
 #include <pxr/usd/usdGeom/scope.h>
+#include <pxr/usd/usdUI/accessibilityAPI.h>
 
-#include "BKE_customdata.hh"
-
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_bounds_types.hh"
 
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 
+#include "WM_types.hh"
+
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
 /* TfToken objects are not cheap to construct, so we do it once. */
@@ -26,17 +32,84 @@ namespace usdtokens {
 static const pxr::TfToken blender_ns("userProperties:blender", pxr::TfToken::Immortal);
 }  // namespace usdtokens
 
+namespace {
+struct AccessibilityPropertyName {
+  pxr::TfToken property_namespace;
+  pxr::TfToken property_base_name;
+};
+}  // anonymous namespace
+
+static std::optional<AccessibilityPropertyName> parse_accessibility_property_name(
+    IDProperty *prop, bool allow_unicode)
+{
+  std::vector<std::string> property_tokens = pxr::TfStringTokenize(prop->name, ":");
+
+  /* First check if the property name matches the UsdUIAccessibility format exactly. */
+  if (property_tokens.size() == 3) {
+    pxr::TfToken accessibility_token(property_tokens[0]);
+    pxr::TfToken basename(property_tokens[2]);
+    if (accessibility_token == pxr::UsdUITokens->accessibility &&
+        pxr::UsdUIAccessibilityAPI::IsSchemaPropertyBaseName(basename))
+    {
+      AccessibilityPropertyName property_name;
+
+      /* Sanitize the namespace since this is user-generated and might need to be conformed
+       * to the `allow_unicode` export setting. */
+      property_name.property_namespace = pxr::TfToken(
+          io::usd::make_safe_name(property_tokens[1], allow_unicode));
+      property_name.property_base_name = basename;
+      return property_name;
+    }
+  }
+
+  return std::nullopt;
+}
+
+static bool is_valid_accessibility_priority(const pxr::TfToken &token)
+{
+  return token == pxr::UsdUITokens->low || token == pxr::UsdUITokens->standard ||
+         token == pxr::UsdUITokens->high;
+}
+
+/**
+ * Write the accessibility property on the given prim. Note: although the
+ * UsdUIAccessibilityAPI DOES allow time-sampled data for the `label`
+ * and `description` properties, Blender does not currently support
+ * keyframes on string custom properties so time-sample authoring will
+ * not be done here.
+ */
+static void write_accessibility_property(const pxr::UsdPrim &prim,
+                                         const AccessibilityPropertyName &property_name,
+                                         const std::string &value)
+{
+  pxr::UsdUIAccessibilityAPI accessibility_api = pxr::UsdUIAccessibilityAPI::Apply(
+      prim, property_name.property_namespace);
+  if (!accessibility_api) {
+    return;
+  }
+
+  if (property_name.property_base_name == pxr::UsdUITokens->label) {
+    accessibility_api.CreateLabelAttr().Set(value);
+  }
+  else if (property_name.property_base_name == pxr::UsdUITokens->description) {
+    accessibility_api.CreateDescriptionAttr().Set(value);
+  }
+  else if (property_name.property_base_name == pxr::UsdUITokens->priority) {
+    pxr::TfToken priority(value);
+    if (is_valid_accessibility_priority(priority)) {
+      accessibility_api.CreatePriorityAttr().Set(priority);
+    }
+  }
+}
+
 static std::string get_mesh_active_uvlayer_name(const Object *ob)
 {
   if (!ob || ob->type != OB_MESH || !ob->data) {
     return "";
   }
 
-  const Mesh *mesh = static_cast<Mesh *>(ob->data);
-
-  const char *name = CustomData_get_active_layer_name(&mesh->corner_data, CD_PROP_FLOAT2);
-
-  return name ? name : "";
+  const Mesh *mesh = id_cast<Mesh *>(ob->data);
+  return mesh->active_uv_map_name();
 }
 
 template<typename USDT>
@@ -44,7 +117,7 @@ bool set_vec_attrib(const pxr::UsdPrim &prim,
                     const IDProperty *prop,
                     const pxr::TfToken &prop_token,
                     const pxr::SdfValueTypeName &type_name,
-                    const pxr::UsdTimeCode &timecode)
+                    const pxr::UsdTimeCode &time)
 {
   if (!prim || !prop || !prop->data.pointer || prop_token.IsEmpty() || !type_name) {
     return false;
@@ -61,15 +134,15 @@ bool set_vec_attrib(const pxr::UsdPrim &prim,
 
   USDT vec_value(static_cast<typename USDT::ScalarType *>(prop->data.pointer));
 
-  return vec_attr.Set(vec_value, timecode);
+  return vec_attr.Set(vec_value, time);
 }
 
-namespace blender::io::usd {
+namespace io::usd {
 
 static void create_vector_attrib(const pxr::UsdPrim &prim,
                                  const IDProperty *prop,
                                  const pxr::TfToken &prop_token,
-                                 const pxr::UsdTimeCode &timecode)
+                                 const pxr::UsdTimeCode &time)
 {
   if (!prim || !prop || prop_token.IsEmpty()) {
     return;
@@ -88,43 +161,43 @@ static void create_vector_attrib(const pxr::UsdPrim &prim,
   if (prop->subtype == IDP_FLOAT) {
     if (prop->len == 2) {
       type_name = pxr::SdfValueTypeNames->Float2;
-      success = set_vec_attrib<pxr::GfVec2f>(prim, prop, prop_token, type_name, timecode);
+      success = set_vec_attrib<pxr::GfVec2f>(prim, prop, prop_token, type_name, time);
     }
     else if (prop->len == 3) {
       type_name = pxr::SdfValueTypeNames->Float3;
-      success = set_vec_attrib<pxr::GfVec3f>(prim, prop, prop_token, type_name, timecode);
+      success = set_vec_attrib<pxr::GfVec3f>(prim, prop, prop_token, type_name, time);
     }
     else if (prop->len == 4) {
       type_name = pxr::SdfValueTypeNames->Float4;
-      success = set_vec_attrib<pxr::GfVec4f>(prim, prop, prop_token, type_name, timecode);
+      success = set_vec_attrib<pxr::GfVec4f>(prim, prop, prop_token, type_name, time);
     }
   }
   else if (prop->subtype == IDP_DOUBLE) {
     if (prop->len == 2) {
       type_name = pxr::SdfValueTypeNames->Double2;
-      success = set_vec_attrib<pxr::GfVec2d>(prim, prop, prop_token, type_name, timecode);
+      success = set_vec_attrib<pxr::GfVec2d>(prim, prop, prop_token, type_name, time);
     }
     else if (prop->len == 3) {
       type_name = pxr::SdfValueTypeNames->Double3;
-      success = set_vec_attrib<pxr::GfVec3d>(prim, prop, prop_token, type_name, timecode);
+      success = set_vec_attrib<pxr::GfVec3d>(prim, prop, prop_token, type_name, time);
     }
     else if (prop->len == 4) {
       type_name = pxr::SdfValueTypeNames->Double4;
-      success = set_vec_attrib<pxr::GfVec4d>(prim, prop, prop_token, type_name, timecode);
+      success = set_vec_attrib<pxr::GfVec4d>(prim, prop, prop_token, type_name, time);
     }
   }
   else if (prop->subtype == IDP_INT) {
     if (prop->len == 2) {
       type_name = pxr::SdfValueTypeNames->Int2;
-      success = set_vec_attrib<pxr::GfVec2i>(prim, prop, prop_token, type_name, timecode);
+      success = set_vec_attrib<pxr::GfVec2i>(prim, prop, prop_token, type_name, time);
     }
     else if (prop->len == 3) {
       type_name = pxr::SdfValueTypeNames->Int3;
-      success = set_vec_attrib<pxr::GfVec3i>(prim, prop, prop_token, type_name, timecode);
+      success = set_vec_attrib<pxr::GfVec3i>(prim, prop, prop_token, type_name, time);
     }
     else if (prop->len == 4) {
       type_name = pxr::SdfValueTypeNames->Int4;
-      success = set_vec_attrib<pxr::GfVec4i>(prim, prop, prop_token, type_name, timecode);
+      success = set_vec_attrib<pxr::GfVec4i>(prim, prop, prop_token, type_name, time);
     }
   }
 
@@ -168,6 +241,11 @@ pxr::UsdTimeCode USDAbstractWriter::get_export_time_code() const
   return pxr::UsdTimeCode::Default();
 }
 
+ReportList *USDAbstractWriter::reports() const
+{
+  return usd_export_context_.export_params.worker_status->reports;
+}
+
 void USDAbstractWriter::write(HierarchyContext &context)
 {
   if (!frame_has_been_written_) {
@@ -193,9 +271,9 @@ pxr::SdfPath USDAbstractWriter::get_material_library_path() const
 {
   static std::string material_library_path("/_materials");
 
-  const char *root_prim_path = usd_export_context_.export_params.root_prim_path;
+  const std::string &root_prim_path = usd_export_context_.export_params.root_prim_path;
 
-  if (root_prim_path[0] != '\0') {
+  if (!root_prim_path.empty()) {
     return pxr::SdfPath(root_prim_path + material_library_path);
   }
 
@@ -235,7 +313,9 @@ pxr::UsdShadeMaterial USDAbstractWriter::ensure_usd_material_created(
       usd_export_context_, usd_path, material, active_uv, reports());
 
   auto prim = usd_material.GetPrim();
+  add_to_prim_map(prim.GetPath(), &material->id);
   write_id_properties(prim, material->id, get_export_time_code());
+  colorspace_apply_to_prim(prim);
 
   return usd_material;
 }
@@ -277,7 +357,7 @@ pxr::UsdShadeMaterial USDAbstractWriter::ensure_usd_material(const HierarchyCont
 }
 
 void USDAbstractWriter::write_visibility(const HierarchyContext &context,
-                                         const pxr::UsdTimeCode timecode,
+                                         const pxr::UsdTimeCode time,
                                          const pxr::UsdGeomImageable &usd_geometry)
 {
   pxr::UsdAttribute attr_visibility = usd_geometry.CreateVisibilityAttr(pxr::VtValue(), true);
@@ -287,7 +367,7 @@ void USDAbstractWriter::write_visibility(const HierarchyContext &context,
   const pxr::TfToken visibility = is_visible ? pxr::UsdGeomTokens->inherited :
                                                pxr::UsdGeomTokens->invisible;
 
-  usd_value_writer_.SetAttribute(attr_visibility, pxr::VtValue(visibility), timecode);
+  usd_value_writer_.SetAttribute(attr_visibility, pxr::VtValue(visibility), time);
 }
 
 bool USDAbstractWriter::mark_as_instance(const HierarchyContext &context, const pxr::UsdPrim &prim)
@@ -314,7 +394,7 @@ bool USDAbstractWriter::mark_as_instance(const HierarchyContext &context, const 
   usd_export_context_.stage->DefinePrim(ref_path);
 
   if (!prim.GetReferences().AddInternalReference(ref_path)) {
-    /* See this URL for a description for why referencing may fail"
+    /* See this URL for a description for why referencing may fail:
      * https://graphics.pixar.com/usd/docs/api/class_usd_references.html#Usd_Failing_References
      */
     CLOG_WARN(&LOG,
@@ -331,7 +411,7 @@ bool USDAbstractWriter::mark_as_instance(const HierarchyContext &context, const 
 
 void USDAbstractWriter::write_id_properties(const pxr::UsdPrim &prim,
                                             const ID &id,
-                                            pxr::UsdTimeCode timecode) const
+                                            pxr::UsdTimeCode time) const
 {
   if (!usd_export_context_.export_params.export_custom_properties) {
     return;
@@ -354,13 +434,13 @@ void USDAbstractWriter::write_id_properties(const pxr::UsdPrim &prim,
   }
 
   if (id.properties) {
-    write_user_properties(prim, id.properties, timecode);
+    write_user_properties(prim, id.properties, time);
   }
 }
 
 void USDAbstractWriter::write_user_properties(const pxr::UsdPrim &prim,
                                               IDProperty *properties,
-                                              pxr::UsdTimeCode timecode) const
+                                              pxr::UsdTimeCode time) const
 {
   if (properties == nullptr) {
     return;
@@ -375,10 +455,22 @@ void USDAbstractWriter::write_user_properties(const pxr::UsdPrim &prim,
   const std::string default_namespace(
       usd_export_context_.export_params.custom_properties_namespace);
 
-  for (IDProperty *prop = (IDProperty *)properties->data.group.first; prop; prop = prop->next) {
+  for (IDProperty *prop = static_cast<IDProperty *>(properties->data.group.first); prop;
+       prop = prop->next)
+  {
     if (displayName_identifier == prop->name) {
       if (prop->type == IDP_STRING && prop->data.pointer) {
         prim.SetDisplayName(static_cast<char *>(prop->data.pointer));
+      }
+      continue;
+    }
+
+    if (auto accessibility_property_name = parse_accessibility_property_name(
+            prop, usd_export_context_.export_params.allow_unicode))
+    {
+      if (prop->type == IDP_STRING && prop->data.pointer) {
+        write_accessibility_property(
+            prim, *accessibility_property_name, static_cast<char *>(prop->data.pointer));
       }
       continue;
     }
@@ -410,52 +502,57 @@ void USDAbstractWriter::write_user_properties(const pxr::UsdPrim &prim,
         if (pxr::UsdAttribute int_attr = prim.CreateAttribute(
                 prop_token, pxr::SdfValueTypeNames->Int, true))
         {
-          int_attr.Set<int>(prop->data.val, timecode);
+          int_attr.Set<int>(prop->data.val, time);
         }
         break;
       case IDP_FLOAT:
         if (pxr::UsdAttribute float_attr = prim.CreateAttribute(
                 prop_token, pxr::SdfValueTypeNames->Float, true))
         {
-          float_attr.Set<float>(*reinterpret_cast<float *>(&prop->data.val), timecode);
+          float_attr.Set<float>(*reinterpret_cast<float *>(&prop->data.val), time);
         }
         break;
       case IDP_DOUBLE:
         if (pxr::UsdAttribute double_attr = prim.CreateAttribute(
                 prop_token, pxr::SdfValueTypeNames->Double, true))
         {
-          double_attr.Set<double>(*reinterpret_cast<double *>(&prop->data.val), timecode);
+          double_attr.Set<double>(*reinterpret_cast<double *>(&prop->data.val), time);
         }
         break;
       case IDP_STRING:
         if (pxr::UsdAttribute str_attr = prim.CreateAttribute(
                 prop_token, pxr::SdfValueTypeNames->String, true))
         {
-          str_attr.Set<std::string>(static_cast<const char *>(prop->data.pointer), timecode);
+          str_attr.Set<std::string>(static_cast<const char *>(prop->data.pointer), time);
         }
         break;
       case IDP_BOOLEAN:
         if (pxr::UsdAttribute bool_attr = prim.CreateAttribute(
                 prop_token, pxr::SdfValueTypeNames->Bool, true))
         {
-          bool_attr.Set<bool>(prop->data.val, timecode);
+          bool_attr.Set<bool>(prop->data.val, time);
         }
         break;
       case IDP_ARRAY:
-        create_vector_attrib(prim, prop, prop_token, timecode);
+        create_vector_attrib(prim, prop, prop_token, time);
+        break;
+      case IDP_GROUP:
+      case IDP_ID:
+      case IDP_IDPARRAY:
+        /* Not supported. */
         break;
     }
   }
 }
 
 void USDAbstractWriter::author_extent(const pxr::UsdGeomBoundable &boundable,
-                                      const pxr::UsdTimeCode timecode)
+                                      const pxr::UsdTimeCode time)
 {
   /* Do not use any existing `extentsHint` that may be authored, instead recompute the extent when
    * authoring it. */
   const bool useExtentsHint = false;
   const pxr::TfTokenVector includedPurposes{pxr::UsdGeomTokens->default_};
-  pxr::UsdGeomBBoxCache bboxCache(timecode, includedPurposes, useExtentsHint);
+  pxr::UsdGeomBBoxCache bboxCache(time, includedPurposes, useExtentsHint);
   pxr::GfBBox3d bounds = bboxCache.ComputeLocalBound(boundable.GetPrim());
 
   /* Note: An empty 'bounds' is still valid (e.g. a mesh with no vertices). */
@@ -463,12 +560,12 @@ void USDAbstractWriter::author_extent(const pxr::UsdGeomBoundable &boundable,
                                     pxr::GfVec3f(bounds.GetRange().GetMax())};
 
   pxr::UsdAttribute attr_extent = boundable.CreateExtentAttr(pxr::VtValue(), true);
-  set_attribute(attr_extent, extent, timecode, usd_value_writer_);
+  set_attribute(attr_extent, extent, time, usd_value_writer_);
 }
 
 void USDAbstractWriter::author_extent(const pxr::UsdGeomBoundable &boundable,
                                       const std::optional<Bounds<float3>> &bounds,
-                                      const pxr::UsdTimeCode timecode)
+                                      const pxr::UsdTimeCode time)
 {
   pxr::VtArray<pxr::GfVec3f> extent(2);
   if (bounds) {
@@ -477,7 +574,15 @@ void USDAbstractWriter::author_extent(const pxr::UsdGeomBoundable &boundable,
   }
 
   pxr::UsdAttribute attr_extent = boundable.CreateExtentAttr(pxr::VtValue(), true);
-  set_attribute(attr_extent, extent, timecode, usd_value_writer_);
+  set_attribute(attr_extent, extent, time, usd_value_writer_);
 }
 
-}  // namespace blender::io::usd
+void USDAbstractWriter::add_to_prim_map(const pxr::SdfPath &usd_path, const ID *id) const
+{
+  if (usd_export_context_.hierarchy_iterator) {
+    usd_export_context_.hierarchy_iterator->add_to_prim_map(usd_path, id);
+  }
+}
+
+}  // namespace io::usd
+}  // namespace blender

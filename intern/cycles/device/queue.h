@@ -30,7 +30,7 @@ struct DeviceKernelArguments {
     HIPRT_GLOBAL_STACK,
   };
 
-  static const int MAX_ARGS = 18;
+  static const int MAX_ARGS = 19;
   Type types[MAX_ARGS];
   void *values[MAX_ARGS];
   size_t sizes[MAX_ARGS];
@@ -99,11 +99,20 @@ class DeviceQueue {
    * value. */
   virtual int num_concurrent_busy_states(const size_t state_size) const = 0;
 
-  /* Number of elements in a partition of sorted shaders, that improves memory locality of
+  /* Number of partitions of sorted shaders, that improves memory locality of
    * integrator state fetch at the cost of decreased coherence for shader kernel execution. */
-  virtual int num_sort_partition_elements() const
+  virtual int num_sort_partitions(int max_num_paths, uint max_scene_shaders) const
   {
-    return 65536;
+    /* Sort partitioning becomes less effective when more shaders are in the wavefront. In lieu of
+     * a more sophisticated heuristic we simply disable sort partitioning if the shader count is
+     * high.
+     */
+    if (max_scene_shaders < 300) {
+      return max(max_num_paths / 65536, 1);
+    }
+    else {
+      return 1;
+    }
   }
 
   /* Does device support local atomic sorting kernels (INTEGRATOR_SORT_BUCKET_PASS and
@@ -119,6 +128,9 @@ class DeviceQueue {
    *
    * Use this method after device synchronization has finished before enqueueing any kernels. */
   virtual void init_execution() = 0;
+
+  /* Update device-specific image state after allocating device_image. */
+  virtual void load_image_info() = 0;
 
   /* Enqueue kernel execution.
    *
@@ -140,6 +152,7 @@ class DeviceQueue {
   virtual void zero_to_device(device_memory &mem) = 0;
   virtual void copy_to_device(device_memory &mem) = 0;
   virtual void copy_from_device(device_memory &mem) = 0;
+  virtual void *copy_from_device_synchronized(device_memory &mem, vector<uint8_t> &storage) = 0;
 
   /* Graphics resources interoperability.
    *
@@ -150,7 +163,7 @@ class DeviceQueue {
    * resource as a buffer writable by kernels of this device. */
   virtual unique_ptr<DeviceGraphicsInterop> graphics_interop_create()
   {
-    LOG(FATAL) << "Request of GPU interop of a device which does not support it.";
+    LOG_FATAL << "Request of GPU interop of a device which does not support it.";
     return nullptr;
   }
 

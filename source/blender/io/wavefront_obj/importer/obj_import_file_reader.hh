@@ -15,24 +15,26 @@
 
 #include "obj_import_objects.hh"
 
+namespace blender {
+struct BLI_mmap_file;
+}
+
 namespace blender::io::obj {
 
 struct MTLMaterial;
 
-/* NOTE: the OBJ parser implementation is planned to get fairly large changes "soon",
- * so don't read too much into current implementation... */
 class OBJParser {
  private:
   const OBJImportParams &import_params_;
-  FILE *obj_file_;
   Vector<std::string> mtl_libraries_;
-  size_t read_buffer_size_;
+  BLI_mmap_file *mmap_file_ = nullptr;
+  std::string line_buffer_;
 
  public:
   /**
    * Open OBJ file at the path given in import parameters.
    */
-  OBJParser(const OBJImportParams &import_params, size_t read_buffer_size);
+  OBJParser(const OBJImportParams &import_params);
   ~OBJParser();
 
   /**
@@ -49,6 +51,11 @@ class OBJParser {
  private:
   void add_mtl_library(StringRef path);
   void add_default_mtl_library();
+  StringRef read_next_obj_line(StringRef &buffer);
+  void parse_string_buffer(StringRef &buffer_str,
+                           Vector<std::unique_ptr<Geometry>> &r_all_geometries,
+                           GlobalVertices &r_global_vertices,
+                           Geometry *&curr_geom);
 };
 
 class MTLParser {

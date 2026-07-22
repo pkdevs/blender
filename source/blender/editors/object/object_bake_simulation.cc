@@ -5,9 +5,9 @@
 #include <sstream>
 
 #include "BLI_fileops.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -46,14 +46,17 @@
 #include "object_intern.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 
-namespace bake = blender::bke::bake;
+namespace blender {
 
-namespace blender::ed::object::bake_simulation {
+namespace bake = bke::bake;
+
+namespace ed::object::bake_simulation {
 
 static bool simulate_to_frame_poll(bContext *C)
 {
-  if (!ED_operator_object_active(C)) {
+  if (!ED_operator_object_active_editable(C)) {
     return false;
   }
   return true;
@@ -74,18 +77,18 @@ static void simulate_to_frame_startjob(void *customdata, wmJobWorkerStatus *work
   SimulateToFrameJob &job = *static_cast<SimulateToFrameJob *>(customdata);
   G.is_rendering = true;
   G.is_break = false;
-  WM_set_locked_interface(job.wm, true);
+  WM_locked_interface_set(job.wm, true);
 
   Vector<Object *> objects_to_calc;
   for (Object *object : job.objects) {
     if (!BKE_id_is_editable(job.bmain, &object->id)) {
       continue;
     }
-    LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
-      if (md->type != eModifierType_Nodes) {
+    for (ModifierData &md : object->modifiers) {
+      if (md.type != eModifierType_Nodes) {
         continue;
       }
-      NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+      NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(&md);
       if (!nmd->runtime->cache) {
         continue;
       }
@@ -132,7 +135,7 @@ static void simulate_to_frame_startjob(void *customdata, wmJobWorkerStatus *work
 static void simulate_to_frame_endjob(void *customdata)
 {
   SimulateToFrameJob &job = *static_cast<SimulateToFrameJob *>(customdata);
-  WM_set_locked_interface(job.wm, false);
+  WM_locked_interface_set(job.wm, false);
   G.is_rendering = false;
   WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, nullptr);
 }
@@ -169,7 +172,7 @@ static wmOperatorStatus simulate_to_frame_invoke(bContext *C,
   wmJob *wm_job = WM_jobs_get(wm,
                               CTX_wm_window(C),
                               CTX_data_scene(C),
-                              "Calculate Simulation",
+                              "Calculating simulation...",
                               WM_JOB_PROGRESS,
                               WM_JOB_TYPE_CALCULATE_SIMULATION_NODES);
 
@@ -197,7 +200,7 @@ static wmOperatorStatus simulate_to_frame_modal(bContext *C,
 
 static bool bake_simulation_poll(bContext *C)
 {
-  if (!ED_operator_object_active(C)) {
+  if (!ED_operator_object_active_editable(C)) {
     return false;
   }
   Object *ob = context_active_object(C);
@@ -228,7 +231,13 @@ struct BakeGeometryNodesJob {
   Depsgraph *depsgraph;
   Scene *scene;
   Vector<NodeBakeRequest> bake_requests;
+  wmOperator *op;
+  std::string error_message;
 };
+
+static void try_delete_bake(
+    Main *bmain, Object &object, NodesModifierData &nmd, const int bake_id, ReportList *reports);
+static void reset_old_bake_cache(NodeBakeRequest &request);
 
 static void request_bakes_in_modifier_cache(BakeGeometryNodesJob &job)
 {
@@ -330,7 +339,7 @@ static void bake_geometry_nodes_startjob(void *customdata, wmJobWorkerStatus *wo
         BLI_file_ensure_parent_dir_exists(meta_path);
         bake::DiskBlobWriter blob_writer{request.path->blobs_dir, frame_file_name};
         fstream meta_file{meta_path, std::ios::out};
-        bake::serialize_bake(frame_cache.state, blob_writer, *request.blob_sharing, meta_file);
+        bake::serialize_bake(frame_cache.values, blob_writer, *request.blob_sharing, meta_file);
         written_size += blob_writer.written_size();
         written_size += meta_file.tellp();
       }
@@ -339,7 +348,7 @@ static void bake_geometry_nodes_startjob(void *customdata, wmJobWorkerStatus *wo
 
         bake::MemoryBlobWriter blob_writer{frame_file_name};
         std::ostringstream meta_file{std::ios::binary};
-        bake::serialize_bake(frame_cache.state, blob_writer, *request.blob_sharing, meta_file);
+        bake::serialize_bake(frame_cache.values, blob_writer, *request.blob_sharing, meta_file);
 
         packed_data.meta_files.append({frame_file_name + ".json", meta_file.str()});
         const Map<std::string, bake::MemoryBlobWriter::OutputStream> &blob_stream_by_name =
@@ -348,6 +357,10 @@ static void bake_geometry_nodes_startjob(void *customdata, wmJobWorkerStatus *wo
           std::string data = item.value.stream->str();
           if (data.empty()) {
             continue;
+          }
+          if (data.size() > PACKED_FILE_MAX_SIZE) {
+            job.error_message = TIP_("A file is too large to be packed (>2GB).");
+            return;
           }
           packed_data.blob_files.append({item.key, std::move(data)});
         }
@@ -375,32 +388,32 @@ static void bake_geometry_nodes_startjob(void *customdata, wmJobWorkerStatus *wo
       continue;
     }
 
-    NodesModifierPackedBake *packed_bake = MEM_callocN<NodesModifierPackedBake>(__func__);
+    NodesModifierPackedBake *packed_bake = MEM_new<NodesModifierPackedBake>(__func__);
 
     packed_bake->meta_files_num = packed_data->meta_files.size();
     packed_bake->blob_files_num = packed_data->blob_files.size();
 
-    packed_bake->meta_files = MEM_calloc_arrayN<NodesModifierBakeFile>(packed_bake->meta_files_num,
-                                                                       __func__);
-    packed_bake->blob_files = MEM_calloc_arrayN<NodesModifierBakeFile>(packed_bake->blob_files_num,
-                                                                       __func__);
+    packed_bake->meta_files = MEM_new_array<NodesModifierBakeFile>(packed_bake->meta_files_num,
+                                                                   __func__);
+    packed_bake->blob_files = MEM_new_array<NodesModifierBakeFile>(packed_bake->blob_files_num,
+                                                                   __func__);
 
-    auto transfer_to_bake =
-        [&](NodesModifierBakeFile *bake_files, MemoryBakeFile *memory_bake_files, const int num) {
-          for (const int i : IndexRange(num)) {
-            NodesModifierBakeFile &bake_file = bake_files[i];
-            MemoryBakeFile &memory = memory_bake_files[i];
-            bake_file.name = BLI_strdup_null(memory.name.c_str());
-            const int64_t data_size = memory.data.size();
-            if (data_size == 0) {
-              continue;
-            }
-            const auto *sharing_info = new blender::ImplicitSharedValue<std::string>(
-                std::move(memory.data));
-            const void *data = sharing_info->data.data();
-            bake_file.packed_file = BKE_packedfile_new_from_memory(data, data_size, sharing_info);
-          }
-        };
+    auto transfer_to_bake = [&](NodesModifierBakeFile *bake_files,
+                                MemoryBakeFile *memory_bake_files,
+                                const int num) {
+      for (const int i : IndexRange(num)) {
+        NodesModifierBakeFile &bake_file = bake_files[i];
+        MemoryBakeFile &memory = memory_bake_files[i];
+        bake_file.name = BLI_strdup_null(memory.name.c_str());
+        const int64_t data_size = memory.data.size();
+        if (data_size == 0) {
+          continue;
+        }
+        const auto *sharing_info = new ImplicitSharedValue<std::string>(std::move(memory.data));
+        const void *data = sharing_info->data.data();
+        bake_file.packed_file = BKE_packedfile_new_from_memory(data, data_size, sharing_info);
+      }
+    };
 
     transfer_to_bake(
         packed_bake->meta_files, packed_data->meta_files.data(), packed_bake->meta_files_num);
@@ -439,11 +452,19 @@ static void bake_geometry_nodes_startjob(void *customdata, wmJobWorkerStatus *wo
 static void bake_geometry_nodes_endjob(void *customdata)
 {
   BakeGeometryNodesJob &job = *static_cast<BakeGeometryNodesJob *>(customdata);
-  WM_set_locked_interface(job.wm, false);
+  WM_locked_interface_set(job.wm, false);
   G.is_rendering = false;
   WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, nullptr);
   WM_main_add_notifier(NC_NODE | ND_DISPLAY, nullptr);
   WM_main_add_notifier(NC_SPACE | ND_SPACE_VIEW3D | NS_VIEW3D_SHADING, nullptr);
+
+  if (!job.error_message.empty()) {
+    for (NodeBakeRequest &request : job.bake_requests) {
+      reset_old_bake_cache(request);
+      try_delete_bake(job.bmain, *request.object, *request.nmd, request.bake_id, job.op->reports);
+    }
+    BKE_report(job.op->reports, RPT_ERROR, job.error_message.c_str());
+  }
 }
 
 static void clear_data_block_references(NodesModifierBake &bake)
@@ -479,9 +500,8 @@ static void reset_old_bake_cache(NodeBakeRequest &request)
 }
 
 static void try_delete_bake(
-    bContext *C, Object &object, NodesModifierData &nmd, const int bake_id, ReportList *reports)
+    Main *bmain, Object &object, NodesModifierData &nmd, const int bake_id, ReportList *reports)
 {
-  Main *bmain = CTX_data_main(C);
   if (!nmd.runtime->cache) {
     return;
   }
@@ -550,12 +570,13 @@ static wmOperatorStatus start_bake_job(bContext *C,
                                        wmOperator *op,
                                        const BakeRequestsMode mode)
 {
+  Main *bmain = CTX_data_main(C);
   for (NodeBakeRequest &request : requests) {
     reset_old_bake_cache(request);
     if (NodesModifierBake *bake = request.nmd->find_bake(request.bake_id)) {
       clear_data_block_references(*bake);
     }
-    try_delete_bake(C, *request.object, *request.nmd, request.bake_id, op->reports);
+    try_delete_bake(bmain, *request.object, *request.nmd, request.bake_id, op->reports);
   }
 
   BakeGeometryNodesJob *job = MEM_new<BakeGeometryNodesJob>(__func__);
@@ -564,7 +585,8 @@ static wmOperatorStatus start_bake_job(bContext *C,
   job->depsgraph = CTX_data_depsgraph_pointer(C);
   job->scene = CTX_data_scene(C);
   job->bake_requests = std::move(requests);
-  WM_set_locked_interface(job->wm, true);
+  job->op = op;
+  WM_locked_interface_set(job->wm, true);
 
   if (mode == BakeRequestsMode::Sync) {
     wmJobWorkerStatus worker_status{};
@@ -577,7 +599,7 @@ static wmOperatorStatus start_bake_job(bContext *C,
   wmJob *wm_job = WM_jobs_get(job->wm,
                               CTX_wm_window(C),
                               job->scene,
-                              "Bake Nodes",
+                              "Baking nodes...",
                               WM_JOB_PROGRESS,
                               WM_JOB_TYPE_BAKE_GEOMETRY_NODES);
 
@@ -601,15 +623,15 @@ static Vector<NodeBakeRequest> collect_simulations_to_bake(Main &bmain,
     if (!BKE_id_is_editable(&bmain, &object->id)) {
       continue;
     }
-    LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
-      if (md->type != eModifierType_Nodes) {
+    for (ModifierData &md : object->modifiers) {
+      if (md.type != eModifierType_Nodes) {
         continue;
       }
-      if (!BKE_modifier_is_enabled(&scene, md, eModifierMode_Realtime)) {
+      if (!BKE_modifier_is_enabled(&scene, &md, eModifierMode_Realtime)) {
         continue;
       }
-      NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
-      if (!nmd->node_group) {
+      NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(&md);
+      if (!nmd->node_group || ID_MISSING(nmd->node_group)) {
         continue;
       }
       if (!nmd->runtime->cache) {
@@ -760,11 +782,11 @@ static void bake_simulation_validate_paths(bContext *C,
       continue;
     }
 
-    LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
-      if (md->type != eModifierType_Nodes) {
+    for (ModifierData &md : object->modifiers) {
+      if (md.type != eModifierType_Nodes) {
         continue;
       }
-      NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+      NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(&md);
       initialize_modifier_bake_directory_if_necessary(C, *object, *nmd, op);
     }
   }
@@ -786,11 +808,33 @@ static PathUsersMap bake_simulation_get_path_users(bContext *C, const Span<Objec
   for (const Object *object : objects) {
     const char *base_path = ID_BLEND_PATH(bmain, &object->id);
 
-    LISTBASE_FOREACH (const ModifierData *, md, &object->modifiers) {
-      if (md->type != eModifierType_Nodes) {
+    for (const ModifierData &md : object->modifiers) {
+      if (md.type != eModifierType_Nodes) {
         continue;
       }
-      const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(md);
+      const NodesModifierData *nmd = reinterpret_cast<const NodesModifierData *>(&md);
+
+      /* If bakes have a custom directory, report that instead of the modifier data directory. */
+      bool all_bakes_have_custom_dir = true;
+      for (NodesModifierBake &bake : MutableSpan{nmd->bakes, nmd->bakes_num}) {
+        auto bake_path = bke::bake::get_node_bake_path(*bmain, *object, *nmd, bake.id);
+        if (!bake_path || !bake_path.value().bake_dir ||
+            bake_path.value().bake_dir.value().empty())
+        {
+          all_bakes_have_custom_dir = false;
+          continue;
+        }
+        path_users.add_or_modify(
+            bake_path.value().bake_dir.value(),
+            [](int *value) { *value = 1; },
+            [](int *value) { ++(*value); });
+      }
+
+      /* If all bakes have a custom directory, we're done. */
+      if (all_bakes_have_custom_dir) {
+        continue;
+      }
+
       if (StringRef(nmd->bake_directory).is_empty()) {
         continue;
       }
@@ -847,7 +891,7 @@ static wmOperatorStatus bake_simulation_invoke(bContext *C,
   }
 
   if (has_path_conflict) {
-    UI_popup_menu_reports(C, op->reports);
+    ui::popup_menu_reports(C, op->reports);
     return OPERATOR_CANCELLED;
   }
   if (has_existing_bake_data) {
@@ -856,7 +900,7 @@ static wmOperatorStatus bake_simulation_invoke(bContext *C,
                                   IFACE_("Overwrite existing bake data?"),
                                   nullptr,
                                   IFACE_("Bake"),
-                                  ALERT_ICON_NONE,
+                                  ui::AlertIcon::None,
                                   false);
   }
   Vector<NodeBakeRequest> requests = bake_simulation_gather_requests(C, op);
@@ -875,6 +919,8 @@ static wmOperatorStatus bake_simulation_modal(bContext *C,
 
 static wmOperatorStatus delete_baked_simulation_exec(bContext *C, wmOperator *op)
 {
+  Main *bmain = CTX_data_main(C);
+
   Vector<Object *> objects;
   if (RNA_boolean_get(op->ptr, "selected")) {
     CTX_DATA_BEGIN (C, Object *, object, selected_objects) {
@@ -893,11 +939,11 @@ static wmOperatorStatus delete_baked_simulation_exec(bContext *C, wmOperator *op
   }
 
   for (Object *object : objects) {
-    LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
-      if (md->type == eModifierType_Nodes) {
-        NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+    for (ModifierData &md : object->modifiers) {
+      if (md.type == eModifierType_Nodes) {
+        NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(&md);
         for (const NodesModifierBake &bake : Span(nmd->bakes, nmd->bakes_num)) {
-          try_delete_bake(C, *object, *nmd, bake.id, op->reports);
+          try_delete_bake(bmain, *object, *nmd, bake.id, op->reports);
         }
       }
     }
@@ -919,18 +965,13 @@ static Vector<NodeBakeRequest> bake_single_node_gather_bake_request(bContext *C,
   if (object == nullptr) {
     return {};
   }
-  char *modifier_name = RNA_string_get_alloc(op->ptr, "modifier_name", nullptr, 0, nullptr);
-  if (modifier_name == nullptr) {
-    return {};
-  }
-  BLI_SCOPED_DEFER([&]() { MEM_SAFE_FREE(modifier_name); });
-
-  ModifierData *md = BKE_modifiers_findby_name(object, modifier_name);
+  std::string modifier_name = RNA_string_get(op->ptr, "modifier_name");
+  ModifierData *md = BKE_modifiers_findby_name(object, modifier_name.c_str());
   if (md == nullptr) {
     return {};
   }
   NodesModifierData &nmd = *reinterpret_cast<NodesModifierData *>(md);
-  if (nmd.node_group == nullptr) {
+  if (!nmd.node_group || ID_MISSING(nmd.node_group)) {
     return {};
   }
   if (!BKE_modifier_is_enabled(scene, md, eModifierMode_Realtime)) {
@@ -965,7 +1006,7 @@ static Vector<NodeBakeRequest> bake_single_node_gather_bake_request(bContext *C,
     if (!request.path) {
       BKE_report(op->reports,
                  RPT_INFO,
-                 "Can't determine bake location on disk. Falling back to packed bake.");
+                 "Cannot determine bake location on disk. Falling back to packed bake.");
     }
   }
 
@@ -975,7 +1016,7 @@ static Vector<NodeBakeRequest> bake_single_node_gather_bake_request(bContext *C,
     request.frame_end = current_frame;
     /* Delete old bake because otherwise this wouldn't be a still frame bake. This is not done for
      * other bakes to avoid loosing data when starting a bake. */
-    try_delete_bake(C, *object, nmd, bake_id, op->reports);
+    try_delete_bake(bmain, *object, nmd, bake_id, op->reports);
   }
   else {
     const std::optional<IndexRange> frame_range = bake::get_node_bake_frame_range(
@@ -1033,20 +1074,15 @@ static wmOperatorStatus delete_single_bake_exec(bContext *C, wmOperator *op)
   if (object == nullptr) {
     return OPERATOR_CANCELLED;
   }
-  char *modifier_name = RNA_string_get_alloc(op->ptr, "modifier_name", nullptr, 0, nullptr);
-  if (modifier_name == nullptr) {
-    return OPERATOR_CANCELLED;
-  }
-  BLI_SCOPED_DEFER([&]() { MEM_SAFE_FREE(modifier_name); });
-
-  ModifierData *md = BKE_modifiers_findby_name(object, modifier_name);
+  std::string modifier_name = RNA_string_get(op->ptr, "modifier_name");
+  ModifierData *md = BKE_modifiers_findby_name(object, modifier_name.c_str());
   if (md == nullptr) {
     return OPERATOR_CANCELLED;
   }
   NodesModifierData &nmd = *reinterpret_cast<NodesModifierData *>(md);
   const int bake_id = RNA_int_get(op->ptr, "bake_id");
 
-  try_delete_bake(C, *object, nmd, bake_id, op->reports);
+  try_delete_bake(bmain, *object, nmd, bake_id, op->reports);
 
   DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
   WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, nullptr);
@@ -1062,13 +1098,8 @@ static wmOperatorStatus pack_single_bake_exec(bContext *C, wmOperator *op)
   if (object == nullptr) {
     return OPERATOR_CANCELLED;
   }
-  char *modifier_name = RNA_string_get_alloc(op->ptr, "modifier_name", nullptr, 0, nullptr);
-  if (modifier_name == nullptr) {
-    return OPERATOR_CANCELLED;
-  }
-  BLI_SCOPED_DEFER([&]() { MEM_SAFE_FREE(modifier_name); });
-
-  ModifierData *md = BKE_modifiers_findby_name(object, modifier_name);
+  std::string modifier_name = RNA_string_get(op->ptr, "modifier_name");
+  ModifierData *md = BKE_modifiers_findby_name(object, modifier_name.c_str());
   if (md == nullptr) {
     return OPERATOR_CANCELLED;
   }
@@ -1096,21 +1127,17 @@ static wmOperatorStatus unpack_single_bake_invoke(bContext *C,
                                                   wmOperator *op,
                                                   const wmEvent * /*event*/)
 {
-  uiPopupMenu *pup;
-  uiLayout *layout;
+  ui::PopupMenu *pup = ui::popup_menu_begin(C, IFACE_("Unpack"), ICON_NONE);
+  ui::Layout &layout = *popup_menu_layout(pup);
 
-  pup = UI_popup_menu_begin(C, IFACE_("Unpack"), ICON_NONE);
-  layout = UI_popup_menu_layout(pup);
+  layout.operator_context_set(wm::OpCallContext::ExecDefault);
+  layout.op_enum(op->type->idname,
+                 "method",
+                 static_cast<IDProperty *>(op->ptr->data),
+                 wm::OpCallContext::ExecRegionWin,
+                 UI_ITEM_NONE);
 
-  uiLayoutSetOperatorContext(layout, WM_OP_EXEC_DEFAULT);
-  uiItemsFullEnumO(layout,
-                   op->type->idname,
-                   "method",
-                   static_cast<IDProperty *>(op->ptr->data),
-                   WM_OP_EXEC_REGION_WIN,
-                   UI_ITEM_NONE);
-
-  UI_popup_menu_end(C, pup);
+  popup_menu_end(C, pup);
 
   return OPERATOR_INTERFACE;
 }
@@ -1123,13 +1150,8 @@ static wmOperatorStatus unpack_single_bake_exec(bContext *C, wmOperator *op)
   if (object == nullptr) {
     return OPERATOR_CANCELLED;
   }
-  char *modifier_name = RNA_string_get_alloc(op->ptr, "modifier_name", nullptr, 0, nullptr);
-  if (modifier_name == nullptr) {
-    return OPERATOR_CANCELLED;
-  }
-  BLI_SCOPED_DEFER([&]() { MEM_SAFE_FREE(modifier_name); });
-
-  ModifierData *md = BKE_modifiers_findby_name(object, modifier_name);
+  std::string modifier_name = RNA_string_get(op->ptr, "modifier_name");
+  ModifierData *md = BKE_modifiers_findby_name(object, modifier_name.c_str());
   if (md == nullptr) {
     return OPERATOR_CANCELLED;
   }
@@ -1192,7 +1214,7 @@ void OBJECT_OT_simulation_nodes_cache_delete(wmOperatorType *ot)
   ot->idname = __func__;
 
   ot->exec = delete_baked_simulation_exec;
-  ot->poll = ED_operator_object_active;
+  ot->poll = ED_operator_object_active_editable;
 
   RNA_def_boolean(ot->srna, "selected", false, "Selected", "Delete cache on all selected objects");
 }
@@ -1220,6 +1242,7 @@ void OBJECT_OT_geometry_node_bake_single(wmOperatorType *ot)
   ot->invoke = bake_single_node_invoke;
   ot->exec = bake_single_node_exec;
   ot->modal = bake_single_node_modal;
+  ot->poll = ED_operator_object_active_editable;
 
   single_bake_operator_props(ot);
 }
@@ -1231,6 +1254,7 @@ void OBJECT_OT_geometry_node_bake_delete_single(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_geometry_node_bake_delete_single";
 
   ot->exec = delete_single_bake_exec;
+  ot->poll = ED_operator_object_active_editable;
 
   single_bake_operator_props(ot);
 }
@@ -1242,6 +1266,7 @@ void OBJECT_OT_geometry_node_bake_pack_single(wmOperatorType *ot)
   ot->idname = "OBJECT_OT_geometry_node_bake_pack_single";
 
   ot->exec = pack_single_bake_exec;
+  ot->poll = ED_operator_object_active_editable;
 
   single_bake_operator_props(ot);
 }
@@ -1254,6 +1279,7 @@ void OBJECT_OT_geometry_node_bake_unpack_single(wmOperatorType *ot)
 
   ot->exec = unpack_single_bake_exec;
   ot->invoke = unpack_single_bake_invoke;
+  ot->poll = ED_operator_object_active_editable;
 
   single_bake_operator_props(ot);
 
@@ -1284,4 +1310,6 @@ void OBJECT_OT_geometry_node_bake_unpack_single(wmOperatorType *ot)
   RNA_def_enum(ot->srna, "method", method_items, PF_USE_LOCAL, "Method", "How to unpack");
 }
 
-}  // namespace blender::ed::object::bake_simulation
+}  // namespace ed::object::bake_simulation
+
+}  // namespace blender

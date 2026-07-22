@@ -7,6 +7,7 @@
 #  include <cstdio>
 #  include <cstdlib>
 #  include <cstring>
+#  include <iomanip>
 
 #  include "device/hip/device_impl.h"
 
@@ -47,9 +48,8 @@ void HIPDevice::set_error(const string &error)
   Device::set_error(error);
 
   if (first_error) {
-    fprintf(stderr, "\nRefer to the Cycles GPU rendering documentation for possible solutions:\n");
-    fprintf(stderr,
-            "https://docs.blender.org/manual/en/latest/render/cycles/gpu_rendering.html\n\n");
+    LOG_ERROR << "Refer to the Cycles GPU rendering documentation for possible solutions:\n"
+                 "https://docs.blender.org/manual/en/latest/render/cycles/gpu_rendering.html\n";
     first_error = false;
   }
 }
@@ -69,7 +69,7 @@ HIPDevice::HIPDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, b
 
   hipModule = nullptr;
 
-  need_texture_info = false;
+  need_image_info = false;
 
   pitch_alignment = 0;
 
@@ -126,7 +126,7 @@ HIPDevice::HIPDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, b
 
 HIPDevice::~HIPDevice()
 {
-  texture_info.free();
+  image_info.free();
   if (hipModule) {
     hip_assert(hipModuleUnload(hipModule));
   }
@@ -164,7 +164,7 @@ bool HIPDevice::check_peer_access(Device *peer_device)
     return false;
   }
 
-  // Ensure array access over the link is possible as well (for 3D textures)
+  // Ensure array access over the link is possible as well (for 3D images)
   hip_assert(hipDeviceGetP2PAttribute(
       &can_access, hipDevP2PAttrHipArrayAccessSupported, hipDevice, peer_device_hip->hipDevice));
   if (can_access == 0) {
@@ -208,6 +208,7 @@ string HIPDevice::compile_kernel_get_common_cflags(const uint kernel_features)
   const string source_path = path_get("source");
   const string include_path = source_path;
   string cflags = string_printf(
+      "-std=c++17 "
       "-m%d "
       "-DHIPCC "
       "-I\"%s\"",
@@ -244,9 +245,9 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
   /* Attempt to use kernel provided with Blender. */
   if (!use_adaptive_compilation()) {
     const string fatbin = path_get(string_printf("lib/%s_%s.fatbin.zst", name, arch.c_str()));
-    VLOG_INFO << "Testing for pre-compiled kernel " << fatbin << ".";
+    LOG_INFO << "Testing for pre-compiled kernel " << fatbin << ".";
     if (path_exists(fatbin)) {
-      VLOG_INFO << "Using precompiled kernel.";
+      LOG_INFO << "Using precompiled kernel.";
       return fatbin;
     }
   }
@@ -262,12 +263,7 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
   const string kernel_md5 = util_md5_string(source_md5 + common_cflags);
 
   const char *const kernel_ext = "genco";
-  std::string options = "-Wno-parentheses-equality -Wno-unused-value -ffast-math";
-  if (hipNeedPreciseMath(arch)) {
-    options.append(
-        " -fhip-fp32-correctly-rounded-divide-sqrt -fno-gpu-approx-transcendentals "
-        "-fgpu-flush-denormals-to-zero -ffp-contract=off");
-  }
+  std::string options = "-Wno-parentheses-equality -Wno-unused-value -ffast-math -std=c++17";
 
 #  ifndef NDEBUG
   options.append(" -save-temps");
@@ -282,9 +278,9 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
   const string fatbin_file = string_printf(
       "cycles_%s_%s_%s", name, arch.c_str(), kernel_md5.c_str());
   const string fatbin = path_cache_get(path_join("kernels", fatbin_file));
-  VLOG_INFO << "Testing for locally compiled kernel " << fatbin << ".";
+  LOG_INFO << "Testing for locally compiled kernel " << fatbin << ".";
   if (path_exists(fatbin)) {
-    VLOG_INFO << "Using locally compiled kernel.";
+    LOG_INFO << "Using locally compiled kernel.";
     return fatbin;
   }
 
@@ -317,17 +313,8 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
     return string();
   }
 
-#  ifdef WITH_HIP_SDK_5
-  int hip_major_ver = hipRuntimeVersion / 10000000;
-  if (hip_major_ver > 5) {
-    set_error(string_printf(
-        "HIP Runtime version %d does not work with kernels compiled with HIP SDK 5\n",
-        hip_major_ver));
-    return string();
-  }
-#  endif
   const int hipcc_hip_version = hipewCompilerVersion();
-  VLOG_INFO << "Found hipcc " << hipcc << ", HIP version " << hipcc_hip_version << ".";
+  LOG_INFO << "Found hipcc " << hipcc << ", HIP version " << hipcc_hip_version << ".";
 
   double starttime = time_dt();
 
@@ -345,9 +332,8 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
                                  fatbin.c_str(),
                                  common_cflags.c_str());
 
-  printf("Compiling %sHIP kernel ...\n%s\n",
-         (use_adaptive_compilation()) ? "adaptive " : "",
-         command.c_str());
+  LOG_INFO_IMPORTANT << "Compiling " << ((use_adaptive_compilation()) ? "adaptive " : "")
+                     << "HIP kernel ... " << command;
 
 #  ifdef _WIN32
   command = "call " + command;
@@ -367,7 +353,8 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
     return string();
   }
 
-  printf("Kernel compilation finished in %.2lfs.\n", time_dt() - starttime);
+  LOG_INFO_IMPORTANT << "Kernel compilation finished in " << std::fixed << std::setprecision(2)
+                     << time_dt() - starttime << "s";
 
   return fatbin;
 }
@@ -380,7 +367,7 @@ bool HIPDevice::load_kernels(const uint kernel_features)
    */
   if (hipModule) {
     if (use_adaptive_compilation()) {
-      VLOG_INFO << "Skipping HIP kernel reload for adaptive compilation, not currently supported.";
+      LOG_INFO << "Skipping HIP kernel reload for adaptive compilation, not currently supported.";
     }
     return true;
   }
@@ -421,7 +408,7 @@ bool HIPDevice::load_kernels(const uint kernel_features)
   }
 
   if (result == hipSuccess) {
-    kernels.load(this);
+    kernels.load_all(this, hipModule);
     reserve_local_memory(kernel_features);
   }
 
@@ -444,23 +431,21 @@ void HIPDevice::reserve_local_memory(const uint kernel_features)
     /* Use the biggest kernel for estimation. */
     const DeviceKernel test_kernel = (kernel_features & KERNEL_FEATURE_NODE_RAYTRACE) ?
                                          DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE :
-                                     (kernel_features & KERNEL_FEATURE_MNEE) ?
-                                         DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE :
                                          DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE;
 
     /* Launch kernel, using just 1 block appears sufficient to reserve memory for all
      * multiprocessors. It would be good to do this in parallel for the multi GPU case
      * still to make it faster. */
-    HIPDeviceQueue queue(this);
+    unique_ptr<DeviceQueue> queue = gpu_queue_create();
 
     device_ptr d_path_index = 0;
     device_ptr d_render_buffer = 0;
     int d_work_size = 0;
     DeviceKernelArguments args(&d_path_index, &d_render_buffer, &d_work_size);
 
-    queue.init_execution();
-    queue.enqueue(test_kernel, 1, args);
-    queue.synchronize();
+    queue->init_execution();
+    queue->enqueue(test_kernel, 1, args);
+    queue->synchronize();
   }
 
   {
@@ -468,8 +453,8 @@ void HIPDevice::reserve_local_memory(const uint kernel_features)
     hipMemGetInfo(&free_after, &total);
   }
 
-  VLOG_INFO << "Local memory reserved " << string_human_readable_number(free_before - free_after)
-            << " bytes. (" << string_human_readable_size(free_before - free_after) << ")";
+  LOG_INFO << "Local memory reserved " << string_human_readable_number(free_before - free_after)
+           << " bytes. (" << string_human_readable_size(free_before - free_after) << ")";
 
 #  if 0
   /* For testing mapped host memory, fill up device memory. */
@@ -540,8 +525,8 @@ void HIPDevice::copy_host_to_device(void *device_pointer, void *host_pointer, co
 
 void HIPDevice::mem_alloc(device_memory &mem)
 {
-  if (mem.type == MEM_TEXTURE) {
-    assert(!"mem_alloc not supported for textures.");
+  if (mem.type == MEM_IMAGE_TEXTURE) {
+    assert(!"mem_alloc not supported for images.");
   }
   else if (mem.type == MEM_GLOBAL) {
     assert(!"mem_alloc not supported for global memory.");
@@ -556,8 +541,8 @@ void HIPDevice::mem_copy_to(device_memory &mem)
   if (mem.type == MEM_GLOBAL) {
     global_copy_to(mem);
   }
-  else if (mem.type == MEM_TEXTURE) {
-    tex_copy_to((device_texture &)mem);
+  else if (mem.type == MEM_IMAGE_TEXTURE) {
+    image_copy_to((device_image &)mem);
   }
   else {
     if (!mem.device_pointer) {
@@ -576,20 +561,20 @@ void HIPDevice::mem_move_to_host(device_memory &mem)
     global_free(mem);
     global_alloc(mem);
   }
-  else if (mem.type == MEM_TEXTURE) {
-    tex_free((device_texture &)mem);
-    tex_alloc((device_texture &)mem);
+  else if (mem.type == MEM_IMAGE_TEXTURE) {
+    image_free((device_image &)mem);
+    image_alloc((device_image &)mem);
   }
   else {
-    assert(!"mem_move_to_host only supported for texture and global memory");
+    assert(!"mem_move_to_host only supported for image and global memory");
   }
 }
 
 void HIPDevice::mem_copy_from(
     device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem)
 {
-  if (mem.type == MEM_TEXTURE || mem.type == MEM_GLOBAL) {
-    assert(!"mem_copy_from not supported for textures.");
+  if (mem.type == MEM_IMAGE_TEXTURE) {
+    assert(!"mem_copy_from not supported for images.");
   }
   else if (mem.host_pointer) {
     const size_t size = elem * w * h;
@@ -629,8 +614,8 @@ void HIPDevice::mem_free(device_memory &mem)
   if (mem.type == MEM_GLOBAL) {
     global_free(mem);
   }
-  else if (mem.type == MEM_TEXTURE) {
-    tex_free((device_texture &)mem);
+  else if (mem.type == MEM_IMAGE_TEXTURE) {
+    image_free((device_image &)mem);
   }
   else {
     generic_free(mem);
@@ -670,7 +655,7 @@ void HIPDevice::global_alloc(device_memory &mem)
     generic_copy_to(mem);
   }
 
-  const_copy_to(mem.name, &mem.device_pointer, sizeof(mem.device_pointer));
+  const_copy_to(mem.global_name(), &mem.device_pointer, sizeof(mem.device_pointer));
 }
 
 void HIPDevice::global_copy_to(device_memory &mem)
@@ -683,7 +668,7 @@ void HIPDevice::global_copy_to(device_memory &mem)
     generic_copy_to(mem);
   }
 
-  const_copy_to(mem.name, &mem.device_pointer, sizeof(mem.device_pointer));
+  const_copy_to(mem.global_name(), &mem.device_pointer, sizeof(mem.device_pointer));
 }
 
 void HIPDevice::global_free(device_memory &mem)
@@ -693,14 +678,14 @@ void HIPDevice::global_free(device_memory &mem)
   }
 }
 
-static size_t tex_src_pitch(const device_texture &mem)
+static size_t tex_src_pitch(const device_image &mem)
 {
   return mem.data_width * datatype_size(mem.data_type) * mem.data_elements;
 }
 
-static hip_Memcpy2D tex_2d_copy_param(const device_texture &mem, const int pitch_alignment)
+static hip_Memcpy2D tex_2d_copy_param(const device_image &mem, const int pitch_alignment)
 {
-  /* 2D texture using pitch aligned linear memory. */
+  /* 2D image using pitch aligned linear memory. */
   const size_t src_pitch = tex_src_pitch(mem);
   const size_t dst_pitch = align_up(src_pitch, pitch_alignment);
 
@@ -718,24 +703,7 @@ static hip_Memcpy2D tex_2d_copy_param(const device_texture &mem, const int pitch
   return param;
 }
 
-static HIP_MEMCPY3D tex_3d_copy_param(const device_texture &mem)
-{
-  const size_t src_pitch = tex_src_pitch(mem);
-
-  HIP_MEMCPY3D param;
-  memset(&param, 0, sizeof(HIP_MEMCPY3D));
-  param.dstMemoryType = hipMemoryTypeArray;
-  param.dstArray = (hArray)mem.device_pointer;
-  param.srcMemoryType = hipMemoryTypeHost;
-  param.srcHost = mem.host_pointer;
-  param.srcPitch = src_pitch;
-  param.WidthInBytes = param.srcPitch;
-  param.Height = mem.data_height;
-  param.Depth = mem.data_depth;
-  return param;
-}
-
-void HIPDevice::tex_alloc(device_texture &mem)
+void HIPDevice::image_alloc(device_image &mem)
 {
   HIPContextScope scope(this);
 
@@ -766,7 +734,7 @@ void HIPDevice::tex_alloc(device_texture &mem)
     filter_mode = hipFilterModeLinear;
   }
 
-  /* Image Texture Storage */
+  /* Image Storage. */
   hipArray_Format format;
   switch (mem.data_type) {
     case TYPE_UCHAR:
@@ -793,53 +761,14 @@ void HIPDevice::tex_alloc(device_texture &mem)
   }
 
   Mem *cmem = nullptr;
-  hArray array_3d = nullptr;
 
   if (!mem.is_resident(this)) {
     thread_scoped_lock lock(device_mem_map_mutex);
     cmem = &device_mem_map[&mem];
     cmem->texobject = 0;
-
-    if (mem.data_depth > 1) {
-      array_3d = (hArray)mem.device_pointer;
-      cmem->array = reinterpret_cast<arrayMemObject>(array_3d);
-    }
-  }
-  else if (mem.data_depth > 1) {
-    /* 3D texture using array, there is no API for linear memory. */
-    HIP_ARRAY3D_DESCRIPTOR desc;
-
-    desc.Width = mem.data_width;
-    desc.Height = mem.data_height;
-    desc.Depth = mem.data_depth;
-    desc.Format = format;
-    desc.NumChannels = mem.data_elements;
-    desc.Flags = 0;
-
-    VLOG_WORK << "Array 3D allocate: " << mem.name << ", "
-              << string_human_readable_number(mem.memory_size()) << " bytes. ("
-              << string_human_readable_size(mem.memory_size()) << ")";
-
-    hip_assert(hipArray3DCreate((hArray *)&array_3d, &desc));
-
-    if (!array_3d) {
-      return;
-    }
-
-    mem.device_pointer = (device_ptr)array_3d;
-    mem.device_size = mem.memory_size();
-    stats.mem_alloc(mem.memory_size());
-
-    const HIP_MEMCPY3D param = tex_3d_copy_param(mem);
-    hip_assert(hipDrvMemcpy3D(&param));
-
-    thread_scoped_lock lock(device_mem_map_mutex);
-    cmem = &device_mem_map[&mem];
-    cmem->texobject = 0;
-    cmem->array = reinterpret_cast<arrayMemObject>(array_3d);
   }
   else if (mem.data_height > 0) {
-    /* 2D texture, using pitch aligned linear memory. */
+    /* 2D image, using pitch aligned linear memory. */
     const size_t dst_pitch = align_up(tex_src_pitch(mem), pitch_alignment);
     const size_t dst_size = dst_pitch * mem.data_height;
 
@@ -852,7 +781,7 @@ void HIPDevice::tex_alloc(device_texture &mem)
     hip_assert(hipDrvMemcpy2DUnaligned(&param));
   }
   else {
-    /* 1D texture, using linear memory. */
+    /* 1D image, using linear memory. */
     cmem = generic_alloc(mem);
     if (!cmem) {
       return;
@@ -862,23 +791,14 @@ void HIPDevice::tex_alloc(device_texture &mem)
   }
 
   /* Set Mapping and tag that we need to (re-)upload to device */
-  TextureInfo tex_info = mem.info;
+  KernelImageInfo tex_info = mem.info;
 
-  if (mem.info.data_type != IMAGE_DATA_TYPE_NANOVDB_FLOAT &&
-      mem.info.data_type != IMAGE_DATA_TYPE_NANOVDB_FLOAT3 &&
-      mem.info.data_type != IMAGE_DATA_TYPE_NANOVDB_FPN &&
-      mem.info.data_type != IMAGE_DATA_TYPE_NANOVDB_FP16)
-  {
+  if (!is_nanovdb_type(mem.info.data_type)) {
     /* Bindless textures. */
     hipResourceDesc resDesc;
     memset(&resDesc, 0, sizeof(resDesc));
 
-    if (array_3d) {
-      resDesc.resType = hipResourceTypeArray;
-      resDesc.res.array.h_Array = array_3d;
-      resDesc.flags = 0;
-    }
-    else if (mem.data_height > 0) {
+    if (mem.data_height > 0) {
       const size_t dst_pitch = align_up(tex_src_pitch(mem), pitch_alignment);
 
       resDesc.resType = hipResourceTypePitch2D;
@@ -910,7 +830,7 @@ void HIPDevice::tex_alloc(device_texture &mem)
 
     if (hipTexObjectCreate(&cmem->texobject, &resDesc, &texDesc, nullptr) != hipSuccess) {
       set_error(
-          "Failed to create texture. Maximum GPU texture size or available GPU memory was likely "
+          "Failed to create image. Maximum GPU image size or available GPU memory was likely "
           "exceeded.");
     }
 
@@ -921,43 +841,40 @@ void HIPDevice::tex_alloc(device_texture &mem)
   }
 
   {
-    /* Update texture info. */
-    thread_scoped_lock lock(texture_info_mutex);
-    const uint slot = mem.slot;
-    if (slot >= texture_info.size()) {
-      /* Allocate some slots in advance, to reduce amount of re-allocations. */
-      texture_info.resize(slot + 128);
+    /* Update image info. */
+    thread_scoped_lock lock(image_info_mutex);
+    const uint image_info_id = mem.image_info_id;
+    if (image_info_id >= image_info.size()) {
+      /* Geometric growth to amortize reallocation cost. */
+      const size_t new_size = max(size_t(image_info_id) + 128, image_info.size() * 2);
+      image_info.host_only_resize(new_size);
     }
-    texture_info[slot] = tex_info;
-    need_texture_info = true;
+    image_info[image_info_id] = tex_info;
+    need_image_info = true;
   }
 }
 
-void HIPDevice::tex_copy_to(device_texture &mem)
+void HIPDevice::image_copy_to(device_image &mem)
 {
   if (!mem.device_pointer) {
     /* Not yet allocated on device. */
-    tex_alloc(mem);
+    image_alloc(mem);
   }
   else if (!mem.is_resident(this)) {
-    /* Peering with another device, may still need to create texture info and object. */
-    bool texture_allocated = false;
+    /* Peering with another device, may still need to create image info and object. */
+    bool image_allocated = false;
     {
-      thread_scoped_lock lock(texture_info_mutex);
-      texture_allocated = mem.slot < texture_info.size() && texture_info[mem.slot].data != 0;
+      thread_scoped_lock lock(image_info_mutex);
+      image_allocated = mem.image_info_id < image_info.size() &&
+                        image_info[mem.image_info_id].data != 0;
     }
-    if (!texture_allocated) {
-      tex_alloc(mem);
+    if (!image_allocated) {
+      image_alloc(mem);
     }
   }
   else {
     /* Resident and fully allocated, only copy. */
-    if (mem.data_depth > 0) {
-      HIPContextScope scope(this);
-      const HIP_MEMCPY3D param = tex_3d_copy_param(mem);
-      hip_assert(hipDrvMemcpy3D(&param));
-    }
-    else if (mem.data_height > 0) {
+    if (mem.data_height > 0) {
       HIPContextScope scope(this);
       const hip_Memcpy2D param = tex_2d_copy_param(mem, pitch_alignment);
       hip_assert(hipDrvMemcpy2DUnaligned(&param));
@@ -968,7 +885,7 @@ void HIPDevice::tex_copy_to(device_texture &mem)
   }
 }
 
-void HIPDevice::tex_free(device_texture &mem)
+void HIPDevice::image_free(device_image &mem)
 {
   HIPContextScope scope(this);
   thread_scoped_lock lock(device_mem_map_mutex);
@@ -981,10 +898,10 @@ void HIPDevice::tex_free(device_texture &mem)
 
   const Mem &cmem = it->second;
 
-  /* Always clear texture info and texture object, regardless of residency. */
+  /* Always clear image info and texture object, regardless of residency. */
   {
-    thread_scoped_lock lock(texture_info_mutex);
-    texture_info[mem.slot] = TextureInfo();
+    thread_scoped_lock lock(image_info_mutex);
+    image_info[mem.image_info_id] = KernelImageInfo();
   }
 
   if (cmem.texobject) {
@@ -1059,10 +976,10 @@ bool HIPDevice::should_use_graphics_interop(const GraphicsInteropDevice &interop
 
       if (log) {
         if (found) {
-          VLOG_INFO << "Graphics interop: found matching OpenGL device for HIP";
+          LOG_INFO << "Graphics interop: found matching OpenGL device for HIP";
         }
         else {
-          VLOG_INFO << "Graphics interop: no matching OpenGL device for HIP";
+          LOG_INFO << "Graphics interop: no matching OpenGL device for HIP";
         }
       }
 

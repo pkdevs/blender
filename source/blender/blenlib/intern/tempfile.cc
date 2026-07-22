@@ -6,11 +6,13 @@
  * \ingroup bli
  */
 
-#include "BLI_tempfile.h"
+#include "BLI_tempfile.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
+
+namespace blender {
 
 bool BLI_temp_directory_path_copy_if_valid(char *tempdir,
                                            const size_t tempdir_maxncpy,
@@ -29,7 +31,7 @@ bool BLI_temp_directory_path_copy_if_valid(char *tempdir,
   /* Disallow paths starting with two forward slashes. While they are valid paths,
    * Blender interprets them as relative in situations relative paths aren't supported,
    * see #95411. */
-  while (UNLIKELY(dirpath[0] == '/' && dirpath[1] == '/')) {
+  while (dirpath[0] == '/' && dirpath[1] == '/') [[unlikely]] {
     dirpath++;
   }
   if (dirpath[0] == '\0') {
@@ -58,28 +60,19 @@ void BLI_temp_directory_path_get(char *tempdir, const size_t tempdir_maxncpy)
 {
   tempdir[0] = '\0';
 
-  const char *env_vars[] = {
 #ifdef WIN32
-      "TEMP",
+  const char *env_var = "TEMP";
 #else
-      /* Non standard (could be removed). */
-      "TMP",
-      /* Posix standard. */
-      "TMPDIR",
+  const char *env_var = "TMPDIR";
 #endif
-  };
 
-  for (int i = 0; i < ARRAY_SIZE(env_vars); i++) {
-    const char *tempdir_test = BLI_getenv(env_vars[i]);
-    if (tempdir_test == nullptr) {
-      continue;
-    }
-    if (BLI_temp_directory_path_copy_if_valid(tempdir, tempdir_maxncpy, tempdir_test)) {
-      break;
-    }
+  if (const char *tempdir_test = BLI_getenv(env_var)) {
+    BLI_temp_directory_path_copy_if_valid(tempdir, tempdir_maxncpy, tempdir_test);
   }
 
   if (tempdir[0] == '\0') {
     BLI_strncpy(tempdir, "/tmp/", tempdir_maxncpy);
   }
 }
+
+}  // namespace blender

@@ -31,7 +31,7 @@
 #include "eevee_instance.hh"
 #include "eevee_sampling.hh"
 #include "eevee_shader.hh"
-#include "eevee_shader_shared.hh"
+#include "eevee_velocity_shared.hh"
 
 #include "eevee_depth_of_field.hh"
 
@@ -45,10 +45,14 @@ void DepthOfField::init()
 {
   const SceneEEVEE &sce_eevee = inst_.scene->eevee;
   const Object *camera_object_eval = inst_.camera_eval_object;
-  const ::Camera *camera = (camera_object_eval && camera_object_eval->type == OB_CAMERA) ?
-                               reinterpret_cast<const ::Camera *>(camera_object_eval->data) :
-                               nullptr;
-  if (camera == nullptr) {
+  const blender::Camera *camera = (camera_object_eval && camera_object_eval->type == OB_CAMERA) ?
+                                      reinterpret_cast<const blender::Camera *>(
+                                          camera_object_eval->data) :
+                                      nullptr;
+
+  enabled_ = camera && (camera->dof.flag & CAM_DOF_ENABLED) != 0;
+
+  if (enabled_ == false) {
     /* Set to invalid value for update detection */
     data_.scatter_color_threshold = -1.0f;
     return;
@@ -67,9 +71,11 @@ void DepthOfField::sync()
 {
   const Camera &camera = inst_.camera;
   const Object *camera_object_eval = inst_.camera_eval_object;
-  const ::Camera *camera_data = (camera_object_eval && camera_object_eval->type == OB_CAMERA) ?
-                                    reinterpret_cast<const ::Camera *>(camera_object_eval->data) :
-                                    nullptr;
+  const blender::Camera *camera_data = (camera_object_eval &&
+                                        camera_object_eval->type == OB_CAMERA) ?
+                                           reinterpret_cast<const blender::Camera *>(
+                                               camera_object_eval->data) :
+                                           nullptr;
 
   if (inst_.debug_mode == DEBUG_DOF_PLANES) {
     /* Set debug message even if DOF is not enabled. */
@@ -82,7 +88,7 @@ void DepthOfField::sync()
         " - Green: Foreground\n");
   }
 
-  if (camera_data == nullptr || (camera_data->dof.flag & CAM_DOF_ENABLED) == 0) {
+  if (enabled_ == false) {
     jitter_radius_ = 0.0f;
     fx_radius_ = 0.0f;
     return;
@@ -152,24 +158,14 @@ void DepthOfField::sync()
 
   /* TODO(fclem): Once we render into multiple view, we will need to use the maximum resolution. */
   int2 max_render_res = inst_.film.render_extent_get();
-  int2 half_res = math::divide_ceil(max_render_res, int2(2));
-  int2 reduce_size = math::ceil_to_multiple(half_res, int2(DOF_REDUCE_GROUP_SIZE));
+  int2 half_render_res = math::divide_ceil(max_render_res, int2(2));
+  int2 reduce_size = math::ceil_to_multiple(half_render_res, int2(DOF_REDUCE_GROUP_SIZE));
 
   data_.gather_uv_fac = 1.0f / float2(reduce_size);
 
-  /* Now that we know the maximum render resolution of every view, using depth of field, allocate
-   * the reduced buffers. Color needs to be signed format here. See note in shader for
-   * explanation. Do not use texture pool because of needs mipmaps. */
-  eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT |
-                           GPU_TEXTURE_USAGE_SHADER_WRITE;
-  reduced_color_tx_.ensure_2d(GPU_RGBA16F, reduce_size, usage, nullptr, DOF_MIP_COUNT);
-  reduced_coc_tx_.ensure_2d(GPU_R16F, reduce_size, usage, nullptr, DOF_MIP_COUNT);
-  reduced_color_tx_.ensure_mip_views();
-  reduced_coc_tx_.ensure_mip_views();
-
   /* Resize the scatter list to contain enough entry to cover half the screen with sprites (which
    * is unlikely due to local contrast test). */
-  data_.scatter_max_rect = (reduced_color_tx_.pixel_count() / 4) / 2;
+  data_.scatter_max_rect = (reduce_size.x * reduce_size.y / 4) / 2;
   scatter_fg_list_buf_.resize(data_.scatter_max_rect);
   scatter_bg_list_buf_.resize(data_.scatter_max_rect);
 
@@ -281,8 +277,8 @@ void DepthOfField::stabilize_pass_sync()
   stabilize_ps_.bind_texture("depth_tx", &render_buffers.depth_tx, no_filter);
   stabilize_ps_.bind_ubo("dof_buf", data_);
   stabilize_ps_.push_constant("u_use_history", &stabilize_valid_history_, 1);
-  stabilize_ps_.bind_image("out_coc_img", reduced_coc_tx_.mip_view(0));
-  stabilize_ps_.bind_image("out_color_img", reduced_color_tx_.mip_view(0));
+  stabilize_ps_.bind_image("out_coc_img", &reduced_coc_mip_views_[0]);
+  stabilize_ps_.bind_image("out_color_img", &reduced_color_mip_views_[0]);
   stabilize_ps_.bind_image("out_history_img", &stabilize_output_tx_);
   stabilize_ps_.dispatch(&dispatch_stabilize_size_);
   stabilize_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH | GPU_BARRIER_SHADER_IMAGE_ACCESS);
@@ -292,8 +288,8 @@ void DepthOfField::downsample_pass_sync()
 {
   downsample_ps_.init();
   downsample_ps_.shader_set(inst_.shaders.static_shader_get(DOF_DOWNSAMPLE));
-  downsample_ps_.bind_texture("color_tx", reduced_color_tx_.mip_view(0), no_filter);
-  downsample_ps_.bind_texture("coc_tx", reduced_coc_tx_.mip_view(0), no_filter);
+  downsample_ps_.bind_texture("color_tx", &reduced_color_mip_views_[0], no_filter);
+  downsample_ps_.bind_texture("coc_tx", &reduced_coc_mip_views_[0], no_filter);
   downsample_ps_.bind_image("out_color_img", &downsample_tx_);
   downsample_ps_.dispatch(&dispatch_downsample_size_);
   downsample_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH);
@@ -309,14 +305,14 @@ void DepthOfField::reduce_pass_sync()
   reduce_ps_.bind_ssbo("scatter_bg_list_buf", scatter_bg_list_buf_);
   reduce_ps_.bind_ssbo("scatter_fg_indirect_buf", scatter_fg_indirect_buf_);
   reduce_ps_.bind_ssbo("scatter_bg_indirect_buf", scatter_bg_indirect_buf_);
-  reduce_ps_.bind_image("inout_color_lod0_img", reduced_color_tx_.mip_view(0));
-  reduce_ps_.bind_image("out_color_lod1_img", reduced_color_tx_.mip_view(1));
-  reduce_ps_.bind_image("out_color_lod2_img", reduced_color_tx_.mip_view(2));
-  reduce_ps_.bind_image("out_color_lod3_img", reduced_color_tx_.mip_view(3));
-  reduce_ps_.bind_image("in_coc_lod0_img", reduced_coc_tx_.mip_view(0));
-  reduce_ps_.bind_image("out_coc_lod1_img", reduced_coc_tx_.mip_view(1));
-  reduce_ps_.bind_image("out_coc_lod2_img", reduced_coc_tx_.mip_view(2));
-  reduce_ps_.bind_image("out_coc_lod3_img", reduced_coc_tx_.mip_view(3));
+  reduce_ps_.bind_image("inout_color_lod0_img", &reduced_color_mip_views_[0]);
+  reduce_ps_.bind_image("out_color_lod1_img", &reduced_color_mip_views_[1]);
+  reduce_ps_.bind_image("out_color_lod2_img", &reduced_color_mip_views_[2]);
+  reduce_ps_.bind_image("out_color_lod3_img", &reduced_color_mip_views_[3]);
+  reduce_ps_.bind_image("in_coc_lod0_img", &reduced_coc_mip_views_[0]);
+  reduce_ps_.bind_image("out_coc_lod1_img", &reduced_coc_mip_views_[1]);
+  reduce_ps_.bind_image("out_coc_lod2_img", &reduced_coc_mip_views_[2]);
+  reduce_ps_.bind_image("out_coc_lod3_img", &reduced_coc_mip_views_[3]);
   reduce_ps_.dispatch(&dispatch_reduce_size_);
   /* NOTE: Command buffer barrier is done automatically by the GPU backend. */
   reduce_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH | GPU_BARRIER_SHADER_STORAGE);
@@ -372,9 +368,9 @@ void DepthOfField::gather_pass_sync()
     drw_pass.bind_resources(inst_.sampling);
     drw_pass.shader_set(inst_.shaders.static_shader_get(sh_type));
     drw_pass.bind_ubo("dof_buf", data_);
-    drw_pass.bind_texture("color_bilinear_tx", reduced_color_tx_, gather_bilinear);
-    drw_pass.bind_texture("color_tx", reduced_color_tx_, gather_nearest);
-    drw_pass.bind_texture("coc_tx", reduced_coc_tx_, gather_nearest);
+    drw_pass.bind_texture("color_bilinear_tx", &reduced_color_tx_, gather_bilinear);
+    drw_pass.bind_texture("color_tx", &reduced_color_tx_, gather_nearest);
+    drw_pass.bind_texture("coc_tx", &reduced_coc_tx_, gather_nearest);
     drw_pass.bind_image("in_tiles_fg_img", &tiles_fg_tx_.current());
     drw_pass.bind_image("in_tiles_bg_img", &tiles_bg_tx_.current());
     drw_pass.bind_image("out_color_img", &color_chain.current());
@@ -437,9 +433,9 @@ void DepthOfField::hole_fill_pass_sync()
   hole_fill_ps_.bind_resources(inst_.sampling);
   hole_fill_ps_.shader_set(inst_.shaders.static_shader_get(DOF_GATHER_HOLE_FILL));
   hole_fill_ps_.bind_ubo("dof_buf", data_);
-  hole_fill_ps_.bind_texture("color_bilinear_tx", reduced_color_tx_, gather_bilinear);
-  hole_fill_ps_.bind_texture("color_tx", reduced_color_tx_, gather_nearest);
-  hole_fill_ps_.bind_texture("coc_tx", reduced_coc_tx_, gather_nearest);
+  hole_fill_ps_.bind_texture("color_bilinear_tx", &reduced_color_tx_, gather_bilinear);
+  hole_fill_ps_.bind_texture("color_tx", &reduced_color_tx_, gather_nearest);
+  hole_fill_ps_.bind_texture("coc_tx", &reduced_coc_tx_, gather_nearest);
   hole_fill_ps_.bind_image("in_tiles_fg_img", &tiles_fg_tx_.current());
   hole_fill_ps_.bind_image("in_tiles_bg_img", &tiles_bg_tx_.current());
   hole_fill_ps_.bind_image("out_color_img", &hole_fill_color_tx_);
@@ -452,7 +448,8 @@ void DepthOfField::resolve_pass_sync()
 {
   GPUSamplerState with_filter = {GPU_SAMPLER_FILTERING_LINEAR};
   RenderBuffers &render_buffers = inst_.render_buffers;
-  GPUShader *sh = inst_.shaders.static_shader_get(use_bokeh_lut_ ? DOF_RESOLVE_LUT : DOF_RESOLVE);
+  gpu::Shader *sh = inst_.shaders.static_shader_get(use_bokeh_lut_ ? DOF_RESOLVE_LUT :
+                                                                     DOF_RESOLVE);
 
   resolve_ps_.init();
   resolve_ps_.specialize_constant(sh, "do_debug_color", inst_.debug_mode == DEBUG_DOF_PLANES);
@@ -502,8 +499,8 @@ void DepthOfField::update_sample_table()
 }
 
 void DepthOfField::render(View &view,
-                          GPUTexture **input_tx,
-                          GPUTexture **output_tx,
+                          gpu::Texture **input_tx,
+                          gpu::Texture **output_tx,
                           DepthOfFieldBuffer &dof_buffer)
 {
   if (fx_radius_ == 0.0f) {
@@ -549,6 +546,30 @@ void DepthOfField::render(View &view,
     data_.push_update();
   }
 
+  /* Acquire reduce texture mip chains, and views for each mip level. */
+  {
+    /* TODO(fclem): Once we render into multiple view, we'll need to use the maximum resolution. */
+    int2 max_render_res = inst_.film.render_extent_get();
+    int2 half_render_res = math::divide_ceil(max_render_res, int2(2));
+    int2 reduce_size = math::ceil_to_multiple(half_render_res, int2(DOF_REDUCE_GROUP_SIZE));
+
+    /* Now we know the maximum render resolution of every view, using depth of field, allocate
+     * reduced buffers. Color needs to be signed format here. See note in shader for explanation */
+    eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT |
+                             GPU_TEXTURE_USAGE_SHADER_WRITE;
+    reduced_color_tx_.acquire_2d(
+        reduce_size, gpu::TextureFormat::SFLOAT_16_16_16_16, usage, DOF_MIP_COUNT);
+    reduced_coc_tx_.acquire_2d(reduce_size, gpu::TextureFormat::SFLOAT_16, usage, DOF_MIP_COUNT);
+
+    /* Set pointers to view textures as TextureFromPool is transient. */
+    reduced_color_tx_.ensure_mip_views();
+    reduced_coc_tx_.ensure_mip_views();
+    for (int i = 0; i < DOF_MIP_COUNT; ++i) {
+      reduced_color_mip_views_[i] = reduced_color_tx_.mip_view(i);
+      reduced_coc_mip_views_[i] = reduced_coc_tx_.mip_view(i);
+    }
+  }
+
   int2 half_res = math::divide_ceil(extent_, int2(2));
   int2 quarter_res = math::divide_ceil(extent_, int2(4));
   int2 tile_res = math::divide_ceil(half_res, int2(DOF_TILES_SIZE));
@@ -582,24 +603,26 @@ void DepthOfField::render(View &view,
   {
     GPU_debug_group_begin("Setup");
     {
-      bokeh_gather_lut_tx_.acquire(int2(DOF_BOKEH_LUT_SIZE), GPU_RG16F);
-      bokeh_scatter_lut_tx_.acquire(int2(DOF_BOKEH_LUT_SIZE), GPU_R16F);
-      bokeh_resolve_lut_tx_.acquire(int2(DOF_MAX_SLIGHT_FOCUS_RADIUS * 2 + 1), GPU_R16F);
+      bokeh_gather_lut_tx_.acquire_2d(int2(DOF_BOKEH_LUT_SIZE), gpu::TextureFormat::SFLOAT_16_16);
+      bokeh_scatter_lut_tx_.acquire_2d(int2(DOF_BOKEH_LUT_SIZE), gpu::TextureFormat::SFLOAT_16);
+      bokeh_resolve_lut_tx_.acquire_2d(int2(DOF_MAX_SLIGHT_FOCUS_RADIUS * 2 + 1),
+                                       gpu::TextureFormat::SFLOAT_16);
 
       if (use_bokeh_lut_) {
         drw.submit(bokeh_lut_ps_, view);
       }
     }
     {
-      setup_color_tx_.acquire(half_res, GPU_RGBA16F, usage_readwrite);
-      setup_coc_tx_.acquire(half_res, GPU_R16F);
+      setup_color_tx_.acquire_2d(
+          half_res, gpu::TextureFormat::SFLOAT_16_16_16_16, usage_readwrite);
+      setup_coc_tx_.acquire_2d(half_res, gpu::TextureFormat::SFLOAT_16);
 
       drw.submit(setup_ps_, view);
     }
     {
-      stabilize_output_tx_.acquire(half_res, GPU_RGBA16F);
-      stabilize_valid_history_ = !dof_buffer.stabilize_history_tx_.ensure_2d(GPU_RGBA16F,
-                                                                             half_res);
+      stabilize_output_tx_.acquire_2d(half_res, gpu::TextureFormat::SFLOAT_16_16_16_16);
+      stabilize_valid_history_ = !dof_buffer.stabilize_history_tx_.acquire_2d(
+          half_res, gpu::TextureFormat::SFLOAT_16_16_16_16);
 
       if (stabilize_valid_history_ == false) {
         /* Avoid uninitialized memory that can contain NaNs. */
@@ -610,10 +633,10 @@ void DepthOfField::render(View &view,
       /* Outputs to reduced_*_tx_ mip 0. */
       drw.submit(stabilize_ps_, view);
 
-      /* WATCH(fclem): Swap Texture an TextureFromPool internal GPUTexture in order to reuse
-       * the one that we just consumed. */
+      /* Swap history and output buffers, and retain the "new" history buffer until
+       * next cycle so we can reuse it as input. */
       TextureFromPool::swap(stabilize_output_tx_, dof_buffer.stabilize_history_tx_);
-
+      dof_buffer.stabilize_history_tx_.retain();
       /* Used by stabilize pass. */
       stabilize_output_tx_.release();
       setup_color_tx_.release();
@@ -622,10 +645,14 @@ void DepthOfField::render(View &view,
       GPU_debug_group_begin("Tile Prepare");
 
       /* WARNING: If format changes, make sure dof_tile_* GLSL constants are properly encoded. */
-      tiles_fg_tx_.previous().acquire(tile_res, GPU_R11F_G11F_B10F, usage_readwrite);
-      tiles_bg_tx_.previous().acquire(tile_res, GPU_R11F_G11F_B10F, usage_readwrite);
-      tiles_fg_tx_.current().acquire(tile_res, GPU_R11F_G11F_B10F, usage_readwrite);
-      tiles_bg_tx_.current().acquire(tile_res, GPU_R11F_G11F_B10F, usage_readwrite);
+      tiles_fg_tx_.previous().acquire_2d(
+          tile_res, gpu::TextureFormat::UFLOAT_11_11_10, usage_readwrite);
+      tiles_bg_tx_.previous().acquire_2d(
+          tile_res, gpu::TextureFormat::UFLOAT_11_11_10, usage_readwrite);
+      tiles_fg_tx_.current().acquire_2d(
+          tile_res, gpu::TextureFormat::UFLOAT_11_11_10, usage_readwrite);
+      tiles_bg_tx_.current().acquire_2d(
+          tile_res, gpu::TextureFormat::UFLOAT_11_11_10, usage_readwrite);
 
       drw.submit(tiles_flatten_ps_, view);
 
@@ -666,7 +693,8 @@ void DepthOfField::render(View &view,
       GPU_debug_group_end();
     }
 
-    downsample_tx_.acquire(quarter_res, GPU_RGBA16F, usage_readwrite);
+    downsample_tx_.acquire_2d(
+        quarter_res, gpu::TextureFormat::SFLOAT_16_16_16_16, usage_readwrite);
 
     drw.submit(downsample_ps_, view);
 
@@ -691,9 +719,10 @@ void DepthOfField::render(View &view,
     PassSimple &filter_ps = is_background ? filter_bg_ps_ : filter_fg_ps_;
     PassSimple &scatter_ps = is_background ? scatter_bg_ps_ : scatter_fg_ps_;
 
-    color_tx.current().acquire(half_res, GPU_RGBA16F, usage_readwrite_attach);
-    weight_tx.current().acquire(half_res, GPU_R16F, usage_readwrite);
-    occlusion_tx_.acquire(half_res, GPU_RG16F);
+    color_tx.current().acquire_2d(
+        half_res, gpu::TextureFormat::SFLOAT_16_16_16_16, usage_readwrite_attach);
+    weight_tx.current().acquire_2d(half_res, gpu::TextureFormat::SFLOAT_16, usage_readwrite);
+    occlusion_tx_.acquire_2d(half_res, gpu::TextureFormat::SFLOAT_16_16);
 
     drw.submit(gather_ps, view);
 
@@ -702,8 +731,9 @@ void DepthOfField::render(View &view,
       color_tx.swap();
       weight_tx.swap();
 
-      color_tx.current().acquire(half_res, GPU_RGBA16F, usage_readwrite_attach);
-      weight_tx.current().acquire(half_res, GPU_R16F, usage_readwrite);
+      color_tx.current().acquire_2d(
+          half_res, gpu::TextureFormat::SFLOAT_16_16_16_16, usage_readwrite_attach);
+      weight_tx.current().acquire_2d(half_res, gpu::TextureFormat::SFLOAT_16, usage_readwrite);
 
       drw.submit(filter_ps, view);
 
@@ -714,6 +744,14 @@ void DepthOfField::render(View &view,
     GPU_memory_barrier(GPU_BARRIER_FRAMEBUFFER);
 
     scatter_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(color_tx.current()));
+
+    if (GPU_type_matches_ex(
+            GPU_DEVICE_ATI, GPU_OS_UNIX, GPU_DRIVER_OPENSOURCE, GPU_BACKEND_OPENGL))
+    {
+      /* WORKAROUND(fclem): Mesa has some synchronization issues between the previous compute
+       * shader and the following graphic pass (see #141198). */
+      GPU_flush();
+    }
 
     GPU_framebuffer_bind(scatter_fb);
     drw.submit(scatter_ps, view);
@@ -729,12 +767,16 @@ void DepthOfField::render(View &view,
     bokeh_gather_lut_tx_.release();
     bokeh_scatter_lut_tx_.release();
 
-    hole_fill_color_tx_.acquire(half_res, GPU_RGBA16F, usage_readwrite);
-    hole_fill_weight_tx_.acquire(half_res, GPU_R16F, usage_readwrite);
+    hole_fill_color_tx_.acquire_2d(
+        half_res, gpu::TextureFormat::SFLOAT_16_16_16_16, usage_readwrite);
+    hole_fill_weight_tx_.acquire_2d(half_res, gpu::TextureFormat::SFLOAT_16, usage_readwrite);
 
     drw.submit(hole_fill_ps_, view);
 
     /* NOTE: We do not filter the hole-fill pass as effect is likely to not be noticeable. */
+
+    reduced_color_tx_.release();
+    reduced_coc_tx_.release();
 
     GPU_debug_group_end();
   }

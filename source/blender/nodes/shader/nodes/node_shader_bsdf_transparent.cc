@@ -4,15 +4,20 @@
 
 #include "node_shader_util.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
-namespace blender::nodes::node_shader_bsdf_transparent_cc {
+namespace blender {
+
+namespace nodes::node_shader_bsdf_transparent_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({1.0f, 1.0f, 1.0f, 1.0f});
-  b.add_input<decl::Float>("Weight").available(false);
-  b.add_output<decl::Shader>("BSDF");
+  const bNodeTree *ntree = b.tree_or_null();
+  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
+
+  b.add_input<decl::Color>("Color"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Shader>("BSDF"_ustr);
 }
 
 static int node_shader_gpu_bsdf_transparent(GPUMaterial *mat,
@@ -23,6 +28,10 @@ static int node_shader_gpu_bsdf_transparent(GPUMaterial *mat,
 {
   if (in[0].link || !is_zero_v3(in[0].vec)) {
     GPU_material_flag_set(mat, GPU_MATFLAG_TRANSPARENT);
+
+    if (in[0].might_be_tinted()) {
+      GPU_material_flag_set(mat, GPU_MATFLAG_TRANSPARENT_MAYBE_COLORED);
+    }
   }
   return GPU_stack_link(mat, node, "node_bsdf_transparent", in, out);
 }
@@ -49,16 +58,16 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_bsdf_transparent_cc
+}  // namespace nodes::node_shader_bsdf_transparent_cc
 
 /* node type definition */
 void register_node_type_sh_bsdf_transparent()
 {
-  namespace file_ns = blender::nodes::node_shader_bsdf_transparent_cc;
+  namespace file_ns = nodes::node_shader_bsdf_transparent_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeBsdfTransparent", SH_NODE_BSDF_TRANSPARENT);
+  sh_node_type_base(&ntype, "ShaderNodeBsdfTransparent"_ustr, SH_NODE_BSDF_TRANSPARENT);
   ntype.ui_name = "Transparent BSDF";
   ntype.ui_description =
       "Transparency without refraction, passing straight through the surface as if there were no "
@@ -67,8 +76,11 @@ void register_node_type_sh_bsdf_transparent()
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.add_ui_poll = object_shader_nodes_poll;
   ntype.declare = file_ns::node_declare;
+  ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
   ntype.gpu_fn = file_ns::node_shader_gpu_bsdf_transparent;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

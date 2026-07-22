@@ -11,15 +11,12 @@
 #include <cstdio>
 #include <cstring>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_fileops.h"
-#ifdef __BIG_ENDIAN__
-#  include "BLI_endian_switch.h"
-#endif
+#include "BLI_fileops.hh"
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "BLT_translation.hh"
@@ -27,6 +24,8 @@
 #include "DNA_modifier_types.h"
 
 #include "MOD_meshcache_util.hh" /* own include */
+
+namespace blender {
 
 struct PC2Head {
   char header[12];  /* 'POINTCACHE2\0' */
@@ -52,10 +51,9 @@ static bool meshcache_read_pc2_head(FILE *fp,
     return false;
   }
 
-#ifdef __BIG_ENDIAN__
-  BLI_endian_switch_int32_array(&pc2_head->file_version,
-                                (sizeof(*pc2_head) - sizeof(pc2_head->header)) / sizeof(int));
-#endif
+  /* NOTE: this is endianness-sensitive. */
+  /* The pc2_head->file_version and following values would need to be switched on big-endian
+   * systems. */
 
   if (pc2_head->verts_tot != verts_tot) {
     *r_err_str = RPT_("Vertex count mismatch");
@@ -150,11 +148,8 @@ bool MOD_meshcache_read_pc2_index(FILE *fp,
     for (i = pc2_head.verts_tot; i != 0; i--, vco += 3) {
       verts_read_num += fread(vco, sizeof(float[3]), 1, fp);
 
-#ifdef __BIG_ENDIAN__
-      BLI_endian_switch_float(vco + 0);
-      BLI_endian_switch_float(vco + 1);
-      BLI_endian_switch_float(vco + 2);
-#endif /* __BIG_ENDIAN__ */
+      /* NOTE: this is endianness-sensitive. */
+      /* The `vco` values would need to be switched on big-endian systems. */
     }
   }
   else {
@@ -165,11 +160,8 @@ bool MOD_meshcache_read_pc2_index(FILE *fp,
       float tvec[3];
       verts_read_num += fread(tvec, sizeof(float[3]), 1, fp);
 
-#ifdef __BIG_ENDIAN__
-      BLI_endian_switch_float(tvec + 0);
-      BLI_endian_switch_float(tvec + 1);
-      BLI_endian_switch_float(tvec + 2);
-#endif /* __BIG_ENDIAN__ */
+      /* NOTE: this is endianness-sensitive. */
+      /* The `tvec` values would need to be switched on big-endian systems. */
 
       vco[0] = (vco[0] * ifactor) + (tvec[0] * factor);
       vco[1] = (vco[1] * ifactor) + (tvec[1] * factor);
@@ -282,3 +274,5 @@ bool MOD_meshcache_read_pc2_times(const char *filepath,
   fclose(fp);
   return ok;
 }
+
+}  // namespace blender

@@ -42,19 +42,24 @@
 
 #pragma once
 
-#include "BLI_map.hh"
-#include "DEG_depsgraph_query.hh"
+#include "DRW_gpu_wrapper.hh"
 
+#include "eevee_motion_blur_shared.hh"
 #include "eevee_sampling.hh"
-#include "eevee_shader_shared.hh"
-#include "eevee_velocity.hh"
+
+#include "draw_pass.hh"
 
 namespace blender::eevee {
+
+using namespace draw;
 
 /* -------------------------------------------------------------------- */
 /** \name MotionBlur
  *
  * \{ */
+
+using MotionBlurDataBuf = draw::UniformBuffer<MotionBlurData>;
+using MotionBlurTileIndirectionBuf = draw::StorageBuffer<MotionBlurTileIndirection, true>;
 
 /**
  * Manages time-steps evaluations and accumulation Motion blur.
@@ -92,8 +97,8 @@ class MotionBlurModule {
   /** Velocity tiles used to guide and speedup the gather pass. */
   TextureFromPool tiles_tx_;
 
-  GPUTexture *input_color_tx_ = nullptr;
-  GPUTexture *output_color_tx_ = nullptr;
+  gpu::Texture *input_color_tx_ = nullptr;
+  gpu::Texture *output_color_tx_ = nullptr;
 
   PassSimple motion_blur_ps_ = {"MotionBlur"};
 
@@ -105,8 +110,8 @@ class MotionBlurModule {
   int3 dispatch_gather_size_ = int3(0);
 
  public:
-  MotionBlurModule(Instance &inst) : inst_(inst){};
-  ~MotionBlurModule(){};
+  MotionBlurModule(Instance &inst) : inst_(inst) {};
+  ~MotionBlurModule() {};
 
   void init();
 
@@ -120,7 +125,7 @@ class MotionBlurModule {
     return motion_blur_fx_enabled_;
   }
 
-  void render(View &view, GPUTexture **input_tx, GPUTexture **output_tx);
+  void render(View &view, gpu::Texture **input_tx, gpu::Texture **output_tx);
 
  private:
   float shutter_time_to_scene_time(float time);

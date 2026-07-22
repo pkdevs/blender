@@ -10,12 +10,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_base.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "IMB_filter.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+
+namespace blender {
 
 static void filtcolum(uchar *point, int y, int skip)
 {
@@ -62,8 +64,8 @@ static void filtcolumf(float *point, int y, int skip)
 
 void IMB_filtery(ImBuf *ibuf)
 {
-  uchar *point = ibuf->byte_buffer.data;
-  float *pointf = ibuf->float_buffer.data;
+  uchar *point = ibuf->byte_data_for_write();
+  float *pointf = ibuf->float_data_for_write();
 
   int x = ibuf->x;
   int y = ibuf->y;
@@ -71,7 +73,7 @@ void IMB_filtery(ImBuf *ibuf)
 
   for (; x > 0; x--) {
     if (point) {
-      if (ibuf->planes > 24) {
+      if (ibuf->color_mode == ImColorMode::RGBA) {
         filtcolum(point, y, skip);
       }
       point++;
@@ -83,7 +85,7 @@ void IMB_filtery(ImBuf *ibuf)
       point++;
     }
     if (pointf) {
-      if (ibuf->planes > 24) {
+      if (ibuf->color_mode == ImColorMode::RGBA) {
         filtcolumf(pointf, y, skip);
       }
       pointf++;
@@ -97,123 +99,6 @@ void IMB_filtery(ImBuf *ibuf)
   }
 }
 
-static void imb_filterN(ImBuf *out, ImBuf *in)
-{
-  BLI_assert(out->channels == in->channels);
-  BLI_assert(out->x == in->x && out->y == in->y);
-
-  const int channels = in->channels;
-  const int rowlen = in->x;
-
-  if (in->byte_buffer.data && out->byte_buffer.data) {
-    for (int y = 0; y < in->y; y++) {
-      /* setup rows */
-      const char *row2 = (const char *)in->byte_buffer.data + y * channels * rowlen;
-      const char *row1 = (y == 0) ? row2 : row2 - channels * rowlen;
-      const char *row3 = (y == in->y - 1) ? row2 : row2 + channels * rowlen;
-
-      char *cp = (char *)out->byte_buffer.data + y * channels * rowlen;
-
-      for (int x = 0; x < rowlen; x++) {
-        const char *r11, *r13, *r21, *r23, *r31, *r33;
-
-        if (x == 0) {
-          r11 = row1;
-          r21 = row2;
-          r31 = row3;
-        }
-        else {
-          r11 = row1 - channels;
-          r21 = row2 - channels;
-          r31 = row3 - channels;
-        }
-
-        if (x == rowlen - 1) {
-          r13 = row1;
-          r23 = row2;
-          r33 = row3;
-        }
-        else {
-          r13 = row1 + channels;
-          r23 = row2 + channels;
-          r33 = row3 + channels;
-        }
-
-        cp[0] = (r11[0] + 2 * row1[0] + r13[0] + 2 * r21[0] + 4 * row2[0] + 2 * r23[0] + r31[0] +
-                 2 * row3[0] + r33[0]) >>
-                4;
-        cp[1] = (r11[1] + 2 * row1[1] + r13[1] + 2 * r21[1] + 4 * row2[1] + 2 * r23[1] + r31[1] +
-                 2 * row3[1] + r33[1]) >>
-                4;
-        cp[2] = (r11[2] + 2 * row1[2] + r13[2] + 2 * r21[2] + 4 * row2[2] + 2 * r23[2] + r31[2] +
-                 2 * row3[2] + r33[2]) >>
-                4;
-        cp[3] = (r11[3] + 2 * row1[3] + r13[3] + 2 * r21[3] + 4 * row2[3] + 2 * r23[3] + r31[3] +
-                 2 * row3[3] + r33[3]) >>
-                4;
-        cp += channels;
-        row1 += channels;
-        row2 += channels;
-        row3 += channels;
-      }
-    }
-  }
-
-  if (in->float_buffer.data && out->float_buffer.data) {
-    for (int y = 0; y < in->y; y++) {
-      /* setup rows */
-      const float *row2 = (const float *)in->float_buffer.data + y * channels * rowlen;
-      const float *row1 = (y == 0) ? row2 : row2 - channels * rowlen;
-      const float *row3 = (y == in->y - 1) ? row2 : row2 + channels * rowlen;
-
-      float *cp = out->float_buffer.data + y * channels * rowlen;
-
-      for (int x = 0; x < rowlen; x++) {
-        const float *r11, *r13, *r21, *r23, *r31, *r33;
-
-        if (x == 0) {
-          r11 = row1;
-          r21 = row2;
-          r31 = row3;
-        }
-        else {
-          r11 = row1 - channels;
-          r21 = row2 - channels;
-          r31 = row3 - channels;
-        }
-
-        if (x == rowlen - 1) {
-          r13 = row1;
-          r23 = row2;
-          r33 = row3;
-        }
-        else {
-          r13 = row1 + channels;
-          r23 = row2 + channels;
-          r33 = row3 + channels;
-        }
-
-        cp[0] = (r11[0] + 2 * row1[0] + r13[0] + 2 * r21[0] + 4 * row2[0] + 2 * r23[0] + r31[0] +
-                 2 * row3[0] + r33[0]) *
-                (1.0f / 16.0f);
-        cp[1] = (r11[1] + 2 * row1[1] + r13[1] + 2 * r21[1] + 4 * row2[1] + 2 * r23[1] + r31[1] +
-                 2 * row3[1] + r33[1]) *
-                (1.0f / 16.0f);
-        cp[2] = (r11[2] + 2 * row1[2] + r13[2] + 2 * r21[2] + 4 * row2[2] + 2 * r23[2] + r31[2] +
-                 2 * row3[2] + r33[2]) *
-                (1.0f / 16.0f);
-        cp[3] = (r11[3] + 2 * row1[3] + r13[3] + 2 * r21[3] + 4 * row2[3] + 2 * r23[3] + r31[3] +
-                 2 * row3[3] + r33[3]) *
-                (1.0f / 16.0f);
-        cp += channels;
-        row1 += channels;
-        row2 += channels;
-        row3 += channels;
-      }
-    }
-  }
-}
-
 void IMB_mask_filter_extend(char *mask, int width, int height)
 {
   const char *row1, *row2, *row3;
@@ -223,11 +108,11 @@ void IMB_mask_filter_extend(char *mask, int width, int height)
   rowlen = width;
 
   /* make a copy, to prevent flooding */
-  temprect = static_cast<char *>(MEM_dupallocN(mask));
+  temprect = MEM_dupalloc(mask);
 
   for (y = 1; y <= height; y++) {
     /* setup rows */
-    row1 = (char *)(temprect + (y - 2) * rowlen);
+    row1 = static_cast<char *>(temprect + (y - 2) * rowlen);
     row2 = row1 + rowlen;
     row3 = row2 + rowlen;
     if (y == 1) {
@@ -255,28 +140,29 @@ void IMB_mask_filter_extend(char *mask, int width, int height)
     }
   }
 
-  MEM_freeN(temprect);
+  MEM_delete(temprect);
 }
 
 void IMB_mask_clear(ImBuf *ibuf, const char *mask, int val)
 {
   int x, y;
-  if (ibuf->float_buffer.data) {
+  if (float *float_data = ibuf->float_data_for_write()) {
     for (x = 0; x < ibuf->x; x++) {
       for (y = 0; y < ibuf->y; y++) {
         if (mask[ibuf->x * y + x] == val) {
-          float *col = ibuf->float_buffer.data + 4 * (ibuf->x * y + x);
+          float *col = float_data + 4 * (ibuf->x * y + x);
           col[0] = col[1] = col[2] = col[3] = 0.0f;
         }
       }
     }
   }
   else {
+    uchar *byte_data = ibuf->byte_data_for_write();
     /* char buffer */
     for (x = 0; x < ibuf->x; x++) {
       for (y = 0; y < ibuf->y; y++) {
         if (mask[ibuf->x * y + x] == val) {
-          char *col = (char *)(ibuf->byte_buffer.data + 4 * ibuf->x * y + x);
+          char *col = reinterpret_cast<char *>(byte_data + 4 * ibuf->x * y + x);
           col[0] = col[1] = col[2] = col[3] = 0;
         }
       }
@@ -304,8 +190,8 @@ static int check_pixel_assigned(
     if (mask != nullptr) {
       res = mask[index] != 0 ? 1 : 0;
     }
-    else if ((is_float && ((const float *)buffer)[alpha_index] != 0.0f) ||
-             (!is_float && ((const uchar *)buffer)[alpha_index] != 0))
+    else if ((is_float && (static_cast<const float *>(buffer))[alpha_index] != 0.0f) ||
+             (!is_float && (static_cast<const uchar *>(buffer))[alpha_index] != 0))
     {
       res = 1;
     }
@@ -319,14 +205,14 @@ void IMB_filter_extend(ImBuf *ibuf, char *mask, int filter)
   const int width = ibuf->x;
   const int height = ibuf->y;
   const int depth = 4; /* always 4 channels */
-  const int chsize = ibuf->float_buffer.data ? sizeof(float) : sizeof(uchar);
+  const int chsize = ibuf->float_data() ? sizeof(float) : sizeof(uchar);
   const size_t bsize = size_t(width) * height * depth * chsize;
-  const bool is_float = (ibuf->float_buffer.data != nullptr);
-  void *dstbuf = MEM_dupallocN(ibuf->float_buffer.data ? (void *)ibuf->float_buffer.data :
-                                                         (void *)ibuf->byte_buffer.data);
-  char *dstmask = mask == nullptr ? nullptr : (char *)MEM_dupallocN(mask);
-  void *srcbuf = ibuf->float_buffer.data ? (void *)ibuf->float_buffer.data :
-                                           (void *)ibuf->byte_buffer.data;
+  const bool is_float = (ibuf->float_data() != nullptr);
+  void *dstbuf = ibuf->float_data() ? static_cast<void *>(MEM_dupalloc(ibuf->float_data())) :
+                                      static_cast<void *>(MEM_dupalloc(ibuf->byte_data()));
+  char *dstmask = mask == nullptr ? nullptr : MEM_dupalloc(mask);
+  void *srcbuf = ibuf->float_data() ? static_cast<void *>(ibuf->float_data_for_write()) :
+                                      static_cast<void *>(ibuf->byte_data_for_write());
   char *srcmask = mask;
   int cannot_early_out = 1, r, n, k, i, j, c;
   float weight[25];
@@ -386,12 +272,12 @@ void IMB_filter_extend(ImBuf *ibuf, char *mask, int filter)
                   if (check_pixel_assigned(srcbuf, srcmask, tmpindex, depth, is_float)) {
                     if (is_float) {
                       for (c = 0; c < depth; c++) {
-                        tmp[c] = ((const float *)srcbuf)[depth * tmpindex + c];
+                        tmp[c] = (static_cast<const float *>(srcbuf))[depth * tmpindex + c];
                       }
                     }
                     else {
                       for (c = 0; c < depth; c++) {
-                        tmp[c] = float(((const uchar *)srcbuf)[depth * tmpindex + c]);
+                        tmp[c] = float((static_cast<const uchar *>(srcbuf))[depth * tmpindex + c]);
                       }
                     }
 
@@ -413,15 +299,13 @@ void IMB_filter_extend(ImBuf *ibuf, char *mask, int filter)
 
               if (is_float) {
                 for (c = 0; c < depth; c++) {
-                  ((float *)dstbuf)[depth * index + c] = acc[c];
+                  (static_cast<float *>(dstbuf))[depth * index + c] = acc[c];
                 }
               }
               else {
                 for (c = 0; c < depth; c++) {
-                  ((uchar *)dstbuf)[depth * index + c] = acc[c] > 255 ?
-                                                             255 :
-                                                             (acc[c] < 0 ? 0 :
-                                                                           uchar(roundf(acc[c])));
+                  (static_cast<uchar *>(dstbuf))[depth * index + c] =
+                      acc[c] > 255 ? 255 : (acc[c] < 0 ? 0 : uchar(roundf(acc[c])));
                 }
               }
 
@@ -443,97 +327,18 @@ void IMB_filter_extend(ImBuf *ibuf, char *mask, int filter)
   }
 
   /* free memory */
-  MEM_freeN(dstbuf);
+  MEM_delete_void(dstbuf);
   if (dstmask != nullptr) {
-    MEM_freeN(dstmask);
+    MEM_delete(dstmask);
   }
 }
 
-void IMB_remakemipmap(ImBuf *ibuf, int use_filter)
-{
-  ImBuf *hbuf = ibuf;
-  int curmap = 0;
-
-  ibuf->miptot = 1;
-
-  while (curmap < IMB_MIPMAP_LEVELS) {
-
-    if (ibuf->mipmap[curmap]) {
-
-      if (use_filter) {
-        ImBuf *nbuf = IMB_allocImBuf(hbuf->x, hbuf->y, hbuf->planes, hbuf->flags);
-        imb_filterN(nbuf, hbuf);
-        imb_onehalf_no_alloc(ibuf->mipmap[curmap], nbuf);
-        IMB_freeImBuf(nbuf);
-      }
-      else {
-        imb_onehalf_no_alloc(ibuf->mipmap[curmap], hbuf);
-      }
-    }
-
-    ibuf->miptot = curmap + 2;
-    hbuf = ibuf->mipmap[curmap];
-    if (hbuf) {
-      hbuf->miplevel = curmap + 1;
-    }
-
-    if (!hbuf || (hbuf->x <= 2 && hbuf->y <= 2)) {
-      break;
-    }
-
-    curmap++;
-  }
-}
-
-void IMB_makemipmap(ImBuf *ibuf, int use_filter)
-{
-  ImBuf *hbuf = ibuf;
-  int curmap = 0;
-
-  IMB_free_mipmaps(ibuf);
-
-  /* no mipmap for non RGBA images */
-  if (ibuf->float_buffer.data && ibuf->channels < 4) {
-    return;
-  }
-
-  ibuf->miptot = 1;
-
-  while (curmap < IMB_MIPMAP_LEVELS) {
-    if (use_filter) {
-      ImBuf *nbuf = IMB_allocImBuf(hbuf->x, hbuf->y, hbuf->planes, hbuf->flags);
-      imb_filterN(nbuf, hbuf);
-      ibuf->mipmap[curmap] = IMB_onehalf(nbuf);
-      IMB_freeImBuf(nbuf);
-    }
-    else {
-      ibuf->mipmap[curmap] = IMB_onehalf(hbuf);
-    }
-
-    ibuf->miptot = curmap + 2;
-    hbuf = ibuf->mipmap[curmap];
-    hbuf->miplevel = curmap + 1;
-
-    if (hbuf->x < 2 && hbuf->y < 2) {
-      break;
-    }
-
-    curmap++;
-  }
-}
-
-ImBuf *IMB_getmipmap(ImBuf *ibuf, int level)
-{
-  CLAMP(level, 0, ibuf->miptot - 1);
-  return (level == 0) ? ibuf : ibuf->mipmap[level - 1];
-}
-
-void IMB_premultiply_rect(uint8_t *rect, char planes, int w, int h)
+void IMB_premultiply_rect(uint8_t *rect, ImColorMode color_mode, int w, int h)
 {
   uint8_t *cp;
   int x, y, val;
 
-  if (planes == 24) { /* put alpha at 255 */
+  if (color_mode == ImColorMode::RGB) { /* put alpha at 255 */
     cp = rect;
 
     for (y = 0; y < h; y++) {
@@ -580,22 +385,22 @@ void IMB_premultiply_alpha(ImBuf *ibuf)
     return;
   }
 
-  if (ibuf->byte_buffer.data) {
-    IMB_premultiply_rect(ibuf->byte_buffer.data, ibuf->planes, ibuf->x, ibuf->y);
+  if (uchar *byte_data = ibuf->byte_data_for_write()) {
+    IMB_premultiply_rect(byte_data, ibuf->color_mode, ibuf->x, ibuf->y);
   }
 
-  if (ibuf->float_buffer.data) {
-    IMB_premultiply_rect_float(ibuf->float_buffer.data, ibuf->channels, ibuf->x, ibuf->y);
+  if (float *float_data = ibuf->float_data_for_write()) {
+    IMB_premultiply_rect_float(float_data, ibuf->channels, ibuf->x, ibuf->y);
   }
 }
 
-void IMB_unpremultiply_rect(uint8_t *rect, char planes, int w, int h)
+void IMB_unpremultiply_rect(uint8_t *rect, ImColorMode color_mode, int w, int h)
 {
   uchar *cp;
   int x, y;
   float val;
 
-  if (planes == 24) { /* put alpha at 255 */
+  if (color_mode == ImColorMode::RGB) { /* put alpha at 255 */
     cp = rect;
 
     for (y = 0; y < h; y++) {
@@ -642,11 +447,13 @@ void IMB_unpremultiply_alpha(ImBuf *ibuf)
     return;
   }
 
-  if (ibuf->byte_buffer.data) {
-    IMB_unpremultiply_rect(ibuf->byte_buffer.data, ibuf->planes, ibuf->x, ibuf->y);
+  if (uchar *byte_data = ibuf->byte_data_for_write()) {
+    IMB_unpremultiply_rect(byte_data, ibuf->color_mode, ibuf->x, ibuf->y);
   }
 
-  if (ibuf->float_buffer.data) {
-    IMB_unpremultiply_rect_float(ibuf->float_buffer.data, ibuf->channels, ibuf->x, ibuf->y);
+  if (float *float_data = ibuf->float_data_for_write()) {
+    IMB_unpremultiply_rect_float(float_data, ibuf->channels, ibuf->x, ibuf->y);
   }
 }
+
+}  // namespace blender

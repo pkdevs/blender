@@ -13,7 +13,10 @@
 
 #include "DNA_listBase.h"
 
+namespace blender {
+
 struct Main;
+struct RecentFile;
 
 /**
  * Global data, typically accessed from #G.
@@ -53,7 +56,7 @@ struct Global {
    * Strings of recently opened files to show in the file menu.
    * A list of #RecentFile read from #BLENDER_HISTORY_FILE.
    */
-  ListBase recent_files;
+  ListBaseT<RecentFile> recent_files;
 
   /**
    * Set when Escape been pressed or `Ctrl-C` pressed in background mode.
@@ -69,14 +72,6 @@ struct Global {
    * (which use background mode by definition).
    */
   bool background;
-
-  /**
-   * When true, suppress any non-error print messages such as files saves, loaded, quitting etc.
-   * This is used so command line tools can control output without unnecessary noise.
-   *
-   * \note This should only be used to suppress printing (not reports or other kinds of logging).
-   */
-  bool quiet;
 
   /**
    * Skip reading the startup file and user preferences.
@@ -108,7 +103,6 @@ struct Global {
    *   *    666: Use quicker batch delete for outliners' delete hierarchy (01/2019).
    *   *    777: Enable UI node panel's sockets polling (11/2011).
    *   *    799: Enable some mysterious new depsgraph behavior (05/2015).
-   *   *    889: Enable PBVH visualization in Solid / XRay rendering mode (09/2019)
    *   *   1112: Disable new Cloth internal springs handling (09/2014).
    *   *   1234: Disable new dyntopo code fixing skinny faces generation (04/2015).
    *   *   3001: Enable additional Fluid modifier (Mantaflow) options (02/2020).
@@ -174,17 +168,16 @@ struct Global {
   char autoexec_fail[200];
 
   /**
-   * Has there been an opengl deprecation call detected when running on a none OpenGL backend.
-   */
-  bool opengl_deprecation_usage_detected;
-  const char *opengl_deprecation_usage_filename;
-  int opengl_deprecation_usage_lineno;
-
-  /**
    * Triggers a GPU capture if the name matches a DebugScope.
    * Set using `--debug-gpu-scope-capture "debug_scope"`.
    */
-  char gpu_debug_scope_name[200];
+  char gpu_debug_scope_name[100];
+
+  /**
+   * Save final shader string to disk.
+   * Set using `--debug-gpu-shader-source "shader_name"`.
+   */
+  char gpu_debug_shader_source_name[100];
 
   bool profile_gpu;
 };
@@ -249,18 +242,17 @@ enum {
 
 /** #Global.debug */
 enum {
-  G_DEBUG = (1 << 0), /* general debug flag, print more info in unexpected cases */
-  G_DEBUG_FFMPEG = (1 << 1),
-  G_DEBUG_PYTHON = (1 << 2),                /* extra python info */
-  G_DEBUG_EVENTS = (1 << 3),                /* input/window/screen events */
-  G_DEBUG_HANDLERS = (1 << 4),              /* events handling */
-  G_DEBUG_WM = (1 << 5),                    /* operator, undo */
-  G_DEBUG_JOBS = (1 << 6),                  /* jobs time profiling */
-  G_DEBUG_FREESTYLE = (1 << 7),             /* freestyle messages */
-  G_DEBUG_DEPSGRAPH_BUILD = (1 << 8),       /* depsgraph construction messages */
-  G_DEBUG_DEPSGRAPH_EVAL = (1 << 9),        /* depsgraph evaluation messages */
-  G_DEBUG_DEPSGRAPH_TAG = (1 << 10),        /* depsgraph tagging messages */
-  G_DEBUG_DEPSGRAPH_TIME = (1 << 11),       /* depsgraph timing statistics and messages */
+  G_DEBUG = (1 << 0),                 /* general debug flag, print more info in unexpected cases */
+  G_DEBUG_PYTHON = (1 << 2),          /* extra python info */
+  G_DEBUG_EVENTS = (1 << 3),          /* input/window/screen events */
+  G_DEBUG_HANDLERS = (1 << 4),        /* events handling */
+  G_DEBUG_WM = (1 << 5),              /* operator, undo */
+  G_DEBUG_JOBS = (1 << 6),            /* jobs time profiling */
+  G_DEBUG_FREESTYLE = (1 << 7),       /* freestyle messages */
+  G_DEBUG_DEPSGRAPH_BUILD = (1 << 8), /* depsgraph construction messages */
+  G_DEBUG_DEPSGRAPH_EVAL = (1 << 9),  /* depsgraph evaluation messages */
+  G_DEBUG_DEPSGRAPH_TAG = (1 << 10),  /* depsgraph tagging messages */
+  G_DEBUG_DEPSGRAPH_TIME = (1 << 11), /* depsgraph timing statistics and messages */
   G_DEBUG_DEPSGRAPH_NO_THREADS = (1 << 12), /* single threaded depsgraph */
   G_DEBUG_DEPSGRAPH_PRETTY = (1 << 13),     /* use pretty colors in depsgraph messages */
   G_DEBUG_DEPSGRAPH_UID = (1 << 14),        /* Verify validness of session-wide identifiers
@@ -269,21 +261,27 @@ enum {
                        G_DEBUG_DEPSGRAPH_TIME | G_DEBUG_DEPSGRAPH_UID),
   G_DEBUG_SIMDATA = (1 << 15),                     /* sim debug data display */
   G_DEBUG_GPU = (1 << 16),                         /* gpu debug */
-  G_DEBUG_IO = (1 << 17),                          /* IO Debugging (for Collada, ...). */
+  G_DEBUG_IO = (1 << 17),                          /* IO Debugging. */
   G_DEBUG_GPU_FORCE_WORKAROUNDS = (1 << 18),       /* Force GPU workarounds bypassing detection. */
   G_DEBUG_GPU_FORCE_VULKAN_LOCAL_READ = (1 << 19), /* Force GPU dynamic rendering local read. */
   G_DEBUG_GPU_COMPILE_SHADERS = (1 << 20),         /* Compile all statically defined shaders. . */
   G_DEBUG_GPU_RENDERDOC = (1 << 21),               /* Enable RenderDoc integration. */
-  G_DEBUG_XR = (1 << 22),                          /* XR/OpenXR messages */
-  G_DEBUG_XR_TIME = (1 << 23),                     /* XR/OpenXR timing messages */
+  G_DEBUG_GPU_SHADER_DEBUG_INFO = (1 << 22), /* Enable the generation of shader debug info. */
+  G_DEBUG_GPU_NO_TEXTURE_POOL = (1 << 23),   /* Disable memory aliasing in the texture pool. */
+  G_DEBUG_XR = (1 << 24),                    /* XR/OpenXR messages */
+  G_DEBUG_XR_TIME = (1 << 25),               /* XR/OpenXR timing messages */
 
-  G_DEBUG_GHOST = (1 << 24),  /* Debug GHOST module. */
-  G_DEBUG_WINTAB = (1 << 25), /* Debug Wintab. */
+  G_DEBUG_GHOST = (1 << 26),  /* Debug GHOST module. */
+  G_DEBUG_WINTAB = (1 << 27), /* Debug Wintab. */
+
+  G_DEBUG_GPU_SHADER_NO_PREPROCESSOR = (1 << 28), /* Disable the preprocessor (implies NO_DCE). */
+  G_DEBUG_GPU_SHADER_NO_DCE = (1 << 29),          /* Disable Dead Code Elimination. */
+  G_DEBUG_GPU_DEVICE_NO_FALLBACK = (1 << 30), /* Fail when the requested GPU device is invalid. */
 };
 
 #define G_DEBUG_ALL \
-  (G_DEBUG | G_DEBUG_FFMPEG | G_DEBUG_PYTHON | G_DEBUG_EVENTS | G_DEBUG_WM | G_DEBUG_JOBS | \
-   G_DEBUG_FREESTYLE | G_DEBUG_DEPSGRAPH | G_DEBUG_IO | G_DEBUG_GHOST | G_DEBUG_WINTAB)
+  (G_DEBUG | G_DEBUG_PYTHON | G_DEBUG_EVENTS | G_DEBUG_WM | G_DEBUG_JOBS | G_DEBUG_FREESTYLE | \
+   G_DEBUG_DEPSGRAPH | G_DEBUG_IO | G_DEBUG_GHOST | G_DEBUG_WINTAB)
 
 /** #Global.fileflags */
 enum {
@@ -335,8 +333,8 @@ enum {
   // #define G_FILE_GLSL_NO_ENV_LIGHTING (1 << 28) /* deprecated */
   /**
    * This file contains a single asset and its dependencies. Users may edit the asset through the
-   * UI, at which point the file will be regenerated by the asset system (API in
-   * #BKE_asset_edit.hh). Stored with a .asset.blend prefix.
+   * UI and save the changes, at which point the file will be regenerated by the asset system to
+   * include the edits (API in #BKE_asset_edit.hh). Stored with an .asset.blend file extension.
    */
   G_FILE_ASSET_EDIT_FILE = (1 << 29),
 };
@@ -378,3 +376,5 @@ extern Global G;
  * helps with cleanup task.
  */
 #define G_MAIN (G).main
+
+}  // namespace blender

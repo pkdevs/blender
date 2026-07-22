@@ -6,7 +6,9 @@
  * \ingroup draw
  */
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 #pragma once
 
@@ -33,7 +35,7 @@ void DRW_text_cache_add(DRWTextStore *dt,
                         const bool shadow = false,
                         const bool align_center = false);
 
-void DRW_text_cache_draw(DRWTextStore *dt, ARegion *region, View3D *v3d);
+void DRW_text_cache_draw(const DRWTextStore *dt, const ARegion *region, const View3D *v3d);
 
 void DRW_text_edit_mesh_measure_stats(const ARegion *region,
                                       const View3D *v3d,
@@ -48,3 +50,5 @@ enum {
   /* reference the string by pointer */
   DRW_TEXT_CACHE_STRING_PTR = (1 << 3),
 };
+
+}  // namespace blender

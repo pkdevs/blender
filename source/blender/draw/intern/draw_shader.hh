@@ -11,19 +11,22 @@
 #include "draw_curves_private.hh"
 #include "draw_hair_private.hh"
 
-struct GPUShader;
+namespace blender {
+
+namespace gpu {
+class Shader;
+}  // namespace gpu
 
 /* draw_shader.cc */
 
-GPUShader *DRW_shader_hair_refine_get(ParticleRefineShader refinement);
+gpu::Shader *DRW_shader_curves_topology_get();
+gpu::Shader *DRW_shader_curves_refine_get(draw::CurvesEvalShader type);
 
-GPUShader *DRW_shader_curves_refine_get(blender::draw::CurvesEvalShader type);
-
-GPUShader *DRW_shader_debug_draw_display_get();
-GPUShader *DRW_shader_draw_visibility_compute_get();
-GPUShader *DRW_shader_draw_view_finalize_get();
-GPUShader *DRW_shader_draw_resource_finalize_get();
-GPUShader *DRW_shader_draw_command_generate_get();
+gpu::Shader *DRW_shader_debug_draw_display_get();
+gpu::Shader *DRW_shader_draw_visibility_compute_get();
+gpu::Shader *DRW_shader_draw_view_finalize_get();
+gpu::Shader *DRW_shader_draw_resource_finalize_get();
+gpu::Shader *DRW_shader_draw_command_generate_get();
 
 /* Subdivision */
 enum class SubdivShaderType {
@@ -34,21 +37,23 @@ enum class SubdivShaderType {
   BUFFER_TRIS = 4,
   BUFFER_TRIS_MULTIPLE_MATERIALS = 5,
   BUFFER_NORMALS_ACCUMULATE = 6,
-  BUFFER_NORMALS_FINALIZE = 7,
-  BUFFER_CUSTOM_NORMALS_FINALIZE = 8,
-  PATCH_EVALUATION = 9,
-  PATCH_EVALUATION_FVAR = 10,
-  PATCH_EVALUATION_FACE_DOTS = 11,
-  PATCH_EVALUATION_FACE_DOTS_WITH_NORMALS = 12,
-  PATCH_EVALUATION_ORCO = 13,
-  COMP_CUSTOM_DATA_INTERP = 14,
-  BUFFER_SCULPT_DATA = 15,
-  BUFFER_UV_STRETCH_ANGLE = 16,
-  BUFFER_UV_STRETCH_AREA = 17,
+  BUFFER_PAINT_OVERLAY_FLAG = 7,
+  PATCH_EVALUATION = 8,
+  PATCH_EVALUATION_FVAR = 9,
+  PATCH_EVALUATION_FACE_DOTS = 10,
+  PATCH_EVALUATION_FACE_DOTS_WITH_NORMALS = 11,
+  PATCH_EVALUATION_ORCO = 12,
+  COMP_CUSTOM_DATA_INTERP = 13,
+  BUFFER_SCULPT_DATA = 14,
+  BUFFER_UV_STRETCH_ANGLE = 15,
+  BUFFER_UV_STRETCH_AREA = 16,
 };
-constexpr int SUBDIVISION_MAX_SHADERS = 18;
+constexpr int SUBDIVISION_MAX_SHADERS = 17;
 
-GPUShader *DRW_shader_subdiv_get(SubdivShaderType shader_type);
-GPUShader *DRW_shader_subdiv_custom_data_get(GPUVertCompType comp_type, int dimensions);
+gpu::Shader *DRW_shader_subdiv_get(SubdivShaderType shader_type);
+gpu::Shader *DRW_shader_subdiv_custom_data_get(GPUVertCompType comp_type, int dimensions);
+gpu::Shader *DRW_shader_subdiv_interp_corner_normals_get();
 
 void DRW_shaders_free();
+
+}  // namespace blender

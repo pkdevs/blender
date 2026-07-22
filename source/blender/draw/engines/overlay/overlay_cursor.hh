@@ -9,10 +9,11 @@
 #pragma once
 
 #include "BKE_paint.hh"
-#include "DNA_brush_types.h"
 
+#include "DNA_brush_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
+
 #include "ED_view3d.hh"
 #include "UI_view2d.hh"
 
@@ -61,12 +62,13 @@ class Cursor : Overlay {
           state.region, cursor->location, pixel_coord, V3D_PROJ_TEST_CLIP_NEAR);
       if (status != V3D_PROJ_RET_OK) {
         /* Clipped. */
+        enabled_ = false;
         return;
       }
     }
     else {
-      const SpaceImage *sima = (SpaceImage *)state.space_data;
-      UI_view2d_view_to_region(
+      const SpaceImage *sima = reinterpret_cast<const SpaceImage *>(state.space_data);
+      ui::view2d_view_to_region(
           &state.region->v2d, sima->cursor[0], sima->cursor[1], &pixel_coord[0], &pixel_coord[1]);
     }
 
@@ -85,7 +87,6 @@ class Cursor : Overlay {
     pass.init();
     pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA);
     pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_POLYLINE_FLAT_COLOR));
-    pass.push_constant("ModelViewProjectionMatrix", mvp);
     pass.push_constant("viewportSize", float2(state.region->winx, state.region->winy));
     pass.push_constant("lineWidth", U.pixelsize);
     pass.push_constant("lineSmooth", true);
@@ -93,25 +94,35 @@ class Cursor : Overlay {
      * So make sure it is set otherwise it can be in undefined state (see #136911). */
     pass.push_constant("gpu_attr_0_fetch_int", false);
     pass.push_constant("gpu_attr_1_fetch_unorm8", false);
+    pass.push_constant("gpu_attr_0_len", 3);
+    pass.push_constant("gpu_attr_1_len", 3);
     /* See `polyline_draw_workaround`. */
     int3 vert_stride_count_line = {2, 9999 /* Doesn't matter. */, 0};
     int3 vert_stride_count_circle = {1, 9999 /* Doesn't matter. */, 0};
 
     if (state.is_space_v3d()) {
-      /* Render line first to avoid Z fighting. */
-      pass.push_constant("ModelViewProjectionMatrix", mvp * float4x4(rotation));
-      pass.push_constant("gpu_vert_stride_count_offset", vert_stride_count_line);
-      pass.draw_expand(res.shapes.cursor_lines.get(), GPU_PRIM_TRIS, 2, 1, ResourceHandle(0));
+      const View3DCursor *cursor = &state.scene->cursor;
+      const float scale = ED_view3d_pixel_size_no_ui_scale(state.rv3d, cursor->location);
+      /* Only draw the axes lines in 3D with the correct perspective. */
+      float4x4 cursor_mat = math::from_loc_rot_scale<float4x4>(
+          cursor->location, cursor->rotation(), float3(scale * U.widget_unit));
+
+      float4x4 mvp_lines = float4x4(state.rv3d->winmat) * float4x4(state.rv3d->viewmat) *
+                           cursor_mat;
+
       pass.push_constant("ModelViewProjectionMatrix", mvp);
       pass.push_constant("gpu_vert_stride_count_offset", vert_stride_count_circle);
-      pass.draw_expand(res.shapes.cursor_circle.get(), GPU_PRIM_TRIS, 2, 1, ResourceHandle(0));
+      pass.draw_expand(res.shapes.cursor_circle.get(), GPU_PRIM_TRIS, 2, 1);
+      pass.push_constant("ModelViewProjectionMatrix", mvp_lines);
+      pass.push_constant("gpu_vert_stride_count_offset", vert_stride_count_line);
+      pass.draw_expand(res.shapes.cursor_lines.get(), GPU_PRIM_TRIS, 2, 1);
     }
     else {
       pass.push_constant("ModelViewProjectionMatrix", mvp);
       pass.push_constant("gpu_vert_stride_count_offset", vert_stride_count_circle);
-      pass.draw_expand(res.shapes.cursor_circle.get(), GPU_PRIM_TRIS, 2, 1, ResourceHandle(0));
+      pass.draw_expand(res.shapes.cursor_circle.get(), GPU_PRIM_TRIS, 2, 1);
       pass.push_constant("gpu_vert_stride_count_offset", vert_stride_count_line);
-      pass.draw_expand(res.shapes.cursor_lines.get(), GPU_PRIM_TRIS, 2, 1, ResourceHandle(0));
+      pass.draw_expand(res.shapes.cursor_lines.get(), GPU_PRIM_TRIS, 2, 1);
     }
   }
 
@@ -147,7 +158,8 @@ class Cursor : Overlay {
       }
       /* exception: object in texture paint mode, clone brush, use_clone_layer disabled */
       else if (state.object_mode & OB_MODE_TEXTURE_PAINT) {
-        const Paint *paint = BKE_paint_get_active(const_cast<Scene *>(state.scene),
+        const Paint *paint = BKE_paint_get_active(*DEG_get_bmain(state.depsgraph),
+                                                  const_cast<Scene *>(state.scene),
                                                   const_cast<ViewLayer *>(state.view_layer));
         const Brush *brush = (paint) ? BKE_paint_brush_for_read(paint) : nullptr;
 
@@ -172,14 +184,14 @@ class Cursor : Overlay {
 
   static bool is_cursor_visible_2d(const State &state)
   {
-    SpaceInfo *space_data = (SpaceInfo *)state.space_data;
-    if (space_data == nullptr) {
+    SpaceLink *space_link = const_cast<SpaceLink *>(state.space_data);
+    if (space_link == nullptr) {
       return false;
     }
-    if (space_data->spacetype != SPACE_IMAGE) {
+    if (space_link->spacetype != SPACE_IMAGE) {
       return false;
     }
-    SpaceImage *sima = (SpaceImage *)space_data;
+    SpaceImage *sima = reinterpret_cast<SpaceImage *>(space_link);
     switch (sima->mode) {
       case SI_MODE_VIEW:
         return false;

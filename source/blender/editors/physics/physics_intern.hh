@@ -8,6 +8,8 @@
 
 #pragma once
 
+namespace blender {
+
 struct Depsgraph;
 struct Object;
 struct PTCacheEdit;
@@ -75,6 +77,7 @@ void PARTICLE_OT_connect_hair(wmOperatorType *ot);
 void PARTICLE_OT_disconnect_hair(wmOperatorType *ot);
 void PARTICLE_OT_copy_particle_systems(wmOperatorType *ot);
 void PARTICLE_OT_duplicate_particle_system(wmOperatorType *ot);
+void PARTICLE_OT_particle_system_remove_all(wmOperatorType *ot);
 
 void PARTICLE_OT_dupliob_copy(wmOperatorType *ot);
 void PARTICLE_OT_dupliob_remove(wmOperatorType *ot);
@@ -155,3 +158,5 @@ void RIGIDBODY_OT_constraint_remove(wmOperatorType *ot);
 void RIGIDBODY_OT_world_add(wmOperatorType *ot);
 void RIGIDBODY_OT_world_remove(wmOperatorType *ot);
 void RIGIDBODY_OT_world_export(wmOperatorType *ot);
+
+}  // namespace blender

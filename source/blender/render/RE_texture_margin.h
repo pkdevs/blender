@@ -7,7 +7,10 @@
  * \ingroup bke
  */
 
-struct DerivedMesh;
+#include "BLI_string_ref.hh"
+
+namespace blender {
+
 struct ImBuf;
 struct Mesh;
 
@@ -24,8 +27,7 @@ void RE_generate_texturemargin_adjacentfaces(struct ImBuf *ibuf,
                                              char *mask,
                                              int margin,
                                              struct Mesh const *me,
-                                             char const *uv_layer,
+                                             StringRef uv_layer,
                                              const float uv_offset[2]);
 
-void RE_generate_texturemargin_adjacentfaces_dm(
-    struct ImBuf *ibuf, char *mask, int margin, struct DerivedMesh *dm, const float uv_offset[2]);
+}  // namespace blender

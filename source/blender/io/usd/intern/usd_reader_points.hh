@@ -4,14 +4,17 @@
 #pragma once
 
 #include "usd.hh"
+#include "usd_api_modifier.hh"
 #include "usd_reader_geom.hh"
 
 #include <pxr/usd/usdGeom/points.h>
 
+namespace blender {
+
 struct Main;
 struct PointCloud;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /*
  * Read UsdGeomPoints primitives as Blender point clouds.
@@ -37,7 +40,7 @@ class USDPointsReader : public USDGeomReader {
   void create_object(Main *bmain) override;
 
   /* Initial point cloud data update. */
-  void read_object_data(Main *bmain, double motionSampleTime) override;
+  void read_object_data(Main *bmain, pxr::UsdTimeCode time) override;
 
   /* Implement point cloud update. This may be called by the cache modifier
    * to update animated geometry. */
@@ -45,11 +48,13 @@ class USDPointsReader : public USDGeomReader {
                      USDMeshReadParams params,
                      const char **r_err_str) override;
 
-  void read_velocities(PointCloud *pointcloud, const double motionSampleTime) const;
-  void read_custom_data(PointCloud *pointcloud, const double motionSampleTime) const;
+  void read_ids(PointCloud *pointcloud, const pxr::UsdTimeCode time) const;
+  void read_velocities(PointCloud *pointcloud, const pxr::UsdTimeCode time) const;
+  void read_custom_data(PointCloud *pointcloud, const pxr::UsdTimeCode time) const;
 
   /* Return true if the USD data may be time varying. */
   bool is_animated() const;
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

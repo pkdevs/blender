@@ -17,11 +17,11 @@
  * - `matrix[2]` is the arrow direction (for all arrows).
  */
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_view3d_types.h"
 
@@ -43,11 +43,14 @@
 
 #include "ED_gizmo_library.hh"
 #include "ED_screen.hh"
+#include "ED_transform.hh"
 #include "ED_view3d.hh"
 
 /* own includes */
 #include "../gizmo_geometry.h"
 #include "../gizmo_library_intern.hh"
+
+namespace blender {
 
 // /** To use custom arrows exported to `geom_arrow_gizmo.cc`. */
 // #define USE_GIZMO_CUSTOM_ARROWS
@@ -69,7 +72,7 @@ struct ArrowGizmoInteraction {
 
 static void gizmo_arrow_matrix_basis_get(const wmGizmo *gz, float r_matrix[4][4])
 {
-  ArrowGizmo3D *arrow = (ArrowGizmo3D *)gz;
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(const_cast<wmGizmo *>(gz));
 
   copy_m4_m4(r_matrix, arrow->gizmo.matrix_basis);
   madd_v3_v3fl(r_matrix[3], arrow->gizmo.matrix_basis[2], arrow->data.offset);
@@ -80,7 +83,7 @@ static void arrow_draw_geom(const ArrowGizmo3D *arrow,
                             const float color[4],
                             const float arrow_length)
 {
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
   bool unbind_shader = true;
   const int draw_style = RNA_enum_get(arrow->gizmo.ptr, "draw_style");
   const int draw_options = RNA_enum_get(arrow->gizmo.ptr, "draw_options");
@@ -119,7 +122,8 @@ static void arrow_draw_geom(const ArrowGizmo3D *arrow,
     wm_gizmo_vec_draw(color, vec, ARRAY_SIZE(vec), pos, GPU_PRIM_LINE_LOOP);
   }
   else if (draw_style == ED_GIZMO_ARROW_STYLE_PLANE) {
-    const float scale = 0.1f;
+    /* Increase the size a bit during selection. These are relatively easy to hit. */
+    const float scale = select ? 0.15f : 0.1f;
     const float verts[4][3] = {
         {0, 0, 0},
         {scale, 0, scale},
@@ -167,7 +171,8 @@ static void arrow_draw_geom(const ArrowGizmo3D *arrow,
     /* NOTE: ideally #ARROW_SELECT_THRESHOLD_PX would be added here, however adding a
      * margin in pixel space isn't so simple, nor is it as important as for the arrow stem. */
     if (draw_style == ED_GIZMO_ARROW_STYLE_BOX) {
-      const float size = 0.05f;
+      /* Increase the size during selection so it is wider than other lines. */
+      const float size = select ? 0.11f : 0.05f;
 
       /* translate to line end with some extra offset so box starts exactly where line ends */
       GPU_matrix_translate_3f(0.0f, 0.0f, arrow_length + size);
@@ -182,8 +187,9 @@ static void arrow_draw_geom(const ArrowGizmo3D *arrow,
     else {
       BLI_assert(draw_style == ED_GIZMO_ARROW_STYLE_NORMAL);
 
-      const float len = 0.25f;
-      const float width = 0.06f;
+      /* Increase the size during selection, but mostly wider. */
+      const float len = select ? 0.35f : 0.25f;
+      const float width = select ? 0.12f : 0.06f;
 
       /* translate to line end */
       GPU_matrix_translate_3f(0.0f, 0.0f, arrow_length);
@@ -245,8 +251,7 @@ static void arrow_draw_intern(ArrowGizmo3D *arrow, const bool select, const bool
     GPU_matrix_mul(arrow_inter->inter.init_matrix_final);
 
     GPU_blend(GPU_BLEND_ALPHA);
-    arrow_draw_geom(
-        arrow, select, blender::float4{0.5f, 0.5f, 0.5f, 0.5f}, arrow_inter->init_arrow_length);
+    arrow_draw_geom(arrow, select, float4{0.5f, 0.5f, 0.5f, 0.5f}, arrow_inter->init_arrow_length);
     GPU_blend(GPU_BLEND_NONE);
 
     GPU_matrix_pop();
@@ -256,12 +261,13 @@ static void arrow_draw_intern(ArrowGizmo3D *arrow, const bool select, const bool
 static void gizmo_arrow_draw_select(const bContext * /*C*/, wmGizmo *gz, int select_id)
 {
   GPU_select_load_id(select_id);
-  arrow_draw_intern((ArrowGizmo3D *)gz, true, false);
+  arrow_draw_intern(reinterpret_cast<ArrowGizmo3D *>(gz), true, false);
 }
 
 static void gizmo_arrow_draw(const bContext * /*C*/, wmGizmo *gz)
 {
-  arrow_draw_intern((ArrowGizmo3D *)gz, false, (gz->state & WM_GIZMO_STATE_HIGHLIGHT) != 0);
+  arrow_draw_intern(
+      reinterpret_cast<ArrowGizmo3D *>(gz), false, (gz->state & WM_GIZMO_STATE_HIGHLIGHT) != 0);
 }
 
 /**
@@ -276,7 +282,7 @@ static int gizmo_arrow_test_select(bContext * /*C*/, wmGizmo *gz, const int mval
   const float stem_geo_x = 0.012320f;
 
   /* Project into 2D space since it simplifies pixel threshold tests. */
-  ArrowGizmo3D *arrow = (ArrowGizmo3D *)gz;
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(gz);
   const float arrow_length = RNA_float_get(arrow->gizmo.ptr, "length") * head_center_z;
 
   float matrix_final[4][4];
@@ -326,11 +332,17 @@ static wmOperatorStatus gizmo_arrow_modal(bContext *C,
                                           const wmEvent *event,
                                           eWM_GizmoFlagTweak tweak_flag)
 {
+  GizmoInteraction *inter = static_cast<GizmoInteraction *>(gz->interaction_data);
+
+  /* Can happen if another (e.g. Python-based) modal operator finishes, see #151241. */
+  if (inter == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
   if (event->type != MOUSEMOVE) {
     return OPERATOR_RUNNING_MODAL;
   }
-  ArrowGizmo3D *arrow = (ArrowGizmo3D *)gz;
-  GizmoInteraction *inter = static_cast<GizmoInteraction *>(gz->interaction_data);
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(gz);
   ARegion *region = CTX_wm_region(C);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
@@ -339,7 +351,7 @@ static wmOperatorStatus gizmo_arrow_modal(bContext *C,
 
   /* A pair: (source, destination). */
   struct {
-    blender::float2 mval;
+    float2 mval;
     float ray_origin[3], ray_direction[3];
     float location[3];
   } proj[2] = {};
@@ -396,6 +408,10 @@ static wmOperatorStatus gizmo_arrow_modal(bContext *C,
     float value = gizmo_value_from_offset(
         data, inter, ofs_new, constrained, inverted, use_precision);
 
+    if (tweak_flag & WM_GIZMO_TWEAK_SNAP) {
+      const float incremental_snap_step = RNA_float_get(gz->ptr, "incremental_snap_step");
+      value = roundf(value / incremental_snap_step) * incremental_snap_step;
+    }
     WM_gizmo_target_property_float_set(C, gz, gz_prop, value);
     /* get clamped value */
     value = WM_gizmo_target_property_float_get(gz, gz_prop);
@@ -408,14 +424,13 @@ static wmOperatorStatus gizmo_arrow_modal(bContext *C,
 
   /* tag the region for redraw */
   ED_region_tag_redraw_editor_overlays(region);
-  WM_event_add_mousemove(CTX_wm_window(C));
 
   return OPERATOR_RUNNING_MODAL;
 }
 
 static void gizmo_arrow_setup(wmGizmo *gz)
 {
-  ArrowGizmo3D *arrow = (ArrowGizmo3D *)gz;
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(gz);
 
   arrow->gizmo.flag |= WM_GIZMO_DRAW_MODAL;
 
@@ -424,9 +439,9 @@ static void gizmo_arrow_setup(wmGizmo *gz)
 
 static wmOperatorStatus gizmo_arrow_invoke(bContext * /*C*/, wmGizmo *gz, const wmEvent *event)
 {
-  ArrowGizmo3D *arrow = (ArrowGizmo3D *)gz;
-  GizmoInteraction *inter = static_cast<GizmoInteraction *>(
-      MEM_callocN(sizeof(ArrowGizmoInteraction), __func__));
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(gz);
+  ArrowGizmoInteraction *arrow_inter = MEM_new_zeroed<ArrowGizmoInteraction>(__func__);
+  GizmoInteraction *inter = &arrow_inter->inter;
   wmGizmoProperty *gz_prop = WM_gizmo_target_property_find(gz, "offset");
 
   /* Some gizmos don't use properties. */
@@ -442,16 +457,16 @@ static wmOperatorStatus gizmo_arrow_invoke(bContext * /*C*/, wmGizmo *gz, const 
   gizmo_arrow_matrix_basis_get(gz, inter->init_matrix_basis);
   WM_gizmo_calc_matrix_final(gz, inter->init_matrix_final);
 
-  ((ArrowGizmoInteraction *)inter)->init_arrow_length = RNA_float_get(gz->ptr, "length");
+  arrow_inter->init_arrow_length = RNA_float_get(gz->ptr, "length");
 
-  gz->interaction_data = inter;
+  gz->interaction_data = arrow_inter;
 
   return OPERATOR_RUNNING_MODAL;
 }
 
 static void gizmo_arrow_property_update(wmGizmo *gz, wmGizmoProperty *gz_prop)
 {
-  ArrowGizmo3D *arrow = (ArrowGizmo3D *)gz;
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(gz);
   const int transform_flag = RNA_enum_get(arrow->gizmo.ptr, "transform");
   const bool constrained = (transform_flag & ED_GIZMO_ARROW_XFORM_FLAG_CONSTRAINED) != 0;
   const bool inverted = (transform_flag & ED_GIZMO_ARROW_XFORM_FLAG_INVERTED) != 0;
@@ -460,13 +475,17 @@ static void gizmo_arrow_property_update(wmGizmo *gz, wmGizmoProperty *gz_prop)
 
 static void gizmo_arrow_exit(bContext *C, wmGizmo *gz, const bool cancel)
 {
-  ArrowGizmo3D *arrow = (ArrowGizmo3D *)gz;
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(gz);
   GizmoCommonData *data = &arrow->data;
   wmGizmoProperty *gz_prop = WM_gizmo_target_property_find(gz, "offset");
   const bool is_prop_valid = WM_gizmo_target_property_is_valid(gz_prop);
 
   if (cancel) {
     GizmoInteraction *inter = static_cast<GizmoInteraction *>(gz->interaction_data);
+    /* Can happen if another (e.g. Python-based) modal operator finishes, see #151241. */
+    if (inter == nullptr) {
+      return;
+    }
     if (is_prop_valid) {
       gizmo_property_value_reset(C, gz, inter, gz_prop);
     }
@@ -497,7 +516,7 @@ static void gizmo_arrow_exit(bContext *C, wmGizmo *gz, const bool cancel)
 
 void ED_gizmo_arrow3d_set_ui_range(wmGizmo *gz, const float min, const float max)
 {
-  ArrowGizmo3D *arrow = (ArrowGizmo3D *)gz;
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(gz);
 
   BLI_assert(min < max);
   BLI_assert_msg(!WM_gizmo_target_property_is_valid(WM_gizmo_target_property_find(gz, "offset")),
@@ -511,11 +530,17 @@ void ED_gizmo_arrow3d_set_ui_range(wmGizmo *gz, const float min, const float max
 
 void ED_gizmo_arrow3d_set_range_fac(wmGizmo *gz, const float range_fac)
 {
-  ArrowGizmo3D *arrow = (ArrowGizmo3D *)gz;
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(gz);
   BLI_assert_msg(!WM_gizmo_target_property_is_valid(WM_gizmo_target_property_find(gz, "offset")),
                  "Make sure this function is called before WM_gizmo_target_property_def_rna");
 
   arrow->data.range_fac = range_fac;
+}
+
+void ED_gizmo_arrow3d_reset_offset(wmGizmo *gz)
+{
+  ArrowGizmo3D *arrow = reinterpret_cast<ArrowGizmo3D *>(gz);
+  arrow->data.offset = 0.0f;
 }
 
 static void GIZMO_GT_arrow_3d(wmGizmoType *gzt)
@@ -574,7 +599,15 @@ static void GIZMO_GT_arrow_3d(wmGizmoType *gzt)
       gzt->srna, "length", 1.0f, -FLT_MAX, FLT_MAX, "Arrow Line Length", "", -FLT_MAX, FLT_MAX);
   RNA_def_float_vector(
       gzt->srna, "aspect", 2, nullptr, 0, FLT_MAX, "Aspect", "Cone/box style only", 0.0f, FLT_MAX);
-
+  RNA_def_float(gzt->srna,
+                "incremental_snap_step",
+                SNAP_INCREMENTAL_SNAP_STEP,
+                0.0f,
+                FLT_MAX,
+                "Incremental snap step",
+                "Offset to snap in steps",
+                0.0f,
+                FLT_MAX);
   WM_gizmotype_target_property_def(gzt, "offset", PROP_FLOAT, 1);
 }
 
@@ -584,3 +617,5 @@ void ED_gizmotypes_arrow_3d()
 }
 
 /** \} */
+
+}  // namespace blender

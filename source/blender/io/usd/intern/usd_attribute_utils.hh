@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
+#include "usd_colorspace_utils.hh"
+
 #include "BLI_color.hh"
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_math_quaternion_types.hh"
@@ -12,7 +14,7 @@
 
 #include "BKE_attribute.hh"
 
-#include "DNA_customdata_types.h"
+#include "IO_validate.hh"
 
 #include <pxr/base/gf/quatf.h>
 #include <pxr/base/gf/vec2f.h>
@@ -29,11 +31,13 @@
 #include <optional>
 #include <type_traits>
 
+namespace blender {
+
 namespace usdtokens {
 inline const pxr::TfToken displayColor("displayColor", pxr::TfToken::Immortal);
 }
 
-namespace blender::io::usd {
+namespace io::usd {
 
 namespace detail {
 
@@ -48,8 +52,19 @@ template<> struct is_layout_compatible<float3, pxr::GfVec3f> : std::true_type {}
 template<> struct is_layout_compatible<pxr::GfVec2f, float2> : std::true_type {};
 template<> struct is_layout_compatible<pxr::GfVec3f, float3> : std::true_type {};
 
+template<typename T>
+concept IsSmall = sizeof(T) <= 16;
+
 /* Conversion utilities to convert a Blender type to an USD type. */
-template<typename From, typename To> inline To convert_value(const From value)
+template<typename From, typename To>
+  requires(IsSmall<From>)
+inline To convert_value(const From value)
+{
+  return value;
+}
+template<typename From, typename To>
+  requires(!IsSmall<From>)
+inline To convert_value(const From &value)
 {
   return value;
 }
@@ -72,17 +87,28 @@ template<> inline pxr::GfVec4f convert_value(const ColorGeometry4f value)
 }
 template<> inline pxr::GfVec3f convert_value(const ColorGeometry4b value)
 {
-  ColorGeometry4f color4f = value.decode();
+  ColorGeometry4f color4f = color::decode(value);
   return pxr::GfVec3f(color4f.r, color4f.g, color4f.b);
 }
 template<> inline pxr::GfVec4f convert_value(const ColorGeometry4b value)
 {
-  ColorGeometry4f color4f = value.decode();
+  ColorGeometry4f color4f = color::decode(value);
   return pxr::GfVec4f(color4f.r, color4f.g, color4f.b, color4f.a);
 }
 template<> inline pxr::GfQuatf convert_value(const math::Quaternion value)
 {
   return pxr::GfQuatf(value.w, value.x, value.y, value.z);
+}
+template<> inline pxr::GfMatrix4d convert_value(const float4x4 &value)
+{
+  pxr::GfMatrix4d result;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      /* USD is row-major, Blender is column-major. */
+      result[j][i] = value[i][j];
+    }
+  }
+  return result;
 }
 
 template<> inline float2 convert_value(const pxr::GfVec2f value)
@@ -106,16 +132,27 @@ template<> inline math::Quaternion convert_value(const pxr::GfQuatf value)
   const pxr::GfVec3f &img = value.GetImaginary();
   return math::Quaternion(value.GetReal(), img[0], img[1], img[2]);
 }
+template<> inline float4x4 convert_value(const pxr::GfMatrix4d &value)
+{
+  float4x4 result;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      /* USD is row-major, Blender is column-major. */
+      result[j][i] = float(value[i][j]);
+    }
+  }
+  return result;
+}
 
 template<class T> struct is_vt_array : std::false_type {};
 template<class T> struct is_vt_array<pxr::VtArray<T>> : std::true_type {};
 
 }  // namespace detail
 
-std::optional<pxr::SdfValueTypeName> convert_blender_type_to_usd(
-    const eCustomDataType blender_type, bool use_color3f_type = false);
+std::optional<pxr::SdfValueTypeName> convert_blender_type_to_usd(const bke::AttrType blender_type,
+                                                                 bool use_color3f_type = false);
 
-std::optional<eCustomDataType> convert_usd_type_to_blender(const pxr::SdfValueTypeName usd_type);
+std::optional<bke::AttrType> convert_usd_type_to_blender(const pxr::SdfValueTypeName usd_type);
 
 /**
  * Set the USD attribute to the provided value at the given time. The value will be written
@@ -124,7 +161,7 @@ std::optional<eCustomDataType> convert_usd_type_to_blender(const pxr::SdfValueTy
 template<typename USDT>
 void set_attribute(const pxr::UsdAttribute &attr,
                    const USDT value,
-                   pxr::UsdTimeCode timecode,
+                   pxr::UsdTimeCode time,
                    pxr::UsdUtilsSparseValueWriter &value_writer)
 {
   /* This overload should only be use with non-VtArray types. If it is not, then that indicates
@@ -136,7 +173,7 @@ void set_attribute(const pxr::UsdAttribute &attr,
     attr.Set(value, pxr::UsdTimeCode::Default());
   }
 
-  value_writer.SetAttribute(attr, pxr::VtValue(value), timecode);
+  value_writer.SetAttribute(attr, pxr::VtValue(value), time);
 }
 
 /**
@@ -146,7 +183,7 @@ void set_attribute(const pxr::UsdAttribute &attr,
 template<typename USDT>
 void set_attribute(const pxr::UsdAttribute &attr,
                    pxr::VtArray<USDT> &value,
-                   pxr::UsdTimeCode timecode,
+                   pxr::UsdTimeCode time,
                    pxr::UsdUtilsSparseValueWriter &value_writer)
 {
   if (!attr.HasValue()) {
@@ -154,13 +191,13 @@ void set_attribute(const pxr::UsdAttribute &attr,
   }
 
   pxr::VtValue val = pxr::VtValue::Take(value);
-  value_writer.SetAttribute(attr, &val, timecode);
+  value_writer.SetAttribute(attr, &val, time);
 }
 
 /* Copy a typed Blender attribute array into a typed USD primvar attribute. */
 template<typename BlenderT, typename USDT>
 void copy_blender_buffer_to_primvar(const VArray<BlenderT> &buffer,
-                                    const pxr::UsdTimeCode timecode,
+                                    const pxr::UsdTimeCode time,
                                     const pxr::UsdGeomPrimvar &primvar,
                                     pxr::UsdUtilsSparseValueWriter &value_writer)
 {
@@ -184,21 +221,20 @@ void copy_blender_buffer_to_primvar(const VArray<BlenderT> &buffer,
     }
   }
 
-  set_attribute(primvar, usd_data, timecode, value_writer);
+  set_attribute(primvar, usd_data, time, value_writer);
 }
 
 void copy_blender_attribute_to_primvar(const GVArray &attribute,
-                                       const eCustomDataType data_type,
-                                       const pxr::UsdTimeCode timecode,
+                                       const bke::AttrType data_type,
+                                       const pxr::UsdTimeCode time,
                                        const pxr::UsdGeomPrimvar &primvar,
                                        pxr::UsdUtilsSparseValueWriter &value_writer);
 
 template<typename T>
-pxr::VtArray<T> get_primvar_array(const pxr::UsdGeomPrimvar &primvar,
-                                  const pxr::UsdTimeCode timecode)
+pxr::VtArray<T> get_primvar_array(const pxr::UsdGeomPrimvar &primvar, const pxr::UsdTimeCode time)
 {
   pxr::VtValue primvar_val;
-  if (!primvar.ComputeFlattened(&primvar_val, timecode)) {
+  if (!primvar.ComputeFlattened(&primvar_val, time)) {
     return {};
   }
 
@@ -209,33 +245,66 @@ pxr::VtArray<T> get_primvar_array(const pxr::UsdGeomPrimvar &primvar,
   return primvar_val.Cast<pxr::VtArray<T>>().template UncheckedGet<pxr::VtArray<T>>();
 }
 
+inline void set_single_value(bke::MutableAttributeAccessor attributes,
+                             const StringRef attr_name,
+                             const bke::AttrDomain domain,
+                             const bke::AttrType data_type,
+                             const bke::AttributeInit &value)
+{
+  if (!attributes.contains(attr_name)) {
+    attributes.add(attr_name, domain, data_type, value);
+  }
+  else {
+    attributes.assign_data(attr_name, value);
+  }
+}
+
 template<typename USDT, typename BlenderT>
 void copy_primvar_to_blender_buffer(const pxr::UsdGeomPrimvar &primvar,
-                                    const pxr::UsdTimeCode timecode,
+                                    const pxr::UsdTimeCode time,
+                                    const bke::AttrType data_type,
+                                    const bke::AttrDomain domain,
                                     const OffsetIndices<int> faces,
-                                    MutableSpan<BlenderT> attribute)
+                                    bke::MutableAttributeAccessor attributes)
 {
-  const pxr::VtArray<USDT> usd_data = get_primvar_array<USDT>(primvar, timecode);
+  const pxr::VtArray<USDT> usd_data = get_primvar_array<USDT>(primvar, time);
   if (usd_data.empty()) {
     return;
   }
 
   constexpr bool is_same = std::is_same_v<USDT, BlenderT>;
   constexpr bool is_compatible = detail::is_layout_compatible<USDT, BlenderT>::value;
+  constexpr bool is_color = std::is_same_v<BlenderT, ColorGeometry4f>;
 
   const pxr::TfToken pv_interp = primvar.GetInterpolation();
+  const pxr::TfToken pv_name = pxr::UsdGeomPrimvar::StripPrimvarsName(primvar.GetPrimvarName());
+  const StringRef attr_name = pv_name.GetText();
+
+  /* Map constant interpolation to single-value attributes. */
   if (pv_interp == pxr::UsdGeomTokens->constant) {
-    /* For situations where there's only a single item, flood fill the object. */
-    attribute.fill(detail::convert_value<USDT, BlenderT>(usd_data[0]));
+    BlenderT value = detail::convert_value<USDT, BlenderT>(usd_data[0]);
+    if constexpr (is_color) {
+      colorspace_attr_to_scene_linear(primvar.GetAttr(), value);
+    }
+    set_single_value(attributes, attr_name, domain, data_type, bke::AttributeInitValue(value));
+    return;
   }
-  else if (pv_interp == pxr::UsdGeomTokens->faceVarying) {
+
+  bke::SpanAttributeWriter<BlenderT> attribute_writer =
+      attributes.lookup_or_add_for_write_span<BlenderT>(pv_name.GetText(), domain);
+  MutableSpan<BlenderT> attribute = attribute_writer.span;
+
+  if (pv_interp == pxr::UsdGeomTokens->faceVarying) {
     if (!faces.is_empty()) {
       /* Reverse the index order. */
       for (const int i : faces.index_range()) {
         const IndexRange face = faces[i];
         for (int j : face.index_range()) {
           const int rev_index = face.last(j);
-          attribute[face.start() + j] = detail::convert_value<USDT, BlenderT>(usd_data[rev_index]);
+          attribute[face.start() + j] = validate::index_in_range(rev_index, usd_data.size()) ?
+                                            detail::convert_value<USDT, BlenderT>(
+                                                usd_data[rev_index]) :
+                                            BlenderT();
         }
       }
     }
@@ -265,13 +334,20 @@ void copy_primvar_to_blender_buffer(const pxr::UsdGeomPrimvar &primvar,
       }
     }
   }
+
+  if constexpr (is_color) {
+    colorspace_attr_to_scene_linear(primvar.GetAttr(), attribute);
+  }
+
+  attribute_writer.finish();
 }
 
 void copy_primvar_to_blender_attribute(const pxr::UsdGeomPrimvar &primvar,
-                                       const pxr::UsdTimeCode timecode,
-                                       const eCustomDataType data_type,
+                                       const pxr::UsdTimeCode time,
+                                       const bke::AttrType data_type,
                                        const bke::AttrDomain domain,
                                        const OffsetIndices<int> face_indices,
                                        bke::MutableAttributeAccessor attributes);
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

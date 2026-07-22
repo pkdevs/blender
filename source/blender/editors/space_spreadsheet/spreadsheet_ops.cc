@@ -10,8 +10,8 @@
 #include "ED_screen.hh"
 #include "ED_spreadsheet.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 
@@ -58,8 +58,8 @@ static wmOperatorStatus row_filter_remove_exec(bContext *C, wmOperator *op)
 {
   SpaceSpreadsheet *sspreadsheet = CTX_wm_space_spreadsheet(C);
 
-  SpreadsheetRowFilter *row_filter = (SpreadsheetRowFilter *)BLI_findlink(
-      &sspreadsheet->row_filters, RNA_int_get(op->ptr, "index"));
+  SpreadsheetRowFilter *row_filter = static_cast<SpreadsheetRowFilter *>(
+      BLI_findlink(&sspreadsheet->row_filters, RNA_int_get(op->ptr, "index")));
   if (row_filter == nullptr) {
     return OPERATOR_CANCELLED;
   }
@@ -194,8 +194,11 @@ SpreadsheetColumn *find_hovered_column_edge(SpaceSpreadsheet &sspreadsheet,
   if (!table) {
     return nullptr;
   }
-  const float cursor_x_view = UI_view2d_region_to_view_x(&region.v2d, cursor_re.x);
+  const float cursor_x_view = ui::view2d_region_to_view_x(&region.v2d, cursor_re.x);
   for (SpreadsheetColumn *column : Span{table->columns, table->num_columns}) {
+    if (column->flag & SPREADSHEET_COLUMN_FLAG_UNAVAILABLE) {
+      continue;
+    }
     if (std::abs(cursor_x_view - column->runtime->right_x) < SPREADSHEET_EDGE_ACTION_ZONE) {
       return column;
     }
@@ -211,8 +214,11 @@ SpreadsheetColumn *find_hovered_column(SpaceSpreadsheet &sspreadsheet,
   if (!table) {
     return nullptr;
   }
-  const float cursor_x_view = UI_view2d_region_to_view_x(&region.v2d, cursor_re.x);
+  const float cursor_x_view = ui::view2d_region_to_view_x(&region.v2d, cursor_re.x);
   for (SpreadsheetColumn *column : Span{table->columns, table->num_columns}) {
+    if (column->flag & SPREADSHEET_COLUMN_FLAG_UNAVAILABLE) {
+      continue;
+    }
     if (cursor_x_view > column->runtime->left_x && cursor_x_view <= column->runtime->right_x) {
       return column;
     }
@@ -318,8 +324,28 @@ static void SPREADSHEET_OT_fit_column(wmOperatorType *ot)
 struct ReorderColumnData {
   SpreadsheetColumn *column = nullptr;
   int initial_cursor_x_view = 0;
-  View2DEdgePanData pan_data{};
+  ui::View2DEdgePanData pan_data{};
 };
+
+static std::optional<int> find_first_available_column_index(const SpreadsheetTable &table)
+{
+  for (int i = 0; i < table.num_columns; i++) {
+    if (!(table.columns[i]->flag & SPREADSHEET_COLUMN_FLAG_UNAVAILABLE)) {
+      return i;
+    }
+  }
+  return std::nullopt;
+}
+
+static std::optional<int> find_last_available_column_index(const SpreadsheetTable &table)
+{
+  for (int i = table.num_columns - 1; i >= 0; i--) {
+    if (!(table.columns[i]->flag & SPREADSHEET_COLUMN_FLAG_UNAVAILABLE)) {
+      return i;
+    }
+  }
+  return std::nullopt;
+}
 
 static wmOperatorStatus reorder_columns_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
@@ -344,7 +370,7 @@ static wmOperatorStatus reorder_columns_invoke(bContext *C, wmOperator *op, cons
 
   ReorderColumnData *data = MEM_new<ReorderColumnData>(__func__);
   data->column = column_to_move;
-  data->initial_cursor_x_view = UI_view2d_region_to_view_x(&region.v2d, cursor_re.x);
+  data->initial_cursor_x_view = ui::view2d_region_to_view_x(&region.v2d, cursor_re.x);
   op->customdata = data;
 
   ReorderColumnVisualizationData &visualization_data =
@@ -353,7 +379,7 @@ static wmOperatorStatus reorder_columns_invoke(bContext *C, wmOperator *op, cons
   visualization_data.new_index = old_index;
   visualization_data.current_offset_x_px = 0;
 
-  UI_view2d_edge_pan_init(C, &data->pan_data, 0, 0, 1, 26, 0.5f, 0.0f);
+  view2d_edge_pan_init(C, &data->pan_data, 0, 0, 1, 26, 0.5f, 0.0f);
   /* Limit to horizontal panning. */
   data->pan_data.limit.xmin = region.v2d.tot.xmin;
   data->pan_data.limit.xmax = region.v2d.tot.xmax;
@@ -384,10 +410,10 @@ static wmOperatorStatus reorder_columns_modal(bContext *C, wmOperator *op, const
   }
   else {
     if (cursor_re.x > sspreadsheet.runtime->left_column_width) {
-      new_index = columns.size() - 1;
+      new_index = *find_last_available_column_index(table);
     }
     else {
-      new_index = 0;
+      new_index = *find_first_available_column_index(table);
     }
   }
 
@@ -401,7 +427,7 @@ static wmOperatorStatus reorder_columns_modal(bContext *C, wmOperator *op, const
   switch (event->type) {
     case RIGHTMOUSE:
     case EVT_ESCKEY: {
-      UI_view2d_edge_pan_cancel(C, &data.pan_data);
+      view2d_edge_pan_cancel(C, &data.pan_data);
       cleanup_on_finish();
       return OPERATOR_CANCELLED;
     }
@@ -414,13 +440,13 @@ static wmOperatorStatus reorder_columns_modal(bContext *C, wmOperator *op, const
       return OPERATOR_FINISHED;
     }
     case MOUSEMOVE: {
-      UI_view2d_edge_pan_apply(C, &data.pan_data, event->xy);
+      view2d_edge_pan_apply(C, &data.pan_data, event->xy);
 
       ReorderColumnVisualizationData &visualization_data =
           *sspreadsheet.runtime->reorder_column_visualization_data;
       visualization_data.new_index = new_index;
-      visualization_data.current_offset_x_px = UI_view2d_region_to_view_x(&region.v2d,
-                                                                          cursor_re.x) -
+      visualization_data.current_offset_x_px = ui::view2d_region_to_view_x(&region.v2d,
+                                                                           cursor_re.x) -
                                                data.initial_cursor_x_view;
       ED_region_tag_redraw(&region);
       return OPERATOR_RUNNING_MODAL;

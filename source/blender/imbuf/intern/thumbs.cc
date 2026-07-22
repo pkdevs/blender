@@ -13,15 +13,17 @@
 
 #include "BKE_blendfile.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_ghash.h"
+#include "BLI_fileops.hh"
+#include "BLI_ghash.hh"
 #include "BLI_hash_md5.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_system.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_system.hh"
+#include "BLI_tempfile.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 #include BLI_SYSTEM_PID_H
 
 #include "DNA_space_types.h" /* For FILE_MAX_LIBEXTRA */
@@ -48,7 +50,7 @@
 #  endif
 /* For SHGetSpecialFolderPath, has to be done before BLI_winstuff
  * because 'near' is disabled through BLI_windstuff */
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include "utfconv.hh"
 #  include <direct.h> /* #chdir */
 #  include <shlobj.h>
@@ -68,6 +70,8 @@
 #endif
 
 #define URI_MAX (FILE_MAX * 3 + 8)
+
+namespace blender {
 
 static bool get_thumb_dir(char *dir, ThumbSize size)
 {
@@ -166,7 +170,7 @@ static void escape_uri_string(const char *string,
                               const int escaped_string_size,
                               const eUnsafeCharacterSet mask)
 {
-#define ACCEPTABLE(a) ((a) >= 32 && (a) < 128 && (acceptable[(a)-32] & mask))
+#define ACCEPTABLE(a) ((a) >= 32 && (a) < 128 && (acceptable[(a) - 32] & mask))
 
   BLI_assert(escaped_string_size > 0);
   /* Remove space for \0. */
@@ -312,6 +316,11 @@ void IMB_thumb_makedirs()
   }
 }
 
+static bool thumb_cancel_requested(const ThumbCancellationToken *cancel_token)
+{
+  return cancel_token && cancel_token->is_cancelled();
+}
+
 /* create thumbnail for file and returns new imbuf for thumbnail */
 static ImBuf *thumb_create_ex(const char *file_path,
                               const char *uri,
@@ -322,8 +331,16 @@ static ImBuf *thumb_create_ex(const char *file_path,
                               const char *blen_id,
                               ThumbSize size,
                               ThumbSource source,
-                              ImBuf *img)
+                              ImBuf *img,
+                              const ThumbCancellationToken *cancel_token = nullptr)
 {
+  if (thumb_cancel_requested(cancel_token)) {
+    return nullptr;
+  }
+
+  /* Just in case these folders got deleted somehow. */
+  IMB_thumb_makedirs();
+
   char desc[URI_MAX + 22];
   char tpath[FILE_MAX];
   char tdir[FILE_MAX];
@@ -354,7 +371,7 @@ static ImBuf *thumb_create_ex(const char *file_path,
       return nullptr;
     }
     if (size == THB_FAIL) {
-      img = IMB_allocImBuf(1, 1, 32, IB_byte_data | IB_metadata);
+      img = IMB_allocImBuf(1, 1, ImBufFlags::ByteData | ImBufFlags::Metadata);
       if (!img) {
         return nullptr;
       }
@@ -387,15 +404,18 @@ static ImBuf *thumb_create_ex(const char *file_path,
 
         if (img != nullptr) {
           if (BLI_stat(file_path, &info) != -1) {
-            SNPRINTF(mtime, "%ld", (long int)info.st_mtime);
+            SNPRINTF_UTF8(mtime, "%ld", (long int)info.st_mtime);
           }
         }
       }
       else if (THB_SOURCE_MOVIE == source) {
         MovieReader *anim = nullptr;
-        anim = MOV_open_file(file_path, IB_byte_data | IB_metadata, 0, nullptr);
+        /* Image buffer is converted from float to byte and only the latter one is used, and the
+         * conversion process is aware of the float color-space. So it is possible to save some
+         * compute time by keeping the original color-space for movies. */
+        anim = MOV_open_file(file_path, ImBufFlags::Zero, 0, true, nullptr);
         if (anim != nullptr) {
-          img = MOV_decode_frame(anim, 0, IMB_TC_NONE, IMB_PROXY_NONE);
+          img = MOV_decode_frame(anim, 0, IMB_PROXY_NONE);
           if (img == nullptr) {
             // printf("not an anim; %s\n", file_path);
           }
@@ -406,10 +426,15 @@ static ImBuf *thumb_create_ex(const char *file_path,
           MOV_close(anim);
         }
         if (BLI_stat(file_path, &info) != -1) {
-          SNPRINTF(mtime, "%ld", (long int)info.st_mtime);
+          SNPRINTF_UTF8(mtime, "%ld", (long int)info.st_mtime);
         }
       }
       if (!img) {
+        return nullptr;
+      }
+
+      if (thumb_cancel_requested(cancel_token)) {
+        IMB_freeImBuf(img);
         return nullptr;
       }
 
@@ -419,8 +444,8 @@ static ImBuf *thumb_create_ex(const char *file_path,
         short ex = std::max(short(1), short(img->x * scale));
         short ey = std::max(short(1), short(img->y * scale));
         /* Save some time by only scaling byte buffer. */
-        if (img->float_buffer.data) {
-          if (img->byte_buffer.data == nullptr) {
+        if (img->float_data()) {
+          if (img->byte_data() == nullptr) {
             IMB_byte_from_float(img);
           }
           IMB_free_float_pixels(img);
@@ -428,23 +453,29 @@ static ImBuf *thumb_create_ex(const char *file_path,
         IMB_scale(img, ex, ey, IMBScaleFilter::Box, false);
       }
     }
-    SNPRINTF(desc, "Thumbnail for %s", uri);
-    IMB_metadata_ensure(&img->metadata);
-    IMB_metadata_set_field(img->metadata, "Software", "Blender");
-    IMB_metadata_set_field(img->metadata, "Thumb::URI", uri);
-    IMB_metadata_set_field(img->metadata, "Description", desc);
-    IMB_metadata_set_field(img->metadata, "Thumb::MTime", mtime);
+
+    if (thumb_cancel_requested(cancel_token)) {
+      IMB_freeImBuf(img);
+      return nullptr;
+    }
+
+    SNPRINTF_UTF8(desc, "Thumbnail for %s", uri);
+    IDProperty *metadata = img->metadata_for_write();
+    IMB_metadata_set_field(metadata, "Software", "Blender");
+    IMB_metadata_set_field(metadata, "Thumb::URI", uri);
+    IMB_metadata_set_field(metadata, "Description", desc);
+    IMB_metadata_set_field(metadata, "Thumb::MTime", mtime);
     if (use_hash) {
-      IMB_metadata_set_field(img->metadata, "X-Blender::Hash", hash);
+      IMB_metadata_set_field(metadata, "X-Blender::Hash", hash);
     }
     img->ftype = IMB_FTYPE_PNG;
-    img->planes = 32;
+    img->color_mode = ImColorMode::RGBA;
 
     /* If we generated from a 16bit PNG e.g., we have a float rect, not a byte one - fix this. */
     IMB_byte_from_float(img);
     IMB_free_float_pixels(img);
 
-    if (IMB_save_image(img, temp, IB_byte_data | IB_metadata)) {
+    if (IMB_save_image(img, temp, ImBufFlags::ByteData | ImBufFlags::Metadata)) {
 #ifndef WIN32
       chmod(temp, S_IRUSR | S_IWUSR);
 #endif
@@ -464,12 +495,22 @@ static ImBuf *thumb_create_or_fail(const char *file_path,
                                    const char *blen_group,
                                    const char *blen_id,
                                    ThumbSize size,
-                                   ThumbSource source)
+                                   ThumbSource source,
+                                   const ThumbCancellationToken *cancel_token)
 {
-  ImBuf *img = thumb_create_ex(
-      file_path, uri, thumb, use_hash, hash, blen_group, blen_id, size, source, nullptr);
+  ImBuf *img = thumb_create_ex(file_path,
+                               uri,
+                               thumb,
+                               use_hash,
+                               hash,
+                               blen_group,
+                               blen_id,
+                               size,
+                               source,
+                               nullptr,
+                               cancel_token);
 
-  if (!img) {
+  if (!img && !thumb_cancel_requested(cancel_token)) {
     /* thumb creation failed, write fail thumb */
     img = thumb_create_ex(
         file_path, uri, thumb, use_hash, hash, blen_group, blen_id, THB_FAIL, source, nullptr);
@@ -483,8 +524,34 @@ static ImBuf *thumb_create_or_fail(const char *file_path,
   return img;
 }
 
+/**
+ * Do not generate thumbnails for 'temp' file paths (i.e. contained into system-defined temp
+ * directory).
+ */
+static bool skip_thumbnails_for_filepath(const char *filepath)
+{
+  if (!BLI_path_extension_check(filepath, ".blend")) {
+    return false;
+  }
+  char temp_dir[FILE_MAX];
+  BLI_temp_directory_path_get(temp_dir, sizeof(temp_dir));
+  return BLI_path_contains(temp_dir, filepath);
+}
+
 ImBuf *IMB_thumb_create(const char *filepath, ThumbSize size, ThumbSource source, ImBuf *img)
 {
+  if (source == THB_SOURCE_DIRECT) {
+    /* Not yet implemented (not needed currently). Could just directly write the image to the given
+     * `filepath`. */
+    BLI_assert_msg(source != THB_SOURCE_DIRECT,
+                   "Writing thumbnails with direct source isn't implemented");
+    return nullptr;
+  }
+
+  if (skip_thumbnails_for_filepath(filepath)) {
+    return nullptr;
+  }
+
   char uri[URI_MAX] = "";
   char thumb_name[40];
 
@@ -507,7 +574,7 @@ ImBuf *IMB_thumb_read(const char *file_or_lib_path, ThumbSize size)
     return nullptr;
   }
   if (thumbpath_from_uri(uri, thumb, sizeof(thumb), size)) {
-    img = IMB_load_image_from_filepath(thumb, IB_byte_data | IB_metadata);
+    img = IMB_load_image_from_filepath(thumb, ImBufFlags::ByteData | ImBufFlags::Metadata);
   }
 
   return img;
@@ -531,8 +598,40 @@ void IMB_thumb_delete(const char *file_or_lib_path, ThumbSize size)
   }
 }
 
-ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSource source)
+ImBuf *IMB_thumb_manage(const char *file_or_lib_path,
+                        ThumbSize size,
+                        ThumbSource source,
+                        const ThumbCancellationToken *cancel_token)
 {
+  if (thumb_cancel_requested(cancel_token)) {
+    return nullptr;
+  }
+
+  if (source == THB_SOURCE_DIRECT) {
+    const eFileAttributes file_attributes = BLI_file_attributes(file_or_lib_path);
+    /* Don't trigger download files from online drives. Maybe less of a problem for
+     * #THE_SOURCE_DIRECT, since what we request is the actual image itself. For other sources this
+     * may download a bunch of large files like videos or blends, just to extract a thumbnail. But
+     * for now, keep the API consistent and do not trigger download of such files. */
+    if (file_attributes & FILE_ATTR_OFFLINE) {
+      return nullptr;
+    }
+
+    ImBuf *thumb = IMB_load_image_from_filepath(file_or_lib_path,
+                                                ImBufFlags::ByteData | ImBufFlags::Metadata);
+    if (!thumb) {
+      return nullptr;
+    }
+
+    IMB_byte_from_float(thumb);
+    IMB_free_float_pixels(thumb);
+    return thumb;
+  }
+
+  if (skip_thumbnails_for_filepath(file_or_lib_path)) {
+    return nullptr;
+  }
+
   char path_buff[FILE_MAX_LIBEXTRA];
   char *blen_group = nullptr, *blen_id = nullptr;
 
@@ -565,7 +664,7 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
   if (file_attributes & FILE_ATTR_OFFLINE) {
     char thumb_path[FILE_MAX];
     if (thumbpath_from_uri(uri, thumb_path, sizeof(thumb_path), size)) {
-      return IMB_load_image_from_filepath(thumb_path, IB_byte_data | IB_metadata);
+      return IMB_load_image_from_filepath(thumb_path, ImBufFlags::ByteData | ImBufFlags::Metadata);
     }
     return nullptr;
   }
@@ -592,10 +691,10 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
     /* The requested path points to a generated thumbnail already (path into the thumbnail cache
      * directory). Attempt to load that, there's nothing we can recreate. */
     if (BLI_path_ncmp(file_or_lib_path, thumb_path, sizeof(thumb_path)) == 0) {
-      img = IMB_load_image_from_filepath(file_or_lib_path, IB_byte_data);
+      img = IMB_load_image_from_filepath(file_or_lib_path, ImBufFlags::ByteData);
     }
     else {
-      img = IMB_load_image_from_filepath(thumb_path, IB_byte_data | IB_metadata);
+      img = IMB_load_image_from_filepath(thumb_path, ImBufFlags::ByteData | ImBufFlags::Metadata);
       if (img) {
         bool regenerate = false;
 
@@ -605,7 +704,7 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
 
         const bool use_hash = thumbhash_from_path(file_path, source, thumb_hash);
 
-        if (IMB_metadata_get_field(img->metadata, "Thumb::MTime", mtime, sizeof(mtime))) {
+        if (IMB_metadata_get_field(img->metadata(), "Thumb::MTime", mtime, sizeof(mtime))) {
           regenerate = (st.st_mtime != atol(mtime));
         }
         else {
@@ -615,7 +714,7 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
 
         if (use_hash && !regenerate) {
           if (IMB_metadata_get_field(
-                  img->metadata, "X-Blender::Hash", thumb_hash_curr, sizeof(thumb_hash_curr)))
+                  img->metadata(), "X-Blender::Hash", thumb_hash_curr, sizeof(thumb_hash_curr)))
           {
             regenerate = !STREQ(thumb_hash, thumb_hash_curr);
           }
@@ -631,16 +730,32 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
           IMB_thumb_delete(file_or_lib_path, THB_NORMAL);
           IMB_thumb_delete(file_or_lib_path, THB_LARGE);
           IMB_thumb_delete(file_or_lib_path, THB_FAIL);
-          img = thumb_create_or_fail(
-              file_path, uri, thumb_name, use_hash, thumb_hash, blen_group, blen_id, size, source);
+          img = thumb_create_or_fail(file_path,
+                                     uri,
+                                     thumb_name,
+                                     use_hash,
+                                     thumb_hash,
+                                     blen_group,
+                                     blen_id,
+                                     size,
+                                     source,
+                                     cancel_token);
         }
       }
       else {
         char thumb_hash[33];
         const bool use_hash = thumbhash_from_path(file_path, source, thumb_hash);
 
-        img = thumb_create_or_fail(
-            file_path, uri, thumb_name, use_hash, thumb_hash, blen_group, blen_id, size, source);
+        img = thumb_create_or_fail(file_path,
+                                   uri,
+                                   thumb_name,
+                                   use_hash,
+                                   thumb_hash,
+                                   blen_group,
+                                   blen_id,
+                                   size,
+                                   source,
+                                   cancel_token);
       }
     }
   }
@@ -663,37 +778,41 @@ ImBuf *IMB_thumb_manage(const char *file_or_lib_path, ThumbSize size, ThumbSourc
  * So idea is to 'lock' a given source file path.
  */
 
-static struct IMBThumbLocks {
-  GSet *locked_paths;
-  int lock_counter;
-  ThreadCondition cond;
-} thumb_locks = {nullptr};
+struct IMBThumbLocks {
+  Set<std::string> locked_paths;
+  int lock_counter = 0;
+  ThreadCondition cond = {};
+};
+
+static IMBThumbLocks &get_thumb_locks()
+{
+  static IMBThumbLocks thumb_locks{};
+  return thumb_locks;
+}
 
 void IMB_thumb_locks_acquire()
 {
   BLI_thread_lock(LOCK_IMAGE);
 
+  IMBThumbLocks &thumb_locks = get_thumb_locks();
   if (thumb_locks.lock_counter == 0) {
-    BLI_assert(thumb_locks.locked_paths == nullptr);
-    thumb_locks.locked_paths = BLI_gset_str_new(__func__);
     BLI_condition_init(&thumb_locks.cond);
   }
   thumb_locks.lock_counter++;
 
-  BLI_assert(thumb_locks.locked_paths != nullptr);
   BLI_assert(thumb_locks.lock_counter > 0);
   BLI_thread_unlock(LOCK_IMAGE);
 }
 
 void IMB_thumb_locks_release()
 {
+  IMBThumbLocks &thumb_locks = get_thumb_locks();
   BLI_thread_lock(LOCK_IMAGE);
-  BLI_assert((thumb_locks.locked_paths != nullptr) && (thumb_locks.lock_counter > 0));
+  BLI_assert(thumb_locks.lock_counter > 0);
 
   thumb_locks.lock_counter--;
   if (thumb_locks.lock_counter == 0) {
-    BLI_gset_free(thumb_locks.locked_paths, MEM_freeN);
-    thumb_locks.locked_paths = nullptr;
+    thumb_locks.locked_paths.clear();
     BLI_condition_end(&thumb_locks.cond);
   }
 
@@ -702,15 +821,13 @@ void IMB_thumb_locks_release()
 
 void IMB_thumb_path_lock(const char *path)
 {
-  void *key = BLI_strdup(path);
+  IMBThumbLocks &thumb_locks = get_thumb_locks();
 
   BLI_thread_lock(LOCK_IMAGE);
-  BLI_assert((thumb_locks.locked_paths != nullptr) && (thumb_locks.lock_counter > 0));
+  BLI_assert(thumb_locks.lock_counter > 0);
 
-  if (thumb_locks.locked_paths) {
-    while (!BLI_gset_add(thumb_locks.locked_paths, key)) {
-      BLI_condition_wait_global_mutex(&thumb_locks.cond, LOCK_IMAGE);
-    }
+  while (!thumb_locks.locked_paths.add(path)) {
+    BLI_condition_wait_global_mutex(&thumb_locks.cond, LOCK_IMAGE);
   }
 
   BLI_thread_unlock(LOCK_IMAGE);
@@ -718,17 +835,17 @@ void IMB_thumb_path_lock(const char *path)
 
 void IMB_thumb_path_unlock(const char *path)
 {
-  const void *key = path;
+  IMBThumbLocks &thumb_locks = get_thumb_locks();
 
   BLI_thread_lock(LOCK_IMAGE);
-  BLI_assert((thumb_locks.locked_paths != nullptr) && (thumb_locks.lock_counter > 0));
+  BLI_assert(thumb_locks.lock_counter > 0);
 
-  if (thumb_locks.locked_paths) {
-    if (!BLI_gset_remove(thumb_locks.locked_paths, key, MEM_freeN)) {
-      BLI_assert_unreachable();
-    }
-    BLI_condition_notify_all(&thumb_locks.cond);
+  if (!thumb_locks.locked_paths.remove(path)) {
+    BLI_assert_unreachable();
   }
+  BLI_condition_notify_all(&thumb_locks.cond);
 
   BLI_thread_unlock(LOCK_IMAGE);
 }
+
+}  // namespace blender

@@ -8,14 +8,16 @@
 
 #pragma once
 
-#include "eevee_shader_shared.hh"
+#include "eevee_defines.hh"
+#include "eevee_lightprobe_shared.hh"
+#include "eevee_uniform_shared.hh"
 
-#include "BKE_cryptomatte.hh"
-
-extern "C" {
-}
+#include "draw_pass.hh"
+#include "draw_view.hh"
 
 namespace blender::eevee {
+
+using namespace draw;
 
 class Instance;
 class HiZBuffer;
@@ -23,6 +25,10 @@ class HiZBuffer;
 /* -------------------------------------------------------------------- */
 /** \name Planar Probe Module
  * \{ */
+
+using ClipPlaneBuf = draw::UniformBuffer<ClipPlaneData>;
+using PlanarProbeDataBuf = draw::UniformArrayBuffer<PlanarProbeData, PLANAR_PROBE_MAX>;
+using PlanarProbeDisplayDataBuf = draw::StorageArrayBuffer<PlanarProbeDisplayData>;
 
 class PlanarProbeModule {
   friend class Instance;
@@ -33,6 +39,7 @@ class PlanarProbeModule {
   Instance &inst_;
 
   struct PlanarResources : NonCopyable {
+    Framebuffer prepass_fb = {"planar.prepass_fb"};
     Framebuffer combined_fb = {"planar.combined_fb"};
     Framebuffer gbuffer_fb = {"planar.gbuffer_fb"};
     draw::View view = {"planar.view"};
@@ -61,16 +68,28 @@ class PlanarProbeModule {
 
   void set_view(const draw::View &main_view, int2 main_view_extent);
 
-  void viewport_draw(View &view, GPUFrameBuffer *view_fb);
+  void viewport_draw(View &view, gpu::FrameBuffer *view_fb);
 
   template<typename PassType> void bind_resources(PassType &pass)
   {
-    /* Disable filter to avoid interpolation with missing background. */
-    GPUSamplerState no_filter = GPUSamplerState::default_sampler();
     pass.bind_ubo(PLANAR_PROBE_BUF_SLOT, &probe_planar_buf_);
-    pass.bind_texture(PLANAR_PROBE_RADIANCE_TEX_SLOT, &radiance_tx_, no_filter);
+    pass.bind_texture(PLANAR_PROBE_RADIANCE_TEX_SLOT, &radiance_tx_);
     pass.bind_texture(PLANAR_PROBE_DEPTH_TEX_SLOT, &depth_tx_);
   }
+
+  /** Used when updating the planar probe. Needed to avoid feedback loop. */
+  struct Dummy {
+    PlanarProbeDataBuf dummy_probe_planar_buf_ = {"probe_planar_buf"};
+    Texture dummy_radiance_tx_ = {"planar.dummy_radiance_tx"};
+    Texture dummy_depth_tx_ = {"planar.dummy_depth_tx"};
+
+    template<typename PassType> void bind_resources(PassType &pass)
+    {
+      pass.bind_ubo(PLANAR_PROBE_BUF_SLOT, dummy_probe_planar_buf_);
+      pass.bind_texture(PLANAR_PROBE_RADIANCE_TEX_SLOT, dummy_radiance_tx_);
+      pass.bind_texture(PLANAR_PROBE_DEPTH_TEX_SLOT, dummy_depth_tx_);
+    }
+  } dummy_resources;
 
   bool enabled() const
   {

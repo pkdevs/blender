@@ -12,15 +12,19 @@
 #include "BLI_math_vector_types.hh"
 #include "GPU_shader_shared.hh"
 
-struct GPUShader;
-struct GPUUniformBuf;
+namespace blender {
+
+namespace gpu {
+class Shader;
+class UniformBuf;
+}  // namespace gpu
 struct View2D;
 
-namespace blender::gpu {
+namespace gpu {
 class Batch;
 }
 
-namespace blender::ed::vse {
+namespace ed::vse {
 
 /* Utility to draw VSE timeline strip widgets in batches, with a dedicated
  * shader. Internally, strip data for drawing is encoded into a uniform
@@ -30,9 +34,9 @@ namespace blender::ed::vse {
 class StripsDrawBatch {
   SeqContextDrawData context_;
   Array<SeqStripDrawData> strips_;
-  GPUUniformBuf *ubo_context_ = nullptr;
-  GPUUniformBuf *ubo_strips_ = nullptr;
-  GPUShader *shader_ = nullptr;
+  gpu::UniformBuf *ubo_context_ = nullptr;
+  gpu::UniformBuf *ubo_strips_ = nullptr;
+  gpu::Shader *shader_ = nullptr;
   gpu::Batch *batch_ = nullptr;
   int binding_context_ = 0;
   int binding_strips_ = 0;
@@ -59,7 +63,7 @@ class StripsDrawBatch {
 
   void flush_batch();
 
-  /* Same math as `UI_view2d_view_to_region_*` but avoiding divisions,
+  /* Same math as `view2d_view_to_region_*` but avoiding divisions,
    * and without relying on View2D data type. */
   float pos_to_pixel_space_x(float x) const
   {
@@ -74,7 +78,7 @@ class StripsDrawBatch {
     return x * view_cur_inv_size_.x * view_mask_size_.x;
   }
 
-  GPUUniformBuf *get_ubo_context() const
+  gpu::UniformBuf *get_ubo_context() const
   {
     return ubo_context_;
   }
@@ -83,4 +87,5 @@ class StripsDrawBatch {
 uint color_pack(const uchar rgba[4]);
 float calc_strip_round_radius(float pixely);
 
-}  // namespace blender::ed::vse
+}  // namespace ed::vse
+}  // namespace blender

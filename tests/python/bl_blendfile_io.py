@@ -186,7 +186,7 @@ class TestIdRuntimeTag(TestHelper):
 
         self.assertNotIn('Cube', bpy.data.objects)
         self.assertNotIn('LibMaterial', bpy.data.materials)
-        self.assertNotIn('libMesh', bpy.data.meshes)
+        self.assertNotIn('LibMesh', bpy.data.meshes)
 
 
 TESTS = (
@@ -206,9 +206,8 @@ def argparse_create():
     parser.add_argument(
         "--output-dir",
         dest="output_dir",
-        default=".",
         help="Where to output temp saved blendfiles",
-        required=False,
+        required=True,
     )
 
     return parser

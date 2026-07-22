@@ -31,18 +31,20 @@
 #include "BLI_vector.hh"
 #include "BLI_virtual_array_fwd.hh"
 
-#include "DNA_customdata_types.h"
-
 #include "BKE_attribute_filter.hh"
+#include "BKE_attribute_storage.hh"
+#include "BKE_geometry_set.hh"
+
+namespace blender {
 
 struct Object;
 struct Collection;
-namespace blender::bke {
+namespace bke {
 class AttributeAccessor;
 class MutableAttributeAccessor;
-}  // namespace blender::bke
+}  // namespace bke
 
-namespace blender::bke {
+namespace bke {
 
 struct GeometrySet;
 struct AttributeAccessorFunctions;
@@ -120,21 +122,20 @@ class Instances {
 
   int instances_num_ = 0;
 
-  CustomData attributes_;
+  bke::AttributeStorage attributes_;
 
   /**
    * Caches how often each reference is used.
    */
   mutable SharedCache<Array<int>> reference_user_counts_;
 
-  /* These almost unique ids are generated based on the `id` attribute, which might not contain
-   * unique ids at all. They are *almost* unique, because under certain very unlikely
-   * circumstances, they are not unique. Code using these ids should not crash when they are not
-   * unique but can generally expect them to be unique. */
-  mutable SharedCache<Array<int>> almost_unique_ids_cache_;
+  /* These unique ids are generated based on the `id` attribute, which might not contain
+   * unique ids at all. */
+  mutable SharedCache<Array<int>> unique_ids_cache_;
 
  public:
   Instances();
+  Instances(int size);
   Instances(Instances &&other);
   Instances(const Instances &other);
   ~Instances();
@@ -145,10 +146,9 @@ class Instances {
   /**
    * Resize the transform, handles, and attributes to the specified capacity.
    *
-   * \note This function should be used carefully, only when it's guaranteed
-   * that the data will be filled.
+   * \warning Attribute values for newly added elements must be *initialized* by the caller.
    */
-  void resize(int capacity);
+  void resize(int size);
 
   /**
    * Returns a handle for the given reference.
@@ -156,19 +156,16 @@ class Instances {
    * Otherwise a new handle is added.
    */
   int add_reference(const InstanceReference &reference);
+  int add_reference(InstanceReference &&reference);
   /**
    * Same as above, but does not deduplicate with existing references.
    */
-  int add_new_reference(const InstanceReference &reference);
+  int add_new_reference(InstanceReference reference);
   std::optional<int> find_reference_handle(const InstanceReference &query);
-  /**
-   * Add a reference to the instance reference with an index specified by the #instance_handle
-   * argument. For adding many instances, using #resize and accessing the transform array
-   * directly is preferred.
-   */
-  void add_instance(int instance_handle, const float4x4 &transform);
 
   Span<InstanceReference> references() const;
+  MutableSpan<InstanceReference> references_for_write();
+
   void remove_unused_references();
 
   /**
@@ -198,9 +195,10 @@ class Instances {
    */
   void remove(const IndexMask &mask, const AttributeFilter &attribute_filter);
   /**
-   * Get an id for every instance. These can be used for e.g. motion blur.
+   * Get an id for every instance. These can be used e.g. motion blur. This is based on the "id"
+   * attribute but makes sure that the ids are actually unique.
    */
-  Span<int> almost_unique_ids() const;
+  Span<int> unique_ids() const;
 
   /**
    * Get cached user counts for every reference.
@@ -210,8 +208,8 @@ class Instances {
   bke::AttributeAccessor attributes() const;
   bke::MutableAttributeAccessor attributes_for_write();
 
-  CustomData &custom_data_attributes();
-  const CustomData &custom_data_attributes() const;
+  bke::AttributeStorage &attribute_storage();
+  const bke::AttributeStorage &attribute_storage() const;
 
   void foreach_referenced_geometry(
       FunctionRef<void(const GeometrySet &geometry_set)> callback) const;
@@ -224,7 +222,7 @@ class Instances {
   void tag_reference_handles_changed()
   {
     reference_user_counts_.tag_dirty();
-    almost_unique_ids_cache_.tag_dirty();
+    unique_ids_cache_.tag_dirty();
   }
 };
 
@@ -285,13 +283,13 @@ inline InstanceReference::Type InstanceReference::type() const
 inline Object &InstanceReference::object() const
 {
   BLI_assert(type_ == Type::Object);
-  return *(Object *)data_;
+  return *static_cast<Object *>(data_);
 }
 
 inline Collection &InstanceReference::collection() const
 {
   BLI_assert(type_ == Type::Collection);
-  return *(Collection *)data_;
+  return *static_cast<Collection *>(data_);
 }
 
 inline GeometrySet &InstanceReference::geometry_set()
@@ -306,16 +304,17 @@ inline const GeometrySet &InstanceReference::geometry_set() const
   return *geometry_set_;
 }
 
-inline CustomData &Instances::custom_data_attributes()
+inline AttributeStorage &Instances::attribute_storage()
 {
   return attributes_;
 }
 
-inline const CustomData &Instances::custom_data_attributes() const
+inline const AttributeStorage &Instances::attribute_storage() const
 {
   return attributes_;
 }
 
 /** \} */
 
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

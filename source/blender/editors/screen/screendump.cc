@@ -13,8 +13,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
@@ -37,17 +38,21 @@
 #include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "screen_intern.hh"
 
+namespace blender {
+
 struct ScreenshotData {
-  uint8_t *dumprect;
-  int dumpsx, dumpsy;
-  rcti crop;
-  bool use_crop;
+  /* Ownership transferred to ImBuf in exec function. */
+  uint8_t *dumprect = nullptr;
+  int dumpsx = 0, dumpsy = 0;
+  rcti crop = {};
+  bool use_crop = false;
 
   ImageFormatData im_format;
 };
@@ -65,7 +70,7 @@ static int screenshot_data_create(bContext *C, wmOperator *op, ScrArea *area)
   uint8_t *dumprect = WM_window_pixels_read(C, win, dumprect_size);
 
   if (dumprect) {
-    ScreenshotData *scd = MEM_callocN<ScreenshotData>("screenshot");
+    ScreenshotData *scd = MEM_new<ScreenshotData>("screenshot");
 
     scd->dumpsx = dumprect_size[0];
     scd->dumpsy = dumprect_size[1];
@@ -74,7 +79,7 @@ static int screenshot_data_create(bContext *C, wmOperator *op, ScrArea *area)
       scd->crop = area->totrct;
     }
 
-    BKE_image_format_init(&scd->im_format, false);
+    BKE_image_format_init(&scd->im_format);
 
     op->customdata = scd;
 
@@ -86,15 +91,8 @@ static int screenshot_data_create(bContext *C, wmOperator *op, ScrArea *area)
 
 static void screenshot_data_free(wmOperator *op)
 {
-  ScreenshotData *scd = static_cast<ScreenshotData *>(op->customdata);
-
-  if (scd) {
-    if (scd->dumprect) {
-      MEM_freeN(scd->dumprect);
-    }
-    MEM_freeN(scd);
-    op->customdata = nullptr;
-  }
+  MEM_delete(static_cast<ScreenshotData *>(op->customdata));
+  op->customdata = nullptr;
 }
 
 static wmOperatorStatus screenshot_exec(bContext *C, wmOperator *op)
@@ -118,16 +116,19 @@ static wmOperatorStatus screenshot_exec(bContext *C, wmOperator *op)
       BLI_path_abs(filepath, BKE_main_blendfile_path_from_global());
 
       /* operator ensures the extension */
-      ibuf = IMB_allocImBuf(scd->dumpsx, scd->dumpsy, 24, 0);
-      IMB_assign_byte_buffer(ibuf, scd->dumprect, IB_DO_NOT_TAKE_OWNERSHIP);
+      ibuf = IMB_allocImBuf(scd->dumpsx, scd->dumpsy, ImBufFlags::Zero);
+      ibuf->color_mode = ImColorMode::RGB;
+      ibuf->assign_byte_data(scd->dumprect);
+      scd->dumprect = nullptr;
 
       /* crop to show only single editor */
       if (use_crop) {
-        IMB_rect_crop(ibuf, &scd->crop);
-        scd->dumprect = ibuf->byte_buffer.data;
+        IMB_crop(ibuf,
+                 int2(scd->crop.xmin, scd->crop.ymin),
+                 int2(BLI_rcti_size_x(&scd->crop) + 1, BLI_rcti_size_y(&scd->crop) + 1));
       }
 
-      if ((scd->im_format.planes == R_IMF_PLANES_BW) &&
+      if ((scd->im_format.color_mode == ImColorMode::BW) &&
           (scd->im_format.imtype != R_IMF_IMTYPE_MULTILAYER))
       {
         /* bw screenshot? - users will notice if it fails! */
@@ -176,7 +177,7 @@ static wmOperatorStatus screenshot_invoke(bContext *C, wmOperator *op, const wmE
     }
     else {
       /* As the file isn't saved, only set the name and let the file selector pick a directory. */
-      STRNCPY(filepath, DATA_("screen"));
+      STRNCPY_UTF8(filepath, DATA_("screen"));
     }
     RNA_string_set(op->ptr, "filepath", filepath);
 
@@ -207,25 +208,25 @@ static bool screenshot_draw_check_prop(PointerRNA * /*ptr*/,
   return !STREQ(prop_id, "filepath");
 }
 
-static void screenshot_draw(bContext * /*C*/, wmOperator *op)
+static void screenshot_draw(bContext *C, wmOperator *op)
 {
-  uiLayout *layout = op->layout;
+  ui::Layout &layout = *op->layout;
   ScreenshotData *scd = static_cast<ScreenshotData *>(op->customdata);
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
 
   /* image template */
-  PointerRNA ptr = RNA_pointer_create_discrete(nullptr, &RNA_ImageFormatSettings, &scd->im_format);
-  uiTemplateImageSettings(layout, &ptr, false);
+  PointerRNA ptr = RNA_pointer_create_discrete(nullptr, RNA_ImageFormatSettings, &scd->im_format);
+  uiTemplateImageSettings(&layout, C, &ptr, false);
 
   /* main draw call */
-  uiDefAutoButsRNA(layout,
+  uiDefAutoButsRNA(&layout,
                    op->ptr,
                    screenshot_draw_check_prop,
                    nullptr,
                    nullptr,
-                   UI_BUT_LABEL_ALIGN_NONE,
+                   ui::BUT_LABEL_ALIGN_NONE,
                    false);
 }
 
@@ -278,3 +279,5 @@ void SCREEN_OT_screenshot_area(wmOperatorType *ot)
 
   ot->flag = OPTYPE_DEPENDS_ON_CURSOR;
 }
+
+}  // namespace blender

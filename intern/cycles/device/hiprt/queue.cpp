@@ -6,6 +6,8 @@
 
 #  include "device/hiprt/queue.h"
 
+#  include <hiprt/hiprt.h>
+
 #  include "device/hip/graphics_interop.h"
 #  include "device/hip/kernel.h"
 #  include "device/hiprt/device_impl.h"
@@ -46,7 +48,7 @@ bool HIPRTDeviceQueue::enqueue(DeviceKernel kernel,
                                                         hiprt_device_->global_stack_buffer);
 
     if (rt_result != hiprtSuccess) {
-      LOG(ERROR) << "Failed to create hiprt Global Stack Buffer";
+      LOG_ERROR << "Failed to create hiprt Global Stack Buffer";
       return false;
     }
   }

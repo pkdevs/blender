@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <optional>
+
+namespace blender {
+
 struct EnumPropertyItem;
 struct ID;
 struct MDeformVert;
@@ -22,7 +26,7 @@ struct bDeformGroup;
 #define WEIGHT_ADD 2
 #define WEIGHT_SUBTRACT 3
 
-namespace blender::ed::object {
+namespace ed::object {
 
 bool vgroup_sync_from_pose(Object *ob);
 void vgroup_select_by_name(Object *ob, const char *name);
@@ -34,7 +38,11 @@ void vgroup_data_clamp_range(ID *id, int total);
  * Matching index only.
  */
 bool vgroup_array_copy(Object *ob, Object *ob_from);
-bool vgroup_parray_alloc(ID *id, MDeformVert ***dvert_arr, int *dvert_tot, bool use_vert_sel);
+bool vgroup_parray_alloc(ID *id,
+                         MDeformVert ***dvert_arr,
+                         int *dvert_tot,
+                         bool use_vert_sel,
+                         std::optional<int> current_frame = {});
 /**
  * For use with tools that use vgroup_parray_alloc with \a use_vert_sel ==
  * true. This finds the unselected mirror deform verts and copies the weights to them from the
@@ -97,4 +105,5 @@ const EnumPropertyItem *vgroup_selection_itemf_helper(const bContext *C,
                                                       bool *r_free,
                                                       unsigned int selection_mask);
 
-}  // namespace blender::ed::object
+}  // namespace ed::object
+}  // namespace blender

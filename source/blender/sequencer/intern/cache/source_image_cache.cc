@@ -8,15 +8,17 @@
 
 #include "BLI_map.hh"
 #include "BLI_mutex.hh"
-#include "BLI_vector.hh"
 
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
+
+#include "BKE_scene.hh"
 
 #include "IMB_imbuf.hh"
 
 #include "SEQ_relations.hh"
 #include "SEQ_render.hh"
+#include "SEQ_sequencer.hh"
 #include "SEQ_time.hh"
 
 #include "prefetch.hh"
@@ -27,9 +29,32 @@ namespace blender::seq {
 static Mutex source_image_cache_mutex;
 
 struct SourceImageCache {
+  struct FrameEntry {
+    SeqResult image;
+    /**
+     * Frame in timeline, relative to strip start. Used to determine which
+     * entries to evict (furthest from the play-head). Due to reversed
+     * frames, playback rate, retiming the relationship between source frame
+     * index and timeline frame is not a simple one.
+     */
+    float strip_frame = 0;
+  };
+
+  struct Key {
+    float source_frame = 0.0f;
+    int view_id = 0;
+    eDrawType scene_draw_type = OB_SOLID;
+
+    uint64_t hash() const
+    {
+      return get_default_hash(source_frame, view_id, scene_draw_type);
+    }
+
+    friend bool operator==(const Key &a, const Key &b) = default;
+  };
+
   struct StripEntry {
-    /* Map key is {source media frame index (i.e. movie frame), view ID}. */
-    Map<std::pair<int, int>, ImBuf *> frames;
+    Map<Key, FrameEntry> frames;
   };
 
   Map<const Strip *, StripEntry> map_;
@@ -42,8 +67,8 @@ struct SourceImageCache {
   void clear()
   {
     for (const auto &item : map_.items()) {
-      for (ImBuf *image : item.value.frames.values()) {
-        IMB_freeImBuf(image);
+      for (const auto &frame : item.value.frames.values()) {
+        IMB_freeImBuf(frame.image.image);
       }
     }
     map_.clear();
@@ -55,8 +80,8 @@ struct SourceImageCache {
     if (entry == nullptr) {
       return;
     }
-    for (ImBuf *image : entry->frames.values()) {
-      IMB_freeImBuf(image);
+    for (const auto &frame : entry->frames.values()) {
+      IMB_freeImBuf(frame.image.image);
     }
     map_.remove_contained(strip);
   }
@@ -64,7 +89,7 @@ struct SourceImageCache {
 
 static SourceImageCache *ensure_source_image_cache(Scene *scene)
 {
-  SourceImageCache **cache = &scene->ed->runtime.source_image_cache;
+  SourceImageCache **cache = &scene->ed->runtime->source_image_cache;
   if (*cache == nullptr) {
     *cache = MEM_new<SourceImageCache>(__func__);
   }
@@ -76,42 +101,81 @@ static SourceImageCache *query_source_image_cache(const Scene *scene)
   if (scene == nullptr || scene->ed == nullptr) {
     return nullptr;
   }
-  return scene->ed->runtime.source_image_cache;
+  return scene->ed->runtime->source_image_cache;
 }
 
-ImBuf *source_image_cache_get(const RenderData *context, const Strip *strip, float timeline_frame)
+static float give_cache_frame_index(const Scene *scene, const Strip *strip, float timeline_frame)
 {
-  if (context->skip_cache || context->is_proxy_render || strip == nullptr) {
-    return nullptr;
+  float frame_index = give_frame_index(scene, strip, timeline_frame);
+  if (strip->type != STRIP_TYPE_SCENE) {
+    /* Scene strips that are slowed down need fractional frame index for animation interpolation;
+     * for others use integer index for better cache hit rates. */
+    frame_index = std::trunc(frame_index);
+  }
+  if (strip->type == STRIP_TYPE_MOVIE) {
+    frame_index += strip->anim_startofs;
+  }
+  return frame_index;
+}
+
+static SourceImageCache::Key get_key(const RenderData *context,
+                                     const Scene *scene,
+                                     const Strip *strip,
+                                     float timeline_frame)
+{
+  const float frame_index = give_cache_frame_index(scene, strip, timeline_frame);
+  eDrawType draw_type = OB_RENDER;
+  if (!context->render && strip->type == STRIP_TYPE_SCENE) {
+    draw_type = eDrawType(scene->r.seq_prev_type);
+  }
+  return {frame_index, context->view_id, draw_type};
+}
+
+SeqResult source_image_cache_get(const RenderData *context,
+                                 const Strip *strip,
+                                 float timeline_frame)
+{
+  if (context->skip_cache || strip == nullptr) {
+    return {};
   }
 
   Scene *scene = prefetch_get_original_scene_and_strip(context, strip);
   timeline_frame = math::round(timeline_frame);
-  int frame_index = give_frame_index(scene, strip, timeline_frame);
-  if (strip->type == STRIP_TYPE_MOVIE) {
-    frame_index += strip->anim_startofs;
-  }
-  const int view_id = context->view_id;
+  const SourceImageCache::Key key = get_key(context, scene, strip, timeline_frame);
 
-  ImBuf *res = nullptr;
+  SeqResult res;
   {
     std::lock_guard lock(source_image_cache_mutex);
     SourceImageCache *cache = query_source_image_cache(scene);
     if (cache == nullptr) {
-      return nullptr;
+      return res;
     }
 
     SourceImageCache::StripEntry *val = cache->map_.lookup_ptr(strip);
     if (val == nullptr) {
       /* Nothing in cache for this strip yet. */
-      return nullptr;
+      return res;
     }
     /* Search entries for the frame we want. */
-    res = val->frames.lookup_default({frame_index, view_id}, nullptr);
+    SourceImageCache::FrameEntry *frame = val->frames.lookup_ptr(key);
+    if (frame != nullptr) {
+      res = frame->image;
+    }
+
+    /* For effect, meta, and scene strips, check if the cached result matches our current
+     * render resolution. If it does not, remove stale source entries for this strip. */
+    if (res.is_valid() &&
+        (strip->is_effect() || strip->type == STRIP_TYPE_SCENE || strip->type == STRIP_TYPE_META))
+    {
+      if (res.image->x != context->rectx || res.image->y != context->recty) {
+        cache->remove_entry(strip);
+        return {};
+      }
+    }
   }
 
-  if (res) {
-    IMB_refImBuf(res);
+  if (res.is_valid()) {
+    IMB_refImBuf(res.image);
   }
   return res;
 }
@@ -119,22 +183,17 @@ ImBuf *source_image_cache_get(const RenderData *context, const Strip *strip, flo
 void source_image_cache_put(const RenderData *context,
                             const Strip *strip,
                             float timeline_frame,
-                            ImBuf *image)
+                            const SeqResult &image)
 {
-  if (context->skip_cache || context->is_proxy_render || strip == nullptr || image == nullptr) {
+  if (context->skip_cache || strip == nullptr || !image.is_valid()) {
     return;
   }
 
   Scene *scene = prefetch_get_original_scene_and_strip(context, strip);
   timeline_frame = math::round(timeline_frame);
+  const SourceImageCache::Key key = get_key(context, scene, strip, timeline_frame);
 
-  int frame_index = give_frame_index(scene, strip, timeline_frame);
-  if (strip->type == STRIP_TYPE_MOVIE) {
-    frame_index += strip->anim_startofs;
-  }
-  const int view_id = context->view_id;
-
-  IMB_refImBuf(image);
+  IMB_refImBuf(image.image);
 
   std::lock_guard lock(source_image_cache_mutex);
   SourceImageCache *cache = ensure_source_image_cache(scene);
@@ -148,11 +207,12 @@ void source_image_cache_put(const RenderData *context,
   }
   BLI_assert_msg(val != nullptr, "Source image cache value should never be null here");
 
-  ImBuf *&item = val->frames.lookup_or_add_default({frame_index, view_id});
-  if (item != nullptr) {
-    IMB_freeImBuf(item);
+  SourceImageCache::FrameEntry &frame = val->frames.lookup_or_add_default(key);
+  if (frame.image.is_valid()) {
+    IMB_freeImBuf(frame.image.image);
   }
-  item = image;
+  frame.strip_frame = timeline_frame - strip->start;
+  frame.image = image;
 }
 
 void source_image_cache_invalidate_strip(Scene *scene, const Strip *strip)
@@ -169,7 +229,7 @@ void source_image_cache_clear(Scene *scene)
   std::lock_guard lock(source_image_cache_mutex);
   SourceImageCache *cache = query_source_image_cache(scene);
   if (cache != nullptr) {
-    scene->ed->runtime.source_image_cache->clear();
+    scene->ed->runtime->source_image_cache->clear();
   }
 }
 
@@ -178,9 +238,9 @@ void source_image_cache_destroy(Scene *scene)
   std::lock_guard lock(source_image_cache_mutex);
   SourceImageCache *cache = query_source_image_cache(scene);
   if (cache != nullptr) {
-    BLI_assert(cache == scene->ed->runtime.source_image_cache);
-    MEM_delete(scene->ed->runtime.source_image_cache);
-    scene->ed->runtime.source_image_cache = nullptr;
+    BLI_assert(cache == scene->ed->runtime->source_image_cache);
+    MEM_delete(scene->ed->runtime->source_image_cache);
+    scene->ed->runtime->source_image_cache = nullptr;
   }
 }
 
@@ -196,17 +256,10 @@ void source_image_cache_iterate(Scene *scene,
     return;
   }
 
-  const float scene_fps = float(scene->r.frs_sec) / float(scene->r.frs_sec_base);
-
-  for (const auto &[key, value] : cache->map_.items()) {
-    for (std::pair<int, int> frame_view : value.frames.keys()) {
-      /* We have frame index of source media, try to guesstimate the timeline frame.
-       * Note that this will be not correct when retiming, strobing etc. are used.
-       * However, factor in playback rate difference. */
-      float frame_fl = frame_view.first / time_media_playback_rate_factor_get(key, scene_fps);
-      float timeline_frame = frame_fl + time_start_frame_get(key);
-
-      callback_iter(userdata, key, int(timeline_frame));
+  for (const auto &[strip, frames] : cache->map_.items()) {
+    for (const auto &[frame_key, frame] : frames.frames.items()) {
+      const float timeline_frame = strip->start + frame.strip_frame;
+      callback_iter(userdata, strip, int(timeline_frame));
     }
   }
 }
@@ -220,8 +273,10 @@ size_t source_image_cache_calc_memory_size(const Scene *scene)
   }
   size_t size = 0;
   for (const SourceImageCache::StripEntry &entry : cache->map_.values()) {
-    for (const ImBuf *image : entry.frames.values()) {
-      size += IMB_get_size_in_memory(image);
+    for (const SourceImageCache::FrameEntry &frame : entry.frames.values()) {
+      if (frame.image.is_valid()) {
+        size += IMB_get_size_in_memory(frame.image.image);
+      }
     }
   }
   return size;
@@ -248,16 +303,44 @@ bool source_image_cache_evict(Scene *scene)
   if (cache == nullptr) {
     return false;
   }
-
   /* Find which entry to remove -- we pick the one that is furthest from the current frame,
-   * biasing the ones that are behind the current frame. */
-  const int cur_frame = scene->r.cfra;
+   * biasing the ones that are behind the current frame.
+   *
+   * However, do not try to evict entries from the current prefetch job range -- we need to
+   * be able to fully fill the cache from prefetching, and then actually stop the job when it
+   * is full and no longer can evict anything. */
+  int cur_prefetch_start = std::numeric_limits<int>::min();
+  int cur_prefetch_end = std::numeric_limits<int>::min();
+  if (scene->ed->cache_flag & SEQ_CACHE_STORE_RAW) {
+    /* Only activate the prefetch guards if the cache is active. */
+    seq_prefetch_get_time_range(scene, &cur_prefetch_start, &cur_prefetch_end);
+  }
+  const bool prefetch_loops_around = cur_prefetch_start > cur_prefetch_end;
+
+  const int timeline_start = scene->playback_start();
+  const int timeline_end = scene->playback_end();
+  /* If we wrap around, treat the timeline start as the playback head position.
+   * This is to try to mitigate un-needed cache evictions. */
+  const int cur_frame = prefetch_loops_around ? timeline_start : scene->r.cfra;
+
   SourceImageCache::StripEntry *best_strip = nullptr;
-  std::pair<int, int> best_key = {};
+  SourceImageCache::Key best_key;
   int best_score = 0;
   for (const auto &strip : cache->map_.items()) {
     for (const auto &entry : strip.value.frames.items()) {
-      const int item_frame = entry.key.first;
+      const int item_frame = int(strip.key->start + entry.value.strip_frame);
+      if (prefetch_loops_around) {
+        if (item_frame >= timeline_start && item_frame <= cur_prefetch_end) {
+          continue; /* Within active prefetch range, do not try to remove it. */
+        }
+        if (item_frame >= cur_prefetch_start && item_frame <= timeline_end) {
+          continue; /* Within active prefetch range, do not try to remove it. */
+        }
+      }
+      else if (item_frame >= cur_prefetch_start && item_frame <= cur_prefetch_end) {
+        continue; /* Within active prefetch range, do not try to remove it. */
+      }
+
       /* Score for removal is distance to current frame; 2x that if behind current frame. */
       int score = 0;
       if (item_frame < cur_frame) {
@@ -276,7 +359,7 @@ bool source_image_cache_evict(Scene *scene)
 
   /* Remove if we found one. */
   if (best_strip != nullptr) {
-    IMB_freeImBuf(best_strip->frames.lookup(best_key));
+    IMB_freeImBuf(best_strip->frames.lookup(best_key).image.image);
     best_strip->frames.remove(best_key);
     return true;
   }

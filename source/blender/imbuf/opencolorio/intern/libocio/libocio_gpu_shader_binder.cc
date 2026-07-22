@@ -4,16 +4,14 @@
 
 #include "libocio_gpu_shader_binder.hh"
 
-#if defined(WITH_OPENCOLORIO)
+#include "GPU_texture.hh"
 
-#  include "GPU_texture.hh"
+#include "error_handling.hh"
+#include "libocio_config.hh"
+#include "libocio_display_processor.hh"
+#include "libocio_processor.hh"
 
-#  include "error_handling.hh"
-#  include "libocio_config.hh"
-#  include "libocio_display_processor.hh"
-#  include "libocio_processor.hh"
-
-#  include "../gpu_shader_binder_internal.hh"
+#include "../gpu_shader_binder_internal.hh"
 
 namespace blender::ocio {
 
@@ -36,6 +34,9 @@ static ConstProcessorRcPtr create_to_display_processor(
   display_parameters.view = display_shader.view;
   display_parameters.display = display_shader.display;
   display_parameters.look = display_shader.look;
+  display_parameters.use_hdr_buffer = display_shader.use_hdr_buffer;
+  display_parameters.use_display_emulation = display_shader.use_display_emulation;
+  display_parameters.use_scope_space = display_shader.use_scope_space;
   return create_ocio_display_processor(config, display_parameters);
 }
 
@@ -79,12 +80,24 @@ static bool add_gpu_lut_1D2D(internal::GPUTextures &textures,
     return false;
   }
 
-  eGPUTextureFormat format = (channel == GpuShaderCreator::TEXTURE_RGB_CHANNEL) ? GPU_RGB16F :
-                                                                                  GPU_R16F;
+  gpu::TextureFormat format = (channel == GpuShaderCreator::TEXTURE_RGB_CHANNEL) ?
+                                  gpu::TextureFormat::SFLOAT_16_16_16 :
+                                  gpu::TextureFormat::SFLOAT_16;
 
   internal::GPULutTexture lut;
-  lut.texture = GPU_texture_create_2d(
-      texture_name, width, height, 1, format, GPU_TEXTURE_USAGE_SHADER_READ, values);
+  /* There does not appear to be an explicit way to check if a texture is 1D or 2D.
+   * It depends on more than height. So check instead by looking at the source.
+   * The Blender default config does not use 1D textures, but for example
+   * studio-config-v3.0.0_aces-v2.0_ocio-v2.4.ocio needs this code. */
+  std::string sampler1D_name = std::string("sampler1D ") + sampler_name;
+  if (strstr(shader_desc->getShaderText(), sampler1D_name.c_str()) != nullptr) {
+    lut.texture = GPU_texture_create_1d(
+        texture_name, width, 1, format, GPU_TEXTURE_USAGE_SHADER_READ, values);
+  }
+  else {
+    lut.texture = GPU_texture_create_2d(
+        texture_name, width, height, 1, format, GPU_TEXTURE_USAGE_SHADER_READ, values);
+  }
   if (lut.texture == nullptr) {
     return false;
   }
@@ -121,7 +134,7 @@ static bool add_gpu_lut_3D(internal::GPUTextures &textures,
                                       edgelen,
                                       edgelen,
                                       1,
-                                      GPU_RGB16F,
+                                      gpu::TextureFormat::SFLOAT_16_16_16,
                                       GPU_TEXTURE_USAGE_SHADER_READ,
                                       values);
   if (lut.texture == nullptr) {
@@ -247,9 +260,10 @@ void LibOCIOGPUShaderBinder::construct_scene_linear_shader(
   }
 
   construct_shader_for_processors(
-      display_shader, processor_to_scene_linear, nullptr, {{"USE_TO_SCENE_LINEAR_ONLY", ""}});
+      display_shader,
+      processor_to_scene_linear,
+      nullptr,
+      {{"USE_TO_SCENE_LINEAR_ONLY", ""}, {"OUTPUT_PREMULTIPLIED", ""}});
 }
 
 }  // namespace blender::ocio
-
-#endif

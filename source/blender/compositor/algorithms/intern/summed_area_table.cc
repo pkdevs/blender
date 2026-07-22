@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_index_range.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
@@ -56,14 +56,14 @@ static void compute_incomplete_prologues(Context &context,
                                          Result &incomplete_x_prologues,
                                          Result &incomplete_y_prologues)
 {
-  GPUShader *shader = context.get_shader(get_compute_incomplete_prologues_shader(operation),
-                                         ResultPrecision::Full);
+  gpu::Shader *shader = context.get_shader(get_compute_incomplete_prologues_shader(operation),
+                                           ResultPrecision::Full);
   GPU_shader_bind(shader);
 
   input.bind_as_texture(shader, "input_tx");
 
   const int2 group_size = int2(16);
-  const int2 input_size = input.domain().size;
+  const int2 input_size = input.domain().data_size;
   const int2 number_of_groups = math::divide_ceil(input_size, group_size);
 
   incomplete_x_prologues.allocate_texture(Domain(int2(input_size.y, number_of_groups.x)));
@@ -93,14 +93,14 @@ static void compute_complete_x_prologues(Context &context,
                                          Result &complete_x_prologues,
                                          Result &complete_x_prologues_sum)
 {
-  GPUShader *shader = context.get_shader(
+  gpu::Shader *shader = context.get_shader(
       "compositor_summed_area_table_compute_complete_x_prologues", ResultPrecision::Full);
   GPU_shader_bind(shader);
 
   incomplete_x_prologues.bind_as_texture(shader, "incomplete_x_prologues_tx");
 
   const int2 group_size = int2(16);
-  const int2 input_size = input.domain().size;
+  const int2 input_size = input.domain().data_size;
   const int2 number_of_groups = math::divide_ceil(input_size, group_size);
 
   complete_x_prologues.allocate_texture(incomplete_x_prologues.domain());
@@ -128,7 +128,7 @@ static void compute_complete_y_prologues(Context &context,
                                          Result &complete_x_prologues_sum,
                                          Result &complete_y_prologues)
 {
-  GPUShader *shader = context.get_shader(
+  gpu::Shader *shader = context.get_shader(
       "compositor_summed_area_table_compute_complete_y_prologues", ResultPrecision::Full);
   GPU_shader_bind(shader);
 
@@ -136,7 +136,7 @@ static void compute_complete_y_prologues(Context &context,
   complete_x_prologues_sum.bind_as_texture(shader, "complete_x_prologues_sum_tx");
 
   const int2 group_size = int2(16);
-  const int2 input_size = input.domain().size;
+  const int2 input_size = input.domain().data_size;
   const int2 number_of_groups = math::divide_ceil(input_size, group_size);
 
   complete_y_prologues.allocate_texture(incomplete_y_prologues.domain());
@@ -174,8 +174,8 @@ static void compute_complete_blocks(Context &context,
                                     SummedAreaTableOperation operation,
                                     Result &output)
 {
-  GPUShader *shader = context.get_shader(get_compute_complete_blocks_shader(operation),
-                                         ResultPrecision::Full);
+  gpu::Shader *shader = context.get_shader(get_compute_complete_blocks_shader(operation),
+                                           ResultPrecision::Full);
   GPU_shader_bind(shader);
 
   input.bind_as_texture(shader, "input_tx");
@@ -186,7 +186,7 @@ static void compute_complete_blocks(Context &context,
   output.bind_as_image(shader, "output_img", true);
 
   const int2 group_size = int2(16);
-  const int2 input_size = input.domain().size;
+  const int2 input_size = input.domain().data_size;
   const int2 number_of_groups = math::divide_ceil(input_size, group_size);
 
   GPU_compute_dispatch(shader, number_of_groups.x, number_of_groups.y, 1);
@@ -236,15 +236,15 @@ static void summed_area_table_cpu(Result &input,
   output.allocate_texture(input.domain());
 
   /* Horizontal summing pass. */
-  const int2 size = input.domain().size;
+  const int2 size = input.domain().data_size;
   threading::parallel_for(IndexRange(size.y), 1, [&](const IndexRange range_y) {
     for (const int y : range_y) {
       float4 accumulated_color = float4(0.0f);
       for (const int x : IndexRange(size.x)) {
         const int2 texel = int2(x, y);
-        const float4 color = input.load_pixel<float4>(texel);
+        const float4 color = float4(input.load_pixel<Color>(texel));
         accumulated_color += operation == SummedAreaTableOperation::Square ? color * color : color;
-        output.store_pixel(texel, accumulated_color);
+        output.store_pixel(texel, Color(accumulated_color));
       }
     }
   });
@@ -255,9 +255,9 @@ static void summed_area_table_cpu(Result &input,
       float4 accumulated_color = float4(0.0f);
       for (const int y : IndexRange(size.y)) {
         const int2 texel = int2(x, y);
-        const float4 color = output.load_pixel<float4>(texel);
+        const float4 color = float4(output.load_pixel<Color>(texel));
         accumulated_color += color;
-        output.store_pixel(texel, accumulated_color);
+        output.store_pixel(texel, Color(accumulated_color));
       }
     }
   });

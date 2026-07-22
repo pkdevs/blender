@@ -9,26 +9,29 @@
 #include "BKE_appdir.hh"
 
 #include "BLI_fileops.hh"
-#include "BLI_hash.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_time.h"
 #ifdef _WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "vk_shader.hh"
 #include "vk_shader_compiler.hh"
 
+#include <iostream>
+#include <string>
+
+#include "CLG_log.h"
+
 namespace blender::gpu {
+
+static CLG_LogRef LOG = {"gpu.vulkan"};
 
 static std::optional<std::string> cache_dir_get()
 {
   static std::optional<std::string> result = []() -> std::optional<std::string> {
     static char tmp_dir_buffer[FILE_MAX];
     /* Shader builder doesn't return the correct appdir. */
-    if (!BKE_appdir_folder_caches(tmp_dir_buffer, sizeof(tmp_dir_buffer))) {
-      return std::nullopt;
-    }
+    BKE_appdir_folder_caches(tmp_dir_buffer, sizeof(tmp_dir_buffer));
 
     std::string cache_dir = std::string(tmp_dir_buffer) + "vk-spirv-cache" + SEP_STR;
     BLI_dir_create_recursive(cache_dir.c_str());
@@ -87,6 +90,8 @@ static bool read_spirv_from_disk(VKShaderModule &shader_module)
   spirv_file.seekg(0, std::ios::beg);
   shader_module.spirv_binary.resize(size / 4);
   spirv_file.read(reinterpret_cast<char *>(shader_module.spirv_binary.data()), size);
+
+  CLOG_TRACE(&LOG, "reading SpirV from disk %s", spirv_path.c_str());
   return true;
 }
 
@@ -101,6 +106,7 @@ static void write_spirv_to_disk(VKShaderModule &shader_module)
 
   /* Write the spirv binary */
   std::string spirv_path = (*cache_dir_get()) + SEP_STR + shader_module.sources_hash + ".spv";
+  CLOG_TRACE(&LOG, "write SpirV to disk %s", spirv_path.c_str());
   size_t size = (shader_module.compilation_result.end() -
                  shader_module.compilation_result.begin()) *
                 sizeof(uint32_t);
@@ -123,7 +129,7 @@ void VKShaderCompiler::cache_dir_clear_old()
 
   direntry *entries = nullptr;
   uint32_t dir_len = BLI_filelist_dir_contents(cache_dir_get()->c_str(), &entries);
-  for (int i : blender::IndexRange(dir_len)) {
+  for (int i : IndexRange(dir_len)) {
     direntry entry = entries[i];
     if (S_ISDIR(entry.s.st_mode)) {
       continue;
@@ -162,31 +168,86 @@ static StringRef to_stage_name(shaderc_shader_kind stage)
   return "unknown stage";
 }
 
+static std::string patch_line_directives(std::string source)
+{
+  /* Patch line directives so that we can make error reporting consistent. */
+  size_t start_pos = 0;
+  while ((start_pos = source.find("#line ", start_pos)) != std::string::npos) {
+    source[start_pos] = '/';
+    source[start_pos + 1] = '/';
+  }
+  return source;
+}
+
 static bool compile_ex(shaderc::Compiler &compiler,
                        VKShader &shader,
                        shaderc_shader_kind stage,
                        VKShaderModule &shader_module)
 {
+  std::string full_name = shader.name_get() + "_" + to_stage_name(stage);
+
+  shader_module.original_sources = std::move(shader_module.combined_sources);
+
+  Shader::dump_source_to_disk(
+      shader.name_get(), full_name, ".glsl", shader_module.original_sources);
+
+  if (!shader.skip_preprocessor) {
+    shader_module.combined_sources = Shader::run_preprocessor(shader_module.original_sources,
+                                                              G.debug & G_DEBUG_GPU_SHADER_NO_DCE);
+
+    Shader::dump_source_to_disk(
+        shader.name_get(), full_name + ".expanded", ".glsl", shader_module.combined_sources);
+  }
+  else {
+    shader_module.combined_sources = shader_module.original_sources;
+  }
+
   if (read_spirv_from_disk(shader_module)) {
     return true;
   }
 
   shaderc::CompileOptions options;
-  options.SetOptimizationLevel(shaderc_optimization_level_performance);
+  bool do_optimize = true;
   options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
   if (G.debug & G_DEBUG_GPU_RENDERDOC) {
-    options.SetOptimizationLevel(shaderc_optimization_level_zero);
+    do_optimize = false;
+  }
+  /* WORKAROUND: Qualcomm driver can crash when handling optimized SPIR-V. */
+  if (GPU_type_matches(GPU_DEVICE_QUALCOMM, GPU_OS_ANY, GPU_DRIVER_ANY)) {
+    do_optimize = false;
+  }
+  options.SetOptimizationLevel(do_optimize ? shaderc_optimization_level_performance :
+                                             shaderc_optimization_level_zero);
+
+  /* Increase the max id bound.
+   *
+   * SPIR-V has a default max id bound set to 0x3fffff which is the minimum amount of ids that
+   * needs to be supported by any platform. However during optimization the max id bound can
+   * increase very fast and lowered at the end. As glslang uses max id bound in their internal
+   * structures to allocate arrays out of bound errors can occur.
+   *
+   * Increasing the max id bound to a larger number to increase the internal arrays of the
+   * compiler to work around the compiler crash.
+   *
+   * NOTE: Test-files in #144614 and #143516 would surpass the default limit during compilation.
+   * The final optimized SPIR-V is far less than the default so be fine to be used on platforms
+   * with minimum spec.
+   *
+   * https://registry.khronos.org/SPIR-V/specs/1.0/SPIRV.html#_a_id_limits_a_universal_limits
+   */
+  options.SetMaxIdBound(0xffffff);
+
+  /* Should always be called after setting the optimization level. Setting optimization level
+   * resets all previous passes. */
+  if (G.debug & G_DEBUG_GPU_SHADER_DEBUG_INFO) {
     options.SetGenerateDebugInfo();
   }
 
-  /* WORKAROUND: Qualcomm driver can crash when handling optimized SPIR-V. */
-  if (GPU_type_matches(GPU_DEVICE_QUALCOMM, GPU_OS_ANY, GPU_DRIVER_ANY)) {
-    options.SetOptimizationLevel(shaderc_optimization_level_zero);
-  }
+  /* Removes line directive. */
+  std::string sources = patch_line_directives(shader_module.combined_sources);
 
-  std::string full_name = shader.name_get() + "_" + to_stage_name(stage);
   shader_module.compilation_result = compiler.CompileGlslToSpv(
-      shader_module.combined_sources, stage, full_name.c_str(), options);
+      sources, stage, full_name.c_str(), options);
   bool compilation_succeeded = shader_module.compilation_result.GetCompilationStatus() ==
                                shaderc_compilation_status_success;
   if (compilation_succeeded) {

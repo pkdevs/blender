@@ -11,10 +11,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
 
 #include "BKE_context.hh"
@@ -110,7 +110,6 @@ static void bezt_to_transdata(TransData *td,
   memset(td->axismtx, 0, sizeof(td->axismtx));
   td->axismtx[2][2] = 1.0f;
 
-  td->ext = nullptr;
   td->val = nullptr;
 
   /* Store AnimData info in td->extra, for applying mapping when flushing.
@@ -186,7 +185,7 @@ static void graph_bezt_get_transform_selection(const TransInfo *t,
                                                bool *r_key,
                                                bool *r_right_handle)
 {
-  SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
+  SpaceGraph *sipo = static_cast<SpaceGraph *>(t->area->spacedata.first);
   bool key = (bezt->f2 & SELECT) != 0;
   bool left = use_handle ? ((bezt->f1 & SELECT) != 0) : key;
   bool right = use_handle ? ((bezt->f3 & SELECT) != 0) : key;
@@ -210,26 +209,28 @@ static void graph_bezt_get_transform_selection(const TransInfo *t,
   *r_right_handle = right;
 }
 
-static void graph_key_shortest_dist(
+static float graph_key_shortest_dist(
     TransInfo *t, FCurve *fcu, TransData *td_start, TransData *td, int cfra, bool use_handle)
 {
   int j = 0;
   TransData *td_iter = td_start;
   bool sel_key, sel_left, sel_right;
 
-  td->dist = FLT_MAX;
+  float dist = FLT_MAX;
   for (; j < fcu->totvert; j++) {
     BezTriple *bezt = fcu->bezt + j;
     if (FrameOnMouseSide(t->frame_side, bezt->vec[1][0], cfra)) {
       graph_bezt_get_transform_selection(t, bezt, use_handle, &sel_left, &sel_key, &sel_right);
 
       if (sel_left || sel_key || sel_right) {
-        td->dist = td->rdist = min_ff(td->dist, fabs(td_iter->center[0] - td->center[0]));
+        dist = std::min({dist, td->dist, fabs(td_iter->center[0] - td->center[0])});
       }
 
       td_iter += 3;
     }
   }
+
+  return dist;
 }
 
 /**
@@ -243,7 +244,7 @@ static void graph_key_shortest_dist(
  */
 static void createTransGraphEditData(bContext *C, TransInfo *t)
 {
-  SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
+  SpaceGraph *sipo = static_cast<SpaceGraph *>(t->area->spacedata.first);
   Scene *scene = t->scene;
   ARegion *region = t->region;
   View2D *v2d = &region->v2d;
@@ -253,7 +254,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
   TransDataGraph *tdg = nullptr;
 
   bAnimContext ac;
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   int filter;
 
   BezTriple *bezt;
@@ -292,14 +293,14 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
    * are selected (or should be edited). */
   Set<FCurve *> visited_fcurves;
   Vector<bAnimListElem *> unique_fcu_anim_list_elements;
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    FCurve *fcu = (FCurve *)ale->key_data;
+  for (bAnimListElem &ale : anim_data) {
+    FCurve *fcu = static_cast<FCurve *>(ale.key_data);
     /* If 2 or more objects share the same action, multiple bAnimListElem might reference the same
      * FCurve. */
     if (!visited_fcurves.add(fcu)) {
       continue;
     }
-    unique_fcu_anim_list_elements.append(ale);
+    unique_fcu_anim_list_elements.append(&ale);
     int curvecount = 0;
     bool selected = false;
 
@@ -310,7 +311,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 
     /* Convert current-frame to action-time (slightly less accurate, especially under
      * higher scaling ratios, but is faster than converting all points). */
-    const float cfra = ANIM_nla_tweakedit_remap(ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
+    const float cfra = ANIM_nla_tweakedit_remap(&ale, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
 
     for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
       /* Only include BezTriples whose 'keyframe'
@@ -344,7 +345,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
     if (is_prop_edit) {
       if (selected) {
         count += curvecount;
-        ale->tag = true;
+        ale.tag = true;
       }
     }
   }
@@ -361,11 +362,11 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
   /* Allocate memory for data. */
   tc->data_len = count;
 
-  tc->data = MEM_calloc_arrayN<TransData>(tc->data_len, "TransData (Graph Editor)");
+  tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransData (Graph Editor)");
   /* For each 2d vert a 3d vector is allocated,
    * so that they can be treated just as if they were 3d verts. */
-  tc->data_2d = MEM_calloc_arrayN<TransData2D>(tc->data_len, "TransData2D (Graph Editor)");
-  tc->custom.type.data = MEM_callocN(tc->data_len * sizeof(TransDataGraph), "TransDataGraph");
+  tc->data_2d = MEM_new_array_zeroed<TransData2D>(tc->data_len, "TransData2D (Graph Editor)");
+  tc->custom.type.data = MEM_new_array_zeroed<TransDataGraph>(tc->data_len, "TransDataGraph");
   tc->custom.type.use_free = true;
 
   td = tc->data;
@@ -380,7 +381,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
     float xscale, yscale;
 
     /* Apply scale factors to x and y axes of space-conversion matrices. */
-    UI_view2d_scale_get(v2d, &xscale, &yscale);
+    ui::view2d_scale_get(v2d, &xscale, &yscale);
 
     /* `mtx` is data to global (i.e. view) conversion. */
     mul_v3_fl(mtx[0], xscale);
@@ -399,7 +400,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 
   /* Loop 2: build transdata arrays. */
   for (bAnimListElem *ale : unique_fcu_anim_list_elements) {
-    FCurve *fcu = (FCurve *)ale->key_data;
+    FCurve *fcu = static_cast<FCurve *>(ale->key_data);
     bool intvals = (fcu->flag & FCURVE_INT_VALUES) != 0;
     float unit_scale, offset;
 
@@ -580,11 +581,11 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
   }
 
   if (is_prop_edit) {
-    /* Loop 2: build transdata arrays. */
+    /* Loop 3: build proportional edit distances. */
     td = tc->data;
 
     for (bAnimListElem *ale : unique_fcu_anim_list_elements) {
-      FCurve *fcu = (FCurve *)ale->key_data;
+      FCurve *fcu = static_cast<FCurve *>(ale->key_data);
       TransData *td_start = td;
 
       /* F-Curve may not have any keyframes. */
@@ -603,29 +604,28 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
         if (FrameOnMouseSide(t->frame_side, bezt->vec[1][0], cfra)) {
           graph_bezt_get_transform_selection(t, bezt, use_handle, &sel_left, &sel_key, &sel_right);
 
-          if (sel_left || sel_key) {
-            td->dist = td->rdist = 0.0f;
-          }
-          else {
-            graph_key_shortest_dist(t, fcu, td_start, td, cfra, use_handle);
-          }
-          td++;
+          /* Now determine to distance for proportional editing for all three TransData
+           * (representing the key as well as both handles). Note though that the way
+           * #bezt_to_transdata sets up the TransData, the td->center[0] will always be based on
+           * the key (bezt->vec[1]) which means that #graph_key_shortest_dist will return the
+           * same for all of them and we can reuse that (expensive) result if needed. Might be
+           * worth looking into using a 2D KDTree in the future as well. */
 
-          if (sel_key) {
-            td->dist = td->rdist = 0.0f;
+          float dist = FLT_MAX;
+          if (sel_left || sel_key || sel_right) {
+            /* If either left handle or key or right handle is selected, all will move fully. */
+            dist = 0.0f;
           }
           else {
-            graph_key_shortest_dist(t, fcu, td_start, td, cfra, use_handle);
+            /* If nothing is selected, left handle and key and right handle will share the same (to
+             * be calculated) distance. */
+            dist = graph_key_shortest_dist(t, fcu, td_start, td, cfra, use_handle);
           }
-          td++;
 
-          if (sel_right || sel_key) {
-            td->dist = td->rdist = 0.0f;
-          }
-          else {
-            graph_key_shortest_dist(t, fcu, td_start, td, cfra, use_handle);
-          }
-          td++;
+          td->dist = td->rdist = dist;
+          (td + 1)->dist = (td + 1)->rdist = dist;
+          (td + 2)->dist = (td + 2)->rdist = dist;
+          td += 3;
         }
       }
     }
@@ -686,7 +686,7 @@ static void flushTransGraphData(TransInfo *t)
        a++, td++, td2d++, tdg++)
   {
     /* Pointers to relevant AnimData blocks are stored in the `td->extra` pointers. */
-    AnimData *adt = (AnimData *)td->extra;
+    AnimData *adt = static_cast<AnimData *>(td->extra);
 
     float inv_unit_scale = 1.0f / tdg->unit_scale;
 
@@ -864,7 +864,7 @@ static void update_transdata_bezt_pointers(TransDataContainer *tc,
  */
 static void remake_graph_transdata(TransInfo *t, const Span<FCurve *> fcurves)
 {
-  SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
+  SpaceGraph *sipo = static_cast<SpaceGraph *>(t->area->spacedata.first);
   const bool use_handle = (sipo->flag & SIPO_NOHANDLES) == 0;
 
   TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
@@ -895,7 +895,7 @@ static void remake_graph_transdata(TransInfo *t, const Span<FCurve *> fcurves)
 
       /* Re-sort actual beztriples
        * (perhaps this could be done using the beztmaps to save time?). */
-      sort_time_fcurve(fcu);
+      sort_time_fcurve(*fcu);
 
       testhandles_fcurve(fcu, BEZT_FLAG_TEMP_TAG, use_handle);
     }
@@ -904,14 +904,14 @@ static void remake_graph_transdata(TransInfo *t, const Span<FCurve *> fcurves)
 
 static void recalcData_graphedit(TransInfo *t)
 {
-  SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
+  SpaceGraph *sipo = static_cast<SpaceGraph *>(t->area->spacedata.first);
   ViewLayer *view_layer = t->view_layer;
 
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   bAnimContext ac = {nullptr};
   int filter;
 
-  BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+  BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
 
   /* Initialize relevant anim-context 'context' data from TransInfo data. */
   /* NOTE: sync this with the code in #ANIM_animdata_get_context(). */
@@ -938,8 +938,8 @@ static void recalcData_graphedit(TransInfo *t)
 
   Vector<FCurve *> unsorted_fcurves;
   /* Now test if there is a need to re-sort. */
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    FCurve *fcu = (FCurve *)ale->key_data;
+  for (bAnimListElem &ale : anim_data) {
+    FCurve *fcu = static_cast<FCurve *>(ale.key_data);
 
     /* Ignore FC-Curves without any selected verts. */
     if (!fcu_test_selected(fcu)) {
@@ -947,17 +947,17 @@ static void recalcData_graphedit(TransInfo *t)
     }
 
     /* Watch it: if the time is wrong: do not correct handles yet. */
-    if (test_time_fcurve(fcu)) {
+    if (test_time_fcurve(*fcu)) {
       unsorted_fcurves.append(fcu);
     }
     else {
-      BKE_fcurve_handles_recalc_ex(fcu, BEZT_FLAG_TEMP_TAG);
+      BKE_fcurve_handles_recalc_ex(*fcu, BEZT_FLAG_TEMP_TAG);
     }
 
     /* Set refresh tags for objects using this animation,
      * BUT only if realtime updates are enabled. */
     if ((sipo->flag & SIPO_NOREALTIMEUPDATES) == 0) {
-      ANIM_list_elem_update(CTX_data_main(t->context), t->scene, ale);
+      ANIM_list_elem_update(CTX_data_main(t->context), t->scene, &ale);
     }
   }
 
@@ -978,7 +978,7 @@ static void recalcData_graphedit(TransInfo *t)
 
 static void special_aftertrans_update__graph(bContext *C, TransInfo *t)
 {
-  SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
+  SpaceGraph *sipo = static_cast<SpaceGraph *>(t->area->spacedata.first);
   bAnimContext ac;
   const bool use_handle = (sipo->flag & SIPO_NOHANDLES) == 0;
 
@@ -991,7 +991,7 @@ static void special_aftertrans_update__graph(bContext *C, TransInfo *t)
   }
 
   if (ac.datatype) {
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
     short filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FOREDIT | ANIMFILTER_CURVE_VISIBLE |
                     ANIMFILTER_FCURVESONLY);
 
@@ -999,8 +999,8 @@ static void special_aftertrans_update__graph(bContext *C, TransInfo *t)
     ANIM_animdata_filter(
         &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
 
-    LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-      FCurve *fcu = (FCurve *)ale->key_data;
+    for (bAnimListElem &ale : anim_data) {
+      FCurve *fcu = static_cast<FCurve *>(ale.key_data);
 
       /* 3 cases here for curve cleanups:
        * 1) NOTRANSKEYCULL on    -> cleanup of duplicates shouldn't be done.
@@ -1010,9 +1010,9 @@ static void special_aftertrans_update__graph(bContext *C, TransInfo *t)
        *                            but we made duplicates, so get rid of these.
        */
       if ((sipo->flag & SIPO_NOTRANSKEYCULL) == 0 && ((canceled == 0) || (duplicate))) {
-        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcu, false, false);
+        ANIM_nla_mapping_apply_if_needed_fcurve(&ale, fcu, false, false);
         BKE_fcurve_merge_duplicate_keys(fcu, BEZT_FLAG_TEMP_TAG, use_handle);
-        ANIM_nla_mapping_apply_if_needed_fcurve(ale, fcu, true, false);
+        ANIM_nla_mapping_apply_if_needed_fcurve(&ale, fcu, true, false);
       }
     }
 

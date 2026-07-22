@@ -8,45 +8,38 @@
 
 #pragma once
 
+#include "BLF_enums.hh"
+
 #include "BLI_array.hh"
 #include "BLI_bounds_types.hh"
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 #include "BLI_vector.hh"
 
-/* Name of sub-directory inside #BLENDER_DATAFILES that contains font files. */
+#include "DNA_listBase.h"
+
+namespace blender {
+
+/** Name of sub-directory inside #BLENDER_DATAFILES that contains font files. */
 #define BLF_DATAFILES_FONTS_DIR "fonts"
 
-/* File name of the default variable-width font. */
+/** File name of the default variable-width font. */
 #define BLF_DEFAULT_PROPORTIONAL_FONT "Inter.woff2"
 
-/* File name of the default fixed-pitch font. */
+/** File name of the default fixed-pitch font. */
 #define BLF_DEFAULT_MONOSPACED_FONT "DejaVuSansMono.woff2"
 
-struct ListBase;
+struct Nurb;
 struct ResultBLF;
 struct rcti;
+struct rctf;
 
-namespace blender::ocio {
-class Display;
-}  // namespace blender::ocio
-using ColorManagedDisplay = blender::ocio::Display;
-
-enum class FontShadowType {
-  None = 0,
-  Blur3x3 = 3,
-  Blur5x5 = 5,
-  Outline = 6,
-};
-
-enum class BLFWrapMode : int {
-  Minimal = 0,            /* Only on ASCII space and line feed. Legacy and invariant. */
-  Typographical = 1 << 0, /* Multilingual, informed by Unicode Standard Annex #14. */
-  Path = 1 << 1,          /* Wrap on file path separators, space, underscores. */
-  HardLimit = 1 << 2,     /* Line break at limit. */
-};
+namespace ocio {
+class ColorSpace;
+}  // namespace ocio
+using ColorSpace = ocio::ColorSpace;
 
 int BLF_init();
 void BLF_exit();
@@ -126,9 +119,15 @@ bool BLF_get_vfont_metrics(int fontid, float *ascend_ratio, float *em_ratio, flo
 
 /**
  * Convert a character's outlines into curves.
+ * \return success if the character was found and converted.
  */
-float BLF_character_to_curves(
-    int fontid, unsigned int unicode, ListBase *nurbsbase, const float scale, bool use_fallback);
+bool BLF_character_to_curves(int fontid,
+                             unsigned int unicode,
+                             ListBaseT<Nurb> *nurbsbase,
+                             const float scale,
+                             bool use_fallback,
+                             float *r_advance,
+                             rctf *r_bounds);
 
 /**
  * Check if font supports a particular glyph.
@@ -149,10 +148,14 @@ void BLF_size(int fontid, float size);
  */
 void BLF_character_weight(int fontid, int weight);
 
-/* Return the font's default design weight (100-900). */
+/**
+ * \return the font's default design weight (100-900).
+ */
 int BLF_default_weight(int fontid) ATTR_WARN_UNUSED_RESULT;
 
-/* Return true if the font has a variable (multiple master) weight axis. */
+/**
+ * \return true if the font has a variable (multiple master) weight axis.
+ */
 bool BLF_has_variable_weight(int fontid) ATTR_WARN_UNUSED_RESULT;
 
 /* Goal: small but useful color API. */
@@ -167,7 +170,7 @@ void BLF_color4f(int fontid, float r, float g, float b, float a);
 void BLF_color4fv(int fontid, const float rgba[4]);
 void BLF_color3f(int fontid, float r, float g, float b);
 void BLF_color3fv_alpha(int fontid, const float rgb[3], float alpha);
-/* Also available: `UI_FontThemeColor(fontid, colorid)`. */
+/* Also available: `theme::font_theme_color_set(fontid, colorid)`. */
 
 /**
  * Batch draw-calls together as long as
@@ -177,12 +180,16 @@ void BLF_batch_draw_begin();
 void BLF_batch_draw_flush();
 void BLF_batch_draw_end();
 
+/* Discard any batching in process and restart.
+ * Only used as a workaround for glitchy driver sync. */
+void BLF_batch_discard();
+
 /**
  * Draw the string using the current font.
  */
 void BLF_draw(int fontid, const char *str, size_t str_len, ResultBLF *r_info = nullptr)
     ATTR_NONNULL(2);
-int BLF_draw_mono(int fontid, const char *str, size_t str_len, int cwidth, int tab_columns)
+int BLF_draw_mono(int fontid, const char *str, size_t str_len, int char_width, int tab_columns)
     ATTR_NONNULL(2);
 
 void BLF_draw_svg_icon(uint icon_id,
@@ -192,15 +199,14 @@ void BLF_draw_svg_icon(uint icon_id,
                        const float color[4] = nullptr,
                        float outline_alpha = 1.0f,
                        bool multicolor = false,
-                       blender::FunctionRef<void(std::string &)> edit_source_cb = nullptr);
+                       FunctionRef<void(std::string &)> edit_source_cb = nullptr);
 
-blender::Array<uchar> BLF_svg_icon_bitmap(
-    uint icon_id,
-    float size,
-    int *r_width,
-    int *r_height,
-    bool multicolor = false,
-    blender::FunctionRef<void(std::string &)> edit_source_cb = nullptr);
+Array<uchar> BLF_svg_icon_bitmap(uint icon_id,
+                                 float size,
+                                 int *r_width,
+                                 int *r_height,
+                                 bool multicolor = false,
+                                 FunctionRef<void(std::string &)> edit_source_cb = nullptr);
 
 using BLF_GlyphBoundsFn = bool (*)(const char *str,
                                    size_t str_step_ofs,
@@ -220,6 +226,12 @@ void BLF_boundbox_foreach_glyph(int fontid,
                                 size_t str_len,
                                 BLF_GlyphBoundsFn user_fn,
                                 void *user_data) ATTR_NONNULL(2);
+
+void BLF_info_foreach_glyph(
+    int fontid,
+    const char *str,
+    size_t str_len,
+    FunctionRef<void(int index, size_t byte_offset, int byte_len, int advance_x)> callback);
 
 /**
  * Get the byte offset within a string, selected by mouse at a horizontal location.
@@ -248,7 +260,7 @@ int BLF_str_offset_to_cursor(
  * Return bounds of selection boxes. There is just one normally but there could
  * be more for multi-line and when containing text of differing directions.
  */
-blender::Vector<blender::Bounds<int>> BLF_str_selection_boxes(
+Vector<Bounds<int>> BLF_str_selection_boxes(
     int fontid, const char *str, size_t str_len, size_t sel_start, size_t sel_length);
 
 /**
@@ -260,7 +272,7 @@ size_t BLF_width_to_strlen(int fontid,
                            float width,
                            float *r_width) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(2);
 /**
- * Same as BLF_width_to_strlen but search from the string end.
+ * Same as #BLF_width_to_strlen but search from the string end.
  */
 size_t BLF_width_to_rstrlen(int fontid,
                             const char *str,
@@ -297,6 +309,17 @@ int BLF_descender(int fontid) ATTR_WARN_UNUSED_RESULT;
 int BLF_ascender(int fontid) ATTR_WARN_UNUSED_RESULT;
 
 /**
+ * Returns the minimum bounding box that can enclose all glyphs in the font at
+ * the current size. Expect negative values as Y=0 is the baseline, X=0 is normal
+ * advance position (glyphs can have negative bearing and positioning). There
+ * should be little use for this as it is best to measure the bounds of the actual
+ * text to be drawn. These values (unscaled) are set in the font file, not calculated
+ * from the actual glyphs at load time. This should be considered correct but it is
+ * possible, although very unlikely, for a defective font to contain incorrect values.
+ */
+bool BLF_bounds_max(int fontid, rctf *r_bounds) ATTR_NONNULL(2);
+
+/**
  * The following function return the width and height of the string, but
  * just in one call, so avoid extra freetype2 stuff.
  */
@@ -322,13 +345,13 @@ void BLF_rotation(int fontid, float angle);
 void BLF_clipping(int fontid, int xmin, int ymin, int xmax, int ymax);
 void BLF_wordwrap(int fontid, int wrap_width, BLFWrapMode mode = BLFWrapMode::Minimal);
 
-blender::Vector<blender::StringRef> BLF_string_wrap(int fontid,
-                                                    blender::StringRef str,
-                                                    const int max_pixel_width,
-                                                    BLFWrapMode mode = BLFWrapMode::Minimal);
+Vector<StringRef> BLF_string_wrap(int fontid,
+                                  StringRef str,
+                                  const int max_pixel_width,
+                                  BLFWrapMode mode = BLFWrapMode::Minimal);
 
-void BLF_enable(int fontid, int option);
-void BLF_disable(int fontid, int option);
+void BLF_enable(int fontid, FontFlags flag);
+void BLF_disable(int fontid, FontFlags flag);
 
 /**
  * Is this font part of the default fonts in the fallback stack?
@@ -350,7 +373,7 @@ void BLF_shadow_offset(int fontid, int x, int y);
 
 /**
  * Make font be rasterized into a given memory image/buffer.
- * The image is assumed to have 4 color channels (RGBA) per pixel.
+ * The image is assumed to have either 4 color channels (RGBA) or 1 gray-scale channel per pixel.
  * When done, call this function with null buffer pointers.
  */
 void BLF_buffer(int fontid,
@@ -358,7 +381,8 @@ void BLF_buffer(int fontid,
                 unsigned char *cbuf,
                 int w,
                 int h,
-                const ColorManagedDisplay *display);
+                int channel_count,
+                const ColorSpace *colorspace);
 
 /**
  * Opaque structure used to push/pop values set by the #BLF_buffer function.
@@ -380,9 +404,10 @@ void BLF_buffer_state_pop(BLFBufferState *buffer_state);
 void BLF_buffer_state_free(BLFBufferState *buffer_state);
 
 /**
- * Set the color to be used for text.
+ * Set the color to be used for text. The red channel of the color is used in case of a grayscale
+ * buffer.
  */
-void BLF_buffer_col(int fontid, const float rgba[4]) ATTR_NONNULL(2);
+void BLF_buffer_col(int fontid, const float srgb_color[4]) ATTR_NONNULL(2);
 
 /**
  * Draw the string into the buffer, this function draw in both buffer,
@@ -428,43 +453,6 @@ void BLF_load_font_stack();
 void BLF_state_print(int fontid);
 #endif
 
-/** #FontBLF.flags. */
-enum {
-  BLF_ROTATION = 1 << 0,
-  BLF_CLIPPING = 1 << 1,
-  BLF_SHADOW = 1 << 2,
-  // BLF_FLAG_UNUSED_3 = 1 << 3, /* dirty */
-  // BLF_MATRIX = 1 << 4,
-  BLF_ASPECT = 1 << 5,
-  BLF_WORD_WRAP = 1 << 6,
-  /** No anti-aliasing. */
-  BLF_MONOCHROME = 1 << 7,
-  BLF_HINTING_NONE = 1 << 8,
-  BLF_HINTING_SLIGHT = 1 << 9,
-  BLF_HINTING_FULL = 1 << 10,
-  BLF_BOLD = 1 << 11,
-  BLF_ITALIC = 1 << 12,
-  /** Intended USE is monospaced, regardless of font type. */
-  BLF_MONOSPACED = 1 << 13,
-  /** A font within the default stack of fonts. */
-  BLF_DEFAULT = 1 << 14,
-  /** Must only be used as last font in the stack. */
-  BLF_LAST_RESORT = 1 << 15,
-  /** Failure to load this font. Don't try again. */
-  BLF_BAD_FONT = 1 << 16,
-  /** This font is managed by the FreeType cache subsystem. */
-  BLF_CACHED = 1 << 17,
-  /**
-   * At small sizes glyphs are rendered at multiple sub-pixel positions.
-   *
-   * \note Can be checked without checking #BLF_MONOSPACED which can be assumed to be disabled.
-   */
-  BLF_RENDER_SUBPIXELAA = 1 << 18,
-
-  /* Do not look in other fonts when a glyph is not found in this font. */
-  BLF_NO_FALLBACK = 1 << 19,
-};
-
 #define BLF_DRAW_STR_DUMMY_MAX 1024
 
 /* XXX, bad design */
@@ -484,3 +472,5 @@ struct ResultBLF {
    */
   int width;
 };
+
+}  // namespace blender

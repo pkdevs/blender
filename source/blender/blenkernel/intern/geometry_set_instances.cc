@@ -44,15 +44,7 @@ GeometrySet object_get_evaluated_geometry_set(const Object &object, const bool a
   if (!DEG_object_geometry_is_evaluated(object)) {
     return {};
   }
-  if (object.type == OB_MESH && object.mode == OB_MODE_EDIT) {
-    GeometrySet geometry_set;
-    if (object.runtime->geometry_set_eval != nullptr) {
-      /* `geometry_set_eval` only contains non-mesh components, see `editbmesh_build_data`. */
-      geometry_set = *object.runtime->geometry_set_eval;
-    }
-    add_final_mesh_as_geometry_component(object, geometry_set, apply_subdiv);
-    return geometry_set;
-  }
+
   if (object.runtime->geometry_set_eval != nullptr) {
     GeometrySet geometry_set = *object.runtime->geometry_set_eval;
     /* Ensure that subdivision is performed on the CPU. */
@@ -70,10 +62,10 @@ GeometrySet object_get_evaluated_geometry_set(const Object &object, const bool a
   }
   if (object.type == OB_EMPTY && object.instance_collection != nullptr) {
     Collection &collection = *object.instance_collection;
-    std::unique_ptr<Instances> instances = std::make_unique<Instances>();
-    const int handle = instances->add_reference(collection);
-    instances->add_instance(handle, float4x4::identity());
-    return GeometrySet::from_instances(instances.release());
+    auto instances = std::make_unique<Instances>(1);
+    instances->reference_handles_for_write().first() = instances->add_reference(collection);
+    instances->transforms_for_write().first() = float4x4::identity();
+    return GeometrySet::from_instances(std::move(instances));
   }
 
   /* Return by value since there is not always an existing geometry set owned elsewhere to use. */
@@ -136,7 +128,7 @@ void Instances::ensure_geometry_instances()
           break;
         }
         GeometrySet object_geometry_set = object_get_evaluated_geometry_set(object);
-        object_geometry_set.name = BKE_id_name(object.id);
+        object_geometry_set.set_name(BKE_id_name(object.id));
         if (object_geometry_set.has_instances()) {
           object_geometry_set.get_instances_for_write()->ensure_geometry_instances();
         }
@@ -146,7 +138,6 @@ void Instances::ensure_geometry_instances()
       case InstanceReference::Type::Collection: {
         /* Create a new reference that contains a geometry set that contains all objects from the
          * collection as instances. */
-        std::unique_ptr<Instances> instances = std::make_unique<Instances>();
         Collection &collection = reference.collection();
 
         Vector<Object *, 8> objects;
@@ -155,7 +146,7 @@ void Instances::ensure_geometry_instances()
         }
         FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
 
-        instances->resize(objects.size());
+        auto instances = std::make_unique<Instances>(objects.size());
         MutableSpan<int> handles = instances->reference_handles_for_write();
         MutableSpan<float4x4> transforms = instances->transforms_for_write();
         for (const int i : objects.index_range()) {
@@ -164,8 +155,8 @@ void Instances::ensure_geometry_instances()
           transforms[i].location() -= collection.instance_offset;
         }
         instances->ensure_geometry_instances();
-        GeometrySet geometry_set = GeometrySet::from_instances(instances.release());
-        geometry_set.name = BKE_id_name(collection.id);
+        GeometrySet geometry_set = GeometrySet::from_instances(std::move(instances));
+        geometry_set.set_name(BKE_id_name(collection.id));
         new_references.append(std::move(geometry_set));
         break;
       }

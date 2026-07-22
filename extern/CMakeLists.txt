@@ -4,21 +4,23 @@
 
 # Libs that adhere to strict flags
 add_subdirectory(curve_fit_nd)
-add_subdirectory(fmtlib)
+add_subdirectory(fast_float)
+add_subdirectory(json)
 if(WITH_IO_FBX)
   add_subdirectory(ufbx)
 endif()
 
-# Otherwise we get warnings here that we cant fix in external projects
+# Otherwise we get warnings here that we can't fix in external projects
 remove_strict_flags()
 
 # Not a strict flag, but noisy for code we don't maintain
-if(CMAKE_COMPILER_IS_GNUCC)
-  remove_cc_flag(
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  remove_c_and_cxx_flag(
+    "-Wextra"
     "-Wmisleading-indentation"
   )
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-  remove_cc_flag(
+  remove_c_and_cxx_flag(
     "-Weverything"
     "-Wextra"
     "-Wnull-pointer-subtraction"
@@ -53,20 +55,8 @@ if(WITH_BULLET)
   endif()
 endif()
 
-if(WITH_DRACO)
-  add_subdirectory(draco)
-endif()
-
 if(WITH_BINRELOC)
   add_subdirectory(binreloc)
-endif()
-
-if(WITH_LZO AND NOT WITH_SYSTEM_LZO)
-  add_subdirectory(lzo)
-endif()
-
-if(WITH_LZMA)
-  add_subdirectory(lzma)
 endif()
 
 if(WITH_CYCLES OR WITH_OPENSUBDIV)
@@ -82,11 +72,7 @@ if(WITH_GHOST_X11 AND WITH_GHOST_XDND)
   add_subdirectory(xdnd)
 endif()
 
-if(WITH_LIBMV)
-  add_subdirectory(ceres)
-endif()
-
-if(WITH_LIBMV OR WITH_GTESTS OR (WITH_CYCLES AND WITH_CYCLES_LOGGING))
+if(WITH_LIBMV OR WITH_GTESTS)
   if(NOT WITH_SYSTEM_GFLAGS)
     add_subdirectory(gflags)
   endif()
@@ -116,4 +102,9 @@ endif()
 
 if(WITH_VULKAN_BACKEND)
   add_subdirectory(vulkan_memory_allocator)
+  add_subdirectory(volk)
+endif()
+
+if(WITH_TRACY)
+  add_subdirectory(tracy_profiler)
 endif()

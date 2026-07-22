@@ -8,7 +8,6 @@ set(INC
 
   ../editors/include
   ../makesrna
-  ../../../extern/fmtlib/include
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -24,6 +23,7 @@ set(SRC
   intern/action_selection.cc
   intern/anim_rna.cc
   intern/animdata.cc
+  intern/armature.cc
   intern/bone_collections.cc
   intern/bonecolor.cc
   intern/driver.cc
@@ -83,6 +83,7 @@ if(WITH_GTESTS)
     intern/action_iterators_test.cc
     intern/action_legacy_test.cc
     intern/action_test.cc
+    intern/anim_rna_test.cc
     intern/bone_collections_test.cc
     intern/evaluation_test.cc
     intern/keyframing_test.cc

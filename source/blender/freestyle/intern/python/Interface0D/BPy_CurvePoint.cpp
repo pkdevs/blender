@@ -31,30 +31,33 @@ PyDoc_STRVAR(
     "as virtual points while querying 0D information along a curve at a\n"
     "given resolution.\n"
     "\n"
-    ".. method:: __init__()\n"
-    "            __init__(brother)\n"
-    "            __init__(first_vertex, second_vertex, t2d)\n"
-    "            __init__(first_point, second_point, t2d)\n"
+    ".. method:: __init__(*args)\n"
+    "\n"
+    "   Accepted call signatures:\n"
+    "\n"
+    "   - ``__init__()``\n"
+    "   - ``__init__(brother)``\n"
+    "   - ``__init__(first_vertex, second_vertex, t2d)``\n"
+    "   - ``__init__(first_point, second_point, t2d)``\n"
     "\n"
     "   Builds a CurvePoint using the default constructor, copy constructor,\n"
     "   or one of the overloaded constructors. The over loaded constructors\n"
     "   can either take two :class:`SVertex` or two :class:`CurvePoint`\n"
     "   objects and an interpolation parameter\n"
     "\n"
-    "   :arg brother: A CurvePoint object.\n"
+    "   :param brother: A CurvePoint object.\n"
     "   :type brother: :class:`CurvePoint`\n"
-    "   :arg first_vertex: The first SVertex.\n"
+    "   :param first_vertex: The first SVertex.\n"
     "   :type first_vertex: :class:`SVertex`\n"
-    "   :arg second_vertex: The second SVertex.\n"
+    "   :param second_vertex: The second SVertex.\n"
     "   :type second_vertex: :class:`SVertex`\n"
-    "   :arg first_point: The first CurvePoint.\n"
+    "   :param first_point: The first CurvePoint.\n"
     "   :type first_point: :class:`CurvePoint`\n"
-    "   :arg second_point: The second CurvePoint.\n"
+    "   :param second_point: The second CurvePoint.\n"
     "   :type second_point: :class:`CurvePoint`\n"
-    "   :arg t2d: A 2D interpolation parameter used to linearly interpolate\n"
+    "   :param t2d: A 2D interpolation parameter used to linearly interpolate\n"
     "             first_vertex and second_vertex or first_point and second_point.\n"
     "   :type t2d: float\n");
-
 static int CurvePoint_init(BPy_CurvePoint *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist_1[] = {"brother", nullptr};
@@ -63,7 +66,15 @@ static int CurvePoint_init(BPy_CurvePoint *self, PyObject *args, PyObject *kwds)
   PyObject *obj1 = nullptr, *obj2 = nullptr;
   float t2d;
 
-  if (PyArg_ParseTupleAndKeywords(args, kwds, "|O!", (char **)kwlist_1, &CurvePoint_Type, &obj1)) {
+  if (PyArg_ParseTupleAndKeywords(args,
+                                  kwds,
+                                  "|"  /* Optional arguments. */
+                                  "O!" /* `brother` */
+                                  ":__init__",
+                                  (char **)kwlist_1,
+                                  &CurvePoint_Type,
+                                  &obj1))
+  {
     if (!obj1) {
       self->cp = new CurvePoint();
     }
@@ -74,7 +85,10 @@ static int CurvePoint_init(BPy_CurvePoint *self, PyObject *args, PyObject *kwds)
   else if ((void)PyErr_Clear(),
            PyArg_ParseTupleAndKeywords(args,
                                        kwds,
-                                       "O!O!f",
+                                       "O!" /* `first_vertex` */
+                                       "O!" /* `second_vertex` */
+                                       "f"  /* `t2d` */
+                                       ":__init__",
                                        (char **)kwlist_2,
                                        &SVertex_Type,
                                        &obj1,
@@ -87,7 +101,10 @@ static int CurvePoint_init(BPy_CurvePoint *self, PyObject *args, PyObject *kwds)
   else if ((void)PyErr_Clear(),
            PyArg_ParseTupleAndKeywords(args,
                                        kwds,
-                                       "O!O!f",
+                                       "O!" /* `first_point` */
+                                       "O!" /* `second_point` */
+                                       "f"  /* `t2d` */
+                                       ":__init__",
                                        (char **)kwlist_3,
                                        &CurvePoint_Type,
                                        &obj1,
@@ -125,8 +142,7 @@ PyDoc_STRVAR(
     CurvePoint_first_svertex_doc,
     "The first SVertex upon which the CurvePoint is built.\n"
     "\n"
-    ":type: :class:`SVertex`");
-
+    ":type: :class:`SVertex`\n");
 static PyObject *CurvePoint_first_svertex_get(BPy_CurvePoint *self, void * /*closure*/)
 {
   SVertex *A = self->cp->A();
@@ -151,8 +167,7 @@ PyDoc_STRVAR(
     CurvePoint_second_svertex_doc,
     "The second SVertex upon which the CurvePoint is built.\n"
     "\n"
-    ":type: :class:`SVertex`");
-
+    ":type: :class:`SVertex`\n");
 static PyObject *CurvePoint_second_svertex_get(BPy_CurvePoint *self, void * /*closure*/)
 {
   SVertex *B = self->cp->B();
@@ -178,8 +193,7 @@ PyDoc_STRVAR(
     "Gets the FEdge for the two SVertices that given CurvePoints consists out of.\n"
     "A shortcut for CurvePoint.first_svertex.get_fedge(CurvePoint.second_svertex).\n"
     "\n"
-    ":type: :class:`FEdge`");
-
+    ":type: :class:`FEdge`\n");
 static PyObject *CurvePoint_fedge_get(BPy_CurvePoint *self, void * /*closure*/)
 {
   SVertex *A = self->cp->A();
@@ -196,8 +210,7 @@ PyDoc_STRVAR(
     CurvePoint_t2d_doc,
     "The 2D interpolation parameter.\n"
     "\n"
-    ":type: float");
-
+    ":type: float\n");
 static PyObject *CurvePoint_t2d_get(BPy_CurvePoint *self, void * /*closure*/)
 {
   return PyFloat_FromDouble(self->cp->t2d());

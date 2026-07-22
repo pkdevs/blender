@@ -9,7 +9,9 @@
 #include "abc_writer_mesh.h"
 #include "abc_hierarchy_iterator.h"
 #include "intern/abc_axis_conversion.h"
+#include "intern/abc_util.h"
 
+#include "BKE_attribute.h"
 #include "BKE_attribute.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_material.hh"
@@ -28,6 +30,9 @@
 #include "DNA_object_types.h"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
 using Alembic::Abc::FloatArraySample;
@@ -41,6 +46,7 @@ using Alembic::AbcGeom::OBoolProperty;
 using Alembic::AbcGeom::OCompoundProperty;
 using Alembic::AbcGeom::OFaceSet;
 using Alembic::AbcGeom::OFaceSetSchema;
+using Alembic::AbcGeom::OInt32Property;
 using Alembic::AbcGeom::ON3fGeomParam;
 using Alembic::AbcGeom::OPolyMesh;
 using Alembic::AbcGeom::OPolyMeshSchema;
@@ -49,7 +55,7 @@ using Alembic::AbcGeom::OSubDSchema;
 using Alembic::AbcGeom::OV2fGeomParam;
 using Alembic::AbcGeom::UInt32ArraySample;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 /* NOTE: Alembic's polygon winding order is clockwise, to match with Renderman. */
 
@@ -66,6 +72,44 @@ static void get_vert_creases(Mesh *mesh,
                              std::vector<float> &sharpnesses);
 static void get_loop_normals(const Mesh *mesh, std::vector<Imath::V3f> &normals);
 
+/* Get the last subdiv modifier ignoring subsequent particle systems modifiers, regardless of
+ * enable/disable status.
+ * TODO(kevindietrich) : deduplicate this with USD, but USD does not ignore particle systems. */
+static const SubsurfModifierData *get_last_subdiv_modifier(eEvaluationMode eval_mode, Object *obj)
+{
+  BLI_assert(obj);
+
+  /* Return the subdiv modifier if it is the last modifier and has
+   * the required mode enabled. */
+
+  ModifierData *md = static_cast<ModifierData *>(obj->modifiers.last);
+
+  while (md != nullptr) {
+    if (md->type != eModifierType_ParticleSystem) {
+      break;
+    }
+    md = md->prev;
+  }
+
+  if (!md) {
+    return nullptr;
+  }
+
+  /* Determine if the modifier is enabled for the current evaluation mode. */
+  ModifierMode mod_mode = (eval_mode == DAG_EVAL_RENDER) ? eModifierMode_Render :
+                                                           eModifierMode_Realtime;
+
+  if ((md->mode & mod_mode) != mod_mode) {
+    return nullptr;
+  }
+
+  if (md->type == eModifierType_Subsurf) {
+    return reinterpret_cast<SubsurfModifierData *>(md);
+  }
+
+  return nullptr;
+}
+
 ABCGenericMeshWriter::ABCGenericMeshWriter(const ABCWriterConstructorArgs &args)
     : ABCAbstractWriter(args), is_subd_(false)
 {
@@ -78,12 +122,18 @@ void ABCGenericMeshWriter::create_alembic_objects(const HierarchyContext *contex
   }
 
   if (is_subd_) {
-    CLOG_INFO(&LOG, 2, "exporting OSubD %s", args_.abc_path.c_str());
+    CLOG_DEBUG(&LOG, "exporting OSubD %s", args_.abc_path.c_str());
     abc_subdiv_ = OSubD(args_.abc_parent, args_.abc_name, timesample_index_);
     abc_subdiv_schema_ = abc_subdiv_.getSchema();
+
+    abc_custom_data_container_ = abc_subdiv_schema_.getUserProperties();
+    abc_subdiv_render_levels_ = OInt32Property(
+        abc_custom_data_container_, "subdivRenderLevels", timesample_index_);
+    abc_subdiv_viewport_levels_ = OInt32Property(
+        abc_custom_data_container_, "subdivViewportLevels", timesample_index_);
   }
   else {
-    CLOG_INFO(&LOG, 2, "exporting OPolyMesh %s", args_.abc_path.c_str());
+    CLOG_DEBUG(&LOG, "exporting OPolyMesh %s", args_.abc_path.c_str());
     abc_poly_mesh_ = OPolyMesh(args_.abc_parent, args_.abc_name, timesample_index_);
     abc_poly_mesh_schema_ = abc_poly_mesh_.getSchema();
 
@@ -126,10 +176,7 @@ bool ABCGenericMeshWriter::export_as_subdivision_surface(Object *ob_eval) const
 
 bool ABCGenericMeshWriter::is_supported(const HierarchyContext *context) const
 {
-  if (args_.export_params->visible_objects_only) {
-    return context->is_object_visible(args_.export_params->evaluation_mode);
-  }
-  return true;
+  return context->is_object_visible(args_.export_params->evaluation_mode);
 }
 
 void ABCGenericMeshWriter::do_write(HierarchyContext &context)
@@ -222,7 +269,7 @@ void ABCGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
   UVSample uvs_and_indices;
 
   if (args_.export_params->uvs) {
-    const char *name = get_uv_sample(uvs_and_indices, m_custom_data_config, &mesh->corner_data);
+    const char *name = get_uv_sample(uvs_and_indices, m_custom_data_config, *mesh);
 
     if (!uvs_and_indices.indices.empty() && !uvs_and_indices.uvs.empty()) {
       OV2fGeomParam::Sample uv_sample;
@@ -234,10 +281,8 @@ void ABCGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
       mesh_sample.setUVs(uv_sample);
     }
 
-    write_custom_data(abc_poly_mesh_schema_.getArbGeomParams(),
-                      m_custom_data_config,
-                      &mesh->corner_data,
-                      CD_PROP_FLOAT2);
+    write_custom_data(
+        abc_poly_mesh_schema_.getArbGeomParams(), m_custom_data_config, *mesh, CD_PROP_FLOAT2);
   }
 
   if (args_.export_params->normals) {
@@ -289,7 +334,7 @@ void ABCGenericMeshWriter::write_subd(HierarchyContext &context, Mesh *mesh)
 
   UVSample sample;
   if (args_.export_params->uvs) {
-    const char *name = get_uv_sample(sample, m_custom_data_config, &mesh->corner_data);
+    const char *name = get_uv_sample(sample, m_custom_data_config, *mesh);
 
     if (!sample.indices.empty() && !sample.uvs.empty()) {
       OV2fGeomParam::Sample uv_sample;
@@ -301,10 +346,8 @@ void ABCGenericMeshWriter::write_subd(HierarchyContext &context, Mesh *mesh)
       subdiv_sample.setUVs(uv_sample);
     }
 
-    write_custom_data(abc_subdiv_schema_.getArbGeomParams(),
-                      m_custom_data_config,
-                      &mesh->corner_data,
-                      CD_PROP_FLOAT2);
+    write_custom_data(
+        abc_subdiv_schema_.getArbGeomParams(), m_custom_data_config, *mesh, CD_PROP_FLOAT2);
   }
 
   if (args_.export_params->orcos) {
@@ -320,6 +363,53 @@ void ABCGenericMeshWriter::write_subd(HierarchyContext &context, Mesh *mesh)
   if (!vert_crease_indices.empty()) {
     subdiv_sample.setCornerIndices(Int32ArraySample(vert_crease_indices));
     subdiv_sample.setCornerSharpnesses(FloatArraySample(vert_crease_sharpness));
+  }
+
+  const SubsurfModifierData *subsurf_data = get_last_subdiv_modifier(
+      args_.export_params->evaluation_mode, context.object);
+
+  if (subsurf_data) {
+    AbcFaceVaryingInterpolateBoundary fvar_interpolate_boundary =
+        AbcFaceVaryingInterpolateBoundary::ALL;
+    AbcInterpolateBoundary interpolate_boundary = AbcInterpolateBoundary::NONE;
+    int propagate_corners = 0;
+
+    /* Confusingly, ALL is NONE and NONE is ALL. */
+    switch (subsurf_data->uv_smooth) {
+      case SUBSURF_UV_SMOOTH_NONE:
+        fvar_interpolate_boundary = AbcFaceVaryingInterpolateBoundary::ALL;
+        break;
+      case SUBSURF_UV_SMOOTH_PRESERVE_CORNERS:
+      case SUBSURF_UV_SMOOTH_PRESERVE_CORNERS_AND_JUNCTIONS:
+        fvar_interpolate_boundary = AbcFaceVaryingInterpolateBoundary::EDGE_AND_CORNERS;
+        break;
+      case SUBSURF_UV_SMOOTH_PRESERVE_CORNERS_JUNCTIONS_AND_CONCAVE:
+        fvar_interpolate_boundary = AbcFaceVaryingInterpolateBoundary::EDGE_AND_CORNERS;
+        propagate_corners = 1;
+        break;
+      case SUBSURF_UV_SMOOTH_PRESERVE_BOUNDARIES:
+        fvar_interpolate_boundary = AbcFaceVaryingInterpolateBoundary::BOUNDARIES;
+        break;
+      case SUBSURF_UV_SMOOTH_ALL:
+        fvar_interpolate_boundary = AbcFaceVaryingInterpolateBoundary::NONE;
+        break;
+    }
+
+    switch (subsurf_data->boundary_smooth) {
+      case SUBSURF_BOUNDARY_SMOOTH_PRESERVE_CORNERS:
+        interpolate_boundary = AbcInterpolateBoundary::EDGE_AND_CORNERS;
+        break;
+      case SUBSURF_BOUNDARY_SMOOTH_ALL:
+        interpolate_boundary = AbcInterpolateBoundary::EDGE_ONLY;
+        break;
+    }
+
+    subdiv_sample.setFaceVaryingInterpolateBoundary(int(fvar_interpolate_boundary));
+    subdiv_sample.setFaceVaryingPropagateCorners(propagate_corners);
+    subdiv_sample.setInterpolateBoundary(int(interpolate_boundary));
+
+    abc_subdiv_viewport_levels_.set(subsurf_data->levels);
+    abc_subdiv_render_levels_.set(subsurf_data->renderLevels);
   }
 
   update_bounding_box(context.object);
@@ -357,29 +447,26 @@ void ABCGenericMeshWriter::write_arb_geo_params(Mesh *mesh)
   else {
     arb_geom_params = abc_poly_mesh_.getSchema().getArbGeomParams();
   }
-  write_custom_data(arb_geom_params, m_custom_data_config, &mesh->corner_data, CD_PROP_BYTE_COLOR);
+  write_custom_data(arb_geom_params, m_custom_data_config, *mesh, CD_PROP_BYTE_COLOR);
 }
 
 bool ABCGenericMeshWriter::get_velocities(Mesh *mesh, std::vector<Imath::V3f> &vels)
 {
   /* Export velocity attribute output by fluid sim, sequence cache modifier
    * and geometry nodes. */
-  AttributeOwner owner = AttributeOwner::from_id(&mesh->id);
-  const CustomDataLayer *velocity_layer = BKE_attribute_find(
-      owner, "velocity", CD_PROP_FLOAT3, bke::AttrDomain::Point);
-
-  if (velocity_layer == nullptr) {
+  const bke::AttributeAccessor attributes = mesh->attributes();
+  const VArraySpan attr = *attributes.lookup<float3>("velocity", bke::AttrDomain::Point);
+  if (attr.is_empty()) {
     return false;
   }
 
   const int totverts = mesh->verts_num;
-  const float(*mesh_velocities)[3] = reinterpret_cast<float(*)[3]>(velocity_layer->data);
 
   vels.clear();
   vels.resize(totverts);
 
   for (int i = 0; i < totverts; i++) {
-    copy_yup_from_zup(vels[i].getValue(), mesh_velocities[i]);
+    copy_yup_from_zup(vels[i].getValue(), attr[i]);
   }
 
   return true;
@@ -404,7 +491,7 @@ void ABCGenericMeshWriter::get_geo_groups(Object *object,
 
     std::string name = args_.hierarchy_iterator->get_id_name(&mat->id);
 
-    if (geo_groups.find(name) == geo_groups.end()) {
+    if (!geo_groups.contains(name)) {
       std::vector<int32_t> faceArray;
       geo_groups[name] = faceArray;
     }
@@ -523,12 +610,12 @@ static void get_loop_normals(const Mesh *mesh, std::vector<Imath::V3f> &normals)
   normals.clear();
 
   switch (mesh->normals_domain()) {
-    case blender::bke::MeshNormalDomain::Point: {
+    case bke::MeshNormalDomain::Point: {
       /* If all faces are smooth shaded, and there are no custom normals, we don't need to
        * export normals at all. This is also done by other software, see #71246. */
       break;
     }
-    case blender::bke::MeshNormalDomain::Face: {
+    case bke::MeshNormalDomain::Face: {
       normals.resize(mesh->corners_num);
       MutableSpan dst_normals(reinterpret_cast<float3 *>(normals.data()), normals.size());
 
@@ -543,7 +630,7 @@ static void get_loop_normals(const Mesh *mesh, std::vector<Imath::V3f> &normals)
       });
       break;
     }
-    case blender::bke::MeshNormalDomain::Corner: {
+    case bke::MeshNormalDomain::Corner: {
       normals.resize(mesh->corners_num);
       MutableSpan dst_normals(reinterpret_cast<float3 *>(normals.data()), normals.size());
 
@@ -570,4 +657,5 @@ Mesh *ABCMeshWriter::get_export_mesh(Object *object_eval, bool & /*r_needsfree*/
   return BKE_object_get_evaluated_mesh(object_eval);
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

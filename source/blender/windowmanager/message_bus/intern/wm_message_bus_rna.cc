@@ -13,9 +13,9 @@
 
 #include "DNA_ID.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 
 #include "WM_message.hh"
 #include "WM_types.hh"
@@ -23,6 +23,8 @@
 
 #include "RNA_access.hh"
 #include "RNA_path.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Internal Utilities
@@ -47,8 +49,10 @@ static uint wm_msg_rna_gset_hash(const void *key_p)
 }
 static bool wm_msg_rna_gset_cmp(const void *key_a_p, const void *key_b_p)
 {
-  const wmMsgParams_RNA *params_a = &((const wmMsgSubscribeKey_RNA *)key_a_p)->msg.params;
-  const wmMsgParams_RNA *params_b = &((const wmMsgSubscribeKey_RNA *)key_b_p)->msg.params;
+  const wmMsgParams_RNA *params_a =
+      &(static_cast<const wmMsgSubscribeKey_RNA *>(key_a_p))->msg.params;
+  const wmMsgParams_RNA *params_b =
+      &(static_cast<const wmMsgSubscribeKey_RNA *>(key_b_p))->msg.params;
   return !((params_a->ptr.type == params_b->ptr.type) &&
            (params_a->ptr.owner_id == params_b->ptr.owner_id) &&
            (params_a->ptr.data == params_b->ptr.data) && (params_a->prop == params_b->prop));
@@ -72,14 +76,15 @@ static void wm_msg_rna_gset_key_free(void *key_p)
     wm_msg_subscribe_value_free(&key->head, msg_lnk);
   }
   if (key->msg.params.data_path != nullptr) {
-    MEM_freeN(key->msg.params.data_path);
+    MEM_delete(key->msg.params.data_path);
   }
   MEM_delete(key);
 }
 
 static void wm_msg_rna_repr(FILE *stream, const wmMsgSubscribeKey *msg_key)
 {
-  const wmMsgSubscribeKey_RNA *m = (wmMsgSubscribeKey_RNA *)msg_key;
+  const wmMsgSubscribeKey_RNA *m = reinterpret_cast<wmMsgSubscribeKey_RNA *>(
+      const_cast<wmMsgSubscribeKey *>(msg_key));
   const char *none = "<none>";
   fprintf(stream,
           "<wmMsg_RNA %p, "
@@ -88,8 +93,10 @@ static void wm_msg_rna_repr(FILE *stream, const wmMsgSubscribeKey *msg_key)
           m,
           m->msg.head.id,
           m->msg.params.ptr.type ? RNA_struct_identifier(m->msg.params.ptr.type) : none,
-          m->msg.params.prop ? RNA_property_identifier((PropertyRNA *)m->msg.params.prop) : none,
-          BLI_listbase_count(&m->head.values));
+          m->msg.params.prop ?
+              RNA_property_identifier(const_cast<PropertyRNA *>(m->msg.params.prop)) :
+              none,
+          m->head.values.count());
 }
 
 static void wm_msg_rna_update_by_id(wmMsgBus *mbus, ID *id_src, ID *id_dst)
@@ -125,7 +132,7 @@ static void wm_msg_rna_update_by_id(wmMsgBus *mbus, ID *id_src, ID *id_dst)
 
       bool remove = true;
 
-      if (BLI_listbase_is_empty(&key->head.values)) {
+      if (key->head.values.is_empty()) {
         /* Remove, no reason to keep. */
       }
       else if (key->msg.params.ptr.data == key->msg.params.ptr.owner_id) {
@@ -240,13 +247,12 @@ void WM_msg_publish_rna_params(wmMsgBus *mbus, const wmMsgParams_RNA *msg_key_pa
   wmMsgSubscribeKey_RNA *key;
 
   const char *none = "<none>";
-  CLOG_INFO(WM_LOG_MSGBUS_PUB,
-            2,
-            "rna(id='%s', %s.%s)",
-            msg_key_params->ptr.owner_id ? ((ID *)msg_key_params->ptr.owner_id)->name : none,
-            msg_key_params->ptr.type ? RNA_struct_identifier(msg_key_params->ptr.type) : none,
-            msg_key_params->prop ? RNA_property_identifier((PropertyRNA *)msg_key_params->prop) :
-                                   none);
+  CLOG_DEBUG(WM_LOG_MSGBUS_PUB,
+             "rna(id='%s', %s.%s)",
+             msg_key_params->ptr.owner_id ? ((ID *)msg_key_params->ptr.owner_id)->name : none,
+             msg_key_params->ptr.type ? RNA_struct_identifier(msg_key_params->ptr.type) : none,
+             msg_key_params->prop ? RNA_property_identifier((PropertyRNA *)msg_key_params->prop) :
+                                    none);
 
   if ((key = WM_msg_lookup_rna(mbus, msg_key_params))) {
     WM_msg_publish_with_key(mbus, &key->head);
@@ -305,17 +311,16 @@ void WM_msg_subscribe_rna_params(wmMsgBus *mbus,
   msg_key_test.msg.params = *msg_key_params;
 
   const char *none = "<none>";
-  CLOG_INFO(WM_LOG_MSGBUS_SUB,
-            3,
-            "rna(id='%s', %s.%s, info='%s')",
-            msg_key_params->ptr.owner_id ? ((ID *)msg_key_params->ptr.owner_id)->name : none,
-            msg_key_params->ptr.type ? RNA_struct_identifier(msg_key_params->ptr.type) : none,
-            msg_key_params->prop ? RNA_property_identifier((PropertyRNA *)msg_key_params->prop) :
-                                   none,
-            id_repr);
+  CLOG_TRACE(WM_LOG_MSGBUS_SUB,
+             "rna(id='%s', %s.%s, info='%s')",
+             msg_key_params->ptr.owner_id ? ((ID *)msg_key_params->ptr.owner_id)->name : none,
+             msg_key_params->ptr.type ? RNA_struct_identifier(msg_key_params->ptr.type) : none,
+             msg_key_params->prop ? RNA_property_identifier((PropertyRNA *)msg_key_params->prop) :
+                                    none,
+             id_repr);
 
-  wmMsgSubscribeKey_RNA *msg_key = (wmMsgSubscribeKey_RNA *)WM_msg_subscribe_with_key(
-      mbus, &msg_key_test.head, msg_val_params);
+  wmMsgSubscribeKey_RNA *msg_key = reinterpret_cast<wmMsgSubscribeKey_RNA *>(
+      WM_msg_subscribe_with_key(mbus, &msg_key_test.head, msg_val_params));
 
   if (msg_val_params->is_persistent) {
     if (msg_key->msg.params.data_path == nullptr) {
@@ -367,3 +372,5 @@ void WM_msg_publish_ID(wmMsgBus *mbus, ID *id)
 }
 
 /** \} */
+
+}  // namespace blender

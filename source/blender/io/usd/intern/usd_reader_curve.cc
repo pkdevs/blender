@@ -71,9 +71,9 @@ static void add_bezier_control_point(int cp,
     handles_right[cp] = to_float3(usdPoints[offset + 1]);
     handles_left[cp] = 2.0f * positions[cp] - handles_right[cp];
   }
-  else if (offset == usdPoints.size() - 1) {
-    positions[cp] = to_float3(usdPoints[offset]);
-    handles_left[cp] = to_float3(usdPoints[offset - 1]);
+  else if (offset >= usdPoints.size() - 1) {
+    positions[cp] = to_float3(usdPoints.last());
+    handles_left[cp] = to_float3(usdPoints.last(1));
     handles_right[cp] = 2.0f * positions[cp] - handles_left[cp];
   }
   else {
@@ -112,8 +112,8 @@ static CurveType get_curve_type(pxr::TfToken type, pxr::TfToken basis)
 
 static std::optional<bke::AttrDomain> convert_usd_interp_to_blender(const pxr::TfToken usd_domain)
 {
-  static const blender::Map<pxr::TfToken, bke::AttrDomain> domain_map = []() {
-    blender::Map<pxr::TfToken, bke::AttrDomain> map;
+  static const Map<pxr::TfToken, bke::AttrDomain> domain_map = []() {
+    Map<pxr::TfToken, bke::AttrDomain> map;
     map.add_new(pxr::UsdGeomTokens->vertex, bke::AttrDomain::Point);
     map.add_new(pxr::UsdGeomTokens->varying, bke::AttrDomain::Point);
     map.add_new(pxr::UsdGeomTokens->constant, bke::AttrDomain::Curve);
@@ -135,27 +135,27 @@ void USDCurvesReader::create_object(Main *bmain)
   Curves *curve = BKE_curves_add(bmain, name_.c_str());
 
   object_ = BKE_object_add_only_object(bmain, OB_CURVES, name_.c_str());
-  object_->data = curve;
+  object_->data = id_cast<ID *>(curve);
 }
 
-void USDCurvesReader::read_object_data(Main *bmain, double motionSampleTime)
+void USDCurvesReader::read_object_data(Main *bmain, pxr::UsdTimeCode time)
 {
-  Curves *cu = (Curves *)object_->data;
-  this->read_curve_sample(cu, motionSampleTime);
+  Curves *cu = id_cast<Curves *>(object_->data);
+  this->read_curve_sample(cu, time);
 
   if (this->is_animated()) {
     this->add_cache_modifier();
   }
 
-  USDXformReader::read_object_data(bmain, motionSampleTime);
+  USDXformReader::read_object_data(bmain, time);
 }
 
 void USDCurvesReader::read_velocities(bke::CurvesGeometry &curves,
                                       const pxr::UsdGeomCurves &usd_curves,
-                                      const double motionSampleTime) const
+                                      const pxr::UsdTimeCode time) const
 {
   pxr::VtVec3fArray velocities;
-  usd_curves.GetVelocitiesAttr().Get(&velocities, motionSampleTime);
+  usd_curves.GetVelocitiesAttr().Get(&velocities, time);
 
   if (!velocities.empty()) {
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
@@ -169,7 +169,7 @@ void USDCurvesReader::read_velocities(bke::CurvesGeometry &curves,
 }
 
 void USDCurvesReader::read_custom_data(bke::CurvesGeometry &curves,
-                                       const double motionSampleTime) const
+                                       const pxr::UsdTimeCode time) const
 {
   pxr::UsdGeomPrimvarsAPI pv_api(prim_);
 
@@ -182,7 +182,7 @@ void USDCurvesReader::read_custom_data(bke::CurvesGeometry &curves,
 
     const pxr::TfToken pv_interp = pv.GetInterpolation();
     const std::optional<bke::AttrDomain> domain = convert_usd_interp_to_blender(pv_interp);
-    const std::optional<eCustomDataType> type = convert_usd_type_to_blender(pv_type);
+    const std::optional<bke::AttrType> type = convert_usd_type_to_blender(pv_type);
 
     if (!domain.has_value() || !type.has_value()) {
       const pxr::TfToken pv_name = pxr::UsdGeomPrimvar::StripPrimvarsName(pv.GetPrimvarName());
@@ -196,7 +196,7 @@ void USDCurvesReader::read_custom_data(bke::CurvesGeometry &curves,
     }
 
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-    copy_primvar_to_blender_attribute(pv, motionSampleTime, *type, *domain, {}, attributes);
+    copy_primvar_to_blender_attribute(pv, time, *type, *domain, {}, attributes);
   }
 }
 
@@ -231,7 +231,7 @@ bool USDBasisCurvesReader::is_animated() const
   return false;
 }
 
-void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const double motionSampleTime)
+void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const pxr::UsdTimeCode time)
 {
   pxr::VtIntArray usd_counts;
   pxr::VtVec3fArray usd_points;
@@ -240,39 +240,57 @@ void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const double mot
   pxr::TfToken type;
   pxr::TfToken wrap;
 
-  curve_prim_.GetCurveVertexCountsAttr().Get(&usd_counts, motionSampleTime);
-  curve_prim_.GetPointsAttr().Get(&usd_points, motionSampleTime);
-  curve_prim_.GetWidthsAttr().Get(&usd_widths, motionSampleTime);
-  curve_prim_.GetBasisAttr().Get(&basis, motionSampleTime);
-  curve_prim_.GetTypeAttr().Get(&type, motionSampleTime);
-  curve_prim_.GetWrapAttr().Get(&wrap, motionSampleTime);
+  curve_prim_.GetCurveVertexCountsAttr().Get(&usd_counts, time);
+  curve_prim_.GetPointsAttr().Get(&usd_points, time);
+  curve_prim_.GetWidthsAttr().Get(&usd_widths, time);
+  curve_prim_.GetBasisAttr().Get(&basis, time);
+  curve_prim_.GetTypeAttr().Get(&type, time);
+  curve_prim_.GetWrapAttr().Get(&wrap, time);
 
   const CurveType curve_type = get_curve_type(type, basis);
   const bool is_cyclic = wrap == pxr::UsdGeomTokens->periodic;
   const int curves_num = usd_counts.size();
   const Array<int> new_offsets = calc_curve_offsets(usd_counts, curve_type, is_cyclic);
 
+  // Check validity of curve counts
+  const int min_points = (curve_type == CURVE_TYPE_BEZIER) ? 3 : 1;
+  const bool all_valid = std::all_of(usd_counts.cbegin(),
+                                     usd_counts.cend(),
+                                     [min_points](int count) { return count >= min_points; });
+
   bke::CurvesGeometry &curves = curves_id->geometry.wrap();
-  if (curves_topology_changed(curves, new_offsets)) {
+  if (all_valid && curves_topology_changed(curves, new_offsets)) {
     curves.resize(new_offsets.last(), curves_num);
   }
 
-  curves.offsets_for_write().copy_from(new_offsets);
+  // Early out if there are no curves to load.
+  if (curves.is_empty()) {
+    return;
+  }
 
+  curves.offsets_for_write().copy_from(new_offsets);
   curves.fill_curve_types(curve_type);
 
   if (is_cyclic) {
-    curves.cyclic_for_write().fill(true);
+    curves.attributes_for_write().add<bool>(
+        "cyclic", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
   }
 
   if (curve_type == CURVE_TYPE_NURBS) {
     const int8_t curve_order = type == pxr::UsdGeomTokens->cubic ? 4 : 2;
-    curves.nurbs_orders_for_write().fill(curve_order);
+    curves.attributes_for_write().add<int8_t>(
+        "nurbs_order", bke::AttrDomain::Curve, bke::AttributeInitValue(curve_order));
   }
 
   MutableSpan<float3> positions = curves.positions_for_write();
   Span<pxr::GfVec3f> points = Span(usd_points.cdata(), usd_points.size());
   Span<int> counts = Span(usd_counts.cdata(), usd_counts.size());
+
+  /* If there's no points defined, fill positions with default values and exit. */
+  if (points.is_empty()) {
+    positions.fill(float3(0.0f, 0.0f, 0.0f));
+    return;
+  }
 
   /* Bezier curves require care in filing out their left/right handles. */
   if (type == pxr::UsdGeomTokens->cubic && basis == pxr::UsdGeomTokens->bezier) {
@@ -295,7 +313,7 @@ void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const double mot
                                  positions.slice(point_offset, point_count),
                                  handles_left.slice(point_offset, point_count),
                                  handles_right.slice(point_offset, point_count),
-                                 points.slice(usd_point_offset, usd_point_count));
+                                 points.slice_safe(usd_point_offset, usd_point_count));
         cp_offset += 3;
       }
 
@@ -305,23 +323,38 @@ void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const double mot
   }
   else {
     static_assert(sizeof(pxr::GfVec3f) == sizeof(float3));
-    positions.copy_from(points.cast<float3>());
+    if (positions.size() != points.size()) {
+      positions.fill(float3(0.0f, 0.0f, 0.0f));
+    }
+    const int copy_size = std::min(positions.size(), points.size());
+    positions.slice(0, copy_size).copy_from(points.slice(0, copy_size).cast<float3>());
   }
 
   if (!usd_widths.empty()) {
-    MutableSpan<float> radii = curves.radius_for_write();
     Span<float> widths = Span(usd_widths.cdata(), usd_widths.size());
 
     pxr::TfToken widths_interp = curve_prim_.GetWidthsInterpolation();
-    if (widths_interp == pxr::UsdGeomTokens->constant) {
-      radii.fill(widths[0] / 2.0f);
+    if (widths_interp == pxr::UsdGeomTokens->constant || widths.size() == 1) {
+      set_single_value(curves.attributes_for_write(),
+                       "radius",
+                       bke::AttrDomain::Point,
+                       bke::AttrType::Float,
+                       bke::AttributeInitValue(widths[0] / 2.0f));
     }
     else {
+      MutableSpan<float> radii = curves.radius_for_write();
+
       const bool is_bezier_vertex_interp = (type == pxr::UsdGeomTokens->cubic &&
                                             basis == pxr::UsdGeomTokens->bezier &&
                                             widths_interp == pxr::UsdGeomTokens->vertex);
+      const bool is_bspline_varying_interp = (type == pxr::UsdGeomTokens->cubic &&
+                                              basis == pxr::UsdGeomTokens->bspline &&
+                                              widths_interp == pxr::UsdGeomTokens->varying);
+      const bool is_catmull_varying_interp = (type == pxr::UsdGeomTokens->cubic &&
+                                              basis == pxr::UsdGeomTokens->catmullRom &&
+                                              widths_interp == pxr::UsdGeomTokens->varying);
       if (is_bezier_vertex_interp) {
-        /* Blender does not support 'vertex-varying' interpolation.
+        /* Blender does not support bezier 'vertex' interpolation.
          * Assign the widths as-if it were 'varying' only. */
         int usd_point_offset = 0;
         int point_offset = 0;
@@ -331,7 +364,8 @@ void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const double mot
 
           int cp_offset = 0;
           for (const int cp : IndexRange(point_count)) {
-            radii[point_offset + cp] = widths[usd_point_offset + cp_offset] / 2.0f;
+            const int usd_index = std::min(usd_point_offset + cp_offset, int(widths.size()) - 1);
+            radii[point_offset + cp] = widths[usd_index] / 2.0f;
             cp_offset += 3;
           }
 
@@ -339,16 +373,42 @@ void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const double mot
           usd_point_offset += usd_point_count;
         }
       }
+      else if (!is_cyclic && (is_bspline_varying_interp || is_catmull_varying_interp)) {
+        /* Blender does not support general cubic 'varying' interpolation. Duplicate the first/last
+         * radius values as a best-effort solution. */
+        int radii_offset = 0;
+        int width_offset = 0;
+        for (const int i : curves.curves_range()) {
+          const int radii_count = counts[i];
+          const int width_count = std::max(2, counts[i] - 2);
+
+          Span<float> usd_curve_widths = widths.slice_safe(width_offset, width_count);
+          MutableSpan<float> curve_radii = radii.slice_safe(radii_offset, radii_count);
+          if (usd_curve_widths.size() != width_count || curve_radii.size() != radii_count) {
+            /* Generally unsafe to continue loading data. */
+            break;
+          }
+
+          curve_radii.first() = usd_curve_widths.first() / 2.0f;
+          curve_radii.last() = usd_curve_widths.last() / 2.0f;
+          for (const int i : usd_curve_widths.index_range()) {
+            curve_radii[i + 1] = usd_curve_widths[i] / 2.0f;
+          }
+
+          radii_offset += radii_count;
+          width_offset += width_count;
+        }
+      }
       else {
-        for (const int i_point : curves.points_range()) {
+        for (const int i_point : IndexRange(std::min(radii.size(), widths.size()))) {
           radii[i_point] = widths[i_point] / 2.0f;
         }
       }
     }
   }
 
-  this->read_velocities(curves, curve_prim_, motionSampleTime);
-  this->read_custom_data(curves, motionSampleTime);
+  this->read_velocities(curves, curve_prim_, time);
+  this->read_custom_data(curves, time);
 }
 
 }  // namespace blender::io::usd

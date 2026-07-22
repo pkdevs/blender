@@ -9,8 +9,8 @@
 
 #include "BKE_volume.hh"
 #include "BKE_volume_render.hh"
-#include "BLI_math_geom.h"
-#include "BLI_rand.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_rand_c.hh"
 #include "DNA_fluid_types.h"
 #include "DNA_modifier_types.h"
 
@@ -22,9 +22,13 @@ void VolumePass::sync(SceneResources &resources)
   ps_.init();
   ps_.bind_ubo(WB_WORLD_SLOT, resources.world_buf);
 
-  dummy_shadow_tx_.ensure_3d(GPU_RGBA8, int3(1), GPU_TEXTURE_USAGE_SHADER_READ, float4(1));
-  dummy_volume_tx_.ensure_3d(GPU_RGBA8, int3(1), GPU_TEXTURE_USAGE_SHADER_READ, float4(0));
-  dummy_coba_tx_.ensure_1d(GPU_RGBA8, 1, GPU_TEXTURE_USAGE_SHADER_READ, float4(0));
+  dummy_shadow_tx_.ensure_3d(
+      gpu::TextureFormat::UNORM_8_8_8_8, int3(1), GPU_TEXTURE_USAGE_SHADER_READ, float4(1));
+  dummy_volume_tx_.ensure_3d(
+      gpu::TextureFormat::UNORM_8_8_8_8, int3(1), GPU_TEXTURE_USAGE_SHADER_READ, float4(0));
+  dummy_coba_tx_.ensure_1d(
+      gpu::TextureFormat::UNORM_8_8_8_8, 1, GPU_TEXTURE_USAGE_SHADER_READ, float4(0));
+  dummy_flag_tx_.ensure_3d(gpu::TextureFormat::UINT_8, int3(1), GPU_TEXTURE_USAGE_SHADER_READ);
 }
 
 void VolumePass::object_sync_volume(Manager &manager,
@@ -51,7 +55,7 @@ void VolumePass::object_sync_volume(Manager &manager,
 
   PassMain::Sub &sub_ps = ps_.sub("Volume Object SubPass");
 
-  const bool use_slice = (volume.display.axis_slice_method == AXIS_SLICE_SINGLE);
+  const bool use_slice = (volume.display.axis_slice_method == VOLUME_AXIS_SLICE_SINGLE);
 
   sub_ps.shader_set(
       ShaderCache::get().volume_get(false, volume.display.interpolation_method, false, use_slice));
@@ -125,6 +129,9 @@ void VolumePass::object_sync_modifier(Manager &manager,
   sub_ps.shader_set(
       ShaderCache::get().volume_get(true, settings.interp_method, settings.use_coba, use_slice));
   sub_ps.push_constant("do_depth_test", scene_state.shading.type >= OB_SOLID);
+  sub_ps.bind_texture("flame_tx", settings.tex_flame ? settings.tex_flame : dummy_volume_tx_);
+  sub_ps.bind_texture("flame_color_tx",
+                      settings.tex_flame ? settings.tex_flame_coba : dummy_coba_tx_);
 
   if (settings.use_coba) {
     const bool show_flags = settings.coba_field == FLUID_DOMAIN_FIELD_FLAGS;
@@ -142,13 +149,18 @@ void VolumePass::object_sync_modifier(Manager &manager,
 
     if (show_flags) {
       sub_ps.bind_texture("flag_tx", settings.tex_field);
+      sub_ps.bind_texture("density_tx", dummy_volume_tx_);
     }
     else {
+      sub_ps.bind_texture("flag_tx", dummy_flag_tx_);
       sub_ps.bind_texture("density_tx", settings.tex_field);
     }
 
     if (!show_flags && !show_pressure && !show_phi) {
       sub_ps.bind_texture("transfer_tx", settings.tex_coba);
+    }
+    else {
+      sub_ps.bind_texture("transfer_tx", dummy_coba_tx_);
     }
   }
   else {
@@ -160,9 +172,6 @@ void VolumePass::object_sync_modifier(Manager &manager,
 
     sub_ps.bind_texture("density_tx",
                         settings.tex_color ? settings.tex_color : settings.tex_density);
-    sub_ps.bind_texture("flame_tx", settings.tex_flame ? settings.tex_flame : dummy_volume_tx_);
-    sub_ps.bind_texture("flame_color_tx",
-                        settings.tex_flame ? settings.tex_flame_coba : dummy_coba_tx_);
     sub_ps.bind_texture("shadow_tx", settings.tex_shadow);
   }
 
@@ -204,7 +213,7 @@ void VolumePass::draw_slice_ps(Manager &manager,
                                int slice_axis_enum,
                                float slice_depth)
 {
-  float4x4 view_mat_inv = blender::draw::View::default_get().viewinv();
+  float4x4 view_mat_inv = draw::View::default_get().viewinv();
 
   const int axis = (slice_axis_enum == SLICE_AXIS_AUTO) ?
                        axis_dominant_v3_single(view_mat_inv[2]) :
@@ -220,7 +229,7 @@ void VolumePass::draw_slice_ps(Manager &manager,
   ps.push_constant("slice_axis", axis);
   ps.push_constant("step_length", step_length);
 
-  ps.draw(resources.volume_cube_batch, manager.resource_handle(ob_ref));
+  ps.draw(resources.volume_cube_batch, manager.unique_handle(ob_ref));
 }
 
 void VolumePass::draw_volume_ps(Manager &manager,
@@ -242,7 +251,7 @@ void VolumePass::draw_volume_ps(Manager &manager,
   ps.push_constant("step_length", step_length);
   ps.push_constant("noise_ofs", float(noise_offset));
 
-  ps.draw(resources.volume_cube_batch, manager.resource_handle(ob_ref));
+  ps.draw(resources.volume_cube_batch, manager.unique_handle(ob_ref));
 }
 
 }  // namespace blender::workbench

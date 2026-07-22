@@ -8,11 +8,46 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_enum_flags.hh"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Ordered Selection Storage
  * \{ */
+
+/** #MSelect.type */
+enum eMSelect_Type : int {
+  ME_VSEL = 0,
+  ME_ESEL = 1,
+  ME_FSEL = 2,
+};
+
+enum eMVertSkinFlag : int {
+  /**
+   * Marks a vertex as the edge-graph root, used for calculating rotations for all connected
+   * edges (recursively). Also used to choose a root when generating an armature.
+   */
+  MVERT_SKIN_ROOT = 1,
+
+  /**
+   * Marks a branch vertex (vertex with more than two connected edges), so that its neighbors
+   * are directly hulled together, rather than the default of generating intermediate frames.
+   */
+  MVERT_SKIN_LOOSE = 2,
+};
+ENUM_OPERATORS(eMVertSkinFlag)
+
+/** #MFace.edcode */
+enum eMFace_EdgeCode : char {
+  ME_V1V2 = (1 << 0),
+  ME_V2V3 = (1 << 1),
+  ME_V3V1 = (1 << 2),
+  ME_V3V4 = ME_V3V1,
+  ME_V4V1 = (1 << 3),
+};
+ENUM_OPERATORS(eMFace_EdgeCode)
 
 /**
  * Optionally store the order of selected elements.
@@ -20,18 +55,10 @@
  *
  * Typically accessed from #Mesh.mselect
  */
-typedef struct MSelect {
+struct MSelect {
   /** Index in the vertex, edge or polygon array. */
   int index;
-  /** #ME_VSEL, #ME_ESEL, #ME_FSEL. */
-  int type;
-} MSelect;
-
-/** #MSelect.type */
-enum {
-  ME_VSEL = 0,
-  ME_ESEL = 1,
-  ME_FSEL = 2,
+  eMSelect_Type type;
 };
 
 /** \} */
@@ -98,22 +125,26 @@ enum {
  * \{ */
 
 /** Custom Data Properties */
-typedef struct MFloatProperty {
+struct MFloatProperty {
   float f;
-} MFloatProperty;
-typedef struct MIntProperty {
+};
+
+struct MIntProperty {
   int i;
-} MIntProperty;
+};
+
 /** Byte string, no encoding implied. May not be null terminated. */
-typedef struct MStringProperty {
+struct MStringProperty {
   char s[255], s_len;
-} MStringProperty;
-typedef struct MBoolProperty {
+};
+
+struct MBoolProperty {
   uint8_t b;
-} MBoolProperty;
-typedef struct MInt8Property {
+};
+
+struct MInt8Property {
   int8_t i;
-} MInt8Property;
+};
 
 /** \} */
 
@@ -124,17 +155,17 @@ typedef struct MInt8Property {
 /**
  * Vertex group index and weight for #MDeformVert.dw
  */
-typedef struct MDeformWeight {
+struct MDeformWeight {
   /** The index for the vertex group, must *always* be unique when in an array. */
   unsigned int def_nr;
   /** Weight between 0.0 and 1.0. */
   float weight;
-} MDeformWeight;
+};
 
 /**
  * Stores all of an element's vertex groups, and their weight values.
  */
-typedef struct MDeformVert {
+struct MDeformVert {
   /**
    * Array of weight indices and values.
    * - There must not be any duplicate #def_nr indices.
@@ -150,32 +181,17 @@ typedef struct MDeformVert {
   int totweight;
   /** Flag is only in use as a run-time tag at the moment. */
   int flag;
-} MDeformVert;
+};
 
-typedef struct MVertSkin {
+struct MVertSkin {
   /**
    * Radii of the skin, define how big the generated frames are.
    * Currently only the first two elements are used.
    */
   float radius[3];
 
-  /** #eMVertSkinFlag */
-  int flag;
-} MVertSkin;
-
-typedef enum eMVertSkinFlag {
-  /**
-   * Marks a vertex as the edge-graph root, used for calculating rotations for all connected
-   * edges (recursively). Also used to choose a root when generating an armature.
-   */
-  MVERT_SKIN_ROOT = 1,
-
-  /**
-   * Marks a branch vertex (vertex with more than two connected edges), so that its neighbors
-   * are directly hulled together, rather than the default of generating intermediate frames.
-   */
-  MVERT_SKIN_LOOSE = 2,
-} eMVertSkinFlag;
+  eMVertSkinFlag flag;
+};
 
 /** \} */
 
@@ -187,32 +203,32 @@ typedef enum eMVertSkinFlag {
  * \note While alpha is not currently in the 3D Viewport,
  * this may eventually be added back, keep this value set to 255.
  */
-typedef struct MLoopCol {
+struct MLoopCol {
   unsigned char r, g, b, a;
-} MLoopCol;
+};
 
-typedef struct MPropCol {
+struct MPropCol {
   float color[4];
-} MPropCol;
+};
 
 /** Multi-Resolution loop data. */
-typedef struct MDisps {
+struct MDisps {
   /* Strange bug in SDNA: if disps pointer comes first, it fails to see totdisp */
   int totdisp;
-  int level;
+  int _pad;
   float (*disps)[3];
 
   /**
    * Used for hiding parts of a multires mesh.
    * Essentially the multires equivalent of the mesh ".hide_vert" boolean attribute.
    *
-   * \note This is a bitmap, keep in sync with type used in BLI_bitmap.h
+   * \note This is a bitmap, keep in sync with type used in BLI_bitmap.hh
    */
   unsigned int *hidden;
-} MDisps;
+};
 
 /** Multi-Resolution grid loop data. */
-typedef struct GridPaintMask {
+struct GridPaintMask {
   /**
    * The data array contains `grid_size * grid_size` elements.
    * Where `grid_size = (1 << (level - 1)) + 1`.
@@ -223,7 +239,7 @@ typedef struct GridPaintMask {
   unsigned int level;
 
   char _pad[4];
-} GridPaintMask;
+};
 
 /** \} */
 
@@ -240,38 +256,42 @@ typedef struct GridPaintMask {
  */
 #
 #
-typedef struct OrigSpaceFace {
+struct OrigSpaceFace {
   float uv[4][2];
-} OrigSpaceFace;
+};
 
 #
 #
-typedef struct OrigSpaceLoop {
+struct OrigSpaceLoop {
   float uv[2];
-} OrigSpaceLoop;
+};
 
 /** \} */
+
+#ifdef DNA_DEPRECATED_ALLOW
 
 /* -------------------------------------------------------------------- */
 /** \name Custom Data (FreeStyle for Edge, Face)
  * \{ */
 
-typedef struct FreestyleEdge {
-  char flag;
-} FreestyleEdge;
-
 /** #FreestyleEdge.flag */
-enum {
+enum eFreestyleEdge_Flag : char {
   FREESTYLE_EDGE_MARK = 1,
 };
+ENUM_OPERATORS(eFreestyleEdge_Flag)
 
-typedef struct FreestyleFace {
-  char flag;
-} FreestyleFace;
+struct FreestyleEdge {
+  eFreestyleEdge_Flag flag;
+};
 
 /** #FreestyleFace.flag */
-enum {
+enum eFreestyleFace_Flag : char {
   FREESTYLE_FACE_MARK = 1,
+};
+ENUM_OPERATORS(eFreestyleFace_Flag)
+
+struct FreestyleFace {
+  eFreestyleFace_Flag flag;
 };
 
 /** \} */
@@ -280,14 +300,26 @@ enum {
 /** \name Deprecated Structs
  * \{ */
 
-#ifdef DNA_DEPRECATED_ALLOW
+/** #MEdge.flag */
+enum eMEdge_Flag : short {
+  /** Deprecated selection status. Now stored in ".select_edge" attribute. */
+  // SELECT = (1 << 0),
+  ME_SEAM = (1 << 2),
+  /** Deprecated hide status. Now stored in ".hide_edge" attribute. */
+  // ME_HIDE = (1 << 4),
+  /** Deprecated loose edge status. Now stored in #Mesh::loose_edges() runtime cache. */
+  ME_LOOSEEDGE = (1 << 7),
+  /** Deprecated sharp edge status. Now stored in "sharp_edge" attribute. */
+  ME_SHARP = (1 << 9),
+};
+ENUM_OPERATORS(eMEdge_Flag)
 
 /**
  * Mesh Edges.
  *
  * Typically accessed with #Mesh.edges()
  */
-typedef struct MEdge {
+struct MEdge {
   /** Un-ordered vertex indices (cannot match). */
   unsigned int v1, v2;
   /** Deprecated edge crease, now located in `edge_crease`, except for file read and write. */
@@ -296,21 +328,19 @@ typedef struct MEdge {
    * Deprecated bevel weight storage, now located in #CD_BWEIGHT, except for file read and write.
    */
   char bweight_legacy;
-  short flag_legacy;
-} MEdge;
-
-/** #MEdge.flag */
-enum {
-  /** Deprecated selection status. Now stored in ".select_edge" attribute. */
-  /*  SELECT = (1 << 0), */
-  ME_SEAM = (1 << 2),
-  /** Deprecated hide status. Now stored in ".hide_edge" attribute. */
-  /*  ME_HIDE = (1 << 4), */
-  /** Deprecated loose edge status. Now stored in #Mesh::loose_edges() runtime cache. */
-  ME_LOOSEEDGE = (1 << 7),
-  /** Deprecated sharp edge status. Now stored in "sharp_edge" attribute. */
-  ME_SHARP = (1 << 9),
+  eMEdge_Flag flag_legacy;
 };
+
+/** #MPoly.flag */
+enum eMPoly_Flag : char {
+  /** Deprecated smooth shading status. Now stored reversed in "sharp_face" attribute. */
+  ME_SMOOTH = (1 << 0),
+  /** Deprecated selection status. Now stored in ".select_poly" attribute. */
+  ME_FACE_SEL = (1 << 1),
+  /** Deprecated hide status. Now stored in ".hide_poly" attribute. */
+  // ME_HIDE = (1 << 4),
+};
+ENUM_OPERATORS(eMPoly_Flag)
 
 /**
  * Mesh Faces.
@@ -319,65 +349,58 @@ enum {
  *
  * Typically accessed with #Mesh.faces().
  */
-typedef struct MPoly {
+struct MPoly {
   /** Offset into loop array and number of loops in the face. */
   int loopstart;
   /** Keep signed since we need to subtract when getting the previous loop. */
   int totloop;
   /** Deprecated material index. Now stored in the "material_index" attribute, but kept for IO. */
   short mat_nr_legacy;
-  char flag_legacy, _pad;
-} MPoly;
-
-/** #MPoly.flag */
-enum {
-  /** Deprecated smooth shading status. Now stored reversed in "sharp_face" attribute. */
-  ME_SMOOTH = (1 << 0),
-  /** Deprecated selection status. Now stored in ".select_poly" attribute. */
-  ME_FACE_SEL = (1 << 1),
-  /** Deprecated hide status. Now stored in ".hide_poly" attribute. */
-  /* ME_HIDE = (1 << 4), */
+  eMPoly_Flag flag_legacy;
+  char _pad;
 };
+
+/** #MLoopUV.flag */
+enum eMLoopUV_Flag : int {
+  MLOOPUV_EDGESEL = (1 << 0),
+  MLOOPUV_VERTSEL = (1 << 1),
+  MLOOPUV_PINNED = (1 << 2),
+};
+ENUM_OPERATORS(eMLoopUV_Flag)
 
 /**
  * UV coordinate for a polygon face & flag for selection & other options.
  * Deprecated, but kept to read old files. UV coordinates are now stored as #CD_PROP_FLOAT2 layers.
  */
-typedef struct MLoopUV {
+struct MLoopUV {
   float uv[2];
-  int flag;
-} MLoopUV;
-
-/** #MLoopUV.flag */
-enum {
-  MLOOPUV_EDGESEL = (1 << 0),
-  MLOOPUV_VERTSEL = (1 << 1),
-  MLOOPUV_PINNED = (1 << 2),
+  eMLoopUV_Flag flag;
 };
+
+/** #MVert.flag */
+enum eMVert_Flag : char {
+  /** Deprecated selection status. Now stored in ".select_vert" attribute. */
+  // SELECT = (1 << 0),
+  /** Deprecated hide status. Now stored in ".hide_vert" attribute. */
+  ME_HIDE = (1 << 4),
+};
+ENUM_OPERATORS(eMVert_Flag)
 
 /**
  * Deprecated mesh vertex data structure. Now stored with generic attributes.
  */
-typedef struct MVert {
+struct MVert {
   float co_legacy[3];
   /**
    * Deprecated flag for storing hide status and selection, which are now stored in separate
    * generic attributes. Kept for file read and write.
    */
-  char flag_legacy;
+  eMVert_Flag flag_legacy;
   /**
    * Deprecated bevel weight storage, now located in #CD_BWEIGHT, except for file read and write.
    */
   char bweight_legacy;
   char _pad[2];
-} MVert;
-
-/** #MVert.flag */
-enum {
-  /** Deprecated selection status. Now stored in ".select_vert" attribute. */
-  /*  SELECT = (1 << 0), */
-  /** Deprecated hide status. Now stored in ".hide_vert" attribute. */
-  ME_HIDE = (1 << 4),
 };
 
 /**
@@ -385,12 +408,12 @@ enum {
  * Deprecated storage for the vertex of a face corner and the following edge.
  * Replaced by the "corner_verts" and "corner_edges" arrays.
  */
-typedef struct MLoop {
+struct MLoop {
   /** Vertex index. */
   unsigned int v;
   /** Edge index into an #MEdge array. */
   unsigned int e;
-} MLoop;
+};
 
 #endif
 
@@ -399,43 +422,37 @@ typedef struct MLoop {
  * blend file. Use for reading old files and in a handful of cases which should be removed
  * eventually.
  */
-typedef struct MFace {
+struct MFace {
   unsigned int v1, v2, v3, v4;
   short mat_nr;
   /** We keep edcode, for conversion to edges draw flags in old files. */
-  char edcode, flag;
-} MFace;
-
-/** #MFace.edcode */
-enum {
-  ME_V1V2 = (1 << 0),
-  ME_V2V3 = (1 << 1),
-  ME_V3V1 = (1 << 2),
-  ME_V3V4 = ME_V3V1,
-  ME_V4V1 = (1 << 3),
+  eMFace_EdgeCode edcode;
+  char flag;
 };
 
 /** Tessellation uv face data. */
-typedef struct MTFace {
+struct MTFace {
   float uv[4][2];
-} MTFace;
+};
 
 /**
  * Tessellation vertex color data.
  *
  * \note The red and blue are swapped for historical reasons.
  */
-typedef struct MCol {
+struct MCol {
   unsigned char a, r, g, b;
-} MCol;
+};
 
 #ifdef DNA_DEPRECATED_ALLOW
 
 /** Old game engine recast navigation data, while unused 2.7x files may contain this. */
-typedef struct MRecast {
+struct MRecast {
   int i;
-} MRecast;
+};
 
 #endif
 
 /** \} */
+
+}  // namespace blender

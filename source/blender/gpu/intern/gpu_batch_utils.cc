@@ -10,31 +10,33 @@
 
 #include "DNA_vec_types.h"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_polyfill_2d.h"
-#include "BLI_sort_utils.h"
-#include "BLI_utildefines.h"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_sort_utils.hh"
+#include "BLI_utildefines.hh"
 
 #include "GPU_batch.hh"
 #include "GPU_batch_utils.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Polygon Creation (2D)
  * \{ */
 
-blender::gpu::Batch *GPU_batch_tris_from_poly_2d_encoded(const uchar *polys_flat,
-                                                         uint polys_flat_len,
-                                                         const rctf *rect)
+gpu::Batch *GPU_batch_tris_from_poly_2d_encoded(const uchar *polys_flat,
+                                                uint polys_flat_len,
+                                                const rctf *rect)
 {
   const uchar(*polys)[2] = reinterpret_cast<const uchar(*)[2]>(polys_flat);
   const uint polys_len = polys_flat_len / 2;
   BLI_assert(polys_flat_len == polys_len * 2);
 
   /* Over alloc in both cases */
-  float(*verts)[2] = static_cast<float(*)[2]>(MEM_mallocN(sizeof(*verts) * polys_len, __func__));
-  float(*verts_step)[2] = verts;
-  uint(*tris)[3] = static_cast<uint(*)[3]>(MEM_mallocN(sizeof(*tris) * polys_len, __func__));
+  float (*verts)[2] = MEM_new_array_uninitialized<float[2]>(polys_len, __func__);
+  float (*verts_step)[2] = verts;
+  uint(*tris)[3] = MEM_new_array_uninitialized<uint[3]>(polys_len, __func__);
   uint(*tris_step)[3] = tris;
 
   const float range_uchar[2] = {
@@ -83,12 +85,12 @@ blender::gpu::Batch *GPU_batch_tris_from_poly_2d_encoded(const uchar *polys_flat
     uint pos;
   } attr_id;
   if (format.attr_len == 0) {
-    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", gpu::VertAttrType::SFLOAT_32_32);
   }
 
   const uint verts_len = (verts_step - verts);
   const uint tris_len = (tris_step - tris);
-  blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+  gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
   GPU_vertbuf_data_alloc(*vbo, verts_len);
 
   GPUVertBufRaw pos_step;
@@ -103,18 +105,18 @@ blender::gpu::Batch *GPU_batch_tris_from_poly_2d_encoded(const uchar *polys_flat
   for (uint i = 0; i < tris_len; i++) {
     GPU_indexbuf_add_tri_verts(&elb, UNPACK3(tris[i]));
   }
-  blender::gpu::IndexBuf *indexbuf = GPU_indexbuf_build(&elb);
+  gpu::IndexBuf *indexbuf = GPU_indexbuf_build(&elb);
 
-  MEM_freeN(tris);
-  MEM_freeN(verts);
+  MEM_delete(tris);
+  MEM_delete(verts);
 
   return GPU_batch_create_ex(
       GPU_PRIM_TRIS, vbo, indexbuf, GPU_BATCH_OWNS_VBO | GPU_BATCH_OWNS_INDEX);
 }
 
-blender::gpu::Batch *GPU_batch_wire_from_poly_2d_encoded(const uchar *polys_flat,
-                                                         uint polys_flat_len,
-                                                         const rctf *rect)
+gpu::Batch *GPU_batch_wire_from_poly_2d_encoded(const uchar *polys_flat,
+                                                uint polys_flat_len,
+                                                const rctf *rect)
 {
   const uchar(*polys)[2] = reinterpret_cast<const uchar(*)[2]>(polys_flat);
   const uint polys_len = polys_flat_len / 2;
@@ -122,7 +124,7 @@ blender::gpu::Batch *GPU_batch_wire_from_poly_2d_encoded(const uchar *polys_flat
 
   /* Over alloc */
   /* Lines are pairs of (x, y) byte locations packed into an int32_t. */
-  int32_t *lines = MEM_malloc_arrayN<int32_t>(polys_len, __func__);
+  int32_t *lines = MEM_new_array_uninitialized<int32_t>(polys_len, __func__);
   int32_t *lines_step = lines;
 
   const float range_uchar[2] = {
@@ -147,8 +149,8 @@ blender::gpu::Batch *GPU_batch_wire_from_poly_2d_encoded(const uchar *polys_flat
           uint16_t as_u16[2];
           uint32_t as_u32;
         } data;
-        data.as_u16[0] = *((const uint16_t *)polys_step[i_prev]);
-        data.as_u16[1] = *((const uint16_t *)polys_step[i]);
+        data.as_u16[0] = *(reinterpret_cast<const uint16_t *>(polys_step[i_prev]));
+        data.as_u16[1] = *(reinterpret_cast<const uint16_t *>(polys_step[i]));
         if (data.as_u16[0] > data.as_u16[1]) {
           std::swap(data.as_u16[0], data.as_u16[1]);
         }
@@ -185,10 +187,10 @@ blender::gpu::Batch *GPU_batch_wire_from_poly_2d_encoded(const uchar *polys_flat
     uint pos;
   } attr_id;
   if (format.attr_len == 0) {
-    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    attr_id.pos = GPU_vertformat_attr_add(&format, "pos", gpu::VertAttrType::SFLOAT_32_32);
   }
 
-  blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+  gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
   const uint vbo_len_capacity = lines_len * 2;
   GPU_vertbuf_data_alloc(*vbo, vbo_len_capacity);
 
@@ -209,7 +211,7 @@ blender::gpu::Batch *GPU_batch_wire_from_poly_2d_encoded(const uchar *polys_flat
     }
   }
   BLI_assert(vbo_len_capacity == GPU_vertbuf_raw_used(&pos_step));
-  MEM_freeN(lines);
+  MEM_delete(lines);
   return GPU_batch_create_ex(GPU_PRIM_LINES, vbo, nullptr, GPU_BATCH_OWNS_VBO);
 }
 
@@ -219,10 +221,8 @@ blender::gpu::Batch *GPU_batch_wire_from_poly_2d_encoded(const uchar *polys_flat
 /** \name Common shapes (3D)
  * \{ */
 
-blender::gpu::Batch *GPU_batch_unit_cube()
+gpu::Batch *GPU_batch_unit_cube()
 {
-  using namespace blender;
-
   static const std::array<float3, 8> bone_box_verts = {
       float3{1.0f, -1.0f, 1.0f},
       float3{1.0f, -1.0f, -1.0f},
@@ -255,8 +255,8 @@ blender::gpu::Batch *GPU_batch_unit_cube()
   };
 
   GPUVertFormat format = {0};
-  GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+  GPU_vertformat_attr_add(&format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
+  gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
 
   const int tri_len = bone_box_solid_tris.size();
   const int vert_len = bone_box_verts.size();
@@ -281,3 +281,5 @@ blender::gpu::Batch *GPU_batch_unit_cube()
 }
 
 /** \} */
+
+}  // namespace blender

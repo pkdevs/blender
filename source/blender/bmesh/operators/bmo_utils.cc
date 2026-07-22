@@ -14,9 +14,10 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
-#include "BLI_alloca.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_array.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_math_vector_types.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_customdata.hh"
@@ -24,6 +25,12 @@
 #include "bmesh.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
+
+/* -------------------------------------------------------------------- */
+/** \name Create Vert
+ * \{ */
 
 #define ELE_NEW 1
 
@@ -36,6 +43,12 @@ void bmo_create_vert_exec(BMesh *bm, BMOperator *op)
   BMO_vert_flag_enable(bm, BM_vert_create(bm, vec, nullptr, BM_CREATE_NOP), ELE_NEW);
   BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "vert.out", BM_VERT, ELE_NEW);
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform
+ * \{ */
 
 void bmo_transform_exec(BMesh *bm, BMOperator *op)
 {
@@ -60,7 +73,8 @@ void bmo_transform_exec(BMesh *bm, BMOperator *op)
     mul_m4_v3(mat, v->co);
 
     if (shape_keys_len != 0) {
-      float(*co_dst)[3] = static_cast<float(*)[3]>(BM_ELEM_CD_GET_VOID_P(v, cd_shape_key_offset));
+      float (*co_dst)[3] = static_cast<float (*)[3]>(
+          BM_ELEM_CD_GET_VOID_P(v, cd_shape_key_offset));
       for (int i = 0; i < shape_keys_len; i++, co_dst++) {
         mul_m4_v3(mat, *co_dst);
       }
@@ -133,6 +147,12 @@ void bmo_rotate_exec(BMesh *bm, BMOperator *op)
                "use_shapekey");
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Reverse Faces
+ * \{ */
+
 void bmo_reverse_faces_exec(BMesh *bm, BMOperator *op)
 {
   const int cd_loop_mdisp_offset = CustomData_get_offset(&bm->ldata, CD_MDISPS);
@@ -145,8 +165,11 @@ void bmo_reverse_faces_exec(BMesh *bm, BMOperator *op)
   }
 }
 
-#define SEL_FLAG 1
-#define SEL_ORIG 2
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Flip Quad Tessellation
+ * \{ */
 
 void bmo_flip_quad_tessellation_exec(BMesh *bm, BMOperator *op)
 {
@@ -163,6 +186,15 @@ void bmo_flip_quad_tessellation_exec(BMesh *bm, BMOperator *op)
     bm->elem_index_dirty |= BM_LOOP;
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Extend
+ * \{ */
+
+#define SEL_FLAG 1
+#define SEL_ORIG 2
 
 static void bmo_face_flag_set_flush(BMesh *bm, BMFace *f, const short oflag, const bool value)
 {
@@ -396,14 +428,20 @@ void bmo_region_extend_exec(BMesh *bm, BMOperator *op)
   BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "geom.out", BM_ALL_NOLOOP, SEL_FLAG);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Smooth Vert
+ * \{ */
+
 void bmo_smooth_vert_exec(BMesh * /*bm*/, BMOperator *op)
 {
   BMOIter siter;
   BMIter iter;
   BMVert *v;
   BMEdge *e;
-  float(*cos)[3] = static_cast<float(*)[3]>(
-      MEM_mallocN(sizeof(*cos) * BMO_slot_buffer_len(op->slots_in, "verts"), __func__));
+  float (*cos)[3] = MEM_new_array_uninitialized<float[3]>(
+      BMO_slot_buffer_len(op->slots_in, "verts"), __func__);
   float *co, *co2, clip_dist = BMO_slot_float_get(op->slots_in, "clip_dist");
   const float fac = BMO_slot_float_get(op->slots_in, "factor");
   int i, j, clipx, clipy, clipz;
@@ -467,12 +505,14 @@ void bmo_smooth_vert_exec(BMesh * /*bm*/, BMOperator *op)
     i++;
   }
 
-  MEM_freeN(cos);
+  MEM_delete(cos);
 }
 
-/**************************************************************************** *
- * Cycle UVs for a face
- **************************************************************************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Cycle UVs for a Face
+ * \{ */
 
 void bmo_rotate_uvs_exec(BMesh *bm, BMOperator *op)
 {
@@ -536,9 +576,11 @@ void bmo_rotate_uvs_exec(BMesh *bm, BMOperator *op)
   }
 }
 
-/**************************************************************************** *
- * Reverse UVs for a face
- **************************************************************************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Reverse UVs for a Face
+ * \{ */
 
 static void bm_face_reverse_uvs(BMFace *f, const int cd_loop_uv_offset)
 {
@@ -546,7 +588,7 @@ static void bm_face_reverse_uvs(BMFace *f, const int cd_loop_uv_offset)
   BMLoop *l;
   int i;
 
-  float(*uvs)[2] = BLI_array_alloca(uvs, f->len);
+  Array<float2, BM_DEFAULT_NGON_STACK_SIZE> uvs(f->len);
 
   BM_ITER_ELEM_INDEX (l, &iter, f, BM_LOOPS_OF_FACE, i) {
     float *luv = BM_ELEM_CD_GET_FLOAT_P(l, cd_loop_uv_offset);
@@ -573,32 +615,29 @@ void bmo_reverse_uvs_exec(BMesh *bm, BMOperator *op)
   }
 }
 
-/**************************************************************************** *
- * Cycle colors for a face
- **************************************************************************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Cycle Colors for a Face
+ * \{ */
 
 static void bmo_get_loop_color_ref(BMesh *bm,
                                    int index,
                                    int *r_cd_color_offset,
-                                   int *r_cd_color_type)
+                                   std::optional<eCustomDataType> *r_cd_color_type)
 {
-  Mesh me_query = blender::dna::shallow_zero_initialize();
-  CustomData_reset(&me_query.vert_data);
-  CustomData_reset(&me_query.edge_data);
-  CustomData_reset(&me_query.face_data);
-  me_query.corner_data = bm->ldata;
-  *((short *)me_query.id.name) = ID_ME;
-
-  AttributeOwner owner = AttributeOwner::from_id(&me_query.id);
-  CustomDataLayer *layer = BKE_attribute_from_index(
-      owner, index, ATTR_DOMAIN_MASK_CORNER, CD_MASK_COLOR_ALL);
-  if (!layer) {
-    *r_cd_color_offset = -1;
-    return;
+  int color_index = 0;
+  for (const CustomDataLayer &layer : Span(bm->ldata.layers, bm->ldata.totlayer)) {
+    if (CD_TYPE_AS_MASK(eCustomDataType(layer.type)) & CD_MASK_COLOR_ALL) {
+      if (color_index == index) {
+        *r_cd_color_offset = layer.offset;
+        *r_cd_color_type = eCustomDataType(layer.type);
+        return;
+      }
+      color_index++;
+    }
   }
-
-  *r_cd_color_offset = layer->offset;
-  *r_cd_color_type = layer->type;
+  *r_cd_color_offset = -1;
 }
 
 void bmo_rotate_colors_exec(BMesh *bm, BMOperator *op)
@@ -612,8 +651,7 @@ void bmo_rotate_colors_exec(BMesh *bm, BMOperator *op)
   const int color_index = BMO_slot_int_get(op->slots_in, "color_index");
 
   int cd_loop_color_offset;
-  int cd_loop_color_type;
-
+  std::optional<eCustomDataType> cd_loop_color_type;
   bmo_get_loop_color_ref(bm, color_index, &cd_loop_color_offset, &cd_loop_color_type);
 
   if (cd_loop_color_offset == -1) {
@@ -673,12 +711,15 @@ void bmo_rotate_colors_exec(BMesh *bm, BMOperator *op)
   }
 }
 
-/*************************************************************************** *
- * Reverse colors for a face
- *************************************************************************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Reverse Colors for a Face
+ * \{ */
+
 static void bm_face_reverse_colors(BMFace *f,
                                    const int cd_loop_color_offset,
-                                   const int cd_loop_color_type)
+                                   const eCustomDataType cd_loop_color_type)
 {
   BMIter iter;
   BMLoop *l;
@@ -691,7 +732,7 @@ static void bm_face_reverse_colors(BMFace *f,
   char *col = cols;
   BM_ITER_ELEM_INDEX (l, &iter, f, BM_LOOPS_OF_FACE, i) {
     void *lcol = BM_ELEM_CD_GET_VOID_P(l, cd_loop_color_offset);
-    memcpy((void *)col, lcol, size);
+    memcpy(static_cast<void *>(col), lcol, size);
     col += size;
   }
 
@@ -701,7 +742,7 @@ static void bm_face_reverse_colors(BMFace *f,
     void *lcol = BM_ELEM_CD_GET_VOID_P(l, cd_loop_color_offset);
 
     col = cols + (f->len - i - 1) * size;
-    memcpy(lcol, (void *)col, size);
+    memcpy(lcol, static_cast<void *>(col), size);
   }
 }
 
@@ -713,8 +754,7 @@ void bmo_reverse_colors_exec(BMesh *bm, BMOperator *op)
   const int color_index = BMO_slot_int_get(op->slots_in, "color_index");
 
   int cd_loop_color_offset;
-  int cd_loop_color_type;
-
+  std::optional<eCustomDataType> cd_loop_color_type;
   bmo_get_loop_color_ref(bm, color_index, &cd_loop_color_offset, &cd_loop_color_type);
 
   if (cd_loop_color_offset == -1) {
@@ -723,6 +763,10 @@ void bmo_reverse_colors_exec(BMesh *bm, BMOperator *op)
   }
 
   BMO_ITER (f, &iter, op->slots_in, "faces", BM_FACE) {
-    bm_face_reverse_colors(f, cd_loop_color_offset, cd_loop_color_type);
+    bm_face_reverse_colors(f, cd_loop_color_offset, *cd_loop_color_type);
   }
 }
+
+/** \} */
+
+}  // namespace blender

@@ -8,12 +8,14 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "DNA_curve_types.h"
 
 #include "ED_anim_api.hh"
 #include "ED_keyframes_keylist.hh"
+
+namespace blender {
 
 struct AnimData;
 struct ChannelDrawList;
@@ -85,18 +87,12 @@ void ED_add_action_layered_channel(ChannelDrawList *channel_list,
 void ED_add_action_slot_channel(ChannelDrawList *channel_list,
                                 bAnimContext *ac,
                                 bAnimListElem *ale,
-                                blender::animrig::Action &action,
-                                blender::animrig::Slot &slot,
+                                animrig::Action &action,
+                                animrig::Slot &slot,
                                 float ypos,
                                 float yscale_fac,
                                 int saction_flag);
-/* Legacy Action Summary */
-void ED_add_action_channel(ChannelDrawList *channel_list,
-                           bAnimListElem *ale,
-                           bAction *act,
-                           float ypos,
-                           float yscale_fac,
-                           int saction_flag);
+
 /* Object Summary */
 void ED_add_object_channel(ChannelDrawList *channel_list,
                            bDopeSheet *ads,
@@ -129,7 +125,7 @@ void ED_add_grease_pencil_cels_channel(ChannelDrawList *channel_list,
 /* Grease Pencil layer group channels */
 void ED_add_grease_pencil_layer_group_channel(ChannelDrawList *channel_list,
                                               bDopeSheet *ads,
-                                              const GreasePencilLayerTreeGroup *layer,
+                                              const GreasePencilLayerTreeGroup *layer_group,
                                               float ypos,
                                               float yscale_fac,
                                               int saction_flag);
@@ -163,3 +159,5 @@ ChannelDrawList *ED_channel_draw_list_create();
 void ED_channel_list_flush(ChannelDrawList *channel_list, View2D *v2d);
 
 void ED_channel_list_free(ChannelDrawList *channel_list);
+
+}  // namespace blender

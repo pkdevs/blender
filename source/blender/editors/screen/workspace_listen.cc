@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_context.hh"
 #include "BKE_viewer_path.hh"
@@ -12,6 +12,8 @@
 
 #include "WM_api.hh"
 
+namespace blender {
+
 /**
  * Checks if the viewer path stored in the workspace is still active and resets it if not.
  * The viewer path stored in the workspace is the ground truth for other editors, so it should be
@@ -19,7 +21,7 @@
  */
 static void validate_viewer_paths(bContext &C, WorkSpace &workspace)
 {
-  if (BLI_listbase_is_empty(&workspace.viewer_path.path)) {
+  if (workspace.viewer_path.path.is_empty()) {
     return;
   }
 
@@ -45,3 +47,5 @@ void ED_workspace_do_listen(bContext *C, const wmNotifier * /*note*/)
   WorkSpace *workspace = CTX_wm_workspace(C);
   validate_viewer_paths(*C, *workspace);
 }
+
+}  // namespace blender

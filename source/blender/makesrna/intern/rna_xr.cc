@@ -20,10 +20,17 @@
 
 #ifdef RNA_RUNTIME
 
-#  include "BLI_math_rotation.h"
-#  include "BLI_math_vector.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_rotation_c.hh"
+#  include "BLI_math_vector_c.hh"
+#  include "BLI_string.hh"
+
+#  include "BKE_context.hh"
+#  include "BKE_main.hh"
 
 #  include "WM_api.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 
@@ -33,7 +40,7 @@ static wmXrData *rna_XrSession_wm_xr_data_get(PointerRNA *ptr)
   /* Callers could also get XrSessionState pointer through ptr->data, but prefer if we just
    * consistently pass wmXrData pointers to the WM_xr_xxx() API. */
 
-  BLI_assert(ELEM(ptr->type, &RNA_XrSessionSettings, &RNA_XrSessionState));
+  BLI_assert(ELEM(ptr->type, RNA_XrSessionSettings, RNA_XrSessionState, RNA_XrViewfinderState));
 
   wmWindowManager *wm = (wmWindowManager *)ptr->owner_id;
   BLI_assert(wm && (GS(wm->id.name) == ID_WM));
@@ -49,7 +56,7 @@ static wmXrData *rna_XrSession_wm_xr_data_get(PointerRNA *ptr)
 static XrComponentPath *rna_XrComponentPath_new(XrActionMapBinding *amb, const char *path_str)
 {
 #  ifdef WITH_XR_OPENXR
-  XrComponentPath *component_path = MEM_callocN<XrComponentPath>(__func__);
+  XrComponentPath *component_path = MEM_new<XrComponentPath>(__func__);
   STRNCPY(component_path->path, path_str);
   BLI_addtail(&amb->component_paths, component_path);
   return component_path;
@@ -152,7 +159,7 @@ static int rna_XrActionMapBinding_component_paths_length(PointerRNA *ptr)
 {
 #  ifdef WITH_XR_OPENXR
   XrActionMapBinding *amb = (XrActionMapBinding *)ptr->data;
-  return BLI_listbase_count(&amb->component_paths);
+  return amb->component_paths.count();
 #  else
   UNUSED_VARS(ptr);
   return 0;
@@ -180,7 +187,7 @@ static void rna_XrActionMapBinding_axis0_region_set(PointerRNA *ptr, int value)
 #  ifdef WITH_XR_OPENXR
   XrActionMapBinding *amb = static_cast<XrActionMapBinding *>(ptr->data);
   amb->axis_flag &= ~(XR_AXIS0_POS | XR_AXIS0_NEG);
-  amb->axis_flag |= value;
+  amb->axis_flag |= eXrAxisFlag(value);
 #  else
   UNUSED_VARS(ptr, value);
 #  endif
@@ -207,7 +214,7 @@ static void rna_XrActionMapBinding_axis1_region_set(PointerRNA *ptr, int value)
 #  ifdef WITH_XR_OPENXR
   XrActionMapBinding *amb = static_cast<XrActionMapBinding *>(ptr->data);
   amb->axis_flag &= ~(XR_AXIS1_POS | XR_AXIS1_NEG);
-  amb->axis_flag |= value;
+  amb->axis_flag |= eXrAxisFlag(value);
 #  else
   UNUSED_VARS(ptr, value);
 #  endif
@@ -218,7 +225,7 @@ static void rna_XrActionMapBinding_name_update(Main *bmain, Scene * /*scene*/, P
 #  ifdef WITH_XR_OPENXR
   wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
   if (wm && wm->xr.runtime) {
-    ListBase *actionmaps = WM_xr_actionmaps_get(wm->xr.runtime);
+    ListBaseT<XrActionMap> *actionmaps = WM_xr_actionmaps_get(wm->xr.runtime);
     short idx = WM_xr_actionmap_selected_index_get(wm->xr.runtime);
     XrActionMap *actionmap = static_cast<XrActionMap *>(BLI_findlink(actionmaps, idx));
     if (actionmap) {
@@ -238,7 +245,7 @@ static void rna_XrActionMapBinding_name_update(Main *bmain, Scene * /*scene*/, P
 static XrUserPath *rna_XrUserPath_new(XrActionMapItem *ami, const char *path_str)
 {
 #  ifdef WITH_XR_OPENXR
-  XrUserPath *user_path = MEM_callocN<XrUserPath>(__func__);
+  XrUserPath *user_path = MEM_new<XrUserPath>(__func__);
   STRNCPY(user_path->path, path_str);
   BLI_addtail(&ami->user_paths, user_path);
   return user_path;
@@ -335,7 +342,7 @@ static int rna_XrActionMapItem_user_paths_length(PointerRNA *ptr)
 {
 #  ifdef WITH_XR_OPENXR
   XrActionMapItem *ami = (XrActionMapItem *)ptr->data;
-  return BLI_listbase_count(&ami->user_paths);
+  return ami->user_paths.count();
 #  else
   UNUSED_VARS(ptr);
   return 0;
@@ -463,7 +470,7 @@ static void rna_XrActionMapItem_haptic_mode_set(PointerRNA *ptr, int value)
 #  ifdef WITH_XR_OPENXR
   XrActionMapItem *ami = static_cast<XrActionMapItem *>(ptr->data);
   ami->haptic_flag &= ~(XR_HAPTIC_PRESS | XR_HAPTIC_RELEASE | XR_HAPTIC_REPEAT);
-  ami->haptic_flag |= value;
+  ami->haptic_flag |= eXrHapticFlag(value);
 #  else
   UNUSED_VARS(ptr, value);
 #  endif
@@ -529,7 +536,7 @@ static int rna_XrActionMapItem_bindings_length(PointerRNA *ptr)
 {
 #  ifdef WITH_XR_OPENXR
   XrActionMapItem *ami = (XrActionMapItem *)ptr->data;
-  return BLI_listbase_count(&ami->bindings);
+  return ami->bindings.count();
 #  else
   UNUSED_VARS(ptr);
   return 0;
@@ -541,7 +548,7 @@ static void rna_XrActionMapItem_name_update(Main *bmain, Scene * /*scene*/, Poin
 #  ifdef WITH_XR_OPENXR
   wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
   if (wm && wm->xr.runtime) {
-    ListBase *actionmaps = WM_xr_actionmaps_get(wm->xr.runtime);
+    ListBaseT<XrActionMap> *actionmaps = WM_xr_actionmaps_get(wm->xr.runtime);
     short idx = WM_xr_actionmap_selected_index_get(wm->xr.runtime);
     XrActionMap *actionmap = static_cast<XrActionMap *>(BLI_findlink(actionmaps, idx));
     if (actionmap) {
@@ -626,7 +633,7 @@ static int rna_XrActionMap_items_length(PointerRNA *ptr)
 {
 #  ifdef WITH_XR_OPENXR
   XrActionMap *actionmap = (XrActionMap *)ptr->data;
-  return BLI_listbase_count(&actionmap->items);
+  return actionmap->items.count();
 #  else
   UNUSED_VARS(ptr);
   return 0;
@@ -757,7 +764,7 @@ static bool rna_XrSessionState_action_create(bContext *C,
 {
 #  ifdef WITH_XR_OPENXR
   wmWindowManager *wm = CTX_wm_manager(C);
-  if (BLI_listbase_is_empty(&ami->user_paths)) {
+  if (ami->user_paths.is_empty()) {
     return false;
   }
 
@@ -807,8 +814,8 @@ static bool rna_XrSessionState_action_binding_create(bContext *C,
 {
 #  ifdef WITH_XR_OPENXR
   wmWindowManager *wm = CTX_wm_manager(C);
-  const int count_user_paths = BLI_listbase_count(&ami->user_paths);
-  const int count_component_paths = BLI_listbase_count(&amb->component_paths);
+  const int count_user_paths = ami->user_paths.count();
+  const int count_component_paths = amb->component_paths.count();
   if (count_user_paths < 1 || (count_user_paths != count_component_paths)) {
     return false;
   }
@@ -1020,6 +1027,291 @@ static void rna_XrSessionState_viewer_pose_rotation_get(PointerRNA *ptr, float *
 #  endif
 }
 
+static PointerRNA rna_XrSessionState_viewfinder_get(PointerRNA *ptr)
+{
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  wmXrViewfinderState *viewfinder = WM_xr_session_state_viewfinder_handle_get(xr);
+  return RNA_pointer_create_discrete(ptr->owner_id, RNA_XrViewfinderState, viewfinder);
+#  else
+  UNUSED_VARS(ptr);
+  return PointerRNA_NULL;
+#  endif
+}
+
+static void rna_XrSessionState_viewfinder_location_get(PointerRNA *ptr, float *r_values)
+{
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_location_get(xr, r_values);
+#  else
+  UNUSED_VARS(ptr);
+  zero_v3(r_values);
+#  endif
+}
+
+static void rna_XrSessionState_viewfinder_orientation_get(PointerRNA *ptr, float *r_values)
+{
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_orientation_get(xr, r_values);
+#  else
+  UNUSED_VARS(ptr);
+  unit_qt(r_values);
+#  endif
+}
+
+static void rna_XrSessionState_viewfinder_trigger_flash(PointerRNA ptr)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(&ptr);
+  WM_xr_session_state_viewfinder_trigger_flash(xr);
+#  else
+  UNUSED_VARS(ptr);
+#  endif
+}
+
+static void rna_XrSessionState_viewfinder_trigger_focus_indicator(PointerRNA ptr, bool hit_success)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(&ptr);
+  WM_xr_session_state_viewfinder_trigger_focus_indicator(xr, hit_success);
+#  else
+  UNUSED_VARS(ptr, hit_success);
+#  endif
+}
+
+static void rna_XrSessionState_viewfinder_reset_view_smoothing(PointerRNA ptr)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(&ptr);
+  WM_xr_session_state_viewfinder_reset_view_smoothing(xr);
+#  else
+  UNUSED_VARS(ptr);
+#  endif
+}
+
+static bool rna_XrSessionState_viewfinder_capture_dof_enabled_get(PointerRNA *ptr)
+{
+  bool value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_capture_dof_enabled_get(xr, &value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 1.0f;
+#  endif
+  return value;
+}
+
+static void rna_XrSessionState_viewfinder_capture_dof_enabled_set(PointerRNA *ptr, bool value)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_capture_dof_enabled_set(xr, value);
+#  else
+  UNUSED_VARS(ptr, value);
+#  endif
+}
+
+static float rna_XrSessionState_viewfinder_capture_lens_focal_get(PointerRNA *ptr)
+{
+  float value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_capture_lens_focal_get(xr, &value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 1.0f;
+#  endif
+  return value;
+}
+
+static void rna_XrSessionState_viewfinder_capture_lens_focal_set(PointerRNA *ptr, float value)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_capture_lens_focal_set(xr, value);
+#  else
+  UNUSED_VARS(ptr, value);
+#  endif
+}
+
+static float rna_XrSessionState_viewfinder_capture_dof_fstop_get(PointerRNA *ptr)
+{
+  float value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_capture_dof_fstop_get(xr, &value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 1.0f;
+#  endif
+  return value;
+}
+
+static void rna_XrSessionState_viewfinder_capture_dof_fstop_set(PointerRNA *ptr, float value)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_capture_dof_fstop_set(xr, value);
+#  else
+  UNUSED_VARS(ptr, value);
+#  endif
+}
+
+static float rna_XrSessionState_viewfinder_capture_dof_distance_get(PointerRNA *ptr)
+{
+  float value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_capture_dof_distance_get(xr, &value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 1.0f;
+#  endif
+  return value;
+}
+
+static void rna_XrSessionState_viewfinder_capture_dof_distance_set(PointerRNA *ptr, float value)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_capture_dof_distance_set(xr, value);
+#  else
+  UNUSED_VARS(ptr, value);
+#  endif
+}
+
+static bool rna_XrSessionState_viewfinder_playback_show_active_capture_in_space_enabled_get(
+    PointerRNA *ptr)
+{
+  bool value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_playback_show_active_capture_in_space_enabled_get(xr, &value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 1.0f;
+#  endif
+  return value;
+}
+
+static void rna_XrSessionState_viewfinder_playback_show_active_capture_in_space_enabled_set(
+    PointerRNA *ptr, bool value)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewfinder_playback_show_active_capture_in_space_enabled_set(xr, value);
+#  else
+  UNUSED_VARS(ptr, value);
+#  endif
+}
+
+static int rna_XrSessionState_viewfinder_active_mode_get(PointerRNA *ptr)
+{
+  int value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  eXrViewfinderMode enum_value;
+  WM_xr_session_state_viewfinder_active_mode_get(xr, &enum_value);
+  value = static_cast<int>(enum_value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 0;
+#  endif
+  return value;
+}
+
+static void rna_XrSessionState_viewfinder_active_mode_set(PointerRNA *ptr, int value)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  const eXrViewfinderMode enum_value = static_cast<eXrViewfinderMode>(value);
+  WM_xr_session_state_viewfinder_active_mode_set(xr, enum_value);
+#  else
+  UNUSED_VARS(ptr, value);
+#  endif
+}
+
+static int rna_XrSessionState_viewfinder_active_action_live_get(PointerRNA *ptr)
+{
+  int value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  eXrViewfinderLiveAction enum_value;
+  WM_xr_session_state_viewfinder_active_action_live_get(xr, &enum_value);
+  value = static_cast<int>(enum_value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 0;
+#  endif
+  return value;
+}
+
+static void rna_XrSessionState_viewfinder_active_action_live_set(PointerRNA *ptr, int value)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  const eXrViewfinderLiveAction enum_value = static_cast<eXrViewfinderLiveAction>(value);
+  WM_xr_session_state_viewfinder_active_action_live_set(xr, enum_value);
+#  else
+  UNUSED_VARS(ptr, value);
+#  endif
+}
+
+static int rna_XrSessionState_viewfinder_active_action_playback_get(PointerRNA *ptr)
+{
+  int value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  eXrViewfinderPlaybackAction enum_value;
+  WM_xr_session_state_viewfinder_active_action_playback_get(xr, &enum_value);
+  value = static_cast<int>(enum_value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 0;
+#  endif
+  return value;
+}
+
+static void rna_XrSessionState_viewfinder_active_action_playback_set(PointerRNA *ptr, int value)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  const eXrViewfinderPlaybackAction enum_value = static_cast<eXrViewfinderPlaybackAction>(value);
+  WM_xr_session_state_viewfinder_active_action_playback_set(xr, enum_value);
+#  else
+  UNUSED_VARS(ptr, value);
+#  endif
+}
+
+static int rna_XrSessionState_viewfinder_active_action_confirm_get(PointerRNA *ptr)
+{
+  int value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  eXrViewfinderConfirmAction enum_value;
+  WM_xr_session_state_viewfinder_active_action_confirm_get(xr, &enum_value);
+  value = static_cast<int>(enum_value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 0;
+#  endif
+  return value;
+}
+
+static void rna_XrSessionState_viewfinder_active_action_confirm_set(PointerRNA *ptr, int value)
+{
+#  ifdef WITH_XR_OPENXR
+  wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  const eXrViewfinderConfirmAction enum_value = static_cast<eXrViewfinderConfirmAction>(value);
+  WM_xr_session_state_viewfinder_active_action_confirm_set(xr, enum_value);
+#  else
+  UNUSED_VARS(ptr, value);
+#  endif
+}
+
 static void rna_XrSessionState_nav_location_get(PointerRNA *ptr, float *r_values)
 {
 #  ifdef WITH_XR_OPENXR
@@ -1085,11 +1377,24 @@ static void rna_XrSessionState_nav_scale_set(PointerRNA *ptr, float value)
 #  endif
 }
 
+static float rna_XrSessionState_viewer_scale_get(PointerRNA *ptr)
+{
+  float value;
+#  ifdef WITH_XR_OPENXR
+  const wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
+  WM_xr_session_state_viewer_scale_get(xr, &value);
+#  else
+  UNUSED_VARS(ptr);
+  value = 1.0f;
+#  endif
+  return value;
+}
+
 static void rna_XrSessionState_actionmaps_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
 #  ifdef WITH_XR_OPENXR
   wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
-  ListBase *lb = WM_xr_actionmaps_get(xr->runtime);
+  ListBaseT<XrActionMap> *lb = WM_xr_actionmaps_get(xr->runtime);
   rna_iterator_listbase_begin(iter, ptr, lb, nullptr);
 #  else
   UNUSED_VARS(iter, ptr);
@@ -1100,8 +1405,8 @@ static int rna_XrSessionState_actionmaps_length(PointerRNA *ptr)
 {
 #  ifdef WITH_XR_OPENXR
   wmXrData *xr = rna_XrSession_wm_xr_data_get(ptr);
-  ListBase *lb = WM_xr_actionmaps_get(xr->runtime);
-  return BLI_listbase_count(lb);
+  ListBaseT<XrActionMap> *lb = WM_xr_actionmaps_get(xr->runtime);
+  return lb->count();
 #  else
   UNUSED_VARS(ptr);
   return 0;
@@ -1345,7 +1650,11 @@ static bool rna_XrEventData_bimanual_get(PointerRNA *ptr)
 
 /** \} */
 
+}  // namespace blender
+
 #else /* RNA_RUNTIME */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 
@@ -1941,6 +2250,20 @@ static void rna_def_xr_session_settings(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  static const EnumPropertyItem viewfinder_hands[] = {
+      {XR_VIEWFINDER_HAND_LEFT,
+       "LEFT",
+       0,
+       "Left",
+       "Place the viewfinder on the left hand controller"},
+      {XR_VIEWFINDER_HAND_RIGHT,
+       "RIGHT",
+       0,
+       "Right",
+       "Place the viewfinder on the right hand controller"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   srna = RNA_def_struct(brna, "XrSessionSettings", nullptr);
   RNA_def_struct_ui_text(srna, "XR Session Settings", "");
 
@@ -1982,7 +2305,7 @@ static void rna_def_xr_session_settings(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
 
   prop = RNA_def_property(srna, "base_scale", PROP_FLOAT, PROP_NONE);
-  RNA_def_property_ui_text(prop, "Base Scale", "Uniform scale to apply to VR view");
+  RNA_def_property_ui_text(prop, "Base Scale", "Uniform base pose scale to apply to VR view");
   RNA_def_property_range(prop, 1e-6f, FLT_MAX);
   RNA_def_property_ui_range(prop, 0.001f, FLT_MAX, 10, 3);
   RNA_def_property_float_default(prop, 1.0f);
@@ -2033,16 +2356,74 @@ static void rna_def_xr_session_settings(BlenderRNA *brna)
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR);
   RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
 
+  prop = RNA_def_property(srna, "viewfinder_enabled", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(prop, "Viewfinder Enabled", "Enable the Location Scouting Viewfinder");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "viewfinder_hand", PROP_ENUM, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_enum_default(prop, XR_VIEWFINDER_HAND_LEFT);
+  RNA_def_property_enum_items(prop, viewfinder_hands);
+  RNA_def_property_ui_text(
+      prop, "Viewfinder Hand", "Hand on which to place the Location Scouting Viewfinder");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "viewfinder_scale", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_range(prop, -3.0f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.001f, 3.0f, 0.01 * 100, 3);
+  RNA_def_property_ui_text(prop, "Viewfinder Scale", "Location Scouting Viewfinder size scale");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "viewfinder_crosshair_enabled", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(
+      prop, "Viewfinder Crosshair Enabled", "Enable the Viewfinder Crosshair");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "viewfinder_passepartout_overscan", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(prop,
+                           "Viewfinder Passepartout Overscan",
+                           "Border size of the Viewfinder Passepartout overlay");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "viewfinder_passepartout_opacity", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(prop,
+                           "Viewfinder Passepartout Opacity",
+                           "Opacity of the darkened Viewfinder Passepartout overlay");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
   prop = RNA_def_property(srna, "clip_start", PROP_FLOAT, PROP_DISTANCE);
   RNA_def_property_range(prop, 1e-6f, FLT_MAX);
-  RNA_def_property_ui_range(prop, 0.001f, FLT_MAX, 10, 3);
+  RNA_def_property_ui_range(prop, 0.001f, FLT_MAX, 0.1 * 100, 3);
   RNA_def_property_ui_text(prop, "Clip Start", "VR viewport near clipping distance");
   RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
 
   prop = RNA_def_property(srna, "clip_end", PROP_FLOAT, PROP_DISTANCE);
   RNA_def_property_range(prop, 1e-6f, FLT_MAX);
-  RNA_def_property_ui_range(prop, 0.001f, FLT_MAX, 10, 3);
+  RNA_def_property_ui_range(prop, 0.001f, FLT_MAX, 10 * 100, 3);
   RNA_def_property_ui_text(prop, "Clip End", "VR viewport far clipping distance");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "fly_speed", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_range(prop, 1e-6f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.001f, FLT_MAX, 0.5 * 100, 3);
+  RNA_def_property_ui_text(prop, "Fly Speed", "Fly speed in meters per second");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "view_scale", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop,
+      "View Scale",
+      "Scaling factor applied to the VR view for fine adjustments. "
+      "Modifying this value will keep the viewer at the same world relative position");
+  RNA_def_property_range(prop, 1e-6f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.001f, 100.0f, 0.1f, 4);
   RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
 
   prop = RNA_def_property(srna, "use_positional_tracking", PROP_BOOLEAN, PROP_NONE);
@@ -2089,6 +2470,12 @@ static void rna_def_xr_session_state(BlenderRNA *brna)
 
   srna = RNA_def_struct(brna, "XrSessionState", nullptr);
   RNA_def_struct_ui_text(srna, "Session State", "Runtime state information about the VR session");
+
+  /* XrViewfinderState */
+  prop = RNA_def_pointer(
+      srna, "viewfinder", "XrViewfinderState", "Viewfinder", "Viewfinder State");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_XrSessionState_viewfinder_get", nullptr, nullptr, nullptr);
 
   func = RNA_def_function(srna, "is_running", "rna_XrSessionState_is_running");
   RNA_def_function_ui_description(func, "Query if the VR session is currently running");
@@ -2403,10 +2790,17 @@ static void rna_def_xr_session_state(BlenderRNA *brna)
   prop = RNA_def_property(srna, "navigation_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_funcs(
       prop, "rna_XrSessionState_nav_scale_get", "rna_XrSessionState_nav_scale_set", nullptr);
-  RNA_def_property_ui_text(
-      prop,
-      "Navigation Scale",
-      "Additional scale multiplier to apply to base scale when determining viewer scale");
+  RNA_def_property_ui_text(prop,
+                           "Navigation Scale",
+                           "Navigation scale multiplier applied when determining viewer scale");
+
+  prop = RNA_def_property(srna, "viewer_scale", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_funcs(prop, "rna_XrSessionState_viewer_scale_get", nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Viewer Scale",
+                           "Viewer XR scale factor, computed from the navigation scale, "
+                           "view scale session setting, and active scene unit scale");
 
   prop = RNA_def_property(srna, "actionmaps", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "XrActionMap");
@@ -2435,6 +2829,201 @@ static void rna_def_xr_session_state(BlenderRNA *brna)
                              "rna_XrSessionState_selected_actionmap_set",
                              nullptr);
   RNA_def_property_ui_text(prop, "Selected Action Map", "");
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name XR Session State Viewfinder
+ * \{ */
+
+static void rna_def_xr_session_state_viewfinder(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  FunctionRNA *func;
+  PropertyRNA *parm, *prop;
+
+  static const EnumPropertyItem viewfinder_modes[] = {
+      {XR_VIEWFINDER_MODE_LIVE,
+       "LIVE",
+       ICON_RESTRICT_RENDER_OFF,
+       "Live Mode",
+       "Capture a shot using the viewfinder"},
+      {XR_VIEWFINDER_MODE_PLAYBACK,
+       "PLAYBACK",
+       ICON_IMAGE_DATA,
+       "Playback Mode",
+       "Preview and playback captured shots in the viewfinder"},
+      {XR_VIEWFINDER_MODE_CONFIRM,
+       "CONFIRM",
+       ICON_CHECKMARK,
+       "Confirmation Mode",
+       "Confirm user action"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  static const EnumPropertyItem viewfinder_live_actions[] = {
+      {XR_VIEWFINDER_ACTION_LIVE_LENS, "LENS", ICON_VIEW_ZOOM, "Focal Length Control", nullptr},
+      {XR_VIEWFINDER_ACTION_LIVE_DOF, "DOF", ICON_COMMUNITY, "Toggle Depth of Field", nullptr},
+      {XR_VIEWFINDER_ACTION_LIVE_FOCUS, "FOCUS", ICON_PIVOT_BOUNDBOX, "Set Focus Point", nullptr},
+      {XR_VIEWFINDER_ACTION_LIVE_APERTURE, "APERTURE", ICON_PROP_CON, "Aperture Control", nullptr},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  static const EnumPropertyItem viewfinder_playback_actions[] = {
+      {XR_VIEWFINDER_ACTION_PB_BROWSE,
+       "BROWSE",
+       ICON_RENDERLAYERS,
+       "Browse Captured Shots",
+       nullptr},
+      {XR_VIEWFINDER_ACTION_PB_PREVIEW,
+       "PREVIEW",
+       ICON_OUTLINER_OB_CAMERA,
+       "Preview Active Shot in Space"},
+      {XR_VIEWFINDER_ACTION_PB_DELETE, "DELETE", ICON_TRASH, "Delete Active Shot"},
+      {0, nullptr, 0, nullptr, nullptr}};
+
+  static const EnumPropertyItem viewfinder_confirm_actions[] = {
+      {XR_VIEWFINDER_ACTION_CF_CANCEL, "CANCEL", ICON_X, "Cancel", nullptr},
+      {XR_VIEWFINDER_ACTION_CF_CONFIRM, "CONFIRM", ICON_CHECKMARK, "Confirm", nullptr},
+      {0, nullptr, 0, nullptr, nullptr}};
+
+  srna = RNA_def_struct(brna, "XrViewfinderState", nullptr);
+  RNA_def_struct_ui_text(srna,
+                         "Viewfinder State",
+                         "Runtime state information about the VR Location Scouting Viewfinder");
+
+  prop = RNA_def_property(srna, "location", PROP_FLOAT, PROP_TRANSLATION);
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_float_funcs(
+      prop, "rna_XrSessionState_viewfinder_location_get", nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Viewfinder Location", "Last known location of the viewfinder in world space");
+
+  prop = RNA_def_property(srna, "orientation", PROP_FLOAT, PROP_QUATERNION);
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_float_funcs(
+      prop, "rna_XrSessionState_viewfinder_orientation_get", nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Viewfinder Rotation", "Last known orientation of the viewfinder in world space");
+
+  func = RNA_def_function(srna, "trigger_flash", "rna_XrSessionState_viewfinder_trigger_flash");
+  RNA_def_function_ui_description(func,
+                                  "Trigger the Viewfinder flash to indicate a shot was captured");
+  RNA_def_function_flag(func, FUNC_SELF_AS_RNA);
+
+  func = RNA_def_function(
+      srna, "trigger_focus_indicator", "rna_XrSessionState_viewfinder_trigger_focus_indicator");
+  RNA_def_function_ui_description(
+      func, "Blink the Viewfinder crosshair to indicate whether a focus action hit a target");
+  RNA_def_function_flag(func, FUNC_SELF_AS_RNA);
+  parm = RNA_def_boolean(func,
+                         "hit_success",
+                         false,
+                         "Hit success",
+                         "True to blink the success color, False to blink the miss color");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+
+  func = RNA_def_function(
+      srna, "reset_view_smoothing", "rna_XrSessionState_viewfinder_reset_view_smoothing");
+  RNA_def_function_ui_description(func, "Reset the Viewfinder continuous view smoothing");
+  RNA_def_function_flag(func, FUNC_SELF_AS_RNA);
+
+  prop = RNA_def_property(srna, "capture_dof_enabled", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_boolean_funcs(prop,
+                                 "rna_XrSessionState_viewfinder_capture_dof_enabled_get",
+                                 "rna_XrSessionState_viewfinder_capture_dof_enabled_set");
+  RNA_def_property_ui_text(prop,
+                           "Viewfinder Capture Depth of Field Enabled",
+                           "Enable viewfinder capture depth of field");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "capture_lens_focal", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_float_funcs(prop,
+                               "rna_XrSessionState_viewfinder_capture_lens_focal_get",
+                               "rna_XrSessionState_viewfinder_capture_lens_focal_set",
+                               nullptr);
+  RNA_def_property_ui_text(prop,
+                           "Viewfinder Capture Focal Length",
+                           "Viewfinder capture focal length value in millimeters");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "capture_dof_distance", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_float_funcs(prop,
+                               "rna_XrSessionState_viewfinder_capture_dof_distance_get",
+                               "rna_XrSessionState_viewfinder_capture_dof_distance_set",
+                               nullptr);
+  RNA_def_property_ui_text(prop,
+                           "Viewfinder Capture Focus Distance",
+                           "Viewfinder capture distance to the focus point for depth of field");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "capture_dof_fstop", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_float_funcs(prop,
+                               "rna_XrSessionState_viewfinder_capture_dof_fstop_get",
+                               "rna_XrSessionState_viewfinder_capture_dof_fstop_set",
+                               nullptr);
+  RNA_def_property_ui_text(prop, "Viewfinder Capture F-Stop", "Viewfinder capture f-stop ratio");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(
+      srna, "playback_show_active_capture_in_space_enabled", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_boolean_funcs(
+      prop,
+      "rna_XrSessionState_viewfinder_playback_show_active_capture_in_space_enabled_get",
+      "rna_XrSessionState_viewfinder_playback_show_active_capture_in_space_enabled_set");
+  RNA_def_property_ui_text(prop,
+                           "Viewfinder Playback Show Active Capture in Space Enabled",
+                           "Display active capture in space when in Viewfinder Playback mode");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "active_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_XrSessionState_viewfinder_active_mode_get",
+                              "rna_XrSessionState_viewfinder_active_mode_set",
+                              nullptr);
+  RNA_def_property_enum_items(prop, viewfinder_modes);
+  RNA_def_property_ui_text(prop, "Viewfinder Mode", "Active viewfinder mode, live or playback");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "active_action_live", PROP_ENUM, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_XrSessionState_viewfinder_active_action_live_get",
+                              "rna_XrSessionState_viewfinder_active_action_live_set",
+                              nullptr);
+  RNA_def_property_enum_items(prop, viewfinder_live_actions);
+  RNA_def_property_ui_text(prop, "Viewfinder Live Action", "Active viewfinder live action");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "active_action_playback", PROP_ENUM, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_XrSessionState_viewfinder_active_action_playback_get",
+                              "rna_XrSessionState_viewfinder_active_action_playback_set",
+                              nullptr);
+  RNA_def_property_enum_items(prop, viewfinder_playback_actions);
+  RNA_def_property_ui_text(
+      prop, "Viewfinder Playback Action", "Active viewfinder playback action");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+
+  prop = RNA_def_property(srna, "active_action_confirm", PROP_ENUM, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_XrSessionState_viewfinder_active_action_confirm_get",
+                              "rna_XrSessionState_viewfinder_active_action_confirm_set",
+                              nullptr);
+  RNA_def_property_enum_items(prop, viewfinder_confirm_actions);
+  RNA_def_property_ui_text(prop, "Viewfinder Confirm Action", "Active viewfinder confirm action");
+  RNA_def_property_update(prop, NC_WM | ND_XR_DATA_CHANGED, nullptr);
 }
 
 /** \} */
@@ -2551,9 +3140,12 @@ void RNA_def_xr(BlenderRNA *brna)
   rna_def_xr_actionmap(brna);
   rna_def_xr_session_settings(brna);
   rna_def_xr_session_state(brna);
+  rna_def_xr_session_state_viewfinder(brna);
   rna_def_xr_eventdata(brna);
 
   RNA_define_animate_sdna(true);
 }
+
+}  // namespace blender
 
 #endif /* RNA_RUNTIME */

@@ -10,7 +10,7 @@ from bpy.types import (
 def rigid_body_warning(layout, text):
     row = layout.row(align=True)
     row.alignment = 'RIGHT'
-    row.label(text=text, icon='ERROR')
+    row.label(text=text, icon='STATUS_ERROR')
 
 
 class PHYSICS_PT_rigidbody_panel:
@@ -23,7 +23,7 @@ class PHYSICS_PT_rigid_body(PHYSICS_PT_rigidbody_panel, Panel):
     bl_label = "Rigid Body"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -48,9 +48,9 @@ class PHYSICS_PT_rigid_body(PHYSICS_PT_rigidbody_panel, Panel):
             if parent.rigid_body.collision_shape == 'COMPOUND':
                 row = layout.row(align=True)
                 row.alignment = 'RIGHT'
-                row.label(text="This object is part of a compound shape", icon='INFO')
+                row.label(text="This object is part of a compound shape", icon='STATUS_INFO')
             else:
-                rigid_body_warning(layout, "Rigid Body can't be child of a non compound Rigid Body")
+                rigid_body_warning(layout, "Rigid Body cannot be child of a non compound Rigid Body")
             return
 
         if parent is None or parent.rigid_body is None:
@@ -62,7 +62,7 @@ class PHYSICS_PT_rigid_body_settings(PHYSICS_PT_rigidbody_panel, Panel):
     bl_parent_id = "PHYSICS_PT_rigid_body"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -98,7 +98,7 @@ class PHYSICS_PT_rigid_body_collisions(PHYSICS_PT_rigidbody_panel, Panel):
     bl_parent_id = "PHYSICS_PT_rigid_body"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -152,7 +152,7 @@ class PHYSICS_PT_rigid_body_collisions_surface(PHYSICS_PT_rigidbody_panel, Panel
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -184,7 +184,7 @@ class PHYSICS_PT_rigid_body_collisions_sensitivity(PHYSICS_PT_rigidbody_panel, P
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -225,7 +225,7 @@ class PHYSICS_PT_rigid_body_collisions_collections(PHYSICS_PT_rigidbody_panel, P
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -251,7 +251,7 @@ class PHYSICS_PT_rigid_body_dynamics(PHYSICS_PT_rigidbody_panel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -290,7 +290,7 @@ class PHYSICS_PT_rigid_body_dynamics_deactivation(PHYSICS_PT_rigidbody_panel, Pa
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 

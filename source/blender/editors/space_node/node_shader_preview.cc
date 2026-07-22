@@ -22,8 +22,9 @@
  * the wanted viewlayer/pass for each previewed node.
  */
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_material_types.h"
@@ -55,6 +56,7 @@
 #include "ED_node_preview.hh"
 #include "ED_render.hh"
 #include "ED_screen.hh"
+
 #include "node_intern.hh"
 
 namespace blender::ed::space_node {
@@ -99,14 +101,14 @@ struct ShaderNodesPreviewJob {
 static void ensure_nodetree_previews(const bContext &C,
                                      NestedTreePreviews &tree_previews,
                                      Material &material,
-                                     ListBase &treepath);
+                                     ListBaseT<bNodeTreePath> &treepath);
 
 static std::optional<ComputeContextHash> get_compute_context_hash_for_node_editor(
     const SpaceNode &snode)
 {
   Vector<const bNodeTreePath *> treepath;
-  LISTBASE_FOREACH (const bNodeTreePath *, item, &snode.treepath) {
-    treepath.append(item);
+  for (const bNodeTreePath &item : snode.treepath) {
+    treepath.append(&item);
   }
 
   if (treepath.is_empty()) {
@@ -193,12 +195,12 @@ static Scene *preview_prepare_scene(const Main *bmain,
 
   /* Only enable the combined render-pass. */
   view_layer->passflag = SCE_PASS_COMBINED;
-  view_layer->eevee.render_passes = 0;
+  view_layer->eevee.render_passes = eViewLayerEEVEEPassType{};
 
   /* This flag tells render to not execute depsgraph or F-Curves etc. */
   scene_preview->r.scemode |= R_BUTS_PREVIEW;
   scene_preview->r.mode |= R_PERSISTENT_DATA;
-  STRNCPY(scene_preview->r.engine, scene_orig->r.engine);
+  STRNCPY_UTF8(scene_preview->r.engine, scene_orig->r.engine);
 
   scene_preview->r.color_mgt_flag = scene_orig->r.color_mgt_flag;
   BKE_color_managed_display_settings_copy(&scene_preview->display_settings,
@@ -212,31 +214,27 @@ static Scene *preview_prepare_scene(const Main *bmain,
   scene_preview->r.cfra = scene_orig->r.cfra;
 
   /* Setup the world. */
-  scene_preview->world = ED_preview_prepare_world(
-      pr_main, scene_preview, scene_orig->world, ID_MA, PR_BUTS_RENDER);
+  scene_preview->world = ED_preview_prepare_world_simple(pr_main);
+  ED_preview_world_simple_set_rgb(scene_preview->world, float4{0.05f, 0.05f, 0.05f, 0.05f});
 
   BLI_addtail(&pr_main->materials, mat_copy);
-  scene_preview->world->use_nodes = false;
-  scene_preview->world->horr = 0.05f;
-  scene_preview->world->horg = 0.05f;
-  scene_preview->world->horb = 0.05f;
 
   ED_preview_set_visibility(pr_main, scene_preview, view_layer, preview_type, PR_BUTS_RENDER);
 
-  BKE_view_layer_synced_ensure(scene_preview, view_layer);
-  LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-    if (base->object->id.name[2] == 'p') {
-      if (OB_TYPE_SUPPORT_MATERIAL(base->object->type)) {
+  BKE_view_layer_synced_ensure(*pr_main, scene_preview, view_layer);
+  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+    if (base.object->id.name[2] == 'p') {
+      if (OB_TYPE_SUPPORT_MATERIAL(base.object->type)) {
         /* Don't use BKE_object_material_assign, it changed mat->id.us, which shows in the UI. */
-        Material ***matar = BKE_object_material_array_p(base->object);
-        int actcol = max_ii(base->object->actcol - 1, 0);
+        Material ***matar = BKE_object_material_array_p(base.object);
+        int actcol = max_ii(base.object->actcol - 1, 0);
 
-        if (matar && actcol < base->object->totcol) {
+        if (matar && actcol < base.object->totcol) {
           (*matar)[actcol] = mat_copy;
         }
       }
-      else if (base->object->type == OB_LAMP) {
-        base->flag |= BASE_ENABLED_AND_MAYBE_VISIBLE_IN_VIEWPORT;
+      else if (base.object->type == OB_LAMP) {
+        base.flag |= BASE_ENABLED_AND_MAYBE_VISIBLE_IN_VIEWPORT;
       }
     }
   }
@@ -384,8 +382,7 @@ static void connect_nested_node_to_node(const Span<bNodeTreePath *> treepath,
     nested_nt->tree_interface.add_socket(
         route_name, "", nested_socket_iter->idname, NODE_INTERFACE_SOCKET_OUTPUT, nullptr);
     BKE_ntree_update_after_single_tree_change(*G.pr_main, *nested_nt);
-    bNodeSocket *out_socket = blender::bke::node_find_enabled_input_socket(*output_node,
-                                                                           route_name);
+    bNodeSocket *out_socket = bke::node_find_enabled_input_socket(*output_node, route_name);
 
     bke::node_add_link(
         *nested_nt, *nested_node_iter, *nested_socket_iter, *output_node, *out_socket);
@@ -401,8 +398,7 @@ static void connect_nested_node_to_node(const Span<bNodeTreePath *> treepath,
 
     /* Now use the newly created socket of the node-group as previewing socket of the node-group
      * instance node. */
-    nested_socket_iter = blender::bke::node_find_enabled_output_socket(*nested_node_iter,
-                                                                       route_name);
+    nested_socket_iter = bke::node_find_enabled_output_socket(*nested_node_iter, route_name);
   }
 
   bke::node_add_link(*treepath.first()->nodetree,
@@ -431,7 +427,7 @@ static void connect_node_to_surface_output(const Span<bNodeTreePath *> treepath,
     socket_preview = socket_preview->link->fromsock;
   }
   /* Ensure output is usable. */
-  out_surface_socket = bke::node_find_socket(output_node, SOCK_IN, "Surface");
+  out_surface_socket = bke::node_find_socket(output_node, SOCK_IN, "Surface"_ustr);
   if (out_surface_socket->link) {
     /* Make sure no node is already wired to the output before wiring. */
     bke::node_remove_link(main_nt, *out_surface_socket->link);
@@ -456,17 +452,17 @@ static void connect_nodes_to_aovs(const Span<bNodeTreePath *> treepath,
   }
   bNodeTree *main_nt = treepath.first()->nodetree;
   bNodeTree *active_nt = treepath.last()->nodetree;
-  for (NodeSocketPair nodesocket : nodesocket_span) {
+  for (const NodeSocketPair &nodesocket : nodesocket_span) {
     bNode *node_preview = nodesocket.first;
     bNodeSocket *socket_preview = nodesocket.second;
 
     bNode *aov_node = bke::node_add_static_node(nullptr, *main_nt, SH_NODE_OUTPUT_AOV);
-    STRNCPY(reinterpret_cast<NodeShaderOutputAOV *>(aov_node->storage)->name,
-            nodesocket.first->name);
+    STRNCPY_UTF8(reinterpret_cast<NodeShaderOutputAOV *>(aov_node->storage)->name,
+                 nodesocket.first->name);
     if (socket_preview == nullptr) {
       continue;
     }
-    bNodeSocket *aov_socket = bke::node_find_socket(*aov_node, SOCK_IN, "Color");
+    bNodeSocket *aov_socket = bke::node_find_socket(*aov_node, SOCK_IN, "Color"_ustr);
     if (socket_preview->in_out == SOCK_IN) {
       if (socket_preview->link == nullptr) {
         /* Copy the custom value of the socket directly to the AOV node.
@@ -475,18 +471,22 @@ static void connect_nodes_to_aovs(const Span<bNodeTreePath *> treepath,
         PointerRNA ptr;
         switch (socket_preview->type) {
           case SOCK_FLOAT:
-            ptr = RNA_pointer_create_discrete((ID *)active_nt, &RNA_NodeSocket, socket_preview);
+            ptr = RNA_pointer_create_discrete(
+                id_cast<ID *>(active_nt), RNA_NodeSocket, socket_preview);
             vec[0] = RNA_float_get(&ptr, "default_value");
             vec[1] = vec[0];
             vec[2] = vec[0];
             break;
           case SOCK_VECTOR:
           case SOCK_RGBA:
-            ptr = RNA_pointer_create_discrete((ID *)active_nt, &RNA_NodeSocket, socket_preview);
+            ptr = RNA_pointer_create_discrete(
+                id_cast<ID *>(active_nt), RNA_NodeSocket, socket_preview);
             RNA_float_get_array(&ptr, "default_value", vec);
             break;
+          default:
+            break;
         }
-        ptr = RNA_pointer_create_discrete((ID *)active_nt, &RNA_NodeSocket, aov_socket);
+        ptr = RNA_pointer_create_discrete(id_cast<ID *>(active_nt), RNA_NodeSocket, aov_socket);
         RNA_float_set_array(&ptr, "default_value", vec);
         continue;
       }
@@ -511,7 +511,7 @@ static bool prepare_viewlayer_update(void *pvl_data, ViewLayer *vl, Depsgraph *d
 {
   NodeSocketPair nodesocket = {nullptr, nullptr};
   ShaderNodesPreviewJob *job_data = static_cast<ShaderNodesPreviewJob *>(pvl_data);
-  for (NodeSocketPair nodesocket_iter : job_data->shader_nodes) {
+  for (const NodeSocketPair &nodesocket_iter : job_data->shader_nodes) {
     if (STREQ(vl->name, nodesocket_iter.first->name)) {
       nodesocket = nodesocket_iter;
       job_data->rendering_node = nodesocket_iter.first;
@@ -527,7 +527,7 @@ static bool prepare_viewlayer_update(void *pvl_data, ViewLayer *vl, Depsgraph *d
   }
 
   bNodeSocket *displacement_socket = bke::node_find_socket(
-      *job_data->mat_output_copy, SOCK_IN, "Displacement");
+      *job_data->mat_output_copy, SOCK_IN, "Displacement"_ustr);
   if (job_data->mat_displacement_copy.first != nullptr && displacement_socket->link == nullptr) {
     bke::node_add_link(*job_data->treepath_copy.first()->nodetree,
                        *job_data->mat_displacement_copy.first,
@@ -548,7 +548,7 @@ static bool prepare_viewlayer_update(void *pvl_data, ViewLayer *vl, Depsgraph *d
 }
 
 /* Called by renderer, refresh the UI. */
-static void all_nodes_preview_update(void *npv, RenderResult *rr, rcti * /*rect*/)
+static void all_nodes_preview_update(void *npv, RenderResult *rr)
 {
   ShaderNodesPreviewJob *job_data = static_cast<ShaderNodesPreviewJob *>(npv);
   *job_data->do_update = true;
@@ -568,7 +568,7 @@ static void all_nodes_preview_update(void *npv, RenderResult *rr, rcti * /*rect*
     }
   }
   if (job_data->rendering_AOVs) {
-    for (NodeSocketPair nodesocket_iter : job_data->AOV_nodes) {
+    for (const NodeSocketPair &nodesocket_iter : job_data->AOV_nodes) {
       ImBuf *&image_cached = job_data->tree_previews->previews_map.lookup_or_add(
           nodesocket_iter.first->identifier, nullptr);
       ImBuf *image_latest = get_image_from_viewlayer_and_pass(
@@ -602,23 +602,21 @@ static void preview_render(ShaderNodesPreviewJob &job_data)
 
   /* Create the AOV passes for the viewlayer. */
   ViewLayer *AOV_layer = static_cast<ViewLayer *>(scene->view_layers.first);
-  for (NodeSocketPair nodesocket_iter : job_data.shader_nodes) {
+  for (const NodeSocketPair &nodesocket_iter : job_data.shader_nodes) {
     ViewLayer *vl = BKE_view_layer_add(
-        scene, nodesocket_iter.first->name, AOV_layer, VIEWLAYER_ADD_COPY);
-    STRNCPY(vl->name, nodesocket_iter.first->name);
+        job_data.bmain, scene, nodesocket_iter.first->name, AOV_layer, VIEWLAYER_ADD_COPY);
+    STRNCPY_UTF8(vl->name, nodesocket_iter.first->name);
   }
-  for (NodeSocketPair nodesocket_iter : job_data.AOV_nodes) {
+  for (const NodeSocketPair &nodesocket_iter : job_data.AOV_nodes) {
     ViewLayerAOV *aov = BKE_view_layer_add_aov(AOV_layer);
-    STRNCPY(aov->name, nodesocket_iter.first->name);
+    STRNCPY_UTF8(aov->name, nodesocket_iter.first->name);
   }
   scene->r.xsch = job_data.tree_previews->preview_size;
   scene->r.ysch = job_data.tree_previews->preview_size;
   scene->r.size = 100;
 
   if (job_data.tree_previews->previews_render == nullptr) {
-    char name[32];
-    SNPRINTF(name, "Preview %p", &job_data.tree_previews);
-    job_data.tree_previews->previews_render = RE_NewRender(name);
+    job_data.tree_previews->previews_render = RE_NewRender(&job_data.tree_previews);
   }
   Render *re = job_data.tree_previews->previews_render;
 
@@ -641,7 +639,7 @@ static void preview_render(ShaderNodesPreviewJob &job_data)
   reinterpret_cast<Camera *>(scene->camera->data)->lens = oldlens;
 
   /* Free the aov layers and the layers generated for each node. */
-  BLI_freelistN(&AOV_layer->aovs);
+  AOV_layer->aovs.free_no_destruct();
   ViewLayer *vl = AOV_layer->next;
   while (vl) {
     ViewLayer *vl_rem = vl;
@@ -702,7 +700,7 @@ static void shader_preview_startjob(void *customdata, wmJobWorkerStatus *worker_
   for (bNode *node_iter : job_data->mat_copy->nodetree->all_nodes()) {
     if (node_iter->flag & NODE_DO_OUTPUT) {
       node_iter->flag &= ~NODE_DO_OUTPUT;
-      bNodeSocket *disp_socket = bke::node_find_socket(*node_iter, SOCK_IN, "Displacement");
+      bNodeSocket *disp_socket = bke::node_find_socket(*node_iter, SOCK_IN, "Displacement"_ustr);
       if (disp_socket != nullptr && disp_socket->link != nullptr) {
         job_data->mat_displacement_copy = std::make_pair(disp_socket->link->fromnode,
                                                          disp_socket->link->fromsock);
@@ -718,6 +716,7 @@ static void shader_preview_startjob(void *customdata, wmJobWorkerStatus *worker_
   job_data->mat_output_copy->flag |= NODE_DO_OUTPUT;
 
   bNodeTree *active_nodetree = job_data->treepath_copy.last()->nodetree;
+  active_nodetree->ensure_topology_cache();
   for (bNode *node : active_nodetree->all_nodes()) {
     if (!(node->flag & NODE_PREVIEW)) {
       /* Clear the cached preview for this node to be sure that the preview is re-rendered if
@@ -746,7 +745,7 @@ static void shader_preview_free(void *customdata)
 {
   ShaderNodesPreviewJob *job_data = static_cast<ShaderNodesPreviewJob *>(customdata);
   for (bNodeTreePath *path : job_data->treepath_copy) {
-    MEM_freeN(path);
+    MEM_delete(path);
   }
   job_data->treepath_copy.clear();
   job_data->tree_previews->rendering = false;
@@ -764,7 +763,7 @@ static void shader_preview_free(void *customdata)
 static void ensure_nodetree_previews(const bContext &C,
                                      NestedTreePreviews &tree_previews,
                                      Material &material,
-                                     ListBase &treepath)
+                                     ListBaseT<bNodeTreePath> &treepath)
 {
   Scene *scene = CTX_data_scene(&C);
   if (!ED_check_engine_supports_preview(scene)) {
@@ -774,7 +773,7 @@ static void ensure_nodetree_previews(const bContext &C,
   bNodeTree *displayed_nodetree = static_cast<bNodeTreePath *>(treepath.last)->nodetree;
   ePreviewType preview_type = MA_FLAT;
   if (CTX_wm_space_node(&C)->overlay.preview_shape == SN_OVERLAY_PREVIEW_3D) {
-    preview_type = (ePreviewType)material.pr_type;
+    preview_type = ePreviewType(material.pr_type);
   }
   update_needed_flag(tree_previews, *displayed_nodetree, preview_type);
   if (!(tree_previews.restart_needed)) {
@@ -795,7 +794,7 @@ static void ensure_nodetree_previews(const bContext &C,
   wmJob *wm_job = WM_jobs_get(CTX_wm_manager(&C),
                               CTX_wm_window(&C),
                               CTX_wm_space_node(&C),
-                              "Shader Previews",
+                              "Generating shader previews...",
                               WM_JOB_EXCL_RENDER,
                               WM_JOB_TYPE_RENDER_PREVIEW);
   ShaderNodesPreviewJob *job_data = MEM_new<ShaderNodesPreviewJob>(__func__);
@@ -809,7 +808,7 @@ static void ensure_nodetree_previews(const bContext &C,
   job_data->preview_type = preview_type;
 
   /* Update the treepath copied to fit the structure of the nodetree copied. */
-  bNodeTreePath *root_path = MEM_callocN<bNodeTreePath>(__func__);
+  bNodeTreePath *root_path = MEM_new<bNodeTreePath>(__func__);
   root_path->nodetree = job_data->mat_copy->nodetree;
   job_data->treepath_copy.append(root_path);
   for (bNodeTreePath *original_path = static_cast<bNodeTreePath *>(treepath.first)->next;
@@ -823,7 +822,7 @@ static void ensure_nodetree_previews(const bContext &C,
        * nodetree. In that case, just skip the node. */
       continue;
     }
-    bNodeTreePath *new_path = MEM_callocN<bNodeTreePath>(__func__);
+    bNodeTreePath *new_path = MEM_new<bNodeTreePath>(__func__);
     memcpy(new_path, original_path, sizeof(bNodeTreePath));
     new_path->nodetree = reinterpret_cast<bNodeTree *>(parent->id);
     job_data->treepath_copy.append(new_path);

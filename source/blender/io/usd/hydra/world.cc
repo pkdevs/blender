@@ -3,170 +3,141 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "world.hh"
-#include "usd_private.hh"
 
 #include <pxr/base/gf/rotation.h>
-#include <pxr/base/gf/vec2f.h>
-#include <pxr/base/vt/array.h>
+#include <pxr/base/gf/vec3f.h>
 #include <pxr/imaging/hd/light.h>
-#include <pxr/imaging/hd/renderDelegate.h>
+#include <pxr/imaging/hd/retainedDataSource.h>
 #include <pxr/imaging/hd/tokens.h>
+#include <pxr/usd/sdf/assetPath.h>
 #include <pxr/usd/usdLux/tokens.h>
 
-#include "DNA_node_types.h"
-#include "DNA_scene_types.h"
-#include "DNA_world_types.h"
+#include "BLI_math_constants.hh"
 
-#include "BLI_math_rotation.h"
-
-#include "BKE_node.hh"
-#include "BKE_node_legacy_types.hh"
-#include "BKE_node_runtime.hh"
 #include "BKE_studiolight.h"
 
-#include "NOD_shader.h"
+#include "DNA_scene_types.h"
+#include "DNA_view3d_types.h"
+#include "DNA_world_types.h"
 
-#include "hydra_scene_delegate.hh"
 #include "image.hh"
+#include "light.hh"
+#include "populate_context.hh"
+#include "usd_private.hh"
 
-/* TODO: add custom `tftoken` "transparency"? */
+/* TODO: add custom #TfToken "transparency"? */
 
 /* NOTE: opacity and blur aren't supported by USD */
 
 namespace blender::io::hydra {
 
-WorldData::WorldData(HydraSceneDelegate *scene_delegate, pxr::SdfPath const &prim_id)
-    : LightData(scene_delegate, nullptr, prim_id)
+pxr::HdContainerDataSourceHandle build_world_data_source(Main *bmain,
+                                                         Scene *scene,
+                                                         const View3D *view3d,
+                                                         pxr::GfMatrix4d *r_transform)
 {
-  prim_type_ = pxr::HdPrimTypeTokens->domeLight;
-}
-
-void WorldData::init()
-{
-  data_.clear();
-
+  pxr::GfVec3f color(1.0f, 1.0f, 1.0f);
   float intensity = 1.0f;
   pxr::SdfAssetPath texture_file;
+  pxr::GfMatrix4d transform(1.0);
 
-  if (scene_delegate_->shading_settings.use_scene_world) {
-    const World *world = scene_delegate_->scene->world;
-    pxr::GfVec3f color(1.0f, 1.0f, 1.0f);
-    ID_LOG(1, "%s", world->id.name);
+  const bool use_scene_world = !view3d || V3D_USES_SCENE_WORLD(view3d);
 
-    if (world->use_nodes) {
-      /* TODO: Create nodes parsing system */
+  if (use_scene_world) {
+    if (!scene->world) {
+      return nullptr;
+    }
 
-      bNode *output_node = ntreeShaderOutputNode(world->nodetree, SHD_OUTPUT_ALL);
-      if (!output_node) {
-        return;
-      }
-      const Span<bNodeSocket *> input_sockets = output_node->input_sockets();
-      bNodeSocket *input_socket = nullptr;
+    usd::WorldToDomeLight res;
+    usd::world_material_to_dome_light(scene, res);
 
-      for (auto *socket : input_sockets) {
-        if (STREQ(socket->name, "Surface")) {
-          input_socket = socket;
-          break;
-        }
-      }
-      if (!input_socket) {
-        return;
-      }
-      if (input_socket->directly_linked_links().is_empty()) {
-        return;
-      }
-      bNodeLink const *link = input_socket->directly_linked_links()[0];
-
-      bNode *input_node = link->fromnode;
-      if (input_node->type_legacy != SH_NODE_BACKGROUND) {
-        return;
+    if (res.image) {
+      const std::string file_path = cache_or_get_image_file(bmain, scene, res.image, res.iuser);
+      if (!file_path.empty()) {
+        texture_file = pxr::SdfAssetPath(file_path, file_path);
       }
 
-      const bNodeSocket &color_input = input_node->input_by_identifier("Color");
-      const bNodeSocket &strength_input = input_node->input_by_identifier("Strength");
-
-      float const *strength = strength_input.default_value_typed<float>();
-      float const *input_color = color_input.default_value_typed<float>();
-      intensity = strength[1];
-      color = pxr::GfVec3f(input_color[0], input_color[1], input_color[2]);
-
-      if (!color_input.directly_linked_links().is_empty()) {
-        bNode *color_input_node = color_input.directly_linked_links()[0]->fromnode;
-        if (ELEM(color_input_node->type_legacy, SH_NODE_TEX_IMAGE, SH_NODE_TEX_ENVIRONMENT)) {
-          NodeTexImage *tex = static_cast<NodeTexImage *>(color_input_node->storage);
-          Image *image = (Image *)color_input_node->id;
-          if (image) {
-            std::string image_path = cache_or_get_image_file(
-                scene_delegate_->bmain, scene_delegate_->scene, image, &tex->iuser);
-            if (!image_path.empty()) {
-              texture_file = pxr::SdfAssetPath(image_path, image_path);
-            }
-          }
-        }
+      if (res.mult_found) {
+        color = pxr::GfVec3f(res.color_mult);
       }
+    }
+    else if (res.color_found) {
+      const std::string file_path = io::usd::cache_image_color(res.color);
+      texture_file = pxr::SdfAssetPath(file_path, file_path);
+      intensity = res.intensity;
     }
     else {
-      intensity = 1.0f;
-      color = pxr::GfVec3f(world->horr, world->horg, world->horb);
+      intensity = 0.0f;
+      color = pxr::GfVec3f(0.0f, 0.0f, 0.0f);
     }
 
-    if (texture_file.GetAssetPath().empty()) {
-      float fill_color[4] = {color[0], color[1], color[2], 1.0f};
-      std::string image_path = blender::io::usd::cache_image_color(fill_color);
-      texture_file = pxr::SdfAssetPath(image_path, image_path);
-    }
+    transform = res.transform;
   }
   else {
-    ID_LOG(1, "studiolight: %s", scene_delegate_->shading_settings.studiolight_name.c_str());
-
-    StudioLight *sl = BKE_studiolight_find(
-        scene_delegate_->shading_settings.studiolight_name.c_str(),
-        STUDIOLIGHT_ORIENTATIONS_MATERIAL_MODE);
+    StudioLight *sl = BKE_studiolight_find(view3d->shading.lookdev_light,
+                                           STUDIOLIGHT_ORIENTATIONS_MATERIAL_MODE);
     if (sl != nullptr && sl->flag & STUDIOLIGHT_TYPE_WORLD) {
       texture_file = pxr::SdfAssetPath(sl->filepath, sl->filepath);
-      /* coefficient to follow Cycles result */
-      intensity = scene_delegate_->shading_settings.studiolight_intensity / 2;
+      /* Coefficient to follow Cycles result */
+      intensity = view3d->shading.studiolight_intensity / 2.0f;
     }
+    else {
+      return nullptr;
+    }
+
+    transform = pxr::GfMatrix4d().SetRotate(pxr::GfRotation(
+        pxr::GfVec3d(0.0, 0.0, -1.0), RAD2DEGF(view3d->shading.studiolight_rot_z)));
   }
 
-  data_[pxr::UsdLuxTokens->orientToStageUpAxis] = true;
-  data_[pxr::HdLightTokens->intensity] = intensity;
-  data_[pxr::HdLightTokens->color] = pxr::GfVec3f(1.0f, 1.0f, 1.0f);
-  data_[pxr::HdLightTokens->textureFile] = texture_file;
+  *r_transform = transform;
 
-  write_transform();
+  HdContainerBuilder b;
+  b.add(pxr::UsdLuxTokens->orientToStageUpAxis, true);
+  b.add(pxr::HdLightTokens->intensity, intensity);
+  b.add(pxr::HdLightTokens->exposure, 0.0f);
+  b.add(pxr::HdLightTokens->color, color);
+  b.add(pxr::HdLightTokens->textureFile, texture_file);
+  return b.build();
 }
 
-void WorldData::update()
+void EmittedWorld::emit(PopulateContext &ctx,
+                        Main *bmain,
+                        Scene *scene,
+                        const View3D *view3d,
+                        const pxr::SdfPath &world_path,
+                        const bool world_shading_changed)
 {
-  ID_LOG(1, "");
+  Inputs inputs;
+  inputs.world = scene->world;
+  inputs.use_scene_world = !view3d || V3D_USES_SCENE_WORLD(view3d);
+  if (view3d) {
+    inputs.shading_type = view3d->shading.type;
+    BLI_strncpy(inputs.studiolight, view3d->shading.lookdev_light, sizeof(inputs.studiolight));
+    inputs.studiolight_intensity = view3d->shading.studiolight_intensity;
+    inputs.studiolight_rot_z = view3d->shading.studiolight_rot_z;
+  }
 
-  if (!scene_delegate_->shading_settings.use_scene_world ||
-      (scene_delegate_->shading_settings.use_scene_world && scene_delegate_->scene->world))
-  {
-    init();
-    if (data_.empty()) {
-      remove();
-      return;
-    }
-    insert();
-    scene_delegate_->GetRenderIndex().GetChangeTracker().MarkSprimDirty(prim_id,
-                                                                        pxr::HdLight::AllDirty);
+  if (used_ && inputs == cached_inputs_ && !world_shading_changed) {
+    ctx.new_paths.add(world_path);
+    return;
   }
-  else {
-    remove();
+
+  pxr::GfMatrix4d world_transform(1.0);
+  pxr::HdContainerDataSourceHandle world_params = build_world_data_source(
+      bmain, scene, view3d, &world_transform);
+  if (world_params) {
+    pxr::HdContainerDataSourceHandle world_prim = build_light_prim_data_source(
+        world_params, world_transform, true);
+    ctx.emit_prim(world_path, pxr::HdPrimTypeTokens->domeLight, world_prim);
   }
+  used_ = (world_params != nullptr);
+  cached_inputs_ = inputs;
 }
 
-void WorldData::write_transform()
+void EmittedWorld::clear()
 {
-  transform = pxr::GfMatrix4d().SetRotate(pxr::GfRotation(pxr::GfVec3d(1.0, 0.0, 0.0), 90.0)) *
-              pxr::GfMatrix4d().SetRotate(pxr::GfRotation(pxr::GfVec3d(0.0, 0.0, 1.0), 90.0));
-  if (!scene_delegate_->shading_settings.use_scene_world) {
-    transform *= pxr::GfMatrix4d().SetRotate(
-        pxr::GfRotation(pxr::GfVec3d(0.0, 0.0, -1.0),
-                        RAD2DEGF(scene_delegate_->shading_settings.studiolight_rotation)));
-  }
+  used_ = false;
+  cached_inputs_ = Inputs();
 }
 
 }  // namespace blender::io::hydra

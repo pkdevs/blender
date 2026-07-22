@@ -16,6 +16,7 @@
 #include "util/path.h"
 #include "util/progress.h"
 #include "util/string.h"
+#include "util/system.h"
 #ifdef WITH_CYCLES_STANDALONE_GUI
 #  include "util/time.h"
 #  include "util/transform.h"
@@ -405,9 +406,8 @@ static void options_parse(const int argc, const char **argv)
   ArgParse ap;
   bool help = false;
   bool profile = false;
-  bool debug = false;
   bool version = false;
-  int verbosity = 1;
+  string log_level;
 
   ap.usage("cycles [options] file.xml");
   ap.arg("filename").hidden().action([&](auto argv) { options.filepath = argv[0]; });
@@ -442,12 +442,9 @@ static void options_parse(const int argc, const char **argv)
   });
   ap.arg("--list-devices", &list).help("List information about all available devices");
   ap.arg("--profile", &profile).help("Enable profile logging");
-#ifdef WITH_CYCLES_LOGGING
-  ap.arg("--debug", &debug).help("Enable debug logging");
-  ap.arg("--verbose %d:VERBOSE").help("Set verbosity of the logger").action([&](auto argv) {
-    parse_int(argv, &verbosity);
-  });
-#endif
+  ap.arg("--log-level %s:LEVEL")
+      .help("Log verbosity: fatal, error, warning, info, stats, debug")
+      .action([&](auto argv) { parse_string(argv, &log_level); });
   ap.arg("--help", &help).help("Print help message");
   ap.arg("--version", &version).help("Print version number");
 
@@ -457,9 +454,8 @@ static void options_parse(const int argc, const char **argv)
     exit(EXIT_FAILURE);
   }
 
-  if (debug) {
-    util_logging_start();
-    util_logging_verbosity_set(verbosity);
+  if (!log_level.empty()) {
+    log_level_set(log_level);
   }
 
   if (list) {
@@ -544,8 +540,9 @@ using namespace ccl;
 
 int main(const int argc, const char **argv)
 {
-  util_logging_init(argv[0]);
+  log_init(nullptr);
   path_init();
+  system_max_open_files_ensure();
   options_parse(argc, argv);
 
 #ifdef WITH_CYCLES_STANDALONE_GUI

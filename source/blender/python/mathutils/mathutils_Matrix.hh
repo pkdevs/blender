@@ -12,6 +12,8 @@
 
 #include "mathutils.hh"
 
+namespace blender {
+
 extern PyTypeObject matrix_Type;
 extern PyTypeObject matrix_access_Type;
 
@@ -53,35 +55,34 @@ struct MatrixObject {
 
 /* Prototypes. */
 
-PyObject *Matrix_CreatePyObject(const float *mat,
-                                ushort col_num,
-                                ushort row_num,
-                                PyTypeObject *base_type) ATTR_WARN_UNUSED_RESULT;
-PyObject *Matrix_CreatePyObject_wrap(float *mat,
-                                     ushort col_num,
-                                     ushort row_num,
-                                     PyTypeObject *base_type) ATTR_WARN_UNUSED_RESULT
-    ATTR_NONNULL(1);
-PyObject *Matrix_CreatePyObject_cb(PyObject *cb_user,
-                                   unsigned short col_num,
-                                   unsigned short row_num,
-                                   unsigned char cb_type,
-                                   unsigned char cb_subtype) ATTR_WARN_UNUSED_RESULT;
+[[nodiscard]] PyObject *Matrix_CreatePyObject(const float *mat,
+                                              ushort col_num,
+                                              ushort row_num,
+                                              PyTypeObject *base_type);
+[[nodiscard]] PyObject *Matrix_CreatePyObject_wrap(float *mat,
+                                                   ushort col_num,
+                                                   ushort row_num,
+                                                   PyTypeObject *base_type) ATTR_NONNULL(1);
+[[nodiscard]] PyObject *Matrix_CreatePyObject_cb(PyObject *cb_user,
+                                                 unsigned short col_num,
+                                                 unsigned short row_num,
+                                                 unsigned char cb_type,
+                                                 unsigned char cb_subtype);
 
 /**
  * \param mat: Initialized matrix value to use in-place, allocated with #PyMem_Malloc
  */
-PyObject *Matrix_CreatePyObject_alloc(float *mat,
-                                      ushort col_num,
-                                      ushort row_num,
-                                      PyTypeObject *base_type) ATTR_WARN_UNUSED_RESULT;
+[[nodiscard]] PyObject *Matrix_CreatePyObject_alloc(float *mat,
+                                                    ushort col_num,
+                                                    ushort row_num,
+                                                    PyTypeObject *base_type);
 
 /* PyArg_ParseTuple's "O&" formatting helpers. */
 
-int Matrix_ParseAny(PyObject *o, void *p);
-int Matrix_Parse2x2(PyObject *o, void *p);
-int Matrix_Parse3x3(PyObject *o, void *p);
-int Matrix_Parse4x4(PyObject *o, void *p);
+[[nodiscard]] int Matrix_ParseAny(PyObject *o, void *p);
+[[nodiscard]] int Matrix_Parse2x2(PyObject *o, void *p);
+[[nodiscard]] int Matrix_Parse3x3(PyObject *o, void *p);
+[[nodiscard]] int Matrix_Parse4x4(PyObject *o, void *p);
 
 extern unsigned char mathutils_matrix_row_cb_index; /* default */
 extern unsigned char mathutils_matrix_col_cb_index;
@@ -92,3 +93,5 @@ extern struct Mathutils_Callback mathutils_matrix_col_cb;
 extern struct Mathutils_Callback mathutils_matrix_translation_cb;
 
 void matrix_as_3x3(float mat[3][3], MatrixObject *self);
+
+}  // namespace blender

@@ -13,10 +13,12 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_bounds_types.hh"
+#include "BLI_enum_flags.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
 
 #include "DNA_windowmanager_enums.h"
+
+namespace blender {
 
 /**
  * Size of the sphere being dragged for trackball rotation within the view bounds.
@@ -45,13 +47,17 @@ struct wmWindow;
 struct wmWindowManager;
 struct ViewLayer;
 
+enum eRegionView3D_View : char;
+enum eRegionView3D_ViewAxisRoll : char;
+enum eRegionView3D_Persp : char;
+
 enum eV3D_OpPropFlag {
   V3D_OP_PROP_MOUSE_CO = (1 << 0),
   V3D_OP_PROP_DELTA = (1 << 1),
   V3D_OP_PROP_USE_ALL_REGIONS = (1 << 2),
   V3D_OP_PROP_USE_MOUSE_INIT = (1 << 3),
 };
-ENUM_OPERATORS(eV3D_OpPropFlag, V3D_OP_PROP_USE_MOUSE_INIT);
+ENUM_OPERATORS(eV3D_OpPropFlag);
 
 enum eV3D_OpEvent {
   VIEW_PASS = 0,
@@ -89,7 +95,7 @@ enum eViewOpsFlag {
 
   VIEWOPS_FLAG_INIT_ZFAC = (1 << 4),
 };
-ENUM_OPERATORS(eViewOpsFlag, VIEWOPS_FLAG_INIT_ZFAC);
+ENUM_OPERATORS(eViewOpsFlag);
 
 struct ViewOpsType {
   eViewOpsFlag flag;
@@ -123,29 +129,29 @@ struct ViewOpsData {
 
     /** These variables reflect the same in #RegionView3D. */
 
-    float ofs[3];        /* DOLLY, MOVE, ROTATE and ZOOM. */
-    float ofs_lock[2];   /* MOVE. */
-    float camdx, camdy;  /* MOVE and ZOOM. */
-    float camzoom;       /* ZOOM. */
-    float dist;          /* ROTATE and ZOOM. */
-    float quat[4];       /* ROLL and ROTATE. */
-    char persp;          /* ROTATE. */
-    char view;           /* ROTATE. */
-    char view_axis_roll; /* ROTATE. */
+    float ofs[3];                              /* DOLLY, MOVE, ROTATE and ZOOM. */
+    float ofs_lock[2];                         /* MOVE. */
+    float camdx, camdy;                        /* MOVE and ZOOM. */
+    float camzoom;                             /* ZOOM. */
+    float dist;                                /* ROTATE and ZOOM. */
+    float quat[4];                             /* ROLL and ROTATE. */
+    eRegionView3D_Persp persp;                 /* ROTATE. */
+    eRegionView3D_View view;                   /* ROTATE. */
+    eRegionView3D_ViewAxisRoll view_axis_roll; /* ROTATE. */
 
     /**
      * #RegionView3D.persp set after auto-perspective is applied.
      * If we want the value before running the operator, add a separate member.
      */
-    char persp_with_auto_persp_applied;
+    eRegionView3D_Persp persp_with_auto_persp_applied;
 
     /** The ones below are unrelated to the state of the 3D view. */
 
     /** #wmEvent.xy. */
-    blender::int2 event_xy;
+    int2 event_xy;
     /* Offset used when "use_cursor_init" is false to simulate pressing in the middle of the
      * region. */
-    blender::int2 event_xy_offset;
+    int2 event_xy_offset;
     /** #wmEvent.type that triggered the operator. */
     int event_type;
 
@@ -253,9 +259,9 @@ void axis_set_view(bContext *C,
                    View3D *v3d,
                    ARegion *region,
                    const float quat_[4],
-                   char view,
-                   char view_axis_roll,
-                   int perspo,
+                   eRegionView3D_View view,
+                   eRegionView3D_ViewAxisRoll view_axis_roll,
+                   eRegionView3D_Persp perspo,
                    const float *align_to_quat,
                    const int smooth_viewtx);
 
@@ -286,7 +292,7 @@ struct wmNDOFMotionData;
 /**
  * Called from both fly mode and walk mode,
  */
-void view3d_ndof_fly(const wmNDOFMotionData *ndof,
+void view3d_ndof_fly(const wmNDOFMotionData &ndof,
                      View3D *v3d,
                      RegionView3D *rv3d,
                      bool use_precision,
@@ -400,7 +406,7 @@ void VIEW3D_OT_smoothview(wmOperatorType *ot);
  * \param depsgraph: The evaluated depsgraph.
  * \param clip_bounds: Clip the bounds by the viewport clipping.
  */
-std::optional<blender::Bounds<blender::float3>> view3d_calc_minmax_visible(
+std::optional<Bounds<float3>> view3d_calc_minmax_visible(
     Depsgraph *depsgraph, ScrArea *area, ARegion *region, bool use_all_regions, bool clip_bounds);
 /**
  * Return the bounds of selected contents of the 3D viewport.
@@ -409,12 +415,12 @@ std::optional<blender::Bounds<blender::float3>> view3d_calc_minmax_visible(
  * \param r_do_zoom: When false, the bounds should be treated as a point
  * (don't zoom to view the point).
  */
-std::optional<blender::Bounds<blender::float3>> view3d_calc_minmax_selected(Depsgraph *depsgraph,
-                                                                            ScrArea *area,
-                                                                            ARegion *region,
-                                                                            bool use_all_regions,
-                                                                            bool clip_bounds,
-                                                                            bool *r_do_zoom);
+std::optional<Bounds<float3>> view3d_calc_minmax_selected(Depsgraph *depsgraph,
+                                                          ScrArea *area,
+                                                          ARegion *region,
+                                                          bool use_all_regions,
+                                                          bool clip_bounds,
+                                                          bool *r_do_zoom);
 
 /**
  * Iterate over objects and check if `point` might is inside any of them.
@@ -422,7 +428,7 @@ std::optional<blender::Bounds<blender::float3>> view3d_calc_minmax_selected(Deps
 bool view3d_calc_point_in_selected_bounds(Depsgraph *depsgraph,
                                           struct ViewLayer *view_layer_eval,
                                           const View3D *v3d,
-                                          const blender::float3 &point,
+                                          const float3 &point,
                                           const float scale_margin);
 
 void VIEW3D_OT_view_all(wmOperatorType *ot);
@@ -471,3 +477,5 @@ extern const ViewOpsType ViewOpsType_zoom;
 /* view3d_navigate_zoom_border.cc */
 
 void VIEW3D_OT_zoom_border(wmOperatorType *ot);
+
+}  // namespace blender

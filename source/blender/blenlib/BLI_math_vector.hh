@@ -13,7 +13,7 @@
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 namespace blender::math {
 
@@ -193,6 +193,29 @@ template<typename T, int Size>
   VecBase<T, Size> result;
   for (int i = 0; i < Size; i++) {
     result[i] = math::mod(a[i], b);
+  }
+  return result;
+}
+
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> floored_mod(const VecBase<T, Size> &a,
+                                                  const VecBase<T, Size> &b)
+{
+  VecBase<T, Size> result;
+  for (int i = 0; i < Size; i++) {
+    BLI_assert(b[i] != 0);
+    result[i] = math::floored_mod(a[i], b[i]);
+  }
+  return result;
+}
+
+template<typename T, int Size>
+[[nodiscard]] inline VecBase<T, Size> floored_mod(const VecBase<T, Size> &a, const T &b)
+{
+  BLI_assert(b != 0);
+  VecBase<T, Size> result;
+  for (int i = 0; i < Size; i++) {
+    result[i] = math::floored_mod(a[i], b);
   }
   return result;
 }
@@ -488,7 +511,7 @@ template<typename T, int Size>
 [[nodiscard]] inline VecBase<T, Size> project(const VecBase<T, Size> &p,
                                               const VecBase<T, Size> &v_proj)
 {
-  if (UNLIKELY(is_zero(v_proj))) {
+  if (is_zero(v_proj)) [[unlikely]] {
     return VecBase<T, Size>(0.0f);
   }
   return v_proj * (dot(p, v_proj) / dot(v_proj, v_proj));
@@ -515,6 +538,11 @@ template<typename T, int Size>
 {
   T len;
   return normalize_and_get_length(v, len);
+}
+
+template<typename T> [[nodiscard]] inline T cross(const VecBase<T, 2> &a, const VecBase<T, 2> &b)
+{
+  return a.x * b.y - a.y * b.x;
 }
 
 /**

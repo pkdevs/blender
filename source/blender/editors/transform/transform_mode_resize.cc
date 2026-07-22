@@ -11,8 +11,8 @@
 
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 
 #include "BKE_context.hh"
@@ -220,7 +220,7 @@ static void applyResize(TransInfo *t)
         if (td->flag & TD_SKIP) {
           continue;
         }
-        ElementResize(t, tc, td, mat);
+        ElementResize(t, tc, i, mat);
       }
     });
   }
@@ -234,9 +234,8 @@ static void applyResize(TransInfo *t)
     }
 
     FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-      TransData *td = tc->data;
-      for (i = 0; i < tc->data_len; i++, td++) {
-        ElementResize(t, tc, td, mat);
+      for (i = 0; i < tc->data_len; i++) {
+        ElementResize(t, tc, i, mat);
       }
 
       /* Not ideal, see #clipUVData code-comment. */
@@ -279,7 +278,7 @@ static void initResize(TransInfo *t, wmOperator *op)
   const bool only_location = transform_mode_affect_only_locations(t);
   if (only_location) {
     WorkspaceStatus status(t->context);
-    status.item(TIP_("Transform is set to only affect location"), ICON_ERROR);
+    status.item(TIP_("Transform is set to only affect location"), ICON_STATUS_WARNING_FILLED);
   }
 
   if (is_zero_v3(mouse_dir_constraint)) {
@@ -328,10 +327,10 @@ static void initResize(TransInfo *t, wmOperator *op)
 
   t->idx_max = 2;
   t->num.idx_max = 2;
-  t->snap[0] = 0.1f;
-  t->snap[1] = t->snap[0] * 0.1f;
+  t->increment = float3(0.1f);
+  t->increment_precision = 0.1f;
 
-  copy_v3_fl(t->num.val_inc, t->snap[0]);
+  copy_v3_fl(t->num.val_inc, t->increment[0]);
   t->num.unit_sys = t->scene->unit.system;
   t->num.unit_type[0] = B_UNIT_NONE;
   t->num.unit_type[1] = B_UNIT_NONE;

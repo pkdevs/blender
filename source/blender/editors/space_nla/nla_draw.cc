@@ -12,14 +12,15 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "DNA_anim_enums.h"
 #include "DNA_anim_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
 #include "BLI_bounds_types.hh"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -43,7 +44,7 @@
 #include "nla_intern.hh" /* own include */
 #include "nla_private.h"
 
-using namespace blender;
+namespace blender {
 
 /* *********************************************** */
 /* Strips */
@@ -54,16 +55,16 @@ void nla_action_get_color(AnimData *adt, bAction *act, float color[4])
 {
   if (adt && (adt->flag & ADT_NLA_EDIT_ON)) {
     /* greenish color (same as tweaking strip) */
-    UI_GetThemeColor4fv(TH_NLA_TWEAK, color);
+    ui::theme::get_color_4fv(TH_NLA_TWEAK, color);
   }
   else {
     if (act) {
       /* reddish color - same as dope-sheet summary */
-      UI_GetThemeColor4fv(TH_ANIM_ACTIVE, color);
+      ui::theme::get_color_4fv(TH_ANIM_ACTIVE, color);
     }
     else {
       /* grayish-red color */
-      UI_GetThemeColor4fv(TH_ANIM_INACTIVE, color);
+      ui::theme::get_color_4fv(TH_ANIM_INACTIVE, color);
     }
   }
 
@@ -100,7 +101,7 @@ static void nla_action_draw_keyframes(
   color[3] = min_ff(0.7f, color[3] * 2.5f);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos_id = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -116,21 +117,19 @@ static void nla_action_draw_keyframes(
   immUnbindProgram();
 
   /* Count keys before drawing. */
-  const ListBase *keys = ED_keylist_listbase(keylist);
-  uint key_len = BLI_listbase_count(keys);
+  const ListBaseT<ActKeyColumn> *keys = ED_keylist_listbase(keylist);
+  uint key_len = keys->count();
 
   if (key_len > 0) {
     format = immVertexFormat();
     KeyframeShaderBindings sh_bindings;
-    sh_bindings.pos_id = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    sh_bindings.size_id = GPU_vertformat_attr_add(
-        format, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    sh_bindings.pos_id = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+    sh_bindings.size_id = GPU_vertformat_attr_add(format, "size", gpu::VertAttrType::SFLOAT_32);
     sh_bindings.color_id = GPU_vertformat_attr_add(
-        format, "color", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+        format, "color", gpu::VertAttrType::UNORM_8_8_8_8);
     sh_bindings.outline_color_id = GPU_vertformat_attr_add(
-        format, "outlineColor", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
-    sh_bindings.flags_id = GPU_vertformat_attr_add(
-        format, "flags", GPU_COMP_U32, 1, GPU_FETCH_INT);
+        format, "outlineColor", gpu::VertAttrType::UNORM_8_8_8_8);
+    sh_bindings.flags_id = GPU_vertformat_attr_add(format, "flags", gpu::VertAttrType::UINT_32);
 
     GPU_program_point_size(true);
     immBindBuiltinProgram(GPU_SHADER_KEYFRAME_SHAPE);
@@ -141,12 +140,12 @@ static void nla_action_draw_keyframes(
     /* - disregard the selection status of keyframes so they draw a certain way
      * - size is 6.0f which is smaller than the editable keyframes, so that there is a distinction
      */
-    LISTBASE_FOREACH (const ActKeyColumn *, ak, keys) {
-      draw_keyframe_shape(ak->cfra,
+    for (const ActKeyColumn &ak : *keys) {
+      draw_keyframe_shape(ak.cfra,
                           y,
                           6.0f,
                           false,
-                          ak->key_type,
+                          ak.key_type,
                           KEYFRAME_SHAPE_FRAME,
                           1.0f,
                           &sh_bindings,
@@ -176,7 +175,7 @@ static void nla_actionclip_draw_markers(
   }
 
   const uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   if (dashed) {
     immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
@@ -194,10 +193,10 @@ static void nla_actionclip_draw_markers(
   }
   immUniformThemeColorShade(TH_STRIP_SELECT, shade);
 
-  immBeginAtMost(GPU_PRIM_LINES, BLI_listbase_count(&act->markers) * 2);
-  LISTBASE_FOREACH (TimeMarker *, marker, &act->markers) {
-    if ((marker->frame > strip->actstart) && (marker->frame < strip->actend)) {
-      float frame = nlastrip_get_frame(strip, marker->frame, NLATIME_CONVERT_MAP);
+  immBeginAtMost(GPU_PRIM_LINES, act->markers.count() * 2);
+  for (TimeMarker &marker : act->markers) {
+    if ((marker.frame > strip->actstart) && (marker.frame < strip->actend)) {
+      float frame = nlastrip_get_frame(strip, marker.frame, NLATIME_CONVERT_MAP);
 
       /* just a simple line for now */
       /* XXX: draw a triangle instead... */
@@ -226,9 +225,9 @@ static void nla_strip_draw_markers(NlaStrip *strip, float yminc, float ymaxc)
     /* just a solid color, so that it is very easy to spot */
     int shade = 20;
     /* draw the markers in the first level of strips only (if they are actions) */
-    LISTBASE_FOREACH (NlaStrip *, nls, &strip->strips) {
-      if (nls->type == NLASTRIP_TYPE_CLIP) {
-        nla_actionclip_draw_markers(nls, yminc, ymaxc, shade, false);
+    for (NlaStrip &nls : strip->strips) {
+      if (nls.type == NLASTRIP_TYPE_CLIP) {
+        nla_actionclip_draw_markers(&nls, yminc, ymaxc, shade, false);
       }
     }
   }
@@ -249,7 +248,7 @@ static void nla_strip_get_color_inside(AnimData *adt, NlaStrip *strip, float col
         /* Active strip tweak - tweak theme is applied only to active edit strip,
          * not linked-duplicates.
          */
-        UI_GetThemeColor3fv(TH_NLA_TWEAK, color);
+        ui::theme::get_color_3fv(TH_NLA_TWEAK, color);
         break;
       }
 
@@ -257,35 +256,35 @@ static void nla_strip_get_color_inside(AnimData *adt, NlaStrip *strip, float col
         /* Non-active strip tweak - display warning theme
          * for non active linked-duplicates.
          */
-        UI_GetThemeColor3fv(TH_NLA_TWEAK_DUPLI, color);
+        ui::theme::get_color_3fv(TH_NLA_TWEAK_DUPLI, color);
         break;
       }
       if (strip->flag & NLASTRIP_FLAG_SELECT) {
         /* selected. */
-        UI_GetThemeColor3fv(TH_STRIP_SELECT, color);
+        ui::theme::get_color_3fv(TH_STRIP_SELECT, color);
         break;
       }
 
       /* unselected - use standard strip theme. */
-      UI_GetThemeColor3fv(TH_STRIP, color);
+      ui::theme::get_color_3fv(TH_STRIP, color);
       break;
 
     case NLASTRIP_TYPE_META:
       /* Meta Strip. */
-      UI_GetThemeColor3fv(is_selected ? TH_NLA_META_SEL : TH_NLA_META, color);
+      ui::theme::get_color_3fv(is_selected ? TH_NLA_META_SEL : TH_NLA_META, color);
       break;
     case NLASTRIP_TYPE_TRANSITION: {
       /* Transition Strip. */
-      UI_GetThemeColor3fv(is_selected ? TH_NLA_TRANSITION_SEL : TH_NLA_TRANSITION, color);
+      ui::theme::get_color_3fv(is_selected ? TH_NLA_TRANSITION_SEL : TH_NLA_TRANSITION, color);
       break;
     }
     case NLASTRIP_TYPE_SOUND:
       /* Sound Strip. */
-      UI_GetThemeColor3fv(is_selected ? TH_NLA_SOUND_SEL : TH_NLA_SOUND, color);
+      ui::theme::get_color_3fv(is_selected ? TH_NLA_SOUND_SEL : TH_NLA_SOUND, color);
       break;
     default: {
       /* default to unselected theme. */
-      UI_GetThemeColor3fv(TH_STRIP, color);
+      ui::theme::get_color_3fv(TH_STRIP, color);
     } break;
   }
 }
@@ -366,7 +365,7 @@ static uint nla_draw_use_dashed_outlines(const float color[4], bool muted)
 {
   /* Note that we use dashed shader here, and make it draw solid lines if not muted... */
   uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
   float viewport_size[4];
@@ -438,7 +437,7 @@ static void nla_draw_strip(SpaceNla *snla,
   /* get color of strip */
   nla_strip_get_color_inside(adt, strip, color);
 
-  shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* draw extrapolation info first (as backdrop)
@@ -476,6 +475,8 @@ static void nla_draw_strip(SpaceNla *snla,
           immRectf(shdr_pos, strip->end, yminc, x2, ymaxc);
         }
         break;
+      case NLASTRIP_EXTEND_NOTHING:
+        break;
     }
 
     GPU_blend(GPU_BLEND_NONE);
@@ -487,16 +488,16 @@ static void nla_draw_strip(SpaceNla *snla,
     immUnbindProgram();
 
     /* strip is in normal track */
-    UI_draw_roundbox_corner_set(UI_CNR_ALL); /* all corners rounded */
+    ui::draw_roundbox_corner_set(ui::CNR_ALL); /* all corners rounded */
     rctf rect;
     rect.xmin = strip->start;
     rect.xmax = strip->end;
     rect.ymin = yminc;
     rect.ymax = ymaxc;
-    UI_draw_roundbox_4fv(&rect, true, 0.0f, color);
+    ui::draw_roundbox_4fv(&rect, true, 0.0f, color);
 
     /* restore current vertex format & program (roundbox trashes it) */
-    shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   }
   else {
@@ -554,7 +555,7 @@ static void nla_draw_strip(SpaceNla *snla,
     rect.xmax = strip->end;
     rect.ymin = yminc;
     rect.ymax = ymaxc;
-    UI_draw_roundbox_4fv(&rect, false, 0.0f, color);
+    ui::draw_roundbox_4fv(&rect, false, 0.0f, color);
 
     /* restore current vertex format & program (roundbox trashes it) */
     shdr_pos = nla_draw_use_dashed_outlines(color, muted);
@@ -585,24 +586,24 @@ static void nla_draw_strip(SpaceNla *snla,
     const float y = (ymaxc - yminc) * 0.5f + yminc;
 
     /* up to 2 lines per strip */
-    immBeginAtMost(GPU_PRIM_LINES, 4 * BLI_listbase_count(&strip->strips));
+    immBeginAtMost(GPU_PRIM_LINES, 4 * strip->strips.count());
 
     /* only draw first-level of child-strips, but don't draw any lines on the endpoints */
-    LISTBASE_FOREACH (NlaStrip *, cs, &strip->strips) {
+    for (NlaStrip &cs : strip->strips) {
       /* draw start-line if not same as end of previous (and only if not the first strip)
        * - on upper half of strip
        */
-      if ((cs->prev) && IS_EQF(cs->prev->end, cs->start) == 0) {
-        immVertex2f(shdr_pos, cs->start, y);
-        immVertex2f(shdr_pos, cs->start, ymaxc);
+      if ((cs.prev) && IS_EQF(cs.prev->end, cs.start) == 0) {
+        immVertex2f(shdr_pos, cs.start, y);
+        immVertex2f(shdr_pos, cs.start, ymaxc);
       }
 
       /* draw end-line if not the last strip
        * - on lower half of strip
        */
-      if (cs->next) {
-        immVertex2f(shdr_pos, cs->end, yminc);
-        immVertex2f(shdr_pos, cs->end, y);
+      if (cs.next) {
+        immVertex2f(shdr_pos, cs.end, yminc);
+        immVertex2f(shdr_pos, cs.end, y);
       }
     }
 
@@ -631,10 +632,10 @@ static void nla_draw_strip_text(AnimData *adt,
 
   /* just print the name and the range */
   if (strip->flag & NLASTRIP_FLAG_TEMP_META) {
-    str_len = STRNCPY_RLEN(str, DATA_("Temp-Meta"));
+    str_len = STRNCPY_UTF8_RLEN(str, DATA_("Temp-Meta"));
   }
   else {
-    str_len = STRNCPY_RLEN(str, strip->name);
+    str_len = STRNCPY_UTF8_RLEN(str, strip->name);
   }
 
   /* set text color - if colors (see above) are light, draw black text, otherwise draw white */
@@ -664,7 +665,7 @@ static void nla_draw_strip_text(AnimData *adt,
   rect.ymax = ymaxc;
 
   /* add this string to the cache of texts to draw */
-  UI_view2d_text_cache_add_rectf(v2d, &rect, str, str_len, col);
+  ui::view2d_text_cache_add_rectf(v2d, &rect, str, str_len, col);
 }
 
 /**
@@ -686,12 +687,12 @@ static void nla_draw_strip_frames_text(
    * while also preserving some accuracy, since we do use floats. */
 
   /* start frame */
-  numstr_len = SNPRINTF_RLEN(numstr, "%.1f", strip->start);
-  UI_view2d_text_cache_add(v2d, strip->start - 1.0f, ymaxc + ytol, numstr, numstr_len, col);
+  numstr_len = SNPRINTF_UTF8_RLEN(numstr, "%.1f", strip->start);
+  ui::view2d_text_cache_add(v2d, strip->start - 1.0f, ymaxc + ytol, numstr, numstr_len, col);
 
   /* end frame */
-  numstr_len = SNPRINTF_RLEN(numstr, "%.1f", strip->end);
-  UI_view2d_text_cache_add(v2d, strip->end, ymaxc + ytol, numstr, numstr_len, col);
+  numstr_len = SNPRINTF_UTF8_RLEN(numstr, "%.1f", strip->end);
+  ui::view2d_text_cache_add(v2d, strip->end, ymaxc + ytol, numstr, numstr_len, col);
 }
 
 /* ---------------------- */
@@ -701,10 +702,10 @@ static void nla_draw_strip_frames_text(
  * Note that this also includes tracks that might only be
  * visible because of their extendmode.
  */
-static ListBase get_visible_nla_strips(NlaTrack *nlt, View2D *v2d)
+static ListBaseT<NlaStrip> get_visible_nla_strips(NlaTrack *nlt, View2D *v2d)
 {
-  if (BLI_listbase_is_empty(&nlt->strips)) {
-    ListBase empty = {nullptr, nullptr};
+  if (nlt->strips.is_empty()) {
+    ListBaseT<NlaStrip> empty = {nullptr, nullptr};
     return empty;
   }
 
@@ -712,9 +713,9 @@ static ListBase get_visible_nla_strips(NlaTrack *nlt, View2D *v2d)
   NlaStrip *last = nullptr;
 
   /* Find the first strip that is within the bounds of the view. */
-  LISTBASE_FOREACH (NlaStrip *, strip, &nlt->strips) {
-    if (BKE_nlastrip_within_bounds(strip, v2d->cur.xmin, v2d->cur.xmax)) {
-      first = last = strip;
+  for (NlaStrip &strip : nlt->strips) {
+    if (BKE_nlastrip_within_bounds(&strip, v2d->cur.xmin, v2d->cur.xmax)) {
+      first = last = &strip;
       break;
     }
   }
@@ -764,12 +765,12 @@ static ListBase get_visible_nla_strips(NlaTrack *nlt, View2D *v2d)
     }
     else {
       /* The view is in the middle of two strips. */
-      LISTBASE_FOREACH (NlaStrip *, strip, &nlt->strips) {
+      for (NlaStrip &strip : nlt->strips) {
         /* Find the strip to the left by finding the strip to the right and getting its prev. */
-        if (v2d->cur.xmax < strip->start) {
+        if (v2d->cur.xmax < strip.start) {
           /* If the strip to the left has an extendmode, set that as the only visible strip. */
-          if (strip->prev && strip->prev->extendmode != NLASTRIP_EXTEND_NOTHING) {
-            first = last = strip->prev;
+          if (strip.prev && strip.prev->extendmode != NLASTRIP_EXTEND_NOTHING) {
+            first = last = strip.prev;
           }
           break;
         }
@@ -777,7 +778,7 @@ static ListBase get_visible_nla_strips(NlaTrack *nlt, View2D *v2d)
     }
   }
 
-  ListBase visible_strips = {first, last};
+  ListBaseT<NlaStrip> visible_strips = {first, last};
   return visible_strips;
 }
 
@@ -788,7 +789,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
   const float text_margin_x = (8 * UI_SCALE_FAC) * pixelx;
 
   /* build list of tracks to draw */
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
                               ANIMFILTER_LIST_CHANNELS | ANIMFILTER_FCURVESONLY);
   size_t items = ANIM_animdata_filter(
@@ -821,26 +822,26 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
         case ANIMTYPE_NLATRACK: {
           AnimData *adt = ale->adt;
           NlaTrack *nlt = static_cast<NlaTrack *>(ale->data);
-          ListBase visible_nla_strips = get_visible_nla_strips(nlt, v2d);
+          ListBaseT<NlaStrip> visible_nla_strips = get_visible_nla_strips(nlt, v2d);
 
           /* Draw each visible strip in the track. */
-          LISTBASE_FOREACH (NlaStrip *, strip, &visible_nla_strips) {
-            const float xminc = strip->start + text_margin_x;
-            const float xmaxc = strip->end - text_margin_x;
+          for (NlaStrip &strip : visible_nla_strips) {
+            const float xminc = strip.start + text_margin_x;
+            const float xmaxc = strip.end - text_margin_x;
 
             /* draw the visualization of the strip */
-            nla_draw_strip(snla, adt, nlt, strip, v2d, ymin, ymax);
+            nla_draw_strip(snla, adt, nlt, &strip, v2d, ymin, ymax);
 
             /* add the text for this strip to the cache */
             if (xminc < xmaxc) {
-              nla_draw_strip_text(adt, nlt, strip, v2d, xminc, xmaxc, ymin, ymax);
+              nla_draw_strip_text(adt, nlt, &strip, v2d, xminc, xmaxc, ymin, ymax);
             }
 
             /* if transforming strips (only real reason for temp-metas currently),
              * add to the cache the frame numbers of the strip's extents
              */
-            if (strip->flag & NLASTRIP_FLAG_TEMP_META) {
-              nla_draw_strip_frames_text(nlt, strip, v2d, ymin, ymax);
+            if (strip.flag & NLASTRIP_FLAG_TEMP_META) {
+              nla_draw_strip_frames_text(nlt, &strip, v2d, ymin, ymax);
             }
           }
           break;
@@ -854,7 +855,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
           }
 
           uint pos = GPU_vertformat_attr_add(
-              immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+              immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
           immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
           /* just draw a semi-shaded rect spanning the width of the viewable area, based on if
@@ -946,6 +947,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
         case ANIMTYPE_DSHAIR:
         case ANIMTYPE_DSPOINTCLOUD:
         case ANIMTYPE_DSVOLUME:
+        case ANIMTYPE_DSLIGHTPROBE:
         case ANIMTYPE_SHAPEKEY:
         case ANIMTYPE_GPLAYER:
         case ANIMTYPE_GREASE_PENCIL_DATABLOCK:
@@ -970,7 +972,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
 void draw_nla_track_list(const bContext *C,
                          bAnimContext *ac,
                          ARegion *region,
-                         const ListBase /*bAnimListElem*/ &anim_data)
+                         const ListBaseT<bAnimListElem> &anim_data)
 {
 
   SpaceNla *snla = reinterpret_cast<SpaceNla *>(ac->sl);
@@ -978,7 +980,7 @@ void draw_nla_track_list(const bContext *C,
 
   /* need to do a view-sync here, so that the keys area doesn't jump around
    * (it must copy this) */
-  UI_view2d_sync(nullptr, ac->area, v2d, V2D_LOCK_COPY);
+  ui::view2d_sync(nullptr, ac->area, v2d, V2D_LOCK_COPY);
 
   /* draw tracks */
   { /* first pass: just the standard GL-drawing for backdrop + text */
@@ -1000,7 +1002,7 @@ void draw_nla_track_list(const bContext *C,
     }
   }
   { /* second pass: UI widgets */
-    uiBlock *block = UI_block_begin(C, region, __func__, blender::ui::EmbossType::Emboss);
+    ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
     size_t track_index = 0;
     float ymax = NLATRACK_FIRST_TOP(ac);
 
@@ -1024,11 +1026,13 @@ void draw_nla_track_list(const bContext *C,
       }
     }
 
-    UI_block_end(C, block);
-    UI_block_draw(C, block);
+    block_end(C, block);
+    block_draw(C, block);
 
     GPU_blend(GPU_BLEND_NONE);
   }
 }
 
 /* *********************************************** */
+
+}  // namespace blender

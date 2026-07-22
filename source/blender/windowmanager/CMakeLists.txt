@@ -8,6 +8,8 @@ set(INC
   gizmo/intern
   ../compositor
   ../editors/include
+  ../editors/interface
+  ../gpu
   ../makesrna
   ../../../intern/memutil
 
@@ -25,6 +27,7 @@ set(SRC
   intern/wm_event_query.cc
   intern/wm_event_system.cc
   intern/wm_files.cc
+  intern/wm_files_colorspace.cc
   intern/wm_files_link.cc
   intern/wm_gesture.cc
   intern/wm_gesture_ops.cc
@@ -57,6 +60,7 @@ set(SRC
   gizmo/intern/wm_gizmo_target_props.cc
   gizmo/intern/wm_gizmo_type.cc
   message_bus/intern/wm_message_bus.cc
+  message_bus/intern/wm_message_bus_remote_io.cc
   message_bus/intern/wm_message_bus_rna.cc
   message_bus/intern/wm_message_bus_static.cc
 
@@ -97,35 +101,54 @@ set(LIB
   PRIVATE bf::draw
   bf_editor_screen
   bf_editor_undo
-  PRIVATE bf::extern::fmtlib
   PRIVATE bf::gpu
   PRIVATE bf::imbuf
   PRIVATE bf::imbuf::movie
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::intern::profile
   PRIVATE bf::animrig
   PRIVATE bf::nodes
   PRIVATE bf::render
   PRIVATE bf::sequencer
   bf_intern_ghost
   bf_compositor
+  PRIVATE bf::dependencies::optional::ffmpeg
+  PRIVATE bf::dependencies::optional::audaspace
 )
 
-if(WIN32)
-  add_definitions(-DNOMINMAX)
+if(WITH_HEADLESS)
+  add_definitions(-DWITH_HEADLESS)
+else()
+  # SVG cursors.
+  list(APPEND LIB
+    PRIVATE bf::extern::nanosvg
+    PRIVATE bf::editor::datafiles
+  )
 endif()
 
-if(WITH_AUDASPACE)
-  list(APPEND INC_SYS
-    ${AUDASPACE_C_INCLUDE_DIRS}
+if(WITH_GHOST_WAYLAND)
+  list(APPEND SRC
+    intern/wm_window_icon.cc
+    intern/wm_window_icon.hh
   )
-  if(WITH_SYSTEM_AUDASPACE)
-    list(APPEND LIB
-      ${AUDASPACE_C_LIBRARIES}
-      ${AUDASPACE_PY_LIBRARIES}
-    )
-  endif()
-  add_definitions(-DWITH_AUDASPACE)
+  # Full-color application icon for the Wayland window icon.
+  data_to_c(
+    "${CMAKE_SOURCE_DIR}/release/freedesktop/icons/scalable/apps/blender.svg"
+    "${CMAKE_CURRENT_BINARY_DIR}/blender_app_icon.svg.c"
+    SRC
+    # Name override to avoid conflicting with the UI icon `datatoc_blender_svg`.
+    "blender_app_icon_svg"
+  )
+  add_definitions(-DWITH_GHOST_WAYLAND)
+endif()
+
+if(WITH_GHOST_CSD)
+  list(APPEND SRC
+    intern/wm_window_csd_draw.cc
+    intern/wm_window_csd_layout.cc
+  )
+  add_definitions(-DWITH_GHOST_CSD)
 endif()
 
 if(WITH_CYCLES)
@@ -138,26 +161,6 @@ endif()
 
 if(WITH_VULKAN_BACKEND)
   add_definitions(-DWITH_VULKAN_BACKEND)
-endif()
-
-if(WITH_OPENCOLLADA)
-  add_definitions(-DWITH_COLLADA)
-endif()
-
-if(WITH_CODEC_FFMPEG)
-  list(APPEND INC_SYS
-    ${FFMPEG_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${FFMPEG_LIBRARIES}
-  )
-  add_definitions(-DWITH_FFMPEG)
-endif()
-
-if(WITH_HEADLESS)
-  add_definitions(-DWITH_HEADLESS)
-elseif(WITH_GHOST_X11)
-  add_definitions(-DWITH_GHOST_X11)
 endif()
 
 if(WITH_PYTHON)
@@ -194,6 +197,7 @@ if(WITH_XR_OPENXR)
     xr/intern/wm_xr_action.cc
     xr/intern/wm_xr_actionmap.cc
     xr/intern/wm_xr_draw.cc
+    xr/intern/wm_xr_location_scouting.cc
     xr/intern/wm_xr_operators.cc
     xr/intern/wm_xr_session.cc
 

@@ -72,6 +72,14 @@ ccl_device int volume_phase_sample(const ccl_private ShaderData *sd,
   }
 }
 
+/* Widen the compact ray differential dD after a phase function scatter to
+ * match the lobe's angular spread. See bsdf_widen_dD for details. */
+ccl_device_forceinline float volume_phase_widen_dD(const float prev_dD,
+                                                   const float sampled_roughness)
+{
+  return max(prev_dD, sampled_roughness);
+}
+
 ccl_device bool volume_phase_equal(const ccl_private ShaderClosure *c1,
                                    const ccl_private ShaderClosure *c2)
 {
@@ -125,8 +133,10 @@ ccl_device float volume_phase_get_g(const ccl_private ShaderVolumeClosure *svc)
 
 /* Volume sampling utilities. */
 
-/* todo: this value could be tweaked or turned into a probability to avoid
- * unnecessary work in volumes and subsurface scattering. */
+/* Ignore paths that have volume throughput below this value, to avoid unnecessary work
+ * and precision issues.
+ * TODO: this value could be tweaked or turned into a probability to avoid unnecessary work in
+ * volumes and subsurface scattering. */
 #define VOLUME_THROUGHPUT_EPSILON 1e-6f
 
 ccl_device Spectrum volume_color_transmittance(Spectrum sigma, const float t)

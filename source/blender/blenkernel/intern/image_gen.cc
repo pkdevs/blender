@@ -10,22 +10,24 @@
 #include <cmath>
 #include <cstdlib>
 
-#include "BLI_math_base.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 
 #include "BKE_image.hh"
 
+#include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
 #include "BLF_api.hh"
 
+namespace blender {
+
 void BKE_image_buf_fill_color(
     uchar *rect_byte, float *rect_float, int width, int height, const float color[4])
 {
-  using namespace blender;
   threading::parallel_for(
       IndexRange(int64_t(width) * height), 64 * 1024, [&](const IndexRange i_range) {
         if (rect_float != nullptr) {
@@ -132,7 +134,7 @@ static void image_buf_fill_checker_slice(
         }
 
         if (rect_float) {
-          srgb_to_linearrgb_v3_v3(rect_float, rgb);
+          IMB_colormanagement_srgb_to_scene_linear_v3(rect_float, rgb);
           rect_float[3] = 1.0f;
         }
       }
@@ -149,7 +151,6 @@ static void image_buf_fill_checker_slice(
 
 void BKE_image_buf_fill_checker(uchar *rect, float *rect_float, int width, int height)
 {
-  using namespace blender;
   threading::parallel_for(IndexRange(height), 64, [&](const IndexRange y_range) {
     int64_t offset = y_range.first() * width * 4;
     uchar *dst_byte = (rect != nullptr) ? (rect + offset) : nullptr;
@@ -193,9 +194,7 @@ static void checker_board_color_fill(
       }
 
       if (rect_float) {
-        rect_float[0] = rgb[0];
-        rect_float[1] = rgb[1];
-        rect_float[2] = rgb[2];
+        IMB_colormanagement_rec709_to_scene_linear(rect_float, rgb);
         rect_float[3] = 1.0f;
 
         rect_float += 4;
@@ -302,11 +301,9 @@ static void checker_board_text(
 
   BLF_size(mono, 54.0f); /* hard coded size! */
 
-  /* OCIO_TODO: using nullptr as display will assume using sRGB display
-   *            this is correct since currently generated images are assumed to be in sRGB space,
-   *            but this would probably needed to be fixed in some way
-   */
-  BLF_buffer(mono, rect_float, rect, width, height, nullptr);
+  /* Using nullptr will assume the byte buffer has sRGB color-space, which currently
+   * matches the default color-space of new images. */
+  BLF_buffer(mono, rect_float, rect, width, height, 4, nullptr);
 
   const float text_color[4] = {0.0, 0.0, 0.0, 1.0};
   const float text_outline[4] = {1.0, 1.0, 1.0, 1.0};
@@ -358,7 +355,7 @@ static void checker_board_text(
   }
 
   /* cleanup the buffer. */
-  BLF_buffer(mono, nullptr, nullptr, 0, 0, nullptr);
+  BLF_buffer(mono, nullptr, nullptr, 0, 0, 4, nullptr);
 }
 
 static void checker_board_color_prepare_slice(
@@ -374,7 +371,6 @@ static void checker_board_color_prepare_slice(
 
 void BKE_image_buf_fill_checker_color(uchar *rect, float *rect_float, int width, int height)
 {
-  using namespace blender;
   threading::parallel_for(IndexRange(height), 64, [&](const IndexRange y_range) {
     int64_t offset = y_range.first() * width * 4;
     uchar *dst_byte = (rect != nullptr) ? (rect + offset) : nullptr;
@@ -386,19 +382,10 @@ void BKE_image_buf_fill_checker_color(uchar *rect, float *rect_float, int width,
   checker_board_text(rect, rect_float, width, height, 128, 2);
 
   if (rect_float != nullptr) {
-    /* TODO(sergey): Currently it's easier to fill in form buffer and
-     * linearize it afterwards. This could be optimized with some smart
-     * trickery around blending factors and such.
-     */
-    IMB_buffer_float_from_float_threaded(rect_float,
-                                         rect_float,
-                                         4,
-                                         IB_PROFILE_LINEAR_RGB,
-                                         IB_PROFILE_SRGB,
-                                         true,
-                                         width,
-                                         height,
-                                         width,
-                                         width);
+    /* It is easier to fill the buffer in sRGB and linearize it afterwards.
+     * Maybe this could be optimized with some smart trickery around blending factors. */
+    IMB_buffer_float_rgba_srgb_to_linear(rect_float, width, height);
   }
 }
+
+}  // namespace blender

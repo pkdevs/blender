@@ -26,6 +26,9 @@
 #include "BKE_object.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
 using Alembic::AbcGeom::OCompoundProperty;
@@ -35,7 +38,7 @@ using Alembic::AbcGeom::OInt16Property;
 using Alembic::AbcGeom::ON3fGeomParam;
 using Alembic::AbcGeom::OV2fGeomParam;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 const std::string ABC_CURVE_RESOLUTION_U_PROPNAME("blender:resolution");
 
@@ -50,7 +53,7 @@ ABCCurveWriter::ABCCurveWriter(const ABCWriterConstructorArgs &args) : ABCAbstra
 
 void ABCCurveWriter::create_alembic_objects(const HierarchyContext *context)
 {
-  CLOG_INFO(&LOG, 2, "exporting %s", args_.abc_path.c_str());
+  CLOG_DEBUG(&LOG, "exporting %s", args_.abc_path.c_str());
   abc_curve_ = OCurves(args_.abc_parent, args_.abc_name, timesample_index_);
   abc_curve_schema_ = abc_curve_.getSchema();
 
@@ -61,16 +64,18 @@ void ABCCurveWriter::create_alembic_objects(const HierarchyContext *context)
   int resolution_u = 1;
   switch (context->object->type) {
     case OB_CURVES_LEGACY: {
-      Curve *curves_id = static_cast<Curve *>(context->object->data);
+      Curve *curves_id = id_cast<Curve *>(context->object->data);
       resolution_u = curves_id->resolu;
       break;
     }
     case OB_CURVES: {
-      Curves *curves_id = static_cast<Curves *>(context->object->data);
+      Curves *curves_id = id_cast<Curves *>(context->object->data);
       const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
       resolution_u = curves.resolution().first();
       break;
     }
+    default:
+      break;
   }
 
   OCompoundProperty user_props = abc_curve_schema_.getUserProperties();
@@ -95,14 +100,14 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
 
   switch (context.object->type) {
     case OB_CURVES_LEGACY: {
-      const Curve *legacy_curve = static_cast<Curve *>(context.object->data);
+      const Curve *legacy_curve = id_cast<Curve *>(context.object->data);
       converted_curves = std::unique_ptr<Curves, std::function<void(Curves *)>>(
           bke::curve_legacy_to_curves(*legacy_curve), [](Curves *c) { BKE_id_free(nullptr, c); });
       curves_id = converted_curves.get();
       break;
     }
     case OB_CURVES:
-      curves_id = static_cast<Curves *>(context.object->data);
+      curves_id = id_cast<Curves *>(context.object->data);
       break;
     default:
       BLI_assert_unreachable();
@@ -163,15 +168,15 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
   std::vector<uint8_t> orders;
 
   const Span<float3> positions = curves.positions();
-  const Span<float> nurbs_weights = curves.nurbs_weights();
+  const std::optional<Span<float>> nurbs_weights = curves.nurbs_weights();
   const VArray<int8_t> nurbs_orders = curves.nurbs_orders();
   const VArray<float> radii = curves.radius();
 
   vert_counts.resize(curves.curves_num());
   const OffsetIndices points_by_curve = curves.points_by_curve();
-  if (blender_curve_type == CURVE_TYPE_BEZIER) {
-    const Span<float3> handles_l = curves.handle_positions_left();
-    const Span<float3> handles_r = curves.handle_positions_right();
+  const std::optional<Span<float3>> handles_l = curves.handle_positions_left();
+  const std::optional<Span<float3>> handles_r = curves.handle_positions_right();
+  if (blender_curve_type == CURVE_TYPE_BEZIER && handles_l && handles_r) {
 
     for (const int i_curve : curves.curves_range()) {
       const IndexRange points = points_by_curve[i_curve];
@@ -190,8 +195,8 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
         verts.push_back(to_yup_V3f(positions[i_point]));
         widths.push_back(radii[i_point] * 2.0f);
 
-        verts.push_back(to_yup_V3f(handles_r[i_point]));
-        verts.push_back(to_yup_V3f(handles_l[i_point + 1]));
+        verts.push_back(to_yup_V3f((*handles_r)[i_point]));
+        verts.push_back(to_yup_V3f((*handles_l)[i_point + 1]));
       }
 
       /* The last vert in the array doesn't need a right handle because the curve stops
@@ -202,8 +207,8 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
       /* If the curve is cyclic, include the right handle of the last point and the
        * left handle of the first point. */
       if (is_cyclic) {
-        verts.push_back(to_yup_V3f(handles_r[last_point_index]));
-        verts.push_back(to_yup_V3f(handles_l[start_point_index]));
+        verts.push_back(to_yup_V3f((*handles_r)[last_point_index]));
+        verts.push_back(to_yup_V3f((*handles_l)[start_point_index]));
       }
 
       vert_counts[i_curve] = verts.size() - current_vert_count;
@@ -218,8 +223,10 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
     }
 
     if (blender_curve_type == CURVE_TYPE_NURBS) {
-      weights.resize(curves.points_num());
-      std::copy_n(nurbs_weights.data(), weights.size(), weights.data());
+      if (nurbs_weights) {
+        weights.resize(curves.points_num());
+        std::copy_n(nurbs_weights->data(), weights.size(), weights.data());
+      }
 
       orders.resize(curves.curves_num());
       for (const int i_curve : curves.curves_range()) {
@@ -270,13 +277,17 @@ Mesh *ABCCurveMeshWriter::get_export_mesh(Object *object_eval, bool &r_needsfree
       return BKE_mesh_new_nomain_from_curve(object_eval);
     }
 
-    case OB_CURVES:
-      Curves *curves = static_cast<Curves *>(object_eval->data);
+    case OB_CURVES: {
+      Curves *curves = id_cast<Curves *>(object_eval->data);
       r_needsfree = true;
       return bke::curve_to_wire_mesh(curves->geometry.wrap());
+    }
+    default:
+      break;
   }
 
   return nullptr;
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

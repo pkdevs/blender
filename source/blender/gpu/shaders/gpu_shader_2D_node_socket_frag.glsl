@@ -2,11 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "infos/gpu_shader_2D_node_socket_info.hh"
-
-#include "gpu_shader_math_matrix_lib.glsl"
+#include "infos/gpu_shader_2D_node_socket_infos.hh"
 
 FRAGMENT_SHADER_CREATE_INFO(gpu_shader_2D_node_socket_inst)
+
+#include "gpu_shader_math_constants_lib.glsl"
+#include "gpu_shader_math_matrix_construct_lib.glsl"
 
 /* Values in `eNodeSocketDisplayShape` in DNA_node_types.h. Keep in sync. */
 #define SOCK_DISPLAY_SHAPE_CIRCLE 0
@@ -15,6 +16,9 @@ FRAGMENT_SHADER_CREATE_INFO(gpu_shader_2D_node_socket_inst)
 #define SOCK_DISPLAY_SHAPE_CIRCLE_DOT 3
 #define SOCK_DISPLAY_SHAPE_SQUARE_DOT 4
 #define SOCK_DISPLAY_SHAPE_DIAMOND_DOT 5
+#define SOCK_DISPLAY_SHAPE_LINE 6
+#define SOCK_DISPLAY_SHAPE_VOLUME_GRID 7
+#define SOCK_DISPLAY_SHAPE_LIST 8
 
 /* Calculates a squared distance field of a square. */
 float square_sdf(float2 absCo, float2 half_size)
@@ -32,7 +36,7 @@ float square_sdf(float2 absCo, float2 half_size)
 
 float2 rotate_45(float2 co)
 {
-  return from_rotation(Angle(M_PI * 0.25f)) * co;
+  return from_rotation(AngleRadian{M_PI * 0.25f}) * co;
 }
 
 /* Calculates an upper and lower limit for an anti-aliased cutoff of the squared distance. */
@@ -91,6 +95,32 @@ void main()
       distance_squared = square_sdf(abs(rotate_45(co)), float2(diamond_radius - corner_rounding));
       alpha_threshold = corner_rounding;
       dot_threshold = finalDotRadius;
+      break;
+    }
+    case SOCK_DISPLAY_SHAPE_LINE: {
+      distance_squared = square_sdf(co, float2(square_radius * 0.75, square_radius * 1.4));
+      alpha_threshold = corner_rounding;
+      break;
+    }
+    case SOCK_DISPLAY_SHAPE_VOLUME_GRID: {
+      constexpr float rect_side_length = 0.25f;
+      const float2 oversize = float2(0.0f, square_radius * 1.4) / 2.5f;
+      const float2 rect_corner = max(float2(rect_side_length), extrusion / 2.0f + oversize) +
+                                 finalOutlineThickness / 4.0f;
+      const float2 mirrored_uv = abs(abs(uv) - rect_corner);
+      distance_squared = square_sdf(mirrored_uv, rect_corner + finalOutlineThickness / 2.0f);
+      alpha_threshold = corner_rounding;
+      break;
+    }
+    case SOCK_DISPLAY_SHAPE_LIST: {
+      constexpr float2 rect_side_length = float2(0.5f, 0.25f);
+      const float2 oversize = float2(0.0f, square_radius * 1.4) / 2.5f;
+      const float2 rect_corner = max(rect_side_length, extrusion / 2.0f + oversize) +
+                                 finalOutlineThickness / 4.0f;
+      const float2 mirrored_uv = float2(
+          abs(uv.x), abs(abs(abs(uv.y) - rect_corner.y / 1.5f) - rect_corner.y / 1.5f));
+      distance_squared = square_sdf(
+          mirrored_uv, (rect_corner + finalOutlineThickness / 2.0f) / float2(1.0f, 1.5f));
       break;
     }
   }

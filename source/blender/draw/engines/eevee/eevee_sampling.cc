@@ -8,13 +8,15 @@
  * Random number generator, contains persistent state and sample count logic.
  */
 
+#include "RNA_access.hh"
+
 #include "BKE_colortools.hh"
 #include "BKE_scene.hh"
 
-#include "BLI_rand.h"
+#include "BLI_rand_c.hh"
 
 #include "BLI_math_base.hh"
-#include "BLI_math_base_safe.h"
+#include "BLI_math_base_safe.hh"
 
 #include "eevee_instance.hh"
 #include "eevee_sampling.hh"
@@ -27,7 +29,12 @@ namespace blender::eevee {
 
 void Sampling::init(const Scene *scene)
 {
-  sample_count_ = inst_.is_viewport() ? scene->eevee.taa_samples : scene->eevee.taa_render_samples;
+  /* Note: Cycles have different option for view layers sample overrides. The current behavior
+   * matches the default `Use`, which simply override if non-zero. */
+  uint64_t render_sample_count = (inst_.view_layer->samples > 0) ? inst_.view_layer->samples :
+                                                                   scene->eevee.taa_render_samples;
+
+  sample_count_ = inst_.is_viewport() ? scene->eevee.taa_samples : render_sample_count;
 
   if (inst_.is_image_render) {
     sample_count_ = math::max(uint64_t(1), sample_count_);
@@ -80,12 +87,34 @@ void Sampling::init(const Scene *scene)
   clamp_data_.surface_indirect = clamp_value_load(scene->eevee.clamp_surface_indirect);
   clamp_data_.volume_direct = clamp_value_load(scene->eevee.clamp_volume_direct);
   clamp_data_.volume_indirect = clamp_value_load(scene->eevee.clamp_volume_indirect);
+
+  clamp_data_.direct_scale = scene->eevee.direct_light_intensity;
+  clamp_data_.indirect_scale = scene->eevee.indirect_light_intensity;
+
+  /* Options for overwriting pixel jitter sample position. */
+  PointerRNA prop_scene = RNA_id_pointer_create(const_cast<ID *>(&scene->id));
+  blender::PropertyRNA *override_pixel_jitter_sample_prop = RNA_struct_find_property(
+      &prop_scene, "[\"override_pixel_jitter_sample\"]");
+  use_custom_pixel_jitter_sample_ = false;
+  if (override_pixel_jitter_sample_prop) {
+    const int array_length = RNA_property_array_length(&prop_scene,
+                                                       override_pixel_jitter_sample_prop);
+    if (array_length == 2) {
+      RNA_property_float_get_array(
+          &prop_scene, override_pixel_jitter_sample_prop, &custom_pixel_jitter_sample_[0]);
+      use_custom_pixel_jitter_sample_ = true;
+    }
+    else if (array_length != 0) {
+      printf("%s: scene.custom_pixel_jitter_sample length is not 0 or 2.\n", __func__);
+    }
+  }
 }
 
 void Sampling::init(const Object &probe_object)
 {
   BLI_assert(inst_.is_baking());
-  const ::LightProbe &lightprobe = DRW_object_get_data_for_drawing<::LightProbe>(probe_object);
+  const blender::LightProbe &lightprobe = DRW_object_get_data_for_drawing<blender::LightProbe>(
+      probe_object);
 
   sample_count_ = max_ii(1, lightprobe.grid_bake_samples);
   sample_ = 0;
@@ -132,15 +161,23 @@ void Sampling::step()
     }
     /* TODO(fclem) we could use some persistent states to speedup the computation. */
     double2 r, offset = {0, 0};
-    /* Using 2,3 primes as per UE4 Temporal AA presentation.
-     * http://advances.realtimerendering.com/s2014/epic/TemporalAA.pptx (slide 14) */
-    uint2 primes = {2, 3};
-    BLI_halton_2d(primes, offset, sample_filter + 1, r);
-    /* WORKAROUND: We offset the distribution to make the first sample (0,0). This way, we are
-     * assured that at least one of the samples inside the TAA rotation will match the one from the
-     * draw manager. This makes sure overlays are correctly composited in static scene. */
-    data_.dimensions[SAMPLING_FILTER_U] = fractf(r[0] + (1.0 / 2.0));
-    data_.dimensions[SAMPLING_FILTER_V] = fractf(r[1] + (2.0 / 3.0));
+    if (use_custom_pixel_jitter_sample_) {
+      r[0] = custom_pixel_jitter_sample_[0];
+      r[1] = custom_pixel_jitter_sample_[1];
+      data_.dimensions[SAMPLING_FILTER_U] = fractf(r[0] + 0.5f);
+      data_.dimensions[SAMPLING_FILTER_V] = fractf(r[1] + 0.5f);
+    }
+    else {
+      /* Using 2,3 primes as per UE4 Temporal AA presentation.
+       * http://advances.realtimerendering.com/s2014/epic/TemporalAA.pptx (slide 14) */
+      uint2 primes = {2, 3};
+      BLI_halton_2d(primes, offset, sample_filter + 1, r);
+      /* WORKAROUND: We offset the distribution to make the first sample (0,0). This way, we are
+       * assured that at least one of the samples inside the TAA rotation will match the one from
+       * the draw manager. This makes sure overlays are correctly composited in static scene. */
+      data_.dimensions[SAMPLING_FILTER_U] = fractf(r[0] + (1.0f / 2.0f));
+      data_.dimensions[SAMPLING_FILTER_V] = fractf(r[1] + (2.0f / 3.0f));
+    }
     /* TODO de-correlate. */
     data_.dimensions[SAMPLING_TIME] = r[0];
     data_.dimensions[SAMPLING_CLOSURE] = r[1];
@@ -216,10 +253,13 @@ void Sampling::step()
     data_.dimensions[SAMPLING_SSS_V] = r[1];
   }
   {
-    /* Don't leave unused data undefined. */
-    data_.dimensions[SAMPLING_UNUSED_0] = 0.0f;
-    data_.dimensions[SAMPLING_UNUSED_1] = 0.0f;
-    data_.dimensions[SAMPLING_UNUSED_2] = 0.0f;
+    /* Separate sequence for G-buffer quantization dithering. */
+    double3 r, offset = {0, 0, 0};
+    uint3 primes = {11, 13, 17};
+    BLI_halton_3d(primes, offset, sample_ + 1, r);
+    data_.dimensions[SAMPLING_GBUFFER_U] = r[0];
+    data_.dimensions[SAMPLING_GBUFFER_V] = r[1];
+    data_.dimensions[SAMPLING_GBUFFER_W] = r[2];
   }
 
   for (int i : IndexRange(SAMPLING_DIMENSION_COUNT)) {

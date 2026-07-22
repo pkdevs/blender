@@ -10,14 +10,14 @@
 
 namespace blender::nodes {
 
-struct ForeachGeometryElementInputItemsAccessor {
+struct ForeachGeometryElementInputItemsAccessor
+    : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = NodeForeachGeometryElementInputItem;
-  static StructRNA *item_srna;
+  static StructRNA **item_srna;
   static int node_type;
   static constexpr StringRefNull node_idname = "GeometryNodeForeachGeometryElementOutput";
   static constexpr bool has_type = true;
   static constexpr bool has_name = true;
-  static constexpr bool has_single_identifier_str = true;
   struct operator_idnames {
     static constexpr StringRefNull add_item =
         "NODE_OT_foreach_geometry_element_zone_input_item_add";
@@ -50,7 +50,7 @@ struct ForeachGeometryElementInputItemsAccessor {
 
   static void destruct_item(ItemT *item)
   {
-    MEM_SAFE_FREE(item->name);
+    MEM_SAFE_DELETE(item->name);
   }
 
   static void blend_write_item(BlendWriter *writer, const ItemT &item);
@@ -58,7 +58,7 @@ struct ForeachGeometryElementInputItemsAccessor {
 
   static eNodeSocketDatatype get_socket_type(const ItemT &item)
   {
-    return eNodeSocketDatatype(item.socket_type);
+    return item.socket_type;
   }
 
   static char **get_name(ItemT &item)
@@ -66,7 +66,7 @@ struct ForeachGeometryElementInputItemsAccessor {
     return &item.name;
   }
 
-  static bool supports_socket_type(const eNodeSocketDatatype socket_type)
+  static bool supports_socket_type(const eNodeSocketDatatype socket_type, const int /*ntree_type*/)
   {
     return ELEM(socket_type,
                 SOCK_FLOAT,
@@ -97,14 +97,13 @@ struct ForeachGeometryElementInputItemsAccessor {
   }
 };
 
-struct ForeachGeometryElementMainItemsAccessor {
+struct ForeachGeometryElementMainItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = NodeForeachGeometryElementMainItem;
-  static StructRNA *item_srna;
+  static StructRNA **item_srna;
   static int node_type;
   static constexpr StringRefNull node_idname = "GeometryNodeForeachGeometryElementOutput";
   static constexpr bool has_type = true;
   static constexpr bool has_name = true;
-  static constexpr bool has_single_identifier_str = true;
   struct operator_idnames {
     static constexpr StringRefNull add_item =
         "NODE_OT_foreach_geometry_element_zone_main_item_add";
@@ -137,7 +136,7 @@ struct ForeachGeometryElementMainItemsAccessor {
 
   static void destruct_item(ItemT *item)
   {
-    MEM_SAFE_FREE(item->name);
+    MEM_SAFE_DELETE(item->name);
   }
 
   static void blend_write_item(BlendWriter *writer, const ItemT &item);
@@ -145,7 +144,7 @@ struct ForeachGeometryElementMainItemsAccessor {
 
   static eNodeSocketDatatype get_socket_type(const ItemT &item)
   {
-    return eNodeSocketDatatype(item.socket_type);
+    return item.socket_type;
   }
 
   static char **get_name(ItemT &item)
@@ -153,7 +152,7 @@ struct ForeachGeometryElementMainItemsAccessor {
     return &item.name;
   }
 
-  static bool supports_socket_type(const eNodeSocketDatatype socket_type)
+  static bool supports_socket_type(const eNodeSocketDatatype socket_type, const int /*ntree_type*/)
   {
     return ELEM(socket_type,
                 SOCK_FLOAT,
@@ -183,14 +182,14 @@ struct ForeachGeometryElementMainItemsAccessor {
   }
 };
 
-struct ForeachGeometryElementGenerationItemsAccessor {
+struct ForeachGeometryElementGenerationItemsAccessor
+    : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = NodeForeachGeometryElementGenerationItem;
-  static StructRNA *item_srna;
+  static StructRNA **item_srna;
   static int node_type;
   static constexpr StringRefNull node_idname = "GeometryNodeForeachGeometryElementOutput";
   static constexpr bool has_type = true;
   static constexpr bool has_name = true;
-  static constexpr bool has_single_identifier_str = true;
   struct operator_idnames {
     static constexpr StringRefNull add_item =
         "NODE_OT_foreach_geometry_element_zone_generation_item_add";
@@ -223,7 +222,7 @@ struct ForeachGeometryElementGenerationItemsAccessor {
 
   static void destruct_item(ItemT *item)
   {
-    MEM_SAFE_FREE(item->name);
+    MEM_SAFE_DELETE(item->name);
   }
 
   static void blend_write_item(BlendWriter *writer, const ItemT &item);
@@ -231,7 +230,7 @@ struct ForeachGeometryElementGenerationItemsAccessor {
 
   static eNodeSocketDatatype get_socket_type(const ItemT &item)
   {
-    return eNodeSocketDatatype(item.socket_type);
+    return item.socket_type;
   }
 
   static char **get_name(ItemT &item)
@@ -239,7 +238,7 @@ struct ForeachGeometryElementGenerationItemsAccessor {
     return &item.name;
   }
 
-  static bool supports_socket_type(const eNodeSocketDatatype socket_type)
+  static bool supports_socket_type(const eNodeSocketDatatype socket_type, const int /*ntree_type*/)
   {
     return ELEM(socket_type,
                 SOCK_FLOAT,

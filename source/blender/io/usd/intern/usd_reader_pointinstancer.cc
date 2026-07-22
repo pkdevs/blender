@@ -13,9 +13,9 @@
 #include "BKE_node_tree_update.hh"
 #include "BKE_object.hh"
 #include "BKE_pointcloud.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_quaternion_types.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "DNA_collection_types.h"
 #include "DNA_node_types.h"
@@ -33,7 +33,7 @@ static bNode *add_input_named_attrib_node(bNodeTree *ntree, const char *name, in
   auto *storage = reinterpret_cast<NodeGeometryInputNamedAttribute *>(node->storage);
   storage->data_type = prop_type;
 
-  bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Name");
+  bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Name"_ustr);
   bNodeSocketValueString *str_value = static_cast<bNodeSocketValueString *>(socket->default_value);
   BLI_strncpy(str_value->value, name, MAX_NAME);
   return node;
@@ -43,7 +43,7 @@ void USDPointInstancerReader::create_object(Main *bmain)
 {
   PointCloud *pointcloud = BKE_pointcloud_add(bmain, name_.c_str());
   this->object_ = BKE_object_add_only_object(bmain, OB_POINTCLOUD, name_.c_str());
-  this->object_->data = pointcloud;
+  this->object_->data = id_cast<ID *>(pointcloud);
 }
 
 void USDPointInstancerReader::read_geometry(bke::GeometrySet &geometry_set,
@@ -53,12 +53,14 @@ void USDPointInstancerReader::read_geometry(bke::GeometrySet &geometry_set,
   pxr::VtArray<pxr::GfVec3f> usd_positions;
   pxr::VtArray<pxr::GfVec3f> usd_scales;
   pxr::VtArray<pxr::GfQuath> usd_orientations;
+  pxr::VtInt64Array usd_ids;
   pxr::VtArray<int> usd_proto_indices;
   std::vector<bool> usd_mask = point_instancer_prim_.ComputeMaskAtTime(params.motion_sample_time);
 
   point_instancer_prim_.GetPositionsAttr().Get(&usd_positions, params.motion_sample_time);
   point_instancer_prim_.GetScalesAttr().Get(&usd_scales, params.motion_sample_time);
   point_instancer_prim_.GetOrientationsAttr().Get(&usd_orientations, params.motion_sample_time);
+  point_instancer_prim_.GetIdsAttr().Get(&usd_ids, params.motion_sample_time);
   point_instancer_prim_.GetProtoIndicesAttr().Get(&usd_proto_indices, params.motion_sample_time);
 
   PointCloud *pointcloud = geometry_set.get_pointcloud_for_write();
@@ -106,6 +108,23 @@ void USDPointInstancerReader::read_geometry(bke::GeometrySet &geometry_set,
 
   orientations_attribute.finish();
 
+  if (!usd_ids.empty()) {
+    bke::SpanAttributeWriter<int> ids_attribute =
+        attributes.lookup_or_add_for_write_only_span<int>("id", bke::AttrDomain::Point);
+
+    const Span<int64_t> usd_data(usd_ids.cdata(), usd_ids.size());
+    if (usd_data.size() < ids_attribute.span.size()) {
+      ids_attribute.span.fill(0);
+    }
+
+    for (const int i : IndexRange(std::min(usd_data.size(), ids_attribute.span.size()))) {
+      /* Blender only supports int ID attributes so we have to narrow the value. */
+      ids_attribute.span[i] = int(usd_data[i]);
+    }
+
+    ids_attribute.finish();
+  }
+
   bke::SpanAttributeWriter<int> proto_indices_attribute =
       attributes.lookup_or_add_for_write_only_span<int>("proto_index", bke::AttrDomain::Point);
 
@@ -136,14 +155,14 @@ void USDPointInstancerReader::read_geometry(bke::GeometrySet &geometry_set,
   geometry_set.replace_pointcloud(pointcloud);
 }
 
-void USDPointInstancerReader::read_object_data(Main *bmain, const double motionSampleTime)
+void USDPointInstancerReader::read_object_data(Main *bmain, const pxr::UsdTimeCode time)
 {
-  PointCloud *pointcloud = static_cast<PointCloud *>(object_->data);
+  PointCloud *pointcloud = id_cast<PointCloud *>(object_->data);
 
   bke::GeometrySet geometry_set = bke::GeometrySet::from_pointcloud(
       pointcloud, bke::GeometryOwnershipType::Editable);
 
-  const USDMeshReadParams params = create_mesh_read_params(motionSampleTime,
+  const USDMeshReadParams params = create_mesh_read_params(time.GetValue(),
                                                            import_params_.mesh_read_flag);
 
   read_geometry(geometry_set, params, nullptr);
@@ -182,7 +201,8 @@ void USDPointInstancerReader::read_object_data(Main *bmain, const double motionS
   bNode *instance_on_points_node = bke::node_add_static_node(
       nullptr, *ntree, GEO_NODE_INSTANCE_ON_POINTS);
   instance_on_points_node->location[0] = 300.0f;
-  bNodeSocket *socket = bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Pick Instance");
+  bNodeSocket *socket = bke::node_find_socket(
+      *instance_on_points_node, SOCK_IN, "Pick Instance"_ustr);
   socket->default_value_typed<bNodeSocketValueBoolean>()->value = true;
 
   bNode *mask_attrib_node = add_input_named_attrib_node(ntree, "mask", CD_PROP_BOOL);
@@ -193,7 +213,7 @@ void USDPointInstancerReader::read_object_data(Main *bmain, const double motionS
       nullptr, *ntree, GEO_NODE_COLLECTION_INFO);
   collection_info_node->location[0] = 100.0f;
   collection_info_node->location[1] = -300.0f;
-  socket = bke::node_find_socket(*collection_info_node, SOCK_IN, "Separate Children");
+  socket = bke::node_find_socket(*collection_info_node, SOCK_IN, "Separate Children"_ustr);
   socket->default_value_typed<bNodeSocketValueBoolean>()->value = true;
 
   bNode *indices_attrib_node = add_input_named_attrib_node(ntree, "proto_index", CD_PROP_INT32);
@@ -213,41 +233,42 @@ void USDPointInstancerReader::read_object_data(Main *bmain, const double motionS
                      *group_input,
                      *static_cast<bNodeSocket *>(group_input->outputs.first),
                      *instance_on_points_node,
-                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Points"));
+                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Points"_ustr));
 
   bke::node_add_link(*ntree,
                      *mask_attrib_node,
-                     *bke::node_find_socket(*mask_attrib_node, SOCK_OUT, "Attribute"),
+                     *bke::node_find_socket(*mask_attrib_node, SOCK_OUT, "Attribute"_ustr),
                      *instance_on_points_node,
-                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Selection"));
+                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Selection"_ustr));
 
-  bke::node_add_link(*ntree,
-                     *indices_attrib_node,
-                     *bke::node_find_socket(*indices_attrib_node, SOCK_OUT, "Attribute"),
-                     *instance_on_points_node,
-                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Instance Index"));
+  bke::node_add_link(
+      *ntree,
+      *indices_attrib_node,
+      *bke::node_find_socket(*indices_attrib_node, SOCK_OUT, "Attribute"_ustr),
+      *instance_on_points_node,
+      *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Instance Index"_ustr));
 
   bke::node_add_link(*ntree,
                      *scale_attrib_node,
-                     *bke::node_find_socket(*scale_attrib_node, SOCK_OUT, "Attribute"),
+                     *bke::node_find_socket(*scale_attrib_node, SOCK_OUT, "Attribute"_ustr),
                      *instance_on_points_node,
-                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Scale"));
+                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Scale"_ustr));
 
   bke::node_add_link(*ntree,
                      *rotation_attrib_node,
-                     *bke::node_find_socket(*rotation_attrib_node, SOCK_OUT, "Attribute"),
+                     *bke::node_find_socket(*rotation_attrib_node, SOCK_OUT, "Attribute"_ustr),
                      *instance_on_points_node,
-                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Rotation"));
+                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Rotation"_ustr));
 
   bke::node_add_link(*ntree,
                      *collection_info_node,
-                     *bke::node_find_socket(*collection_info_node, SOCK_OUT, "Instances"),
+                     *bke::node_find_socket(*collection_info_node, SOCK_OUT, "Instances"_ustr),
                      *instance_on_points_node,
-                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Instance"));
+                     *bke::node_find_socket(*instance_on_points_node, SOCK_IN, "Instance"_ustr));
 
   bke::node_add_link(*ntree,
                      *instance_on_points_node,
-                     *bke::node_find_socket(*instance_on_points_node, SOCK_OUT, "Instances"),
+                     *bke::node_find_socket(*instance_on_points_node, SOCK_OUT, "Instances"_ustr),
                      *group_output,
                      *static_cast<bNodeSocket *>(group_output->inputs.first));
 
@@ -255,7 +276,7 @@ void USDPointInstancerReader::read_object_data(Main *bmain, const double motionS
 
   BKE_object_modifier_set_active(object_, md);
 
-  USDXformReader::read_object_data(bmain, motionSampleTime);
+  USDXformReader::read_object_data(bmain, time);
 }
 
 pxr::SdfPathVector USDPointInstancerReader::proto_paths() const
@@ -291,7 +312,7 @@ void USDPointInstancerReader::set_collection(Main *bmain, Collection &coll)
     return;
   }
 
-  bNodeSocket *sock = bke::node_find_socket(*collection_node, SOCK_IN, "Collection");
+  bNodeSocket *sock = bke::node_find_socket(*collection_node, SOCK_IN, "Collection"_ustr);
   if (!sock) {
     BLI_assert_unreachable();
     return;

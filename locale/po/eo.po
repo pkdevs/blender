@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.5.0 Alpha (b'd87e0ecb614e')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'96294be75080')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-19 11:37+0000\n"
-"PO-Revision-Date: 2025-04-14 08:15+0000\n"
+"POT-Creation-Date: 2026-07-20 07:29+0000\n"
+"PO-Revision-Date: 2025-09-08 15:59+0000\n"
 "Last-Translator: william sélifet <williamselifet@live.be>\n"
 "Language-Team: Esperanto <https://translate.blender.org/projects/blender-ui/ui/eo/>\n"
 "Language: eo\n"
@@ -12,7 +12,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.10.1"
+"X-Generator: Weblate 5.12.1"
 
 
 msgid "Name"
@@ -25,6 +25,10 @@ msgstr "F-Kurbecoj"
 
 msgid "Select"
 msgstr "Elektu"
+
+
+msgid "Intersection only"
+msgstr "Interago"
 
 
 msgid "Add"

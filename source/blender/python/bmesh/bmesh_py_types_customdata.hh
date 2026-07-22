@@ -12,6 +12,8 @@
 
 #include "bmesh_py_types.hh"
 
+namespace blender {
+
 struct BMesh;
 
 /* All use #BPy_BMLayerAccess struct. */
@@ -30,14 +32,14 @@ extern PyTypeObject BPy_BMLayerItem_Type;
 
 /** All layers for vert/edge/face/loop. */
 struct BPy_BMLayerAccess {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   char htype;
 };
 
 /** Access different layer types deform/uv/vertex-color. */
 struct BPy_BMLayerCollection {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   char htype;
   int type; /* customdata type - CD_XXX */
@@ -45,23 +47,27 @@ struct BPy_BMLayerCollection {
 
 /** Access a specific layer directly. */
 struct BPy_BMLayerItem {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   BMesh *bm; /* keep first */
   char htype;
   int type;  /* customdata type - CD_XXX */
   int index; /* index of this layer type */
 };
 
-PyObject *BPy_BMLayerAccess_CreatePyObject(BMesh *bm, char htype);
-PyObject *BPy_BMLayerCollection_CreatePyObject(BMesh *bm, char htype, int type);
-PyObject *BPy_BMLayerItem_CreatePyObject(BMesh *bm, char htype, int type, int index);
+[[nodiscard]] PyObject *BPy_BMLayerAccess_CreatePyObject(BMesh *bm, char htype);
+[[nodiscard]] PyObject *BPy_BMLayerCollection_CreatePyObject(BMesh *bm, char htype, int type);
+[[nodiscard]] PyObject *BPy_BMLayerItem_CreatePyObject(BMesh *bm, char htype, int type, int index);
 
 void BPy_BM_init_types_customdata();
 
 /**
- *\brief BMElem.__getitem__() / __setitem__()
+ * \brief `BMElem.__getitem__() / __setitem__()`
  *
  * Assume all error checks are done, eg: `uv = vert[uv_layer]`
  */
-PyObject *BPy_BMLayerItem_GetItem(BPy_BMElem *py_ele, BPy_BMLayerItem *py_layer);
-int BPy_BMLayerItem_SetItem(BPy_BMElem *py_ele, BPy_BMLayerItem *py_layer, PyObject *value);
+[[nodiscard]] PyObject *BPy_BMLayerItem_GetItem(BPy_BMElem *py_ele, BPy_BMLayerItem *py_layer);
+[[nodiscard]] int BPy_BMLayerItem_SetItem(BPy_BMElem *py_ele,
+                                          BPy_BMLayerItem *py_layer,
+                                          PyObject *value);
+
+}  // namespace blender

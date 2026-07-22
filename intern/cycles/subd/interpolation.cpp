@@ -4,6 +4,7 @@
 
 #include "subd/interpolation.h"
 
+#include "kernel/types.h"
 #include "scene/attribute.h"
 #include "scene/mesh.h"
 
@@ -42,6 +43,36 @@ struct SubdByte {
   }
 };
 
+struct SubdNormal {
+  using Type = packed_normal;
+  using AccumType = float3;
+
+  static AccumType read(const Type &value)
+  {
+    return value.decode();
+  }
+
+  static Type output(const AccumType &value)
+  {
+    return packed_normal(value);
+  }
+};
+
+struct SubdPackedFloat3 {
+  using Type = packed_float3;
+  using AccumType = float3;
+
+  static AccumType read(const Type &value)
+  {
+    return float3(value);
+  }
+
+  static Type output(const AccumType &value)
+  {
+    return packed_float3(value);
+  }
+};
+
 #ifdef WITH_OPENSUBDIV
 SubdAttributeInterpolation::SubdAttributeInterpolation(Mesh &mesh,
                                                        OsdMesh &osd_mesh,
@@ -75,12 +106,18 @@ void SubdAttributeInterpolation::setup()
 
 bool SubdAttributeInterpolation::support_interp_attribute(const Attribute &attr) const
 {
-  // TODO: Recompute UV tangent
   switch (attr.std) {
     /* Smooth normals are computed from derivatives, for linear interpolate. */
     case ATTR_STD_VERTEX_NORMAL:
-    case ATTR_STD_MOTION_VERTEX_NORMAL:
+    case ATTR_STD_CORNER_NORMAL:
       if (mesh.get_subdivision_type() == Mesh::SUBDIVISION_CATMULL_CLARK) {
+        return false;
+      }
+      break;
+    /* Center step position is computed by patch evaluation during dicing.
+     * Only interpolate position when there are motion steps. */
+    case ATTR_STD_POSITION:
+      if (!attr.has_motion()) {
         return false;
       }
       break;
@@ -94,10 +131,13 @@ bool SubdAttributeInterpolation::support_interp_attribute(const Attribute &attr)
 
   /* Skip element types that should not exist for subd attributes anyway. */
   switch (attr.element) {
+    case ATTR_ELEMENT_OBJECT:
+    case ATTR_ELEMENT_MESH:
     case ATTR_ELEMENT_VERTEX:
+    case ATTR_ELEMENT_VERTEX_NORMAL:
     case ATTR_ELEMENT_CORNER:
     case ATTR_ELEMENT_CORNER_BYTE:
-    case ATTR_ELEMENT_VERTEX_MOTION:
+    case ATTR_ELEMENT_CORNER_NORMAL:
     case ATTR_ELEMENT_FACE:
       break;
     default:
@@ -109,8 +149,11 @@ bool SubdAttributeInterpolation::support_interp_attribute(const Attribute &attr)
 
 void SubdAttributeInterpolation::setup_attribute(const Attribute &subd_attr, Attribute &mesh_attr)
 {
-  if (subd_attr.element == ATTR_ELEMENT_CORNER_BYTE) {
+  if (subd_attr.element & ATTR_ELEMENT_IS_BYTE) {
     setup_attribute_type<SubdByte>(subd_attr, mesh_attr);
+  }
+  else if (subd_attr.element & ATTR_ELEMENT_IS_NORMAL) {
+    setup_attribute_type<SubdNormal>(subd_attr, mesh_attr);
   }
   else if (Attribute::same_storage(subd_attr.type, TypeFloat)) {
     setup_attribute_type<SubdFloat<float>>(subd_attr, mesh_attr);
@@ -119,9 +162,11 @@ void SubdAttributeInterpolation::setup_attribute(const Attribute &subd_attr, Att
     setup_attribute_type<SubdFloat<float2>>(subd_attr, mesh_attr);
   }
   else if (Attribute::same_storage(subd_attr.type, TypeVector)) {
-    setup_attribute_type<SubdFloat<float3>>(subd_attr, mesh_attr);
+    setup_attribute_type<SubdPackedFloat3>(subd_attr, mesh_attr);
   }
-  else if (Attribute::same_storage(subd_attr.type, TypeFloat4)) {
+  else if (Attribute::same_storage(subd_attr.type, TypeFloat4) ||
+           Attribute::same_storage(subd_attr.type, TypeRGBA))
+  {
     setup_attribute_type<SubdFloat<float4>>(subd_attr, mesh_attr);
   }
 }
@@ -133,11 +178,11 @@ void SubdAttributeInterpolation::setup_attribute_vertex_linear(const Attribute &
 {
   SubdAttribute attr;
 
-  const typename T::Type *subd_data = reinterpret_cast<const typename T::Type *>(
-                                          subd_attr.data()) +
-                                      motion_step * mesh.get_num_subd_base_verts();
-  typename T::Type *mesh_data = reinterpret_cast<typename T::Type *>(mesh_attr.data()) +
-                                motion_step * mesh.get_verts().size();
+  /* motion_step -1 selects the center step, other select motion steps. */
+  const int attr_step = motion_step + 1;
+  assert(attr_step == 0 || subd_attr.has_motion());
+  const typename T::Type *subd_data = subd_attr.data<typename T::Type>(attr_step);
+  typename T::Type *mesh_data = mesh_attr.data_for_write<typename T::Type>(attr_step);
 
   assert(mesh_data != nullptr);
 
@@ -227,8 +272,9 @@ void SubdAttributeInterpolation::setup_attribute_vertex_smooth(const Attribute &
   typename T::AccumType *subd_data = reinterpret_cast<typename T::AccumType *>(
       attr.refined_data.data());
 
-  const typename T::Type *base_src = reinterpret_cast<const typename T::Type *>(subd_attr.data()) +
-                                     num_base_verts * motion_step;
+  const int attr_step = motion_step + 1;
+  assert(attr_step == 0 || subd_attr.has_motion());
+  const typename T::Type *base_src = subd_attr.data<typename T::Type>(attr_step);
   typename T::AccumType *base_dst = subd_data;
   for (int i = 0; i < num_base_verts; i++) {
     base_dst[i] = T::read(base_src[i]);
@@ -250,17 +296,19 @@ void SubdAttributeInterpolation::setup_attribute_vertex_smooth(const Attribute &
   }
 
   /* Evaluate patches at limit. */
-  typename T::Type *mesh_data = reinterpret_cast<typename T::Type *>(mesh_attr.data()) +
-                                mesh.get_verts().size() * motion_step;
-
+  assert(attr_step == 0 || mesh_attr.has_motion());
+  typename T::Type *mesh_data = mesh_attr.data_for_write<typename T::Type>(attr_step);
   assert(mesh_data != nullptr);
 
   /* Compute motion normals alongside positions. */
-  float3 *mesh_normal_data = nullptr;
-  if constexpr (std::is_same_v<typename T::Type, float3>) {
-    if (mesh_attr.std == ATTR_STD_MOTION_VERTEX_POSITION) {
-      Attribute *attr_normal = mesh.attributes.add(ATTR_STD_MOTION_VERTEX_NORMAL);
-      mesh_normal_data = attr_normal->data_float3() + mesh.get_verts().size() * motion_step;
+  packed_normal *mesh_normal_data = nullptr;
+  if constexpr (std::is_same_v<typename T::AccumType, float3>) {
+    if (motion_step >= 0 && mesh_attr.std == ATTR_STD_POSITION && mesh_attr.has_motion()) {
+      Attribute *attr_normal = mesh.attributes.find(ATTR_STD_VERTEX_NORMAL);
+      if (attr_normal) {
+        attr_normal->add_motion(&mesh);
+        mesh_normal_data = attr_normal->data_for_write<packed_normal>(attr_step);
+      }
     }
   }
 
@@ -290,7 +338,7 @@ void SubdAttributeInterpolation::setup_attribute_vertex_smooth(const Attribute &
 
       /* Optionally compute normal. */
       if (mesh_normal_data) {
-        if constexpr (std::is_same_v<typename T::Type, float3>) {
+        if constexpr (std::is_same_v<typename T::AccumType, float3>) {
           float3 du = zero_float3();
           float3 dv = zero_float3();
           for (int k = 0; k < cv.size(); k++) {
@@ -298,8 +346,8 @@ void SubdAttributeInterpolation::setup_attribute_vertex_smooth(const Attribute &
             du += p * du_weights[k];
             dv += p * dv_weights[k];
           }
-          mesh_normal_data[vert_index[i]] = safe_normalize_fallback(cross(du, dv),
-                                                                    make_float3(0.0f, 0.0f, 1.0f));
+          mesh_normal_data[vert_index[i]] = packed_normal(
+              safe_normalize_fallback(cross(du, dv), make_float3(0.0f, 0.0f, 1.0f)));
         }
       }
     }
@@ -312,13 +360,16 @@ void SubdAttributeInterpolation::setup_attribute_vertex_smooth(const Attribute &
 
 template<typename T>
 void SubdAttributeInterpolation::setup_attribute_corner_linear(const Attribute &subd_attr,
-                                                               Attribute &mesh_attr)
+                                                               Attribute &mesh_attr,
+                                                               const int motion_step)
 {
   SubdAttribute attr;
 
   /* Interpolate values at corners. */
-  const typename T::Type *subd_data = reinterpret_cast<const typename T::Type *>(subd_attr.data());
-  typename T::Type *mesh_data = reinterpret_cast<typename T::Type *>(mesh_attr.data());
+  const int attr_step = motion_step + 1;
+  assert(attr_step == 0 || subd_attr.has_motion());
+  const typename T::Type *subd_data = subd_attr.data<typename T::Type>(attr_step);
+  typename T::Type *mesh_data = mesh_attr.data_for_write<typename T::Type>(attr_step);
 
   assert(mesh_data != nullptr);
 
@@ -354,6 +405,7 @@ void SubdAttributeInterpolation::setup_attribute_corner_linear(const Attribute &
       for (int j = 1; j < face.num_corners; j++) {
         value_center += T::read(subd_data[face.start_corner + j]);
       }
+      value_center /= (float)face.num_corners;
 
       /* Compute value at corner at adjacent vertices. */
       const typename T::AccumType value_corner = T::read(subd_data[face.start_corner + corner]);
@@ -427,7 +479,7 @@ void SubdAttributeInterpolation::setup_attribute_corner_smooth(Attribute &mesh_a
 
   /* Evaluate patches at limit. */
   const typename T::AccumType *subd_data = refined_data;
-  typename T::Type *mesh_data = reinterpret_cast<typename T::Type *>(mesh_attr.data());
+  typename T::Type *mesh_data = reinterpret_cast<typename T::Type *>(mesh_attr.data_for_write());
 
   assert(mesh_data != nullptr);
 
@@ -475,10 +527,10 @@ template<typename T>
 void SubdAttributeInterpolation::setup_attribute_face(const Attribute &subd_attr,
                                                       Attribute &mesh_attr)
 {
-  /* Copy value from face to triangle .*/
+  /* Copy value from face to triangle. */
   SubdAttribute attr;
   const typename T::Type *subd_data = reinterpret_cast<const typename T::Type *>(subd_attr.data());
-  typename T::Type *mesh_data = reinterpret_cast<typename T::Type *>(mesh_attr.data());
+  typename T::Type *mesh_data = reinterpret_cast<typename T::Type *>(mesh_attr.data_for_write());
 
   assert(mesh_data != nullptr);
 
@@ -501,30 +553,57 @@ void SubdAttributeInterpolation::setup_attribute_type(const Attribute &subd_attr
                                                       Attribute &mesh_attr)
 {
   switch (subd_attr.element) {
-    case ATTR_ELEMENT_VERTEX: {
+    case ATTR_ELEMENT_OBJECT:
+    case ATTR_ELEMENT_MESH: {
+      /* Uniform attributes don't need interpolation, just copy data. */
+      assert(mesh_attr.size == subd_attr.size);
+      memcpy(mesh_attr.data_for_write(), subd_attr.data(), subd_attr.data_sizeof());
+      break;
+    }
+    case ATTR_ELEMENT_VERTEX:
+    case ATTR_ELEMENT_VERTEX_NORMAL: {
+      /* Center step. Position center is computed by patch evaluation
+       * during dicing, so skip it here. */
+      if (subd_attr.std != ATTR_STD_POSITION) {
 #ifdef WITH_OPENSUBDIV
-      if (mesh.get_subdivision_type() == Mesh::SUBDIVISION_CATMULL_CLARK) {
-        /* Only smoothly interpolation known position-like attributes. */
-        switch (subd_attr.std) {
-          case ATTR_STD_GENERATED:
-          case ATTR_STD_POSITION_UNDEFORMED:
-          case ATTR_STD_POSITION_UNDISPLACED:
-            setup_attribute_vertex_smooth<T>(subd_attr, mesh_attr);
-            break;
-          default:
-            setup_attribute_vertex_linear<T>(subd_attr, mesh_attr);
-            break;
+        if (mesh.get_subdivision_type() == Mesh::SUBDIVISION_CATMULL_CLARK) {
+          /* Only smoothly interpolation known position-like attributes. */
+          switch (subd_attr.std) {
+            case ATTR_STD_GENERATED:
+            case ATTR_STD_POSITION_UNDEFORMED:
+            case ATTR_STD_POSITION_UNDISPLACED:
+              setup_attribute_vertex_smooth<T>(subd_attr, mesh_attr);
+              break;
+            default:
+              setup_attribute_vertex_linear<T>(subd_attr, mesh_attr);
+              break;
+          }
+        }
+        else
+#endif
+        {
+          setup_attribute_vertex_linear<T>(subd_attr, mesh_attr);
         }
       }
-      else
+      /* Motion steps. */
+      if (subd_attr.has_motion()) {
+        for (int step = 0; step < subd_attr.motion.size(); step++) {
+#ifdef WITH_OPENSUBDIV
+          if (mesh.get_subdivision_type() == Mesh::SUBDIVISION_CATMULL_CLARK) {
+            setup_attribute_vertex_smooth<T>(subd_attr, mesh_attr, step);
+          }
+          else
 #endif
-      {
-        setup_attribute_vertex_linear<T>(subd_attr, mesh_attr);
+          {
+            setup_attribute_vertex_linear<T>(subd_attr, mesh_attr, step);
+          }
+        }
       }
       break;
     }
     case ATTR_ELEMENT_CORNER:
-    case ATTR_ELEMENT_CORNER_BYTE: {
+    case ATTR_ELEMENT_CORNER_BYTE:
+    case ATTR_ELEMENT_CORNER_NORMAL: {
 #ifdef WITH_OPENSUBDIV
       if (osd_mesh.use_smooth_fvar(subd_attr)) {
         for (const auto &merged_fvar : osd_mesh.merged_fvars) {
@@ -538,19 +617,10 @@ void SubdAttributeInterpolation::setup_attribute_type(const Attribute &subd_attr
       }
 #endif
       setup_attribute_corner_linear<T>(subd_attr, mesh_attr);
-      break;
-    }
-    case ATTR_ELEMENT_VERTEX_MOTION: {
-      /* Interpolate each motion step individually. */
-      for (int step = 0; step < mesh.get_motion_steps() - 1; step++) {
-#ifdef WITH_OPENSUBDIV
-        if (mesh.get_subdivision_type() == Mesh::SUBDIVISION_CATMULL_CLARK) {
-          setup_attribute_vertex_smooth<T>(subd_attr, mesh_attr, step);
-        }
-        else
-#endif
-        {
-          setup_attribute_vertex_linear<T>(subd_attr, mesh_attr, step);
+      /* Motion steps. */
+      if (subd_attr.has_motion()) {
+        for (int step = 0; step < subd_attr.motion.size(); step++) {
+          setup_attribute_corner_linear<T>(subd_attr, mesh_attr, step);
         }
       }
       break;

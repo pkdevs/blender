@@ -6,11 +6,12 @@
  * \ingroup edtransform
  */
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_string.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_string_utf8.hh"
 
+#include "BKE_report.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"
@@ -54,7 +55,7 @@ struct VertSlideData {
   {
     ARegion *region = t->region;
 
-    if (UNLIKELY(region == nullptr)) {
+    if (region == nullptr) [[unlikely]] {
       this->win_half = {1.0f, 1.0f};
       this->proj_mat = float4x4::identity();
       return;
@@ -73,7 +74,7 @@ struct VertSlideData {
     }
     else {
       const View2D *v2d = static_cast<View2D *>(t->view);
-      UI_view2d_view_to_region_m4(v2d, this->proj_mat.ptr());
+      ui::view2d_view_to_region_m4(v2d, this->proj_mat.ptr());
       this->proj_mat.location()[0] -= this->win_half[0];
       this->proj_mat.location()[1] -= this->win_half[1];
     }
@@ -86,11 +87,12 @@ struct VertSlideData {
 
   /**
    * Run while moving the mouse to slide along the edge matching the mouse direction.
+   * Update which edges are active for vertex slide using a world-space direction.
    */
-  void update_active_edges(TransInfo *t, const float2 &mval_fl)
+  void update_active_edges(TransInfo *t, const TransDataContainer *tc, const float3 &dir)
   {
-    /* First get the direction of the original mouse position. */
-    float2 dir = math::normalize(mval_fl - t->mouse.imval);
+    const bool is_uv = (t->data_type == &TransConvertType_MeshUV);
+    const float4x4 &obmat = tc->obedit->object_to_world();
 
     for (TransDataVertSlideVert &sv : this->sv) {
       if (sv.co_link_orig_3d.size() <= 1) {
@@ -98,17 +100,26 @@ struct VertSlideData {
       }
 
       const float3 v_co_orig = sv.co_orig_3d();
-      float2 loc_src_2d = math::project_point(this->proj_mat, v_co_orig).xy();
 
       float dir_dot_best = -FLT_MAX;
       int co_link_curr_best = -1;
 
       for (int j : sv.co_link_orig_3d.index_range()) {
         const float3 &loc_dst = sv.co_link_orig_3d[j];
-        float2 loc_dst_2d = math::project_point(this->proj_mat, loc_dst).xy();
-        float2 tdir = math::normalize(loc_dst_2d - loc_src_2d);
 
-        float dir_dot = math::dot(dir, tdir);
+        float dir_dot;
+        if (is_uv) {
+          const float2 co_orig_2d = this->project(v_co_orig);
+          const float2 loc_dst_2d = this->project(loc_dst);
+          const float2 tdir = math::normalize(loc_dst_2d - co_orig_2d);
+          dir_dot = math::dot(float2(dir), tdir);
+        }
+        else {
+          const float3 dir_local = loc_dst - v_co_orig;
+          const float3 tdir = math::normalize((obmat * float4(dir_local, 0.0f)).xyz());
+          dir_dot = math::dot(dir, tdir);
+        }
+
         if (dir_dot > dir_dot_best) {
           dir_dot_best = dir_dot;
           co_link_curr_best = j;
@@ -143,9 +154,11 @@ struct VertSlideData {
 
 struct VertSlideParams {
   float perc;
-
+  wmOperator *op;
   bool use_even;
   bool flipped;
+  /** Must never be zero length, otherwise should be null. */
+  std::optional<float3> dir_3d;
 };
 
 static void vert_slide_update_input(TransInfo *t)
@@ -219,6 +232,14 @@ static void freeVertSlideVerts(TransInfo * /*t*/,
   custom_data->data = nullptr;
 }
 
+static void freeVertSlideParams(TransInfo * /*t*/,
+                                TransDataContainer * /*tc*/,
+                                TransCustomData *custom_data)
+{
+  MEM_delete(static_cast<VertSlideParams *>(custom_data->data));
+  custom_data->data = nullptr;
+}
+
 static eRedrawFlag handleEventVertSlide(TransInfo *t, const wmEvent *event)
 {
   if (t->redraw && event->type != MOUSEMOVE) {
@@ -257,9 +278,23 @@ static eRedrawFlag handleEventVertSlide(TransInfo *t, const wmEvent *event)
         /* Don't recalculate the best edge. */
         const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
         if (is_clamp) {
-          const TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_OK(t);
-          VertSlideData *sld = static_cast<VertSlideData *>(tc->custom.mode.data);
-          sld->update_active_edges(t, float2(event->mval));
+          const float2 delta = float2(event->mval) - t->mouse.imval;
+          if (const std::optional<float3> dir3_opt = mouse_delta_to_world_dir(t, delta)) {
+            const float3 &dir_unit = *dir3_opt;
+            /* Update the slide direction for every selected object. */
+            FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+              VertSlideData *sld = static_cast<VertSlideData *>(tc->custom.mode.data);
+              if (sld) {
+                sld->update_active_edges(t, tc, dir_unit);
+              }
+            }
+            if (slp->op) {
+              if (PropertyRNA *prop = RNA_struct_find_property(slp->op->ptr, "direction")) {
+                RNA_property_float_set_array(slp->op->ptr, prop, &dir_unit.x);
+              }
+            }
+            slp->dir_3d = dir_unit;
+          }
         }
         calcVertSlideCustomPoints(t);
         break;
@@ -286,8 +321,8 @@ static void drawVertSlide(TransInfo *t)
       const float3 co_orig_3d_act = curr_sv->co_orig_3d();
       const float3 co_dest_3d_act = curr_sv->co_dest_3d();
 
-      const float ctrl_size = UI_GetThemeValuef(TH_FACEDOT_SIZE) + 1.5f;
-      const float line_size = UI_GetThemeValuef(TH_OUTLINE_WIDTH) + 0.5f;
+      const float ctrl_size = ui::theme::get_value_f(TH_FACEDOT_SIZE) + 1.5f;
+      const float line_size = ui::theme::get_value_f(TH_OUTLINE_WIDTH) + 0.5f;
       const int alpha_shade = -160;
 
       GPU_depth_test(GPU_DEPTH_NONE);
@@ -305,7 +340,7 @@ static void drawVertSlide(TransInfo *t)
       GPU_line_width(line_size);
 
       const uint shdr_pos = GPU_vertformat_attr_add(
-          immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+          immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
       immUniformThemeColorShadeAlpha(TH_EDGE_SELECT, 80, alpha_shade);
@@ -334,7 +369,12 @@ static void drawVertSlide(TransInfo *t)
       }
       immEnd();
 
+      immUnbindProgram();
+
+      immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_COLOR);
+
       GPU_point_size(ctrl_size);
+      immUniformThemeColorShadeAlpha(TH_VERTEX_ACTIVE, 80, alpha_shade);
 
       immBegin(GPU_PRIM_POINTS, 1);
       immVertex3fv(shdr_pos, (slp->flipped && slp->use_even) ? co_dest_3d_act : co_orig_3d_act);
@@ -364,7 +404,7 @@ static void drawVertSlide(TransInfo *t)
         GPU_line_width(1.0f);
 
         const uint shdr_pos_2d = GPU_vertformat_attr_add(
-            immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+            immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
         immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
@@ -489,6 +529,9 @@ static void applyVertSlide(TransInfo *t)
   const bool use_even = slp->use_even;
   const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
   const bool is_constrained = !(is_clamp == false || hasNumInput(&t->num));
+  const bool is_precision = t->modifiers & MOD_PRECISION;
+  const bool is_snap = t->modifiers & MOD_SNAP;
+  const bool is_snap_invert = t->modifiers & MOD_SNAP_INVERT;
 
   final = t->values[0] + t->values_modal_offset[0];
 
@@ -507,23 +550,15 @@ static void applyVertSlide(TransInfo *t)
   t->values_final[0] = final;
 
   /* Header string. */
-  ofs += BLI_strncpy_rlen(str + ofs, IFACE_("Vertex Slide: "), sizeof(str) - ofs);
+  ofs += BLI_strncpy_utf8_rlen(str + ofs, IFACE_("Vertex Slide: "), sizeof(str) - ofs);
   if (hasNumInput(&t->num)) {
     char c[NUM_STR_REP_LEN];
     outputNumInput(&(t->num), c, t->scene->unit);
-    ofs += BLI_strncpy_rlen(str + ofs, &c[0], sizeof(str) - ofs);
+    ofs += BLI_strncpy_utf8_rlen(str + ofs, &c[0], sizeof(str) - ofs);
   }
   else {
-    ofs += BLI_snprintf_rlen(str + ofs, sizeof(str) - ofs, "%.4f ", final);
+    ofs += BLI_snprintf_utf8_rlen(str + ofs, sizeof(str) - ofs, "%.4f ", final);
   }
-  ofs += BLI_snprintf_rlen(
-      str + ofs, sizeof(str) - ofs, IFACE_("(E)ven: %s, "), WM_bool_as_string(use_even));
-  if (use_even) {
-    ofs += BLI_snprintf_rlen(
-        str + ofs, sizeof(str) - ofs, IFACE_("(F)lipped: %s, "), WM_bool_as_string(flipped));
-  }
-  ofs += BLI_snprintf_rlen(
-      str + ofs, sizeof(str) - ofs, IFACE_("Alt or (C)lamp: %s"), WM_bool_as_string(is_clamp));
   /* Done with header string. */
 
   /* Do stuff here. */
@@ -532,6 +567,27 @@ static void applyVertSlide(TransInfo *t)
   recalc_data(t);
 
   ED_area_status_text(t->area, str);
+
+  wmOperator *op = slp->op;
+  if (!op) {
+    return;
+  }
+
+  WorkspaceStatus status(t->context);
+  status.opmodal(IFACE_("Confirm"), op->type, TFM_MODAL_CONFIRM);
+  status.opmodal(IFACE_("Cancel"), op->type, TFM_MODAL_CONFIRM);
+  status.opmodal(IFACE_("Snap"), op->type, TFM_MODAL_SNAP_TOGGLE, is_snap);
+  status.opmodal(IFACE_("Snap Invert"), op->type, TFM_MODAL_SNAP_INV_ON, is_snap_invert);
+  status.opmodal(IFACE_("Set Snap Base"), op->type, TFM_MODAL_EDIT_SNAP_SOURCE_ON);
+  status.opmodal(IFACE_("Move"), op->type, TFM_MODAL_TRANSLATE);
+  status.opmodal(IFACE_("Rotate"), op->type, TFM_MODAL_ROTATE);
+  status.opmodal(IFACE_("Resize"), op->type, TFM_MODAL_RESIZE);
+  status.opmodal(IFACE_("Precision Mode"), op->type, TFM_MODAL_PRECISION, is_precision);
+  status.item_bool(IFACE_("Clamp"), is_clamp, ICON_EVENT_C, ICON_EVENT_ALT);
+  status.item_bool(IFACE_("Even"), use_even, ICON_EVENT_E);
+  if (use_even) {
+    status.item_bool(IFACE_("Flipped"), flipped, ICON_EVENT_F);
+  }
 }
 
 static void vert_slide_transform_matrix_fn(TransInfo *t, float mat_xform[4][4])
@@ -563,31 +619,61 @@ static void vert_slide_transform_matrix_fn(TransInfo *t, float mat_xform[4][4])
   add_v3_v3(mat_xform[3], delta);
 }
 
-static void initVertSlide_ex(TransInfo *t, bool use_even, bool flipped, bool use_clamp)
+static void initVertSlide_ex(
+    TransInfo *t, wmOperator *op, bool use_even, bool flipped, bool use_clamp)
 {
+  if ((t->flag & T_EDIT) == 0 || (t->obedit_type != OB_MESH)) {
+    BKE_report(t->reports, RPT_ERROR, "'Vertex Slide' is only supported in mesh edit mode");
+    t->state = TRANS_CANCEL;
+    return;
+  }
 
   t->mode = TFM_VERT_SLIDE;
 
   {
-    VertSlideParams *slp = MEM_callocN<VertSlideParams>(__func__);
+    VertSlideParams *slp = MEM_new<VertSlideParams>(__func__);
     slp->use_even = use_even;
     slp->flipped = flipped;
     slp->perc = 0.0f;
+    slp->op = op;
 
     if (!use_clamp) {
       t->flag |= T_ALT_TRANSFORM;
     }
 
+    if (op) {
+      PropertyRNA *prop = RNA_struct_find_property(op->ptr, "direction");
+      if (prop && RNA_property_is_set(op->ptr, prop)) {
+        float3 d;
+        RNA_property_float_get_array(op->ptr, prop, d);
+        slp->dir_3d = math::normalize(d);
+      }
+    }
+
     t->custom.mode.data = slp;
-    t->custom.mode.use_free = true;
+    t->custom.mode.use_free = false;
+    t->custom.mode.free_cb = freeVertSlideParams;
   }
 
   bool ok = false;
+  const float3 init_dir = [&t]() {
+    const VertSlideParams *slp = static_cast<VertSlideParams *>(t->custom.mode.data);
+    if (std::optional<float3> dir = slp->dir_3d; dir) {
+      return *dir;
+    }
+    const float2 delta = float2(t->mval) - t->mouse.imval;
+    if (std::optional<float3> dir = mouse_delta_to_world_dir(t, delta); dir) {
+      return *dir;
+    }
+    /* Fallback direction so the operator initializes before any mouse movement. */
+    return float3(1, 0, 0);
+  }();
+
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     VertSlideData *sld = createVertSlideVerts(t, tc);
     if (sld) {
       sld->update_active_vert(t, t->mval);
-      sld->update_active_edges(t, t->mval);
+      sld->update_active_edges(t, tc, init_dir);
 
       tc->custom.mode.data = sld;
       tc->custom.mode.free_cb = freeVertSlideVerts;
@@ -606,10 +692,10 @@ static void initVertSlide_ex(TransInfo *t, bool use_even, bool flipped, bool use
 
   t->idx_max = 0;
   t->num.idx_max = 0;
-  t->snap[0] = 0.1f;
-  t->snap[1] = t->snap[0] * 0.1f;
+  t->increment[0] = 0.1f;
+  t->increment_precision = 0.1f;
 
-  copy_v3_fl(t->num.val_inc, t->snap[0]);
+  copy_v3_fl(t->num.val_inc, t->increment[0]);
   t->num.unit_sys = t->scene->unit.system;
   t->num.unit_type[0] = B_UNIT_NONE;
 }
@@ -620,11 +706,15 @@ static void initVertSlide(TransInfo *t, wmOperator *op)
   bool flipped = false;
   bool use_clamp = true;
   if (op) {
-    use_even = RNA_boolean_get(op->ptr, "use_even");
-    flipped = RNA_boolean_get(op->ptr, "flipped");
-    use_clamp = RNA_boolean_get(op->ptr, "use_clamp");
+    PropertyRNA *prop;
+    prop = RNA_struct_find_property(op->ptr, "use_even");
+    use_even = (prop) ? RNA_property_boolean_get(op->ptr, prop) : false;
+    prop = RNA_struct_find_property(op->ptr, "flipped");
+    flipped = (prop) ? RNA_property_boolean_get(op->ptr, prop) : false;
+    prop = RNA_struct_find_property(op->ptr, "use_clamp");
+    use_clamp = (prop) ? RNA_property_boolean_get(op->ptr, prop) : true;
   }
-  initVertSlide_ex(t, use_even, flipped, use_clamp);
+  initVertSlide_ex(t, op, use_even, flipped, use_clamp);
 }
 
 /** \} */

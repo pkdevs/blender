@@ -13,8 +13,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_dynstr.h"
-#include "BLI_string.h"
+#include "BLI_dynstr.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_vector.hh"
 
@@ -22,15 +22,17 @@
 
 #include "gpu_platform_private.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name GPUPlatformGlobal
  * \{ */
 
-namespace blender::gpu {
+namespace gpu {
 
 GPUPlatformGlobal GPG;
 
-static char *create_key(eGPUSupportLevel support_level,
+static char *create_key(GPUSupportLevel support_level,
                         const char *vendor,
                         const char *renderer,
                         const char *version)
@@ -66,11 +68,11 @@ static char *create_gpu_name(const char *vendor, const char *renderer, const cha
   return gpu_name;
 }
 
-void GPUPlatformGlobal::init(eGPUDeviceType gpu_device,
-                             eGPUOSType os_type,
-                             eGPUDriverType driver_type,
-                             eGPUSupportLevel gpu_support_level,
-                             eGPUBackendType backend,
+void GPUPlatformGlobal::init(GPUDeviceType gpu_device,
+                             GPUOSType os_type,
+                             GPUDriverType driver_type,
+                             GPUSupportLevel gpu_support_level,
+                             GPUBackendType backend,
                              const char *vendor_str,
                              const char *renderer_str,
                              const char *version_str,
@@ -100,11 +102,11 @@ void GPUPlatformGlobal::init(eGPUDeviceType gpu_device,
 
 void GPUPlatformGlobal::clear()
 {
-  MEM_SAFE_FREE(vendor);
-  MEM_SAFE_FREE(renderer);
-  MEM_SAFE_FREE(version);
-  MEM_SAFE_FREE(support_key);
-  MEM_SAFE_FREE(gpu_name);
+  MEM_SAFE_DELETE(vendor);
+  MEM_SAFE_DELETE(renderer);
+  MEM_SAFE_DELETE(version);
+  MEM_SAFE_DELETE(support_key);
+  MEM_SAFE_DELETE(gpu_name);
   devices.clear_and_shrink();
   device_uuid.reinitialize(0);
   device_luid.reinitialize(0);
@@ -112,7 +114,7 @@ void GPUPlatformGlobal::clear()
   initialized = false;
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
 
 /** \} */
 
@@ -122,7 +124,7 @@ void GPUPlatformGlobal::clear()
 
 using namespace blender::gpu;
 
-eGPUSupportLevel GPU_platform_support_level()
+GPUSupportLevel GPU_platform_support_level()
 {
   BLI_assert(GPG.initialized);
   return GPG.support_level;
@@ -164,32 +166,32 @@ GPUArchitectureType GPU_platform_architecture()
   return GPG.architecture_type;
 }
 
-bool GPU_type_matches(eGPUDeviceType device, eGPUOSType os, eGPUDriverType driver)
+bool GPU_type_matches(GPUDeviceType device, GPUOSType os, GPUDriverType driver)
 {
   return GPU_type_matches_ex(device, os, driver, GPU_BACKEND_ANY);
 }
 
-bool GPU_type_matches_ex(eGPUDeviceType device,
-                         eGPUOSType os,
-                         eGPUDriverType driver,
-                         eGPUBackendType backend)
+bool GPU_type_matches_ex(GPUDeviceType device,
+                         GPUOSType os,
+                         GPUDriverType driver,
+                         GPUBackendType backend)
 {
   BLI_assert(GPG.initialized);
   return (GPG.device & device) && (GPG.os & os) && (GPG.driver & driver) &&
          (GPG.backend & backend);
 }
 
-blender::Span<GPUDevice> GPU_platform_devices_list()
+Span<GPUDevice> GPU_platform_devices_list()
 {
   return GPG.devices.as_span();
 }
 
-blender::Span<uint8_t> GPU_platform_uuid()
+Span<uint8_t> GPU_platform_uuid()
 {
   return GPG.device_uuid.as_span();
 }
 
-blender::Span<uint8_t> GPU_platform_luid()
+Span<uint8_t> GPU_platform_luid()
 {
   return GPG.device_luid.as_span();
 }
@@ -199,4 +201,57 @@ uint32_t GPU_platform_luid_node_mask()
   return GPG.device_luid_node_mask;
 }
 
+GPUIntelGpuArch GPU_platform_get_intel_arch(uint32_t device_id)
+{
+  /* Source for device IDs:
+   * https://gitlab.freedesktop.org/mesa/mesa/-/blob/main/include/pci_ids/iris_pci_ids.h
+   */
+  switch (device_id & 0xFF00) {
+    case 0x2900:  // Broadwater
+    case 0x2A00:  // Broadwater/Eagle Lake
+    case 0x2E00:  // Eagle Lake
+    case 0x0000:  // Iron Lake
+    case 0x0100:  // Ivy Bridge/Sandy Bridge/Baytrail
+    case 0x0F00:  // Baytrail
+    case 0x0400:  // Haswell
+    case 0x0C00:  // Haswell
+    case 0x0D00:  // Haswell
+    case 0x0A00:  // Haswell / Appollo Lake
+    case 0x2200:  // Cherrytrail
+    case 0x1600:  // Broadwell
+    case 0x5A00:  // Apollo Lake
+    case 0x1900:  // Skylake
+    case 0x1A00:  // Apollo Lake
+    case 0x3100:  // Gemini Lake
+    case 0x5900:  // Kaby Lake/Amber Lake
+    case 0x8700:  // Kaby Lake/Coffee Lake
+    case 0x3E00:  // Coffee Lake/Whiskey Lake
+    case 0x9B00:  // Comet Lake
+      return GPUIntelGpuArch::Gen9AndOlder;
+    case 0x8A00:  // Ice Lake
+    case 0x4500:  // Elkhart Lake
+    case 0x4E00:  // Jasper Lake
+      return GPUIntelGpuArch::Gen11;
+    case 0x9A00:  // Tiger Lake
+    case 0x4C00:  // Rocket Lake
+    case 0x4900:  // DG1
+    case 0x4600:  // Alder Lake
+    case 0x4F00:  // Alchemist
+    case 0x5600:  // Alchemist
+    case 0xA700:  // Raptor Lake
+    case 0x7D00:  // Meteor Lake / Arrow Lake
+    case 0xB600:  // Meteor Lake / Arrow Lake
+      return GPUIntelGpuArch::Xe;
+    case 0x6400:  // Lunar Lake
+    case 0xE200:  // Battlemage
+      return GPUIntelGpuArch::Xe2;
+    case 0xB000:  // Panther Lake
+    case 0xFD00:  // Wildcat Lake
+    default:
+      return GPUIntelGpuArch::Xe3AndNewer;
+  }
+}
+
 /** \} */
+
+}  // namespace blender

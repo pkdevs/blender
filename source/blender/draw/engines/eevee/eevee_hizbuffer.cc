@@ -20,11 +20,13 @@ void HiZBuffer::sync()
   /* Padding to avoid complexity during down-sampling and screen tracing. */
   int2 hiz_extent = math::ceil_to_multiple(math::max(render_extent, probe_extent),
                                            int2(1u << (HIZ_MIP_COUNT - 1)));
-  int2 dispatch_size = math::divide_ceil(hiz_extent, int2(HIZ_GROUP_SIZE));
+  /* Each thread update 4 LOD0 pixels. So the actual extent of each group is double of it size. */
+  int2 dispatch_size = math::divide_ceil(hiz_extent, int2(HIZ_GROUP_SIZE) * 2);
 
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
   for ([[maybe_unused]] const int i : IndexRange(hiz_tx_.size())) {
-    hiz_tx_.current().ensure_2d(GPU_R32F, hiz_extent, usage, nullptr, HIZ_MIP_COUNT);
+    hiz_tx_.current().ensure_2d(
+        gpu::TextureFormat::SFLOAT_32, hiz_extent, usage, nullptr, HIZ_MIP_COUNT);
     hiz_tx_.current().ensure_mip_views();
     GPU_texture_mipmap_mode(hiz_tx_.current(), true, false);
     hiz_tx_.swap();
@@ -38,14 +40,14 @@ void HiZBuffer::sync()
 
   {
     PassSimple &pass = hiz_update_ps_;
-    GPUShader *sh = inst_.shaders.static_shader_get(HIZ_UPDATE);
+    gpu::Shader *sh = inst_.shaders.static_shader_get(HIZ_UPDATE);
     pass.init();
     pass.specialize_constant(sh, "update_mip_0", update_mip_0);
     pass.shader_set(sh);
     pass.bind_ssbo("finished_tile_counter", atomic_tile_counter_);
     /* TODO(fclem): Should be a parameter to avoid confusion. */
-    pass.bind_texture("depth_tx", &src_tx_, with_filter);
-    pass.bind_image("out_mip_0", &hiz_mip_ref_[0]);
+    pass.bind_texture("depth_tx", &src_tx_);
+    pass.bind_image("out_mip_0", &hiz_mip_ref_[0]);  // NOLINT(readability-container-data-pointer)
     pass.bind_image("out_mip_1", &hiz_mip_ref_[1]);
     pass.bind_image("out_mip_2", &hiz_mip_ref_[2]);
     pass.bind_image("out_mip_3", &hiz_mip_ref_[3]);
@@ -57,14 +59,14 @@ void HiZBuffer::sync()
   }
   {
     PassSimple &pass = hiz_update_layer_ps_;
-    GPUShader *sh = inst_.shaders.static_shader_get(HIZ_UPDATE_LAYER);
+    gpu::Shader *sh = inst_.shaders.static_shader_get(HIZ_UPDATE_LAYER);
     pass.init();
     pass.specialize_constant(sh, "update_mip_0", update_mip_0);
     pass.shader_set(sh);
     pass.bind_ssbo("finished_tile_counter", atomic_tile_counter_);
     /* TODO(fclem): Should be a parameter to avoid confusion. */
-    pass.bind_texture("depth_layered_tx", &src_tx_, with_filter);
-    pass.bind_image("out_mip_0", &hiz_mip_ref_[0]);
+    pass.bind_texture("depth_layered_tx", &src_tx_);
+    pass.bind_image("out_mip_0", &hiz_mip_ref_[0]);  // NOLINT(readability-container-data-pointer)
     pass.bind_image("out_mip_1", &hiz_mip_ref_[1]);
     pass.bind_image("out_mip_2", &hiz_mip_ref_[2]);
     pass.bind_image("out_mip_3", &hiz_mip_ref_[3]);
@@ -91,6 +93,9 @@ void HiZBuffer::update()
     return;
   }
 
+  /* After this, the front buffer become valid. */
+  front.ref_tx_ = hiz_tx_.current();
+
   src_tx_ = *src_tx_ptr_;
   for (const int i : IndexRange(HIZ_MIP_COUNT)) {
     hiz_mip_ref_[i] = hiz_tx_.current().mip_view(i);
@@ -106,7 +111,7 @@ void HiZBuffer::update()
   is_dirty_ = false;
 }
 
-void HiZBuffer::debug_draw(View &view, GPUFrameBuffer *view_fb)
+void HiZBuffer::debug_draw(View &view, gpu::FrameBuffer *view_fb)
 {
   if (inst_.debug_mode == eDebugMode::DEBUG_HIZ_VALIDATION) {
     inst_.info_append(

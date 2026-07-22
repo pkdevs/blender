@@ -26,4 +26,9 @@
 #include "util/types_float4.h"  // IWYU pragma: export
 #include "util/types_float8.h"  // IWYU pragma: export
 
+#include "util/types_normal.h"  // IWYU pragma: export
+
+#include "util/types_rgbe.h"      // IWYU pragma: export
 #include "util/types_spectrum.h"  // IWYU pragma: export
+
+#include "util/types_dual.h"  // IWYU pragma: export

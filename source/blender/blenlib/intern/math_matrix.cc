@@ -10,16 +10,19 @@
 
 #include "BLI_math_rotation.hh"
 #include "BLI_simd.hh"
+#include "BLI_task.hh"
+
+#include "PRF_profile.hh"
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Matrix multiplication
  * \{ */
-
-namespace blender {
 
 template<> float4x4 operator*(const float4x4 &a, const float4x4 &b)
 {
@@ -117,11 +120,9 @@ template double2x2 operator*(const double2x2 &a, const double2x2 &b);
 template double3x3 operator*(const double3x3 &a, const double3x3 &b);
 template double4x4 operator*(const double4x4 &a, const double4x4 &b);
 
-}  // namespace blender
-
 /** \} */
 
-namespace blender::math {
+namespace math {
 
 /* -------------------------------------------------------------------- */
 /** \name Determinant
@@ -517,4 +518,145 @@ template float4x4 perspective_infinite(
 
 /** \} */
 
-}  // namespace blender::math
+/**
+ * Check that each column is orthogonal to the others, and that each column is the same length.
+ * In other words, there is no shear, and any scaling is uniform.
+ */
+template<typename T>
+bool is_similarity_transform(const MatBase<T, 3, 3> &matrix, const T &epsilon = 1e-6)
+{
+  if (math::abs(math::dot(matrix[0], matrix[1])) > epsilon) {
+    return false;
+  }
+  if (math::abs(math::dot(matrix[0], matrix[2])) > epsilon) {
+    return false;
+  }
+  if (math::abs(math::dot(matrix[1], matrix[2])) > epsilon) {
+    return false;
+  }
+  const float length_0 = math::length_squared(matrix[0]);
+  const float length_1 = math::length_squared(matrix[1]);
+  const float length_2 = math::length_squared(matrix[2]);
+  if (math::abs(length_0 - length_1) > epsilon) {
+    return false;
+  }
+  if (math::abs(length_0 - length_2) > epsilon) {
+    return false;
+  }
+  if (math::abs(length_1 - length_2) > epsilon) {
+    return false;
+  }
+  return true;
+}
+
+void transform_normals(const float3x3 &transform, MutableSpan<float3> normals)
+{
+  if (math::is_equal(transform, float3x3::identity(), 1e-6f)) {
+    return;
+  }
+  PRF_scope_with_name("math::transform_points", ProfileCategory::Default);
+  const float3x3 normal_transform = math::transpose(math::invert(transform));
+  if (is_similarity_transform(normal_transform)) {
+    const float3x3 normalized_transform = math::normalize(normal_transform);
+    threading::parallel_for(normals.index_range(), 1024, [&](const IndexRange range) {
+      for (float3 &normal : normals.slice(range)) {
+        normal = normalized_transform * normal;
+      }
+    });
+  }
+  else {
+    threading::parallel_for(normals.index_range(), 1024, [&](const IndexRange range) {
+      for (float3 &normal : normals.slice(range)) {
+        normal = math::normalize(normal_transform * normal);
+      }
+    });
+  }
+}
+
+void transform_normals(Span<float3> src, const float3x3 &transform, MutableSpan<float3> dst)
+{
+  if (math::is_equal(transform, float3x3::identity(), 1e-6f)) {
+    dst.copy_from(src);
+    return;
+  }
+  PRF_scope_with_name("math::transform_points", ProfileCategory::Default);
+  const float3x3 normal_transform = math::transpose(math::invert(transform));
+  if (is_similarity_transform(normal_transform)) {
+    const float3x3 normalized_transform = math::normalize(normal_transform);
+    threading::parallel_for(src.index_range(), 1024, [&](const IndexRange range) {
+      for (const int i : range) {
+        dst[i] = normalized_transform * src[i];
+      }
+    });
+  }
+  else {
+    threading::parallel_for(src.index_range(), 1024, [&](const IndexRange range) {
+      for (const int i : range) {
+        dst[i] = math::normalize(normal_transform * src[i]);
+      }
+    });
+  }
+}
+
+static bool skip_transform(const float4x4 &transform)
+{
+  return math::is_equal(transform, float4x4::identity(), 1e-6f);
+}
+
+static void transform_points_no_threading(const Span<float3> src,
+                                          const float4x4 &transform,
+                                          MutableSpan<float3> dst)
+{
+  PRF_scope_with_name("math::transform_points", ProfileCategory::Default);
+  for (const int64_t i : src.index_range()) {
+    dst[i] = math::transform_point(transform, src[i]);
+  }
+}
+
+void transform_points(const Span<float3> src,
+                      const float4x4 &transform,
+                      MutableSpan<float3> dst,
+                      const bool use_threading)
+{
+  if (skip_transform(transform)) {
+    dst.copy_from(src);
+  }
+  else {
+    if (use_threading) {
+      threading::parallel_for(src.index_range(), 1024, [&](const IndexRange range) {
+        transform_points_no_threading(src.slice(range), transform, dst.slice(range));
+      });
+    }
+    else {
+      transform_points_no_threading(src, transform, dst);
+    }
+  }
+}
+
+static void transform_points_no_threading(const float4x4 &transform, MutableSpan<float3> points)
+{
+  PRF_scope_with_name("math::transform_points", ProfileCategory::Default);
+  for (float3 &position : points) {
+    position = math::transform_point(transform, position);
+  }
+}
+
+void transform_points(const float4x4 &transform,
+                      MutableSpan<float3> points,
+                      const bool use_threading)
+{
+  if (skip_transform(transform)) {
+    return;
+  }
+  if (use_threading) {
+    threading::parallel_for(points.index_range(), 1024, [&](const IndexRange range) {
+      transform_points_no_threading(transform, points.slice(range));
+    });
+  }
+  else {
+    transform_points_no_threading(transform, points);
+  }
+}
+
+}  // namespace math
+}  // namespace blender

@@ -13,15 +13,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_alloca.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_array.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "BKE_customdata.hh"
 
 #include "bmesh.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 #define USE_CAP_OPTION
 
@@ -36,7 +38,7 @@
 
 static BMFace *bm_face_split_walk_back(BMesh *bm, BMLoop *l_src, BMLoop **r_l)
 {
-  float(*cos)[3];
+  float (*cos)[3];
   BMLoop *l_dst;
   BMFace *f;
   int num, i;
@@ -49,7 +51,8 @@ static BMFace *bm_face_split_walk_back(BMesh *bm, BMLoop *l_src, BMLoop **r_l)
 
   BLI_assert(num != 0);
 
-  cos = BLI_array_alloca(cos, num);
+  Array<float3, BM_DEFAULT_NGON_STACK_SIZE> cos_buf(num);
+  cos = reinterpret_cast<float (*)[3]>(cos_buf.data());
 
   for (l_dst = l_src->prev, i = 0; BM_elem_index_get(l_dst->prev->v) != -1;
        l_dst = l_dst->prev, i++)
@@ -82,7 +85,7 @@ void bmo_offset_edgeloops_exec(BMesh *bm, BMOperator *op)
   BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_TAG, false);
 
   /* over alloc */
-  verts = MEM_malloc_arrayN<BMVert *>((edges_num * 2), __func__);
+  verts = MEM_new_array_uninitialized<BMVert *>((edges_num * 2), __func__);
 
   STACK_INIT(verts, (edges_num * 2));
 
@@ -125,8 +128,8 @@ void bmo_offset_edgeloops_exec(BMesh *bm, BMOperator *op)
   }
 
   /* possible but unlikely we have no mixed vertices */
-  if (UNLIKELY(STACK_SIZE(verts) == 0)) {
-    MEM_freeN(verts);
+  if (STACK_SIZE(verts) == 0) [[unlikely]] {
+    MEM_delete(verts);
     return;
   }
 
@@ -181,11 +184,14 @@ void bmo_offset_edgeloops_exec(BMesh *bm, BMOperator *op)
 #endif
           {
             BMLoop *l_new;
-            BM_face_split(bm, l->f, l->prev, l->next, &l_new, nullptr, true);
-            BLI_assert(f_cmp == l->f);
-            BLI_assert(f_cmp != l_new->f);
-            UNUSED_VARS_NDEBUG(f_cmp);
-            BMO_edge_flag_enable(bm, l_new->e, ELE_NEW);
+            if (!BM_face_split_check_double_face(l->prev, l->next, 3) &&
+                (BM_face_split(bm, l->f, l->prev, l->next, &l_new, nullptr, true) != nullptr))
+            {
+              BLI_assert(f_cmp == l->f);
+              BLI_assert(f_cmp != l_new->f);
+              UNUSED_VARS_NDEBUG(f_cmp);
+              BMO_edge_flag_enable(bm, l_new->e, ELE_NEW);
+            }
           }
         }
         else if (l->f->len > 4) {
@@ -193,11 +199,15 @@ void bmo_offset_edgeloops_exec(BMesh *bm, BMOperator *op)
             if (BM_elem_index_get(l->next->v) == -1) {
               if (BM_elem_index_get(l->prev->prev->v) == -1) {
                 BMLoop *l_new;
-                BM_face_split(bm, l->f, l->prev->prev, l->next, &l_new, nullptr, true);
-                BLI_assert(f_cmp == l->f);
-                BLI_assert(f_cmp != l_new->f);
-                BMO_edge_flag_enable(bm, l_new->e, ELE_NEW);
-                BM_elem_flag_disable(l->f, BM_ELEM_TAG);
+                if (!BM_face_split_check_double_face(l->prev->prev, l->next, 4) &&
+                    (BM_face_split(bm, l->f, l->prev->prev, l->next, &l_new, nullptr, true) !=
+                     nullptr))
+                {
+                  BLI_assert(f_cmp == l->f);
+                  BLI_assert(f_cmp != l_new->f);
+                  BMO_edge_flag_enable(bm, l_new->e, ELE_NEW);
+                  BM_elem_flag_disable(l->f, BM_ELEM_TAG);
+                }
               }
               else {
                 /* walk backwards */
@@ -228,7 +238,8 @@ void bmo_offset_edgeloops_exec(BMesh *bm, BMOperator *op)
 
 #ifdef USE_CAP_OPTION
   if (use_cap_endpoint == false) {
-    BMVert **varr = BLI_array_alloca(varr, v_edges_max);
+    Array<BMVert *, BM_DEFAULT_TOPOLOGY_STACK_SIZE> varr_buf(v_edges_max);
+    BMVert **varr = varr_buf.data();
     STACK_DECLARE(varr);
     BMVert *v;
 
@@ -259,7 +270,9 @@ void bmo_offset_edgeloops_exec(BMesh *bm, BMOperator *op)
   }
 #endif
 
-  MEM_freeN(verts);
+  MEM_delete(verts);
 
   BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "edges.out", BM_EDGE, ELE_NEW);
 }
+
+}  // namespace blender

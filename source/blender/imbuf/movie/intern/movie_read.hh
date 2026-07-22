@@ -13,26 +13,28 @@
 
 #include "IMB_imbuf_enums.h"
 
-#ifdef WITH_FFMPEG
-
-extern "C" {
-#  include <libavutil/rational.h>
-}
-
 struct AVFormatContext;
 struct AVCodecContext;
 struct AVCodec;
 struct AVFrame;
 struct AVPacket;
 struct SwsContext;
+
+#ifdef WITH_FFMPEG
+
+extern "C" {
+#  include <libavutil/rational.h>
+}
+
 #endif
 
+namespace blender {
+
 struct IDProperty;
-struct MovieIndex;
 
 struct MovieReader {
   enum class State { Uninitialized, Failed, Valid };
-  int ib_flags = 0;
+  ImBufFlags ib_flags = ImBufFlags::Zero;
   State state = State::Uninitialized;
   int cur_position = 0; /* index  0 = 1e,  1 = 2e, enz. */
   int duration_in_frames = 0;
@@ -44,9 +46,11 @@ struct MovieReader {
   int video_rotation = 0;
 
   /* for number */
-  char filepath[1024] = {};
+  char filepath[/*FILE_MAX*/ 1024] = {};
 
   int streamindex = 0;
+
+  bool keep_original_colorspace = false;
 
 #ifdef WITH_FFMPEG
   AVFormatContext *pFormatCtx = nullptr;
@@ -79,17 +83,17 @@ struct MovieReader {
   bool never_seek_decode_one_frame = false;
 #endif
 
-  char index_dir[768] = {};
+  char proxy_dir[768] = {};
 
   int proxies_tried = 0;
-  int indices_tried = 0;
 
   MovieReader *proxy_anim[IMB_PROXY_MAX_SLOT] = {};
-  MovieIndex *record_run = nullptr;
-  MovieIndex *no_gaps = nullptr;
 
-  char colorspace[64] = {};
-  char suffix[64] = {}; /* MAX_NAME - multiview */
+  char colorspace[/*MAX_COLORSPACE_NAME*/ 64] = {};
+  /** The maximum name from multi-view. */
+  char suffix[/*MAX_NAME*/ 64] = {};
 
   IDProperty *metadata = nullptr;
 };
+
+}  // namespace blender

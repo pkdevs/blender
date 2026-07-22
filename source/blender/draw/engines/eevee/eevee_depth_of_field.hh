@@ -19,9 +19,13 @@
 
 #pragma once
 
-#include "eevee_shader_shared.hh"
+#include "eevee_depth_of_field_shared.hh"
+
+#include "draw_pass.hh"
 
 namespace blender::eevee {
+
+using namespace draw;
 
 class Instance;
 
@@ -37,16 +41,23 @@ struct DepthOfFieldBuffer {
    * Note this should be private as its inner working only concerns the Depth Of Field
    * implementation. The view itself should not touch it.
    */
-  Texture stabilize_history_tx_ = {"dof_taa"};
+  TextureFromPool stabilize_history_tx_ = {"dof_taa"};
 };
 
+using DepthOfFieldScatterListBuf = draw::StorageArrayBuffer<ScatterRect, 16, true>;
+using DepthOfFieldDataBuf = draw::UniformBuffer<DepthOfFieldData>;
+
 class DepthOfField {
+
  private:
   class Instance &inst_;
 
+  static constexpr GPUSamplerState no_filter = GPUSamplerState::default_sampler();
+  static constexpr GPUSamplerState with_filter = {GPU_SAMPLER_FILTERING_LINEAR};
+
   /** Input/Output texture references. */
-  GPUTexture *input_color_tx_ = nullptr;
-  GPUTexture *output_color_tx_ = nullptr;
+  gpu::Texture *input_color_tx_ = nullptr;
+  gpu::Texture *output_color_tx_ = nullptr;
 
   /** Bokeh LUT precompute pass. */
   TextureFromPool bokeh_gather_lut_tx_ = {"dof_bokeh_gather_lut"};
@@ -60,13 +71,15 @@ class DepthOfField {
   int3 dispatch_setup_size_ = int3(-1);
   PassSimple setup_ps_ = {"Setup"};
 
-  /** Allocated because we need mip chain. Which isn't supported by TextureFromPool. */
-  Texture reduced_coc_tx_ = {"dof_reduced_coc"};
-  Texture reduced_color_tx_ = {"dof_reduced_color"};
+  /* Reduce buffer mip chains with view texture per level. */
+  TextureFromPool reduced_coc_tx_ = {"dof_reduced_coc"};
+  TextureFromPool reduced_color_tx_ = {"dof_reduced_color"};
+  std::array<gpu::Texture *, DOF_MIP_COUNT> reduced_coc_mip_views_;
+  std::array<gpu::Texture *, DOF_MIP_COUNT> reduced_color_mip_views_;
 
   /** Stabilization (flicker attenuation) of Color and CoC output of the setup pass. */
   TextureFromPool stabilize_output_tx_ = {"dof_taa"};
-  GPUTexture *stabilize_input_ = nullptr;
+  gpu::Texture *stabilize_input_ = nullptr;
   bool32_t stabilize_valid_history_ = false;
   int3 dispatch_stabilize_size_ = int3(-1);
   PassSimple stabilize_ps_ = {"Stabilize"};
@@ -124,32 +137,34 @@ class DepthOfField {
   PassSimple scatter_bg_ps_ = {"ScatterBg"};
 
   /** Recombine the results and also perform a slight out of focus gather. */
-  GPUTexture *resolve_stable_color_tx_ = nullptr;
+  gpu::Texture *resolve_stable_color_tx_ = nullptr;
   int3 dispatch_resolve_size_ = int3(-1);
   PassSimple resolve_ps_ = {"Resolve"};
 
   DepthOfFieldDataBuf data_;
 
   /** Scene settings that are immutable. */
-  float user_overblur_;
-  float fx_max_coc_;
+  float user_overblur_ = 0.0f;
+  float fx_max_coc_ = 0.0f;
   /** Use jittered depth of field where we randomize camera location. */
-  bool do_jitter_;
+  bool do_jitter_ = false;
   /** Enable bokeh lookup texture. */
-  bool use_bokeh_lut_;
+  bool use_bokeh_lut_ = false;
 
   /** Circle of Confusion radius for FX DoF passes. Is in view X direction in [0..1] range. */
-  float fx_radius_;
+  float fx_radius_ = 0.0f;
   /** Circle of Confusion radius for jittered DoF. Is in view X direction in [0..1] range. */
-  float jitter_radius_;
+  float jitter_radius_ = 0.0f;
   /** Focus distance in view space. */
-  float focus_distance_;
+  float focus_distance_ = 0.0f;
   /** Extent of the input buffer. */
-  int2 extent_;
+  int2 extent_ = int2(0);
+
+  bool enabled_ = false;
 
  public:
-  DepthOfField(Instance &inst) : inst_(inst){};
-  ~DepthOfField(){};
+  DepthOfField(Instance &inst) : inst_(inst) {};
+  ~DepthOfField() {};
 
   void init();
 
@@ -165,13 +180,18 @@ class DepthOfField {
    * is in input_tx.
    */
   void render(View &view,
-              GPUTexture **input_tx,
-              GPUTexture **output_tx,
+              gpu::Texture **input_tx,
+              gpu::Texture **output_tx,
               DepthOfFieldBuffer &dof_buffer);
 
   bool postfx_enabled() const
   {
     return fx_radius_ > 0.0f;
+  }
+
+  bool enabled() const
+  {
+    return enabled_;
   }
 
  private:

@@ -8,6 +8,7 @@
 
 #include "vk_descriptor_set_layouts.hh"
 #include "vk_backend.hh"
+#include "vk_memory_layout.hh"
 
 namespace blender::gpu {
 VKDescriptorSetLayouts::VKDescriptorSetLayouts()
@@ -40,16 +41,16 @@ VkDescriptorSetLayout VKDescriptorSetLayouts::get_or_create(const VKDescriptorSe
   }
 
   update_layout_bindings(info);
+  const VKDevice &device = VKBackend::get().device;
 
   vk_descriptor_set_layout_create_info_.bindingCount = vk_descriptor_set_layout_bindings_.size();
   vk_descriptor_set_layout_create_info_.pBindings = vk_descriptor_set_layout_bindings_.data();
 
-  const VKDevice &device = VKBackend::get().device;
   VkDescriptorSetLayout vk_descriptor_set_layout = VK_NULL_HANDLE;
-  vkCreateDescriptorSetLayout(device.vk_handle(),
-                              &vk_descriptor_set_layout_create_info_,
-                              nullptr,
-                              &vk_descriptor_set_layout);
+  device.functions.vkCreateDescriptorSetLayout(device.vk_handle(),
+                                               &vk_descriptor_set_layout_create_info_,
+                                               nullptr,
+                                               &vk_descriptor_set_layout);
   BLI_assert(vk_descriptor_set_layout != VK_NULL_HANDLE);
 
   vk_descriptor_set_layout_create_info_.bindingCount = 0;
@@ -85,7 +86,8 @@ void VKDescriptorSetLayouts::deinit()
   std::scoped_lock mutex(mutex_);
   const VKDevice &device = VKBackend::get().device;
   for (VkDescriptorSetLayout &vk_descriptor_set_layout : vk_descriptor_set_layouts_.values()) {
-    vkDestroyDescriptorSetLayout(device.vk_handle(), vk_descriptor_set_layout, nullptr);
+    device.functions.vkDestroyDescriptorSetLayout(
+        device.vk_handle(), vk_descriptor_set_layout, nullptr);
   }
   vk_descriptor_set_layouts_.clear();
 }

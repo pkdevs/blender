@@ -10,15 +10,19 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_heap.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include <algorithm>
+
+#include "BLI_heap.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_customdata.hh"
 
 #include "bmesh.hh"
 #include "bmesh_decimate.hh" /* own include */
+
+namespace blender {
 
 /* check that collapsing a vertex between 2 edges doesn't cause a degenerate face. */
 #define USE_DEGENERATE_CHECK
@@ -57,7 +61,7 @@ static float bm_vert_edge_face_angle(BMVert *v,
   /* NOTE: could be either edge, it doesn't matter. */
   if (v->e && BM_edge_is_manifold(v->e)) {
     /* Checking delimited is important here,
-     * otherwise the boundary between two materials for e.g.
+     * otherwise, for example, the boundary between two materials
      * will collapse if the faces on either side of the edge have a small angle.
      *
      * This way, delimiting edges are treated like boundary edges,
@@ -292,7 +296,7 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
   const float angle_limit_cos_neg = -cosf(angle_limit);
   DelimitData delimit_data = {0};
   const int eheap_table_len = do_dissolve_boundaries ? einput_len : max_ii(einput_len, vinput_len);
-  void *_heap_table = MEM_malloc_arrayN<HeapNode *>(eheap_table_len, __func__);
+  void *_heap_table = MEM_new_array_uninitialized<HeapNode *>(eheap_table_len, __func__);
 
   int i;
 
@@ -348,11 +352,11 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
       i = BM_elem_index_get(e);
 
       if (BM_edge_is_manifold(e)) {
-        BMFace *f_double;
-        f_new = BM_faces_join_pair(bm, e->l, e->l->radial_next, false, &f_double);
-        /* See #BM_faces_join note on callers asserting when `r_double` is non-null. */
-        BLI_assert_msg(f_double == nullptr,
-                       "Doubled face detected at " AT ". Resulting mesh may be corrupt.");
+        /* The `f_new` may be an existing face, see #144383.
+         * In this case it's still flagged as output so the selection
+         * isn't "lost" when dissolving, see: !144653. */
+        f_new = BM_faces_join_pair(bm, e->l, e->l->radial_next, false, nullptr);
+
         if (f_new) {
           BMLoop *l_first, *l_iter;
 
@@ -377,22 +381,22 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
         }
       }
 
-      if (UNLIKELY(f_new == nullptr)) {
+      if (f_new == nullptr) [[unlikely]] {
         BLI_heap_node_value_update(eheap, enode_top, COST_INVALID);
       }
     }
 
     /* prepare for cleanup */
     BM_mesh_elem_index_ensure(bm, BM_VERT);
-    vert_reverse_lookup = MEM_malloc_arrayN<int>(bm->totvert, __func__);
-    copy_vn_i(vert_reverse_lookup, bm->totvert, -1);
+    vert_reverse_lookup = MEM_new_array_uninitialized<int>(bm->totvert, __func__);
+    std::fill_n(vert_reverse_lookup, bm->totvert, -1);
     for (i = 0; i < vinput_len; i++) {
       BMVert *v = vinput_arr[i];
       vert_reverse_lookup[BM_elem_index_get(v)] = i;
     }
 
     /* --- cleanup --- */
-    earray = MEM_malloc_arrayN<BMEdge *>(bm->totedge, __func__);
+    earray = MEM_new_array_uninitialized<BMEdge *>(bm->totedge, __func__);
     BM_ITER_MESH_INDEX (e_iter, &iter, bm, BM_EDGES_OF_MESH, i) {
       earray[i] = e_iter;
     }
@@ -423,8 +427,8 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
         }
       }
     }
-    MEM_freeN(vert_reverse_lookup);
-    MEM_freeN(earray);
+    MEM_delete(vert_reverse_lookup);
+    MEM_delete(earray);
 
     BLI_heap_free(eheap, nullptr);
   }
@@ -456,7 +460,7 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
 
     for (i = 0; i < vinput_len; i++) {
       BMVert *v = vinput_arr[i];
-      if (LIKELY(v != nullptr)) {
+      if (v != nullptr) [[likely]] {
         const float cost = bm_vert_edge_face_angle(v, delimit, &delimit_data);
         vheap_table[i] = BLI_heap_insert(vheap, cost, v);
         BM_elem_index_set(v, i); /* set dirty */
@@ -533,7 +537,7 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
         }
       }
 
-      if (UNLIKELY(e_new == nullptr)) {
+      if (e_new == nullptr) [[unlikely]] {
         BLI_heap_node_value_update(vheap, vnode_top, COST_INVALID);
       }
     }
@@ -541,7 +545,7 @@ void BM_mesh_decimate_dissolve_ex(BMesh *bm,
     BLI_heap_free(vheap, nullptr);
   }
 
-  MEM_freeN(_heap_table);
+  MEM_delete_void(_heap_table);
 }
 
 void BM_mesh_decimate_dissolve(BMesh *bm,
@@ -567,6 +571,8 @@ void BM_mesh_decimate_dissolve(BMesh *bm,
                                einput_len,
                                0);
 
-  MEM_freeN(vinput_arr);
-  MEM_freeN(einput_arr);
+  MEM_delete(vinput_arr);
+  MEM_delete(einput_arr);
 }
+
+}  // namespace blender

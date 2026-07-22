@@ -10,11 +10,14 @@
 
 #include "BLI_span.hh"
 
+namespace blender {
+
+struct Editing;
 struct Scene;
 struct Strip;
 struct StripProxy;
 
-namespace blender::seq {
+namespace seq {
 
 /**
  * Cache must be freed before calling this function
@@ -22,15 +25,6 @@ namespace blender::seq {
  */
 void seq_free_strip_recurse(Scene *scene, Strip *strip, bool do_id_user);
 StripProxy *seq_strip_proxy_alloc();
-/**
- * Find effect strips, that use strip `strip` as one of inputs.
- * If lookup hash doesn't exist, it will be created. If hash is tagged as invalid, it will be
- * rebuilt.
- *
- * \param key: pointer to Strip inside of meta strip
- *
- * \return collection of effect strips
- */
-blender::Span<Strip *> SEQ_lookup_effects_by_strip(Editing *ed, const Strip *key);
 
-}  // namespace blender::seq
+}  // namespace seq
+}  // namespace blender

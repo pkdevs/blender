@@ -6,15 +6,9 @@
 #include <cstdint>
 #include <memory>
 
-#include "BLI_array.hh"
 #include "BLI_hash.hh"
 #include "BLI_index_range.hh"
-
-#include "RE_pipeline.h"
-
-#include "DNA_scene_types.h"
-
-#include "GPU_texture.hh"
+#include "BLI_math_filter.hh"
 
 #include "COM_context.hh"
 #include "COM_morphological_distance_feather_weights.hh"
@@ -50,63 +44,70 @@ bool operator==(const MorphologicalDistanceFeatherWeightsKey &a,
 MorphologicalDistanceFeatherWeights::MorphologicalDistanceFeatherWeights(Context &context,
                                                                          int type,
                                                                          int radius)
-    : weights_result(context.create_result(ResultType::Float)),
-      falloffs_result(context.create_result(ResultType::Float))
+    : weights(context.create_result(ResultType::Float)),
+      falloffs(context.create_result(ResultType::Float))
 {
-  this->compute_weights(radius);
-  this->compute_distance_falloffs(type, radius);
+  Result weights_cpu = this->compute_weights(context, radius);
+  Result falloffs_cpu = this->compute_distance_falloffs(context, type, radius);
 
   if (context.use_gpu()) {
-    this->weights_result.allocate_texture(Domain(int2(weights_.size(), 1)), false);
-    this->falloffs_result.allocate_texture(Domain(int2(falloffs_.size(), 1)), false);
-    GPU_texture_update(this->weights_result, GPU_DATA_FLOAT, weights_.data());
-    GPU_texture_update(this->falloffs_result, GPU_DATA_FLOAT, falloffs_.data());
+    Result weights_gpu = weights_cpu.upload_to_gpu(false);
+    this->weights.share_data(weights_gpu);
+    weights_gpu.release();
 
-    /* CPU-side data no longer needed, so free it. */
-    weights_ = Array<float>();
-    falloffs_ = Array<float>();
+    Result falloffs_gpu = falloffs_cpu.upload_to_gpu(false);
+    this->falloffs.share_data(falloffs_gpu);
+    falloffs_gpu.release();
   }
   else {
-    this->weights_result.wrap_external(weights_.data(), int2(weights_.size(), 1));
-    this->falloffs_result.wrap_external(falloffs_.data(), int2(falloffs_.size(), 1));
+    this->weights.share_data(weights_cpu);
+    this->falloffs.share_data(falloffs_cpu);
   }
+
+  weights_cpu.release();
+  falloffs_cpu.release();
 }
 
 MorphologicalDistanceFeatherWeights::~MorphologicalDistanceFeatherWeights()
 {
-  weights_result.release();
-  falloffs_result.release();
+  weights.release();
+  falloffs.release();
 }
 
-void MorphologicalDistanceFeatherWeights::compute_weights(int radius)
+Result MorphologicalDistanceFeatherWeights::compute_weights(Context &context, int radius)
 {
+  Result weights_cpu = context.create_result(ResultType::Float);
+
   /* The size of filter is double the radius plus 1, but since the filter is symmetric, we only
    * compute half of it and no doubling happens. We add 1 to make sure the filter size is always
    * odd and there is a center weight. */
   const int size = radius + 1;
-  weights_ = Array<float>(size);
+  weights_cpu.allocate_texture(Domain(int2(size, 1)), false, ResultStorageType::CPU);
 
   float sum = 0.0f;
 
   /* First, compute the center weight. */
-  const float center_weight = RE_filter_value(R_FILTER_GAUSS, 0.0f);
-  weights_[0] = center_weight;
+  const float center_weight = math::filter_kernel_value(math::FilterKernel::Gauss, 0.0f);
+  weights_cpu.store_pixel(int2(0, 0), center_weight);
   sum += center_weight;
 
   /* Second, compute the other weights in the positive direction, making sure to add double the
    * weight to the sum of weights because the filter is symmetric and we only loop over half of
    * it. Skip the center weight already computed by dropping the front index. */
   const float scale = radius > 0.0f ? 1.0f / radius : 0.0f;
-  for (const int i : weights_.index_range().drop_front(1)) {
-    const float weight = RE_filter_value(R_FILTER_GAUSS, i * scale);
-    weights_[i] = weight;
+  for (const int i : IndexRange(size).drop_front(1)) {
+    const float weight = math::filter_kernel_value(math::FilterKernel::Gauss, i * scale);
+    weights_cpu.store_pixel(int2(i, 0), weight);
     sum += weight * 2.0f;
   }
 
   /* Finally, normalize the weights. */
-  for (const int i : weights_.index_range()) {
-    weights_[i] /= sum;
+  for (const int i : IndexRange(size)) {
+    const int2 texel = int2(i, 0);
+    weights_cpu.store_pixel(texel, weights_cpu.load_pixel<float>(texel) / sum);
   }
+
+  return weights_cpu;
 }
 
 /* Computes a falloff that is equal to 1 at an input of zero and decrease to zero at an input of 1,
@@ -134,20 +135,26 @@ static float compute_distance_falloff(int type, float x)
   }
 }
 
-void MorphologicalDistanceFeatherWeights::compute_distance_falloffs(int type, int radius)
+Result MorphologicalDistanceFeatherWeights::compute_distance_falloffs(Context &context,
+                                                                      int type,
+                                                                      int radius)
 {
+  Result falloffs_cpu = context.create_result(ResultType::Float);
+
   /* The size of the distance falloffs is double the radius plus 1, but since the falloffs are
    * symmetric, we only compute half of them and no doubling happens. We add 1 to make sure the
    * falloffs size is always odd and there is a center falloff. */
   const int size = radius + 1;
-  falloffs_ = Array<float>(size);
+  falloffs_cpu.allocate_texture(Domain(int2(size, 1)), false, ResultStorageType::CPU);
 
   /* Compute the distance falloffs in the positive direction only, because the falloffs are
    * symmetric. */
   const float scale = radius > 0.0f ? 1.0f / radius : 0.0f;
-  for (const int i : falloffs_.index_range()) {
-    falloffs_[i] = compute_distance_falloff(type, i * scale);
+  for (const int i : IndexRange(size)) {
+    falloffs_cpu.store_pixel(int2(i, 0), compute_distance_falloff(type, i * scale));
   }
+
+  return falloffs_cpu;
 }
 
 /* --------------------------------------------------------------------

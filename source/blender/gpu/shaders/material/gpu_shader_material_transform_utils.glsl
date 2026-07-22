@@ -4,76 +4,140 @@
 
 /* Requires all common matrices declared. */
 
-void normal_transform_object_to_world(float3 vin, out float3 vout)
+[[node]]
+void normal_transform_object_to_world(float3 vin, float3 &vout)
 {
+  const ObjectMatrices obj = object_matrices_get();
   /* Expansion of NormalMatrix. */
-  vout = vin * to_float3x3(drw_modelinv());
+  vout = vin * to_float3x3(obj.model_inverse);
 }
 
-void normal_transform_world_to_object(float3 vin, out float3 vout)
+[[node]]
+void normal_transform_world_to_object(float3 vin, float3 &vout)
 {
+  const ObjectMatrices obj = object_matrices_get();
   /* Expansion of NormalMatrixInverse. */
-  vout = vin * to_float3x3(drw_modelmat());
+  vout = vin * to_float3x3(obj.model);
 }
 
-void direction_transform_object_to_world(float3 vin, out float3 vout)
+[[node]]
+void normal_transform_object_to_view(float3 vin, float3 &vout)
 {
-  vout = to_float3x3(drw_modelmat()) * vin;
+  const ObjectMatrices obj = object_matrices_get();
+  const ViewMatrices view = view_matrices_get();
+  vout = vin * to_float3x3(obj.model_inverse);
+  vout = to_float3x3(view.viewmat) * vout;
 }
 
-void direction_transform_object_to_view(float3 vin, out float3 vout)
+[[node]]
+void normal_transform_view_to_world(float3 vin, float3 &vout)
 {
-  vout = to_float3x3(drw_modelmat()) * vin;
-  vout = to_float3x3(drw_view().viewmat) * vout;
+  const ViewMatrices view = view_matrices_get();
+  vout = to_float3x3(view.viewinv) * vin;
 }
 
-void direction_transform_view_to_world(float3 vin, out float3 vout)
+[[node]]
+void normal_transform_view_to_object(float3 vin, float3 &vout)
 {
-  vout = to_float3x3(drw_view().viewinv) * vin;
+  const ObjectMatrices obj = object_matrices_get();
+  const ViewMatrices view = view_matrices_get();
+  vout = to_float3x3(view.viewinv) * vin;
+  vout = vout * to_float3x3(obj.model);
 }
 
-void direction_transform_view_to_object(float3 vin, out float3 vout)
+[[node]]
+void normal_transform_world_to_view(float3 vin, float3 &vout)
 {
-  vout = to_float3x3(drw_view().viewinv) * vin;
-  vout = to_float3x3(drw_modelinv()) * vout;
+  const ViewMatrices view = view_matrices_get();
+  vout = to_float3x3(view.viewmat) * vin;
 }
 
-void direction_transform_world_to_view(float3 vin, out float3 vout)
+[[node]]
+void direction_transform_object_to_world(float3 vin, float3 &vout)
 {
-  vout = to_float3x3(drw_view().viewmat) * vin;
+  const ObjectMatrices obj = object_matrices_get();
+  vout = to_float3x3(obj.model) * vin;
 }
 
-void direction_transform_world_to_object(float3 vin, out float3 vout)
+[[node]]
+void direction_transform_object_to_view(float3 vin, float3 &vout)
 {
-  vout = to_float3x3(drw_modelinv()) * vin;
+  const ObjectMatrices obj = object_matrices_get();
+  const ViewMatrices view = view_matrices_get();
+  vout = to_float3x3(obj.model) * vin;
+  vout = to_float3x3(view.viewmat) * vout;
 }
 
-void point_transform_object_to_world(float3 vin, out float3 vout)
+[[node]]
+void direction_transform_view_to_world(float3 vin, float3 &vout)
 {
-  vout = (drw_modelmat() * float4(vin, 1.0f)).xyz;
+  const ViewMatrices view = view_matrices_get();
+  vout = to_float3x3(view.viewinv) * vin;
 }
 
-void point_transform_object_to_view(float3 vin, out float3 vout)
+[[node]]
+void direction_transform_view_to_object(float3 vin, float3 &vout)
 {
-  vout = (drw_view().viewmat * (drw_modelmat() * float4(vin, 1.0f))).xyz;
+  const ObjectMatrices obj = object_matrices_get();
+  const ViewMatrices view = view_matrices_get();
+  vout = to_float3x3(view.viewinv) * vin;
+  vout = to_float3x3(obj.model_inverse) * vout;
 }
 
-void point_transform_view_to_world(float3 vin, out float3 vout)
+[[node]]
+void direction_transform_world_to_view(float3 vin, float3 &vout)
 {
-  vout = (drw_view().viewinv * float4(vin, 1.0f)).xyz;
+  const ViewMatrices view = view_matrices_get();
+  vout = to_float3x3(view.viewmat) * vin;
 }
 
-void point_transform_view_to_object(float3 vin, out float3 vout)
+[[node]]
+void direction_transform_world_to_object(float3 vin, float3 &vout)
 {
-  vout = (drw_modelinv() * (drw_view().viewinv * float4(vin, 1.0f))).xyz;
+  const ObjectMatrices obj = object_matrices_get();
+  vout = to_float3x3(obj.model_inverse) * vin;
 }
 
-void point_transform_world_to_view(float3 vin, out float3 vout)
+[[node]]
+void point_transform_object_to_world(float3 vin, float3 &vout)
 {
-  vout = (drw_view().viewmat * float4(vin, 1.0f)).xyz;
+  const ObjectMatrices obj = object_matrices_get();
+  vout = (obj.model * float4(vin, 1.0f)).xyz;
 }
 
-void point_transform_world_to_object(float3 vin, out float3 vout)
+[[node]]
+void point_transform_object_to_view(float3 vin, float3 &vout)
 {
-  vout = (drw_modelinv() * float4(vin, 1.0f)).xyz;
+  const ObjectMatrices obj = object_matrices_get();
+  const ViewMatrices view = view_matrices_get();
+  vout = (view.viewmat * (obj.model * float4(vin, 1.0f))).xyz;
+}
+
+[[node]]
+void point_transform_view_to_world(float3 vin, float3 &vout)
+{
+  const ViewMatrices view = view_matrices_get();
+  vout = (view.viewinv * float4(vin, 1.0f)).xyz;
+}
+
+[[node]]
+void point_transform_view_to_object(float3 vin, float3 &vout)
+{
+  const ObjectMatrices obj = object_matrices_get();
+  const ViewMatrices view = view_matrices_get();
+  vout = (obj.model_inverse * (view.viewinv * float4(vin, 1.0f))).xyz;
+}
+
+[[node]]
+void point_transform_world_to_view(float3 vin, float3 &vout)
+{
+  const ViewMatrices view = view_matrices_get();
+  vout = (view.viewmat * float4(vin, 1.0f)).xyz;
+}
+
+[[node]]
+void point_transform_world_to_object(float3 vin, float3 &vout)
+{
+  const ObjectMatrices obj = object_matrices_get();
+  vout = (obj.model_inverse * float4(vin, 1.0f)).xyz;
 }

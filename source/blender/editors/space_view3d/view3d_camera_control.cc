@@ -31,15 +31,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_object.hh"
 
 #include "DEG_depsgraph.hh"
 
 #include "view3d_intern.hh" /* own include */
+
+namespace blender {
 
 struct View3DCameraControl {
 
@@ -79,7 +81,7 @@ struct View3DCameraControl {
    * Remember if we're orthographic or not,
    * only used for restoring the view if it was a orthographic view.
    */
-  char persp_backup;
+  eRegionView3D_Persp persp_backup;
 
   /**
    * True when flying an orthographic camera in perspective view,
@@ -115,7 +117,7 @@ View3DCameraControl *ED_view3d_cameracontrol_acquire(Depsgraph *depsgraph,
 {
   View3DCameraControl *vctrl;
 
-  vctrl = MEM_callocN<View3DCameraControl>(__func__);
+  vctrl = MEM_new_zeroed<View3DCameraControl>(__func__);
 
   /* Store context */
   vctrl->ctx_scene = scene;
@@ -131,7 +133,7 @@ View3DCameraControl *ED_view3d_cameracontrol_acquire(Depsgraph *depsgraph,
   /* check for flying ortho camera - which we can't support well
    * we _could_ also check for an ortho camera but this is easier */
   if ((rv3d->persp == RV3D_CAMOB) && (rv3d->is_persp == false)) {
-    ((Camera *)v3d->camera->data)->type = CAM_PERSP;
+    (id_cast<Camera *>(v3d->camera->data))->type = CAM_PERSP;
     vctrl->is_ortho_cam = true;
   }
 
@@ -185,7 +187,7 @@ View3DCameraControl *ED_view3d_cameracontrol_acquire(Depsgraph *depsgraph,
  * A version of #BKE_object_apply_mat4 that respects #Object.protectflag,
  * applying the locking back to the view to avoid the view.
  * This is needed so the view doesn't get out of sync with the object,
- * causing visible jittering when in fly/walk mode for e.g.
+ * causing visible jittering when in fly/walk mode for example.
  *
  * \note This could be exposed as an API option, as we might not want the view
  * to be constrained by the thing it's controlling.
@@ -327,7 +329,7 @@ void ED_view3d_cameracontrol_release(View3DCameraControl *vctrl, const bool rest
     rv3d->dist = vctrl->dist_backup;
   }
   else if (vctrl->persp_backup == RV3D_CAMOB) { /* camera */
-    DEG_id_tag_update((ID *)view3d_cameracontrol_object(vctrl), ID_RECALC_TRANSFORM);
+    DEG_id_tag_update(id_cast<ID *>(view3d_cameracontrol_object(vctrl)), ID_RECALC_TRANSFORM);
 
     /* always, is set to zero otherwise */
     copy_v3_v3(rv3d->ofs, vctrl->ofs_backup);
@@ -341,12 +343,14 @@ void ED_view3d_cameracontrol_release(View3DCameraControl *vctrl, const bool rest
   }
 
   if (vctrl->is_ortho_cam) {
-    ((Camera *)v3d->camera->data)->type = CAM_ORTHO;
+    (id_cast<Camera *>(v3d->camera->data))->type = CAM_ORTHO;
   }
 
   if (vctrl->obtfm) {
-    MEM_freeN(vctrl->obtfm);
+    BKE_object_tfm_free(vctrl->obtfm);
   }
 
-  MEM_freeN(vctrl);
+  MEM_delete(vctrl);
 }
+
+}  // namespace blender

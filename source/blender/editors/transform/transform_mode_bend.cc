@@ -10,11 +10,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
 
 #include "BKE_unit.hh"
@@ -24,9 +24,9 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "UI_interface.hh"
-
 #include "BLT_translation.hh"
+
+#include "UI_interface_types.hh"
 
 #include "transform.hh"
 #include "transform_convert.hh"
@@ -64,6 +64,7 @@ struct BendCustomData {
 static void transdata_elem_bend(const TransInfo *t,
                                 const TransDataContainer *tc,
                                 TransData *td,
+                                TransDataExtension *td_ext,
                                 float angle,
                                 const BendCustomData *bend_data,
                                 const float warp_sta_local[3],
@@ -73,7 +74,7 @@ static void transdata_elem_bend(const TransInfo *t,
 
                                 bool is_clamp)
 {
-  if (UNLIKELY(angle == 0.0f)) {
+  if (angle == 0.0f) [[unlikely]] {
     copy_v3_v3(td->loc, td->iloc);
     return;
   }
@@ -120,7 +121,7 @@ static void transdata_elem_bend(const TransInfo *t,
 
   /* Rotation. */
   if ((t->flag & T_POINTS) == 0) {
-    ElementRotation(t, tc, td, mat, V3D_AROUND_LOCAL_ORIGINS);
+    ElementRotation(t, tc, td, td_ext, mat, V3D_AROUND_LOCAL_ORIGINS);
   }
 
   /* Location. */
@@ -169,7 +170,7 @@ static void Bend(TransInfo *t)
    * this isn't essential but nicer to give reasonable snapping values for radius. */
   if (t->tsnap.mode & SCE_SNAP_TO_INCREMENT) {
     const float radius_snap = 0.1f;
-    const float snap_hack = (t->snap[0] * bend_data->warp_init_dist) / radius_snap;
+    const float snap_hack = (t->increment[0] * bend_data->warp_init_dist) / radius_snap;
     values.scale *= snap_hack;
     transform_snap_increment(t, values.vector);
     values.scale /= snap_hack;
@@ -188,19 +189,19 @@ static void Bend(TransInfo *t)
 
     outputNumInput(&(t->num), c, t->scene->unit);
 
-    SNPRINTF(str,
-             IFACE_("Bend Angle: %s, Radius: %s, Alt: Clamp %s"),
-             &c[0],
-             &c[NUM_STR_REP_LEN],
-             WM_bool_as_string(is_clamp));
+    SNPRINTF_UTF8(str,
+                  IFACE_("Bend Angle: %s, Radius: %s, Alt: Clamp %s"),
+                  &c[0],
+                  &c[NUM_STR_REP_LEN],
+                  WM_bool_as_string(is_clamp));
   }
   else {
     /* Default header print. */
-    SNPRINTF(str,
-             IFACE_("Bend Angle: %.3f, Radius: %.4f, Alt: Clamp %s"),
-             RAD2DEGF(values.angle),
-             values.scale * bend_data->warp_init_dist,
-             WM_bool_as_string(is_clamp));
+    SNPRINTF_UTF8(str,
+                  IFACE_("Bend Angle: %.3f, Radius: %.4f, Alt: Clamp %s"),
+                  RAD2DEGF(values.angle),
+                  values.scale * bend_data->warp_init_dist,
+                  WM_bool_as_string(is_clamp));
   }
 
   values.angle *= -1.0f;
@@ -248,12 +249,14 @@ static void Bend(TransInfo *t)
     threading::parallel_for(IndexRange(tc->data_len), 1024, [&](const IndexRange range) {
       for (const int i : range) {
         TransData *td = &tc->data[i];
+        TransDataExtension *td_ext = tc->data_ext ? &tc->data_ext[i] : nullptr;
         if (td->flag & TD_SKIP) {
           continue;
         }
         transdata_elem_bend(t,
                             tc,
                             td,
+                            td_ext,
                             values.angle,
                             bend_data,
                             warp_sta_local,
@@ -284,7 +287,7 @@ static void initBend(TransInfo *t, wmOperator * /*op*/)
   t->num.idx_max = 1;
   initSnapAngleIncrements(t);
 
-  copy_v3_fl(t->num.val_inc, t->snap[0]);
+  copy_v3_fl(t->num.val_inc, t->increment[0]);
   t->num.unit_sys = t->scene->unit.system;
   t->num.unit_use_radians = (t->scene->unit.system_rotation == USER_UNIT_ROT_RADIANS);
   t->num.unit_type[0] = B_UNIT_ROTATION;
@@ -296,12 +299,17 @@ static void initBend(TransInfo *t, wmOperator * /*op*/)
   }
   calculateCenterLocal(t, t->center_global);
 
-  data = MEM_callocN<BendCustomData>(__func__);
+  data = MEM_new_zeroed<BendCustomData>(__func__);
 
   curs = t->scene->cursor.location;
   copy_v3_v3(data->warp_sta, curs);
-  ED_view3d_win_to_3d(
-      (View3D *)t->area->spacedata.first, t->region, curs, t->mval, data->warp_end);
+  if (t->spacetype == SPACE_VIEW3D) {
+    ED_view3d_win_to_3d(
+        static_cast<View3D *>(t->area->spacedata.first), t->region, curs, t->mval, data->warp_end);
+  }
+  else {
+    copy_v3_v3(data->warp_end, curs); /* Dummy value. */
+  }
 
   copy_v3_v3(data->warp_nor, t->viewinv[2]);
   normalize_v3(data->warp_nor);

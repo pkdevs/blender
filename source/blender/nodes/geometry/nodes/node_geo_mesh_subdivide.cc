@@ -5,6 +5,7 @@
 #include "BKE_subdiv.hh"
 #include "BKE_subdiv_mesh.hh"
 
+#include "GEO_foreach_geometry.hh"
 #include "GEO_randomize.hh"
 
 #include "node_geometry_util.hh"
@@ -15,9 +16,11 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
-  b.add_output<decl::Geometry>("Mesh").propagate_all().align_with_previous();
-  b.add_input<decl::Int>("Level").default_value(1).min(0).max(6);
+  b.add_input<decl::Geometry>("Mesh"_ustr)
+      .supported_type(GeometryComponent::Type::Mesh)
+      .description("Mesh to subdivide");
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Int>("Level"_ustr).default_value(1).min(0).max(6);
 }
 
 #ifdef WITH_OPENSUBDIV
@@ -55,16 +58,22 @@ static Mesh *simple_subdivide_mesh(const Mesh &mesh, const int level)
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh"_ustr);
 #ifdef WITH_OPENSUBDIV
   /* See CCGSUBSURF_LEVEL_MAX for max limit. */
-  const int level = clamp_i(params.extract_input<int>("Level"), 0, 11);
+  const int level = std::max(params.extract_input<int>("Level"_ustr), 0);
   if (level == 0) {
-    params.set_output("Mesh", std::move(geometry_set));
+    params.set_output("Mesh"_ustr, std::move(geometry_set));
+    return;
+  }
+  /* At this limit, a subdivided single triangle would be too large to be stored in #Mesh. */
+  if (level >= 16) {
+    params.error_message_add(NodeWarningType::Error, TIP_("The subdivision level is too large"));
+    params.set_default_remaining_outputs();
     return;
   }
 
-  geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+  geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     if (const Mesh *mesh = geometry_set.get_mesh()) {
       geometry_set.replace_mesh(simple_subdivide_mesh(*mesh, level));
     }
@@ -73,14 +82,14 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.error_message_add(NodeWarningType::Error,
                            TIP_("Disabled, Blender was compiled without OpenSubdiv"));
 #endif
-  params.set_output("Mesh", std::move(geometry_set));
+  params.set_output("Mesh"_ustr, std::move(geometry_set));
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSubdivideMesh", GEO_NODE_SUBDIVIDE_MESH);
+  geo_node_type_base(&ntype, "GeometryNodeSubdivideMesh"_ustr, GEO_NODE_SUBDIVIDE_MESH);
   ntype.ui_name = "Subdivide Mesh";
   ntype.ui_description =
       "Divide mesh faces into smaller ones without changing the shape or volume, using linear "
@@ -89,7 +98,7 @@ static void node_register()
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

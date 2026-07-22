@@ -8,12 +8,18 @@
  * \ingroup bke
  */
 
-#include "BLI_ghash.h"
-#include "BLI_iterator.h"
-#include "BLI_sys_types.h"
+#include <string>
 
+#include "BLI_iterator.hh"
+#include "BLI_map.hh"
+#include "BLI_set.hh"
+#include "BLI_sys_types.hh"
+
+#include "DNA_collection_types.h"
 #include "DNA_listBase.h"
 #include "DNA_userdef_enums.h"
+
+namespace blender {
 
 /* Structs */
 
@@ -24,22 +30,66 @@ struct BlendWriter;
 struct Collection;
 struct ID;
 struct CollectionChild;
+struct CollectionImport;
 struct CollectionExport;
 struct Main;
 struct Object;
 struct Scene;
 struct ViewLayer;
 
+/** #CollectionRuntime.tag */
+enum {
+  /**
+   * That code (#BKE_main_collections_parent_relations_rebuild and the like)
+   * is called from very low-level places, like e.g ID remapping...
+   * Using a generic tag like #ID_TAG_DOIT for this is just impossible, we need our very own.
+   */
+  COLLECTION_TAG_RELATION_REBUILD = (1 << 0),
+  /**
+   * Mark the `gobject` list and/or its `runtime.gobject_hash` mapping as dirty, i.e. that their
+   * data is not reliable and should be cleaned-up or updated.
+   *
+   * This should typically only be set by ID remapping code.
+   */
+  COLLECTION_TAG_COLLECTION_OBJECT_DIRTY = (1 << 1),
+};
+
+using CollectionObjectMap = Map<const Object *, CollectionObject *>;
+
 struct CollectionParent {
   struct CollectionParent *next, *prev;
   struct Collection *collection;
 };
 
+namespace bke {
+
+struct CollectionRuntime {
+  /**
+   * Cache of objects in this collection and all its children.
+   * This is created on demand when e.g. some physics simulation needs it,
+   * we don't want to have it for every collections due to memory usage reasons.
+   */
+  ListBaseT<Base> object_cache = {};
+
+  /** Need this for line art sub-collection selections. */
+  ListBaseT<Base> object_cache_instanced = {};
+
+  /** List of collections that are a parent of this data-block. */
+  ListBaseT<CollectionParent> parents = {};
+
+  /** An optional map for faster lookups on #Collection.gobject */
+  CollectionObjectMap *gobject_hash = nullptr;
+
+  uint8_t tag = 0;
+};
+
+}  // namespace bke
+
 /* Collections */
 
 /**
- * Add a collection to a collection ListBase and synchronize all render layers
- * The ListBase is NULL when the collection is to be added to the master collection
+ * Add a collection to a collection ListBaseT and synchronize all render layers
+ * The ListBaseT is NULL when the collection is to be added to the master collection
  */
 Collection *BKE_collection_add(Main *bmain,
                                Collection *collection_parent,
@@ -70,15 +120,43 @@ void BKE_collection_add_from_collection(Main *bmain,
 void BKE_collection_free_data(Collection *collection);
 
 /**
+ * Can the collection contents be modified. Returns an optional reason if the content is not
+ * editable.
+ */
+bool BKE_collection_is_content_editable(const Collection *collection,
+                                        std::string *reason = nullptr);
+
+/**
+ * Add a new collection importer to the collection.
+ */
+CollectionImport *BKE_collection_importer_add(Collection *collection, const char *idname);
+
+/**
+ * Add a new collection exporter to the collection.
+ */
+CollectionExport *BKE_collection_exporter_add(Collection *collection, char *idname, char *label);
+
+/**
+ * Remove a collection exporter from the collection.
+ */
+void BKE_collection_exporter_remove(Collection *collection, CollectionExport *data);
+
+/**
+ * Move a collection exporter from one position to another.
+ */
+bool BKE_collection_exporter_move(Collection *collection, const int from, const int to);
+
+/**
  * Assigns a unique name to the collection exporter.
  */
-void BKE_collection_exporter_name_set(const ListBase *exporters,
+void BKE_collection_exporter_name_set(const ListBaseT<CollectionExport> *exporters,
                                       CollectionExport *data,
                                       const char *newname);
 
 /**
- * Free all data owned by the collection exporter.
+ * Free all data owned by the collection importers/exporters.
  */
+void BKE_collection_importer_free_data(CollectionImport *data);
 void BKE_collection_exporter_free_data(CollectionExport *data);
 
 /**
@@ -90,7 +168,7 @@ bool BKE_collection_delete(Main *bmain, Collection *collection, bool hierarchy);
 /**
  * Make a deep copy (aka duplicate) of the given collection and all of its children, recursively.
  *
- * \param dupflag: Controls which sub-data are also duplicated
+ * \param duplicate_flags: Controls which sub-data are also duplicated
  * (see #eDupli_ID_Flags in DNA_userdef_types.h).
  * \param duplicate_options: Additional context information about current duplicate call (e.g. if
  * it's part of a higher-level duplication or not, etc.). (see #eLibIDDuplicateFlags in
@@ -117,6 +195,13 @@ Collection *BKE_collection_duplicate(Main *bmain,
 
 #define BKE_SCENE_COLLECTION_NAME "Scene Collection"
 Collection *BKE_collection_master_add(Scene *scene);
+
+/**
+ * Check if the collection contains any geometry that can be rendered. Otherwise there's nothing to
+ * display in the preview, so don't generate one.
+ * Objects and sub-collections hidden in the render will be skipped.
+ */
+bool BKE_collection_contains_geometry_recursive(const Collection *collection);
 
 /* Collection Objects */
 
@@ -226,8 +311,8 @@ bool BKE_collection_object_cyclic_check(Main *bmain, Object *object, Collection 
 
 /* Object list cache. */
 
-ListBase BKE_collection_object_cache_get(Collection *collection);
-ListBase BKE_collection_object_cache_instanced_get(Collection *collection);
+ListBaseT<Base> BKE_collection_object_cache_get(Collection *collection);
+ListBaseT<Base> BKE_collection_object_cache_instanced_get(Collection *collection);
 /**
  * Free the object cache of given `collection` and all of its ancestors (recursively).
  *
@@ -246,34 +331,33 @@ void BKE_collection_object_cache_free(const Main *bmain,
  */
 void BKE_main_collections_object_cache_free(const Main *bmain);
 
-Base *BKE_collection_or_layer_objects(const Scene *scene,
+Base *BKE_collection_or_layer_objects(const Main &bmain,
+                                      const Scene *scene,
                                       ViewLayer *view_layer,
                                       Collection *collection);
 
 /* Editing. */
 
 /**
- * Return Scene Collection for a given index.
- *
- * The index is calculated from top to bottom counting the children before the siblings.
+ * Return Scene Collection for a given session_uid.
  */
-Collection *BKE_collection_from_index(Scene *scene, int index);
+Collection *BKE_collection_from_session_uid(Scene *scene, uint64_t session_uid);
+/**
+ * Return Collection for a given session_uid and its owner Scene.
+ */
+Collection *BKE_collection_from_session_uid(Main *bmain,
+                                            uint64_t session_uid,
+                                            Scene **r_scene = nullptr);
+
 /**
  * The automatic/fallback name of a new collection.
  */
-void BKE_collection_new_name_get(Collection *collection_parent, char *rname);
+void BKE_collection_new_name_get(Collection *collection_parent,
+                                 char r_name[/*MAX_ID_NAME - 2*/ 256]);
 /**
  * The name to show in the interface.
  */
 const char *BKE_collection_ui_name_get(Collection *collection);
-/**
- * Select all the objects in this Collection (and its nested collections) for this ViewLayer.
- * Return true if any object was selected.
- */
-bool BKE_collection_objects_select(const Scene *scene,
-                                   ViewLayer *view_layer,
-                                   Collection *collection,
-                                   bool deselect);
 
 /* Collection children */
 
@@ -354,7 +438,7 @@ using BKE_scene_collections_Cb = void (*)(Collection *ob, void *data);
     int _base_flag = (_mode == DAG_EVAL_VIEWPORT) ? BASE_ENABLED_VIEWPORT : BASE_ENABLED_RENDER; \
     int _object_visibility_flag = (_mode == DAG_EVAL_VIEWPORT) ? OB_HIDE_VIEWPORT : \
                                                                  OB_HIDE_RENDER; \
-    int _base_id = 0; \
+    [[maybe_unused]] int _base_id = 0; \
     for (Base *_base = static_cast<Base *>(BKE_collection_object_cache_get(_collection).first); \
          _base; \
          _base = _base->next, _base_id++) \
@@ -401,6 +485,7 @@ void BKE_scene_objects_iterator_end(BLI_Iterator *iter);
  * \note The object->flag is tested against flag.
  */
 struct SceneObjectsIteratorExData {
+  Main *bmain;
   Scene *scene;
   int flag;
   void *iter_data;
@@ -411,13 +496,13 @@ void BKE_scene_objects_iterator_next_ex(BLI_Iterator *iter);
 void BKE_scene_objects_iterator_end_ex(BLI_Iterator *iter);
 
 /**
- * Generate a new #GSet (or extend given `objects_gset` if not NULL) with all objects referenced by
+ * Generate a new #Set (or extend given `objects_set` if not NULL) with all objects referenced by
  * all collections of given `scene`.
  *
  * \note This will include objects without a base currently
  * (because they would belong to excluded collections only e.g.).
  */
-GSet *BKE_scene_objects_as_gset(Scene *scene, GSet *objects_gset);
+Set<Object *> *BKE_scene_objects_as_set(Scene *scene, Set<Object *> *objects_set);
 
 #define FOREACH_SCENE_COLLECTION_BEGIN(scene, _instance) \
   ITER_BEGIN (BKE_scene_collections_iterator_begin, \
@@ -465,3 +550,5 @@ GSet *BKE_scene_objects_as_gset(Scene *scene, GSet *objects_gset);
               _instance)
 
 #define FOREACH_SCENE_OBJECT_END ITER_END
+
+}  // namespace blender

@@ -6,6 +6,12 @@
 #       If you're doing changes in this file, please update template
 #       in that script too
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  # Suppress these warnings until the issue is addressed as this adds noise.
+  # Use `-Wno-deprecated-copy` as this may have been enabled via `-Wextra`.
+  add_cxx_flag_per_config("-Wno-deprecated-copy")
+endif()
+
 set(INC
   .
 )
@@ -25,8 +31,6 @@ if(WITH_LIBMV)
   if(WIN32)
     add_definitions(-D_USE_MATH_DEFINES)
   endif()
-  add_definitions(${GFLAGS_DEFINES})
-  add_definitions(${GLOG_DEFINES})
   add_definitions(-DLIBMV_GFLAGS_NAMESPACE=${GFLAGS_NAMESPACE})
 
   if(WITH_TBB)
@@ -34,27 +38,21 @@ if(WITH_LIBMV)
   endif()
 
   list(APPEND INC
-    ${GFLAGS_INCLUDE_DIRS}
-    ${GLOG_INCLUDE_DIRS}
     ../guardedalloc
   )
 
   list(APPEND INC_SYS
-    ${PNG_INCLUDE_DIRS}
-    ${ZLIB_INCLUDE_DIRS}
-    ../../extern/ceres/include
-    ../../extern/ceres/config
   )
 
   list(APPEND LIB
-    extern_ceres
+    PRIVATE bf::dependencies::optional::ceres
     PUBLIC bf::dependencies::optional::tbb
-
-    ${GLOG_LIBRARIES}
-    ${GFLAGS_LIBRARIES}
-    ${PNG_LIBRARIES}
+    PRIVATE bf::dependencies::zlib
 
     PRIVATE bf::dependencies::eigen
+    PRIVATE bf::dependencies::gflags
+    PRIVATE bf::dependencies::glog
+    PRIVATE bf::dependencies::png
   )
 
   add_definitions(

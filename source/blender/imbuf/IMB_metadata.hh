@@ -10,6 +10,8 @@
 
 #include <cstddef>
 
+namespace blender {
+
 struct IDProperty;
 struct ImBuf;
 
@@ -37,7 +39,7 @@ void IMB_metadata_free(IDProperty *metadata);
  * \param key: the key of the field
  * \param value: the data in the field, first one found with key is returned,
  * memory has to be allocated by user.
- * \param len: length of value buffer allocated by user.
+ * \param value_maxncpy: length of value buffer allocated by user.
  * \return 1 (true) if metadata is present and value for the key found, 0 (false) otherwise.
  */
 bool IMB_metadata_get_field(const IDProperty *metadata,
@@ -57,6 +59,8 @@ void IMB_metadata_set_field(IDProperty *metadata, const char *key, const char *v
 
 void IMB_metadata_copy(ImBuf *ibuf_dst, const ImBuf *ibuf_src);
 
-/* Invoke callback for every value stored in the metadata. */
+/** Invoke callback for every value stored in the metadata. */
 using IMBMetadataForeachCb = void (*)(const char *field, const char *value, void *userdata);
 void IMB_metadata_foreach(const ImBuf *ibuf, IMBMetadataForeachCb callback, void *userdata);
+
+}  // namespace blender

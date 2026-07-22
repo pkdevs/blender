@@ -43,7 +43,7 @@ class Particles : Overlay {
  public:
   void begin_sync(Resources &res, const State &state) final
   {
-    enabled_ = state.is_space_v3d();
+    enabled_ = state.is_space_v3d() && !state.skip_particles;
 
     if (!enabled_) {
       return;
@@ -99,7 +99,7 @@ class Particles : Overlay {
         auto &sub = pass.sub("Dots");
         sub.shader_set(res.shaders->particle_edit_vert.get());
         sub.bind_texture("weight_tx", res.weight_ramp_tx);
-        sub.push_constant("use_weight", show_weight_);
+        sub.push_constant("use_weight", false);
         sub.push_constant("use_grease_pencil", false);
         edit_vert_ps_ = &sub;
       }
@@ -107,7 +107,7 @@ class Particles : Overlay {
         auto &sub = pass.sub("Edges");
         sub.shader_set(res.shaders->particle_edit_edge.get());
         sub.bind_texture("weight_tx", res.weight_ramp_tx);
-        sub.push_constant("use_weight", false);
+        sub.push_constant("use_weight", show_weight_);
         sub.push_constant("use_grease_pencil", false);
         edit_edge_ps_ = &sub;
       }
@@ -163,8 +163,8 @@ class Particles : Overlay {
 
     Object *ob = ob_ref.object;
 
-    ResourceHandle handle = manager.resource_handle_for_psys(
-        ob_ref, DRW_particles_dupli_matrix_get(ob_ref));
+    ResourceHandleRange handle = manager.resource_handle_for_psys(ob_ref,
+                                                                  ob_ref.particles_matrix());
 
     {
       gpu::Batch *geom = DRW_cache_particles_get_edit_strands(ob, psys, edit, show_weight_);
@@ -191,18 +191,26 @@ class Particles : Overlay {
 
     Object *ob = ob_ref.object;
 
-    ResourceHandle handle = {0};
+    ResourceHandleRange handle = {};
 
     for (ParticleSystem *psys : ListBaseWrapper<ParticleSystem>(&ob->particlesystem)) {
       if (!DRW_object_is_visible_psys_in_active_context(ob, psys)) {
         continue;
       }
 
-      if (handle.raw == 0u) {
-        handle = manager.resource_handle_for_psys(ob_ref, DRW_particles_dupli_matrix_get(ob_ref));
+      const ParticleSettings *part = psys->part;
+      const int draw_as = (part->draw_as == PART_DRAW_REND) ? part->ren_as : part->draw_as;
+
+      if (ELEM(draw_as, PART_DRAW_NOT, PART_DRAW_OB, PART_DRAW_GR)) {
+        /* Skip early, before we try to create a handle, since we can't create these for ObjectRefs
+         * with instances. Objects and groups are realized by the Depsgraph as regular instances
+         * and therefore support instancing optimizations, but don't need to be handled here. */
+        continue;
       }
 
-      const ParticleSettings *part = psys->part;
+      if (!handle.is_valid()) {
+        handle = manager.resource_handle_for_psys(ob_ref, ob_ref.particles_matrix());
+      }
 
       auto set_color = [&](PassMain::Sub &sub) {
         /* NOTE(fclem): Is color even useful in our modern context? */
@@ -210,8 +218,7 @@ class Particles : Overlay {
         sub.push_constant("ucolor", float4(ma ? float3(&ma->r) : float3(0.6f), part->draw_size));
       };
 
-      blender::gpu::Batch *geom = nullptr;
-      const int draw_as = (part->draw_as == PART_DRAW_REND) ? part->ren_as : part->draw_as;
+      gpu::Batch *geom = nullptr;
       switch (draw_as) {
         case PART_DRAW_PATH:
           if ((state.is_wireframe_mode == false) && (part->draw_as == PART_DRAW_REND)) {

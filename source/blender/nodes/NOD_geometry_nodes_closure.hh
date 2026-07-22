@@ -4,32 +4,17 @@
 
 #pragma once
 
-#include "BKE_node.hh"
+#include "BKE_node_socket_value.hh"
 
 #include "NOD_geometry_nodes_closure_fwd.hh"
 #include "NOD_geometry_nodes_closure_location.hh"
-#include "NOD_socket_interface_key.hh"
+#include "NOD_geometry_nodes_closure_signature.hh"
 
 #include "BLI_resource_scope.hh"
 
 #include "FN_lazy_function.hh"
 
 namespace blender::nodes {
-
-/** Describes the names and types of the inputs and outputs of a closure. */
-class ClosureSignature {
- public:
-  struct Item {
-    SocketInterfaceKey key;
-    const bke::bNodeSocketType *type = nullptr;
-  };
-
-  Vector<Item> inputs;
-  Vector<Item> outputs;
-
-  std::optional<int> find_input_index(const SocketInterfaceKey &key) const;
-  std::optional<int> find_output_index(const SocketInterfaceKey &key) const;
-};
 
 /**
  * Describes the meaning of the various inputs and outputs of the lazy-function that's contained
@@ -77,23 +62,26 @@ class Closure : public ImplicitSharingMixin {
   std::unique_ptr<ResourceScope> scope_;
   const fn::lazy_function::LazyFunction &function_;
   ClosureFunctionIndices indices_;
-  Vector<const void *> default_input_values_;
+  Vector<bke::SocketValueVariant> default_input_values_;
+  Vector<const bke::SocketValueVariant *> captured_values_;
 
  public:
   Closure(std::shared_ptr<ClosureSignature> signature,
           std::unique_ptr<ResourceScope> scope,
           const fn::lazy_function::LazyFunction &function,
           ClosureFunctionIndices indices,
-          Vector<const void *> default_input_values,
+          Vector<bke::SocketValueVariant> default_input_values,
           std::optional<ClosureSourceLocation> source_location,
-          std::shared_ptr<ClosureEvalLog> eval_log)
+          std::shared_ptr<ClosureEvalLog> eval_log,
+          Vector<const bke::SocketValueVariant *> captured_values)
       : signature_(signature),
         source_location_(source_location),
         eval_log_(eval_log),
         scope_(std::move(scope)),
         function_(function),
         indices_(indices),
-        default_input_values_(std::move(default_input_values))
+        default_input_values_(std::move(default_input_values)),
+        captured_values_(std::move(captured_values))
   {
   }
 
@@ -122,9 +110,19 @@ class Closure : public ImplicitSharingMixin {
     return eval_log_;
   }
 
-  const void *default_input_value(const int index) const
+  const bke::SocketValueVariant &default_input_value(const int index) const
   {
     return default_input_values_[index];
+  }
+
+  Span<bke::SocketValueVariant> default_input_values() const
+  {
+    return default_input_values_;
+  }
+
+  Span<const bke::SocketValueVariant *> captured_values() const
+  {
+    return captured_values_;
   }
 
   void delete_self() override

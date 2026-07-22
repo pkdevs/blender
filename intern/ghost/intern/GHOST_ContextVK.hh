@@ -18,6 +18,7 @@
 #  include "GHOST_SystemWin32.hh"
 #elif defined(__APPLE__)
 #  include "GHOST_SystemCocoa.hh"
+#  include <vulkan/vulkan_metal.h>
 #else
 #  ifdef WITH_GHOST_X11
 #    include "GHOST_SystemX11.hh"
@@ -33,7 +34,13 @@
 #  endif
 #endif
 
+#include <map>
+#include <optional>
 #include <vector>
+
+namespace blender {
+class StringRefNull;
+}
 
 #ifndef GHOST_OPENGL_VK_CONTEXT_FLAGS
 /* leave as convenience define for the future */
@@ -43,6 +50,9 @@
 #ifndef GHOST_OPENGL_VK_RESET_NOTIFICATION_STRATEGY
 #  define GHOST_OPENGL_VK_RESET_NOTIFICATION_STRATEGY 0
 #endif
+namespace volk {
+struct VolkDeviceTable;
+}
 
 enum GHOST_TVulkanPlatformType {
   GHOST_kVulkanPlatformHeadless = 0,
@@ -60,15 +70,21 @@ struct GHOST_ContextVK_WindowInfo {
 
 struct GHOST_FrameDiscard {
   std::vector<VkSwapchainKHR> swapchains;
+  std::vector<VkSemaphore> semaphores;
 
-  void destroy(VkDevice vk_device)
-  {
-    while (!swapchains.empty()) {
-      VkSwapchainKHR vk_swapchain = swapchains.back();
-      swapchains.pop_back();
-      vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
-    }
-  }
+  void destroy(VkDevice vk_device, const volk::VolkDeviceTable &functions);
+};
+
+struct GHOST_SwapchainImage {
+  /** Swap-chain image (owned by the swapchain). */
+  VkImage vk_image = VK_NULL_HANDLE;
+
+  /**
+   * Semaphore for presenting; being signaled when the swap-chain image is ready to be presented.
+   */
+  VkSemaphore present_semaphore = VK_NULL_HANDLE;
+
+  void destroy(VkDevice vk_device, const volk::VolkDeviceTable &functions);
 };
 
 struct GHOST_Frame {
@@ -77,35 +93,13 @@ struct GHOST_Frame {
    * frame can acquire a new image and the semaphores can be reused.
    */
   VkFence submission_fence = VK_NULL_HANDLE;
-  /** Semaphore for acquiring; being signaled when the swap chain image is ready to be updated. */
+  /** Semaphore for acquiring; being signaled when the swap-chain image is ready to be updated. */
   VkSemaphore acquire_semaphore = VK_NULL_HANDLE;
-  /**
-   * Semaphore for presenting; being signaled when the swap chain image is ready to be presented.
-   */
-  VkSemaphore present_semaphore = VK_NULL_HANDLE;
 
   GHOST_FrameDiscard discard_pile;
 
-  void destroy(VkDevice vk_device)
-  {
-    vkDestroyFence(vk_device, submission_fence, nullptr);
-    submission_fence = VK_NULL_HANDLE;
-    vkDestroySemaphore(vk_device, acquire_semaphore, nullptr);
-    acquire_semaphore = VK_NULL_HANDLE;
-    vkDestroySemaphore(vk_device, present_semaphore, nullptr);
-    present_semaphore = VK_NULL_HANDLE;
-    discard_pile.destroy(vk_device);
-  }
+  void destroy(VkDevice vk_device, const volk::VolkDeviceTable &functions);
 };
-
-/**
- * The number of frames that GHOST manages.
- *
- * This must be kept in sync with any frame-aligned resources in the
- * Vulkan backend. Notably, VKThreadData's resource_pool_count must
- * match this value.
- */
-constexpr static uint32_t GHOST_FRAMES_IN_FLIGHT = 3;
 
 class GHOST_ContextVK : public GHOST_Context {
   friend class GHOST_XrGraphicsBindingVulkan;
@@ -115,7 +109,7 @@ class GHOST_ContextVK : public GHOST_Context {
   /**
    * Constructor.
    */
-  GHOST_ContextVK(bool stereoVisual,
+  GHOST_ContextVK(const GHOST_ContextParams &context_params,
 #ifdef _WIN32
                   HWND hwnd,
 #elif defined(__APPLE__)
@@ -133,19 +127,21 @@ class GHOST_ContextVK : public GHOST_Context {
 #endif
                   int contextMajorVersion,
                   int contextMinorVersion,
-                  int debug,
-                  const GHOST_GPUDevice &preferred_device);
+                  const GHOST_GPUDevice &preferred_device,
+                  const GHOST_WindowHDRInfo *hdr_info_ = nullptr);
 
   /**
    * Destructor.
    */
   ~GHOST_ContextVK() override;
 
+  /** \copydoc #GHOST_IContext::swapBuffersAcquire */
+  GHOST_TSuccess swapBufferAcquire() override;
   /**
    * Swaps front and back buffers of a window.
    * \return  A boolean success indicator.
    */
-  GHOST_TSuccess swapBuffers() override;
+  GHOST_TSuccess swapBufferRelease() override;
 
   /**
    * Activates the drawing context of this window.
@@ -181,11 +177,21 @@ class GHOST_ContextVK : public GHOST_Context {
   GHOST_TSuccess getVulkanSwapChainFormat(GHOST_VulkanSwapChainData *r_swap_chain_data) override;
 
   GHOST_TSuccess setVulkanSwapBuffersCallbacks(
-      std::function<void(const GHOST_VulkanSwapChainData *)> swap_buffers_pre_callback,
-      std::function<void(void)> swap_buffers_post_callback,
+      std::function<void(const GHOST_VulkanSwapChainData *, bool)> swap_buffer_draw_callback,
+      std::function<void(void)> swap_buffer_acquired_callback,
       std::function<void(GHOST_VulkanOpenXRData *)> openxr_acquire_framebuffer_image_callback,
       std::function<void(GHOST_VulkanOpenXRData *)> openxr_release_framebuffer_image_callback)
       override;
+
+#ifdef WITH_GHOST_WAYLAND
+  /**
+   * \brief Check if the active driver supports wayland color management.
+   *
+   * NVIDIA driver before 595 don't support wayland color management protocol as expected resulting
+   * in to bright output.
+   */
+  static GHOST_TSuccess supportsWaylandColorManagement();
+#endif
 
   /**
    * Sets the swap interval for `swapBuffers`.
@@ -199,10 +205,10 @@ class GHOST_ContextVK : public GHOST_Context {
 
   /**
    * Gets the current swap interval for swapBuffers.
-   * \param intervalOut: Variable to store the swap interval if it can be read.
+   * \param interval_out: Variable to store the swap interval if it can be read.
    * \return Whether the swap interval can be read.
    */
-  GHOST_TSuccess getSwapInterval(int & /*intervalOut*/) override
+  GHOST_TSuccess getSwapInterval(int & /*interval_out*/) override
   {
     return GHOST_kFailure;
   };
@@ -217,49 +223,76 @@ class GHOST_ContextVK : public GHOST_Context {
     return true;
   }
 
+  /**
+   * \brief Is the given extension name enabled on instance level?
+   *
+   * \returns false, when extension isn't enabled on instance level or when no instance exists.
+   * Will return true when instance exists and extension name has been enabled on the instance.
+   */
+  static bool is_instance_extension_enabled(blender::StringRefNull extension_name);
+
+  /**
+   * \brief Is the given extension name enabled on device level?
+   *
+   * \returns false, when extension isn't enabled on device level or when no instance or device
+   * exists. Will return true when instance exists and extension name has been enabled on the
+   * instance.
+   */
+  static bool is_device_extension_enabled(blender::StringRefNull extension_name);
+
  private:
 #ifdef _WIN32
-  HWND m_hwnd;
+  HWND hwnd_;
 #elif defined(__APPLE__)
-  CAMetalLayer *m_metal_layer;
+  /* Is CAMetalLayer* */
+  void *metal_layer_;
 #else /* Linux */
-  GHOST_TVulkanPlatformType m_platform;
+  GHOST_TVulkanPlatformType platform_;
   /* X11 */
-  Display *m_display;
-  Window m_window;
+  Display *display_;
+  Window window_;
   /* Wayland */
-  wl_surface *m_wayland_surface;
-  wl_display *m_wayland_display;
-  const GHOST_ContextVK_WindowInfo *m_wayland_window_info;
+  wl_surface *wayland_surface_;
+  wl_display *wayland_display_;
+  const GHOST_ContextVK_WindowInfo *wayland_window_info_;
 #endif
 
-  const int m_context_major_version;
-  const int m_context_minor_version;
-  const int m_debug;
-  const GHOST_GPUDevice m_preferred_device;
+  const int context_major_version_;
+  const int context_minor_version_;
+  const GHOST_GPUDevice preferred_device_;
 
-  VkQueue m_graphic_queue;
-  VkQueue m_present_queue;
+  /* Optional HDR info updated by window. */
+  const GHOST_WindowHDRInfo *hdr_info_;
 
   /* For display only. */
-  VkSurfaceKHR m_surface;
-  VkSwapchainKHR m_swapchain;
-  std::vector<VkImage> m_swapchain_images;
-  std::vector<GHOST_Frame> m_frame_data;
-  uint64_t m_render_frame;
-  uint64_t m_image_count;
+  VkSurfaceKHR surface_;
+  VkSwapchainKHR swapchain_;
+  std::vector<GHOST_SwapchainImage> swapchain_images_;
+  std::vector<GHOST_Frame> frame_data_;
+  uint64_t render_frame_;
+  uint64_t image_count_;
 
-  VkExtent2D m_render_extent;
-  VkExtent2D m_render_extent_min;
-  VkSurfaceFormatKHR m_surface_format;
+  VkExtent2D render_extent_;
+  VkExtent2D render_extent_min_;
+  VkSurfaceFormatKHR surface_format_;
+  bool use_hdr_swapchain_;
 
-  std::function<void(const GHOST_VulkanSwapChainData *)> swap_buffers_pre_callback_;
-  std::function<void(void)> swap_buffers_post_callback_;
+  std::optional<uint32_t> acquired_swapchain_image_index_;
+
+  std::function<void(const GHOST_VulkanSwapChainData *, bool)> swap_buffer_draw_callback_;
+  std::function<void(void)> swap_buffer_acquired_callback_;
   std::function<void(GHOST_VulkanOpenXRData *)> openxr_acquire_framebuffer_image_callback_;
   std::function<void(GHOST_VulkanOpenXRData *)> openxr_release_framebuffer_image_callback_;
 
+  std::vector<VkFence> fence_pile_;
+  std::map<VkSwapchainKHR, std::vector<VkFence>> present_fences_;
+
   const char *getPlatformSpecificSurfaceExtension() const;
-  GHOST_TSuccess recreateSwapchain();
+  GHOST_TSuccess recreateSwapchain(bool use_hdr_swapchain);
   GHOST_TSuccess initializeFrameData();
   GHOST_TSuccess destroySwapchain();
+
+  VkFence getFence();
+  void setPresentFence(VkSwapchainKHR swapchain, VkFence fence);
+  void destroySwapchainPresentFences(VkSwapchainKHR swapchain);
 };

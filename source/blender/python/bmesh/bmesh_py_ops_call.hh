@@ -10,6 +10,8 @@
 
 #include <Python.h>
 
+namespace blender {
+
 struct BPy_BMeshOpFunc {
   PyObject_HEAD /* Required Python macro. */
   const char *opname;
@@ -18,4 +20,6 @@ struct BPy_BMeshOpFunc {
 /**
  * This is the `__call__` for `bmesh.ops.xxx()`.
  */
-PyObject *BPy_BMO_call(BPy_BMeshOpFunc *self, PyObject *args, PyObject *kw);
+[[nodiscard]] PyObject *BPy_BMO_call(BPy_BMeshOpFunc *self, PyObject *args, PyObject *kw);
+
+}  // namespace blender

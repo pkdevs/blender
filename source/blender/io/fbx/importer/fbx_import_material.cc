@@ -15,12 +15,14 @@
 
 #include "BLI_math_vector.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_material_types.h"
 
 #include "NOD_shader.h"
 
+#include "IMB_colormanagement.hh"
 #include "IMB_imbuf_types.hh"
 
 #include "fbx_import_material.hh"
@@ -57,15 +59,15 @@ static void link_sockets(bNodeTree *ntree,
                          bNode *to_node,
                          const char *to_node_id)
 {
-  bNodeSocket *from_sock{bke::node_find_socket(*from_node, SOCK_OUT, from_node_id)};
-  bNodeSocket *to_sock{bke::node_find_socket(*to_node, SOCK_IN, to_node_id)};
+  bNodeSocket *from_sock{bke::node_find_socket(*from_node, SOCK_OUT, UString(from_node_id))};
+  bNodeSocket *to_sock{bke::node_find_socket(*to_node, SOCK_IN, UString(to_node_id))};
   BLI_assert(from_sock && to_sock);
   bke::node_add_link(*ntree, *from_node, *from_sock, *to_node, *to_sock);
 }
 
 static void set_socket_float(const char *socket_id, const float value, bNode *node)
 {
-  bNodeSocket *socket{bke::node_find_socket(*node, SOCK_IN, socket_id)};
+  bNodeSocket *socket{bke::node_find_socket(*node, SOCK_IN, UString(socket_id))};
   BLI_assert(socket && socket->type == SOCK_FLOAT);
   bNodeSocketValueFloat *dst = socket->default_value_typed<bNodeSocketValueFloat>();
   dst->value = value;
@@ -73,7 +75,7 @@ static void set_socket_float(const char *socket_id, const float value, bNode *no
 
 static void set_socket_rgb(const char *socket_id, float vr, float vg, float vb, bNode *node)
 {
-  bNodeSocket *socket{bke::node_find_socket(*node, SOCK_IN, socket_id)};
+  bNodeSocket *socket{bke::node_find_socket(*node, SOCK_IN, UString(socket_id))};
   BLI_assert(socket && socket->type == SOCK_RGBA);
   bNodeSocketValueRGBA *dst = socket->default_value_typed<bNodeSocketValueRGBA>();
   dst->value[0] = vr;
@@ -84,7 +86,7 @@ static void set_socket_rgb(const char *socket_id, float vr, float vg, float vb, 
 
 static void set_socket_vector(const char *socket_id, float vx, float vy, float vz, bNode *node)
 {
-  bNodeSocket *socket{bke::node_find_socket(*node, SOCK_IN, socket_id)};
+  bNodeSocket *socket{bke::node_find_socket(*node, SOCK_IN, UString(socket_id))};
   BLI_assert(socket && socket->type == SOCK_VECTOR);
   bNodeSocketValueVector *dst = socket->default_value_typed<bNodeSocketValueVector>();
   dst->value[0] = vx;
@@ -202,9 +204,13 @@ static Image *create_placeholder_image(Main *bmain, const std::string &path)
   const float color[4] = {0, 0, 0, 1};
   const char *name = BLI_path_basename(path.c_str());
   Image *image = BKE_image_add_generated(
-      bmain, 32, 32, name, 24, false, IMA_GENTYPE_BLANK, color, false, false, false);
+      bmain, 1, 1, name, 24, false, IMA_GENTYPE_BLANK, color, false, false, false);
   STRNCPY(image->filepath, path.c_str());
+
+  /* Ensure that we are not marked as a generated image and clear any buffers created so far. */
   image->source = IMA_SRC_FILE;
+  image->type = IMA_TYPE_IMAGE;
+  BKE_image_free_buffers(image);
   return image;
 }
 
@@ -212,14 +218,31 @@ static Image *load_texture_image(Main *bmain, const std::string &file_dir, const
 {
   /* Check with filename directly. */
   Image *image = BKE_image_load_exists(bmain, tex.filename.data);
+  /* Try loading as a relative path. */
   if (image == nullptr) {
-    /* Try loading as a relative path. */
     std::string path = file_dir + "/" + tex.filename.data;
     image = BKE_image_load_exists(bmain, path.c_str());
-    if (image == nullptr) {
-      /* Try loading with absolute path from FBX. */
-      image = BKE_image_load_exists(bmain, tex.absolute_filename.data);
-    }
+  }
+  /* Try loading with absolute path from FBX. */
+  if (image == nullptr) {
+    image = BKE_image_load_exists(bmain, tex.absolute_filename.data);
+  }
+
+  /* If still not found, try taking progressively longer parts of the absolute path,
+   * as relative to the file. */
+  if (image == nullptr) {
+    size_t pos = tex.absolute_filename.length;
+    do {
+      const char *parent_path = BLI_path_parent_dir_end(tex.absolute_filename.data, pos);
+      if (parent_path == nullptr) {
+        break;
+      }
+      char path[FILE_MAX];
+      BLI_path_join(path, sizeof(path), file_dir.c_str(), parent_path);
+      BLI_path_normalize(path);
+      image = BKE_image_load_exists(bmain, path);
+      pos = parent_path - tex.absolute_filename.data;
+    } while (image == nullptr);
   }
 
   /* Create dummy/placeholder image. */
@@ -230,7 +253,7 @@ static Image *load_texture_image(Main *bmain, const std::string &file_dir, const
   /* Use embedded data for this image, if we haven't done that yet. */
   if (tex.content.size > 0 && (image == nullptr || !BKE_image_has_packedfile(image))) {
     BKE_image_free_buffers(image); /* Free cached placeholder images. */
-    char *data_dup = MEM_malloc_arrayN<char>(tex.content.size, __func__);
+    char *data_dup = MEM_new_array_uninitialized<char>(tex.content.size, __func__);
     memcpy(data_dup, tex.content.data, tex.content.size);
     BKE_image_packfiles_from_mem(nullptr, image, data_dup, tex.content.size);
 
@@ -300,6 +323,14 @@ static void add_image_texture(Main *bmain,
   Image *image = load_texture_image(bmain, file_dir, *ftex);
   BLI_assert(image != nullptr);
 
+  /* Set "non-color" color space for all "data" textures. */
+  if (!STR_ELEM(
+          socket_name, "Base Color", "Specular Tint", "Sheen Tint", "Coat Tint", "Emission Color"))
+  {
+    STRNCPY_UTF8(image->colorspace_settings.name,
+                 IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DATA));
+  }
+
   /* Add texture node and any UV transformations if needed. */
   bNode *image_node = add_node(ntree, SH_NODE_TEX_IMAGE, node_locx_image, node_locy);
   BLI_assert(image_node);
@@ -314,7 +345,7 @@ static void add_image_texture(Main *bmain,
 
   /* UV transform. */
   if (ftex->has_uv_transform) {
-    /*@TODO: which UV set to use. */
+    /* TODO: which UV set to use. */
     bNode *uvmap = add_node(ntree, SH_NODE_UVMAP, node_locx_texcoord, node_locy);
     bNode *mapping = add_node(ntree, SH_NODE_MAPPING, node_locx_mapping, node_locy);
     mapping->custom1 = TEXMAP_TYPE_TEXTURE;
@@ -355,7 +386,7 @@ static void add_image_texture(Main *bmain,
       /* Link base color alpha (if we have one) to output alpha. */
       void *lock;
       ImBuf *ibuf = BKE_image_acquire_ibuf(image, nullptr, &lock);
-      bool has_alpha = ibuf != nullptr && ibuf->planes == R_IMF_PLANES_RGBA;
+      bool has_alpha = ibuf != nullptr && ibuf->can_contain_alpha();
       BKE_image_release_ibuf(image, ibuf, lock);
 
       if (has_alpha) {
@@ -418,9 +449,7 @@ Material *import_material(Main *bmain, const std::string &base_dir, const ufbx_m
   Material *mat = BKE_material_add(bmain, fmat.name.data);
   id_us_min(&mat->id);
 
-  mat->use_nodes = true;
-  bNodeTree *ntree = blender::bke::node_tree_add_tree_embedded(
-      nullptr, &mat->id, "Shader Nodetree", ntreeType_Shader->idname);
+  bNodeTree *ntree = mat->nodetree;
   bNode *bsdf = add_node(ntree, SH_NODE_BSDF_PRINCIPLED, node_locx_bsdf, node_locy_top);
   bNode *output = add_node(ntree, SH_NODE_OUTPUT_MATERIAL, node_locx_output, node_locy_top);
   set_bsdf_socket_values(bsdf, mat, fmat);

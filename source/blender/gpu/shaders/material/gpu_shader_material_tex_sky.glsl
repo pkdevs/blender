@@ -53,6 +53,7 @@ float3 xyY_to_xyz(float x, float y, float Y)
   return float3(X, Y, Z);
 }
 
+[[node]]
 void node_tex_sky_preetham(float3 co,
                            float4 config_Y03,
                            float config_Y4,
@@ -65,7 +66,7 @@ void node_tex_sky_preetham(float3 co,
                            float3 xyz_to_r,
                            float3 xyz_to_g,
                            float3 xyz_to_b,
-                           out float4 color)
+                           float4 &color)
 {
   /* convert vector to spherical coordinates */
   float3 spherical = sky_spherical_coordinates(co);
@@ -108,6 +109,7 @@ float sky_radiance_hosekwilkie(
           config47[3] * zenith);
 }
 
+[[node]]
 void node_tex_sky_hosekwilkie(float3 co,
                               float4 config_x03,
                               float4 config_x47,
@@ -121,7 +123,7 @@ void node_tex_sky_hosekwilkie(float3 co,
                               float3 xyz_to_r,
                               float3 xyz_to_g,
                               float3 xyz_to_b,
-                              out float4 color)
+                              float4 &color)
 {
   /* convert vector to spherical coordinates */
   float3 spherical = sky_spherical_coordinates(co);
@@ -148,48 +150,29 @@ void node_tex_sky_hosekwilkie(float3 co,
   color = float4(dot(xyz_to_r, xyz), dot(xyz_to_g, xyz), dot(xyz_to_b, xyz), 1);
 }
 
+[[node]]
 void node_tex_sky_nishita(float3 co,
+                          float sky_type,
                           float sun_rotation,
                           float3 xyz_to_r,
                           float3 xyz_to_g,
                           float3 xyz_to_b,
                           sampler2DArray ima,
                           float layer,
-                          out float4 color)
+                          float4 &color)
 {
   float3 spherical = sky_spherical_coordinates(co);
-
   float3 xyz;
-  if (co.z < -0.4f) {
-    /* too far below the horizon, just return black */
-    color = float4(0, 0, 0, 1);
-  }
-  else {
-    /* evaluate longitudinal position on the map */
-    constexpr float tau = 6.28318530717958647692f;
-    float x = (spherical.y + M_PI + sun_rotation) / tau;
-    if (x > 1.0f) {
-      x -= 1.0f;
-    }
+  float dir_elevation = M_PI_2 - spherical.x;
+  float x = (spherical.y + M_PI + sun_rotation) / (2.0f * M_PI);
+  float fade = 1.0f;
+  float y;
 
-    float fade;
-    float y;
-    if (co.z < 0.0f) {
-      /* we're below the horizon, so extend the map by blending from values at the horizon
-       * to zero according to a cubic falloff */
-      fade = 1.0f + co.z * 2.5f;
-      fade = fade * fade * fade;
-      y = 0.0f;
-    }
-    else {
-      /* we're above the horizon, so compute the lateral position by inverting the remapped
-       * coordinates that are preserve to have more detail near the horizon. */
-      fade = 1.0f;
-      y = sqrt((M_PI_2 - spherical.x) / M_PI_2);
-    }
+  /* Undo the non-linear transformation from the sky LUT. */
+  float dir_elevation_abs = (dir_elevation < 0.0f) ? -dir_elevation : dir_elevation;
+  y = sqrt(dir_elevation_abs / M_PI_2) * sign(dir_elevation) * 0.5f + 0.5f;
 
-    /* look up color in the precomputed map and convert to RGB */
-    xyz = fade * texture(ima, float3(x, y, layer)).rgb;
-    color = float4(dot(xyz_to_r, xyz), dot(xyz_to_g, xyz), dot(xyz_to_b, xyz), 1);
-  }
+  /* Look up color in the precomputed map and convert to RGB. */
+  xyz = fade * texture(ima, float3(x, y, layer)).rgb;
+  color = float4(dot(xyz_to_r, xyz), dot(xyz_to_g, xyz), dot(xyz_to_b, xyz), 1.0f);
 }

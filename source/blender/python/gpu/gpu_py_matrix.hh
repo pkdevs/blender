@@ -10,4 +10,10 @@
 
 #include <Python.h>
 
-PyObject *bpygpu_matrix_init();
+namespace blender {
+
+extern PyTypeObject PyGPUMatrixStackContext_Type;
+
+[[nodiscard]] PyObject *bpygpu_matrix_init();
+
+}  // namespace blender

@@ -41,6 +41,7 @@
 #include "tree_element_rna.hh"
 #include "tree_element_scene_objects.hh"
 #include "tree_element_seq.hh"
+#include "tree_element_shapekey.hh"
 #include "tree_element_view_collection.hh"
 #include "tree_element_view_layer.hh"
 
@@ -203,8 +204,13 @@ std::unique_ptr<AbstractTreeElement> AbstractTreeElement::create_from_type(const
           *static_cast<BoneCollection *>(create_data));
     case TSE_ACTION_SLOT:
       return std::make_unique<TreeElementActionSlot>(
-          legacy_te, *reinterpret_cast<blender::animrig::Slot *>(create_data));
-
+          legacy_te, *reinterpret_cast<animrig::Slot *>(create_data));
+    case TSE_SHAPE_KEY_BLOCK:
+      return std::make_unique<TreeElementShapeKey>(legacy_te,
+                                                   *static_cast<KeyBlock *>(create_data));
+    case TSE_SHAPE_KEY_BASE:
+      return std::make_unique<TreeElementShapeKeyBase>(legacy_te,
+                                                       *reinterpret_cast<Key *>(owner_id));
     default:
       break;
   }
@@ -240,7 +246,7 @@ void AbstractTreeElement::uncollapse_by_default(TreeElement *legacy_te)
   }
 }
 
-TreeElement *AbstractTreeElement::add_element(ListBase *lb,
+TreeElement *AbstractTreeElement::add_element(ListBaseT<TreeElement> *lb,
                                               ID *owner_id,
                                               void *create_data,
                                               TreeElement *parent,
@@ -251,7 +257,7 @@ TreeElement *AbstractTreeElement::add_element(ListBase *lb,
   if (!display_) {
     BLI_assert_msg(false,
                    "Element not registered properly through AbstractTreeDisplay::add_element(), "
-                   "can't expand the tree further");
+                   "cannot expand the tree further");
     return nullptr;
   }
 

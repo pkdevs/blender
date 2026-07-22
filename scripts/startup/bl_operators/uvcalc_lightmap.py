@@ -215,8 +215,10 @@ class prettyface:
                 yspan = y2 - y1
                 for uvco in uv:
                     x, y = uvco
-                    uvco[:] = ((x1 + (x * xspan)),
-                               (y1 + (y * yspan)))
+                    uvco[:] = (
+                        (x1 + (x * xspan)),
+                        (y1 + (y * yspan))
+                    )
 
     def __hash__(self):
         # None unique hash
@@ -598,14 +600,14 @@ class LightMapPack(Operator):
     # Proper solution would be to make undo stack aware of such things,
     # but for now just disable redo. Keep undo here so unwanted changes to uv
     # coords might be undone.
-    # This fixes infinite image creation reported there #30968 (sergey)
+    # NOTE(@sergey): This fixes infinite image creation reported there #30968.
     bl_options = {'UNDO'}
 
     PREF_CONTEXT: bpy.props.EnumProperty(
         name="Selection",
         items=(
-            ('SEL_FACES', "Selected Faces", "Space all UVs evenly"),
-            ('ALL_FACES', "All Faces", "Average space UVs edge length of each loop"),
+            ('SEL_FACES', "Selected Faces", "Pack only selected faces"),
+            ('ALL_FACES', "All Faces", "Pack all faces in the mesh"),
         ),
     )
 

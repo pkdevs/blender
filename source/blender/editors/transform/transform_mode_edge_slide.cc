@@ -6,13 +6,16 @@
  * \ingroup edtransform
  */
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include <algorithm>
+
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_string.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_editmesh.hh"
 #include "BKE_editmesh_bvh.hh"
+#include "BKE_report.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"
@@ -57,6 +60,12 @@ struct EdgeSlideData {
   void update_proj_mat(TransInfo *t, const TransDataContainer *tc)
   {
     ARegion *region = t->region;
+    if (region == nullptr) [[unlikely]] {
+      this->win_half = {1.0f, 1.0f};
+      this->proj_mat = float4x4::identity();
+      return;
+    }
+
     this->win_half = {region->winx / 2.0f, region->winy / 2.0f};
 
     if (t->spacetype == SPACE_VIEW3D) {
@@ -70,7 +79,7 @@ struct EdgeSlideData {
     }
     else {
       const View2D *v2d = static_cast<View2D *>(t->view);
-      UI_view2d_view_to_region_m4(v2d, this->proj_mat.ptr());
+      ui::view2d_view_to_region_m4(v2d, this->proj_mat.ptr());
       this->proj_mat.location()[0] -= this->win_half[0];
       this->proj_mat.location()[1] -= this->win_half[1];
     }
@@ -142,7 +151,7 @@ static void interp_line_v3_v3v3v3(
 
   t_delta = t - t_mid;
   if (t_delta < 0.0f) {
-    if (UNLIKELY(fabsf(t_mid) < FLT_EPSILON)) {
+    if (fabsf(t_mid) < FLT_EPSILON) [[unlikely]] {
       copy_v3_v3(p, v2);
     }
     else {
@@ -153,7 +162,7 @@ static void interp_line_v3_v3v3v3(
     t = t - t_mid;
     t_mid = 1.0f - t_mid;
 
-    if (UNLIKELY(fabsf(t_mid) < FLT_EPSILON)) {
+    if (fabsf(t_mid) < FLT_EPSILON) [[unlikely]] {
       copy_v3_v3(p, v3);
     }
     else {
@@ -165,7 +174,7 @@ static void interp_line_v3_v3v3v3(
 static void edge_slide_data_init_mval(MouseInput *mi, EdgeSlideData *sld, float *mval_dir)
 {
   /* Possible all of the edge loops are pointing directly at the view. */
-  if (UNLIKELY(len_squared_v2(mval_dir) < 0.1f)) {
+  if (len_squared_v2(mval_dir) < 0.1f) [[unlikely]] {
     mval_dir[0] = 0.0f;
     mval_dir[1] = 100.0f;
   }
@@ -277,9 +286,9 @@ static void calcEdgeSlide_mval_range(TransInfo *t,
   float *loop_maxdist = nullptr;
 
   if (use_calc_direction) {
-    loop_dir = MEM_calloc_arrayN<float2>(loop_nr, "sv loop_dir");
-    loop_maxdist = MEM_malloc_arrayN<float>(loop_nr, "sv loop_maxdist");
-    copy_vn_fl(loop_maxdist, loop_nr, FLT_MAX);
+    loop_dir = MEM_new_array_zeroed<float2>(loop_nr, "sv loop_dir");
+    loop_maxdist = MEM_new_array_uninitialized<float>(loop_nr, "sv loop_maxdist");
+    std::fill_n(loop_maxdist, loop_nr, FLT_MAX);
   }
 
   for (int i : sld->sv.index_range()) {
@@ -326,8 +335,8 @@ static void calcEdgeSlide_mval_range(TransInfo *t,
       }
     }
 
-    MEM_freeN(loop_dir);
-    MEM_freeN(loop_maxdist);
+    MEM_delete(loop_dir);
+    MEM_delete(loop_maxdist);
   }
 
   edge_slide_data_init_mval(&t->mouse, sld, mval_dir);
@@ -460,7 +469,7 @@ static void drawEdgeSlide(TransInfo *t)
   const EdgeSlideParams *slp = static_cast<const EdgeSlideParams *>(t->custom.mode.data);
   const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
 
-  const float line_size = UI_GetThemeValuef(TH_OUTLINE_WIDTH) + 0.5f;
+  const float line_size = ui::theme::get_value_f(TH_OUTLINE_WIDTH) + 0.5f;
 
   GPU_depth_test(GPU_DEPTH_NONE);
 
@@ -471,7 +480,7 @@ static void drawEdgeSlide(TransInfo *t)
     GPU_matrix_mul(TRANS_DATA_CONTAINER_FIRST_OK(t)->obedit->object_to_world().ptr());
   }
 
-  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -482,7 +491,7 @@ static void drawEdgeSlide(TransInfo *t)
     /* Even mode. */
     float co_a[3], co_b[3], co_mark[3];
     const float fac = (slp->perc + 1.0f) / 2.0f;
-    const float ctrl_size = UI_GetThemeValuef(TH_FACEDOT_SIZE) + 1.5f;
+    const float ctrl_size = ui::theme::get_value_f(TH_FACEDOT_SIZE) + 1.5f;
     const float guide_size = ctrl_size - 0.5f;
     const int alpha_shade = -30;
 
@@ -501,7 +510,9 @@ static void drawEdgeSlide(TransInfo *t)
       immVertex3fv(pos, curr_sv_co_orig);
     }
     immEnd();
+    immUnbindProgram();
 
+    immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
     {
       float *co_test = nullptr;
       if (slp->flipped) {
@@ -792,14 +803,14 @@ static void applyEdgeSlide(TransInfo *t)
   t->values_final[0] = final;
 
   /* Header string. */
-  ofs += BLI_strncpy_rlen(str + ofs, RPT_("Edge Slide: "), sizeof(str) - ofs);
+  ofs += BLI_strncpy_utf8_rlen(str + ofs, RPT_("Edge Slide: "), sizeof(str) - ofs);
   if (hasNumInput(&t->num)) {
     char c[NUM_STR_REP_LEN];
     outputNumInput(&(t->num), c, t->scene->unit);
-    ofs += BLI_strncpy_rlen(str + ofs, &c[0], sizeof(str) - ofs);
+    ofs += BLI_strncpy_utf8_rlen(str + ofs, &c[0], sizeof(str) - ofs);
   }
   else {
-    ofs += BLI_snprintf_rlen(str + ofs, sizeof(str) - ofs, "%.4f ", final);
+    ofs += BLI_snprintf_utf8_rlen(str + ofs, sizeof(str) - ofs, "%.4f ", final);
   }
   /* Done with header string. */
 
@@ -881,10 +892,16 @@ static void initEdgeSlide_ex(TransInfo *t,
   EdgeSlideData *sld;
   bool ok = false;
 
+  if ((t->flag & T_EDIT) == 0 || (t->obedit_type != OB_MESH)) {
+    BKE_report(t->reports, RPT_ERROR, "'Edge Slide' is only supported in mesh edit mode");
+    t->state = TRANS_CANCEL;
+    return;
+  }
+
   t->mode = TFM_EDGE_SLIDE;
 
   {
-    EdgeSlideParams *slp = MEM_callocN<EdgeSlideParams>(__func__);
+    EdgeSlideParams *slp = MEM_new_zeroed<EdgeSlideParams>(__func__);
     slp->op = op;
     slp->use_even = use_even;
     slp->flipped = flipped;
@@ -923,10 +940,10 @@ static void initEdgeSlide_ex(TransInfo *t,
 
   t->idx_max = 0;
   t->num.idx_max = 0;
-  t->snap[0] = 0.1f;
-  t->snap[1] = t->snap[0] * 0.1f;
+  t->increment[0] = 0.1f;
+  t->increment_precision = 0.1f;
 
-  copy_v3_fl(t->num.val_inc, t->snap[0]);
+  copy_v3_fl(t->num.val_inc, t->increment[0]);
   t->num.unit_sys = t->scene->unit.system;
   t->num.unit_type[0] = B_UNIT_NONE;
 }

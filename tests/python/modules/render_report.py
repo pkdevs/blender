@@ -8,19 +8,39 @@ a HTML report showing the differences, for regression testing.
 """
 
 import glob
+import fnmatch
 import os
+import sys
 import pathlib
 import shutil
 import subprocess
 import time
 import multiprocessing
+import traceback
+import re
+import json
+
+from pathlib import Path
 
 from . import global_report
 from .colored_print import (print_message, use_message_colors)
 
 
-def blend_list(dirpath, blocklist):
+def blend_list(dirpath, blocklist, filter):
     import re
+
+    positive_patterns = []
+    negative_patterns = []
+
+    if filter:
+        if "-" in filter:
+            positive_filter, negative_filter = filter.split('-', maxsplit=1)
+        else:
+            positive_filter = filter
+            negative_filter = ""
+
+        positive_patterns = positive_filter.lower().split(":") if positive_filter else []
+        negative_patterns = negative_filter.lower().split(":") if negative_filter else []
 
     for root, dirs, files in os.walk(dirpath):
         for filename in files:
@@ -32,6 +52,24 @@ def blend_list(dirpath, blocklist):
                 if re.match(blocklist_entry, filename):
                     skip = True
                     break
+
+            if skip:
+                continue
+
+            name_for_filter = Path(filename).stem.lower()
+
+            if positive_patterns:
+                skip = True
+                for positive_pattern in positive_patterns:
+                    if fnmatch.fnmatch(name_for_filter, positive_pattern):
+                        skip = False
+                        break
+
+            if negative_patterns:
+                for negative_pattern in negative_patterns:
+                    if fnmatch.fnmatch(name_for_filter, negative_pattern):
+                        skip = True
+                        break
 
             if not skip:
                 filepath = os.path.join(root, filename)
@@ -78,6 +116,7 @@ class TestResult:
         self.filepath = filepath
         self.name = name
         self.error = None
+        self.stats = None
         self.tmp_out_img_base = os.path.join(report.output_dir, "tmp_" + name)
         self.tmp_out_img = self.tmp_out_img_base + '0001.png'
         self.old_img, self.ref_img, self.new_img, self.diff_color_img, self.diff_alpha_img = test_get_images(
@@ -106,12 +145,30 @@ def diff_output(test, oiiotool, fail_threshold, fail_percent, verbose, update):
             "--diff",
         )
         try:
-            subprocess.check_output(command)
+            output = subprocess.check_output(command)
             failed = False
         except subprocess.CalledProcessError as e:
+            output = e.output
             if verbose:
-                print_message(e.output.decode("utf-8", 'ignore'))
+                print_message(output.decode("utf-8", 'ignore'))
             failed = e.returncode != 0
+
+        try:
+            output = output.decode("utf-8", 'ignore')
+            # Only print max error and number of pixels over threshold.
+            # Max error is not present if the images are a perfect match.
+            max_error = re.search(r"Max error *= *(\S+)", output)
+            over_threshold = re.findall(r"\S+ pixels .* over \S+", output)
+            if max_error or over_threshold:
+                test.stats = ""
+                if max_error:
+                    test.stats += "Max error = {:.3f}\n".format(float(max_error.group(1)))
+                if over_threshold:
+                    test.stats += over_threshold[-1]
+        except Exception as e:
+            print("Error parsing oiiotool output: \n", output, "\n", traceback.format_exc())
+            test.error = "STATS ERROR"
+            return test
     else:
         if not update:
             test.error = "VERIFY"
@@ -158,7 +215,7 @@ def diff_output(test, oiiotool, fail_threshold, fail_percent, verbose, update):
     try:
         subprocess.check_output(command, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
-        if self.verbose:
+        if verbose:
             msg = e.output.decode("utf-8", 'ignore')
             for line in msg.splitlines():
                 # Ignore warnings for images without alpha channel.
@@ -173,6 +230,40 @@ def diff_output(test, oiiotool, fail_threshold, fail_percent, verbose, update):
     return test
 
 
+def get_gpu_device_info(blender, gpu_backend):
+    command = [
+        blender,
+        "--background",
+        "--factory-startup",
+        "--gpu-backend",
+        gpu_backend,
+        "--python",
+        str(pathlib.Path(__file__).parent / "gpu_info.py")
+    ]
+
+    completed_process = subprocess.run(command, stdout=subprocess.PIPE, universal_newlines=True)
+    info = completed_process.stdout.split("<GPU_INFO>")[1].split("</GPU_INFO>")[0]
+    return json.loads(info)
+
+
+def get_gpu_device_vendor(blender, gpu_backend):
+    return get_gpu_device_info(blender, gpu_backend)["DEVICE_TYPE"]
+
+
+def get_gpu_device_ray_queries_support(blender, gpu_backend):
+    command = [
+        blender,
+        "--background",
+        "--factory-startup",
+        "--gpu-backend",
+        gpu_backend,
+        "--python-expr",
+        'import gpu; gpu.init(); print("GPU_RAY_QUERIES_SUPPORT:", gpu.capabilities.ray_query_support_get())'
+    ]
+    completed_process = subprocess.run(command, stdout=subprocess.PIPE, universal_newlines=True)
+    return "GPU_RAY_QUERIES_SUPPORT: True" in completed_process.stdout
+
+
 class Report:
     __slots__ = (
         'title',
@@ -181,12 +272,14 @@ class Report:
         'global_dir',
         'reference_dir',
         'reference_override_dir',
+        "test_name_suffix",
         'oiiotool',
         'pixelated',
         'fail_threshold',
         'fail_percent',
         'verbose',
         'update',
+        'filter',
         'failed_tests',
         'passed_tests',
         'compare_tests',
@@ -204,6 +297,7 @@ class Report:
 
         self.reference_dir = 'reference_renders'
         self.reference_override_dir = None
+        self.test_name_suffix = ""
         self.oiiotool = oiiotool
         self.compare_engine = None
         self.fail_threshold = 0.016
@@ -218,6 +312,7 @@ class Report:
         self.pixelated = False
         self.verbose = os.environ.get("BLENDER_VERBOSE") is not None
         self.update = os.getenv('BLENDER_TEST_UPDATE') is not None
+        self.filter = os.getenv('BLENDER_TEST_FILTER') or ""
 
         if os.environ.get("BLENDER_TEST_COLOR") is not None:
             use_message_colors()
@@ -248,6 +343,9 @@ class Report:
 
     def set_engine_name(self, engine_name):
         self.engine_name = engine_name
+
+    def set_test_name_suffix(self, suffix):
+        self.test_name_suffix = suffix
 
     def run(self, dirpath, blender, arguments_cb, batch=False, fail_silently=False):
         # Run tests and output report.
@@ -343,7 +441,7 @@ class Report:
             message += """<p><tt>BLENDER_TEST_UPDATE=1 ctest -R %s</tt></p>""" % self.engine_name
             message += """<p>This then happens for new and failing tests; reference images of """ \
                        """passing test cases will not be updated. Be sure to commit the new reference """ \
-                       """images to the tests/files git submodule afterwards.</p>"""
+                       """images under the tests/files folder afterwards.</p>"""
             message += """</div>"""
         else:
             message = ""
@@ -430,9 +528,11 @@ class Report:
         return pathlib.Path(relpath).as_posix()
 
     def _write_test_html(self, test_category, test_result):
-        name = test_result.name.replace('_', ' ')
+        name = test_result.name + self.test_name_suffix
 
-        status = test_result.error if test_result.error else ""
+        status = "<strong>" + test_result.error + "</strong><br>" if test_result.error else ""
+        if test_result.stats:
+            status += "<i>" + "<br>".join(test_result.stats.splitlines()) + "</i>"
         tr_style = """ class="table-danger" """ if test_result.error else ""
 
         new_url = self._relative_url(test_result.new_img)
@@ -502,30 +602,46 @@ class Report:
 
         remaining_filepaths = filepaths[:]
         test_results = []
+        arguments_suffix = self._get_arguments_suffix()
 
         while len(remaining_filepaths) > 0:
             command = [blender]
             running_tests = []
 
+            # On Windows, there is a maximum length of 32,767 characters (including the terminating null character)
+            # for process command line commands, see:
+            # https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessa
+            command_line_length = len(blender)
+            for suffix in arguments_suffix:
+                # Add 3 for taking into account spaces and quotation marks potentially added by Python.
+                command_line_length += len(suffix) + 3
+
             # Construct output filepaths and command to run
             for filepath in remaining_filepaths:
-                running_tests.append(filepath)
-
                 testname = test_get_name(filepath)
-                print_message(testname, 'SUCCESS', 'RUN')
 
                 base_output_filepath = os.path.join(self.output_dir, "tmp_" + testname)
+                command_filepath = self._get_render_arguments(arguments_cb, filepath, base_output_filepath)
+
+                # Check if we have surpassed the command line limit.
+                for cmd in command_filepath:
+                    command_line_length += len(cmd) + 3
+                if sys.platform == 'win32' and command_line_length > 32766 and len(running_tests) > 0:
+                    break
+
+                print_message(testname, 'SUCCESS', 'RUN')
+                running_tests.append(filepath)
+                command.extend(command_filepath)
+
                 output_filepath = base_output_filepath + '0001.png'
                 if os.path.exists(output_filepath):
                     os.remove(output_filepath)
-
-                command.extend(self._get_render_arguments(arguments_cb, filepath, base_output_filepath))
 
                 # Only chain multiple commands for batch
                 if not batch:
                     break
 
-            command.extend(self._get_arguments_suffix())
+            command.extend(arguments_suffix)
 
             # Run process
             crash = False
@@ -539,7 +655,20 @@ class Report:
                 crash = True
 
             if verbose:
-                print(" ".join(command))
+                def quote_expr_args(cmd):
+                    quoted = []
+                    quote_next = False
+                    for arg in cmd:
+                        if quote_next:
+                            quoted.append('"{}"'.format(arg))  # wrap the expression in quotes
+                            quote_next = False
+                        else:
+                            quoted.append(arg)
+                            if arg == "--python-expr":
+                                quote_next = True
+                    return quoted
+                print(' '.join(quote_expr_args(command)))
+
             if (verbose or crash) and output:
                 print(output.decode("utf-8", 'ignore'))
 
@@ -550,6 +679,7 @@ class Report:
                 remaining_filepaths.pop(0)
                 file_crashed = False
                 for test in self._get_filepath_tests(filepath):
+                    self.postprocess_test(blender, test)
                     if not os.path.exists(test.tmp_out_img) or os.path.getsize(test.tmp_out_img) == 0:
                         if crash:
                             # In case of crash, stop after missing files and re-render remaining
@@ -589,13 +719,24 @@ class Report:
 
         return test_results
 
+    def postprocess_test(self, blender, test):
+        """
+        Post-process test result after the Blender has run.
+        For example, this function is where conversion from video to a still image suitable for image diffing.
+        """
+
+        pass
+
     def _run_all_tests(self, dirname, dirpath, blender, arguments_cb, batch, fail_silently):
+        if self.filter:
+            print_message(f"Note: Blender Test filter = {self.filter}", type='WARNING', status="RAW")
+
         passed_tests = []
         failed_tests = []
         silently_failed_tests = []
-        all_files = list(blend_list(dirpath, self.blocklist))
+        all_files = list(blend_list(dirpath, self.blocklist, self.filter))
         all_files.sort()
-        if not list(blend_list(dirpath, [])):
+        if not list(blend_list(dirpath, [], "")):
             print_message("No .blend files found in '{}'!".format(dirpath), 'FAILURE', 'FAILED')
             return False
 

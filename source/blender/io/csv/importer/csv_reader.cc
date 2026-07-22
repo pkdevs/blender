@@ -263,7 +263,7 @@ static Array<std::optional<GArray<>>> flatten_valid_attribute_chunks(
 PointCloud *import_csv_as_pointcloud(const CSVImportParams &import_params)
 {
   size_t buffer_len;
-  void *buffer = BLI_file_read_text_as_mem(import_params.filepath, 0, &buffer_len);
+  char *buffer = BLI_file_read_text_as_mem(import_params.filepath, 0, &buffer_len);
   if (buffer == nullptr) {
     BKE_reportf(import_params.reports,
                 RPT_ERROR,
@@ -271,7 +271,7 @@ PointCloud *import_csv_as_pointcloud(const CSVImportParams &import_params)
                 import_params.filepath);
     return nullptr;
   }
-  BLI_SCOPED_DEFER([&]() { MEM_freeN(buffer); });
+  BLI_SCOPED_DEFER([&]() { MEM_delete(buffer); });
   if (buffer_len == 0) {
     BKE_reportf(
         import_params.reports, RPT_ERROR, "CSV Import: empty file '%s'", import_params.filepath);
@@ -302,7 +302,7 @@ PointCloud *import_csv_as_pointcloud(const CSVImportParams &import_params)
     return parse_records_chunk(records, columns_info);
   };
 
-  const Span<char> buffer_span{static_cast<char *>(buffer), int64_t(buffer_len)};
+  const Span<char> buffer_span{buffer, int64_t(buffer_len)};
   std::optional<Vector<ChunkResult>> parsed_chunks = csv_parse::parse_csv_in_chunks<ChunkResult>(
       buffer_span, parse_options, parse_header, parse_data_chunk);
 
@@ -330,7 +330,7 @@ PointCloud *import_csv_as_pointcloud(const CSVImportParams &import_params)
   threading::memory_bandwidth_bound_task(points_num * 16, [&]() {
     threading::parallel_invoke(
         [&]() {
-          array_utils::copy(VArray<float3>::ForSingle(float3(0), points_num),
+          array_utils::copy(VArray<float3>::from_single(float3(0), points_num),
                             pointcloud->positions_for_write());
         },
         [&]() {
@@ -347,7 +347,7 @@ PointCloud *import_csv_as_pointcloud(const CSVImportParams &import_params)
       continue;
     }
     const auto *data = new ImplicitSharedValue<GArray<>>(std::move(*attribute));
-    const eCustomDataType type = bke::cpp_type_to_custom_data_type(attribute->type());
+    const bke::AttrType type = bke::cpp_type_to_attribute_type(attribute->type());
     const ColumnInfo &column_info = columns_info[column_i];
     attributes.add(column_info.name,
                    bke::AttrDomain::Point,

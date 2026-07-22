@@ -24,13 +24,12 @@ PyDoc_STRVAR(
     "   Returns true if the 2D length of inter1 is less than the 2D length\n"
     "   of inter2.\n"
     "\n"
-    "   :arg inter1: The first Interface1D object.\n"
+    "   :param inter1: The first Interface1D object.\n"
     "   :type inter1: :class:`freestyle.types.Interface1D`\n"
-    "   :arg inter2: The second Interface1D object.\n"
+    "   :param inter2: The second Interface1D object.\n"
     "   :type inter2: :class:`freestyle.types.Interface1D`\n"
     "   :return: True or false.\n"
     "   :rtype: bool\n");
-
 static int Length2DBP1D___init__(BPy_Length2DBP1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};

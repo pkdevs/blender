@@ -21,6 +21,8 @@
 #include "BKE_subdiv_modifier.hh"
 #include "BKE_volume.hh"
 
+#include "NOD_geometry_nodes_bundle.hh"
+
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
 
@@ -117,19 +119,10 @@ GeometryComponent &GeometrySet::get_component_for_write(GeometryComponent::Type 
     /* If the component did not exist before, create a new one. */
     component_ptr = GeometryComponent::create(component_type);
   }
-  else if (component_ptr->is_mutable()) {
-    /* If the referenced component is already mutable, return it directly. */
-    component_ptr->tag_ensured_mutable();
-  }
-  else {
-    /* If the referenced component is shared, make a copy. The copy is not shared and is
-     * therefore mutable. */
-    component_ptr = component_ptr->copy();
-  }
-  return const_cast<GeometryComponent &>(*component_ptr);
+  return component_ptr.ensure_mutable_inplace();
 }
 
-GeometryComponent *GeometrySet::get_component_ptr(GeometryComponent::Type type)
+GeometryComponent *GeometrySet::get_component_for_write_ptr(GeometryComponent::Type type)
 {
   if (this->has(type)) {
     return &this->get_component_for_write(type);
@@ -164,19 +157,6 @@ void GeometrySet::keep_only(const Span<GeometryComponent::Type> component_types)
   }
 }
 
-void GeometrySet::keep_only_during_modify(const Span<GeometryComponent::Type> component_types)
-{
-  Vector<GeometryComponent::Type> extended_types = component_types;
-  extended_types.append_non_duplicates(GeometryComponent::Type::Instance);
-  extended_types.append_non_duplicates(GeometryComponent::Type::Edit);
-  this->keep_only(extended_types);
-}
-
-void GeometrySet::remove_geometry_during_modify()
-{
-  this->keep_only_during_modify({});
-}
-
 void GeometrySet::add(const GeometryComponent &component)
 {
   BLI_assert(!components_[size_t(component.type())]);
@@ -197,14 +177,20 @@ Vector<const GeometryComponent *> GeometrySet::get_components() const
 }
 
 std::optional<Bounds<float3>> GeometrySet::compute_boundbox_without_instances(
-    const bool use_radius) const
+    const bool use_radius, const bool use_subdiv) const
 {
   std::optional<Bounds<float3>> bounds;
   if (const PointCloud *pointcloud = this->get_pointcloud()) {
     bounds = bounds::merge(bounds, pointcloud->bounds_min_max(use_radius));
   }
   if (const Mesh *mesh = this->get_mesh()) {
-    bounds = bounds::merge(bounds, mesh->bounds_min_max());
+    /* Use tessellated subdivision mesh if it exists. */
+    if (use_subdiv && mesh->runtime->mesh_eval) {
+      bounds = bounds::merge(bounds, mesh->runtime->mesh_eval->bounds_min_max());
+    }
+    else {
+      bounds = bounds::merge(bounds, mesh->bounds_min_max());
+    }
   }
   if (const Volume *volume = this->get_volume()) {
     bounds = bounds::merge(bounds, BKE_volume_min_max(volume));
@@ -221,8 +207,8 @@ std::optional<Bounds<float3>> GeometrySet::compute_boundbox_without_instances(
 std::ostream &operator<<(std::ostream &stream, const GeometrySet &geometry_set)
 {
   Vector<std::string> parts;
-  if (!geometry_set.name.empty()) {
-    parts.append(fmt::format("\"{}\"", geometry_set.name));
+  if (!geometry_set.name().is_empty()) {
+    parts.append(fmt::format("\"{}\"", geometry_set.name()));
   }
   if (const Mesh *mesh = geometry_set.get_mesh()) {
     parts.append(std::to_string(mesh->verts_num) + " verts");
@@ -411,7 +397,10 @@ bool GeometrySet::has_realized_data() const
 {
   for (const GeometryComponentPtr &component_ptr : components_) {
     if (component_ptr) {
-      if (component_ptr->type() != GeometryComponent::Type::Instance) {
+      if (!ELEM(component_ptr->type(),
+                GeometryComponent::Type::Instance,
+                GeometryComponent::Type::Edit))
+      {
         return true;
       }
     }
@@ -463,6 +452,13 @@ GeometrySet GeometrySet::from_instances(Instances *instances, GeometryOwnershipT
 {
   GeometrySet geometry_set;
   geometry_set.replace_instances(instances, ownership);
+  return geometry_set;
+}
+
+GeometrySet GeometrySet::from_instances(std::unique_ptr<Instances> instances)
+{
+  GeometrySet geometry_set;
+  geometry_set.replace_instances(instances.release(), GeometryOwnershipType::Owned);
   return geometry_set;
 }
 
@@ -561,31 +557,31 @@ void GeometrySet::replace_grease_pencil(GreasePencil *grease_pencil,
 
 Mesh *GeometrySet::get_mesh_for_write()
 {
-  MeshComponent *component = this->get_component_ptr<MeshComponent>();
+  MeshComponent *component = this->get_component_for_write_ptr<MeshComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
 PointCloud *GeometrySet::get_pointcloud_for_write()
 {
-  PointCloudComponent *component = this->get_component_ptr<PointCloudComponent>();
+  PointCloudComponent *component = this->get_component_for_write_ptr<PointCloudComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
 Volume *GeometrySet::get_volume_for_write()
 {
-  VolumeComponent *component = this->get_component_ptr<VolumeComponent>();
+  VolumeComponent *component = this->get_component_for_write_ptr<VolumeComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
 Curves *GeometrySet::get_curves_for_write()
 {
-  CurveComponent *component = this->get_component_ptr<CurveComponent>();
+  CurveComponent *component = this->get_component_for_write_ptr<CurveComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
 Instances *GeometrySet::get_instances_for_write()
 {
-  InstancesComponent *component = this->get_component_ptr<InstancesComponent>();
+  InstancesComponent *component = this->get_component_for_write_ptr<InstancesComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
@@ -621,7 +617,7 @@ GizmoEditHints *GeometrySet::get_gizmo_edit_hints_for_write()
 
 GreasePencil *GeometrySet::get_grease_pencil_for_write()
 {
-  GreasePencilComponent *component = this->get_component_ptr<GreasePencilComponent>();
+  GreasePencilComponent *component = this->get_component_for_write_ptr<GreasePencilComponent>();
   return component == nullptr ? nullptr : component->get_for_write();
 }
 
@@ -708,52 +704,18 @@ bool attribute_is_builtin_on_component_type(const GeometryComponent::Type type,
   return false;
 }
 
-void GeometrySet::gather_attributes_for_propagation(
-    const Span<GeometryComponent::Type> component_types,
-    const GeometryComponent::Type dst_component_type,
-    bool include_instances,
-    const AttributeFilter &attribute_filter,
-    Map<StringRef, AttributeDomainAndType> &r_attributes) const
+void GeometrySet::GatheredAttributes::add(const StringRef name, const AttributeDomainAndType &kind)
 {
-  this->attribute_foreach(
-      component_types,
-      include_instances,
-      [&](const StringRef attribute_id,
-          const AttributeMetaData &meta_data,
-          const GeometryComponent &component) {
-        if (component.attributes()->is_builtin(attribute_id)) {
-          if (!attribute_is_builtin_on_component_type(dst_component_type, attribute_id)) {
-            /* Don't propagate built-in attributes that are not built-in on the destination
-             * component. */
-            return;
-          }
-        }
-        if (meta_data.data_type == CD_PROP_STRING) {
-          /* Propagating string attributes is not supported yet. */
-          return;
-        }
-        if (attribute_filter.allow_skip(attribute_id)) {
-          return;
-        }
-
-        AttrDomain domain = meta_data.domain;
-        if (dst_component_type != GeometryComponent::Type::Instance &&
-            domain == AttrDomain::Instance) {
-          domain = AttrDomain::Point;
-        }
-
-        auto add_info = [&](AttributeDomainAndType *attribute_kind) {
-          attribute_kind->domain = domain;
-          attribute_kind->data_type = meta_data.data_type;
-        };
-        auto modify_info = [&](AttributeDomainAndType *attribute_kind) {
-          attribute_kind->domain = bke::attribute_domain_highest_priority(
-              {attribute_kind->domain, domain});
-          attribute_kind->data_type = bke::attribute_data_type_highest_complexity(
-              {attribute_kind->data_type, meta_data.data_type});
-        };
-        r_attributes.add_or_modify(attribute_id, add_info, modify_info);
-      });
+  const int index = this->names.index_of_or_add(name);
+  if (index >= this->kinds.size()) {
+    this->kinds.append(AttributeDomainAndType{kind.domain, kind.data_type});
+  }
+  else {
+    this->kinds[index].domain = bke::attribute_domain_highest_priority(
+        {this->kinds[index].domain, kind.domain});
+    this->kinds[index].data_type = bke::attribute_data_type_highest_complexity(
+        {this->kinds[index].data_type, kind.data_type});
+  }
 }
 
 static void gather_component_types_recursive(const GeometrySet &geometry_set,
@@ -790,37 +752,60 @@ Vector<GeometryComponent::Type> GeometrySet::gather_component_types(const bool i
   return types;
 }
 
-static void gather_mutable_geometry_sets(GeometrySet &geometry_set,
-                                         Vector<GeometrySet *> &r_geometry_sets)
+bool GeometrySet::has_bundle() const
 {
-  r_geometry_sets.append(&geometry_set);
-  if (!geometry_set.has_instances()) {
+  return bundle_;
+}
+
+const nodes::Bundle *GeometrySet::bundle() const
+{
+  return bundle_.get();
+}
+
+const nodes::BundlePtr &GeometrySet::bundle_ptr() const
+{
+  return bundle_;
+}
+
+nodes::BundlePtr &GeometrySet::bundle_ptr()
+{
+  return bundle_;
+}
+
+nodes::Bundle &GeometrySet::bundle_for_write()
+{
+  if (!bundle_) {
+    bundle_ = nodes::Bundle::create();
+  }
+  return bundle_.ensure_mutable_inplace();
+}
+
+void GeometrySet::copy_bundle_from(const GeometrySet &other)
+{
+  bundle_ = other.bundle_;
+}
+
+void GeometrySet::merge_bundle_from(const GeometrySet &other)
+{
+  if (!other.has_bundle()) {
     return;
   }
-  /* In the future this can be improved by deduplicating instance references across different
-   * instances. */
-  Instances &instances = *geometry_set.get_instances_for_write();
-  instances.ensure_geometry_instances();
-  for (const int handle : instances.references().index_range()) {
-    if (instances.references()[handle].type() == InstanceReference::Type::GeometrySet) {
-      GeometrySet &instance_geometry = instances.geometry_set_from_reference(handle);
-      gather_mutable_geometry_sets(instance_geometry, r_geometry_sets);
-    }
+  if (bundle_) {
+    this->bundle_for_write().merge(*other.bundle());
+  }
+  else {
+    this->copy_bundle_from(other);
   }
 }
 
-void GeometrySet::modify_geometry_sets(ForeachSubGeometryCallback callback)
+void GeometrySet::set_name(std::string name)
 {
-  Vector<GeometrySet *> geometry_sets;
-  gather_mutable_geometry_sets(*this, geometry_sets);
-  if (geometry_sets.size() == 1) {
-    /* Avoid possible overhead and a large call stack when multithreading is pointless. */
-    callback(*geometry_sets.first());
-  }
-  else {
-    threading::parallel_for_each(geometry_sets,
-                                 [&](GeometrySet *geometry_set) { callback(*geometry_set); });
-  }
+  name_ = std::move(name);
+}
+
+StringRefNull GeometrySet::name() const
+{
+  return name_;
 }
 
 bool object_has_geometry_set_instances(const Object &object)

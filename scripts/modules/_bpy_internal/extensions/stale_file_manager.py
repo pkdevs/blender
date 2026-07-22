@@ -88,7 +88,7 @@ class StaleFiles:
         debug = self._debug
 
         assert base_directory.endswith(sep)
-        # Don't support loading multiple times or after adding files.
+        # Don't support loading multiple times or running again after adding files.
         assert len(paths) == 0
 
         stale_filepath = os.path.join(base_directory, self._stale_filename)
@@ -162,7 +162,7 @@ class StaleFiles:
                 #
                 # If this ever did happen besides potentially trying to remove `base_directory`,
                 # this path could be treated as a file which could not be removed and queued for
-                # removal again causing a single space (for e.g.) to be left in the stale file,
+                # removal again causing a single space (for example) to be left in the stale file,
                 # trying to be removed every startup and failing.
                 # Avoid all these issues by checking the path doesn't resolve to being the same path as it's parent.
                 is_same = False

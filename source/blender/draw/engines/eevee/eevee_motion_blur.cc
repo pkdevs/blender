@@ -60,7 +60,7 @@ void MotionBlurModule::init()
   }
 
   /* Without this there is the possibility of the curve table not being allocated. */
-  BKE_curvemapping_changed((CurveMapping *)&scene->r.mblur_shutter_curve, false);
+  BKE_curvemapping_changed(const_cast<CurveMapping *>(&scene->r.mblur_shutter_curve), false);
 
   Vector<float> cdf(CM_TABLE);
   Sampling::cdf_from_curvemapping(scene->r.mblur_shutter_curve, cdf);
@@ -149,9 +149,10 @@ void MotionBlurModule::sync()
   {
     /* Create max velocity tiles. */
     PassSimple::Sub &sub = motion_blur_ps_.sub("TilesFlatten");
-    eGPUTextureFormat vector_tx_format = inst_.render_buffers.vector_tx_format();
-    eShaderType shader = vector_tx_format == GPU_RG16F ? MOTION_BLUR_TILE_FLATTEN_RG :
-                                                         MOTION_BLUR_TILE_FLATTEN_RGBA;
+    gpu::TextureFormat vector_tx_format = inst_.render_buffers.vector_tx_format();
+    eShaderType shader = vector_tx_format == gpu::TextureFormat::SFLOAT_16_16 ?
+                             MOTION_BLUR_TILE_FLATTEN_RG :
+                             MOTION_BLUR_TILE_FLATTEN_RGBA;
     sub.shader_set(inst_.shaders.static_shader_get(shader));
     sub.bind_ubo("motion_blur_buf", data_);
     sub.bind_texture("depth_tx", &render_buffers.depth_tx);
@@ -186,7 +187,7 @@ void MotionBlurModule::sync()
   }
 }
 
-void MotionBlurModule::render(View &view, GPUTexture **input_tx, GPUTexture **output_tx)
+void MotionBlurModule::render(View &view, gpu::Texture **input_tx, gpu::Texture **output_tx)
 {
   if (!motion_blur_fx_enabled_) {
     return;
@@ -198,12 +199,15 @@ void MotionBlurModule::render(View &view, GPUTexture **input_tx, GPUTexture **ou
   int2 tiles_extent = math::divide_ceil(extent, int2(MOTION_BLUR_TILE_SIZE));
 
   if (inst_.is_viewport()) {
-    float frame_delta = fabsf(inst_.velocity.step_time_delta_get(STEP_PREVIOUS, STEP_CURRENT));
+    float frame_delta_between_steps = fabsf(
+        inst_.velocity.step_time_delta_get(STEP_PREVIOUS, STEP_CURRENT));
     /* Avoid highly disturbing blurs, during navigation with high shutter time. */
-    if (frame_delta > 0.0f && !inst_.is_navigating) {
+    if (frame_delta_between_steps > 0.0f && !inst_.is_navigating) {
       /* Rescale motion blur intensity to be shutter time relative and avoid long streak when we
-       * have frame skipping. Always try to stick to what the render frame would look like. */
-      data_.motion_scale = float2(shutter_time_ / frame_delta);
+       * have frame skipping. Always try to stick to what the render frame would look like.
+       * For viewport, only previous motion is supported and always uses "Center on Frame" shutter
+       * position. */
+      data_.motion_scale = float2(0.5f, 0.5f) * float2(shutter_time_ / frame_delta_between_steps);
     }
     else {
       /* There is no time change. Motion only comes from viewport navigation and object transform.
@@ -237,7 +241,7 @@ void MotionBlurModule::render(View &view, GPUTexture **input_tx, GPUTexture **ou
 
   GPU_debug_group_begin("Motion Blur");
 
-  tiles_tx_.acquire(tiles_extent, GPU_RGBA16F);
+  tiles_tx_.acquire_2d(tiles_extent, gpu::TextureFormat::SFLOAT_16_16_16_16);
 
   tile_indirection_buf_.clear_to_zero();
 

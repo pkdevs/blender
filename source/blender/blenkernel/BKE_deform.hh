@@ -4,10 +4,17 @@
 
 #pragma once
 
+#include "DNA_listBase.h"
+#include "DNA_meshdata_types.h"
+
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
+#include "BLI_span.hh"
 #include "BLI_string_ref.hh"
+#include "BLI_vector_set.hh"
 #include "BLI_virtual_array_fwd.hh"
+
+namespace blender {
 
 /** \file
  * \ingroup bke
@@ -17,7 +24,6 @@
 struct BlendDataReader;
 struct BlendWriter;
 struct ID;
-struct ListBase;
 struct MDeformVert;
 struct MDeformWeight;
 struct Object;
@@ -25,8 +31,8 @@ struct bDeformGroup;
 
 bool BKE_id_supports_vertex_groups(const ID *id);
 bool BKE_object_supports_vertex_groups(const Object *ob);
-const ListBase *BKE_object_defgroup_list(const Object *ob);
-ListBase *BKE_object_defgroup_list_mutable(Object *ob);
+const ListBaseT<bDeformGroup> *BKE_object_defgroup_list(const Object *ob);
+ListBaseT<bDeformGroup> *BKE_object_defgroup_list_mutable(Object *ob);
 
 int BKE_object_defgroup_count(const Object *ob);
 /**
@@ -41,25 +47,23 @@ void BKE_object_defgroup_active_index_set(Object *ob, int new_index);
 /**
  * Return the ID's vertex group names.
  * Supports Mesh (ME), Lattice (LT), and GreasePencil (GD) IDs.
- * \return ListBase of bDeformGroup pointers.
+ * \return ListBaseT of bDeformGroup pointers.
  */
-const ListBase *BKE_id_defgroup_list_get(const ID *id);
-ListBase *BKE_id_defgroup_list_get_mutable(ID *id);
-int BKE_defgroup_name_index(const ListBase *defbase, blender::StringRef name);
-int BKE_id_defgroup_name_index(const ID *id, blender::StringRef name);
-bool BKE_defgroup_listbase_name_find(const ListBase *defbase,
-                                     blender::StringRef name,
+const ListBaseT<bDeformGroup> *BKE_id_defgroup_list_get(const ID *id);
+ListBaseT<bDeformGroup> *BKE_id_defgroup_list_get_mutable(ID *id);
+int BKE_defgroup_name_index(const ListBaseT<bDeformGroup> *defbase, StringRef name);
+int BKE_id_defgroup_name_index(const ID *id, StringRef name);
+bool BKE_defgroup_listbase_name_find(ListBaseT<bDeformGroup> *defbase,
+                                     StringRef name,
                                      int *r_index,
                                      bDeformGroup **r_group);
-bool BKE_id_defgroup_name_find(const ID *id,
-                               blender::StringRef name,
-                               int *r_index,
-                               bDeformGroup **r_group);
+bool BKE_id_defgroup_name_find(ID *id, StringRef name, int *r_index, bDeformGroup **r_group);
 
-bDeformGroup *BKE_object_defgroup_new(Object *ob, blender::StringRef name);
-void BKE_defgroup_copy_list(ListBase *outbase, const ListBase *inbase);
+bDeformGroup *BKE_object_defgroup_new(Object *ob, StringRef name);
+void BKE_defgroup_copy_list(ListBaseT<bDeformGroup> *outbase,
+                            const ListBaseT<bDeformGroup> *inbase);
 bDeformGroup *BKE_defgroup_duplicate(const bDeformGroup *ingroup);
-bDeformGroup *BKE_object_defgroup_find_name(const Object *ob, blender::StringRef name);
+bDeformGroup *BKE_object_defgroup_find_name(const Object *ob, StringRef name);
 /**
  * Returns flip map for the vertex-groups of `ob`.
  *
@@ -90,7 +94,7 @@ int *BKE_object_defgroup_flip_map_single(const Object *ob,
                                          int defgroup,
                                          int *r_flip_map_num);
 int BKE_object_defgroup_flip_index(const Object *ob, int index, bool use_default);
-int BKE_object_defgroup_name_index(const Object *ob, blender::StringRef name);
+int BKE_object_defgroup_name_index(const Object *ob, StringRef name);
 void BKE_object_defgroup_unique_name(bDeformGroup *dg, Object *ob);
 void BKE_object_defgroup_set_name(bDeformGroup *dg, Object *ob, const char *new_name);
 
@@ -233,26 +237,70 @@ void BKE_defvert_sync_mapped(MDeformVert *dvert_dst,
 void BKE_defvert_remap(MDeformVert *dvert, const int *map, int map_len);
 void BKE_defvert_flip(MDeformVert *dvert, const int *flip_map, int flip_map_num);
 void BKE_defvert_flip_merged(MDeformVert *dvert, const int *flip_map, int flip_map_num);
-void BKE_defvert_normalize(MDeformVert *dvert);
+
 /**
- * Same as #BKE_defvert_normalize but takes a bool array.
+ * Normalize all the vertex group weights on a vertex.
+ *
+ * Note: this ignores whether groups are locked or not, and will therefore
+ * happily modify even locked groups.
+ *
+ * See #BKE_defvert_normalize_ex() for parameter documentation.
  */
-void BKE_defvert_normalize_subset(MDeformVert *dvert, const bool *vgroup_subset, int vgroup_num);
+void BKE_defvert_normalize(MDeformVert &dvert);
+
 /**
- * Same as BKE_defvert_normalize() if the locked vgroup is not a member of the subset
+ * Normalize a subset of vertex group weights among themselves.
+ *
+ * Note: this ignores whether groups are locked or not, and will therefore
+ * happily modify even locked groups.
+ *
+ * See #BKE_defvert_normalize_ex() for parameter documentation.
  */
-void BKE_defvert_normalize_lock_single(MDeformVert *dvert,
-                                       const bool *vgroup_subset,
-                                       int vgroup_num,
-                                       uint def_nr_lock);
+void BKE_defvert_normalize_subset(MDeformVert &dvert, Span<bool> subset_flags);
+
 /**
- * Same as BKE_defvert_normalize() if no locked vgroup is a member of the subset
+ * Normalize a subset of vertex group weights among themselves, but leaving
+ * locked groups unmodified.
+ *
+ * See #BKE_defvert_normalize_ex() for parameter documentation.
  */
-void BKE_defvert_normalize_lock_map(MDeformVert *dvert,
-                                    const bool *vgroup_subset,
-                                    int vgroup_num,
-                                    const bool *lock_flags,
-                                    int defbase_num);
+void BKE_defvert_normalize_lock_map(MDeformVert &dvert,
+                                    Span<bool> subset_flags,
+                                    Span<bool> lock_flags);
+
+/**
+ * Normalize the vertex groups of a vertex, with all the bells and whistles.
+ *
+ * \param dvert: the vertex weights to be normalized.
+ *
+ * \param vgroup_subset: span of bools indicating which vertex groups are
+ * included vs ignored in this function. True means included, false means
+ * ignored. Note that this is different than locking: locked groups are not
+ * *modified*, but their weights are still accounted for in the normalization
+ * process, whereas ignored groups aren't accounted for at all. May be empty,
+ * indicating all vertex groups are included. If not empty, its length must
+ * match the number of vertex groups in the source data (e.g. the mesh).
+ *
+ * \param lock_flags: span of bools with `true` indicating the vertex groups
+ * that are completely locked from modification, even if that prevents
+ * normalization. May be empty, indicating no locked groups. If not empty, its
+ * length must match the number of vertex groups in the source data (e.g. the
+ * mesh).
+ *
+ * \param soft_lock_flags: span of bools with `true` indicating a set of vertex
+ * groups that are "soft locked". The intended use case for this is to "protect"
+ * weights that have just been set by a tool or operator during post-process
+ * normalization. When possible, only non-soft-locked weights will be modified
+ * to achieve normalization, but if necessary soft-locked will also be modified.
+ * NOTE: in theory this could be used for purposes other than "just set" groups,
+ * but corner cases are handled with that use case in mind. May be empty,
+ * indicating no "soft locked" groups. If not empty, its length must match the
+ * number of vertex groups in the source data (e.g. the mesh).
+ */
+void BKE_defvert_normalize_ex(MDeformVert &dvert,
+                              Span<bool> subset_flags,
+                              Span<bool> lock_flags,
+                              Span<bool> soft_lock_flags);
 
 /* Utilities to 'extract' a given vgroup into a simple float array,
  * for verts, but also edges/faces/loops. */
@@ -267,24 +315,21 @@ void BKE_defvert_extract_vgroup_to_vertweights(
 void BKE_defvert_extract_vgroup_to_edgeweights(const MDeformVert *dvert,
                                                int defgroup,
                                                int verts_num,
-                                               const blender::int2 *edges,
-                                               int edges_num,
+                                               Span<int2> edges,
                                                bool invert_vgroup,
                                                float *r_weights);
 void BKE_defvert_extract_vgroup_to_loopweights(const MDeformVert *dvert,
                                                int defgroup,
                                                int verts_num,
-                                               const int *corner_verts,
-                                               int loops_num,
+                                               Span<int> corner_verts,
                                                bool invert_vgroup,
                                                float *r_weights);
 
 void BKE_defvert_extract_vgroup_to_faceweights(const MDeformVert *dvert,
                                                int defgroup,
                                                int verts_num,
-                                               const int *corner_verts,
-                                               int loops_num,
-                                               blender::OffsetIndices<int> faces,
+                                               const Span<int> corner_verts,
+                                               OffsetIndices<int> faces,
                                                bool invert_vgroup,
                                                float *r_weights);
 
@@ -292,9 +337,9 @@ void BKE_defvert_weight_to_rgb(float r_rgb[3], float weight);
 
 void BKE_defvert_blend_write(BlendWriter *writer, int count, const MDeformVert *dvlist);
 void BKE_defvert_blend_read(BlendDataReader *reader, int count, MDeformVert *mdverts);
-void BKE_defbase_blend_write(BlendWriter *writer, const ListBase *defbase);
+void BKE_defbase_blend_write(BlendWriter *writer, const ListBaseT<bDeformGroup> *defbase);
 
-namespace blender::bke {
+namespace bke {
 
 VArray<float> varray_for_deform_verts(Span<MDeformVert> dverts, int defgroup_index);
 VMutableArray<float> varray_for_mutable_deform_verts(MutableSpan<MDeformVert> dverts,
@@ -306,4 +351,18 @@ void gather_deform_verts(Span<MDeformVert> src,
                          const IndexMask &indices,
                          MutableSpan<MDeformVert> dst);
 
-}  // namespace blender::bke
+struct WeightIndexGetter {
+  int operator()(const MDeformWeight &value) const
+  {
+    return value.def_nr;
+  }
+};
+using MDeformWeightSet = CustomIDVectorSet<MDeformWeight, WeightIndexGetter, 64>;
+
+MDeformVert mix_deform_verts(const Span<MDeformVert> src,
+                             const Span<int> indices,
+                             const Span<float> weights,
+                             MDeformWeightSet &dw_buffer);
+
+}  // namespace bke
+}  // namespace blender

@@ -10,4 +10,8 @@
 
 #include <Python.h>
 
-PyObject *bpygpu_state_init();
+namespace blender {
+
+[[nodiscard]] PyObject *bpygpu_state_init();
+
+}  // namespace blender

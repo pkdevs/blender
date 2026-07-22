@@ -10,11 +10,12 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BKE_movieclip.h"
-#include "BKE_tracking.h"
+#include "BKE_movieclip.hh"
+#include "BKE_tracking.hh"
 
+#include "ED_anim_api.hh"
 #include "ED_clip.hh"
 
 #include "GPU_immediate.hh"
@@ -26,6 +27,8 @@
 #include "UI_view2d.hh"
 
 #include "clip_intern.hh" /* own include */
+
+namespace blender {
 
 struct TrackMotionCurveUserData {
   SpaceClip *sc;
@@ -42,7 +45,7 @@ static void tracking_segment_point_cb(void *userdata,
                                       int scene_framenr,
                                       float val)
 {
-  TrackMotionCurveUserData *data = (TrackMotionCurveUserData *)userdata;
+  TrackMotionCurveUserData *data = static_cast<TrackMotionCurveUserData *>(userdata);
 
   if (!clip_graph_value_visible(data->sc, value_source)) {
     return;
@@ -56,7 +59,7 @@ static void tracking_segment_start_cb(void *userdata,
                                       eClipCurveValueSource value_source,
                                       bool is_point)
 {
-  TrackMotionCurveUserData *data = (TrackMotionCurveUserData *)userdata;
+  TrackMotionCurveUserData *data = static_cast<TrackMotionCurveUserData *>(userdata);
   SpaceClip *sc = data->sc;
   float col[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
@@ -66,13 +69,13 @@ static void tracking_segment_start_cb(void *userdata,
 
   switch (value_source) {
     case CLIP_VALUE_SOURCE_SPEED_X:
-      col[0] = 1.0f;
+      ui::theme::get_color_4fv(TH_AXIS_X, col);
       break;
     case CLIP_VALUE_SOURCE_SPEED_Y:
-      col[1] = 1.0f;
+      ui::theme::get_color_4fv(TH_AXIS_Y, col);
       break;
     case CLIP_VALUE_SOURCE_REPROJECTION_ERROR:
-      col[2] = 1.0f;
+      ui::theme::get_color_4fv(TH_AXIS_Z, col);
       break;
   }
 
@@ -85,6 +88,13 @@ static void tracking_segment_start_cb(void *userdata,
     GPU_line_width(1.0f);
   }
 
+  if (is_point) {
+    immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_COLOR);
+    immUniform1f("size", 3.0f);
+  }
+  else {
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+  }
   immUniformColor4fv(col);
 
   if (is_point) {
@@ -98,12 +108,13 @@ static void tracking_segment_start_cb(void *userdata,
 
 static void tracking_segment_end_cb(void *userdata, eClipCurveValueSource value_source)
 {
-  TrackMotionCurveUserData *data = (TrackMotionCurveUserData *)userdata;
+  TrackMotionCurveUserData *data = static_cast<TrackMotionCurveUserData *>(userdata);
   SpaceClip *sc = data->sc;
   if (!clip_graph_value_visible(sc, value_source)) {
     return;
   }
   immEnd();
+  immUnbindProgram();
 }
 
 static void tracking_segment_knot_cb(void *userdata,
@@ -113,7 +124,7 @@ static void tracking_segment_knot_cb(void *userdata,
                                      int scene_framenr,
                                      float val)
 {
-  TrackMotionCurveUserData *data = (TrackMotionCurveUserData *)userdata;
+  TrackMotionCurveUserData *data = static_cast<TrackMotionCurveUserData *>(userdata);
 
   if (track != data->act_track) {
     return;
@@ -122,11 +133,14 @@ static void tracking_segment_knot_cb(void *userdata,
     return;
   }
 
-  const int sel_flag = value_source == CLIP_VALUE_SOURCE_SPEED_X ? MARKER_GRAPH_SEL_X :
-                                                                   MARKER_GRAPH_SEL_Y;
+  const TrackingMarkerFlag sel_flag = value_source == CLIP_VALUE_SOURCE_SPEED_X ?
+                                          MARKER_GRAPH_SEL_X :
+                                          MARKER_GRAPH_SEL_Y;
   const bool sel = (marker->flag & sel_flag) != 0;
 
   if (sel == data->sel) {
+    GPU_line_width(1.0f);
+    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformThemeColor(sel ? TH_HANDLE_VERTEX_SELECT : TH_HANDLE_VERTEX);
 
     GPU_matrix_push();
@@ -136,6 +150,7 @@ static void tracking_segment_knot_cb(void *userdata,
     imm_draw_circle_wire_2d(data->pos, 0, 0, 0.7, 8);
 
     GPU_matrix_pop();
+    immUnbindProgram();
   }
 }
 
@@ -154,14 +169,14 @@ static void draw_tracks_motion_and_error_curves(View2D *v2d, SpaceClip *sc, uint
 
   TrackMotionCurveUserData userdata;
   userdata.sc = sc;
-  userdata.hsize = UI_GetThemeValuef(TH_HANDLE_VERTEX_SIZE);
+  userdata.hsize = ui::theme::get_value_f(TH_HANDLE_VERTEX_SIZE);
   userdata.sel = false;
   userdata.act_track = active_track;
   userdata.pos = pos;
 
   /* Non-selected knot handles. */
   if (draw_knots) {
-    UI_view2d_scale_get(v2d, &userdata.xscale, &userdata.yscale);
+    ui::view2d_scale_get(v2d, &userdata.xscale, &userdata.yscale);
     clip_graph_tracking_values_iterate(sc,
                                        (sc->flag & SC_SHOW_GRAPH_SEL_ONLY) != 0,
                                        (sc->flag & SC_SHOW_GRAPH_HIDDEN) != 0,
@@ -208,7 +223,9 @@ static void draw_frame_curves(SpaceClip *sc, uint pos)
   /* Indicates whether immBegin() was called. */
   bool is_lines_segment_open = false;
 
-  immUniformColor3f(0.0f, 0.0f, 1.0f);
+  GPU_line_width(1.0f);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+  immUniformColor4f(0.0f, 0.0f, 1.0f, 1.0f);
 
   for (int i = 0; i < reconstruction->camnr; i++) {
     MovieReconstructedCamera *camera = &reconstruction->cameras[i];
@@ -242,6 +259,7 @@ static void draw_frame_curves(SpaceClip *sc, uint pos)
   if (is_lines_segment_open) {
     immEnd();
   }
+  immUnbindProgram();
 }
 
 void clip_draw_graph(SpaceClip *sc, ARegion *region, Scene *scene)
@@ -250,14 +268,11 @@ void clip_draw_graph(SpaceClip *sc, ARegion *region, Scene *scene)
   View2D *v2d = &region->v2d;
 
   /* grid */
-  UI_view2d_draw_lines_x__values(v2d);
-  UI_view2d_draw_lines_y__values(v2d);
+  ui::view2d_draw_lines_x(v2d, scene, false, true, true, 10);
+  ui::view2d_draw_lines_y(v2d, true, 10);
 
   if (clip) {
-    uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-    immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-
-    GPU_point_size(3.0f);
+    uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
     if (sc->flag & (SC_SHOW_GRAPH_TRACKS_MOTION | SC_SHOW_GRAPH_TRACKS_ERROR)) {
       draw_tracks_motion_and_error_curves(v2d, sc, pos);
@@ -266,10 +281,12 @@ void clip_draw_graph(SpaceClip *sc, ARegion *region, Scene *scene)
     if (sc->flag & SC_SHOW_GRAPH_FRAMES) {
       draw_frame_curves(sc, pos);
     }
-
-    immUnbindProgram();
   }
 
-  /* frame range */
-  clip_draw_sfra_efra(v2d, scene);
+  /* Frame and preview range. */
+  ui::view2d_view_ortho(v2d);
+  ANIM_draw_framerange(scene, v2d);
+  ANIM_draw_previewrange(scene, v2d, 0);
 }
+
+}  // namespace blender

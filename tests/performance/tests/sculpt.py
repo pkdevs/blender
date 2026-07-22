@@ -40,7 +40,7 @@ def set_view3d_context_override(context_override):
                 context_override["region"] = region
 
 
-def prepare_sculpt_scene(context: any, mode: SculptMode):
+def prepare_sculpt_scene(context: any, mode: SculptMode, subdivision_level=3):
     """
     Prepare a clean state of the scene suitable for benchmarking
 
@@ -72,7 +72,7 @@ def prepare_sculpt_scene(context: any, mode: SculptMode):
     elif mode == SculptMode.MULTIRES:
         size = 150
     elif mode == SculptMode.DYNTOPO:
-        size = 1500
+        size = 500
     else:
         raise NotImplementedError
 
@@ -97,7 +97,7 @@ def prepare_sculpt_scene(context: any, mode: SculptMode):
     bpy.ops.object.mode_set(mode='SCULPT')
 
     if mode == SculptMode.MULTIRES:
-        bpy.ops.object.subdivision_set(level=3)
+        bpy.ops.object.subdivision_set(level=subdivision_level)
     elif mode == SculptMode.DYNTOPO:
         bpy.ops.sculpt.dynamic_topology_toggle()
 
@@ -159,26 +159,62 @@ def _run_brush_test(args: dict):
     import time
     context = bpy.context
 
-    timeout = 5
+    timeout = 10
     total_time_start = time.time()
 
     # Create an undo stack explicitly. This isn't created by default in background mode.
     bpy.ops.ed.undo_push()
 
-    prepare_sculpt_scene(context, args['mode'])
     prepare_brush(context, args['brush_type'])
 
-    context_override = context.copy()
-    set_view3d_context_override(context_override)
+    min_measurements = 5
+    max_measurements = 100
+    measurements = []
+    while True:
+        prepare_sculpt_scene(context, args['mode'])
+        context_override = context.copy()
+        set_view3d_context_override(context_override)
+        with context.temp_override(**context_override):
+            if args.get('spatial_reorder', False):
+                bpy.ops.mesh.reorder_vertices_spatial()
+                bpy.ops.ed.undo_push()
+            start = time.time()
+            bpy.ops.sculpt.brush_stroke(stroke=generate_stroke(context_override), override_location=True)
+            bpy.ops.ed.undo_push()
+            measurements.append(time.time() - start)
+            memory_info = bpy.app.memory_usage_undo()
+        if len(measurements) >= min_measurements and (time.time() - total_time_start) > timeout:
+            break
+        if len(measurements) >= max_measurements:
+            break
+
+    return {'time': sum(measurements) / len(measurements), 'memory': memory_info}
+
+
+def _run_bvh_test(args: dict):
+    import bpy
+    import time
+    context = bpy.context
+
+    timeout = 10
+    total_time_start = time.time()
+
+    # Create an undo stack explicitly. This isn't created by default in background mode.
+    bpy.ops.ed.undo_push()
 
     min_measurements = 5
     max_measurements = 100
 
     measurements = []
     while True:
+        prepare_sculpt_scene(context, args['mode'])
+        context_override = context.copy()
+        set_view3d_context_override(context_override)
         with context.temp_override(**context_override):
+            if args.get('spatial_reorder', False):
+                bpy.ops.mesh.reorder_vertices_spatial()
             start = time.time()
-            bpy.ops.sculpt.brush_stroke(stroke=generate_stroke(context_override), override_location=True)
+            bpy.ops.sculpt.optimize()
             measurements.append(time.time() - start)
 
         if len(measurements) >= min_measurements and (time.time() - total_time_start) > timeout:
@@ -189,30 +225,28 @@ def _run_brush_test(args: dict):
     return sum(measurements) / len(measurements)
 
 
-def _run_bvh_test(args: dict):
+def _run_subdivide_test(_args: dict):
     import bpy
     import time
     context = bpy.context
 
-    timeout = 5
+    timeout = 10
     total_time_start = time.time()
 
     # Create an undo stack explicitly. This isn't created by default in background mode.
     bpy.ops.ed.undo_push()
-
-    prepare_sculpt_scene(context, args['mode'])
-
-    context_override = context.copy()
-    set_view3d_context_override(context_override)
 
     min_measurements = 5
     max_measurements = 100
 
     measurements = []
     while True:
+        prepare_sculpt_scene(context, SculptMode.MULTIRES, subdivision_level=2)
+        context_override = context.copy()
+        set_view3d_context_override(context_override)
         with context.temp_override(**context_override):
             start = time.time()
-            bpy.ops.sculpt.optimize()
+            bpy.ops.object.multires_subdivide(modifier="Multires")
             measurements.append(time.time() - start)
 
         if len(measurements) >= min_measurements and (time.time() - total_time_start) > timeout:
@@ -235,15 +269,40 @@ class SculptBrushTest(api.Test):
     def category(self):
         return "sculpt"
 
-    def run(self, env, _device_id):
+    def run(self, env, _device_id, _gpu_backend):
         args = {
             'mode': self.mode,
             'brush_type': self.brush_type,
+            'spatial_reorder': False,
         }
 
         result, _ = env.run_in_blender(_run_brush_test, args, [self.filepath])
 
-        return {'time': result}
+        return result
+
+
+class SculptBrushAfterSpatialReorderingTest(api.Test):
+    def __init__(self, filepath: pathlib.Path, mode: SculptMode, brush_type: BrushType):
+        self.filepath = filepath
+        self.mode = mode
+        self.brush_type = brush_type
+
+    def name(self):
+        return "{}_{}_{}".format(self.mode.name.lower(), self.brush_type.name.lower(), "after_reordering")
+
+    def category(self):
+        return "sculpt"
+
+    def run(self, env, _device_id, _gpu_backend):
+        args = {
+            'mode': self.mode,
+            'brush_type': self.brush_type,
+            'spatial_reorder': True,
+        }
+
+        result, _ = env.run_in_blender(_run_brush_test, args, [self.filepath])
+
+        return result
 
 
 class SculptRebuildBVHTest(api.Test):
@@ -257,12 +316,51 @@ class SculptRebuildBVHTest(api.Test):
     def category(self):
         return "sculpt"
 
-    def run(self, env, _device_id):
+    def run(self, env, _device_id, _gpu_backend):
         args = {
             'mode': self.mode,
+            'spatial_reorder': False,
         }
 
         result, _ = env.run_in_blender(_run_bvh_test, args, [self.filepath])
+
+        return {'time': result}
+
+
+class SculptRebuildSpatialBVHTest(api.Test):
+    def __init__(self, filepath: pathlib.Path, mode: SculptMode):
+        self.filepath = filepath
+        self.mode = mode
+
+    def name(self):
+        return "{}_spatial_rebuild_bvh".format(self.mode.name.lower())
+
+    def category(self):
+        return "sculpt"
+
+    def run(self, env, _device_id, _gpu_backend):
+        args = {
+            'mode': self.mode,
+            'spatial_reorder': True,
+        }
+
+        result, _ = env.run_in_blender(_run_bvh_test, args, [self.filepath])
+
+        return {'time': result}
+
+
+class SculptMultiresSubdivideTest(api.Test):
+    def __init__(self, filepath: pathlib.Path):
+        self.filepath = filepath
+
+    def name(self):
+        return "multires_subdivide_2_to_3"
+
+    def category(self):
+        return "sculpt"
+
+    def run(self, env, _device_id, _gpu_backend):
+        result, _ = env.run_in_blender(_run_subdivide_test, {}, [self.filepath])
 
         return {'time': result}
 
@@ -271,6 +369,14 @@ def generate(env):
     filepaths = env.find_blend_files('sculpt/*')
     # For now, we only expect there to ever be a single file to use as the basis for generating other brush tests
     assert len(filepaths) == 1
+
     brush_tests = [SculptBrushTest(filepaths[0], mode, brush_type) for mode in SculptMode for brush_type in BrushType]
+    brush_tests_after_reordering = [
+        SculptBrushAfterSpatialReorderingTest(
+            filepaths[0],
+            SculptMode.MESH,
+            brush_type)for brush_type in BrushType]
     bvh_tests = [SculptRebuildBVHTest(filepaths[0], mode) for mode in SculptMode]
-    return brush_tests + bvh_tests
+    spatial_bvh_tests = [SculptRebuildSpatialBVHTest(filepaths[0], SculptMode.MESH)]
+    subdivision_tests = [SculptMultiresSubdivideTest(filepaths[0])]
+    return brush_tests + brush_tests_after_reordering + bvh_tests + spatial_bvh_tests + subdivision_tests

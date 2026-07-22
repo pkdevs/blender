@@ -6,31 +6,36 @@
  * \ingroup edanimation
  */
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "DNA_anim_types.h"
+#include "DNA_gpencil_legacy_types.h"
+#include "DNA_grease_pencil_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
+#include "DNA_workspace_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_curve.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
-#include "BKE_mask.h"
+#include "BKE_mask.hh"
 #include "BKE_nla.hh"
 
 #include "ED_anim_api.hh"
 #include "ED_keyframes_edit.hh"
 #include "ED_keyframes_keylist.hh"
+#include "ED_sequencer.hh"
 
 #include "RNA_access.hh"
 #include "RNA_path.hh"
@@ -40,6 +45,12 @@
 
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
+
+#include "SEQ_time.hh"
+
+#include <utility>
+
+namespace blender {
 
 /* *************************************************** */
 /* CURRENT FRAME DRAWING */
@@ -54,7 +65,7 @@ void ANIM_draw_cfra(const bContext *C, View2D *v2d, short flag)
   GPU_line_width((flag & DRAWCFRA_WIDE) ? 3.0 : 2.0);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
@@ -72,26 +83,26 @@ void ANIM_draw_cfra(const bContext *C, View2D *v2d, short flag)
 /* PREVIEW RANGE 'CURTAINS' */
 /* NOTE: 'Preview Range' tools are defined in `anim_ops.cc`. */
 
-void ANIM_draw_previewrange(const bContext *C, View2D *v2d, int end_frame_width)
+void ANIM_draw_previewrange(const Scene *scene, View2D *v2d, int end_frame_width)
 {
-  Scene *scene = CTX_data_scene(C);
-
-  /* only draw this if preview range is set */
+  /* Only draw this if preview range is set. */
   if (PRVRANGEON) {
     GPU_blend(GPU_BLEND_ALPHA);
 
     GPUVertFormat *format = immVertexFormat();
-    uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformThemeColorShadeAlpha(TH_ANIM_PREVIEW_RANGE, -25, -30);
-    /* XXX: Fix this hardcoded color (anim_active) */
-    // immUniformColor4f(0.8f, 0.44f, 0.1f, 0.2f);
 
-    /* only draw two separate 'curtains' if there's no overlap between them */
-    if (PSFRA < PEFRA + end_frame_width) {
-      immRectf(pos, v2d->cur.xmin, v2d->cur.ymin, float(PSFRA), v2d->cur.ymax);
-      immRectf(pos, float(PEFRA + end_frame_width), v2d->cur.ymin, v2d->cur.xmax, v2d->cur.ymax);
+    /* Only draw two separate 'curtains' if there's no overlap between them. */
+    if (scene->r.psfra < scene->r.pefra + end_frame_width) {
+      immRectf(pos, v2d->cur.xmin, v2d->cur.ymin, float(scene->r.psfra), v2d->cur.ymax);
+      immRectf(pos,
+               float(scene->r.pefra + end_frame_width),
+               v2d->cur.ymin,
+               v2d->cur.xmax,
+               v2d->cur.ymax);
     }
     else {
       immRectf(pos, v2d->cur.xmin, v2d->cur.ymin, v2d->cur.xmax, v2d->cur.ymax);
@@ -103,6 +114,60 @@ void ANIM_draw_previewrange(const bContext *C, View2D *v2d, int end_frame_width)
   }
 }
 
+void ANIM_draw_scene_strip_range(const bContext *C, View2D *v2d)
+{
+  SpaceAction *space_action = CTX_wm_space_action(C);
+  if (!space_action || (space_action->overlays.flag & ADS_OVERLAY_SHOW_OVERLAYS) == 0 ||
+      (space_action->overlays.flag & ADS_SHOW_SCENE_STRIP_FRAME_RANGE) == 0)
+  {
+    return;
+  }
+  WorkSpace *workspace = CTX_wm_workspace(C);
+  if (!workspace) {
+    return;
+  }
+  if ((workspace->flags & WORKSPACE_SYNC_SCENE_TIME) == 0) {
+    return;
+  }
+  const Scene *sequencer_scene = workspace->sequencer_scene;
+  if (!sequencer_scene) {
+    return;
+  }
+  const Strip *scene_strip = ed::vse::get_scene_strip_for_time_sync(sequencer_scene);
+  if (!scene_strip || !scene_strip->scene) {
+    return;
+  }
+  GPU_blend(GPU_BLEND_ALPHA);
+
+  GPUVertFormat *format = immVertexFormat();
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+  immUniformThemeColorShadeAlpha(TH_ANIM_SCENE_STRIP_RANGE, -25, -30);
+
+  /* ..._handle are frames in "sequencer logic", meaning that on the right_handle point in time,
+   * the strip is not visible any more. The last visible frame of the strip is actually on
+   * (right_handle-1), hence the -1 when computing the end_frame. */
+  const float left_handle = scene_strip->left_handle();
+  const float right_handle = scene_strip->right_handle(sequencer_scene);
+  float start_frame = seq::give_frame_index(sequencer_scene, scene_strip, left_handle) +
+                      scene_strip->scene->r.sfra + scene_strip->anim_startofs;
+  float end_frame = seq::give_frame_index(sequencer_scene, scene_strip, right_handle - 1) +
+                    scene_strip->scene->r.sfra + scene_strip->anim_startofs;
+
+  /* This can happen when the strip time is reversed. */
+  if (start_frame > end_frame) {
+    std::swap(start_frame, end_frame);
+  }
+
+  immRectf(pos, v2d->cur.xmin, v2d->cur.ymin, start_frame, v2d->cur.ymax);
+  immRectf(pos, end_frame, v2d->cur.ymin, v2d->cur.xmax, v2d->cur.ymax);
+
+  immUnbindProgram();
+
+  GPU_blend(GPU_BLEND_NONE);
+}
+
 /* *************************************************** */
 /* SCENE FRAME RANGE */
 
@@ -112,7 +177,7 @@ void ANIM_draw_framerange(Scene *scene, View2D *v2d)
   GPU_blend(GPU_BLEND_ALPHA);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformThemeColorShadeAlpha(TH_BACK, -25, -100);
@@ -164,12 +229,12 @@ void ANIM_draw_action_framerange(
   GPU_blend(GPU_BLEND_ALPHA);
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
   immBindBuiltinProgram(GPU_SHADER_2D_DIAG_STRIPES);
 
   float color[4];
-  UI_GetThemeColorShadeAlpha4fv(TH_BACK, -40, -50, color);
+  ui::theme::get_color_shade_alpha_4fv(TH_BACK, -40, -50, color);
 
   immUniform4f("color1", color[0], color[1], color[2], color[3]);
   immUniform4f("color2", 0.0f, 0.0f, 0.0f, 0.0f);
@@ -249,6 +314,9 @@ bool ANIM_nla_mapping_allowed(const bAnimListElem *ale)
     case ANIMTYPE_MASKLAYER:
       /* I (Sybren) don't _think_ masks can use the NLA. */
       return false;
+    case ANIMTYPE_SUMMARY:
+      /* The summary line cannot do NLA remapping since it may contain multiple actions. */
+      return false;
     default:
       /* NLA time remapping is the default behavior, and only should be
        * prohibited for the above types. */
@@ -308,7 +376,7 @@ static short bezt_nlamapping_apply(KeyframeEditData *ked, BezTriple *bezt)
 
 void ANIM_nla_mapping_apply_fcurve(AnimData *adt, FCurve *fcu, bool restore, bool only_keys)
 {
-  if (adt == nullptr || BLI_listbase_is_empty(&adt->nla_tracks)) {
+  if (adt == nullptr || adt->nla_tracks.is_empty()) {
     return;
   }
   KeyframeEditData ked = {{nullptr}};
@@ -318,7 +386,7 @@ void ANIM_nla_mapping_apply_fcurve(AnimData *adt, FCurve *fcu, bool restore, boo
    * - AnimData is stored in 'data'
    * - only_keys is stored in 'i1'
    */
-  ked.data = (void *)adt;
+  ked.data = static_cast<void *>(adt);
   ked.i1 = int(only_keys);
 
   /* get editing callback */
@@ -541,9 +609,16 @@ static float normalization_factor_get(Scene *scene, FCurve *fcu, short flag, flo
     offset = -min_coord - range / 2.0f;
   }
   else {
-    /* Skip normalization. */
+    /* Skip normalization in 2 cases. Either the y difference of all keyframes is too small to
+     * normalize or there are no keys at all in the range. In the first case, the curve should be
+     * brought to the 0 line. In the second case we cannot do that since we have no information. */
     factor = 1.0f;
-    offset = -min_coord;
+    if (min_coord == FLT_MAX) {
+      offset = 0.0f;
+    }
+    else {
+      offset = -min_coord;
+    }
   }
 
   BLI_assert(factor != 0.0f);
@@ -566,30 +641,40 @@ float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag
     *r_offset = 0.0f;
   }
 
-  /* sanity checks */
-  if (id && fcu && fcu->rna_path) {
-    PointerRNA ptr;
-    PropertyRNA *prop;
+  /* TODO: change the pointer parameters to references, as this function should not be called
+   * without an animated ID or a scene (to get the preferred units). */
 
-    /* get RNA property that F-Curve affects */
-    PointerRNA id_ptr = RNA_id_pointer_create(id);
-    if (RNA_path_resolve_property(&id_ptr, fcu->rna_path, &ptr, &prop)) {
-      /* rotations: radians <-> degrees? */
-      if (RNA_SUBTYPE_UNIT(RNA_property_subtype(prop)) == PROP_UNIT_ROTATION) {
-        /* if the radians flag is not set, default to using degrees which need conversions */
-        if ((scene) && (scene->unit.system_rotation == USER_UNIT_ROT_RADIANS) == 0) {
-          if (flag & ANIM_UNITCONV_RESTORE) {
-            return DEG2RADF(1.0f); /* degrees to radians */
-          }
-          return RAD2DEGF(1.0f); /* radians to degrees */
-        }
-      }
-
-      /* TODO: other rotation types here as necessary */
-    }
+  if (!id || !fcu || !fcu->rna_path || !scene) {
+    /* Not enough information to do the remapping, so just show the data as-is. */
+    return 1.0f;
   }
 
-  /* no mapping needs to occur... */
+  PointerRNA ptr;
+  PropertyRNA *prop;
+  PointerRNA id_ptr = RNA_id_pointer_create(id);
+  if (!RNA_path_resolve_property(&id_ptr, fcu->rna_path, &ptr, &prop)) {
+    /* Without resolving the property, its type & subtype are unknown; remapping is impossible. */
+    return 1.0f;
+  }
+
+  const PropertyUnit prop_unit = PropertyUnit(RNA_SUBTYPE_UNIT(RNA_property_subtype(prop)));
+
+  switch (prop_unit) {
+    case PROP_UNIT_ROTATION:
+      if (scene->unit.system_rotation == USER_UNIT_ROT_RADIANS) {
+        return 1.0f;
+      }
+
+      if (flag & ANIM_UNITCONV_RESTORE) {
+        return DEG2RADF(1.0f);
+      }
+      return RAD2DEGF(1.0f);
+
+    default:
+      /* TODO: other rotation types here as necessary */
+      break;
+  }
+
   return 1.0f;
 }
 
@@ -619,7 +704,7 @@ static bool find_prev_next_keyframes(bContext *C, int *r_nextfra, int *r_prevfra
 
   if (ob) {
     ob_to_keylist(&ads, ob, keylist, 0, {-FLT_MAX, FLT_MAX});
-    gpencil_to_keylist(&ads, static_cast<bGPdata *>(ob->data), keylist, false);
+    gpencil_to_keylist(&ads, id_cast<bGPdata *>(ob->data), keylist, false);
   }
 
   if (mask) {
@@ -692,15 +777,20 @@ static bool find_prev_next_keyframes(bContext *C, int *r_nextfra, int *r_prevfra
 
 void ANIM_center_frame(bContext *C, int smooth_viewtx)
 {
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  if (!scene) {
+    return;
+  }
+
   ARegion *region = CTX_wm_region(C);
-  Scene *scene = CTX_data_scene(C);
   float w = BLI_rctf_size_x(&region->v2d.cur);
   rctf newrct;
   int nextfra, prevfra;
 
   switch (U.view_frame_type) {
     case ZOOM_FRAME_MODE_SECONDS: {
-      const float fps = FPS;
+      const float fps = scene->frames_per_second();
       newrct.xmax = scene->r.cfra + U.view_frame_seconds * fps + 1;
       newrct.xmin = scene->r.cfra - U.view_frame_seconds * fps - 1;
       newrct.ymax = region->v2d.cur.ymax;
@@ -729,7 +819,7 @@ void ANIM_center_frame(bContext *C, int smooth_viewtx)
       break;
   }
 
-  UI_view2d_smooth_view(C, region, &newrct, smooth_viewtx);
+  ui::view2d_smooth_view(C, region, &newrct, smooth_viewtx);
 }
 /* *************************************************** */
 
@@ -739,12 +829,12 @@ rctf ANIM_frame_range_view2d_add_xmargin(const View2D &view_2d, const rctf view_
   const float keyframe_size = 10 * UI_SCALE_FAC;
   const float margin_in_px = 4 * keyframe_size;
 
-  /* This cannot use UI_view2d_scale_get_x(view_2d) because that would use the
+  /* This cannot use view2d_scale_get_x(view_2d) because that would use the
    * current scale of the view, and not the one we'd get once `view_rect` is
    * applied. And this function should not assume that view_2d.cur == view_rect.
    *
    * As an added bonus, the division is inverted (compared to
-   * UI_view2d_scale_get_x()) so that we can multiply with the result instead of
+   * view2d_scale_get_x()) so that we can multiply with the result instead of
    * doing yet another division. */
   const float target_scale = BLI_rctf_size_x(&view_rect) / BLI_rcti_size_x(&view_2d.mask);
   const float margin_in_frames = margin_in_px * target_scale;
@@ -761,3 +851,5 @@ rctf ANIM_frame_range_view2d_add_xmargin(const View2D &view_2d, const rctf view_
 
   return rect_with_margin;
 }
+
+}  // namespace blender

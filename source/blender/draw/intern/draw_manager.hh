@@ -14,18 +14,27 @@
  * \note It is currently work in progress and should replace the old global draw manager.
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "GPU_material.hh"
 
+#include "IMB_imbuf.hh"
+
+#include "draw_handle.hh"
 #include "draw_resource.hh"
 #include "draw_view.hh"
 
 #include <atomic>
+#include <memory>
 
-namespace blender::draw {
+namespace blender {
+
+struct Image;
+struct ImageUser;
+
+namespace draw {
 
 /* Forward declarations. */
 
@@ -71,6 +80,17 @@ class Manager {
     Span<ObjectInfos> infos;
   };
 
+  struct DeferredTexture {
+    /* Input to load textures from. */
+    blender::Image *image = nullptr;
+    blender::ImageUser *image_user = nullptr;
+    bool use_tile_mapping = false;
+
+    /* Loaded textures. */
+    gpu::Texture *texture = nullptr;
+    gpu::Texture *tile_mapping = nullptr;
+  };
+
   /**
    * Buffers containing all object data. Referenced by resource index.
    * Exposed as public members for shader access after sync.
@@ -99,9 +119,16 @@ class Manager {
    * List of textures coming from Image data-blocks.
    * They need to be reference-counted in order to avoid being freed in another thread.
    */
-  Vector<GPUTexture *> acquired_textures;
+  Vector<gpu::Texture *> acquired_textures;
 
  private:
+  /**
+   * List of texture that will be deferred loaded in parallel.
+   * Note this uses std::unique_ptr because bind_texture uses the pointer address,
+   * so it must be at a stable memory location.
+   */
+  Vector<std::unique_ptr<DeferredTexture>> deferred_textures_;
+
   /** Number of sync done by managers. Used for fingerprint. */
   static std::atomic<uint32_t> global_sync_counter_;
 
@@ -116,27 +143,30 @@ class Manager {
   Object *object_active = nullptr;
 
  public:
-  Manager(){};
+  Manager() {};
   ~Manager();
 
   /**
    * Create a unique resource handle for the given object.
    * Returns the existing handle if it exists.
    */
+  /* WORKAROUND: Instead of breaking const correctness everywhere, we only break it for this. */
   ResourceHandleRange unique_handle(const ObjectRef &ref);
+
+  ResourceHandleRange unique_handle_for_sculpt(const ObjectRef &ref);
+
   /**
    * Create a new resource handle for the given object.
    */
-  /* WORKAROUND: Instead of breaking const correctness everywhere, we only break it for this. */
   ResourceHandleRange resource_handle(const ObjectRef &ref, float inflate_bounds = 0.0f);
   /**
    * Create a new resource handle for the given object, but optionally override model matrix and
    * bounds.
    */
-  ResourceHandle resource_handle(const ObjectRef &ref,
-                                 const float4x4 *model_matrix,
-                                 const float3 *bounds_center,
-                                 const float3 *bounds_half_extent);
+  ResourceHandleRange resource_handle(const ObjectRef &ref,
+                                      const float4x4 *model_matrix,
+                                      const float3 *bounds_center,
+                                      const float3 *bounds_half_extent);
   /**
    * Get resource id for a loose matrix. The draw-calls for this resource handle won't be culled
    * and there won't be any associated object info / bounds. Assumes correct handedness / winding.
@@ -156,25 +186,19 @@ class Manager {
    */
   ResourceHandle resource_handle_for_psys(const ObjectRef &ref, const float4x4 &model_matrix);
 
-  ResourceHandleRange resource_handle_for_sculpt(const ObjectRef &ref);
-
   /** Update the bounds of an already created handle. */
   void update_handle_bounds(ResourceHandle handle,
                             const ObjectRef &ref,
                             float inflate_bounds = 0.0f);
-  /** Update the bounds of an already created handle. */
-  void update_handle_bounds(ResourceHandle handle,
-                            const float3 &bounds_center,
-                            const float3 &bounds_half_extent);
 
   /**
    * Populate additional per resource data on demand.
    * IMPORTANT: Should be called only **once** per object.
    */
-  void extract_object_attributes(ResourceHandle handle,
+  void extract_object_attributes(ResourceHandleRange handle,
                                  const ObjectRef &ref,
                                  const GPUMaterial *material);
-  void extract_object_attributes(ResourceHandle handle,
+  void extract_object_attributes(ResourceHandleRange handle,
                                  const ObjectRef &ref,
                                  Span<GPUMaterial *> materials);
 
@@ -283,13 +307,37 @@ class Manager {
   DataDebugOutput data_debug();
 
   /**
-   * Will acquire the texture using ref counting and release it after drawing. To be used for
+   * Will take a reference counted texture and release it after drawing. To be used for
    * texture coming from blender Image.
    */
-  void acquire_texture(GPUTexture *texture)
+  void hold_texture(gpu::Texture *texture)
   {
-    GPU_texture_ref(texture);
-    acquired_textures.append(texture);
+    if (texture != nullptr) {
+      acquired_textures.append(texture);
+    }
+  }
+
+  /**
+   * Add deferred loading texture.
+   */
+  DeferredTexture &add_texture_deferred(blender::Image *image,
+                                        blender::ImageUser *image_user,
+                                        const bool use_tile_mapping)
+  {
+    deferred_textures_.append(std::make_unique<DeferredTexture>());
+    DeferredTexture &deferred = *deferred_textures_.last();
+    deferred.image = image;
+    deferred.image_user = image_user;
+    deferred.use_tile_mapping = use_tile_mapping;
+    return deferred;
+  }
+
+  /**
+   * Return true if there are textures pending deferred loading this frame.
+   */
+  bool has_deferred_textures() const
+  {
+    return !deferred_textures_.is_empty();
   }
 
   /**
@@ -304,6 +352,8 @@ class Manager {
   void begin_sync(Object *object_active = nullptr);
   void end_sync();
 
+  void load_deferred_textures();
+
   void debug_bind();
   void resource_bind();
 
@@ -317,28 +367,67 @@ class Manager {
 
 inline ResourceHandleRange Manager::unique_handle(const ObjectRef &ref)
 {
-  if (ref.handle.handle_first.raw == 0) {
+  if (!ref.handle_.is_valid()) {
     /* WORKAROUND: Instead of breaking const correctness everywhere, we only break it for this. */
-    const_cast<ObjectRef &>(ref).handle = resource_handle(ref);
+    const_cast<ObjectRef &>(ref).handle_ = resource_handle(ref);
   }
-  return ref.handle;
+  return ref.handle_;
 }
 
 inline ResourceHandleRange Manager::resource_handle(const ObjectRef &ref, float inflate_bounds)
 {
-  bool is_active_object = (ref.dupli_object ? ref.dupli_parent : ref.object) == object_active;
-  matrix_buf.current().get_or_resize(resource_len_).sync(*ref.object);
-  bounds_buf.current().get_or_resize(resource_len_).sync(*ref.object, inflate_bounds);
-  infos_buf.current().get_or_resize(resource_len_).sync(ref, is_active_object);
-  return ResourceHandle(resource_len_++, (ref.object->transflag & OB_NEG_SCALE) != 0);
+  bool is_active_object = ref.is_active(object_active);
+  bool is_active_edit_mode = object_active &&
+                             (DRW_object_is_in_edit_mode(object_active) ||
+                              ELEM(object_active->mode, OB_MODE_TEXTURE_PAINT, OB_MODE_SCULPT)) &&
+                             ref.object->mode == object_active->mode;
+  if (ref.duplis_) {
+    uint start = resource_len_;
+
+    ObjectBounds proto_bounds;
+    proto_bounds.sync(*ref.object, inflate_bounds);
+
+    ObjectInfos proto_info;
+    proto_info.sync(ref, is_active_object, is_active_edit_mode);
+
+    for (const DupliObject *dupli : *ref.duplis_) {
+      const float4x4 dupli_mat(dupli->mat);
+      matrix_buf.current().get_or_resize(resource_len_).sync(dupli_mat);
+      bounds_buf.current().get_or_resize(resource_len_) = proto_bounds;
+
+      ObjectInfos &info = infos_buf.current().get_or_resize(resource_len_);
+      info = proto_info;
+      info.random = dupli->random_id * (1.0f / float(0xFFFFFFFF));
+      /* Normal offset is scaled by world transform, so it must be computed per instance. */
+      info.shadow_terminator_normal_offset = shadow_terminator_normal_offset_get(*ref.object,
+                                                                                 dupli_mat);
+
+      resource_len_++;
+    }
+    return ResourceHandleRange(ResourceHandle(start, (ref.object->transflag & OB_NEG_SCALE) != 0),
+                               resource_len_ - start);
+  }
+  else {
+    matrix_buf.current().get_or_resize(resource_len_).sync(*ref.object);
+    bounds_buf.current().get_or_resize(resource_len_).sync(*ref.object, inflate_bounds);
+    infos_buf.current()
+        .get_or_resize(resource_len_)
+        .sync(ref, is_active_object, is_active_edit_mode);
+    return ResourceHandle(resource_len_++, (ref.object->transflag & OB_NEG_SCALE) != 0);
+  }
 }
 
-inline ResourceHandle Manager::resource_handle(const ObjectRef &ref,
-                                               const float4x4 *model_matrix,
-                                               const float3 *bounds_center,
-                                               const float3 *bounds_half_extent)
+inline ResourceHandleRange Manager::resource_handle(const ObjectRef &ref,
+                                                    const float4x4 *model_matrix,
+                                                    const float3 *bounds_center,
+                                                    const float3 *bounds_half_extent)
 {
-  bool is_active_object = (ref.dupli_object ? ref.dupli_parent : ref.object) == object_active;
+  BLI_assert(!ref.duplis_);
+  bool is_active_object = ref.is_active(object_active);
+  bool is_active_edit_mode = object_active &&
+                             (DRW_object_is_in_edit_mode(object_active) ||
+                              ELEM(object_active->mode, OB_MODE_TEXTURE_PAINT, OB_MODE_SCULPT)) &&
+                             ref.object->mode == object_active->mode;
   if (model_matrix) {
     matrix_buf.current().get_or_resize(resource_len_).sync(*model_matrix);
   }
@@ -351,7 +440,9 @@ inline ResourceHandle Manager::resource_handle(const ObjectRef &ref,
   else {
     bounds_buf.current().get_or_resize(resource_len_).sync(*ref.object);
   }
-  infos_buf.current().get_or_resize(resource_len_).sync(ref, is_active_object);
+  infos_buf.current()
+      .get_or_resize(resource_len_)
+      .sync(ref, is_active_object, is_active_edit_mode);
   return ResourceHandle(resource_len_++, (ref.object->transflag & OB_NEG_SCALE) != 0);
 }
 
@@ -376,10 +467,17 @@ inline ResourceHandle Manager::resource_handle(const float4x4 &model_matrix,
 inline ResourceHandle Manager::resource_handle_for_psys(const ObjectRef &ref,
                                                         const float4x4 &model_matrix)
 {
-  bool is_active_object = (ref.dupli_object ? ref.dupli_parent : ref.object) == object_active;
+  BLI_assert(!ref.duplis_);
+  bool is_active_object = ref.is_active(object_active);
+  bool is_active_edit_mode = object_active &&
+                             (DRW_object_is_in_edit_mode(object_active) ||
+                              ELEM(object_active->mode, OB_MODE_TEXTURE_PAINT, OB_MODE_SCULPT)) &&
+                             ref.object->mode == object_active->mode;
   matrix_buf.current().get_or_resize(resource_len_).sync(model_matrix);
   bounds_buf.current().get_or_resize(resource_len_).sync();
-  infos_buf.current().get_or_resize(resource_len_).sync(ref, is_active_object);
+  infos_buf.current()
+      .get_or_resize(resource_len_)
+      .sync(ref, is_active_object, is_active_edit_mode);
   return ResourceHandle(resource_len_++, (ref.object->transflag & OB_NEG_SCALE) != 0);
 }
 
@@ -387,82 +485,79 @@ inline void Manager::update_handle_bounds(ResourceHandle handle,
                                           const ObjectRef &ref,
                                           float inflate_bounds)
 {
-  bounds_buf.current()[handle.resource_index()].sync(*ref.object, inflate_bounds);
+  bounds_buf.current()[handle.index()].sync(*ref.object, inflate_bounds);
 }
 
-inline void Manager::update_handle_bounds(ResourceHandle handle,
-                                          const float3 &bounds_center,
-                                          const float3 &bounds_half_extent)
-{
-  bounds_buf.current()[handle.resource_index()].sync(bounds_center, bounds_half_extent);
-}
-
-inline void Manager::extract_object_attributes(ResourceHandle handle,
+inline void Manager::extract_object_attributes(ResourceHandleRange handle,
                                                const ObjectRef &ref,
                                                const GPUMaterial *material)
 {
-  ObjectInfos &infos = infos_buf.current().get_or_resize(handle.resource_index());
-  infos.object_attrs_offset = attribute_len_;
-
   const GPUUniformAttrList *attr_list = GPU_material_uniform_attributes(material);
-  if (attr_list == nullptr) {
+  if (attr_list == nullptr || attr_list->count == 0) {
     return;
   }
 
-  LISTBASE_FOREACH (const GPUUniformAttr *, attr, &attr_list->list) {
-    if (attributes_buf.get_or_resize(attribute_len_).sync(ref, *attr)) {
-      infos.object_attrs_len++;
-      attribute_len_++;
+  int instance_index = 0;
+  for (ResourceID resource_id : handle.id_range()) {
+    ObjectInfos &infos = infos_buf.current().get_or_resize(resource_id.index());
+    infos.object_attrs_offset = attribute_len_;
+    for (const GPUUniformAttr &attr : attr_list->list) {
+      if (attributes_buf.get_or_resize(attribute_len_).sync(ref, *&attr, instance_index)) {
+        infos.object_attrs_len++;
+        attribute_len_++;
+      }
     }
+    instance_index++;
   }
 }
 
-inline void Manager::extract_object_attributes(ResourceHandle handle,
+inline void Manager::extract_object_attributes(ResourceHandleRange handle,
                                                const ObjectRef &ref,
                                                Span<GPUMaterial *> materials)
 {
-  ObjectInfos &infos = infos_buf.current().get_or_resize(handle.resource_index());
-  infos.object_attrs_offset = attribute_len_;
-
-  /* Simple cache solution to avoid duplicates. */
-  Vector<uint32_t, 4> hash_cache;
+  Map<uint32_t, const GPUUniformAttr *, 4> attributes;
 
   for (const GPUMaterial *mat : materials) {
     const GPUUniformAttrList *attr_list = GPU_material_uniform_attributes(mat);
     if (attr_list == nullptr) {
       continue;
     }
+    for (const GPUUniformAttr &attr : attr_list->list) {
+      attributes.add(attr.hash_code, &attr);
+    }
+  }
 
-    LISTBASE_FOREACH (const GPUUniformAttr *, attr, &attr_list->list) {
-      /** WATCH: Linear Search. Avoid duplicate attributes across materials. */
-      if ((mat != materials.first()) && (hash_cache.first_index_of_try(attr->hash_code) != -1)) {
-        /* Attribute has already been added to the attribute buffer by another material. */
-        continue;
-      }
-      hash_cache.append(attr->hash_code);
-      if (attributes_buf.get_or_resize(attribute_len_).sync(ref, *attr)) {
+  int instance_index = 0;
+  for (ResourceID resource_id : handle.id_range()) {
+    ObjectInfos &infos = infos_buf.current().get_or_resize(resource_id.index());
+    infos.object_attrs_offset = attribute_len_;
+    for (const GPUUniformAttr *attr : attributes.values()) {
+      if (attributes_buf.get_or_resize(attribute_len_).sync(ref, *attr, instance_index)) {
         infos.object_attrs_len++;
         attribute_len_++;
       }
     }
+    instance_index++;
   }
 }
 
 inline void Manager::register_layer_attributes(GPUMaterial *material)
 {
-  const ListBase *attr_list = GPU_material_layer_attributes(material);
+  const ListBaseT<GPULayerAttr> *attr_list = GPU_material_layer_attributes(material);
 
   if (attr_list != nullptr) {
-    LISTBASE_FOREACH (const GPULayerAttr *, attr, attr_list) {
+    for (const GPULayerAttr &attr : *attr_list) {
       /** Since layer attributes are global to the whole render pass,
        *  this only collects a table of their names. */
-      layer_attributes.add(attr->hash_code, *attr);
+      layer_attributes.add(attr.hash_code, *&attr);
     }
   }
 }
 
-}  // namespace blender::draw
+}  // namespace draw
 
 /* TODO(@fclem): This is for testing. The manager should be passed to the engine through the
  * callbacks. */
-blender::draw::Manager *DRW_manager_get();
+draw::Manager *DRW_manager_get();
+
+}  // namespace blender

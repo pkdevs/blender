@@ -16,36 +16,15 @@
 #include "eevee_lookdev.hh"
 #include "eevee_sync.hh"
 
+namespace blender {
+
 struct bNodeTree;
 struct bNodeSocketValueRGBA;
 struct UniformBuffer;
 
-namespace blender::eevee {
+namespace eevee {
 
 class Instance;
-
-/* -------------------------------------------------------------------- */
-/** \name Default World Node-Tree
- *
- * In order to support worlds without node-tree we reuse and configure a standalone node-tree that
- * we pass for shader generation. The GPUMaterial is still stored inside the World even if
- * it does not use a node-tree.
- * \{ */
-
-class DefaultWorldNodeTree {
- private:
-  bNodeTree *ntree_;
-  bNodeSocketValueRGBA *color_socket_;
-
- public:
-  DefaultWorldNodeTree();
-  ~DefaultWorldNodeTree();
-
-  /** Configure a default node-tree with the given world. */
-  bNodeTree *nodetree_get(::World *world);
-};
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name World
@@ -56,19 +35,18 @@ class World {
  public:
   /**
    * Buffer containing the sun light for the world.
-   * Filled by #LightProbeModule and read by #LightModule.  */
-  UniformBuffer<LightData> sunlight = {"sunlight"};
+   * Filled by #LightProbeModule and read by #LightModule.
+   */
+  UniformArrayBuffer<LightData, 2> sunlight = {"sunlight"};
 
  private:
   Instance &inst_;
 
-  DefaultWorldNodeTree default_tree;
-
   /* Used to detect if world change. */
-  ::World *prev_original_world = nullptr;
+  blender::World *prev_original_world = nullptr;
 
   /* Used when the scene doesn't have a world. */
-  ::World *default_world_ = nullptr;
+  blender::World *default_world_ = nullptr;
 
   /* Is true if world as a valid volume shader compiled. */
   bool has_volume_ = false;
@@ -76,13 +54,16 @@ class World {
   bool has_volume_absorption_ = false;
   /* Is true if the volume shader has scattering. */
   bool has_volume_scatter_ = false;
+  /* Is true if the surface shader is compiled and ready. */
+  bool is_ready_ = false;
 
   LookdevWorld lookdev_world_;
 
  public:
-  World(Instance &inst) : inst_(inst){};
+  World(Instance &inst) : inst_(inst) {};
   ~World();
 
+  /* Setup and request the background shader. */
   void sync();
 
   bool has_volume() const
@@ -98,6 +79,11 @@ class World {
   bool has_volume_scatter() const
   {
     return has_volume_scatter_;
+  }
+
+  bool is_ready() const
+  {
+    return is_ready_;
   }
 
   float sun_threshold();
@@ -133,16 +119,17 @@ class World {
   }
 
  private:
-  void sync_volume(const WorldHandle &world_handle);
+  void sync_volume(const WorldHandle &world_handle, bool wait_ready);
 
   /* Returns a dummy black world for when a valid world isn't present or when we want to suppress
    * any light coming from the world. */
-  ::World *default_world_get();
+  blender::World *default_world_get();
 
   /* Returns either the scene world or the default world if scene has no world. */
-  ::World *scene_world_get();
+  blender::World *scene_world_get();
 };
 
 /** \} */
 
-}  // namespace blender::eevee
+}  // namespace eevee
+}  // namespace blender

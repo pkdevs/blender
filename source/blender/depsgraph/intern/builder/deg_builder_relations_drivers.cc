@@ -13,7 +13,7 @@
 #include <cstring>
 #include <deque>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "DNA_anim_types.h"
 
@@ -172,12 +172,12 @@ void DepsgraphRelationBuilder::build_driver_relations(IDNode *id_node)
 
   PointerRNA id_ptr = RNA_id_pointer_create(id_orig);
 
-  LISTBASE_FOREACH (FCurve *, fcu, &adt->drivers) {
-    if (fcu->rna_path == nullptr) {
+  for (FCurve &fcu : adt->drivers) {
+    if (fcu.rna_path == nullptr) {
       continue;
     }
 
-    DriverDescriptor driver_desc(&id_ptr, fcu);
+    DriverDescriptor driver_desc(&id_ptr, &fcu);
     if (!driver_desc.driver_relations_needed()) {
       continue;
     }
@@ -245,9 +245,23 @@ bool data_path_maybe_shared(const ID &id, const StringRef data_path)
   /* As it is hard to generally detect implicit sharing, this is implemented as
    * a 'known to not share' list. */
 
+  /* Allow concurrent writes to custom properties. #140706 shows that this
+   * shouldn't be a problem in practice. */
+  if (data_path.startswith("[\"") && data_path.endswith("\"]")) {
+    return false;
+  }
+
   if (GS(id.name) == ID_OB) {
     const Object &ob = *reinterpret_cast<const Object *>(&id);
     const bool is_thread_safe = (ob.type == OB_ARMATURE && data_path.startswith("pose.bones["));
+    return !is_thread_safe;
+  }
+
+  /* Allow concurrent writes to shape-key values. #140706 shows that this
+   * shouldn't be a problem in practice. */
+  if (GS(id.name) == ID_KE) {
+    const bool is_thread_safe = data_path.startswith("key_blocks[") &&
+                                data_path.endswith("].value");
     return !is_thread_safe;
   }
 

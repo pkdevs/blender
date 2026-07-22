@@ -21,6 +21,10 @@
 #  include <cmath>   // IWYU pragma: export
 #endif
 
+#if !defined(__KERNEL_GPU__)
+#  include <bit>
+#endif
+
 CCL_NAMESPACE_BEGIN
 
 /* Float Pi variations */
@@ -369,11 +373,6 @@ ccl_device_inline float clamp(const float a, const float mn, const float mx)
   return min(max(a, mn), mx);
 }
 
-ccl_device_inline float mix(const float a, const float b, float t)
-{
-  return a + t * (b - a);
-}
-
 ccl_device_inline float smoothstep(const float edge0, const float edge1, const float x)
 {
   float result;
@@ -390,17 +389,51 @@ ccl_device_inline float smoothstep(const float edge0, const float edge1, const f
   return result;
 }
 
+/* There are two common ways of implementing a linear interpolation: result = a + t * (b - a) and
+ * result = (1 - t) * a + t * b. The former variant is called "mix" in our code and it ensures that
+ * result always changes monotonically when t increases monotonically. This comes at the cost of
+ * the fact that generally result != b when t == 1, which becomes particularly noticeable when the
+ * magnitudes of a and b are vastly different. The latter variant is called
+ * "endvalue_preserving_mix" in our code ensures that result == b when t == 1. This comes at the
+ * cost of an additional multiplication step compared to the former version and the fact that
+ * result may not change monotonically when a and b have different signs and t increases
+ * monotonically, which however isn't noticeable in most cases as long as monotony isn't explicitly
+ * required. In general, "endvalue_preserving_mix" should be preferred over "mix" when it is
+ * important that result == b when t == 1 or when a and b may have vastly different magnitudes.*/
+template<typename T1, typename T2> ccl_device_inline T1 mix(const T1 a, const T1 b, const T2 t)
+{
+  return a + t * (b - a);
+}
+
 #endif /* !defined(__KERNEL_METAL__) */
 
-#if defined(__KERNEL_CUDA__)
-ccl_device_inline float saturatef(const float a)
+/* Same as the "mix" function but with different numerical behavior. See comment above the "mix"
+ * function for more information. */
+template<typename T1, typename T2>
+ccl_device_inline T1 endvalue_preserving_mix(const T1 a, const T1 b, const T2 t)
 {
-  return __saturatef(a);
+  return (1.0f - t) * a + t * b;
 }
-#elif !defined(__KERNEL_METAL__)
+
+#if !defined(__KERNEL_METAL__)
 ccl_device_inline float saturatef(const float a)
 {
+#  ifdef __KERNEL_OPTIX__
+  /* Workaround OptiX driver bug which somehow rounds constant values to
+   * integers when using __saturatef. This particular logic works around the
+   * problem, just using clamp gets optimized back to saturate. See #159954. */
+  if (!(a >= 0.0f)) {
+    return 0.0f;
+  }
+  if (!(a <= 1.0f)) {
+    return 1.0f;
+  }
+  return a;
+#  elif defined(__KERNEL_CUDA__)
+  return __saturatef(a);
+#  else
   return clamp(a, 0.0f, 1.0f);
+#  endif
 }
 #endif /* __KERNEL_CUDA__ */
 
@@ -547,19 +580,23 @@ ccl_device float safe_acosf(const float a)
 
 ccl_device float compatible_powf(const float x, const float y)
 {
-#ifdef __KERNEL_GPU__
-  if (y == 0.0f) /* x^0 -> 1, including 0^0 */
+  if (y == 0.0f) {
+    /* x^0 -> 1, including 0^0. */
     return 1.0f;
-
+  }
+  if (x == 0.0f) {
+    return 0.0f;
+  }
+#ifdef __KERNEL_GPU__
   /* GPU pow doesn't accept negative x, do manual checks here */
   if (x < 0.0f) {
-    if (fmodf(-y, 2.0f) == 0.0f)
+    if (fmodf(-y, 2.0f) == 0.0f) {
       return powf(-x, y);
-    else
+    }
+    else {
       return -powf(-x, y);
+    }
   }
-  else if (x == 0.0f)
-    return 0.0f;
 #endif
   return powf(x, y);
 }
@@ -624,6 +661,12 @@ ccl_device_inline float one_minus_cos(const float angle)
   return angle > 0.02f ? 1.0f - cosf(angle) : 0.5f * sqr(angle);
 }
 
+/*  2^a. */
+ccl_device_inline int power_of_2(const int a)
+{
+  return 1 << a;
+}
+
 ccl_device_inline float pow20(const float a)
 {
   return sqr(sqr(sqr(sqr(a)) * a));
@@ -653,9 +696,14 @@ ccl_device_inline float beta(const float x, const float y)
   return expf(lgammaf(x) + lgammaf(y) - lgammaf(x + y));
 }
 
-ccl_device_inline float xor_signmask(const float x, const int y)
+ccl_device_inline float xor_mask(const float x, const uint y)
 {
-  return __int_as_float(__float_as_int(x) ^ y);
+  return __uint_as_float(__float_as_uint(x) ^ y);
+}
+
+ccl_device_inline float or_mask(const float x, const uint y)
+{
+  return __uint_as_float(__float_as_uint(x) | y);
 }
 
 ccl_device float bits_to_01(const uint bits)
@@ -663,23 +711,20 @@ ccl_device float bits_to_01(const uint bits)
   return bits * (1.0f / (float)0xFFFFFFFF);
 }
 
+ccl_device_inline bool is_zero(const float a)
+{
+  return a == 0.0f;
+}
+
 #if !defined(__KERNEL_GPU__)
-#  if defined(__GNUC__)
 ccl_device_inline uint popcount(const uint x)
 {
-  return __builtin_popcount(x);
+  return std::popcount(x);
 }
-#  else
-ccl_device_inline uint popcount(const uint x)
+ccl_device_inline uint popcount(const uint64_t x)
 {
-  /* TODO(Stefan): pop-count intrinsic for Windows with fallback for older CPUs. */
-  uint i = x;
-  i = i - ((i >> 1) & 0x55555555);
-  i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
-  i = (((i + (i >> 4)) & 0xF0F0F0F) * 0x1010101) >> 24;
-  return i;
+  return std::popcount(x);
 }
-#  endif
 #elif defined(__KERNEL_ONEAPI__)
 #  define popcount(x) sycl::popcount(x)
 #elif defined(__KERNEL_HIP__)
@@ -887,6 +932,52 @@ ccl_device_inline Interval<T> intervals_intersection(const ccl_private Interval<
                                                      const ccl_private Interval<T> &second)
 {
   return {max(first.min, second.min), min(first.max, second.max)};
+}
+
+/* Defines the minimal and maximal values of a quantity. */
+template<typename T> struct Extrema {
+  T min;
+  T max;
+  Extrema() = default;
+  ccl_device_inline_method Extrema(T value) : min(value), max(value) {}
+  ccl_device_inline_method Extrema(T min_, T max_) : min(min_), max(max_) {}
+
+  ccl_device_inline_method T range() const
+  {
+    return max - min;
+  }
+};
+
+template<typename T> ccl_device_inline Extrema<T> operator*(const Extrema<T> a, const T b)
+{
+  return {a.min * b, a.max * b};
+}
+
+template<typename T>
+ccl_device_inline Extrema<T> operator+(const ccl_private Extrema<T> &a,
+                                       const ccl_private Extrema<T> &b)
+{
+  return {a.min + b.min, a.max + b.max};
+}
+
+template<typename T>
+ccl_device_inline Extrema<T> operator+=(ccl_private Extrema<T> &a, const ccl_private Extrema<T> &b)
+{
+  return a = a + b;
+}
+
+/* Returns the extrema of both extrema. */
+template<typename T>
+ccl_device_inline Extrema<T> merge(const ccl_private Extrema<T> &a,
+                                   const ccl_private Extrema<T> &b)
+{
+  return {min(a.min, b.min), max(a.max, b.max)};
+}
+
+template<typename T>
+ccl_device_inline Extrema<T> merge(const ccl_private Extrema<T> &a, const ccl_private T &v)
+{
+  return {min(a.min, v), max(a.max, v)};
 }
 
 CCL_NAMESPACE_END

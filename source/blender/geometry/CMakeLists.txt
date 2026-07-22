@@ -4,8 +4,11 @@
 
 set(INC
   PUBLIC .
+  PUBLIC xpbd
   ../makesrna
   ../../../intern/eigen
+  ../draw/intern
+  ../gpu
 )
 
 set(INC_SYS
@@ -18,14 +21,17 @@ set(SRC
   intern/extend_curves.cc
   intern/extract_elements.cc
   intern/fillet_curves.cc
+  intern/fit_curves.cc
+  intern/foreach_geometry.cc
   intern/interpolate_curves.cc
   intern/join_geometries.cc
   intern/merge_curves.cc
   intern/merge_layers.cc
+  intern/mesh_bevel.cc
   intern/mesh_boolean.cc
   intern/mesh_boolean_manifold.cc
   intern/mesh_copy_selection.cc
-  intern/mesh_merge_by_distance.cc
+  intern/mesh_merge_verts.cc
   intern/mesh_primitive_cuboid.cc
   intern/mesh_primitive_cylinder_cone.cc
   intern/mesh_primitive_grid.cc
@@ -37,7 +43,7 @@ set(SRC
   intern/mesh_to_volume.cc
   intern/mesh_triangulate.cc
   intern/mix_geometries.cc
-  intern/point_merge_by_distance.cc
+  intern/point_merge.cc
   intern/points_to_volume.cc
   intern/randomize.cc
   intern/realize_instances.cc
@@ -55,19 +61,25 @@ set(SRC
   intern/uv_parametrizer.cc
   intern/volume_grid_resample.cc
 
+  xpbd/intern/xpbd_constraint_coloring.cc
+
   GEO_add_curves_on_mesh.hh
   GEO_curve_constraints.hh
   GEO_curves_remove_and_split.hh
   GEO_extend_curves.hh
   GEO_extract_elements.hh
   GEO_fillet_curves.hh
+  GEO_fit_curves.hh
+  GEO_foreach_geometry.hh
+  GEO_grid_samplers.hh
   GEO_interpolate_curves.hh
   GEO_join_geometries.hh
   GEO_merge_curves.hh
   GEO_merge_layers.hh
+  GEO_mesh_bevel.hh
   GEO_mesh_boolean.hh
   GEO_mesh_copy_selection.hh
-  GEO_mesh_merge_by_distance.hh
+  GEO_mesh_merge_verts.hh
   GEO_mesh_primitive_cuboid.hh
   GEO_mesh_primitive_cylinder_cone.hh
   GEO_mesh_primitive_grid.hh
@@ -79,7 +91,7 @@ set(SRC
   GEO_mesh_to_volume.hh
   GEO_mesh_triangulate.hh
   GEO_mix_geometries.hh
-  GEO_point_merge_by_distance.hh
+  GEO_point_merge.hh
   GEO_points_to_volume.hh
   GEO_randomize.hh
   GEO_realize_instances.hh
@@ -96,6 +108,29 @@ set(SRC
   GEO_uv_pack.hh
   GEO_uv_parametrizer.hh
   GEO_volume_grid_resample.hh
+
+  xpbd/GEO_xpbd_constraint_align_rotations.hh
+  xpbd/GEO_xpbd_constraint_collision_edge.hh
+  xpbd/GEO_xpbd_constraint_collision_face.hh
+  xpbd/GEO_xpbd_constraint_coloring.hh
+  xpbd/GEO_xpbd_constraint_damping_angular.hh
+  xpbd/GEO_xpbd_constraint_damping_linear.hh
+  xpbd/GEO_xpbd_constraint_distance.hh
+  xpbd/GEO_xpbd_constraint_friction_edge.hh
+  xpbd/GEO_xpbd_constraint_friction_face.hh
+  xpbd/GEO_xpbd_constraint_math.hh
+  xpbd/GEO_xpbd_constraint_pin_position.hh
+  xpbd/GEO_xpbd_constraint_pin_rotation.hh
+  xpbd/GEO_xpbd_constraint_rod_bend_twist.hh
+  xpbd/GEO_xpbd_constraint_rod_stretch_shear.hh
+  xpbd/GEO_xpbd_constraint_set.hh
+  xpbd/GEO_xpbd_constraint_set_params.hh
+  xpbd/GEO_xpbd_constraint_set_templated.hh
+  xpbd/GEO_xpbd_geometry_ref.hh
+  xpbd/GEO_xpbd_updater_gauss_seidel.hh
+  xpbd/GEO_xpbd_updater_velocity.hh
+
+  intern/mesh_boolean_intern.hh
   intern/mesh_boolean_manifold.hh
 )
 
@@ -106,10 +141,13 @@ set(LIB
   PRIVATE bf::bmesh
   PRIVATE bf::dna
   PRIVATE bf::functions
+  PRIVATE bf::nodes
   PRIVATE bf::intern::atomic
   PRIVATE bf::intern::guardedalloc
-  PRIVATE bf::extern::fmtlib
+  PRIVATE bf::intern::profile
+  PRIVATE bf::extern::curve_fit_nd
   PRIVATE bf::dependencies::optional::manifold
+  PRIVATE bf::dependencies::optional::gmp
 )
 
 if(WITH_UV_SLIM)
@@ -117,32 +155,6 @@ if(WITH_UV_SLIM)
     ../../../intern/slim
   )
   add_definitions(-DWITH_UV_SLIM)
-endif()
-
-if(WITH_OPENVDB)
-  list(APPEND INC
-    ../../../intern/openvdb
-  )
-  list(APPEND INC_SYS
-    ${OPENVDB_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    bf_intern_openvdb
-    ${OPENVDB_LIBRARIES}
-  )
-  add_definitions(-DWITH_OPENVDB ${OPENVDB_DEFINITIONS})
-endif()
-
-if(WITH_GMP)
-  add_definitions(-DWITH_GMP)
-
-  list(APPEND INC_SYS
-    ${GMP_INCLUDE_DIRS}
-  )
-
-  list(APPEND LIB
-    ${GMP_LIBRARIES}
-  )
 endif()
 
 if(WITH_MANIFOLD)
@@ -156,9 +168,12 @@ if(WITH_GTESTS)
   set(TEST_INC
   )
   set(TEST_SRC
+    tests/GEO_interpolate_curves_test.cc
     tests/GEO_merge_curves_test.cc
+    tests/GEO_realize_instances_test.cc
   )
   set(TEST_LIB
+    PRIVATE bf::intern::clog
   )
   blender_add_test_suite_lib(bf_geometry_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
 endif()

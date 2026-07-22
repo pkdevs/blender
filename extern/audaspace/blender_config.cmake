@@ -4,7 +4,7 @@
 set(AUDASPACE_STANDALONE FALSE)
 set(BUILD_DEMOS FALSE)  # "Build and install demos"
 set(SHARED_LIBRARY FALSE)  # "Build Shared Library"
-set(WITH_C TRUE)  # "Build C Module"
+set(WITH_C FALSE)  # "Build C Module"
 set(WITH_DOCS FALSE)  # "Build C++ HTML Documentation with Doxygen"
 set(WITH_FFMPEG ${WITH_CODEC_FFMPEG})  # "Build With FFMPEG"
 if(DEFINED WITH_FFTW3 AND WITH_FFTW3) # "Build With FFTW"
@@ -14,6 +14,7 @@ if(DEFINED WITH_FFTW3 AND WITH_FFTW3) # "Build With FFTW"
   set(FFTW_LIBRARY ${FFTW3_LIBRARIES})
 endif()
 set(WITH_LIBSNDFILE ${WITH_CODEC_SNDFILE})  # "Build With LibSndFile"
+set(WITH_RUBBERBAND ${WITH_RUBBERBAND})  # "Build With Rubber Band Library"
 set(SEPARATE_C FALSE)  # "Build C Binding as separate library"
 set(PLUGIN_COREAUDIO FALSE)  # "Build CoreAudio Plugin"
 set(PLUGIN_FFMPEG FALSE)  # "Build FFMPEG Plugin"
@@ -39,9 +40,9 @@ set(PYTHONLIBS_FOUND TRUE)
 set(NUMPY_FOUND ${WITH_PYTHON_NUMPY})
 set(NUMPY_INCLUDE_DIRS ${PYTHON_NUMPY_INCLUDE_DIRS})
 
-set(SDL_FOUND ${WITH_SDL})
+set(SDL_FOUND ${WITH_SDL_AUDIO})
 if(SDL_FOUND)
-  set(USE_SDL2 TRUE)
-  # This probably shouldn't be used, but it is.
-  set(SDL_LIBRARY "${SDL2_LIBRARY}")
+  set(USE_SDL3 TRUE)
+  set(SDL_LIBRARY bf::dependencies::optional::sdl)
+  get_target_property(SDL_INCLUDE_DIR SDL3::Headers INTERFACE_INCLUDE_DIRECTORIES)
 endif()

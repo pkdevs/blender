@@ -10,9 +10,13 @@
 
 #include "BLI_path_utils.hh"
 
+#include "DEG_depsgraph.hh"
+
 #include "DNA_ID.h"
 
 #include "IO_orientation.hh"
+
+namespace blender {
 
 struct Mesh;
 struct bContext;
@@ -40,9 +44,10 @@ struct STLExportParams {
   bool export_selected_objects = false;
   bool use_scene_unit = false;
   bool apply_modifiers = true;
+  eEvaluationMode evaluation_mode = DAG_EVAL_RENDER;
   bool ascii_format = false;
   bool use_batch = false;
-  char collection[MAX_IDPROP_NAME] = "";
+  char collection[MAX_ID_NAME - 2] = "";
 
   ReportList *reports = nullptr;
 };
@@ -51,3 +56,5 @@ void STL_import(bContext *C, const STLImportParams *import_params);
 void STL_export(bContext *C, const STLExportParams *export_params);
 
 Mesh *STL_import_mesh(const STLImportParams *import_params);
+
+}  // namespace blender

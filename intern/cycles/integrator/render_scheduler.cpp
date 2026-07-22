@@ -55,7 +55,12 @@ bool RenderScheduler::is_denoiser_gpu_used() const
 
 void RenderScheduler::set_limit_samples_per_update(const int limit_samples)
 {
-  limit_samples_per_update_ = limit_samples;
+  if (limit_samples_per_update_) {
+    limit_samples_per_update_ = min(limit_samples_per_update_, limit_samples);
+  }
+  else {
+    limit_samples_per_update_ = limit_samples;
+  }
 }
 
 void RenderScheduler::set_adaptive_sampling(const AdaptiveSampling &adaptive_sampling)
@@ -169,6 +174,7 @@ void RenderScheduler::reset(const BufferParams &buffer_params)
   adaptive_filter_time_.reset();
   display_update_time_.reset();
   rebalance_time_.reset();
+  volume_guiding_denoise_time_.reset();
 }
 
 void RenderScheduler::reset_for_next_tile()
@@ -229,7 +235,7 @@ bool RenderScheduler::render_work_reschedule_on_idle(RenderWork &render_work)
 
 void RenderScheduler::render_work_reschedule_on_cancel(RenderWork &render_work)
 {
-  VLOG_WORK << "Schedule work for cancel.";
+  LOG_DEBUG << "Schedule work for cancel.";
 
   /* Un-schedule samples: they will not be rendered and should not be counted. */
   state_.num_rendered_samples -= render_work.path_trace.num_samples;
@@ -294,6 +300,10 @@ RenderWork RenderScheduler::get_render_work()
   if (done()) {
     RenderWork render_work;
     render_work.resolution_divider = state_.resolution_divider;
+    render_work.denoised_resolution_divider = state_.resolution_divider;
+    if (denoiser_params_.use) {
+      render_work.resolution_divider *= denoiser_params_.upscale_factor;
+    }
 
     if (!set_postprocess_render_work(&render_work)) {
       set_full_frame_render_work(&render_work);
@@ -315,7 +325,7 @@ RenderWork RenderScheduler::get_render_work()
       /* Don't progress the resolution divider as the user is currently navigating in the scene. */
       state_.user_is_navigating = false;
     }
-    else {
+    else if (default_start_resolution_divider_ != 0) {
       /* If the resolution divider is greater than or equal to default_start_resolution_divider_,
        * drop the resolution divider down to 4. This is so users with slow hardware and thus high
        * resolution dividers (E.G. 16), get an update to let them know something is happening
@@ -331,6 +341,10 @@ RenderWork RenderScheduler::get_render_work()
   }
 
   render_work.resolution_divider = state_.resolution_divider;
+  render_work.denoised_resolution_divider = state_.resolution_divider;
+  if (denoiser_params_.use) {
+    render_work.resolution_divider *= denoiser_params_.upscale_factor;
+  }
 
   render_work.path_trace.start_sample = get_start_sample_to_path_trace();
   render_work.path_trace.num_samples = get_num_samples_to_path_trace();
@@ -348,6 +362,9 @@ RenderWork RenderScheduler::get_render_work()
   render_work.adaptive_sampling.filter = work_need_adaptive_filter();
   render_work.adaptive_sampling.threshold = work_adaptive_threshold();
   render_work.adaptive_sampling.reset = false;
+
+  /* Denoise volume guiding at power of two samples, but not needed when done. */
+  render_work.volume_guiding_denoise = is_power_of_two(state_.num_rendered_samples) && !done();
 
   bool denoiser_delayed;
   bool denoiser_ready_to_display;
@@ -495,7 +512,7 @@ void RenderScheduler::report_path_trace_time(const RenderWork &render_work,
 
   path_trace_time_.add_average(final_time_approx, render_work.path_trace.num_samples);
 
-  VLOG_WORK << "Average path tracing time: " << path_trace_time_.get_average() << " seconds.";
+  LOG_DEBUG << "Average path tracing time: " << path_trace_time_.get_average() << " seconds.";
 }
 
 void RenderScheduler::report_path_trace_occupancy(const RenderWork &render_work,
@@ -503,7 +520,7 @@ void RenderScheduler::report_path_trace_occupancy(const RenderWork &render_work,
 {
   state_.occupancy_num_samples = render_work.path_trace.num_samples;
   state_.occupancy = occupancy;
-  VLOG_WORK << "Measured path tracing occupancy: " << occupancy;
+  LOG_DEBUG << "Measured path tracing occupancy: " << occupancy;
 }
 
 void RenderScheduler::report_adaptive_filter_time(const RenderWork &render_work,
@@ -524,7 +541,7 @@ void RenderScheduler::report_adaptive_filter_time(const RenderWork &render_work,
 
   adaptive_filter_time_.add_average(final_time_approx, render_work.path_trace.num_samples);
 
-  VLOG_WORK << "Average adaptive sampling filter  time: " << adaptive_filter_time_.get_average()
+  LOG_DEBUG << "Average adaptive sampling filter  time: " << adaptive_filter_time_.get_average()
             << " seconds.";
 }
 
@@ -544,7 +561,24 @@ void RenderScheduler::report_denoise_time(const RenderWork &render_work, const d
 
   denoise_time_.add_average(final_time_approx);
 
-  VLOG_WORK << "Average denoising time: " << denoise_time_.get_average() << " seconds.";
+  LOG_DEBUG << "Average denoising time: " << denoise_time_.get_average() << " seconds.";
+}
+
+void RenderScheduler::report_volume_guiding_denoise_time(const RenderWork &render_work,
+                                                         const double time)
+{
+  volume_guiding_denoise_time_.add_wall(time);
+
+  const double final_time_approx = approximate_final_time(render_work, time);
+
+  if (work_report_reset_average(render_work)) {
+    volume_guiding_denoise_time_.reset_average();
+  }
+
+  volume_guiding_denoise_time_.add_average(final_time_approx, render_work.path_trace.num_samples);
+
+  LOG_DEBUG << "Average volume guiding denoising time: "
+            << volume_guiding_denoise_time_.get_average() << " seconds.";
 }
 
 void RenderScheduler::report_display_update_time(const RenderWork &render_work, const double time)
@@ -563,7 +597,7 @@ void RenderScheduler::report_display_update_time(const RenderWork &render_work, 
 
   display_update_time_.add_average(final_time_approx);
 
-  VLOG_WORK << "Average display update time: " << display_update_time_.get_average()
+  LOG_DEBUG << "Average display update time: " << display_update_time_.get_average()
             << " seconds.";
 
   /* Move the display update moment further in time, so that logic which checks when last update
@@ -590,7 +624,7 @@ void RenderScheduler::report_rebalance_time(const RenderWork &render_work,
 
   state_.last_rebalance_changed = balance_changed;
 
-  VLOG_WORK << "Average rebalance time: " << rebalance_time_.get_average() << " seconds.";
+  LOG_DEBUG << "Average rebalance time: " << rebalance_time_.get_average() << " seconds.";
 }
 
 string RenderScheduler::full_report() const
@@ -632,11 +666,23 @@ string RenderScheduler::full_report() const
     result += "  Start Sample: " + to_string(denoiser_params_.start_sample) + "\n";
 
     string passes = "Color";
-    if (denoiser_params_.use_pass_albedo) {
+    if (denoiser_params_.passes & DENOISER_PASS_ALBEDO) {
       passes += ", Albedo";
     }
-    if (denoiser_params_.use_pass_normal) {
+    if (denoiser_params_.passes & DENOISER_PASS_SPECULAR_ALBEDO) {
+      passes += ", Specular Albedo";
+    }
+    if (denoiser_params_.passes & DENOISER_PASS_NORMAL) {
       passes += ", Normal";
+    }
+    if (denoiser_params_.passes & DENOISER_PASS_ROUGHNESS) {
+      passes += ", Roughness";
+    }
+    if (denoiser_params_.passes & DENOISER_PASS_DEPTH) {
+      passes += ", Depth";
+    }
+    if (denoiser_params_.passes & DENOISER_PASS_MOTION) {
+      passes += ", Motion";
     }
 
     result += "  Passes: " + passes + "\n";
@@ -850,8 +896,10 @@ int RenderScheduler::get_num_samples_to_path_trace() const
     /* Keep occupancy at about 0.5 (this is more of an empirical figure which seems to match scenes
      * with good performance without forcing occupancy to be higher). */
     int num_samples_to_occupy = state_.occupancy_num_samples;
+    float ratio_to_increase_occupancy = 1.0f;
     if (state_.occupancy > 0 && state_.occupancy < 0.5f) {
-      num_samples_to_occupy = lround(state_.occupancy_num_samples * 0.7f / state_.occupancy);
+      ratio_to_increase_occupancy = 0.7f / state_.occupancy;
+      num_samples_to_occupy = lround(state_.occupancy_num_samples * ratio_to_increase_occupancy);
     }
 
     /* Time limit for path tracing, which constraints the scheduler from "over-scheduling" work
@@ -894,10 +942,12 @@ int RenderScheduler::get_num_samples_to_path_trace() const
       }
     }
     if (path_tracing_time_limit != 0) {
-      /* Use the per-sample time from the previously rendered batch of samples so that the
-       * correction is applied much quicker. */
+      /* Use the per-sample time from the previously rendered batch of samples, so that the
+       * correction is applied much quicker. Also use the predicted increase in performance from
+       * increased occupancy. */
       const double predicted_render_time = num_samples_to_occupy *
-                                           path_trace_time_.get_last_sample_time();
+                                           path_trace_time_.get_last_sample_time() /
+                                           ratio_to_increase_occupancy;
       if (predicted_render_time > path_tracing_time_limit) {
         num_samples_to_occupy = lround(num_samples_to_occupy *
                                        (path_tracing_time_limit / predicted_render_time));
@@ -1115,7 +1165,7 @@ void RenderScheduler::update_start_resolution_divider()
      * that we have a somewhat good initial behavior, giving a chance to collect real numbers. */
     start_resolution_divider_ = min(default_start_resolution_divider_,
                                     max_res_divider_for_desired_size);
-    VLOG_WORK << "Initial resolution divider is " << start_resolution_divider_;
+    LOG_DEBUG << "Initial resolution divider is " << start_resolution_divider_;
     return;
   }
 
@@ -1144,7 +1194,7 @@ void RenderScheduler::update_start_resolution_divider()
    * unreadable viewport render. */
   start_resolution_divider_ = min(resolution_divider_for_update, max_res_divider_for_desired_size);
 
-  VLOG_WORK << "Calculated resolution divider is " << start_resolution_divider_;
+  LOG_DEBUG << "Calculated resolution divider is " << start_resolution_divider_;
 }
 
 double RenderScheduler::guess_viewport_navigation_update_interval_in_seconds() const

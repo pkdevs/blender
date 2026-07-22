@@ -11,39 +11,33 @@
 #include "BKE_material.hh"
 #include "BKE_node_runtime.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "DNA_material_types.h"
 
 #include "RE_texture.h"
 
-static blender::bke::bNodeSocketTemplate inputs[] = {
+namespace blender {
+
+static bke::bNodeSocketTemplate inputs[] = {
     {SOCK_RGBA, N_("Color1"), 1.0f, 1.0f, 1.0f, 1.0f},
     {SOCK_RGBA, N_("Color2"), 0.0f, 0.0f, 0.0f, 1.0f},
     {-1, ""},
 };
 
-static blender::bke::bNodeSocketTemplate outputs[] = {
+static bke::bNodeSocketTemplate outputs[] = {
     {SOCK_RGBA, N_("Color")},
     {-1, ""},
 };
 
 static void colorfn(float *out, TexParams *p, bNode *node, bNodeStack **in, short thread)
 {
-  Tex *nodetex = (Tex *)node->id;
+  Tex *nodetex = id_cast<Tex *>(node->id);
   static float red[] = {1, 0, 0, 1};
   static float white[] = {1, 1, 1, 1};
-  float co[3], dxt[3], dyt[3];
+  float co[3];
 
   copy_v3_v3(co, p->co);
-  if (p->osatex) {
-    copy_v3_v3(dxt, p->dxt);
-    copy_v3_v3(dyt, p->dyt);
-  }
-  else {
-    zero_v3(dxt);
-    zero_v3(dyt);
-  }
 
   if (node->custom2 || node->runtime->need_exec == 0) {
     /* this node refers to its own texture tree! */
@@ -57,8 +51,7 @@ static void colorfn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
     tex_input_rgba(col1, in[0], p, thread);
     tex_input_rgba(col2, in[1], p, thread);
 
-    textype = multitex_nodes(
-        nodetex, co, dxt, dyt, p->osatex, &texres, thread, 0, p->mtex, nullptr);
+    textype = multitex_nodes(nodetex, co, &texres, thread, 0, p->mtex, nullptr);
 
     if (textype & TEX_RGB) {
       copy_v4_v4(out, texres.trgba);
@@ -82,15 +75,17 @@ static void exec(void *data,
 
 void register_node_type_tex_texture()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  tex_node_type_base(&ntype, "TextureNodeTexture", TEX_NODE_TEXTURE);
+  tex_node_type_base(&ntype, "TextureNodeTexture"_ustr, TEX_NODE_TEXTURE);
   ntype.ui_name = "Texture";
   ntype.enum_name_legacy = "TEXTURE";
   ntype.nclass = NODE_CLASS_INPUT;
-  blender::bke::node_type_socket_templates(&ntype, inputs, outputs);
+  bke::node_type_socket_templates(&ntype, inputs, outputs);
   ntype.exec_fn = exec;
   ntype.flag |= NODE_PREVIEW;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

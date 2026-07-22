@@ -140,7 +140,7 @@ def resolve_collection_reference(obj: ArmatureObject, ref: Any, *,
                 ref["name"] = coll.name
             return coll
 
-    # Fallback to lookup by name only if possible
+    # Fall back to lookup by name only if possible
     if name_coll:
         if update:
             ref["uid"] = ensure_collection_uid(name_coll)
@@ -353,7 +353,7 @@ class ControlLayersOption:
                 props.prop_name = self.refs_option
                 props.index = i
         else:
-            box.label(text="Use the plus button to add list entries", icon="INFO")
+            box.label(text="Use the plus button to add list entries", icon='STATUS_INFO')
 
     # Declarations for auto-completion
     FK: 'ControlLayersOption'

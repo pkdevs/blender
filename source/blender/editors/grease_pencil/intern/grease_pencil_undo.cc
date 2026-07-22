@@ -31,9 +31,11 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-static CLG_LogRef LOG = {"ed.undo.greasepencil"};
+namespace blender {
 
-namespace blender::ed::greasepencil::undo {
+static CLG_LogRef LOG = {"undo.greasepencil"};
+
+namespace ed::greasepencil::undo {
 
 /* -------------------------------------------------------------------- */
 /** \name Implements ED Undo System
@@ -67,7 +69,7 @@ class StepDrawingGeometryBase {
   int index_;
 
   /* Data from #GreasePencilDrawingBase that needs to be saved in undo steps. */
-  uint32_t flag_;
+  GreasePencilDrawingBaseFlag flag_;
 
   /**
    * Ensures that the drawing from the given array at the current index exists,
@@ -117,15 +119,15 @@ class StepDrawingGeometry : public StepDrawingGeometryBase {
   bke::CurvesGeometry geometry_;
 
  public:
-  void encode(const GreasePencilDrawing &drawing_geometry,
+  void encode(const GreasePencilDrawing &drawing,
               const int64_t drawing_index,
               StepEncodeStatus & /*encode_status*/)
   {
     BLI_assert(drawing_index >= 0 && drawing_index < INT32_MAX);
     index_ = int(drawing_index);
 
-    flag_ = drawing_geometry.base.flag;
-    geometry_ = drawing_geometry.geometry.wrap();
+    flag_ = drawing.base.flag;
+    geometry_ = drawing.wrap().strokes();
   }
 
   void decode(GreasePencil &grease_pencil, StepDecodeStatus & /*decode_status*/) const
@@ -134,15 +136,14 @@ class StepDrawingGeometry : public StepDrawingGeometryBase {
     this->decode_valid_drawingtype_at_index_ensure(drawings, GP_DRAWING);
     BLI_assert(drawings[index_]->type == GP_DRAWING);
 
-    GreasePencilDrawing &drawing_geometry = *reinterpret_cast<GreasePencilDrawing *>(
-        drawings[index_]);
+    GreasePencilDrawing &drawing = *reinterpret_cast<GreasePencilDrawing *>(drawings[index_]);
 
-    drawing_geometry.base.flag = flag_;
-    drawing_geometry.geometry.wrap() = geometry_;
+    drawing.base.flag = flag_;
+    drawing.wrap().strokes_for_write() = geometry_;
 
     /* TODO: Check if there is a way to tell if both stored and current geometry are still the
      * same, to avoid recomputing the caches all the time for all drawings? */
-    drawing_geometry.wrap().tag_topology_changed();
+    drawing.wrap().tag_topology_changed();
   }
 };
 
@@ -196,7 +197,7 @@ class StepObject {
   int layers_num_ = 0;
   bke::greasepencil::LayerGroup root_group_;
   std::string active_node_name_;
-  CustomData layers_data_ = {};
+  bke::AttributeStorage layer_attributes_;
 
   void encode_drawings(const GreasePencil &grease_pencil, StepEncodeStatus &encode_status)
   {
@@ -252,9 +253,7 @@ class StepObject {
   void encode_layers(const GreasePencil &grease_pencil, StepEncodeStatus & /*encode_status*/)
   {
     layers_num_ = int(grease_pencil.layers().size());
-
-    CustomData_init_from(
-        &grease_pencil.layers_data, &layers_data_, eCustomDataMask(CD_MASK_ALL), layers_num_);
+    layer_attributes_ = grease_pencil.attribute_storage.wrap();
 
     if (grease_pencil.active_node != nullptr) {
       active_node_name_ = grease_pencil.get_active_node()->name();
@@ -281,20 +280,15 @@ class StepObject {
       }
     }
 
-    CustomData_free(&grease_pencil.layers_data);
-    CustomData_init_from(
-        &layers_data_, &grease_pencil.layers_data, eCustomDataMask(CD_MASK_ALL), layers_num_);
+    grease_pencil.attribute_storage.wrap() = layer_attributes_;
   }
 
  public:
-  ~StepObject()
-  {
-    CustomData_free(&layers_data_);
-  }
+  ~StepObject() = default;
 
   void encode(Object *ob, StepEncodeStatus &encode_status)
   {
-    const GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob->data);
+    const GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
     this->obedit_ref.ptr = ob;
 
     this->encode_drawings(grease_pencil, encode_status);
@@ -303,7 +297,7 @@ class StepObject {
 
   void decode(StepDecodeStatus &decode_status) const
   {
-    GreasePencil &grease_pencil = *static_cast<GreasePencil *>(this->obedit_ref.ptr->data);
+    GreasePencil &grease_pencil = *id_cast<GreasePencil *>(this->obedit_ref.ptr->data);
 
     this->decode_drawings(grease_pencil, decode_status);
     this->decode_layers(grease_pencil, decode_status);
@@ -334,7 +328,7 @@ static bool step_encode(bContext *C, Main *bmain, UndoStep *us_p)
 
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(scene, view_layer);
+  Vector<Object *> objects = ED_undo_editmode_objects_from_view_layer(*bmain, scene, view_layer);
 
   us->scene_ref.ptr = scene;
   new (&us->objects) Array<StepObject>(objects.size());
@@ -379,7 +373,7 @@ static void step_decode(
   }
 
   ED_undo_object_set_active_or_warn(
-      scene, view_layer, us->objects.first().obedit_ref.ptr, us_p->name, &LOG);
+      *bmain, scene, view_layer, us->objects.first().obedit_ref.ptr, us_p->name, &LOG);
 
   bmain->is_memfile_undo_flush_needed = true;
 
@@ -406,13 +400,13 @@ static void foreach_ID_ref(UndoStep *us_p,
 
 /** \} */
 
-}  // namespace blender::ed::greasepencil::undo
+}  // namespace ed::greasepencil::undo
 
 void ED_undosys_type_grease_pencil(UndoType *ut)
 {
   using namespace blender::ed;
 
-  ut->name = "Edit GreasePencil";
+  ut->identifier = "EDIT_GREASEPENCIL";
   ut->poll = greasepencil::grease_pencil_edit_poll;
   ut->step_encode = greasepencil::undo::step_encode;
   ut->step_decode = greasepencil::undo::step_decode;
@@ -424,3 +418,5 @@ void ED_undosys_type_grease_pencil(UndoType *ut)
 
   ut->step_size = sizeof(greasepencil::undo::GreasePencilUndoStep);
 }
+
+}  // namespace blender

@@ -145,7 +145,7 @@
  * then spit out a new one; this allows operators to be chained together.
  *
  * \note Element buffers may have elements of different types within the same buffer
- * (this is supported by the API.
+ * (this is supported by the API).
  * \section bm_fname Function Naming Conventions
  *
  * These conventions should be used throughout the bmesh module.
@@ -206,6 +206,7 @@
 #include "intern/bmesh_polygon_edgenet.hh"      // IWYU pragma: export
 #include "intern/bmesh_query.hh"                // IWYU pragma: export
 #include "intern/bmesh_query_uv.hh"             // IWYU pragma: export
+#include "intern/bmesh_uvselect.hh"             // IWYU pragma: export
 #include "intern/bmesh_walkers.hh"              // IWYU pragma: export
 
 #include "intern/bmesh_inline.hh"  // IWYU pragma: export

@@ -11,9 +11,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_material_types.h"
@@ -21,32 +20,28 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
-#include "DNA_view3d_types.h"
 
 #include "BKE_context.hh"
-#include "BKE_gpencil_legacy.h"
 #include "BKE_paint.hh"
-#include "BKE_tracking.h"
+#include "BKE_tracking.hh"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 #include "RNA_access.hh"
-#include "RNA_enum_types.hh"
 #include "RNA_prototypes.hh"
 
 #include "UI_view2d.hh"
 
 #include "ED_clip.hh"
 #include "ED_gpencil_legacy.hh"
-#include "ED_object.hh"
-#include "ED_select_utils.hh"
 #include "ED_view3d.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "gpencil_intern.hh"
+
+namespace blender {
 
 /* ******************************************************** */
 /* Context Wrangling... */
@@ -78,7 +73,7 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
       }
       case SPACE_NODE: /* Nodes Editor */
       {
-        SpaceNode *snode = (SpaceNode *)sl;
+        SpaceNode *snode = reinterpret_cast<SpaceNode *>(sl);
 
         /* return the GP data for the active node block/node */
         if (snode && snode->nodetree) {
@@ -95,28 +90,28 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
       }
       case SPACE_SEQ: /* Sequencer */
       {
-        SpaceSeq *sseq = (SpaceSeq *)sl;
+        SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(sl);
 
         /* For now, Grease Pencil data is associated with the space
          * (actually preview region only). */
         if (r_ptr) {
-          *r_ptr = RNA_pointer_create_discrete(screen_id, &RNA_SpaceSequenceEditor, sseq);
+          *r_ptr = RNA_pointer_create_discrete(screen_id, RNA_SpaceSequenceEditor, sseq);
         }
         return &sseq->gpd;
       }
       case SPACE_IMAGE: /* Image/UV Editor */
       {
-        SpaceImage *sima = (SpaceImage *)sl;
+        SpaceImage *sima = reinterpret_cast<SpaceImage *>(sl);
 
         /* For now, Grease Pencil data is associated with the space... */
         if (r_ptr) {
-          *r_ptr = RNA_pointer_create_discrete(screen_id, &RNA_SpaceImageEditor, sima);
+          *r_ptr = RNA_pointer_create_discrete(screen_id, RNA_SpaceImageEditor, sima);
         }
         return &sima->gpd;
       }
       case SPACE_CLIP: /* Nodes Editor */
       {
-        SpaceClip *sc = (SpaceClip *)sl;
+        SpaceClip *sc = reinterpret_cast<SpaceClip *>(sl);
         MovieClip *clip = ED_space_clip_get_clip(sc);
 
         if (clip) {
@@ -130,7 +125,7 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
             }
 
             if (r_ptr) {
-              *r_ptr = RNA_pointer_create_discrete(&clip->id, &RNA_MovieTrackingTrack, track);
+              *r_ptr = RNA_pointer_create_discrete(&clip->id, RNA_MovieTrackingTrack, track);
             }
             return &track->gpd;
           }
@@ -151,7 +146,7 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
 
 bGPdata **ED_annotation_data_get_pointers(const bContext *C, PointerRNA *r_ptr)
 {
-  ID *screen_id = (ID *)CTX_wm_screen(C);
+  ID *screen_id = id_cast<ID *>(CTX_wm_screen(C));
   Scene *scene = CTX_data_scene(C);
   ScrArea *area = CTX_wm_area(C);
 
@@ -244,7 +239,7 @@ void gpencil_point_to_xy(
   else if (gps->flag & GP_STROKE_2DSPACE) {
     float vec[3] = {pt->x, pt->y, 0.0f};
     mul_m4_v3(gsc->mat, vec);
-    UI_view2d_view_to_region_clip(v2d, vec[0], vec[1], r_x, r_y);
+    ui::view2d_view_to_region_clip(v2d, vec[0], vec[1], r_x, r_y);
   }
   else {
     if (subrect == nullptr) {
@@ -260,52 +255,6 @@ void gpencil_point_to_xy(
   }
 }
 
-/**
- * Helper to convert 2d to 3d for simple drawing buffer.
- */
-static void gpencil_stroke_convertcoords(ARegion *region,
-                                         const tGPspoint *point2D,
-                                         const float origin[3],
-                                         float out[3])
-{
-  float mval_prj[2];
-  float rvec[3];
-
-  copy_v3_v3(rvec, origin);
-
-  const float zfac = ED_view3d_calc_zfac(static_cast<const RegionView3D *>(region->regiondata),
-                                         rvec);
-
-  if (ED_view3d_project_float_global(region, rvec, mval_prj, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK)
-  {
-    float dvec[3];
-    float xy_delta[2];
-    sub_v2_v2v2(xy_delta, mval_prj, point2D->m_xy);
-    ED_view3d_win_to_delta(region, xy_delta, zfac, dvec);
-    sub_v3_v3v3(out, rvec, dvec);
-  }
-  else {
-    zero_v3(out);
-  }
-}
-
-void ED_gpencil_tpoint_to_point(ARegion *region,
-                                float origin[3],
-                                const tGPspoint *tpt,
-                                bGPDspoint *pt)
-{
-  float p3d[3];
-  /* conversion to 3d format */
-  gpencil_stroke_convertcoords(region, tpt, origin, p3d);
-  copy_v3_v3(&pt->x, p3d);
-  zero_v4(pt->vert_color);
-
-  pt->pressure = tpt->pressure;
-  pt->strength = tpt->strength;
-  pt->uv_fac = tpt->uv_fac;
-  pt->uv_rot = tpt->uv_rot;
-}
-
 tGPspoint *ED_gpencil_sbuffer_ensure(tGPspoint *buffer_array,
                                      int *buffer_size,
                                      int *buffer_used,
@@ -318,12 +267,13 @@ tGPspoint *ED_gpencil_sbuffer_ensure(tGPspoint *buffer_array,
    * This is done in order to keep cache small and improve speed. */
   if (*buffer_used + 1 > *buffer_size) {
     if ((*buffer_size == 0) || (buffer_array == nullptr)) {
-      p = MEM_calloc_arrayN<tGPspoint>(GP_STROKE_BUFFER_CHUNK, "GPencil Sbuffer");
+      p = MEM_new_array_zeroed<tGPspoint>(GP_STROKE_BUFFER_CHUNK, "GPencil Sbuffer");
       *buffer_size = GP_STROKE_BUFFER_CHUNK;
     }
     else {
       *buffer_size += GP_STROKE_BUFFER_CHUNK;
-      p = static_cast<tGPspoint *>(MEM_recallocN(buffer_array, sizeof(tGPspoint) * *buffer_size));
+      p = static_cast<tGPspoint *>(
+          MEM_realloc_zeroed(buffer_array, sizeof(tGPspoint) * *buffer_size));
     }
 
     if (p == nullptr) {
@@ -343,3 +293,5 @@ tGPspoint *ED_gpencil_sbuffer_ensure(tGPspoint *buffer_array,
 
   return buffer_array;
 }
+
+}  // namespace blender

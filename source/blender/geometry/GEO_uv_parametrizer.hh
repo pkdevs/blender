@@ -4,22 +4,28 @@
 
 #pragma once
 
+/** \file
+ * \ingroup geo
+ */
+
 #include <cstdint>
 
 namespace slim {
 struct MatrixTransfer;
 }
 
-/** \file
- * \ingroup geo
- */
+namespace blender {
+
+namespace geometry {
+class UVPackIsland_Params;
+}
 
 struct GHash;
 struct Heap;
 struct MemArena;
 struct RNG;
 
-namespace blender::geometry {
+namespace geometry {
 
 struct PChart;
 struct PHash;
@@ -121,6 +127,7 @@ struct ParamSlimOptions {
 
 void uv_parametrizer_slim_solve(ParamHandle *phandle,
                                 const ParamSlimOptions *slim_options,
+                                bool use_original_bounds,
                                 int *count_changed,
                                 int *count_failed);
 
@@ -145,7 +152,10 @@ bool uv_parametrizer_is_slim(const ParamHandle *phandle);
  *
  * \{ */
 
-void uv_parametrizer_lscm_begin(ParamHandle *handle, bool live, bool abf);
+void uv_parametrizer_lscm_begin(ParamHandle *handle,
+                                bool live,
+                                bool abf,
+                                bool use_original_bounds);
 void uv_parametrizer_lscm_solve(ParamHandle *handle, int *count_changed, int *count_failed);
 void uv_parametrizer_lscm_end(ParamHandle *handle);
 
@@ -166,7 +176,15 @@ void uv_parametrizer_stretch_end(ParamHandle *handle);
 /** \name Packing
  * \{ */
 
-void uv_parametrizer_pack(ParamHandle *handle, float margin, bool do_rotate, bool ignore_pinned);
+void uv_parametrizer_pack(ParamHandle *handle, const UVPackIsland_Params &params);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Original Bounds
+ * \{ */
+
+void uv_parametrizer_original_bounds(ParamHandle *phandle);
 
 /** \} */
 
@@ -187,4 +205,5 @@ void uv_parametrizer_flush_restore(ParamHandle *handle);
 
 /** \} */
 
-}  // namespace blender::geometry
+}  // namespace geometry
+}  // namespace blender

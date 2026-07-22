@@ -10,14 +10,16 @@
 
 #pragma once
 
+#include "DRW_gpu_wrapper.hh"
 #include "DRW_render.hh"
 #include "GPU_capabilities.hh"
-
 #include "GPU_platform.hh"
-#include "eevee_material.hh"
-#include "eevee_shader_shared.hh"
+
+#include "eevee_defines.hh"
 
 namespace blender::eevee {
+
+using namespace draw;
 
 class Instance;
 
@@ -127,10 +129,9 @@ class Instance;
  */
 struct GBuffer {
  public:
-  /* TODO(fclem): Use texture from pool once they support texture array and layer views. */
-  Texture header_tx = {"GBufferHeader"};
-  Texture closure_tx = {"GBufferClosure"};
-  Texture normal_tx = {"GBufferNormal"};
+  TextureFromPool header_tx = {"GBufferHeader"};
+  TextureFromPool closure_tx = {"GBufferClosure"};
+  TextureFromPool normal_tx = {"GBufferNormal"};
 
   /* Expected number of layer written through the framebuffer. */
   const uint header_fb_layer_count = GBUF_HEADER_FB_LAYER_COUNT;
@@ -142,16 +143,16 @@ struct GBuffer {
    * These will point to either the dummy textures bellow or to a layer range view of the above
    * textures. In the later case, these layers are written with imageStore instead of being part
    * of the #Framebuffer. */
-  GPUTexture *closure_opt_layers_ = nullptr;
-  GPUTexture *normal_opt_layers_ = nullptr;
-  GPUTexture *header_opt_layers_ = nullptr;
+  gpu::Texture *closure_opt_layers_ = nullptr;
+  gpu::Texture *normal_opt_layers_ = nullptr;
+  gpu::Texture *header_opt_layers_ = nullptr;
 
   /* Textures used to fulfill the GBuffer optional layers binding when textures do not have enough
    * layers for the optional layers image views. The shader are then expected to never write to
    * them. */
-  Texture dummy_header_tx_ = {"GBufferDummyHeader"};
-  Texture dummy_closure_tx_ = {"GBufferDummyClosure"};
-  Texture dummy_normal_tx_ = {"GBufferDummyNormal"};
+  TextureFromPool dummy_header_tx_ = {"GBufferDummyHeader"};
+  TextureFromPool dummy_closure_tx_ = {"GBufferDummyClosure"};
+  TextureFromPool dummy_normal_tx_ = {"GBufferDummyNormal"};
 
  public:
   void acquire(int2 extent, int header_count, int data_count, int normal_count)
@@ -161,15 +162,17 @@ struct GBuffer {
     data_count = max_ii(closure_fb_layer_count, data_count);
     normal_count = max_ii(normal_fb_layer_count, normal_count);
 
-    dummy_header_tx_.ensure_2d_array(GPU_R32UI, int2(1), 1, GPU_TEXTURE_USAGE_SHADER_WRITE);
-    dummy_closure_tx_.ensure_2d_array(GPU_RGB10_A2, int2(1), 1, GPU_TEXTURE_USAGE_SHADER_WRITE);
-    dummy_normal_tx_.ensure_2d_array(GPU_RG16, int2(1), 1, GPU_TEXTURE_USAGE_SHADER_WRITE);
+    eGPUTextureUsage dummy_use = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE;
+    dummy_header_tx_.acquire_2d_array({1, 1}, 1, gpu::TextureFormat::UINT_32, dummy_use);
+    dummy_closure_tx_.acquire_2d_array({1, 1}, 1, gpu::TextureFormat::UNORM_10_10_10_2, dummy_use);
+    dummy_normal_tx_.acquire_2d_array({1, 1}, 1, gpu::TextureFormat::UNORM_16_16, dummy_use);
 
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE |
                              GPU_TEXTURE_USAGE_ATTACHMENT;
-    header_tx.ensure_2d_array(GPU_R32UI, extent, header_count, usage);
-    closure_tx.ensure_2d_array(GPU_RGB10_A2, extent, data_count, usage);
-    normal_tx.ensure_2d_array(GPU_RG16, extent, normal_count, usage);
+    header_tx.acquire_2d_array(extent, header_count, gpu::TextureFormat::UINT_32, usage);
+    closure_tx.acquire_2d_array(extent, data_count, gpu::TextureFormat::UNORM_10_10_10_2, usage);
+    normal_tx.acquire_2d_array(extent, normal_count, gpu::TextureFormat::UNORM_16_16, usage);
+
     /* Ensure layer view for frame-buffer attachment. */
     header_tx.ensure_layer_views();
     closure_tx.ensure_layer_views();
@@ -186,7 +189,7 @@ struct GBuffer {
   }
 
   /* Bind the GBuffer frame-buffer correctly using the correct workarounds. */
-  void bind(Framebuffer &gbuffer_fb)
+  void bind(Framebuffer &gbuffer_fb, bool clear_combined = false)
   {
     /* Workaround a Metal bug that is only showing up on ATI/Intel GPUs. */
     if (GPU_type_matches(
@@ -203,11 +206,14 @@ struct GBuffer {
       GPU_framebuffer_bind(gbuffer_fb);
       GPU_framebuffer_clear_stencil(gbuffer_fb, 0x0u);
     }
+
+    GPULoadOp combined_load_action = clear_combined ? GPU_LOADACTION_CLEAR : GPU_LOADACTION_LOAD;
+
     GPU_framebuffer_bind_ex(
         gbuffer_fb,
         {
             {GPU_LOADACTION_LOAD, GPU_STOREACTION_STORE},       /* Depth. */
-            {GPU_LOADACTION_LOAD, GPU_STOREACTION_STORE},       /* Combined. */
+            {combined_load_action, GPU_STOREACTION_STORE, {0}}, /* Combined. */
             {GPU_LOADACTION_CLEAR, GPU_STOREACTION_STORE, {0}}, /* GBuf Header. */
             {GPU_LOADACTION_DONT_CARE, GPU_STOREACTION_STORE},  /* GBuf Normal. */
             {GPU_LOADACTION_DONT_CARE, GPU_STOREACTION_STORE},  /* GBuf Closure. */
@@ -217,10 +223,13 @@ struct GBuffer {
 
   void release()
   {
-    /* TODO(fclem): Use texture from pool once they support texture array. */
-    // header_tx.release();
-    // closure_tx.release();
-    // normal_tx.release();
+    header_tx.release();
+    closure_tx.release();
+    normal_tx.release();
+
+    dummy_header_tx_.release();
+    dummy_closure_tx_.release();
+    dummy_normal_tx_.release();
 
     header_opt_layers_ = nullptr;
     closure_opt_layers_ = nullptr;

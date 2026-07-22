@@ -11,6 +11,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_pointcloud_types.h"
 
+#include "BKE_attribute_storage.hh"
 #include "BKE_curves.hh"
 #include "BKE_customdata.hh"
 #include "BKE_geometry_set.hh"
@@ -81,6 +82,32 @@ static void reorder_customdata(CustomData &data, const Span<int> new_by_old_map)
   data = new_data;
 }
 
+static void reorder_attribute_domain(bke::AttributeStorage &data,
+                                     const bke::AttrDomain domain,
+                                     const Span<int> new_by_old_map)
+{
+  for (bke::Attribute &attr : data) {
+    if (attr.domain() != domain) {
+      continue;
+    }
+    const CPPType &type = bke::attribute_type_to_cpp_type(attr.data_type());
+    switch (attr.storage_type()) {
+      case bke::AttrStorageType::Array: {
+        const auto &data = std::get<bke::Attribute::ArrayData>(attr.data());
+        auto new_data = bke::Attribute::ArrayData::from_constructed(type, new_by_old_map.size());
+        bke::attribute_math::gather(GSpan(type, data.data, data.size),
+                                    new_by_old_map,
+                                    GMutableSpan(type, new_data.data, new_data.size));
+        attr.assign_data(std::move(new_data));
+        break;
+      }
+      case bke::AttrStorageType::Single: {
+        break;
+      }
+    }
+  }
+}
+
 void debug_randomize_vert_order(Mesh *mesh)
 {
   if (mesh == nullptr || !use_debug_randomization()) {
@@ -89,8 +116,10 @@ void debug_randomize_vert_order(Mesh *mesh)
 
   const int seed = seed_from_mesh(*mesh);
   const Array<int> new_by_old_map = get_permutation(mesh->verts_num, seed);
+  const Array<int> old_by_new_map = invert_permutation(new_by_old_map);
 
   reorder_customdata(mesh->vert_data, new_by_old_map);
+  reorder_attribute_domain(mesh->attribute_storage.wrap(), bke::AttrDomain::Point, old_by_new_map);
 
   for (int &v : mesh->edges_for_write().cast<int>()) {
     v = new_by_old_map[v];
@@ -110,8 +139,10 @@ void debug_randomize_edge_order(Mesh *mesh)
 
   const int seed = seed_from_mesh(*mesh);
   const Array<int> new_by_old_map = get_permutation(mesh->edges_num, seed);
+  const Array<int> old_by_new_map = invert_permutation(new_by_old_map);
 
   reorder_customdata(mesh->edge_data, new_by_old_map);
+  reorder_attribute_domain(mesh->attribute_storage.wrap(), bke::AttrDomain::Edge, old_by_new_map);
 
   for (int &e : mesh->corner_edges_for_write()) {
     e = new_by_old_map[e];
@@ -123,12 +154,9 @@ void debug_randomize_edge_order(Mesh *mesh)
 static Array<int> make_new_offset_indices(const OffsetIndices<int> old_offsets,
                                           const Span<int> old_by_new_map)
 {
-  Array<int> new_offsets(old_offsets.data().size());
-  new_offsets[0] = 0;
-  for (const int new_i : old_offsets.index_range()) {
-    const int old_i = old_by_new_map[new_i];
-    new_offsets[new_i + 1] = new_offsets[new_i] + old_offsets[old_i].size();
-  }
+  Array<int> new_offsets(old_offsets.size() + 1);
+  offset_indices::gather_group_sizes(old_offsets, old_by_new_map, new_offsets);
+  offset_indices::accumulate_counts_to_offsets(new_offsets.as_mutable_span());
   return new_offsets;
 }
 
@@ -152,6 +180,48 @@ static void reorder_customdata_groups(CustomData &data,
   data = new_data;
 }
 
+static void reorder_attribute_groups(bke::AttributeStorage &storage,
+                                     const bke::AttrDomain domain,
+                                     const OffsetIndices<int> old_offsets,
+                                     const OffsetIndices<int> new_offsets,
+                                     const Span<int> new_by_old_map)
+{
+  const int groups_num = new_by_old_map.size();
+  BLI_assert(old_offsets.size() == groups_num);
+  BLI_assert(new_offsets.size() == groups_num);
+  for (bke::Attribute &attr : storage) {
+    if (attr.domain() != domain) {
+      continue;
+    }
+    const CPPType &type = bke::attribute_type_to_cpp_type(attr.data_type());
+    switch (attr.storage_type()) {
+      case bke::AttrStorageType::Array: {
+        const auto &data = std::get<bke::Attribute::ArrayData>(attr.data());
+
+        auto new_data = bke::Attribute::ArrayData::from_uninitialized(type,
+                                                                      new_offsets.total_size());
+        threading::parallel_for(IndexRange(groups_num), 1024, [&](const IndexRange range) {
+          for (const int old_i : range) {
+            const int new_i = new_by_old_map[old_i];
+            const IndexRange old_range = old_offsets[old_i];
+            const IndexRange new_range = new_offsets[new_i];
+            BLI_assert(old_range.size() == new_range.size());
+            type.copy_construct_n(POINTER_OFFSET(data.data, old_range.start() * type.size),
+                                  POINTER_OFFSET(new_data.data, new_range.start() * type.size),
+                                  old_range.size());
+          }
+        });
+
+        attr.assign_data(std::move(new_data));
+        break;
+      }
+      case bke::AttrStorageType::Single: {
+        break;
+      }
+    }
+  }
+}
+
 void debug_randomize_face_order(Mesh *mesh)
 {
   if (mesh == nullptr || mesh->faces_num == 0 || !use_debug_randomization()) {
@@ -163,12 +233,18 @@ void debug_randomize_face_order(Mesh *mesh)
   const Array<int> old_by_new_map = invert_permutation(new_by_old_map);
 
   reorder_customdata(mesh->face_data, new_by_old_map);
+  reorder_attribute_domain(mesh->attribute_storage.wrap(), bke::AttrDomain::Face, old_by_new_map);
 
   const OffsetIndices old_faces = mesh->faces();
   Array<int> new_face_offsets = make_new_offset_indices(old_faces, old_by_new_map);
   const OffsetIndices<int> new_faces = new_face_offsets.as_span();
 
   reorder_customdata_groups(mesh->corner_data, old_faces, new_faces, new_by_old_map);
+  reorder_attribute_groups(mesh->attribute_storage.wrap(),
+                           bke::AttrDomain::Corner,
+                           old_faces,
+                           new_faces,
+                           new_by_old_map);
 
   mesh->face_offsets_for_write().copy_from(new_face_offsets);
 
@@ -183,8 +259,9 @@ void debug_randomize_point_order(PointCloud *pointcloud)
 
   const int seed = seed_from_pointcloud(*pointcloud);
   const Array<int> new_by_old_map = get_permutation(pointcloud->totpoint, seed);
-
-  reorder_customdata(pointcloud->pdata, new_by_old_map);
+  const Array<int> old_by_new_map = invert_permutation(new_by_old_map);
+  reorder_attribute_domain(
+      pointcloud->attribute_storage.wrap(), bke::AttrDomain::Point, old_by_new_map);
 
   pointcloud->tag_positions_changed();
   pointcloud->tag_radii_changed();
@@ -200,7 +277,9 @@ void debug_randomize_curve_order(bke::CurvesGeometry *curves)
   const Array<int> new_by_old_map = get_permutation(curves->curve_num, seed);
   const Array<int> old_by_new_map = invert_permutation(new_by_old_map);
 
-  reorder_customdata(curves->curve_data, new_by_old_map);
+  bke::AttributeStorage &attributes = curves->attribute_storage.wrap();
+
+  reorder_attribute_domain(attributes, bke::AttrDomain::Curve, old_by_new_map);
 
   const OffsetIndices old_points_by_curve = curves->points_by_curve();
   Array<int> new_curve_offsets = make_new_offset_indices(old_points_by_curve, old_by_new_map);
@@ -208,6 +287,11 @@ void debug_randomize_curve_order(bke::CurvesGeometry *curves)
 
   reorder_customdata_groups(
       curves->point_data, old_points_by_curve, new_points_by_curve, new_by_old_map);
+  reorder_attribute_groups(attributes,
+                           bke::AttrDomain::Point,
+                           old_points_by_curve,
+                           new_points_by_curve,
+                           new_by_old_map);
 
   curves->offsets_for_write().copy_from(new_curve_offsets);
 
@@ -233,7 +317,8 @@ void debug_randomize_instance_order(bke::Instances *instances)
   const int instances_num = instances->instances_num();
   const int seed = seed_from_instances(*instances);
   const Array<int> new_by_old_map = get_permutation(instances_num, seed);
-  reorder_customdata(instances->custom_data_attributes(), new_by_old_map);
+  reorder_attribute_domain(
+      instances->attribute_storage(), bke::AttrDomain::Instance, new_by_old_map);
 }
 
 bool use_debug_randomization()

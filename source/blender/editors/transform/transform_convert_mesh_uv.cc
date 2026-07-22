@@ -8,11 +8,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_linklist_stack.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_linklist_stack.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
@@ -61,7 +61,6 @@ static void UVsToTransData(const float aspect[2],
   memset(r_td->axismtx, 0, sizeof(r_td->axismtx));
   r_td->axismtx[2][2] = 1.0f;
 
-  r_td->ext = nullptr;
   r_td->val = nullptr;
 
   if (selected) {
@@ -111,7 +110,7 @@ static void uv_set_connectivity_distance(const ToolSettings *ts,
 
     BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
       float dist;
-      bool uv_vert_sel = uvedit_uv_select_test_ex(ts, l, offsets);
+      bool uv_vert_sel = uvedit_uv_select_test_ex(ts, bm, l, offsets);
 
       if (uv_vert_sel) {
         BLI_LINKSTACK_PUSH(queue, l);
@@ -133,7 +132,7 @@ static void uv_set_connectivity_distance(const ToolSettings *ts,
   }
 
   /* Need to be very careful of feedback loops here, store previous dist's to avoid feedback. */
-  float *dists_prev = static_cast<float *>(MEM_dupallocN(dists));
+  float *dists_prev = MEM_dupalloc(dists);
 
   do {
     while ((l = BLI_LINKSTACK_POP(queue))) {
@@ -241,7 +240,7 @@ static void uv_set_connectivity_distance(const ToolSettings *ts,
   BLI_LINKSTACK_FREE(queue);
   BLI_LINKSTACK_FREE(queue_next);
 
-  MEM_freeN(dists_prev);
+  MEM_delete(dists_prev);
 #undef TMP_LOOP_SELECT_TAG
 }
 
@@ -281,7 +280,7 @@ static void createTransUVs(bContext *C, TransInfo *t)
         continue;
       }
 
-      island_center = MEM_calloc_arrayN<IslandCenter>(elementmap->total_islands, __func__);
+      island_center = MEM_new_array_zeroed<IslandCenter>(elementmap->total_islands, __func__);
     }
 
     BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
@@ -297,7 +296,7 @@ static void createTransUVs(bContext *C, TransInfo *t)
         /* Make sure that the loop element flag is cleared for when we use it in
          * uv_set_connectivity_distance later. */
         BM_elem_flag_disable(l, BM_ELEM_TAG);
-        if (uvedit_uv_select_test(scene, l, offsets)) {
+        if (uvedit_uv_select_test(scene, em->bm, l, offsets)) {
           countsel++;
 
           if (island_center) {
@@ -334,10 +333,10 @@ static void createTransUVs(bContext *C, TransInfo *t)
     }
 
     tc->data_len = (is_prop_edit) ? count : countsel;
-    tc->data = MEM_calloc_arrayN<TransData>(tc->data_len, "TransObData(UV Editing)");
+    tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransObData(UV Editing)");
     /* For each 2d uv coord a 3d vector is allocated, so that they can be
      * treated just as if they were 3d verts. */
-    tc->data_2d = MEM_calloc_arrayN<TransData2D>(tc->data_len, "TransObData2D(UV Editing)");
+    tc->data_2d = MEM_new_array_zeroed<TransData2D>(tc->data_len, "TransObData2D(UV Editing)");
 
     if (sima->flag & SI_CLIP_UV) {
       t->flag |= T_CLIP_UV;
@@ -347,7 +346,7 @@ static void createTransUVs(bContext *C, TransInfo *t)
     td2d = tc->data_2d;
 
     if (is_prop_connected) {
-      prop_dists = MEM_calloc_arrayN<float>(em->bm->totloop, "TransObPropDists(UV Editing)");
+      prop_dists = MEM_new_array_zeroed<float>(em->bm->totloop, "TransObPropDists(UV Editing)");
 
       uv_set_connectivity_distance(t->settings, em->bm, prop_dists, t->aspect);
     }
@@ -360,8 +359,8 @@ static void createTransUVs(bContext *C, TransInfo *t)
       }
 
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
-        const bool selected = uvedit_uv_select_test(scene, l, offsets);
-        float(*luv)[2];
+        const bool selected = uvedit_uv_select_test(scene, em->bm, l, offsets);
+        float (*luv)[2];
         const float *center = nullptr;
         float prop_distance = FLT_MAX;
 
@@ -381,7 +380,7 @@ static void createTransUVs(bContext *C, TransInfo *t)
           }
         }
 
-        luv = (float(*)[2])BM_ELEM_CD_GET_FLOAT_P(l, offsets.uv);
+        luv = reinterpret_cast<float (*)[2]> BM_ELEM_CD_GET_FLOAT_P(l, offsets.uv);
         UVsToTransData(t->aspect, *luv, center, prop_distance, selected, l, td++, td2d++);
       }
     }
@@ -393,12 +392,12 @@ static void createTransUVs(bContext *C, TransInfo *t)
 
   finally:
     if (is_prop_connected) {
-      MEM_SAFE_FREE(prop_dists);
+      MEM_SAFE_DELETE(prop_dists);
     }
     if (is_island_center) {
       BM_uv_element_map_free(elementmap);
 
-      MEM_freeN(island_center);
+      MEM_delete(island_center);
     }
   }
 }
@@ -448,6 +447,8 @@ static void flushTransUVs(TransInfo *t)
             td->loc2d[0] = roundf(td->loc2d[0]);
             td->loc2d[1] = roundf(td->loc2d[1]);
             break;
+          case SI_PIXEL_ROUND_DISABLED:
+            break;
         }
 
         td->loc2d[0] /= size[0];
@@ -468,7 +469,7 @@ static void recalcData_uv(TransInfo *t)
 
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     if (tc->data_len) {
-      DEG_id_tag_update(static_cast<ID *>(tc->obedit->data), ID_RECALC_GEOMETRY);
+      DEG_id_tag_update(tc->obedit->data, ID_RECALC_GEOMETRY);
     }
   }
 }
@@ -502,24 +503,20 @@ struct UVGroups {
 
     /* Now, count and set the index for the corners being transformed. */
     this->sd_len = 0;
-    TransData *td = tc->data;
-    for (int i = 0; i < tc->data_len; i++, td++) {
-      if (!(td->flag & TD_SELECTED)) {
-        /* The selected ones are sorted at the beginning. */
-        break;
-      }
+    tc->foreach_index_selected([&](const int i) {
+      TransData *td = &tc->data[i];
       this->sd_len++;
 
       BMLoop *l = static_cast<BMLoop *>(td->extra);
       BM_elem_index_set(l, i);
-    }
+    });
     bm->elem_index_dirty |= BM_LOOP;
 
     /* Create the groups. */
     groups_offs_buffer_.reserve(this->sd_len);
     groups_offs_indices_.reserve((this->sd_len / 4) + 2);
 
-    td = tc->data;
+    TransData *td = tc->data;
     for (int i = 0; i < tc->data_len; i++, td++) {
       BMLoop *l_orig = static_cast<BMLoop *>(td->extra);
       if (BM_elem_index_get(l_orig) == -1) {
@@ -564,8 +561,8 @@ struct UVGroups {
 
   Array<TransDataVertSlideVert> sd_array_create_and_init(TransDataContainer *tc)
   {
-    Array<TransDataVertSlideVert> r_sv(this->sd_len);
-    TransDataVertSlideVert *sv = r_sv.data();
+    Array<TransDataVertSlideVert> sv_array(this->sd_len);
+    TransDataVertSlideVert *sv = sv_array.data();
     for (const int group_index : this->groups().index_range()) {
       for (int td_index : this->td_indices_get(group_index)) {
         TransData *td = &tc->data[td_index];
@@ -574,13 +571,13 @@ struct UVGroups {
       }
     }
 
-    return r_sv;
+    return sv_array;
   }
 
   Array<TransDataEdgeSlideVert> sd_array_create_and_init_edge(TransDataContainer *tc)
   {
-    Array<TransDataEdgeSlideVert> r_sv(this->sd_len);
-    TransDataEdgeSlideVert *sv = r_sv.data();
+    Array<TransDataEdgeSlideVert> sv_array(this->sd_len);
+    TransDataEdgeSlideVert *sv = sv_array.data();
     for (const int group_index : this->groups().index_range()) {
       for (int td_index : this->td_indices_get(group_index)) {
         TransData *td = &tc->data[td_index];
@@ -592,7 +589,7 @@ struct UVGroups {
       }
     }
 
-    return r_sv;
+    return sv_array;
   }
 
   MutableSpan<TransDataVertSlideVert> sd_group_get(MutableSpan<TransDataVertSlideVert> sd_array,
@@ -645,9 +642,9 @@ Array<TransDataVertSlideVert> transform_mesh_uv_vert_slide_data_create(
 
   UVGroups *uv_groups = mesh_uv_groups_get(tc, bm, offsets);
 
-  Array<TransDataVertSlideVert> r_sv = uv_groups->sd_array_create_and_init(tc);
+  Array<TransDataVertSlideVert> sv_array = uv_groups->sd_array_create_and_init(tc);
 
-  r_loc_dst_buffer.reserve(r_sv.size() * 4);
+  r_loc_dst_buffer.reserve(sv_array.size() * 4);
 
   for (const int group_index : uv_groups->groups().index_range()) {
     const int size_prev = r_loc_dst_buffer.size();
@@ -672,7 +669,7 @@ Array<TransDataVertSlideVert> transform_mesh_uv_vert_slide_data_create(
     }
 
     const int size_new = r_loc_dst_buffer.size() - size_prev;
-    for (TransDataVertSlideVert &sv : uv_groups->sd_group_get(r_sv, group_index)) {
+    for (TransDataVertSlideVert &sv : uv_groups->sd_group_get(sv_array, group_index)) {
       /* The buffer address may change as the vector is resized. Avoid setting #Span now. */
       // sv.targets = r_loc_dst_buffer.as_span().drop_front(size_prev);
 
@@ -689,12 +686,12 @@ Array<TransDataVertSlideVert> transform_mesh_uv_vert_slide_data_create(
     }
   }
 
-  for (TransDataVertSlideVert &sv : r_sv) {
+  for (TransDataVertSlideVert &sv : sv_array) {
     int start = POINTER_AS_INT(sv.co_link_orig_3d.data());
     sv.co_link_orig_3d = r_loc_dst_buffer.as_span().slice(start, sv.co_link_orig_3d.size());
   }
 
-  return r_sv;
+  return sv_array;
 }
 
 /** \} */
@@ -824,7 +821,7 @@ Array<TransDataEdgeSlideVert> transform_mesh_uv_edge_slide_data_create(const Tra
                                                                        TransDataContainer *tc,
                                                                        int *r_group_len)
 {
-  Array<TransDataEdgeSlideVert> r_sv;
+  Array<TransDataEdgeSlideVert> sv_array;
   BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
   BMesh *bm = em->bm;
   const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
@@ -839,16 +836,12 @@ Array<TransDataEdgeSlideVert> transform_mesh_uv_edge_slide_data_create(const Tra
 
     /* First we just need to "clean up" the neighboring loops.
      * This way we can identify where a group of sliding edges starts and where it ends. */
-    TransData *td = tc->data;
-    for (int i = 0; i < tc->data_len; i++, td++) {
-      if (!(td->flag & TD_SELECTED)) {
-        /* The selected ones are sorted at the beginning. */
-        break;
-      }
+    tc->foreach_index_selected([&](const int i) {
+      TransData *td = &tc->data[i];
       BMLoop *l = static_cast<BMLoop *>(td->extra);
       BM_elem_index_set(l->prev, -1);
       BM_elem_index_set(l->next, -1);
-    }
+    });
 
     /* Now set the group indexes. */
     for (const int group_index : uv_groups->groups().index_range()) {
@@ -880,14 +873,14 @@ Array<TransDataEdgeSlideVert> transform_mesh_uv_edge_slide_data_create(const Tra
 
         if (check_edge) {
           BMLoop *l_edge = l_dst == l->prev ? l_dst : l;
-          if (!uvedit_edge_select_test_ex(t->settings, l_edge, offsets)) {
+          if (!uvedit_edge_select_test_ex(t->settings, bm, l_edge, offsets)) {
             continue;
           }
         }
 
         if (group_linked_pair[1] != -1) {
           /* For Edge Slide, the vertex can only be connected to a maximum of 2 sliding edges. */
-          return r_sv;
+          return sv_array;
         }
         const int slot = int(group_linked_pair[0] != -1);
         group_linked_pair[slot] = group_index_dst;
@@ -896,22 +889,22 @@ Array<TransDataEdgeSlideVert> transform_mesh_uv_edge_slide_data_create(const Tra
 
     if (group_linked_pair[0] == -1) {
       /* For Edge Slide, the vertex must be connected to at least 1 sliding edge. */
-      return r_sv;
+      return sv_array;
     }
   }
 
   /* Alloc and initialize the #TransDataEdgeSlideVert. */
-  r_sv = uv_groups->sd_array_create_and_init_edge(tc);
+  sv_array = uv_groups->sd_array_create_and_init_edge(tc);
 
   /* Compute the sliding groups. */
   int loop_nr = 0;
-  for (int i : r_sv.index_range()) {
-    if (r_sv[i].loop_nr != -1) {
+  for (int i : sv_array.index_range()) {
+    if (sv_array[i].loop_nr != -1) {
       /* This vertex has already been computed. */
       continue;
     }
 
-    BMLoop *l = static_cast<BMLoop *>(r_sv[i].td->extra);
+    BMLoop *l = static_cast<BMLoop *>(sv_array[i].td->extra);
     int group_index = BM_elem_index_get(l);
 
     /* Start from a vertex connected to just a single edge or any if it doesn't exist. */
@@ -942,8 +935,8 @@ Array<TransDataEdgeSlideVert> transform_mesh_uv_edge_slide_data_create(const Tra
       /**
        * Find the best direction to slide among the ones already computed.
        *
-       * \param curr_prev: prev state of the #SlideTempDataUV where the faces are linked to the
-       * previous edge.
+       * \param curr_side_other: prev state of the #SlideTempDataUV
+       * where the faces are linked to the previous edge.
        * \param l_src: the source corner in the edge to slide.
        * \param l_dst: the current destination corner.
        */
@@ -1107,7 +1100,7 @@ Array<TransDataEdgeSlideVert> transform_mesh_uv_edge_slide_data_create(const Tra
       }
 
       TransDataEdgeSlideVert *sv_first = nullptr;
-      for (TransDataEdgeSlideVert &sv : uv_groups->sd_group_get(r_sv, curr.i)) {
+      for (TransDataEdgeSlideVert &sv : uv_groups->sd_group_get(sv_array, curr.i)) {
         if (sv_first) {
           TransData *td = sv.td;
           sv = *sv_first;
@@ -1145,7 +1138,7 @@ Array<TransDataEdgeSlideVert> transform_mesh_uv_edge_slide_data_create(const Tra
     loop_nr++;
   }
   *r_group_len = loop_nr;
-  return r_sv;
+  return sv_array;
 }
 
 /** \} */

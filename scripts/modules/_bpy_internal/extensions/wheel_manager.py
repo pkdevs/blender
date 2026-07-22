@@ -17,7 +17,6 @@ import contextlib
 import os
 import re
 import shutil
-import sys
 import zipfile
 
 from collections.abc import (
@@ -148,20 +147,12 @@ def _rmtree_safe(dir_remove: str, expected_root: str) -> Exception | None:
 
     ex_result = None
 
-    if sys.version_info < (3, 12):
-        def on_error(*args) -> None:  # type: ignore
-            nonlocal ex_result
-            print("Failed to remove:", args)
-            ex_result = args[2][0]
+    def on_exc(*args) -> None:  # type: ignore
+        nonlocal ex_result
+        print("Failed to remove:", args)
+        ex_result = args[2]
 
-        shutil.rmtree(dir_remove, onerror=on_error)
-    else:
-        def on_exc(*args) -> None:  # type: ignore
-            nonlocal ex_result
-            print("Failed to remove:", args)
-            ex_result = args[2]
-
-        shutil.rmtree(dir_remove, onexc=on_exc)
+    shutil.rmtree(dir_remove, onexc=on_exc)
 
     return ex_result
 
@@ -464,7 +455,7 @@ def wheel_version_from_filename_for_cmp(
     so comparing the first 3 numbers is sufficient. The trailing string is just a tie breaker in the
     unlikely event it differs.
 
-    If supporting the full spec, comparing: "1.1.dev6" with "1.1.6rc6" for e.g.
+    If supporting the full spec, comparing: "1.1.dev6" with "1.1.6rc6" for example
     we could support this doesn't seem especially important as extensions should use major releases.
     """
     filename_split = filename.split("-")
@@ -551,12 +542,12 @@ def apply_action(
         debug: bool,
 ) -> None:
     """
-    :arg local_dir:
+    :param local_dir:
        The location wheels are stored.
        Typically: ``~/.config/blender/4.2/extensions/.local``.
 
        WARNING: files under this directory may be removed.
-    :arg local_dir_site_packages:
+    :param local_dir_site_packages:
        The path which wheels are extracted into.
        Typically: ``~/.config/blender/4.2/extensions/.local/lib/python3.11/site-packages``.
     """

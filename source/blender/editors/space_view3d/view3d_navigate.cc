@@ -8,13 +8,13 @@
 
 #include "DNA_curve_types.h"
 
-#include "BLI_dial_2d.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_dial_2d.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
@@ -36,6 +36,8 @@
 
 #include "view3d_navigate.hh" /* own include */
 
+namespace blender {
+
 /* Prototypes. */
 static const ViewOpsType *view3d_navigation_type_from_idname(const char *idname);
 
@@ -47,7 +49,7 @@ static eViewOpsFlag viewops_flag_from_prefs()
 
   /**
    * If the mode requires it, always set the #VIEWOPS_FLAG_PERSP_ENSURE.
-   * The function `ED_view3d_persp_ensure` already handles the checking of the preferences.
+   * The function #ED_view3d_persp_ensure already handles the checking of the preferences.
    * And even with the option disabled, in some modes, it is still necessary to exit the camera
    * view.
    *
@@ -191,7 +193,11 @@ static eViewOpsFlag navigate_pivot_get(bContext *C,
 
     /* Uses the `lastofs` in #view3d_orbit_calc_center. */
     BLI_assert(viewops_flag & VIEWOPS_FLAG_ORBIT_SELECT);
-    return VIEWOPS_FLAG_ORBIT_SELECT;
+    if (v3d->runtime.flag & V3D_RUNTIME_OFS_LAST_CENTER_IS_VALID) {
+      return VIEWOPS_FLAG_ORBIT_SELECT;
+    }
+    /* No valid pivot, don't use any dynamic offset. */
+    return VIEWOPS_FLAG_NONE;
   }
 
   if (dyn_ofs_override) {
@@ -227,9 +233,10 @@ void ViewOpsData::init_navigation(bContext *C,
                                   const float dyn_ofs_override[3],
                                   const bool use_cursor_init)
 {
-  using namespace blender;
   this->nav_type = nav_type;
   eViewOpsFlag viewops_flag = nav_type->flag & viewops_flag_from_prefs();
+  constexpr eViewOpsFlag viewops_flag_dynamic_ofs = VIEWOPS_FLAG_DEPTH_NAVIGATE |
+                                                    VIEWOPS_FLAG_ORBIT_SELECT;
 
   if (!use_cursor_init) {
     viewops_flag &= ~(VIEWOPS_FLAG_DEPTH_NAVIGATE | VIEWOPS_FLAG_ZOOM_TO_MOUSE);
@@ -249,7 +256,7 @@ void ViewOpsData::init_navigation(bContext *C,
      * Logically it doesn't make sense to use the selection as a pivot when the first-person
      * navigation pivots from the view-point. This also interferes with zoom-speed,
      * causing zoom-speed scale based on the distance to the selection center, see: #115253. */
-    if ((U.ndof_flag & NDOF_MODE_ORBIT) == 0) {
+    if (U.ndof_navigation_mode == NDOF_NAVIGATION_MODE_FLY) {
       viewops_flag &= ~VIEWOPS_FLAG_ORBIT_SELECT;
     }
   }
@@ -269,64 +276,68 @@ void ViewOpsData::init_navigation(bContext *C,
     }
   }
 
-  if (viewops_flag & (VIEWOPS_FLAG_DEPTH_NAVIGATE | VIEWOPS_FLAG_ORBIT_SELECT)) {
+  if (viewops_flag & viewops_flag_dynamic_ofs) {
     float pivot_new[3];
     eViewOpsFlag pivot_type = navigate_pivot_get(
         C, depsgraph, region, v3d, event, viewops_flag, dyn_ofs_override, pivot_new);
 
-    viewops_flag &= ~(VIEWOPS_FLAG_DEPTH_NAVIGATE | VIEWOPS_FLAG_ORBIT_SELECT);
+    viewops_flag &= ~viewops_flag_dynamic_ofs;
     viewops_flag |= pivot_type;
 
-    negate_v3_v3(this->dyn_ofs, pivot_new);
-    this->use_dyn_ofs = true;
+    /* It's possible no offset can be found, see: #111098. */
+    if (viewops_flag & viewops_flag_dynamic_ofs) {
+      negate_v3_v3(this->dyn_ofs, pivot_new);
+      this->use_dyn_ofs = true;
 
-    if (pivot_type == VIEWOPS_FLAG_DEPTH_NAVIGATE) {
-      /* Ensure we'll always be able to zoom into the new pivot point and panning won't go bad when
-       * dist is zero. Therefore, set a new #RegionView3D::ofs and #RegionView3D::dist so that the
-       * dist value becomes the distance from the new pivot point. */
+      if (pivot_type == VIEWOPS_FLAG_DEPTH_NAVIGATE) {
+        /* Ensure we'll always be able to zoom into the new pivot point and panning won't go bad
+         * when dist is zero. Therefore, set a new #RegionView3D::ofs and #RegionView3D::dist so
+         * that the dist value becomes the distance from the new pivot point. */
 
-      if (rv3d->is_persp) {
-        float my_origin[3]; /* Original #RegionView3D.ofs. */
-        float my_pivot[3];  /* View pivot. */
-        float dvec[3];
+        if (rv3d->is_persp) {
+          float my_origin[3]; /* Original #RegionView3D.ofs. */
+          float my_pivot[3];  /* View pivot. */
+          float dvec[3];
 
-        negate_v3_v3(my_origin, rv3d->ofs); /* ofs is flipped */
+          negate_v3_v3(my_origin, rv3d->ofs); /* ofs is flipped */
 
-        /* remove dist value */
-        float3 upvec;
-        upvec[0] = upvec[1] = 0;
-        upvec[2] = rv3d->dist;
-        float3x3 mat = float3x3(float4x4(rv3d->viewinv));
+          /* remove dist value */
+          float3 upvec;
+          upvec[0] = upvec[1] = 0;
+          upvec[2] = rv3d->dist;
+          float3x3 mat = float3x3(float4x4(rv3d->viewinv));
 
-        upvec = math::transform_point(mat, upvec);
-        add_v3_v3v3(my_pivot, my_origin, upvec);
+          upvec = math::transform_point(mat, upvec);
+          add_v3_v3v3(my_pivot, my_origin, upvec);
 
-        /* find a new ofs value that is along the view axis
-         * (rather than the mouse location) */
-        float lambda = closest_to_line_v3(dvec, pivot_new, my_pivot, my_origin);
+          /* find a new ofs value that is along the view axis
+           * (rather than the mouse location) */
+          float lambda = closest_to_line_v3(dvec, pivot_new, my_pivot, my_origin);
 
-        negate_v3_v3(rv3d->ofs, dvec);
-        rv3d->dist = len_v3v3(my_pivot, dvec);
+          negate_v3_v3(rv3d->ofs, dvec);
+          rv3d->dist = len_v3v3(my_pivot, dvec);
 
-        if (lambda < 0.0f) {
-          /* The distance is actually negative. */
-          rv3d->dist *= -1;
+          if (lambda < 0.0f) {
+            /* The distance is actually negative. */
+            rv3d->dist *= -1;
+          }
+        }
+        else {
+          const float mval_region_mid[2] = {float(region->winx) / 2.0f,
+                                            float(region->winy) / 2.0f};
+          ED_view3d_win_to_3d(v3d, region, pivot_new, mval_region_mid, rv3d->ofs);
+          negate_v3(rv3d->ofs);
         }
       }
-      else {
-        const float mval_region_mid[2] = {float(region->winx) / 2.0f, float(region->winy) / 2.0f};
-        ED_view3d_win_to_3d(v3d, region, pivot_new, mval_region_mid, rv3d->ofs);
-        negate_v3(rv3d->ofs);
-      }
-    }
 
-    /* Reinitialize `this->init.dist` and `this->init.ofs` as these values may have changed
-     * when #ED_view3d_persp_ensure was called or when the operator uses `Auto Depth`.
-     *
-     * XXX: The initial state captured by #ViewOpsData::state_backup is being modified here.
-     * This causes the state not to be fully restored when canceling a navigation operation. */
-    this->init.dist = rv3d->dist;
-    copy_v3_v3(this->init.ofs, rv3d->ofs);
+      /* Reinitialize `this->init.dist` and `this->init.ofs` as these values may have changed
+       * when #ED_view3d_persp_ensure was called or when the operator uses `Auto Depth`.
+       *
+       * XXX: The initial state captured by #ViewOpsData::state_backup is being modified here.
+       * This causes the state not to be fully restored when canceling a navigation operation. */
+      this->init.dist = rv3d->dist;
+      copy_v3_v3(this->init.ofs, rv3d->ofs);
+    }
   }
 
   if (viewops_flag & VIEWOPS_FLAG_INIT_ZFAC) {
@@ -406,7 +417,7 @@ void ViewOpsData::end_navigation(bContext *C)
 struct ViewOpsData_Utility : ViewOpsData {
   /* To track only the navigation #wmKeyMapItem items and allow changes to them, an internal
    * #wmKeyMap is created with their copy. */
-  ListBase keymap_items;
+  ListBaseT<wmKeyMapItem> keymap_items;
 
   /* Used by #ED_view3d_navigation_do. */
   bool is_modal_event = false;
@@ -423,18 +434,18 @@ struct ViewOpsData_Utility : ViewOpsData {
 
     wmKeyMap keymap_tmp = {};
 
-    LISTBASE_FOREACH (wmKeyMapItem *, kmi, &keymap->items) {
-      if (!STRPREFIX(kmi->idname, "VIEW3D")) {
+    for (wmKeyMapItem &kmi : keymap->items) {
+      if (!STRPREFIX(kmi.idname, "VIEW3D")) {
         continue;
       }
-      if (kmi->flag & KMI_INACTIVE) {
+      if (kmi.flag & KMI_INACTIVE) {
         continue;
       }
-      if (view3d_navigation_type_from_idname(kmi->idname) == nullptr) {
+      if (view3d_navigation_type_from_idname(kmi.idname) == nullptr) {
         continue;
       }
 
-      wmKeyMapItem *kmi_cpy = WM_keymap_add_item_copy(&keymap_tmp, kmi);
+      wmKeyMapItem *kmi_cpy = WM_keymap_add_item_copy(&keymap_tmp, &kmi);
       if (kmi_merge) {
         if (kmi_merge->shift == KM_MOD_HELD ||
             ELEM(kmi_merge->type, EVT_RIGHTSHIFTKEY, EVT_LEFTSHIFTKEY))
@@ -484,7 +495,7 @@ struct ViewOpsData_Utility : ViewOpsData {
   MEM_CXX_CLASS_ALLOC_FUNCS("ViewOpsData_Utility")
 };
 
-static bool view3d_navigation_poll_impl(bContext *C, const char viewlock)
+static bool view3d_navigation_poll_impl(bContext *C, const eRegionView3D_ViewLock viewlock)
 {
   if (!ED_operator_region_view3d_active(C)) {
     return false;
@@ -575,7 +586,7 @@ wmOperatorStatus view3d_navigate_invoke_impl(bContext *C,
   vod->init_context(C);
   wmOperatorStatus ret = view3d_navigation_invoke_generic(
       C, vod, event, op->ptr, nav_type, nullptr);
-  op->customdata = (void *)vod;
+  op->customdata = static_cast<void *>(vod);
 
   if (ret == OPERATOR_RUNNING_MODAL) {
     WM_event_add_modal_handler(C, op);
@@ -754,7 +765,7 @@ static void view3d_orbit_apply_dyn_ofs_ortho_correction(float ofs[3],
    * (`ofs` + `dist` along the view Z-axis) unlike orthographic views which center around `ofs`.
    * Nevertheless there will be cases when having `ofs` and a large `dist` pointing nowhere doesn't
    * give ideal behavior (zooming may jump in larger than expected steps and panning the view may
-   * move too much in relation to nearby objects - for e.g.). So it's worth investigating but
+   * move too much in relation to nearby objects - for example). So it's worth investigating but
    * should be done with extra care as changing `ofs` in perspective view also requires changing
    * the `dist` which could cause unexpected results if the calculated `dist` happens to be small.
    * So disable this workaround in perspective view unless there are clear benefits to enabling. */
@@ -771,11 +782,11 @@ static void view3d_orbit_apply_dyn_ofs_ortho_correction(float ofs[3],
 
   const float angle_cos = max_ff(0.0f, dot_v3v3(view_z_init, view_z_curr));
   /* 1.0 or more means no rotation, there is nothing to do in that case. */
-  if (LIKELY(angle_cos < 1.0f)) {
+  if (angle_cos < 1.0f) [[likely]] {
     const float dot_ofs_curr = dot_v3v3(view_z_curr, ofs);
     const float dot_ofs_next = dot_v3v3(view_z_curr, dyn_ofs);
     const float ofs_delta = dot_ofs_next - dot_ofs_curr;
-    if (LIKELY(ofs_delta != 0.0f)) {
+    if (ofs_delta != 0.0f) [[likely]] {
       /* Calculate a factor where 0.0 represents no rotation and 1.0 represents 90d or more.
        * NOTE: Without applying the factor, the distances immediately changes
        * (useful for testing), but not good for the users experience as minor rotations
@@ -802,24 +813,28 @@ void viewrotate_apply_dyn_ofs(ViewOpsData *vod, const float viewquat_new[4])
 
 bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
 {
-  using namespace blender;
-  static float3 lastofs = float3(0);
+  float3 ofs = float3(0);
   bool is_set = false;
 
   const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  Scene *scene = CTX_data_scene(C);
-  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
+  Paint *paint = BKE_paint_get_active_from_context(C);
   ViewLayer *view_layer_eval = DEG_get_evaluated_view_layer(depsgraph);
   View3D *v3d = CTX_wm_view3d(C);
-  BKE_view_layer_synced_ensure(scene_eval, view_layer_eval);
+  /* Evaluated view layers should always be in sync with the evaluated scene and its collections.
+   */
+  BLI_assert(BKE_view_layer_is_synced(*view_layer_eval));
   Object *ob_act_eval = BKE_view_layer_active_object_get(view_layer_eval);
   Object *ob_act = DEG_get_original(ob_act_eval);
+
+  if (v3d->runtime.flag & V3D_RUNTIME_OFS_LAST_CENTER_IS_VALID) {
+    ofs = -float3(v3d->runtime.ofs_last_center);
+  }
 
   if (ob_act && (ob_act->mode & OB_MODE_ALL_PAINT) &&
       /* with weight-paint + pose-mode, fall through to using calculateTransformCenter */
       ((ob_act->mode & OB_MODE_WEIGHT_PAINT) && BKE_object_pose_armature_get(ob_act)) == 0)
   {
-    BKE_paint_stroke_get_average(scene, ob_act_eval, lastofs);
+    BKE_paint_stroke_get_average(paint, ob_act_eval, ofs);
     is_set = true;
   }
   else if (ob_act && ELEM(ob_act->mode,
@@ -829,20 +844,20 @@ bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
                           OB_MODE_VERTEX_GREASE_PENCIL,
                           OB_MODE_WEIGHT_GREASE_PENCIL))
   {
-    BKE_paint_stroke_get_average(scene, ob_act_eval, lastofs);
+    BKE_paint_stroke_get_average(paint, ob_act_eval, ofs);
     is_set = true;
   }
   else if (ob_act && (ob_act->mode & OB_MODE_EDIT) && (ob_act->type == OB_FONT)) {
-    Curve *cu = static_cast<Curve *>(ob_act_eval->data);
+    Curve *cu = id_cast<Curve *>(ob_act_eval->data);
     EditFont *ef = cu->editfont;
 
-    lastofs = float3(0);
+    ofs = float3(0);
     for (int i = 0; i < 4; i++) {
-      lastofs += ef->textcurs[i];
+      add_v2_v2(ofs, ef->textcurs[i]);
     }
-    lastofs *= 0.25f;
+    ofs *= 0.25f;
 
-    lastofs = math::transform_point(ob_act_eval->object_to_world(), lastofs);
+    ofs = math::transform_point(ob_act_eval->object_to_world(), ofs);
 
     is_set = true;
   }
@@ -852,10 +867,10 @@ bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
     float3 select_center(0);
 
     zero_v3(select_center);
-    LISTBASE_FOREACH (const Base *, base_eval, BKE_view_layer_object_bases_get(view_layer_eval)) {
-      if (BASE_SELECTED(v3d, base_eval)) {
+    for (const Base &base_eval : *BKE_view_layer_object_bases_get(view_layer_eval)) {
+      if (BASE_SELECTED(v3d, &base_eval)) {
         /* Use the bounding-box if we can. */
-        const Object *ob_eval = base_eval->object;
+        const Object *ob_eval = base_eval.object;
 
         if (const std::optional<Bounds<float3>> bounds = BKE_object_boundbox_get(ob_eval)) {
           const float3 center = math::midpoint(bounds->min, bounds->max);
@@ -869,16 +884,22 @@ bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
     }
     if (total) {
       mul_v3_fl(select_center, 1.0f / float(total));
-      copy_v3_v3(lastofs, select_center);
+      copy_v3_v3(ofs, select_center);
       is_set = true;
     }
   }
   else {
-    /* If there's no selection, `lastofs` is unmodified and last value since static. */
-    is_set = blender::ed::transform::calc_pivot_pos(C, V3D_AROUND_CENTER_MEDIAN, lastofs);
+    /* If there's no selection, `ofs` is unmodified, the last offset will be used if set.
+     * Otherwise the value of `ofs` is zero and should not be used. */
+    is_set = ed::transform::calc_pivot_pos(C, V3D_AROUND_CENTER_MEDIAN, ofs);
   }
 
-  copy_v3_v3(r_dyn_ofs, lastofs);
+  if (is_set) {
+    v3d->runtime.flag |= V3D_RUNTIME_OFS_LAST_CENTER_IS_VALID;
+    negate_v3_v3(v3d->runtime.ofs_last_center, ofs);
+  }
+
+  copy_v3_v3(r_dyn_ofs, ofs);
 
   return is_set;
 }
@@ -913,9 +934,9 @@ void axis_set_view(bContext *C,
                    View3D *v3d,
                    ARegion *region,
                    const float quat_[4],
-                   char view,
-                   char view_axis_roll,
-                   int perspo,
+                   eRegionView3D_View view,
+                   eRegionView3D_ViewAxisRoll view_axis_roll,
+                   eRegionView3D_Persp perspo,
                    const float *align_to_quat,
                    const int smooth_viewtx)
 {
@@ -923,9 +944,9 @@ void axis_set_view(bContext *C,
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
   float quat[4];
-  const short orig_persp = rv3d->persp;
-  const char orig_view = rv3d->view;
-  const char orig_view_axis_roll = rv3d->view_axis_roll;
+  const eRegionView3D_Persp orig_persp = rv3d->persp;
+  const eRegionView3D_View orig_view = rv3d->view;
+  const eRegionView3D_ViewAxisRoll orig_view_axis_roll = rv3d->view_axis_roll;
 
   normalize_qt_qt(quat, quat_);
 
@@ -1034,7 +1055,7 @@ void viewmove_apply(ViewOpsData *vod, int x, int y)
   else {
     float dvec[3];
 
-    ED_view3d_win_to_delta(vod->region, event_ofs, vod->init.zfac, dvec);
+    ED_view3d_win_to_delta(vod->region, event_ofs, vod->init.zfac, dvec, true);
 
     sub_v3_v3(vod->rv3d->ofs, dvec);
 
@@ -1061,7 +1082,7 @@ void viewmove_apply(ViewOpsData *vod, int x, int y)
  * `wmKeyMapItem::idname`) */
 static const ViewOpsType *view3d_navigation_type_from_idname(const char *idname)
 {
-  const blender::Array<const ViewOpsType *> nav_types = {
+  const Array<const ViewOpsType *> nav_types = {
       &ViewOpsType_zoom,
       &ViewOpsType_rotate,
       &ViewOpsType_move,
@@ -1088,7 +1109,7 @@ static const ViewOpsType *view3d_navigation_type_from_idname(const char *idname)
 
 ViewOpsData *ED_view3d_navigation_init(bContext *C, const wmKeyMapItem *kmi_merge)
 {
-  /* Unlike `viewops_data_create`, `ED_view3d_navigation_init` creates a navigation context along
+  /* Unlike #viewops_data_create, #ED_view3d_navigation_init creates a navigation context along
    * with an array of `wmKeyMapItem`s used for navigation. */
   if (!CTX_wm_region_view3d(C)) {
     return nullptr;
@@ -1127,18 +1148,18 @@ bool ED_view3d_navigation_do(bContext *C,
     }
   }
   else {
-    LISTBASE_FOREACH (wmKeyMapItem *, kmi, &vod_intern->keymap_items) {
-      if (!WM_event_match(event, kmi)) {
+    for (wmKeyMapItem &kmi : vod_intern->keymap_items) {
+      if (!WM_event_match(event, &kmi)) {
         continue;
       }
 
-      const ViewOpsType *nav_type = view3d_navigation_type_from_idname(kmi->idname);
+      const ViewOpsType *nav_type = view3d_navigation_type_from_idname(kmi.idname);
       if (nav_type->poll_fn && !nav_type->poll_fn(C)) {
         break;
       }
 
       op_return = view3d_navigation_invoke_generic(
-          C, vod, event, kmi->ptr, nav_type, depth_loc_override);
+          C, vod, event, kmi.ptr, nav_type, depth_loc_override);
 
       if (op_return == OPERATOR_RUNNING_MODAL) {
         vod_intern->is_modal_event = true;
@@ -1178,3 +1199,5 @@ void ED_view3d_navigation_free(bContext *C, ViewOpsData *vod)
 }
 
 /** \} */
+
+}  // namespace blender

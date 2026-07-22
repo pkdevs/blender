@@ -19,25 +19,24 @@
 
 #include "multires_reshape.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Reshape from object
  * \{ */
 
-bool multiresModifier_reshapeFromVertcos(Depsgraph *depsgraph,
-                                         Object *object,
-                                         MultiresModifierData *mmd,
-                                         const float (*vert_coords)[3],
-                                         const int num_vert_coords)
+static bool multiresModifier_reshapeFromVertcos(Depsgraph *depsgraph,
+                                                Object *object,
+                                                MultiresModifierData *mmd,
+                                                Span<float3> positions)
 {
   MultiresReshapeContext reshape_context;
   if (!multires_reshape_context_create_from_object(&reshape_context, depsgraph, object, mmd)) {
     return false;
   }
   multires_reshape_store_original_grids(&reshape_context);
-  multires_reshape_ensure_grids(static_cast<Mesh *>(object->data), reshape_context.top.level);
-  if (!multires_reshape_assign_final_coords_from_vertcos(
-          &reshape_context, vert_coords, num_vert_coords))
-  {
+  multires_reshape_ensure_grids(id_cast<Mesh *>(object->data), reshape_context.top.level);
+  if (!multires_reshape_assign_final_coords_from_vertcos(&reshape_context, positions)) {
     multires_reshape_context_free(&reshape_context);
     return false;
   }
@@ -61,12 +60,7 @@ bool multiresModifier_reshapeFromObject(Depsgraph *depsgraph,
     return false;
   }
 
-  return multiresModifier_reshapeFromVertcos(
-      depsgraph,
-      dst,
-      mmd,
-      reinterpret_cast<const float(*)[3]>(src_mesh_eval->vert_positions().data()),
-      src_mesh_eval->verts_num);
+  return multiresModifier_reshapeFromVertcos(depsgraph, dst, mmd, src_mesh_eval->vert_positions());
 }
 
 /** \} */
@@ -80,8 +74,7 @@ bool multiresModifier_reshapeFromDeformModifier(Depsgraph *depsgraph,
                                                 MultiresModifierData *mmd,
                                                 ModifierData *deform_md)
 {
-  using namespace blender;
-  MultiresModifierData highest_mmd = blender::dna::shallow_copy(*mmd);
+  MultiresModifierData highest_mmd = dna::shallow_copy(*mmd);
   highest_mmd.sculptlvl = highest_mmd.totlvl;
   highest_mmd.lvl = highest_mmd.totlvl;
   highest_mmd.renderlvl = highest_mmd.totlvl;
@@ -106,11 +99,7 @@ bool multiresModifier_reshapeFromDeformModifier(Depsgraph *depsgraph,
 
   /* Reshaping */
   bool result = multiresModifier_reshapeFromVertcos(
-      depsgraph,
-      object,
-      &highest_mmd,
-      reinterpret_cast<float(*)[3]>(deformed_verts.data()),
-      deformed_verts.size());
+      depsgraph, object, &highest_mmd, deformed_verts);
 
   return result;
 }
@@ -167,7 +156,7 @@ void multiresModifier_subdivide_to_level(Object *object,
     return;
   }
 
-  Mesh *coarse_mesh = static_cast<Mesh *>(object->data);
+  Mesh *coarse_mesh = id_cast<Mesh *>(object->data);
   if (coarse_mesh->corners_num == 0) {
     /* If there are no loops in the mesh implies there is no CD_MDISPS as well. So can early output
      * from here as there is nothing to subdivide. */
@@ -237,7 +226,10 @@ void multiresModifier_subdivide_to_level(Object *object,
 /** \name Apply base
  * \{ */
 
-void multiresModifier_base_apply(Depsgraph *depsgraph, Object *object, MultiresModifierData *mmd)
+void multiresModifier_base_apply(Depsgraph *depsgraph,
+                                 Object *object,
+                                 MultiresModifierData *mmd,
+                                 const ApplyBaseMode mode)
 {
   multires_force_sculpt_rebuild(object);
 
@@ -268,7 +260,10 @@ void multiresModifier_base_apply(Depsgraph *depsgraph, Object *object, MultiresM
    * - Heuristic moves them a bit, kind of canceling out the effect of subsurf (so then when
    *   multires modifier applies subsurf vertices are placed at the desired location). */
   multires_reshape_apply_base_update_mesh_coords(&reshape_context);
-  multires_reshape_apply_base_refit_base_mesh(&reshape_context);
+  if (mode == ApplyBaseMode::ForSubdivision) {
+    multires_reshape_apply_base_refit_base_mesh(&reshape_context);
+  }
+  multires_reshape_apply_base_update_shape_key(&reshape_context);
 
   /* Reshape to the stored final state.
    * Not that the base changed, so the subdiv is to be refined to the new positions. Unfortunately,
@@ -281,3 +276,5 @@ void multiresModifier_base_apply(Depsgraph *depsgraph, Object *object, MultiresM
 }
 
 /** \} */
+
+}  // namespace blender

@@ -9,13 +9,11 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
-
-#include "UI_interface.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -23,6 +21,8 @@
 #include "interface_intern.hh"
 
 #include "eyedropper_intern.hh" /* own include */
+
+namespace blender::ui {
 
 /* -------------------------------------------------------------------- */
 /* Keymap
@@ -103,23 +103,23 @@ void eyedropper_draw_cursor_text_region(const int xy[2], const char *name)
   const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
 
   /* Use the theme settings from tooltips. */
-  const bTheme *btheme = UI_GetTheme();
+  const bTheme *btheme = theme::theme_get();
   const uiWidgetColors *wcol = &btheme->tui.wcol_tooltip;
 
   float col_fg[4], col_bg[4];
   rgba_uchar_to_float(col_fg, wcol->text);
   rgba_uchar_to_float(col_bg, wcol->inner);
 
-  UI_fontstyle_draw_simple_backdrop(fstyle, xy[0], xy[1] + U.widget_unit, name, col_fg, col_bg);
+  fontstyle_draw_simple_backdrop(fstyle, xy[0], xy[1] + U.widget_unit, name, col_fg, col_bg);
 }
 
-uiBut *eyedropper_get_property_button_under_mouse(bContext *C, const wmEvent *event)
+Button *eyedropper_get_property_button_under_mouse(bContext *C, const wmEvent *event)
 {
   bScreen *screen = CTX_wm_screen(C);
   ScrArea *area = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, event->xy);
   const ARegion *region = BKE_area_find_region_xy(area, RGN_TYPE_ANY, event->xy);
 
-  uiBut *but = ui_but_find_mouse_over(region, event);
+  Button *but = but_find_mouse_over(region, event);
 
   if (ELEM(nullptr, but, but->rnapoin.data, but->rnaprop)) {
     return nullptr;
@@ -150,3 +150,5 @@ void eyedropper_win_area_find(const bContext *C,
 }
 
 /** \} */
+
+}  // namespace blender::ui

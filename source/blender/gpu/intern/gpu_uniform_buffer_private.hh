@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
-
-struct GPUUniformBuf;
+#include "BLI_sys_types.hh"
 
 namespace blender::gpu {
 
@@ -51,20 +49,6 @@ class UniformBuf {
     data_ = data;
   }
 };
-
-/* Syntactic sugar. */
-static inline GPUUniformBuf *wrap(UniformBuf *vert)
-{
-  return reinterpret_cast<GPUUniformBuf *>(vert);
-}
-static inline UniformBuf *unwrap(GPUUniformBuf *vert)
-{
-  return reinterpret_cast<UniformBuf *>(vert);
-}
-static inline const UniformBuf *unwrap(const GPUUniformBuf *vert)
-{
-  return reinterpret_cast<const UniformBuf *>(vert);
-}
 
 #undef DEBUG_NAME_LEN
 

@@ -13,15 +13,15 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_lib_id.hh"
-#include "BKE_movieclip.h"
+#include "BKE_movieclip.hh"
 #include "BKE_report.hh"
-#include "BKE_tracking.h"
+#include "BKE_tracking.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -32,19 +32,21 @@
 
 #include "clip_intern.hh"
 
+namespace blender {
+
 /********************** solve camera operator *********************/
 
 struct SolveCameraJob {
-  wmWindowManager *wm;
-  Scene *scene;
-  MovieClip *clip;
+  wmWindowManager *wm = nullptr;
+  Scene *scene = nullptr;
+  MovieClip *clip = nullptr;
   MovieClipUser user;
 
-  ReportList *reports;
+  ReportList *reports = nullptr;
 
-  char stats_message[256];
+  char stats_message[256] = "";
 
-  MovieReconstructContext *context;
+  MovieReconstructContext *context = nullptr;
 };
 
 static bool solve_camera_initjob(
@@ -77,24 +79,24 @@ static bool solve_camera_initjob(
                                                          width,
                                                          height);
 
-  tracking->stats = MEM_callocN<MovieTrackingStats>("solve camera stats");
+  tracking->stats = MEM_new<MovieTrackingStats>("solve camera stats");
 
-  WM_set_locked_interface(scj->wm, true);
+  WM_locked_interface_set(scj->wm, true);
 
   return true;
 }
 
 static void solve_camera_updatejob(void *scv)
 {
-  SolveCameraJob *scj = (SolveCameraJob *)scv;
+  SolveCameraJob *scj = static_cast<SolveCameraJob *>(scv);
   MovieTracking *tracking = &scj->clip->tracking;
 
-  STRNCPY(tracking->stats->message, scj->stats_message);
+  STRNCPY_UTF8(tracking->stats->message, scj->stats_message);
 }
 
 static void solve_camera_startjob(void *scv, wmJobWorkerStatus *worker_status)
 {
-  SolveCameraJob *scj = (SolveCameraJob *)scv;
+  SolveCameraJob *scj = static_cast<SolveCameraJob *>(scv);
   BKE_tracking_reconstruction_solve(scj->context,
                                     &worker_status->stop,
                                     &worker_status->do_update,
@@ -105,7 +107,7 @@ static void solve_camera_startjob(void *scv, wmJobWorkerStatus *worker_status)
 
 static void solve_camera_freejob(void *scv)
 {
-  SolveCameraJob *scj = (SolveCameraJob *)scv;
+  SolveCameraJob *scj = static_cast<SolveCameraJob *>(scv);
   MovieTracking *tracking = &scj->clip->tracking;
   Scene *scene = scj->scene;
   MovieClip *clip = scj->clip;
@@ -114,12 +116,12 @@ static void solve_camera_freejob(void *scv)
   /* WindowManager is missing in the job when initialization is incomplete.
    * In this case the interface is not locked either. */
   if (scj->wm != nullptr) {
-    WM_set_locked_interface(scj->wm, false);
+    WM_locked_interface_set(scj->wm, false);
   }
 
   if (!scj->context) {
     /* job weren't fully initialized due to some error */
-    MEM_freeN(scj);
+    MEM_delete(scj);
     return;
   }
 
@@ -153,7 +155,7 @@ static void solve_camera_freejob(void *scv)
   if (scene->camera != nullptr && scene->camera->data &&
       GS(((ID *)scene->camera->data)->name) == ID_CA)
   {
-    Camera *camera = (Camera *)scene->camera->data;
+    Camera *camera = id_cast<Camera *>(scene->camera->data);
     int width, height;
     BKE_movieclip_get_size(clip, &scj->user, &width, &height);
     BKE_tracking_camera_to_blender(tracking, scene, camera, width, height);
@@ -161,7 +163,7 @@ static void solve_camera_freejob(void *scv)
     WM_main_add_notifier(NC_OBJECT, camera);
   }
 
-  MEM_freeN(tracking->stats);
+  MEM_delete(tracking->stats);
   tracking->stats = nullptr;
 
   DEG_id_tag_update(&clip->id, 0);
@@ -173,14 +175,14 @@ static void solve_camera_freejob(void *scv)
   WM_main_add_notifier(NC_SCENE, scene);
 
   BKE_tracking_reconstruction_context_free(scj->context);
-  MEM_freeN(scj);
+  MEM_delete(scj);
 }
 
 static wmOperatorStatus solve_camera_exec(bContext *C, wmOperator *op)
 {
   SolveCameraJob *scj;
   char error_msg[256] = "\0";
-  scj = MEM_callocN<SolveCameraJob>("SolveCameraJob data");
+  scj = MEM_new<SolveCameraJob>("SolveCameraJob data");
   if (!solve_camera_initjob(C, scj, op, error_msg, sizeof(error_msg))) {
     if (error_msg[0]) {
       BKE_report(op->reports, RPT_ERROR, error_msg);
@@ -210,7 +212,7 @@ static wmOperatorStatus solve_camera_invoke(bContext *C, wmOperator *op, const w
     return OPERATOR_CANCELLED;
   }
 
-  scj = MEM_callocN<SolveCameraJob>("SolveCameraJob data");
+  scj = MEM_new<SolveCameraJob>("SolveCameraJob data");
   if (!solve_camera_initjob(C, scj, op, error_msg, sizeof(error_msg))) {
     if (error_msg[0]) {
       BKE_report(op->reports, RPT_ERROR, error_msg);
@@ -219,7 +221,7 @@ static wmOperatorStatus solve_camera_invoke(bContext *C, wmOperator *op, const w
     return OPERATOR_CANCELLED;
   }
 
-  STRNCPY(tracking->stats->message, "Solving camera | Preparing solve");
+  STRNCPY_UTF8(tracking->stats->message, "Solving camera | Preparing solve");
 
   /* Hide reconstruction statistics from previous solve. */
   reconstruction->flag &= ~TRACKING_RECONSTRUCTED;
@@ -229,7 +231,7 @@ static wmOperatorStatus solve_camera_invoke(bContext *C, wmOperator *op, const w
   wm_job = WM_jobs_get(CTX_wm_manager(C),
                        CTX_wm_window(C),
                        CTX_data_scene(C),
-                       "Solve Camera",
+                       "Solving camera...",
                        WM_JOB_PROGRESS,
                        WM_JOB_TYPE_CLIP_SOLVE_CAMERA);
   WM_jobs_customdata_set(wm_job, scj, solve_camera_freejob);
@@ -292,11 +294,11 @@ static wmOperatorStatus clear_solution_exec(bContext *C, wmOperator * /*op*/)
   MovieTrackingObject *tracking_object = BKE_tracking_object_get_active(&clip->tracking);
   MovieTrackingReconstruction *reconstruction = &tracking_object->reconstruction;
 
-  LISTBASE_FOREACH (MovieTrackingTrack *, track, &tracking_object->tracks) {
-    track->flag &= ~TRACK_HAS_BUNDLE;
+  for (MovieTrackingTrack &track : tracking_object->tracks) {
+    track.flag &= ~TRACK_HAS_BUNDLE;
   }
 
-  MEM_SAFE_FREE(reconstruction->cameras);
+  MEM_SAFE_DELETE(reconstruction->cameras);
 
   reconstruction->camnr = 0;
   reconstruction->flag &= ~TRACKING_RECONSTRUCTED;
@@ -323,3 +325,5 @@ void CLIP_OT_clear_solution(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+}  // namespace blender

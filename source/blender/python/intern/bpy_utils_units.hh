@@ -10,4 +10,8 @@
 
 #include <Python.h>
 
-PyObject *BPY_utils_units();
+namespace blender {
+
+[[nodiscard]] PyObject *BPY_utils_units();
+
+}  // namespace blender

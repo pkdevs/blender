@@ -8,11 +8,16 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
+#include "BKE_attribute.hh"
+
+#include "BLI_compiler_attrs.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
+#include "BLI_virtual_array.hh"
 
 #include "DNA_windowmanager_enums.h"
+
+namespace blender {
 
 struct ARegion;
 struct BMBVHTree;
@@ -46,6 +51,34 @@ struct UvElement;
 struct UvElementMap;
 
 /* `editmesh_utils.cc` */
+class EditMeshSymmetryHelper {
+ public:
+  static std::optional<EditMeshSymmetryHelper> create_if_needed(Object *ob, uchar htype);
+
+  bool any_mirror_vert_selected(BMVert *v, char hflag) const;
+  bool any_mirror_edge_selected(BMEdge *e, char hflag) const;
+  bool any_mirror_face_selected(BMFace *f, char hflag) const;
+
+  void set_hflag_on_mirror_verts(BMVert *v, char hflag, bool value) const;
+  void set_hflag_on_mirror_edges(BMEdge *e, char hflag, bool value) const;
+  void set_hflag_on_mirror_faces(BMFace *f, char hflag, bool value) const;
+
+  void apply_on_mirror_verts(BMVert *v, FunctionRef<void(BMVert *)> op) const;
+  void apply_on_mirror_edges(BMEdge *e, FunctionRef<void(BMEdge *)> op) const;
+  void apply_on_mirror_faces(BMFace *f, FunctionRef<void(BMFace *)> op) const;
+
+ private:
+  EditMeshSymmetryHelper(Object *ob, uchar htype);
+
+  BMEditMesh *em_;
+  Mesh *mesh_;
+  uchar htype_;
+  bool use_topology_mirror_;
+
+  Map<BMVert *, Vector<BMVert *>> vert_to_mirror_map_;
+  Map<BMEdge *, Vector<BMEdge *>> edge_to_mirror_map_;
+  Map<BMFace *, Vector<BMFace *>> face_to_mirror_map_;
+};
 
 /**
  * \param em: Edit-mesh used for generating mirror data.
@@ -105,8 +138,13 @@ void EDBM_select_less(BMEditMesh *em, bool use_face_step);
 void EDBM_selectmode_flush_ex(BMEditMesh *em, short selectmode);
 void EDBM_selectmode_flush(BMEditMesh *em);
 
-void EDBM_deselect_flush(BMEditMesh *em);
-void EDBM_select_flush(BMEditMesh *em);
+/**
+ * Mode independent selection/de-selection flush from vertices.
+ *
+ * \param select: When true, flush the selection state to de-selected elements,
+ * otherwise perform the opposite, flushing de-selection.
+ */
+void EDBM_select_flush_from_verts(BMEditMesh *em, bool select);
 
 bool EDBM_vert_color_check(BMEditMesh *em);
 
@@ -171,10 +209,13 @@ UvMapVert *BM_uv_vert_map_at_index(UvVertMap *vmap, unsigned int v);
 /**
  * Return a new #UvVertMap from the edit-mesh.
  */
-UvVertMap *BM_uv_vert_map_create(BMesh *bm, bool use_select);
+UvVertMap *BM_uv_vert_map_create(BMesh *bm, bool use_select, bool respect_hide);
 
 void EDBM_flag_enable_all(BMEditMesh *em, char hflag);
 void EDBM_flag_disable_all(BMEditMesh *em, char hflag);
+
+/** \copydoc #BM_uvselect_clear */
+bool EDBM_uvselect_clear(BMEditMesh *em);
 
 bool BMBVH_EdgeVisible(const BMBVHTree *tree,
                        const BMEdge *e,
@@ -188,8 +229,13 @@ void EDBM_project_snap_verts(
 
 /* `editmesh_automerge.cc` */
 
-void EDBM_automerge(Object *obedit, bool update, char hflag, float dist);
-void EDBM_automerge_and_split(
+/** \return true if a change is made. */
+bool EDBM_automerge(Object *obedit, bool update, char hflag, float dist, bool use_centroid);
+/** \return true if a change is made. */
+bool EDBM_automerge_connected(Object *obedit, bool update, char hflag, float dist);
+
+/** \return true if a change is made. */
+bool EDBM_automerge_and_split(
     Object *obedit, bool split_edges, bool split_faces, bool update, char hflag, float dist);
 
 /* `editmesh_undo.cc` */
@@ -201,6 +247,16 @@ void ED_mesh_undosys_type(UndoType *ut);
 
 void EDBM_select_mirrored(
     BMEditMesh *em, const Mesh *mesh, int axis, bool extend, int *r_totmirr, int *r_totfail);
+
+#if 0 /* Unused but seems useful to keep. */
+/**
+ * Select mirrored elements on all enabled axis.
+ * Does nothing if selection symmetry isn't enabled.
+ *
+ * \return true if the selection changed.
+ */
+bool EDBM_select_mirrored_extend_all(Object *obedit, BMEditMesh *em);
+#endif
 
 /**
  * Nearest vertex under the cursor.
@@ -217,7 +273,7 @@ BMVert *EDBM_vert_find_nearest_ex(ViewContext *vc,
                                   float *dist_px_manhattan_p,
                                   bool use_select_bias,
                                   bool use_cycle,
-                                  blender::Span<Base *> bases,
+                                  Span<Base *> bases,
                                   uint *r_base_index);
 BMVert *EDBM_vert_find_nearest(ViewContext *vc, float *dist_px_manhattan_p);
 
@@ -227,7 +283,7 @@ BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
                                   bool use_select_bias,
                                   bool use_cycle,
                                   BMEdge **r_eed_zbuf,
-                                  blender::Span<Base *> bases,
+                                  Span<Base *> bases,
                                   uint *r_base_index);
 BMEdge *EDBM_edge_find_nearest(ViewContext *vc, float *dist_px_manhattan_p);
 
@@ -245,19 +301,19 @@ BMFace *EDBM_face_find_nearest_ex(ViewContext *vc,
                                   bool use_select_bias,
                                   bool use_cycle,
                                   BMFace **r_efa_zbuf,
-                                  blender::Span<Base *> bases,
+                                  Span<Base *> bases,
                                   uint *r_base_index);
 BMFace *EDBM_face_find_nearest(ViewContext *vc, float *dist_px_manhattan_p);
 
 bool EDBM_unified_findnearest(ViewContext *vc,
-                              blender::Span<Base *> bases,
+                              Span<Base *> bases,
                               int *r_base_index,
                               BMVert **r_eve,
                               BMEdge **r_eed,
                               BMFace **r_efa);
 
 bool EDBM_unified_findnearest_from_raycast(ViewContext *vc,
-                                           blender::Span<Base *> bases,
+                                           Span<Base *> bases,
                                            bool use_boundary_vertices,
                                            bool use_boundary_edges,
                                            int *r_base_index_vert,
@@ -294,9 +350,7 @@ void EDBM_selectmode_convert(BMEditMesh *em, short selectmode_old, short selectm
  * Select-mode setting utility.
  * This operates on tool-settings and all objects passed in.
  */
-bool EDBM_selectmode_set_multi_ex(Scene *scene,
-                                  blender::Span<Object *> objects,
-                                  const short selectmode);
+bool EDBM_selectmode_set_multi_ex(Scene *scene, Span<Object *> objects, const short selectmode);
 /**
  * High level select-mode setting utility.
  * This operates on tool-settings and all edit-mode objects.
@@ -329,10 +383,10 @@ void EDBM_select_swap(BMEditMesh *em); /* exported for UV */
 bool EDBM_select_interior_faces(BMEditMesh *em);
 ViewContext em_setup_viewcontext(bContext *C); /* rename? */
 
-bool EDBM_mesh_deselect_all_multi_ex(blender::Span<Base *> bases);
+bool EDBM_mesh_deselect_all_multi_ex(Span<Base *> bases);
 bool EDBM_mesh_deselect_all_multi(bContext *C);
 bool EDBM_selectmode_disable_multi_ex(Scene *scene,
-                                      blender::Span<Base *> bases,
+                                      Span<Base *> bases,
                                       short selectmode_disable,
                                       short selectmode_fallback);
 bool EDBM_selectmode_disable_multi(bContext *C,
@@ -350,7 +404,7 @@ void EDBM_preselect_edgering_update_from_edge(EditMesh_PreSelEdgeRing *psel,
                                               BMesh *bm,
                                               BMEdge *eed_start,
                                               int previewlines,
-                                              blender::Span<blender::float3> vert_positions);
+                                              Span<float3> vert_positions);
 
 /* `editmesh_preselect_elem.cc` */
 
@@ -369,12 +423,18 @@ void EDBM_preselect_elem_draw(EditMesh_PreSelElem *psel, const float matrix[4][4
 void EDBM_preselect_elem_update_from_single(EditMesh_PreSelElem *psel,
                                             BMesh *bm,
                                             BMElem *ele,
-                                            blender::Span<blender::float3> vert_positions);
+                                            Span<float3> vert_positions);
 
 void EDBM_preselect_elem_update_preview(
     EditMesh_PreSelElem *psel, ViewContext *vc, BMesh *bm, BMElem *ele, const int mval[2]);
 void EDBM_preselect_action_set(EditMesh_PreSelElem *psel, eEditMesh_PreSelPreviewAction action);
 eEditMesh_PreSelPreviewAction EDBM_preselect_action_get(EditMesh_PreSelElem *psel);
+
+/**
+ * Extrudes individual edges.
+ */
+bool EDBM_extrude_edges_indiv(BMEditMesh *em, wmOperator *op, char hflag, bool use_normal_flip);
+bool EDBM_smooth_vert(BMEditMesh *em, wmOperator *op);
 
 /* `mesh_ops.cc` */
 
@@ -427,6 +487,8 @@ void paintvert_select_ungrouped(Object *ob, bool extend, bool flush_flags);
  */
 void paintvert_flush_flags(Object *ob);
 void paintvert_tag_select_update(bContext *C, Object *ob);
+void paintvert_select_loop(bContext *C, Object *ob, const int mval[2], const bool select);
+
 /* Select vertices that are connected to already selected vertices. */
 void paintvert_select_linked(bContext *C, Object *ob);
 /* Select vertices that are linked to the vertex under the given region space coordinates. */
@@ -468,28 +530,20 @@ void ED_mesh_faces_remove(Mesh *mesh, ReportList *reports, int count);
 
 void ED_mesh_geometry_clear(Mesh *mesh);
 
-bool *ED_mesh_uv_map_vert_select_layer_ensure(Mesh *mesh, int uv_index);
-bool *ED_mesh_uv_map_edge_select_layer_ensure(Mesh *mesh, int uv_index);
-bool *ED_mesh_uv_map_pin_layer_ensure(Mesh *mesh, int uv_index);
-const bool *ED_mesh_uv_map_vert_select_layer_get(const Mesh *mesh, int uv_index);
-const bool *ED_mesh_uv_map_edge_select_layer_get(const Mesh *mesh, int uv_index);
-const bool *ED_mesh_uv_map_pin_layer_get(const Mesh *mesh, int uv_index);
+bke::AttributeWriter<bool> ED_mesh_uv_map_pin_layer_ensure(Mesh *mesh, int uv_index);
+VArray<bool> ED_mesh_uv_map_pin_layer_get(const Mesh *mesh, int uv_index);
 
 void ED_mesh_uv_ensure(Mesh *mesh, const char *name);
 int ED_mesh_uv_add(
     Mesh *mesh, const char *name, bool active_set, bool do_init, ReportList *reports);
 
 void ED_mesh_uv_loop_reset(bContext *C, Mesh *mesh);
-/**
- * Without a #bContext, called when UV-editing.
- */
-void ED_mesh_uv_loop_reset_ex(Mesh *mesh, int layernum);
 bool ED_mesh_color_ensure(Mesh *mesh, const char *name);
-int ED_mesh_color_add(
+std::string ED_mesh_color_add(
     Mesh *mesh, const char *name, bool active_set, bool do_init, ReportList *reports);
 
-void ED_mesh_report_mirror(wmOperator *op, int totmirr, int totfail);
-void ED_mesh_report_mirror_ex(wmOperator *op, int totmirr, int totfail, char selectmode);
+void ED_mesh_report_mirror(ReportList &reports, int totmirr, int totfail);
+void ED_mesh_report_mirror_ex(ReportList &reports, int totmirr, int totfail, char selectmode);
 
 KeyBlock *ED_mesh_get_edit_shape_key(const Mesh *me);
 
@@ -525,11 +579,17 @@ void EDBM_redo_state_restore_and_free(BMBackup *backup, BMEditMesh *em, bool rec
     ATTR_NONNULL(1, 2);
 void EDBM_redo_state_free(BMBackup *backup) ATTR_NONNULL(1);
 
+namespace ed::mesh {
+
+wmOperatorStatus join_objects_exec(bContext *C, wmOperator *op);
+
+}
+
 /* `meshtools.cc` */
 
-wmOperatorStatus ED_mesh_join_objects_exec(bContext *C, wmOperator *op);
 wmOperatorStatus ED_mesh_shapes_join_objects_exec(bContext *C,
                                                   bool ensure_keys_exist,
+                                                  bool mirror,
                                                   ReportList *reports);
 
 /* Mirror lookup API. */
@@ -596,10 +656,12 @@ MDeformVert *ED_mesh_active_dvert_get_em(Object *ob, BMVert **r_eve);
 MDeformVert *ED_mesh_active_dvert_get_ob(Object *ob, int *r_index);
 MDeformVert *ED_mesh_active_dvert_get_only(Object *ob);
 
-void EDBM_mesh_stats_multi(blender::Span<Object *> objects, int totelem[3], int totelem_sel[3]);
-void EDBM_mesh_elem_index_ensure_multi(blender::Span<Object *> objects, char htype);
+void EDBM_mesh_stats_multi(Span<Object *> objects, int totelem[3], int totelem_sel[3]);
+void EDBM_mesh_elem_index_ensure_multi(Span<Object *> objects, char htype);
 
 #define ED_MESH_PICK_DEFAULT_VERT_DIST 25
 #define ED_MESH_PICK_DEFAULT_FACE_DIST 1
 
 #define USE_LOOPSLIDE_HACK
+
+}  // namespace blender

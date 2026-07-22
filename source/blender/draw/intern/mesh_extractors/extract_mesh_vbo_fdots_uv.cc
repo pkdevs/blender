@@ -15,7 +15,7 @@ namespace blender::draw {
 static void extract_face_dots_uv_mesh(const MeshRenderData &mr, MutableSpan<float2> vbo_data)
 {
   const Mesh &mesh = *mr.mesh;
-  const StringRef name = CustomData_get_active_layer_name(&mesh.corner_data, CD_PROP_FLOAT2);
+  const StringRef name = mesh.active_uv_map_name();
   const bke::AttributeAccessor attributes = mesh.attributes();
   if (mr.use_subsurf_fdots) {
     const BitSpan facedot_tags = mesh.runtime->subsurf_face_dot_tags;
@@ -67,7 +67,7 @@ gpu::VertBufPtr extract_face_dots_uv(const MeshRenderData &mr)
 {
   static const GPUVertFormat format = []() {
     GPUVertFormat format{};
-    GPU_vertformat_attr_add(&format, "u", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "u", gpu::VertAttrType::SFLOAT_32_32);
     GPU_vertformat_alias_add(&format, "au");
     GPU_vertformat_alias_add(&format, "pos");
     return format;

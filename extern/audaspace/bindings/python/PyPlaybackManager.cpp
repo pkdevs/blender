@@ -189,7 +189,7 @@ PyDoc_STRVAR(M_aud_PlaybackManager_get_volume_doc,
 	"   Retrieves the volume of a category.\n\n"
 	"   :arg catKey: the key of the category.\n"
 	"   :type catKey: int\n"
-	"   :return: The volume of the cateogry.\n"
+	"   :return: The volume of the category.\n"
 	"   :rtype: float\n\n");
 
 static PyObject *
@@ -316,7 +316,10 @@ static PyMethodDef PlaybackManager_methods[] = {
 };
 
 PyDoc_STRVAR(M_aud_PlaybackManager_doc,
-	"A PlabackManager object allows to easily control groups os sounds organized in categories.");
+	".. class:: PlaybackManager(device, /)\n\n"
+	"   A PlaybackManager object allows to easily control groups of sounds organized in categories.\n\n"
+	"   :arg device: The device that will be used to play sounds.\n"
+	"   :type device: :class:`Device`\n");
 
 PyTypeObject PlaybackManagerType = {
 	PyVarObject_HEAD_INIT(nullptr, 0)

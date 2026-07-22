@@ -17,9 +17,10 @@
 #include <cstddef>
 
 #include "../generic/py_capi_utils.hh"
-#include "../generic/python_compat.hh"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
-#include "BLI_string.h"
+#include "BLI_path_utils.hh"
+#include "BLI_string.hh"
 
 #include "BKE_global.hh"
 #include "BKE_main.hh"
@@ -30,10 +31,12 @@
 #include "bpy_rna.hh"
 #include "bpy_rna_data.hh"
 
+namespace blender {
+
 struct BPy_DataContext {
   PyObject_HEAD /* Required Python macro. */
   BPy_StructRNA *data_rna;
-  char filepath[1024];
+  char filepath[FILE_MAX];
 };
 
 static PyObject *bpy_rna_data_temp_data(PyObject *self, PyObject *args, PyObject *kw);
@@ -51,8 +54,8 @@ static PyObject *bpy_rna_data_context_exit(BPy_DataContext *self, PyObject *args
 #endif
 
 static PyMethodDef bpy_rna_data_context_methods[] = {
-    {"__enter__", (PyCFunction)bpy_rna_data_context_enter, METH_NOARGS},
-    {"__exit__", (PyCFunction)bpy_rna_data_context_exit, METH_VARARGS},
+    {"__enter__", reinterpret_cast<PyCFunction>(bpy_rna_data_context_enter), METH_NOARGS},
+    {"__exit__", reinterpret_cast<PyCFunction>(bpy_rna_data_context_exit), METH_VARARGS},
     {nullptr} /* sentinel */
 };
 
@@ -87,7 +90,7 @@ static PyTypeObject bpy_rna_data_context_Type = {
     /*tp_name*/ "bpy_rna_data_context",
     /*tp_basicsize*/ sizeof(BPy_DataContext),
     /*tp_itemsize*/ 0,
-    /*tp_dealloc*/ (destructor)bpy_rna_data_context_dealloc,
+    /*tp_dealloc*/ reinterpret_cast<destructor>(bpy_rna_data_context_dealloc),
     /*tp_vectorcall_offset*/ 0,
     /*tp_getattr*/ nullptr,
     /*tp_setattr*/ nullptr,
@@ -104,8 +107,8 @@ static PyTypeObject bpy_rna_data_context_Type = {
     /*tp_as_buffer*/ nullptr,
     /*tp_flags*/ Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     /*tp_doc*/ nullptr,
-    /*tp_traverse*/ (traverseproc)bpy_rna_data_context_traverse,
-    /*tp_clear*/ (inquiry)bpy_rna_data_context_clear,
+    /*tp_traverse*/ reinterpret_cast<traverseproc>(bpy_rna_data_context_traverse),
+    /*tp_clear*/ reinterpret_cast<inquiry>(bpy_rna_data_context_clear),
     /*tp_richcompare*/ nullptr,
     /*tp_weaklistoffset*/ 0,
     /*tp_iter*/ nullptr,
@@ -137,25 +140,23 @@ static PyTypeObject bpy_rna_data_context_Type = {
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_rna_data_context_load_doc,
-    ".. method:: temp_data(filepath=None)\n"
+    ".. staticmethod:: temp_data(*, filepath=None)\n"
     "\n"
     "   A context manager that temporarily creates blender file data.\n"
     "\n"
-    "   :arg filepath: The file path for the newly temporary data. "
+    "   :param filepath: The file path for the newly temporary data. "
     "When None, the path of the currently open file is used.\n"
     "   :type filepath: str | bytes | None\n"
     "\n"
-    "   :return: Blend file data which is freed once the context exists.\n"
+    "   :return: Blend file data which is freed once the context exits.\n"
     "   :rtype: :class:`bpy.types.BlendData`\n");
-
 static PyObject *bpy_rna_data_temp_data(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
   PyC_UnicodeAsBytesAndSize_Data filepath_data = {nullptr};
   BPy_DataContext *ret;
   static const char *_keywords[] = {"filepath", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `filepath` */
       ":temp_data",
       _keywords,
@@ -168,28 +169,42 @@ static PyObject *bpy_rna_data_temp_data(PyObject * /*self*/, PyObject *args, PyO
   }
 
   ret = PyObject_GC_New(BPy_DataContext, &bpy_rna_data_context_Type);
+  ret->data_rna = nullptr;
 
   STRNCPY(ret->filepath, filepath_data.value ? filepath_data.value : G_MAIN->filepath);
   Py_XDECREF(filepath_data.value_coerce);
 
-  return (PyObject *)ret;
+  return reinterpret_cast<PyObject *>(ret);
 }
 
 static PyObject *bpy_rna_data_context_enter(BPy_DataContext *self)
 {
-  Main *bmain_temp = BKE_main_new();
-  PointerRNA ptr = RNA_pointer_create_discrete(nullptr, &RNA_BlendData, bmain_temp);
+  if (self->data_rna != nullptr) {
+    PyErr_SetString(PyExc_RuntimeError, "Context manager already entered");
+    return nullptr;
+  }
 
-  self->data_rna = (BPy_StructRNA *)pyrna_struct_CreatePyObject(&ptr);
+  Main *bmain_temp = BKE_main_new();
+  STRNCPY(bmain_temp->filepath, self->filepath);
+
+  PointerRNA ptr = RNA_pointer_create_discrete(nullptr, RNA_BlendData, bmain_temp);
+
+  self->data_rna = reinterpret_cast<BPy_StructRNA *>(pyrna_struct_CreatePyObject(&ptr));
 
   BLI_assert(!PyObject_GC_IsTracked((PyObject *)self));
   PyObject_GC_Track(self);
 
-  return (PyObject *)self->data_rna;
+  return Py_NewRef(reinterpret_cast<PyObject *>(self->data_rna));
 }
 
 static PyObject *bpy_rna_data_context_exit(BPy_DataContext *self, PyObject * /*args*/)
 {
+  /* Only possible when `__exit__` is called directly instead of via a `with` statement. */
+  if (self->data_rna == nullptr) {
+    PyErr_SetString(PyExc_RuntimeError, "Context manager not entered");
+    return nullptr;
+  }
+
   BKE_main_free(static_cast<Main *>(self->data_rna->ptr->data));
   self->data_rna->ptr->invalidate();
   Py_RETURN_NONE;
@@ -207,7 +222,7 @@ static PyObject *bpy_rna_data_context_exit(BPy_DataContext *self, PyObject * /*a
 
 PyMethodDef BPY_rna_data_context_method_def = {
     "temp_data",
-    (PyCFunction)bpy_rna_data_temp_data,
+    reinterpret_cast<PyCFunction>(bpy_rna_data_temp_data),
     METH_STATIC | METH_VARARGS | METH_KEYWORDS,
     bpy_rna_data_context_load_doc,
 };
@@ -228,3 +243,5 @@ int BPY_rna_data_context_type_ready()
 
   return 0;
 }
+
+}  // namespace blender

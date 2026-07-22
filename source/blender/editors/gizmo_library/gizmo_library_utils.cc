@@ -18,10 +18,10 @@
 #include "BKE_main.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "RNA_access.hh"
 
@@ -36,7 +36,9 @@
 /* own includes */
 #include "gizmo_library_intern.hh"
 
-static CLG_LogRef LOG = {"ed.gizmo.library_utils"};
+namespace blender {
+
+static CLG_LogRef LOG = {"tool.gizmo"};
 
 /* factor for precision tweaking */
 #define GIZMO_PRECISION_FAC 0.05f
@@ -173,7 +175,7 @@ bool gizmo_window_project_2d(
   float mat[4][4], imat[4][4];
   {
     float mat_identity[4][4];
-    WM_GizmoMatrixParams params = {nullptr};
+    wmGizmoMatrixParams params = {nullptr};
     if (use_offset == false) {
       unit_m4(mat_identity);
       params.matrix_offset = mat_identity;
@@ -196,7 +198,7 @@ bool gizmo_window_project_2d(
 
     float plane[4], co[3];
     plane_from_point_normal_v3(plane, mat[3], mat[2]);
-    bool clip_ray = ((RegionView3D *)region->regiondata)->is_persp;
+    bool clip_ray = (static_cast<RegionView3D *>(region->regiondata))->is_persp;
     if (ED_view3d_win_to_3d_on_plane(region, plane, mval, clip_ray, co)) {
       mul_m4_v3(imat, co);
       r_co[0] = co[(axis + 1) % 3];
@@ -218,7 +220,7 @@ bool gizmo_window_project_3d(
   float mat[4][4], imat[4][4];
   {
     float mat_identity[4][4];
-    WM_GizmoMatrixParams params = {nullptr};
+    wmGizmoMatrixParams params = {nullptr};
     if (use_offset == false) {
       unit_m4(mat_identity);
       params.matrix_offset = mat_identity;
@@ -263,24 +265,22 @@ wmGizmo *gizmo_find_from_properties(const IDProperty *properties,
   for (bScreen *screen = static_cast<bScreen *>(G_MAIN->screens.first); screen;
        screen = static_cast<bScreen *>(screen->id.next))
   {
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      if (!ELEM(spacetype, SPACE_TYPE_ANY, area->spacetype)) {
+    for (ScrArea &area : screen->areabase) {
+      if (!ELEM(spacetype, SPACE_TYPE_ANY, area.spacetype)) {
         continue;
       }
-      LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-        if (region->runtime->gizmo_map == nullptr) {
+      for (ARegion &region : area.regionbase) {
+        if (region.runtime->gizmo_map == nullptr) {
           continue;
         }
-        if (!ELEM(regionid, RGN_TYPE_ANY, region->regiontype)) {
+        if (!ELEM(regionid, RGN_TYPE_ANY, region.regiontype)) {
           continue;
         }
 
-        LISTBASE_FOREACH (
-            wmGizmoGroup *, gzgroup, WM_gizmomap_group_list(region->runtime->gizmo_map))
-        {
-          LISTBASE_FOREACH (wmGizmo *, gz, &gzgroup->gizmos) {
-            if (gz->properties == properties) {
-              return gz;
+        for (wmGizmoGroup &gzgroup : *WM_gizmomap_group_list(region.runtime->gizmo_map)) {
+          for (wmGizmo &gz : gzgroup.gizmos) {
+            if (gz.properties == properties) {
+              return &gz;
             }
           }
         }
@@ -291,3 +291,5 @@ wmGizmo *gizmo_find_from_properties(const IDProperty *properties,
 }
 
 /** \} */
+
+}  // namespace blender

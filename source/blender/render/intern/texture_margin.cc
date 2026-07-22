@@ -6,8 +6,8 @@
  * \ingroup render
  */
 
-#include "BLI_assert.h"
-#include "BLI_math_geom.h"
+#include "BLI_assert.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
@@ -15,7 +15,6 @@
 #include "BKE_attribute.hh"
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
-#include "BKE_mesh_legacy_derived_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 
 #include "IMB_imbuf.hh"
@@ -23,14 +22,16 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "zbuf.h"  // for rasterizer
+#include "zbuf.h" /* For rasterizer (#ZSpan and associated functions). */
 
 #include "RE_texture_margin.h"
 
 #include <algorithm>
 #include <cmath>
 
-namespace blender::render::texturemargin {
+namespace blender {
+
+namespace render::texturemargin {
 
 /**
  * The map class contains both a pixel map which maps out face indices for all UV-polygons and
@@ -55,7 +56,7 @@ class TextureMarginMap {
 
   OffsetIndices<int> faces_;
   Span<int> corner_edges_;
-  Span<float2> mloopuv_;
+  Span<float2> uv_map_;
   int totedge_;
 
  public:
@@ -65,12 +66,12 @@ class TextureMarginMap {
                    const int totedge,
                    const OffsetIndices<int> faces,
                    const Span<int> corner_edges,
-                   const Span<float2> mloopuv)
+                   const Span<float2> uv_map)
       : w_(w),
         h_(h),
         faces_(faces),
         corner_edges_(corner_edges),
-        mloopuv_(mloopuv),
+        uv_map_(uv_map),
         totedge_(totedge)
   {
     copy_v2_v2(uv_offset_, uv_offset);
@@ -220,8 +221,8 @@ class TextureMarginMap {
    */
   void lookup_pixels(ImBuf *ibuf, char *mask, int maxPolygonSteps)
   {
-    float4 *ibuf_ptr_fl = reinterpret_cast<float4 *>(ibuf->float_buffer.data);
-    uchar4 *ibuf_ptr_ch = reinterpret_cast<uchar4 *>(ibuf->byte_buffer.data);
+    float4 *ibuf_ptr_fl = reinterpret_cast<float4 *>(ibuf->float_data_for_write());
+    uchar4 *ibuf_ptr_ch = reinterpret_cast<uchar4 *>(ibuf->byte_data_for_write());
     size_t pixel_index = 0;
     for (int y = 0; y < h_; y++) {
       for (int x = 0; x < w_; x++) {
@@ -297,17 +298,17 @@ class TextureMarginMap {
   }
 
  private:
-  float2 uv_to_xy(const float2 &mloopuv) const
+  float2 uv_to_xy(const float2 &uv_map) const
   {
     float2 ret;
-    ret.x = (((mloopuv[0] - uv_offset_[0]) * w_) - (0.5f + 0.001f));
-    ret.y = (((mloopuv[1] - uv_offset_[1]) * h_) - (0.5f + 0.001f));
+    ret.x = (((uv_map[0] - uv_offset_[0]) * w_) - (0.5f + 0.001f));
+    ret.y = (((uv_map[1] - uv_offset_[1]) * h_) - (0.5f + 0.001f));
     return ret;
   }
 
   void build_tables()
   {
-    loop_to_face_map_ = blender::bke::mesh::build_corner_to_face_map(faces_);
+    loop_to_face_map_ = bke::mesh::build_corner_to_face_map(faces_);
 
     loop_adjacency_map_.resize(corner_edges_.size(), -1);
 
@@ -407,8 +408,8 @@ class TextureMarginMap {
         l2 = faces_[src_poly].start();
       }
       /* edge points */
-      float2 edgepoint1 = uv_to_xy(mloopuv_[l1]);
-      float2 edgepoint2 = uv_to_xy(mloopuv_[l2]);
+      float2 edgepoint1 = uv_to_xy(uv_map_[l1]);
+      float2 edgepoint2 = uv_to_xy(uv_map_[l2]);
       /* Vector AB is the vector from the first edge point to the second edge point.
        * Vector AP is the vector from the first edge point to our point under investigation. */
       float2 ab = edgepoint2 - edgepoint1;
@@ -468,8 +469,8 @@ class TextureMarginMap {
       other_edge2 = faces_[dst_poly].start();
     }
 
-    float2 other_edgepoint1 = uv_to_xy(mloopuv_[other_edge]);
-    float2 other_edgepoint2 = uv_to_xy(mloopuv_[other_edge2]);
+    float2 other_edgepoint1 = uv_to_xy(uv_map_[other_edge]);
+    float2 other_edgepoint2 = uv_to_xy(uv_map_[other_edge2]);
 
     /* Calculate the vector from the order edges last point to its first point. */
     float2 other_ab = other_edgepoint1 - other_edgepoint2;
@@ -502,7 +503,7 @@ static void generate_margin(ImBuf *ibuf,
                             const OffsetIndices<int> faces,
                             const Span<int> corner_edges,
                             const Span<int> corner_verts,
-                            const Span<float2> mloopuv,
+                            const Span<float2> uv_map,
                             const float uv_offset[2])
 {
   Array<int3> corner_tris(poly_to_tri_count(faces.size(), corner_edges.size()));
@@ -511,16 +512,16 @@ static void generate_margin(ImBuf *ibuf,
   Array<int> tri_faces(corner_tris.size());
   bke::mesh::corner_tris_calc_face_indices(faces, tri_faces);
 
-  TextureMarginMap map(ibuf->x, ibuf->y, uv_offset, edges_num, faces, corner_edges, mloopuv);
+  TextureMarginMap map(ibuf->x, ibuf->y, uv_offset, edges_num, faces, corner_edges, uv_map);
 
   bool draw_new_mask = false;
   /* Now the map contains 3 sorts of values: 0xFFFFFFFF for empty pixels, `0x80000000 + polyindex`
    * for margin pixels, just `polyindex` for face pixels. */
   if (mask) {
-    mask = (char *)MEM_dupallocN(mask);
+    mask = MEM_dupalloc(mask);
   }
   else {
-    mask = MEM_calloc_arrayN<char>(size_t(ibuf->x) * size_t(ibuf->y), __func__);
+    mask = MEM_new_array_zeroed<char>(size_t(ibuf->x) * size_t(ibuf->y), __func__);
     draw_new_mask = true;
   }
 
@@ -529,7 +530,7 @@ static void generate_margin(ImBuf *ibuf,
     float vec[3][2];
 
     for (int a = 0; a < 3; a++) {
-      const float *uv = mloopuv[tri[a]];
+      const float *uv = uv_map[tri[a]];
 
       /* NOTE(@ideasman42): workaround for pixel aligned UVs which are common and can screw up
        * our intersection tests where a pixel gets in between 2 faces or the middle of a quad,
@@ -545,11 +546,11 @@ static void generate_margin(ImBuf *ibuf,
     map.rasterize_tri(vec[0], vec[1], vec[2], tri_faces[i], mask, draw_new_mask);
   }
 
-  char *tmpmask = (char *)MEM_dupallocN(mask);
+  char *tmpmask = MEM_dupalloc(mask);
   /* Extend (with averaging) by 2 pixels. Those will be overwritten, but it
    * helps linear interpolations on the edges of polygons. */
   IMB_filter_extend(ibuf, tmpmask, 2);
-  MEM_freeN(tmpmask);
+  MEM_delete(tmpmask);
 
   map.grow_dijkstra(margin);
 
@@ -563,54 +564,32 @@ static void generate_margin(ImBuf *ibuf,
    */
   IMB_filter_extend(ibuf, mask, margin);
 
-  MEM_freeN(mask);
+  MEM_delete(mask);
 }
 
-}  // namespace blender::render::texturemargin
+}  // namespace render::texturemargin
 
 void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
                                              char *mask,
                                              const int margin,
                                              const Mesh *mesh,
-                                             char const *uv_layer,
+                                             StringRef uv_layer,
                                              const float uv_offset[2])
 {
-  using namespace blender;
-  const blender::StringRef uv_map_name = (uv_layer && uv_layer[0]) ?
-                                             uv_layer :
-                                             CustomData_get_active_layer_name(&mesh->corner_data,
-                                                                              CD_PROP_FLOAT2);
-  const blender::bke::AttributeAccessor attributes = mesh->attributes();
-  const VArraySpan<float2> uv_map = *attributes.lookup<float2>(uv_map_name,
-                                                               bke::AttrDomain::Corner);
+  const StringRef name = uv_layer.is_empty() ? mesh->active_uv_map_name() : uv_layer;
+  const bke::AttributeAccessor attributes = mesh->attributes();
+  const VArraySpan<float2> uv_map = *attributes.lookup<float2>(name, bke::AttrDomain::Corner);
 
-  blender::render::texturemargin::generate_margin(ibuf,
-                                                  mask,
-                                                  margin,
-                                                  mesh->vert_positions(),
-                                                  mesh->edges_num,
-                                                  mesh->faces(),
-                                                  mesh->corner_edges(),
-                                                  mesh->corner_verts(),
-                                                  uv_map,
-                                                  uv_offset);
+  render::texturemargin::generate_margin(ibuf,
+                                         mask,
+                                         margin,
+                                         mesh->vert_positions(),
+                                         mesh->edges_num,
+                                         mesh->faces(),
+                                         mesh->corner_edges(),
+                                         mesh->corner_verts(),
+                                         uv_map,
+                                         uv_offset);
 }
 
-void RE_generate_texturemargin_adjacentfaces_dm(
-    ImBuf *ibuf, char *mask, const int margin, DerivedMesh *dm, const float uv_offset[2])
-{
-  const blender::float2 *mloopuv = static_cast<const blender::float2 *>(
-      dm->getLoopDataArray(dm, CD_PROP_FLOAT2));
-
-  blender::render::texturemargin::generate_margin(
-      ibuf,
-      mask,
-      margin,
-      {reinterpret_cast<const blender::float3 *>(dm->getVertArray(dm)), dm->getNumVerts(dm)},
-      dm->getNumEdges(dm),
-      blender::Span(dm->getPolyArray(dm), dm->getNumPolys(dm) + 1),
-      {dm->getCornerEdgeArray(dm), dm->getNumLoops(dm)},
-      {dm->getCornerVertArray(dm), dm->getNumLoops(dm)},
-      {mloopuv, dm->getNumLoops(dm)},
-      uv_offset);
-}
+}  // namespace blender

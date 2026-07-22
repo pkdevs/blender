@@ -10,6 +10,8 @@
 #include "BLI_implicit_sharing.hh"
 #include "BLI_string_ref.hh"
 
+namespace blender {
+
 #define RET_OK 0
 #define RET_ERROR 1
 
@@ -41,14 +43,17 @@ enum ePF_FileStatus {
   PF_ASK = 10,
 };
 
+constexpr int64_t PACKED_FILE_MAX_SIZE = INT32_MAX;
+
 /* Pack. */
 
 PackedFile *BKE_packedfile_duplicate(const PackedFile *pf_src);
 PackedFile *BKE_packedfile_new(ReportList *reports,
                                const char *filepath_rel,
                                const char *basepath);
-PackedFile *BKE_packedfile_new_from_memory(
-    const void *mem, int memlen, const blender::ImplicitSharingInfo *sharing_info = nullptr);
+PackedFile *BKE_packedfile_new_from_memory(const void *mem,
+                                           int memlen,
+                                           const ImplicitSharingInfo *sharing_info = nullptr);
 
 /**
  * No libraries for now.
@@ -65,7 +70,7 @@ void BKE_packedfile_pack_all_libraries(Main *bmain, ReportList *reports);
  * It returns a char *to the existing file name / new file name or NULL when
  * there was an error or when the user decides to cancel the operation.
  *
- * \warning 'abs_name' may be relative still! (use a "//" prefix)
+ * \warning 'abs_name' may be relative still! (use a `//` prefix)
  * be sure to run #BLI_path_abs on it first.
  */
 char *BKE_packedfile_unpack_to_file(ReportList *reports,
@@ -152,6 +157,6 @@ bool BKE_packedfile_id_check(const ID *id);
 void BKE_packedfile_id_unpack(Main *bmain, ID *id, ReportList *reports, enum ePF_FileStatus how);
 
 void BKE_packedfile_blend_write(BlendWriter *writer, const PackedFile *pf);
-void BKE_packedfile_blend_read(BlendDataReader *reader,
-                               PackedFile **pf_p,
-                               blender::StringRefNull filepath);
+void BKE_packedfile_blend_read(BlendDataReader *reader, PackedFile **pf_p, StringRefNull filepath);
+
+}  // namespace blender

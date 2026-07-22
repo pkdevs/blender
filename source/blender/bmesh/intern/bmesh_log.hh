@@ -8,10 +8,12 @@
  * \ingroup bmesh
  */
 
+struct RangeTreeUInt;
+namespace blender {
+
 struct BMFace;
 struct BMVert;
 struct BMesh;
-struct RangeTreeUInt;
 struct BMLog;
 struct BMLogEntry;
 
@@ -35,9 +37,6 @@ BMLog *BM_log_from_existing_entries_create(BMesh *bm, BMLogEntry *entry);
  * Free all the data in a BMLog including the log itself.
  */
 void BM_log_free(BMLog *log);
-
-/** Apply a consistent ordering to BMesh vertices and faces. */
-void BM_log_mesh_elems_reorder(BMesh *bm, BMLog *log);
 
 /**
  * Start a new log entry and update the log entry list.
@@ -202,3 +201,5 @@ struct RangeTreeUInt *BM_log_unused_ids(BMLog *log);
 void BM_log_print(const BMLog *log, const char *description);
 void BM_log_print_entry(BMesh *bm, BMLogEntry *entry);
 #endif
+
+}  // namespace blender

@@ -16,18 +16,17 @@
 
 namespace blender::draw {
 
-GPUVertFormat init_format_for_attribute(const eCustomDataType data_type, const StringRef vbo_name)
+GPUVertFormat init_format_for_attribute(const bke::AttrType data_type, const StringRef vbo_name)
 {
   GPUVertFormat format{};
-  bke::attribute_math::convert_to_static_type(data_type, [&](auto dummy) {
-    using T = decltype(dummy);
+  bke::attribute_math::to_static_type(data_type, [&]<typename T>() {
     using Converter = AttributeConverter<T>;
     if constexpr (!std::is_void_v<typename Converter::VBOType>) {
-      GPU_vertformat_attr_add(&format,
-                              vbo_name,
-                              Converter::gpu_component_type,
-                              Converter::gpu_component_len,
-                              Converter::gpu_fetch_mode);
+      GPU_vertformat_attr_add_legacy(&format,
+                                     vbo_name,
+                                     Converter::gpu_component_type,
+                                     Converter::gpu_component_len,
+                                     Converter::gpu_fetch_mode);
     }
   });
   return format;
@@ -35,8 +34,7 @@ GPUVertFormat init_format_for_attribute(const eCustomDataType data_type, const S
 
 void vertbuf_data_extract_direct(const GSpan attribute, gpu::VertBuf &vbo)
 {
-  bke::attribute_math::convert_to_static_type(attribute.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  bke::attribute_math::to_static_type(attribute.type(), [&]<typename T>() {
     using Converter = AttributeConverter<T>;
     using VBOType = typename Converter::VBOType;
     if constexpr (!std::is_void_v<VBOType>) {

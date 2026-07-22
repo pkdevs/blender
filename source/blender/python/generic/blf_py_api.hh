@@ -10,4 +10,8 @@
 
 #include <Python.h>
 
-PyObject *BPyInit_blf();
+namespace blender {
+
+[[nodiscard]] PyObject *BPyInit_blf();
+
+}  // namespace blender

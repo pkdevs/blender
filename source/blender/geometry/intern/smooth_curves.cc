@@ -54,7 +54,7 @@ static void gaussian_blur_1D(const Span<T> src,
   BLI_assert(!src.is_empty());
   BLI_assert(src.size() == dst.size());
 
-  /* Avoid computation if the there is just one point. */
+  /* Avoid computation if there is just one point. */
   if (src.size() == 1) {
     return;
   }
@@ -155,8 +155,7 @@ void gaussian_blur_1D(const GSpan src,
                       const bool is_cyclic,
                       GMutableSpan dst)
 {
-  bke::attribute_math::convert_to_static_type(src.type(), [&](auto dummy) {
-    using T = decltype(dummy);
+  bke::attribute_math::to_static_type(src.type(), [&]<typename T>() {
     /* Only allow smoothing of float, float2, or float3. */
     /* Reduces unnecessary code generation. */
     if constexpr (is_same_any_v<T, float, float2, float3>) {
@@ -192,34 +191,36 @@ void smooth_curve_attribute(const IndexMask &curves_to_smooth,
 
         gaussian_blur_1D(src_data,
                          iterations,
-                         VArray<float>::ForSpan(influences.slice(range)),
+                         VArray<float>::from_span(influences.slice(range)),
                          smooth_ends,
                          keep_shape,
                          cyclic,
                          dst_data);
       };
 
-  curves_to_smooth.foreach_index(GrainSize(512), [&](const int curve_i) {
-    Vector<std::byte> orig_data;
-    const IndexRange points = points_by_curve[curve_i];
+  curves_to_smooth.foreach_index(
+      [&](const int curve_i) {
+        Vector<std::byte> orig_data;
+        const IndexRange points = points_by_curve[curve_i];
 
-    IndexMaskMemory memory;
-    const IndexMask selection_mask = IndexMask::from_bools(points, point_selection, memory);
-    if (selection_mask.is_empty()) {
-      return;
-    }
+        IndexMaskMemory memory;
+        const IndexMask selection_mask = IndexMask::from_bools(points, point_selection, memory);
+        if (selection_mask.is_empty()) {
+          return;
+        }
 
-    const std::optional<IndexRange> selection_range = selection_mask.to_range();
-    if (selection_range && *selection_range == points) {
-      smooth_points_range(points, cyclic[curve_i], orig_data);
-    }
-    else {
-      selection_mask.foreach_range([&](const IndexRange range) {
-        /* Individual ranges should be treated as non-cyclic. */
-        smooth_points_range(range, false, orig_data);
-      });
-    }
-  });
+        const std::optional<IndexRange> selection_range = selection_mask.to_range();
+        if (selection_range && *selection_range == points) {
+          smooth_points_range(points, cyclic[curve_i], orig_data);
+        }
+        else {
+          selection_mask.foreach_range([&](const IndexRange range) {
+            /* Individual ranges should be treated as non-cyclic. */
+            smooth_points_range(range, false, orig_data);
+          });
+        }
+      },
+      exec_mode::grain_size(512));
 }
 
 void smooth_curve_attribute(const IndexMask &curves_to_smooth,
@@ -237,7 +238,7 @@ void smooth_curve_attribute(const IndexMask &curves_to_smooth,
                          point_selection,
                          cyclic,
                          iterations,
-                         VArray<float>::ForSingle(influence, points_by_curve.total_size()),
+                         VArray<float>::from_single(influence, points_by_curve.total_size()),
                          smooth_ends,
                          keep_shape,
                          attribute_data);
@@ -245,6 +246,7 @@ void smooth_curve_attribute(const IndexMask &curves_to_smooth,
 
 void smooth_curve_positions(bke::CurvesGeometry &curves,
                             const IndexMask &curves_to_smooth,
+                            const VArray<bool> &point_selection,
                             const int iterations,
                             const VArray<float> &influence_by_point,
                             const bool smooth_ends,
@@ -253,8 +255,6 @@ void smooth_curve_positions(bke::CurvesGeometry &curves,
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
   const OffsetIndices points_by_curve = curves.points_by_curve();
   const VArray<bool> cyclic = curves.cyclic();
-  const VArray<bool> point_selection = *curves.attributes().lookup_or_default<bool>(
-      ".selection", bke::AttrDomain::Point, true);
   if (!curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
     bke::GSpanAttributeWriter positions = attributes.lookup_for_write_span("position");
     smooth_curve_attribute(curves_to_smooth,
@@ -280,57 +280,60 @@ void smooth_curve_positions(bke::CurvesGeometry &curves,
         curves, bezier_curves_to_smooth);
 
     VArraySpan<float> influences(influence_by_point);
-    bezier_curves_to_smooth.foreach_index(GrainSize(512), [&](const int curve) {
-      Vector<float3> orig_data;
-      const IndexRange points = points_by_curve[curve];
+    bezier_curves_to_smooth.foreach_index(
+        [&](const int curve) {
+          Vector<float3> orig_data;
+          const IndexRange points = points_by_curve[curve];
 
-      IndexMaskMemory memory;
-      const IndexMask selection_mask = IndexMask::from_bools(points, point_selection, memory);
-      if (selection_mask.is_empty()) {
-        return;
-      }
+          IndexMaskMemory memory;
+          const IndexMask selection_mask = IndexMask::from_bools(points, point_selection, memory);
+          if (selection_mask.is_empty()) {
+            return;
+          }
 
-      selection_mask.foreach_range([&](const IndexRange range) {
-        IndexRange positions_range(range.start() * 3, range.size() * 3);
-        /* Ignore the left handle of the first point and the right handle of the last point. */
-        if (!smooth_ends && !cyclic[curve]) {
-          positions_range = positions_range.drop_front(1).drop_back(1);
-        }
-        MutableSpan<float3> dst_data = all_positions.as_mutable_span().slice(positions_range);
+          selection_mask.foreach_range([&](const IndexRange range) {
+            IndexRange positions_range(range.start() * 3, range.size() * 3);
+            /* Ignore the left handle of the first point and the right handle of the last point. */
+            if (!smooth_ends && !cyclic[curve]) {
+              positions_range = positions_range.drop_front(1).drop_back(1);
+            }
+            MutableSpan<float3> dst_data = all_positions.as_mutable_span().slice(positions_range);
 
-        orig_data.resize(dst_data.size());
-        orig_data.as_mutable_span().copy_from(dst_data);
+            orig_data.resize(dst_data.size());
+            orig_data.as_mutable_span().copy_from(dst_data);
 
-        /* The influence is mapped from handle+control point index to only control point index. */
-        Array<float> point_influences(positions_range.size());
-        if (!smooth_ends && !cyclic[curve]) {
-          threading::parallel_for(
-              positions_range.index_range(), 4096, [&](const IndexRange influences_range) {
-                for (const int index : influences_range) {
-                  /* Account for the left handle of the first
-                   * point being ignored. */
-                  point_influences[index] = influences.slice(range)[(index + 1) / 3];
-                }
-              });
-        }
-        else {
-          threading::parallel_for(
-              positions_range.index_range(), 4096, [&](const IndexRange influences_range) {
-                for (const int index : influences_range) {
-                  point_influences[index] = influences.slice(range)[index / 3];
-                }
-              });
-        }
+            /* The influence is mapped from handle+control point index to only control point index.
+             */
+            Array<float> point_influences(positions_range.size());
+            if (!smooth_ends && !cyclic[curve]) {
+              threading::parallel_for(
+                  positions_range.index_range(), 4096, [&](const IndexRange influences_range) {
+                    for (const int index : influences_range) {
+                      /* Account for the left handle of the first
+                       * point being ignored. */
+                      point_influences[index] = influences.slice(range)[(index + 1) / 3];
+                    }
+                  });
+            }
+            else {
+              threading::parallel_for(
+                  positions_range.index_range(), 4096, [&](const IndexRange influences_range) {
+                    for (const int index : influences_range) {
+                      point_influences[index] = influences.slice(range)[index / 3];
+                    }
+                  });
+            }
 
-        gaussian_blur_1D(orig_data.as_span(),
-                         iterations,
-                         VArray<float>::ForSpan(point_influences.as_span()),
-                         smooth_ends,
-                         keep_shape,
-                         cyclic[curve],
-                         dst_data);
-      });
-    });
+            gaussian_blur_1D(orig_data.as_span(),
+                             iterations,
+                             VArray<float>::from_span(point_influences.as_span()),
+                             smooth_ends,
+                             keep_shape,
+                             cyclic[curve],
+                             dst_data);
+          });
+        },
+        exec_mode::grain_size(512));
 
     /* Copy the resulting values from the flat array back into the three position attributes for
      * the left and right handles as well as the control points. */
@@ -354,6 +357,7 @@ void smooth_curve_positions(bke::CurvesGeometry &curves,
     }
 
     curves.calculate_bezier_auto_handles();
+    curves.calculate_bezier_aligned_handles();
   }
 
   curves.tag_positions_changed();
@@ -361,6 +365,7 @@ void smooth_curve_positions(bke::CurvesGeometry &curves,
 
 void smooth_curve_positions(bke::CurvesGeometry &curves,
                             const IndexMask &curves_to_smooth,
+                            const VArray<bool> &point_selection,
                             const int iterations,
                             const float influence,
                             const bool smooth_ends,
@@ -368,8 +373,9 @@ void smooth_curve_positions(bke::CurvesGeometry &curves,
 {
   smooth_curve_positions(curves,
                          curves_to_smooth,
+                         point_selection,
                          iterations,
-                         VArray<float>::ForSingle(influence, curves.points_num()),
+                         VArray<float>::from_single(influence, curves.points_num()),
                          smooth_ends,
                          keep_shape);
 }

@@ -8,8 +8,8 @@
 
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
@@ -25,6 +25,8 @@
 #include "console_intern.hh"
 
 #include "../space_info/textview.hh"
+
+namespace blender {
 
 static enum eTextViewContext_LineFlag console_line_data(TextViewContext *tvc,
                                                         uchar fg[4],
@@ -51,7 +53,7 @@ static enum eTextViewContext_LineFlag console_line_data(TextViewContext *tvc,
       break;
   }
 
-  UI_GetThemeColor4ubv(fg_id, fg);
+  ui::theme::get_color_4ubv(fg_id, fg);
   return TVC_LINE_FG;
 }
 
@@ -64,21 +66,21 @@ void console_scrollback_prompt_begin(SpaceConsole *sc, ConsoleLine *cl_dummy)
   cl_dummy->type = CONSOLE_LINE_INPUT;
   cl_dummy->len = prompt_len + cl->len;
   cl_dummy->len_alloc = cl_dummy->len + 1;
-  cl_dummy->line = MEM_malloc_arrayN<char>(cl_dummy->len_alloc, "cl_dummy");
+  cl_dummy->line = MEM_new_array_uninitialized<char>(cl_dummy->len_alloc, "cl_dummy");
   memcpy(cl_dummy->line, sc->prompt, prompt_len);
   memcpy(cl_dummy->line + prompt_len, cl->line, cl->len + 1);
   BLI_addtail(&sc->scrollback, cl_dummy);
 }
 void console_scrollback_prompt_end(SpaceConsole *sc, ConsoleLine *cl_dummy)
 {
-  MEM_freeN(cl_dummy->line);
+  MEM_delete(cl_dummy->line);
   BLI_remlink(&sc->scrollback, cl_dummy);
 }
 
 /* console textview callbacks */
 static int console_textview_begin(TextViewContext *tvc)
 {
-  SpaceConsole *sc = (SpaceConsole *)tvc->arg1;
+  SpaceConsole *sc = static_cast<SpaceConsole *>(const_cast<void *>(tvc->arg1));
   tvc->sel_start = sc->sel_start;
   tvc->sel_end = sc->sel_end;
 
@@ -90,13 +92,14 @@ static int console_textview_begin(TextViewContext *tvc)
 
 static void console_textview_end(TextViewContext *tvc)
 {
-  SpaceConsole *sc = (SpaceConsole *)tvc->arg1;
+  SpaceConsole *sc = static_cast<SpaceConsole *>(const_cast<void *>(tvc->arg1));
   (void)sc;
 }
 
 static int console_textview_step(TextViewContext *tvc)
 {
-  return ((tvc->iter = (void *)((Link *)tvc->iter)->prev) != nullptr);
+  return ((tvc->iter = static_cast<void *>(
+               (static_cast<Link *>(const_cast<void *>(tvc->iter)))->prev)) != nullptr);
 }
 
 static void console_textview_line_get(TextViewContext *tvc, const char **r_line, int *r_len)
@@ -131,21 +134,24 @@ static void console_cursor_wrap_offset(
   }
 }
 
-static void console_textview_draw_cursor(TextViewContext *tvc, int cwidth, int columns)
+static void console_textview_draw_cursor(TextViewContext *tvc, int char_width, int columns)
 {
   int pen[2];
   {
-    const SpaceConsole *sc = (SpaceConsole *)tvc->arg1;
-    const ConsoleLine *cl = (ConsoleLine *)sc->history.last;
+    const SpaceConsole *sc = static_cast<SpaceConsole *>(const_cast<void *>(tvc->arg1));
+    /* Cache the font metrics computed during draw, reused for IME cursor positioning. */
+    sc->runtime->char_width_px = char_width;
+    sc->runtime->line_height_px = tvc->line_height;
+    const ConsoleLine *cl = static_cast<ConsoleLine *>(sc->history.last);
     int offl = 0, offc = 0;
 
     console_cursor_wrap_offset(sc->prompt, columns, &offl, &offc, nullptr);
     console_cursor_wrap_offset(cl->line, columns, &offl, &offc, cl->line + cl->cursor);
-    pen[0] = cwidth * offc;
-    pen[1] = -tvc->lheight * offl;
+    pen[0] = char_width * offc;
+    pen[1] = -tvc->line_height * offl;
 
     console_cursor_wrap_offset(cl->line + cl->cursor, columns, &offl, &offc, nullptr);
-    pen[1] += tvc->lheight * offl;
+    pen[1] += tvc->line_height * offl;
 
     pen[0] += tvc->draw_rect.xmin;
     pen[1] += tvc->draw_rect.ymin;
@@ -153,18 +159,18 @@ static void console_textview_draw_cursor(TextViewContext *tvc, int cwidth, int c
 
   /* cursor */
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformThemeColor(TH_CONSOLE_CURSOR);
 
-  immRectf(pos, pen[0] - U.pixelsize, pen[1], pen[0] + U.pixelsize, pen[1] + tvc->lheight);
+  immRectf(pos, pen[0] - U.pixelsize, pen[1], pen[0] + U.pixelsize, pen[1] + tvc->line_height);
 
   immUnbindProgram();
 }
 
 static void console_textview_const_colors(TextViewContext * /*tvc*/, uchar bg_sel[4])
 {
-  UI_GetThemeColor4ubv(TH_CONSOLE_SELECT, bg_sel);
+  ui::theme::get_color_4ubv(TH_CONSOLE_SELECT, bg_sel);
 }
 
 static void console_textview_draw_rect_calc(const ARegion *region,
@@ -213,7 +219,7 @@ static int console_textview_main__internal(SpaceConsole *sc,
   /* view */
   tvc.sel_start = sc->sel_start;
   tvc.sel_end = sc->sel_end;
-  tvc.lheight = sc->lheight * UI_SCALE_FAC;
+  tvc.line_height = sc->line_height * UI_SCALE_FAC;
   tvc.scroll_ymin = v2d->cur.ymin;
   tvc.scroll_ymax = v2d->cur.ymax;
 
@@ -223,7 +229,7 @@ static int console_textview_main__internal(SpaceConsole *sc,
   int m_pos[2] = {mval[0], mval[1]};
   /* Mouse position is initialized with max int. */
   if (m_pos[0] != INT_MAX) {
-    m_pos[0] += tvc.lheight / 4;
+    m_pos[0] += tvc.line_height / 4;
   }
 
   console_scrollback_prompt_begin(sc, &cl_dummy);
@@ -247,9 +253,43 @@ int console_textview_height(SpaceConsole *sc, const ARegion *region)
 
 int console_char_pick(SpaceConsole *sc, const ARegion *region, const int mval[2])
 {
-  int r_mval_pick_offset = 0;
+  int mval_pick_offset = 0;
   void *mval_pick_item = nullptr;
 
-  console_textview_main__internal(sc, region, false, mval, &mval_pick_item, &r_mval_pick_offset);
-  return r_mval_pick_offset;
+  console_textview_main__internal(sc, region, false, mval, &mval_pick_item, &mval_pick_offset);
+  return mval_pick_offset;
 }
+
+std::optional<blender::int2> console_cursor_region_xy_get(const SpaceConsole *sc,
+                                                          const ARegion *region,
+                                                          const int offset)
+{
+  const ConsoleLine *cl = static_cast<const ConsoleLine *>(sc->history.last);
+  if (cl == nullptr) {
+    return std::nullopt;
+  }
+
+  rcti draw_rect, draw_rect_outer;
+  console_textview_draw_rect_calc(region, &draw_rect, &draw_rect_outer);
+
+  const int line_height = sc->runtime->line_height_px;
+  const int char_width = sc->runtime->char_width_px;
+  const int columns = std::max((draw_rect.xmax - draw_rect.xmin) / std::max(char_width, 1), 1);
+
+  int offl = 0, offc = 0;
+  console_cursor_wrap_offset(sc->prompt, columns, &offl, &offc, nullptr);
+  console_cursor_wrap_offset(cl->line, columns, &offl, &offc, cl->line + offset);
+  int2 xy = {
+      char_width * offc,
+      -line_height * offl,
+  };
+
+  console_cursor_wrap_offset(cl->line + offset, columns, &offl, &offc, nullptr);
+  xy[1] += line_height * offl;
+
+  xy[0] += draw_rect.xmin;
+  xy[1] += draw_rect.ymin;
+  return xy;
+}
+
+}  // namespace blender

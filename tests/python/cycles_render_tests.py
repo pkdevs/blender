@@ -20,42 +20,44 @@ BLOCKLIST_ALL = [
     "hair_instancer_uv.blend",
     "principled_hair_directcoloring.blend",
     "visibility_particles.blend",
-    # Temporarily blocked for 4.4 lib upgrade, due to PNG alpha minor difference.
-    "image_log_osl.blend",
+    # High noise variance between platforms
+    "many_lights.blend",
+    # Tests for EEVEE-only setting (duplicates from the Cycles perspective)
+    "raytrace_backface_on.blend",
+    "raytrace_backface_off.blend",
+    "camera_depth_of_field_jittered.blend",
+    "shadow_resolution.blend",
+    "shadow_min_pool_size.blend",
+    "shadow_resolution_scale.blend",
+    "shader_to_rgb_transparent.blend",
+    "subsurface_shader_to_rgb.blend",
+    "lightprobe_planar.blend"
 ]
 
-# Blocklist that disables OSL specific tests for configurations that do not support OSL backend.
-BLOCKLIST_EXPLICIT_OSL = [
+# Blocklist for device + build configuration that does not support OSL at all.
+BLOCKLIST_OSL_NONE = [
     '.*_osl.blend',
     'osl_.*.blend',
 ]
 
-# Blocklist for SVM tests that are forced to run with OSL to test consistency between the two backends.
-BLOCKLIST_OSL = [
-    # Block tests that fail with OSL due to differences from SVM.
-    # Note: Most of the tests below are expected to be different between OSL and SVM
-    # As such many of these tests have both a SVM and OSL file. Blocking the SVM
-    # tests here doesn't loose any test permutations.
-    #
+# Blocklist for OSL with limited OSL tests for fast test execution.
+BLOCKLIST_OSL_LIMITED = []
+
+# Blocklist for tests that fail when running all tests with OSL backend.
+# Most of these tests are blocked due to expected differences between SVM and OSL.
+# Due to the expected differences there are usually a SVM and OSL version of the test.
+# So blocking these tests doesn't lose any test permutations.
+BLOCKLIST_OSL_ALL = BLOCKLIST_OSL_LIMITED + [
     # AOVs are not supported. See 73266
-    'aov_position.blend',
+    'aov_.*.blend',
     'render_passes_aov.*.blend',
-    # Image sampling is different from SVM. There are OSL variants of these tests
-    'image_byte.*.blend',
-    'image_float.*.blend',
-    'image_half.*.blend',
-    'image_mapping_.*_closest.blend',
-    'image_mapping_.*_cubic.blend',
-    'image_mapping_.*_linear.blend',
-    'image_alpha_blend.blend',
-    'image_alpha_channel_packed.blend',
-    'image_alpha_ignore.blend',
-    'image_log.blend',
-    'image_non_color.blend',
-    'image_mapping_udim.blend',
-    # TODO: Tests that need investigating into why they're failing, and how to fix that.
+    # Tests that need investigating into why they're failing:
     # Noise differences due to Principled BSDF mixing/layering used in some of these scenes
     'render_passes_.*.blend',
+    # OSL can not specify parameters when reading attribute, which we need for stochastic sampling
+    'volume_tricubic_interpolation.blend',
+    # Test specifically for how SVM deals with missing derivatives, which OSL has.
+    "image_mipmap_incomplete_derivs.blend"
 ]
 
 BLOCKLIST_OPTIX = [
@@ -64,28 +66,41 @@ BLOCKLIST_OPTIX = [
     'big_plane_43865.blend',
 ]
 
-BLOCKLIST_OPTIX_OSL = [
-    # OptiX OSL does support AO or Bevel
+# Blocklist for OSL tests that fail with the OptiX OSL backend.
+BLOCKLIST_OPTIX_OSL_LIMITED = [
+    # OptiX OSL doesn't support the trace function
+    'osl_trace_shader.blend',
+    # Noise functions do not return color with OptiX OSL
+    'osl_camera_advanced.blend',
+]
+
+# Blocklist for SVM tests that fail when forced to run with OptiX OSL
+BLOCKLIST_OPTIX_OSL_ALL = BLOCKLIST_OPTIX_OSL_LIMITED + [
+    # OptiX OSL does support AO, Bevel or Raycast
     'ambient_occlusion.*.blend',
     'bake_bevel.blend',
     'bevel.blend',
+    'osl_camera_bevel.blend',
+    'raycast.*.blend',
     'principled_bsdf_bevel_emission_137420.blend',
-    # OptiX OSL doesn't support the trace function
-    'osl_trace_shader.blend',
-    # The 3D texture doesn't have the right mappings
-    'point_density_.*_object.blend',
     # Dicing tests use wireframe node which doesn't appear to be supported with OptiX OSL
     'dicing_camera.blend',
+    'object_dicing.blend',
     'offscreen_dicing.blend',
     'panorama_dicing.blend',
-    # The mapping of the UDIM texture is incorrect. Need to investigate why.
-    'image_mapping_udim_packed.blend',
     # Error during rendering. Need to investigate why.
     'points_volume.blend',
 ]
 
 
 BLOCKLIST_METAL = []
+
+BLOCKLIST_METAL_RT = [
+    # Metal RT uses different parameterization for linear curves.
+    # See discussion in #146072
+    # https://projects.blender.org/blender/blender/issues/146072#issuecomment-1699788
+    'hair_linear_close_up.blend',
+]
 
 if platform.system() == "Darwin":
     version, _, _ = platform.mac_ver()
@@ -96,12 +111,22 @@ if platform.system() == "Darwin":
             "underwater_caustics.blend",
         ]
 
+
+BLOCKLIST_HIPRT = [
+    # Light leaking fireflies due to HIP-RT intersection precision issue.
+    "normal_mapping_light_leak.blend",
+]
+
+BLOCKLIST_HIP_NORT = [
+    # MNEE not supported on HIP without HIP-RT
+    "underwater_caustics.blend",
+]
+
+
 BLOCKLIST_GPU = [
     # Uninvestigated differences with GPU.
-    'image_log.blend',
     'glass_mix_40964.blend',
     'filter_glossy_refraction_45609.blend',
-    'smoke_color.blend',
     'bevel_mblur.blend',
     # Inconsistency between Embree and Hair primitive on GPU.
     'denoise_hair.blend',
@@ -113,6 +138,7 @@ BLOCKLIST_GPU = [
     'principled_hair_.*.blend',
     'transparent_shadow_hair.*.blend',
     "microfacet_hair_orientation.blend",
+    "instance_types.blend",
     # Inconsistent handling of overlapping objects.
     "sobol_uniform_41143.blend",
     "visibility_particles.blend",
@@ -122,12 +148,21 @@ BLOCKLIST_GPU = [
 
 
 class CyclesReport(render_report.Report):
-    def __init__(self, title, output_dir, oiiotool, device=None, blocklist=[], osl=False):
+    def __init__(
+            self,
+            title,
+            test_dir_name,
+            output_dir,
+            oiiotool,
+            device=None,
+            blocklist=[],
+            osl=False):
         # Split device name in format "<device_type>[-<RT>]" into individual
         # tokens, setting the RT suffix to an empty string if its not specified.
         self.device, suffix = (device.split("-") + [""])[:2]
         self.use_hwrt = (suffix == "RT")
         self.osl = osl
+        self.extra_args = []
 
         variation = self.device
         if suffix:
@@ -137,14 +172,26 @@ class CyclesReport(render_report.Report):
 
         super().__init__(title, output_dir, oiiotool, variation, blocklist)
 
+        self.set_pixelated(True)
+        self.set_reference_dir("cycles_renders")
+        if device == 'CPU':
+            self.set_compare_engine('eevee')
+        else:
+            self.set_compare_engine('cycles', 'CPU')
+
     def _get_render_arguments(self, arguments_cb, filepath, base_output_filepath):
-        return arguments_cb(filepath, base_output_filepath, self.use_hwrt, self.osl)
+        return arguments_cb(
+            filepath,
+            base_output_filepath,
+            self.use_hwrt,
+            self.osl,
+            self.extra_args)
 
     def _get_arguments_suffix(self):
         return ['--', '--cycles-device', self.device] if self.device else []
 
 
-def get_arguments(filepath, output_filepath, use_hwrt=False, osl=False):
+def get_arguments(filepath, output_filepath, use_hwrt, osl, extra_args):
     dirname = os.path.dirname(filepath)
     basedir = os.path.dirname(dirname)
     subject = os.path.basename(dirname)
@@ -155,6 +202,7 @@ def get_arguments(filepath, output_filepath, use_hwrt=False, osl=False):
         "--enable-autoexec",
         "--debug-memory",
         "--debug-exit-on-error",
+        "--console-crash-handler",
         filepath,
         "-E", "CYCLES",
         "-o", output_filepath,
@@ -185,10 +233,18 @@ def get_arguments(filepath, output_filepath, use_hwrt=False, osl=False):
     if osl:
         args.extend(["--python-expr", "import bpy; bpy.context.scene.cycles.shading_system = True"])
 
-    if subject == 'bake':
+        # Workaround for #152968, issue with OSL and Vulkan on Windows.
+        if sys.platform == "win32":
+            args.extend(["--gpu-backend", "opengl"])
+
+    args.extend(extra_args)
+
+    if subject.startswith('bake'):
         args.extend(['--python', os.path.join(basedir, "util", "render_bake.py")])
     elif subject == 'denoise_animation':
         args.extend(['--python', os.path.join(basedir, "util", "render_denoise.py")])
+    elif subject == 'updates':
+        args.extend(['--python', os.path.join(basedir, "util", "render_updates.py")])
     else:
         args.extend(["-f", "1"])
 
@@ -204,10 +260,34 @@ def create_argparse():
     parser.add_argument("--outdir", required=True)
     parser.add_argument("--oiiotool", required=True)
     parser.add_argument("--device", required=True)
-    parser.add_argument("--blocklist", nargs="*", default=[])
-    parser.add_argument("--osl", default=False, action='store_true')
+    parser.add_argument("--osl", default='none', type=str, choices=["none", "limited", "all"])
     parser.add_argument('--batch', default=False, action='store_true')
     return parser
+
+
+def test_volume_ray_marching(args, report):
+    # Default volume rendering algorithm is null scattering, but we also want to test ray marching
+    report.extra_args = ["--python-expr", "import bpy; bpy.context.scene.cycles.volume_biased = True"]
+    report.set_reference_dir("cycles_ray_marching_renders")
+    report.set_test_name_suffix("_ray_marching")
+    return report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
+
+
+def test_texture_cache(args, report):
+    # Use texture cache directory in output folder, and clear it to test auto generating.
+    test_dir_name = Path(args.testdir).name
+    texture_cache_dir = Path(args.outdir) / test_dir_name / "texture_cache"
+    for tx_file in texture_cache_dir.glob("*.tx"):
+        tx_file.unlink()
+
+    report.extra_args = ["--python-expr",
+                         "import bpy; "
+                         "bpy.context.scene.render.use_texture_cache = True; "
+                         "bpy.context.scene.render.use_auto_generate_texture_cache = True; "
+                         f"bpy.context.preferences.filepaths.texture_cache_directory = r\"{texture_cache_dir}\""]
+    report.set_reference_dir("cycles_tx_renders")
+    report.set_test_name_suffix("_tx")
+    return report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
 
 
 def main():
@@ -217,26 +297,37 @@ def main():
     device = args.device
 
     blocklist = BLOCKLIST_ALL
+
+    if args.osl == 'none':
+        blocklist += BLOCKLIST_OSL_NONE
+    elif args.osl == "limited":
+        blocklist += BLOCKLIST_OSL_LIMITED
+    else:
+        blocklist += BLOCKLIST_OSL_ALL
+
     if device != 'CPU':
         blocklist += BLOCKLIST_GPU
-    if device != 'CPU' or 'OSL' in args.blocklist:
-        blocklist += BLOCKLIST_EXPLICIT_OSL
+
     if device == 'OPTIX':
         blocklist += BLOCKLIST_OPTIX
-        if args.osl:
-            blocklist += BLOCKLIST_OPTIX_OSL
+        if args.osl == 'limited':
+            blocklist += BLOCKLIST_OPTIX_OSL_LIMITED
+        elif args.osl == 'all':
+            blocklist += BLOCKLIST_OPTIX_OSL_ALL
+
     if device == 'METAL':
         blocklist += BLOCKLIST_METAL
-    if args.osl:
-        blocklist += BLOCKLIST_OSL
+    if device == 'METAL-RT':
+        blocklist += BLOCKLIST_METAL
+        blocklist += BLOCKLIST_METAL_RT
 
-    report = CyclesReport('Cycles', args.outdir, args.oiiotool, device, blocklist, args.osl)
-    report.set_pixelated(True)
-    report.set_reference_dir("cycles_renders")
-    if device == 'CPU':
-        report.set_compare_engine('eevee')
-    else:
-        report.set_compare_engine('cycles', 'CPU')
+    if device == 'HIP':
+        blocklist += BLOCKLIST_HIP_NORT
+    if device == 'HIP-RT':
+        blocklist += BLOCKLIST_HIPRT
+
+    test_dir_name = Path(args.testdir).name
+    report = CyclesReport('Cycles', test_dir_name, args.outdir, args.oiiotool, device, blocklist, args.osl == 'all')
 
     # Increase threshold for motion blur, see #78777.
     #
@@ -249,17 +340,35 @@ def main():
     #
     # both_displacement.blend has slight differences between Linux and other platforms.
 
-    test_dir_name = Path(args.testdir).name
     if (test_dir_name in {'motion_blur', 'integrator', "displacement"}) or \
-       ((args.osl) and (test_dir_name in {'shader', 'hair'})):
+       ((args.osl == 'all') and (test_dir_name in {'shader', 'hair'})):
         report.set_fail_threshold(0.032)
 
     # Layer mixing is different between SVM and OSL, so a few tests have
-    # noticably different noise causing OSL Principled BSDF tests to fail.
-    if ((args.osl) and (test_dir_name == 'principled_bsdf')):
+    # noticeably different noise causing OSL Principled BSDF tests to fail.
+    if ((args.osl == 'all') and (test_dir_name == 'principled_bsdf')):
         report.set_fail_threshold(0.06)
 
+    # Volume scattering probability guiding renders differently on different platforms
+    if (test_dir_name in {'shadow_catcher', 'light'}):
+        report.set_fail_threshold(0.038)
+    if (test_dir_name in {'light', 'camera'}):
+        report.set_fail_threshold(0.02)
+        report.set_fail_percent(4)
+    if (test_dir_name in {'volume', 'openvdb'}):
+        report.set_fail_threshold(0.048)
+        report.set_fail_percent(3)
+    # OSL blackbody output is a little different.
+    if (test_dir_name in {'colorspace'}):
+        report.set_fail_threshold(0.05)
+
     ok = report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
+
+    if (test_dir_name == 'volume'):
+        ok = ok and test_volume_ray_marching(args, report)
+
+    if (test_dir_name in {'image_colorspace', 'image_mapping'}):
+        ok = ok and test_texture_cache(args, report)
 
     sys.exit(not ok)
 

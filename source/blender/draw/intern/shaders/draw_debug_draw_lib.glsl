@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "draw_debug_info.hh"
+#include "draw_debug_infos.hh"
 
 SHADER_LIBRARY_CREATE_INFO(draw_debug_draw)
 
@@ -33,7 +33,7 @@ uint drw_debug_start_draw(uint v_needed)
   return vertid;
 }
 
-void drw_debug_line(inout uint vertid, float3 v1, float3 v2, uint v_color, uint lifetime)
+void drw_debug_line(uint &vertid, float3 v1, float3 v2, uint v_color, uint lifetime)
 {
   uint out_line_id = vertid / 2u;
   drw_debug_lines_buf[out_line_id + drw_debug_draw_offset] = debug_line_make(floatBitsToUint(v1.x),
@@ -88,10 +88,10 @@ void drw_debug_quad(float3 v1, float3 v2, float3 v3, float3 v4, float4 v_color, 
   uint vertid = drw_debug_start_draw(v_needed);
   if (vertid + v_needed < DRW_DEBUG_DRAW_VERT_MAX) {
     uint pcolor = debug_color_pack(v_color);
-    drw_debug_line(vertid, v1, v2, pcolor, drw_debug_default_lifetime);
-    drw_debug_line(vertid, v2, v3, pcolor, drw_debug_default_lifetime);
-    drw_debug_line(vertid, v3, v4, pcolor, drw_debug_default_lifetime);
-    drw_debug_line(vertid, v4, v1, pcolor, drw_debug_default_lifetime);
+    drw_debug_line(vertid, v1, v2, pcolor, lifetime);
+    drw_debug_line(vertid, v2, v3, pcolor, lifetime);
+    drw_debug_line(vertid, v3, v4, pcolor, lifetime);
+    drw_debug_line(vertid, v4, v1, pcolor, lifetime);
   }
 }
 void drw_debug_quad(float3 v1, float3 v2, float3 v3, float3 v4, float4 v_color)

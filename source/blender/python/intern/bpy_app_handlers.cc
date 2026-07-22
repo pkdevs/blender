@@ -10,8 +10,10 @@
  * functions into (called via blenders generic BLI_cb API)
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include <Python.h>
+
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
 #include "BKE_callbacks.hh"
 
@@ -21,6 +23,8 @@
 #include "bpy_rna.hh"
 
 #include "BPY_extern.hh"
+
+namespace blender {
 
 void bpy_app_generic_callback(Main *main,
                               PointerRNA **pointers,
@@ -32,63 +36,131 @@ static PyTypeObject BlenderAppCbType;
 #define FILEPATH_SAVE_ARG \
   "Accepts one argument: " \
   "the file being saved, an empty string for the startup-file."
+#define PYDOC_FILEPATH_SAVE_TYPE "\n\n:type: list[Callable[[str], None]]"
+
 #define FILEPATH_LOAD_ARG \
   "Accepts one argument: " \
   "the file being loaded, an empty string for the startup-file."
+#define PYDOC_FILEPATH_LOAD_TYPE "\n\n:type: list[Callable[[str], None]]"
+
 #define RENDER_STATS_ARG \
   "Accepts one argument: " \
-  "the render stats (render/saving time plus in background mode frame/used [peak] memory)."
+  "the render progress as a string containing current frame, current sample, render time and " \
+  "saving time."
+#define PYDOC_RENDER_STATS_TYPE "\n\n:type: list[Callable[[str], None]]"
+
+#define DEPSGRAPH_UPDATE_ARG \
+  "Accepts one or two arguments: " \
+  "The scene data-block, and optionally the dependency graph being updated"
+#define PYDOC_DEPSGRAPH_UPDATE_TYPE \
+  "\n\n:type: list[" \
+  "Callable[[bpy.types.Scene, bpy.types.Depsgraph], None] | " \
+  "Callable[[bpy.types.Scene], None]" \
+  "]"
+
+#define RENDER_ARG \
+  "Accepts one argument: " \
+  "the scene data-block being rendered"
+#define PYDOC_RENDER_TYPE "\n\n:type: list[Callable[[bpy.types.Scene], None]]"
+
+#define OBJECT_BAKE_ARG \
+  "Accepts one argument: " \
+  "the object data-block being baked"
+#define PYDOC_OBJECT_BAKE_TYPE "\n\n:type: list[Callable[[bpy.types.Object], None]]"
+
+#define COMPOSITE_ARG \
+  "Accepts one argument: " \
+  "the scene data-block"
+#define PYDOC_COMPOSITE_TYPE "\n\n:type: list[Callable[[bpy.types.Scene], None]]"
+
+#define ANNOTATION_ARG \
+  "Accepts two arguments: " \
+  "the annotation data-block and dependency graph"
+#define PYDOC_ANNOTATION_TYPE \
+  "\n\n:type: list[Callable[[bpy.types.GreasePencil, bpy.types.Depsgraph], None]]"
+
+#define BLENDIMPORT_ARG \
+  "Accepts one argument: " \
+  "a BlendImportContext"
+#define PYDOC_BLENDIMPORT_TYPE "\n\n:type: list[Callable[[bpy.types.BlendImportContext], None]]"
+
+#define SCENE_ARG \
+  "Accepts one argument: " \
+  "the scene data-block"
+#define PYDOC_SCENE_TYPE "\n\n:type: list[Callable[[bpy.types.Scene], None]]"
+#define PYDOC_HANDLER_TYPE_NONE "\n\n:type: list[Callable[[], None]]"
+#define PYDOC_HANDLER_TYPE_BOOL "\n\n:type: list[Callable[[bool], None]]"
+
 /**
  * See `BKE_callbacks.hh` #eCbEvent declaration for the policy on naming.
  */
 static PyStructSequence_Field app_cb_info_fields[] = {
     {"frame_change_pre",
-     "Called after frame change for playback and rendering, before any data is evaluated for the "
-     "new frame. This makes it possible to change data and relations (for example swap an object "
+     "Called when a frame change is triggered for playback and rendering, "
+     "before any data is evaluated for the new frame. "
+     "This makes it possible to change data and relations (for example swap an object "
      "to another mesh) for the new frame. Note that this handler is **not** to be used as 'before "
      "the frame changes' event. The dependency graph is not available in this handler, as data "
      "and relations may have been altered and the dependency graph has not yet been updated for "
-     "that."},
+     "that. " DEPSGRAPH_UPDATE_ARG PYDOC_DEPSGRAPH_UPDATE_TYPE},
     {"frame_change_post",
      "Called after frame change for playback and rendering, after the data has been evaluated "
-     "for the new frame."},
-    {"render_pre", "on render (before)"},
-    {"render_post", "on render (after)"},
-    {"render_write", "on writing a render frame (directly after the frame is written)"},
-    {"render_stats", "on printing render statistics. " RENDER_STATS_ARG},
-    {"render_init", "on initialization of a render job"},
-    {"render_complete", "on completion of render job"},
-    {"render_cancel", "on canceling a render job"},
+     "for the new frame. " DEPSGRAPH_UPDATE_ARG PYDOC_DEPSGRAPH_UPDATE_TYPE},
+    {"render_pre", "on render (before). " RENDER_ARG PYDOC_RENDER_TYPE},
+    {"render_post", "on render (after). " RENDER_ARG PYDOC_RENDER_TYPE},
+    {"render_write",
+     "on writing a render frame (directly after the frame is written). " RENDER_ARG
+         PYDOC_RENDER_TYPE},
+    {"render_stats", "on printing render statistics. " RENDER_STATS_ARG PYDOC_RENDER_STATS_TYPE},
+    {"render_init", "on initialization of a render job. " RENDER_ARG PYDOC_RENDER_TYPE},
+    {"render_complete", "on completion of render job. " RENDER_ARG PYDOC_RENDER_TYPE},
+    {"render_cancel", "on canceling a render job. " RENDER_ARG PYDOC_RENDER_TYPE},
 
-    {"load_pre", "on loading a new blend file (before)." FILEPATH_LOAD_ARG},
-    {"load_post", "on loading a new blend file (after). " FILEPATH_LOAD_ARG},
-    {"load_post_fail", "on failure to load a new blend file (after). " FILEPATH_LOAD_ARG},
+    {"load_pre",
+     "on loading a new blend file (before). " FILEPATH_LOAD_ARG PYDOC_FILEPATH_LOAD_TYPE},
+    {"load_post",
+     "on loading a new blend file (after). " FILEPATH_LOAD_ARG PYDOC_FILEPATH_LOAD_TYPE},
+    {"load_post_fail",
+     "on failure to load a new blend file (after). " FILEPATH_LOAD_ARG PYDOC_FILEPATH_LOAD_TYPE},
 
-    {"save_pre", "on saving a blend file (before). " FILEPATH_SAVE_ARG},
-    {"save_post", "on saving a blend file (after). " FILEPATH_SAVE_ARG},
-    {"save_post_fail", "on failure to save a blend file (after). " FILEPATH_SAVE_ARG},
+    {"save_pre", "on saving a blend file (before). " FILEPATH_SAVE_ARG PYDOC_FILEPATH_SAVE_TYPE},
+    {"save_post", "on saving a blend file (after). " FILEPATH_SAVE_ARG PYDOC_FILEPATH_SAVE_TYPE},
+    {"save_post_fail",
+     "on failure to save a blend file (after). " FILEPATH_SAVE_ARG PYDOC_FILEPATH_SAVE_TYPE},
 
-    {"undo_pre", "on loading an undo step (before)"},
-    {"undo_post", "on loading an undo step (after)"},
-    {"redo_pre", "on loading a redo step (before)"},
-    {"redo_post", "on loading a redo step (after)"},
-    {"depsgraph_update_pre", "on depsgraph update (pre)"},
-    {"depsgraph_update_post", "on depsgraph update (post)"},
-    {"version_update", "on ending the versioning code"},
-    {"load_factory_preferences_post", "on loading factory preferences (after)"},
-    {"load_factory_startup_post", "on loading factory startup (after)"},
-    {"xr_session_start_pre", "on starting an xr session (before)"},
-    {"annotation_pre", "on drawing an annotation (before)"},
-    {"annotation_post", "on drawing an annotation (after)"},
-    {"object_bake_pre", "before starting a bake job"},
-    {"object_bake_complete", "on completing a bake job; will be called in the main thread"},
-    {"object_bake_cancel", "on canceling a bake job; will be called in the main thread"},
-    {"composite_pre", "on a compositing background job (before)"},
-    {"composite_post", "on a compositing background job (after)"},
-    {"composite_cancel", "on a compositing background job (cancel)"},
-    {"animation_playback_pre", "on starting animation playback"},
-    {"animation_playback_post", "on ending animation playback"},
-    {"translation_update_post", "on translation settings update"},
+    {"undo_pre", "on loading an undo step (before). " SCENE_ARG PYDOC_SCENE_TYPE},
+    {"undo_post", "on loading an undo step (after). " SCENE_ARG PYDOC_SCENE_TYPE},
+    {"redo_pre", "on loading a redo step (before). " SCENE_ARG PYDOC_SCENE_TYPE},
+    {"redo_post", "on loading a redo step (after). " SCENE_ARG PYDOC_SCENE_TYPE},
+    {"depsgraph_update_pre",
+     "on depsgraph update (pre). " DEPSGRAPH_UPDATE_ARG PYDOC_DEPSGRAPH_UPDATE_TYPE},
+    {"depsgraph_update_post",
+     "on depsgraph update (post). " DEPSGRAPH_UPDATE_ARG PYDOC_DEPSGRAPH_UPDATE_TYPE},
+    {"version_update", "on ending the versioning code" PYDOC_HANDLER_TYPE_NONE},
+    {"load_factory_preferences_post",
+     "on loading factory preferences (after)" PYDOC_HANDLER_TYPE_NONE},
+    {"load_factory_startup_post", "on loading factory startup (after)" PYDOC_HANDLER_TYPE_NONE},
+    {"xr_session_start_pre", "on starting an xr session (before)" PYDOC_HANDLER_TYPE_NONE},
+    {"annotation_pre", "on drawing an annotation (before). " ANNOTATION_ARG PYDOC_ANNOTATION_TYPE},
+    {"annotation_post", "on drawing an annotation (after). " ANNOTATION_ARG PYDOC_ANNOTATION_TYPE},
+    {"object_bake_pre", "before starting a bake job. " OBJECT_BAKE_ARG PYDOC_OBJECT_BAKE_TYPE},
+    {"object_bake_complete",
+     "on completing a bake job; will be called in the main "
+     "thread. " OBJECT_BAKE_ARG PYDOC_OBJECT_BAKE_TYPE},
+    {"object_bake_cancel",
+     "on canceling a bake job; will be called in the main "
+     "thread. " OBJECT_BAKE_ARG PYDOC_OBJECT_BAKE_TYPE},
+    {"composite_pre",
+     "on a compositing background job (before). " COMPOSITE_ARG PYDOC_COMPOSITE_TYPE},
+    {"composite_post",
+     "on a compositing background job (after). " COMPOSITE_ARG PYDOC_COMPOSITE_TYPE},
+    {"composite_cancel",
+     "on a compositing background job (cancel). " COMPOSITE_ARG PYDOC_COMPOSITE_TYPE},
+    {"animation_playback_pre",
+     "on starting animation playback. " DEPSGRAPH_UPDATE_ARG PYDOC_DEPSGRAPH_UPDATE_TYPE},
+    {"animation_playback_post",
+     "on ending animation playback. " DEPSGRAPH_UPDATE_ARG PYDOC_DEPSGRAPH_UPDATE_TYPE},
+    {"translation_update_post", "on translation settings update" PYDOC_HANDLER_TYPE_NONE},
     /* NOTE(@ideasman42): This avoids bad-level calls into BPY API
      * but should not be considered part of the public Python API.
      * If there is a compelling reason to make these public, the leading `_` can be removed. */
@@ -98,14 +170,21 @@ static PyStructSequence_Field app_cb_info_fields[] = {
     {"_extension_repos_files_clear",
      "remove files from the repository directory (uses as a string argument)"},
     {"blend_import_pre",
-     "on linking or appending data (before), get a single `BlendImportContext` parameter"},
+     "on linking or appending data (before). " BLENDIMPORT_ARG PYDOC_BLENDIMPORT_TYPE},
     {"blend_import_post",
-     "on linking or appending data (after), get a single `BlendImportContext` parameter"},
+     "on linking or appending data (after). " BLENDIMPORT_ARG PYDOC_BLENDIMPORT_TYPE},
+    {"exit_pre",
+     "just before Blender shuts down, while all data is still valid. "
+     "Accepts one boolean argument. True indicates either that a user has been using Blender and "
+     "exited, or that Blender is exiting in a circumstance that should be treated as if that were "
+     "the case. False indicates that Blender is running in background mode, or is exiting due to "
+     "failed command line arguments, etc." PYDOC_HANDLER_TYPE_BOOL},
 
 /* sets the permanent tag */
 #define APP_CB_OTHER_FIELDS 1
     {"persistent",
-     "Function decorator for callback functions not to be removed when loading new files"},
+     "Function decorator for callback functions not to be removed when loading new files"
+     "\n\n:type: type"},
 
     {nullptr},
 };
@@ -135,7 +214,11 @@ static PyObject *bpy_app_handlers_persistent_new(PyTypeObject * /*type*/,
 {
   PyObject *value;
 
-  if (!PyArg_ParseTuple(args, "O:bpy.app.handlers.persistent", &value)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `func` */
+                        ":bpy.app.handlers.persistent",
+                        &value))
+  {
     return nullptr;
   }
 
@@ -245,7 +328,7 @@ static PyObject *make_app_cb_info()
   }
 
   /* custom function */
-  PyStructSequence_SET_ITEM(app_cb_info, pos++, (PyObject *)&BPyPersistent_Type);
+  PyStructSequence_SET_ITEM(app_cb_info, pos++, Py_NewRef((PyObject *)&BPyPersistent_Type));
 
   return app_cb_info;
 }
@@ -270,7 +353,7 @@ PyObject *BPY_app_handlers_struct()
   BlenderAppCbType.tp_init = nullptr;
   BlenderAppCbType.tp_new = nullptr;
   /* Without this we can't do `set(sys.modules)` #29635. */
-  BlenderAppCbType.tp_hash = (hashfunc)_Py_HashPointer;
+  BlenderAppCbType.tp_hash = reinterpret_cast<hashfunc>(Py_HashPointer);
 
   /* assign the C callbacks */
   if (ret) {
@@ -345,7 +428,7 @@ static PyObject *choose_arguments(PyObject *func, PyObject *args_all, PyObject *
   if (!PyFunction_Check(func)) {
     return args_all;
   }
-  PyCodeObject *code = (PyCodeObject *)PyFunction_GetCode(func);
+  PyCodeObject *code = reinterpret_cast<PyCodeObject *>(PyFunction_GetCode(func));
   if (code->co_argcount == 1) {
     return args_single;
   }
@@ -404,7 +487,6 @@ void bpy_app_generic_callback(Main * /*main*/,
                           app_cb_info_fields[POINTER_AS_INT(arg)].name,
                           int(pos));
         PyErr_PrintEx(0);
-        PyErr_Clear();
       }
       else {
         Py_DECREF(ret);
@@ -417,3 +499,5 @@ void bpy_app_generic_callback(Main * /*main*/,
     PyGILState_Release(gilstate);
   }
 }
+
+}  // namespace blender

@@ -16,6 +16,7 @@
 
 import os
 import re
+import textwrap
 
 CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
 SOURCE_DIR = os.path.normpath(os.path.abspath(os.path.normpath(os.path.join(CURRENT_DIR, "..", ".."))))
@@ -163,19 +164,25 @@ def main():
             l = l.replace("{", "(")
             l = l.replace("}", ")")
 
-            if l.startswith("/*"):
-                l = l.replace("/*", "'''own <")
-            else:
-                l = l.replace("/*", "'''inline <")
-            l = l.replace("*/", ">''',")
+            # Skip `exec` & `init` functions. eg: `/*exec*/ bmo_rotate_edges_exec`,
+            if l.startswith("/*opname*/"):
+                l = l.removeprefix("/*opname*/")
 
-            # exec func. eg: bmo_rotate_edges_exec,
-            if l.startswith("bmo_") and l.endswith("_exec,"):
+            elif l.startswith("/*exec*/"):
                 l = "None,"
+            elif l.startswith("/*init*/"):
+                l = "None,"
+            else:
+                if l.startswith("/*"):
+                    l = l.replace("/*", "'''own <")
+                else:
+                    # NOTE: `inline <...>` aren't used anymore, all docstring comments require their own line.
+                    l = l.replace("/*", "'''inline <")
+                l = l.replace("*/", ">''',")
 
-            # enums
-            if l.startswith("static BMO_FlagSet "):
-                is_enum = True
+                # enums
+                if l.startswith("static BMO_FlagSet "):
+                    is_enum = True
 
             b[i] = l
 
@@ -219,7 +226,8 @@ def main():
     # Now convert into rst.
     fout = open(OUT_RST, 'w', encoding="utf-8")
     fw = fout.write
-    fw(HEADER)
+    # By convention, ensure a blank line after the last directive in `HEADER`.
+    fw("{:s}\n\n".format(HEADER.rstrip("\n")))
     for comment, b in blocks_py:
         args_in = None
         args_out = None
@@ -256,27 +264,23 @@ def main():
 
                 tp_str = ""
 
-                comment_prev = ""
-                comment_next = ""
-                if i != 0:
-                    comment_prev = args[i + 1]
-                    if type(comment_prev) == str and comment_prev.startswith("our <"):
-                        comment_prev = comment_next[5:-1]  # strip inline <...>
-                    else:
-                        comment_prev = ""
-
-                if i + 1 < len(args):
-                    comment_next = args[i + 1]
-                    if type(comment_next) == str and comment_next.startswith("inline <"):
-                        comment_next = comment_next[8:-1]  # strip inline <...>
-                    else:
-                        comment_next = ""
-
                 comment = ""
-                if comment_prev:
-                    comment += comment_prev.strip()
-                if comment_next:
-                    comment += ("\n" if comment_prev else "") + comment_next.strip()
+                if i != 0:
+                    comment = args[i - 1]
+                    if type(args[i - 1]) == str:
+                        if args[i - 1].startswith("own <"):
+                            comment = args[i - 1][5:-1].strip()  # strip `our <...>`
+                            if "\n" in comment:
+                                # Remove leading "*" of comment blocks.
+                                comment = "\n".join([
+                                    "" if l.strip() == "*" else l.lstrip().removeprefix("* ")
+                                    for l in comment.split("\n")
+                                ])
+                    else:
+                        comment = ""
+
+                if comment.startswith("NOTE"):
+                    comment = ""
 
                 default_value = None
                 if tp == BMO_OP_SLOT_FLT:
@@ -286,10 +290,10 @@ def main():
                 elif tp == BMO_OP_SLOT_INT:
                     if tp_sub == BMO_OP_SLOT_SUBTYPE_INT_ENUM:
                         default_value = enums.split(",", 1)[0].strip("[")
-                        tp_str = "enum in " + enums + ", default " + default_value
+                        tp_str = "Literal{:s}".format(enums)
                     elif tp_sub == BMO_OP_SLOT_SUBTYPE_INT_FLAG:
                         default_value = 'set()'
-                        tp_str = "set of flags from " + enums + ", default " + default_value
+                        tp_str = "set[Literal{:s}]".format(enums)
                     else:
                         tp_str = "int"
                         default_value = '0'
@@ -298,12 +302,13 @@ def main():
                     default_value = 'False'
                 elif tp == BMO_OP_SLOT_MAT:
                     tp_str = ":class:`mathutils.Matrix`"
-                    default_value = 'mathutils.Matrix.Identity(4)'
+                    default_value = '((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))'
                 elif tp == BMO_OP_SLOT_VEC:
-                    tp_str = ":class:`mathutils.Vector`"
-                    default_value = 'mathutils.Vector()'
-                    if not is_ret:
-                        tp_str += " or any sequence of 3 floats"
+                    default_value = '(0.0, 0.0, 0.0)'
+                    if is_ret:
+                        tp_str = ":class:`mathutils.Vector`"
+                    else:
+                        tp_str = "Sequence[float]"
                 elif tp == BMO_OP_SLOT_PTR:
                     assert tp_sub is not None
                     if 'if None' in comment:
@@ -318,7 +323,8 @@ def main():
                         tp_str = ":class:`bpy.types.Mesh`"
                     elif tp_sub == BMO_OP_SLOT_SUBTYPE_PTR_STRUCT:
                         # XXX Used for CurveProfile only currently I think (bevel code),
-                        #     but think the idea is that that pointer is for any type?
+                        #     but think the idea is that pointer is for any type?
+                        # tp_str = ":class:`bpy.types.CurveProfile`"
                         tp_str = ":class:`bpy.types.bpy_struct`"
                     else:
                         assert False, "unreachable, unknown type {!r}".format(vars_dict_reverse[tp_sub])
@@ -336,33 +342,41 @@ def main():
                     assert ls  # Must be at least one.
 
                     if tp_sub & BMO_OP_SLOT_SUBTYPE_ELEM_IS_SINGLE:
-                        tp_str = "/".join(ls)
+                        tp_str = " | ".join(ls)
+                        default_value = 'None'
                     else:
-                        tp_str = "list of ({:s})".format(", ".join(ls))
+                        tp_str = "list[{:s}]".format(" | ".join(ls))
                         default_value = '[]'
 
                     del ls
                 elif tp == BMO_OP_SLOT_MAPPING:
+                    elem_union = (
+                        ":class:`bmesh.types.BMVert` | "
+                        ":class:`bmesh.types.BMEdge` | "
+                        ":class:`bmesh.types.BMFace`"
+                    )
                     if tp_sub & BMO_OP_SLOT_SUBTYPE_MAP_EMPTY:
-                        tp_str = "set of vert/edge/face type"
+                        tp_str = "set[{:s}]".format(elem_union)
                         default_value = 'set()'
                     else:
-                        tp_str = "dict mapping vert/edge/face types to "
                         default_value = '{}'
                         if tp_sub == BMO_OP_SLOT_SUBTYPE_MAP_BOOL:
-                            tp_str += "bool"
+                            tp_str = "dict[{:s}, bool]".format(elem_union)
                         elif tp_sub == BMO_OP_SLOT_SUBTYPE_MAP_INT:
-                            tp_str += "int"
+                            tp_str = "dict[{:s}, int]".format(elem_union)
                         elif tp_sub == BMO_OP_SLOT_SUBTYPE_MAP_FLT:
-                            tp_str += "float"
+                            tp_str = "dict[{:s}, float]".format(elem_union)
                         elif tp_sub == BMO_OP_SLOT_SUBTYPE_MAP_ELEM:
-                            tp_str += ":class:`bmesh.types.BMVert`/:class:`bmesh.types.BMEdge`/:class:`bmesh.types.BMFace`"
+                            tp_str = "dict[{:s}, {:s}]".format(elem_union, elem_union)
                         elif tp_sub == BMO_OP_SLOT_SUBTYPE_MAP_INTERNAL:
-                            tp_str += "unknown internal data, not compatible with Python"
+                            tp_str = "dict"
                         else:
                             assert False, "unreachable, unknown type {!r}".format(vars_dict_reverse[tp_sub])
                 else:
                     assert False, "unreachable, unknown type {!r}".format(vars_dict_reverse[tp])
+
+                if default_value == 'None':
+                    tp_str = "{:s} | None".format(tp_str)
 
                 args_wash.append((name, default_value, tp_str, comment))
             return args_wash
@@ -387,6 +401,9 @@ def main():
                 continue
             if l.strip():
                 l = "   " + l
+
+            # Use double back-ticks for literals (C++ comments only use a single, RST expected two).
+            l = l.replace("`", "``")
             comment_washed.append(l)
 
         fw("\n".join(comment_washed))
@@ -394,7 +411,7 @@ def main():
         # -- done
 
         # all ops get this arg
-        fw("   :arg bm: The bmesh to operate on.\n")
+        fw("   :param bm: The bmesh to operate on.\n")
         fw("   :type bm: :class:`bmesh.types.BMesh`\n")
 
         args_out_wash = get_args_wash(args_out, args_out_index, True)
@@ -403,7 +420,8 @@ def main():
             if comment == "":
                 comment = "Undocumented."
 
-            fw("   :arg {:s}: {:s}\n".format(name, comment))
+            # Indent a block to support multiple lines.
+            fw("   :param {:s}:\n{:s}\n".format(name, textwrap.indent(comment, "      ")))
             fw("   :type {:s}: {:s}\n".format(name, tp))
 
         if args_out_wash:
@@ -412,7 +430,9 @@ def main():
             for (name, _, tp, comment) in args_out_wash:
                 assert name.endswith(".out")
                 name = name[:-4]
-                fw("      - ``{:s}``: {:s}\n\n".format(name, comment))
+                fw("      - ``{:s}``:\n{:s}\n".format(
+                    name, "{:s}\n".format(textwrap.indent(comment, "        ")) if comment else "",
+                ))
                 fw("        **type** {:s}\n".format(tp))
 
             fw("\n")
@@ -425,7 +445,6 @@ def main():
 
     fout.close()
     del fout
-    print(OUT_RST)
 
 
 def arg_name_with_default(arg):

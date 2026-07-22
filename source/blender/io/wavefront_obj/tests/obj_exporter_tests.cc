@@ -12,10 +12,11 @@
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_version.h"
+#include "BKE_gtest_base.hh"
 #include "BKE_main.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_string.h"
+#include "BLI_fileops.hh"
+#include "BLI_string.hh"
 
 #include "BLO_readfile.hh"
 
@@ -124,10 +125,10 @@ static std::string read_temp_file_in_string(const std::string &file_path)
 {
   std::string res;
   size_t buffer_len;
-  void *buffer = BLI_file_read_text_as_mem(file_path.c_str(), 0, &buffer_len);
+  char *buffer = BLI_file_read_text_as_mem(file_path.c_str(), 0, &buffer_len);
   if (buffer != nullptr) {
-    res.assign((const char *)buffer, buffer_len);
-    MEM_freeN(buffer);
+    res.assign(buffer, buffer_len);
+    MEM_delete(buffer);
   }
   return res;
 }
@@ -243,12 +244,23 @@ static bool strings_equal_after_first_lines(const std::string &a, const std::str
   const size_t b_len = b.size();
   const size_t a_next = a.find_first_of('\n');
   const size_t b_next = b.find_first_of('\n');
-  if (a_next == std::string::npos || b_next == std::string::npos) {
-    printf("Couldn't find newline in one of args\n");
+  if (a_next == std::string::npos) {
+    printf("No newline found in evaluated string\n");
     return false;
   }
-  if (a.compare(a_next, a_len - a_next, b, b_next, b_len - b_next) != 0) {
-    for (int i = 0; i < a_len - a_next && i < b_len - b_next; ++i) {
+  if (b_next == std::string::npos) {
+    printf("No newline found in the golden string\n");
+    return false;
+  }
+  const size_t a_sublen = a_len - a_next;
+  const size_t b_sublen = b_len - b_next;
+  if (a_sublen != b_sublen) {
+    printf("Mismatching string length, evaluated contains %zu chars, while golden has %zu\n",
+           a_sublen,
+           b_sublen);
+  }
+  if (a.compare(a_next, a_sublen, b, b_next, b_sublen) != 0) {
+    for (int i = 0; i < std::min(a_sublen, b_sublen); ++i) {
       if (a[a_next + i] != b[b_next + i]) {
         printf("Difference found at pos %zu of a\n", a_next + i);
         printf("a: %s ...\n", a.substr(a_next + i, 100).c_str());
@@ -285,7 +297,7 @@ class OBJExportRegressionTest : public OBJExportTest {
     std::string out_file_path = tempdir + BLI_path_basename(golden_obj.c_str());
     STRNCPY(params.filepath, out_file_path.c_str());
     params.blen_filepath = bfile->main->filepath;
-    std::string golden_file_path = blender::tests::flags_test_asset_dir() + SEP_STR + golden_obj;
+    std::string golden_file_path = tests::flags_test_asset_dir() + SEP_STR + golden_obj;
     BLI_path_split_dir_part(
         golden_file_path.c_str(), params.file_base_for_tests, sizeof(params.file_base_for_tests));
     export_frame(depsgraph, params, out_file_path.c_str());
@@ -293,8 +305,11 @@ class OBJExportRegressionTest : public OBJExportTest {
 
     std::string golden_str = read_temp_file_in_string(golden_file_path);
     bool are_equal = strings_equal_after_first_lines(output_str, golden_str);
-    if (save_failing_test_output && !are_equal) {
-      printf("failing test output in %s\n", out_file_path.c_str());
+    if (!are_equal) {
+      printf("failed test for file: %s\n", golden_file_path.c_str());
+      if (save_failing_test_output) {
+        printf("failing test output in %s\n", out_file_path.c_str());
+      }
     }
     ASSERT_TRUE(are_equal);
     if (!save_failing_test_output || are_equal) {
@@ -303,12 +318,14 @@ class OBJExportRegressionTest : public OBJExportTest {
     if (!golden_mtl.empty()) {
       std::string out_mtl_file_path = tempdir + BLI_path_basename(golden_mtl.c_str());
       std::string output_mtl_str = read_temp_file_in_string(out_mtl_file_path);
-      std::string golden_mtl_file_path = blender::tests::flags_test_asset_dir() + SEP_STR +
-                                         golden_mtl;
+      std::string golden_mtl_file_path = tests::flags_test_asset_dir() + SEP_STR + golden_mtl;
       std::string golden_mtl_str = read_temp_file_in_string(golden_mtl_file_path);
       are_equal = strings_equal_after_first_lines(output_mtl_str, golden_mtl_str);
-      if (save_failing_test_output && !are_equal) {
-        printf("failing test output in %s\n", out_mtl_file_path.c_str());
+      if (!are_equal) {
+        printf("failed test for mtl file: %s\n", golden_mtl_file_path.c_str());
+        if (save_failing_test_output) {
+          printf("failing test output in %s\n", out_mtl_file_path.c_str());
+        }
       }
       ASSERT_TRUE(are_equal);
       if (!save_failing_test_output || are_equal) {

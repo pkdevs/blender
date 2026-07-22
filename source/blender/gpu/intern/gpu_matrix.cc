@@ -14,11 +14,13 @@
 #include "GPU_matrix.hh"
 #undef USE_GPU_PY_MATRIX_API
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "MEM_guardedalloc.h"
+
+namespace blender {
 
 using namespace blender::gpu;
 
@@ -57,12 +59,10 @@ GPUMatrixState *GPU_matrix_state_create()
 #define MATRIX_4X4_IDENTITY \
   { \
     {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, \
-    { \
-      0.0f, 0.0f, 0.0f, 1.0f \
-    } \
+        {0.0f, 0.0f, 0.0f, 1.0f} \
   }
 
-  GPUMatrixState *state = (GPUMatrixState *)MEM_mallocN(sizeof(*state), __func__);
+  GPUMatrixState *state = MEM_new_uninitialized<GPUMatrixState>(__func__);
   const MatrixStack identity_stack = {{MATRIX_4X4_IDENTITY}, 0};
 
   state->model_view_stack = state->projection_stack = identity_stack;
@@ -75,7 +75,7 @@ GPUMatrixState *GPU_matrix_state_create()
 
 void GPU_matrix_state_discard(GPUMatrixState *state)
 {
-  MEM_freeN(state);
+  MEM_delete(state);
 }
 
 static void gpu_matrix_state_active_set_dirty(bool value)
@@ -609,7 +609,7 @@ const float (*GPU_matrix_normal_inverse_get(float m[3][3]))[3]
   return m;
 }
 
-void GPU_matrix_bind(GPUShader *shader)
+void GPU_matrix_bind(gpu::Shader *shader)
 {
   /* set uniform values to matrix stack values
    * call this before a draw call if desired matrices are dirty
@@ -625,30 +625,35 @@ void GPU_matrix_bind(GPUShader *shader)
 
   if (MV != -1) {
     GPU_shader_uniform_float_ex(
-        shader, MV, 16, 1, (const float *)GPU_matrix_model_view_get(nullptr));
+        shader, MV, 16, 1, reinterpret_cast<const float *>(GPU_matrix_model_view_get(nullptr)));
   }
   if (P != -1) {
     GPU_shader_uniform_float_ex(
-        shader, P, 16, 1, (const float *)GPU_matrix_projection_get(nullptr));
+        shader, P, 16, 1, reinterpret_cast<const float *>(GPU_matrix_projection_get(nullptr)));
   }
   if (MVP != -1) {
     GPU_shader_uniform_float_ex(
-        shader, MVP, 16, 1, (const float *)GPU_matrix_model_view_projection_get(nullptr));
+        shader,
+        MVP,
+        16,
+        1,
+        reinterpret_cast<const float *>(GPU_matrix_model_view_projection_get(nullptr)));
   }
   if (N != -1) {
-    GPU_shader_uniform_float_ex(shader, N, 9, 1, (const float *)GPU_matrix_normal_get(nullptr));
+    GPU_shader_uniform_float_ex(
+        shader, N, 9, 1, reinterpret_cast<const float *>(GPU_matrix_normal_get(nullptr)));
   }
   if (MV_inv != -1) {
     Mat4 m;
     GPU_matrix_model_view_get(m);
     invert_m4(m);
-    GPU_shader_uniform_float_ex(shader, MV_inv, 16, 1, (const float *)m);
+    GPU_shader_uniform_float_ex(shader, MV_inv, 16, 1, reinterpret_cast<const float *>(m));
   }
   if (P_inv != -1) {
     Mat4 m;
     GPU_matrix_projection_get(m);
     invert_m4(m);
-    GPU_shader_uniform_float_ex(shader, P_inv, 16, 1, (const float *)m);
+    GPU_shader_uniform_float_ex(shader, P_inv, 16, 1, reinterpret_cast<const float *>(m));
   }
 
   gpu_matrix_state_active_set_dirty(false);
@@ -744,3 +749,5 @@ void GPU_polygon_offset(float viewdist, float dist)
 }
 
 /** \} */
+
+}  // namespace blender

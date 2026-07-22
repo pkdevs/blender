@@ -37,12 +37,12 @@ class Fluids : Overlay {
   int dominant_axis = -1;
 
  public:
-  Fluids(const SelectionType selection_type) : selection_type_(selection_type){};
+  Fluids(const SelectionType selection_type) : selection_type_(selection_type) {};
 
   void begin_sync(Resources &res, const State &state) final
   {
     /* Against design. Should not sync depending on view. */
-    float3 camera_direction = blender::draw::View::default_get().viewinv().z_axis();
+    float3 camera_direction = draw::View::default_get().viewinv().z_axis();
     dominant_axis = math::dominant_axis(camera_direction);
 
     {
@@ -95,7 +95,7 @@ class Fluids : Overlay {
       return;
     }
 
-    FluidModifierData *fmd = (FluidModifierData *)md;
+    FluidModifierData *fmd = reinterpret_cast<FluidModifierData *>(md);
     FluidDomainSettings *fds = fmd->domain;
 
     if (fds == nullptr) {
@@ -103,14 +103,14 @@ class Fluids : Overlay {
     }
 
     const bool is_active_frame_after_cache_start = state.scene->r.cfra >= fds->cache_frame_start;
-    const bool is_active_frame_before_cache_end = state.scene->r.cfra >= fds->cache_frame_start;
+    const bool is_active_frame_before_cache_end = state.scene->r.cfra <= fds->cache_frame_end;
     const bool is_active_frame_in_cache_range = is_active_frame_after_cache_start &&
                                                 is_active_frame_before_cache_end;
     if (!is_active_frame_in_cache_range) {
       return;
     }
 
-    ResourceHandle res_handle = manager.unique_handle(ob_ref);
+    ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
     select::ID sel_id = res.select_id(ob_ref);
 
     /* Small cube showing voxel size. */
@@ -132,8 +132,7 @@ class Fluids : Overlay {
 
     int slice_axis = slide_axis_get(*fds);
 
-    const bool draw_velocity = (fds->draw_velocity && is_active_frame_after_cache_start);
-    if (draw_velocity) {
+    if (fds->draw_velocity) {
       int lines_per_voxel = -1;
       PassSimple::Sub *sub_pass = nullptr;
       switch (fds->vector_draw_type) {
@@ -211,7 +210,7 @@ class Fluids : Overlay {
             sub_pass->push_constant("cell_filter", int(fds->gridlines_cell_filter));
             break;
           }
-          /* Otherwise, fallback to none color type. */
+          /* Otherwise, fall back to none color type. */
           ATTR_FALLTHROUGH;
         case FLUID_GRIDLINE_COLOR_TYPE_NONE:
           sub_pass = grid_lines_flat_ps_;

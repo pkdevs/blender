@@ -6,7 +6,8 @@
  * \ingroup spoutliner
  */
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -120,6 +121,21 @@ void TreeElementRNAStruct::expand(SpaceOutliner &space_outliner) const
   }
 }
 
+std::optional<BIFIconID> TreeElementRNAStruct::get_icon() const
+{
+  if (RNA_struct_is_ID(rna_ptr_.type)) {
+    ID *id = static_cast<ID *>(rna_ptr_.data);
+    if (id && GS(id->name) == ID_LI && id_cast<Library *>(id)->flag & LIBRARY_FLAG_IS_ARCHIVE) {
+      return ICON_PACKAGE;
+    }
+    else {
+      return RNA_struct_ui_icon(rna_ptr_.type);
+    }
+  }
+  else {
+    return RNA_struct_ui_icon(rna_ptr_.type);
+  }
+}
 /* -------------------------------------------------------------------- */
 /* RNA Property */
 
@@ -223,13 +239,14 @@ TreeElementRNAArrayElement::TreeElementRNAArrayElement(TreeElement &legacy_te,
   char c = RNA_property_array_item_char(TreeElementRNAArrayElement::get_property_rna(), index);
 
   const size_t name_size = sizeof(char[20]);
-  legacy_te_.name = MEM_calloc_arrayN<char>(name_size, "OutlinerRNAArrayName");
+  char *name = MEM_new_array_zeroed<char>(name_size, "OutlinerRNAArrayName");
   if (c) {
-    BLI_snprintf((char *)legacy_te_.name, name_size, "  %c", c);
+    BLI_snprintf_utf8(name, name_size, "  %c", c);
   }
   else {
-    BLI_snprintf((char *)legacy_te_.name, name_size, "  %d", index + 1);
+    BLI_snprintf_utf8(name, name_size, "  %d", index + 1);
   }
+  legacy_te_.name = name;
   legacy_te_.flag |= TE_FREE_NAME;
 }
 

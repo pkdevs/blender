@@ -7,10 +7,13 @@
  */
 
 #include "BKE_curves.hh"
+#include "BKE_gtest_base.hh"
 
 #include "testing/testing.h"
 
 namespace blender::bke::tests {
+
+constexpr float EPSILON_FLT32 = 1e-6f;
 
 static CurvesGeometry create_basic_curves(const int points_size, const int curves_size)
 {
@@ -29,7 +32,9 @@ static CurvesGeometry create_basic_curves(const int points_size, const int curve
   return curves;
 }
 
-TEST(curves_geometry, Empty)
+class CurvesGeometryTest : public BlenderGTestBase {};
+
+TEST_F(CurvesGeometryTest, Empty)
 {
   CurvesGeometry empty(0, 0);
   empty.cyclic();
@@ -37,7 +42,7 @@ TEST(curves_geometry, Empty)
   EXPECT_FALSE(empty.bounds_min_max());
 }
 
-TEST(curves_geometry, Move)
+TEST_F(CurvesGeometryTest, Move)
 {
   CurvesGeometry curves = create_basic_curves(100, 10);
 
@@ -62,7 +67,7 @@ TEST(curves_geometry, Move)
   EXPECT_EQ(second_other.offsets().data(), offsets_data);
 }
 
-TEST(curves_geometry, TypeCount)
+TEST_F(CurvesGeometryTest, TypeCount)
 {
   CurvesGeometry curves = create_basic_curves(100, 10);
   curves.curve_types_for_write().copy_from({
@@ -85,7 +90,55 @@ TEST(curves_geometry, TypeCount)
   EXPECT_EQ(counts[CURVE_TYPE_NURBS], 3);
 }
 
-TEST(curves_geometry, CatmullRomEvaluation)
+TEST_F(CurvesGeometryTest, CyclicOffsets)
+{
+  CurvesGeometry curves = create_basic_curves(100, 10);
+  {
+    EXPECT_FALSE(curves.has_cyclic_curve());
+  }
+  {
+    curves.cyclic_for_write().fill(true);
+    curves.tag_topology_changed();
+    EXPECT_TRUE(curves.has_cyclic_curve());
+  }
+  {
+    curves.cyclic_for_write().fill(false);
+    curves.tag_topology_changed();
+    EXPECT_FALSE(curves.has_cyclic_curve());
+  }
+  {
+    curves.attributes_for_write().remove("cyclic");
+    EXPECT_FALSE(curves.has_cyclic_curve());
+  }
+  {
+    curves.cyclic_for_write().copy_from(
+        {false, true, false, true, false, false, false, false, true, false});
+    curves.tag_topology_changed();
+    EXPECT_TRUE(curves.has_cyclic_curve());
+  }
+}
+
+TEST_F(CurvesGeometryTest, InvalidResolution)
+{
+  CurvesGeometry curves = create_basic_curves(40, 4);
+  curves.curve_types_for_write().copy_from({
+      CURVE_TYPE_BEZIER,
+      CURVE_TYPE_NURBS,
+      CURVE_TYPE_CATMULL_ROM,
+      CURVE_TYPE_POLY,
+  });
+  curves.update_curve_types();
+  curves.resolution_for_write().fill(0);
+
+  static const Array<int> expected_offsets{0, 10, 20, 30, 40};
+
+  OffsetIndices<int> actual_offsets = curves.evaluated_points_by_curve();
+  for (const int i : actual_offsets.index_range()) {
+    EXPECT_EQ(expected_offsets[i], actual_offsets.data()[i]);
+  }
+}
+
+TEST_F(CurvesGeometryTest, CatmullRomEvaluation)
 {
   CurvesGeometry curves(4, 1);
   curves.fill_curve_types(CURVE_TYPE_CATMULL_ROM);
@@ -218,7 +271,7 @@ TEST(curves_geometry, CatmullRomEvaluation)
   }
 }
 
-TEST(curves_geometry, CatmullRomTwoPointCyclic)
+TEST_F(CurvesGeometryTest, CatmullRomTwoPointCyclic)
 {
   CurvesGeometry curves(2, 1);
   curves.fill_curve_types(CURVE_TYPE_CATMULL_ROM);
@@ -230,7 +283,7 @@ TEST(curves_geometry, CatmullRomTwoPointCyclic)
   EXPECT_EQ(curves.evaluated_points_num(), 24);
 }
 
-TEST(curves_geometry, BezierPositionEvaluation)
+TEST_F(CurvesGeometryTest, BezierPositionEvaluation)
 {
   CurvesGeometry curves(2, 1);
   curves.fill_curve_types(CURVE_TYPE_BEZIER);
@@ -314,97 +367,7 @@ TEST(curves_geometry, BezierPositionEvaluation)
   }
 }
 
-TEST(curves_geometry, NURBSEvaluation)
-{
-  CurvesGeometry curves(4, 1);
-  curves.fill_curve_types(CURVE_TYPE_NURBS);
-  curves.resolution_for_write().fill(10);
-  curves.offsets_for_write().last() = 4;
-
-  MutableSpan<float3> positions = curves.positions_for_write();
-  positions[0] = {1, 1, 0};
-  positions[1] = {0, 1, 0};
-  positions[2] = {0, 0, 0};
-  positions[3] = {-1, 0, 0};
-
-  Span<float3> evaluated_positions = curves.evaluated_positions();
-  static const Array<float3> result_1{{
-      {0.166667, 0.833333, 0},    {0.150006, 0.815511, 0},   {0.134453, 0.796582, 0},
-      {0.119924, 0.776627, 0},    {0.106339, 0.75573, 0},    {0.0936146, 0.733972, 0},
-      {0.0816693, 0.711434, 0},   {0.0704211, 0.6882, 0},    {0.0597879, 0.66435, 0},
-      {0.0496877, 0.639968, 0},   {0.0400385, 0.615134, 0},  {0.0307584, 0.589931, 0},
-      {0.0217653, 0.564442, 0},   {0.0129772, 0.538747, 0},  {0.00431208, 0.512929, 0},
-      {-0.00431208, 0.487071, 0}, {-0.0129772, 0.461253, 0}, {-0.0217653, 0.435558, 0},
-      {-0.0307584, 0.410069, 0},  {-0.0400385, 0.384866, 0}, {-0.0496877, 0.360032, 0},
-      {-0.0597878, 0.33565, 0},   {-0.0704211, 0.3118, 0},   {-0.0816693, 0.288566, 0},
-      {-0.0936146, 0.266028, 0},  {-0.106339, 0.24427, 0},   {-0.119924, 0.223373, 0},
-      {-0.134453, 0.203418, 0},   {-0.150006, 0.184489, 0},  {-0.166667, 0.166667, 0},
-  }};
-  for (const int i : evaluated_positions.index_range()) {
-    EXPECT_V3_NEAR(evaluated_positions[i], result_1[i], 1e-5f);
-  }
-
-  /* Test a cyclic curve. */
-  curves.cyclic_for_write().fill(true);
-  curves.tag_topology_changed();
-  evaluated_positions = curves.evaluated_positions();
-  static const Array<float3> result_2{{
-      {0.166667, 0.833333, 0},   {0.121333, 0.778667, 0},
-      {0.084, 0.716, 0},         {0.0526667, 0.647333, 0},
-      {0.0253333, 0.574667, 0},  {0, 0.5, 0},
-      {-0.0253333, 0.425333, 0}, {-0.0526667, 0.352667, 0},
-      {-0.084, 0.284, 0},        {-0.121333, 0.221333, 0},
-      {-0.166667, 0.166667, 0},  {-0.221, 0.121667, 0},
-      {-0.281333, 0.0866667, 0}, {-0.343667, 0.0616666, 0},
-      {-0.404, 0.0466667, 0},    {-0.458333, 0.0416667, 0},
-      {-0.502667, 0.0466667, 0}, {-0.533, 0.0616666, 0},
-      {-0.545333, 0.0866667, 0}, {-0.535667, 0.121667, 0},
-      {-0.5, 0.166667, 0},       {-0.436, 0.221334, 0},
-      {-0.348, 0.284, 0},        {-0.242, 0.352667, 0},
-      {-0.124, 0.425333, 0},     {0, 0.5, 0},
-      {0.124, 0.574667, 0},      {0.242, 0.647333, 0},
-      {0.348, 0.716, 0},         {0.436, 0.778667, 0},
-      {0.5, 0.833333, 0},        {0.535667, 0.878334, 0},
-      {0.545333, 0.913333, 0},   {0.533, 0.938333, 0},
-      {0.502667, 0.953333, 0},   {0.458333, 0.958333, 0},
-      {0.404, 0.953333, 0},      {0.343667, 0.938333, 0},
-      {0.281333, 0.913333, 0},   {0.221, 0.878333, 0},
-  }};
-  for (const int i : evaluated_positions.index_range()) {
-    EXPECT_V3_NEAR(evaluated_positions[i], result_2[i], 1e-5f);
-  }
-
-  /* Test a circular cyclic curve with weights. */
-  positions[0] = {1, 0, 0};
-  positions[1] = {1, 1, 0};
-  positions[2] = {0, 1, 0};
-  positions[3] = {0, 0, 0};
-  curves.nurbs_weights_for_write().fill(1.0f);
-  curves.nurbs_weights_for_write()[0] = 4.0f;
-  curves.tag_positions_changed();
-  static const Array<float3> result_3{{
-      {0.888889, 0.555556, 0},  {0.837792, 0.643703, 0},  {0.773885, 0.727176, 0},
-      {0.698961, 0.800967, 0},  {0.616125, 0.860409, 0},  {0.529412, 0.901961, 0},
-      {0.443152, 0.923773, 0},  {0.361289, 0.925835, 0},  {0.286853, 0.909695, 0},
-      {0.221722, 0.877894, 0},  {0.166667, 0.833333, 0},  {0.122106, 0.778278, 0},
-      {0.0903055, 0.713148, 0}, {0.0741654, 0.638711, 0}, {0.0762274, 0.556847, 0},
-      {0.0980392, 0.470588, 0}, {0.139591, 0.383875, 0},  {0.199032, 0.301039, 0},
-      {0.272824, 0.226114, 0},  {0.356297, 0.162208, 0},  {0.444444, 0.111111, 0},
-      {0.531911, 0.0731388, 0}, {0.612554, 0.0468976, 0}, {0.683378, 0.0301622, 0},
-      {0.74391, 0.0207962, 0},  {0.794872, 0.017094, 0},  {0.837411, 0.017839, 0},
-      {0.872706, 0.0222583, 0}, {0.901798, 0.0299677, 0}, {0.925515, 0.0409445, 0},
-      {0.944444, 0.0555556, 0}, {0.959056, 0.0744855, 0}, {0.970032, 0.0982019, 0},
-      {0.977742, 0.127294, 0},  {0.982161, 0.162589, 0},  {0.982906, 0.205128, 0},
-      {0.979204, 0.256091, 0},  {0.969838, 0.316622, 0},  {0.953102, 0.387446, 0},
-      {0.926861, 0.468089, 0},
-  }};
-  evaluated_positions = curves.evaluated_positions();
-  for (const int i : evaluated_positions.index_range()) {
-    EXPECT_V3_NEAR(evaluated_positions[i], result_3[i], 1e-5f);
-  }
-}
-
-TEST(curves_geometry, BezierGenericEvaluation)
+TEST_F(CurvesGeometryTest, BezierGenericEvaluation)
 {
   CurvesGeometry curves(3, 1);
   curves.fill_curve_types(CURVE_TYPE_BEZIER);
@@ -476,5 +439,491 @@ TEST(curves_geometry, BezierGenericEvaluation)
     EXPECT_NEAR(evaluated_radii[i], result_2[i], 1e-6f);
   }
 }
+
+/* -------------------------------------------------------------------- */
+/** \name NURBS: Evaluation
+ * \{ */
+
+static CurvesGeometry create_single_nurbs(const int num_points)
+{
+  CurvesGeometry curves(num_points, 1);
+  curves.fill_curve_types(CURVE_TYPE_NURBS);
+  curves.resolution_for_write().fill(10);
+  curves.offsets_for_write().last() = num_points;
+  return curves;
+}
+
+TEST_F(CurvesGeometryTest, NURBSEvaluation)
+{
+  CurvesGeometry curves = create_single_nurbs(4);
+  MutableSpan<float3> positions = curves.positions_for_write();
+  positions[0] = {1, 1, 0};
+  positions[1] = {0, 1, 0};
+  positions[2] = {0, 0, 0};
+  positions[3] = {-1, 0, 0};
+
+  Span<float3> evaluated_positions = curves.evaluated_positions();
+  static const Array<float3> result_1{{
+      {0.166667, 0.833333, 0},
+      {0.121333, 0.778667, 0},
+      {0.084, 0.716, 0},
+      {0.0526667, 0.647333, 0},
+      {0.0253333, 0.574667, 0},
+      {0, 0.5, 0},
+      {-0.0253333, 0.425333, 0},
+      {-0.0526667, 0.352667, 0},
+      {-0.084, 0.284, 0},
+      {-0.121333, 0.221333, 0},
+      {-0.166667, 0.166667, 0},
+  }};
+  for (const int i : evaluated_positions.index_range()) {
+    EXPECT_V3_NEAR(evaluated_positions[i], result_1[i], 1e-5f);
+  }
+
+  /* Test a cyclic curve. */
+  curves.cyclic_for_write().fill(true);
+  curves.tag_topology_changed();
+  evaluated_positions = curves.evaluated_positions();
+  static const Array<float3> result_2{{
+      {0.166667, 0.833333, 0},   {0.121333, 0.778667, 0},
+      {0.084, 0.716, 0},         {0.0526667, 0.647333, 0},
+      {0.0253333, 0.574667, 0},  {0, 0.5, 0},
+      {-0.0253333, 0.425333, 0}, {-0.0526667, 0.352667, 0},
+      {-0.084, 0.284, 0},        {-0.121333, 0.221333, 0},
+      {-0.166667, 0.166667, 0},  {-0.221, 0.121667, 0},
+      {-0.281333, 0.0866667, 0}, {-0.343667, 0.0616666, 0},
+      {-0.404, 0.0466667, 0},    {-0.458333, 0.0416667, 0},
+      {-0.502667, 0.0466667, 0}, {-0.533, 0.0616666, 0},
+      {-0.545333, 0.0866667, 0}, {-0.535667, 0.121667, 0},
+      {-0.5, 0.166667, 0},       {-0.436, 0.221334, 0},
+      {-0.348, 0.284, 0},        {-0.242, 0.352667, 0},
+      {-0.124, 0.425333, 0},     {0, 0.5, 0},
+      {0.124, 0.574667, 0},      {0.242, 0.647333, 0},
+      {0.348, 0.716, 0},         {0.436, 0.778667, 0},
+      {0.5, 0.833333, 0},        {0.535667, 0.878334, 0},
+      {0.545333, 0.913333, 0},   {0.533, 0.938333, 0},
+      {0.502667, 0.953333, 0},   {0.458333, 0.958333, 0},
+      {0.404, 0.953333, 0},      {0.343667, 0.938333, 0},
+      {0.281333, 0.913333, 0},   {0.221, 0.878333, 0},
+  }};
+  for (const int i : evaluated_positions.index_range()) {
+    EXPECT_V3_NEAR(evaluated_positions[i], result_2[i], 1e-5f);
+  }
+
+  /* Test a circular cyclic curve with weights. */
+  positions[0] = {1, 0, 0};
+  positions[1] = {1, 1, 0};
+  positions[2] = {0, 1, 0};
+  positions[3] = {0, 0, 0};
+  curves.nurbs_weights_for_write().fill(1.0f);
+  curves.nurbs_weights_for_write()[0] = 4.0f;
+  curves.tag_positions_changed();
+  static const Array<float3> result_3{{
+      {0.888889, 0.555556, 0},  {0.837792, 0.643703, 0},  {0.773885, 0.727176, 0},
+      {0.698961, 0.800967, 0},  {0.616125, 0.860409, 0},  {0.529412, 0.901961, 0},
+      {0.443152, 0.923773, 0},  {0.361289, 0.925835, 0},  {0.286853, 0.909695, 0},
+      {0.221722, 0.877894, 0},  {0.166667, 0.833333, 0},  {0.122106, 0.778278, 0},
+      {0.0903055, 0.713148, 0}, {0.0741654, 0.638711, 0}, {0.0762274, 0.556847, 0},
+      {0.0980392, 0.470588, 0}, {0.139591, 0.383875, 0},  {0.199032, 0.301039, 0},
+      {0.272824, 0.226114, 0},  {0.356297, 0.162208, 0},  {0.444444, 0.111111, 0},
+      {0.531911, 0.0731388, 0}, {0.612554, 0.0468976, 0}, {0.683378, 0.0301622, 0},
+      {0.74391, 0.0207962, 0},  {0.794872, 0.017094, 0},  {0.837411, 0.017839, 0},
+      {0.872706, 0.0222583, 0}, {0.901798, 0.0299677, 0}, {0.925515, 0.0409445, 0},
+      {0.944444, 0.0555556, 0}, {0.959056, 0.0744855, 0}, {0.970032, 0.0982019, 0},
+      {0.977742, 0.127294, 0},  {0.982161, 0.162589, 0},  {0.982906, 0.205128, 0},
+      {0.979204, 0.256091, 0},  {0.969838, 0.316622, 0},  {0.953102, 0.387446, 0},
+      {0.926861, 0.468089, 0},
+  }};
+  evaluated_positions = curves.evaluated_positions();
+  for (const int i : evaluated_positions.index_range()) {
+    EXPECT_V3_NEAR(evaluated_positions[i], result_3[i], 1e-5f);
+  }
+}
+
+TEST_F(CurvesGeometryTest, NURBSEvaluateZeroOrderBezierDeg3)
+{
+  CurvesGeometry curves = create_single_nurbs(4);
+  curves.nurbs_knots_modes_for_write().fill(NURBS_KNOT_MODE_ENDPOINT_BEZIER);
+
+  MutableSpan<float3> positions = curves.positions_for_write();
+  positions[0] = {2.33f, 1.45f, -0.4f};
+  positions[1] = {0.03f, 0.78f, -0.3f};
+  positions[2] = {0.0f, -0.29f, -0.2f};
+  positions[3] = {-5.12f, 0.0f, -0.1f};
+
+  for (int8_t i = -1; i < 2; i++) {
+    curves.nurbs_orders_for_write().fill(i);
+    curves.tag_topology_changed();
+    Span<float3> evaluated_positions = curves.evaluated_positions();
+    EXPECT_NEAR_SPAN<float>(
+        evaluated_positions.cast<float>(), positions.as_span().cast<float>(), EPSILON_FLT32);
+  }
+}
+
+TEST_F(CurvesGeometryTest, NURBSEvaluateZeroOrderClampedDeg3)
+{
+  CurvesGeometry curves = create_single_nurbs(4);
+  curves.nurbs_knots_modes_for_write().fill(NURBS_KNOT_MODE_ENDPOINT);
+
+  MutableSpan<float3> positions = curves.positions_for_write();
+  positions[0] = {2.33f, 1.45f, 0.4f};
+  positions[1] = {0.03f, 0.78f, 0.3f};
+  positions[2] = {0.0f, -0.29f, 0.2f};
+  positions[3] = {-5.12f, 0.0f, 0.1f};
+
+  for (int8_t i = -1; i < 2; i++) {
+    curves.nurbs_orders_for_write().fill(i);
+    curves.tag_topology_changed();
+    Span<float3> evaluated_positions = curves.evaluated_positions();
+    EXPECT_NEAR_SPAN<float>(
+        evaluated_positions.cast<float>(), positions.as_span().cast<float>(), EPSILON_FLT32);
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name NURBS: Basis Cache Calculation
+ * \{ */
+
+TEST_F(CurvesGeometryTest, BasisCacheBezierSegmentDeg2)
+{
+  const int order = 3;
+  const int point_count = 3;
+  const int resolution = 3;
+  const bool is_cyclic = false;
+
+  const std::array<float, 6> knots_data{0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+  const Span<float> knots = Span<float>(knots_data);
+
+  /* Expectation */
+  auto fn_Ni2_span = [](MutableSpan<float> Ni2, const float u) {
+    const float nu = 1.0f - u;
+    Ni2[0] = nu * nu;
+    Ni2[1] = 2.0f * u * nu;
+    Ni2[2] = u * u;
+  };
+
+  std::array<float, 12> expected_data;
+  MutableSpan<float> expectation = MutableSpan<float>(expected_data);
+  fn_Ni2_span(expectation.slice(0, 3), 0.0f);
+  fn_Ni2_span(expectation.slice(3, 3), 1.0f / 3.0f);
+  fn_Ni2_span(expectation.slice(6, 3), 2.0f / 3.0f);
+  fn_Ni2_span(expectation.slice(9, 3), 1.0f);
+
+  /* Test */
+  const int evaluated_num = curves::nurbs::calculate_evaluated_num(
+      point_count, order, is_cyclic, resolution, KnotsMode::NURBS_KNOT_MODE_CUSTOM, knots);
+  EXPECT_EQ(evaluated_num, resolution + 1);
+
+  curves::nurbs::BasisCache cache;
+  curves::nurbs::calculate_basis_cache(point_count,
+                                       evaluated_num,
+                                       order,
+                                       resolution,
+                                       is_cyclic,
+                                       KnotsMode::NURBS_KNOT_MODE_CUSTOM,
+                                       knots,
+                                       cache);
+  EXPECT_EQ_SPAN<float>(expectation, cache.weights);
+}
+
+TEST_F(CurvesGeometryTest, BasisCacheNonUniformDeg2)
+{
+  const int order = 3;
+  const int point_count = 8;
+  const int resolution = 3;
+  const bool is_cyclic = false;
+
+  const std::array<float, 11> knots_data{
+      0.0f, 0.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 4.0f, 5.0f, 5.0f, 5.0f};
+  const Span<float> knots = Span<float>(knots_data);
+
+  /* Expectation */
+  auto fn_Ni2_span0 = [](MutableSpan<float> Ni2, const float u) {
+    Ni2[0] = square_f(1.0f - u);
+    Ni2[1] = 2.0f * u - 1.5f * square_f(u);
+    Ni2[2] = square_f(u) / 2.0f;
+  };
+  auto fn_Ni2_span1 = [](MutableSpan<float> Ni2, float u) {
+    Ni2[0] = square_f(2.0f - u) / 2.0f;
+    Ni2[1] = -1.5f + 3 * u - square_f(u);
+    Ni2[2] = square_f(u - 1.0f) / 2.0f;
+  };
+  auto fn_Ni2_span2 = [](MutableSpan<float> Ni2, float u) {
+    Ni2[0] = square_f(3.0f - u) / 2.0f;
+    Ni2[1] = -5.5f + 5.0f * u - square_f(u);
+    Ni2[2] = square_f(u - 2.0f) / 2.0f;
+  };
+  auto fn_Ni2_span3 = [](MutableSpan<float> Ni2, float u) {
+    Ni2[0] = square_f(4.0f - u) / 2.0f;
+    Ni2[1] = -16.0f + 10.0f * u - 1.5f * square_f(u);
+    Ni2[2] = square_f(u - 3.0f);
+  };
+  auto fn_Ni2_span4 = [](MutableSpan<float> Ni2, float u) {
+    Ni2[0] = square_f(5.0f - u);
+    Ni2[1] = 2.0f * (u - 4.0f) * (5.0f - u);
+    Ni2[2] = square_f(u - 4.0f);
+  };
+
+  std::array<float, 48> expected_data;
+  MutableSpan<float> expectation = MutableSpan<float>(expected_data);
+  for (int i = 0; i < 3; i++) {
+    const float du = i / 3.0f;
+    const int step = i * 3;
+    fn_Ni2_span0(expectation.slice(step, 3), du);
+    fn_Ni2_span1(expectation.slice(step + 9, 3), 1.0f + du);
+    fn_Ni2_span2(expectation.slice(step + 18, 3), 2.0f + du);
+    fn_Ni2_span3(expectation.slice(step + 27, 3), 3.0f + du);
+    fn_Ni2_span4(expectation.slice(step + 36, 3), 4.0f + du);
+  }
+  fn_Ni2_span4(expectation.slice(45, 3), 5.0f);
+
+  /* Test */
+  const int evaluated_num = curves::nurbs::calculate_evaluated_num(
+      point_count, order, is_cyclic, resolution, KnotsMode::NURBS_KNOT_MODE_CUSTOM, knots);
+  EXPECT_EQ(evaluated_num, 5 * resolution + 1);
+
+  curves::nurbs::BasisCache cache;
+  curves::nurbs::calculate_basis_cache(point_count,
+                                       evaluated_num,
+                                       order,
+                                       resolution,
+                                       is_cyclic,
+                                       KnotsMode::NURBS_KNOT_MODE_CUSTOM,
+                                       knots,
+                                       cache);
+  EXPECT_NEAR_SPAN<float>(expectation, cache.weights, EPSILON_FLT32);
+}
+
+/** \} */
+
+class KnotVectorTest : public BlenderGTestBase {};
+
+TEST_F(KnotVectorTest, KnotVectorUniform)
+{
+  constexpr int8_t order = 5;
+  constexpr int points_num = 7;
+
+  Vector<float> knots(curves::nurbs::knots_num(points_num, order, false));
+  curves::nurbs::calculate_knots(
+      points_num, KnotsMode::NURBS_KNOT_MODE_NORMAL, order, false, knots);
+
+  const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+  EXPECT_EQ_SPAN<int>(Span({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}), multiplicity);
+}
+
+TEST_F(KnotVectorTest, KnotVectorUniformClamped)
+{
+  constexpr int8_t order = 3;
+  constexpr int points_num = 7;
+
+  Vector<float> knots(curves::nurbs::knots_num(points_num, order, false));
+  curves::nurbs::calculate_knots(
+      points_num, KnotsMode::NURBS_KNOT_MODE_ENDPOINT, order, false, knots);
+
+  const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+  EXPECT_EQ_SPAN<int>(Span({3, 1, 1, 1, 1, 3}), multiplicity);
+}
+
+/* -------------------------------------------------------------------- */
+/** \name Knot vector: KnotMode::NURBS_KNOT_MODE_ENDPOINT_BEZIER
+ * \{ */
+
+TEST_F(KnotVectorTest, KnotVectorBezierClampedSegmentDeg2)
+{
+  constexpr int8_t order = 3;
+  constexpr int points_num = 3;
+
+  Vector<float> knots(curves::nurbs::knots_num(points_num, order, false));
+  curves::nurbs::calculate_knots(
+      points_num, KnotsMode::NURBS_KNOT_MODE_ENDPOINT_BEZIER, order, false, knots);
+
+  const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+  EXPECT_EQ_SPAN<int>(Span({3, 3}), multiplicity);
+}
+
+TEST_F(KnotVectorTest, KnotVectorBezierClampedSegmentDeg4)
+{
+  constexpr int8_t order = 5;
+  constexpr int points_num = 5;
+
+  Vector<float> knots(curves::nurbs::knots_num(points_num, order, false));
+  curves::nurbs::calculate_knots(
+      points_num, KnotsMode::NURBS_KNOT_MODE_ENDPOINT_BEZIER, order, false, knots);
+
+  const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+  EXPECT_EQ_SPAN<int>(Span({5, 5}), multiplicity);
+}
+
+TEST_F(KnotVectorTest, KnotVectorBezierClampedDeg2)
+{
+  constexpr int8_t order = 3;
+  constexpr int points_num = 9;
+
+  Vector<float> knots(curves::nurbs::knots_num(points_num, order, false));
+  curves::nurbs::calculate_knots(
+      points_num, KnotsMode::NURBS_KNOT_MODE_ENDPOINT_BEZIER, order, false, knots);
+
+  const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+  EXPECT_EQ_SPAN<int>(Span({3, 2, 2, 2, 3}), multiplicity);
+}
+
+TEST_F(KnotVectorTest, KnotVectorBezierClampedUnevenDeg2)
+{
+  constexpr int8_t order = 3;
+  constexpr int points_num = 8;
+
+  Vector<float> knots(curves::nurbs::knots_num(points_num, order, false));
+  curves::nurbs::calculate_knots(
+      points_num, KnotsMode::NURBS_KNOT_MODE_ENDPOINT_BEZIER, order, false, knots);
+
+  const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+  EXPECT_EQ_SPAN<int>(Span({3, 2, 2, 4}), multiplicity);
+}
+
+TEST_F(KnotVectorTest, KnotVectorBezierClampedDeg4)
+{
+  constexpr int8_t order = 5;
+  constexpr int points_num = 13;
+
+  Vector<float> knots(curves::nurbs::knots_num(points_num, order, false));
+  curves::nurbs::calculate_knots(
+      points_num, KnotsMode::NURBS_KNOT_MODE_ENDPOINT_BEZIER, order, false, knots);
+
+  const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+  EXPECT_EQ_SPAN<int>(Span({5, 4, 4, 5}), multiplicity);
+}
+
+TEST_F(KnotVectorTest, KnotVectorBezierClampedUnevenDeg4)
+{
+  constexpr int8_t order = 5;
+  constexpr int points_num[4] = {12, 11, 10, 9};
+  const std::array<std::array<int, 3>, 4> expectation = {std::array<int, 3>{5, 4, 8},
+                                                         std::array<int, 3>{5, 4, 7},
+                                                         std::array<int, 3>{5, 4, 6},
+                                                         std::array<int, 3>{5, 4, 5}};
+
+  for (int i = 0; i < expectation.size(); i++) {
+    Vector<float> knots(curves::nurbs::knots_num(points_num[i], order, false));
+    curves::nurbs::calculate_knots(
+        points_num[i], KnotsMode::NURBS_KNOT_MODE_ENDPOINT_BEZIER, order, false, knots);
+
+    const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+    EXPECT_EQ_SPAN<int>(Span(expectation[i]), multiplicity);
+  }
+}
+
+TEST_F(KnotVectorTest, KnotVectorCircleCyclicUnevenDeg2)
+{
+  constexpr int8_t order = 3;
+  constexpr int points_num = 8;
+
+  Vector<float> knots(curves::nurbs::knots_num(points_num, order, true));
+  curves::nurbs::calculate_knots(
+      points_num, KnotsMode::NURBS_KNOT_MODE_ENDPOINT_BEZIER, order, true, knots);
+
+  const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+  EXPECT_EQ_SPAN<int>(Span({1, 2, 2, 2, 2, 2, 2}), multiplicity);
+}
+
+TEST_F(KnotVectorTest, KnotVectorBezierClampedCyclicUnevenDeg4)
+{
+  constexpr int8_t order = 5;
+  constexpr int points_num[4] = {12, 11, 10, 9};
+  const std::array<std::array<int, 6>, 4> expectation = {std::array<int, 6>{1, 4, 4, 4, 4, 4},
+                                                         std::array<int, 6>{1, 4, 4, 3, 4, 4},
+                                                         std::array<int, 6>{1, 4, 4, 2, 4, 4},
+                                                         std::array<int, 6>{1, 4, 4, 1, 4, 4}};
+
+  for (int i = 0; i < expectation.size(); i++) {
+    Vector<float> knots(curves::nurbs::knots_num(points_num[i], order, true));
+    curves::nurbs::calculate_knots(
+        points_num[i], KnotsMode::NURBS_KNOT_MODE_ENDPOINT_BEZIER, order, true, knots);
+
+    const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+    EXPECT_EQ_SPAN<int>(Span(expectation[i]), multiplicity);
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Knot vector: KnotMode::NURBS_KNOT_MODE_BEZIER
+ * \{ */
+
+TEST_F(KnotVectorTest, KnotVectorBezierSegmentDeg2)
+{
+  constexpr int8_t order = 4;
+  constexpr int points_num = 4;
+
+  Vector<float> knots(curves::nurbs::knots_num(points_num, order, false));
+  curves::nurbs::calculate_knots(
+      points_num, KnotsMode::NURBS_KNOT_MODE_BEZIER, order, false, knots);
+
+  const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+  EXPECT_EQ_SPAN<int>(Span({2, 3, 3}), multiplicity);
+}
+
+TEST_F(KnotVectorTest, KnotVectorBezierUnevenDeg2)
+{
+  constexpr int8_t order = 3;
+  constexpr int points_num[4] = {8, 7, 6, 5};
+  const std::array<std::array<int, 6>, 4> expectation = {std::array<int, 6>{2, 2, 2, 2, 2, 1},
+                                                         std::array<int, 6>{2, 2, 2, 2, 2, -1},
+                                                         std::array<int, 6>{2, 2, 2, 2, 1, -1},
+                                                         std::array<int, 6>{2, 2, 2, 2, -1, -1}};
+
+  for (int i = 0; i < expectation.size(); i++) {
+    Vector<float> knots(curves::nurbs::knots_num(points_num[i], order, false));
+    curves::nurbs::calculate_knots(
+        points_num[i], KnotsMode::NURBS_KNOT_MODE_BEZIER, order, false, knots);
+
+    const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+    EXPECT_EQ_SPAN<int>(Span(expectation[i].data(), multiplicity.size()), multiplicity);
+  }
+}
+
+TEST_F(KnotVectorTest, KnotVectorBezierUnevenDeg4)
+{
+  constexpr int8_t order = 5;
+  constexpr int points_num[6] = {14, 13, 12, 11, 10, 9};
+  const std::array<std::array<int, 6>, 6> expectation = {std::array<int, 6>{2, 4, 4, 4, 4, 1},
+                                                         std::array<int, 6>{2, 4, 4, 4, 4, -1},
+                                                         std::array<int, 6>{2, 4, 4, 4, 3, -1},
+                                                         std::array<int, 6>{2, 4, 4, 4, 2, -1},
+                                                         std::array<int, 6>{2, 4, 4, 4, 1, -1},
+                                                         std::array<int, 6>{2, 4, 4, 4, -1, -1}};
+
+  for (int i = 0; i < expectation.size(); i++) {
+    Vector<float> knots(curves::nurbs::knots_num(points_num[i], order, false));
+    curves::nurbs::calculate_knots(
+        points_num[i], KnotsMode::NURBS_KNOT_MODE_BEZIER, order, false, knots);
+
+    const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+    EXPECT_EQ_SPAN<int>(Span(expectation[i].data(), multiplicity.size()), multiplicity);
+  }
+}
+
+TEST_F(KnotVectorTest, KnotVectorBezierCyclicUnevenDeg4)
+{
+  constexpr int8_t order = 5;
+  constexpr int points_num[4] = {12, 11, 10, 9};
+  const std::array<std::array<int, 6>, 4> expectation = {std::array<int, 6>{2, 4, 4, 4, 4, 3},
+                                                         std::array<int, 6>{2, 4, 4, 3, 4, 3},
+                                                         std::array<int, 6>{2, 4, 4, 2, 4, 3},
+                                                         std::array<int, 6>{2, 4, 5, 4, 3, -1}};
+
+  for (int i = 0; i < expectation.size(); i++) {
+    Vector<float> knots(curves::nurbs::knots_num(points_num[i], order, true));
+    curves::nurbs::calculate_knots(
+        points_num[i], KnotsMode::NURBS_KNOT_MODE_BEZIER, order, true, knots);
+
+    const Vector<int> multiplicity = curves::nurbs::calculate_multiplicity_sequence(knots);
+    EXPECT_EQ_SPAN<int>(Span(expectation[i].data(), multiplicity.size()), multiplicity);
+  }
+}
+
+/** \} */
 
 }  // namespace blender::bke::tests

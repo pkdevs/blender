@@ -10,7 +10,11 @@
 
 #include "DNA_vec_types.h"
 
+namespace blender {
+
 struct ARegion;
+struct Scene;
+struct ViewLayer;
 
 /* ----------------------------------------------------- */
 
@@ -20,6 +24,13 @@ struct ARegion;
 struct ScreenAnimData {
   /** Do not read from this, only for comparing if region exists. */
   ARegion *region;
+
+  /* The Scene and the View Layer that the animation timer is playing. */
+  Scene *scene;
+  ViewLayer *view_layer;
+  /* For sequencer scenes, account for scene syncing during playback. */
+  bool do_scene_syncing;
+
   short redraws;
   /** Flags for playback */
   short flag;
@@ -45,6 +56,28 @@ enum {
   ANIMPLAY_FLAG_NO_SYNC = (1 << 3),
   /** Use #ScreenAnimData::nextfra at next timer update. */
   ANIMPLAY_FLAG_USE_NEXT_FRAME = (1 << 4),
+};
+
+/**Matching the mode argument of #ED_screen_animation_play. */
+enum class PlaybackDirection : int8_t {
+  BACKWARDS = -1,
+  FORWARDS = 1,
+};
+
+/** Matching the sync argument of #ED_screen_animation_play. */
+enum class PlaySyncMode : int8_t {
+  UNCHANGED = -1,
+  OFF = 0,
+  ON = 1,
+};
+
+/**
+ * Playback state captured by #ED_screen_scrubbing_enable when scrubbing starts,
+ * consumed by #ED_screen_scrubbing_disable to resume playback.
+ */
+struct PreScrubbingState {
+  PlaySyncMode play_sync = PlaySyncMode::UNCHANGED;
+  PlaybackDirection play_mode = PlaybackDirection::FORWARDS;
 };
 
 /* ----------------------------------------------------- */
@@ -105,6 +138,10 @@ enum {
    */
   AZONE_REGION,
   /**
+   * Widget at the very center of the 3D Viewport Quad View for resizing.
+   */
+  AZONE_REGION_QUAD,
+  /**
    * Used when in editor full-screen draw a corner to return to normal mode.
    */
   AZONE_FULLSCREEN,
@@ -114,3 +151,5 @@ enum {
    */
   AZONE_REGION_SCROLL,
 };
+
+}  // namespace blender

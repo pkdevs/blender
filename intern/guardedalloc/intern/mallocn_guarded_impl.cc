@@ -18,6 +18,7 @@
 #include <pthread.h>
 
 #include "MEM_guardedalloc.h"
+#include "MEM_safe_multiply.h"
 
 /* Quiet warnings when dealing with allocated data written into the blend file.
  * This also rounds up and causes warnings which we don't consider bugs in practice. */
@@ -25,8 +26,9 @@
 #  include "valgrind/memcheck.h"
 #endif
 
+#include "PRF_profile.hh"
 /* to ensure strict conversions */
-#include "../../source/blender/blenlib/BLI_strict_flags.h"
+#include "../../source/blender/blenlib/BLI_strict_flags.hh"
 
 #include "atomic_ops.h"
 #include "mallocn_intern.hh"
@@ -35,7 +37,7 @@
 using namespace mem_guarded::internal;
 
 /* Only for debugging:
- * store original buffer's name when doing MEM_dupallocN
+ * store original buffer's name when doing MEM_dupalloc_void
  * helpful to profile issues with non-freed "dup_alloc" buffers,
  * but this introduces some overhead to memory header and makes
  * things slower a bit, so better to keep disabled by default
@@ -144,12 +146,10 @@ typedef MemHead MemHeadAligned;
 /* #MemHead::flag. */
 enum MemHeadFlag {
   /**
-   * This block of memory has been allocated from CPP `new` (e.g. #MEM_new, or some
-   * guardedalloc-overloaded `new` operator). It mainly checks that #MEM_freeN is not directly
-   * called on it (#MEM_delete or some guardedalloc-overloaded `delete` operator should always be
-   * used instead).
+   * This block of memory has been allocated for a type with a non-trivial destructor.
+   * This checks that #MEM_delete is used to free the memory, and not #MEM_delete_void.
    */
-  MEMHEAD_FLAG_FROM_CPP_NEW = 1 << 1,
+  MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR = 1 << 1,
 };
 
 typedef struct MemTail {
@@ -174,11 +174,8 @@ static const char *check_memlist(const MemHead *memh);
 /* locally used defines                                                  */
 /* --------------------------------------------------------------------- */
 
-#ifdef __BIG_ENDIAN__
-#  define MAKE_ID(a, b, c, d) (int(a) << 24 | int(b) << 16 | (c) << 8 | (d))
-#else
-#  define MAKE_ID(a, b, c, d) (int(d) << 24 | int(c) << 16 | (b) << 8 | (a))
-#endif
+/* NOTE: this is endianness-sensitive. */
+#define MAKE_ID(a, b, c, d) (int(d) << 24 | int(c) << 16 | (b) << 8 | (a))
 
 #define MEMTAG1 MAKE_ID('M', 'E', 'M', 'O')
 #define MEMTAG2 MAKE_ID('R', 'Y', 'B', 'L')
@@ -269,7 +266,7 @@ report_error_on_address(const void *vmemh, const char *message, ...)
 
   const void *address = memh;
   size_t size = len + sizeof(*memh) + sizeof(MemTail);
-  if (UNLIKELY(memh->alignment > 0)) {
+  if (memh->alignment > 0) [[unlikely]] {
     const MemHeadAligned *memh_aligned = memh;
     address = MEMHEAD_REAL_PTR(memh_aligned);
     size = len + sizeof(*memh_aligned) + MEMHEAD_ALIGN_PADDING(memh_aligned->alignment) +
@@ -327,25 +324,26 @@ size_t MEM_guarded_allocN_len(const void *vmemh)
 
 void *MEM_guarded_dupallocN(const void *vmemh)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   void *newp = nullptr;
 
   if (vmemh) {
     const MemHead *memh = static_cast<const MemHead *>(vmemh);
     memh--;
 
-    if ((memh->flag & MEMHEAD_FLAG_FROM_CPP_NEW) != 0) {
+    if ((memh->flag & MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR) != 0) {
       report_error_on_address(vmemh,
-                              "Attempt to use C-style MEM_dupallocN on a pointer created with "
+                              "Attempt to use C-style MEM_dupalloc_void on a pointer created with "
                               "CPP-style MEM_new or new\n");
     }
 
 #ifndef DEBUG_MEMDUPLINAME
-    if (LIKELY(memh->alignment == 0)) {
+    if (memh->alignment == 0) [[likely]] {
       newp = MEM_guarded_mallocN(memh->len, "dupli_alloc");
     }
     else {
       newp = MEM_guarded_mallocN_aligned(
-          memh->len, size_t(memh->alignment), "dupli_alloc", AllocationType::ALLOC_FREE);
+          memh->len, size_t(memh->alignment), "dupli_alloc", DestructorType::Trivial);
     }
 
     if (newp == nullptr) {
@@ -361,12 +359,12 @@ void *MEM_guarded_dupallocN(const void *vmemh)
       memcpy(name, name_prefix, sizeof(name_prefix));
       memcpy(name + name_prefix_len, memh->name, name_size);
 
-      if (LIKELY(memh->alignment == 0)) {
+      if (memh->alignment == 0) [[likely]] {
         newp = MEM_guarded_mallocN(memh->len, name);
       }
       else {
         newp = MEM_guarded_mallocN_aligned(
-            memh->len, (size_t)memh->alignment, name, AllocationType::ALLOC_FREE);
+            memh->len, size_t(memh->alignment), name, DestructorType::Trivial);
       }
 
       if (newp == nullptr)
@@ -387,24 +385,26 @@ void *MEM_guarded_dupallocN(const void *vmemh)
 
 void *MEM_guarded_reallocN_id(void *vmemh, size_t len, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   void *newp = nullptr;
 
   if (vmemh) {
     MemHead *memh = static_cast<MemHead *>(vmemh);
     memh--;
 
-    if ((memh->flag & MEMHEAD_FLAG_FROM_CPP_NEW) != 0) {
-      report_error_on_address(vmemh,
-                              "Attempt to use C-style MEM_reallocN on a pointer created with "
-                              "CPP-style MEM_new or new\n");
+    if ((memh->flag & MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR) != 0) {
+      report_error_on_address(
+          vmemh,
+          "Attempt to use C-style MEM_realloc_uninitialized on a pointer created with "
+          "CPP-style MEM_new or new\n");
     }
 
-    if (LIKELY(memh->alignment == 0)) {
+    if (memh->alignment == 0) [[likely]] {
       newp = MEM_guarded_mallocN(len, memh->name);
     }
     else {
       newp = MEM_guarded_mallocN_aligned(
-          len, size_t(memh->alignment), memh->name, AllocationType::ALLOC_FREE);
+          len, size_t(memh->alignment), memh->name, DestructorType::Trivial);
     }
 
     if (newp) {
@@ -418,7 +418,7 @@ void *MEM_guarded_reallocN_id(void *vmemh, size_t len, const char *str)
       }
     }
 
-    MEM_guarded_freeN(vmemh, AllocationType::ALLOC_FREE);
+    MEM_guarded_freeN(vmemh, DestructorType::Trivial);
   }
   else {
     newp = MEM_guarded_mallocN(len, str);
@@ -429,24 +429,26 @@ void *MEM_guarded_reallocN_id(void *vmemh, size_t len, const char *str)
 
 void *MEM_guarded_recallocN_id(void *vmemh, size_t len, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   void *newp = nullptr;
 
   if (vmemh) {
     MemHead *memh = static_cast<MemHead *>(vmemh);
     memh--;
 
-    if ((memh->flag & MEMHEAD_FLAG_FROM_CPP_NEW) != 0) {
-      report_error_on_address(vmemh,
-                              "Attempt to use C-style MEM_recallocN on a pointer created with "
-                              "CPP-style MEM_new or new\n");
+    if ((memh->flag & MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR) != 0) {
+      report_error_on_address(
+          vmemh,
+          "Attempt to use C-style MEM_realloc_zeroed on a pointer created with "
+          "CPP-style MEM_new or new\n");
     }
 
-    if (LIKELY(memh->alignment == 0)) {
+    if (memh->alignment == 0) [[likely]] {
       newp = MEM_guarded_mallocN(len, memh->name);
     }
     else {
       newp = MEM_guarded_mallocN_aligned(
-          len, size_t(memh->alignment), memh->name, AllocationType::ALLOC_FREE);
+          len, size_t(memh->alignment), memh->name, DestructorType::Trivial);
     }
 
     if (newp) {
@@ -465,7 +467,7 @@ void *MEM_guarded_recallocN_id(void *vmemh, size_t len, const char *str)
       }
     }
 
-    MEM_guarded_freeN(vmemh, AllocationType::ALLOC_FREE);
+    MEM_guarded_freeN(vmemh, DestructorType::Trivial);
   }
   else {
     newp = MEM_guarded_callocN(len, str);
@@ -497,7 +499,7 @@ static void print_memhead_backtrace(MemHead *memh)
 static void make_memhead_header(MemHead *memh,
                                 size_t len,
                                 const char *str,
-                                const AllocationType allocation_type)
+                                const DestructorType destructor_type)
 {
   MemTail *memt;
 
@@ -505,7 +507,9 @@ static void make_memhead_header(MemHead *memh,
   memh->name = str;
   memh->nextname = nullptr;
   memh->len = len;
-  memh->flag = (allocation_type == AllocationType::NEW_DELETE ? MEMHEAD_FLAG_FROM_CPP_NEW : 0);
+  memh->flag = (destructor_type == DestructorType::NonTrivial ?
+                    MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR :
+                    0);
   memh->alignment = 0;
   memh->tag2 = MEMTAG2;
 
@@ -534,6 +538,7 @@ static void make_memhead_header(MemHead *memh,
 
 void *MEM_guarded_mallocN(size_t len, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   MemHead *memh;
 
 #ifdef WITH_MEM_VALGRIND
@@ -542,12 +547,13 @@ void *MEM_guarded_mallocN(size_t len, const char *str)
   len = SIZET_ALIGN_4(len);
 
   memh = (MemHead *)malloc(len + sizeof(MemHead) + sizeof(MemTail));
+  PRF_memory_alloc(memh, len + sizeof(MemHead) + sizeof(MemTail));
 
-  if (LIKELY(memh)) {
-    make_memhead_header(memh, len, str, AllocationType::ALLOC_FREE);
+  if (memh) [[likely]] {
+    make_memhead_header(memh, len, str, DestructorType::Trivial);
 
-    if (LIKELY(len)) {
-      if (UNLIKELY(malloc_debug_memset)) {
+    if (len) [[likely]] {
+      if (malloc_debug_memset) [[unlikely]] {
         memset(memh + 1, 255, len);
       }
 #ifdef WITH_MEM_VALGRIND
@@ -561,8 +567,9 @@ void *MEM_guarded_mallocN(size_t len, const char *str)
     }
 
 #ifdef DEBUG_MEMCOUNTER
-    if (_mallocn_count == DEBUG_MEMCOUNTER_ERROR_VAL)
+    if (_mallocn_count == DEBUG_MEMCOUNTER_ERROR_VAL) {
       memcount_raise(__func__);
+    }
     memh->_count = _mallocn_count++;
 #endif
     return (++memh);
@@ -576,8 +583,9 @@ void *MEM_guarded_mallocN(size_t len, const char *str)
 
 void *MEM_guarded_malloc_arrayN(size_t len, size_t size, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   size_t total_size;
-  if (UNLIKELY(!MEM_size_safe_multiply(len, size, &total_size))) {
+  if (!MEM_size_safe_multiply(len, size, &total_size)) [[unlikely]] {
     print_error(
         "Malloc array aborted due to integer overflow: "
         "len=" SIZET_FORMAT "x" SIZET_FORMAT " in %s, total " SIZET_FORMAT "\n",
@@ -595,8 +603,9 @@ void *MEM_guarded_malloc_arrayN(size_t len, size_t size, const char *str)
 void *MEM_guarded_mallocN_aligned(size_t len,
                                   size_t alignment,
                                   const char *str,
-                                  const AllocationType allocation_type)
+                                  const DestructorType destructor_type)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   /* Huge alignment values doesn't make sense and they wouldn't fit into 'short' used in the
    * MemHead. */
   assert(alignment < 1024);
@@ -626,18 +635,19 @@ void *MEM_guarded_mallocN_aligned(size_t len,
 
   MemHead *memh = (MemHead *)aligned_malloc(
       len + extra_padding + sizeof(MemHead) + sizeof(MemTail), alignment);
+  PRF_memory_alloc(memh, len + extra_padding + sizeof(MemHead) + sizeof(MemTail));
 
-  if (LIKELY(memh)) {
+  if (memh) [[likely]] {
     /* We keep padding in the beginning of MemHead,
      * this way it's always possible to get MemHead
      * from the data pointer.
      */
     memh = (MemHead *)((char *)memh + extra_padding);
 
-    make_memhead_header(memh, len, str, allocation_type);
+    make_memhead_header(memh, len, str, destructor_type);
     memh->alignment = short(alignment);
-    if (LIKELY(len)) {
-      if (UNLIKELY(malloc_debug_memset)) {
+    if (len) [[likely]] {
+      if (malloc_debug_memset) [[unlikely]] {
         memset(memh + 1, 255, len);
       }
 #ifdef WITH_MEM_VALGRIND
@@ -651,8 +661,9 @@ void *MEM_guarded_mallocN_aligned(size_t len,
     }
 
 #ifdef DEBUG_MEMCOUNTER
-    if (_mallocn_count == DEBUG_MEMCOUNTER_ERROR_VAL)
+    if (_mallocn_count == DEBUG_MEMCOUNTER_ERROR_VAL) {
       memcount_raise(__func__);
+    }
     memh->_count = _mallocn_count++;
 #endif
     return (++memh);
@@ -666,17 +677,20 @@ void *MEM_guarded_mallocN_aligned(size_t len,
 
 void *MEM_guarded_callocN(size_t len, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   MemHead *memh;
 
   len = SIZET_ALIGN_4(len);
 
   memh = (MemHead *)calloc(len + sizeof(MemHead) + sizeof(MemTail), 1);
+  PRF_memory_alloc(memh, len + sizeof(MemHead) + sizeof(MemTail));
 
   if (memh) {
-    make_memhead_header(memh, len, str, AllocationType::ALLOC_FREE);
+    make_memhead_header(memh, len, str, DestructorType::Trivial);
 #ifdef DEBUG_MEMCOUNTER
-    if (_mallocn_count == DEBUG_MEMCOUNTER_ERROR_VAL)
+    if (_mallocn_count == DEBUG_MEMCOUNTER_ERROR_VAL) {
       memcount_raise(__func__);
+    }
     memh->_count = _mallocn_count++;
 #endif
     return (++memh);
@@ -690,8 +704,9 @@ void *MEM_guarded_callocN(size_t len, const char *str)
 
 void *MEM_guarded_calloc_arrayN(size_t len, size_t size, const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   size_t total_size;
-  if (UNLIKELY(!MEM_size_safe_multiply(len, size, &total_size))) {
+  if (!MEM_size_safe_multiply(len, size, &total_size)) [[unlikely]] {
     print_error(
         "Calloc array aborted due to integer overflow: "
         "len=" SIZET_FORMAT "x" SIZET_FORMAT " in %s, total " SIZET_FORMAT "\n",
@@ -712,7 +727,7 @@ static void *mem_guarded_malloc_arrayN_aligned(const size_t len,
                                                const char *str,
                                                size_t &r_bytes_num)
 {
-  if (UNLIKELY(!MEM_size_safe_multiply(len, size, &r_bytes_num))) {
+  if (!MEM_size_safe_multiply(len, size, &r_bytes_num)) [[unlikely]] {
     print_error(
         "Calloc array aborted due to integer overflow: "
         "len=" SIZET_FORMAT "x" SIZET_FORMAT " in %s, total " SIZET_FORMAT "\n",
@@ -726,7 +741,7 @@ static void *mem_guarded_malloc_arrayN_aligned(const size_t len,
   if (alignment <= MEM_MIN_CPP_ALIGNMENT) {
     return mem_mallocN(r_bytes_num, str);
   }
-  return MEM_mallocN_aligned(r_bytes_num, alignment, str);
+  return MEM_new_uninitialized_aligned(r_bytes_num, alignment, str);
 }
 
 void *MEM_guarded_malloc_arrayN_aligned(const size_t len,
@@ -734,6 +749,7 @@ void *MEM_guarded_malloc_arrayN_aligned(const size_t len,
                                         const size_t alignment,
                                         const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   size_t bytes_num;
   return mem_guarded_malloc_arrayN_aligned(len, size, alignment, str, bytes_num);
 }
@@ -743,8 +759,9 @@ void *MEM_guarded_calloc_arrayN_aligned(const size_t len,
                                         const size_t alignment,
                                         const char *str)
 {
+  PRF_scope(blender::ProfileCategory::Core);
   size_t bytes_num;
-  /* There is no lower level #calloc with an alignment parameter, so we have to fallback to using
+  /* There is no lower level #calloc with an alignment parameter, so we have to fall back to using
    * #memset unfortunately. */
   void *ptr = mem_guarded_malloc_arrayN_aligned(len, size, alignment, str, bytes_num);
   if (!ptr) {
@@ -797,7 +814,7 @@ void MEM_guarded_printmemlist_stats()
     /* put memory blocks into array */
     printblock = static_cast<MemPrintBlock *>(malloc(sizeof(MemPrintBlock) * totblock));
 
-    if (UNLIKELY(!printblock)) {
+    if (!printblock) [[unlikely]] {
       mem_unlock_thread();
       print_error("malloc returned null while generating stats");
       return;
@@ -1000,8 +1017,9 @@ short MEM_guarded_testN(void *vmemh)
   mem_lock_thread();
 
   membl = membase->first;
-  if (membl)
+  if (membl) {
     membl = MEMNEXT(membl);
+  }
 
   while (membl) {
     if (vmemh == membl + 1) {
@@ -1032,10 +1050,11 @@ void MEM_guarded_printmemlist_pydict()
 }
 void mem_guarded_clearmemlist()
 {
-  membase->first = membase->last = nullptr;
+  membase->first = nullptr;
+  membase->last = nullptr;
 }
 
-void MEM_guarded_freeN(void *vmemh, const AllocationType allocation_type)
+void MEM_guarded_freeN(void *vmemh, const DestructorType destructor_type)
 {
   MemTail *memt;
   MemHead *memh = static_cast<MemHead *>(vmemh);
@@ -1062,12 +1081,12 @@ void MEM_guarded_freeN(void *vmemh, const AllocationType allocation_type)
 
   memh--;
 
-  if (allocation_type != AllocationType::NEW_DELETE &&
-      (memh->flag & MEMHEAD_FLAG_FROM_CPP_NEW) != 0)
+  if (destructor_type != DestructorType::NonTrivial &&
+      (memh->flag & MEMHEAD_FLAG_NONTRIVIAL_DESTRUCTOR))
   {
-    report_error_on_address(
-        vmemh,
-        "Attempt to use C-style MEM_freeN on a pointer created with CPP-style MEM_new or new\n");
+    report_error_on_address(vmemh,
+                            "Attempt to use C-style MEM_delete_void on a pointer created with "
+                            "CPP-style MEM_new or new\n");
   }
 
   if (memh->tag1 == MEMFREE && memh->tag2 == MEMFREE) {
@@ -1126,10 +1145,12 @@ static void addtail(volatile localListBase *listbase, void *vlink)
   /* for a generic API error checks here is fine but
    * the limited use here they will never be nullptr */
 #if 0
-  if (link == nullptr)
+  if (link == nullptr) {
     return;
-  if (listbase == nullptr)
+  }
+  if (listbase == nullptr) {
     return;
+  }
 #endif
 
   link->next = nullptr;
@@ -1151,10 +1172,12 @@ static void remlink(volatile localListBase *listbase, void *vlink)
   /* for a generic API error checks here is fine but
    * the limited use here they will never be nullptr */
 #if 0
-  if (link == nullptr)
+  if (link == nullptr) {
     return;
-  if (listbase == nullptr)
+  }
+  if (listbase == nullptr) {
     return;
+  }
 #endif
 
   if (link->next) {
@@ -1190,14 +1213,16 @@ static void rem_memblock(MemHead *memh)
   atomic_sub_and_fetch_z(&mem_in_use, memh->len);
 
 #ifdef DEBUG_MEMDUPLINAME
-  if (memh->need_free_name)
+  if (memh->need_free_name) {
     free((char *)memh->name);
+  }
 #endif
 
-  if (UNLIKELY(malloc_debug_memset && memh->len)) {
+  if (malloc_debug_memset && memh->len) [[unlikely]] {
     memset(memh + 1, 255, memh->len);
   }
-  if (LIKELY(memh->alignment == 0)) {
+  if (memh->alignment == 0) [[likely]] {
+    PRF_memory_free(memh);
     free(memh);
   }
   else {
@@ -1334,7 +1359,8 @@ static const char *check_memlist(const MemHead *memh)
         membase->first = &backok->next;
       }
       else {
-        membase->first = membase->last = nullptr;
+        membase->first = nullptr;
+        membase->last = nullptr;
       }
     }
   }

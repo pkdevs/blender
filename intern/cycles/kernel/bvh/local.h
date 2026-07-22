@@ -60,7 +60,7 @@ ccl_device_inline
   }
   kernel_assert((local_isect == nullptr) == (max_hits == 0));
 
-  const int object_flag = kernel_data_fetch(object_flag, local_object);
+  const uint object_flag = kernel_data_fetch(object_flag, local_object);
   if (!(object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
 #if BVH_FEATURE(BVH_MOTION)
     bvh_instance_motion_push(kg, local_object, ray, &P, &dir, &idir);
@@ -88,7 +88,7 @@ ccl_device_inline
                                        tmin,
                                        isect_t,
                                        node_addr,
-                                       PATH_RAY_ALL_VISIBILITY,
+                                       PATH_RAY_VISIBILITY_ALL,
                                        dist);
 
         node_addr = __float_as_int(cnodes.z);
@@ -137,7 +137,8 @@ ccl_device_inline
           case PRIMITIVE_TRIANGLE: {
             /* intersect ray against primitive */
             for (; prim_addr < prim_addr2; prim_addr++) {
-              kernel_assert(kernel_data_fetch(prim_type, prim_addr) == type);
+              kernel_assert((kernel_data_fetch(prim_type, prim_addr) & PRIMITIVE_ALL) ==
+                            (type & PRIMITIVE_ALL));
 
               /* Only intersect with matching object, for instanced objects we
                * already know we are only intersecting the right object. */
@@ -159,7 +160,6 @@ ccl_device_inline
                                            dir,
                                            local_object,
                                            prim,
-                                           prim_addr,
                                            tmin,
                                            isect_t,
                                            lcg_state,
@@ -174,7 +174,8 @@ ccl_device_inline
           case PRIMITIVE_MOTION_TRIANGLE: {
             /* intersect ray against primitive */
             for (; prim_addr < prim_addr2; prim_addr++) {
-              kernel_assert(kernel_data_fetch(prim_type, prim_addr) == type);
+              kernel_assert((kernel_data_fetch(prim_type, prim_addr) & PRIMITIVE_ALL) ==
+                            (type & PRIMITIVE_ALL));
 
               /* Only intersect with matching object, for instanced objects we
                * already know we are only intersecting the right object. */
@@ -197,7 +198,6 @@ ccl_device_inline
                                                   ray->time,
                                                   local_object,
                                                   prim,
-                                                  prim_addr,
                                                   tmin,
                                                   isect_t,
                                                   lcg_state,

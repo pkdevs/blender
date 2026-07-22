@@ -8,14 +8,14 @@ set(INC
   ../../mikktspace
 )
 
+set(INC_SYS
+)
+
 set(SRC
-  alembic.cpp
-  alembic_read.cpp
   attribute.cpp
   background.cpp
   bake.cpp
   camera.cpp
-  colorspace.cpp
   constant_fold.cpp
   devicescene.cpp
   film.cpp
@@ -25,10 +25,13 @@ set(SRC
   geometry_mesh.cpp
   hair.cpp
   image.cpp
+  image_cache.cpp
+  image_loader.cpp
   image_oiio.cpp
   image_sky.cpp
   image_vdb.cpp
   integrator.cpp
+  scene_attributes.cpp
   light.cpp
   light_tree.cpp
   light_tree_debug.cpp
@@ -54,19 +57,18 @@ set(SRC
 )
 
 set(SRC_HEADERS
-  alembic.h
-  alembic_read.h
   attribute.h
   bake.h
   background.h
   camera.h
-  colorspace.h
   constant_fold.h
   devicescene.h
   film.h
   geometry.h
   hair.h
   image.h
+  image_cache.h
+  image_loader.h
   image_oiio.h
   image_sky.h
   image_vdb.h
@@ -94,67 +96,24 @@ set(SRC_HEADERS
 )
 
 set(LIB
-  cycles_bvh
-  cycles_device
-  cycles_integrator
-  cycles_subd
-  cycles_util
+  PUBLIC cycles_bvh
+  PUBLIC cycles_device
+  PUBLIC cycles_integrator
+  PUBLIC cycles_subd
+  PUBLIC cycles_util
+  PRIVATE bf::dependencies::optional::openvdb
+  PRIVATE bf::dependencies::optional::nanovdb
 )
 
 if(CYCLES_STANDALONE_REPOSITORY)
-  list(APPEND LIB extern_sky)
+  list(APPEND LIB PRIVATE extern_sky)
 else()
-  list(APPEND LIB bf_intern_sky)
+  list(APPEND LIB PRIVATE bf_intern_sky)
 endif()
 
 if(WITH_CYCLES_OSL)
   list(APPEND LIB
-    cycles_kernel_osl
-    ${OSL_LIBRARIES}
-  )
-endif()
-
-if(WITH_OPENCOLORIO)
-  add_definitions(-DWITH_OCIO)
-  list(APPEND INC_SYS
-    ${OPENCOLORIO_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${OPENCOLORIO_LIBRARIES}
-  )
-  if(WIN32 AND NOT USD_OVERRIDE_OPENCOLORIO)
-    add_definitions(-DOpenColorIO_SKIP_IMPORTS)
-  endif()
-endif()
-
-if(WITH_OPENVDB)
-  add_definitions(-DWITH_OPENVDB ${OPENVDB_DEFINITIONS})
-  list(APPEND INC_SYS
-    ${OPENVDB_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${OPENVDB_LIBRARIES}
-  )
-
-  # This works around the issue described in #120317 and https://github.com/AcademySoftwareFoundation/openvdb/pull/1786
-  if(MSVC_CLANG)
-    set_source_files_properties(image_vdb.cpp PROPERTIES COMPILE_FLAGS -fno-delayed-template-parsing)
-  endif()
-endif()
-
-if(WITH_ALEMBIC)
-  add_definitions(-DWITH_ALEMBIC)
-  list(APPEND INC_SYS
-    ${ALEMBIC_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${ALEMBIC_LIBRARIES}
-  )
-endif()
-
-if(WITH_NANOVDB)
-  list(APPEND INC_SYS
-    ${NANOVDB_INCLUDE_DIRS}
+    PRIVATE cycles_kernel_osl
   )
 endif()
 

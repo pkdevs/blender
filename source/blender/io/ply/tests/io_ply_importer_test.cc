@@ -6,11 +6,17 @@
 
 #include "BLI_path_utils.hh"
 
+#include "CLG_log.h"
+
 #include "ply_import.hh"
 #include "ply_import_buffer.hh"
 #include "ply_import_data.hh"
 
-namespace blender::io::ply {
+namespace blender {
+
+static CLG_LogRef LOG = {"io.ply"};
+
+namespace io::ply {
 
 /* Extensive tests for PLY importing are in `io_ply_import_test.py`.
  * The tests here are only for testing PLY reader buffer refill behavior,
@@ -18,9 +24,9 @@ namespace blender::io::ply {
 
 TEST(ply_import, BufferRefillTest)
 {
-  std::string ply_path_a = blender::tests::flags_test_asset_dir() +
+  std::string ply_path_a = tests::flags_test_asset_dir() +
                            SEP_STR "io_tests" SEP_STR "ply" SEP_STR + "ASCII_wireframe_cube.ply";
-  std::string ply_path_b = blender::tests::flags_test_asset_dir() +
+  std::string ply_path_b = tests::flags_test_asset_dir() +
                            SEP_STR "io_tests" SEP_STR "ply" SEP_STR + "wireframe_cube.ply";
 
   /* Use a small read buffer size to test buffer refilling behavior. */
@@ -31,14 +37,14 @@ TEST(ply_import, BufferRefillTest)
   const char *header_err_a = read_header(infile_a, header_a);
   const char *header_err_b = read_header(infile_b, header_b);
   if (header_err_a != nullptr || header_err_b != nullptr) {
-    fprintf(stderr, "Failed to read PLY header\n");
+    CLOG_ERROR(&LOG, "Failed to read PLY header");
     ADD_FAILURE();
     return;
   }
   std::unique_ptr<PlyData> data_a = import_ply_data(infile_a, header_a);
   std::unique_ptr<PlyData> data_b = import_ply_data(infile_b, header_b);
   if (!data_a->error.empty() || !data_b->error.empty()) {
-    fprintf(stderr, "Failed to read PLY data\n");
+    CLOG_ERROR(&LOG, "Failed to read PLY data");
     ADD_FAILURE();
     return;
   }
@@ -56,10 +62,8 @@ TEST(ply_import, BufferRefillTest)
                                      {5, 4},
                                      {0, 4},
                                      {5, 1}};
-  EXPECT_EQ(12, data_a->edges.size());
-  EXPECT_EQ(12, data_b->edges.size());
-  EXPECT_EQ_ARRAY(exp_edges, data_a->edges.data(), 12);
-  EXPECT_EQ_ARRAY(exp_edges, data_b->edges.data(), 12);
+  EXPECT_EQ_SPAN<std::pair<int, int>>(Span(exp_edges, 12), data_a->edges);
+  EXPECT_EQ_SPAN<std::pair<int, int>>(Span(exp_edges, 12), data_b->edges);
 }
 
 //@TODO: now we put vertex color attribute first, maybe put position first?
@@ -69,4 +73,5 @@ TEST(ply_import, BufferRefillTest)
 //@TODO: UVs with: s,t; u,v; texture_u,texture_v; texture_s,texture_t (from miniply)
 //@TODO: colors with: r,g,b in addition to red,green,blue (from miniply)
 
-}  // namespace blender::io::ply
+}  // namespace io::ply
+}  // namespace blender

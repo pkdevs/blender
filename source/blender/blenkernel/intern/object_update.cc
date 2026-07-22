@@ -7,14 +7,15 @@
  */
 
 #include "DNA_constraint_types.h"
+#include "DNA_lattice_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_constraint.h"
@@ -22,13 +23,14 @@
 #include "BKE_curves.h"
 #include "BKE_displist.h"
 #include "BKE_editmesh.hh"
-#include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.h"
 #include "BKE_grease_pencil.hh"
+#include "BKE_instances.hh"
 #include "BKE_lattice.hh"
 #include "BKE_layer.hh"
 #include "BKE_mball.hh"
 #include "BKE_mesh.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
@@ -42,7 +44,7 @@
 #include "DEG_depsgraph_light_linking.hh"
 #include "DEG_depsgraph_query.hh"
 
-namespace deg = blender::deg;
+namespace blender {
 
 void BKE_object_eval_reset(Object *ob_eval)
 {
@@ -98,7 +100,7 @@ void BKE_object_eval_constraints(Depsgraph *depsgraph, Scene *scene, Object *ob)
 
   /* evaluate constraints stack */
   /* TODO: split this into:
-   * - pre (i.e. BKE_constraints_make_evalob, per-constraint (i.e.
+   * - pre (i.e. BKE_constraints_make_evalob), per-constraint (i.e.
    * - inner body of BKE_constraints_solve),
    * - post (i.e. BKE_constraints_clear_evalob)
    *
@@ -126,12 +128,64 @@ void BKE_object_eval_transform_final(Depsgraph *depsgraph, Object *ob)
   ob->runtime->last_update_transform = DEG_get_update_count(depsgraph);
 }
 
+static void empty_object_apply_modifiers(Depsgraph *depsgraph,
+                                         Scene *scene,
+                                         Object *object,
+                                         bke::GeometrySet &geometry_set)
+{
+  const bool use_render = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
+  const int required_mode = use_render ? eModifierMode_Render : eModifierMode_Realtime;
+  ModifierApplyFlag apply_flag = use_render ? MOD_APPLY_RENDER : MOD_APPLY_USECACHE;
+  const ModifierEvalContext mectx = {depsgraph, object, apply_flag};
+
+  BKE_modifiers_clear_errors(object);
+
+  VirtualModifierData virtual_modifier_data;
+  ModifierData *md = BKE_modifiers_get_virtual_modifierlist(object, &virtual_modifier_data);
+
+  /* Evaluate modifiers. */
+  for (; md; md = md->next) {
+    const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
+
+    if (!BKE_modifier_is_enabled(scene, md, required_mode)) {
+      continue;
+    }
+
+    if (mti->modify_geometry_set) {
+      mti->modify_geometry_set(md, &mectx, &geometry_set);
+    }
+  }
+}
+
+static void empty_object_update(Depsgraph *depsgraph, Scene *scene, Object *object)
+{
+  BKE_object_free_derived_caches(object);
+
+  bke::GeometrySet geometry_set;
+  /* If the empty is instancing a collection, create an input geometry set of this collection. */
+  if (object->instance_collection != nullptr) {
+    Collection &collection = *object->instance_collection;
+    auto instances = std::make_unique<bke::Instances>(1);
+    instances->reference_handles_for_write().first() = instances->add_reference(collection);
+    instances->transforms_for_write().first() = float4x4::identity();
+    geometry_set = bke::GeometrySet::from_instances(std::move(instances));
+  }
+  /* Evaluate modifiers. */
+  empty_object_apply_modifiers(depsgraph, scene, object, geometry_set);
+
+  object->runtime->geometry_set_eval = new bke::GeometrySet(std::move(geometry_set));
+}
+
 void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *ob)
 {
   DEG_debug_print_eval(depsgraph, __func__, ob->id.name, ob);
 
   /* includes all keys and modifiers */
   switch (ob->type) {
+    case OB_EMPTY: {
+      empty_object_update(depsgraph, scene, ob);
+      break;
+    }
     case OB_MESH: {
       CustomData_MeshMasks cddata_masks = scene->customdata_mask;
       CustomData_MeshMasks_update(&cddata_masks, &CD_MASK_BAREMESH);
@@ -143,18 +197,11 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
       cddata_masks.fmask |= CD_MASK_PROP_ALL;
       cddata_masks.pmask |= CD_MASK_PROP_ALL;
       cddata_masks.lmask |= CD_MASK_PROP_ALL;
-
-      /* Make sure Freestyle edge/face marks appear in evaluated mesh (see #40315).
-       * Due to Line Art implementation, edge marks should also be shown in viewport. */
-#ifdef WITH_FREESTYLE
-      cddata_masks.emask |= CD_MASK_FREESTYLE_EDGE;
-      cddata_masks.pmask |= CD_MASK_FREESTYLE_FACE;
-#endif
       if (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER) {
         /* Always compute orcos for render. */
         cddata_masks.vmask |= CD_MASK_ORCO;
       }
-      blender::bke::mesh_data_update(*depsgraph, *scene, *ob, cddata_masks);
+      bke::mesh_data_update(*depsgraph, *scene, *ob, cddata_masks);
       break;
     }
     case OB_ARMATURE:
@@ -187,6 +234,8 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
       break;
     case OB_GREASE_PENCIL:
       BKE_object_eval_grease_pencil(depsgraph, scene, ob);
+      break;
+    default:
       break;
   }
 
@@ -221,6 +270,16 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
     }
   }
 
+  /* Cache the contained geometry types of the #geometry_set_eval. */
+  if (ob->runtime->geometry_set_eval) {
+    ob->runtime->contained_geometry_types = 0;
+    for (const bke::GeometryComponent::Type type :
+         ob->runtime->geometry_set_eval->gather_component_types(true, true))
+    {
+      ob->runtime->contained_geometry_types |= uint16_t(1 << size_t(type));
+    }
+  }
+
   if (DEG_is_active(depsgraph)) {
     Object *object_orig = DEG_get_original(ob);
     object_orig->runtime->bounds_eval = BKE_object_evaluated_geometry_bounds(ob);
@@ -235,6 +294,19 @@ void BKE_object_sync_to_original(Depsgraph *depsgraph, Object *object)
   Object *object_orig = DEG_get_original(object);
   /* Base flags. */
   object_orig->base_flag = object->base_flag;
+  object_orig->base_local_view_bits = object->base_local_view_bits;
+
+  /* Particle edit mode draws from the original object, so sync imat from evaluated to original
+   * object so drawing uses the correct transform. */
+  for (ParticleSystem *
+           psys_eval = static_cast<ParticleSystem *>(object->particlesystem.first),
+          *psys_orig = static_cast<ParticleSystem *>(object_orig->particlesystem.first);
+       psys_eval && psys_orig;
+       psys_eval = psys_eval->next, psys_orig = psys_orig->next)
+  {
+    copy_m4_m4(psys_orig->imat, psys_eval->imat);
+  }
+
   /* Transformation flags. */
   copy_m4_m4(object_orig->runtime->object_to_world.ptr(), object->object_to_world().ptr());
   copy_m4_m4(object_orig->runtime->world_to_object.ptr(), object->world_to_object().ptr());
@@ -249,7 +321,7 @@ void BKE_object_sync_to_original(Depsgraph *depsgraph, Object *object)
        md = md->next, md_orig = md_orig->next)
   {
     BLI_assert(md->type == md_orig->type && STREQ(md->name, md_orig->name));
-    MEM_SAFE_FREE(md_orig->error);
+    MEM_SAFE_DELETE(md_orig->error);
     if (md->error != nullptr) {
       md_orig->error = BLI_strdup(md->error);
     }
@@ -262,15 +334,15 @@ void BKE_object_batch_cache_dirty_tag(Object *ob)
 {
   switch (ob->type) {
     case OB_MESH:
-      BKE_mesh_batch_cache_dirty_tag((Mesh *)ob->data, BKE_MESH_BATCH_DIRTY_ALL);
+      BKE_mesh_batch_cache_dirty_tag(id_cast<Mesh *>(ob->data), BKE_MESH_BATCH_DIRTY_ALL);
       break;
     case OB_LATTICE:
-      BKE_lattice_batch_cache_dirty_tag((Lattice *)ob->data, BKE_LATTICE_BATCH_DIRTY_ALL);
+      BKE_lattice_batch_cache_dirty_tag(id_cast<Lattice *>(ob->data), BKE_LATTICE_BATCH_DIRTY_ALL);
       break;
     case OB_CURVES_LEGACY:
     case OB_SURF:
     case OB_FONT:
-      BKE_curve_batch_cache_dirty_tag((Curve *)ob->data, BKE_CURVE_BATCH_DIRTY_ALL);
+      BKE_curve_batch_cache_dirty_tag(id_cast<Curve *>(ob->data), BKE_CURVE_BATCH_DIRTY_ALL);
       break;
     case OB_MBALL: {
       /* This function is currently called on original objects, so to properly
@@ -282,16 +354,17 @@ void BKE_object_batch_cache_dirty_tag(Object *ob)
       break;
     }
     case OB_CURVES:
-      BKE_curves_batch_cache_dirty_tag((Curves *)ob->data, BKE_CURVES_BATCH_DIRTY_ALL);
+      BKE_curves_batch_cache_dirty_tag(id_cast<Curves *>(ob->data), BKE_CURVES_BATCH_DIRTY_ALL);
       break;
     case OB_POINTCLOUD:
-      BKE_pointcloud_batch_cache_dirty_tag((PointCloud *)ob->data, BKE_POINTCLOUD_BATCH_DIRTY_ALL);
+      BKE_pointcloud_batch_cache_dirty_tag(id_cast<PointCloud *>(ob->data),
+                                           BKE_POINTCLOUD_BATCH_DIRTY_ALL);
       break;
     case OB_VOLUME:
-      BKE_volume_batch_cache_dirty_tag((Volume *)ob->data, BKE_VOLUME_BATCH_DIRTY_ALL);
+      BKE_volume_batch_cache_dirty_tag(id_cast<Volume *>(ob->data), BKE_VOLUME_BATCH_DIRTY_ALL);
       break;
     case OB_GREASE_PENCIL:
-      BKE_grease_pencil_batch_cache_dirty_tag((GreasePencil *)ob->data,
+      BKE_grease_pencil_batch_cache_dirty_tag(id_cast<GreasePencil *>(ob->data),
                                               BKE_GREASEPENCIL_BATCH_DIRTY_ALL);
       break;
     default:
@@ -322,7 +395,7 @@ void BKE_object_eval_transform_all(Depsgraph *depsgraph, Scene *scene, Object *o
   if (object->parent != nullptr) {
     BKE_object_eval_parent(depsgraph, object);
   }
-  if (!BLI_listbase_is_empty(&object->constraints)) {
+  if (!object->constraints.is_empty()) {
     BKE_object_eval_constraints(depsgraph, scene, object);
   }
   BKE_object_eval_uber_transform(depsgraph, object);
@@ -334,13 +407,14 @@ void BKE_object_data_select_update(Depsgraph *depsgraph, ID *object_data)
   DEG_debug_print_eval(depsgraph, __func__, object_data->name, object_data);
   switch (GS(object_data->name)) {
     case ID_ME:
-      BKE_mesh_batch_cache_dirty_tag((Mesh *)object_data, BKE_MESH_BATCH_DIRTY_SELECT);
+      BKE_mesh_batch_cache_dirty_tag(id_cast<Mesh *>(object_data), BKE_MESH_BATCH_DIRTY_SELECT);
       break;
     case ID_CU_LEGACY:
-      BKE_curve_batch_cache_dirty_tag((Curve *)object_data, BKE_CURVE_BATCH_DIRTY_SELECT);
+      BKE_curve_batch_cache_dirty_tag(id_cast<Curve *>(object_data), BKE_CURVE_BATCH_DIRTY_SELECT);
       break;
     case ID_LT:
-      BKE_lattice_batch_cache_dirty_tag((Lattice *)object_data, BKE_LATTICE_BATCH_DIRTY_SELECT);
+      BKE_lattice_batch_cache_dirty_tag(reinterpret_cast<Lattice *>(object_data),
+                                        BKE_LATTICE_BATCH_DIRTY_SELECT);
       break;
     default:
       break;
@@ -351,12 +425,12 @@ void BKE_object_select_update(Depsgraph *depsgraph, Object *object)
 {
   DEG_debug_print_eval(depsgraph, __func__, object->id.name, object);
   if (object->type == OB_MESH && !object->runtime->is_data_eval_owned) {
-    Mesh *mesh_input = (Mesh *)object->runtime->data_orig;
+    Mesh *mesh_input = id_cast<Mesh *>(object->runtime->data_orig);
     std::lock_guard lock{mesh_input->runtime->eval_mutex};
-    BKE_object_data_select_update(depsgraph, static_cast<ID *>(object->data));
+    BKE_object_data_select_update(depsgraph, object->data);
   }
   else {
-    BKE_object_data_select_update(depsgraph, static_cast<ID *>(object->data));
+    BKE_object_data_select_update(depsgraph, object->data);
   }
 }
 
@@ -433,3 +507,5 @@ void BKE_object_eval_shading(Depsgraph *depsgraph, Object *object)
 
   object->runtime->last_update_shading = DEG_get_update_count(depsgraph);
 }
+
+}  // namespace blender

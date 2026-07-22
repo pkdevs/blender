@@ -18,7 +18,7 @@
 #include "BKE_report.hh"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string_utf8.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -40,15 +40,15 @@ namespace blender::ed::object {
 
 static bool multires_poll(bContext *C)
 {
-  return edit_modifier_poll_generic(C, &RNA_MultiresModifier, (1 << OB_MESH), true, false);
+  return edit_modifier_poll_generic(C, RNA_MultiresModifier, (1 << OB_MESH), true, false);
 }
 
 static wmOperatorStatus multires_higher_levels_delete_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
   Object *ob = context_active_object(C);
-  MultiresModifierData *mmd = (MultiresModifierData *)edit_modifier_property_get(
-      op, ob, eModifierType_Multires);
+  MultiresModifierData *mmd = reinterpret_cast<MultiresModifierData *>(
+      edit_modifier_property_get(op, ob, eModifierType_Multires));
 
   if (!mmd) {
     return OPERATOR_CANCELLED;
@@ -116,15 +116,15 @@ static EnumPropertyItem prop_multires_subdivide_mode_type[] = {
 static wmOperatorStatus multires_subdivide_exec(bContext *C, wmOperator *op)
 {
   Object *object = context_active_object(C);
-  MultiresModifierData *mmd = (MultiresModifierData *)edit_modifier_property_get(
-      op, object, eModifierType_Multires);
+  MultiresModifierData *mmd = reinterpret_cast<MultiresModifierData *>(
+      edit_modifier_property_get(op, object, eModifierType_Multires));
 
   if (!mmd) {
     return OPERATOR_CANCELLED;
   }
 
-  const MultiresSubdivideModeType subdivide_mode = (MultiresSubdivideModeType)RNA_enum_get(op->ptr,
-                                                                                           "mode");
+  const MultiresSubdivideModeType subdivide_mode = MultiresSubdivideModeType(
+      RNA_enum_get(op->ptr, "mode"));
   multiresModifier_subdivide(object, mmd, subdivide_mode);
 
   iter_other(CTX_data_main(C), object, true, multires_update_totlevels, &mmd->totlvl);
@@ -182,8 +182,8 @@ static wmOperatorStatus multires_reshape_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Object *ob = context_active_object(C), *secondob = nullptr;
-  MultiresModifierData *mmd = (MultiresModifierData *)edit_modifier_property_get(
-      op, ob, eModifierType_Multires);
+  MultiresModifierData *mmd = reinterpret_cast<MultiresModifierData *>(
+      edit_modifier_property_get(op, ob, eModifierType_Multires));
 
   if (!mmd) {
     return OPERATOR_CANCELLED;
@@ -253,7 +253,7 @@ static wmOperatorStatus multires_external_save_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
-  Mesh *mesh = (ob) ? static_cast<Mesh *>(ob->data) : static_cast<Mesh *>(op->customdata);
+  Mesh *mesh = (ob) ? id_cast<Mesh *>(ob->data) : static_cast<Mesh *>(op->customdata);
   char filepath[FILE_MAX];
   const bool relative = RNA_boolean_get(op->ptr, "relative_path");
 
@@ -283,15 +283,15 @@ static wmOperatorStatus multires_external_save_invoke(bContext *C,
                                                       const wmEvent * /*event*/)
 {
   Object *ob = context_active_object(C);
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
   char filepath[FILE_MAX];
 
   if (!edit_modifier_invoke_properties(C, op)) {
     return OPERATOR_CANCELLED;
   }
 
-  MultiresModifierData *mmd = (MultiresModifierData *)edit_modifier_property_get(
-      op, ob, eModifierType_Multires);
+  MultiresModifierData *mmd = reinterpret_cast<MultiresModifierData *>(
+      edit_modifier_property_get(op, ob, eModifierType_Multires));
 
   if (!mmd) {
     return OPERATOR_CANCELLED;
@@ -307,7 +307,8 @@ static wmOperatorStatus multires_external_save_invoke(bContext *C,
 
   op->customdata = mesh;
 
-  SNPRINTF(filepath, "//%s.btx", mesh->id.name + 2);
+  /* While a filename need not be UTF8, at this point the constructed name should be UTF8. */
+  SNPRINTF_UTF8(filepath, "//%s.btx", mesh->id.name + 2);
   RNA_string_set(op->ptr, "filepath", filepath);
 
   WM_event_add_fileselect(C, op);
@@ -348,7 +349,7 @@ void OBJECT_OT_multires_external_save(wmOperatorType *ot)
 static wmOperatorStatus multires_external_pack_exec(bContext *C, wmOperator * /*op*/)
 {
   Object *ob = context_active_object(C);
-  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  Mesh *mesh = id_cast<Mesh *>(ob->data);
 
   if (!CustomData_external_test(&mesh->corner_data, CD_MDISPS)) {
     return OPERATOR_CANCELLED;
@@ -383,16 +384,20 @@ static wmOperatorStatus multires_base_apply_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Object *object = context_active_object(C);
-  MultiresModifierData *mmd = (MultiresModifierData *)edit_modifier_property_get(
-      op, object, eModifierType_Multires);
+  MultiresModifierData *mmd = reinterpret_cast<MultiresModifierData *>(
+      edit_modifier_property_get(op, object, eModifierType_Multires));
 
   if (!mmd) {
     return OPERATOR_CANCELLED;
   }
 
+  const ApplyBaseMode mode = RNA_boolean_get(op->ptr, "apply_heuristic") ?
+                                 ApplyBaseMode::ForSubdivision :
+                                 ApplyBaseMode::Base;
+
   ed::sculpt_paint::undo::push_multires_mesh_begin(C, op->type->name);
 
-  multiresModifier_base_apply(depsgraph, object, mmd);
+  multiresModifier_base_apply(depsgraph, object, mmd, mode);
 
   ed::sculpt_paint::undo::push_multires_mesh_end(C, op->type->name);
 
@@ -425,6 +430,14 @@ void OBJECT_OT_multires_base_apply(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_INTERNAL;
   edit_modifier_properties(ot);
+  PropertyRNA *prop = RNA_def_boolean(
+      ot->srna,
+      "apply_heuristic",
+      true,
+      "Apply Subdivision Heuristic",
+      "Whether or not the final base mesh positions will be slightly altered to account for a new "
+      "subdivision modifier being added");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
 }
 
 /** \} */
@@ -437,18 +450,20 @@ static wmOperatorStatus multires_unsubdivide_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Object *object = context_active_object(C);
-  MultiresModifierData *mmd = (MultiresModifierData *)edit_modifier_property_get(
-      op, object, eModifierType_Multires);
+  MultiresModifierData *mmd = reinterpret_cast<MultiresModifierData *>(
+      edit_modifier_property_get(op, object, eModifierType_Multires));
 
   if (!mmd) {
     return OPERATOR_CANCELLED;
   }
 
-  int new_levels = multiresModifier_rebuild_subdiv(depsgraph, object, mmd, 1, true);
+  MultiresUnsubdivideInfo info = {};
+  int new_levels = multiresModifier_rebuild_subdiv(depsgraph, object, mmd, 1, true, info);
   if (new_levels == 0) {
     BKE_report(op->reports, RPT_ERROR, "No valid subdivisions found to rebuild a lower level");
     return OPERATOR_CANCELLED;
   }
+  multiresModifier_unsubdivide_report_if_needed(info, op->reports);
 
   DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, object);
@@ -491,18 +506,20 @@ static wmOperatorStatus multires_rebuild_subdiv_exec(bContext *C, wmOperator *op
 {
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Object *object = context_active_object(C);
-  MultiresModifierData *mmd = (MultiresModifierData *)edit_modifier_property_get(
-      op, object, eModifierType_Multires);
+  MultiresModifierData *mmd = reinterpret_cast<MultiresModifierData *>(
+      edit_modifier_property_get(op, object, eModifierType_Multires));
 
   if (!mmd) {
     return OPERATOR_CANCELLED;
   }
 
-  int new_levels = multiresModifier_rebuild_subdiv(depsgraph, object, mmd, INT_MAX, false);
+  MultiresUnsubdivideInfo info = {};
+  int new_levels = multiresModifier_rebuild_subdiv(depsgraph, object, mmd, INT_MAX, false, info);
   if (new_levels == 0) {
     BKE_report(op->reports, RPT_ERROR, "No valid subdivisions found to rebuild lower levels");
     return OPERATOR_CANCELLED;
   }
+  multiresModifier_unsubdivide_report_if_needed(info, op->reports);
 
   BKE_reportf(op->reports, RPT_INFO, "%d new levels rebuilt", new_levels);
 

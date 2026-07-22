@@ -117,36 +117,43 @@ class Sculpts : Overlay {
       case OB_CURVES:
         curves_sync(manager, ob_ref, state);
         break;
+      default:
+        break;
     }
   }
 
   void curves_sync(Manager &manager, const ObjectRef &ob_ref, const State &state)
   {
-    ::Curves &curves = DRW_object_get_data_for_drawing<::Curves>(*ob_ref.object);
+    blender::Curves &curves = DRW_object_get_data_for_drawing<blender::Curves>(*ob_ref.object);
 
     /* As an optimization, draw nothing if everything is selected. */
     if (show_mask_ && !everything_selected(curves)) {
       /* Retrieve the location of the texture. */
       bool is_point_domain;
-      gpu::VertBuf **select_attr_buf = DRW_curves_texture_for_evaluated_attribute(
-          &curves, ".selection", &is_point_domain);
-      if (select_attr_buf) {
+      bool is_valid;
+      gpu::VertBufPtr &select_attr_buf = DRW_curves_texture_for_evaluated_attribute(
+          &curves, ".selection", is_point_domain, is_valid);
+      if (is_valid) {
         /* Evaluate curves and their attributes if necessary. */
-        gpu::Batch *geometry = curves_sub_pass_setup(*curves_ps_, state.scene, ob_ref.object);
-        if (*select_attr_buf) {
-          ResourceHandle handle = manager.unique_handle(ob_ref);
+        const char *error = nullptr;
+        /* The error string will always have been printed by the engine already.
+         * No need to display it twice. */
+        gpu::Batch *geometry = curves_sub_pass_setup(
+            *curves_ps_, state.scene, ob_ref.object, error);
+        if (select_attr_buf.get()) {
+          ResourceHandleRange handle = manager.unique_handle(ob_ref);
 
           curves_ps_->push_constant("is_point_domain", is_point_domain);
-          curves_ps_->bind_texture("selection_tx", *select_attr_buf);
+          curves_ps_->bind_texture("selection_tx", select_attr_buf);
           curves_ps_->draw(geometry, handle);
         }
       }
     }
 
     if (show_curves_cage_) {
-      ResourceHandle handle = manager.unique_handle(ob_ref);
+      ResourceHandleRange handle = manager.unique_handle(ob_ref);
 
-      blender::gpu::Batch *geometry = DRW_curves_batch_cache_get_sculpt_curves_cage(&curves);
+      gpu::Batch *geometry = DRW_curves_batch_cache_get_sculpt_curves_cage(&curves);
       sculpt_curve_cage_.draw(geometry, handle);
     }
   }
@@ -158,7 +165,7 @@ class Sculpts : Overlay {
       return;
     }
 
-    const SculptSession *sculpt_session = ob_ref.object->sculpt;
+    const SculptSession *sculpt_session = ob_ref.object->runtime->sculpt_session;
     if (sculpt_session == nullptr) {
       return;
     }
@@ -180,7 +187,7 @@ class Sculpts : Overlay {
     }
 
     switch (pbvh->type()) {
-      case blender::bke::pbvh::Type::Mesh: {
+      case bke::pbvh::Type::Mesh: {
         const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
         if (!mesh.attributes().contains(".sculpt_face_set") &&
             !mesh.attributes().contains(".sculpt_mask"))
@@ -189,7 +196,7 @@ class Sculpts : Overlay {
         }
         break;
       }
-      case blender::bke::pbvh::Type::Grids: {
+      case bke::pbvh::Type::Grids: {
         const SubdivCCG &subdiv_ccg = *sculpt_session->subdiv_ccg;
         const Mesh &base_mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
         if (subdiv_ccg.masks.is_empty() && !base_mesh.attributes().contains(".sculpt_face_set")) {
@@ -197,7 +204,7 @@ class Sculpts : Overlay {
         }
         break;
       }
-      case blender::bke::pbvh::Type::BMesh: {
+      case bke::pbvh::Type::BMesh: {
         const BMesh &bm = *sculpt_session->bm;
         if (!CustomData_has_layer_named(&bm.pdata, CD_PROP_FLOAT, ".sculpt_face_set") &&
             !CustomData_has_layer_named(&bm.vdata, CD_PROP_FLOAT, ".sculpt_mask"))
@@ -210,7 +217,7 @@ class Sculpts : Overlay {
 
     const bool use_pbvh = BKE_sculptsession_use_pbvh_draw(ob_ref.object, state.rv3d);
     if (use_pbvh) {
-      ResourceHandle handle = manager.resource_handle_for_sculpt(ob_ref);
+      ResourceHandleRange handle = manager.unique_handle_for_sculpt(ob_ref);
 
       SculptBatchFeature sculpt_batch_features_ = (show_face_set_ ? SCULPT_BATCH_FACE_SET :
                                                                     SCULPT_BATCH_DEFAULT) |
@@ -222,7 +229,7 @@ class Sculpts : Overlay {
       }
     }
     else {
-      ResourceHandle handle = manager.unique_handle(ob_ref);
+      ResourceHandleRange handle = manager.unique_handle(ob_ref);
 
       Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
       gpu::Batch *sculpt_overlays = DRW_mesh_batch_cache_get_sculpt_overlays(mesh);
@@ -239,7 +246,7 @@ class Sculpts : Overlay {
     manager.submit(sculpt_curve_cage_, view);
   }
 
-  void draw_on_render(GPUFrameBuffer *framebuffer, Manager &manager, View &view) final
+  void draw_on_render(gpu::FrameBuffer *framebuffer, Manager &manager, View &view) final
   {
     if (!enabled_) {
       return;
@@ -249,7 +256,7 @@ class Sculpts : Overlay {
   }
 
  private:
-  bool everything_selected(const ::Curves &curves_id)
+  bool everything_selected(const blender::Curves &curves_id)
   {
     const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
     const VArray<bool> selection = *curves.attributes().lookup_or_default<bool>(

@@ -14,7 +14,7 @@
 
 #include "DRW_render.hh"
 
-#include "eevee_shader_shared.hh"
+#include "eevee_renderbuffers_shared.hh"
 
 namespace blender::eevee {
 
@@ -24,14 +24,20 @@ class RenderBuffers {
  public:
   RenderBuffersInfoData &data;
 
-  static constexpr eGPUTextureFormat color_format = GPU_RGBA16F;
-  static constexpr eGPUTextureFormat float_format = GPU_R16F;
+  static constexpr gpu::TextureFormat color_format = gpu::TextureFormat::SFLOAT_16_16_16_16;
+  static constexpr gpu::TextureFormat float_format = gpu::TextureFormat::SFLOAT_16;
+  static constexpr gpu::TextureFormat depth_format = gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8;
+  static constexpr gpu::TextureFormat object_id_format = gpu::TextureFormat::UINT_16;
+  static constexpr gpu::TextureFormat prepass_normal_format = gpu::TextureFormat::UNORM_10_10_10_2;
 
   Texture depth_tx;
   TextureFromPool combined_tx;
 
   // TextureFromPool mist_tx; /* Derived from depth_tx during accumulation. */
   TextureFromPool vector_tx;
+  TextureFromPool raycast_depth_tx;
+  TextureFromPool object_id_tx;
+  TextureFromPool prepass_normal_tx;
   TextureFromPool cryptomatte_tx;
   /* TODO(fclem): Use texture from pool once they support texture array. */
   Texture rp_color_tx;
@@ -43,16 +49,18 @@ class RenderBuffers {
   int2 extent_;
 
  public:
-  RenderBuffers(Instance &inst, RenderBuffersInfoData &data) : data(data), inst_(inst){};
+  RenderBuffers(Instance &inst, RenderBuffersInfoData &data) : data(data), inst_(inst) {};
 
   /** WARNING: RenderBuffers and Film use different storage types for AO and Shadow. */
   static ePassStorageType pass_storage_type(eViewLayerEEVEEPassType pass_type)
   {
     switch (pass_type) {
-      case EEVEE_RENDER_PASS_Z:
+      case EEVEE_RENDER_PASS_DEPTH:
       case EEVEE_RENDER_PASS_MIST:
       case EEVEE_RENDER_PASS_SHADOW:
       case EEVEE_RENDER_PASS_AO:
+      case EEVEE_RENDER_PASS_DENOISING_DEPTH:
+      case EEVEE_RENDER_PASS_DENOISING_ROUGHNESS:
         return PASS_STORAGE_VALUE;
       case EEVEE_RENDER_PASS_CRYPTOMATTE_OBJECT:
       case EEVEE_RENDER_PASS_CRYPTOMATTE_ASSET:
@@ -66,7 +74,7 @@ class RenderBuffers {
   void init();
 
   /* Acquires (also ensures) the render buffer before rendering to them. */
-  void acquire(int2 extent);
+  void acquire(int2 extent, gpu::TextureFormat raycast_depth_format = depth_format);
   void release();
 
   /* Return the size of the allocated render buffers. Undefined if called before `acquire()`. */
@@ -75,7 +83,7 @@ class RenderBuffers {
     return extent_;
   }
 
-  eGPUTextureFormat vector_tx_format();
+  gpu::TextureFormat vector_tx_format();
 };
 
 }  // namespace blender::eevee

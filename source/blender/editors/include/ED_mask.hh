@@ -8,9 +8,13 @@
 
 #pragma once
 
+#include "DNA_listBase.h"
 #include "DNA_mask_types.h"
 
+namespace blender {
+
 struct ARegion;
+struct CfraElem;
 struct Depsgraph;
 struct KeyframeEditData;
 struct MaskLayer;
@@ -77,18 +81,38 @@ void ED_mask_pixelspace_factor(ScrArea *area, ARegion *region, float *r_scalex, 
 void ED_mask_mouse_pos(ScrArea *area, ARegion *region, const int mval[2], float r_co[2]);
 
 /**
- * \param x/y: input, mval space.
- * \param xr/yr: output, mask point space.
+ * \param x, y: input, mval space.
+ * \param r_x, r_y: output, mask point space.
  */
 void ED_mask_point_pos(ScrArea *area, ARegion *region, float x, float y, float *r_x, float *r_y);
 void ED_mask_point_pos__reverse(
     ScrArea *area, ARegion *region, float x, float y, float *r_x, float *r_y);
 
 void ED_mask_cursor_location_get(ScrArea *area, float cursor[2]);
+
+/**
+ * Calculate the bounding box of selected mask points.
+ *
+ * \param handles_as_knot: Selected handles contribute the knot position rather
+ * than their actual position. Individual handle selection is still evaluated.
+ * Useful for "view selected" where handles shouldn't extend bounds beyond the knot.
+ *
+ * \param handles_as_knot_selected_only: Any selection on the point contributes only the
+ * knot position. Individual handle selection is not evaluated.
+ * Useful for rotate/scale gizmo origins where the pivot should always be the knot.
+ */
 bool ED_mask_selected_minmax(const bContext *C,
                              float min[2],
                              float max[2],
-                             bool handles_as_control_point);
+                             bool handles_as_knot,
+                             bool handles_as_knot_selected_only);
+
+void ED_mask_center_from_pivot_ex(const bContext *C,
+                                  ScrArea *area,
+                                  char mode,
+                                  bool handles_as_knot_selected_only,
+                                  float r_center[2],
+                                  bool *r_has_select);
 
 /* `mask_draw.cc` */
 
@@ -99,9 +123,10 @@ bool ED_mask_selected_minmax(const bContext *C,
 void ED_mask_draw_region(Depsgraph *depsgraph,
                          Mask *mask,
                          ARegion *region,
-                         char draw_flag,
-                         char draw_type,
-                         eMaskOverlayMode overlay_mode,
+                         bool show_overlays,
+                         MaskDrawFlag draw_flag,
+                         MaskDrawType draw_type,
+                         MaskOverlayMode overlay_mode,
                          float blend_factor,
                          int width_i,
                          int height_i,
@@ -131,7 +156,7 @@ bool ED_masklayer_frames_looper(MaskLayer *mask_layer,
 /**
  * Make a listing all the mask-frames in a layer as cfraelems.
  */
-void ED_masklayer_make_cfra_list(MaskLayer *mask_layer, ListBase *elems, bool onlysel);
+void ED_masklayer_make_cfra_list(MaskLayer *mask_layer, ListBaseT<CfraElem> *elems, bool onlysel);
 
 /**
  * Check if one of the frames in this layer is selected.
@@ -185,3 +210,5 @@ void paste_gpdata();
 
 void mirror_masklayer_frames(MaskLayer *mask_layer, short mode);
 #endif
+
+}  // namespace blender

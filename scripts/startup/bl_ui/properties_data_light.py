@@ -25,7 +25,7 @@ class DATA_PT_context_light(DataButtonsPanel, Panel):
     bl_options = {'HIDE_HEADER'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -47,7 +47,7 @@ class DATA_PT_preview(DataButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
     }
 
     def draw(self, context):
@@ -74,7 +74,7 @@ class DATA_PT_light(DataButtonsPanel, Panel):
 
 class DATA_PT_EEVEE_light(DataButtonsPanel, Panel):
     bl_label = "Light"
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     def draw(self, context):
         layout = self.layout
@@ -91,6 +91,7 @@ class DATA_PT_EEVEE_light(DataButtonsPanel, Panel):
         col = layout.column()
         heading = col.column(align=True, heading="Temperature")
         row = heading.column(align=True).row(align=True)
+        row.use_property_decorate = False
         row.prop(light, "use_temperature", text="")
         # Don't show color preview for now, it is grayed out so the color
         # is not accurate. Would not a change in the UI code to allow
@@ -104,6 +105,7 @@ class DATA_PT_EEVEE_light(DataButtonsPanel, Panel):
             sub = row.row()
             sub.active = light.use_temperature
             sub.prop(light, "temperature", text="")
+            row.prop_decorator(light, "temperature")
 
         if light.use_temperature:
             col.prop(light, "color", text="Tint")
@@ -141,7 +143,7 @@ class DATA_PT_EEVEE_light_distance(DataButtonsPanel, Panel):
     bl_label = "Custom Distance"
     bl_parent_id = "DATA_PT_EEVEE_light"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     @classmethod
     def poll(cls, context):
@@ -169,7 +171,7 @@ class DATA_PT_EEVEE_light_shadow(DataButtonsPanel, Panel):
     bl_label = "Shadow"
     bl_parent_id = "DATA_PT_EEVEE_light"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     def draw_header(self, context):
         light = context.light
@@ -203,7 +205,7 @@ class DATA_PT_EEVEE_light_influence(DataButtonsPanel, Panel):
     bl_label = "Influence"
     bl_parent_id = "DATA_PT_EEVEE_light"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
     def draw(self, context):
         layout = self.layout
@@ -235,7 +237,7 @@ class DATA_PT_spot(DataButtonsPanel, Panel):
     bl_parent_id = "DATA_PT_EEVEE_light"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -253,7 +255,7 @@ class DATA_PT_spot(DataButtonsPanel, Panel):
 
         col = layout.column()
 
-        col.prop(light, "spot_size", text="Size")
+        col.prop(light, "spot_size", text="Angle")
         col.prop(light, "spot_blend", text="Blend", slider=True)
 
         col.prop(light, "show_cone")
@@ -262,7 +264,7 @@ class DATA_PT_spot(DataButtonsPanel, Panel):
 class DATA_PT_light_animation(DataButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -287,7 +289,7 @@ class DATA_PT_light_animation(DataButtonsPanel, PropertiesAnimationMixin, Proper
 class DATA_PT_custom_props_light(DataButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
     _context_path = "object.data"

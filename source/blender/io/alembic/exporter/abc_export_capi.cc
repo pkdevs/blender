@@ -21,15 +21,20 @@
 #include "BKE_main.hh"
 #include "BKE_scene.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_timeit.hh"
+
+#include "ED_util.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
 #include <memory>
@@ -44,10 +49,10 @@ struct ExportJobData {
 
   bool was_canceled = false;
   bool export_ok = false;
-  blender::timeit::TimePoint start_time = {};
+  timeit::TimePoint start_time = {};
 };
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 /* Construct the depsgraph for exporting. */
 static bool build_depsgraph(ExportJobData *job)
@@ -63,11 +68,8 @@ static bool build_depsgraph(ExportJobData *job)
 
     DEG_graph_build_from_collection(job->depsgraph, collection);
   }
-  else if (job->params.visible_objects_only) {
-    DEG_graph_build_from_view_layer(job->depsgraph);
-  }
   else {
-    DEG_graph_build_for_all_objects(job->depsgraph);
+    DEG_graph_build_from_view_layer(job->depsgraph);
   }
 
   return true;
@@ -75,9 +77,9 @@ static bool build_depsgraph(ExportJobData *job)
 
 static void report_job_duration(const ExportJobData *data)
 {
-  blender::timeit::Nanoseconds duration = blender::timeit::Clock::now() - data->start_time;
+  timeit::Nanoseconds duration = timeit::Clock::now() - data->start_time;
   std::cout << "Alembic export of '" << data->filepath << "' took ";
-  blender::timeit::print_duration(duration);
+  timeit::print_duration(duration);
   std::cout << '\n';
 }
 
@@ -85,10 +87,10 @@ static void export_startjob(void *customdata, wmJobWorkerStatus *worker_status)
 {
   ExportJobData *data = static_cast<ExportJobData *>(customdata);
   data->was_canceled = false;
-  data->start_time = blender::timeit::Clock::now();
+  data->start_time = timeit::Clock::now();
 
   G.is_rendering = true;
-  WM_set_locked_interface(data->wm, true);
+  WM_locked_interface_set(data->wm, true);
   G.is_break = false;
 
   worker_status->progress = 0.0f;
@@ -137,7 +139,7 @@ static void export_startjob(void *customdata, wmJobWorkerStatus *worker_status)
   ABCHierarchyIterator iter(data->bmain, data->depsgraph, abc_archive.get(), data->params);
 
   if (export_animation) {
-    CLOG_INFO(&LOG, 2, "Exporting animation");
+    CLOG_STR_DEBUG(&LOG, "Exporting animation");
 
     /* Writing the animated frames is not 100% of the work, but it's our best guess. */
     const float progress_per_frame = 1.0f / std::max(size_t(1), abc_archive->total_frame_count());
@@ -156,7 +158,7 @@ static void export_startjob(void *customdata, wmJobWorkerStatus *worker_status)
       scene->r.subframe = float(frame - scene->r.cfra);
       BKE_scene_graph_update_for_newframe(data->depsgraph);
 
-      CLOG_INFO(&LOG, 2, "Exporting frame %.2f", frame);
+      CLOG_DEBUG(&LOG, "Exporting frame %.2f", frame);
       ExportSubset export_subset = abc_archive->export_subset_for_frame(frame);
       iter.set_export_subset(export_subset);
       iter.iterate_and_write();
@@ -195,11 +197,11 @@ static void export_endjob(void *customdata)
   }
 
   G.is_rendering = false;
-  WM_set_locked_interface(data->wm, false);
+  WM_locked_interface_set(data->wm, false);
   report_job_duration(data);
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
 
 bool ABC_export(Scene *scene,
                 bContext *C,
@@ -216,6 +218,8 @@ bool ABC_export(Scene *scene,
   job->export_ok = false;
   STRNCPY(job->filepath, filepath);
 
+  ED_editors_flush_edits(job->bmain);
+
   job->depsgraph = DEG_graph_new(job->bmain, scene, view_layer, params->evaluation_mode);
   job->params = *params;
 
@@ -223,7 +227,7 @@ bool ABC_export(Scene *scene,
    *
    * Has to be done from main thread currently, as it may affect Main original data (e.g. when
    * doing deferred update of the view-layers, see #112534 for details). */
-  if (!blender::io::alembic::build_depsgraph(job)) {
+  if (!io::alembic::build_depsgraph(job)) {
     return false;
   }
 
@@ -232,7 +236,7 @@ bool ABC_export(Scene *scene,
     wmJob *wm_job = WM_jobs_get(job->wm,
                                 CTX_wm_window(C),
                                 scene,
-                                "Alembic Export",
+                                "Exporting Alembic...",
                                 WM_JOB_PROGRESS,
                                 WM_JOB_TYPE_ALEMBIC_EXPORT);
 
@@ -240,18 +244,15 @@ bool ABC_export(Scene *scene,
     WM_jobs_customdata_set(
         wm_job, job, [](void *j) { MEM_delete(static_cast<ExportJobData *>(j)); });
     WM_jobs_timer(wm_job, 0.1, NC_SCENE | ND_FRAME, NC_SCENE | ND_FRAME);
-    WM_jobs_callbacks(wm_job,
-                      blender::io::alembic::export_startjob,
-                      nullptr,
-                      nullptr,
-                      blender::io::alembic::export_endjob);
+    WM_jobs_callbacks(
+        wm_job, io::alembic::export_startjob, nullptr, nullptr, io::alembic::export_endjob);
 
     WM_jobs_start(CTX_wm_manager(C), wm_job);
   }
   else {
     wmJobWorkerStatus worker_status = {};
-    blender::io::alembic::export_startjob(job, &worker_status);
-    blender::io::alembic::export_endjob(job);
+    io::alembic::export_startjob(job, &worker_status);
+    io::alembic::export_endjob(job);
     export_ok = job->export_ok;
 
     MEM_delete(job);
@@ -259,3 +260,5 @@ bool ABC_export(Scene *scene,
 
   return export_ok;
 }
+
+}  // namespace blender

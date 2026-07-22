@@ -6,101 +6,105 @@
  * \ingroup gpu
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
+#include "GPU_texture.hh"
+#include "vk_backend.hh"
 #include "vk_common.hh"
 
 namespace blender::gpu {
-VkImageAspectFlags to_vk_image_aspect_flag_bits(const eGPUTextureFormat format)
+VkImageAspectFlags to_vk_image_aspect_flag_bits(const TextureFormat format)
 {
   switch (format) {
     /* Formats texture & render-buffer */
-    case GPU_RGBA32UI:
-    case GPU_RG32UI:
-    case GPU_R32UI:
-    case GPU_RGBA16UI:
-    case GPU_RG16UI:
-    case GPU_R16UI:
-    case GPU_RGBA8UI:
-    case GPU_RG8UI:
-    case GPU_R8UI:
-    case GPU_RGBA32I:
-    case GPU_RG32I:
-    case GPU_R32I:
-    case GPU_RGBA16I:
-    case GPU_RG16I:
-    case GPU_R16I:
-    case GPU_RGBA8I:
-    case GPU_RG8I:
-    case GPU_R8I:
-    case GPU_RGBA32F:
-    case GPU_RG32F:
-    case GPU_R32F:
-    case GPU_RGBA16F:
-    case GPU_RG16F:
-    case GPU_R16F:
-    case GPU_RGBA16:
-    case GPU_RG16:
-    case GPU_R16:
-    case GPU_RGBA8:
-    case GPU_RG8:
-    case GPU_R8:
+    case TextureFormat::UINT_32_32_32_32:
+    case TextureFormat::UINT_32_32:
+    case TextureFormat::UINT_32:
+    case TextureFormat::UINT_16_16_16_16:
+    case TextureFormat::UINT_16_16:
+    case TextureFormat::UINT_16:
+    case TextureFormat::UINT_8_8_8_8:
+    case TextureFormat::UINT_8_8:
+    case TextureFormat::UINT_8:
+    case TextureFormat::SINT_32_32_32_32:
+    case TextureFormat::SINT_32_32:
+    case TextureFormat::SINT_32:
+    case TextureFormat::SINT_16_16_16_16:
+    case TextureFormat::SINT_16_16:
+    case TextureFormat::SINT_16:
+    case TextureFormat::SINT_8_8_8_8:
+    case TextureFormat::SINT_8_8:
+    case TextureFormat::SINT_8:
+    case TextureFormat::SFLOAT_32_32_32_32:
+    case TextureFormat::SFLOAT_32_32:
+    case TextureFormat::SFLOAT_32:
+    case TextureFormat::SFLOAT_16_16_16_16:
+    case TextureFormat::SFLOAT_16_16:
+    case TextureFormat::SFLOAT_16:
+    case TextureFormat::UNORM_16_16_16_16:
+    case TextureFormat::UNORM_16_16:
+    case TextureFormat::UNORM_16:
+    case TextureFormat::UNORM_8_8_8_8:
+    case TextureFormat::UNORM_8_8:
+    case TextureFormat::UNORM_8:
       return VK_IMAGE_ASPECT_COLOR_BIT;
 
     /* Special formats texture & render-buffer */
-    case GPU_RGB10_A2:
-    case GPU_RGB10_A2UI:
-    case GPU_R11F_G11F_B10F:
-    case GPU_SRGB8_A8:
+    case TextureFormat::UNORM_10_10_10_2:
+    case TextureFormat::UINT_10_10_10_2:
+    case TextureFormat::UFLOAT_11_11_10:
+    case TextureFormat::SRGBA_8_8_8_8:
       return VK_IMAGE_ASPECT_COLOR_BIT;
 
     /* Depth Formats. */
-    case GPU_DEPTH_COMPONENT32F:
-    case GPU_DEPTH_COMPONENT24:
-    case GPU_DEPTH_COMPONENT16:
+    case TextureFormat::SFLOAT_32_DEPTH:
+    case TextureFormat::UNORM_16_DEPTH:
       return VK_IMAGE_ASPECT_DEPTH_BIT;
 
-    case GPU_DEPTH32F_STENCIL8:
-    case GPU_DEPTH24_STENCIL8:
+    case TextureFormat::SFLOAT_32_DEPTH_UINT_8:
       return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 
     /* Texture only formats. */
-    case GPU_RGB32UI:
-    case GPU_RGB16UI:
-    case GPU_RGB8UI:
-    case GPU_RGB32I:
-    case GPU_RGB16I:
-    case GPU_RGB8I:
-    case GPU_RGB16:
-    case GPU_RGB8:
-    case GPU_RGBA16_SNORM:
-    case GPU_RGB16_SNORM:
-    case GPU_RG16_SNORM:
-    case GPU_R16_SNORM:
-    case GPU_RGBA8_SNORM:
-    case GPU_RGB8_SNORM:
-    case GPU_RG8_SNORM:
-    case GPU_R8_SNORM:
-    case GPU_RGB32F:
-    case GPU_RGB16F:
+    case TextureFormat::UINT_32_32_32:
+    case TextureFormat::UINT_16_16_16:
+    case TextureFormat::UINT_8_8_8:
+    case TextureFormat::SINT_32_32_32:
+    case TextureFormat::SINT_16_16_16:
+    case TextureFormat::SINT_8_8_8:
+    case TextureFormat::UNORM_16_16_16:
+    case TextureFormat::UNORM_8_8_8:
+    case TextureFormat::SNORM_16_16_16_16:
+    case TextureFormat::SNORM_16_16_16:
+    case TextureFormat::SNORM_16_16:
+    case TextureFormat::SNORM_16:
+    case TextureFormat::SNORM_8_8_8_8:
+    case TextureFormat::SNORM_8_8_8:
+    case TextureFormat::SNORM_8_8:
+    case TextureFormat::SNORM_8:
+    case TextureFormat::SFLOAT_32_32_32:
+    case TextureFormat::SFLOAT_16_16_16:
       return VK_IMAGE_ASPECT_COLOR_BIT;
 
     /* Special formats, texture only. */
-    case GPU_SRGB8_A8_DXT1:
-    case GPU_SRGB8_A8_DXT3:
-    case GPU_SRGB8_A8_DXT5:
-    case GPU_RGBA8_DXT1:
-    case GPU_RGBA8_DXT3:
-    case GPU_RGBA8_DXT5:
-    case GPU_SRGB8:
-    case GPU_RGB9_E5:
+    case TextureFormat::SRGB_DXT1:
+    case TextureFormat::SRGB_DXT3:
+    case TextureFormat::SRGB_DXT5:
+    case TextureFormat::SNORM_DXT1:
+    case TextureFormat::SNORM_DXT3:
+    case TextureFormat::SNORM_DXT5:
+    case TextureFormat::SRGBA_8_8_8:
+    case TextureFormat::UFLOAT_9_9_9_EXP_5:
       return VK_IMAGE_ASPECT_COLOR_BIT;
+
+    case TextureFormat::Invalid:
+      BLI_assert_unreachable();
+      break;
   }
   BLI_assert_unreachable();
   return 0;
 }
 
-VkImageAspectFlags to_vk_image_aspect_flag_bits(const eGPUFrameBufferBits buffers)
+VkImageAspectFlags to_vk_image_aspect_flag_bits(const GPUFrameBufferBits buffers)
 {
   VkImageAspectFlags result = 0;
   if (buffers & GPU_COLOR_BIT) {
@@ -115,162 +119,53 @@ VkImageAspectFlags to_vk_image_aspect_flag_bits(const eGPUFrameBufferBits buffer
   return result;
 }
 
-eGPUTextureFormat to_gpu_format(const VkFormat format)
+TextureFormat to_gpu_format(const VkFormat format)
 {
   switch (format) {
     case VK_FORMAT_R8G8B8A8_UNORM:
     case VK_FORMAT_B8G8R8A8_UNORM:
-      return GPU_RGBA8;
+      return TextureFormat::UNORM_8_8_8_8;
+
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+      return TextureFormat::SFLOAT_16_16_16_16;
 
     default:
       BLI_assert_unreachable();
   }
-  return GPU_RGBA32F;
+  return TextureFormat::SFLOAT_32_32_32_32;
 }
 
-VkFormat to_vk_format(const eGPUTextureFormat format)
+std::string to_gpu_format_string(VkFormat format)
 {
+#define CASE(a, b, c, blender_enum, vk_enum, e, f, g, h) \
+  case VK_FORMAT_##vk_enum: \
+    return STRINGIFY(blender_enum);
   switch (format) {
-    /* Formats texture & render-buffer */
-    case GPU_RGBA32UI:
-      return VK_FORMAT_R32G32B32A32_UINT;
-    case GPU_RG32UI:
-      return VK_FORMAT_R32G32_UINT;
-    case GPU_R32UI:
-      return VK_FORMAT_R32_UINT;
-    case GPU_RGBA16UI:
-      return VK_FORMAT_R16G16B16A16_UINT;
-    case GPU_RG16UI:
-      return VK_FORMAT_R16G16_UINT;
-    case GPU_R16UI:
-      return VK_FORMAT_R16_UINT;
-    case GPU_RGBA8UI:
-      return VK_FORMAT_R8G8B8A8_UINT;
-    case GPU_RG8UI:
-      return VK_FORMAT_R8G8_UINT;
-    case GPU_R8UI:
-      return VK_FORMAT_R8_UINT;
-    case GPU_RGBA32I:
-      return VK_FORMAT_R32G32B32A32_SINT;
-    case GPU_RG32I:
-      return VK_FORMAT_R32G32_SINT;
-    case GPU_R32I:
-      return VK_FORMAT_R32_SINT;
-    case GPU_RGBA16I:
-      return VK_FORMAT_R16G16B16A16_SINT;
-    case GPU_RG16I:
-      return VK_FORMAT_R16G16_SINT;
-    case GPU_R16I:
-      return VK_FORMAT_R16_SINT;
-    case GPU_RGBA8I:
-      return VK_FORMAT_R8G8B8A8_SINT;
-    case GPU_RG8I:
-      return VK_FORMAT_R8G8_SINT;
-    case GPU_R8I:
-      return VK_FORMAT_R8_SINT;
-    case GPU_RGBA32F:
-      return VK_FORMAT_R32G32B32A32_SFLOAT;
-    case GPU_RG32F:
-      return VK_FORMAT_R32G32_SFLOAT;
-    case GPU_R32F:
-      return VK_FORMAT_R32_SFLOAT;
-    case GPU_RGBA16F:
-      return VK_FORMAT_R16G16B16A16_SFLOAT;
-    case GPU_RG16F:
-      return VK_FORMAT_R16G16_SFLOAT;
-    case GPU_R16F:
-      return VK_FORMAT_R16_SFLOAT;
-    case GPU_RGBA16:
-      return VK_FORMAT_R16G16B16A16_UNORM;
-    case GPU_RG16:
-      return VK_FORMAT_R16G16_UNORM;
-    case GPU_R16:
-      return VK_FORMAT_R16_UNORM;
-    case GPU_RGBA8:
-      return VK_FORMAT_R8G8B8A8_UNORM;
-    case GPU_RG8:
-      return VK_FORMAT_R8G8_UNORM;
-    case GPU_R8:
-      return VK_FORMAT_R8_UNORM;
+    GPU_TEXTURE_TARGET_FORMAT_EXPAND(CASE)
 
-    /* Special formats texture & render-buffer */
-    case GPU_RGB10_A2:
-      return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-    case GPU_RGB10_A2UI:
-      return VK_FORMAT_A2B10G10R10_UINT_PACK32;
-    case GPU_R11F_G11F_B10F:
-      return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-    case GPU_SRGB8_A8:
-      return VK_FORMAT_R8G8B8A8_SRGB;
-    case GPU_DEPTH32F_STENCIL8:
-      return VK_FORMAT_D32_SFLOAT_S8_UINT;
-    case GPU_DEPTH24_STENCIL8:
-      return VK_FORMAT_D24_UNORM_S8_UINT;
+    case VK_FORMAT_UNDEFINED:
+      return "UNDEFINED";
 
-    /* Depth Formats. */
-    case GPU_DEPTH_COMPONENT32F:
-      return VK_FORMAT_D32_SFLOAT;
-    case GPU_DEPTH_COMPONENT24:
-      return VK_FORMAT_X8_D24_UNORM_PACK32;
-    case GPU_DEPTH_COMPONENT16:
-      return VK_FORMAT_D16_UNORM;
-
-    /* Texture only formats. */
-    case GPU_RGB32UI:
-      return VK_FORMAT_R32G32B32_UINT;
-    case GPU_RGB16UI:
-      return VK_FORMAT_R16G16B16_UINT;
-    case GPU_RGB8UI:
-      return VK_FORMAT_R8G8B8_UINT;
-    case GPU_RGB32I:
-      return VK_FORMAT_R32G32B32_SINT;
-    case GPU_RGB16I:
-      return VK_FORMAT_R16G16B16_SINT;
-    case GPU_RGB8I:
-      return VK_FORMAT_R8G8B8_SINT;
-    case GPU_RGB16:
-      return VK_FORMAT_R16G16B16_UNORM;
-    case GPU_RGB8:
-      return VK_FORMAT_R8G8B8_UNORM;
-    case GPU_RGBA16_SNORM:
-      return VK_FORMAT_R16G16B16A16_SNORM;
-    case GPU_RGB16_SNORM:
-      return VK_FORMAT_R16G16B16_SNORM;
-    case GPU_RG16_SNORM:
-      return VK_FORMAT_R16G16_SNORM;
-    case GPU_R16_SNORM:
-      return VK_FORMAT_R16_SNORM;
-    case GPU_RGBA8_SNORM:
-      return VK_FORMAT_R8G8B8A8_SNORM;
-    case GPU_RGB8_SNORM:
-      return VK_FORMAT_R8G8B8_SNORM;
-    case GPU_RG8_SNORM:
-      return VK_FORMAT_R8G8_SNORM;
-    case GPU_R8_SNORM:
-      return VK_FORMAT_R8_SNORM;
-    case GPU_RGB32F:
-      return VK_FORMAT_R32G32B32_SFLOAT;
-    case GPU_RGB16F:
-      return VK_FORMAT_R16G16B16_SFLOAT;
-
-    /* Special formats, texture only. */
-    case GPU_SRGB8_A8_DXT1:
-      return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
-    case GPU_SRGB8_A8_DXT3:
-      return VK_FORMAT_BC2_SRGB_BLOCK;
-    case GPU_SRGB8_A8_DXT5:
-      return VK_FORMAT_BC3_SRGB_BLOCK;
-    case GPU_RGBA8_DXT1:
-      return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
-    case GPU_RGBA8_DXT3:
-      return VK_FORMAT_BC2_UNORM_BLOCK;
-    case GPU_RGBA8_DXT5:
-      return VK_FORMAT_BC3_UNORM_BLOCK;
-    case GPU_SRGB8:
-      return VK_FORMAT_R8G8B8_SRGB;
-    case GPU_RGB9_E5:
-      return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
+    default:
+      BLI_assert_unreachable();
+      break;
   }
+#undef CASE
+  return "Invalid";
+}
+
+VkFormat to_vk_format(const TextureFormat format)
+{
+#define CASE(a, b, c, blender_enum, vk_enum, e, f, g, h) \
+  case TextureFormat::blender_enum: \
+    return VK_FORMAT_##vk_enum;
+
+  switch (format) {
+    GPU_TEXTURE_FORMAT_EXPAND(CASE)
+    case TextureFormat::Invalid:
+      break;
+  }
+#undef CASE
   return VK_FORMAT_UNDEFINED;
 }
 
@@ -598,7 +493,7 @@ VkQueryType to_vk_query_type(const GPUQueryType query_type)
   return VK_QUERY_TYPE_OCCLUSION;
 }
 
-VkImageType to_vk_image_type(const eGPUTextureType type)
+VkImageType to_vk_image_type(const GPUTextureType type)
 {
   /* See
    * https://vulkan.lunarg.com/doc/view/1.3.243.0/linux/1.3-extensions/vkspec.html#resources-image-views-compatibility
@@ -627,7 +522,7 @@ VkImageType to_vk_image_type(const eGPUTextureType type)
   return VK_IMAGE_TYPE_1D;
 }
 
-VkImageViewType to_vk_image_view_type(const eGPUTextureType type,
+VkImageViewType to_vk_image_view_type(const GPUTextureType type,
                                       const eImageViewUsage view_type,
                                       VKImageViewArrayed arrayed)
 {
@@ -713,42 +608,40 @@ VkComponentSwizzle to_vk_component_swizzle(const char swizzle)
   return VK_COMPONENT_SWIZZLE_IDENTITY;
 }
 
-template<typename T> void copy_color(T dst[4], const T *src)
-{
-  dst[0] = src[0];
-  dst[1] = src[1];
-  dst[2] = src[2];
-  dst[3] = src[3];
-}
-
-VkClearColorValue to_vk_clear_color_value(const eGPUDataFormat format, const void *data)
+VkClearColorValue to_vk_clear_color_value(const eGPUDataFormat format, const double4 data)
 {
   VkClearColorValue result = {{0.0f}};
   switch (format) {
-    /* All float-like formats (i.e. everything except literal int/uint go
+    /* All float-like formats (i.e. everything except literal int/uint) go
      * into VkClearColorValue float color fields. */
     case GPU_DATA_FLOAT:
     case GPU_DATA_HALF_FLOAT:
     case GPU_DATA_UBYTE:
     case GPU_DATA_10_11_11_REV:
     case GPU_DATA_2_10_10_10_REV: {
-      const float *float_data = static_cast<const float *>(data);
-      copy_color<float>(result.float32, float_data);
+      result.float32[0] = float(data[0]);
+      result.float32[1] = float(data[1]);
+      result.float32[2] = float(data[2]);
+      result.float32[3] = float(data[3]);
       break;
     }
 
     case GPU_DATA_INT: {
-      const int32_t *int_data = static_cast<const int32_t *>(data);
-      copy_color<int32_t>(result.int32, int_data);
+      result.int32[0] = int32_t(data[0]);
+      result.int32[1] = int32_t(data[1]);
+      result.int32[2] = int32_t(data[2]);
+      result.int32[3] = int32_t(data[3]);
       break;
     }
 
     case GPU_DATA_UINT: {
-      const uint32_t *uint_data = static_cast<const uint32_t *>(data);
-      copy_color<uint32_t>(result.uint32, uint_data);
+      result.uint32[0] = uint32_t(data[0]);
+      result.uint32[1] = uint32_t(data[1]);
+      result.uint32[2] = uint32_t(data[2]);
+      result.uint32[3] = uint32_t(data[3]);
       break;
     }
-    case GPU_DATA_UINT_24_8: {
+    case GPU_DATA_UINT_24_8_DEPRECATED: {
       BLI_assert_unreachable();
       break;
     }
@@ -802,7 +695,7 @@ VkPrimitiveTopology to_vk_primitive_topology(const GPUPrimType prim_type)
   return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
 }
 
-VkCullModeFlags to_vk_cull_mode_flags(const eGPUFaceCullTest cull_test)
+VkCullModeFlags to_vk_cull_mode_flags(const GPUFaceCullTest cull_test)
 {
   switch (cull_test) {
     case GPU_CULL_FRONT:
@@ -938,9 +831,83 @@ VkDescriptorType to_vk_descriptor_type(const shader::ShaderCreateInfo::Resource 
       return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     case shader::ShaderCreateInfo::Resource::BindType::UNIFORM_BUFFER:
       return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case shader::ShaderCreateInfo::Resource::BindType::ACCELERATION_STRUCTURE:
+      return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
   }
   BLI_assert_unreachable();
   return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+}
+
+VkImageCreateFlags to_vk_image_create(const GPUTextureType texture_type,
+                                      const GPUTextureFormatFlag format_flag,
+                                      eGPUTextureUsage usage)
+{
+  VkImageCreateFlags result = 0;
+
+  if (ELEM(texture_type, GPU_TEXTURE_CUBE, GPU_TEXTURE_CUBE_ARRAY)) {
+    result |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+  }
+
+  /* sRGB textures needs to be mutable as they can be used as non-sRGB frame-buffer attachments. */
+  if (usage & GPU_TEXTURE_USAGE_ATTACHMENT && format_flag & GPU_FORMAT_SRGB) {
+    result |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+  }
+
+  if (usage & GPU_TEXTURE_USAGE_FORMAT_VIEW) {
+    result |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+  }
+
+  return result;
+}
+
+VkImageUsageFlags to_vk_image_usage(const eGPUTextureUsage usage,
+                                    const GPUTextureFormatFlag format_flag,
+                                    bool use_image_host_copy)
+{
+  const VKDevice &device = VKBackend::get().device;
+  const VKExtensions &extensions = device.extensions_get();
+
+  VkImageUsageFlags result = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  if (usage & GPU_TEXTURE_USAGE_SHADER_READ) {
+    result |= VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+  if (usage & GPU_TEXTURE_USAGE_SHADER_WRITE) {
+    result |= VK_IMAGE_USAGE_STORAGE_BIT;
+  }
+  if (usage & GPU_TEXTURE_USAGE_ATTACHMENT) {
+    if (format_flag & GPU_FORMAT_COMPRESSED) {
+      /* These formats aren't supported as an attachment. When using GPU_TEXTURE_USAGE_DEFAULT they
+       * are still being evaluated to be attachable. So we need to skip them. */
+    }
+    else {
+      if (format_flag & (GPU_FORMAT_DEPTH | GPU_FORMAT_STENCIL)) {
+        result |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+      }
+      else {
+        result |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        result |= extensions.dynamic_rendering_local_read ? VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT :
+                                                            VK_IMAGE_USAGE_SAMPLED_BIT;
+      }
+    }
+  }
+  if (usage & GPU_TEXTURE_USAGE_HOST_READ) {
+    result |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  }
+  if (use_image_host_copy) {
+    result |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT;
+  }
+
+  /* Disable some usages based on the given format flag to support more devices. */
+  if (format_flag & GPU_FORMAT_SRGB) {
+    /* NVIDIA devices don't create SRGB textures when it storage bit is set. */
+    result &= ~VK_IMAGE_USAGE_STORAGE_BIT;
+  }
+  if (format_flag & (GPU_FORMAT_DEPTH | GPU_FORMAT_STENCIL)) {
+    /* NVIDIA devices don't create depth textures when it storage bit is set. */
+    result &= ~VK_IMAGE_USAGE_STORAGE_BIT;
+  }
+
+  return result;
 }
 
 }  // namespace blender::gpu

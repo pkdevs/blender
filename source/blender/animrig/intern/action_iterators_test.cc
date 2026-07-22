@@ -4,6 +4,7 @@
 #include "ANIM_action.hh"
 #include "ANIM_action_iterators.hh"
 
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -15,28 +16,13 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
-#include "CLG_log.h"
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
-class ActionIteratorsTest : public testing::Test {
+class ActionIteratorsTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
   Action *action;
-
-  static void SetUpTestSuite()
-  {
-    /* BKE_id_free() hits a code path that uses CLOG, which crashes if not initialized properly. */
-    CLG_init();
-
-    /* To make id_can_have_animdata() and friends work, the `id_types` array needs to be set up. */
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void SetUp() override
   {
@@ -54,12 +40,11 @@ TEST_F(ActionIteratorsTest, iterate_all_fcurves_of_slot)
 {
   Slot &cube_slot = action->slot_add();
   Slot &monkey_slot = action->slot_add();
-  EXPECT_TRUE(action->is_action_layered());
 
   /* Try iterating an empty action. */
-  blender::Vector<FCurve *> no_fcurves;
+  Vector<const FCurve *> no_fcurves;
   foreach_fcurve_in_action_slot(
-      *action, cube_slot.handle, [&](FCurve &fcurve) { no_fcurves.append(&fcurve); });
+      *action, cube_slot.handle, [&](const FCurve &fcurve) { no_fcurves.append(&fcurve); });
 
   ASSERT_TRUE(no_fcurves.is_empty());
 
@@ -82,18 +67,18 @@ TEST_F(ActionIteratorsTest, iterate_all_fcurves_of_slot)
   }
 
   /* Get all FCurves. */
-  blender::Vector<FCurve *> cube_fcurves;
+  Vector<const FCurve *> cube_fcurves;
   foreach_fcurve_in_action_slot(
-      *action, cube_slot.handle, [&](FCurve &fcurve) { cube_fcurves.append(&fcurve); });
+      *action, cube_slot.handle, [&](const FCurve &fcurve) { cube_fcurves.append(&fcurve); });
 
   ASSERT_EQ(cube_fcurves.size(), 3);
-  for (FCurve *fcurve : cube_fcurves) {
+  for (const FCurve *fcurve : cube_fcurves) {
     ASSERT_STREQ(fcurve->rna_path, "location");
   }
 
   /* Get only FCurves with index 0 which should be 1. */
-  blender::Vector<FCurve *> monkey_fcurves;
-  foreach_fcurve_in_action_slot(*action, monkey_slot.handle, [&](FCurve &fcurve) {
+  Vector<const FCurve *> monkey_fcurves;
+  foreach_fcurve_in_action_slot(*action, monkey_slot.handle, [&](const FCurve &fcurve) {
     if (fcurve.array_index == 0) {
       monkey_fcurves.append(&fcurve);
     }
@@ -104,10 +89,11 @@ TEST_F(ActionIteratorsTest, iterate_all_fcurves_of_slot)
 
   /* Slots handles are just numbers. Passing in a slot handle that doesn't exist should return
    * nothing. */
-  blender::Vector<FCurve *> invalid_slot_fcurves;
-  foreach_fcurve_in_action_slot(*action,
-                                monkey_slot.handle + cube_slot.handle,
-                                [&](FCurve &fcurve) { invalid_slot_fcurves.append(&fcurve); });
+  Vector<const FCurve *> invalid_slot_fcurves;
+  foreach_fcurve_in_action_slot(
+      *action, monkey_slot.handle + cube_slot.handle, [&](const FCurve &fcurve) {
+        invalid_slot_fcurves.append(&fcurve);
+      });
   ASSERT_TRUE(invalid_slot_fcurves.is_empty());
 }
 
@@ -171,7 +157,7 @@ TEST_F(ActionIteratorsTest, foreach_action_slot_use_with_rna)
                                      PointerRNA &action_slot_owner_ptr,
                                      PropertyRNA &action_slot_prop,
                                      char * /*last_slot_identifier*/) -> bool {
-    PointerRNA rna_slot = RNA_pointer_create_discrete(&action->id, &RNA_ActionSlot, &another_slot);
+    PointerRNA rna_slot = RNA_pointer_create_discrete(&action->id, RNA_ActionSlot, &another_slot);
     RNA_property_pointer_set(&action_slot_owner_ptr, &action_slot_prop, rna_slot, nullptr);
     return true;
   };

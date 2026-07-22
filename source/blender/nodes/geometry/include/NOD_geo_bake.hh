@@ -16,25 +16,26 @@
 
 #include "BLI_index_range.hh"
 
+namespace blender {
+
 struct NodesModifierData;
 struct NodesModifierBake;
 struct SpaceNode;
 struct Object;
 
-namespace blender::nodes {
+namespace nodes {
 
 /**
- * Makes it possible to use various functions (e.g. the ones in `NOD_socket_items.hh`) for index
- * bake node items.
+ * Makes it possible to use various functions (e.g. the ones in `NOD_socket_items.hh`) for bake
+ * node items.
  */
-struct BakeItemsAccessor {
+struct BakeItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = NodeGeometryBakeItem;
-  static StructRNA *item_srna;
+  static StructRNA **item_srna;
   static int node_type;
   static constexpr StringRefNull node_idname = "GeometryNodeBake";
   static constexpr bool has_type = true;
   static constexpr bool has_name = true;
-  static constexpr bool has_single_identifier_str = true;
   struct operator_idnames {
     static constexpr StringRefNull add_item = "NODE_OT_bake_node_item_add";
     static constexpr StringRefNull remove_item = "NODE_OT_bake_node_item_remove";
@@ -62,7 +63,7 @@ struct BakeItemsAccessor {
 
   static void destruct_item(NodeGeometryBakeItem *item)
   {
-    MEM_SAFE_FREE(item->name);
+    MEM_SAFE_DELETE(item->name);
   }
 
   static void blend_write_item(BlendWriter *writer, const ItemT &item);
@@ -70,7 +71,7 @@ struct BakeItemsAccessor {
 
   static eNodeSocketDatatype get_socket_type(const NodeGeometryBakeItem &item)
   {
-    return eNodeSocketDatatype(item.socket_type);
+    return item.socket_type;
   }
 
   static char **get_name(NodeGeometryBakeItem &item)
@@ -78,9 +79,9 @@ struct BakeItemsAccessor {
     return &item.name;
   }
 
-  static bool supports_socket_type(const eNodeSocketDatatype socket_type)
+  static bool supports_socket_type(const eNodeSocketDatatype socket_type, const int ntree_type)
   {
-    return SimulationItemsAccessor::supports_socket_type(socket_type);
+    return SimulationItemsAccessor::supports_socket_type(socket_type, ntree_type);
   }
 
   static void init_with_socket_type_and_name(bNode &node,
@@ -112,6 +113,7 @@ struct BakeDrawContext {
   bool bake_still;
   bool is_baked;
   std::optional<NodesModifierBakeTarget> bake_target;
+  bool is_bakeable_in_current_context;
 };
 
 [[nodiscard]] bool get_bake_draw_context(const bContext *C,
@@ -121,9 +123,10 @@ struct BakeDrawContext {
 std::string get_baked_string(const BakeDrawContext &ctx);
 
 std::optional<std::string> get_bake_state_string(const BakeDrawContext &ctx);
-void draw_common_bake_settings(bContext *C, BakeDrawContext &ctx, uiLayout *layout);
+void draw_common_bake_settings(bContext *C, BakeDrawContext &ctx, ui::Layout &layout);
 void draw_bake_button_row(const BakeDrawContext &ctx,
-                          uiLayout *layout,
+                          ui::Layout &layout,
                           bool is_in_sidebar = false);
 
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

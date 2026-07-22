@@ -4,30 +4,39 @@
 
 #pragma once
 
-#include "DNA_fluid_types.h"
+#include <string>
 
-#include "volume.hh"
+#include <pxr/base/gf/matrix4d.h>
+#include <pxr/base/tf/token.h>
+#include <pxr/usd/sdf/path.h>
 
-namespace blender::io::hydra {
+#include "BLI_vector.hh"
 
-class VolumeModifierData : public VolumeData {
+namespace blender {
 
- public:
-  VolumeModifierData(HydraSceneDelegate *scene_delegate,
-                     const Object *object,
-                     pxr::SdfPath const &prim_id);
-  static bool is_volume_modifier(const Object *object);
+struct Depsgraph;
+struct FluidModifierData;
+struct Object;
 
-  void init() override;
-  void update() override;
+namespace io::hydra {
 
- protected:
-  void write_transform() override;
-
- private:
-  std::string get_cached_file_path(const std::string &directory, int frame);
-
-  const FluidModifierData *modifier_;
+struct VolumeFieldDescriptor {
+  pxr::TfToken name;
+  pxr::SdfPath field_path;
 };
 
-}  // namespace blender::io::hydra
+/** Evaluated #FluidModifierData for a mesh object. */
+const FluidModifierData *fluid_gas_domain_modifier(const Object *object,
+                                                   const Depsgraph *depsgraph);
+
+/** Resolve the VDB cache file path,per-grid fields and transform
+ * for a fluid modifier. */
+std::string build_volume_fields_from_modifier(const Object *object,
+                                              const FluidModifierData *fmd,
+                                              int frame,
+                                              const pxr::SdfPath &volume_path,
+                                              pxr::GfMatrix4d *r_geometry_xform,
+                                              Vector<VolumeFieldDescriptor> *r_fields);
+
+}  // namespace io::hydra
+}  // namespace blender

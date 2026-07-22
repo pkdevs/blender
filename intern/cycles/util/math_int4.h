@@ -10,7 +10,7 @@
 
 CCL_NAMESPACE_BEGIN
 
-#ifndef __KERNEL_GPU__
+#if !defined(__KERNEL_METAL__)
 ccl_device_inline int4 operator+(const int4 a, const int4 b)
 {
 #  ifdef __KERNEL_SSE__
@@ -37,6 +37,11 @@ ccl_device_inline int4 operator-(const int4 a, const int4 b)
 ccl_device_inline int4 operator-=(int4 &a, const int4 b)
 {
   return a = a - b;
+}
+
+ccl_device_inline int4 operator*(const int4 a, const int4 b)
+{
+  return make_int4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
 }
 
 ccl_device_inline int4 operator>>(const int4 a, const int i)
@@ -69,6 +74,11 @@ ccl_device_inline int4 operator<(const int4 a, const int4 b)
 ccl_device_inline int4 operator<(const int4 a, const int b)
 {
   return a < make_int4(b);
+}
+
+ccl_device_inline int4 operator>(const int4 a, const int4 b)
+{
+  return b < a;
 }
 
 ccl_device_inline int4 operator==(const int4 a, const int4 b)
@@ -192,12 +202,14 @@ ccl_device_inline int4 &operator>>=(int4 &a, const int32_t b)
   return a = a >> b;
 }
 
-#  ifdef __KERNEL_SSE__
-ccl_device_forceinline int4 srl(const int4 a, const int32_t b)
+ccl_device_inline int4 srl(const int4 a, const int i)
 {
-  return int4(_mm_srli_epi32(a.m128, b));
-}
+#  ifdef __KERNEL_SSE__
+  return int4(_mm_srli_epi32(a.m128, i));
+#  else
+  return make_int4(uint32_t(a.x) >> i, uint32_t(a.y) >> i, uint32_t(a.z) >> i, uint32_t(a.w) >> i);
 #  endif
+}
 
 ccl_device_inline int4 min(const int4 a, const int4 b)
 {
@@ -240,7 +252,7 @@ ccl_device_inline int4 load_int4(const int *v)
   return make_int4(v[0], v[1], v[2], v[3]);
 #  endif
 }
-#endif /* __KERNEL_GPU__ */
+#endif /* __KERNEL_METAL__ */
 
 ccl_device_inline float4 cast(const int4 a)
 {

@@ -5,12 +5,11 @@
 set(INC
   ..
   ../../../source/blender/makesrna
-  ${CMAKE_BINARY_DIR}/source/blender/makesrna/intern
+  # RNA_prototypes.hh
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 set(INC_SYS
-  ${Epoxy_INCLUDE_DIRS}
-  ${PYTHON_INCLUDE_DIRS}
 )
 
 set(SRC
@@ -18,6 +17,7 @@ set(SRC
   device.cpp
   display_driver.cpp
   image.cpp
+  implicit_sharing.cpp
   geometry.cpp
   light.cpp
   light_linking.cpp
@@ -33,7 +33,7 @@ set(SRC
   session.cpp
   shader.cpp
   sync.cpp
-  texture.cpp
+  texture_cache.cpp
   viewport.cpp
   volume.cpp
 
@@ -48,44 +48,44 @@ set(SRC
   output_driver.h
   sync.h
   session.h
-  texture.h
   util.h
   viewport.h
 )
 
 set(LIB
   PRIVATE bf::blenkernel
+  PRIVATE bf::depsgraph
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   PRIVATE bf::imbuf
+  PRIVATE bf::geometry
   PRIVATE bf::gpu
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::intern::clog
+  PRIVATE bf::nodes
+  PRIVATE bf::nodes::shader
   PRIVATE bf::render
-  cycles_bvh
-  cycles_device
-  cycles_graph
-  cycles_kernel
-  cycles_scene
-  cycles_session
-  cycles_subd
-  cycles_util
+  PRIVATE cycles_bvh
+  PRIVATE cycles_device
+  PRIVATE cycles_graph
+  PRIVATE cycles_kernel
+  PRIVATE cycles_scene
+  PRIVATE cycles_session
+  PRIVATE cycles_subd
+  PRIVATE cycles_util
 
-  ${Epoxy_LIBRARIES}
-  ${PYTHON_LINKFLAGS}
-  ${PYTHON_LIBRARIES}
+  PRIVATE bf::dependencies::epoxy
+  PRIVATE bf::dependencies::optional::python
+  PRIVATE bf::dependencies::optional::openimagedenoise
+  PRIVATE bf::dependencies::optional::openvdb
+  PRIVATE bf::dependencies::optional::osl
 )
-
-if(WITH_CYCLES_LOGGING)
-  list(APPEND LIB
-    ${GLOG_LIBRARIES}
-    ${GFLAGS_LIBRARIES}
-  )
-endif()
 
 set(ADDON_FILES
   addon/__init__.py
   addon/camera.py
   addon/engine.py
+  addon/maketx.py
   addon/operators.py
   addon/osl.py
   addon/presets.py
@@ -104,46 +104,6 @@ endif()
 
 if(WITH_MOD_FLUID)
   add_definitions(-DWITH_FLUID)
-endif()
-
-if(WITH_TBB)
-  add_definitions(-DWITH_TBB)
-endif()
-
-if(WITH_OPENVDB)
-  add_definitions(-DWITH_OPENVDB ${OPENVDB_DEFINITIONS})
-  list(APPEND INC
-    ../../openvdb
-  )
-  list(APPEND INC_SYS
-    ${OPENVDB_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${OPENVDB_LIBRARIES}
-  )
-endif()
-
-if(WITH_ALEMBIC)
-  add_definitions(-DWITH_ALEMBIC)
-  list(APPEND INC_SYS
-    ${ALEMBIC_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${ALEMBIC_LIBRARIES}
-  )
-endif()
-
-if(WITH_OPENIMAGEDENOISE)
-  add_definitions(-DWITH_OPENIMAGEDENOISE)
-  list(APPEND INC_SYS
-    ${OPENIMAGEDENOISE_INCLUDE_DIRS}
-  )
-endif()
-
-if(WITH_CYCLES_OSL)
-  list(APPEND LIB
-    ${OSL_LIBRARIES}
-  )
 endif()
 
 blender_add_lib(bf_intern_cycles "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

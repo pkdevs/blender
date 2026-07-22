@@ -6,13 +6,14 @@
  * \ingroup spview3d
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 #include "BKE_image.hh"
 #include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_object.hh"
 
 #include "DEG_depsgraph.hh"
@@ -32,6 +33,8 @@
 
 #include "view3d_intern.hh" /* own include */
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Empty Image Gizmos
  * \{ */
@@ -49,7 +52,7 @@ static void gizmo_empty_image_prop_matrix_get(const wmGizmo *gz,
                                               wmGizmoProperty *gz_prop,
                                               void *value_p)
 {
-  float(*matrix)[4] = static_cast<float(*)[4]>(value_p);
+  float (*matrix)[4] = static_cast<float (*)[4]>(value_p);
   BLI_assert(gz_prop->type->array_length == 16);
   EmptyImageWidgetGroup *igzgroup = static_cast<EmptyImageWidgetGroup *>(
       gz_prop->custom_func.user_data);
@@ -72,7 +75,7 @@ static void gizmo_empty_image_prop_matrix_set(const wmGizmo *gz,
                                               wmGizmoProperty *gz_prop,
                                               const void *value_p)
 {
-  const float(*matrix)[4] = static_cast<const float(*)[4]>(value_p);
+  const float (*matrix)[4] = static_cast<const float (*)[4]>(value_p);
   BLI_assert(gz_prop->type->array_length == 16);
   EmptyImageWidgetGroup *igzgroup = static_cast<EmptyImageWidgetGroup *>(
       gz_prop->custom_func.user_data);
@@ -103,15 +106,20 @@ static bool WIDGETGROUP_empty_image_poll(const bContext *C, wmGizmoGroupType * /
     return false;
   }
 
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Base *base = BKE_view_layer_active_base_get(view_layer);
   if (base && BASE_SELECTABLE(v3d, base)) {
-    Object *ob = base->object;
+    const Object *ob = base->object;
     if (ob->type == OB_EMPTY) {
       if (ob->empty_drawtype == OB_EMPTY_IMAGE) {
-        return BKE_object_empty_image_frame_is_visible_in_view3d(ob, rv3d);
+        if (BKE_object_empty_image_frame_is_visible_in_view3d(ob, rv3d)) {
+          if (BKE_id_is_editable(CTX_data_main(C), &ob->id)) {
+            return true;
+          }
+        }
       }
     }
   }
@@ -120,7 +128,7 @@ static bool WIDGETGROUP_empty_image_poll(const bContext *C, wmGizmoGroupType * /
 
 static void WIDGETGROUP_empty_image_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
-  EmptyImageWidgetGroup *igzgroup = MEM_mallocN<EmptyImageWidgetGroup>(__func__);
+  EmptyImageWidgetGroup *igzgroup = MEM_new_uninitialized<EmptyImageWidgetGroup>(__func__);
   igzgroup->gizmo = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
   wmGizmo *gz = igzgroup->gizmo;
   RNA_enum_set(gz->ptr, "transform", ED_GIZMO_CAGE_XFORM_FLAG_SCALE);
@@ -129,12 +137,12 @@ static void WIDGETGROUP_empty_image_setup(const bContext * /*C*/, wmGizmoGroup *
 
   WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_HOVER, true);
 
-  UI_GetThemeColor3fv(TH_GIZMO_PRIMARY, gz->color);
-  UI_GetThemeColor3fv(TH_GIZMO_HI, gz->color_hi);
+  ui::theme::get_color_3fv(TH_GIZMO_PRIMARY, gz->color);
+  ui::theme::get_color_3fv(TH_GIZMO_HI, gz->color_hi);
 
   /* All gizmos must perform undo. */
-  LISTBASE_FOREACH (wmGizmo *, gz, &gzgroup->gizmos) {
-    WM_gizmo_set_flag(gz, WM_GIZMO_NEEDS_UNDO, true);
+  for (wmGizmo &gz : gzgroup->gizmos) {
+    WM_gizmo_set_flag(&gz, WM_GIZMO_NEEDS_UNDO, true);
   }
 }
 
@@ -142,9 +150,10 @@ static void WIDGETGROUP_empty_image_refresh(const bContext *C, wmGizmoGroup *gzg
 {
   EmptyImageWidgetGroup *igzgroup = static_cast<EmptyImageWidgetGroup *>(gzgroup->customdata);
   wmGizmo *gz = igzgroup->gizmo;
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   copy_m4_m4(gz->matrix_basis, ob->object_to_world().ptr());
@@ -158,10 +167,10 @@ static void WIDGETGROUP_empty_image_refresh(const bContext *C, wmGizmoGroup *gzg
 
   /* Use dimensions for aspect. */
   if (ob->data != nullptr) {
-    const Image *image = static_cast<const Image *>(ob->data);
+    const Image *image = id_cast<const Image *>(ob->data);
     ImageUser iuser = *ob->iuser;
     float size[2];
-    BKE_image_get_size_fl(static_cast<Image *>(ob->data), &iuser, size);
+    BKE_image_get_size_fl(id_cast<Image *>(ob->data), &iuser, size);
 
     /* Get the image aspect even if the buffer is invalid */
     if (image->aspx > image->aspy) {
@@ -202,3 +211,5 @@ void VIEW3D_GGT_empty_image(wmGizmoGroupType *gzgt)
 }
 
 /** \} */
+
+}  // namespace blender

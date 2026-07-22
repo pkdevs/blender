@@ -6,11 +6,13 @@
  * \ingroup gpu
  */
 
+#include <algorithm>
+#include <cstdio>
 #include <sstream>
 
-#include "GHOST_C-api.h"
-
-#include "BLI_threads.h"
+#include "BLI_path_utils.hh"
+#include "BLI_string.hh"
+#include "BLI_threads.hh"
 
 #include "CLG_log.h"
 
@@ -26,18 +28,22 @@
 #include "vk_index_buffer.hh"
 #include "vk_pixel_buffer.hh"
 #include "vk_query.hh"
+#include "vk_ray_tracing.hh"
 #include "vk_shader.hh"
 #include "vk_state_manager.hh"
 #include "vk_storage_buffer.hh"
 #include "vk_texture.hh"
+#include "vk_texture_pool.hh"
 #include "vk_uniform_buffer.hh"
 #include "vk_vertex_buffer.hh"
 
 #include "vk_backend.hh"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"gpu.vulkan"};
 
-namespace blender::gpu {
+namespace gpu {
 
 static const char *vk_extension_get(int index)
 {
@@ -53,13 +59,10 @@ bool GPU_vulkan_is_supported_driver(VkPhysicalDevice vk_physical_device)
   vk_physical_device_driver_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
   vk_physical_device_properties.pNext = &vk_physical_device_driver_properties;
   vkGetPhysicalDeviceProperties2(vk_physical_device, &vk_physical_device_properties);
-  uint32_t conformance_version = VK_MAKE_API_VERSION(
-      vk_physical_device_driver_properties.conformanceVersion.major,
-      vk_physical_device_driver_properties.conformanceVersion.minor,
-      vk_physical_device_driver_properties.conformanceVersion.subminor,
-      vk_physical_device_driver_properties.conformanceVersion.patch);
 
-  /* Intel IRIS on 10th gen CPU (and older) crashes due to multiple driver issues.
+#ifdef _WIN32
+  /* Intel IRIS on 10th gen CPU (and older) crashes with drivers before 101.2140 due to multiple
+   * driver issues.
    *
    * 1) Workbench is working, but EEVEE pipelines are failing. Calling vkCreateGraphicsPipelines
    * for certain EEVEE shaders (Shadow, Deferred rendering) would return with VK_SUCCESS, but
@@ -71,11 +74,17 @@ bool GPU_vulkan_is_supported_driver(VkPhysicalDevice vk_physical_device)
    */
   if (vk_physical_device_driver_properties.driverID == VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS &&
       vk_physical_device_properties.properties.deviceType ==
-          VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU &&
-      conformance_version < VK_MAKE_API_VERSION(1, 3, 2, 0))
+          VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
   {
-    return false;
+    const uint32_t driver_version = vk_physical_device_properties.properties.driverVersion;
+    uint32_t driver_version_major = driver_version >> 14u;
+    uint32_t driver_version_minor = driver_version & 0x3fffu;
+    if (driver_version_major < 101 || (driver_version_major == 101 && driver_version_minor < 2140))
+    {
+      return false;
+    }
   }
+#endif
 
 #ifndef _WIN32
   /* NVIDIA drivers below 550 don't work on Linux. When sending command to the GPU there is not
@@ -83,10 +92,47 @@ bool GPU_vulkan_is_supported_driver(VkPhysicalDevice vk_physical_device)
    * but there is no mention of a solution. This means that on Linux we can only support GTX900 and
    * or use MesaNVK.
    */
+  uint32_t conformance_version = VK_MAKE_API_VERSION(
+      vk_physical_device_driver_properties.conformanceVersion.major,
+      vk_physical_device_driver_properties.conformanceVersion.minor,
+      vk_physical_device_driver_properties.conformanceVersion.subminor,
+      vk_physical_device_driver_properties.conformanceVersion.patch);
   if (vk_physical_device_driver_properties.driverID == VK_DRIVER_ID_NVIDIA_PROPRIETARY &&
       conformance_version < VK_MAKE_API_VERSION(1, 3, 7, 2))
   {
     return false;
+  }
+
+  /* NVIDIA driver 580.76.05 doesn't start using specific Wayland configurations #144625. There are
+   * multiple reports also not Blender related and NVIDIA mentions that a new driver will be
+   * released. It is unclear if that driver will fix our issue. For now disabling this driver on
+   * Linux. This also disables it for configurations that are working as well (including X11). */
+  if (vk_physical_device_driver_properties.driverID == VK_DRIVER_ID_NVIDIA_PROPRIETARY &&
+      ((StringRefNull(vk_physical_device_driver_properties.driverInfo).find("580.76.5", 0) !=
+        StringRef::not_found) ||
+       (StringRefNull(vk_physical_device_driver_properties.driverInfo).find("580.76.05", 0) !=
+        StringRef::not_found)))
+  {
+    return false;
+  }
+#endif
+
+#ifdef _WIN32
+  if (vk_physical_device_driver_properties.driverID == VK_DRIVER_ID_QUALCOMM_PROPRIETARY) {
+    /* Any Qualcomm driver older than 31.0.112.0 will not be capable of running blender due
+     * to an issue in their semaphore timeline implementation. The driver could return
+     * timelines that have not been provided by Blender. As Blender uses timelines for resource
+     * management this resulted in resources to be destroyed, that are still in use. */
+
+    /* Public version 31.0.112 uses vulkan driver version 512.827.0. */
+    const uint32_t driver_version = vk_physical_device_properties.properties.driverVersion;
+    constexpr uint32_t version_31_0_112 = VK_MAKE_VERSION(512, 827, 0);
+    if (driver_version < version_31_0_112) {
+      CLOG_WARN(&LOG,
+                "Detected qualcomm driver is not supported. To run the Vulkan backend "
+                "driver 31.0.112.0 or later is required. Switching to OpenGL.");
+      return false;
+    }
   }
 #endif
 
@@ -99,19 +145,34 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
   /* Check device features. */
   VkPhysicalDeviceVulkan12Features features_12 = {
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+  VkPhysicalDeviceVulkan11Features features_11 = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, &features_12};
   VkPhysicalDeviceFeatures2 features = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-                                        &features_12};
+                                        &features_11};
 
   vkGetPhysicalDeviceFeatures2(vk_physical_device, &features);
 
 #ifndef __APPLE__
+  /* Features currently not supported by Mesa KosmicKrisp. */
   if (features.features.geometryShader == VK_FALSE) {
     missing_capabilities.append("geometry shaders");
+  }
+#endif
+  if (features.features.vertexPipelineStoresAndAtomics == VK_FALSE) {
+    missing_capabilities.append("vertex pipeline stores and atomics");
+  }
+  if (features.features.multiViewport == VK_FALSE) {
+    missing_capabilities.append("multi viewport");
+  }
+  if (features.features.shaderClipDistance == VK_FALSE) {
+    missing_capabilities.append("shader clip distance");
+  }
+  if (features.features.fragmentStoresAndAtomics == VK_FALSE) {
+    missing_capabilities.append("fragment stores and atomics");
   }
   if (features.features.logicOp == VK_FALSE) {
     missing_capabilities.append("logical operations");
   }
-#endif
   if (features.features.dualSrcBlend == VK_FALSE) {
     missing_capabilities.append("dual source blending");
   }
@@ -121,20 +182,17 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
   if (features.features.multiDrawIndirect == VK_FALSE) {
     missing_capabilities.append("multi draw indirect");
   }
-  if (features.features.multiViewport == VK_FALSE) {
-    missing_capabilities.append("multi viewport");
-  }
-  if (features.features.shaderClipDistance == VK_FALSE) {
-    missing_capabilities.append("shader clip distance");
-  }
   if (features.features.drawIndirectFirstInstance == VK_FALSE) {
     missing_capabilities.append("draw indirect first instance");
   }
-  if (features.features.fragmentStoresAndAtomics == VK_FALSE) {
-    missing_capabilities.append("fragment stores and atomics");
+  if (features_11.shaderDrawParameters == VK_FALSE) {
+    missing_capabilities.append("shader draw parameters");
   }
   if (features_12.timelineSemaphore == VK_FALSE) {
     missing_capabilities.append("timeline semaphores");
+  }
+  if (features_12.bufferDeviceAddress == VK_FALSE) {
+    missing_capabilities.append("buffer device address");
   }
 
   /* Check device extensions. */
@@ -152,6 +210,9 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
   if (!extensions.contains(VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
     missing_capabilities.append(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
   }
+  if (!extensions.contains(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)) {
+    missing_capabilities.append(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+  }
 #ifndef __APPLE__
   /* Metal doesn't support provoking vertex. */
   if (!extensions.contains(VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME)) {
@@ -162,9 +223,43 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
   return missing_capabilities;
 }
 
-bool VKBackend::is_supported()
+/**
+ * Disable implicit layers and only allow layers that we trust.
+ *
+ * Render doc layer is hidden behind a debug flag. There are malicious layers that impersonate
+ * RenderDoc and can crash when loaded. See #139543.
+ *
+ * Must be called before any `vkCreateInstance` so temporary Vulkan instances created during
+ * argument handling (e.g. `--gpu-device help`) don't load implicit layers either.
+ */
+static void vk_restrict_loader_layers()
 {
-  CLG_logref_init(&LOG);
+  std::stringstream allowed_layers;
+  allowed_layers << "VK_LAYER_KHRONOS_*";
+  allowed_layers << ",VK_LAYER_AMD_*";
+  allowed_layers << ",VK_LAYER_INTEL_*";
+  allowed_layers << ",VK_LAYER_NV_*";
+  allowed_layers << ",VK_LAYER_MESA_*";
+  if (bool(G.debug & G_DEBUG_GPU)) {
+    allowed_layers << ",VK_LAYER_LUNARG_*";
+    allowed_layers << ",VK_LAYER_RENDERDOC_*";
+  }
+  BLI_setenv("VK_LOADER_LAYERS_DISABLE", "~implicit~");
+  BLI_setenv("VK_LOADER_LAYERS_ALLOW", allowed_layers.str().c_str());
+}
+
+static bool vk_instance_create_for_platform_checks(VkInstance *r_instance)
+{
+  vk_restrict_loader_layers();
+
+  VkResult vk_result = volkInitialize();
+  if (vk_result != VK_SUCCESS) {
+    CLOG_ERROR(&LOG,
+               "Error initializing Vulkan loader: VkResult=%d, most likely cannot find the Vulkan "
+               "Loader provided by GPU driver/OS.",
+               vk_result);
+    return false;
+  }
 
   /* Initialize an vulkan 1.2 instance. */
   VkApplicationInfo vk_application_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
@@ -177,12 +272,22 @@ bool VKBackend::is_supported()
   VkInstanceCreateInfo vk_instance_info = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
   vk_instance_info.pApplicationInfo = &vk_application_info;
 
+  *r_instance = VK_NULL_HANDLE;
+  vkCreateInstance(&vk_instance_info, nullptr, r_instance);
+
+  return *r_instance != VK_NULL_HANDLE;
+}
+
+bool VKBackend::is_supported()
+{
+  CLG_logref_init(&LOG);
+
   VkInstance vk_instance = VK_NULL_HANDLE;
-  vkCreateInstance(&vk_instance_info, nullptr, &vk_instance);
-  if (vk_instance == VK_NULL_HANDLE) {
-    CLOG_ERROR(&LOG, "Unable to initialize a Vulkan 1.2 instance.");
+  if (!vk_instance_create_for_platform_checks(&vk_instance)) {
+    CLOG_WARN(&LOG, "Unable to initialize a Vulkan 1.2 instance.");
     return false;
   }
+  volkLoadInstanceOnly(vk_instance);
 
   /* Go over all the devices. */
   uint32_t physical_devices_count = 0;
@@ -206,11 +311,11 @@ bool VKBackend::is_supported()
     /* Report result. */
     if (missing_capabilities.is_empty()) {
       /* This device meets minimum requirements. */
-      CLOG_INFO(&LOG,
-                2,
-                "Device [%s] supports minimum requirements. Skip checking other GPUs. Another GPU "
-                "can still be selected during auto-detection.",
-                vk_properties.deviceName);
+      CLOG_DEBUG(
+          &LOG,
+          "Device [%s] supports minimum requirements. Skip checking other GPUs. Another GPU "
+          "can still be selected during auto-detection.",
+          vk_properties.deviceName);
 
       vkDestroyInstance(vk_instance, nullptr);
       return true;
@@ -236,7 +341,75 @@ bool VKBackend::is_supported()
   return false;
 }
 
-static eGPUOSType determine_os_type()
+void VKBackend::supported_devices_print(FILE *fp)
+{
+  CLG_logref_init(&LOG);
+
+  VkInstance vk_instance = VK_NULL_HANDLE;
+  if (!vk_instance_create_for_platform_checks(&vk_instance)) {
+    fprintf(fp, "Unable to initialize a Vulkan 1.2 instance.\n");
+    return;
+  }
+  volkLoadInstanceOnly(vk_instance);
+
+  uint32_t physical_devices_count = 0;
+  vkEnumeratePhysicalDevices(vk_instance, &physical_devices_count, nullptr);
+  Array<VkPhysicalDevice> vk_physical_devices(physical_devices_count);
+  vkEnumeratePhysicalDevices(vk_instance, &physical_devices_count, vk_physical_devices.data());
+
+  struct Row {
+    int index;
+    std::string identifier;
+    std::string name;
+  };
+  Vector<Row> rows;
+  int index = 0;
+  for (VkPhysicalDevice vk_physical_device : vk_physical_devices) {
+    if (missing_capabilities_get(vk_physical_device).is_empty() &&
+        GPU_vulkan_is_supported_driver(vk_physical_device))
+    {
+      VkPhysicalDeviceProperties vk_properties = {};
+      vkGetPhysicalDeviceProperties(vk_physical_device, &vk_properties);
+      std::stringstream identifier;
+      identifier << std::hex << vk_properties.vendorID << "/" << vk_properties.deviceID << "/"
+                 << index;
+      rows.append({index, identifier.str(), std::string(vk_properties.deviceName)});
+    }
+    index++;
+  }
+
+  if (rows.is_empty()) {
+    fprintf(fp, "  (no supported Vulkan devices found)\n");
+    vkDestroyInstance(vk_instance, nullptr);
+    return;
+  }
+
+  const char *col_index = "Index";
+  const char *col_id = "Device-ID";
+  const char *col_name = "Name";
+  size_t w_index = strlen(col_index);
+  size_t w_id = strlen(col_id);
+  for (const Row &row : rows) {
+    char buf[16];
+    w_index = std::max(w_index, BLI_snprintf_rlen(buf, sizeof(buf), "%d", row.index));
+    w_id = std::max(w_id, row.identifier.size());
+  }
+
+  fprintf(fp, "  %-*s  %-*s  %s\n", int(w_index), col_index, int(w_id), col_id, col_name);
+  for (const Row &row : rows) {
+    fprintf(fp,
+            "  %-*d  %-*s  %s\n",
+            int(w_index),
+            row.index,
+            int(w_id),
+            row.identifier.c_str(),
+            row.name.c_str());
+  }
+
+  vkDestroyInstance(vk_instance, nullptr);
+}
+
+static GPUOSType determine_os_type()
 {
 #ifdef _WIN32
   return GPU_OS_WIN;
@@ -258,26 +431,18 @@ void VKBackend::platform_init()
            "",
            "",
            GPU_ARCHITECTURE_IMR);
+}
 
-  /* Query for all compatible devices */
-  VkApplicationInfo vk_application_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
-  vk_application_info.pApplicationName = "Blender";
-  vk_application_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-  vk_application_info.pEngineName = "Blender";
-  vk_application_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-  vk_application_info.apiVersion = VK_API_VERSION_1_2;
-
-  VkInstanceCreateInfo vk_instance_info = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-  vk_instance_info.pApplicationInfo = &vk_application_info;
-
-  VkInstance vk_instance = VK_NULL_HANDLE;
-  vkCreateInstance(&vk_instance_info, nullptr, &vk_instance);
-  BLI_assert(vk_instance != VK_NULL_HANDLE);
+static void init_device_list(GHOST_IContext *ghost_context)
+{
+  GHOST_VulkanHandles vulkan_handles = {};
+  ghost_context->getVulkanHandles(vulkan_handles);
 
   uint32_t physical_devices_count = 0;
-  vkEnumeratePhysicalDevices(vk_instance, &physical_devices_count, nullptr);
+  vkEnumeratePhysicalDevices(vulkan_handles.instance, &physical_devices_count, nullptr);
   Array<VkPhysicalDevice> vk_physical_devices(physical_devices_count);
-  vkEnumeratePhysicalDevices(vk_instance, &physical_devices_count, vk_physical_devices.data());
+  vkEnumeratePhysicalDevices(
+      vulkan_handles.instance, &physical_devices_count, vk_physical_devices.data());
   int index = 0;
   for (VkPhysicalDevice vk_physical_device : vk_physical_devices) {
     if (missing_capabilities_get(vk_physical_device).is_empty() &&
@@ -296,8 +461,8 @@ void VKBackend::platform_init()
     }
     index++;
   }
-  vkDestroyInstance(vk_instance, nullptr);
-  std::sort(GPG.devices.begin(), GPG.devices.end(), [&](const GPUDevice &a, const GPUDevice &b) {
+
+  std::ranges::sort(GPG.devices, [&](const GPUDevice &a, const GPUDevice &b) {
     if (a.name == b.name) {
       return a.index < b.index;
     }
@@ -309,10 +474,10 @@ void VKBackend::platform_init(const VKDevice &device)
 {
   const VkPhysicalDeviceProperties &properties = device.physical_device_properties_get();
 
-  eGPUDeviceType device_type = device.device_type();
-  eGPUDriverType driver = device.driver_type();
-  eGPUOSType os = determine_os_type();
-  eGPUSupportLevel support_level = GPU_SUPPORT_LEVEL_SUPPORTED;
+  GPUDeviceType device_type = device.device_type();
+  GPUDriverType driver = device.driver_type();
+  GPUOSType os = determine_os_type();
+  GPUSupportLevel support_level = GPU_SUPPORT_LEVEL_SUPPORTED;
 
   std::string vendor_name = device.vendor_name();
   std::string driver_version = device.driver_version();
@@ -346,7 +511,6 @@ void VKBackend::platform_init(const VKDevice &device)
   }
 
   CLOG_INFO(&LOG,
-            0,
             "Using vendor [%s] device [%s] driver version [%s].",
             vendor_name.c_str(),
             device.vk_physical_device_properties_.deviceName,
@@ -359,41 +523,59 @@ void VKBackend::detect_workarounds(VKDevice &device)
   VKExtensions extensions;
 
   if (G.debug & G_DEBUG_GPU_FORCE_WORKAROUNDS) {
-    printf("\n");
-    printf("VK: Forcing workaround usage and disabling features and extensions.\n");
-    printf("    Vendor: %s\n", device.vendor_name().c_str());
-    printf("    Device: %s\n", device.physical_device_properties_get().deviceName);
-    printf("    Driver: %s\n", device.driver_version().c_str());
+    CLOG_WARN(&LOG, "Forcing workarounds and disabling features and extensions");
+
     /* Force workarounds and disable extensions. */
     workarounds.not_aligned_pixel_formats = true;
-    workarounds.vertex_formats.r8g8b8 = true;
     extensions.shader_output_layer = false;
     extensions.shader_output_viewport_index = false;
     extensions.fragment_shader_barycentric = false;
-    extensions.dynamic_rendering = false;
     extensions.dynamic_rendering_local_read = false;
     extensions.dynamic_rendering_unused_attachments = false;
-
-    GCaps.render_pass_workaround = true;
+    extensions.pageable_device_local_memory = false;
+    extensions.wide_lines = false;
+    extensions.line_rasterization = false;
+    extensions.extended_dynamic_state = false;
+    GCaps.ray_query_support = false;
+    GCaps.stencil_export_support = false;
+    GCaps.texture_pool_workaround = true;
 
     device.workarounds_ = workarounds;
     device.extensions_ = extensions;
     return;
   }
 
+  if (G.debug & G_DEBUG_GPU_NO_TEXTURE_POOL) {
+    GCaps.texture_pool_workaround = true;
+  }
+
   extensions.shader_output_layer =
       device.physical_device_vulkan_12_features_get().shaderOutputLayer;
   extensions.shader_output_viewport_index =
       device.physical_device_vulkan_12_features_get().shaderOutputViewportIndex;
+  extensions.wide_lines = device.physical_device_features_get().wideLines;
   extensions.fragment_shader_barycentric = device.supports_extension(
       VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
-  extensions.dynamic_rendering = device.supports_extension(
-      VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
   extensions.dynamic_rendering_local_read = device.supports_extension(
       VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
   extensions.dynamic_rendering_unused_attachments = device.supports_extension(
       VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
   extensions.logic_ops = device.physical_device_features_get().logicOp;
+  extensions.maintenance4 = device.supports_extension(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
+  extensions.memory_priority = device.supports_extension(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
+  extensions.pageable_device_local_memory = device.supports_extension(
+      VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME);
+  extensions.graphics_pipeline_library = device.supports_extension(
+      VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
+  extensions.line_rasterization = device.supports_extension(
+      VK_EXT_LINE_RASTERIZATION_EXTENSION_NAME);
+  extensions.extended_dynamic_state = device.supports_extension(
+      VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+  extensions.vertex_input_dynamic_state = device.supports_extension(
+      VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME);
+#if 0
+  extensions.host_image_copy = device.supports_extension(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
+#endif
 #ifdef _WIN32
   extensions.external_memory = device.supports_extension(
       VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
@@ -408,6 +590,26 @@ void VKBackend::detect_workarounds(VKDevice &device)
       GPU_type_matches(GPU_DEVICE_APPLE, GPU_OS_MAC, GPU_DRIVER_ANY))
   {
     workarounds.not_aligned_pixel_formats = true;
+  }
+
+  /* During testing graphics pipeline library feature it was detected that it would crash on
+   * official AMD drivers.
+   */
+  if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL) &&
+      bool(G.debug & G_DEBUG_GPU))
+  {
+    extensions.graphics_pipeline_library = false;
+    extensions.vertex_input_dynamic_state = false;
+  }
+
+  /* Disable vertex input dynamic state for Qualcomm devices (#153414).
+   *
+   * TODO: We should re-validate vertex input dynamic state as there are multiple vendors with
+   * similar issues. It might be an oversight. Will wait for feedback from the driver developers
+   * and perform some out of bounds error checks.
+   */
+  if (GPU_type_matches(GPU_DEVICE_QUALCOMM, GPU_OS_WIN, GPU_DRIVER_ANY)) {
+    extensions.vertex_input_dynamic_state = false;
   }
 
   /* Only enable by default dynamic rendering local read on Qualcomm devices. NVIDIA, AMD and Intel
@@ -426,21 +628,49 @@ void VKBackend::detect_workarounds(VKDevice &device)
     extensions.dynamic_rendering_local_read = false;
   }
 
-  VkFormatProperties format_properties = {};
-  vkGetPhysicalDeviceFormatProperties(
-      device.physical_device_get(), VK_FORMAT_R8G8B8_UNORM, &format_properties);
-  workarounds.vertex_formats.r8g8b8 = (format_properties.bufferFeatures &
-                                       VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT) == 0;
+  /* When using host image copy on certain NVIDIA platforms the allocation of textures that only
+   * use GPU_TEXTURE_USAGE_SHADER_READ/WRITE will fail to allocate the memory. This needs some more
+   * research as this might just be a missing flag when allocating. Another solution is to not
+   * allow host_imag_copy when only these two flags are set as the rest seems to work as expected.
+   *
+   * See #151826
+   */
+  if (GPU_type_matches(GPU_DEVICE_NVIDIA, GPU_OS_ANY, GPU_DRIVER_OFFICIAL)) {
+    extensions.host_image_copy = false;
+  }
 
-  GCaps.render_pass_workaround = !extensions.dynamic_rendering;
+#ifdef _WIN32
+  if (GPU_type_matches(GPU_DEVICE_INTEL | GPU_DEVICE_INTEL_UHD, GPU_OS_WIN, GPU_DRIVER_OFFICIAL)) {
+    GPUIntelGpuArch gpu_arch = GPU_platform_get_intel_arch(
+        device.physical_device_properties_get().deviceID);
+
+    /* Intel Gen9 iGPUs (Intel 7th to 10th Gen Processor Graphics driver) show a black screen at
+     * application startup when using VK_EXT_vertex_input_dynamic_state.
+     *
+     * See #147721
+     */
+    if (gpu_arch == GPUIntelGpuArch::Gen9AndOlder) {
+      extensions.vertex_input_dynamic_state = false;
+    }
+
+    /* Using the texture pool causes varying issues on older Intel iGPUs.
+     * Note: Gen12 iGPUs are partly covered by the Intel 11th to 14th Gen Processor Graphics driver
+     * and the Intel Arc Graphics driver (the latter handles Arrow Lake and Meteor Lake).
+     * - Visual corruptions can be seen on Gen9 and older iGPUs (Intel 7th to 10th Gen Processor
+     * Graphics driver; #147721).
+     * - When using the image cache, visual artifacts can be seen on Gen11 and Gen12 iGPUs
+     * (#156496) and Gen12 dGPUs (#160002).
+     * - When using the texture pool without the image cache, memory leaks happen on Gen11 and
+     * Gen12 GPUs (#157777).
+     */
+    if (gpu_arch <= GPUIntelGpuArch::Gen12) {
+      GCaps.texture_pool_workaround = true;
+    }
+  }
+#endif
 
 #ifdef __APPLE__
-  /* Due to a limitation in MoltenVK, attachments should be sequential even when using
-   * dynamic rendering. MoltenVK internally uses render passes to simulate dynamic rendering and
-   * same limitations apply. */
-  if (GPU_type_matches(GPU_DEVICE_APPLE, GPU_OS_MAC, GPU_DRIVER_ANY)) {
-    GCaps.render_pass_workaround = true;
-  }
+  extensions.extended_dynamic_state = false;
 #endif
 
   device.workarounds_ = workarounds;
@@ -467,14 +697,6 @@ void VKBackend::delete_resources()
   MEM_delete(compiler_);
 }
 
-void VKBackend::samplers_update()
-{
-  VKDevice &device = VKBackend::get().device;
-  if (device.is_initialized()) {
-    device.reinit();
-  }
-}
-
 void VKBackend::compute_dispatch(int groups_x_len, int groups_y_len, int groups_z_len)
 {
   VKContext &context = *VKContext::get();
@@ -495,31 +717,27 @@ void VKBackend::compute_dispatch_indirect(StorageBuf *indirect_buf)
   render_graph::VKResourceAccessInfo &resources = context.reset_and_get_access_info();
   render_graph::VKDispatchIndirectNode::CreateInfo dispatch_indirect_info(resources);
   context.update_pipeline_data(dispatch_indirect_info.dispatch_indirect_node.pipeline_data);
-  dispatch_indirect_info.dispatch_indirect_node.buffer = indirect_buffer.vk_handle();
+  dispatch_indirect_info.dispatch_indirect_node.buffer = indirect_buffer.resource();
   dispatch_indirect_info.dispatch_indirect_node.offset = 0;
   context.render_graph().add_node(dispatch_indirect_info);
 }
 
-Context *VKBackend::context_alloc(void *ghost_window, void *ghost_context)
+Context *VKBackend::context_alloc(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context)
 {
-  if (ghost_window) {
-    BLI_assert(ghost_context == nullptr);
-    ghost_context = GHOST_GetDrawingContext((GHOST_WindowHandle)ghost_window);
-  }
-
-  BLI_assert(ghost_context != nullptr);
   if (!device.is_initialized()) {
     device.init(ghost_context);
     device.extensions_get().log();
+    device.workarounds_get().log();
+    init_device_list(ghost_context);
   }
 
   VKContext *context = new VKContext(ghost_window, ghost_context);
   device.context_register(*context);
-  GHOST_SetVulkanSwapBuffersCallbacks((GHOST_ContextHandle)ghost_context,
-                                      VKContext::swap_buffers_pre_callback,
-                                      VKContext::swap_buffers_post_callback,
-                                      VKContext::openxr_acquire_framebuffer_image_callback,
-                                      VKContext::openxr_release_framebuffer_image_callback);
+  ghost_context->setVulkanSwapBuffersCallbacks(
+      VKContext::swap_buffer_draw_callback,
+      VKContext::swap_buffer_acquired_callback,
+      VKContext::openxr_acquire_framebuffer_image_callback,
+      VKContext::openxr_release_framebuffer_image_callback);
 
   return context;
 }
@@ -564,6 +782,16 @@ Texture *VKBackend::texture_alloc(const char *name)
   return new VKTexture(name);
 }
 
+TexturePool *VKBackend::texturepool_alloc()
+{
+  if (GCaps.texture_pool_workaround) {
+    CLOG_TRACE(&LOG, "Using texture pool \"TexturePoolImpl\".");
+    return new TexturePoolImpl();
+  }
+  CLOG_TRACE(&LOG, "Using texture pool \"VKTexturePool\".");
+  return new VKTexturePool();
+}
+
 UniformBuf *VKBackend::uniformbuf_alloc(size_t size, const char *name)
 {
   return new VKUniformBuffer(size, name);
@@ -579,6 +807,15 @@ VertBuf *VKBackend::vertbuf_alloc()
   return new VKVertexBuffer();
 }
 
+TopLevelAS *VKBackend::tlas_alloc(const char *name)
+{
+  return new VKTopLevelAS(name);
+}
+BottomLevelAS *VKBackend::blas_alloc(const char *name)
+{
+  return new VKBottomLevelAS(name);
+}
+
 void VKBackend::render_begin()
 {
   VKThreadData &thread_data = device.current_thread_data();
@@ -592,13 +829,14 @@ void VKBackend::render_end()
   thread_data.rendering_depth -= 1;
   BLI_assert_msg(thread_data.rendering_depth >= 0, "Unbalanced `GPU_render_begin/end`");
   if (G.background) {
-    /* Garbage collection when performing background rendering. */
     if (thread_data.rendering_depth == 0) {
       VKContext *context = VKContext::get();
       if (context != nullptr) {
-        context->flush_render_graph(RenderGraphFlushFlags::RENEW_RENDER_GRAPH);
+        context->flush();
       }
-      device.orphaned_data.destroy_discarded_resources(device);
+      std::scoped_lock lock(device.orphaned_data.mutex_get());
+      device.orphaned_data.move_data(device.orphaned_data_render,
+                                     device.orphaned_data.timeline_ + 1);
     }
   }
 
@@ -606,6 +844,7 @@ void VKBackend::render_end()
    * after each frame.
    */
   if (G.is_rendering && thread_data.rendering_depth == 0 && !BLI_thread_is_main()) {
+    std::scoped_lock lock(device.orphaned_data.mutex_get());
     device.orphaned_data.move_data(device.orphaned_data_render,
                                    device.orphaned_data.timeline_ + 1);
   }
@@ -614,6 +853,7 @@ void VKBackend::render_end()
 void VKBackend::render_step(bool force_resource_release)
 {
   if (force_resource_release) {
+    std::scoped_lock lock(device.orphaned_data.mutex_get());
     device.orphaned_data.move_data(device.orphaned_data_render,
                                    device.orphaned_data.timeline_ + 1);
   }
@@ -627,19 +867,19 @@ void VKBackend::capabilities_init(VKDevice &device)
   /* Reset all capabilities from previous context. */
   GCaps = {};
   GCaps.geometry_shader_support = true;
-  GCaps.clip_control_support = true;
   GCaps.stencil_export_support = device.supports_extension(
       VK_EXT_SHADER_STENCIL_EXPORT_EXTENSION_NAME);
-  GCaps.shader_draw_parameters_support =
-      device.physical_device_vulkan_11_features_get().shaderDrawParameters;
+  GCaps.ray_query_support =
+      device.supports_extension(VK_KHR_RAY_QUERY_EXTENSION_NAME) &&
+      device.physical_device_acceleration_structure_properties_get().maxGeometryCount > 0 &&
+      device.physical_device_acceleration_structure_properties_get().maxPrimitiveCount > 0 &&
+      device.physical_device_acceleration_structure_properties_get().maxInstanceCount > 0;
 
   GCaps.max_texture_size = max_ii(limits.maxImageDimension1D, limits.maxImageDimension2D);
   GCaps.max_texture_3d_size = min_uu(limits.maxImageDimension3D, INT_MAX);
+  GCaps.max_buffer_texture_size = min_uu(limits.maxTexelBufferElements, UINT_MAX);
   GCaps.max_texture_layers = min_uu(limits.maxImageArrayLayers, INT_MAX);
-  GCaps.max_textures = min_uu(limits.maxDescriptorSetSampledImages, INT_MAX);
-  GCaps.max_textures_vert = GCaps.max_textures_geom = GCaps.max_textures_frag = min_uu(
-      limits.maxPerStageDescriptorSampledImages, INT_MAX);
-  GCaps.max_samplers = min_uu(limits.maxSamplerAllocationCount, INT_MAX);
+  GCaps.max_textures = min_uu(limits.maxPerStageDescriptorSampledImages, INT_MAX);
   GCaps.max_images = min_uu(limits.maxPerStageDescriptorStorageImages, INT_MAX);
   for (int i = 0; i < 3; i++) {
     GCaps.max_work_group_count[i] = min_uu(limits.maxComputeWorkGroupCount[i], INT_MAX);
@@ -653,6 +893,7 @@ void VKBackend::capabilities_init(VKDevice &device)
   GCaps.max_varying_floats = min_uu(limits.maxVertexOutputComponents, INT_MAX);
   GCaps.max_shader_storage_buffer_bindings = GCaps.max_compute_shader_storage_blocks = min_uu(
       limits.maxPerStageDescriptorStorageBuffers, INT_MAX);
+  GCaps.max_uniform_buffer_size = size_t(limits.maxUniformBufferRange);
   GCaps.max_storage_buffer_size = size_t(limits.maxStorageBufferRange);
   GCaps.storage_buffer_alignment = limits.minStorageBufferOffsetAlignment;
 
@@ -668,4 +909,5 @@ void VKBackend::capabilities_init(VKDevice &device)
   detect_workarounds(device);
 }
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

@@ -2,19 +2,21 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
+#include "BLI_bounds.hh"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
 #include "BLI_string_ref.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLT_translation.hh"
-
-#include "DNA_ID.h"
-#include "DNA_ID_enums.h"
+#include "DNA_layer_types.h"
+#include "DNA_node_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_vec_types.h"
 #include "DNA_view3d_types.h"
+
+#include "BKE_compositor.hh"
+#include "BKE_node.hh"
+#include "BKE_node_runtime.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -25,8 +27,11 @@
 
 #include "COM_context.hh"
 #include "COM_domain.hh"
-#include "COM_evaluator.hh"
+#include "COM_node_group_operation.hh"
+#include "COM_realize_on_domain_operation.hh"
 #include "COM_result.hh"
+#include "COM_scheduler.hh"
+#include "COM_utilities.hh"
 
 #include "GPU_context.hh"
 #include "GPU_state.hh"
@@ -40,17 +45,32 @@ namespace blender::draw::compositor_engine {
 
 class Context : public compositor::Context {
  private:
+  const Main *main_;
+  const Scene *scene_;
   /* A pointer to the info message of the compositor engine. This is a char array of size
    * GPU_INFO_SIZE. The message is cleared prior to updating or evaluating the compositor. */
   char *info_message_;
-  const Scene *scene_;
+  /* The hash of the active compute context. */
+  const ComputeContextHash active_compute_context_hash_;
 
  public:
-  Context(char *info_message) : compositor::Context(), info_message_(info_message) {}
-
-  void set_scene(const Scene *scene)
+  Context(compositor::StaticCacheManager &cache_manager,
+          const Main *main,
+          const Scene *scene,
+          char *info_message)
+      : compositor::Context(cache_manager),
+        main_(main),
+        scene_(scene),
+        info_message_(info_message),
+        active_compute_context_hash_(bke::compositor::compute_active_compute_context_hash(
+            *scene, *scene->compositing_node_group))
   {
-    scene_ = scene;
+    this->set_info_message("");
+  }
+
+  const Main &get_main() const override
+  {
+    return *main_;
   }
 
   const Scene &get_scene() const override
@@ -58,53 +78,60 @@ class Context : public compositor::Context {
     return *scene_;
   }
 
-  const bNodeTree &get_node_tree() const override
-  {
-    return *scene_->nodetree;
-  }
-
   bool use_gpu() const override
   {
     return true;
   }
 
-  eCompositorDenoiseQaulity get_denoise_quality() const override
+  const ComputeContextHash &get_active_compute_context_hash() const override
   {
-    return static_cast<eCompositorDenoiseQaulity>(
-        this->get_render_data().compositor_denoise_preview_quality);
+    return active_compute_context_hash_;
   }
 
-  compositor::OutputTypes needed_outputs() const override
+  /* In case the viewport has no camera region or is an image render, the domain covers the entire
+   * viewport. But in case the camera region is not entirely visible in the viewport, the data size
+   * of the domain will only cover the intersection of the viewport and the camera regions, while
+   * the display size will cover the virtual extension of the camera region. */
+  compositor::Domain get_compositing_domain() const override
   {
-    return compositor::OutputTypes::Composite | compositor::OutputTypes::Viewer;
+    const DRWContext *draw_ctx = DRW_context_get();
+
+    /* No camera region or is a viewport render, the domain is the entire viewport. */
+    if (draw_ctx->rv3d->persp != RV3D_CAMOB || draw_ctx->is_viewport_image_render()) {
+      return compositor::Domain(int2(draw_ctx->viewport_size_get()));
+    }
+
+    rctf camera_border;
+    ED_view3d_calc_camera_border(draw_ctx->scene,
+                                 draw_ctx->depsgraph,
+                                 draw_ctx->region,
+                                 draw_ctx->v3d,
+                                 draw_ctx->rv3d,
+                                 false,
+                                 &camera_border);
+
+    const Bounds<int2> camera_region = Bounds<int2>(
+        int2(int(camera_border.xmin), int(camera_border.ymin)),
+        int2(int(camera_border.xmax), int(camera_border.ymax)));
+
+    const Bounds<int2> render_region = Bounds<int2>(int2(0), int2(draw_ctx->viewport_size_get()));
+    const Bounds<int2> border_region = bounds::intersect(render_region, camera_region).value();
+
+    compositor::Domain domain = compositor::Domain(camera_region.size());
+    domain.data_size = border_region.size();
+    domain.data_offset = border_region.min - camera_region.min;
+    return domain;
   }
 
-  /* The viewport compositor does not support viewer outputs, so treat viewers as composite
-   * outputs. */
-  bool treat_viewer_as_composite_output() const override
-  {
-    return true;
-  }
-
-  const RenderData &get_render_data() const override
-  {
-    return scene_->r;
-  }
-
-  int2 get_render_size() const override
-  {
-    return int2(DRW_context_get()->viewport_size_get());
-  }
-
-  /* We limit the compositing region to the camera region if in camera view, while we use the
-   * entire viewport otherwise. We also use the entire viewport when doing viewport rendering since
-   * the viewport is already the camera region in that case. */
-  rcti get_compositing_region() const override
+  /* Get the bounds of the camera region in pixels relative to the viewport. In case the viewport
+   * has no camera region or is an image render, return the bounds of the entire viewport. */
+  Bounds<int2> get_camera_region() const
   {
     const DRWContext *draw_ctx = DRW_context_get();
     const int2 viewport_size = int2(draw_ctx->viewport_size_get());
-    const rcti render_region = rcti{0, viewport_size.x, 0, viewport_size.y};
+    const Bounds<int2> render_region = Bounds<int2>(int2(0), viewport_size);
 
+    /* No camera region or is a viewport render, the domain is the entire viewport. */
     if (draw_ctx->rv3d->persp != RV3D_CAMOB || draw_ctx->is_viewport_image_render()) {
       return render_region;
     }
@@ -118,61 +145,160 @@ class Context : public compositor::Context {
                                  false,
                                  &camera_border);
 
-    rcti camera_region;
-    BLI_rcti_rctf_copy_floor(&camera_region, &camera_border);
+    const Bounds<int2> camera_region = Bounds<int2>(
+        int2(int(camera_border.xmin), int(camera_border.ymin)),
+        int2(int(camera_border.xmax), int(camera_border.ymax)));
 
-    rcti visible_camera_region;
-    BLI_rcti_isect(&render_region, &camera_region, &visible_camera_region);
-
-    return visible_camera_region;
+    return bounds::intersect(render_region, camera_region).value_or(Bounds<int2>(int2(0)));
   }
 
-  compositor::Result get_output_result() override
+  void write_output(const compositor::Result &result)
   {
-    compositor::Result result = this->create_result(compositor::ResultType::Color,
-                                                    compositor::ResultPrecision::Half);
-    result.wrap_external(DRW_context_get()->viewport_texture_list_get()->color);
-    return result;
+    gpu::Texture *output = DRW_context_get()->viewport_texture_list_get()->color;
+    if (result.is_single_value()) {
+      GPU_texture_clear(output, GPU_DATA_FLOAT, result.get_single_value<compositor::Color>());
+      return;
+    }
+
+    gpu::Shader *shader = this->get_shader("compositor_write_output",
+                                           compositor::ResultPrecision::Half);
+    GPU_shader_bind(shader);
+
+    const Bounds<int2> bounds = this->get_camera_region();
+    GPU_shader_uniform_2iv(shader, "lower_bound", bounds.min);
+    GPU_shader_uniform_2iv(shader, "upper_bound", bounds.max);
+
+    result.bind_as_texture(shader, "input_tx");
+
+    const int image_unit = GPU_shader_get_sampler_binding(shader, "output_img");
+    GPU_texture_image_bind(output, image_unit);
+
+    compositor::compute_dispatch_threads_at_least(shader, result.domain().data_size);
+
+    result.unbind_as_texture();
+    GPU_texture_image_unbind(output);
+    GPU_shader_unbind();
   }
 
-  compositor::Result get_viewer_output_result(compositor::Domain /*domain*/,
-                                              bool /*is_data*/,
-                                              compositor::ResultPrecision /*precision*/) override
+  void write_viewer(compositor::Result &result) override
   {
-    compositor::Result result = this->create_result(compositor::ResultType::Color,
-                                                    compositor::ResultPrecision::Half);
-    result.wrap_external(DRW_context_get()->viewport_texture_list_get()->color);
-    return result;
+    using namespace compositor;
+
+    /* Realize the result on the compositing domain if needed. */
+    const Domain compositing_domain = this->get_compositing_domain();
+    const InputDescriptor input_descriptor = {ResultType::Color,
+                                              InputRealizationMode::OperationDomain};
+    SimpleOperation *realization_operation = RealizeOnDomainOperation::construct_if_needed(
+        *this, result, input_descriptor, compositing_domain);
+
+    if (!realization_operation) {
+      this->write_output(result);
+      return;
+    }
+
+    Result realize_input = this->create_result(result.type(), result.precision());
+    realize_input.share_data(result);
+    realization_operation->map_input_to_result(&realize_input);
+    realization_operation->evaluate();
+
+    Result &realized_result = realization_operation->get_result();
+    this->write_output(realized_result);
+    realized_result.release();
+    delete realization_operation;
   }
 
-  compositor::Result get_pass(const Scene *scene, int view_layer, const char *pass_name) override
+  compositor::Result get_invalid_pass()
   {
-    if (DEG_get_original(scene) != DEG_get_original(scene_)) {
-      return compositor::Result(*this);
-    }
+    compositor::Result invalid_pass = this->create_result(compositor::ResultType::Color);
+    invalid_pass.allocate_invalid();
+    return invalid_pass;
+  }
 
-    if (view_layer != 0) {
-      return compositor::Result(*this);
-    }
-
-    /* The combined pass is a special case where we return the viewport color texture, because it
-     * includes Grease Pencil objects since GP is drawn using their own engine. */
-    if (STREQ(pass_name, RE_PASSNAME_COMBINED)) {
-      GPUTexture *combined_texture = DRW_context_get()->viewport_texture_list_get()->color;
-      compositor::Result pass = compositor::Result(*this, GPU_texture_format(combined_texture));
-      pass.wrap_external(combined_texture);
-      return pass;
-    }
-
+  /* Get the pass that corresponds to the given pass name. If no pass with the given name exists,
+   * returns an unallocated result instead. */
+  compositor::Result get_pass_result(const char *pass_name)
+  {
     /* Return the pass that was written by the engine if such pass was found. */
-    GPUTexture *pass_texture = DRW_viewport_pass_texture_get(pass_name).gpu_texture();
-    if (pass_texture) {
+    if (DRW_viewport_pass_texture_exists(pass_name)) {
+      gpu::Texture *pass_texture = DRW_viewport_pass_texture_get(pass_name).gpu_texture();
       compositor::Result pass = compositor::Result(*this, GPU_texture_format(pass_texture));
-      pass.wrap_external(pass_texture);
+      pass.share_data(pass_texture);
       return pass;
     }
 
-    return compositor::Result(*this);
+    /* The combined pass is a special case where we return the viewport color texture if the engine
+     * didn't provide a combined pass. */
+    if (STREQ(pass_name, RE_PASSNAME_COMBINED)) {
+      gpu::Texture *combined_texture = DRW_context_get()->viewport_texture_list_get()->color;
+      compositor::Result pass = compositor::Result(*this, GPU_texture_format(combined_texture));
+      pass.share_data(combined_texture);
+      return pass;
+    }
+
+    return this->create_result(compositor::ResultType::Color);
+  }
+
+  compositor::Result crop_pass(const compositor::Result &pass)
+  {
+    const char *shader_name = pass.type() == compositor::ResultType::Float ?
+                                  "compositor_image_crop_float" :
+                                  "compositor_image_crop_float4";
+    gpu::Shader *shader = this->get_shader(shader_name, pass.precision());
+    GPU_shader_bind(shader);
+
+    /* The compositing space is limited to a subset of the pass texture, so only read that
+     * compositing region into an appropriately sized result. */
+    const int2 lower_bound = this->get_camera_region().min;
+    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
+
+    pass.bind_as_texture(shader, "input_tx");
+
+    compositor::Result cropped_pass = this->create_result(pass.type(), pass.precision());
+    cropped_pass.allocate_texture(this->get_compositing_domain());
+    cropped_pass.bind_as_image(shader, "output_img");
+
+    compositor::compute_dispatch_threads_at_least(shader, cropped_pass.domain().data_size);
+
+    GPU_shader_unbind();
+    pass.unbind_as_texture();
+    cropped_pass.unbind_as_image();
+
+    return cropped_pass;
+  }
+
+  compositor::Result get_pass(const Scene *scene, int view_layer_index, const char *name) override
+  {
+    /* Blender aliases the Image pass name to be the Combined pass, so we return the combined pass
+     * in that case. */
+    const char *pass_name = StringRef(name) == "Image" ? "Combined" : name;
+
+    const Scene *original_scene = DEG_get_original(scene_);
+    if (DEG_get_original(scene) != original_scene) {
+      return this->get_invalid_pass();
+    }
+
+    ViewLayer *view_layer = static_cast<ViewLayer *>(
+        BLI_findlink(&original_scene->view_layers, view_layer_index));
+    if (StringRef(view_layer->name) != DRW_context_get()->view_layer->name) {
+      return this->get_invalid_pass();
+    }
+
+    compositor::Result pass = this->get_pass_result(pass_name);
+    if (!pass.is_allocated()) {
+      return this->get_invalid_pass();
+    }
+
+    /* The pass data window matches the compositing domain data window, so update its display
+     * window and return it as is. */
+    const compositor::Domain compositing_domain = this->get_compositing_domain();
+    if (this->get_camera_region().min == int2(0) &&
+        compositing_domain.data_size == pass.domain().data_size)
+    {
+      pass.domain() = compositing_domain;
+      return pass;
+    }
+
+    return this->crop_pass(pass);
   }
 
   StringRef get_view_name() const override
@@ -199,28 +325,108 @@ class Context : public compositor::Context {
   {
     message.copy_utf8_truncated(info_message_, GPU_INFO_SIZE);
   }
+
+  compositor::NodeGroupOutputTypes needed_outputs() const
+  {
+    return compositor::NodeGroupOutputTypes::ViewerNode;
+  }
+
+  void evaluate()
+  {
+    using namespace compositor;
+    const NodeGroupOutputTypes needed_outputs = this->needed_outputs();
+    const bNodeTree &node_group = *DRW_context_get()->scene->compositing_node_group;
+    const bke::DataBlockComputeContext base_compute_context(nullptr, this->get_scene().id);
+    NodeGroupOperation node_group_operation(
+        *this, node_group, needed_outputs, base_compute_context);
+
+    /* If the node group has no viewer node in the active context or the base context, and the
+     * context requires a viewer output, we use the group output as a viewer. */
+    const bool has_viewer =
+        has_viewer_node(node_group, base_compute_context, base_compute_context.hash()) ||
+        has_viewer_node(node_group, base_compute_context, this->get_active_compute_context_hash());
+    const bool needs_viewer_output = flag_is_set(needed_outputs, NodeGroupOutputTypes::ViewerNode);
+    const bool use_group_output_as_viewer = (!has_viewer && needs_viewer_output);
+
+    const bool is_group_output_needed = use_group_output_as_viewer;
+
+    /* Set the reference count for the outputs, only the first color output is actually needed,
+     * while the rest are ignored. */
+    node_group.ensure_interface_cache();
+    for (const bNodeTreeInterfaceSocket *output_socket : node_group.interface_outputs()) {
+      const bool is_first_output = output_socket == node_group.interface_outputs().first();
+      Result &output_result = node_group_operation.get_result(output_socket->identifier);
+      const bool is_color = output_result.type() == ResultType::Color;
+      const bool is_needed = is_group_output_needed && is_first_output && is_color;
+      output_result.set_reference_count(is_needed ? 1 : 0);
+    }
+
+    /* Map the inputs to the operation. */
+    Vector<std::unique_ptr<Result>> inputs;
+    for (const bNodeTreeInterfaceSocket *input_socket : node_group.interface_inputs()) {
+      Result *input_result = new Result(
+          this->create_result(ResultType::Color, ResultPrecision::Half));
+      if (input_socket == node_group.interface_inputs()[0]) {
+        /* First socket is the viewport combined pass. */
+        const int active_view_layer_index = BLI_findstringindex(
+            &scene_->view_layers, DRW_context_get()->view_layer->name, offsetof(ViewLayer, name));
+        Result combined_pass = this->get_pass(
+            scene_, active_view_layer_index, RE_PASSNAME_COMBINED);
+        input_result->share_data(combined_pass);
+        combined_pass.release();
+      }
+      else {
+        /* The rest of the sockets are not supported. */
+        input_result->allocate_invalid();
+      }
+
+      node_group_operation.map_input_to_result(input_socket->identifier, input_result);
+      inputs.append(std::unique_ptr<Result>(input_result));
+    }
+
+    node_group_operation.evaluate();
+
+    /* Write the outputs of the operation. */
+    for (const bNodeTreeInterfaceSocket *output_socket : node_group.interface_outputs()) {
+      Result &output_result = node_group_operation.get_result(output_socket->identifier);
+      if (!output_result.should_compute()) {
+        continue;
+      }
+
+      if (use_group_output_as_viewer) {
+        this->write_viewer(output_result);
+      }
+
+      output_result.release();
+    }
+  }
 };
 
 class Instance : public DrawEngine {
  private:
-  Context context_;
+  compositor::StaticCacheManager cache_manager_;
 
  public:
-  Instance() : context_(this->info) {}
-
   StringRefNull name_get() final
   {
     return "Compositor";
   }
 
-  void init() final{};
-  void begin_sync() final{};
-  void object_sync(blender::draw::ObjectRef & /*ob_ref*/,
-                   blender::draw::Manager & /*manager*/) final{};
-  void end_sync() final{};
+  void init() final {};
+  void begin_sync() final {};
+  void object_sync(draw::ObjectRef & /*ob_ref*/, draw::Manager & /*manager*/) final {};
+  void end_sync() final {};
 
   void draw(Manager & /*manager*/) final
   {
+    Context context(cache_manager_,
+                    DEG_get_bmain(DRW_context_get()->depsgraph),
+                    DRW_context_get()->scene,
+                    this->info);
+    if (context.get_camera_region().is_empty()) {
+      return;
+    }
+
     DRW_submission_start();
 
 #if defined(__APPLE__)
@@ -232,12 +438,8 @@ class Instance : public DrawEngine {
     }
 #endif
 
-    /* Execute Compositor render commands. */
-    {
-      context_.set_scene(DRW_context_get()->scene);
-      compositor::Evaluator evaluator(context_);
-      evaluator.evaluate();
-    }
+    context.evaluate();
+    context.cache_manager().reset();
 
 #if defined(__APPLE__)
     /* NOTE(Metal): Following previous flush to break command stream, with compositor command

@@ -13,9 +13,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_scene_types.h"
@@ -30,6 +30,8 @@
 #include "WM_api.hh"
 
 #include "DEG_depsgraph.hh"
+
+namespace blender {
 
 /* ***************************************** */
 /* NOTE ABOUT THIS FILE:
@@ -50,9 +52,9 @@ bool ED_gpencil_layer_frames_looper(bGPDlayer *gpl,
   }
 
   /* do loop */
-  LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
+  for (bGPDframe &gpf : gpl->frames) {
     /* execute callback */
-    if (gpf_cb(gpf, scene)) {
+    if (gpf_cb(&gpf, scene)) {
       return true;
     }
   }
@@ -64,7 +66,7 @@ bool ED_gpencil_layer_frames_looper(bGPDlayer *gpl,
 /* ****************************************** */
 /* Data Conversion Tools */
 
-void ED_gpencil_layer_make_cfra_list(bGPDlayer *gpl, ListBase *elems, bool onlysel)
+void ED_gpencil_layer_make_cfra_list(bGPDlayer *gpl, ListBaseT<CfraElem> *elems, bool onlysel)
 {
   CfraElem *ce;
 
@@ -74,12 +76,12 @@ void ED_gpencil_layer_make_cfra_list(bGPDlayer *gpl, ListBase *elems, bool onlys
   }
 
   /* loop through gp-frames, adding */
-  LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
-    if ((onlysel == 0) || (gpf->flag & GP_FRAME_SELECT)) {
-      ce = MEM_callocN<CfraElem>("CfraElem");
+  for (bGPDframe &gpf : gpl->frames) {
+    if ((onlysel == 0) || (gpf.flag & GP_FRAME_SELECT)) {
+      ce = MEM_new_zeroed<CfraElem>("CfraElem");
 
-      ce->cfra = float(gpf->framenum);
-      ce->sel = (gpf->flag & GP_FRAME_SELECT) ? 1 : 0;
+      ce->cfra = float(gpf.framenum);
+      ce->sel = (gpf.flag & GP_FRAME_SELECT) ? 1 : 0;
 
       BLI_addtail(elems, ce);
     }
@@ -97,8 +99,8 @@ bool ED_gpencil_layer_frame_select_check(const bGPDlayer *gpl)
   }
 
   /* stop at the first one found */
-  LISTBASE_FOREACH (const bGPDframe *, gpf, &gpl->frames) {
-    if (gpf->flag & GP_FRAME_SELECT) {
+  for (const bGPDframe &gpf : gpl->frames) {
+    if (gpf.flag & GP_FRAME_SELECT) {
       return true;
     }
   }
@@ -135,8 +137,8 @@ void ED_gpencil_select_frames(bGPDlayer *gpl, short select_mode)
   }
 
   /* handle according to mode */
-  LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
-    gpencil_frame_select(gpf, select_mode);
+  for (bGPDframe &gpf : gpl->frames) {
+    gpencil_frame_select(&gpf, select_mode);
   }
 }
 
@@ -173,9 +175,9 @@ void ED_gpencil_layer_frames_select_box(bGPDlayer *gpl, float min, float max, sh
   }
 
   /* only select those frames which are in bounds */
-  LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
-    if (IN_RANGE(gpf->framenum, min, max)) {
-      gpencil_frame_select(gpf, select_mode);
+  for (bGPDframe &gpf : gpl->frames) {
+    if (IN_RANGE(gpf.framenum, min, max)) {
+      gpencil_frame_select(&gpf, select_mode);
     }
   }
 }
@@ -190,25 +192,25 @@ void ED_gpencil_layer_frames_select_region(KeyframeEditData *ked,
   }
 
   /* only select frames which are within the region */
-  LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
+  for (bGPDframe &gpf : gpl->frames) {
     /* construct a dummy point coordinate to do this testing with */
     float pt[2] = {0};
 
-    pt[0] = gpf->framenum;
+    pt[0] = gpf.framenum;
     pt[1] = ked->channel_y;
 
     /* check the necessary regions */
     if (tool == BEZT_OK_CHANNEL_LASSO) {
       /* Lasso */
       if (keyframe_region_lasso_test(static_cast<const KeyframeEdit_LassoData *>(ked->data), pt)) {
-        gpencil_frame_select(gpf, select_mode);
+        gpencil_frame_select(&gpf, select_mode);
       }
     }
     else if (tool == BEZT_OK_CHANNEL_CIRCLE) {
       /* Circle */
       if (keyframe_region_circle_test(static_cast<const KeyframeEdit_CircleData *>(ked->data), pt))
       {
-        gpencil_frame_select(gpf, select_mode);
+        gpencil_frame_select(&gpf, select_mode);
       }
     }
   }
@@ -221,7 +223,6 @@ void ED_gpencil_set_active_channel(bGPdata *gpd, bGPDlayer *gpl)
   /* Update other layer status. */
   if (BKE_gpencil_layer_active_get(gpd) != gpl) {
     BKE_gpencil_layer_active_set(gpd, gpl);
-    BKE_gpencil_layer_autolock_set(gpd, false);
     WM_main_add_notifier(NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
   }
 }
@@ -239,9 +240,9 @@ bool ED_gpencil_layer_frames_delete(bGPDlayer *gpl)
   }
 
   /* check for frames to delete */
-  LISTBASE_FOREACH_MUTABLE (bGPDframe *, gpf, &gpl->frames) {
-    if (gpf->flag & GP_FRAME_SELECT) {
-      BKE_gpencil_layer_frame_delete(gpl, gpf);
+  for (bGPDframe &gpf : gpl->frames.items_mutable()) {
+    if (gpf.flag & GP_FRAME_SELECT) {
+      BKE_gpencil_layer_frame_delete(gpl, &gpf);
       changed = true;
     }
   }
@@ -257,17 +258,17 @@ void ED_gpencil_layer_frames_duplicate(bGPDlayer *gpl)
   }
 
   /* Duplicate selected frames. */
-  LISTBASE_FOREACH_MUTABLE (bGPDframe *, gpf, &gpl->frames) {
+  for (bGPDframe &gpf : gpl->frames.items_mutable()) {
 
     /* duplicate this frame */
-    if (gpf->flag & GP_FRAME_SELECT) {
+    if (gpf.flag & GP_FRAME_SELECT) {
       bGPDframe *gpfd;
 
       /* duplicate frame, and deselect self */
-      gpfd = BKE_gpencil_frame_duplicate(gpf, true);
-      gpf->flag &= ~GP_FRAME_SELECT;
+      gpfd = BKE_gpencil_frame_duplicate(&gpf, true);
+      gpf.flag &= ~GP_FRAME_SELECT;
 
-      BLI_insertlinkafter(&gpl->frames, gpf, gpfd);
+      BLI_insertlinkafter(&gpl->frames, &gpf, gpfd);
     }
   }
 }
@@ -278,9 +279,9 @@ void ED_gpencil_layer_frames_keytype_set(bGPDlayer *gpl, short type)
     return;
   }
 
-  LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
-    if (gpf->flag & GP_FRAME_SELECT) {
-      gpf->key_type = type;
+  for (bGPDframe &gpf : gpl->frames) {
+    if (gpf.flag & GP_FRAME_SELECT) {
+      gpf.key_type = type;
     }
   }
 }
@@ -298,7 +299,7 @@ void ED_gpencil_layer_frames_keytype_set(bGPDlayer *gpl, short type)
  */
 
 /* globals for copy/paste data (like for other copy/paste buffers) */
-static ListBase gpencil_anim_copybuf = {nullptr, nullptr};
+static ListBaseT<bGPDlayer> gpencil_anim_copybuf = {nullptr, nullptr};
 static int gpencil_anim_copy_firstframe = 999999999;
 static int gpencil_anim_copy_lastframe = -999999999;
 static int gpencil_anim_copy_cfra = 0;
@@ -306,7 +307,7 @@ static int gpencil_anim_copy_cfra = 0;
 void ED_gpencil_anim_copybuf_free()
 {
   BKE_gpencil_free_layers(&gpencil_anim_copybuf);
-  BLI_listbase_clear(&gpencil_anim_copybuf);
+  gpencil_anim_copybuf.clear_no_delete();
 
   gpencil_anim_copy_firstframe = 999999999;
   gpencil_anim_copy_lastframe = -999999999;
@@ -315,7 +316,7 @@ void ED_gpencil_anim_copybuf_free()
 
 bool ED_gpencil_anim_copybuf_copy(bAnimContext *ac)
 {
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   int filter;
 
   Scene *scene = ac->scene;
@@ -328,33 +329,33 @@ bool ED_gpencil_anim_copybuf_copy(bAnimContext *ac)
   ANIM_animdata_filter(
       ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
 
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+  for (bAnimListElem &ale : anim_data) {
     /* This function only deals with grease pencil layer frames.
      * This check is needed in the case of a call from the main dope-sheet. */
-    if (ale->type != ANIMTYPE_GPLAYER) {
+    if (ale.type != ANIMTYPE_GPLAYER) {
       continue;
     }
 
-    ListBase copied_frames = {nullptr, nullptr};
-    bGPDlayer *gpl = (bGPDlayer *)ale->data;
+    ListBaseT<bGPDframe> copied_frames = {nullptr, nullptr};
+    bGPDlayer *gpl = static_cast<bGPDlayer *>(ale.data);
 
     /* loop over frames, and copy only selected frames */
-    LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
+    for (bGPDframe &gpf : gpl->frames) {
       /* if frame is selected, make duplicate it and its strokes */
-      if (gpf->flag & GP_FRAME_SELECT) {
+      if (gpf.flag & GP_FRAME_SELECT) {
         /* make a copy of this frame */
-        bGPDframe *new_frame = BKE_gpencil_frame_duplicate(gpf, true);
+        bGPDframe *new_frame = BKE_gpencil_frame_duplicate(&gpf, true);
         BLI_addtail(&copied_frames, new_frame);
 
         /* extend extents for keyframes encountered */
-        gpencil_anim_copy_firstframe = std::min(gpf->framenum, gpencil_anim_copy_firstframe);
-        gpencil_anim_copy_lastframe = std::max(gpf->framenum, gpencil_anim_copy_lastframe);
+        gpencil_anim_copy_firstframe = std::min(gpf.framenum, gpencil_anim_copy_firstframe);
+        gpencil_anim_copy_lastframe = std::max(gpf.framenum, gpencil_anim_copy_lastframe);
       }
     }
 
     /* create a new layer in buffer if there were keyframes here */
-    if (BLI_listbase_is_empty(&copied_frames) == false) {
-      bGPDlayer *new_layer = MEM_callocN<bGPDlayer>("GPCopyPasteLayer");
+    if (copied_frames.is_empty() == false) {
+      bGPDlayer *new_layer = MEM_new<bGPDlayer>("GPCopyPasteLayer");
       BLI_addtail(&gpencil_anim_copybuf, new_layer);
 
       /* move over copied frames */
@@ -362,7 +363,7 @@ bool ED_gpencil_anim_copybuf_copy(bAnimContext *ac)
       BLI_assert(copied_frames.first == nullptr);
 
       /* make a copy of the layer's name - for name-based matching later... */
-      STRNCPY(new_layer->info, gpl->info);
+      STRNCPY_UTF8(new_layer->info, gpl->info);
     }
   }
 
@@ -373,20 +374,17 @@ bool ED_gpencil_anim_copybuf_copy(bAnimContext *ac)
   ANIM_animdata_freelist(&anim_data);
 
   /* report success */
-  return !BLI_listbase_is_empty(&gpencil_anim_copybuf);
+  return !gpencil_anim_copybuf.is_empty();
 }
 
 bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
 {
-  ListBase anim_data = {nullptr, nullptr};
-  int filter;
-
   Scene *scene = ac->scene;
   bool no_name = false;
   int offset = 0;
 
   /* check if buffer is empty */
-  if (BLI_listbase_is_empty(&gpencil_anim_copybuf)) {
+  if (gpencil_anim_copybuf.is_empty()) {
     return false;
   }
 
@@ -411,21 +409,27 @@ bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
       break;
   }
 
-  /* filter data */
-  /* TODO: try doing it with selection, then without selection limits. */
-  filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_SEL |
-            ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS);
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
+  /* Only paste into selected layers. */
+  int filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_FOREDIT |
+                ANIMFILTER_NODUPLIS | ANIMFILTER_SEL);
   ANIM_animdata_filter(
       ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
+  if (anim_data.is_empty()) {
+    /* If no channels are selected at all, make even unselected layers "targets" for pasting. */
+    filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_NODUPLIS |
+              ANIMFILTER_FOREDIT);
+    ANIM_animdata_filter(
+        ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
+  }
 
-  /* from selected channels */
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+  for (bAnimListElem &ale : anim_data) {
     /* Only deal with GPlayers (case of calls from general dope-sheet). */
-    if (ale->type != ANIMTYPE_GPLAYER) {
+    if (ale.type != ANIMTYPE_GPLAYER) {
       continue;
     }
 
-    bGPDlayer *gpld = (bGPDlayer *)ale->data;
+    bGPDlayer *gpld = static_cast<bGPDlayer *>(ale.data);
     bGPDlayer *gpls = nullptr;
     bGPDframe *gpf;
 
@@ -443,15 +447,15 @@ bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
     }
 
     /* add frames from buffer */
-    LISTBASE_FOREACH (bGPDframe *, gpfs, &gpls->frames) {
+    for (bGPDframe &gpfs : gpls->frames) {
       /* temporarily apply offset to buffer-frame while copying */
-      gpfs->framenum += offset;
+      gpfs.framenum += offset;
 
       /* get frame to copy data into (if no frame returned, then just ignore) */
-      gpf = BKE_gpencil_layer_frame_get(gpld, gpfs->framenum, GP_GETFRAME_ADD_NEW);
+      gpf = BKE_gpencil_layer_frame_get(gpld, gpfs.framenum, GP_GETFRAME_ADD_NEW);
       if (gpf) {
         /* Ensure to use same keyframe type. */
-        gpf->key_type = gpfs->key_type;
+        gpf->key_type = gpfs.key_type;
 
         /* This should be the right frame... as it may be a pre-existing frame,
          * must make sure that only compatible stroke types get copied over
@@ -460,26 +464,26 @@ bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
          *   don't have enough info to do so. Instead, we simply just paste,
          *   if it works, it will show up.
          */
-        LISTBASE_FOREACH (bGPDstroke *, gps, &gpfs->strokes) {
-          /* make a copy of stroke, then of its points array */
-          bGPDstroke *gpsn = BKE_gpencil_stroke_duplicate(gps, true, true);
+        for (bGPDstroke &gps : gpfs.strokes) {
+          /* Make a copy of stroke, then a copy of its points array. */
+          bGPDstroke *gpsn = BKE_gpencil_stroke_duplicate(&gps, true, true);
 
           /* append stroke to frame */
           BLI_addtail(&gpf->strokes, gpsn);
         }
 
         /* if no strokes (i.e. new frame) added, free gpf */
-        if (BLI_listbase_is_empty(&gpf->strokes)) {
+        if (gpf->strokes.is_empty()) {
           BKE_gpencil_layer_frame_delete(gpld, gpf);
         }
       }
 
       /* unapply offset from buffer-frame */
-      gpfs->framenum -= offset;
+      gpfs.framenum -= offset;
     }
 
     /* Tag destination datablock. */
-    DEG_id_tag_update(ale->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
+    DEG_id_tag_update(ale.id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   }
 
   /* clean up */
@@ -502,7 +506,7 @@ static bool gpencil_frame_snap_nearest(bGPDframe * /*gpf*/, Scene * /*scene*/)
 
 static bool gpencil_frame_snap_nearestsec(bGPDframe *gpf, Scene *scene)
 {
-  float secf = float(FPS);
+  float secf = float(scene->frames_per_second());
   if (gpf->flag & GP_FRAME_SELECT) {
     gpf->framenum = int(floorf(gpf->framenum / secf + 0.5f) * secf);
   }
@@ -649,3 +653,5 @@ void ED_gpencil_layer_mirror_frames(bGPDlayer *gpl, Scene *scene, short mode)
 }
 
 /* ***************************************** */
+
+}  // namespace blender

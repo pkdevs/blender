@@ -6,6 +6,8 @@
 
 #include "DNA_view3d_types.h"
 
+namespace blender {
+
 #pragma once
 
 /** \file
@@ -13,13 +15,12 @@
  */
 
 struct ARegion;
+struct Depsgraph;
 struct View3D;
 struct bContext;
 struct Scene;
 struct ReportList;
-struct Depsgraph;
-
-namespace blender::io::grease_pencil {
+namespace io::grease_pencil {
 
 struct IOContext {
   ReportList *reports;
@@ -43,6 +44,14 @@ struct ImportParams {
   int resolution = 10;
   bool use_scene_unit = false;
   bool recenter_bounds = false;
+};
+
+enum class ExportStatus : int8_t {
+  Ok = 0,
+  NoFramesSelected,
+  InvalidActiveObjectType,
+  FileWriteError,
+  UnknownError,
 };
 
 struct ExportParams {
@@ -74,13 +83,15 @@ struct ExportParams {
 };
 
 bool import_svg(const IOContext &context, const ImportParams &params, StringRefNull filepath);
-bool export_svg(const IOContext &context,
-                const ExportParams &params,
-                Scene &scene,
-                StringRefNull filepath);
+ExportStatus export_svg(const IOContext &context,
+                        const ExportParams &params,
+                        Scene &scene,
+                        StringRefNull filepath);
 bool export_pdf(const IOContext &context,
                 const ExportParams &params,
                 Scene &scene,
                 StringRefNull filepath);
 
-}  // namespace blender::io::grease_pencil
+}  // namespace io::grease_pencil
+
+}  // namespace blender

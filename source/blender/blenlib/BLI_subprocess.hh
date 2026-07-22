@@ -25,7 +25,7 @@
 
 #  include "BLI_span.hh"
 #  include "BLI_string_ref.hh"
-#  include "BLI_sys_types.h"
+#  include "BLI_sys_types.hh"
 #  include "BLI_utility_mixins.hh"
 #  include <string>
 
@@ -56,7 +56,7 @@ class BlenderSubprocess : NonCopyable {
   /**
    * Create a subprocess and pass the arguments to the main function.
    * NOTE: The subprocess path is not passed as `argv[0]`.
-   * `args` only support alpha-numeric characters, underscores and hyphen-minus as a safety
+   * `args` only support alphanumeric characters, underscores and hyphen-minus as a safety
    * measure.
    * WARNING: This function shouldn't be called again after it succeeds.
    */
@@ -85,7 +85,7 @@ class SharedMemory : NonCopyable {
 #  endif
   void *data_;
   size_t data_size_;
-  bool is_owner_;
+  [[maybe_unused]] bool is_owner_;
 
  public:
   /**
@@ -126,7 +126,7 @@ class SharedSemaphore : NonCopyable {
 #  else
   sem_t *handle_;
 #  endif
-  bool is_owner_;
+  [[maybe_unused]] bool is_owner_;
 
  public:
   /**

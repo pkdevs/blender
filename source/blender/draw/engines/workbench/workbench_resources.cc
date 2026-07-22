@@ -6,11 +6,12 @@
 
 #include "BKE_studiolight.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "GPU_batch_utils.hh"
+#include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
 #include "draw_common_c.hh"
@@ -25,21 +26,21 @@ static bool get_matcap_tx(Texture &matcap_tx, StudioLight &studio_light)
                                   STUDIOLIGHT_MATCAP_SPECULAR_GPUTEXTURE);
   ImBuf *matcap_diffuse = studio_light.matcap_diffuse.ibuf;
   ImBuf *matcap_specular = studio_light.matcap_specular.ibuf;
-  if (matcap_diffuse && matcap_diffuse->float_buffer.data) {
+  if (matcap_diffuse && matcap_diffuse->float_data()) {
     int layers = 1;
-    float *buffer = matcap_diffuse->float_buffer.data;
+    const float *buffer = matcap_diffuse->float_data();
     Vector<float> combined_buffer;
 
-    if (matcap_specular && matcap_specular->float_buffer.data) {
+    if (matcap_specular && matcap_specular->float_data()) {
       int size = matcap_diffuse->x * matcap_diffuse->y * 4;
-      combined_buffer.extend(matcap_diffuse->float_buffer.data, size);
-      combined_buffer.extend(matcap_specular->float_buffer.data, size);
+      combined_buffer.extend(matcap_diffuse->float_data(), size);
+      combined_buffer.extend(matcap_specular->float_data(), size);
       buffer = combined_buffer.begin();
       layers++;
     }
 
     matcap_tx = Texture(studio_light.name,
-                        GPU_RGBA16F,
+                        gpu::TextureFormat::SFLOAT_16_16_16_16,
                         GPU_TEXTURE_USAGE_SHADER_READ,
                         int2(matcap_diffuse->x, matcap_diffuse->y),
                         layers,
@@ -51,7 +52,7 @@ static bool get_matcap_tx(Texture &matcap_tx, StudioLight &studio_light)
 
 static float4x4 get_world_shading_rotation_matrix(float studiolight_rot_z)
 {
-  float4x4 V = blender::draw::View::default_get().viewmat();
+  float4x4 V = draw::View::default_get().viewmat();
   float R[4][4];
   axis_angle_to_mat4_single(R, 'Z', -studiolight_rot_z);
   mul_m4_m4m4(R, V.ptr(), R);
@@ -60,10 +61,10 @@ static float4x4 get_world_shading_rotation_matrix(float studiolight_rot_z)
   return float4x4(R);
 }
 
-static LightData get_light_data_from_studio_solidlight(const SolidLight *sl,
-                                                       const float4x4 &world_shading_rotation)
+static SolidLightData get_light_data_from_studio_solidlight(const SolidLight *sl,
+                                                            const float4x4 &world_shading_rotation)
 {
-  LightData light = {};
+  SolidLightData light = {};
   if (sl && sl->flag) {
     float3 direction = math::transform_direction(world_shading_rotation, float3(sl->vec));
     light.direction = float4(direction, 0.0f);
@@ -101,8 +102,10 @@ void SceneResources::load_jitter_tx(int total_samples)
   }
 
   jitter_tx.free();
-  jitter_tx.ensure_2d(
-      GPU_RGBA16F, int2(jitter_tx_size), GPU_TEXTURE_USAGE_SHADER_READ, jitter[0][0]);
+  jitter_tx.ensure_2d(gpu::TextureFormat::SFLOAT_16_16_16_16,
+                      int2(jitter_tx_size),
+                      GPU_TEXTURE_USAGE_SHADER_READ,
+                      jitter[0][0]);
 }
 
 void SceneResources::init(const SceneState &scene_state, const DRWContext *ctx)
@@ -118,7 +121,10 @@ void SceneResources::init(const SceneState &scene_state, const DRWContext *ctx)
   world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
 
   StudioLight *studio_light = nullptr;
-  if (U.edit_studio_light) {
+  if (U.edit_studio_light && shading.light == V3D_LIGHTING_STUDIO) {
+    /* Do not use this for MATCAP.
+     * matcap is also stored as StudioLight data but it needs its selected matcap texture loaded
+     * through the normal matcap path. */
     studio_light = BKE_studiolight_studio_edit_get();
   }
   else {
@@ -136,7 +142,8 @@ void SceneResources::init(const SceneState &scene_state, const DRWContext *ctx)
     }
   }
   if (!matcap_tx.is_valid()) {
-    matcap_tx.ensure_2d_array(GPU_RGBA16F, int2(1), 1, GPU_TEXTURE_USAGE_SHADER_READ);
+    matcap_tx.ensure_2d_array(
+        gpu::TextureFormat::SFLOAT_16_16_16_16, int2(1), 1, GPU_TEXTURE_USAGE_SHADER_READ);
   }
 
   float4x4 world_shading_rotation = float4x4::identity();
@@ -181,17 +188,25 @@ void SceneResources::init(const SceneState &scene_state, const DRWContext *ctx)
 
   clip_planes_buf.push_update();
 
-  missing_tx.ensure_2d(
-      GPU_RGBA8, int2(1), GPU_TEXTURE_USAGE_SHADER_READ, float4(1.0f, 0.0f, 1.0f, 1.0f));
-  missing_texture.gpu.texture = missing_tx;
-  missing_texture.name = "Missing Texture";
+  if (missing_texture.gpu.texture == nullptr) {
+    missing_texture.gpu.texture = GPU_texture_create_error(2, false);
+    missing_texture.name = "Missing Texture";
+  }
 
-  dummy_texture_tx.ensure_2d(
-      GPU_RGBA8, int2(1), GPU_TEXTURE_USAGE_SHADER_READ, float4(0.0f, 0.0f, 0.0f, 0.0f));
-  dummy_tile_array_tx.ensure_2d_array(
-      GPU_RGBA8, int2(1), 1, GPU_TEXTURE_USAGE_SHADER_READ, float4(0.0f, 0.0f, 0.0f, 0.0f));
-  dummy_tile_data_tx.ensure_1d_array(
-      GPU_RGBA8, 1, 1, GPU_TEXTURE_USAGE_SHADER_READ, float4(0.0f, 0.0f, 0.0f, 0.0f));
+  dummy_texture_tx.ensure_2d(gpu::TextureFormat::UNORM_8_8_8_8,
+                             int2(1),
+                             GPU_TEXTURE_USAGE_SHADER_READ,
+                             float4(0.0f, 0.0f, 0.0f, 0.0f));
+  dummy_tile_array_tx.ensure_2d_array(gpu::TextureFormat::UNORM_8_8_8_8,
+                                      int2(1),
+                                      1,
+                                      GPU_TEXTURE_USAGE_SHADER_READ,
+                                      float4(0.0f, 0.0f, 0.0f, 0.0f));
+  dummy_tile_data_tx.ensure_1d_array(gpu::TextureFormat::UNORM_8_8_8_8,
+                                     1,
+                                     1,
+                                     GPU_TEXTURE_USAGE_SHADER_READ,
+                                     float4(0.0f, 0.0f, 0.0f, 0.0f));
 
   if (volume_cube_batch == nullptr) {
     volume_cube_batch = GPU_batch_unit_cube();

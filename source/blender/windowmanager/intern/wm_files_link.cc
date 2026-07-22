@@ -20,10 +20,10 @@
 #include "DNA_screen_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_map.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLO_readfile.hh"
 
@@ -64,7 +64,9 @@
 
 #include "wm_files.hh"
 
-static CLG_LogRef LOG = {"wm.files_link"};
+namespace blender {
+
+static CLG_LogRef LOG = {"blend.link"};
 
 /* -------------------------------------------------------------------- */
 /** \name Link/Append Operator
@@ -109,6 +111,9 @@ static wmOperatorStatus wm_link_append_invoke(bContext *C,
 
 static int wm_link_append_flag(wmOperator *op)
 {
+  /* NOTE: most options exposed here should also be available in the Python API
+   * unless there are good reasons to have them only exposed to the operator.
+   * see `bpy_lib_load`. */
   PropertyRNA *prop;
   int flag = 0;
 
@@ -177,14 +182,14 @@ static bool wm_link_append_item_poll(ReportList *reports,
       if (do_append) {
         BKE_reportf(reports,
                     RPT_ERROR_INVALID_INPUT,
-                    "Can't append data-block '%s' of type '%s'",
+                    "Cannot append data-block '%s' of type '%s'",
                     name,
                     group);
       }
       else {
         BKE_reportf(reports,
                     RPT_ERROR_INVALID_INPUT,
-                    "Can't link data-block '%s' of type '%s'",
+                    "Cannot link data-block '%s' of type '%s'",
                     name,
                     group);
       }
@@ -198,17 +203,20 @@ static bool wm_link_append_item_poll(ReportList *reports,
 static wmOperatorStatus wm_link_append_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
+  const char *blendfile_path = BKE_main_blendfile_path(bmain);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   PropertyRNA *prop;
   BlendfileLinkAppendContext *lapp_context;
-  char filepath[FILE_MAX_LIBEXTRA], root[FILE_MAXDIR], libname[FILE_MAX_LIBEXTRA],
-      relname[FILE_MAX];
+  char filepath[FILE_MAX_LIBEXTRA], root[FILE_MAX], libname[FILE_MAX_LIBEXTRA], relname[FILE_MAX];
   char *group, *name;
   int totfiles = 0;
 
   RNA_string_get(op->ptr, "filename", relname);
   RNA_string_get(op->ptr, "directory", root);
+  if (BLI_path_is_rel(root)) {
+    BLI_path_abs(root, blendfile_path);
+  }
 
   BLI_path_join(filepath, sizeof(filepath), root, relname);
 
@@ -216,14 +224,19 @@ static wmOperatorStatus wm_link_append_exec(bContext *C, wmOperator *op)
   const bool is_librarypath_valid = BKE_blendfile_library_path_explode(
       filepath, libname, &group, &name);
 
-  /* NOTE: Need to also check filepath, as typically libname is an empty string here (when trying
-   * to append from current file from the file-browser e.g.). */
-  if (BLI_path_cmp(BKE_main_blendfile_path(bmain), filepath) == 0 ||
-      BLI_path_cmp(BKE_main_blendfile_path(bmain), libname) == 0)
   {
-    BKE_reportf(op->reports, RPT_ERROR, "'%s': cannot use current file as library", filepath);
-    return OPERATOR_CANCELLED;
+    if (blendfile_path[0] != '\0') {
+      /* NOTE: Need to also check `filepath`, as typically `libname` is an empty string here
+       * (when trying to append from current file from the file-browser e.g.). */
+      if (BLI_path_cmp(blendfile_path, filepath) == 0 ||
+          BLI_path_cmp(blendfile_path, libname) == 0)
+      {
+        BKE_reportf(op->reports, RPT_ERROR, "'%s': cannot use current file as library", filepath);
+        return OPERATOR_CANCELLED;
+      }
+    }
   }
+
   if (!group) {
     BKE_reportf(op->reports, RPT_ERROR, "'%s': nothing indicated", filepath);
     return OPERATOR_CANCELLED;
@@ -255,7 +268,7 @@ static wmOperatorStatus wm_link_append_exec(bContext *C, wmOperator *op)
   /* From here down, no error returns. */
 
   if (view_layer && RNA_boolean_get(op->ptr, "autoselect")) {
-    BKE_view_layer_base_deselect_all(scene, view_layer);
+    BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
   }
 
   /* Sanity checks for flag. */
@@ -285,7 +298,7 @@ static wmOperatorStatus wm_link_append_exec(bContext *C, wmOperator *op)
       lapp_context, datatoc_startup_blend, datatoc_startup_blend_size);
 
   if (totfiles != 0) {
-    blender::Map<std::string, int> libraries;
+    Map<std::string, int> libraries;
     int lib_idx = 0;
 
     RNA_BEGIN (op->ptr, itemptr, "files") {
@@ -519,15 +532,18 @@ void WM_OT_append(wmOperatorType *ot)
 static wmOperatorStatus wm_id_linked_relocate_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
+  const char *blendfile_path = BKE_main_blendfile_path(bmain);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   BlendfileLinkAppendContext *lapp_context;
-  char filepath[FILE_MAX_LIBEXTRA], root[FILE_MAXDIR], libname[FILE_MAX_LIBEXTRA],
-      relname[FILE_MAX];
+  char filepath[FILE_MAX_LIBEXTRA], root[FILE_MAX], libname[FILE_MAX_LIBEXTRA], relname[FILE_MAX];
   char *group, *name;
 
   RNA_string_get(op->ptr, "filename", relname);
   RNA_string_get(op->ptr, "directory", root);
+  if (BLI_path_is_rel(root)) {
+    BLI_path_abs(root, blendfile_path);
+  }
 
   BLI_path_join(filepath, sizeof(filepath), root, relname);
 
@@ -535,14 +551,19 @@ static wmOperatorStatus wm_id_linked_relocate_exec(bContext *C, wmOperator *op)
   const bool is_librarypath_valid = BKE_blendfile_library_path_explode(
       filepath, libname, &group, &name);
 
-  /* NOTE: Need to also check filepath, as typically libname is an empty string here (when trying
-   * to append from current file from the file-browser e.g.). */
-  if (BLI_path_cmp(BKE_main_blendfile_path(bmain), filepath) == 0 ||
-      BLI_path_cmp(BKE_main_blendfile_path(bmain), libname) == 0)
   {
-    BKE_reportf(op->reports, RPT_ERROR, "'%s': cannot use current file as library", filepath);
-    return OPERATOR_CANCELLED;
+    if (blendfile_path[0] != '\0') {
+      /* NOTE: Need to also check `filepath`, as typically `libname` is an empty string here
+       * (when trying to append from current file from the file-browser e.g.). */
+      if (BLI_path_cmp(blendfile_path, filepath) == 0 ||
+          BLI_path_cmp(blendfile_path, libname) == 0)
+      {
+        BKE_reportf(op->reports, RPT_ERROR, "'%s': cannot use current file as library", filepath);
+        return OPERATOR_CANCELLED;
+      }
+    }
   }
+
   if (!is_librarypath_valid) {
     BKE_reportf(op->reports, RPT_ERROR, "'%s': not a library", filepath);
     return OPERATOR_CANCELLED;
@@ -594,7 +615,7 @@ static wmOperatorStatus wm_id_linked_relocate_exec(bContext *C, wmOperator *op)
   /* From here down, no error returns. */
 
   if (view_layer && RNA_boolean_get(op->ptr, "autoselect")) {
-    BKE_view_layer_base_deselect_all(scene, view_layer);
+    BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
   }
 
   /* Never enforce instantiation of anything when relocating. */
@@ -704,8 +725,14 @@ static ID *wm_file_link_append_datablock_ex(Main *bmain,
                                             const char *filepath,
                                             const short id_code,
                                             const char *id_name,
-                                            const int flag)
+                                            const int flag,
+                                            ReportList *reports = nullptr)
 {
+  BLI_assert_msg(
+      BLI_path_cmp(BKE_main_blendfile_path(bmain), filepath) != 0,
+      "Calling code should ensure it does not attempt to link/append from current blendfile");
+
+  const bool do_pack = (flag & BLO_LIBLINK_PACK) != 0;
   const bool do_append = (flag & FILE_LINK) == 0;
   /* Tag everything so we can make local only the new datablock. */
   BKE_main_id_tag_all(bmain, ID_TAG_PRE_EXISTING, true);
@@ -726,13 +753,16 @@ static ID *wm_file_link_append_datablock_ex(Main *bmain,
   BKE_blendfile_link_append_context_init_done(lapp_context);
 
   /* Link datablock. */
-  BKE_blendfile_link(lapp_context, nullptr);
+  BKE_blendfile_link(lapp_context, reports);
 
-  if (do_append) {
-    BKE_blendfile_append(lapp_context, nullptr);
+  if (do_pack) {
+    BKE_blendfile_link_pack(lapp_context, reports);
+  }
+  else if (do_append) {
+    BKE_blendfile_append(lapp_context, reports);
   }
 
-  BKE_blendfile_link_append_instantiate_loose(lapp_context, nullptr);
+  BKE_blendfile_link_append_instantiate_loose(lapp_context, reports);
 
   BKE_blendfile_link_append_context_finalize(lapp_context);
 
@@ -753,11 +783,12 @@ ID *WM_file_link_datablock(Main *bmain,
                            const char *filepath,
                            const short id_code,
                            const char *id_name,
-                           int flag)
+                           int flag,
+                           ReportList *reports)
 {
   flag |= FILE_LINK;
   return wm_file_link_append_datablock_ex(
-      bmain, scene, view_layer, v3d, filepath, id_code, id_name, flag);
+      bmain, scene, view_layer, v3d, filepath, id_code, id_name, flag, reports);
 }
 
 ID *WM_file_append_datablock(Main *bmain,
@@ -767,13 +798,12 @@ ID *WM_file_append_datablock(Main *bmain,
                              const char *filepath,
                              const short id_code,
                              const char *id_name,
-                             int flag)
+                             int flag,
+                             ReportList *reports)
 {
   BLI_assert((flag & FILE_LINK) == 0);
-  ID *id = wm_file_link_append_datablock_ex(
-      bmain, scene, view_layer, v3d, filepath, id_code, id_name, flag);
-
-  return id;
+  return wm_file_link_append_datablock_ex(
+      bmain, scene, view_layer, v3d, filepath, id_code, id_name, flag, reports);
 }
 
 /** \} */
@@ -790,7 +820,7 @@ static wmOperatorStatus wm_lib_relocate_invoke(bContext *C,
   char lib_name[MAX_NAME];
 
   RNA_string_get(op->ptr, "library", lib_name);
-  lib = (Library *)BKE_libblock_find_name(CTX_data_main(C), ID_LI, lib_name);
+  lib = id_cast<Library *>(BKE_libblock_find_name(CTX_data_main(C), ID_LI, lib_name));
 
   if (lib) {
     if (lib->runtime->parent) {
@@ -829,20 +859,22 @@ void WM_lib_reload(Library *lib, bContext *C, ReportList *reports)
 
   Main *bmain = CTX_data_main(C);
   LibraryLink_Params lapp_params;
-  BLO_library_link_params_init_with_context(&lapp_params,
-                                            bmain,
-                                            BLO_LIBLINK_USE_PLACEHOLDERS |
-                                                BLO_LIBLINK_FORCE_INDIRECT,
-                                            0,
-                                            CTX_data_scene(C),
-                                            CTX_data_view_layer(C),
-                                            nullptr);
+  BLO_library_link_params_init_with_context(
+      &lapp_params,
+      bmain,
+      (BLO_LIBLINK_USE_PLACEHOLDERS | BLO_LIBLINK_FORCE_INDIRECT | FILE_LINK),
+      0,
+      CTX_data_scene(C),
+      CTX_data_view_layer(C),
+      nullptr);
 
   BlendfileLinkAppendContext *lapp_context = BKE_blendfile_link_append_context_new(&lapp_params);
 
   BKE_blendfile_link_append_context_library_add(lapp_context, lib->runtime->filepath_abs, nullptr);
 
   BKE_blendfile_library_relocate(lapp_context, reports, lib, true);
+
+  BKE_blendfile_link_append_context_finalize(lapp_context);
 
   BKE_blendfile_link_append_context_free(lapp_context);
 
@@ -862,10 +894,11 @@ void WM_lib_reload(Library *lib, bContext *C, ReportList *reports)
 static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, bool do_reload)
 {
   Main *bmain = CTX_data_main(C);
+  const char *blendfile_path = BKE_main_blendfile_path(bmain);
   char lib_name[MAX_NAME];
 
   RNA_string_get(op->ptr, "library", lib_name);
-  Library *lib = (Library *)BKE_libblock_find_name(bmain, ID_LI, lib_name);
+  Library *lib = id_cast<Library *>(BKE_libblock_find_name(bmain, ID_LI, lib_name));
   if (lib == nullptr) {
     return OPERATOR_CANCELLED;
   }
@@ -873,12 +906,7 @@ static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, boo
   PropertyRNA *prop;
   BlendfileLinkAppendContext *lapp_context;
 
-  char filepath[FILE_MAX], root[FILE_MAXDIR], libname[FILE_MAX], relname[FILE_MAX];
-  short flag = 0;
-
-  if (RNA_boolean_get(op->ptr, "relative_path")) {
-    flag |= FILE_RELPATH;
-  }
+  char filepath[FILE_MAX], root[FILE_MAX], libname[FILE_MAX], relname[FILE_MAX];
 
   if (lib->runtime->parent && !do_reload) {
     BKE_reportf(op->reports,
@@ -888,8 +916,11 @@ static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, boo
     return OPERATOR_CANCELLED;
   }
 
-  RNA_string_get(op->ptr, "directory", root);
   RNA_string_get(op->ptr, "filename", libname);
+  RNA_string_get(op->ptr, "directory", root);
+  if (BLI_path_is_rel(root)) {
+    BLI_path_abs(root, blendfile_path);
+  }
 
   if (!BKE_blendfile_extension_check(libname)) {
     BKE_report(op->reports, RPT_ERROR, "Not a library");
@@ -907,13 +938,24 @@ static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, boo
     return OPERATOR_CANCELLED;
   }
 
-  if (BLI_path_cmp(BKE_main_blendfile_path(bmain), filepath) == 0) {
-    BKE_reportf(op->reports,
-                RPT_ERROR_INVALID_INPUT,
-                "Cannot relocate library '%s' to current blend file '%s'",
-                lib->id.name,
-                filepath);
-    return OPERATOR_CANCELLED;
+  {
+    if ((blendfile_path[0] != '\0') && (BLI_path_cmp(blendfile_path, filepath) == 0)) {
+      BKE_reportf(op->reports,
+                  RPT_ERROR_INVALID_INPUT,
+                  "Cannot relocate library '%s' to current blend file '%s'",
+                  lib->id.name,
+                  filepath);
+      return OPERATOR_CANCELLED;
+    }
+  }
+
+  int flag = FILE_LINK;
+  if (RNA_boolean_get(op->ptr, "relative_path")) {
+    flag |= FILE_RELPATH;
+  }
+  flag |= BLO_LIBLINK_FORCE_INDIRECT;
+  if (do_reload) {
+    flag |= BLO_LIBLINK_USE_PLACEHOLDERS;
   }
 
   LibraryLink_Params lapp_params;
@@ -921,7 +963,7 @@ static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, boo
       &lapp_params, bmain, flag, 0, CTX_data_scene(C), CTX_data_view_layer(C), nullptr);
 
   if (BLI_path_cmp(lib->runtime->filepath_abs, filepath) == 0) {
-    CLOG_INFO(&LOG, 4, "We are supposed to reload '%s' lib (%d)", lib->filepath, lib->id.us);
+    CLOG_DEBUG(&LOG, "We are supposed to reload '%s' lib (%d)", lib->filepath, lib->id.us);
 
     do_reload = true;
 
@@ -931,8 +973,8 @@ static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, boo
   else {
     int totfiles = 0;
 
-    CLOG_INFO(
-        &LOG, 4, "We are supposed to relocate '%s' lib to new '%s' one", lib->filepath, libname);
+    CLOG_DEBUG(
+        &LOG, "We are supposed to relocate '%s' lib to new '%s' one", lib->filepath, libname);
 
     /* Check if something is indicated for relocate. */
     prop = RNA_struct_find_property(op->ptr, "files");
@@ -960,23 +1002,20 @@ static wmOperatorStatus wm_lib_relocate_exec_do(bContext *C, wmOperator *op, boo
           continue;
         }
 
-        CLOG_INFO(&LOG, 4, "\tCandidate new lib to reload datablocks from: %s", filepath);
+        CLOG_DEBUG(&LOG, "\tCandidate new lib to reload data-blocks from: %s", filepath);
         BKE_blendfile_link_append_context_library_add(lapp_context, filepath, nullptr);
       }
       RNA_END;
     }
     else {
-      CLOG_INFO(&LOG, 4, "\tCandidate new lib to reload datablocks from: %s", filepath);
+      CLOG_DEBUG(&LOG, "\tCandidate new lib to reload data-blocks from: %s", filepath);
       BKE_blendfile_link_append_context_library_add(lapp_context, filepath, nullptr);
     }
   }
 
-  BKE_blendfile_link_append_context_flag_set(lapp_context,
-                                             BLO_LIBLINK_FORCE_INDIRECT |
-                                                 (do_reload ? BLO_LIBLINK_USE_PLACEHOLDERS : 0),
-                                             true);
-
   BKE_blendfile_library_relocate(lapp_context, op->reports, lib, do_reload);
+
+  BKE_blendfile_link_append_context_finalize(lapp_context);
 
   BKE_blendfile_link_append_context_free(lapp_context);
 
@@ -1062,3 +1101,5 @@ void WM_OT_lib_reload(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

@@ -6,11 +6,15 @@
 
 #include "kernel/image.h"
 
+#include "kernel/svm/node_types.h"
+#include "kernel/svm/types.h"
 #include "kernel/svm/util.h"
 
 #include "kernel/util/colorspace.h"
+#include "kernel/util/differential.h"
 
 #include "util/color.h"
+#include "util/defines.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -133,212 +137,128 @@ ccl_device float3 geographical_to_direction(const float lat, const float lon)
 }
 
 ccl_device float3 sky_radiance_nishita(KernelGlobals kg,
+                                       ccl_private ShaderData *sd,
                                        const float3 dir,
                                        const uint32_t path_flag,
                                        const float3 pixel_bottom,
                                        const float3 pixel_top,
-                                       const ccl_private float *nishita_data,
+                                       const ccl_private float *sky_data,
                                        const uint texture_id)
 {
-  /* definitions */
-  const float sun_elevation = nishita_data[0];
-  const float sun_rotation = nishita_data[1];
-  const float angular_diameter = nishita_data[2];
-  const float sun_intensity = nishita_data[3];
+  /* Definitions */
+  const float sun_elevation = sky_data[0];
+  const float sun_rotation = sky_data[1];
+  const float angular_diameter = sky_data[2];
+  const float sun_intensity = sky_data[3];
+  const float earth_intersection_angle = sky_data[4];
   const bool sun_disc = (angular_diameter >= 0.0f);
-  float3 xyz;
-  /* convert dir to spherical coordinates */
+  float3 xyz = zero_float3();
   const float2 direction = direction_to_spherical(dir);
-  /* render above the horizon */
-  if (dir.z >= 0.0f) {
-    /* definitions */
-    const float3 sun_dir = geographical_to_direction(sun_elevation, sun_rotation);
-    const float sun_dir_angle = precise_angle(dir, sun_dir);
-    const float half_angular = angular_diameter * 0.5f;
-    const float dir_elevation = M_PI_2_F - direction.x;
+  const float3 sun_dir = spherical_to_direction(sun_elevation - M_PI_2_F, sun_rotation - M_PI_2_F);
+  const float sun_dir_angle = precise_angle(dir, sun_dir);
+  const float half_angular = angular_diameter * 0.5f;
+  const float dir_elevation = M_PI_2_F - direction.x;
 
-    /* If the ray is inside the sun disc, render it, otherwise render the sky.
-     * Alternatively, ignore the sun if we're evaluating the background texture. */
-    if (sun_disc && sun_dir_angle < half_angular &&
-        !((path_flag & PATH_RAY_IMPORTANCE_BAKE) && kernel_data.background.use_sun_guiding))
-    {
-      /* get 2 pixels data */
-      float y;
-
-      /* sun interpolation */
-      if (sun_elevation - half_angular > 0.0f) {
-        if (sun_elevation + half_angular > 0.0f) {
-          y = ((dir_elevation - sun_elevation) / angular_diameter) + 0.5f;
-          xyz = interp(pixel_bottom, pixel_top, y) * sun_intensity;
-        }
-      }
-      else {
-        if (sun_elevation + half_angular > 0.0f) {
-          y = dir_elevation / (sun_elevation + half_angular);
-          xyz = interp(pixel_bottom, pixel_top, y) * sun_intensity;
-        }
-      }
-      /* limb darkening, coefficient is 0.6f */
-      const float limb_darkening = (1.0f - 0.6f * (1.0f - sqrtf(1.0f - sqr(sun_dir_angle /
-                                                                           half_angular))));
-      xyz *= limb_darkening;
-    }
-    /* sky */
-    else {
-      /* sky interpolation */
-      const float x = fractf((-direction.y - M_PI_2_F + sun_rotation) / M_2PI_F);
-      /* more pixels toward horizon compensation */
-      const float y = safe_sqrtf(dir_elevation / M_PI_2_F);
-      xyz = make_float3(kernel_tex_image_interp(kg, texture_id, x, y));
-    }
-  }
-  /* ground */
-  else {
-    if (dir.z < -0.4f) {
-      xyz = make_float3(0.0f, 0.0f, 0.0f);
-    }
-    else {
-      /* black ground fade */
-      float fade = 1.0f + dir.z * 2.5f;
-      fade = sqr(fade) * fade;
-      /* interpolation */
-      const float x = fractf((-direction.y - M_PI_2_F + sun_rotation) / M_2PI_F);
-      xyz = make_float3(kernel_tex_image_interp(kg, texture_id, x, -0.5)) * fade;
-    }
+  /* If the ray is inside the Sun disc, render it, otherwise render the sky.
+   * Alternatively, ignore the Sun if we're evaluating the background texture. */
+  if (sun_disc && sun_dir_angle < half_angular && dir_elevation > earth_intersection_angle &&
+      !((path_flag & PATH_RAY_IMPORTANCE_BAKE) && kernel_data.background.use_sun_guiding))
+  {
+    /* Sun interpolation */
+    const float y = ((dir_elevation - sun_elevation) / angular_diameter) + 0.5f;
+    /* Limb darkening, coefficient is 0.6f */
+    const float limb_darkening = (1.0f -
+                                  0.6f * (1.0f - sqrtf(1.0f - sqr(sun_dir_angle / half_angular))));
+    xyz = mix(pixel_bottom, pixel_top, y) * sun_intensity * limb_darkening;
   }
 
-  /* convert to RGB */
+  /* Sky */
+  const float x = fractf((-direction.y - M_PI_2_F + sun_rotation) * M_1_2PI_F);
+  /* Undo the non-linear transformation from the sky LUT */
+  const float y = copysignf(sqrtf(fabsf(dir_elevation) * M_2_PI_F), dir_elevation) * 0.5f + 0.5f;
+  xyz += make_float3(kernel_image_interp(kg, sd, texture_id, dual2(make_float2(x, y))));
+
+  /* Convert to RGB */
   return xyz_to_rgb_clamped(kg, xyz);
 }
 
 ccl_device_noinline int svm_node_tex_sky(KernelGlobals kg,
                                          ccl_private ShaderData *sd,
                                          const uint32_t path_flag,
-                                         ccl_private float *stack,
-                                         const uint4 node,
+                                         ccl_private float *ccl_restrict stack,
+                                         const ccl_global SVMNodeTexSky &ccl_restrict node,
                                          int offset)
 {
   /* Load data */
-  const uint dir_offset = node.y;
-  const uint out_offset = node.z;
-  const int sky_model = node.w;
+  const NodeSkyType sky_type = node.sky_type;
 
-  const float3 dir = stack_load_float3(stack, dir_offset);
-  float3 f;
+  const float3 dir = stack_load_float3(stack, node.dir_offset);
+  float3 rgb;
 
   /* Preetham and Hosek share the same data */
-  if (sky_model == 0 || sky_model == 1) {
-    /* Define variables */
-    float sunphi;
-    float suntheta;
-    float radiance_x;
-    float radiance_y;
-    float radiance_z;
-    float config_x[9];
-    float config_y[9];
-    float config_z[9];
+  if (sky_type == NODE_SKY_PREETHAM || sky_type == NODE_SKY_HOSEK) {
+    const ccl_global SVMNodeTexSkyPreethamData &preetham =
+        *reinterpret_cast<const ccl_global SVMNodeTexSkyPreethamData *>(
+            &kernel_data_fetch(svm_nodes, offset));
+    offset += sizeof(SVMNodeTexSkyPreethamData) / sizeof(uint);
 
-    float4 data = read_node_float(kg, &offset);
-    sunphi = data.x;
-    suntheta = data.y;
-    radiance_x = data.z;
-    radiance_y = data.w;
-
-    data = read_node_float(kg, &offset);
-    radiance_z = data.x;
-    config_x[0] = data.y;
-    config_x[1] = data.z;
-    config_x[2] = data.w;
-
-    data = read_node_float(kg, &offset);
-    config_x[3] = data.x;
-    config_x[4] = data.y;
-    config_x[5] = data.z;
-    config_x[6] = data.w;
-
-    data = read_node_float(kg, &offset);
-    config_x[7] = data.x;
-    config_x[8] = data.y;
-    config_y[0] = data.z;
-    config_y[1] = data.w;
-
-    data = read_node_float(kg, &offset);
-    config_y[2] = data.x;
-    config_y[3] = data.y;
-    config_y[4] = data.z;
-    config_y[5] = data.w;
-
-    data = read_node_float(kg, &offset);
-    config_y[6] = data.x;
-    config_y[7] = data.y;
-    config_y[8] = data.z;
-    config_z[0] = data.w;
-
-    data = read_node_float(kg, &offset);
-    config_z[1] = data.x;
-    config_z[2] = data.y;
-    config_z[3] = data.z;
-    config_z[4] = data.w;
-
-    data = read_node_float(kg, &offset);
-    config_z[5] = data.x;
-    config_z[6] = data.y;
-    config_z[7] = data.z;
-    config_z[8] = data.w;
+    /* Copy config arrays to private memory for GPU compatibility. */
+    float config_x[9], config_y[9], config_z[9];
+    for (int i = 0; i < 9; i++) {
+      config_x[i] = preetham.config_x[i];
+      config_y[i] = preetham.config_y[i];
+      config_z[i] = preetham.config_z[i];
+    }
 
     /* Compute Sky */
-    if (sky_model == 0) {
-      f = sky_radiance_preetham(kg,
-                                dir,
-                                sunphi,
-                                suntheta,
-                                radiance_x,
-                                radiance_y,
-                                radiance_z,
-                                config_x,
-                                config_y,
-                                config_z);
+    if (sky_type == NODE_SKY_PREETHAM) {
+      rgb = sky_radiance_preetham(kg,
+                                  dir,
+                                  preetham.phi,
+                                  preetham.theta,
+                                  preetham.radiance_x,
+                                  preetham.radiance_y,
+                                  preetham.radiance_z,
+                                  config_x,
+                                  config_y,
+                                  config_z);
     }
     else {
-      f = sky_radiance_hosek(kg,
-                             dir,
-                             sunphi,
-                             suntheta,
-                             radiance_x,
-                             radiance_y,
-                             radiance_z,
-                             config_x,
-                             config_y,
-                             config_z);
+      rgb = sky_radiance_hosek(kg,
+                               dir,
+                               preetham.phi,
+                               preetham.theta,
+                               preetham.radiance_x,
+                               preetham.radiance_y,
+                               preetham.radiance_z,
+                               config_x,
+                               config_y,
+                               config_z);
     }
   }
   /* Nishita */
   else {
-    /* Define variables */
-    float nishita_data[4];
+    const ccl_global SVMNodeTexSkyNishitaData &nishita =
+        *reinterpret_cast<const ccl_global SVMNodeTexSkyNishitaData *>(
+            &kernel_data_fetch(svm_nodes, offset));
+    offset += sizeof(SVMNodeTexSkyNishitaData) / sizeof(uint);
 
-    float4 data = read_node_float(kg, &offset);
-    const float3 pixel_bottom = make_float3(data.x, data.y, data.z);
-    float3 pixel_top;
-    pixel_top.x = data.w;
-
-    data = read_node_float(kg, &offset);
-    pixel_top.y = data.x;
-    pixel_top.z = data.y;
-    nishita_data[0] = data.z;
-    nishita_data[1] = data.w;
-
-    data = read_node_float(kg, &offset);
-    nishita_data[2] = data.x;
-    nishita_data[3] = data.y;
-    const uint texture_id = __float_as_uint(data.z);
+    const float3 pixel_bottom = make_float3(
+        nishita.pixel_bottom_x, nishita.pixel_bottom_y, nishita.pixel_bottom_z);
+    const float3 pixel_top = make_float3(
+        nishita.pixel_top_x, nishita.pixel_top_y, nishita.pixel_top_z);
+    const float sky_data[5] = {nishita.sun_elevation,
+                               nishita.sun_rotation,
+                               nishita.angular_diameter,
+                               nishita.sun_intensity,
+                               nishita.earth_intersection_angle};
 
     /* Compute Sky */
-    f = sky_radiance_nishita(
-        kg, dir, path_flag, pixel_bottom, pixel_top, nishita_data, texture_id);
+    rgb = sky_radiance_nishita(
+        kg, sd, dir, path_flag, pixel_bottom, pixel_top, sky_data, nishita.texture_id);
   }
 
-  stack_store_float3(stack, out_offset, f);
+  stack_store_float3(stack, node.out_offset, rgb);
   return offset;
 }
 

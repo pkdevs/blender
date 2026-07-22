@@ -12,11 +12,15 @@
 
 #include "BLI_math_vector_types.hh"
 
-#include "eevee_shader_shared.hh"
+#include "eevee_precompute_shared.hh"
+
+#include "draw_manager.hh"
 
 #include <fstream>
 
 namespace blender::eevee {
+
+using namespace draw;
 
 /**
  * Create a look-up table of the specified type using GPU compute.
@@ -44,7 +48,7 @@ class Precompute {
   }
 
   /**
-   * Write a the content of a texture to a PFM image file for inspection.
+   * Write the content of a texture to a PFM image file for inspection.
    * OpenGL texture coordinate convention with Y up is respected.
    */
   template<typename VecT>
@@ -63,11 +67,9 @@ class Precompute {
     file.open(std::string(name) + ".pfm");
     file << "PF\n";
     file << n_x * n_z << " " << n_y * n_w << "\n";
-#ifdef __LITTLE_ENDIAN__
+    /* NOTE: this is endianness-sensitive.
+     * Big endian system would have needed `1.0` value instead. */
     file << "-1.0\n";
-#else
-    file << "1.0\n";
-#endif
     file.close();
 
     /* Write binary float content. */
@@ -91,7 +93,7 @@ class Precompute {
   }
 
   /**
-   * Write a the content of a texture as a C++ header file array.
+   * Write the content of a texture as a C++ header file array.
    * The content is to be copied to `eevee_lut.cc` and formatted with `make format`.
    */
   template<typename VecT>

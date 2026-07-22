@@ -15,29 +15,23 @@
 #include "GHOST_XrGraphicsBindingVulkan.hh"
 #include "GHOST_Xr_intern.hh"
 
+#include "BLI_string_ref.hh"
+#include "BLI_vector.hh"
+
 #ifdef _WIN32
 #  include <vulkan/vulkan_win32.h>
 #endif
-
-/** OpenXR/Vulkan specific function pointers. */
-PFN_xrGetVulkanGraphicsRequirements2KHR
-    GHOST_XrGraphicsBindingVulkan::s_xrGetVulkanGraphicsRequirements2KHR_fn = nullptr;
-PFN_xrGetVulkanGraphicsDevice2KHR
-    GHOST_XrGraphicsBindingVulkan::s_xrGetVulkanGraphicsDevice2KHR_fn = nullptr;
-PFN_xrCreateVulkanInstanceKHR GHOST_XrGraphicsBindingVulkan::s_xrCreateVulkanInstanceKHR_fn =
-    nullptr;
-PFN_xrCreateVulkanDeviceKHR GHOST_XrGraphicsBindingVulkan::s_xrCreateVulkanDeviceKHR_fn = nullptr;
 
 /* -------------------------------------------------------------------- */
 /** \name Constructor
  * \{ */
 
 GHOST_XrGraphicsBindingVulkan::GHOST_XrGraphicsBindingVulkan(GHOST_Context &ghost_ctx)
-    : GHOST_IXrGraphicsBinding(), m_ghost_ctx(static_cast<GHOST_ContextVK &>(ghost_ctx))
+    : GHOST_IXrGraphicsBinding(), ghost_ctx_(static_cast<GHOST_ContextVK &>(ghost_ctx))
 {
 }
 
-/* \} */
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Destroying resources.
@@ -46,105 +40,162 @@ GHOST_XrGraphicsBindingVulkan::GHOST_XrGraphicsBindingVulkan(GHOST_Context &ghos
 GHOST_XrGraphicsBindingVulkan::~GHOST_XrGraphicsBindingVulkan()
 {
   /* Destroy buffer */
-  if (m_vk_buffer != VK_NULL_HANDLE) {
-    vmaUnmapMemory(m_vma_allocator, m_vk_buffer_allocation);
-    vmaDestroyBuffer(m_vma_allocator, m_vk_buffer, m_vk_buffer_allocation);
-    m_vk_buffer = VK_NULL_HANDLE;
-    m_vk_buffer_allocation = VK_NULL_HANDLE;
+  if (vk_buffer_ != VK_NULL_HANDLE) {
+    vmaUnmapMemory(vma_allocator_, vk_buffer_allocation_);
+    vmaDestroyBuffer(vma_allocator_, vk_buffer_, vk_buffer_allocation_);
+    vk_buffer_ = VK_NULL_HANDLE;
+    vk_buffer_allocation_ = VK_NULL_HANDLE;
   }
 
-  for (ImportedMemory &imported_memory : m_imported_memory) {
-    vkDestroyImage(m_vk_device, imported_memory.vk_image_xr, nullptr);
-    vkFreeMemory(m_vk_device, imported_memory.vk_device_memory_xr, nullptr);
+  for (ImportedMemory &imported_memory : imported_memory_) {
+    functions.vkDestroyImage(vk_device_, imported_memory.vk_image_xr, nullptr);
+    functions.vkFreeMemory(vk_device_, imported_memory.vk_device_memory_xr, nullptr);
   }
-  m_imported_memory.clear();
+  imported_memory_.clear();
 
   /* Destroy VMA */
-  if (m_vma_allocator != VK_NULL_HANDLE) {
-    vmaDestroyAllocator(m_vma_allocator);
-    m_vma_allocator = VK_NULL_HANDLE;
+  if (vma_allocator_ != VK_NULL_HANDLE) {
+    vmaDestroyAllocator(vma_allocator_);
+    vma_allocator_ = VK_NULL_HANDLE;
   }
 
   /* Destroy command buffer */
-  if (m_vk_command_buffer != VK_NULL_HANDLE) {
-    vkFreeCommandBuffers(m_vk_device, m_vk_command_pool, 1, &m_vk_command_buffer);
-    m_vk_command_buffer = VK_NULL_HANDLE;
+  if (vk_command_buffer_ != VK_NULL_HANDLE) {
+    functions.vkFreeCommandBuffers(vk_device_, vk_command_pool_, 1, &vk_command_buffer_);
+    vk_command_buffer_ = VK_NULL_HANDLE;
   }
 
   /* Destroy command pool */
-  if (m_vk_command_pool != VK_NULL_HANDLE) {
-    vkDestroyCommandPool(m_vk_device, m_vk_command_pool, nullptr);
-    m_vk_command_pool = VK_NULL_HANDLE;
+  if (vk_command_pool_ != VK_NULL_HANDLE) {
+    functions.vkDestroyCommandPool(vk_device_, vk_command_pool_, nullptr);
+    vk_command_pool_ = VK_NULL_HANDLE;
   }
 
-  m_vk_queue = VK_NULL_HANDLE;
+  vk_queue_ = VK_NULL_HANDLE;
 
   /* Destroy device */
-  if (m_vk_device != VK_NULL_HANDLE) {
-    vkDestroyDevice(m_vk_device, nullptr);
-    m_vk_device = VK_NULL_HANDLE;
+  if (vk_device_ != VK_NULL_HANDLE) {
+    functions.vkDestroyDevice(vk_device_, nullptr);
+    vk_device_ = VK_NULL_HANDLE;
   }
 
   /* Destroy instance */
-  if (m_vk_instance != VK_NULL_HANDLE) {
-    vkDestroyInstance(m_vk_instance, nullptr);
-    m_vk_instance = VK_NULL_HANDLE;
+  if (vk_instance_ != VK_NULL_HANDLE) {
+    vkDestroyInstance(vk_instance_, nullptr);
+    vk_instance_ = VK_NULL_HANDLE;
   }
-
-  s_xrGetVulkanGraphicsRequirements2KHR_fn = nullptr;
-  s_xrGetVulkanGraphicsDevice2KHR_fn = nullptr;
-  s_xrCreateVulkanInstanceKHR_fn = nullptr;
-  s_xrCreateVulkanDeviceKHR_fn = nullptr;
 }
 
-/* \} */
+/** \} */
+
+bool GHOST_XrGraphicsBindingVulkan::loadExtensionFunctions(XrInstance instance)
+{
+#define LOAD_FUNCTION(fn_ptr, name) \
+  XR_SUCCEEDED(xrGetInstanceProcAddr(instance, #name, (PFN_xrVoidFunction *)&fn_ptr))
+
+  extensions_.vulkan_enable = LOAD_FUNCTION(functions_.xrGetVulkanInstanceExtensionsKHR,
+                                            xrGetVulkanInstanceExtensionsKHR) &&
+                              LOAD_FUNCTION(functions_.xrGetVulkanDeviceExtensionsKHR,
+                                            xrGetVulkanDeviceExtensionsKHR) &&
+                              LOAD_FUNCTION(functions_.xrGetVulkanGraphicsDeviceKHR,
+                                            xrGetVulkanGraphicsDeviceKHR) &&
+                              LOAD_FUNCTION(functions_.xrGetVulkanGraphicsRequirementsKHR,
+                                            xrGetVulkanGraphicsRequirementsKHR);
+  extensions_.vulkan_enable2 =
+      LOAD_FUNCTION(functions_.xrGetVulkanGraphicsRequirements2KHR,
+                    xrGetVulkanGraphicsRequirements2KHR) &&
+      LOAD_FUNCTION(functions_.xrGetVulkanGraphicsDevice2KHR, xrGetVulkanGraphicsDevice2KHR) &&
+      LOAD_FUNCTION(functions_.xrCreateVulkanInstanceKHR, xrCreateVulkanInstanceKHR) &&
+      LOAD_FUNCTION(functions_.xrCreateVulkanDeviceKHR, xrCreateVulkanDeviceKHR);
+
+#undef LOAD_FUNCTION
+
+  CLOG_INFO(LOG_GHOST_XR,
+            "XR/Vulkan graphics extensions:\n"
+            " - [%c] XR_KHR_vulkan_enable\n"
+            " - [%c] XR_KHR_vulkan_enable2",
+            extensions_.vulkan_enable ? 'X' : ' ',
+            extensions_.vulkan_enable2 ? 'X' : ' ');
+  return extensions_.vulkan_enable || extensions_.vulkan_enable2;
+}
 
 bool GHOST_XrGraphicsBindingVulkan::checkVersionRequirements(GHOST_Context &ghost_ctx,
                                                              XrInstance instance,
                                                              XrSystemId system_id,
                                                              std::string *r_requirement_info) const
 {
-#define LOAD_PFN(var, name) \
-  if (var == nullptr && \
-      XR_FAILED(xrGetInstanceProcAddr(instance, #name, (PFN_xrVoidFunction *)&var))) \
-  { \
-    var = nullptr; \
-    *r_requirement_info = std::string("Unable to retrieve " #name " instance function"); \
-    return false; \
-  }
-  /* Get the function pointers for OpenXR/Vulkan. If any fails we expect that we cannot use the
-   * given context. */
-  LOAD_PFN(s_xrGetVulkanGraphicsRequirements2KHR_fn, xrGetVulkanGraphicsRequirements2KHR);
-  LOAD_PFN(s_xrGetVulkanGraphicsDevice2KHR_fn, xrGetVulkanGraphicsDevice2KHR);
-  LOAD_PFN(s_xrCreateVulkanInstanceKHR_fn, xrCreateVulkanInstanceKHR);
-  LOAD_PFN(s_xrCreateVulkanDeviceKHR_fn, xrCreateVulkanDeviceKHR);
-#undef LOAD_PFN
+  std::ostringstream strstream;
 
-  XrGraphicsRequirementsVulkanKHR xr_graphics_requirements{
-      /*type*/ XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN_KHR,
-  };
-  if (XR_FAILED(s_xrGetVulkanGraphicsRequirements2KHR_fn(
-          instance, system_id, &xr_graphics_requirements)))
-  {
-    *r_requirement_info = std::string("Unable to retrieve Xr version requirements for Vulkan");
-    return false;
-  }
-
-  /* Check if the Vulkan API instance version is supported. */
   GHOST_ContextVK &context_vk = static_cast<GHOST_ContextVK &>(ghost_ctx);
   const XrVersion vk_version = XR_MAKE_VERSION(
-      context_vk.m_context_major_version, context_vk.m_context_minor_version, 0);
-  if (vk_version < xr_graphics_requirements.minApiVersionSupported ||
-      vk_version > xr_graphics_requirements.maxApiVersionSupported)
-  {
-    std::ostringstream strstream;
-    strstream << "Min Vulkan version "
-              << XR_VERSION_MAJOR(xr_graphics_requirements.minApiVersionSupported) << "."
-              << XR_VERSION_MINOR(xr_graphics_requirements.minApiVersionSupported) << std::endl;
-    strstream << "Max Vulkan version "
-              << XR_VERSION_MAJOR(xr_graphics_requirements.maxApiVersionSupported) << "."
-              << XR_VERSION_MINOR(xr_graphics_requirements.maxApiVersionSupported) << std::endl;
+      context_vk.context_major_version_, context_vk.context_minor_version_, 0);
 
+  if (extensions_.vulkan_enable) {
+    XrGraphicsRequirementsVulkanKHR xr_graphics_requirements{
+        /*type*/ XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN_KHR,
+    };
+
+    if (XR_FAILED(functions_.xrGetVulkanGraphicsRequirementsKHR(
+            instance, system_id, &xr_graphics_requirements)))
+    {
+      *r_requirement_info = std::string("Unable to retrieve Xr version requirements for Vulkan");
+      return false;
+    }
+
+    /* Check if the Vulkan API instance version is supported. */
+    if (vk_version < xr_graphics_requirements.minApiVersionSupported) {
+      strstream.clear();
+      strstream << "Min Vulkan version "
+                << XR_VERSION_MAJOR(xr_graphics_requirements.minApiVersionSupported) << "."
+                << XR_VERSION_MINOR(xr_graphics_requirements.minApiVersionSupported) << std::endl;
+    }
+    if (vk_version > xr_graphics_requirements.maxApiVersionSupported) {
+      CLOG_INFO(LOG_GHOST_XR,
+                "OpenXR platform vulkan version requirements do not match with Blender. "
+                "This is known to happen when using Oculus/Meta Quest. A workaround for this is "
+                "already enabled by enabling extensions that are known to be in core vulkan. "
+                "(minimum vulkan version=%d.%d, maximum vulkan version=%d.%d).",
+                XR_VERSION_MAJOR(xr_graphics_requirements.minApiVersionSupported),
+                XR_VERSION_MINOR(xr_graphics_requirements.minApiVersionSupported),
+                XR_VERSION_MAJOR(xr_graphics_requirements.maxApiVersionSupported),
+                XR_VERSION_MINOR(xr_graphics_requirements.maxApiVersionSupported));
+    }
+  }
+
+  if (extensions_.vulkan_enable2) {
+    XrGraphicsRequirementsVulkanKHR xr_graphics_requirements2{
+        /*type*/ XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN_KHR,
+    };
+
+    if (XR_FAILED(functions_.xrGetVulkanGraphicsRequirements2KHR(
+            instance, system_id, &xr_graphics_requirements2)))
+    {
+      *r_requirement_info = std::string("Unable to retrieve Xr version requirements for Vulkan");
+      return false;
+    }
+
+    if (vk_version < xr_graphics_requirements2.minApiVersionSupported) {
+      strstream.clear();
+      strstream << "Min Vulkan version "
+                << XR_VERSION_MAJOR(xr_graphics_requirements2.minApiVersionSupported) << "."
+                << XR_VERSION_MINOR(xr_graphics_requirements2.minApiVersionSupported) << std::endl;
+    }
+    if (vk_version > xr_graphics_requirements2.maxApiVersionSupported) {
+      CLOG_INFO(LOG_GHOST_XR,
+                "OpenXR platform vulkan version requirements do not match with Blender. "
+                "This is known to happen when using Oculus/Meta Quest. A workaround for this is "
+                "already enabled by enabling extensions that are known to be in core vulkan. "
+                "(minimum vulkan version=%d.%d, maximum vulkan version=%d.%d).",
+                XR_VERSION_MAJOR(xr_graphics_requirements2.minApiVersionSupported),
+                XR_VERSION_MINOR(xr_graphics_requirements2.minApiVersionSupported),
+                XR_VERSION_MAJOR(xr_graphics_requirements2.maxApiVersionSupported),
+                XR_VERSION_MINOR(xr_graphics_requirements2.maxApiVersionSupported));
+    }
+  }
+
+  /* When one of the version doesn't match we will error out. We assume when both extensions are
+   * supported that both will use the same requirements. */
+  if (!strstream.str().empty()) {
     *r_requirement_info = strstream.str();
     return false;
   }
@@ -152,10 +203,13 @@ bool GHOST_XrGraphicsBindingVulkan::checkVersionRequirements(GHOST_Context &ghos
   return true;
 }
 
-void GHOST_XrGraphicsBindingVulkan::initFromGhostContext(GHOST_Context & /*ghost_ctx*/,
+void GHOST_XrGraphicsBindingVulkan::initFromGhostContext(GHOST_Context &ghost_ctx,
                                                          XrInstance instance,
                                                          XrSystemId system_id)
 {
+  if (tryReuseVulkanInstance(static_cast<GHOST_ContextVK &>(ghost_ctx), instance, system_id)) {
+    return;
+  }
   /* Create a new VkInstance that is compatible with OpenXR */
   VkApplicationInfo vk_application_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO,
                                            nullptr,
@@ -180,29 +234,29 @@ void GHOST_XrGraphicsBindingVulkan::initFromGhostContext(GHOST_Context & /*ghost
                                                            &vk_instance_create_info,
                                                            nullptr};
   VkResult vk_result;
-  CHECK_XR(s_xrCreateVulkanInstanceKHR_fn(
-               instance, &xr_instance_create_info, &m_vk_instance, &vk_result),
+  CHECK_XR(functions_.xrCreateVulkanInstanceKHR(
+               instance, &xr_instance_create_info, &vk_instance_, &vk_result),
            "Unable to create an OpenXR compatible Vulkan instance.");
 
   /* Physical device selection */
   XrVulkanGraphicsDeviceGetInfoKHR xr_device_get_info = {
-      XR_TYPE_VULKAN_GRAPHICS_DEVICE_GET_INFO_KHR, nullptr, system_id, m_vk_instance};
-  CHECK_XR(
-      s_xrGetVulkanGraphicsDevice2KHR_fn(instance, &xr_device_get_info, &m_vk_physical_device),
-      "Unable to create an OpenXR compatible Vulkan physical device.");
+      XR_TYPE_VULKAN_GRAPHICS_DEVICE_GET_INFO_KHR, nullptr, system_id, vk_instance_};
+  CHECK_XR(functions_.xrGetVulkanGraphicsDevice2KHR(
+               instance, &xr_device_get_info, &vk_physical_device_),
+           "Unable to create an OpenXR compatible Vulkan physical device.");
 
   /* Queue family */
   uint32_t vk_queue_family_count = 0;
-  vkGetPhysicalDeviceQueueFamilyProperties(m_vk_physical_device, &vk_queue_family_count, nullptr);
+  vkGetPhysicalDeviceQueueFamilyProperties(vk_physical_device_, &vk_queue_family_count, nullptr);
   std::vector<VkQueueFamilyProperties> vk_queue_families(vk_queue_family_count);
-  m_graphics_queue_family = 0;
+  graphics_queue_family_ = 0;
   vkGetPhysicalDeviceQueueFamilyProperties(
-      m_vk_physical_device, &vk_queue_family_count, vk_queue_families.data());
+      vk_physical_device_, &vk_queue_family_count, vk_queue_families.data());
   for (uint32_t i = 0; i < vk_queue_family_count; i++) {
     if (vk_queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT &&
         vk_queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
     {
-      m_graphics_queue_family = i;
+      graphics_queue_family_ = i;
       break;
     }
   }
@@ -212,7 +266,7 @@ void GHOST_XrGraphicsBindingVulkan::initFromGhostContext(GHOST_Context & /*ghost
   VkDeviceQueueCreateInfo vk_queue_create_info = {VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                                                   nullptr,
                                                   0,
-                                                  m_graphics_queue_family,
+                                                  graphics_queue_family_,
                                                   1,
                                                   &queue_priority};
   VkDeviceCreateInfo vk_device_create_info = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -229,60 +283,200 @@ void GHOST_XrGraphicsBindingVulkan::initFromGhostContext(GHOST_Context & /*ghost
                                                        system_id,
                                                        0,
                                                        vkGetInstanceProcAddr,
-                                                       m_vk_physical_device,
+                                                       vk_physical_device_,
                                                        &vk_device_create_info,
                                                        nullptr};
-  CHECK_XR(
-      s_xrCreateVulkanDeviceKHR_fn(instance, &xr_device_create_info, &m_vk_device, &vk_result),
-      "Unable to create an OpenXR compatible Vulkan logical device.");
+  CHECK_XR(functions_.xrCreateVulkanDeviceKHR(
+               instance, &xr_device_create_info, &vk_device_, &vk_result),
+           "Unable to create an OpenXR compatible Vulkan logical device.");
+  volkLoadDeviceTable(&functions, vk_device_);
 
-  vkGetDeviceQueue(m_vk_device, m_graphics_queue_family, 0, &m_vk_queue);
+  functions.vkGetDeviceQueue(vk_device_, graphics_queue_family_, 0, &vk_queue_);
 
   /* Command buffer pool */
   VkCommandPoolCreateInfo vk_command_pool_create_info = {
       VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       nullptr,
       VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-      m_graphics_queue_family};
-  vkCreateCommandPool(m_vk_device, &vk_command_pool_create_info, nullptr, &m_vk_command_pool);
+      graphics_queue_family_};
+  functions.vkCreateCommandPool(
+      vk_device_, &vk_command_pool_create_info, nullptr, &vk_command_pool_);
 
   /* Command buffer */
   VkCommandBufferAllocateInfo vk_command_buffer_allocate_info = {
       VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       nullptr,
-      m_vk_command_pool,
+      vk_command_pool_,
       VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       1};
-  vkAllocateCommandBuffers(m_vk_device, &vk_command_buffer_allocate_info, &m_vk_command_buffer);
+  functions.vkAllocateCommandBuffers(
+      vk_device_, &vk_command_buffer_allocate_info, &vk_command_buffer_);
 
   /* Select the best data transfer mode based on the OpenXR device and ContextVK. */
-  m_data_transfer_mode = choseDataTransferMode();
+  data_transfer_mode_ = choseDataTransferMode();
 
-  if (m_data_transfer_mode == GHOST_kVulkanXRModeCPU) {
+  if (data_transfer_mode_ == GHOST_kVulkanXRModeCPU) {
     /* VMA */
     VmaAllocatorCreateInfo allocator_create_info = {};
     allocator_create_info.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
     allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_2;
-    allocator_create_info.physicalDevice = m_vk_physical_device;
-    allocator_create_info.device = m_vk_device;
-    allocator_create_info.instance = m_vk_instance;
-    vmaCreateAllocator(&allocator_create_info, &m_vma_allocator);
+    allocator_create_info.physicalDevice = vk_physical_device_;
+    allocator_create_info.device = vk_device_;
+    allocator_create_info.instance = vk_instance_;
+    VmaVulkanFunctions vma_vulkan_functions = {};
+    vmaImportVulkanFunctionsFromVolk(&allocator_create_info, &vma_vulkan_functions);
+    allocator_create_info.pVulkanFunctions = &vma_vulkan_functions;
+    vmaCreateAllocator(&allocator_create_info, &vma_allocator_);
   }
 
   /* Update the binding struct */
   oxr_binding.vk.type = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR;
   oxr_binding.vk.next = nullptr;
-  oxr_binding.vk.instance = m_vk_instance;
-  oxr_binding.vk.physicalDevice = m_vk_physical_device;
-  oxr_binding.vk.device = m_vk_device;
-  oxr_binding.vk.queueFamilyIndex = m_graphics_queue_family;
+  oxr_binding.vk.instance = vk_instance_;
+  oxr_binding.vk.physicalDevice = vk_physical_device_;
+  oxr_binding.vk.device = vk_device_;
+  oxr_binding.vk.queueFamilyIndex = graphics_queue_family_;
   oxr_binding.vk.queueIndex = 0;
+}
+
+bool GHOST_XrGraphicsBindingVulkan::tryReuseVulkanInstance(GHOST_ContextVK &ghost_ctx,
+                                                           XrInstance instance,
+                                                           XrSystemId system_id)
+{
+  if (!extensions_.vulkan_enable) {
+    CLOG_INFO(LOG_GHOST_XR,
+              "Unable to reuse vulkan instance: XR_KHR_vulkan_enable isn't supported");
+    return false;
+  }
+
+  GHOST_VulkanHandles context_handles;
+  if (ghost_ctx.getVulkanHandles(context_handles) == GHOST_kFailure) {
+    return false;
+  }
+
+  bool result = true;
+
+  /* Perform all checks. When stacking the calls with `&&` only the first
+   * failing message will be reported. */
+  result &= areRequiredInstanceExtensionsEnabled(instance, system_id);
+  result &= areRequiredDeviceExtensionsEnabled(instance, system_id);
+  result &= isSamePhysicalDeviceSelected(instance, system_id, context_handles);
+
+  if (!result) {
+    return result;
+  }
+
+  CLOG_INFO(LOG_GHOST_XR, "Reusing vulkan instance.");
+  data_transfer_mode_ = GHOST_kVulkanXRModeRenderGraph;
+
+  /* Initialize binding struct */
+  oxr_binding.vk.type = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR;
+  oxr_binding.vk.next = nullptr;
+  oxr_binding.vk.instance = context_handles.instance;
+  oxr_binding.vk.physicalDevice = context_handles.physical_device;
+  oxr_binding.vk.device = context_handles.device;
+  oxr_binding.vk.queueFamilyIndex = context_handles.graphic_queue_family;
+  oxr_binding.vk.queueIndex = 0;
+  return true;
+}
+
+static blender::Vector<std::string> split_extension_names(blender::StringRef extension_names)
+{
+  blender::Vector<std::string> result;
+  std::stringstream ss(extension_names);
+  std::string extension_name;
+
+  while (std::getline(ss, extension_name, ' ')) {
+    if (!extension_name.empty()) {
+      result.append(extension_name);
+    }
+  }
+
+  return result;
+}
+
+bool GHOST_XrGraphicsBindingVulkan::areRequiredInstanceExtensionsEnabled(
+    XrInstance instance, XrSystemId system_id) const
+{
+  uint32_t buffer_count = 0;
+  functions_.xrGetVulkanInstanceExtensionsKHR(instance, system_id, 0, &buffer_count, nullptr);
+  std::string buffer(buffer_count, '\0');
+  functions_.xrGetVulkanInstanceExtensionsKHR(
+      instance, system_id, uint32_t(buffer.size()), &buffer_count, buffer.data());
+  blender::Vector<std::string> instance_extension_names = split_extension_names(buffer);
+  bool all_extensions_enabled = true;
+  std::stringstream log_ss;
+  log_ss << "Required vulkan instance extensions:";
+  for (const std::string &extension_name : instance_extension_names) {
+    bool is_extension_enabled = GHOST_ContextVK::is_instance_extension_enabled(
+        extension_name.c_str());
+    log_ss << "\n - [" << (is_extension_enabled ? 'X' : ' ') << "] " << extension_name;
+    all_extensions_enabled &= is_extension_enabled;
+  }
+  CLOG_DEBUG(LOG_GHOST_XR, "%s", log_ss.str().c_str());
+  if (!all_extensions_enabled) {
+    CLOG_INFO(LOG_GHOST_XR,
+              "Unable to reuse vulkan instance: not all required instance extensions are enabled");
+    return false;
+  }
+
+  return true;
+}
+
+bool GHOST_XrGraphicsBindingVulkan::areRequiredDeviceExtensionsEnabled(XrInstance instance,
+                                                                       XrSystemId system_id) const
+{
+  uint32_t buffer_count = 0;
+  functions_.xrGetVulkanDeviceExtensionsKHR(instance, system_id, 0, &buffer_count, nullptr);
+  std::string buffer(buffer_count, '\0');
+  functions_.xrGetVulkanDeviceExtensionsKHR(
+      instance, system_id, uint32_t(buffer.size()), &buffer_count, buffer.data());
+  blender::Vector<std::string> instance_extension_names = split_extension_names(buffer);
+  bool all_extensions_enabled = true;
+  std::stringstream log_ss;
+  log_ss << "Required vulkan device extensions:";
+  for (const std::string &extension_name : instance_extension_names) {
+    bool is_extension_enabled = GHOST_ContextVK::is_device_extension_enabled(
+        extension_name.c_str());
+    log_ss << "\n - [" << (is_extension_enabled ? 'X' : ' ') << "] " << extension_name;
+    all_extensions_enabled &= is_extension_enabled;
+  }
+  CLOG_DEBUG(LOG_GHOST_XR, "%s", log_ss.str().c_str());
+  if (!all_extensions_enabled) {
+    CLOG_INFO(LOG_GHOST_XR,
+              "Unable to reuse vulkan instance: not all required device extensions are enabled");
+    return false;
+  }
+
+  return true;
+}
+
+bool GHOST_XrGraphicsBindingVulkan::isSamePhysicalDeviceSelected(
+    XrInstance instance, XrSystemId system_id, const GHOST_VulkanHandles &context_handles) const
+{
+  VkPhysicalDevice openxr_physical_device = VK_NULL_HANDLE;
+  functions_.xrGetVulkanGraphicsDeviceKHR(
+      instance, system_id, context_handles.instance, &openxr_physical_device);
+  if (context_handles.physical_device != openxr_physical_device) {
+    VkPhysicalDeviceProperties openxr_physical_device_properties = {};
+    vkGetPhysicalDeviceProperties(openxr_physical_device, &openxr_physical_device_properties);
+    VkPhysicalDeviceProperties context_physical_device_properties = {};
+    vkGetPhysicalDeviceProperties(context_handles.physical_device,
+                                  &context_physical_device_properties);
+    CLOG_INFO(LOG_GHOST_XR,
+              "Unable to reuse vulkan instance: OpenXR requires to use a different GPU [%s] than "
+              "currently in used [%s].",
+              openxr_physical_device_properties.deviceName,
+              context_physical_device_properties.deviceName);
+    return false;
+  }
+  return true;
 }
 
 GHOST_TVulkanXRModes GHOST_XrGraphicsBindingVulkan::choseDataTransferMode()
 {
   GHOST_VulkanHandles vulkan_handles;
-  m_ghost_ctx.getVulkanHandles(vulkan_handles);
+  ghost_ctx_.getVulkanHandles(vulkan_handles);
 
   /* Retrieve the Context physical device properties. */
   VkPhysicalDeviceVulkan11Properties vk_physical_device_vulkan11_properties = {
@@ -296,11 +490,11 @@ GHOST_TVulkanXRModes GHOST_XrGraphicsBindingVulkan::choseDataTransferMode()
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES};
   VkPhysicalDeviceProperties2 xr_physical_device_properties = {
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &xr_physical_device_vulkan11_properties};
-  vkGetPhysicalDeviceProperties2(m_vk_physical_device, &xr_physical_device_properties);
+  vkGetPhysicalDeviceProperties2(vk_physical_device_, &xr_physical_device_properties);
 
   /* When the physical device properties match between the Vulkan device and the Xr devices we
    * assume that they are the same physical device in the machine and we can use shared memory.
-   * If not we fall back to CPU based data transfer.*/
+   * If not we fall back to CPU based data transfer. */
   const bool is_same_physical_device = memcmp(&vk_physical_device_vulkan11_properties,
                                               &xr_physical_device_vulkan11_properties,
                                               sizeof(VkPhysicalDeviceVulkan11Properties)) == 0;
@@ -321,7 +515,7 @@ GHOST_TVulkanXRModes GHOST_XrGraphicsBindingVulkan::choseDataTransferMode()
 
   auto has_extension = [=](const char *extension_name) {
     for (const auto &extension : available_device_extensions) {
-      if (strcmp(extension_name, extension.extensionName) == 0) {
+      if (STREQ(extension_name, extension.extensionName)) {
         return true;
       }
     }
@@ -394,16 +588,21 @@ std::optional<int64_t> GHOST_XrGraphicsBindingVulkan::chooseSwapchainFormat(
         break;
     }
 
-    switch (*result) {
-      case VK_FORMAT_R16G16B16A16_SFLOAT:
-      case VK_FORMAT_R8G8B8A8_UNORM:
-      case VK_FORMAT_B8G8R8A8_UNORM:
-        r_is_srgb_format = false;
-        break;
-      case VK_FORMAT_R8G8B8A8_SRGB:
-      case VK_FORMAT_B8G8R8A8_SRGB:
-        r_is_srgb_format = true;
-        break;
+    /* When using render graph, the render graph commands will ensure that the drawing is done in
+     * scene reference space and blits to the swapchain with sRGB conversion. No need to render
+     * into an sRGB framebuffer. */
+    if (data_transfer_mode_ != GHOST_kVulkanXRModeRenderGraph) {
+      switch (*result) {
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_B8G8R8A8_UNORM:
+          r_is_srgb_format = false;
+          break;
+        case VK_FORMAT_R8G8B8A8_SRGB:
+        case VK_FORMAT_B8G8R8A8_SRGB:
+          r_is_srgb_format = true;
+          break;
+      }
     }
   }
   return result;
@@ -418,7 +617,7 @@ std::vector<XrSwapchainImageBaseHeader *> GHOST_XrGraphicsBindingVulkan::createS
   for (XrSwapchainImageVulkan2KHR &image : vulkan_images) {
     base_images.push_back(reinterpret_cast<XrSwapchainImageBaseHeader *>(&image));
   }
-  m_image_cache.push_back(std::move(vulkan_images));
+  image_cache_.push_back(std::move(vulkan_images));
 
   return base_images;
 }
@@ -430,7 +629,7 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImage(
   XrSwapchainImageVulkan2KHR &vulkan_image = *reinterpret_cast<XrSwapchainImageVulkan2KHR *>(
       &swapchain_image);
 
-  switch (m_data_transfer_mode) {
+  switch (data_transfer_mode_) {
     case GHOST_kVulkanXRModeFD:
     case GHOST_kVulkanXRModeWin32:
       submitToSwapchainImageGpu(vulkan_image, draw_info);
@@ -438,6 +637,10 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImage(
 
     case GHOST_kVulkanXRModeCPU:
       submitToSwapchainImageCpu(vulkan_image, draw_info);
+      break;
+
+    case GHOST_kVulkanXRModeRenderGraph:
+      submitToSwapchainImageRenderGraph(vulkan_image, draw_info);
       break;
   }
 }
@@ -452,26 +655,27 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageCpu(
 {
   /* Acquire frame buffer image. */
   GHOST_VulkanOpenXRData openxr_data = {GHOST_kVulkanXRModeCPU};
-  m_ghost_ctx.openxr_acquire_framebuffer_image_callback_(&openxr_data);
+  ghost_ctx_.openxr_acquire_framebuffer_image_callback_(&openxr_data);
 
   /* Import render result. */
   VkDeviceSize component_size = 4 * sizeof(uint8_t);
-  if (draw_info.swapchain_format == GHOST_kXrSwapchainFormatRGBA16F ||
-      draw_info.swapchain_format == GHOST_kXrSwapchainFormatRGBA16)
+  if (ELEM(draw_info.swapchain_format,
+           GHOST_kXrSwapchainFormatRGBA16F,
+           GHOST_kXrSwapchainFormatRGBA16))
   {
     component_size = 4 * sizeof(uint16_t);
   }
   VkDeviceSize image_data_size = openxr_data.extent.width * openxr_data.extent.height *
                                  component_size;
 
-  if (m_vk_buffer != VK_NULL_HANDLE && m_vk_buffer_allocation_info.size < image_data_size) {
-    vmaUnmapMemory(m_vma_allocator, m_vk_buffer_allocation);
-    vmaDestroyBuffer(m_vma_allocator, m_vk_buffer, m_vk_buffer_allocation);
-    m_vk_buffer = VK_NULL_HANDLE;
-    m_vk_buffer_allocation = VK_NULL_HANDLE;
+  if (vk_buffer_ != VK_NULL_HANDLE && vk_buffer_allocation_info_.size < image_data_size) {
+    vmaUnmapMemory(vma_allocator_, vk_buffer_allocation_);
+    vmaDestroyBuffer(vma_allocator_, vk_buffer_, vk_buffer_allocation_);
+    vk_buffer_ = VK_NULL_HANDLE;
+    vk_buffer_allocation_ = VK_NULL_HANDLE;
   }
 
-  if (m_vk_buffer == VK_NULL_HANDLE) {
+  if (vk_buffer_ == VK_NULL_HANDLE) {
     VkBufferCreateInfo vk_buffer_create_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                                                 nullptr,
                                                 0,
@@ -484,20 +688,18 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageCpu(
     allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
     allocation_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     allocation_create_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    vmaCreateBuffer(m_vma_allocator,
+    vmaCreateBuffer(vma_allocator_,
                     &vk_buffer_create_info,
                     &allocation_create_info,
-                    &m_vk_buffer,
-                    &m_vk_buffer_allocation,
-                    &m_vk_buffer_allocation_info);
-    vmaMapMemory(
-        m_vma_allocator, m_vk_buffer_allocation, &m_vk_buffer_allocation_info.pMappedData);
+                    &vk_buffer_,
+                    &vk_buffer_allocation_,
+                    &vk_buffer_allocation_info_);
+    vmaMapMemory(vma_allocator_, vk_buffer_allocation_, &vk_buffer_allocation_info_.pMappedData);
   }
-  std::memcpy(
-      m_vk_buffer_allocation_info.pMappedData, openxr_data.cpu.image_data, image_data_size);
+  std::memcpy(vk_buffer_allocation_info_.pMappedData, openxr_data.cpu.image_data, image_data_size);
 
   /* Copy frame buffer image to swapchain image. */
-  VkCommandBuffer vk_command_buffer = m_vk_command_buffer;
+  VkCommandBuffer vk_command_buffer = vk_command_buffer_;
 
   /* - Begin command recording */
   VkCommandBufferBeginInfo vk_command_buffer_begin_info = {
@@ -505,9 +707,9 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageCpu(
       nullptr,
       VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
       nullptr};
-  vkBeginCommandBuffer(vk_command_buffer, &vk_command_buffer_begin_info);
+  functions.vkBeginCommandBuffer(vk_command_buffer, &vk_command_buffer_begin_info);
 
-  /* Transfer imported render result & swap chain image (UNDEFINED -> GENERAL) */
+  /* Transfer imported render result & swap-chain image (UNDEFINED -> GENERAL). */
   VkImageMemoryBarrier vk_image_memory_barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                                                   nullptr,
                                                   0,
@@ -518,16 +720,16 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageCpu(
                                                   VK_QUEUE_FAMILY_IGNORED,
                                                   swapchain_image.image,
                                                   {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
-  vkCmdPipelineBarrier(vk_command_buffer,
-                       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                       VK_PIPELINE_STAGE_TRANSFER_BIT,
-                       0,
-                       0,
-                       nullptr,
-                       0,
-                       nullptr,
-                       1,
-                       &vk_image_memory_barrier);
+  functions.vkCmdPipelineBarrier(vk_command_buffer,
+                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 0,
+                                 0,
+                                 nullptr,
+                                 0,
+                                 nullptr,
+                                 1,
+                                 &vk_image_memory_barrier);
 
   /* Copy buffer to image */
   VkBufferImageCopy vk_buffer_image_copy = {
@@ -537,31 +739,51 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageCpu(
       {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
       {draw_info.ofsx, draw_info.ofsy, 0},
       {openxr_data.extent.width, openxr_data.extent.height, 1}};
-  vkCmdCopyBufferToImage(vk_command_buffer,
-                         m_vk_buffer,
-                         swapchain_image.image,
-                         VK_IMAGE_LAYOUT_GENERAL,
-                         1,
-                         &vk_buffer_image_copy);
+  functions.vkCmdCopyBufferToImage(vk_command_buffer,
+                                   vk_buffer_,
+                                   swapchain_image.image,
+                                   VK_IMAGE_LAYOUT_GENERAL,
+                                   1,
+                                   &vk_buffer_image_copy);
 
   /* - End command recording */
-  vkEndCommandBuffer(vk_command_buffer);
+  functions.vkEndCommandBuffer(vk_command_buffer);
   /* - Submit command buffer to queue. */
   VkSubmitInfo vk_submit_info = {
       VK_STRUCTURE_TYPE_SUBMIT_INFO, nullptr, 0, nullptr, nullptr, 1, &vk_command_buffer};
-  vkQueueSubmit(m_vk_queue, 1, &vk_submit_info, VK_NULL_HANDLE);
+  functions.vkQueueSubmit(vk_queue_, 1, &vk_submit_info, VK_NULL_HANDLE);
 
   /* - Wait until device is idle. */
-  vkQueueWaitIdle(m_vk_queue);
+  functions.vkQueueWaitIdle(vk_queue_);
 
   /* - Reset command buffer for next eye/frame */
-  vkResetCommandBuffer(vk_command_buffer, 0);
+  functions.vkResetCommandBuffer(vk_command_buffer, 0);
 
   /* Release frame buffer image. */
-  m_ghost_ctx.openxr_release_framebuffer_image_callback_(&openxr_data);
+  ghost_ctx_.openxr_release_framebuffer_image_callback_(&openxr_data);
 }
 
-/* \} */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Data transfer render graph
+ * \{ */
+
+void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageRenderGraph(
+    XrSwapchainImageVulkan2KHR &swapchain_image, const GHOST_XrDrawViewInfo &draw_info)
+{
+  const bool is_last_view = draw_info.view_idx == image_cache_.size() - 1;
+
+  GHOST_VulkanSwapChainData swap_chain_data = {};
+  swap_chain_data.image = swapchain_image.image;
+  swap_chain_data.extent = {uint32_t(draw_info.width), uint32_t(draw_info.height)};
+  swap_chain_data.surface_format.format = VkFormat(draw_info.gpu_swapchain_format);
+  swap_chain_data.surface_format.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+
+  ghost_ctx_.swap_buffer_draw_callback_(&swap_chain_data, is_last_view);
+}
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Data transfer GPU
@@ -572,28 +794,28 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
 {
   /* Check for previous imported memory. */
   ImportedMemory *imported_memory = nullptr;
-  for (ImportedMemory &item : m_imported_memory) {
+  for (ImportedMemory &item : imported_memory_) {
     if (item.view_idx == draw_info.view_idx) {
       imported_memory = &item;
     }
   }
   /* No previous imported memory found, creating a new. */
   if (imported_memory == nullptr) {
-    m_imported_memory.push_back(
+    imported_memory_.push_back(
         {draw_info.view_idx, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE});
-    imported_memory = &m_imported_memory.back();
+    imported_memory = &imported_memory_.back();
   }
 
-  GHOST_VulkanOpenXRData openxr_data = {m_data_transfer_mode};
+  GHOST_VulkanOpenXRData openxr_data = {data_transfer_mode_};
   openxr_data.gpu.vk_image_blender = imported_memory->vk_image_blender;
-  m_ghost_ctx.openxr_acquire_framebuffer_image_callback_(&openxr_data);
+  ghost_ctx_.openxr_acquire_framebuffer_image_callback_(&openxr_data);
   imported_memory->vk_image_blender = openxr_data.gpu.vk_image_blender;
 
   /* Create an image handle */
   if (openxr_data.gpu.new_handle) {
     if (imported_memory->vk_image_xr) {
-      vkDestroyImage(m_vk_device, imported_memory->vk_image_xr, nullptr);
-      vkFreeMemory(m_vk_device, imported_memory->vk_device_memory_xr, nullptr);
+      functions.vkDestroyImage(vk_device_, imported_memory->vk_image_xr, nullptr);
+      functions.vkFreeMemory(vk_device_, imported_memory->vk_device_memory_xr, nullptr);
       imported_memory->vk_device_memory_xr = VK_NULL_HANDLE;
       imported_memory->vk_image_xr = VK_NULL_HANDLE;
     }
@@ -601,7 +823,7 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
     VkExternalMemoryImageCreateInfo vk_external_memory_image_info = {
         VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO, nullptr, 0};
 
-    switch (m_data_transfer_mode) {
+    switch (data_transfer_mode_) {
       case GHOST_kVulkanXRModeFD:
         vk_external_memory_image_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
         break;
@@ -610,6 +832,7 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
             VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
         break;
       case GHOST_kVulkanXRModeCPU:
+      case GHOST_kVulkanXRModeRenderGraph:
         break;
     }
 
@@ -629,12 +852,12 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
                                        nullptr,
                                        VK_IMAGE_LAYOUT_UNDEFINED};
 
-    vkCreateImage(m_vk_device, &vk_image_info, nullptr, &imported_memory->vk_image_xr);
+    functions.vkCreateImage(vk_device_, &vk_image_info, nullptr, &imported_memory->vk_image_xr);
 
     /* Get the memory requirements */
     VkMemoryRequirements vk_memory_requirements = {};
-    vkGetImageMemoryRequirements(
-        m_vk_device, imported_memory->vk_image_xr, &vk_memory_requirements);
+    functions.vkGetImageMemoryRequirements(
+        vk_device_, imported_memory->vk_image_xr, &vk_memory_requirements);
 
     /* Import the memory */
     VkMemoryDedicatedAllocateInfo vk_memory_dedicated_allocation_info = {
@@ -642,7 +865,7 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
         nullptr,
         imported_memory->vk_image_xr,
         VK_NULL_HANDLE};
-    switch (m_data_transfer_mode) {
+    switch (data_transfer_mode_) {
       case GHOST_kVulkanXRModeFD: {
         VkImportMemoryFdInfoKHR import_memory_info = {VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
                                                       &vk_memory_dedicated_allocation_info,
@@ -651,8 +874,8 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
         VkMemoryAllocateInfo allocate_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
                                               &import_memory_info,
                                               vk_memory_requirements.size};
-        vkAllocateMemory(
-            m_vk_device, &allocate_info, nullptr, &imported_memory->vk_device_memory_xr);
+        functions.vkAllocateMemory(
+            vk_device_, &allocate_info, nullptr, &imported_memory->vk_device_memory_xr);
         break;
       }
 
@@ -666,25 +889,26 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
         VkMemoryAllocateInfo allocate_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
                                               &import_memory_info,
                                               vk_memory_requirements.size};
-        vkAllocateMemory(
-            m_vk_device, &allocate_info, nullptr, &imported_memory->vk_device_memory_xr);
+        functions.vkAllocateMemory(
+            vk_device_, &allocate_info, nullptr, &imported_memory->vk_device_memory_xr);
 #endif
         break;
       }
 
       case GHOST_kVulkanXRModeCPU:
+      case GHOST_kVulkanXRModeRenderGraph:
         break;
     }
 
     /* Bind the imported memory to the image. */
-    vkBindImageMemory(m_vk_device,
-                      imported_memory->vk_image_xr,
-                      imported_memory->vk_device_memory_xr,
-                      openxr_data.gpu.memory_offset);
+    functions.vkBindImageMemory(vk_device_,
+                                imported_memory->vk_image_xr,
+                                imported_memory->vk_device_memory_xr,
+                                openxr_data.gpu.memory_offset);
   }
 
   /* Copy frame buffer image to swapchain image. */
-  VkCommandBuffer vk_command_buffer = m_vk_command_buffer;
+  VkCommandBuffer vk_command_buffer = vk_command_buffer_;
 
   /* Begin command recording */
   VkCommandBufferBeginInfo vk_command_buffer_begin_info = {
@@ -692,9 +916,9 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
       nullptr,
       VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
       nullptr};
-  vkBeginCommandBuffer(vk_command_buffer, &vk_command_buffer_begin_info);
+  functions.vkBeginCommandBuffer(vk_command_buffer, &vk_command_buffer_begin_info);
 
-  /* Transfer imported render result & swap chain image (UNDEFINED -> GENERAL) */
+  /* Transfer imported render result & swap-chain image (UNDEFINED -> GENERAL). */
   VkImageMemoryBarrier vk_image_memory_barrier[] = {{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                                                      nullptr,
                                                      0,
@@ -715,16 +939,16 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
                                                      VK_QUEUE_FAMILY_IGNORED,
                                                      swapchain_image.image,
                                                      {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}}};
-  vkCmdPipelineBarrier(vk_command_buffer,
-                       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                       VK_PIPELINE_STAGE_TRANSFER_BIT,
-                       0,
-                       0,
-                       nullptr,
-                       0,
-                       nullptr,
-                       2,
-                       vk_image_memory_barrier);
+  functions.vkCmdPipelineBarrier(vk_command_buffer,
+                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 0,
+                                 0,
+                                 nullptr,
+                                 0,
+                                 nullptr,
+                                 2,
+                                 vk_image_memory_barrier);
 
   /* Copy image to swap-chain. */
   VkImageCopy vk_image_copy = {{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
@@ -732,13 +956,13 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
                                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
                                {draw_info.ofsx, draw_info.ofsy, 0},
                                {openxr_data.extent.width, openxr_data.extent.height, 1}};
-  vkCmdCopyImage(vk_command_buffer,
-                 imported_memory->vk_image_xr,
-                 VK_IMAGE_LAYOUT_GENERAL,
-                 swapchain_image.image,
-                 VK_IMAGE_LAYOUT_GENERAL,
-                 1,
-                 &vk_image_copy);
+  functions.vkCmdCopyImage(vk_command_buffer,
+                           imported_memory->vk_image_xr,
+                           VK_IMAGE_LAYOUT_GENERAL,
+                           swapchain_image.image,
+                           VK_IMAGE_LAYOUT_GENERAL,
+                           1,
+                           &vk_image_copy);
 
   /* Swap-chain needs to be in an VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL compatible layout. */
   VkImageMemoryBarrier vk_image_memory_barrier2 = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -751,34 +975,37 @@ void GHOST_XrGraphicsBindingVulkan::submitToSwapchainImageGpu(
                                                    VK_QUEUE_FAMILY_IGNORED,
                                                    swapchain_image.image,
                                                    {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
-  vkCmdPipelineBarrier(vk_command_buffer,
-                       VK_PIPELINE_STAGE_TRANSFER_BIT,
-                       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                       0,
-                       0,
-                       nullptr,
-                       0,
-                       nullptr,
-                       1,
-                       &vk_image_memory_barrier2);
+  functions.vkCmdPipelineBarrier(vk_command_buffer,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                 0,
+                                 0,
+                                 nullptr,
+                                 0,
+                                 nullptr,
+                                 1,
+                                 &vk_image_memory_barrier2);
 
   /* End command recording. */
-  vkEndCommandBuffer(vk_command_buffer);
+  functions.vkEndCommandBuffer(vk_command_buffer);
   /* Submit command buffer to queue. */
   VkSubmitInfo vk_submit_info = {
       VK_STRUCTURE_TYPE_SUBMIT_INFO, nullptr, 0, nullptr, nullptr, 1, &vk_command_buffer};
-  vkQueueSubmit(m_vk_queue, 1, &vk_submit_info, VK_NULL_HANDLE);
+  functions.vkQueueSubmit(vk_queue_, 1, &vk_submit_info, VK_NULL_HANDLE);
 
   /* Wait until device is idle. */
-  vkQueueWaitIdle(m_vk_queue);
+  functions.vkQueueWaitIdle(vk_queue_);
 
   /* Reset command buffer for next eye/frame. */
-  vkResetCommandBuffer(vk_command_buffer, 0);
+  functions.vkResetCommandBuffer(vk_command_buffer, 0);
 }
 
-/* \} */
+/** \} */
 
 bool GHOST_XrGraphicsBindingVulkan::needsUpsideDownDrawing(GHOST_Context &ghost_ctx) const
 {
+  if (data_transfer_mode_ == GHOST_kVulkanXRModeRenderGraph) {
+    return !ghost_ctx.isUpsideDown();
+  }
   return ghost_ctx.isUpsideDown();
 }

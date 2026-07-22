@@ -14,6 +14,7 @@
 #include "scene/stats.h"
 #include "scene/tables.h"
 
+#include "util/log.h"
 #include "util/math.h"
 #include "util/math_cdf.h"
 #include "util/time.h"
@@ -89,7 +90,7 @@ NODE_DEFINE(Film)
   NodeType *type = NodeType::add("film", create);
 
   SOCKET_FLOAT(exposure, "Exposure", 1.0f);
-  SOCKET_FLOAT(pass_alpha_threshold, "Pass Alpha Threshold", 0.0f);
+  SOCKET_FLOAT(pass_alpha_threshold, "Pass Alpha Threshold", 0.5f);
 
   static NodeEnum filter_enum;
   filter_enum.insert("box", FILTER_BOX);
@@ -121,6 +122,11 @@ NODE_DEFINE(Film)
   SOCKET_BOOLEAN(use_approximate_shadow_catcher, "Use Approximate Shadow Catcher", false);
 
   SOCKET_BOOLEAN(use_sample_count, "Use Sample Count Pass", false);
+
+  SOCKET_BOOLEAN(denoising_pass_follow_reflections, "Denoising Pass Reflections", true);
+  SOCKET_BOOLEAN(denoising_pass_use_albedo_roughness_weighting,
+                 "Denoising Pass Albedo Roughness Weighting",
+                 true);
 
   return type;
 }
@@ -155,6 +161,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->exposure = exposure;
   kfilm->pass_alpha_threshold = pass_alpha_threshold;
   kfilm->pass_flag = 0;
+  kfilm->denoising_pass_flag = 0;
 
   kfilm->use_approximate_shadow_catcher = get_use_approximate_shadow_catcher();
 
@@ -186,13 +193,23 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->pass_transmission_indirect = PASS_UNUSED;
   kfilm->pass_volume_direct = PASS_UNUSED;
   kfilm->pass_volume_indirect = PASS_UNUSED;
+  kfilm->pass_volume_scatter = PASS_UNUSED;
+  kfilm->pass_volume_transmit = PASS_UNUSED;
+  kfilm->pass_volume_scatter_denoised = PASS_UNUSED;
+  kfilm->pass_volume_transmit_denoised = PASS_UNUSED;
+  kfilm->pass_volume_majorant = PASS_UNUSED;
   kfilm->pass_lightgroup = PASS_UNUSED;
 
   /* Mark passes as unused so that the kernel knows the pass is inaccessible. */
-  kfilm->pass_denoising_normal = PASS_UNUSED;
   kfilm->pass_denoising_albedo = PASS_UNUSED;
+  kfilm->pass_denoising_specular_albedo = PASS_UNUSED;
+  kfilm->pass_denoising_normal = PASS_UNUSED;
+  kfilm->pass_denoising_roughness = PASS_UNUSED;
   kfilm->pass_denoising_depth = PASS_UNUSED;
+  kfilm->pass_denoising_backward_motion = PASS_UNUSED;
+  kfilm->pass_denoising_specular_motion = PASS_UNUSED;
   kfilm->pass_sample_count = PASS_UNUSED;
+  kfilm->pass_render_time = PASS_UNUSED;
   kfilm->pass_adaptive_aux_buffer = PASS_UNUSED;
   kfilm->pass_shadow_catcher = PASS_UNUSED;
   kfilm->pass_shadow_catcher_sample_count = PASS_UNUSED;
@@ -217,13 +234,23 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
     if (pass->get_mode() == PassMode::DENOISED) {
       /* Generally we only storing offsets of the noisy passes. The display pass is an exception
        * since it is a read operation and not a write. */
+      if (pass->get_type() == PASS_VOLUME_TRANSMIT) {
+        kfilm->pass_volume_transmit_denoised = kfilm->pass_stride;
+      }
+      else if (pass->get_type() == PASS_VOLUME_SCATTER) {
+        kfilm->pass_volume_scatter_denoised = kfilm->pass_stride;
+      }
       kfilm->pass_stride += pass->get_info().num_components;
       continue;
     }
 
     /* Can't do motion pass if no motion vectors are available. */
-    if (pass->get_type() == PASS_MOTION || pass->get_type() == PASS_MOTION_WEIGHT) {
-      if (scene->need_motion() != Scene::MOTION_PASS) {
+    if (pass->get_type() == PASS_MOTION || pass->get_type() == PASS_MOTION_WEIGHT ||
+        pass->get_type() == PASS_DENOISING_BACKWARD_MOTION ||
+        pass->get_type() == PASS_DENOISING_SPECULAR_MOTION)
+    {
+      const Scene::MotionType need_motion = scene->need_motion();
+      if (need_motion != Scene::MOTION_PASS && need_motion != Scene::MOTION_PASS_INTERACTIVE) {
         kfilm->pass_stride += pass->get_info().num_components;
         continue;
       }
@@ -235,6 +262,9 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
     }
     else if (pass->get_type() <= PASS_CATEGORY_DATA_END) {
       kfilm->pass_flag |= pass_flag;
+    }
+    else if (pass->get_type() <= PASS_CATEGORY_DENOISING_END) {
+      kfilm->denoising_pass_flag |= pass_flag;
     }
     else {
       assert(pass->get_type() <= PASS_CATEGORY_BAKE_END);
@@ -327,6 +357,18 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
       case PASS_VOLUME_DIRECT:
         kfilm->pass_volume_direct = kfilm->pass_stride;
         break;
+      case PASS_VOLUME_SCATTER:
+        kfilm->pass_volume_scatter = kfilm->pass_stride;
+        break;
+      case PASS_VOLUME_TRANSMIT:
+        kfilm->pass_volume_transmit = kfilm->pass_stride;
+        break;
+      case PASS_VOLUME_MAJORANT:
+        kfilm->pass_volume_majorant = kfilm->pass_stride;
+        break;
+      case PASS_VOLUME_MAJORANT_SAMPLE_COUNT:
+        kfilm->pass_volume_majorant_sample_count = kfilm->pass_stride;
+        break;
 
       case PASS_BAKE_PRIMITIVE:
         kfilm->pass_bake_primitive = kfilm->pass_stride;
@@ -345,14 +387,26 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
         have_cryptomatte = true;
         break;
 
-      case PASS_DENOISING_NORMAL:
-        kfilm->pass_denoising_normal = kfilm->pass_stride;
-        break;
       case PASS_DENOISING_ALBEDO:
         kfilm->pass_denoising_albedo = kfilm->pass_stride;
         break;
+      case PASS_DENOISING_SPECULAR_ALBEDO:
+        kfilm->pass_denoising_specular_albedo = kfilm->pass_stride;
+        break;
+      case PASS_DENOISING_NORMAL:
+        kfilm->pass_denoising_normal = kfilm->pass_stride;
+        break;
+      case PASS_DENOISING_ROUGHNESS:
+        kfilm->pass_denoising_roughness = kfilm->pass_stride;
+        break;
       case PASS_DENOISING_DEPTH:
         kfilm->pass_denoising_depth = kfilm->pass_stride;
+        break;
+      case PASS_DENOISING_BACKWARD_MOTION:
+        kfilm->pass_denoising_backward_motion = kfilm->pass_stride;
+        break;
+      case PASS_DENOISING_SPECULAR_MOTION:
+        kfilm->pass_denoising_specular_motion = kfilm->pass_stride;
         break;
 
       case PASS_SHADOW_CATCHER:
@@ -370,6 +424,9 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
         break;
       case PASS_SAMPLE_COUNT:
         kfilm->pass_sample_count = kfilm->pass_stride;
+        break;
+      case PASS_RENDER_TIME:
+        kfilm->pass_render_time = kfilm->pass_stride;
         break;
 
       case PASS_AOV_COLOR:
@@ -415,6 +472,15 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->cryptomatte_passes = cryptomatte_passes;
   kfilm->cryptomatte_depth = cryptomatte_depth;
 
+  /* denoiser pass parameters */
+  kfilm->denoising_pass_options_flag = 0;
+  if (denoising_pass_follow_reflections) {
+    kfilm->denoising_pass_options_flag |= DENOISING_PASS_FOLLOW_REFLECTIONS;
+  }
+  if (denoising_pass_use_albedo_roughness_weighting) {
+    kfilm->denoising_pass_options_flag |= DENOISING_PASS_USE_ALBEDO_ROUGHNESS_WEIGHTING;
+  }
+
   clear_modified();
 }
 
@@ -457,7 +523,7 @@ bool Film::update_lightgroups(Scene *scene)
   for (const Pass *pass : scene->passes) {
     const ustring lightgroup = pass->get_lightgroup();
     if (!lightgroup.empty()) {
-      if (!lightgroups.count(lightgroup)) {
+      if (!lightgroups.contains(lightgroup)) {
         lightgroups[lightgroup] = i++;
       }
     }
@@ -478,7 +544,7 @@ void Film::update_passes(Scene *scene)
   Integrator *integrator = scene->integrator;
 
   if (!is_modified() && !object_manager->need_update() && !integrator->is_modified() &&
-      !background->is_modified())
+      !background->is_modified() && !scene->has_volume_modified())
   {
     return;
   }
@@ -508,11 +574,30 @@ void Film::update_passes(Scene *scene)
   /* Create passes needed for denoising. */
   const bool use_denoise = integrator->get_use_denoise();
   if (use_denoise) {
-    if (integrator->get_use_denoise_pass_normal()) {
+    const DenoiserPassMask denoiser_passes = integrator->get_denoiser_passes();
+    if (denoiser_passes & DENOISER_PASS_ALBEDO) {
+      add_auto_pass(scene, PASS_DENOISING_ALBEDO);
+    }
+    if (denoiser_passes & DENOISER_PASS_SPECULAR_ALBEDO) {
+      add_auto_pass(scene, PASS_DENOISING_SPECULAR_ALBEDO);
+    }
+    if (denoiser_passes & DENOISER_PASS_NORMAL) {
       add_auto_pass(scene, PASS_DENOISING_NORMAL);
     }
-    if (integrator->get_use_denoise_pass_albedo()) {
-      add_auto_pass(scene, PASS_DENOISING_ALBEDO);
+    if (denoiser_passes & DENOISER_PASS_ROUGHNESS) {
+      add_auto_pass(scene, PASS_DENOISING_ROUGHNESS);
+    }
+    if (denoiser_passes & DENOISER_PASS_DEPTH) {
+      add_auto_pass(scene, PASS_DENOISING_DEPTH);
+    }
+    if (denoiser_passes & DENOISER_PASS_MOTION) {
+      add_auto_pass(scene, PASS_MOTION);
+    }
+    if (denoiser_passes & DENOISER_PASS_BACKWARD_MOTION) {
+      add_auto_pass(scene, PASS_DENOISING_BACKWARD_MOTION);
+    }
+    if (denoiser_passes & DENOISER_PASS_SPECULAR_MOTION) {
+      add_auto_pass(scene, PASS_DENOISING_SPECULAR_MOTION);
     }
   }
 
@@ -570,12 +655,27 @@ void Film::update_passes(Scene *scene)
     }
   }
 
+  if (scene->has_volume()) {
+    add_auto_pass(scene, PASS_VOLUME_SCATTER);
+    add_auto_pass(scene, PASS_VOLUME_SCATTER, PassMode::DENOISED, "Volume Scatter");
+    add_auto_pass(scene, PASS_VOLUME_TRANSMIT);
+    add_auto_pass(scene, PASS_VOLUME_TRANSMIT, PassMode::DENOISED, "Volume Transmit");
+    if (!Pass::contains(scene->passes, PASS_SAMPLE_COUNT)) {
+      add_auto_pass(scene, PASS_SAMPLE_COUNT);
+    }
+    if (!Pass::contains(scene->passes, PASS_VOLUME_MAJORANT)) {
+      add_auto_pass(scene, PASS_VOLUME_MAJORANT, "Volume Majorant");
+    }
+    add_auto_pass(scene, PASS_VOLUME_MAJORANT_SAMPLE_COUNT);
+  }
+
   /* Remove duplicates and initialize internal pass info. */
   finalize_passes(scene, use_denoise);
 
   /* Flush scene updates. */
   const bool have_uv_pass = Pass::contains(scene->passes, PASS_UV);
-  const bool have_motion_pass = Pass::contains(scene->passes, PASS_MOTION);
+  const bool have_motion_pass = Pass::contains(scene->passes, PASS_MOTION) ||
+                                Pass::contains(scene->passes, PASS_DENOISING_BACKWARD_MOTION);
   const bool have_ao_pass = Pass::contains(scene->passes, PASS_AO);
 
   if (have_uv_pass != prev_have_uv_pass) {
@@ -598,10 +698,10 @@ void Film::update_passes(Scene *scene)
   tag_modified();
 
   /* Debug logging. */
-  if (VLOG_INFO_IS_ON) {
-    VLOG_INFO << "Effective scene passes:";
+  if (LOG_IS_ON(LOG_LEVEL_INFO)) {
+    LOG_INFO << "Effective scene passes:";
     for (const Pass *pass : scene->passes) {
-      VLOG_INFO << "- " << *pass;
+      LOG_INFO << "- " << *pass;
     }
   }
 }
@@ -668,8 +768,9 @@ void Film::finalize_passes(Scene *scene, const bool use_denoise)
 
     /* Disable denoising on passes if denoising is disabled, or if the
      * pass does not support it. */
-    pass->set_mode((use_denoise && pass->get_info().support_denoise) ? pass->get_mode() :
-                                                                       PassMode::NOISY);
+    const bool need_denoise = pass->get_info().support_denoise &&
+                              (use_denoise || is_volume_guiding_pass(pass->get_type()));
+    pass->set_mode(need_denoise ? pass->get_mode() : PassMode::NOISY);
 
     /* Merge duplicate passes. */
     bool duplicate_found = false;
@@ -701,7 +802,7 @@ void Film::finalize_passes(Scene *scene, const bool use_denoise)
     }
   }
 
-  /* Order from by components and type, This is required to for AOVs and cryptomatte passes,
+  /* Order from by components and type, This is required for AOVs and cryptomatte passes,
    * which the kernel assumes to be in order. Note this must use stable sort so cryptomatte
    * passes remain in the right order. */
   new_passes.stable_sort(compare_pass_order);
@@ -721,13 +822,16 @@ uint Film::get_kernel_features(const Scene *scene) const
     const PassType pass_type = pass->get_type();
     const PassMode pass_mode = pass->get_mode();
 
-    if (pass_mode == PassMode::DENOISED || pass_type == PASS_DENOISING_NORMAL ||
-        pass_type == PASS_DENOISING_ALBEDO || pass_type == PASS_DENOISING_DEPTH)
+    const bool has_denoise_pass = (pass_mode == PassMode::DENOISED) &&
+                                  !is_volume_guiding_pass(pass_type);
+
+    if (has_denoise_pass ||
+        (pass_type >= PASS_DENOISING_ALBEDO && pass_type <= PASS_DENOISING_SPECULAR_MOTION))
     {
       kernel_features |= KERNEL_FEATURE_DENOISING;
     }
 
-    if (pass_type >= PASS_DIFFUSE && pass_type <= PASS_VOLUME_INDIRECT) {
+    if (pass_type >= PASS_DIFFUSE && pass_type <= PASS_VOLUME_TRANSMIT) {
       kernel_features |= KERNEL_FEATURE_LIGHT_PASSES;
     }
 

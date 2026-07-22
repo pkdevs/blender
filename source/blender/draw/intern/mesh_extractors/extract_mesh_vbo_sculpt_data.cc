@@ -7,7 +7,7 @@
  */
 
 #include "BLI_array_utils.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_mesh.hh"
@@ -22,8 +22,8 @@ static const GPUVertFormat &get_sculpt_data_format()
 {
   static const GPUVertFormat format = []() {
     GPUVertFormat format{};
-    GPU_vertformat_attr_add(&format, "fset", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
-    GPU_vertformat_attr_add(&format, "msk", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&format, "fset", gpu::VertAttrType::UNORM_8_8_8_8);
+    GPU_vertformat_attr_add(&format, "msk", gpu::VertAttrType::SFLOAT_32);
     return format;
   }();
   return format;
@@ -117,7 +117,7 @@ gpu::VertBufPtr extract_sculpt_data_subdiv(const MeshRenderData &mr,
 
   if (const VArray mask = *attributes.lookup<float>(".sculpt_mask", bke::AttrDomain::Point)) {
     GPUVertFormat mask_format = {0};
-    GPU_vertformat_attr_add(&mask_format, "msk", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    GPU_vertformat_attr_add(&mask_format, "msk", gpu::VertAttrType::SFLOAT_32);
     const Span<int> corner_verts = coarse_mesh.corner_verts();
     mask_vbo = GPU_vertbuf_calloc();
     GPU_vertbuf_init_with_format(*mask_vbo, mask_format);
@@ -134,7 +134,7 @@ gpu::VertBufPtr extract_sculpt_data_subdiv(const MeshRenderData &mr,
 
   /* Then, gather face sets. */
   GPUVertFormat face_set_format = {0};
-  GPU_vertformat_attr_add(&face_set_format, "msk", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+  GPU_vertformat_attr_add(&face_set_format, "msk", gpu::VertAttrType::UNORM_8_8_8_8);
 
   gpu::VertBuf *face_set_vbo = GPU_vertbuf_calloc();
   GPU_vertbuf_init_with_format(*face_set_vbo, face_set_format);
@@ -160,7 +160,7 @@ gpu::VertBufPtr extract_sculpt_data_subdiv(const MeshRenderData &mr,
 
         uchar4 face_set_color(UCHAR_MAX);
         const int face_set_id = face_sets[face_index];
-        /* Skip for the default color Face Set to render it white. */
+        /* Skip for the default color face set to render it white. */
         if (face_set_id != default_face_set) {
           BKE_paint_face_set_overlay_color_get(face_set_id, face_set_seed, face_set_color);
         }

@@ -8,17 +8,26 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
+#include "BLI_threads.hh"
 
 #include "IMB_colormanagement.hh"
 #include "IMB_filetype.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
+#include "CLG_log.h"
+
 #include "openjpeg.h"
 
 #include <algorithm>
 #include <cstring>
+
+namespace blender {
+
+const char *imb_file_extensions_jp2[] = {".jp2", ".j2c", nullptr};
+
+static CLG_LogRef LOG = {"image.openjpeg"};
 
 #define JP2_FILEHEADER_SIZE 12
 
@@ -77,28 +86,25 @@ bool imb_is_a_jp2(const uchar *buf, size_t size)
 /**
  * sample error callback expecting a FILE* client object
  */
-static void error_callback(const char *msg, void *client_data)
+static void error_callback(const char *msg, void * /*client_data*/)
 {
-  FILE *stream = (FILE *)client_data;
-  fprintf(stream, "[ERROR] %s", msg);
+  CLOG_STR_ERROR(&LOG, msg);
 }
 /**
  * sample warning callback expecting a FILE* client object
  */
-static void warning_callback(const char *msg, void *client_data)
+static void warning_callback(const char *msg, void * /*client_data*/)
 {
-  FILE *stream = (FILE *)client_data;
-  fprintf(stream, "[WARNING] %s", msg);
+  CLOG_STR_WARN(&LOG, msg);
 }
 
 #ifndef NDEBUG
 /**
  * sample debug callback expecting no client object
  */
-static void info_callback(const char *msg, void *client_data)
+static void info_callback(const char *msg, void * /*client_data*/)
 {
-  FILE *stream = (FILE *)client_data;
-  fprintf(stream, "[INFO] %s", msg);
+  CLOG_STR_INFO(&LOG, msg);
 }
 #endif
 
@@ -297,10 +303,13 @@ static opj_stream_t *opj_stream_create_from_file(const char *filepath,
 
 static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
                                   OPJ_CODEC_FORMAT p_format,
-                                  int flags,
+                                  ImBufFlags flags,
                                   ImFileColorSpace &r_colorspace);
 
-ImBuf *imb_load_jp2(const uchar *mem, size_t size, int flags, ImFileColorSpace &r_colorspace)
+ImBuf *imb_load_jp2(const uchar *mem,
+                    size_t size,
+                    ImBufFlags flags,
+                    ImFileColorSpace &r_colorspace)
 {
   const OPJ_CODEC_FORMAT format = (size > JP2_FILEHEADER_SIZE) ? format_from_header(mem, size) :
                                                                  OPJ_CODEC_UNKNOWN;
@@ -315,7 +324,9 @@ ImBuf *imb_load_jp2(const uchar *mem, size_t size, int flags, ImFileColorSpace &
   return ibuf;
 }
 
-ImBuf *imb_load_jp2_filepath(const char *filepath, int flags, ImFileColorSpace &r_colorspace)
+ImBuf *imb_load_jp2_filepath(const char *filepath,
+                             ImBufFlags flags,
+                             ImFileColorSpace &r_colorspace)
 {
   FILE *p_file = nullptr;
   uchar mem[JP2_FILEHEADER_SIZE];
@@ -340,7 +351,7 @@ ImBuf *imb_load_jp2_filepath(const char *filepath, int flags, ImFileColorSpace &
 
 static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
                                   const OPJ_CODEC_FORMAT format,
-                                  int flags,
+                                  ImBufFlags flags,
                                   ImFileColorSpace & /*r_colorspace*/)
 {
   if (format == OPJ_CODEC_UNKNOWN) {
@@ -350,11 +361,12 @@ static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
   ImBuf *ibuf = nullptr;
   bool use_float = false; /* for precision higher than 8 use float */
   bool use_alpha = false;
+  ImColorMode color_mode = ImColorMode::RGBA;
 
   long signed_offsets[4] = {0, 0, 0, 0};
   int float_divs[4] = {1, 1, 1, 1};
 
-  uint i, i_next, w, h, planes;
+  uint i, i_next, w, h;
   uint y;
   const int *r, *g, *b, *a; /* matching 'opj_image_comp.data' type */
 
@@ -372,10 +384,10 @@ static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
   codec = opj_create_decompress(format);
 
   /* configure the event callbacks (not required) */
-  opj_set_error_handler(codec, error_callback, stderr);
-  opj_set_warning_handler(codec, warning_callback, stderr);
+  opj_set_error_handler(codec, error_callback, nullptr);
+  opj_set_warning_handler(codec, warning_callback, nullptr);
 #ifndef NDEBUG /* too noisy */
-  opj_set_info_handler(codec, info_callback, stderr);
+  opj_set_info_handler(codec, info_callback, nullptr);
 #endif
 
   /* setup the decoder decoding parameters using the current image and user parameters */
@@ -384,18 +396,18 @@ static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
   }
 
   if (opj_read_header(stream, codec, &image) == false) {
-    printf("OpenJPEG error: failed to read the header\n");
+    CLOG_ERROR(&LOG, "Failed to read the header");
     goto finally;
   }
 
   /* decode the stream and fill the image structure */
   if (opj_decode(codec, stream, image) == false) {
-    fprintf(stderr, "ERROR -> j2k_to_image: failed to decode image!\n");
+    CLOG_ERROR(&LOG, "Failed to decode image!");
     goto finally;
   }
 
   if ((image->numcomps * image->x1 * image->y1) == 0) {
-    fprintf(stderr, "\nError: invalid raw image parameters\n");
+    CLOG_ERROR(&LOG, "Invalid raw image parameters");
     goto finally;
   }
 
@@ -404,12 +416,19 @@ static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
 
   switch (image->numcomps) {
     case 1: /* Gray-scale. */
-    case 3: /* Color. */
-      planes = 24;
+      color_mode = ImColorMode::BW;
       use_alpha = false;
       break;
-    default:       /* 2 or 4 - Gray-scale or Color + alpha. */
-      planes = 32; /* Gray-scale + alpha. */
+    case 2: /* Gray-scale + alpha. */
+      color_mode = ImColorMode::BW_A;
+      use_alpha = true;
+      break;
+    case 3: /* Color. */
+      color_mode = ImColorMode::RGB;
+      use_alpha = false;
+      break;
+    default: /* 4 or more - assume RGBA. */
+      color_mode = ImColorMode::RGBA;
       use_alpha = true;
       break;
   }
@@ -432,12 +451,13 @@ static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
     float_divs[i] = (1 << image->comps[i].prec) - 1;
   }
 
-  ibuf = IMB_allocImBuf(w, h, planes, use_float ? IB_float_data : IB_byte_data);
+  ibuf = IMB_allocImBuf(w, h, use_float ? ImBufFlags::FloatData : ImBufFlags::ByteData);
 
   if (ibuf == nullptr) {
     goto finally;
   }
 
+  ibuf->color_mode = color_mode;
   ibuf->ftype = IMB_FTYPE_JP2;
   if (true /*is_jp2*/) {
     ibuf->foptions.flag |= JP2_JP2;
@@ -447,7 +467,7 @@ static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
   }
 
   if (use_float) {
-    float *rect_float = ibuf->float_buffer.data;
+    float *rect_float = ibuf->float_data_for_write();
 
     if (image->numcomps < 3) {
       r = image->comps[0].data;
@@ -499,14 +519,14 @@ static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
     }
   }
   else {
-    uchar *rect_uchar = ibuf->byte_buffer.data;
+    uchar *rect_uchar = ibuf->byte_data_for_write();
 
     if (image->numcomps < 3) {
       r = image->comps[0].data;
 
       /* Gray-scale. */
       if (use_alpha) {
-        a = image->comps[3].data;
+        a = image->comps[1].data;
         PIXEL_LOOPER_BEGIN (rect_uchar) {
           rect_uchar[0] = rect_uchar[1] = rect_uchar[2] = (r[i] + signed_offsets[0]);
           rect_uchar[3] = a[i] + signed_offsets[1];
@@ -549,7 +569,7 @@ static ImBuf *imb_load_jp2_stream(opj_stream_t *stream,
     }
   }
 
-  if (flags & IB_byte_data) {
+  if (flag_is_set(flags, ImBufFlags::ByteData)) {
     IMB_byte_from_float(ibuf);
   }
 
@@ -692,12 +712,12 @@ static void cinema_setup_encoder(opj_cparameters_t *parameters,
     case OPJ_CINEMA2K_48:
       parameters->numresolution = std::min(parameters->numresolution, 6);
       if (!((image->comps[0].w == 2048) || (image->comps[0].h == 1080))) {
-        fprintf(stdout,
-                "Image coordinates %u x %u is not 2K compliant.\nJPEG Digital Cinema Profile-3 "
-                "(2K profile) compliance requires that at least one of coordinates match 2048 x "
-                "1080\n",
-                image->comps[0].w,
-                image->comps[0].h);
+        CLOG_WARN(&LOG,
+                  "Image coordinates %u x %u is not 2K compliant.\nJPEG Digital Cinema Profile-3 "
+                  "(2K profile) compliance requires that at least one of coordinates match 2048 x "
+                  "1080",
+                  image->comps[0].w,
+                  image->comps[0].h);
         parameters->cp_rsiz = OPJ_STD_RSIZ;
       }
       else {
@@ -713,12 +733,12 @@ static void cinema_setup_encoder(opj_cparameters_t *parameters,
         parameters->numresolution = 7;
       }
       if (!((image->comps[0].w == 4096) || (image->comps[0].h == 2160))) {
-        fprintf(stdout,
-                "Image coordinates %u x %u is not 4K compliant.\nJPEG Digital Cinema Profile-4"
-                "(4K profile) compliance requires that at least one of coordinates match 4096 x "
-                "2160\n",
-                image->comps[0].w,
-                image->comps[0].h);
+        CLOG_WARN(&LOG,
+                  "Image coordinates %u x %u is not 4K compliant.\nJPEG Digital Cinema Profile-4"
+                  "(4K profile) compliance requires that at least one of coordinates match 4096 x "
+                  "2160",
+                  image->comps[0].w,
+                  image->comps[0].h);
         parameters->cp_rsiz = OPJ_STD_RSIZ;
       }
       else {
@@ -816,7 +836,7 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
   img_fol_t img_fol; /* only needed for cinema presets */
   memset(&img_fol, 0, sizeof(img_fol_t));
 
-  if (ibuf->float_buffer.colorspace || (ibuf->colormanage_flag & IMB_COLORMANAGE_IS_DATA)) {
+  if (ibuf->float_buffer.colorspace || ibuf->colorspace_is_data()) {
     /* float buffer was managed already, no need in color space conversion */
     chanel_colormanage_cb = channel_colormanage_noop;
   }
@@ -839,7 +859,8 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
       }
     }
     if (parameters->cp_cinema) {
-      img_fol.rates = MEM_malloc_arrayN<float>(size_t(parameters->tcp_numlayers), "jp2_rates");
+      img_fol.rates = MEM_new_array_uninitialized<float>(size_t(parameters->tcp_numlayers),
+                                                         "jp2_rates");
       for (i = 0; i < parameters->tcp_numlayers; i++) {
         img_fol.rates[i] = parameters->tcp_rates[i];
       }
@@ -852,8 +873,6 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
   }
   else {
     /* Get settings from the imbuf */
-    color_space = (ibuf->foptions.flag & JP2_YCC) ? OPJ_CLRSPC_SYCC : OPJ_CLRSPC_SRGB;
-
     if (ibuf->foptions.flag & JP2_16BIT) {
       prec = 16;
     }
@@ -864,9 +883,27 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
       prec = 8;
     }
 
-    /* 32bit images == alpha channel. */
-    /* Gray-scale not supported yet. */
-    numcomps = (ibuf->planes == 32) ? 4 : 3;
+    switch (ibuf->color_mode) {
+      case ImColorMode::BW:
+        numcomps = 1;
+        break;
+      case ImColorMode::BW_A:
+        numcomps = 2;
+        break;
+      case ImColorMode::RGB:
+        numcomps = 3;
+        break;
+      case ImColorMode::RGBA:
+        numcomps = 4;
+        break;
+    }
+
+    if (numcomps <= 2) {
+      color_space = OPJ_CLRSPC_GRAY;
+    }
+    else {
+      color_space = (ibuf->foptions.flag & JP2_YCC) ? OPJ_CLRSPC_SYCC : OPJ_CLRSPC_SRGB;
+    }
   }
 
   w = ibuf->x;
@@ -889,7 +926,7 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
   /* create the image */
   image = opj_image_create(numcomps, &cmptparm[0], color_space);
   if (!image) {
-    printf("Error: opj_image_create() failed\n");
+    CLOG_ERROR(&LOG, "opj_image_create() failed");
     return nullptr;
   }
 
@@ -900,260 +937,222 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
   image->y1 = image->y0 + (h - 1) * subsampling_dy + 1 + image->y0;
 
   /* set image data */
-  rect_uchar = ibuf->byte_buffer.data;
-  rect_float = ibuf->float_buffer.data;
+  rect_uchar = ibuf->byte_data_for_write();
+  rect_float = ibuf->float_data_for_write();
 
-  /* set the destination channels */
+  /* Set the destination channels. For gray + alpha (numcomps == 2), alpha is component 1. */
   r = image->comps[0].data;
-  g = image->comps[1].data;
-  b = image->comps[2].data;
-  a = (numcomps == 4) ? image->comps[3].data : nullptr;
+  g = (numcomps >= 3) ? image->comps[1].data : nullptr;
+  b = (numcomps >= 3) ? image->comps[2].data : nullptr;
+  a = (numcomps == 4) ? image->comps[3].data : (numcomps == 2) ? image->comps[1].data : nullptr;
 
   if (rect_float && rect_uchar && prec == 8) {
     /* No need to use the floating point buffer, just write the 8 bits from the char buffer */
     rect_float = nullptr;
   }
 
+  /* `g`, `b`, `a` are null for components not being written. */
   if (rect_float) {
     int channels_in_float = ibuf->channels ? ibuf->channels : 4;
 
     switch (prec) {
       case 8: /* Convert blenders float color channels to 8, 12 or 16bit ints */
-        if (numcomps == 4) {
-          if (channels_in_float == 4) {
-            PIXEL_LOOPER_BEGIN (rect_float) {
-              premul_to_straight_v4_v4(from_straight, rect_float);
-              r[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(from_straight[0]));
+        if (channels_in_float == 4) {
+          PIXEL_LOOPER_BEGIN (rect_float) {
+            premul_to_straight_v4_v4(from_straight, rect_float);
+            r[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(from_straight[0]));
+            if (g) {
               g[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(from_straight[1]));
+            }
+            if (b) {
               b[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(from_straight[2]));
+            }
+            if (a) {
               a[i] = DOWNSAMPLE_FLOAT_TO_8BIT(from_straight[3]);
             }
-            PIXEL_LOOPER_END;
           }
-          else if (channels_in_float == 3) {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 3) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[0]));
+          PIXEL_LOOPER_END;
+        }
+        else if (channels_in_float == 3) {
+          PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 3) {
+            r[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[0]));
+            if (g) {
               g[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[1]));
+            }
+            if (b) {
               b[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[2]));
+            }
+            if (a) {
               a[i] = 255;
             }
-            PIXEL_LOOPER_END;
           }
-          else {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 1) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[0]));
-              g[i] = b[i] = r[i];
-              a[i] = 255;
-            }
-            PIXEL_LOOPER_END;
-          }
+          PIXEL_LOOPER_END;
         }
         else {
-          if (channels_in_float == 4) {
-            PIXEL_LOOPER_BEGIN (rect_float) {
-              premul_to_straight_v4_v4(from_straight, rect_float);
-              r[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(from_straight[0]));
-              g[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(from_straight[1]));
-              b[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(from_straight[2]));
+          PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 1) {
+            r[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[0]));
+            if (g) {
+              g[i] = r[i];
             }
-            PIXEL_LOOPER_END;
-          }
-          else if (channels_in_float == 3) {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 3) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[0]));
-              g[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[1]));
-              b[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[2]));
+            if (b) {
+              b[i] = r[i];
             }
-            PIXEL_LOOPER_END;
-          }
-          else {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 1) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_8BIT(chanel_colormanage_cb(rect_float[0]));
-              g[i] = b[i] = r[i];
+            if (a) {
+              a[i] = 255;
             }
-            PIXEL_LOOPER_END;
           }
+          PIXEL_LOOPER_END;
         }
         break;
 
       case 12:
-        if (numcomps == 4) {
-          if (channels_in_float == 4) {
-            PIXEL_LOOPER_BEGIN (rect_float) {
-              premul_to_straight_v4_v4(from_straight, rect_float);
-              r[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(from_straight[0]));
+        if (channels_in_float == 4) {
+          PIXEL_LOOPER_BEGIN (rect_float) {
+            premul_to_straight_v4_v4(from_straight, rect_float);
+            r[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(from_straight[0]));
+            if (g) {
               g[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(from_straight[1]));
+            }
+            if (b) {
               b[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(from_straight[2]));
+            }
+            if (a) {
               a[i] = DOWNSAMPLE_FLOAT_TO_12BIT(from_straight[3]);
             }
-            PIXEL_LOOPER_END;
           }
-          else if (channels_in_float == 3) {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 3) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[0]));
+          PIXEL_LOOPER_END;
+        }
+        else if (channels_in_float == 3) {
+          PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 3) {
+            r[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[0]));
+            if (g) {
               g[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[1]));
+            }
+            if (b) {
               b[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[2]));
+            }
+            if (a) {
               a[i] = 4095;
             }
-            PIXEL_LOOPER_END;
           }
-          else {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 1) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[0]));
-              g[i] = b[i] = r[i];
-              a[i] = 4095;
-            }
-            PIXEL_LOOPER_END;
-          }
+          PIXEL_LOOPER_END;
         }
         else {
-          if (channels_in_float == 4) {
-            PIXEL_LOOPER_BEGIN (rect_float) {
-              premul_to_straight_v4_v4(from_straight, rect_float);
-              r[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(from_straight[0]));
-              g[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(from_straight[1]));
-              b[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(from_straight[2]));
+          PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 1) {
+            r[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[0]));
+            if (g) {
+              g[i] = r[i];
             }
-            PIXEL_LOOPER_END;
-          }
-          else if (channels_in_float == 3) {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 3) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[0]));
-              g[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[1]));
-              b[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[2]));
+            if (b) {
+              b[i] = r[i];
             }
-            PIXEL_LOOPER_END;
-          }
-          else {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 1) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_12BIT(chanel_colormanage_cb(rect_float[0]));
-              g[i] = b[i] = r[i];
+            if (a) {
+              a[i] = 4095;
             }
-            PIXEL_LOOPER_END;
           }
+          PIXEL_LOOPER_END;
         }
         break;
 
       case 16:
-        if (numcomps == 4) {
-          if (channels_in_float == 4) {
-            PIXEL_LOOPER_BEGIN (rect_float) {
-              premul_to_straight_v4_v4(from_straight, rect_float);
-              r[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(from_straight[0]));
+        if (channels_in_float == 4) {
+          PIXEL_LOOPER_BEGIN (rect_float) {
+            premul_to_straight_v4_v4(from_straight, rect_float);
+            r[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(from_straight[0]));
+            if (g) {
               g[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(from_straight[1]));
+            }
+            if (b) {
               b[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(from_straight[2]));
+            }
+            if (a) {
               a[i] = DOWNSAMPLE_FLOAT_TO_16BIT(from_straight[3]);
             }
-            PIXEL_LOOPER_END;
           }
-          else if (channels_in_float == 3) {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 3) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[0]));
+          PIXEL_LOOPER_END;
+        }
+        else if (channels_in_float == 3) {
+          PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 3) {
+            r[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[0]));
+            if (g) {
               g[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[1]));
+            }
+            if (b) {
               b[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[2]));
+            }
+            if (a) {
               a[i] = 65535;
             }
-            PIXEL_LOOPER_END;
           }
-          else {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 1) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[0]));
-              g[i] = b[i] = r[i];
-              a[i] = 65535;
-            }
-            PIXEL_LOOPER_END;
-          }
+          PIXEL_LOOPER_END;
         }
         else {
-          if (channels_in_float == 4) {
-            PIXEL_LOOPER_BEGIN (rect_float) {
-              premul_to_straight_v4_v4(from_straight, rect_float);
-              r[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(from_straight[0]));
-              g[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(from_straight[1]));
-              b[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(from_straight[2]));
+          PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 1) {
+            r[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[0]));
+            if (g) {
+              g[i] = r[i];
             }
-            PIXEL_LOOPER_END;
-          }
-          else if (channels_in_float == 3) {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 3) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[0]));
-              g[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[1]));
-              b[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[2]));
+            if (b) {
+              b[i] = r[i];
             }
-            PIXEL_LOOPER_END;
-          }
-          else {
-            PIXEL_LOOPER_BEGIN_CHANNELS (rect_float, 1) {
-              r[i] = DOWNSAMPLE_FLOAT_TO_16BIT(chanel_colormanage_cb(rect_float[0]));
-              g[i] = b[i] = r[i];
+            if (a) {
+              a[i] = 65535;
             }
-            PIXEL_LOOPER_END;
           }
+          PIXEL_LOOPER_END;
         }
         break;
     }
   }
   else {
-    /* Just use rect. */
+    /* Just use rect. Alpha lives at byte index 3 in the #ImBuf for both RGBA and BW_A. */
     switch (prec) {
       case 8:
-        if (numcomps == 4) {
-          PIXEL_LOOPER_BEGIN (rect_uchar) {
-            r[i] = rect_uchar[0];
+        PIXEL_LOOPER_BEGIN (rect_uchar) {
+          r[i] = rect_uchar[0];
+          if (g) {
             g[i] = rect_uchar[1];
+          }
+          if (b) {
             b[i] = rect_uchar[2];
+          }
+          if (a) {
             a[i] = rect_uchar[3];
           }
-          PIXEL_LOOPER_END;
         }
-        else {
-          PIXEL_LOOPER_BEGIN (rect_uchar) {
-            r[i] = rect_uchar[0];
-            g[i] = rect_uchar[1];
-            b[i] = rect_uchar[2];
-          }
-          PIXEL_LOOPER_END;
-        }
+        PIXEL_LOOPER_END;
         break;
 
-      case 12: /* Up Sampling, a bit pointless but best write the bit depth requested */
-        if (numcomps == 4) {
-          PIXEL_LOOPER_BEGIN (rect_uchar) {
-            r[i] = UPSAMPLE_8_TO_12(rect_uchar[0]);
+      case 12: /* Up Sampling, a bit pointless but best write the bit depth requested. */
+        PIXEL_LOOPER_BEGIN (rect_uchar) {
+          r[i] = UPSAMPLE_8_TO_12(rect_uchar[0]);
+          if (g) {
             g[i] = UPSAMPLE_8_TO_12(rect_uchar[1]);
+          }
+          if (b) {
             b[i] = UPSAMPLE_8_TO_12(rect_uchar[2]);
+          }
+          if (a) {
             a[i] = UPSAMPLE_8_TO_12(rect_uchar[3]);
           }
-          PIXEL_LOOPER_END;
         }
-        else {
-          PIXEL_LOOPER_BEGIN (rect_uchar) {
-            r[i] = UPSAMPLE_8_TO_12(rect_uchar[0]);
-            g[i] = UPSAMPLE_8_TO_12(rect_uchar[1]);
-            b[i] = UPSAMPLE_8_TO_12(rect_uchar[2]);
-          }
-          PIXEL_LOOPER_END;
-        }
+        PIXEL_LOOPER_END;
         break;
 
       case 16:
-        if (numcomps == 4) {
-          PIXEL_LOOPER_BEGIN (rect_uchar) {
-            r[i] = UPSAMPLE_8_TO_16(rect_uchar[0]);
+        PIXEL_LOOPER_BEGIN (rect_uchar) {
+          r[i] = UPSAMPLE_8_TO_16(rect_uchar[0]);
+          if (g) {
             g[i] = UPSAMPLE_8_TO_16(rect_uchar[1]);
+          }
+          if (b) {
             b[i] = UPSAMPLE_8_TO_16(rect_uchar[2]);
+          }
+          if (a) {
             a[i] = UPSAMPLE_8_TO_16(rect_uchar[3]);
           }
-          PIXEL_LOOPER_END;
         }
-        else {
-          PIXEL_LOOPER_BEGIN (rect_uchar) {
-            r[i] = UPSAMPLE_8_TO_16(rect_uchar[0]);
-            g[i] = UPSAMPLE_8_TO_16(rect_uchar[1]);
-            b[i] = UPSAMPLE_8_TO_16(rect_uchar[2]);
-          }
-          PIXEL_LOOPER_END;
-        }
+        PIXEL_LOOPER_END;
         break;
     }
   }
@@ -1166,15 +1165,15 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
   }
 
   if (img_fol.rates) {
-    MEM_freeN(img_fol.rates);
+    MEM_delete(img_fol.rates);
   }
 
   return image;
 }
 
-bool imb_save_jp2_stream(ImBuf *ibuf, opj_stream_t *stream, int flags);
+bool imb_save_jp2_stream(ImBuf *ibuf, opj_stream_t *stream, ImBufFlags flags);
 
-bool imb_save_jp2(ImBuf *ibuf, const char *filepath, int flags)
+bool imb_save_jp2(ImBuf *ibuf, const char *filepath, ImBufFlags flags)
 {
   opj_stream_t *stream = opj_stream_create_from_file(
       filepath, OPJ_J2K_STREAM_CHUNK_SIZE, false, nullptr);
@@ -1187,7 +1186,7 @@ bool imb_save_jp2(ImBuf *ibuf, const char *filepath, int flags)
 }
 
 /* Found write info at http://users.ece.gatech.edu/~slabaugh/personal/c/bitmapUnix.c */
-bool imb_save_jp2_stream(ImBuf *ibuf, opj_stream_t *stream, int /*flags*/)
+bool imb_save_jp2_stream(ImBuf *ibuf, opj_stream_t *stream, ImBufFlags /*flags*/)
 {
   int quality = ibuf->foptions.quality;
 
@@ -1204,6 +1203,19 @@ bool imb_save_jp2_stream(ImBuf *ibuf, opj_stream_t *stream, int /*flags*/)
 
   parameters.tcp_numlayers = 1; /* only one resolution */
   parameters.cp_disto_alloc = 1;
+
+  /* Enable tiling for better multi-threaded performance on large images.
+   * Only use tiling for images >= 12 megapixels to avoid overhead on smaller images.
+   * Note: Cinema profiles override this via cinema_parameters() which sets tile_size_on = 0. */
+  constexpr int64_t megapixels_threshold = 12 * 1000 * 1000;
+  const int64_t total_pixels = int64_t(ibuf->x) * int64_t(ibuf->y);
+  if (total_pixels >= megapixels_threshold) {
+    parameters.tile_size_on = OPJ_TRUE;
+    parameters.cp_tdx = 1024;
+    parameters.cp_tdy = 1024;
+    parameters.cp_tx0 = 0;
+    parameters.cp_ty0 = 0;
+  }
 
   image = ibuftoimage(ibuf, &parameters);
 
@@ -1223,15 +1235,20 @@ bool imb_save_jp2_stream(ImBuf *ibuf, opj_stream_t *stream, int /*flags*/)
     codec = opj_create_compress(format);
 
     /* configure the event callbacks (not required) */
-    opj_set_error_handler(codec, error_callback, stderr);
-    opj_set_warning_handler(codec, warning_callback, stderr);
+    opj_set_error_handler(codec, error_callback, nullptr);
+    opj_set_warning_handler(codec, warning_callback, nullptr);
 #ifndef NDEBUG /* too noisy */
-    opj_set_info_handler(codec, info_callback, stderr);
+    opj_set_info_handler(codec, info_callback, nullptr);
 #endif
 
     /* setup the encoder parameters using the current image and using user parameters */
     if (opj_setup_encoder(codec, &parameters, image) == false) {
       goto finally;
+    }
+
+    /* Enable multi-threaded encoding for faster compression. */
+    if (!opj_codec_set_threads(codec, BLI_system_thread_count())) {
+      CLOG_WARN(&LOG, "JP2 encoder: failed to set %d threads", BLI_system_thread_count());
     }
 
     if (opj_start_compress(codec, image, stream) == false) {
@@ -1259,8 +1276,10 @@ finally:
   }
 
   if (ok == false) {
-    fprintf(stderr, "failed to encode image\n");
+    CLOG_ERROR(&LOG, "Failed to encode image");
   }
 
   return ok;
 }
+
+}  // namespace blender

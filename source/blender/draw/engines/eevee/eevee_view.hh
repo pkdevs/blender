@@ -69,9 +69,9 @@ class ShadingView {
 
  public:
   ShadingView(Instance &inst, const char *name, const float4x4 &face_matrix)
-      : inst_(inst), name_(name), face_matrix_(face_matrix), render_view_(name){};
+      : inst_(inst), name_(name), face_matrix_(face_matrix), render_view_(name) {};
 
-  ~ShadingView(){};
+  ~ShadingView() {};
 
   void init();
 
@@ -82,7 +82,7 @@ class ShadingView {
  private:
   void render_transparent_pass(RenderBuffers &rbufs);
 
-  GPUTexture *render_postfx(GPUTexture *input_tx);
+  gpu::Texture *render_postfx(gpu::Texture *input_tx);
 
   void update_view();
 };

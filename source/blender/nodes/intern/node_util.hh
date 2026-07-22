@@ -10,8 +10,13 @@
 
 #include "DNA_node_types.h"
 
+#include "BKE_node.hh"
+
+namespace blender {
+
 struct bNode;
 struct bNodeTree;
+struct bContext;
 
 /* data for initializing node execution */
 struct bNodeExecContext {};
@@ -42,19 +47,29 @@ void node_vector_math_label(const bNodeTree *ntree,
                             const bNode *node,
                             char *label,
                             int label_maxncpy);
-void node_filter_label(const bNodeTree *ntree, const bNode *node, char *label, int label_maxncpy);
-void node_combsep_color_label(const ListBase *sockets, NodeCombSepColorMode mode);
+void node_combsep_color_label(const ListBaseT<bNodeSocket> *sockets, NodeCombSepColorMode mode);
 
 /*** Link Handling */
 
 /**
  * By default there are no links we don't want to connect, when inserting.
  */
-bool node_insert_link_default(bNodeTree *ntree, bNode *node, bNodeLink *link);
+bool node_insert_link_default(bke::NodeInsertLinkParams &params);
 
+int node_socket_get_int(bNodeTree *ntree, bNode *node, bNodeSocket *sock);
+void node_socket_set_int(bNodeTree *ntree, bNode *node, bNodeSocket *sock, int value);
+bool node_socket_get_bool(bNodeTree *ntree, bNode *node, bNodeSocket *sock);
+void node_socket_set_bool(bNodeTree *ntree, bNode *node, bNodeSocket *sock, bool value);
 float node_socket_get_float(bNodeTree *ntree, bNode *node, bNodeSocket *sock);
 void node_socket_set_float(bNodeTree *ntree, bNode *node, bNodeSocket *sock, float value);
 void node_socket_get_color(bNodeTree *ntree, bNode *node, bNodeSocket *sock, float *value);
 void node_socket_set_color(bNodeTree *ntree, bNode *node, bNodeSocket *sock, const float *value);
 void node_socket_get_vector(bNodeTree *ntree, bNode *node, bNodeSocket *sock, float *value);
 void node_socket_set_vector(bNodeTree *ntree, bNode *node, bNodeSocket *sock, const float *value);
+void node_socket_get_rotation(bNodeTree *ntree, bNode *node, bNodeSocket *sock, float *value);
+void node_socket_set_rotation(bNodeTree *ntree,
+                              bNode *node,
+                              bNodeSocket *sock,
+                              const float *value);
+
+}  // namespace blender

@@ -12,22 +12,19 @@
 #include "draw_handle.hh"
 #include "draw_shader_shared.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name ObjectAttributes
  * \{ */
 
-bool ObjectAttribute::sync(const blender::draw::ObjectRef &ref, const GPUUniformAttr &attr)
+bool ObjectAttribute::sync(const draw::ObjectRef &ref,
+                           const GPUUniformAttr &attr,
+                           int instance_index)
 {
   /* This function mirrors `lookup_instance_property` in `cycles/blender/blender_object.cpp`. */
-
   hash_code = attr.hash_code;
-
-  /* If requesting instance data, check the parent particle system and object. */
-  if (attr.use_dupli) {
-    return BKE_object_dupli_find_rgba_attribute(
-        ref.object, ref.dupli_object, ref.dupli_parent, attr.name, &data_x);
-  }
-  return BKE_object_dupli_find_rgba_attribute(ref.object, nullptr, nullptr, attr.name, &data_x);
+  return ref.find_rgba_attribute(attr, instance_index, &data_x);
 }
 
 /** \} */
@@ -44,3 +41,5 @@ bool LayerAttribute::sync(const Scene *scene, const ViewLayer *layer, const GPUL
 }
 
 /** \} */
+
+}  // namespace blender

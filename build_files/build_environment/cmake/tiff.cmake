@@ -18,6 +18,14 @@ set(TIFF_EXTRA_ARGS
   -Dsphinx=OFF
 )
 
+if(APPLE)
+  set(TIFF_EXTRA_ARGS
+    ${TIFF_EXTRA_ARGS}
+    # Work around issue where homebrew's libdeflate can be prioritized over our own dependency during linking if installed.
+    -DDeflate_LIBRARY=${LIBDIR}/deflate/lib/libdeflate${LIBEXT}
+  )
+endif()
+
 ExternalProject_Add(external_tiff
   URL file://${PACKAGE_DIR}/${TIFF_FILE}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
@@ -37,20 +45,3 @@ add_dependencies(
   external_zlib
   external_jpeg
 )
-if(WIN32)
-  if(BUILD_MODE STREQUAL Release)
-    ExternalProject_Add_Step(external_tiff after_install
-      COMMAND
-        ${CMAKE_COMMAND} -E copy
-          ${LIBDIR}/tiff/lib/tiff.lib
-          ${HARVEST_TARGET}/tiff/lib/libtiff.lib &&
-        ${CMAKE_COMMAND} -E copy_directory
-          ${LIBDIR}/tiff/include/
-          ${HARVEST_TARGET}/tiff/include/
-      DEPENDEES install
-    )
-  endif()
-else()
-  harvest(external_tiff tiff/include tiff/include "*.h")
-  harvest(external_tiff tiff/lib tiff/lib "*.a")
-endif()

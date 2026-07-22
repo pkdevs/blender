@@ -23,9 +23,9 @@ static auto filter_builtin_attributes(const bke::AttributeAccessor &mesh_attribu
                                       Set<StringRef> &storage,
                                       const bke::AttributeFilter &attribute_filter)
 {
-  for (const StringRef id : mesh_attributes.all_ids()) {
-    if (mesh_attributes.is_builtin(id) && !curves_attributes.is_builtin(id)) {
-      storage.add(id);
+  for (const StringRef name : mesh_attributes.all_names()) {
+    if (mesh_attributes.is_builtin(name) && !curves_attributes.is_builtin(name)) {
+      storage.add(name);
     }
   }
   return bke::attribute_filter_with_skip_ref(attribute_filter, storage);
@@ -38,6 +38,7 @@ BLI_NOINLINE bke::CurvesGeometry create_curve_from_vert_indices(
     const IndexRange cyclic_curves,
     const bke::AttributeFilter &attribute_filter)
 {
+  PRF_scope(ProfileCategory::Default);
   bke::CurvesGeometry curves(vert_indices.size(), curve_offsets.size());
   curves.offsets_for_write().drop_back(1).copy_from(curve_offsets);
   curves.offsets_for_write().last() = vert_indices.size();
@@ -60,11 +61,12 @@ BLI_NOINLINE bke::CurvesGeometry create_curve_from_vert_indices(
                          vert_indices,
                          curves_attributes);
 
+  /* Transfer attributes from edge, face, and corner domains to curve points. */
   mesh_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     if (iter.domain == bke::AttrDomain::Point) {
       return;
     }
-    if (iter.data_type == CD_PROP_STRING) {
+    if (iter.data_type == bke::AttrType::String) {
       return;
     }
     if (attribute_filter_with_skip.allow_skip(iter.name)) {
@@ -77,6 +79,15 @@ BLI_NOINLINE bke::CurvesGeometry create_curve_from_vert_indices(
     if (!src) {
       return;
     }
+
+    const CommonVArrayInfo info = src.varray.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const bke::AttributeInitValue init(GPointer(src.varray.type(), info.data));
+      if (curves_attributes.add(iter.name, bke::AttrDomain::Point, iter.data_type, init)) {
+        return;
+      }
+    }
+
     bke::GSpanAttributeWriter dst = curves_attributes.lookup_or_add_for_write_only_span(
         iter.name, bke::AttrDomain::Point, iter.data_type);
     if (!dst) {
@@ -103,10 +114,11 @@ struct CurveFromEdgesOutput {
 BLI_NOINLINE static CurveFromEdgesOutput edges_to_curve_point_indices(const int verts_num,
                                                                       const Span<int2> edges)
 {
+  PRF_scope(ProfileCategory::Default);
   /* Compute the number of edges connecting to each vertex. */
   Array<int> neighbor_offsets_data(verts_num + 1, 0);
-  offset_indices::build_reverse_offsets(edges.cast<int>(), neighbor_offsets_data);
-  const OffsetIndices<int> neighbor_offsets(neighbor_offsets_data);
+  const OffsetIndices<int> neighbor_offsets = offset_indices::build_reverse_offsets(
+      edges.cast<int>(), neighbor_offsets_data);
 
   /* Use as an index into the "neighbor group" for each vertex. */
   Array<int> used_slots(verts_num, 0);
@@ -224,6 +236,7 @@ bke::CurvesGeometry mesh_edges_to_curves_convert(const Mesh &mesh,
                                                  const IndexMask &selection,
                                                  const bke::AttributeFilter &attribute_filter)
 {
+  PRF_scope(ProfileCategory::Default);
   const Span<int2> edges = mesh.edges();
   if (selection.size() == edges.size()) {
     return edges_to_curves_convert(mesh, edges, attribute_filter);
@@ -253,7 +266,8 @@ static bke::CurvesGeometry create_curves_for_faces(const Mesh &mesh,
   }
 
   BKE_defgroup_copy_list(&curves.vertex_group_names, &mesh.vertex_group_names);
-  curves.cyclic_for_write().fill(true);
+  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+  attributes.add<bool>("cyclic", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
   curves.fill_curve_types(CURVE_TYPE_POLY);
   return curves;
 }
@@ -277,6 +291,7 @@ bke::CurvesGeometry mesh_faces_to_curves_convert(const Mesh &mesh,
                                                  const IndexMask &selection,
                                                  const bke::AttributeFilter &attribute_filter)
 {
+  PRF_scope(ProfileCategory::Default);
   const OffsetIndices faces = mesh.faces();
   const bke::AttributeAccessor src_attributes = mesh.attributes();
 
@@ -303,7 +318,7 @@ bke::CurvesGeometry mesh_faces_to_curves_convert(const Mesh &mesh,
     if (iter.domain != bke::AttrDomain::Edge) {
       return;
     }
-    if (iter.data_type == CD_PROP_STRING) {
+    if (iter.data_type == bke::AttrType::String) {
       return;
     }
     if (attribute_filter_with_skip.allow_skip(iter.name)) {

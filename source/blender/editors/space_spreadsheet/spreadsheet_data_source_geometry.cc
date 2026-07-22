@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
+#include <fmt/format.h>
+
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_virtual_array.hh"
 
@@ -32,7 +34,10 @@
 #include "ED_curves.hh"
 #include "ED_outliner.hh"
 
-#include "NOD_geometry_nodes_log.hh"
+#include "NOD_eval_log.hh"
+#include "NOD_geometry_nodes_bundle.hh"
+#include "NOD_geometry_nodes_closure.hh"
+#include "NOD_geometry_nodes_list.hh"
 
 #include "BLT_translation.hh"
 
@@ -46,11 +51,11 @@
 #include "spreadsheet_data_source_geometry.hh"
 #include "spreadsheet_intern.hh"
 
-using blender::nodes::geo_eval_log::ViewerNodeLog;
+namespace blender {
 
 uint64_t SpreadsheetInstanceID::hash() const
 {
-  return blender::get_default_hash(this->reference_index);
+  return get_default_hash(this->reference_index);
 }
 
 bool operator==(const SpreadsheetInstanceID &a, const SpreadsheetInstanceID &b)
@@ -63,50 +68,51 @@ bool operator!=(const SpreadsheetInstanceID &a, const SpreadsheetInstanceID &b)
   return !(a == b);
 }
 
-namespace blender::ed::spreadsheet {
+bool operator==(const SpreadsheetBundlePathElem &a, const SpreadsheetBundlePathElem &b)
+{
+  return STREQ(a.identifier, b.identifier);
+}
+
+bool operator!=(const SpreadsheetBundlePathElem &a, const SpreadsheetBundlePathElem &b)
+{
+  return !(a == b);
+}
+
+namespace ed::spreadsheet {
 
 static void add_mesh_debug_column_names(
     const Mesh &mesh,
     const bke::AttrDomain domain,
     FunctionRef<void(const SpreadsheetColumnID &, bool is_extra)> fn)
 {
-  const bke::AttributeAccessor attributes = mesh.attributes();
-  auto add_attribute = [&](const StringRefNull name) {
-    if (const std::optional<bke::AttributeMetaData> meta_data = attributes.lookup_meta_data(name))
-    {
-      if (meta_data->domain == domain) {
-        fn({(char *)name.c_str()}, false);
-      }
-    }
-  };
-
   switch (domain) {
     case bke::AttrDomain::Point:
       if (CustomData_has_layer(&mesh.vert_data, CD_ORIGINDEX)) {
-        fn({(char *)"Original Index"}, false);
+        fn({const_cast<char *>("Original Index")}, false);
       }
-      add_attribute(".sculpt_mask");
-      add_attribute(".hide_vert");
+      if (CustomData_has_layer(&mesh.vert_data, CD_ORCO)) {
+        fn({const_cast<char *>("CD_ORCO")}, false);
+      }
+      if (CustomData_has_layer(&mesh.vert_data, CD_CLOTH_ORCO)) {
+        fn({const_cast<char *>("CD_CLOTH_ORCO")}, false);
+      }
       break;
     case bke::AttrDomain::Edge:
       if (CustomData_has_layer(&mesh.edge_data, CD_ORIGINDEX)) {
-        fn({(char *)"Original Index"}, false);
+        fn({const_cast<char *>("Original Index")}, false);
       }
-      fn({(char *)"Vertices"}, false);
-      add_attribute(".hide_edge");
       break;
     case bke::AttrDomain::Face:
       if (CustomData_has_layer(&mesh.face_data, CD_ORIGINDEX)) {
-        fn({(char *)"Original Index"}, false);
+        fn({const_cast<char *>("Original Index")}, false);
       }
-      fn({(char *)"Corner Start"}, false);
-      fn({(char *)"Corner Size"}, false);
-      add_attribute(".sculpt_face_set");
-      add_attribute(".hide_poly");
+      fn({const_cast<char *>("Corner Start")}, false);
+      fn({const_cast<char *>("Corner Size")}, false);
       break;
     case bke::AttrDomain::Corner:
-      fn({(char *)"Vertex"}, false);
-      fn({(char *)"Edge"}, false);
+      if (CustomData_has_layer(&mesh.corner_data, CD_ORIGSPACE_MLOOP)) {
+        fn({const_cast<char *>("CD_ORIGSPACE_MLOOP")}, false);
+      }
       break;
     default:
       BLI_assert_unreachable();
@@ -125,7 +131,23 @@ static std::unique_ptr<ColumnValues> build_mesh_debug_columns(const Mesh &mesh,
             CustomData_get_layer(&mesh.vert_data, CD_ORIGINDEX));
         if (data) {
           return std::make_unique<ColumnValues>(name,
-                                                VArray<int>::ForSpan({data, mesh.verts_num}));
+                                                VArray<int>::from_span({data, mesh.verts_num}));
+        }
+      }
+      if (name == "CD_ORCO") {
+        const float3 *data = static_cast<const float3 *>(
+            CustomData_get_layer(&mesh.vert_data, CD_ORCO));
+        if (data) {
+          return std::make_unique<ColumnValues>(name,
+                                                VArray<float3>::from_span({data, mesh.verts_num}));
+        }
+      }
+      if (name == "CD_CLOTH_ORCO") {
+        const float3 *data = static_cast<const float3 *>(
+            CustomData_get_layer(&mesh.vert_data, CD_CLOTH_ORCO));
+        if (data) {
+          return std::make_unique<ColumnValues>(name,
+                                                VArray<float3>::from_span({data, mesh.verts_num}));
         }
       }
       return {};
@@ -136,11 +158,8 @@ static std::unique_ptr<ColumnValues> build_mesh_debug_columns(const Mesh &mesh,
             CustomData_get_layer(&mesh.edge_data, CD_ORIGINDEX));
         if (data) {
           return std::make_unique<ColumnValues>(name,
-                                                VArray<int>::ForSpan({data, mesh.edges_num}));
+                                                VArray<int>::from_span({data, mesh.edges_num}));
         }
-      }
-      if (name == "Vertices") {
-        return std::make_unique<ColumnValues>(name, VArray<int2>::ForSpan(mesh.edges()));
       }
       return {};
     }
@@ -150,28 +169,30 @@ static std::unique_ptr<ColumnValues> build_mesh_debug_columns(const Mesh &mesh,
             CustomData_get_layer(&mesh.face_data, CD_ORIGINDEX));
         if (data) {
           return std::make_unique<ColumnValues>(name,
-                                                VArray<int>::ForSpan({data, mesh.faces_num}));
+                                                VArray<int>::from_span({data, mesh.faces_num}));
         }
       }
       if (name == "Corner Start") {
         return std::make_unique<ColumnValues>(
-            name, VArray<int>::ForSpan(mesh.face_offsets().drop_back(1)));
+            name, VArray<int>::from_span(mesh.face_offsets().drop_back(1)));
       }
       if (name == "Corner Size") {
         const OffsetIndices faces = mesh.faces();
         return std::make_unique<ColumnValues>(
-            name, VArray<int>::ForFunc(faces.size(), [faces](int64_t index) {
+            name, VArray<int>::from_std_func(faces.size(), [faces](int64_t index) {
               return faces[index].size();
             }));
       }
       return {};
     }
     case bke::AttrDomain::Corner: {
-      if (name == "Vertex") {
-        return std::make_unique<ColumnValues>(name, VArray<int>::ForSpan(mesh.corner_verts()));
-      }
-      if (name == "Edge") {
-        return std::make_unique<ColumnValues>(name, VArray<int>::ForSpan(mesh.corner_edges()));
+      if (name == "CD_ORIGSPACE_MLOOP") {
+        const float2 *data = static_cast<const float2 *>(
+            CustomData_get_layer(&mesh.corner_data, CD_ORIGSPACE_MLOOP));
+        if (data) {
+          return std::make_unique<ColumnValues>(
+              name, VArray<float2>::from_span({data, mesh.corners_num}));
+        }
       }
       return {};
     }
@@ -181,6 +202,25 @@ static std::unique_ptr<ColumnValues> build_mesh_debug_columns(const Mesh &mesh,
   }
 }
 
+bool GeometryDataSource::display_attribute(const StringRef name,
+                                           const bke::AttrDomain domain) const
+{
+  if (bke::attribute_name_is_anonymous(name)) {
+    return false;
+  }
+  if (!show_internal_attributes_) {
+    if (!bke::allow_procedural_attribute_access(name)) {
+      return false;
+    }
+    if (domain == bke::AttrDomain::Instance && name == "instance_transform") {
+      /* Don't display the instance transform attribute, since matrix visualization in the
+       * spreadsheet isn't helpful. */
+      return false;
+    }
+  }
+  return true;
+}
+
 void GeometryDataSource::foreach_default_column_ids(
     FunctionRef<void(const SpreadsheetColumnID &, bool is_extra)> fn) const
 {
@@ -188,43 +228,32 @@ void GeometryDataSource::foreach_default_column_ids(
   if (!attributes.has_value()) {
     return;
   }
-  if (attributes->domain_size(domain_) == 0) {
-    return;
-  }
 
   if (component_->type() == bke::GeometryComponent::Type::Instance) {
-    fn({(char *)"Name"}, false);
+    fn({const_cast<char *>("Name")}, false);
   }
 
   if (component_->type() == bke::GeometryComponent::Type::GreasePencil) {
-    fn({(char *)"Name"}, false);
+    fn({const_cast<char *>("Name")}, false);
   }
 
   attributes->foreach_attribute([&](const bke::AttributeIter &iter) {
     if (iter.domain != domain_) {
       return;
     }
-    if (bke::attribute_name_is_anonymous(iter.name)) {
-      return;
-    }
-    if (!bke::allow_procedural_attribute_access(iter.name)) {
-      return;
-    }
-    if (iter.domain == bke::AttrDomain::Instance && iter.name == "instance_transform") {
-      /* Don't display the instance transform attribute, since matrix visualization in the
-       * spreadsheet isn't helpful. */
+    if (!display_attribute(iter.name, iter.domain)) {
       return;
     }
     SpreadsheetColumnID column_id;
-    column_id.name = (char *)iter.name.data();
+    column_id.name = const_cast<char *>(iter.name.data());
     const bool is_front = iter.name == ".viewer";
     fn(column_id, is_front);
   });
 
   if (component_->type() == bke::GeometryComponent::Type::Instance) {
-    fn({(char *)"Position"}, false);
-    fn({(char *)"Rotation"}, false);
-    fn({(char *)"Scale"}, false);
+    fn({const_cast<char *>("Position")}, false);
+    fn({const_cast<char *>("Rotation")}, false);
+    fn({const_cast<char *>("Scale")}, false);
   }
   else if (G.debug_value == 4001 && component_->type() == bke::GeometryComponent::Type::Mesh) {
     const bke::MeshComponent &component = static_cast<const bke::MeshComponent &>(*component_);
@@ -242,7 +271,7 @@ std::unique_ptr<ColumnValues> GeometryDataSource::get_column_values(
     return {};
   }
   const int domain_num = attributes->domain_size(domain_);
-  if (domain_num == 0) {
+  if (!display_attribute(column_id.name, domain_)) {
     return {};
   }
 
@@ -257,7 +286,7 @@ std::unique_ptr<ColumnValues> GeometryDataSource::get_column_values(
         Span<bke::InstanceReference> references = instances->references();
         return std::make_unique<ColumnValues>(
             column_id.name,
-            VArray<bke::InstanceReference>::ForFunc(
+            VArray<bke::InstanceReference>::from_std_func(
                 domain_num, [reference_handles, references](int64_t index) {
                   return references[reference_handles[index]];
                 }));
@@ -265,19 +294,19 @@ std::unique_ptr<ColumnValues> GeometryDataSource::get_column_values(
       Span<float4x4> transforms = instances->transforms();
       if (STREQ(column_id.name, "Position")) {
         return std::make_unique<ColumnValues>(
-            column_id.name, VArray<float3>::ForFunc(domain_num, [transforms](int64_t index) {
+            column_id.name, VArray<float3>::from_std_func(domain_num, [transforms](int64_t index) {
               return transforms[index].location();
             }));
       }
       if (STREQ(column_id.name, "Rotation")) {
         return std::make_unique<ColumnValues>(
-            column_id.name, VArray<float3>::ForFunc(domain_num, [transforms](int64_t index) {
+            column_id.name, VArray<float3>::from_std_func(domain_num, [transforms](int64_t index) {
               return float3(math::to_euler(math::normalize(transforms[index])));
             }));
       }
       if (STREQ(column_id.name, "Scale")) {
         return std::make_unique<ColumnValues>(
-            column_id.name, VArray<float3>::ForFunc(domain_num, [transforms](int64_t index) {
+            column_id.name, VArray<float3>::from_std_func(domain_num, [transforms](int64_t index) {
               return math::to_scale<true>(transforms[index]);
             }));
       }
@@ -290,7 +319,8 @@ std::unique_ptr<ColumnValues> GeometryDataSource::get_column_values(
       if (domain_ == bke::AttrDomain::Layer && STREQ(column_id.name, "Name")) {
         const Span<const bke::greasepencil::Layer *> layers = grease_pencil->layers();
         return std::make_unique<ColumnValues>(
-            column_id.name, VArray<std::string>::ForFunc(domain_num, [layers](int64_t index) {
+            column_id.name,
+            VArray<std::string>::from_std_func(domain_num, [layers](int64_t index) {
               StringRefNull name = layers[index]->name();
               if (name.is_empty()) {
                 name = IFACE_("(Layer)");
@@ -325,7 +355,12 @@ std::unique_ptr<ColumnValues> GeometryDataSource::get_column_values(
     column_display_name = "Viewer";
   }
 
-  return std::make_unique<ColumnValues>(column_display_name, std::move(varray));
+  StringRef description;
+  if (varray.is_single()) {
+    description = TIP_("Stored as single value");
+  }
+
+  return std::make_unique<ColumnValues>(column_display_name, std::move(varray), description);
 }
 
 int GeometryDataSource::tot_rows() const
@@ -377,7 +412,7 @@ bool GeometryDataSource::has_selection_filter() const
 
 static IndexMask calc_mesh_selection_mask_faces(const Mesh &mesh_eval,
                                                 const Mesh &mesh_orig,
-                                                IndexMaskMemory &memory)
+                                                LinearAllocator<> &memory)
 {
   const bke::AttributeAccessor attributes_eval = mesh_eval.attributes();
   const IndexRange range(attributes_eval.domain_size(bke::AttrDomain::Face));
@@ -385,7 +420,7 @@ static IndexMask calc_mesh_selection_mask_faces(const Mesh &mesh_eval,
 
   BM_mesh_elem_table_ensure(bm, BM_FACE);
   if (mesh_eval.faces_num == bm->totface) {
-    return IndexMask::from_predicate(range, GrainSize(4096), memory, [&](const int i) {
+    return IndexMask::from_predicate(range, memory, [&](const int i) {
       const BMFace *face = BM_face_at_index(bm, i);
       return BM_elem_flag_test_bool(face, BM_ELEM_SELECT);
     });
@@ -393,7 +428,7 @@ static IndexMask calc_mesh_selection_mask_faces(const Mesh &mesh_eval,
   if (const int *orig_indices = static_cast<const int *>(
           CustomData_get_layer(&mesh_eval.face_data, CD_ORIGINDEX)))
   {
-    return IndexMask::from_predicate(range, GrainSize(2048), memory, [&](const int i) {
+    return IndexMask::from_predicate(range, memory, [&](const int i) {
       const int orig = orig_indices[i];
       if (orig == -1) {
         return false;
@@ -408,7 +443,7 @@ static IndexMask calc_mesh_selection_mask_faces(const Mesh &mesh_eval,
 static IndexMask calc_mesh_selection_mask(const Mesh &mesh_eval,
                                           const Mesh &mesh_orig,
                                           const bke::AttrDomain domain,
-                                          IndexMaskMemory &memory)
+                                          LinearAllocator<> &memory)
 {
   const bke::AttributeAccessor attributes_eval = mesh_eval.attributes();
   const IndexRange range(attributes_eval.domain_size(domain));
@@ -418,7 +453,7 @@ static IndexMask calc_mesh_selection_mask(const Mesh &mesh_eval,
     case bke::AttrDomain::Point: {
       BM_mesh_elem_table_ensure(bm, BM_VERT);
       if (mesh_eval.verts_num == bm->totvert) {
-        return IndexMask::from_predicate(range, GrainSize(4096), memory, [&](const int i) {
+        return IndexMask::from_predicate(range, memory, [&](const int i) {
           const BMVert *vert = BM_vert_at_index(bm, i);
           return BM_elem_flag_test_bool(vert, BM_ELEM_SELECT);
         });
@@ -426,7 +461,7 @@ static IndexMask calc_mesh_selection_mask(const Mesh &mesh_eval,
       if (const int *orig_indices = static_cast<const int *>(
               CustomData_get_layer(&mesh_eval.vert_data, CD_ORIGINDEX)))
       {
-        return IndexMask::from_predicate(range, GrainSize(2048), memory, [&](const int i) {
+        return IndexMask::from_predicate(range, memory, [&](const int i) {
           const int orig = orig_indices[i];
           if (orig == -1) {
             return false;
@@ -440,7 +475,7 @@ static IndexMask calc_mesh_selection_mask(const Mesh &mesh_eval,
     case bke::AttrDomain::Edge: {
       BM_mesh_elem_table_ensure(bm, BM_EDGE);
       if (mesh_eval.edges_num == bm->totedge) {
-        return IndexMask::from_predicate(range, GrainSize(4096), memory, [&](const int i) {
+        return IndexMask::from_predicate(range, memory, [&](const int i) {
           const BMEdge *edge = BM_edge_at_index(bm, i);
           return BM_elem_flag_test_bool(edge, BM_ELEM_SELECT);
         });
@@ -448,7 +483,7 @@ static IndexMask calc_mesh_selection_mask(const Mesh &mesh_eval,
       if (const int *orig_indices = static_cast<const int *>(
               CustomData_get_layer(&mesh_eval.edge_data, CD_ORIGINDEX)))
       {
-        return IndexMask::from_predicate(range, GrainSize(2048), memory, [&](const int i) {
+        return IndexMask::from_predicate(range, memory, [&](const int i) {
           const int orig = orig_indices[i];
           if (orig == -1) {
             return false;
@@ -477,7 +512,7 @@ static IndexMask calc_mesh_selection_mask(const Mesh &mesh_eval,
       face_mask.to_bools(face_selection);
 
       const VArray<bool> corner_selection = attributes_eval.adapt_domain<bool>(
-          VArray<bool>::ForSpan(face_selection), bke::AttrDomain::Face, bke::AttrDomain::Corner);
+          VArray<bool>::from_span(face_selection), bke::AttrDomain::Face, bke::AttrDomain::Corner);
       return IndexMask::from_bools(corner_selection, memory);
     }
     default:
@@ -486,7 +521,7 @@ static IndexMask calc_mesh_selection_mask(const Mesh &mesh_eval,
   }
 }
 
-IndexMask GeometryDataSource::apply_selection_filter(IndexMaskMemory &memory) const
+IndexMask GeometryDataSource::apply_selection_filter(LinearAllocator<> &memory) const
 {
   std::lock_guard lock{mutex_};
   const IndexMask full_range(this->tot_rows());
@@ -499,7 +534,7 @@ IndexMask GeometryDataSource::apply_selection_filter(IndexMaskMemory &memory) co
       BLI_assert(object_orig_->type == OB_MESH);
       BLI_assert(object_orig_->mode == OB_MODE_EDIT);
       const Mesh *mesh_eval = geometry_set_.get_mesh();
-      const Mesh *mesh_orig = static_cast<const Mesh *>(object_orig_->data);
+      const Mesh *mesh_orig = id_cast<const Mesh *>(object_orig_->data);
       return calc_mesh_selection_mask(*mesh_eval, *mesh_orig, domain_, memory);
     }
     case bke::GeometryComponent::Type::Curve: {
@@ -557,11 +592,34 @@ void VolumeDataSource::foreach_default_column_ids(
     return;
   }
 
-  for (const char *name : {"Grid Name", "Data Type", "Class"}) {
-    SpreadsheetColumnID column_id{(char *)name};
+  for (const char *name : {"Grid Name",
+                           "Data Type",
+                           "Class",
+                           "Voxel Extent",
+                           "Min Voxel",
+                           "Voxels",
+                           "Leaf Voxels",
+                           "Tiles",
+                           "Size"})
+  {
+    SpreadsheetColumnID column_id{const_cast<char *>(name)};
     fn(column_id, false);
   }
 }
+
+#ifdef WITH_OPENVDB
+static StringRef grid_class_name(const bke::VolumeGridData &grid_data)
+{
+  openvdb::GridClass grid_class = grid_data.grid_class();
+  if (grid_class == openvdb::GridClass::GRID_FOG_VOLUME) {
+    return IFACE_("Fog Volume");
+  }
+  if (grid_class == openvdb::GridClass::GRID_LEVEL_SET) {
+    return IFACE_("Level Set");
+  }
+  return IFACE_("Unknown");
+}
+#endif
 
 std::unique_ptr<ColumnValues> VolumeDataSource::get_column_values(
     const SpreadsheetColumnID &column_id) const
@@ -575,14 +633,14 @@ std::unique_ptr<ColumnValues> VolumeDataSource::get_column_values(
   const int size = this->tot_rows();
   if (STREQ(column_id.name, "Grid Name")) {
     return std::make_unique<ColumnValues>(
-        IFACE_("Grid Name"), VArray<std::string>::ForFunc(size, [volume](int64_t index) {
+        IFACE_("Grid Name"), VArray<std::string>::from_std_func(size, [volume](int64_t index) {
           const bke::VolumeGridData *volume_grid = BKE_volume_grid_get(volume, index);
           return volume_grid->name();
         }));
   }
   if (STREQ(column_id.name, "Data Type")) {
     return std::make_unique<ColumnValues>(
-        IFACE_("Data Type"), VArray<std::string>::ForFunc(size, [volume](int64_t index) {
+        IFACE_("Data Type"), VArray<std::string>::from_std_func(size, [volume](int64_t index) {
           const bke::VolumeGridData *volume_grid = BKE_volume_grid_get(volume, index);
           const VolumeGridType type = volume_grid->grid_type();
           const char *name = nullptr;
@@ -592,16 +650,54 @@ std::unique_ptr<ColumnValues> VolumeDataSource::get_column_values(
   }
   if (STREQ(column_id.name, "Class")) {
     return std::make_unique<ColumnValues>(
-        IFACE_("Class"), VArray<std::string>::ForFunc(size, [volume](int64_t index) {
-          const bke::VolumeGridData *volume_grid = BKE_volume_grid_get(volume, index);
-          openvdb::GridClass grid_class = volume_grid->grid_class();
-          if (grid_class == openvdb::GridClass::GRID_FOG_VOLUME) {
-            return IFACE_("Fog Volume");
+        IFACE_("Class"), VArray<std::string>::from_std_func(size, [volume](int64_t index) {
+          return grid_class_name(*BKE_volume_grid_get(volume, index));
+        }));
+  }
+  if (STREQ(column_id.name, "Voxels")) {
+    return std::make_unique<ColumnValues>(
+        IFACE_("Voxels"), VArray<int64_t>::from_std_func(size, [volume](const int64_t index) {
+          return BKE_volume_grid_get(volume, index)->active_voxels();
+        }));
+  }
+  if (STREQ(column_id.name, "Leaf Voxels")) {
+    return std::make_unique<ColumnValues>(
+        IFACE_("Leaf Voxels"), VArray<int64_t>::from_std_func(size, [volume](const int64_t index) {
+          return BKE_volume_grid_get(volume, index)->active_leaf_voxels();
+        }));
+  }
+  if (STREQ(column_id.name, "Tiles")) {
+    return std::make_unique<ColumnValues>(
+        IFACE_("Tiles"), VArray<int64_t>::from_std_func(size, [volume](const int64_t index) {
+          return BKE_volume_grid_get(volume, index)->active_tiles();
+        }));
+  }
+  if (STREQ(column_id.name, "Size")) {
+    return std::make_unique<ColumnValues>(
+        IFACE_("Size"),
+        VArray<int64_t>::from_std_func(
+            size,
+            [volume](const int64_t index) {
+              return BKE_volume_grid_get(volume, index)->size_in_bytes();
+            }),
+        "",
+        ColumnValueDisplayHint::Bytes);
+  }
+  if (STREQ(column_id.name, "Voxel Extent")) {
+    return std::make_unique<ColumnValues>(
+        IFACE_("Voxel Extent"), VArray<int3>::from_std_func(size, [volume](const int64_t index) {
+          return int3(BKE_volume_grid_get(volume, index)->active_bounds().dim().asPointer());
+        }));
+  }
+  if (STREQ(column_id.name, "Min Voxel")) {
+    return std::make_unique<ColumnValues>(
+        IFACE_("Min Voxel"), VArray<int3>::from_std_func(size, [volume](const int64_t index) {
+          const openvdb::CoordBBox &active_bounds =
+              BKE_volume_grid_get(volume, index)->active_bounds();
+          if (active_bounds.empty()) {
+            return int3(0, 0, 0);
           }
-          if (grid_class == openvdb::GridClass::GRID_LEVEL_SET) {
-            return IFACE_("Level Set");
-          }
-          return IFACE_("Unknown");
+          return int3(active_bounds.min().asPointer());
         }));
   }
 #else
@@ -618,6 +714,355 @@ int VolumeDataSource::tot_rows() const
     return 0;
   }
   return BKE_volume_num_grids(volume);
+}
+
+#ifdef WITH_OPENVDB
+
+VolumeGridDataSource::VolumeGridDataSource(const bke::GVolumeGrid &grid)
+    : grid_(std::make_unique<bke::GVolumeGrid>(grid))
+{
+}
+
+void VolumeGridDataSource::foreach_default_column_ids(
+    FunctionRef<void(const SpreadsheetColumnID &, bool is_extra)> fn) const
+{
+  if (!grid_) {
+    return;
+  }
+
+  for (const char *name : {"Data Type",
+                           "Class",
+                           "Voxel Extent",
+                           "Min Voxel",
+                           "Voxels",
+                           "Leaf Voxels",
+                           "Tiles",
+                           "Size"})
+  {
+    SpreadsheetColumnID column_id{const_cast<char *>(name)};
+    fn(column_id, false);
+  }
+}
+
+std::unique_ptr<ColumnValues> VolumeGridDataSource::get_column_values(
+    const SpreadsheetColumnID &column_id) const
+{
+  const bke::VolumeGridData &grid = grid_->get();
+  if (STREQ(column_id.name, "Data Type")) {
+    const VolumeGridType type = grid.grid_type();
+    const char *name = nullptr;
+    RNA_enum_name_from_value(rna_enum_volume_grid_data_type_items, type, &name);
+    return std::make_unique<ColumnValues>(IFACE_("Data Type"),
+                                          VArray<std::string>::from_single(name, 1));
+  }
+  if (STREQ(column_id.name, "Class")) {
+    const StringRef name = grid_class_name(grid_->get());
+    return std::make_unique<ColumnValues>(IFACE_("Class"),
+                                          VArray<std::string>::from_single(name, 1));
+  }
+  if (STREQ(column_id.name, "Voxels")) {
+    const int64_t active_voxels = grid.active_voxels();
+    return std::make_unique<ColumnValues>(IFACE_("Voxels"),
+                                          VArray<int64_t>::from_single(active_voxels, 1));
+  }
+  if (STREQ(column_id.name, "Leaf Voxels")) {
+    const int64_t active_leaf_voxels = grid.active_leaf_voxels();
+    return std::make_unique<ColumnValues>(IFACE_("Leaf Voxels"),
+                                          VArray<int64_t>::from_single(active_leaf_voxels, 1));
+  }
+  if (STREQ(column_id.name, "Tiles")) {
+    const int64_t active_tiles = grid.active_tiles();
+    return std::make_unique<ColumnValues>(IFACE_("Tiles"),
+                                          VArray<int64_t>::from_single(active_tiles, 1));
+  }
+  if (STREQ(column_id.name, "Size")) {
+    const int64_t size = grid.size_in_bytes();
+    return std::make_unique<ColumnValues>(
+        IFACE_("Size"), VArray<int64_t>::from_single(size, 1), "", ColumnValueDisplayHint::Bytes);
+  }
+  if (STREQ(column_id.name, "Voxel Extent")) {
+    const int3 extent = int3(grid.active_bounds().dim().asPointer());
+    return std::make_unique<ColumnValues>(IFACE_("Voxel Extent"),
+                                          VArray<int3>::from_single(extent, 1));
+  }
+  if (STREQ(column_id.name, "Min Voxel")) {
+    const openvdb::CoordBBox &active_bounds = grid.active_bounds();
+    if (active_bounds.empty()) {
+      return std::make_unique<ColumnValues>(IFACE_("Min Voxel"),
+                                            VArray<int3>::from_single(int3(0, 0, 0), 1));
+    }
+    const int3 min = int3(active_bounds.min().asPointer());
+    return std::make_unique<ColumnValues>(IFACE_("Min Voxel"), VArray<int3>::from_single(min, 1));
+  }
+  return {};
+}
+
+int VolumeGridDataSource::tot_rows() const
+{
+  return 1;
+}
+
+#endif
+
+ListDataSource::ListDataSource(nodes::GListPtr list) : list_(std::move(list)) {}
+
+void ListDataSource::foreach_default_column_ids(
+    FunctionRef<void(const SpreadsheetColumnID &, bool is_extra)> fn) const
+{
+  if (!list_ || list_->size() == 0) {
+    return;
+  }
+
+  for (const char *name : {"Value"}) {
+    SpreadsheetColumnID column_id{const_cast<char *>(name)};
+    fn(column_id, false);
+  }
+}
+
+std::unique_ptr<ColumnValues> ListDataSource::get_column_values(
+    const SpreadsheetColumnID &column_id) const
+{
+  if (!list_) {
+    return {};
+  }
+  if (STREQ(column_id.name, "Value")) {
+    return std::make_unique<ColumnValues>(IFACE_("Value"), list_->varray());
+  }
+  return {};
+}
+
+int ListDataSource::tot_rows() const
+{
+  if (!list_) {
+    return 0;
+  }
+  return list_->size();
+}
+
+BundleDataSource::BundleDataSource(nodes::BundlePtr bundle) : bundle_(std::move(bundle))
+{
+  this->collect_flat_items(*bundle_, "");
+}
+
+void BundleDataSource::foreach_default_column_ids(
+    FunctionRef<void(const SpreadsheetColumnID &, bool is_extra)> fn) const
+{
+  if (bundle_->is_empty()) {
+    return;
+  }
+
+  for (const char *name : {"Identifier", "Type", "Value"}) {
+    SpreadsheetColumnID column_id{const_cast<char *>(name)};
+    fn(column_id, false);
+  }
+}
+
+std::unique_ptr<ColumnValues> BundleDataSource::get_column_values(
+    const SpreadsheetColumnID &column_id) const
+{
+  if (STREQ(column_id.name, "Identifier")) {
+    return std::make_unique<ColumnValues>(IFACE_("Identifier"),
+                                          VArray<std::string>::from_span(flat_item_keys_));
+  }
+  if (STREQ(column_id.name, "Type")) {
+    return std::make_unique<ColumnValues>(
+        IFACE_("Type"),
+        VArray<std::string>::from_func(
+            flat_items_.size(), [items = flat_items_](int64_t index) -> std::string {
+              const nodes::BundleItemValue &value = *items[index];
+              if (const auto *socket_value = std::get_if<nodes::BundleItemSocketValue>(
+                      &value.value)) {
+                const bke::SocketValueVariant &value_variant = socket_value->value;
+                const StringRef type_name = IFACE_(socket_value->type->label);
+                if (value_variant.is_single()) {
+                  return type_name;
+                }
+                if (value_variant.is_context_dependent_field()) {
+                  return fmt::format("{} {}", type_name, IFACE_("Field"));
+                }
+                if (value_variant.is_volume_grid()) {
+                  return fmt::format("{} {}", type_name, IFACE_("Grid"));
+                }
+                if (value_variant.is_list()) {
+                  return fmt::format("{} {}", type_name, IFACE_("List"));
+                }
+                return type_name;
+              }
+              if (const auto *internal_value = std::get_if<nodes::BundleItemInternalValue>(
+                      &value.value)) {
+                return internal_value->value->type_name();
+              }
+              return "";
+            }));
+  }
+  if (STREQ(column_id.name, "Value")) {
+    return std::make_unique<ColumnValues>(
+        IFACE_("Value"),
+        VArray<nodes::BundleItemValue>::from_func(
+            flat_items_.size(),
+            [items = flat_items_](const int64_t index) -> nodes::BundleItemValue {
+              return *items[index];
+            }));
+  }
+  return {};
+}
+
+int BundleDataSource::tot_rows() const
+{
+  return flat_item_keys_.size();
+}
+
+void BundleDataSource::collect_flat_items(const nodes::Bundle &bundle, const StringRef parent_path)
+{
+  for (const auto &item : bundle.items()) {
+    const std::string path = parent_path.is_empty() ?
+                                 item.key.ustr().string() :
+                                 nodes::Bundle::combine_path({parent_path, item.key.ustr().ref()});
+    flat_item_keys_.append(path);
+    flat_items_.append(&item.value);
+    if (const auto *value = std::get_if<nodes::BundleItemSocketValue>(&item.value.value)) {
+      if (value->value.is_single()) {
+        const GPointer ptr = value->value.get_single_ptr();
+        if (ptr.is_type<nodes::BundlePtr>()) {
+          const nodes::BundlePtr child_bundle = *ptr.get<nodes::BundlePtr>();
+          if (child_bundle) {
+            this->collect_flat_items(*child_bundle, path);
+          }
+        }
+      }
+    }
+  }
+}
+
+ClosureSignatureDataSource::ClosureSignatureDataSource(nodes::ClosurePtr closure,
+                                                       const SpreadsheetClosureInputOutput in_out)
+    : closure_(std::move(closure)), in_out_(in_out)
+{
+}
+
+void ClosureSignatureDataSource::foreach_default_column_ids(
+    FunctionRef<void(const SpreadsheetColumnID &, bool is_extra)> fn) const
+{
+  Vector<StringRefNull> columns_names;
+  if (in_out_ == SPREADSHEET_CLOSURE_NONE) {
+    columns_names.append("Interface");
+  }
+  columns_names.extend({"Identifier", "Type"});
+
+  for (const StringRefNull name : columns_names) {
+    SpreadsheetColumnID column_id{const_cast<char *>(name.c_str())};
+    fn(column_id, false);
+  }
+}
+
+std::unique_ptr<ColumnValues> ClosureSignatureDataSource::get_column_values(
+    const SpreadsheetColumnID &column_id) const
+{
+  const Span<nodes::ClosureSignature::Item> input_items = closure_->signature().inputs;
+  const Span<nodes::ClosureSignature::Item> output_items = closure_->signature().outputs;
+
+  switch (in_out_) {
+    case SPREADSHEET_CLOSURE_NONE: {
+      const int items_sum = input_items.size() + output_items.size();
+      if (STREQ(column_id.name, "Identifier")) {
+        return std::make_unique<ColumnValues>(
+            IFACE_("Identifier"),
+            VArray<std::string>::from_func(items_sum,
+                                           [input_items, output_items](const int64_t index) {
+                                             if (index < input_items.size()) {
+                                               return input_items[index].key;
+                                             }
+                                             return output_items[index - input_items.size()].key;
+                                           }));
+      }
+      if (STREQ(column_id.name, "Type")) {
+        return std::make_unique<ColumnValues>(
+            IFACE_("Type"),
+            VArray<std::string>::from_func(
+                items_sum, [input_items, output_items](const int64_t index) {
+                  if (index < input_items.size()) {
+                    return input_items[index].type->label;
+                  }
+                  return output_items[index - input_items.size()].type->label;
+                }));
+      }
+      if (STREQ(column_id.name, "Interface")) {
+        return std::make_unique<ColumnValues>(
+            IFACE_("Interface"),
+            VArray<std::string>::from_func(items_sum,
+                                           [inputs_num = input_items.size()](const int64_t index) {
+                                             if (index < inputs_num) {
+                                               return IFACE_("Input");
+                                             }
+                                             return IFACE_("Output");
+                                           }));
+      }
+      break;
+    }
+    case SPREADSHEET_CLOSURE_INPUT:
+    case SPREADSHEET_CLOSURE_OUTPUT: {
+      const Span<nodes::ClosureSignature::Item> items = in_out_ == SPREADSHEET_CLOSURE_INPUT ?
+                                                            input_items :
+                                                            output_items;
+      if (STREQ(column_id.name, "Identifier")) {
+        return std::make_unique<ColumnValues>(
+            IFACE_("Identifier"),
+            VArray<std::string>::from_func(items.size(),
+                                           [items](int64_t index) { return items[index].key; }));
+      }
+      if (STREQ(column_id.name, "Type")) {
+        return std::make_unique<ColumnValues>(
+            IFACE_("Type"), VArray<std::string>::from_func(items.size(), [items](int64_t index) {
+              return items[index].type->label;
+            }));
+      }
+      break;
+    }
+  }
+  return {};
+}
+
+int ClosureSignatureDataSource::tot_rows() const
+{
+  const int inputs_num = closure_->signature().inputs.size();
+  const int outputs_num = closure_->signature().outputs.size();
+  switch (in_out_) {
+    case SPREADSHEET_CLOSURE_NONE:
+      return inputs_num + outputs_num;
+    case SPREADSHEET_CLOSURE_INPUT:
+      return inputs_num;
+    case SPREADSHEET_CLOSURE_OUTPUT:
+      return outputs_num;
+  }
+  return 0;
+}
+
+SingleValueDataSource::SingleValueDataSource(const GPointer value)
+    : value_gvarray_(GVArray::from_single(*value.type(), 1, value.get()))
+{
+}
+
+void SingleValueDataSource::foreach_default_column_ids(
+    FunctionRef<void(const SpreadsheetColumnID &, bool is_extra)> fn) const
+{
+  for (const char *name : {"Value"}) {
+    SpreadsheetColumnID column_id{const_cast<char *>(name)};
+    fn(column_id, false);
+  }
+}
+
+std::unique_ptr<ColumnValues> SingleValueDataSource::get_column_values(
+    const SpreadsheetColumnID &column_id) const
+{
+  if (STREQ(column_id.name, "Value")) {
+    return std::make_unique<ColumnValues>(IFACE_("Value"), value_gvarray_);
+  }
+  return {};
+}
+
+int SingleValueDataSource::tot_rows() const
+{
+  return 1;
 }
 
 int get_instance_reference_icon(const bke::InstanceReference &reference)
@@ -640,58 +1085,140 @@ int get_instance_reference_icon(const bke::InstanceReference &reference)
   return ICON_NONE;
 }
 
-bke::GeometrySet spreadsheet_get_display_geometry_set(const SpaceSpreadsheet *sspreadsheet,
-                                                      Object *object_eval)
+const nodes::eval_log::ViewerNodeLog *viewer_node_log_lookup(const SpaceSpreadsheet &sspreadsheet)
 {
-  bke::GeometrySet geometry_set;
+  return nodes::eval_log::NodesEvalLog::find_viewer_node_log_for_path(
+      sspreadsheet.geometry_id.viewer_path);
+}
+
+static bke::SocketValueVariant lookup_bundle_path(const nodes::BundlePtr &bundle,
+                                                  const SpreadsheetBundleTreeViewPath &path)
+{
+  if (!bundle) {
+    return {};
+  }
+  if (path.bundle_path_num == 0) {
+    return bke::SocketValueVariant::From(bundle);
+  }
+  Vector<nodes::BundleKey> keys;
+  for (const int i : IndexRange(path.bundle_path_num)) {
+    if (const std::optional<nodes::BundleKey> key = nodes::BundleKey::from_str(
+            path.bundle_path[i].identifier))
+    {
+      keys.append(*key);
+    }
+    else {
+      return {};
+    }
+  }
+  return bundle->lookup_path<bke::SocketValueVariant>(keys).value_or(bke::SocketValueVariant{});
+}
+
+bke::SocketValueVariant root_display_data_get(const SpaceSpreadsheet *sspreadsheet,
+                                              Object *object_eval)
+{
   if (sspreadsheet->geometry_id.object_eval_state == SPREADSHEET_OBJECT_EVAL_STATE_ORIGINAL) {
     const Object *object_orig = DEG_get_original(object_eval);
     if (object_orig->type == OB_MESH) {
-      const Mesh *mesh = static_cast<const Mesh *>(object_orig->data);
+      const Mesh *mesh = id_cast<const Mesh *>(object_orig->data);
       if (object_orig->mode == OB_MODE_EDIT) {
         if (const BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
           Mesh *new_mesh = BKE_id_new_nomain<Mesh>(nullptr);
-          /* This is a potentially heavy operation to do on every redraw. The best solution here is
-           * to display the data directly from the bmesh without a conversion, which can be
+          /* This is a potentially heavy operation to do on every redraw. The best solution here
+           * is to display the data directly from the bmesh without a conversion, which can be
            * implemented a bit later. */
           BM_mesh_bm_to_me_for_eval(*em->bm, *new_mesh, nullptr);
-          geometry_set.replace_mesh(new_mesh, bke::GeometryOwnershipType::Owned);
+          return bke::SocketValueVariant::From(bke::GeometrySet::from_mesh(new_mesh));
         }
       }
       else {
-        geometry_set.replace_mesh(const_cast<Mesh *>(mesh), bke::GeometryOwnershipType::ReadOnly);
+        return bke::SocketValueVariant::From(bke::GeometrySet::from_mesh(
+            const_cast<Mesh *>(mesh), bke::GeometryOwnershipType::ReadOnly));
       }
     }
     else if (object_orig->type == OB_POINTCLOUD) {
-      const PointCloud *pointcloud = static_cast<const PointCloud *>(object_orig->data);
-      geometry_set.replace_pointcloud(const_cast<PointCloud *>(pointcloud),
-                                      bke::GeometryOwnershipType::ReadOnly);
+      const PointCloud *pointcloud = id_cast<const PointCloud *>(object_orig->data);
+      return bke::SocketValueVariant::From(bke::GeometrySet::from_pointcloud(
+          const_cast<PointCloud *>(pointcloud), bke::GeometryOwnershipType::ReadOnly));
     }
     else if (object_orig->type == OB_CURVES) {
-      const Curves &curves_id = *static_cast<const Curves *>(object_orig->data);
-      geometry_set.replace_curves(&const_cast<Curves &>(curves_id),
-                                  bke::GeometryOwnershipType::ReadOnly);
+      const Curves &curves_id = *id_cast<const Curves *>(object_orig->data);
+      return bke::SocketValueVariant::From(bke::GeometrySet::from_curves(
+          &const_cast<Curves &>(curves_id), bke::GeometryOwnershipType::ReadOnly));
     }
     else if (object_orig->type == OB_GREASE_PENCIL) {
-      const GreasePencil &grease_pencil = *static_cast<const GreasePencil *>(object_orig->data);
-      geometry_set.replace_grease_pencil(&const_cast<GreasePencil &>(grease_pencil),
-                                         bke::GeometryOwnershipType::ReadOnly);
+      const GreasePencil &grease_pencil = *id_cast<const GreasePencil *>(object_orig->data);
+      return bke::SocketValueVariant::From(bke::GeometrySet::from_grease_pencil(
+          &const_cast<GreasePencil &>(grease_pencil), bke::GeometryOwnershipType::ReadOnly));
     }
+    return {};
   }
-  else {
-    if (BLI_listbase_is_single(&sspreadsheet->geometry_id.viewer_path.path)) {
-      geometry_set = bke::object_get_evaluated_geometry_set(*object_eval);
-    }
-    else {
-      if (const ViewerNodeLog *viewer_log =
-              nodes::geo_eval_log::GeoNodesLog::find_viewer_node_log_for_path(
-                  sspreadsheet->geometry_id.viewer_path))
-      {
-        geometry_set = viewer_log->geometry;
+
+  if (sspreadsheet->geometry_id.viewer_path.path.is_single()) {
+    return bke::SocketValueVariant::From(bke::object_get_evaluated_geometry_set(*object_eval));
+  }
+
+  const nodes::eval_log::ViewerNodeLog *viewer_log =
+      nodes::eval_log::NodesEvalLog::find_viewer_node_log_for_path(
+          sspreadsheet->geometry_id.viewer_path);
+  if (!viewer_log) {
+    return {};
+  }
+
+  const SpreadsheetTableIDGeometry &table_id = sspreadsheet->geometry_id;
+  const int item_index = viewer_log->items.index_of_try_as(table_id.viewer_item_identifier);
+  if (item_index == -1) {
+    return {};
+  }
+
+  bke::SocketValueVariant value = viewer_log->items[item_index].value;
+
+  /* Try to display the previous geometry instead of the value is a field (it will have been
+   * evaluated on that geometry). */
+  if (value.is_context_dependent_field()) {
+    for (int i = item_index - 1; i >= 0; i--) {
+      const bke::SocketValueVariant &prev_value = viewer_log->items[i].value;
+      if (!prev_value.is_single()) {
+        continue;
       }
+      const GPointer ptr = prev_value.get_single_ptr();
+      if (!ptr.is_type<bke::GeometrySet>()) {
+        continue;
+      }
+      return prev_value;
     }
+    return {};
   }
-  return geometry_set;
+
+  if (value.is_single()) {
+    const GPointer ptr = value.get_single_ptr();
+    if (!ptr.is_type<nodes::BundlePtr>()) {
+      return value;
+    }
+    const nodes::BundlePtr &bundle = *ptr.get<nodes::BundlePtr>();
+    return lookup_bundle_path(bundle, table_id.viewer_item_bundle_path);
+  }
+  if (value.is_list()) {
+    return value;
+  }
+  if (value.is_volume_grid()) {
+    return value;
+  }
+  return {};
+}
+
+std::optional<bke::GeometrySet> root_geometry_set_get(const SpaceSpreadsheet *sspreadsheet,
+                                                      Object *object_eval)
+{
+  bke::SocketValueVariant display_data = root_display_data_get(sspreadsheet, object_eval);
+  if (!display_data.is_single()) {
+    return std::nullopt;
+  }
+  const GPointer ptr = display_data.get_single_ptr();
+  if (!ptr.is_type<bke::GeometrySet>()) {
+    return std::nullopt;
+  }
+  return display_data.extract<bke::GeometrySet>();
 }
 
 bke::GeometrySet get_geometry_set_for_instance_ids(const bke::GeometrySet &root_geometry,
@@ -717,32 +1244,111 @@ bke::GeometrySet get_geometry_set_for_instance_ids(const bke::GeometrySet &root_
   return geometry;
 }
 
+static std::unique_ptr<DataSource> data_source_from_socket_value(
+    const bke::SocketValueVariant &value, const SpreadsheetClosureInputOutput closure_inout)
+{
+  if (value.is_context_dependent_field()) {
+    return {};
+  }
+  if (value.is_volume_grid()) {
+#ifdef WITH_OPENVDB
+    return std::make_unique<VolumeGridDataSource>(value.get<bke::GVolumeGrid>());
+#else
+    return {};
+#endif
+  }
+  if (value.is_list()) {
+    return std::make_unique<ListDataSource>(value.get<nodes::GListPtr>());
+  }
+  if (value.is_single()) {
+    const GPointer ptr = value.get_single_ptr();
+    if (ptr.is_type<nodes::BundlePtr>()) {
+      const nodes::BundlePtr bundle_ptr = value.get<nodes::BundlePtr>();
+      if (bundle_ptr) {
+        return std::make_unique<BundleDataSource>(bundle_ptr);
+      }
+      return {};
+    }
+    if (ptr.is_type<nodes::ClosurePtr>()) {
+      const nodes::ClosurePtr closure_ptr = value.get<nodes::ClosurePtr>();
+      if (closure_ptr) {
+        return std::make_unique<ClosureSignatureDataSource>(closure_ptr, closure_inout);
+      }
+      return {};
+    }
+    const eSpreadsheetColumnValueType column_type = cpp_type_to_column_type(*ptr.type());
+    if (column_type == SPREADSHEET_VALUE_TYPE_UNKNOWN) {
+      return {};
+    }
+    return std::make_unique<SingleValueDataSource>(ptr);
+  }
+  return {};
+}
+
+static std::unique_ptr<DataSource> data_source_from_geometry(
+    bke::GeometrySet geometry,
+    const SpreadsheetTableIDGeometry &geometry_id,
+    Object *object_eval,
+    const bool show_internal_attributes)
+{
+  switch (SpreadsheetGeometryItemType(geometry_id.geometry_item_type)) {
+    case SPREADSHEET_GEOMETRY_ITEM_TYPE_DOMAIN: {
+      const bke::AttrDomain domain = (bke::AttrDomain)geometry_id.attribute_domain;
+      const auto component_type = bke::GeometryComponent::Type(
+          geometry_id.geometry_component_type);
+      const int layer_index = geometry_id.layer_index;
+      if (!geometry.has(component_type)) {
+        return {};
+      }
+      if (component_type == bke::GeometryComponent::Type::Volume) {
+        return std::make_unique<VolumeDataSource>(std::move(geometry));
+      }
+      Object *object_orig = geometry_id.instance_ids_num == 0 ? DEG_get_original(object_eval) :
+                                                                nullptr;
+      return std::make_unique<GeometryDataSource>(object_orig,
+                                                  std::move(geometry),
+                                                  component_type,
+                                                  domain,
+                                                  show_internal_attributes,
+                                                  layer_index);
+    }
+    case SPREADSHEET_GEOMETRY_ITEM_TYPE_BUNDLE: {
+      const nodes::BundlePtr &bundle_ptr = geometry.bundle_ptr();
+      bke::SocketValueVariant value = lookup_bundle_path(bundle_ptr,
+                                                         geometry_id.geometry_bundle_path);
+      return data_source_from_socket_value(
+          value,
+          SpreadsheetClosureInputOutput(geometry_id.geometry_bundle_path.closure_input_output));
+    }
+  }
+  return {};
+}
+
 std::unique_ptr<DataSource> data_source_from_geometry(const bContext *C, Object *object_eval)
 {
   SpaceSpreadsheet *sspreadsheet = CTX_wm_space_spreadsheet(C);
+  bke::SocketValueVariant root_data = root_display_data_get(sspreadsheet, object_eval);
 
-  const bke::GeometrySet root_geometry_set = spreadsheet_get_display_geometry_set(sspreadsheet,
-                                                                                  object_eval);
-  const bke::GeometrySet geometry_set = get_geometry_set_for_instance_ids(
-      root_geometry_set,
-      Span{sspreadsheet->geometry_id.instance_ids, sspreadsheet->geometry_id.instance_ids_num});
-
-  const bke::AttrDomain domain = (bke::AttrDomain)sspreadsheet->geometry_id.attribute_domain;
-  const auto component_type = bke::GeometryComponent::Type(
-      sspreadsheet->geometry_id.geometry_component_type);
-  const int layer_index = sspreadsheet->geometry_id.layer_index;
-  if (!geometry_set.has(component_type)) {
-    return {};
+  if (root_data.is_single()) {
+    const GPointer ptr = root_data.get_single_ptr();
+    if (ptr.is_type<bke::GeometrySet>()) {
+      const bke::GeometrySet root_geometry_set = root_data.extract<bke::GeometrySet>();
+      const bke::GeometrySet geometry_set = get_geometry_set_for_instance_ids(
+          root_geometry_set,
+          Span{sspreadsheet->geometry_id.instance_ids,
+               sspreadsheet->geometry_id.instance_ids_num});
+      return data_source_from_geometry(std::move(geometry_set),
+                                       sspreadsheet->geometry_id,
+                                       object_eval,
+                                       sspreadsheet->flag &
+                                           SPREADSHEET_FLAG_SHOW_INTERNAL_ATTRIBUTES);
+    }
   }
-
-  if (component_type == bke::GeometryComponent::Type::Volume) {
-    return std::make_unique<VolumeDataSource>(std::move(geometry_set));
-  }
-  Object *object_orig = sspreadsheet->geometry_id.instance_ids_num == 0 ?
-                            DEG_get_original(object_eval) :
-                            nullptr;
-  return std::make_unique<GeometryDataSource>(
-      object_orig, std::move(geometry_set), component_type, domain, layer_index);
+  return data_source_from_socket_value(
+      root_data,
+      SpreadsheetClosureInputOutput(
+          sspreadsheet->geometry_id.viewer_item_bundle_path.closure_input_output));
 }
 
-}  // namespace blender::ed::spreadsheet
+}  // namespace ed::spreadsheet
+}  // namespace blender

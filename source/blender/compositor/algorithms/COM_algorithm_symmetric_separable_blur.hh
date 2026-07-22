@@ -4,9 +4,8 @@
 
 #pragma once
 
+#include "BLI_math_filter.hh"
 #include "BLI_math_vector_types.hh"
-
-#include "DNA_scene_types.h"
 
 #include "COM_context.hh"
 #include "COM_result.hh"
@@ -14,15 +13,14 @@
 namespace blender::compositor {
 
 /* Blur the input using a horizontal and a vertical separable blur passes given a certain radius
- * and filter type using SymmetricSeparableBlurWeights. The output is written to the given output
- * result, which will be allocated internally and is thus expected not to be previously allocated.
- * If extend_bounds is true, the output will have an extra radius amount of pixels on the boundary
- * of the image, where blurring can take place assuming a fully transparent out of bound values. */
+ * and filter type using SymmetricSeparableBlurWeights. If extend_bounds is true, the input will be
+ * zero padded by radius amount of pixels. The result is written to the given output, which will be
+ * allocated internally and is thus expected not to be previously allocated. */
 void symmetric_separable_blur(Context &context,
                               const Result &input,
                               Result &output,
                               const float2 &radius,
-                              const int filter_type = R_FILTER_GAUSS,
+                              const math::FilterKernel filter_type = math::FilterKernel::Gauss,
                               const bool extend_bounds = false);
 
 }  // namespace blender::compositor

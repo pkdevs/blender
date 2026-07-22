@@ -12,125 +12,19 @@
 #pragma once
 
 #include "BKE_duplilist.hh"
-#include "BLI_ghash.h"
+#include "BLI_function_ref.hh"
 #include "BLI_map.hh"
-#include "DEG_depsgraph_query.hh"
+#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DRW_render.hh"
-#include "GPU_material.hh"
 
-#include "eevee_shader_shared.hh"
+#include "draw_handle.hh"
 
 namespace blender::eevee {
 
+using namespace draw;
+
 class Instance;
-
-/* -------------------------------------------------------------------- */
-/** \name ObjectKey
- *
- * Unique key to identify each object in the hash-map.
- * Note that we get a unique key for each object component.
- * \{ */
-
-class ObjectKey {
-  /** Hash value of the key. */
-  uint64_t hash_value_ = 0;
-  /** Original Object or source object for duplis. */
-  Object *ob_ = nullptr;
-  /** Original Parent object for duplis. */
-  Object *parent_ = nullptr;
-  /** Dupli objects recursive unique identifier */
-  int id_[MAX_DUPLI_RECUR];
-  /** Used for particle system hair. */
-  int sub_key_ = 0;
-
- public:
-  ObjectKey() = default;
-
-  ObjectKey(const ObjectRef &ob_ref, int sub_key = 0)
-  {
-    ob_ = DEG_get_original(ob_ref.object);
-    hash_value_ = BLI_ghashutil_ptrhash(ob_);
-
-    if (DupliObject *dupli = ob_ref.dupli_object) {
-      parent_ = ob_ref.dupli_parent;
-      hash_value_ = BLI_ghashutil_combine_hash(hash_value_, BLI_ghashutil_ptrhash(parent_));
-      for (int i : IndexRange(MAX_DUPLI_RECUR)) {
-        id_[i] = dupli->persistent_id[i];
-        if (id_[i] == INT_MAX) {
-          break;
-        }
-        hash_value_ = BLI_ghashutil_combine_hash(hash_value_, BLI_ghashutil_inthash(id_[i]));
-      }
-    }
-
-    if (sub_key != 0) {
-      sub_key_ = sub_key;
-      hash_value_ = BLI_ghashutil_combine_hash(hash_value_, BLI_ghashutil_inthash(sub_key_));
-    }
-  }
-
-  uint64_t hash() const
-  {
-    return hash_value_;
-  }
-
-  bool operator<(const ObjectKey &k) const
-  {
-    if (hash_value_ != k.hash_value_) {
-      return hash_value_ < k.hash_value_;
-    }
-    if (ob_ != k.ob_) {
-      return (ob_ < k.ob_);
-    }
-    if (parent_ != k.parent_) {
-      return (parent_ < k.parent_);
-    }
-    if (sub_key_ != k.sub_key_) {
-      return (sub_key_ < k.sub_key_);
-    }
-    if (parent_) {
-      for (int i : IndexRange(MAX_DUPLI_RECUR)) {
-        if (id_[i] < k.id_[i]) {
-          return true;
-        }
-        if (id_[i] == INT_MAX) {
-          break;
-        }
-      }
-    }
-    return false;
-  }
-
-  bool operator==(const ObjectKey &k) const
-  {
-    if (hash_value_ != k.hash_value_) {
-      return false;
-    }
-    if (ob_ != k.ob_) {
-      return false;
-    }
-    if (parent_ != k.parent_) {
-      return false;
-    }
-    if (sub_key_ != k.sub_key_) {
-      return false;
-    }
-    if (parent_) {
-      for (int i : IndexRange(MAX_DUPLI_RECUR)) {
-        if (id_[i] != k.id_[i]) {
-          return false;
-        }
-        if (id_[i] == INT_MAX) {
-          break;
-        }
-      }
-    }
-    return true;
-  }
-};
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Sync Module
@@ -138,44 +32,67 @@ class ObjectKey {
  * \{ */
 
 struct BaseHandle {
-  unsigned int recalc;
+  const uint recalc = 0;
 };
 
-struct ObjectHandle : BaseHandle {
-  ObjectKey object_key;
+struct ObjectHandle : ObjectRef, BaseHandle {
+  const ResourceHandleRange res_handle;
+
+  ObjectHandle(const ObjectRef &ob_ref,
+               const ResourceHandleRange &res_handle,
+               uint recalc,
+               uint sub_key = 0)
+      : ObjectRef(ob_ref, sub_key), BaseHandle{recalc}, res_handle(res_handle) {};
 };
 
 struct WorldHandle : public BaseHandle {};
 
-struct SceneHandle : public BaseHandle {};
+struct Material;
+struct MaterialPass;
 
 class SyncModule {
  private:
   Instance &inst_;
 
-  Map<ObjectKey, ObjectHandle> ob_handles = {};
-
  public:
-  SyncModule(Instance &inst) : inst_(inst){};
-  ~SyncModule(){};
+  SyncModule(Instance &inst) : inst_(inst) {};
+  ~SyncModule() {};
 
-  ObjectHandle &sync_object(const ObjectRef &ob_ref);
-  WorldHandle sync_world(const ::World &world);
+  ObjectHandle sync_object(const ObjectRef &ob_ref,
+                           const ResourceHandleRange &res_handle,
+                           uint sub_key = 0);
 
-  void sync_mesh(Object *ob, ObjectHandle &ob_handle, const ObjectRef &ob_ref);
-  bool sync_sculpt(Object *ob, ObjectHandle &ob_handle, const ObjectRef &ob_ref);
-  void sync_pointcloud(Object *ob, ObjectHandle &ob_handle, const ObjectRef &ob_ref);
-  void sync_volume(Object *ob, ObjectHandle &ob_handle, const ObjectRef &ob_ref);
-  void sync_curves(Object *ob,
-                   ObjectHandle &ob_handle,
-                   const ObjectRef &ob_ref,
-                   ResourceHandle res_handle = 0,
-                   ModifierData *modifier_data = nullptr,
-                   ParticleSystem *particle_sys = nullptr);
+  void sync_mesh(const ObjectRef &ob_ref);
+  bool sync_sculpt(const ObjectRef &ob_ref);
+  void sync_pointcloud(const ObjectRef &ob_ref);
+  void sync_volume(const ObjectRef &ob_ref);
+  void sync_curves(const ObjectRef &ob_ref,
+                   struct HairParticleInfo const *hair_particle = nullptr);
+
+ private:
+  void sync_common_passes(const Material &material,
+                          FunctionRef<void(const MaterialPass &)> sync_cb);
+  void sync_volume_passes(const ObjectHandle &ob_handle,
+                          const Material &material,
+                          FunctionRef<void(const MaterialPass &, int)> sync_cb);
+  void sync_alpha_blended_passes(const ObjectHandle &ob_handle,
+                                 const Material &material,
+                                 FunctionRef<void(const MaterialPass &, int)> sync_cb);
+
+  void sync_common(const ObjectHandle &ob_handle,
+                   Span<Material *> materials,
+                   Span<GPUMaterial *> gpu_materials);
 };
 
-using HairHandleCallback = FunctionRef<void(ObjectHandle, ModifierData &, ParticleSystem &)>;
-void foreach_hair_particle_handle(Object *ob, ObjectHandle ob_handle, HairHandleCallback callback);
+struct HairParticleInfo {
+  ModifierData &md;
+  ParticleSystem &psys;
+  uint recalc_flags;
+  uint sub_key;
+};
+
+using HairHandleCallback = FunctionRef<void(const HairParticleInfo &)>;
+void foreach_hair_particle(Instance &inst, ObjectRef &ob_ref, HairHandleCallback callback);
 
 /** \} */
 

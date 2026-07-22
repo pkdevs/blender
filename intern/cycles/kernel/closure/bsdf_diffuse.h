@@ -9,6 +9,7 @@
 
 #include "kernel/types.h"
 
+#include "kernel/closure/alloc.h"
 #include "kernel/sample/mapping.h"
 
 CCL_NAMESPACE_BEGIN
@@ -21,14 +22,21 @@ static_assert(sizeof(ShaderClosure) >= sizeof(DiffuseBsdf), "DiffuseBsdf is too 
 
 /* DIFFUSE */
 
-ccl_device int bsdf_diffuse_setup(ccl_private DiffuseBsdf *bsdf)
+ccl_device void bsdf_diffuse_setup(ccl_private ShaderData *sd,
+                                   const float3 N,
+                                   const Spectrum weight)
 {
-  bsdf->type = CLOSURE_BSDF_DIFFUSE_ID;
-  return SD_BSDF | SD_BSDF_HAS_EVAL;
+  ccl_private DiffuseBsdf *bsdf = (ccl_private DiffuseBsdf *)bsdf_alloc(
+      sd, sizeof(DiffuseBsdf), weight);
+  if (bsdf) {
+    bsdf->N = N;
+    bsdf->type = CLOSURE_BSDF_DIFFUSE_ID;
+    sd->flag |= (SD_BSDF | SD_BSDF_HAS_EVAL);
+  }
 }
 
 ccl_device Spectrum bsdf_diffuse_eval(const ccl_private ShaderClosure *sc,
-                                      const float3 wi,
+                                      const float3 /*wi*/,
                                       const float3 wo,
                                       ccl_private float *pdf)
 {
@@ -42,7 +50,7 @@ ccl_device Spectrum bsdf_diffuse_eval(const ccl_private ShaderClosure *sc,
 
 ccl_device int bsdf_diffuse_sample(const ccl_private ShaderClosure *sc,
                                    const float3 Ng,
-                                   const float3 wi,
+                                   const float3 /*wi*/,
                                    const float2 rand,
                                    ccl_private Spectrum *eval,
                                    ccl_private float3 *wo,
@@ -66,14 +74,21 @@ ccl_device int bsdf_diffuse_sample(const ccl_private ShaderClosure *sc,
 
 /* TRANSLUCENT */
 
-ccl_device int bsdf_translucent_setup(ccl_private DiffuseBsdf *bsdf)
+ccl_device void bsdf_translucent_setup(ccl_private ShaderData *sd,
+                                       const float3 N,
+                                       const Spectrum weight)
 {
-  bsdf->type = CLOSURE_BSDF_TRANSLUCENT_ID;
-  return SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_HAS_TRANSMISSION;
+  ccl_private DiffuseBsdf *bsdf = (ccl_private DiffuseBsdf *)bsdf_alloc(
+      sd, sizeof(DiffuseBsdf), weight);
+  if (bsdf) {
+    bsdf->N = N;
+    bsdf->type = CLOSURE_BSDF_TRANSLUCENT_ID;
+    sd->flag |= (SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSDF_HAS_TRANSMISSION);
+  }
 }
 
 ccl_device Spectrum bsdf_translucent_eval(const ccl_private ShaderClosure *sc,
-                                          const float3 wi,
+                                          const float3 /*wi*/,
                                           const float3 wo,
                                           ccl_private float *pdf)
 {
@@ -87,7 +102,7 @@ ccl_device Spectrum bsdf_translucent_eval(const ccl_private ShaderClosure *sc,
 
 ccl_device int bsdf_translucent_sample(const ccl_private ShaderClosure *sc,
                                        const float3 Ng,
-                                       const float3 wi,
+                                       const float3 /*wi*/,
                                        const float2 rand,
                                        ccl_private Spectrum *eval,
                                        ccl_private float3 *wo,

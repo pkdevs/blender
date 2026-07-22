@@ -9,11 +9,15 @@
 #pragma once
 
 #include "BLI_array.hh"
+#include "BLI_enum_flags.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "ED_anim_api.hh" /* for enum eAnimFilter_Flags */
 
 #include "DNA_curve_types.h"
+#include "DNA_listBase.h"
+
+namespace blender {
 
 struct BezTriple;
 struct ButterworthCoefficients;
@@ -35,8 +39,10 @@ enum eEditKeyframes_Validate {
   /* Frame range */
   BEZT_OK_FRAME = 1,
   BEZT_OK_FRAMERANGE,
-  /* Selection status */
+  /* Selection status (any of f1, f2, f3)  */
   BEZT_OK_SELECTED,
+  /* Selection status (f2 is enough) */
+  BEZT_OK_SELECTED_KEY,
   /* Values (y-val) only */
   BEZT_OK_VALUE,
   BEZT_OK_VALUERANGE,
@@ -102,7 +108,7 @@ enum eEditKeyframes_Mirror {
 struct KeyframeEdit_LassoData {
   rctf *rectf_scaled;
   const rctf *rectf_view;
-  blender::Array<blender::int2> mcoords;
+  Array<int2> mcoords;
 };
 
 /* use with BEZT_OK_REGION_CIRCLE */
@@ -135,7 +141,11 @@ enum eKeyframeVertOk {
 
 /* Flags for use during iteration */
 enum eKeyframeIterFlags {
-  /* consider handles in addition to key itself */
+  /* Consider handles in addition to key itself. Used in #keyframe_ok_checks, #select_bezier_add,
+   * #select_bezier_subtract. If set, treat key and handles separately (e.g (de)select them
+   * individually, and do additional visibility checks on the handles if necessary), otherwise
+   * always treat key and handles the same (e.g. (de)select all of them).
+   */
   KEYFRAME_ITER_INCL_HANDLES = (1 << 0),
 
   /* Perform NLA time remapping (global -> strip) for the "f1" parameter
@@ -150,9 +160,13 @@ enum eKeyframeIterFlags {
    * get the actual visibility state. E.g. in some cases handles are only drawn if either a handle
    * or their control point is selected. The selection state will have to be checked in the
    * iterator callbacks then. */
+  /* Represents "Only Selected Keyframes" option (SIPO_SELVHANDLESONLY). */
   KEYFRAME_ITER_HANDLES_DEFAULT_INVISIBLE = (1 << 3),
+
+  /* Represents "Show Handles" option (SIPO_NOHANDLES). */
+  KEYFRAME_ITER_HANDLES_INVISIBLE = (1 << 4),
 };
-ENUM_OPERATORS(eKeyframeIterFlags, KEYFRAME_ITER_HANDLES_DEFAULT_INVISIBLE)
+ENUM_OPERATORS(eKeyframeIterFlags)
 
 /** \} */
 
@@ -174,7 +188,8 @@ struct CfraElem {
 struct KeyframeEditData {
   /* generic properties/data access */
   /** temp list for storing custom list of data to check */
-  ListBase list;
+  ListBaseT<CfraElem> cfra_elem_list;
+  ListBaseT<TimeMarker> time_marker_list;
   /** pointer to current scene - many tools need access to cfra/etc. */
   Scene *scene;
   /** pointer to custom data - usually 'Object' but also 'rectf', but could be other types too */
@@ -206,7 +221,7 @@ struct KeyframeEditData {
  * \{ */
 
 /** Callback function that refreshes the F-Curve after use. */
-using FcuEditFunc = void (*)(FCurve *fcu);
+using FcuEditFunc = void (*)(FCurve &fcu);
 /** Callback function that operates on the given #BezTriple. */
 using KeyframeEditFunc = short (*)(KeyframeEditData *ked, BezTriple *bezt);
 
@@ -309,17 +324,6 @@ short ANIM_animchannel_keyframes_loop(KeyframeEditData *ked,
                                       KeyframeEditFunc key_ok,
                                       KeyframeEditFunc key_cb,
                                       FcuEditFunc fcu_cb);
-/**
- * Same as #ANIM_animchannel_keyframes_loop, except #bAnimListElem wrapper is not needed.
- * \param keytype: is #eAnim_KeyType.
- */
-short ANIM_animchanneldata_keyframes_loop(KeyframeEditData *ked,
-                                          bDopeSheet *ads,
-                                          void *data,
-                                          int keytype,
-                                          KeyframeEditFunc key_ok,
-                                          KeyframeEditFunc key_cb,
-                                          FcuEditFunc fcu_cb);
 
 /**
  * Calls callback_fn() for each keyframe in each fcurve in the filtered animation context.
@@ -431,7 +435,7 @@ struct FCurveSegment {
  * Keys that have BEZT_FLAG_IGNORE_TAG set are treated as unselected.
  * The caller is responsible for freeing the memory.
  */
-ListBase find_fcurve_segments(FCurve *fcu);
+ListBaseT<FCurveSegment> find_fcurve_segments(FCurve *fcu);
 void clean_fcurve(bAnimListElem *ale, float thresh, bool cleardefault, bool only_selected_keys);
 void blend_to_neighbor_fcurve_segment(FCurve *fcu, FCurveSegment *segment, float factor);
 void breakdown_fcurve_segment(FCurve *fcu, FCurveSegment *segment, float factor);
@@ -469,7 +473,9 @@ void butterworth_smooth_fcurve_segment(FCurve *fcu,
                                        ButterworthCoefficients *bw_coeff);
 void smooth_fcurve_segment(FCurve *fcu,
                            FCurveSegment *segment,
+                           const float *original_values,
                            float *samples,
+                           const int sample_count,
                            float factor,
                            int kernel_size,
                            const double *kernel);
@@ -529,7 +535,7 @@ void ANIM_fcurves_copybuf_free();
  *
  * \returns Whether anything was copied into the buffer.
  */
-bool copy_animedit_keys(bAnimContext *ac, ListBase *anim_data);
+bool copy_animedit_keys(bAnimContext *ac, ListBaseT<bAnimListElem> *anim_data);
 
 struct KeyframePasteContext {
   eKeyPasteOffset offset_mode;
@@ -542,9 +548,11 @@ struct KeyframePasteContext {
 };
 
 eKeyPasteError paste_animedit_keys(bAnimContext *ac,
-                                   ListBase *anim_data,
+                                   ListBaseT<bAnimListElem> *anim_data,
                                    const KeyframePasteContext &paste_context);
 
 /* ************************************************ */
 
 /** \} */
+
+}  // namespace blender

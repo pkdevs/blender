@@ -2,22 +2,53 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "UI_interface_layout.hh"
+#include "UI_resources.hh"
+
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_bsdf_glass_cc {
+namespace blender {
+
+namespace nodes::node_shader_bsdf_glass_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({1.0f, 1.0f, 1.0f, 1.0f});
-  b.add_input<decl::Float>("Roughness")
+  const bNodeTree *ntree = b.tree_or_null();
+  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
+
+  b.use_custom_socket_order();
+
+  b.add_output<decl::Shader>("BSDF"_ustr);
+
+  b.add_default_layout();
+
+  b.add_input<decl::Color>("Color"_ustr).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Float>("Roughness"_ustr)
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
-  b.add_input<decl::Float>("IOR").default_value(1.5f).min(0.0f).max(1000.0f);
-  b.add_input<decl::Vector>("Normal").hide_value();
-  b.add_input<decl::Float>("Weight").available(false);
-  b.add_output<decl::Shader>("BSDF");
+  b.add_input<decl::Float>("IOR"_ustr).default_value(1.5f).min(0.0f).max(1000.0f);
+  b.add_input<decl::Vector>("Normal"_ustr).hide_value();
+  b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
+
+  PanelDeclarationBuilder &film = b.add_panel("Thin Film"_ustr).default_closed(true);
+  film.add_input<decl::Float>("Thin Film Thickness"_ustr)
+      .default_value(0.0)
+      .min(0.0f)
+      .max(100000.0f)
+      .subtype(PROP_WAVELENGTH)
+      .description("Thickness of the film in nanometers");
+  film.add_input<decl::Float>("Thin Film IOR"_ustr)
+      .default_value(1.33f)
+      .min(1.0f)
+      .max(1000.0f)
+      .description("Index of refraction (IOR) of the thin film");
+}
+
+static void node_shader_buts_glass(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
+{
+  layout.prop(ptr, "distribution", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 }
 
 static void node_shader_init_glass(bNodeTree * /*ntree*/, bNode *node)
@@ -37,6 +68,11 @@ static int node_shader_gpu_bsdf_glass(GPUMaterial *mat,
 
   GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY | GPU_MATFLAG_REFRACT);
 
+  if (in[0].might_be_tinted()) {
+    GPU_material_flag_set(
+        mat, GPU_MATFLAG_REFLECTION_MAYBE_COLORED | GPU_MATFLAG_REFRACTION_MAYBE_COLORED);
+  }
+
   float use_multi_scatter = (node->custom1 == SHD_GLOSSY_MULTI_GGX) ? 1.0f : 0.0f;
 
   return GPU_stack_link(mat, node, "node_bsdf_glass", in, out, GPU_constant(&use_multi_scatter));
@@ -53,6 +89,8 @@ NODE_SHADER_MATERIALX_BEGIN
   NodeItem roughness = get_input_value("Roughness", NodeItem::Type::Vector2);
   NodeItem ior = get_input_value("IOR", NodeItem::Type::Float);
   NodeItem normal = get_input_link("Normal", NodeItem::Type::Vector3);
+  NodeItem thin_film_thickness = get_input_value("Thin Film Thickness", NodeItem::Type::Float);
+  NodeItem thin_film_ior = get_input_value("Thin Film IOR", NodeItem::Type::Float);
 
   return create_node("dielectric_bsdf",
                      NodeItem::Type::BSDF,
@@ -60,31 +98,37 @@ NODE_SHADER_MATERIALX_BEGIN
                       {"tint", color},
                       {"roughness", roughness},
                       {"ior", ior},
+                      {"thinfilm_thickness", thin_film_thickness},
+                      {"thinfilm_ior", thin_film_ior},
                       {"scatter_mode", val(std::string("RT"))}});
 }
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_bsdf_glass_cc
+}  // namespace nodes::node_shader_bsdf_glass_cc
 
 /* node type definition */
 void register_node_type_sh_bsdf_glass()
 {
-  namespace file_ns = blender::nodes::node_shader_bsdf_glass_cc;
+  namespace file_ns = nodes::node_shader_bsdf_glass_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeBsdfGlass", SH_NODE_BSDF_GLASS);
+  sh_node_type_base(&ntype, "ShaderNodeBsdfGlass"_ustr, SH_NODE_BSDF_GLASS);
   ntype.ui_name = "Glass BSDF";
   ntype.ui_description = "Glass-like shader mixing refraction and reflection at grazing angles";
   ntype.enum_name_legacy = "BSDF_GLASS";
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
+  ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
   ntype.add_ui_poll = object_shader_nodes_poll;
-  blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Middle);
+  ntype.default_width = bke::NodeWidth::_160;
+  ntype.draw_buttons = file_ns::node_shader_buts_glass;
   ntype.initfunc = file_ns::node_shader_init_glass;
   ntype.gpu_fn = file_ns::node_shader_gpu_bsdf_glass;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

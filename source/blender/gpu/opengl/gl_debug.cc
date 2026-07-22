@@ -8,10 +8,10 @@
  * Debug features of OpenGL.
  */
 
-#include "BLI_compiler_attrs.h"
-#include "BLI_string.h"
-#include "BLI_system.h"
-#include "BLI_utildefines.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_string.hh"
+#include "BLI_system.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh"
 
@@ -27,6 +27,8 @@
 
 #include "gl_debug.hh"
 
+namespace blender {
+
 static CLG_LogRef LOG = {"gpu.debug"};
 
 /* Avoid too much NVidia buffer info in the output log. */
@@ -34,7 +36,7 @@ static CLG_LogRef LOG = {"gpu.debug"};
 /* Avoid unneeded shader statistics. */
 #define TRIM_SHADER_STATS_INFO 1
 
-namespace blender::gpu::debug {
+namespace gpu::debug {
 
 /* -------------------------------------------------------------------- */
 /** \name Debug Callbacks
@@ -82,15 +84,15 @@ static void APIENTRY debug_callback(GLenum /*source*/,
   const bool use_color = CLG_color_support_get(&LOG);
 
   if (ELEM(severity, GL_DEBUG_SEVERITY_LOW, GL_DEBUG_SEVERITY_NOTIFICATION)) {
-    if ((LOG.type->flag & CLG_FLAG_USE) && (LOG.type->level >= CLG_SEVERITY_INFO)) {
+    if (CLOG_CHECK(&LOG, CLG_LEVEL_INFO)) {
       const char *format = use_color ? "\033[2m%s\033[0m" : "%s";
-      CLG_logf(LOG.type, CLG_SEVERITY_INFO, "Notification", "", format, message);
+      CLG_logf(LOG.type, CLG_LEVEL_INFO, "Notification", "", format, message);
     }
   }
   else {
     char debug_groups[512] = "";
     GPU_debug_get_groups_names(sizeof(debug_groups), debug_groups);
-    CLG_Severity clog_severity;
+    CLG_Level clog_level;
 
     if (GPU_debug_group_match(GPU_DEBUG_SHADER_COMPILATION_GROUP) ||
         GPU_debug_group_match(GPU_DEBUG_SHADER_SPECIALIZATION_GROUP))
@@ -103,19 +105,19 @@ static void APIENTRY debug_callback(GLenum /*source*/,
       case GL_DEBUG_TYPE_ERROR:
       case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
       case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
-        clog_severity = CLG_SEVERITY_ERROR;
+        clog_level = CLG_LEVEL_ERROR;
         break;
       case GL_DEBUG_TYPE_PORTABILITY:
       case GL_DEBUG_TYPE_PERFORMANCE:
       case GL_DEBUG_TYPE_OTHER:
       case GL_DEBUG_TYPE_MARKER: /* KHR has this, ARB does not */
       default:
-        clog_severity = CLG_SEVERITY_WARN;
+        clog_level = CLG_LEVEL_WARN;
         break;
     }
 
-    if ((LOG.type->flag & CLG_FLAG_USE) && (LOG.type->level <= clog_severity)) {
-      CLG_logf(LOG.type, clog_severity, debug_groups, "", "%s", message);
+    if (CLOG_CHECK(&LOG, clog_level)) {
+      CLG_logf(LOG.type, clog_level, debug_groups, "", "%s", message);
       if (severity == GL_DEBUG_SEVERITY_HIGH) {
         /* Focus on error message. */
         if (use_color) {
@@ -135,40 +137,16 @@ static void APIENTRY debug_callback(GLenum /*source*/,
 
 void init_gl_callbacks()
 {
-  CLOG_ENSURE(&LOG);
-
-  char msg[256] = "";
-  const char format[] = "Successfully hooked OpenGL debug callback using %s";
-
-  if (epoxy_gl_version() >= 43 || epoxy_has_gl_extension("GL_KHR_debug")) {
-    SNPRINTF(msg, format, epoxy_gl_version() >= 43 ? "OpenGL 4.3" : "KHR_debug extension");
-    glEnable(GL_DEBUG_OUTPUT);
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback((GLDEBUGPROC)debug_callback, nullptr);
-    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
-    glDebugMessageInsert(GL_DEBUG_SOURCE_APPLICATION,
-                         GL_DEBUG_TYPE_MARKER,
-                         0,
-                         GL_DEBUG_SEVERITY_NOTIFICATION,
-                         -1,
-                         msg);
-  }
-  else if (epoxy_has_gl_extension("GL_ARB_debug_output")) {
-    SNPRINTF(msg, format, "ARB_debug_output");
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallbackARB((GLDEBUGPROCARB)debug_callback, nullptr);
-    glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
-    glDebugMessageInsertARB(GL_DEBUG_SOURCE_APPLICATION_ARB,
-                            GL_DEBUG_TYPE_OTHER_ARB,
-                            0,
-                            GL_DEBUG_SEVERITY_LOW_ARB,
-                            -1,
-                            msg);
-  }
-  else {
-    CLOG_STR_WARN(&LOG, "Failed to hook OpenGL debug callback. Use fallback debug layer.");
-    init_debug_layer();
-  }
+  glEnable(GL_DEBUG_OUTPUT);
+  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+  glDebugMessageCallback(static_cast<GLDEBUGPROC>(debug_callback), nullptr);
+  glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+  glDebugMessageInsert(GL_DEBUG_SOURCE_APPLICATION,
+                       GL_DEBUG_TYPE_MARKER,
+                       0,
+                       GL_DEBUG_SEVERITY_NOTIFICATION,
+                       -1,
+                       "Successfully hooked OpenGL debug callback");
 }
 
 /** \} */
@@ -215,7 +193,7 @@ void check_gl_error(const char *info)
 
 void check_gl_resources(const char *info)
 {
-  if (!(G.debug & G_DEBUG_GPU) || GPU_bgl_get()) {
+  if (!(G.debug & G_DEBUG_GPU)) {
     return;
   }
 
@@ -380,9 +358,9 @@ void object_label(GLenum type, GLuint object, const char *name)
 
 /** \} */
 
-}  // namespace blender::gpu::debug
+}  // namespace gpu::debug
 
-namespace blender::gpu {
+namespace gpu {
 
 /* -------------------------------------------------------------------- */
 /** \name Debug Groups
@@ -441,7 +419,7 @@ void GLContext::debug_group_end()
       break;
     }
     if (i == 0) {
-      std::cout << "Profile GPU error: Extra GPU_debug_group_end() call.\n";
+      CLOG_ERROR(&LOG, "Profile GPU error: Extra GPU_debug_group_end() call.");
     }
   }
 }
@@ -461,7 +439,7 @@ void GLContext::process_frame_timings()
     for (int i = queries.size() - 1; i >= 0; i--) {
       if (!queries[i].finished) {
         frame_is_valid = false;
-        std::cout << "Profile GPU error: Missing GPU_debug_group_end() call\n";
+        CLOG_ERROR(&LOG, "Profile GPU error: Missing GPU_debug_group_end() call");
       }
       else {
         glGetQueryObjectiv(queries.last().handle_end, GL_QUERY_RESULT_AVAILABLE, &frame_is_ready);
@@ -576,4 +554,5 @@ void GLContext::debug_unbind_all_ssbo()
 
 /** \} */
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

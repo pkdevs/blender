@@ -5,6 +5,7 @@
 #include "BLI_array_utils.hh"
 #include "BLI_stack.hh"
 
+#include "BKE_curves_utils.hh"
 #include "BKE_deform.hh"
 
 #include "GEO_merge_curves.hh"
@@ -132,10 +133,17 @@ static void reorder_and_flip_attributes_group_to_group(
     if (iter.domain != domain) {
       return;
     }
-    if (iter.data_type == CD_PROP_STRING) {
+    if (iter.data_type == bke::AttrType::String) {
       return;
     }
     const GVArray src = *iter.get(domain);
+    const CommonVArrayInfo info = src.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const bke::AttributeInitValue init(GPointer(src.type(), info.data));
+      if (dst_attributes.add(iter.name, iter.domain, iter.data_type, init)) {
+        return;
+      }
+    }
     bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
         iter.name, domain, iter.data_type);
     if (!dst) {
@@ -305,6 +313,16 @@ bke::CurvesGeometry curves_merge_endpoints(const bke::CurvesGeometry &src_curves
   bke::CurvesGeometry merged_curves = join_curves_ranges(ordered_curves, joined_curves_by_new);
   merged_curves.cyclic_for_write().copy_from(cyclic);
 
+  /**
+   * `curves_merge_endpoints` seems to be working only with CURVE_TYPE_POLY, still adding this here
+   * in advance.
+   */
+  if (src_curves.nurbs_has_custom_knots()) {
+    bke::curves::nurbs::update_custom_knot_modes(merged_curves.curves_range(),
+                                                 NURBS_KNOT_MODE_NORMAL,
+                                                 NURBS_KNOT_MODE_NORMAL,
+                                                 merged_curves);
+  }
   return merged_curves;
 }
 

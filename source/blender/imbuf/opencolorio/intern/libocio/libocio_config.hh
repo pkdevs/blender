@@ -4,20 +4,18 @@
 
 #pragma once
 
-#if defined(WITH_OPENCOLORIO)
+#include "MEM_guardedalloc.h"
 
-#  include "MEM_guardedalloc.h"
+#include "BLI_vector.hh"
 
-#  include "BLI_vector.hh"
+#include "OCIO_config.hh"
 
-#  include "OCIO_config.hh"
+#include "libocio_colorspace.hh"
+#include "libocio_display.hh"
+#include "libocio_gpu_shader_binder.hh"
+#include "libocio_look.hh"
 
-#  include "libocio_colorspace.hh"
-#  include "libocio_display.hh"
-#  include "libocio_gpu_shader_binder.hh"
-#  include "libocio_look.hh"
-
-#  include "../opencolorio.hh"
+#include "../opencolorio.hh"
 
 namespace blender::ocio {
 
@@ -33,6 +31,7 @@ class LibOCIOConfig : public Config {
    * array does not contain aliases or roles. If role or alias is to be resolved OpenColorIO is to
    * be used first to provide color space name which then can be looked up in this array. */
   Vector<LibOCIOColorSpace> color_spaces_;
+  Vector<LibOCIOColorSpace> inactive_color_spaces_;
   Vector<LibOCIOLook> looks_;
   Vector<LibOCIODisplay> displays_;
 
@@ -43,10 +42,9 @@ class LibOCIOConfig : public Config {
   LibOCIOGPUShaderBinder gpu_shader_binder_{*this};
 
  public:
-  ~LibOCIOConfig();
+  ~LibOCIOConfig() override;
 
   static std::unique_ptr<Config> create_from_environment();
-  static std::unique_ptr<Config> create_from_file(StringRefNull filename);
 
   /* Color space information. */
   float3 get_default_luma_coefs() const override;
@@ -58,6 +56,11 @@ class LibOCIOConfig : public Config {
   int get_num_color_spaces() const override;
   const ColorSpace *get_color_space_by_index(int index) const override;
   const ColorSpace *get_sorted_color_space_by_index(int index) const override;
+  const ColorSpace *get_color_space_by_interop_id(StringRefNull interop_id) const override;
+  const ColorSpace *get_color_space_for_hdr_image(StringRefNull name) const override;
+
+  /* Working space API. */
+  void set_scene_linear_role(StringRefNull name) override;
 
   /* Display API. */
   const Display *get_default_display() const override;
@@ -96,11 +99,11 @@ class LibOCIOConfig : public Config {
 
   /* Initialize BLender-side representation of color spaces, displays, etc. from the current
    * OpenColorIO configuration. */
-  void initialize_color_spaces();
+  void initialize_active_color_spaces();
+  void initialize_inactive_color_spaces();
+  void initialize_hdr_color_spaces();
   void initialize_looks();
   void initialize_displays();
 };
 
 }  // namespace blender::ocio
-
-#endif

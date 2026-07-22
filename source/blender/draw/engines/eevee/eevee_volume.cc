@@ -31,7 +31,7 @@ void VolumeModule::init()
   int tile_size = clamp_i(scene_eval->eevee.volumetric_tile_size, 1, 16);
 
   int3 tex_size;
-  /* Try to match resolution setting but fallback to lower resolution
+  /* Try to match resolution setting but fall back to lower resolution
    * if it doesn't fit the hardware limits. */
   for (; tile_size <= 16; tile_size *= 2) {
     /* Find Froxel Texture resolution. */
@@ -88,7 +88,9 @@ void VolumeModule::world_sync(const WorldHandle &world_handle)
 
 void VolumeModule::object_sync(const ObjectHandle &ob_handle)
 {
-  current_objects_.add(ob_handle.object_key);
+  for (int i : IndexRange(ob_handle.instances_count())) {
+    current_objects_.add(ObjectKey(ob_handle, i));
+  }
 
   if (!use_reprojection_) {
     return;
@@ -99,9 +101,17 @@ void VolumeModule::object_sync(const ObjectHandle &ob_handle)
   }
 }
 
+bool VolumeModule::will_enable() const
+{
+  return inst_.world.has_volume() || !current_objects_.is_empty() ||
+         inst_.film.get_data().volume_light_id != -1;
+}
+
 void VolumeModule::end_sync()
 {
-  enabled_ = inst_.world.has_volume() || !current_objects_.is_empty();
+  enabled_ = will_enable();
+  /* Save reset state. */
+  viewport_sampling_is_reset_ = inst_.is_viewport() && inst_.sampling.is_reset();
 
   const Scene *scene_eval = inst_.scene;
 
@@ -197,17 +207,18 @@ void VolumeModule::end_sync()
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE |
                            GPU_TEXTURE_USAGE_ATTACHMENT;
 
-  prop_scattering_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  prop_extinction_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  prop_emission_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
+  prop_scattering_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  prop_extinction_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  prop_emission_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
   /* We need 2 separate images to prevent bugs in Nvidia drivers (See #122454). */
-  prop_phase_tx_.ensure_3d(GPU_R16F, data_.tex_size, usage);
-  prop_phase_weight_tx_.ensure_3d(GPU_R16F, data_.tex_size, usage);
+  prop_phase_tx_.ensure_3d(gpu::TextureFormat::SFLOAT_16, data_.tex_size, usage);
+  prop_phase_weight_tx_.ensure_3d(gpu::TextureFormat::SFLOAT_16, data_.tex_size, usage);
 
   int occupancy_layers = divide_ceil_u(data_.tex_size.z, 32u);
   eGPUTextureUsage occupancy_usage = GPU_TEXTURE_USAGE_SHADER_READ |
                                      GPU_TEXTURE_USAGE_SHADER_WRITE | GPU_TEXTURE_USAGE_ATOMIC;
-  occupancy_tx_.ensure_3d(GPU_R32UI, int3(data_.tex_size.xy(), occupancy_layers), occupancy_usage);
+  occupancy_tx_.ensure_3d(
+      gpu::TextureFormat::UINT_32, int3(data_.tex_size.xy(), occupancy_layers), occupancy_usage);
 
   {
     eGPUTextureUsage hit_count_usage = GPU_TEXTURE_USAGE_SHADER_READ |
@@ -220,29 +231,35 @@ void VolumeModule::end_sync()
       hit_list_layer = clamp_i(inst_.scene->eevee.volumetric_ray_depth, 1, 16);
       hit_list_size = data_.tex_size.xy();
     }
-    hit_depth_tx_.ensure_3d(GPU_R32F, int3(hit_list_size, hit_list_layer), hit_depth_usage);
-    if (hit_count_tx_.ensure_2d(GPU_R32UI, hit_list_size, hit_count_usage)) {
+    hit_depth_tx_.ensure_3d(
+        gpu::TextureFormat::SFLOAT_32, int3(hit_list_size, hit_list_layer), hit_depth_usage);
+    if (hit_count_tx_.ensure_2d(gpu::TextureFormat::UINT_32, hit_list_size, hit_count_usage)) {
       hit_count_tx_.clear(uint4(0u));
     }
   }
 
   eGPUTextureUsage front_depth_usage = GPU_TEXTURE_USAGE_SHADER_READ |
                                        GPU_TEXTURE_USAGE_ATTACHMENT;
-  front_depth_tx_.ensure_2d(GPU_DEPTH32F_STENCIL8, data_.tex_size.xy(), front_depth_usage);
+  front_depth_tx_.ensure_2d(
+      gpu::TextureFormat::SFLOAT_32_DEPTH_UINT_8, data_.tex_size.xy(), front_depth_usage);
   occupancy_fb_.ensure(GPU_ATTACHMENT_TEXTURE(front_depth_tx_));
 
   bool created = false;
-  created |= scatter_tx_.current().ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  created |= extinction_tx_.current().ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  created |= scatter_tx_.previous().ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  created |= extinction_tx_.previous().ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
+  created |= scatter_tx_.current().ensure_3d(
+      gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  created |= extinction_tx_.current().ensure_3d(
+      gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  created |= scatter_tx_.previous().ensure_3d(
+      gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  created |= extinction_tx_.previous().ensure_3d(
+      gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
 
   if (created) {
     valid_history_ = false;
   }
 
-  integrated_scatter_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
-  integrated_transmit_tx_.ensure_3d(GPU_R11F_G11F_B10F, data_.tex_size, usage);
+  integrated_scatter_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
+  integrated_transmit_tx_.ensure_3d(gpu::TextureFormat::UFLOAT_11_11_10, data_.tex_size, usage);
 
   /* Update references for bindings. */
   result.scattering_tx_ = integrated_scatter_tx_;
@@ -266,6 +283,7 @@ void VolumeModule::end_sync()
   scatter_ps_.init();
   scatter_ps_.shader_set(
       inst_.shaders.static_shader_get(use_lights_ ? VOLUME_SCATTER_WITH_LIGHTS : VOLUME_SCATTER));
+  scatter_ps_.bind_resources(inst_.hiz_buffer.front);
   scatter_ps_.bind_resources(inst_.lights);
   scatter_ps_.bind_resources(inst_.sphere_probes);
   scatter_ps_.bind_resources(inst_.volume_probes);
@@ -313,12 +331,8 @@ void VolumeModule::end_sync()
   resolve_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
-void VolumeModule::draw_prepass(View &main_view)
+void VolumeModule::set_view(View &main_view)
 {
-  if (!enabled_) {
-    return;
-  }
-
   /* Number of frame to consider for blending with exponential (infinite) average. */
   int exponential_frame_count = 16;
   if (inst_.is_image_render) {
@@ -347,7 +361,7 @@ void VolumeModule::draw_prepass(View &main_view)
      * artifacts on lights because of voxels stretched in Z or anisotropy. */
     exponential_frame_count = 8;
   }
-  else if (inst_.is_viewport() && inst_.sampling.is_reset()) {
+  else if (viewport_sampling_is_reset_) {
     /* If we are not falling in any cases above, this usually means there is a scene or object
      * parameter update. Reset accumulation completely. */
     exponential_frame_count = 0;
@@ -412,13 +426,19 @@ void VolumeModule::draw_prepass(View &main_view)
   /* Compute re-projection matrix. */
   data_.curr_view_to_past_view = history_viewmat_ * main_view.viewinv();
 
-  inst_.uniform_data.push_update();
+  volume_view.sync(main_view.viewmat(), winmat_infinite);
+}
+
+void VolumeModule::draw_prepass(View &main_view)
+{
+  if (!enabled_) {
+    return;
+  }
 
   GPU_debug_group_begin("Volumes");
   occupancy_fb_.bind();
   inst_.pipelines.world_volume.render(main_view);
 
-  volume_view.sync(main_view.viewmat(), winmat_infinite);
   /* TODO(fclem): The infinite projection matrix makes the culling test unreliable (see #115595).
    * We need custom culling for these but that's not implemented yet. */
   volume_view.visibility_test(false);
@@ -442,7 +462,7 @@ void VolumeModule::draw_compute(View &main_view, int2 extent)
     inst_.hiz_buffer.update();
     inst_.volume_probes.set_view(main_view);
     inst_.sphere_probes.set_view(main_view);
-    inst_.shadows.set_view(main_view, extent);
+    inst_.shadows.render(main_view, extent);
   }
 
   scatter_tx_.swap();

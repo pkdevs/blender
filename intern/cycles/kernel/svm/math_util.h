@@ -12,13 +12,14 @@
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device void svm_vector_math(ccl_private float *value,
-                                ccl_private float3 *vector,
+template<class Float3Type, class FloatType>
+ccl_device void svm_vector_math(ccl_private FloatType *value,
+                                ccl_private Float3Type *vector,
                                 NodeVectorMathType type,
-                                const float3 a,
-                                const float3 b,
-                                const float3 c,
-                                float param1)
+                                const Float3Type a,
+                                const Float3Type b,
+                                const Float3Type c,
+                                const FloatType param1)
 {
   switch (type) {
     case NODE_VECTOR_MATH_ADD:
@@ -69,6 +70,9 @@ ccl_device void svm_vector_math(ccl_private float *value,
     case NODE_VECTOR_MATH_SNAP:
       *vector = floor(safe_divide(a, b)) * b;
       break;
+    case NODE_VECTOR_MATH_ROUND:
+      *vector = floor(a + 0.5f);
+      break;
     case NODE_VECTOR_MATH_FLOOR:
       *vector = floor(a);
       break;
@@ -76,16 +80,22 @@ ccl_device void svm_vector_math(ccl_private float *value,
       *vector = ceil(a);
       break;
     case NODE_VECTOR_MATH_MODULO:
-      *vector = make_float3(safe_modulo(a.x, b.x), safe_modulo(a.y, b.y), safe_modulo(a.z, b.z));
+      *vector = safe_fmod(a, b);
       break;
     case NODE_VECTOR_MATH_WRAP:
-      *vector = make_float3(wrapf(a.x, b.x, c.x), wrapf(a.y, b.y, c.y), wrapf(a.z, b.z, c.z));
+      *vector = wrap(a, b, c);
       break;
     case NODE_VECTOR_MATH_FRACTION:
       *vector = a - floor(a);
       break;
     case NODE_VECTOR_MATH_ABSOLUTE:
       *vector = fabs(a);
+      break;
+    case NODE_VECTOR_MATH_POWER:
+      *vector = safe_pow(a, b);
+      break;
+    case NODE_VECTOR_MATH_SIGN:
+      *vector = compatible_sign(a);
       break;
     case NODE_VECTOR_MATH_MINIMUM:
       *vector = min(a, b);
@@ -94,17 +104,17 @@ ccl_device void svm_vector_math(ccl_private float *value,
       *vector = max(a, b);
       break;
     case NODE_VECTOR_MATH_SINE:
-      *vector = make_float3(sinf(a.x), sinf(a.y), sinf(a.z));
+      *vector = sin(a);
       break;
     case NODE_VECTOR_MATH_COSINE:
-      *vector = make_float3(cosf(a.x), cosf(a.y), cosf(a.z));
+      *vector = cos(a);
       break;
     case NODE_VECTOR_MATH_TANGENT:
-      *vector = make_float3(tanf(a.x), tanf(a.y), tanf(a.z));
+      *vector = tan(a);
       break;
     default:
-      *vector = zero_float3();
-      *value = 0.0f;
+      *vector = Float3Type(zero_float3());
+      *value = FloatType(0.0f);
   }
 }
 

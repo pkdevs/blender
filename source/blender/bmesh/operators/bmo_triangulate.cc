@@ -12,14 +12,16 @@
 
 #include "DNA_listBase.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_scanfill.h"
-#include "BLI_sort_utils.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_scanfill.hh"
+#include "BLI_sort_utils.hh"
 
 #include "bmesh.hh"
 #include "bmesh_tools.hh"
 #include "intern/bmesh_operators_private.hh"
+
+namespace blender {
 
 #define ELE_NEW 1
 #define EDGE_MARK 4
@@ -55,14 +57,14 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
   BMEdge *e;
   ScanFillContext sf_ctx;
   // ScanFillEdge *sf_edge; /* UNUSED */
-  GHash *sf_vert_map;
   float normal[3];
   const int scanfill_flag = BLI_SCANFILL_CALC_HOLES | BLI_SCANFILL_CALC_POLYS |
                             BLI_SCANFILL_CALC_LOOSE;
   uint nors_tot;
   bool calc_winding = false;
 
-  sf_vert_map = BLI_ghash_ptr_new_ex(__func__, BMO_slot_buffer_len(op->slots_in, "edges"));
+  Map<BMVert *, ScanFillVert *> sf_vert_map;
+  sf_vert_map.reserve(BMO_slot_buffer_len(op->slots_in, "edges"));
 
   BMO_slot_vec_get(op->slots_in, "normal", normal);
 
@@ -78,20 +80,17 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
     calc_winding = (calc_winding || BM_edge_is_boundary(e));
 
     for (i = 0; i < 2; i++) {
-      if ((sf_verts[i] = static_cast<ScanFillVert *>(BLI_ghash_lookup(sf_vert_map, e_verts[i]))) ==
-          nullptr)
-      {
-        sf_verts[i] = BLI_scanfill_vert_add(&sf_ctx, e_verts[i]->co);
-        sf_verts[i]->tmp.p = e_verts[i];
-        BLI_ghash_insert(sf_vert_map, e_verts[i], sf_verts[i]);
-      }
+      sf_verts[i] = sf_vert_map.lookup_or_add_cb(e_verts[i], [&]() {
+        ScanFillVert *sf_vert = BLI_scanfill_vert_add(&sf_ctx, e_verts[i]->co);
+        sf_vert->tmp.p = e_verts[i];
+        return sf_vert;
+      });
     }
 
     /* sf_edge = */ BLI_scanfill_edge_add(&sf_ctx, UNPACK2(sf_verts));
     // sf_edge->tmp.p = e; /* UNUSED */
   }
-  nors_tot = BLI_ghash_len(sf_vert_map);
-  BLI_ghash_free(sf_vert_map, nullptr, nullptr);
+  nors_tot = sf_vert_map.size();
 
   if (is_zero_v3(normal)) {
     /* calculate the normal from the cross product of vert-edge pairs.
@@ -101,7 +100,7 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
     uint i;
     bool is_degenerate = true;
 
-    nors = MEM_malloc_arrayN<SortNormal>(nors_tot, __func__);
+    nors = MEM_new_array_uninitialized<SortNormal>(nors_tot, __func__);
 
     for (sf_vert = static_cast<ScanFillVert *>(sf_ctx.fillvertbase.first), i = 0; sf_vert;
          sf_vert = sf_vert->next, i++)
@@ -144,7 +143,7 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
       }
     }
 
-    if (UNLIKELY(is_degenerate)) {
+    if (is_degenerate) [[unlikely]] {
       /* no vertices have 2 edges?
        * in this case fall back to the average vertex normals */
     }
@@ -153,7 +152,7 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
 
       copy_v3_v3(normal, nors[0].no);
       for (i = 0; i < nors_tot; i++) {
-        if (UNLIKELY(nors[i].value == -1.0f)) {
+        if (nors[i].value == -1.0f) [[unlikely]] {
           break;
         }
         if (dot_v3v3(normal, nors[i].no) < 0.0f) {
@@ -164,7 +163,7 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
       normalize_v3(normal);
     }
 
-    MEM_freeN(nors);
+    MEM_delete(nors);
   }
   else {
     calc_winding = false;
@@ -172,7 +171,7 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
 
   /* in this case we almost certainly have degenerate geometry,
    * better set a fallback value as a last resort */
-  if (UNLIKELY(normalize_v3(normal) == 0.0f)) {
+  if (normalize_v3(normal) == 0.0f) [[unlikely]] {
     normal[2] = 1.0f;
   }
 
@@ -181,10 +180,10 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
   /* if we have existing faces, base winding on those */
   if (calc_winding) {
     int winding_votes = 0;
-    LISTBASE_FOREACH (ScanFillFace *, sf_tri, &sf_ctx.fillfacebase) {
-      BMVert *v_tri[3] = {static_cast<BMVert *>(sf_tri->v1->tmp.p),
-                          static_cast<BMVert *>(sf_tri->v2->tmp.p),
-                          static_cast<BMVert *>(sf_tri->v3->tmp.p)};
+    for (ScanFillFace &sf_tri : sf_ctx.fillfacebase) {
+      BMVert *v_tri[3] = {static_cast<BMVert *>(sf_tri.v1->tmp.p),
+                          static_cast<BMVert *>(sf_tri.v2->tmp.p),
+                          static_cast<BMVert *>(sf_tri.v3->tmp.p)};
       uint i, i_prev;
 
       for (i = 0, i_prev = 2; i < 3; i_prev = i++) {
@@ -196,21 +195,21 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
     }
 
     if (winding_votes < 0) {
-      LISTBASE_FOREACH (ScanFillFace *, sf_tri, &sf_ctx.fillfacebase) {
-        std::swap(sf_tri->v2, sf_tri->v3);
+      for (ScanFillFace &sf_tri : sf_ctx.fillfacebase) {
+        std::swap(sf_tri.v2, sf_tri.v3);
       }
     }
   }
 
-  LISTBASE_FOREACH (ScanFillFace *, sf_tri, &sf_ctx.fillfacebase) {
+  for (ScanFillFace &sf_tri : sf_ctx.fillfacebase) {
     BMFace *f;
     BMLoop *l;
     BMIter liter;
 
     f = BM_face_create_quad_tri(bm,
-                                static_cast<BMVert *>(sf_tri->v1->tmp.p),
-                                static_cast<BMVert *>(sf_tri->v2->tmp.p),
-                                static_cast<BMVert *>(sf_tri->v3->tmp.p),
+                                static_cast<BMVert *>(sf_tri.v1->tmp.p),
+                                static_cast<BMVert *>(sf_tri.v2->tmp.p),
+                                static_cast<BMVert *>(sf_tri.v3->tmp.p),
                                 nullptr,
                                 nullptr,
                                 BM_CREATE_NO_DOUBLE);
@@ -241,14 +240,40 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
     BM_ITER_MESH_MUTABLE (e, e_next, &iter, bm, BM_EDGES_OF_MESH) {
       if (BMO_edge_flag_test(bm, e, ELE_NEW)) {
         /* in rare cases the edges face will have already been removed from the edge */
-        if (LIKELY(BM_edge_is_manifold(e))) {
+        BMLoop *l_a, *l_b;
+        if (BM_edge_loop_pair(e, &l_a, &l_b) &&
+            /* This ensures we don't delete existing faces attached to the geometry being filled.
+             * The likely cause of this will have been a duplicate, where the newly created
+             * face was removed and the existing (un-tagged) face kept.
+             * Follow the rule of not deleting geometry unrelated to the fill. */
+            (BMO_face_flag_test(bm, l_a->f, ELE_NEW) && BMO_face_flag_test(bm, l_b->f, ELE_NEW)))
+            [[likely]]
+        {
           BMFace *f_double;
           BMFace *f_new = BM_faces_join_pair(bm, e->l, e->l->radial_next, false, &f_double);
-          /* See #BM_faces_join note on callers asserting when `r_double` is non-null. */
-          BLI_assert_msg(f_double == nullptr,
-                         "Doubled face detected at " AT ". Resulting mesh may be corrupt.");
 
-          if (f_new) {
+          if (f_double) [[unlikely]] {
+            /* NOTE(@ideasman42): Regarding duplicate faces.
+             * The common case for filling is to select an empty region and fill it.
+             * In general filling over and existing filled area isn't likely to work well,
+             * so anything done here is more to avoid errors - not part of a typical workflow.
+             *
+             * - It's important never to finish with duplicate faces (an *invalid* mesh).
+             * - Remove the "new" face because having a "fill" action
+             *   delete existing geometry is unexpected and could cause problems
+             *   if the caller doesn't know to account for this.
+             * - This face may be an *intermediate* state - where multiple edges
+             *   would be collapsed to create the final face.
+             *   Unfortunately this isn't currently handled as well as it might be,
+             *   it may be better to fill a temporary mesh, then apply the final result,
+             *   so we only have to deal with final duplicates (not intermediate ones).
+             */
+            if (f_new) {
+              BM_face_kill(bm, f_new);
+            }
+            BM_edge_kill(bm, e);
+          }
+          else if (f_new) {
             BMO_face_flag_enable(bm, f_new, ELE_NEW);
             BM_edge_kill(bm, e);
           }
@@ -266,3 +291,5 @@ void bmo_triangle_fill_exec(BMesh *bm, BMOperator *op)
 
   BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "geom.out", BM_EDGE | BM_FACE, ELE_NEW);
 }
+
+}  // namespace blender

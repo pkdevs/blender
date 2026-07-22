@@ -38,7 +38,8 @@ ccl_device void integrator_volume_stack_update_for_subsurface(KernelGlobals kg,
   const uint volume_stack_size = kernel_data.volume_stack_size;
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-  const uint32_t visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag, PATH_RAY_ALL_VISIBILITY);
+  const PathRayVisibility visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag,
+                                                                      PATH_RAY_VISIBILITY_ALL);
 
 #  ifdef __VOLUME_RECORD_ALL__
   Intersection hits[2 * MAX_VOLUME_STACK_SIZE + 1];
@@ -55,7 +56,7 @@ ccl_device void integrator_volume_stack_update_for_subsurface(KernelGlobals kg,
         continue;
       }
       shader_setup_from_ray(kg, stack_sd, &volume_ray, isect);
-      volume_stack_enter_exit(kg, state, stack_sd);
+      volume_stack_enter_exit<false>(kg, state, stack_sd);
     }
   }
 #  else
@@ -67,7 +68,7 @@ ccl_device void integrator_volume_stack_update_for_subsurface(KernelGlobals kg,
     /* Ignore self, SSS itself already enters and exits the object. */
     if (isect.object != volume_ray.self.object) {
       shader_setup_from_ray(kg, stack_sd, &volume_ray, &isect);
-      volume_stack_enter_exit(kg, state, stack_sd);
+      volume_stack_enter_exit<false>(kg, state, stack_sd);
     }
     /* Move ray forward. */
     volume_ray.tmin = intersection_t_offset(isect.t);
@@ -102,13 +103,15 @@ ccl_device void integrator_volume_stack_init(KernelGlobals kg, IntegratorState s
   int enclosed_index = 0;
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-  const uint32_t visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag, PATH_RAY_CAMERA);
+  const PathRayVisibility visibility = SHADOW_CATCHER_PATH_VISIBILITY(path_flag,
+                                                                      PATH_RAY_VISIBILITY_CAMERA);
 
   /* Initialize volume stack with background volume For shadow catcher the
    * background volume is always assumed to be CG. */
   if (kernel_data.background.volume_shader != SHADER_NONE) {
     if (!(path_flag & PATH_RAY_SHADOW_CATCHER_PASS)) {
-      INTEGRATOR_STATE_ARRAY_WRITE(state, volume_stack, stack_index, object) = OBJECT_NONE;
+      INTEGRATOR_STATE_ARRAY_WRITE(
+          state, volume_stack, stack_index, object) = kernel_data.background.object_index;
       INTEGRATOR_STATE_ARRAY_WRITE(
           state, volume_stack, stack_index, shader) = kernel_data.background.volume_shader;
       stack_index++;
@@ -239,8 +242,7 @@ ccl_device void integrator_intersect_volume_stack(KernelGlobals kg, IntegratorSt
 #  endif
   {
     /* Volume stack init for camera rays, continue with intersection of camera ray. */
-    integrator_path_next(kg,
-                         state,
+    integrator_path_next(state,
                          DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK,
                          DEVICE_KERNEL_INTEGRATOR_INTERSECT_CLOSEST);
   }

@@ -12,7 +12,7 @@
 
 #include "mathutils.hh"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "../generic/py_capi_utils.hh"
 #include "../generic/python_utildefines.hh"
@@ -22,10 +22,12 @@
 #endif
 
 #ifndef MATH_STANDALONE
-#  include "BLI_dynstr.h"
+#  include "BLI_dynstr.hh"
 #endif
 
 #define COLOR_SIZE 3
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Utilities
@@ -61,34 +63,54 @@ static PyObject *Color_to_tuple_ex(ColorObject *self, int ndigits)
 /** \name Color Type: `__new__` / `mathutils.Color()`
  * \{ */
 
-static PyObject *Color_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+static PyObject *Color_vectorcall(PyObject *type,
+                                  PyObject *const *args,
+                                  const size_t nargsf,
+                                  PyObject *kwnames)
 {
-  float col[3] = {0.0f, 0.0f, 0.0f};
-
-  if (kwds && PyDict_Size(kwds)) {
+  if (kwnames && PyTuple_GET_SIZE(kwnames)) [[unlikely]] {
     PyErr_SetString(PyExc_TypeError,
                     "mathutils.Color(): "
                     "takes no keyword args");
     return nullptr;
   }
 
-  switch (PyTuple_GET_SIZE(args)) {
-    case 0:
+  float col[3] = {0.0f, 0.0f, 0.0f};
+
+  const size_t nargs = PyVectorcall_NARGS(nargsf);
+  switch (nargs) {
+    case 0: {
       break;
-    case 1:
-      if (mathutils_array_parse(
-              col, COLOR_SIZE, COLOR_SIZE, PyTuple_GET_ITEM(args, 0), "mathutils.Color()") == -1)
-      {
+    }
+    case 1: {
+      if (mathutils_array_parse(col, COLOR_SIZE, COLOR_SIZE, args[0], "mathutils.Color()") == -1) {
         return nullptr;
       }
       break;
-    default:
-      PyErr_SetString(PyExc_TypeError,
-                      "mathutils.Color(): "
-                      "more than a single arg given");
+    }
+    default: {
+      PyErr_Format(PyExc_TypeError,
+                   "mathutils.Color(): "
+                   "takes at most 1 argument (%zd given)",
+                   nargs);
       return nullptr;
+    }
   }
-  return Color_CreatePyObject(col, type);
+  return Color_CreatePyObject(col, reinterpret_cast<PyTypeObject *>(type));
+}
+
+static PyObject *Color_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+  /* Only called on sub-classes. */
+  if (kwds && PyDict_GET_SIZE(kwds)) [[unlikely]] {
+    PyErr_SetString(PyExc_TypeError,
+                    "mathutils.Color(): "
+                    "takes no keyword args");
+    return nullptr;
+  }
+  PyObject *const *args_array = &PyTuple_GET_ITEM(args, 0);
+  const size_t args_array_num = PyTuple_GET_SIZE(args);
+  return Color_vectorcall(reinterpret_cast<PyObject *>(type), args_array, args_array_num, nullptr);
 }
 
 /** \} */
@@ -102,7 +124,7 @@ static PyObject *Color_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 PyDoc_STRVAR(
     /* Wrap. */
     Color_from_scene_linear_to_srgb_doc,
-    ".. function:: from_scene_linear_to_srgb()\n"
+    ".. method:: from_scene_linear_to_srgb()\n"
     "\n"
     "   Convert from scene linear to sRGB color space.\n"
     "\n"
@@ -118,7 +140,7 @@ static PyObject *Color_from_scene_linear_to_srgb(ColorObject *self)
 PyDoc_STRVAR(
     /* Wrap. */
     Color_from_srgb_to_scene_linear_doc,
-    ".. function:: from_srgb_to_scene_linear()\n"
+    ".. method:: from_srgb_to_scene_linear()\n"
     "\n"
     "   Convert from sRGB to scene linear color space.\n"
     "\n"
@@ -134,7 +156,7 @@ static PyObject *Color_from_srgb_to_scene_linear(ColorObject *self)
 PyDoc_STRVAR(
     /* Wrap. */
     Color_from_scene_linear_to_xyz_d65_doc,
-    ".. function:: from_scene_linear_to_xyz_d65()\n"
+    ".. method:: from_scene_linear_to_xyz_d65()\n"
     "\n"
     "   Convert from scene linear to CIE XYZ (Illuminant D65) color space.\n"
     "\n"
@@ -150,7 +172,7 @@ static PyObject *Color_from_scene_linear_to_xyz_d65(ColorObject *self)
 PyDoc_STRVAR(
     /* Wrap. */
     Color_from_xyz_d65_to_scene_linear_doc,
-    ".. function:: from_xyz_d65_to_scene_linear()\n"
+    ".. method:: from_xyz_d65_to_scene_linear()\n"
     "\n"
     "   Convert from CIE XYZ (Illuminant D65) to scene linear color space.\n"
     "\n"
@@ -166,7 +188,7 @@ static PyObject *Color_from_xyz_d65_to_scene_linear(ColorObject *self)
 PyDoc_STRVAR(
     /* Wrap. */
     Color_from_scene_linear_to_aces_doc,
-    ".. function:: from_scene_linear_to_aces()\n"
+    ".. method:: from_scene_linear_to_aces()\n"
     "\n"
     "   Convert from scene linear to ACES2065-1 linear color space.\n"
     "\n"
@@ -182,7 +204,7 @@ static PyObject *Color_from_scene_linear_to_aces(ColorObject *self)
 PyDoc_STRVAR(
     /* Wrap. */
     Color_from_aces_to_scene_linear_doc,
-    ".. function:: from_aces_to_scene_linear()\n"
+    ".. method:: from_aces_to_scene_linear()\n"
     "\n"
     "   Convert from ACES2065-1 linear to scene linear color space.\n"
     "\n"
@@ -197,8 +219,40 @@ static PyObject *Color_from_aces_to_scene_linear(ColorObject *self)
 
 PyDoc_STRVAR(
     /* Wrap. */
+    Color_from_scene_linear_to_acescg_doc,
+    ".. method:: from_scene_linear_to_acescg()\n"
+    "\n"
+    "   Convert from scene linear to ACEScg linear color space.\n"
+    "\n"
+    "   :return: A color in ACEScg linear color space.\n"
+    "   :rtype: :class:`Color`\n");
+static PyObject *Color_from_scene_linear_to_acescg(ColorObject *self)
+{
+  float col[3];
+  IMB_colormanagement_scene_linear_to_acescg(col, self->col);
+  return Color_CreatePyObject(col, Py_TYPE(self));
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    Color_from_acescg_to_scene_linear_doc,
+    ".. method:: from_acescg_to_scene_linear()\n"
+    "\n"
+    "   Convert from ACEScg linear to scene linear color space.\n"
+    "\n"
+    "   :return: A color in scene linear color space.\n"
+    "   :rtype: :class:`Color`\n");
+static PyObject *Color_from_acescg_to_scene_linear(ColorObject *self)
+{
+  float col[3];
+  IMB_colormanagement_acescg_to_scene_linear(col, self->col);
+  return Color_CreatePyObject(col, Py_TYPE(self));
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
     Color_from_scene_linear_to_rec709_linear_doc,
-    ".. function:: from_scene_linear_to_rec709_linear()\n"
+    ".. method:: from_scene_linear_to_rec709_linear()\n"
     "\n"
     "   Convert from scene linear to Rec.709 linear color space.\n"
     "\n"
@@ -214,7 +268,7 @@ static PyObject *Color_from_scene_linear_to_rec709_linear(ColorObject *self)
 PyDoc_STRVAR(
     /* Wrap. */
     Color_from_rec709_linear_to_scene_linear_doc,
-    ".. function:: from_rec709_linear_to_scene_linear()\n"
+    ".. method:: from_rec709_linear_to_scene_linear()\n"
     "\n"
     "   Convert from Rec.709 linear color space to scene linear color space.\n"
     "\n"
@@ -224,6 +278,38 @@ static PyObject *Color_from_rec709_linear_to_scene_linear(ColorObject *self)
 {
   float col[3];
   IMB_colormanagement_rec709_to_scene_linear(col, self->col);
+  return Color_CreatePyObject(col, Py_TYPE(self));
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    Color_from_scene_linear_to_rec2020_linear_doc,
+    ".. method:: from_scene_linear_to_rec2020_linear()\n"
+    "\n"
+    "   Convert from scene linear to Rec.2020 linear color space.\n"
+    "\n"
+    "   :return: A color in Rec.2020 linear color space.\n"
+    "   :rtype: :class:`Color`\n");
+static PyObject *Color_from_scene_linear_to_rec2020_linear(ColorObject *self)
+{
+  float col[3];
+  IMB_colormanagement_scene_linear_to_rec2020(col, self->col);
+  return Color_CreatePyObject(col, Py_TYPE(self));
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    Color_from_rec2020_linear_to_scene_linear_doc,
+    ".. method:: from_rec2020_linear_to_scene_linear()\n"
+    "\n"
+    "   Convert from Rec.2020 linear color space to scene linear color space.\n"
+    "\n"
+    "   :return: A color in scene linear color space.\n"
+    "   :rtype: :class:`Color`\n");
+static PyObject *Color_from_rec2020_linear_to_scene_linear(ColorObject *self)
+{
+  float col[3];
+  IMB_colormanagement_rec2020_to_scene_linear(col, self->col);
   return Color_CreatePyObject(col, Py_TYPE(self));
 }
 
@@ -238,7 +324,7 @@ static PyObject *Color_from_rec709_linear_to_scene_linear(ColorObject *self)
 PyDoc_STRVAR(
     /* Wrap. */
     Color_copy_doc,
-    ".. function:: copy()\n"
+    ".. method:: copy()\n"
     "\n"
     "   Returns a copy of this color.\n"
     "\n"
@@ -306,6 +392,59 @@ static PyObject *Color_str(ColorObject *self)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Color Type: Buffer Protocol
+ * \{ */
+
+static int Color_getbuffer(PyObject *obj, Py_buffer *view, int flags)
+{
+  ColorObject *self = reinterpret_cast<ColorObject *>(obj);
+  if (BaseMath_Prepare_ForBufferAccess(self, view, flags) == -1) [[unlikely]] {
+    return -1;
+  }
+  if (BaseMath_ReadCallback(self) == -1) [[unlikely]] {
+    return -1;
+  }
+
+  memset(view, 0, sizeof(*view));
+
+  view->obj = reinterpret_cast<PyObject *>(self);
+  view->buf = static_cast<void *>(self->col);
+  view->len = Py_ssize_t(COLOR_SIZE * sizeof(float));
+  view->itemsize = sizeof(float);
+  view->ndim = 1;
+  if ((flags & PyBUF_WRITABLE) == 0) {
+    view->readonly = 1;
+  }
+  if (flags & PyBUF_FORMAT) {
+    view->format = const_cast<char *>("f");
+  }
+
+  self->flag |= BASE_MATH_FLAG_HAS_BUFFER_VIEW;
+
+  Py_INCREF(self);
+  return 0;
+}
+
+static void Color_releasebuffer(PyObject * /*exporter*/, Py_buffer *view)
+{
+  ColorObject *self = reinterpret_cast<ColorObject *>(view->obj);
+  self->flag &= ~BASE_MATH_FLAG_HAS_BUFFER_VIEW;
+
+  if (view->readonly == 0) {
+    if (BaseMath_WriteCallback(self) == -1) [[unlikely]] {
+      PyErr_Print();
+    }
+  }
+}
+
+static PyBufferProcs Color_as_buffer = {
+    static_cast<getbufferproc>(Color_getbuffer),
+    static_cast<releasebufferproc>(Color_releasebuffer),
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Color Type: Rich Compare
  * \{ */
 
@@ -315,8 +454,8 @@ static PyObject *Color_richcmpr(PyObject *a, PyObject *b, int op)
   int ok = -1; /* zero is true */
 
   if (ColorObject_Check(a) && ColorObject_Check(b)) {
-    ColorObject *colA = (ColorObject *)a;
-    ColorObject *colB = (ColorObject *)b;
+    ColorObject *colA = reinterpret_cast<ColorObject *>(a);
+    ColorObject *colB = reinterpret_cast<ColorObject *>(b);
 
     if (BaseMath_ReadCallback(colA) == -1 || BaseMath_ReadCallback(colB) == -1) {
       return nullptr;
@@ -326,22 +465,25 @@ static PyObject *Color_richcmpr(PyObject *a, PyObject *b, int op)
   }
 
   switch (op) {
-    case Py_NE:
+    case Py_NE: {
       ok = !ok;
       ATTR_FALLTHROUGH;
-    case Py_EQ:
+    }
+    case Py_EQ: {
       res = ok ? Py_False : Py_True;
       break;
-
+    }
     case Py_LT:
     case Py_LE:
     case Py_GT:
-    case Py_GE:
+    case Py_GE: {
       res = Py_NotImplemented;
       break;
-    default:
+    }
+    default: {
       PyErr_BadArgument();
       return nullptr;
+    }
   }
 
   return Py_NewRef(res);
@@ -381,10 +523,6 @@ static Py_ssize_t Color_len(ColorObject * /*self*/)
 /** Sequence accessor (get): `x = object[i]`. */
 static PyObject *Color_item(ColorObject *self, Py_ssize_t i)
 {
-  if (i < 0) {
-    i = COLOR_SIZE - i;
-  }
-
   if (i < 0 || i >= COLOR_SIZE) {
     PyErr_SetString(PyExc_IndexError,
                     "color[item]: "
@@ -416,10 +554,6 @@ static int Color_ass_item(ColorObject *self, Py_ssize_t i, PyObject *value)
     return -1;
   }
 
-  if (i < 0) {
-    i = COLOR_SIZE - i;
-  }
-
   if (i < 0 || i >= COLOR_SIZE) {
     PyErr_SetString(PyExc_IndexError,
                     "color[item] = x: "
@@ -436,63 +570,57 @@ static int Color_ass_item(ColorObject *self, Py_ssize_t i, PyObject *value)
   return 0;
 }
 
-/** Sequence slice accessor (get): `x = object[i:j]`. */
-static PyObject *Color_slice(ColorObject *self, int begin, int end)
+/** Sequence slice accessor (get): `x = object[i:j]` / `object[i:j:step]`. */
+static PyObject *Color_slice(ColorObject *self,
+                             Py_ssize_t start,
+                             Py_ssize_t step,
+                             Py_ssize_t slice_length)
 {
-  PyObject *tuple;
-  int count;
-
   if (BaseMath_ReadCallback(self) == -1) {
     return nullptr;
   }
 
-  CLAMP(begin, 0, COLOR_SIZE);
-  if (end < 0) {
-    end = (COLOR_SIZE + 1) + end;
+  PyObject *tuple = PyTuple_New(slice_length);
+  Py_ssize_t index = start;
+  for (Py_ssize_t i = 0; i < slice_length; i++, index += step) {
+    BLI_assert(index >= 0 && index < COLOR_SIZE);
+    PyTuple_SET_ITEM(tuple, i, PyFloat_FromDouble(self->col[index]));
   }
-  CLAMP(end, 0, COLOR_SIZE);
-  begin = std::min(begin, end);
-
-  tuple = PyTuple_New(end - begin);
-  for (count = begin; count < end; count++) {
-    PyTuple_SET_ITEM(tuple, count - begin, PyFloat_FromDouble(self->col[count]));
-  }
-
   return tuple;
 }
 
-/** Sequence slice accessor (set): `object[i:j] = x`. */
-static int Color_ass_slice(ColorObject *self, int begin, int end, PyObject *seq)
+/**
+ * Sequence slice accessor (set): `object[i:j] = x` / `object[i:j:step] = x`.
+ * Length of `seq` must equal `slice_length`
+ * (Python list semantics: extended slice assignment cannot resize).
+ */
+static int Color_ass_slice(
+    ColorObject *self, Py_ssize_t start, Py_ssize_t step, Py_ssize_t slice_length, PyObject *seq)
 {
-  int i, size;
   float col[COLOR_SIZE];
 
-  if (BaseMath_ReadCallback_ForWrite(self) == -1) {
-    return -1;
+  /* Subset writes merge into existing values, so sync the source first. */
+  if (mathutils_slice_is_subset(start, step, slice_length, COLOR_SIZE)) {
+    if (BaseMath_ReadCallback_ForWrite(self) == -1) {
+      return -1;
+    }
+  }
+  else {
+    if (BaseMath_Prepare_ForWrite(self) == -1) {
+      return -1;
+    }
   }
 
-  CLAMP(begin, 0, COLOR_SIZE);
-  if (end < 0) {
-    end = (COLOR_SIZE + 1) + end;
-  }
-  CLAMP(end, 0, COLOR_SIZE);
-  begin = std::min(begin, end);
-
-  if ((size = mathutils_array_parse(col, 0, COLOR_SIZE, seq, "mathutils.Color[begin:end] = []")) ==
-      -1)
+  if (mathutils_array_parse(
+          col, slice_length, slice_length, seq, "mathutils.Color[slice] = seq") == -1)
   {
     return -1;
   }
 
-  if (size != (end - begin)) {
-    PyErr_SetString(PyExc_ValueError,
-                    "color[begin:end] = []: "
-                    "size mismatch in slice assignment");
-    return -1;
-  }
-
-  for (i = 0; i < COLOR_SIZE; i++) {
-    self->col[begin + i] = col[i];
+  Py_ssize_t index = start;
+  for (Py_ssize_t i = 0; i < slice_length; i++, index += step) {
+    BLI_assert(index >= 0 && index < COLOR_SIZE);
+    self->col[index] = col[i];
   }
 
   (void)BaseMath_WriteCallback(self);
@@ -514,21 +642,13 @@ static PyObject *Color_subscript(ColorObject *self, PyObject *item)
     return Color_item(self, i);
   }
   if (PySlice_Check(item)) {
-    Py_ssize_t start, stop, step, slicelength;
+    Py_ssize_t start, stop, step, slice_length;
 
-    if (PySlice_GetIndicesEx(item, COLOR_SIZE, &start, &stop, &step, &slicelength) < 0) {
+    if (PySlice_GetIndicesEx(item, COLOR_SIZE, &start, &stop, &step, &slice_length) < 0) {
       return nullptr;
     }
 
-    if (slicelength <= 0) {
-      return PyTuple_New(0);
-    }
-    if (step == 1) {
-      return Color_slice(self, start, stop);
-    }
-
-    PyErr_SetString(PyExc_IndexError, "slice steps not supported with color");
-    return nullptr;
+    return Color_slice(self, start, step, slice_length);
   }
 
   PyErr_Format(
@@ -550,18 +670,13 @@ static int Color_ass_subscript(ColorObject *self, PyObject *item, PyObject *valu
     return Color_ass_item(self, i, value);
   }
   if (PySlice_Check(item)) {
-    Py_ssize_t start, stop, step, slicelength;
+    Py_ssize_t start, stop, step, slice_length;
 
-    if (PySlice_GetIndicesEx(item, COLOR_SIZE, &start, &stop, &step, &slicelength) < 0) {
+    if (PySlice_GetIndicesEx(item, COLOR_SIZE, &start, &stop, &step, &slice_length) < 0) {
       return -1;
     }
 
-    if (step == 1) {
-      return Color_ass_slice(self, start, stop, value);
-    }
-
-    PyErr_SetString(PyExc_IndexError, "slice steps not supported with color");
-    return -1;
+    return Color_ass_slice(self, start, step, slice_length, value);
   }
 
   PyErr_Format(
@@ -589,8 +704,8 @@ static PyObject *Color_add(PyObject *v1, PyObject *v2)
                  Py_TYPE(v2)->tp_name);
     return nullptr;
   }
-  color1 = (ColorObject *)v1;
-  color2 = (ColorObject *)v2;
+  color1 = reinterpret_cast<ColorObject *>(v1);
+  color2 = reinterpret_cast<ColorObject *>(v2);
 
   if (BaseMath_ReadCallback(color1) == -1 || BaseMath_ReadCallback(color2) == -1) {
     return nullptr;
@@ -614,8 +729,8 @@ static PyObject *Color_iadd(PyObject *v1, PyObject *v2)
                  Py_TYPE(v2)->tp_name);
     return nullptr;
   }
-  color1 = (ColorObject *)v1;
-  color2 = (ColorObject *)v2;
+  color1 = reinterpret_cast<ColorObject *>(v1);
+  color2 = reinterpret_cast<ColorObject *>(v2);
 
   if (BaseMath_ReadCallback_ForWrite(color1) == -1 || BaseMath_ReadCallback(color2) == -1) {
     return nullptr;
@@ -642,8 +757,8 @@ static PyObject *Color_sub(PyObject *v1, PyObject *v2)
                  Py_TYPE(v2)->tp_name);
     return nullptr;
   }
-  color1 = (ColorObject *)v1;
-  color2 = (ColorObject *)v2;
+  color1 = reinterpret_cast<ColorObject *>(v1);
+  color2 = reinterpret_cast<ColorObject *>(v2);
 
   if (BaseMath_ReadCallback(color1) == -1 || BaseMath_ReadCallback(color2) == -1) {
     return nullptr;
@@ -667,8 +782,8 @@ static PyObject *Color_isub(PyObject *v1, PyObject *v2)
                  Py_TYPE(v2)->tp_name);
     return nullptr;
   }
-  color1 = (ColorObject *)v1;
-  color2 = (ColorObject *)v2;
+  color1 = reinterpret_cast<ColorObject *>(v1);
+  color2 = reinterpret_cast<ColorObject *>(v2);
 
   if (BaseMath_ReadCallback_ForWrite(color1) == -1 || BaseMath_ReadCallback(color2) == -1) {
     return nullptr;
@@ -695,13 +810,13 @@ static PyObject *Color_mul(PyObject *v1, PyObject *v2)
   float scalar;
 
   if (ColorObject_Check(v1)) {
-    color1 = (ColorObject *)v1;
+    color1 = reinterpret_cast<ColorObject *>(v1);
     if (BaseMath_ReadCallback(color1) == -1) {
       return nullptr;
     }
   }
   if (ColorObject_Check(v2)) {
-    color2 = (ColorObject *)v2;
+    color2 = reinterpret_cast<ColorObject *>(v2);
     if (BaseMath_ReadCallback(color2) == -1) {
       return nullptr;
     }
@@ -740,7 +855,7 @@ static PyObject *Color_div(PyObject *v1, PyObject *v2)
   float scalar;
 
   if (ColorObject_Check(v1)) {
-    color1 = (ColorObject *)v1;
+    color1 = reinterpret_cast<ColorObject *>(v1);
     if (BaseMath_ReadCallback(color1) == -1) {
       return nullptr;
     }
@@ -770,7 +885,7 @@ static PyObject *Color_div(PyObject *v1, PyObject *v2)
 /** Multiplication in-place: `object *= object`. */
 static PyObject *Color_imul(PyObject *v1, PyObject *v2)
 {
-  ColorObject *color = (ColorObject *)v1;
+  ColorObject *color = reinterpret_cast<ColorObject *>(v1);
   float scalar;
 
   if (BaseMath_ReadCallback_ForWrite(color) == -1) {
@@ -798,7 +913,7 @@ static PyObject *Color_imul(PyObject *v1, PyObject *v2)
 /** Division in-place: `object *= object`. */
 static PyObject *Color_idiv(PyObject *v1, PyObject *v2)
 {
-  ColorObject *color = (ColorObject *)v1;
+  ColorObject *color = reinterpret_cast<ColorObject *>(v1);
   float scalar;
 
   if (BaseMath_ReadCallback_ForWrite(color) == -1) {
@@ -848,12 +963,12 @@ static PyObject *Color_neg(ColorObject *self)
  * \{ */
 
 static PySequenceMethods Color_SeqMethods = {
-    /*sq_length*/ (lenfunc)Color_len,
+    /*sq_length*/ reinterpret_cast<lenfunc>(Color_len),
     /*sq_concat*/ nullptr,
     /*sq_repeat*/ nullptr,
-    /*sq_item*/ (ssizeargfunc)Color_item,
+    /*sq_item*/ reinterpret_cast<ssizeargfunc>(Color_item),
     /*was_sq_slice*/ nullptr, /* DEPRECATED. */
-    /*sq_ass_item*/ (ssizeobjargproc)Color_ass_item,
+    /*sq_ass_item*/ reinterpret_cast<ssizeobjargproc>(Color_ass_item),
     /*was_sq_ass_slice*/ nullptr, /* DEPRECATED. */
     /*sq_contains*/ nullptr,
     /*sq_inplace_concat*/ nullptr,
@@ -861,20 +976,20 @@ static PySequenceMethods Color_SeqMethods = {
 };
 
 static PyMappingMethods Color_AsMapping = {
-    /*mp_length*/ (lenfunc)Color_len,
-    /*mp_subscript*/ (binaryfunc)Color_subscript,
-    /*mp_ass_subscript*/ (objobjargproc)Color_ass_subscript,
+    /*mp_length*/ reinterpret_cast<lenfunc>(Color_len),
+    /*mp_subscript*/ reinterpret_cast<binaryfunc>(Color_subscript),
+    /*mp_ass_subscript*/ reinterpret_cast<objobjargproc>(Color_ass_subscript),
 };
 
 static PyNumberMethods Color_NumMethods = {
-    /*nb_add*/ (binaryfunc)Color_add,
-    /*nb_subtract*/ (binaryfunc)Color_sub,
-    /*nb_multiply*/ (binaryfunc)Color_mul,
+    /*nb_add*/ static_cast<binaryfunc>(Color_add),
+    /*nb_subtract*/ static_cast<binaryfunc>(Color_sub),
+    /*nb_multiply*/ static_cast<binaryfunc>(Color_mul),
     /*nb_remainder*/ nullptr,
     /*nb_divmod*/ nullptr,
     /*nb_power*/ nullptr,
-    /*nb_negative*/ (unaryfunc)Color_neg,
-    /*nb_positive*/ (unaryfunc)Color_copy,
+    /*nb_negative*/ reinterpret_cast<unaryfunc>(Color_neg),
+    /*nb_positive*/ reinterpret_cast<unaryfunc>(Color_copy),
     /*nb_absolute*/ nullptr,
     /*nb_bool*/ nullptr,
     /*nb_invert*/ nullptr,
@@ -918,19 +1033,19 @@ PyDoc_STRVAR(
     Color_channel_r_doc,
     "Red color channel.\n"
     "\n"
-    ":type: float");
+    ":type: float\n");
 PyDoc_STRVAR(
     /* Wrap. */
     Color_channel_g_doc,
     "Green color channel.\n"
     "\n"
-    ":type: float");
+    ":type: float\n");
 PyDoc_STRVAR(
     /* Wrap. */
     Color_channel_b_doc,
     "Blue color channel.\n"
     "\n"
-    ":type: float");
+    ":type: float\n");
 
 static PyObject *Color_channel_get(ColorObject *self, void *type)
 {
@@ -949,19 +1064,19 @@ PyDoc_STRVAR(
     Color_channel_hsv_h_doc,
     "HSV Hue component in [0, 1].\n"
     "\n"
-    ":type: float");
+    ":type: float\n");
 PyDoc_STRVAR(
     /* Wrap. */
     Color_channel_hsv_s_doc,
     "HSV Saturation component in [0, 1].\n"
     "\n"
-    ":type: float");
+    ":type: float\n");
 PyDoc_STRVAR(
     /* Wrap. */
     Color_channel_hsv_v_doc,
     "HSV Value component in [0, 1].\n"
     "\n"
-    ":type: float");
+    ":type: float\n");
 
 static PyObject *Color_channel_hsv_get(ColorObject *self, void *type)
 {
@@ -1011,7 +1126,7 @@ PyDoc_STRVAR(
     Color_hsv_doc,
     "HSV Values in [0, 1].\n"
     "\n"
-    ":type: float triplet");
+    ":type: tuple[float, float, float]\n");
 /** Color channel HSV (get): `x = color.hsv`. */
 static PyObject *Color_hsv_get(ColorObject *self, void * /*closure*/)
 {
@@ -1061,57 +1176,61 @@ static int Color_hsv_set(ColorObject *self, PyObject *value, void * /*closure*/)
 
 static PyGetSetDef Color_getseters[] = {
     {"r",
-     (getter)Color_channel_get,
-     (setter)Color_channel_set,
+     reinterpret_cast<getter>(Color_channel_get),
+     reinterpret_cast<setter>(Color_channel_set),
      Color_channel_r_doc,
      POINTER_FROM_INT(0)},
     {"g",
-     (getter)Color_channel_get,
-     (setter)Color_channel_set,
+     reinterpret_cast<getter>(Color_channel_get),
+     reinterpret_cast<setter>(Color_channel_set),
      Color_channel_g_doc,
      POINTER_FROM_INT(1)},
     {"b",
-     (getter)Color_channel_get,
-     (setter)Color_channel_set,
+     reinterpret_cast<getter>(Color_channel_get),
+     reinterpret_cast<setter>(Color_channel_set),
      Color_channel_b_doc,
      POINTER_FROM_INT(2)},
 
     {"h",
-     (getter)Color_channel_hsv_get,
-     (setter)Color_channel_hsv_set,
+     reinterpret_cast<getter>(Color_channel_hsv_get),
+     reinterpret_cast<setter>(Color_channel_hsv_set),
      Color_channel_hsv_h_doc,
      POINTER_FROM_INT(0)},
     {"s",
-     (getter)Color_channel_hsv_get,
-     (setter)Color_channel_hsv_set,
+     reinterpret_cast<getter>(Color_channel_hsv_get),
+     reinterpret_cast<setter>(Color_channel_hsv_set),
      Color_channel_hsv_s_doc,
      POINTER_FROM_INT(1)},
     {"v",
-     (getter)Color_channel_hsv_get,
-     (setter)Color_channel_hsv_set,
+     reinterpret_cast<getter>(Color_channel_hsv_get),
+     reinterpret_cast<setter>(Color_channel_hsv_set),
      Color_channel_hsv_v_doc,
      POINTER_FROM_INT(2)},
 
-    {"hsv", (getter)Color_hsv_get, (setter)Color_hsv_set, Color_hsv_doc, nullptr},
+    {"hsv",
+     reinterpret_cast<getter>(Color_hsv_get),
+     reinterpret_cast<setter>(Color_hsv_set),
+     Color_hsv_doc,
+     nullptr},
 
     {"is_wrapped",
-     (getter)BaseMathObject_is_wrapped_get,
-     (setter) nullptr,
+     reinterpret_cast<getter>(BaseMathObject_is_wrapped_get),
+     static_cast<setter>(nullptr),
      BaseMathObject_is_wrapped_doc,
      nullptr},
     {"is_frozen",
-     (getter)BaseMathObject_is_frozen_get,
-     (setter) nullptr,
+     reinterpret_cast<getter>(BaseMathObject_is_frozen_get),
+     static_cast<setter>(nullptr),
      BaseMathObject_is_frozen_doc,
      nullptr},
     {"is_valid",
-     (getter)BaseMathObject_is_valid_get,
-     (setter) nullptr,
+     reinterpret_cast<getter>(BaseMathObject_is_valid_get),
+     static_cast<setter>(nullptr),
      BaseMathObject_is_valid_doc,
      nullptr},
     {"owner",
-     (getter)BaseMathObject_owner_get,
-     (setter) nullptr,
+     reinterpret_cast<getter>(BaseMathObject_owner_get),
+     static_cast<setter>(nullptr),
      BaseMathObject_owner_doc,
      nullptr},
     {nullptr, nullptr, nullptr, nullptr, nullptr} /* Sentinel */
@@ -1134,47 +1253,66 @@ static PyGetSetDef Color_getseters[] = {
 #endif
 
 static PyMethodDef Color_methods[] = {
-    {"copy", (PyCFunction)Color_copy, METH_NOARGS, Color_copy_doc},
-    {"__copy__", (PyCFunction)Color_copy, METH_NOARGS, Color_copy_doc},
-    {"__deepcopy__", (PyCFunction)Color_deepcopy, METH_VARARGS, Color_copy_doc},
+    {"copy", reinterpret_cast<PyCFunction>(Color_copy), METH_NOARGS, Color_copy_doc},
+    {"__copy__", reinterpret_cast<PyCFunction>(Color_copy), METH_NOARGS, Color_copy_doc},
+    {"__deepcopy__", reinterpret_cast<PyCFunction>(Color_deepcopy), METH_VARARGS, Color_copy_doc},
 
     /* base-math methods */
-    {"freeze", (PyCFunction)BaseMathObject_freeze, METH_NOARGS, BaseMathObject_freeze_doc},
+    {"freeze",
+     reinterpret_cast<PyCFunction>(BaseMathObject_freeze),
+     METH_NOARGS,
+     BaseMathObject_freeze_doc},
 
 /* Color-space methods. */
 #ifndef MATH_STANDALONE
     {"from_scene_linear_to_srgb",
-     (PyCFunction)Color_from_scene_linear_to_srgb,
+     reinterpret_cast<PyCFunction>(Color_from_scene_linear_to_srgb),
      METH_NOARGS,
      Color_from_scene_linear_to_srgb_doc},
     {"from_srgb_to_scene_linear",
-     (PyCFunction)Color_from_srgb_to_scene_linear,
+     reinterpret_cast<PyCFunction>(Color_from_srgb_to_scene_linear),
      METH_NOARGS,
      Color_from_srgb_to_scene_linear_doc},
     {"from_scene_linear_to_xyz_d65",
-     (PyCFunction)Color_from_scene_linear_to_xyz_d65,
+     reinterpret_cast<PyCFunction>(Color_from_scene_linear_to_xyz_d65),
      METH_NOARGS,
      Color_from_scene_linear_to_xyz_d65_doc},
     {"from_xyz_d65_to_scene_linear",
-     (PyCFunction)Color_from_xyz_d65_to_scene_linear,
+     reinterpret_cast<PyCFunction>(Color_from_xyz_d65_to_scene_linear),
      METH_NOARGS,
      Color_from_xyz_d65_to_scene_linear_doc},
     {"from_scene_linear_to_aces",
-     (PyCFunction)Color_from_scene_linear_to_aces,
+     reinterpret_cast<PyCFunction>(Color_from_scene_linear_to_aces),
      METH_NOARGS,
      Color_from_scene_linear_to_aces_doc},
     {"from_aces_to_scene_linear",
-     (PyCFunction)Color_from_aces_to_scene_linear,
+     reinterpret_cast<PyCFunction>(Color_from_aces_to_scene_linear),
      METH_NOARGS,
      Color_from_aces_to_scene_linear_doc},
+    {"from_scene_linear_to_acescg",
+     reinterpret_cast<PyCFunction>(Color_from_scene_linear_to_acescg),
+     METH_NOARGS,
+     Color_from_scene_linear_to_acescg_doc},
+    {"from_acescg_to_scene_linear",
+     reinterpret_cast<PyCFunction>(Color_from_acescg_to_scene_linear),
+     METH_NOARGS,
+     Color_from_acescg_to_scene_linear_doc},
     {"from_scene_linear_to_rec709_linear",
-     (PyCFunction)Color_from_scene_linear_to_rec709_linear,
+     reinterpret_cast<PyCFunction>(Color_from_scene_linear_to_rec709_linear),
      METH_NOARGS,
      Color_from_scene_linear_to_rec709_linear_doc},
     {"from_rec709_linear_to_scene_linear",
-     (PyCFunction)Color_from_rec709_linear_to_scene_linear,
+     reinterpret_cast<PyCFunction>(Color_from_rec709_linear_to_scene_linear),
      METH_NOARGS,
      Color_from_rec709_linear_to_scene_linear_doc},
+    {"from_scene_linear_to_rec2020_linear",
+     reinterpret_cast<PyCFunction>(Color_from_scene_linear_to_rec2020_linear),
+     METH_NOARGS,
+     Color_from_scene_linear_to_rec2020_linear_doc},
+    {"from_rec2020_linear_to_scene_linear",
+     reinterpret_cast<PyCFunction>(Color_from_rec2020_linear_to_scene_linear),
+     METH_NOARGS,
+     Color_from_rec2020_linear_to_scene_linear_doc},
 #endif /* !MATH_STANDALONE */
 
     {nullptr, nullptr, 0, nullptr},
@@ -1201,41 +1339,42 @@ static PyMethodDef Color_methods[] = {
 PyDoc_STRVAR(
     /* Wrap. */
     color_doc,
-    ".. class:: Color(rgb)\n"
+    ".. class:: Color(rgb=(0.0, 0.0, 0.0), /)\n"
     "\n"
     "   This object gives access to Colors in Blender.\n"
     "\n"
     "   Most colors returned by Blender APIs are in scene linear color space, as defined by "
-    "   the OpenColorIO configuration. The notable exception is user interface theming colors, "
-    "   which are in sRGB color space.\n"
+    "the OpenColorIO configuration. The notable exception is user interface theming colors, "
+    "which are in sRGB color space.\n"
     "\n"
-    "   :arg rgb: (red, green, blue) color values where (0, 0, 0) is black & (1, 1, 1) is white.\n"
+    "   :param rgb: (red, green, blue) color values "
+    "where (0, 0, 0) is black & (1, 1, 1) is white.\n"
     "   :type rgb: Sequence[float]\n");
 PyTypeObject color_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "Color",
     /*tp_basicsize*/ sizeof(ColorObject),
     /*tp_itemsize*/ 0,
-    /*tp_dealloc*/ (destructor)BaseMathObject_dealloc,
+    /*tp_dealloc*/ reinterpret_cast<destructor>(BaseMathObject_dealloc),
     /*tp_vectorcall_offset*/ 0,
     /*tp_getattr*/ nullptr,
     /*tp_setattr*/ nullptr,
     /*tp_as_async*/ nullptr,
-    /*tp_repr*/ (reprfunc)Color_repr,
+    /*tp_repr*/ reinterpret_cast<reprfunc>(Color_repr),
     /*tp_as_number*/ &Color_NumMethods,
     /*tp_as_sequence*/ &Color_SeqMethods,
     /*tp_as_mapping*/ &Color_AsMapping,
-    /*tp_hash*/ (hashfunc)Color_hash,
+    /*tp_hash*/ reinterpret_cast<hashfunc>(Color_hash),
     /*tp_call*/ nullptr,
-    /*tp_str*/ (reprfunc)Color_str,
+    /*tp_str*/ reinterpret_cast<reprfunc>(Color_str),
     /*tp_getattro*/ nullptr,
     /*tp_setattro*/ nullptr,
-    /*tp_as_buffer*/ nullptr,
+    /*tp_as_buffer*/ &Color_as_buffer,
     /*tp_flags*/ Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
     /*tp_doc*/ color_doc,
-    /*tp_traverse*/ (traverseproc)BaseMathObject_traverse,
-    /*tp_clear*/ (inquiry)BaseMathObject_clear,
-    /*tp_richcompare*/ (richcmpfunc)Color_richcmpr,
+    /*tp_traverse*/ reinterpret_cast<traverseproc>(BaseMathObject_traverse),
+    /*tp_clear*/ reinterpret_cast<inquiry>(BaseMathObject_clear),
+    /*tp_richcompare*/ static_cast<richcmpfunc>(Color_richcmpr),
     /*tp_weaklistoffset*/ 0,
     /*tp_iter*/ nullptr,
     /*tp_iternext*/ nullptr,
@@ -1251,7 +1390,7 @@ PyTypeObject color_Type = {
     /*tp_alloc*/ nullptr,
     /*tp_new*/ Color_new,
     /*tp_free*/ nullptr,
-    /*tp_is_gc*/ (inquiry)BaseMathObject_is_gc,
+    /*tp_is_gc*/ reinterpret_cast<inquiry>(BaseMathObject_is_gc),
     /*tp_bases*/ nullptr,
     /*tp_mro*/ nullptr,
     /*tp_cache*/ nullptr,
@@ -1260,7 +1399,7 @@ PyTypeObject color_Type = {
     /*tp_del*/ nullptr,
     /*tp_version_tag*/ 0,
     /*tp_finalize*/ nullptr,
-    /*tp_vectorcall*/ nullptr,
+    /*tp_vectorcall*/ Color_vectorcall,
 };
 
 #ifdef MATH_STANDALONE
@@ -1279,7 +1418,7 @@ PyObject *Color_CreatePyObject(const float col[3], PyTypeObject *base_type)
   float *col_alloc;
 
   col_alloc = static_cast<float *>(PyMem_Malloc(COLOR_SIZE * sizeof(float)));
-  if (UNLIKELY(col_alloc == nullptr)) {
+  if (col_alloc == nullptr) [[unlikely]] {
     PyErr_SetString(PyExc_MemoryError,
                     "Color(): "
                     "problem allocating data");
@@ -1308,7 +1447,7 @@ PyObject *Color_CreatePyObject(const float col[3], PyTypeObject *base_type)
     PyMem_Free(col_alloc);
   }
 
-  return (PyObject *)self;
+  return reinterpret_cast<PyObject *>(self);
 }
 
 PyObject *Color_CreatePyObject_wrap(float col[3], PyTypeObject *base_type)
@@ -1326,12 +1465,12 @@ PyObject *Color_CreatePyObject_wrap(float col[3], PyTypeObject *base_type)
     self->flag = BASE_MATH_FLAG_DEFAULT | BASE_MATH_FLAG_IS_WRAP;
   }
 
-  return (PyObject *)self;
+  return reinterpret_cast<PyObject *>(self);
 }
 
 PyObject *Color_CreatePyObject_cb(PyObject *cb_user, uchar cb_type, uchar cb_subtype)
 {
-  ColorObject *self = (ColorObject *)Color_CreatePyObject(nullptr, nullptr);
+  ColorObject *self = reinterpret_cast<ColorObject *>(Color_CreatePyObject(nullptr, nullptr));
   if (self) {
     Py_INCREF(cb_user);
     self->cb_user = cb_user;
@@ -1341,7 +1480,9 @@ PyObject *Color_CreatePyObject_cb(PyObject *cb_user, uchar cb_type, uchar cb_sub
     PyObject_GC_Track(self);
   }
 
-  return (PyObject *)self;
+  return reinterpret_cast<PyObject *>(self);
 }
 
 /** \} */
+
+}  // namespace blender

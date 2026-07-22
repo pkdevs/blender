@@ -8,10 +8,13 @@
 
 #pragma once
 
-#include "BLI_bitmap.h"
+#include "BLI_bitmap.hh"
+
 #include "DNA_listBase.h"
+
 #include "RNA_types.hh"
-#include "UI_interface.hh"
+
+namespace blender {
 
 struct ARegionType;
 struct ID;
@@ -63,7 +66,7 @@ struct ButsTextureUser {
 };
 
 struct ButsContextTexture {
-  ListBase users;
+  ListBaseT<ButsTextureUser> users;
 
   struct Tex *texture;
 
@@ -97,3 +100,5 @@ void BUTTONS_OT_file_browse(wmOperatorType *ot);
  */
 void BUTTONS_OT_directory_browse(wmOperatorType *ot);
 void BUTTONS_OT_context_menu(wmOperatorType *ot);
+
+}  // namespace blender

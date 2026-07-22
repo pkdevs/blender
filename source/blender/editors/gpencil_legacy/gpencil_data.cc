@@ -11,8 +11,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -20,7 +20,7 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve_driver.h"
@@ -30,8 +30,6 @@
 #include "BKE_material.hh"
 #include "BKE_paint.hh"
 #include "BKE_report.hh"
-
-#include "UI_interface.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -48,6 +46,8 @@
 #include "DEG_depsgraph_build.hh"
 
 #include "gpencil_intern.hh"
+
+namespace blender {
 
 /* ************************************************ */
 /* Datablock Operators */
@@ -255,9 +255,6 @@ static wmOperatorStatus gpencil_layer_remove_exec(bContext *C, wmOperator *op)
   /* delete the layer now... */
   BKE_gpencil_layer_delete(gpd, gpl);
 
-  /* Reorder masking. */
-  BKE_gpencil_layer_mask_sort_all(gpd);
-
   /* notifiers */
   DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
@@ -319,9 +316,6 @@ static wmOperatorStatus gpencil_layer_move_exec(bContext *C, wmOperator *op)
 
   BLI_assert(ELEM(direction, -1, 0, 1)); /* we use value below */
   if (BLI_listbase_link_move(&gpd->layers, gpl, direction)) {
-    /* Reorder masking. */
-    BKE_gpencil_layer_mask_sort_all(gpd);
-
     DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
   }
@@ -351,3 +345,5 @@ void GPENCIL_OT_layer_annotation_move(wmOperatorType *ot)
 
   ot->prop = RNA_def_enum(ot->srna, "type", slot_move, 0, "Type", "");
 }
+
+}  // namespace blender

@@ -12,13 +12,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_endian_defines.h"
-#include "BLI_endian_switch.h"
-#include "BLI_fileops.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_endian_defines.hh"
+#include "BLI_fileops.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_customdata_file.h"
+
+namespace blender {
 
 /************************* File Format Definitions ***************************/
 
@@ -78,7 +79,6 @@ struct CDataFile {
 
   FILE *readf;
   FILE *writef;
-  int switchendian;
   size_t dataoffset;
 };
 
@@ -86,16 +86,13 @@ struct CDataFile {
 
 static int cdf_endian()
 {
-  if (ENDIAN_ORDER == L_ENDIAN) {
-    return CDF_ENDIAN_LITTLE;
-  }
-
-  return CDF_ENDIAN_BIG;
+  BLI_STATIC_ASSERT(ENDIAN_ORDER == L_ENDIAN, "Blender only builds on little endian systems")
+  return CDF_ENDIAN_LITTLE;
 }
 
 CDataFile *cdf_create(int type)
 {
-  CDataFile *cdf = MEM_callocN<CDataFile>("CDataFile");
+  CDataFile *cdf = MEM_new_zeroed<CDataFile>("CDataFile");
 
   cdf->type = type;
 
@@ -108,10 +105,10 @@ void cdf_free(CDataFile *cdf)
   cdf_write_close(cdf);
 
   if (cdf->layer) {
-    MEM_freeN(cdf->layer);
+    MEM_delete(cdf->layer);
   }
 
-  MEM_freeN(cdf);
+  MEM_delete(cdf);
 }
 
 /********************************* Read/Write ********************************/
@@ -138,15 +135,14 @@ static bool cdf_read_header(CDataFile *cdf)
   if (header->version > CDF_VERSION) {
     return false;
   }
+  if (header->endian != cdf_endian()) {
+    return false;
+  }
 
-  cdf->switchendian = header->endian != cdf_endian();
   header->endian = cdf_endian();
 
-  if (cdf->switchendian) {
-    BLI_endian_switch_int32(&header->type);
-    BLI_endian_switch_int32(&header->totlayer);
-    BLI_endian_switch_int32(&header->structbytes);
-  }
+  /* NOTE: this is endianness-sensitive.
+   * Some non-char `header` data would need to be switched. */
 
   if (!ELEM(header->type, CDF_TYPE_IMAGE, CDF_TYPE_MESH)) {
     return false;
@@ -165,12 +161,8 @@ static bool cdf_read_header(CDataFile *cdf)
       return false;
     }
 
-    if (cdf->switchendian) {
-      BLI_endian_switch_int32(&image->width);
-      BLI_endian_switch_int32(&image->height);
-      BLI_endian_switch_int32(&image->tile_size);
-      BLI_endian_switch_int32(&image->structbytes);
-    }
+    /* NOTE: this is endianness-sensitive.
+     * Some non-char `image` data would need to be switched. */
 
     offset += image->structbytes;
     image->structbytes = sizeof(CDataFileImageHeader);
@@ -181,9 +173,8 @@ static bool cdf_read_header(CDataFile *cdf)
       return false;
     }
 
-    if (cdf->switchendian) {
-      BLI_endian_switch_int32(&mesh->structbytes);
-    }
+    /* NOTE: this is endianness-sensitive.
+     * Some non-char `mesh` data would need to be switched. */
 
     offset += mesh->structbytes;
     mesh->structbytes = sizeof(CDataFileMeshHeader);
@@ -193,7 +184,7 @@ static bool cdf_read_header(CDataFile *cdf)
     return false;
   }
 
-  cdf->layer = MEM_calloc_arrayN<CDataFileLayer>(header->totlayer, "CDataFileLayer");
+  cdf->layer = MEM_new_array_zeroed<CDataFileLayer>(header->totlayer, "CDataFileLayer");
   cdf->totlayer = header->totlayer;
 
   if (!cdf->layer) {
@@ -207,12 +198,8 @@ static bool cdf_read_header(CDataFile *cdf)
       return false;
     }
 
-    if (cdf->switchendian) {
-      BLI_endian_switch_int32(&layer->type);
-      BLI_endian_switch_int32(&layer->datatype);
-      BLI_endian_switch_uint64(&layer->datasize);
-      BLI_endian_switch_int32(&layer->structbytes);
-    }
+    /* NOTE: this is endianness-sensitive.
+     * Some non-char `layer` data would need to be switched. */
 
     if (layer->datatype != CDF_DATA_FLOAT) {
       return false;
@@ -319,10 +306,8 @@ bool cdf_read_data(CDataFile *cdf, uint size, void *data)
     return false;
   }
 
-  /* switch endian if necessary */
-  if (cdf->switchendian) {
-    BLI_endian_switch_float_array(static_cast<float *>(data), size / sizeof(float));
-  }
+  /* NOTE: this is endianness-sensitive.
+   * `data` would need to be switched. */
 
   return true;
 }
@@ -432,7 +417,7 @@ CDataFileLayer *cdf_layer_add(CDataFile *cdf, int type, const char *name, size_t
   CDataFileLayer *newlayer, *layer;
 
   /* expand array */
-  newlayer = MEM_calloc_arrayN<CDataFileLayer>(size_t(cdf->totlayer) + 1, "CDataFileLayer");
+  newlayer = MEM_new_array_zeroed<CDataFileLayer>(size_t(cdf->totlayer) + 1, "CDataFileLayer");
   if (cdf->totlayer > 0) {
     memcpy(newlayer, cdf->layer, sizeof(CDataFileLayer) * cdf->totlayer);
   }
@@ -450,3 +435,5 @@ CDataFileLayer *cdf_layer_add(CDataFile *cdf, int type, const char *name, size_t
 
   return layer;
 }
+
+}  // namespace blender

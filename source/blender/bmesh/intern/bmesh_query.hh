@@ -8,14 +8,17 @@
  * \ingroup bmesh
  */
 
-#include "BLI_compiler_attrs.h"
-#include "BLI_compiler_compat.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_compiler_compat.hh"
 
 #include "bmesh_class.hh"
 
 /**
  * Returns true if the vertex is used in a given face.
  */
+
+namespace blender {
+
 bool BM_vert_in_face(BMVert *v, BMFace *f) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 /**
  * Compares the number of vertices in an array
@@ -289,7 +292,7 @@ bool BM_vert_is_edge_pair_manifold(const BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR
  *
  * \return true when only 2 verts are found.
  */
-bool BM_vert_edge_pair(BMVert *v, BMEdge **r_e_a, BMEdge **r_e_b);
+bool BM_vert_edge_pair(const BMVert *v, BMEdge **r_e_a, BMEdge **r_e_b);
 /**
  * Return true if the vertex is connected to _any_ faces.
  *
@@ -381,7 +384,7 @@ float BM_loop_calc_face_angle(const BMLoop *l) ATTR_WARN_UNUSED_RESULT ATTR_NONN
 /**
  * \brief BM_loop_calc_face_normal
  *
- * Calculate the normal at this loop corner or fallback to the face normal on straight lines.
+ * Calculate the normal at this loop corner or fall back to the face normal on straight lines.
  *
  * \param l: The loop to calculate the normal at
  * \param r_normal: Resulting normal
@@ -397,7 +400,7 @@ float BM_loop_calc_face_normal_safe(const BMLoop *l, float r_normal[3]) ATTR_NON
 /**
  * \brief BM_loop_calc_face_normal
  *
- * Calculate the normal at this loop corner or fallback to the face normal on straight lines.
+ * Calculate the normal at this loop corner or fall back to the face normal on straight lines.
  *
  * \param l: The loop to calculate the normal at.
  * \param epsilon_sq: Value to avoid numeric errors (1e-5f works well).
@@ -430,7 +433,7 @@ void BM_loop_calc_face_direction(const BMLoop *l, float r_dir[3]);
 /**
  * \brief BM_loop_calc_face_tangent
  *
- * Calculate the tangent at this loop corner or fallback to the face normal on straight lines.
+ * Calculate the tangent at this loop corner or fall back to the face normal on straight lines.
  * This vector always points inward into the face.
  *
  * \param l: The loop to calculate the tangent at
@@ -541,6 +544,18 @@ BMEdge *BM_edge_find_double(BMEdge *e) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
  */
 BMFace *BM_face_exists(BMVert *const *varr, int len) ATTR_NONNULL(1);
 /**
+ * Check if a face exists, using a subset of an existing face's loops.
+ * Edges defined by loops from `l_a` to `l_b` (inclusive) are used to check if they make a face,
+ * with an implied edge between `l_a->v` & `l_b->v` which must exist for there to be a face.
+ *
+ * \param l_a, l_b: First and last loop of the subset.
+ * \param f_len: Number of loops (vertices) between `l_a` & `l_b` (inclusive).
+ * \return The matching face if it exists, otherwise null.
+ */
+BMFace *BM_face_exists_subset_from_face(BMLoop *l_a,
+                                        BMLoop *l_b,
+                                        int f_len) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+/**
  * Check if the face has an exact duplicate (both winding directions).
  */
 BMFace *BM_face_find_double(BMFace *f) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
@@ -559,7 +574,9 @@ BMFace *BM_face_find_double(BMFace *f) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
  */
 bool BM_face_exists_multi(BMVert **varr, BMEdge **earr, int len) ATTR_WARN_UNUSED_RESULT
     ATTR_NONNULL();
-/* same as 'BM_face_exists_multi' but built vert array from edges */
+/**
+ * Same as #BM_face_exists_multi but builds the vert array from edges.
+ */
 bool BM_face_exists_multi_edge(BMEdge **earr, int len) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 /**
@@ -639,7 +656,7 @@ BMVert *BM_edge_share_vert(BMEdge *e1, BMEdge *e2) ATTR_WARN_UNUSED_RESULT ATTR_
 /**
  * \brief Return the Loop Shared by Edge and Vert
  *
- * Finds the loop used which uses \a  in face loop \a l
+ * Finds the loop used which uses \a v in face loop \a l
  *
  * \note this function takes a loop rather than an edge
  * so we can select the face that the loop should be from.
@@ -776,5 +793,7 @@ int BM_mesh_calc_edge_groups_as_arrays(BMesh *bm,
 
 /* Not really any good place to put this. */
 float bmesh_subd_falloff_calc(int falloff, float val) ATTR_WARN_UNUSED_RESULT;
+
+}  // namespace blender
 
 #include "bmesh_query_inline.hh" /* IWYU pragma: export */

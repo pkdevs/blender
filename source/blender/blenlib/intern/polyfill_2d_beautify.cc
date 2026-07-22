@@ -23,16 +23,18 @@
  * No globals - keep threadsafe.
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_heap.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_memarena.h"
+#include "BLI_heap.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_memarena.hh"
 
-#include "BLI_polyfill_2d_beautify.h" /* own include */
+#include "BLI_polyfill_2d_beautify.hh" /* own include */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* Used to find matching edges. */
 struct OrderEdge {
@@ -202,7 +204,7 @@ float BLI_polyfill_edge_calc_rotate_beauty__area(const float v1[3],
                  (ELEM(v3, v1, v2, v4) == false) && (ELEM(v4, v1, v2, v3) == false));
 
       add_v3_v3v3(no, no_a, no_b);
-      if (UNLIKELY((no_scale = normalize_v3(no)) == 0.0f)) {
+      if ((no_scale = normalize_v3(no)) == 0.0f) [[unlikely]] {
         break;
       }
 
@@ -424,10 +426,10 @@ void BLI_polyfill_beautify(const float (*coords)[2],
 
   /* Now perform iterative rotations. */
 #if 0
-  eheap_table = BLI_memarena_alloc(arena, sizeof(HeapNode *) * (size_t)edges_len);
+  eheap_table = BLI_memarena_alloc(arena, sizeof(HeapNode *) * size_t(edges_len));
 #else
   /* We can re-use this since its big enough. */
-  eheap_table = (HeapNode **)order_edges;
+  eheap_table = reinterpret_cast<HeapNode **>(order_edges);
   order_edges = nullptr;
 #endif
 
@@ -460,7 +462,7 @@ void BLI_polyfill_beautify(const float (*coords)[2],
 
   BLI_heap_clear(eheap, nullptr);
 
-  // MEM_freeN(eheap_table); /* arena */
+  // MEM_delete(eheap_table); /* arena */
 
   /* Get triangles from half edge. */
   uint tri_index = 0;
@@ -482,3 +484,5 @@ void BLI_polyfill_beautify(const float (*coords)[2],
     }
   }
 }
+
+}  // namespace blender

@@ -12,12 +12,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 
 #include "WM_message.hh"
 #include "WM_types.hh"
 #include "message_bus/intern/wm_message_bus_intern.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------------- */
 
@@ -30,15 +32,17 @@ static uint wm_msg_static_gset_hash(const void *key_p)
 }
 static bool wm_msg_static_gset_cmp(const void *key_a_p, const void *key_b_p)
 {
-  const wmMsgParams_Static *params_a = &((const wmMsgSubscribeKey_Static *)key_a_p)->msg.params;
-  const wmMsgParams_Static *params_b = &((const wmMsgSubscribeKey_Static *)key_b_p)->msg.params;
+  const wmMsgParams_Static *params_a =
+      &(static_cast<const wmMsgSubscribeKey_Static *>(key_a_p))->msg.params;
+  const wmMsgParams_Static *params_b =
+      &(static_cast<const wmMsgSubscribeKey_Static *>(key_b_p))->msg.params;
   return !(params_a->event == params_b->event);
 }
 
 static void *wm_msg_static_gset_key_duplicate(const void *key_p)
 {
   const wmMsgSubscribeKey *key_src = static_cast<const wmMsgSubscribeKey *>(key_p);
-  return MEM_dupallocN<wmMsgSubscribeKey>(__func__, *key_src);
+  return MEM_new<wmMsgSubscribeKey>(__func__, *key_src);
 }
 static void wm_msg_static_gset_key_free(void *key_p)
 {
@@ -51,21 +55,22 @@ static void wm_msg_static_gset_key_free(void *key_p)
   {
     msg_lnk_next = msg_lnk->next;
     BLI_remlink(&key->values, msg_lnk);
-    MEM_freeN(msg_lnk);
+    MEM_delete(msg_lnk);
   }
-  MEM_freeN(key);
+  MEM_delete(key);
 }
 
 static void wm_msg_static_repr(FILE *stream, const wmMsgSubscribeKey *msg_key)
 {
-  const wmMsgSubscribeKey_Static *m = (wmMsgSubscribeKey_Static *)msg_key;
+  const wmMsgSubscribeKey_Static *m = reinterpret_cast<wmMsgSubscribeKey_Static *>(
+      const_cast<wmMsgSubscribeKey *>(msg_key));
   fprintf(stream,
           "<wmMsg_Static %p, "
           "id='%s', "
           "values_len=%d\n",
           m,
           m->msg.head.id,
-          BLI_listbase_count(&m->head.values));
+          m->head.values.count());
 }
 
 void WM_msgtypeinfo_init_static(wmMsgTypeInfo *msgtype_info)
@@ -90,7 +95,7 @@ wmMsgSubscribeKey_Static *WM_msg_lookup_static(wmMsgBus *mbus,
 
 void WM_msg_publish_static_params(wmMsgBus *mbus, const wmMsgParams_Static *msg_key_params)
 {
-  CLOG_INFO(WM_LOG_MSGBUS_PUB, 2, "static(event=%d)", msg_key_params->event);
+  CLOG_DEBUG(WM_LOG_MSGBUS_PUB, "static(event=%d)", msg_key_params->event);
 
   wmMsgSubscribeKey_Static *key = WM_msg_lookup_static(mbus, msg_key_params);
   if (key) {
@@ -130,3 +135,5 @@ void WM_msg_subscribe_static(wmMsgBus *mbus,
   params.event = event;
   WM_msg_subscribe_static_params(mbus, &params, msg_val_params, id_repr);
 }
+
+}  // namespace blender

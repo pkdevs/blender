@@ -48,10 +48,11 @@
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
 
-#include "UI_interface.hh"
 #include "UI_resources.hh"
 
-namespace blender::ed::greasepencil {
+namespace blender {
+
+namespace ed::greasepencil {
 
 enum class PrimitiveType : int8_t {
   Line = 0,
@@ -208,10 +209,10 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
   ColorGeometry4f color_gizmo_secondary;
   ColorGeometry4f color_gizmo_a;
   ColorGeometry4f color_gizmo_b;
-  UI_GetThemeColor4fv(TH_GIZMO_PRIMARY, color_gizmo_primary);
-  UI_GetThemeColor4fv(TH_GIZMO_SECONDARY, color_gizmo_secondary);
-  UI_GetThemeColor4fv(TH_GIZMO_A, color_gizmo_a);
-  UI_GetThemeColor4fv(TH_GIZMO_B, color_gizmo_b);
+  ui::theme::get_color_4fv(TH_GIZMO_PRIMARY, color_gizmo_primary);
+  ui::theme::get_color_4fv(TH_GIZMO_SECONDARY, color_gizmo_secondary);
+  ui::theme::get_color_4fv(TH_GIZMO_A, color_gizmo_a);
+  ui::theme::get_color_4fv(TH_GIZMO_B, color_gizmo_b);
 
   const float size_primary = ui_primary_point_draw_size_px;
   const float size_secondary = ui_secondary_point_draw_size_px;
@@ -263,9 +264,10 @@ static void control_point_colors_and_sizes(const PrimitiveToolOperation &ptd,
 static void draw_control_points(PrimitiveToolOperation &ptd)
 {
   GPUVertFormat *format3d = immVertexFormat();
-  const uint pos3d = GPU_vertformat_attr_add(format3d, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-  const uint col3d = GPU_vertformat_attr_add(format3d, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-  const uint siz3d = GPU_vertformat_attr_add(format3d, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  const uint pos3d = GPU_vertformat_attr_add(format3d, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
+  const uint col3d = GPU_vertformat_attr_add(
+      format3d, "color", gpu::VertAttrType::SFLOAT_32_32_32_32);
+  const uint siz3d = GPU_vertformat_attr_add(format3d, "size", gpu::VertAttrType::SFLOAT_32);
   immBindBuiltinProgram(GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR);
 
   GPU_program_point_size(true);
@@ -379,7 +381,7 @@ static void primitive_calulate_curve_positions(PrimitiveToolOperation &ptd,
       const float2 offset = control_points[control_point_first] - center;
       for (const int i : new_positions.index_range()) {
         const float t = i / float(new_points_num);
-        const float a = t * math::numbers::pi * 2.0f;
+        const float a = t * std::numbers::pi * 2.0f;
         new_positions[i] = offset * float2(sinf(a), cosf(a)) + center;
       }
       return;
@@ -526,7 +528,11 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
     new_opacities[point] = ed::greasepencil::randomize_opacity(
         *ptd.settings, ptd.stroke_random_opacity_factor, lengths[point], opacity, pressure);
     if (ptd.vertex_color) {
+      std::optional<BrushColorJitterSettings> jitter_settings =
+          BKE_brush_color_jitter_get_settings(&ptd.vc.scene->toolsettings->gp_paint->paint,
+                                              ptd.brush);
       new_vertex_colors[point] = ed::greasepencil::randomize_color(*ptd.settings,
+                                                                   jitter_settings,
                                                                    ptd.stroke_random_hue_factor,
                                                                    ptd.stroke_random_sat_factor,
                                                                    ptd.stroke_random_val_factor,
@@ -556,7 +562,12 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
                                     bke::attribute_filter_from_skip_ref(point_attributes_to_skip),
                                     curve_points);
 
-  ptd.drawing->tag_topology_changed();
+  if (on_back) {
+    ptd.drawing->tag_topology_changed();
+  }
+  else {
+    ptd.drawing->tag_topology_changed(IndexRange::from_single(target_curve_index));
+  }
   ptd.drawing->set_texture_matrices({ptd.texture_space},
                                     IndexRange::from_single(target_curve_index));
 }
@@ -564,10 +575,9 @@ static void grease_pencil_primitive_update_curves(PrimitiveToolOperation &ptd)
 static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
 {
   /* Resize the curves geometry so there is one more curve with a single point. */
-  bke::CurvesGeometry &curves = ptd.drawing->strokes_for_write();
-
   const bool on_back = ptd.on_back;
-  ed::greasepencil::add_single_curve(curves, on_back == false);
+  ed::greasepencil::add_single_curve(*ptd.drawing, on_back == false);
+  bke::CurvesGeometry &curves = ptd.drawing->strokes_for_write();
 
   const int target_curve_index = on_back ? 0 : (curves.curves_num() - 1);
 
@@ -577,11 +587,31 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   bke::SpanAttributeWriter<int> materials = attributes.lookup_or_add_for_write_span<int>(
       "material_index", bke::AttrDomain::Curve);
   materials.span[target_curve_index] = ptd.material_index;
+  materials.finish();
+  curve_attributes_to_skip.add("material_index");
 
   bke::SpanAttributeWriter<bool> cyclic = attributes.lookup_or_add_for_write_span<bool>(
       "cyclic", bke::AttrDomain::Curve);
   const bool is_cyclic = ELEM(ptd.type, PrimitiveType::Box, PrimitiveType::Circle);
   cyclic.span[target_curve_index] = is_cyclic;
+  cyclic.finish();
+  curve_attributes_to_skip.add("cyclic");
+
+  if ((ptd.settings->flag2 & GP_BRUSH_USE_STROKE) == 0) {
+    bke::SpanAttributeWriter<bool> hide_stroke = attributes.lookup_or_add_for_write_span<bool>(
+        "hide_stroke", bke::AttrDomain::Curve);
+    hide_stroke.span[target_curve_index] = true;
+    curve_attributes_to_skip.add("hide_stroke");
+    hide_stroke.finish();
+  }
+  if (ptd.use_fill) {
+    bke::SpanAttributeWriter<int> fill_id = attributes.lookup_or_add_for_write_span<int>(
+        "fill_id", bke::AttrDomain::Curve);
+    /* TODO: Use the first available ID. */
+    fill_id.span[target_curve_index] = target_curve_index + 1;
+    curve_attributes_to_skip.add("fill_id");
+    fill_id.finish();
+  }
 
   if (bke::SpanAttributeWriter<float> softness = attributes.lookup_or_add_for_write_span<float>(
           "softness", bke::AttrDomain::Curve))
@@ -613,11 +643,8 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
   }
 
   if (ptd.use_fill && (ptd.fill_opacity < 1.0f || attributes.contains("fill_opacity"))) {
-    if (bke::SpanAttributeWriter<float> fill_opacities =
-            attributes.lookup_or_add_for_write_span<float>(
-                "fill_opacity",
-                bke::AttrDomain::Curve,
-                bke::AttributeInitVArray(VArray<float>::ForSingle(1.0f, curves.curves_num()))))
+    if (bke::SpanAttributeWriter fill_opacities = attributes.lookup_or_add_for_write_span<float>(
+            "fill_opacity", bke::AttrDomain::Curve, bke::AttributeInitValue(1.0f)))
     {
       fill_opacities.span[target_curve_index] = ptd.fill_opacity;
       fill_opacities.finish();
@@ -630,9 +657,13 @@ static void grease_pencil_primitive_init_curves(PrimitiveToolOperation &ptd)
     curve_attributes_to_skip.add("fill_color");
   }
 
-  cyclic.finish();
-  materials.finish();
-  curve_attributes_to_skip.add_multiple({"material_index", "cyclic"});
+  if (bke::SpanAttributeWriter<float> u_scale = attributes.lookup_or_add_for_write_span<float>(
+          "u_scale", bke::AttrDomain::Curve))
+  {
+    u_scale.span[target_curve_index] = 1.0f;
+    u_scale.finish();
+    curve_attributes_to_skip.add("u_scale");
+  }
 
   curves.curve_types_for_write()[target_curve_index] = CURVE_TYPE_POLY;
   curves.update_curve_types();
@@ -667,7 +698,7 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
   status.item(IFACE_("Align"), ICON_EVENT_SHIFT);
   status.opmodal("", op->type, int(ModalKeyMode::IncreaseSubdivision));
   status.opmodal("", op->type, int(ModalKeyMode::DecreaseSubdivision));
-  status.item(fmt::format("{} ({})", IFACE_("subdivisions"), ptd.subdivision), ICON_NONE);
+  status.item(fmt::format("{} ({})", IFACE_("Subdivisions"), ptd.subdivision), ICON_NONE);
 
   if (ptd.segments == 1) {
     status.item(IFACE_("Center"), ICON_EVENT_ALT);
@@ -689,7 +720,7 @@ static void grease_pencil_primitive_status_indicators(bContext *C,
 
 static void grease_pencil_primitive_update_view(bContext *C, PrimitiveToolOperation &ptd)
 {
-  GreasePencil *grease_pencil = static_cast<GreasePencil *>(ptd.vc.obact->data);
+  GreasePencil *grease_pencil = id_cast<GreasePencil *>(ptd.vc.obact->data);
 
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, grease_pencil);
@@ -730,7 +761,7 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
   View3D *view3d = CTX_wm_view3d(C);
   const float2 start_coords = float2(event->mval);
 
-  GreasePencil *grease_pencil = static_cast<GreasePencil *>(vc.obact->data);
+  GreasePencil *grease_pencil = id_cast<GreasePencil *>(vc.obact->data);
 
   /* Initialize helper class for projecting screen space coordinates. */
   DrawingPlacement placement = DrawingPlacement(
@@ -775,9 +806,9 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
   BKE_curvemapping_init(ptd.settings->curve_rand_pressure);
   BKE_curvemapping_init(ptd.settings->curve_rand_strength);
   BKE_curvemapping_init(ptd.settings->curve_rand_uv);
-  BKE_curvemapping_init(ptd.settings->curve_rand_hue);
-  BKE_curvemapping_init(ptd.settings->curve_rand_saturation);
-  BKE_curvemapping_init(ptd.settings->curve_rand_value);
+  BKE_curvemapping_init(ptd.brush->curve_rand_hue);
+  BKE_curvemapping_init(ptd.brush->curve_rand_saturation);
+  BKE_curvemapping_init(ptd.brush->curve_rand_value);
 
   ToolSettings *ts = vc.scene->toolsettings;
   GP_Sculpt_Settings *gset = &ts->gp_sculpt;
@@ -789,20 +820,19 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
   Material *material = BKE_grease_pencil_object_material_ensure_from_brush(
       CTX_data_main(C), vc.obact, ptd.brush);
   ptd.material_index = BKE_object_material_index_get(vc.obact, material);
-  ptd.use_fill = (material->gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0;
+  ptd.use_fill = (ptd.settings->flag2 & GP_BRUSH_USE_FILL) != 0;
 
   const bool use_vertex_color = (vc.scene->toolsettings->gp_paint->mode ==
                                  GPPAINT_FLAG_USE_VERTEXCOLOR);
   if (use_vertex_color) {
     ColorGeometry4f color_base;
-    srgb_to_linearrgb_v3_v3(color_base, ptd.brush->rgb);
+    copy_v3_v3(color_base, ptd.brush->color);
     color_base.a = ptd.settings->vertex_factor;
-    ptd.vertex_color = ELEM(ptd.settings->vertex_mode, GPPAINT_MODE_STROKE, GPPAINT_MODE_BOTH) ?
+
+    ptd.vertex_color = (ptd.settings->flag2 & GP_BRUSH_USE_STROKE) ?
                            std::make_optional(color_base) :
                            std::nullopt;
-    ptd.fill_color = ELEM(ptd.settings->vertex_mode, GPPAINT_MODE_FILL, GPPAINT_MODE_BOTH) ?
-                         std::make_optional(color_base) :
-                         std::nullopt;
+    ptd.fill_color = ptd.use_fill ? std::make_optional(color_base) : std::nullopt;
   }
   else {
     ptd.vertex_color = std::nullopt;
@@ -847,7 +877,7 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
 }
 
 /* Exit and free memory. */
-static void grease_pencil_primitive_exit(bContext *C, wmOperator *op)
+static void grease_pencil_primitive_exit(bContext *C, wmOperator *op, const bool cancelled)
 {
   PrimitiveToolOperation *ptd = static_cast<PrimitiveToolOperation *>(op->customdata);
 
@@ -856,9 +886,9 @@ static void grease_pencil_primitive_exit(bContext *C, wmOperator *op)
                                        GP_TOOL_FLAG_AUTOMERGE_STROKE) != 0;
   const bool on_back = (scene.toolsettings->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) != 0;
 
-  if (do_automerge_endpoints) {
+  if (do_automerge_endpoints && !cancelled) {
     const Object &ob = *ptd->vc.obact;
-    const GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob.data);
+    const GreasePencil *grease_pencil = id_cast<GreasePencil *>(ob.data);
     const bke::greasepencil::Layer &active_layer = *grease_pencil->get_active_layer();
 
     constexpr float merge_distance = 30.0f;
@@ -894,7 +924,7 @@ static void grease_pencil_primitive_exit(bContext *C, wmOperator *op)
 static float2 snap_diagonals(float2 p)
 {
   using namespace math;
-  return sign(p) * float2(1.0f / numbers::sqrt2) * length(p);
+  return sign(p) * float2(1.0f / std::numbers::sqrt2) * length(p);
 }
 
 /* Using Chebyshev distance instead of Euclidean. */
@@ -1199,12 +1229,12 @@ static wmOperatorStatus grease_pencil_primitive_event_modal_map(bContext *C,
   switch (event->val) {
     case int(ModalKeyMode::Cancel): {
       grease_pencil_primitive_undo_curves(ptd);
-      grease_pencil_primitive_exit(C, op);
+      grease_pencil_primitive_exit(C, op, true);
 
       return OPERATOR_CANCELLED;
     }
     case int(ModalKeyMode::Confirm): {
-      grease_pencil_primitive_exit(C, op);
+      grease_pencil_primitive_exit(C, op, false);
 
       return OPERATOR_FINISHED;
     }
@@ -1447,7 +1477,7 @@ static wmOperatorStatus grease_pencil_primitive_modal(bContext *C,
   /* Check for confirm before navigation. */
   if (event->type == EVT_MODAL_MAP) {
     if (event->val == int(ModalKeyMode::Confirm)) {
-      grease_pencil_primitive_exit(C, op);
+      grease_pencil_primitive_exit(C, op, false);
 
       return OPERATOR_FINISHED;
     }
@@ -1491,7 +1521,7 @@ static wmOperatorStatus grease_pencil_primitive_modal(bContext *C,
 
       if (ptd.mode == OperatorMode::Idle) {
         grease_pencil_primitive_undo_curves(ptd);
-        grease_pencil_primitive_exit(C, op);
+        grease_pencil_primitive_exit(C, op, true);
 
         return OPERATOR_CANCELLED;
       }
@@ -1528,7 +1558,7 @@ static wmOperatorStatus grease_pencil_primitive_modal(bContext *C,
 static void grease_pencil_primitive_cancel(bContext *C, wmOperator *op)
 {
   /* This is just a wrapper around exit() */
-  grease_pencil_primitive_exit(C, op);
+  grease_pencil_primitive_exit(C, op, true);
 }
 
 static void grease_pencil_primitive_common_props(wmOperatorType *ot,
@@ -1676,7 +1706,7 @@ static void GREASE_PENCIL_OT_primitive_circle(wmOperatorType *ot)
   grease_pencil_primitive_common_props(ot, 94, PrimitiveType::Circle);
 }
 
-}  // namespace blender::ed::greasepencil
+}  // namespace ed::greasepencil
 
 void ED_operatortypes_grease_pencil_primitives()
 {
@@ -1731,3 +1761,5 @@ void ED_primitivetool_modal_keymap(wmKeyConfig *keyconf)
   WM_modalkeymap_assign(keymap, "GREASE_PENCIL_OT_primitive_box");
   WM_modalkeymap_assign(keymap, "GREASE_PENCIL_OT_primitive_circle");
 }
+
+}  // namespace blender

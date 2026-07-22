@@ -8,29 +8,62 @@
 
 #include "BLI_string_ref.hh"
 
+namespace blender {
+
 struct bContext;
-struct uiLayout;
+
+namespace ui {
+struct Block;
+struct Button;
+struct Layout;
+struct TooltipData;
 
 /* names */
-#define UI_MAX_DRAW_STR 400
-#define UI_MAX_NAME_STR 128
+#define UI_MAX_DRAW_STR 550
+#define UI_MAX_NAME_STR 256
 #define UI_MAX_SHORTCUT_STR 64
+
+#define RNA_NO_INDEX -1
 
 /* Menu Callbacks */
 
-using uiMenuCreateFunc = void (*)(bContext *C, uiLayout *layout, void *arg1);
-using uiMenuHandleFunc = void (*)(bContext *C, void *arg, int event);
+using MenuCreateFunc = void (*)(bContext *C, Layout *layout, void *arg1);
+using MenuHandleFunc = void (*)(bContext *C, void *arg, int event);
 
 /**
  * Used for cycling menu values without opening the menu (Ctrl-Wheel).
  * \param direction: forward or backwards [1 / -1].
- * \param arg1: `uiBut.poin` (as with #uiMenuCreateFunc).
+ * \param arg1: `Button.poin` (as with #MenuCreateFunc).
  * \return true when the button was changed.
  */
-using uiMenuStepFunc = bool (*)(bContext *C, int direction, void *arg1);
+using MenuStepFunc = bool (*)(bContext *C, int direction, void *arg1);
 
-using uiCopyArgFunc = void *(*)(const void *arg);
-using uiFreeArgFunc = void (*)(void *arg);
+using CopyArgFunc = void *(*)(const void *arg);
+using FreeArgFunc = void (*)(void *arg);
 
 /** Must return an allocated string. */
-using uiButToolTipFunc = std::string (*)(bContext *C, void *argN, blender::StringRef tip);
+using ButtonToolTipFunc = std::string (*)(bContext *C, void *argN, StringRef tip);
+
+/**
+ * \param data: The tooltip data to be filled.
+ * \param but: The exact button the tooltip is shown for. This is needed when the tooltip function
+ *   is shared across multiple buttons but there still needs to be some customization per button.
+ *   Mostly useful when using #uiLayoutSetTooltipCustomFunc.
+ */
+using ButtonToolTipCustomFunc = void (*)(bContext &C, TooltipData &data, Button *but, void *argN);
+
+/** #uiFontStyle.align */
+enum FontStyleAlign {
+  UI_STYLE_TEXT_LEFT = 0,
+  UI_STYLE_TEXT_CENTER = 1,
+  UI_STYLE_TEXT_RIGHT = 2,
+};
+
+}  // namespace ui
+
+namespace ocio {
+class Display;
+}  // namespace ocio
+using ColorManagedDisplay = ocio::Display;
+
+}  // namespace blender
