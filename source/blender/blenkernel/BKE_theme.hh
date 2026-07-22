@@ -8,19 +8,7 @@
 
 namespace blender::bke {
 
-const bTheme &active_theme_get()
-{
-  switch (U.active_theme_type) {
-    case UserPrefActiveThemeType::Dark:
-      return *U.active_theme_dark;
-    case UserPrefActiveThemeType::Light:
-      return *U.active_theme_light;
-    case UserPrefActiveThemeType::System:
-      /* TODO */
-      return false ? *U.active_theme_light : *U.active_theme_dark;
-  }
-  return *U.active_theme_dark;
-}
+const bTheme &active_theme_get();
 
 /** Reload a theme to match its source file. */
 void reset_theme(bTheme &theme);

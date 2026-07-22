@@ -288,6 +288,7 @@ set(SRC
   intern/text.cc
   intern/text_suggestions.cc
   intern/texture.cc
+  intern/theme.cc
   intern/tracking.cc
   intern/tracking_auto.cc
   intern/tracking_detect.cc
@@ -525,6 +526,7 @@ set(SRC
   BKE_text.h
   BKE_text_suggestions.h
   BKE_texture.h
+  BKE_theme.hh
   BKE_tracking.hh
   BKE_type_conversions.hh
   BKE_undo_system.hh
