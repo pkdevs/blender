@@ -78,7 +78,7 @@ class OBJECT_MT_modifier_add(ModifierAddMenu, Menu):
         ob_type = ob.type
         geometry_nodes_supported = ob_type in {
             'EMPTY', 'MESH', 'CURVE', 'CURVES',
-            'FONT', 'VOLUME', 'POINTCLOUD', 'GREASEPENCIL'
+            'FONT', 'VOLUME', 'POINTCLOUD', 'GREASEPENCIL', 'ARMATURE'
         }
 
         if layout.operator_context == 'EXEC_REGION_WIN':
