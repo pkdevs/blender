@@ -1442,7 +1442,8 @@ bool BKE_object_supports_modifiers(const Object *ob)
               OB_POINTCLOUD,
               OB_VOLUME,
               OB_GREASE_PENCIL,
-              OB_EMPTY);
+              OB_EMPTY,
+              OB_ARMATURE);
 }
 
 bool BKE_object_support_modifier_type_check(const Object *ob, int modifier_type)
@@ -1454,8 +1455,8 @@ bool BKE_object_support_modifier_type_check(const Object *ob, int modifier_type)
     return false;
   }
 
-  /* Empties only support geometry nodes modifiers. */
-  if (ob->type == OB_EMPTY) {
+  /* Empties and armatures only support geometry nodes modifiers. */
+  if (ELEM(ob->type, OB_EMPTY, OB_ARMATURE)) {
     return modifier_type == eModifierType_Nodes;
   }
   if (ELEM(ob->type, OB_POINTCLOUD, OB_CURVES)) {

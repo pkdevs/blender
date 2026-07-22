@@ -1234,6 +1234,10 @@ static bool modifier_apply_obdata(ReportList *reports,
       return false;
     }
   }
+  else if (ob->type == OB_ARMATURE) {
+    // TODO
+    BLI_assert_unreachable();
+  }
   else {
     /* TODO: implement for volumes. */
     BKE_report(reports, RPT_ERROR, "Cannot apply modifier for this object type");
