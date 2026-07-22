@@ -678,8 +678,7 @@ struct InstantiationContext {
         case NodeType::VarDecl: {
           VarDecl decl = node;
           if (!decl.type().is_static()) {
-            var_decl(decl, cls);
-            member_count++;
+            member_count += var_decl(decl, cls);
           }
           break;
         }
@@ -798,6 +797,9 @@ struct InstantiationContext {
               SymbolClass *type = id_type_lookup_resolved(decl.type().id(), cls);
               for (Declarator d : decl.children_of_type<Declarator>()) {
                 SymbolVariable *var = cls.lookup_variable(d.identifier());
+                if (var->is_static) {
+                  continue;
+                }
                 string access;
                 string close;
                 int dim = 0;
@@ -995,7 +997,13 @@ struct InstantiationContext {
     builder.curr = decl.identifier().back();
     builder << inst_fn->resolved->identifier + trivia(decl.identifier());
 
-    func_arg_list(decl.arguments(), *inst_fn);
+    if (inst_fn->is_entry_point()) {
+      builder.curr = decl.arguments().back();
+      builder << string("()\n");
+    }
+    else {
+      func_arg_list(decl.arguments(), *inst_fn);
+    }
 
     local_scope(body, *inst_fn);
   }
@@ -1171,8 +1179,18 @@ struct InstantiationContext {
     }
   }
 
-  void var_decl(VarDecl decl, SymbolScope &scope, bool jump = true)
+  /* Return true if declaration was issued. */
+  bool var_decl(VarDecl decl, SymbolScope &scope, bool jump = true)
   {
+    auto [res_packed, err_attr] = resource_type_from_attributes(decl.attributes());
+    auto [res_type, srt_type] = res_packed;
+    error(err_attr);
+
+    if (res_type != ResourceType::NONE) {
+      /* Resources are defined in global space at runtime. */
+      return false;
+    }
+
     if (jump) {
       jump_to(decl.front());
     }
@@ -1193,6 +1211,7 @@ struct InstantiationContext {
       match_if(',');
     }
     match_if(';');
+    return true;
   }
 
   void id_type(IdType type, SymbolScope &scope)
@@ -1213,7 +1232,13 @@ struct InstantiationContext {
   {
     node = node.next();
     if (node.type() == NodeType::Op && node.front() == TokenType::Dot) {
-      builder << node;
+      if (cls->is_srt()) {
+        /* Remove access to SRT type (makes the resource global). */
+        skip_node(node);
+      }
+      else {
+        builder << node;
+      }
       Node member = node.next();
       if (cls == nullptr) {
         /* TODO(fclem): Error. */
@@ -1503,6 +1528,12 @@ struct InstantiationContext {
 
     if (var->is_constexpr) {
       builder.ss << to_string(var->value) + trivia(id);
+      return var;
+    }
+
+    if (var->type->is_srt()) {
+      /* Remove access to SRT type (makes the resource global). */
+      skip_node(id);
       return var;
     }
 

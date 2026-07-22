@@ -20,6 +20,131 @@ using namespace std;
 struct SymbolParser;
 struct SymbolTable;
 
+enum class ResourceType {
+  NONE = 0,
+
+  LEGACY_INFO,
+  COMPILATION_CONST,
+  SPECIALIZATION_CONST,
+  PUSH_CONST,
+  SAMPLER,
+  IMAGE,
+  UNIFORM_BUF,
+  STORAGE_BUF,
+  ACCELERATION_STRUCTURE,
+  RESOURCE_TABLE,
+  SHARED,
+
+  VERT_ATTR_IN,
+  VERT_ATTR_OUT,
+  FRAG_IN,
+  FRAG_OUT,
+
+  BASE_INSTANCE,
+  CLIP_CONTROL,
+  CLIP_DISTANCE,
+  FRONT_FACING,
+  GLOBAL_INVOCATION_ID,
+  IN,
+  INSTANCE_ID,
+  INSTANCE_INDEX,
+  LAYER,
+  LOCAL_INVOCATION_ID,
+  LOCAL_INVOCATION_INDEX,
+  OUT,
+  POINT_COORD,
+  POINT_SIZE,
+  POSITION,
+  SUBPASS_IN,
+  VERTEX_ID,
+  VIEWPORT_INDEX,
+  WORK_GROUP_ID,
+  NUM_WORK_GROUP,
+  FRAG_DEPTH,
+  FRAG_COORD,
+  FRAG_STENCIL_REF,
+};
+
+static inline string to_str(ResourceType type)
+{
+#define SERIALIZE(a) \
+  case ResourceType::a: \
+    return #a
+
+  switch (type) {
+    SERIALIZE(NONE);
+    SERIALIZE(LEGACY_INFO);
+    SERIALIZE(COMPILATION_CONST);
+    SERIALIZE(SPECIALIZATION_CONST);
+    SERIALIZE(PUSH_CONST);
+    SERIALIZE(SAMPLER);
+    SERIALIZE(IMAGE);
+    SERIALIZE(UNIFORM_BUF);
+    SERIALIZE(STORAGE_BUF);
+    SERIALIZE(ACCELERATION_STRUCTURE);
+    SERIALIZE(VERT_ATTR_IN);
+    SERIALIZE(VERT_ATTR_OUT);
+    SERIALIZE(FRAG_IN);
+    SERIALIZE(FRAG_OUT);
+    SERIALIZE(BASE_INSTANCE);
+    SERIALIZE(CLIP_CONTROL);
+    SERIALIZE(CLIP_DISTANCE);
+    SERIALIZE(FRONT_FACING);
+    SERIALIZE(GLOBAL_INVOCATION_ID);
+    SERIALIZE(IN);
+    SERIALIZE(INSTANCE_ID);
+    SERIALIZE(INSTANCE_INDEX);
+    SERIALIZE(LAYER);
+    SERIALIZE(LOCAL_INVOCATION_ID);
+    SERIALIZE(LOCAL_INVOCATION_INDEX);
+    SERIALIZE(OUT);
+    SERIALIZE(POINT_COORD);
+    SERIALIZE(POINT_SIZE);
+    SERIALIZE(POSITION);
+    SERIALIZE(SUBPASS_IN);
+    SERIALIZE(VERTEX_ID);
+    SERIALIZE(VIEWPORT_INDEX);
+    SERIALIZE(WORK_GROUP_ID);
+    SERIALIZE(FRAG_DEPTH);
+    SERIALIZE(FRAG_COORD);
+    SERIALIZE(RESOURCE_TABLE);
+    SERIALIZE(SHARED);
+    SERIALIZE(NUM_WORK_GROUP);
+    SERIALIZE(FRAG_STENCIL_REF);
+  }
+  return "Unknown";
+#undef SERIALIZE
+}
+
+enum class ResourceTableType {
+  NONE = 0,
+
+  VERTEX_IN,
+  VERTEX_OUT,
+  FRAGMENT_OUT,
+  RESOURCE_TABLE,
+
+  ENTRY_POINT,
+};
+
+static inline string to_str(ResourceTableType type)
+{
+#define SERIALIZE(a) \
+  case ResourceTableType::a: \
+    return #a
+
+  switch (type) {
+    SERIALIZE(NONE);
+    SERIALIZE(VERTEX_IN);
+    SERIALIZE(VERTEX_OUT);
+    SERIALIZE(FRAGMENT_OUT);
+    SERIALIZE(RESOURCE_TABLE);
+    SERIALIZE(ENTRY_POINT);
+  }
+  return "Unknown";
+#undef SERIALIZE
+}
+
 struct StringPair {
   string str;
   string str_debug;
@@ -37,6 +162,8 @@ template<typename T> struct Result {
   /* TODO better error class */
   std::optional<AstNodeException> err;
 };
+
+Result<pair<ResourceType, ResourceTableType>> resource_type_from_attributes(AttrList list);
 
 struct SourceLocation {
   Token tok;
@@ -196,6 +323,8 @@ struct SymbolScope : Symbol {
 struct SymbolClass : SymbolScope {
   SymbolClass *resolved = nullptr;
 
+  ResourceTableType srt_type = ResourceTableType::NONE;
+
   SymbolFunction *operator_subscript = nullptr;
   SymbolClassTemplate *template_data = nullptr;
 
@@ -227,6 +356,11 @@ struct SymbolClass : SymbolScope {
   }
 
   void ensure_size_and_align();
+
+  bool is_srt() const
+  {
+    return srt_type != ResourceTableType::NONE;
+  }
 };
 
 struct SymbolFunction : SymbolScope {
@@ -243,19 +377,35 @@ struct SymbolFunction : SymbolScope {
   bool is_error = false;
 
   enum Type { STATIC, MEMBER, GLOBAL } fn_type;
+  enum class EntryPointType { FRAG, VERT, COMP, NONE } entry_point_type;
 
   SymbolFunction(SymbolScope *parent, FuncDecl decl, const string &suffix = "")
       : SymbolScope(
             parent, decl.front(), string(decl.identifier().name().str()) + suffix, FUNCTION),
-        fn_type(decl.is_method() ? (decl.is_static() ? STATIC : MEMBER) : GLOBAL)
+        fn_type(decl.is_method() ? (decl.is_static() ? STATIC : MEMBER) : GLOBAL),
+        entry_point_type(EntryPointType::NONE)
   {
     if (decl.is_method()) {
       loc = decl.parent(NodeType::ClassDecl).front();
     }
+    for (Attr attr : decl.attributes().children_of_type<Attr>()) {
+      string_view id = attr.identifier().str();
+      if (id == "vertex") {
+        entry_point_type = EntryPointType::VERT;
+      }
+      else if (id == "fragment") {
+        entry_point_type = EntryPointType::FRAG;
+      }
+      else if (id == "compute") {
+        entry_point_type = EntryPointType::COMP;
+      }
+    }
   }
 
   SymbolFunction(SymbolScope *parent, Token tok, const string &id, Type fn_type)
-      : SymbolScope(parent, tok, id, FUNCTION), fn_type(fn_type)
+      : SymbolScope(parent, tok, id, FUNCTION),
+        fn_type(fn_type),
+        entry_point_type(EntryPointType::NONE)
   {
   }
 
@@ -263,6 +413,11 @@ struct SymbolFunction : SymbolScope {
   SymbolClass *parent_class()
   {
     return this->parent->as_class();
+  }
+
+  bool is_entry_point() const
+  {
+    return entry_point_type != SymbolFunction::EntryPointType::NONE;
   }
 
   /* To be called on the first registered overload. */
@@ -283,6 +438,8 @@ struct SymbolVariable : Symbol {
   SymbolVariable *resolved = nullptr;
 
   SymbolClass *type = nullptr; /* TODO rename to type */
+
+  ResourceType res_type = ResourceType::NONE;
 
   /* Value if constexpr. */
   int64_t value = 0;

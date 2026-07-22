@@ -18,6 +18,102 @@ using namespace std;
 static const char *subscript_operator_id = "arr_op_";
 static const char *ns_sep = SourceProcessor::namespace_separator;
 
+Result<pair<ResourceType, ResourceTableType>> resource_type_from_attributes(AttrList list)
+{
+  static unordered_map<string, pair<ResourceType, ResourceTableType>> attr_map = {
+      /* Noop, to remove. */
+      {"host_shared", {ResourceType::NONE, ResourceTableType::NONE}},
+      /* Vertex inputs. */
+      {"attribute", {ResourceType::VERT_ATTR_IN, ResourceTableType::VERTEX_IN}},
+      /* Vertex outputs. */
+      {"flat", {ResourceType::VERT_ATTR_OUT, ResourceTableType::VERTEX_OUT}},
+      {"no_perspective", {ResourceType::VERT_ATTR_OUT, ResourceTableType::VERTEX_OUT}},
+      {"smooth", {ResourceType::VERT_ATTR_OUT, ResourceTableType::VERTEX_OUT}},
+      /* Fragment outputs. */
+      {"frag_color", {ResourceType::FRAG_OUT, ResourceTableType::FRAGMENT_OUT}},
+      {"frag_stencil_ref", {ResourceType::FRAG_OUT, ResourceTableType::FRAGMENT_OUT}},
+      /* Fragment inputs. */
+      {"subpass_input", {ResourceType::FRAG_IN, ResourceTableType::NONE}},
+      /* Entry point type. */
+      {"vertex", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"fragment", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"compute", {ResourceType::NONE, ResourceTableType::NONE}},
+      /* Entry point attrib. */
+      {"early_fragment_tests", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"num_work_groups", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"texture_atomic", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"metal_max_total_threads_per_threadgroup", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"local_size", {ResourceType::NONE, ResourceTableType::NONE}},
+      /* Resource table. */
+      {"compilation_constant",
+       {ResourceType::COMPILATION_CONST, ResourceTableType::RESOURCE_TABLE}},
+      {"legacy_info", {ResourceType::LEGACY_INFO, ResourceTableType::RESOURCE_TABLE}},
+      {"push_constant", {ResourceType::PUSH_CONST, ResourceTableType::RESOURCE_TABLE}},
+      {"resource_table", {ResourceType::RESOURCE_TABLE, ResourceTableType::RESOURCE_TABLE}},
+      {"shared", {ResourceType::SHARED, ResourceTableType::RESOURCE_TABLE}},
+      {"sampler", {ResourceType::SAMPLER, ResourceTableType::RESOURCE_TABLE}},
+      {"specialization_constant",
+       {ResourceType::SPECIALIZATION_CONST, ResourceTableType::RESOURCE_TABLE}},
+      {"uniform", {ResourceType::UNIFORM_BUF, ResourceTableType::RESOURCE_TABLE}},
+      {"storage", {ResourceType::STORAGE_BUF, ResourceTableType::RESOURCE_TABLE}},
+      {"image", {ResourceType::IMAGE, ResourceTableType::RESOURCE_TABLE}},
+      /* Entry point argument. */
+      {"base_instance", {ResourceType::BASE_INSTANCE, ResourceTableType::ENTRY_POINT}},
+      {"clip_control", {ResourceType::CLIP_CONTROL, ResourceTableType::ENTRY_POINT}},
+      {"clip_distance", {ResourceType::CLIP_DISTANCE, ResourceTableType::ENTRY_POINT}},
+      {"front_facing", {ResourceType::FRONT_FACING, ResourceTableType::ENTRY_POINT}},
+      {"global_invocation_id",
+       {ResourceType::GLOBAL_INVOCATION_ID, ResourceTableType::ENTRY_POINT}},
+      {"in", {ResourceType::IN, ResourceTableType::ENTRY_POINT}},
+      {"instance_id", {ResourceType::INSTANCE_ID, ResourceTableType::ENTRY_POINT}},
+      {"instance_index", {ResourceType::INSTANCE_INDEX, ResourceTableType::ENTRY_POINT}},
+      {"layer", {ResourceType::LAYER, ResourceTableType::ENTRY_POINT}},
+      {"local_invocation_id", {ResourceType::LOCAL_INVOCATION_ID, ResourceTableType::ENTRY_POINT}},
+      {"local_invocation_index",
+       {ResourceType::LOCAL_INVOCATION_INDEX, ResourceTableType::ENTRY_POINT}},
+      {"out", {ResourceType::OUT, ResourceTableType::ENTRY_POINT}},
+      {"point_coord", {ResourceType::POINT_COORD, ResourceTableType::ENTRY_POINT}},
+      {"point_size", {ResourceType::POINT_SIZE, ResourceTableType::ENTRY_POINT}},
+      {"position", {ResourceType::POSITION, ResourceTableType::ENTRY_POINT}},
+      {"subpass_in", {ResourceType::SUBPASS_IN, ResourceTableType::ENTRY_POINT}},
+      {"vertex_id", {ResourceType::VERTEX_ID, ResourceTableType::ENTRY_POINT}},
+      {"viewport_index", {ResourceType::VIEWPORT_INDEX, ResourceTableType::ENTRY_POINT}},
+      {"work_group_id", {ResourceType::WORK_GROUP_ID, ResourceTableType::ENTRY_POINT}},
+      {"num_work_groups", {ResourceType::NUM_WORK_GROUP, ResourceTableType::ENTRY_POINT}},
+      {"frag_depth", {ResourceType::FRAG_DEPTH, ResourceTableType::ENTRY_POINT}},
+      {"frag_coord", {ResourceType::FRAG_COORD, ResourceTableType::ENTRY_POINT}},
+      {"frag_stencil_ref", {ResourceType::FRAG_STENCIL_REF, ResourceTableType::ENTRY_POINT}},
+      /* Misc. */
+      {"fallthrough", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"maybe_unused", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"nodiscard", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"node", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"static_branch", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"unroll", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"condition", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"frequency", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"unroll_n", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"index", {ResourceType::NONE, ResourceTableType::NONE}},
+      {"raster_order_group", {ResourceType::NONE, ResourceTableType::NONE}},
+  };
+
+  Result<pair<ResourceType, ResourceTableType>> result;
+  for (Attr attr : list.children_of_type<Attr>()) {
+    if (auto it = attr_map.find(string(attr.identifier().str())); it != attr_map.end()) {
+      if (it->second.first != ResourceType::NONE) {
+        if (result.value.first == ResourceType::NONE) {
+          result.value = it->second;
+        }
+        else {
+          result.err = AstNodeException(
+              attr, "Declaration is already of type '" + to_str(result.value.first) + "'");
+        }
+      }
+    }
+  }
+  return result;
+}
+
 /**
  * Type resolution parser.
  * Will evaluate each operand type and return the type of the expression result.
@@ -504,7 +600,7 @@ SymbolClass::SymbolClass(SymbolScope *parent, ClassDecl decl, const string &suff
     : SymbolScope(parent,
                   decl.front(),
                   decl.identifier().str().empty() ?
-                      string("a") + to_string(parent->classes.size()) :
+                      string("a") + std::to_string(parent->classes.size()) :
                       string(decl.identifier().name().str()) + suffix,
                   CLASS)
 
@@ -723,6 +819,10 @@ struct SymbolParser {
     auto [type, err] = fn_sym->lookup_class(decl.return_type().id());
     error(err);
     fn_sym->return_type = type;
+
+    if (fn_sym->is_entry_point() && type->identifier != "void") {
+      error(decl.return_type(), "Entry point functions must return 'void'");
+    }
   }
 
   /* Create declaration for each function argument so name lookup will work with these.
@@ -730,15 +830,106 @@ struct SymbolParser {
   void parse_function_arguments(SymbolScope &scope, FuncDecl decl)
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
+    const bool is_entry_point = fn_sym->is_entry_point();
+
     for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
+      auto [res_packed, err_attr] = resource_type_from_attributes(arg.attributes());
+      auto [res_type, srt_type] = res_packed;
+      error(err_attr);
+
       auto [type, err] = scope.lookup_class(arg.type().id());
       error(err);
-      SymbolVariable var(&scope, type, arg.declarator());
-      var.type = type;
-      scope.variables.emplace(var.identifier, table.var_arena.alloc(var));
+      SymbolVariable *var = table.var_arena.alloc(&scope, type, arg.declarator());
+      var->type = type;
+      scope.variables.emplace(var->identifier, var);
       /* Register argument type for argument resolution. */
       fn_sym->arg_types.emplace_back(type);
       fn_sym->arg_defaults.emplace_back(arg.declarator().initial_value().expr());
+
+      auto generate_resolved_builtin = [&](const char *builtin) {
+        SymbolVariable *resolved = table.var_arena.alloc(*var);
+        var->resolved = resolved;
+        resolved->identifier = builtin;
+      };
+      switch (res_type) {
+        case ResourceType::BASE_INSTANCE:
+          generate_resolved_builtin("gpu_BaseInstance");
+          break;
+        case ResourceType::FRONT_FACING:
+          generate_resolved_builtin("gl_FrontFacing");
+          break;
+        case ResourceType::INSTANCE_ID:
+          generate_resolved_builtin("gl_InstanceID");
+          break;
+        case ResourceType::POINT_SIZE:
+          generate_resolved_builtin("gl_PointSize");
+          break;
+        case ResourceType::CLIP_DISTANCE:
+          generate_resolved_builtin("gl_ClipDistance");
+          break;
+        case ResourceType::LAYER:
+          generate_resolved_builtin("gl_Layer");
+          break;
+        case ResourceType::INSTANCE_INDEX:
+          generate_resolved_builtin("gpu_InstanceIndex");
+          break;
+        case ResourceType::VIEWPORT_INDEX:
+          generate_resolved_builtin("gpu_ViewportIndex");
+          break;
+        case ResourceType::VERTEX_ID:
+          generate_resolved_builtin("gl_VertexID");
+          break;
+        case ResourceType::POSITION:
+          generate_resolved_builtin("gl_Position");
+          break;
+        case ResourceType::FRAG_DEPTH:
+          generate_resolved_builtin("gl_FragDepth");
+          break;
+        case ResourceType::FRAG_COORD:
+          generate_resolved_builtin("gl_FragCoord");
+          break;
+        case ResourceType::FRAG_STENCIL_REF:
+          generate_resolved_builtin("gl_FragStencilRefARB");
+          break;
+        case ResourceType::POINT_COORD:
+          generate_resolved_builtin("gl_PointCoord");
+          break;
+        case ResourceType::LOCAL_INVOCATION_ID:
+          generate_resolved_builtin("gl_GlobalInvocationID");
+          break;
+        case ResourceType::LOCAL_INVOCATION_INDEX:
+          generate_resolved_builtin("gl_LocalInvocationIndex");
+          break;
+        case ResourceType::GLOBAL_INVOCATION_ID:
+          generate_resolved_builtin("gl_GlobalInvocationID");
+          break;
+        case ResourceType::WORK_GROUP_ID:
+          generate_resolved_builtin("gl_WorkGroupID");
+          break;
+        case ResourceType::NUM_WORK_GROUP:
+          generate_resolved_builtin("gl_NumWorkGroups");
+          break;
+          /* TODO  */
+        // case ResourceType::IN:
+        //   generate_resolved_builtin("");
+        //   break;
+        // case ResourceType::OUT:
+        //   generate_resolved_builtin("");
+        //   break;
+        default:
+          break;
+      }
+
+      if (is_entry_point && srt_type != ResourceTableType::ENTRY_POINT &&
+          res_type != ResourceType::RESOURCE_TABLE)
+      {
+        error(arg, "Expected entry point resource attribute but got '" + to_str(srt_type) + "'");
+      }
+      else if (!is_entry_point && srt_type != ResourceTableType::NONE &&
+               res_type != ResourceType::RESOURCE_TABLE)
+      {
+        error(arg, "Resource attributes are only supported on entry point arguments");
+      }
     }
 
     if (scope.parent != nullptr) {
@@ -1131,6 +1322,45 @@ struct SymbolParser {
 
     SymbolClass *cls = scope.as_class();
 
+    auto [res_packed, err_attr] = resource_type_from_attributes(var.attributes());
+    auto [res_type, srt_type] = res_packed;
+    error(err_attr);
+
+    if (res_type == ResourceType::UNIFORM_BUF && !type->is_std140_compatible) {
+      /* TODO better error. */
+      error(type_id, "Uniform buffer type is not std140 compatible");
+    }
+    else if (res_type == ResourceType::STORAGE_BUF && !type->is_std430_compatible) {
+      /* TODO better error. */
+      error(type_id, "Storage buffer type is not std430 compatible");
+    }
+
+    if (cls) {
+      if (cls->srt_type == ResourceTableType::NONE && srt_type != ResourceTableType::NONE) {
+        if (cls->is_anonymous) {
+          error(var, "Resources cannot be declared in an anonymous struct");
+        }
+        if (srt_type != ResourceTableType::VERTEX_IN &&
+            srt_type != ResourceTableType::VERTEX_OUT &&
+            srt_type != ResourceTableType::FRAGMENT_OUT &&
+            srt_type != ResourceTableType::RESOURCE_TABLE)
+        {
+          error(var,
+                "Invalid resource of type '" + to_str(cls->srt_type) +
+                    "' for resource table class");
+        }
+        cls->srt_type = srt_type;
+      }
+      else if (cls->srt_type != srt_type) {
+        error(var,
+              "Expected resource definition of type '" + to_str(cls->srt_type) + "' but got '" +
+                  to_str(srt_type) + "'");
+      }
+    }
+    else if (res_type != ResourceType::NONE) {
+      error(var, "Out of class resource declaration");
+    }
+
     string anon_prefix;
     SymbolScope *named_parent = nullptr;
     if (cls && cls->is_anonymous) {
@@ -1140,6 +1370,8 @@ struct SymbolParser {
 
     for (Declarator decl : var.children_of_type<Declarator>()) {
       SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl);
+      sym->res_type = res_type;
+      sym->is_static |= res_type != ResourceType::NONE;
       scope.variables.emplace(sym->identifier, sym);
 
       if (cls) {
@@ -1254,7 +1486,7 @@ struct SymbolParser {
       error(err->node, err->msg);
     }
   }
-};
+};  // namespace blender::gpu::shader::parser
 
 void SymbolVariable::set_offset(bool is_union, int &offset)
 {
@@ -1925,6 +2157,8 @@ void SymbolTable::register_builtins(LocalScope node)
       {"uimage3DAtomic", 0, 1},
       {"iimage2DArrayAtomic", 0, 1},
       {"uimage2DArrayAtomic", 0, 1},
+
+      {"ShaderCreateInfo", 1, 1}, /* Only for compatibility. To be removed. */
   };
 
   for (const auto &t : types) {
