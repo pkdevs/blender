@@ -1026,7 +1026,7 @@ void DepsgraphRelationBuilder::build_object_data(Object *object)
       break;
     }
     case OB_ARMATURE:
-      build_rig(object);
+      build_object_data_armature(object);
       break;
     case OB_LAMP:
       build_object_data_light(object);

@@ -25,12 +25,14 @@
 #include "BKE_anim_path.h"
 #include "BKE_armature.hh"
 #include "BKE_curve.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object_types.hh"
 #include "BKE_scene.hh"
 
 #include "BIK_api.h"
 
 #include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 namespace blender {
 
@@ -1037,6 +1039,32 @@ void BKE_pose_splineik_evaluate(Depsgraph *depsgraph,
     return;
   }
   BKE_splineik_execute_tree(depsgraph, scene, object, rootchan, ctime);
+}
+
+void BKE_pose_eval_modifiers(Depsgraph *depsgraph, Scene *scene, Object *object)
+{
+  const bool use_render = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
+  const int required_mode = use_render ? eModifierMode_Render : eModifierMode_Realtime;
+  ModifierApplyFlag apply_flag = ModifierApplyFlag(0);
+  const ModifierEvalContext modifier_context = {depsgraph, object, apply_flag};
+
+  BKE_modifiers_clear_errors(object);
+
+  VirtualModifierData virtual_modifier_data;
+  ModifierData *md = BKE_modifiers_get_virtual_modifierlist(object, &virtual_modifier_data);
+
+  /* Evaluate modifiers. */
+  for (; md; md = md->next) {
+    const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
+
+    if (!BKE_modifier_is_enabled(scene, md, required_mode)) {
+      continue;
+    }
+
+    if (mti->modify_geometry_set) {
+      // mti->modify_geometry_set(md, &modifier_context, &geometry_set);
+    }
+  }
 }
 
 static void pose_eval_cleanup_common(Object *object)

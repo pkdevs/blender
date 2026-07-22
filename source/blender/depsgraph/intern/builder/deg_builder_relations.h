@@ -156,6 +156,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_object_data_light(Object *object);
   virtual void build_object_data_lightprobe(Object *object);
   virtual void build_object_data_speaker(Object *object);
+  virtual void build_object_data_armature(Object *object);
   virtual void build_object_parent(Object *object);
   virtual void build_object_pointcache(Object *object);
   virtual void build_object_instance_collection(Object *object);
@@ -238,7 +239,6 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
                                      const OperationKey &solver_key,
                                      const bPoseChannel *rootchan,
                                      const RootPChanMap *root_map);
-  virtual void build_rig(Object *object);
   virtual void build_shapekeys(Key *key);
   virtual void build_armature(bArmature *armature);
   virtual void build_armature_bones(ListBaseT<Bone> *bones);

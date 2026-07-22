@@ -685,6 +685,8 @@ void BKE_pose_splineik_evaluate(Depsgraph *depsgraph,
                                 Object *object,
                                 int rootchan_index);
 
+void BKE_pose_eval_modifiers(Depsgraph *depsgraph, Scene *scene, Object *object);
+
 void BKE_pose_eval_done(Depsgraph *depsgraph, Object *object);
 
 void BKE_pose_eval_cleanup(Depsgraph *depsgraph, Scene *scene, Object *object);
