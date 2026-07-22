@@ -25,6 +25,8 @@
 #include "BKE_anim_path.h"
 #include "BKE_armature.hh"
 #include "BKE_curve.hh"
+#include "BKE_geometry_set.hh"
+#include "BKE_instances.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object_types.hh"
 #include "BKE_scene.hh"
@@ -33,6 +35,9 @@
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
+
+#include "NOD_geometry_nodes_bundle.hh"
+#include "NOD_geometry_nodes_list.hh"
 
 namespace blender {
 
@@ -1041,12 +1046,92 @@ void BKE_pose_splineik_evaluate(Depsgraph *depsgraph,
   BKE_splineik_execute_tree(depsgraph, scene, object, rootchan, ctime);
 }
 
+static bke::GeometrySet pose_to_geometry(const bArmature & /*armature*/, const bPose &pose)
+{
+  const int num_pchan = pose.chanbase.count();
+  std::unique_ptr<bke::Instances> instances = std::make_unique<bke::Instances>(num_pchan);
+  MutableSpan<int> ref_handles = instances->reference_handles_for_write();
+  MutableSpan<float4x4> transforms = instances->transforms_for_write();
+  Array<std::string> pose_channel_names(num_pchan);
+
+  int pchan_i = 0;
+  for (const bPoseChannel &pchan : pose.chanbase) {
+    ref_handles[pchan_i] = instances->add_new_reference(bke::InstanceReference());
+    transforms[pchan_i] = float4x4(pchan.pose_mat);
+    pose_channel_names[pchan_i] = pchan.name;
+    ++pchan_i;
+  }
+
+  bke::GeometrySet geometry_set = bke::GeometrySet::from_instances(std::move(instances));
+  nodes::ListPtr<std::string> pose_channel_name_list = nodes::List<std::string>::from_container(
+      std::move(pose_channel_names));
+  nodes::BundleItemSocketValue pose_channel_name_item;
+  pose_channel_name_item.value = bke::SocketValueVariant::From(std::move(pose_channel_name_list));
+  geometry_set.bundle_for_write().add_path_new(
+      "pose_channel_names", nodes::BundleItemValue(std::move(pose_channel_name_item)));
+
+  return geometry_set;
+}
+
+static void geometry_to_pose(const bke::GeometrySet &geometry_set,
+                             const bArmature & /*armature*/,
+                             bPose &pose)
+{
+  if (!geometry_set.has_instances() || !geometry_set.has_bundle()) {
+    /* Unusable geometry data, keep input transforms. */
+    return;
+  }
+  const bke::Instances &instances = *geometry_set.get_instances();
+  const nodes::Bundle &bundle = *geometry_set.bundle();
+  const nodes::BundleItemValue *pose_channel_names_item = bundle.lookup_path("pose_channel_names");
+  if (!pose_channel_names_item) {
+    return;
+  }
+  std::optional<nodes::GListPtr> pose_channel_names =
+      pose_channel_names_item->as<nodes::GListPtr>();
+  if (!pose_channel_names || pose_channel_names.value()->cpp_type() != CPPType::get<std::string>())
+  {
+    return;
+  }
+
+  const Span<float4x4> transforms = instances.transforms();
+
+  BKE_pose_channels_hash_ensure(&pose);
+  auto apply_pose_channel = [&](const int instance_i, const StringRefNull name) {
+    bPoseChannel *pchan = BKE_pose_channel_find_name(&pose, name.c_str());
+    if (!pchan) {
+      return;
+    }
+
+    copy_m4_m4(pchan->pose_mat, transforms[instance_i].ptr());
+  };
+
+  const std::variant pose_channel_name_values = pose_channel_names->typed<std::string>()->values();
+  if (const auto *span_values = std::get_if<Span<std::string>>(&pose_channel_name_values)) {
+    const int max_instances = std::min(instances.instances_num(), int(span_values->size()));
+    for (const int instance_i : IndexRange(max_instances)) {
+      apply_pose_channel(instance_i, (*span_values)[instance_i]);
+    }
+  }
+  if (const auto *single_value = std::get_if<const std::string *>(&pose_channel_name_values)) {
+    apply_pose_channel(0, **single_value);
+  }
+}
+
 void BKE_pose_eval_modifiers(Depsgraph *depsgraph, Scene *scene, Object *object)
 {
+  bArmature *armature = id_cast<bArmature *>(object->data);
+  bPose *pose = object->pose;
+  BLI_assert(armature != nullptr);
+  BLI_assert(pose != nullptr);
+
   const bool use_render = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
   const int required_mode = use_render ? eModifierMode_Render : eModifierMode_Realtime;
   ModifierApplyFlag apply_flag = ModifierApplyFlag(0);
   const ModifierEvalContext modifier_context = {depsgraph, object, apply_flag};
+
+  /* Construct input geometry representation of the armature pose. */
+  bke::GeometrySet geometry_set = pose_to_geometry(*armature, *pose);
 
   BKE_modifiers_clear_errors(object);
 
@@ -1062,9 +1147,12 @@ void BKE_pose_eval_modifiers(Depsgraph *depsgraph, Scene *scene, Object *object)
     }
 
     if (mti->modify_geometry_set) {
-      // mti->modify_geometry_set(md, &modifier_context, &geometry_set);
+      mti->modify_geometry_set(md, &modifier_context, &geometry_set);
     }
   }
+
+  /* Apply modifier results to the pose. */
+  geometry_to_pose(geometry_set, *armature, *pose);
 }
 
 static void pose_eval_cleanup_common(Object *object)

@@ -928,15 +928,30 @@ void DepsgraphRelationBuilder::build_object_layer_component_relations(Object *ob
   add_relation(object_from_layer_exit_key, synchronize_key, "Synchronize to Original");
 }
 
+static OperationKey object_modifier_eval_init_key(const Object &object)
+{
+  if (object.type == OB_ARMATURE) {
+    return OperationKey(&object.id, NodeType::EVAL_POSE, OperationCode::POSE_INIT);
+  }
+  return OperationKey(&object.id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT);
+}
+
+static OperationKey object_modifier_eval_key(const Object &object)
+{
+  if (object.type == OB_ARMATURE) {
+    return OperationKey(&object.id, NodeType::EVAL_POSE, OperationCode::POSE_DONE);
+  }
+  return OperationKey(&object.id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
+}
+
 void DepsgraphRelationBuilder::build_object_modifiers(Object *object)
 {
   if (object->modifiers.is_empty()) {
     return;
   }
 
-  const OperationKey eval_init_key(
-      &object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT);
-  const OperationKey eval_key(&object->id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
+  const OperationKey eval_init_key = object_modifier_eval_init_key(*object);
+  const OperationKey eval_key = object_modifier_eval_key(*object);
 
   const ComponentKey object_visibility_key(&object->id, NodeType::VISIBILITY);
   const OperationKey modifier_visibility_key(
