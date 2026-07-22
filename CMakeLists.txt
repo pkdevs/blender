@@ -347,10 +347,7 @@ if(UNIX AND NOT (APPLE OR HAIKU))
     option(WITH_GHOST_CSD "Enable client side decorations with Wayland" ON)
     mark_as_advanced(WITH_GHOST_CSD)
 
-    option(WITH_GHOST_WAYLAND_DBUS "\
-Optionally build with DBUS support (used for themes). \
-      OFF
-    )
+    option(WITH_GHOST_WAYLAND_DBUS "Optionally build with DBUS support (used for themes)." ON)
     mark_as_advanced(WITH_GHOST_WAYLAND_DBUS)
 
     option(WITH_GHOST_WAYLAND_DYNLOAD "Enable runtime dynamic WAYLAND libraries loading" ON)
