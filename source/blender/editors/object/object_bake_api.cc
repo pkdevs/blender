@@ -92,7 +92,6 @@ struct BakeAPIRender {
   int pass_filter;
   int margin;
   eBakeMarginType margin_type;
-  bool conservative_raster;
 
   bool is_clear;
   bool is_selected_to_active;
@@ -227,8 +226,7 @@ static bool write_internal_bake_pixels(Image *image,
                                        const bool is_tangent_normal,
                                        Mesh const *mesh_eval,
                                        const StringRef uv_layer,
-                                       const float uv_offset[2],
-                                       bool conservative)
+                                       const float uv_offset[2])
 {
   ImBuf *ibuf;
   void *lock;
@@ -311,8 +309,7 @@ static bool write_internal_bake_pixels(Image *image,
 
   /* margins */
   if (margin > 0) {
-    RE_bake_margin(
-        ibuf, mask_buffer, margin, margin_type, mesh_eval, uv_layer, uv_offset, conservative);
+    RE_bake_margin(ibuf, mask_buffer, margin, margin_type, mesh_eval, uv_layer, uv_offset, true);
   }
 
   IMB_partial_update_mark_full(ibuf);
@@ -351,8 +348,7 @@ static bool write_external_bake_pixels(const char *filepath,
                                        const bool is_tangent_normal,
                                        Mesh const *mesh_eval,
                                        const StringRef uv_layer,
-                                       const float uv_offset[2],
-                                       bool conservative)
+                                       const float uv_offset[2])
 {
   ImBuf *ibuf = nullptr;
   bool ok = false;
@@ -401,8 +397,7 @@ static bool write_external_bake_pixels(const char *filepath,
 
     mask_buffer = MEM_new_array_zeroed<char>(pixels_num, "Bake Mask");
     RE_bake_mask_fill(pixel_array, pixels_num, mask_buffer);
-    RE_bake_margin(
-        ibuf, mask_buffer, margin, margin_type, mesh_eval, uv_layer, uv_offset, conservative);
+    RE_bake_margin(ibuf, mask_buffer, margin, margin_type, mesh_eval, uv_layer, uv_offset);
 
     if (mask_buffer) {
       MEM_delete(mask_buffer);
@@ -830,8 +825,7 @@ static bool bake_targets_output_internal(const BakeAPIRender *bkr,
                                                is_tangent_normal,
                                                mesh_eval,
                                                bkr->uv_layer,
-                                               bk_image->uv_offset,
-                                               bkr->conservative_raster);
+                                               bk_image->uv_offset);
 
     /* might be read by UI to set active image for display */
     bake_update_image(bkr->area, bk_image->image);
@@ -958,8 +952,7 @@ static bool bake_targets_output_external(const BakeAPIRender *bkr,
                                                is_tangent_normal,
                                                mesh_eval,
                                                bkr->uv_layer,
-                                               bk_image->uv_offset,
-                                               bkr->conservative_raster);
+                                               bk_image->uv_offset);
 
     if (!ok) {
       BKE_reportf(reports, RPT_ERROR, "Problem saving baked map in \"%s\"", filepath);
@@ -1343,12 +1336,7 @@ static void bake_targets_populate_pixels(const BakeAPIRender *bkr,
     bake_targets_populate_pixels_color_attributes(targets, ob, mesh_eval, pixel_array);
   }
   else {
-    RE_bake_pixels_populate(mesh_eval,
-                            pixel_array,
-                            targets->pixels_num,
-                            targets,
-                            bkr->uv_layer,
-                            bkr->conservative_raster);
+    RE_bake_pixels_populate(mesh_eval, pixel_array, targets->pixels_num, targets, bkr->uv_layer);
   }
 }
 
@@ -1901,8 +1889,6 @@ static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
     RNA_property_enum_identifier(C, op->ptr, prop, bkr->pass_type, &bkr->identifier);
   }
 
-  bkr->conservative_raster = RNA_boolean_get(op->ptr, "conservative_raster");
-
   CTX_data_selected_objects(C, &bkr->selected_objects);
 
   bkr->reports = op->reports;
@@ -2162,11 +2148,6 @@ static void bake_set_props(wmOperator *op, Scene *scene)
   if (!RNA_property_is_set(op->ptr, prop)) {
     RNA_property_enum_set(op->ptr, prop, bake->pass_filter);
   }
-
-  prop = RNA_struct_find_property(op->ptr, "conservative_raster");
-  if (!RNA_property_is_set(op->ptr, prop)) {
-    RNA_property_boolean_set(op->ptr, prop, (bake->flag & R_BAKE_CONSERVATIVE) != 0);
-  }
 }
 
 static wmOperatorStatus bake_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
@@ -2382,11 +2363,6 @@ void OBJECT_OT_bake(wmOperatorType *ot)
                  MAX_CUSTOMDATA_LAYER_NAME_NO_PREFIX,
                  "UV Layer",
                  "UV layer to override active");
-  RNA_def_boolean(ot->srna,
-                  "conservative_raster",
-                  false,
-                  "Conservative Rasterization",
-                  "Enables conservative rasterization to capture geometry on a subpixel level");
 }
 
 }  // namespace blender::ed::object

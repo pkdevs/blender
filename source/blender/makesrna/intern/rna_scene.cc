@@ -6235,14 +6235,6 @@ static void rna_def_bake_data(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, displacement_space_items);
   RNA_def_property_ui_text(prop, "Displacement Space", "Choose displacement space for baking");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
-
-  prop = RNA_def_property(srna, "conservative_raster", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", R_BAKE_CONSERVATIVE);
-  RNA_def_property_ui_text(
-      prop,
-      "Conservative Rasterization",
-      "Enables conservative rasterization to capture geometry on a subpixel level");
-  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
 }
 
 static void rna_def_view_layers(BlenderRNA *brna, PropertyRNA *cprop)

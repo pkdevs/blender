@@ -146,14 +146,12 @@ void RE_bake_margin(ImBuf *ibuf,
                     const char margin_type,
                     const Mesh *mesh,
                     const StringRef uv_layer,
-                    const float uv_offset[2],
-                    bool conservative)
+                    const float uv_offset[2])
 {
   /* margin */
   switch (margin_type) {
     case R_BAKE_ADJACENT_FACES:
-      RE_generate_texturemargin_adjacentfaces(
-          ibuf, mask, margin, mesh, uv_layer, uv_offset, conservative);
+      RE_generate_texturemargin_adjacentfaces(ibuf, mask, margin, mesh, uv_layer, uv_offset, true);
       break;
     default:
     /* fall through */
@@ -712,8 +710,7 @@ void RE_bake_pixels_populate(Mesh *mesh,
                              BakePixel pixel_array[],
                              const size_t pixels_num,
                              const BakeTargets *targets,
-                             const StringRef uv_layer,
-                             bool conservative)
+                             const StringRef uv_layer)
 {
   const bke::AttributeAccessor attributes = mesh->attributes();
   VArraySpan<float2> uv_map;
@@ -755,7 +752,7 @@ void RE_bake_pixels_populate(Mesh *mesh,
 
   const int materials_num = targets->materials_num;
 
-  for (int fill = conservative ? 0 : 1; fill < 2; fill++) {
+  for (int fill = 0; fill < 2; fill++) {
     for (int i = 0; i < tottri; i++) {
       const int3 &tri = corner_tris[i];
       const int face_i = tri_faces[i];

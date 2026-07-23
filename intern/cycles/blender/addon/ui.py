@@ -2115,9 +2115,6 @@ class CYCLES_RENDER_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "view_from")
             row.active = scene.camera is not None
 
-        if not cbk.use_multires:
-            layout.prop(cbk, "conservative_raster")
-
 
 class CYCLES_RENDER_PT_bake_influence(CyclesButtonsPanel, Panel):
     bl_label = "Influence"
