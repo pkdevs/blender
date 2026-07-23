@@ -28,6 +28,7 @@ from bpy.app.translations import (
     contexts as i18n_contexts,
 )
 
+
 def _list_all_workspace_tools() -> set:
 
     from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
@@ -1421,11 +1422,11 @@ class WM_OT_doc_view_manual(Operator):
                     else:
                         # If nothing can be found redirect to general tool page.
                         fallback_rna_id = "bpy.ops.wm.tool_set_by_id"
-                        rna_ref = WM_OT_doc_view_manual._find_reference(fallback_rna_id, url_manual_mapping, verbose=verbose)
+                        rna_ref = WM_OT_doc_view_manual._find_reference(
+                            fallback_rna_id, url_manual_mapping, verbose=verbose)
                         if rna_ref is not None:
                             url = prefix + rna_ref
                             return url
-
 
     def execute(self, _context):
         rna_id = _wm_doc_get_id(self.doc_id, do_url=False, report=self.report)
