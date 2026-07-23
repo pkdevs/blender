@@ -936,6 +936,10 @@ ccl_device_inline ShaderEvalResult mnee_path_contribution(KernelGlobals kg,
     *throughput *= bsdf_contribution;
   }
 
+#ifdef __SPECTRAL__
+  update_path_throughput_for_dispersion(kg, state, sd_mnee);
+#endif
+
   /* Restore original state path bounce info. */
   INTEGRATOR_STATE_WRITE(state, path, transmission_bounce) = transmission_bounce;
   INTEGRATOR_STATE_WRITE(state, path, diffuse_bounce) = diffuse_bounce;
@@ -1130,6 +1134,10 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
     if (result != SHADER_EVAL_OK) {
       return result;
     }
+
+#ifdef __SPECTRAL__
+    update_path_throughput_for_dispersion(kg, state, sd_mnee);
+#endif
 
     r_vertex_count = vertex_count;
     return SHADER_EVAL_OK;

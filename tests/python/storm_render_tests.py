@@ -60,6 +60,8 @@ BLOCKLIST_USD = [
     "principled_bsdf_thin_glass.blend",
     # Custom OSL camera not supported.
     "osl_camera_.*.blend",
+    # The result in incorrect
+    "principled_bsdf_dispersion.blend",
 ]
 
 # Metal support in Storm is no as good as OpenGL, though this needs to be

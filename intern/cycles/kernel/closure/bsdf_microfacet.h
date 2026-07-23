@@ -260,6 +260,44 @@ ccl_device_forceinline float3 microfacet_ggx_sample_vndf(const float3 wi,
   return normalize(make_float3(alpha_x * H_.x, alpha_y * H_.y, max(0.0f, H_.z)));
 }
 
+ccl_device_inline float bsdf_glass_ior(ccl_private ShaderData *sd, float ior, const float inv_abbe)
+{
+#ifdef __SPECTRAL__
+  const bool backfacing = sd->runtime_flag & SR_BACKFACING;
+
+  if (inv_abbe == 0.0f) {
+    return ior;
+  }
+
+  sd->runtime_flag |= SR_BSDF_HAS_DISPERSION;
+  ior = backfacing ? 1.0f / ior : ior;
+
+  /* Wavelengths of the Fraunhofer spectral lines in um. */
+  /* const float lambda_d = 0.5876f; */
+  /* const float lambda_C = 0.6563f; */
+  /* const float lambda_F = 0.4861f; */
+  /* const float fac = 1.0f / (1.0f / sqr(lambda_F) - 1.0f / sqr(lambda_C)); */
+  constexpr float fac = 0.52345371246337890625f;
+  /* const float inv_lambda_d_sq = 1.0f / sqr(lambda_d); */
+  constexpr float inv_lambda_d_sq = 2.89625263214111328125f;
+
+  /* Cauchy empirical formula.
+   * OpenPBR Surface specification v1.1.1, Eq. (56). */
+  const float B = (ior - 1.0f) * inv_abbe * fac;
+  const float A = ior - B * inv_lambda_d_sq;
+
+  const float wavelength = sample_wavelength(sd->rand_wavelength);
+
+  /* OpenPBR Surface specification v1.1.1, Eq. (55). */
+  ior = A + B / sqr(wavelength);
+  return backfacing ? 1.0f / ior : ior;
+#else
+  (void)sd;
+  (void)inv_abbe;
+  return ior;
+#endif
+}
+
 /* Computes Fresnel reflectance and transmittance of the Generalized Schlick Model. */
 ccl_device_forceinline void generalized_schlick_fresnel(
     KernelGlobals kg,

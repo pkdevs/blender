@@ -37,6 +37,16 @@ ccl_device_forceinline void integrate_surface_shader_setup(KernelGlobals kg,
   integrator_state_read_ray(state, &ray);
 
   shader_setup_from_ray(kg, sd, &ray, &isect);
+
+#ifdef __SPECTRAL__
+  if (sd->shader_flag & SD_REQUIRES_WAVELENGTH) {
+    RNGState rng_state;
+    path_state_rng_load(state, &rng_state);
+    /* Same random number per path, irrelevant of the bounce. */
+    rng_state.rng_offset = PRNG_BOUNCE_NUM;
+    sd->rand_wavelength = path_state_rng_1D(kg, &rng_state, PRNG_WAVELENGTH);
+  }
+#endif
 }
 
 ccl_device_forceinline float3 integrate_surface_ray_offset(KernelGlobals kg,
@@ -791,6 +801,10 @@ ccl_device int integrate_surface(KernelGlobals kg,
     if (sd.runtime_flag & SR_CACHE_MISS) {
       return LABEL_CACHE_MISS;
     }
+
+#ifdef __SPECTRAL__
+    update_path_throughput_for_dispersion(kg, state, &sd);
+#endif
 
     /* After shader evaluation, in case of texture cache miss. */
     guiding_record_surface_segment(kg, state, &sd);

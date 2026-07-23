@@ -58,6 +58,14 @@ CCL_NAMESPACE_BEGIN
 #define INTEGRATOR_SHADOW_ISECT_SIZE_CPU 1024U
 #define INTEGRATOR_SHADOW_ISECT_SIZE_GPU 4U
 
+#ifdef __SPECTRAL__
+/* CIE1931 visible wavelength range in um. */
+#  define WAVELENGTH_CIE_MIN 0.38f
+#  define WAVELENGTH_CIE_MAX 0.78f
+#  define WAVELENGTH_DLAMBDA 0.005f
+#  define WAVELENGTH_RESOLUTION 80 /* = (0.78 - 0.38) / 0.005 */
+#endif
+
 #ifdef __KERNEL_GPU__
 #  define INTEGRATOR_SHADOW_ISECT_SIZE INTEGRATOR_SHADOW_ISECT_SIZE_GPU
 #else
@@ -112,6 +120,9 @@ enum PathTraceDimension {
 
   /* Volume density baking. */
   PRNG_BAKE_VOLUME_DENSITY_EVAL = 0,
+
+  /* Sample wavelength for dispersion. */
+  PRNG_WAVELENGTH = 12,
 
   /* High enough number so we don't need to change it when adding new dimensions,
    * low enough so there is no uint16_t overflow with many bounces. */
@@ -282,6 +293,9 @@ enum PathRayFlag : uint32_t {
 
   /* Path and shader is being evaluated for volume extinction. */
   PATH_RAY_EXTINCTION = (1U << 26U),
+
+  /* Path has associated wavelength. */
+  PATH_RAY_SPECTRAL = (1U << 27U),
 };
 
 // 8bit enum, just in case we need to move more variables in it
@@ -928,10 +942,14 @@ enum ShaderRuntimeFlag {
   SR_RAY_PORTAL = (1 << 11),
   /* Shader evaluation needs to be redone, because of texture cache miss */
   SR_CACHE_MISS = (1 << 12),
+  /* BSDF has dispersion. */
+  SR_BSDF_HAS_DISPERSION = (1 << 13),
 };
 
 /* Shader flags that are set after compiling the shaders. */
 enum ShaderDataFlag {
+  /* If the shader is wavelength-dependent. */
+  SD_REQUIRES_WAVELENGTH = (1 << 12),
   /* If Light Path Node is present in the shader graph. */
   SD_HAS_LIGHT_PATH_NODE = (1 << 13),
   /* Has bump mapping from BSDF connected to surface socket. */
@@ -1083,6 +1101,10 @@ struct ccl_align(16) ShaderData {
 
   /* LCG state for closures that require additional random numbers. */
   uint lcg_state;
+#ifdef __SPECTRAL__
+  /* Random number for sampling the wavelength. */
+  float rand_wavelength;
+#endif
 
   /* Closure weights summed directly, so we can evaluate
    * emission and shadow transparency with MAX_CLOSURE 0. */
