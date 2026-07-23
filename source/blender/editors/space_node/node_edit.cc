@@ -1512,17 +1512,15 @@ static wmOperatorStatus expression_to_group_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  /* Below this point the topology cache is not used anymore.*/
   bNode *group_node = bke::node_add_node(C, tree, tree.typeinfo->group_idname);
   group_node->id = &new_group->tree->id;
   nodes::update_node_declaration_and_sockets(tree, *group_node, &bmain);
 
   Map<bNodeSocket *, bNodeSocket *> new_by_old_socket;
   for (auto &&[i, group_socket] : group_node->inputs.enumerate()) {
-    new_by_old_socket.add_new(
-
-        expression_node_inputs[expression_storage.expression_items.items_num + 1 + i],
-        &group_socket);
+    bNodeSocket *expr_input_socket =
+        expression_node_inputs[expression_storage.expression_items.items_num + 1 + i];
+    new_by_old_socket.add_new(expr_input_socket, &group_socket);
   }
   for (auto &&[i, group_socket] : group_node->outputs.enumerate()) {
     new_by_old_socket.add_new(expression_node_outputs[i], &group_socket);
@@ -1532,6 +1530,7 @@ static wmOperatorStatus expression_to_group_exec(bContext *C, wmOperator *op)
   group_node->location[0] = expression_node.location[0];
   group_node->location[1] = expression_node.location[1];
   group_node->width = expression_node.width;
+  /* TODO: Copy socket values and animation. */
 
   for (bNodeLink &link : tree.links) {
     if (link.tonode == &expression_node) {

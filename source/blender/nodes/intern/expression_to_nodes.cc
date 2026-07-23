@@ -528,6 +528,10 @@ class AstToNodeGroupBuilder {
     else {
       BKE_ntree_update_without_main(r_tree_);
     }
+
+    if (bmain_) {
+      this->position_nodes_in_output_tree();
+    }
   }
 
  private:
@@ -700,6 +704,30 @@ class AstToNodeGroupBuilder {
     }
     std::optional<Value> converted_value = (*fn)(value, to_type);
     return converted_value;
+  }
+
+  void position_nodes_in_output_tree()
+  {
+    bNodeTree &tree = r_tree_;
+    tree.ensure_topology_cache();
+
+    Map<int, int> num_by_depth;
+    Map<bNode *, int> depth_by_node;
+
+    /* Simple algorithm that does a very rough layout of the generated tree. This does not produce
+     * great results generally, but is usually good enough when debugging smaller node trees. */
+    for (bNode *node : tree.toposort_right_to_left()) {
+      int depth = 0;
+      for (bNodeSocket *socket : node->output_sockets()) {
+        for (bNodeSocket *target : socket->directly_linked_sockets()) {
+          depth = std::max(depth, depth_by_node.lookup(&target->owner_node()) + 1);
+        }
+      }
+      depth_by_node.add_new(node, depth);
+      const int index_at_depth = num_by_depth.lookup_or_add(depth, 0)++;
+      node->location[0] = 200 - depth * 200;
+      node->location[1] = -index_at_depth * 300;
+    }
   }
 };
 
@@ -1041,8 +1069,11 @@ static void init_symbol_table(SymbolTable &symbols)
           bNodeSocket *x_socket = static_cast<bNodeSocket *>(separate_node.outputs.first);
           bNodeSocket *y_socket = x_socket->next;
 
+          bNodeSocket *mix_factor = bke::node_find_socket(mix_node, SOCK_IN, "Factor_Float"_ustr);
           bNodeSocket *mix_a = bke::node_find_socket(mix_node, SOCK_IN, "A_Float"_ustr);
           bNodeSocket *mix_b = bke::node_find_socket(mix_node, SOCK_IN, "B_Float"_ustr);
+
+          mix_factor->default_value_typed<bNodeSocketValueFloat>()->value = 0.5f;
 
           bke::node_add_link(tree, separate_node, *x_socket, mix_node, *mix_a);
           bke::node_add_link(tree, separate_node, *y_socket, mix_node, *mix_b);
