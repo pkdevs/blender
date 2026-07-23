@@ -160,7 +160,7 @@ static void ringsel_find_edge(RingSelOpData *lcd, const int previewlines)
  * Gather the four spline control points for new loop cut vertex. 
  * p2 and p3 are original endpoints, p1 and p4 are one quad past p2 and p3 to calculate the curve tangents.
  */
-static bool loopcut_find_control_points(BMVert *v, int cuts, float3 &p1, float3 &p2, float3 &p3, float3 &p4, int &r_idx, int &r_span) {
+static bool loopcut_find_control_points(BMVert *v, int cuts, float min_angle, float3 &p1, float3 &p2, float3 &p3, float3 &p4, int &r_idx, int &r_span) {
   /* Split edge halves; far vert is original vert. */
   BMEdge *e_rail[2] = {nullptr, nullptr};
   int rail_count = 0;
@@ -260,6 +260,17 @@ static bool loopcut_find_control_points(BMVert *v, int cuts, float3 &p1, float3 
     if (v_outer == nullptr || BM_elem_flag_test(v_outer, BM_ELEM_SELECT)) {
       return false;
     }
+
+    if (min_angle > 0.0f) {
+      BMVert *v_in = BM_edge_other_vert(edge, v_end);
+      const float3 dir_back = float3(v_in->co) - float3(v_end->co);
+      const float3 dir_fwd = float3(v_outer->co) - float3(v_end->co);
+      if (angle_v3v3(dir_back, dir_fwd) < min_angle) {
+        r_outer = anchor + (anchor - opposite);
+        return true;
+      }
+    }
+
     r_outer = v_outer->co;
     return true;
   };
@@ -276,10 +287,10 @@ static bool loopcut_find_control_points(BMVert *v, int cuts, float3 &p1, float3 
 /**
  *  Compute spline position for new loopcut vertex v.
  */
-static bool loopcut_calc_curve_target(BMVert *v, int cuts, float tension, float3 &r_co) {
+static bool loopcut_calc_curve_target(BMVert *v, int cuts, float tension, float min_angle, float3 &r_co) {
   float3 p1, p2, p3, p4;
   int idx, span;
-  if (!loopcut_find_control_points(v, cuts, p1, p2, p3, p4, idx, span)) {
+  if (!loopcut_find_control_points(v, cuts, min_angle, p1, p2, p3, p4, idx, span)) {
     return false;
   }
 
@@ -300,7 +311,7 @@ static bool loopcut_calc_curve_target(BMVert *v, int cuts, float tension, float3
 /**
  * Move each loopcut vert onto spline target. Find all targets first, then copy to positions.
  */
-static void loopcut_apply_curvature(BMesh *bm, int cuts, float tension) {
+static void loopcut_apply_curvature(BMesh *bm, int cuts, float tension, float min_angle) {
   Vector<BMVert *> verts;
   Vector<float3> targets;
 
@@ -312,7 +323,7 @@ static void loopcut_apply_curvature(BMesh *bm, int cuts, float tension) {
     }
 
     float3 co;
-    if (loopcut_calc_curve_target(v, cuts, tension, co)) {
+    if (loopcut_calc_curve_target(v, cuts, tension, min_angle, co)) {
       verts.append(v);
       targets.append(co);
     }
@@ -377,7 +388,8 @@ static void ringsel_finish(bContext *C, wmOperator *op)
 
       if (use_preserve_curvature && seltype == SUBDIV_SELECT_LOOPCUT) {
         const float tension = RNA_float_get(op->ptr, "curve_tension");
-        loopcut_apply_curvature(em->bm, cuts, tension);
+        const float min_angle = RNA_float_get(op->ptr, "curve_min_angle");
+        loopcut_apply_curvature(em->bm, cuts, tension, min_angle);
       }
 
       /* When used in a macro the tessellation will be recalculated anyway,
@@ -935,23 +947,33 @@ void MESH_OT_loopcut(wmOperatorType *ot)
                        SUBD_SMOOTH_MAX);
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-  prop = RNA_def_boolean(ot->srna,
-                        "preserve_curvature",
-                        false,
-                        "Preserve Curvature",
-                        "Place new loop on spline curve through neighboring loops");
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  RNA_def_boolean(ot->srna,
+                  "preserve_curvature",
+                  false,
+                  "Preserve Curvature",
+                  "Place new loop on spline curve through neighboring loops");
 
-  prop = RNA_def_float(ot->srna,
-                       "curve_tension",
-                       0.0f,
-                       -1.0f,
-                       1.0f,
-                       "Tension",
-                       "Curve tension for preserve curvature",
-                       -1.0f,
-                       1.0f);
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  RNA_def_float(ot->srna,
+                "curve_tension",
+                0.0f,
+                -1.0f,
+                1.0f,
+                "Tension",
+                "Curve tension for preserve curvature",
+                -1.0f,
+                1.0f);
+
+  RNA_def_float_rotation(ot->srna,
+                         "curve_min_angle",
+                         0,
+                         nullptr,
+                         0.0f,
+                         DEG2RADF(180.0f),
+                         "Min Angle",
+                         "Flatten the curve at corners tighter than this angle "
+                         "(0 follows curvature everywhere)",
+                         0.0f,
+                         DEG2RADF(180.0f));
 
   WM_operatortype_props_advanced_begin(ot);
 
