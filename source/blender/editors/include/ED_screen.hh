@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
@@ -78,16 +80,6 @@ void ED_region_tag_redraw_partial(ARegion *region, const rcti *rct, bool rebuild
 void ED_region_tag_redraw_cursor(ARegion *region);
 void ED_region_tag_redraw_no_rebuild(ARegion *region);
 void ED_region_tag_refresh_ui(ARegion *region);
-/**
- * Attempt to activate an button referencing an RNA property in the \a region, it may redraw the
- * region so it can try one more time.
- * \param block_name: name of the block to lookup the text button in.
- */
-void ED_region_activate_rna_prop(bContext *C,
-                                 ARegion *region,
-                                 const void *data,
-                                 StringRefNull prop_name,
-                                 StringRefNull block_name);
 /**
  * Tag editor overlays to be redrawn. If in doubt about which parts need to be redrawn (partial
  * clipping rectangle set), redraw everything.
@@ -559,6 +551,26 @@ void ED_update_for_newframe(Main *bmain, Depsgraph *depsgraph);
  */
 void ED_reset_audio_device(bContext *C);
 wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode);
+
+/**
+ * Start scrubbing, returns optional playback state.
+ * \param C the current context, which is used to find the screen that is currently managing the
+animation playback
+ * \param screen the screen that is currently being used to scrub.
+ */
+std::optional<PreScrubbingState> ED_screen_scrubbing_enable(bContext &C, bScreen &screen);
+/**
+ * Stop scrubbing, optionally resumes playback.
+ * \param C the current context, which is used to find the screen that is currently managing the
+ * animation playback
+ * \param screen the screen that is currently being used to scrub.
+ * \param resume optional saved playback data - If it has a value, playback is started with the
+ * given settings.
+ */
+void ED_screen_scrubbing_disable(bContext &C,
+                                 bScreen &screen,
+                                 const std::optional<PreScrubbingState> &resume);
+
 /**
  * Find window that owns the animation timer.
  */

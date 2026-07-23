@@ -235,13 +235,6 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
           else if (g_theme_state.regionid == RGN_TYPE_CHANNELS) {
             cp = btheme->regions.channels.text;
           }
-          else if (ELEM(g_theme_state.regionid,
-                        RGN_TYPE_HEADER,
-                        RGN_TYPE_FOOTER,
-                        RGN_TYPE_ASSET_SHELF_HEADER))
-          {
-            cp = ts->header_text;
-          }
           else {
             cp = ts->text;
           }
@@ -250,44 +243,13 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
           if (g_theme_state.regionid == RGN_TYPE_CHANNELS) {
             cp = btheme->regions.channels.text_selected;
           }
-          else if (ELEM(g_theme_state.regionid,
-                        RGN_TYPE_HEADER,
-                        RGN_TYPE_FOOTER,
-                        RGN_TYPE_ASSET_SHELF_HEADER))
-          {
-            cp = ts->header_text_hi;
-          }
           else {
             cp = ts->text_hi;
-          }
-          break;
-        case TH_TITLE:
-          if (ELEM(g_theme_state.regionid, RGN_TYPE_UI, RGN_TYPE_TOOLS, RGN_TYPE_CHANNELS) ||
-              ELEM(g_theme_state.spacetype, SPACE_PROPERTIES, SPACE_USERPREF))
-          {
-            cp = btheme->tui.panel_title;
-          }
-          else if (ELEM(g_theme_state.regionid,
-                        RGN_TYPE_HEADER,
-                        RGN_TYPE_FOOTER,
-                        RGN_TYPE_ASSET_SHELF_HEADER))
-          {
-            cp = ts->header_title;
-          }
-          else {
-            cp = ts->title;
           }
           break;
 
         case TH_HEADER:
           cp = ts->header;
-          break;
-
-        case TH_HEADER_TEXT:
-          cp = ts->header_text;
-          break;
-        case TH_HEADER_TEXT_HI:
-          cp = ts->header_text_hi;
           break;
 
         case TH_PANEL_HEADER:

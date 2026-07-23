@@ -321,6 +321,13 @@ void SEQUENCER_OT_image_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_effect_strip_add(wmOperatorType *ot);
 void SEQUENCER_OT_add_scene_strip_from_scene_asset(wmOperatorType *ot);
 
+void frame_filename_set(char *dst,
+                        size_t dst_len,
+                        const char *filename_stripped,
+                        const int frame,
+                        const int numdigits,
+                        const char *ext);
+
 /* `sequencer_drag_drop.cc` */
 
 void sequencer_dropboxes();
@@ -367,15 +374,6 @@ void SEQUENCER_OT_rename_channel(wmOperatorType *ot);
 /* `sequencer_preview.cc` */
 
 void sequencer_preview_add_sound(const bContext *C, const Strip *strip);
-
-/* `sequencer_add.cc` */
-
-int sequencer_image_strip_get_minmax_frame(wmOperator *op,
-                                           int sfra,
-                                           int *r_minframe,
-                                           int *r_numdigits);
-void sequencer_image_strip_reserve_frames(
-    wmOperator *op, StripElem *se, int len, int minframe, int numdigits);
 
 /* `sequencer_retiming.cc` */
 void SEQUENCER_OT_retiming_reset(wmOperatorType *ot);
@@ -425,6 +423,8 @@ float retiming_key_size();
 
 /* `sequencer_text_edit.cc` */
 bool sequencer_text_editing_active_poll(bContext *C);
+std::optional<int2> sequencer_text_editing_cursor_region_xy_get(const Scene *scene,
+                                                                const ARegion *region);
 void SEQUENCER_OT_text_cursor_move(wmOperatorType *ot);
 void SEQUENCER_OT_text_insert(wmOperatorType *ot);
 void SEQUENCER_OT_text_delete(wmOperatorType *ot);
