@@ -460,8 +460,7 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
             if (node_fully_masked_or_hidden(node)) {
               return false;
             }
-            return true ||
-                   node_in_box(mat, node.bounds(), float3(0.0f), float3(1.0f, 1.0f, 1.0f), false);
+            return node_in_box(mat, node.bounds(), float3(0.0f), float3(1.0f, 1.0f, 1.0f), false);
           });
       return {plane_mask, plane_center, plane_normal};
     }
