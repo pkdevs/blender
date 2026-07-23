@@ -756,10 +756,20 @@ struct XrNavigation {
   char _pad0[2] = {};
 };
 
+enum class UserPrefThemeType : int8_t {
+  Dark = 0,
+  Light = 1,
+};
+
 struct UserDef_Runtime {
   /** Mark as changed so the preferences are saved on exit. */
   char is_dirty = 0;
-  char _pad0[7] = {};
+  /**
+   * The operating system's light/dark color-scheme preference, used to resolve
+   * `UserPrefThemeChoice::System`.
+   */
+  UserPrefThemeType system_theme_type = UserPrefThemeType::Dark;
+  char _pad0[6] = {};
 };
 
 /* Toggles for unfinished 2.8 UserPref design. */
@@ -799,9 +809,9 @@ enum eUserPref_SpaceData_Flag : char {
 };
 ENUM_OPERATORS(eUserPref_SpaceData_Flag)
 
-enum class UserPrefActiveThemeType : int8_t {
-  Dark = 0,
-  Light = 1,
+enum class UserPrefThemeChoice : int8_t {
+  Dark = int8_t(UserPrefThemeType::Dark),
+  Light = int8_t(UserPrefThemeType::Light),
   System = 2,
 };
 
@@ -1038,13 +1048,13 @@ struct UserDef {
   /** Startup application template. */
   char app_template[64] = "";
 
-  UserPrefActiveThemeType active_theme_type = UserPrefActiveThemeType::System;
+  UserPrefThemeChoice active_theme_type = UserPrefThemeChoice::System;
 
   char _pad[7] = {};
 
-  /** Theme for dark mode of #UserPrefActiveThemeType, referencing #themes. */
+  /** Theme for dark mode of #UserPrefThemeChoice, referencing #themes. */
   bTheme *active_theme_dark;
-  /** Theme for light mode of #UserPrefActiveThemeType, referencing #themes. */
+  /** Theme for light mode of #UserPrefThemeChoice, referencing #themes. */
   bTheme *active_theme_light;
 
   /**

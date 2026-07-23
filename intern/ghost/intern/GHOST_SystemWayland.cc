@@ -8578,10 +8578,37 @@ GHOST_SystemWayland::GHOST_SystemWayland(const bool background)
   /* Could be null in background mode, however there are enough
    * references to the timer-manager that it's safer to create it. */
   display_->key_repeat_timer_manager = new GHOST_TimerManager();
+
+#ifdef WITH_GHOST_WAYLAND_DBUS
+  /* As with the WAYLAND event thread, there's no need for this in background mode. */
+  if (!background) {
+    appearance_watcher_ = std::make_unique<GHOST_WaylandAppearanceWatcher>(
+        [this](GHOST_TColorScheme /*color_scheme*/) {
+          /* Called from the watcher's own background thread. */
+          pushEvent_maybe_pending(std::make_unique<GHOST_Event>(
+              getMilliSeconds(), GHOST_kEventSystemAppearanceChanged, nullptr));
+        });
+    if (appearance_watcher_) {
+      /* Push an initial event too (rather than relying on the caller to query
+       * #getSystemColorScheme up front), so the value the constructor just read
+       * synchronously above is picked up the same way a later change would be: through
+       * the main event queue, once the rest of Blender has finished initializing. */
+      pushEvent_maybe_pending(std::make_unique<GHOST_Event>(
+          getMilliSeconds(), GHOST_kEventSystemAppearanceChanged, nullptr));
+    }
+  }
+#endif
 }
 
 void GHOST_SystemWayland::display_destroy_and_free_all()
 {
+#ifdef WITH_GHOST_WAYLAND_DBUS
+  /* Stop and join the watcher thread before freeing `display_`: its callback (still able to
+   * run until the thread is joined) accesses `display_` indirectly via `pushEvent_maybe_pending`.
+   */
+  appearance_watcher_.reset();
+#endif
+
   gwl_display_destroy(display_);
 
 #ifdef USE_EVENT_BACKGROUND_THREAD
@@ -10242,6 +10269,16 @@ wl_shm *GHOST_SystemWayland::wl_shm_get() const
 GHOST_TimerManager *GHOST_SystemWayland::key_repeat_timer_manager()
 {
   return display_->key_repeat_timer_manager;
+}
+
+GHOST_TColorScheme GHOST_SystemWayland::getSystemColorScheme() const
+{
+#ifdef WITH_GHOST_WAYLAND_DBUS
+  if (appearance_watcher_) {
+    return appearance_watcher_->color_scheme_get();
+  }
+#endif
+  return GHOST_kColorSchemeNoPreference;
 }
 
 void GHOST_SystemWayland::xdg_toplevel_icon_update(GHOST_WindowWayland *window,

@@ -11,9 +11,10 @@
 namespace blender::bke {
 
 /** Resolve #UserDef::active_theme_type to a concrete Dark or Light slot (never System). */
-UserPrefActiveThemeType resolve_active_theme_type();
+UserPrefThemeType resolve_active_theme_type();
 
-/** The #bTheme referenced by whichever of #UserDef::active_theme_dark/light is currently active. */
+/** The #bTheme referenced by whichever of #UserDef::active_theme_dark/light is currently active.
+ */
 const bTheme &active_theme_get();
 
 /**
@@ -26,8 +27,6 @@ const bTheme &active_theme_get();
  * theme that already exists and isn't force-reset is left untouched, e.g. keeping any live
  * edits made while it was previously active.
  */
-bTheme &ensure_theme(StringRefNull filepath,
-                      UserPrefActiveThemeType slot,
-                      bool force_reset = false);
+bTheme &ensure_theme(StringRefNull filepath, UserPrefThemeType slot, bool force_reset = false);
 
 }  // namespace blender::bke

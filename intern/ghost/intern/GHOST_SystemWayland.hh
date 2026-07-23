@@ -27,6 +27,11 @@
 #  include <thread>
 #endif
 
+#ifdef WITH_GHOST_WAYLAND_DBUS
+#  include "GHOST_WaylandAppearanceWatcher.hh"
+#  include <memory>
+#endif
+
 class GHOST_WindowWayland;
 
 bool ghost_wl_display_report_error_if_set(wl_display *display);
@@ -263,6 +268,9 @@ class GHOST_SystemWayland : public GHOST_System {
 
   void xdg_toplevel_icon_update(GHOST_WindowWayland *window, struct xdg_toplevel *toplevel);
 
+  /** \copydoc #GHOST_ISystem::getSystemColorScheme */
+  GHOST_TColorScheme getSystemColorScheme() const override;
+
   /* WAYLAND direct-data access. */
 
   struct wl_display *wl_display_get();
@@ -381,4 +389,8 @@ class GHOST_SystemWayland : public GHOST_System {
   void display_destroy_and_free_all();
 
   struct GWL_Display *display_;
+
+#ifdef WITH_GHOST_WAYLAND_DBUS
+  std::unique_ptr<GHOST_WaylandAppearanceWatcher> appearance_watcher_;
+#endif
 };

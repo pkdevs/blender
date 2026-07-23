@@ -1006,6 +1006,7 @@ class USERPREF_MT_interface_theme_presets(Menu):
 
     preset_subdir = "interface_theme"
     preset_operator = "wm.interface_theme_preset_set"
+    preset_operator_defaults = {"menu_idname": "USERPREF_MT_interface_theme_presets"}
     preset_type = 'XML'
     preset_xml_map = (
         ("preferences.active_theme", "Theme"),

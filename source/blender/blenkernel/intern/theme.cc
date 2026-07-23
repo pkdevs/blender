@@ -14,31 +14,30 @@
 
 namespace blender::bke {
 
-UserPrefActiveThemeType resolve_active_theme_type()
+UserPrefThemeType resolve_active_theme_type()
 {
   switch (U.active_theme_type) {
-    case UserPrefActiveThemeType::Dark:
-    case UserPrefActiveThemeType::Light:
-      return U.active_theme_type;
-    case UserPrefActiveThemeType::System:
-      /* TODO: Query the operating system for its light/dark preference. */
-      return UserPrefActiveThemeType::Dark;
+    case UserPrefThemeChoice::Dark:
+    case UserPrefThemeChoice::Light:
+      return UserPrefThemeType(U.active_theme_type);
+    case UserPrefThemeChoice::System:
+      return U.runtime.system_theme_type;
   }
-  return UserPrefActiveThemeType::Dark;
+  return UserPrefThemeType::Dark;
 }
 
 const bTheme &active_theme_get()
 {
-  if (resolve_active_theme_type() == UserPrefActiveThemeType::Light && U.active_theme_light) {
+  if (resolve_active_theme_type() == UserPrefThemeType::Light && U.active_theme_light) {
     return *U.active_theme_light;
   }
   /* No light theme has been set up yet (or dark is active): fall back to dark. */
   return *U.active_theme_dark;
 }
 
-bTheme &ensure_theme(StringRefNull filepath, UserPrefActiveThemeType slot, bool force_reset)
+bTheme &ensure_theme(StringRefNull filepath, UserPrefThemeType slot, bool force_reset)
 {
-  BLI_assert(slot == UserPrefActiveThemeType::Dark || slot == UserPrefActiveThemeType::Light);
+  BLI_assert(slot == UserPrefThemeType::Dark || slot == UserPrefThemeType::Light);
 
   bTheme *btheme = static_cast<bTheme *>(
       BLI_findstring(&U.themes, filepath.c_str(), offsetof(bTheme, filepath)));
@@ -59,8 +58,8 @@ bTheme &ensure_theme(StringRefNull filepath, UserPrefActiveThemeType slot, bool 
     STRNCPY_UTF8(btheme->filepath, filepath.c_str());
   }
 
-  bTheme *&slot_ptr = (slot == UserPrefActiveThemeType::Dark) ? U.active_theme_dark :
-                                                                 U.active_theme_light;
+  bTheme *&slot_ptr = (slot == UserPrefThemeType::Dark) ? U.active_theme_dark :
+                                                          U.active_theme_light;
   slot_ptr = btheme;
   return *btheme;
 }

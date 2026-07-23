@@ -139,6 +139,17 @@ class GHOST_ISystem {
   static bool getUseWindowFrame();
   static void setUseWindowFrame(bool use_window_frame);
 
+  /***************************************************************************************
+   * System appearance.
+   ***************************************************************************************/
+
+  /**
+   * Return the system's current light/dark color-scheme preference.
+   * \note Platforms that can't query this (or haven't implemented support for it)
+   * return #GHOST_kColorSchemeNoPreference.
+   */
+  virtual GHOST_TColorScheme getSystemColorScheme() const = 0;
+
  protected:
   /**
    * Constructor.

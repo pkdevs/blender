@@ -127,6 +127,7 @@ bool GHOST_EventPrinter::processEvent(const GHOST_IEvent *event)
     }
 
       CASE_TYPE(GHOST_kEventQuitRequest);
+      CASE_TYPE(GHOST_kEventSystemAppearanceChanged);
       CASE_TYPE(GHOST_kEventWindowClose);
       CASE_TYPE(GHOST_kEventWindowActivate);
       CASE_TYPE(GHOST_kEventWindowDeactivate);

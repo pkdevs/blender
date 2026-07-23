@@ -25,7 +25,6 @@
 #include "BLT_translation.hh"
 
 #include "BKE_studiolight.h"
-#include "BKE_theme.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -263,6 +262,7 @@ static const EnumPropertyItem rna_enum_preferences_extension_repo_source_type_it
 #  include "BKE_preferences.h"
 #  include "BKE_screen.hh"
 #  include "BKE_sound.hh"
+#  include "BKE_theme.hh"
 
 #  include "DEG_depsgraph.hh"
 
@@ -945,6 +945,11 @@ static PointerRNA rna_UserDef_active_theme_get(PointerRNA *ptr)
 {
   bTheme *btheme = const_cast<bTheme *>(&blender::bke::active_theme_get());
   return RNA_pointer_create_with_parent(*ptr, RNA_Theme, btheme);
+}
+
+static int rna_UserDef_active_theme_type_resolved_get(PointerRNA * /*ptr*/)
+{
+  return int(blender::bke::resolve_active_theme_type());
 }
 
 static PointerRNA rna_UserDef_view_get(PointerRNA *ptr)
@@ -7943,9 +7948,9 @@ void RNA_def_userdef(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Studio Lights", "");
 
   static const EnumPropertyItem active_theme_type_items[] = {
-      {int(UserPrefActiveThemeType::Dark), "DARK", 0, "Dark", ""},
-      {int(UserPrefActiveThemeType::Light), "LIGHT", 0, "Light", ""},
-      {int(UserPrefActiveThemeType::System), "SYSTEM", 0, "System", ""},
+      {int(UserPrefThemeChoice::Dark), "DARK", 0, "Dark", ""},
+      {int(UserPrefThemeChoice::Light), "LIGHT", 0, "Light", ""},
+      {int(UserPrefThemeChoice::System), "SYSTEM", 0, "System", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -7953,6 +7958,15 @@ void RNA_def_userdef(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, active_theme_type_items);
   RNA_def_property_ui_text(prop, "Active Theme Type", "");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
+  prop = RNA_def_property(srna, "active_theme_type_resolved", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, active_theme_type_items);
+  RNA_def_property_enum_funcs(
+      prop, "rna_UserDef_active_theme_type_resolved_get", nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Active Theme Type (Resolved)",
+                           "Active Theme Type with System resolved to Dark or Light");
 
   prop = RNA_def_property(srna, "active_theme_dark", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NEVER_NULL);
@@ -7962,8 +7976,7 @@ void RNA_def_userdef(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "active_theme_light", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "Theme");
-  RNA_def_property_ui_text(
-      prop, "Light Theme", "Falls back to the dark theme when unset");
+  RNA_def_property_ui_text(prop, "Light Theme", "Falls back to the dark theme when unset");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
   /* Preferences Flags */

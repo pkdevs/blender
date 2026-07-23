@@ -55,6 +55,7 @@
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
+#include "BKE_theme.hh"
 #include "BKE_wm_runtime.hh"
 #include "BKE_workspace.hh"
 
@@ -1794,6 +1795,35 @@ static bool ghost_event_proc(const GHOST_IEvent *ghost_event, GHOST_TUserDataPtr
     else {
       wm_exit_schedule_delayed(C);
     }
+    return true;
+  }
+
+  if (type == GHOST_kEventSystemAppearanceChanged) {
+    U.runtime.system_theme_type = [&]() {
+      switch (g_system->getSystemColorScheme()) {
+        case GHOST_kColorSchemePreferDark:
+          printf("GHOST_kColorSchemePreferDark\n");
+          return UserPrefThemeType::Dark;
+        case GHOST_kColorSchemePreferLight:
+          printf("GHOST_kColorSchemePreferLight\n");
+          return UserPrefThemeType::Light;
+        default:
+          return UserPrefThemeType::Dark;
+      }
+    }();
+
+    /* If System mode now resolves to Light but no light theme has ever been loaded,
+     * `active_theme_get()` would otherwise keep silently falling back to the dark theme.
+     * Loading the built-in default is only implemented in Python (XML parsing), and the
+     * operator itself resolves which of dark/light to load from the same (already updated
+     * above) state, so this doesn't need to pass that along explicitly. */
+    if (bke::resolve_active_theme_type() == UserPrefThemeType::Light && !U.active_theme_light) {
+      WM_operator_name_call(
+          C, "preferences.reset_default_theme", wm::OpCallContext::ExecDefault, nullptr, nullptr);
+    }
+
+    /* Full redraw, relevant when Active Theme Type is System. */
+    WM_main_add_notifier(NC_WINDOW, nullptr);
     return true;
   }
 

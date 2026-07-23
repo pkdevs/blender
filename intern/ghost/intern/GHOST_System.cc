@@ -165,6 +165,11 @@ GHOST_IWindow *GHOST_System::getWindowUnderCursor(int32_t x, int32_t y)
   return nullptr;
 }
 
+GHOST_TColorScheme GHOST_System::getSystemColorScheme() const
+{
+  return GHOST_kColorSchemeNoPreference;
+}
+
 void GHOST_System::dispatchEvents()
 {
 #ifdef WITH_INPUT_NDOF

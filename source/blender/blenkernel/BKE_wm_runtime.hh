@@ -56,8 +56,6 @@ struct WindowManagerRuntime {
   /** Indicates whether interface is locked for user interaction. */
   bool is_interface_locked = false;
 
-  bool system_light_theme = false;
-
   /** Indicates whether modified images should be saved when saving the blend file. */
   char save_modified_images_when_file_is_saved = true;
 

@@ -272,6 +272,17 @@ enum GHOST_TConsoleWindowState {
 
 enum GHOST_TWindowOrder { GHOST_kWindowOrderTop = 0, GHOST_kWindowOrderBottom };
 
+/**
+ * The system's light/dark color-scheme preference.
+ * Values match the XDG Desktop Portal `org.freedesktop.appearance` `color-scheme` setting.
+ */
+enum GHOST_TColorScheme {
+  /** No preference is known, or the platform doesn't support querying one. */
+  GHOST_kColorSchemeNoPreference = 0,
+  GHOST_kColorSchemePreferDark = 1,
+  GHOST_kColorSchemePreferLight = 2,
+};
+
 enum GHOST_TDrawingContextType {
   GHOST_kDrawingContextTypeNone = 0,
 #if defined(WITH_OPENGL_BACKEND)
@@ -355,6 +366,9 @@ enum GHOST_TEventType {
   GHOST_kEventKeyUp,
 
   GHOST_kEventQuitRequest,
+
+  /** The system's light/dark color-scheme preference has changed, see #GHOST_TColorScheme. */
+  GHOST_kEventSystemAppearanceChanged,
 
   GHOST_kEventWindowClose,
   GHOST_kEventWindowActivate,

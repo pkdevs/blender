@@ -282,6 +282,11 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       list(APPEND LIB
         ${dbus_LINK_LIBRARIES}
       )
+      list(APPEND SRC
+        intern/GHOST_WaylandAppearanceWatcher.cc
+
+        intern/GHOST_WaylandAppearanceWatcher.hh
+      )
     endif()
 
     if(WITH_GHOST_CSD)

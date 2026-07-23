@@ -92,6 +92,13 @@ class GHOST_System : public GHOST_ISystem {
   GHOST_CSD_Params window_csd_params_;
   GHOST_CSD_Layout window_csd_layout_;
 
+  /**
+   * \copydoc #GHOST_ISystem::getSystemColorScheme
+   * Default implementation for platforms that don't (yet) support querying this.
+   * Implementations that can support it should override this.
+   */
+  GHOST_TColorScheme getSystemColorScheme() const override;
+
   /***************************************************************************************
    * Event management functionality
    ***************************************************************************************/

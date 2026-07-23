@@ -695,8 +695,7 @@ class AddPresetNodeColor(AddPresetBase, Operator):
 
 
 class SetPresetInterfaceTheme(Operator):
-    """Make a theme preset active for the current theme type (light/dark), loading it for
-    the first time if it hasn't been loaded yet"""
+    """Make a theme preset active for the current theme type (light/dark)"""
     bl_idname = "wm.interface_theme_preset_set"
     bl_label = "Set Theme"
 
@@ -772,8 +771,10 @@ class ResetDefaultTheme(Operator):
 
     def execute(self, context):
         prefs = context.preferences
-        is_dark = prefs.active_theme.as_pointer() == prefs.active_theme_dark.as_pointer()
-        filename = "Blender_Dark" if is_dark else "Blender_Light"
+        # Use the resolved type (rather than comparing `active_theme` against
+        # `active_theme_dark`/`_light`) so this is correct even before the target theme
+        # slot has ever been populated, e.g. the first time System mode resolves to Light.
+        filename = "Blender_Dark" if prefs.active_theme_type_resolved == 'DARK' else "Blender_Light"
 
         filepath = bpy.utils.preset_find(filename, "interface_theme", ext=".xml")
         if not filepath:
