@@ -41,6 +41,7 @@ int WM_window_csd_layout_callback(const int window_size[2],
 
   /* The caller is expected not to run the callback for full screen windows. */
   BLI_assert(window_state != GHOST_kWindowStateFullScreen);
+  UNUSED_VARS_NDEBUG(window_state);
   int decor_num = 0;
 
   GHOST_CSD_Elem *elem;
@@ -103,71 +104,9 @@ int WM_window_csd_layout_callback(const int window_size[2],
   elem->bounds[1][0] = 0;
   elem->bounds[1][1] = title;
 
-  if (window_state != GHOST_kWindowStateMaximized) {
-    /* Border elements extend outward, past the visible window into the invisible resize margin
-     * (see #GHOST_CSD_Params::resize_margin_size), so a WAYLAND subsurface positioned just outside
-     * the window can resolve to a resize border. */
-    const int32_t margin = WM_window_csd_fracitonal_scale_apply(WM_WINDOW_CSD_RESIZE_MARGIN_SIZE,
-                                                                fractional_scale);
-
-    /* Border: corners. */
-    elem = &csd_elems[decor_num++];
-    elem->type = GHOST_kCSDTypeBorderTopLeft;
-    elem->bounds[0][0] = -margin;
-    elem->bounds[0][1] = 0;
-    elem->bounds[1][0] = -margin;
-    elem->bounds[1][1] = 0;
-
-    elem = &csd_elems[decor_num++];
-    elem->type = GHOST_kCSDTypeBorderTopRight;
-    elem->bounds[0][0] = window_size[0];
-    elem->bounds[0][1] = window_size[0] + margin;
-    elem->bounds[1][0] = -margin;
-    elem->bounds[1][1] = 0;
-
-    elem = &csd_elems[decor_num++];
-    elem->type = GHOST_kCSDTypeBorderBottomLeft;
-    elem->bounds[0][0] = -margin;
-    elem->bounds[0][1] = 0;
-    elem->bounds[1][0] = window_size[1];
-    elem->bounds[1][1] = window_size[1] + margin;
-
-    elem = &csd_elems[decor_num++];
-    elem->type = GHOST_kCSDTypeBorderBottomRight;
-    elem->bounds[0][0] = window_size[0];
-    elem->bounds[0][1] = window_size[0] + margin;
-    elem->bounds[1][0] = window_size[1];
-    elem->bounds[1][1] = window_size[1] + margin;
-
-    /* Border: axis aligned. */
-    elem = &csd_elems[decor_num++];
-    elem->type = GHOST_kCSDTypeBorderTop;
-    elem->bounds[0][0] = 0;
-    elem->bounds[0][1] = window_size[0];
-    elem->bounds[1][0] = -margin;
-    elem->bounds[1][1] = 0;
-
-    elem = &csd_elems[decor_num++];
-    elem->type = GHOST_kCSDTypeBorderBottom;
-    elem->bounds[0][0] = 0;
-    elem->bounds[0][1] = window_size[0];
-    elem->bounds[1][0] = window_size[1];
-    elem->bounds[1][1] = window_size[1] + margin;
-
-    elem = &csd_elems[decor_num++];
-    elem->type = GHOST_kCSDTypeBorderLeft;
-    elem->bounds[0][0] = -margin;
-    elem->bounds[0][1] = 0;
-    elem->bounds[1][0] = 0;
-    elem->bounds[1][1] = window_size[1];
-
-    elem = &csd_elems[decor_num++];
-    elem->type = GHOST_kCSDTypeBorderRight;
-    elem->bounds[0][0] = window_size[0];
-    elem->bounds[0][1] = window_size[0] + margin;
-    elem->bounds[1][0] = 0;
-    elem->bounds[1][1] = window_size[1];
-  }
+  /* Border elements are intentionally not included, resizing runs via the invisible
+   * margin outside the window which resolves borders from its own geometry,
+   * see #GHOST_CSD_Params::resize_margin_size. */
 
   return decor_num;
 }

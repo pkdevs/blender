@@ -99,6 +99,14 @@ struct GWL_WindowCSD {
   wl_subsurface *margin_subsurface = nullptr;
   wp_viewport *margin_viewport = nullptr;
   wl_buffer *margin_buffer = nullptr;
+
+  /**
+   * The margin & window size in surface local coordinates, as last applied to the
+   * margin surface. Hit-testing must use the exact values the compositor routes
+   * input by, see #gwl_window_csd_margin_elem_motion.
+   */
+  int32_t margin_size_local = 0;
+  int32_t margin_window_size_local[2] = {0, 0};
 };
 
 #endif /* WITH_GHOST_CSD */
@@ -930,6 +938,10 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
 
     xdg_csd->margin_viewport = wp_viewporter_get_viewport(viewporter, xdg_csd->margin_surface);
   }
+
+  xdg_csd->margin_size_local = margin_local;
+  xdg_csd->margin_window_size_local[0] = window_size_local[0];
+  xdg_csd->margin_window_size_local[1] = window_size_local[1];
 
   wl_surface_attach(xdg_csd->margin_surface, xdg_csd->margin_buffer, 0, 0);
   wl_subsurface_set_position(xdg_csd->margin_subsurface, -margin_local, -margin_local);
@@ -2829,6 +2841,16 @@ GHOST_CSD_EventState &GHOST_WindowWayland::csd_eventstate_get()
 {
   GHOST_ASSERT(this->system_->use_window_frame_csd_get(), "caller must ensure");
   return window_->xdg_csd->event_state;
+}
+
+void GHOST_WindowWayland::csd_margin_geometry_get(int32_t &r_margin_size,
+                                                  int32_t r_window_size[2]) const
+{
+  GHOST_ASSERT(this->system_->use_window_frame_csd_get(), "caller must ensure");
+  const GWL_WindowCSD *xdg_csd = window_->xdg_csd;
+  r_margin_size = xdg_csd->margin_size_local;
+  r_window_size[0] = xdg_csd->margin_window_size_local[0];
+  r_window_size[1] = xdg_csd->margin_window_size_local[1];
 }
 
 #endif /* WITH_GHOST_CSD */
