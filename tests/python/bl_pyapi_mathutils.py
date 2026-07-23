@@ -1040,6 +1040,7 @@ class KDTreeTesting(unittest.TestCase):
         for i, co in enumerate(coords_2d):
             k.insert(co, i)
         k.balance()
+        self.assertEqual(k.dimensions, 2)
 
         co_found, index_found, dist_found = k.find((1, 1))
 
@@ -1104,6 +1105,7 @@ class KDTreeTesting(unittest.TestCase):
     def test_kdtree_grid(self):
         size = 10
         k = self.kdtree_create_grid_3d(size)
+        self.assertEqual(k.dimensions, 3)
 
         # find_range
         ret = k.find_range((0.5,) * 3, 2.0)

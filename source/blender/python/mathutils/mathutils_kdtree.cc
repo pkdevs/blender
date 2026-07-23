@@ -542,6 +542,57 @@ static PyObject *py_kdtree_find_range(PyKDTree *self, PyObject *args, PyObject *
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name KDTree Type: Get/Set Item Implementation
+ * \{ */
+
+/* `KDTree.dimensions`. */
+PyDoc_STRVAR(
+    /* Wrap. */
+    py_kdtree_dimensions_doc,
+    "KDTree dimensions.\n"
+    "\n"
+    ":type: int\n");
+static PyObject *py_kdtree_dimensions_get(PyKDTree *self, void * /*closure*/)
+{
+  return PyLong_FromLong(self->dimensions);
+}
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name KDTree Type: Get/Set Item Definitions
+ * \{ */
+
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
+#endif
+
+static PyGetSetDef PyKDTree_getseters[] = {
+    {"dimensions",
+     reinterpret_cast<getter>(py_kdtree_dimensions_get),
+     static_cast<setter>(nullptr),
+     py_kdtree_dimensions_doc,
+     nullptr},
+
+    {nullptr, nullptr, nullptr, nullptr, nullptr} /* Sentinel */
+};
+
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
+#endif
+
+/** \} */
+
 #ifdef __GNUC__
 #  ifdef __clang__
 #    pragma clang diagnostic push
@@ -630,7 +681,7 @@ PyTypeObject PyKDTree_Type = {
     /*tp_iternext*/ nullptr,
     /*tp_methods*/ static_cast<PyMethodDef *>(PyKDTree_methods),
     /*tp_members*/ nullptr,
-    /*tp_getset*/ nullptr,
+    /*tp_getset*/ PyKDTree_getseters,
     /*tp_base*/ nullptr,
     /*tp_dict*/ nullptr,
     /*tp_descr_get*/ nullptr,
