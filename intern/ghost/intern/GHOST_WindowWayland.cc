@@ -864,13 +864,27 @@ static void gwl_window_pending_actions_handle(GWL_Window *win)
 
 #ifdef WITH_GHOST_CSD
 /**
- * Keep #GWL_WindowCSD.margin_surface in sync with the window's current size & state.
+ * Keep the XDG "window geometry" in sync with the window's visible rectangle.
+ * Without this the compositors default (bounding-box) geometry includes the
+ * invisible margin, throwing off snapping, maximize/restore & previews.
  *
- * Also keeps the XDG "window geometry" declared to the compositor in sync with the window's
- * visible rectangle, excluding the invisible margin. This is required once a subsurface extends
- * beyond the main surface, otherwise the compositor's default (bounding-box) geometry would
- * include the invisible margin, throwing off window snapping, maximize/restore geometry and
- * previews (e.g. Alt-Tab thumbnails).
+ * Must run every time #GWL_Window.frame is updated
+ * (see #gwl_window_frame_update_from_pending_no_lock).
+ */
+static void gwl_window_csd_geometry_update(GWL_Window *win)
+{
+  if (win->xdg_decor == nullptr) {
+    return;
+  }
+  xdg_surface_set_window_geometry(win->xdg_decor->surface,
+                                  0,
+                                  0,
+                                  gwl_window_physical_to_surface_local(win, win->frame.size[0]),
+                                  gwl_window_physical_to_surface_local(win, win->frame.size[1]));
+}
+
+/**
+ * Keep #GWL_WindowCSD.margin_surface in sync with the window's current size & state.
  *
  * Must run every time #GWL_Window.frame is updated: on size, DPI or maximized/full-screen
  * changes (see #gwl_window_frame_update_from_pending_no_lock).
@@ -880,34 +894,23 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
   GWL_WindowCSD *xdg_csd = win->xdg_csd;
   GHOST_SystemWayland *system = win->ghost_system;
 
-  const int32_t window_size_local[2] = {
-      gwl_window_physical_to_surface_local(win, win->frame.size[0]),
-      gwl_window_physical_to_surface_local(win, win->frame.size[1]),
-  };
-
-  if (win->xdg_decor) {
-    xdg_surface_set_window_geometry(
-        win->xdg_decor->surface, 0, 0, window_size_local[0], window_size_local[1]);
+  /* Zero hides the margin: no border exists for full-screen & maximized windows,
+   * a zero size means it's disabled (also accounting for rounding at extreme scales). */
+  int32_t margin_local = 0;
+  if (!ELEM(gwl_window_state_get(win), GHOST_kWindowStateFullScreen, GHOST_kWindowStateMaximized))
+  {
+    const GHOST_CSD_Params &params = system->getWindowCSD();
+    const int32_t margin_physical = (params.resize_margin_size * win->ghost_window->getDPIHint()) /
+                                    GHOST_CSD_DPI_FRACTIONAL_BASE;
+    margin_local = gwl_window_physical_to_surface_local(win, margin_physical);
   }
 
-  const GHOST_TWindowState state = gwl_window_state_get(win);
-  const GHOST_CSD_Params &params = system->getWindowCSD();
-  const bool show = (params.resize_margin_size > 0) && (state != GHOST_kWindowStateFullScreen) &&
-                    (state != GHOST_kWindowStateMaximized);
-
-  if (!show) {
+  if (margin_local <= 0) {
     if (xdg_csd->margin_surface) {
       /* Unmap: detach the buffer so the (otherwise unused) surface stops accepting input. */
       wl_surface_attach(xdg_csd->margin_surface, nullptr, 0, 0);
       wl_surface_commit(xdg_csd->margin_surface);
     }
-    return;
-  }
-
-  const int32_t margin_physical = (params.resize_margin_size * win->ghost_window->getDPIHint()) /
-                                  GHOST_CSD_DPI_FRACTIONAL_BASE;
-  const int32_t margin_local = gwl_window_physical_to_surface_local(win, margin_physical);
-  if (margin_local <= 0) {
     return;
   }
 
@@ -942,6 +945,11 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
 
     xdg_csd->margin_viewport = wp_viewporter_get_viewport(viewporter, xdg_csd->margin_surface);
   }
+
+  const int32_t window_size_local[2] = {
+      gwl_window_physical_to_surface_local(win, win->frame.size[0]),
+      gwl_window_physical_to_surface_local(win, win->frame.size[1]),
+  };
 
   xdg_csd->margin_size_local = margin_local;
   xdg_csd->margin_window_size_local[0] = window_size_local[0];
@@ -1122,6 +1130,7 @@ static void gwl_window_frame_update_from_pending_no_lock(GWL_Window *win)
       win->ghost_window->notify_decor_redraw();
     }
 
+    gwl_window_csd_geometry_update(win);
     gwl_window_csd_margin_update(win);
   }
 #endif /* WITH_GHOST_CSD */
