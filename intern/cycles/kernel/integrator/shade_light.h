@@ -115,28 +115,21 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
 
     /* TODO(weizhen): this has artefacts when `num_hits > 1` due to transparent lights. */
     if (INTEGRATOR_STATE(state, path, bounce) == 1) {
-        // TODO: Reconstruct the ReSTIR candidate here.
-      // film_add_reservoir_di( // !!!: light_eval.ls
-      //     kg, state, eval, light_eval.ls, &rng_state, render_buffer);  // light_pass
+      /* Reconstruct both LightSample and the ReSTIR reference */
+      LightSample ls ccl_optional_struct_init;
+      ReSTIRLightSampleReference ref = restir_light_reference_empty();
 
-    /* TODO: Add forward light-intersection serialization for ReSTIR DI.
-    *
-    * This path must convert the intersected emitter (`isect.prim`) and
-    * intersection geometry into a complete LightSample, including its
-    * emitter-local canonical parameterization, and then construct a
-    * ReSTIRLightSampleReference for film_add_reservoir_di().
-    *
-    * Do not use restir_light_sample_from_uv() here: that function performs
-    * the inverse operation. It reconstructs/relocates an existing persistent
-    * sample reference relative to a shading point and therefore requires the
-    * emitter identity and canonical parameters to have already been stored.
-    *
-    * The removed light_sample_from_intersection() provided this operation in
-    * the original ReSTIR DI implementation. A modern equivalent should reuse
-    * the per-light intersection-evaluation routines or introduce explicit
-    * per-light intersection-to-reference helpers without expanding LightEval
-    * with a transient LightSample.
-    */
+      /** 
+       * Construct LightSample and its persistent reference together. The reference
+       * retains emitter-local parameters formerly stored in LightSample::u/v and is
+       * the authoritative representation serialized into the ReSTIR reservoir. */
+      if (light_sample_from_intersection(kg, &isect, ray_P, ray_D, N, path_flag, &ls, &ref)) {
+        /* Set final PDF computed during NEE integration. */
+        ls.pdf = nee_pdf;
+
+        /* Add to DI Reservoir. */
+        film_add_reservoir_di(kg, state, eval, ls, ref, &rng_state, render_buffer);
+      }
     }
     else {
       const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * eval * mis_weight;

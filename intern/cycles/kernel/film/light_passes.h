@@ -870,6 +870,7 @@ ccl_device_inline void film_add_reservoir_di(
     ConstIntegratorState state,
     const Spectrum L,
     ccl_private const LightSample &ls,
+    ccl_private const ReSTIRLightSampleReference &candidate_reference,
     ccl_private const RNGState *rng_state,
     ccl_global float *ccl_restrict render_buffer)
 {
@@ -887,24 +888,20 @@ ccl_device_inline void film_add_reservoir_di(
 
   restir_unpack_reservoir(kg, &reservoir, buffer);
 
-  /*
-   * Reconstruct the canonical reference for this candidate.
-
-   * The reference is stored separately from LightSample because the
-   * reservoir only serializes the compact emitter identity/parameters.
-   */
-  ReSTIRLightSampleReference candidate_reference = restir_light_reference_empty();
-
-  if (!restir_light_reference_from_sample(kg, &ls, &candidate_reference)) {
+  /* The caller supplies the persistent reference together with LightSample.
+   * Forward light intersections may contain canonical emitter parameters that
+   * cannot be recovered exactly from LightSample after its u/v fields were
+   * removed. In particular, reconstructing the reference here using 
+   * `restir_light_reference_from_sample()` would duplicate per-light 
+   * parameterization logic and would reject light types not supported
+   * by `restir_light_reference_from_sample()`. */
+  if (!restir_light_reference_is_valid(&candidate_reference)) {
     return;
   }
-  
-  kernel_assert(restir_light_reference_is_valid(&candidate_reference)); // !!!: Temp
 
   const float geometry_term = ls.jacobian_solid_angle_to_area();
-
-  Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) *
-      bsdf_pdf * L * geometry_term;
+  const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) *
+                                bsdf_pdf * L * geometry_term;
 
   /* TODO(weizhen): Handle diffuse/glossy pass decomposition properly. */
   BsdfEval radiance;
@@ -913,12 +910,8 @@ ccl_device_inline void film_add_reservoir_di(
   const float rand_pick = path_branched_rng_1D(
       kg, rng_state, reservoir.num_light_samples, reservoir.max_samples, PRNG_PICK);
 
-  reservoir_add_bsdf_sample(&reservoir,
-                            ls,
-                            candidate_reference,
-                            radiance,
-                            bsdf_pdf,
-                            rand_pick);
+  reservoir_add_bsdf_sample(
+      &reservoir, ls, candidate_reference, radiance, bsdf_pdf, rand_pick);
 
 /**
  * because film_write_pass_reservoir() writes only the serialized reference, weight, and luminance, 

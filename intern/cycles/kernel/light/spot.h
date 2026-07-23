@@ -247,6 +247,51 @@ ccl_device_inline LightEval spot_light_eval_from_intersection(KernelGlobals kg,
   return light_eval;
 }
 
+ccl_device_inline bool spot_light_sample_from_intersection(KernelGlobals kg,
+                                                           const ccl_global KernelLight *klight,
+                                                           const float3 ray_P,
+                                                           const float3 ray_D,
+                                                           const float3 N,
+                                                           const uint32_t path_flag,
+                                                           ccl_private LightSample *ccl_restrict ls,
+                                                           ccl_private ReSTIRLightSampleReference *ref)
+{
+  const float r_sq = sqr(klight->spot.radius);
+  const float d_sq = len_squared(ray_P - klight->co);
+
+  ls->eval_fac = klight->spot.eval_fac;
+
+  if (klight->spot.is_sphere) {
+    ls->pdf = spot_light_pdf(&klight->spot, d_sq, r_sq, N, ray_D, path_flag);
+    ls->Ng = normalize(ls->P - klight->co);
+  }
+  else {
+    if (ls->t != FLT_MAX) {
+      const float3 lightN = normalize(ray_P - klight->co);
+      const float invarea = (r_sq > 0.0f) ? 1.0f / (r_sq * M_PI_F) : 1.0f;
+      ls->pdf = invarea * light_pdf_area_to_solid_angle(lightN, -ray_D, ls->t);
+    }
+    else {
+      ls->pdf = 0.0f;
+    }
+    ls->Ng = -ray_D;
+  }
+
+  /* Attenuation. */
+  const float3 local_ray = spot_light_to_local(kg, klight, -ray_D);
+  if (!klight->spot.is_sphere || d_sq > r_sq) {
+    ls->eval_fac *= spot_light_attenuation(&klight->spot, local_ray);
+  }
+  if (ls->eval_fac == 0) {
+    return false;
+  }
+
+  /* Texture coordinates stored in reference parameterization */
+  ref->param = spot_light_uv(local_ray, klight->spot.half_cot_half_spot_angle);
+
+  return true;
+}
+
 /* Find the ray segment lit by the spot light. */
 ccl_device_inline bool spot_light_valid_ray_segment(KernelGlobals kg,
                                                     const ccl_global KernelLight *klight,

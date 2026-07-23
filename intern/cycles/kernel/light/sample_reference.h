@@ -189,13 +189,16 @@ ccl_device_inline bool restir_area_light_reference_from_sample(
 // param stores the same barycentric-style emitter coordinates `float2(v + 0.5f, -u - v)`.
   reference->param = area_light_uv(klight, ls->P);
   reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
-                     RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+                     RESTIR_LIGHT_REFERENCE_HAS_PARAM; // !!!
 
   return true;
 }
 
 
 // TODO: Handle all analytic lights
+/** Dispatcher
+ * Fallback Conversion API: Available for paths where only an LS exists, such as ordinary NEE samples.
+ */
 ccl_device_inline bool restir_light_reference_from_sample( // !!!
     KernelGlobals kg,
     const ccl_private LightSample *ls,

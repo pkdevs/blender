@@ -424,7 +424,7 @@ ccl_device_inline bool area_light_intersect(const ccl_global KernelLight *klight
   const float3 light_P = klight->co;
 
   float3 P;
-  float u, v;
+  float u, v; // !!!
   return ray_quad_intersect(ray->P,
                             ray->D,
                             ray->tmin,
@@ -440,6 +440,25 @@ ccl_device_inline bool area_light_intersect(const ccl_global KernelLight *klight
                             is_ellipse);
 }
 
+ccl_device_inline bool area_light_sample_from_intersection(
+    const ccl_global KernelLight *klight,
+    const ccl_private Intersection *ccl_restrict isect,
+    const float3 ray_P,
+    const float3 ray_D,
+    ccl_private LightSample *ccl_restrict ls,
+    ccl_private ReSTIRLightSampleReference *ref)
+{
+  ref->param.x = isect->u;
+  ref->param.y = isect->v;
+  ls->D = ray_D;
+  ls->Ng = klight->area.dir;
+
+  float3 light_P = klight->co;
+  /* Pass ref->param representing coordinates on the emitter. */
+  return area_light_eval<false>(klight, ray_P, &light_P, ls, ref->param, false);
+}
+
+// an area-light reference can be generated from the sampled world-space position:p
 ccl_device_inline float2 area_light_uv(const ccl_global KernelLight *klight, const float3 P)
 {
   /* Compute uv when we already know there is an intersection, to avoid the need

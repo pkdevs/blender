@@ -458,6 +458,55 @@ light_eval_from_intersection(KernelGlobals kg,
   return LightEval{};
 }
 
+ccl_device bool light_sample_from_intersection(KernelGlobals kg,
+                                               const ccl_private Intersection *ccl_restrict isect,
+                                               const float3 ray_P,
+                                               const float3 ray_D,
+                                               const float3 N,
+                                               const uint32_t path_flag,
+                                               ccl_private LightSample *ccl_restrict ls,
+                                               ccl_private ReSTIRLightSampleReference *ref)
+{
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, isect->prim);
+  const LightType type = (LightType)klight->type;
+  ls->type = type;
+  ls->shader = klight->shader_id;
+  ls->object = isect->object;
+  ls->prim = isect->prim;
+  ls->t = isect->t;
+  ls->P = ray_P + ray_D * ls->t;
+  ls->D = ray_D;
+  ls->group = object_lightgroup(kg, ls->object);
+
+  /* Set basic properties of the reference. */
+  ref->type = type;
+  ref->object = ls->object;
+  ref->prim = ls->prim;
+  ref->flags = RESTIR_LIGHT_REFERENCE_VALID | RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+
+  if (type == LIGHT_SPOT) {
+    if (!spot_light_sample_from_intersection(kg, klight, ray_P, ray_D, N, path_flag, ls, ref)) {
+      return false;
+    }
+  }
+  else if (type == LIGHT_POINT) {
+    if (!point_light_sample_from_intersection(kg, klight, ray_P, ray_D, N, path_flag, ls, ref)) {
+      return false;
+    }
+  }
+  else if (type == LIGHT_AREA) {
+    if (!area_light_sample_from_intersection(klight, isect, ray_P, ray_D, ls, ref)) {
+      return false;
+    }
+  }
+  else {
+    kernel_assert(!"Invalid lamp type in light_sample_from_intersection");
+    return false;
+  }
+
+  return true;
+}
+
 /* Get light coordinates from position on light. */
 ccl_device void light_normal_uv_from_position(KernelGlobals kg,
                                               const ccl_global KernelLight *klight,
