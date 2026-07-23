@@ -55,11 +55,9 @@ void ghost_wl_surface_tag_cursor_tablet(struct wl_surface *wl_surface);
 
 #ifdef WITH_GHOST_CSD
 /**
- * Tag for the invisible subsurface used to for the CSD resize border past the visible
- * window (see #GWL_WindowCSD::margin_surface). Kept distinct from #ghost_wl_surface_tag so
- * non-pointer input paths ignore it as they would any other foreign surface, since only pointer
- * motion/press handling knows how to translate its coordinates back into the main surface's
- * coordinate space.
+ * Tag for the invisible resize margin around the window
+ * (see #GWL_WindowCSD::margin_surface). Kept distinct from #ghost_wl_surface_tag
+ * so input paths without margin support ignore it as any other foreign surface.
  */
 bool ghost_wl_surface_own_csd_margin(const struct wl_surface *wl_surface);
 void ghost_wl_surface_tag_csd_margin(struct wl_surface *wl_surface);
