@@ -302,7 +302,8 @@ struct SymbolScope : Symbol {
    * Return nullptr if this scope is not inside a function. */
   SymbolFunction *parent_function();
 
-  void function_emplace(SymbolFunction *fn);
+  /* Returns true if the function is an overload or redefines the symbol. */
+  bool function_emplace(SymbolFunction *fn);
 
   vector<SymbolVariable *> non_static_variables_in_declaration_order();
 
@@ -500,8 +501,9 @@ inline SymbolFunction *SymbolScope::parent_function()
   return fn ? fn->as_function() : nullptr;
 }
 
-inline void SymbolScope::function_emplace(SymbolFunction *fn)
+inline bool SymbolScope::function_emplace(SymbolFunction *fn)
 {
+  bool result = false;
   if (auto it = functions.try_emplace(fn->identifier, fn); !it.second) {
     /* If function already exists, insert overload in the linked list. */
     fn->overload_next = it.first->second->overload_next;
@@ -512,8 +514,10 @@ inline void SymbolScope::function_emplace(SymbolFunction *fn)
      * shader to shader. We use the line index for that. It is short enough to not clutter the
      * resulting source file. */
     fn->identifier += to_string(fn->loc.tok.line_number());
+    result = true;
   }
   scopes.emplace(unique_id(), fn);
+  return result;
 }
 
 inline vector<SymbolVariable *> SymbolScope::non_static_variables_in_declaration_order()

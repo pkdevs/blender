@@ -1092,7 +1092,12 @@ struct SymbolParser {
                                   TemplateInst temp = {})
   {
     SymbolFunction *fn = table.fun_arena.alloc(&scope, func, suffix);
-    scope.function_emplace(fn);
+    bool is_overload = scope.function_emplace(fn);
+    if (is_overload && fn->is_entry_point()) {
+      error(func.identifier(),
+            "Redefinition of entry point function '" + string(func.identifier().str()) + "'");
+    }
+
     parse_scope(*fn, func.body(), prefix + fn->identifier + ns_sep, temp);
 
     {
@@ -1393,7 +1398,13 @@ struct SymbolParser {
         SymbolVariable *flat_var = table.var_arena.alloc(*sym);
         sym->resolved = flat_var;
         flat_var->resolved = sym;
-        flat_var->identifier = prefix + sym->identifier;
+        if (res_type != ResourceType::VERT_ATTR_OUT && res_type != ResourceType::FRAG_OUT) {
+          /* Some resource are declared in global namespace without prefix. */
+          flat_var->identifier = sym->identifier;
+        }
+        else {
+          flat_var->identifier = prefix + sym->identifier;
+        }
         global.variables.try_emplace(flat_var->identifier, flat_var);
       }
 

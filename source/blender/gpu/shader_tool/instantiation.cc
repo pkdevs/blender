@@ -1555,8 +1555,14 @@ struct InstantiationContext {
     }
 
     if (var->type->is_srt()) {
-      /* Remove access to SRT type (makes the resource global). */
-      skip_node(id);
+      if (id.back().next() == TokenType::Dot) {
+        /* Remove access to SRT type (makes the resource global). */
+        skip_node(id);
+      }
+      else {
+        /* SRT type is used in an expression (likely as function argument). Call the ctor. */
+        builder << var->type->resolved->identifier + "_ctor_()" + trivia(id);
+      }
       return var;
     }
 
