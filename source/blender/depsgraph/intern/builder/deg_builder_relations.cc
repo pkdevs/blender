@@ -315,6 +315,30 @@ bool DepsgraphRelationBuilder::has_node(const ComponentKey &key) const
   return find_node(key) != nullptr;
 }
 
+static OperationKey object_modifier_eval_init_key(const Object &object)
+{
+  if (object.type == OB_ARMATURE) {
+    return OperationKey(&object.id, NodeType::EVAL_POSE, OperationCode::POSE_INIT);
+  }
+  return OperationKey(&object.id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT);
+}
+
+static OperationKey object_modifier_eval_key(const Object &object)
+{
+  if (object.type == OB_ARMATURE) {
+    return OperationKey(&object.id, NodeType::EVAL_POSE, OperationCode::POSE_INIT);
+  }
+  return OperationKey(&object.id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
+}
+
+static OperationKey object_modifier_key(const Object &object, const StringRefNull name)
+{
+  if (object.type == OB_ARMATURE) {
+    return OperationKey(&object.id, NodeType::EVAL_POSE, OperationCode::MODIFIER, name.c_str());
+  }
+  return OperationKey(&object.id, NodeType::GEOMETRY, OperationCode::MODIFIER, name.c_str());
+}
+
 Relation *DepsgraphRelationBuilder::add_node_handle_relation(const TimeSourceKey &key_from,
                                                              const DepsNodeHandle *handle,
                                                              const char *description,
@@ -333,8 +357,8 @@ void DepsgraphRelationBuilder::add_depends_on_transform_relation(const DepsNodeH
 {
   IDNode *id_node = handle->node->owner->owner;
   ID *id = id_node->id_orig;
-  const OperationKey geometry_key(
-      id, NodeType::GEOMETRY, OperationCode::MODIFIER, handle->node->name.c_str());
+  const OperationKey geometry_key = object_modifier_key(*id_cast<Object *>(id),
+                                                        handle->node->name);
   /* Wire up the actual relation. */
   add_depends_on_transform_relation(id, geometry_key, description);
 }
@@ -928,22 +952,6 @@ void DepsgraphRelationBuilder::build_object_layer_component_relations(Object *ob
   add_relation(object_from_layer_exit_key, synchronize_key, "Synchronize to Original");
 }
 
-static OperationKey object_modifier_eval_init_key(const Object &object)
-{
-  if (object.type == OB_ARMATURE) {
-    return OperationKey(&object.id, NodeType::EVAL_POSE, OperationCode::POSE_INIT);
-  }
-  return OperationKey(&object.id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL_INIT);
-}
-
-static OperationKey object_modifier_eval_key(const Object &object)
-{
-  if (object.type == OB_ARMATURE) {
-    return OperationKey(&object.id, NodeType::EVAL_POSE, OperationCode::POSE_DONE);
-  }
-  return OperationKey(&object.id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
-}
-
 void DepsgraphRelationBuilder::build_object_modifiers(Object *object)
 {
   if (object->modifiers.is_empty()) {
@@ -969,8 +977,7 @@ void DepsgraphRelationBuilder::build_object_modifiers(Object *object)
 
   OperationKey previous_key = eval_init_key;
   for (ModifierData &modifier : object->modifiers) {
-    const OperationKey modifier_key(
-        &object->id, NodeType::GEOMETRY, OperationCode::MODIFIER, modifier.name);
+    const OperationKey modifier_key = object_modifier_key(*object, modifier.name);
 
     /* Relation for the modifier stack chain. */
     add_relation(previous_key, modifier_key, "Modifier");

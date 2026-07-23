@@ -941,8 +941,17 @@ void DepsgraphNodeBuilder::build_object_modifiers(Object *object)
                      });
 
   for (const auto [modifier_index, modifier] : object->modifiers.enumerate()) {
-    OperationNode *modifier_node = add_operation_node(
-        &object->id, NodeType::GEOMETRY, OperationCode::MODIFIER, nullptr, modifier.name);
+    OperationNode *modifier_node = (object->type == OB_ARMATURE) ?
+                                       add_operation_node(&object->id,
+                                                          NodeType::EVAL_POSE,
+                                                          OperationCode::MODIFIER,
+                                                          nullptr,
+                                                          modifier.name) :
+                                       add_operation_node(&object->id,
+                                                          NodeType::GEOMETRY,
+                                                          OperationCode::MODIFIER,
+                                                          nullptr,
+                                                          modifier.name);
     if (modifier.type == eModifierType_Nodes) {
       modifier_node->evaluate = [id_node, modifier_index = modifier_index, modifier_node](
                                     blender::Depsgraph * /*depsgraph*/) {

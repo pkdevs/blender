@@ -304,7 +304,7 @@ void DepsgraphRelationBuilder::build_object_data_armature(Object *object)
   const OperationKey pose_done_key(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_DONE);
   add_relation(local_transform, pose_init_key, "Local Transform -> Pose Init");
   add_relation(pose_init_key, pose_init_ik_key, "Pose Init -> Pose Init IK");
-  add_relation(pose_init_ik_key, pose_done_key, "Pose Init IK -> Pose Cleanup");
+  add_relation(pose_init_ik_key, pose_modifiers_key, "Pose Init IK -> Pose Modifiers");
   add_relation(pose_modifiers_key, pose_done_key, "Post Modifiers -> Pose Done");
   /* Make sure pose is up-to-date with armature updates. */
   build_armature(armature);

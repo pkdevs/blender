@@ -11,6 +11,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_c.hh"
@@ -1074,7 +1075,7 @@ static bke::GeometrySet pose_to_geometry(const bArmature & /*armature*/, const b
 }
 
 static void geometry_to_pose(const bke::GeometrySet &geometry_set,
-                             const bArmature & /*armature*/,
+                             const bArmature &armature,
                              bPose &pose)
 {
   if (!geometry_set.has_instances() || !geometry_set.has_bundle()) {
@@ -1103,7 +1104,7 @@ static void geometry_to_pose(const bke::GeometrySet &geometry_set,
       return;
     }
 
-    copy_m4_m4(pchan->pose_mat, transforms[instance_i].ptr());
+    (float4x4 &)pchan->pose_mat = transforms[instance_i];
   };
 
   const std::variant pose_channel_name_values = pose_channel_names->typed<std::string>()->values();
@@ -1116,6 +1117,18 @@ static void geometry_to_pose(const bke::GeometrySet &geometry_set,
   if (const auto *single_value = std::get_if<const std::string *>(&pose_channel_name_values)) {
     apply_pose_channel(0, **single_value);
   }
+
+  // /* Update local matrices and other bPoseChannel properties (see BKE_pose_where_is_bone). */
+  // for (bPoseChannel &pchan : pose.chanbase) {
+  //   const Bone *bone = pchan.bone_get(armature);
+  //   if (bone) {
+  //     const float4x4 pose_mat = float4x4(pchan.pose_mat);
+  //     const float4x4 arm_mat = float4x4(bone->arm_mat);
+  //     (float4x4 &)pchan.chan_mat = pose_mat * math::invert(arm_mat);
+  //     (float3 &)pchan.pose_head = pose_mat.location();
+  //     (float3 &)pchan.pose_tail = pose_mat.location() + pose_mat.y_axis() * bone->length;
+  //   }
+  // }
 }
 
 void BKE_pose_eval_modifiers(Depsgraph *depsgraph, Scene *scene, Object *object)

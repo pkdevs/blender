@@ -1056,7 +1056,7 @@ static void equalize_cubic_bezier(const float control[4][3],
                                   const float *segment_scales,
                                   float *r_t_points)
 {
-  float (*coords)[3] = static_cast<float (*)[3]>(BLI_array_alloca(coords, temp_segments + 1));
+  float(*coords)[3] = static_cast<float(*)[3]>(BLI_array_alloca(coords, temp_segments + 1));
   float *pdist = static_cast<float *>(BLI_array_alloca(pdist, temp_segments + 1));
 
   /* Compute the first pass of bezier point coordinates. */
@@ -1906,7 +1906,7 @@ static void find_bbone_segment_index_straight(const bke::PChanBoneConst pchanbon
                                               float *r_blend_next)
 {
   const Mat4 *mats = pchanbone.pchan->runtime.bbone_deform_mats;
-  const float (*mat)[4] = mats[0].mat;
+  const float(*mat)[4] = mats[0].mat;
 
   /* Transform co to bone space and get its y component. */
   const float y = mat[0][1] * co[0] + mat[1][1] * co[1] + mat[2][1] * co[2] + mat[3][1];
@@ -3140,6 +3140,7 @@ void BKE_pose_where_is_bone(Depsgraph *depsgraph,
 
   /* Only root-bones get the cyclic offset (unless user doesn't want that). */
   /* XXX That could be a problem for snapping and other "reverse transform" features... */
+  /* Note: cyclic offset is deprecated since 2.5. */
   if (!pchan->parent) {
     if ((bone->flag & BONE_NO_CYCLICOFFSET) == 0) {
       add_v3_v3(pchan->pose_mat[3], ob->pose->cyclic_offset);
