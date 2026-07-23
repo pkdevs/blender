@@ -2864,6 +2864,21 @@ static wl_buffer *ghost_wl_buffer_create_for_image(wl_shm *shm,
   return buffer;
 }
 
+wl_buffer *ghost_wl_buffer_create_transparent_pixel(wl_shm *shm)
+{
+  const int32_t size_xy[2] = {1, 1};
+  void *buffer_data = nullptr;
+  size_t buffer_data_size = 0;
+  wl_buffer *buffer = ghost_wl_buffer_create_for_image(
+      shm, size_xy, WL_SHM_FORMAT_ARGB8888, &buffer_data, &buffer_data_size);
+  if (buffer == nullptr) [[unlikely]] {
+    return nullptr;
+  }
+  memset(buffer_data, 0, buffer_data_size);
+  munmap(buffer_data, buffer_data_size);
+  return buffer;
+}
+
 /**
  * A version of `read` which will read `nbytes` or as many bytes as possible,
  * useful as the LIBC version may `read` less than requested.
@@ -10759,21 +10774,6 @@ wl_shm *GHOST_SystemWayland::wl_shm_get() const
 GHOST_TimerManager *GHOST_SystemWayland::key_repeat_timer_manager()
 {
   return display_->key_repeat_timer_manager;
-}
-
-wl_buffer *GHOST_SystemWayland::wl_buffer_create_argb_transparent()
-{
-  const int32_t size_xy[2] = {1, 1};
-  void *buffer_data = nullptr;
-  size_t buffer_data_size = 0;
-  wl_buffer *buffer = ghost_wl_buffer_create_for_image(
-      display_->wl.shm, size_xy, WL_SHM_FORMAT_ARGB8888, &buffer_data, &buffer_data_size);
-  if (buffer == nullptr) [[unlikely]] {
-    return nullptr;
-  }
-  memset(buffer_data, 0, buffer_data_size);
-  munmap(buffer_data, buffer_data_size);
-  return buffer;
 }
 
 void GHOST_SystemWayland::xdg_toplevel_icon_update(GHOST_WindowWayland *window,

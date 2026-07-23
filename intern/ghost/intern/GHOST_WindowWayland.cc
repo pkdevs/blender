@@ -922,7 +922,7 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
       return;
     }
 
-    xdg_csd->margin_buffer = system->wl_buffer_create_argb_transparent();
+    xdg_csd->margin_buffer = ghost_wl_buffer_create_transparent_pixel(system->wl_shm_get());
     if (xdg_csd->margin_buffer == nullptr) [[unlikely]] {
       return;
     }

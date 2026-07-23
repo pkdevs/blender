@@ -31,6 +31,12 @@ class GHOST_WindowWayland;
 
 bool ghost_wl_display_report_error_if_set(wl_display *display);
 
+/**
+ * Create a 1x1 transparent buffer, intended for up-scaling via #wp_viewport_set_destination.
+ * The caller owns the returned buffer, null on allocation failure.
+ */
+struct wl_buffer *ghost_wl_buffer_create_transparent_pixel(struct wl_shm *shm);
+
 bool ghost_wl_output_own(const struct wl_output *wl_output);
 void ghost_wl_output_tag(struct wl_output *wl_output);
 struct GWL_Output *ghost_wl_output_user_data(struct wl_output *wl_output);
@@ -296,13 +302,6 @@ class GHOST_SystemWayland : public GHOST_System {
   const std::span<GWL_Output *const> outputs_get() const;
 
   struct wl_shm *wl_shm_get() const;
-
-  /**
-   * Create a 1x1 fully transparent SHM buffer, ready to be scaled to any size via
-   * #wp_viewport_set_destination. Returns null on allocation failure. The caller owns the returned
-   * buffer.
-   */
-  struct wl_buffer *wl_buffer_create_argb_transparent();
 
   void ime_begin(const GHOST_WindowWayland *win,
                  int32_t x,
