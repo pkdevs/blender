@@ -915,8 +915,10 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
     wl_subcompositor *subcompositor = system->wl_subcompositor_get();
     wp_viewporter *viewporter = system->wp_viewporter_get();
     if (subcompositor == nullptr || viewporter == nullptr) {
-      /* No support for the invisible margin on this compositor,
-       * the existing inward-facing border still works as a fallback. */
+      /* No support for the invisible margin on this compositor, in that case there
+       * is no way to resize from the window borders. Very unlikely in practice,
+       * resizing remains possible via the compositors own shortcuts,
+       * so accept the limitation. */
       return;
     }
 
@@ -931,8 +933,10 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
 
     xdg_csd->margin_subsurface = wl_subcompositor_get_subsurface(
         subcompositor, xdg_csd->margin_surface, win->wl.surface);
-    /* The margin is purely transparent & input-only, not tied to the main surface's frame
-     * timing: apply changes immediately rather than only alongside the parent's next commit. */
+    /* De-synchronize so the margins state (buffer & viewport) applies on its own
+     * commit, it's not tied to the main surface's frame timing. The position is the
+     * exception, #wl_subsurface_set_position only applies on the parents commit,
+     * in practice the parent commits on every size & state change. */
     wl_subsurface_set_desync(xdg_csd->margin_subsurface);
     wl_subsurface_place_below(xdg_csd->margin_subsurface, win->wl.surface);
 
