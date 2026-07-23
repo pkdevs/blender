@@ -1511,27 +1511,64 @@ void SymbolVariable::set_offset(bool is_union, int &offset)
   }
 }
 
-Result<string> SymbolTable::expr_to_string(const SymbolScope &scope, Node start, int &node_count)
+Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
+                                           Node start,
+                                           int &node_count,
+                                           bool allow_compilation_constant)
 {
+  const char *expr_type = allow_compilation_constant ? "static branch condition" :
+                                                       "constant expression";
   std::optional<AstNodeException> error;
   string expr_str;
   for (Node child = start; child.is_valid(); child = child.next()) {
     switch (child.type()) {
-      /* TODO member access. */
       case NodeType::LocalVar: {
         SymbolVariable *var = scope.lookup_variable(LocalVar(child).identifier());
-        if (!var->is_constexpr) {
-          return {
-              "0",
-              AstNodeException(
-                  child, "Read of non-const variable is not allowed in a constant expression")};
+        /* Resolve member access. */
+
+        for (Node next = child.next(); next.type() == NodeType::Op && next.front() == '.';
+             next = child.next())
+        {
+          child = next.next();
+
+          if (child.type() == NodeType::LocalVar) {
+            var = var->type->lookup_variable(LocalVar(child).identifier());
+          }
+          else if (child.type() == NodeType::FuncCall) {
+            return {"0",
+                    AstNodeException(child, string(expr_type) + " cannot contain function calls")};
+          }
+          else {
+            return {"0",
+                    AstNodeException(child,
+                                     "Unsupported symbol '" + string(child.str()) + "' inside " +
+                                         string(expr_type))};
+          }
         }
-        expr_str += to_string(var->value);
+
+        if (var->is_error) {
+          return {"0", AstNodeException(child, "Unknown variable " + string(child.str()))};
+        }
+
+        if (allow_compilation_constant && var->is_compilation_const) {
+          /* Compilation constants are in global namespace. */
+          expr_str += "SRT_CONSTANT_" + var->identifier;
+        }
+        else if (!var->is_constexpr) {
+          return {"0",
+                  AstNodeException(child,
+                                   "Read of non-const variable is not allowed in a " +
+                                       string(expr_type))};
+        }
+        else {
+          expr_str += to_string(var->value);
+        }
         node_count++;
         break;
       }
       case NodeType::FuncCall:
-        return {"0", AstNodeException(child, "Constexpr cannot contain function calls")};
+        return {"0",
+                AstNodeException(child, string(expr_type) + " cannot contain function calls")};
       case NodeType::ExprSub: {
         auto [str, err] = expr_to_string(scope, ExprSub(child).expr().child_first(), node_count);
         expr_str += '(';
@@ -1549,7 +1586,10 @@ Result<string> SymbolTable::expr_to_string(const SymbolScope &scope, Node start,
         node_count++;
         break;
       default:
-        return {"0", AstNodeException(child, "Unsupported symbol inside constexpr definition")};
+        return {"0",
+                AstNodeException(child,
+                                 "Unsupported symbol '" + string(child.str()) + "' inside " +
+                                     string(expr_type))};
     }
   }
   return {expr_str, error};

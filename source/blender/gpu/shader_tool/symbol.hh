@@ -451,6 +451,7 @@ struct SymbolVariable : Symbol {
   bool is_static = false;
   bool is_error = false;
   bool is_constexpr = false;
+  bool is_compilation_const = false;
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarator decl)
       : Symbol(string(decl.identifier().str()), decl.front(), parent),
@@ -459,7 +460,8 @@ struct SymbolVariable : Symbol {
         is_static(decl.type().is_static()),
         is_constexpr(decl.type().constant().is_valid() ?
                          decl.type().constant().front() == Constexpr :
-                         false)
+                         false),
+        is_compilation_const(AttrList(decl.type().prev()).contains_attr("compilation_constant"))
   {
   }
 
@@ -605,7 +607,10 @@ struct SymbolTable {
 
   static Result<int64_t> evaluate_constexpr(const SymbolScope &scope, Node start);
 
-  static Result<string> expr_to_string(const SymbolScope &scope, Node start, int &node_count);
+  static Result<string> expr_to_string(const SymbolScope &scope,
+                                       Node start,
+                                       int &node_count,
+                                       bool allow_compilation_constant = false);
 
  private:
   struct BuiltinType {

@@ -697,6 +697,67 @@ void f(int a)
     auto [output, _, error] = process_test_string(input, Language::BSL);
     EXPECT_EQ(error, "Read of non-const variable is not allowed in a constant expression");
   }
+  {
+    string input = R"(
+enum E : int {
+  ENUM = 1,
+};
+
+struct Res {
+  [[compilation_constant]] const int i;
+};
+
+void f(Res res)
+{
+  if (res.i + 1 + E::ENUM == ENUM) [[static_branch]] {
+    0;
+  }
+  else if (res.i == 1) [[static_branch]] {
+    1;
+  }
+  else {
+    2;
+  }
+}
+)";
+    string expect = R"(
+
+const int E_ENUM  = 1;
+
+
+struct Res {
+  int _pad;
+};
+#line 6
+Res Res_ctor_() {Res r;r._pad=0;return r;}
+#if defined(CREATE_INFO_Res)
+
+
+void f(Res res)
+{
+  #if SRT_CONSTANT_i+1+1==1
+#line 12
+                                                     {
+    0;
+  }
+  #elif SRT_CONSTANT_i==1
+#line 15
+                                         {
+    1;
+  }
+  #else
+#line 18
+       {
+    2;
+  }
+  #endif
+}
+#endif
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
 }
 
 }  // namespace blender::gpu::tests

@@ -231,7 +231,12 @@ struct InstantiationContext {
           structured_binding(node, symbol);
           break;
         case NodeType::IfStmt:
-          if_statement(node, *symbol.scopes[to_string(local_scope_id++)]);
+          if (Condition(node.child_first()).attributes().contains_attr("static_branch")) {
+            static_if_statement(node, symbol, local_scope_id);
+          }
+          else {
+            if_statement(node, symbol, local_scope_id);
+          }
           break;
         case NodeType::ElseIfStmt:
         case NodeType::ElseStmt:
@@ -561,7 +566,8 @@ struct InstantiationContext {
       string type_str = string("const ") + string(type.str());
       builder << type_str;
       /* Pretty align. */
-      builder.ss << string(max(size_t(0), val.front().char_number() - type_str.size()), ' ');
+      builder.ss << string(
+          max(int64_t(1), int64_t(val.front().char_number()) - int64_t(type_str.size())), ' ');
 
       SymbolVariable *var = id_var_decl_resolved(val.identifier(), body_scope);
       builder << string(" = ") + to_string(var->value);
@@ -1112,10 +1118,13 @@ struct InstantiationContext {
 
   /* Match if/else if/else statements */
   void if_statement(Node decl,
-                    SymbolScope &scope,
+                    SymbolScope &parent_scope,
+                    int &local_scope_id,
                     bool preceeded_by_true_if_constexpr = false,
                     bool preceeded_by_regular_if = false)
   {
+    SymbolScope &scope = *parent_scope.scopes[to_string(local_scope_id++)];
+
     Condition cond(decl.child_first());
 
     bool is_constexpr = cond.is_valid() && cond.front().prev() == Constexpr;
@@ -1133,6 +1142,12 @@ struct InstantiationContext {
       else if (!err.has_value()) {
         /* Expression was evaluated successfully. Treat the statement as constexpr. */
         is_constexpr = true;
+      }
+
+      if (cond.attributes().contains_attr("static_branch")) {
+        error(
+            decl,
+            "statement cannot be tagged as 'static_branch' because previous statement also isn't");
       }
     }
 
@@ -1181,9 +1196,66 @@ struct InstantiationContext {
     Node next = decl.next();
     if (next.type() == NodeType::ElseIfStmt || next.type() == NodeType::ElseStmt) {
       if_statement(next,
-                   scope,
+                   parent_scope,
+                   local_scope_id,
                    preceeded_by_true_if_constexpr || (is_constexpr && constexpr_value == true),
                    preceeded_by_regular_if || !is_constexpr);
+    }
+  }
+
+  void static_if_statement(Node decl,
+                           SymbolScope &parent_scope,
+                           int &local_scope_id,
+                           bool first = true)
+  {
+    SymbolScope &scope = *parent_scope.scopes[to_string(local_scope_id++)];
+
+    Condition cond(decl.child_first());
+
+    if (cond.is_valid()) {
+      if (!cond.attributes().contains_attr("static_branch")) {
+        error(decl, "statement must be tagged as 'static_branch' because previous statement is");
+      }
+      if (cond.front().prev() == Constexpr) {
+        error(decl, "'if' statement cannot be 'constexpr' inside a static branch");
+      }
+      LocalStmt stmt(cond.child_first());
+      int unused_count = 0;
+      /* Checks that condition is made of compilation constants or constexpr. */
+      auto [cond_str, err] = SymbolTable::expr_to_string(
+          parent_scope, stmt.expr().child_first(), unused_count, true);
+      error(err);
+      builder.ss << (first ? "#if " : "#elif ") + string(cond_str) + "\n";
+    }
+    else {
+      builder.ss << "#else\n";
+    }
+
+    skip_if(If);
+    skip_if(Constexpr);
+    skip_node(cond);
+
+    LocalScope body = decl.child_last(NodeType::LocalScope);
+    jump_to(body.front());
+
+    local_scope(body, scope);
+
+    /* Process preprocessor directive that can be added between if statements. */
+    Node node = body.next();
+    while (node.type() == NodeType::Preprocessor) {
+      builder << node;
+      node = node.next();
+    }
+
+    jump_to(body.back().next());
+
+    Node next = decl.next();
+    if (next.type() == NodeType::ElseIfStmt || next.type() == NodeType::ElseStmt) {
+      static_if_statement(next, parent_scope, local_scope_id, false);
+    }
+    else {
+      /* Pretty align. */
+      builder.ss << string(decl.front().char_number(), ' ') + "#endif\n";
     }
   }
 
