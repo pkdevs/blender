@@ -232,10 +232,12 @@ static void edge_flow_walk_loop(BMEdge *start_edge, Vector<BMEdge *> &r_edges)
   }
 }
 
-static void edge_flow_collect_loops(BMesh *bm, Vector<EdgeFlowLoop> &r_loops)
+/* Returns the number of walks dropped because their edges were not contiguous. */
+static int edge_flow_collect_loops(BMesh *bm, Vector<EdgeFlowLoop> &r_loops)
 {
   BMIter eiter;
   BMEdge *e;
+  int dropped = 0;
 
   BM_ITER_MESH (e, &eiter, bm, BM_EDGES_OF_MESH) {
     if (!BM_elem_flag_test(e, BM_ELEM_TAG)) {
@@ -283,6 +285,7 @@ static void edge_flow_collect_loops(BMesh *bm, Vector<EdgeFlowLoop> &r_loops)
     }
 
     if (!valid) {
+      dropped++;
       continue;
     }
 
@@ -296,6 +299,8 @@ static void edge_flow_collect_loops(BMesh *bm, Vector<EdgeFlowLoop> &r_loops)
     loop.is_cyclic = (loop.verts.first() == loop.verts.last());
     r_loops.append(std::move(loop));
   }
+
+  return dropped;
 }
 
 static bool edge_flow_loops_cross(const Span<EdgeFlowLoop> loops)
@@ -575,7 +580,10 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
   BMO_slot_buffer_hflag_enable(bm, op->slots_in, "edges", BM_EDGE, BM_ELEM_TAG, false);
 
   Vector<EdgeFlowLoop> loops;
-  edge_flow_collect_loops(bm, loops);
+  const int dropped = edge_flow_collect_loops(bm, loops);
+  if (dropped > 0) {
+    BMO_error_raise(bm, op, BMO_ERROR_WARN, "Non-contiguous edge chains skipped");
+  }
 
   if (mode == EDGE_FLOW_FLOW) {
     bool all_cyclic = !loops.is_empty();
@@ -586,6 +594,8 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
       }
     }
     if (all_cyclic && edge_flow_loops_cross(loops)) {
+      BMO_error_raise(
+          bm, op, BMO_ERROR_WARN, "Crossing cyclic loops have no anchors, flow not changed");
       return;
     }
 
@@ -599,6 +609,7 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
       }
     }
 
+    bool target_applied = false;
     for (int iter = 0; iter < iterations; iter++) {
       for (const EdgeFlowLoop &loop : loops) {
         for (const int i : loop.verts.index_range().drop_back(1)) {
@@ -631,9 +642,16 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
 
           for (int k = 0; k < target_count; k++) {
             copy_v3_v3(centers[k]->co, targets[k]);
+            target_applied = true;
           }
         }
       }
+    }
+
+    if (!loops.is_empty() && !target_applied) {
+      BMO_error_raise(
+          bm, op, BMO_ERROR_WARN, "Flow requires quads around selected edges, nothing changed");
+      return;
     }
 
     const int blend_mode = BMO_slot_int_get(op->slots_in, "blend_mode");
@@ -669,12 +687,14 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
         bm, op, BMO_ERROR_WARN, "Crossing chains could not be split into two directions");
   }
 
+  int cyclic_skipped = 0;
   for (const int j : loops.index_range()) {
     EdgeFlowLoop &loop = loops[j];
     if (!process_chain[j]) {
       continue;
     }
     if (loop.is_cyclic) {
+      cyclic_skipped++;
       continue;
     }
 
@@ -758,6 +778,11 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
         copy_v3_v3(loop.verts[i]->co, blended);
       }
     }
+  }
+
+  if (cyclic_skipped > 0) {
+    BMO_error_raise(
+        bm, op, BMO_ERROR_WARN, "Closed loops skipped, Linear and Curve require open chains");
   }
 }
 
