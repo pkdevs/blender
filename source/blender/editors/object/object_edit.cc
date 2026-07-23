@@ -1301,21 +1301,17 @@ void motion_paths_recalc(bContext *C,
 
     animviz_build_motionpath_targets(ob, targets);
   }
-
-  Depsgraph *depsgraph = animviz_depsgraph_build(bmain, scene, view_layer, targets);
-
-  animviz_calc_motionpaths(depsgraph, scene, targets, range);
-
-  /* Tag objects for copy-on-eval - so paths will draw/redraw
-   * For currently frame only we update evaluated object directly. */
-  for (Object *ob : objects) {
-    if (has_object_motion_paths(ob) || has_pose_motion_paths(ob)) {
-      DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
-    }
+  for (MPathTarget &target : targets) {
+    StringRefNull bone_name = target.pchan ? target.pchan->name : "";
+    motionpath::register_motionpath_async(*bmain,
+                                          *CTX_wm_manager(C),
+                                          *CTX_wm_window(C),
+                                          *scene,
+                                          *view_layer,
+                                          *target.mpath,
+                                          *target.ob,
+                                          bone_name);
   }
-
-  /* Free temporary depsgraph. */
-  DEG_graph_free(depsgraph);
 }
 
 void motion_paths_recalc_selected(bContext *C, Scene *scene, const eAnimvizCalcRange range)
