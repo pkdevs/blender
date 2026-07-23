@@ -13,8 +13,6 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
-
 #include "draw_curves_lib.glsl" /* IWYU pragma: export. For nodetree functions. */
 #include "draw_view.bsl.hh"     /* IWYU pragma: export. For nodetree functions. */
 #include "eevee_cryptomatte.bsl.hh"
@@ -26,6 +24,9 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
 
 float4 closure_to_rgba(Closure /*cl*/)
 {
+  /* Workaround for gl_FragCoord. */
+  FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
+
   [[resource_table]] const eevee::Sampling &sampling = resource_table_get(eevee::Sampling);
   [[resource_table]] const UtilityTexture &util_tx = resource_table_get(UtilityTexture);
   float4 out_color;
@@ -155,7 +156,7 @@ void surf_deferred([[resource_table]] PipelineConstants &pipe,
   /* ----- GBuffer output ----- */
 
   gbuffer::InputClosures gbuf_data;
-  /* Make sure we we do not read uninitialized data (see #159161). */
+  /* Make sure we do not read uninitialized data (see #159161). */
   if (pipe.closure_bin_count == 0) [[static_branch]] {
     gbuf_data.closure[0] = ClosureUndetermined{};
   }

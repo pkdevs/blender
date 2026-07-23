@@ -11,8 +11,8 @@
 namespace blender::nodes {
 
 /**
- * Makes it possible to use various functions (e.g. the ones in `NOD_socket_items.hh`) for field
- * to grid items.
+ * Makes it possible to use various functions (e.g. the ones in `NOD_socket_items.hh`) for closure
+ * to list items.
  */
 struct ClosureToListItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = GeometryNodeClosureToListItem;
@@ -91,7 +91,7 @@ struct ClosureToListItemsAccessor : public socket_items::SocketItemsAccessorDefa
   }
   static std::string output_socket_identifier_for_item(const GeometryNodeClosureToListItem &item)
   {
-    return "Grid_" + std::to_string(item.identifier);
+    return "List_" + std::to_string(item.identifier);
   }
 };
 

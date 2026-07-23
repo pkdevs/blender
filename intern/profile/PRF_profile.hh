@@ -30,9 +30,9 @@ namespace blender {
  */
 enum class ProfileCategory : uint32_t {
   /**
-   * \note Not pure black (0x000000) as Tracy uses that to indicate "no user provided color".
+   * \note Do not use pure black (0x000000) as Tracy uses it to indicate "no user provided color".
    */
-  Default = 0x000001,
+  Default = 0x666666,
   Core = 0x0088FE,
   Draw = 0x00C49F,
   Editor = 0xFFBB28,
@@ -49,7 +49,7 @@ enum class ProfileCategory : uint32_t {
 
 /** Profile the current scope, creating a Tracy zone. */
 #  define PRF_scope(category) ZoneScopedC(uint32_t(category))
-#  define PRF_scope_with_name(name, category) ZoneScopedNC(name, uint32_t(category))
+#  define PRF_scope_with_name(ui_name, category) ZoneScopedNC(ui_name, uint32_t(category))
 
 /** Set the profiled zone's name on a per-call basis. */
 #  define PRF_scope_set_dynamic_name(fmt, ...) ZoneNameF(fmt, ##__VA_ARGS__)
@@ -67,7 +67,7 @@ enum class ProfileCategory : uint32_t {
  */
 #  define PRF_scope_var(var, category) ZoneNamedC(var, uint32_t(category), true)
 #  define PRF_scope_var_with_name(var, ui_name, category) \
-    ZoneNamedNC(var, ui_name.c_str(), uint32_t(category), true)
+    ZoneNamedNC(var, ui_name, uint32_t(category), true)
 
 /** Set the specified zone's name on a per-call basis. */
 #  define PRF_scope_var_set_dynamic_name(var, fmt, ...) ZoneNameVF(var, fmt, ##__VA_ARGS__)
@@ -78,6 +78,9 @@ enum class ProfileCategory : uint32_t {
 /** Attach a numeric value to the specified zone. */
 #  define PRF_scope_var_add_value(var, value) ZoneValueV(var, value)
 
+#  define PRF_memory_alloc(ptr, size) TracyAlloc(ptr, size)
+#  define PRF_memory_free(ptr) TracyFree(ptr)
+
 #else
 
 #  define PRF_frame_mark
@@ -85,7 +88,7 @@ enum class ProfileCategory : uint32_t {
 #  define PRF_frame_mark_end(name)
 
 #  define PRF_scope(category)
-#  define PRF_scope_with_name(name, category)
+#  define PRF_scope_with_name(ui_name, category)
 
 #  define PRF_scope_set_dynamic_name(fmt, ...)
 #  define PRF_scope_add_text(fmt, ...)
@@ -97,6 +100,9 @@ enum class ProfileCategory : uint32_t {
 #  define PRF_scope_var_set_dynamic_name(var, fmt, ...)
 #  define PRF_scope_var_add_text(var, fmt, ...)
 #  define PRF_scope_var_add_value(var, value)
+
+#  define PRF_memory_alloc(ptr, size)
+#  define PRF_memory_free(ptr)
 
 #endif
 

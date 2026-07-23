@@ -11,8 +11,8 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf_types.hh"
@@ -379,6 +379,7 @@ char BKE_imtype_valid_channels(const char imtype)
     case R_IMF_IMTYPE_IRIS:
     case R_IMF_IMTYPE_OPENEXR:
     case R_IMF_IMTYPE_JP2:
+    case R_IMF_IMTYPE_AVIF:
       chan_flag |= IMA_CHAN_FLAG_BW;
       break;
   }

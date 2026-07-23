@@ -13,11 +13,11 @@
 #include "DNA_mesh_types.h"
 
 #include "BLI_function_ref.hh"
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
@@ -979,7 +979,7 @@ BLI_INLINE const GridCoord *reshape_subdiv_refine_vert_grid_coord(const Vertex *
   }
   /* NOTE: All grid coordinates will point to the same object position, so can be simple and use
    * first grid coordinate. */
-  return &vert->grid_coords[0];
+  return vert->grid_coords.data();
 }
 
 /* Version of reshape_subdiv_refine() which uses coarse position from original grids. */

@@ -138,6 +138,7 @@ class NODE_MT_shader_node_input_base(node_add_menu.NodeMenu):
             poll=object_material_shader_nodes_poll(context)
         )
         self.node_operator(layout, "ShaderNodeRaycast", poll=object_material_shader_nodes_poll(context))
+        self.node_operator_with_outputs(context, layout, "GeometryNodeInputSceneTime", ["Frame", "Seconds"])
         self.node_operator(layout, "ShaderNodeTangent")
         self.node_operator_with_outputs(
             context, layout, "ShaderNodeTexCoord",
@@ -168,7 +169,6 @@ class NODE_MT_shader_node_input_constant_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "ShaderNodeRGB")
         self.node_operator(layout, "FunctionNodeInputInt")
         self.node_operator(layout, "FunctionNodeInputMenu")
-        self.node_operator(layout, "GeometryNodeInputSceneTime")
         self.node_operator(layout, "ShaderNodeValue")
         self.node_operator(layout, "FunctionNodeInputVector")
 
@@ -479,14 +479,15 @@ class NODE_MT_shader_node_utilities_base(node_add_menu.NodeMenu):
         self.draw_menu(layout, "Utilities/Math")
         self.draw_menu(layout, "Utilities/Vector")
         layout.separator()
+        self.node_operator(layout, "NodeImplicitConversion")
         self.repeat_zone(layout, label="Repeat")
         layout.separator()
-        self.node_operator(layout, "NodeImplicitConversion")
         self.closure_zone(layout, label="Closure")
         self.node_operator(layout, "NodeEvaluateClosure")
+        layout.separator()
         self.node_operator(layout, "NodeCombineBundle")
-        self.node_operator(layout, "NodeSeparateBundle")
         self.node_operator(layout, "NodeJoinBundle")
+        self.node_operator(layout, "NodeSeparateBundle")
         layout.separator()
         self.node_operator(layout, "GeometryNodeMenuSwitch")
         if cycles_shader_nodes_poll(context):

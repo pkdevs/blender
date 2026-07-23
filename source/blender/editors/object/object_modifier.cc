@@ -27,15 +27,15 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_array_utils.hh"
-#include "BLI_bitmap.h"
+#include "BLI_bitmap.hh"
 #include "BLI_implicit_sharing.hh"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_anonymous_attribute_id.hh"
 #include "BKE_armature.hh"
 #include "BKE_context.hh"
@@ -1164,6 +1164,7 @@ static bool modifier_apply_obdata(ReportList *reports,
 
     bke::GeometrySet geometry_set = bke::GeometrySet::from_curves(
         &curves, bke::GeometryOwnershipType::ReadOnly);
+    bke::curves_store_surface_in_geometry_bundle(*depsgraph, curves, geometry_set);
 
     ModifierEvalContext mectx = {depsgraph, ob, MOD_APPLY_TO_ORIGINAL};
     mti->modify_geometry_set(md_eval, &mectx, &geometry_set);
@@ -1513,6 +1514,16 @@ void OBJECT_OT_modifier_add(wmOperatorType *ot)
  * Using modifier names and data context.
  * \{ */
 
+static PointerRNA edit_modifier_ptr_get(bContext *C, StructRNA *rna_type)
+{
+  return CTX_data_pointer_get_type(C, "modifier", rna_type);
+}
+
+static Object *edit_modifier_object_get(bContext *C, const PointerRNA &ptr)
+{
+  return (ptr.owner_id != nullptr) ? id_cast<Object *>(ptr.owner_id) : context_active_object(C);
+}
+
 bool edit_modifier_poll_generic(bContext *C,
                                 StructRNA *rna_type,
                                 int obtype_flag,
@@ -1520,8 +1531,8 @@ bool edit_modifier_poll_generic(bContext *C,
                                 const bool is_liboverride_allowed)
 {
   Main *bmain = CTX_data_main(C);
-  PointerRNA ptr = CTX_data_pointer_get_type(C, "modifier", rna_type);
-  Object *ob = (ptr.owner_id) ? id_cast<Object *>(ptr.owner_id) : context_active_object(C);
+  PointerRNA ptr = edit_modifier_ptr_get(C, rna_type);
+  Object *ob = edit_modifier_object_get(C, ptr);
   ModifierData *mod = static_cast<ModifierData *>(ptr.data); /* May be nullptr. */
 
   if (mod == nullptr && ob != nullptr) {
@@ -1953,9 +1964,8 @@ static bool modifier_apply_poll(bContext *C)
   }
 
   Scene *scene = CTX_data_scene(C);
-  PointerRNA ptr = CTX_data_pointer_get_type(C, "modifier", RNA_Modifier);
-  Object *ob = (ptr.owner_id != nullptr) ? id_cast<Object *>(ptr.owner_id) :
-                                           context_active_object(C);
+  PointerRNA ptr = edit_modifier_ptr_get(C, RNA_Modifier);
+  Object *ob = edit_modifier_object_get(C, ptr);
   ModifierData *md = static_cast<ModifierData *>(ptr.data); /* May be nullptr. */
   if (ob->type == OB_EMPTY) {
     CTX_wm_operator_poll_msg_set(C, "Modifiers cannot be applied on empty object type");
@@ -2070,9 +2080,8 @@ static wmOperatorStatus modifier_apply_invoke(bContext *C, wmOperator *op, const
 {
   wmOperatorStatus retval;
   if (edit_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
-    PointerRNA ptr = CTX_data_pointer_get_type(C, "modifier", RNA_Modifier);
-    Object *ob = (ptr.owner_id != nullptr) ? id_cast<Object *>(ptr.owner_id) :
-                                             context_active_object(C);
+    PointerRNA ptr = edit_modifier_ptr_get(C, RNA_Modifier);
+    Object *ob = edit_modifier_object_get(C, ptr);
 
     if ((ob->data != nullptr) && ID_REAL_USERS(ob->data) > 1) {
       PropertyRNA *prop = RNA_struct_find_property(op->ptr, "single_user");
@@ -2412,8 +2421,8 @@ static wmOperatorStatus modifier_copy_to_selected_invoke(bContext *C,
 
 static bool modifier_copy_to_selected_poll(bContext *C)
 {
-  PointerRNA ptr = CTX_data_pointer_get_type(C, "modifier", RNA_Modifier);
-  Object *obact = (ptr.owner_id) ? id_cast<Object *>(ptr.owner_id) : context_active_object(C);
+  PointerRNA ptr = edit_modifier_ptr_get(C, RNA_Modifier);
+  Object *obact = edit_modifier_object_get(C, ptr);
   ModifierData *md = static_cast<ModifierData *>(ptr.data);
 
   /* This just mirrors the check in #BKE_object_copy_modifier,
@@ -2564,8 +2573,11 @@ static bool skin_poll(bContext *C)
 
 static bool skin_edit_poll(bContext *C)
 {
-  Object *ob = CTX_data_edit_object(C);
-  return (ob != nullptr &&
+  /* Resolve the object the same way the exec functions do (#edit_modifier_object_get),
+   * so the poll validates the object that will actually be edited. */
+  PointerRNA ptr = edit_modifier_ptr_get(C, RNA_SkinModifier);
+  Object *ob = edit_modifier_object_get(C, ptr);
+  return (ob != nullptr && BKE_object_is_in_editmode(ob) &&
           edit_modifier_poll_generic(C, RNA_SkinModifier, (1 << OB_MESH), true, false) &&
           !ID_IS_OVERRIDE_LIBRARY(ob) && !ID_IS_OVERRIDE_LIBRARY(ob->data));
 }
@@ -2591,7 +2603,8 @@ static void skin_root_clear(BMVert *bm_vert, Set<BMVert *> &visited, const int c
 
 static wmOperatorStatus skin_root_mark_exec(bContext *C, wmOperator * /*op*/)
 {
-  Object *ob = CTX_data_edit_object(C);
+  PointerRNA ptr = edit_modifier_ptr_get(C, RNA_SkinModifier);
+  Object *ob = edit_modifier_object_get(C, ptr);
   BMEditMesh *em = BKE_editmesh_from_object(ob);
   BMesh *bm = em->bm;
 
@@ -2642,7 +2655,8 @@ enum SkinLooseAction {
 
 static wmOperatorStatus skin_loose_mark_clear_exec(bContext *C, wmOperator *op)
 {
-  Object *ob = CTX_data_edit_object(C);
+  PointerRNA ptr = edit_modifier_ptr_get(C, RNA_SkinModifier);
+  Object *ob = edit_modifier_object_get(C, ptr);
   BMEditMesh *em = BKE_editmesh_from_object(ob);
   BMesh *bm = em->bm;
   SkinLooseAction action = static_cast<SkinLooseAction>(RNA_enum_get(op->ptr, "action"));
@@ -2698,7 +2712,8 @@ void OBJECT_OT_skin_loose_mark_clear(wmOperatorType *ot)
 
 static wmOperatorStatus skin_radii_equalize_exec(bContext *C, wmOperator * /*op*/)
 {
-  Object *ob = CTX_data_edit_object(C);
+  PointerRNA ptr = edit_modifier_ptr_get(C, RNA_SkinModifier);
+  Object *ob = edit_modifier_object_get(C, ptr);
   BMEditMesh *em = BKE_editmesh_from_object(ob);
   BMesh *bm = em->bm;
 
@@ -2855,7 +2870,8 @@ static wmOperatorStatus skin_armature_create_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  Object *ob = CTX_data_active_object(C);
+  PointerRNA ptr = edit_modifier_ptr_get(C, RNA_SkinModifier);
+  Object *ob = edit_modifier_object_get(C, ptr);
   Mesh *mesh = id_cast<Mesh *>(ob->data);
   ModifierData *skin_md;
 
@@ -2873,7 +2889,8 @@ static wmOperatorStatus skin_armature_create_exec(bContext *C, wmOperator *op)
   if (arm_md) {
     skin_md = edit_modifier_property_get(op, ob, eModifierType_Skin);
     BLI_insertlinkafter(&ob->modifiers, skin_md, arm_md);
-    BKE_modifiers_persistent_uid_init(*arm_ob, arm_md->modifier);
+    BKE_modifier_unique_name(&ob->modifiers, &arm_md->modifier);
+    BKE_modifiers_persistent_uid_init(*ob, arm_md->modifier);
 
     arm_md->object = arm_ob;
     arm_md->deformflag = ARM_DEF_VGROUP | ARM_DEF_QUATERNION;

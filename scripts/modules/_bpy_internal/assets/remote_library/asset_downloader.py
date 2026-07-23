@@ -400,6 +400,14 @@ class AssetDownloader:
         remote_url = urllib.parse.urljoin(self._locator.remote_url, asset_url)
         download_to_path = self._locator.local_path / download_to_path
 
+        # Safety measure: refuse to download a file into the listing directory.
+        if self._locator.is_system_path(download_to_path):
+            raise ValueError(
+                ("Asset at {!s} wants to be downloaded to {!s}, which would overwrite local asset system files. " +
+                 "Notify the owner of the asset library about this.").format(
+                    remote_url,
+                    download_to_path))
+
         logger.info("downloading %s to %s", remote_url, download_to_path)
 
         assert self._bg_downloader, "downloads can only be queued when the bgdownloader is available"
@@ -568,7 +576,7 @@ class AssetReporter:
     ) -> None:
         logger.debug("Download unnecessary, file already downloaded: %s", http_req_descr.url)
         bpy.types.WindowManager.asset_library_status_ping_asset_file_succeeded(
-            self.asset_library_url, http_req_descr.url)
+            self.asset_library_url, http_req_descr.url, str(local_file))
 
     def download_error(
         self,

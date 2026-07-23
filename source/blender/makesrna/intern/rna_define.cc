@@ -20,12 +20,12 @@
 
 #include "DNA_sdna_type_ids.hh"
 
-#include "BLI_asan.h"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_bits.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_asan.hh"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_bits.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_blender_version.h" /* For #BLENDER_VERSION deprecation warnings. */
 
@@ -310,10 +310,28 @@ static int rna_find_parsed_struct_index(const StringRef structname)
   return -1;
 }
 
+static const void *rna_default_data(const int struct_idx,
+                                    const int member_idx,
+                                    const void *base_default_data)
+{
+  const void *member_default_data = DNA_member_default_table[struct_idx][member_idx];
+
+  if (base_default_data) {
+    /* For a nested member, offset into the parent struct's default instance. */
+    const void *struct_default_base = DNA_member_default_table[struct_idx][0];
+    return POINTER_OFFSET(base_default_data,
+                          static_cast<const char *>(member_default_data) -
+                              static_cast<const char *>(struct_default_base));
+  }
+
+  return member_default_data;
+}
+
 /** Find DNA type info, recursively following `.` and `->`. */
 static bool rna_find_sdna_member(const StringRef structname,
                                  const StringRef path,
-                                 PropertyDefRNA *r_dp = nullptr)
+                                 PropertyDefRNA *r_dp = nullptr,
+                                 const void *base_default_data = nullptr)
 {
   const int struct_idx = rna_find_parsed_struct_index(structname);
   if (struct_idx == -1) {
@@ -341,7 +359,7 @@ static bool rna_find_sdna_member(const StringRef structname,
         for (int b = 0; pm.member_name[b] == '*'; b++) {
           r_dp->dnapointerlevel++;
         }
-        r_dp->dnadefaultdata = DNA_member_default_table[struct_idx][member_idx];
+        r_dp->dnadefaultdata = rna_default_data(struct_idx, member_idx, base_default_data);
       }
       return true;
     }
@@ -357,7 +375,12 @@ static bool rna_find_sdna_member(const StringRef structname,
       continue;
     }
 
-    rna_find_sdna_member(pm.type_name, remainder, r_dp);
+    /* The return value for nested structs is ignored, to allow recursing into
+     * runtime structs not covered by DNA. */
+    rna_find_sdna_member(pm.type_name,
+                         remainder,
+                         r_dp,
+                         rna_default_data(struct_idx, member_idx, base_default_data));
     return true;
   }
 
@@ -898,6 +921,7 @@ StructRNA *RNA_def_struct_ptr(BlenderRNA *brna, const char *identifier, StructRN
 
     prop = RNA_def_property(&srna->cont, "rna_type", PROP_POINTER, PROP_NONE);
     RNA_def_property_flag(prop, PROP_HIDDEN);
+    prop->flag_internal |= PROP_INTERN_RNA_DEFINITION;
     RNA_def_property_ui_text(prop, "RNA", "RNA type definition");
 
 #ifndef RNA_RUNTIME
@@ -1009,12 +1033,12 @@ void RNA_def_struct_nested(BlenderRNA *brna, StructRNA *srna, const char *struct
   srna->nested = srnafrom;
 }
 
-void RNA_def_struct_flag(StructRNA *srna, int flag)
+void RNA_def_struct_flag(StructRNA *srna, StructFlag flag)
 {
   srna->flag |= flag;
 }
 
-void RNA_def_struct_clear_flag(StructRNA *srna, int flag)
+void RNA_def_struct_clear_flag(StructRNA *srna, StructFlag flag)
 {
   srna->flag &= ~flag;
 }
@@ -1153,7 +1177,6 @@ PropertyRNA *RNA_def_property(StructOrFunctionRNA *cont_,
                               int type,
                               int subtype)
 {
-  // StructRNA *srna = DefRNA.laststruct; /* Invalid for Python defined props. */
   ContainerRNA *cont = static_cast<ContainerRNA *>(cont_);
   PropertyRNA *prop;
 
@@ -1309,6 +1332,11 @@ PropertyRNA *RNA_def_property(StructOrFunctionRNA *cont_,
 #ifndef RNA_RUNTIME
   if (DefRNA.make_overridable) {
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  }
+
+  StructRNA *srna = DefRNA.laststruct;
+  if (srna->flag & STRUCT_RNA_DEFINITION) {
+    prop->flag_internal |= PROP_INTERN_RNA_DEFINITION;
   }
 
   switch (type) {
@@ -3516,6 +3544,12 @@ void RNA_def_property_pointer_funcs_runtime(PropertyRNA *prop,
   }
 }
 
+void RNA_def_property_pointer_default_runtime(PropertyRNA *prop, uint32_t id_session_uid)
+{
+  PointerPropertyRNA *pprop = reinterpret_cast<PointerPropertyRNA *>(prop);
+  pprop->id_default_session_uid = id_session_uid;
+}
+
 #ifndef RNA_RUNTIME
 void RNA_def_property_pointer_funcs(
     PropertyRNA *prop, const char *get, const char *set, const char *type_fn, const char *poll)
@@ -4605,7 +4639,7 @@ void RNA_def_function_output(FunctionRNA * /*func*/, PropertyRNA *ret)
   ret->flag_parameter |= PARM_OUTPUT;
 }
 
-void RNA_def_function_flag(FunctionRNA *func, int flag)
+void RNA_def_function_flag(FunctionRNA *func, FunctionFlag flag)
 {
   func->flag |= flag;
 

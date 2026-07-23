@@ -86,7 +86,7 @@ struct Item {
   friend struct ItemInternal;
 };
 
-enum eUI_Item_Flag : uint16_t;
+enum eUI_Item_Flag : uint32_t;
 
 enum class LayoutSeparatorType : int8_t {
   Auto,
@@ -239,14 +239,14 @@ struct Layout : public Item, NonCopyable, NonMovable {
   /**
    * Sets when to split property's label into a separate button when adding new property buttons.
    */
-  void use_property_split_set(bool value);
+  void use_property_split_set(bool is_sep);
 
   [[nodiscard]] bool use_property_decorate() const;
   /**
    * Sets when to add an extra button to insert keyframes next to new property buttons added in the
    * layout.
    */
-  void use_property_decorate_set(bool is_sep);
+  void use_property_decorate_set(bool is_decorate);
 
   [[nodiscard]] int width() const;
 
@@ -403,6 +403,14 @@ struct Layout : public Item, NonCopyable, NonMovable {
 
   /** Adds a label item that will display text and/or icon in the layout. */
   void label(StringRef name, int icon);
+  /**
+   * Adds a multi-line label that will display wrapped text and/or icon in the layout.
+   * \param max_lines: Number of maximum lines to display in the layout, 0 means all.
+   */
+  void label_multiline(StringRefNull label,
+                       int icon,
+                       FontStyleAlign align = UI_STYLE_TEXT_LEFT,
+                       int max_lines = 0);
 
   /**
    * Adds link item, displays a url that can be clicked in the layout.
@@ -659,12 +667,13 @@ struct Layout : public Item, NonCopyable, NonMovable {
 
   /**
    * Adds a string property item as textbox, this will let multi-line text editing, textbox state
-   * will be persistent at runtime.
+   * will stored in the current context region.
    */
   void textbox(const bContext *C,
                PointerRNA *ptr,
                StringRefNull propname,
-               std::optional<StringRefNull> placeholder = std::nullopt);
+               std::optional<StringRefNull> placeholder = std::nullopt,
+               const int initial_visible_lines = 3);
   /**
    * Adds a string property item as textbox, this will let multi-line text editing.
    * \param textbox_state: custom allocation for persistent textbox state.
@@ -738,6 +747,11 @@ struct Layout : public Item, NonCopyable, NonMovable {
   virtual void estimate_impl();
   void resolve();
   virtual void resolve_impl();
+  /**
+   * Resolve layouts containing items whose heights depends on their resolved width.
+   * Currently only for layouts containing multi-line labels.
+   */
+  virtual void resolve_dynamic_height();
 };
 
 inline bool Layout::active() const
@@ -895,7 +909,7 @@ bool block_layout_needs_resolving(const Block *block);
  */
 void block_layout_free(Block *block);
 
-enum eUI_Item_Flag : uint16_t {
+enum eUI_Item_Flag : uint32_t {
   /** Align text input to the right. */
   ITEM_R_TEXT_RIGHT = 1 << 0,
   ITEM_R_EXPAND = 1 << 1,
@@ -931,6 +945,8 @@ enum eUI_Item_Flag : uint16_t {
    * text input while leaving the remaining UI interactive).
    */
   ITEM_R_TEXT_BUT_FORCE_SEMI_MODAL_ACTIVE = 1 << 15,
+  /** Text buttons with no emboss styled like labels. */
+  ITEM_R_TEXT_BUT_LABEL_STYLE = 1 << 16,
 };
 ENUM_OPERATORS(eUI_Item_Flag)
 #define UI_ITEM_NONE ui::eUI_Item_Flag(0)

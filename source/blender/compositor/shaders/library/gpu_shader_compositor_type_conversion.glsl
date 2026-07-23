@@ -403,7 +403,7 @@ float3 bool_to_float3(bool value)
 
 float4 bool_to_color(bool value)
 {
-  return float4(value);
+  return value ? float4(1.0f) : float4(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 float4 bool_to_float4(bool value)
@@ -427,7 +427,8 @@ int3 bool_to_int3(bool value)
 
 float4 float4x4_to_quaternion(float4x4 mat)
 {
-  float3x3 mat_3x3 = normalize(to_float3x3(mat));
+  float3 unused_size;
+  float3x3 mat_3x3 = normalize_and_get_size(to_float3x3(mat), unused_size);
   return to_quaternion(to_euler(mat_3x3)).as_float4();
 }
 

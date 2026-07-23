@@ -9,7 +9,7 @@
 #pragma once
 
 #include "BLI_enum_flags.hh"
-#include "BLI_math_constants.h"
+#include "BLI_math_constants.hh"
 
 #include "DNA_ID.h"
 #include "DNA_anim_enums.h"
@@ -65,6 +65,12 @@ enum eUserPref_Flag : int {
 };
 ENUM_OPERATORS(eUserPref_Flag)
 
+/** #UserDef.asset_flag */
+enum eUserPref_AssetFlag : char {
+  USER_ASSETS_USE_ONLINE_ESSENTIALS = 1 << 0,
+};
+ENUM_OPERATORS(eUserPref_AssetFlag)
+
 /** #UserDef.extension_flag */
 enum eUserPref_ExtensionFlag : char {
   USER_EXTENSION_FLAG_ONLINE_ACCESS_HANDLED = 1 << 0,
@@ -88,6 +94,7 @@ enum eUserpref_Save_Modified_Images : char {
 
 enum eUserPref_PrefFlag : char {
   USER_PREF_FLAG_SAVE = (1 << 0),
+  USER_PREF_FLAG_PROJECT_SAVE = (1 << 1),
 };
 ENUM_OPERATORS(eUserPref_PrefFlag)
 
@@ -190,7 +197,7 @@ ENUM_OPERATORS(eUserpref_UI_Flag2)
 
 /** #UserDef.gpu_flag */
 enum eUserpref_GPU_Flag : char {
-  USER_GPU_FLAG_UNUSED_0 = (1 << 0), /* Unused. To be removed. */
+  USER_GPU_FLAG_WORKBENCH_RT_SHADOWS = (1 << 0),
   USER_GPU_FLAG_NO_EDIT_MODE_SMOOTH_WIRE = (1 << 1),
   USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE = (1 << 2),
   USER_GPU_FLAG_SUBDIVISION_EVALUATION = (1 << 3),
@@ -206,8 +213,10 @@ enum eUserPref_GPUBackendType : short {
   USER_GPU_BACKEND_VULKAN = 1 << 3,
 #ifdef __APPLE__
   USER_GPU_BACKEND_DEFAULT = USER_GPU_BACKEND_METAL,
-#else
+#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
   USER_GPU_BACKEND_DEFAULT = USER_GPU_BACKEND_OPENGL,
+#else
+  USER_GPU_BACKEND_DEFAULT = USER_GPU_BACKEND_VULKAN,
 #endif
 };
 
@@ -826,6 +835,7 @@ struct UserDef_TempWinBounds {
   rctf image = {50.0f, 1360.0f, 50.0f, 830.0f};
   rctf graph = {50.0f, 950.0f, 200.0f, 780.0f};
   rctf info = {100.0f, 1000.0f, 300.0f, 880.0f};
+  rctf project = {100.0f, 800.0f, 500.0f, 850.0f};
   rctf outliner = {100.0f, 550.0f, 350.0f, 800.0f};
 };
 
@@ -859,8 +869,7 @@ struct UserDef_Experimental {
    * actually remove this flag is tracked in #158903. */
   char use_remote_asset_libraries = 1;
   char use_collection_importer = 0;
-  char use_geometry_nodes_hair_dynamics = 0;
-  char _pad[3] = {};
+  char _pad[4] = {};
 };
 
 #define USER_EXPERIMENTAL_TEST(userdef, member) (((userdef)->experimental).member)
@@ -914,7 +923,7 @@ struct UserDef {
                          USER_DUP_CAMERA | USER_DUP_SPEAKER | USER_DUP_ACT | USER_DUP_LIGHTPROBE |
                          USER_DUP_GPENCIL | USER_DUP_CURVES | USER_DUP_POINTCLOUD;
   /** Preferences for the preferences. */
-  eUserPref_PrefFlag pref_flag = USER_PREF_FLAG_SAVE;
+  eUserPref_PrefFlag pref_flag = USER_PREF_FLAG_SAVE | USER_PREF_FLAG_PROJECT_SAVE;
   char savetime = 2;
   eUserpref_EmulateMMBMod mouse_emulate_3_button_modifier = {};
   /**
@@ -1061,9 +1070,6 @@ struct UserDef {
 
   char keyconfigstr[64] = "Blender";
 
-  /** Index of the asset library being edited in the Preferences UI. */
-  short active_asset_library = 0;
-
   /** Index of the extension repo in the Preferences UI. */
   short active_extension_repo = 0;
   /** Flag for all extensions. */
@@ -1076,7 +1082,13 @@ struct UserDef {
   /** Maximum number of simulations connection limit for online operations. */
   uint8_t network_connection_limit = 5;
 
-  char _pad14[3] = {};
+  char _pad2[1] = {};
+
+  /** Index of the asset library being edited in the Preferences UI. */
+  short active_asset_library = 0;
+  eUserPref_AssetFlag asset_flag = USER_ASSETS_USE_ONLINE_ESSENTIALS;
+
+  char _pad14[1] = {};
 
   short undosteps = 32;
   int undomemory = 0;
@@ -1097,7 +1109,11 @@ struct UserDef {
   short vbotimeout = 120, vbocollectrate = 60;
   short textimeout = 120, texcollectrate = 60;
   int memcachelimit = 4096;
-  int geometry_nodes_stack_limit = 100;
+  /**
+   * Maximum evaluation depth of node trees (e.g. number of nested node groups, not how many nodes
+   * are in a chain).
+   */
+  int nodes_stack_limit = 100;
   /** Unused. */
   int prefetchframes = 0;
   /** Control the rotation step of the view when PAD2, PAD4, PAD6&PAD8 is use. */

@@ -17,7 +17,7 @@
 #include "BLI_math_euler.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -623,6 +623,9 @@ class SocketTooltipBuilder {
     }
     if (base_type.is<float4x4>()) {
       return TIP_("Matrix Field");
+    }
+    if (base_type.is<nodes::MenuValue>()) {
+      return TIP_("Menu Field");
     }
     BLI_assert_unreachable();
     return TIP_("Field");

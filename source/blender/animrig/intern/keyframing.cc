@@ -21,7 +21,7 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
@@ -30,9 +30,9 @@
 
 #include "DNA_scene_types.h"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLT_translation.hh"
 
 #include "DEG_depsgraph.hh"
@@ -864,7 +864,7 @@ CombinedKeyingResult insert_keyframes(Main *bmain,
     CombinedKeyingResult result;
 
     const std::optional<StringRefNull> this_rna_path_channel_group =
-        channel_group.has_value() ? *channel_group :
+        channel_group.has_value() ? channel_group :
                                     default_channel_group_for_path(&ptr, *rna_path_id_to_prop);
 
     result = insert_key_layered_action(bmain,

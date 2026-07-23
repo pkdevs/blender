@@ -11,13 +11,13 @@
 #include "DNA_array_utils.hh"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
@@ -2503,6 +2503,36 @@ const animrig::Channelbag *channelbag_for_action_slot(const Action &action,
   }
 
   return nullptr;
+}
+
+Vector<Channelbag *> channelbags_for_action_slot(Action &action, const slot_handle_t slot_handle)
+{
+  if (slot_handle == Slot::unassigned) {
+    return {};
+  }
+
+  /* To avoid adding the same channelbag multiple times which can happen with strip instances. */
+  Set<Channelbag *> visited_channelbags;
+  Vector<Channelbag *> channelbags;
+  for (animrig::Layer *layer : action.layers()) {
+    for (animrig::Strip *strip : layer->strips()) {
+      switch (strip->type()) {
+        case animrig::Strip::Type::Keyframe: {
+          animrig::StripKeyframeData &strip_data = strip->data<animrig::StripKeyframeData>(action);
+          animrig::Channelbag *bag = strip_data.channelbag_for_slot(slot_handle);
+          if (!bag) {
+            continue;
+          }
+          if (!visited_channelbags.add(bag)) {
+            continue;
+          }
+          channelbags.append(bag);
+        }
+      }
+    }
+  }
+
+  return channelbags;
 }
 
 animrig::Channelbag *channelbag_for_action_slot(Action &action, const slot_handle_t slot_handle)

@@ -8,10 +8,10 @@
  * Wrapper between `ED_undo.hh` and `BKE_undo_system.hh` API's.
  */
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 
 #include "DNA_ID.h"
 #include "DNA_collection_types.h"
@@ -78,7 +78,7 @@ static bool memfile_undosys_step_encode(bContext * /*C*/, Main *bmain, UndoStep 
   UndoStack *ustack = ED_undo_stack_get();
 
   if (bmain->is_memfile_undo_flush_needed) {
-    ED_editors_flush_edits_ex(bmain, false, true);
+    ED_editors_flush_edits_ex(bmain, true);
   }
 
   /* can be null, use when set. */
@@ -338,7 +338,7 @@ static void memfile_undosys_step_free(UndoStep *us_p)
 
 void ED_memfile_undosys_type(UndoType *ut)
 {
-  ut->name = "Global Undo";
+  ut->identifier = "GLOBAL_UNDO";
   ut->poll = memfile_undosys_poll;
   ut->step_encode = memfile_undosys_step_encode;
   ut->step_decode = memfile_undosys_step_decode;

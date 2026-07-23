@@ -517,7 +517,7 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
 ccl_device void osl_closure_thin_glass_setup(KernelGlobals kg,
                                              ccl_private ShaderData *sd,
                                              const PathRayVisibility path_visibility,
-                                             const uint32_t /*path_flag*/,
+                                             const uint32_t path_flag,
                                              const float3 weight,
                                              const ccl_private ThinGlassClosure *closure,
                                              float3 *layer_albedo)
@@ -563,7 +563,9 @@ ccl_device void osl_closure_thin_glass_setup(KernelGlobals kg,
                         closure->ior,
                         thinfilm,
                         &reflectance,
-                        &transmittance);
+                        &transmittance,
+                        path_visibility,
+                        path_flag);
 
   if (layer_albedo != nullptr) {
     *layer_albedo = transmittance * !!has_transmission + reflectance * !!has_reflection;
@@ -941,13 +943,17 @@ ccl_device void osl_closure_glossy_toon_setup(KernelGlobals kg,
  */
 ccl_device void osl_closure_emission_setup(KernelGlobals kg,
                                            ccl_private ShaderData *sd,
-                                           const PathRayVisibility /*path_visibility*/,
-                                           const uint32_t /*path_flag*/,
+                                           const PathRayVisibility path_visibility,
+                                           const uint32_t path_flag,
                                            float3 weight,
                                            const ccl_private GenericEmissiveClosure * /*closure*/,
                                            float3 * /*layer_albedo*/)
 {
   if (sd->flag & SD_IS_VOLUME_SHADER_EVAL) {
+    if ((path_visibility & PATH_RAY_VISIBILITY_SHADOW) || (path_flag & PATH_RAY_EXTINCTION)) {
+      /* Don't need emission for shadows and extinction. */
+      return;
+    }
     weight *= object_volume_density(kg, sd->object);
   }
   emission_setup(sd, rgb_to_spectrum(weight));
@@ -977,14 +983,18 @@ ccl_device void osl_closure_background_setup(
  */
 ccl_device void osl_closure_uniform_edf_setup(KernelGlobals kg,
                                               ccl_private ShaderData *sd,
-                                              const PathRayVisibility /*path_visibility*/,
-                                              const uint32_t /*path_flag*/,
+                                              const PathRayVisibility path_visibility,
+                                              const uint32_t path_flag,
                                               float3 weight,
                                               const ccl_private UniformEDFClosure *closure,
                                               float3 * /*layer_albedo*/)
 {
   weight *= closure->emittance;
   if (sd->flag & SD_IS_VOLUME_SHADER_EVAL) {
+    if ((path_visibility & PATH_RAY_VISIBILITY_SHADOW) || (path_flag & PATH_RAY_EXTINCTION)) {
+      /* Don't need emission for shadows and extinction. */
+      return;
+    }
     weight *= object_volume_density(kg, sd->object);
   }
   emission_setup(sd, rgb_to_spectrum(weight));
@@ -1117,7 +1127,7 @@ ccl_device void osl_closure_subsurface_bssrdf_setup(
     const ccl_private SubsurfaceBSSRDFClosure *closure,
     float3 * /*layer_albedo*/)
 {
-  ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, rgb_to_spectrum(weight));
+  ccl_private Bssrdf *bssrdf = bssrdf_alloc(sd, rgb_to_spectrum(closure->albedo * weight));
   if (!bssrdf) {
     return;
   }
@@ -1277,8 +1287,8 @@ ccl_device void osl_closure_hair_huang_setup(KernelGlobals kg,
     const int k0 = kcurve.first_key + PRIMITIVE_UNPACK_SEGMENT(sd->type);
     const int k1 = k0 + 1;
     const int position_offset = kernel_data_fetch(objects, sd->object).position_offset;
-    const float radius = mix(kernel_data_fetch(attributes_float4, position_offset + k0).w,
-                             kernel_data_fetch(attributes_float4, position_offset + k1).w,
+    const float radius = mix(kernel_data_fetch(curve_keys, position_offset + k0).w,
+                             kernel_data_fetch(curve_keys, position_offset + k1).w,
                              sd->u);
 
     bsdf->extra->pixel_coverage = 0.5f * sd->dP / radius;

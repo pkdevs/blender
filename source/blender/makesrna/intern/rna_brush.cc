@@ -13,8 +13,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_texture_types.h"
 
-#include "BLI_math_base.h"
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_string_utf8_symbols.hh"
 
 #include "BLT_translation.hh"
 
@@ -321,6 +321,7 @@ const EnumPropertyItem rna_enum_brush_curves_sculpt_brush_type_items[] = {
     {CURVES_SCULPT_BRUSH_TYPE_COMB, "COMB", 0, "Comb", ""},
     {CURVES_SCULPT_BRUSH_TYPE_SNAKE_HOOK, "SNAKE_HOOK", 0, "Snake Hook", ""},
     {CURVES_SCULPT_BRUSH_TYPE_GROW_SHRINK, "GROW_SHRINK", 0, "Grow / Shrink", ""},
+    {CURVES_SCULPT_BRUSH_TYPE_CUT, "CUT", 0, "Cut", ""},
     {CURVES_SCULPT_BRUSH_TYPE_PINCH, "PINCH", 0, "Pinch", ""},
     {CURVES_SCULPT_BRUSH_TYPE_PUFF, "PUFF", 0, "Puff", ""},
     {CURVES_SCULPT_BRUSH_TYPE_SMOOTH, "SMOOTH", 0, "Smooth", ""},
@@ -468,6 +469,12 @@ static bool rna_BrushCapabilitiesSculpt_has_auto_smooth_get(PointerRNA *ptr)
 {
   const Brush *br = static_cast<const Brush *>(ptr->data);
   return bke::brush::supports_auto_smooth(*br);
+}
+
+static bool rna_BrushCapabilitiesSculpt_has_tip_roundness_get(PointerRNA *ptr)
+{
+  const Brush *br = static_cast<const Brush *>(ptr->data);
+  return bke::brush::supports_tip_roundness(*br);
 }
 
 static bool rna_BrushCapabilitiesSculpt_has_hardness_get(PointerRNA *ptr)
@@ -811,6 +818,10 @@ static const EnumPropertyItem *rna_Brush_direction_itemf(bContext *C,
                                                          PropertyRNA * /*prop*/,
                                                          bool * /*r_free*/)
 {
+  if (C == nullptr) {
+    return rna_enum_dummy_DEFAULT_items;
+  }
+
   PaintMode mode = BKE_paintmode_get_active_from_context(C);
 
   /* sculpt mode */
@@ -1244,6 +1255,7 @@ static void rna_def_sculpt_capabilities(BlenderRNA *brna)
   SCULPT_BRUSH_CAPABILITY(has_auto_smooth, "Has Auto Smooth");
   SCULPT_BRUSH_CAPABILITY(has_normal_radius, "Has Normal Radius");
   SCULPT_BRUSH_CAPABILITY(has_hardness, "Has Hardness");
+  SCULPT_BRUSH_CAPABILITY(has_tip_roundness, "Has Tip Roundness");
   SCULPT_BRUSH_CAPABILITY(has_topology_rake, "Has Topology Rake");
   SCULPT_BRUSH_CAPABILITY(has_height, "Has Height");
   SCULPT_BRUSH_CAPABILITY(has_plane_depth, "Has Plane Depth");

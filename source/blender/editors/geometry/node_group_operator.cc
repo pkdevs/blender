@@ -8,9 +8,9 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_key_types.h"
 #include "ED_curves.hh"
@@ -84,15 +84,15 @@
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
 
+#include "PRF_profile.hh"
+
 #include <xxhash.h>
 
 #include "geometry_intern.hh"
 
 #include <fmt/format.h>
 
-namespace blender {
-
-namespace ed::geometry {
+namespace blender::ed::geometry {
 
 using asset_system::AssetRepresentation;
 
@@ -886,6 +886,49 @@ static Vector<Object *> gather_supported_objects(const bContext &C,
   return objects;
 }
 
+/**
+ * Input node values are stored as operator properties in order to support redoing from the redo
+ * panel for a few reasons:
+ *  1. Some data (like the mouse position) cannot be retrieved from the `exec` callback used for
+ *     operator redo. Redo is meant to just call the operator again with the exact same properties.
+ *  2. While adjusting an input in the redo panel, the user doesn't expect anything else to change.
+ *     If we retrieve other data like the viewport transform on every execution, that won't be the
+ *     case.
+ * We use operator RNA properties instead of operator custom data because the custom data struct
+ * isn't maintained for the redo `exec` call.
+ */
+static void store_input_node_values_rna_props(const bContext &C,
+                                              wmOperator &op,
+                                              const wmEvent &event)
+{
+  Scene *scene = CTX_data_scene(&C);
+  /* NOTE: `region` and `rv3d` may be null when called from a script. */
+  const ARegion *region = CTX_wm_region(&C);
+  const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
+
+  /* Mouse position node inputs. */
+  RNA_int_set_array(op.ptr, "mouse_position", event.mval);
+  RNA_int_set_array(
+      op.ptr,
+      "region_size",
+      region ? int2(BLI_rcti_size_x(&region->winrct), BLI_rcti_size_y(&region->winrct)) : int2(0));
+
+  /* 3D cursor node inputs. */
+  const View3DCursor &cursor = scene->cursor;
+  RNA_float_set_array(op.ptr, "cursor_position", cursor.location);
+  math::Quaternion cursor_rotation = cursor.rotation();
+  RNA_float_set_array(op.ptr, "cursor_rotation", &cursor_rotation.w);
+
+  /* Viewport transform node inputs. */
+  RNA_float_set_array(op.ptr,
+                      "viewport_projection_matrix",
+                      rv3d ? float4x4(rv3d->winmat).base_ptr() : float4x4::identity().base_ptr());
+  RNA_float_set_array(op.ptr,
+                      "viewport_view_matrix",
+                      rv3d ? float4x4(rv3d->viewmat).base_ptr() : float4x4::identity().base_ptr());
+  RNA_boolean_set(op.ptr, "viewport_is_perspective", rv3d ? bool(rv3d->is_persp) : true);
+}
+
 static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -1005,49 +1048,6 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   }
 
   return OPERATOR_FINISHED;
-}
-
-/**
- * Input node values are stored as operator properties in order to support redoing from the redo
- * panel for a few reasons:
- *  1. Some data (like the mouse position) cannot be retrieved from the `exec` callback used for
- *     operator redo. Redo is meant to just call the operator again with the exact same properties.
- *  2. While adjusting an input in the redo panel, the user doesn't expect anything else to change.
- *     If we retrieve other data like the viewport transform on every execution, that won't be the
- *     case.
- * We use operator RNA properties instead of operator custom data because the custom data struct
- * isn't maintained for the redo `exec` call.
- */
-static void store_input_node_values_rna_props(const bContext &C,
-                                              wmOperator &op,
-                                              const wmEvent &event)
-{
-  Scene *scene = CTX_data_scene(&C);
-  /* NOTE: `region` and `rv3d` may be null when called from a script. */
-  const ARegion *region = CTX_wm_region(&C);
-  const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
-
-  /* Mouse position node inputs. */
-  RNA_int_set_array(op.ptr, "mouse_position", event.mval);
-  RNA_int_set_array(
-      op.ptr,
-      "region_size",
-      region ? int2(BLI_rcti_size_x(&region->winrct), BLI_rcti_size_y(&region->winrct)) : int2(0));
-
-  /* 3D cursor node inputs. */
-  const View3DCursor &cursor = scene->cursor;
-  RNA_float_set_array(op.ptr, "cursor_position", cursor.location);
-  math::Quaternion cursor_rotation = cursor.rotation();
-  RNA_float_set_array(op.ptr, "cursor_rotation", &cursor_rotation.w);
-
-  /* Viewport transform node inputs. */
-  RNA_float_set_array(op.ptr,
-                      "viewport_projection_matrix",
-                      rv3d ? float4x4(rv3d->winmat).base_ptr() : float4x4::identity().base_ptr());
-  RNA_float_set_array(op.ptr,
-                      "viewport_view_matrix",
-                      rv3d ? float4x4(rv3d->viewmat).base_ptr() : float4x4::identity().base_ptr());
-  RNA_boolean_set(op.ptr, "viewport_is_perspective", rv3d ? bool(rv3d->is_persp) : true);
 }
 
 static wmOperatorStatus run_node_group_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -1304,6 +1304,7 @@ static StructRNA *get_input_socket_struct_rna(IDProperty &input_idprop,
     case SOCK_COLLECTION:
     case SOCK_MATERIAL:
     case SOCK_FONT:
+    case SOCK_SOUND:
     case SOCK_OBJECT: {
       RNA_def_string(srna, "value", nullptr, 0, name.c_str(), description.c_str());
       make_common_value_props(*srna);
@@ -1499,14 +1500,14 @@ void ui_template_node_operator_registration_errors(ui::Layout &layout,
   }
   ui::Layout &col = layout.column(false);
   if (errors_for_type->is_builtin_operator) {
-    col.label(TIP_("Operator is already registered"), ICON_ERROR);
+    col.label(TIP_("Operator is already registered"), ICON_STATUS_ERROR);
   }
   if (errors_for_type->duplicate_count != 0) {
     col.label(fmt::format(fmt::runtime(TIP_("Duplicates: {}")), errors_for_type->duplicate_count),
-              ICON_ERROR);
+              ICON_STATUS_ERROR);
   }
   for (const std::string &error : errors_for_type->idname_validation_errors) {
-    col.label(error, ICON_ERROR);
+    col.label(error, ICON_STATUS_ERROR);
   }
 }
 
@@ -1690,6 +1691,7 @@ static void show_error_reports(const bContext &C, RegistrationData::Errors error
 
 void register_node_group_operators(const bContext &C)
 {
+  PRF_scope(ProfileCategory::Core);
   wmWindowManager &wm = *CTX_wm_manager(&C);
   Main &bmain = *CTX_data_main(&C);
   RegistrationData &registration_data = get_registration_data();
@@ -2146,5 +2148,4 @@ void ui_template_node_operator_asset_root_items(ui::Layout &layout, const bConte
 
 /** \} */
 
-}  // namespace ed::geometry
-}  // namespace blender
+}  // namespace blender::ed::geometry

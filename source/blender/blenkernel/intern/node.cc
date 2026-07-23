@@ -35,28 +35,28 @@
 #include "DNA_world_types.h"
 
 #include "BLI_color_types.hh"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_math_rotation.hh"
 #include "BLI_math_rotation_types.hh"
-#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_rand.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 #include "BLT_translation.hh"
 
 #include "IMB_imbuf.hh"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_asset.hh"
 #include "BKE_bpath.hh"
 #include "BKE_colorband.hh"
@@ -138,6 +138,7 @@ static void node_socket_set_typeinfo(bNodeTree *ntree,
 static void node_socket_copy(bNodeSocket *sock_dst, const bNodeSocket *sock_src, const int flag);
 static void free_localized_node_groups(bNodeTree *ntree);
 static bool socket_id_user_decrement(bNodeSocket *sock);
+static void node_socket_free(bNodeSocket *sock, const bool do_id_user);
 
 static void ntree_init_data(ID *id)
 {
@@ -723,6 +724,10 @@ static void write_legacy_properties(bNodeTree &ntree, Map<ID **, ID *> &r_ids_to
                                        ->default_value_typed<bNodeSocketValueFont>()
                                        ->value);
         }
+        else if (node->is_type("GeometryNodeSetGreasePencilColor"_ustr)) {
+          const bNodeSocket *socket = node_find_socket(*node, SOCK_IN, "Mode"_ustr);
+          node->custom1 = socket->default_value_typed<bNodeSocketValueMenu>()->value;
+        }
       }
       break;
     }
@@ -1062,6 +1067,75 @@ static void free_legacy_socket_storage(bNode &node)
   }
 }
 
+static const Map<StringRef, StringRef> &subtype_pixel_to_none()
+{
+  static const Map<StringRef, StringRef> map = {
+      {"NodeSocketFloatPixel", "NodeSocketFloat"},
+      {"NodeSocketVectorPixel", "NodeSocketVector"},
+      {"NodeSocketVectorPixel2D", "NodeSocketVector2D"},
+      {"NodeSocketVectorPixel4D", "NodeSocketVector4D"},
+      {"NodeSocketIntPixel", "NodeSocketInt"},
+      {"NodeSocketIntVectorPixel2D", "NodeSocketIntVector2D"},
+      {"NodeSocketIntVectorPixel3D", "NodeSocketIntVector3D"}};
+  return map;
+}
+
+template<typename ValueType>
+static void write_default_value_none_subtype(BlendWriter *writer, const void *default_value)
+{
+  ValueType value = *static_cast<const ValueType *>(default_value);
+  value.subtype = PROP_NONE;
+  writer->write_struct_at_address_cast<ValueType>(default_value, &value);
+}
+
+static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket &sock)
+{
+  bNodeSocket *sock_copy = MEM_dupalloc(&sock);
+  node_socket_copy(sock_copy, &sock, LIB_ID_CREATE_NO_USER_REFCOUNT);
+  STRNCPY(sock_copy->idname, subtype_pixel_to_none().lookup(sock.idname).data());
+
+  /* This property should only be used for group node "interface" sockets. */
+  BLI_assert(sock_copy->default_attribute_name == nullptr);
+
+  /* Write a shallow copy of sock to ensure modified #sock->default_value is written at desired
+   * original address, see also #write_default_value_none_subtype. This is safe because sockets
+   * with Pixel and None subtypes share the same data. */
+  void *default_value_copy = sock_copy->default_value;
+  IDProperty *prop_copy = sock_copy->prop;
+  sock_copy->default_value = sock.default_value;
+  sock_copy->prop = sock.prop;
+  writer->write_struct_at_address(&sock, sock_copy);
+  sock_copy->default_value = default_value_copy;
+  sock_copy->prop = prop_copy;
+
+  if (sock.prop) {
+    IDP_BlendWrite(writer, sock.prop);
+  }
+
+  if (sock.default_value != nullptr) {
+    switch (sock.type) {
+      case SOCK_FLOAT:
+        write_default_value_none_subtype<bNodeSocketValueFloat>(writer, sock.default_value);
+        break;
+      case SOCK_VECTOR:
+        write_default_value_none_subtype<bNodeSocketValueVector>(writer, sock.default_value);
+        break;
+      case SOCK_INT:
+        write_default_value_none_subtype<bNodeSocketValueInt>(writer, sock.default_value);
+        break;
+      case SOCK_INT_VECTOR:
+        write_default_value_none_subtype<bNodeSocketValueIntVector>(writer, sock.default_value);
+        break;
+      default:
+        BLI_assert_unreachable();
+        break;
+    }
+  }
+
+  node_socket_free(sock_copy, false);
+  MEM_delete(sock_copy);
+}
+
 }  // namespace forward_compat
 
 static void write_node_socket_default_value(BlendWriter *writer, const bNodeSocket *sock)
@@ -1145,6 +1219,13 @@ static void write_node_socket_default_value(BlendWriter *writer, const bNodeSock
 
 static void write_node_socket(BlendWriter *writer, const bNodeSocket *sock)
 {
+  /* Todo(#140111): Forward compatibility support for pixel subtype will be removed in 6.0. */
+  if (!BLO_write_is_undo(writer) && forward_compat::subtype_pixel_to_none().contains(sock->idname))
+  {
+    forward_compat::pixel_subtype_forward_compat(writer, *sock);
+    return;
+  }
+
   writer->write_struct(sock);
 
   if (sock->prop) {
@@ -1276,7 +1357,10 @@ void node_tree_blend_write(BlendWriter *writer, bNodeTree *ntree)
       node->custom1 = data->parametrization;
     }
 
-    writer->write_struct(node);
+    writer->write_struct(node, [](BlendStructWriter &struct_writer) {
+      struct_writer.runtime_ptr(offsetof(bNode, runtime));
+      struct_writer.runtime_ptr(offsetof(bNode, typeinfo));
+    });
 
     if (node->prop) {
       IDP_BlendWrite(writer, node->prop);
@@ -2114,9 +2198,12 @@ static void ntree_blend_read_after_liblink(BlendLibReader *reader, ID *id)
    * to match the static layout. */
   if (!BLO_read_lib_is_undo(reader)) {
     for (bNode &node : ntree->nodes) {
-      /* Don't update node groups here because they may depend on other node groups which are not
-       * fully versioned yet and don't have `typeinfo` pointers set. */
-      if (!node.is_group()) {
+      /* Don't update nodes whose declaration may depend on other IDs which may not be fully linked
+       * and versioned yet. */
+      const bool is_context_dependent = node.typeinfo->static_declaration &&
+                                        node.typeinfo->static_declaration->is_context_dependent;
+      const bool references_another_id = node.id != nullptr;
+      if (!(is_context_dependent && references_another_id)) {
         node_verify_sockets(reader->main, ntree, &node, false);
       }
     }
@@ -3881,8 +3968,7 @@ bNodeSocket *node_add_static_socket(bNodeTree &ntree,
 static void node_socket_free(bNodeSocket *sock, const bool do_id_user)
 {
   if (sock->prop) {
-    IDP_FreePropertyContent_ex(sock->prop, do_id_user);
-    MEM_delete(sock->prop);
+    IDP_FreeProperty_ex(sock->prop, do_id_user);
   }
 
   if (sock->default_value) {
@@ -4314,110 +4400,118 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
  * Type of value storage related with socket is the same.
  * \param socket: Node can have multiple sockets & storage pairs.
  */
-static void *node_static_value_storage_for(bNode &node, const bNodeSocket &socket)
+[[nodiscard]] static bool store_socket_value(bNode &node,
+                                             const bNodeSocket &socket,
+                                             const void *value)
 {
   if (!socket.is_output()) {
-    return nullptr;
+    return false;
   }
 
   switch (node.type_legacy) {
     case FN_NODE_INPUT_BOOL:
-      return &reinterpret_cast<NodeInputBool *>(node.storage)->boolean;
+      reinterpret_cast<NodeInputBool *>(node.storage)->boolean = *static_cast<const bool *>(value);
+      return true;
     case SH_NODE_VALUE:
       /* The value is stored in the default value of the first output socket. */
-      return &static_cast<bNodeSocket *>(node.outputs.first)
-                  ->default_value_typed<bNodeSocketValueFloat>()
-                  ->value;
+      static_cast<bNodeSocket *>(node.outputs.first)
+          ->default_value_typed<bNodeSocketValueFloat>()
+          ->value = *static_cast<const float *>(value);
+      return true;
     case FN_NODE_INPUT_INT:
-      return &reinterpret_cast<NodeInputInt *>(node.storage)->integer;
+      reinterpret_cast<NodeInputInt *>(node.storage)->integer = *static_cast<const int *>(value);
+      return true;
     case FN_NODE_INPUT_VECTOR:
-      return &reinterpret_cast<NodeInputVector *>(node.storage)->vector;
+      copy_v3_v3(reinterpret_cast<NodeInputVector *>(node.storage)->vector,
+                 *static_cast<const float3 *>(value));
+      return true;
     case FN_NODE_INPUT_COLOR:
-      return &reinterpret_cast<NodeInputColor *>(node.storage)->color;
+      copy_v4_v4(reinterpret_cast<NodeInputColor *>(node.storage)->color,
+                 *static_cast<const ColorGeometry4f *>(value));
+      return true;
     case FN_NODE_INPUT_ROTATION:
-      return &reinterpret_cast<NodeInputRotation *>(node.storage)->rotation_euler;
+      copy_v3_v3(reinterpret_cast<NodeInputRotation *>(node.storage)->rotation_euler,
+                 float3(math::to_euler(*static_cast<const math::Quaternion *>(value)).xyz()));
+      return true;
     case FN_NODE_INPUT_STRING:
       /* Handled separately for string copies. */
-      return nullptr;
+      return false;
     case GEO_NODE_IMAGE:
     case GEO_NODE_INPUT_COLLECTION:
     case GEO_NODE_INPUT_MATERIAL:
     case GEO_NODE_INPUT_OBJECT:
-      return &node.id;
+      node.id = *static_cast<ID *const *>(value);
+      return true;
     default:
       break;
   }
+  if (node.is_type("ShaderNodeCombineXYZ"_ustr)) {
+    const float3 &vector = *static_cast<const float3 *>(value);
+    node.input_socket(0).default_value_typed<bNodeSocketValueFloat>()->value = vector.x;
+    node.input_socket(1).default_value_typed<bNodeSocketValueFloat>()->value = vector.y;
+    node.input_socket(2).default_value_typed<bNodeSocketValueFloat>()->value = vector.z;
+    return true;
+  }
   if (node.is_type("GeometryNodeInputFont"_ustr)) {
-    return &node.id;
+    node.id = *static_cast<ID *const *>(value);
+    return true;
   }
   if (node.is_type("FunctionNodeInputMenu"_ustr)) {
-    return &reinterpret_cast<NodeInputMenu *>(node.storage)->value;
+    reinterpret_cast<NodeInputMenu *>(node.storage)->value = *static_cast<const int *>(value);
+    return true;
   }
-  if (node.is_type("ShaderNodeRGB"_ustr)) {
-    return &node.output_socket(0).default_value_typed<bNodeSocketValueRGBA>()->value;
+  if (node.is_type("ShaderNodeRGB"_ustr) || node.is_type("CompositorNodeRGB"_ustr)) {
+    copy_v4_v4(node.output_socket(0).default_value_typed<bNodeSocketValueRGBA>()->value,
+               *static_cast<const ColorGeometry4f *>(value));
+    return true;
   }
   if (node.is_type("ShaderNodeValue"_ustr)) {
-    return &node.output_socket(0).default_value_typed<bNodeSocketValueFloat>()->value;
+    node.output_socket(0).default_value_typed<bNodeSocketValueFloat>()->value =
+        *static_cast<const float *>(value);
+    return true;
   }
 
-  return nullptr;
+  return false;
 }
 
-static void *socket_value_storage(bNodeSocket &socket)
+[[nodiscard]] static bool get_socket_value(bNodeSocket &socket, void *buffer)
 {
   switch (socket.type) {
     case SOCK_BOOLEAN:
-      return &socket.default_value_typed<bNodeSocketValueBoolean>()->value;
     case SOCK_INT:
-      return &socket.default_value_typed<bNodeSocketValueInt>()->value;
     case SOCK_FLOAT:
-      return &socket.default_value_typed<bNodeSocketValueFloat>()->value;
     case SOCK_VECTOR:
-      return &socket.default_value_typed<bNodeSocketValueVector>()->value;
     case SOCK_RGBA:
-      return &socket.default_value_typed<bNodeSocketValueRGBA>()->value;
     case SOCK_IMAGE:
-      return &socket.default_value_typed<bNodeSocketValueImage>()->value;
     case SOCK_TEXTURE:
-      return &socket.default_value_typed<bNodeSocketValueTexture>()->value;
     case SOCK_COLLECTION:
-      return &socket.default_value_typed<bNodeSocketValueCollection>()->value;
     case SOCK_OBJECT:
-      return &socket.default_value_typed<bNodeSocketValueObject>()->value;
     case SOCK_MATERIAL:
-      return &socket.default_value_typed<bNodeSocketValueMaterial>()->value;
     case SOCK_FONT:
-      return &socket.default_value_typed<bNodeSocketValueFont>()->value;
     case SOCK_SCENE:
-      return &socket.default_value_typed<bNodeSocketValueScene>()->value;
     case SOCK_TEXT_ID:
-      return &socket.default_value_typed<bNodeSocketValueText>()->value;
     case SOCK_MASK:
-      return &socket.default_value_typed<bNodeSocketValueMask>()->value;
     case SOCK_SOUND:
-      return &socket.default_value_typed<bNodeSocketValueSound>()->value;
     case SOCK_ROTATION:
-      return &socket.default_value_typed<bNodeSocketValueRotation>()->value_euler;
     case SOCK_MENU:
-      return &socket.default_value_typed<bNodeSocketValueMenu>()->value;
     case SOCK_INT_VECTOR:
-      return &socket.default_value_typed<bNodeSocketValueIntVector>()->value;
+      socket.typeinfo->get_base_cpp_value(socket.default_value, buffer);
+      return true;
     case SOCK_MATRIX:
       /* Matrix sockets currently have no default value. */
-      return nullptr;
+      return false;
     case SOCK_STRING:
       /* Handled separately for string copies. */
-      return nullptr;
+      return false;
     case SOCK_CUSTOM:
     case SOCK_SHADER:
     case SOCK_GEOMETRY:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
-      /* Unmovable types. */
-      break;
+      return false;
   }
 
-  return nullptr;
+  return false;
 }
 
 void node_socket_move_default_value(Main & /*bmain*/,
@@ -4464,56 +4558,52 @@ void node_socket_move_default_value(Main & /*bmain*/,
     return;
   }
 
-  void *src_value = socket_value_storage(src);
-  if (!src_value) {
+  BUFFER_FOR_CPP_TYPE_VALUE(src_type, src_value);
+  if (!get_socket_value(src, src_value)) {
     return;
-  }
-  /* Special handling for rotation because the CPPType is a quaternion but values are stored as
-   * Euler angles. */
-  math::Quaternion src_rotation_value;
-  if (src.type == SOCK_ROTATION) {
-    src_rotation_value = math::to_quaternion(math::EulerXYZ(*static_cast<float3 *>(src_value)));
-    src_value = &src_rotation_value;
   }
 
   BUFFER_FOR_CPP_TYPE_VALUE(dst_type, dst_buffer);
   convert.convert_to_uninitialized(src_type, dst_type, src_value, dst_buffer);
-
-  if (dst_node.is_type("ShaderNodeCombineXYZ"_ustr)) {
-    const float3 &src_value = *static_cast<float3 *>(dst_buffer);
-    dst_node.input_socket(0).default_value_typed<bNodeSocketValueFloat>()->value = src_value.x;
-    dst_node.input_socket(1).default_value_typed<bNodeSocketValueFloat>()->value = src_value.y;
-    dst_node.input_socket(2).default_value_typed<bNodeSocketValueFloat>()->value = src_value.z;
-    return;
-  }
-
-  void *dst_value = node_static_value_storage_for(dst_node, dst);
-  if (!dst_value) {
-    return;
-  }
-
-  if (dst.type == SOCK_ROTATION) {
-    *static_cast<float3 *>(dst_value) = float3(
-        math::to_euler(*static_cast<math::Quaternion *>(dst_buffer)).xyz());
-    return;
-  }
-
-  dst_type.move_assign(dst_buffer, dst_value);
-
   src_type.destruct(src_value);
-  if (ELEM(src.type,
-           SOCK_COLLECTION,
-           SOCK_IMAGE,
-           SOCK_MATERIAL,
-           SOCK_TEXTURE,
-           SOCK_OBJECT,
-           SOCK_FONT,
-           SOCK_SCENE,
-           SOCK_TEXT_ID,
-           SOCK_MASK,
-           SOCK_SOUND))
-  {
-    src_type.value_initialize(src_value);
+
+  if (!store_socket_value(dst_node, dst, dst_buffer)) {
+    return;
+  }
+
+  switch (src.type) {
+    case SOCK_COLLECTION:
+      src.default_value_typed<bNodeSocketValueCollection>()->value = nullptr;
+      break;
+    case SOCK_IMAGE:
+      src.default_value_typed<bNodeSocketValueImage>()->value = nullptr;
+      break;
+    case SOCK_MATERIAL:
+      src.default_value_typed<bNodeSocketValueMaterial>()->value = nullptr;
+      break;
+    case SOCK_TEXTURE:
+      src.default_value_typed<bNodeSocketValueTexture>()->value = nullptr;
+      break;
+    case SOCK_OBJECT:
+      src.default_value_typed<bNodeSocketValueObject>()->value = nullptr;
+      break;
+    case SOCK_FONT:
+      src.default_value_typed<bNodeSocketValueFont>()->value = nullptr;
+      break;
+    case SOCK_SCENE:
+      src.default_value_typed<bNodeSocketValueScene>()->value = nullptr;
+      break;
+    case SOCK_TEXT_ID:
+      src.default_value_typed<bNodeSocketValueText>()->value = nullptr;
+      break;
+    case SOCK_MASK:
+      src.default_value_typed<bNodeSocketValueMask>()->value = nullptr;
+      break;
+    case SOCK_SOUND:
+      src.default_value_typed<bNodeSocketValueSound>()->value = nullptr;
+      break;
+    default:
+      break;
   }
 }
 
@@ -4606,9 +4696,84 @@ bool node_link_is_hidden(const bNodeLink &link)
   return !(link.fromsock->is_visible() && link.tosock->is_visible());
 }
 
+static bool check_link_selected_backward(const bNodeLink &link, Set<const bNode *> &visited_nodes)
+{
+  const bNode *node = link.fromnode;
+  if (!node) {
+    return false;
+  }
+  if ((node->flag & NODE_SELECT)) {
+    return true;
+  }
+  if (!node->is_reroute()) {
+    return false;
+  }
+  if (!visited_nodes.add(node)) {
+    return false;
+  }
+  if (node->input_sockets().is_empty()) {
+    return false;
+  }
+  const bNodeSocket &input_socket = node->input_socket(0);
+  for (const bNodeLink *prev_link : input_socket.directly_linked_links()) {
+    if (check_link_selected_backward(*prev_link, visited_nodes)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool check_link_selected_forward(const bNodeLink &link, Set<const bNode *> &visited_nodes)
+{
+  const bNode *node = link.tonode;
+  if (!node) {
+    return false;
+  }
+  if ((node->flag & NODE_SELECT)) {
+    return true;
+  }
+  if (!node->is_reroute()) {
+    return false;
+  }
+  if (!visited_nodes.add(node)) {
+    return false;
+  }
+  if (node->output_sockets().is_empty()) {
+    return false;
+  }
+  const bNodeSocket &output_socket = node->output_socket(0);
+  for (const bNodeLink *next_link : output_socket.directly_linked_links()) {
+    if (check_link_selected_forward(*next_link, visited_nodes)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool node_link_is_selected(const bNodeLink &link)
 {
-  return (link.fromnode->flag & NODE_SELECT) || (link.tonode->flag & NODE_SELECT);
+  if ((link.fromnode->flag & NODE_SELECT) || (link.tonode->flag & NODE_SELECT)) {
+    return true;
+  }
+  if (!link.fromnode->is_reroute() && !link.tonode->is_reroute()) {
+    return false;
+  }
+
+  BLI_assert(bke::node_tree_runtime::topology_cache_is_available(*link.fromnode));
+
+  if (link.fromnode->is_reroute()) {
+    Set<const bNode *> visited_backward;
+    if (check_link_selected_backward(link, visited_backward)) {
+      return true;
+    }
+  }
+  if (link.tonode->is_reroute()) {
+    Set<const bNode *> visited_forward;
+    if (check_link_selected_forward(link, visited_forward)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /* Adjust the indices of links connected to the given multi input socket after deleting the link at
@@ -4932,13 +5097,11 @@ void node_free_node(bNodeTree *ntree, bNode &node)
 
   if (node.prop) {
     /* Remember, no ID user refcount management here! */
-    IDP_FreePropertyContent_ex(node.prop, false);
-    MEM_delete(node.prop);
+    IDP_FreeProperty_ex(node.prop, false);
   }
   if (node.system_properties) {
     /* Remember, no ID user refcount management here! */
-    IDP_FreePropertyContent_ex(node.system_properties, false);
-    MEM_delete(node.system_properties);
+    IDP_FreeProperty_ex(node.system_properties, false);
   }
 
   if (node.runtime->declaration) {

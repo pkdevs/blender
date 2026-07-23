@@ -24,10 +24,10 @@
 
 #undef DNA_GENFILE_VERSIONING_MACROS
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_colortools.hh"
@@ -1043,9 +1043,9 @@ void blo_do_versions_420(FileData *fd, Library * /*lib*/, Main *bmain)
       /* Guess a somewhat correct density given the resolution. But very low resolution need
        * a decent enough density to work. */
       lightprobe.grid_surfel_density = max_ii(20,
-                                              2 * max_iii(lightprobe.grid_resolution_x,
-                                                          lightprobe.grid_resolution_y,
-                                                          lightprobe.grid_resolution_z));
+                                              2 * std::max({lightprobe.grid_resolution_x,
+                                                            lightprobe.grid_resolution_y,
+                                                            lightprobe.grid_resolution_z}));
     }
   }
 

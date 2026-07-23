@@ -21,7 +21,7 @@
 #ifndef WIN32
 #  include <unistd.h> /* for read close */
 #else
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include "winsock2.h"
 #  include <io.h> /* for open close read */
 #endif
@@ -51,25 +51,25 @@
 #include "MEM_guardedalloc.h"
 #include "MEM_safe_multiply.h"
 
-#include "BLI_endian_defines.h"
-#include "BLI_fileops.h"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_endian_defines.hh"
+#include "BLI_fileops.hh"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_memarena.h"
+#include "BLI_memarena.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_threads.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_asset.hh"
 #include "BKE_blender_version.h"
 #include "BKE_collection.hh"
@@ -616,7 +616,7 @@ static BHeadN *get_bhead(FileData *fd)
           new_bhead->is_memchunk_identical = false;
           new_bhead->bhead = *bhead;
           const off64_t seek_new = fd->file->seek(fd->file, bhead->len, SEEK_CUR);
-          if (UNLIKELY(seek_new == -1)) {
+          if (seek_new == -1) [[unlikely]] {
             fd->is_eof = true;
             MEM_delete(new_bhead);
             new_bhead = nullptr;
@@ -644,7 +644,7 @@ static BHeadN *get_bhead(FileData *fd)
 
           const int64_t readsize = fd->file->read(fd->file, new_bhead + 1, size_t(bhead->len));
 
-          if (UNLIKELY(readsize != bhead->len)) {
+          if (readsize != bhead->len) [[unlikely]] {
             fd->is_eof = true;
             MEM_delete(new_bhead);
             new_bhead = nullptr;
@@ -734,12 +734,12 @@ static bool blo_bhead_read_data(FileData *fd, BHead *thisblock, void *buf)
   BHeadN *new_bhead = BHEADN_FROM_BHEAD(thisblock);
   BLI_assert(new_bhead->has_data == false && new_bhead->file_offset != 0);
   off64_t offset_backup = fd->file->offset;
-  if (UNLIKELY(fd->file->seek(fd->file, new_bhead->file_offset, SEEK_SET) == -1)) {
+  if (fd->file->seek(fd->file, new_bhead->file_offset, SEEK_SET) == -1) [[unlikely]] {
     success = false;
   }
   else {
-    if (UNLIKELY(fd->file->read(fd->file, buf, size_t(new_bhead->bhead.len)) !=
-                 new_bhead->bhead.len))
+    if (fd->file->read(fd->file, buf, size_t(new_bhead->bhead.len)) != new_bhead->bhead.len)
+        [[unlikely]]
     {
       success = false;
     }
@@ -894,28 +894,28 @@ static bool read_file_dna(FileData *fd, const char **r_error_message)
       const bool do_alias = false; /* Postpone until after #blo_do_versions_dna runs. */
       fd->filesdna = DNA_sdna_from_data(&bhead[1], bhead->len, true, do_alias, r_error_message);
       if (fd->filesdna) {
-        blo_do_versions_dna(fd->filesdna, fd->fileversion, subversion);
+        blo_do_versions_dna(fd->filesdna.get(), fd->fileversion, subversion);
         /* Allow aliased lookups (must be after version patching DNA). */
-        DNA_sdna_alias_data_ensure_structs_map(fd->filesdna);
+        DNA_sdna_alias_data_ensure_structs_map(fd->filesdna.get());
 
-        fd->compflags = DNA_struct_get_compareflags(fd->filesdna, fd->memsdna);
+        fd->compflags = DNA_struct_get_compareflags(fd->filesdna.get(), fd->memsdna);
         fd->reconstruct_info = DNA_reconstruct_info_create(
-            fd->filesdna, fd->memsdna, fd->compflags);
+            fd->filesdna.get(), fd->memsdna, fd->compflags);
         /* used to retrieve ID names from (bhead+1) */
         fd->id_name_offset = DNA_struct_member_offset_by_name_with_alias(
-            fd->filesdna, "ID", "char", "name[]");
+            fd->filesdna.get(), "ID", "char", "name[]");
         BLI_assert(fd->id_name_offset != -1);
         fd->id_asset_data_offset = DNA_struct_member_offset_by_name_with_alias(
-            fd->filesdna, "ID", "AssetMetaData", "*asset_data");
+            fd->filesdna.get(), "ID", "AssetMetaData", "*asset_data");
         fd->id_flag_offset = DNA_struct_member_offset_by_name_with_alias(
-            fd->filesdna, "ID", "short", "flag");
+            fd->filesdna.get(), "ID", "short", "flag");
         fd->id_deep_hash_offset = DNA_struct_member_offset_by_name_with_alias(
-            fd->filesdna, "ID", "IDHash", "deep_hash");
+            fd->filesdna.get(), "ID", "IDHash", "deep_hash");
 
         fd->library_filepath_offset = DNA_struct_member_offset_by_name_with_alias(
-            fd->filesdna, "Library", "char", "filepath[]");
+            fd->filesdna.get(), "Library", "char", "filepath[]");
         fd->library_flag_offset = DNA_struct_member_offset_by_name_with_alias(
-            fd->filesdna, "Library", "ushort", "flag");
+            fd->filesdna.get(), "Library", "ushort", "flag");
 
         fd->filesubversion = subversion;
 
@@ -1153,9 +1153,12 @@ static FileData *filedata_new(BlendFileReadReport *reports)
 }
 
 /**
- * Check if #FileGlobal::minversion of the file is older than current Blender,
- * return false if it is not.
+ * Check if the file's #FileGlobal::minversion requires a newer Blender to open.
+ *
  * Should only be called after #read_file_dna was successfully executed.
+ *
+ * \return true if the file is too new to open or its required global block is corrupt
+ * (reporting the error), false otherwise.
  */
 static bool is_minversion_older_than_blender(FileData *fd, ReportList *reports)
 {
@@ -1167,6 +1170,10 @@ static bool is_minversion_older_than_blender(FileData *fd, ReportList *reports)
 
     FileGlobal *fg = static_cast<FileGlobal *>(
         read_struct(fd, bhead, "Data from Global block", INDEX_ID_NULL));
+    if (fg == nullptr) [[unlikely]] {
+      BKE_reportf(reports, RPT_ERROR, "Blend file '%s' is corrupt, unable to read", fd->relabase);
+      return true;
+    }
     if ((fg->minversion > BLENDER_FILE_VERSION) ||
         (fg->minversion == BLENDER_FILE_VERSION && fg->minsubversion > BLENDER_FILE_SUBVERSION))
     {
@@ -1371,9 +1378,6 @@ void blo_filedata_free(FileData *fd)
 #endif
   fd->file->close(fd->file);
 
-  if (fd->filesdna) {
-    DNA_sdna_free(fd->filesdna);
-  }
   if (fd->compflags) {
     MEM_delete(fd->compflags);
   }
@@ -1522,9 +1526,7 @@ static FileData *change_ID_link_filedata_get(Main *bmain, FileData *basefd)
   if (bmain->curlib) {
     return bmain->curlib->runtime->filedata;
   }
-  else {
-    return basefd;
-  }
+  return basefd;
 }
 
 static void change_link_placeholder_to_real_ID_pointer(FileData *basefd, void *old, void *newp)
@@ -1777,7 +1779,7 @@ static const char *get_alloc_name(FileData *fd,
   }();
 
   const std::string block_alloc_name = is_id_data ? id_alloc_names[id_type_index] : blockname;
-  const std::string struct_name = DNA_struct_identifier(fd->filesdna, bh->SDNAnr);
+  const std::string struct_name = DNA_struct_identifier(fd->filesdna.get(), bh->SDNAnr);
   keyT key{block_alloc_name + struct_name, bh->nr};
   if (!storage.contains(key)) {
     const std::string alloc_string = fmt::format(
@@ -1792,7 +1794,7 @@ static const char *get_alloc_name(FileData *fd,
   /* Simple storage for pure release builds, using integer as key, one entry for each ID type. */
   UNUSED_VARS_NDEBUG(bh);
   if (is_id_data) {
-    if (UNLIKELY(!storage.contains(id_type_index))) {
+    if (!storage.contains(id_type_index)) [[unlikely]] {
       if (id_type_index == INDEX_ID_NULL) {
         return storage.insert(id_type_index, "Data from UNKNOWN");
       }
@@ -1815,6 +1817,16 @@ static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const i
     BHead *bh_orig = bh;
 #endif
 
+    /* A corrupt file could reference a struct index outside the file's SDNA, used below to index
+     * the compare-flags, reconstruction & alignment tables. */
+    if (bh->SDNAnr < 0 || bh->SDNAnr >= fd->filesdna->structs.size()) [[unlikely]] {
+      fd->flags &= ~FD_FLAGS_FILE_OK;
+      if (fd->bmain) {
+        blo_readfile_invalidate(fd, fd->bmain, "Corrupt .blend file, invalid block struct index");
+      }
+      return nullptr;
+    }
+
     /* Endianness switch is based on file DNA.
      *
      * NOTE: raw data (aka #SDNA_RAW_DATA_STRUCT_INDEX #SDNAnr) is not handled here, it's up to
@@ -1825,7 +1837,7 @@ static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const i
 #ifdef USE_BHEAD_READ_ON_DEMAND
       if (BHEADN_FROM_BHEAD(bh)->has_data == false) {
         bh = blo_bhead_read_full(fd, bh);
-        if (UNLIKELY(bh == nullptr)) {
+        if (bh == nullptr) [[unlikely]] {
           fd->flags &= ~FD_FLAGS_FILE_OK;
           return nullptr;
         }
@@ -1836,10 +1848,23 @@ static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const i
     if (fd->compflags[bh->SDNAnr] != SDNA_CMP_REMOVED) {
       const char *alloc_name = get_alloc_name(fd, bh, blockname, id_type_index);
       if (fd->compflags[bh->SDNAnr] == SDNA_CMP_NOT_EQUAL) {
+        /* The block must be large enough to hold the number of structs it claims, otherwise
+         * reconstruction (which strides the block by the file struct size) reads past its end.
+         * Written as a division to avoid overflow in `nr * struct_size`. */
+        const int64_t old_struct_size = DNA_struct_size(fd->filesdna.get(), bh->SDNAnr);
+        if (bh->nr < 0 || (old_struct_size != 0 && bh->nr > bh->len / old_struct_size))
+            [[unlikely]]
+        {
+          fd->flags &= ~FD_FLAGS_FILE_OK;
+          if (fd->bmain) {
+            blo_readfile_invalidate(fd, fd->bmain, "Corrupt .blend file, invalid block count");
+          }
+          return nullptr;
+        }
 #ifdef USE_BHEAD_READ_ON_DEMAND
         if (BHEADN_FROM_BHEAD(bh)->has_data == false) {
           bh = blo_bhead_read_full(fd, bh);
-          if (UNLIKELY(bh == nullptr)) {
+          if (bh == nullptr) [[unlikely]] {
             fd->flags &= ~FD_FLAGS_FILE_OK;
             return nullptr;
           }
@@ -1850,7 +1875,7 @@ static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const i
       }
       else {
         /* SDNA_CMP_EQUAL */
-        const int alignment = DNA_struct_alignment(fd->filesdna, bh->SDNAnr);
+        const int alignment = DNA_struct_alignment(fd->filesdna.get(), bh->SDNAnr);
         temp = MEM_new_uninitialized_aligned(bh->len, alignment, alloc_name);
 #ifdef USE_BHEAD_READ_ON_DEMAND
         if (BHEADN_FROM_BHEAD(bh)->has_data) {
@@ -1859,7 +1884,7 @@ static void *read_struct(FileData *fd, BHead *bh, const char *blockname, const i
         else {
           /* Instead of allocating the bhead, then copying it,
            * read the data from the file directly into the memory. */
-          if (UNLIKELY(!blo_bhead_read_data(fd, bh, temp))) {
+          if (!blo_bhead_read_data(fd, bh, temp)) [[unlikely]] {
             fd->flags &= ~FD_FLAGS_FILE_OK;
             MEM_delete_void(temp);
             temp = nullptr;
@@ -2016,6 +2041,8 @@ static void direct_link_id_override_property(BlendDataReader *reader,
   for (IDOverrideLibraryPropertyOperation &opop : op->operations) {
     BLO_read_string(reader, &opop.subitem_reference_name);
     BLO_read_string(reader, &opop.subitem_local_name);
+    BLO_read_string(reader, &opop.label);
+    BLO_read_string(reader, &opop.tooltip);
 
     opop.tag = {}; /* Runtime only. */
   }
@@ -3578,12 +3605,22 @@ BHead *blo_read_asset_data_block(FileData *fd, BHead *bhead, AssetMetaData **r_a
 /** \name Read Global Data
  * \{ */
 
-/* NOTE: this has to be kept for reading older files... */
-/* also version info is written here */
+/**
+ * Read the required global (#FileGlobal) block.
+ *
+ * NOTE: this has to be kept for reading older files, version info is written here too.
+ *
+ * \return nullptr if the global block is missing or corrupt, invalidating the read.
+ */
 static BHead *read_global(BlendFileData *bfd, FileData *fd, BHead *bhead)
 {
   FileGlobal *fg = static_cast<FileGlobal *>(
       read_struct(fd, bhead, "Data from Global block", INDEX_ID_NULL));
+
+  if (fg == nullptr) [[unlikely]] {
+    blo_readfile_invalidate(fd, bfd->main, "Corrupt .blend file, missing global block");
+    return nullptr;
+  }
 
   /* NOTE: `bfd->main->versionfile` is supposed to have already been set from `fd->fileversion`
    * beforehand by calling code. */
@@ -3697,7 +3734,7 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
     char build_commit_datetime[32];
     time_t temp_time = main->build_commit_timestamp;
     tm *tm = (temp_time) ? gmtime(&temp_time) : nullptr;
-    if (LIKELY(tm)) {
+    if (tm) [[likely]] {
       strftime(build_commit_datetime, sizeof(build_commit_datetime), "%Y-%m-%d %H:%M", tm);
     }
     else {
@@ -3760,6 +3797,9 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
   }
   if (!main->is_read_invalid) {
     blo_do_versions_520(fd, lib, main);
+  }
+  if (!main->is_read_invalid) {
+    blo_do_versions_530(fd, lib, main);
   }
 
   /* WATCH IT!!!: pointers from libdata have not been converted yet here! */
@@ -3828,6 +3868,9 @@ static void do_versions_after_linking(FileData *fd, Main *main)
   }
   if (!main->is_read_invalid) {
     do_versions_after_linking_520(fd, main);
+  }
+  if (!main->is_read_invalid) {
+    do_versions_after_linking_530(fd, main);
   }
 
   main->is_locked_for_linking = false;
@@ -3981,11 +4024,21 @@ static void direct_link_keymapitem(BlendDataReader *reader, wmKeyMapItem *kmi)
   kmi->flag &= ~KMI_UPDATE;
 }
 
+/**
+ * Read the user-preferences (#UserDef) block.
+ *
+ * \return nullptr if the block is missing or corrupt, invalidating the read.
+ */
 static BHead *read_userdef(BlendFileData *bfd, FileData *fd, BHead *bhead)
 {
   UserDef *user;
   bfd->user = user = static_cast<UserDef *>(
       read_struct(fd, bhead, "Data for User Def", INDEX_ID_NULL));
+
+  if (user == nullptr) [[unlikely]] {
+    blo_readfile_invalidate(fd, bfd->main, "Corrupt .blend file, missing user-preferences block");
+    return nullptr;
+  }
 
   /* User struct has separate do-version handling */
   user->versionfile = bfd->main->versionfile;
@@ -4298,6 +4351,15 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
     if (bmain_to_read_into) {
       bhead = read_libblock(
           fd, bmain_to_read_into, bhead, 0, {}, placeholder_set_indirect_extern, nullptr);
+    }
+
+    /* It's not enough to check `bfd->main->is_read_invalid` because the error may have
+     * occurred before the #Main struct is available, so it's important to check the flag here. */
+    if (!(fd->flags & FD_FLAGS_FILE_OK)) [[unlikely]] {
+      /* Skip when already invalidated - that error is more specific. */
+      if (!bfd->main->is_read_invalid) {
+        blo_readfile_invalidate(fd, bfd->main, "Corrupt .blend file, failed to read a block");
+      }
     }
 
     if (bfd->main->is_read_invalid) {
@@ -4669,7 +4731,7 @@ static BHead *find_bhead_from_code_name(FileData *fd, const short idcode, const 
 static BHead *find_bhead_from_idname(FileData *fd, const char *idname)
 {
   BHead *bhead = fd->bhead_idname_map->lookup_default(idname, nullptr);
-  if (LIKELY(bhead)) {
+  if (bhead) [[likely]] {
     return bhead;
   }
 
@@ -4906,7 +4968,12 @@ static void read_id_in_lib(FileData *fd,
      * library it belongs to, so that it will be read later. */
     read_libblock(
         fd, libmain, bhead, fd->id_tag_extra | ID_TAG_INDIRECT, id_read_tags, false, &id);
-    BLI_assert(id != nullptr);
+    /* A corrupt block may fail to read, leaving `id` null.
+     * Skip it rather than dereferencing null - #read_libblock has already advanced
+     * past the block, and #link_named_part handles the same case this way. */
+    if (id == nullptr) {
+      return;
+    }
     id_sort_by_name(which_libbase(libmain, GS(id->name)), id, static_cast<ID *>(id->prev));
 
     /* commented because this can print way too much */
@@ -5602,6 +5669,17 @@ static void read_library_linked_ids(FileData *basefd, FileData *fd, Main *mainva
           loaded_ids.add_overwrite(id->name, realid);
         }
 
+        /* A failed on-demand block read only clears `FD_FLAGS_FILE_OK` on `fd` (as for the
+         * local-data read loop in #blo_read_file_internal), it doesn't invalidate `mainvar` by
+         * itself. Without this check such a failure looks just like a "missing linked ID" below,
+         * silently continuing the read instead of reporting the corrupt library and aborting. */
+        if (fd && !(fd->flags & FD_FLAGS_FILE_OK)) [[unlikely]] {
+          if (!mainvar->is_read_invalid) {
+            blo_readfile_invalidate(fd, mainvar, "Corrupt .blend file, failed to read a block");
+          }
+          return;
+        }
+
         /* `realid` shall never be nullptr - unless some source file/lib is broken
          * (known case: some directly linked shape-key from a missing lib...). */
         // BLI_assert(*realid != nullptr);
@@ -5969,13 +6047,13 @@ bool blo_read_array_impl(BlendDataReader *reader,
 }
 
 void *BLO_read_struct_by_name_array(BlendDataReader *reader,
-                                    const char *struct_name,
+                                    const StringRef struct_name,
                                     const int64_t items_num,
                                     const void *old_address)
 {
   const int struct_index = DNA_struct_find_with_alias(reader->fd->memsdna, struct_name);
-  BLI_assert(STREQ(DNA_struct_identifier(const_cast<SDNA *>(reader->fd->memsdna), struct_index),
-                   struct_name));
+  BLI_assert(DNA_struct_identifier(const_cast<SDNA *>(reader->fd->memsdna), struct_index) ==
+             struct_name);
   const size_t struct_size = size_t(DNA_struct_size(reader->fd->memsdna, struct_index));
   return blo_read_struct_impl(reader, old_address, struct_size * items_num);
 }

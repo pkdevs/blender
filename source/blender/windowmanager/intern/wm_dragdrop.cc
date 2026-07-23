@@ -22,12 +22,12 @@
 
 #include "BLT_translation.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BIF_glutil.hh"
 
@@ -569,12 +569,12 @@ static bool has_single_asset_drag(const wmWindowManager &wm)
 
 static bool drag_global_poll(const bContext *C,
                              const wmDrag *drag,
-                             std::string *r_status_info,
+                             std::string * /*r_status_info*/,
                              std::string *r_disabled_info)
 {
   if (wmDragAsset *asset_data = WM_drag_get_asset_data(drag, 0)) {
     if (asset_data->asset->is_online_only()) {
-      *r_status_info = RPT_("Downloading asset...");
+      *r_disabled_info = RPT_("Asset needs downloading first");
       return false;
     }
   }
@@ -730,14 +730,8 @@ void wm_drags_handle_events(bContext *C, const wmEvent *event)
 
   bool any_active = false;
   for (wmDrag &drag : wm->runtime->drags) {
-    switch (event->type) {
-      case MOUSEMOVE:
-      case EVT_DROP:
-        wm_drop_update_active(C, &drag, event);
-        break;
-      default:
-        break;
-    }
+    /* This is to update tooltip during drag and timer events.  */
+    wm_drop_update_active(C, &drag, event);
 
     if (wmDropBox *dropbox = drag.drop_state.active_dropbox) {
       any_active = true;
@@ -1151,9 +1145,16 @@ static void wm_drop_redalert_draw(const StringRef redalert_str, int x, int y)
   const bTheme *btheme = ui::theme::theme_get();
   const uiWidgetColors *wcol = &btheme->tui.wcol_tooltip;
 
-  float col_fg[4], col_bg[4];
-  ui::theme::get_color_4fv(TH_REDALERT, col_fg);
+  float col_fg[4], col_bg[4], col_alert[4];
   rgba_uchar_to_float(col_bg, wcol->inner);
+  rgba_uchar_to_float(col_fg, wcol->text);
+  ui::theme::get_color_4fv(TH_REDALERT, col_alert);
+
+  /* Blend between the original text color and alert.
+   * This ensures the text be always readable, lighter or darker depending on the theme. */
+  col_fg[0] = (1.0f - 0.66f) * col_fg[0] + (0.66f * col_alert[0]);
+  col_fg[1] = (1.0f - 0.66f) * col_fg[1] + (0.66f * col_alert[1]);
+  col_fg[2] = (1.0f - 0.66f) * col_fg[2] + (0.66f * col_alert[2]);
 
   ui::fontstyle_draw_simple_backdrop(fstyle, x, y, redalert_str, col_fg, col_bg);
 }

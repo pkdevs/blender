@@ -5,6 +5,7 @@
 import bpy
 from bl_ui import node_add_menu
 from bpy.app.translations import (
+    pgettext_n as n_,
     contexts as i18n_contexts,
 )
 
@@ -35,10 +36,10 @@ class NODE_MT_gn_color_base(node_add_menu.NodeMenu):
         layout = self.layout
 
         self.node_operator(layout, "ShaderNodeBlackbody")
-        self.node_operator(layout, "ShaderNodeGamma")
         self.node_operator(layout, "ShaderNodeValToRGB")
-        self.node_operator(layout, "ShaderNodeRGBCurve")
+        self.node_operator(layout, "ShaderNodeGamma")
         self.color_mix_node(context, layout, search_weight=-1.0)
+        self.node_operator(layout, "ShaderNodeRGBCurve")
         layout.separator()
         self.node_operator(layout, "FunctionNodeCombineColor")
         self.node_operator(layout, "FunctionNodeSeparateColor")
@@ -74,6 +75,8 @@ class NODE_MT_gn_curve_read_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeInputCurveTilt")
         self.node_operator(layout, "GeometryNodeCurveEndpointSelection")
         self.node_operator(layout, "GeometryNodeCurveHandleTypeSelection")
+        self.node_operator(layout, "GeometryNodeNURBSOrder")
+        self.node_operator(layout, "GeometryNodeNURBSWeight")
         self.node_operator(layout, "GeometryNodeInputSplineCyclic")
         self.node_operator(layout, "GeometryNodeSplineLength")
         self.node_operator(layout, "GeometryNodeSplineParameter")
@@ -171,6 +174,12 @@ class NODE_MT_gn_grease_pencil_read_base(node_add_menu.NodeMenu):
 
     def draw(self, _context):
         layout = self.layout
+        self.node_operator(layout, "GeometryNodeGreasePencilColor")
+        self.node_operator(layout, "GeometryNodeGreasePencilDrawTime")
+        self.node_operator(layout, "GeometryNodeGreasePencilFillID")
+        self.node_operator(layout, "GeometryNodeGreasePencilOpacity")
+        self.node_operator(layout, "GeometryNodeGreasePencilStrokeSoftness")
+        self.node_operator(layout, "GeometryNodeGreasePencilStrokeVisibility")
         self.node_operator(layout, "GeometryNodeInputNamedLayerSelection")
 
         self.draw_assets_for_catalog(layout, self.menu_path)
@@ -245,8 +254,9 @@ class NODE_MT_gn_geometry_read_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeInputPosition", search_weight=1.0)
         self.node_operator(layout, "GeometryNodeInputRadius")
         if context.space_data.node_tree_sub_type == 'TOOL':
-            self.node_operator(layout, "GeometryNodeToolSelection")
+            layout.separator()
             self.node_operator(layout, "GeometryNodeToolActiveElement")
+            self.node_operator(layout, "GeometryNodeToolSelection")
         layout.separator()
         self.node_operator(layout, "GeometryNodeGetGeometryBundle")
 
@@ -367,6 +377,7 @@ class NODE_MT_gn_input_scene_base(node_add_menu.NodeMenu):
         if context.space_data.node_tree_sub_type == 'TOOL':
             self.node_operator(layout, "GeometryNodeTool3DCursor")
         self.node_operator(layout, "GeometryNodeInputActiveCamera")
+        self.node_operator(layout, "GeometryNodeBoneInfo")
         self.node_operator_with_outputs(
             context,
             layout,
@@ -383,7 +394,6 @@ class NODE_MT_gn_input_scene_base(node_add_menu.NodeMenu):
                 "Orthographic Scale",
             ],
         )
-        self.node_operator(layout, "GeometryNodeBoneInfo")
         self.node_operator(layout, "GeometryNodeCollectionChildren")
         self.node_operator(layout, "GeometryNodeCollectionInfo")
         self.node_operator(layout, "GeometryNodeImageInfo")
@@ -492,9 +502,9 @@ class NODE_MT_gn_mesh_read_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeInputMeshFaceNeighbors")
         if context.space_data.node_tree_sub_type == 'TOOL':
             self.node_operator(layout, "GeometryNodeToolFaceSet")
+        self.node_operator(layout, "GeometryNodeInputEdgeSmooth")
         self.node_operator(layout, "GeometryNodeInputMeshFaceIsPlanar")
         self.node_operator(layout, "GeometryNodeInputShadeSmooth")
-        self.node_operator(layout, "GeometryNodeInputEdgeSmooth")
         self.node_operator(layout, "GeometryNodeInputMeshIsland")
         self.node_operator(layout, "GeometryNodeInputShortestEdgePaths")
         self.node_operator(layout, "GeometryNodeInputMeshVertexNeighbors")
@@ -540,6 +550,7 @@ class NODE_MT_gn_mesh_operations_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeEdgePathsToSelection")
         self.node_operator(layout, "GeometryNodeExtrudeMesh")
         self.node_operator(layout, "GeometryNodeFlipFaces")
+        self.node_operator(layout, "GeometryNodeMeshBevel")
         self.node_operator(layout, "GeometryNodeMeshBoolean")
         self.node_operator(layout, "GeometryNodeMeshToCurve")
         self.node_operator(layout, "GeometryNodeMeshToDensityGrid")
@@ -648,8 +659,7 @@ class NODE_MT_gn_simulation_base(node_add_menu.NodeMenu):
         layout = self.layout
         self.simulation_zone(layout, label="Simulation")
         layout.separator()
-        if context.preferences.experimental.use_geometry_nodes_hair_dynamics:
-            self.node_operator(layout, "GeometryNodeXPBDSolver")
+        self.node_operator(layout, "GeometryNodeXPBDSolver")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -665,10 +675,10 @@ class NODE_MT_gn_utilities_text_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "FunctionNodeMatchString")
         self.node_operator(layout, "FunctionNodeReplaceString")
         self.node_operator(layout, "FunctionNodeReverseString")
-        self.node_operator(layout, "FunctionNodeSliceString")
         self.node_operator_with_searchable_enum_socket(
             context, layout, "FunctionNodeSetStringCase", "Case", ["Uppercase", "Lowercase"],
         )
+        self.node_operator(layout, "FunctionNodeSliceString")
         self.node_operator(layout, "FunctionNodeSplitString")
         self.node_operator(layout, "FunctionNodeTrimString")
         layout.separator()
@@ -679,8 +689,7 @@ class NODE_MT_gn_utilities_text_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "FunctionNodeValueToString")
         layout.separator()
         self.node_operator(layout, "FunctionNodeInputSpecialCharacters")
-        if context.preferences.experimental.use_geometry_nodes_hair_dynamics:
-            self.node_operator(layout, "GeometryNodeTagFilter")
+        self.node_operator(layout, "GeometryNodeTagFilter")
 
         self.draw_assets_for_catalog(layout, self.menu_path)
 
@@ -730,12 +739,13 @@ class NODE_MT_gn_utilities_base(node_add_menu.NodeMenu):
         self.draw_menu(layout, path="Utilities/Rotation")
         self.draw_menu(layout, path="Utilities/Sound")
         layout.separator()
-        self.node_operator(layout, "NodeImplicitConversion")
         self.for_each_element_zone(layout, label="For Each Element")
-        self.node_operator(layout, "GeometryNodeIndexSwitch")
-        self.node_operator(layout, "GeometryNodeMenuSwitch")
+        self.node_operator(layout, "NodeImplicitConversion")
         self.node_operator(layout, "FunctionNodeRandomValue")
         self.repeat_zone(layout, label="Repeat")
+        layout.separator()
+        self.node_operator(layout, "GeometryNodeIndexSwitch")
+        self.node_operator(layout, "GeometryNodeMenuSwitch")
         self.node_operator(layout, "GeometryNodeSwitch")
         layout.separator()
         self.draw_assets_for_catalog(layout, self.bl_label)
@@ -808,8 +818,8 @@ class NODE_MT_gn_utilities_matrix_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "FunctionNodeCombineTransform")
         self.node_operator(layout, "FunctionNodeMatrixDeterminant", label="Determinant")
         self.node_operator(layout, "FunctionNodeInvertMatrix")
-        self.node_operator(layout, "FunctionNodeMatrixMultiply")
         self.node_operator(layout, "FunctionNodeMatrixSVD")
+        self.node_operator(layout, "FunctionNodeMatrixMultiply")
         self.node_operator(layout, "FunctionNodeProjectPoint")
         self.node_operator(layout, "FunctionNodeSeparateMatrix")
         self.node_operator(layout, "FunctionNodeSeparateTransform")
@@ -827,14 +837,14 @@ class NODE_MT_category_utilities_bundle_base(node_add_menu.NodeMenu):
     def draw(self, context):
         layout = self.layout
         self.node_operator(layout, "NodeCombineBundle")
-        self.node_operator(layout, "NodeSeparateBundle")
-        self.node_operator(layout, "NodeGetBundleItem")
-        if context.preferences.experimental.use_geometry_nodes_hair_dynamics:
-            self.node_operator(layout, "NodeGetNestedBundlePaths")
-        self.node_operator(layout, "NodeStoreBundleItem")
         self.node_operator(layout, "NodeJoinBundle")
-        if context.preferences.experimental.use_geometry_nodes_hair_dynamics:
-            self.typed_bundle(layout, label="Typed Bundle")
+        self.node_operator(layout, "NodeSeparateBundle")
+        layout.separator()
+        self.node_operator(layout, "NodeGetBundleItem")
+        self.node_operator(layout, "NodeGetNestedBundlePaths")
+        self.node_operator(layout, "NodeStoreBundleItem")
+        layout.separator()
+        self.typed_bundle(layout, label=n_("Typed Bundle"))
 
         self.draw_assets_for_catalog(layout, self.menu_path)
 
@@ -863,6 +873,7 @@ class NODE_MT_gn_utilities_list_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeFilterList")
         self.node_operator(layout, "GeometryNodeListGetItem")
         self.node_operator(layout, "GeometryNodeListLength")
+        self.node_operator(layout, "GeometryNodeSortList")
 
         self.draw_assets_for_catalog(layout, self.menu_path)
 
@@ -1027,10 +1038,12 @@ class NODE_MT_gn_volume_operations_base(node_add_menu.NodeMenu):
         layout.separator()
         self.node_operator(layout, "GeometryNodeFieldToGrid")
         self.node_operator(layout, "GeometryNodeGridClip")
+        self.node_operator(layout, "GeometryNodeGridDeactivateVoxels")
         self.node_operator(layout, "GeometryNodeGridDilateAndErode")
         self.node_operator(layout, "GeometryNodeGridMean")
         self.node_operator(layout, "GeometryNodeGridMedian")
         self.node_operator(layout, "GeometryNodeGridPrune")
+        self.node_operator(layout, "GeometryNodeGridTopologyBoolean")
         self.node_operator(layout, "GeometryNodeGridVoxelize")
 
         self.draw_assets_for_catalog(layout, self.menu_path)

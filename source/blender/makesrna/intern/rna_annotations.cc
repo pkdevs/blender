@@ -11,6 +11,7 @@
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
+#include "RNA_path.hh"
 
 #include "rna_internal.hh"
 
@@ -22,14 +23,15 @@
 
 #  include "BLT_translation.hh"
 
-#  include "BLI_listbase.h"
-#  include "BLI_math_base.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_base_c.hh"
 #  include "BLI_memory_utils.hh"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 #  include "BLI_string_utils.hh"
 
-#  include "BKE_animsys.h"
+#  include "BKE_animsys.hh"
+#  include "BKE_global.hh"
 #  include "BKE_gpencil_geom_legacy.h"
 #  include "BKE_gpencil_legacy.h"
 #  include "BKE_icons.hh"
@@ -171,7 +173,14 @@ static void rna_annotation_layer_info_set(PointerRNA *ptr, const char *value)
       &gpd->layers, gpl, DATA_("GP_Layer"), '.', offsetof(bGPDlayer, info), sizeof(gpl->info));
 
   /* now fix animation paths */
-  BKE_animdata_fix_paths_rename_all(&gpd->id, "layers", oldname, gpl->info);
+  if (ptr->owner_id) {
+    BKE_animdata_fix_paths(*ptr->owner_id,
+                           "layers",
+                           RNA_path_name_to_infix(oldname),
+                           RNA_path_name_to_infix(gpl->info),
+                           /*verify_paths=*/true,
+                           *G_MAIN);
+  }
 
   /* Fix mask layers. */
   for (bGPDlayer &gpl_ : gpd->layers) {

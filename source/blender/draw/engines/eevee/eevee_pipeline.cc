@@ -928,7 +928,7 @@ void DeferredLayer::end_sync(bool is_first_pass,
         /* Use depth test to reject background pixels which have not been stencil cleared. */
         /* WORKAROUND: Avoid rasterizer discard by enabling stencil write, but the shaders actually
          * use no fragment output. */
-        sub.state_set(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_EQUAL | DRW_STATE_DEPTH_GREATER);
+        sub.state_set(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_EQUAL | DRW_STATE_DEPTH_LESS);
         sub.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
         sub.bind_image(RBUFS_COLOR_SLOT, &inst_.render_buffers.rp_color_tx);
         sub.bind_image(RBUFS_VALUE_SLOT, &inst_.render_buffers.rp_value_tx);
@@ -999,6 +999,22 @@ void DeferredLayer::end_sync(bool is_first_pass,
           sh, "use_radiance_feedback", use_feedback_output_ && use_clamp_direct_);
       pass.specialize_constant(sh, "render_pass_normal_enabled", rbuf_data.normal_id != -1);
       pass.specialize_constant(sh, "render_pass_position_enabled", rbuf_data.position_id != -1);
+      pass.specialize_constant(
+          sh, "render_passes_denoising_depth_enabled", rbuf_data.denoising_depth_id != -1);
+      pass.specialize_constant(
+          sh, "render_passes_denoising_normal_enabled", rbuf_data.denoising_normal_id != -1);
+      pass.specialize_constant(
+          sh, "render_passes_denoising_roughness_enabled", rbuf_data.denoising_roughness_id != -1);
+      pass.specialize_constant(sh,
+                               "render_passes_denoising_diffuse_albedo_enabled",
+                               rbuf_data.denoising_diffuse_albedo_id != -1);
+      pass.specialize_constant(sh,
+                               "render_passes_denoising_specular_albedo_enabled",
+                               rbuf_data.denoising_specular_albedo_id != -1);
+      pass.specialize_constant(sh,
+                               "use_albedo_roughness_weighting",
+                               (inst_.view_layer->eevee.denoising_pass_flags &
+                                EEVEE_DENOISING_PASS_USE_ALBEDO_ROUGHNESS_WEIGHTING) != 0);
       pass.shader_set(sh);
       /* Use stencil test to reject pixels not written by this layer. */
       pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL | DRW_STATE_STENCIL_NEQUAL);
@@ -1512,7 +1528,7 @@ void DeferredProbePipeline::end_sync()
     PassSimple &pass = eval_light_ps_;
     pass.init();
     /* Use depth test to reject background pixels. */
-    pass.state_set(DRW_STATE_DEPTH_GREATER | DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
+    pass.state_set(DRW_STATE_DEPTH_LESS | DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
     pass.shader_set(inst_.shaders.static_shader_get(DEFERRED_CAPTURE_EVAL));
     pass.bind_image(RBUFS_COLOR_SLOT, &inst_.render_buffers.rp_color_tx);
     pass.bind_image(RBUFS_VALUE_SLOT, &inst_.render_buffers.rp_value_tx);
@@ -1613,7 +1629,7 @@ void PlanarProbePipeline::end_sync()
   if (!gbuffer_ps_.is_empty()) {
     PassSimple &pass = eval_light_ps_;
     pass.init();
-    pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL | DRW_STATE_DEPTH_GREATER);
+    pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL | DRW_STATE_DEPTH_LESS);
     pass.shader_set(inst_.shaders.static_shader_get(DEFERRED_PLANAR_EVAL));
     pass.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
     pass.bind_resources(inst_.uniform_data);

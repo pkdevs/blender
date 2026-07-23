@@ -2107,7 +2107,7 @@ struct GeometryNodesLazyFunctionBuilder {
   {
     const int zone_i = zone.index;
     ZoneBuildInfo &zone_info = zone_build_infos_[zone_i];
-    lf::Graph &lf_graph = scope_.construct<lf::Graph>();
+    lf::Graph &lf_graph = scope_.construct<lf::Graph>("Simulation Zone");
     const auto &sim_output_storage = *static_cast<const NodeGeometrySimulationOutput *>(
         zone.output_node()->storage);
 
@@ -3645,24 +3645,32 @@ struct GeometryNodesLazyFunctionBuilder {
 
   void build_menu_switch_node(const bNode &bnode, BuildGraphParams &graph_params)
   {
-    std::unique_ptr<LazyFunction> lazy_function = get_menu_switch_node_lazy_function(
-        bnode, *lf_graph_info_);
-    lf::FunctionNode &lf_node = graph_params.lf_graph.add_function(*lazy_function);
-    scope_.add(std::move(lazy_function));
+    const NodeMenuSwitch &storage = *static_cast<NodeMenuSwitch *>(bnode.storage);
 
-    int input_index = 0;
-    for (const bNodeSocket *bsocket : bnode.input_sockets().drop_back(1)) {
-      if (bsocket->is_available()) {
-        this->add_to_socket_map(graph_params, *bsocket, lf_node.input(input_index));
-        input_index++;
-      }
+    /* The menu-switch node uses separate lazy-functions for the main output and all the boolean
+     * outputs. This leads to better lazy evaluation in some cases because the boolean outputs more
+     * obviously only depend on the menu input (and not on all the value inputs). */
+    std::unique_ptr<LazyFunction> value_fn = get_menu_switch_node_lazy_function(bnode,
+                                                                                *lf_graph_info_);
+    std::unique_ptr<LazyFunction> bools_fn = get_menu_switch_node_boolean_outputs_lazy_function(
+        bnode, *lf_graph_info_);
+
+    lf::FunctionNode &lf_value_node = graph_params.lf_graph.add_function(*value_fn);
+    lf::FunctionNode &lf_bools_node = graph_params.lf_graph.add_function(*bools_fn);
+    scope_.add(std::move(value_fn));
+    scope_.add(std::move(bools_fn));
+
+    for (const int i : bnode.input_sockets().index_range().drop_back(1)) {
+      const bNodeSocket &bsocket = bnode.input_socket(i);
+      this->add_to_socket_map(graph_params, bsocket, lf_value_node.input(i));
     }
-    int output_index = 0;
-    for (const bNodeSocket *bsocket : bnode.output_sockets()) {
-      if (bsocket->is_available()) {
-        this->add_to_socket_map(graph_params, *bsocket, lf_node.output(output_index));
-        output_index++;
-      }
+    this->add_to_socket_map(graph_params, bnode.input_socket(0), lf_bools_node.input(0));
+
+    this->add_to_socket_map(graph_params, bnode.output_socket(0), lf_value_node.output(0));
+
+    for (const int i : IndexRange(storage.enum_definition.items_num)) {
+      const bNodeSocket &bsocket = bnode.output_socket(i + 1);
+      this->add_to_socket_map(graph_params, bsocket, lf_bools_node.output(i));
     }
 
     this->build_menu_switch_node_socket_usage(bnode, graph_params);
@@ -4248,6 +4256,11 @@ struct GeometryNodesLazyFunctionBuilder {
   }
 };
 
+GeometryNodesLazyFunctionGraphInfo::GeometryNodesLazyFunctionGraphInfo(const char *debug_name)
+    : graph(debug_name)
+{
+}
+
 static std::shared_ptr<GeometryNodesLazyFunctionGraphInfo>
 ensure_geometry_nodes_lazy_function_graph_impl(const bNodeTree &btree)
 {
@@ -4290,20 +4303,22 @@ ensure_geometry_nodes_lazy_function_graph_impl(const bNodeTree &btree)
     }
   }
 
-  auto lf_graph_info = std::make_shared<GeometryNodesLazyFunctionGraphInfo>();
+  /* Make a copy of the node tree so that the execution graph can be independent of the original
+   * tree. */
+  std::shared_ptr<bNodeTree> btree_copy{
+      bke::node_tree_copy_tree_ex(btree, nullptr, false),
+      [](bNodeTree *btree) { BKE_id_free(nullptr, &btree->id); }};
+
+  auto lf_graph_info = std::make_shared<GeometryNodesLazyFunctionGraphInfo>(
+      BKE_id_name(btree_copy->id));
+  lf_graph_info->tree = btree_copy;
+
   if (const bNodeTree *original_tree = DEG_get_original(&btree)) {
     lf_graph_info->original_tree_session_uid = original_tree->id.session_uid;
   }
   else {
     lf_graph_info->original_tree_session_uid = btree.id.session_uid;
   }
-
-  /* Make a copy of the node tree so that the execution graph can be independent of the original
-   * tree. */
-  std::shared_ptr<bNodeTree> btree_copy{
-      bke::node_tree_copy_tree_ex(btree, nullptr, false),
-      [](bNodeTree *btree) { BKE_id_free(nullptr, &btree->id); }};
-  lf_graph_info->tree = btree_copy;
 
   btree_copy->ensure_topology_cache();
   BLI_assert(btree.all_sockets().size() == btree_copy->all_sockets().size());

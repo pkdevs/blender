@@ -42,14 +42,14 @@
 #include "DNA_world_types.h"
 
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_rotation.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLO_readfile.hh"
 
@@ -57,7 +57,7 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_bpath.hh"
 #include "BKE_callbacks.hh"
 #include "BKE_collection.hh"
@@ -374,8 +374,7 @@ static void scene_free_markers(Scene *scene, bool do_id_user)
 {
   for (TimeMarker &marker : scene->markers.items_mutable()) {
     if (marker.prop != nullptr) {
-      IDP_FreePropertyContent_ex(marker.prop, do_id_user);
-      MEM_delete(marker.prop);
+      IDP_FreeProperty_ex(marker.prop, do_id_user);
     }
     MEM_delete(&marker);
   }
@@ -1078,7 +1077,9 @@ static void scene_blend_write_compositor_forward_compat(Scene &scene,
                                                  "Final render output",
                                                  "COMPOSITE",
                                                  NODE_CLASS_OUTPUT,
-                                                 false);
+                                                 140.0f,
+                                                 100.0f,
+                                                 true);
       composite_input = &version_node_add_socket(
           *temp_nodetree_copy, *composite_node, SOCK_IN, "NodeSocketColor", "Image");
 
@@ -1616,7 +1617,7 @@ IDTypeInfo IDType_ID_SCE = {
     .main_listbase_index = INDEX_ID_SCE,
     .struct_size = sizeof(Scene),
     .name = "Scene",
-    .name_plural = "scenes",
+    .name_plural = N_("scenes"),
     .translation_context = BLT_I18NCONTEXT_ID_SCENE,
     .flags = IDTYPE_FLAGS_NEVER_UNUSED,
     .asset_type_info = nullptr,
@@ -2026,6 +2027,35 @@ Scene *BKE_scene_duplicate(Main *bmain,
                                  LIB_ID_DUPLICATE_IS_SUBPROCESS);
       }
     }
+
+    /* Duplicate receiver and blocker collections from the light linking settings.
+     * If light linking used a collection from a scene collection, the light linking will end up
+     * using the same duplicated collection as the scene collection.
+     * If light linking used its own collection (outside any scene collection), the collection
+     * will be duplicated, and the objects inside this collection will be remapped to the objects
+     * from the duplicated scene. */
+    FOREACH_SCENE_OBJECT_BEGIN (sce_copy, object) {
+      if (!object->light_linking) {
+        continue;
+      }
+      if (object->light_linking->receiver_collection) {
+        BKE_collection_duplicate(bmain,
+                                 nullptr,
+                                 nullptr,
+                                 object->light_linking->receiver_collection,
+                                 duplicate_flags,
+                                 LIB_ID_DUPLICATE_IS_SUBPROCESS);
+      }
+      if (object->light_linking->blocker_collection) {
+        BKE_collection_duplicate(bmain,
+                                 nullptr,
+                                 nullptr,
+                                 object->light_linking->blocker_collection,
+                                 duplicate_flags,
+                                 LIB_ID_DUPLICATE_IS_SUBPROCESS);
+      }
+    }
+    FOREACH_SCENE_OBJECT_END;
   }
   else {
     /* Remove sequencer if not full copy */
@@ -3417,7 +3447,7 @@ int BKE_scene_multiview_num_videos_get(const RenderData *rd, const ImageFormatDa
 void BKE_scene_ppm_get(const RenderData *rd, double r_ppm[2])
 {
   /* Should not be zero, prevent divide by zero if it is. */
-  if (UNLIKELY(rd->ppm_base == 0.0f)) {
+  if (rd->ppm_base == 0.0f) [[unlikely]] {
     /* Zero PPM should be ignored. */
     r_ppm[0] = 0.0;
     r_ppm[1] = 0.0;

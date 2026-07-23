@@ -22,17 +22,17 @@
 #  include <dirent.h>
 #  include <unistd.h>
 #else
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include <io.h>
 #endif
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -49,7 +49,7 @@
 namespace blender {
 
 #ifndef _MSC_VER
-#  include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#  include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 #endif
 
 static CLG_LogRef LOG = {"lib.bpath"};
@@ -83,6 +83,9 @@ void BKE_bpath_foreach_path_id(BPathForeachPathData *bpath_data, ID *id)
   bpath_data->absolute_base_path = absbase;
   bpath_data->owner_id = id;
   bpath_data->is_path_modified = false;
+  bpath_data->is_expanded = false;
+  bpath_data->is_cache = false;
+  bpath_data->is_readonly = false;
 
   if ((flag & BKE_BPATH_FOREACH_PATH_SKIP_LINKED) && ID_IS_LINKED(id)) {
     return;
@@ -153,6 +156,27 @@ bool BKE_bpath_foreach_path_fixed_process(BPathForeachPathData *bpath_data,
   }
 
   return false;
+}
+
+void BKE_bpath_foreach_path_readonly_process(BPathForeachPathData *bpath_data, const char *path)
+{
+  char path_src[FILE_MAX];
+  char path_dst[FILE_MAX];
+
+  STRNCPY(path_src, path);
+  if (bpath_data->absolute_base_path) {
+    BLI_path_abs(path_src, bpath_data->absolute_base_path);
+  }
+  /* Any modification to path_dst will be discarded. */
+  STRNCPY(path_dst, path_src);
+
+  bpath_data->is_readonly = true;
+  const bool changed = bpath_data->callback_function(
+      bpath_data, path_dst, sizeof(path_dst), path_src);
+  bpath_data->is_readonly = false;
+
+  BLI_assert_msg(!changed, "Read-only path edited in bpath foreach");
+  UNUSED_VARS_NDEBUG(changed);
 }
 
 void BKE_bpath_sequence_filepaths_foreach(const char *abs_filepath,

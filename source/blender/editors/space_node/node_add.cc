@@ -17,11 +17,11 @@
 #include "DNA_sequence_types.h"
 #include "DNA_texture_types.h"
 
-#include "BLI_easing.h"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_easing.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -247,11 +247,18 @@ static wmOperatorStatus add_reroute_exec(bContext *C, wmOperator *op)
       bke::node_set_active(ntree, *reroute);
     }
 
-    bke::node_add_link(ntree,
-                       *item.value.from_node,
-                       *item.key,
-                       *reroute,
-                       *static_cast<bNodeSocket *>(reroute->inputs.first));
+    bNodeLink &link_from = bke::node_add_link(ntree,
+                                              *item.value.from_node,
+                                              *item.key,
+                                              *reroute,
+                                              *static_cast<bNodeSocket *>(reroute->inputs.first));
+
+    /* Mute resulting link if all cut links were muted as well. */
+    bke::node_link_set_mute(ntree,
+                            link_from,
+                            std::all_of(cuts.keys().begin(),
+                                        cuts.keys().end(),
+                                        [](const bNodeLink *link) { return link->is_muted(); }));
 
     /* Reconnect links from the original output socket to the new reroute. */
     for (bNodeLink *link : cuts.keys()) {
@@ -859,7 +866,7 @@ void NODE_OT_add_collection(wmOperatorType *ot)
 static bool node_add_image_poll(bContext *C)
 {
   const SpaceNode *snode = CTX_wm_space_node(C);
-  if (!snode) {
+  if (!snode || !snode->nodetree) {
     return false;
   }
 
@@ -926,7 +933,12 @@ static wmOperatorStatus node_add_image_exec(bContext *C, wmOperator *op)
   int type = 0;
   switch (snode.nodetree->type) {
     case NTREE_SHADER:
-      type = SH_NODE_TEX_IMAGE;
+      if (snode.shaderfrom == SNODE_SHADER_WORLD) {
+        type = SH_NODE_TEX_ENVIRONMENT;
+      }
+      else {
+        type = SH_NODE_TEX_IMAGE;
+      }
       break;
     case NTREE_TEXTURE:
       type = TEX_NODE_IMAGE;
@@ -1862,31 +1874,11 @@ static void initialize_compositor_sequencer_node_group(const bContext *C,
   input_node->location[1] = 0.0f;
   bke::node_set_active(ntree, *input_node);
 
-  bNode *reroute = bke::node_add_static_node(C, ntree, NODE_REROUTE);
-  reroute->location[0] = 100.0f;
-  reroute->location[1] = -35.0f;
-
-  bNode *viewer = bke::node_add_static_node(C, ntree, CMP_NODE_VIEWER);
-  viewer->location[0] = 200.0f;
-  viewer->location[1] = -80.0f;
-
   bke::node_add_link(ntree,
                      *input_node,
                      *static_cast<bNodeSocket *>(input_node->outputs.first),
-                     *reroute,
-                     *static_cast<bNodeSocket *>(reroute->inputs.first));
-
-  bke::node_add_link(ntree,
-                     *reroute,
-                     *static_cast<bNodeSocket *>(reroute->outputs.first),
                      *output_node,
                      *static_cast<bNodeSocket *>(output_node->inputs.first));
-
-  bke::node_add_link(ntree,
-                     *reroute,
-                     *static_cast<bNodeSocket *>(reroute->outputs.first),
-                     *viewer,
-                     *static_cast<bNodeSocket *>(viewer->inputs.first));
 
   BKE_ntree_update_after_single_tree_change(*CTX_data_main(C), ntree);
 }

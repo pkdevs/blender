@@ -805,6 +805,7 @@ static TypeDesc find_type_from_geometry_std(Geometry *geometry, AttributeStandar
       case ATTR_STD_RANDOM_PER_ISLAND:
         return TypeFloat;
       case ATTR_STD_SHADOW_TRANSPARENCY:
+        /* Stored as float but uses RGBE encoding. */
         return TypeFloat;
       default:
         assert(0);
@@ -1100,7 +1101,14 @@ void AttributeSet::update(AttributeSet &&new_attributes)
 
   /* Add or update old_attributes based on the new_attributes. */
   for (Attribute &attr : new_attributes.attributes) {
-    add_from(std::move(attr));
+    const Attribute *new_attr = add_from(std::move(attr));
+
+    /* Tag geometry as modified so BVH updates when attributes affecting it change. */
+    if (new_attr->modified &&
+        (new_attr->std == ATTR_STD_POSITION || new_attr->std == ATTR_STD_RADIUS))
+    {
+      geometry->tag_modified();
+    }
   }
 
   /* If all attributes were replaced, transform is no longer applied. */

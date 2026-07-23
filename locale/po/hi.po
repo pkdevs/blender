@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'8764d33c658b')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'96294be75080')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-01 07:36+0000\n"
+"POT-Creation-Date: 2026-07-20 07:29+0000\n"
 "PO-Revision-Date: 2025-12-04 22:18+0000\n"
 "Last-Translator: Jackson Zheng <business.jackson.zheng@gmail.com>\n"
 "Language-Team: Hindi <https://translate.blender.org/projects/blender-ui/ui/hi/>\n"
@@ -554,6 +554,10 @@ msgstr "चित्रपट"
 
 msgid "Window Managers"
 msgstr "खिडकी प्रबंधक"
+
+
+msgid "Dirty"
+msgstr "गंदे"
 
 
 msgid "Goal"
@@ -1909,10 +1913,6 @@ msgid "Generated image width"
 msgstr "उत्पन्न छवि चौड़ाई"
 
 
-msgid "Dirty"
-msgstr "गंदे"
-
-
 msgid "Single image file"
 msgstr "एक छवि संचिका"
 
@@ -2586,30 +2586,6 @@ msgid "Placement"
 msgstr "नियोजन"
 
 
-msgid "Mirror"
-msgstr "दर्पण"
-
-
-msgid "Snap"
-msgstr "स्नैप"
-
-
-msgid "Math"
-msgstr "गणित"
-
-
-msgid "Light"
-msgstr "प्रकाश"
-
-
-msgid "Rigid Body"
-msgstr "कठोर-पदार्थ"
-
-
-msgid "Import"
-msgstr "आयात करें"
-
-
 msgid "Apply"
 msgstr "लागू करें"
 
@@ -2634,8 +2610,8 @@ msgid "Hooks"
 msgstr "खूँटी"
 
 
-msgid "UV"
-msgstr "यूवी"
+msgid "Math"
+msgstr "गणित"
 
 
 msgid "Names"
@@ -2654,12 +2630,36 @@ msgid "Merge"
 msgstr "विलय करें"
 
 
+msgid "Import"
+msgstr "आयात करें"
+
+
 msgid "Bone Roll"
 msgstr "हड्डी पंजी"
 
 
+msgid "UV"
+msgstr "यूवी"
+
+
+msgid "Snap"
+msgstr "स्नैप"
+
+
+msgid "Mirror"
+msgstr "दर्पण"
+
+
 msgid "Keying"
 msgstr "कुंजीयन"
+
+
+msgid "Light"
+msgstr "प्रकाश"
+
+
+msgid "Rigid Body"
+msgstr "कठोर-पदार्थ"
 
 
 msgid "Basic"
@@ -4111,6 +4111,10 @@ msgid "Paste"
 msgstr "चिपकाएँ"
 
 
+msgid "Movie"
+msgstr "चलचित्र"
+
+
 msgid "Effect"
 msgstr "प्रभाव"
 
@@ -4961,6 +4965,10 @@ msgid "Relationship Lines"
 msgstr "संबंध रेखाएँ"
 
 
+msgid "Cancel"
+msgstr "रद्द करें"
+
+
 msgctxt "WindowManager"
 msgid "Object Mode"
 msgstr "वस्तु रूप"
@@ -5791,10 +5799,6 @@ msgid "Same bone selected..."
 msgstr "एक ही हड्डी का चयन किया..."
 
 
-msgid "Cancel"
-msgstr "रद्द करें"
-
-
 msgctxt "Curve"
 msgid "Surface"
 msgstr "सतह"
@@ -5870,10 +5874,6 @@ msgstr "हेक्स"
 
 msgid "OK"
 msgstr "ठीक है"
-
-
-msgid "Movie"
-msgstr "चलचित्र"
 
 
 msgid "Pos"

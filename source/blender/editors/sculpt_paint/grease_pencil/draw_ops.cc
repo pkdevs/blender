@@ -20,17 +20,17 @@
 #include "BKE_screen.hh"
 
 #include "BLI_array_utils.hh"
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_bounds.hh"
 #include "BLI_color_types.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_kdopbvh.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_offset_indices.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "DNA_brush_enums.h"
 #include "DNA_brush_types.h"
@@ -88,19 +88,19 @@ struct GreasePencilPaintStroke final : public PaintStroke {
 
   bool get_location(float location[3], const float mouse[2], bool force_original) override;
   bool test_start(wmOperator *op, const float mouse[2]) override;
-  void update_step(wmOperator *op, PointerRNA *itemptr) override;
+  void update_step(wmOperator *op, PointerRNA *stroke_element) override;
   void redraw(bool final) override;
   bool test_cancel() override;
   void done(bool is_cancel, bool stroke_started) override;
 };
 
-bool GreasePencilPaintStroke::get_location(float out[3],
+bool GreasePencilPaintStroke::get_location(float location[3],
                                            const float mouse[2],
                                            bool /*force_original*/)
 {
-  out[0] = mouse[0];
-  out[1] = mouse[1];
-  out[2] = 0;
+  location[0] = mouse[0];
+  location[1] = mouse[1];
+  location[2] = 0;
   return true;
 }
 
@@ -1693,7 +1693,7 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
   }
 
   if (!did_create_fill) {
-    BKE_reportf(op.reports, RPT_ERROR, "Unable to fill unclosed areas");
+    BKE_report(op.reports, RPT_ERROR, "No fill created");
   }
 
   WM_cursor_modal_restore(&win);
@@ -2054,8 +2054,8 @@ static bool remove_points_and_split_from_drawings(
     if (Drawing *drawing = get_current_drawing_or_duplicate_for_autokey(
             scene, grease_pencil, info.layer_index))
     {
-      drawing->strokes_for_write() = geometry::remove_points_and_split(drawing->strokes(),
-                                                                       points_to_remove);
+      drawing->strokes_for_write() = geometry::grease_pencil_remove_points_and_split(
+          drawing->strokes(), points_to_remove);
       drawing->tag_topology_changed();
       changed = true;
     }

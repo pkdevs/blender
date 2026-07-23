@@ -17,13 +17,14 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "BLT_translation.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_customdata.hh"
 #include "BKE_data_transfer.h"
+#include "BKE_global.hh"
 #include "BKE_mesh_remap.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
@@ -31,6 +32,7 @@
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
+#include "RNA_path.hh"
 
 #include "rna_internal.hh"
 
@@ -558,9 +560,9 @@ const EnumPropertyItem rna_enum_shrinkwrap_face_cull_items[] = {
 };
 
 const EnumPropertyItem rna_enum_node_warning_type_items[] = {
-    {int(nodes::NodeWarningType::Error), "ERROR", ICON_CANCEL, "Error", ""},
-    {int(nodes::NodeWarningType::Warning), "WARNING", ICON_ERROR, "Warning", ""},
-    {int(nodes::NodeWarningType::Info), "INFO", ICON_INFO, "Info", ""},
+    {int(nodes::NodeWarningType::Error), "ERROR", ICON_STATUS_ERROR_FILLED, "Error", ""},
+    {int(nodes::NodeWarningType::Warning), "WARNING", ICON_STATUS_WARNING_FILLED, "Warning", ""},
+    {int(nodes::NodeWarningType::Info), "INFO", ICON_STATUS_INFO_FILLED, "Info", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -849,10 +851,11 @@ static const EnumPropertyItem grease_pencil_build_time_mode_items[] = {
 #  include "DNA_object_force_types.h"
 #  include "DNA_particle_types.h"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
+#  include "BKE_bake_geometry_nodes_modifier.hh"
 #  include "BKE_cachefile.hh"
 #  include "BKE_compute_contexts.hh"
 #  include "BKE_context.hh"
@@ -860,6 +863,7 @@ static const EnumPropertyItem grease_pencil_build_time_mode_items[] = {
 #  include "BKE_deform.hh"
 #  include "BKE_fluid.h"
 #  include "BKE_lib_id.hh"
+#  include "BKE_lib_override.hh"
 #  include "BKE_material.hh"
 #  include "BKE_mesh_runtime.hh"
 #  include "BKE_modifier.hh"
@@ -868,7 +872,7 @@ static const EnumPropertyItem grease_pencil_build_time_mode_items[] = {
 #  include "BKE_ocean.h"
 #  include "BKE_particle.h"
 
-#  include "BLI_sort_utils.h"
+#  include "BLI_sort_utils.hh"
 #  include "BLI_string_utils.hh"
 
 #  include "DEG_depsgraph.hh"
@@ -924,10 +928,14 @@ static void rna_Modifier_name_set(PointerRNA *ptr, const char *value)
   if (ptr->owner_id) {
     Object *ob = id_cast<Object *>(ptr->owner_id);
     BKE_modifier_unique_name(&ob->modifiers, md);
-  }
 
-  /* fix all the animation data which may link to this */
-  BKE_animdata_fix_paths_rename_all(nullptr, "modifiers", oldname, md->name);
+    BKE_animdata_fix_paths(ob->id,
+                           "modifiers",
+                           RNA_path_name_to_infix(oldname),
+                           RNA_path_name_to_infix(md->name),
+                           /*verify_paths=*/true,
+                           *G_MAIN);
+  }
 }
 
 static void rna_Modifier_name_update(Main *bmain, Scene * /*scene*/, PointerRNA * /*ptr*/)
@@ -1139,6 +1147,7 @@ RNA_MOD_OBJECT_SET(GreasePencilOutline, object, OB_EMPTY);
 RNA_MOD_OBJECT_SET(GreasePencilShrinkwrap, target, OB_MESH);
 RNA_MOD_OBJECT_SET(GreasePencilShrinkwrap, aux_target, OB_MESH);
 RNA_MOD_OBJECT_SET(GreasePencilBuild, object, OB_EMPTY);
+RNA_MOD_OBJECT_SET(GreasePencilLineart, source_camera, OB_CAMERA);
 
 static void rna_HookModifier_object_set(PointerRNA *ptr,
                                         PointerRNA value,
@@ -1927,7 +1936,7 @@ static void rna_NodesModifier_node_group_update(Main *bmain, Scene *scene, Point
   Object *object = id_cast<Object *>(ptr->owner_id);
   NodesModifierData *nmd = static_cast<NodesModifierData *>(ptr->data);
   rna_Modifier_dependency_update(bmain, scene, ptr);
-  MOD_nodes_update_interface(object, nmd);
+  MOD_nodes_update_interface(*bmain, object, nmd);
 }
 
 static StructRNA *rna_NodesModifierProperties_refine(PointerRNA *ptr)
@@ -1970,7 +1979,7 @@ static nodes::eval_log::NodeTreeLog *get_nodes_modifier_log(const Object &object
     return nullptr;
   }
   bke::DataBlockComputeContext data_block_context{nullptr, object.id};
-  bke::ModifierComputeContext modifier_context{&data_block_context, nmd};
+  bke::GeometryNodesModifierComputeContext modifier_context{&data_block_context, nmd};
   return &nmd.runtime->eval_log->get_tree_log(modifier_context.hash());
 }
 
@@ -2131,6 +2140,182 @@ static PointerRNA rna_NodesModifierBake_node_get(PointerRNA *ptr)
   BLI_assert(tree != nullptr);
   return RNA_pointer_create_discrete(
       const_cast<ID *>(&tree->id), RNA_Node, const_cast<bNode *>(node));
+}
+
+void rna_NodesModifierBake_override_diff(Main *bmain, RNAPropertyOverrideDiffContext &rnadiff_ctx)
+{
+  /* This diffing code uses the `LIBOVERRIDE_OP_CUSTOM` liboverride operation to encode a 'packed
+   * data is changed into that bake's info. */
+
+  rna_property_override_diff_default(bmain, rnadiff_ctx);
+
+  const bool do_create = rnadiff_ctx.liboverride != nullptr &&
+                         (rnadiff_ctx.liboverride_flags & RNA_OVERRIDE_COMPARE_CREATE) != 0 &&
+                         rnadiff_ctx.rna_path != nullptr;
+
+  if (rnadiff_ctx.comparison && !do_create) {
+    /* Default diffing found a difference, no need to go further. */
+    return;
+  }
+
+  const NodesModifierData *nmd_a = rnadiff_ctx.prop_a->ptr->data_as<NodesModifierData>();
+  const NodesModifierData *nmd_b = rnadiff_ctx.prop_b->ptr->data_as<NodesModifierData>();
+
+  /* In standard context (same nodes in both modifiers), the bake ids and their order should
+   * always match. For now, simply ignore cases where they don't. */
+  if (nmd_a->bakes_num != nmd_b->bakes_num) {
+    return;
+  }
+
+  for (int i : IndexRange(nmd_a->bakes_num)) {
+    const NodesModifierBake *nmd_bake_a = &nmd_a->bakes[i];
+    const NodesModifierBake *nmd_bake_b = &nmd_b->bakes[i];
+
+    if (nmd_bake_a->id != nmd_bake_b->id) {
+      /* Bakes for different nodes, cannot do anything else here, ignore. */
+      /* NOTE: Not sure if this can actually happen? Maybe in case the user assigns a different
+       * node-tree in the overridden version of the modifier, which happens to have exactly the
+       * same amount of bake nodes? */
+      BLI_assert_unreachable();
+      continue;
+    }
+
+    if (!nmd_bake_a->packed && !nmd_bake_b->packed) {
+      /* There are no packed bake data in either, so regular diffing above should be sufficient to
+       * ensure valid diffing and liboverride operations results. */
+      continue;
+    }
+
+    if (nmd_bake_a->packed && nmd_bake_b->packed) {
+      /* Both bakes have packed data, no other solution than doing full byte-wise comparison of the
+       * whole packed data. */
+      /* TODO: #NodesModifierPackedBake could store a hash of its data, in case this full
+       * comparison becomes a performance issue? */
+      bool is_different =
+          ((nmd_bake_a->packed->meta_files_num != nmd_bake_b->packed->meta_files_num) ||
+           (nmd_bake_a->packed->blob_files_num != nmd_bake_b->packed->blob_files_num));
+      if (!is_different) {
+        for (int i : IndexRange(nmd_bake_a->packed->meta_files_num)) {
+          if ((StringRefNull(nmd_bake_a->packed->meta_files[i].name) !=
+               StringRefNull(nmd_bake_b->packed->meta_files[i].name)) ||
+              (nmd_bake_a->packed->meta_files[i].data() !=
+               nmd_bake_b->packed->meta_files[i].data()))
+          {
+            is_different = true;
+            break;
+          }
+        }
+      }
+      if (!is_different) {
+        for (int i : IndexRange(nmd_bake_a->packed->blob_files_num)) {
+          if ((StringRefNull(nmd_bake_a->packed->blob_files[i].name) !=
+               StringRefNull(nmd_bake_b->packed->blob_files[i].name)) ||
+              (nmd_bake_a->packed->blob_files[i].data() !=
+               nmd_bake_b->packed->blob_files[i].data()))
+          {
+            is_different = true;
+            break;
+          }
+        }
+      }
+      if (!is_different) {
+        continue;
+      }
+    }
+
+    /* Sign doesn't make sense here, these are not orderable data. */
+    rnadiff_ctx.comparison = 1;
+
+    /* The remainder of this function was taken from rna_property_override_diff_default(). It's
+     * just formatted a little differently to allow for early returns. */
+
+    if (!do_create) {
+      /* Not enough info to create an override operation, so bail out. */
+      continue;
+    }
+
+    /* Create the override operation. */
+    bool created = false;
+    IDOverrideLibraryProperty *op = BKE_lib_override_library_property_get(
+        rnadiff_ctx.liboverride, rnadiff_ctx.rna_path, &created);
+    if (!op) {
+      continue;
+    }
+
+    if (created || op->rna_prop_type == 0) {
+      op->rna_prop_type = PROP_COLLECTION;
+    }
+    else {
+      BLI_assert(op->rna_prop_type == PROP_COLLECTION);
+    }
+    IDOverrideLibraryPropertyOperation *opop = BKE_lib_override_library_property_operation_get(
+        op, LIBOVERRIDE_OP_CUSTOM, nullptr, nullptr, {}, {}, i, i, true, nullptr, &created);
+    if (!opop) {
+      continue;
+    }
+
+    const bNodeTree *owner_ntree = nullptr;
+    const bNode *node = nmd_a->node_group->find_nested_node(nmd_bake_a->id, &owner_ntree);
+    owner_ntree = owner_ntree ? owner_ntree : nmd_a->node_group;
+
+    if (node) {
+      BKE_lib_override_library_property_operation_ui_info_set(
+          *opop,
+          node->name,
+          fmt::format("{}::{}::{}",
+                      owner_ntree->id.lib ? BKE_id_name(owner_ntree->id.lib->id) : "LOCAL",
+                      BKE_id_name(owner_ntree->id),
+                      node->name));
+    }
+
+    if (created) {
+      rnadiff_ctx.report_flag |= RNA_OVERRIDE_MATCH_RESULT_CREATED;
+    }
+  }
+}
+
+bool rna_NodesModifierBake_override_apply(Main *bmain,
+                                          RNAPropertyOverrideApplyContext &rnaapply_ctx)
+{
+  PointerRNA *ptr_dst = &rnaapply_ctx.ptr_dst;
+  PropertyRNA *prop_dst = rnaapply_ctx.prop_dst;
+
+#  ifndef NDEBUG
+  IDOverrideLibraryPropertyOperation *opop = rnaapply_ctx.liboverride_operation;
+  IDOverrideLibraryPropertyOperation *removed_opop = rnaapply_ctx.liboverride_removed_operation;
+
+  /* `REPLACE` operation will be generated by the 'remove liboverride' feature (see
+   * #override_remove_button_exec), to revert the overridden changes. */
+  BLI_assert_msg((((opop->operation == LIBOVERRIDE_OP_CUSTOM) && !removed_opop) ||
+                  ((opop->operation == LIBOVERRIDE_OP_REPLACE) &&
+                   (removed_opop && (removed_opop->operation == LIBOVERRIDE_OP_CUSTOM)))),
+                 "Unsupported RNA override operation on Nodes modifier bakes collection");
+#  endif
+
+  NodesModifierBake *nmd_bake_src = rnaapply_ctx.ptr_item_src.data_as<NodesModifierBake>();
+
+  /* Ignore index-based default 'destination item' defined by the generic liboverride apply code
+   * and stored in RNAPropertyOverrideApplyContext::ptr_item_dst, as changes in source linked
+   * node-tree may have re-ordered its bakes. Instead, lookup by bake id. */
+  NodesModifierData *nmd_dst = ptr_dst->data_as<NodesModifierData>();
+  NodesModifierBake *nmd_bake_dst = nmd_dst->find_bake(nmd_bake_src->id);
+  if (!nmd_bake_dst) {
+    return false;
+  }
+  BLI_assert(nmd_bake_dst->id == nmd_bake_src->id);
+
+  if (nmd_bake_dst->packed) {
+    nodes_modifier_packed_bake_free(nmd_bake_dst->packed);
+    nmd_bake_dst->packed = nullptr;
+  }
+  nodes_modifier_packed_bake_copy(*nmd_bake_dst, *nmd_bake_src);
+  if (nmd_dst->runtime) {
+    nmd_dst->runtime->cache->reset_cache(nmd_bake_dst->id);
+  }
+
+  RNA_property_update_main(bmain, nullptr, ptr_dst, prop_dst);
+  rna_NodesModifier_bake_update(bmain, nullptr, ptr_dst);
+  return true;
 }
 
 static StructRNA *rna_NodesModifierBake_data_block_typef(PointerRNA *ptr)
@@ -2342,7 +2527,12 @@ static void rna_GreasePencilDashModifierSegment_name_set(PointerRNA *ptr, const 
   BLI_str_escape(name_esc, dmd->modifier.name, sizeof(name_esc));
   char rna_path_prefix[36 + sizeof(name_esc) + 1];
   SNPRINTF_UTF8(rna_path_prefix, "modifiers[\"%s\"].segments", name_esc);
-  BKE_animdata_fix_paths_rename_all(nullptr, rna_path_prefix, oldname.c_str(), dash_segment->name);
+  BKE_animdata_fix_paths(*ptr->owner_id,
+                         rna_path_prefix,
+                         RNA_path_name_to_infix(oldname),
+                         RNA_path_name_to_infix(dash_segment->name),
+                         /*verify_paths=*/true,
+                         *G_MAIN);
 }
 
 static void rna_GreasePencilDashModifier_segments_begin(CollectionPropertyIterator *iter,
@@ -2446,7 +2636,12 @@ static void rna_GreasePencilTimeModifierSegment_name_set(PointerRNA *ptr, const 
   BLI_str_escape(name_esc, tmd->modifier.name, sizeof(name_esc));
   char rna_path_prefix[36 + sizeof(name_esc) + 1];
   SNPRINTF_UTF8(rna_path_prefix, "modifiers[\"%s\"].segments", name_esc);
-  BKE_animdata_fix_paths_rename_all(nullptr, rna_path_prefix, oldname.c_str(), segment->name);
+  BKE_animdata_fix_paths(*ptr->owner_id,
+                         rna_path_prefix,
+                         RNA_path_name_to_infix(oldname),
+                         RNA_path_name_to_infix(segment->name),
+                         /*verify_paths=*/true,
+                         *G_MAIN);
 }
 
 static void rna_GreasePencilTimeModifier_segments_begin(CollectionPropertyIterator *iter,
@@ -8095,30 +8290,6 @@ static void rna_def_modifier_nodes_bakes(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Bakes", "Bake data for every bake node");
 }
 
-static void rna_def_modifier_nodes_panel(BlenderRNA *brna)
-{
-  StructRNA *srna;
-  PropertyRNA *prop;
-
-  srna = RNA_def_struct(brna, "NodesModifierPanel", nullptr);
-  RNA_def_struct_ui_text(srna, "Nodes Modifier Panel", "");
-
-  prop = RNA_def_property(srna, "is_open", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", NODES_MODIFIER_PANEL_OPEN);
-  RNA_def_property_ui_text(prop, "Is Open", "Whether the panel is expanded or closed");
-  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
-  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, nullptr);
-}
-
-static void rna_def_modifier_nodes_panels(BlenderRNA *brna)
-{
-  StructRNA *srna;
-
-  srna = RNA_def_struct(brna, "NodesModifierPanels", nullptr);
-  RNA_def_struct_sdna(srna, "NodesModifierData");
-  RNA_def_struct_ui_text(srna, "Panels", "State of all panels defined by the node group");
-}
-
 static void rna_def_modifier_nodes_warning(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -8172,9 +8343,6 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
   rna_def_modifier_nodes_bake(brna);
   rna_def_modifier_nodes_bakes(brna);
 
-  rna_def_modifier_nodes_panel(brna);
-  rna_def_modifier_nodes_panels(brna);
-
   rna_def_modifier_nodes_warning(brna);
 
   rna_def_modifier_nodes_properties(brna);
@@ -8207,13 +8375,14 @@ static void rna_def_modifier_nodes(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "bakes", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "NodesModifierBake");
+  RNA_def_property_ui_text(
+      prop, "Bakes", "All potential bakes, as defined by the assigned Geometry Nodes");
   RNA_def_property_collection_sdna(prop, nullptr, "bakes", "bakes_num");
   RNA_def_property_srna(prop, "NodesModifierBakes");
-
-  prop = RNA_def_property(srna, "panels", PROP_COLLECTION, PROP_NONE);
-  RNA_def_property_struct_type(prop, "NodesModifierPanel");
-  RNA_def_property_collection_sdna(prop, nullptr, "panels", "panels_num");
-  RNA_def_property_srna(prop, "NodesModifierPanels");
+  RNA_def_property_override_funcs(prop,
+                                  "rna_NodesModifierBake_override_diff",
+                                  nullptr,
+                                  "rna_NodesModifierBake_override_apply");
 
   prop = RNA_def_property(srna, "show_group_selector", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(
@@ -9088,6 +9257,11 @@ static void rna_def_modifier_grease_pencil_lineart(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   prop = RNA_def_property(srna, "source_camera", PROP_POINTER, PROP_NONE);
+  RNA_def_property_pointer_funcs(prop,
+                                 nullptr,
+                                 "rna_GreasePencilLineartModifier_source_camera_set",
+                                 nullptr,
+                                 "rna_Camera_object_poll");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_SELF_CHECK);
   RNA_def_property_struct_type(prop, "Object");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);

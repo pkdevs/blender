@@ -85,6 +85,7 @@ set(SRC
   intern/gpu_pass.cc
   intern/gpu_platform.cc
   intern/gpu_query.cc
+  intern/gpu_ray_tracing.cc
   intern/gpu_select.cc
   intern/gpu_select_next.cc
   intern/gpu_select_pick.cc
@@ -108,11 +109,13 @@ set(SRC
   intern/gpu_viewport.cc
   intern/gpu_worker.cc
 
+  shader_tool/ast.cc
   shader_tool/attribute.cc
   shader_tool/enum.cc
   shader_tool/flow_control.cc
   shader_tool/function.cc
   shader_tool/grammar.cc
+  shader_tool/grammar_bsl.cc
   shader_tool/intermediate.cc
   shader_tool/metadata.cc
   shader_tool/namespace.cc
@@ -148,6 +151,7 @@ set(SRC
   GPU_platform.hh
   GPU_platform_backend_enum.h
   GPU_primitive.hh
+  GPU_ray_tracing.hh
   GPU_select.hh
   GPU_shader.hh
   GPU_shader_builtin.hh
@@ -269,6 +273,7 @@ set(VULKAN_SRC
   vulkan/vk_pixel_buffer.cc
   vulkan/vk_push_constants.cc
   vulkan/vk_query.cc
+  vulkan/vk_ray_tracing.cc
   vulkan/render_graph/nodes/vk_pipeline_data.cc
   vulkan/render_graph/vk_command_buffer_wrapper.cc
   vulkan/render_graph/vk_command_builder.cc
@@ -294,6 +299,7 @@ set(VULKAN_SRC
   vulkan/vk_to_string.cc
   vulkan/vk_uniform_buffer.cc
   vulkan/vk_vertex_attribute_object.cc
+  vulkan/vk_vertex_attribute_object_cache.cc
   vulkan/vk_vertex_buffer.cc
 
   vulkan/vk_backend.hh
@@ -322,9 +328,11 @@ set(VULKAN_SRC
   vulkan/vk_pixel_buffer.hh
   vulkan/vk_push_constants.hh
   vulkan/vk_query.hh
+  vulkan/vk_ray_tracing.hh
   vulkan/render_graph/nodes/vk_begin_query_node.hh
   vulkan/render_graph/nodes/vk_begin_rendering_node.hh
   vulkan/render_graph/nodes/vk_blit_image_node.hh
+  vulkan/render_graph/nodes/vk_build_acceleration_structure_node.hh
   vulkan/render_graph/nodes/vk_clear_attachments_node.hh
   vulkan/render_graph/nodes/vk_clear_color_image_node.hh
   vulkan/render_graph/nodes/vk_clear_depth_stencil_image_node.hh
@@ -372,6 +380,7 @@ set(VULKAN_SRC
   vulkan/vk_to_string.hh
   vulkan/vk_uniform_buffer.hh
   vulkan/vk_vertex_attribute_object.hh
+  vulkan/vk_vertex_attribute_object_cache.hh
   vulkan/vk_vertex_buffer.hh
   vulkan/vk_vertex_input_description.hh
 )
@@ -460,6 +469,14 @@ endif()
 
 
 if(WITH_VULKAN_BACKEND)
+  list(APPEND INC
+    ../../../extern/volk
+    ../../../extern/vulkan_memory_allocator
+  )
+  list(APPEND INC_SYS
+    ${VULKAN_INCLUDE_DIRS}
+    ${SHADERC_INCLUDE_DIRS}
+  )
   list(APPEND SRC
     ${VULKAN_SRC}
   )
@@ -468,6 +485,9 @@ if(WITH_VULKAN_BACKEND)
     PRIVATE bf::extern::xxhash
     PRIVATE bf::dependencies::optional::vulkan
     PRIVATE bf::dependencies::optional::shaderc
+    ${SHADERC_LIBRARIES}
+    extern_volk
+    extern_vulkan_memory_allocator
   )
 
   add_definitions(-DWITH_VULKAN_BACKEND)
@@ -639,17 +659,22 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_bevel.glsl
   shaders/material/gpu_shader_material_wavelength.glsl
   shaders/material/gpu_shader_material_blackbody.glsl
+  shaders/material/gpu_shader_material_bit_math.glsl
+  shaders/material/gpu_shader_material_boolean_math.glsl
   shaders/material/gpu_shader_material_bright_contrast.glsl
   shaders/material/gpu_shader_material_bump.glsl
   shaders/material/gpu_shader_material_camera.glsl
   shaders/material/gpu_shader_material_clamp.glsl
+  shaders/material/gpu_shader_material_compare.glsl
   shaders/material/gpu_shader_material_combine_color.glsl
+  shaders/material/gpu_shader_material_combine_transform.glsl
   shaders/material/gpu_shader_material_combine_xyz.glsl
   shaders/material/gpu_shader_material_diffuse.glsl
   shaders/material/gpu_shader_material_displacement.glsl
   shaders/material/gpu_shader_material_eevee_specular.glsl
   shaders/material/gpu_shader_material_emission.glsl
   shaders/material/gpu_shader_material_euler_to_rotation.glsl
+  shaders/material/gpu_shader_material_float_to_int.glsl
   shaders/material/gpu_shader_material_fractal_noise.glsl
   shaders/material/gpu_shader_material_fractal_voronoi.glsl
   shaders/material/gpu_shader_material_fresnel.glsl
@@ -669,6 +694,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_light_path.glsl
   shaders/material/gpu_shader_material_mapping.glsl
   shaders/material/gpu_shader_material_map_range.glsl
+  shaders/material/gpu_shader_material_matrix_svd.glsl
   shaders/material/gpu_shader_material_metallic.glsl
   shaders/material/gpu_shader_material_mix_color.glsl
   shaders/material/gpu_shader_material_mix_shader.glsl
@@ -697,6 +723,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_rotation_to_quaternion.glsl
   shaders/material/gpu_shader_material_scene_time.glsl
   shaders/material/gpu_shader_material_separate_color.glsl
+  shaders/material/gpu_shader_material_separate_transform.glsl
   shaders/material/gpu_shader_material_separate_xyz.glsl
   shaders/material/gpu_shader_material_set.glsl
   shaders/material/gpu_shader_material_shader_to_rgba.glsl
@@ -768,6 +795,7 @@ set(GLSL_TEST_SRC
   tests/shaders/gpu_framebuffer_layer_viewport_test.glsl
   tests/shaders/gpu_framebuffer_subpass_input_test.glsl
   tests/shaders/gpu_push_constants_test.glsl
+  tests/shaders/gpu_ray_query_test.glsl
   tests/shaders/gpu_texture_test.glsl
   tests/shaders/gpu_texture_atomic_test.glsl
 )
@@ -864,7 +892,7 @@ set(GLSL_SOURCE_CONTENT "")
 set(GLSL_METADATA_CONTENT "")
 set(GLSL_INFOS_CONTENT "")
 foreach(GLSL_FILE ${GLSL_SRC})
-  get_filename_component(GLSL_FILE_NAME ${GLSL_FILE} NAME)
+  cmake_path(GET GLSL_FILE FILENAME GLSL_FILE_NAME)
   string(REPLACE "." "_" GLSL_FILE_NAME_UNDERSCORES ${GLSL_FILE_NAME})
   string(APPEND GLSL_FILE_NAME_UNDERSCORES "_tmp")
   string(APPEND GLSL_SOURCE_CONTENT "SHADER_SOURCE\(${GLSL_FILE_NAME_UNDERSCORES}, \"${GLSL_FILE_NAME}\", \"${GLSL_FILE}\"\)\n")
@@ -946,8 +974,8 @@ if(WITH_GTESTS)
       tests/immediate_test.cc
       tests/index_buffer_test.cc
       tests/push_constants_test.cc
+      tests/ray_tracing_test.cc
       tests/shader_create_info_test.cc
-      tests/shader_preprocess_test.cc
       tests/shader_test.cc
       tests/specialization_constants_test.cc
       tests/state_blend_test.cc

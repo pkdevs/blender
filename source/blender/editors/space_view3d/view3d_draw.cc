@@ -9,17 +9,17 @@
 #include <cmath>
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_half.hh"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_threads.h"
-#include "BLI_time.h"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_camera.h"
@@ -29,6 +29,7 @@
 #include "BKE_global.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -767,6 +768,7 @@ static void view3d_grid_steps_ex(const Scene *scene,
     }
   }
   else {
+    len = STEPS_LEN;
     if (rv3d->view != RV3D_VIEW_USER) {
       /* Allow 3 more subdivisions. */
       grid_scale /= powf(v3d->gridsubdiv, 3);
@@ -1671,7 +1673,7 @@ void view3d_main_region_draw(const bContext *C, ARegion *region)
 
   DRW_cache_free_old_subdiv();
   DRW_cache_free_old_batches(bmain);
-  BKE_image_free_old_gputextures(bmain);
+  BKE_image_free_old_buffers(bmain);
 
   /* No depth test for drawing action zones afterwards. */
   GPU_depth_test(GPU_DEPTH_NONE);
@@ -1780,7 +1782,7 @@ void ED_view3d_draw_offscreen(Depsgraph *depsgraph,
   {
     /* Free images which can have changed on frame-change.
      * WARNING(@ideasman42): can be slow so only free animated images. */
-    BKE_image_free_anim_gputextures(G.main);
+    BKE_image_free_anim_gpu_texture_caches(G.main);
   }
 
   GPU_matrix_push_projection();
@@ -1856,6 +1858,7 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
                                      bool draw_background,
                                      const char *viewname,
                                      const bool do_color_management,
+                                     Object *camera_override,
                                      GPUOffScreen *ofs,
                                      GPUViewport *viewport)
 {
@@ -1927,7 +1930,14 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
   v3d.object_type_exclude_viewport = object_type_exclude_viewport_override;
   v3d.object_type_exclude_select = object_type_exclude_select_override;
 
-  rv3d.persp = RV3D_PERSP;
+  if (camera_override != nullptr) {
+    /* Override the active View3D camera and force camera perspective. */
+    rv3d.persp = RV3D_CAMOB;
+    v3d.camera = camera_override;
+  }
+  else {
+    rv3d.persp = RV3D_PERSP;
+  }
   v3d.clip_start = clip_start;
   v3d.clip_end = clip_end;
   /* Actually not used since we pass in the projection matrix. */
