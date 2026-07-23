@@ -768,6 +768,16 @@ std::optional<std::string> button_online_manual_id(const Button *but)
         "{}.{}", RNA_struct_identifier(but->rnapoin.type), RNA_property_identifier(but->rnaprop));
   }
   if (but->optype) {
+    /* Buttons that set a tool (`WM_OT_tool_set_by_id`) should link to the manual page
+     * for the tool being set, not to the generic tool-set operator itself. */
+    if (but->opptr && but_is_tool(but)) {
+      char tool_id[MAX_NAME];
+      RNA_string_get(but->opptr, "name", tool_id);
+      if (tool_id[0] != '\0') {
+        return std::string(tool_id);
+      }
+    }
+
     char idname[OP_MAX_TYPENAME];
     const size_t idname_len = WM_operator_py_idname(idname, but->optype->idname);
     return std::string(idname, idname_len);

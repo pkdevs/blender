@@ -28,6 +28,43 @@ from bpy.app.translations import (
     contexts as i18n_contexts,
 )
 
+def _list_all_workspace_tools() -> set:
+
+    from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
+    from collections.abc import Iterable
+
+    def walk_tools(obj) -> set:
+        tool_ids = set()
+
+        if isinstance(obj, str):
+            return tool_ids
+        if callable(obj):
+            return tool_ids
+
+        # ToolDef
+        if hasattr(obj, "idname"):
+            tool_ids.add(obj.idname)
+            return tool_ids
+
+        # Recurse into containers
+        if isinstance(obj, Iterable):
+            for item in obj:
+                tool_ids |= walk_tools(item)
+
+        return tool_ids
+
+    all_tool_ids = set()
+
+    for cls in ToolSelectPanelHelper.__subclasses__():
+        for mode, tools in cls.tools_all():
+            if mode is None:
+                continue
+
+            tool_ids = walk_tools(tools)
+            all_tool_ids |= tool_ids
+
+    return all_tool_ids
+
 
 def _rna_path_prop_search_for_context_impl(context, edit_text, unique_attrs):
     # Use the same logic as auto-completing in the Python console to expand the data-path.
@@ -1251,6 +1288,27 @@ def _wm_doc_get_id(doc_id, *, do_url=True, url_prefix="", report=None):
                 url = "{:s}/bpy.ops.{:s}.html#bpy.ops.{:s}.{:s}".format(url_prefix, class_name, class_name, class_prop)
             else:
                 rna = "bpy.ops.{:s}.{:s}".format(class_name, class_prop)
+        # a workspace tool
+        elif doc_id in _list_all_workspace_tools():
+            # get the context indicator to differentiate between tools that
+            # are present in multiple modes/editors.
+            area = bpy.context.area
+            if area.type == 'VIEW_3D':
+                context = str(bpy.context.mode)
+            elif area.type == 'IMAGE_EDITOR':
+                editor = area.spaces.active
+                context = str(editor.mode)
+            elif area.type == 'SEQUENCE_EDITOR':
+                editor = area.spaces.active
+                context = str(editor.view_type)
+            elif area.type == 'NODE_EDITOR':
+                # Node editor doesn't have established mode identifiers. Use simply "node".
+                context = "node"
+
+            if do_url:
+                return None
+            else:
+                rna = "{:s}.{:s}.{:s}".format(context.lower(), class_name, class_prop)
         else:
             # An RNA setting, common case.
 
@@ -1343,11 +1401,31 @@ class WM_OT_doc_view_manual(Operator):
 
     @staticmethod
     def _lookup_rna_url(rna_id, verbose=True):
+        # Every given rna_id starts with bpy, except workspace tools.
+        is_workspace_tool = not rna_id.startswith("bpy")
+
         for prefix, url_manual_mapping in bpy.utils.manual_map():
             rna_ref = WM_OT_doc_view_manual._find_reference(rna_id, url_manual_mapping, verbose=verbose)
             if rna_ref is not None:
                 url = prefix + rna_ref
                 return url
+            else:
+                if is_workspace_tool:
+                    # Some workspace tools might not have a mode-specific page.
+                    # Check for general tool page in that case.
+                    split_rna_id = rna_id.split(".", 1)[1]
+                    rna_ref = WM_OT_doc_view_manual._find_reference(split_rna_id, url_manual_mapping, verbose=verbose)
+                    if rna_ref is not None:
+                        url = prefix + rna_ref
+                        return url
+                    else:
+                        # If nothing can be found redirect to general tool page.
+                        fallback_rna_id = "bpy.ops.wm.tool_set_by_id"
+                        rna_ref = WM_OT_doc_view_manual._find_reference(fallback_rna_id, url_manual_mapping, verbose=verbose)
+                        if rna_ref is not None:
+                            url = prefix + rna_ref
+                            return url
+
 
     def execute(self, _context):
         rna_id = _wm_doc_get_id(self.doc_id, do_url=False, report=self.report)
