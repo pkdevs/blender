@@ -181,6 +181,7 @@ struct LayoutInternal {
   static void layout_remove_but(Layout *layout, const Button *but);
   static void layout_estimate(Layout *layout);
   static void layout_resolve(Layout *layout);
+  static void resolve_dynamic_height(Layout *layout);
   static ButtonItem *layout_find_button_item(const Layout *layout, const Button *but);
   static Layout *item_prop_split_layout_hack(Layout *layout_parent, Layout *layout_split);
   static void layout_offset_size_set(Layout *layout, int x, int y, int w, int h);
@@ -3852,6 +3853,10 @@ void LayoutInternal::layout_estimate(Layout *layout)
 void LayoutInternal::layout_resolve(Layout *layout)
 {
   layout->resolve();
+}
+
+void LayoutInternal::resolve_dynamic_height(Layout *layout)
+{
   if (layout->root_->use_dynamic_height) {
     layout->resolve_dynamic_height();
   }
@@ -6010,7 +6015,7 @@ static int2 layout_end(Layout *layout)
 
   Vector<ItemSourceState> items_source_states;
   Block *block = layout->block();
-  /* Some popups tags blocks as popups before using #block_layout, check again now. */
+
   if (block->popup_auto_width) {
     backup_item_source_state_recursive(items_source_states, *layout);
   }
@@ -6042,6 +6047,9 @@ static int2 layout_end(Layout *layout)
       LayoutInternal::layout_resolve(layout);
     }
   }
+
+  LayoutInternal::resolve_dynamic_height(layout);
+
   return layout->offset();
 }
 
