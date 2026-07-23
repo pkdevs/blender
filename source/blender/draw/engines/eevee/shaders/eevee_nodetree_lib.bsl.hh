@@ -932,6 +932,7 @@ void node_shadow_raycast_impl(float3 position, float spread, float4 &color)
                                     g_data.N,
                                     object_infos.shadow_terminator_normal_offset,
                                     object_infos.shadow_terminator_geometry_offset,
+                                    spread,
                                     ray_count,
                                     ray_step_count);
 

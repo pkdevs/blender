@@ -159,6 +159,7 @@ template<bool is_transmission> struct EvalCtx {
                            stack.cl[0].N,
                            terminator_normal_offset,
                            terminator_geometry_offset,
+                           1.0f,
                            ray_count,
                            ray_step_count);
     }

@@ -456,6 +456,7 @@ float shadow_eval([[resource_table]] ShadowRenderData &srd,
                   float3 N,
                   float terminator_normal_offset,
                   float terminator_geometry_offset,
+                  float soft_shadow_scale,
                   int ray_count,
                   int ray_step_count)
 {
@@ -522,6 +523,7 @@ float shadow_eval([[resource_table]] ShadowRenderData &srd,
   float surface_hit = 0.0f;
   for (int ray_index = 0; ray_index < ray_count && ray_index < SHADOW_MAX_RAY; ray_index++) {
     float2 random_ray_2d = fract(hammersley_2d(ray_index, ray_count) + random_shadow_3d.xy);
+    random_ray_2d = mix(float2(0.5f), random_ray_2d, soft_shadow_scale);
 
     bool has_hit;
     if (is_directional) {
