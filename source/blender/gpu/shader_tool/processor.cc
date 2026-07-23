@@ -2158,15 +2158,29 @@ void SourceProcessor::cleanup_line_directives(Parser &parser)
     Token next = toks[2].next();
     /* True if the directive splits a logical line and the parts do not overlap. */
     if (prev.line_number() == value) {
-      int prev_end_col = prev.char_number() + prev.str().length();
-      int next_start_col = next.char_number();
+      /* Backtrack to find the first token of the previous line. */
+      Token first_on_prev_line = prev;
+      Token peek = first_on_prev_line.prev();
+      while (peek.is_valid() && peek.str_with_whitespace().find_first_of('\n') == string::npos) {
+        first_on_prev_line = peek;
+        peek = first_on_prev_line.prev();
+      }
 
-      if (prev_end_col < next_start_col) {
-        int spaces_needed = next_start_col - prev_end_col;
-        parser.replace(prev.str_index_last_no_whitespace() + 1,
-                       next.str_index_start() - 1,
-                       std::string(spaces_needed, ' '));
-        return;
+      /* Check if the previous line is a preprocessor directive. */
+      bool is_prev_directive = (first_on_prev_line.is_valid() && first_on_prev_line == '#');
+
+      /* Only merge if the previous line is NOT a preprocessor directive. */
+      if (!is_prev_directive) {
+        int prev_end_col = prev.char_number() + prev.str().length();
+        int next_start_col = next.char_number();
+
+        if (prev_end_col < next_start_col) {
+          int spaces_needed = next_start_col - prev_end_col;
+          parser.replace(prev.str_index_last_no_whitespace() + 1,
+                         next.str_index_start() - 1,
+                         std::string(spaces_needed, ' '));
+          return;
+        }
       }
     }
     /* True if directive is noop. */
