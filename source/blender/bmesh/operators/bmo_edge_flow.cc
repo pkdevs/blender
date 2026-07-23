@@ -15,6 +15,7 @@
 #include "BLI_math_vector_c.hh"
 #include "BLI_vector.hh"
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 
 #include "BKE_curves.hh"
 #include "BLI_length_parameterize.hh"
@@ -688,6 +689,7 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
   }
 
   int cyclic_skipped = 0;
+  int self_crossing_skipped = 0;
   for (const int j : loops.index_range()) {
     EdgeFlowLoop &loop = loops[j];
     if (!process_chain[j]) {
@@ -701,6 +703,23 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
     /* No interior verts. */
     if (int(loop.verts.size()) <= 2) {
       continue;
+    }
+
+    /* The arc-length mapping onto the spline folds over at a revisited vert (figure-8
+     * chains), so curve mode requires simple chains. */
+    if (mode == EDGE_FLOW_CURVE) {
+      Set<const BMVert *> seen;
+      bool self_crossing = false;
+      for (const BMVert *v : loop.verts) {
+        if (!seen.add(v)) {
+          self_crossing = true;
+          break;
+        }
+      }
+      if (self_crossing) {
+        self_crossing_skipped++;
+        continue;
+      }
     }
 
     Array<float3> orig_cos(loop.verts.size());
@@ -783,6 +802,10 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
   if (cyclic_skipped > 0) {
     BMO_error_raise(
         bm, op, BMO_ERROR_WARN, "Closed loops skipped, Linear and Curve require open chains");
+  }
+  if (self_crossing_skipped > 0) {
+    BMO_error_raise(
+        bm, op, BMO_ERROR_WARN, "Self-crossing chains skipped, Curve requires simple chains");
   }
 }
 

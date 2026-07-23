@@ -200,7 +200,7 @@ void MESH_OT_edge_flow(wmOperatorType *ot)
                 1.0f);
 
   RNA_def_boolean( ot->srna, "space_evenly", false, "Space Evenly", "Space edges evenly along the loop");
-  RNA_def_int(ot->srna, "tension", 180, -500, 500, "Tension", "Tension of curve for flow mode", -500, 500);
+  RNA_def_int(ot->srna, "tension", 180, -500, 500, "Tension", "Tension of curve for flow mode", -250, 250);
   RNA_def_int(ot->srna, "iterations", 8, 1, 32, "Iterations", "Number of iterations for flow algorithm", 1, 32);
 
   RNA_def_enum(ot->srna, "blend_mode", blend_mode_items, 0, "Blend Mode", "Blend start/end as vertex counts or loop fractions");
@@ -213,8 +213,8 @@ void MESH_OT_edge_flow(wmOperatorType *ot)
 
   RNA_def_boolean(ot->srna, "use_rail", false, "Use Rail", "Use first and last edge to control curvature");
   RNA_def_enum(ot->srna, "rail_mode", rail_mode_items, 1, "Rail Mode", "Rail length as absolute or factor of end edge");
-  RNA_def_float(ot->srna, "rail_start", 1.0f, -FLT_MAX, FLT_MAX, "Rail Start", "Rail length at start of loop", -100.0f, 100.0f);
-  RNA_def_float(ot->srna, "rail_end", 1.0f, -FLT_MAX, FLT_MAX, "Rail End", "Rail length at end of loop", -100.0f, 100.0f);
+  RNA_def_float(ot->srna, "rail_start", 1.0f, -FLT_MAX, FLT_MAX, "Rail Start", "Rail length at start of loop", -10.0f, 10.0f);
+  RNA_def_float(ot->srna, "rail_end", 1.0f, -FLT_MAX, FLT_MAX, "Rail End", "Rail length at end of loop", -10.0f, 10.0f);
 }
 
 }  // namespace blender
