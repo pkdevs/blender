@@ -281,28 +281,13 @@ struct BMUVSelectPickParams {
   bool shared = true;
 };
 
-/**
- * Select/deselect a single vert/edge/face, flushing locally.
- *
- * \param mirrored: When true, operate on the mirror-select flags
- * (#BM_ELEM_MIRRORED_SELECT_UV & friends) instead of the regular UV-select ones.
- * The face variant ignores `params.shared` when `mirrored` is true - mirror face-pick is always
- * confined to the picked face's own loops, see the doc-comment on the definition.
- */
 void BM_vert_uvselect_set_pick(
     BMesh *bm, BMVert *v, bool select, const BMUVSelectPickParams &params, bool mirrored = false);
-/** \copydoc #BM_vert_uvselect_set_pick. */
 void BM_edge_uvselect_set_pick(
     BMesh *bm, BMEdge *e, bool select, const BMUVSelectPickParams &params, bool mirrored = false);
-/** \copydoc #BM_vert_uvselect_set_pick. */
 void BM_face_uvselect_set_pick(
     BMesh *bm, BMFace *f, bool select, const BMUVSelectPickParams &params, bool mirrored = false);
 
-/**
- * Regular & mirror-select element lists for #BM_mesh_uvselect_set_elem_from_mesh,
- * bundled so both kinds of selection are applied together in a single, coherent pass
- * instead of two separate calls.
- */
 struct BMUVSelectSetElemFromMeshSpans {
   Span<BMVert *> verts;
   Span<BMEdge *> edges;
@@ -312,7 +297,6 @@ struct BMUVSelectSetElemFromMeshSpans {
   Span<BMEdge *> edges_mirrored;
   Span<BMFace *> faces_mirrored;
 };
-/** \copydoc #BMUVSelectSetElemFromMeshSpans. */
 struct BMUVSelectSetElemFromMeshLists {
   const VectorList<BMVert *> &verts;
   const VectorList<BMEdge *> &edges;
