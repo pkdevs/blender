@@ -3113,6 +3113,10 @@ static void calchandleNurb_intern(BezTriple *bezt,
     return;
   }
 
+  if (prev == nullptr && next == nullptr) {
+    return;
+  }
+
   p2 = bezt->vec[1];
 
   if (prev == nullptr) {
