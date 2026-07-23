@@ -88,7 +88,7 @@ struct DepsgraphEvalState {
 
 static bool operation_reads_main(OperationNode &operation_node)
 {
-  if (operation_node.type == NodeType::COPY_ON_EVAL) {
+  if (operation_node.opcode == OperationCode::COPY_ON_EVAL) {
     return true;
   }
   return false;
