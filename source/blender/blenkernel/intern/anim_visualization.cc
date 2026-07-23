@@ -247,6 +247,9 @@ void background_eval_register(Main &bmain,
       TargetData &data = eval_data->worker_data.target_data[target_index];
       data.finished_left = false;
       data.finished_right = false;
+      DEG_set_allow_read_from_main(eval_data->worker_data.dg, true);
+      DEG_evaluate_on_refresh(eval_data->worker_data.dg);
+      DEG_set_allow_read_from_main(eval_data->worker_data.dg, false);
       eval_data->worker_data.restart.store(true, std::memory_order_release);
       eval_data->worker_data.unlock();
       return;
