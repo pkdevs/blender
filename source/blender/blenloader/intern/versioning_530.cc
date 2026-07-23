@@ -184,6 +184,26 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
+    for (Object &ob : bmain->objects) {
+      if (bMotionPath *mpath = ob.mpath) {
+        for (const int i : IndexRange(mpath->length)) {
+          mpath->points[i].flag |= MOTIONPATH_VERT_EVALUATED;
+        }
+      }
+      /* bones motion path */
+      if (ob.pose) {
+        for (bPoseChannel &pchan : ob.pose->chanbase) {
+          if (bMotionPath *mpath = pchan.mpath) {
+            for (const int i : IndexRange(mpath->length)) {
+              mpath->points[i].flag |= MOTIONPATH_VERT_EVALUATED;
+            }
+          }
+        }
+      }
+    }
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
