@@ -20,11 +20,11 @@
  * Watches the XDG Desktop Portal's `org.freedesktop.appearance` `color-scheme` setting over
  * DBUS, so #GHOST_SystemWayland can report the system's light/dark preference.
  *
- * A dedicated background thread blocks on the (private, exclusively owned) DBUS connection so
- * updates are delivered as they happen instead of by polling. This is independent of WAYLAND's
- * own event handling thread (see `USE_EVENT_BACKGROUND_THREAD`) and its locking, the only
- * shared state is the atomic #color_scheme_ and the `on_change` callback, which must be safe to
- * call from this background thread.
+ * A dedicated background thread blocks on the DBUS connection so updates are delivered as they
+ * happen instead of by polling. This is independent of WAYLAND's own event handling thread (see
+ * `USE_EVENT_BACKGROUND_THREAD`) and its locking. The only shared state is the atomic
+ * #color_scheme_ and the `on_change` callback, which must be safe to call from this background
+ * thread.
  */
 class GHOST_WaylandAppearanceWatcher {
  public:

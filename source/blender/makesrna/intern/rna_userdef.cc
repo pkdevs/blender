@@ -952,6 +952,15 @@ static int rna_UserDef_active_theme_type_resolved_get(PointerRNA * /*ptr*/)
   return int(blender::bke::resolve_active_theme_type());
 }
 
+static void rna_UserDef_ensure_theme(bContext *C, const char *filepath)
+{
+  blender::bke::ensure_theme(filepath, blender::bke::resolve_active_theme_type());
+
+  WM_reinit_gizmomap_all(CTX_data_main(C));
+  WM_main_add_notifier(NC_WINDOW, nullptr);
+  USERDEF_TAG_DIRTY;
+}
+
 static PointerRNA rna_UserDef_view_get(PointerRNA *ptr)
 {
   return RNA_pointer_create_with_parent(*ptr, RNA_PreferencesView, ptr->data);
@@ -1216,6 +1225,11 @@ static void rna_Theme_name_set(PointerRNA *ptr, const char *value)
   bTheme *btheme = static_cast<bTheme *>(ptr->data);
   STRNCPY_UTF8(btheme->name, value);
   BLI_uniquename(&U.themes, btheme, "Theme", '.', offsetof(bTheme, name), sizeof(btheme->name));
+}
+
+static void rna_Theme_reset_to_baseline(bTheme *theme)
+{
+  blender::bke::reset_theme(*theme);
 }
 
 static void rna_Addon_module_set(PointerRNA *ptr, const char *value)
@@ -4428,6 +4442,12 @@ static void rna_def_userdef_themes(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "Theme", nullptr);
   RNA_def_struct_sdna(srna, "bTheme");
   RNA_def_struct_ui_text(srna, "Theme", "User interface styling and color settings");
+
+  FunctionRNA *func = RNA_def_function(srna, "reset_to_baseline", "rna_Theme_reset_to_baseline");
+  RNA_def_function_ui_description(
+      func,
+      "Reset this theme's values to Blender's compiled-in baseline colors, not accounting "
+      "for its own preset file");
 
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_ui_text(prop, "Name", "Name of the theme");
@@ -7968,6 +7988,15 @@ void RNA_def_userdef(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Active Theme Type (Resolved)",
                            "Active Theme Type with System resolved to Dark or Light");
+
+  FunctionRNA *func = RNA_def_function(srna, "ensure_theme", "rna_UserDef_ensure_theme");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+  RNA_def_function_ui_description(
+      func,
+      "Make sure the currently active (light or dark) theme is backed by a theme preset at "
+      "the given file path, creating one if it doesn't exist yet");
+  RNA_def_string_file_path(
+      func, "filepath", nullptr, FILE_MAX, "File Path", "Path of the theme preset");
 
   prop = RNA_def_property(srna, "active_theme_dark", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NEVER_NULL);

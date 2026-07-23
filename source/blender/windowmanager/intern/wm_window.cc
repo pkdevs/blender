@@ -1814,10 +1814,16 @@ static bool ghost_event_proc(const GHOST_IEvent *ghost_event, GHOST_TUserDataPtr
      * `active_theme_get()` would otherwise keep silently falling back to the dark theme.
      * Loading the built-in default is only implemented in Python (XML parsing), and the
      * operator itself resolves which of dark/light to load from the same (already updated
-     * above) state, so this doesn't need to pass that along explicitly. */
+     * above) state, so this doesn't need to pass that along explicitly.
+     *
+     * `force_reset=False` so this only ever fills in a theme slot that's never been loaded,
+     * it must never clobber a theme the user has already loaded or customized. */
     if (bke::resolve_active_theme_type() == UserPrefThemeType::Light && !U.active_theme_light) {
-      WM_operator_name_call(
-          C, "preferences.reset_default_theme", wm::OpCallContext::ExecDefault, nullptr, nullptr);
+      wmOperatorType *ot = WM_operatortype_find("preferences.reset_default_theme", false);
+      PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
+      RNA_boolean_set(&props_ptr, "force_reset", false);
+      WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &props_ptr, nullptr);
+      WM_operator_properties_free(&props_ptr);
     }
 
     /* Full redraw, relevant when Active Theme Type is System. */

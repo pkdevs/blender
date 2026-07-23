@@ -35,27 +35,28 @@ const bTheme &active_theme_get()
   return *U.active_theme_dark;
 }
 
-bTheme &ensure_theme(StringRefNull filepath, UserPrefThemeType slot, bool force_reset)
+void reset_theme(bTheme &theme)
 {
-  BLI_assert(slot == UserPrefThemeType::Dark || slot == UserPrefThemeType::Light);
+  /* Reset to the compiled-in baseline, ready for a caller to overlay a preset's own values
+   * on top (loading the XML itself is only implemented in Python, see `_rna_xml.py`).
+   * Copying from after `filepath` leaves `name`/`filepath` untouched; `active_theme_area`
+   * is the last member, so it still needs preserving separately. */
+  const int active_theme_area = theme.active_theme_area;
+  MEMCPY_STRUCT_AFTER(&theme, &U_theme_default, filepath);
+  theme.active_theme_area = active_theme_area;
+}
 
+bTheme &ensure_theme(StringRefNull filepath, UserPrefThemeType slot)
+{
   bTheme *btheme = static_cast<bTheme *>(
       BLI_findstring(&U.themes, filepath.c_str(), offsetof(bTheme, filepath)));
-  const bool is_new = !btheme;
-  if (is_new) {
+  if (!btheme) {
     btheme = MEM_new<bTheme>(__func__);
     BLI_addtail(&U.themes, btheme);
-  }
-
-  if (is_new || force_reset) {
-    /* Reset to the compiled-in baseline before the caller overlays the preset's own values
-     * on top (loading the XML itself is only implemented in Python, see `_rna_xml.py`). A
-     * theme that's already loaded is otherwise left untouched, so switching which preset is
-     * active doesn't discard live edits made to a theme still in #UserDef::themes. */
-    const int active_theme_area = btheme->active_theme_area;
-    MEMCPY_STRUCT_AFTER(btheme, &U_theme_default, name);
-    btheme->active_theme_area = active_theme_area;
     STRNCPY_UTF8(btheme->filepath, filepath.c_str());
+    /* A theme that already exists is otherwise left untouched, so switching which preset is
+     * active doesn't discard live edits made to a theme still in #UserDef::themes. */
+    reset_theme(*btheme);
   }
 
   bTheme *&slot_ptr = (slot == UserPrefThemeType::Dark) ? U.active_theme_dark :

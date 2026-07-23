@@ -29,7 +29,6 @@
 #include "BKE_main.hh"
 #include "BKE_preferences.h"
 #include "BKE_screen.hh"
-#include "BKE_theme.hh"
 
 #include "BKE_report.hh"
 
@@ -83,43 +82,6 @@ static void PREFERENCES_OT_reset_default_ui_style(wmOperatorType *ot)
 
   /* flags */
   ot->flag = OPTYPE_REGISTER;
-}
-
-static wmOperatorStatus preferences_ensure_theme_exec(bContext *C, wmOperator *op)
-{
-  Main *bmain = CTX_data_main(C);
-
-  char filepath[FILE_MAX];
-  RNA_string_get(op->ptr, "filepath", filepath);
-  const bool force_reset = RNA_boolean_get(op->ptr, "force_reset");
-  bke::ensure_theme(filepath, bke::resolve_active_theme_type(), force_reset);
-
-  WM_reinit_gizmomap_all(bmain);
-  WM_event_add_notifier(C, NC_WINDOW, nullptr);
-  U.runtime.is_dirty = true;
-  return OPERATOR_FINISHED;
-}
-
-static void PREFERENCES_OT_ensure_theme(wmOperatorType *ot)
-{
-  ot->name = "Ensure Theme";
-  ot->idname = "PREFERENCES_OT_ensure_theme";
-  ot->description =
-      "Make sure the currently active (light or dark) theme is backed by a theme preset at the "
-      "given file path, creating one if it doesn't exist yet";
-
-  ot->exec = preferences_ensure_theme_exec;
-
-  ot->flag = OPTYPE_REGISTER;
-
-  RNA_def_string_file_path(
-      ot->srna, "filepath", nullptr, FILE_MAX, "File Path", "Path of the theme preset");
-  RNA_def_boolean(ot->srna,
-                   "force_reset",
-                   false,
-                   "Force Reset",
-                   "Reset the theme's values to the compiled-in baseline even if it was "
-                   "already loaded, discarding any live edits");
 }
 
 /** \} */
@@ -1339,7 +1301,6 @@ void PREFERENCES_OT_clear_filter(wmOperatorType *ot)
 void ED_operatortypes_userpref()
 {
   WM_operatortype_append(PREFERENCES_OT_reset_default_ui_style);
-  WM_operatortype_append(PREFERENCES_OT_ensure_theme);
 
   WM_operatortype_append(PREFERENCES_OT_autoexec_path_add);
   WM_operatortype_append(PREFERENCES_OT_autoexec_path_remove);

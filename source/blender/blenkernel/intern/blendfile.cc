@@ -1548,6 +1548,10 @@ UserDef *BKE_blendfile_userdef_from_defaults()
     memcpy(btheme, &U_theme_default, sizeof(*btheme));
 
     BLI_addtail(&userdef->themes, btheme);
+    /* The previous active theme becomes the dark theme. The light theme remains un-set and is
+     * lazily loaded when it's activated. This is because we can't reliably detect whether a theme
+     * is "light" here, and because the theme XML loading is currently only implemented in Python
+     * which doesn't really make sense to call from this context. */
     userdef->active_theme_dark = btheme;
   }
 

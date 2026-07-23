@@ -719,7 +719,7 @@ class SetPresetInterfaceTheme(Operator):
         from os.path import basename
         filepath = self.filepath
 
-        # change the menu title to the most recently chosen option
+        # Change the menu title to the most recently chosen option.
         preset_class = getattr(bpy.types, self.menu_idname)
         preset_class.bl_label = bpy.path.display_name(basename(filepath), title_case=False)
 
@@ -728,7 +728,9 @@ class SetPresetInterfaceTheme(Operator):
         # always needs its values loaded, since `ensure_theme` only resets it to a baseline.
         is_new = not any(theme.filepath == filepath for theme in context.preferences.themes)
 
-        bpy.ops.preferences.ensure_theme(filepath=filepath, force_reset=self.force_reset)
+        context.preferences.ensure_theme(filepath=filepath)
+        if self.force_reset and not is_new:
+            context.preferences.active_theme.reset_to_baseline()
 
         if is_new or self.force_reset:
             import _rna_xml as rna_xml
@@ -757,17 +759,36 @@ class ResetTheme(Operator):
             self.report({'ERROR'}, "The active theme has no saved preset to reset to")
             return {'CANCELLED'}
 
-        return bpy.ops.wm.interface_theme_preset_set(
-            filepath=filepath,
-            menu_idname="USERPREF_MT_interface_theme_presets",
-            force_reset=True,
-        )
+        context.preferences.active_theme.reset_to_baseline()
+
+        import _rna_xml as rna_xml
+        preset_class = bpy.types.USERPREF_MT_interface_theme_presets
+        try:
+            rna_xml.xml_file_run(
+                context,
+                filepath,
+                preset_class.preset_xml_map,
+                secure_types=getattr(preset_class, "preset_xml_secure_types", None),
+            )
+        except Exception as ex:
+            self.report({'ERROR'}, rpt_("Failed to reset the theme: {:s}").format(repr(ex)))
+            return {'CANCELLED'}
+
+        return {'FINISHED'}
 
 
 class ResetDefaultTheme(Operator):
     """Reset the active theme to Blender's built-in default colors"""
     bl_idname = "preferences.reset_default_theme"
     bl_label = "Reset to Default Theme"
+
+    force_reset: BoolProperty(
+        default=True,
+        options={'HIDDEN', 'SKIP_SAVE'},
+        description="Reset the theme's values even if it was already loaded, "
+        "discarding any live edits (otherwise this only has an effect if nothing "
+        "has been loaded into the target theme slot yet)",
+    )
 
     def execute(self, context):
         prefs = context.preferences
@@ -781,12 +802,13 @@ class ResetDefaultTheme(Operator):
             self.report({'ERROR'}, "Could not find the built-in theme preset")
             return {'CANCELLED'}
 
-        bpy.ops.preferences.reset_default_ui_style()
+        if self.force_reset:
+            bpy.ops.preferences.reset_default_ui_style()
 
         return bpy.ops.wm.interface_theme_preset_set(
             filepath=filepath,
             menu_idname="USERPREF_MT_interface_theme_presets",
-            force_reset=True,
+            force_reset=self.force_reset,
         )
 
 
