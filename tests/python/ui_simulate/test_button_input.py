@@ -103,7 +103,7 @@ def _button_reset_value(wm, region, data, prop, t, e, expected_value, index=0):
     t.assertEqual(getattr(data, prop), expected_value)
 
 
-def ui_string_property_buttons():
+def test_string_buttons_interactions():
     _register()
     e, t = _test_vars(window := _test_window())
 
@@ -112,8 +112,8 @@ def ui_string_property_buttons():
     area.type = 'TEXT_EDITOR'
     t.assertEqual(area.type, 'TEXT_EDITOR')
 
-    area.spaces[0].show_region_ui = True
-    t.assertTrue(area.spaces[0].show_region_ui)
+    area.spaces.active.show_region_ui = True
+    t.assertTrue(area.spaces.active.show_region_ui)
 
     # Let UI to refresh so 'Test String Property Buttons' can be set as ARegion::active_panel_category
     yield
@@ -162,9 +162,7 @@ def ui_string_property_buttons():
     # value to "" and paste again "a1a1a1a1a1a1a1a1a1".
     t.assertTrue(wm.try_activate_rna_button(region, data, "string_prop", 'HIGHLIGHT'))
     yield e.ctrl.c()
-    data.string_prop = ""
-    yield  # Refresh UI
-    t.assertEqual(data.string_prop, "")
+    yield from _button_reset_value(wm, region, data, "string_prop", t, e, "", 0)
     yield e.ctrl.v()
     t.assertEqual(data.string_prop, "a1a1a1a1a1a1a1a1a1")
 
@@ -202,9 +200,7 @@ def ui_string_property_buttons():
     # Highlight button and copy its "áéíóúaeiou" content, reset its value to "" and paste again "áéíóúaeiou".
     t.assertTrue(wm.try_activate_rna_button(region, data, "string_update_prop", 'HIGHLIGHT'))
     yield e.ctrl.c()
-    data.string_update_prop = ""
-    yield  # Refresh UI
-    t.assertEqual(data.string_update_prop, "")
+    yield from _button_reset_value(wm, region, data, "string_update_prop", t, e, "", 0)
     yield e.ctrl.v()
     t.assertEqual(data.string_update_prop, "áéíóúaeiou")
 
@@ -241,9 +237,7 @@ def ui_string_property_buttons():
     # value to "" and paste again "a1a1a1a1a1a1a1a1a1".
     t.assertTrue(xy := wm.try_activate_rna_button(region, data, "string_search_prop", 'HIGHLIGHT'))
     yield e.ctrl.c()
-    data.string_search_prop = ""
-    yield  # Refresh UI
-    t.assertEqual(data.string_search_prop, "")
+    yield from _button_reset_value(wm, region, data, "string_search_prop", t, e, "", 0)
     yield e.ctrl.v()
     t.assertEqual(data.string_search_prop, "a1a1a1a1a1a1a1a1a1")
 
