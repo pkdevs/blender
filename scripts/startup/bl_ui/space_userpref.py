@@ -681,10 +681,13 @@ class USERPREF_PT_animation_timeline_advanced(AnimationPanel, CenterAlignMixIn, 
         edit = prefs.edit
 
         layout.prop(edit, "use_negative_frames")
-        row = layout.row(align=False)
-        row.active = edit.use_negative_frames
-        row.alignment = 'RIGHT'
-        row.label(icon='STATUS_WARNING', text="Negative frames can cause issues with audio playback and exporters.")
+        split = layout.split(factor=0.4)
+        split.active = edit.use_negative_frames
+        split.separator()
+        split.label_multiline(
+            icon='STATUS_WARNING_FILLED',
+            text="Negative frames can cause issues with audio playback and exporters.",
+            alignment='LEFT')
 
 
 # -----------------------------------------------------------------------------
@@ -877,7 +880,7 @@ class USERPREF_PT_system_memory(SystemPanel, CenterAlignMixIn, Panel):
         layout.separator()
 
         col = layout.column()
-        col.prop(system, "geometry_nodes_stack_limit")
+        col.prop(system, "nodes_stack_limit")
 
 
 class USERPREF_PT_system_video_sequencer(SystemPanel, CenterAlignMixIn, Panel):
@@ -3018,7 +3021,6 @@ class USERPREF_PT_experimental_prototypes(ExperimentalPanel, Panel):
             (
                 ({"property": "use_new_curves_tools"}, ("blender/blender/issues/68981", "#68981")),
                 ({"property": "use_sculpt_texture_paint"}, ("blender/blender/issues/96225", "#96225")),
-                ({"property": "use_workbench_raytraced_shadows"}, ("blender/blender/pulls/146142", "!146142")),
             ),
         )
 
