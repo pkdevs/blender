@@ -785,12 +785,13 @@ static FunctionSymbol negate_float_function()
 static FunctionSymbol vector_member_access(const ValueType type, const int index)
 {
   BLI_assert(index >= 0 && index <= 2);
-  return FunctionSymbol(
-      fmt::format(".{}", char('x' + index)), {{type, true}}, [index](InsertCallParams &params) {
-        bNode &node = params.add_node("ShaderNodeSeparateXYZ"_ustr);
-        params.use_node_inputs(node);
-        params.set_output(node, index);
-      });
+  return FunctionSymbol(fmt::format(".{}", char('x' + index)),
+                        {{type, true}},
+                        [type, index](InsertCallParams &params) {
+                          bNode &node = params.add_node("ShaderNodeSeparateXYZ"_ustr);
+                          params.add_input(node, 0, type);
+                          params.set_output(node, index);
+                        });
 }
 
 static FunctionSymbol string_concatenation()
@@ -999,16 +1000,21 @@ static void init_symbol_table(SymbolTable &symbols)
   symbols.add(rgb_from_scalars());
   symbols.add(rgba_from_scalars());
 
-  for (const ValueType type : {ValueType::Vec3, ValueType::Rgb, ValueType::Rgba}) {
+  for (const ValueType type :
+       {ValueType::Vec2, ValueType::Vec3, ValueType::Rgb, ValueType::Rgba, ValueType::Float})
+  {
     symbols.add(vector_member_access(type, 0));
     symbols.add(vector_member_access(type, 1));
-    symbols.add(vector_member_access(type, 2));
-
     symbols.add(create_color_member_access(type, 0));
     symbols.add(create_color_member_access(type, 1));
+  }
+  for (const ValueType type : {ValueType::Vec3, ValueType::Rgb, ValueType::Rgba}) {
+    symbols.add(vector_member_access(type, 2));
     symbols.add(create_color_member_access(type, 2));
   }
-  symbols.add(create_color_member_access(ValueType::Rgba, 3));
+  for (const ValueType type : {ValueType::Rgba}) {
+    symbols.add(create_color_member_access(type, 3));
+  }
 
   symbols.add(string_concatenation());
 
