@@ -27,6 +27,8 @@
 #include "UI_interface_c.hh"
 #include "UI_resources.hh"
 
+#include "BKE_theme.hh"
+
 #include "BLF_api.hh"
 
 namespace blender {
@@ -293,7 +295,7 @@ void WM_window_csd_draw_titlebar(const wmWindow *win)
    * won't have run after loading factory settings, see: #152138.
    * Access the theme directly as this will probably be replaced by something else,
    * it's better other parts of Blender don't unintentionally rely on the theme being set here. */
-  const bTheme &theme = *static_cast<const bTheme *>(U.themes.first);
+  const bTheme &theme = bke::active_theme_get();
   copy_v3_v3_uchar(border_color, theme.space_view3d.header);
   copy_v3_v3_uchar(text_color, theme.space_view3d.text_hi);
 
