@@ -3114,6 +3114,7 @@ static void calchandleNurb_intern(BezTriple *bezt,
   }
 
   if (prev == nullptr && next == nullptr) {
+    /* Single point, no need to calculat handles. */
     return;
   }
 
