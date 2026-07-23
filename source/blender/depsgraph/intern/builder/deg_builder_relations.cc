@@ -326,7 +326,7 @@ static OperationKey object_modifier_eval_init_key(const Object &object)
 static OperationKey object_modifier_eval_key(const Object &object)
 {
   if (object.type == OB_ARMATURE) {
-    return OperationKey(&object.id, NodeType::EVAL_POSE, OperationCode::POSE_INIT);
+    return OperationKey(&object.id, NodeType::EVAL_POSE, OperationCode::POSE_MODIFIERS);
   }
   return OperationKey(&object.id, NodeType::GEOMETRY, OperationCode::GEOMETRY_EVAL);
 }
