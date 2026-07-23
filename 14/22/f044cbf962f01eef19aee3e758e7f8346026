@@ -9,3 +9,4 @@ Referenced by pull request #161224, Fix #161196: Modifier edit and cage visibili
 Referenced by issue #161363, Crash when switching to Weight Paint on a mesh with a geometry nodes modifier
 Referenced by commit 9c9cd5d2d0f00bc57668c7a2e7a9b236831e7579, Fix #161196: Modifier edit and cage visibility issues
 Referenced by issue #161837, Mesh with shapekey does not display in editmode
+Referenced by issue #161785, Multires viewport display toggle deletes sculpt deformation
