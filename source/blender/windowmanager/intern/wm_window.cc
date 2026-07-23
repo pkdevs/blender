@@ -1802,10 +1802,8 @@ static bool ghost_event_proc(const GHOST_IEvent *ghost_event, GHOST_TUserDataPtr
     U.runtime.system_theme_type = [&]() {
       switch (g_system->getSystemColorScheme()) {
         case GHOST_kColorSchemePreferDark:
-          printf("GHOST_kColorSchemePreferDark\n");
           return UserPrefThemeType::Dark;
         case GHOST_kColorSchemePreferLight:
-          printf("GHOST_kColorSchemePreferLight\n");
           return UserPrefThemeType::Light;
         default:
           return UserPrefThemeType::Dark;

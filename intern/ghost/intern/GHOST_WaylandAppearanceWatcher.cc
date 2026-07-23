@@ -10,10 +10,8 @@
 
 #  include "GHOST_WaylandAppearanceWatcher.hh"
 
-#  include "GHOST_utildefines.hh"
-
 #  include <cstdint>
-#  include <cstring>
+#  include <string>
 
 #  include <dbus/dbus.h>
 
@@ -25,7 +23,6 @@ static constexpr char COLOR_SCHEME_KEY[] = "color-scheme";
 
 static GHOST_TColorScheme color_scheme_from_value(const uint32_t value)
 {
-  printf("color_scheme_from_value %d\n", int(value));
   switch (value) {
     case 1:
       return GHOST_kColorSchemePreferDark;
@@ -65,7 +62,7 @@ static bool color_scheme_from_read_reply(DBusMessage *reply, GHOST_TColorScheme 
   return true;
 }
 
-static bool color_scheme_read_sync(DBusConnection *connection, GHOST_TColorScheme &r_value)
+static bool color_scheme_read(DBusConnection *connection, GHOST_TColorScheme &r_value)
 {
   DBusMessage *message = dbus_message_new_method_call(
       PORTAL_SERVICE, PORTAL_PATH, PORTAL_SETTINGS_IFACE, "Read");
@@ -107,33 +104,19 @@ static DBusHandlerResult filter_func(DBusConnection * /*connection*/,
 {
   auto *watcher = static_cast<GHOST_WaylandAppearanceWatcher *>(user_data);
 
-  if (!dbus_message_is_signal(message, "org.freedesktop.portal.Settings", "SettingChanged")) {
+  if (!dbus_message_is_signal(message, PORTAL_SETTINGS_IFACE, "SettingChanged")) {
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
   }
 
+  /* The `arg0`/`arg1` match rule already guarantees this signal is for
+   * `APPEARANCE_NAMESPACE`/`COLOR_SCHEME_KEY`, only the message shape needs checking here:
+   * skip over the (unread) `namespace`/`key` string arguments to reach the value. */
   DBusMessageIter iter;
   if (!dbus_message_iter_init(message, &iter) ||
-      dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
-  {
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-  }
-  const char *name_space = nullptr;
-  dbus_message_iter_get_basic(&iter, &name_space);
-
-  if (!dbus_message_iter_next(&iter) || dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
-  {
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-  }
-  const char *key = nullptr;
-  dbus_message_iter_get_basic(&iter, &key);
-
-  if (!(name_space && key && STREQ(name_space, APPEARANCE_NAMESPACE) &&
-        STREQ(key, COLOR_SCHEME_KEY)))
-  {
-    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-  }
-
-  if (!dbus_message_iter_next(&iter) || dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_VARIANT)
+      dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING ||
+      !dbus_message_iter_next(&iter) ||
+      dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING ||
+      !dbus_message_iter_next(&iter) || dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_VARIANT)
   {
     return DBUS_HANDLER_RESULT_HANDLED;
   }
@@ -157,9 +140,6 @@ GHOST_WaylandAppearanceWatcher::GHOST_WaylandAppearanceWatcher(
   DBusError error;
   dbus_error_init(&error);
 
-  /* A private connection (rather than the shared one from #dbus_bus_get) so it's safe for
-   * the destructor to close it directly to unblock the background thread's blocking read,
-   * without risk of affecting other DBUS users in the process. */
   DBusConnection *connection = dbus_bus_get_private(DBUS_BUS_SESSION, &error);
   if (dbus_error_is_set(&error)) {
     dbus_error_free(&error);
@@ -171,15 +151,25 @@ GHOST_WaylandAppearanceWatcher::GHOST_WaylandAppearanceWatcher(
   dbus_connection_set_exit_on_disconnect(connection, false);
 
   GHOST_TColorScheme initial_value = GHOST_kColorSchemeNoPreference;
-  if (color_scheme_read_sync(connection, initial_value)) {
+  if (color_scheme_read(connection, initial_value)) {
     color_scheme_.store(initial_value);
   }
 
-  dbus_bus_add_match(connection,
-                     "type='signal',"
-                     "interface='org.freedesktop.portal.Settings',"
-                     "member='SettingChanged'",
-                     &error);
+  /* `arg0`/`arg1` narrow this to just the setting being watched, so the bus doesn't forward
+   * (and `filter_func` doesn't need to filter out) changes to unrelated portal settings. */
+  std::string match_rule;
+  match_rule.append("type='signal',")
+      .append("interface='")
+      .append(PORTAL_SETTINGS_IFACE)
+      .append("',")
+      .append("member='SettingChanged',")
+      .append("arg0='")
+      .append(APPEARANCE_NAMESPACE)
+      .append("',")
+      .append("arg1='")
+      .append(COLOR_SCHEME_KEY)
+      .append("'");
+  dbus_bus_add_match(connection, match_rule.c_str(), &error);
   if (dbus_error_is_set(&error)) {
     dbus_error_free(&error);
     dbus_connection_close(connection);

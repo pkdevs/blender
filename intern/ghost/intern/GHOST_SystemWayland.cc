@@ -8580,7 +8580,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(const bool background)
   display_->key_repeat_timer_manager = new GHOST_TimerManager();
 
 #ifdef WITH_GHOST_WAYLAND_DBUS
-  /* As with the WAYLAND event thread, there's no need for this in background mode. */
+  /* Like the WAYLAND event thread, there's no need for this in background mode. */
   if (!background) {
     appearance_watcher_ = std::make_unique<GHOST_WaylandAppearanceWatcher>(
         [this](GHOST_TColorScheme /*color_scheme*/) {
