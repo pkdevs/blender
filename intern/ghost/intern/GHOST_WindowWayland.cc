@@ -866,7 +866,7 @@ static void gwl_window_pending_actions_handle(GWL_Window *win)
 /**
  * Keep the XDG "window geometry" in sync with the window's visible rectangle.
  * Without this the compositors default (bounding-box) geometry includes the
- * invisible margin, throwing off snapping, maximize/restore & previews.
+ * invisible margin, throwing off snapping, maximize/restore, and previews.
  *
  * Must run every time #GWL_Window.frame is updated
  * (see #gwl_window_frame_update_from_pending_no_lock).
@@ -918,10 +918,9 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
     wl_subcompositor *subcompositor = system->wl_subcompositor_get();
     wp_viewporter *viewporter = system->wp_viewporter_get();
     if (subcompositor == nullptr || viewporter == nullptr) {
-      /* No support for the invisible margin on this compositor, in that case there
-       * is no way to resize from the window borders. Very unlikely in practice,
-       * resizing remains possible via the compositors own shortcuts,
-       * so accept the limitation. */
+      /* No support for the invisible margin on this compositor, in that case there is no way to
+       * resize from the window borders. Very unlikely in practice, resizing remains possible via
+       * the compositor's own shortcuts, so accept the limitation. */
       return;
     }
 
@@ -936,7 +935,7 @@ static void gwl_window_csd_margin_update(GWL_Window *win)
 
     xdg_csd->margin_subsurface = wl_subcompositor_get_subsurface(
         subcompositor, xdg_csd->margin_surface, win->wl.surface);
-    /* De-synchronize so the margins state (buffer & viewport) applies on its own
+    /* De-synchronize so the margin's state (buffer & viewport) applies on its own
      * commit, it's not tied to the main surface's frame timing. The position is the
      * exception, #wl_subsurface_set_position only applies on the parents commit,
      * in practice the parent commits on every size & state change. */
