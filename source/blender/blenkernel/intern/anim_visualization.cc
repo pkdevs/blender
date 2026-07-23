@@ -321,6 +321,17 @@ void background_eval_deregister(wmWindowManager &wm,
 
 namespace bke::motionpath {
 
+struct Runtime {
+  /* Heap allocated data for the worker thread to write to. */
+  /* TODO maybe not required to heap allocate. */
+  WorkerBuffer *worker_buffer;
+  /* Async animviz job data. Used to deregister from the job. */
+  wmWindowManager *wm;
+  wmWindow *window;
+  Scene *job_owner;
+  bke::animviz::EvaluationTarget target;
+};
+
 void async_eval_allocate(bMotionPath &motion_path,
                          wmWindowManager &wm,
                          wmWindow &window,
