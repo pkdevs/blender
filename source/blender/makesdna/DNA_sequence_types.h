@@ -474,7 +474,12 @@ struct Strip {
   seq::StripRuntime *runtime = nullptr;
 
 #ifdef __cplusplus
-  bool is_transition() const;
+  /**
+   * Transitions can be on top of the input strips on the same channel, or on a separate channel as
+   * an effect strip (the old type of transition). Same channel transitions have handles and are
+   * drawn in a different way.
+   */
+  bool is_same_channel_transition() const;
 
   bool is_effect() const;
   int effect_num_inputs_get() const;

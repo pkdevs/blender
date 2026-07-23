@@ -1973,7 +1973,7 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
           op->reports, RPT_ERROR, "Cannot add multiple transitions between the same input strips");
       return OPERATOR_CANCELLED;
     }
-    if (inputs[0]->is_transition() || inputs[1]->is_transition()) {
+    if (inputs[0]->is_same_channel_transition() || inputs[1]->is_same_channel_transition()) {
       BKE_report(op->reports, RPT_ERROR, "Cannot add transitions on other transitions");
       return OPERATOR_CANCELLED;
     }

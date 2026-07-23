@@ -407,7 +407,7 @@ static bool seq_edit_split_operation_permitted_check(const Scene *scene,
     if (strip->effect_num_inputs_get() <= 1) {
       continue;
     }
-    if (strip->is_transition()) {
+    if (strip->is_same_channel_transition()) {
       *r_error = "Splitting transition effect is not permitted.";
       return false;
     }

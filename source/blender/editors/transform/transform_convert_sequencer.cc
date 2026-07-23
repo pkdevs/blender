@@ -460,7 +460,7 @@ static void query_time_dependent_strips_strips(TransInfo *t,
 
   /* Remove all non-effects. */
   time_dependent_strips.remove_if([&](Strip *strip) {
-    return seq::transform_strip_can_be_translated(strip) || strip->is_transition();
+    return seq::transform_strip_can_be_translated(strip) || strip->is_same_channel_transition();
   });
 }
 
@@ -470,7 +470,7 @@ static void transitions_for_each(Editing *ed,
 {
   Span<Strip *> effects = seq::lookup_effects_by_strip(ed, strip);
   for (Strip *effect_strip : effects) {
-    if (effect_strip->is_transition()) {
+    if (effect_strip->is_same_channel_transition()) {
       callback(effect_strip);
     }
   }
@@ -627,7 +627,7 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
     ts->hard_clamp.ymin = max_ii(ts->hard_clamp.ymin, 1 - strip->channel);
     ts->hard_clamp.ymax = min_ii(ts->hard_clamp.ymax, seq::MAX_CHANNELS - strip->channel);
 
-    if (strip->is_transition()) {
+    if (strip->is_same_channel_transition()) {
       if ((strip->flag & (SEQ_LEFTSEL | SEQ_RIGHTSEL)) != 0) {
         has_transition_handles = true;
       }
@@ -900,7 +900,7 @@ static Strip *get_adjacent_selection_transition_for_left_input(Editing *ed, cons
   }};
   Span<Strip *> effect_strips = seq::lookup_effects_by_strip(ed, strip);
   for (Strip *effect : effect_strips) {
-    if (effect->is_transition() && effect->input1 == strip &&
+    if (effect->is_same_channel_transition() && effect->input1 == strip &&
         valid_selection(effect->input1, SEQ_RIGHTSEL) &&
         valid_selection(effect->input2, SEQ_LEFTSEL))
     {
@@ -924,7 +924,7 @@ static void flush_strip_transforms(TransInfo *t,
   const TransDataSeq *tdsq = static_cast<TransDataSeq *>(td->extra);
   Strip *strip = tdsq->strip;
 
-  if (strip->is_transition()) {
+  if (strip->is_same_channel_transition()) {
     flush_transition_transforms(t, td, offset_clamped, r_left_new, r_right_new);
     return;
   }

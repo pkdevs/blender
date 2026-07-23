@@ -51,7 +51,7 @@ static Strip *get_transition_of_left_input(Editing *ed, const Strip *strip)
 {
   Span<Strip *> effect_strips = seq::lookup_effects_by_strip(ed, strip);
   for (Strip *effect : effect_strips) {
-    if (effect->is_transition() && effect->input1 == strip) {
+    if (effect->is_same_channel_transition() && effect->input1 == strip) {
       return effect;
     }
   }

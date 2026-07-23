@@ -329,7 +329,7 @@ static float transition_fader_calc(const Scene *scene, const Strip *strip, float
 float effect_fader_calc(Scene *scene, Strip *strip, float timeline_frame)
 {
   if (strip->flag & SEQ_USE_EFFECT_DEFAULT_FADE) {
-    if (strip->is_transition()) {
+    if (strip->is_same_channel_transition()) {
       return transition_fader_calc(scene, strip, timeline_frame);
     }
     return 1.0f;
@@ -391,7 +391,7 @@ Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2)
   Span<Strip *> effect_strips = seq::lookup_effects_by_strip(ed, input1);
   for (Strip *effect : effect_strips) {
     /* Inputs should never be in the reverse order, but check anyway. */
-    if (effect->is_transition() && ELEM(input2, effect->input1, effect->input2)) {
+    if (effect->is_same_channel_transition() && ELEM(input2, effect->input1, effect->input2)) {
       return effect;
     }
   }
@@ -400,7 +400,7 @@ Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2)
 
 }  // namespace seq
 
-bool Strip::is_transition() const
+bool Strip::is_same_channel_transition() const
 {
   return (this->input1 != nullptr) && (this->input2 != nullptr) &&
          seq::strip_type_can_be_transition(this->type) &&

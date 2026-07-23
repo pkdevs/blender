@@ -944,7 +944,7 @@ static SlipData *slip_data_init(bContext *C, const wmOperator *op, const wmEvent
   const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(
       seq::editing_get(scene));
   strips.remove_if([&](Strip *strip) {
-    return (seq::transform_single_image_check(strip) || strip->is_transition() ||
+    return (seq::transform_single_image_check(strip) || strip->is_same_channel_transition() ||
             seq::transform_is_locked(channels, strip));
   });
   if (strips.is_empty()) {
@@ -1503,7 +1503,7 @@ static wmOperatorStatus sequencer_connect_exec(bContext *C, wmOperator *op)
   bool has_transition = false;
   bool has_non_transition = false;
   for (Strip *strip : selected) {
-    if (strip->is_transition()) {
+    if (strip->is_same_channel_transition()) {
       has_transition = true;
     }
     else {

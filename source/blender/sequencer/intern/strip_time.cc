@@ -457,7 +457,8 @@ void time_slip_strip(
 
 bool Strip::is_time_dependent() const
 {
-  return (this->input1 != nullptr || this->input2 != nullptr) && !this->is_transition();
+  return (this->input1 != nullptr || this->input2 != nullptr) &&
+         !this->is_same_channel_transition();
 }
 
 float Strip::media_playback_rate_factor(float scene_fps) const

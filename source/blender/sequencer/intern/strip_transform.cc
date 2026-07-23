@@ -71,13 +71,13 @@ bool transform_test_overlap(const Scene *scene, Strip *strip1, Strip *strip2)
 bool transform_test_invalid_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test)
 {
   /* Don't shuffle transitions. */
-  if (test->is_transition()) {
+  if (test->is_same_channel_transition()) {
     return false;
   }
   for (Strip &strip : *seqbasep) {
     /* Transitions should only ever overlap the strips they're applied on. Don't shuffle based on
      * them. */
-    if (strip.is_transition()) {
+    if (strip.is_same_channel_transition()) {
       continue;
     }
     if (flag_is_set(strip.runtime->flag, seq::StripRuntimeFlag::MarkForDelete)) {
@@ -102,7 +102,7 @@ void transform_set_overlap_flags(const Scene *scene,
 
   /* First flag transitions for deletion. */
   for (Strip *transition : strips) {
-    if (!transition->is_transition()) {
+    if (!transition->is_same_channel_transition()) {
       continue;
     }
     Strip *left = transition->input1;
@@ -123,7 +123,7 @@ void transform_set_overlap_flags(const Scene *scene,
     if (flag_is_set(strip->runtime->flag, seq::StripRuntimeFlag::MarkForDelete)) {
       continue;
     }
-    if (strip->is_transition()) {
+    if (strip->is_same_channel_transition()) {
       continue;
     }
     if (!transform_test_invalid_overlap(scene, seqbasep, strip)) {
@@ -136,7 +136,7 @@ void transform_set_overlap_flags(const Scene *scene,
      * recursively. */
     Span<Strip *> effect_strips = lookup_effects_by_strip(ed, strip);
     for (Strip *effect : effect_strips) {
-      if (effect->is_transition()) {
+      if (effect->is_same_channel_transition()) {
         effect->runtime->flag |= seq::StripRuntimeFlag::Overlap;
       }
     }
@@ -312,8 +312,9 @@ bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
     strips_to_translate.add_multiple(strips_to_shuffle);
     seq::iterator_set_expand(ed, strips_to_translate, seq::query_strip_transitions);
     strips_to_translate.remove_if([&](Strip *strip) {
-      return strip->is_transition() && !(strips_to_translate.contains(strip->input1) &&
-                                         strips_to_translate.contains(strip->input2));
+      return strip->is_same_channel_transition() &&
+             !(strips_to_translate.contains(strip->input1) &&
+               strips_to_translate.contains(strip->input2));
     });
 
     for (Strip *strip : strips_to_translate) {

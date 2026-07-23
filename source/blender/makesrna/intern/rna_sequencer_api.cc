@@ -553,7 +553,7 @@ static Strip *rna_Strips_new_effect(ID *id,
           "Strips.new_effect: cannot add multiple transitions between the same input strips");
       return nullptr;
     }
-    if (input1->is_transition() || input2->is_transition()) {
+    if (input1->is_same_channel_transition() || input2->is_same_channel_transition()) {
       BKE_report(
           reports, RPT_ERROR, "Strips.new_effect: cannot add transitions on other transitions");
       return nullptr;

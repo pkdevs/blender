@@ -248,7 +248,7 @@ Vector<Strip *> query_rendered_strips_sorted(const Scene *scene,
   /* Sort strips by channel. */
   std::ranges::sort(strips_vec, [](const Strip *a, const Strip *b) {
     if (a->channel == b->channel) {
-      return b->is_transition();
+      return b->is_same_channel_transition();
     }
     return (a->channel < b->channel);
   });
@@ -273,7 +273,7 @@ void query_strip_transitions(Strip *strip, Editing *ed, VectorSet<Strip *> &r_st
 
   Span<Strip *> effects = seq::lookup_effects_by_strip(ed, strip);
   for (Strip *effect_strip : effects) {
-    if (effect_strip->is_transition()) {
+    if (effect_strip->is_same_channel_transition()) {
       r_strips.add(effect_strip);
     }
   }

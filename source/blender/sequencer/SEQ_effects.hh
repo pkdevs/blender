@@ -35,7 +35,9 @@ void effect_free(Strip *strip);
 int effect_type_get_min_num_inputs(StripType type);
 bool strip_type_is_effect(StripType type);
 /* Compositor strips can be non-transitions as well, depending on the number of inputs.
- * Use #Strip::is_transition to test for this. */
+ * Transitions can be on top of the input strips on the same channel, in which case they have
+ * handles and are drawn differently. Use #Strip::is_same_channel_transition to test for
+ * this. */
 bool strip_type_can_be_transition(StripType type);
 Strip *get_transition_between(Scene *scene, Strip *input1, Strip *input2);
 
