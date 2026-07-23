@@ -1053,7 +1053,7 @@ struct BSLParser {
       match_if(Constexpr);
       condition(1);
       local_scope();
-      if (peek() == '#') {
+      while (peek() == '#') {
         preprocessor_directive();
       }
     }
@@ -1065,7 +1065,7 @@ struct BSLParser {
         match_if(Constexpr);
         condition(1);
         local_scope();
-        if (peek() == '#') {
+        while (peek() == '#') {
           preprocessor_directive();
         }
       }

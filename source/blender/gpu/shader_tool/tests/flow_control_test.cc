@@ -500,6 +500,203 @@ void func([[resource_table]] Resources &srt)
     auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "Expecting single condition.");
   }
+  {
+    string input = R"(
+template<int N> int implicit_test(int x)
+{
+  if (N == 0) {
+    return 0;
+  }
+  else if (x == 1) {
+    return 1;
+  }
+  else if (N == 1) {
+    return 2;
+  }
+  else {
+    return 3;
+  }
+}
+
+template int implicit_test<0>();
+template int implicit_test<1>();
+template int implicit_test<2>();
+)";
+    string expect = R"(
+                int implicit_testT0(int x)
+{
+              {
+    return 0;
+  }
+#line 16
+}
+#line 2
+                int implicit_testT1(int x)
+{
+#line 7
+       if (x == 1) {
+    return 1;
+  }
+  else             {
+    return 2;
+  }
+#line 16
+}
+#line 2
+                int implicit_testT2(int x)
+{
+#line 7
+       if (x == 1) {
+    return 1;
+  }
+#line 13
+  else {
+    return 3;
+  }
+}
+
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+template<int B> int chain_test(int y)
+{
+  if (y == 0) {
+    return 0;
+  }
+  else if constexpr (B == 1) {
+    return 1;
+  }
+  else if (y == 2) {
+    return 2;
+  }
+  else {
+    return 3;
+  }
+}
+
+template int chain_test<1>();
+template int chain_test<0>();
+)";
+    string expect = R"(
+                int chain_testT1(int y)
+{
+  if (y == 0) {
+    return 0;
+  }
+  else                       {
+    return 1;
+  }
+#line 16
+}
+#line 2
+                int chain_testT0(int y)
+{
+  if (y == 0) {
+    return 0;
+  }
+#line 10
+  else if (y == 2) {
+    return 2;
+  }
+  else {
+    return 3;
+  }
+}
+
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+template<int i> int f(int a)
+{
+  if constexpr (i == 0) {
+    return 0;
+  }
+  else if (i == 1) {
+    return 1;
+  }
+  else if (i + a == 1) {
+    return 3;
+  }
+  else if constexpr (i == 2) {
+    return 2;
+  }
+  else {
+    return 4;
+  }
+}
+
+template int f<0>(int);
+template int f<1>(int);
+template int f<2>(int);
+template int f<3>(int);
+)";
+    string expect = R"(
+                int fT0(int a)
+{
+                        {
+    return 0;
+  }
+#line 19
+}
+#line 2
+                int fT1(int a)
+{
+#line 7
+                   {
+    return 1;
+  }
+#line 19
+}
+#line 2
+                int fT2(int a)
+{
+#line 10
+       if (2 + a == 1) {
+    return 3;
+  }
+  else                       {
+    return 2;
+  }
+#line 19
+}
+#line 2
+                int fT3(int a)
+{
+#line 10
+       if (3 + a == 1) {
+    return 3;
+  }
+#line 16
+  else {
+    return 4;
+  }
+}
+
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+void f(int a)
+{
+  if constexpr (a == 0) {
+    return;
+  }
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Read of non-const variable is not allowed in a constant expression");
+  }
 }
 
 }  // namespace blender::gpu::tests

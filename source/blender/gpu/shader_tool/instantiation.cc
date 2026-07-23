@@ -231,9 +231,11 @@ struct InstantiationContext {
           structured_binding(node, symbol);
           break;
         case NodeType::IfStmt:
+          if_statement(node, *symbol.scopes[to_string(local_scope_id++)]);
+          break;
         case NodeType::ElseIfStmt:
         case NodeType::ElseStmt:
-          if_statement(node, *symbol.scopes[to_string(local_scope_id++)]);
+          /* Should have been processed by the if statement. */
           break;
         case NodeType::LocalStmt:
           local_statement(node, symbol);
@@ -1109,17 +1111,80 @@ struct InstantiationContext {
   }
 
   /* Match if/else if/else statements */
-  void if_statement(Node decl, SymbolScope &scope)
+  void if_statement(Node decl,
+                    SymbolScope &scope,
+                    bool preceeded_by_true_if_constexpr = false,
+                    bool preceeded_by_regular_if = false)
   {
-    match_if(Else);
-    match_if(If);
-    match_if(Constexpr);
-
     Condition cond(decl.child_first());
+
+    bool is_constexpr = cond.is_valid() && cond.front().prev() == Constexpr;
+
+    bool constexpr_value = true;
     if (cond.is_valid()) {
-      condition(cond, scope);
+      LocalStmt stmt = cond.child_first();
+      auto [value, err] = SymbolTable::evaluate_constexpr(scope, stmt.expr().child_first());
+      constexpr_value = value != 0;
+
+      if (is_constexpr) {
+        /* Report error if expression couldn't be evaluated. */
+        error(err);
+      }
+      else if (!err.has_value()) {
+        /* Expression was evaluated successfully. Treat the statement as constexpr. */
+        is_constexpr = true;
+      }
     }
-    local_scope(decl.child_last(NodeType::LocalScope), scope);
+
+    /* Generate a 'else' statement only if there is a non-constexpr if above in the chain,
+     * and if no 'if constexpr' evaluated to true above in the chain,
+     * and if not a 'if constexpr' itself. */
+    if (preceeded_by_regular_if && !preceeded_by_true_if_constexpr &&
+        (!is_constexpr || constexpr_value == true))
+    {
+      match_if(Else);
+    }
+    else {
+      skip_if(Else);
+    }
+
+    /* Generate a if statement only if this is not a 'if constexpr',
+     * and if no 'if constexpr' evaluated to true above in the chain. */
+    if (!is_constexpr && !preceeded_by_true_if_constexpr) {
+      match_if(If);
+      skip_if(Constexpr);
+      if (cond.is_valid()) {
+        condition(cond, scope);
+      }
+    }
+    else {
+      skip_if(If);
+      skip_if(Constexpr);
+      skip_node(cond);
+    }
+
+    LocalScope body = decl.child_last(NodeType::LocalScope);
+
+    if (!preceeded_by_true_if_constexpr && (!is_constexpr || constexpr_value == true)) {
+      local_scope(body, scope);
+    }
+
+    /* Process preprocessor directive that can be added between if statements. */
+    Node node = body.next();
+    while (node.type() == NodeType::Preprocessor) {
+      builder << node;
+      node = node.next();
+    }
+
+    jump_to(body.back().next());
+
+    Node next = decl.next();
+    if (next.type() == NodeType::ElseIfStmt || next.type() == NodeType::ElseStmt) {
+      if_statement(next,
+                   scope,
+                   preceeded_by_true_if_constexpr || (is_constexpr && constexpr_value == true),
+                   preceeded_by_regular_if || !is_constexpr);
+    }
   }
 
   void condition(Condition cond, SymbolScope &scope)
