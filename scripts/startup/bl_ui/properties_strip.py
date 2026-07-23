@@ -233,10 +233,12 @@ class STRIP_PT_effect(StripButtonsPanel, Panel):
             row.prop(strip, "input_1")
 
             if strip.input_count > 1:
-                row.operator("sequencer.swap_inputs", text="", icon='SORT_ASC')
+                if bpy.ops.sequencer.swap_inputs.poll():
+                    row.operator("sequencer.swap_inputs", text="", icon='SORT_ASC')
                 row = col.row()
                 row.prop(strip, "input_2")
-                row.operator("sequencer.swap_inputs", text="", icon='SORT_DESC')
+                if bpy.ops.sequencer.swap_inputs.poll():
+                    row.operator("sequencer.swap_inputs", text="", icon='SORT_DESC')
 
         if strip_type == 'COLOR':
             layout.template_color_picker(strip, "color", value_slider=True, cubic=True)
