@@ -17,7 +17,7 @@ VERTEX_SHADER_CREATE_INFO(overlay_motion_path_line)
 
 struct VertIn {
   float3 P;
-  uint flag;
+  uint data;
   uint vert_id;
 };
 
@@ -27,7 +27,7 @@ VertIn input_assembly(uint in_vertex_id)
 
   VertIn vert_in;
   vert_in.P = gpu_attr_load_float3(pos, gpu_attr_0, v_i);
-  // vert_in.flag = flag[gpu_attr_load_index(v_i, gpu_attr_1)];
+  vert_in.data = data[gpu_attr_load_index(v_i, gpu_attr_1)];
   vert_in.vert_id = v_i;
   return vert_in;
 }
@@ -169,7 +169,7 @@ void main()
 
   /* Discard by default. */
   gl_Position = float4(NAN_FLT);
-  //if ((vert_in[0].flag & MOTIONPATH_VERT_EVALUATED) != 0u){
+  if (((vert_in[0].data & MOTIONPATH_VERT_EVALUATED) != 0u) && ((vert_in[1].data & MOTIONPATH_VERT_EVALUATED) != 0u)){
     geometry_main(vert_out, out_vertex_id, out_primitive_id, out_invocation_id);
-  //}
+  }
 }

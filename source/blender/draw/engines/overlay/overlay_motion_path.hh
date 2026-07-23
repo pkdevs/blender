@@ -267,7 +267,7 @@ class MotionPath : Overlay {
       GPUVertFormat format = {0};
       /* Match structure of #bMotionPathVert. */
       GPU_vertformat_attr_add(&format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
-      GPU_vertformat_attr_add(&format, "flag", gpu::VertAttrType::SINT_32);
+      GPU_vertformat_attr_add(&format, "data", gpu::VertAttrType::SINT_32);
       mpath->points_vbo = GPU_vertbuf_create_with_format(format);
       GPU_vertbuf_data_alloc(*mpath->points_vbo, mpath->length);
       /* meh... a useless `memcpy`. */

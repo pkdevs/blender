@@ -53,7 +53,7 @@ void main()
 
   if (show_key_frames) {
     /* Overrides the color to highlight points that are keyframes. */
-    if ((uint(flag) & MOTIONPATH_VERT_KEY) != 0u) {
+    if ((uint(data) & MOTIONPATH_VERT_KEY) != 0u) {
       gl_PointSize = float(pt_size + 5);
       final_color = theme.colors.vert_select;
       /* Bias more to get these on top of regular points */
@@ -62,7 +62,7 @@ void main()
   }
 
   gl_PointSize *= theme.sizes.pixel;
-  // gl_PointSize *= float((uint(flag) & MOTIONPATH_VERT_EVALUATED) != 0u);
+  gl_PointSize *= float((uint(data) & MOTIONPATH_VERT_EVALUATED) != 0u);
 
   view_clipping_distances(ws_P);
 }
