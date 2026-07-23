@@ -2759,6 +2759,7 @@ static IndexMask pbvh_gather_generic_cube(Object &ob,
   }
 
   BLI_assert_unreachable();
+  return {};
 }
 
 IndexMask gather_nodes(const bke::pbvh::Tree &pbvh,

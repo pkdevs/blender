@@ -474,6 +474,7 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
   }
 
   BLI_assert_unreachable();
+  return {};
 }
 }  // namespace clay_strips
 
