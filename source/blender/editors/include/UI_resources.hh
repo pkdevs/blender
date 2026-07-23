@@ -59,7 +59,6 @@ enum ThemeColorID {
   TH_BACK_GRAD,
   TH_TEXT,
   TH_TEXT_HI,
-  TH_TITLE,
 
   /* Tabs. */
   TH_TAB_TEXT,
@@ -71,8 +70,6 @@ enum ThemeColorID {
   TH_TAB_OUTLINE_ACTIVE,
 
   TH_HEADER,
-  TH_HEADER_TEXT,
-  TH_HEADER_TEXT_HI,
 
   /* panels */
   TH_PANEL_HEADER,
