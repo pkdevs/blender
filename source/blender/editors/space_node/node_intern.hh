@@ -582,6 +582,7 @@ void NODE_OT_deactivate_viewer(wmOperatorType *ot);
 void NODE_OT_activate_viewer(wmOperatorType *ot);
 void NODE_OT_toggle_viewer(wmOperatorType *ot);
 void NODE_OT_test_inlining_shader_nodes(wmOperatorType *ot);
+void NODE_OT_expression_to_group(wmOperatorType *ot);
 
 void NODE_OT_read_viewlayers(wmOperatorType *ot);
 void NODE_OT_render_changed(wmOperatorType *ot);

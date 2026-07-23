@@ -48,6 +48,7 @@
 #include "DEG_depsgraph_debug.hh"
 #include "DEG_depsgraph_query.hh"
 
+#include "NOD_expression_to_nodes.hh"
 #include "NOD_shader_nodes_inline.hh"
 #include "RE_compositor.hh"
 #include "RE_engine.h"
@@ -74,10 +75,12 @@
 #include "IMB_imbuf_types.hh"
 
 #include "NOD_composite.hh"
+#include "NOD_geo_expression.hh"
 #include "NOD_geometry.hh"
 #include "NOD_shader.h"
 #include "NOD_socket.hh"
 #include "NOD_texture.h"
+
 #include "node_intern.hh" /* own include */
 
 namespace blender {
@@ -1444,6 +1447,118 @@ void NODE_OT_test_inlining_shader_nodes(wmOperatorType *ot)
 
   ot->exec = test_inline_shader_nodes_exec;
   ot->poll = ED_operator_node_active;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static wmOperatorStatus expression_to_group_exec(bContext *C, wmOperator *op)
+{
+  Main &bmain = *CTX_data_main(C);
+  SpaceNode &snode = *CTX_wm_space_node(C);
+  if (!snode.edittree || !ELEM(snode.nodetree->type, NTREE_GEOMETRY, NTREE_SHADER, NTREE_COMPOSIT))
+  {
+    return OPERATOR_CANCELLED;
+  }
+  bNodeTree &tree = *snode.edittree;
+  bNode *active_node = bke::node_get_active(tree);
+  if (!active_node) {
+    return OPERATOR_CANCELLED;
+  }
+  if (!active_node->is_type("NodeExpression"_ustr)) {
+    BKE_report(op->reports, RPT_ERROR, "Not an expression node");
+    return OPERATOR_CANCELLED;
+  }
+  bNode &expression_node = *active_node;
+
+  Vector<bNodeSocket *> expression_node_inputs = expression_node.input_sockets();
+  Vector<bNodeSocket *> expression_node_outputs = expression_node.output_sockets();
+
+  const NodeExpression &expression_storage = *static_cast<NodeExpression *>(
+      expression_node.storage);
+
+  tree.ensure_topology_cache();
+
+  struct ExpressionData {
+    std::string name;
+    eNodeSocketDatatype output_type;
+    bNodeSocket *output_socket;
+  };
+  Vector<ExpressionData> expressions;
+  Vector<StringRef> expr_strings;
+  Vector<int> expr_indices;
+
+  for (const int expr_i : IndexRange(expression_storage.expression_items.items_num)) {
+    const NodeExpressionItem &item = expression_storage.expression_items.items[expr_i];
+    UString identifier{nodes::ExpressionItemsAccessor::socket_identifier_for_item(item)};
+    bNodeSocket *expr_input = expression_node.input_by_identifier(identifier);
+    bNodeSocket *expr_output = expression_node.output_by_identifier(identifier);
+    if (expr_input->is_directly_linked()) {
+      BKE_report(
+          op->reports, RPT_ERROR, "Linked expression strings can't be converted to a node group");
+      return OPERATOR_CANCELLED;
+    }
+    const StringRef expr_string = expr_input->default_value_typed<bNodeSocketValueString>()->value;
+    expressions.append({item.name, item.socket_type, expr_output});
+    expr_strings.append(expr_string);
+    expr_indices.append(expr_i);
+  }
+
+  std::shared_ptr<nodes::expression::ExpressionNodeGroup> new_group =
+      nodes::expression::expression_node_to_group(
+          &bmain, expression_node, tree.idname, expr_strings, expr_indices);
+  BLI_assert(new_group);
+  if (!new_group->error.empty()) {
+    BKE_reportf(op->reports, RPT_ERROR, "%s", new_group->error.c_str());
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Below this point the topology cache is not used anymore.*/
+  bNode *group_node = bke::node_add_node(C, tree, tree.typeinfo->group_idname);
+  group_node->id = &new_group->tree->id;
+  nodes::update_node_declaration_and_sockets(tree, *group_node, &bmain);
+
+  Map<bNodeSocket *, bNodeSocket *> new_by_old_socket;
+  for (auto &&[i, group_socket] : group_node->inputs.enumerate()) {
+    new_by_old_socket.add_new(
+
+        expression_node_inputs[expression_storage.expression_items.items_num + 1 + i],
+        &group_socket);
+  }
+  for (auto &&[i, group_socket] : group_node->outputs.enumerate()) {
+    new_by_old_socket.add_new(expression_node_outputs[i], &group_socket);
+  }
+
+  group_node->parent = expression_node.parent;
+  group_node->location[0] = expression_node.location[0];
+  group_node->location[1] = expression_node.location[1];
+  group_node->width = expression_node.width;
+
+  for (bNodeLink &link : tree.links) {
+    if (link.tonode == &expression_node) {
+      link.tosock = new_by_old_socket.lookup(link.tosock);
+      link.tonode = group_node;
+    }
+    else if (link.fromnode == &expression_node) {
+      link.fromnode = group_node;
+      link.fromsock = new_by_old_socket.lookup(link.fromsock);
+    }
+  }
+
+  bke::node_remove_node(&bmain, tree, expression_node, true, false);
+
+  BKE_main_ensure_invariants(bmain);
+
+  return OPERATOR_FINISHED;
+}
+
+void NODE_OT_expression_to_group(wmOperatorType *ot)
+{
+  ot->name = "Expression to Group";
+  ot->description = "Convert an expression node to a group node";
+  ot->idname = "NODE_OT_expression_to_group";
+
+  ot->exec = expression_to_group_exec;
+  ot->poll = ED_operator_node_editable;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }

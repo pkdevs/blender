@@ -435,6 +435,10 @@ struct BuildOptions {};
 
 class AstToNodeGroupBuilder {
  private:
+  /**
+   * Optional bmain, only non-null when building a node group that is added to the main database.
+   */
+  Main *bmain_;
   const NodeExpression &bnode_storage_;
   const Span<ast::Expr *> root_exprs_;
   const Span<int> expr_indices_;
@@ -449,14 +453,16 @@ class AstToNodeGroupBuilder {
   friend InsertCallParams;
 
  public:
-  AstToNodeGroupBuilder(const bNode &expr_bnode,
+  AstToNodeGroupBuilder(Main *bmain,
+                        const bNode &expr_bnode,
                         const Span<ast::Expr *> root_exprs,
                         const Span<int> expr_indices,
                         const SymbolTable &symbol_table,
                         const BuildOptions &options,
                         bNodeTree &r_tree,
                         std::string &r_error)
-      : bnode_storage_(*static_cast<const NodeExpression *>(expr_bnode.storage)),
+      : bmain_(bmain),
+        bnode_storage_(*static_cast<const NodeExpression *>(expr_bnode.storage)),
         root_exprs_(root_exprs),
         expr_indices_(expr_indices),
         symbol_table_(symbol_table),
@@ -516,7 +522,12 @@ class AstToNodeGroupBuilder {
       }
     }
 
-    BKE_ntree_update_without_main(r_tree_);
+    if (bmain_) {
+      BKE_ntree_update(*bmain_);
+    }
+    else {
+      BKE_ntree_update_without_main(r_tree_);
+    }
   }
 
  private:
@@ -1054,7 +1065,8 @@ static SymbolTable &get_symbol_table()
   return symbol_table;
 }
 
-std::shared_ptr<ExpressionNodeGroup> expression_node_to_group(const bNode &node,
+std::shared_ptr<ExpressionNodeGroup> expression_node_to_group(Main *bmain,
+                                                              const bNode &node,
                                                               const StringRef tree_idname,
                                                               const Span<StringRef> expressions,
                                                               const Span<int> expr_indices)
@@ -1075,12 +1087,12 @@ std::shared_ptr<ExpressionNodeGroup> expression_node_to_group(const bNode &node,
 
   const SymbolTable &symbols = get_symbol_table();
 
-  bNodeTree *tree = bke::node_tree_add_tree(nullptr, node.name, tree_idname);
+  bNodeTree *tree = bke::node_tree_add_tree(bmain, node.name, tree_idname);
 
   output->tree = tree;
   BuildOptions options;
   AstToNodeGroupBuilder builder(
-      node, expr_asts, expr_indices, symbols, options, *tree, output->error);
+      bmain, node, expr_asts, expr_indices, symbols, options, *tree, output->error);
   builder.build();
   if (!output->error.empty()) {
     BKE_id_free(nullptr, &tree->id);
@@ -1092,7 +1104,9 @@ std::shared_ptr<ExpressionNodeGroup> expression_node_to_group(const bNode &node,
 ExpressionNodeGroup::~ExpressionNodeGroup()
 {
   if (this->tree) {
-    BKE_id_free(nullptr, const_cast<ID *>(&this->tree->id));
+    if (this->tree->id.tag & ID_TAG_NO_MAIN) {
+      BKE_id_free(nullptr, const_cast<ID *>(&this->tree->id));
+    }
   }
 }
 

@@ -421,7 +421,7 @@ class SocketUsageInferencerImpl {
         expression::ExpressionNodeGroup &group = *expression_node_groups_cache_.lookup_or_add_cb(
             result_output_socket, [&]() {
               return expression::expression_node_to_group(
-                  *node, root_tree_.idname, {*expression}, {expr_i});
+                  nullptr, *node, root_tree_.idname, {*expression}, {expr_i});
             });
         if (!group.tree) {
           continue;

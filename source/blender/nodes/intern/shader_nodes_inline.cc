@@ -728,7 +728,7 @@ class ShaderNodesInliner {
     const expression::ExpressionNodeGroup &group = *expression_node_groups_cache_.lookup_or_add_cb(
         socket, [&]() {
           return expression::expression_node_to_group(
-              *node, src_tree_.idname, {expression}, {expr_index});
+              nullptr, *node, src_tree_.idname, {expression}, {expr_index});
         });
     if (!group.tree) {
       this->report_error(node, group.error);

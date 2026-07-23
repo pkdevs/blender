@@ -1682,7 +1682,7 @@ class LazyFunctionForExpressionNode : public LazyFunction {
       const std::string expression =
           params.get_input<SocketValueVariant>(expression_input_i_).get<std::string>();
       eval_storage.expression_node_group = expression::expression_node_to_group(
-          bnode_, bnode_.owner_tree().idname, {expression}, {expr_index_});
+          nullptr, bnode_, bnode_.owner_tree().idname, {expression}, {expr_index_});
       /* Check if creating the node group failed. */
       if (!eval_storage.expression_node_group->tree) {
         this->output_fallbacks(params);

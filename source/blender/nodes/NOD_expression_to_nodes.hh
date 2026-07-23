@@ -11,6 +11,7 @@ namespace blender {
 struct bNodeSocket;
 struct bNodeTree;
 struct bNode;
+struct Main;
 }  // namespace blender
 
 namespace blender::nodes::expression {
@@ -19,11 +20,12 @@ class ExpressionNodeGroup : NonCopyable, NonMovable {
  public:
   ~ExpressionNodeGroup();
 
-  const bNodeTree *tree = nullptr;
+  bNodeTree *tree = nullptr;
   std::string error;
 };
 
-std::shared_ptr<ExpressionNodeGroup> expression_node_to_group(const bNode &node,
+std::shared_ptr<ExpressionNodeGroup> expression_node_to_group(Main *bmain,
+                                                              const bNode &node,
                                                               StringRef tree_idname,
                                                               Span<StringRef> expressions,
                                                               Span<int> expr_indices);

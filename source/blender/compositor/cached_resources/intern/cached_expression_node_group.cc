@@ -65,7 +65,7 @@ CachedExpressionNodeGroup::CachedExpressionNodeGroup(const bNode &node,
   Array<int> expression_indices(expressions.size());
   array_utils::fill_index_range<int>(expression_indices);
   this->expression_node_group = nodes::expression::expression_node_to_group(
-      node, node.owner_tree().idname, expressions, expression_indices);
+      nullptr, node, node.owner_tree().idname, expressions, expression_indices);
 }
 
 /* --------------------------------------------------------------------

@@ -271,7 +271,7 @@ class SocketValueInferencerImpl {
     const expression::ExpressionNodeGroup &group = *expression_node_groups_.lookup_or_add_cb(
         socket, [&]() {
           return expression::expression_node_to_group(
-              *node, root_tree_.idname, {*expr}, {expr_index});
+              nullptr, *node, root_tree_.idname, {*expr}, {expr_index});
         });
     if (!group.tree) {
       all_socket_values_.add_new(socket, InferenceValue::Unknown());
