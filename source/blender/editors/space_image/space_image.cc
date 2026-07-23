@@ -719,43 +719,42 @@ static void image_main_region_init(wmWindowManager *wm, ARegion *region)
   WM_event_add_keymap_handler_v2d_mask(&region->runtime->handlers, keymap);
 }
 
-static void draw_composition_guides(SpaceImageOverlay *overlay, View2D *v2d) {
-  if (overlay->flag & SI_OVERLAY_SHOW_OVERLAYS &&
-    overlay->flag & SI_OVERLAY_SHOW_COMPOSITION_GUIDES)
+static void draw_composition_guides(SpaceImageOverlay *overlay, View2D *v2d)
 {
-  int xmin, ymin, xmax, ymax;
-  ui::view2d_view_to_region(v2d, 0.0f, 0.0f, &xmin, &ymin);
-  ui::view2d_view_to_region(v2d, 1.0f, 1.0f, &xmax, &ymax);
+  if (overlay->flag & SI_OVERLAY_SHOW_OVERLAYS &&
+      overlay->flag & SI_OVERLAY_SHOW_COMPOSITION_GUIDES)
+  {
+    int xmin, ymin, xmax, ymax;
+    ui::view2d_view_to_region(v2d, 0.0f, 0.0f, &xmin, &ymin);
+    ui::view2d_view_to_region(v2d, 1.0f, 1.0f, &xmax, &ymax);
 
-  rctf guide_rect;
-  BLI_rctf_init(&guide_rect, (float)xmin, (float)xmax, (float)ymin, (float)ymax);
+    rctf guide_rect;
+    BLI_rctf_init(&guide_rect, (float)xmin, (float)xmax, (float)ymin, (float)ymax);
 
-  /* Note: Because we are using region screen coordinates, we DO NOT call
-   * ui::view2d_view_ortho(v2d) here. We draw directly in Region space. */
+    /* Note: Because we are using region screen coordinates, we DO NOT call
+     * ui::view2d_view_ortho(v2d) here. We draw directly in Region space. */
 
-  GPU_line_width(1.0f);
+    GPU_line_width(1.0f);
 
-  const uint shdr_pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
+    const uint shdr_pos = GPU_vertformat_attr_add(
+        immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
-  immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
+    immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
 
-  float viewport_size[4];
-  GPU_viewport_size_get_f(viewport_size);
-  immUniform2f(
-      "viewport_size", viewport_size[2] / UI_SCALE_FAC, viewport_size[3] / UI_SCALE_FAC);
+    float viewport_size[4];
+    GPU_viewport_size_get_f(viewport_size);
+    immUniform2f(
+        "viewport_size", viewport_size[2] / UI_SCALE_FAC, viewport_size[3] / UI_SCALE_FAC);
 
-  immUniform1i("colors_len", 0); /* Simple dashes. */
-  immUniform1f("dash_width", 6.0f);
-  immUniform1f("udash_factor", 0.5f);
+    immUniform1i("colors_len", 0); /* Simple dashes. */
+    immUniform1f("dash_width", 6.0f);
+    immUniform1f("udash_factor", 0.5f);
 
-  ED_draw_composition_guides(shdr_pos,
-                             overlay->composition_guide_flags,
-                             &guide_rect,
-                             overlay->composition_guide_color);
+    ED_draw_composition_guides(
+        shdr_pos, overlay->composition_guide_flags, &guide_rect, overlay->composition_guide_color);
 
-  immUnbindProgram();
-}
+    immUnbindProgram();
+  }
 }
 
 static void image_main_region_draw(const bContext *C, ARegion *region)

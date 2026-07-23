@@ -13,8 +13,8 @@
 #include "DNA_scene_types.h"
 
 #include "BLI_listbase_iterator.hh"
-#include "BLI_sys_types.hh"
 #include "BLI_math_vector_c.hh"
+#include "BLI_sys_types.hh"
 
 #include "BKE_main.hh"
 #include "BKE_node.hh"

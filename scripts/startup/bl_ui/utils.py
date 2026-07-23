@@ -4,6 +4,7 @@
 
 from bpy.types import Menu
 
+
 def draw_composition_guides_panel(layout, camera):
     layout.use_property_split = True
     layout.prop(camera, "show_composition_thirds")
@@ -21,6 +22,8 @@ def draw_composition_guides_panel(layout, camera):
     col.prop(camera, "composition_guide_color", text="Color")
 
 # Panel mix-in class (don't register).
+
+
 class PresetPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'HEADER'
