@@ -424,11 +424,12 @@ void animviz_free_motionpath(bMotionPath *mpath)
     return;
   }
 
-  if (mpath->runtime && mpath->runtime->wm) {
+  if (mpath->runtime->worker_buffer) {
     bke::animviz::background_eval_deregister(*mpath->runtime->wm,
                                              *mpath->runtime->window,
                                              *mpath->runtime->job_owner,
                                              mpath->runtime->target);
+    bke::motionpath::async_eval_free(*mpath);
   }
   MEM_delete(mpath->runtime);
   animviz_free_motionpath_cache(mpath);
