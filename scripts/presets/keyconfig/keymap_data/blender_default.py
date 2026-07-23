@@ -5633,6 +5633,7 @@ def km_edit_mesh(params):
         ("mesh.select_prev_item",
          {"type": 'NUMPAD_MINUS', "value": 'PRESS', "shift": True, "ctrl": True, "repeat": True}, None),
         ("mesh.select_linked", {"type": 'L', "value": 'PRESS', "ctrl": True}, None),
+        ("mesh.shortest_path_select", {"type": params.select_mouse, "value": 'CLICK', "ctrl": True}, None),
         ("mesh.select_linked_pick", {"type": 'L', "value": 'PRESS'},
          {"properties": [("deselect", False)]}),
         ("mesh.select_linked_pick", {"type": 'L', "value": 'PRESS', "shift": True},
