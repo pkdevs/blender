@@ -283,11 +283,14 @@ class FunctionSymbol {
 };
 
 using ImplicitConversionFn = std::function<Value(const Value &value, ValueType to_type)>;
+using FinalizeValueFn = std::function<NodeAndSocket(
+    bNodeTree &tree, const Value &value, const eNodeSocketDatatype to_type)>;
 
 class SymbolTable {
  private:
   MultiValueMap<std::string, FunctionSymbol> function_;
   Map<std::pair<ValueType, ValueType>, ImplicitConversionFn> implicit_conversions_;
+  Map<std::pair<ValueType, eNodeSocketDatatype>, FinalizeValueFn> finalize_value_fns_;
 
   struct MatchResult {
     Vector<bool> param_needs_conversion;
@@ -330,10 +333,23 @@ class SymbolTable {
     implicit_conversions_.add_new(std::pair(from_type, to_type), std::move(fn));
   }
 
+  void add_finalize_value_fn(const ValueType from_type,
+                             const eNodeSocketDatatype to_type,
+                             FinalizeValueFn fn)
+  {
+    finalize_value_fns_.add_new(std::pair(from_type, to_type), std::move(fn));
+  }
+
   const ImplicitConversionFn *lookup_implicit_conversion(const ValueType from_type,
                                                          const ValueType to_type) const
   {
     return implicit_conversions_.lookup_ptr(std::pair(from_type, to_type));
+  }
+
+  const FinalizeValueFn *lookup_finalize_value_fn(const ValueType from_type,
+                                                  const eNodeSocketDatatype to_type) const
+  {
+    return finalize_value_fns_.lookup_ptr(std::pair(from_type, to_type));
   }
 
   const FunctionSymbol *lookup_function(const StringRef name,
@@ -481,12 +497,19 @@ class AstToNodeGroupBuilder {
         if (!expr_result) {
           return;
         }
-        // TODO: Make sure that the z component of vec2 values is zero.
-        BLI_assert(!expr_result->sockets.is_empty());
-        const NodeAndSocket &expr_socket = expr_result->sockets[0];
+        NodeAndSocket eval_value_socket;
+        if (const FinalizeValueFn *finalize_fn = symbol_table_.lookup_finalize_value_fn(
+                expr_result->type, group_output_socket->type))
+        {
+          eval_value_socket = (*finalize_fn)(r_tree_, *expr_result, group_output_socket->type);
+        }
+        else {
+          BLI_assert(!expr_result->sockets.is_empty());
+          eval_value_socket = expr_result->sockets[0];
+        }
         bke::node_add_link(r_tree_,
-                           *expr_socket.node,
-                           *expr_socket.socket,
+                           *eval_value_socket.node,
+                           *eval_value_socket.socket,
                            group_output_node,
                            *group_output_socket);
         group_output_socket = group_output_socket->next;
@@ -972,6 +995,52 @@ static void init_symbol_table(SymbolTable &symbols)
         symbols.add_implicit_conversion(from_type, to_type);
       }
     }
+  }
+
+  symbols.add_finalize_value_fn(
+      ValueType::Vec2,
+      SOCK_VECTOR,
+      [](bNodeTree &tree, const Value &value, const eNodeSocketDatatype /*type*/) {
+        bNode &node = *bke::node_add_node(nullptr, tree, "ShaderNodeVectorMath"_ustr);
+        node.custom1 = NODE_VECTOR_MATH_MULTIPLY;
+        bNodeSocket *input0 = static_cast<bNodeSocket *>(node.inputs.first);
+        bNodeSocket *input1 = input0->next;
+        float *mul_value = input1->default_value_typed<bNodeSocketValueVector>()->value;
+        mul_value[0] = 1.0f;
+        mul_value[1] = 1.0f;
+        mul_value[2] = 0.0f;
+        mul_value[3] = 0.0f;
+        bke::node_add_link(tree, *value.sockets[0].node, *value.sockets[0].socket, node, *input0);
+        return NodeAndSocket{&node, static_cast<bNodeSocket *>(node.outputs.first)};
+      });
+
+  for (const eNodeSocketDatatype type : {SOCK_FLOAT, SOCK_INT, SOCK_BOOLEAN}) {
+    symbols.add_finalize_value_fn(
+        ValueType::Vec2,
+        type,
+        [](bNodeTree &tree, const Value &value, const eNodeSocketDatatype /*type*/) {
+          bNode &separate_node = *bke::node_add_node(nullptr, tree, "ShaderNodeSeparateXYZ"_ustr);
+          bNode &mix_node = *bke::node_add_node(nullptr, tree, "ShaderNodeMix"_ustr);
+
+          bke::node_add_link(tree,
+                             *value.sockets[0].node,
+                             *value.sockets[0].socket,
+                             separate_node,
+                             *static_cast<bNodeSocket *>(separate_node.inputs.first));
+          bNodeSocket *x_socket = static_cast<bNodeSocket *>(separate_node.outputs.first);
+          bNodeSocket *y_socket = x_socket->next;
+
+          bNodeSocket *mix_a = bke::node_find_socket(mix_node, SOCK_IN, "A_Float"_ustr);
+          bNodeSocket *mix_b = bke::node_find_socket(mix_node, SOCK_IN, "B_Float"_ustr);
+
+          bke::node_add_link(tree, separate_node, *x_socket, mix_node, *mix_a);
+          bke::node_add_link(tree, separate_node, *y_socket, mix_node, *mix_b);
+
+          return NodeAndSocket{
+              &mix_node,
+              bke::node_find_socket(mix_node, SOCK_OUT, "Result_Float"_ustr),
+          };
+        });
   }
 }
 
