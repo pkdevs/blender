@@ -891,7 +891,7 @@ void node_light_evaluation_impl(float3 position,
   energy_scale *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
 }
 
-void node_shadow_raycast_impl(float3 position, float spread, float4 &color)
+void node_shadow_raycast_impl(float3 position, float softness, float4 &color)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
@@ -932,7 +932,7 @@ void node_shadow_raycast_impl(float3 position, float spread, float4 &color)
                                     g_data.N,
                                     object_infos.shadow_terminator_normal_offset,
                                     object_infos.shadow_terminator_geometry_offset,
-                                    spread,
+                                    softness,
                                     ray_count,
                                     ray_step_count);
 

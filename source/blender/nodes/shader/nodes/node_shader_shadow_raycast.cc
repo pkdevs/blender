@@ -11,7 +11,7 @@ namespace nodes::node_shader_shadow_raycast_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Vector>("Position"_ustr).hide_value();
-  b.add_input<decl::Float>("Spread"_ustr).default_value(1.0f);
+  b.add_input<decl::Float>("Softness"_ustr).default_value(1.0f);
   b.add_output<decl::Color>("Color"_ustr);
 }
 
