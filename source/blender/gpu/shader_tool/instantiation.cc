@@ -977,6 +977,20 @@ struct InstantiationContext {
     builder << string(";\n");
   }
 
+  string condition(SymbolFunction *fn)
+  {
+    string str;
+    if (fn->is_entry_point()) {
+      str += " && defined(ENTRY_POINT_" + fn->resolved->identifier + ")";
+    }
+    for (SymbolClass *type : fn->arg_types) {
+      if (type->is_srt()) {
+        str += " && defined(CREATE_INFO_" + type->resolved->identifier + ")";
+      }
+    }
+    return str.empty() ? str : str.substr(4);
+  }
+
   void func_decl(FuncDecl decl,
                  SymbolScope &scope,
                  /* Resolved, templated function instance. */
@@ -986,6 +1000,11 @@ struct InstantiationContext {
 
     if (inst_fn == nullptr) {
       inst_fn = id_func_resolved_lookup(decl.identifier(), decl.arguments(), scope);
+    }
+
+    string cond = condition(inst_fn);
+    if (!cond.empty()) {
+      builder.ss << string("#if ") + cond + "\n";
     }
 
     jump_to(decl.front());
@@ -1006,6 +1025,10 @@ struct InstantiationContext {
     }
 
     local_scope(body, *inst_fn);
+
+    if (!cond.empty()) {
+      builder.ss << string("#endif\n");
+    }
   }
 
   void func_arg_list(FuncArgList list, SymbolScope &scope, bool with_trivia = true)
