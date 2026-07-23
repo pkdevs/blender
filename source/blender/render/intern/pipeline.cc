@@ -1189,8 +1189,13 @@ static void do_render_compositor_scenes(Render *re, VectorSet<Scene *> &needed_s
 {
   bool a_scene_was_rendered = false;
   for (Scene *scene : needed_scenes_to_render) {
+    /* The provided needed_scenes_to_render might contain evaluated scenes, so get the original
+     * scene instead, because we will be doing raw pointer comparison below and the render function
+     * expects original scenes. */
+    Scene *original_scene = DEG_get_original(scene);
+
     /* The pipeline scene was already rendered. */
-    if (scene == re->scene) {
+    if (original_scene == re->scene) {
       continue;
     }
 
@@ -1198,7 +1203,7 @@ static void do_render_compositor_scenes(Render *re, VectorSet<Scene *> &needed_s
       continue;
     }
 
-    do_render_compositor_scene(re, scene, re->scene->r.cfra);
+    do_render_compositor_scene(re, original_scene, re->scene->r.cfra);
     a_scene_was_rendered = true;
   }
 
@@ -1233,11 +1238,13 @@ static void do_render_compositor(Render *re)
   bool update_newframe = false;
 
   VectorSet<Scene *> needed_scenes_to_render = get_scenes_that_needs_render_by_compositor(
-      *re->scene);
+      *re->pipeline_scene_eval);
 
   /* Render the pipeline scene because the compositor is disabled and thus we do a simple render,
    * or the compositor is enabled and requires the scene to be rendered. */
-  if (!is_compositor_enabled(*re->scene) || needed_scenes_to_render.contains(re->scene)) {
+  if (!is_compositor_enabled(*re->pipeline_scene_eval) ||
+      needed_scenes_to_render.contains(re->pipeline_scene_eval))
+  {
     /* render the frames
      * it could be optimized to render only the needed view
      * but what if a scene has a different number of views
