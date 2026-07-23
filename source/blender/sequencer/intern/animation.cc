@@ -39,9 +39,11 @@ bool fcurve_matches(const Strip &strip, const FCurve &fcurve)
       fcurve, "sequence_editor.strips_all[", strip.name + 2);
 }
 
-void offset_animdata(const Scene *scene, Strip *strip, float ofs)
+static void transform_animdata(const Scene *scene,
+                               Strip *strip,
+                               FunctionRef<void(float &)> callback)
 {
-  if (!animation_keyframes_exist(scene) || ofs == 0.0f) {
+  if (!animation_keyframes_exist(scene)) {
     return;
   }
 
@@ -55,20 +57,43 @@ void offset_animdata(const Scene *scene, Strip *strip, float ofs)
     if (fcu->bezt) {
       for (i = 0; i < fcu->totvert; i++) {
         BezTriple *bezt = &fcu->bezt[i];
-        bezt->vec[0][0] += ofs;
-        bezt->vec[1][0] += ofs;
-        bezt->vec[2][0] += ofs;
+        callback(bezt->vec[0][0]);
+        callback(bezt->vec[1][0]);
+        callback(bezt->vec[2][0]);
       }
     }
     if (fcu->fpt) {
       for (i = 0; i < fcu->totvert; i++) {
         FPoint *fpt = &fcu->fpt[i];
-        fpt->vec[0] += ofs;
+        callback(fpt->vec[0]);
       }
     }
   }
 
   DEG_id_tag_update(&scene->adt->action->id, ID_RECALC_ANIMATION);
+}
+
+void transform_transition_animdata(const Scene *scene,
+                                   Strip *strip,
+                                   float left_old,
+                                   float right_old,
+                                   float left_new,
+                                   float right_new)
+{
+  if (left_old == left_new && right_old == right_new) {
+    return;
+  }
+  const float scale = (right_new - left_new) / (right_old - left_old);
+  const float offset = left_new - left_old * scale;
+
+  transform_animdata(scene, strip, [=](float &x) { x = x * scale + offset; });
+}
+
+void offset_animdata(const Scene *scene, Strip *strip, float ofs)
+{
+  if (ofs != 0.0f) {
+    transform_animdata(scene, strip, [=](float &x) { x += ofs; });
+  }
 }
 
 void free_animdata(Scene *scene, Strip *strip)

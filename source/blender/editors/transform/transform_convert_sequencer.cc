@@ -1017,10 +1017,12 @@ static void flushTransSeq(TransInfo *t)
       }
     }
 
+    const int left_old = strip->left_handle();
+    const int right_old = strip->right_handle(scene);
     std::optional<int> left_new{};
     std::optional<int> right_new{};
-
     float offset[2], offset_clamped[2];
+
     get_strip_offsets(t, td1, edge_pan_offset, offset, offset_clamped);
     flush_strip_flags(t, td1, offset, offset_clamped);
     flush_strip_transforms(t, td1, offset_clamped, left_new, right_new);
@@ -1039,6 +1041,16 @@ static void flushTransSeq(TransInfo *t)
     }
     else if (right_new) {
       strip->right_handle_set(scene, *right_new);
+    }
+
+    /* Move transition keyframes to match the new bounds. */
+    if (strip->is_same_channel_transition()) {
+      seq::transform_transition_animdata(scene,
+                                         strip,
+                                         left_old,
+                                         right_old,
+                                         left_new.value_or(left_old),
+                                         right_new.value_or(right_old));
     }
   }
 
