@@ -27,7 +27,6 @@ set(SRC
   anim_markers.cc
   anim_motion_paths.cc
   anim_ops.cc
-  anim_visualization.cc
   drivers.cc
   fmodifier_ui.cc
   keyframes_draw.cc

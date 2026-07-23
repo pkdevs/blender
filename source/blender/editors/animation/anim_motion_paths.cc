@@ -601,6 +601,7 @@ static void update_callback(ID &id, void *buffer_data, Bounds<int> evaluated_ran
 
   if (mpath == nullptr) {
     BLI_assert_unreachable();
+    /* Should have unregistered from the eval job before deleting the motion path. */
     return;
   }
 
@@ -648,16 +649,16 @@ void register_motionpath_async(Main &bmain,
     copy_v3_v3(buffer->points[i], motion_path.points[i].co);
     buffer->flags[i] = motion_path.points[i].flag;
   }
-  animviz::background_eval_register(bmain,
-                                    wm,
-                                    window,
-                                    scene,
-                                    view_layer,
-                                    {&armature_object.id, buffer->bone_name},
-                                    buffer,
-                                    eval_callback,
-                                    update_callback,
-                                    free_buffer_callback);
+  bke::animviz::background_eval_register(bmain,
+                                         wm,
+                                         window,
+                                         scene,
+                                         view_layer,
+                                         {&armature_object.id, buffer->bone_name},
+                                         buffer,
+                                         eval_callback,
+                                         update_callback,
+                                         free_buffer_callback);
 }
 
 }  // namespace motionpath
