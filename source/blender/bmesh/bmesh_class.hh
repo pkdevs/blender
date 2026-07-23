@@ -558,7 +558,8 @@ enum {
 
   /** Tagged to disable mirrored selection for pre-existing selection when symmetry is turned on.
    */
-  BM_ELEM_MIRROR_DISABLED = (1 << 9),
+  BM_ELEM_MIRRORED_SELECT_UV = (1 << 9),
+  BM_ELEM_MIRRORED_SELECT_UV_EDGE = (1 << 10),
 };
 
 /* Only for #BMLoop to select an edge. */

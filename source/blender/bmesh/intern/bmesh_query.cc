@@ -2007,7 +2007,7 @@ bool BM_face_exists_overlap_subset(BMVert **varr, const int len)
   return is_overlap;
 }
 
-bool BM_vert_is_all_edge_flag_test(const BMVert *v, const char hflag, const bool respect_hide)
+bool BM_vert_is_all_edge_flag_test(const BMVert *v, const int hflag, const bool respect_hide)
 {
   if (v->e) {
     BMEdge *e_other;
@@ -2025,7 +2025,7 @@ bool BM_vert_is_all_edge_flag_test(const BMVert *v, const char hflag, const bool
   return true;
 }
 
-bool BM_vert_is_all_face_flag_test(const BMVert *v, const char hflag, const bool respect_hide)
+bool BM_vert_is_all_face_flag_test(const BMVert *v, const int hflag, const bool respect_hide)
 {
   if (v->e) {
     BMEdge *f_other;
@@ -2043,7 +2043,7 @@ bool BM_vert_is_all_face_flag_test(const BMVert *v, const char hflag, const bool
   return true;
 }
 
-bool BM_edge_is_all_face_flag_test(const BMEdge *e, const char hflag, const bool respect_hide)
+bool BM_edge_is_all_face_flag_test(const BMEdge *e, const int hflag, const bool respect_hide)
 {
   if (e->l) {
     BMLoop *l_iter, *l_first;
@@ -2061,7 +2061,7 @@ bool BM_edge_is_all_face_flag_test(const BMEdge *e, const char hflag, const bool
   return true;
 }
 
-bool BM_edge_is_any_face_flag_test(const BMEdge *e, const char hflag)
+bool BM_edge_is_any_face_flag_test(const BMEdge *e, const int hflag)
 {
   if (e->l) {
     BMLoop *l_iter, *l_first;
@@ -2077,12 +2077,12 @@ bool BM_edge_is_any_face_flag_test(const BMEdge *e, const char hflag)
   return false;
 }
 
-bool BM_edge_is_any_vert_flag_test(const BMEdge *e, const char hflag)
+bool BM_edge_is_any_vert_flag_test(const BMEdge *e, const int hflag)
 {
   return (BM_elem_flag_test(e->v1, hflag) || BM_elem_flag_test(e->v2, hflag));
 }
 
-bool BM_face_is_any_vert_flag_test(const BMFace *f, const char hflag)
+bool BM_face_is_any_vert_flag_test(const BMFace *f, const int hflag)
 {
   BMLoop *l_iter;
   BMLoop *l_first;
@@ -2096,7 +2096,7 @@ bool BM_face_is_any_vert_flag_test(const BMFace *f, const char hflag)
   return false;
 }
 
-bool BM_face_is_any_edge_flag_test(const BMFace *f, const char hflag)
+bool BM_face_is_any_edge_flag_test(const BMFace *f, const int hflag)
 {
   BMLoop *l_iter;
   BMLoop *l_first;

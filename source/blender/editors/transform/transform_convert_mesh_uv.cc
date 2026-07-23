@@ -110,7 +110,7 @@ static void uv_set_connectivity_distance(const ToolSettings *ts,
 
     BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
       float dist;
-      bool uv_vert_sel = uvedit_uv_select_test_ex(ts, bm, l, offsets);
+      bool uv_vert_sel = uvedit_uv_select_test_ex(ts, bm, l, offsets, BM_ELEM_SELECT);
 
       if (uv_vert_sel) {
         BLI_LINKSTACK_PUSH(queue, l);

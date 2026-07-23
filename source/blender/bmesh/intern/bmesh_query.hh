@@ -700,23 +700,23 @@ void BM_edge_ordered_verts_ex(const BMEdge *edge,
                               const BMLoop *edge_loop) ATTR_NONNULL();
 
 bool BM_vert_is_all_edge_flag_test(const BMVert *v,
-                                   char hflag,
+                                   int hflag,
                                    bool respect_hide) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 bool BM_vert_is_all_face_flag_test(const BMVert *v,
-                                   char hflag,
+                                   int hflag,
                                    bool respect_hide) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 bool BM_edge_is_all_face_flag_test(const BMEdge *e,
-                                   char hflag,
+                                   int hflag,
                                    bool respect_hide) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 /* convenience functions for checking flags */
-bool BM_edge_is_any_vert_flag_test(const BMEdge *e, char hflag) ATTR_WARN_UNUSED_RESULT
+bool BM_edge_is_any_vert_flag_test(const BMEdge *e, int hflag) ATTR_WARN_UNUSED_RESULT
     ATTR_NONNULL();
-bool BM_edge_is_any_face_flag_test(const BMEdge *e, char hflag) ATTR_WARN_UNUSED_RESULT
+bool BM_edge_is_any_face_flag_test(const BMEdge *e, int hflag) ATTR_WARN_UNUSED_RESULT
     ATTR_NONNULL();
-bool BM_face_is_any_vert_flag_test(const BMFace *f, char hflag) ATTR_WARN_UNUSED_RESULT
+bool BM_face_is_any_vert_flag_test(const BMFace *f, int hflag) ATTR_WARN_UNUSED_RESULT
     ATTR_NONNULL();
-bool BM_face_is_any_edge_flag_test(const BMFace *f, char hflag) ATTR_WARN_UNUSED_RESULT
+bool BM_face_is_any_edge_flag_test(const BMFace *f, int hflag) ATTR_WARN_UNUSED_RESULT
     ATTR_NONNULL();
 
 bool BM_edge_is_any_face_len_test(const BMEdge *e, int len) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();

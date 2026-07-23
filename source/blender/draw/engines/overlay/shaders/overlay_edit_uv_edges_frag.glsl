@@ -13,49 +13,49 @@ FRAGMENT_SHADER_CREATE_INFO(overlay_edit_uv_edges)
 
 void main()
 {
-  float4 inner_color = float4(float3(0.0f), 1.0f);
-  float4 outer_color = float4(0.0f);
+  float4 inner_color = float4(float3(0.0), 1.0);
+  float4 outer_color = float4(0.0);
 
   float2 dd = gpu_fwidth(stipple_pos);
   float line_distance = distance(stipple_pos, stipple_start) / max(dd.x, dd.y);
 
-  float sel_fac = clamp(selection_fac, 0.0f, 1.0f);
+  float sel_fac = clamp(selection_fac, 0.0, 1.0);
 
+  /* 1. Base color assignment from UV Line Style */
   if (OVERLAY_UVLineStyle(line_style) == OVERLAY_UV_LINE_STYLE_OUTLINE) {
     if (use_edge_select) {
-      /* TODO(@ideasman42): The current wire-edit color contrast enough against the selection.
-       * Look into changing the default theme color instead of reducing contrast with edge-select.
-       */
-      inner_color = (sel_fac != 0.0f) ? theme.colors.edge_select : (theme.colors.wire_edit * 0.5f);
+      inner_color = (sel_fac != 0.0) ? theme.colors.edge_select : (theme.colors.wire_edit * 0.5);
     }
     else {
       inner_color = mix(theme.colors.wire_edit, theme.colors.edge_select, sel_fac);
     }
-    outer_color = float4(float3(0.0f), 1.0f);
+    outer_color = float4(float3(0.0), 1.0);
   }
   else if (OVERLAY_UVLineStyle(line_style) == OVERLAY_UV_LINE_STYLE_DASH) {
-    if (fract(line_distance / float(dash_length)) < 0.5f) {
-      inner_color = mix(float4(float3(0.35f), 1.0f), theme.colors.edge_select, sel_fac);
+    if (fract(line_distance / float(dash_length)) < 0.5) {
+      inner_color = mix(float4(float3(0.35), 1.0), theme.colors.edge_select, sel_fac);
     }
   }
   else if (OVERLAY_UVLineStyle(line_style) == OVERLAY_UV_LINE_STYLE_BLACK) {
-    float4 base_color = float4(float3(0.0f), 1.0f);
+    float4 base_color = float4(float3(0.0), 1.0);
     inner_color = mix(base_color, theme.colors.edge_select, sel_fac);
   }
   else if (OVERLAY_UVLineStyle(line_style) == OVERLAY_UV_LINE_STYLE_WHITE) {
-    float4 base_color = float4(1.0f);
+    float4 base_color = float4(1.0);
     inner_color = mix(base_color, theme.colors.edge_select, sel_fac);
   }
   else if (OVERLAY_UVLineStyle(line_style) == OVERLAY_UV_LINE_STYLE_SHADOW) {
     inner_color = theme.colors.uv_shadow;
   }
 
-  if (selection_fac == 2.0f) {
-    inner_color = theme.colors.edge_mirror_selection;
-  }
+  /* Fade towards the mirror color for the part of the gradient above 1.0 (e.g. one vertex
+   * selected and the other only mirror-selected), instead of hard-switching only when the whole
+   * edge is purely mirror-selected. */
+  float mirror_fac = clamp(selection_fac - 1.0, 0.0, 1.0);
+  inner_color = mix(inner_color, theme.colors.edge_mirror_selection, mirror_fac);
 
-  float dist = abs(edge_coord) - max(theme.sizes.edge - 0.5f, 0.0f);
-  float dist_outer = dist - max(theme.sizes.edge, 1.0f);
+  float dist = abs(edge_coord) - max(theme.sizes.edge - 0.5, 0.0);
+  float dist_outer = dist - max(theme.sizes.edge, 1.0);
   float mix_w;
   float mix_w_outer;
 
@@ -64,16 +64,16 @@ void main()
     mix_w_outer = smoothstep(LINE_SMOOTH_START, LINE_SMOOTH_END, dist_outer);
   }
   else {
-    mix_w = step(0.5f, dist);
-    mix_w_outer = step(0.5f, dist_outer);
+    mix_w = step(0.5, dist);
+    mix_w_outer = step(0.5, dist_outer);
   }
 
-  float4 final_color = mix(outer_color, inner_color, 1.0f - mix_w * outer_color.a);
-  final_color.a *= 1.0f - (outer_color.a > 0.0f ? mix_w_outer : mix_w);
+  float4 final_color = mix(outer_color, inner_color, 1.0 - mix_w * outer_color.a);
+  final_color.a *= 1.0 - (outer_color.a > 0.0 ? mix_w_outer : mix_w);
 
   eObjectInfoFlag ob_flag = drw_object_infos().flag;
   bool is_active = flag_test(ob_flag, OBJECT_ACTIVE_EDIT_MODE);
-  final_color.a *= is_active ? alpha : (alpha * 0.25f);
+  final_color.a *= is_active ? alpha : (alpha * 0.25);
 
   frag_color = final_color;
 }

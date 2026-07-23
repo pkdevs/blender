@@ -65,11 +65,11 @@ void main()
 
 #elif defined(EDGE)
 #  ifdef FLAT
-  final_color = EDIT_MESH_edge_color_inner(m_data.y, m_data.x);
+  final_color = EDIT_MESH_edge_color_inner(m_data.y);
   selectOverride = 1u;
 #  else
-  final_color = EDIT_MESH_edge_vertex_color(m_data.y, m_data.x);
-  selectOverride = (m_data.y & EDGE_SELECTED) | (m_data.x & EDGE_MIRRORED_SELECT);
+  final_color = EDIT_MESH_edge_vertex_color(m_data.y);
+  selectOverride = (m_data.y & EDGE_SELECTED) | (m_data.y & EDGE_MIRRORED_SELECT);
 #  endif
 
   float edge_crease = float(m_data.z & 0xFu) / 15.0f;

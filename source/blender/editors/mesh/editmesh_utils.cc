@@ -406,170 +406,6 @@ void EDBM_selectmode_to_scene(bContext *C)
   WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
 }
 
-static void EDBM_select_mirrored_tag_update(Main *bmain,
-                                            BMEditMesh *em,
-                                            const bool keep_current = false)
-{
-  BMesh *bm = em->bm;
-
-  BMIter iter;
-  BMVert *v;
-  BMEdge *e;
-  BMFace *f;
-
-  blender::Set<BMVert *> old_mirrored_verts;
-  blender::Set<BMEdge *> old_mirrored_edges;
-  blender::Set<BMFace *> old_mirrored_faces;
-
-  if (keep_current) {
-    BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-      if (BM_elem_flag_test(v, BM_ELEM_MIRRORED_SELECT)) {
-        old_mirrored_verts.add(v);
-      }
-    }
-    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-      if (BM_elem_flag_test(e, BM_ELEM_MIRRORED_SELECT)) {
-        old_mirrored_edges.add(e);
-      }
-    }
-    BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-      if (BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT)) {
-        old_mirrored_faces.add(f);
-      }
-    }
-  }
-
-  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-    BM_elem_flag_disable(v, BM_ELEM_MIRRORED_SELECT);
-    if (!BM_elem_flag_test(v, BM_ELEM_SELECT)) {
-      BM_elem_flag_disable(v, BM_ELEM_MIRROR_DISABLED);
-    }
-  }
-  BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-    BM_elem_flag_disable(e, BM_ELEM_MIRRORED_SELECT);
-    if (!BM_elem_flag_test(e, BM_ELEM_SELECT)) {
-      BM_elem_flag_disable(e, BM_ELEM_MIRROR_DISABLED);
-    }
-  }
-  BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-    BM_elem_flag_disable(f, BM_ELEM_MIRRORED_SELECT);
-    if (!BM_elem_flag_test(f, BM_ELEM_SELECT)) {
-      BM_elem_flag_disable(f, BM_ELEM_MIRROR_DISABLED);
-    }
-  }
-
-  Mesh *mesh = nullptr;
-  for (Mesh &me : bmain->meshes) {
-    if (me.runtime && me.runtime->edit_mesh && me.runtime->edit_mesh.get() == em) {
-      mesh = &me;
-      break;
-    }
-  }
-
-  if (!mesh || mesh->symmetry == 0) {
-    em->last_symmetry = 0;
-    BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-      if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
-        BM_elem_flag_enable(v, BM_ELEM_MIRROR_DISABLED);
-      }
-    }
-    BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-      if (BM_elem_flag_test(e, BM_ELEM_SELECT)) {
-        BM_elem_flag_enable(e, BM_ELEM_MIRROR_DISABLED);
-      }
-    }
-    BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-      if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
-        BM_elem_flag_enable(f, BM_ELEM_MIRROR_DISABLED);
-      }
-    }
-    return;
-  }
-
-  em->last_symmetry = mesh->symmetry;
-
-  for (int axis = 0; axis < 3; axis++) {
-    if (mesh->symmetry & (ME_SYMMETRY_X << axis)) {
-      bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
-
-      EDBM_verts_mirror_cache_begin(em, axis, true, true, true, use_topology);
-
-      if (bm->totvertsel > 0) {
-        BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-          if (BM_elem_flag_test(v, BM_ELEM_SELECT) &&
-              !BM_elem_flag_test(v, BM_ELEM_MIRROR_DISABLED) &&
-              !BM_elem_flag_test(v, BM_ELEM_HIDDEN))
-          {
-            BMVert *v_mirr = EDBM_verts_mirror_get(em, v);
-            if (v_mirr && v_mirr != v && !BM_elem_flag_test(v_mirr, BM_ELEM_HIDDEN) &&
-                !BM_elem_flag_test(v_mirr, BM_ELEM_SELECT))
-            {
-              if (!keep_current || old_mirrored_verts.contains(v_mirr)) {
-                BM_elem_flag_enable(v_mirr, BM_ELEM_MIRRORED_SELECT);
-              }
-            }
-          }
-        }
-      }
-      if (bm->totedgesel > 0) {
-        BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
-          if (BM_elem_flag_test(e, BM_ELEM_SELECT) &&
-              !BM_elem_flag_test(e, BM_ELEM_MIRROR_DISABLED) &&
-              !BM_elem_flag_test(e, BM_ELEM_HIDDEN))
-          {
-            BMEdge *e_mirr = EDBM_verts_mirror_get_edge(em, e);
-            if (e_mirr && e_mirr != e && !BM_elem_flag_test(e_mirr, BM_ELEM_HIDDEN) &&
-                !BM_elem_flag_test(e_mirr, BM_ELEM_SELECT))
-            {
-              if (!keep_current || old_mirrored_edges.contains(e_mirr)) {
-                BM_elem_flag_enable(e_mirr, BM_ELEM_MIRRORED_SELECT);
-              }
-            }
-          }
-        }
-      }
-      if (bm->totfacesel > 0) {
-        BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
-          if (BM_elem_flag_test(f, BM_ELEM_SELECT) &&
-              !BM_elem_flag_test(f, BM_ELEM_MIRROR_DISABLED) &&
-              !BM_elem_flag_test(f, BM_ELEM_HIDDEN))
-          {
-            BMFace *f_mirr = EDBM_verts_mirror_get_face(em, f);
-            if (f_mirr && f_mirr != f && !BM_elem_flag_test(f_mirr, BM_ELEM_HIDDEN) &&
-                !BM_elem_flag_test(f_mirr, BM_ELEM_SELECT))
-            {
-              if (!keep_current || old_mirrored_faces.contains(f_mirr)) {
-                BM_elem_flag_enable(f_mirr, BM_ELEM_MIRRORED_SELECT);
-              }
-            }
-          }
-        }
-      }
-
-      EDBM_verts_mirror_cache_end(em);
-    }
-  }
-}
-
-void EDBM_selectmode_flush_mirrored_ex(Main *bmain,
-                                       BMEditMesh *em,
-                                       const short selectmode,
-                                       const bool keep_current)
-{
-  BM_mesh_select_mode_flush_ex(em->bm, selectmode, BMSelectFlushFlag_All);
-  EDBM_select_mirrored_tag_update(bmain, em, keep_current);
-}
-
-void EDBM_selectmode_flush_mirrored(Main *bmain, BMEditMesh *em)
-{
-  EDBM_selectmode_flush_mirrored_ex(bmain, em, em->selectmode, false);
-}
-
-void EDBM_selectmode_flush_mirrored_keep_current(Main *bmain, BMEditMesh *em)
-{
-  EDBM_selectmode_flush_mirrored_ex(bmain, em, em->selectmode, true);
-}
-
 void EDBM_selectmode_flush_ex(BMEditMesh *em, const short selectmode)
 {
   BM_mesh_select_mode_flush_ex(em->bm, selectmode, BMSelectFlushFlag_All);
@@ -636,22 +472,28 @@ void EDBM_select_less(BMEditMesh *em, const bool use_face_step)
   BM_mesh_select_mode_clean(em->bm);
 }
 
-void EDBM_flag_disable_all(BMEditMesh *em, const char hflag)
+void EDBM_flag_disable_all(BMEditMesh *em, const short hflag)
 {
   BM_mesh_elem_hflag_disable_all(em->bm, BM_VERT | BM_EDGE | BM_FACE, hflag, false);
 
   /* Keep this as there is no need to maintain UV selection when all are disabled. */
   if (hflag & BM_ELEM_SELECT) {
+    BM_mesh_elem_hflag_disable_all(
+        em->bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_MIRRORED_SELECT, false);
     EDBM_uvselect_clear(em);
   }
 }
 
-void EDBM_flag_enable_all(BMEditMesh *em, const char hflag)
+void EDBM_flag_enable_all(BMEditMesh *em, const short hflag)
 {
   BM_mesh_elem_hflag_enable_all(em->bm, BM_VERT | BM_EDGE | BM_FACE, hflag, true);
 
   /* Keep this as there is no need to maintain UV selection when all are enabled. */
   if (hflag & BM_ELEM_SELECT) {
+    /* Every element is now really selected: clear mirror-highlight flags so they don't survive
+     * as stale state on top of real selection (see #EDBM_flag_disable_all). */
+    BM_mesh_elem_hflag_disable_all(
+        em->bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_MIRRORED_SELECT, false);
     EDBM_uvselect_clear(em);
   }
 }

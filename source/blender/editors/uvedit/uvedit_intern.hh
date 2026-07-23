@@ -105,6 +105,11 @@ bool uvedit_edge_is_face_select_any_other(const ToolSettings *ts,
                                           const BMLoop *l,
                                           const BMUVOffsets &offsets);
 
+bool uvedit_edge_is_face_mirrored_select_any_other(const ToolSettings *ts,
+                                                   const BMesh *bm,
+                                                   const BMLoop *l,
+                                                   const BMUVOffsets &offsets);
+
 bool uvedit_vert_is_all_other_faces_selected(const ToolSettings *ts,
                                              const BMesh *bm,
                                              const BMLoop *l,
@@ -112,7 +117,8 @@ bool uvedit_vert_is_all_other_faces_selected(const ToolSettings *ts,
 
 [[nodiscard]] bool uvedit_vert_select_get_no_sync(const ToolSettings *ts,
                                                   const BMesh *bm,
-                                                  const BMLoop *l);
+                                                  const BMLoop *l,
+                                                  const int hflag = BM_ELEM_SELECT_UV);
 [[nodiscard]] bool uvedit_edge_select_get_no_sync(const ToolSettings *ts,
                                                   const BMesh *bm,
                                                   const BMLoop *l);

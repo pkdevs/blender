@@ -170,14 +170,15 @@ bool BM_loop_edge_uvselect_test(const BMLoop *l);
  * Each function asserts that a supported `hflag` is passed in.
  * \{ */
 
-bool BM_loop_vert_uvselect_check_other_loop_vert(BMLoop *l, char hflag, int cd_loop_uv_offset);
-bool BM_loop_vert_uvselect_check_other_loop_edge(BMLoop *l, char hflag, int cd_loop_uv_offset);
-bool BM_loop_vert_uvselect_check_other_edge(BMLoop *l, char hflag, int cd_loop_uv_offset);
-bool BM_loop_vert_uvselect_check_other_face(BMLoop *l, char hflag, int cd_loop_uv_offset);
-bool BM_loop_edge_uvselect_check_other_loop_edge(BMLoop *l, char hflag, int cd_loop_uv_offset);
-bool BM_loop_edge_uvselect_check_other_face(BMLoop *l, char hflag, int cd_loop_uv_offset);
+bool BM_loop_vert_uvselect_check_other_loop_vert(BMLoop *l, int hflag, int cd_loop_uv_offset);
+bool BM_loop_vert_uvselect_check_other_loop_edge(BMLoop *l, int hflag, int cd_loop_uv_offset);
+bool BM_loop_vert_uvselect_check_other_edge(BMLoop *l, int hflag, int cd_loop_uv_offset);
+bool BM_loop_vert_uvselect_check_other_face(BMLoop *l, int hflag, int cd_loop_uv_offset);
+bool BM_loop_edge_uvselect_check_other_loop_edge(BMLoop *l, int hflag, int cd_loop_uv_offset);
+bool BM_loop_edge_uvselect_check_other_face(BMLoop *l, int hflag, int cd_loop_uv_offset);
 
 bool BM_face_uvselect_check_edges_all(BMFace *f);
+bool BM_face_uvselect_check_edges_all_mirrored(BMFace *f);
 
 /** \} */
 
@@ -186,19 +187,19 @@ bool BM_face_uvselect_check_edges_all(BMFace *f);
  * \{ */
 
 /** Set the UV selection flag for `f` without flushing down to edges & vertices. */
-void BM_face_uvselect_set_noflush(BMesh *bm, BMFace *f, bool select);
+void BM_face_uvselect_set_noflush(BMesh *bm, BMFace *f, bool select, bool mirrored = false);
 /** Set the UV selection flag for `f` & flush down to edges & vertices. */
-void BM_face_uvselect_set(BMesh *bm, BMFace *f, bool select);
+void BM_face_uvselect_set(BMesh *bm, BMFace *f, bool select, bool mirrored = false);
 
 /** Set the UV selection flag for `e` without flushing down to vertices. */
-void BM_loop_edge_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select);
+void BM_loop_edge_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select, bool mirrored = false);
 /** Set the UV selection flag for `e` & flush down to vertices. */
-void BM_loop_edge_uvselect_set(BMesh *bm, BMLoop *l, bool select);
+void BM_loop_edge_uvselect_set(BMesh *bm, BMLoop *l, bool select, bool mirrored = false);
 /**
  * Set the UV selection flag for `v` without flushing down.
  * since there is nothing to flush down to.
  */
-void BM_loop_vert_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select);
+void BM_loop_vert_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select, bool mirrored = false);
 
 /**
  * Call this function when selecting mesh elements in the viewport and
@@ -280,18 +281,47 @@ struct BMUVSelectPickParams {
   bool shared = true;
 };
 
-void BM_vert_uvselect_set_pick(BMesh *bm,
-                               BMVert *v,
-                               bool select,
-                               const BMUVSelectPickParams &params);
-void BM_edge_uvselect_set_pick(BMesh *bm,
-                               BMEdge *e,
-                               bool select,
-                               const BMUVSelectPickParams &params);
-void BM_face_uvselect_set_pick(BMesh *bm,
-                               BMFace *f,
-                               bool select,
-                               const BMUVSelectPickParams &params);
+/**
+ * Select/deselect a single vert/edge/face, flushing locally.
+ *
+ * \param mirrored: When true, operate on the mirror-select flags
+ * (#BM_ELEM_MIRRORED_SELECT_UV & friends) instead of the regular UV-select ones.
+ * The face variant ignores `params.shared` when `mirrored` is true - mirror face-pick is always
+ * confined to the picked face's own loops, see the doc-comment on the definition.
+ */
+void BM_vert_uvselect_set_pick(
+    BMesh *bm, BMVert *v, bool select, const BMUVSelectPickParams &params, bool mirrored = false);
+/** \copydoc #BM_vert_uvselect_set_pick. */
+void BM_edge_uvselect_set_pick(
+    BMesh *bm, BMEdge *e, bool select, const BMUVSelectPickParams &params, bool mirrored = false);
+/** \copydoc #BM_vert_uvselect_set_pick. */
+void BM_face_uvselect_set_pick(
+    BMesh *bm, BMFace *f, bool select, const BMUVSelectPickParams &params, bool mirrored = false);
+
+/**
+ * Regular & mirror-select element lists for #BM_mesh_uvselect_set_elem_from_mesh,
+ * bundled so both kinds of selection are applied together in a single, coherent pass
+ * instead of two separate calls.
+ */
+struct BMUVSelectSetElemFromMeshSpans {
+  Span<BMVert *> verts;
+  Span<BMEdge *> edges;
+  Span<BMFace *> faces;
+
+  Span<BMVert *> verts_mirrored;
+  Span<BMEdge *> edges_mirrored;
+  Span<BMFace *> faces_mirrored;
+};
+/** \copydoc #BMUVSelectSetElemFromMeshSpans. */
+struct BMUVSelectSetElemFromMeshLists {
+  const VectorList<BMVert *> &verts;
+  const VectorList<BMEdge *> &edges;
+  const VectorList<BMFace *> &faces;
+
+  const VectorList<BMVert *> &verts_mirrored;
+  const VectorList<BMEdge *> &edges_mirrored;
+  const VectorList<BMFace *> &faces_mirrored;
+};
 
 /**
  * Select/deselect elements in the viewport,
@@ -302,16 +332,12 @@ void BM_face_uvselect_set_pick(BMesh *bm,
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                          bool select,
                                          const BMUVSelectPickParams &params,
-                                         Span<BMVert *> verts,
-                                         Span<BMEdge *> edges,
-                                         Span<BMFace *> faces);
+                                         const BMUVSelectSetElemFromMeshSpans &elems);
 /** \copydoc #BM_mesh_uvselect_set_elem_from_mesh. */
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                          bool select,
                                          const BMUVSelectPickParams &params,
-                                         const VectorList<BMVert *> &verts,
-                                         const VectorList<BMEdge *> &edges,
-                                         const VectorList<BMFace *> &faces);
+                                         const BMUVSelectSetElemFromMeshLists &elems);
 
 /** \} */
 

@@ -36,14 +36,16 @@ void mesh_render_data_face_flag(const MeshRenderData &mr,
   if (BM_elem_flag_test(efa, BM_ELEM_MIRRORED_SELECT)) {
     eattr.v_flag |= VFLAG_FACE_MIRRORED_SELECT;
   }
-
   if (efa == mr.efa_act_uv) {
     eattr.v_flag |= VFLAG_FACE_UV_ACTIVE;
   }
-  if ((offsets.uv != -1) && (!BM_elem_flag_test(efa, BM_ELEM_HIDDEN)) &&
-      uvedit_face_select_test_ex(mr.toolsettings, mr.bm, efa))
-  {
-    eattr.v_flag |= VFLAG_FACE_UV_SELECT;
+  if ((offsets.uv != -1) && (!BM_elem_flag_test(efa, BM_ELEM_HIDDEN))) {
+    if (uvedit_face_select_test_ex(mr.toolsettings, mr.bm, efa)) {
+      eattr.v_flag |= VFLAG_FACE_UV_SELECT;
+    }
+    if (uvedit_face_mirrored_select_test_ex(mr.toolsettings, mr.bm, efa)) {
+      eattr.v_flag |= VFLAG_FACE_MIRRORED_UV_SELECT;
+    }
   }
 
 #ifdef WITH_FREESTYLE
@@ -66,11 +68,11 @@ void mesh_render_data_loop_flag(const MeshRenderData &mr,
   if (BM_ELEM_CD_GET_BOOL(l, offsets.pin)) {
     eattr.v_flag |= VFLAG_VERT_UV_PINNED;
   }
-  if (uvedit_uv_select_test_ex(mr.toolsettings, mr.bm, l, offsets)) {
+  if (uvedit_uv_select_test_ex(mr.toolsettings, mr.bm, l, offsets, BM_ELEM_SELECT)) {
     eattr.v_flag |= VFLAG_VERT_UV_SELECT;
   }
-  if (uvedit_uv_mirrored_select_test_ex(mr.toolsettings, mr.bm, l, offsets)) {
-    eattr.e_flag |= VFLAG_VERT_UV_MIRRORED_SELECT;
+  if (uvedit_uv_select_test_ex(mr.toolsettings, mr.bm, l, offsets, BM_ELEM_MIRRORED_SELECT)) {
+    eattr.v_flag |= VFLAG_VERT_MIRRORED_UV_SELECT;
   }
 }
 
@@ -87,7 +89,8 @@ void mesh_render_data_loop_edge_flag(const MeshRenderData &mr,
     eattr.v_flag |= VFLAG_VERT_UV_SELECT;
   }
   if (uvedit_edge_mirrored_select_test_ex(mr.toolsettings, mr.bm, l, offsets)) {
-    eattr.v_flag |= VFLAG_EDGE_MIRRORED_SELECT;
+    eattr.v_flag |= VFLAG_EDGE_MIRRORED_UV_SELECT;
+    eattr.v_flag |= VFLAG_VERT_MIRRORED_UV_SELECT;
   }
 }
 

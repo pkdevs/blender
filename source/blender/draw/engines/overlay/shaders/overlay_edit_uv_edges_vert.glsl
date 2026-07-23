@@ -56,12 +56,11 @@ VertOut vertex_main(VertIn v_in)
   const uint selection_flag = use_edge_select ? uint(EDGE_UV_SELECT) : uint(VERT_UV_SELECT);
   vert_out.selected = flag_test(v_in.flag.x, selection_flag);
 
-  const uint mirrored_flag = use_edge_select ? uint(EDGE_MIRRORED_SELECT) :
-                                               uint(VERT_UV_MIRRORED_SELECT);
-  vert_out.mirrored = use_edge_select ? flag_test(v_in.flag.x, mirrored_flag) :
-                                        flag_test(v_in.flag.y, mirrored_flag);
+  const uint mirrored_flag = use_edge_select ? uint(EDGE_MIRRORED_UV_SELECT) :
+                                               uint(VERT_MIRRORED_UV_SELECT);
+  vert_out.mirrored = flag_test(v_in.flag.x, mirrored_flag);
 
-  /* Move selected edges to the top so that they occlude unselected edges.
+  /* Move selected or mirrored edges to the top so that they occlude unselected edges.
    * - Vertices are between 0.0 and 0.2 depth.
    * - Edges between 0.2 and 0.4 depth.
    * - Image pixels are at 0.75 depth.
@@ -86,6 +85,7 @@ struct GeomOut {
 
 void export_vertex(GeomOut geom_out)
 {
+  /* 1.0f = Selected (Orange/White), 2.0f = Mirrored (Yellow), 0.0f = Unselected */
   selection_fac = geom_out.selected ? 1.0f : (geom_out.mirrored ? 2.0f : 0.0f);
   stipple_start = geom_out.stipple_start;
   stipple_pos = geom_out.stipple_pos;

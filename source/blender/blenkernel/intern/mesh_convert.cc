@@ -559,17 +559,12 @@ void BKE_mesh_to_pointcloud(Main *bmain, Depsgraph *depsgraph, Scene * /*scene*/
   copy_attributes(src_attributes,
                   AttrDomain::Point,
                   AttrDomain::Point,
-                  attribute_filter_from_skip_ref({
-                      ".select_vert",
-                      ".select_edge",
-                      ".select_poly",
-                      ".select_vert_mirrored",
-                      ".select_edge_mirrored",
-                      ".select_poly_mirrored",
-                      ".select_vert_mirror_disabled",
-                      ".select_edge_mirror_disabled",
-                      ".select_poly_mirror_disabled",
-                  }),
+                  attribute_filter_from_skip_ref({".select_vert",
+                                                  ".select_edge",
+                                                  ".select_poly",
+                                                  ".select_vert_mirrored",
+                                                  ".select_edge_mirrored",
+                                                  ".select_poly_mirrored"}),
                   dst_attributes);
 
   if (const GAttributeReader src = src_attributes.lookup(".select_vert")) {

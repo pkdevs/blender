@@ -17,7 +17,7 @@ void main()
   gl_Position = drw_point_world_to_homogenous(world_pos);
 
   bool is_selected = (flag & FACE_UV_SELECT) != 0u;
-  bool is_mirrored = (flag & FACE_MIRRORED_SELECT) != 0u;
+  bool is_mirrored = (flag & FACE_MIRRORED_UV_SELECT) != 0u;
   bool is_active = (flag & FACE_UV_ACTIVE) != 0u;
   eObjectInfoFlag ob_flag = drw_object_infos().flag;
   bool is_object_active = flag_test(ob_flag, OBJECT_ACTIVE_EDIT_MODE);

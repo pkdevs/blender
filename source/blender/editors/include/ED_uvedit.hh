@@ -38,6 +38,7 @@ struct bContext;
 struct bNode;
 struct bNodeTree;
 struct wmKeyConfig;
+struct EditMeshSymmetryHelper;
 struct wmTimer;
 
 /* `uvedit_ops.cc` */
@@ -118,6 +119,14 @@ class UVSyncSelectFromMesh : NonCopyable {
   VectorList<BMEdge *> bm_edges_deselect_;
   VectorList<BMFace *> bm_faces_deselect_;
 
+  VectorList<BMVert *> bm_verts_mirrored_select_;
+  VectorList<BMEdge *> bm_edges_mirrored_select_;
+  VectorList<BMFace *> bm_faces_mirrored_select_;
+
+  VectorList<BMVert *> bm_verts_mirrored_deselect_;
+  VectorList<BMEdge *> bm_edges_mirrored_deselect_;
+  VectorList<BMFace *> bm_faces_mirrored_deselect_;
+
  public:
   UVSyncSelectFromMesh(BMesh &bm, char uv_sticky) : uv_sticky_(uv_sticky), bm_(bm) {}
   UVSyncSelectFromMesh(const UVSyncSelectFromMesh &) = delete;
@@ -142,6 +151,10 @@ class UVSyncSelectFromMesh : NonCopyable {
   void vert_select_set(BMVert *v, bool value);
   void edge_select_set(BMEdge *f, bool value);
   void face_select_set(BMFace *f, bool value);
+
+  void vert_mirrored_select_set(BMVert *v, bool value);
+  void edge_mirrored_select_set(BMEdge *f, bool value);
+  void face_mirrored_select_set(BMFace *f, bool value);
 };
 
 }  // namespace ed::uv
@@ -154,6 +167,16 @@ void ED_uvedit_sync_uvselect_ensure_if_needed(const ToolSettings *ts, BMesh *bm)
 
 bool uvedit_face_visible_test_ex(const ToolSettings *ts, const BMFace *efa);
 bool uvedit_face_select_test_ex(const ToolSettings *ts, const BMesh *bm, const BMFace *efa);
+/**
+ * The UV cache's copy of the face's real #BM_ELEM_MIRRORED_SELECT, updated whenever the
+ * cache is valid (see `bm_mesh_uvselect_mode_flush_down_deselect_only` in `bmesh_uvselect.cc`).
+ * Falls back to the raw mesh flag directly when the cache isn't valid, matching
+ * #uvedit_face_select_test_ex's own fallback for #BM_ELEM_SELECT.
+ */
+bool uvedit_face_mirrored_select_test_ex(const ToolSettings *ts,
+                                         const BMesh *bm,
+                                         const BMFace *efa);
+bool uvedit_face_mirrored_select_test(const Scene *scene, const BMesh *bm, const BMFace *efa);
 
 bool uvedit_edge_select_test_ex(const ToolSettings *ts,
                                 const BMesh *bm,
@@ -166,11 +189,8 @@ bool uvedit_edge_mirrored_select_test_ex(const ToolSettings *ts,
 bool uvedit_uv_select_test_ex(const ToolSettings *ts,
                               const BMesh *bm,
                               const BMLoop *l,
-                              const BMUVOffsets &offsets);
-bool uvedit_uv_mirrored_select_test_ex(const ToolSettings *ts,
-                                       const BMesh *bm,
-                                       const BMLoop *l,
-                                       const BMUVOffsets &offsets);
+                              const BMUVOffsets &offsets,
+                              const int hflag);
 
 bool uvedit_face_visible_test(const Scene *scene, const BMFace *efa);
 bool uvedit_face_select_test(const Scene *scene, const BMesh *bm, const BMFace *efa);
@@ -211,47 +231,93 @@ void uvedit_loop_edge_select_set(const ToolSettings *ts,
  *
  * Changes selection state of a single UV Face.
  */
-void uvedit_face_select_set(const Scene *scene, BMesh *bm, BMFace *efa, bool select);
+void uvedit_face_select_set(const Scene *scene,
+                            BMesh *bm,
+                            BMFace *efa,
+                            bool select,
+                            const EditMeshSymmetryHelper *symmetry_helper);
 /**
  * \brief Select UV Edge
  *
  * Changes selection state of a single UV Edge.
  */
-void uvedit_edge_select_set(const Scene *scene, BMesh *bm, BMLoop *l, bool select);
+void uvedit_edge_select_set(const Scene *scene,
+                            BMesh *bm,
+                            BMLoop *l,
+                            bool select,
+                            const EditMeshSymmetryHelper *symmetry_helper);
 /**
  * \brief Select UV Vertex
  *
  * Changes selection state of a single UV vertex.
  */
-void uvedit_uv_select_set(const Scene *scene, BMesh *bm, BMLoop *l, bool select);
+void uvedit_uv_select_set(const Scene *scene,
+                          BMesh *bm,
+                          BMLoop *l,
+                          bool select,
+                          const EditMeshSymmetryHelper *symmetry_helper);
 
 /* Low level functions for (de)selecting individual UV elements. Ensure UV face visibility before
  * use. */
 
-void uvedit_face_select_enable(const Scene *scene, BMesh *bm, BMFace *efa);
-void uvedit_face_select_disable(const Scene *scene, BMesh *bm, BMFace *efa);
+void uvedit_face_select_enable(const Scene *scene,
+                               BMesh *bm,
+                               BMFace *efa,
+                               const EditMeshSymmetryHelper *symmetry_helper);
+void uvedit_face_select_disable(const Scene *scene,
+                                BMesh *bm,
+                                BMFace *efa,
+                                const EditMeshSymmetryHelper *symmetry_helper);
 
-void uvedit_edge_select_enable(const Scene *scene, BMesh *bm, BMLoop *l);
-void uvedit_edge_select_disable(const Scene *scene, BMesh *bm, BMLoop *l);
+void uvedit_edge_select_enable(const Scene *scene,
+                               BMesh *bm,
+                               BMLoop *l,
+                               const EditMeshSymmetryHelper *symmetry_helper);
+void uvedit_edge_select_disable(const Scene *scene,
+                                BMesh *bm,
+                                BMLoop *l,
+                                const EditMeshSymmetryHelper *symmetry_helper);
 
-void uvedit_uv_select_enable(const Scene *scene, BMesh *bm, BMLoop *l);
-void uvedit_uv_select_disable(const Scene *scene, BMesh *bm, BMLoop *l);
+void uvedit_uv_select_enable(const Scene *scene,
+                             BMesh *bm,
+                             BMLoop *l,
+                             const EditMeshSymmetryHelper *symmetry_helper);
+void uvedit_uv_select_disable(const Scene *scene,
+                              BMesh *bm,
+                              BMLoop *l,
+                              const EditMeshSymmetryHelper *symmetry_helper);
 
 /* Sticky mode UV element selection functions. */
 
-void uvedit_face_select_set_with_sticky(
-    const Scene *scene, BMesh *bm, BMFace *efa, bool select, const BMUVOffsets &offsets);
-void uvedit_edge_select_set_with_sticky(
-    const Scene *scene, BMesh *bm, BMLoop *l, bool select, const BMUVOffsets &offsets);
+void uvedit_face_select_set_with_sticky(const Scene *scene,
+                                        BMesh *bm,
+                                        BMFace *efa,
+                                        bool select,
+                                        const BMUVOffsets &offsets,
+                                        const EditMeshSymmetryHelper *symmetry_helper);
+void uvedit_edge_select_set_with_sticky(const Scene *scene,
+                                        BMesh *bm,
+                                        BMLoop *l,
+                                        bool select,
+                                        const BMUVOffsets &offsets,
+                                        const EditMeshSymmetryHelper *symmetry_helper);
 
-void uvedit_uv_select_set_with_sticky(
-    const Scene *scene, BMesh *bm, BMLoop *l, bool select, const BMUVOffsets &offsets);
+void uvedit_uv_select_set_with_sticky(const Scene *scene,
+                                      BMesh *bm,
+                                      BMLoop *l,
+                                      bool select,
+                                      const BMUVOffsets &offsets,
+                                      const EditMeshSymmetryHelper *symmetry_helper);
 
 /* Low level functions for sticky element selection (sticky mode independent). Type of sticky
  * selection is specified explicitly (using sticky_flag, except for face selection). */
 
-void uvedit_face_select_shared_vert(
-    const Scene *scene, BMesh *bm, BMFace *efa, const bool select, const BMUVOffsets &offsets);
+void uvedit_face_select_shared_vert(const Scene *scene,
+                                    BMesh *bm,
+                                    BMFace *efa,
+                                    const bool select,
+                                    const BMUVOffsets &offsets,
+                                    const EditMeshSymmetryHelper *symmetry_helper);
 /**
  * Selects UV edges and shared vertices according to sticky_flag.
  *
@@ -264,7 +330,8 @@ void uvedit_edge_select_shared_vert(const Scene *scene,
                                     BMLoop *l,
                                     const bool select,
                                     const int sticky_flag,
-                                    const BMUVOffsets &offsets);
+                                    const BMUVOffsets &offsets,
+                                    const EditMeshSymmetryHelper *symmetry_helper);
 /**
  * Selects shared UVs based on #sticky_flag.
  *
@@ -277,7 +344,8 @@ void uvedit_uv_select_shared_vert(const Scene *scene,
                                   BMLoop *l,
                                   const bool select,
                                   const int sticky_flag,
-                                  const BMUVOffsets &offsets);
+                                  const BMUVOffsets &offsets,
+                                  const EditMeshSymmetryHelper *symmetry_helper);
 
 /**
  * Sets required UV edge flags as specified by the `sticky_flag`.
@@ -287,7 +355,8 @@ void uvedit_edge_select_set_noflush(const Scene *scene,
                                     BMLoop *l,
                                     const bool select,
                                     const int sticky_flag,
-                                    const BMUVOffsets &offsets);
+                                    const BMUVOffsets &offsets,
+                                    const EditMeshSymmetryHelper *symmetry_helper);
 
 /**
  * \brief UV Select Mode set

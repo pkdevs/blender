@@ -61,12 +61,12 @@ void BM_face_hide_set(BMFace *f, bool hide);
 void BM_elem_select_set(BMesh *bm, BMElem *ele, bool select);
 
 void BM_mesh_elem_hflag_enable_test(
-    BMesh *bm, char htype, char hflag, bool respecthide, bool overwrite, char hflag_test);
+    BMesh *bm, char htype, short hflag, bool respecthide, bool overwrite, short hflag_test);
 void BM_mesh_elem_hflag_disable_test(
-    BMesh *bm, char htype, char hflag, bool respecthide, bool overwrite, char hflag_test);
+    BMesh *bm, char htype, short hflag, bool respecthide, bool overwrite, short hflag_test);
 
-void BM_mesh_elem_hflag_enable_all(BMesh *bm, char htype, char hflag, bool respecthide);
-void BM_mesh_elem_hflag_disable_all(BMesh *bm, char htype, char hflag, bool respecthide);
+void BM_mesh_elem_hflag_enable_all(BMesh *bm, char htype, short hflag, bool respecthide);
+void BM_mesh_elem_hflag_disable_all(BMesh *bm, char htype, short hflag, bool respecthide);
 
 /* Individual element select functions, #BM_elem_select_set is a shortcut for these
  * that automatically detects which one to use. */

@@ -135,12 +135,13 @@ bool BM_attribute_stored_in_bmesh_builtin(const StringRef name)
                 ".select_vert_mirrored",
                 ".select_edge_mirrored",
                 ".select_poly_mirrored",
-                ".select_vert_mirror_disabled",
-                ".select_edge_mirror_disabled",
-                ".select_poly_mirror_disabled",
                 ".uv_select_vert",
                 ".uv_select_edge",
-                ".uv_select_face");
+                ".uv_select_face") ||
+           ELEM(name,
+                ".uv_select_vert_mirrored",
+                ".uv_select_edge_mirrored",
+                ".uv_select_face_mirrored");
   }
   return ELEM(name, "position", "uv_seam", "material_index", "sharp_face", "sharp_edge");
 }
@@ -527,12 +528,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
                                                                    AttrDomain::Edge);
   const VArraySpan select_poly_mirrored = *attributes.lookup<bool>(".select_poly_mirrored",
                                                                    AttrDomain::Face);
-  const VArraySpan select_vert_mirror_disabled = *attributes.lookup<bool>(
-      ".select_vert_mirror_disabled", AttrDomain::Point);
-  const VArraySpan select_edge_mirror_disabled = *attributes.lookup<bool>(
-      ".select_edge_mirror_disabled", AttrDomain::Edge);
-  const VArraySpan select_poly_mirror_disabled = *attributes.lookup<bool>(
-      ".select_poly_mirror_disabled", AttrDomain::Face);
+
   const VArraySpan hide_vert = *attributes.lookup<bool>(".hide_vert", AttrDomain::Point);
   const VArraySpan hide_edge = *attributes.lookup<bool>(".hide_edge", AttrDomain::Edge);
   const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", AttrDomain::Face);
@@ -546,9 +542,18 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
   const VArraySpan uv_select_edge = *attributes.lookup<bool>(".uv_select_edge",
                                                              AttrDomain::Corner);
   const VArraySpan uv_select_face = *attributes.lookup<bool>(".uv_select_face", AttrDomain::Face);
+  const VArraySpan uv_select_vert_mirrored = *attributes.lookup<bool>(".uv_select_vert_mirrored",
+                                                                      AttrDomain::Corner);
+  const VArraySpan uv_select_edge_mirrored = *attributes.lookup<bool>(".uv_select_edge_mirrored",
+                                                                      AttrDomain::Corner);
+  const VArraySpan uv_select_face_mirrored = *attributes.lookup<bool>(".uv_select_face_mirrored",
+                                                                      AttrDomain::Face);
 
   const bool need_uv_select = is_new && (!uv_select_vert.is_empty() &&
                                          !uv_select_edge.is_empty() && !uv_select_face.is_empty());
+  const bool need_uv_select_mirrored = need_uv_select && !uv_select_vert_mirrored.is_empty() &&
+                                       !uv_select_edge_mirrored.is_empty() &&
+                                       !uv_select_face_mirrored.is_empty();
 
   const Span<float3> positions = mesh->vert_positions();
   Array<BMVert *> vtable(mesh->verts_num);
@@ -565,9 +570,6 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
     }
     if (!select_vert_mirrored.is_empty() && select_vert_mirrored[i]) {
       BM_elem_flag_enable(v, BM_ELEM_MIRRORED_SELECT);
-    }
-    if (!select_vert_mirror_disabled.is_empty() && select_vert_mirror_disabled[i]) {
-      BM_elem_flag_enable(v, BM_ELEM_MIRROR_DISABLED);
     }
 
     if (!vert_normals.is_empty()) {
@@ -613,9 +615,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
     if (!select_edge_mirrored.is_empty() && select_edge_mirrored[i]) {
       BM_elem_flag_enable(e, BM_ELEM_MIRRORED_SELECT);
     }
-    if (!select_edge_mirror_disabled.is_empty() && select_edge_mirror_disabled[i]) {
-      BM_elem_flag_enable(e, BM_ELEM_MIRROR_DISABLED);
-    }
+
     if (!(!sharp_edges.is_empty() && sharp_edges[i])) {
       BM_elem_flag_enable(e, BM_ELEM_SMOOTH);
     }
@@ -672,9 +672,6 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
     if (!select_poly_mirrored.is_empty() && select_poly_mirrored[i]) {
       BM_elem_flag_enable(f, BM_ELEM_MIRRORED_SELECT);
     }
-    if (!select_poly_mirror_disabled.is_empty() && select_poly_mirror_disabled[i]) {
-      BM_elem_flag_enable(f, BM_ELEM_MIRROR_DISABLED);
-    }
 
     f->mat_nr = material_indices.is_empty() ? 0 : material_indices[i];
     if (i == mesh->act_face) {
@@ -698,6 +695,14 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
           BM_elem_flag_enable(l_iter, BM_ELEM_SELECT_UV_EDGE);
         }
       }
+      if (need_uv_select_mirrored) {
+        if (uv_select_vert_mirrored[j]) {
+          BM_elem_flag_enable(l_iter, BM_ELEM_MIRRORED_SELECT_UV);
+        }
+        if (uv_select_edge_mirrored[j]) {
+          BM_elem_flag_enable(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
+        }
+      }
 
       j++;
     } while ((l_iter = l_iter->next) != l_first);
@@ -707,6 +712,11 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
     if (need_uv_select) {
       if (uv_select_face[i]) {
         BM_elem_flag_enable(f, BM_ELEM_SELECT_UV);
+      }
+    }
+    if (need_uv_select_mirrored) {
+      if (uv_select_face_mirrored[i]) {
+        BM_elem_flag_enable(f, BM_ELEM_MIRRORED_SELECT_UV);
       }
     }
 
@@ -1137,9 +1147,6 @@ static void assert_bmesh_has_no_mesh_only_attributes(const BMesh &bm)
   BLI_assert(!CustomData_has_layer_named(&bm.vdata, CD_PROP_BOOL, ".select_vert_mirrored"));
   BLI_assert(!CustomData_has_layer_named(&bm.edata, CD_PROP_BOOL, ".select_edge_mirrored"));
   BLI_assert(!CustomData_has_layer_named(&bm.pdata, CD_PROP_BOOL, ".select_poly_mirrored"));
-  BLI_assert(!CustomData_has_layer_named(&bm.vdata, CD_PROP_BOOL, ".select_vert_mirror_disabled"));
-  BLI_assert(!CustomData_has_layer_named(&bm.edata, CD_PROP_BOOL, ".select_edge_mirror_disabled"));
-  BLI_assert(!CustomData_has_layer_named(&bm.pdata, CD_PROP_BOOL, ".select_poly_mirror_disabled"));
 }
 
 static void bmesh_to_mesh_calc_object_remap(Main &bmain,
@@ -1287,8 +1294,7 @@ static void bm_vert_table_build(BMesh &bm,
                                 MutableSpan<const BMVert *> table,
                                 bool &need_select_vert,
                                 bool &need_hide_vert,
-                                bool &need_select_vert_mirrored,
-                                bool &need_select_vert_mirror_disabled)
+                                bool &need_select_vert_mirrored)
 {
   short hflag = 0;
   BMIter iter;
@@ -1302,7 +1308,6 @@ static void bm_vert_table_build(BMesh &bm,
   need_select_vert = (hflag & BM_ELEM_SELECT) != 0;
   need_hide_vert = (hflag & BM_ELEM_HIDDEN) != 0;
   need_select_vert_mirrored = (hflag & BM_ELEM_MIRRORED_SELECT) != 0;
-  need_select_vert_mirror_disabled = (hflag & BM_ELEM_MIRROR_DISABLED) != 0;
 }
 
 static void bm_edge_table_build(BMesh &bm,
@@ -1311,8 +1316,7 @@ static void bm_edge_table_build(BMesh &bm,
                                 bool &need_hide_edge,
                                 bool &need_sharp_edge,
                                 bool &need_uv_seams,
-                                bool &need_select_edge_mirrored,
-                                bool &need_select_edge_mirror_disabled)
+                                bool &need_select_edge_mirrored)
 {
   short hflag = 0;
   BMIter iter;
@@ -1328,7 +1332,6 @@ static void bm_edge_table_build(BMesh &bm,
   need_hide_edge = (hflag & BM_ELEM_HIDDEN) != 0;
   need_uv_seams = (hflag & BM_ELEM_SEAM) != 0;
   need_select_edge_mirrored = (hflag & BM_ELEM_MIRRORED_SELECT) != 0;
-  need_select_edge_mirror_disabled = (hflag & BM_ELEM_MIRROR_DISABLED) != 0;
 }
 
 /**
@@ -1345,8 +1348,7 @@ static void bm_face_loop_table_build(BMesh &bm,
                                      bool &need_sharp_face,
                                      bool &need_material_index,
                                      Vector<int> &loop_layers_not_to_copy,
-                                     bool &need_select_poly_mirrored,
-                                     bool &need_select_poly_mirror_disabled)
+                                     bool &need_select_poly_mirrored)
 {
   const CustomData &ldata = bm.ldata;
   Vector<int> pin_layers;
@@ -1395,7 +1397,6 @@ static void bm_face_loop_table_build(BMesh &bm,
   need_select_poly = (hflag & BM_ELEM_SELECT) != 0;
   need_hide_poly = (hflag & BM_ELEM_HIDDEN) != 0;
   need_select_poly_mirrored = (hflag & BM_ELEM_MIRRORED_SELECT) != 0;
-  need_select_poly_mirror_disabled = (hflag & BM_ELEM_MIRROR_DISABLED) != 0;
 
   for (const int i : pin_layers.index_range()) {
     if (!need_pin[i]) {
@@ -1487,8 +1488,7 @@ static void bm_to_mesh_verts(Mesh &mesh,
                              AttrSingleValueChecker &single_checker,
                              MutableSpan<bool> select_vert,
                              MutableSpan<bool> hide_vert,
-                             MutableSpan<bool> select_vert_mirrored,
-                             MutableSpan<bool> select_vert_mirror_disabled)
+                             MutableSpan<bool> select_vert_mirrored)
 {
   MutableSpan<float3> dst_vert_positions = mesh.vert_positions_for_write();
 
@@ -1520,12 +1520,6 @@ static void bm_to_mesh_verts(Mesh &mesh,
                                                          BM_ELEM_MIRRORED_SELECT);
       }
     }
-    if (!select_vert_mirror_disabled.is_empty()) {
-      for (const int vert_i : range) {
-        select_vert_mirror_disabled[vert_i] = BM_elem_flag_test(bm_verts[vert_i],
-                                                                BM_ELEM_MIRROR_DISABLED);
-      }
-    }
   };
 
   process_verts(bm_verts.index_range().take_front(1));
@@ -1548,8 +1542,7 @@ static void bm_to_mesh_edges(Mesh &mesh,
                              MutableSpan<bool> hide_edge,
                              MutableSpan<bool> sharp_edge,
                              MutableSpan<bool> uv_seams,
-                             MutableSpan<bool> select_edge_mirrored,
-                             MutableSpan<bool> select_edge_mirror_disabled)
+                             MutableSpan<bool> select_edge_mirrored)
 {
   MutableSpan<int2> dst_edges = mesh.edges_for_write();
 
@@ -1591,12 +1584,6 @@ static void bm_to_mesh_edges(Mesh &mesh,
                                                          BM_ELEM_MIRRORED_SELECT);
       }
     }
-    if (!select_edge_mirror_disabled.is_empty()) {
-      for (const int edge_i : range) {
-        select_edge_mirror_disabled[edge_i] = BM_elem_flag_test(bm_edges[edge_i],
-                                                                BM_ELEM_MIRROR_DISABLED);
-      }
-    }
   };
 
   process_edges(bm_edges.index_range().take_front(1));
@@ -1621,7 +1608,7 @@ static void bm_to_mesh_faces(Mesh &mesh,
                              MutableSpan<bool> uv_select_face,
                              MutableSpan<int> material_indices,
                              MutableSpan<bool> select_poly_mirrored,
-                             MutableSpan<bool> select_poly_mirror_disabled)
+                             MutableSpan<bool> uv_select_face_mirrored)
 {
   BKE_mesh_face_offsets_ensure_alloc(&mesh);
 
@@ -1664,10 +1651,10 @@ static void bm_to_mesh_faces(Mesh &mesh,
                                                          BM_ELEM_MIRRORED_SELECT);
       }
     }
-    if (!select_poly_mirror_disabled.is_empty()) {
+    if (!uv_select_face_mirrored.is_empty()) {
       for (const int face_i : range) {
-        select_poly_mirror_disabled[face_i] = BM_elem_flag_test(bm_faces[face_i],
-                                                                BM_ELEM_MIRROR_DISABLED);
+        uv_select_face_mirrored[face_i] = BM_elem_flag_test(bm_faces[face_i],
+                                                            BM_ELEM_MIRRORED_SELECT_UV);
       }
     }
   };
@@ -1712,11 +1699,15 @@ static void bm_to_mesh_loops(Mesh &mesh,
                              const Span<BMeshToMeshLayerInfo> copy_info,
                              AttrSingleValueChecker &single_checker,
                              MutableSpan<bool> uv_select_vert,
-                             MutableSpan<bool> uv_select_edge)
+                             MutableSpan<bool> uv_select_edge,
+                             MutableSpan<bool> uv_select_vert_mirrored,
+                             MutableSpan<bool> uv_select_edge_mirrored)
 {
   MutableSpan<int> dst_corner_verts = mesh.corner_verts_for_write();
   MutableSpan<int> dst_corner_edges = mesh.corner_edges_for_write();
   const bool need_uv_select = !uv_select_vert.is_empty() && !uv_select_edge.is_empty();
+  const bool need_uv_select_mirrored = !uv_select_vert_mirrored.is_empty() &&
+                                       !uv_select_edge_mirrored.is_empty();
 
   const auto process_corners = [&](const IndexRange range) {
     for (const int loop_i : range) {
@@ -1731,6 +1722,14 @@ static void bm_to_mesh_loops(Mesh &mesh,
         const BMLoop &src_loop = *bm_loops[loop_i];
         uv_select_vert[loop_i] = BM_elem_flag_test(&src_loop, BM_ELEM_SELECT_UV);
         uv_select_edge[loop_i] = BM_elem_flag_test(&src_loop, BM_ELEM_SELECT_UV_EDGE);
+      }
+    }
+    if (need_uv_select_mirrored) {
+      for (const int loop_i : range) {
+        const BMLoop &src_loop = *bm_loops[loop_i];
+        uv_select_vert_mirrored[loop_i] = BM_elem_flag_test(&src_loop, BM_ELEM_MIRRORED_SELECT_UV);
+        uv_select_edge_mirrored[loop_i] = BM_elem_flag_test(&src_loop,
+                                                            BM_ELEM_MIRRORED_SELECT_UV_EDGE);
       }
     }
   };
@@ -1778,9 +1777,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
   bool need_select_vert_mirrored = false;
   bool need_select_edge_mirrored = false;
   bool need_select_poly_mirrored = false;
-  bool need_select_vert_mirror_disabled = false;
-  bool need_select_edge_mirror_disabled = false;
-  bool need_select_poly_mirror_disabled = false;
+
   bool need_hide_vert = false;
   bool need_hide_edge = false;
   bool need_hide_poly = false;
@@ -1793,44 +1790,39 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
   Array<const BMFace *> face_table;
   Array<const BMLoop *> loop_table;
   Vector<int> loop_layers_not_to_copy;
-  threading::parallel_invoke((mesh->faces_num + mesh->edges_num) > 1024,
-                             [&]() {
-                               vert_table.reinitialize(bm->totvert);
-                               bm_vert_table_build(*bm,
-                                                   vert_table,
-                                                   need_select_vert,
-                                                   need_hide_vert,
-                                                   need_select_vert_mirrored,
-                                                   need_select_vert_mirror_disabled);
-                             },
-                             [&]() {
-                               edge_table.reinitialize(bm->totedge);
-                               bm_edge_table_build(*bm,
-                                                   edge_table,
-                                                   need_select_edge,
-                                                   need_hide_edge,
-                                                   need_sharp_edge,
-                                                   need_uv_seams,
-                                                   need_select_edge_mirrored,
-                                                   need_select_edge_mirror_disabled);
-                             },
-                             [&]() {
-                               face_table.reinitialize(bm->totface);
-                               loop_table.reinitialize(bm->totloop);
-                               bm_face_loop_table_build(*bm,
-                                                        face_table,
-                                                        loop_table,
-                                                        need_select_poly,
-                                                        need_hide_poly,
-                                                        need_sharp_face,
-                                                        need_material_index,
-                                                        loop_layers_not_to_copy,
-                                                        need_select_poly_mirrored,
-                                                        need_select_poly_mirror_disabled);
-                               for (const int i : loop_layers_not_to_copy) {
-                                 bm->ldata.layers[i].flag |= CD_FLAG_NOCOPY;
-                               }
-                             });
+  threading::parallel_invoke(
+      (mesh->faces_num + mesh->edges_num) > 1024,
+      [&]() {
+        vert_table.reinitialize(bm->totvert);
+        bm_vert_table_build(
+            *bm, vert_table, need_select_vert, need_hide_vert, need_select_vert_mirrored);
+      },
+      [&]() {
+        edge_table.reinitialize(bm->totedge);
+        bm_edge_table_build(*bm,
+                            edge_table,
+                            need_select_edge,
+                            need_hide_edge,
+                            need_sharp_edge,
+                            need_uv_seams,
+                            need_select_edge_mirrored);
+      },
+      [&]() {
+        face_table.reinitialize(bm->totface);
+        loop_table.reinitialize(bm->totloop);
+        bm_face_loop_table_build(*bm,
+                                 face_table,
+                                 loop_table,
+                                 need_select_poly,
+                                 need_hide_poly,
+                                 need_sharp_face,
+                                 need_material_index,
+                                 loop_layers_not_to_copy,
+                                 need_select_poly_mirrored);
+        for (const int i : loop_layers_not_to_copy) {
+          bm->ldata.layers[i].flag |= CD_FLAG_NOCOPY;
+        }
+      });
   bm->elem_index_dirty &= ~(BM_VERT | BM_EDGE | BM_FACE | BM_LOOP);
 
   {
@@ -1866,13 +1858,14 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
   bke::SpanAttributeWriter<bool> uv_select_vert;
   bke::SpanAttributeWriter<bool> uv_select_edge;
   bke::SpanAttributeWriter<bool> uv_select_face;
+  bke::SpanAttributeWriter<bool> uv_select_vert_mirrored;
+  bke::SpanAttributeWriter<bool> uv_select_edge_mirrored;
+  bke::SpanAttributeWriter<bool> uv_select_face_mirrored;
   bke::SpanAttributeWriter<int> material_index;
   bke::SpanAttributeWriter<bool> select_vert_mirrored;
   bke::SpanAttributeWriter<bool> select_edge_mirrored;
   bke::SpanAttributeWriter<bool> select_poly_mirrored;
-  bke::SpanAttributeWriter<bool> select_vert_mirror_disabled;
-  bke::SpanAttributeWriter<bool> select_edge_mirror_disabled;
-  bke::SpanAttributeWriter<bool> select_poly_mirror_disabled;
+
   if (need_select_vert) {
     select_vert = attrs.lookup_or_add_for_write_only_span<bool>(".select_vert", AttrDomain::Point);
   }
@@ -1880,10 +1873,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
     select_vert_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(".select_vert_mirrored",
                                                                          AttrDomain::Point);
   }
-  if (need_select_vert_mirror_disabled) {
-    select_vert_mirror_disabled = attrs.lookup_or_add_for_write_only_span<bool>(
-        ".select_vert_mirror_disabled", AttrDomain::Point);
-  }
+
   if (need_hide_vert) {
     hide_vert = attrs.lookup_or_add_for_write_only_span<bool>(".hide_vert", AttrDomain::Point);
   }
@@ -1894,10 +1884,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
     select_edge_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(".select_edge_mirrored",
                                                                          AttrDomain::Edge);
   }
-  if (need_select_edge_mirror_disabled) {
-    select_edge_mirror_disabled = attrs.lookup_or_add_for_write_only_span<bool>(
-        ".select_edge_mirror_disabled", AttrDomain::Edge);
-  }
+
   if (need_sharp_edge) {
     sharp_edge = attrs.lookup_or_add_for_write_only_span<bool>("sharp_edge", AttrDomain::Edge);
   }
@@ -1914,10 +1901,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
     select_poly_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(".select_poly_mirrored",
                                                                          AttrDomain::Face);
   }
-  if (need_select_poly_mirror_disabled) {
-    select_poly_mirror_disabled = attrs.lookup_or_add_for_write_only_span<bool>(
-        ".select_poly_mirror_disabled", AttrDomain::Face);
-  }
+
   if (need_hide_poly) {
     hide_poly = attrs.lookup_or_add_for_write_only_span<bool>(".hide_poly", AttrDomain::Face);
   }
@@ -1931,6 +1915,12 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
                                                                    AttrDomain::Corner);
     uv_select_face = attrs.lookup_or_add_for_write_only_span<bool>(".uv_select_face",
                                                                    AttrDomain::Face);
+    uv_select_vert_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(
+        ".uv_select_vert_mirrored", AttrDomain::Corner);
+    uv_select_edge_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(
+        ".uv_select_edge_mirrored", AttrDomain::Corner);
+    uv_select_face_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(
+        ".uv_select_face_mirrored", AttrDomain::Face);
   }
   if (need_material_index) {
     material_index = attrs.lookup_or_add_for_write_only_span<int>("material_index",
@@ -1969,8 +1959,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
                          vert_single_checker,
                          select_vert.span,
                          hide_vert.span,
-                         select_vert_mirrored.span,
-                         select_vert_mirror_disabled.span);
+                         select_vert_mirrored.span);
         if (mesh->key) {
           bm_to_mesh_shape(
               bm, mesh->key, mesh->vert_positions_for_write(), params->active_shapekey_to_mvert);
@@ -1985,8 +1974,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
                          hide_edge.span,
                          sharp_edge.span,
                          uv_seams.span,
-                         select_edge_mirrored.span,
-                         select_edge_mirror_disabled.span);
+                         select_edge_mirrored.span);
       },
       [&]() {
         bm_to_mesh_faces(*mesh,
@@ -1999,7 +1987,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
                          uv_select_face.span,
                          material_index.span,
                          select_poly_mirrored.span,
-                         select_poly_mirror_disabled.span);
+                         uv_select_face_mirrored.span);
         if (bm->act_face) {
           mesh->act_face = BM_elem_index_get(bm->act_face);
         }
@@ -2010,7 +1998,9 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
                          corner_copy_info,
                          corner_single_checker,
                          uv_select_vert.span,
-                         uv_select_edge.span);
+                         uv_select_edge.span,
+                         uv_select_vert_mirrored.span,
+                         uv_select_edge_mirrored.span);
         /* Topology could be changed, ensure #CD_MDISPS are ok. */
         multires_topology_changed(mesh);
         for (const int i : loop_layers_not_to_copy) {
@@ -2067,22 +2057,22 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
 
   select_vert.finish();
   select_vert_mirrored.finish();
-  select_vert_mirror_disabled.finish();
   hide_vert.finish();
   select_edge.finish();
   select_edge_mirrored.finish();
-  select_edge_mirror_disabled.finish();
   hide_edge.finish();
   sharp_edge.finish();
   uv_seams.finish();
   select_poly.finish();
   select_poly_mirrored.finish();
-  select_poly_mirror_disabled.finish();
   hide_poly.finish();
   sharp_face.finish();
   uv_select_vert.finish();
   uv_select_edge.finish();
   uv_select_face.finish();
+  uv_select_vert_mirrored.finish();
+  uv_select_edge_mirrored.finish();
+  uv_select_face_mirrored.finish();
   material_index.finish();
 
   vert_single_checker.optimize_storage();
@@ -2152,9 +2142,6 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
   bool need_select_vert_mirrored = false;
   bool need_select_edge_mirrored = false;
   bool need_select_poly_mirrored = false;
-  bool need_select_vert_mirror_disabled = false;
-  bool need_select_edge_mirror_disabled = false;
-  bool need_select_poly_mirror_disabled = false;
   bool need_hide_vert = false;
   bool need_hide_edge = false;
   bool need_hide_poly = false;
@@ -2172,12 +2159,8 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
       use_threading,
       [&]() {
         vert_table.reinitialize(bm.totvert);
-        bm_vert_table_build(bm,
-                            vert_table,
-                            need_select_vert,
-                            need_hide_vert,
-                            need_select_vert_mirrored,
-                            need_select_vert_mirror_disabled);
+        bm_vert_table_build(
+            bm, vert_table, need_select_vert, need_hide_vert, need_select_vert_mirrored);
       },
       [&]() {
         edge_table.reinitialize(bm.totedge);
@@ -2187,8 +2170,7 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
                             need_hide_edge,
                             need_sharp_edge,
                             need_uv_seams,
-                            need_select_edge_mirrored,
-                            need_select_edge_mirror_disabled);
+                            need_select_edge_mirrored);
       },
       [&]() {
         face_table.reinitialize(bm.totface);
@@ -2201,8 +2183,7 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
                                  need_sharp_face,
                                  need_material_index,
                                  loop_layers_not_to_copy,
-                                 need_select_poly_mirrored,
-                                 need_select_poly_mirror_disabled);
+                                 need_select_poly_mirrored);
         for (const int i : loop_layers_not_to_copy) {
           bm.ldata.layers[i].flag |= CD_FLAG_NOCOPY;
         }
@@ -2241,13 +2222,13 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
   bke::SpanAttributeWriter<bool> uv_select_vert;
   bke::SpanAttributeWriter<bool> uv_select_edge;
   bke::SpanAttributeWriter<bool> uv_select_face;
+  bke::SpanAttributeWriter<bool> uv_select_vert_mirrored;
+  bke::SpanAttributeWriter<bool> uv_select_edge_mirrored;
+  bke::SpanAttributeWriter<bool> uv_select_face_mirrored;
   bke::SpanAttributeWriter<int> material_index;
   bke::SpanAttributeWriter<bool> select_vert_mirrored;
   bke::SpanAttributeWriter<bool> select_edge_mirrored;
   bke::SpanAttributeWriter<bool> select_poly_mirrored;
-  bke::SpanAttributeWriter<bool> select_vert_mirror_disabled;
-  bke::SpanAttributeWriter<bool> select_edge_mirror_disabled;
-  bke::SpanAttributeWriter<bool> select_poly_mirror_disabled;
 
   bke::MutableAttributeAccessor attrs = mesh.attributes_for_write();
   if (add_mesh_attributes) {
@@ -2259,10 +2240,6 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
       select_vert_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(".select_vert_mirrored",
                                                                            AttrDomain::Point);
     }
-    if (need_select_vert_mirror_disabled) {
-      select_vert_mirror_disabled = attrs.lookup_or_add_for_write_only_span<bool>(
-          ".select_vert_mirror_disabled", AttrDomain::Point);
-    }
     if (need_hide_vert) {
       hide_vert = attrs.lookup_or_add_for_write_only_span<bool>(".hide_vert", AttrDomain::Point);
     }
@@ -2273,10 +2250,6 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
     if (need_select_edge_mirrored) {
       select_edge_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(".select_edge_mirrored",
                                                                            AttrDomain::Edge);
-    }
-    if (need_select_edge_mirror_disabled) {
-      select_edge_mirror_disabled = attrs.lookup_or_add_for_write_only_span<bool>(
-          ".select_edge_mirror_disabled", AttrDomain::Edge);
     }
     if (need_sharp_edge) {
       sharp_edge = attrs.lookup_or_add_for_write_only_span<bool>("sharp_edge", AttrDomain::Edge);
@@ -2295,10 +2268,6 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
       select_poly_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(".select_poly_mirrored",
                                                                            AttrDomain::Face);
     }
-    if (need_select_poly_mirror_disabled) {
-      select_poly_mirror_disabled = attrs.lookup_or_add_for_write_only_span<bool>(
-          ".select_poly_mirror_disabled", AttrDomain::Face);
-    }
     if (need_hide_poly) {
       hide_poly = attrs.lookup_or_add_for_write_only_span<bool>(".hide_poly", AttrDomain::Face);
     }
@@ -2312,6 +2281,12 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
                                                                      AttrDomain::Corner);
       uv_select_face = attrs.lookup_or_add_for_write_only_span<bool>(".uv_select_face",
                                                                      AttrDomain::Face);
+      uv_select_vert_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(
+          ".uv_select_vert_mirrored", AttrDomain::Corner);
+      uv_select_edge_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(
+          ".uv_select_edge_mirrored", AttrDomain::Corner);
+      uv_select_face_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(
+          ".uv_select_face_mirrored", AttrDomain::Face);
     }
     if (need_material_index) {
       material_index = attrs.lookup_or_add_for_write_only_span<int>("material_index",
@@ -2351,8 +2326,7 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
                          vert_single_checker,
                          select_vert.span,
                          hide_vert.span,
-                         select_vert_mirrored.span,
-                         select_vert_mirror_disabled.span);
+                         select_vert_mirrored.span);
       },
       [&]() {
         bm_to_mesh_edges(mesh,
@@ -2363,8 +2337,7 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
                          hide_edge.span,
                          sharp_edge.span,
                          uv_seams.span,
-                         select_edge_mirrored.span,
-                         select_edge_mirror_disabled.span);
+                         select_edge_mirrored.span);
       },
       [&]() {
         bm_to_mesh_faces(mesh,
@@ -2377,7 +2350,7 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
                          uv_select_face.span,
                          material_index.span,
                          select_poly_mirrored.span,
-                         select_poly_mirror_disabled.span);
+                         uv_select_face_mirrored.span);
         if (bm.act_face) {
           mesh.act_face = BM_elem_index_get(bm.act_face);
         }
@@ -2388,7 +2361,9 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
                          corner_copy_info,
                          corner_single_checker,
                          uv_select_vert.span,
-                         uv_select_edge.span);
+                         uv_select_edge.span,
+                         uv_select_vert_mirrored.span,
+                         uv_select_edge_mirrored.span);
         for (const int i : loop_layers_not_to_copy) {
           bm.ldata.layers[i].flag &= ~CD_FLAG_NOCOPY;
         }
@@ -2397,22 +2372,22 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
   if (add_mesh_attributes) {
     select_vert.finish();
     select_vert_mirrored.finish();
-    select_vert_mirror_disabled.finish();
     hide_vert.finish();
     select_edge.finish();
     select_edge_mirrored.finish();
-    select_edge_mirror_disabled.finish();
     hide_edge.finish();
     sharp_edge.finish();
     uv_seams.finish();
     select_poly.finish();
     select_poly_mirrored.finish();
-    select_poly_mirror_disabled.finish();
     hide_poly.finish();
     sharp_face.finish();
     uv_select_vert.finish();
     uv_select_edge.finish();
     uv_select_face.finish();
+    uv_select_vert_mirrored.finish();
+    uv_select_edge_mirrored.finish();
+    uv_select_face_mirrored.finish();
     material_index.finish();
 
     vert_single_checker.optimize_storage();

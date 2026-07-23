@@ -64,9 +64,6 @@ struct BMEditMesh {
    * Set #Main.is_memfile_undo_flush_needed when enabling.
    */
   char needs_flush_to_id;
-
-  /** Last symmetry flags seen when updating selection. */
-  int last_symmetry = 0;
 };
 
 /* editmesh.cc */

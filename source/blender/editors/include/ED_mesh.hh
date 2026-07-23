@@ -53,7 +53,11 @@ struct UvElementMap;
 /* `editmesh_utils.cc` */
 class EditMeshSymmetryHelper {
  public:
-  static std::optional<EditMeshSymmetryHelper> create_if_needed(Object *ob, uchar htype);
+  static std::optional<EditMeshSymmetryHelper> create_if_needed(Object *ob,
+                                                                uchar htype,
+                                                                bool use_self = true,
+                                                                bool use_select = false,
+                                                                bool respecthide = true);
 
   bool any_mirror_vert_selected(BMVert *v, short hflag) const;
   bool any_mirror_edge_selected(BMEdge *e, short hflag) const;
@@ -68,7 +72,8 @@ class EditMeshSymmetryHelper {
   void apply_on_mirror_faces(BMFace *f, FunctionRef<void(BMFace *)> op) const;
 
  private:
-  EditMeshSymmetryHelper(Object *ob, uchar htype);
+  EditMeshSymmetryHelper(
+      Object *ob, uchar htype, bool use_self, bool use_select, bool respecthide);
 
   BMEditMesh *em_;
   Mesh *mesh_;
@@ -136,12 +141,6 @@ void EDBM_mesh_load(Main *bmain, Object *ob);
 void EDBM_select_more(BMEditMesh *em, bool use_face_step);
 void EDBM_select_less(BMEditMesh *em, bool use_face_step);
 
-void EDBM_selectmode_flush_mirrored_ex(Main *bmain,
-                                       BMEditMesh *em,
-                                       short selectmode,
-                                       bool keep_current = false);
-void EDBM_selectmode_flush_mirrored(Main *bmain, BMEditMesh *em);
-void EDBM_selectmode_flush_mirrored_keep_current(Main *bmain, BMEditMesh *em);
 void EDBM_selectmode_flush_ex(BMEditMesh *em, short selectmode);
 void EDBM_selectmode_flush(BMEditMesh *em);
 
@@ -218,8 +217,8 @@ UvMapVert *BM_uv_vert_map_at_index(UvVertMap *vmap, unsigned int v);
  */
 UvVertMap *BM_uv_vert_map_create(BMesh *bm, bool use_select, bool respect_hide);
 
-void EDBM_flag_enable_all(BMEditMesh *em, char hflag);
-void EDBM_flag_disable_all(BMEditMesh *em, char hflag);
+void EDBM_flag_enable_all(BMEditMesh *em, short hflag);
+void EDBM_flag_disable_all(BMEditMesh *em, short hflag);
 
 /** \copydoc #BM_uvselect_clear */
 bool EDBM_uvselect_clear(BMEditMesh *em);

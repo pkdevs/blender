@@ -18,15 +18,6 @@
 
 namespace blender {
 
-template<typename T> static bool bm_elem_select_test(const T *ele, const short hflag)
-{
-  if (hflag == BM_ELEM_SELECT) {
-    return BM_elem_flag_test(ele, BM_ELEM_SELECT) ||
-           BM_elem_flag_test(ele, BM_ELEM_MIRRORED_SELECT);
-  }
-  return BM_elem_flag_test(ele, hflag);
-}
-
 /* -------------------------------------------------------------------- */
 /** \name Internal Utilities
  * \{ */
@@ -41,7 +32,9 @@ static void bm_mesh_uvselect_disable_all(BMesh *bm)
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      BM_elem_flag_disable(l_iter, BM_ELEM_SELECT_UV | BM_ELEM_SELECT_UV_EDGE);
+      BM_elem_flag_disable(l_iter,
+                           BM_ELEM_SELECT_UV | BM_ELEM_SELECT_UV_EDGE |
+                               BM_ELEM_MIRRORED_SELECT_UV | BM_ELEM_MIRRORED_SELECT_UV_EDGE);
     } while ((l_iter = l_iter->next) != l_first);
     BM_elem_flag_disable(f, BM_ELEM_SELECT_UV);
   }
@@ -75,7 +68,7 @@ bool BM_face_uvselect_test(const BMFace *f)
  * \{ */
 
 bool BM_loop_vert_uvselect_check_other_loop_vert(BMLoop *l,
-                                                 const char hflag,
+                                                 const int hflag,
                                                  const int cd_loop_uv_offset)
 {
   BLI_assert(ELEM(hflag, BM_ELEM_SELECT_UV, BM_ELEM_TAG));
@@ -109,10 +102,10 @@ bool BM_loop_vert_uvselect_check_other_loop_vert(BMLoop *l,
 }
 
 bool BM_loop_vert_uvselect_check_other_loop_edge(BMLoop *l,
-                                                 const char hflag,
+                                                 const int hflag,
                                                  const int cd_loop_uv_offset)
 {
-  BLI_assert(ELEM(hflag, BM_ELEM_SELECT_UV_EDGE, BM_ELEM_TAG));
+  BLI_assert(ELEM(hflag, BM_ELEM_SELECT_UV_EDGE, BM_ELEM_MIRRORED_SELECT_UV_EDGE, BM_ELEM_TAG));
   BMVert *v = l->v;
   BLI_assert(v->e);
   const BMEdge *e_iter, *e_first;
@@ -144,10 +137,10 @@ bool BM_loop_vert_uvselect_check_other_loop_edge(BMLoop *l,
 }
 
 bool BM_loop_vert_uvselect_check_other_edge(BMLoop *l,
-                                            const char hflag,
+                                            const int hflag,
                                             const int cd_loop_uv_offset)
 {
-  BLI_assert(ELEM(hflag, BM_ELEM_SELECT, BM_ELEM_TAG));
+  BLI_assert(ELEM(hflag, BM_ELEM_SELECT, BM_ELEM_MIRRORED_SELECT, BM_ELEM_TAG));
   BMVert *v = l->v;
   BLI_assert(v->e);
   const BMEdge *e_iter, *e_first;
@@ -168,9 +161,9 @@ bool BM_loop_vert_uvselect_check_other_edge(BMLoop *l,
       /* Connected to a selected edge. */
       if (l_iter != l) {
         if (((!BM_elem_flag_test(l_iter->e, BM_ELEM_HIDDEN)) &&
-             bm_elem_select_test(l_iter->e, hflag)) ||
+             BM_elem_flag_test(l_iter->e, hflag)) ||
             ((!BM_elem_flag_test(l_iter->prev->e, BM_ELEM_HIDDEN)) &&
-             bm_elem_select_test(l_iter->prev->e, hflag)))
+             BM_elem_flag_test(l_iter->prev->e, hflag)))
         {
           if (BM_loop_uv_share_vert_check(l, l_iter, cd_loop_uv_offset)) {
             return true;
@@ -183,10 +176,15 @@ bool BM_loop_vert_uvselect_check_other_edge(BMLoop *l,
 }
 
 bool BM_loop_vert_uvselect_check_other_face(BMLoop *l,
-                                            const char hflag,
+                                            const int hflag,
                                             const int cd_loop_uv_offset)
 {
-  BLI_assert(ELEM(hflag, BM_ELEM_SELECT, BM_ELEM_SELECT_UV, BM_ELEM_TAG));
+  BLI_assert(ELEM(hflag,
+                  BM_ELEM_SELECT,
+                  BM_ELEM_SELECT_UV,
+                  BM_ELEM_MIRRORED_SELECT,
+                  BM_ELEM_MIRRORED_SELECT_UV,
+                  BM_ELEM_TAG));
   BMVert *v = l->v;
   BLI_assert(v->e);
   const BMEdge *e_iter, *e_first;
@@ -205,7 +203,7 @@ bool BM_loop_vert_uvselect_check_other_face(BMLoop *l,
         continue;
       }
       if (l_iter != l) {
-        if (bm_elem_select_test(l_iter->f, hflag)) {
+        if (BM_elem_flag_test(l_iter->f, hflag)) {
           if (BM_loop_uv_share_vert_check(l, l_iter, cd_loop_uv_offset)) {
             return true;
           }
@@ -217,7 +215,7 @@ bool BM_loop_vert_uvselect_check_other_face(BMLoop *l,
 }
 
 bool BM_loop_edge_uvselect_check_other_loop_edge(BMLoop *l,
-                                                 const char hflag,
+                                                 const int hflag,
                                                  const int cd_loop_uv_offset)
 {
   BLI_assert(ELEM(hflag, BM_ELEM_SELECT, BM_ELEM_SELECT_UV_EDGE, BM_ELEM_TAG));
@@ -238,17 +236,21 @@ bool BM_loop_edge_uvselect_check_other_loop_edge(BMLoop *l,
 }
 
 bool BM_loop_edge_uvselect_check_other_face(BMLoop *l,
-                                            const char hflag,
+                                            const int hflag,
                                             const int cd_loop_uv_offset)
 {
-  BLI_assert(ELEM(hflag, BM_ELEM_SELECT, BM_ELEM_SELECT_UV));
+  BLI_assert(ELEM(hflag,
+                  BM_ELEM_SELECT,
+                  BM_ELEM_SELECT_UV,
+                  BM_ELEM_MIRRORED_SELECT,
+                  BM_ELEM_MIRRORED_SELECT_UV));
   BMLoop *l_iter = l;
   do {
     if (BM_elem_flag_test(l_iter->f, BM_ELEM_HIDDEN)) {
       continue;
     }
     if (l_iter != l) {
-      if (bm_elem_select_test(l_iter->f, hflag)) {
+      if (BM_elem_flag_test(l_iter->f, hflag)) {
         if (BM_loop_uv_share_edge_check(l, l_iter, cd_loop_uv_offset)) {
           return true;
         }
@@ -273,13 +275,48 @@ bool BM_face_uvselect_check_edges_all(BMFace *f)
   return true;
 }
 
+bool BM_face_uvselect_check_edges_all_mirrored(BMFace *f)
+{
+  if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
+    return false;
+  }
+  BMLoop *l_iter, *l_first;
+  l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+  do {
+    if (!BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE)) {
+      return false;
+    }
+  } while ((l_iter = l_iter->next) != l_first);
+  return true;
+}
+
+struct UVSelectFlagSet {
+  int vert_hflag;
+  int edge_hflag;
+  bool (*face_check_edges_all)(BMFace *f);
+  bool mirrored;
+};
+
+static const UVSelectFlagSet uv_select_flags_regular = {
+    BM_ELEM_SELECT_UV,
+    BM_ELEM_SELECT_UV_EDGE,
+    BM_face_uvselect_check_edges_all,
+    false,
+};
+static const UVSelectFlagSet uv_select_flags_mirrored = {
+    BM_ELEM_MIRRORED_SELECT_UV,
+    BM_ELEM_MIRRORED_SELECT_UV_EDGE,
+    BM_face_uvselect_check_edges_all_mirrored,
+    true,
+};
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name UV Selection Functions
  * \{ */
 
-void BM_loop_vert_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select)
+void BM_loop_vert_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select, bool mirrored)
 {
   /* Only select if it's valid, otherwise the result wont be used. */
   BLI_assert(bm->uv_select_sync_valid);
@@ -291,10 +328,10 @@ void BM_loop_vert_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select)
 
   /* NOTE: don't do any flushing here as it's too expensive to walk over connected geometry.
    * These can be handled in separate operations. */
-  BM_elem_flag_set(l, BM_ELEM_SELECT_UV, select);
+  BM_elem_flag_set(l, mirrored ? BM_ELEM_MIRRORED_SELECT_UV : BM_ELEM_SELECT_UV, select);
 }
 
-void BM_loop_edge_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select)
+void BM_loop_edge_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select, bool mirrored)
 {
   /* Only select if it's valid, otherwise the result wont be used. */
   BLI_assert(bm->uv_select_sync_valid);
@@ -306,18 +343,18 @@ void BM_loop_edge_uvselect_set_noflush(BMesh *bm, BMLoop *l, bool select)
 
   /* NOTE: don't do any flushing here as it's too expensive to walk over connected geometry.
    * These can be handled in separate operations. */
-  BM_elem_flag_set(l, BM_ELEM_SELECT_UV_EDGE, select);
+  BM_elem_flag_set(l, mirrored ? BM_ELEM_MIRRORED_SELECT_UV_EDGE : BM_ELEM_SELECT_UV_EDGE, select);
 }
 
-void BM_loop_edge_uvselect_set(BMesh *bm, BMLoop *l, bool select)
+void BM_loop_edge_uvselect_set(BMesh *bm, BMLoop *l, bool select, bool mirrored)
 {
-  BM_loop_edge_uvselect_set_noflush(bm, l, select);
+  BM_loop_edge_uvselect_set_noflush(bm, l, select, mirrored);
 
-  BM_loop_vert_uvselect_set_noflush(bm, l, select);
-  BM_loop_vert_uvselect_set_noflush(bm, l->next, select);
+  BM_loop_vert_uvselect_set_noflush(bm, l, select, mirrored);
+  BM_loop_vert_uvselect_set_noflush(bm, l->next, select, mirrored);
 }
 
-void BM_face_uvselect_set_noflush(BMesh *bm, BMFace *f, bool select)
+void BM_face_uvselect_set_noflush(BMesh *bm, BMFace *f, bool select, bool mirrored)
 {
   /* Only select if it's valid, otherwise the result wont be used. */
   BLI_assert(bm->uv_select_sync_valid);
@@ -329,17 +366,17 @@ void BM_face_uvselect_set_noflush(BMesh *bm, BMFace *f, bool select)
 
   /* NOTE: don't do any flushing here as it's too expensive to walk over connected geometry.
    * These can be handled in separate operations. */
-  BM_elem_flag_set(f, BM_ELEM_SELECT_UV, select);
+  BM_elem_flag_set(f, mirrored ? BM_ELEM_MIRRORED_SELECT_UV : BM_ELEM_SELECT_UV, select);
 }
 
-void BM_face_uvselect_set(BMesh *bm, BMFace *f, bool select)
+void BM_face_uvselect_set(BMesh *bm, BMFace *f, bool select, bool mirrored)
 {
-  BM_face_uvselect_set_noflush(bm, f, select);
+  BM_face_uvselect_set_noflush(bm, f, select, mirrored);
   BMLoop *l_iter, *l_first;
   l_iter = l_first = BM_FACE_FIRST_LOOP(f);
   do {
-    BM_loop_vert_uvselect_set_noflush(bm, l_iter, select);
-    BM_loop_edge_uvselect_set_noflush(bm, l_iter, select);
+    BM_loop_vert_uvselect_set_noflush(bm, l_iter, select, mirrored);
+    BM_loop_edge_uvselect_set_noflush(bm, l_iter, select, mirrored);
   } while ((l_iter = l_iter->next) != l_first);
 }
 
@@ -358,12 +395,15 @@ bool BM_mesh_uvselect_clear(BMesh *bm)
 /** \name UV Selection Functions (Shared)
  * \{ */
 
-void BM_loop_vert_uvselect_set_shared(BMesh *bm,
-                                      BMLoop *l,
-                                      bool select,
-                                      const int cd_loop_uv_offset)
+static void bm_loop_vert_uvselect_set_shared_ex(BMesh *bm,
+                                                BMLoop *l,
+                                                const bool select,
+                                                const int cd_loop_uv_offset,
+                                                const UVSelectFlagSet &flags)
 {
-  BM_loop_vert_uvselect_set_noflush(bm, l, select);
+  BLI_assert(bm->uv_select_sync_valid);
+  BLI_assert(!BM_elem_flag_test(l->f, BM_ELEM_HIDDEN) || (select == false));
+  BM_elem_flag_set(l, flags.vert_hflag, select);
 
   BMVert *v = l->v;
   BLI_assert(v->e);
@@ -383,9 +423,9 @@ void BM_loop_vert_uvselect_set_shared(BMesh *bm,
         continue;
       }
       if (l_iter != l) {
-        if (BM_elem_flag_test_bool(l_iter, BM_ELEM_SELECT_UV) != select) {
+        if (BM_elem_flag_test_bool(l_iter, flags.vert_hflag) != select) {
           if (BM_loop_uv_share_vert_check(l, l_iter, cd_loop_uv_offset)) {
-            BM_loop_vert_uvselect_set_noflush(bm, l_iter, select);
+            BM_elem_flag_set(l_iter, flags.vert_hflag, select);
           }
         }
       }
@@ -393,12 +433,23 @@ void BM_loop_vert_uvselect_set_shared(BMesh *bm,
   } while ((e_iter = bmesh_disk_edge_next(e_iter, v)) != e_first);
 }
 
-void BM_loop_edge_uvselect_set_shared(BMesh *bm,
+void BM_loop_vert_uvselect_set_shared(BMesh *bm,
                                       BMLoop *l,
                                       bool select,
                                       const int cd_loop_uv_offset)
 {
-  BM_loop_edge_uvselect_set_noflush(bm, l, select);
+  bm_loop_vert_uvselect_set_shared_ex(bm, l, select, cd_loop_uv_offset, uv_select_flags_regular);
+}
+
+static void bm_loop_edge_uvselect_set_shared_ex(BMesh *bm,
+                                                BMLoop *l,
+                                                const bool select,
+                                                const int cd_loop_uv_offset,
+                                                const UVSelectFlagSet &flags)
+{
+  BLI_assert(bm->uv_select_sync_valid);
+  BLI_assert(!BM_elem_flag_test(l->f, BM_ELEM_HIDDEN) || (select == false));
+  BM_elem_flag_set(l, flags.edge_hflag, select);
 
   BMLoop *l_iter = l->radial_next;
   /* Check it's not a boundary. */
@@ -407,13 +458,21 @@ void BM_loop_edge_uvselect_set_shared(BMesh *bm,
       if (BM_elem_flag_test(l_iter->f, BM_ELEM_HIDDEN)) {
         continue;
       }
-      if (BM_elem_flag_test_bool(l_iter, BM_ELEM_SELECT_UV_EDGE) != select) {
+      if (BM_elem_flag_test_bool(l_iter, flags.edge_hflag) != select) {
         if (BM_loop_uv_share_edge_check(l, l_iter, cd_loop_uv_offset)) {
-          BM_loop_edge_uvselect_set_noflush(bm, l_iter, select);
+          BM_elem_flag_set(l_iter, flags.edge_hflag, select);
         }
       }
     } while ((l_iter = l_iter->radial_next) != l);
   }
+}
+
+void BM_loop_edge_uvselect_set_shared(BMesh *bm,
+                                      BMLoop *l,
+                                      bool select,
+                                      const int cd_loop_uv_offset)
+{
+  bm_loop_edge_uvselect_set_shared_ex(bm, l, select, cd_loop_uv_offset, uv_select_flags_regular);
 }
 
 void BM_face_uvselect_set_shared(BMesh *bm, BMFace *f, bool select, const int cd_loop_uv_offset)
@@ -538,11 +597,11 @@ void BM_mesh_uvselect_set_elem_shared(BMesh *bm,
  * which corrects "isolated" elements which should not be selected based on the selection-mode.
  * \{ */
 
-static void bm_vert_uvselect_set_pick(BMesh *bm,
-                                      BMVert *v,
-                                      const bool select,
-                                      const BMUVSelectPickParams & /*uv_pick_params*/,
-                                      bool caller_handles_edge_or_face_mode)
+static void bm_vert_uvselect_set_pick_ex(BMesh *bm,
+                                         BMVert *v,
+                                         const bool select,
+                                         const UVSelectFlagSet &flags,
+                                         bool caller_handles_edge_or_face_mode)
 {
   if (caller_handles_edge_or_face_mode == false) {
     /* With de-selection, isolated vertices/edges wont be de-selected.
@@ -552,7 +611,10 @@ static void bm_vert_uvselect_set_pick(BMesh *bm,
   }
   /* NOTE: it doesn't make sense to check `uv_pick_params.shared` in this context because,
    * unlike edges and faces, a vertex is logically connected to all corners that use it,
-   * so there is no way to use the UV coordinates to differentiate one UV region from another. */
+   * so there is no way to use the UV coordinates to differentiate one UV region from another.
+   * This holds for both regular & mirror select.*/
+
+  BLI_assert(bm->uv_select_sync_valid);
 
   if (BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
     return;
@@ -580,21 +642,21 @@ static void bm_vert_uvselect_set_pick(BMesh *bm,
           continue;
         }
         /* Select vertex. */
-        BM_loop_vert_uvselect_set_noflush(bm, l_radial_iter, true);
+        BM_loop_vert_uvselect_set_noflush(bm, l_radial_iter, true, flags.mirrored);
 
         /* Select edges if adjacent vertices are selected. */
-        if (BM_elem_flag_test(l_radial_iter->next, BM_ELEM_SELECT_UV)) {
-          BM_loop_edge_uvselect_set_noflush(bm, l_radial_iter, true);
+        if (BM_elem_flag_test(l_radial_iter->next, flags.vert_hflag)) {
+          BM_loop_edge_uvselect_set_noflush(bm, l_radial_iter, true, flags.mirrored);
         }
-        if (BM_elem_flag_test(l_radial_iter->prev, BM_ELEM_SELECT_UV)) {
-          BM_loop_edge_uvselect_set_noflush(bm, l_radial_iter->prev, true);
+        if (BM_elem_flag_test(l_radial_iter->prev, flags.vert_hflag)) {
+          BM_loop_edge_uvselect_set_noflush(bm, l_radial_iter->prev, true, flags.mirrored);
         }
         /* Select face if all edges are selected. */
         if (!BM_elem_flag_test(l_radial_iter->f, BM_ELEM_HIDDEN) &&
-            !BM_elem_flag_test(l_radial_iter->f, BM_ELEM_SELECT_UV))
+            !BM_elem_flag_test(l_radial_iter->f, flags.vert_hflag))
         {
-          if (BM_face_uvselect_check_edges_all(l_radial_iter->f)) {
-            BM_face_uvselect_set_noflush(bm, l_radial_iter->f, true);
+          if (flags.face_check_edges_all(l_radial_iter->f)) {
+            BM_face_uvselect_set_noflush(bm, l_radial_iter->f, true, flags.mirrored);
           }
         }
       } while ((l_radial_iter = l_radial_iter->radial_next) != l_radial_first);
@@ -617,22 +679,23 @@ static void bm_vert_uvselect_set_pick(BMesh *bm,
           continue;
         }
         /* Deselect vertex. */
-        BM_loop_vert_uvselect_set_noflush(bm, l_radial_iter, false);
+        BM_loop_vert_uvselect_set_noflush(bm, l_radial_iter, false, flags.mirrored);
         /* Deselect edges. */
-        BM_loop_edge_uvselect_set_noflush(bm, l_radial_iter, false);
-        BM_loop_edge_uvselect_set_noflush(bm, l_radial_iter->prev, false);
+        BM_loop_edge_uvselect_set_noflush(bm, l_radial_iter, false, flags.mirrored);
+        BM_loop_edge_uvselect_set_noflush(bm, l_radial_iter->prev, false, flags.mirrored);
         /* Deselect connected face. */
-        BM_face_uvselect_set_noflush(bm, l_radial_iter->f, false);
+        BM_face_uvselect_set_noflush(bm, l_radial_iter->f, false, flags.mirrored);
       } while ((l_radial_iter = l_radial_iter->radial_next) != l_radial_first);
     } while ((e_iter = bmesh_disk_edge_next(e_iter, v)) != e_first);
   }
 }
 
-static void bm_edge_uvselect_set_pick(BMesh *bm,
-                                      BMEdge *e,
-                                      const bool select,
-                                      const BMUVSelectPickParams &uv_pick_params,
-                                      const bool caller_handles_face_mode)
+static void bm_edge_uvselect_set_pick_ex(BMesh *bm,
+                                         BMEdge *e,
+                                         const bool select,
+                                         const BMUVSelectPickParams &uv_pick_params,
+                                         const UVSelectFlagSet &flags,
+                                         const bool caller_handles_face_mode)
 {
   if (caller_handles_face_mode == false) {
     /* With de-selection, isolated vertices/edges wont be de-selected.
@@ -640,6 +703,8 @@ static void bm_edge_uvselect_set_pick(BMesh *bm,
     BLI_assert_msg(bm->selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE),
                    "Picking edges in face-select mode is not supported.");
   }
+
+  BLI_assert(bm->uv_select_sync_valid);
 
   if (BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
     return;
@@ -661,13 +726,13 @@ static void bm_edge_uvselect_set_pick(BMesh *bm,
           continue;
         }
 
-        BM_loop_edge_uvselect_set_noflush(bm, l_iter, true);
+        BM_loop_edge_uvselect_set_noflush(bm, l_iter, true, flags.mirrored);
 
-        BM_loop_vert_uvselect_set_noflush(bm, l_iter, true);
-        BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, true);
+        BM_loop_vert_uvselect_set_noflush(bm, l_iter, true, flags.mirrored);
+        BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, true, flags.mirrored);
 
         if (any_faces_unselected == false) {
-          if (!BM_elem_flag_test(l_iter->f, BM_ELEM_SELECT_UV)) {
+          if (!BM_elem_flag_test(l_iter->f, flags.vert_hflag)) {
             any_faces_unselected = true;
           }
         }
@@ -680,9 +745,9 @@ static void bm_edge_uvselect_set_pick(BMesh *bm,
           if (BM_elem_flag_test(l_iter->f, BM_ELEM_HIDDEN)) {
             continue;
           }
-          if (!BM_elem_flag_test(l_iter->f, BM_ELEM_SELECT_UV)) {
-            if (BM_face_uvselect_check_edges_all(l_iter->f)) {
-              BM_face_uvselect_set_noflush(bm, l_iter->f, true);
+          if (!BM_elem_flag_test(l_iter->f, flags.vert_hflag)) {
+            if (flags.face_check_edges_all(l_iter->f)) {
+              BM_face_uvselect_set_noflush(bm, l_iter->f, true, flags.mirrored);
             }
           }
         } while ((l_iter = l_iter->radial_next) != l_first);
@@ -694,14 +759,14 @@ static void bm_edge_uvselect_set_pick(BMesh *bm,
         if (BM_elem_flag_test(l_iter->f, BM_ELEM_HIDDEN)) {
           continue;
         }
-        BM_loop_edge_uvselect_set_noflush(bm, l_iter, false);
-        if (!BM_elem_flag_test(l_iter->prev, BM_ELEM_SELECT_UV_EDGE)) {
-          BM_loop_vert_uvselect_set_noflush(bm, l_iter, false);
+        BM_loop_edge_uvselect_set_noflush(bm, l_iter, false, flags.mirrored);
+        if (!BM_elem_flag_test(l_iter->prev, flags.edge_hflag)) {
+          BM_loop_vert_uvselect_set_noflush(bm, l_iter, false, flags.mirrored);
         }
-        if (!BM_elem_flag_test(l_iter->next, BM_ELEM_SELECT_UV_EDGE)) {
-          BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, false);
+        if (!BM_elem_flag_test(l_iter->next, flags.edge_hflag)) {
+          BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, false, flags.mirrored);
         }
-        BM_face_uvselect_set_noflush(bm, l_iter->f, false);
+        BM_face_uvselect_set_noflush(bm, l_iter->f, false, flags.mirrored);
       } while ((l_iter = l_iter->radial_next) != l_first);
     }
     return;
@@ -731,13 +796,13 @@ static void bm_edge_uvselect_set_pick(BMesh *bm,
         continue;
       }
 
-      BM_loop_edge_uvselect_set_noflush(bm, l_iter, true);
+      BM_loop_edge_uvselect_set_noflush(bm, l_iter, true, flags.mirrored);
 
-      BM_loop_vert_uvselect_set_noflush(bm, l_iter, true);
-      BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, true);
+      BM_loop_vert_uvselect_set_noflush(bm, l_iter, true, flags.mirrored);
+      BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, true, flags.mirrored);
 
       if (any_faces_unselected == false) {
-        if (!BM_elem_flag_test(l_iter->f, BM_ELEM_SELECT_UV)) {
+        if (!BM_elem_flag_test(l_iter->f, flags.vert_hflag)) {
           any_faces_unselected = true;
         }
       }
@@ -750,9 +815,9 @@ static void bm_edge_uvselect_set_pick(BMesh *bm,
         if (BM_elem_flag_test(l_iter->f, BM_ELEM_HIDDEN)) {
           continue;
         }
-        if (!BM_elem_flag_test(l_iter->f, BM_ELEM_SELECT_UV)) {
-          if (BM_face_uvselect_check_edges_all(l_iter->f)) {
-            BM_face_uvselect_set_noflush(bm, l_iter->f, true);
+        if (!BM_elem_flag_test(l_iter->f, flags.vert_hflag)) {
+          if (flags.face_check_edges_all(l_iter->f)) {
+            BM_face_uvselect_set_noflush(bm, l_iter->f, true, flags.mirrored);
           }
         }
       } while ((l_iter = l_iter->radial_next) != l_first);
@@ -764,14 +829,14 @@ static void bm_edge_uvselect_set_pick(BMesh *bm,
       if (BM_elem_flag_test(l_iter->f, BM_ELEM_HIDDEN)) {
         continue;
       }
-      BM_loop_edge_uvselect_set_noflush(bm, l_iter, false);
-      if (!BM_elem_flag_test(l_iter->prev, BM_ELEM_SELECT_UV_EDGE)) {
-        BM_loop_vert_uvselect_set_noflush(bm, l_iter, false);
+      BM_loop_edge_uvselect_set_noflush(bm, l_iter, false, flags.mirrored);
+      if (!BM_elem_flag_test(l_iter->prev, flags.edge_hflag)) {
+        BM_loop_vert_uvselect_set_noflush(bm, l_iter, false, flags.mirrored);
       }
-      if (!BM_elem_flag_test(l_iter->next, BM_ELEM_SELECT_UV_EDGE)) {
-        BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, false);
+      if (!BM_elem_flag_test(l_iter->next, flags.edge_hflag)) {
+        BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, false, flags.mirrored);
       }
-      BM_face_uvselect_set_noflush(bm, l_iter->f, false);
+      BM_face_uvselect_set_noflush(bm, l_iter->f, false, flags.mirrored);
     } while ((l_iter = l_iter->radial_next) != l_first);
 
     /* Ensure connected vertices remain selected when they are connected to selected edges. */
@@ -781,32 +846,35 @@ static void bm_edge_uvselect_set_pick(BMesh *bm,
         continue;
       }
       for (BMLoop *l_edge_vert : {l_iter, l_iter->next}) {
-        if (BM_elem_flag_test(l_edge_vert, BM_ELEM_SELECT_UV)) {
+        if (BM_elem_flag_test(l_edge_vert, flags.vert_hflag)) {
           /* This was not de-selected. */
           continue;
         }
         if (BM_loop_vert_uvselect_check_other_loop_edge(
-                l_edge_vert, BM_ELEM_SELECT_UV_EDGE, uv_pick_params.cd_loop_uv_offset))
+                l_edge_vert, flags.edge_hflag, uv_pick_params.cd_loop_uv_offset))
         {
-          BM_loop_vert_uvselect_set_noflush(bm, l_edge_vert, true);
+          BM_loop_vert_uvselect_set_noflush(bm, l_edge_vert, true, flags.mirrored);
         }
         else {
           /* It's possible there are isolated selected vertices,
            * although in edge select mode this should not happen. */
-          BM_loop_vert_uvselect_set_shared(
-              bm, l_edge_vert, false, uv_pick_params.cd_loop_uv_offset);
+          bm_loop_vert_uvselect_set_shared_ex(
+              bm, l_edge_vert, false, uv_pick_params.cd_loop_uv_offset, flags);
         }
       }
     } while ((l_iter = l_iter->radial_next) != l_first);
   }
 }
 
-static void bm_face_uvselect_set_pick(BMesh *bm,
-                                      BMFace *f,
-                                      const bool select,
-                                      const BMUVSelectPickParams &uv_pick_params)
+static void bm_face_uvselect_set_pick_ex(BMesh *bm,
+                                         BMFace *f,
+                                         const bool select,
+                                         const BMUVSelectPickParams &uv_pick_params,
+                                         const UVSelectFlagSet &flags)
 {
   /* Picking faces is valid in all selection modes. */
+  BLI_assert(bm->uv_select_sync_valid);
+
   if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
     return;
   }
@@ -814,79 +882,94 @@ static void bm_face_uvselect_set_pick(BMesh *bm,
   BMLoop *l_iter, *l_first;
 
   if (uv_pick_params.shared == false) {
-    BM_face_uvselect_set(bm, f, select);
+    BM_face_uvselect_set(bm, f, select, flags.mirrored);
     return;
   }
 
   if (select) {
-    BM_face_uvselect_set_noflush(bm, f, true);
+    BM_face_uvselect_set_noflush(bm, f, true, flags.mirrored);
 
     /* Setting these values first. */
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      BM_loop_vert_uvselect_set_noflush(bm, l_iter, true);
-      BM_loop_edge_uvselect_set_noflush(bm, l_iter, true);
+      BM_loop_vert_uvselect_set_noflush(bm, l_iter, true, flags.mirrored);
+      BM_loop_edge_uvselect_set_noflush(bm, l_iter, true, flags.mirrored);
     } while ((l_iter = l_iter->next) != l_first);
 
     /* Set other values. */
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      BM_loop_vert_uvselect_set_shared(bm, l_iter, true, uv_pick_params.cd_loop_uv_offset);
-      BM_loop_edge_uvselect_set_shared(bm, l_iter, true, uv_pick_params.cd_loop_uv_offset);
+      bm_loop_vert_uvselect_set_shared_ex(
+          bm, l_iter, true, uv_pick_params.cd_loop_uv_offset, flags);
+      bm_loop_edge_uvselect_set_shared_ex(
+          bm, l_iter, true, uv_pick_params.cd_loop_uv_offset, flags);
     } while ((l_iter = l_iter->next) != l_first);
   }
   else {
-    BM_face_uvselect_set_noflush(bm, f, false);
+    BM_face_uvselect_set_noflush(bm, f, false, flags.mirrored);
 
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      BM_loop_vert_uvselect_set_noflush(bm, l_iter, false);
-      BM_loop_edge_uvselect_set_noflush(bm, l_iter, false);
+      BM_loop_vert_uvselect_set_noflush(bm, l_iter, false, flags.mirrored);
+      BM_loop_edge_uvselect_set_noflush(bm, l_iter, false, flags.mirrored);
       /* Vertex. */
       if (BM_loop_vert_uvselect_check_other_face(
-              l_iter, BM_ELEM_SELECT_UV, uv_pick_params.cd_loop_uv_offset))
+              l_iter, flags.vert_hflag, uv_pick_params.cd_loop_uv_offset))
       {
-        BM_loop_vert_uvselect_set_noflush(bm, l_iter, true);
+        BM_loop_vert_uvselect_set_noflush(bm, l_iter, true, flags.mirrored);
       }
       else {
-        BM_loop_vert_uvselect_set_shared(bm, l_iter, false, uv_pick_params.cd_loop_uv_offset);
+        bm_loop_vert_uvselect_set_shared_ex(
+            bm, l_iter, false, uv_pick_params.cd_loop_uv_offset, flags);
       }
       /* Edge. */
       if (BM_loop_edge_uvselect_check_other_face(
-              l_iter, BM_ELEM_SELECT_UV, uv_pick_params.cd_loop_uv_offset))
+              l_iter, flags.vert_hflag, uv_pick_params.cd_loop_uv_offset))
       {
-        BM_loop_edge_uvselect_set_noflush(bm, l_iter, true);
+        BM_loop_edge_uvselect_set_noflush(bm, l_iter, true, flags.mirrored);
       }
       else {
-        BM_loop_edge_uvselect_set_shared(bm, l_iter, false, uv_pick_params.cd_loop_uv_offset);
+        bm_loop_edge_uvselect_set_shared_ex(
+            bm, l_iter, false, uv_pick_params.cd_loop_uv_offset, flags);
       }
     } while ((l_iter = l_iter->next) != l_first);
   }
 }
 
-void BM_vert_uvselect_set_pick(BMesh *bm,
-                               BMVert *v,
-                               bool select,
-                               const BMUVSelectPickParams &params)
+void BM_vert_uvselect_set_pick(
+    BMesh *bm, BMVert *v, bool select, const BMUVSelectPickParams &params, bool mirrored)
 {
-  const bool caller_handles_edge_or_face_mode = false;
-  bm_vert_uvselect_set_pick(bm, v, select, params, caller_handles_edge_or_face_mode);
+  bm_vert_uvselect_set_pick_ex(bm,
+                               v,
+                               select,
+                               mirrored ? uv_select_flags_mirrored : uv_select_flags_regular,
+                               /*caller_handles_edge_or_face_mode*/ mirrored);
 }
-void BM_edge_uvselect_set_pick(BMesh *bm,
-                               BMEdge *e,
-                               bool select,
-                               const BMUVSelectPickParams &params)
+
+/** \param mirrored: See #BM_vert_uvselect_set_pick. */
+void BM_edge_uvselect_set_pick(
+    BMesh *bm, BMEdge *e, bool select, const BMUVSelectPickParams &params, bool mirrored)
 {
   const bool caller_handles_face_mode = false;
-  bm_edge_uvselect_set_pick(bm, e, select, params, caller_handles_face_mode);
+  bm_edge_uvselect_set_pick_ex(bm,
+                               e,
+                               select,
+                               params,
+                               mirrored ? uv_select_flags_mirrored : uv_select_flags_regular,
+                               caller_handles_face_mode);
 }
-void BM_face_uvselect_set_pick(BMesh *bm,
-                               BMFace *f,
-                               bool select,
-                               const BMUVSelectPickParams &params)
+
+void BM_face_uvselect_set_pick(
+    BMesh *bm, BMFace *f, bool select, const BMUVSelectPickParams &params, bool mirrored)
 {
+  if (mirrored) {
+    const BMUVSelectPickParams confined_params = {/*cd_loop_uv_offset*/ params.cd_loop_uv_offset,
+                                                  /*shared*/ false};
+    bm_face_uvselect_set_pick_ex(bm, f, select, confined_params, uv_select_flags_mirrored);
+    return;
+  }
   /* Picking faces is valid in all modes. */
-  bm_face_uvselect_set_pick(bm, f, select, params);
+  bm_face_uvselect_set_pick_ex(bm, f, select, params, uv_select_flags_regular);
 }
 
 /**
@@ -906,7 +989,8 @@ static void bm_mesh_uvselect_mode_flush_down_deselect_only(BMesh *bm,
                                                            const int cd_loop_uv_offset,
                                                            const bool shared,
                                                            const bool check_verts,
-                                                           const bool check_edges)
+                                                           const bool check_edges,
+                                                           const UVSelectFlagSet &flags)
 {
   if (!(check_verts || check_edges)) {
     return;
@@ -946,21 +1030,21 @@ static void bm_mesh_uvselect_mode_flush_down_deselect_only(BMesh *bm,
         continue;
       }
       /* Only handle faces that are partially selected. */
-      if (BM_elem_flag_test(f, BM_ELEM_SELECT_UV)) {
+      if (BM_elem_flag_test(f, flags.vert_hflag)) {
         continue;
       }
       BMLoop *l_iter, *l_first;
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       do {
-        if (BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV) &&
+        if (BM_elem_flag_test(l_iter, flags.vert_hflag) &&
             /* Skip the UV check if either edge is selected. */
-            !(BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV_EDGE) ||
-              BM_elem_flag_test(l_iter->prev, BM_ELEM_SELECT_UV_EDGE)))
+            !(BM_elem_flag_test(l_iter, flags.edge_hflag) ||
+              BM_elem_flag_test(l_iter->prev, flags.edge_hflag)))
         {
           if ((shared == false) || !BM_loop_vert_uvselect_check_other_loop_edge(
-                                       l_iter, BM_ELEM_SELECT_UV_EDGE, cd_loop_uv_offset))
+                                       l_iter, flags.edge_hflag, cd_loop_uv_offset))
           {
-            BM_elem_flag_disable(l_iter, BM_ELEM_SELECT_UV);
+            BM_loop_vert_uvselect_set_noflush(bm, l_iter, false, flags.mirrored);
           }
         }
       } while ((l_iter = l_iter->next) != l_first);
@@ -975,30 +1059,29 @@ static void bm_mesh_uvselect_mode_flush_down_deselect_only(BMesh *bm,
         continue;
       }
       /* Only handle faces that are partially selected. */
-      if (BM_elem_flag_test(f, BM_ELEM_SELECT_UV)) {
+      if (BM_elem_flag_test(f, flags.vert_hflag)) {
         continue;
       }
       BMLoop *l_iter, *l_first;
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       do {
-        if (BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV_EDGE)) {
-          if (!BM_loop_edge_uvselect_check_other_face(
-                  l_iter, BM_ELEM_SELECT_UV, cd_loop_uv_offset))
+        if (BM_elem_flag_test(l_iter, flags.edge_hflag)) {
+          if (!BM_loop_edge_uvselect_check_other_face(l_iter, flags.vert_hflag, cd_loop_uv_offset))
           {
-            BM_elem_flag_disable(l_iter, BM_ELEM_SELECT_UV_EDGE);
+            BM_loop_edge_uvselect_set_noflush(bm, l_iter, false, flags.mirrored);
           }
         }
       } while ((l_iter = l_iter->next) != l_first);
-      bool e_prev_select = BM_elem_flag_test(l_iter->prev, BM_ELEM_SELECT_UV_EDGE);
+      bool e_prev_select = BM_elem_flag_test(l_iter->prev, flags.edge_hflag);
       l_iter = l_first;
       do {
-        const bool e_iter_select = BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV_EDGE);
+        const bool e_iter_select = BM_elem_flag_test(l_iter, flags.edge_hflag);
         /* Skip the UV check if either edge is selected. */
-        if (BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV) && !(e_prev_select || e_iter_select)) {
-          if ((shared == false) || !BM_loop_vert_uvselect_check_other_face(
-                                       l_iter, BM_ELEM_SELECT_UV, cd_loop_uv_offset))
+        if (BM_elem_flag_test(l_iter, flags.vert_hflag) && !(e_prev_select || e_iter_select)) {
+          if ((shared == false) ||
+              !BM_loop_vert_uvselect_check_other_face(l_iter, flags.vert_hflag, cd_loop_uv_offset))
           {
-            BM_elem_flag_disable(l_iter, BM_ELEM_SELECT_UV);
+            BM_loop_vert_uvselect_set_noflush(bm, l_iter, false, flags.mirrored);
           }
         }
         e_prev_select = e_iter_select;
@@ -1010,52 +1093,96 @@ static void bm_mesh_uvselect_mode_flush_down_deselect_only(BMesh *bm,
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                          const bool select,
                                          const BMUVSelectPickParams &params,
-                                         const VectorList<BMVert *> &verts,
-                                         const VectorList<BMEdge *> &edges,
-                                         const VectorList<BMFace *> &faces)
+                                         const BMUVSelectSetElemFromMeshLists &elems)
 {
-  const bool check_verts = !verts.is_empty();
-  const bool check_edges = !edges.is_empty();
+  const bool check_verts = !elems.verts.is_empty();
+  const bool check_edges = !elems.edges.is_empty();
+  const bool check_verts_mirrored = !elems.verts_mirrored.is_empty();
+  const bool check_edges_mirrored = !elems.edges_mirrored.is_empty();
 
   /* TODO(@ideasman42): select picking may be slow because it does flushing too.
    * Although in practice it seems fast-enough. This should be handled more efficiently. */
 
-  for (BMVert *v : verts) {
-    bm_vert_uvselect_set_pick(bm, v, select, params, true);
+  for (BMVert *v : elems.verts) {
+    bm_vert_uvselect_set_pick_ex(bm, v, select, uv_select_flags_regular, true);
   }
-  for (BMEdge *e : edges) {
-    bm_edge_uvselect_set_pick(bm, e, select, params, true);
+  for (BMEdge *e : elems.edges) {
+    bm_edge_uvselect_set_pick_ex(bm, e, select, params, uv_select_flags_regular, true);
   }
-  for (BMFace *f : faces) {
-    bm_face_uvselect_set_pick(bm, f, select, params);
+  for (BMFace *f : elems.faces) {
+    bm_face_uvselect_set_pick_ex(bm, f, select, params, uv_select_flags_regular);
   }
 
-  bm_mesh_uvselect_mode_flush_down_deselect_only(
-      bm, bm->selectmode, params.cd_loop_uv_offset, params.shared, check_verts, check_edges);
+  for (BMVert *v : elems.verts_mirrored) {
+    bm_vert_uvselect_set_pick_ex(bm, v, select, uv_select_flags_mirrored, true);
+  }
+  for (BMEdge *e : elems.edges_mirrored) {
+    bm_edge_uvselect_set_pick_ex(bm, e, select, params, uv_select_flags_mirrored, true);
+  }
+  for (BMFace *f : elems.faces_mirrored) {
+    BM_face_uvselect_set_pick(bm, f, select, params, /*mirrored*/ true);
+  }
+
+  bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
+                                                 bm->selectmode,
+                                                 params.cd_loop_uv_offset,
+                                                 params.shared,
+                                                 check_verts,
+                                                 check_edges,
+                                                 uv_select_flags_regular);
+  bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
+                                                 bm->selectmode,
+                                                 params.cd_loop_uv_offset,
+                                                 params.shared,
+                                                 check_verts_mirrored,
+                                                 check_edges_mirrored,
+                                                 uv_select_flags_mirrored);
 }
 
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                          bool select,
                                          const BMUVSelectPickParams &params,
-                                         Span<BMVert *> verts,
-                                         Span<BMEdge *> edges,
-                                         Span<BMFace *> faces)
+                                         const BMUVSelectSetElemFromMeshSpans &elems)
 {
-  const bool check_verts = !verts.is_empty();
-  const bool check_edges = !edges.is_empty();
+  const bool check_verts = !elems.verts.is_empty();
+  const bool check_edges = !elems.edges.is_empty();
+  const bool check_verts_mirrored = !elems.verts_mirrored.is_empty();
+  const bool check_edges_mirrored = !elems.edges_mirrored.is_empty();
 
-  for (BMVert *v : verts) {
+  for (BMVert *v : elems.verts) {
     BM_vert_uvselect_set_pick(bm, v, select, params);
   }
-  for (BMEdge *e : edges) {
+  for (BMEdge *e : elems.edges) {
     BM_edge_uvselect_set_pick(bm, e, select, params);
   }
-  for (BMFace *f : faces) {
+  for (BMFace *f : elems.faces) {
     BM_face_uvselect_set_pick(bm, f, select, params);
   }
 
-  bm_mesh_uvselect_mode_flush_down_deselect_only(
-      bm, bm->selectmode, params.cd_loop_uv_offset, params.shared, check_verts, check_edges);
+  for (BMVert *v : elems.verts_mirrored) {
+    BM_vert_uvselect_set_pick(bm, v, select, params, /*mirrored*/ true);
+  }
+  for (BMEdge *e : elems.edges_mirrored) {
+    BM_edge_uvselect_set_pick(bm, e, select, params, /*mirrored*/ true);
+  }
+  for (BMFace *f : elems.faces_mirrored) {
+    BM_face_uvselect_set_pick(bm, f, select, params, /*mirrored*/ true);
+  }
+
+  bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
+                                                 bm->selectmode,
+                                                 params.cd_loop_uv_offset,
+                                                 params.shared,
+                                                 check_verts,
+                                                 check_edges,
+                                                 uv_select_flags_regular);
+  bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
+                                                 bm->selectmode,
+                                                 params.cd_loop_uv_offset,
+                                                 params.shared,
+                                                 check_verts_mirrored,
+                                                 check_edges_mirrored,
+                                                 uv_select_flags_mirrored);
 }
 
 /** \} */
@@ -1299,6 +1426,7 @@ void BM_mesh_uvselect_flush_from_loop_verts(BMesh *bm)
     }
 
     bool select_all = true;
+    bool mirrored_all = true;
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
@@ -1308,8 +1436,16 @@ void BM_mesh_uvselect_flush_from_loop_verts(BMesh *bm)
       if (select == false) {
         select_all = false;
       }
+
+      const bool mirrored = (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV) &&
+                             BM_elem_flag_test(l_iter->next, BM_ELEM_MIRRORED_SELECT_UV));
+      BM_loop_edge_uvselect_set_noflush(bm, l_iter, mirrored, /*mirrored*/ true);
+      if (mirrored == false) {
+        mirrored_all = false;
+      }
     } while ((l_iter = l_iter->next) != l_first);
     BM_face_uvselect_set_noflush(bm, f, select_all);
+    BM_face_uvselect_set_noflush(bm, f, mirrored_all, /*mirrored*/ true);
   }
 }
 
@@ -1329,9 +1465,11 @@ void BM_mesh_uvselect_flush_from_loop_edges(BMesh *bm, bool flush_down)
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       do {
         BM_loop_vert_uvselect_set_noflush(bm, l_iter, false);
+        BM_loop_vert_uvselect_set_noflush(bm, l_iter, false, /*mirrored*/ true);
       } while ((l_iter = l_iter->next) != l_first);
     }
     BM_face_uvselect_set_noflush(bm, f, false);
+    BM_face_uvselect_set_noflush(bm, f, false, /*mirrored*/ true);
   }
 
   BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
@@ -1340,22 +1478,37 @@ void BM_mesh_uvselect_flush_from_loop_edges(BMesh *bm, bool flush_down)
     }
 
     bool select_all = true;
+    bool mirrored_all = true;
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
       const bool select_edge = BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV_EDGE);
       if (select_edge) {
         if (flush_down) {
-          BM_loop_vert_uvselect_set_noflush(bm, l_iter, true);
-          BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, true);
+          BM_loop_vert_uvselect_set_noflush(bm, l_iter, true, false);
+          BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, true, false);
         }
       }
       else {
         select_all = false;
       }
+
+      const bool mirrored_edge = BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
+      if (mirrored_edge) {
+        if (flush_down) {
+          BM_loop_vert_uvselect_set_noflush(bm, l_iter, true, true);
+          BM_loop_vert_uvselect_set_noflush(bm, l_iter->next, true, true);
+        }
+      }
+      else {
+        mirrored_all = false;
+      }
     } while ((l_iter = l_iter->next) != l_first);
     if (select_all) {
       BM_face_uvselect_set_noflush(bm, f, true);
+    }
+    if (mirrored_all) {
+      BM_face_uvselect_set_noflush(bm, f, true, /*mirrored*/ true);
     }
   }
 }
@@ -1363,7 +1516,7 @@ void BM_mesh_uvselect_flush_from_loop_edges(BMesh *bm, bool flush_down)
 void BM_mesh_uvselect_flush_from_faces(BMesh *bm, bool flush_down)
 {
   if (!flush_down) {
-    return; /* NOP. */
+    return; /* NOP - matches regular select; mirror does nothing here either. */
   }
 
   BMIter iter;
@@ -1374,11 +1527,14 @@ void BM_mesh_uvselect_flush_from_faces(BMesh *bm, bool flush_down)
     }
 
     const bool select_face = BM_elem_flag_test(f, BM_ELEM_SELECT_UV);
+    const bool mirrored_face = BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT_UV);
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      BM_loop_vert_uvselect_set_noflush(bm, l_iter, select_face);
-      BM_loop_edge_uvselect_set_noflush(bm, l_iter, select_face);
+      BM_loop_vert_uvselect_set_noflush(bm, l_iter, select_face, false);
+      BM_loop_edge_uvselect_set_noflush(bm, l_iter, select_face, false);
+      BM_loop_vert_uvselect_set_noflush(bm, l_iter, mirrored_face, true);
+      BM_loop_edge_uvselect_set_noflush(bm, l_iter, mirrored_face, true);
     } while ((l_iter = l_iter->next) != l_first);
   }
 }
@@ -1483,6 +1639,8 @@ void BM_mesh_uvselect_mode_flush_update(BMesh *bm,
   /* First pass: match underlying mesh. */
   BMIter iter;
   BMFace *f;
+  bool any_mirrored_vert_sel = false;
+  bool any_mirrored_edge_sel = false;
   BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
     if (BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
       continue;
@@ -1491,6 +1649,7 @@ void BM_mesh_uvselect_mode_flush_update(BMesh *bm,
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     bool select_face = true;
+    bool mirrored_face = true;
     do {
       if (BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV)) {
         if (!BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT)) {
@@ -1506,10 +1665,35 @@ void BM_mesh_uvselect_mode_flush_update(BMesh *bm,
       else {
         select_face = false;
       }
+
+      if (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV)) {
+        if (!BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT)) {
+          BM_elem_flag_disable(l_iter, BM_ELEM_MIRRORED_SELECT_UV);
+        }
+      }
+      if (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE)) {
+        if (!BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT)) {
+          BM_elem_flag_disable(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
+          mirrored_face = false;
+        }
+      }
+      else {
+        mirrored_face = false;
+      }
+
+      if (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV)) {
+        any_mirrored_vert_sel = true;
+      }
+      if (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE)) {
+        any_mirrored_edge_sel = true;
+      }
     } while ((l_iter = l_iter->next) != l_first);
 
     if (select_face == false) {
       BM_elem_flag_disable(f, BM_ELEM_SELECT_UV);
+    }
+    if (mirrored_face == false) {
+      BM_elem_flag_disable(f, BM_ELEM_MIRRORED_SELECT_UV);
     }
   }
 
@@ -1518,8 +1702,20 @@ void BM_mesh_uvselect_mode_flush_update(BMesh *bm,
     const bool shared = true;
     const bool check_verts = (bm->totvertsel != 0);
     const bool check_edges = (bm->totedgesel != 0);
-    bm_mesh_uvselect_mode_flush_down_deselect_only(
-        bm, selectmode_new, cd_loop_uv_offset, shared, check_verts, check_edges);
+    bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
+                                                   selectmode_new,
+                                                   cd_loop_uv_offset,
+                                                   shared,
+                                                   check_verts,
+                                                   check_edges,
+                                                   uv_select_flags_regular);
+    bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
+                                                   selectmode_new,
+                                                   cd_loop_uv_offset,
+                                                   shared,
+                                                   any_mirrored_vert_sel,
+                                                   any_mirrored_edge_sel,
+                                                   uv_select_flags_mirrored);
   }
 }
 
@@ -1621,17 +1817,18 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_vert_for_vert_mode(BMesh *bm
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      const bool v_select = BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT) ||
-                            BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT);
-      const bool e_select = BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT) ||
-                            BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT);
+      const bool v_select = BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT);
+      const bool e_select = BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT);
       BM_elem_flag_set(l_iter, BM_ELEM_SELECT_UV, v_select);
       BM_elem_flag_set(l_iter, BM_ELEM_SELECT_UV_EDGE, e_select);
+
+      const bool v_mirrored = BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT);
+      const bool e_mirrored = BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT);
+      BM_elem_flag_set(l_iter, BM_ELEM_MIRRORED_SELECT_UV, v_mirrored);
+      BM_elem_flag_set(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE, e_mirrored);
     } while ((l_iter = l_iter->next) != l_first);
-    BM_elem_flag_set(f,
-                     BM_ELEM_SELECT_UV,
-                     BM_elem_flag_test(f, BM_ELEM_SELECT) ||
-                         BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT));
+    BM_elem_flag_set(f, BM_ELEM_SELECT_UV, BM_elem_flag_test(f, BM_ELEM_SELECT));
+    BM_elem_flag_set(f, BM_ELEM_MIRRORED_SELECT_UV, BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT));
   }
   bm->uv_select_sync_valid = true;
 }
@@ -1653,9 +1850,7 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_vert_for_edge_mode(BMesh *bm
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      if (BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT) ||
-          BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT))
-      {
+      if (BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT)) {
         BM_elem_flag_enable(l_iter, BM_ELEM_SELECT_UV_EDGE);
         for (BMLoop *l_edge_vert : {l_iter, l_iter->next}) {
           if (!BM_elem_flag_test(l_edge_vert, BM_ELEM_SELECT_UV)) {
@@ -1663,11 +1858,20 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_vert_for_edge_mode(BMesh *bm
           }
         }
       }
+      if (BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT)) {
+        BM_elem_flag_enable(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
+        for (BMLoop *l_edge_vert : {l_iter, l_iter->next}) {
+          if (!BM_elem_flag_test(l_edge_vert, BM_ELEM_MIRRORED_SELECT_UV)) {
+            BM_elem_flag_enable(l_edge_vert, BM_ELEM_MIRRORED_SELECT_UV);
+          }
+        }
+      }
     } while ((l_iter = l_iter->next) != l_first);
 
-    if (BM_elem_flag_test(f, BM_ELEM_SELECT) || BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT)) {
+    if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
       BM_elem_flag_enable(f, BM_ELEM_SELECT_UV);
     }
+    BM_elem_flag_set(f, BM_ELEM_MIRRORED_SELECT_UV, BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT));
   }
   bm->uv_select_sync_valid = true;
 }
@@ -1686,7 +1890,7 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_vert_for_face_mode(BMesh *bm
       continue;
     }
 
-    if (BM_elem_flag_test(f, BM_ELEM_SELECT) || BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT)) {
+    if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
       BMLoop *l_iter, *l_first;
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       do {
@@ -1696,6 +1900,15 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_vert_for_face_mode(BMesh *bm
       } while ((l_iter = l_iter->next) != l_first);
       BM_elem_flag_enable(f, BM_ELEM_SELECT_UV);
     }
+    const bool mirrored_face = BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT);
+    if (mirrored_face) {
+      BMLoop *l_iter, *l_first;
+      l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+      do {
+        BM_elem_flag_enable(l_iter, BM_ELEM_MIRRORED_SELECT_UV | BM_ELEM_MIRRORED_SELECT_UV_EDGE);
+      } while ((l_iter = l_iter->next) != l_first);
+    }
+    BM_elem_flag_set(f, BM_ELEM_MIRRORED_SELECT_UV, mirrored_face);
   }
   bm->uv_select_sync_valid = true;
 }
@@ -1731,13 +1944,11 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_location_for_edge_mode(
 
     BMLoop *l_iter, *l_first;
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
-    bool e_prev_select = BM_elem_flag_test(l_iter->prev->e, BM_ELEM_SELECT) ||
-                         BM_elem_flag_test(l_iter->prev->e, BM_ELEM_MIRRORED_SELECT);
+    bool e_prev_select = BM_elem_flag_test(l_iter->prev->e, BM_ELEM_SELECT);
+    bool e_prev_mirrored = BM_elem_flag_test(l_iter->prev->e, BM_ELEM_MIRRORED_SELECT);
     do {
-      const bool e_iter_select = BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT) ||
-                                 BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT);
-      const bool v_iter_select = ((BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT) ||
-                                   BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT)) &&
+      const bool e_iter_select = BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT);
+      const bool v_iter_select = (BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT) &&
                                   ((e_prev_select || e_iter_select) ||
                                    /* This is a more expensive check, order last. */
                                    BM_loop_vert_uvselect_check_other_edge(
@@ -1746,11 +1957,22 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_location_for_edge_mode(
       BM_elem_flag_set(l_iter, BM_ELEM_SELECT_UV, v_iter_select);
       BM_elem_flag_set(l_iter, BM_ELEM_SELECT_UV_EDGE, e_iter_select);
       e_prev_select = e_iter_select;
+
+      const bool e_iter_mirrored = BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT);
+      const bool v_iter_mirrored = (BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT) &&
+                                    ((e_prev_mirrored || e_iter_mirrored) ||
+                                     /* This is a more expensive check, order last. */
+                                     BM_loop_vert_uvselect_check_other_edge(
+                                         l_iter, BM_ELEM_MIRRORED_SELECT, cd_loop_uv_offset)));
+      BM_elem_flag_set(l_iter, BM_ELEM_MIRRORED_SELECT_UV, v_iter_mirrored);
+      BM_elem_flag_set(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE, e_iter_mirrored);
+      e_prev_mirrored = e_iter_mirrored;
     } while ((l_iter = l_iter->next) != l_first);
 
-    const bool f_select = BM_elem_flag_test(f, BM_ELEM_SELECT) ||
-                          BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT);
+    const bool f_select = BM_elem_flag_test(f, BM_ELEM_SELECT);
     BM_elem_flag_set(f, BM_ELEM_SELECT_UV, f_select);
+    const bool f_mirrored = BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT);
+    BM_elem_flag_set(f, BM_ELEM_MIRRORED_SELECT_UV, f_mirrored);
   }
   bm->uv_select_sync_valid = true;
 }
@@ -1767,7 +1989,7 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_location_for_face_mode(
       continue;
     }
 
-    if (BM_elem_flag_test(f, BM_ELEM_SELECT) || BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT)) {
+    if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
       BMLoop *l_iter, *l_first;
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       do {
@@ -1779,12 +2001,10 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_location_for_face_mode(
       BMLoop *l_iter, *l_first;
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       do {
-        const bool v_iter_select = ((BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT) ||
-                                     BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT)) &&
+        const bool v_iter_select = (BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT) &&
                                     BM_loop_vert_uvselect_check_other_face(
                                         l_iter, BM_ELEM_SELECT, cd_loop_uv_offset));
-        const bool e_iter_select = ((BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT) ||
-                                     BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT)) &&
+        const bool e_iter_select = (BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT) &&
                                     BM_loop_edge_uvselect_check_other_face(
                                         l_iter, BM_ELEM_SELECT, cd_loop_uv_offset));
 
@@ -1792,6 +2012,33 @@ static void bm_mesh_uvselect_flush_from_mesh_sticky_location_for_face_mode(
         BM_elem_flag_set(l_iter, BM_ELEM_SELECT_UV_EDGE, e_iter_select);
       } while ((l_iter = l_iter->next) != l_first);
       BM_elem_flag_disable(f, BM_ELEM_SELECT_UV);
+    }
+
+    if (BM_elem_flag_test(f, BM_ELEM_MIRRORED_SELECT)) {
+      BMLoop *l_iter, *l_first;
+      l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+      do {
+        BM_elem_flag_enable(l_iter, BM_ELEM_MIRRORED_SELECT_UV | BM_ELEM_MIRRORED_SELECT_UV_EDGE);
+      } while ((l_iter = l_iter->next) != l_first);
+      BM_elem_flag_enable(f, BM_ELEM_MIRRORED_SELECT_UV);
+    }
+    else {
+      bool mirrored_all = true;
+      BMLoop *l_iter, *l_first;
+      l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+      do {
+        const bool v_iter_mirrored = (BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT) &&
+                                      BM_loop_vert_uvselect_check_other_face(
+                                          l_iter, BM_ELEM_MIRRORED_SELECT, cd_loop_uv_offset));
+        const bool e_iter_mirrored = (BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT) &&
+                                      BM_loop_edge_uvselect_check_other_face(
+                                          l_iter, BM_ELEM_MIRRORED_SELECT, cd_loop_uv_offset));
+
+        BM_elem_flag_set(l_iter, BM_ELEM_MIRRORED_SELECT_UV, v_iter_mirrored);
+        BM_elem_flag_set(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE, e_iter_mirrored);
+        mirrored_all &= v_iter_mirrored;
+      } while ((l_iter = l_iter->next) != l_first);
+      BM_elem_flag_set(f, BM_ELEM_MIRRORED_SELECT_UV, mirrored_all);
     }
   }
   bm->uv_select_sync_valid = true;
@@ -1845,6 +2092,7 @@ void BM_mesh_uvselect_sync_to_mesh(BMesh *bm)
   BM_SELECT_HISTORY_BACKUP(bm);
 
   BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
+  BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_MIRRORED_SELECT, false);
 
   if (bm->selectmode & SCE_SELECT_VERTEX) {
     /* Simple, no need to worry about edge selection. */
@@ -1946,16 +2194,24 @@ void BM_mesh_uvselect_sync_to_mesh(BMesh *bm)
       BMLoop *l_iter, *l_first;
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       bool face_select = true;
+      bool face_mirrored = true;
       do {
         if (!BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV) ||
             !BM_elem_flag_test(l_iter, BM_ELEM_SELECT_UV_EDGE))
         {
           face_select = false;
-          break;
+        }
+        if (!BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV) ||
+            !BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV_EDGE))
+        {
+          face_mirrored = false;
         }
       } while ((l_iter = l_iter->next) != l_first);
       if (face_select) {
         BM_face_select_set(bm, f, true);
+      }
+      if (face_mirrored) {
+        BM_face_select_set(bm, f, true, BM_ELEM_MIRRORED_SELECT);
       }
     }
   }

@@ -457,7 +457,7 @@ static wmOperatorStatus similar_face_select_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       EDBMUpdate_Params params{};
@@ -484,7 +484,7 @@ static wmOperatorStatus similar_face_select_exec(bContext *C, wmOperator *op)
           BM_face_select_set(bm, face, true);
         }
       }
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       EDBMUpdate_Params params{};
@@ -902,7 +902,7 @@ static wmOperatorStatus similar_edge_select_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       EDBMUpdate_Params params{};
@@ -929,7 +929,7 @@ static wmOperatorStatus similar_edge_select_exec(bContext *C, wmOperator *op)
           BM_edge_select_set(bm, edge, true);
         }
       }
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       EDBMUpdate_Params params{};
@@ -1256,7 +1256,7 @@ static wmOperatorStatus similar_vert_select_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBMUpdate_Params params{};
       params.calc_looptris = false;
       params.calc_normals = false;

@@ -361,8 +361,8 @@ void ED_mesh_mirrtopo_free(MirrTopoStore_t *mesh_topo_store)
 /** \name EditMeshSymmetryHelper API
  * \{ */
 
-std::optional<EditMeshSymmetryHelper> EditMeshSymmetryHelper::create_if_needed(Object *ob,
-                                                                               uchar htype)
+std::optional<EditMeshSymmetryHelper> EditMeshSymmetryHelper::create_if_needed(
+    Object *ob, uchar htype, bool use_self, bool use_select, bool respecthide)
 {
   BLI_assert(htype != 0);
   BLI_assert((htype & ~(BM_VERT | BM_EDGE | BM_FACE)) == 0);
@@ -376,25 +376,26 @@ std::optional<EditMeshSymmetryHelper> EditMeshSymmetryHelper::create_if_needed(O
   if (!em || !em->bm || mesh->symmetry == 0) {
     return std::nullopt;
   }
-  return EditMeshSymmetryHelper(ob, htype);
+  return EditMeshSymmetryHelper(ob, htype, use_self, use_select, respecthide);
 }
 
-EditMeshSymmetryHelper::EditMeshSymmetryHelper(Object *ob, uchar htype)
+EditMeshSymmetryHelper::EditMeshSymmetryHelper(
+    Object *ob, uchar htype, bool use_self, bool use_select, bool respecthide)
     : em_(BKE_editmesh_from_object(ob)), mesh_(id_cast<Mesh *>(ob->data)), htype_(htype)
 {
   BMesh *bmesh = em_->bm;
   use_topology_mirror_ = (mesh_->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
-  Set<BMVert *> processed_verts;
-  Set<BMEdge *> processed_edges;
-  Set<BMFace *> processed_faces;
-
   BMIter iter;
 
   for (int axis = 0; axis < 3; axis++) {
     if (mesh_->symmetry & (ME_SYMMETRY_X << axis)) {
-      EDBM_verts_mirror_cache_begin(em_, axis, true, false, true, use_topology_mirror_);
+      Set<BMVert *> processed_verts;
+      Set<BMEdge *> processed_edges;
+      Set<BMFace *> processed_faces;
 
+      EDBM_verts_mirror_cache_begin(
+          em_, axis, use_self, use_select, respecthide, use_topology_mirror_);
       if (htype_ & BM_VERT) {
         BMVert *v_curr;
         BM_ITER_MESH (v_curr, &iter, bmesh, BM_VERTS_OF_MESH) {
@@ -536,13 +537,7 @@ void EditMeshSymmetryHelper::set_hflag_on_mirror_verts(BMVert *v,
                                                        const bool value) const
 {
   apply_on_mirror_verts(v, [this, hflag, value](BMVert *v_mirr) {
-    if (hflag & BM_ELEM_SELECT) {
-      BM_vert_select_set(this->em_->bm, v_mirr, value);
-    }
-    const short hflag_test = short(hflag & ~BM_ELEM_SELECT);
-    if (hflag_test) {
-      BM_elem_flag_set(v_mirr, hflag_test, value);
-    }
+    BM_vert_select_set(this->em_->bm, v_mirr, value, hflag);
   });
 }
 
@@ -551,13 +546,7 @@ void EditMeshSymmetryHelper::set_hflag_on_mirror_edges(BMEdge *e,
                                                        const bool value) const
 {
   apply_on_mirror_edges(e, [this, hflag, value](BMEdge *e_mirr) {
-    if (hflag & BM_ELEM_SELECT) {
-      BM_edge_select_set(this->em_->bm, e_mirr, value);
-    }
-    short hflag_test = short(hflag & ~BM_ELEM_SELECT);
-    if (hflag_test) {
-      BM_elem_flag_set(e_mirr, hflag_test, value);
-    }
+    BM_edge_select_set(this->em_->bm, e_mirr, value, hflag);
   });
 }
 
@@ -566,13 +555,7 @@ void EditMeshSymmetryHelper::set_hflag_on_mirror_faces(BMFace *f,
                                                        const bool value) const
 {
   apply_on_mirror_faces(f, [this, hflag, value](BMFace *f_mirr) {
-    if (hflag & BM_ELEM_SELECT) {
-      BM_face_select_set(this->em_->bm, f_mirr, value);
-    }
-    short hflag_test = short(hflag & ~BM_ELEM_SELECT);
-    if (hflag_test) {
-      BM_elem_flag_set(f_mirr, hflag_test, value);
-    }
+    BM_face_select_set(this->em_->bm, f_mirr, value, hflag);
   });
 }
 

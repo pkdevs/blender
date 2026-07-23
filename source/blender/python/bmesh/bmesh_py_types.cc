@@ -162,6 +162,25 @@ PyDoc_STRVAR(
     "UV edge selected state of this loop.\n"
     "\n"
     ":type: bool\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_bm_elem_mirrored_uv_select_vert_doc,
+    "Mirrored-selection state of this loop, used by the UV editor\n"
+    "\n"
+    ":type: bool\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_bm_elem_mirrored_uv_select_edge_doc,
+    "Mirrored-selection state of this loop's edge, used by the UV editor\n"
+    "\n"
+    ":type: bool\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_bm_elem_mirrored_uv_select_doc,
+    "The UV editor's cached copy of this face's mirrored_selection state, used by the UV\n"
+    "editor's overlay\n"
+    "\n"
+    ":type: bool\n");
 
 static PyObject *bpy_bm_elem_hflag_get(BPy_BMElem *self, void *flag)
 {
@@ -1109,6 +1128,11 @@ static PyGetSetDef bpy_bmface_getseters[] = {
      reinterpret_cast<setter>(bpy_bm_elem_hflag_set),
      bpy_bm_elem_uv_select_doc,
      reinterpret_cast<void *>(BM_ELEM_SELECT_UV)},
+    {"mirrored_uv_select",
+     reinterpret_cast<getter>(bpy_bm_elem_hflag_get),
+     reinterpret_cast<setter>(bpy_bm_elem_hflag_set),
+     bpy_bm_elem_mirrored_uv_select_doc,
+     reinterpret_cast<void *>(BM_ELEM_MIRRORED_SELECT_UV)},
     {"index",
      reinterpret_cast<getter>(bpy_bm_elem_index_get),
      reinterpret_cast<setter>(bpy_bm_elem_index_set),
@@ -1190,6 +1214,16 @@ static PyGetSetDef bpy_bmloop_getseters[] = {
      reinterpret_cast<setter>(bpy_bm_elem_hflag_set),
      bpy_bm_elem_uv_select_edge_doc,
      reinterpret_cast<void *>(BM_ELEM_SELECT_UV_EDGE)},
+    {"mirrored_uv_select_vert",
+     reinterpret_cast<getter>(bpy_bm_elem_hflag_get),
+     reinterpret_cast<setter>(bpy_bm_elem_hflag_set),
+     bpy_bm_elem_mirrored_uv_select_vert_doc,
+     reinterpret_cast<void *>(BM_ELEM_MIRRORED_SELECT_UV)},
+    {"mirrored_uv_select_edge",
+     reinterpret_cast<getter>(bpy_bm_elem_hflag_get),
+     reinterpret_cast<setter>(bpy_bm_elem_hflag_set),
+     bpy_bm_elem_mirrored_uv_select_edge_doc,
+     reinterpret_cast<void *>(BM_ELEM_MIRRORED_SELECT_UV_EDGE)},
     {"index",
      reinterpret_cast<getter>(bpy_bm_elem_index_get),
      reinterpret_cast<setter>(bpy_bm_elem_index_set),
@@ -2133,9 +2167,9 @@ static PyObject *bpy_bmesh_uv_select_foreach_set_from_mesh(BPy_BMesh *self,
     BM_mesh_uvselect_set_elem_from_mesh(bm,
                                         use_select,
                                         uv_pick_params,
-                                        Span(vert_array, vert_array_num),
-                                        Span(edge_array, edge_array_num),
-                                        Span(face_array, face_array_num));
+                                        {Span(vert_array, vert_array_num),
+                                         Span(edge_array, edge_array_num),
+                                         Span(face_array, face_array_num)});
   }
 
   PyMem_FREE(vert_array);

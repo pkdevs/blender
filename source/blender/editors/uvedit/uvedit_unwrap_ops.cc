@@ -3303,7 +3303,7 @@ static wmOperatorStatus smart_project_exec(bContext *C, wmOperator *op)
 
       if (only_selected_uvs) {
         if (!uvedit_face_select_test(scene, em->bm, efa)) {
-          uvedit_face_select_disable(scene, em->bm, efa);
+          uvedit_face_select_disable(scene, em->bm, efa, nullptr);
           continue;
         }
       }
@@ -3917,7 +3917,7 @@ static float uv_sphere_project(const Scene *scene,
 
     if (only_selected_uvs) {
       if (!uvedit_face_select_test(scene, bm, efa)) {
-        uvedit_face_select_disable(scene, bm, efa);
+        uvedit_face_select_disable(scene, bm, efa, nullptr);
         continue; /* Unselected UV, ignore. */
       }
     }
@@ -4094,7 +4094,7 @@ static float uv_cylinder_project(const Scene *scene,
 
     if (only_selected_uvs) {
       if (!uvedit_face_select_test(scene, bm, efa)) {
-        uvedit_face_select_disable(scene, bm, efa);
+        uvedit_face_select_disable(scene, bm, efa, nullptr);
         continue; /* Unselected UV, ignore. */
       }
     }
@@ -4191,7 +4191,7 @@ static wmOperatorStatus cylinder_project_exec(bContext *C, wmOperator *op)
       }
 
       if (only_selected_uvs && !uvedit_face_select_test(scene, em->bm, efa)) {
-        uvedit_face_select_disable(scene, em->bm, efa);
+        uvedit_face_select_disable(scene, em->bm, efa, nullptr);
         continue;
       }
 
@@ -4276,7 +4276,7 @@ static void uvedit_unwrap_cube_project(const Scene *scene,
       continue;
     }
     if (only_selected_uvs && !uvedit_face_select_test(scene, bm, efa)) {
-      uvedit_face_select_disable(scene, bm, efa);
+      uvedit_face_select_disable(scene, bm, efa, nullptr);
       continue;
     }
 

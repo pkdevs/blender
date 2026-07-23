@@ -1264,7 +1264,7 @@ static void mesh_undosys_step_decode(
     obedit->shapenr = em->bm->shapenr;
 
     em->needs_flush_to_id = 1;
-    EDBM_selectmode_flush_mirrored_keep_current(bmain, em);
+    EDBM_selectmode_flush(em);
     DEG_id_tag_update(&mesh->id, ID_RECALC_GEOMETRY);
     /* The object update tag is necessary to cause modifiers to reevaluate after vertex group
      * changes. */

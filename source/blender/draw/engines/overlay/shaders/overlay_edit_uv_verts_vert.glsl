@@ -16,18 +16,25 @@ void main()
 
   bool is_selected = (flag.x & (VERT_UV_SELECT | FACE_UV_SELECT)) != 0u;
   bool is_pinned = (flag.x & VERT_UV_PINNED) != 0u;
-  bool is_mirrored = (flag.y & VERT_UV_MIRRORED_SELECT) != 0u;
-  float4 deselect_col = (is_pinned) ? pinned_col : float4(color.rgb, 1.0f);
-  if (is_mirrored && !is_selected) {
-    deselect_col = theme.colors.vertex_mirror_selection;
+  bool is_mirrored = (flag.x & (VERT_MIRRORED_UV_SELECT | FACE_MIRRORED_UV_SELECT)) != 0u;
+
+  // Priority order: Selected > Mirrored > Pinned > Default
+  if (is_selected) {
+    fill_color = theme.colors.vert_select;
   }
-  fill_color = (is_selected) ? theme.colors.vert_select : deselect_col;
+  else if (is_mirrored) {
+    fill_color = theme.colors.vertex_mirror_selection;
+  }
+  else if (is_pinned) {
+    fill_color = pinned_col;
+  }
+  else {
+    fill_color = float4(color.rgb, 1.0f);
+  }
+
   outline_color = (is_pinned) ? pinned_col : float4(fill_color.rgb, 0.0f);
 
   float3 world_pos = float3(au, 0.0f);
-  /* Move selected vertices to the top
-   * Vertices are between 0.0 and 0.2, Edges between 0.2 and 0.4
-   * actual pixels are at 0.75, 1.0 is used for the background. */
   float depth = (is_selected || is_mirrored) ? (is_pinned ? 0.05f : 0.10f) : 0.15f;
   gl_Position = float4(drw_point_world_to_homogenous(world_pos).xy, depth, 1.0f);
   gl_PointSize = dot_size;

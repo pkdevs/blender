@@ -78,11 +78,11 @@ VertOut vertex_main(VertIn vert_in)
 
 #elif defined(EDGE)
   if (use_vertex_selection) {
-    vert_out.final_color = EDIT_MESH_edge_vertex_color(m_data.y, m_data.x);
-    vert_out.select_override = (m_data.y & EDGE_SELECTED) | (m_data.x & EDGE_MIRRORED_SELECT);
+    vert_out.final_color = EDIT_MESH_edge_vertex_color(m_data.y);
+    vert_out.select_override = (m_data.y & EDGE_SELECTED) | (m_data.y & EDGE_MIRRORED_SELECT);
   }
   else {
-    vert_out.final_color = EDIT_MESH_edge_color_inner(m_data.y, m_data.x);
+    vert_out.final_color = EDIT_MESH_edge_color_inner(m_data.y);
     vert_out.select_override = 1u;
   }
 

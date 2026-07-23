@@ -1787,7 +1787,7 @@ static wmOperatorStatus edbm_edge_loop_multiselect_exec(bContext *C, wmOperator 
       }
     }
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
     }
 
@@ -1846,7 +1846,7 @@ static wmOperatorStatus edbm_edge_ring_multiselect_exec(bContext *C, wmOperator 
           em, BMW_EDGERING, eed, true, BMW_FLAG_TEST_HIDDEN, delimit, nullptr);
     }
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
     }
 
@@ -1935,7 +1935,7 @@ static wmOperatorStatus edbm_boundary_loop_multiselect_exec(bContext *C, wmOpera
       /* Only flush modes if a boundary selection was made,
        * otherwise it's a simple de-select all. */
       if (changed_boundary) {
-        EDBM_selectmode_flush_mirrored(bmain, em);
+        EDBM_selectmode_flush(em);
       }
       EDBM_uvselect_clear(em);
       DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
@@ -2165,7 +2165,7 @@ static void edbm_select_loop_or_ring_by_edge(Main *bmain,
     }
   }
 
-  EDBM_selectmode_flush_mirrored(bmain, em);
+  EDBM_selectmode_flush(em);
   EDBM_uvselect_clear(em);
 
   /* Sets as active, useful for other tools. */
@@ -2623,15 +2623,15 @@ static wmOperatorStatus edbm_select_all_exec(bContext *C, wmOperator *op)
     switch (action) {
       case SEL_SELECT:
         EDBM_flag_enable_all(em, BM_ELEM_SELECT);
-        EDBM_selectmode_flush_mirrored(bmain, em);
+        EDBM_selectmode_flush(em);
         break;
       case SEL_DESELECT:
         EDBM_flag_disable_all(em, BM_ELEM_SELECT);
-        EDBM_selectmode_flush_mirrored(bmain, em);
+        EDBM_selectmode_flush(em);
         break;
       case SEL_INVERT:
         EDBM_select_swap(em);
-        EDBM_selectmode_flush_mirrored(bmain, em);
+        EDBM_selectmode_flush(em);
         break;
     }
 
@@ -2711,64 +2711,6 @@ void MESH_OT_select_interior_faces(wmOperatorType *ot)
  * Gets called via generic mouse select operator.
  * \{ */
 
-static void edbm_select_pick_mirror_disable_face(BMEditMesh *em, const Mesh *mesh, BMFace *efa)
-{
-  if (mesh && mesh->symmetry != 0) {
-    for (int axis = 0; axis < 3; axis++) {
-      if (mesh->symmetry & (ME_SYMMETRY_X << axis)) {
-        bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
-        EDBM_verts_mirror_cache_begin(em, axis, true, true, true, use_topology);
-        BMFace *f_mirr = EDBM_verts_mirror_get_face(em, efa);
-        if (f_mirr && f_mirr != efa && BM_elem_flag_test(f_mirr, BM_ELEM_SELECT)) {
-          BM_elem_flag_enable(f_mirr, BM_ELEM_MIRROR_DISABLED);
-          BMLoop *l_iter = f_mirr->l_first;
-          do {
-            BM_elem_flag_enable(l_iter->e, BM_ELEM_MIRROR_DISABLED);
-            BM_elem_flag_enable(l_iter->v, BM_ELEM_MIRROR_DISABLED);
-          } while ((l_iter = l_iter->next) != f_mirr->l_first);
-        }
-        EDBM_verts_mirror_cache_end(em);
-      }
-    }
-  }
-}
-
-static void edbm_select_pick_mirror_disable_edge(BMEditMesh *em, const Mesh *mesh, BMEdge *eed)
-{
-  if (mesh && mesh->symmetry != 0) {
-    for (int axis = 0; axis < 3; axis++) {
-      if (mesh->symmetry & (ME_SYMMETRY_X << axis)) {
-        bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
-        EDBM_verts_mirror_cache_begin(em, axis, true, true, true, use_topology);
-        BMEdge *e_mirr = EDBM_verts_mirror_get_edge(em, eed);
-        if (e_mirr && e_mirr != eed && BM_elem_flag_test(e_mirr, BM_ELEM_SELECT)) {
-          BM_elem_flag_enable(e_mirr, BM_ELEM_MIRROR_DISABLED);
-          BM_elem_flag_enable(e_mirr->v1, BM_ELEM_MIRROR_DISABLED);
-          BM_elem_flag_enable(e_mirr->v2, BM_ELEM_MIRROR_DISABLED);
-        }
-        EDBM_verts_mirror_cache_end(em);
-      }
-    }
-  }
-}
-
-static void edbm_select_pick_mirror_disable_vert(BMEditMesh *em, const Mesh *mesh, BMVert *eve)
-{
-  if (mesh && mesh->symmetry != 0) {
-    for (int axis = 0; axis < 3; axis++) {
-      if (mesh->symmetry & (ME_SYMMETRY_X << axis)) {
-        bool use_topology = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
-        EDBM_verts_mirror_cache_begin(em, axis, true, true, true, use_topology);
-        BMVert *v_mirr = EDBM_verts_mirror_get(em, eve);
-        if (v_mirr && v_mirr != eve && BM_elem_flag_test(v_mirr, BM_ELEM_SELECT)) {
-          BM_elem_flag_enable(v_mirr, BM_ELEM_MIRROR_DISABLED);
-        }
-        EDBM_verts_mirror_cache_end(em);
-      }
-    }
-  }
-}
-
 bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &params)
 {
   int base_index_active = -1;
@@ -2799,7 +2741,7 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         Object *ob_iter = base_iter->object;
         BMEditMesh *em_iter = BKE_editmesh_from_object(ob_iter);
         EDBM_flag_disable_all(em_iter, BM_ELEM_SELECT);
-        EDBM_selectmode_flush_mirrored(vc.bmain, em_iter);
+        EDBM_selectmode_flush(em_iter);
         DEG_id_tag_update(ob_iter->data, ID_RECALC_SELECT);
         WM_event_add_notifier(C, NC_GEOM | ND_SELECT, ob_iter->data);
       }
@@ -2820,6 +2762,19 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         /*shared*/ vc.scene->toolsettings->uv_sticky == UV_STICKY_LOCATION,
     };
 
+    char symmetry_htype = 0;
+    if (em->selectmode & SCE_SELECT_FACE) {
+      symmetry_htype |= BM_FACE;
+    }
+    if (em->selectmode & SCE_SELECT_EDGE) {
+      symmetry_htype |= BM_EDGE;
+    }
+    if (em->selectmode & SCE_SELECT_VERTEX) {
+      symmetry_htype |= BM_VERT;
+    }
+    std::optional<EditMeshSymmetryHelper> symmetry_helper =
+        EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
+
     if (efa) {
       switch (params.sel_op) {
         case SEL_OP_ADD: {
@@ -2829,8 +2784,14 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
            * be active even if it was already selected. */
           BM_select_history_remove(bm, efa);
           BM_face_select_set(bm, efa, false);
+          if (symmetry_helper.has_value()) {
+            symmetry_helper->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, false);
+          }
           BM_select_history_store(bm, efa);
           BM_face_select_set(bm, efa, true);
+          if (symmetry_helper.has_value()) {
+            symmetry_helper->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, true);
+          }
           if (bm->uv_select_sync_valid) {
             BM_face_uvselect_set_pick(bm, efa, true, uv_pick_params);
           }
@@ -2839,10 +2800,8 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         case SEL_OP_SUB: {
           BM_select_history_remove(bm, efa);
           BM_face_select_set(bm, efa, false);
-          bool is_selected = BM_elem_flag_test(efa, BM_ELEM_SELECT);
-          bool is_mirrored_selected = BM_elem_flag_test(efa, BM_ELEM_MIRRORED_SELECT);
-          if (!is_selected && is_mirrored_selected) {
-            edbm_select_pick_mirror_disable_face(em, id_cast<const Mesh *>(obedit->data), efa);
+          if (symmetry_helper.has_value()) {
+            symmetry_helper->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, false);
           }
           break;
         }
@@ -2853,6 +2812,9 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           if (!is_selected && !is_mirrored_selected) {
             BM_select_history_store(bm, efa);
             BM_face_select_set(bm, efa, true);
+            if (symmetry_helper.has_value()) {
+              symmetry_helper->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, true);
+            }
             if (bm->uv_select_sync_valid) {
               BM_face_uvselect_set_pick(bm, efa, true, uv_pick_params);
             }
@@ -2860,12 +2822,11 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           else {
             BM_select_history_remove(bm, efa);
             BM_face_select_set(bm, efa, false);
-            BM_elem_flag_disable(efa, BM_ELEM_MIRRORED_SELECT);
+            if (symmetry_helper.has_value()) {
+              symmetry_helper->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, false);
+            }
             if (bm->uv_select_sync_valid) {
               BM_face_uvselect_set_pick(bm, efa, false, uv_pick_params);
-            }
-            if (!is_selected && is_mirrored_selected) {
-              edbm_select_pick_mirror_disable_face(em, id_cast<const Mesh *>(obedit->data), efa);
             }
           }
           break;
@@ -2875,6 +2836,9 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           if (!BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
             BM_select_history_store(bm, efa);
             BM_face_select_set(bm, efa, true);
+            if (symmetry_helper.has_value()) {
+              symmetry_helper->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, true);
+            }
           }
           /* UV select will have been cleared. */
           break;
@@ -2893,8 +2857,14 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
            * be active even if it was already selected. */
           BM_select_history_remove(bm, eed);
           BM_edge_select_set(bm, eed, false);
+          if (symmetry_helper.has_value()) {
+            symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, false);
+          }
           BM_select_history_store(bm, eed);
           BM_edge_select_set(bm, eed, true);
+          if (symmetry_helper.has_value()) {
+            symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, true);
+          }
           if (bm->uv_select_sync_valid) {
             BM_edge_uvselect_set_pick(bm, eed, true, uv_pick_params);
           }
@@ -2903,13 +2873,11 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         case SEL_OP_SUB: {
           BM_select_history_remove(bm, eed);
           BM_edge_select_set(bm, eed, false);
+          if (symmetry_helper.has_value()) {
+            symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, false);
+          }
           if (bm->uv_select_sync_valid) {
             BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params);
-          }
-          bool is_selected = BM_elem_flag_test(eed, BM_ELEM_SELECT);
-          bool is_mirrored_selected = BM_elem_flag_test(eed, BM_ELEM_MIRRORED_SELECT);
-          if (!is_selected && is_mirrored_selected) {
-            edbm_select_pick_mirror_disable_edge(em, id_cast<const Mesh *>(obedit->data), eed);
           }
           break;
         }
@@ -2919,6 +2887,9 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           if (!is_selected && !is_mirrored_selected) {
             BM_select_history_store(bm, eed);
             BM_edge_select_set(bm, eed, true);
+            if (symmetry_helper.has_value()) {
+              symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, true);
+            }
             if (bm->uv_select_sync_valid) {
               BM_edge_uvselect_set_pick(bm, eed, true, uv_pick_params);
             }
@@ -2927,11 +2898,11 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
             BM_select_history_remove(bm, eed);
             BM_edge_select_set(bm, eed, false);
             BM_elem_flag_disable(eed, BM_ELEM_MIRRORED_SELECT);
+            if (symmetry_helper.has_value()) {
+              symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, false);
+            }
             if (bm->uv_select_sync_valid) {
               BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params);
-            }
-            if (!is_selected && is_mirrored_selected) {
-              edbm_select_pick_mirror_disable_edge(em, id_cast<const Mesh *>(obedit->data), eed);
             }
           }
           break;
@@ -2940,6 +2911,9 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           if (!BM_elem_flag_test(eed, BM_ELEM_SELECT)) {
             BM_select_history_store(bm, eed);
             BM_edge_select_set(bm, eed, true);
+            if (symmetry_helper.has_value()) {
+              symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, true);
+            }
           }
           break;
         }
@@ -2956,8 +2930,14 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
            * be active even if it was already selected. */
           BM_select_history_remove(bm, eve);
           BM_vert_select_set(bm, eve, false);
+          if (symmetry_helper.has_value()) {
+            symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, false);
+          }
           BM_select_history_store(bm, eve);
           BM_vert_select_set(bm, eve, true);
+          if (symmetry_helper.has_value()) {
+            symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, true);
+          }
           if (bm->uv_select_sync_valid) {
             BM_vert_uvselect_set_pick(bm, eve, true, uv_pick_params);
           }
@@ -2966,13 +2946,11 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         case SEL_OP_SUB: {
           BM_select_history_remove(bm, eve);
           BM_vert_select_set(bm, eve, false);
+          if (symmetry_helper.has_value()) {
+            symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, false);
+          }
           if (bm->uv_select_sync_valid) {
             BM_vert_uvselect_set_pick(bm, eve, false, uv_pick_params);
-          }
-          bool is_selected = BM_elem_flag_test(eve, BM_ELEM_SELECT);
-          bool is_mirrored_selected = BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT);
-          if (!is_selected && is_mirrored_selected) {
-            edbm_select_pick_mirror_disable_vert(em, id_cast<const Mesh *>(obedit->data), eve);
           }
           break;
         }
@@ -2982,6 +2960,9 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           if (!is_selected && !is_mirrored_selected) {
             BM_select_history_store(bm, eve);
             BM_vert_select_set(bm, eve, true);
+            if (symmetry_helper.has_value()) {
+              symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, true);
+            }
             if (bm->uv_select_sync_valid) {
               BM_vert_uvselect_set_pick(bm, eve, true, uv_pick_params);
             }
@@ -2990,11 +2971,11 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
             BM_select_history_remove(bm, eve);
             BM_vert_select_set(bm, eve, false);
             BM_elem_flag_disable(eve, BM_ELEM_MIRRORED_SELECT);
+            if (symmetry_helper.has_value()) {
+              symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, false);
+            }
             if (bm->uv_select_sync_valid) {
               BM_vert_uvselect_set_pick(bm, eve, false, uv_pick_params);
-            }
-            if (!is_selected && is_mirrored_selected) {
-              edbm_select_pick_mirror_disable_vert(em, id_cast<const Mesh *>(obedit->data), eve);
             }
           }
           break;
@@ -3003,6 +2984,9 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           if (!BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
             BM_select_history_store(bm, eve);
             BM_vert_select_set(bm, eve, true);
+            if (symmetry_helper.has_value()) {
+              symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, true);
+            }
           }
           break;
         }
@@ -3013,7 +2997,7 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
       }
     }
 
-    EDBM_selectmode_flush_mirrored(vc.bmain, em);
+    EDBM_selectmode_flush(em);
 
     if (efa) {
       ed::object::material_active_index_set(obedit, efa->mat_nr);
@@ -3177,6 +3161,11 @@ void EDBM_selectmode_convert(BMEditMesh *em,
           BM_edge_select_set(bm, eed, true);
         }
       }
+      BM_ITER_MESH (eed, &iter, bm, BM_EDGES_OF_MESH) {
+        BM_elem_flag_set(eed,
+                         BM_ELEM_MIRRORED_SELECT,
+                         BM_edge_is_any_vert_flag_test(eed, BM_ELEM_MIRRORED_SELECT));
+      }
     }
     else if (selectmode_new == SCE_SELECT_FACE) {
       /* Flush up (vert -> face). */
@@ -3190,6 +3179,12 @@ void EDBM_selectmode_convert(BMEditMesh *em,
         if (BM_elem_flag_test(efa, BM_ELEM_TAG)) {
           BM_face_select_set(bm, efa, true);
         }
+      }
+
+      BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+        BM_elem_flag_set(efa,
+                         BM_ELEM_MIRRORED_SELECT,
+                         BM_face_is_any_vert_flag_test(efa, BM_ELEM_MIRRORED_SELECT));
       }
     }
   }
@@ -3210,6 +3205,11 @@ void EDBM_selectmode_convert(BMEditMesh *em,
           BM_face_select_set(bm, efa, true);
         }
       }
+      BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+        BM_elem_flag_set(efa,
+                         BM_ELEM_MIRRORED_SELECT,
+                         BM_face_is_any_edge_flag_test(efa, BM_ELEM_MIRRORED_SELECT));
+      }
     }
     else if (selectmode_new == SCE_SELECT_VERTEX) {
       /* Flush down (edge -> vert). */
@@ -3217,6 +3217,9 @@ void EDBM_selectmode_convert(BMEditMesh *em,
       BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
         if (!BM_vert_is_all_edge_flag_test(eve, BM_ELEM_SELECT, true)) {
           BM_vert_select_set(bm, eve, false);
+        }
+        if (!BM_vert_is_all_face_flag_test(eve, BM_ELEM_MIRRORED_SELECT, true)) {
+          BM_elem_flag_disable(eve, BM_ELEM_MIRRORED_SELECT);
         }
       }
       /* Deselect edges without both verts selected. */
@@ -3234,6 +3237,9 @@ void EDBM_selectmode_convert(BMEditMesh *em,
         if (!BM_edge_is_all_face_flag_test(eed, BM_ELEM_SELECT, true)) {
           BM_edge_select_set(bm, eed, false);
         }
+        if (!BM_edge_is_all_face_flag_test(eed, BM_ELEM_MIRRORED_SELECT, true)) {
+          BM_elem_flag_disable(eed, BM_ELEM_MIRRORED_SELECT);
+        }
       }
       /* Deselect faces without edges selected. */
       BM_mesh_select_flush_from_verts(bm, false);
@@ -3244,6 +3250,9 @@ void EDBM_selectmode_convert(BMEditMesh *em,
       BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
         if (!BM_vert_is_all_face_flag_test(eve, BM_ELEM_SELECT, true)) {
           BM_vert_select_set(bm, eve, false);
+        }
+        if (!BM_vert_is_all_face_flag_test(eve, BM_ELEM_MIRRORED_SELECT, true)) {
+          BM_elem_flag_disable(eve, BM_ELEM_MIRRORED_SELECT);
         }
       }
       /* Deselect faces without verts selected. */
@@ -4219,7 +4228,7 @@ static wmOperatorStatus edbm_select_linked_exec(bContext *C, wmOperator *op)
 
       BMW_end(&walker);
 
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
     }
     else if (em->selectmode & SCE_SELECT_EDGE) {
       BMEdge *e;
@@ -4286,7 +4295,7 @@ static wmOperatorStatus edbm_select_linked_exec(bContext *C, wmOperator *op)
 
       BMW_end(&walker);
 
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
     }
     else {
       BMFace *f;
@@ -4316,7 +4325,7 @@ static wmOperatorStatus edbm_select_linked_exec(bContext *C, wmOperator *op)
       }
 
       BMW_end(&walker);
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
     }
 
     if (delimit) {
@@ -4419,7 +4428,7 @@ static void edbm_select_linked_pick_ex(
 
     BMW_end(&walker);
 
-    EDBM_selectmode_flush_mirrored(bmain, em);
+    EDBM_selectmode_flush(em);
   }
   else if (ele->head.htype == BM_EDGE) {
     BMEdge *eed = reinterpret_cast<BMEdge *>(ele);
@@ -4457,7 +4466,7 @@ static void edbm_select_linked_pick_ex(
 
     BMW_end(&walker);
 
-    EDBM_selectmode_flush_mirrored(bmain, em);
+    EDBM_selectmode_flush(em);
   }
   else if (ele->head.htype == BM_FACE) {
     BMFace *efa = reinterpret_cast<BMFace *>(ele);
@@ -4736,7 +4745,7 @@ static wmOperatorStatus edbm_select_by_pole_count_exec(bContext *C, wmOperator *
     }
 
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
@@ -4817,7 +4826,7 @@ static wmOperatorStatus edbm_select_face_by_sides_exec(bContext *C, wmOperator *
     }
 
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
@@ -4931,7 +4940,7 @@ static wmOperatorStatus edbm_select_loose_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
@@ -5449,7 +5458,7 @@ static void walker_deselect_nth(Main *bmain,
     BMVert *v_start = reinterpret_cast<BMVert *>(h_act);
     if (bm_verts_form_cyclic_chain(v_start)) {
       walker_deselect_nth_vertex_chain(em, op_params, v_start);
-      EDBM_selectmode_flush_mirrored_ex(bmain, em, SCE_SELECT_VERTEX);
+      EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);
       return;
     }
   }
@@ -5457,7 +5466,7 @@ static void walker_deselect_nth(Main *bmain,
     BMEdge *e_start = reinterpret_cast<BMEdge *>(h_act);
     if (bm_edges_form_cyclic_chain(e_start)) {
       walker_deselect_nth_edge_chain(em, op_params, e_start);
-      EDBM_selectmode_flush_mirrored_ex(bmain, em, SCE_SELECT_EDGE);
+      EDBM_selectmode_flush_ex(em, SCE_SELECT_EDGE);
       return;
     }
   }
@@ -5465,7 +5474,7 @@ static void walker_deselect_nth(Main *bmain,
     BMFace *f_start = reinterpret_cast<BMFace *>(h_act);
     if (bm_faces_form_cyclic_chain(f_start)) {
       walker_deselect_nth_face_chain(em, op_params, f_start);
-      EDBM_selectmode_flush_mirrored_ex(bmain, em, SCE_SELECT_FACE);
+      EDBM_selectmode_flush_ex(em, SCE_SELECT_FACE);
       return;
     }
   }
@@ -5542,7 +5551,7 @@ static void walker_deselect_nth(Main *bmain,
   BMO_pop(bm);
 
   /* Flush selection up. */
-  EDBM_selectmode_flush_mirrored_ex(bmain, em, flushtype);
+  EDBM_selectmode_flush_ex(em, flushtype);
 }
 
 static void deselect_nth_active(
@@ -5555,7 +5564,7 @@ static void deselect_nth_active(
   *r_eed = nullptr;
   *r_efa = nullptr;
 
-  EDBM_selectmode_flush_mirrored(bmain, em);
+  EDBM_selectmode_flush(em);
   ele = BM_mesh_active_elem_get(em->bm);
 
   if (ele && BM_elem_flag_test(ele, BM_ELEM_SELECT)) {
@@ -5735,7 +5744,7 @@ static wmOperatorStatus edbm_select_sharp_edges_exec(bContext *C, wmOperator *op
       EDBM_selectmode_convert(em, SCE_SELECT_EDGE, SCE_SELECT_FACE);
     }
     else {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
     }
     EDBM_uvselect_clear(em);
 
@@ -5949,7 +5958,7 @@ static wmOperatorStatus edbm_select_non_manifold_exec(bContext *C, wmOperator *o
       DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
       WM_event_add_notifier(C, NC_GEOM | ND_SELECT, obedit->data);
 
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
     }
   }
@@ -6069,7 +6078,7 @@ static wmOperatorStatus edbm_select_random_exec(bContext *C, wmOperator *op)
 
     if (select) {
       /* Was #EDBM_select_flush_from_verts, but it over selects in edge/face mode. */
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
     }
     else {
       EDBM_select_flush_from_verts(em, false);
@@ -6171,7 +6180,7 @@ static wmOperatorStatus edbm_select_ungrouped_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
@@ -6302,7 +6311,7 @@ static wmOperatorStatus edbm_select_axis_exec(bContext *C, wmOperator *op)
       }
     }
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em_iter);
+      EDBM_selectmode_flush(em_iter);
       EDBM_uvselect_clear(em);
 
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit_iter->data);
@@ -6626,7 +6635,7 @@ static wmOperatorStatus edbm_loop_to_region_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
@@ -6743,7 +6752,7 @@ static wmOperatorStatus edbm_select_by_attribute_exec(bContext *C, wmOperator * 
     }
 
     if (changed) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
       EDBM_uvselect_clear(em);
 
       DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);

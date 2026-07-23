@@ -1653,7 +1653,7 @@ static wmOperatorStatus edbm_vert_connect_path_exec(bContext *C, wmOperator *op)
     BM_custom_loop_normals_to_vector_layer(bm);
 
     if (bm_vert_connect_select_history(bm)) {
-      EDBM_selectmode_flush_mirrored(bmain, em);
+      EDBM_selectmode_flush(em);
 
       BM_custom_loop_normals_from_vector_layer(bm, false);
 
