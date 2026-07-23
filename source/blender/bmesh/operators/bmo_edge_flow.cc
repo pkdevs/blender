@@ -14,6 +14,7 @@
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_vector.hh"
+#include "BLI_map.hh"
 
 #include "BKE_curves.hh"
 #include "BLI_length_parameterize.hh"
@@ -297,6 +298,113 @@ static void edge_flow_collect_loops(BMesh *bm, Vector<EdgeFlowLoop> &r_loops)
   }
 }
 
+static bool edge_flow_loops_cross(const Span<EdgeFlowLoop> loops)
+{
+  Map<const BMVert *, int> vert_loop_map;
+  for (const int i : loops.index_range()) {
+    for (const BMVert *v : loops[i].verts) {
+      // if owner is a different loop index, two chains share that vert and cross.
+      const int owner = vert_loop_map.lookup_or_add(v, i);
+      if (owner != i) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/*
+* Handle case of open chain rungs and rails for linear/curve mode by 2-coloring parallel and perpendicular loops, 
+* then processing in one direction at a time. Otherwise processing order is index-dependent and degenerates.
+*/
+static int edge_flow_pick_chains(const Span<EdgeFlowLoop> loops, MutableSpan<bool> r_process)
+{
+  auto chain_survives = [&](const int j) {
+    return !loops[j].is_cyclic && loops[j].verts.size() > 2;
+  };
+
+  Map<const BMVert *, Vector<int>> vert_chains;
+  for (const int i : loops.index_range()) {
+    if (!chain_survives(i)) {
+      continue;
+    }
+    for (const BMVert *v : loops[i].verts) {
+      Vector<int> &chains = vert_chains.lookup_or_add_default(v);
+      if (chains.is_empty() || chains.last() != i) {
+        chains.append(i);
+      }
+    }
+  }
+
+  Array<Vector<int>> adjacent(loops.size());
+  for (const Vector<int> &chains : vert_chains.values()) {
+    for (const int i : chains) {
+      for (const int j : chains) {
+        if (i != j && !adjacent[i].contains(j)) {
+          adjacent[i].append(j);
+        }
+      }
+    }
+  }
+
+  int skipped = 0;
+  Array<int> color(loops.size(), -1);
+  for (const int seed: loops.index_range()) {
+    if (!chain_survives(seed) || color[seed] != -1) {
+      continue;
+    }
+
+    Vector<int> component;
+    Vector<int> stack({seed});
+    color[seed] = 0;
+    bool bipartite = true;
+    while (!stack.is_empty()) {
+      const int i = stack.pop_last();
+      component.append(i);
+      for (const int j : adjacent[i]) {
+        if (color[j] == -1) {
+          color[j] = 1 - color[i];
+          stack.append(j);
+        }
+        else if (color[j] == color[i]) {
+          bipartite = false;
+        }
+      }
+    }
+
+    if (component.size() == 1) {
+      continue;
+    }
+
+    if (!bipartite) {
+      for (const int i : component) {
+        r_process[i] = false;
+      }
+      skipped += int(component.size());
+      continue;
+    }
+
+    /* Longest chain anchors the kept family; lowest collection index breaks ties
+     * (collection follows mesh edge order, so this is deterministic). */
+    int anchor = component.first();
+    for (const int i : component) {
+      const int64_t anchor_len = loops[anchor].verts.size();
+      const int64_t i_len = loops[i].verts.size();
+      if (i_len > anchor_len || (i_len == anchor_len && i < anchor)) {
+        anchor = i;
+      }
+    }
+    const int family = color[anchor];
+    for (const int i : component) {
+      if (color[i] != family) {
+        r_process[i] = false;
+      }
+    }
+  }
+  return skipped;
+}
+
 static bool edge_flow_calc_spline_target(BMLoop *l, const float tension, const float min_angle, float3 &r_target)
 {
   if (l->f->len != 4 || l->radial_prev->f->len != 4) {
@@ -470,6 +578,17 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
   edge_flow_collect_loops(bm, loops);
 
   if (mode == EDGE_FLOW_FLOW) {
+    bool all_cyclic = !loops.is_empty();
+    for (const EdgeFlowLoop &loop : loops) {
+      if (!loop.is_cyclic) {
+        all_cyclic = false;
+        break;
+      }
+    }
+    if (all_cyclic && edge_flow_loops_cross(loops)) {
+      return;
+    }
+
     Array<Array<float3>> orig_cos(loops.size());
 
     for (const int j : loops.index_range()) {
@@ -543,7 +662,18 @@ void bmo_edge_flow_exec(BMesh *bm, BMOperator *op)
     return;
   }
 
-  for (EdgeFlowLoop &loop : loops) {
+  Array<bool> process_chain(loops.size(), true);
+  const int skipped = edge_flow_pick_chains(loops, process_chain);
+  if (skipped > 0) {
+    BMO_error_raise(
+        bm, op, BMO_ERROR_WARN, "Crossing chains could not be split into two directions");
+  }
+
+  for (const int j : loops.index_range()) {
+    EdgeFlowLoop &loop = loops[j];
+    if (!process_chain[j]) {
+      continue;
+    }
     if (loop.is_cyclic) {
       continue;
     }

@@ -11,6 +11,8 @@
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
+#include "BLI_string.hh"
+
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_layer.hh"
@@ -28,6 +30,39 @@
 #include "mesh_intern.hh"
 
 namespace blender {
+
+static bool edbm_edge_flow_poll_property(const bContext * /*C*/, wmOperator *op, const PropertyRNA *prop)
+{
+  const char *prop_id = RNA_property_identifier(prop);
+  const int mode = RNA_enum_get(op->ptr, "mode");
+
+  if (STR_ELEM(prop_id, "iterations", "min_angle", "blend_mode", "blend_start_int", "blend_end_int", "blend_start_float", 
+    "blend_end_float")) {
+      if (mode != EDGE_FLOW_FLOW) {
+        return false;
+      }
+      const int blend_mode = RNA_enum_get(op->ptr, "blend_mode");
+      if (blend_mode == 0 && STR_ELEM(prop_id, "blend_start_float", "blend_end_float")) {
+        return false;
+      }
+      if (blend_mode == 1 && STR_ELEM(prop_id, "blend_start_int", "blend_end_int")) {
+        return false;
+      }
+      return true;
+  }
+  
+  if (STREQ(prop_id, "tension")) {
+    return mode != EDGE_FLOW_LINEAR;
+  }
+  if (STREQ(prop_id, "use_rail")) {
+    return mode == EDGE_FLOW_CURVE;
+  }
+  if (STR_ELEM(prop_id, "rail_mode", "rail_start", "rail_end")) {
+    return mode == EDGE_FLOW_CURVE && RNA_boolean_get(op->ptr, "use_rail");
+  }
+
+  return true;
+}
 
 static wmOperatorStatus edbm_edge_flow_exec(bContext *C, wmOperator *op)
 {
@@ -148,6 +183,7 @@ void MESH_OT_edge_flow(wmOperatorType *ot)
   ot->exec = edbm_edge_flow_exec;
   ot->invoke = edbm_edge_flow_invoke;
   ot->poll = ED_operator_editmesh;
+  ot->poll_property = edbm_edge_flow_poll_property;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
