@@ -3,3 +3,4 @@ Referenced by commit 97a4020d3cf4e9ff90f1efec8ca4c0ebbb0e7908, Fix #157071: Scul
 Referenced by pull request #161817, Fix #161761: Tablet eraser not recognized in mesh paint modes
 Referenced by issue #161820, Blender crashes when using the grab planar cloth brush on nothing.
 Referenced by pull request #161829, Fix #161820: Grab Planar Cloth brush crashes when used off mesh
+Referenced by commit 6e2c6ca42587761ccc860dd484d7469bf99fad38, Fix #161820: Grab Planar Cloth brush crashes when used off mesh
