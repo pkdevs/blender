@@ -356,24 +356,6 @@ bool DEG_id_is_fully_evaluated(const Depsgraph *depsgraph, const ID *id_eval)
   return true;
 }
 
-bool DEG_needs_to_read_main(const Depsgraph *depsgraph)
-{
-  const deg::Depsgraph *deg_graph = reinterpret_cast<const deg::Depsgraph *>(depsgraph);
-  for (deg::IDNode *id_node : deg_graph->id_nodes) {
-    for (deg::ComponentNode *component : id_node->components.values()) {
-      for (deg::OperationNode *operation : component->operations) {
-        if (operation->type != deg::NodeType::COPY_ON_EVAL) {
-          continue;
-        }
-        if (operation->flag & deg::DEPSOP_FLAG_NEEDS_UPDATE) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
 static bool operation_needs_update(const ID &id,
                                    const deg::NodeType component_type,
                                    const deg::OperationCode opcode)

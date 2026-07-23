@@ -176,11 +176,6 @@ template<typename T> bool DEG_is_evaluated(const T *id)
 bool DEG_is_fully_evaluated(const Depsgraph *depsgraph);
 
 /**
- * Returns true if any nodes are tagged that require reading from Main.
- */
-bool DEG_needs_to_read_main(const Depsgraph *depsgraph);
-
-/**
  * Check every component of the data-block is evaluated. For example, an object disabled in the
  * viewport is not fully evaluated, even though the copy-on-eval data-block is created.
  */
