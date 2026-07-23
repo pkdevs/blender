@@ -311,12 +311,6 @@ void do_clay_strips_brush(const Depsgraph &depsgraph,
   const float4x4 mat = clay_strips::calc_local_matrix(
       brush, *ss.cache, tip_normal, plane_center, flip);
 
-  // const float4x4 mat =
-  //     eBrushFalloffShape(brush.falloff_shape) == PAINT_FALLOFF_SHAPE_SPHERE ?
-  //         clay_strips::calc_local_matrix(brush, *ss.cache, plane_normal, plane_center, flip)
-  //         : clay_strips::calc_local_matrix(
-  //             brush, *ss.cache, ss.cache->view_normal_symm, ss.cache->location_symm, flip);
-
   const float3 offset = plane_normal * ss.cache->bstrength * ss.cache->radius;
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
