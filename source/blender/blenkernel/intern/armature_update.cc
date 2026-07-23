@@ -1050,24 +1050,47 @@ void BKE_pose_splineik_evaluate(Depsgraph *depsgraph,
 static bke::GeometrySet pose_to_geometry(const bArmature & /*armature*/, const bPose &pose)
 {
   const int num_pchan = pose.chanbase.count();
+  /* Index map for looking up parent bone index. */
+  Map<const bPoseChannel *, int> pchan_index_map;
+  pchan_index_map.reserve(num_pchan);
+  int pchan_i = 0;
+  for (const bPoseChannel &pchan : pose.chanbase) {
+    pchan_index_map.add_new(&pchan, pchan_i);
+    ++pchan_i;
+  }
+
   std::unique_ptr<bke::Instances> instances = std::make_unique<bke::Instances>(num_pchan);
   MutableSpan<int> ref_handles = instances->reference_handles_for_write();
   MutableSpan<float4x4> transforms = instances->transforms_for_write();
   Array<std::string> pose_channel_names(num_pchan);
+  bke::MutableAttributeAccessor attributes = instances->attributes_for_write();
+  bke::SpanAttributeWriter<int> bone_parent_index_writer =
+      attributes.lookup_or_add_for_write_only_span<int>("bone_parent_index",
+                                                        bke::AttrDomain::Instance);
+  bke::SpanAttributeWriter<int> bone_depth = attributes.lookup_or_add_for_write_span<int>(
+      "bone_depth", bke::AttrDomain::Instance);
 
-  int pchan_i = 0;
+  pchan_i = 0;
   for (const bPoseChannel &pchan : pose.chanbase) {
     ref_handles[pchan_i] = instances->add_new_reference(bke::InstanceReference());
     transforms[pchan_i] = float4x4(pchan.pose_mat);
     pose_channel_names[pchan_i] = pchan.name;
+    const int bone_parent_index = pchan_index_map.lookup_default(pchan.parent, -1);
+    bone_parent_index_writer.span[pchan_i] = bone_parent_index;
+    bone_depth.span[pchan_i] = (bone_parent_index >= 0 ? bone_depth.span[bone_parent_index] + 1 :
+                                                         0);
+
     ++pchan_i;
   }
+  bone_parent_index_writer.finish();
+  bone_depth.finish();
 
-  bke::GeometrySet geometry_set = bke::GeometrySet::from_instances(std::move(instances));
   nodes::ListPtr<std::string> pose_channel_name_list = nodes::List<std::string>::from_container(
       std::move(pose_channel_names));
   nodes::BundleItemSocketValue pose_channel_name_item;
   pose_channel_name_item.value = bke::SocketValueVariant::From(std::move(pose_channel_name_list));
+
+  bke::GeometrySet geometry_set = bke::GeometrySet::from_instances(std::move(instances));
   geometry_set.bundle_for_write().add_path_new(
       "pose_channel_names", nodes::BundleItemValue(std::move(pose_channel_name_item)));
 
@@ -1075,7 +1098,7 @@ static bke::GeometrySet pose_to_geometry(const bArmature & /*armature*/, const b
 }
 
 static void geometry_to_pose(const bke::GeometrySet &geometry_set,
-                             const bArmature &armature,
+                             const bArmature & /*armature*/,
                              bPose &pose)
 {
   if (!geometry_set.has_instances() || !geometry_set.has_bundle()) {
