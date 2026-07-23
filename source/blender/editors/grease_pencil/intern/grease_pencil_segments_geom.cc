@@ -1554,7 +1554,21 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
                                segment.intersection_factor[Side::End]);
   }
   else {
-    point2 = all_positions[segment.edge(Side::Start)[1]];
+    const int first_end_index = segment.edge(Side::Start)[1];
+    int end_index = first_end_index;
+
+    point2 = all_positions[end_index];
+
+    /* If the points are on top of each other, go to the next point. */
+    while (math::distance(point1, point2) < 0.001f) {
+      end_index = segment.wrap_index(end_index + 1);
+      point2 = all_positions[end_index];
+
+      /* Prevent looping forever. */
+      if (end_index == first_end_index) {
+        break;
+      }
+    }
   }
 
   const float2 line_dir = math::normalize(point2 - point1);
