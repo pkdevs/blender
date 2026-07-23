@@ -25,7 +25,7 @@ class ModalTimerOperator(bpy.types.Operator):
 
     def execute(self, context):
         # Store the original color to avoid altering user settings
-        self._theme = context.preferences.themes[0]
+        self._theme = context.preferences.active_theme
         color = self._theme.view_3d.space.gradients.high_gradient
         self._original_color = color[:]
         wm = context.window_manager

@@ -20,7 +20,7 @@ def update(filepath):
 
     print("Updating theme: {!r}".format(filepath))
     preset_xml_map = (
-        ("preferences.themes[0]", "Theme"),
+        ("preferences.active_theme", "Theme"),
         ("preferences.ui_styles[0]", "Theme"),
     )
     rna_xml.xml_file_run(

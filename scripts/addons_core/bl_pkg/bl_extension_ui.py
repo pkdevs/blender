@@ -918,7 +918,7 @@ class ExtensionUI_FilterParams:
             addons_enabled = None  # Unused.
 
         if show_themes:
-            active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.themes[0].filepath)
+            active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.active_theme.filepath)
         else:
             active_theme_info = None  # Unused.
 
@@ -1936,7 +1936,7 @@ class USERPREF_MT_extensions_item(Menu):
                 case "add-on":
                     is_enabled = prefs.addons.get(addon_module_name) is not None
                 case "theme":
-                    active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.themes[0].filepath)
+                    active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.active_theme.filepath)
                     is_enabled = (repo_index, pkg_id) == active_theme_info
 
         return repo, repo_index, pkg_id, item_local, item_remote, addon_module_name, is_enabled
@@ -2251,7 +2251,7 @@ def tags_current(wm, tags_attr):
     if filter_by_type in {"", "add-on"}:
         addons_enabled = {addon.module for addon in prefs.addons}
     if filter_by_type in {"", "theme"}:
-        active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.themes[0].filepath)
+        active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.active_theme.filepath)
 
     repo_filter = wm.extension_repo_filter
 

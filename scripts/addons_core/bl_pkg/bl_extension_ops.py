@@ -491,7 +491,7 @@ def pkg_info_check_exclude_filter(item, search_casefold):
 
 
 def extension_theme_enable_filepath(filepath):
-    bpy.ops.script.execute_preset(
+    bpy.ops.wm.interface_theme_preset_set(
         filepath=filepath,
         menu_idname="USERPREF_MT_interface_theme_presets",
     )
@@ -1232,7 +1232,7 @@ def _preferences_theme_state_create():
         file_mtime_or_none,
         scandir_with_demoted_errors,
     )
-    filepath = bpy.context.preferences.themes[0].filepath
+    filepath = bpy.context.preferences.active_theme.filepath
     if not filepath:
         return None, None
 
@@ -1268,11 +1268,18 @@ def _preferences_theme_state_restore(state):
     # The current theme was an extension that was uninstalled.
     if state[0] is not None and state_update[0] is None:
         bpy.ops.preferences.reset_default_theme()
+    # Update:
+    elif state_update[0] is not None:
+        extension_theme_enable_filepath(state_update[1])
+    else:
         return
 
-    # Update:
-    if state_update[0] is not None:
-        extension_theme_enable_filepath(state_update[1])
+    # A theme change affects every area, not just the Preferences editor that
+    # `_preferences_ui_redraw` affects, and notifiers alone aren't reliably
+    # processed in this (background job completion) context.
+    for win in bpy.context.window_manager.windows:
+        for area in win.screen.areas:
+            area.tag_redraw()
 
 
 # -----------------------------------------------------------------------------
@@ -3621,7 +3628,7 @@ class EXTENSIONS_OT_package_theme_disable(Operator):
     def execute(self, context):
         repo_item = extension_repos_read_index(self.repo_index)
         dirpath = os.path.join(repo_item.directory, self.pkg_id)
-        if os.path.samefile(dirpath, os.path.dirname(context.preferences.themes[0].filepath)):
+        if os.path.samefile(dirpath, os.path.dirname(context.preferences.active_theme.filepath)):
             bpy.ops.preferences.reset_default_theme()
         return {'FINISHED'}
 
