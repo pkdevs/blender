@@ -823,12 +823,8 @@ void scene_time_uniforms(float &seconds, float &frame)
   frame = uni.uniform_buf.scene.frame;
 }
 
-void node_light_info_impl(float4 &color,
-                          float &power,
-                          float3 &position,
-                          float3 &direction,
-                          float &distance,
-                          float &attenuation)
+void node_light_info_impl(
+    float4 &color, float &power, float3 &position, float3 &direction, float &distance, float &mask)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
@@ -842,7 +838,7 @@ void node_light_info_impl(float4 &color,
   LightVector lv = light_vector_get(light, is_directional, g_data.P);
   direction = lv.L;
   distance = lv.dist;
-  attenuation = light_attenuation_surface(light, is_directional, lv);
+  mask = light_attenuation_surface(light, is_directional, lv);
 }
 
 void node_light_accumulation_impl(

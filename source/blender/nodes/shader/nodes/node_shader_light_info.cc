@@ -15,7 +15,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Vector>("Position"_ustr);
   b.add_output<decl::Vector>("Direction"_ustr);
   b.add_output<decl::Float>("Distance"_ustr);
-  b.add_output<decl::Float>("Attenuation"_ustr);
+  b.add_output<decl::Float>("Mask"_ustr);
 }
 
 static int node_shader_gpu_light_info(GPUMaterial *mat,
