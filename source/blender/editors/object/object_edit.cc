@@ -196,9 +196,7 @@ Vector<Object *> objects_in_mode_or_selected(bContext *C,
      * irrespective of selection. */
     ob = ob_active;
   }
-  else if (ob_active && (ob_active->mode &
-                         (OB_MODE_ALL_PAINT | OB_MODE_ALL_SCULPT | OB_MODE_ALL_PAINT_GPENCIL)))
-  {
+  else if (ob_active && (ob_active->mode & (OB_MODE_ALL_PAINT | OB_MODE_ALL_PAINT_GPENCIL))) {
     /* When painting, limit to active. */
     ob = ob_active;
   }
@@ -871,7 +869,7 @@ bool editmode_enter_ex(Main *bmain, Scene *scene, Object *ob, int flag)
 {
   bool ok = false;
 
-  if (ELEM(nullptr, ob, ob->data) || !ID_IS_EDITABLE(ob) || ID_IS_OVERRIDE_LIBRARY(ob) ||
+  if (ELEM(nullptr, ob, ob->data) || !ID_IS_EDITABLE(ob) || !ID_IS_EDITABLE(ob->data) ||
       ID_IS_OVERRIDE_LIBRARY(ob->data))
   {
     return false;
@@ -1068,7 +1066,7 @@ static bool editmode_toggle_poll(bContext *C)
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   /* Covers liboverrides too. */
-  if (ELEM(nullptr, ob, ob->data) || !ID_IS_EDITABLE(ob->data) || ID_IS_OVERRIDE_LIBRARY(ob) ||
+  if (ELEM(nullptr, ob, ob->data) || !ID_IS_EDITABLE(ob) || !ID_IS_EDITABLE(ob->data) ||
       ID_IS_OVERRIDE_LIBRARY(ob->data))
   {
     return false;

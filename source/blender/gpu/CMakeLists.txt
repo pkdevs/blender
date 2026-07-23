@@ -109,11 +109,13 @@ set(SRC
   intern/gpu_viewport.cc
   intern/gpu_worker.cc
 
+  shader_tool/ast.cc
   shader_tool/attribute.cc
   shader_tool/enum.cc
   shader_tool/flow_control.cc
   shader_tool/function.cc
   shader_tool/grammar.cc
+  shader_tool/grammar_bsl.cc
   shader_tool/intermediate.cc
   shader_tool/metadata.cc
   shader_tool/namespace.cc
@@ -329,8 +331,8 @@ set(VULKAN_SRC
   vulkan/vk_ray_tracing.hh
   vulkan/render_graph/nodes/vk_begin_query_node.hh
   vulkan/render_graph/nodes/vk_begin_rendering_node.hh
-  vulkan/render_graph/nodes/vk_build_acceleration_structure_node.hh
   vulkan/render_graph/nodes/vk_blit_image_node.hh
+  vulkan/render_graph/nodes/vk_build_acceleration_structure_node.hh
   vulkan/render_graph/nodes/vk_clear_attachments_node.hh
   vulkan/render_graph/nodes/vk_clear_color_image_node.hh
   vulkan/render_graph/nodes/vk_clear_depth_stencil_image_node.hh
@@ -972,7 +974,6 @@ if(WITH_GTESTS)
       tests/push_constants_test.cc
       tests/ray_tracing_test.cc
       tests/shader_create_info_test.cc
-      tests/shader_preprocess_test.cc
       tests/shader_test.cc
       tests/specialization_constants_test.cc
       tests/state_blend_test.cc
