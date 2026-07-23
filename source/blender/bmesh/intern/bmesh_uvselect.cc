@@ -611,8 +611,7 @@ static void bm_vert_uvselect_set_pick_ex(BMesh *bm,
   }
   /* NOTE: it doesn't make sense to check `uv_pick_params.shared` in this context because,
    * unlike edges and faces, a vertex is logically connected to all corners that use it,
-   * so there is no way to use the UV coordinates to differentiate one UV region from another.
-   * This holds for both regular & mirror select.*/
+   * so there is no way to use the UV coordinates to differentiate one UV region from another. */
 
   BLI_assert(bm->uv_select_sync_valid);
 
