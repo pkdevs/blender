@@ -1095,7 +1095,7 @@ const uchar *get_color_ptr(const bTheme *btheme, int spacetype, int colorid)
     }
   }
 
-  return static_cast<const uchar *>(cp);
+  return cp;
 }
 
 void init_default()
