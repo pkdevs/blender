@@ -1171,7 +1171,7 @@ static void geometry_to_pose(const bke::GeometrySet &geometry_set,
       return;
     }
 
-    (float4x4 &)pchan->pose_mat = transforms[instance_i];
+    copy_m4_m4(pchan->pose_mat, transforms[instance_i].ptr());
   };
 
   const std::variant pose_channel_name_values = pose_channel_names->typed<std::string>()->values();
@@ -1191,9 +1191,9 @@ static void geometry_to_pose(const bke::GeometrySet &geometry_set,
   //   if (bone) {
   //     const float4x4 pose_mat = float4x4(pchan.pose_mat);
   //     const float4x4 arm_mat = float4x4(bone->arm_mat);
-  //     (float4x4 &)pchan.chan_mat = pose_mat * math::invert(arm_mat);
-  //     (float3 &)pchan.pose_head = pose_mat.location();
-  //     (float3 &)pchan.pose_tail = pose_mat.location() + pose_mat.y_axis() * bone->length;
+  //     pchan.chan_mat = pose_mat * math::invert(arm_mat);
+  //     pchan.pose_head = pose_mat.location();
+  //     pchan.pose_tail = pose_mat.location() + pose_mat.y_axis() * bone->length;
   //   }
   // }
 }
