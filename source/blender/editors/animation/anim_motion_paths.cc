@@ -522,15 +522,6 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
 
 namespace motionpath {
 
-/* Data owned by the thread which calculates the motion path. */
-struct MotionPathBuffer {
-  /* The bone name for pose bones, empty for objects. */
-  std::string bone_name;
-  int start_frame;
-  Array<float3> points;
-  Array<eMotionPathVert_Flag> flags;
-};
-
 static bMotionPath *get_motion_path(Object &ob, StringRefNull bone_name)
 {
   bMotionPath *mpath;
@@ -549,14 +540,24 @@ static bMotionPath *get_motion_path(Object &ob, StringRefNull bone_name)
 }
 
 /* Runs on the worker thread. */
-static bool eval_callback(Depsgraph *dg, ID &id, const int frame, void *buffer_data)
+static bool eval_callback(Depsgraph *dg,
+                          const bke::animviz::EvaluationTarget &target,
+                          const int frame)
 {
-  MotionPathBuffer *buffer = static_cast<MotionPathBuffer *>(buffer_data);
+  Object *ob = id_cast<Object *>(target.id);
+  bMotionPath *mpath = get_motion_path(*ob, target.component_name);
+  if (!mpath) {
+    return false;
+  }
+  bke::motionpath::WorkerBuffer *buffer = bke::motionpath::get_worker_buffer(*mpath);
+  if (buffer == nullptr) {
+    return false;
+  }
   if (frame < buffer->start_frame || frame >= buffer->start_frame + buffer->points.size()) {
     return false;
   }
 
-  ID *id_eval = DEG_get_evaluated(dg, &id);
+  ID *id_eval = DEG_get_evaluated(dg, target.id);
   if (!id_eval) {
     /* Should not happen. All IDs with a callback should be in the depsgraph. */
     BLI_assert_unreachable();
@@ -567,13 +568,13 @@ static bool eval_callback(Depsgraph *dg, ID &id, const int frame, void *buffer_d
   Object *ob_eval = id_cast<Object *>(id_eval);
 
   float3 motion_path_point;
-  if (buffer->bone_name.empty()) {
+  if (target.component_name.empty()) {
     motion_path_point = ob_eval->object_to_world().location();
   }
   else {
     BLI_assert(ob_eval->type == OB_ARMATURE);
     bPoseChannel *pchan_eval = BKE_pose_channel_find_name(ob_eval->pose,
-                                                          buffer->bone_name.c_str());
+                                                          target.component_name.c_str());
     /* TODO pass in motion path flags. */
     // mpath->flag & MOTIONPATH_FLAG_BHEAD
     if (true) {
@@ -593,15 +594,21 @@ static bool eval_callback(Depsgraph *dg, ID &id, const int frame, void *buffer_d
 }
 
 /* Runs on main thread. */
-static void update_callback(ID &id, void *buffer_data, Bounds<int> evaluated_range)
+static void update_callback(const bke::animviz::EvaluationTarget &target,
+                            Bounds<int> evaluated_range)
 {
-  MotionPathBuffer *buffer = static_cast<MotionPathBuffer *>(buffer_data);
-  Object *ob = id_cast<Object *>(&id);
-  bMotionPath *mpath = get_motion_path(*ob, buffer->bone_name);
+  Object *ob = id_cast<Object *>(target.id);
+  bMotionPath *mpath = get_motion_path(*ob, target.component_name);
 
   if (mpath == nullptr) {
     BLI_assert_unreachable();
     /* Should have unregistered from the eval job before deleting the motion path. */
+    return;
+  }
+
+  bke::motionpath::WorkerBuffer *buffer = bke::motionpath::get_worker_buffer(*mpath);
+  if (buffer == nullptr) {
+    BLI_assert_unreachable();
     return;
   }
 
@@ -622,10 +629,14 @@ static void update_callback(ID &id, void *buffer_data, Bounds<int> evaluated_ran
   WM_main_add_notifier(NC_OBJECT | ND_DRAW_ANIMVIZ, ob);
 }
 
-static void free_buffer_callback(void *buffer_data)
+static void finish_callback(const bke::animviz::EvaluationTarget &target)
 {
-  MotionPathBuffer *buffer = static_cast<MotionPathBuffer *>(buffer_data);
-  MEM_delete(buffer);
+  Object *ob = id_cast<Object *>(target.id);
+  bMotionPath *mpath = get_motion_path(*ob, target.component_name);
+  if (!mpath) {
+    return;
+  }
+  bke::motionpath::async_eval_free(*mpath);
 }
 
 void register_motionpath_async(Main &bmain,
@@ -634,31 +645,23 @@ void register_motionpath_async(Main &bmain,
                                Scene &scene,
                                ViewLayer &view_layer,
                                bMotionPath &motion_path,
-                               Object &armature_object,
+                               Object &object,
                                std::optional<StringRefNull> bone_name)
 {
   for (int i = 0; i < motion_path.length; i++) {
     motion_path.points[i].flag |= MOTIONPATH_VERT_STALE;
   }
-  MotionPathBuffer *buffer = MEM_new<MotionPathBuffer>(__func__);
-  buffer->bone_name = bone_name.has_value() ? *bone_name : "";
-  buffer->start_frame = motion_path.start_frame;
-  buffer->points.reinitialize(motion_path.length);
-  buffer->flags.reinitialize(motion_path.length);
-  for (const int i : IndexRange(motion_path.length)) {
-    copy_v3_v3(buffer->points[i], motion_path.points[i].co);
-    buffer->flags[i] = motion_path.points[i].flag;
-  }
+  bke::animviz::EvaluationTarget target = {&object.id, bone_name.has_value() ? *bone_name : ""};
+  bke::motionpath::async_eval_allocate(motion_path, wm, window, scene, target);
   bke::animviz::background_eval_register(bmain,
                                          wm,
                                          window,
                                          scene,
                                          view_layer,
-                                         {&armature_object.id, buffer->bone_name},
-                                         buffer,
+                                         target,
                                          eval_callback,
                                          update_callback,
-                                         free_buffer_callback);
+                                         finish_callback);
 }
 
 }  // namespace motionpath

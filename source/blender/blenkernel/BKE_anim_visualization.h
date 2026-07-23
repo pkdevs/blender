@@ -56,22 +56,23 @@ struct EvaluationTarget {
  * the thread that for this frame, the evaluation was not required. This is used on the worker
  * thread to dynamically figure out where the evaluation should end.
  */
-using EvalCallback = FunctionRef<bool(Depsgraph *dg, ID &id, int frame, void *buffer_data)>;
+using EvalCallback = FunctionRef<bool(Depsgraph *dg, const EvaluationTarget &target, int frame)>;
 /* Callback that runs on the main thread periodically. Can be used to copy back data from the
  * buffer. The given range is guaranteed to be evaluated and can be read in a thread safe way. */
-using UpdateCallback = FunctionRef<void(ID &id, void *buffer_data, Bounds<int> evaluated_range)>;
+using UpdateCallback =
+    FunctionRef<void(const EvaluationTarget &target, Bounds<int> evaluated_range)>;
 /* Called when the given target is done with the evaluation. Use to free any heap allocated data
  * passed into the system. */
-using FreeBufferCallback = FunctionRef<void(void *buffer_data)>;
+using FinishCallback = FunctionRef<void(const EvaluationTarget &target)>;
 
 /**
  *
- * \param target_buffer Memory to be written to on the worker thread. The system takes ownership of
- * the memory and will free it with free_cb.
  * \param eval_cb Will be called from the worker thread
  * with the evaluated depsgraph for every frame. Don't touch main from this function.
  * \param update_cb Will be called periodically on the main thread. This can be used to copy data
  * from the buffer to a storage in the main thread.
+ * \param finish_cb Always called just after the target was removed from the evaluation system. Use
+ * to do any last syncronisation and freeing any allocated buffers.
  */
 void background_eval_register(Main &bmain,
                               wmWindowManager &wm,
@@ -79,10 +80,9 @@ void background_eval_register(Main &bmain,
                               Scene &scene,
                               ViewLayer &view_layer,
                               const EvaluationTarget &target,
-                              void *target_buffer,
                               EvalCallback eval_cb,
                               UpdateCallback update_cb,
-                              FreeBufferCallback free_cb);
+                              FinishCallback finish_cb);
 
 /**
  * Manually deregister a target from background evaluation. This is a no-op if the target is not
@@ -99,6 +99,36 @@ void background_eval_deregister(wmWindowManager &wm,
  * Initialize the default settings for animation visualization.
  */
 void animviz_settings_init(struct bAnimVizSettings *avs);
+
+namespace bke::motionpath {
+
+/* Data owned by the thread which calculates the motion path. */
+struct WorkerBuffer {
+  int start_frame;
+  Array<float3> points;
+  Array<eMotionPathVert_Flag> flags;
+};
+
+struct Runtime {
+  /* Heap allocated data for the worker thread to write to. */
+  /* TODO maybe not required to heap allocate. */
+  WorkerBuffer *worker_buffer;
+  /* Async animviz job data. Used to deregister from the job. */
+  wmWindowManager *wm;
+  wmWindow *window;
+  Scene *job_owner;
+  bke::animviz::EvaluationTarget target;
+};
+
+void async_eval_allocate(bMotionPath &motionpath,
+                         wmWindowManager &wm,
+                         wmWindow &window,
+                         Scene &job_owner,
+                         bke::animviz::EvaluationTarget &target);
+void async_eval_free(bMotionPath &motion_path);
+WorkerBuffer *get_worker_buffer(bMotionPath &motion_path);
+
+}  // namespace bke::motionpath
 
 /**
  * Make a copy of motion-path data, so that viewing with copy on write works.

@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "BLI_bounds.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_threads.hh"
 #include "BLI_vector.hh"
 
@@ -40,19 +41,17 @@ namespace bke::animviz {
 
 struct TargetData {
   EvaluationTarget target;
-  void *buffer;
   EvalCallback eval;
   UpdateCallback update;
-  FreeBufferCallback free_buffer;
+  FinishCallback finish;
   bool finished_left = false;
   bool finished_right = false;
 
   TargetData(const EvaluationTarget &target,
-             void *buffer,
              EvalCallback eval,
              UpdateCallback update,
-             FreeBufferCallback free_buffer)
-      : target(target), buffer(buffer), eval(eval), update(update), free_buffer(free_buffer)
+             FinishCallback finish)
+      : target(target), eval(eval), update(update), finish(finish)
   {
   }
 };
@@ -121,8 +120,7 @@ restart:
   DEG_evaluate_on_framechange(eval_data->dg, center_frame);
   for (TargetData &target_data : eval_data->target_data) {
     const EvaluationTarget &target = target_data.target;
-    void *target_buffer = target_data.buffer;
-    target_data.eval(eval_data->dg, *target.id, center_frame, target_buffer);
+    target_data.eval(eval_data->dg, target, center_frame);
   }
   eval_data->unlock();
 
@@ -151,8 +149,7 @@ restart:
     DEG_evaluate_on_framechange(eval_data->dg, frame);
     for (TargetData &target_data : eval_data->target_data) {
       const EvaluationTarget &target = target_data.target;
-      void *target_buffer = target_data.buffer;
-      const bool modified_data = target_data.eval(eval_data->dg, *target.id, frame, target_buffer);
+      const bool modified_data = target_data.eval(eval_data->dg, target, frame);
       if (!modified_data) {
         if (frame < center_frame) {
           target_data.finished_left = true;
@@ -204,7 +201,7 @@ static void update_job(void *job_data)
   WorkerData *eval_data = static_cast<WorkerData *>(job_data);
   Bounds<int> evaluated_range = eval_data->evaluated_range.load(std::memory_order_acquire);
   for (TargetData &target_data : eval_data->target_data) {
-    target_data.update(*target_data.target.id, target_data.buffer, evaluated_range);
+    target_data.update(target_data.target, evaluated_range);
   }
 }
 
@@ -212,7 +209,7 @@ static void finish_job(void *job_data)
 {
   WorkerData *eval_data = static_cast<WorkerData *>(job_data);
   for (TargetData &target_data : eval_data->target_data) {
-    target_data.free_buffer(target_data.buffer);
+    target_data.finish(target_data.target);
   }
 }
 
@@ -231,10 +228,9 @@ void background_eval_register(Main &bmain,
                               Scene &scene,
                               ViewLayer &view_layer,
                               const EvaluationTarget &target,
-                              void *target_buffer,
                               EvalCallback eval_cb,
                               UpdateCallback update_cb,
-                              FreeBufferCallback free_cb)
+                              FinishCallback free_cb)
 {
   /* TODO dont rebuild DG every time. Keep data around for a while before ending worker. This will
    * mean regular updates to the same data are more efficient. */
@@ -249,8 +245,6 @@ void background_eval_register(Main &bmain,
       const int target_index = eval_data->worker_data.find_target_index(target);
       BLI_assert(target_index != -1);
       TargetData &data = eval_data->worker_data.target_data[target_index];
-      data.free_buffer(data.buffer);
-      data.buffer = target_buffer;
       data.finished_left = false;
       data.finished_right = false;
       eval_data->worker_data.restart.store(true, std::memory_order_release);
@@ -265,8 +259,7 @@ void background_eval_register(Main &bmain,
     DEG_graph_free(eval_data->worker_data.dg);
     eval_data->worker_data.dg = build_worker_depsgraph(
         bmain, scene, view_layer, eval_data->active_targets);
-    eval_data->worker_data.target_data.append(
-        {target, target_buffer, eval_cb, update_cb, free_cb});
+    eval_data->worker_data.target_data.append({target, eval_cb, update_cb, free_cb});
 
     eval_data->worker_data.restart.store(true, std::memory_order_release);
     eval_data->worker_data.unlock();
@@ -275,7 +268,7 @@ void background_eval_register(Main &bmain,
 
   BGEvalJobData *eval_data = MEM_new<BGEvalJobData>(__func__);
   eval_data->active_targets.add(target);
-  eval_data->worker_data.target_data.append({target, target_buffer, eval_cb, update_cb, free_cb});
+  eval_data->worker_data.target_data.append({target, eval_cb, update_cb, free_cb});
   eval_data->worker_data.dg = build_worker_depsgraph(
       bmain, scene, view_layer, eval_data->active_targets);
   const int center_frame = BKE_scene_frame_get(&scene);
@@ -319,17 +312,64 @@ void background_eval_deregister(wmWindowManager &wm,
   eval_data->worker_data.dg = build_worker_depsgraph(
       *bmain, scene, *view_layer, eval_data->active_targets);
 
-  /* No need to restart the job since this no data was added to the worker that would need
+  /* No need to restart the job since no data was added to the worker that would need
    * evaluation. */
   eval_data->worker_data.unlock();
 }
 
 }  // namespace bke::animviz
 
-struct MotionpathRuntime {
-  struct wmWindowManager *wm;
-  Scene *job_owner;
-};
+namespace bke::motionpath {
+
+void async_eval_allocate(bMotionPath &motion_path,
+                         wmWindowManager &wm,
+                         wmWindow &window,
+                         Scene &job_owner,
+                         bke::animviz::EvaluationTarget &target)
+{
+  if (motion_path.runtime->worker_buffer) {
+    /* Data already created for async eval. */
+    return;
+  }
+
+  WorkerBuffer *buffer = MEM_new<WorkerBuffer>(__func__);
+  buffer->start_frame = motion_path.start_frame;
+  buffer->points.reinitialize(motion_path.length);
+  buffer->flags.reinitialize(motion_path.length);
+  for (const int i : IndexRange(motion_path.length)) {
+    copy_v3_v3(buffer->points[i], motion_path.points[i].co);
+    buffer->flags[i] = motion_path.points[i].flag;
+  }
+
+  motion_path.runtime->worker_buffer = buffer;
+  motion_path.runtime->wm = &wm;
+  motion_path.runtime->window = &window;
+  motion_path.runtime->job_owner = &job_owner;
+  motion_path.runtime->target = target;
+}
+
+void async_eval_free(bMotionPath &motion_path)
+{
+  if (!motion_path.runtime->worker_buffer) {
+    BLI_assert_unreachable();
+    return;
+  }
+  MEM_delete(motion_path.runtime->worker_buffer);
+  motion_path.runtime->worker_buffer = nullptr;
+  motion_path.runtime->wm = nullptr;
+  motion_path.runtime->window = nullptr;
+  motion_path.runtime->job_owner = nullptr;
+}
+
+WorkerBuffer *get_worker_buffer(bMotionPath &motion_path)
+{
+  if (!motion_path.runtime) {
+    return nullptr;
+  }
+  return motion_path.runtime->worker_buffer;
+}
+
+}  // namespace bke::motionpath
 
 /* ******************************************************************** */
 /* Animation Visualization */
@@ -384,6 +424,12 @@ void animviz_free_motionpath(bMotionPath *mpath)
     return;
   }
 
+  if (mpath->runtime && mpath->runtime->wm) {
+    bke::animviz::background_eval_deregister(*mpath->runtime->wm,
+                                             *mpath->runtime->window,
+                                             *mpath->runtime->job_owner,
+                                             mpath->runtime->target);
+  }
   MEM_delete(mpath->runtime);
   animviz_free_motionpath_cache(mpath);
 
@@ -408,7 +454,7 @@ bMotionPath *animviz_copy_motionpath(const bMotionPath *mpath_src)
   mpath_dst->points_vbo = nullptr;
   mpath_dst->batch_line = nullptr;
   mpath_dst->batch_points = nullptr;
-  mpath_dst->runtime = MEM_new<MotionpathRuntime>(__func__);
+  mpath_dst->runtime = MEM_new<bke::motionpath::Runtime>(__func__);
 
   return mpath_dst;
 }
@@ -480,7 +526,7 @@ bMotionPath *animviz_verify_motionpaths(ReportList *reports,
   }
   else {
     mpath = MEM_new<bMotionPath>("bMotionPath");
-    mpath->runtime = MEM_new<MotionpathRuntime>(__func__);
+    mpath->runtime = MEM_new<bke::motionpath::Runtime>(__func__);
     *dst = mpath;
   }
 
@@ -530,7 +576,7 @@ void animviz_motionpath_blend_write(BlendWriter *writer, bMotionPath *mpath)
   if (mpath == nullptr) {
     return;
   }
-  MotionpathRuntime *backup = mpath->runtime;
+  bke::motionpath::Runtime *backup = mpath->runtime;
   mpath->runtime = nullptr;
   /* firstly, just write the motionpath struct */
   writer->write_struct(mpath);
@@ -553,7 +599,7 @@ void animviz_motionpath_blend_read_data(BlendDataReader *reader, bMotionPath *mp
   mpath->points_vbo = nullptr;
   mpath->batch_line = nullptr;
   mpath->batch_points = nullptr;
-  mpath->runtime = MEM_new<MotionpathRuntime>(__func__);
+  mpath->runtime = MEM_new<bke::motionpath::Runtime>(__func__);
 }
 
 }  // namespace blender

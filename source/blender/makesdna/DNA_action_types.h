@@ -34,11 +34,14 @@ struct FCurve;
 struct GHash;
 struct Object;
 struct SpaceLink;
-struct MotionpathRuntime;
 namespace gpu {
 class VertBuf;
 class Batch;
 }  // namespace gpu
+
+namespace bke::motionpath {
+struct Runtime;
+}
 
 /* Forward declarations so the actual declarations can happen top-down. */
 struct ActionLayer;
@@ -626,7 +629,7 @@ struct bMotionPath {
   gpu::VertBuf *points_vbo = nullptr;
   gpu::Batch *batch_line = nullptr;
   gpu::Batch *batch_points = nullptr;
-  MotionpathRuntime *runtime = nullptr;
+  bke::motionpath::Runtime *runtime = nullptr;
 };
 
 /* Visualization General --------------------------- */
