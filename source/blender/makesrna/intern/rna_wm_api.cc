@@ -1215,7 +1215,9 @@ void RNA_api_wm(StructRNA *srna)
   RNA_def_property_int_default(parm, 0);
   parm = RNA_def_property(func, "xy", PROP_INT, PROP_NONE);
   RNA_def_property_ui_text(
-      parm, "xy", "The center point of the button in window coordinates when successfully activated");
+      parm,
+      "xy",
+      "The center point of the button in window coordinates when successfully activated");
   RNA_def_property_array(parm, 2);
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, PARM_OUTPUT);
 
