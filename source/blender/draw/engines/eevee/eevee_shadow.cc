@@ -1198,6 +1198,8 @@ bool ShadowModule::shadow_update_finished(int loop_count)
 
   if (loop_count == 2) {
     /* Read back and check if there is still tile-map to update. */
+    /* TODO: Only the first loop should call `async_flush_to_host()`, but we need to fix the VK and
+     * Metal implementations first. */
     statistics_buf_.current().async_flush_to_host();
     statistics_buf_.current().read();
     ShadowStatistics stats = statistics_buf_.current();
