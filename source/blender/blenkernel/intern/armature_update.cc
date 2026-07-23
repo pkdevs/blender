@@ -1051,8 +1051,8 @@ static bke::GeometrySet pose_to_geometry(const bArmature &armature, const bPose 
 {
   const int num_pchan = pose.chanbase.count();
   /* Index map for looking up parent bone index. */
-  Map<const bPoseChannel *, int> pchan_index_map;
-  pchan_index_map.reserve(num_pchan);
+  Map<const Bone *, int> bone_index_map;
+  bone_index_map.reserve(num_pchan);
   int pchan_i = 0;
   Array<std::string> pose_channel_names(num_pchan);
 
@@ -1076,15 +1076,16 @@ static bke::GeometrySet pose_to_geometry(const bArmature &armature, const bPose 
   pchan_i = 0;
   for (const bPoseChannel &pchan : pose.chanbase) {
     const Bone *bone = pchan.bone_get(armature);
+    const Bone *parent_bone = bone->parent;
     BLI_assert(bone);
 
     pose_channel_names[pchan_i] = pchan.name;
-    pchan_index_map.add_new(&pchan, pchan_i);
+    bone_index_map.add_new(bone, pchan_i);
 
     ref_handles[pchan_i] = instances->add_new_reference(bke::InstanceReference());
     transforms[pchan_i] = float4x4(pchan.pose_mat);
     rest_transforms.span[pchan_i] = float4x4(bone->arm_mat);
-    const int bone_parent_index = pchan_index_map.lookup_default(pchan.parent, -1);
+    const int bone_parent_index = bone_index_map.lookup_default(parent_bone, -1);
     bone_parent_index_writer.span[pchan_i] = bone_parent_index;
     bone_depth_writer.span[pchan_i] = (bone_parent_index >= 0 ?
                                            bone_depth_writer.span[bone_parent_index] + 1 :
@@ -1100,14 +1101,42 @@ static bke::GeometrySet pose_to_geometry(const bArmature &armature, const bPose 
   length_writer.finish();
   connected_writer.finish();
 
-  nodes::ListPtr<std::string> pose_channel_name_list = nodes::List<std::string>::from_container(
-      std::move(pose_channel_names));
-  nodes::BundleItemSocketValue pose_channel_name_item;
-  pose_channel_name_item.value = bke::SocketValueVariant::From(std::move(pose_channel_name_list));
+  Array<std::string> bone_collection_names(armature.collections_span().size());
+  int bone_collection_i = 0;
+  for (const BoneCollection *bone_collection : armature.collections_span()) {
+    bone_collection_names[bone_collection_i] = bone_collection->name;
+    std::string attr_name = "bone_collection:" + std::string(bone_collection->name);
+    bke::SpanAttributeWriter<bool> bone_collection_writer =
+        attributes.lookup_or_add_for_write_span<bool>(
+            attr_name, bke::AttrDomain::Instance, bke::AttributeInitValue(false));
+
+    for (const BoneCollectionMember &bone : bone_collection->bones) {
+      if (const std::optional<int> bone_index = bone_index_map.lookup_try(bone.bone)) {
+        bone_collection_writer.span[*bone_index] = true;
+      }
+    }
+
+    bone_collection_writer.finish();
+    ++bone_collection_i;
+  }
 
   bke::GeometrySet geometry_set = bke::GeometrySet::from_instances(std::move(instances));
+
+  nodes::ListPtr<std::string> bone_collections_list = nodes::List<std::string>::from_container(
+      std::move(bone_collection_names));
   geometry_set.bundle_for_write().add_path_new(
-      "pose_channel_names", nodes::BundleItemValue(std::move(pose_channel_name_item)));
+      "bone_collections",
+      nodes::BundleItemValue{nodes::BundleItemSocketValue{
+          bke::node_socket_type_find_static(SOCK_STRING),
+          bke::SocketValueVariant::From(std::move(bone_collections_list))}});
+
+  nodes::ListPtr<std::string> pose_channel_name_list = nodes::List<std::string>::from_container(
+      std::move(pose_channel_names));
+  geometry_set.bundle_for_write().add_path_new(
+      "pose_channel_names",
+      nodes::BundleItemValue{nodes::BundleItemSocketValue{
+          bke::node_socket_type_find_static(SOCK_STRING),
+          bke::SocketValueVariant::From(std::move(pose_channel_name_list))}});
 
   return geometry_set;
 }
