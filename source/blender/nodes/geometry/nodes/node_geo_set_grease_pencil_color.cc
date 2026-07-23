@@ -19,8 +19,8 @@
 namespace blender::nodes::node_geo_set_grease_pencil_color_cc {
 
 enum class Mode : int8_t {
-  Stroke = GEO_NODE_GP_STROKE,
-  Fill = GEO_NODE_GP_FILL,
+  Stroke = GEO_NODE_GREASE_PENCIL_STROKE,
+  Fill = GEO_NODE_GREASE_PENCIL_FILL,
 };
 
 static void node_declare(NodeDeclarationBuilder &b)
@@ -38,7 +38,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .hide_value()
       .evaluated_geometry_field();
   b.add_input<decl::Menu>("Mode"_ustr)
-      .static_items(rna_enum_node_gp_stroke_type_items)
+      .static_items(rna_enum_node_grease_pencil_stroke_type_items)
       .optional_label();
   b.add_input<decl::Color>("Color"_ustr)
       .default_value(ColorGeometry4f(1.0f, 1.0f, 1.0f, 1.0f))

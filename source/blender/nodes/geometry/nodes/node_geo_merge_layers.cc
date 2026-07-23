@@ -38,7 +38,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .hide_value()
       .evaluated_geometry_field();
   b.add_input<decl::Menu>("Mode"_ustr)
-      .static_items(rna_enum_node_gp_merge_mode_items)
+      .static_items(rna_enum_node_grease_pencil_merge_mode_items)
       .optional_label();
   b.add_input<decl::Int>("Group ID"_ustr)
       .hide_value()

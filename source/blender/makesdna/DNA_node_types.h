@@ -1409,9 +1409,9 @@ enum NodeGeometryMergeLayersMode {
   GEO_NODE_MERGE_LAYERS_BY_ID = 1,
 };
 
-enum NodeGeometryGPStrokeType : int8_t {
-  GEO_NODE_GP_STROKE = 0,
-  GEO_NODE_GP_FILL = 1,
+enum NodeGeometryGreasePencilStrokeType : int8_t {
+  GEO_NODE_GREASE_PENCIL_STROKE = 0,
+  GEO_NODE_GREASE_PENCIL_FILL = 1,
 };
 
 struct bNodeStack {
