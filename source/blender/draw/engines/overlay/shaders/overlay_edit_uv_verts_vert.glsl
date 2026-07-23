@@ -18,7 +18,6 @@ void main()
   bool is_pinned = (flag.x & VERT_UV_PINNED) != 0u;
   bool is_mirrored = (flag.x & (VERT_MIRRORED_UV_SELECT | FACE_MIRRORED_UV_SELECT)) != 0u;
 
-  // Priority order: Selected > Mirrored > Pinned > Default
   if (is_selected) {
     fill_color = theme.colors.vert_select;
   }

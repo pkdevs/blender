@@ -167,12 +167,7 @@ void ED_uvedit_sync_uvselect_ensure_if_needed(const ToolSettings *ts, BMesh *bm)
 
 bool uvedit_face_visible_test_ex(const ToolSettings *ts, const BMFace *efa);
 bool uvedit_face_select_test_ex(const ToolSettings *ts, const BMesh *bm, const BMFace *efa);
-/**
- * The UV cache's copy of the face's real #BM_ELEM_MIRRORED_SELECT, updated whenever the
- * cache is valid (see `bm_mesh_uvselect_mode_flush_down_deselect_only` in `bmesh_uvselect.cc`).
- * Falls back to the raw mesh flag directly when the cache isn't valid, matching
- * #uvedit_face_select_test_ex's own fallback for #BM_ELEM_SELECT.
- */
+
 bool uvedit_face_mirrored_select_test_ex(const ToolSettings *ts,
                                          const BMesh *bm,
                                          const BMFace *efa);

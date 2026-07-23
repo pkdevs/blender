@@ -274,9 +274,6 @@ static bool edbm_backbuf_check_and_select_verts(EditSelectBuf_Cache *esel,
       if (sel_op_result != -1) {
         BM_vert_select_set(em->bm, eve, sel_op_result);
         if (symmetry_helper) {
-          /* This vert's own selection state is now explicitly set: any leftover
-           * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-           * is stale. */
           BM_elem_flag_disable(eve, BM_ELEM_MIRRORED_SELECT);
           symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, sel_op_result);
           if (uv_selctx) {
@@ -325,9 +322,6 @@ static bool edbm_backbuf_check_and_select_edges(EditSelectBuf_Cache *esel,
       if (sel_op_result != -1) {
         BM_edge_select_set(em->bm, eed, sel_op_result);
         if (symmetry_helper) {
-          /* This edge's own selection state is now explicitly set: any leftover
-           * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-           * is stale. */
           BM_elem_flag_disable(eed, BM_ELEM_MIRRORED_SELECT);
           symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, sel_op_result);
           if (uv_selctx) {
@@ -770,9 +764,6 @@ static void do_lasso_select_mesh__doSelectVert(void *user_data,
   if (sel_op_result != -1) {
     BM_vert_select_set(data->vc->em->bm, eve, sel_op_result);
     if (data->symmetry_helper) {
-      /* This vert's own selection state is now explicitly set: any leftover
-       * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-       * is stale. */
       BM_elem_flag_disable(eve, BM_ELEM_MIRRORED_SELECT);
       data->symmetry_helper->set_hflag_on_mirror_verts(
           eve, BM_ELEM_MIRRORED_SELECT, sel_op_result);
@@ -819,9 +810,6 @@ static void do_lasso_select_mesh__doSelectEdge_pass0(void *user_data,
   if (sel_op_result != -1) {
     BM_edge_select_set(data->vc->em->bm, eed, sel_op_result);
     if (data->symmetry_helper) {
-      /* This edge's own selection state is now explicitly set: any leftover
-       * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-       * is stale. */
       BM_elem_flag_disable(eed, BM_ELEM_MIRRORED_SELECT);
       data->symmetry_helper->set_hflag_on_mirror_edges(
           eed, BM_ELEM_MIRRORED_SELECT, sel_op_result);
@@ -864,9 +852,6 @@ static void do_lasso_select_mesh__doSelectEdge_pass1(void *user_data,
   if (sel_op_result != -1) {
     BM_edge_select_set(data->vc->em->bm, eed, sel_op_result);
     if (data->symmetry_helper) {
-      /* This edge's own selection state is now explicitly set: any leftover
-       * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-       * is stale. */
       BM_elem_flag_disable(eed, BM_ELEM_MIRRORED_SELECT);
       data->symmetry_helper->set_hflag_on_mirror_edges(
           eed, BM_ELEM_MIRRORED_SELECT, sel_op_result);
@@ -4080,9 +4065,6 @@ static void do_mesh_box_select__doSelectVert(void *user_data,
   if (sel_op_result != -1) {
     BM_vert_select_set(data->vc->em->bm, eve, sel_op_result);
     if (data->symmetry_helper) {
-      /* This vert's own selection state is now explicitly set: any leftover
-       * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-       * is stale. */
       BM_elem_flag_disable(eve, BM_ELEM_MIRRORED_SELECT);
       data->symmetry_helper->set_hflag_on_mirror_verts(
           eve, BM_ELEM_MIRRORED_SELECT, sel_op_result);
@@ -4130,9 +4112,6 @@ static void do_mesh_box_select__doSelectEdge_pass0(void *user_data,
   if (sel_op_result != -1) {
     BM_edge_select_set(data->vc->em->bm, eed, sel_op_result);
     if (data->symmetry_helper) {
-      /* This edge's own selection state is now explicitly set: any leftover
-       * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-       * is stale. */
       BM_elem_flag_disable(eed, BM_ELEM_MIRRORED_SELECT);
       data->symmetry_helper->set_hflag_on_mirror_edges(
           eed, BM_ELEM_MIRRORED_SELECT, sel_op_result);
@@ -4175,9 +4154,6 @@ static void do_mesh_box_select__doSelectEdge_pass1(void *user_data,
   if (sel_op_result != -1) {
     BM_edge_select_set(data->vc->em->bm, eed, sel_op_result);
     if (data->symmetry_helper) {
-      /* This edge's own selection state is now explicitly set: any leftover
-       * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-       * is stale. */
       BM_elem_flag_disable(eed, BM_ELEM_MIRRORED_SELECT);
       data->symmetry_helper->set_hflag_on_mirror_edges(
           eed, BM_ELEM_MIRRORED_SELECT, sel_op_result);
@@ -4932,9 +4908,6 @@ static void mesh_circle_doSelectVert(void *user_data,
   if (len_squared_v2v2(data->mval_fl, screen_co) <= data->radius_squared) {
     BM_vert_select_set(data->vc->em->bm, eve, data->select);
     if (data->symmetry_helper) {
-      /* This vert's own selection state is now explicitly set: any leftover
-       * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-       * is stale. */
       BM_elem_flag_disable(eve, BM_ELEM_MIRRORED_SELECT);
       data->symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, data->select);
       if (data->uv_selctx) {
@@ -4961,9 +4934,6 @@ static void mesh_circle_doSelectEdge(void *user_data,
   if (edge_inside_circle(data->mval_fl, data->radius, screen_co_a, screen_co_b)) {
     BM_edge_select_set(data->vc->em->bm, eed, data->select);
     if (data->symmetry_helper) {
-      /* This edge's own selection state is now explicitly set: any leftover
-       * mirror-highlight on itself (as opposed to its mirror counterpart, seeded below)
-       * is stale. */
       BM_elem_flag_disable(eed, BM_ELEM_MIRRORED_SELECT);
       data->symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, data->select);
       if (data->uv_selctx) {

@@ -21,10 +21,12 @@ void main()
 
   float sel_fac = clamp(selection_fac, 0.0, 1.0);
 
-  /* 1. Base color assignment from UV Line Style */
   if (OVERLAY_UVLineStyle(line_style) == OVERLAY_UV_LINE_STYLE_OUTLINE) {
     if (use_edge_select) {
-      inner_color = (sel_fac != 0.0) ? theme.colors.edge_select : (theme.colors.wire_edit * 0.5);
+      /* TODO(@ideasman42): The current wire-edit color contrast enough against the selection.
+       * Look into changing the default theme color instead of reducing contrast with edge-select.
+       */
+      inner_color = (sel_fac != 0.0f) ? theme.colors.edge_select : (theme.colors.wire_edit * 0.5f);
     }
     else {
       inner_color = mix(theme.colors.wire_edit, theme.colors.edge_select, sel_fac);
@@ -48,9 +50,6 @@ void main()
     inner_color = theme.colors.uv_shadow;
   }
 
-  /* Fade towards the mirror color for the part of the gradient above 1.0 (e.g. one vertex
-   * selected and the other only mirror-selected), instead of hard-switching only when the whole
-   * edge is purely mirror-selected. */
   float mirror_fac = clamp(selection_fac - 1.0, 0.0, 1.0);
   inner_color = mix(inner_color, theme.colors.edge_mirror_selection, mirror_fac);
 

@@ -528,7 +528,6 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
                                                                    AttrDomain::Edge);
   const VArraySpan select_poly_mirrored = *attributes.lookup<bool>(".select_poly_mirrored",
                                                                    AttrDomain::Face);
-
   const VArraySpan hide_vert = *attributes.lookup<bool>(".hide_vert", AttrDomain::Point);
   const VArraySpan hide_edge = *attributes.lookup<bool>(".hide_edge", AttrDomain::Edge);
   const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", AttrDomain::Face);
@@ -615,7 +614,6 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
     if (!select_edge_mirrored.is_empty() && select_edge_mirrored[i]) {
       BM_elem_flag_enable(e, BM_ELEM_MIRRORED_SELECT);
     }
-
     if (!(!sharp_edges.is_empty() && sharp_edges[i])) {
       BM_elem_flag_enable(e, BM_ELEM_SMOOTH);
     }
@@ -1777,7 +1775,6 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
   bool need_select_vert_mirrored = false;
   bool need_select_edge_mirrored = false;
   bool need_select_poly_mirrored = false;
-
   bool need_hide_vert = false;
   bool need_hide_edge = false;
   bool need_hide_poly = false;
@@ -1873,7 +1870,6 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
     select_vert_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(".select_vert_mirrored",
                                                                          AttrDomain::Point);
   }
-
   if (need_hide_vert) {
     hide_vert = attrs.lookup_or_add_for_write_only_span<bool>(".hide_vert", AttrDomain::Point);
   }
@@ -1884,7 +1880,6 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
     select_edge_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(".select_edge_mirrored",
                                                                          AttrDomain::Edge);
   }
-
   if (need_sharp_edge) {
     sharp_edge = attrs.lookup_or_add_for_write_only_span<bool>("sharp_edge", AttrDomain::Edge);
   }
@@ -1901,7 +1896,6 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
     select_poly_mirrored = attrs.lookup_or_add_for_write_only_span<bool>(".select_poly_mirrored",
                                                                          AttrDomain::Face);
   }
-
   if (need_hide_poly) {
     hide_poly = attrs.lookup_or_add_for_write_only_span<bool>(".hide_poly", AttrDomain::Face);
   }
