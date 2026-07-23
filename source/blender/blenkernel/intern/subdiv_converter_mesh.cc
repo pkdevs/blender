@@ -12,6 +12,7 @@
 
 #include "BKE_attribute.hh"
 #include "BKE_customdata.hh"
+#include "BKE_global.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BKE_subdiv.hh"
@@ -198,12 +199,16 @@ static void precalc_uv_layer(const OpenSubdiv_Converter *converter, const int la
     storage->loop_uv_indices = MEM_new_array_uninitialized<int>(size_t(mesh->corners_num),
                                                                 "loop uv vertex index");
   }
+  /* Ignore winding during transformation as this may lead to a lot of updates due to sudden
+   * change in UVs. For example, edge sliding could make UV edges cross opposite edges, changing
+   * the winding, see #160366. */
+  const bool use_winding = (G.moving & G_TRANSFORM_EDIT) == 0;
   UvVertMap *uv_vert_map = BKE_mesh_uv_vert_map_create(storage->faces,
                                                        storage->corner_verts,
                                                        uv_map,
                                                        num_vert,
                                                        float2(STD_UV_CONNECT_LIMIT),
-                                                       false);
+                                                       use_winding);
   /* NOTE: First UV vertex is supposed to be always marked as separate. */
   storage->num_uv_coordinates = -1;
   for (int vertex_index = 0; vertex_index < num_vert; vertex_index++) {
