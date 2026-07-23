@@ -264,7 +264,7 @@ static void zspan_rasterize_conservative_line(ZSpan *zspan,
   float miny = min_ff(v1[1], v2[1]);
   float maxy = max_ff(v1[1], v2[1]);
 
-  int y0 = floor(miny);
+  int y0 = ceil(miny) - 1;
   int y1 = floor(maxy);
 
   /* Clip and cull the line. */
@@ -312,7 +312,7 @@ static void zspan_rasterize_conservative_line(ZSpan *zspan,
       maxx = max_ff(v1[0], v2[0]);
     }
 
-    int x0 = floor(minx);
+    int x0 = ceil(minx) - 1;
     int x1 = floor(maxx);
 
     /* Clip and cull scanline. */
