@@ -851,10 +851,13 @@ void node_light_accumulation_impl(
   /*TODO*/
 }
 
-void node_light_evaluation_impl(
-    float3 position, float3 normal, float roughness, float4 &color, float &factor)
+void node_light_evaluation_impl(float3 position,
+                                float3 normal,
+                                float roughness,
+                                float4 &color,
+                                float &factor,
+                                float &energy_scale)
 {
-  return;  // WIP
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
   /* clang-format on */
@@ -875,10 +878,17 @@ void node_light_evaluation_impl(
       util_tx, normal, V, dot(normal, V), roughness);
   float3x3 T = from_incident_vector(normal, V);
   ltc_data.Minv = ltc_data.Minv * transpose(T);
-  float ltc_result = light_ltc(util_tx.utility_tx, light, ltc_data, lv, light_shape_vertices);
-  // ltc_result *= light_attenuation_facing(light, lv.L, lv.dist, normal, false);
+  float cosine_integral, form_factor;
+  light_ltc(
+      util_tx.utility_tx, light, ltc_data, lv, light_shape_vertices, cosine_integral, form_factor);
+  factor = cosine_integral * M_PI;
+  energy_scale = form_factor * M_1_PI;
 
-  factor = ltc_result;
+  energy_scale *= eevee::light::power_get(light,
+                                          roughness == 1.0f ? LIGHT_DIFFUSE : LIGHT_SPECULAR);
+
+  const bool is_transmission = false;  // TODO: Expose.
+  energy_scale *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
 }
 
 void node_shadow_raycast_impl(float3 position, float spread, float4 &color)

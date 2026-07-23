@@ -154,7 +154,11 @@ float3 edge_integral_vec(float3 v1, float3 v2)
 /**
  * Evaluate contribution of rectangle light.
  */
-float evaluate_quad(sampler2DArray util_tx, LTCData ltc_data, float3 corners[4])
+void evaluate_quad(sampler2DArray util_tx,
+                   LTCData ltc_data,
+                   float3 corners[4],
+                   float &r_cosine_integral,
+                   float &r_form_factor)
 {
   /* Transform the quad corners into LTC space, and project on to sphere. */
   float3 V[4] = {normalize(ltc_data.Minv * corners[0]),
@@ -172,21 +176,19 @@ float evaluate_quad(sampler2DArray util_tx, LTCData ltc_data, float3 corners[4])
 
   float form_factor_inv = inversesqrt(dot(avg_dir, avg_dir));
   float avg_dir_z = (avg_dir * form_factor_inv).z;
-  float form_factor = saturate(1.0f / form_factor_inv);
+  r_form_factor = saturate(1.0f / form_factor_inv);
   /* The form factor should always be finite. Check that the previous saturate works as filter. */
-  // assert(!isnan(form_factor) && !isinf(form_factor));
+  // assert(!isnan(r_form_factor) && !isinf(r_form_factor));
 
   switch (ltc_data.form_factor_type) {
     case LTCFormFactorType::OneSidedCosineSphereClipped:
       /* TODO(not_mark): apply attenuation here as LTC bleed fix. */
-      form_factor *= detail::diffuse_sphere_integral(util_tx, avg_dir_z, form_factor);
+      r_cosine_integral = detail::diffuse_sphere_integral(util_tx, avg_dir_z, r_form_factor);
       break;
     default: /* LTCFormFactorType::TwoSidedCosineSphere */
-      form_factor *= M_1_PI;
+      r_cosine_integral = M_1_PI;
       break;
   }
-
-  return form_factor;
 }
 
 /**
@@ -194,7 +196,11 @@ float evaluate_quad(sampler2DArray util_tx, LTCData ltc_data, float3 corners[4])
  *
  * disk_points are WS vectors from the shading point to the disk "bounding domain".
  */
-float evaluate_disk(sampler2DArray util_tx, LTCData ltc_data, float3 disk_points[4])
+void evaluate_disk(sampler2DArray util_tx,
+                   LTCData ltc_data,
+                   float3 disk_points[4],
+                   float &r_cosine_integral,
+                   float &r_form_factor)
 {
   /* Intermediate step: init ellipse. */
   float3 C = 0.5f * (disk_points[0] + disk_points[2]);
@@ -288,21 +294,19 @@ float evaluate_disk(sampler2DArray util_tx, LTCData ltc_data, float3 disk_points
   /* L1, L2 are the extents of the front facing ellipse. From here, find the sphere form factor. */
   float L1 = inversesqrt(-e3 / e2);
   float L2 = inversesqrt(-e1 / e2);
-  float form_factor = saturate(L1 * L2 * inversesqrt((1.0f + L1 * L1) * (1.0f + L2 * L2)));
+  r_form_factor = saturate(L1 * L2 * inversesqrt((1.0f + L1 * L1) * (1.0f + L2 * L2)));
   /* The form factor should always be finite. Check that the previous saturate works as filter. */
-  // assert(!isnan(form_factor) && !isinf(form_factor));
+  // assert(!isnan(r_form_factor) && !isinf(r_form_factor));
 
   switch (ltc_data.form_factor_type) {
     case LTCFormFactorType::OneSidedCosineSphereClipped:
       /* TODO(not_mark): apply attenuation here as LTC bleed fix. */
-      form_factor *= detail::diffuse_sphere_integral(util_tx, avg_dir.z, form_factor);
+      r_cosine_integral = detail::diffuse_sphere_integral(util_tx, avg_dir.z, r_form_factor);
       break;
     default: /* LTCFormFactorType::TwoSidedCosineSphere */
-      form_factor *= M_1_PI;
+      r_cosine_integral = M_1_PI;
       break;
   }
-
-  return form_factor;
 }
 
 }  // namespace eevee::ltc

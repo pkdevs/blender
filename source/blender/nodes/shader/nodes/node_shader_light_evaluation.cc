@@ -15,6 +15,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>("Roughness"_ustr).default_value(1.0f);
   b.add_output<decl::Color>("Color"_ustr);
   b.add_output<decl::Float>("Factor"_ustr);
+  b.add_output<decl::Float>("Energy Scale"_ustr);
 }
 
 static int node_shader_gpu_light_evaluation(GPUMaterial *mat,

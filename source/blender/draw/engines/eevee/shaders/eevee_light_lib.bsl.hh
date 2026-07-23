@@ -255,21 +255,37 @@ LightVertices light_shape_corners(LightData light, LightVector lv)
   return vertices;
 }
 
+void light_ltc(sampler2DArray utility_tx,
+               LightData light,
+               eevee::LTCData ltc_data,
+               LightVector lv,
+               LightVertices vertices,
+               float &r_cosine_integral,
+               float &r_form_factor)
+{
+  if (is_sphere_light(light.type) && lv.dist < light.local().local.shape_radius) {
+    /* Inside the sphere light, integrate over the hemisphere. */
+    r_cosine_integral = M_1_PI;
+    r_form_factor = M_PI;
+  }
+
+  if (light.type == LIGHT_RECT) {
+    eevee::ltc::evaluate_quad(utility_tx, ltc_data, vertices.v, r_cosine_integral, r_form_factor);
+  }
+  else {
+    eevee::ltc::evaluate_disk(utility_tx, ltc_data, vertices.v, r_cosine_integral, r_form_factor);
+  }
+}
+
 float light_ltc(sampler2DArray utility_tx,
                 LightData light,
                 eevee::LTCData ltc_data,
                 LightVector lv,
                 LightVertices vertices)
 {
-  if (is_sphere_light(light.type) && lv.dist < light.local().local.shape_radius) {
-    /* Inside the sphere light, integrate over the hemisphere. */
-    return 1.0f;
-  }
-
-  if (light.type == LIGHT_RECT) {
-    return eevee::ltc::evaluate_quad(utility_tx, ltc_data, vertices.v);
-  }
-  return eevee::ltc::evaluate_disk(utility_tx, ltc_data, vertices.v);
+  float cosine_integral, form_factor;
+  light_ltc(utility_tx, light, ltc_data, lv, vertices, cosine_integral, form_factor);
+  return cosine_integral * form_factor;
 }
 
 /** \} */
