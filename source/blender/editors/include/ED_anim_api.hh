@@ -1373,9 +1373,11 @@ struct EvaluationTarget {
 
 /**
  *
- * \param buffer_cb Will be called from the worker thread with the evaluated depsgraph for every
- * frame. Don't touch main from this function.
- * \param updated_cb Will be called periodically on the main thread. This can be used to copy data
+ * \param target_buffer Memory to be written to on the worker thread. The system takes ownership of
+ * the memory and will free it with free_cb.
+ * \param eval_cb Will be called from the worker thread
+ * with the evaluated depsgraph for every frame. Don't touch main from this function.
+ * \param update_cb Will be called periodically on the main thread. This can be used to copy data
  * from the buffer to a storage in the main thread.
  */
 void background_eval_register(Main &bmain,
@@ -1387,7 +1389,7 @@ void background_eval_register(Main &bmain,
                               void *target_buffer,
                               EvalCallback eval_cb,
                               UpdateCallback update_cb,
-                              FreeBufferCallback finish_cb);
+                              FreeBufferCallback free_cb);
 
 /**
  * Manually deregister a target from background evaluation. This is a no-op if the target is not

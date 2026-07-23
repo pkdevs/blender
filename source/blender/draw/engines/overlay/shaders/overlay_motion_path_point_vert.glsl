@@ -62,6 +62,7 @@ void main()
   }
 
   gl_PointSize *= theme.sizes.pixel;
+  // gl_PointSize *= float((uint(flag) & MOTIONPATH_VERT_EVALUATED) != 0u);
 
   view_clipping_distances(ws_P);
 }

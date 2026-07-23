@@ -589,7 +589,7 @@ static bool eval_callback(Depsgraph *dg, ID &id, const int frame, void *buffer_d
   const int point_index = frame - buffer->start_frame;
   const bool is_data_different = buffer->points[point_index] != motion_path_point;
   buffer->points[point_index] = motion_path_point;
-  return is_data_different;
+  return is_data_different || !(buffer->flags[point_index] & MOTIONPATH_VERT_EVALUATED);
 }
 
 /* Runs on main thread. */
@@ -615,6 +615,7 @@ static void update_callback(ID &id, void *buffer_data, Bounds<int> evaluated_ran
     }
     copy_v3_v3(mpv.co, buffer->points[i]);
     mpv.flag &= ~MOTIONPATH_VERT_STALE;
+    mpv.flag |= MOTIONPATH_VERT_EVALUATED;
   }
   DEG_id_tag_update(&ob->id, ID_RECALC_ANIMATION_NO_FLUSH);
   WM_main_add_notifier(NC_OBJECT | ND_DRAW_ANIMVIZ, ob);
@@ -642,10 +643,11 @@ void register_motionpath_async(Main &bmain,
   buffer->bone_name = bone_name.has_value() ? *bone_name : "";
   buffer->start_frame = motion_path.start_frame;
   buffer->points.reinitialize(motion_path.length);
+  buffer->flags.reinitialize(motion_path.length);
   for (const int i : IndexRange(motion_path.length)) {
     copy_v3_v3(buffer->points[i], motion_path.points[i].co);
+    buffer->flags[i] = motion_path.points[i].flag;
   }
-  buffer->flags.reinitialize(motion_path.length);
   animviz::background_eval_register(bmain,
                                     wm,
                                     window,

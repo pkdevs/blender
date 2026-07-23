@@ -71,9 +71,11 @@ enum eMotionPathVert_Flag : int {
   /* vert is selected */
   MOTIONPATH_VERT_SEL = (1 << 0),
   MOTIONPATH_VERT_KEY = (1 << 1),
+  /* Set if the vert has been evaluated at least once. */
+  MOTIONPATH_VERT_EVALUATED = (1 << 2),
   /* Set when the data needs to be updated on a worker thread, but the worker did not yet calculate
      it.  */
-  MOTIONPATH_VERT_STALE = (1 << 2),
+  MOTIONPATH_VERT_STALE = (1 << 3),
 };
 ENUM_OPERATORS(eMotionPathVert_Flag);
 
