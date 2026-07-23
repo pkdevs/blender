@@ -325,7 +325,7 @@ static void zspan_rasterize_conservative_line(ZSpan *zspan,
       continue;
 
     for (; x0 <= x1; x0++) {
-      float w = (x0 - v1[0] + 0.5f) * dir[0] + (y0 - v1[1] + 0.5f) * dir[1];
+      float w = (x0 - v1[0] + 0.5f + 0.001f) * dir[0] + (y0 - v1[1] + 0.5f + 0.002f) * dir[1];
       w = clamp_f(w, 0, 1);
 
       float u = (1 - w) * uv1[0] + w * uv2[0];
