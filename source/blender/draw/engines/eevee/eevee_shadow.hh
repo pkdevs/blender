@@ -203,6 +203,10 @@ class ShadowModule {
   /* Used to call caster_update_ps_ only once per sync (Initialized on begin_sync). */
   bool update_casters_ = false;
 
+  /* When rendering shadows in a loop, we only tag for usage once and setup multiple times.
+   * In this case `run_tagging_` is set to false after the first iteration. */
+  bool32_t run_tagging_ = false;
+
   /* -------------------------------------------------------------------- */
   /** \name Tile-map Management
    * \{ */
@@ -381,11 +385,6 @@ class ShadowModule {
   {
     do_full_update_ = true;
   }
-
-  /** Compute approximate screen pixel space radius (as world space radius). */
-  static float screen_pixel_radius(const float4x4 &wininv,
-                                   bool is_perspective,
-                                   const int2 &extent);
 
  private:
   void remove_unused();
