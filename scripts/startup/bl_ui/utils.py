@@ -4,6 +4,21 @@
 
 from bpy.types import Menu
 
+def draw_composition_guides_panel(layout, camera):
+    layout.use_property_split = True
+    layout.prop(camera, "show_composition_thirds")
+    col = layout.column(heading="Center", align=True)
+    col.prop(camera, "show_composition_center")
+    col.prop(camera, "show_composition_center_diagonal", text="Diagonal")
+    col = layout.column(heading="Golden", align=True)
+    col.prop(camera, "show_composition_golden", text="Ratio")
+    col.prop(camera, "show_composition_golden_tria_a", text="Triangle A")
+    col.prop(camera, "show_composition_golden_tria_b", text="Triangle B")
+    col = layout.column(heading="Harmony", align=True)
+    col.prop(camera, "show_composition_harmony_tri_a", text="Triangle A")
+    col.prop(camera, "show_composition_harmony_tri_b", text="Triangle B")
+    col = layout.column()
+    col.prop(camera, "composition_guide_color", text="Color")
 
 # Panel mix-in class (don't register).
 class PresetPanel:

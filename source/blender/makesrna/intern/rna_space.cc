@@ -6343,57 +6343,57 @@ static void rna_def_space_image_overlay(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(
       prop, nullptr, "overlay.composition_guide_flags", COMPOSITION_GUIDES_CENTER);
   RNA_def_property_ui_text(prop, "Center", "Display center composition guide");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_center_diagonal", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(
       prop, nullptr, "overlay.composition_guide_flags", COMPOSITION_GUIDES_CENTER_DIAG);
   RNA_def_property_ui_text(prop, "Center Diagonal", "Display diagonal center composition guide");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_thirds", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(
       prop, nullptr, "overlay.composition_guide_flags", COMPOSITION_GUIDES_THIRDS);
   RNA_def_property_ui_text(prop, "Thirds", "Display rule of thirds composition guide");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_golden", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(
       prop, nullptr, "overlay.composition_guide_flags", COMPOSITION_GUIDES_GOLDEN);
   RNA_def_property_ui_text(prop, "Golden Ratio", "Display golden ratio composition guide");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_golden_tria_a", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(
       prop, nullptr, "overlay.composition_guide_flags", COMPOSITION_GUIDES_GOLDEN_TRI_A);
   RNA_def_property_ui_text(
       prop, "Golden Triangle A", "Display golden triangle A composition guide");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_golden_tria_b", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(
       prop, nullptr, "overlay.composition_guide_flags", COMPOSITION_GUIDES_GOLDEN_TRI_B);
   RNA_def_property_ui_text(
       prop, "Golden Triangle B", "Display golden triangle B composition guide");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_harmony_tri_a", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(
       prop, nullptr, "overlay.composition_guide_flags", COMPOSITION_GUIDES_HARMONY_TRI_A);
   RNA_def_property_ui_text(prop, "Harmonious Triangle A", "Display harmony A composition guide");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_harmony_tri_b", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(
       prop, nullptr, "overlay.composition_guide_flags", COMPOSITION_GUIDES_HARMONY_TRI_B);
   RNA_def_property_ui_text(prop, "Harmonious Triangle B", "Display harmony B composition guide");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 
   prop = RNA_def_property(srna, "composition_guide_color", PROP_FLOAT, PROP_COLOR);
   RNA_def_property_float_sdna(prop, nullptr, "overlay.composition_guide_color");
   RNA_def_property_ui_text(
       prop, "Composition Guide Color", "Color and alpha for compositional guide overlays");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 }
 
 static void rna_def_space_image(BlenderRNA *brna)

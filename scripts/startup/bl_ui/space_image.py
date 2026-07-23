@@ -38,9 +38,7 @@ from bpy.app.translations import (
     pgettext_iface as iface_,
 )
 
-from bl_ui.properties_data_camera import (
-    DATA_PT_camera_display_composition_guides,
-)
+from bl_ui.utils import draw_composition_guides_panel
 
 
 class ImagePaintPanel(UnifiedPaintPanel):
@@ -1829,7 +1827,7 @@ class IMAGE_PT_view_composition_guides(Panel):
 
     def draw(self, context):
         overlay_settings = context.space_data.overlay
-        DATA_PT_camera_display_composition_guides.draw_panel(self.layout, overlay_settings)
+        draw_composition_guides_panel(self.layout, overlay_settings)
 
 # Grease Pencil properties
 

@@ -719,6 +719,45 @@ static void image_main_region_init(wmWindowManager *wm, ARegion *region)
   WM_event_add_keymap_handler_v2d_mask(&region->runtime->handlers, keymap);
 }
 
+static void draw_composition_guides(SpaceImageOverlay *overlay, View2D *v2d) {
+  if (overlay->flag & SI_OVERLAY_SHOW_OVERLAYS &&
+    overlay->flag & SI_OVERLAY_SHOW_COMPOSITION_GUIDES)
+{
+  int xmin, ymin, xmax, ymax;
+  ui::view2d_view_to_region(v2d, 0.0f, 0.0f, &xmin, &ymin);
+  ui::view2d_view_to_region(v2d, 1.0f, 1.0f, &xmax, &ymax);
+
+  rctf guide_rect;
+  BLI_rctf_init(&guide_rect, (float)xmin, (float)xmax, (float)ymin, (float)ymax);
+
+  /* Note: Because we are using region screen coordinates, we DO NOT call
+   * ui::view2d_view_ortho(v2d) here. We draw directly in Region space. */
+
+  GPU_line_width(1.0f);
+
+  const uint shdr_pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
+
+  immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
+
+  float viewport_size[4];
+  GPU_viewport_size_get_f(viewport_size);
+  immUniform2f(
+      "viewport_size", viewport_size[2] / UI_SCALE_FAC, viewport_size[3] / UI_SCALE_FAC);
+
+  immUniform1i("colors_len", 0); /* Simple dashes. */
+  immUniform1f("dash_width", 6.0f);
+  immUniform1f("udash_factor", 0.5f);
+
+  ED_draw_composition_guides(shdr_pos,
+                             overlay->composition_guide_flags,
+                             &guide_rect,
+                             overlay->composition_guide_color);
+
+  immUnbindProgram();
+}
+}
+
 static void image_main_region_draw(const bContext *C, ARegion *region)
 {
   /* draw entirely, view changes should be handled here */
@@ -788,48 +827,7 @@ static void image_main_region_draw(const bContext *C, ARegion *region)
 
   draw_image_main_helpers(C, region);
 
-  /* Draw Composition Guides */
-  if (sima->overlay.flag & SI_OVERLAY_SHOW_OVERLAYS &&
-      sima->overlay.flag & SI_OVERLAY_SHOW_COMPOSITION_GUIDES)
-  {
-    /* Convert the View2D normalized image boundaries (0.0 to 1.0) into Region
-     * pixel coordinates. This ensures the correct screen aspect ratio is passed
-     * into ED_draw_composition_guides so that the math for Golden Triangles
-     * yields mathematically true perpendicular drops instead of an "X".
-     * Not sure if that's the right way to do that. */
-    int xmin, ymin, xmax, ymax;
-    ui::view2d_view_to_region(v2d, 0.0f, 0.0f, &xmin, &ymin);
-    ui::view2d_view_to_region(v2d, 1.0f, 1.0f, &xmax, &ymax);
-
-    rctf guide_rect;
-    BLI_rctf_init(&guide_rect, (float)xmin, (float)xmax, (float)ymin, (float)ymax);
-
-    /* Note: Because we are using region screen coordinates, we DO NOT call
-     * ui::view2d_view_ortho(v2d) here. We draw directly in Region space. */
-
-    GPU_line_width(1.0f);
-
-    const uint shdr_pos = GPU_vertformat_attr_add(
-        immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
-
-    immBindBuiltinProgram(GPU_SHADER_3D_LINE_DASHED_UNIFORM_COLOR);
-
-    float viewport_size[4];
-    GPU_viewport_size_get_f(viewport_size);
-    immUniform2f(
-        "viewport_size", viewport_size[2] / UI_SCALE_FAC, viewport_size[3] / UI_SCALE_FAC);
-
-    immUniform1i("colors_len", 0); /* Simple dashes. */
-    immUniform1f("dash_width", 6.0f);
-    immUniform1f("udash_factor", 0.5f);
-
-    ED_draw_composition_guides(shdr_pos,
-                               sima->overlay.composition_guide_flags,
-                               &guide_rect,
-                               sima->overlay.composition_guide_color);
-
-    immUnbindProgram();
-  }
+  draw_composition_guides(&sima->overlay, v2d);
 
   /* Draw Meta data of the image isn't added to the DrawManager as it is
    * used in other areas as well. */

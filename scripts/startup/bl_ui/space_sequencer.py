@@ -22,7 +22,7 @@ from bl_ui.space_toolsystem_common import (
 
 from rna_prop_ui import PropertyPanel
 from bl_ui.space_time import playback_controls
-from bl_ui.properties_data_camera import DATA_PT_camera_display_composition_guides
+from bl_ui.utils import draw_composition_guides_panel
 
 
 def _space_view_types(st):
@@ -1935,7 +1935,7 @@ class SEQUENCER_PT_view_composition_guides(SequencerButtonsPanel_Output, Panel):
 
     def draw(self, context):
         overlay_settings = context.space_data.preview_overlay
-        DATA_PT_camera_display_composition_guides.draw_panel(self.layout, overlay_settings)
+        draw_composition_guides_panel(self.layout, overlay_settings)
 
 
 class SEQUENCER_PT_annotation(AnnotationDataPanel, SequencerButtonsPanel_Output, Panel):

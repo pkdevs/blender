@@ -136,8 +136,7 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
           if (sl.spacetype == SPACE_IMAGE) {
             SpaceImage *sima = reinterpret_cast<SpaceImage *>(&sl);
             sima->overlay.flag |= SI_OVERLAY_SHOW_COMPOSITION_GUIDES;
-            float default_col[4] = {0.5f, 0.5f, 0.5f, 1.0f};
-            copy_v4_v4(sima->overlay.composition_guide_color, default_col);
+            copy_v4_fl4(sima->overlay.composition_guide_color, 0.5f, 0.5f, 0.5f, 1.0f);
           }
         }
       }
