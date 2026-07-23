@@ -1,1 +1,2 @@
 Referenced by issue #161762, Workbench shadows can temporarily disappear when toggling hardware ray tracing
+Referenced by commit 697b9aa3492f4b935d03a8a90f692dcec9d81d16, Fix: Remove outdated experimental option
