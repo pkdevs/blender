@@ -321,6 +321,10 @@ static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
   bNode &node = *ptr->data_as<bNode>();
   bNodeTree &ntree = *reinterpret_cast<bNodeTree *>(ptr->owner_id);
 
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+  layout.prop(ptr, "is_debug_view", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
   if (ui::Layout *panel = layout.panel(C, "viewer_items", false, IFACE_("Viewer Items"))) {
     socket_items::ui::draw_items_list_with_operators<GeoViewerItemsAccessor>(
         C, panel, ntree, node);

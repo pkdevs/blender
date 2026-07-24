@@ -3022,32 +3022,11 @@ static void node_draw_basis(const bContext &C,
     button_func_set(
         but, node_toggle_button_cb, POINTER_FROM_INT(node.identifier), (void *)(operator_idname));
 
-    PointerRNA nodeptr = RNA_pointer_create_discrete(
-        &ntree.id, RNA_Node, const_cast<bNode *>(&node));
-    iconofs -= iconbutw;
-    ui::Button *debug_view_but = uiDefIconButR(&block,
-                                               ui::ButtonType::IconToggle,
-                                               ICON_BUG,
-                                               iconofs,
-                                               rct.ymax - NODE_DY,
-                                               iconbutw,
-                                               UI_UNIT_Y,
-                                               &nodeptr,
-                                               "is_debug_view",
-                                               -1,
-                                               0,
-                                               0,
-                                               TIP_("Use as Persistent Debug View"));
-    if (!RNA_boolean_get(&nodeptr, "is_debug_view")) {
-      button_flag_enable(debug_view_but, ui::BUT_INACTIVE);
-    }
-
     short shortcut_icon = get_viewer_shortcut_icon(node);
-    iconofs -= 1.2f * iconbutw;
     uiDefIconBut(&block,
                  ui::ButtonType::But,
                  shortcut_icon,
-                 iconofs,
+                 iconofs - 1.2 * iconbutw,
                  rct.ymax - NODE_DY,
                  iconbutw,
                  UI_UNIT_Y,

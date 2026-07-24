@@ -232,7 +232,6 @@ if(WITH_BLENDER)
       bookmarks
       bordermove
       brushes_all
-      bug
       brush_data
       camera_data
       camera_stereo

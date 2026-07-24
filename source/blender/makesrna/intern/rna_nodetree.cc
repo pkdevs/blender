@@ -7774,7 +7774,6 @@ static void rna_def_geo_viewer(BlenderRNA *brna, StructRNA *srna)
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", NODE_GEO_VIEWER_FLAG_DEBUG_VIEW);
   RNA_def_property_ui_text(
       prop, "Debug View", "Keep the viewer available as a persistent modifier debug view");
-  RNA_def_property_ui_icon(prop, ICON_BUG, 0);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_socket_update");
 
