@@ -34,7 +34,6 @@
 
 #include "UI_view2d.hh"
 
-#include "intern/sequencer.hh"
 #include "sequencer_intern.hh"
 
 namespace blender::ed::vse {
@@ -1015,8 +1014,6 @@ wmOperatorStatus sequencer_retiming_box_select_exec(bContext *C, wmOperator *op)
 
       /* If there isn't enough space a transition strip may overlap the retiming key, potentially
        * obscuring the key. In this case don't select the key. */
-      // TODO: I think this should not be done, and the keys should always be drawn in front of the
-      // transitions instead
       if (has_overlapping_transition(scene, v2d, sseq, effects, key_frame)) {
         continue;
       }

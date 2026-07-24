@@ -18,10 +18,6 @@
 
 #include "BKE_context.hh"
 
-#include "ED_sequencer.hh"
-
-#include "SEQ_edit.hh"
-#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_retiming.hh"

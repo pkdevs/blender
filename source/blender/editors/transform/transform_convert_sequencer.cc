@@ -6,8 +6,6 @@
  * \ingroup edtransform
  */
 
-#include <optional>
-
 #include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
@@ -26,7 +24,6 @@
 #include "SEQ_animation.hh"
 #include "SEQ_channels.hh"
 #include "SEQ_edit.hh"
-#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_sequencer.hh"
@@ -34,7 +31,6 @@
 
 #include "UI_view2d.hh"
 
-#include "intern/sequencer.hh"
 #include "transform.hh"
 #include "transform_convert.hh"
 #include "transform_mode.hh"
@@ -284,8 +280,6 @@ static void seq_transform_cancel(TransInfo *t, Span<Strip *> transformed_strips)
 
   vse::sync_active_scene_and_time_with_scene_strip(*t->context);
 
-  // TODO: I think this can be left as is. though, transform_seqbase_shuffle needs to work with
-  // transition chains
   for (Strip *strip : transformed_strips) {
     /* Handle pre-existing overlapping strips even when operator is canceled.
      * This is necessary for #SEQUENCER_OT_duplicate_move macro for example. */
@@ -548,8 +542,6 @@ static void create_transition_clamp_data(TransInfo *t, const Scene *scene, Strip
 {
   TransSeq *ts = static_cast<TransSeq *>(TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
 
-  // TODO: this might break with the extend transform mode since that modifies the handles
-  // imo best would be if the updated handle selection state was saved in the strip runtime
   bool left_sel = (strip->flag & SEQ_LEFTSEL);
   bool right_sel = (strip->flag & SEQ_RIGHTSEL);
 
@@ -796,11 +788,6 @@ static void get_strip_offsets(TransInfo *t,
   }
 }
 
-// TODO: this offset could instead be returned directly from #flush_strip_transforms. It would be
-// then checked each time to make sure each offset is the same, and a flag would be set if they
-// aren't the same. If the flag is set, the animation data wouldn't be offset at all. This can be
-// the case if the user has eg. added a keymap for "scaling" strips.
-// AH! get_strip_offsets added to td->loc, so it would get added twice.
 static int get_delta_offset(TransInfo *t, TransData *td, const float edge_pan_offset[2])
 {
   Scene *scene = CTX_data_sequencer_scene(t->context);
@@ -867,9 +854,6 @@ static void flush_transition_transforms(TransInfo *t,
   /* Clamped offset from #x_old. */
   const int x_offset = round_fl_to_int(offset_clamped[0]);
 
-  // TODO: Should you be able to move the transition by selecting both handles? Currently it's
-  // allowed
-
   int opposite_new = tdsq->opposite_handle;
   if (!(t->modifiers & MOD_STRIP_ASYMMETRIC)) {
     opposite_new -= x_offset;
@@ -886,9 +870,6 @@ static void flush_transition_transforms(TransInfo *t,
   }
 }
 
-// TODO: quite a mouthful
-// This needs to be for the left (or right) input to stay sane since one strip can have a
-// transition on each side
 static Strip *get_adjacent_selection_transition_for_left_input(Editing *ed, const Strip *strip)
 {
   auto valid_selection{[](const Strip *strip, eStripFlag valid_side) -> bool {
@@ -961,11 +942,6 @@ static void flush_strip_transforms(TransInfo *t,
     }
   }
 
-  // TODO: i think this doesn't respect the modifications to the flag tho
-  // really you need to iterate again like this
-  // for (int a = 0; a < tc->data_len; a++, td++) {
-  // rather than with a lookup.
-  // Or move it to the runtime data like mentioned elsewhere
   /* Move attached transitions with the strips if both transition inputs are selected. */
   Editing *ed = seq::editing_get(scene);
   Strip *transition = get_adjacent_selection_transition_for_left_input(ed, strip);
@@ -1170,7 +1146,6 @@ bool transform_convert_sequencer_clamp(const TransInfo *t, float r_val[2])
     clamp_x(ts->soft_clamp_min, ts->soft_clamp_max);
   }
 
-  // TODO: I think that should rather be MOD_STRIP_SYMMETRIC with the logic switched around
   /* Clamping of symmetric transitions. */
   if ((t->modifiers & MOD_STRIP_ASYMMETRIC) == 0) {
     clamp_x(ts->symmetric_hard_clamp_min, ts->symmetric_hard_clamp_max);

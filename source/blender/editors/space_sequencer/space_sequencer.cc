@@ -663,7 +663,6 @@ static void sequencer_main_region_message_subscribe(const wmRegionMessageSubscri
   }
 }
 
-// TODO: this might need new cursors for the transition strips
 static void sequencer_main_cursor(wmWindow *win, ScrArea *area, ARegion *region)
 {
   const WorkSpace *workspace = WM_window_get_active_workspace(win);

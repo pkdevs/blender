@@ -150,15 +150,6 @@ static void sequencer_flag_users_for_removal(const Scene *scene,
       sequencer_flag_users_for_removal(scene, &user_strip.seqbase, strip);
     }
 
-    // TODO: I think this should be done in the delete function itself?
-    // Could be in EditingRuntime as a Vector of mask strips to set to null
-    // Then #edit_remove_flagged_strips would actually do the job of setting them to nullptr
-    // It could actually also store the strips stored for removal
-    // then a separate function edit_cancel_removal would clear those flags and the vector of mask
-    // strips
-    // Then transform_set_overlap_flags can just iterate over #strips
-    // Really, both should just be sets. Then there's no need for the extra runtime flag on strips
-    // Just make a separate edit_strip_is_marked_for_removal function.
     /* Clear strip from modifiers. */
     for (StripModifierData &smd : user_strip.modifiers) {
       if (smd.mask_strip == strip) {

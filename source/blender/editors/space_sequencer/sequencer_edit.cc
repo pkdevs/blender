@@ -20,7 +20,6 @@
 #include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
-#include "DNA_space_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLT_translation.hh"
@@ -1995,7 +1994,6 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
   return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
 }
 
-// TODO: check to make sure transitions can't be split
 static wmOperatorStatus sequencer_split_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
@@ -2142,7 +2140,6 @@ static bool sequencer_box_blade_poll(bContext *C)
   return sequencer_edit_poll(C) && sequencer_view_strips_poll(C);
 }
 
-// TODO: check. how does this act with transitions?
 static wmOperatorStatus sequencer_box_blade_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);

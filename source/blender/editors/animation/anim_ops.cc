@@ -34,7 +34,6 @@
 
 #include "BLT_translation.hh"
 
-#include "DNA_space_types.h"
 #include "UI_interface_c.hh"
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"

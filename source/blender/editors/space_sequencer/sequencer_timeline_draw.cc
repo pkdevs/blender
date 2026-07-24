@@ -33,7 +33,6 @@
 #include "BKE_screen.hh"
 #include "BKE_sound.hh"
 
-#include "DNA_view2d_types.h"
 #include "ED_anim_api.hh"
 #include "ED_markers.hh"
 #include "ED_mask.hh"
@@ -43,7 +42,6 @@
 
 #include "GPU_immediate.hh"
 #include "GPU_matrix.hh"
-#include "GPU_shader_shared.hh"
 #include "GPU_state.hh"
 
 #include "PRF_profile.hh"
@@ -1350,7 +1348,6 @@ static void visible_strips_ordered_get(const TimelineDrawContext &ctx,
 
   for (Strip *strip : strips) {
     StripDrawContext strip_ctx = strip_draw_context_get(ctx, strip);
-    // tmp (doesn't support transitions on transitions when moving)
     if (flag_is_set(strip->runtime->flag, seq::StripRuntimeFlag::Overlap)) {
       if (strip->is_same_channel_transition()) {
         r_top_layer_transitions.append(strip_ctx);

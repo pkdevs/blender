@@ -814,7 +814,7 @@ static void rna_Strip_channel_set(PointerRNA *ptr, int value)
 static int rna_Strip_channel_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   Strip *strip = static_cast<Strip *>(ptr->data);
-  /* Effect strips' start frame and length must be readonly! */
+  /* The channel of same channel transitions is determined by its inputs. */
   return strip->is_same_channel_transition() ? PropertyFlag(0) : PROP_EDITABLE;
 }
 

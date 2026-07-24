@@ -767,8 +767,6 @@ static SeqResult seq_render_preprocess_ibuf(const RenderData *context,
   return input_preprocess(context, state, strip, timeline_frame, input, is_proxy_image);
 }
 
-// !
-
 static SeqResult seq_render_effect_strip_impl(const RenderData *context,
                                               SeqRenderState *state,
                                               Strip *strip,
@@ -1918,8 +1916,6 @@ static bool is_opaque_alpha_over(const Strip *strip, const RenderData *context)
   }
   return true;
 }
-
-// !
 
 static SeqResult seq_render_strip_stack(const RenderData *context,
                                         SeqRenderState *state,

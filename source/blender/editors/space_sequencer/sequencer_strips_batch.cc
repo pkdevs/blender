@@ -57,7 +57,6 @@ StripsDrawBatch::StripsDrawBatch(const View2D *v2d) : strips_(GPU_SEQ_STRIP_DRAW
   uchar col[4];
   ui::theme::get_color_shade_3ubv(TH_BACK, -40, col);
   col[3] = 255;
-  // !
   context_.col_back = color_pack(col);
 
   shader_ = GPU_shader_get_builtin_shader(GPU_SHADER_SEQUENCER_STRIPS);

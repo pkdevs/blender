@@ -53,7 +53,6 @@ static bool get_retiming_overlay_visibility(const Scene *scene,
                                             const Strip *strip)
 {
   float2 threshold{15 * UI_SCALE_FAC, 25 * UI_SCALE_FAC};
-  // TODO: maybe pixely could be a function like get_pixely(v2d);
   float pixelx = BLI_rctf_size_x(&v2d->cur) / (BLI_rcti_size_x(&v2d->mask) + 1);
   float pixely = BLI_rctf_size_y(&v2d->cur) / (BLI_rcti_size_y(&v2d->mask) + 1);
 
@@ -114,7 +113,6 @@ static inline float retiming_key_center(const View2D *v2d, const Strip *strip)
           RETIMING_KEY_PIXEL_OFFSET + retiming_key_size() / 2);
 }
 
-// TMP
 static rctf strip_bounds_get2(const Scene *scene, const Strip *strip)
 {
   rctf bounds;
@@ -140,6 +138,7 @@ rcti strip_retiming_keys_box_get(const Scene *scene, const View2D *v2d, const St
 /* -------------------------------------------------------------------- */
 /** \name Draw Retiming Keys
  * \{ */
+
 static void retiming_key_draw(const TimelineDrawContext &ctx,
                               const StripDrawContext &strip_ctx,
                               const SeqRetimingKey *key,

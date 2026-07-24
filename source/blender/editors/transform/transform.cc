@@ -43,7 +43,6 @@
 #include "BLF_api.hh"
 #include "BLT_translation.hh"
 
-#include "WM_types.hh"
 #include "transform.hh"
 #include "transform_constraints.hh"
 #include "transform_convert.hh"
