@@ -1401,7 +1401,21 @@ static void v3d_editvertex_buts(
       }
     }
   }
-  else { /* apply */
+  else {
+    /* We get here (via #do_view3d_region_buttons()) if the above buttons return
+     B_TRANSFORM_PANEL_MEDIAN, so either when multiple elements are selected or no RNA buttons are
+     used. Either way, we are now setting values directly (not via RNA buttons) and thus no
+     automatic RNA updates. We could run the actual RNA updates (creating a PointerRNA, finding the
+     specific PropertyRNA and calling #RNA_property_update()), but for one, this creates a lot of
+     noisy code and secondly, it also would not work for bmesh (since that has no RNA updates).
+     Instead, just run the corresponding notifiers and dependency graph tagging (see for each
+     object type below).
+   */
+
+    Main *bmain = CTX_data_main(C);
+    Scene *scene = CTX_data_scene(C);
+    PropertyRNA *prop;
+
     memcpy(&ve_median_basis, &tfp->ve_median, sizeof(tfp->ve_median));
 
     if (v3d->flag & V3D_GLOBAL_STATS) {
@@ -1560,6 +1574,8 @@ static void v3d_editvertex_buts(
           }
         }
       }
+      /* We basically want the same update as in #EDBM_update(), so keep in sync. */
+      WM_main_add_notifier(NC_GEOM | ND_DATA, &mesh->id);
     }
     else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF) &&
              (apply_vcos || median_basis.curve.b_weight || median_basis.curve.weight ||
@@ -1577,6 +1593,7 @@ static void v3d_editvertex_buts(
       for (Nurb &nu : *nurbs) {
         if (nu.type == CU_BEZIER) {
           for (a = nu.pntsu, bezt = nu.bezt; a--; bezt++) {
+            data_ptr = RNA_pointer_create_discrete(&cu->id, RNA_BezierSplinePoint, bezt);
             if (bezt->f2 & SELECT) {
               if (apply_vcos) {
                 /* Here we always have to use the diff... :/
@@ -1586,24 +1603,40 @@ static void v3d_editvertex_buts(
                 add_v3_v3(bezt->vec[0], median->location);
                 add_v3_v3(bezt->vec[1], median->location);
                 add_v3_v3(bezt->vec[2], median->location);
+                prop = RNA_struct_find_property(&data_ptr, "handle_left");
+                RNA_property_update_main(bmain, scene, &data_ptr, prop);
+                prop = RNA_struct_find_property(&data_ptr, "co");
+                RNA_property_update_main(bmain, scene, &data_ptr, prop);
+                prop = RNA_struct_find_property(&data_ptr, "handle_right");
+                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
               if (median->weight) {
                 apply_scale_factor_clamp(&bezt->weight, tot, ve_median->weight, scale_w);
+                prop = RNA_struct_find_property(&data_ptr, "weight_softbody");
+                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
               if (median->radius) {
                 apply_raw_diff(&bezt->radius, tot, ve_median->radius, median->radius);
+                prop = RNA_struct_find_property(&data_ptr, "radius");
+                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
               if (median->tilt) {
                 apply_raw_diff(&bezt->tilt, tot, ve_median->tilt, median->tilt);
+                prop = RNA_struct_find_property(&data_ptr, "radius");
+                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
             }
             else if (apply_vcos) {
               /* Handles can only have their coordinates changed here. */
               if (bezt->f1 & SELECT) {
                 apply_raw_diff_v3(bezt->vec[0], tot, ve_median->location, median->location);
+                prop = RNA_struct_find_property(&data_ptr, "handle_left");
+                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
               if (bezt->f3 & SELECT) {
                 apply_raw_diff_v3(bezt->vec[2], tot, ve_median->location, median->location);
+                prop = RNA_struct_find_property(&data_ptr, "handle_right");
+                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
             }
           }
@@ -1637,6 +1670,8 @@ static void v3d_editvertex_buts(
         if ((nu.type == CU_BEZIER) && apply_vcos) {
           BKE_nurb_handles_test(&nu, NURB_HANDLE_TEST_EACH, false); /* test for bezier too */
         }
+        /* We basically want the same update as in #rna_Curve_update_data_id(), so keep in sync. */
+        WM_main_add_notifier(NC_GEOM | ND_DATA, &cu->id);
       }
     }
     else if ((ob->type == OB_LATTICE) && (apply_vcos || median_basis.lattice.weight)) {
@@ -1660,6 +1695,8 @@ static void v3d_editvertex_buts(
         }
         bp++;
       }
+      /* We basically want the same update as in #rna_Lattice_update_data(), so keep in sync. */
+      WM_main_add_notifier(NC_GEOM | ND_DATA, &lt->id);
     }
     else if (ob->type == OB_GREASE_PENCIL &&
              (apply_vcos || median_basis.curves.nurbs_weight || median_basis.curves.radius ||
@@ -1679,6 +1716,8 @@ static void v3d_editvertex_buts(
           info.drawing.tag_positions_changed();
         }
       });
+      /* We basically want the same update as in #rna_grease_pencil_update(), so keep in sync. */
+      WM_main_add_notifier(NC_GPENCIL | NA_EDITED, &grease_pencil.id);
     }
     else if (ob->type == OB_CURVES && (apply_vcos || median_basis.curves.nurbs_weight ||
                                        median_basis.curves.radius || median_basis.curves.tilt))
@@ -1691,7 +1730,11 @@ static void v3d_editvertex_buts(
       {
         curves.tag_positions_changed();
       }
+      /* We basically want the same update as in #rna_Curves_update_data(), so keep in sync. */
+      WM_main_add_notifier(NC_GEOM | ND_DATA, &curves_id.id);
     }
+
+    DEG_id_tag_update(ob->data, ID_RECALC_GEOMETRY);
   }
 
   // ED_undo_push(C, "Transform properties");
@@ -2191,7 +2234,6 @@ static void do_view3d_region_buttons(bContext *C, void * /*index*/, int event)
     case B_TRANSFORM_PANEL_MEDIAN:
       if (ob) {
         v3d_editvertex_buts(C, nullptr, v3d, ob, 1.0);
-        DEG_id_tag_update(ob->data, ID_RECALC_GEOMETRY);
       }
       break;
     case B_TRANSFORM_PANEL_DIMS:
