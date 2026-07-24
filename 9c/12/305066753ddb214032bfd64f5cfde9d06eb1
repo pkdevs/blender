@@ -1,1 +1,2 @@
 Referenced by issue #161868, Error display when opening a file
+Referenced by commit 4ba6f3e4a2462fccd74a63d14819ebf9f0784753, Fix #161868: Crash when deleting invalid shapekey on blendfile read.
