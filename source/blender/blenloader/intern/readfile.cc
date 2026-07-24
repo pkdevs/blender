@@ -4889,11 +4889,11 @@ static Main *blo_find_main_for_library_and_idname(FileData *fd,
           /* If this Main was already used to read and store some packed data, it will have an
            * assigned (non-owned) FileData pointer.
            *
-           * Even though that Main does not contains the same version of the linked packed ID being
+           * Even though that Main does not contain any version of the linked packed ID being
            * read, it cannot be used as its container if the FileData does not match.
            *
            * Otherwise, in complex cases, code can end up putting some packed IDs from libC, used
-           * (and read from) in libA, into the same Main as other packed IDs from libC, read from
+           * in (and read from) libA, into the same Main as other packed IDs from libC, read from
            * libB.
            *
            * This would result in 'stealing' the FileData of this Main, which will likely result in
