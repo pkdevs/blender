@@ -2798,8 +2798,9 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         }
         case SEL_OP_SUB: {
           BM_select_history_remove(bm, efa);
-          BM_face_select_set(bm, efa, false);
-          if (symmetry_helper.has_value()) {
+          BM_face_select_set(bm, efa, false, BM_ELEM_SELECT);
+          BM_face_select_set(bm, efa, false, BM_ELEM_MIRRORED_SELECT);
+          if (BM_elem_flag_test(efa, BM_ELEM_SELECT) && symmetry_helper.has_value()) {
             symmetry_helper->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, false);
           }
           break;
@@ -2818,12 +2819,11 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
               BM_face_uvselect_set_pick(bm, efa, true, uv_pick_params);
             }
           }
+
           else {
             BM_select_history_remove(bm, efa);
-            BM_face_select_set(bm, efa, false);
-            if (symmetry_helper.has_value()) {
-              symmetry_helper->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, false);
-            }
+            BM_face_select_set(bm, efa, false, BM_ELEM_SELECT);
+            BM_face_select_set(bm, efa, false, BM_ELEM_MIRRORED_SELECT);
             if (bm->uv_select_sync_valid) {
               BM_face_uvselect_set_pick(bm, efa, false, uv_pick_params);
             }
@@ -2871,12 +2871,14 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         }
         case SEL_OP_SUB: {
           BM_select_history_remove(bm, eed);
-          BM_edge_select_set(bm, eed, false);
-          if (symmetry_helper.has_value()) {
+          BM_edge_select_set(bm, eed, false, BM_ELEM_SELECT);
+          BM_edge_select_set(bm, eed, false, BM_ELEM_MIRRORED_SELECT);
+          if (BM_elem_flag_test(eed, BM_ELEM_SELECT) && symmetry_helper.has_value()) {
             symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, false);
           }
           if (bm->uv_select_sync_valid) {
-            BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params);
+            BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params, BM_ELEM_SELECT);
+            BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params, BM_ELEM_MIRRORED_SELECT);
           }
           break;
         }
@@ -2885,24 +2887,15 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           bool is_mirrored_selected = BM_elem_flag_test(eed, BM_ELEM_MIRRORED_SELECT);
           if (!is_selected && !is_mirrored_selected) {
             BM_select_history_store(bm, eed);
-            BM_edge_select_set(bm, eed, true);
+            BM_edge_select_set(bm, eed, true, BM_ELEM_SELECT);
             if (symmetry_helper.has_value()) {
               symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, true);
-            }
-            if (bm->uv_select_sync_valid) {
-              BM_edge_uvselect_set_pick(bm, eed, true, uv_pick_params);
             }
           }
           else {
             BM_select_history_remove(bm, eed);
-            BM_edge_select_set(bm, eed, false);
-            BM_elem_flag_disable(eed, BM_ELEM_MIRRORED_SELECT);
-            if (symmetry_helper.has_value()) {
-              symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, false);
-            }
-            if (bm->uv_select_sync_valid) {
-              BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params);
-            }
+            BM_edge_select_set(bm, eed, false, BM_ELEM_SELECT);
+            BM_edge_select_set(bm, eed, false, BM_ELEM_MIRRORED_SELECT);
           }
           break;
         }
@@ -2945,7 +2938,8 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         case SEL_OP_SUB: {
           BM_select_history_remove(bm, eve);
           BM_vert_select_set(bm, eve, false);
-          if (symmetry_helper.has_value()) {
+          BM_vert_select_set(bm, eve, false, BM_ELEM_MIRRORED_SELECT);
+          if (BM_elem_flag_test(eve, BM_ELEM_SELECT) && symmetry_helper.has_value()) {
             symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, false);
           }
           if (bm->uv_select_sync_valid) {
@@ -2956,6 +2950,7 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         case SEL_OP_XOR: {
           bool is_selected = BM_elem_flag_test(eve, BM_ELEM_SELECT);
           bool is_mirrored_selected = BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT);
+
           if (!is_selected && !is_mirrored_selected) {
             BM_select_history_store(bm, eve);
             BM_vert_select_set(bm, eve, true);
