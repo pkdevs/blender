@@ -2596,7 +2596,6 @@ bool node_in_cylinder(const DistRayAABB_Precalc &ray_dist_precalc,
   const float dist_sq = dist_squared_ray_to_aabb_v3(
       &ray_dist_precalc, bounds.min, bounds.max, dummy_co, &dummy_depth);
 
-  /* TODO: Solve issues and enable distance check. */
   return dist_sq < radius_sq;
 }
 
