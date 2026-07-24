@@ -27,6 +27,7 @@
 #include "DNA_windowmanager_types.h"
 
 #include "RNA_access.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
 #include "BLO_read_write.hh"
@@ -37,6 +38,7 @@
 #include "BKE_compute_contexts.hh"
 #include "BKE_context.hh"
 #include "BKE_cryptomatte.hh"
+#include "BKE_global.hh"
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_query.hh"
@@ -245,19 +247,12 @@ void rename_effect(Scene &scene,
   }
 
   /* Fix all the animation data which may link to this. */
-  AnimData *animation_data = BKE_animdata_from_id(&scene.id);
-  if (animation_data) {
-    BKE_animdata_fix_paths_rename(&scene.id,
-                                  animation_data,
-                                  nullptr,
-                                  "compositor_effects",
-                                  old_name.c_str(),
-                                  effect.name,
-                                  0,
-                                  0,
-                                  /*verify_paths=*/true,
-                                  /*infix_is_name=*/true);
-  }
+  BKE_animdata_fix_paths(scene.id,
+                         "compositor_effects",
+                         RNA_path_name_to_infix(old_name.c_str()),
+                         RNA_path_name_to_infix(effect.name),
+                         true,
+                         *G_MAIN);
 }
 
 SceneCompositorEffect &new_effect(Scene &scene, StringRef name)
