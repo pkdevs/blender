@@ -470,6 +470,7 @@ class QueueSide(enum.Enum):
     FRONT = 'front'
     """Download goes to the front of the queue."""
 
+
 class BackgroundDownloader:
     """Wrapper for a ConditionalDownloader + reporters.
 
