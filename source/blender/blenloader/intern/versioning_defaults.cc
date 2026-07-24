@@ -359,6 +359,7 @@ void BLO_update_defaults_workspace(WorkSpace *workspace, const char *app_templat
   }
   /* For Video Editing template. */
   if (STRPREFIX(workspace->id.name + 2, "Video Editing")) {
+    puts("Versioned Workspace");
     for (WorkSpaceLayout &layout : workspace->layouts) {
       bScreen *screen = layout.screen;
       if (screen) {
@@ -372,6 +373,10 @@ void BLO_update_defaults_workspace(WorkSpace *workspace, const char *app_templat
                                                                                &sl.regionbase;
               ARegion *sidebar = BKE_region_find_in_listbase_by_type(regionbase, RGN_TYPE_UI);
               sidebar->flag |= RGN_FLAG_HIDDEN;
+            }
+            else if (sl.spacetype == SPACE_PROPERTIES) {
+              reinterpret_cast<SpaceProperties *>(&sl)->visible_tabs &= ~(1
+                                                                          << BCONTEXT_COMPOSITOR);
             }
           }
         }
