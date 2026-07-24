@@ -57,6 +57,7 @@ struct BakePixel {
   float uv[2];
   float du_dx, du_dy;
   float dv_dx, dv_dy;
+  bool keep_original;
 };
 
 struct BakeHighPolyData {
@@ -104,7 +105,8 @@ void RE_bake_pixels_populate(struct Mesh *mesh,
                              struct BakePixel *pixel_array,
                              size_t pixels_num,
                              const struct BakeTargets *targets,
-                             StringRef uv_layer);
+                             StringRef uv_layer,
+							 int margin);
 
 void RE_bake_mask_fill(const BakePixel pixel_array[], size_t pixels_num, char *mask);
 

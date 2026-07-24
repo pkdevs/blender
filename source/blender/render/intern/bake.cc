@@ -123,6 +123,7 @@ static void store_bake_pixel(void *handle, int x, int y, float u, float v)
   pixel->dv_dy = bd->dv_dy;
   pixel->object_id = 0;
   pixel->seed = i;
+  pixel->keep_original = false;
 }
 
 void RE_bake_mask_fill(const BakePixel pixel_array[], const size_t pixels_num, char *mask)
@@ -134,7 +135,9 @@ void RE_bake_mask_fill(const BakePixel pixel_array[], const size_t pixels_num, c
 
   /* only extend to pixels outside the mask area */
   for (i = 0; i < pixels_num; i++) {
-    if (pixel_array[i].primitive_id != -1) {
+    const BakePixel *px = &pixel_array[i];
+
+    if (px->primitive_id != -1 && !px->keep_original) {
       mask[i] = FILTER_MASK_USED;
     }
   }
@@ -382,6 +385,7 @@ static bool cast_ray_highpoly(bke::BVHTreeFromMesh *treeData,
     pixel_high->primitive_id = primitive_id_high;
     pixel_high->object_id = hit_mesh;
     pixel_high->seed = pixel_id;
+    pixel_high->keep_original = false;
 
     /* ray direction in high poly object space */
     float dir_high[3];
@@ -706,11 +710,64 @@ static void bake_differentials(BakeDataZSpan *bd,
   }
 }
 
+static void bakepixels_add_margin(BakePixel pixel_array[], const BakeTargets *targets, int margin)
+{
+  for (int image_id = 0; image_id < targets->images_num; image_id++) {
+    BakeImage *image = &targets->images[image_id];
+
+    int width = image->width;
+    int height = image->height;
+    size_t image_size = width * height;
+    size_t image_offset = image->offset;
+
+    BakePixel *bk_pixels = pixel_array + image->offset;
+
+    char *mask = MEM_new_array_zeroed<char>(image_size, "Bake denoise margin mask");
+    RE_bake_mask_fill(bk_pixels, image_size, mask);
+
+    for (int r = 0; r < margin; r++) {
+      for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+          size_t px_ptr = x + y * width;
+          size_t copy_ptr;
+
+          if (mask[px_ptr] != 0)
+            continue;
+
+          if (y != 0 && mask[px_ptr - width] == FILTER_MASK_USED + r) {
+            copy_ptr = px_ptr - width;
+          }
+          else if (y != height - 1 && mask[px_ptr + width] == FILTER_MASK_USED + r) {
+            copy_ptr = px_ptr + width;
+          }
+          else if (x != 0 && mask[px_ptr - 1] == FILTER_MASK_USED + r) {
+            copy_ptr = px_ptr - 1;
+          }
+          else if (x != width - 1 && mask[px_ptr + 1] == FILTER_MASK_USED + r) {
+            copy_ptr = px_ptr + 1;
+          }
+          else {
+            continue;
+          }
+
+          mask[px_ptr] = FILTER_MASK_USED + r + 1;
+          bk_pixels[px_ptr] = bk_pixels[copy_ptr];
+          bk_pixels[px_ptr].seed = px_ptr + image_offset;
+          bk_pixels[px_ptr].keep_original = true;
+        }
+      }
+    }
+
+    MEM_delete(mask);
+  }
+}
+
 void RE_bake_pixels_populate(Mesh *mesh,
                              BakePixel pixel_array[],
                              const size_t pixels_num,
                              const BakeTargets *targets,
-                             const StringRef uv_layer)
+                             const StringRef uv_layer,
+                             int margin)
 {
   const bke::AttributeAccessor attributes = mesh->attributes();
   VArraySpan<float2> uv_map;
@@ -792,6 +849,10 @@ void RE_bake_pixels_populate(Mesh *mesh,
 
   for (int i = 0; i < targets->images_num; i++) {
     zbuf_free_span(&bd.zspan[i]);
+  }
+
+  if (margin > 0) {
+    bakepixels_add_margin(pixel_array, targets, margin);
   }
 
   MEM_delete(corner_tris);
@@ -880,10 +941,11 @@ void RE_bake_normal_world_to_tangent(const BakePixel pixel_array[],
     bool is_smooth;
 
     int primitive_id = pixel_array[i].primitive_id;
+    bool keep_original = pixel_array[i].keep_original;
 
     offset = i * depth;
 
-    if (primitive_id == -1) {
+    if (primitive_id == -1 || keep_original) {
       if (depth == 4) {
         copy_v4_fl4(&result[offset], 0.5f, 0.5f, 1.0f, 1.0f);
       }
@@ -981,7 +1043,7 @@ void RE_bake_normal_world_to_object(const BakePixel pixel_array[],
     size_t offset;
     float nor[3];
 
-    if (pixel_array[i].primitive_id == -1) {
+    if (pixel_array[i].primitive_id == -1 || pixel_array[i].keep_original) {
       continue;
     }
 
@@ -1009,7 +1071,7 @@ void RE_bake_normal_world_to_world(const BakePixel pixel_array[],
     size_t offset;
     float nor[3];
 
-    if (pixel_array[i].primitive_id == -1) {
+    if (pixel_array[i].primitive_id == -1 || pixel_array[i].keep_original) {
       continue;
     }
 
