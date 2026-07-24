@@ -1403,19 +1403,13 @@ static void v3d_editvertex_buts(
   }
   else {
     /* We get here (via #do_view3d_region_buttons()) if the above buttons return
-     B_TRANSFORM_PANEL_MEDIAN, so either when multiple elements are selected or no RNA buttons are
-     used. Either way, we are now setting values directly (not via RNA buttons) and thus no
-     automatic RNA updates. We could run the actual RNA updates (creating a PointerRNA, finding the
-     specific PropertyRNA and calling #RNA_property_update()), but for one, this creates a lot of
-     noisy code and secondly, it also would not work for bmesh (since that has no RNA updates).
-     Instead, just run the corresponding notifiers and dependency graph tagging (see for each
-     object type below).
-   */
-
-    Main *bmain = CTX_data_main(C);
-    Scene *scene = CTX_data_scene(C);
-    PropertyRNA *prop;
-
+     * B_TRANSFORM_PANEL_MEDIAN, so either when multiple elements are selected or no RNA buttons
+     * are used. Either way, we are now setting values directly (not via RNA buttons) and thus lack
+     * automatic RNA updates. We could run the actual RNA updates (creating a PointerRNA, finding
+     * the specific PropertyRNA and calling #RNA_property_update()), but for one, this creates a
+     * lot of noisy code and secondly, it also would not work for bmesh (since that has no RNA
+     * updates). Instead, just run the corresponding notifiers and dependency graph tagging (see
+     * for each object type below). */
     memcpy(&ve_median_basis, &tfp->ve_median, sizeof(tfp->ve_median));
 
     if (v3d->flag & V3D_GLOBAL_STATS) {
@@ -1593,7 +1587,6 @@ static void v3d_editvertex_buts(
       for (Nurb &nu : *nurbs) {
         if (nu.type == CU_BEZIER) {
           for (a = nu.pntsu, bezt = nu.bezt; a--; bezt++) {
-            data_ptr = RNA_pointer_create_discrete(&cu->id, RNA_BezierSplinePoint, bezt);
             if (bezt->f2 & SELECT) {
               if (apply_vcos) {
                 /* Here we always have to use the diff... :/
@@ -1603,40 +1596,24 @@ static void v3d_editvertex_buts(
                 add_v3_v3(bezt->vec[0], median->location);
                 add_v3_v3(bezt->vec[1], median->location);
                 add_v3_v3(bezt->vec[2], median->location);
-                prop = RNA_struct_find_property(&data_ptr, "handle_left");
-                RNA_property_update_main(bmain, scene, &data_ptr, prop);
-                prop = RNA_struct_find_property(&data_ptr, "co");
-                RNA_property_update_main(bmain, scene, &data_ptr, prop);
-                prop = RNA_struct_find_property(&data_ptr, "handle_right");
-                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
               if (median->weight) {
                 apply_scale_factor_clamp(&bezt->weight, tot, ve_median->weight, scale_w);
-                prop = RNA_struct_find_property(&data_ptr, "weight_softbody");
-                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
               if (median->radius) {
                 apply_raw_diff(&bezt->radius, tot, ve_median->radius, median->radius);
-                prop = RNA_struct_find_property(&data_ptr, "radius");
-                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
               if (median->tilt) {
                 apply_raw_diff(&bezt->tilt, tot, ve_median->tilt, median->tilt);
-                prop = RNA_struct_find_property(&data_ptr, "radius");
-                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
             }
             else if (apply_vcos) {
               /* Handles can only have their coordinates changed here. */
               if (bezt->f1 & SELECT) {
                 apply_raw_diff_v3(bezt->vec[0], tot, ve_median->location, median->location);
-                prop = RNA_struct_find_property(&data_ptr, "handle_left");
-                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
               if (bezt->f3 & SELECT) {
                 apply_raw_diff_v3(bezt->vec[2], tot, ve_median->location, median->location);
-                prop = RNA_struct_find_property(&data_ptr, "handle_right");
-                RNA_property_update_main(bmain, scene, &data_ptr, prop);
               }
             }
           }
