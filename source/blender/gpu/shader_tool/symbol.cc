@@ -120,9 +120,13 @@ Result<pair<ResourceType, ResourceTableType>> resource_type_from_attributes(Attr
  */
 class ExpressionTypeParser {
  public:
-  Result<SymbolClass *> eval(const SymbolTable &table, const SymbolScope &scope, Expr expr) const
+  Result<SymbolClass *> eval(const SymbolTable &table,
+                             const SymbolScope &scope,
+                             Expr expr,
+                             bool allow_temporary = true,
+                             bool allow_side_effects = true) const
   {
-    EvalContext ctx(&table, &scope, expr.child_first());
+    EvalContext ctx(&table, &scope, expr.child_first(), allow_temporary, allow_side_effects);
 
     Result<SymbolClass *> result;
     result.value = ctx.expr(0);
@@ -147,10 +151,22 @@ class ExpressionTypeParser {
     SymbolClass *uint_cls;
     SymbolClass *str_cls;
     SymbolClass *err_cls;
+    /* Emit error if the expression contains any operator other than the access operators. */
+    bool allow_temporary;
+    /* Emit error if the expression contains a function call or (in|post)fix operator. */
+    bool allow_side_effects;
 
    public:
-    EvalContext(const SymbolTable *table, const SymbolScope *scope, Node node)
-        : table(table), scope(scope), node(node)
+    EvalContext(const SymbolTable *table,
+                const SymbolScope *scope,
+                Node node,
+                bool allow_temporary = true,
+                bool allow_side_effects = true)
+        : table(table),
+          scope(scope),
+          node(node),
+          allow_temporary(allow_temporary),
+          allow_side_effects(allow_side_effects)
     {
       const SymbolScope &root = *scope->root_scope();
       float_cls = root.lookup_class("float");
@@ -182,6 +198,11 @@ class ExpressionTypeParser {
       switch (node.type()) {
         // case NodeType::TemplateExplicit: /* Should have already been removed. */
         case NodeType::FuncCall:
+          if (!allow_side_effects) {
+            error = AstNodeException(
+                node,
+                "Call to function can have side effects which are not allowed in this context");
+          }
           return fun_call(node);
           // case NodeType::Constructor: /* TODO */
         case NodeType::StringConst:
@@ -191,9 +212,19 @@ class ExpressionTypeParser {
         case NodeType::NumConst:
           return num_const(node);
         case NodeType::Op:
+          if (!allow_side_effects) {
+            if (node.front() == Increment || node.front() == Decrement) {
+              error = AstNodeException(
+                  node, "Expression have side effects which are not allowed in this context");
+            }
+          }
           return op(node, expr(unary_binding_power));
         case NodeType::ExprSub: {
-          EvalContext ctx(table, scope, ExprSub(node).expr().child_first());
+          EvalContext ctx(table,
+                          scope,
+                          ExprSub(node).expr().child_first(),
+                          allow_temporary,
+                          allow_side_effects);
           return ctx.expr(0);
         }
         default:
@@ -212,6 +243,10 @@ class ExpressionTypeParser {
 
       /* Binary operator. */
       if (node.front() != '?') {
+        if (!allow_temporary) {
+          error = AstNodeException(
+              node, "Result of expression is a temporary which is not allowed in this context");
+        }
         return op(node, left, expr(left_binding_power(node)));
       }
 
@@ -284,7 +319,7 @@ class ExpressionTypeParser {
         default:
           break;
       }
-      error = AstNodeException(Node{}, "Invalid operator token");
+      error = AstNodeException(peek(), "Invalid operator token '" + to_str(type) + "'");
       return -1;
     }
 
@@ -1394,11 +1429,22 @@ struct SymbolParser {
         error(decl, "Resource table must be declared as reference");
       }
 
+      /* Local References. */
       if (is_ref && cls == nullptr) {
         AssignStmt stmt = decl.initial_value();
         if (stmt.is_valid() && stmt.expr().is_valid()) {
-          /* TODO(fclem): Run type analysis to check if we bind to the same type. */
-          /* TODO(fclem): Run const analysis to check if we bind a const expr. */
+
+          ExpressionTypeParser parser;
+          /* Run analysis to check if we bind a temporary. */
+          /* Run const analysis to check if we bind a const expr. */
+          auto [expr_cls, err] = parser.eval(table, scope, stmt.expr(), false, false);
+          error(err);
+          if (type->resolved != expr_cls->resolved) {
+            error(decl,
+                  "Reference to type '" + type->resolved->identifier +
+                      "' cannot bind to a value of unrelated type '" + expr_cls->identifier + "'");
+          }
+
           sym->reference_value = stmt.expr();
         }
         else {
