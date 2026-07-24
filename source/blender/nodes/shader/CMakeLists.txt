@@ -60,6 +60,7 @@ set(SRC
   nodes/node_shader_light_evaluation.cc
   nodes/node_shader_light_falloff.cc
   nodes/node_shader_light_info.cc
+  nodes/node_shader_light_iter_internal.cc
   nodes/node_shader_light_path.cc
   nodes/node_shader_map_range.cc
   nodes/node_shader_mapping.cc
