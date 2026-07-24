@@ -43,6 +43,8 @@ namespace blender {
 #define WIDGET_OUTER_RADIUS \
   (((U.gizmo_size_navigate_v3d / 2.0f) + AXIS_LINE_WIDTH * 1.5f) * UI_SCALE_FAC)
 
+#define WIDGET_ROLL_RESOLUTION 64
+
 /* Radius of the entire background. */
 #define WIDGET_RADIUS ((U.gizmo_size_navigate_v3d / 2.0f) * UI_SCALE_FAC)
 
@@ -56,27 +58,23 @@ namespace blender {
 #define AXIS_DEPTH_BIAS 0.01f
 
 static void draw_line_circle(const uint pos,
-                             const int num_points,
                              const float radius,
                              const float line_width,
-                             const float color[4],
-                             const float viewportSize[2])
+                             const float color[4])
 {
   GPU_blend(GPU_BLEND_ALPHA);
   GPU_line_width(line_width);
   GPU_line_smooth(true);
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-  immUniform2fv("viewportSize", viewportSize);
+
+  float viewport[4];
+  GPU_viewport_size_get_f(viewport);
+  immUniform2fv("viewportSize", &viewport[2]);
   immUniformColor4fv(color);
-  immBegin(GPU_PRIM_LINE_STRIP, num_points + 1);
-  const float angle_d = M_TAU / num_points;
-  immVertex2f(pos, 1.0f * radius, 0.0f * radius);
-  for (const int i : IndexRange(num_points)) {
-    const float angle = (i + 1) * angle_d;
-    immVertex2f(pos, cosf(angle) * radius, sinf(angle) * radius);
-  }
-  immEnd();
+
+  imm_draw_circle_wire_2d(pos, 0.0f, 0.0f, radius, WIDGET_ROLL_RESOLUTION);
+
   immUnbindProgram();
 
   GPU_line_smooth(false);
@@ -184,8 +182,7 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
     GPUVertFormat *format = immVertexFormat();
     const uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
-    draw_line_circle(
-        pos, 32, WIDGET_OUTER_RADIUS, AXIS_LINE_WIDTH, gz->color_hi, &viewport_size[2]);
+    draw_line_circle(pos, WIDGET_OUTER_RADIUS, AXIS_LINE_WIDTH, gz->color_hi);
 
     GPU_matrix_pop();
   }
@@ -433,9 +430,6 @@ static void gizmo_roll_draw(const bContext * /*C*/, wmGizmo *gz)
   GPU_matrix_push();
   GPU_matrix_mul(matrix_screen);
 
-  float viewport_size[4];
-  GPU_viewport_size_get_f(viewport_size);
-
   bool use_project_matrix = (gz->scale_final >= -GPU_MATRIX_ORTHO_CLIP_NEAR_DEFAULT);
   if (use_project_matrix) {
     GPU_matrix_push_projection();
@@ -449,8 +443,7 @@ static void gizmo_roll_draw(const bContext * /*C*/, wmGizmo *gz)
     GPUVertFormat *format = immVertexFormat();
     const uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
 
-    draw_line_circle(
-        pos, 32, WIDGET_OUTER_RADIUS, AXIS_LINE_WIDTH, gz->color_hi, &viewport_size[2]);
+    draw_line_circle(pos, WIDGET_OUTER_RADIUS, AXIS_LINE_WIDTH, gz->color_hi);
 
     GPU_matrix_pop();
   }
