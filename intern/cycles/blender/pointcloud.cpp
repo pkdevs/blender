@@ -106,6 +106,8 @@ static void copy_attributes(PointCloud *pointcloud,
         Attribute *attr = attributes.add(name, Converter::type_desc, ATTR_ELEMENT_VERTEX);
         CyclesT *data = reinterpret_cast<CyclesT *>(attr->data_for_write());
 
+        attr->std = Attribute::name_standard(name.c_str());
+
         const blender::VArraySpan src = src_varray;
         for (const int i : src.index_range()) {
           data[i] = Converter::convert(src[i]);
