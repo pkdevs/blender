@@ -69,12 +69,12 @@ static void viewroll_apply(ViewOpsData *vod, int x, int y)
     view_roll_angle(
         vod->region, vod->rv3d->viewquat, vod->init.quat, vod->init.mousevec, angle, false);
 
-    const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
-    if (vod->rv3d->persp == RV3D_CAMOB && !is_camera_lock) {
-      vod->rv3d->camroll = vod->init.camroll - angle;
-
-      /* Keep angle between -Pi and Pi */
-      vod->rv3d->camroll = angle_wrap_rad(vod->rv3d->camroll);
+    if (vod->rv3d->persp == RV3D_CAMOB) {
+      const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
+      if (!is_camera_lock) {
+        /* Wrap to prevent poor precision at large values. */
+        vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
+      }
     }
   }
 
@@ -216,12 +216,12 @@ static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
   negate_v3(mousevec);
   view_roll_angle(vod->region, quat_new, vod->rv3d->viewquat, mousevec, angle, true);
 
-  const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
-  if (vod->rv3d->persp == RV3D_CAMOB && !is_camera_lock) {
-    vod->rv3d->camroll = vod->init.camroll - angle;
-
-    /* Keep angle between -Pi and Pi */
-    vod->rv3d->camroll = angle_wrap_rad(vod->rv3d->camroll);
+  if (vod->rv3d->persp == RV3D_CAMOB) {
+    const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
+    if (!is_camera_lock) {
+      /* Wrap to prevent poor precision at large values. */
+      vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
+    }
   }
 
   V3D_SmoothParams sview_params = {};

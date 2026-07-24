@@ -293,10 +293,9 @@ static wmOperatorStatus render_border_exec(bContext *C, wmOperator *op)
   border.xmax = float(rect.xmax);
   border.ymax = float(rect.ymax);
 
-  /* Unroll the border to put it in the view border space and expand to fully cover the input box.
-   */
+  /* Remove the roll to put the border in view border space, expanding to fully cover the box. */
   if (rv3d->persp == RV3D_CAMOB && rv3d->camroll != 0.0f) {
-    const float2 view_center(region->winx / 2.0f, region->winy / 2.0f);
+    const float2 view_center(region->winx / 2, region->winy / 2);
     BLI_rctf_translate(&border, -view_center.x, -view_center.y);
 
     float2 cent(BLI_rctf_cent_x(&border), BLI_rctf_cent_y(&border));
