@@ -75,6 +75,8 @@ vector<SymbolTable::BuiltinOp> SymbolTable::generate_all_operators(
     if (is_numeric(t.base)) {
       ops.emplace_back("", Plus, t.name, t.name);
       ops.emplace_back("", Minus, t.name, t.name);
+      ops.emplace_back("", Increment, t.name, t.name);
+      ops.emplace_back("", Decrement, t.name, t.name);
     }
     if (is_integer(t.base)) {
       ops.emplace_back("", BitwiseNot, t.name, t.name);

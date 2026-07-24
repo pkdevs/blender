@@ -2417,6 +2417,8 @@ void SymbolTable::register_builtins(LocalScope node)
   /* Builtin operators. */
 
   const unordered_map<TokenType, const char *> unary_type_to_id = {
+      {Increment, "inc_op_"},
+      {Decrement, "dec_op_"},
       {Plus, "pos_op_"},
       {Minus, "neg_op_"},
       {BitwiseNot, "bitnot_op_"},
