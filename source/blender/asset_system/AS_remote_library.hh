@@ -110,6 +110,13 @@ struct OnlineAssetInfo {
 
 class AssetRepresentation;
 
+/**
+ * \return The progress in [0.0..1.0] or an unset value if the progress could not be determined,
+ *     for example because the asset is not stored in a remote library or wasn't requested for
+ *     downloading, or only some of its files were requested for downloading (for example by
+ *     another asset).
+ */
+std::optional<float> remote_library_asset_download_progress(const AssetRepresentation &asset);
 float remote_library_total_asset_downloads_progress();
 /** Return true if there is any asset file (any file in an assets file set) being downloaded. */
 bool remote_library_has_unfinished_asset_downloads();

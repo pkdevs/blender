@@ -1429,6 +1429,13 @@ static rcti text_draw_rect_get(const View2D *v2d,
   return rect;
 }
 
+static int file_first_visible_index(const FileLayout *layout, const ARegion *region)
+{
+  const int offset = ED_fileselect_layout_offset(
+      layout, int(region->v2d.cur.xmin), int(-region->v2d.cur.ymax) + layout->offset_top);
+  return std::max(offset, 0);
+}
+
 void file_draw_list(const bContext *C, ARegion *region)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -1442,7 +1449,6 @@ void file_draw_list(const bContext *C, ARegion *region)
   ui::Block *block = block_begin(C, region, __func__, ui::EmbossType::Emboss);
   int numfiles;
   int numfiles_layout;
-  int offset;
   int i;
   ui::FontStyleAlign align;
   bool do_drag;
@@ -1451,16 +1457,13 @@ void file_draw_list(const bContext *C, ARegion *region)
   const bool draw_columnheader = (params->display == FILE_VERTICALDISPLAY);
   const float thumb_icon_aspect = std::min(64.0f / float(params->thumbnail_size), 4.0f);
 
+  const int offset = file_first_visible_index(layout, region);
   numfiles = filelist_files_ensure(files);
 
   if (params->display != FILE_IMGDISPLAY) {
     draw_background(layout, v2d);
     draw_dividers(layout, v2d);
   }
-
-  offset = ED_fileselect_layout_offset(
-      layout, int(region->v2d.cur.xmin), int(-region->v2d.cur.ymax) + layout->offset_top);
-  offset = std::max(offset, 0);
 
   numfiles_layout = ED_fileselect_layout_numfiles(layout, region);
 
@@ -1778,6 +1781,81 @@ void file_draw_list(const bContext *C, ARegion *region)
   if (numfiles != -1) {
     /* Only save current size if there is something to show. */
     layout->curr_size = layout->width;
+  }
+}
+
+void file_draw_list_overlays(const bContext *C, ARegion *region)
+{
+  SpaceFile *sfile = CTX_wm_space_file(C);
+  const FileSelectParams *params = ED_fileselect_get_active_params(sfile);
+
+  const bool use_draw_online_assets_progress =
+      (params->display == FILE_IMGDISPLAY) && ED_fileselect_is_asset_browser(sfile) &&
+      asset_system::remote_library_has_unfinished_asset_downloads();
+
+  /* Currently there are only overlays for the asset download progress in thumbnails display mode,
+   * so can save work and early exit here. */
+  if (!use_draw_online_assets_progress) {
+    return;
+  }
+
+  const FileLayout *layout = ED_fileselect_get_layout(sfile, region);
+  const int offset = file_first_visible_index(layout, region);
+  const int numfiles = filelist_files_ensure(sfile->files);
+
+  int numfiles_layout = ED_fileselect_layout_numfiles(layout, region);
+
+  /* adjust, so the next row is already drawn when scrolling */
+  if (layout->flag & FILE_LAYOUT_HOR) {
+    numfiles_layout += layout->rows;
+  }
+  else {
+    numfiles_layout += layout->flow_columns;
+  }
+
+  for (int i = offset; (i < numfiles) && (i < offset + numfiles_layout); i++) {
+    const rcti tile_draw_rect = tile_draw_rect_get(&region->v2d, layout, i);
+    const FileDirEntry *file = filelist_file(sfile->files, i);
+
+    if (!file->asset) {
+      BLI_assert_unreachable();
+      continue;
+    }
+    if (!file->asset->is_online_only()) {
+      continue;
+    }
+
+    const std::optional<float> progress = asset_system::remote_library_asset_download_progress(
+        *file->asset);
+    if (!progress) {
+      continue;
+    }
+
+    {
+      GPUVertFormat *format = immVertexFormat();
+      const uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+      immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+      /* TODO better colors? */
+      immUniformColor4ub(255, 255, 255, 100);
+      GPU_blend(GPU_BLEND_ALPHA);
+      GPU_polygon_smooth(true);
+
+      const float center_x = BLI_rcti_cent_x(&tile_draw_rect);
+      const float center_y = tile_draw_rect.ymax - layout->tile_border_y - layout->prv_h * 0.5f;
+
+      /* Outer bound of the outer ring. */
+      const float rad_outer = std::min(layout->prv_w, layout->prv_h) * 0.4f;
+      imm_draw_disk_partial_fill_2d(
+          pos, center_x, center_y, rad_outer * 0.8f, rad_outer, 48, 0.0f, 360);
+      /* Outer bound of the inner disk. */
+      const float rad_inner = rad_outer * 0.8f;
+      imm_draw_disk_partial_fill_2d(
+          pos, center_x, center_y, rad_inner, 0.0f, 48, 0.0f, 360 * *progress);
+
+      GPU_polygon_smooth(false);
+      GPU_blend(GPU_BLEND_NONE);
+      immUnbindProgram();
+    }
   }
 }
 

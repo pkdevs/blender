@@ -503,6 +503,13 @@ static void file_main_region_listener(const wmRegionListenerParams *listener_par
         ED_region_tag_redraw(region);
       }
       break;
+    case NC_WM: {
+      if ((wmn->data == ND_JOB) && (wmn->subtype == NS_JOB_ASSET_DOWNLOAD_PROGRESS)) {
+        /* Redraw progress overlays (don't redraw the entire region). */
+        ED_region_tag_redraw_editor_overlays(region);
+      }
+      break;
+    }
   }
 }
 
@@ -671,6 +678,14 @@ static void file_main_region_draw(const bContext *C, ARegion *region)
   ui::view2d_scrollers_draw(v2d, &view_rect);
 
   ED_region_draw_overflow_indication(CTX_wm_area(C), region, &view_rect);
+
+  /* Note: More is being drawn in #file_main_region_draw_overlay(). */
+}
+
+static void file_main_region_draw_overlay(const bContext *C, ARegion *region)
+{
+  ui::view2d_view_ortho(&region->v2d);
+  file_draw_list_overlays(C, region);
 }
 
 static void file_operatortypes()
@@ -1044,6 +1059,7 @@ void ED_spacetype_file()
   art->regionid = RGN_TYPE_WINDOW;
   art->init = file_main_region_init;
   art->draw = file_main_region_draw;
+  art->draw_overlay = file_main_region_draw_overlay;
   art->listener = file_main_region_listener;
   art->message_subscribe = file_main_region_message_subscribe;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D;

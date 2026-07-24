@@ -54,6 +54,7 @@ int /*eContextResult*/ file_context(const bContext *C,
   (_layout->flag & FILE_LAYOUT_VER && (_layout->width / UI_SCALE_FAC) < 350)
 
 void file_draw_list(const bContext *C, ARegion *region);
+void file_draw_list_overlays(const bContext *C, ARegion *region);
 bool file_banner_poll(const SpaceFile *sfile);
 void file_draw_banner(const bContext *C, const SpaceFile *sfile, ARegion *region);
 /**

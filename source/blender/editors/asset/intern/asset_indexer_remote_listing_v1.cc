@@ -256,7 +256,7 @@ static ReadingResult<RemoteListingFileEntry> listing_file_from_asset_dictionary(
   /* URL is optional, and defaults to the local path. That's handled in Python
    * (see `download_asset()` in `asset_downloader.py`) so here we can just use
    * an empty string to indicate "no URL". */
-  file_entry.download_url.url = dictionary.lookup_str("url").value_or("");
+  file_entry.download_url.url = dictionary.lookup_str("url").value_or(file_entry.local_path);
 
   return ReadingResult<RemoteListingFileEntry>::Success(std::move(file_entry));
 }

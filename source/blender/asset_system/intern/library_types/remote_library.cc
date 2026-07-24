@@ -175,7 +175,7 @@ struct FileProgress {
 };
 
 struct ProgressData {
-  bool any_asset_file_loading;
+  bool any_asset_file_loading = false;
 
   /**
    * Assets stored in the asset system may only contain a relative URL. The downloader turns this
@@ -247,7 +247,7 @@ void ProgressTracker::file_requested(wmWindowManager &wm,
 
   if (!ProgressTracker::notification_timer) {
     ProgressTracker::notification_timer = WM_event_timer_add_notifier(
-        &wm, nullptr, NC_WM | ND_JOB, 0.1);
+        &wm, nullptr, NC_WM | ND_JOB | NS_JOB_ASSET_DOWNLOAD_PROGRESS, 0.01);
   }
 }
 
@@ -296,6 +296,39 @@ void ProgressTracker::on_all_finished(wmWindowManager &wm)
 bool ProgressTracker::is_any_loading()
 {
   return ProgressTracker::current.any_asset_file_loading;
+}
+
+std::optional<float> remote_library_asset_download_progress(const AssetRepresentation &asset)
+{
+  const std::optional<StringRefNull> library_url = asset.owner_asset_library().remote_url();
+
+  if (!library_url) {
+    return std::nullopt;
+  }
+
+  int64_t expected_bytes = 0;
+  int64_t current_bytes = 0;
+  for (const OnlineAssetFile &file : asset.online_asset_files()) {
+    const RequestIdentifier req{.library_url = *library_url, .file_request_url = file.url.url};
+    const std::string *full_url = ProgressTracker::current.req_to_full_urls.lookup_ptr(req);
+    if (!full_url) {
+      /* Could not find an ongoing download request for this file. */
+      return std::nullopt;
+    }
+
+    if (FileProgress *progress = ProgressTracker::current.requested_files.lookup_ptr(*full_url)) {
+      expected_bytes += progress->expected_size_in_bytes;
+      current_bytes += progress->current_size_in_bytes;
+    }
+  }
+
+  if (!expected_bytes) {
+    return std::nullopt;
+  }
+
+  const float progress = float(current_bytes) / expected_bytes;
+  BLI_assert(progress >= -0.0001f && progress <= 1.0001f);
+  return std::clamp(progress, 0.0f, 1.0f);
 }
 
 float remote_library_total_asset_downloads_progress()

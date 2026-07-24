@@ -620,6 +620,11 @@ struct wmNotifier {
 /* Subtype layer editing. */
 #define NS_LAYER_COLLECTION (24 << 8)
 
+/* Subtype NC_WM | ND_JOB */
+/** Triggered by a timer while assets are being downloaded as a way to draw progress reporting in
+ * the UI. */
+#define NS_JOB_ASSET_DOWNLOAD_PROGRESS (25 << 8)
+
 /* Action classification. */
 #define NOTE_ACTION (0x000000FF)
 #define NA_EDITED 1

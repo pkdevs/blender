@@ -757,7 +757,7 @@ void fileselect_file_set(bContext *C, SpaceFile *sfile, const int index)
   }
 }
 
-int ED_fileselect_layout_numfiles(FileLayout *layout, ARegion *region)
+int ED_fileselect_layout_numfiles(const FileLayout *layout, ARegion *region)
 {
   int numfiles;
 
@@ -843,7 +843,7 @@ FileSelection ED_fileselect_layout_offset_rect(FileLayout *layout, const rcti *r
   return sel;
 }
 
-int ED_fileselect_layout_offset(FileLayout *layout, int x, int y)
+int ED_fileselect_layout_offset(const FileLayout *layout, int x, int y)
 {
   int offsetx, offsety;
   int active_file;

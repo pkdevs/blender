@@ -134,8 +134,8 @@ void ED_fileselect_init_layout(SpaceFile *sfile, ARegion *region);
 
 FileLayout *ED_fileselect_get_layout(SpaceFile *sfile, ARegion *region);
 
-int ED_fileselect_layout_numfiles(FileLayout *layout, ARegion *region);
-int ED_fileselect_layout_offset(FileLayout *layout, int x, int y);
+int ED_fileselect_layout_numfiles(const FileLayout *layout, ARegion *region);
+int ED_fileselect_layout_offset(const FileLayout *layout, int x, int y);
 FileSelection ED_fileselect_layout_offset_rect(FileLayout *layout, const rcti *rect);
 
 /**
