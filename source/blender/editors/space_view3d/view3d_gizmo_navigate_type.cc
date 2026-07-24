@@ -39,18 +39,49 @@
 
 namespace blender {
 
+#define AXIS_LINE_WIDTH ((U.gizmo_size_navigate_v3d / 40.0f) * U.pixelsize)
+#define WIDGET_OUTER_RADIUS \
+  (((U.gizmo_size_navigate_v3d / 2.0f) + AXIS_LINE_WIDTH * 1.5f) * UI_SCALE_FAC)
+
 /* Radius of the entire background. */
 #define WIDGET_RADIUS ((U.gizmo_size_navigate_v3d / 2.0f) * UI_SCALE_FAC)
 
 /* Sizes of axis spheres containing XYZ characters in relation to above. */
 #define AXIS_HANDLE_SIZE 0.20f
 
-#define AXIS_LINE_WIDTH ((U.gizmo_size_navigate_v3d / 40.0f) * U.pixelsize)
 #define AXIS_RING_WIDTH ((U.gizmo_size_navigate_v3d / 60.0f) * U.pixelsize)
 #define AXIS_TEXT_SIZE (WIDGET_RADIUS * AXIS_HANDLE_SIZE * 1.25f)
 
 /* distance within this from center is considered positive. */
 #define AXIS_DEPTH_BIAS 0.01f
+
+static void draw_line_circle(const uint pos,
+                             const int num_points,
+                             const float radius,
+                             const float line_width,
+                             const float color[4],
+                             const float viewportSize[2])
+{
+  GPU_blend(GPU_BLEND_ALPHA);
+  GPU_line_width(line_width);
+  GPU_line_smooth(true);
+
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+  immUniform2fv("viewportSize", viewportSize);
+  immUniformColor4fv(color);
+  immBegin(GPU_PRIM_LINE_STRIP, num_points + 1);
+  const float angle_d = M_TAU / num_points;
+  immVertex2f(pos, 1.0f * radius, 0.0f * radius);
+  for (const int i : IndexRange(num_points)) {
+    const float angle = (i + 1) * angle_d;
+    immVertex2f(pos, cosf(angle) * radius, sinf(angle) * radius);
+  }
+  immEnd();
+  immUnbindProgram();
+
+  GPU_line_smooth(false);
+  GPU_blend(GPU_BLEND_NONE);
+}
 
 static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
 {
@@ -97,10 +128,6 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
   GPU_matrix_push();
   GPU_matrix_mul(matrix_screen);
 
-  GPUVertFormat *format = immVertexFormat();
-  const uint pos_id = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
-  const uint color_id = GPU_vertformat_attr_add(
-      format, "color", gpu::VertAttrType::SFLOAT_32_32_32_32);
   float viewport_size[4];
   GPU_viewport_size_get_f(viewport_size);
 
@@ -153,8 +180,20 @@ static void gizmo_axis_draw(const bContext *C, wmGizmo *gz)
     rect.ymin = -rad;
     rect.ymax = rad;
     ui::draw_roundbox_4fv(&rect, true, rad, gz->color_hi);
+
+    GPUVertFormat *format = immVertexFormat();
+    const uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+
+    draw_line_circle(
+        pos, 32, WIDGET_OUTER_RADIUS, AXIS_LINE_WIDTH, gz->color_hi, &viewport_size[2]);
+
     GPU_matrix_pop();
   }
+
+  GPUVertFormat *format = immVertexFormat();
+  const uint pos_id = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
+  const uint color_id = GPU_vertformat_attr_add(
+      format, "color", gpu::VertAttrType::SFLOAT_32_32_32_32);
 
   GPU_matrix_mul(gz->matrix_offset);
 
@@ -373,6 +412,91 @@ void VIEW3D_GT_navigate_rotate(wmGizmoType *gzt)
   gzt->test_select = gizmo_axis_test_select;
   gzt->cursor_get = gizmo_axis_cursor_get;
   gzt->screen_bounds_get = gizmo_axis_screen_bounds_get;
+
+  gzt->struct_size = sizeof(wmGizmo);
+}
+
+static void gizmo_roll_draw(const bContext * /*C*/, wmGizmo *gz)
+{
+  const bool is_active = ((gz->state & WM_GIZMO_STATE_HIGHLIGHT) != 0);
+  if (!is_active) {
+    return;
+  }
+
+  float matrix_screen[4][4];
+  float matrix_unit[4][4];
+  unit_m4(matrix_unit);
+
+  wmGizmoMatrixParams params{};
+  params.matrix_offset = matrix_unit;
+  WM_gizmo_calc_matrix_final_params(gz, &params, matrix_screen);
+  GPU_matrix_push();
+  GPU_matrix_mul(matrix_screen);
+
+  float viewport_size[4];
+  GPU_viewport_size_get_f(viewport_size);
+
+  bool use_project_matrix = (gz->scale_final >= -GPU_MATRIX_ORTHO_CLIP_NEAR_DEFAULT);
+  if (use_project_matrix) {
+    GPU_matrix_push_projection();
+    GPU_matrix_ortho_set_z(-gz->scale_final, gz->scale_final);
+  }
+
+  {
+    GPU_matrix_push();
+    GPU_matrix_scale_1f(1.0f / WIDGET_RADIUS);
+
+    GPUVertFormat *format = immVertexFormat();
+    const uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+
+    draw_line_circle(
+        pos, 32, WIDGET_OUTER_RADIUS, AXIS_LINE_WIDTH, gz->color_hi, &viewport_size[2]);
+
+    GPU_matrix_pop();
+  }
+
+  if (use_project_matrix) {
+    GPU_matrix_pop_projection();
+  }
+
+  GPU_matrix_pop();
+}
+
+static int gizmo_roll_test_select(bContext * /*C*/, wmGizmo *gz, const int mval[2])
+{
+  float point_local[2] = {float(mval[0]), float(mval[1])};
+  sub_v2_v2(point_local, gz->matrix_basis[3]);
+  mul_v2_fl(point_local, 1.0f / gz->scale_final);
+
+  const float len_sq = len_squared_v2(point_local);
+  if (len_sq > 1.5) {
+    return -1;
+  }
+  return 0;
+}
+
+static bool gizmo_roll_screen_bounds_get(const bContext *C, wmGizmo *gz, rcti *r_bounding_box)
+{
+  ScrArea *area = CTX_wm_area(C);
+  const float rad = WIDGET_OUTER_RADIUS;
+  r_bounding_box->xmin = gz->matrix_basis[3][0] + area->totrct.xmin - rad;
+  r_bounding_box->ymin = gz->matrix_basis[3][1] + area->totrct.ymin - rad;
+  r_bounding_box->xmax = gz->matrix_basis[3][0] + area->totrct.xmin + rad;
+  r_bounding_box->ymax = gz->matrix_basis[3][1] + area->totrct.ymin + rad;
+  return true;
+}
+
+void VIEW3D_GT_navigate_roll(wmGizmoType *gzt)
+{
+  /* identifiers */
+  gzt->idname = "VIEW3D_GT_navigate_roll";
+
+  /* API callbacks. */
+  gzt->setup = gizmo_axis_setup;
+  gzt->draw = gizmo_roll_draw;
+  gzt->test_select = gizmo_roll_test_select;
+  gzt->cursor_get = gizmo_axis_cursor_get;
+  gzt->screen_bounds_get = gizmo_roll_screen_bounds_get;
 
   gzt->struct_size = sizeof(wmGizmo);
 }

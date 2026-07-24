@@ -50,20 +50,21 @@ namespace {
 enum {
   GZ_INDEX_MOVE = 0,
   GZ_INDEX_ROTATE = 1,
-  GZ_INDEX_ZOOM = 2,
+  GZ_INDEX_ROLL = 2,
+  GZ_INDEX_ZOOM = 3,
 
   /* just buttons */
   /* overlaps GZ_INDEX_ORTHO (switch between) */
-  GZ_INDEX_PERSP = 3,
-  GZ_INDEX_ORTHO = 4,
+  GZ_INDEX_PERSP = 4,
+  GZ_INDEX_ORTHO = 5,
 
-  GZ_INDEX_CAMERA_OFF = 5,
-  GZ_INDEX_CAMERA_ON = 6,
+  GZ_INDEX_CAMERA_OFF = 6,
+  GZ_INDEX_CAMERA_ON = 7,
 
-  GZ_INDEX_CAMERA_LOCK = 7,
-  GZ_INDEX_CAMERA_UNLOCK = 8,
+  GZ_INDEX_CAMERA_LOCK = 8,
+  GZ_INDEX_CAMERA_UNLOCK = 9,
 
-  GZ_INDEX_TOTAL = 9,
+  GZ_INDEX_TOTAL = 10,
 };
 
 struct NavigateGizmoInfo {
@@ -104,6 +105,12 @@ static NavigateGizmoInfo g_navigate_params[GZ_INDEX_TOTAL] = {
     {
         "VIEW3D_OT_rotate",
         "VIEW3D_GT_navigate_rotate",
+        ICON_NONE,
+        nullptr,
+    },
+    {
+        "VIEW3D_OT_view_roll",
+        "VIEW3D_GT_navigate_roll",
         ICON_NONE,
         nullptr,
     },
@@ -169,6 +176,7 @@ static void WIDGETGROUP_navigate_setup(const bContext *C, wmGizmoGroup *gzgroup)
 
   wmOperatorType *ot_view_axis = WM_operatortype_find("VIEW3D_OT_view_axis", true);
   wmOperatorType *ot_view_camera = WM_operatortype_find("VIEW3D_OT_view_camera", true);
+  wmOperatorType *ot_view_roll = WM_operatortype_find("VIEW3D_OT_view_roll", true);
 
   for (int i = 0; i < GZ_INDEX_TOTAL; i++) {
     const NavigateGizmoInfo *info = &g_navigate_params[i];
@@ -176,7 +184,7 @@ static void WIDGETGROUP_navigate_setup(const bContext *C, wmGizmoGroup *gzgroup)
     wmGizmo *gz = navgroup->gz_array[i];
     gz->flag |= WM_GIZMO_MOVE_CURSOR | WM_GIZMO_DRAW_MODAL;
 
-    if (i == GZ_INDEX_ROTATE) {
+    if (ELEM(i, GZ_INDEX_ROTATE, GZ_INDEX_ROLL)) {
       gz->color[3] = 0.0f;
       copy_v3_fl(gz->color_hi, 0.5f);
       gz->color_hi[3] = 0.5f;
@@ -263,6 +271,16 @@ static void WIDGETGROUP_navigate_setup(const bContext *C, wmGizmoGroup *gzgroup)
     gz->drag_part = 0;
   }
 
+  {
+    wmGizmo *gz = navgroup->gz_array[GZ_INDEX_ROLL];
+    gz->scale_basis = GIZMO_SIZE / 2.0f;
+    WM_gizmo_operator_set(gz, 0, ot_view_roll, nullptr);
+
+    wmWindowManager *wm = CTX_wm_manager(C);
+    gz->keymap = WM_gizmo_keymap_generic_press_drag(wm);
+    gz->drag_part = 0;
+  }
+
   gzgroup->customdata = navgroup;
 }
 
@@ -342,6 +360,11 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
 
   if (show_rotate_gizmo) {
     gz = navgroup->gz_array[GZ_INDEX_ROTATE];
+    gz->matrix_basis[3][0] = roundf(co_rotate[0]);
+    gz->matrix_basis[3][1] = roundf(co_rotate[1]);
+    WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
+
+    gz = navgroup->gz_array[GZ_INDEX_ROLL];
     gz->matrix_basis[3][0] = roundf(co_rotate[0]);
     gz->matrix_basis[3][1] = roundf(co_rotate[1]);
     WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
