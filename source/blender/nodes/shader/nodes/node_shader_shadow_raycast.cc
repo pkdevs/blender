@@ -10,6 +10,11 @@ namespace nodes::node_shader_shadow_raycast_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  const bNodeTree *ntree = b.tree_or_null();
+  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
+
+  b.add_input<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
+
   b.add_input<decl::Vector>("Position"_ustr).hide_value();
   b.add_input<decl::Float>("Softness"_ustr).default_value(1.0f);
   b.add_output<decl::Color>("Color"_ustr);
@@ -24,8 +29,8 @@ static int node_shader_gpu_shadow_raycast(GPUMaterial *mat,
   // TODO: Use a different flag.
   GPU_material_flag_set(mat, GPU_MATFLAG_SHADER_TO_RGBA);
 
-  if (!in[0].link) {
-    GPU_link(mat, "world_position_get", &in[0].link);
+  if (!in[1].link) {
+    GPU_link(mat, "world_position_get", &in[1].link);
   }
 
   return GPU_stack_link(mat, node, "node_shadow_raycast", in, out);

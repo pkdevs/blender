@@ -823,8 +823,13 @@ void scene_time_uniforms(float &seconds, float &frame)
   frame = uni.uniform_buf.scene.frame;
 }
 
-void node_light_info_impl(
-    float4 &color, float &power, float3 &position, float3 &direction, float &distance, float &mask)
+void node_light_info_impl(const int /*light_index*/,
+                          float4 &color,
+                          float &power,
+                          float3 &position,
+                          float3 &direction,
+                          float &distance,
+                          float &mask)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
@@ -847,7 +852,8 @@ void node_light_accumulation_impl(
   /*TODO*/
 }
 
-void node_light_evaluation_impl(float3 position,
+void node_light_evaluation_impl(const int /*light_index*/,
+                                float3 position,
                                 float3 normal,
                                 float roughness,
                                 float4 &color,
@@ -887,7 +893,10 @@ void node_light_evaluation_impl(float3 position,
   energy_scale *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
 }
 
-void node_shadow_raycast_impl(float3 position, float softness, float4 &color)
+void node_shadow_raycast_impl(const int /*light_index*/,
+                              float3 position,
+                              float softness,
+                              float4 &color)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
@@ -936,7 +945,7 @@ void node_shadow_raycast_impl(float3 position, float softness, float4 &color)
 #endif
 }
 
-float4 node_attribute_light_impl(uint attr_hash)
+float4 node_attribute_light_impl(const int /*light_index*/, uint attr_hash)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);

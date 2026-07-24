@@ -19,6 +19,11 @@ namespace nodes::node_shader_attribute_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  const bNodeTree *ntree = b.tree_or_null();
+  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
+
+  b.add_input<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
+
   b.add_output<decl::Color>("Color"_ustr);
   b.add_output<decl::Vector>("Vector"_ustr);
   b.add_output<decl::Float>("Factor"_ustr, "Fac"_ustr);
