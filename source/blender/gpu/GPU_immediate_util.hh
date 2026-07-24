@@ -126,6 +126,25 @@ void imm_draw_disk_partial_fill_3d(uint pos,
                                    float sweep);
 
 /**
+ * Same as #imm_draw_disk_partial_fill_2d, but avoids the visible seams that
+ * `GPU_polygon_smooth` produces between the strip's individual triangles, by faking
+ * antialiasing through jittered supersampling instead. Draws the shape multiple times with a
+ * translucent \a color, so the caller must not bind a shader that ignores it, and must enable
+ * #GPU_BLEND_ALPHA around the call.
+ *
+ * \param color: RGBA color, used at reduced alpha for each of the supersampled draws.
+ */
+void imm_draw_disk_partial_fill_aa_2d(uint pos,
+                                      float x,
+                                      float y,
+                                      float rad_inner,
+                                      float rad_outer,
+                                      int nsegments,
+                                      float start,
+                                      float sweep,
+                                      const float color[4]);
+
+/**
  * Draw a lined box.
  *
  * \param pos: The vertex attribute number for position.

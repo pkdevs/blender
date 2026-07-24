@@ -1835,24 +1835,22 @@ void file_draw_list_overlays(const bContext *C, ARegion *region)
       GPUVertFormat *format = immVertexFormat();
       const uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-      /* TODO better colors? */
-      immUniformColor4ub(255, 255, 255, 100);
       GPU_blend(GPU_BLEND_ALPHA);
-      GPU_polygon_smooth(true);
 
       const float center_x = BLI_rcti_cent_x(&tile_draw_rect);
       const float center_y = tile_draw_rect.ymax - layout->tile_border_y - layout->prv_h * 0.5f;
+      /* TODO better colors? */
+      const float color[4] = {1.0f, 1.0f, 1.0f, 100.0f / 255.0f};
 
       /* Outer bound of the outer ring. */
       const float rad_outer = std::min(layout->prv_w, layout->prv_h) * 0.4f;
-      imm_draw_disk_partial_fill_2d(
-          pos, center_x, center_y, rad_outer * 0.8f, rad_outer, 48, 0.0f, 360);
+      imm_draw_disk_partial_fill_aa_2d(
+          pos, center_x, center_y, rad_outer * 0.8f, rad_outer, 48, 0.0f, 360, color);
       /* Outer bound of the inner disk. */
       const float rad_inner = rad_outer * 0.8f;
-      imm_draw_disk_partial_fill_2d(
-          pos, center_x, center_y, rad_inner, 0.0f, 48, 0.0f, 360 * *progress);
+      imm_draw_disk_partial_fill_aa_2d(
+          pos, center_x, center_y, rad_inner, 0.0f, 48, 0.0f, 360 * *progress, color);
 
-      GPU_polygon_smooth(false);
       GPU_blend(GPU_BLEND_NONE);
       immUnbindProgram();
     }

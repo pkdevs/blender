@@ -354,6 +354,52 @@ void imm_draw_disk_partial_fill_3d(uint pos,
       GPU_PRIM_TRI_STRIP, pos, x, y, z, rad_inner, rad_outer, nsegments, start, sweep);
 }
 
+/* Number of jittered sub-pixel draws used by #imm_draw_disk_partial_fill_aa_2d. */
+#define IMM_DISK_AA_JITTER_LEN 8
+
+/* Sub-pixel offsets used to fake antialiasing through supersampling. Same technique and
+ * values as `ui_pixel_jitter` in `interface_widgets.cc`. */
+static const float imm_disk_aa_jitter[IMM_DISK_AA_JITTER_LEN][2] = {
+    {0.468813f, -0.481430f},
+    {-0.155755f, -0.352820f},
+    {0.219306f, -0.238501f},
+    {-0.393286f, -0.110949f},
+    {-0.024699f, 0.013908f},
+    {0.343805f, 0.147431f},
+    {-0.272855f, 0.269918f},
+    {0.095909f, 0.388710f},
+};
+
+void imm_draw_disk_partial_fill_aa_2d(uint pos,
+                                      float x,
+                                      float y,
+                                      float rad_inner,
+                                      float rad_outer,
+                                      int nsegments,
+                                      float start,
+                                      float sweep,
+                                      const float color[4])
+{
+  float color_faded[4];
+  copy_v4_v4(color_faded, color);
+  /* With `GPU_BLEND_ALPHA`, blending the same alpha `a` "over" a pixel `N` times in a row
+   * converges to `1 - (1 - a)^N`, not `N * a`. Solve for the per-draw alpha so a fully covered
+   * (interior) pixel reproduces the requested total alpha after all `N` draws. */
+  color_faded[3] = 1.0f - powf(1.0f - color[3], 1.0f / float(IMM_DISK_AA_JITTER_LEN));
+  immUniformColor4fv(color_faded);
+
+  for (int i = 0; i < IMM_DISK_AA_JITTER_LEN; i++) {
+    imm_draw_disk_partial_fill_2d(pos,
+                                  x + imm_disk_aa_jitter[i][0],
+                                  y + imm_disk_aa_jitter[i][1],
+                                  rad_inner,
+                                  rad_outer,
+                                  nsegments,
+                                  start,
+                                  sweep);
+  }
+}
+
 static void imm_draw_circle_3D(GPUPrimType prim_type,
                                uint pos,
                                float x,
