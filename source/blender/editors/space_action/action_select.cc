@@ -453,17 +453,25 @@ struct BoxSelectData {
   KeyframeEditFunc ok_cb, select_cb;
 };
 
-static void box_select_elem(
-    BoxSelectData *sel_data, bAnimListElem *ale, float xmin, float xmax, bool summary)
+static void box_select_elem(BoxSelectData *sel_data,
+                            bAnimListElem *ale,
+                            float xmin,
+                            float xmax,
+                            bool summary,
+                            bool child_row_in_box)
 {
   bAnimContext *ac = sel_data->ac;
 
-  /* An expanded channel's children are drawn as separate rows which each get their own box
-   * test, allowing granular selection of the keys they display. Only a collapsed channel acts
-   * as the sole visible representative of its subtree, selecting all the keyframes that it
-   * summarizes. Skipped when `summary` is set: then this element is visited on behalf of a
-   * collapsed summary channel, which covers everything regardless of expansion state. */
-  if (!summary && ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_EXPAND) > 0) {
+  /* An expanded channel's children are drawn as separate rows directly below it. When the box
+   * also reaches the first of those rows, each covered child gets its own box test, allowing
+   * granular selection of the keys it displays, and the aggregate contributes nothing. When the
+   * box stops inside the expanded channel's own row however, this row is the most granular level
+   * the user targeted, so it selects its whole subtree just like a collapsed channel does.
+   * Skipped when `summary` is set: then this element is visited on behalf of a summary channel
+   * that is selecting its subtree, which covers everything regardless of expansion state. */
+  if (!summary && child_row_in_box &&
+      ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_EXPAND) > 0)
+  {
     return;
   }
 
@@ -518,7 +526,7 @@ static void box_select_elem(
             ac, &anim_data, ANIMFILTER_DATA_VISIBLE, ac->data, eAnimCont_Types(ac->datatype));
 
         for (bAnimListElem &ale2 : anim_data) {
-          box_select_elem(sel_data, &ale2, xmin, xmax, true);
+          box_select_elem(sel_data, &ale2, xmin, xmax, true, false);
         }
 
         ANIM_animdata_update(ac, &anim_data);
@@ -598,7 +606,12 @@ static void box_select_action(bAnimContext *ac,
 
     /* perform vertical suitability check (if applicable) */
     if ((mode == ACTKEYS_BORDERSEL_FRAMERANGE) || !((ymax < rectf.ymin) || (ymin > rectf.ymax))) {
-      box_select_elem(&sel_data, ale, rectf.xmin, rectf.xmax, false);
+      /* Whether the row drawn directly below this one is also inside the box. For an expanded
+       * channel that row is its first child, so this tells whether the box covers part of the
+       * channel's subtree or stops at the aggregate row itself. */
+      const bool child_row_in_box = (ale->next != nullptr) &&
+                                    !((ymin < rectf.ymin) || (ymin - channel_step > rectf.ymax));
+      box_select_elem(&sel_data, ale, rectf.xmin, rectf.xmax, false, child_row_in_box);
     }
   }
 
