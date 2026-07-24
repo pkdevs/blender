@@ -33,6 +33,7 @@ enum eFModifier_Types : short {
   FMODIFIER_TYPE_LIMITS = 8,
   FMODIFIER_TYPE_STEPPED = 9,
   FMODIFIER_TYPE_SMOOTH = 10,
+  FMODIFIER_TYPE_PENNY = 11,
 
   /* NOTE: all new modifiers must be added above this line */
   FMODIFIER_NUM_TYPES,

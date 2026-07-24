@@ -5857,6 +5857,147 @@ static void def_sh_tex_noise(BlenderRNA *brna, StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
+/* ---- Penny Noise RNA registration ----
+ * Enum tables and property definitions for the Penny Noise texture node
+ * (SH_NODE_TEX_PENNY). Integer IDs must match the `penny_blend()` dispatch
+ * in penny.h / noise_penny.cc and the `PennyType` enum in BLI_noise_penny.hh. */
+
+/* Blend mode enum. Mode 0 = Normal (passthrough, no second sample needed).
+ * Modes 1–24 generate a second decorrelated sample and combine via the
+ * corresponding Photoshop-style blend operation. */
+static const EnumPropertyItem penny_blend_mode_items[] = {
+    {0, "NORMAL", 0, "Normal", "Use only the latest octave"},
+    {1, "ADD", 0, "Add", ""},
+    {2, "MULTIPLY", 0, "Multiply", ""},
+    {3, "DIFFERENCE", 0, "Difference", ""},
+    {4, "DARKEN", 0, "Darken", ""},
+    {5, "LIGHTEN", 0, "Lighten", ""},
+    {6, "DODGE", 0, "Dodge", ""},
+    {7, "BURN", 0, "Burn", ""},
+    {8, "OVERLAY", 0, "Overlay", ""},
+    {9, "AVERAGE", 0, "Average", ""},
+    {10, "EXCLUSION", 0, "Exclusion", ""},
+    {11, "GLOW", 0, "Glow", ""},
+    {12, "HARD_LIGHT", 0, "Hard Light", ""},
+    {13, "HARD_MIX", 0, "Hard Mix", ""},
+    {14, "LINEAR_BURN", 0, "Linear Burn", ""},
+    {15, "LINEAR_DODGE", 0, "Linear Dodge", ""},
+    {16, "LINEAR_LIGHT", 0, "Linear Light", ""},
+    {17, "NEGATION", 0, "Negation", ""},
+    {18, "PHOENIX", 0, "Phoenix", ""},
+    {19, "PIN_LIGHT", 0, "Pin Light", ""},
+    {20, "REFLECT", 0, "Reflect", ""},
+    {21, "SCREEN", 0, "Screen", ""},
+    {22, "SOFT_LIGHT", 0, "Soft Light", ""},
+    {23, "SUBTRACT", 0, "Subtract", ""},
+    {24, "VIVID_LIGHT", 0, "Vivid Light", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+/* Noise type enum. Integer IDs must match `PennyType` in BLI_noise_penny.hh
+ * and the SVM dispatch order in penny.h. Tooltip strings describe each
+ * algorithm's visual character for the user. */
+static const EnumPropertyItem penny_noise_type_items[] = {
+    {0, "FBM", 0, "fBm", "Fractal Brownian Motion (tileable 4D Improved Perlin)"},
+    {1, "TURBULENCE", 0, "Turbulence", "Summed absolute-value octaves (Penny Turbulence)"},
+    {2, "STUPL", 0, "Stupl", "Domain-warped turbulence (Penny Stupl)"},
+    {3, "LUKA", 0, "Luka", "Domain-warped abs-turbulence (Penny Luka)"},
+    {4,
+     "BLISTERED",
+     0,
+     "Blistered Turbulence",
+     "Adaptive contrast-window turbulence (Penny Blistered Turbulence)"},
+    {5, "BOX", 0, "Box", "Domain-distortion noise (Penny Box)"},
+    {6, "MOD", 0, "Mod", "Quantized cell-snapped Perlin (Penny Mod)"},
+    {7, "NUTOUS", 0, "Nutous", "Squared domain-warped abs-turbulence (Penny Nutous)"},
+    {8, "CRANAL", 0, "Cranal", "X-shifted ridged biased turbulence (Penny Cranal)"},
+    {9, "BUYA", 0, "Buya", "Ridge-folded biased pfBm with octave remap (Penny Buya)"},
+    {10, "CELL", 0, "Cell", "Quantized cell Perlin, octave-summed (Penny Cell)"},
+    {11,
+     "DISTURB",
+     0,
+     "Displaced Turbulence",
+     "Displacement-warped turbulence sum (Penny Displaced Turbulence)"},
+    {12, "HAMA", 0, "Hama", "Per-octave product of narrow-windowed turbulence (Penny Hama)"},
+    {13,
+     "NAKI",
+     0,
+     "Naki",
+     "Abs-turb displacement-warped Perlin with smoothstep bias (Penny Naki)"},
+    {14, "POXO", 0, "Poxo", "Recursive abs-turb blend with fractional octaves (Penny Poxo)"},
+    {15, "PEZO", 0, "Pezo", "Smoothstep-gated turbulence product with abs-turb mask (Penny Pezo)"},
+    {16, "DENTS", 0, "Dents", "Max-of-octaves folded turbulence (Penny Dents)"},
+    {17, "SEMA", 0, "Sema", "Tightly-gated max-of-octaves fold with fine dither (Penny Sema)"},
+    {18,
+     "VL_NOISE",
+     0,
+     "VL Noise",
+     "Variable-lacunarity: Perlin domain-warped by Perlin (Penny VL Noise)"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+/* Penny Noise property registration.
+ * Registers the Dimensions, Period X/Y/Z/W, Blend Mode, and Noise Type
+ * properties on the NodeTexPenny storage struct. Dimensions triggers
+ * socket visibility updates via rna_ShaderNode_socket_update. */
+static void def_sh_tex_penny(BlenderRNA *brna, StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeTexPenny", "storage");
+  def_sh_tex(brna, srna);
+
+  prop = RNA_def_property(srna, "penny_dimensions", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "dimensions");
+  RNA_def_property_enum_items(prop, rna_enum_node_tex_dimensions_items);
+  RNA_def_property_ui_text(prop,
+                           "Dimensions",
+                           "Number of dimensions to evaluate noise for "
+                           "(1D = W only, 2D = X/Y, 3D = X/Y/Z, 4D = X/Y/Z + W)");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_TEXTURE);
+  RNA_def_property_update(prop, 0, "rna_ShaderNode_socket_update");
+
+  prop = RNA_def_property(srna, "period_x", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, nullptr, "period_x");
+  RNA_def_property_range(prop, 1, 256);
+  RNA_def_property_ui_text(prop,
+                           "Period X",
+                           "Tiling period along X axis (1..256 lattice cells). "
+                           "Increase for more variety; decrease for tighter tiling");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "period_y", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, nullptr, "period_y");
+  RNA_def_property_range(prop, 1, 256);
+  RNA_def_property_ui_text(prop, "Period Y", "Tiling period along Y axis");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "blend_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "blend_mode");
+  RNA_def_property_enum_items(prop, penny_blend_mode_items);
+  RNA_def_property_ui_text(
+      prop, "Blend Mode", "How each fBm octave is combined with the accumulated result");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "noise_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "noise_type");
+  RNA_def_property_enum_items(prop, penny_noise_type_items);
+  RNA_def_property_ui_text(prop, "Noise Type", "Which noise algorithm to evaluate");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "period_z", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, nullptr, "period_z");
+  RNA_def_property_range(prop, 1, 256);
+  RNA_def_property_ui_text(prop, "Period Z", "Tiling period along Z axis");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "period_w", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, nullptr, "period_w");
+  RNA_def_property_range(prop, 1, 256);
+  RNA_def_property_ui_text(prop, "Period W", "Tiling period along W axis");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
 static void def_sh_tex_checker(BlenderRNA *brna, StructRNA *srna)
 {
   RNA_def_struct_sdna_from(srna, "NodeTexChecker", "storage");
@@ -10653,6 +10794,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("ShaderNode", "ShaderNodeTexImage", def_sh_tex_image);
   define("ShaderNode", "ShaderNodeTexMagic", def_sh_tex_magic);
   define("ShaderNode", "ShaderNodeTexNoise", def_sh_tex_noise);
+  define("ShaderNode", "ShaderNodeTexPenny", def_sh_tex_penny);
   define("ShaderNode", "ShaderNodeTexSky", def_sh_tex_sky);
   define("ShaderNode", "ShaderNodeTexVoronoi", def_sh_tex_voronoi);
   define("ShaderNode", "ShaderNodeTexWave", def_sh_tex_wave);

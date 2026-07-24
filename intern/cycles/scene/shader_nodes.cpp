@@ -1246,6 +1246,121 @@ void NoiseTextureNode::compile(OSLCompiler &compiler)
   compiler.add(this, "node_noise_texture");
 }
 
+/* Penny Noise Texture — Cycles scene node implementation.
+ *
+ * Tileable 4D Improved Perlin noise (19 types, 24 blend modes).
+ * Defines the Cycles NodeType with all input/output sockets, and provides
+ * two compile() methods:
+ *   - SVM: emits NODE_TEX_PENNY opcodes with packed stack offsets matching
+ *     the layout expected by svm_node_tex_penny in penny.h.
+ *   - OSL: passes dimensions, blend_mode, and noise_type as shader parameters
+ *     to node_penny_noise_texture.osl.
+ *
+ * When the Coordinate input is unconnected, object-space position is injected
+ * via NODE_TEX_COORD / NODE_TEXCO_OBJECT so the noise anchors at the object
+ * origin. Lacunarity is locked to 2 internally for tiling continuity.
+ *
+ * Copyright: David Patrick Farmer and Jamie Halmick. */
+
+NODE_DEFINE(PennyNoiseTextureNode)
+{
+  NodeType *type = NodeType::add("penny_noise_texture", create, NodeType::SHADER);
+
+  TEXTURE_MAPPING_DEFINE(PennyNoiseTextureNode);
+
+  SOCKET_IN_POINT(vector, "Coordinate", zero_float3(), SocketType::LINK_TEXTURE_GENERATED);
+  SOCKET_IN_FLOAT(w, "W", 0.0f);
+  SOCKET_IN_FLOAT(scale, "Scale", 100.0f);
+  SOCKET_IN_FLOAT(scale_x, "Scale X", 100.0f);
+  SOCKET_IN_FLOAT(scale_y, "Scale Y", 100.0f);
+  SOCKET_IN_FLOAT(scale_z, "Scale Z", 100.0f);
+  SOCKET_IN_FLOAT(scale_w, "Scale W", 100.0f);
+  SOCKET_IN_FLOAT(detail, "Octaves", 7.0f);
+  SOCKET_IN_FLOAT(roughness, "Roughness", 0.5f);
+  SOCKET_IN_FLOAT(level_min, "Level Min", 0.0f);
+  SOCKET_IN_FLOAT(level_mid, "Level Mid", 0.5f);
+  SOCKET_IN_FLOAT(level_max, "Level Max", 1.0f);
+  SOCKET_IN_FLOAT(period_x, "Period X", 256.0f);
+  SOCKET_IN_FLOAT(period_y, "Period Y", 256.0f);
+  SOCKET_IN_FLOAT(period_z, "Period Z", 256.0f);
+  SOCKET_IN_FLOAT(period_w, "Period W", 256.0f);
+  static NodeEnum penny_dimensions_enum;
+  penny_dimensions_enum.insert("1D", 1);
+  penny_dimensions_enum.insert("2D", 2);
+  penny_dimensions_enum.insert("3D", 3);
+  penny_dimensions_enum.insert("4D", 4);
+  SOCKET_ENUM(dimensions, "Dimensions", penny_dimensions_enum, 4);
+  SOCKET_INT(blend_mode, "Blend Mode", 0);
+  SOCKET_INT(noise_type, "Noise Type", 0);
+  SOCKET_OUT_FLOAT(fac, "Fac");
+  SOCKET_OUT_COLOR(color, "Color");
+  SOCKET_OUT_VECTOR(gradient, "Gradient");
+
+  return type;
+}
+
+PennyNoiseTextureNode::PennyNoiseTextureNode() : TextureNode(get_node_type()) {}
+
+/* SVM compilation: emit NODE_TEX_PENNY opcode + 6 data nodes.
+ * Stack layout must match svm_node_tex_penny in penny.h exactly:
+ *   Node 0: main op + packed offsets (vector, w, scale, detail | roughness,
+ *           level_min, level_mid, level_max | fac, color, unused, unused).
+ *   Node 1: defaults (w, scale, detail, roughness) as float-as-int.
+ *   Node 2: period offsets + blend_mode + noise_type + dimensions.
+ *   Node 3: period defaults as float-as-int.
+ *   Node 4: per-axis scale offsets.
+ *   Node 5: per-axis scale defaults as float-as-int.
+ *   Node 6: level defaults (min, mid, max, unused). */
+void PennyNoiseTextureNode::compile(SVMCompiler &compiler)
+{
+  ShaderInput *vector_in = input("Coordinate");
+
+  const SVMStackOffset vector_stack_offset = tex_mapping.compile_begin(
+      compiler, vector_in, nullptr);
+  /* An unconnected Coordinate input defaults to the generated texture coordinate
+   * via the LINK_TEXTURE_GENERATED socket flag, matching the other texture nodes. */
+
+  compiler.add_node(this,
+                    NODE_TEX_PENNY,
+                    SVMNodeTexPenny{
+                        .dimensions = uint(dimensions),
+                        .noise_type = uint(noise_type),
+                        .blend_mode = uint(blend_mode),
+                        .w = compiler.input_float("W"),
+                        .scale = compiler.input_float("Scale"),
+                        .scale_x = compiler.input_float("Scale X"),
+                        .scale_y = compiler.input_float("Scale Y"),
+                        .scale_z = compiler.input_float("Scale Z"),
+                        .scale_w = compiler.input_float("Scale W"),
+                        .detail = compiler.input_float("Octaves"),
+                        .roughness = compiler.input_float("Roughness"),
+                        .level_min = compiler.input_float("Level Min"),
+                        .level_mid = compiler.input_float("Level Mid"),
+                        .level_max = compiler.input_float("Level Max"),
+                        .period_x = compiler.input_float("Period X"),
+                        .period_y = compiler.input_float("Period Y"),
+                        .period_z = compiler.input_float("Period Z"),
+                        .period_w = compiler.input_float("Period W"),
+                        .coord = vector_stack_offset,
+                        .fac_offset = compiler.output("Fac"),
+                        .color_offset = compiler.output("Color"),
+                        .gradient_offset = compiler.output("Gradient"),
+                    });
+  tex_mapping.compile_end(compiler, vector_in, vector_stack_offset);
+}
+
+/* OSL compilation: pass compile-time properties as shader parameters,
+ * then add the node_penny_noise_texture shader. Socket values are
+ * connected automatically by the OSL compiler infrastructure. */
+void PennyNoiseTextureNode::compile(OSLCompiler &compiler)
+{
+  tex_mapping.compile(compiler);
+  compiler.parameter(this, "dimensions");
+  compiler.parameter(this, "blend_mode");
+  compiler.parameter(this, "noise_type");
+  compiler.add(this, "node_penny_noise_texture");
+}
+
 /* Gabor Texture */
 
 NODE_DEFINE(GaborTextureNode)
@@ -1568,7 +1683,7 @@ NODE_DEFINE(WaveTextureNode)
   SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_TEXTURE_GENERATED);
   SOCKET_IN_FLOAT(scale, "Scale", 1.0f);
   SOCKET_IN_FLOAT(distortion, "Distortion", 0.0f);
-  SOCKET_IN_FLOAT(detail, "Detail", 2.0f);
+  SOCKET_IN_FLOAT(detail, "Octaves", 7.0f);
   SOCKET_IN_FLOAT(detail_scale, "Detail Scale", 0.0f);
   SOCKET_IN_FLOAT(detail_roughness, "Detail Roughness", 0.5f);
   SOCKET_IN_FLOAT(phase, "Phase Offset", 0.0f);

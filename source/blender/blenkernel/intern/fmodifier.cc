@@ -25,6 +25,7 @@
 #include "BLI_math_base_c.hh"
 #include "BLI_noise.hh"
 #include "BLI_noise_c.hh"
+#include "BLI_noise_penny.hh"
 #include "BLI_utildefines.hh"
 
 #include "BKE_fcurve.hh"
@@ -882,6 +883,119 @@ static FModifierTypeInfo FMI_NOISE = {
     /*evaluate_modifier*/ fcm_noise_evaluate,
 };
 
+/* -------------------------------------------------------------------- */
+/** \name Penny Noise F-Curve Modifier
+ *
+ * Applies the Penny Noise family (19 noise types, 24 blend modes) directly
+ * to an F-Curve's evaluated value. The noise is sampled in 1D along the
+ * time axis using the same 4D tileable Perlin core as the shader/GN backends
+ * (blender::noise::penny::penny from BLI_noise_penny.hh).
+ *
+ * The 4D coordinate is constructed as (time/scale, seedY, seedZ, seedW),
+ * where the seed offsets produce fully decorrelated streams — each Random
+ * Seed value samples a distinct slice of the 4D noise field.
+ *
+ * The f-Blend (modification) modes control how the noise combines with the
+ * existing curve value: Replace (centered-add), Add, Subtract, Multiply.
+ * \{ */
+
+/** Initialize default F-Curve modifier data (FMod_Penny). */
+static void fcm_penny_new_data(void *mdata)
+{
+  FMod_Penny *data = static_cast<FMod_Penny *>(mdata);
+
+  /* defaults */
+  data->scale = 20.0f; /* frames per feature; larger = slower variation */
+  data->strength = 1.0f;
+  data->offset = 0.0f;
+  data->roughness = 0.5f;
+  data->detail = 2.0f;
+  data->level_min = 0.0f;
+  data->level_mid = 0.5f;
+  data->level_max = 1.0f;
+  data->noise_type = 0;
+  data->blend_mode = 0;
+  data->seed = 0;
+  data->period = 256;
+  data->modification = 0; /* Replace */
+}
+
+/** Evaluate the Penny Noise modifier at the given frame time.
+ *  Samples blender::noise::penny::penny() at a 4D coordinate derived from
+ *  (evaltime - offset) / scale on the X axis and seed-derived offsets on
+ *  Y/Z/W. The Period property tiles along X (the time axis). The result
+ *  is combined with the incoming curve value via the f-Blend mode. */
+static void fcm_penny_evaluate(const FCurve * /*fcu*/,
+                               const FModifier *fcm,
+                               float *cvalue,
+                               float evaltime,
+                               void * /*storage*/)
+{
+  FMod_Penny *data = static_cast<FMod_Penny *>(fcm->data);
+
+  /* Seed -> fully decorrelated stream: large fixed offsets on the non-time axes,
+   * so each seed samples a distinct slice of the 4D Penny field. */
+  const float sf = float(data->seed);
+  const float seedY = sf * 137.51f + 11.7f;
+  const float seedZ = sf * 191.13f + 53.3f;
+  const float seedW = sf * 311.71f + 17.9f;
+
+  /* Time along the axis. scale acts like the Noise modifier's size (1/scale),
+   * larger scale = slower variation. offset shifts the sample position. */
+  const float t = evaltime - data->offset;
+  const float coord = (data->scale != 0.0f) ? (t / data->scale) : 0.0f;
+
+  blender::noise::penny::PennyParams pp;
+  pp.type = data->noise_type;
+  pp.blend_mode = data->blend_mode;
+  pp.detail = (data->detail > 1.0f) ? data->detail : 1.0f;
+  pp.roughness = data->roughness;
+  pp.levels = blender::float3(data->level_min, data->level_mid, data->level_max);
+  /* 1D noise walks the X axis; the user Period tiles that axis. */
+  pp.period = blender::int4((data->period > 0) ? data->period : 8, 8, 8, 8);
+
+  const float noise =
+      blender::noise::penny::penny(blender::float4(coord, seedY, seedZ, seedW), pp).x;
+
+  /* Apply the noise to the incoming curve value per the Modification Blend.
+   * Replace (default) matches Penny's original centered-add behavior. */
+  switch (data->modification) {
+    case 1: /* Add */
+      *cvalue = *cvalue + noise * data->strength;
+      break;
+    case 2: /* Subtract */
+      *cvalue = *cvalue - noise * data->strength;
+      break;
+    case 3: /* Multiply */
+      *cvalue = *cvalue * noise * data->strength;
+      break;
+    case 0: /* Replace */
+    default:
+      *cvalue = *cvalue + (noise - 0.5f) * data->strength;
+      break;
+  }
+}
+
+/** Modifier type info for the Penny Noise F-Curve modifier.
+ *  Registered in fmodifier_type_info_init (see bottom of this file). */
+static FModifierTypeInfo FMI_PENNY = {
+    /*type*/ FMODIFIER_TYPE_PENNY,
+    /*size*/ sizeof(FMod_Penny),
+    /*acttype*/ FMI_TYPE_REPLACE_VALUES,
+    /*requires_flag*/ 0,
+    /*name*/ CTX_N_(BLT_I18NCONTEXT_ID_ACTION, "Penny Noise"),
+    /*struct_name*/ "FMod_Penny",
+    /*storage_size*/ 0,
+    /*free_data*/ nullptr,
+    /*copy_data*/ nullptr,
+    /*new_data*/ fcm_penny_new_data,
+    /*verify_data*/ nullptr,
+    /*evaluate_modifier_time*/ nullptr,
+    /*evaluate_modifier*/ fcm_penny_evaluate,
+};
+
+/** \} */
+
 /* Limits F-Curve Modifier --------------------------- */
 
 static float fcm_limits_time(const FCurve * /*fcu*/,
@@ -1130,6 +1244,7 @@ static void fmods_init_typeinfo()
   fmodifiersTypeInfo[FMODIFIER_TYPE_LIMITS] = &FMI_LIMITS;
   fmodifiersTypeInfo[FMODIFIER_TYPE_STEPPED] = &FMI_STEPPED;
   fmodifiersTypeInfo[FMODIFIER_TYPE_SMOOTH] = &FMI_SMOOTH;
+  fmodifiersTypeInfo[FMODIFIER_TYPE_PENNY] = &FMI_PENNY;
 
 #ifndef NDEBUG
   /* Check that the array indices are correct. */

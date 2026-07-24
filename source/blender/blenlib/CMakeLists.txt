@@ -116,6 +116,7 @@ set(SRC
   intern/mesh_intersect.cc
   intern/noise.cc
   intern/noise_c.cc
+  intern/noise_penny.cc
   intern/offset_indices.cc
   intern/ordered_edge.cc
   intern/path_utils.cc
@@ -340,6 +341,7 @@ set(SRC
   BLI_mutex.hh
   BLI_noise.hh
   BLI_noise_c.hh
+  BLI_noise_penny.hh
   BLI_normalized_int_types.hh
   BLI_offset_indices.hh
   BLI_offset_span.hh

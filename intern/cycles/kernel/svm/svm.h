@@ -62,6 +62,7 @@
 #include "kernel/svm/mix.h"
 #include "kernel/svm/noisetex.h"
 #include "kernel/svm/normal.h"
+#include "kernel/svm/penny.h"
 #include "kernel/svm/radial_tiling.h"
 #include "kernel/svm/ramp.h"
 #include "kernel/svm/scene_time.h"
@@ -301,6 +302,9 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
       break;
       SVM_CASE(NODE_TEX_NOISE)
       svm_node_tex_noise(stack, svm_node_get<SVMNodeTexNoise>(kg, &offset));
+      break;
+      SVM_CASE(NODE_TEX_PENNY)
+      svm_node_tex_penny(stack, svm_node_get<SVMNodeTexPenny>(kg, &offset));
       break;
       SVM_CASE(NODE_SET_BUMP)
       svm_node_set_bump<node_feature_mask>(

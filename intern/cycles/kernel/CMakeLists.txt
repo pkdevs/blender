@@ -89,6 +89,7 @@ set(SRC_KERNEL_SVM_HEADERS
   svm/node_types_template.h
   svm/noise.h
   svm/noisetex.h
+  svm/penny.h
   svm/normal.h
   svm/ramp.h
   svm/ramp_util.h

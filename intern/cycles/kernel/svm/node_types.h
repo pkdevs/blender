@@ -594,6 +594,34 @@ struct SVMNodeTexNoise {
 static_assert(alignof(SVMNodeTexNoise) <= alignof(uint));
 static_assert(sizeof(SVMNodeTexNoise) % sizeof(uint) == 0);
 
+/* NODE_TEX_PENNY */
+struct SVMNodeTexPenny {
+  uint dimensions;
+  uint noise_type;
+  uint blend_mode;
+  SVMInputFloat w;
+  SVMInputFloat scale;
+  SVMInputFloat scale_x;
+  SVMInputFloat scale_y;
+  SVMInputFloat scale_z;
+  SVMInputFloat scale_w;
+  SVMInputFloat detail;
+  SVMInputFloat roughness;
+  SVMInputFloat level_min;
+  SVMInputFloat level_mid;
+  SVMInputFloat level_max;
+  SVMInputFloat period_x;
+  SVMInputFloat period_y;
+  SVMInputFloat period_z;
+  SVMInputFloat period_w;
+  SVMStackOffset coord;
+  SVMStackOffset fac_offset;
+  SVMStackOffset color_offset;
+  SVMStackOffset gradient_offset;
+};
+static_assert(alignof(SVMNodeTexPenny) <= alignof(uint));
+static_assert(sizeof(SVMNodeTexPenny) % sizeof(uint) == 0);
+
 /* NODE_TEX_VORONOI */
 struct SVMNodeTexVoronoi {
   uint dimensions;

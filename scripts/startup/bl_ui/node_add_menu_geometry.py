@@ -719,6 +719,7 @@ class NODE_MT_gn_texture_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeImageTexture")
         self.node_operator(layout, "ShaderNodeTexMagic")
         self.node_operator(layout, "ShaderNodeTexNoise")
+        self.node_operator(layout, "ShaderNodeTexPenny")
         self.node_operator(layout, "ShaderNodeTexVoronoi")
         self.node_operator(layout, "ShaderNodeTexWave")
         self.node_operator(layout, "ShaderNodeTexWhiteNoise")

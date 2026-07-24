@@ -904,6 +904,10 @@ bool BKE_fcurve_are_keyframes_usable(const FCurve &fcu)
         case FMODIFIER_TYPE_CYCLES:
         case FMODIFIER_TYPE_STEPPED:
         case FMODIFIER_TYPE_NOISE:
+        /* Penny drives the F-Curve with noise like FMODIFIER_TYPE_NOISE above:
+         * it offsets evaluated values but leaves the underlying keyframes intact
+         * and editable, so it never renders them unusable. */
+        case FMODIFIER_TYPE_PENNY:
           break;
 
         /* Sometimes harmful - depending on whether they're "additive" or not. */

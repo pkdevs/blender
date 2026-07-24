@@ -278,6 +278,37 @@ class NoiseTextureNode : public TextureNode {
   NODE_SOCKET_API(float3, vector)
 };
 
+/** Cycles scene node for the Penny Noise texture.
+ *  Bridges Blender's node storage (NodeTexPenny) to the Cycles SVM kernel
+ *  (svm_node_tex_penny in penny.h) and the OSL shader
+ *  (node_penny_noise_texture.osl). The compile() methods emit the SVM
+ *  bytecode or OSL parameters; socket values become SVM stack entries or
+ *  OSL shader arguments. */
+class PennyNoiseTextureNode : public TextureNode {
+ public:
+  SHADER_NODE_CLASS(PennyNoiseTextureNode)
+
+  NODE_SOCKET_API(float3, vector)
+  NODE_SOCKET_API(float, w)
+  NODE_SOCKET_API(float, scale)
+  NODE_SOCKET_API(float, scale_x)
+  NODE_SOCKET_API(float, scale_y)
+  NODE_SOCKET_API(float, scale_z)
+  NODE_SOCKET_API(float, scale_w)
+  NODE_SOCKET_API(float, detail)
+  NODE_SOCKET_API(float, roughness)
+  NODE_SOCKET_API(float, level_min)
+  NODE_SOCKET_API(float, level_mid)
+  NODE_SOCKET_API(float, level_max)
+  NODE_SOCKET_API(float, period_x)
+  NODE_SOCKET_API(float, period_y)
+  NODE_SOCKET_API(float, period_z)
+  NODE_SOCKET_API(float, period_w)
+  NODE_SOCKET_API(int, dimensions)
+  NODE_SOCKET_API(int, blend_mode)
+  NODE_SOCKET_API(int, noise_type)
+};
+
 class GaborTextureNode : public TextureNode {
  public:
   SHADER_NODE_CLASS(GaborTextureNode)

@@ -1073,6 +1073,24 @@ static ShaderNode *add_node(Scene *scene,
     get_tex_mapping(noise, &b_texture_mapping);
     node = noise;
   }
+  /* Penny Noise: convert Blender node storage (NodeTexPenny) to Cycles
+   * PennyNoiseTextureNode. Compile-time properties (period, dimensions,
+   * blend_mode, noise_type) are transferred here; per-point socket values
+   * (Octaves, Roughness, Scale, Levels) are connected automatically. */
+  else if (b_node.is_type("ShaderNodeTexPenny"_ustr)) {
+    const auto &storage = *static_cast<blender::NodeTexPenny *>(b_node.storage);
+    PennyNoiseTextureNode *penny = graph->create_node<PennyNoiseTextureNode>();
+    penny->set_period_x(storage.period_x);
+    penny->set_period_y(storage.period_y);
+    penny->set_period_z(storage.period_z);
+    penny->set_period_w(storage.period_w);
+    penny->set_dimensions(storage.dimensions);
+    penny->set_blend_mode(storage.blend_mode);
+    penny->set_noise_type(storage.noise_type);
+    const blender::TexMapping &b_texture_mapping = storage.base.tex_mapping;
+    get_tex_mapping(penny, &b_texture_mapping);
+    node = penny;
+  }
   else if (b_node.is_type("ShaderNodeTexGabor"_ustr)) {
     const auto &storage = *static_cast<blender::NodeTexGabor *>(b_node.storage);
     GaborTextureNode *gabor = graph->create_node<GaborTextureNode>();

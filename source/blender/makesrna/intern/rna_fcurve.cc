@@ -47,6 +47,7 @@ const EnumPropertyItem rna_enum_fmodifier_type_items[] = {
      "Reshape F-Curve values, e.g. change amplitude of movements"},
     {FMODIFIER_TYPE_CYCLES, "CYCLES", 0, "Cycles", "Cyclic extend/repeat keyframe sequence"},
     {FMODIFIER_TYPE_NOISE, "NOISE", 0, "Noise", "Add pseudo-random noise on top of F-Curves"},
+    {FMODIFIER_TYPE_PENNY, "PENNY", 0, "Penny Noise", "Drive F-Curves with Penny noise"},
     {FMODIFIER_TYPE_LIMITS,
      "LIMITS",
      0,
@@ -227,6 +228,8 @@ static StructRNA *rna_FModifierType_refine(PointerRNA *ptr)
       return RNA_FModifierCycles;
     case FMODIFIER_TYPE_NOISE:
       return RNA_FModifierNoise;
+    case FMODIFIER_TYPE_PENNY:
+      return RNA_FModifierPenny;
     case FMODIFIER_TYPE_LIMITS:
       return RNA_FModifierLimits;
     case FMODIFIER_TYPE_STEPPED:
@@ -1641,6 +1644,182 @@ static void rna_def_fmodifier_limits(BlenderRNA *brna)
 
 /* --------- */
 
+static void rna_def_fmodifier_penny(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  static const EnumPropertyItem prop_penny_noise_type_items[] = {
+      {0, "FBM", 0, "fBm", "Fractional Brownian motion"},
+      {1, "TURBULENCE", 0, "Turbulence", ""},
+      {2, "STUPL", 0, "Stupl", ""},
+      {3, "LUKA", 0, "Luka", ""},
+      {4, "BLISTERED", 0, "Blistered Turbulence", ""},
+      {5, "BOX", 0, "Box", ""},
+      {6, "MOD", 0, "Mod", ""},
+      {7, "NUTOUS", 0, "Nutous", ""},
+      {8, "CRANAL", 0, "Cranal", ""},
+      {9, "BUYA", 0, "Buya", ""},
+      {10, "CELL", 0, "Cell", ""},
+      {11, "DISTURB", 0, "Displaced Turbulence", ""},
+      {12, "HAMA", 0, "Hama", ""},
+      {13, "NAKI", 0, "Naki", ""},
+      {14, "POXO", 0, "Poxo", ""},
+      {15, "PEZO", 0, "Pezo", ""},
+      {16, "DENTS", 0, "Dents", ""},
+      {17, "SEMA", 0, "Sema", ""},
+      {18, "VL", 0, "VL", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  static const EnumPropertyItem prop_penny_blend_mode_items[] = {
+      {0, "NORMAL", 0, "Normal", ""},
+      {1, "ADD", 0, "Add", ""},
+      {2, "MULTIPLY", 0, "Multiply", ""},
+      {3, "DIFFERENCE", 0, "Difference", ""},
+      {4, "DARKEN", 0, "Darken", ""},
+      {5, "LIGHTEN", 0, "Lighten", ""},
+      {6, "COLOR_DODGE", 0, "Color Dodge", ""},
+      {7, "COLOR_BURN", 0, "Color Burn", ""},
+      {8, "OVERLAY", 0, "Overlay", ""},
+      {9, "AVERAGE", 0, "Average", ""},
+      {10, "EXCLUSION", 0, "Exclusion", ""},
+      {11, "GLOW", 0, "Glow", ""},
+      {12, "HARD_LIGHT", 0, "Hard Light", ""},
+      {13, "HARD_MIX", 0, "Hard Mix", ""},
+      {14, "LINEAR_BURN", 0, "Linear Burn", ""},
+      {15, "LINEAR_DODGE", 0, "Linear Dodge", ""},
+      {16, "LINEAR_LIGHT", 0, "Linear Light", ""},
+      {17, "NEGATION", 0, "Negation", ""},
+      {18, "PHOENIX", 0, "Phoenix", ""},
+      {19, "PIN_LIGHT", 0, "Pin Light", ""},
+      {20, "REFLECT", 0, "Reflect", ""},
+      {21, "SCREEN", 0, "Screen", ""},
+      {22, "SOFT_LIGHT", 0, "Soft Light", ""},
+      {23, "SUBTRACT", 0, "Subtract", ""},
+      {24, "VIVID_LIGHT", 0, "Vivid Light", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  srna = RNA_def_struct(brna, "FModifierPenny", "FModifier");
+  RNA_def_struct_ui_text(srna, "Penny Noise F-Modifier", "Drive the F-Curve with Penny noise");
+  RNA_def_struct_sdna_from(srna, "FMod_Penny", "data");
+
+  prop = RNA_def_property(srna, "noise_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "noise_type");
+  RNA_def_property_enum_items(prop, prop_penny_noise_type_items);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Noise Type", "Which Penny noise to generate");
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+
+  prop = RNA_def_property(srna, "blend_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "blend_mode");
+  RNA_def_property_enum_items(prop, prop_penny_blend_mode_items);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Blend Mode", "Self-blend mode (matches the Penny node/GN)");
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+
+  prop = RNA_def_property(srna, "scale", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "scale");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Scale", "Feature size in frames (larger = slower variation)");
+  RNA_def_property_range(prop, 0.0001f, 100000.0f);
+  RNA_def_property_ui_range(prop, 0.1f, 500.0f, 1.0f, 3);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  RNA_def_property_float_default(prop, 20.0f);
+
+  prop = RNA_def_property(srna, "strength", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "strength");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Strength", "Amplitude of the noise added to the curve");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_AMOUNT);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  RNA_def_property_float_default(prop, 1.0f);
+
+  prop = RNA_def_property(srna, "offset", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "offset");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Offset", "Position offset along the noise axis");
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  RNA_def_property_float_default(prop, 0.0f);
+
+  prop = RNA_def_property(srna, "detail", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "detail");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Octaves", "Number of noise octaves");
+  RNA_def_property_range(prop, 1.0f, 15.0f);
+  RNA_def_property_ui_range(prop, 1.0f, 15.0f, 1.0f, 2);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  RNA_def_property_float_default(prop, 2.0f);
+
+  prop = RNA_def_property(srna, "roughness", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "roughness");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Roughness", "Amplitude falloff of higher octaves");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  RNA_def_property_float_default(prop, 0.5f);
+
+  prop = RNA_def_property(srna, "level_min", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "level_min");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Level Min", "Black point (input low)");
+  RNA_def_property_ui_range(prop, -1.0f, 2.0f, 0.1f, 3);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  RNA_def_property_float_default(prop, 0.0f);
+
+  prop = RNA_def_property(srna, "level_mid", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "level_mid");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Level Mid", "Midtone gamma pivot");
+  RNA_def_property_ui_range(prop, 0.001f, 0.999f, 0.05f, 3);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  RNA_def_property_float_default(prop, 0.5f);
+
+  prop = RNA_def_property(srna, "level_max", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "level_max");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Level Max", "White point (input high)");
+  RNA_def_property_ui_range(prop, -1.0f, 2.0f, 0.1f, 3);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  RNA_def_property_float_default(prop, 1.0f);
+
+  prop = RNA_def_property(srna, "seed", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, nullptr, "seed");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Random Seed", "Selects a fully decorrelated noise stream");
+  RNA_def_property_range(prop, 0, 100000);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  RNA_def_property_int_default(prop, 0);
+
+  prop = RNA_def_property(srna, "period", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, nullptr, "period");
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(prop, "Period", "Tiling period along the noise axis");
+  RNA_def_property_range(prop, 1, 256);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+  /* Default comes from the DNA initializer (FMod_Penny::period = 8). */
+
+  static const EnumPropertyItem prop_penny_modification_items[] = {
+      {0, "REPLACE", 0, "Replace", "Add centered noise on top of the curve"},
+      {1, "ADD", 0, "Add", "Add the noise to the curve value"},
+      {2, "SUBTRACT", 0, "Subtract", "Subtract the noise from the curve value"},
+      {3, "MULTIPLY", 0, "Multiply", "Multiply the curve value by the noise"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  prop = RNA_def_property(srna, "modification", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "modification");
+  RNA_def_property_enum_items(prop, prop_penny_modification_items);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_ui_text(
+      prop,
+      "f-Blend",
+      "How the Penny modifier is applied to the F-Curve: Replace adds centered noise, or "
+      "Add/Subtract/Multiply the noise against the curve value");
+  RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, "rna_FModifier_update");
+}
+
 static void rna_def_fmodifier_noise(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -2807,6 +2986,7 @@ void RNA_def_fcurve(BlenderRNA *brna)
   rna_def_fmodifier_cycles(brna);
   rna_def_fmodifier_limits(brna);
   rna_def_fmodifier_noise(brna);
+  rna_def_fmodifier_penny(brna);
   rna_def_fmodifier_stepped(brna);
   rna_def_fmodifier_smooth(brna);
 }

@@ -186,6 +186,26 @@ struct FMod_Noise {
   char _pad[3] = {};
 };
 
+/* Penny noise modifier data (SLA Penny noise as an F-curve modifier). */
+struct FMod_Penny {
+  float scale = 0;
+  float strength = 0;
+  float offset = 0;
+  float roughness = 0;
+  float detail = 0;
+  float level_min = 0;
+  float level_mid = 0;
+  float level_max = 0;
+
+  int noise_type = 0;
+  int blend_mode = 0;
+  int seed = 0;
+  int period = 256;
+  /* How the noise is applied to the curve: 0=Replace, 1=Add, 2=Subtract, 3=Multiply. */
+  int modification = 0;
+  char _pad[4] = {};
+};
+
 /* stepped modifier data */
 struct FMod_Stepped {
   /** Number of frames each interpolated value should be held. */

@@ -564,6 +564,64 @@ static void panel_register_noise(ARegionType *region_type,
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Penny Noise Modifier
+ *
+ * Graph Editor panel for the Penny Noise F-Curve modifier.
+ * Draws the Noise Type, Blend Mode, and f-Blend (Modification) dropdowns,
+ * followed by the numeric properties (Scale, Strength, Offset, Octaves,
+ * Roughness, Period, Random Seed) and the three-point Levels (Min/Mid/Max).
+ * \{ */
+
+/** Draw the Penny Noise modifier panel in the Graph Editor sidebar. */
+static void penny_panel_draw(const bContext *C, Panel *panel)
+{
+  ui::Layout &layout = *panel->layout;
+
+  PointerRNA *ptr = fmodifier_get_pointers(C, panel, nullptr);
+
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+
+  layout.prop(ptr, "noise_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "blend_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "modification", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  ui::Layout &col = layout.column(false);
+  col.prop(ptr, "scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "strength", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "detail", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "roughness", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "period", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "seed", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  ui::Layout &lvl = layout.column(true);
+  lvl.prop(ptr, "level_min", UI_ITEM_NONE, "Levels Min", ICON_NONE);
+  lvl.prop(ptr, "level_mid", UI_ITEM_NONE, "Mid", ICON_NONE);
+  lvl.prop(ptr, "level_max", UI_ITEM_NONE, "Max", ICON_NONE);
+
+  fmodifier_influence_draw(layout, ptr);
+}
+
+/** Register the Penny Noise modifier panel and its Restrict Frame Range subpanel. */
+static void panel_register_penny(ARegionType *region_type,
+                                 const char *id_prefix,
+                                 PanelTypePollFn poll_fn)
+{
+  PanelType *panel_type = fmodifier_panel_register(
+      region_type, FMODIFIER_TYPE_PENNY, penny_panel_draw, poll_fn, id_prefix);
+  fmodifier_subpanel_register(region_type,
+                              "frame_range",
+                              "",
+                              fmodifier_frame_range_header_draw,
+                              fmodifier_frame_range_draw,
+                              poll_fn,
+                              panel_type);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Envelope Modifier
  * \{ */
 
@@ -949,6 +1007,7 @@ void ANIM_modifier_panels_register_graph_and_NLA(ARegionType *region_type,
   panel_register_generator(region_type, modifier_panel_prefix, poll_function);
   panel_register_fn_generator(region_type, modifier_panel_prefix, poll_function);
   panel_register_noise(region_type, modifier_panel_prefix, poll_function);
+  panel_register_penny(region_type, modifier_panel_prefix, poll_function);
   panel_register_envelope(region_type, modifier_panel_prefix, poll_function);
   panel_register_limits(region_type, modifier_panel_prefix, poll_function);
   panel_register_stepped(region_type, modifier_panel_prefix, poll_function);

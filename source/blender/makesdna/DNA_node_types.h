@@ -2698,6 +2698,29 @@ struct NodeTexNoise {
   char _pad[2] = {};
 };
 
+/** Storage for the Penny Noise texture node (SH_NODE_TEX_PENNY).
+ *  Compile-time properties that don't change per evaluation point.
+ *  Runtime per-point values (Octaves, Roughness, Levels, Scale) come
+ *  from node sockets instead. */
+struct NodeTexPenny {
+  DNA_DEFINE_CXX_METHODS(NodeTexPenny)
+  NodeTexBase base;
+  /** Per-axis tiling period in noise-space units. Range [1, 256]. */
+  int period_x = 256;
+  int period_y = 256;
+  int period_z = 256;
+  int period_w = 256;
+  /** Blend mode selector (0 = Normal/passthrough, 1..24 = Photoshop-style).
+   *  Must match the `penny_blend()` dispatch in penny.h / noise_penny.cc. */
+  int blend_mode = 0;
+  /** Noise algorithm selector. Cast to `PennyType` enum (BLI_noise_penny.hh).
+   *  Must match the RNA enum in rna_nodetree.cc. */
+  int noise_type = 0;
+  /** Number of dimensions to evaluate: 1 = W only, 2 = X/Y, 3 = X/Y/Z, 4 = X/Y/Z/W. */
+  int dimensions = 4;
+  char _pad[4] = {};
+};
+
 struct NodeTexVoronoi {
   DNA_DEFINE_CXX_METHODS(NodeTexVoronoi)
 
