@@ -864,7 +864,7 @@ static bool uv_rip_object(
             for (BMLoop *l_iter : *rip->loops) {
               ULData *ul = UL(l_iter);
               if (ul->side == side_from_cursor) {
-                uvedit_uv_select_disable(scene, bm, l_iter, nullptr);
+                uvedit_uv_select_disable(scene, bm, l_iter);
                 changed = true;
               }
               /* Ensure we don't operate on these again. */
@@ -881,7 +881,7 @@ static bool uv_rip_object(
           for (BMLoop *l_iter : *rip->loops) {
             ULData *ul = UL(l_iter);
             if (ul->side == side_from_cursor) {
-              uvedit_uv_select_disable(scene, bm, l_iter, nullptr);
+              uvedit_uv_select_disable(scene, bm, l_iter);
               changed = true;
             }
             /* Ensure we don't operate on these again. */

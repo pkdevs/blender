@@ -3499,11 +3499,11 @@ static wmOperatorStatus uv_select_more_less(bContext *C, const bool select)
     if (changed) {
       if (is_uv_face_selectmode) {
         /* Select tagged faces. */
-        uv_select_flush_from_tag_face(scene, obedit, select, nullptr);
+        uv_select_flush_from_tag_face(scene, obedit, select);
       }
       else {
         /* Select tagged loops. */
-        uv_select_flush_from_tag_loop(scene, obedit, select, nullptr);
+        uv_select_flush_from_tag_loop(scene, obedit, select);
         /* Set/unset edge flags based on selected verts. */
         if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
           /* Pass. */
@@ -4842,7 +4842,7 @@ static void uv_select_tag_update_for_object(Depsgraph *depsgraph,
 static void uvedit_uv_select_flush_from_tag_sticky_loc_internal(
     const Scene *scene, BMesh *bm, BMLoop *l, const bool select, const BMUVOffsets &offsets)
 {
-  uvedit_uv_select_set(scene, bm, l, select, nullptr);
+  uvedit_uv_select_set(scene, bm, l, select);
 
   BMVert *v = l->v;
   BLI_assert(v->e);
@@ -4862,7 +4862,7 @@ static void uvedit_uv_select_flush_from_tag_sticky_loc_internal(
         continue;
       }
       if (BM_loop_uv_share_vert_check(l, l_iter, offsets.uv)) {
-        uvedit_uv_select_set(scene, bm, l_iter, select, nullptr);
+        uvedit_uv_select_set(scene, bm, l_iter, select);
       }
     } while ((l_iter = l_iter->radial_next) != l_first);
   } while ((e_iter = BM_DISK_EDGE_NEXT(e_iter, v)) != e_first);
@@ -4874,7 +4874,7 @@ static void uvedit_uv_select_flush_from_tag_sticky_loc_internal(
 static void uvedit_edge_select_flush_from_tag_sticky_loc_internal(
     const Scene *scene, BMesh *bm, BMLoop *l, const bool select, const BMUVOffsets &offsets)
 {
-  uvedit_edge_select_set(scene, bm, l, select, nullptr);
+  uvedit_edge_select_set(scene, bm, l, select);
   if (l->radial_next != l) {
     BMLoop *l_iter = l->radial_next;
     do {
@@ -4882,7 +4882,7 @@ static void uvedit_edge_select_flush_from_tag_sticky_loc_internal(
         continue;
       }
       if (BM_loop_uv_share_edge_check(l, l_iter, offsets.uv)) {
-        uvedit_edge_select_set(scene, bm, l_iter, select, nullptr);
+        uvedit_edge_select_set(scene, bm, l_iter, select);
       }
     } while ((l_iter = l_iter->radial_next) != l);
   }
@@ -7282,7 +7282,7 @@ static wmOperatorStatus uv_select_similar_island_exec(bContext *C, wmOperator *o
         continue;
       }
       for (int j = 0; j < island.faces_len; j++) {
-        uvedit_face_select_set(scene, bm, island.faces[j], select, nullptr);
+        uvedit_face_select_set(scene, bm, island.faces[j], select);
       }
       changed = true;
     }
@@ -7622,7 +7622,7 @@ void ED_uvedit_selectmode_clean(const Scene *scene, Object *obedit)
           }
         }
       }
-      uv_select_flush_from_tag_loop(scene, obedit, true, nullptr);
+      uv_select_flush_from_tag_loop(scene, obedit, true);
     }
   }
 
@@ -7635,7 +7635,7 @@ void ED_uvedit_selectmode_clean(const Scene *scene, Object *obedit)
         }
         BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
           if (uvedit_edge_select_test(scene, bm, l, offsets)) {
-            uvedit_edge_select_set_noflush(scene, bm, l, true, sticky, offsets, nullptr);
+            uvedit_edge_select_set_noflush(scene, bm, l, true, sticky, offsets);
           }
         }
       }
@@ -7651,10 +7651,10 @@ void ED_uvedit_selectmode_clean(const Scene *scene, Object *obedit)
         if (uvedit_face_select_test(scene, bm, efa)) {
           BM_elem_flag_enable(efa, BM_ELEM_TAG);
         }
-        uvedit_face_select_set(scene, bm, efa, false, nullptr);
+        uvedit_face_select_set(scene, bm, efa, false);
       }
     }
-    uv_select_flush_from_tag_face(scene, obedit, true, nullptr);
+    uv_select_flush_from_tag_face(scene, obedit, true);
   }
 
   ED_uvedit_selectmode_flush(scene, bm);

@@ -492,8 +492,6 @@ void EDBM_flag_enable_all(BMEditMesh *em, const short hflag)
 
   /* Keep this as there is no need to maintain UV selection when all are enabled. */
   if (hflag & BM_ELEM_SELECT) {
-    /* Every element is now really selected: clear mirror-highlight flags so they don't survive
-     * as stale state on top of real selection (see #EDBM_flag_disable_all). */
     BM_mesh_elem_hflag_disable_all(
         em->bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_MIRRORED_SELECT, false);
     EDBM_uvselect_clear(em);

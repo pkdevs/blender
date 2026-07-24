@@ -260,7 +260,7 @@ void uvedit_edge_select_set_with_sticky(
     const Scene *scene, BMesh *bm, BMLoop *l, bool select, const BMUVOffsets &offsets);
 
 void uvedit_uv_select_set_with_sticky(
-    const Scene *scene, BMesh *bm, BMLoop *l, bool select, const BMUVOffsets &offsets, );
+    const Scene *scene, BMesh *bm, BMLoop *l, bool select, const BMUVOffsets &offsets);
 
 /* Low level functions for sticky element selection (sticky mode independent). Type of sticky
  * selection is specified explicitly (using sticky_flag, except for face selection). */
