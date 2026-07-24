@@ -87,14 +87,8 @@ static void uv_select_all_perform_multi_ex(const Scene *scene,
                                            const Object *ob_exclude);
 static void uv_select_all_perform_multi(const Scene *scene, Span<Object *> objects, int action);
 
-static void uv_select_flush_from_tag_face(const Scene *scene,
-                                          Object *obedit,
-                                          const bool select,
-                                          const EditMeshSymmetryHelper *symmetry_helper);
-static void uv_select_flush_from_tag_loop(const Scene *scene,
-                                          Object *obedit,
-                                          const bool select,
-                                          const EditMeshSymmetryHelper *symmetry_helper);
+static void uv_select_flush_from_tag_face(const Scene *scene, Object *obedit, const bool select);
+static void uv_select_flush_from_tag_loop(const Scene *scene, Object *obedit, const bool select);
 static void uv_select_flush_from_loop_edge_flag(const Scene *scene, BMesh *bm);
 
 static void uv_select_tag_update_for_object(Depsgraph *depsgraph,
@@ -403,10 +397,7 @@ void ED_uvedit_select_sync_flush(const ToolSettings *ts, BMesh *bm, const bool s
   }
 }
 
-static void uvedit_vertex_select_tagged(BMesh *bm,
-                                        const Scene *scene,
-                                        bool select,
-                                        const EditMeshSymmetryHelper *symmetry_helper)
+static void uvedit_vertex_select_tagged(BMesh *bm, const Scene *scene, bool select)
 {
   BMFace *efa;
   BMLoop *l;
@@ -415,7 +406,7 @@ static void uvedit_vertex_select_tagged(BMesh *bm,
   BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
     BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
       if (BM_elem_flag_test(l->v, BM_ELEM_TAG)) {
-        uvedit_uv_select_set(scene, bm, l, select, symmetry_helper);
+        uvedit_uv_select_set(scene, bm, l, select);
       }
     }
   }
@@ -509,18 +500,14 @@ bool uvedit_face_mirrored_select_test(const Scene *scene, const BMesh *bm, const
   return uvedit_face_mirrored_select_test_ex(scene->toolsettings, bm, efa);
 }
 
-void uvedit_face_select_set_with_sticky(const Scene *scene,
-                                        BMesh *bm,
-                                        BMFace *efa,
-                                        const bool select,
-                                        const BMUVOffsets &offsets,
-                                        const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_face_select_set_with_sticky(
+    const Scene *scene, BMesh *bm, BMFace *efa, const bool select, const BMUVOffsets &offsets)
 {
   const ToolSettings *ts = scene->toolsettings;
   const char sticky = ts->uv_sticky;
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     if (ED_uvedit_sync_uvselect_ignore(ts)) {
-      uvedit_face_select_set(scene, bm, efa, select, symmetry_helper);
+      uvedit_face_select_set(scene, bm, efa, select);
       return;
     }
     BLI_assert(ED_uvedit_sync_uvselect_is_valid_or_ignore(ts, bm));
@@ -532,22 +519,18 @@ void uvedit_face_select_set_with_sticky(const Scene *scene,
    * (not part of any face selections). This now uses the sticky location mode logic instead. */
   switch (sticky) {
     case UV_STICKY_DISABLE: {
-      uvedit_face_select_set(scene, bm, efa, select, symmetry_helper);
+      uvedit_face_select_set(scene, bm, efa, select);
       break;
     }
     default: {
       /* UV_STICKY_LOCATION and UV_STICKY_VERT modes. */
-      uvedit_face_select_shared_vert(scene, bm, efa, select, offsets, symmetry_helper);
+      uvedit_face_select_shared_vert(scene, bm, efa, select, offsets);
     }
   }
 }
 
-void uvedit_face_select_shared_vert(const Scene *scene,
-                                    BMesh *bm,
-                                    BMFace *efa,
-                                    const bool select,
-                                    const BMUVOffsets &offsets,
-                                    const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_face_select_shared_vert(
+    const Scene *scene, BMesh *bm, BMFace *efa, const bool select, const BMUVOffsets &offsets)
 {
   const ToolSettings *ts = scene->toolsettings;
   BMLoop *l;
@@ -601,34 +584,27 @@ void uvedit_face_select_shared_vert(const Scene *scene,
     uvedit_edge_select_set_no_sync(ts, bm, l, select);
 
     if (select) {
-      uvedit_uv_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets, nullptr);
+      uvedit_uv_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets);
     }
     else {
       if (!uvedit_vert_is_face_select_any_other(ts, bm, l, offsets)) {
-        uvedit_uv_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets, nullptr);
+        uvedit_uv_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets);
       }
     }
   }
 }
 
-void uvedit_face_select_set(const Scene *scene,
-                            BMesh *bm,
-                            BMFace *efa,
-                            const bool select,
-                            const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_face_select_set(const Scene *scene, BMesh *bm, BMFace *efa, const bool select)
 {
   if (select) {
-    uvedit_face_select_enable(scene, bm, efa, symmetry_helper);
+    uvedit_face_select_enable(scene, bm, efa);
   }
   else {
-    uvedit_face_select_disable(scene, bm, efa, symmetry_helper);
+    uvedit_face_select_disable(scene, bm, efa);
   }
 }
 
-void uvedit_face_select_enable(const Scene *scene,
-                               BMesh *bm,
-                               BMFace *efa,
-                               const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_face_select_enable(const Scene *scene, BMesh *bm, BMFace *efa)
 {
   const ToolSettings *ts = scene->toolsettings;
 
@@ -652,10 +628,7 @@ void uvedit_face_select_enable(const Scene *scene,
   }
 }
 
-void uvedit_face_select_disable(const Scene *scene,
-                                BMesh *bm,
-                                BMFace *efa,
-                                const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_face_select_disable(const Scene *scene, BMesh *bm, BMFace *efa)
 {
   const ToolSettings *ts = scene->toolsettings;
 
@@ -793,17 +766,13 @@ bool uvedit_edge_mirrored_select_test(const Scene *scene,
   return uvedit_edge_mirrored_select_test_ex(scene->toolsettings, bm, l, offsets);
 }
 
-void uvedit_edge_select_set_with_sticky(const Scene *scene,
-                                        BMesh *bm,
-                                        BMLoop *l,
-                                        const bool select,
-                                        const BMUVOffsets &offsets,
-                                        const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_edge_select_set_with_sticky(
+    const Scene *scene, BMesh *bm, BMLoop *l, const bool select, const BMUVOffsets &offsets)
 {
   const ToolSettings *ts = scene->toolsettings;
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     if (ED_uvedit_sync_uvselect_ignore(ts)) {
-      uvedit_edge_select_set(scene, bm, l, select, symmetry_helper);
+      uvedit_edge_select_set(scene, bm, l, select);
       return;
     }
     BLI_assert(ED_uvedit_sync_uvselect_is_valid_or_ignore(ts, bm));
@@ -813,19 +782,17 @@ void uvedit_edge_select_set_with_sticky(const Scene *scene,
   switch (sticky) {
     case UV_STICKY_DISABLE: {
       if (uvedit_face_visible_test(scene, l->f)) {
-        uvedit_edge_select_set(scene, bm, l, select, symmetry_helper);
+        uvedit_edge_select_set(scene, bm, l, select);
       }
       break;
     }
     case UV_STICKY_VERT: {
-      uvedit_edge_select_shared_vert(
-          scene, bm, l, select, UV_STICKY_VERT, offsets, symmetry_helper);
+      uvedit_edge_select_shared_vert(scene, bm, l, select, UV_STICKY_VERT, offsets);
       break;
     }
     default: {
       /* UV_STICKY_LOCATION (Fallback) */
-      uvedit_edge_select_shared_vert(
-          scene, bm, l, select, UV_STICKY_LOCATION, offsets, symmetry_helper);
+      uvedit_edge_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets);
       break;
     }
   }
@@ -868,33 +835,29 @@ void uvedit_edge_select_shared_vert(const Scene *scene,
                                     BMLoop *l,
                                     const bool select,
                                     const int sticky_flag,
-                                    const BMUVOffsets &offsets,
-                                    const EditMeshSymmetryHelper *symmetry_helper)
+                                    const BMUVOffsets &offsets)
 {
   BLI_assert(ELEM(sticky_flag, UV_STICKY_LOCATION, UV_STICKY_VERT));
   /* Set edge flags. Rely on this for face visibility checks */
-  uvedit_edge_select_set_noflush(scene, bm, l, select, sticky_flag, offsets, symmetry_helper);
+  uvedit_edge_select_set_noflush(scene, bm, l, select, sticky_flag, offsets);
 
   /* Vert selections. */
   BMLoop *l_iter = l;
   do {
     if (select) {
       if (bm_loop_select_edge_check_internal(scene, bm, l_iter)) {
-        uvedit_uv_select_shared_vert(
-            scene, bm, l_iter, true, UV_STICKY_LOCATION, offsets, symmetry_helper);
-        uvedit_uv_select_shared_vert(
-            scene, bm, l_iter->next, true, UV_STICKY_LOCATION, offsets, symmetry_helper);
+        uvedit_uv_select_shared_vert(scene, bm, l_iter, true, UV_STICKY_LOCATION, offsets);
+        uvedit_uv_select_shared_vert(scene, bm, l_iter->next, true, UV_STICKY_LOCATION, offsets);
       }
     }
     else {
       if (!bm_loop_select_edge_check_internal(scene, bm, l_iter)) {
         if (!uvedit_vert_is_edge_select_any_other(scene->toolsettings, bm, l, offsets)) {
-          uvedit_uv_select_shared_vert(
-              scene, bm, l_iter, false, UV_STICKY_LOCATION, offsets, symmetry_helper);
+          uvedit_uv_select_shared_vert(scene, bm, l_iter, false, UV_STICKY_LOCATION, offsets);
         }
         if (!uvedit_vert_is_edge_select_any_other(scene->toolsettings, bm, l->next, offsets)) {
           uvedit_uv_select_shared_vert(
-              scene, bm, l_iter->next, false, UV_STICKY_LOCATION, offsets, symmetry_helper);
+              scene, bm, l_iter->next, false, UV_STICKY_LOCATION, offsets);
         }
       }
     }
@@ -906,8 +869,7 @@ void uvedit_edge_select_set_noflush(const Scene *scene,
                                     BMLoop *l,
                                     const bool select,
                                     const int sticky_flag,
-                                    const BMUVOffsets &offsets,
-                                    const EditMeshSymmetryHelper *symmetry_helper)
+                                    const BMUVOffsets &offsets)
 {
   const ToolSettings *ts = scene->toolsettings;
   if ((ts->uv_flag & UV_FLAG_SELECT_SYNC) == 0) {
@@ -928,24 +890,17 @@ void uvedit_edge_select_set_noflush(const Scene *scene,
   } while (((l_iter = l_iter->radial_next) != l) && (sticky_flag != UV_STICKY_DISABLE));
 }
 
-void uvedit_edge_select_set(const Scene *scene,
-                            BMesh *bm,
-                            BMLoop *l,
-                            const bool select,
-                            const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_edge_select_set(const Scene *scene, BMesh *bm, BMLoop *l, const bool select)
 {
   if (select) {
-    uvedit_edge_select_enable(scene, bm, l, symmetry_helper);
+    uvedit_edge_select_enable(scene, bm, l);
   }
   else {
-    uvedit_edge_select_disable(scene, bm, l, symmetry_helper);
+    uvedit_edge_select_disable(scene, bm, l);
   }
 }
 
-void uvedit_edge_select_enable(const Scene *scene,
-                               BMesh *bm,
-                               BMLoop *l,
-                               const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_edge_select_enable(const Scene *scene, BMesh *bm, BMLoop *l)
 {
   const ToolSettings *ts = scene->toolsettings;
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
@@ -972,10 +927,7 @@ void uvedit_edge_select_enable(const Scene *scene,
   }
 }
 
-void uvedit_edge_select_disable(const Scene *scene,
-                                BMesh *bm,
-                                BMLoop *l,
-                                const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_edge_select_disable(const Scene *scene, BMesh *bm, BMLoop *l)
 {
   const ToolSettings *ts = scene->toolsettings;
 
@@ -1128,17 +1080,13 @@ bool uvedit_uv_mirrored_select_test(const Scene *scene,
   return uvedit_uv_select_test_ex(scene->toolsettings, bm, l, offsets, BM_ELEM_MIRRORED_SELECT);
 }
 
-void uvedit_uv_select_set_with_sticky(const Scene *scene,
-                                      BMesh *bm,
-                                      BMLoop *l,
-                                      const bool select,
-                                      const BMUVOffsets &offsets,
-                                      const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_uv_select_set_with_sticky(
+    const Scene *scene, BMesh *bm, BMLoop *l, const bool select, const BMUVOffsets &offsets)
 {
   const ToolSettings *ts = scene->toolsettings;
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     if (ED_uvedit_sync_uvselect_ignore(ts)) {
-      uvedit_uv_select_set(scene, bm, l, select, symmetry_helper);
+      uvedit_uv_select_set(scene, bm, l, select);
       return;
     }
   }
@@ -1147,18 +1095,17 @@ void uvedit_uv_select_set_with_sticky(const Scene *scene,
   switch (sticky) {
     case UV_STICKY_DISABLE: {
       if (uvedit_face_visible_test(scene, l->f)) {
-        uvedit_uv_select_set(scene, bm, l, select, symmetry_helper);
+        uvedit_uv_select_set(scene, bm, l, select);
       }
       break;
     }
     case UV_STICKY_VERT: {
-      uvedit_uv_select_shared_vert(scene, bm, l, select, UV_STICKY_VERT, offsets, symmetry_helper);
+      uvedit_uv_select_shared_vert(scene, bm, l, select, UV_STICKY_VERT, offsets);
       break;
     }
     default: {
       /* UV_STICKY_LOCATION. */
-      uvedit_uv_select_shared_vert(
-          scene, bm, l, select, UV_STICKY_LOCATION, offsets, symmetry_helper);
+      uvedit_uv_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets);
       break;
     }
   }
@@ -1169,8 +1116,7 @@ void uvedit_uv_select_shared_vert(const Scene *scene,
                                   BMLoop *l,
                                   const bool select,
                                   const int sticky_flag,
-                                  const BMUVOffsets &offsets,
-                                  const EditMeshSymmetryHelper *symmetry_helper)
+                                  const BMUVOffsets &offsets)
 {
   BLI_assert(ELEM(sticky_flag, UV_STICKY_LOCATION, UV_STICKY_VERT));
   BLI_assert(offsets.uv >= 0);
@@ -1194,7 +1140,7 @@ void uvedit_uv_select_shared_vert(const Scene *scene,
           }
 
           if (do_select) {
-            uvedit_uv_select_set(scene, bm, l_radial_iter, select, symmetry_helper);
+            uvedit_uv_select_set(scene, bm, l_radial_iter, select);
           }
         }
       }
@@ -1202,24 +1148,17 @@ void uvedit_uv_select_shared_vert(const Scene *scene,
   } while ((e_iter = BM_DISK_EDGE_NEXT(e_iter, l->v)) != e_first);
 }
 
-void uvedit_uv_select_set(const Scene *scene,
-                          BMesh *bm,
-                          BMLoop *l,
-                          const bool select,
-                          const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_uv_select_set(const Scene *scene, BMesh *bm, BMLoop *l, const bool select)
 {
   if (select) {
-    uvedit_uv_select_enable(scene, bm, l, symmetry_helper);
+    uvedit_uv_select_enable(scene, bm, l);
   }
   else {
-    uvedit_uv_select_disable(scene, bm, l, symmetry_helper);
+    uvedit_uv_select_disable(scene, bm, l);
   }
 }
 
-void uvedit_uv_select_enable(const Scene *scene,
-                             BMesh *bm,
-                             BMLoop *l,
-                             const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_uv_select_enable(const Scene *scene, BMesh *bm, BMLoop *l)
 {
   const ToolSettings *ts = scene->toolsettings;
 
@@ -1245,10 +1184,7 @@ void uvedit_uv_select_enable(const Scene *scene,
   }
 }
 
-void uvedit_uv_select_disable(const Scene *scene,
-                              BMesh *bm,
-                              BMLoop *l,
-                              const EditMeshSymmetryHelper *symmetry_helper)
+void uvedit_uv_select_disable(const Scene *scene, BMesh *bm, BMLoop *l)
 {
   const ToolSettings *ts = scene->toolsettings;
 
@@ -2528,8 +2464,6 @@ static int uv_select_edgeloop(Scene *scene, Object *obedit, UvNearestHit *hit, c
     select = true;
   }
 
-  const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-  std::optional<EditMeshSymmetryHelper> symmetry_helper;
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     char symmetry_htype = 0;
     if (ts->selectmode & SCE_SELECT_FACE) {
@@ -2540,10 +2474,6 @@ static int uv_select_edgeloop(Scene *scene, Object *obedit, UvNearestHit *hit, c
     }
     if (ts->selectmode & SCE_SELECT_VERTEX) {
       symmetry_htype |= BM_VERT;
-    }
-    symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-    if (symmetry_helper.has_value()) {
-      symmetry_helper_ptr = &symmetry_helper.value();
     }
   }
 
@@ -2600,19 +2530,15 @@ static int uv_select_edgeloop(Scene *scene, Object *obedit, UvNearestHit *hit, c
       BM_ITER_ELEM (l_iter, &liter, f, BM_LOOPS_OF_FACE) {
         if (BM_elem_flag_test(l_iter, BM_ELEM_TAG)) {
           if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
-            uvedit_edge_select_set_with_sticky(
-                scene, bm, l_iter, select, offsets, symmetry_helper_ptr);
+            uvedit_edge_select_set_with_sticky(scene, bm, l_iter, select, offsets);
           }
           else {
             if (ts->uv_selectmode == UV_SELECT_VERT) {
-              uvedit_uv_select_set_with_sticky(
-                  scene, bm, l_iter, select, offsets, symmetry_helper_ptr);
-              uvedit_uv_select_set_with_sticky(
-                  scene, bm, l_iter->next, select, offsets, symmetry_helper_ptr);
+              uvedit_uv_select_set_with_sticky(scene, bm, l_iter, select, offsets);
+              uvedit_uv_select_set_with_sticky(scene, bm, l_iter->next, select, offsets);
             }
             else {
-              uvedit_edge_select_set_with_sticky(
-                  scene, bm, l_iter, select, offsets, symmetry_helper_ptr);
+              uvedit_edge_select_set_with_sticky(scene, bm, l_iter, select, offsets);
             }
           }
         }
@@ -2647,8 +2573,6 @@ static int uv_select_faceloop(Scene *scene, Object *obedit, UvNearestHit *hit, c
   }
   const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
-  const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-  std::optional<EditMeshSymmetryHelper> symmetry_helper;
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     char symmetry_htype = 0;
     if (ts->selectmode & SCE_SELECT_FACE) {
@@ -2659,10 +2583,6 @@ static int uv_select_faceloop(Scene *scene, Object *obedit, UvNearestHit *hit, c
     }
     if (ts->selectmode & SCE_SELECT_VERTEX) {
       symmetry_htype |= BM_VERT;
-    }
-    symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-    if (symmetry_helper.has_value()) {
-      symmetry_helper_ptr = &symmetry_helper.value();
     }
   }
 
@@ -2687,8 +2607,7 @@ static int uv_select_faceloop(Scene *scene, Object *obedit, UvNearestHit *hit, c
         break;
       }
 
-      uvedit_face_select_set_with_sticky(
-          scene, bm, l_step->f, select, offsets, symmetry_helper_ptr);
+      uvedit_face_select_set_with_sticky(scene, bm, l_step->f, select, offsets);
 
       BM_elem_flag_enable(l_step->f, BM_ELEM_TAG);
       if (l_step->f->len == 4) {
@@ -2742,8 +2661,6 @@ static int uv_select_edgering(Scene *scene, Object *obedit, UvNearestHit *hit, c
   }
   const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
-  const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-  std::optional<EditMeshSymmetryHelper> symmetry_helper;
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     char symmetry_htype = 0;
     if (ts->selectmode & SCE_SELECT_FACE) {
@@ -2754,10 +2671,6 @@ static int uv_select_edgering(Scene *scene, Object *obedit, UvNearestHit *hit, c
     }
     if (ts->selectmode & SCE_SELECT_VERTEX) {
       symmetry_htype |= BM_VERT;
-    }
-    symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-    if (symmetry_helper.has_value()) {
-      symmetry_helper_ptr = &symmetry_helper.value();
     }
   }
 
@@ -2788,18 +2701,15 @@ static int uv_select_edgering(Scene *scene, Object *obedit, UvNearestHit *hit, c
         /* While selecting face loops is now done in a separate function #uv_select_faceloop(),
          * this check is still kept for edge ring selection, to keep it consistent with how edge
          * ring selection works in face mode in the 3D viewport. */
-        uvedit_face_select_set_with_sticky(
-            scene, bm, l_step->f, select, offsets, symmetry_helper_ptr);
+        uvedit_face_select_set_with_sticky(scene, bm, l_step->f, select, offsets);
       }
       else if (use_vertex_select) {
-        uvedit_uv_select_set_with_sticky(scene, bm, l_step, select, offsets, symmetry_helper_ptr);
-        uvedit_uv_select_set_with_sticky(
-            scene, bm, l_step->next, select, offsets, symmetry_helper_ptr);
+        uvedit_uv_select_set_with_sticky(scene, bm, l_step, select, offsets);
+        uvedit_uv_select_set_with_sticky(scene, bm, l_step->next, select, offsets);
       }
       else {
         /* Edge select mode */
-        uvedit_edge_select_set_with_sticky(
-            scene, bm, l_step, select, offsets, symmetry_helper_ptr);
+        uvedit_edge_select_set_with_sticky(scene, bm, l_step, select, offsets);
       }
 
       BM_elem_flag_enable(l_step->e, BM_ELEM_TAG);
@@ -2939,8 +2849,6 @@ static void uv_select_linked_multi(const Scene *scene,
     }
     const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (uv_select_sync) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -2951,10 +2859,6 @@ static void uv_select_linked_multi(const Scene *scene,
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -3125,16 +3029,13 @@ static void uv_select_linked_multi(const Scene *scene,
   if (select_faces) { \
     if (hflag == BM_ELEM_SELECT) { \
       BM_face_select_set(bm, efa, value); \
-      if (symmetry_helper_ptr && (ts->selectmode & SCE_SELECT_FACE)) { \
-        symmetry_helper_ptr->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, value); \
-      } \
     } \
     else { \
       BM_elem_flag_set(efa, hflag, value); \
     } \
   } \
   else { \
-    uvedit_face_select_set(scene, bm, efa, value, symmetry_helper_ptr); \
+    uvedit_face_select_set(scene, bm, efa, value); \
   } \
   (void)0
 
@@ -3399,7 +3300,7 @@ struct UVSelectLinkedHelper : NonCopyable, NonMovable {
    * Apply selection to all internally tagged faces.
    * Used for edge/vertex selection modes.
    */
-  void select_all(const bool select, const EditMeshSymmetryHelper *symmetry_helper)
+  void select_all(const bool select)
   {
     if (!has_face) {
       return;
@@ -3409,7 +3310,7 @@ struct UVSelectLinkedHelper : NonCopyable, NonMovable {
     int a;
     BM_ITER_MESH_INDEX (efa, &iter, bm, BM_FACES_OF_MESH, a) {
       if (face_is_tagged_[a]) {
-        uvedit_face_select_set(scene, bm, efa, select, symmetry_helper);
+        uvedit_face_select_set(scene, bm, efa, select);
       }
     }
   }
@@ -4191,8 +4092,6 @@ static bool uv_mouse_select_multi(bContext *C,
         uvedit_select_prepare_sync_select(scene, bm);
       }
 
-      const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-      std::optional<EditMeshSymmetryHelper> symmetry_helper;
       if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
         char symmetry_htype = 0;
         if (ts->selectmode & SCE_SELECT_FACE) {
@@ -4204,25 +4103,18 @@ static bool uv_mouse_select_multi(bContext *C,
         if (ts->selectmode & SCE_SELECT_VERTEX) {
           symmetry_htype |= BM_VERT;
         }
-        symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-        if (symmetry_helper.has_value()) {
-          symmetry_helper_ptr = &symmetry_helper.value();
-        }
       }
 
       if (selectmode == UV_SELECT_FACE) {
-        uvedit_face_select_set_with_sticky(
-            scene, bm, hit.efa, select_value, offsets, symmetry_helper_ptr);
+        uvedit_face_select_set_with_sticky(scene, bm, hit.efa, select_value, offsets);
         flush = 1;
       }
       else if (selectmode == UV_SELECT_EDGE) {
-        uvedit_edge_select_set_with_sticky(
-            scene, bm, hit.l, select_value, offsets, symmetry_helper_ptr);
+        uvedit_edge_select_set_with_sticky(scene, bm, hit.l, select_value, offsets);
         flush = 1;
       }
       else if (selectmode == UV_SELECT_VERT) {
-        uvedit_uv_select_set_with_sticky(
-            scene, bm, hit.l, select_value, offsets, symmetry_helper_ptr);
+        uvedit_uv_select_set_with_sticky(scene, bm, hit.l, select_value, offsets);
         flush = 1;
       }
       else {
@@ -5006,10 +4898,7 @@ static void uvedit_edge_select_flush_from_tag_sticky_loc_internal(
  * \note This function is very similar to #uv_select_flush_from_tag_loop,
  * be sure to update both upon changing.
  */
-static void uv_select_flush_from_tag_face(const Scene *scene,
-                                          Object *obedit,
-                                          const bool select,
-                                          const EditMeshSymmetryHelper *symmetry_helper)
+static void uv_select_flush_from_tag_face(const Scene *scene, Object *obedit, const bool select)
 {
   /* Selecting UV Faces with some modes requires us to change
    * the selection in other faces (depending on the sticky mode).
@@ -5084,7 +4973,7 @@ static void uv_select_flush_from_tag_face(const Scene *scene,
       if (!BM_elem_flag_test(efa, BM_ELEM_TAG)) {
         continue;
       }
-      uvedit_face_select_set(scene, bm, efa, select, symmetry_helper);
+      uvedit_face_select_set(scene, bm, efa, select);
     }
   }
 }
@@ -5099,10 +4988,7 @@ static void uv_select_flush_from_tag_face(const Scene *scene,
  * \note This function is very similar to #uv_select_flush_from_tag_face,
  * be sure to update both upon changing.
  */
-static void uv_select_flush_from_tag_loop(const Scene *scene,
-                                          Object *obedit,
-                                          const bool select,
-                                          const EditMeshSymmetryHelper *symmetry_helper)
+static void uv_select_flush_from_tag_loop(const Scene *scene, Object *obedit, const bool select)
 {
   /* Selecting UV Loops with some modes requires us to change
    * the selection in other faces (depending on the sticky mode).
@@ -5146,7 +5032,7 @@ static void uv_select_flush_from_tag_loop(const Scene *scene,
       bool tag_any = false;
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
         if (BM_elem_flag_test(l->v, BM_ELEM_TAG)) {
-          uvedit_uv_select_set(scene, bm, l, select, symmetry_helper);
+          uvedit_uv_select_set(scene, bm, l, select);
           tag_any = true;
         }
         else {
@@ -5214,7 +5100,7 @@ static void uv_select_flush_from_tag_loop(const Scene *scene,
     BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
         if (BM_elem_flag_test(l, BM_ELEM_TAG)) {
-          uvedit_uv_select_set(scene, bm, l, select, symmetry_helper);
+          uvedit_uv_select_set(scene, bm, l, select);
         }
       }
     }
@@ -5368,8 +5254,6 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
   for (Object *obedit : objects) {
     BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -5380,10 +5264,6 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -5439,7 +5319,7 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
 
       /* (de)selects all tagged faces and deals with sticky modes */
       if (changed) {
-        uv_select_flush_from_tag_face(scene, obedit, select, symmetry_helper_ptr);
+        uv_select_flush_from_tag_face(scene, obedit, select);
       }
     }
     else if (uv_select_mode == UV_SELECT_EDGE) {
@@ -5460,8 +5340,7 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
         BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
           luv = BM_ELEM_CD_GET_FLOAT_P(l, offsets.uv);
           if (BLI_rctf_isect_pt_v(&rectf, luv) && BLI_rctf_isect_pt_v(&rectf, luv_prev)) {
-            uvedit_edge_select_set_with_sticky(
-                scene, bm, l_prev, select, offsets, symmetry_helper_ptr);
+            uvedit_edge_select_set_with_sticky(scene, bm, l_prev, select, offsets);
             do_second_pass = false;
             has_selected = true;
             changed = true;
@@ -5488,8 +5367,7 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
           BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
             luv = BM_ELEM_CD_GET_FLOAT_P(l, offsets.uv);
             if (BLI_rctf_isect_segment(&rectf, luv_prev, luv)) {
-              uvedit_edge_select_set_with_sticky(
-                  scene, bm, l_prev, select, offsets, symmetry_helper_ptr);
+              uvedit_edge_select_set_with_sticky(scene, bm, l_prev, select, offsets);
               has_selected = true;
               changed = true;
             }
@@ -5502,7 +5380,7 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
         }
       }
       if (use_select_linked) {
-        linked_helper->select_all(select, symmetry_helper_ptr);
+        linked_helper->select_all(select);
       }
     }
     else {
@@ -5527,7 +5405,7 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
           if (select != uvedit_uv_select_test(scene, bm, l, offsets)) {
             if (BLI_rctf_isect_pt_v(&rectf, luv)) {
               if (!pinned || BM_ELEM_CD_GET_BOOL(l, offsets.pin)) {
-                uvedit_uv_select_set(scene, bm, l, select, symmetry_helper_ptr);
+                uvedit_uv_select_set(scene, bm, l, select);
                 BM_elem_flag_enable(l->v, BM_ELEM_TAG);
                 has_selected = true;
               }
@@ -5539,11 +5417,11 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
         }
       }
       if (use_select_linked) {
-        linked_helper->select_all(select, symmetry_helper_ptr);
+        linked_helper->select_all(select);
       }
 
       if (ts->uv_sticky == UV_STICKY_VERT) {
-        uvedit_vertex_select_tagged(bm, scene, select, symmetry_helper_ptr);
+        uvedit_vertex_select_tagged(bm, scene, select);
       }
     }
 
@@ -5687,8 +5565,6 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
     Object *obedit = objects[ob_index];
     BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -5699,10 +5575,6 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -5761,7 +5633,7 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
 
       /* (de)selects all tagged faces and deals with sticky modes */
       if (changed) {
-        uv_select_flush_from_tag_face(scene, obedit, select, symmetry_helper_ptr);
+        uv_select_flush_from_tag_face(scene, obedit, select);
       }
     }
     else if (uv_select_mode == UV_SELECT_EDGE) {
@@ -5778,8 +5650,7 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
         BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
           luv = BM_ELEM_CD_GET_FLOAT_P(l, offsets.uv);
           if (uv_circle_select_is_edge_inside(luv, luv_prev, offset, ellipse)) {
-            uvedit_edge_select_set_with_sticky(
-                scene, bm, l_prev, select, offsets, symmetry_helper_ptr);
+            uvedit_edge_select_set_with_sticky(scene, bm, l_prev, select, offsets);
             has_selected = true;
             changed = true;
           }
@@ -5791,7 +5662,7 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
         }
       }
       if (use_select_linked) {
-        linked_helper->select_all(select, symmetry_helper_ptr);
+        linked_helper->select_all(select);
         linked_helper->clear();
       }
     }
@@ -5811,7 +5682,7 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
             luv = BM_ELEM_CD_GET_FLOAT_P(l, offsets.uv);
             if (uv_circle_select_is_point_inside(luv, offset, ellipse)) {
               changed = true;
-              uvedit_uv_select_set(scene, bm, l, select, symmetry_helper_ptr);
+              uvedit_uv_select_set(scene, bm, l, select);
               BM_elem_flag_enable(l->v, BM_ELEM_TAG);
               has_selected = true;
             }
@@ -5822,12 +5693,12 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
         }
       }
       if (use_select_linked) {
-        linked_helper->select_all(select, symmetry_helper_ptr);
+        linked_helper->select_all(select);
         linked_helper->clear();
       }
 
       if (ts->uv_sticky == UV_STICKY_VERT) {
-        uvedit_vertex_select_tagged(bm, scene, select, symmetry_helper_ptr);
+        uvedit_vertex_select_tagged(bm, scene, select);
       }
     }
 
@@ -5947,8 +5818,6 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
 
     BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -5959,10 +5828,6 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -6015,7 +5880,7 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
 
       /* (de)selects all tagged faces and deals with sticky modes */
       if (changed) {
-        uv_select_flush_from_tag_face(scene, obedit, select, symmetry_helper_ptr);
+        uv_select_flush_from_tag_face(scene, obedit, select);
       }
     }
     else if (uv_select_mode == UV_SELECT_EDGE) {
@@ -6034,8 +5899,7 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
           if (do_lasso_select_mesh_uv_is_point_inside(region, &rect, mcoords, luv) &&
               do_lasso_select_mesh_uv_is_point_inside(region, &rect, mcoords, luv_prev))
           {
-            uvedit_edge_select_set_with_sticky(
-                scene, bm, l_prev, select, offsets, symmetry_helper_ptr);
+            uvedit_edge_select_set_with_sticky(scene, bm, l_prev, select, offsets);
             do_second_pass = false;
             has_selected = true;
             changed = true;
@@ -6062,8 +5926,7 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
           BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
             float *luv = BM_ELEM_CD_GET_FLOAT_P(l, offsets.uv);
             if (do_lasso_select_mesh_uv_is_edge_inside(region, &rect, mcoords, luv, luv_prev)) {
-              uvedit_edge_select_set_with_sticky(
-                  scene, bm, l_prev, select, offsets, symmetry_helper_ptr);
+              uvedit_edge_select_set_with_sticky(scene, bm, l_prev, select, offsets);
               has_selected = true;
               changed = true;
             }
@@ -6076,7 +5939,7 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
         }
       }
       if (use_select_linked) {
-        linked_helper->select_all(select, symmetry_helper_ptr);
+        linked_helper->select_all(select);
       }
     }
     else {
@@ -6094,7 +5957,7 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
           if (select != uvedit_uv_select_test(scene, bm, l, offsets)) {
             float *luv = BM_ELEM_CD_GET_FLOAT_P(l, offsets.uv);
             if (do_lasso_select_mesh_uv_is_point_inside(region, &rect, mcoords, luv)) {
-              uvedit_uv_select_set(scene, bm, l, select, symmetry_helper_ptr);
+              uvedit_uv_select_set(scene, bm, l, select);
               changed = true;
               BM_elem_flag_enable(l->v, BM_ELEM_TAG);
               has_selected = true;
@@ -6106,11 +5969,11 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
         }
       }
       if (use_select_linked) {
-        linked_helper->select_all(select, symmetry_helper_ptr);
+        linked_helper->select_all(select);
       }
 
       if (ts->uv_sticky == UV_STICKY_VERT) {
-        uvedit_vertex_select_tagged(bm, scene, select, symmetry_helper_ptr);
+        uvedit_vertex_select_tagged(bm, scene, select);
       }
     }
 
@@ -6198,8 +6061,6 @@ static wmOperatorStatus uv_select_pinned_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -6210,10 +6071,6 @@ static wmOperatorStatus uv_select_pinned_exec(bContext *C, wmOperator *op)
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -6234,7 +6091,7 @@ static wmOperatorStatus uv_select_pinned_exec(bContext *C, wmOperator *op)
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
 
         if (BM_ELEM_CD_GET_BOOL(l, offsets.pin)) {
-          uvedit_uv_select_enable(scene, bm, l, symmetry_helper_ptr);
+          uvedit_uv_select_enable(scene, bm, l);
           changed = true;
         }
       }
@@ -6584,8 +6441,6 @@ static wmOperatorStatus uv_select_overlap(bContext *C, const bool extend, const 
     if (tag_info.has_overlap) {
       BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
 
-      const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-      std::optional<EditMeshSymmetryHelper> symmetry_helper;
       if (uv_select_sync) {
         char symmetry_htype = 0;
         if (ts->selectmode & SCE_SELECT_FACE) {
@@ -6597,10 +6452,6 @@ static wmOperatorStatus uv_select_overlap(bContext *C, const bool extend, const 
         if (ts->selectmode & SCE_SELECT_VERTEX) {
           symmetry_htype |= BM_VERT;
         }
-        symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-        if (symmetry_helper.has_value()) {
-          symmetry_helper_ptr = &symmetry_helper.value();
-        }
       }
 
       if (uv_select_sync) {
@@ -6609,7 +6460,7 @@ static wmOperatorStatus uv_select_overlap(bContext *C, const bool extend, const 
       else {
         uvedit_select_prepare_custom_data(scene, bm);
       }
-      uv_select_flush_from_tag_face(scene, obedit, select, symmetry_helper_ptr);
+      uv_select_flush_from_tag_face(scene, obedit, select);
 
       if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
         ED_uvedit_select_sync_flush(ts, bm, select);
@@ -6688,8 +6539,6 @@ static wmOperatorStatus uv_select_by_winding_exec(bContext *C, wmOperator *op)
     BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
     const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -6700,10 +6549,6 @@ static wmOperatorStatus uv_select_by_winding_exec(bContext *C, wmOperator *op)
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(obedit, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -6724,7 +6569,7 @@ static wmOperatorStatus uv_select_by_winding_exec(bContext *C, wmOperator *op)
     }
 
     if (changed) {
-      uv_select_flush_from_tag_face(scene, obedit, true, symmetry_helper_ptr);
+      uv_select_flush_from_tag_face(scene, obedit, true);
 
       if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
         ED_uvedit_select_sync_flush(ts, bm, true);
@@ -7011,8 +6856,6 @@ static wmOperatorStatus uv_select_similar_vert_exec(bContext *C, wmOperator *op)
       }
     }
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -7023,10 +6866,6 @@ static wmOperatorStatus uv_select_similar_vert_exec(bContext *C, wmOperator *op)
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(ob, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -7055,7 +6894,7 @@ static wmOperatorStatus uv_select_similar_vert_exec(bContext *C, wmOperator *op)
         const float needle = get_uv_vert_needle(type, l->v, ob_m3, l, offsets);
         bool select = ED_select_similar_compare_float_tree(tree_1d, needle, threshold, compare);
         if (select) {
-          uvedit_uv_select_set(scene, bm, l, select, symmetry_helper_ptr);
+          uvedit_uv_select_set(scene, bm, l, select);
           changed = true;
         }
       }
@@ -7143,8 +6982,6 @@ static wmOperatorStatus uv_select_similar_edge_exec(bContext *C, wmOperator *op)
       }
     }
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -7155,10 +6992,6 @@ static wmOperatorStatus uv_select_similar_edge_exec(bContext *C, wmOperator *op)
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(ob, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -7187,7 +7020,7 @@ static wmOperatorStatus uv_select_similar_edge_exec(bContext *C, wmOperator *op)
         float needle = get_uv_edge_needle(type, l->e, ob_m3, l, l->next, offsets);
         bool select = ED_select_similar_compare_float_tree(tree_1d, needle, threshold, compare);
         if (select) {
-          uvedit_edge_select_set(scene, bm, l, select, symmetry_helper_ptr);
+          uvedit_edge_select_set(scene, bm, l, select);
           changed = true;
         }
       }
@@ -7294,8 +7127,6 @@ static wmOperatorStatus uv_select_similar_face_exec(bContext *C, wmOperator *op)
       }
     }
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -7306,10 +7137,6 @@ static wmOperatorStatus uv_select_similar_face_exec(bContext *C, wmOperator *op)
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(ob, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -7341,7 +7168,7 @@ static wmOperatorStatus uv_select_similar_face_exec(bContext *C, wmOperator *op)
 
       bool select = ED_select_similar_compare_float_tree(tree_1d, needle, threshold, compare);
       if (select) {
-        uvedit_face_select_set(scene, bm, face, select, symmetry_helper_ptr);
+        uvedit_face_select_set(scene, bm, face, select);
         changed = true;
       }
     }
@@ -7980,8 +7807,6 @@ static wmOperatorStatus uv_select_tile_exec(bContext *C, wmOperator *op)
     BMEditMesh *em = BKE_editmesh_from_object(ob);
     const BMUVOffsets offsets = BM_uv_map_offsets_get(em->bm);
 
-    const EditMeshSymmetryHelper *symmetry_helper_ptr = nullptr;
-    std::optional<EditMeshSymmetryHelper> symmetry_helper;
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
       char symmetry_htype = 0;
       if (ts->selectmode & SCE_SELECT_FACE) {
@@ -7992,10 +7817,6 @@ static wmOperatorStatus uv_select_tile_exec(bContext *C, wmOperator *op)
       }
       if (ts->selectmode & SCE_SELECT_VERTEX) {
         symmetry_htype |= BM_VERT;
-      }
-      symmetry_helper = EditMeshSymmetryHelper::create_if_needed(ob, symmetry_htype);
-      if (symmetry_helper.has_value()) {
-        symmetry_helper_ptr = &symmetry_helper.value();
       }
     }
 
@@ -8024,7 +7845,7 @@ static wmOperatorStatus uv_select_tile_exec(bContext *C, wmOperator *op)
       float2 center;
       BM_face_uv_calc_center_median(f, offsets.uv, center);
       if (BLI_rctf_isect_pt_v(&tile_rect, center)) {
-        uvedit_face_select_set_with_sticky(scene, em->bm, f, true, offsets, symmetry_helper_ptr);
+        uvedit_face_select_set_with_sticky(scene, em->bm, f, true, offsets);
         changed = true;
       }
     }

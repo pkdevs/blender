@@ -387,7 +387,7 @@ static void facetag_set_cb(BMFace *f, bool val, void *user_data_v)
   UserData_UV *user_data = static_cast<UserData_UV *>(user_data_v);
   const Scene *scene = user_data->scene;
   BMesh *bm = user_data->bm;
-  uvedit_face_select_set_with_sticky(scene, bm, f, val, user_data->offsets, nullptr);
+  uvedit_face_select_set_with_sticky(scene, bm, f, val, user_data->offsets);
 }
 
 static int mouse_mesh_uv_shortest_path_face(Scene *scene,

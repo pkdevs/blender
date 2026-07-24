@@ -2159,7 +2159,7 @@ static bool uv_mesh_hide_no_sync(const Scene *scene, Object *ob, BMEditMesh *em,
         }
         if (pass == pass_end) {
           if (!swap) {
-            uvedit_face_select_disable(scene, bm, efa, nullptr);
+            uvedit_face_select_disable(scene, bm, efa);
             changed_uv = true;
           }
         }
@@ -2190,7 +2190,7 @@ static bool uv_mesh_hide_no_sync(const Scene *scene, Object *ob, BMEditMesh *em,
         }
         if (pass == pass_end) {
           if (!swap) {
-            uvedit_face_select_disable(scene, bm, efa, nullptr);
+            uvedit_face_select_disable(scene, bm, efa);
             changed_uv = true;
           }
         }
@@ -2214,7 +2214,7 @@ static bool uv_mesh_hide_no_sync(const Scene *scene, Object *ob, BMEditMesh *em,
             changed = true;
           }
         }
-        uvedit_face_select_disable(scene, bm, efa, nullptr);
+        uvedit_face_select_disable(scene, bm, efa);
         changed_uv = true;
       }
     }
