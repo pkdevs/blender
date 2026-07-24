@@ -474,7 +474,7 @@ static void rna_Object_active_shape_update(Main *bmain, Scene * /*scene*/, Point
         BMEditMesh *em = mesh->runtime->edit_mesh.get();
         int select_mode = em->selectmode;
         EDBM_mesh_load(bmain, ob);
-        EDBM_mesh_make(bmain, ob, select_mode, true);
+        EDBM_mesh_make(ob, select_mode, true);
         em = mesh->runtime->edit_mesh.get();
 
         DEG_id_tag_update(&mesh->id, 0);

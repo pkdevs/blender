@@ -2143,8 +2143,7 @@ static void mouse_mesh_loop_edge(BMEditMesh *em,
 /**
  * Core loop selection logic, shared by invoke and exec.
  */
-static void edbm_select_loop_or_ring_by_edge(Main *bmain,
-                                             BMEditMesh *em,
+static void edbm_select_loop_or_ring_by_edge(BMEditMesh *em,
                                              Object *obedit,
                                              BMEdge *eed,
                                              bool select,
@@ -2253,7 +2252,7 @@ static wmOperatorStatus edbm_select_loop_or_ring_exec_impl(bContext *C,
                                                            bool ring,
                                                            BMWDelimitFlag delimit)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -2328,7 +2327,7 @@ static wmOperatorStatus edbm_select_loop_or_ring_exec_impl(bContext *C,
   }
 
   edbm_select_loop_or_ring_by_edge(
-      bmain, em, obedit, eed, select, select_clear, select_cycle, ring, delimit);
+      em, obedit, eed, select, select_clear, select_cycle, ring, delimit);
 
   /* Set active element from stored indices (for redo support).
    * These indices should only be set when "select" is true,
@@ -4385,8 +4384,7 @@ void MESH_OT_select_linked(wmOperatorType *ot)
 
 static wmOperatorStatus edbm_select_linked_pick_exec(bContext *C, wmOperator *op);
 
-static void edbm_select_linked_pick_ex(
-    Main *bmain, BMEditMesh *em, BMElem *ele, bool sel, int delimit)
+static void edbm_select_linked_pick_ex(BMEditMesh *em, BMElem *ele, bool sel, int delimit)
 {
   BMesh *bm = em->bm;
   BMWalker walker;
@@ -4569,7 +4567,7 @@ static wmOperatorStatus edbm_select_linked_pick_invoke(bContext *C,
 
   BMElem *ele = EDBM_elem_from_selectmode(em, eve, eed, efa);
 
-  edbm_select_linked_pick_ex(vc.bmain, em, ele, sel, delimit);
+  edbm_select_linked_pick_ex(em, ele, sel, delimit);
 
   /* To support redo. */
   {
@@ -4618,7 +4616,7 @@ static wmOperatorStatus edbm_select_linked_pick_exec(bContext *C, wmOperator *op
   int delimit = RNA_enum_get(op->ptr, "delimit");
 #endif
 
-  edbm_select_linked_pick_ex(bmain, em, ele, sel, delimit);
+  edbm_select_linked_pick_ex(em, ele, sel, delimit);
 
   DEG_id_tag_update(obedit->data, ID_RECALC_SELECT);
   WM_event_add_notifier(C, NC_GEOM | ND_SELECT, obedit->data);
@@ -5435,8 +5433,7 @@ static void walker_deselect_nth_face_chain(BMEditMesh *em,
 /* Walk all reachable elements of the same type as h_act in breadth-first
  * order, starting from h_act. Deselects elements if the depth when they
  * are reached is not a multiple of "nth". */
-static void walker_deselect_nth(Main *bmain,
-                                BMEditMesh *em,
+static void walker_deselect_nth(BMEditMesh *em,
                                 const CheckerIntervalParams *op_params,
                                 BMHeader *h_act)
 {
@@ -5561,8 +5558,7 @@ static void walker_deselect_nth(Main *bmain,
   EDBM_selectmode_flush_ex(em, flushtype);
 }
 
-static void deselect_nth_active(
-    Main *bmain, BMEditMesh *em, BMVert **r_eve, BMEdge **r_eed, BMFace **r_efa)
+static void deselect_nth_active(BMEditMesh *em, BMVert **r_eve, BMEdge **r_eed, BMFace **r_efa)
 {
   BMIter iter;
   BMElem *ele;
@@ -5615,24 +5611,24 @@ static void deselect_nth_active(
   }
 }
 
-static bool edbm_deselect_nth(Main *bmain, BMEditMesh *em, const CheckerIntervalParams *op_params)
+static bool edbm_deselect_nth(BMEditMesh *em, const CheckerIntervalParams *op_params)
 {
   BMVert *v;
   BMEdge *e;
   BMFace *f;
 
-  deselect_nth_active(bmain, em, &v, &e, &f);
+  deselect_nth_active(em, &v, &e, &f);
 
   if (v) {
-    walker_deselect_nth(bmain, em, op_params, &v->head);
+    walker_deselect_nth(em, op_params, &v->head);
     return true;
   }
   if (e) {
-    walker_deselect_nth(bmain, em, op_params, &e->head);
+    walker_deselect_nth(em, op_params, &e->head);
     return true;
   }
   if (f) {
-    walker_deselect_nth(bmain, em, op_params, &f->head);
+    walker_deselect_nth(em, op_params, &f->head);
     return true;
   }
 
@@ -5658,7 +5654,7 @@ static wmOperatorStatus edbm_select_nth_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    if (edbm_deselect_nth(bmain, em, &op_params) == true) {
+    if (edbm_deselect_nth(em, &op_params) == true) {
       EDBM_uvselect_clear(em);
 
       found_active_elt = true;

@@ -294,14 +294,16 @@ static int object_shapenr_basis_index_ensured(const Object *ob)
   return ob->shapenr;
 }
 
-void EDBM_mesh_make(Main *bmain, Object *ob, const int select_mode, const bool add_key_index)
+void EDBM_mesh_make(Object *ob, const int select_mode, const bool add_key_index)
 {
   Mesh *mesh = id_cast<Mesh *>(ob->data);
-  EDBM_mesh_make_from_mesh(bmain, ob, mesh, select_mode, add_key_index);
+  EDBM_mesh_make_from_mesh(ob, mesh, select_mode, add_key_index);
 }
 
-void EDBM_mesh_make_from_mesh(
-    Main *bmain, Object *ob, Mesh *src_mesh, const int select_mode, const bool add_key_index)
+void EDBM_mesh_make_from_mesh(Object *ob,
+                              Mesh *src_mesh,
+                              const int select_mode,
+                              const bool add_key_index)
 {
   Mesh *mesh = id_cast<Mesh *>(ob->data);
   BMeshCreateParams create_params{};

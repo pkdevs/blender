@@ -660,8 +660,7 @@ static void store_result_geometry(const bContext &C,
           remove_shape_key_attributes(*new_mesh, *key);
         }
         if (object.mode == OB_MODE_EDIT) {
-          EDBM_mesh_make_from_mesh(
-              &bmain, &object, new_mesh, scene.toolsettings->selectmode, true);
+          EDBM_mesh_make_from_mesh(&object, new_mesh, scene.toolsettings->selectmode, true);
           BKE_editmesh_looptris_and_normals_calc(mesh.runtime->edit_mesh.get());
           BKE_id_free(nullptr, new_mesh);
           DEG_id_tag_update(&mesh.id, ID_RECALC_GEOMETRY);

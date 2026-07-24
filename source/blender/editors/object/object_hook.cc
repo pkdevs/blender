@@ -335,7 +335,7 @@ static bool object_hook_index_array(Main *bmain,
       Mesh *mesh = id_cast<Mesh *>(obedit->data);
 
       EDBM_mesh_load(bmain, obedit);
-      EDBM_mesh_make(bmain, obedit, scene->toolsettings->selectmode, true);
+      EDBM_mesh_make(obedit, scene->toolsettings->selectmode, true);
 
       DEG_id_tag_update(obedit->data, 0);
 
