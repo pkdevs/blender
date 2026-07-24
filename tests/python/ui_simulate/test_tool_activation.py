@@ -55,17 +55,13 @@ def _setup_image_editor(mode):
 
     bpy.ops.mesh.primitive_cube_add()
     space.image = bpy.data.images.new("TestImage", width=256, height=256)
+    space.mode = mode
 
-    if mode == "VIEW":
-        space.mode = "VIEW"
-    elif mode == "PAINT":
+    if mode == "PAINT":
         bpy.ops.object.mode_set(mode="TEXTURE_PAINT")
-        space.mode = "PAINT"
     elif mode == "UV":
         bpy.ops.object.mode_set(mode="EDIT")
-        space.mode = "UV"
     elif mode == "MASK":
-        space.mode = "MASK"
         space.mask = bpy.data.masks.new("TestMask")
 
     return e, t, window, area
