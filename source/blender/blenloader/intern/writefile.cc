@@ -1494,7 +1494,7 @@ static void write_libraries(WriteData *wd, Main *bmain)
     }
     write_library(wd, linked_ids_by_library, written_libraries, library);
     for (Library *archive_library : library.runtime->archived_libraries) {
-      BLI_assert(library.flag & LIBRARY_FLAG_IS_ARCHIVE);
+      BLI_assert(archive_library->flag & LIBRARY_FLAG_IS_ARCHIVE);
       write_library(wd, linked_ids_by_library, written_libraries, *archive_library);
     }
   }
