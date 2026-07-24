@@ -2588,17 +2588,16 @@ bool node_in_sphere(const bke::pbvh::Node &node,
 
 bool node_in_cylinder(const DistRayAABB_Precalc &ray_dist_precalc,
                       const bke::pbvh::Node &node,
-                      const float radius_sq,
-                      const bool original)
+                      const float radius_sq)
 {
-  const Bounds<float3> &bounds = original ? node.bounds_orig() : node.bounds();
+  const Bounds<float3> &bounds = node.bounds();
 
   float dummy_co[3], dummy_depth;
   const float dist_sq = dist_squared_ray_to_aabb_v3(
       &ray_dist_precalc, bounds.min, bounds.max, dummy_co, &dummy_depth);
 
   /* TODO: Solve issues and enable distance check. */
-  return dist_sq < radius_sq || true;
+  return dist_sq < radius_sq;
 }
 
 bool node_in_box(const float4x4 &mat,
@@ -2707,7 +2706,7 @@ static IndexMask pbvh_gather_generic(Object &ob,
         if (ignore_ineffective && node_fully_masked_or_hidden(node)) {
           return false;
         }
-        return node_in_cylinder(ray_dist_precalc, node, radius_sq, use_original);
+        return node_in_cylinder(ray_dist_precalc, node, radius_sq);
       });
     }
   }
@@ -2765,7 +2764,7 @@ IndexMask gather_nodes(const bke::pbvh::Tree &pbvh,
         if (node_fully_masked_or_hidden(node)) {
           return false;
         }
-        return node_in_cylinder(ray_dist_precalc, node, radius_sq, use_original);
+        return node_in_cylinder(ray_dist_precalc, node, radius_sq);
       });
     }
   }

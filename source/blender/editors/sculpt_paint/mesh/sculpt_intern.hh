@@ -775,8 +775,7 @@ bool node_in_sphere(const bke::pbvh::Node &node,
                     bool original);
 bool node_in_cylinder(const DistRayAABB_Precalc &ray_dist_precalc,
                       const bke::pbvh::Node &node,
-                      float radius_sq,
-                      bool original);
+                      float radius_sq);
 /** Calculates whether node intersects the [-1,1] x [-1,1] x [-1,1] volume in local space.*/
 bool node_in_box(const float4x4 &mat,
                  const Bounds<float3> &bounds,
