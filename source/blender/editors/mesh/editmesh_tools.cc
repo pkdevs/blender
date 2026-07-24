@@ -1302,7 +1302,7 @@ static bool edbm_connect_vert_pair(BMEditMesh *em, Mesh *mesh, wmOperator *op)
 
 static wmOperatorStatus edbm_vert_connect_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   uint failed_objects_len = 0;
@@ -1599,7 +1599,7 @@ static bool bm_vert_connect_select_history_edge_to_vert_path(
 
 static wmOperatorStatus edbm_vert_connect_path_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   uint failed_selection_order_len = 0;

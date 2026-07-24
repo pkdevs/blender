@@ -1733,7 +1733,7 @@ static bool walker_select(BMEditMesh *em,
 static wmOperatorStatus edbm_edge_loop_multiselect_exec(bContext *C, wmOperator *op)
 {
   const BMWDelimitFlag delimit = BMWDelimitFlag(RNA_enum_get(op->ptr, "delimit_edge_loop"));
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
@@ -1805,7 +1805,7 @@ static wmOperatorStatus edbm_edge_loop_multiselect_exec(bContext *C, wmOperator 
 static wmOperatorStatus edbm_edge_ring_multiselect_exec(bContext *C, wmOperator *op)
 {
   const BMWDelimitFlag delimit = BMWDelimitFlag(RNA_enum_get(op->ptr, "delimit_edge_ring"));
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
@@ -4138,7 +4138,7 @@ static void select_linked_delimit_end(BMEditMesh *em)
 
 static wmOperatorStatus edbm_select_linked_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -4592,9 +4592,9 @@ static wmOperatorStatus edbm_select_linked_pick_exec(bContext *C, wmOperator *op
 {
   Object *obedit = nullptr;
   BMElem *ele;
-  Main *bmain = CTX_data_main(C);
 
   {
+    const Main *bmain = CTX_data_main(C);
     const Scene *scene = CTX_data_scene(C);
     ViewLayer *view_layer = CTX_data_view_layer(C);
     /* Intentionally wrap negative values so the lookup fails. */
@@ -4667,7 +4667,7 @@ void MESH_OT_select_linked_pick(wmOperatorType *ot)
 
 static wmOperatorStatus edbm_select_by_pole_count_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const bool extend = RNA_boolean_get(op->ptr, "extend");
@@ -4798,7 +4798,7 @@ void MESH_OT_select_by_pole_count(wmOperatorType *ot)
 
 static wmOperatorStatus edbm_select_face_by_sides_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const bool extend = RNA_boolean_get(op->ptr, "extend");
@@ -4876,7 +4876,7 @@ void MESH_OT_select_face_by_sides(wmOperatorType *ot)
 
 static wmOperatorStatus edbm_select_loose_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const bool extend = RNA_boolean_get(op->ptr, "extend");
@@ -5637,7 +5637,7 @@ static bool edbm_deselect_nth(BMEditMesh *em, const CheckerIntervalParams *op_pa
 
 static wmOperatorStatus edbm_select_nth_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   CheckerIntervalParams op_params;
@@ -5715,7 +5715,7 @@ static wmOperatorStatus edbm_select_sharp_edges_exec(bContext *C, wmOperator *op
    * small enough, select the edge. */
   const float angle_limit_cos = cosf(RNA_float_get(op->ptr, "sharpness"));
 
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
@@ -5904,7 +5904,7 @@ static wmOperatorStatus edbm_select_non_manifold_exec(bContext *C, wmOperator *o
   const bool use_non_contiguous = RNA_boolean_get(op->ptr, "use_non_contiguous");
   const bool use_verts = RNA_boolean_get(op->ptr, "use_verts");
 
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
@@ -6012,7 +6012,7 @@ static wmOperatorStatus edbm_select_random_exec(bContext *C, wmOperator *op)
   const float randfac = RNA_float_get(op->ptr, "ratio");
   const int seed = WM_operator_properties_select_random_seed_increment_get(op);
 
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -6143,7 +6143,7 @@ static bool edbm_select_ungrouped_poll(bContext *C)
 static wmOperatorStatus edbm_select_ungrouped_exec(bContext *C, wmOperator *op)
 {
   const bool extend = RNA_boolean_get(op->ptr, "extend");
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -6224,7 +6224,7 @@ enum {
 
 static wmOperatorStatus edbm_select_axis_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Object *obedit = CTX_data_edit_object(C);
@@ -6601,7 +6601,7 @@ static wmOperatorStatus edbm_loop_to_region_exec(bContext *C, wmOperator *op)
 {
   const bool select_bigger = RNA_boolean_get(op->ptr, "select_bigger");
 
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
@@ -6712,7 +6712,7 @@ static std::optional<BMIterType> domain_to_iter_type(const bke::AttrDomain domai
 
 static wmOperatorStatus edbm_select_by_attribute_exec(bContext *C, wmOperator * /*op*/)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(

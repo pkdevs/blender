@@ -152,7 +152,7 @@ static void face_to_plane(const Object *ob, BMFace *face, float r_plane[4])
  */
 static wmOperatorStatus similar_face_select_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -560,7 +560,7 @@ static bool edge_data_value_set(BMEdge *edge, const int hflag, int *r_value)
  */
 static wmOperatorStatus similar_edge_select_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -954,7 +954,7 @@ static wmOperatorStatus similar_edge_select_exec(bContext *C, wmOperator *op)
 
 static wmOperatorStatus similar_vert_select_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
