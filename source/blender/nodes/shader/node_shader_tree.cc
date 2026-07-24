@@ -974,6 +974,63 @@ static void ntree_shader_pruned_unused(bNodeTree *ntree, bNode *output_node)
   }
 }
 
+static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
+{
+  bNode *zone_input = nullptr;
+  bNode *zone_output = nullptr;
+
+  auto ensure_nodes = [&]() {
+    if (!zone_input) {
+      zone_input = bke::node_add_static_node(nullptr, *ntree, SH_NODE_LIGHT_ITER_INTERNAL_INPUT);
+      zone_output = bke::node_add_static_node(nullptr, *ntree, SH_NODE_LIGHT_ITER_INTERNAL_OUTPUT);
+      zone_input->custom3 = *reinterpret_cast<float *>(&zone_output->identifier);
+    }
+  };
+
+  for (bNode &node : ntree->nodes) {
+    if (ELEM(node.type_legacy,
+             SH_NODE_LIGHT_INFO,
+             SH_NODE_LIGHT_EVALUATION,
+             SH_NODE_SHADOW_RAYCAST) ||
+        (node.type_legacy == SH_NODE_ATTRIBUTE &&
+         static_cast<NodeShaderAttribute *>(node.storage)->type == SHD_ATTRIBUTE_LIGHT))
+    {
+      ensure_nodes();
+      bke::node_add_link(*ntree,
+                         *zone_input,
+                         *ntree_shader_node_output_get(zone_input, 0),
+                         node,
+                         *ntree_shader_node_input_get(&node, 0));
+    }
+    else if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+      ensure_nodes();
+      bke::node_add_link(*ntree,
+                         node,
+                         *ntree_shader_node_output_get(&node, 0),
+                         *zone_output,
+                         *ntree_shader_node_input_get(zone_output, 0));
+    }
+  }
+
+  Vector<bNodeLink *> links_to_remove;
+  for (bNodeLink &link : ntree->links) {
+    if (link.fromnode->type_legacy == SH_NODE_LIGHT_ACCUMULATION &&
+        link.tonode->type_legacy != SH_NODE_LIGHT_ITER_INTERNAL_OUTPUT)
+    {
+      bke::node_add_link(*ntree,
+                         *zone_output,
+                         *ntree_shader_node_output_get(zone_output, 0),
+                         *link.tonode,
+                         *link.tosock);
+      links_to_remove.append(&link);
+    }
+  }
+
+  for (bNodeLink *link : links_to_remove) {
+    bke::node_remove_link(ntree, *link);
+  }
+}
+
 void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
 {
   bNodeTreeExec *exec;
@@ -986,6 +1043,7 @@ void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
 
   if (valid_tree) {
     ntree_shader_pruned_unused(localtree, output);
+    // ntree_shader_setup_custom_lighting_zone(localtree);
     if (output != nullptr) {
       ntree_shader_shader_to_rgba_branches(localtree);
       ntree_shader_weight_tree_invert(localtree, output);
