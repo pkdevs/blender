@@ -550,11 +550,13 @@ bool ED_view3d_persp_ensure(const Depsgraph *depsgraph, View3D *v3d, ARegion *re
 
   if (rv3d->persp != RV3D_PERSP) {
     if (rv3d->persp == RV3D_CAMOB) {
-      /* If autopersp and previous view was an axis one,
-       * switch back to PERSP mode, else reuse previous mode. */
-      eRegionView3D_Persp persp = (autopersp && RV3D_VIEW_IS_AXIS(rv3d->lview)) ? RV3D_PERSP :
-                                                                                  rv3d->lpersp;
-      ED_view3d_persp_switch_from_camera(depsgraph, v3d, rv3d, persp);
+      if (v3d->flag2 & V3D_ALLOW_EXIT_CAMERA_ON_ROTATE) {
+        /* If autopersp and previous view was an axis one,
+         * switch back to PERSP mode, else reuse previous mode. */
+        eRegionView3D_Persp persp = (autopersp && RV3D_VIEW_IS_AXIS(rv3d->lview)) ? RV3D_PERSP :
+                                                                                    rv3d->lpersp;
+        ED_view3d_persp_switch_from_camera(depsgraph, v3d, rv3d, persp);
+      }
     }
     else if (autopersp && RV3D_VIEW_IS_AXIS(rv3d->view)) {
       rv3d->persp = RV3D_PERSP;
