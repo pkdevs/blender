@@ -443,6 +443,10 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(tui.wcol_state.error);
   }
 
+  if (!USER_VERSION_ATLEAST(503, 5)) {
+    FROM_DEFAULT_V4_UCHAR(tui.wcol_list_item.item);
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
@@ -1681,7 +1685,8 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(500, 11)) {
-    userdef->gpu_flag &= ~USER_GPU_FLAG_UNUSED_0;
+    /* This used to be USER_GPU_FLAG_UNUSED_0. */
+    userdef->gpu_flag &= ~USER_GPU_FLAG_WORKBENCH_RT_SHADOWS;
   }
 
   if (!USER_VERSION_ATLEAST(500, 59)) {

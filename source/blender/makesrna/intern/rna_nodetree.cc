@@ -21,15 +21,17 @@
 #include "DNA_object_types.h"
 #include "DNA_texture_types.h"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_attribute.hh"
 #include "BKE_context.hh"
 #include "BKE_geometry_set.hh"
+#include "BKE_global.hh"
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
+#include "RNA_path.hh"
 
 #include "NOD_common.hh"
 
@@ -37,6 +39,8 @@
 #include "rna_internal_types.hh"
 
 #include "IMB_colormanagement.hh"
+
+#include "UI_interface_c.hh"
 
 #include "WM_types.hh"
 
@@ -776,6 +780,11 @@ const EnumPropertyItem *rna_node_tree_type_itemf(void *data,
 int rna_node_socket_idname_to_enum(const char *idname)
 {
   bke::bNodeSocketType *socket_type = bke::node_socket_type_find(idname);
+  if (socket_type == nullptr) {
+    /* May happen when reading newer files with undefined types. In this case the socket is
+     * undefined and no enum item will be selected. */
+    return -1;
+  }
 
   /* Regular socket types use the base type as their enum value.
    * Custom sockets don't have a base type and are used directly as the enum entry. */
@@ -1071,6 +1080,7 @@ static bool rna_NodeTree_unregister(Main *bmain, StructRNA *type)
   if (!nt) {
     return false;
   }
+  ui::refresh_for_srna_unregister(bmain, type);
 
   RNA_struct_free_extension(type, &nt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
@@ -1995,6 +2005,7 @@ static bool rna_Node_unregister(Main *bmain, StructRNA *type)
   if (!nt || rna_Node_is_builtin(nt)) {
     return false;
   }
+  ui::refresh_for_srna_unregister(bmain, type);
 
   RNA_struct_free_extension(type, &nt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
@@ -2707,7 +2718,12 @@ static void rna_Node_name_set(PointerRNA *ptr, const char *value)
   bke::node_unique_name(*ntree, *node);
 
   /* fix all the animation data which may link to this */
-  BKE_animdata_fix_paths_rename_all(nullptr, "nodes", oldname, node->name);
+  BKE_animdata_fix_paths(ntree->id,
+                         "nodes",
+                         RNA_path_name_to_infix(oldname),
+                         RNA_path_name_to_infix(node->name),
+                         /*verify_paths=*/true,
+                         *G_MAIN);
 }
 
 static int rna_Node_color_tag_get(PointerRNA *ptr)

@@ -578,6 +578,9 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
     }
     return reflectance;
   }
+  else if (bsdf->type == CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID) {
+    return eval_transmission ? one_spectrum() : zero_spectrum();
+  }
 
   /* Simpler case without the lookup tables. */
   Spectrum reflectance;
@@ -1200,7 +1203,7 @@ ccl_device int bsdf_microfacet_beckmann_sample(KernelGlobals kg,
  * internal reflections.
  *
  * The reflected lobe is a glossy lobe with given roughness.
- * The transmitted lobe is modelled as a mirrored reflection with modified roughness.
+ * The transmitted lobe is modeled as a mirrored reflection with modified roughness.
  *
  * \{ */
 
