@@ -613,6 +613,10 @@ struct ReSTIRLightSampleReference {
 
 /** @short Emitter-specific canonical parameters.
   *
+  * LIGHT_TRIANGLE:
+  *   triangle barycentric coordinates corresponding to the former
+  *   LightSample::u and LightSample::v fields.
+  *
   * LIGHT_POINT sphere:
   *   encoded light-local surface normal.
   *

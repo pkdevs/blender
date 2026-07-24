@@ -9,6 +9,7 @@
 #include "kernel/geom/motion_triangle.h"
 #include "kernel/geom/object.h"
 #include "kernel/geom/triangle.h"
+#include "kernel/light/sample_reference.h"
 
 #include "util/math_fast.h"
 #include "util/math_intersect.h"
@@ -274,13 +275,26 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
   return (ls->pdf > 0.0f);
 }
 
-/* uv, object and lamp should already be set at this point. */
-ccl_device_forceinline void triangle_light_sample_from_uv(KernelGlobals kg,
-                                                          float time,
-                                                          const float2 uv_, // reservoir.uv
-                                                          ccl_private LightSample *ls,
-                                                          const float3 P)
+/* Reconstruct a triangle light sample from its persistent reference.
+ *
+ * The reference object, primitive and canonical barycentric coordinates must
+ * already be initialized. The LightSample PDF must be initialized by the
+ * caller before entering this function.
+ */
+ccl_device_forceinline void triangle_light_sample_from_reference(
+    KernelGlobals kg,
+    const float time,
+    ccl_private const ReSTIRLightSampleReference *reference,
+    ccl_private LightSample *ls,
+    const float3 P)
 {
+  kernel_assert(restir_light_reference_is_valid(reference));
+  kernel_assert(reference->type == LIGHT_TRIANGLE);
+  kernel_assert(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM);
+
+  ls->object = reference->object;
+  ls->prim = reference->prim;
+
   float3 V[3];
   triangle_world_space_vertices(kg, ls->object, ls->prim, time, V);
 
@@ -296,16 +310,61 @@ ccl_device_forceinline void triangle_light_sample_from_uv(KernelGlobals kg,
 
   ls->eval_fac = 1.0f;
 
-  // TODO(Tri): MIS. Side of triangle
+  /* TODO(weizhen): MIS. Side of triangle. */
   ls->shader = kernel_data_fetch(tri_shader, ls->prim) | SHADER_USE_MIS;
   ls->type = LIGHT_TRIANGLE;
   ls->group = object_lightgroup(kg, ls->object);
+  ls->eval_fac = 1.0f; // ???: Necessary?
 
-  const float t = 1.0f - uv_.x - uv_.y;
-  ls->P = t * V[0] + uv_.x * V[1] + uv_.y * V[2];
+  const float u = reference->param.x;
+  const float v = reference->param.y;
+  const float w = 1.0f - u - v;
+
+  ls->P = w * V[0] + u * V[1] + v * V[2];
   ls->D = safe_normalize_len(ls->P - P, &ls->t);
 
   ls->pdf *= (ls->t > 0.0f);
+}
+
+ccl_device_inline void triangle_light_sample_from_intersection(
+    KernelGlobals kg,
+    IntegratorState state,
+    ccl_private const ShaderData *sd,
+    ccl_private LightSample *ccl_restrict ls,
+    ccl_private ReSTIRLightSampleReference *ccl_restrict reference)
+{
+  const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
+
+  ls->shader = sd->shader;
+  ls->D = ray_D;
+  ls->t = sd->ray_length;
+  ls->P = INTEGRATOR_STATE(state, ray, P) + ray_D * ls->t;
+  ls->object = sd->object;
+  ls->prim = sd->prim;
+  ls->type = LIGHT_TRIANGLE;
+  ls->group = object_lightgroup(kg, ls->object);
+
+  *reference = restir_light_reference_empty();
+  reference->type = LIGHT_TRIANGLE;
+  reference->object = sd->object;
+  reference->prim = sd->prim;
+  reference->param = make_float2(sd->u, sd->v);
+  reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
+                     RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+
+  /* Normal. */
+  float3 V[3];
+  triangle_world_space_vertices(
+      kg, ls->object, ls->prim, INTEGRATOR_STATE(state, ray, time), V);
+
+  const float3 e0 = V[1] - V[0];
+  const float3 e1 = V[2] - V[0];
+  ls->Ng = safe_normalize(cross(e0, e1));
+
+  if (dot(ls->Ng, sd->wi) < 0.0f) {
+    /* TODO(weizhen): MIS. */
+    ls->Ng = -ls->Ng;
+  }
 }
 
 /* Find the ray segment lit by the triangle light. */

@@ -619,7 +619,7 @@ ccl_device_inline void restir_light_sample_from_uv(
   // TODO: Spot...
   else {
     /* Mesh light */
-    triangle_light_sample_from_uv(kg, sd->time, uv_, ls, sd->P);
+    // triangle_light_sample_from_uv(kg, sd->time, uv_, ls, sd->P); // !!!: 
   }
 }
 

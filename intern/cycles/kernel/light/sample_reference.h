@@ -14,7 +14,7 @@
 #include "kernel/light/point.h"
 #include "kernel/light/spot.h"
 #include "kernel/light/sun.h"
-#include "kernel/light/triangle.h"
+// #include "kernel/light/triangle.h" // !!!
 #include "kernel/sample/lcg.h"
 #include "kernel/types.h"
 
@@ -50,7 +50,8 @@ ccl_device_inline float3 restir_area_position_decode(const ccl_global KernelLigh
          v * klight->area.len_v * klight->area.axis_v;
 }
 
-// MARK: - Move elsewhere?
+// MARK: -
+// TODO: Move elsewhere?
 
 // Should be added to ReSTIRReservoir eventually?
 ccl_device_inline ReSTIRLightSampleReference restir_light_reference_empty()
