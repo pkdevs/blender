@@ -850,6 +850,22 @@ static void file_draw_preview(const FileDirEntry *file,
               scale,
               document_img_col);
 
+  /* Darken the whole preview area for assets that are being downloaded, so the progress overlay
+   * drawn on top of it has enough contrast, regardless of the image's own colors. */
+  if (file->asset && asset_system::remote_library_asset_download_progress(*file->asset)) {
+    const float overlay_col[] = {0.0f, 0.0f, 0.0f, 0.3f};
+    const uiWidgetColors wcol = ui::theme::theme_get()->tui.wcol_list_item;
+
+    rctf tile_rect_rctf;
+    BLI_rctf_rcti_copy(&tile_rect_rctf, tile_draw_rect);
+    tile_rect_rctf.ymin = tile_rect_rctf.ymax - layout->prv_h - layout->tile_border_y * 2.0f;
+    BLI_rctf_pad(&tile_rect_rctf, -layout->prv_border_x * 0.5f, -layout->prv_border_y * 0.5f);
+
+    ui::draw_roundbox_corner_set(ui::CNR_ALL);
+    ui::draw_roundbox_4fv(&tile_rect_rctf, true, wcol.roundness * U.widget_unit, overlay_col);
+    ui::draw_roundbox_corner_set(ui::CNR_NONE);
+  }
+
   const bool show_outline = (file->typeflag & (FILE_TYPE_IMAGE | FILE_TYPE_OBJECT_IO |
                                                FILE_TYPE_MOVIE | FILE_TYPE_BLENDER));
   /* Contrasting outline around some preview types. */
