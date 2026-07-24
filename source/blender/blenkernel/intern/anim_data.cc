@@ -753,8 +753,22 @@ static std::optional<std::string> rna_path_rename_fix(ID &owner_id,
   return modified_path;
 }
 
+/**
+ * Inverse of RNA_path_name_to_infix. For example `["bone \"quoted\""]` -> `bone "quoted"`.
+ */
+static std::string infix_to_name(const StringRef infix)
+{
+  /* An empty name infix would be `[""]` so four characters. */
+  BLI_assert(infix.size() >= 4);
+  std::string unescaped;
+  unescaped.resize(infix.size() - 4);
+  size_t string_size = BLI_str_unescape(unescaped.data(), infix.data() + 2, unescaped.size());
+  unescaped.resize(string_size);
+  return unescaped;
+}
+
 /* Check RNA-Paths for a list of F-Curves */
-static bool fcurves_path_rename_fix(ID *owner_id,
+static bool fcurves_path_rename_fix(ID &owner_id,
                                     const StringRef prefix,
                                     const StringRef old_infix,
                                     const StringRef new_infix,
@@ -769,7 +783,7 @@ static bool fcurves_path_rename_fix(ID *owner_id,
     }
     /* Firstly, handle the F-Curve's own path. */
     std::optional<std::string> new_path = rna_path_rename_fix(
-        *owner_id, prefix, old_infix, new_infix, fcu->rna_path, verify_paths);
+        owner_id, prefix, old_infix, new_infix, fcu->rna_path, verify_paths);
     if (!new_path.has_value()) {
       continue;
     }
@@ -780,7 +794,7 @@ static bool fcurves_path_rename_fix(ID *owner_id,
     /* If the path changed and the FCurve is grouped, check if its group also needs renaming
      * (i.e. F-Curve is first of a bone's F-Curves;
      * hence renaming this should also trigger rename) */
-    PointerRNA ptr = RNA_id_pointer_create(owner_id);
+    PointerRNA ptr = RNA_id_pointer_create(&owner_id);
     PointerRNA resolved_ptr;
     PropertyRNA *resolved_prop;
     if (!RNA_path_resolve(&ptr, fcu->rna_path, &resolved_ptr, &resolved_prop)) {
@@ -797,7 +811,8 @@ static bool fcurves_path_rename_fix(ID *owner_id,
       /* Only update the name if the action group name was contained in the old infix. Since groups
        * can be renamed by the user we shouldn't override that data. */
       bPoseChannel *pchan = static_cast<bPoseChannel *>(resolved_ptr.data);
-      if (old_infix.find(agrp->name) != StringRefBase::not_found) {
+      std::string old_name = infix_to_name(old_infix);
+      if (old_name == StringRefNull(agrp->name)) {
         STRNCPY_UTF8(agrp->name, pchan->name);
       }
     }
@@ -805,68 +820,9 @@ static bool fcurves_path_rename_fix(ID *owner_id,
   return is_changed;
 }
 
-/* Check RNA-Paths for a list of Drivers */
-static bool drivers_path_rename_fix(ID *owner_id,
-                                    ID *ref_id,
-                                    const StringRef prefix,
-                                    const char *old_name,
-                                    const char *new_name,
-                                    const StringRef old_infix,
-                                    const StringRef new_infix,
-                                    ListBaseT<FCurve> &curves,
-                                    const bool verify_paths)
-{
-  bool is_changed = false;
-  /* We need to check every curve - drivers are F-Curves too. */
-  for (FCurve &fcu : curves) {
-    /* firstly, handle the F-Curve's own path */
-    if (fcu.rna_path != nullptr) {
-      std::optional<std::string> new_path = rna_path_rename_fix(
-          *owner_id, prefix, old_infix, new_infix, fcu.rna_path, verify_paths);
-      if (new_path.has_value()) {
-        MEM_delete(fcu.rna_path);
-        fcu.rna_path = BLI_strdup(new_path->c_str());
-        is_changed = true;
-      }
-    }
-    if (fcu.driver == nullptr) {
-      continue;
-    }
-    ChannelDriver *driver = fcu.driver;
-    /* driver variables */
-    for (DriverVar &dvar : driver->variables) {
-      /* only change the used targets, since the others will need fixing manually anyway */
-      DRIVER_TARGETS_USED_LOOPER_BEGIN (&dvar) {
-        /* rename RNA path */
-        if (dtar->rna_path && dtar->id) {
-          std::optional<std::string> new_path = rna_path_rename_fix(
-              *dtar->id, prefix, old_infix, new_infix, dtar->rna_path, verify_paths);
-          if (new_path.has_value()) {
-            MEM_delete(dtar->rna_path);
-            dtar->rna_path = BLI_strdup(new_path->c_str());
-            is_changed = true;
-          }
-        }
-        /* also fix the bone-name (if applicable) */
-        if (prefix.find("bones") != StringRefBase::not_found) {
-          if (((dtar->id) && (GS(dtar->id->name) == ID_OB) &&
-               (!ref_id || (id_cast<Object *>(dtar->id))->data == ref_id)) &&
-              (dtar->pchan_name[0]) && STREQ(old_name, dtar->pchan_name))
-          {
-            is_changed = true;
-            STRNCPY(dtar->pchan_name, new_name);
-          }
-        }
-      }
-      DRIVER_TARGETS_LOOPER_END;
-    }
-  }
-  return is_changed;
-}
-
 static bool rename_paths_action(bAction *dna_action,
                                 const animrig::slot_handle_t slot_handle,
-                                ID *owner_id,
+                                ID &owner_id,
                                 const StringRef prefix,
                                 const StringRef old_infix,
                                 const StringRef new_infix,
@@ -893,7 +849,7 @@ static bool rename_paths_action(bAction *dna_action,
 }
 
 /* Fix all RNA-Paths for Actions linked to NLA Strips */
-static bool nlastrips_path_rename_fix(ID *owner_id,
+static bool nlastrips_path_rename_fix(ID &owner_id,
                                       const StringRef prefix,
                                       const StringRef old_infix,
                                       const StringRef new_infix,
@@ -927,11 +883,8 @@ static bool nlastrips_path_rename_fix(ID *owner_id,
 char *BKE_animsys_fix_rna_path_rename(ID *owner_id,
                                       char *old_path,
                                       const StringRef prefix,
-                                      const char *old_name,
-                                      const char *new_name,
-                                      const int old_subscript,
-                                      const int new_subscript,
-                                      const bool verify_paths)
+                                      const StringRefNull old_name,
+                                      const StringRefNull new_name)
 {
   /* if no action, no need to proceed */
   if (ELEM(nullptr, owner_id, old_path)) {
@@ -941,15 +894,14 @@ char *BKE_animsys_fix_rna_path_rename(ID *owner_id,
     return old_path;
   }
 
-  auto &&[old_key, new_key] = RNA_generate_keys_for_path_rename(
-      old_name ? old_name : "", new_name ? new_name : "", old_subscript, new_subscript, true);
+  auto &&[old_key, new_key] = RNA_generate_keys_for_path_rename(old_name, new_name, 0, 0, true);
 
   /* fix given path */
   if (G.debug & G_DEBUG) {
     printf("%s | %s  | oldpath = %p ", old_key.c_str(), new_key.c_str(), old_path);
   }
   std::optional<std::string> new_path = rna_path_rename_fix(
-      *owner_id, prefix, old_key, new_key, old_path, verify_paths);
+      *owner_id, prefix, old_key, new_key, old_path, false);
   if (!new_path.has_value()) {
     return old_path;
   }
@@ -963,10 +915,8 @@ void BKE_action_fix_paths_rename(ID *owner_id,
                                  bAction *act,
                                  animrig::slot_handle_t slot_handle,
                                  const StringRef prefix,
-                                 const char *old_name,
-                                 const char *new_name,
-                                 const int old_subscript,
-                                 const int new_subscript,
+                                 const StringRefNull old_name,
+                                 const StringRefNull new_name,
                                  const bool verify_paths)
 {
   /* if no action, no need to proceed */
@@ -974,11 +924,10 @@ void BKE_action_fix_paths_rename(ID *owner_id,
     return;
   }
 
-  auto &&[old_key, new_key] = RNA_generate_keys_for_path_rename(
-      old_name ? old_name : "", new_name ? new_name : "", old_subscript, new_subscript, true);
+  auto &&[old_key, new_key] = RNA_generate_keys_for_path_rename(old_name, new_name, 0, 0, true);
 
   /* fix paths in action */
-  fcurves_path_rename_fix(owner_id,
+  fcurves_path_rename_fix(*owner_id,
                           prefix,
                           old_key,
                           new_key,
@@ -988,57 +937,124 @@ void BKE_action_fix_paths_rename(ID *owner_id,
   DEG_id_tag_update(&act->id, ID_RECALC_ANIMATION);
 }
 
-void BKE_animdata_fix_paths_rename(ID *owner_id,
-                                   AnimData *adt,
-                                   ID *ref_id,
-                                   const char *prefix,
-                                   const char *old_infix,
-                                   const char *new_infix,
-                                   int old_subscript,
-                                   int new_subscript,
-                                   bool verify_paths,
-                                   bool infix_is_name)
+/* Fix all targets that point to the given ID. */
+static bool driver_target_path_fix(ID &owner_id,
+                                   const StringRef prefix,
+                                   const StringRef old_infix,
+                                   const StringRef new_infix,
+                                   const DriverMap &driver_map)
 {
-  /* If no AnimData, no need to proceed. */
-  if (ELEM(nullptr, owner_id, adt)) {
+  const Vector<DriverTarget *> *target_uses = driver_map.lookup_ptr(&owner_id);
+  if (!target_uses) {
+    return false;
+  }
+
+  bool is_changed = false;
+  for (DriverTarget *target : *target_uses) {
+    BLI_assert_msg(target->id == &owner_id,
+                   "Driver Map for this ID contains targets for another ID.");
+    if (target->rna_path) {
+      /* This cannot verify paths because driver paths are not always valid rna paths. They can end
+       * in e.g. ".location[0]" while "location" + array index integer would be correct. */
+      std::optional<std::string> fixed_path = rna_path_rename_fix(
+          owner_id, prefix, old_infix, new_infix, target->rna_path, /*verify_paths=*/false);
+      if (fixed_path.has_value()) {
+        MEM_delete(target->rna_path);
+        target->rna_path = BLI_strdup(fixed_path->c_str());
+        is_changed = true;
+      }
+    }
+
+    if (GS(owner_id.name) == ID_OB && target->pchan_name[0] && prefix.find("bones")) {
+      /* If the target is a bone we can assume that the infix will be surrounded with square
+       * brackets and escaped. */
+      BLI_assert(old_infix.size() >= 4);
+      const std::string old_bone_name = infix_to_name(old_infix);
+      if (old_bone_name == StringRef(target->pchan_name)) {
+        const std::string new_bone_name = infix_to_name(new_infix);
+        BLI_strncpy(target->pchan_name, new_bone_name.data(), MAXBONENAME);
+        is_changed = true;
+      }
+    }
+  }
+
+  return is_changed;
+}
+
+DriverMap BKE_animdata_build_driver_target_map(Main &bmain)
+{
+  DriverMap map;
+  BKE_animdata_main_cb(&bmain, [&](ID * /* id */, AnimData *adt) {
+    for (const FCurve &driver : adt->drivers) {
+      if (!driver.driver) {
+        continue;
+      }
+      for (DriverVar &driver_var : driver.driver->variables) {
+        for (DriverTarget &target : MutableSpan(driver_var.targets, driver_var.num_targets)) {
+          if (!target.id) {
+            continue;
+          }
+          map.lookup_or_add_default(target.id).append(&target);
+        }
+      }
+    }
+  });
+  return map;
+}
+
+void BKE_animdata_fix_paths(ID &id,
+                            const StringRef prefix,
+                            const StringRef old_infix,
+                            const StringRef new_infix,
+                            const bool verify_paths,
+                            const DriverMap &driver_map)
+{
+  bool is_changed = false;
+  /* We always need to fix drivers that target this ID. This is independent of this ID having
+   * animation data. Also fixes this ID's drivers if they target the ID itself. */
+  is_changed |= driver_target_path_fix(id, prefix, old_infix, new_infix, driver_map);
+
+  AnimData *adt = BKE_animdata_from_id(&id);
+  if (!adt) {
     return;
   }
 
-  auto &&[old_key, new_key] = RNA_generate_keys_for_path_rename(old_infix ? old_infix : "",
-                                                                new_infix ? new_infix : "",
-                                                                old_subscript,
-                                                                new_subscript,
-                                                                infix_is_name);
-  bool is_self_changed = false;
-
-  /* Active action and temp action. */
-  if (adt->action != nullptr && adt->slot_handle != animrig::Slot::unassigned) {
-    rename_paths_action(
-        adt->action, adt->slot_handle, owner_id, prefix, old_key, new_key, verify_paths);
+  if (adt->action && adt->slot_handle != animrig::Slot::unassigned) {
+    is_changed |= rename_paths_action(
+        adt->action, adt->slot_handle, id, prefix, old_infix, new_infix, verify_paths);
   }
-  if (adt->tmpact) {
-    rename_paths_action(
-        adt->tmpact, adt->tmp_slot_handle, owner_id, prefix, old_key, new_key, verify_paths);
+  if (adt->tmpact && adt->tmp_slot_handle != animrig::Slot::unassigned) {
+    is_changed |= rename_paths_action(
+        adt->tmpact, adt->tmp_slot_handle, id, prefix, old_infix, new_infix, verify_paths);
   }
-  /* Drivers - Drivers are really F-Curves */
-  is_self_changed |= drivers_path_rename_fix(owner_id,
-                                             ref_id,
-                                             prefix,
-                                             old_infix,
-                                             new_infix,
-                                             old_key,
-                                             new_key,
-                                             adt->drivers,
-                                             verify_paths);
-  /* NLA Data - Animation Data for Strips */
   for (NlaTrack &nlt : adt->nla_tracks) {
-    is_self_changed |= nlastrips_path_rename_fix(
-        owner_id, prefix, old_key, new_key, nlt.strips, verify_paths);
+    is_changed |= nlastrips_path_rename_fix(
+        id, prefix, old_infix, new_infix, nlt.strips, verify_paths);
   }
-  /* Tag owner ID if it */
-  if (is_self_changed) {
-    DEG_id_tag_update(owner_id, ID_RECALC_SYNC_TO_EVAL);
+  for (FCurve &fcurve : adt->drivers) {
+    std::optional<std::string> fixed_path = rna_path_rename_fix(
+        id, prefix, old_infix, new_infix, fcurve.rna_path, verify_paths);
+    if (!fixed_path.has_value()) {
+      continue;
+    }
+    MEM_delete(fcurve.rna_path);
+    fcurve.rna_path = BLI_strdup(fixed_path->c_str());
+    is_changed = true;
   }
+  if (is_changed) {
+    DEG_id_tag_update(&id, ID_RECALC_SYNC_TO_EVAL);
+  }
+}
+
+void BKE_animdata_fix_paths(ID &id,
+                            StringRef prefix,
+                            StringRef old_infix,
+                            StringRef new_infix,
+                            bool verify_paths,
+                            Main &bmain)
+{
+  const DriverMap driver_map = BKE_animdata_build_driver_target_map(bmain);
+  BKE_animdata_fix_paths(id, prefix, old_infix, new_infix, verify_paths, driver_map);
 }
 
 /* Remove FCurves with Prefix  -------------------------------------- */
