@@ -106,7 +106,7 @@ void RE_bake_pixels_populate(struct Mesh *mesh,
                              size_t pixels_num,
                              const struct BakeTargets *targets,
                              StringRef uv_layer,
-							 int margin);
+                             int margin);
 
 void RE_bake_mask_fill(const BakePixel pixel_array[], size_t pixels_num, char *mask);
 
