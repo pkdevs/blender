@@ -42,37 +42,36 @@ static void node_geo_exec(GeoNodeExecParams params)
   const GeometryComponent::Type component = params.extract_input<GeometryComponent::Type>(
       "Component Type"_ustr);
 
-  if (!geometry_set.has(component)) {
-    params.set_default_remaining_outputs();
-    return;
-  }
-
   Material **materials = nullptr;
   int count = 0;
 
   switch (component) {
     case GeometryComponent::Type::Curve: {
-      const Curves &curves = *geometry_set.get_curves();
-      materials = curves.mat;
-      count = curves.totcol;
+      if (const Curves *curves = geometry_set.get_curves()) {
+        materials = curves->mat;
+        count = curves->totcol;
+      }
       break;
     }
     case GeometryComponent::Type::GreasePencil: {
-      const GreasePencil &grease_pencil = *geometry_set.get_grease_pencil();
-      materials = grease_pencil.material_array;
-      count = grease_pencil.material_array_num;
+      if (const GreasePencil *grease_pencil = geometry_set.get_grease_pencil()) {
+        materials = grease_pencil->material_array;
+        count = grease_pencil->material_array_num;
+      }
       break;
     }
     case GeometryComponent::Type::Mesh: {
-      const Mesh &mesh = *geometry_set.get_mesh();
-      materials = mesh.mat;
-      count = mesh.totcol;
+      if (const Mesh *mesh = geometry_set.get_mesh()) {
+        materials = mesh->mat;
+        count = mesh->totcol;
+      }
       break;
     }
     case GeometryComponent::Type::PointCloud: {
-      const PointCloud &point_cloud = *geometry_set.get_pointcloud();
-      materials = point_cloud.mat;
-      count = point_cloud.totcol;
+      if (const PointCloud *point_cloud = geometry_set.get_pointcloud()) {
+        materials = point_cloud->mat;
+        count = point_cloud->totcol;
+      }
       break;
     }
     default:
