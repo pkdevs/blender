@@ -4349,42 +4349,42 @@ static const EnumPropertyItem *rna_NodeImplicitConversion_data_type_itemf(bConte
 
 static int rna_MergeLayers_mode_get(PointerRNA *ptr)
 {
-  bNode *node = (bNode *)ptr->data;
+  bNode *node = ptr->data_as<bNode>();
   const bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Mode"_ustr);
   return socket->default_value_typed<bNodeSocketValueMenu>()->value;
 }
 
 static void rna_MergeLayers_mode_set(PointerRNA *ptr, int value)
 {
-  bNode *node = (bNode *)ptr->data;
+  bNode *node = ptr->data_as<bNode>();
   bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Mode"_ustr);
   socket->default_value_typed<bNodeSocketValueMenu>()->value = value;
 }
 
 static int rna_SetGreasePencilColor_mode_get(PointerRNA *ptr)
 {
-  bNode *node = (bNode *)ptr->data;
+  bNode *node = ptr->data_as<bNode>();
   const bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Mode"_ustr);
   return socket->default_value_typed<bNodeSocketValueMenu>()->value;
 }
 
 static void rna_SetGreasePencilColor_mode_set(PointerRNA *ptr, int value)
 {
-  bNode *node = (bNode *)ptr->data;
+  bNode *node = ptr->data_as<bNode>();
   bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Mode"_ustr);
   socket->default_value_typed<bNodeSocketValueMenu>()->value = value;
 }
 
 static int rna_SetGreasePencilDepth_depth_order_get(PointerRNA *ptr)
 {
-  bNode *node = (bNode *)ptr->data;
+  bNode *node = ptr->data_as<bNode>();
   const bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Depth Order"_ustr);
   return socket->default_value_typed<bNodeSocketValueMenu>()->value;
 }
 
 static void rna_SetGreasePencilDepth_depth_order_set(PointerRNA *ptr, int value)
 {
-  bNode *node = (bNode *)ptr->data;
+  bNode *node = ptr->data_as<bNode>();
   bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Depth Order"_ustr);
   socket->default_value_typed<bNodeSocketValueMenu>()->value = value;
 }
