@@ -1354,6 +1354,13 @@ struct InstantiationContext {
     if (jump) {
       jump_to(decl.front());
     }
+
+    if (scope.as_class() == nullptr && decl.is_reference()) {
+      /* Local references are simply pasted. */
+      skip_node(decl);
+      return false;
+    }
+
     skip_node(decl.attributes());
 
     if (decl.type().id().str() == "auto") {
@@ -1700,6 +1707,11 @@ struct InstantiationContext {
         /* SRT type is used in an expression (likely as function argument). Call the ctor. */
         builder << var->type->resolved->identifier + "_ctor_()" + trivia(id);
       }
+      return var;
+    }
+
+    if (var->reference_value.is_valid()) {
+      builder << string(var->reference_value.str()) + trivia(id);
       return var;
     }
 

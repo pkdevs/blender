@@ -451,7 +451,11 @@ struct SymbolVariable : Symbol {
   bool is_static = false;
   bool is_error = false;
   bool is_constexpr = false;
+  bool is_const = false;
   bool is_compilation_const = false;
+  /* Valid if the variable is a local reference.
+   * The variable will be substituted to this statement. */
+  Expr reference_value = {};
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarator decl)
       : Symbol(string(decl.identifier().str()), decl.front(), parent),

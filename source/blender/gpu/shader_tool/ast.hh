@@ -848,6 +848,12 @@ struct VarDecl : Node {
   {
     return child_first(NodeType::IdType);
   }
+
+  /* Return true if the first declarator is a reference. */
+  bool is_reference() const
+  {
+    return Declarator(child_first(NodeType::Declarator)).is_reference();
+  }
 };
 
 struct FuncArg : Node {

@@ -1362,9 +1362,14 @@ struct SymbolParser {
                   to_str(srt_type) + "'");
       }
     }
+    else if (res_type == ResourceType::RESOURCE_TABLE) {
+      /* Currently supported as noop for legacy resource table reference getter. */
+    }
     else if (res_type != ResourceType::NONE) {
       error(var, "Out of class resource declaration");
     }
+
+    const bool is_srt_local_ref = type->is_srt() && cls == nullptr;
 
     string anon_prefix;
     SymbolScope *named_parent = nullptr;
@@ -1373,11 +1378,35 @@ struct SymbolParser {
       anon_prefix = prefix.prefix, named_parent = prefix.non_anonymous_parent;
     }
 
+    const bool is_ref = var.is_reference();
     for (Declarator decl : var.children_of_type<Declarator>()) {
+      if (is_ref != decl.is_reference()) {
+        error(decl, "Variable declaration must declare either no reference or only reference");
+        continue;
+      }
+
       SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl);
       sym->res_type = res_type;
       sym->is_static |= res_type != ResourceType::NONE;
       scope.variables.emplace(sym->identifier, sym);
+
+      if (is_srt_local_ref && !is_ref) {
+        error(decl, "Resource table must be declared as reference");
+      }
+
+      if (is_ref && cls == nullptr) {
+        AssignStmt stmt = decl.initial_value();
+        if (stmt.is_valid() && stmt.expr().is_valid()) {
+          /* TODO(fclem): Run type analysis to check if we bind to the same type. */
+          /* TODO(fclem): Run const analysis to check if we bind a const expr. */
+          sym->reference_value = stmt.expr();
+        }
+        else {
+          error(decl,
+                "Declaration of reference variable '" + string(decl.identifier().str()) +
+                    "' requires an initializer");
+        }
+      }
 
       if (cls) {
         sym->set_offset(cls->is_union, offset);
