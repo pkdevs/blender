@@ -458,6 +458,15 @@ static void box_select_elem(
 {
   bAnimContext *ac = sel_data->ac;
 
+  /* An expanded channel's children are drawn as separate rows which each get their own box
+   * test, allowing granular selection of the keys they display. Only a collapsed channel acts
+   * as the sole visible representative of its subtree, selecting all the keyframes that it
+   * summarizes. Skipped when `summary` is set: then this element is visited on behalf of a
+   * collapsed summary channel, which covers everything regardless of expansion state. */
+  if (!summary && ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_EXPAND) > 0) {
+    return;
+  }
+
   switch (ale->type) {
     case ANIMTYPE_GREASE_PENCIL_DATABLOCK: {
       GreasePencil *grease_pencil = static_cast<GreasePencil *>(ale->data);
