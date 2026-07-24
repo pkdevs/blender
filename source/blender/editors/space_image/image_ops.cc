@@ -3512,7 +3512,7 @@ static wmOperatorStatus image_pack_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (BKE_image_is_dirty(ima)) {
+  if (BKE_image_is_dirty(ima) || ima->source == IMA_SRC_FILE) {
     BKE_image_memorypack(ima);
   }
   else {
