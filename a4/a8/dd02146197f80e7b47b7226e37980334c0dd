@@ -1,1 +1,2 @@
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
+Referenced by pull request #161922, Core: Optimize out truely indirect packed data on write.
