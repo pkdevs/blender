@@ -162,12 +162,12 @@ def view3d_object_drag():
     yield e.ctrl.z()
     yield
     cube = bpy.data.objects["Cube"]
-    t.assertEqual(cube.location, before_location, "Undo should restore the exact object location")
+    t.assertEqual(tuple(cube.location), before_location, "Undo should restore the exact object location")
 
     yield e.ctrl.shift.z()
     yield
     cube = bpy.data.objects["Cube"]
-    t.assertEqual(cube.location, after_location, "Redo should restore the moved object location")
+    t.assertEqual(tuple(cube.location), after_location, "Redo should restore the moved object location")
 
 
 def viewport_navigation_drags():
@@ -183,10 +183,10 @@ def viewport_navigation_drags():
 
     center = ui.get_area_center(area)
     yield from e.middlemouse.cursor_motion(ui.cursor_motion_data_circle(center, 80))
-    t.assertNotEqual(rv3d.view_rotation, before_rotation, "Rotate drag should change the view rotation")
+    t.assertNotEqual(tuple(rv3d.view_rotation), before_rotation, "Rotate drag should change the view rotation")
 
     yield from e.shift.middlemouse.cursor_motion(ui.cursor_motion_data_x(window))
-    t.assertNotEqual(rv3d.view_location, before_location, "Pan drag should change the view location")
+    t.assertNotEqual(tuple(rv3d.view_location), before_location, "Pan drag should change the view location")
 
     yield from e.ctrl.middlemouse.cursor_motion(ui.cursor_motion_data_y(window))
     t.assertNotEqual(rv3d.view_distance, before_distance, "Zoom drag should change the view distance")
