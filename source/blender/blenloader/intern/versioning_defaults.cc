@@ -359,7 +359,6 @@ void BLO_update_defaults_workspace(WorkSpace *workspace, const char *app_templat
   }
   /* For Video Editing template. */
   if (STRPREFIX(workspace->id.name + 2, "Video Editing")) {
-    puts("Versioned Workspace");
     for (WorkSpaceLayout &layout : workspace->layouts) {
       bScreen *screen = layout.screen;
       if (screen) {
