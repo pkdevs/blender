@@ -1,3 +1,4 @@
 Referenced by pull request #161745, RNA: Prevent regular properties from accessing meta-data PointerRNA.
 Referenced by commit 56ef3a461e07f8f02ec1ea0131a070bd3c1f0150, RNA: Prevent regular properties from accessing meta-data PointerRNA.
 Referenced by issue #161772, Assert when using autocomplete for functions in python console
+Referenced by commit 360ccd1e800513ee93c7b8c9e892e06edb77cfd0, Fix #161772: Assert when using autocomplete for functions in python console.
