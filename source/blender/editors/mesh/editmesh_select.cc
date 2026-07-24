@@ -3076,12 +3076,15 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
   /* Strip stored selection isn't relevant to the new mode. */
   edbm_strip_selections(em);
 
-  if (em->bm->totvertsel == 0 && em->bm->totedgesel == 0 && em->bm->totfacesel == 0) {
+  if (em->bm->totvertsel == 0 && em->bm->totedgesel == 0 && em->bm->totfacesel == 0 &&
+      em->bm->totvertsel_mirrored == 0 && em->bm->totedgesel_mirrored == 0 &&
+      em->bm->totfacesel_mirrored == 0)
+  {
     return;
   }
 
   if (em->selectmode & SCE_SELECT_VERTEX) {
-    if (em->bm->totvertsel) {
+    if (em->bm->totvertsel || em->bm->totvertsel_mirrored) {
       EDBM_select_flush_from_verts(em, true);
     }
   }
@@ -3106,12 +3109,16 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
     /* Deselect edges, and select again based on face select. */
     BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
       BM_edge_select_set(em->bm, eed, false);
+      BM_edge_select_set(em->bm, eed, false, BM_ELEM_MIRRORED_SELECT);
     }
 
-    if (em->bm->totfacesel) {
+    if (em->bm->totfacesel || em->bm->totfacesel_mirrored) {
       BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
         if (BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
           BM_face_select_set(em->bm, efa, true);
+        }
+        if (BM_elem_flag_test(efa, BM_ELEM_MIRRORED_SELECT)) {
+          BM_face_select_set(em->bm, efa, true, BM_ELEM_MIRRORED_SELECT);
         }
       }
     }

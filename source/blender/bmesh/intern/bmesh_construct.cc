@@ -667,8 +667,11 @@ BMesh *BM_mesh_copy(BMesh *bm_old)
 
   /* Low level! don't do this for normal API use. */
   bm_new->totvertsel = bm_old->totvertsel;
+  bm_new->totvertsel_mirrored = bm_old->totvertsel_mirrored;
   bm_new->totedgesel = bm_old->totedgesel;
+  bm_new->totedgesel_mirrored = bm_old->totedgesel_mirrored;
   bm_new->totfacesel = bm_old->totfacesel;
+  bm_new->totfacesel_mirrored = bm_old->totfacesel_mirrored;
 
   /* safety check */
   BLI_assert(i == bm_old->totface);

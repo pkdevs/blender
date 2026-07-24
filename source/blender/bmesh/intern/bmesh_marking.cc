@@ -51,6 +51,17 @@ static void recount_totsels_range_vert_func(void * /*userdata*/,
   }
 }
 
+static void recount_totsels_range_vert_mirrored_func(void * /*userdata*/,
+                                                     MempoolIterData *iter,
+                                                     const TaskParallelTLS *__restrict tls)
+{
+  SelectionCountChunkData *count = static_cast<SelectionCountChunkData *>(tls->userdata_chunk);
+  const BMVert *eve = reinterpret_cast<const BMVert *>(iter);
+  if (BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT)) {
+    count->selection_len += 1;
+  }
+}
+
 static void recount_totsels_range_edge_func(void * /*userdata*/,
                                             MempoolIterData *iter,
                                             const TaskParallelTLS *__restrict tls)
@@ -62,6 +73,17 @@ static void recount_totsels_range_edge_func(void * /*userdata*/,
   }
 }
 
+static void recount_totsels_range_edge_mirrored_func(void * /*userdata*/,
+                                                     MempoolIterData *iter,
+                                                     const TaskParallelTLS *__restrict tls)
+{
+  SelectionCountChunkData *count = static_cast<SelectionCountChunkData *>(tls->userdata_chunk);
+  const BMEdge *eed = reinterpret_cast<const BMEdge *>(iter);
+  if (BM_elem_flag_test(eed, BM_ELEM_MIRRORED_SELECT)) {
+    count->selection_len += 1;
+  }
+}
+
 static void recount_totsels_range_face_func(void * /*userdata*/,
                                             MempoolIterData *iter,
                                             const TaskParallelTLS *__restrict tls)
@@ -69,6 +91,17 @@ static void recount_totsels_range_face_func(void * /*userdata*/,
   SelectionCountChunkData *count = static_cast<SelectionCountChunkData *>(tls->userdata_chunk);
   const BMFace *efa = reinterpret_cast<const BMFace *>(iter);
   if (BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
+    count->selection_len += 1;
+  }
+}
+
+static void recount_totsels_range_face_mirrored_func(void * /*userdata*/,
+                                                     MempoolIterData *iter,
+                                                     const TaskParallelTLS *__restrict tls)
+{
+  SelectionCountChunkData *count = static_cast<SelectionCountChunkData *>(tls->userdata_chunk);
+  const BMFace *efa = reinterpret_cast<const BMFace *>(iter);
+  if (BM_elem_flag_test(efa, BM_ELEM_MIRRORED_SELECT)) {
     count->selection_len += 1;
   }
 }
@@ -99,7 +132,26 @@ static TaskParallelMempoolFunc recount_totsels_get_range_func(BMIterType iter_ty
   return range_func;
 }
 
-static int recount_totsel(BMesh *bm, BMIterType iter_type)
+static TaskParallelMempoolFunc recount_totsels_get_range_func_mirrored(BMIterType iter_type)
+{
+  BLI_assert(ELEM(iter_type, BM_VERTS_OF_MESH, BM_EDGES_OF_MESH, BM_FACES_OF_MESH));
+
+  TaskParallelMempoolFunc range_func = nullptr;
+  if (iter_type == BM_VERTS_OF_MESH) {
+    range_func = recount_totsels_range_vert_mirrored_func;
+  }
+  else if (iter_type == BM_EDGES_OF_MESH) {
+    range_func = recount_totsels_range_edge_mirrored_func;
+  }
+  else if (iter_type == BM_FACES_OF_MESH) {
+    range_func = recount_totsels_range_face_mirrored_func;
+  }
+  return range_func;
+}
+
+static int recount_totsel_with_func(BMesh *bm,
+                                    BMIterType iter_type,
+                                    TaskParallelMempoolFunc range_func)
 {
   const int MIN_ITER_SIZE = 1024;
 
@@ -112,9 +164,19 @@ static int recount_totsel(BMesh *bm, BMIterType iter_type)
   settings.userdata_chunk = &count;
   settings.userdata_chunk_size = sizeof(count);
 
-  TaskParallelMempoolFunc range_func = recount_totsels_get_range_func(iter_type);
   BM_iter_parallel(bm, iter_type, range_func, nullptr, &settings);
   return count.selection_len;
+}
+
+static int recount_totsel(BMesh *bm, BMIterType iter_type)
+{
+  return recount_totsel_with_func(bm, iter_type, recount_totsels_get_range_func(iter_type));
+}
+
+static int recount_totsel_mirrored(BMesh *bm, BMIterType iter_type)
+{
+  return recount_totsel_with_func(
+      bm, iter_type, recount_totsels_get_range_func_mirrored(iter_type));
 }
 
 static void recount_totvertsel(BMesh *bm)
@@ -122,9 +184,19 @@ static void recount_totvertsel(BMesh *bm)
   bm->totvertsel = recount_totsel(bm, BM_VERTS_OF_MESH);
 }
 
+static void recount_totvertsel_mirrored(BMesh *bm)
+{
+  bm->totvertsel_mirrored = recount_totsel_mirrored(bm, BM_VERTS_OF_MESH);
+}
+
 static void recount_totedgesel(BMesh *bm)
 {
   bm->totedgesel = recount_totsel(bm, BM_EDGES_OF_MESH);
+}
+
+static void recount_totedgesel_mirrored(BMesh *bm)
+{
+  bm->totedgesel_mirrored = recount_totsel_mirrored(bm, BM_EDGES_OF_MESH);
 }
 
 static void recount_totfacesel(BMesh *bm)
@@ -132,19 +204,30 @@ static void recount_totfacesel(BMesh *bm)
   bm->totfacesel = recount_totsel(bm, BM_FACES_OF_MESH);
 }
 
+static void recount_totfacesel_mirrored(BMesh *bm)
+{
+  bm->totfacesel_mirrored = recount_totsel_mirrored(bm, BM_FACES_OF_MESH);
+}
+
 static void recount_totsels(BMesh *bm)
 {
   recount_totvertsel(bm);
+  recount_totvertsel_mirrored(bm);
   recount_totedgesel(bm);
+  recount_totedgesel_mirrored(bm);
   recount_totfacesel(bm);
+  recount_totfacesel_mirrored(bm);
 }
 
 #ifndef NDEBUG
 static bool recount_totsels_are_ok(BMesh *bm)
 {
   return bm->totvertsel == recount_totsel(bm, BM_VERTS_OF_MESH) &&
+         bm->totvertsel_mirrored == recount_totsel_mirrored(bm, BM_VERTS_OF_MESH) &&
          bm->totedgesel == recount_totsel(bm, BM_EDGES_OF_MESH) &&
-         bm->totfacesel == recount_totsel(bm, BM_FACES_OF_MESH);
+         bm->totedgesel_mirrored == recount_totsel_mirrored(bm, BM_EDGES_OF_MESH) &&
+         bm->totfacesel == recount_totsel(bm, BM_FACES_OF_MESH) &&
+         bm->totfacesel_mirrored == recount_totsel_mirrored(bm, BM_FACES_OF_MESH);
 }
 #endif
 
@@ -576,12 +659,15 @@ void BM_mesh_select_mode_flush_ex(BMesh *bm, const short selectmode, BMSelectFlu
 
   if (flag_is_set(flag, BMSelectFlushFlag::RecalcLenVert)) {
     recount_totvertsel(bm);
+    recount_totvertsel_mirrored(bm);
   }
   if (flag_is_set(flag, BMSelectFlushFlag::RecalcLenEdge)) {
     recount_totedgesel(bm);
+    recount_totedgesel_mirrored(bm);
   }
   if (flag_is_set(flag, BMSelectFlushFlag::RecalcLenFace)) {
     recount_totfacesel(bm);
+    recount_totfacesel_mirrored(bm);
   }
   BLI_assert(recount_totsels_are_ok(bm));
 }
@@ -727,12 +813,18 @@ void BM_vert_select_set(BMesh *bm, BMVert *v, const bool select, const short hfl
       if (hflag == BM_ELEM_SELECT) {
         bm->totvertsel += 1;
       }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totvertsel_mirrored += 1;
+      }
     }
   }
   else {
     if (BM_elem_flag_test(v, hflag)) {
       if (hflag == BM_ELEM_SELECT) {
         bm->totvertsel -= 1;
+      }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totvertsel_mirrored -= 1;
       }
       BM_elem_flag_disable(v, hflag);
     }
@@ -753,6 +845,9 @@ void BM_edge_select_set(BMesh *bm, BMEdge *e, const bool select, const short hfl
       if (hflag == BM_ELEM_SELECT) {
         bm->totedgesel += 1;
       }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totedgesel_mirrored += 1;
+      }
     }
     BM_vert_select_set(bm, e->v1, true, hflag);
     BM_vert_select_set(bm, e->v2, true, hflag);
@@ -762,6 +857,9 @@ void BM_edge_select_set(BMesh *bm, BMEdge *e, const bool select, const short hfl
       BM_elem_flag_disable(e, hflag);
       if (hflag == BM_ELEM_SELECT) {
         bm->totedgesel -= 1;
+      }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totedgesel_mirrored -= 1;
       }
     }
 
@@ -800,6 +898,9 @@ void BM_face_select_set(BMesh *bm, BMFace *f, const bool select, const short hfl
       if (hflag == BM_ELEM_SELECT) {
         bm->totfacesel += 1;
       }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totfacesel_mirrored += 1;
+      }
     }
 
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
@@ -814,6 +915,9 @@ void BM_face_select_set(BMesh *bm, BMFace *f, const bool select, const short hfl
       BM_elem_flag_disable(f, hflag);
       if (hflag == BM_ELEM_SELECT) {
         bm->totfacesel -= 1;
+      }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totfacesel_mirrored -= 1;
       }
     }
     /**
@@ -880,6 +984,9 @@ void BM_edge_select_set_noflush(BMesh *bm, BMEdge *e, const bool select, const s
       if (hflag == BM_ELEM_SELECT) {
         bm->totedgesel += 1;
       }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totedgesel_mirrored += 1;
+      }
     }
   }
   else {
@@ -887,6 +994,9 @@ void BM_edge_select_set_noflush(BMesh *bm, BMEdge *e, const bool select, const s
       BM_elem_flag_disable(e, hflag);
       if (hflag == BM_ELEM_SELECT) {
         bm->totedgesel -= 1;
+      }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totedgesel_mirrored -= 1;
       }
     }
   }
@@ -906,6 +1016,9 @@ void BM_face_select_set_noflush(BMesh *bm, BMFace *f, const bool select, const s
       if (hflag == BM_ELEM_SELECT) {
         bm->totfacesel += 1;
       }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totfacesel_mirrored += 1;
+      }
     }
   }
   else {
@@ -913,6 +1026,9 @@ void BM_face_select_set_noflush(BMesh *bm, BMFace *f, const bool select, const s
       BM_elem_flag_disable(f, hflag);
       if (hflag == BM_ELEM_SELECT) {
         bm->totfacesel -= 1;
+      }
+      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+        bm->totfacesel_mirrored -= 1;
       }
     }
   }

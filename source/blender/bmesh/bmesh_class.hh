@@ -325,6 +325,13 @@ struct BMesh {
   int totvertsel = 0;
   int totedgesel = 0;
   int totfacesel = 0;
+  /**
+   * Number of verts/edges/faces with #BM_ELEM_MIRRORED_SELECT set,
+   * mirror-select counterparts to #totvertsel/#totedgesel/#totfacesel.
+   */
+  int totvertsel_mirrored = 0;
+  int totedgesel_mirrored = 0;
+  int totfacesel_mirrored = 0;
 
   /**
    * Flag index arrays as being dirty so we can check if they are clean and

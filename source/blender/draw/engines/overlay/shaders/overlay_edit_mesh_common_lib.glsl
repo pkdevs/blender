@@ -36,6 +36,14 @@ float4 EDIT_MESH_edge_vertex_color(uint vertex_flag)
   /* Edge color in vertex selection mode. */
   float4 selected_edge_col = (select_edge) ? theme.colors.edge_mode_select :
                                              theme.colors.edge_select;
+
+  if ((vertex_flag & EDGE_SELECTED) != 0u) {
+    return float4(selected_edge_col.rgb, 1.0f);
+  }
+  if ((vertex_flag & EDGE_MIRRORED_SELECT) != 0u) {
+    return float4(theme.colors.edge_mirror_selection.rgb, 1.0f);
+  }
+
   bool edge_mirrored = (vertex_flag & VERT_MIRRORED_SELECT) != 0u;
   bool edge_selected = (vertex_flag & (VERT_ACTIVE | VERT_SELECTED)) != 0u;
 
