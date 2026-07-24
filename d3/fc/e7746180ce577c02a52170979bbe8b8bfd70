@@ -1,2 +1,2 @@
 Referenced by issue #161882, Blender doesn't create color attributes with alpha values other than 1
-Referenced by pull request #161910, Fix #161882: new color attributes always have an alpha of 1
+Referenced by pull request #161910, Fix #161882: New color attributes always have an alpha of 1
