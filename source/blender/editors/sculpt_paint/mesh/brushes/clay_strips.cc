@@ -454,7 +454,7 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
 
     case PAINT_FALLOFF_SHAPE_TUBE: {
       const float4x4 mat = calc_local_matrix(
-          brush, *ss.cache, ss.cache->view_normal_symm, ss.cache->location_symm, flip);
+          brush, *ss.cache, ss.cache->view_normal_symm, plane_center, flip);
       const IndexMask plane_mask = bke::pbvh::search_nodes(
           pbvh, memory, [&](const bke::pbvh::Node &node) {
             if (node_fully_masked_or_hidden(node)) {
