@@ -200,9 +200,7 @@ void strip_time_effect_range_set(const Scene *scene, Strip *strip)
     if (seq::effect_is_transition(strip->type) &&
         inputs_have_wrong_order(scene, strip->input1, strip->input2))
     {
-      Strip *tmp_strip = strip->input1;
-      strip->input1 = strip->input2;
-      strip->input2 = tmp_strip;
+      std::swap(strip->input1, strip->input2);
     }
   }
   else if (strip->input1) { /* Single input effect. */
