@@ -13,7 +13,7 @@ if(NOT WIN32)
     )
     set(CROSS_COMPILE_FUNC_CONFIGS
       # Disabling std-c23
-      export ac_cv_prog_cc_c23=no
+      export ac_cv_prog_cc_c23=no &&
     )
   else()
     set(CROSS_COMPILE_FLAGS)
@@ -26,7 +26,7 @@ if(NOT WIN32)
     URL_HASH ${FLAC_HASH_TYPE}=${FLAC_HASH}
     PREFIX ${BUILD_DIR}/flac
 
-    CONFIGURE_COMMAND ${CONFIGURE_ENV} && ${CROSS_COMPILE_FUNC_CONFIGS} &&
+    CONFIGURE_COMMAND ${CONFIGURE_ENV} && ${CROSS_COMPILE_FUNC_CONFIGS}
       cd ${BUILD_DIR}/flac/src/external_flac/ &&
       ${CONFIGURE_COMMAND} --prefix=${LIBDIR}/flac --disable-shared --enable-static  ${CROSS_COMPILE_FLAGS}
 
