@@ -2498,7 +2498,8 @@ void SymbolTable::register_builtins(LocalScope node)
       {"packed_float4", "float", 4, 16},
   };
 
-  const char *comp_name[4] = {"x", "y", "z", "w"};
+  const char *swizzle_xyzw[4] = {"x", "y", "z", "w"};
+  const char *swizzle_rgba[4] = {"r", "g", "b", "a"};
 
   for (const auto &t : vectors) {
     SymbolClass *cls = cls_arena.alloc(
@@ -2521,9 +2522,16 @@ void SymbolTable::register_builtins(LocalScope node)
     flatten_root->classes.emplace(t.id, sym_resolved);
 
     for (int i = 0; i < t.comp; i++) {
-      string id(comp_name[i]);
-      SymbolVariable *var = var_arena.alloc(cls, root->classes[t.base], tok, id);
-      cls->variables.emplace(id, var);
+      {
+        string id(swizzle_xyzw[i]);
+        SymbolVariable *var = var_arena.alloc(cls, root->classes[t.base], tok, id);
+        cls->variables.emplace(id, var);
+      }
+      {
+        string id(swizzle_rgba[i]);
+        SymbolVariable *var = var_arena.alloc(cls, root->classes[t.base], tok, id);
+        cls->variables.emplace(id, var);
+      }
     }
   }
 
@@ -2538,7 +2546,8 @@ void SymbolTable::register_builtins(LocalScope node)
     }
     SymbolScope *scope = root->scopes[t.id];
 
-    auto generate_swizzles = [&](auto &self, string current, int target_length) -> void {
+    auto generate_swizzles =
+        [&](auto &self, string current, int target_length, auto swizzle) -> void {
       if (current.length() == target_length) {
         /* e.g., "float" + "3" = "float3" */
         string return_type_id = t.base + to_string(target_length);
@@ -2550,12 +2559,13 @@ void SymbolTable::register_builtins(LocalScope node)
       }
       /* Only allow swizzling components that actually exist on this vector type. */
       for (int i = 0; i < t.comp; i++) {
-        self(self, current + comp_name[i], target_length);
+        self(self, current + swizzle[i], target_length, swizzle);
       }
     };
     /* Generate combinations for vec2, vec3, and vec4 variants. */
     for (int len = 2; len <= 4; len++) {
-      generate_swizzles(generate_swizzles, "", len);
+      generate_swizzles(generate_swizzles, "", len, swizzle_xyzw);
+      generate_swizzles(generate_swizzles, "", len, swizzle_rgba);
     }
   }
 
