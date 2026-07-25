@@ -1541,6 +1541,48 @@ struct InstantiationContext {
     match_if(')');
   }
 
+  void array_decl(ArrayDecl array, Declarator decl, SymbolScope &scope)
+  {
+    if (!array.is_valid()) {
+      return;
+    }
+
+    if (array.dimensions() == 1) {
+      if (array.sub().is_empty()) {
+        AssignStmt stmt = decl.initial_value();
+        InitializerList list = stmt.initializer_list();
+        if (!list.is_valid()) {
+          error(decl,
+                "Definition of variable with array type needs an explicit size or an initializer");
+        }
+        int size = list.child_count();
+        builder << builder.curr;
+        builder.ss << to_string(size);
+        builder << builder.curr;
+        if (size == 0) {
+          error(decl, "Array size must be greater than zero");
+        }
+        return;
+      }
+    }
+
+    for (Subscript sub : array.children_of_type<Subscript>()) {
+      if (sub.is_empty()) {
+        error(sub, "Multi-dimensional arrays cannot have implicit size");
+      }
+      else {
+        auto [size, err] = SymbolTable::evaluate_constexpr(scope, sub.expr().child_first());
+        /* Note: Do not report error. The size might be defined by compilation constant. */
+        if (!err) {
+          if (size == 0) {
+            error(decl, "Array size must be greater than zero");
+          }
+        }
+      }
+      builder << sub;
+    }
+  }
+
   void declarator(Declarator decl, SymbolScope &scope, bool skip_value = false)
   {
     const bool par = match_if('(');
@@ -1551,9 +1593,7 @@ struct InstantiationContext {
     }
 
     ArrayDecl array = decl.array();
-    if (array.is_valid()) {
-      builder << array;
-    }
+    array_decl(array, decl, scope);
 
     SymbolVariable *var = scope.lookup_variable(decl.identifier());
     if (!var->is_error && var->is_constexpr) {

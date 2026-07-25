@@ -54,6 +54,55 @@ float2 c[2] = {{0, 1}, {0, 1}};
     auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "Nested initializer list is not supported.");
   }
+  {
+    string input = R"(
+float a[] = {0, 1};
+float b[2] = {a[0], a[1],};
+float d[] = {a[0], a[1] + a[1]};
+)";
+    string expect =
+        R"(
+float a[2] = {0, 1};
+float b[2] = {a[0], a[1] };
+float d[2] = {a[0], a[1] + a[1]};
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(expect, output);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(float c[];)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error,
+              "Definition of variable with array type needs an explicit size or an initializer");
+  }
+  {
+    string input = R"(float c[] = {};)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Array size must be greater than zero");
+  }
+  {
+    string input = R"(float c[][] = {};)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Multi-dimensional arrays cannot have implicit size");
+  }
+  {
+    string input = R"(float c[0] = {};)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Array size must be greater than zero");
+  }
+  {
+    string input = R"(float c[1][0] = {};)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Array size must be greater than zero");
+  }
+  {
+    string input = R"(float2 c[2] = {{0, 1}, {0, 1}};)";
+    string expect = R"(float2 c[2] = {float2(0, 1), float2(0, 1)};)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(expect, output);
+    EXPECT_EQ(error, "");
+  }
 }
 
 TEST(shader_tool, Swizzle)
