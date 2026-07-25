@@ -215,7 +215,7 @@ struct ExpressionTypeParser {
       }
       default:
         error(node.is_valid() ? node : start, "Invalid expression");
-        this->node = Node{};
+        this->node = Node(start.p, -1);
         return err_cls;
     }
   }
@@ -556,6 +556,7 @@ struct ExpressionTypeParser {
 
 Result<SymbolClass *> SymbolTable::expr_type_analysis(const SymbolScope &scope, Expr expr) const
 {
+  assert(expr.is_valid());
   return ExpressionTypeParser(this, &scope, expr.child_first()).eval();
 }
 
@@ -563,8 +564,19 @@ Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declara
 {
   std::optional<AstNodeException> err;
   Node node = decl.child_last();
-  if (node.type() == NodeType::InitializerList) {
-    Initializer init(InitializerList(node).child_first());
+  AssignStmt assign(node);
+
+  if (Expr expr = assign.expr(); expr.is_valid()) {
+    return expr_type_analysis(scope, expr);
+  }
+
+  InitializerList list(node);
+  if (!list.is_valid()) {
+    list = assign.initializer_list();
+  }
+
+  if (list.is_valid()) {
+    Initializer init(list.child_first());
     if (init.child_first().type() == NodeType::InitializerList) {
       err = {init.child_first(),
              "Cannot deduce type for variable '" + string(decl.identifier().str()) +
@@ -579,9 +591,7 @@ Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declara
       return expr_type_analysis(scope, Expr(init.child_first()));
     }
   }
-  else {
-    return expr_type_analysis(scope, AssignStmt(node).expr());
-  }
+
   return {scope.root_scope()->lookup_class(SymbolTable::err_symbol), err};
 }
 
