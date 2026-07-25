@@ -458,20 +458,14 @@ static void box_select_elem(BoxSelectData *sel_data,
                             float xmin,
                             float xmax,
                             bool summary,
-                            bool child_row_in_box)
+                            bool next_row_in_box)
 {
   bAnimContext *ac = sel_data->ac;
 
-  /* An expanded channel's children are drawn as separate rows directly below it. When the box
-   * also reaches the first of those rows, each covered child gets its own box test, allowing
-   * granular selection of the keys it displays, and the aggregate contributes nothing. When the
-   * box stops inside the expanded channel's own row however, this row is the most granular level
-   * the user targeted, so it selects its whole subtree just like a collapsed channel does.
-   * Skipped when `summary` is set: then this element is visited on behalf of a summary channel
-   * that is selecting its subtree, which covers everything regardless of expansion state. */
-  if (!summary && child_row_in_box &&
-      ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_EXPAND) > 0)
-  {
+  /* When this expanded channel's children are also in the box, defer selection to them for
+   * granular control. A box that covers this channel and any of its children must cover the first
+   * child too, so it's sufficient to check whether the row immediately below is in the box. */
+  if (next_row_in_box && ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_EXPAND) > 0) {
     return;
   }
 
@@ -606,12 +600,10 @@ static void box_select_action(bAnimContext *ac,
 
     /* perform vertical suitability check (if applicable) */
     if ((mode == ACTKEYS_BORDERSEL_FRAMERANGE) || !((ymax < rectf.ymin) || (ymin > rectf.ymax))) {
-      /* Whether the row drawn directly below this one is also inside the box. For an expanded
-       * channel that row is its first child, so this tells whether the box covers part of the
-       * channel's subtree or stops at the aggregate row itself. */
-      const bool child_row_in_box = (ale->next != nullptr) &&
-                                    !((ymin < rectf.ymin) || (ymin - channel_step > rectf.ymax));
-      box_select_elem(&sel_data, ale, rectf.xmin, rectf.xmax, false, child_row_in_box);
+      /* Passes if the next row is selected for granular selection. */
+      const bool next_row_in_box = (ale->next != nullptr) &&
+                                   !((ymin < rectf.ymin) || (ymin - channel_step > rectf.ymax));
+      box_select_elem(&sel_data, ale, rectf.xmin, rectf.xmax, false, next_row_in_box);
     }
   }
 
