@@ -629,6 +629,8 @@ struct InstantiationContext {
     /* Then emit the class itself. */
     builder << "struct" + trivia(builder.curr);
 
+    skip_node(decl.attributes());
+
     if (cls.is_anonymous) {
       builder.ss << cls.resolved->identifier << " ";
     }
@@ -991,6 +993,7 @@ struct InstantiationContext {
     SymbolScope &body_scope = *scope.functions[string(decl.identifier().str())];
 
     // jump_to(decl.front()); /* Adds too many directives. */
+    builder.curr = decl.front();
     skip_node(decl.attributes());
     id_type(decl.return_type(), scope);
     id_func_resolved(decl.identifier(), decl.arguments(), scope);
