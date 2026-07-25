@@ -269,8 +269,8 @@ struct ExpressionTypeParser {
       return it->second->return_type;
     }
     error(operator_type,
-          "Invalid operands to binary expression ('" + left_type->identifier + "' and '" +
-              right_type->identifier + "')");
+          "Invalid operands to binary expression ('" + left_type->identifier + "' " +
+              to_str(tok_type) + " '" + right_type->identifier + "')");
     return err_cls;
   }
 
@@ -287,7 +287,8 @@ struct ExpressionTypeParser {
       return it->second->return_type;
     }
     error(operator_type,
-          "Invalid argument type '" + right_type->identifier + "' to unary expression");
+          "Invalid argument type '" + right_type->identifier + "' to unary expression (" +
+              to_str(tok_type) + "'" + right_type->identifier + "')");
     return err_cls;
   }
 
