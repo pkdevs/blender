@@ -292,6 +292,7 @@ struct SymbolScope : Symbol {
   void print() const;
 
   const SymbolScope *root_scope() const;
+  SymbolScope *root_scope();
 
   /* Can be null if this is not a class. */
   SymbolClass *as_class();

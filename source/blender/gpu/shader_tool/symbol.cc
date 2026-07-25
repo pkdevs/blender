@@ -442,6 +442,9 @@ struct SymbolParser {
     {
       for (Node child = node.child_first(); child.is_valid(); child = child.next()) {
         switch (child.type()) {
+          case NodeType::Preprocessor:
+            parse_preprocessor(scope, child);
+            break;
           case NodeType::Namespace:
             parse_namespace(scope, child, prefix);
             break;
@@ -699,6 +702,47 @@ struct SymbolParser {
         sym.type = type;
         scope.variables.emplace(sym.identifier, table.var_arena.alloc(sym));
       }
+    }
+  }
+
+  void parse_preprocessor(SymbolScope &scope, Preprocessor directive)
+  {
+    /* Keep track of all defines with value to make sure to not hit an undefined symbol error. */
+    Token type = directive.front().next();
+    if (type.str() == "define") {
+      Token name = type.next();
+      if (name == directive.back()) {
+        /* Doesn't define anything. */
+        return;
+      }
+      Token value = name.next();
+      bool is_func = false;
+      if (value == '(' && name.str_with_whitespace().back() != ' ') {
+        /* This is a functional macro. */
+        is_func = true;
+        value = value.next(')');
+        if (value == directive.back()) {
+          /* Doesn't define anything. */
+          return;
+        }
+        value = value.next();
+      }
+
+      SymbolScope *root = scope.root_scope();
+      /* Macro is not empty and defines something. Assume it is a int constant. */
+      SymbolClass *int_cls = root->lookup_class("int");
+      if (is_func) {
+        SymbolFunction *fn = table.fun_arena.alloc(
+            root, name, string(name.str()), SymbolFunction::GLOBAL);
+        fn->return_type = int_cls;
+        root->functions.try_emplace(fn->identifier, fn);
+      }
+      else {
+        SymbolVariable *var = table.var_arena.alloc(root, int_cls, name, string(name.str()));
+        root->variables.try_emplace(var->identifier, var);
+      }
+      /* TODO: Make a warning/error if this just defines a constant in global space without #if
+       * directives. */
     }
   }
 
@@ -1589,6 +1633,15 @@ SymbolVariable *SymbolScope::lookup_variable(IdQualified id) const
 const SymbolScope *SymbolScope::root_scope() const
 {
   const SymbolScope *scope = this;
+  while (scope->parent) {
+    scope = scope->parent;
+  }
+  return scope;
+}
+
+SymbolScope *SymbolScope::root_scope()
+{
+  SymbolScope *scope = this;
   while (scope->parent) {
     scope = scope->parent;
   }
