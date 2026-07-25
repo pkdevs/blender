@@ -447,6 +447,10 @@ struct SymbolVariable : Symbol {
   int64_t value = 0;
 
   int array_dimensions = 0;
+  /* Number of array elements in the declaration.
+   * 0 if not array.
+   * -1 if not known at compile time. */
+  int array_elements = 0;
   /* In bytes. From scope start, taking alignment into account. */
   int offset = 0;
   bool is_static = false;

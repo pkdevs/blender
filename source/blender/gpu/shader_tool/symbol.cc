@@ -360,14 +360,33 @@ void SymbolClass::ensure_size_and_align()
   align = 1;
   is_std140_compatible = true;
   is_std430_compatible = true;
-  auto process_member_of_class = [&](SymbolClass &cls) {
+  for (SymbolVariable *var : non_static_variables_in_declaration_order()) {
+    SymbolClass &cls = *var->type;
+
+    int member_size = cls.size;
+    if (var->array_elements == 0) {
+      /* Not an array. */
+    }
+    else if (var->array_elements == -1) {
+      /* Array size need to be known at compile time for shared structs. */
+      is_std140_compatible = false;
+      is_std430_compatible = false;
+    }
+    else {
+      if (cls.align != 16) {
+        /* Arrays are padded to 16 bytes for each element for std140. */
+        is_std140_compatible = false;
+      }
+      member_size *= var->array_elements;
+    }
+
     cls.ensure_size_and_align();
     if (this->is_union) {
       /* Consider class compatible if it has no implicit padding. */
       is_std140_compatible &= cls.size == size;
       is_std430_compatible &= cls.size == size;
 
-      size = max(size, cls.size);
+      size = max(size, member_size);
     }
     else {
       /* Padding to next member alignment. */
@@ -377,7 +396,7 @@ void SymbolClass::ensure_size_and_align()
       is_std430_compatible &= padded == size;
       size = padded;
       /* Add member size. */
-      size += cls.size;
+      size += member_size;
     }
     /* Update the overall alignment of the current struct. */
     align = max(align, cls.align);
@@ -388,22 +407,17 @@ void SymbolClass::ensure_size_and_align()
     if (!cls.is_builtin && cls.align % 16 != 0) {
       is_std140_compatible = false;
     }
-  };
-
-  for (auto &[_, var] : variables) {
-    process_member_of_class(*var->type);
-  }
-
-  for (auto &[_, cls] : classes) {
-    if (cls->is_anonymous) {
-      process_member_of_class(*cls);
-    }
   }
 
   /* The total size of the struct must be a multiple of its alignment. */
   if (align > 0) {
     size = (size + align - 1) / align * align;
   }
+
+#if 0 /* For debugging. */
+  std::cout << "size:" << size << " align:" << align << " id:" << identifier << std::endl;
+#endif
+
   /* The overall size and alignment of a struct in std140 must be rounded up to the base alignment
    * of a vec4 (16 bytes). */
   if (size % 16 != 0 || align % 16 != 0) {
