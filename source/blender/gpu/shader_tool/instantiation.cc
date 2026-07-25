@@ -314,7 +314,7 @@ struct InstantiationContext {
   void switch_statement(SwitchStmt stmt, SymbolScope &scope, int &local_scope_id)
   {
     match_if(Switch);
-    condition(stmt.condition(), scope);
+    condition(stmt.condition(), scope, false, false);
     match_if('{');
 
     for (Node node : stmt.children_range()) {
@@ -527,14 +527,14 @@ struct InstantiationContext {
       return;
     }
     match_if(For);
-    condition(stmt.condition(), scope);
+    condition(stmt.condition(), scope, true, true);
     local_scope(stmt.body(), scope);
   }
 
   void while_loop(WhileLoop stmt, SymbolScope &scope)
   {
     match_if(While);
-    condition(stmt.condition(), scope);
+    condition(stmt.condition(), scope, false, true);
     local_scope(stmt.body(), scope);
   }
 
@@ -543,7 +543,7 @@ struct InstantiationContext {
     match_if(Do);
     local_scope(stmt.body(), scope);
     match_if(While);
-    condition(stmt.condition(), scope);
+    condition(stmt.condition(), scope, false, true);
     match_if(';');
   }
 
@@ -1194,7 +1194,7 @@ struct InstantiationContext {
       match_if(If);
       skip_if(Constexpr);
       if (cond.is_valid()) {
-        condition(cond, scope);
+        condition(cond, scope, false, true);
       }
     }
     else {
@@ -1284,7 +1284,7 @@ struct InstantiationContext {
     }
   }
 
-  void condition(Condition cond, SymbolScope &scope)
+  void condition(Condition cond, SymbolScope &scope, bool is_for_loop, bool do_implicit_conversion)
   {
     match_if('(');
     for (Node child : cond.children_range()) {
@@ -1293,6 +1293,23 @@ struct InstantiationContext {
       }
       else if (child.type() == NodeType::LocalStmt) {
         local_statement(child, scope);
+
+        /* In for loops, only the center statement is a condition. */
+        if (!is_for_loop || (child.prev().is_valid() && child.next().is_valid())) {
+          auto [type, err] = symbols.expr_type_analysis(scope, LocalStmt(child).expr());
+          error(err);
+          if (type->resolved->identifier == "int") {
+            builder.ss << "!=0";
+          }
+          else if (type->resolved->identifier == "uint") {
+            builder.ss << "!=0u";
+          }
+          else if (type->resolved->identifier != "bool") {
+            error(child,
+                  "Value of type '" + type->resolved->identifier +
+                      "' is not contextually convertible to 'bool'");
+          }
+        }
       }
       else {
         /* TODO: structured bindings. */

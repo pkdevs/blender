@@ -760,4 +760,41 @@ void f(Res res)
   }
 }
 
+TEST(shader_tool, BoolCast)
+{
+  {
+    string input = R"(int i; if (i == 0) {})";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(int i; if (i == 0u) {})";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Invalid operands to binary expression ('int' == 'uint')");
+  }
+  {
+    string input = R"(if (1) {})";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+uint i; if (i) {})";
+    string expect = R"(
+uint i; if (i!=0u) {})";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+int i; if (i) {})";
+    string expect = R"(
+int i; if (i!=0) {})";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+}
+
 }  // namespace blender::gpu::tests
