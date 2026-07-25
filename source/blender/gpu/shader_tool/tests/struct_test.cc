@@ -696,7 +696,7 @@ struct U {
 U U_ctor_() {U r;r._pad=0;return r;}
 
 #ifndef GPU_METAL
-void U_fn();
+       void U_fn();
 #endif
 #line 5
          void U_fn() {}
