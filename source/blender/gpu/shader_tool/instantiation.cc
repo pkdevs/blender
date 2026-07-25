@@ -1015,11 +1015,6 @@ struct InstantiationContext {
     if (fn->is_entry_point()) {
       str += " && defined(ENTRY_POINT_" + fn->resolved->identifier + ")";
     }
-    for (SymbolClass *type : fn->arg_types) {
-      if (type->is_srt()) {
-        str += " && defined(CREATE_INFO_" + type->resolved->identifier + ")";
-      }
-    }
     if (string scope_str = condition(static_cast<SymbolScope *>(fn)); !scope_str.empty()) {
       str += " && " + scope_str;
     }
