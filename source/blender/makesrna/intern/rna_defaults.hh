@@ -11,7 +11,6 @@
 
 #pragma once
 
-#include "dna_type_offsets.h"
 
 namespace blender {
 

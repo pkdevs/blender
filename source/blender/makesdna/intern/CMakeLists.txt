@@ -102,13 +102,11 @@ add_custom_command(
     ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
     ${CMAKE_CURRENT_BINARY_DIR}/dna_defaults.cc
     ${CMAKE_CURRENT_BINARY_DIR}/dna_struct_ids.cc
-    ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
     ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
   COMMAND
     ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
     "$<TARGET_FILE:makesdna>"
     ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
-    ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
     ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
     ${CMAKE_CURRENT_BINARY_DIR}/dna_struct_ids.cc
     ${CMAKE_CURRENT_BINARY_DIR}/dna_defaults.cc
@@ -127,7 +125,6 @@ set(SRC
   ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
   ${SRC_DNA_INC}
 
-  ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
   dna_rename_defs.h
   dna_utils.h
 )
@@ -135,7 +132,6 @@ set(SRC
 set_source_files_properties(
   ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
   ${CMAKE_CURRENT_BINARY_DIR}/dna_struct_ids.cc
-  ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
   ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
   PROPERTIES GENERATED TRUE
 )

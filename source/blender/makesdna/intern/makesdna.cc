@@ -670,21 +670,6 @@ static void write_sdna_blob(FILE *file,
 /** \name Auxiliary files
  * \{ */
 
-/** Write the `dna_type_offsets.h` for `SDNA_TYPE_FROM_STRUCT(id)` macro. */
-static void write_sdna_type_offsets(FILE *file, const Span<dna::ParsedStruct> parsed_structs)
-{
-  fprintf(file, "#pragma once\n");
-  fprintf(file, "#define SDNA_TYPE_FROM_STRUCT(id) _SDNA_TYPE_##id\n");
-  fprintf(file, "enum {\n");
-  fprintf(file, "\t_SDNA_TYPE_raw_data = %d,\n", SDNA_RAW_DATA_STRUCT_INDEX);
-  for (const int64_t i : parsed_structs.index_range()) {
-    const int sdna_index = int(i) + 1;
-    fprintf(
-        file, "\t_SDNA_TYPE_%s = %d,\n", parsed_structs[i].alias_type_name.c_str(), sdna_index);
-  }
-  fprintf(file, "\tSDNA_TYPE_MAX = %d,\n", 1 + int(parsed_structs.size()));
-  fprintf(file, "};\n\n");
-}
 
 /** Write the `dna_struct_ids.cc` file for `sdna_struct_id_get<T>()`. */
 static void write_sdna_struct_ids(FILE *file, const Span<dna::ParsedStruct> parsed_structs)
@@ -862,7 +847,6 @@ static bool apply_renames(Vector<dna::ParsedStruct> &parsed_structs)
 
 static bool make_structDNA(const StringRefNull base_directory,
                            FILE *file,
-                           FILE *file_offsets,
                            FILE *file_verify,
                            FILE *file_ids,
                            FILE *file_defaults)
@@ -909,7 +893,6 @@ static bool make_structDNA(const StringRefNull base_directory,
   write_sdna_blob(file, table, parsed_structs);
 
   /* Write auxiliary files. */
-  write_sdna_type_offsets(file_offsets, parsed_structs);
   write_sdna_struct_ids(file_ids, parsed_structs);
   write_sdna_verify(file_verify, table, parsed_structs, base_directory);
 
@@ -942,7 +925,8 @@ static void print_usage(const char *argv0)
 {
   printf(
       "Usage: %s [--include-file <file>, ...] "
-      "dna.cc dna_type_offsets.h dna_verify.cc dna_struct_ids.cc dna_defaults.cc "
+      // "dna.cc dna_type_offsets.h dna_verify.cc dna_struct_ids.cc dna_defaults.cc "
+      "dna.cc dna_verify.cc dna_struct_ids.cc dna_defaults.cc "
       "[base directory]\n",
       argv0);
 }
@@ -955,7 +939,7 @@ int main(int argc, char **argv)
   Vector<const char *> cli_include_files;
 
   /* There is a number of non-optional arguments that must be provided to the executable. */
-  if (argc < 6) {
+  if (argc < 5) {
     print_usage(argv[0]);
     return 1;
   }
@@ -981,9 +965,11 @@ int main(int argc, char **argv)
     includefiles = Span<const char *>(cli_include_files.data(), cli_include_files.size());
   }
 
-  /* Check the number of non-optional positional arguments. */
+  /* Check the number of non-optional positional arguments.
+   * Expected layout after removing dna_type_offsets output:
+   *   dna.cc dna_verify.cc dna_struct_ids.cc dna_defaults.cc [base directory] */
   const int num_arguments = argc - arg_index;
-  if (!ELEM(num_arguments, 5, 6)) {
+  if (!ELEM(num_arguments, 4, 5)) {
     print_usage(argv[0]);
     return 0;
   }
@@ -991,35 +977,30 @@ int main(int argc, char **argv)
   int return_status = 0;
 
   FILE *file_dna = fopen(argv[arg_index], "w");
-  FILE *file_dna_offsets = fopen(argv[arg_index + 1], "w");
-  FILE *file_dna_verify = fopen(argv[arg_index + 2], "w");
-  FILE *file_dna_ids = fopen(argv[arg_index + 3], "w");
-  FILE *file_dna_defaults = fopen(argv[arg_index + 4], "w");
+  FILE *file_dna_verify = fopen(argv[arg_index + 1], "w");
+  FILE *file_dna_ids = fopen(argv[arg_index + 2], "w");
+  FILE *file_dna_defaults = fopen(argv[arg_index + 3], "w");
   if (!file_dna) {
     printf("Unable to open file: %s\n", argv[arg_index]);
     return_status = 1;
   }
-  else if (!file_dna_offsets) {
+  else if (!file_dna_verify) {
     printf("Unable to open file: %s\n", argv[arg_index + 1]);
     return_status = 1;
   }
-  else if (!file_dna_verify) {
+  else if (!file_dna_ids) {
     printf("Unable to open file: %s\n", argv[arg_index + 2]);
     return_status = 1;
   }
-  else if (!file_dna_ids) {
-    printf("Unable to open file: %s\n", argv[arg_index + 3]);
-    return_status = 1;
-  }
   else if (!file_dna_defaults) {
-    printf("Unable to open file: %s\n", argv[arg_index + 4]);
+    printf("Unable to open file: %s\n", argv[arg_index + 3]);
     return_status = 1;
   }
   else {
     const char *base_directory;
 
-    if (num_arguments == 6) {
-      base_directory = argv[arg_index + 5];
+    if (num_arguments == 5) {
+      base_directory = argv[arg_index + 4];
     }
     else {
       base_directory = BASE_HEADER;
@@ -1039,7 +1020,6 @@ int main(int argc, char **argv)
 
     if (!make_structDNA(base_directory,
                         file_dna,
-                        file_dna_offsets,
                         file_dna_verify,
                         file_dna_ids,
                         file_dna_defaults))
@@ -1060,9 +1040,7 @@ int main(int argc, char **argv)
   if (file_dna) {
     fclose(file_dna);
   }
-  if (file_dna_offsets) {
-    fclose(file_dna_offsets);
-  }
+  
   if (file_dna_verify) {
     fclose(file_dna_verify);
   }

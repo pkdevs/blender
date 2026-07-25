@@ -12,14 +12,12 @@ if(WITH_GTESTS)
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna.cc
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_defaults.cc
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_struct_ids.cc
-      ${CMAKE_CURRENT_BINARY_DIR}/test_dna_type_offsets.h
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_verify.cc
     COMMAND
       ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
       "$<TARGET_FILE:makesdna>"
       --include-file dna_test.h
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna.cc
-      ${CMAKE_CURRENT_BINARY_DIR}/test_dna_type_offsets.h
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_verify.cc
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_struct_ids.cc
       ${CMAKE_CURRENT_BINARY_DIR}/test_dna_defaults.cc
@@ -33,7 +31,6 @@ if(WITH_GTESTS)
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna.cc
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_defaults.cc
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_struct_ids.cc
-    ${CMAKE_CURRENT_BINARY_DIR}/test_dna_type_offsets.h
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_verify.cc
     PROPERTIES GENERATED TRUE
   )
@@ -43,7 +40,6 @@ if(WITH_GTESTS)
 
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna.cc
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_struct_ids.cc
-    ${CMAKE_CURRENT_BINARY_DIR}/test_dna_type_offsets.h
     ${CMAKE_CURRENT_BINARY_DIR}/test_dna_verify.cc
   )
   set(TEST_INC
