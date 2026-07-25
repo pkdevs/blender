@@ -271,7 +271,7 @@ static bool compile_ex(shaderc::Compiler &compiler,
   /* The cached SPIR-V binary contains an injected OpString, which depends on the shader name.
    * Include the name in the cache key so an entry is only reused for an identical result. This
    * also invalidates older caches that stored the SPIR-V without the injected OpString. */
-  const std::string hash_extra = std::string("op_string:") + shader.name_get().c_str();
+  const std::string hash_extra = std::string("op_string:") + full_name;
 
   if (read_spirv_from_disk(shader_module, hash_extra)) {
     return true;
@@ -328,7 +328,7 @@ static bool compile_ex(shaderc::Compiler &compiler,
     const uint32_t *end = shader_module.compilation_result.end();
     shader_module.spirv_binary = Vector<uint32_t>(Span<uint32_t>(begin, end - begin));
     if ((G.debug & G_DEBUG_GPU_SHADER_DEBUG_INFO) == 0) {
-      spirv_inject_op_string(shader_module.spirv_binary, shader.name_get());
+      spirv_inject_op_string(shader_module.spirv_binary, full_name);
     }
     write_spirv_to_disk(shader_module);
   }
