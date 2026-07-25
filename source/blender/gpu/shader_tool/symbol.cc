@@ -422,6 +422,33 @@ struct ExpressionTypeParser {
 
   SymbolClass *fun_call(FuncCall call)
   {
+    if (call.identifier().str() == "resource_table_get") {
+      /* Special getter that creates a resource table link to the function.
+       * This is to help the porting process and should be phased out at some point. */
+      FuncParamList params = call.parameters();
+      if (params.child_count() != 1) {
+        error(params, "Expecting one argument");
+        return err_cls;
+      }
+      Expr expr(params.child_first());
+      if (params.child_count() != 1) {
+        error(params, "Expecting one typename");
+        return err_cls;
+      }
+      LocalVar var(expr.child_first());
+      if (params.child_count() != 1) {
+        error(params, "Expecting one typename");
+        return err_cls;
+      }
+      auto [type, err] = scope->lookup_class(var.identifier());
+      error(err);
+      if (!type->is_srt()) {
+        error(params, "Expecting a resource table typename");
+        return err_cls;
+      }
+      return type;
+    }
+
     if (!first_function_call.is_valid()) {
       first_function_call = call;
     }
