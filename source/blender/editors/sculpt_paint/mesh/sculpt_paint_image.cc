@@ -81,6 +81,21 @@ std::unique_ptr<ImageData> ImageData::init_active_image(Object &ob,
   return image_data;
 }
 
+std::unique_ptr<ImageData> ImageData::init_mask_image(PaintModeSettings &paint_mode_settings)
+{
+  /* TODO: Implement a user-facing warning notifying the user that Stencil Mask has no texture
+   * to work with. */
+  if (!paint_mode_settings.stencil) {
+    return nullptr;
+  }
+  std::unique_ptr<ImageData> image_data = std::make_unique<ImageData>();
+  image_data->image = paint_mode_settings.stencil;
+  image_data->image_user = &paint_mode_settings.image_user;
+  BLI_assert(image_data->image);
+  BLI_assert(image_data->image_user);
+  return image_data;
+}
+
 static void fetch_image_buffers(ImageData &image_data,
                                 bke::pbvh::Node & /*node*/,
                                 PixelNode &pixel_node)
@@ -359,6 +374,66 @@ static void paint_blend_pixels(const PaintBlendSettings &settings,
 #endif
       paint_pixels[i] = paint_blend_pixel(
           brush_color, brush_alpha, is_mix, blend_mode, factors[start + i], scene);
+    }
+
+    /* SIMD optimized write. */
+    const float (*matrix)[3] = blender::colorspace::scene_linear_is_rec709 ?
+                                   nullptr :
+                                   reinterpret_cast<const float (*)[3]>(
+                                       blender::colorspace::scene_linear_to_rec709.ptr());
+    linearrgb_to_srgb_uchar4_n(reinterpret_cast<uchar(*)[4]>(&image_pixels[img_x]),
+                               reinterpret_cast<const float (*)[4]>(paint_pixels.data()),
+                               size,
+                               matrix);
+  }
+}
+
+template<typename PixelT>
+static void paint_blend_mask(const bool invert,
+                             const Span<float> factors,
+                             const int start,
+                             const int size,
+                             const MutableSpan<PixelT> image_pixels,
+                             const int img_x,
+                             const TileColorspaceProcessor &processors,
+                             Vector<float4> &paint_pixels)
+{
+  constexpr bool is_float = std::is_same_v<typename PixelT::base_type, float>;
+  const bool fast_colorspace = is_float ? processors.is_noop : processors.is_srgb_byte;
+  if (!fast_colorspace) {
+    return;
+  }
+
+  PRF_scope(ProfileCategory::Editor);
+
+  /* Keep variables in registers during the loop. */
+  const float4 brush_color = float4(invert ? float3(0.0, 0.0, 0.0) : float3(1.0, 1.0, 1.0), 1.0);
+  const float brush_alpha = 1.0;
+  const IMB_BlendMode blend_mode = IMB_BLEND_MIX;
+
+  if constexpr (is_float) {
+    /* Scene linear float. */
+    for (int i = 0; i < size; i++) {
+      float4 scene = image_pixels[img_x + i];
+#ifdef DEBUG_PIXEL_NODES
+      scene = paint_debug_color(scene, img_y);
+#endif
+      image_pixels[img_x + i] = paint_blend_pixel(
+          brush_color, brush_alpha, true, blend_mode, factors[start + i], scene);
+    }
+  }
+  else {
+    /* sRGB byte. */
+    paint_pixels.resize(size);
+    for (int i = 0; i < size; i++) {
+      float4 scene;
+      srgb_to_linearrgb_uchar4(scene, image_pixels[img_x + i]);
+      IMB_colormanagement_rec709_to_scene_linear(scene, scene);
+#ifdef DEBUG_PIXEL_NODES
+      scene = paint_debug_color(scene, img_y);
+#endif
+      paint_pixels[i] = paint_blend_pixel(
+          brush_color, brush_alpha, true, blend_mode, factors[start + i], scene);
     }
 
     /* SIMD optimized write. */
@@ -690,7 +765,7 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
 
 static void do_mask_pixels(const Depsgraph &depsgraph,
                            Object &object,
-                           const Paint &paint,
+                           const Paint & /*paint*/,
                            const Brush &brush,
                            ImageData &image_data,
                            bke::pbvh::Node & /*node*/,
@@ -706,8 +781,6 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
   const Span<int3> corner_tris = mesh.corner_tris();
   BitVector<> brush_test = init_uv_primitives_brush_test(
       ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions);
-
-  const PaintBlendSettings blend_settings(paint, brush, ss.cache->toggle_settings.invert);
 
 #ifdef DEBUG_PIXEL_NODES
   float4 debug_color;
@@ -813,7 +886,7 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
             apply_hardness_to_distances(cache, tri_distances);
             calc_brush_strength_factors(cache, brush, tri_distances, tri_factors);
             calc_brush_texture_factors(ss, brush, tri_positions, tri_factors);
-            scale_factors(tri_factors, cache.bstrength);
+            scale_factors(tri_factors, abs(cache.bstrength));
 
             /* Track which subset of the run has non-zero factors. */
             int tri_active_begin = -1;
@@ -867,26 +940,24 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
 
         /* Blend pixels with computed factors. */
         if (!float_buffer.is_empty()) {
-          paint_blend_pixels<float4>(blend_settings,
-                                     factors,
-                                     run_active_begin,
-                                     run_active_size,
-                                     float_buffer,
-                                     run_y * image_buffer->x + run_active_x,
-                                     run_y,
-                                     *processors,
-                                     tls.paint_blend_pixels);
+          paint_blend_mask<float4>(ss.cache->bstrength < 0,
+                                   factors,
+                                   run_active_begin,
+                                   run_active_size,
+                                   float_buffer,
+                                   run_y * image_buffer->x + run_active_x,
+                                   *processors,
+                                   tls.paint_blend_pixels);
         }
         else {
-          paint_blend_pixels<uchar4>(blend_settings,
-                                     factors,
-                                     run_active_begin,
-                                     run_active_size,
-                                     byte_buffer,
-                                     run_y * image_buffer->x + run_active_x,
-                                     run_y,
-                                     *processors,
-                                     tls.paint_blend_pixels);
+          paint_blend_mask<uchar4>(ss.cache->bstrength < 0,
+                                   factors,
+                                   run_active_begin,
+                                   run_active_size,
+                                   byte_buffer,
+                                   run_y * image_buffer->x + run_active_x,
+                                   *processors,
+                                   tls.paint_blend_pixels);
         }
       }
     });
@@ -1028,6 +1099,12 @@ void SCULPT_do_paint_brush_image(const Depsgraph &depsgraph,
     bke::pbvh::pixels::mark_image_dirty(
         nodes[i], pixel_nodes[i], *image_data.image, image_data.buffers);
   });
+}
+
+bool SCULPT_use_image_mask_brush(PaintModeSettings &paint_mode_settings)
+{
+  return paint_mode_settings.flag & PAINTMODE_STENCIL &&
+         USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint);
 }
 
 void SCULPT_do_mask_brush_image(const Depsgraph &depsgraph,
