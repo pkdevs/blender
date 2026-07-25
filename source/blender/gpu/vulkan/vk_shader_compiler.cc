@@ -174,12 +174,12 @@ static StringRef to_stage_name(shaderc_shader_kind stage)
 
 /**
  * Injects a standalone "OpString" holding the shader name into the SPIR-V binary.
+ * This is not necessary when G_DEBUG_GPU_SHADER_DEBUG_INFO is used, as then shaderc/glslang will
+ * generate this OpString together with an OpSource instruction that contains the GLSL source code.
+ *
  * This way, the human-readable shader name can be found/referenced when inspecting the binary or
  * debugging even when not using the flag G_DEBUG_GPU_SHADER_DEBUG_INFO. The OpString instruction
- * ID is currently not used in OpSource or OpName instructions. glslang references it in OpSource
- * together with the shader code, but OpSource is avoided when not explicitly using
- * G_DEBUG_GPU_SHADER_DEBUG_INFO to avoid unnecessarily increasing the SPIR-V code size when it is
- * sufficient to just know which shader name corresponds to the binary.
+ * ID is currently not used in OpSource or OpName instructions.
  */
 static void spirv_inject_op_string(Vector<uint32_t> &spirv, StringRef name)
 {
@@ -206,7 +206,7 @@ static void spirv_inject_op_string(Vector<uint32_t> &spirv, StringRef name)
   instruction.append(result_id);
   instruction.extend(string_words);
 
-  /* Insertion point = start of the debug section: after all OpCapability / OpExtension /
+  /* Insertion point = start of the debug section: After all OpCapability / OpExtension /
    * OpExtInstImport / OpMemoryModel / OpEntryPoint / OpExecutionMode(Id) instructions. */
   int64_t pos = SPIRV_HEADER_WORD_COUNT;
   while (pos < spirv.size()) {

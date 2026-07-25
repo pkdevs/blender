@@ -87,8 +87,8 @@ class VKShaderModule {
    * Build the sources hash from the combined_sources.
    *
    * \param extra: Additional data folded into the hash. This is used to distinguish cache entries
-   * whose SPIR-V binary differs even though the sources are identical (e.g. the injected OpString
-   * shader name or whether debug information was generated).
+   * with differing SPIR-V binary even though the sources are identical (e.g., the injected
+   * OpString shader name or potentially in the future whether debug information was generated).
    */
   void build_sources_hash(StringRef extra);
 };
