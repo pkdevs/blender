@@ -175,6 +175,12 @@ struct InstantiationContext {
       }
     }
 
+    string cond = condition(&symbol);
+    if (!cond.empty()) {
+      builder.ss << string("\n#if ") + cond + "\n";
+      jump_to(builder.curr);
+    }
+
     if (node.child_first().is_valid()) {
       jump_to(node.child_first().front());
     }
@@ -252,6 +258,11 @@ struct InstantiationContext {
           builder << node;
           break;
       }
+    }
+
+    if (!cond.empty()) {
+      builder.ss << string("\n#endif\n");
+      jump_to(builder.curr);
     }
 
     if (symbol.parent != nullptr) {
@@ -985,6 +996,17 @@ struct InstantiationContext {
     builder << string(";\n");
   }
 
+  string condition(SymbolScope *scope)
+  {
+    string str;
+    for (auto &[k, var] : scope->variables) {
+      if (var->type->is_srt()) {
+        str += " && defined(CREATE_INFO_" + var->type->resolved->identifier + ")";
+      }
+    }
+    return str.empty() ? str : str.substr(4);
+  }
+
   string condition(SymbolFunction *fn)
   {
     string str;
@@ -995,6 +1017,9 @@ struct InstantiationContext {
       if (type->is_srt()) {
         str += " && defined(CREATE_INFO_" + type->resolved->identifier + ")";
       }
+    }
+    if (string scope_str = condition(static_cast<SymbolScope *>(fn)); !scope_str.empty()) {
+      str += " && " + scope_str;
     }
     return str.empty() ? str : str.substr(4);
   }
