@@ -255,8 +255,7 @@ static wmOperatorStatus collection_new_exec(bContext *C, wmOperator *op)
     {
       collection = outliner_collection_from_tree_element(active_te);
       if (active_te->idcode == ID_OB) {
-        collection = BKE_collection_object_find(
-            bmain, scene, nullptr, reinterpret_cast<Object *>(active_te->store_elem->id));
+        collection = find_parent_collection(C, active_te);
       }
     }
   }
