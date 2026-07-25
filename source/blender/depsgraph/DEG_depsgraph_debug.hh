@@ -49,6 +49,7 @@ void DEG_stats_simple(const Depsgraph *graph,
 /* Diagram-Based Graph Debugging */
 
 std::string DEG_debug_graph_to_dot(const Depsgraph &graph, StringRef label);
+std::string DEG_debug_graph_to_json(const Depsgraph &graph, StringRef label);
 
 void DEG_debug_stats_gnuplot(const Depsgraph *graph,
                              FILE *fp,

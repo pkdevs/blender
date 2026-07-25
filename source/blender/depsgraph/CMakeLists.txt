@@ -45,6 +45,7 @@ set(SRC
   intern/builder/pipeline_view_layer.cc
   intern/debug/deg_debug.cc
   intern/debug/deg_debug_relations_graphviz.cc
+  intern/debug/deg_debug_relations_json.cc
   intern/debug/deg_debug_stats_gnuplot.cc
   intern/eval/deg_eval.cc
   intern/eval/deg_eval_copy_on_write.cc

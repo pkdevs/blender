@@ -161,13 +161,13 @@ static void rna_DepsgraphObjectInstance_matrix_world_get(PointerRNA *ptr, float 
   RNA_DepsgraphIterator *di = static_cast<RNA_DepsgraphIterator *>(ptr->data);
   DEGObjectIterData *deg_iter = static_cast<DEGObjectIterData *>(di->iter.data);
   if (deg_iter->dupli_object_current != nullptr) {
-    copy_m4_m4(reinterpret_cast<float (*)[4]>(mat), deg_iter->dupli_object_current->mat);
+    copy_m4_m4(reinterpret_cast<float(*)[4]>(mat), deg_iter->dupli_object_current->mat);
   }
   else {
     /* We can return actual object's matrix here, no reason to return identity matrix
      * when this is not actually an instance... */
     Object *ob = static_cast<Object *>(di->iter.current);
-    copy_m4_m4(reinterpret_cast<float (*)[4]>(mat), ob->object_to_world().ptr());
+    copy_m4_m4(reinterpret_cast<float(*)[4]>(mat), ob->object_to_world().ptr());
   }
 }
 
@@ -258,6 +258,25 @@ static void rna_Depsgraph_debug_relations_graphviz(Depsgraph *depsgraph,
       return;
     }
     fprintf(f, "%s", dot_str.c_str());
+    fclose(f);
+  }
+}
+
+static void rna_Depsgraph_debug_relations_json(Depsgraph *depsgraph,
+                                               const char *filepath,
+                                               const char **r_str,
+                                               int *r_len)
+{
+  const std::string json_str = DEG_debug_graph_to_json(*depsgraph, "Depsgraph");
+  *r_len = json_str.size();
+  *r_str = BLI_strdup(json_str.c_str());
+
+  if (filepath) {
+    FILE *f = fopen(filepath, "w");
+    if (f == nullptr) {
+      return;
+    }
+    fprintf(f, "%s", json_str.c_str());
     fclose(f);
   }
 }
@@ -715,6 +734,19 @@ static void rna_def_depsgraph(BlenderRNA *brna)
                                   "File Name",
                                   "Optional output path for the graphviz debug file");
   parm = RNA_def_string(func, "dot_graph", nullptr, INT32_MAX, "Dot Graph", "Graph in dot format");
+  RNA_def_parameter_flags(parm, PROP_DYNAMIC, ParameterFlag(0));
+  RNA_def_parameter_clear_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
+  RNA_def_function_output(func, parm);
+
+  func = RNA_def_function(srna, "debug_relations_json", "rna_Depsgraph_debug_relations_json");
+  parm = RNA_def_string_file_path(func,
+                                  "filepath",
+                                  nullptr,
+                                  FILE_MAX,
+                                  "File Name",
+                                  "Optional output path for the json debug file");
+  parm = RNA_def_string(
+      func, "json_graph", nullptr, INT32_MAX, "JSON Graph", "Graph in json format");
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, ParameterFlag(0));
   RNA_def_parameter_clear_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_output(func, parm);
