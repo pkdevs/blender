@@ -53,15 +53,13 @@ static bool get_retiming_overlay_visibility(const Scene *scene,
                                             const Strip *strip)
 {
   float2 threshold{15 * UI_SCALE_FAC, 25 * UI_SCALE_FAC};
-  float pixelx = BLI_rctf_size_x(&v2d->cur) / (BLI_rcti_size_x(&v2d->mask) + 1);
-  float pixely = BLI_rctf_size_y(&v2d->cur) / (BLI_rcti_size_y(&v2d->mask) + 1);
 
   float top = strip->channel + STRIP_OFSTOP;
   float bottom = strip->channel + STRIP_OFSBOTTOM;
   float length = strip->right_handle(scene) - strip->left_handle();
 
-  bool visibility = (top - bottom) / pixely >= threshold.y;
-  visibility &= length / pixelx >= threshold.x;
+  bool visibility = (top - bottom) / pixel_y(v2d) >= threshold.y;
+  visibility &= length / pixel_x(v2d) >= threshold.x;
   visibility &= retiming_overlay_enabled(sseq);
   return visibility;
 }
@@ -363,16 +361,16 @@ static std::optional<float2> speed_label_pos_get(const TimelineDrawContext &ctx,
   const float next_x = min_ff(strip_ctx.right_handle,
                               seq::retiming_key_frame_get(scene, strip_ctx.strip, key + 1));
 
-  const float label_width = ctx.pixelx * BLF_width(BLF_default(), label_str, label_len);
+  const float label_width = pixel_x(ctx.v2d) * BLF_width(BLF_default(), label_str, label_len);
 
   /* Available space for text is segment width minus two "half" keys (one key width in total). */
-  const float available_width = (next_x - key_x) - (ctx.pixelx * retiming_key_size());
+  const float available_width = (next_x - key_x) - (pixel_x(ctx.v2d) * retiming_key_size());
   if (available_width < label_width) {
     return std::nullopt;
   }
 
   /* Label rests 5px above bottom of strip. */
-  const float bottom_pad = (ctx.pixely * 5.0f);
+  const float bottom_pad = (pixel_y(ctx.v2d) * 5.0f);
 
   const float x = 0.5f * (key_x + next_x - label_width); /* Left edge of centered label. */
   const float y = (strip_ctx.strip->channel + STRIP_OFSBOTTOM) + bottom_pad;

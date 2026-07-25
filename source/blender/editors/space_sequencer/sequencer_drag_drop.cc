@@ -416,8 +416,6 @@ static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, co
   uchar strip_color[4];
   strip_color[3] = 255;
   uchar text_color[4] = {255, 255, 255, 255};
-  float pixelx = BLI_rctf_size_x(&region->v2d.cur) / (BLI_rcti_size_x(&region->v2d.mask) + 1);
-  float pixely = BLI_rctf_size_y(&region->v2d.cur) / (BLI_rcti_size_y(&region->v2d.mask) + 1);
 
   StripsDrawBatch batch(&region->v2d);
 
@@ -456,10 +454,10 @@ static void draw_strip_in_view(bContext *C, wmWindow * /*win*/, wmDrag *drag, co
     data.col_outline = color_pack(strip_color);
 
     /* Taken from strip_handle_draw_size_get(). */
-    const float handle_size = pixelx * (5.0f * U.pixelsize);
+    const float handle_size = pixel_x(&region->v2d) * (5.0f * U.pixelsize);
 
     /* Calculate height needed for drawing text on strip. */
-    float text_margin_y = y2 - min_ff(0.40f, 20 * UI_SCALE_FAC * pixely);
+    float text_margin_y = y2 - min_ff(0.40f, 20 * UI_SCALE_FAC * pixel_y(&region->v2d));
     float text_margin_x = 2.0f * handle_size;
 
     rctf rect;

@@ -126,7 +126,6 @@ struct TimelineDrawContext {
   ListBaseT<SeqTimelineChannel> *channels;
   GPUViewport *viewport;
   gpu::FrameBuffer *framebuffer_overlay;
-  float pixelx, pixely; /* Width and height of pixel in timeline space. */
   Map<SeqRetimingKey *, Strip *> retiming_selection;
 
   SeqQuadsBatch *quads;
@@ -134,6 +133,9 @@ struct TimelineDrawContext {
 
 /* `sequencer_timeline_draw.cc` */
 
+/* The width and height of a pixel in timeline space. */
+float pixel_x(const View2D *v2d);
+float pixel_y(const View2D *v2d);
 /* Returns value in frames (view-space), 5px for large strips, 1/4 of the strip for smaller. */
 float strip_handle_draw_size_get(const Scene *scene, const Strip *strip, float pixelx);
 void draw_timeline_seq(const bContext *C, const ARegion *region);
