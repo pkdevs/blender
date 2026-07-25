@@ -53,16 +53,16 @@ struct SPIRVSidecar {
   uint64_t spirv_size;
 };
 
-static bool read_spirv_from_disk(VKShaderModule &shader_module)
+static bool read_spirv_from_disk(VKShaderModule &shader_module, StringRef hash_extra)
 {
-  if (G.debug & G_DEBUG_GPU_RENDERDOC) {
-    /* RenderDoc uses spirv shaders including debug information. */
+  if (G.debug & G_DEBUG_GPU_SHADER_DEBUG_INFO) {
+    /* Debug information is not part of the cached SPIR-V, so don't use the cache in this case. */
     return false;
   }
   if (!cache_dir_get().has_value()) {
     return false;
   }
-  shader_module.build_sources_hash();
+  shader_module.build_sources_hash(hash_extra);
   std::string spirv_path = (*cache_dir_get()) + SEP_STR + shader_module.sources_hash + ".spv";
   std::string sidecar_path = (*cache_dir_get()) + SEP_STR + shader_module.sources_hash +
                              ".sidecar.bin";
@@ -100,21 +100,22 @@ static bool read_spirv_from_disk(VKShaderModule &shader_module)
 
 static void write_spirv_to_disk(VKShaderModule &shader_module)
 {
-  if (G.debug & G_DEBUG_GPU_RENDERDOC) {
+  if (G.debug & G_DEBUG_GPU_SHADER_DEBUG_INFO) {
+    /* Debug information is not part of the cached SPIR-V, so don't use the cache in this case. */
     return;
   }
   if (!cache_dir_get().has_value()) {
     return;
   }
 
-  /* Write the spirv binary */
+  /* Write the SPIR-V binary. Note that spirv_binary is used instead of compilation_result so
+   * that any post-processing (e.g. the injected OpString shader name) is stored in the cache and
+   * does not have to be redone every time the cache entry is read back. */
   std::string spirv_path = (*cache_dir_get()) + SEP_STR + shader_module.sources_hash + ".spv";
   CLOG_TRACE(&LOG, "write SpirV to disk %s", spirv_path.c_str());
-  size_t size = (shader_module.compilation_result.end() -
-                 shader_module.compilation_result.begin()) *
-                sizeof(uint32_t);
+  size_t size = shader_module.spirv_binary.size() * sizeof(uint32_t);
   fstream spirv_file(spirv_path, std::ios::binary | std::ios::out);
-  spirv_file.write(reinterpret_cast<const char *>(shader_module.compilation_result.begin()), size);
+  spirv_file.write(reinterpret_cast<const char *>(shader_module.spirv_binary.data()), size);
 
   /* Write the sidecar */
   SPIRVSidecar sidecar = {size};
@@ -267,10 +268,12 @@ static bool compile_ex(shaderc::Compiler &compiler,
     shader_module.combined_sources = shader_module.original_sources;
   }
 
-  if (read_spirv_from_disk(shader_module)) {
-    if ((G.debug & G_DEBUG_GPU_SHADER_DEBUG_INFO) == 0) {
-      spirv_inject_op_string(shader_module.spirv_binary, shader.name_get());
-    }
+  /* The cached SPIR-V binary contains an injected OpString, which depends on the shader name.
+   * Include the name in the cache key so an entry is only reused for an identical result. This
+   * also invalidates older caches that stored the SPIR-V without the injected OpString. */
+  const std::string hash_extra = std::string("op_string:") + shader.name_get().c_str();
+
+  if (read_spirv_from_disk(shader_module, hash_extra)) {
     return true;
   }
 
@@ -319,7 +322,6 @@ static bool compile_ex(shaderc::Compiler &compiler,
   bool compilation_succeeded = shader_module.compilation_result.GetCompilationStatus() ==
                                shaderc_compilation_status_success;
   if (compilation_succeeded) {
-    write_spirv_to_disk(shader_module);
     /* Copy the compiled SPIR-V code into spirv_binary so it can be post-processed.
      * The function VKShaderModule::finalize prefers spirv_binary when it is not empty. */
     const uint32_t *begin = shader_module.compilation_result.begin();
@@ -328,6 +330,7 @@ static bool compile_ex(shaderc::Compiler &compiler,
     if ((G.debug & G_DEBUG_GPU_SHADER_DEBUG_INFO) == 0) {
       spirv_inject_op_string(shader_module.spirv_binary, shader.name_get());
     }
+    write_spirv_to_disk(shader_module);
   }
   return compilation_succeeded;
 }
