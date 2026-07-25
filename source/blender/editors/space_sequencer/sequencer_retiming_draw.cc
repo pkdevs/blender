@@ -111,23 +111,13 @@ static inline float retiming_key_center(const View2D *v2d, const Strip *strip)
           RETIMING_KEY_PIXEL_OFFSET + retiming_key_size() / 2);
 }
 
-static rctf strip_bounds_get2(const Scene *scene, const Strip *strip)
-{
-  rctf bounds;
-  bounds.xmin = strip->left_handle();
-  bounds.xmax = strip->right_handle(scene);
-  bounds.ymin = strip->channel + STRIP_OFSBOTTOM;
-  bounds.ymax = strip->channel + STRIP_OFSTOP;
-  return bounds;
-}
 rcti strip_retiming_keys_box_get(const Scene *scene, const View2D *v2d, const Strip *strip)
 {
-  rctf strip_bounds = strip_bounds_get2(scene, strip);
   rcti key_bounds;
-  ui::view2d_view_to_region_rcti(v2d, &strip_bounds, &key_bounds);
-
-  key_bounds.ymax = retiming_key_center(v2d, strip) + retiming_key_size() / 2;
+  key_bounds.xmin = ui::view2d_view_to_region_x(v2d, strip->left_handle());
+  key_bounds.xmax = ui::view2d_view_to_region_x(v2d, strip->right_handle(scene));
   key_bounds.ymin = retiming_key_center(v2d, strip) - retiming_key_size() / 2;
+  key_bounds.ymax = retiming_key_center(v2d, strip) + retiming_key_size() / 2;
   return key_bounds;
 }
 
