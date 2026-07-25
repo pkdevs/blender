@@ -183,8 +183,8 @@ struct A {
   A A_ctor_() {A r;r.a0_=A_a0_ctor_();return r;}
 #line 9
 void f(A a) {
-  a.a0_.a();
-  a.a0_.b();
+  _a(a.a0_);
+  _b(a.a0_);
 }
 )";
     auto [output, _, error] = process_test_string(input, Language::BSL);
@@ -460,11 +460,11 @@ struct A {
   A A_ctor_() {A r;r.a0_=A_a0_ctor_();r.a1_=A_a1_ctor_();return r;}
 #line 19
 void f(A a) {
-a.a0_.a0_().a();
-a.a0_.a0_().b();
-a.a0_.c();
-a.a1_.d().i;
-a.a1_.e();
+_a(_a0_(a.a0_));
+_b(_a0_(a.a0_));
+_c(a.a0_);
+_d(a.a1_).i;
+_e(a.a1_);
 }
 )";
     auto [output, _, error] = process_test_string(input, Language::BSL);
