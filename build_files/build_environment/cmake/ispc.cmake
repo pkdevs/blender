@@ -40,44 +40,11 @@ elseif(UNIX)
   )
 endif()
 
-macro(copy_host_tool_apple
-  TOOL_SOURCE
-  TOOL_DEST)
-
-  if(EXISTS ${TOOL_SOURCE})
-    execute_process(COMMAND cp -rf ${TOOL_SOURCE} ${TOOL_DEST})
-  else()
-    message("Crosscompiled Tool: ${TOOL_SOURCE} could not be found! Please ensure that host dependencies have been built before running iOS build")
-  endif()
-
-endmacro()
-
 if(WITH_APPLE_CROSSPLATFORM)
   # NOTE: Crosscompile currently limited due to missing curses and tinfo libs for iOS.
   #       These libs are not part of the build process, but instead we opt to statically
   #       link and resolve indirectly via other dependencies in the project.
   # TODO: Add curses and tinfo as dependencies for ispc and build locally.
-
-  set(LLVM_TOOLS_BINARY_DIR ${CMAKE_DEPS_CROSSCOMPILE_BUILDDIR}/deps_arm64/Release/llvm/bin)
-
-  # Copy LLVM tools to build_ios path as lib dir is derived from tool dir and this erroneously links macOS libraries.
-  set(LLVM_CONFIG_EXECUTABLE_PATH_ORIG ${LLVM_TOOLS_BINARY_DIR}/llvm-config)
-  set(CLANG_EXECUTABLE_PATH_ORIG ${LLVM_TOOLS_BINARY_DIR}/clang)
-  set(CLANGPP_EXECUTABLE_PATH_ORIG ${LLVM_TOOLS_BINARY_DIR}/clang++)
-  set(LLVM_DIS_EXECUTABLE_PATH_ORIG ${LLVM_TOOLS_BINARY_DIR}/llvm-dis)
-  set(LLVM_AS_EXECUTABLE_PATH_ORIG ${LLVM_TOOLS_BINARY_DIR}/llvm-as)
-
-  set(LLVM_CONFIG_EXECUTABLE_PATH ${LIBDIR}/llvm/bin/llvm-config)
-  set(CLANG_EXECUTABLE_PATH ${LIBDIR}/llvm/bin/clang)
-  set(CLANGPP_EXECUTABLE_PATH ${LIBDIR}/llvm/bin/clang++)
-  set(LLVM_DIS_EXECUTABLE_PATH ${LIBDIR}/llvm/bin/llvm-dis)
-  set(LLVM_AS_EXECUTABLE_PATH ${LIBDIR}/llvm/bin/llvm-as)
-
-  copy_host_tool_apple(${LLVM_CONFIG_EXECUTABLE_PATH_ORIG} ${LLVM_CONFIG_EXECUTABLE_PATH})
-  copy_host_tool_apple(${CLANG_EXECUTABLE_PATH_ORIG} ${CLANG_EXECUTABLE_PATH})
-  copy_host_tool_apple(${CLANGPP_EXECUTABLE_PATH_ORIG} ${CLANGPP_EXECUTABLE_PATH})
-  copy_host_tool_apple(${LLVM_DIS_EXECUTABLE_PATH_ORIG} ${LLVM_DIS_EXECUTABLE_PATH})
-  copy_host_tool_apple(${LLVM_AS_EXECUTABLE_PATH_ORIG} ${LLVM_AS_EXECUTABLE_PATH})
 
   set(ISPC_EXTRA_ARGS
     # CROSS COMPILE
@@ -106,36 +73,24 @@ if(WITH_APPLE_CROSSPLATFORM)
 
     # LLVM settings (Auto detect fails)
     -DLLVM_FOUND=YES
-    # -DLLVM_VERSION=${LLVM_VERSION}
     -DLLVM_TARGETS_TO_BUILD=AArch64
 
     # Host Tools (Using freshly built tools for darwin_arm64)
-    -DLLVM_TOOLS_BINARY_DIR=${LLVM_TOOLS_BINARY_DIR}
-    -DLLVM_CONFIG_EXECUTABLE=${LLVM_CONFIG_EXECUTABLE_PATH}
-    -DCLANG_EXECUTABLE=${CLANG_EXECUTABLE_PATH}
-    -DCLANGPP_EXECUTABLE=${CLANGPP_EXECUTABLE_PATH}
-    -DLLVM_DIS_EXECUTABLE=${LLVM_DIS_EXECUTABLE_PATH}
-    -DLLVM_AS_EXECUTABLE=${LLVM_AS_EXECUTABLE_PATH}
+    -DLLVM_TOOLS_BINARY_DIR=${LLVM_TOOLS_HOST_DIR}
+    -DLLVM_CONFIG_EXECUTABLE=${LLVM_CONFIG_EXECUTABLE}
+    -DCLANG_EXECUTABLE=${CLANG_EXECUTABLE}
+    -DCLANGPP_EXECUTABLE=${CLANGPP_EXECUTABLE}
+    -DLLVM_DIS_EXECUTABLE=${LLVM_DIS_EXECUTABLE}
+    -DLLVM_AS_EXECUTABLE=${LLVM_AS_EXECUTABLE}
 
     # Clang libs
-    -DclangASTPath=${LIBDIR}/llvm/lib/libclangAST.a
-    -DclangASTMatchersPath=${LIBDIR}/llvm/lib/libclangASTMatchers.a
-    -DclangAnalysisPath=${LIBDIR}/llvm/lib/libclangAnalysis.a
-    -DclangBasicPath=${LIBDIR}/llvm/lib/libclangBasic.a
-    -DclangDriverPath=${LIBDIR}/llvm/lib/libclangDriver.a
-    -DclangEditPath=${LIBDIR}/llvm/lib/libclangEdit.a
-    -DclangFrontendPath=${LIBDIR}/llvm/lib/libclangFrontend.a
-    -DclangLexPath=${LIBDIR}/llvm/lib/libclangLex.a
-    -DclangParsePath=${LIBDIR}/llvm/lib/libclangParse.a
-    -DclangSemaPath=${LIBDIR}/llvm/lib/libclangSema.a
-    -DclangSerializationPath=${LIBDIR}/llvm/lib/libclangSerialization.a
-    -DclangSupportPath=${LIBDIR}/llvm/lib/libclangSupport.a
     -DCLANG_LIBRARY_DIR=${LIBDIR}/llvm/lib
     -DCLANG_INCLUDE_DIRS=${LIBDIR}/llvm/include
     -DPython3_ROOT_DIR=${LIBDIR}/python/
     -DPython3_EXECUTABLE=${PYTHON_BINARY}
     ${ISPC_EXTRA_ARGS_APPLE}
   )
+  set(ISPC_PATCH_PATH  ${PATCH_DIR}/ispc_ios.diff)
 else()
   set(ISPC_EXTRA_ARGS
     -DISPC_INCLUDE_EXAMPLES=Off
@@ -155,11 +110,6 @@ else()
     ${ISPC_EXTRA_ARGS_APPLE}
     ${ISPC_EXTRA_ARGS_UNIX}
   )
-endif()
-
-if(WITH_APPLE_CROSSPLATFORM)
-  set(ISPC_PATCH_PATH  ${PATCH_DIR}/ispc_ios.diff)
-else()
   set(ISPC_PATCH_PATH  ${PATCH_DIR}/ispc.diff)
 endif()
 

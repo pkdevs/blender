@@ -166,3 +166,34 @@ if(NOT WITH_APPLE_CROSSPLATFORM)
     external_python
   )
 endif()
+
+if(WITH_APPLE_CROSSPLATFORM)
+  # Copy LLVM tools to build_ios path as lib dir is derived from tool dir and this erroneously links macOS libraries.
+  set(LLVM_TOOLS_HOST_DIR ${CMAKE_DEPS_CROSSCOMPILE_BUILDDIR}/deps_arm64/Release/llvm/bin)
+
+  set(LLVM_CONFIG_EXECUTABLE ${LIBDIR}/llvm/bin/llvm-config)
+  set(CLANG_EXECUTABLE ${LIBDIR}/llvm/bin/clang)
+  set(CLANGPP_EXECUTABLE ${LIBDIR}/llvm/bin/clang++)
+  set(LLVM_DIS_EXECUTABLE ${LIBDIR}/llvm/bin/llvm-dis)
+  set(LLVM_AS_EXECUTABLE ${LIBDIR}/llvm/bin/llvm-as)
+
+  ExternalProject_Add_Step(ll after_install
+    COMMAND ${CMAKE_COMMAND} -E copy
+      ${LLVM_TOOLS_HOST_DIR}/llvm-config
+      ${LLVM_CONFIG_EXECUTABLE}
+    COMMAND ${CMAKE_COMMAND} -E copy
+      ${LLVM_TOOLS_HOST_DIR}/clang
+      ${CLANG_EXECUTABLE}
+    COMMAND ${CMAKE_COMMAND} -E copy
+      ${LLVM_TOOLS_HOST_DIR}/clang++
+      ${CLANGPP_EXECUTABLE}
+    COMMAND ${CMAKE_COMMAND} -E copy
+      ${LLVM_TOOLS_HOST_DIR}/llvm-dis
+      ${LLVM_DIS_EXECUTABLE}
+    COMMAND ${CMAKE_COMMAND} -E copy
+      ${LLVM_TOOLS_HOST_DIR}/llvm-as
+      ${LLVM_AS_EXECUTABLE}
+
+    DEPENDEES install
+  )
+endif()
