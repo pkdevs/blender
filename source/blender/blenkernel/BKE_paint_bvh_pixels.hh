@@ -59,6 +59,8 @@ struct UDIMTilePixels {
 
   /** Image coordinate of the first pixel of each run. */
   Vector<ushort2> pixel_row_run_start_coords;
+  MutableSpan<float4> float_buffer;
+  MutableSpan<uchar4> byte_buffer;
 
   UDIMTilePixels()
   {

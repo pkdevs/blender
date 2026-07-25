@@ -453,6 +453,32 @@ static void mark_seam_tiles_modified(MutableSpan<uint8_t> mask,
   }
 }
 
+static void acquire_mutable_buffers(ImageData &image_data,
+                                    bke::pbvh::Node & /*node*/,
+                                    PixelNode &pixel_node)
+{
+  for (UDIMTilePixels &tile_data : pixel_node.tiles) {
+    ImBuf *image_buffer = image_data.buffers.lookup_default(tile_data.tile_number, nullptr);
+    if (image_buffer == nullptr) {
+      continue;
+    }
+
+    if (image_buffer->float_data()) {
+      BLI_assert(ELEM(image_buffer->channels, 0, 4));
+      tile_data.float_buffer = MutableSpan(
+          reinterpret_cast<float4 *>(image_buffer->float_data_for_write()),
+          image_buffer->x * image_buffer->y);
+    }
+    else {
+      tile_data.byte_buffer = MutableSpan(
+          reinterpret_cast<uchar4 *>(image_buffer->byte_data_for_write()),
+          image_buffer->x * image_buffer->y);
+    }
+
+    BLI_assert(!tile_data.float_buffer.is_empty() || !tile_data.byte_buffer.is_empty());
+  }
+}
+
 static void do_paint_pixels(const Depsgraph &depsgraph,
                             Object &object,
                             const Paint &paint,
@@ -496,18 +522,8 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
       continue;
     }
 
-    MutableSpan<float4> float_buffer;
-    MutableSpan<uchar4> byte_buffer;
-
-    if (image_buffer->float_data()) {
-      BLI_assert(ELEM(image_buffer->channels, 0, 4));
-      float_buffer = MutableSpan(reinterpret_cast<float4 *>(image_buffer->float_data_for_write()),
-                                 image_buffer->x * image_buffer->y);
-    }
-    else {
-      byte_buffer = MutableSpan(reinterpret_cast<uchar4 *>(image_buffer->byte_data_for_write()),
-                                image_buffer->x * image_buffer->y);
-    }
+    MutableSpan<float4> float_buffer = tile_data.float_buffer;
+    MutableSpan<uchar4> byte_buffer = tile_data.byte_buffer;
 
     const TileColorspaceProcessor *processors = image_data.processors.lookup_ptr(
         tile_data.tile_number);
@@ -780,6 +796,10 @@ void SCULPT_do_paint_brush_image(const Depsgraph &depsgraph,
   for (Array<uint8_t> &modified : image_data.seam_tile_modified.values()) {
     modified.as_mutable_span().fill(0);
   }
+
+  node_mask.foreach_index(
+      [&](const int i) { acquire_mutable_buffers(image_data, nodes[i], pixel_nodes[i]); },
+      exec_mode::serial);
 
   node_mask.foreach_index(
       [&](const int i) {
