@@ -2,7 +2,7 @@ diff --git a/src/cmake/externalpackages.cmake b/src/cmake/externalpackages.cmake
 index a7e098b..dad11d0 100644
 --- a/src/cmake/externalpackages.cmake
 +++ b/src/cmake/externalpackages.cmake
-@@ -56,11 +56,11 @@
+@@ -56,11 +56,7 @@
  
  
  # LLVM library setup
@@ -11,11 +11,7 @@ index a7e098b..dad11d0 100644
 -                      VERSION_MAX 20.9
 -                      PRINT LLVM_SYSTEM_LIBRARIES CLANG_LIBRARIES
 -                            LLVM_SHARED_MODE)
-+#checked_find_package (LLVM REQUIRED
-+#                      VERSION_MIN 11.0
-+#                      VERSION_MAX 20.9
-+#                      PRINT LLVM_SYSTEM_LIBRARIES CLANG_LIBRARIES
-+#                            LLVM_SHARED_MODE)
++file(GLOB LLVM_LIBRARIES "${LLVM_LIB_DIR}/*.a")
  # ensure include directory is added (in case of non-standard locations
  include_directories (BEFORE SYSTEM "${LLVM_INCLUDES}")
  link_directories ("${LLVM_LIB_DIR}")
@@ -70,66 +66,6 @@ index 8c2e77b..211b8a7 100644
  
  endmacro ()
 
---- a/src/liboslcomp/CMakeLists.txt	2025-04-29 15:37:54.000000000 
-+++ b/src/liboslcomp/CMakeLists.txt	2025-04-30 15:35:55.000000000 
-@@ -20,13 +20,14 @@
- target_include_directories(${local_lib}
-     PUBLIC
-         ${CMAKE_INSTALL_FULL_INCLUDEDIR}
-     )
- target_link_libraries (${local_lib}
-     PUBLIC
-         OpenImageIO::OpenImageIO
-+        ${OpenImageIO_LIBRARIES}
-         $<TARGET_NAME_IF_EXISTS:Imath::Imath>
-         $<TARGET_NAME_IF_EXISTS:Imath::Half>
-     PRIVATE
-         ${CMAKE_DL_LIBS}
-         ${CLANG_LIBRARIES} ${LLVM_LIBRARIES} ${LLVM_LDFLAGS}
-         ${LLVM_SYSTEM_LIBRARIES})
- 
---- a/src/liboslexec/CMakeLists.txt	2025-04-29 15:37:54.000000000 
-+++ b/src/liboslexec/CMakeLists.txt	2025-04-30 15:38:43.000000000 
-@@ -520,7 +520,7 @@
-         )
-     target_link_libraries (${batched_target_lib}
-         PUBLIC
--            OpenImageIO::OpenImageIO
-+            ${OpenImageIO_LIBRARIES}
-             ${local_lib}
-         )
-     if (partio_FOUND)
-@@ -572,7 +572,7 @@
- target_link_libraries (${local_lib}
-     PUBLIC
-         oslquery oslnoise
--        OpenImageIO::OpenImageIO
-+        ${OpenImageIO_LIBRARIES}
-         $<TARGET_NAME_IF_EXISTS:Imath::Imath>
-         $<TARGET_NAME_IF_EXISTS:Imath::Half>
-     PRIVATE
-@@ -615,7 +615,7 @@
-     add_test (unit_accum ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/accum_test)
- 
-     add_executable (dual_test dual_test.cpp)
--    target_link_libraries (dual_test PRIVATE OpenImageIO::OpenImageIO Imath::Imath ${CMAKE_DL_LIBS})
-+    target_link_libraries (dual_test PRIVATE ${OpenImageIO_LIBRARIES} Imath::Imath ${CMAKE_DL_LIBS})
-     target_include_directories (dual_test  BEFORE PRIVATE ${OpenImageIO_INCLUDES})
-     set_target_properties (dual_test PROPERTIES FOLDER "Unit Tests")
-     add_test (unit_dual ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/dual_test)
-
---- a/src/liboslnoise/CMakeLists.txt	2025-04-29 15:37:54.000000000 
-+++ b/src/liboslnoise/CMakeLists.txt	2025-04-30 15:39:31.000000000 
-@@ -16,7 +16,7 @@
- target_include_directories (${local_lib}  BEFORE PRIVATE ${OpenImageIO_INCLUDES})
- target_link_libraries (${local_lib}
-     PUBLIC
--        OpenImageIO::OpenImageIO
-+        ${OpenImageIO_LIBRARIES}
-         $<TARGET_NAME_IF_EXISTS:Imath::Imath>
-         $<TARGET_NAME_IF_EXISTS:Imath::Half>
-     PRIVATE
- 
 --- a/src/liboslexec/shadingsys.cpp	2025-04-29 15:37:54.000000000 
 +++ b/src/liboslexec/shadingsys.cpp	2025-04-30 16:08:59.000000000 
 @@ -4282,22 +4282,24 @@
