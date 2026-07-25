@@ -1953,9 +1953,11 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
       for (SymbolClass *cls : arg_types) {
         parameters += ", '" + cls->identifier + "'";
       }
-      err = {id,
-             "No matching function for call to '" + func->identifier + "' for parameters " +
-                 parameters.substr(2)};
+      if (!err) {
+        err = {id,
+               "No matching function for call to '" + func->identifier + "' for parameters " +
+                   parameters.substr(2)};
+      }
     }
     func = overload;
   }
