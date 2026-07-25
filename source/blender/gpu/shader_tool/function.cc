@@ -538,4 +538,245 @@ void SourceProcessor::lower_entry_points_signature(Parser &parser)
 
   parser.apply_mutations();
 }
+
+/* Generates every single legal BSL builtin function dynamically. */
+vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
+{
+  /* Start with the error symbol. */
+  vector<BuiltinFunc> functions = {{"void", err_symbol, {}}};
+
+  /* Type definition vectors for vectorized generation */
+  const vector<string> f_types = {"float", "float2", "float3", "float4"};
+  const vector<string> i_types = {"int", "int2", "int3", "int4"};
+  const vector<string> u_types = {"uint", "uint2", "uint3", "uint4"};
+  const vector<string> b_types = {"bool", "bool2", "bool3", "bool4"};
+
+  /* 1-argument component-wise functions (e.g. sin, cos, abs). */
+  auto add_unary = [&](const string &name, const vector<string> &types) {
+    for (const auto &t : types) {
+      functions.push_back({t, name, {t}});
+    }
+  };
+
+  /* 2-argument component-wise functions (e.g. pow, min, max). */
+  auto add_binary = [&](const string &name, const vector<string> &types) {
+    for (const auto &t : types) {
+      functions.push_back({t, name, {t, t}});
+    }
+  };
+
+  /* 3-argument component-wise functions (e.g. clamp, mix, fma). */
+  auto add_ternary = [&](const string &name, const vector<string> &types) {
+    for (const auto &t : types) {
+      functions.push_back({t, name, {t, t, t}});
+    }
+  };
+
+  /* Functions with vector-scalar variants (e.g. min(float3, float), clamp(float3, float, float)).
+   */
+  auto add_vec_scalar_binary = [&](const string &name, const vector<string> &types) {
+    const string &scalar = types[0];
+    for (size_t i = 1; i < types.size(); ++i) {
+      functions.push_back({types[i], name, {types[i], scalar}});
+    }
+  };
+
+  auto add_vec_scalar_ternary = [&](const string &name, const vector<string> &types) {
+    const string &scalar = types[0];
+    for (size_t i = 1; i < types.size(); ++i) {
+      functions.push_back({types[i], name, {types[i], scalar, scalar}});
+    }
+  };
+
+  const vector<string> trig_unary = {"radians",
+                                     "degrees",
+                                     "sin",
+                                     "cos",
+                                     "tan",
+                                     "asin",
+                                     "acos",
+                                     "atan",
+                                     "sinh",
+                                     "cosh",
+                                     "tanh",
+                                     "asinh",
+                                     "acosh",
+                                     "atanh"};
+  for (const auto &name : trig_unary) {
+    add_unary(name, f_types);
+  }
+  /* 2-argument atan(y, x). */
+  add_binary("atan", f_types);
+
+  const vector<string> exp_unary = {"exp", "log", "exp2", "log2", "sqrt", "inversesqrt"};
+  for (const auto &name : exp_unary) {
+    add_unary(name, f_types);
+  }
+  add_binary("pow", f_types);
+
+  const vector<string> common_float_unary = {
+      "floor", "trunc", "round", "roundEven", "ceil", "fract", "isnan", "isinf"};
+  for (const auto &name : common_float_unary) {
+    add_unary(name, f_types);
+  }
+
+  add_unary("abs", f_types);
+  add_unary("abs", i_types);
+
+  add_unary("sign", f_types);
+  add_unary("sign", i_types);
+
+  add_binary("mod", f_types);
+  add_vec_scalar_binary("mod", f_types);
+
+  for (const auto &tlist : {f_types, i_types, u_types}) {
+    add_binary("min", tlist);
+    add_vec_scalar_binary("min", tlist);
+    add_binary("max", tlist);
+    add_vec_scalar_binary("max", tlist);
+    add_ternary("clamp", tlist);
+    add_vec_scalar_ternary("clamp", tlist);
+  }
+
+  add_ternary("mix", f_types);
+  add_vec_scalar_ternary("mix", f_types);
+  for (size_t i = 0; i < f_types.size(); ++i) {
+    functions.push_back({f_types[i], "mix", {f_types[i], f_types[i], b_types[i]}});
+  }
+
+  add_binary("step", f_types);
+  add_vec_scalar_binary("step", f_types);
+  add_ternary("smoothstep", f_types);
+  add_vec_scalar_ternary("smoothstep", f_types);
+
+  add_ternary("fma", f_types);
+
+  // Bit-reinterpretation conversions
+  for (size_t i = 0; i < f_types.size(); ++i) {
+    functions.push_back({i_types[i], "floatBitsToInt", {f_types[i]}});
+    functions.push_back({u_types[i], "floatBitsToUint", {f_types[i]}});
+    functions.push_back({f_types[i], "intBitsToFloat", {i_types[i]}});
+    functions.push_back({f_types[i], "uintBitsToFloat", {u_types[i]}});
+  }
+
+  functions.push_back({"uint", "packUnorm2x16", {"float2"}});
+  functions.push_back({"uint", "packSnorm2x16", {"float2"}});
+  functions.push_back({"uint", "packUnorm4x8", {"float4"}});
+  functions.push_back({"uint", "packSnorm4x8", {"float4"}});
+  functions.push_back({"uint", "packHalf2x16", {"float2"}});
+
+  functions.push_back({"float2", "unpackUnorm2x16", {"uint"}});
+  functions.push_back({"float2", "unpackSnorm2x16", {"uint"}});
+  functions.push_back({"float4", "unpackUnorm4x8", {"uint"}});
+  functions.push_back({"float4", "unpackSnorm4x8", {"uint"}});
+  functions.push_back({"float2", "unpackHalf2x16", {"uint"}});
+
+  for (size_t i = 0; i < f_types.size(); ++i) {
+    functions.push_back({"float", "length", {f_types[i]}});
+    functions.push_back({"float", "distance", {f_types[i], f_types[i]}});
+    functions.push_back({"float", "dot", {f_types[i], f_types[i]}});
+    functions.push_back({f_types[i], "normalize", {f_types[i]}});
+    functions.push_back({f_types[i], "faceforward", {f_types[i], f_types[i], f_types[i]}});
+    functions.push_back({f_types[i], "reflect", {f_types[i], f_types[i]}});
+    functions.push_back({f_types[i], "refract", {f_types[i], f_types[i], "float"}});
+  }
+  functions.push_back({"float3", "cross", {"float3", "float3"}});
+
+  const vector<string> square_mats = {"float2x2", "float3x3", "float4x4"};
+  const vector<string> all_mats = {"float2x2",
+                                   "float3x3",
+                                   "float4x4",
+                                   "float2x3",
+                                   "float2x4",
+                                   "float3x2",
+                                   "float3x4",
+                                   "float4x2",
+                                   "float4x3"};
+
+  for (const auto &m : all_mats) {
+    functions.push_back({m, "transpose", {m}});
+  }
+
+  for (const auto &m : square_mats) {
+    functions.push_back({"float", "determinant", {m}});
+    functions.push_back({m, "inverse", {m}});
+  }
+
+  const vector<string> rel_ops = {
+      "lessThan", "lessThanEqual", "greaterThan", "greaterThanEqual", "equal", "notEqual"};
+
+  for (const auto &op : rel_ops) {
+    for (size_t i = 1; i < f_types.size(); ++i) {
+      functions.push_back({b_types[i], op, {f_types[i], f_types[i]}});
+      functions.push_back({b_types[i], op, {i_types[i], i_types[i]}});
+      functions.push_back({b_types[i], op, {u_types[i], u_types[i]}});
+    }
+  }
+
+  for (size_t i = 1; i < b_types.size(); ++i) {
+    functions.push_back({"bool", "any", {b_types[i]}});
+    functions.push_back({"bool", "all", {b_types[i]}});
+    functions.push_back({b_types[i], "not", {b_types[i]}});
+  }
+
+  const vector<string> bit_unary = {"bitfieldReverse", "bitCount", "findLSB", "findMSB"};
+  for (const auto &op : bit_unary) {
+    add_unary(op, i_types);
+    add_unary(op, u_types);
+  }
+
+  for (const auto &tlist : {i_types, u_types}) {
+    for (const auto &t : tlist) {
+      functions.push_back({t, "bitfieldExtract", {t, "int", "int"}});
+      functions.push_back({t, "bitfieldInsert", {t, t, "int", "int"}});
+    }
+  }
+
+  const vector<string> atomic_2arg = {"atomicAdd",
+                                      "atomicMin",
+                                      "atomicMax",
+                                      "atomicAnd",
+                                      "atomicOr",
+                                      "atomicXor",
+                                      "atomicExchange"};
+
+  for (const auto &op : atomic_2arg) {
+    functions.push_back({"int", op, {"int", "int"}});
+    functions.push_back({"uint", op, {"uint", "uint"}});
+  }
+  functions.push_back({"int", "atomicCompSwap", {"int", "int", "int"}});
+  functions.push_back({"uint", "atomicCompSwap", {"uint", "uint", "uint"}});
+
+  const vector<string> deriv_funcs = {"dFdx",
+                                      "dFdy",
+                                      "fwidth",
+                                      "dFdxCoarse",
+                                      "dFdyCoarse",
+                                      "fwidthCoarse",
+                                      "dFdxFine",
+                                      "dFdyFine",
+                                      "fwidthFine"};
+
+  for (const auto &op : deriv_funcs) {
+    add_unary(op, f_types);
+  }
+
+  const vector<string> samplers = {"sampler1D",
+                                   "sampler2D",
+                                   "sampler3D",
+                                   "samplerCube",
+                                   "sampler1DArray",
+                                   "sampler2DArray",
+                                   "samplerCubeArray"};
+
+  for (size_t i = 0; i < samplers.size(); ++i) {
+    string coord_type = f_types[i < 4 ? i : (i == 4 ? 1 : (i == 5 ? 2 : 3))];
+    functions.push_back({"float4", "texture", {samplers[i], coord_type}});
+    functions.push_back({"float4", "textureLod", {samplers[i], coord_type, "float"}});
+    functions.push_back({"int3", "textureSize", {samplers[i], "int"}});
+  }
+
+  return functions;
+}
+
 }  // namespace blender::gpu::shader

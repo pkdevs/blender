@@ -644,6 +644,7 @@ struct SymbolTable {
   static vector<BuiltinType> generate_builtin_types();
   static vector<BuiltinOp> generate_all_operators(const vector<BuiltinType> &types);
   static vector<BuiltinFunc> generate_all_constructors(const vector<BuiltinType> &types);
+  static vector<BuiltinFunc> generate_all_builtin_functions();
 };
 
 }  // namespace blender::gpu::shader::parser
