@@ -541,10 +541,10 @@ template struct A<float>;
 ATfloat ATfloat_ctor_() {ATfloat r;r.a=0.0f;return r;}
 
 #ifndef GPU_METAL
-ATfloat _method(const ATfloat &this_, float b);
+ATfloat _method(ATfloat this_, float b);
 #endif
 #line 4
-  ATfloat _method(const ATfloat &this_, float b)
+  ATfloat _method(ATfloat this_, float b)
   {
     ATfloat a;
     ATfloat c;

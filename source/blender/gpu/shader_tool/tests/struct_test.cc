@@ -119,19 +119,19 @@ A A_ctor_() {A r;r._0=float4(0);return r;}
 uint4 _a(A this_) {
   return floatBitsToUint(this_._0);
 }
-void _a_set_(A &this_, uint4 v) {
+void _a_set_(_ref(A ,this_), uint4 v) {
   this_._0 = uintBitsToFloat(v.a);
 }
 int4 _b(A this_) {
   return floatBitsToInt(this_._0);
 }
-void _b_set_(A &this_, int4 v) {
+void _b_set_(_ref(A ,this_), int4 v) {
   this_._0 = intBitsToFloat(v.b);
 }
 float4 _c(A this_) {
   return this_._0;
 }
-void _c_set_(A &this_, float4 v) {
+void _c_set_(_ref(A ,this_), float4 v) {
   this_._0 = v.c;
 }
 )";
@@ -165,13 +165,13 @@ A_a0 A_a0_ctor_() {A_a0 r;r._0=float4(0);return r;}
 uint4 _a(A_a0 this_) {
   return floatBitsToUint(this_._0);
 }
-void _a_set_(A_a0 &this_, uint4 v) {
+void _a_set_(_ref(A_a0 ,this_), uint4 v) {
   this_._0 = uintBitsToFloat(v.a);
 }
 int4 _b(A_a0 this_) {
   return floatBitsToInt(this_._0);
 }
-void _b_set_(A_a0 &this_, int4 v) {
+void _b_set_(_ref(A_a0 ,this_), int4 v) {
   this_._0 = intBitsToFloat(v.b);
 }
 #line 2
@@ -417,14 +417,14 @@ A_a0_a0 _a0_(A_a0 this_) {
   r.b = floatBitsToInt(this_._1);
   return val;
 }
-void _a0__set_(A_a0 &this_, A_a0_a0 v) {
+void _a0__set_(_ref(A_a0 ,this_), A_a0_a0 v) {
   this_._0 = uintBitsToFloat(val.a);
   this_._1 = intBitsToFloat(val.b);
 }
 uint4 _c(A_a0 this_) {
   return floatBitsToUint(this_._0);
 }
-void _c_set_(A_a0 &this_, uint4 v) {
+void _c_set_(_ref(A_a0 ,this_), uint4 v) {
   this_._0 = uintBitsToFloat(v.c);
 }
 #line 13
@@ -440,13 +440,13 @@ T _d(A_a1 this_) {
   r.i = floatBitsToInt(this_._0.x);
   return val;
 }
-void _d_set_(A_a1 &this_, T v) {
+void _d_set_(_ref(A_a1 ,this_), T v) {
   this_._0.x = intBitsToFloat(val.i);
 }
 uint4 _e(A_a1 this_) {
   return floatBitsToUint(this_._0);
 }
-void _e_set_(A_a1 &this_, uint4 v) {
+void _e_set_(_ref(A_a1 ,this_), uint4 v) {
   this_._0 = uintBitsToFloat(v.e);
 }
 #line 5

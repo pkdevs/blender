@@ -321,29 +321,16 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     // lower_strings(parser);
     // lower_printf(parser);
     /* Lower other C++ constructs. */
-    // lower_implicit_return_types(parser);
-    // lower_initializer_implicit_types(parser);
-    // lower_designated_initializers(parser);
-    // lower_aggregate_initializers(parser);
     // lower_array_initializations(parser);
-    // lower_scope_resolution_operators(parser);
-    // lower_structured_bindings(parser);
     // lower_tests(parser);
-    /* Lower references. */
-    // lower_reference_arguments(parser);
-    // lower_reference_variables(parser);
-    /* Lower control flow. */
-    // lower_static_branch(parser);
-    /* Unroll last to avoid processing more tokens in other phases. */
-    // lower_loop_unroll(parser);
 
     parser.language = Language::IL;
     parser.apply_mutations();
 
-    /* GLSL syntax compatibility.
-     * TODO(fclem): Remove. */
-    // lower_argument_qualifiers(parser);
-    // lower_gather_component(parser);
+    /* GLSL syntax compatibility. */
+    lower_reference_arguments(parser);
+    lower_argument_qualifiers(parser);
+    lower_gather_component(parser);
 
     /* Cleanup to make output more human readable and smaller for runtime. */
     cleanup_whitespace(parser, true);
