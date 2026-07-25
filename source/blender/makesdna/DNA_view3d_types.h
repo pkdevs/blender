@@ -566,10 +566,6 @@ struct RegionView3D {
   /** Active rotation from NDOF (run-time only). */
   float ndof_rot_angle = 0;
   float ndof_rot_axis[3] = {};
-
-  /* Camera view roll. */
-  float camroll = 0;
-  char _pad9[4] = {};
 };
 
 struct View3DCursor {

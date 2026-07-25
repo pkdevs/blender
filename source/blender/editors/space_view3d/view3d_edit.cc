@@ -459,8 +459,6 @@ static void view3d_set_1_to_1_viewborder(Scene *scene,
   ED_view3d_calc_camera_border_size(scene, depsgraph, region, v3d, rv3d, size);
 
   rv3d->camzoom = BKE_screen_view3d_zoom_from_fac(float(im_width) / size[0]);
-  rv3d->camroll = 0.0f;
-  rv3d->rflag &= ~RV3D_MIRROR_X;
   CLAMP(rv3d->camzoom, RV3D_CAMZOOM_MIN, RV3D_CAMZOOM_MAX);
 }
 

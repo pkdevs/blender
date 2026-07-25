@@ -511,7 +511,7 @@ void BKE_camera_params_compute_viewplane(
   /* Apply roll. */
   if (params->roll != 0.0f || params->is_mirrored) {
     const float2x2 rot = math::from_rotation<float2x2>(math::AngleRadian(params->roll));
-    const float2 dxy = rot * float2(dx, dy);
+    float2 dxy = rot * float2(dx, dy);
 
     if (params->is_mirrored) {
       dxy.x = -dxy.x;
