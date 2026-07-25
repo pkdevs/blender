@@ -322,6 +322,101 @@ ccl_device_inline void light_sample_to_volume_shadow_ray(
   shadow_ray_setup(sd, ls, P, ray, false);
 }
 
+// !!!
+// TODO: Ensure Correctness
+/* Evaluate shader on a ReSTIR light sample candidate.
+ * Unlike the forward path, this version supports evaluating all light types 
+ * (including triangle meshes and background) and supports optional inline 
+ * visibility checks. */
+template<typename ConstIntegratorGenericState>
+ccl_device Spectrum
+light_sample_shader_eval(KernelGlobals kg,
+                         ConstIntegratorGenericState state,
+                         ccl_private ShaderData *ccl_restrict emission_sd,
+                         ccl_private LightSample *ccl_restrict ls,
+                         float time,
+                         ccl_private const ShaderData *ccl_restrict sd = nullptr,
+                         ccl_private const ReSTIRLightSampleReference *ccl_restrict reference = nullptr,
+                         bool check_visibility = false)
+{
+  /* Setup shading at the emitter. */
+  Spectrum eval = zero_spectrum();
+
+  if (surface_shader_constant_emission(kg, ls->shader, &eval)) {
+    if ((ls->prim != PRIM_NONE) && dot(ls->Ng, ls->D) > 0.0f) {
+      ls->Ng = -ls->Ng;
+    }
+  }
+  else {
+    /* Setup shader data and call surface_shader_eval once, which is
+     * better for GPU coherence and compile times. */
+    PROFILING_INIT_FOR_SHADER(kg, PROFILING_SHADE_LIGHT_SETUP);
+    if (ls->type == LIGHT_BACKGROUND) {
+      shader_setup_from_background(kg, emission_sd, ls->P, ls->D, 0.0f, time); // !!!
+    }
+    else {
+      const float u = (reference) ? reference->param.x : 0.0f;
+      const float v = (reference) ? reference->param.y : 0.0f;
+      const bool is_lamp = (ls->type != LIGHT_TRIANGLE);
+
+      shader_setup_from_sample(kg,
+                               emission_sd,
+                               ls->P,
+                               ls->Ng,
+                               -ls->D,
+                               ls->shader,
+                               ls->object,
+                               ls->prim,
+                               u,
+                               v,
+                               ls->t,
+                               time,
+                               false,
+                               is_lamp);
+
+      ls->Ng = emission_sd->Ng;
+    }
+
+    PROFILING_SHADER(emission_sd->object, emission_sd->shader);
+    PROFILING_EVENT(PROFILING_SHADE_LIGHT_EVAL);
+
+    /* Note: We use PATH_RAY_VISIBILITY_NONE to match modern Cycles surface_shader_eval signature. */
+    surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT>(
+        kg, state, emission_sd, nullptr, PATH_RAY_VISIBILITY_NONE, PATH_RAY_EMISSION);
+
+    /* Evaluate closures. */
+    if (ls->type == LIGHT_BACKGROUND) {
+      eval = surface_shader_background(emission_sd);
+    }
+    else {
+      eval = surface_shader_emission(emission_sd);
+    }
+  }
+
+  eval *= ls->eval_fac;
+
+  if (ls->type != LIGHT_TRIANGLE && ls->prim != LAMP_NONE) {
+    ccl_global const KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
+    eval *= rgb_to_spectrum(
+        make_float3(klight->strength[0], klight->strength[1], klight->strength[2]));
+  }
+
+  if (check_visibility) {
+    kernel_assert(sd != nullptr);
+    Ray ray ccl_optional_struct_init;
+    light_sample_to_surface_shadow_ray(kg, sd, ls, &ray);
+
+    /* TODO(weizhen): this is opque visibility, only works for surface. */
+    /* Opaque visibility check. */
+    Intersection isect;
+    if (scene_intersect(kg, &ray, PATH_RAY_VISIBILITY_SHADOW_OPAQUE, &isect)) {
+      return zero_spectrum();
+    }
+  }
+
+  return eval;
+}
+
 /* Multiple importance sampling weights. */
 
 ccl_device_inline float light_sample_mis_weight_forward(KernelGlobals kg, // !!!
@@ -460,21 +555,6 @@ ccl_device_forceinline void light_sample_update(KernelGlobals kg,
 
 // ------
 
-// /* Forward sampling.
-//  *
-//  * Multiple importance sampling weights for hitting surface, light or background
-//  * through indirect light ray.
-//  *
-//  * The BSDF or phase pdf from the previous bounce was stored in mis_ray_pdf and
-//  * is used for balancing with the light sampling pdf. */
-
-// ccl_device_inline float light_sample_mis_weight_forward_surface( // !!!: 
-//     KernelGlobals kg,
-//     IntegratorState state,
-//     const PathRayVisibility path_visibility,
-//     const uint32_t path_flag,
-//     const ccl_private ShaderData *sd)
-// {
 /* Probability of sampling an emissive surface, analytic light, or background
  * from a shading point.
  *
@@ -535,15 +615,6 @@ ccl_device_inline float light_sample_pdf_surface(KernelGlobals kg,
   return pdf;
 }
 
-// ccl_device_inline float light_sample_mis_weight_forward_lamp(
-//     KernelGlobals kg,
-//     IntegratorState state,
-//     const PathRayVisibility path_visibility,
-//     const uint32_t path_flag,
-//     const int object_id,
-//     const float light_sample_pdf,
-//     const float3 P)
-// {
 /* Probability of sampling an analytic light from a shading point.
  *
  * `lamp` is the KernelLight index. `light_sample_pdf` is the conditional
