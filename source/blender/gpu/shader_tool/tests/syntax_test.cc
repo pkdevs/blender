@@ -175,6 +175,77 @@ TEST(shader_tool, Reference)
     auto [output, _, error] = process_test_string(input);
     EXPECT_EQ(error, "Unexpected token \"&\": Expecting declaration");
   }
+
+  {
+    string input = R"(
+int b[1]; const int i = 0; auto &a = b[i]; a = 0;)";
+    string expect = R"(
+int b[1]; const int i = 0;                 b[i] = 0;)";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+int b(int){ return 0; }
+void f(){ auto &a = b(0); }
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Function calls are not allowed in reference definition");
+  }
+  {
+    string input = R"(
+int b(int){ return 0; }
+void f(){ int c[1]; auto &a = c[b(0)]; }
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Function calls are not allowed in reference definition");
+  }
+  {
+    string input = R"(
+int b[1]; int i = 0; auto &a = b[i + 1];)";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(
+        error,
+        "Reference cannot bind to non-const subscript because 'i' is not defined as 'const'");
+  }
+  {
+    string input = R"(
+int b[1]; const int i = 0; auto &a = b[i + 1];)";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+int b; float &a = b;)";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Reference to type 'float' cannot bind to a value of unrelated type 'int'");
+  }
+  {
+    string input = R"(
+int b; int &a = b + 1;)";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Reference cannot bind to a temporary");
+  }
+  {
+    /* Only allowed in C++ if ref is const. */
+    string input = R"(
+const int &a = 1;)";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+int b; int &a = b++;)";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Reference cannot bind to a temporary");
+  }
+  {
+    string input = R"(
+int b; int &a = ++b;)";
+    auto [output, _, error] = process_test_local(input, Language::BSL);
+    EXPECT_EQ(error, "Reference cannot bind to an expression with side effect");
+  }
 }
 
 TEST(shader_tool, Constexpr)
@@ -212,7 +283,11 @@ TEST(shader_tool, Auto)
         "auto e = 0.0f;\n"
         "auto f = 0.0f + 0;\n"
         "auto g = a * b;\n"
-        "auto h = a * a;\n";
+        "auto h = a * a;\n"
+        "float4x4 i[4];\n"
+        "auto j = i[0];\n"
+        "auto k = i[0][0];\n"
+        "auto l = i[0][0][0];\n";
     string expect =
         "int a=int{0};\n"
         "float b=float{0.0f};\n"
@@ -221,7 +296,11 @@ TEST(shader_tool, Auto)
         "float e = 0.0f;\n"
         "float f = 0.0f + 0;\n"
         "float g = a * b;\n"
-        "int h = a * a;\n";
+        "int h = a * a;\n"
+        "float4x4 i[4];\n"
+        "float4x4 j = i[0];\n"
+        "float4 k = i[0][0];\n"
+        "float l = i[0][0][0];\n";
     auto [output, _, error] = process_test_string(input, shader::Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");

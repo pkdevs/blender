@@ -348,7 +348,7 @@ struct InstantiationContext {
     Declarator decl = init_stmt.child_first(NodeType::Declarator);
     SymbolVariable *var = scope.lookup_variable(decl.identifier());
     if (var->is_error) {
-      error(decl.identifier(), "Unknown variable");
+      error(decl.identifier(), "Unknown variable '" + string(decl.identifier().str()) + "'");
       return;
     }
     /* Check if only a single var is declared. */
@@ -811,14 +811,14 @@ struct InstantiationContext {
                 string access;
                 string close;
                 int dim = 0;
-                Subscript sub = d.array();
+                Subscript sub = d.array().sub();
                 while (sub.is_valid()) {
                   string var = get_temp_name(dim++);
                   string len = string(sub.expr().str());
                   members += "for(int " + var + " =0;" + var + " < " + len + ";++" + var + ") {";
                   close += "}";
                   access += "[" + var + "]";
-                  sub = sub.sub();
+                  sub = sub.next();
                 }
                 members += "r." + var->identifier + access + "=" + default_value(*type) + ";";
                 members += close;
@@ -1327,6 +1327,7 @@ struct InstantiationContext {
     }
   }
 
+  /* For subscript in expressions. */
   void subscript(Subscript stmt, SymbolScope &scope)
   {
     match_if('[');
@@ -1334,9 +1335,6 @@ struct InstantiationContext {
       expr(stmt.expr(), scope);
     }
     match_if(']');
-    if (stmt.sub().is_valid()) {
-      subscript(stmt.sub(), scope);
-    }
   }
 
   /* Return true if declaration was issued. */
@@ -1418,22 +1416,26 @@ struct InstantiationContext {
       }
     }
     else if (node.type() == NodeType::Subscript) {
-      subscript(node, expr_scope);
-      /* TODO(fclem): Make this work for subscript operator on result of array deref.
-       * Currently the subscript AST node contains all the subscript scopes nested.
-       * We might want to not nest them inside expressions. */
-      if (var && var->array_dimensions > 0) {
-        /* TODO error if dimension mismatch. */
-        member_access(expr_scope, node, var->type);
-      }
-      else if (SymbolFunction *fn = cls->operator_subscript; fn) {
-        cls = fn->return_type;
-        Subscript sub = node;
-        while (sub.sub().is_valid()) {
-          sub = sub.sub();
-          cls = cls->operator_subscript->return_type;
+      Node array_start = node;
+      for (int dim = var ? var->array_dimensions : 0, count = 0; dim > 0; --dim, ++count) {
+        if (node.type() != NodeType::Subscript) {
+          error(array_start,
+                "Not enough subscript (" + to_string(count) + ") to match array dimensions (" +
+                    to_string(var->array_dimensions) + ")");
+          break;
         }
-        member_access(expr_scope, node, cls);
+        subscript(node, expr_scope);
+        node = node.next();
+      }
+
+      if (SymbolFunction *fn = cls->operator_subscript; fn && node.type() == NodeType::Subscript) {
+        match_if('[');
+        expr(node, expr_scope);
+        match_if(']');
+        member_access(expr_scope, node, fn->return_type);
+      }
+      else {
+        member_access(expr_scope, node, var->type);
       }
     }
   }
@@ -1688,7 +1690,7 @@ struct InstantiationContext {
     assert(id.is_valid());
     SymbolVariable *var = scope.lookup_variable(id);
     if (var->is_error) {
-      error(id, "Unknown variable");
+      error(id, "Unknown variable '" + string(id.str()) + "'");
       builder << id;
       return var;
     }
@@ -1736,7 +1738,7 @@ struct InstantiationContext {
     assert(id.is_valid());
     SymbolVariable *var = scope.lookup_variable(id);
     if (var->is_error) {
-      error(id, "Unknown variable");
+      error(id, "Unknown variable '" + string(id.str()) + "'");
       builder << id;
       return var;
     }

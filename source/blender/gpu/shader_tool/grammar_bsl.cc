@@ -372,7 +372,7 @@ struct BSLParser {
       initializer_list();
     }
     else {
-      subscript_optional();
+      array_optional();
       assignment_optional();
     }
   }
@@ -971,10 +971,13 @@ struct BSLParser {
     match(';');
   }
 
-  void subscript_optional()
+  void array_optional()
   {
     if (peek() == '[') {
-      subscript();
+      NODE(ArrayDecl);
+      do {
+        subscript();
+      } while (peek() == '[');
     }
   }
 
@@ -990,7 +993,6 @@ struct BSLParser {
       expression(true);
       match(']');
     }
-    subscript_optional();
   }
 
   void attribute_optional()

@@ -462,11 +462,12 @@ struct SymbolVariable : Symbol {
         type(type),
         array_dimensions(decl.array().dimensions()),
         is_static(decl.type().is_static()),
-        is_constexpr(decl.type().constant().is_valid() ?
-                         decl.type().constant().front() == Constexpr :
-                         false),
         is_compilation_const(AttrList(decl.type().prev()).contains_attr("compilation_constant"))
   {
+    if (Const constant = decl.type().constant(); constant.is_valid()) {
+      is_constexpr = constant.front() == Constexpr;
+      is_const = true;
+    }
   }
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, EnumValue decl)

@@ -60,6 +60,7 @@ enum class NodeType : char {
   TemplateInst,
   TemplateExplicit,
   LocalScope,
+  ArrayDecl,
   Subscript,
   AttrList,
   Attr,
@@ -663,22 +664,20 @@ struct Subscript : Node {
   {
     return child_first();
   }
+};
 
-  Subscript sub() const
-  {
-    return child_last();
-  }
+struct ArrayDecl : Node {
+  NODE_COMMON(ArrayDecl);
 
   /* Return 0 if invalid. */
   int dimensions() const
   {
-    int array_dimensions = 0;
-    Subscript sub = *this;
-    while (sub.is_valid()) {
-      array_dimensions++;
-      sub = sub.sub();
-    }
-    return array_dimensions;
+    return is_valid() ? child_count() : 0;
+  }
+
+  Subscript sub() const
+  {
+    return child_first();
   }
 };
 
@@ -815,7 +814,7 @@ struct Declarator : Node {
     return child_first(NodeType::IdQualified);
   }
 
-  Subscript array() const
+  ArrayDecl array() const
   {
     return identifier().next();
   }

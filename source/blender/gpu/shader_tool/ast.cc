@@ -359,6 +359,8 @@ static std::string to_string(ast::NodeType type)
       return "ExprSub";
     case ast::NodeType::StructuredBinding:
       return "StructuredBinding";
+    case ast::NodeType::ArrayDecl:
+      return "ArrayDecl";
   }
   return "Error";
 }
@@ -487,6 +489,8 @@ static bool display_type(ast::NodeType type)
     case ast::NodeType::ExprSub:
       return false;
     case ast::NodeType::StructuredBinding:
+      return false;
+    case ast::NodeType::ArrayDecl:
       return false;
   }
   return false;

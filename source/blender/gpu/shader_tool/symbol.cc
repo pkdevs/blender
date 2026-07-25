@@ -118,309 +118,407 @@ Result<pair<ResourceType, ResourceTableType>> resource_type_from_attributes(Attr
  * Type resolution parser.
  * Will evaluate each operand type and return the type of the expression result.
  */
-class ExpressionTypeParser {
- public:
-  Result<SymbolClass *> eval(const SymbolTable &table,
-                             const SymbolScope &scope,
-                             Expr expr,
-                             bool allow_temporary = true,
-                             bool allow_side_effects = true) const
-  {
-    EvalContext ctx(&table, &scope, expr.child_first(), allow_temporary, allow_side_effects);
-
-    Result<SymbolClass *> result;
-    result.value = ctx.expr(0);
-    result.err = ctx.error;
-
-    if (ctx.peek().is_valid() && !result.err.has_value()) {
-      result.err = AstNodeException(ctx.peek(), "Trailing input");
-    }
-    return result;
-  }
+struct ExpressionTypeParser {
+  /* First temporary inducing operator. */
+  Node first_temporary = {};
+  /* First variable not declared const. */
+  Node first_non_const_var_in_subscript = {};
+  /* First operator creating side effect. */
+  Node first_side_effect_op = {};
+  /* First function call. */
+  Node first_function_call = {};
 
  private:
-  struct EvalContext {
-    std::optional<AstNodeException> error;
+  std::optional<AstNodeException> err;
+  const SymbolTable *table;
+  const SymbolScope *scope;
+  Node start;
+  Node node;
+  SymbolClass *float_cls;
+  SymbolClass *int_cls;
+  SymbolClass *uint_cls;
+  SymbolClass *str_cls;
+  SymbolClass *err_cls;
 
-   private:
-    const SymbolTable *table;
-    const SymbolScope *scope;
-    Node node;
-    SymbolClass *float_cls;
-    SymbolClass *int_cls;
-    SymbolClass *uint_cls;
-    SymbolClass *str_cls;
-    SymbolClass *err_cls;
-    /* Emit error if the expression contains any operator other than the access operators. */
-    bool allow_temporary;
-    /* Emit error if the expression contains a function call or (in|post)fix operator. */
-    bool allow_side_effects;
+  /* Array dimension of the current symbol. */
+  int array_dim = 0;
 
-   public:
-    EvalContext(const SymbolTable *table,
-                const SymbolScope *scope,
-                Node node,
-                bool allow_temporary = true,
-                bool allow_side_effects = true)
-        : table(table),
-          scope(scope),
-          node(node),
-          allow_temporary(allow_temporary),
-          allow_side_effects(allow_side_effects)
-    {
-      const SymbolScope &root = *scope->root_scope();
-      float_cls = root.lookup_class("float");
-      int_cls = root.lookup_class("int");
-      uint_cls = root.lookup_class("uint");
-      // str_cls = root.lookup_class("string");
-      err_cls = root.lookup_class(SymbolTable::err_symbol);
+  bool is_subscript_expr = false;
+
+ public:
+  ExpressionTypeParser(const SymbolTable *table, const SymbolScope *scope, Node expr_first_child)
+      : table(table), scope(scope), start(expr_first_child), node(expr_first_child)
+  {
+    const SymbolScope &root = *scope->root_scope();
+    float_cls = root.lookup_class("float");
+    int_cls = root.lookup_class("int");
+    uint_cls = root.lookup_class("uint");
+    // str_cls = root.lookup_class("string");
+    err_cls = root.lookup_class(SymbolTable::err_symbol);
+  }
+
+  Result<SymbolClass *> eval()
+  {
+    SymbolClass *cls = expr(0);
+
+    if (array_dim > 0) {
+      error(start, "Expression result is of array type");
     }
 
-    SymbolClass *expr(int right_binding_power)
-    {
-      /* Parse unary operator, evaluate parenthesis, evaluate constant. */
-      SymbolClass *left = nud(consume());
-      /* While left binding power is greater than the right, continue consuming binary operations.
-       */
-      while (left_binding_power(peek()) > right_binding_power) {
-        left = led(left, consume());
+    if (peek().is_valid() && !err) {
+      error(peek(), "Trailing input");
+    }
+    return {cls, err};
+  }
+
+  SymbolClass *expr(int right_binding_power)
+  {
+    /* Parse unary operator, evaluate parenthesis, evaluate constant. */
+    SymbolClass *left = nud(consume());
+
+    /* While left binding power is greater than the right, continue consuming binary operations.
+     */
+    while (node.is_valid() && left_binding_power(peek()) > right_binding_power) {
+      left = led(left, consume());
+    }
+    return left;
+  }
+
+  /* How a token evaluates without left context (e.g. unary operator).
+   * Also known as Null-Denotation or NUD. */
+  SymbolClass *nud(ast::Node node)
+  {
+    /* Unary operators must have the highest precedence. */
+    static constexpr int unary_binding_power = 1000;
+
+    switch (node.type()) {
+      // case NodeType::TemplateExplicit: /* Should have already been removed. */
+      case NodeType::FuncCall:
+        return fun_call(node);
+        // case NodeType::Constructor: /* TODO */
+      case NodeType::StringConst:
+        return str_cls;
+      case NodeType::LocalVar:
+        return local_var(node);
+      case NodeType::NumConst:
+        return num_const(node);
+      case NodeType::Op:
+        return op(node, expr(unary_binding_power));
+      case NodeType::ExprSub: {
+        ExpressionTypeParser ctx(table, scope, ExprSub(node).expr().child_first());
+        ctx.is_subscript_expr = this->is_subscript_expr;
+        auto [cls, err] = ctx.eval();
+        error(err);
+        merge_errors(ctx, false);
+        return cls;
       }
+      default:
+        error(node.is_valid() ? node : start, "Invalid expression");
+        this->node = Node{};
+        return err_cls;
+    }
+  }
+
+  /* How a token evaluates from left-to-right, on two operands.
+   * Also known as Left-Denotation or LED. */
+  SymbolClass *led(SymbolClass *left, Node node)
+  {
+    /* Subscript operator. */
+    if (node.type() == NodeType::Subscript) {
+      if (array_dim > 0) {
+        array_dim -= 1;
+        check_subscript(node);
+        return left;
+      }
+      /* Call subscript operator */
+      if (left->operator_subscript) {
+        check_subscript(node);
+        return left->operator_subscript->return_type;
+      }
+      error(node, "Subscripted value is not an array or vector");
       return left;
     }
 
-    /* How a token evaluates without left context (e.g. unary operator).
-     * Also known as Null-Denotation or NUD. */
-    SymbolClass *nud(ast::Node node)
-    {
-      /* Unary operators must have the highest precedence. */
-      static constexpr int unary_binding_power = 1000;
+    if (array_dim > 0) {
+      error(node, "Invalid operand of array type");
+    }
 
-      switch (node.type()) {
-        // case NodeType::TemplateExplicit: /* Should have already been removed. */
-        case NodeType::FuncCall:
-          if (!allow_side_effects) {
-            error = AstNodeException(
-                node,
-                "Call to function can have side effects which are not allowed in this context");
-          }
-          return fun_call(node);
-          // case NodeType::Constructor: /* TODO */
-        case NodeType::StringConst:
-          return str_cls;
-        case NodeType::LocalVar:
-          return local_var(node);
-        case NodeType::NumConst:
-          return num_const(node);
-        case NodeType::Op:
-          if (!allow_side_effects) {
-            if (node.front() == Increment || node.front() == Decrement) {
-              error = AstNodeException(
-                  node, "Expression have side effects which are not allowed in this context");
-            }
-          }
-          return op(node, expr(unary_binding_power));
-        case NodeType::ExprSub: {
-          EvalContext ctx(table,
-                          scope,
-                          ExprSub(node).expr().child_first(),
-                          allow_temporary,
-                          allow_side_effects);
-          return ctx.expr(0);
+    if (node.type() != NodeType::Op) {
+      error(node, "Invalid operator for type '" + left->resolved->identifier + "'");
+    }
+
+    /* Member access operator. */
+    if (node.front() == Dot) {
+      return member_access(left, consume());
+    }
+
+    /* Post-fix operator. */
+    if (node.front() == Increment || node.front() == Decrement) {
+      if (!first_temporary.is_valid()) {
+        first_temporary = node;
+      }
+      /* TODO operator. */
+      return left;
+    }
+
+    /* Binary operator. */
+    if (node.front() != '?') {
+      if (!first_temporary.is_valid()) {
+        first_temporary = node;
+      }
+      return op(node, left, expr(left_binding_power(node)));
+    }
+
+    /* Ternary operator. */
+
+    /* The middle expression can be almost anything.
+     * We use 0 so it only stops at the ':' (since Colon has a precedence of 0). */
+    SymbolClass *tval = expr(0);
+
+    consume(); /* ':' */
+
+    /* Use (Precedence - 1) to handle right-associativity. */
+    SymbolClass *fval = expr(left_binding_power(Question) - 1);
+
+    if (tval != fval) {
+      error(node, "Incompatible operand types");
+    }
+    /* Operand types match. We can return either. */
+    return fval;
+  }
+
+  int left_binding_power(Node node)
+  {
+    return left_binding_power(node.front().type());
+  }
+
+  int left_binding_power(TokenType type)
+  {
+    switch (type) {
+      case Increment:
+      case Decrement:
+      case SquareOpen:
+      case Dot:
+        return 130;
+      case Multiply:
+      case Divide:
+      case Modulo:
+        return 110;
+      case Plus:
+      case Minus:
+        return 100;
+      case LShift:
+      case RShift:
+        return 90;
+      case LThan:
+      case LEqual:
+      case GThan:
+      case GEqual:
+        return 80;
+      case Equal:
+      case NotEqual:
+        return 70;
+      case And:
+        return 60;
+      case Xor:
+        return 50;
+      case Or:
+        return 40;
+      case LogicalAnd:
+        return 30;
+      case LogicalOr:
+        return 20;
+      case Question:
+        return 10;
+      case Colon:
+      case ParOpen:
+      case ParClose:
+        return 0;
+      case Not:
+      case BitwiseNot:
+        /* Prefix operators don't bind to the left! */
+        return 0;
+      case Invalid: /* EndOfFile */
+        return -1;
+      default:
+        break;
+    }
+    error(peek(), "Invalid operator token '" + to_str(type) + "'");
+    return -1;
+  }
+
+  Node peek() const
+  {
+    return node;
+  }
+
+  Node consume()
+  {
+    Node n = node;
+    node = node.next();
+    return n;
+  }
+
+  SymbolClass *op(Node operator_type, SymbolClass *left_type, SymbolClass *right_type)
+  {
+    TokenType tok_type = operator_type.front().type();
+    OperatorKey key{left_type, tok_type, right_type};
+    if (auto it = table->operators.find(key); it != table->operators.end()) {
+      return it->second->return_type;
+    }
+    error(operator_type,
+          "Invalid operands to binary expression ('" + left_type->identifier + "' and '" +
+              right_type->identifier + "')");
+    return err_cls;
+  }
+
+  SymbolClass *op(Node operator_type, SymbolClass *right_type)
+  {
+    TokenType tok_type = operator_type.front().type();
+    if (tok_type == Increment || tok_type == Decrement) {
+      if (!first_side_effect_op.is_valid()) {
+        first_side_effect_op = operator_type;
+      }
+    }
+    OperatorKey key{nullptr, tok_type, right_type};
+    if (auto it = table->operators.find(key); it != table->operators.end()) {
+      return it->second->return_type;
+    }
+    error(operator_type,
+          "Invalid argument type '" + right_type->identifier + "' to unary expression");
+    return err_cls;
+  }
+
+  SymbolClass *member_access(SymbolClass *left, ast::Node member)
+  {
+    switch (member.type()) {
+      case NodeType::FuncCall: {
+        FuncCall fun = member;
+        if (!first_function_call.is_valid()) {
+          first_function_call = fun;
         }
-        default:
-          error = AstNodeException(node, "Invalid expression");
+        auto [sym, err] = left->lookup_function(fun.identifier());
+        error(err);
+        return sym->return_type;
+      }
+      case NodeType::LocalVar: {
+        LocalVar var = member;
+        SymbolVariable *sym = left->lookup_variable(var.identifier());
+        if (!sym) {
+          error(node, "Unknown member '" + string(var.identifier().str()) + "'");
           return err_cls;
-      }
-    }
-
-    /* How a token evaluates from left-to-right, on two operands.
-     * Also known as Left-Denotation or LED. */
-    SymbolClass *led(SymbolClass *left, Node node)
-    {
-      if (node.type() != NodeType::Op) {
-        error = AstNodeException(node, "Invalid operator");
-      }
-
-      /* Binary operator. */
-      if (node.front() != '?') {
-        if (!allow_temporary) {
-          error = AstNodeException(
-              node, "Result of expression is a temporary which is not allowed in this context");
         }
-        return op(node, left, expr(left_binding_power(node)));
+        if (sym->array_dimensions) {
+          array_dim = sym->array_dimensions;
+        }
+        return sym->type;
       }
-
-      /* Ternary operator. */
-
-      /* The middle expression can be almost anything.
-       * We use 0 so it only stops at the ':' (since Colon has a precedence of 0). */
-      SymbolClass *tval = expr(0);
-
-      consume(); /* ':' */
-
-      /* Use (Precedence - 1) to handle right-associativity. */
-      SymbolClass *fval = expr(left_binding_power(Question) - 1);
-
-      if (tval != fval) {
-        error = AstNodeException(node, "Incompatible operand types");
-      }
-      /* Operand types match. We can return either. */
-      return fval;
-    }
-
-    int left_binding_power(Node node)
-    {
-      return left_binding_power(node.front().type());
-    }
-
-    int left_binding_power(TokenType type)
-    {
-      switch (type) {
-        case Multiply:
-        case Divide:
-        case Modulo:
-          return 110;
-        case Plus:
-        case Minus:
-          return 100;
-        case LShift:
-        case RShift:
-          return 90;
-        case LThan:
-        case LEqual:
-        case GThan:
-        case GEqual:
-          return 80;
-        case Equal:
-        case NotEqual:
-          return 70;
-        case And:
-          return 60;
-        case Xor:
-          return 50;
-        case Or:
-          return 40;
-        case LogicalAnd:
-          return 30;
-        case LogicalOr:
-          return 20;
-        case Question:
-          return 10;
-        case Colon:
-        case ParOpen:
-        case ParClose:
-          return 0;
-        case Not:
-        case BitwiseNot:
-          /* Prefix operators don't bind to the left! */
-          return 0;
-        case Invalid: /* EndOfFile */
-          return -1;
-        default:
-          break;
-      }
-      error = AstNodeException(peek(), "Invalid operator token '" + to_str(type) + "'");
-      return -1;
-    }
-
-    Node peek() const
-    {
-      return node;
-    }
-
-    Node consume()
-    {
-      Node n = node;
-      node = node.next();
-      return n;
-    }
-
-    SymbolClass *op(Node operator_type, SymbolClass *left_type, SymbolClass *right_type)
-    {
-      OperatorKey key{left_type, operator_type.front().type(), right_type};
-      if (auto it = table->operators.find(key); it != table->operators.end()) {
-        return it->second->return_type;
-      }
-      error = AstNodeException(operator_type,
-                               "Invalid operands to binary expression ('" + left_type->identifier +
-                                   "' and '" + right_type->identifier + "')");
-      return err_cls;
-    }
-
-    SymbolClass *op(Node operator_type, SymbolClass *right_type)
-    {
-      OperatorKey key{nullptr, operator_type.front().type(), right_type};
-      if (auto it = table->operators.find(key); it != table->operators.end()) {
-        return it->second->return_type;
-      }
-      error = AstNodeException(operator_type,
-                               "Invalid argument type '" + right_type->identifier +
-                                   "' to unary expression");
-      return err_cls;
-    }
-
-    SymbolClass *fun_call(FuncCall call)
-    {
-      auto [fn, err_fn] = scope->lookup_function(call.identifier(), call.parameters(), *table);
-      if (err_fn) {
-        error = err_fn;
+      default:
+        error(node.is_valid() ? node : start, "Invalid expression");
+        this->node = Node{};
         return err_cls;
-      }
+    }
+  }
 
-      SymbolClass *type = fn->return_type;
+  SymbolClass *fun_call(FuncCall call)
+  {
+    if (!first_function_call.is_valid()) {
+      first_function_call = call;
+    }
+    auto [fn, err_fn] = scope->lookup_function(call.identifier(), call.parameters(), *table);
+    error(err_fn);
+    return fn->return_type;
+  }
 
-      Node next = call.next();
-      if (next.type() == NodeType::Op && next.front() == Dot) {
-        /* Member access */
-        error = AstNodeException(Node{}, "Not implemented yet");
-      }
-      if (next.type() == NodeType::Subscript) {
-        /* Subscript. */
-        error = AstNodeException(Node{}, "Not implemented yet");
-      }
-      return type;
+  SymbolClass *local_var(LocalVar var)
+  {
+    SymbolVariable *sym = scope->lookup_variable(var.identifier());
+    if (!sym) {
+      error(var, "Unknown identifier '" + string(var.identifier().str()) + "'");
+      return err_cls;
+    }
+    if (!sym->is_const && is_subscript_expr && !first_non_const_var_in_subscript.is_valid()) {
+      first_non_const_var_in_subscript = var;
+    }
+    if (sym->array_dimensions) {
+      array_dim = sym->array_dimensions;
+    }
+    return sym->type;
+  }
+
+  SymbolClass *num_const(NumConst num)
+  {
+    string_view lit = num.str();
+    /* Convert to lowercase helper for easier suffix matching */
+    string str;
+    str.reserve(lit.size());
+    for (char c : lit) {
+      str.push_back(tolower(static_cast<unsigned char>(c)));
     }
 
-    SymbolClass *local_var(LocalVar var)
-    {
-      SymbolVariable *sym = scope->lookup_variable(var.identifier());
-      SymbolClass *type = sym->type;
-      /* TODO member access */
-      return type;
+    bool has_decimal = (str.find('.') != string_view::npos);
+    bool has_exponent = !str.starts_with("0x") && (str.find('e') != string_view::npos);
+
+    if (has_decimal || has_exponent || str.back() == 'f') {
+      return float_cls;
     }
-
-    // SymbolClass *member_access(SymbolClass *left, LocalVar var) {/* TODO */}
-
-    // SymbolClass *subscript(SymbolClass *left, LocalVar var) {/* TODO */}
-
-    SymbolClass *num_const(NumConst num)
-    {
-      string_view lit = num.str();
-      /* Convert to lowercase helper for easier suffix matching */
-      string str;
-      str.reserve(lit.size());
-      for (char c : lit) {
-        str.push_back(tolower(static_cast<unsigned char>(c)));
-      }
-
-      bool has_decimal = (str.find('.') != string_view::npos);
-      bool has_exponent = !str.starts_with("0x") && (str.find('e') != string_view::npos);
-
-      if (has_decimal || has_exponent || str.back() == 'f') {
-        return float_cls;
-      }
-      if (str.back() == 'u') {
-        return uint_cls;
-      }
-      return int_cls;
+    if (str.back() == 'u') {
+      return uint_cls;
     }
-  };
+    return int_cls;
+  }
+
+ private:
+  void error(ast::Node node, const string &msg)
+  {
+    /* Only log the first error. */
+    if (!err) {
+      err = {node, msg};
+    }
+  }
+
+  /* Pipe error if existing. */
+  void error(std::optional<AstNodeException> &err)
+  {
+    if (err) {
+      error(err->node, err->msg);
+    }
+  }
+
+  void check_subscript(Node node)
+  {
+    ExpressionTypeParser ctx(table, scope, Subscript(node).expr().child_first());
+    ctx.is_subscript_expr = true;
+    auto [type, err] = ctx.eval();
+    error(err);
+    if (type->resolved != int_cls->resolved && type->resolved != uint_cls->resolved) {
+      error(node, "Array subscript is not an integer");
+    }
+    /* Discard checking for temporary. It is allowed to have temporary inside subscript
+     * expressions as long as we can be sure they are constant. */
+    merge_errors(ctx, true);
+  }
+
+  void merge_errors(const ExpressionTypeParser &ctx, bool allow_temporary)
+  {
+    if (!first_temporary.is_valid() && !allow_temporary) {
+      this->first_temporary = ctx.first_temporary;
+    }
+    if (!first_non_const_var_in_subscript.is_valid()) {
+      this->first_non_const_var_in_subscript = ctx.first_non_const_var_in_subscript;
+    }
+    if (!first_side_effect_op.is_valid()) {
+      this->first_side_effect_op = ctx.first_side_effect_op;
+    }
+    if (!first_function_call.is_valid()) {
+      this->first_function_call = ctx.first_function_call;
+    }
+  }
 };
 
 Result<SymbolClass *> SymbolTable::expr_type_analysis(const SymbolScope &scope, Expr expr) const
 {
-  ExpressionTypeParser parser;
-  return parser.eval(*this, scope, expr);
+  return ExpressionTypeParser(this, &scope, expr.child_first()).eval();
 }
 
 Result<SymbolClass *> SymbolTable::resolve_auto_type(SymbolScope &scope, Declarator decl) const
@@ -1433,13 +1531,29 @@ struct SymbolParser {
       if (is_ref && cls == nullptr) {
         AssignStmt stmt = decl.initial_value();
         if (stmt.is_valid() && stmt.expr().is_valid()) {
-
-          ExpressionTypeParser parser;
           /* Run analysis to check if we bind a temporary. */
           /* Run const analysis to check if we bind a const expr. */
-          auto [expr_cls, err] = parser.eval(table, scope, stmt.expr(), false, false);
+          ExpressionTypeParser parser(&table, &scope, stmt.expr().child_first());
+          auto [expr_cls, err] = parser.eval();
           error(err);
-          if (type->resolved != expr_cls->resolved) {
+          if (parser.first_temporary.is_valid()) {
+            error(parser.first_temporary, "Reference cannot bind to a temporary");
+          }
+          else if (parser.first_side_effect_op.is_valid()) {
+            error(parser.first_side_effect_op,
+                  "Reference cannot bind to an expression with side effect");
+          }
+          else if (parser.first_function_call.is_valid()) {
+            error(parser.first_function_call,
+                  "Function calls are not allowed in reference definition");
+          }
+          else if (parser.first_non_const_var_in_subscript.is_valid()) {
+            error(parser.first_non_const_var_in_subscript,
+                  "Reference cannot bind to non-const subscript because '" +
+                      string(parser.first_non_const_var_in_subscript.str()) +
+                      "' is not defined as 'const'");
+          }
+          else if (type->resolved != expr_cls->resolved) {
             error(decl,
                   "Reference to type '" + type->resolved->identifier +
                       "' cannot bind to a value of unrelated type '" + expr_cls->identifier + "'");
@@ -1622,7 +1736,7 @@ Result<string> SymbolTable::expr_to_string(const SymbolScope &scope,
         }
 
         if (var->is_error) {
-          return {"0", AstNodeException(child, "Unknown variable " + string(child.str()))};
+          return {"0", AstNodeException(child, "Unknown variable '" + string(child.str()) + "'")};
         }
 
         if (allow_compilation_constant && var->is_compilation_const) {
