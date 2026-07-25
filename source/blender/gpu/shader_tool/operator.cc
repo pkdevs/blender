@@ -145,7 +145,7 @@ vector<SymbolTable::BuiltinOp> SymbolTable::generate_all_operators(
       /* Equality (==, !=) */
       /* Do not support vector-vector comparisons for MSL compatibility. */
       if (t1.size == 1 && t2.size == 1) {
-        if (t1.base == "bool" && t2.base == "bool") {
+        if (t1.base == t2.base) {
           ops.emplace_back(t1.name, Equal, t2.name, "bool");
           ops.emplace_back(t1.name, NotEqual, t2.name, "bool");
         }
