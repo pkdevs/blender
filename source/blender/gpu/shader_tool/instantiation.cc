@@ -175,7 +175,9 @@ struct InstantiationContext {
       }
     }
 
-    string cond = condition(&symbol);
+    /* Resource guards for local SRT variables. Can be phased out once we remove the need for
+     * resource_table_get.  */
+    string cond = !symbol.as_function() ? condition(&symbol) : "";
     if (!cond.empty()) {
       builder.ss << string("\n#if ") + cond + "\n";
       jump_to(builder.curr);
