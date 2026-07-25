@@ -195,7 +195,8 @@ struct ExpressionTypeParser {
       // case NodeType::TemplateExplicit: /* Should have already been removed. */
       case NodeType::FuncCall:
         return fun_call(node);
-        // case NodeType::Constructor: /* TODO */
+      case NodeType::Constructor:
+        return constructor(node);
       case NodeType::StringConst:
         return str_cls;
       case NodeType::LocalVar:
@@ -418,6 +419,16 @@ struct ExpressionTypeParser {
         this->node = Node{};
         return err_cls;
     }
+  }
+
+  SymbolClass *constructor(Constructor ctor)
+  {
+    if (!first_temporary.is_valid()) {
+      this->first_temporary = ctor;
+    }
+    auto [cls, err] = scope->lookup_class(ctor.id());
+    error(err);
+    return cls;
   }
 
   SymbolClass *fun_call(FuncCall call)

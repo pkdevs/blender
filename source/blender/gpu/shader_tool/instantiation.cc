@@ -1600,6 +1600,12 @@ struct InstantiationContext {
   {
     auto [cls, err] = scope.lookup_class(construct.id());
     error(err);
+    if (cls->is_srt()) {
+      error(construct,
+            "Calling resource table constructor '" + cls->identifier +
+                "' is not allowed; use 'resource_table_get(" + cls->identifier + ")' instead");
+    }
+
     initializer_list(construct.initializer_list(), scope, cls);
 
     member_access(scope, construct, cls);
