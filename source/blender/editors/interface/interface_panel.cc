@@ -846,10 +846,10 @@ static void panel_calculate_size_recursive(ARegion *region, Panel *panel)
     if (width != 0) {
       panel->sizex = width;
     }
-    if (region->regiontype == RGN_TYPE_XR) {
-      /* XR panels are re-rendered from fresh layouts and don't need to preserve the previous
-       * open height for desktop panel collapse animation. Keeping the old closed height leaves a
-       * visual gap until another interaction forces the stack to repack. */
+    if (region->regiontype == RGN_TYPE_XR && panel->activedata == nullptr) {
+      /* XR static relayouts can use the freshly measured height immediately, which avoids blank
+       * gaps after collapsing panels. During active drag/animation, keep the previous height so
+       * reorder alignment continues to use a stable panel body size. */
       panel->sizey = height;
     }
     else if (height != 0 || !panel_is_closed(panel)) {
