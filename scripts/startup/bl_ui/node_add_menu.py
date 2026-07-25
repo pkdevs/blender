@@ -593,7 +593,7 @@ classes = (
         "NODE_MT_group_input_add",
         template=AddNodeMenu,
         layout_base=NODE_MT_group_input_base,
-        pathing_dict=swap_base_pathing_dict),
+        pathing_dict=add_base_pathing_dict),
     generate_menu(
         "NODE_MT_group_input_swap",
         template=SwapNodeMenu,
