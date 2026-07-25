@@ -59,7 +59,7 @@ float luma_weight([[resource_table]] const Uniform &uni, float luma)
 {
   /* Slide 20 of "High Quality Temporal Supersampling" by Brian Karis at SIGGRAPH 2014. */
   /* To preserve more details in dark areas, we use a bigger bias. */
-  return 1.0f / (64.0f + luma * uni.uniform_buf.film.exposure_scale);
+  return 1.0f / (128.0f + luma * uni.uniform_buf.film.exposure_scale);
 }
 
 /**
