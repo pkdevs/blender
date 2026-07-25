@@ -188,8 +188,8 @@ struct ExpressionTypeParser {
    * Also known as Null-Denotation or NUD. */
   SymbolClass *nud(ast::Node node)
   {
-    /* Unary operators must have the highest precedence. */
-    static constexpr int unary_binding_power = 1000;
+    /* Unary operators must have the highest precedence after postfix and member access. */
+    static constexpr int unary_binding_power = 120;
 
     switch (node.type()) {
       // case NodeType::TemplateExplicit: /* Should have already been removed. */
