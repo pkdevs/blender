@@ -1148,7 +1148,7 @@ struct SymbolParser {
     SymbolScope *ns_scope = &scope;
     for (Id id : ns.children_of_type<Id>()) {
       SymbolScope *sym = table.scp_arena.alloc(ns_scope, id, SymbolScope::NAMESPACE);
-      scope.scopes.emplace(sym->identifier, sym);
+      ns_scope->scopes.emplace(sym->identifier, sym);
       ns_scope = sym;
       ns_prefix = ns_prefix + sym->identifier + ns_sep;
     }
