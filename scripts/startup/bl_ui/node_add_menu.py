@@ -504,16 +504,40 @@ class NODE_MT_group_input_base(NodeMenu):
         if hasattr(props, "use_transform"):
             props.use_transform = cls.use_transform
 
+    @staticmethod
+    def get_root_panel(tree):
+        item = tree.interface.items_tree[0]
+
+        # NOTE: Only check up to 20 levels of nesting to prevent infinite loops
+        # This limit can be raised accordingly if evedr needed.
+        for _ in range(20):
+            parent = item.parent
+
+            if parent is None:
+                return item
+            
+            item = parent
+
+        return item
+
+    def draw_children(self, layout, tree, parents=None):
+        if parents is None:
+            parents = []
+            direct_parent = self.get_root_panel(tree)
+        else:
+            direct_parent = parents[-1]
+
+        for item in direct_parent.interface_items:
+            if item.item_type == 'SOCKET' and item.in_out == 'INPUT':
+                self.draw_group_input(layout, item.identifier, label=" \u25B8 ".join(i.name for i in (*parents, item)))
+            elif item.item_type == 'PANEL':
+                self.draw_children(layout, tree, parents=[*parents, item])
+
     def draw(self, context):
         layout = self.layout
-
-        space_node = context.space_data
-        tree = space_node.edit_tree
-
-        if tree.bl_use_group_interface:
-            for item in tree.interface.items_tree:
-                if item.item_type == 'SOCKET' and item.in_out == 'INPUT':
-                    self.draw_group_input(layout, label=item.name)
+        tree = context.space_data.edit_tree
+        
+        self.draw_children(layout, tree)
 
 
 class NODE_MT_layout_base(NodeMenu):
