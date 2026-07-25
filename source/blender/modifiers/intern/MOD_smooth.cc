@@ -6,6 +6,9 @@
  * \ingroup modifiers
  */
 
+#include <algorithm>
+#include <cmath>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
@@ -35,8 +38,6 @@
 #include "MOD_modifiertypes.hh"
 #include "MOD_ui_common.hh"
 #include "MOD_util.hh"
-
-#include "eigen_capi.h"
 
 namespace blender {
 
@@ -78,7 +79,9 @@ static float vgroup_weight(const MDeformVert &dv, const int defgrp_index, const 
 }
 
 template<typename Fn>
-static void pin_edge_endpoints(const Span<int2> edges, MutableSpan<bool> is_pinned, const Fn &edge_selected)
+static void pin_edge_endpoints(const Span<int2> edges,
+                               MutableSpan<bool> is_pinned,
+                               const Fn &edge_selected)
 {
   for (const int e : edges.index_range()) {
     if (edge_selected(e)) {
@@ -262,12 +265,237 @@ static void hc_correction_pass(MutableSpan<float3> p,
   });
 }
 
+struct FrequencyDotProduct {
+  double value[3] = {0.0, 0.0, 0.0};
+};
+
+static FrequencyDotProduct frequency_dot_product(const Span<float3> a,
+                                                 const Span<float3> b,
+                                                 MutableSpan<FrequencyDotProduct> partial_sums)
+{
+  constexpr int64_t grain_size = 4096;
+  BLI_assert(a.size() == b.size());
+  BLI_assert(partial_sums.size() == (a.size() + grain_size - 1) / grain_size);
+
+  threading::parallel_for(partial_sums.index_range(), 1, [&](const IndexRange range) {
+    for (const int64_t chunk : range) {
+      const int64_t start = chunk * grain_size;
+      const int64_t end = std::min(start + grain_size, a.size());
+      FrequencyDotProduct sum;
+      for (int64_t i = start; i < end; i++) {
+        for (const int axis : IndexRange(3)) {
+          sum.value[axis] += double(a[i][axis]) * double(b[i][axis]);
+        }
+      }
+      partial_sums[chunk] = sum;
+    }
+  });
+
+  FrequencyDotProduct sum;
+  for (const FrequencyDotProduct &partial : partial_sums) {
+    for (const int axis : IndexRange(3)) {
+      sum.value[axis] += partial.value[axis];
+    }
+  }
+  return sum;
+}
+
+static void frequency_apply_matrix(const Span<int2> edges,
+                                   const GroupedSpan<int> vert_to_edge_map,
+                                   const Span<float> edge_weights,
+                                   const Span<float> inverse_weight_sums,
+                                   const float laplacian_weight,
+                                   const Span<float3> src,
+                                   MutableSpan<float3> laplacian,
+                                   MutableSpan<float3> dst)
+{
+  const bool weighted = !edge_weights.is_empty();
+  threading::parallel_for(src.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i : range) {
+      const float inverse_weight_sum = inverse_weight_sums[i];
+      if (inverse_weight_sum == 0.0f) {
+        laplacian[i] = float3(0.0f);
+        continue;
+      }
+
+      float3 neighbor_sum(0.0f);
+      for (const int e : vert_to_edge_map[i]) {
+        const int2 edge = edges[e];
+        const int other = (edge[0] == i) ? edge[1] : edge[0];
+        const float weight = weighted ? edge_weights[e] : 1.0f;
+        neighbor_sum += src[other] * weight;
+      }
+      laplacian[i] = src[i] - neighbor_sum * inverse_weight_sum;
+    }
+  });
+
+  /* Since edge weights are symmetric, `(L^T x)_i` can also be evaluated as a gather. */
+  threading::parallel_for(src.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i : range) {
+      float3 transposed_laplacian = laplacian[i];
+      for (const int e : vert_to_edge_map[i]) {
+        const int2 edge = edges[e];
+        const int other = (edge[0] == i) ? edge[1] : edge[0];
+        const float weight = weighted ? edge_weights[e] : 1.0f;
+        transposed_laplacian -= laplacian[other] * (weight * inverse_weight_sums[other]);
+      }
+      dst[i] = src[i] + transposed_laplacian * laplacian_weight;
+    }
+  });
+}
+
+static bool frequency_pcg_solve(const Span<int2> edges,
+                                const GroupedSpan<int> vert_to_edge_map,
+                                const Span<float> edge_weights,
+                                const Span<bool> pinned,
+                                const Span<float> inverse_weight_sums,
+                                const Span<float> inverse_diagonal,
+                                const float laplacian_weight,
+                                const short smooth_flags,
+                                MutableSpan<float3> positions,
+                                MutableSpan<float3> laplacian,
+                                MutableSpan<float3> residual,
+                                MutableSpan<float3> direction,
+                                MutableSpan<float3> matrix_result,
+                                MutableSpan<FrequencyDotProduct> partial_sums)
+{
+  frequency_apply_matrix(edges,
+                         vert_to_edge_map,
+                         edge_weights,
+                         inverse_weight_sums,
+                         laplacian_weight,
+                         positions,
+                         laplacian,
+                         matrix_result);
+
+  const bool has_pin = !pinned.is_empty();
+  threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      const bool is_pinned = has_pin && pinned[i];
+      const float3 matrix_value = matrix_result[i];
+      for (const int axis : IndexRange(3)) {
+        const bool use_axis = (smooth_flags & (MOD_SMOOTH_X << axis)) != 0;
+        residual[i][axis] = (is_pinned || !use_axis) ? 0.0f :
+                                                       positions[i][axis] - matrix_value[axis];
+        matrix_result[i][axis] = residual[i][axis] * inverse_diagonal[i];
+        direction[i][axis] = matrix_result[i][axis];
+      }
+    }
+  });
+
+  FrequencyDotProduct residual_dot = frequency_dot_product(residual, residual, partial_sums);
+  FrequencyDotProduct old_preconditioned_dot = frequency_dot_product(
+      residual, matrix_result, partial_sums);
+  constexpr double squared_relative_tolerance = 1e-10;
+  constexpr double minimum_squared_residual = 1e-20;
+  double residual_threshold[3];
+  bool converged[3];
+  for (const int axis : IndexRange(3)) {
+    residual_threshold[axis] = std::max(residual_dot.value[axis] * squared_relative_tolerance,
+                                        minimum_squared_residual);
+    converged[axis] = residual_dot.value[axis] <= residual_threshold[axis];
+  }
+
+  constexpr int max_iterations = 200;
+  const int max_solver_iterations = int(std::min<int64_t>(positions.size(), max_iterations));
+  for (int iteration = 0; iteration < max_solver_iterations; iteration++) {
+    if (converged[0] && converged[1] && converged[2]) {
+      return true;
+    }
+
+    frequency_apply_matrix(edges,
+                           vert_to_edge_map,
+                           edge_weights,
+                           inverse_weight_sums,
+                           laplacian_weight,
+                           direction,
+                           laplacian,
+                           matrix_result);
+    const FrequencyDotProduct direction_dot = frequency_dot_product(
+        direction, matrix_result, partial_sums);
+
+    double step[3] = {0.0, 0.0, 0.0};
+    for (const int axis : IndexRange(3)) {
+      if (converged[axis]) {
+        continue;
+      }
+      const double denominator = direction_dot.value[axis];
+      if (!(denominator > 0.0) || !std::isfinite(denominator)) {
+        return false;
+      }
+      step[axis] = old_preconditioned_dot.value[axis] / denominator;
+      if (!std::isfinite(step[axis])) {
+        return false;
+      }
+    }
+
+    threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        if (has_pin && pinned[i]) {
+          continue;
+        }
+        for (const int axis : IndexRange(3)) {
+          positions[i][axis] += float(step[axis]) * direction[i][axis];
+          residual[i][axis] -= float(step[axis]) * matrix_result[i][axis];
+        }
+      }
+    });
+
+    residual_dot = frequency_dot_product(residual, residual, partial_sums);
+    for (const int axis : IndexRange(3)) {
+      converged[axis] = residual_dot.value[axis] <= residual_threshold[axis];
+    }
+    if (converged[0] && converged[1] && converged[2]) {
+      return true;
+    }
+
+    threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        for (const int axis : IndexRange(3)) {
+          matrix_result[i][axis] = converged[axis] ? 0.0f :
+                                                     residual[i][axis] * inverse_diagonal[i];
+        }
+      }
+    });
+    const FrequencyDotProduct new_preconditioned_dot = frequency_dot_product(
+        residual, matrix_result, partial_sums);
+
+    double beta[3] = {0.0, 0.0, 0.0};
+    for (const int axis : IndexRange(3)) {
+      if (converged[axis]) {
+        continue;
+      }
+      const double denominator = old_preconditioned_dot.value[axis];
+      if (!(denominator > 0.0) || !std::isfinite(denominator)) {
+        return false;
+      }
+      beta[axis] = new_preconditioned_dot.value[axis] / denominator;
+      if (!std::isfinite(beta[axis])) {
+        return false;
+      }
+    }
+
+    threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        for (const int axis : IndexRange(3)) {
+          direction[i][axis] = matrix_result[i][axis] + float(beta[axis]) * direction[i][axis];
+        }
+      }
+    });
+    old_preconditioned_dot = new_preconditioned_dot;
+  }
+
+  /* A bounded approximate result is preferable to blocking modifier evaluation indefinitely. */
+  return true;
+}
+
 static bool frequency_filter(const Span<int2> edges,
                              const GroupedSpan<int> vert_to_edge_map,
                              const Span<float> edge_weights,
                              const Span<bool> pinned,
                              const float cutoff,
                              const int iterations,
+                             const short smooth_flags,
                              MutableSpan<float3> positions)
 {
   const int verts_num = positions.size();
@@ -275,62 +503,71 @@ static bool frequency_filter(const Span<int2> edges,
     return true;
   }
 
-  LinearSolver *solver = EIG_linear_least_squares_solver_new(2 * verts_num, verts_num, 3);
-  const bool has_pin = !pinned.is_empty();
-  for (const int i : positions.index_range()) {
-    EIG_linear_solver_variable_set(solver, 0, i, positions[i].x);
-    EIG_linear_solver_variable_set(solver, 1, i, positions[i].y);
-    EIG_linear_solver_variable_set(solver, 2, i, positions[i].z);
-    if (has_pin && pinned[i]) {
-      EIG_linear_solver_variable_lock(solver, i);
-    }
-  }
-
   const bool weighted = !edge_weights.is_empty();
-  const float laplacian_scale = 1.0f / ((cutoff > 1e-6f) ? cutoff : 1e-6f);
-  for (const int i : positions.index_range()) {
-    EIG_linear_solver_matrix_add(solver, i, i, 1.0);
-
-    const Span<int> incident = vert_to_edge_map[i];
-    float weight_sum = 0.0f;
-    for (const int e : incident) {
-      weight_sum += weighted ? edge_weights[e] : 1.0f;
+  Array<float> inverse_weight_sums(verts_num, 0.0f);
+  threading::parallel_for(positions.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i : range) {
+      float weight_sum = 0.0f;
+      for (const int e : vert_to_edge_map[i]) {
+        weight_sum += weighted ? edge_weights[e] : 1.0f;
+      }
+      if (weight_sum > 0.0f) {
+        inverse_weight_sums[i] = 1.0f / weight_sum;
+      }
     }
-    if (weight_sum <= 0.0f) {
-      continue;
-    }
+  });
 
-    const int row = verts_num + i;
-    EIG_linear_solver_matrix_add(solver, row, i, laplacian_scale);
-    for (const int e : incident) {
-      const int2 edge = edges[e];
-      const int other = (edge[0] == i) ? edge[1] : edge[0];
-      const float weight = weighted ? edge_weights[e] : 1.0f;
-      EIG_linear_solver_matrix_add(
-          solver, row, other, -laplacian_scale * weight / weight_sum);
-    }
-  }
+  const float safe_cutoff = std::max(cutoff, 1e-6f);
+  const float laplacian_weight = 1.0f / (safe_cutoff * safe_cutoff);
+  const bool has_pin = !pinned.is_empty();
+  Array<float> inverse_diagonal(verts_num);
+  threading::parallel_for(positions.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i : range) {
+      if (has_pin && pinned[i]) {
+        inverse_diagonal[i] = 0.0f;
+        continue;
+      }
 
-  bool success = true;
+      double normal_diagonal = (inverse_weight_sums[i] != 0.0f) ? 1.0 : 0.0;
+      for (const int e : vert_to_edge_map[i]) {
+        const int2 edge = edges[e];
+        const int other = (edge[0] == i) ? edge[1] : edge[0];
+        const float weight = weighted ? edge_weights[e] : 1.0f;
+        const double coefficient = double(weight) * inverse_weight_sums[other];
+        normal_diagonal += coefficient * coefficient;
+      }
+      inverse_diagonal[i] = 1.0f / (1.0f + laplacian_weight * float(normal_diagonal));
+    }
+  });
+
+  Array<float3> laplacian(verts_num);
+  Array<float3> residual(verts_num);
+  Array<float3> direction(verts_num);
+  Array<float3> matrix_result(verts_num);
+  constexpr int64_t dot_grain_size = 4096;
+  Array<FrequencyDotProduct> partial_sums((positions.size() + dot_grain_size - 1) /
+                                          dot_grain_size);
+
   for (int iteration = 0; iteration < iterations; iteration++) {
-    for (const int i : positions.index_range()) {
-      EIG_linear_solver_right_hand_side_add(solver, 0, i, positions[i].x);
-      EIG_linear_solver_right_hand_side_add(solver, 1, i, positions[i].y);
-      EIG_linear_solver_right_hand_side_add(solver, 2, i, positions[i].z);
-    }
-    if (!EIG_linear_solver_solve(solver)) {
-      success = false;
-      break;
-    }
-    for (const int i : positions.index_range()) {
-      positions[i].x = EIG_linear_solver_variable_get(solver, 0, i);
-      positions[i].y = EIG_linear_solver_variable_get(solver, 1, i);
-      positions[i].z = EIG_linear_solver_variable_get(solver, 2, i);
+    if (!frequency_pcg_solve(edges,
+                             vert_to_edge_map,
+                             edge_weights,
+                             pinned,
+                             inverse_weight_sums,
+                             inverse_diagonal,
+                             laplacian_weight,
+                             smooth_flags,
+                             positions,
+                             laplacian,
+                             residual,
+                             direction,
+                             matrix_result,
+                             partial_sums))
+    {
+      return false;
     }
   }
-
-  EIG_linear_solver_delete(solver);
-  return success;
+  return true;
 }
 
 static void smoothModifier_do(SmoothModifierData *smd,
@@ -441,6 +678,7 @@ static void smoothModifier_do(SmoothModifierData *smd,
                            pinned_span,
                            smd->frequency_cutoff,
                            smd->repeat,
+                           smd->flag,
                            filtered_positions))
       {
         apply_blend(vertexCos,
@@ -497,11 +735,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
     col.prop(ptr, "frequency_cutoff", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  if (ELEM(method,
-           MOD_SMOOTH_METHOD_TAUBIN,
-           MOD_SMOOTH_METHOD_HC,
-           MOD_SMOOTH_METHOD_FREQUENCY))
-  {
+  if (ELEM(method, MOD_SMOOTH_METHOD_TAUBIN, MOD_SMOOTH_METHOD_HC, MOD_SMOOTH_METHOD_FREQUENCY)) {
     col.prop(ptr, "use_cotangent_weights", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
