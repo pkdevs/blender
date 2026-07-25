@@ -202,7 +202,6 @@ namespace blender {
 #  define DEFINE_VALUE(name, value) .define(name, value)
 
 #  define DO_STATIC_COMPILATION() .do_static_compilation(true)
-#  define AUTO_RESOURCE_LOCATION() .auto_resource_location(true)
 
 /* TO REMOVE. */
 #  define METAL_BACKEND_ONLY() .metal_backend_only(true)
@@ -303,7 +302,6 @@ namespace blender {
 #  define DEFINE_VALUE(name, value)
 
 #  define DO_STATIC_COMPILATION()
-#  define AUTO_RESOURCE_LOCATION()
 
 /* TO REMOVE. */
 #  define METAL_BACKEND_ONLY()
@@ -358,10 +356,28 @@ static inline Type to_type(const GPUType type)
       return Type::float3x3_t;
     case GPU_MAT4:
       return Type::float4x4_t;
-    default:
-      BLI_assert_msg(0, "Error: Cannot convert GPUType to shader::Type.");
-      return Type::float_t;
+    case GPU_INT:
+      return Type::int_t;
+    case GPU_INT2:
+      return Type::int2_t;
+    case GPU_INT3:
+      return Type::int3_t;
+    case GPU_INT4:
+      return Type::int4_t;
+    case GPU_BOOL:
+      return Type::bool_t;
+    case GPU_NONE:
+    case GPU_TEX1D_ARRAY:
+    case GPU_TEX2D:
+    case GPU_TEX2D_ARRAY:
+    case GPU_TEX3D:
+    case GPU_CLOSURE:
+    case GPU_ATTR:
+      break;
   }
+
+  BLI_assert_msg(0, "Error: Cannot convert GPUType to shader::Type.");
+  return Type::float_t;
 }
 
 static inline std::ostream &operator<<(std::ostream &stream, const Type type)
@@ -771,8 +787,6 @@ struct ShaderCreateInfo {
   bool is_generated_ = true;
   /** If true, all additionally linked create info will be merged into this one. */
   bool finalized_ = false;
-  /** If true, all resources will have an automatic location assigned. */
-  bool auto_resource_location_ = false;
   /** If true, force depth and stencil tests to always happen before fragment shader invocation. */
   bool early_fragment_test_ = false;
   /** Allow optimization when fragment shader writes to `gl_FragDepth`. */
@@ -1516,12 +1530,6 @@ struct ShaderCreateInfo {
   Self &depth_write(DepthWrite value)
   {
     depth_write_ = value;
-    return *static_cast<Self *>(this);
-  }
-
-  Self &auto_resource_location(bool value)
-  {
-    auto_resource_location_ = value;
     return *static_cast<Self *>(this);
   }
 

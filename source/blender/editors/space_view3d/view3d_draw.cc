@@ -513,6 +513,7 @@ static void drawviewborder(Scene *scene, Depsgraph *depsgraph, ARegion *region, 
   {
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
+    /* Apply roll. */
     if (roll != 0.0f || is_mirrored) {
       GPU_matrix_push();
       const int center_x = region->winx / 2;
@@ -522,7 +523,7 @@ static void drawviewborder(Scene *scene, Depsgraph *depsgraph, ARegion *region, 
         GPU_matrix_scale_2f(-1.0f, 1.0f);
       }
       if (roll != 0.0f) {
-        GPU_matrix_rotate_2d(RAD2DEG(rv3d->camroll));
+        GPU_matrix_rotate_2d(RAD2DEG(roll));
       }
       GPU_matrix_translate_2f(-center_x, -center_y);
     }

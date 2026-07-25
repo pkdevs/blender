@@ -952,12 +952,7 @@ void ED_screen_exit(bContext *C, wmWindow *window, bScreen *screen)
   CTX_wm_window_set(C, window);
 
   if (screen->animtimer) {
-    WM_event_timer_remove(wm, window, screen->animtimer);
-
-    Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
-    Scene *scene = WM_window_get_active_scene(prevwin);
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
-    BKE_sound_stop_scene(scene_eval);
+    screen_stop_playback(CTX_data_main(C), wm, window, screen);
   }
   screen->animtimer = nullptr;
   screen->scrubbing = false;
@@ -1173,6 +1168,12 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
       }
     }
   }
+
+#ifdef WITH_INPUT_IME
+  if (region_prev != screen->active_region) {
+    WM_window_IME_region_refresh(win, area, screen->active_region);
+  }
+#endif
 }
 
 int ED_screen_area_active(const bContext *C)
@@ -1947,7 +1948,9 @@ void ED_screen_animation_stop(Main *bmain,
 
 void ED_screen_animation_timer_remove(wmWindowManager *wm, wmWindow *win)
 {
-  bScreen *stopscreen = ED_screen_animation_playing(wm);
+  /* `ED_screen_animation_playing` isn't used, as it also checks for screens with
+   *  scrubbing enabled*/
+  bScreen *stopscreen = ED_screen_animation_no_scrub(wm);
   if (!stopscreen) {
     return;
   }

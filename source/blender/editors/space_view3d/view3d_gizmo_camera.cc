@@ -577,15 +577,20 @@ static void WIDGETGROUP_camera_view_draw_prepare(const bContext *C, wmGizmoGroup
   gz->matrix_space[3][0] = viewgroup->state.view_border.xmin;
   gz->matrix_space[3][1] = viewgroup->state.view_border.ymin;
 
-  gz->matrix_space[3][0] -= region->winx / 2.0f;
-  gz->matrix_space[3][1] -= region->winy / 2.0f;
+  /* Apply roll. */
+  if (viewgroup->state.roll != 0.0f) {
+    const int center_x = region->winx / 2;
+    const int center_y = region->winy / 2;
+    gz->matrix_space[3][0] -= center_x;
+    gz->matrix_space[3][1] -= center_y;
 
-  transpose_m4(gz->matrix_space);
-  rotate_m4(gz->matrix_space, 'Z', -viewgroup->state.roll);
-  transpose_m4(gz->matrix_space);
+    transpose_m4(gz->matrix_space);
+    rotate_m4(gz->matrix_space, 'Z', -viewgroup->state.roll);
+    transpose_m4(gz->matrix_space);
 
-  gz->matrix_space[3][0] += region->winx / 2.0f;
-  gz->matrix_space[3][1] += region->winy / 2.0f;
+    gz->matrix_space[3][0] += center_x;
+    gz->matrix_space[3][1] += center_y;
+  }
 }
 
 static void WIDGETGROUP_camera_view_refresh(const bContext *C, wmGizmoGroup *gzgroup)

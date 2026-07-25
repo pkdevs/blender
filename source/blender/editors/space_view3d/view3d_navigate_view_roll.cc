@@ -69,16 +69,17 @@ static void viewroll_apply(ViewOpsData *vod, int x, int y)
     view_roll_angle(
         vod->region, vod->rv3d->viewquat, vod->init.quat, vod->init.mousevec, angle, false);
 
-    const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
-    if (vod->rv3d->persp == RV3D_CAMOB && !is_camera_lock) {
-      if ((vod->rv3d->rflag & RV3D_MIRROR_X) != 0) {
-        vod->rv3d->camroll = vod->init.camroll + angle;
+    if (vod->rv3d->persp == RV3D_CAMOB) {
+      const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
+      if (!is_camera_lock) {
+        /* Wrap to prevent poor precision at large values. */
+        if ((vod->rv3d->rflag & RV3D_MIRROR_X) != 0) {
+          vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll + angle);
+        }
+        else {
+          vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
+        }
       }
-      else {
-        vod->rv3d->camroll = vod->init.camroll - angle;
-      }
-      /* Keep angle between -Pi and Pi */
-      vod->rv3d->camroll = math::floored_mod(vod->rv3d->camroll - M_PI, M_PI * 2.0f) - M_PI;
     }
   }
 
@@ -220,16 +221,17 @@ static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
   negate_v3(mousevec);
   view_roll_angle(vod->region, quat_new, vod->rv3d->viewquat, mousevec, angle, true);
 
-  const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
-  if (vod->rv3d->persp == RV3D_CAMOB && !is_camera_lock) {
-    if ((vod->rv3d->rflag & RV3D_MIRROR_X) != 0) {
-      vod->rv3d->camroll = vod->init.camroll + angle;
+  if (vod->rv3d->persp == RV3D_CAMOB) {
+    const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
+    if (!is_camera_lock) {
+      /* Wrap to prevent poor precision at large values. */
+      if ((vod->rv3d->rflag & RV3D_MIRROR_X) != 0) {
+        vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll + angle);
+      }
+      else {
+        vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
+      }
     }
-    else {
-      vod->rv3d->camroll = vod->init.camroll - angle;
-    }
-    /* Keep angle between -Pi and Pi */
-    vod->rv3d->camroll = math::floored_mod(vod->rv3d->camroll - M_PI, M_PI * 2.0f) - M_PI;
   }
 
   V3D_SmoothParams sview_params = {};
