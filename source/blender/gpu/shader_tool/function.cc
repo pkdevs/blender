@@ -747,19 +747,13 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   functions.push_back({"int", "atomicCompSwap", {"int", "int", "int"}});
   functions.push_back({"uint", "atomicCompSwap", {"uint", "uint", "uint"}});
 
-  const vector<string> deriv_funcs = {"dFdx",
-                                      "dFdy",
-                                      "fwidth",
-                                      "dFdxCoarse",
-                                      "dFdyCoarse",
-                                      "fwidthCoarse",
-                                      "dFdxFine",
-                                      "dFdyFine",
-                                      "fwidthFine"};
+  const vector<string> deriv_funcs = {"gpu_dfdx", "gpu_dfdy", "gpu_fwidth"};
 
   for (const auto &op : deriv_funcs) {
     add_unary(op, f_types);
   }
+
+  functions.push_back({"void", "gpu_discard_fragment", {}});
 
   const vector<string> samplers = {"sampler1D",
                                    "sampler2D",
