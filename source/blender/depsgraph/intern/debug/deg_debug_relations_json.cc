@@ -12,6 +12,8 @@
 
 #include "BLI_stack.hh"
 
+#include "BKE_idtype.hh"
+
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_debug.hh"
 
@@ -209,9 +211,14 @@ static void deg_debug_json_node_recursive(JSONStream &json,
 
   json.object_begin();
 
+  json.object_key("type");
+  json.value(nodeTypeAsString(node.type));
+
   if (const auto *const *id_node = std::get_if<const IDNode *>(&node_variant)) {
+    json.object_key("id_type");
+    json.value(BKE_idtype_idcode_to_name(GS((*id_node)->id_orig->name)));
     json.object_key("id_name");
-    json.value((*id_node)->id_orig->name);
+    json.value((*id_node)->id_orig->name + 2);
     json.object_key("uid");
     json.value((*id_node)->id_orig_session_uid);
     json.object_key("components");
@@ -226,8 +233,6 @@ static void deg_debug_json_node_recursive(JSONStream &json,
   if (const auto *const *time_node = std::get_if<const TimeSourceNode *>(&node_variant)) {
   }
   if (const auto *const *comp_node = std::get_if<const ComponentNode *>(&node_variant)) {
-    json.object_key("type");
-    json.value(nodeTypeAsString(node.type));
     json.object_key("operations");
     json.array_begin();
     for (const auto *op_node : (*comp_node)->operations) {
