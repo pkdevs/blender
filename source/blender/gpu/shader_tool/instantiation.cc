@@ -1527,8 +1527,10 @@ struct InstantiationContext {
     if (par) {
       match_if(')');
     }
-    if (decl.is_array()) {
-      builder << decl.array();
+
+    ArrayDecl array = decl.array();
+    if (array.is_valid()) {
+      builder << array;
     }
 
     SymbolVariable *var = scope.lookup_variable(decl.identifier());
@@ -1542,24 +1544,27 @@ struct InstantiationContext {
       skip_node(decl.initial_value());
     }
     else if (decl.initial_value().is_valid()) {
-      assignment(decl.initial_value(), scope, var->type);
+      assignment(decl.initial_value(), scope, var->type, array.dimensions());
     }
     else if (decl.initializer_list().is_valid()) {
       builder.ss << "=";
-      initializer_list(decl.initializer_list(), scope, var->type);
+      initializer_list(decl.initializer_list(), scope, var->type, array.dimensions());
     }
   }
 
-  void assignment(AssignStmt stmt, SymbolScope &scope, SymbolClass *cls)
+  void assignment(AssignStmt stmt, SymbolScope &scope, SymbolClass *cls, int array_dim = 0)
   {
     match_if('=');
-    init_expression_or_initializer_list(stmt.child_first(), scope, cls);
+    init_expression_or_initializer_list(stmt.child_first(), scope, cls, array_dim);
   }
 
-  void init_expression_or_initializer_list(Node node, SymbolScope &scope, SymbolClass *cls)
+  void init_expression_or_initializer_list(Node node,
+                                           SymbolScope &scope,
+                                           SymbolClass *cls,
+                                           int array_dim = 0)
   {
     if (node == NodeType::InitializerList) {
-      initializer_list(node, scope, cls);
+      initializer_list(node, scope, cls, array_dim);
     }
     else if (node == NodeType::Expr) {
       expr(node, scope);
@@ -1577,12 +1582,16 @@ struct InstantiationContext {
     builder.curr = construct.back().next();
   }
 
-  void initializer_list(InitializerList list, SymbolScope &scope, SymbolClass *cls)
+  void initializer_list(InitializerList list,
+                        SymbolScope &scope,
+                        SymbolClass *cls,
+                        int array_dim = 0)
   {
-    if (cls && !cls->is_error) {
-      builder.ss << cls->resolved->identifier;
+    const bool is_empty = list.is_empty();
+    if (array_dim > 0) {
+      /* Array initializer is the only place where we don't need to prepend the type. */
     }
-    else {
+    else if (cls == nullptr || cls->is_error) {
       /* TODO(fclem): Long term, we can lookup what is the expected type of the expression and pass
        * it down the initializer tree. */
       error(list, "Initializer list requires explicit type");
@@ -1590,9 +1599,34 @@ struct InstantiationContext {
     }
     builder.curr = list.front();
 
-    match_if('{');
+    if (array_dim > 0) {
+      /* Only use aggregate syntax for arrays. */
+      match_if('{');
+    }
+    else if (cls->resolved->is_builtin) {
+      /* Use constructor syntax for builtin types. */
+      builder << cls->resolved->identifier + "(" + trivia(builder.curr);
+    }
+    else if (is_empty) {
+      /* Call default constructor. */
+      if (cls->resolved->is_builtin) {
+        builder << cls->resolved->identifier + "(0" + trivia(builder.curr);
+      }
+      else {
+        builder << cls->resolved->identifier + "_ctor_(" + trivia(builder.curr);
+      }
+    }
+    else {
+      /* '_ctor' macro resolve to either aggregate or default constructor depending on target
+       * language. */
+      builder << "_ctor(" + cls->resolved->identifier + ")" + trivia(builder.curr);
+    }
+
     DesignatedInitializer designated(list.child_first());
     if (designated.is_valid()) {
+      if (array_dim > 0) {
+        error(designated, "Expected array member initializer but got designated initializer");
+      }
       /* Iterate over the list of members, zero initializing the omitted members, until we find
        * the given initializer. If member is out of order or not existing, raise an error. */
       for (SymbolVariable *var : cls->non_static_variables_in_declaration_order()) {
@@ -1624,11 +1658,23 @@ struct InstantiationContext {
     }
     else {
       for (Node child : list.children_range()) {
-        init_expression_or_initializer_list(child.child_last(), scope, nullptr /* TODO */);
+        init_expression_or_initializer_list(
+            child.child_last(), scope, array_dim > 0 ? cls : nullptr /* TODO */, array_dim - 1);
         match_if(',');
       }
     }
-    match_if('}');
+
+    if (array_dim > 0) {
+      /* Only use aggregate syntax for arrays. */
+      match_if('}');
+    }
+    else if (cls->resolved->is_builtin || is_empty) {
+      /* Use constructor syntax for builtin types. */
+      builder << ")" + trivia(builder.curr);
+    }
+    else {
+      builder << " _rotc()" + trivia(builder.curr);
+    }
   }
 
   SymbolClass *id_type_lookup_resolved(IdQualified id, const SymbolScope &scope)

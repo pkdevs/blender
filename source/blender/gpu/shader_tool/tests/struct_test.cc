@@ -953,6 +953,7 @@ T fn6() { return {1, 2, }; }
 T fn7() { return {.a=1, .b=2}; }
 T fn8() { return {.a=1, .b=2, }; }
 void fn() {
+  T t0={};
   T t1=T{1, 2};
   T t2=T{1, 2, };
   T t3=T{.a=1, .b=2};
@@ -973,25 +974,26 @@ struct T{
                  };
 #line 2
 T T_ctor_() {T r;r.a=0;r.b=0;return r;}
-T fn1() { return T{1, 2}; }
-T fn2() { return T{1, 2  }; }
-T fn3() { return T{1, 2}; }
-T fn4() { return T{1, 2  }; }
-T fn5() { return T{1, 2}; }
-T fn6() { return T{1, 2  }; }
-T fn7() { return T{1, 2}; }
-T fn8() { return T{1, 2  }; }
+T fn1() { return _ctor(T)1, 2 _rotc(); }
+T fn2() { return _ctor(T)1, 2   _rotc(); }
+T fn3() { return _ctor(T)1, 2 _rotc(); }
+T fn4() { return _ctor(T)1, 2   _rotc(); }
+T fn5() { return _ctor(T)1, 2 _rotc(); }
+T fn6() { return _ctor(T)1, 2   _rotc(); }
+T fn7() { return _ctor(T)1, 2 _rotc(); }
+T fn8() { return _ctor(T)1, 2   _rotc(); }
 void fn() {
-  T t1=T{1, 2};
-  T t2=T{1, 2  };
-  T t3=T{1, 2};
-  T t4=T{1, 2  };
-  T t5=T{1, 2};
-  T t6=T{1, 2  };
-  T t7=T{1, 2};
-  T t8=T{1, 2  };
-  T t9=T{1, T{0, 2}.a};
-  T t10=T{1, T{0, 2}.a};
+  T t0=T_ctor_();
+  T t1=_ctor(T)1, 2 _rotc();
+  T t2=_ctor(T)1, 2   _rotc();
+  T t3=_ctor(T)1, 2 _rotc();
+  T t4=_ctor(T)1, 2   _rotc();
+  T t5=_ctor(T)1, 2 _rotc();
+  T t6=_ctor(T)1, 2   _rotc();
+  T t7=_ctor(T)1, 2 _rotc();
+  T t8=_ctor(T)1, 2   _rotc();
+  T t9=_ctor(T)1, _ctor(T)0, 2 _rotc().a _rotc();
+  T t10=_ctor(T)1, _ctor(T)0, 2 _rotc().a _rotc();
 }
 )";
     auto [output, _, error] = process_test_string(input, Language::BSL);

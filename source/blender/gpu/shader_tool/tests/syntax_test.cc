@@ -289,9 +289,9 @@ TEST(shader_tool, Auto)
         "auto k = i[0][0];\n"
         "auto l = i[0][0][0];\n";
     string expect =
-        "int a=int{0};\n"
-        "float b=float{0.0f};\n"
-        "float c=float{0.0f + 0};\n"
+        "int a=int(0);\n"
+        "float b=float(0.0f);\n"
+        "float c=float(0.0f + 0);\n"
         "int d = 0;\n"
         "float e = 0.0f;\n"
         "float f = 0.0f + 0;\n"
@@ -301,6 +301,24 @@ TEST(shader_tool, Auto)
         "float4x4 j = i[0];\n"
         "float4 k = i[0][0];\n"
         "float l = i[0][0][0];\n";
+    auto [output, _, error] = process_test_string(input, shader::Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+}
+
+TEST(shader_tool, ArrayAggregate)
+{
+  {
+    string input = "int a[4] = {0, 1, 2, 3};\n";
+    string expect = "int a[4] = {0, 1, 2, 3};\n";
+    auto [output, _, error] = process_test_string(input, shader::Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = "int a[4][2] = {{0,0}, {1,1}, {int{2},{2}}, {3,3}};\n";
+    string expect = "int a[4][2] = {{0,0}, {1,1}, {int(2),int(2)}, {3,3}};\n";
     auto [output, _, error] = process_test_string(input, shader::Language::BSL);
     EXPECT_EQ(output, expect);
     EXPECT_EQ(error, "");
