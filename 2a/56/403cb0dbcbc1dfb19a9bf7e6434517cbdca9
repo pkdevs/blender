@@ -3,3 +3,4 @@ Referenced by commit f75af7cbf53, Mesh: Forward compatibility with generic bevel
 Referenced by issue #114860, Bevel modifier bug
 Referenced by issue #109840, Select Similar Crease not functioning.
 Referenced by issue #108491, Crash when file is loaded in previous versions
+Referenced by pull request #161957, Fix #161952: Skin Modifier root and radii lost when joining objects
