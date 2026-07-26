@@ -786,7 +786,7 @@ float dist_squared_ray_to_aabb_v3(const DistRayAABB_Precalc *data,
     main_axis += 3;
   }
 
-  /* If rtmin <= rtmax, ray intersect AABB. Ohterwise, there is no moment where the ray has entered
+  /* If rtmin <= rtmax, ray intersect AABB. Otherwise, there is no moment where the ray has entered
    * through all three near plane but has not exited from any far plane, meaning the ray does not
    * intersect the AABB. */
   if (rtmin <= rtmax) {
