@@ -18,7 +18,7 @@ namespace blender::nodes::node_geo_clip_geometry_cc {
 /* Node arg names: */
 constexpr std::string INPUT_PLANE_ORIGIN = "Center";
 constexpr std::string INPUT_PLANE_NORMAL = "Normal";
-constexpr std::string OUTPUT_PLANE_SELECTION = "Intersection";
+const blender::UString OUTPUT_PLANE_SELECTION = "Intersection"_ustr;
 
 /*
  * Mesh
@@ -34,8 +34,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value({1.0f, 0.0f, 0.0f})
       .subtype(PROP_XYZ);
 
-  b.add_output<decl::Geometry>(N_("Geometry"_ustr)).propagate_all();
-  b.add_output<decl::Bool>(blender::UString(OUTPUT_PLANE_SELECTION)).field_on_all();
+  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all();
+  b.add_output<decl::Bool>(OUTPUT_PLANE_SELECTION);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -47,8 +47,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   float3 plane_no = params.extract_input<float3>(blender::UString(INPUT_PLANE_NORMAL));
 
   blender::geometry::ClipByPlaneArgs args;
-  args.plane_selection_attr_id = params.get_output_anonymous_attribute_id_if_needed(
-      blender::UString(OUTPUT_PLANE_SELECTION));
+  args.plane_selection_attr_id = params.get_output_anonymous_attribute_id_if_needed(OUTPUT_PLANE_SELECTION);
 
   /* Check norm to avoid zero vector */
   if (normalize_v3(plane_no) != 0.0f) {
