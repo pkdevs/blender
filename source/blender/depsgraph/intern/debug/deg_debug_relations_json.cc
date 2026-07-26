@@ -244,8 +244,8 @@ static void deg_debug_json_node_recursive(JSONStream &json,
     json.array_end();
   }
   if (const auto *const *op_node = std::get_if<const OperationNode *>(&node_variant)) {
-    json.object_key("name");
-    json.value(node.name);
+    json.object_key("operation");
+    json.value(operationCodeAsString((*op_node)->opcode));
     json.object_key("is_entry");
     json.value(is_entry);
     json.object_key("is_exit");
