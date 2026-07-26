@@ -5,7 +5,6 @@
 #pragma once
 
 #include <memory>
-#include <optional>
 
 #include "BLI_array.hh"
 
@@ -55,12 +54,8 @@ struct NodesModifierRuntime {
    * evaluation (e.g. for gizmo backpropagation).
    */
   std::shared_ptr<nodes::eval_log::NodesEvalLog> eval_log;
-  /**
-   * Runtime-only preferred Debug View identity. When it is temporarily unavailable, preview uses
-   * a deterministic fallback without overwriting this value, so the preferred view is restored if
-   * it reappears. Compute-context hashes are intentionally not stored in blend files.
-   */
-  std::optional<nodes::debug_view::Identifier> selected_debug_view;
+  /** Runtime-only enabled Debug Views. Compute-context hashes are not stored in blend files. */
+  nodes::debug_view::State debug_view_state;
   /**
    * Simulation cache that is shared between original and evaluated modifiers. This allows the
    * original modifier to be removed, without also removing the simulation state which may still be

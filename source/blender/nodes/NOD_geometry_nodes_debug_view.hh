@@ -4,13 +4,18 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 
 #include "BLI_compute_context.hh"
+#include "BLI_set.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
+
+namespace blender {
+struct Object;
+}
 
 namespace blender::nodes {
 
@@ -26,10 +31,21 @@ std::string viewer_name_from_node(StringRef label, StringRef node_name);
 /** Decide whether logged Viewer data can replace modifier geometry. */
 bool is_geometry_candidate(bool is_debug_view, bool is_shown, bool has_geometry);
 
+/**
+ * Hash the original node-tree datablock session UIDs in deterministic outer-to-inner order.
+ *
+ * Session UIDs are stable for the current Blender session and across memfile undo, but are
+ * intentionally regenerated when a file is loaded normally.
+ */
+ComputeContextHash node_tree_lineage_hash(Span<uint32_t> tree_session_uids);
+
 /** Stable identity of a Viewer node within one Geometry Nodes modifier evaluation. */
 struct Identifier {
   ComputeContextHash compute_context_hash;
+  ComputeContextHash node_tree_lineage_hash;
   int32_t viewer_node_id = 0;
+
+  uint64_t hash() const;
 
   friend bool operator==(const Identifier &, const Identifier &) = default;
 };
@@ -52,6 +68,12 @@ struct Candidate {
   std::string viewer_name;
 };
 
+/** Runtime-only enabled state for one Geometry Nodes modifier. */
+struct State {
+  VectorSet<Identifier> enabled;
+  bool initialized = false;
+};
+
 /** Sort candidates deterministically and remove duplicate identities. */
 void finalize_candidates(Vector<Candidate> &candidates);
 
@@ -63,23 +85,34 @@ std::string candidate_display_name(Span<Candidate> candidates,
                                    int candidate_index,
                                    StringRef default_viewer_name);
 
+/** Enable the first available candidate once, without reinitializing an empty state later. */
+void initialize_state(Span<Candidate> candidates, State &state);
+
+/** Toggle an available candidate by stable identity. */
+bool toggle_candidate(Span<Candidate> candidates, const Identifier &identifier, State &state);
+
+/** Candidate indices enabled in deterministic candidate order. Stale identities are preserved. */
+Vector<int> enabled_candidate_indices(Span<Candidate> candidates, const State &state);
+
 /**
- * Find the current selection or the first candidate as fallback without changing the selection.
+ * Preserve runtime-only state across memfile undo for matching Geometry Nodes modifiers.
+ *
+ * Object and modifier duplication still create independent, freshly initialized state.
  */
-int find_candidate_index(Span<Candidate> candidates, const std::optional<Identifier> &selection);
+void preserve_states_on_undo(const Object &old_object, Object &new_object);
 
-/** Keep a valid selection or choose the first candidate as deterministic fallback. */
-int resolve_candidate_index(Span<Candidate> candidates, std::optional<Identifier> &selection);
+/**
+ * Stable namespace for this Debug View in a dupli persistent-ID chain.
+ *
+ * #INT_MAX is reserved as the end marker of a persistent ID.
+ */
+int persistent_id_namespace(const Identifier &identifier);
 
-/** Select the candidate with the exact stable identity when it is available. */
-int select_candidate(Span<Candidate> candidates,
-                     const Identifier &identifier,
-                     std::optional<Identifier> &selection);
+/** Reserve a namespace, probing deterministically if another enabled source has the same hash. */
+int unique_persistent_id_namespace(const Identifier &identifier, Set<int> &used_namespaces);
 
-/** Cycle relative to the resolved selection, wrapping at both ends. */
-int cycle_candidate_index(Span<Candidate> candidates,
-                          int step,
-                          std::optional<Identifier> &selection);
+/** Whether one namespace parent level fits before the persistent-ID termination slot. */
+bool persistent_id_namespace_fits(int current_depth, int max_depth);
 
 }  // namespace debug_view
 }  // namespace blender::nodes

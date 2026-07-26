@@ -143,9 +143,7 @@ void operatortypes_object()
   WM_operatortype_append(OBJECT_OT_skin_radii_equalize);
   WM_operatortype_append(OBJECT_OT_skin_armature_create);
   WM_operatortype_append(OBJECT_OT_geometry_nodes_input_attribute_toggle);
-  WM_operatortype_append(OBJECT_OT_geometry_nodes_debug_view_select);
-  WM_operatortype_append(OBJECT_OT_geometry_nodes_debug_view_cycle);
-  geometry_nodes_debug_view_menu_register();
+  WM_operatortype_append(OBJECT_OT_geometry_nodes_debug_view_toggle);
   WM_operatortype_append(OBJECT_OT_geometry_node_tree_copy_assign);
   WM_operatortype_append(OBJECT_OT_grease_pencil_dash_modifier_segment_add);
   WM_operatortype_append(OBJECT_OT_grease_pencil_dash_modifier_segment_remove);

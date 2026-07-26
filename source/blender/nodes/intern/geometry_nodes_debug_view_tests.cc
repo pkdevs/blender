@@ -4,19 +4,33 @@
 
 #include "testing/testing.h"
 
+#include "MEM_guardedalloc.h"
+
+#include "BLI_listbase.hh"
+#include "BLI_map.hh"
+
 #include "BKE_compute_contexts.hh"
 #include "BKE_gtest_setup.hh"
+#include "BKE_modifier.hh"
+
+#include "DNA_modifier_types.h"
+#include "DNA_object_types.h"
+
+#include "MOD_nodes.hh"
 
 #include "NOD_eval_log.hh"
 #include "NOD_geometry_nodes_debug_view.hh"
 
 namespace blender::nodes::debug_view::tests {
 
-static Identifier identifier(const uint64_t context, const int32_t node)
+static Identifier identifier(const uint64_t context,
+                             const int32_t node,
+                             const uint32_t tree_session_uid = 1)
 {
   Identifier identifier;
   identifier.compute_context_hash.v1 = context;
   identifier.compute_context_hash.v2 = context * 17;
+  identifier.node_tree_lineage_hash = node_tree_lineage_hash({&tree_session_uid, 1});
   identifier.viewer_node_id = node;
   return identifier;
 }
@@ -100,6 +114,45 @@ TEST(GeometryNodesDebugView, DuplicateIdentityIsRemoved)
   EXPECT_EQ(candidates.size(), 1);
 }
 
+TEST(GeometryNodesDebugView, NodeTreeLineageIsPartOfIdentity)
+{
+  const Identifier original = identifier(10, 20, 100);
+  const Identifier replacement = identifier(10, 20, 200);
+  EXPECT_NE(original, replacement);
+  EXPECT_NE(original.hash(), replacement.hash());
+
+  State state;
+  state.initialized = true;
+  state.enabled.add(original);
+  Vector<Candidate> replacement_candidates = {candidate(10, 20, {1}, {}, "Replacement")};
+  replacement_candidates[0].identifier = replacement;
+  EXPECT_TRUE(enabled_candidate_indices(replacement_candidates, state).is_empty());
+  EXPECT_FALSE(state.enabled.contains(replacement));
+}
+
+TEST(GeometryNodesDebugView, CompleteOuterToInnerNodeTreeLineageIsHashed)
+{
+  const uint32_t root_a_nested_a[] = {10, 20};
+  const uint32_t root_b_nested_a[] = {11, 20};
+  const uint32_t root_a_nested_b[] = {10, 21};
+  const uint32_t root_a_nested_a_again[] = {10, 20};
+
+  EXPECT_NE(node_tree_lineage_hash({root_a_nested_a, 2}),
+            node_tree_lineage_hash({root_b_nested_a, 2}));
+  EXPECT_NE(node_tree_lineage_hash({root_a_nested_a, 2}),
+            node_tree_lineage_hash({root_a_nested_b, 2}));
+  EXPECT_EQ(node_tree_lineage_hash({root_a_nested_a, 2}),
+            node_tree_lineage_hash({root_a_nested_a_again, 2}));
+
+  /* Repeated instances of one nested tree retain the same lineage but remain distinct through
+   * their compute contexts. */
+  const Identifier first_instance = identifier(100, 30);
+  Identifier second_instance = first_instance;
+  second_instance.compute_context_hash.v1++;
+  EXPECT_EQ(first_instance.node_tree_lineage_hash, second_instance.node_tree_lineage_hash);
+  EXPECT_NE(first_instance, second_instance);
+}
+
 TEST(GeometryNodesDebugView, GeometryEligibility)
 {
   EXPECT_TRUE(is_geometry_candidate(true, true, true));
@@ -108,79 +161,29 @@ TEST(GeometryNodesDebugView, GeometryEligibility)
   EXPECT_FALSE(is_geometry_candidate(false, true, true));
 }
 
-TEST(GeometryNodesDebugView, ResolvePreservesOrFallsBack)
+TEST(GeometryNodesDebugView, FirstInitialization)
 {
   Vector<Candidate> candidates;
   candidates.append(candidate(10, 1, {1}, {}, "First"));
   candidates.append(candidate(20, 2, {2}, {}, "Second"));
   finalize_candidates(candidates);
 
-  std::optional<Identifier> selection = candidates[1].identifier;
-  EXPECT_EQ(resolve_candidate_index(candidates.as_span(), selection), 1);
-  EXPECT_EQ(selection, candidates[1].identifier);
+  State state;
+  initialize_state({}, state);
+  EXPECT_FALSE(state.initialized);
+  EXPECT_TRUE(state.enabled.is_empty());
 
-  Vector<Candidate> reevaluated_candidates = candidates;
-  EXPECT_EQ(resolve_candidate_index(reevaluated_candidates.as_span(), selection), 1);
+  initialize_state(candidates, state);
+  EXPECT_TRUE(state.initialized);
+  EXPECT_EQ(state.enabled.size(), 1);
+  EXPECT_TRUE(state.enabled.contains(candidates[0].identifier));
 
-  reevaluated_candidates.remove(1);
-  EXPECT_EQ(resolve_candidate_index(reevaluated_candidates.as_span(), selection), 0);
-  EXPECT_EQ(selection, reevaluated_candidates[0].identifier);
+  state.enabled.add(candidates[1].identifier);
+  initialize_state(candidates.as_span().take_front(1), state);
+  EXPECT_EQ(state.enabled.size(), 2);
 }
 
-TEST(GeometryNodesDebugView, FindFallbackDoesNotChangeSelection)
-{
-  Vector<Candidate> candidates;
-  candidates.append(candidate(10, 1, {1}, {}, "First"));
-  candidates.append(candidate(20, 2, {2}, {}, "Second"));
-  finalize_candidates(candidates);
-
-  std::optional<Identifier> selection = identifier(99, 99);
-  EXPECT_EQ(find_candidate_index(candidates, selection), 0);
-  EXPECT_EQ(selection, identifier(99, 99));
-  EXPECT_EQ(find_candidate_index({}, selection), -1);
-  EXPECT_EQ(selection, identifier(99, 99));
-}
-
-TEST(GeometryNodesDebugView, PreferredSelectionReturnsAfterFallback)
-{
-  Vector<Candidate> candidates;
-  candidates.append(candidate(10, 1, {1}, {}, "First"));
-  candidates.append(candidate(20, 2, {2}, {}, "Preferred"));
-  finalize_candidates(candidates);
-
-  const Identifier preferred = candidates[1].identifier;
-  std::optional<Identifier> selection = preferred;
-  EXPECT_EQ(find_candidate_index(candidates.as_span().take_front(1), selection), 0);
-  EXPECT_EQ(selection, preferred);
-
-  EXPECT_EQ(find_candidate_index(candidates, selection), 1);
-  EXPECT_EQ(selection, preferred);
-}
-
-TEST(GeometryNodesDebugView, ZeroOneAndManySelection)
-{
-  std::optional<Identifier> selection = identifier(99, 99);
-  EXPECT_EQ(resolve_candidate_index(Span<Candidate>(), selection), -1);
-  EXPECT_FALSE(selection.has_value());
-
-  Vector<Candidate> candidates;
-  candidates.append(candidate(10, 1, {1}, {}, "First"));
-  candidates.append(candidate(20, 2, {2}, {}, "Second"));
-  candidates.append(candidate(30, 3, {3}, {}, "Third"));
-  finalize_candidates(candidates);
-
-  EXPECT_EQ(resolve_candidate_index(candidates.as_span().take_front(1), selection), 0);
-  EXPECT_EQ(cycle_candidate_index(candidates.as_span(), 1, selection), 1);
-  EXPECT_EQ(cycle_candidate_index(candidates.as_span(), 1, selection), 2);
-  EXPECT_EQ(cycle_candidate_index(candidates.as_span(), 1, selection), 0);
-  EXPECT_EQ(cycle_candidate_index(candidates.as_span(), -1, selection), 2);
-  EXPECT_EQ(select_candidate(candidates, candidates[1].identifier, selection), 1);
-  EXPECT_EQ(selection, candidates[1].identifier);
-  EXPECT_EQ(select_candidate(candidates, identifier(99, 99), selection), -1);
-  EXPECT_EQ(selection, candidates[1].identifier);
-}
-
-TEST(GeometryNodesDebugView, SelectionUsesStableIdentity)
+TEST(GeometryNodesDebugView, ZeroOneAndManyEnabledCandidates)
 {
   Vector<Candidate> candidates;
   candidates.append(candidate(10, 1, {1}, {}, "First"));
@@ -188,35 +191,270 @@ TEST(GeometryNodesDebugView, SelectionUsesStableIdentity)
   candidates.append(candidate(30, 3, {3}, {}, "Third"));
   finalize_candidates(candidates);
 
-  const Identifier clicked_identifier = candidates[1].identifier;
-  std::optional<Identifier> selection = candidates[0].identifier;
-  Vector<Candidate> reevaluated_candidates = {candidates[2], candidates[0]};
-  EXPECT_EQ(select_candidate(reevaluated_candidates, clicked_identifier, selection), -1);
-  EXPECT_EQ(selection, candidates[0].identifier);
+  State state;
+  state.initialized = true;
+  EXPECT_TRUE(enabled_candidate_indices(candidates, state).is_empty());
 
-  reevaluated_candidates.append(candidates[1]);
-  EXPECT_EQ(select_candidate(reevaluated_candidates, clicked_identifier, selection), 2);
-  EXPECT_EQ(selection, clicked_identifier);
+  state.enabled.add(candidates[1].identifier);
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({1}));
+
+  state.enabled.add(candidates[0].identifier);
+  state.enabled.add(candidates[2].identifier);
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({0, 1, 2}));
 }
 
-TEST(GeometryNodesDebugView, SelectionStateIsIndependent)
+TEST(GeometryNodesDebugView, IndependentTogglingAndDisableAll)
 {
   Vector<Candidate> candidates;
   candidates.append(candidate(10, 1, {1}, {}, "First"));
   candidates.append(candidate(20, 2, {2}, {}, "Second"));
   finalize_candidates(candidates);
 
-  std::optional<Identifier> modifier_a;
-  std::optional<Identifier> modifier_b;
-  select_candidate(candidates, candidates[0].identifier, modifier_a);
-  select_candidate(candidates, candidates[1].identifier, modifier_b);
-  cycle_candidate_index(candidates.as_span(), 1, modifier_a);
+  State state;
+  initialize_state(candidates, state);
+  EXPECT_TRUE(toggle_candidate(candidates, candidates[1].identifier, state));
+  EXPECT_TRUE(state.enabled.contains(candidates[0].identifier));
+  EXPECT_TRUE(state.enabled.contains(candidates[1].identifier));
 
-  EXPECT_EQ(modifier_a, candidates[1].identifier);
-  EXPECT_EQ(modifier_b, candidates[1].identifier);
-  cycle_candidate_index(candidates.as_span(), 1, modifier_a);
-  EXPECT_EQ(modifier_a, candidates[0].identifier);
-  EXPECT_EQ(modifier_b, candidates[1].identifier);
+  EXPECT_TRUE(toggle_candidate(candidates, candidates[0].identifier, state));
+  EXPECT_FALSE(state.enabled.contains(candidates[0].identifier));
+  EXPECT_TRUE(state.enabled.contains(candidates[1].identifier));
+
+  EXPECT_TRUE(toggle_candidate(candidates, candidates[1].identifier, state));
+  EXPECT_TRUE(state.enabled.is_empty());
+  EXPECT_TRUE(state.initialized);
+  EXPECT_FALSE(toggle_candidate(candidates, identifier(99, 99), state));
+  EXPECT_TRUE(state.enabled.is_empty());
+}
+
+TEST(GeometryNodesDebugView, StaleIdentityRestorationAndNewCandidatesDefaultOff)
+{
+  Vector<Candidate> candidates;
+  candidates.append(candidate(10, 1, {1}, {}, "First"));
+  candidates.append(candidate(20, 2, {2}, {}, "Second"));
+  finalize_candidates(candidates);
+
+  State state;
+  initialize_state(candidates, state);
+  toggle_candidate(candidates, candidates[1].identifier, state);
+  EXPECT_EQ(state.enabled.size(), 2);
+
+  Vector<Candidate> changed_candidates = {candidates[1], candidate(30, 3, {3}, {}, "New")};
+  finalize_candidates(changed_candidates);
+  EXPECT_EQ(enabled_candidate_indices(changed_candidates, state), Vector<int>({0}));
+  EXPECT_EQ(state.enabled.size(), 2);
+  EXPECT_FALSE(state.enabled.contains(changed_candidates[1].identifier));
+
+  changed_candidates.append(candidates[0]);
+  finalize_candidates(changed_candidates);
+  EXPECT_EQ(enabled_candidate_indices(changed_candidates, state), Vector<int>({0, 1}));
+  EXPECT_EQ(state.enabled.size(), 2);
+}
+
+TEST(GeometryNodesDebugView, RemovingCandidateDoesNotChangeOtherStates)
+{
+  Vector<Candidate> candidates;
+  candidates.append(candidate(10, 1, {1}, {}, "First"));
+  candidates.append(candidate(20, 2, {2}, {}, "Second"));
+  candidates.append(candidate(30, 3, {3}, {}, "Third"));
+  finalize_candidates(candidates);
+
+  State state;
+  state.initialized = true;
+  state.enabled.add(candidates[0].identifier);
+  state.enabled.add(candidates[2].identifier);
+  candidates.remove(1);
+
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({0, 1}));
+  EXPECT_EQ(state.enabled.size(), 2);
+}
+
+TEST(GeometryNodesDebugView, StateIsIndependentBetweenModifiersAndObjectsSharingNodeGroup)
+{
+  Vector<Candidate> candidates;
+  candidates.append(candidate(10, 1, {1}, {}, "First"));
+  candidates.append(candidate(20, 2, {2}, {}, "Second"));
+  finalize_candidates(candidates);
+
+  State modifier_a;
+  State modifier_b;
+  initialize_state(candidates, modifier_a);
+  initialize_state(candidates, modifier_b);
+  toggle_candidate(candidates, candidates[1].identifier, modifier_a);
+  toggle_candidate(candidates, candidates[0].identifier, modifier_b);
+
+  EXPECT_EQ(enabled_candidate_indices(candidates, modifier_a), Vector<int>({0, 1}));
+  EXPECT_TRUE(enabled_candidate_indices(candidates, modifier_b).is_empty());
+}
+
+TEST(GeometryNodesDebugView, DeterministicCandidateIntersection)
+{
+  Vector<Candidate> candidates;
+  candidates.append(candidate(30, 3, {3}, {}, "Third"));
+  candidates.append(candidate(10, 1, {1}, {}, "First"));
+  candidates.append(candidate(20, 2, {2}, {}, "Second"));
+
+  State state;
+  state.initialized = true;
+  state.enabled.add(candidates[0].identifier);
+  state.enabled.add(candidates[2].identifier);
+  finalize_candidates(candidates);
+
+  EXPECT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({1, 2}));
+}
+
+TEST(GeometryNodesDebugView, PreserveStateAcrossObjectUndo)
+{
+  Object old_object = {};
+  Object new_object = {};
+  NodesModifierData old_modifier = {};
+  NodesModifierData new_modifier = {};
+  old_modifier.modifier.type = eModifierType_Nodes;
+  new_modifier.modifier.type = eModifierType_Nodes;
+  old_modifier.modifier.persistent_uid = 42;
+  new_modifier.modifier.persistent_uid = 42;
+  old_modifier.runtime = MEM_new<NodesModifierRuntime>(__func__);
+  new_modifier.runtime = MEM_new<NodesModifierRuntime>(__func__);
+  BLI_addtail(&old_object.modifiers, &old_modifier);
+  BLI_addtail(&new_object.modifiers, &new_modifier);
+
+  const Identifier enabled_identifier = identifier(10, 30);
+  old_modifier.runtime->debug_view_state.enabled.add(enabled_identifier);
+  old_modifier.runtime->debug_view_state.initialized = true;
+
+  preserve_states_on_undo(old_object, new_object);
+
+  EXPECT_TRUE(new_modifier.runtime->debug_view_state.initialized);
+  EXPECT_TRUE(new_modifier.runtime->debug_view_state.enabled.contains(enabled_identifier));
+  EXPECT_NE(&old_modifier.runtime->debug_view_state, &new_modifier.runtime->debug_view_state);
+
+  new_modifier.runtime->debug_view_state.enabled.clear();
+  EXPECT_TRUE(old_modifier.runtime->debug_view_state.enabled.contains(enabled_identifier));
+
+  MEM_delete(old_modifier.runtime);
+  MEM_delete(new_modifier.runtime);
+}
+
+TEST(GeometryNodesDebugView, PreserveStateAcrossUndoMatchesObjectLocalPersistentUid)
+{
+  Object old_object = {};
+  Object new_object = {};
+  NodesModifierData old_first = {};
+  NodesModifierData old_second = {};
+  NodesModifierData new_second = {};
+  NodesModifierData new_replacement = {};
+  for (NodesModifierData *nmd : {&old_first, &old_second, &new_second, &new_replacement}) {
+    nmd->modifier.type = eModifierType_Nodes;
+    nmd->runtime = MEM_new<NodesModifierRuntime>(__func__);
+  }
+  old_first.modifier.persistent_uid = 10;
+  old_second.modifier.persistent_uid = 20;
+  new_second.modifier.persistent_uid = 20;
+  new_replacement.modifier.persistent_uid = 30;
+  BLI_addtail(&old_object.modifiers, &old_first);
+  BLI_addtail(&old_object.modifiers, &old_second);
+  /* Reordered matching modifier, followed by an unrelated replacement. */
+  BLI_addtail(&new_object.modifiers, &new_second);
+  BLI_addtail(&new_object.modifiers, &new_replacement);
+
+  old_first.runtime->debug_view_state.initialized = true;
+  old_first.runtime->debug_view_state.enabled.add(identifier(1, 1));
+  old_second.runtime->debug_view_state.initialized = true;
+  old_second.runtime->debug_view_state.enabled.add(identifier(2, 2));
+
+  preserve_states_on_undo(old_object, new_object);
+
+  EXPECT_TRUE(new_second.runtime->debug_view_state.enabled.contains(identifier(2, 2)));
+  EXPECT_FALSE(new_second.runtime->debug_view_state.enabled.contains(identifier(1, 1)));
+  EXPECT_FALSE(new_replacement.runtime->debug_view_state.initialized);
+  EXPECT_TRUE(new_replacement.runtime->debug_view_state.enabled.is_empty());
+
+  for (NodesModifierData *nmd : {&old_first, &old_second, &new_second, &new_replacement}) {
+    MEM_delete(nmd->runtime);
+  }
+}
+
+TEST(GeometryNodesDebugView, CorrespondingDuplisUseDistinctTopLevelPersistentIds)
+{
+  Vector<Candidate> candidates = {candidate(10, 1, {1}, {}, "Same"),
+                                  candidate(20, 1, {1}, {}, "Same")};
+  finalize_candidates(candidates);
+  State state;
+  state.initialized = true;
+  state.enabled.add(candidates[0].identifier);
+  state.enabled.add(candidates[1].identifier);
+  ASSERT_EQ(enabled_candidate_indices(candidates, state), Vector<int>({0, 1}));
+
+  Set<int> used_namespaces;
+  const int first_namespace = unique_persistent_id_namespace(candidates[0].identifier,
+                                                             used_namespaces);
+  const int second_namespace = unique_persistent_id_namespace(candidates[1].identifier,
+                                                              used_namespaces);
+  EXPECT_NE(first_namespace, second_namespace);
+  EXPECT_NE(first_namespace, INT_MAX);
+  EXPECT_NE(second_namespace, INT_MAX);
+
+  /* The component or instance ID precedes the source namespace in the persistent ID. */
+  const int first_component_persistent_id[2] = {0, first_namespace};
+  const int second_component_persistent_id[2] = {0, second_namespace};
+  EXPECT_EQ(first_component_persistent_id[0], second_component_persistent_id[0]);
+  EXPECT_NE(first_component_persistent_id[1], second_component_persistent_id[1]);
+
+  const int first_instance_persistent_id[2] = {42, first_namespace};
+  const int second_instance_persistent_id[2] = {42, second_namespace};
+  EXPECT_EQ(first_instance_persistent_id[0], second_instance_persistent_id[0]);
+  EXPECT_NE(first_instance_persistent_id[1], second_instance_persistent_id[1]);
+
+  Set<int> forced_collision;
+  forced_collision.add(first_namespace);
+  const int probed_namespace = unique_persistent_id_namespace(candidates[0].identifier,
+                                                              forced_collision);
+  EXPECT_NE(probed_namespace, first_namespace);
+  EXPECT_NE(probed_namespace, INT_MAX);
+
+  candidates[0].viewer_name = "Renamed";
+  candidates[0].sort_order = {100};
+  EXPECT_EQ(persistent_id_namespace(candidates[0].identifier), first_namespace);
+}
+
+TEST(GeometryNodesDebugView, ProductionNamespaceCollisionProbingIsDeterministic)
+{
+  Map<int, Identifier> first_identity_by_namespace;
+  std::optional<std::pair<Identifier, Identifier>> collision;
+  for (uint32_t tree_uid = 1; tree_uid <= 200000; tree_uid++) {
+    const Identifier current = identifier(100, 200, tree_uid);
+    const int initial_namespace = persistent_id_namespace(current);
+    if (const Identifier *previous = first_identity_by_namespace.lookup_ptr(initial_namespace)) {
+      if (*previous != current) {
+        collision = std::pair(*previous, current);
+        break;
+      }
+    }
+    else {
+      first_identity_by_namespace.add_new(initial_namespace, current);
+    }
+  }
+  ASSERT_TRUE(collision.has_value());
+  EXPECT_EQ(persistent_id_namespace(collision->first),
+            persistent_id_namespace(collision->second));
+
+  Set<int> first_run;
+  const int first_namespace = unique_persistent_id_namespace(collision->first, first_run);
+  const int second_namespace = unique_persistent_id_namespace(collision->second, first_run);
+  EXPECT_NE(first_namespace, second_namespace);
+
+  Set<int> second_run;
+  EXPECT_EQ(unique_persistent_id_namespace(collision->first, second_run), first_namespace);
+  EXPECT_EQ(unique_persistent_id_namespace(collision->second, second_run), second_namespace);
+}
+
+TEST(GeometryNodesDebugView, MaximumPersistentIdDepthFailsSafely)
+{
+  EXPECT_TRUE(persistent_id_namespace_fits(0, 8));
+  EXPECT_TRUE(persistent_id_namespace_fits(6, 8));
+  EXPECT_FALSE(persistent_id_namespace_fits(7, 8));
+  EXPECT_FALSE(persistent_id_namespace_fits(8, 8));
+  EXPECT_FALSE(persistent_id_namespace_fits(-1, 8));
 }
 
 static void add_viewer_log(eval_log::NodeTreeLogger &tree_logger,
@@ -246,11 +484,113 @@ class CandidateCollectionTest : public testing::Test {
   }
 };
 
-TEST_F(CandidateCollectionTest, IsCached)
+TEST_F(CandidateCollectionTest, ModifierAndObjectCopyPathCreatesFreshRuntimeState)
+{
+  ModifierData *source_md = BKE_modifier_new(eModifierType_Nodes);
+  auto &source = *reinterpret_cast<NodesModifierData *>(source_md);
+  source.runtime->debug_view_state.initialized = true;
+  source.runtime->debug_view_state.enabled.add(identifier(10, 20));
+
+  ModifierData *copy_md = BKE_modifier_copy_ex(source_md, 0);
+  auto &copy = *reinterpret_cast<NodesModifierData *>(copy_md);
+  EXPECT_NE(source.runtime, copy.runtime);
+  EXPECT_FALSE(copy.runtime->debug_view_state.initialized);
+  EXPECT_TRUE(copy.runtime->debug_view_state.enabled.is_empty());
+
+  BKE_modifier_free(source_md);
+  BKE_modifier_free(copy_md);
+}
+
+static Vector<Candidate> candidates_for_tree_lineage(const uint32_t root_tree_uid,
+                                                     const uint32_t nested_tree_uid)
+{
+  eval_log::NodesEvalLog root_log;
+  NodesModifierData nmd = {};
+  bke::DataBlockComputeContext object_context(nullptr, 1);
+  bke::GeometryNodesModifierComputeContext modifier_context(&object_context, nmd);
+  bke::GroupNodeComputeContext nested_context(&modifier_context, 50);
+  eval_log::NodeTreeLogger &root_logger = root_log.get_local_tree_logger(modifier_context);
+  root_logger.tree_orig_session_uid = root_tree_uid;
+  eval_log::NodeTreeLogger &nested_logger = root_log.get_local_tree_logger(nested_context);
+  nested_logger.tree_orig_session_uid = nested_tree_uid;
+  nested_logger.context_order = 1;
+  add_viewer_log(nested_logger, 60, 1, "Viewer");
+  return Vector<Candidate>(root_log.debug_view_candidates());
+}
+
+TEST_F(CandidateCollectionTest, UnrelatedNodeGroupReplacementDoesNotInheritEnabledState)
+{
+  const Vector<Candidate> original_candidates = candidates_for_tree_lineage(100, 200);
+  const Vector<Candidate> replacement_candidates = candidates_for_tree_lineage(101, 201);
+  ASSERT_EQ(original_candidates.size(), 1);
+  ASSERT_EQ(replacement_candidates.size(), 1);
+  /* Both evaluations deliberately reuse the same context structure and Viewer node identifier. */
+  EXPECT_EQ(original_candidates[0].identifier.compute_context_hash,
+            replacement_candidates[0].identifier.compute_context_hash);
+  EXPECT_EQ(original_candidates[0].identifier.viewer_node_id,
+            replacement_candidates[0].identifier.viewer_node_id);
+  EXPECT_NE(original_candidates[0].identifier.node_tree_lineage_hash,
+            replacement_candidates[0].identifier.node_tree_lineage_hash);
+
+  State state;
+  initialize_state(original_candidates, state);
+  EXPECT_EQ(enabled_candidate_indices(original_candidates, state), Vector<int>({0}));
+  EXPECT_TRUE(enabled_candidate_indices(replacement_candidates, state).is_empty());
+  EXPECT_FALSE(
+      toggle_candidate(replacement_candidates, original_candidates[0].identifier, state));
+}
+
+TEST_F(CandidateCollectionTest, NodeGroupReplacementUndoRedoKeepsOnlyMatchingLineageEnabled)
+{
+  const Vector<Candidate> original_candidates = candidates_for_tree_lineage(100, 200);
+  const Vector<Candidate> replacement_candidates = candidates_for_tree_lineage(101, 201);
+  Object before_replacement = {};
+  Object after_replacement = {};
+  NodesModifierData before_modifier = {};
+  NodesModifierData after_modifier = {};
+  for (NodesModifierData *nmd : {&before_modifier, &after_modifier}) {
+    nmd->modifier.type = eModifierType_Nodes;
+    nmd->modifier.persistent_uid = 42;
+    nmd->runtime = MEM_new<NodesModifierRuntime>(__func__);
+  }
+  BLI_addtail(&before_replacement.modifiers, &before_modifier);
+  BLI_addtail(&after_replacement.modifiers, &after_modifier);
+  initialize_state(original_candidates, before_modifier.runtime->debug_view_state);
+
+  /* Redo/current-state transfer keeps the old intent, but it cannot match the unrelated tree. */
+  preserve_states_on_undo(before_replacement, after_replacement);
+  EXPECT_TRUE(enabled_candidate_indices(
+                  replacement_candidates, after_modifier.runtime->debug_view_state)
+                  .is_empty());
+
+  /* Undo transfers the same runtime intent back to the restored datablocks and session UIDs. */
+  before_modifier.runtime->debug_view_state = {};
+  preserve_states_on_undo(after_replacement, before_replacement);
+  EXPECT_EQ(enabled_candidate_indices(original_candidates,
+                                      before_modifier.runtime->debug_view_state),
+            Vector<int>({0}));
+
+  MEM_delete(before_modifier.runtime);
+  MEM_delete(after_modifier.runtime);
+}
+
+TEST_F(CandidateCollectionTest, MissingNodeTreeLineageDoesNotCreateIncompleteIdentity)
 {
   eval_log::NodesEvalLog root_log;
   bke::DataBlockComputeContext compute_context(nullptr, 1);
   eval_log::NodeTreeLogger &tree_logger = root_log.get_local_tree_logger(compute_context);
+  add_viewer_log(tree_logger, 10, 1, "Viewer");
+  EXPECT_TRUE(root_log.debug_view_candidates().is_empty());
+}
+
+TEST_F(CandidateCollectionTest, IsCached)
+{
+  eval_log::NodesEvalLog root_log;
+  NodesModifierData nmd = {};
+  bke::DataBlockComputeContext object_context(nullptr, 1);
+  bke::GeometryNodesModifierComputeContext modifier_context(&object_context, nmd);
+  eval_log::NodeTreeLogger &tree_logger = root_log.get_local_tree_logger(modifier_context);
+  tree_logger.tree_orig_session_uid = 100;
   add_viewer_log(tree_logger, 20, 2, "Second");
   add_viewer_log(tree_logger, 10, 1, "First");
 

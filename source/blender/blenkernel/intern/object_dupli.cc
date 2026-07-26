@@ -1870,7 +1870,8 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
   Object *ob_orig = DEG_get_original(ob_eval);
   const int required_mode = eModifierMode_Realtime |
                             (BKE_object_is_in_editmode(ob_orig) ? eModifierMode_Editmode : 0);
-  const nodes::eval_log::ViewerNodeLog *viewer_log = nullptr;
+  Span<nodes::debug_view::Candidate> selected_candidates;
+  Vector<int> enabled_candidate_indices;
   std::shared_ptr<nodes::eval_log::NodesEvalLog> selected_eval_log;
   /* A later applicable modifier is closer to the final stack result and therefore takes
    * precedence when multiple modifiers have Debug Views enabled. */
@@ -1887,19 +1888,25 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
     }
     std::shared_ptr<nodes::eval_log::NodesEvalLog> eval_log = nmd_orig.runtime->eval_log;
     const Span<nodes::debug_view::Candidate> candidates = eval_log->debug_view_candidates();
-    /* Preserve an unavailable preferred identity so it is restored if it reappears later. */
-    const int candidate_index = nodes::debug_view::find_candidate_index(
-        candidates, nmd_orig.runtime->selected_debug_view);
-    if (candidate_index != -1) {
-      viewer_log = candidates[candidate_index].viewer_log;
-      selected_eval_log = std::move(eval_log);
-      break;
+    if (candidates.is_empty()) {
+      continue;
     }
+    nodes::debug_view::initialize_state(candidates, nmd_orig.runtime->debug_view_state);
+    enabled_candidate_indices = nodes::debug_view::enabled_candidate_indices(
+        candidates, nmd_orig.runtime->debug_view_state);
+    selected_candidates = candidates;
+    selected_eval_log = std::move(eval_log);
+    break;
   }
-  if (!viewer_log) {
+  /* An applicable later modifier with every Debug View disabled suppresses earlier modifiers. */
+  if (enabled_candidate_indices.is_empty()) {
     return false;
   }
   BLI_assert(selected_eval_log);
+  /* Candidate and geometry pointers below borrow from this owner. The original modifier runtime
+   * retains the same shared owner after this function returns, and depsgraph object iteration
+   * consumes the dupli list synchronously before another modifier evaluation can replace it. This
+   * is the same lifetime model used by the active Viewer preview path above. */
 
   DupliContext ctx;
   Vector<Object *> instance_stack;
@@ -1914,10 +1921,30 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
                dupli_gen_type_stack,
                r_duplilist);
 
-  const bke::GeometrySet &viewer_geometry = *viewer_log->main_geometry();
-  ctx.preview_base_geometry = &viewer_geometry;
-  make_duplis_geometry_set_impl(
-      &ctx, viewer_geometry, ob_eval->object_to_world().ptr(), true, ob_eval->type == OB_CURVES);
+  Set<int> used_preview_namespaces;
+  for (const int candidate_index : enabled_candidate_indices) {
+    const nodes::debug_view::Candidate &candidate = selected_candidates[candidate_index];
+    const bke::GeometrySet &viewer_geometry = *candidate.viewer_log->main_geometry();
+
+    /* Add one parent persistent-ID level to namespace otherwise corresponding components and
+     * instances generated from different top-level preview sources. */
+    if (!nodes::debug_view::persistent_id_namespace_fits(ctx.level, MAX_DUPLI_RECUR)) {
+      continue;
+    }
+    DupliContext preview_ctx = ctx;
+    preview_ctx.persistent_id[preview_ctx.level] =
+        nodes::debug_view::unique_persistent_id_namespace(candidate.identifier,
+                                                          used_preview_namespaces);
+    preview_ctx.instance_idx[preview_ctx.level] = 0;
+    preview_ctx.instance_data[preview_ctx.level] = nullptr;
+    preview_ctx.level++;
+    preview_ctx.preview_base_geometry = &viewer_geometry;
+    make_duplis_geometry_set_impl(&preview_ctx,
+                                  viewer_geometry,
+                                  ob_eval->object_to_world().ptr(),
+                                  true,
+                                  ob_eval->type == OB_CURVES);
+  }
   return true;
 }
 

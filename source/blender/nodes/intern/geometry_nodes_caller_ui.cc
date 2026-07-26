@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <bit>
+
 #include <fmt/format.h>
 #include <memory>
 #include <sstream>
@@ -869,10 +871,29 @@ static void draw_manage_panel(const bContext *C,
   }
 }
 
-static void draw_debug_view_selector(const bContext &C,
-                                     ui::Layout &layout,
-                                     Object &object,
-                                     NodesModifierData &nmd)
+static void debug_view_identifier_set(PointerRNA &ptr, const debug_view::Identifier &identifier)
+{
+  const int context_hash[4] = {
+      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v1)),
+      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v1 >> 32)),
+      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v2)),
+      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v2 >> 32)),
+  };
+  RNA_int_set_array(&ptr, "context_hash", context_hash);
+  const int node_tree_lineage_hash[4] = {
+      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v1)),
+      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v1 >> 32)),
+      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v2)),
+      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v2 >> 32)),
+  };
+  RNA_int_set_array(&ptr, "node_tree_lineage_hash", node_tree_lineage_hash);
+  RNA_int_set(&ptr, "viewer_node_id", identifier.viewer_node_id);
+}
+
+static void draw_debug_view_toggles(const bContext &C,
+                                    ui::Layout &layout,
+                                    Object &object,
+                                    NodesModifierData &nmd)
 {
   const int required_mode = eModifierMode_Realtime |
                             (BKE_object_is_in_editmode(&object) ? eModifierMode_Editmode : 0);
@@ -885,32 +906,27 @@ static void draw_debug_view_selector(const bContext &C,
   /* Keep the log alive while candidate pointers are used to build the UI. */
   const std::shared_ptr<eval_log::NodesEvalLog> eval_log = nmd.runtime->eval_log;
   const Span<debug_view::Candidate> candidates = eval_log->debug_view_candidates();
-  const int selected_index = debug_view::find_candidate_index(candidates,
-                                                              nmd.runtime->selected_debug_view);
-  if (selected_index == -1) {
+  if (candidates.is_empty()) {
     return;
   }
+  debug_view::initialize_state(candidates, nmd.runtime->debug_view_state);
 
   ui::Layout &split = layout.split(0.4f, false);
   ui::Layout &name_row = split.row(false);
   name_row.alignment_set(ui::LayoutAlign::Right);
-  name_row.label(IFACE_("Debug View"), ICON_NONE);
+  name_row.label(IFACE_("Debug Views"), ICON_NONE);
 
-  ui::Layout &controls = split.row(true);
-  const std::string selected_name = debug_view::candidate_display_name(
-      candidates, selected_index, IFACE_("Viewer"));
-  if (candidates.size() == 1) {
-    controls.label(selected_name, ICON_NONE);
-    return;
+  ui::Layout &controls = split.column(false);
+  for (const int i : candidates.index_range()) {
+    const debug_view::Candidate &candidate = candidates[i];
+    const bool is_enabled = nmd.runtime->debug_view_state.enabled.contains(candidate.identifier);
+    const std::string display_name = debug_view::candidate_display_name(
+        candidates, i, IFACE_("Viewer"));
+    PointerRNA props = controls.op("OBJECT_OT_geometry_nodes_debug_view_toggle",
+                                   display_name,
+                                   is_enabled ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT);
+    debug_view_identifier_set(props, candidate.identifier);
   }
-
-  PointerRNA props = controls.op("OBJECT_OT_geometry_nodes_debug_view_cycle", "", ICON_TRIA_LEFT);
-  RNA_boolean_set(&props, "reverse", true);
-
-  controls.menu("OBJECT_MT_geometry_nodes_debug_views", selected_name, ICON_DOWNARROW_HLT);
-
-  props = controls.op("OBJECT_OT_geometry_nodes_debug_view_cycle", "", ICON_TRIA_RIGHT);
-  RNA_boolean_set(&props, "reverse", false);
 }
 
 void draw_geometry_nodes_modifier_ui(const bContext &C,
@@ -976,7 +992,7 @@ void draw_geometry_nodes_modifier_ui(const bContext &C,
         });
 
     layout.prop(modifier_ptr, "show_debug_views", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    draw_debug_view_selector(C, layout, object, nmd);
+    draw_debug_view_toggles(C, layout, object, nmd);
   }
 
   modifier_error_message_draw(layout, modifier_ptr);
