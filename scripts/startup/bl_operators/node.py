@@ -557,7 +557,7 @@ class NODE_OT_add_node(NodeAddOperator, Operator):
     )
 
     visible_output: StringProperty(
-        name="Output Name",
+        name="Output Identifier",
         description="If provided, all outputs that are named differently will be hidden",
         options={'SKIP_SAVE'},
     )
@@ -570,7 +570,7 @@ class NODE_OT_add_node(NodeAddOperator, Operator):
                 self.apply_node_settings(node)
                 if self.visible_output:
                     for socket in node.outputs:
-                        if socket.name != self.visible_output:
+                        if socket.identifier != self.visible_output:
                             socket.hide = True
             return {'FINISHED'}
         else:
@@ -634,7 +634,7 @@ class NODE_OT_swap_node(NodeSwapOperator, Operator):
         target_output.hide = False
 
         for socket in node.outputs:
-            if socket.name != output_name:
+            if socket.identifier != output_name:
                 for link in socket.links[:]:
                     new_link = tree.links.new(target_output, link.to_socket)
                     if not new_link.is_valid:
@@ -663,7 +663,7 @@ class NODE_OT_swap_node(NodeSwapOperator, Operator):
 
             if self.visible_output:
                 for socket in new_node.outputs:
-                    if socket.name != self.visible_output:
+                    if socket.identifier != self.visible_output:
                         socket.hide = True
 
             new_node.location_absolute = old_node.location_absolute

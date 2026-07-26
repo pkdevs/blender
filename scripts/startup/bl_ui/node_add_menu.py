@@ -493,13 +493,10 @@ class NODE_MT_group_input_base(NodeMenu):
     bl_label = "Inputs"
 
     @classmethod
-    def draw_group_input(cls, layout, label):
-        props = cls.node_operator(
-            layout, "NodeGroupInput",
-            label=label,
-        )
+    def draw_group_input(cls, layout, identifier, label):
+        props = cls.node_operator(layout, "NodeGroupInput", label=label)
 
-        props.visible_output = label
+        props.visible_output = identifier
 
         if hasattr(props, "use_transform"):
             props.use_transform = cls.use_transform
