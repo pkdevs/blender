@@ -662,6 +662,7 @@ void Film::init_pass(PassSimple &pass, gpu::Shader *sh)
   eVelocityStep step_next = inst_.is_viewport() ? STEP_PREVIOUS : STEP_NEXT;
 
   pass.bind_resources(inst_.uniform_data);
+  inst_.sampling.bind_resources(pass);
   pass.bind_ubo("camera_prev", &(*velocity.camera_steps[STEP_PREVIOUS]));
   pass.bind_ubo("camera_curr", &(*velocity.camera_steps[STEP_CURRENT]));
   pass.bind_ubo("camera_next", &(*velocity.camera_steps[step_next]));

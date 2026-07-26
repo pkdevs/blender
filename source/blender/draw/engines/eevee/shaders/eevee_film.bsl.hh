@@ -12,6 +12,7 @@
 #include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_cryptomatte.bsl.hh"
 #include "eevee_reverse_z_lib.bsl.hh"
+#include "eevee_sampling_lib.bsl.hh"
 #include "eevee_uniform.bsl.hh"
 #include "eevee_velocity.bsl.hh"
 #include "gpu_shader_fullscreen_lib.glsl"
@@ -68,14 +69,18 @@ float luma_weight([[resource_table]] const Uniform &uni, float luma)
  * Apparently, most (if not all) hardware truncate the mantissa when writing the attribute to a 16
  * bit float texture. This biases our accumulation drastically (see #126947). Manually rounding the
  * mantissa right before storage (and thus truncation) fixes the issue.
+ *
+ * A fixed offset stays biased under repeated accumulation, so dither it instead (see #129533).
  */
-float4 patch_float_for_16f_storage(float4 color)
+float4 patch_float_for_16f_storage(float4 color, float4 dither)
 {
-  return uintBitsToFloat(floatBitsToUint(color) + 0x1000);
+  uint4 rounding = uint4(dither * float(1 << 13));
+  return uintBitsToFloat(floatBitsToUint(color) + rounding);
 }
-float patch_float_for_16f_storage(float value)
+float patch_float_for_16f_storage(float value, float dither)
 {
-  return uintBitsToFloat(floatBitsToUint(value) + 0x1000);
+  uint rounding = uint(dither * float(1 << 13));
+  return uintBitsToFloat(floatBitsToUint(value) + rounding);
 }
 
 float4 safe_divide_even_color(float4 a, float4 b)
@@ -113,6 +118,7 @@ float4 safe_divide_even_color(float4 a, float4 b)
 struct Film {
   [[resource_table]] srt_t<CameraVelocity> camera;
   [[resource_table]] srt_t<draw::View> views_;
+  [[resource_table]] srt_t<Sampling> sampling_;
 
   [[specialization_constant(1)]] uint enabled_categories;
   [[specialization_constant(9)]] int samples_len;
@@ -145,6 +151,22 @@ struct Film {
 
   [[resource_table]] srt_t<Cryptomatte> cryptomatte;
   [[resource_table]] srt_t<Uniform> uniforms;
+
+  /* Per-pixel dither noise for `patch_float_for_16f_storage`. */
+  float4 quantization_dither(float2 texel, float seed)
+  {
+    [[resource_table]] const Sampling &sampling = this->sampling_;
+    float3 dither_rgb = interleaved_gradient_noise(
+        texel, float3(0.0f, 1.0f, 2.0f) + seed, sampling.rng_3D_get(SAMPLING_FILM_U));
+    float dither_a = interleaved_gradient_noise(
+        texel, 3.0f + seed, sampling.rng_1D_get(SAMPLING_FILM_X));
+    return float4(dither_rgb, dither_a);
+  }
+  float quantization_dither_value(float2 texel, float seed)
+  {
+    [[resource_table]] const Sampling &sampling = this->sampling_;
+    return interleaved_gradient_noise(texel, 4.0f + seed, sampling.rng_1D_get(SAMPLING_FILM_X));
+  }
 
   /* -------------------------------------------------------------------- */
   /** \name Filter
@@ -660,7 +682,7 @@ struct Film {
     if (display_id == -1) {
       display = color;
     }
-    color = patch_float_for_16f_storage(color);
+    color = patch_float_for_16f_storage(color, quantization_dither(float2(dst.texel), 0.0f));
     imageStoreFast(out_combined_img, dst.texel, color);
   }
 
@@ -685,7 +707,8 @@ struct Film {
     if (display_id == pass_id) {
       display = color;
     }
-    color = patch_float_for_16f_storage(color);
+    color = patch_float_for_16f_storage(color,
+                                        quantization_dither(float2(dst.texel), float(pass_id)));
     imageStoreFast(color_accum_img, int3(dst.texel, pass_id), color);
   }
 
@@ -751,7 +774,8 @@ struct Film {
     if (display_id == pass_id) {
       display = float4(value, value, value, 1.0f);
     }
-    value = patch_float_for_16f_storage(value);
+    value = patch_float_for_16f_storage(
+        value, quantization_dither_value(float2(dst.texel), float(pass_id)));
     imageStoreFast(value_accum_img, int3(dst.texel, pass_id), float4(value));
   }
 

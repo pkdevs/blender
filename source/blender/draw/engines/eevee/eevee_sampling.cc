@@ -261,6 +261,18 @@ void Sampling::step()
     data_.dimensions[SAMPLING_GBUFFER_V] = r[1];
     data_.dimensions[SAMPLING_GBUFFER_W] = r[2];
   }
+  {
+    /* Separate sequence for film accumulation buffer quantization dithering (see #129533). */
+    double3 r, offset = {0, 0, 0};
+    uint3 primes = {19, 23, 29};
+    BLI_halton_3d(primes, offset, sample_ + 1, r);
+    data_.dimensions[SAMPLING_FILM_U] = r[0];
+    data_.dimensions[SAMPLING_FILM_V] = r[1];
+    data_.dimensions[SAMPLING_FILM_W] = r[2];
+    double x, offset_1d = 0;
+    BLI_halton_1d(31, offset_1d, sample_ + 1, &x);
+    data_.dimensions[SAMPLING_FILM_X] = float(x);
+  }
 
   for (int i : IndexRange(SAMPLING_DIMENSION_COUNT)) {
     /* These numbers are often fed to `sqrt`. Make sure their values are in the expected range. */
