@@ -350,11 +350,12 @@ SymbolClass::SymbolClass(SymbolScope *parent, ClassDecl decl, const string &suff
 {
   this->is_anonymous = decl.identifier().str().empty();
   this->is_union = decl.front() == Union;
+  this->is_enum = decl.front() == Enum;
 }
 
-void SymbolClass::ensure_size_and_align()
+void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool check_st430)
 {
-  if (size != -1) {
+  if (size != -1 && (err_handler == nullptr || is_builtin)) {
     return;
   }
   size = 0;
@@ -364,6 +365,16 @@ void SymbolClass::ensure_size_and_align()
   for (SymbolVariable *var : non_static_variables_in_declaration_order()) {
     SymbolClass &cls = *var->type;
 
+    if (err_handler && !cls.is_enum) {
+      auto scope = err_handler->note(var->loc.tok,
+                                     "In declaration of '" + var->identifier + "' of type '" +
+                                         cls.identifier + "'");
+      cls.ensure_size_and_align(err_handler, check_st430);
+    }
+    else {
+      cls.ensure_size_and_align();
+    }
+
     int member_size = cls.size;
     if (var->array_elements == 0) {
       /* Not an array. */
@@ -372,57 +383,144 @@ void SymbolClass::ensure_size_and_align()
       /* Array size need to be known at compile time for shared structs. */
       is_std140_compatible = false;
       is_std430_compatible = false;
+      if (err_handler) {
+        err_handler->error(var->loc.tok, "Array size is not a constant expression");
+      }
     }
     else {
-      if (cls.align != 16) {
+      if (cls.size == 12) {
+        /* Arrays of float3 padded to 16 bytes for each element for std430. */
+        is_std140_compatible = false;
+        if (err_handler) {
+          err_handler->error(var->loc.tok,
+                             "Implicit padding of 4 bytes per array element, do not use 12 bytes "
+                             "types in arrays");
+        }
+      }
+      else if (cls.size % 16 != 0) {
         /* Arrays are padded to 16 bytes for each element for std140. */
         is_std140_compatible = false;
+        if (err_handler && !check_st430) {
+          err_handler->error(var->loc.tok,
+                             "Implicit padding of " + to_string(16 - (cls.size % 16)) +
+                                 " bytes per array element, use a 16 bytes type or use "
+                                 "a storage buffer");
+        }
       }
       member_size *= var->array_elements;
     }
 
-    cls.ensure_size_and_align();
-    if (this->is_union) {
-      /* Consider class compatible if it has no implicit padding. */
-      is_std140_compatible &= cls.size == size;
-      is_std430_compatible &= cls.size == size;
+    /* Inherit base compatibility from the member. */
+    is_std140_compatible &= cls.is_std140_compatible;
+    is_std430_compatible &= cls.is_std430_compatible;
 
+    if (err_handler) {
+      string hint;
+      if (cls.is_enum) {
+        hint = " because its underlying type is not 'uint' or 'int'";
+      }
+      else if (cls.resolved->identifier == "float3") {
+        hint = "; use 'packed_float3' instead";
+      }
+      else if (cls.resolved->identifier == "int3") {
+        hint = "; use 'packed_int3' instead";
+      }
+      else if (cls.resolved->identifier == "uint3") {
+        hint = "; use 'packed_uint3' instead";
+      }
+      else if (cls.resolved->identifier == "bool") {
+        hint = "; use 'bool32_t' instead";
+      }
+      else if (cls.resolved->identifier == "float3x3") {
+        hint = "; use 'float3x4' instead";
+      }
+
+      if (!is_std140_compatible && !check_st430) {
+        err_handler->error(var->loc.tok,
+                           "Type '" + var->type->identifier +
+                               "' is not allowed in uniform and storage buffer" + hint);
+      }
+      else if (!is_std430_compatible) {
+        err_handler->error(var->loc.tok,
+                           "Type '" + var->type->identifier +
+                               "' is not allowed in storage buffer" + hint);
+      }
+    }
+
+    if (this->is_union) {
       size = max(size, member_size);
     }
     else {
-      /* Padding to next member alignment. */
-      int padded = pad(size, cls.align);
+      /* Padding to next member alignment.
+       * Force struct and arrays to all have alignment of float4. */
+      int align = (cls.is_builtin || cls.is_enum) && var->array_dimensions == 0 ? cls.align : 16;
+      int padded = pad(size, align);
       /* Consider class compatible if it has no implicit padding. */
       is_std140_compatible &= padded == size;
       is_std430_compatible &= padded == size;
+      if (err_handler && padded != size) {
+        err_handler->error(var->loc.tok,
+                           "Implicit " + to_string(padded - size) + " bytes padding before '" +
+                               var->identifier + "', add manual padding");
+      }
       size = padded;
       /* Add member size. */
       size += member_size;
     }
     /* Update the overall alignment of the current struct. */
     align = max(align, cls.align);
-    /* Inherit base compatibility from the member. */
-    is_std140_compatible &= cls.is_std140_compatible;
-    is_std430_compatible &= cls.is_std430_compatible;
 
-    if (!cls.is_builtin && cls.align % 16 != 0) {
+    if (!cls.is_builtin && !cls.is_enum && cls.size % 16 != 0) {
       is_std140_compatible = false;
+      if (err_handler && !check_st430) {
+        err_handler->error(
+            var->loc.tok,
+            "Type '" + var->type->identifier +
+                "' is not allowed in uniform buffer because it contains implicit padding");
+      }
     }
   }
 
   /* The total size of the struct must be a multiple of its alignment. */
   if (align > 0) {
-    size = (size + align - 1) / align * align;
+
+    int padded = pad(size, align);
+    if (padded != size) {
+      is_std140_compatible = false;
+      is_std430_compatible = false;
+      if (err_handler) {
+        err_handler->error(loc.tok,
+                           "Implicit " + to_string(padded - size) +
+                               " bytes padding at the end of '" + identifier +
+                               "' , add manual padding");
+      }
+    }
+    size = padded;
   }
 
 #if 0 /* For debugging. */
   std::cout << "size:" << size << " align:" << align << " id:" << identifier << std::endl;
 #endif
 
+  if (size == 0) {
+    is_std140_compatible = false;
+    is_std430_compatible = false;
+
+    if (err_handler) {
+      err_handler->error(loc.tok, "Empty classes are not supported in storage or uniform buffers");
+    }
+  }
   /* The overall size and alignment of a struct in std140 must be rounded up to the base alignment
    * of a vec4 (16 bytes). */
-  if (size % 16 != 0 || align % 16 != 0) {
+  if (size % 16 != 0) {
     is_std140_compatible = false;
+
+    if (err_handler && !check_st430) {
+      err_handler->error(loc.tok,
+                         "Implicit " + to_string(16 - (size % 16)) +
+                             " bytes padding at the end of '" + identifier +
+                             "' , add manual padding");
+    }
   }
 }
 
@@ -876,7 +974,17 @@ struct SymbolParser : NodeErrorHandler {
 
     parse_scope(*cls, decl.body(), prefix + cls->identifier + ns_sep, temp);
 
-    cls->ensure_size_and_align();
+    if (cls->is_enum) {
+      auto [underlying_type, err] = scope.lookup_class(decl.parent_class());
+      error(err);
+      cls->size = underlying_type->size;
+      cls->align = underlying_type->align;
+      cls->is_std140_compatible = cls->size == 4;
+      cls->is_std430_compatible = cls->size == 4;
+    }
+    else {
+      cls->ensure_size_and_align();
+    }
 
     if (cls->is_anonymous) {
       /* Instantiate into parent class as member. */
@@ -1152,12 +1260,12 @@ struct SymbolParser : NodeErrorHandler {
     error(err_attr);
 
     if (res_type == ResourceType::UNIFORM_BUF && !type->is_std140_compatible) {
-      /* TODO better error. */
-      error(type_id, "Uniform buffer type is not std140 compatible");
+      NOTE(type_id, "In this uniform buffer declaration");
+      type->ensure_size_and_align(this);
     }
     else if (res_type == ResourceType::STORAGE_BUF && !type->is_std430_compatible) {
-      /* TODO better error. */
-      error(type_id, "Storage buffer type is not std430 compatible");
+      NOTE(type_id, "In this storage buffer declaration");
+      type->ensure_size_and_align(this, true);
     }
 
     if (cls) {
@@ -2129,8 +2237,11 @@ void SymbolTable::register_builtins(LocalScope node)
       {"bool3", "bool", 3, 3},
       {"bool4", "bool", 4, 4},
       {"packed_float2", "float", 2, 8},
-      {"packed_float3", "float", 3, 12},
+      {"packed_float3", "float", 3, 16},
       {"packed_float4", "float", 4, 16},
+      {"packed_int2", "float", 2, 8},
+      {"packed_int3", "float", 3, 16},
+      {"packed_int4", "float", 4, 16},
   };
 
   const char *swizzle_xyzw[4] = {"x", "y", "z", "w"};
@@ -2142,8 +2253,8 @@ void SymbolTable::register_builtins(LocalScope node)
     root->classes.emplace(t.id, cls);
     root->scopes.emplace(t.id, cls);
 
-    cls->is_std140_compatible = t.align >= 8;
-    cls->is_std430_compatible = t.align >= 8;
+    cls->is_std140_compatible = t.align >= 8 && t.id != "float3" && t.base != "float3";
+    cls->is_std430_compatible = t.align >= 8 && t.id != "float3" && t.base != "float3";
 
     SymbolFunction *sub_op = fun_arena.alloc(
         cls, tok, subscript_operator_id, SymbolFunction::MEMBER);

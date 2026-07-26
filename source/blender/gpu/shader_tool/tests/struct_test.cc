@@ -846,11 +846,9 @@ void f()
     EXPECT_EQ(error, "");
   }
 }
+
 TEST(shader_tool, InitializerList)
 {
-  using namespace std;
-  using namespace shader::parser;
-
   {
     string input = R"(
 T fn1() { return T{1, 2}; }
@@ -1001,4 +999,226 @@ void fn() {
     EXPECT_EQ(error, "");
   }
 }
+
+/* Process a test string inside a wrapper function. */
+static inline Result process_test_buffer(std::string str,
+                                         std::string buffer,
+                                         shader::Language language)
+{
+  std::string prefix = "struct S {\n";
+  std::string suffix = R"(
+};
+struct Res {
+  )" + buffer + R"( S &a;
+};
+)";
+  auto [result, metadata, error] = process_test_string(prefix + str + suffix, language);
+  result = result.substr(prefix.size(), result.size() - suffix.size() - prefix.size());
+  return {result, metadata, error};
+}
+
+static inline Result process_test_uniform(
+    std::string str, shader::Language language = shader::Language::BLENDER_GLSL)
+{
+  return process_test_buffer(str, "[[uniform(0)]]", language);
+}
+
+static inline Result process_test_storage(
+    std::string str, shader::Language language = shader::Language::BLENDER_GLSL)
+{
+  return process_test_buffer(str, "[[storage(0, read)]]", language);
+}
+
+TEST(shader_tool, StructBufferLinting)
+{
+  {
+    string input = R"(char d;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error, "Type 'char' is not allowed in storage buffer");
+  }
+  {
+    string input = R"(float3 d;)";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(
+        error,
+        "Type 'float3' is not allowed in uniform and storage buffer; use 'packed_float3' instead");
+  }
+  {
+    string input = R"(float3 d;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error,
+              "Type 'float3' is not allowed in storage buffer; use 'packed_float3' instead");
+  }
+  {
+    string input = R"(bool d;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error, "Type 'bool' is not allowed in storage buffer; use 'bool32_t' instead");
+  }
+  {
+    string input = R"(float3x3 d;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error, "Type 'float3x3' is not allowed in storage buffer; use 'float3x4' instead");
+  }
+
+  /* Basic padding. */
+  {
+    string input = R"(
+float a;
+float2 b;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 4 bytes padding before 'b', add manual padding");
+  }
+  {
+    string input = R"(
+float a;
+packed_float3 b;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 12 bytes padding before 'b', add manual padding");
+  }
+  {
+    string input = R"(
+float a;
+float4 b;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 12 bytes padding before 'b', add manual padding");
+  }
+  {
+    string input = R"(
+float a;
+float4x4 b;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 12 bytes padding before 'b', add manual padding");
+  }
+  {
+    string input = R"(
+float a;
+float3x4 b;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 12 bytes padding before 'b', add manual padding");
+  }
+  {
+    string input = R"(
+float A;
+float V;
+float C;
+float D;
+float4 a;
+packed_float3 b;
+float c;
+float S;
+float R;
+float2 d;
+float e;
+float f;
+float2 g;)";
+    auto [output, _, error] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error, "");
+  }
+
+  {
+    /* std140 arrays force 16-byte alignment. */
+    string input = R"(
+  float a;
+  float b[2];
+  float c;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 12 bytes padding before 'b', add manual padding");
+  }
+  {
+    /* std140 arrays force 16-byte alignment. */
+    string input = R"(
+  float2 a;
+  float2 b[2];
+  float2 c;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 8 bytes padding before 'b', add manual padding");
+  }
+  {
+    /* Unknown size. */
+    string input = R"(
+  float b[SOME_CONST];
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Array size is not a constant expression");
+  }
+  {
+    /* Tiny struct. */
+    string input = R"(
+  float a;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 12 bytes padding at the end of 'S' , add manual padding");
+    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error_ssbo, "");
+  }
+  {
+    /* Tiny struct. */
+    string input = R"(
+  float2 a;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 8 bytes padding at the end of 'S' , add manual padding");
+    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error_ssbo, "");
+  }
+  {
+    string input = R"(
+  packed_float3 a;
+  float2 b;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 4 bytes padding before 'b', add manual padding");
+  }
+  {
+    string input = R"(
+  float2 a;
+  float b;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S' , add manual padding");
+  }
+  {
+    string input = R"(
+  packed_float3 a;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S' , add manual padding");
+  }
+  {
+    string input = R"(
+  float a;
+  float b;
+  float c;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S' , add manual padding");
+    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error_ssbo, "");
+  }
+  {
+    string input = R"(
+struct T { uint a; };
+T a;
+T b[2];
+)";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 12 bytes padding at the end of 'T' , add manual padding");
+    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error_ssbo, "Implicit 12 bytes padding before 'b', add manual padding");
+  }
+  {
+    string input = R"(
+struct T { float2 a; };
+float a;
+T b;
+)";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error, "Implicit 8 bytes padding at the end of 'T' , add manual padding");
+    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error_ssbo, "Implicit 12 bytes padding before 'b', add manual padding");
+  }
+}
+
 }  // namespace blender::gpu::tests

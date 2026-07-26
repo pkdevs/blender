@@ -401,6 +401,7 @@ struct SymbolClass : SymbolScope {
   bool is_builtin = false;
   bool is_anonymous = false;
   bool is_union = false;
+  bool is_enum = false;
   bool is_std140_compatible = false;
   bool is_std430_compatible = false;
   bool is_error = false;
@@ -425,7 +426,7 @@ struct SymbolClass : SymbolScope {
   {
   }
 
-  void ensure_size_and_align();
+  void ensure_size_and_align(NodeErrorHandler *err_handler = nullptr, bool check_st430 = false);
 
   bool is_srt() const
   {
