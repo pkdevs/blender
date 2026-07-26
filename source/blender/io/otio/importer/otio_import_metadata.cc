@@ -11,7 +11,9 @@
 #include <string>
 
 #include "BKE_colortools.hh"
+#include "BKE_idprop.hh"
 
+#include "BLI_math_base.hh"
 #include "BLI_string.hh"
 
 #include "DNA_curve_enums.h"
@@ -19,12 +21,15 @@
 #include "DNA_sound_types.h"
 
 #include "SEQ_modifier.hh"
+#include "SEQ_sequencer.hh"
 #include "SEQ_sound.hh"
 
 #include <opentimelineio/anyDictionary.h>
 #include <opentimelineio/anyVector.h>
 #include <opentimelineio/effect.h>
+#include <opentimelineio/serialization.h>
 
+#include "IO_otio.hh"
 #include "otio_import_metadata.hh"
 
 namespace blender::io::otio {
@@ -617,6 +622,59 @@ void set_effect_strip_params(AnyDictionary &params,
   }
   else if (effect_strip->type == STRIP_TYPE_TEXT) {
     set_text_strip_params(params, effect_strip);
+  }
+}
+
+int get_strip_original_channel(Item *item)
+{
+  AnyDictionary metadata;
+  if (!any_cast_set(item->metadata(), "blender", metadata)) {
+    return 0;
+  }
+
+  int channel = 0;
+  any_cast_set(metadata, "original_channel", channel);
+
+  return math::clamp(channel, 0, seq::MAX_CHANNELS);
+}
+
+void store_foreign_metadata(AnyDictionary &root, IDProperty *&idp)
+{
+  if (idp && idp->type != IDP_GROUP) {
+    return;
+  }
+
+  if (!idp) {
+    idp = MEM_new<IDProperty>(__func__);
+    idp->type = IDP_GROUP;
+  }
+
+  IDProperty *otio_group = IDP_GetPropertyFromGroup(idp, "otio_metadata");
+  if (!otio_group) {
+    IDPropertyTemplate val{};
+    otio_group = IDP_New(IDP_GROUP, &val, "otio_metadata");
+    IDP_AddToGroup(idp, otio_group);
+  }
+
+  for (const auto &[key, metadata] : root) {
+    if (key == "blender") {
+      continue;
+    }
+
+    ErrorStatus es;
+    std::string serialized_str = serialize_json_to_string(metadata, nullptr, &es, 0);
+
+    if (is_error(es)) {
+      CLOG_ERROR(
+          &LOG,
+          "Failed to serialize foreign metadata with key: '%s'\nDetails: %s\nDescription: %s",
+          key.c_str(),
+          es.details.c_str(),
+          es.full_description.c_str());
+      continue;
+    }
+
+    IDP_AddToGroup(otio_group, IDP_NewString(serialized_str, key));
   }
 }
 }  // namespace blender::io::otio

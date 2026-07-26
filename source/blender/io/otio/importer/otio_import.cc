@@ -139,7 +139,7 @@ static void add_transition(Scene *scene, ListBaseT<Strip> *seqbase, TransitionPa
   seq::LoadData load_data;
   memset(&load_data, 0, sizeof(seq::LoadData));
   load_data.start_frame = right_handle;
-  load_data.channel = params.channel;
+  load_data.channel = params.input1->channel;
   load_data.allow_invalid_file = true;
   load_data.fit_method = SEQ_SCALE_TO_FIT;
   load_data.flags |= seq::SEQ_LOAD_SET_VIEW_TRANSFORM;
@@ -177,33 +177,59 @@ static void add_transitions(Scene *scene,
   }
 }
 
-static int find_free_effect_channel(const Scene *scene,
-                                    const ListBaseT<Strip> *seqbase,
-                                    const Strip *input)
+static int find_free_channel(const Scene *scene,
+                             const ListBaseT<Strip> *seqbase,
+                             const int left_handle,
+                             const int right_handle,
+                             const int target_channel)
 {
-  const int effect_left = input->left_handle();
-  const int effect_right = input->right_handle(scene);
-
-  for (int channel = input->channel + 1; channel <= seq::MAX_CHANNELS; channel++) {
-    bool occupied = false;
-
+  auto is_channel_free = [&](int channel) {
     for (const Strip &strip : *seqbase) {
       if (strip.channel != channel) {
         continue;
       }
 
-      const bool overlaps = effect_left < strip.right_handle(scene) &&
-                            effect_right > strip.left_handle();
+      const bool overlaps = left_handle < strip.right_handle(scene) &&
+                            right_handle > strip.left_handle();
 
       if (overlaps) {
-        occupied = true;
-        break;
+        return false;
       }
     }
+    return true;
+  };
 
-    if (!occupied) {
-      return channel;
+  int up = target_channel;
+  int down = target_channel - 1;
+
+  /* Alternatively search above and below the target channel to find a free channel which is
+   * nearest to the target channel. */
+
+  while (up <= seq::MAX_CHANNELS && down > 0) {
+    if (is_channel_free(up)) {
+      return up;
     }
+
+    if (is_channel_free(down)) {
+      return down;
+    }
+
+    ++up;
+    --down;
+  }
+
+  while (down > 0) {
+    if (is_channel_free(down)) {
+      return down;
+    }
+    --down;
+  }
+
+  while (up <= seq::MAX_CHANNELS) {
+    if (is_channel_free(up)) {
+      return up;
+    }
+    ++up;
   }
 
   /* No free channel found. */
@@ -212,7 +238,11 @@ static int find_free_effect_channel(const Scene *scene,
 
 static void add_effect(Scene *scene, EffectParams &params)
 {
-  int channel = find_free_effect_channel(scene, params.seqbase, params.input);
+  int channel = find_free_channel(scene,
+                                  params.seqbase,
+                                  params.input->left_handle(),
+                                  params.input->right_handle(scene),
+                                  params.input->channel + 1);
   if (!channel) {
     CLOG_WARN(&LOG,
               "No free channel above strip '%s' for effect '%s'",
@@ -236,9 +266,11 @@ static void add_effect(Scene *scene, EffectParams &params)
   load_data.effect.input2 = nullptr;
   load_data.effect.length = params.input->right_handle(scene) - params.input->left_handle();
 
+  Strip *effect_strip = nullptr;
+
   if (STREQ(params.otio_effect->effect_name().c_str(), "Speed")) {
     load_data.effect.type = STRIP_TYPE_SPEED;
-    Strip *effect_strip = seq::add_effect_strip(scene, params.seqbase, &load_data);
+    effect_strip = seq::add_effect_strip(scene, params.seqbase, &load_data);
     SpeedControlVars *speed = static_cast<SpeedControlVars *>(effect_strip->effectdata);
 
     if (dynamic_cast<FreezeFrame *>(params.otio_effect)) {
@@ -252,14 +284,18 @@ static void add_effect(Scene *scene, EffectParams &params)
 
   else if (STREQ(params.otio_effect->effect_name().c_str(), "Gaussian Blur")) {
     load_data.effect.type = STRIP_TYPE_GAUSSIAN_BLUR;
-    Strip *effect_strip = seq::add_effect_strip(scene, params.seqbase, &load_data);
+    effect_strip = seq::add_effect_strip(scene, params.seqbase, &load_data);
     set_gaussian_blur_metadata(params.otio_effect, effect_strip);
   }
 
   else if (STREQ(params.otio_effect->effect_name().c_str(), "Glow")) {
     load_data.effect.type = STRIP_TYPE_GLOW;
-    Strip *effect_strip = seq::add_effect_strip(scene, params.seqbase, &load_data);
+    effect_strip = seq::add_effect_strip(scene, params.seqbase, &load_data);
     set_glow_metadata(params.otio_effect, effect_strip);
+  }
+
+  if (effect_strip) {
+    store_foreign_metadata(params.otio_effect->metadata(), effect_strip->system_properties);
   }
 }
 
@@ -365,6 +401,7 @@ static Strip *add_item_recursive(Main *bmain,
                                  ListBaseT<Strip> *seqbase,
                                  Item *item,
                                  int channel,
+                                 bool restore_channel,
                                  int left_handle,
                                  bool is_sound_clip,
                                  std::vector<EffectParams> &effect_params,
@@ -378,6 +415,23 @@ static Strip *add_item_recursive(Main *bmain,
   seq::LoadData load_data;
   memset(&load_data, 0, sizeof(seq::LoadData));
   load_data.start_frame = left_handle - left_offset;
+
+  if (restore_channel) {
+    if (int original_channel = get_strip_original_channel(item)) {
+      channel = original_channel;
+    }
+  }
+
+  channel = find_free_channel(scene, seqbase, left_handle, left_handle + duration, channel);
+
+  if (!channel) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "No free channel available for strip '%s'. Skipping Strip...",
+                item->name().c_str());
+    return nullptr;
+  }
+
   load_data.channel = channel;
   load_data.allow_invalid_file = true;
   load_data.fit_method = SEQ_SCALE_TO_FIT;
@@ -462,7 +516,6 @@ static Strip *add_item_recursive(Main *bmain,
 
         std::vector<TransitionParams> transition_params;
         TransitionParams transition_params_curr;
-        transition_params_curr.set_channel(channel_meta);
 
         for (auto &child : track->children()) {
           if (auto item = dynamic_cast<Item *>(child.value)) {
@@ -472,6 +525,7 @@ static Strip *add_item_recursive(Main *bmain,
                                                     &strip->seqbase,
                                                     item,
                                                     channel_meta,
+                                                    restore_channel,
                                                     left_handle_meta,
                                                     is_sound_clip,
                                                     effect_params_meta,
@@ -510,6 +564,7 @@ static Strip *add_item_recursive(Main *bmain,
 
     set_strip_metadata(item, strip);
     handle_strip_effects(item, strip, seqbase, effect_params);
+    store_foreign_metadata(item->metadata(), strip->system_properties);
   }
   else {
     CLOG_ERROR(&LOG, "File '%s' could not be loaded", load_data.path);
@@ -550,6 +605,7 @@ static void add_scene_markers(Scene *scene, SerializableObject::Retainer<Timelin
 void build_blender_timeline(Main *bmain,
                             Scene *scene,
                             SerializableObject::Retainer<Timeline> &timeline,
+                            bool restore_channel,
                             ReportList *reports)
 {
   /* Set Scene fps. */
@@ -581,7 +637,6 @@ void build_blender_timeline(Main *bmain,
 
       std::vector<TransitionParams> transition_params;
       TransitionParams transition_params_curr;
-      transition_params_curr.set_channel(channel);
 
       for (auto &child : track->children()) {
         if (auto item = dynamic_cast<Item *>(child.value)) {
@@ -591,6 +646,7 @@ void build_blender_timeline(Main *bmain,
                                                   &scene->ed->seqbase,
                                                   item,
                                                   channel,
+                                                  restore_channel,
                                                   left_handle,
                                                   is_sound_clip,
                                                   effect_params,
@@ -616,6 +672,7 @@ void build_blender_timeline(Main *bmain,
   add_scene_markers(scene, timeline);
   add_effects(scene, effect_params);
   resolve_effects_inputs(input_effects);
+  store_foreign_metadata(timeline->metadata(), scene->id.system_properties);
 }
 
 }  // namespace blender::io::otio

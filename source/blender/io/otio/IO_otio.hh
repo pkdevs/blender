@@ -23,6 +23,6 @@ struct OTIOExportParams {
 };
 
 void OTIO_export(bContext *C, const OTIOExportParams &params);
-void OTIO_import(const bContext *C, const char *filepath, ReportList *reports);
+bool OTIO_import(bContext *C, const char *filepath, bool restore_channel, ReportList *reports);
 
 }  // namespace blender

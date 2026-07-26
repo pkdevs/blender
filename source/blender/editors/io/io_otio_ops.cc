@@ -158,13 +158,38 @@ static wmOperatorStatus wm_otio_import_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  bool restore_channel = RNA_boolean_get(op->ptr, "restore_channel");
+
+  int count = 0;
   for (const auto &path : paths) {
     char filepath[FILE_MAX];
     STRNCPY(filepath, path.c_str());
-    OTIO_import(C, filepath, op->reports);
+    if (OTIO_import(C, filepath, restore_channel, op->reports)) {
+      ++count;
+    }
   }
 
+  BKE_reportf(op->reports,
+              RPT_INFO,
+              "OTIO Import: %d file%s imported successfully",
+              count,
+              count == 1 ? "" : "s");
+
   return OPERATOR_FINISHED;
+}
+
+static void wm_otio_import_draw(bContext *C, wmOperator *op)
+{
+  ui::Layout &layout = *op->layout;
+  PointerRNA *ptr = op->ptr;
+
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+
+  if (ui::Layout *panel = layout.panel(C, "OTIO_import_strip", false, IFACE_("Strip"))) {
+    ui::Layout *col = &panel->column(false);
+    col->prop(ptr, "restore_channel", UI_ITEM_NONE, IFACE_("Restore Channel"), ICON_NONE);
+  }
 }
 
 void WM_OT_otio_import(wmOperatorType *ot)
@@ -173,6 +198,7 @@ void WM_OT_otio_import(wmOperatorType *ot)
   ot->description = "Import OpenTimelineIO Timeline into Sequencer Scene";
   ot->idname = "WM_OT_otio_import";
 
+  ot->ui = wm_otio_import_draw;
   ot->invoke = wm_otio_import_invoke;
   ot->exec = wm_otio_import_exec;
   ot->poll = WM_operator_winactive;
@@ -189,6 +215,12 @@ void WM_OT_otio_import(wmOperatorType *ot)
 
   PropertyRNA *prop = RNA_def_string(ot->srna, "filter_glob", "*.otio", 0, "", "");
   RNA_def_property_flag(prop, PROP_HIDDEN);
+
+  RNA_def_boolean(ot->srna,
+                  "restore_channel",
+                  true,
+                  "Restore Channel",
+                  "Try to restore the original channel of the strip from metadata");
 }
 }  // namespace blender
 

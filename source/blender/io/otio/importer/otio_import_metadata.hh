@@ -43,5 +43,7 @@ void set_gaussian_blur_metadata(otio::Effect *otio_effect, Strip *effect_strip);
 void set_effect_strip_params(AnyDictionary &params,
                              Strip *effect_strip,
                              EffectStripWithInputsParams &input_effect_params);
+int get_strip_original_channel(Item *item);
+void store_foreign_metadata(AnyDictionary &root, IDProperty *&idp);
 
 }  // namespace blender::io::otio

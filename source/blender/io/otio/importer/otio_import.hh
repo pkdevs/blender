@@ -39,7 +39,6 @@ struct TransitionParams {
   Transition *otio_transition = nullptr;
   Strip *input1 = nullptr;
   Strip *input2 = nullptr;
-  int channel = 1;
 
   /**
    * \return `true` when all members are non-null, otherwise `false`.
@@ -67,17 +66,11 @@ struct TransitionParams {
     otio_transition = transition;
   }
 
-  void set_channel(int ch)
-  {
-    channel = ch;
-  }
-
   void reset()
   {
     otio_transition = nullptr;
     input1 = nullptr;
     input2 = nullptr;
-    channel = 1;
   }
 };
 
@@ -90,6 +83,7 @@ struct EffectParams {
 void build_blender_timeline(Main *bmain,
                             Scene *scene,
                             SerializableObject::Retainer<Timeline> &timeline,
+                            bool restore_channel,
                             ReportList *reports);
 
 }  // namespace io::otio
