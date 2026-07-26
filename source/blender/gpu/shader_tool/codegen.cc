@@ -17,7 +17,7 @@ using namespace shader::parser;
 using namespace shader::parser::ast;
 using namespace metadata;
 
-struct InstantiationContext {
+struct CodegenContext {
   SourceProcessor::Parser &parser;
   SymbolTable &symbols;
   SourceProcessor::ErrorHandler &error_handler;
@@ -75,9 +75,9 @@ struct InstantiationContext {
     }
   } builder;
 
-  InstantiationContext(SourceProcessor::Parser &parser,
-                       SymbolTable &symbols,
-                       SourceProcessor::ErrorHandler &error_handler)
+  CodegenContext(SourceProcessor::Parser &parser,
+                 SymbolTable &symbols,
+                 SourceProcessor::ErrorHandler &error_handler)
       : parser(parser),
         symbols(symbols),
         error_handler(error_handler),
@@ -1891,16 +1891,7 @@ struct InstantiationContext {
 /* Lower namespaces by adding namespace prefix to all the contained structs and functions. */
 void SourceProcessor::lower_namespaces_ast(Parser &parser, SymbolTable &symbols)
 {
-  /* First, create original <-> mangled symbol mapping. */
-  // string fn = "000 " + filename;
-  // auto new_root = make_unique<SymbolScope>(fn, LocalScope(parser.root()), nullptr);
-  // flatten_symbols_recursive(*symbols.root, *new_root, "");
-
-  // symbols.root->print();
-  // symbols.flatten_root->print();
-  // new_root->print();
-
-  InstantiationContext ctx(parser, symbols, error_handler);
+  CodegenContext ctx(parser, symbols, error_handler);
   string str = ctx.process(*symbols.root, LocalScope(Node(&parser, 0)));
 
   if (error_handler.err.has_value()) {

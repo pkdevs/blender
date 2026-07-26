@@ -8,13 +8,13 @@
 set(SRC
   ast.cc
   attribute.cc
+  codegen.cc
   constructor.cc
   enum.cc
   flow_control.cc
   function.cc
   grammar.cc
   grammar_bsl.cc
-  instantiation.cc
   intermediate.cc
   metadata.cc
   namespace.cc

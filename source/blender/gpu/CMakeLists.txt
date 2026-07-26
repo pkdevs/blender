@@ -111,13 +111,13 @@ set(SRC
 
   shader_tool/ast.cc
   shader_tool/attribute.cc
+  shader_tool/codegen.cc
   shader_tool/constructor.cc
   shader_tool/enum.cc
   shader_tool/flow_control.cc
   shader_tool/function.cc
   shader_tool/grammar.cc
   shader_tool/grammar_bsl.cc
-  shader_tool/instantiation.cc
   shader_tool/intermediate.cc
   shader_tool/metadata.cc
   shader_tool/namespace.cc
