@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_geom.h"
+#include "BLI_math_geom.hh"
 
 #include "BKE_mesh.h"
 
@@ -16,8 +16,8 @@
 namespace blender::nodes::node_geo_clip_geometry_cc {
 
 /* Node arg names: */
-constexpr std::string INPUT_PLANE_ORIGIN = "Center";
-constexpr std::string INPUT_PLANE_NORMAL = "Normal";
+const std::string INPUT_PLANE_ORIGIN = "Center";
+const std::string INPUT_PLANE_NORMAL = "Normal";
 const blender::UString OUTPUT_PLANE_SELECTION = "Intersection"_ustr;
 
 /*
@@ -35,7 +35,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_XYZ);
 
   b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all();
-  b.add_output<decl::Bool>(OUTPUT_PLANE_SELECTION);
+  b.add_output<decl::Bool>(OUTPUT_PLANE_SELECTION).anonymous_attribute_output();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)

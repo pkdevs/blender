@@ -6,8 +6,8 @@
 #include "BLI_bit_vector.hh"
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom.h"
-#include "BLI_memarena.h"
+#include "BLI_math_geom.hh"
+#include "BLI_memarena.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -16,7 +16,6 @@
 #include "BKE_attribute_math.hh"
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
-#include "BLI_math_geom.h"
 
 #include "GEO_mesh_clip_geometry_by_plane.hh"
 #include "GEO_mesh_copy_selection.hh"
@@ -278,6 +277,7 @@ void transfer_vertex_data(const Mesh &src_mesh,
 
         accumulated_offset += set_range.size();
       }
+      attribute.dst.finish();
     });
   }
 }
@@ -376,6 +376,7 @@ void transfer_edge_data(const Mesh &src_mesh,
         }
         set_offset += set_range.size();
       }
+      attribute.dst.finish();
     });
   }
 }
@@ -541,6 +542,7 @@ void transfer_polygon_data(const Mesh &src_mesh,
         }
         face_offset += set_face_count[index];
       }
+      attribute.dst.finish();
     });
   }
 
@@ -601,6 +603,7 @@ void transfer_polygon_data(const Mesh &src_mesh,
           }
           face_offset += set_face_count[set_index];
         }
+        attribute.dst.finish();
       });
     }
   }
