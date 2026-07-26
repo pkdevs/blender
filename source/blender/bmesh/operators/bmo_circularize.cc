@@ -246,7 +246,7 @@ static void calculate_circle_best_fit(Span<CircleVert> verts,
   }
 
   if (!converged) {
-    /* Fallback for the best fit circle in the the scenario that the Gauss-Newton solver
+    /* Fallback for the best fit circle in the scenario that the Gauss-Newton solver
      * fails to converge. */
     initial_center = float2(0.0f);
     initial_radius = 0.0f;
