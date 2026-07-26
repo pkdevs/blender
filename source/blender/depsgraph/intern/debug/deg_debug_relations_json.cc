@@ -280,8 +280,8 @@ static void deg_debug_json_node_identifier(JSONStream &json, const Node &node)
     json.value((*comp_node)->owner->id_orig_session_uid);
   }
   if (const auto *const *op_node = std::get_if<const OperationNode *>(&node_variant)) {
-    json.object_key("name");
-    json.value((*op_node)->name);
+    json.object_key("operation");
+    json.value(operationCodeAsString((*op_node)->opcode));
     json.object_key("owner_type");
     json.value(nodeTypeAsString((*op_node)->owner->type));
     json.object_key("owner_uid");
