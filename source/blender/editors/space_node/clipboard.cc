@@ -102,7 +102,7 @@ static int node_copy_local(bNodeTree &from_tree,
   }
 
   if (node_map.is_empty()) {
-    return false;
+    return 0;
   }
 
   for (bNode *new_node : node_map.values()) {
@@ -253,8 +253,6 @@ void NODE_OT_clipboard_copy(wmOperatorType *ot)
 
   ot->exec = node_clipboard_copy_exec;
   ot->poll = ED_operator_node_active;
-
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /** \} */

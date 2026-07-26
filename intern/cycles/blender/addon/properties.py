@@ -234,7 +234,9 @@ enum_view3d_shading_render_pass = (
     ('DENOISING_SPECULAR_ALBEDO', "Denoising Specular Albedo", "Specular albedo pass used by denoiser"),
     ('DENOISING_NORMAL', "Denoising Normal", "Normal pass used by denoiser"),
     ('DENOISING_ROUGHNESS', "Denoising Roughness", "Roughness pass used by denoiser"),
+    ('DENOISING_DEPTH', "Denoising Depth", "Depth pass used by denoiser"),
     ('DENOISING_BACKWARD_MOTION', "Denoising Backward Motion", "Backward motion pass used by denoiser"),
+    ('DENOISING_SPECULAR_MOTION', "Denoising Specular Motion", "Specular motion pass used by denoiser"),
     ('SAMPLE_COUNT', "Sample Count", "Per-pixel number of samples"),
 )
 
@@ -1890,7 +1892,7 @@ class CyclesPreferences(bpy.types.AddonPreferences):
 
         if not found_device:
             col = box.column(align=True)
-            col.label(text=rpt_("No compatible GPUs found for Cycles"), icon='INFO', translate=False)
+            col.label(text=rpt_("No compatible GPUs found for Cycles"), icon='STATUS_INFO', translate=False)
 
             if device_type == 'CUDA':
                 compute_capability = "5.0"
