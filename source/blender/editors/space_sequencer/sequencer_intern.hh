@@ -237,6 +237,7 @@ void SEQUENCER_OT_ripple_delete(wmOperatorType *ot);
 void SEQUENCER_OT_offset_clear(wmOperatorType *ot);
 void SEQUENCER_OT_images_separate(wmOperatorType *ot);
 void SEQUENCER_OT_meta_toggle(wmOperatorType *ot);
+void SEQUENCER_OT_compositor_input_toggle(wmOperatorType *ot);
 void SEQUENCER_OT_meta_make(wmOperatorType *ot);
 void SEQUENCER_OT_meta_separate(wmOperatorType *ot);
 

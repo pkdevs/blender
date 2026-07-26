@@ -68,6 +68,7 @@ void compositor_modifier_nodes_update_interface(Main &bmain,
   PointerRNA properties_ptr = RNA_pointer_create_discrete(
       &sequencer_scene.id, RNA_SequencerCompositorModifierProperties, &cmd);
   RNA_ensure_and_sync_system_properties(bmain, properties_ptr, *cmd.modifier.system_properties);
+  nodes::compositor_nodes_reset_invalid_input_types(properties_ptr, *cmd.node_group);
 
   DEG_id_tag_update(&sequencer_scene.id, ID_RECALC_SEQUENCER_STRIPS);
 }
@@ -194,7 +195,7 @@ class CompositorModifierContext : public CompositorContext {
       }
       else if (valid_socket_type) {
         /* Remaining inputs read their value from the exposed RNA property. */
-        set_input_result_from_rna(inputs_ptr, *input_socket, socket_type, *input_result);
+        this->set_input_result_from_rna(inputs_ptr, *input_socket, socket_type, *input_result);
       }
       else {
         /* Unsupported sockets. */

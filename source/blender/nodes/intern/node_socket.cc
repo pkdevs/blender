@@ -819,6 +819,8 @@ static bke::bNodeSocketType *make_socket_type_virtual()
   return stype;
 }
 
+static void set_common_sequencer_update_function(PropertyRNA *prop);
+
 static void make_common_type_prop(StructRNA &srna,
                                   const bNodeTreeInterfaceSocket &socket,
                                   const EnumPropertyItem *items,
@@ -841,7 +843,8 @@ static void make_common_type_prop(StructRNA &srna,
                                   const bNodeTreeInterfaceSocket &socket,
                                   const EnumPropertyItem *items,
                                   const nodes::CompositorNodesInputType default_type,
-                                  nodes::GeneratedTreeSrnaData &r_generated)
+                                  nodes::GeneratedTreeSrnaData &r_generated,
+                                  const char *description = "")
 {
   PropertyRNA *prop = RNA_def_enum(
       &srna,
@@ -849,8 +852,10 @@ static void make_common_type_prop(StructRNA &srna,
       items,
       int(default_type),
       r_generated.scope.add_value(fmt::format("{} {}", TIP_("Type for"), socket.name)).c_str(),
-      "");
+      description);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  /* Switching the input type (color vs image) must re-render the strip. */
+  set_common_sequencer_update_function(prop);
 }
 
 /* Find the strip that owns the compositor properties an input value belongs to. Works both
@@ -897,18 +902,33 @@ static Strip *find_compositor_properties_strip(PointerRNA *ptr, Editing *ed)
   }
   return nullptr;
 }
+
+static void sequencer_compositor_property_update(Main * /*bmain*/,
+                                                 Scene * /*scene*/,
+                                                 PointerRNA *ptr)
+{
+  Scene *sequencer_scene = reinterpret_cast<Scene *>(ptr->owner_id);
+  Editing *ed = seq::editing_get(sequencer_scene);
+  if (!ed) {
+    return;
+  }
+  Strip *properties_strip = find_compositor_properties_strip(ptr, ed);
+  if (properties_strip) {
+    seq::relations_invalidate_cache(sequencer_scene, properties_strip);
+  }
+}
+
 static void set_common_sequencer_update_function(PropertyRNA *prop)
 {
-  RNA_def_property_update_runtime(prop, [](Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr) {
-    Scene *sequencer_scene = reinterpret_cast<Scene *>(ptr->owner_id);
-    Editing *ed = seq::editing_get(sequencer_scene);
-    if (!ed) {
-      return;
-    }
-    Strip *properties_strip = find_compositor_properties_strip(ptr, ed);
-    if (properties_strip) {
-      seq::relations_invalidate_cache(sequencer_scene, properties_strip);
-    }
+  RNA_def_property_update_runtime(prop, sequencer_compositor_property_update);
+  RNA_def_property_update_notifier(prop, NC_SCENE | ND_SEQUENCER);
+}
+
+static void set_common_sequencer_id_update_function(PropertyRNA *prop)
+{
+  RNA_def_property_update_runtime(prop, [](Main *bmain, Scene *scene, PointerRNA *ptr) {
+    sequencer_compositor_property_update(bmain, scene, ptr);
+    DEG_relations_tag_update(bmain);
   });
   RNA_def_property_update_notifier(prop, NC_SCENE | ND_SEQUENCER);
 }
@@ -1566,11 +1586,16 @@ static bke::bNodeSocketType *make_socket_type_rgba()
                                             0.0f,
                                             1.0f);
     set_common_sequencer_update_function(prop);
+    /* Color inputs can also sample an image data-block. */
+    PropertyRNA *image_prop = RNA_def_pointer_runtime(
+        &srna, "image", RNA_Image, socket.name, socket.description);
+    set_common_sequencer_id_update_function(image_prop);
     make_common_type_prop(srna,
                           socket,
-                          nodes::compositor_nodes_input_type_items_value,
+                          nodes::compositor_nodes_input_type_items_color,
                           nodes::CompositorNodesInputType::Value,
-                          r_generated);
+                          r_generated,
+                          "Switch between a single color and an image");
   };
   socktype->make_scene_compositor_effect_input_srna =
       [](const bNodeTree & /*tree*/,

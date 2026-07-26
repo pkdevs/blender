@@ -12,12 +12,15 @@
 
 #include "BKE_node_runtime.hh"
 
+#include "DNA_image_types.h"
+
 #include "PRF_profile.hh"
 
 #include "COM_algorithm_parallel_reduction.hh"
 #include "COM_ocio_color_space_conversion_shader.hh"
 #include "COM_realize_on_domain_operation.hh"
 #include "COM_scheduler.hh"
+#include "COM_static_cache_manager.hh"
 #include "COM_utilities.hh"
 
 #include "GPU_state.hh"
@@ -57,9 +60,10 @@ static void set_single_input_from_rna_value(PointerRNA *input_props_ptr,
 {
   using namespace nodes;
 
-  /* Only consider inputs explicitly set to Value type. */
-  if (CompositorNodesInputType(RNA_enum_get(input_props_ptr, "type")) !=
-      CompositorNodesInputType::Value)
+  /* Only color inputs currently support a non-value source. Other socket types should still read
+   * their value if stale properties from a previously assigned node group contain another type. */
+  if (socket_type == SOCK_RGBA && CompositorNodesInputType(RNA_enum_get(
+                                      input_props_ptr, "type")) != CompositorNodesInputType::Value)
   {
     return;
   }
@@ -177,15 +181,61 @@ static std::optional<int> get_socket_dimension(const bNodeTreeInterfaceSocket *s
   return {};
 }
 
-void set_input_result_from_rna(PointerRNA &inputs_ptr,
-                               const bNodeTreeInterfaceSocket &socket,
-                               const eNodeSocketDatatype socket_type,
-                               compositor::Result &result)
+static void set_input_result_from_rna_value(PointerRNA &inputs_ptr,
+                                            const bNodeTreeInterfaceSocket &socket,
+                                            const eNodeSocketDatatype socket_type,
+                                            compositor::Result &result)
 {
   PointerRNA input_props_ptr = RNA_pointer_get(&inputs_ptr, socket.identifier);
   result.allocate_single_value();
   set_single_input_from_rna_value(
       &input_props_ptr, socket_type, result, get_socket_dimension(&socket, socket_type));
+}
+
+CompositorContext::InputImageStatus CompositorContext::fill_color_input_from_rna_image(
+    PointerRNA &inputs_ptr, const bNodeTreeInterfaceSocket &socket, compositor::Result &result)
+{
+  using namespace nodes;
+  PointerRNA input_props_ptr = RNA_pointer_get(&inputs_ptr, socket.identifier);
+  if (CompositorNodesInputType(RNA_enum_get(&input_props_ptr, "type")) !=
+      CompositorNodesInputType::Image)
+  {
+    return InputImageStatus::NotImage;
+  }
+  Image *image = RNA_pointer_get(&input_props_ptr, "image").data_as<Image>();
+  if (image == nullptr || !compositor_nodes_image_input_supported(*image)) {
+    return InputImageStatus::Unavailable;
+  }
+
+  ImageUser image_user = {};
+  const compositor::Result &cached_image = this->cache_manager().cached_images.get(
+      *this, *image, image_user, "Image");
+  if (!cached_image.is_allocated()) {
+    return InputImageStatus::Unavailable;
+  }
+  result.set_type(cached_image.type());
+  result.set_precision(cached_image.precision());
+  result.share_data(cached_image);
+  return InputImageStatus::Loaded;
+}
+
+void CompositorContext::set_input_result_from_rna(PointerRNA &inputs_ptr,
+                                                  const bNodeTreeInterfaceSocket &socket,
+                                                  const eNodeSocketDatatype socket_type,
+                                                  compositor::Result &result)
+{
+  if (socket_type == SOCK_RGBA) {
+    const InputImageStatus image_status = this->fill_color_input_from_rna_image(
+        inputs_ptr, socket, result);
+    if (image_status == InputImageStatus::Loaded) {
+      return;
+    }
+    if (image_status == InputImageStatus::Unavailable) {
+      result.allocate_invalid();
+      return;
+    }
+  }
+  set_input_result_from_rna_value(inputs_ptr, socket, socket_type, result);
 }
 
 compositor::ResultPrecision CompositorContext::get_precision() const

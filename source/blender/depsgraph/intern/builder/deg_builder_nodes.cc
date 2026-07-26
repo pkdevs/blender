@@ -2396,6 +2396,7 @@ static bool strip_node_build_cb(Strip *strip, void *user_data)
 
   if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
     CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);
+    nb->build_idproperties(comp_data->system_properties);
     if (comp_data->node_group) {
       nb->build_nodetree(comp_data->node_group);
     }
@@ -2404,6 +2405,7 @@ static bool strip_node_build_cb(Strip *strip, void *user_data)
     if (modifier.type != eSeqModifierType_Compositor) {
       continue;
     }
+    nb->build_idproperties(modifier.system_properties);
 
     const SequencerCompositorModifierData *modifier_data =
         reinterpret_cast<SequencerCompositorModifierData *>(&modifier);

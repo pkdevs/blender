@@ -18,14 +18,6 @@ enum eNodeSocketDatatype : short;
 
 namespace blender::seq {
 
-/**
- * Allocate result as a single value, and fill it from the RNA property of the given input.
- */
-void set_input_result_from_rna(PointerRNA &inputs_ptr,
-                               const bNodeTreeInterfaceSocket &socket,
-                               eNodeSocketDatatype socket_type,
-                               compositor::Result &result);
-
 class CompositorContext : public compositor::Context {
  protected:
   const RenderData &render_data_;
@@ -74,6 +66,12 @@ class CompositorContext : public compositor::Context {
   }
 
  protected:
+  enum class InputImageStatus {
+    NotImage,
+    Loaded,
+    Unavailable,
+  };
+
   compositor::NodeGroupOutputTypes needed_outputs() const
   {
     if (!render_data_.render) {
@@ -83,6 +81,21 @@ class CompositorContext : public compositor::Context {
   }
 
   void create_result_from_input(compositor::Result &result, ImBuf &input);
+  /**
+   * If the given color input is set to an  image data-block, load that image through
+   * the image cache and share into result.
+   */
+  InputImageStatus fill_color_input_from_rna_image(PointerRNA &inputs_ptr,
+                                                   const bNodeTreeInterfaceSocket &socket,
+                                                   compositor::Result &result);
+  /**
+   * Allocate result as a single value (or potentially an image for Image inputs), and fill it
+   * from the RNA property of the given input.
+   */
+  void set_input_result_from_rna(PointerRNA &inputs_ptr,
+                                 const bNodeTreeInterfaceSocket &socket,
+                                 eNodeSocketDatatype socket_type,
+                                 compositor::Result &result);
   void write_viewer_impl(const compositor::Result &result, ImBuf &image);
   void write_output(const compositor::Result &result, ImBuf &image);
   void write_outputs(const bNodeTree &node_group,

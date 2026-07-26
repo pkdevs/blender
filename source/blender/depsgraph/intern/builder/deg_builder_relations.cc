@@ -3520,6 +3520,7 @@ static bool strip_build_prop_cb(Strip *strip, void *user_data)
   }
   if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
     const CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);
+    cd->builder->build_idproperties(comp_data->system_properties);
     if (comp_data->node_group) {
       cd->builder->build_nodetree(comp_data->node_group);
       OperationKey node_tree_key(
@@ -3531,6 +3532,7 @@ static bool strip_build_prop_cb(Strip *strip, void *user_data)
     if (modifier.type != eSeqModifierType_Compositor) {
       continue;
     }
+    cd->builder->build_idproperties(modifier.system_properties);
 
     const SequencerCompositorModifierData *modifier_data =
         reinterpret_cast<SequencerCompositorModifierData *>(&modifier);

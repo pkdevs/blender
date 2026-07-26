@@ -8,6 +8,7 @@
  * \ingroup sequencer
  */
 
+#include "DNA_image_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
@@ -16,6 +17,7 @@
 #include "BLI_session_uid.hh"
 #include "BLI_string.hh"
 
+#include "BKE_idprop.hh"
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
 #include "BKE_report.hh"
@@ -254,6 +256,44 @@ void relations_invalidate_compositor_users(const Main *bmain, const bNodeTree *n
         relations_invalidate_cache(&scene, strip);
       }
     }
+  }
+}
+
+static bool idproperties_use_id(IDProperty *properties, const ID *target_id)
+{
+  bool used = false;
+  IDP_foreach_property(properties, IDP_TYPE_FILTER_ID, [&](IDProperty *property) {
+    if (IDP_ID_get(property) == target_id) {
+      used = true;
+    }
+  });
+  return used;
+}
+
+void relations_invalidate_image_users(const Main *bmain, const Image *image)
+{
+  const ID *image_id = &image->id;
+  for (Scene &scene : bmain->scenes) {
+    if (scene.ed == nullptr) {
+      continue;
+    }
+    foreach_strip(&scene.ed->seqbase, [&](Strip *strip) {
+      bool used = false;
+      if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
+        const CompositorEffectVars *effect = static_cast<CompositorEffectVars *>(
+            strip->effectdata);
+        used = idproperties_use_id(effect->system_properties, image_id);
+      }
+      for (StripModifierData &modifier : strip->modifiers) {
+        if (modifier.type == eSeqModifierType_Compositor) {
+          used |= idproperties_use_id(modifier.system_properties, image_id);
+        }
+      }
+      if (used) {
+        relations_invalidate_cache(&scene, strip);
+      }
+      return true;
+    });
   }
 }
 

@@ -22,6 +22,7 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 
+#include "NOD_compositor_nodes_srna.hh"
 #include "NOD_socket_usage_inference.hh"
 
 #include "PRF_profile.hh"
@@ -133,7 +134,7 @@ class CompositorEffectContext : public CompositorContext {
       }
       else if (valid_socket_type && inputs_ptr) {
         /* Remaining inputs read their value from the exposed RNA property. */
-        set_input_result_from_rna(inputs_ptr, *input_socket, socket_type, *input_result);
+        this->set_input_result_from_rna(inputs_ptr, *input_socket, socket_type, *input_result);
       }
       else {
         /* Unsupported sockets. */
@@ -259,6 +260,7 @@ void compositor_effect_nodes_update_interface(Main &bmain, Scene &sequencer_scen
   PointerRNA properties_ptr = RNA_pointer_create_discrete(
       &sequencer_scene.id, RNA_SequencerCompositorEffectProperties, comp);
   RNA_ensure_and_sync_system_properties(bmain, properties_ptr, *comp->system_properties);
+  nodes::compositor_nodes_reset_invalid_input_types(properties_ptr, *comp->node_group);
 
   DEG_id_tag_update(&sequencer_scene.id, ID_RECALC_SEQUENCER_STRIPS);
 }

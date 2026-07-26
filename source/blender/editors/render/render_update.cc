@@ -408,6 +408,10 @@ static void update_sequencer(const DEGEditorUpdateContext *update_ctx, Main *bma
       seq::relations_invalidate_compositor_users(bmain, node_tree);
     }
   }
+
+  if (id->id_type() == ID_IM) {
+    seq::relations_invalidate_image_users(bmain, reinterpret_cast<const Image *>(id));
+  }
 }
 
 void ED_render_id_flush_update(const DEGEditorUpdateContext *update_ctx, ID *id)

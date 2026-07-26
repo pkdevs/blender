@@ -17,6 +17,7 @@
 namespace blender {
 
 struct Main;
+struct Image;
 struct MovieClip;
 struct ReportList;
 struct bNodeTree;
@@ -85,6 +86,9 @@ void relations_update_view_layer_scene_strips(Main *bmain,
  * Invalidates the cache for all strips that uses the given compositor node tree.
  */
 void relations_invalidate_compositor_users(const Main *bmain, const bNodeTree *node_tree);
+
+/** Invalidate the cache for all compositor strips and modifiers that use the image input. */
+void relations_invalidate_image_users(const Main *bmain, const Image *image);
 
 void relations_invalidate_movieclip_strips(Main *bmain, MovieClip *clip_target);
 /**

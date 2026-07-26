@@ -31,6 +31,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
@@ -150,6 +151,63 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
                   ui::TEMPLATE_ID_FILTER_ALL,
                   false,
                   name);
+      break;
+    }
+    case SOCK_RGBA: {
+      /* A flat color or an image. */
+      const auto input_type = CompositorNodesInputType(RNA_enum_get(socket_props_ptr, "type"));
+      const bool show_image = input_type == CompositorNodesInputType::Image;
+      bool unsupported_image = false;
+
+      /* Use shared property split for both color and image types, to make sure the label
+       * and control bounds stay the same between the two cases. */
+      ui::PropertySplitWrapper split = uiItemPropertySplitWrapperCreate(&row);
+      split.label_column->label(name, ICON_NONE);
+      ui::Layout &prop_row = *split.property_row;
+      prop_row.use_property_split_set(false);
+      if (show_image) {
+        template_id(&prop_row,
+                    &ctx.C,
+                    socket_props_ptr,
+                    "image",
+                    nullptr,
+                    "IMAGE_OT_open",
+                    nullptr,
+                    ui::TEMPLATE_ID_FILTER_ALL,
+                    false,
+                    std::nullopt);
+        Image *image = RNA_pointer_get(socket_props_ptr, "image").data_as<Image>();
+        unsupported_image = image && !compositor_nodes_image_input_supported(*image);
+      }
+      else {
+        prop_row.prop(socket_props_ptr, "value", UI_ITEM_NONE, "", ICON_NONE);
+      }
+      PropertyRNA *type_prop = RNA_struct_find_property(socket_props_ptr, "type");
+      std::optional<std::string> type_path;
+      if (type_prop) {
+        type_path = RNA_path_from_ID_to_property(socket_props_ptr, type_prop);
+      }
+      if (type_path.has_value()) {
+        PointerRNA props = prop_row.op("sequencer.compositor_input_toggle",
+                                       "",
+                                       ICON_IMAGE_DATA,
+                                       wm::OpCallContext::InvokeDefault,
+                                       UI_ITEM_NONE);
+        RNA_string_set(&props, "data_path", type_path->c_str());
+      }
+      BLI_assert(split.decorate_column != nullptr);
+      if (show_image) {
+        split.decorate_column->label("", ICON_BLANK1);
+      }
+      else {
+        split.decorate_column->decorator(socket_props_ptr, "value", -1);
+      }
+
+      if (unsupported_image) {
+        ui::Layout &message_row = layout.row(false);
+        message_row.label(RPT_("Only file and generated single-layer images are supported"),
+                          ICON_STATUS_ERROR);
+      }
       break;
     }
     default: {

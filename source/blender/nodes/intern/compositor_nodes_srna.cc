@@ -10,10 +10,12 @@
 #include "NOD_compositor_nodes_srna.hh"
 #include "NOD_socket.hh"
 
+#include "DNA_image_types.h"
 #include "DNA_node_types.h"
 #include "DNA_sequence_types.h"
 
 #include "BKE_idprop.hh"
+#include "BKE_image.hh"
 #include "BKE_node_runtime.hh"
 
 #include "SEQ_iterator.hh"
@@ -29,6 +31,12 @@ static constexpr EnumPropertyItem input_type_item_fallback = {
     int(CompositorNodesInputType::Fallback), "FALLBACK", 0, "Fallback", "Fallback"};
 static constexpr EnumPropertyItem input_type_item_value = {
     int(CompositorNodesInputType::Value), "VALUE", 0, "Value", "Pass a single value"};
+static constexpr EnumPropertyItem input_type_item_image = {
+    int(CompositorNodesInputType::Image),
+    "IMAGE",
+    0,
+    "Image",
+    "Sample a file or generated single-layer image data-block"};
 
 const EnumPropertyItem compositor_nodes_input_type_items_fallback[] = {
     input_type_item_fallback,
@@ -39,6 +47,36 @@ const EnumPropertyItem compositor_nodes_input_type_items_value[] = {
     input_type_item_value,
     {0},
 };
+
+const EnumPropertyItem compositor_nodes_input_type_items_color[] = {
+    input_type_item_value,
+    input_type_item_image,
+    {0},
+};
+
+bool compositor_nodes_image_input_supported(const Image &image)
+{
+  return ELEM(image.source, IMA_SRC_FILE, IMA_SRC_GENERATED) && !BKE_image_is_multilayer(&image);
+}
+
+void compositor_nodes_reset_invalid_input_types(PointerRNA &properties_ptr, const bNodeTree &tree)
+{
+  PointerRNA inputs_ptr = RNA_pointer_get(&properties_ptr, "inputs");
+  for (const bNodeTreeInterfaceSocket *socket : tree.interface_inputs()) {
+    PointerRNA input_ptr = RNA_pointer_get(&inputs_ptr, socket->identifier);
+    PropertyRNA *type_prop = RNA_struct_find_property(&input_ptr, "type");
+    if (type_prop == nullptr) {
+      continue;
+    }
+
+    const int type = RNA_property_enum_get(&input_ptr, type_prop);
+    EnumPropertyItem type_item;
+    if (!RNA_property_enum_item_from_value(nullptr, &input_ptr, type_prop, type, &type_item)) {
+      RNA_property_enum_set(
+          &input_ptr, type_prop, RNA_property_enum_get_default(&input_ptr, type_prop));
+    }
+  }
+}
 
 struct CompositorNodesSrnaContext {
   StructRNA *properties_struct;
