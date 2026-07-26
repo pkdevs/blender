@@ -370,7 +370,7 @@ class NodeMenu(Menu):
             props.use_transform = cls.use_transform
 
     @classmethod
-    def draw_menu(cls, layout, path):
+    def draw_menu(cls, layout, path, label=None):
         """
         Takes the given menu path and draws the corresponding menu.
         Menu paths are either explicitly defined, or based on bl_label if not.
@@ -378,7 +378,10 @@ class NodeMenu(Menu):
         if cls.pathing_dict is None:
             raise ValueError("`pathing_dict` was not set for {!s}".format(cls))
 
-        layout.menu(cls.pathing_dict[path])
+        if label:
+            layout.menu(cls.pathing_dict[path], text=label)
+        else:
+            layout.menu(cls.pathing_dict[path])
 
     @classmethod
     def simulation_zone(cls, layout, label):
