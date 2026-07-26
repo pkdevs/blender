@@ -544,7 +544,7 @@ ccl_device_inline float3 penny_turb_additive(const float x,
     float off = (f - 1.0f) * 1000.0f;
     int4 op = make_int4(
         (int)(period.x * f), (int)(period.y * f), (int)(period.z * f), (int)(period.w * f));
-    float3 n = penny_perlin_4d_tile(x * f + off, y * f + off, z * f + off, w, op);
+    float3 n = penny_perlin_4d_tile(x * f + off, y * f + off, z * f + off, w * f + off, op);
     float3 t = 0.7f * (n * 0.5f + make_float3(0.5f, 0.5f, 0.5f)) + make_float3(0.3f, 0.3f, 0.3f);
     value = value + (2.0f * t - make_float3(1.0f, 1.0f, 1.0f)) * amp;
     norm += amp;
@@ -613,7 +613,7 @@ ccl_device_inline float3 penny_abs_turb2(const float x,
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 p01 = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w, op) *
+    float3 p01 = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
                      0.5f +
                  make_float3(0.5f, 0.5f, 0.5f);
     sum = sum + make_float3(fabsf(2.0f * p01.x - 1.0f),
@@ -646,7 +646,7 @@ ccl_device_inline float3 penny_reg_turb2(const float x,
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 p01 = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w, op) *
+    float3 p01 = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
                      0.5f +
                  make_float3(0.5f, 0.5f, 0.5f);
     sum = sum + make_float3(2.0f * p01.x - 1.0f, 2.0f * p01.y - 1.0f, 2.0f * p01.z - 1.0f) * amp;
@@ -679,7 +679,7 @@ ccl_device_inline float3 penny_reg_turb2_signed(const float x,
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 p01 = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w, op) *
+    float3 p01 = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
                      0.5f +
                  make_float3(0.5f, 0.5f, 0.5f);
     sum = sum + make_float3(2.0f * p01.x - 1.0f, 2.0f * p01.y - 1.0f, 2.0f * p01.z - 1.0f) * amp;
@@ -776,7 +776,7 @@ ccl_device_inline float3 penny_luka_turb(const float x,
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 n = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w, op);
+    float3 n = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op);
     sum = sum + make_float3(fabsf(n.x * 0.73f), fabsf(n.y * 0.73f), fabsf(n.z * 0.73f)) * amp;
     norm += amp;
     scale *= 2.0f;
@@ -815,7 +815,7 @@ ccl_device_inline float3 penny_blist_turb(const float x,
     float off = (f - 1.0f) * 1000.0f;
     int4 op = make_int4(
         (int)(period.x * f), (int)(period.y * f), (int)(period.z * f), (int)(period.w * f));
-    float3 n = penny_perlin_4d_tile(x * f + off, y * f + off, z * f + off, w, op);
+    float3 n = penny_perlin_4d_tile(x * f + off, y * f + off, z * f + off, w * f + off, op);
     result = result + n * scale;
     scale *= roughness;
     scale_sum += scale;
@@ -924,7 +924,7 @@ ccl_device_noinline float3 penny_mod_tile(const float x,
                         (int)(period.z * scale),
                         (int)(period.w * scale));
     value = value +
-            penny_mod_sample(cx * scale + off, cy * scale + off, cz * scale + off, w, op) * amp;
+            penny_mod_sample(cx * scale + off, cy * scale + off, cz * scale + off, w * scale + off, op) * amp;
     ampsum += amp;
     scale *= 2.0f;
     amp *= ramp;
@@ -958,7 +958,7 @@ ccl_device_noinline float3 penny_mod_tile(const float x,
                         (int)(period.z * scale),
                         (int)(period.w * scale));
     value2 = value2 +
-             penny_mod_sample(c2x * scale + off, c2y * scale + off, c2z * scale + off, w, op) *
+             penny_mod_sample(c2x * scale + off, c2y * scale + off, c2z * scale + off, w * scale + off, op) *
                  amp;
     ampsum2 += amp;
     scale *= 2.0f;
@@ -1040,7 +1040,7 @@ ccl_device_noinline float3 penny_box_tile(const float x,
     float off = (f - 1.0f) * 1000.0f;
     int4 op = make_int4(
         (int)(period.x * f), (int)(period.y * f), (int)(period.z * f), (int)(period.w * f));
-    float3 b = penny_box_noise(x * f + off, y * f + off, z * f + off, w, op, 4.0f);
+    float3 b = penny_box_noise(x * f + off, y * f + off, z * f + off, w * f + off, op, 4.0f);
     value = value + (2.0f * b - make_float3(1.0f, 1.0f, 1.0f)) * amp;
     f *= 2.0f;
     amp *= roughness;
@@ -1064,7 +1064,7 @@ ccl_device_noinline float3 penny_box_tile(const float x,
     int4 op = make_int4(
         (int)(period.x * f), (int)(period.y * f), (int)(period.z * f), (int)(period.w * f));
     float3 b = penny_box_noise(
-        (x + 0.5f) * f + off, (y + 0.5f) * f + off, (z + 0.5f) * f + off, w, op, 4.0f);
+        (x + 0.5f) * f + off, (y + 0.5f) * f + off, (z + 0.5f) * f + off, w * f + off, op, 4.0f);
     value2 = value2 + (2.0f * b - make_float3(1.0f, 1.0f, 1.0f)) * amp;
     f *= 2.0f;
     amp *= roughness;
@@ -1170,10 +1170,16 @@ ccl_device_noinline float3 penny_cranal_tile(const float x_in,
 {
   octaves = max(octaves, 1);
 
-  /* Baked 300% scale. */
-  const float cx = x_in / 3.0f;
-  const float cy0 = y_in / 3.0f;
-  const float cz0 = z_in / 3.0f;
+  /* Snap the 1/3 feature scale to the period so the pattern wraps at `period`
+   * exactly (x/3 alone would only repeat every 3*period). */
+  const int ppx = max(period.x, 1), ppy = max(period.y, 1), ppz = max(period.z, 1);
+  const int lpx = max(1, (int)((float)ppx / 3.0f + 0.5f));
+  const int lpy = max(1, (int)((float)ppy / 3.0f + 0.5f));
+  const int lpz = max(1, (int)((float)ppz / 3.0f + 0.5f));
+  const int4 lat_period = make_int4(lpx, lpy, lpz, period.w);
+  const float cx = x_in * ((float)lpx / (float)ppx);
+  const float cy0 = y_in * ((float)lpy / (float)ppy);
+  const float cz0 = z_in * ((float)lpz / (float)ppz);
 
   /* Roughness drives bias, centered so 0.5 == faithful 0.80. */
   const float bias = clamp(0.80f + (roughness - 0.5f) * 0.3f, 0.5f, 0.95f);
@@ -1190,7 +1196,7 @@ ccl_device_noinline float3 penny_cranal_tile(const float x_in,
       /* Per-octave Y/Z decorrelation to break lattice grid alignment. */
       float oy = (float)i * 7.793f;
       float oz = (float)i * 11.219f;
-      float3 t = penny_blist_turb(x1, cy + oy, cz + oz, w_in, period, 1, roughness);
+      float3 t = penny_blist_turb(x1, cy + oy, cz + oz, w_in, lat_period, 1, roughness);
       float tch[3];
       tch[0] = t.x;
       tch[1] = t.y;
@@ -1225,7 +1231,7 @@ ccl_device_noinline float3 penny_cranal_tile(const float x_in,
       for (int i = 0; i <= octaves; ++i) {
         float oy = (float)i * 7.793f;
         float oz = (float)i * 11.219f;
-        float3 t2 = penny_blist_turb(x1b, cyb + oy, czb + oz, w_in, period, 1, roughness);
+        float3 t2 = penny_blist_turb(x1b, cyb + oy, czb + oz, w_in, lat_period, 1, roughness);
         float t2ch[3];
         t2ch[0] = t2.x;
         t2ch[1] = t2.y;
@@ -1299,7 +1305,7 @@ ccl_device_inline float buya_pfbm_channel(const float x,
                         (int)(period.y * scale),
                         (int)(period.z * scale),
                         (int)(period.w * scale));
-    float3 p = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w, op);
+    float3 p = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op);
     float pch[3];
     pch[0] = p.x;
     pch[1] = p.y;
@@ -1390,7 +1396,7 @@ ccl_device_inline float cell_octaves(
                         (int)(period.y * scale),
                         (int)(period.z * scale),
                         (int)(period.w * scale));
-    sum += cell_sample(bx * scale, by * scale, bz * scale, w, op, ch) * amp;
+    sum += cell_sample(bx * scale, by * scale, bz * scale, w * scale, op, ch) * amp;
     ampsum += amp;
     amp *= roughness;
     scale *= 2.0f;
@@ -1784,7 +1790,7 @@ ccl_device_inline float penny_pezo_absturb2(
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (scale - 1.0f) * 1000.0f;
-    float3 p = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w, op) *
+    float3 p = penny_perlin_4d_tile(x * scale + off, y * scale + off, z * scale + off, w * scale + off, op) *
                    0.5f +
                make_float3(0.5f, 0.5f, 0.5f);
     float p01 = (ch == 0) ? p.x : ((ch == 1) ? p.y : p.z);
@@ -1807,7 +1813,7 @@ ccl_device_inline float penny_pezo_turb3(
   int4 op = period;
   for (int i = 0; i < octaves; ++i) {
     float off = (f - 1.0f) * 1000.0f;
-    float3 s3 = penny_perlin_4d_tile(x * f + off, y * f + off, z * f, w, op);
+    float3 s3 = penny_perlin_4d_tile(x * f + off, y * f + off, z * f, w * f + off, op);
     float s = (ch == 0) ? s3.x : ((ch == 1) ? s3.y : s3.z);
     value += s / f;
     f *= 2.0f;
@@ -2181,13 +2187,18 @@ ccl_device_inline float3 penny_luka_tile(const float x,
   octaves = max(octaves, 1);
 
   /* Faithful pre-transform: scale 0.8 + decorrelation offset (xyz; w passes through). */
-  float cx = x * 0.8f + 127.1f;
-  float cy = y * 0.8f + 64.8f;
-  float cz = z * 0.8f + 26.81f;
+  const int ppx = max(period.x, 1), ppy = max(period.y, 1), ppz = max(period.z, 1);
+  const int4 lat_period = make_int4(max(1, (int)(0.8f * (float)ppx + 0.5f)),
+                                    max(1, (int)(0.8f * (float)ppy + 0.5f)),
+                                    max(1, (int)(0.8f * (float)ppz + 0.5f)),
+                                    period.w);
+  float cx = x * ((float)lat_period.x / (float)ppx) + 127.1f;
+  float cy = y * ((float)lat_period.y / (float)ppy) + 64.8f;
+  float cz = z * ((float)lat_period.z / (float)ppz) + 26.81f;
 
-  float3 temp = penny_luka_turb(cx, cy, cz, w, period, octaves, roughness);
+  float3 temp = penny_luka_turb(cx, cy, cz, w, lat_period, octaves, roughness);
   /* Displacement: single raw Perlin * 0.275 (== 0.55 * 0.5). */
-  float3 disp3 = penny_perlin_4d_tile(cx, cy, cz, w, period) * 0.275f;
+  float3 disp3 = penny_perlin_4d_tile(cx, cy, cz, w, lat_period) * 0.275f;
 
   float tch[3];
   tch[0] = temp.x;
@@ -2203,7 +2214,7 @@ ccl_device_inline float3 penny_luka_tile(const float x,
     /* Warp #1: (x+d, y-d, z+d). */
     float w1x = cx + d, w1y = cy - d, w1z = cz + d;
     /* Inner sample warps again by +d on all axes. */
-    float3 inner3 = penny_luka_turb(w1x + d, w1y + d, w1z + d, w, period, octaves, roughness);
+    float3 inner3 = penny_luka_turb(w1x + d, w1y + d, w1z + d, w, lat_period, octaves, roughness);
     float ich[3];
     ich[0] = inner3.x;
     ich[1] = inner3.y;
@@ -2218,7 +2229,7 @@ ccl_device_inline float3 penny_luka_tile(const float x,
     }
     else {
       float3 inner3b = penny_luka_turb(
-          w1x + d + 0.5f, w1y + d + 0.5f, w1z + d + 0.5f, w, period, octaves, roughness);
+          w1x + d + 0.5f, w1y + d + 0.5f, w1z + d + 0.5f, w, lat_period, octaves, roughness);
       float ichb[3];
       ichb[0] = inner3b.x;
       ichb[1] = inner3b.y;

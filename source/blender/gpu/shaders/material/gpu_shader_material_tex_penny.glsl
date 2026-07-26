@@ -371,7 +371,7 @@ float3 penny_turb_additive(float4 co, int octaves, float roughness, int4 period)
   float norm = 0.0f;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (f - 1.0f) * 1000.0f;
-    float4 sample_co = float4(co.x * f + off, co.y * f + off, co.z * f + off, co.w);
+    float4 sample_co = float4(co.x * f + off, co.y * f + off, co.z * f + off, co.w * f + off);
     int4 oct_period = period * int(f);
     float3 n = penny_perlin_4d_tile(sample_co, oct_period);
     float3 t = 0.7f * (n * 0.5f + 0.5f) + 0.3f;
@@ -420,7 +420,7 @@ float3 penny_abs_turb2(float4 co, int octaves, float roughness, int4 period)
   int4 oct_period = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0f) * 1000.0f;
-    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w);
+    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     float3 p01 = penny_perlin_4d_tile(sc, oct_period) * 0.5f + 0.5f;
     sum = sum + abs(2.0f * p01 - 1.0f) * amp;
     norm += amp;
@@ -444,7 +444,7 @@ float3 penny_reg_turb2(float4 co, int octaves, float roughness, int4 period)
   int4 oct_period = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0f) * 1000.0f;
-    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w);
+    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     float3 p01 = penny_perlin_4d_tile(sc, oct_period) * 0.5f + 0.5f;
     sum = sum + (2.0f * p01 - 1.0f) * amp;
     norm += amp;
@@ -469,7 +469,7 @@ float3 penny_reg_turb2_signed(float4 co, int octaves, float roughness, int4 peri
   int4 oct_period = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0f) * 1000.0f;
-    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w);
+    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     float3 p01 = penny_perlin_4d_tile(sc, oct_period) * 0.5f + 0.5f;
     sum = sum + (2.0f * p01 - 1.0f) * amp;
     norm += amp;
@@ -533,7 +533,7 @@ float3 penny_luka_turb(float4 co, int octaves, float roughness, int4 period)
   int4 oct_period = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0f) * 1000.0f;
-    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w);
+    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     float3 n = penny_perlin_4d_tile(sc, oct_period);
     sum = sum + abs(n * 0.73f) * amp;
     norm += amp;
@@ -563,7 +563,7 @@ float3 penny_blist_turb(float4 co, int octaves, float roughness, int4 period)
   /* Remaining octaves: coord doubles (freq doubling), scale damps. */
   for (int i = 1; i < octaves; i = i + 1) {
     float off = (f - 1.0f) * 1000.0f;
-    float4 sample_co = float4(co.x * f + off, co.y * f + off, co.z * f + off, co.w);
+    float4 sample_co = float4(co.x * f + off, co.y * f + off, co.z * f + off, co.w * f + off);
     int4 oct_period = period * int(f);
     float3 n = penny_perlin_4d_tile(sample_co, oct_period);
     result = result + n * scale;
@@ -651,7 +651,7 @@ float3 penny_box_tile(float4 co, float detail, float roughness, int4 period, int
   float amp = 1.0f;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (f - 1.0f) * 1000.0f;
-    float4 sample_co = float4(co.x * f + off, co.y * f + off, co.z * f + off, co.w);
+    float4 sample_co = float4(co.x * f + off, co.y * f + off, co.z * f + off, co.w * f + off);
     int4 oct_period = period * int(f);
     float3 b = penny_box_noise(sample_co, oct_period, 4.0f);
     /* (2*p01 - 1) * amp ; amp = roughness^i reproduces /f at roughness 0.5. */
@@ -674,7 +674,7 @@ float3 penny_box_tile(float4 co, float detail, float roughness, int4 period, int
   amp = 1.0f;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (f - 1.0f) * 1000.0f;
-    float4 sample_co = float4((co.x + 0.5f) * f + off, (co.y + 0.5f) * f + off, (co.z + 0.5f) * f + off, co.w);
+    float4 sample_co = float4((co.x + 0.5f) * f + off, (co.y + 0.5f) * f + off, (co.z + 0.5f) * f + off, co.w * f + off);
     int4 oct_period = period * int(f);
     float3 b = penny_box_noise(sample_co, oct_period, 4.0f);
     value2 = value2 + (2.0f * b - float3(1.0f, 1.0f, 1.0f)) * amp;
@@ -719,7 +719,7 @@ float3 penny_mod_tile(float4 co, float detail, float roughness, int4 period, int
   float ampsum = 0.0f;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0f) * 1000.0f;
-    float4 p = float4(c.x * scale + off, c.y * scale + off, c.z * scale + off, c.w);
+    float4 p = float4(c.x * scale + off, c.y * scale + off, c.z * scale + off, c.w * scale + off);
     int4 oct_period = period * int(scale);
     value = value + penny_mod_sample(p, oct_period) * amp;
     ampsum += amp;
@@ -743,7 +743,7 @@ float3 penny_mod_tile(float4 co, float detail, float roughness, int4 period, int
   float ampsum2 = 0.0f;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0f) * 1000.0f;
-    float4 p = float4(c2.x * scale + off, c2.y * scale + off, c2.z * scale + off, c2.w);
+    float4 p = float4(c2.x * scale + off, c2.y * scale + off, c2.z * scale + off, c2.w * scale + off);
     int4 oct_period = period * int(scale);
     value2 = value2 + penny_mod_sample(p, oct_period) * amp;
     ampsum2 += amp;
@@ -807,8 +807,16 @@ float3 penny_cranal_tile(float4 co, float detail, float roughness, int4 period, 
 {
   int octaves = max(int(detail), 1);
 
-  /* Baked 300% scale (coord /= 3 → coarser default; user Scale multiplies on top). */
-  co = float4(co.x / 3.0f, co.y / 3.0f, co.z / 3.0f, co.w);
+  /* Snap the 1/3 feature scale to the period so the pattern wraps at `period`
+   * exactly (co/3 alone would only repeat every 3*period). */
+  int4 lat_period = int4(max(1, int(round(float(period.x) / 3.0f))),
+                         max(1, int(round(float(period.y) / 3.0f))),
+                         max(1, int(round(float(period.z) / 3.0f))),
+                         period.w);
+  co = float4(co.x * (float(lat_period.x) / float(max(period.x, 1))),
+              co.y * (float(lat_period.y) / float(max(period.y, 1))),
+              co.z * (float(lat_period.z) / float(max(period.z, 1))),
+              co.w);
 
   /* Roughness drives bias, centered so 0.5 == faithful 0.80. */
   float bias = clamp(0.80f + (roughness - 0.5f) * 0.3f, 0.5f, 0.95f);
@@ -827,7 +835,7 @@ float3 penny_cranal_tile(float4 co, float detail, float roughness, int4 period, 
       /* Per-octave Y/Z decorrelation to break lattice grid alignment. */
       float oy = float(i) * 7.793f;
       float oz = float(i) * 11.219f;
-      float3 t = penny_blist_turb(float4(x1, cy + oy, cz + oz, co.w), 1, roughness, period);
+      float3 t = penny_blist_turb(float4(x1, cy + oy, cz + oz, co.w), 1, roughness, lat_period);
       float tv = t[ch];
       float n = darf_noxstep(-0.5f, 0.5f, tv);
       float folded = abs(1.0f - 2.0f * n);
@@ -852,7 +860,7 @@ float3 penny_cranal_tile(float4 co, float detail, float roughness, int4 period, 
       for (int i = 0; i <= octaves; i = i + 1) {
         float oy = float(i) * 7.793f;
         float oz = float(i) * 11.219f;
-        float3 t2 = penny_blist_turb(float4(x1b, cyb + oy, czb + oz, co.w), 1, roughness, period);
+        float3 t2 = penny_blist_turb(float4(x1b, cyb + oy, czb + oz, co.w), 1, roughness, lat_period);
         float tv2 = t2[ch];
         float n2 = darf_noxstep(-0.5f, 0.5f, tv2);
         float folded2 = abs(1.0f - 2.0f * n2);
@@ -890,7 +898,7 @@ float buya_pfbm_channel(float4 co, int ch, int octaves, int4 period, float rough
   int4 per = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0f) * 1000.0f;
-    float4 c = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w);
+    float4 c = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     float3 p = penny_perlin_4d_tile(c, per);
     float toy = p[ch] * 0.5f + 0.5f;  /* Improved_Toy [0,1] */
     float h = (1.0f - roughness) * 0.4f;  /* inverted; 0.5 -> H 0.2 (faithful) */
@@ -963,7 +971,7 @@ float cell_octaves(float bx, float by, float bz, float w, int4 period, int octav
   float scale = 1.0f;
   int4 per = period;
   for (int i = 0; i < octaves; i = i + 1) {
-    sum = sum + cell_sample(bx * scale, by * scale, bz * scale, w, per, ch) * amp;
+    sum = sum + cell_sample(bx * scale, by * scale, bz * scale, w * scale, per, ch) * amp;
     ampsum = ampsum + amp;
     amp = amp * roughness;
     scale = scale * 2.0f;
@@ -1240,7 +1248,7 @@ float penny_pezo_absturb2(float4 co, int octaves, int4 period, int ch)
   int4 op = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (scale - 1.0f) * 1000.0f;
-    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w);
+    float4 sc = float4(co.x * scale + off, co.y * scale + off, co.z * scale + off, co.w * scale + off);
     float p01 = penny_perlin_4d_tile(sc, op)[ch] * 0.5f + 0.5f;
     value += abs(2.0f * p01 - 1.0f) / scale;
     scale *= 2.0f;
@@ -1258,7 +1266,7 @@ float penny_pezo_turb3(float4 co, int octaves, int4 period, int ch)
   int4 op = period;
   for (int i = 0; i < octaves; i = i + 1) {
     float off = (f - 1.0f) * 1000.0f;
-    float4 sc = float4(co.x * f + off, co.y * f + off, co.z * f, co.w);
+    float4 sc = float4(co.x * f + off, co.y * f + off, co.z * f, co.w * f + off);
     float s = penny_perlin_4d_tile(sc, op)[ch];  /* 2*(s*0.5+0.5)-1 == s */
     value += s / f;
     f *= 2.0f;
@@ -1502,11 +1510,20 @@ float3 penny_luka_tile(float4 co, float detail, float roughness, int4 period, in
   int octaves = max(int(detail), 1);
 
   /* Faithful pre-transform: scale 0.8 + decorrelation offset (xyz; w passes through). */
-  float4 c = float4(co.x * 0.8f + 127.1f, co.y * 0.8f + 64.8f, co.z * 0.8f + 26.81f, co.w);
+  /* Snap the 0.8 feature scale to the period so the pattern wraps at `period`
+   * exactly (a non-integer 0.8 prescale would not tile). */
+  int4 lat_period = int4(max(1, int(round(0.8f * float(period.x)))),
+                         max(1, int(round(0.8f * float(period.y)))),
+                         max(1, int(round(0.8f * float(period.z)))),
+                         period.w);
+  float kx = float(lat_period.x) / float(max(period.x, 1));
+  float ky = float(lat_period.y) / float(max(period.y, 1));
+  float kz = float(lat_period.z) / float(max(period.z, 1));
+  float4 c = float4(co.x * kx + 127.1f, co.y * ky + 64.8f, co.z * kz + 26.81f, co.w);
 
-  float3 temp = penny_luka_turb(c, octaves, roughness, period);
+  float3 temp = penny_luka_turb(c, octaves, roughness, lat_period);
   /* Displacement: single raw Perlin * 0.275 (== 0.55 * 0.5). */
-  float3 disp3 = penny_perlin_4d_tile(c, period) * 0.275f;
+  float3 disp3 = penny_perlin_4d_tile(c, lat_period) * 0.275f;
 
   float3 result = float3(0.0f, 0.0f, 0.0f);
   for (int ch = 0; ch < 3; ch = ch + 1) {
@@ -1515,7 +1532,7 @@ float3 penny_luka_tile(float4 co, float detail, float roughness, int4 period, in
     float4 w1 = float4(c.x + d, c.y - d, c.z + d, c.w);
     /* Inner sample warps again by +d on all axes. */
     float4 w2 = float4(w1.x + d, w1.y + d, w1.z + d, c.w);
-    float3 inner3 = penny_luka_turb(w2, octaves, roughness, period);
+    float3 inner3 = penny_luka_turb(w2, octaves, roughness, lat_period);
     float inner = inner3[ch];
     float v = darf_noxstep(-2.0f, 2.0f, inner);
     v = darf_noxstep(0.47f - temp[ch], 0.525f + temp[ch], v);
@@ -1528,7 +1545,7 @@ float3 penny_luka_tile(float4 co, float detail, float roughness, int4 period, in
     else {
       /* Self-blend: same Luka chain at a phase-shifted coord for classic modes. */
       float4 w2b = float4(w1.x + d + 0.5f, w1.y + d + 0.5f, w1.z + d + 0.5f, c.w);
-      float3 inner3b = penny_luka_turb(w2b, octaves, roughness, period);
+      float3 inner3b = penny_luka_turb(w2b, octaves, roughness, lat_period);
       float v2 = darf_noxstep(-2.0f, 2.0f, inner3b[ch]);
       v2 = darf_noxstep(0.47f - temp[ch], 0.525f + temp[ch], v2);
       v2 = darf_noxstep(0.5f, 0.78f, v2);
