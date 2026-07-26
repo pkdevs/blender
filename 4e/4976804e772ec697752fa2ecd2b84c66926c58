@@ -14,3 +14,4 @@ Referenced by pull request #155339, Fix #155185: asset "PACK" import method lost
 Referenced by commit 758fa11e7f718654dade941b072c17bca9625cf2, Fix #155185: asset "PACK" import method lost on file read
 Referenced by issue #157474, Blender crash when using undo while editing pose
 Referenced by pull request blender/blender-manual#105531, Asset Browser: Remove Append (Reuse Data) from Blender manual
+Referenced by commit blender/blender-manual@ee870b2678fd0f2d6356d9e99cef5250c404b143, Asset Browser: Remove Append (Reuse Data) from Blender manual
