@@ -2576,9 +2576,7 @@ bool node_fully_masked_or_hidden(const bke::pbvh::Node &node)
   return false;
 }
 
-bool node_in_sphere(const bke::pbvh::Node &node,
-                    const float3 &location,
-                    const float radius_sq)
+bool node_in_sphere(const bke::pbvh::Node &node, const float3 &location, const float radius_sq)
 {
   const Bounds<float3> &bounds = node.bounds();
   const float3 nearest = math::clamp(location, bounds.min, bounds.max);

@@ -769,9 +769,7 @@ std::array<int, PAINT_SYMM_AREAS> find_all_symm_verts(
     float max_distance = std::numeric_limits<float>::max());
 
 bool node_fully_masked_or_hidden(const bke::pbvh::Node &node);
-bool node_in_sphere(const bke::pbvh::Node &node,
-                    const float3 &location,
-                    float radius_sq);
+bool node_in_sphere(const bke::pbvh::Node &node, const float3 &location, float radius_sq);
 bool node_in_cylinder(const DistRayAABB_Precalc &ray_dist_precalc,
                       const bke::pbvh::Node &node,
                       float radius_sq);
