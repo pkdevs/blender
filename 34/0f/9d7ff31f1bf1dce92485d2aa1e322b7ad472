@@ -12,3 +12,4 @@ Referenced by pull request #151536, Fix #151488: another crash joining specific 
 Referenced by issue #157977, Joining multiresolution meshes breaks the sculpted data.
 Referenced by pull request #158003, Fix #157977: Joining meshes with different total multires levels breaks
 Referenced by commit 3756f79794e7b8214e0e472df5d90c64b5a9ebdf, Fix #157977: Joining meshes with different total multires levels breaks
+Referenced by pull request #161957, Fix #161952: Skin Modifier root and radii lost when joining objects
