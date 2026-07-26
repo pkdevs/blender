@@ -1045,14 +1045,13 @@ static Vector<Strip *> padded_strips_under_mouse_get(const Scene *scene,
     if (strip.right_handle(scene) < v2d->cur.xmin) {
       continue;
     }
-    if (!transitions.is_empty() && strip.is_same_channel_transition()) {
+    if (!transitions.is_empty() && !strip.is_same_channel_transition()) {
       continue;
     }
     const rctf body = strip_clickable_area_get(scene, sseq, v2d, &strip);
     if (!BLI_rctf_isect_pt_v(&body, mouse_co)) {
       continue;
     }
-    /* Transitions don't have adjacent handle selection. */
     if (strip.is_same_channel_transition()) {
       transitions.append(&strip);
     }
@@ -1068,7 +1067,7 @@ static Vector<Strip *> padded_strips_under_mouse_get(const Scene *scene,
            strip_to_frame_distance(scene, sseq, v2d, strip2, mouse_co[0]);
   });
 
-  /* We only want the closest transition. */
+  /* Transitions don't have adjacent handle selection. We only want the closest transition. */
   if (!transitions.is_empty()) {
     Vector<Strip *> transition{transitions[0]};
     return transition;
