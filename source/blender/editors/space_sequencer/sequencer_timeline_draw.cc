@@ -1361,27 +1361,25 @@ static void visible_strips_ordered_get(const TimelineDrawContext &ctx,
                                        Vector<StripDrawContext> &r_top_layer,
                                        Vector<StripDrawContext> &r_top_layer_transitions)
 {
-  r_bottom_layer.clear();
-  r_bottom_layer_transitions.clear();
-  r_top_layer.clear();
-  r_top_layer_transitions.clear();
-
   Vector<Strip *> strips = sequencer_visible_strips_get(ctx.C);
   r_bottom_layer.reserve(strips.size());
 
   for (Strip *strip : strips) {
     StripDrawContext strip_ctx = strip_draw_context_get(ctx, strip);
-    if (flag_is_set(strip->runtime->flag, seq::StripRuntimeFlag::Overlap)) {
-      if (strip->is_same_channel_transition()) {
+
+    if (strip->is_same_channel_transition()) {
+      if (flag_is_set(strip->input1->runtime->flag, seq::StripRuntimeFlag::Overlap) ||
+          flag_is_set(strip->input2->runtime->flag, seq::StripRuntimeFlag::Overlap))
+      {
         r_top_layer_transitions.append(strip_ctx);
       }
       else {
-        r_top_layer.append(strip_ctx);
+        r_bottom_layer_transitions.append(strip_ctx);
       }
     }
     else {
-      if (strip->is_same_channel_transition()) {
-        r_bottom_layer_transitions.append(strip_ctx);
+      if (flag_is_set(strip->runtime->flag, seq::StripRuntimeFlag::Overlap)) {
+        r_top_layer.append(strip_ctx);
       }
       else {
         r_bottom_layer.append(strip_ctx);

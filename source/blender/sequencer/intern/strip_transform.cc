@@ -116,7 +116,6 @@ void transform_set_overlap_flags(const Scene *scene,
   }
 
   /* Then test overlap. */
-  Editing *ed = seq::editing_get(scene);
   for (Strip *strip : strips) {
     if (flag_is_set(strip->runtime->flag, seq::StripRuntimeFlag::MarkForDelete)) {
       continue;
@@ -129,15 +128,6 @@ void transform_set_overlap_flags(const Scene *scene,
     }
 
     strip->runtime->flag |= seq::StripRuntimeFlag::Overlap;
-    /* Transitions also need to be marked as overlapping so that the draw order is correct.
-     * Transitions can't have other transitions applied on them, so no need to do this
-     * recursively. */
-    Span<Strip *> effect_strips = lookup_effects_by_strip(ed, strip);
-    for (Strip *effect : effect_strips) {
-      if (effect->is_same_channel_transition()) {
-        effect->runtime->flag |= seq::StripRuntimeFlag::Overlap;
-      }
-    }
   }
 }
 
