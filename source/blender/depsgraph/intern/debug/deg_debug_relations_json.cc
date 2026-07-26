@@ -272,8 +272,7 @@ static void deg_debug_json_node_identifier(JSONStream &json, const Node &node)
     json.value((*id_node)->id_orig_session_uid);
   }
   if (const auto *const *time_node = std::get_if<const TimeSourceNode *>(&node_variant)) {
-    json.object_key("name");
-    json.value((*time_node)->name);
+    /* No identifiers, time source node is unique. */
   }
   if (const auto *const *comp_node = std::get_if<const ComponentNode *>(&node_variant)) {
     json.object_key("owner_uid");
