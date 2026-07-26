@@ -737,7 +737,7 @@ std::optional<int> nearest_vert_calc_mesh(const bke::pbvh::Tree &pbvh,
   IndexMaskMemory memory;
   const IndexMask nodes_in_sphere = bke::pbvh::search_nodes(
       pbvh, memory, [&](const bke::pbvh::Node &node) {
-        return node_in_sphere(node, location, max_distance_sq, use_original);
+        return node_in_sphere(node, location, max_distance_sq);
       });
   if (nodes_in_sphere.is_empty()) {
     return std::nullopt;
@@ -783,7 +783,7 @@ std::optional<SubdivCCGCoord> nearest_vert_calc_grids(const bke::pbvh::Tree &pbv
   IndexMaskMemory memory;
   const IndexMask nodes_in_sphere = bke::pbvh::search_nodes(
       pbvh, memory, [&](const bke::pbvh::Node &node) {
-        return node_in_sphere(node, location, max_distance_sq, use_original);
+        return node_in_sphere(node, location, max_distance_sq);
       });
   if (nodes_in_sphere.is_empty()) {
     return std::nullopt;
@@ -836,7 +836,7 @@ std::optional<BMVert *> nearest_vert_calc_bmesh(const bke::pbvh::Tree &pbvh,
   IndexMaskMemory memory;
   const IndexMask nodes_in_sphere = bke::pbvh::search_nodes(
       pbvh, memory, [&](const bke::pbvh::Node &node) {
-        return node_in_sphere(node, location, max_distance_sq, use_original);
+        return node_in_sphere(node, location, max_distance_sq);
       });
   if (nodes_in_sphere.is_empty()) {
     return std::nullopt;
@@ -2578,10 +2578,9 @@ bool node_fully_masked_or_hidden(const bke::pbvh::Node &node)
 
 bool node_in_sphere(const bke::pbvh::Node &node,
                     const float3 &location,
-                    const float radius_sq,
-                    const bool original)
+                    const float radius_sq)
 {
-  const Bounds<float3> &bounds = original ? node.bounds_orig() : node.bounds();
+  const Bounds<float3> &bounds = node.bounds();
   const float3 nearest = math::clamp(location, bounds.min, bounds.max);
   return math::distance_squared(location, nearest) < radius_sq;
 }
@@ -2671,7 +2670,7 @@ static IndexMask pbvh_gather_cursor_update(Object &ob, bool use_original, IndexM
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
   const float3 center = ss.cache ? ss.cache->location_symm : ss.cursor_location;
   return bke::pbvh::search_nodes(pbvh, memory, [&](const bke::pbvh::Node &node) {
-    return node_in_sphere(node, center, ss.cursor_radius, use_original);
+    return node_in_sphere(node, center, ss.cursor_radius);
   });
 }
 
@@ -2694,7 +2693,7 @@ static IndexMask pbvh_gather_generic(Object &ob,
         if (ignore_ineffective && node_fully_masked_or_hidden(node)) {
           return false;
         }
-        return node_in_sphere(node, center, radius_sq, use_original);
+        return node_in_sphere(node, center, radius_sq);
       });
     }
 
@@ -2751,7 +2750,7 @@ IndexMask gather_nodes(const bke::pbvh::Tree &pbvh,
         if (node_fully_masked_or_hidden(node)) {
           return false;
         }
-        return node_in_sphere(node, location, radius_sq, use_original);
+        return node_in_sphere(node, location, radius_sq);
       });
     }
 
@@ -6526,7 +6525,7 @@ static void fake_neighbor_search(const Depsgraph &depsgraph,
         IndexMaskMemory memory;
         const IndexMask nodes_in_sphere = bke::pbvh::search_nodes(
             pbvh, memory, [&](const bke::pbvh::Node &node) {
-              return node_in_sphere(node, location, max_distance_sq, false);
+              return node_in_sphere(node, location, max_distance_sq);
             });
         if (nodes_in_sphere.is_empty()) {
           continue;
@@ -6572,7 +6571,7 @@ static void fake_neighbor_search(const Depsgraph &depsgraph,
         IndexMaskMemory memory;
         const IndexMask nodes_in_sphere = bke::pbvh::search_nodes(
             pbvh, memory, [&](const bke::pbvh::Node &node) {
-              return node_in_sphere(node, location, max_distance_sq, false);
+              return node_in_sphere(node, location, max_distance_sq);
             });
         if (nodes_in_sphere.is_empty()) {
           continue;
@@ -6616,7 +6615,7 @@ static void fake_neighbor_search(const Depsgraph &depsgraph,
         IndexMaskMemory memory;
         const IndexMask nodes_in_sphere = bke::pbvh::search_nodes(
             pbvh, memory, [&](const bke::pbvh::Node &node) {
-              return node_in_sphere(node, location, max_distance_sq, false);
+              return node_in_sphere(node, location, max_distance_sq);
             });
         if (nodes_in_sphere.is_empty()) {
           continue;
