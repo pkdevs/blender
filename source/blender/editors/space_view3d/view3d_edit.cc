@@ -295,9 +295,15 @@ static wmOperatorStatus render_border_exec(bContext *C, wmOperator *op)
   border.ymax = float(rect.ymax);
 
   /* Remove the roll to put the border in view border space, expanding to fully cover the box. */
-  if (rv3d->persp == RV3D_CAMOB && rv3d->camroll != 0.0f) {
+  if ((rv3d->persp == RV3D_CAMOB && rv3d->camroll != 0.0f) || (rv3d->rflag & RV3D_MIRROR_X) != 0) {
     const float2 view_center(region->winx / 2, region->winy / 2);
     BLI_rctf_translate(&border, -view_center.x, -view_center.y);
+
+    if ((rv3d->rflag & RV3D_MIRROR_X) != 0) {
+      std::swap(border.xmin, border.xmax);
+      border.xmin = -border.xmin;
+      border.xmax = -border.xmax;
+    }
 
     float2 cent(BLI_rctf_cent_x(&border), BLI_rctf_cent_y(&border));
     BLI_rctf_translate(&border, -cent.x, -cent.y);
