@@ -207,6 +207,7 @@ struct DrawKeylistUIData {
 static void channel_ui_data_init(DrawKeylistUIData *ctx,
                                  View2D *v2d,
                                  float yscale_fac,
+                                 float keyframe_scale,
                                  bool channel_locked,
                                  eSAction_Flag saction_flag)
 {
@@ -214,7 +215,7 @@ static void channel_ui_data_init(DrawKeylistUIData *ctx,
   /* TODO: allow this opacity factor to be themed? */
   ctx->alpha = channel_locked ? 0.25f : 1.0f;
 
-  ctx->icon_size = U.widget_unit * 0.5f * yscale_fac;
+  ctx->icon_size = U.widget_unit * 0.5f * yscale_fac * keyframe_scale;
   ctx->half_icon_size = 0.5f * ctx->icon_size;
   ctx->smaller_size = 0.35f * ctx->icon_size;
   ctx->ipo_size = 0.1f * ctx->icon_size;
@@ -432,6 +433,44 @@ enum class ChannelType {
   MASK_LAYER,
 };
 
+/**
+ * Keyframes on aggregate channels are drawn smaller than those on the channels they summarize,
+ * so that a rolled-up key reads differently from a key that actually exists on an F-Curve.
+ */
+static constexpr float AGGREGATE_KEYFRAME_SCALE = 0.6f;
+
+/**
+ * Whether this channel's keys are a summary of other channels, rather than keys that exist on the
+ * channel itself.
+ */
+static bool channel_type_is_aggregate(const ChannelType type)
+{
+  switch (type) {
+    case ChannelType::SUMMARY:
+    case ChannelType::SCENE:
+    case ChannelType::OBJECT:
+    case ChannelType::ACTION_LAYERED:
+    case ChannelType::ACTION_SLOT:
+    case ChannelType::ACTION_LEGACY:
+    case ChannelType::ACTION_GROUP:
+    case ChannelType::GREASE_PENCIL_GROUP:
+    case ChannelType::GREASE_PENCIL_DATA:
+      return true;
+    case ChannelType::FCURVE:
+    case ChannelType::GREASE_PENCIL_CELS:
+    case ChannelType::GREASE_PENCIL_LAYER:
+    case ChannelType::MASK_LAYER:
+      return false;
+  }
+  BLI_assert_unreachable();
+  return false;
+}
+
+static float channel_keyframe_scale(const ChannelType type)
+{
+  return channel_type_is_aggregate(type) ? AGGREGATE_KEYFRAME_SCALE : 1.0f;
+}
+
 struct ChannelListElement {
   ChannelListElement *next, *prev;
   AnimKeylist *keylist;
@@ -558,7 +597,12 @@ static void build_channel_keylist(ChannelListElement *elem, float2 range)
 static void draw_channel_blocks(ChannelListElement *elem, View2D *v2d)
 {
   DrawKeylistUIData ctx;
-  channel_ui_data_init(&ctx, v2d, elem->yscale_fac, elem->channel_locked, elem->saction_flag);
+  channel_ui_data_init(&ctx,
+                       v2d,
+                       elem->yscale_fac,
+                       channel_keyframe_scale(elem->type),
+                       elem->channel_locked,
+                       elem->saction_flag);
 
   const int key_len = ED_keylist_array_len(elem->keylist);
   const ActKeyColumn *keys = ED_keylist_array(elem->keylist);
@@ -570,7 +614,12 @@ static void draw_channel_keys(ChannelListElement *elem,
                               const KeyframeShaderBindings *sh_bindings)
 {
   DrawKeylistUIData ctx;
-  channel_ui_data_init(&ctx, v2d, elem->yscale_fac, elem->channel_locked, elem->saction_flag);
+  channel_ui_data_init(&ctx,
+                       v2d,
+                       elem->yscale_fac,
+                       channel_keyframe_scale(elem->type),
+                       elem->channel_locked,
+                       elem->saction_flag);
 
   const int key_len = ED_keylist_array_len(elem->keylist);
   const ActKeyColumn *keys = ED_keylist_array(elem->keylist);
