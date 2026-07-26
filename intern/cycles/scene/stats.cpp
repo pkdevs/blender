@@ -375,6 +375,9 @@ void RenderStats::collect_profiling(Scene *scene, Profiler &prof)
   NamedNestedSampleStats &restir = kernel.add_entry("ReSTIR", 0);
 
   // TODO: RIS, TEMPORAL...
+  restir.add_entry("BSDF Evaluation", prof.get_event(PROFILING_RESTIR_BSDF_EVAL));
+  restir.add_entry("Light Evaluation", prof.get_event(PROFILING_RESTIR_LIGHT_EVAL));
+  restir.add_entry("Reservoir Streaming", prof.get_event(PROFILING_RESTIR_RESERVOIR));
 
 	NamedNestedSampleStats &initial_resampling = restir.add_entry(
       "Initial Resampling", prof.get_event(PROFILING_RESTIR_INITIAL_RESAMPLING));
@@ -383,8 +386,15 @@ void RenderStats::collect_profiling(Scene *scene, Profiler &prof)
 
   NamedNestedSampleStats &spatial_resampling = restir.add_entry(
       "Spatial Resampling", prof.get_event(PROFILING_RESTIR_SPATIAL_RESAMPLING));
+  NamedNestedSampleStats &temporal_resampling = restir.add_entry(
+      "Temporal Resampling", prof.get_event(PROFILING_RESTIR_TEMPORAL_RESAMPLING));
+
   spatial_resampling.add_entry("Reservoir Passes",
                                prof.get_event(PROFILING_RESTIR_RESERVOIR_PASSES));
+	spatial_resampling.add_entry("Light Setup", prof.get_event(PROFILING_RESTIR_LIGHT_SETUP));
+  spatial_resampling.add_entry("Shader Setup", prof.get_event(PROFILING_RESTIR_SHADER_SETUP));
+  spatial_resampling.add_entry("Surface Data Setup",
+                               prof.get_event(PROFILING_RESTIR_SURFACE_DATA_SETUP));
 
   shaders.entries.clear();
   for (Shader *shader : scene->shaders) {

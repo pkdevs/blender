@@ -58,6 +58,14 @@ CCL_NAMESPACE_BEGIN
 #define INTEGRATOR_SHADOW_ISECT_SIZE_CPU 1024U
 #define INTEGRATOR_SHADOW_ISECT_SIZE_GPU 4U
 
+/* Reconnection only happens if the roughness of consecutive vertices are larger than this
+ * threshold. */
+#define RESTIR_ROUGHNESS_THRESH_SQ 0.04f
+/* Reconnection only happens if the ray length from the reconnection vertex to the previous vertex
+ * is longer than this threshold. */
+/* TODO(weizhen): this can be adaptive to scene size or spatial reuse radius. */
+#define RESTIR_RAY_LENGTH_THRESH 0.1f
+
 #ifdef __KERNEL_GPU__
 #  define INTEGRATOR_SHADOW_ISECT_SIZE INTEGRATOR_SHADOW_ISECT_SIZE_GPU
 #else
@@ -739,8 +747,8 @@ struct RaySelfPrimitives {
 struct Ray {
   float3 P;   /* origin */
   float3 D;   /* direction */
-  float tmin; /* start distance */
-  float tmax; /* end distance */
+  float tmin = 0.0f; /* start distance */
+  float tmax = FLT_MAX; /* end distance */
   float time; /* time (for motion blur) */
 
 #ifdef __RAY_DIFFERENTIALS__
@@ -749,6 +757,9 @@ struct Ray {
 #endif
 
   RaySelfPrimitives self;
+
+  Ray() = default;
+  Ray(float3 P_, float3 D_) : P(P_), D(D_) {}
 };
 
 /* Intersection */

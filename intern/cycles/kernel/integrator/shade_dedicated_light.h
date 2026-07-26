@@ -196,7 +196,7 @@ ccl_device void shadow_linking_shade(KernelGlobals kg, IntegratorState state)
   /* No need to update the volume stack as the surface bounce already performed enter-exit check.
    */
 
-  const uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
+  // const uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
     /* The diffuse and glossy pass weights are written into the main path as part of the path
@@ -207,9 +207,10 @@ ccl_device void shadow_linking_shade(KernelGlobals kg, IntegratorState state)
         state, path, pass_glossy_weight);
   }
 
-  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, visibility) = INTEGRATOR_STATE(
-      state, path, visibility);
-  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag;
+  // Remove?
+  // INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, visibility) = INTEGRATOR_STATE(
+  //     state, path, visibility);
+  // INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag;
 
 #  if defined(__PATH_GUIDING__)
   if (kernel_data.integrator.train_guiding) {

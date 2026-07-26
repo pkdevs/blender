@@ -2942,6 +2942,7 @@ ccl_device_inline void integrator_next_kernel_after_shade_volume(
 {
   if (event == VOLUME_PATH_MISSED) {
     /* End path. */
+    integrator_finalize_reservoir(kg, state, render_buffer); // !!!
     integrator_path_terminate(kg, state, render_buffer, volume_kernel);
     return;
   }

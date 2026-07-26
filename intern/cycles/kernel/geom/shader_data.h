@@ -9,6 +9,7 @@
 #pragma once
 
 #include "kernel/globals.h"
+#include "kernel/integrator/state_util.h"
 
 #include "kernel/geom/curve_intersect.h"
 #include "kernel/geom/motion_triangle_shader.h"
@@ -44,7 +45,7 @@ ccl_device_noinline
 ccl_device_inline
 #endif
     void
-    shader_setup_from_ray(KernelGlobals kg,
+    shader_setup_from_ray(KernelGlobals kg, // !!!
                           ccl_private ShaderData *ccl_restrict sd,
                           const ccl_private Ray *ccl_restrict ray,
                           const ccl_private Intersection *ccl_restrict isect)
@@ -427,17 +428,20 @@ ccl_device_inline void shader_setup_from_background(KernelGlobals kg,
 #endif
 }
 
-// TODO: shader_setup_from_restir
+/* TODO(weizhen): mostly copied from `shader_setup_from_ray()`, the original function requires
+ * `isect` in many places, but they are also available in `sd`, can probably reuse. */
 ccl_device_inline void shader_setup_from_restir(KernelGlobals kg,
                                                 const ccl_private Ray *ccl_restrict ray,
                                                 ccl_private ShaderData *ccl_restrict sd)
 {
   sd->object_flag = kernel_data_fetch(object_flag, sd->object);
+  sd->prim = PRIM_NONE;
 
 #ifdef __OBJECT_MOTION__
   shader_setup_object_transforms(kg, sd, sd->time);
 #endif
 
+  /* TODO(weizhen): curve and point cloud. */
   /* Ensure we only process supported geometry (PRIMITIVE_TRIANGLE) */
   kernel_assert(sd->type & PRIMITIVE_TRIANGLE);
 
@@ -452,10 +456,10 @@ ccl_device_inline void shader_setup_from_restir(KernelGlobals kg,
 
   if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
     /* instance transform */
-    object_normal_transform(kg, sd, &sd->N);
+    object_normal_transform(kg, sd, &sd->N); // object_normal_transform_auto
     object_normal_transform(kg, sd, &sd->Ng);
 #ifdef __DPDU__
-    object_dir_transform(kg, sd, &sd->dPdu);
+    object_dir_transform(kg, sd, &sd->dPdu); // object_dir_transform_auto
     object_dir_transform(kg, sd, &sd->dPdv);
 #endif
   }

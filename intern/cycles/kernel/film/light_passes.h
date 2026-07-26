@@ -541,7 +541,6 @@ ccl_device_inline void film_write_pass_reservoir_pt(KernelGlobals kg,
 }
 
 /* Write light contribution to render buffer. */
-/* Write light contribution to render buffer. */
 ccl_device_inline void film_write_direct_light(KernelGlobals kg,
                                                ConstIntegratorShadowState state,
                                                ccl_global float *ccl_restrict render_buffer)

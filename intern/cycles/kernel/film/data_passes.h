@@ -234,4 +234,32 @@ ccl_device_inline void film_write_data_passes_background(
 #endif
 }
 
+ccl_device_forceinline void film_write_reconnection_vertex(KernelGlobals kg,
+                                                           IntegratorState state,
+                                                           const float2 roughness,
+                                                           const float ray_length,
+                                                           ccl_global float *ccl_restrict
+                                                               render_buffer)
+{
+  if (!path_use_restir(kg, state)) {
+    return;
+  }
+
+  ccl_global float *reservoir_buffer = film_pass_pixel_render_buffer(kg, state, render_buffer) +
+                                          kernel_data.film.pass_restir_pt_reservoir;
+
+  const bool found_reconnection_vertex = (int)kernel_read_pass_float(reservoir_buffer + 2) > 1;
+  const bool bounce_is_rough = roughness.x * roughness.y > RESTIR_ROUGHNESS_THRESH_SQ;
+
+  if (!found_reconnection_vertex && ray_length >= RESTIR_RAY_LENGTH_THRESH && bounce_is_rough &&
+      INTEGRATOR_STATE(state, path, last_bounce_is_rough))
+  {
+    /* Found reconnection vertex, write to reservoir. */
+    film_overwrite_pass_float(reservoir_buffer + 2, (float)INTEGRATOR_STATE(state, path, bounce));
+  }
+  else {
+    INTEGRATOR_STATE_WRITE(state, path, last_bounce_is_rough) = bounce_is_rough;
+  }
+}
+
 CCL_NAMESPACE_END

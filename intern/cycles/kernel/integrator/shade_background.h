@@ -268,6 +268,7 @@ ccl_device void integrator_shade_background(KernelGlobals kg,
   }
 #endif
 
+  integrator_finalize_reservoir(kg, state, render_buffer); // !!!
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND);
 }
 
