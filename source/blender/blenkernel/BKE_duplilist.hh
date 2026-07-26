@@ -84,7 +84,7 @@ void object_duplilist_preview(Depsgraph *depsgraph,
                               const ViewerPath *viewer_path,
                               DupliList &r_duplilist);
 /**
- * Fill a Vector of #DupliObject for a shown Geometry Nodes debug view, if one exists.
+ * Fill a vector of #DupliObject for enabled persistent Geometry Nodes Debug Views.
  *
  * \return True when debug-view geometry was found.
  */

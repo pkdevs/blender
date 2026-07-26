@@ -910,6 +910,8 @@ static void draw_debug_view_toggles(const bContext &C,
     return;
   }
   debug_view::initialize_state(candidates, nmd.runtime->debug_view_state);
+  const Vector<debug_view::CandidatePresentation> presentations =
+      debug_view::candidate_presentations(*CTX_data_main(&C), candidates, IFACE_("Viewer"));
 
   ui::Layout &split = layout.split(0.4f, false);
   ui::Layout &name_row = split.row(false);
@@ -920,10 +922,8 @@ static void draw_debug_view_toggles(const bContext &C,
   for (const int i : candidates.index_range()) {
     const debug_view::Candidate &candidate = candidates[i];
     const bool is_enabled = nmd.runtime->debug_view_state.enabled.contains(candidate.identifier);
-    const std::string display_name = debug_view::candidate_display_name(
-        candidates, i, IFACE_("Viewer"));
     PointerRNA props = controls.op("OBJECT_OT_geometry_nodes_debug_view_toggle",
-                                   display_name,
+                                   presentations[i].display_name,
                                    is_enabled ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT);
     debug_view_identifier_set(props, candidate.identifier);
   }

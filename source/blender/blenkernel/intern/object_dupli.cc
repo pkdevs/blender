@@ -1922,15 +1922,15 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
                r_duplilist);
 
   Set<int> used_preview_namespaces;
+  /* One generated component ID, one source namespace, and one INT_MAX terminator must fit. */
+  static_assert(MAX_DUPLI_RECUR >= 3);
+  BLI_assert(ctx.level == 0);
   for (const int candidate_index : enabled_candidate_indices) {
     const nodes::debug_view::Candidate &candidate = selected_candidates[candidate_index];
     const bke::GeometrySet &viewer_geometry = *candidate.viewer_log->main_geometry();
 
     /* Add one parent persistent-ID level to namespace otherwise corresponding components and
      * instances generated from different top-level preview sources. */
-    if (!nodes::debug_view::persistent_id_namespace_fits(ctx.level, MAX_DUPLI_RECUR)) {
-      continue;
-    }
     DupliContext preview_ctx = ctx;
     preview_ctx.persistent_id[preview_ctx.level] =
         nodes::debug_view::unique_persistent_id_namespace(candidate.identifier,

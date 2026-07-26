@@ -916,8 +916,12 @@ static void buttons_area_listener(const wmSpaceTypeListenerParams *params)
       }
       break;
     case NC_NODE:
-      if (wmn->action == NA_SELECTED) {
+      if (wmn->action == NA_SELECTED ||
+          (wmn->data == ND_DISPLAY && sbuts->mainb == BCONTEXT_MODIFIER))
+      {
         ED_area_tag_redraw(area);
+      }
+      if (wmn->action == NA_SELECTED) {
         /* new active node, update texture preview */
         if (sbuts->mainb == BCONTEXT_TEXTURE) {
           sbuts->preview = 1;

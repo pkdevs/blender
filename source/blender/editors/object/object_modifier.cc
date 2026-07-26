@@ -3589,12 +3589,7 @@ static NodesModifierData *geometry_nodes_debug_view_modifier_get(bContext *C, Ob
     nmd = static_cast<NodesModifierData *>(modifier_ptr.data);
   }
   else {
-    object = CTX_data_active_object(C);
-    ModifierData *md = object ? BKE_object_active_modifier(object) : nullptr;
-    if (!md || md->type != eModifierType_Nodes) {
-      return nullptr;
-    }
-    nmd = reinterpret_cast<NodesModifierData *>(md);
+    return nullptr;
   }
   if (BLI_findindex(&object->modifiers, nmd) == -1) {
     return nullptr;
@@ -3634,26 +3629,6 @@ static void geometry_nodes_debug_view_notify(bContext *C, Object &object)
   WM_event_add_notifier(C, NC_VIEWER_PATH, nullptr);
 }
 
-static void geometry_nodes_debug_view_identifier_set(
-    PointerRNA &ptr, const nodes::debug_view::Identifier &identifier)
-{
-  const int context_hash[4] = {
-      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v1)),
-      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v1 >> 32)),
-      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v2)),
-      std::bit_cast<int>(uint32_t(identifier.compute_context_hash.v2 >> 32)),
-  };
-  RNA_int_set_array(&ptr, "context_hash", context_hash);
-  const int node_tree_lineage_hash[4] = {
-      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v1)),
-      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v1 >> 32)),
-      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v2)),
-      std::bit_cast<int>(uint32_t(identifier.node_tree_lineage_hash.v2 >> 32)),
-  };
-  RNA_int_set_array(&ptr, "node_tree_lineage_hash", node_tree_lineage_hash);
-  RNA_int_set(&ptr, "viewer_node_id", identifier.viewer_node_id);
-}
-
 static std::optional<nodes::debug_view::Identifier> geometry_nodes_debug_view_identifier_get(
     PointerRNA &ptr)
 {
@@ -3682,33 +3657,6 @@ static std::optional<nodes::debug_view::Identifier> geometry_nodes_debug_view_id
   return identifier;
 }
 
-static std::optional<nodes::debug_view::Identifier>
-geometry_nodes_debug_view_identifier_from_operator(
-    PointerRNA &ptr, const Span<nodes::debug_view::Candidate> candidates)
-{
-  if (const std::optional<nodes::debug_view::Identifier> identifier =
-          geometry_nodes_debug_view_identifier_get(ptr))
-  {
-    return identifier;
-  }
-  const bool has_partial_stable_identity =
-      RNA_struct_property_is_set(&ptr, "context_hash") ||
-      RNA_struct_property_is_set(&ptr, "node_tree_lineage_hash") ||
-      RNA_struct_property_is_set(&ptr, "viewer_node_id");
-  if (has_partial_stable_identity) {
-    return std::nullopt;
-  }
-  /* Test-only compatibility for the Python integration test. Production UI always supplies the
-   * complete stable identity above. */
-  if (RNA_struct_property_is_set(&ptr, "candidate_index")) {
-    const int candidate_index = RNA_int_get(&ptr, "candidate_index");
-    if (candidates.index_range().contains(candidate_index)) {
-      return candidates[candidate_index].identifier;
-    }
-  }
-  return std::nullopt;
-}
-
 static wmOperatorStatus geometry_nodes_debug_view_toggle_exec(bContext *C, wmOperator *op)
 {
   Object *object = nullptr;
@@ -3720,7 +3668,7 @@ static wmOperatorStatus geometry_nodes_debug_view_toggle_exec(bContext *C, wmOpe
   const Span<nodes::debug_view::Candidate> candidates = geometry_nodes_debug_view_candidates_get(
       *nmd, eval_log);
   const std::optional<nodes::debug_view::Identifier> identifier =
-      geometry_nodes_debug_view_identifier_from_operator(*op->ptr, candidates);
+      geometry_nodes_debug_view_identifier_get(*op->ptr);
   if (!identifier || !nodes::debug_view::toggle_candidate(
                          candidates, *identifier, nmd->runtime->debug_view_state))
   {
@@ -3742,18 +3690,20 @@ static std::string geometry_nodes_debug_view_toggle_description(bContext *C,
   const Span<nodes::debug_view::Candidate> candidates = geometry_nodes_debug_view_candidates_get(
       *nmd, eval_log);
   const std::optional<nodes::debug_view::Identifier> identifier =
-      geometry_nodes_debug_view_identifier_from_operator(*ptr, candidates);
+      geometry_nodes_debug_view_identifier_get(*ptr);
   if (!identifier) {
     return {};
   }
-  for (const nodes::debug_view::Candidate &candidate : candidates) {
-    if (candidate.identifier == *identifier) {
+  const Vector<nodes::debug_view::CandidatePresentation> presentations =
+      nodes::debug_view::candidate_presentations(*CTX_data_main(C), candidates, IFACE_("Viewer"));
+  for (const int i : candidates.index_range()) {
+    if (candidates[i].identifier == *identifier) {
       const bool is_enabled = nmd->runtime->debug_view_state.enabled.contains(*identifier);
       return fmt::format(fmt::runtime(is_enabled ?
                                           TIP_("Disable Debug View: {}") :
                                           TIP_("Enable Debug View: {}. An active Viewer takes "
                                                "precedence")),
-                         nodes::debug_view::candidate_full_name(candidate, IFACE_("Viewer")));
+                         presentations[i].full_name);
     }
   }
   return {};
@@ -3802,16 +3752,66 @@ void OBJECT_OT_geometry_nodes_debug_view_toggle(wmOperatorType *ot)
                      INT_MIN,
                      INT_MAX);
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+}
+
+/* Test-only operator. Production UI always uses the complete stable identity operator above. */
+static wmOperatorStatus geometry_nodes_debug_view_test_toggle_exec(bContext *C, wmOperator *op)
+{
+  Object *object = CTX_data_active_object(C);
+  ModifierData *md = object ? BKE_object_active_modifier(object) : nullptr;
+  if (!md || md->type != eModifierType_Nodes) {
+    return OPERATOR_CANCELLED;
+  }
+  auto &nmd = *reinterpret_cast<NodesModifierData *>(md);
+  std::shared_ptr<nodes::eval_log::NodesEvalLog> eval_log;
+  const Span<nodes::debug_view::Candidate> candidates = geometry_nodes_debug_view_candidates_get(
+      nmd, eval_log);
+  const int candidate_index = RNA_int_get(op->ptr, "candidate_index");
+  if (!candidates.index_range().contains(candidate_index)) {
+    return OPERATOR_CANCELLED;
+  }
+  nodes::debug_view::initialize_state(candidates, nmd.runtime->debug_view_state);
+  const nodes::debug_view::Identifier &identifier = candidates[candidate_index].identifier;
+  const int expected_enabled = RNA_int_get(op->ptr, "expected_enabled");
+  if (expected_enabled != -1) {
+    return nmd.runtime->debug_view_state.enabled.contains(identifier) == bool(expected_enabled) ?
+               OPERATOR_FINISHED :
+               OPERATOR_CANCELLED;
+  }
+  if (!nodes::debug_view::toggle_candidate(candidates, identifier, nmd.runtime->debug_view_state)) {
+    return OPERATOR_CANCELLED;
+  }
+  geometry_nodes_debug_view_notify(C, *object);
+  return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_geometry_nodes_debug_view_test_toggle(wmOperatorType *ot)
+{
+  ot->name = "Test Geometry Nodes Debug View Toggle";
+  ot->description = "Internal test utility for toggling a deterministically ordered candidate";
+  ot->idname = "OBJECT_OT_geometry_nodes_debug_view_test_toggle";
+  ot->exec = geometry_nodes_debug_view_test_toggle_exec;
+  ot->flag = OPTYPE_INTERNAL;
+
+  PropertyRNA *prop = RNA_def_int(ot->srna,
+                                  "candidate_index",
+                                  -1,
+                                  -1,
+                                  INT_MAX,
+                                  "Candidate Index",
+                                  "Deterministically ordered test candidate",
+                                  -1,
+                                  INT_MAX);
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
   prop = RNA_def_int(ot->srna,
-                     "candidate_index",
+                     "expected_enabled",
                      -1,
                      -1,
-                     INT_MAX,
-                     "Candidate Index",
-                     "Deterministically ordered candidate index used when no stable identity is "
-                     "provided",
+                     1,
+                     "Expected Enabled State",
+                     "Test the candidate state instead of toggling it; -1 toggles",
                      -1,
-                     INT_MAX);
+                     1);
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 

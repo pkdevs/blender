@@ -34,6 +34,12 @@ class NodesEvalLog;
  */
 void MOD_nodes_update_interface(Main &bmain, Object *object, NodesModifierData *nmd);
 
+/**
+ * Preserve runtime-only state across memfile undo for matching object-local modifier UIDs.
+ * Ordinary object and modifier duplication still create fresh runtime state.
+ */
+void MOD_nodes_preserve_runtime_state_on_undo(const Object &old_object, Object &new_object);
+
 class NodesModifierUsageInferenceCache {
  private:
   uint64_t input_values_hash_ = 0;

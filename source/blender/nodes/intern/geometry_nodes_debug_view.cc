@@ -10,13 +10,15 @@
 
 #include "BLI_hash.hh"
 #include "BLI_hash_c.hh"
-#include "BLI_listbase.hh"
+#include "BLI_map.hh"
 #include "BLI_string_utils.hh"
 
-#include "DNA_modifier_types.h"
-#include "DNA_object_types.h"
+#include "DNA_node_types.h"
 
-#include "MOD_nodes.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
+#include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 
 #include "NOD_geometry_nodes_debug_view.hh"
 
@@ -78,59 +80,101 @@ static bool candidate_less(const Candidate &a, const Candidate &b)
   return a.identifier.viewer_node_id < b.identifier.viewer_node_id;
 }
 
-static StringRef candidate_viewer_name(const Candidate &candidate,
-                                       const StringRef default_viewer_name)
+static std::string live_context_name(Main &bmain,
+                                     const Candidate &candidate,
+                                     const int context_index)
 {
-  return candidate.viewer_name.empty() ? default_viewer_name : StringRef(candidate.viewer_name);
-}
-
-std::string candidate_full_name(const Candidate &candidate, const StringRef default_viewer_name)
-{
-  std::string name;
-  for (const std::string &context_name : candidate.context_names) {
-    if (!name.empty()) {
-      name += " / ";
-    }
-    name += context_name;
-  }
-  if (!name.empty()) {
-    name += " / ";
-  }
-  name += candidate_viewer_name(candidate, default_viewer_name);
-  return name;
-}
-
-std::string candidate_display_name(const Span<Candidate> candidates,
-                                   const int candidate_index,
-                                   const StringRef default_viewer_name)
-{
-  if (!candidates.index_range().contains(candidate_index)) {
-    return {};
-  }
-  const Candidate &candidate = candidates[candidate_index];
-  const StringRef viewer_name = candidate_viewer_name(candidate, default_viewer_name);
-  const bool has_duplicate_name = std::ranges::any_of(candidates, [&](const Candidate &other) {
-    return &other != &candidate &&
-           candidate_viewer_name(other, default_viewer_name) == viewer_name;
-  });
-  if (!has_duplicate_name) {
-    return viewer_name;
-  }
-
-  std::string display_name = candidate_full_name(candidate, default_viewer_name);
-  int duplicate_number = 1;
-  for (const int previous_i : IndexRange(candidate_index)) {
-    const Candidate &previous = candidates[previous_i];
-    if (candidate_viewer_name(previous, default_viewer_name) == viewer_name &&
-        candidate_full_name(previous, default_viewer_name) == display_name)
+  if (candidate.tree_session_uids.index_range().contains(context_index) &&
+      candidate.group_node_ids.index_range().contains(context_index))
+  {
+    const auto *tree = id_cast<bNodeTree *>(
+        BKE_libblock_find_session_uid(&bmain, ID_NT, candidate.tree_session_uids[context_index]));
+    const bNode *group_node = tree ? tree->node_by_id(candidate.group_node_ids[context_index]) :
+                                     nullptr;
+    if (group_node && group_node->type_legacy == NODE_GROUP && group_node->id &&
+        candidate.tree_session_uids.index_range().contains(context_index + 1) &&
+        group_node->id->session_uid == candidate.tree_session_uids[context_index + 1])
     {
-      duplicate_number++;
+      if (group_node->label[0] != '\0') {
+        return group_node->label;
+      }
+      return BKE_id_name(*group_node->id);
     }
   }
-  if (duplicate_number > 1) {
-    display_name = fmt::format("{} ({})", display_name, duplicate_number);
+  return candidate.context_names.index_range().contains(context_index) ?
+             candidate.context_names[context_index] :
+             std::string();
+}
+
+static std::string live_viewer_name(Main &bmain,
+                                    const Candidate &candidate,
+                                    const StringRef default_viewer_name)
+{
+  if (!candidate.tree_session_uids.is_empty()) {
+    const auto *tree = id_cast<bNodeTree *>(
+        BKE_libblock_find_session_uid(&bmain, ID_NT, candidate.tree_session_uids.last()));
+    const bNode *viewer_node = tree ? tree->node_by_id(candidate.identifier.viewer_node_id) :
+                                      nullptr;
+    if (viewer_node && viewer_node->type_legacy == GEO_NODE_VIEWER) {
+      const std::string name = viewer_name_from_node(viewer_node->label, viewer_node->name);
+      return name.empty() ? std::string(default_viewer_name) : name;
+    }
   }
-  return display_name;
+  return candidate.viewer_name.empty() ? std::string(default_viewer_name) : candidate.viewer_name;
+}
+
+Vector<CandidatePresentation> candidate_presentations(Main &bmain,
+                                                      const Span<Candidate> candidates,
+                                                      const StringRef default_viewer_name)
+{
+  Vector<std::string> viewer_names;
+  Vector<std::string> full_names;
+  viewer_names.reserve(candidates.size());
+  full_names.reserve(candidates.size());
+  Map<std::string, int> viewer_name_counts;
+  for (const Candidate &candidate : candidates) {
+    std::string viewer_name = live_viewer_name(bmain, candidate, default_viewer_name);
+    viewer_name_counts.lookup_or_add(viewer_name, 0)++;
+    std::string full_name;
+    const int context_num = std::max(candidate.group_node_ids.size(),
+                                     candidate.context_names.size());
+    for (const int i : IndexRange(context_num)) {
+      const std::string context_name = live_context_name(bmain, candidate, i);
+      if (!context_name.empty()) {
+        if (!full_name.empty()) {
+          full_name += " / ";
+        }
+        full_name += context_name;
+      }
+    }
+    if (!full_name.empty()) {
+      full_name += " / ";
+    }
+    full_name += viewer_name;
+    viewer_names.append(std::move(viewer_name));
+    full_names.append(std::move(full_name));
+  }
+
+  Vector<CandidatePresentation> presentations;
+  presentations.reserve(candidates.size());
+  Map<std::string, int> full_name_counts;
+  for (const int i : candidates.index_range()) {
+    CandidatePresentation presentation;
+    presentation.full_name = full_names[i];
+    if (viewer_name_counts.lookup(viewer_names[i]) == 1) {
+      presentation.display_name = viewer_names[i];
+    }
+    else {
+      const int duplicate_number = ++full_name_counts.lookup_or_add(full_names[i], 0);
+      presentation.display_name = full_names[i];
+      if (duplicate_number > 1) {
+        presentation.display_name = fmt::format(
+            "{} ({})", presentation.display_name, duplicate_number);
+      }
+    }
+    presentations.append(std::move(presentation));
+  }
+  return presentations;
 }
 
 void finalize_candidates(Vector<Candidate> &candidates)
@@ -184,31 +228,6 @@ Vector<int> enabled_candidate_indices(const Span<Candidate> candidates, const St
   return indices;
 }
 
-void preserve_states_on_undo(const Object &old_object, Object &new_object)
-{
-  for (ModifierData &new_md : new_object.modifiers) {
-    if (new_md.type != eModifierType_Nodes) {
-      continue;
-    }
-    const ModifierData *old_md = nullptr;
-    for (const ModifierData &candidate_md : old_object.modifiers) {
-      if (candidate_md.persistent_uid == new_md.persistent_uid) {
-        old_md = &candidate_md;
-        break;
-      }
-    }
-    if (old_md == nullptr || old_md->type != eModifierType_Nodes) {
-      continue;
-    }
-
-    const auto &old_nmd = reinterpret_cast<const NodesModifierData &>(*old_md);
-    auto &new_nmd = reinterpret_cast<NodesModifierData &>(new_md);
-    if (old_nmd.runtime != nullptr && new_nmd.runtime != nullptr) {
-      new_nmd.runtime->debug_view_state = old_nmd.runtime->debug_view_state;
-    }
-  }
-}
-
 int persistent_id_namespace(const Identifier &identifier)
 {
   uint hash = BLI_hash_int_2d(uint(identifier.compute_context_hash.v1),
@@ -237,11 +256,6 @@ int unique_persistent_id_namespace(const Identifier &identifier, Set<int> &used_
     } while (namespace_bits == uint(INT_MAX));
   }
   return std::bit_cast<int>(namespace_bits);
-}
-
-bool persistent_id_namespace_fits(const int current_depth, const int max_depth)
-{
-  return current_depth >= 0 && current_depth < max_depth - 1;
 }
 
 }  // namespace blender::nodes::debug_view

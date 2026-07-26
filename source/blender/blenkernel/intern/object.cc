@@ -143,7 +143,7 @@
 #include "ANIM_action_legacy.hh"
 #include "ANIM_animdata.hh"
 
-#include "NOD_geometry_nodes_debug_view.hh"
+#include "MOD_nodes.hh"
 #include "NOD_geometry_nodes_srna.hh"
 
 #include "RNA_prototypes.hh"
@@ -1251,8 +1251,7 @@ static void object_undo_preserve(BlendLibReader * /*reader*/, ID *id_new, ID *id
   if (id_new == id_old) {
     return;
   }
-  nodes::debug_view::preserve_states_on_undo(*id_cast<Object *>(id_old),
-                                             *id_cast<Object *>(id_new));
+  MOD_nodes_preserve_runtime_state_on_undo(*id_cast<Object *>(id_old), *id_cast<Object *>(id_new));
 }
 
 static AssetTypeInfo AssetType_OB = {

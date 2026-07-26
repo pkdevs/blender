@@ -7,13 +7,17 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.hh"
-#include "BLI_map.hh"
+#include "BLI_string.hh"
 
 #include "BKE_compute_contexts.hh"
 #include "BKE_gtest_setup.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_modifier.hh"
+#include "BKE_node.hh"
 
 #include "DNA_modifier_types.h"
+#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 
 #include "MOD_nodes.hh"
@@ -51,6 +55,16 @@ static Candidate candidate(const uint64_t context,
   return candidate;
 }
 
+static Vector<CandidatePresentation> fallback_presentations(const Span<Candidate> candidates,
+                                                            const StringRef default_viewer_name)
+{
+  Main *bmain = BKE_main_new();
+  Vector<CandidatePresentation> presentations = candidate_presentations(
+      *bmain, candidates, default_viewer_name);
+  BKE_main_free(bmain);
+  return presentations;
+}
+
 TEST(GeometryNodesDebugView, MeaningfulViewerName)
 {
   EXPECT_EQ(viewer_name_from_node("Surface", "Viewer.001"), "Surface");
@@ -82,10 +96,11 @@ TEST(GeometryNodesDebugView, DuplicateNamesUseContextThenSuffix)
 
   finalize_candidates(candidates);
 
-  EXPECT_EQ(candidate_display_name(candidates, 0, "Viewer"), "Surface");
-  EXPECT_EQ(candidate_display_name(candidates, 1, "Viewer"), "Inner Group / Surface");
-  EXPECT_EQ(candidate_display_name(candidates, 2, "Viewer"), "Inner Group / Surface (2)");
-  EXPECT_EQ(candidate_full_name(candidates[1], "Viewer"), "Inner Group / Surface");
+  const Vector<CandidatePresentation> presentations = fallback_presentations(candidates, "Viewer");
+  EXPECT_EQ(presentations[0].display_name, "Surface");
+  EXPECT_EQ(presentations[1].display_name, "Inner Group / Surface");
+  EXPECT_EQ(presentations[2].display_name, "Inner Group / Surface (2)");
+  EXPECT_EQ(presentations[1].full_name, "Inner Group / Surface");
 }
 
 TEST(GeometryNodesDebugView, DefaultNameIsTranslatedAtPresentationTime)
@@ -96,11 +111,14 @@ TEST(GeometryNodesDebugView, DefaultNameIsTranslatedAtPresentationTime)
   finalize_candidates(candidates);
 
   EXPECT_TRUE(candidates[0].viewer_name.empty());
-  EXPECT_EQ(candidate_display_name(candidates, 0, "Translated Viewer"), "Translated Viewer");
-  EXPECT_EQ(candidate_display_name(candidates, 1, "Translated Viewer"), "Viewer");
+  const Vector<CandidatePresentation> translated = fallback_presentations(candidates,
+                                                                          "Translated Viewer");
+  EXPECT_EQ(translated[0].display_name, "Translated Viewer");
+  EXPECT_EQ(translated[1].display_name, "Viewer");
 
-  EXPECT_EQ(candidate_display_name(candidates, 0, "Viewer"), "Default Group / Viewer");
-  EXPECT_EQ(candidate_display_name(candidates, 1, "Viewer"), "Custom Group / Viewer");
+  const Vector<CandidatePresentation> untranslated = fallback_presentations(candidates, "Viewer");
+  EXPECT_EQ(untranslated[0].display_name, "Default Group / Viewer");
+  EXPECT_EQ(untranslated[1].display_name, "Custom Group / Viewer");
 }
 
 TEST(GeometryNodesDebugView, DuplicateIdentityIsRemoved)
@@ -322,7 +340,7 @@ TEST(GeometryNodesDebugView, PreserveStateAcrossObjectUndo)
   old_modifier.runtime->debug_view_state.enabled.add(enabled_identifier);
   old_modifier.runtime->debug_view_state.initialized = true;
 
-  preserve_states_on_undo(old_object, new_object);
+  MOD_nodes_preserve_runtime_state_on_undo(old_object, new_object);
 
   EXPECT_TRUE(new_modifier.runtime->debug_view_state.initialized);
   EXPECT_TRUE(new_modifier.runtime->debug_view_state.enabled.contains(enabled_identifier));
@@ -362,7 +380,7 @@ TEST(GeometryNodesDebugView, PreserveStateAcrossUndoMatchesObjectLocalPersistent
   old_second.runtime->debug_view_state.initialized = true;
   old_second.runtime->debug_view_state.enabled.add(identifier(2, 2));
 
-  preserve_states_on_undo(old_object, new_object);
+  MOD_nodes_preserve_runtime_state_on_undo(old_object, new_object);
 
   EXPECT_TRUE(new_second.runtime->debug_view_state.enabled.contains(identifier(2, 2)));
   EXPECT_FALSE(new_second.runtime->debug_view_state.enabled.contains(identifier(1, 1)));
@@ -419,42 +437,23 @@ TEST(GeometryNodesDebugView, CorrespondingDuplisUseDistinctTopLevelPersistentIds
 
 TEST(GeometryNodesDebugView, ProductionNamespaceCollisionProbingIsDeterministic)
 {
-  Map<int, Identifier> first_identity_by_namespace;
-  std::optional<std::pair<Identifier, Identifier>> collision;
-  for (uint32_t tree_uid = 1; tree_uid <= 200000; tree_uid++) {
-    const Identifier current = identifier(100, 200, tree_uid);
-    const int initial_namespace = persistent_id_namespace(current);
-    if (const Identifier *previous = first_identity_by_namespace.lookup_ptr(initial_namespace)) {
-      if (*previous != current) {
-        collision = std::pair(*previous, current);
-        break;
-      }
-    }
-    else {
-      first_identity_by_namespace.add_new(initial_namespace, current);
-    }
-  }
-  ASSERT_TRUE(collision.has_value());
-  EXPECT_EQ(persistent_id_namespace(collision->first),
-            persistent_id_namespace(collision->second));
+  /* Found once with the production hash. Keep the full-strength identities as a fixture so this
+   * test exercises the real collision path without a search on every test run. */
+  const Identifier first = {{100, 1700}, {1198274633936249892ULL, 16238052728921080834ULL}, 200};
+  const Identifier second = {{100, 1700}, {2905449761900578234ULL, 6204400446275641994ULL}, 200};
+  EXPECT_NE(first, second);
+  EXPECT_EQ(persistent_id_namespace(first), persistent_id_namespace(second));
 
   Set<int> first_run;
-  const int first_namespace = unique_persistent_id_namespace(collision->first, first_run);
-  const int second_namespace = unique_persistent_id_namespace(collision->second, first_run);
+  const int first_namespace = unique_persistent_id_namespace(first, first_run);
+  const int second_namespace = unique_persistent_id_namespace(second, first_run);
   EXPECT_NE(first_namespace, second_namespace);
+  EXPECT_NE(first_namespace, INT_MAX);
+  EXPECT_NE(second_namespace, INT_MAX);
 
   Set<int> second_run;
-  EXPECT_EQ(unique_persistent_id_namespace(collision->first, second_run), first_namespace);
-  EXPECT_EQ(unique_persistent_id_namespace(collision->second, second_run), second_namespace);
-}
-
-TEST(GeometryNodesDebugView, MaximumPersistentIdDepthFailsSafely)
-{
-  EXPECT_TRUE(persistent_id_namespace_fits(0, 8));
-  EXPECT_TRUE(persistent_id_namespace_fits(6, 8));
-  EXPECT_FALSE(persistent_id_namespace_fits(7, 8));
-  EXPECT_FALSE(persistent_id_namespace_fits(8, 8));
-  EXPECT_FALSE(persistent_id_namespace_fits(-1, 8));
+  EXPECT_EQ(unique_persistent_id_namespace(first, second_run), first_namespace);
+  EXPECT_EQ(unique_persistent_id_namespace(second, second_run), second_namespace);
 }
 
 static void add_viewer_log(eval_log::NodeTreeLogger &tree_logger,
@@ -484,6 +483,49 @@ class CandidateCollectionTest : public testing::Test {
   }
 };
 
+TEST_F(CandidateCollectionTest, PresentationLabelsRefreshWithoutChangingIdentityOrState)
+{
+  Main *bmain = BKE_main_new();
+  bNodeTree &root = *bke::node_tree_add_tree(bmain, "Root", "GeometryNodeTree");
+  bNodeTree &nested = *bke::node_tree_add_tree(bmain, "Nested", "GeometryNodeTree");
+  bNode &group_node = *bke::node_add_node(nullptr, root, "GeometryNodeGroup"_ustr);
+  group_node.id = &nested.id;
+  id_us_plus(group_node.id);
+  bNode &viewer_node = *bke::node_add_node(nullptr, nested, "GeometryNodeViewer"_ustr);
+  STRNCPY(group_node.label, "Prepared Group");
+  STRNCPY(viewer_node.label, "Prepared Viewer");
+  Candidate candidate;
+  candidate.identifier = identifier(10, viewer_node.identifier);
+  const std::array<uint32_t, 2> lineage = {root.id.session_uid, nested.id.session_uid};
+  candidate.identifier.node_tree_lineage_hash = node_tree_lineage_hash(lineage);
+  candidate.tree_session_uids = {root.id.session_uid, nested.id.session_uid};
+  candidate.group_node_ids = {group_node.identifier};
+  candidate.context_names = {"Logged Group"};
+  candidate.viewer_name = "Logged Viewer";
+  const Vector<Candidate> candidates = {candidate};
+  State state;
+  state.initialized = true;
+  state.enabled.add(candidate.identifier);
+
+  Vector<CandidatePresentation> presentations = candidate_presentations(
+      *bmain, candidates, "Viewer");
+  EXPECT_EQ(presentations[0].full_name, "Prepared Group / Prepared Viewer");
+
+  STRNCPY(group_node.label, "Renamed Group");
+  STRNCPY(viewer_node.label, "Renamed Viewer");
+  presentations = candidate_presentations(*bmain, candidates, "Viewer");
+  EXPECT_EQ(presentations[0].full_name, "Renamed Group / Renamed Viewer");
+  EXPECT_TRUE(state.enabled.contains(candidate.identifier));
+  EXPECT_EQ(candidate.identifier, candidates[0].identifier);
+
+  group_node.label[0] = '\0';
+  BKE_id_rename(*bmain, nested.id, "Renamed Nested Tree");
+  presentations = candidate_presentations(*bmain, candidates, "Viewer");
+  EXPECT_EQ(presentations[0].full_name, "Renamed Nested Tree / Renamed Viewer");
+
+  BKE_main_free(bmain);
+}
+
 TEST_F(CandidateCollectionTest, ModifierAndObjectCopyPathCreatesFreshRuntimeState)
 {
   ModifierData *source_md = BKE_modifier_new(eModifierType_Nodes);
@@ -501,8 +543,8 @@ TEST_F(CandidateCollectionTest, ModifierAndObjectCopyPathCreatesFreshRuntimeStat
   BKE_modifier_free(copy_md);
 }
 
-static Vector<Candidate> candidates_for_tree_lineage(const uint32_t root_tree_uid,
-                                                     const uint32_t nested_tree_uid)
+static Vector<Identifier> identifiers_for_tree_lineage(const uint32_t root_tree_uid,
+                                                       const uint32_t nested_tree_uid)
 {
   eval_log::NodesEvalLog root_log;
   NodesModifierData nmd = {};
@@ -515,13 +557,31 @@ static Vector<Candidate> candidates_for_tree_lineage(const uint32_t root_tree_ui
   nested_logger.tree_orig_session_uid = nested_tree_uid;
   nested_logger.context_order = 1;
   add_viewer_log(nested_logger, 60, 1, "Viewer");
-  return Vector<Candidate>(root_log.debug_view_candidates());
+  Vector<Identifier> identifiers;
+  for (const Candidate &candidate : root_log.debug_view_candidates()) {
+    identifiers.append(candidate.identifier);
+  }
+  return identifiers;
+}
+
+static Vector<Candidate> candidates_from_identifiers(const Span<Identifier> identifiers)
+{
+  Vector<Candidate> candidates;
+  for (const Identifier &identifier : identifiers) {
+    Candidate candidate;
+    candidate.identifier = identifier;
+    candidates.append(std::move(candidate));
+  }
+  return candidates;
 }
 
 TEST_F(CandidateCollectionTest, UnrelatedNodeGroupReplacementDoesNotInheritEnabledState)
 {
-  const Vector<Candidate> original_candidates = candidates_for_tree_lineage(100, 200);
-  const Vector<Candidate> replacement_candidates = candidates_for_tree_lineage(101, 201);
+  const Vector<Identifier> original_identifiers = identifiers_for_tree_lineage(100, 200);
+  const Vector<Identifier> replacement_identifiers = identifiers_for_tree_lineage(101, 201);
+  const Vector<Candidate> original_candidates = candidates_from_identifiers(original_identifiers);
+  const Vector<Candidate> replacement_candidates = candidates_from_identifiers(
+      replacement_identifiers);
   ASSERT_EQ(original_candidates.size(), 1);
   ASSERT_EQ(replacement_candidates.size(), 1);
   /* Both evaluations deliberately reuse the same context structure and Viewer node identifier. */
@@ -536,14 +596,16 @@ TEST_F(CandidateCollectionTest, UnrelatedNodeGroupReplacementDoesNotInheritEnabl
   initialize_state(original_candidates, state);
   EXPECT_EQ(enabled_candidate_indices(original_candidates, state), Vector<int>({0}));
   EXPECT_TRUE(enabled_candidate_indices(replacement_candidates, state).is_empty());
-  EXPECT_FALSE(
-      toggle_candidate(replacement_candidates, original_candidates[0].identifier, state));
+  EXPECT_FALSE(toggle_candidate(replacement_candidates, original_candidates[0].identifier, state));
 }
 
 TEST_F(CandidateCollectionTest, NodeGroupReplacementUndoRedoKeepsOnlyMatchingLineageEnabled)
 {
-  const Vector<Candidate> original_candidates = candidates_for_tree_lineage(100, 200);
-  const Vector<Candidate> replacement_candidates = candidates_for_tree_lineage(101, 201);
+  const Vector<Identifier> original_identifiers = identifiers_for_tree_lineage(100, 200);
+  const Vector<Identifier> replacement_identifiers = identifiers_for_tree_lineage(101, 201);
+  const Vector<Candidate> original_candidates = candidates_from_identifiers(original_identifiers);
+  const Vector<Candidate> replacement_candidates = candidates_from_identifiers(
+      replacement_identifiers);
   Object before_replacement = {};
   Object after_replacement = {};
   NodesModifierData before_modifier = {};
@@ -558,17 +620,17 @@ TEST_F(CandidateCollectionTest, NodeGroupReplacementUndoRedoKeepsOnlyMatchingLin
   initialize_state(original_candidates, before_modifier.runtime->debug_view_state);
 
   /* Redo/current-state transfer keeps the old intent, but it cannot match the unrelated tree. */
-  preserve_states_on_undo(before_replacement, after_replacement);
-  EXPECT_TRUE(enabled_candidate_indices(
-                  replacement_candidates, after_modifier.runtime->debug_view_state)
-                  .is_empty());
+  MOD_nodes_preserve_runtime_state_on_undo(before_replacement, after_replacement);
+  EXPECT_TRUE(
+      enabled_candidate_indices(replacement_candidates, after_modifier.runtime->debug_view_state)
+          .is_empty());
 
   /* Undo transfers the same runtime intent back to the restored datablocks and session UIDs. */
   before_modifier.runtime->debug_view_state = {};
-  preserve_states_on_undo(after_replacement, before_replacement);
-  EXPECT_EQ(enabled_candidate_indices(original_candidates,
-                                      before_modifier.runtime->debug_view_state),
-            Vector<int>({0}));
+  MOD_nodes_preserve_runtime_state_on_undo(after_replacement, before_replacement);
+  EXPECT_EQ(
+      enabled_candidate_indices(original_candidates, before_modifier.runtime->debug_view_state),
+      Vector<int>({0}));
 
   MEM_delete(before_modifier.runtime);
   MEM_delete(after_modifier.runtime);
@@ -596,8 +658,10 @@ TEST_F(CandidateCollectionTest, IsCached)
 
   const Span<Candidate> first_candidates = root_log.debug_view_candidates();
   ASSERT_EQ(first_candidates.size(), 2);
-  EXPECT_EQ(candidate_display_name(first_candidates, 0, "Viewer"), "First");
-  EXPECT_EQ(candidate_display_name(first_candidates, 1, "Viewer"), "Second");
+  const Vector<CandidatePresentation> presentations = fallback_presentations(first_candidates,
+                                                                             "Viewer");
+  EXPECT_EQ(presentations[0].display_name, "First");
+  EXPECT_EQ(presentations[1].display_name, "Second");
 
   const Span<Candidate> second_candidates = root_log.debug_view_candidates();
   EXPECT_EQ(second_candidates.data(), first_candidates.data());

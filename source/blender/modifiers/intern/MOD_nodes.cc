@@ -2089,6 +2089,26 @@ static void copy_data(const ModifierData *md, ModifierData *target, const int fl
   }
 }
 
+void MOD_nodes_preserve_runtime_state_on_undo(const Object &old_object, Object &new_object)
+{
+  for (ModifierData &new_md : new_object.modifiers) {
+    if (new_md.type != eModifierType_Nodes) {
+      continue;
+    }
+    const ModifierData *old_md = BKE_modifiers_findby_persistent_uid(&old_object,
+                                                                     new_md.persistent_uid);
+    if (old_md == nullptr || old_md->type != eModifierType_Nodes) {
+      continue;
+    }
+
+    const auto &old_nmd = reinterpret_cast<const NodesModifierData &>(*old_md);
+    auto &new_nmd = reinterpret_cast<NodesModifierData &>(new_md);
+    if (old_nmd.runtime != nullptr && new_nmd.runtime != nullptr) {
+      new_nmd.runtime->debug_view_state = old_nmd.runtime->debug_view_state;
+    }
+  }
+}
+
 void nodes_modifier_packed_bake_copy(NodesModifierBake &bake_dst,
                                      const NodesModifierBake &bake_src)
 {

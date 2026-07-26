@@ -11,10 +11,9 @@
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
-#include "BLI_vector_set.hh"
 
 namespace blender {
-struct Object;
+struct Main;
 }
 
 namespace blender::nodes {
@@ -66,24 +65,32 @@ struct Candidate {
   Vector<std::string> context_names;
   /** Empty for the standard Viewer name, which is translated only when presented in the UI. */
   std::string viewer_name;
+  /** Original node trees and group-node identifiers used to resolve presentation names live. */
+  Vector<uint32_t> tree_session_uids;
+  Vector<int32_t> group_node_ids;
+};
+
+struct CandidatePresentation {
+  std::string display_name;
+  std::string full_name;
 };
 
 /** Runtime-only enabled state for one Geometry Nodes modifier. */
 struct State {
-  VectorSet<Identifier> enabled;
+  Set<Identifier> enabled;
   bool initialized = false;
 };
 
 /** Sort candidates deterministically and remove duplicate identities. */
 void finalize_candidates(Vector<Candidate> &candidates);
 
-/** Complete context path, using the translated default name passed by the UI. */
-std::string candidate_full_name(const Candidate &candidate, StringRef default_viewer_name);
-
-/** Concise name with context and a suffix added only when needed for disambiguation. */
-std::string candidate_display_name(Span<Candidate> candidates,
-                                   int candidate_index,
-                                   StringRef default_viewer_name);
+/**
+ * Resolve labels from original node trees and disambiguate every candidate in one linear pass.
+ * Logged names are retained only as a fallback when a tree or node no longer exists.
+ */
+Vector<CandidatePresentation> candidate_presentations(Main &bmain,
+                                                      Span<Candidate> candidates,
+                                                      StringRef default_viewer_name);
 
 /** Enable the first available candidate once, without reinitializing an empty state later. */
 void initialize_state(Span<Candidate> candidates, State &state);
@@ -95,13 +102,6 @@ bool toggle_candidate(Span<Candidate> candidates, const Identifier &identifier, 
 Vector<int> enabled_candidate_indices(Span<Candidate> candidates, const State &state);
 
 /**
- * Preserve runtime-only state across memfile undo for matching Geometry Nodes modifiers.
- *
- * Object and modifier duplication still create independent, freshly initialized state.
- */
-void preserve_states_on_undo(const Object &old_object, Object &new_object);
-
-/**
  * Stable namespace for this Debug View in a dupli persistent-ID chain.
  *
  * #INT_MAX is reserved as the end marker of a persistent ID.
@@ -110,9 +110,6 @@ int persistent_id_namespace(const Identifier &identifier);
 
 /** Reserve a namespace, probing deterministically if another enabled source has the same hash. */
 int unique_persistent_id_namespace(const Identifier &identifier, Set<int> &used_namespaces);
-
-/** Whether one namespace parent level fits before the persistent-ID termination slot. */
-bool persistent_id_namespace_fits(int current_depth, int max_depth);
 
 }  // namespace debug_view
 }  // namespace blender::nodes

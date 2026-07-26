@@ -74,6 +74,18 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
     def warning_messages(self, modifier):
         return [warning.message for warning in modifier.node_warnings]
 
+    def assert_debug_view_enabled(self, obj, modifier, candidate_index, expected):
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        self.evaluate(obj)
+        with bpy.context.temp_override(
+                object=obj, active_object=obj, modifier=modifier):
+            self.assertEqual(
+                bpy.ops.object.geometry_nodes_debug_view_test_toggle(
+                    candidate_index=candidate_index,
+                    expected_enabled=int(expected)),
+                {'FINISHED'})
+
     def test_debug_view_evaluation_and_modifier_isolation(self):
         group, viewer = self.create_node_group()
         obj_a, modifier_a = self.create_object_with_modifier("Object A", group)
@@ -147,6 +159,54 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
         self.assertIn("Debug View evaluated", self.warning_messages(modifier_a_first))
         self.assertEqual(self.warning_messages(modifier_a_second), [])
 
+    def test_runtime_state_isolation_copy_and_modifier_reorder(self):
+        group, viewer = self.create_node_group()
+        viewer.is_debug_view = True
+        obj, first_modifier = self.create_object_with_modifier("Object", group)
+        first_modifier.show_debug_views = True
+        self.assert_debug_view_enabled(obj, first_modifier, 0, True)
+        with bpy.context.temp_override(
+                object=obj, active_object=obj, modifier=first_modifier):
+            self.assertEqual(
+                bpy.ops.object.geometry_nodes_debug_view_test_toggle(candidate_index=0),
+                {'FINISHED'})
+        self.assert_debug_view_enabled(obj, first_modifier, 0, False)
+
+        second_modifier = obj.modifiers.new("Second Geometry Nodes", 'NODES')
+        second_modifier.node_group = group
+        second_modifier.show_debug_views = True
+        obj.modifiers.active = second_modifier
+        self.assert_debug_view_enabled(obj, second_modifier, 0, True)
+        obj.modifiers.active = first_modifier
+        self.assert_debug_view_enabled(obj, first_modifier, 0, False)
+
+        obj.modifiers.move(1, 0)
+        obj.modifiers.active = second_modifier
+        self.assert_debug_view_enabled(obj, second_modifier, 0, True)
+        obj.modifiers.active = first_modifier
+        self.assert_debug_view_enabled(obj, first_modifier, 0, False)
+
+        with bpy.context.temp_override(object=obj, active_object=obj):
+            self.assertEqual(
+                bpy.ops.object.modifier_copy(modifier=first_modifier.name),
+                {'FINISHED'})
+        copied_modifier = obj.modifiers[-1]
+        obj.modifiers.active = copied_modifier
+        self.assert_debug_view_enabled(obj, copied_modifier, 0, True)
+
+        copied_obj = obj.copy()
+        copied_obj.name = "Copied Object"
+        bpy.context.collection.objects.link(copied_obj)
+        copied_object_modifier = copied_obj.modifiers[first_modifier.name]
+        copied_obj.modifiers.active = copied_object_modifier
+        self.assert_debug_view_enabled(copied_obj, copied_object_modifier, 0, True)
+
+        shared_obj, shared_modifier = self.create_object_with_modifier("Shared Object", group)
+        shared_modifier.show_debug_views = True
+        self.assert_debug_view_enabled(shared_obj, shared_modifier, 0, True)
+        obj.modifiers.active = first_modifier
+        self.assert_debug_view_enabled(obj, first_modifier, 0, False)
+
     def test_disabled_modifier_does_not_evaluate_debug_view(self):
         group, viewer = self.create_node_group()
         viewer.is_debug_view = True
@@ -178,26 +238,77 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
             # The first toggle initializes the state with candidate zero enabled,
             # then independently enables candidate one.
             self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(candidate_index=1),
+                bpy.ops.object.geometry_nodes_debug_view_test_toggle(candidate_index=1),
                 {'FINISHED'})
             self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(candidate_index=0),
+                bpy.ops.object.geometry_nodes_debug_view_test_toggle(candidate_index=0),
                 {'FINISHED'})
             self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(candidate_index=1),
+                bpy.ops.object.geometry_nodes_debug_view_test_toggle(candidate_index=1),
                 {'FINISHED'})
             # Re-enable both independently.
             self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(candidate_index=0),
+                bpy.ops.object.geometry_nodes_debug_view_test_toggle(candidate_index=0),
                 {'FINISHED'})
             self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(candidate_index=1),
+                bpy.ops.object.geometry_nodes_debug_view_test_toggle(candidate_index=1),
                 {'FINISHED'})
 
         bpy.context.view_layer.update()
         self.assertEqual(len(obj.evaluated_get(
             bpy.context.evaluated_depsgraph_get()).data.vertices), 8)
         self.assertEqual(self.warning_messages(modifier), warnings_before)
+
+    def test_label_changes_do_not_reevaluate_geometry(self):
+        group, viewer = self.create_node_group()
+        viewer.is_debug_view = True
+        nested = bpy.data.node_groups.new("Nested Geometry Nodes", "GeometryNodeTree")
+        nested.interface.new_socket(
+            name="Geometry", in_out='OUTPUT', socket_type="NodeSocketGeometry")
+        nested_output = nested.nodes.new("NodeGroupOutput")
+        nested_geometry = nested.nodes.new("GeometryNodeMeshCylinder")
+        nested.links.new(nested_geometry.outputs["Mesh"], nested_output.inputs["Geometry"])
+        nested_viewer = nested.nodes.new("GeometryNodeViewer")
+        nested_viewer.viewer_items.new('GEOMETRY', "Geometry")
+        nested_viewer.is_debug_view = True
+        nested.links.new(nested_geometry.outputs["Mesh"], nested_viewer.inputs["Geometry"])
+
+        group_node = group.nodes.new("GeometryNodeGroup")
+        group_node.node_tree = nested
+        group_node.label = "Nested Label"
+        outer_viewer = group.nodes.new("GeometryNodeViewer")
+        outer_viewer.viewer_items.new('GEOMETRY', "Geometry")
+        outer_viewer.is_debug_view = True
+        group.links.new(group_node.outputs["Geometry"], outer_viewer.inputs["Geometry"])
+
+        obj, modifier = self.create_object_with_modifier("Object", group)
+        modifier.show_debug_views = True
+        self.assertEqual(self.evaluate(obj), 8)
+        warnings_before = self.warning_messages(modifier)
+        geometry_updates = []
+
+        def record_geometry_updates(_scene, depsgraph):
+            geometry_updates.extend(
+                update for update in depsgraph.updates
+                if update.id == obj and update.is_updated_geometry)
+
+        bpy.app.handlers.depsgraph_update_post.append(record_geometry_updates)
+        try:
+            viewer.label = "Renamed Viewer"
+            bpy.context.view_layer.update()
+            group_node.label = "Renamed Nested Label"
+            bpy.context.view_layer.update()
+            group_node.label = ""
+            bpy.context.view_layer.update()
+            nested.name = "Renamed Nested Geometry Nodes"
+            bpy.context.view_layer.update()
+        finally:
+            bpy.app.handlers.depsgraph_update_post.remove(record_geometry_updates)
+
+        self.assertEqual(geometry_updates, [])
+        self.assertEqual(self.warning_messages(modifier), warnings_before)
+        self.assertEqual(len(obj.evaluated_get(
+            bpy.context.evaluated_depsgraph_get()).data.vertices), 8)
 
     def test_debug_view_operator_rejects_incomplete_and_stale_identities(self):
         group, viewer = self.create_node_group()
@@ -212,12 +323,11 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
                 object=obj, active_object=obj, modifier=modifier):
             # An incomplete stable identity must not fall through to the test-only index.
             self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(
-                    context_hash=(1, 2, 3, 4), candidate_index=0),
+                bpy.ops.object.geometry_nodes_debug_view_toggle(context_hash=(1, 2, 3, 4)),
                 {'CANCELLED'})
             self.assertEqual(
                 bpy.ops.object.geometry_nodes_debug_view_toggle(
-                    node_tree_lineage_hash=(1, 2, 3, 4), candidate_index=0),
+                    node_tree_lineage_hash=(1, 2, 3, 4)),
                 {'CANCELLED'})
             # A complete but stale identity cannot resolve to an available candidate.
             self.assertEqual(
@@ -246,28 +356,32 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
         modifier.show_debug_views = True
         bpy.context.view_layer.objects.active = obj
         obj.select_set(True)
-        self.evaluate(obj)
-        with bpy.context.temp_override(
-                object=obj, active_object=obj, modifier=modifier):
-            # Initialize runtime state and intentionally disable the only original candidate.
-            self.assertEqual(
-                bpy.ops.object.geometry_nodes_debug_view_toggle(candidate_index=0),
-                {'FINISHED'})
+        self.assert_debug_view_enabled(obj, modifier, 0, True)
 
         bpy.ops.ed.undo_push()
         bpy.ops.ed.undo_push()
 
         modifier.node_group = replacement_group
-        self.evaluate(obj)
+        self.assert_debug_view_enabled(obj, modifier, 0, False)
         bpy.ops.ed.undo_push()
 
         self.assertEqual(bpy.ops.ed.undo(), {'FINISHED'})
-        restored_modifier = bpy.data.objects["Object"].modifiers["Geometry Nodes"]
+        restored_obj = bpy.data.objects["Object"]
+        restored_modifier = restored_obj.modifiers["Geometry Nodes"]
         self.assertEqual(restored_modifier.node_group.name, "Original Geometry Nodes")
+        self.assert_debug_view_enabled(restored_obj, restored_modifier, 0, True)
 
         self.assertEqual(bpy.ops.ed.redo(), {'FINISHED'})
-        redone_modifier = bpy.data.objects["Object"].modifiers["Geometry Nodes"]
+        redone_obj = bpy.data.objects["Object"]
+        redone_modifier = redone_obj.modifiers["Geometry Nodes"]
         self.assertEqual(redone_modifier.node_group.name, "Replacement Geometry Nodes")
+        self.assert_debug_view_enabled(redone_obj, redone_modifier, 0, False)
+        with bpy.context.temp_override(
+                object=redone_obj, active_object=redone_obj, modifier=redone_modifier):
+            self.assertEqual(
+                bpy.ops.object.geometry_nodes_debug_view_test_toggle(candidate_index=0),
+                {'FINISHED'})
+        self.assert_debug_view_enabled(redone_obj, redone_modifier, 0, True)
 
         bpy.ops.ed.undo_push()
         replacement_tree = redone_modifier.node_group
@@ -280,6 +394,10 @@ class GeometryNodesDebugViewTest(unittest.TestCase):
         restored_tree = bpy.data.node_groups["Replacement Geometry Nodes"]
         self.assertTrue(any(
             node.bl_idname == "GeometryNodeViewer" for node in restored_tree.nodes))
+        viewer_restored_obj = bpy.data.objects["Object"]
+        viewer_restored_modifier = viewer_restored_obj.modifiers["Geometry Nodes"]
+        self.assert_debug_view_enabled(
+            viewer_restored_obj, viewer_restored_modifier, 0, True)
 
     def test_debug_view_settings_persist(self):
         group, viewer = self.create_node_group()
