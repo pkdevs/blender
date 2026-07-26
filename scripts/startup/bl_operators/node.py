@@ -557,8 +557,8 @@ class NODE_OT_add_node(NodeAddOperator, Operator):
     )
 
     visible_output: StringProperty(
-        name="Output Identifier",
-        description="If provided, all outputs that are named differently will be hidden",
+        name="Visible Output",
+        description="If provided, all other outputs will be hidden",
         options={'SKIP_SAVE'},
     )
 
@@ -589,8 +589,8 @@ class NODE_OT_swap_node(NodeSwapOperator, Operator):
     )
 
     visible_output: StringProperty(
-        name="Output Name",
-        description="If provided, all outputs that are named differently will be hidden",
+        name="Visible Output",
+        description="If provided, all other outputs will be hidden",
         options={'SKIP_SAVE'},
     )
 
