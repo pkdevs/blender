@@ -159,8 +159,76 @@ struct AstNodeException {
 
 template<typename T> struct Result {
   T value;
-  /* TODO better error class */
   std::optional<AstNodeException> err;
+};
+
+template<typename T, typename U> struct ResultPair {
+  T first;
+  U second;
+  std::optional<AstNodeException> err;
+};
+
+struct NodeErrorHandler {
+  ErrorHandler &err_handler;
+
+  NodeErrorHandler(ErrorHandler &handler) : err_handler(handler) {}
+
+  void error(Token tok, const string &msg)
+  {
+    if (err_handler.err) {
+      return;
+    }
+    vector<pair<Token, string>> errors;
+    errors.emplace_back(tok, msg);
+
+    for (auto it = note_stack.rbegin(); it != note_stack.rend(); ++it) {
+      auto [note_node, note_msg] = *it;
+      errors.emplace_back(note_node, note_msg);
+    }
+    err_handler.report(errors);
+  }
+
+  void error(ast::Node node, const string &msg)
+  {
+    error(node.front(), msg);
+  }
+
+  /* Pipe error if existing. */
+  void error(std::optional<AstNodeException> &err)
+  {
+    if (err) {
+      error(err->node, err->msg);
+    }
+  }
+
+  /* Stack of notes to add to the error. */
+  vector<pair<Token, string>> note_stack = {};
+
+  struct ScopedNote {
+    vector<pair<Token, string>> &note_stack;
+
+    ScopedNote(Token tok, const string &msg, vector<pair<Token, string>> &note_stack)
+        : note_stack(note_stack)
+    {
+      note_stack.emplace_back(tok, msg);
+    }
+
+    ~ScopedNote()
+    {
+      note_stack.pop_back();
+    }
+  };
+
+  [[nodiscard]] ScopedNote note(Token tok, const string &msg)
+  {
+    return ScopedNote(tok, msg, note_stack);
+  }
+  [[nodiscard]] ScopedNote note(Node node, const string &msg)
+  {
+    return ScopedNote(node.front(), msg, note_stack);
+  }
+
+#define NOTE(node, msg) auto n = note(node, msg)
 };
 
 Result<pair<ResourceType, ResourceTableType>> resource_type_from_attributes(AttrList list);
@@ -221,7 +289,7 @@ template<typename T> struct SymbolTemplate {
     return !temp_arg_index_in_fn_arg.empty();
   }
 
-  Result<T *> lookup_inst(TemplateParamList list, const SymbolScope &scope) const;
+  ResultPair<T *, string> lookup_inst(TemplateParamList list, const SymbolScope &scope) const;
   Result<T *> lookup_adl(const SymbolTable &symbols,
                          FuncParamList list,
                          const SymbolScope &scope) const;

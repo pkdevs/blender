@@ -17,23 +17,9 @@ using namespace shader::parser;
 using namespace shader::parser::ast;
 using namespace metadata;
 
-struct CodegenContext {
+struct CodegenContext : NodeErrorHandler {
   SourceProcessor::Parser &parser;
   SymbolTable &symbols;
-  SourceProcessor::ErrorHandler &error_handler;
-
-  void error(ast::Node node, const string &str)
-  {
-    error_handler.report(node.front(), str);
-  }
-
-  /* Pipe error if existing. */
-  void error(std::optional<AstNodeException> &err)
-  {
-    if (err) {
-      error(err->node, err->msg);
-    }
-  }
 
   struct StringBuilder {
     Token curr;
@@ -78,9 +64,9 @@ struct CodegenContext {
   CodegenContext(SourceProcessor::Parser &parser,
                  SymbolTable &symbols,
                  SourceProcessor::ErrorHandler &error_handler)
-      : parser(parser),
+      : NodeErrorHandler(error_handler),
+        parser(parser),
         symbols(symbols),
-        error_handler(error_handler),
         builder(Token::invalid(&parser))
   {
   }
@@ -393,7 +379,7 @@ struct CodegenContext {
         error(end_stmt, "Comma operator is not allowed in unrolled loop statement");
       }
     }
-    if (error_handler.err) {
+    if (this->err_handler.err) {
       return;
     }
 
@@ -1109,7 +1095,10 @@ struct CodegenContext {
       ClassDecl decl = temp_decl.decl();
       auto *base_cls = scope.lookup_class_base(decl.identifier());
       /* Instantiation should have been checked already. */
-      auto [temp_cls, _] = base_cls->template_data->lookup_inst(temp_decl.parameters(), scope);
+      auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(temp_decl.parameters(),
+                                                                         scope);
+      NOTE(decl.identifier(),
+           "In instantiation of class template specialization '" + full_id + "' requested here");
       Node decl_tmp = base_cls->template_data->decl.decl();
       class_decl(decl_tmp, scope, 0, temp_cls);
     }
@@ -1117,7 +1106,11 @@ struct CodegenContext {
       FuncForwardDecl decl = temp_decl.decl();
       auto *base_fn = scope.lookup_function_base(decl.identifier());
       /* Instantiation should have been checked already. */
-      auto [temp_fn, _] = base_fn->template_data->lookup_inst(temp_decl.parameters(), scope);
+      auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(temp_decl.parameters(),
+                                                                       scope);
+      NOTE(decl.identifier(),
+           "In instantiation of function template specialization '" + full_id +
+               "' requested here");
       Node decl_tmp = base_fn->template_data->decl.decl();
       func_decl(decl_tmp, *temp_fn->parent, temp_fn);
     }
@@ -1129,14 +1122,21 @@ struct CodegenContext {
       ClassDecl decl = temp_spec.decl();
       auto *base_cls = scope.lookup_class_base(decl.identifier());
       /* Instantiation should have been checked already. */
-      auto [temp_cls, _] = base_cls->template_data->lookup_inst(temp_spec.parameters(), scope);
+      auto [temp_cls, full_id, _] = base_cls->template_data->lookup_inst(temp_spec.parameters(),
+                                                                         scope);
+      NOTE(decl.identifier(),
+           "In instantiation of class template specialization '" + full_id + "' requested here");
       class_decl(decl, scope, 0, temp_cls);
     }
     else {
       FuncDecl decl = temp_spec.decl();
       auto *base_fn = scope.lookup_function_base(decl.identifier());
       /* Instantiation should have been checked already. */
-      auto [temp_fn, _] = base_fn->template_data->lookup_inst(temp_spec.parameters(), scope);
+      auto [temp_fn, full_id, _] = base_fn->template_data->lookup_inst(temp_spec.parameters(),
+                                                                       scope);
+      NOTE(decl.identifier(),
+           "In instantiation of function template specialization '" + full_id +
+               "' requested here");
       func_decl(decl, *temp_fn->parent, temp_fn);
     }
   }

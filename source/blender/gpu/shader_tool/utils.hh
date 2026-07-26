@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace blender::gpu::shader::parser {
 
@@ -33,6 +34,8 @@ struct ErrorHandler {
 
   void report(Token tok, std::string_view message);
   void report(int row, int column, std::string line, std::string_view message);
+  /* Report a series of errors/notes but consider it as a single error. */
+  void report(const std::vector<std::pair<Token, std::string>> &reports);
 
   void reset()
   {

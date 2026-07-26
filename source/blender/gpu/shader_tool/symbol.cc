@@ -193,7 +193,7 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
           }
           else {
             /* Recursive. */
-            auto [type_, err_] = type->template_data->lookup_inst(list_nested, scope);
+            auto [type_, _, err_] = type->template_data->lookup_inst(list_nested, scope);
             type = type_;
             if (err_) {
               err = err_;
@@ -225,26 +225,27 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
 }
 
 template<typename T>
-Result<T *> SymbolTemplate<T>::lookup_inst(TemplateParamList list, const SymbolScope &scope) const
+ResultPair<T *, string> SymbolTemplate<T>::lookup_inst(TemplateParamList list,
+                                                       const SymbolScope &scope) const
 {
   auto [mangled, err] = SymbolTable::mangle_identifier(decl.arguments(), list, scope);
   auto [args, args_debug] = mangled;
   auto it = instances.find(args);
+  string full_id = string(id().str()) + "<" + args_debug.substr(2) + ">";
+
   if (it == instances.end() && !err) {
-    err = {list,
-           "Missing explicit instantiation of template '" + string(id().str()) + "<" +
-               args_debug.substr(2) + ">'"};
+    err = {list, "Missing explicit instantiation of template '" + full_id + "'"};
   }
 
   if (err) {
     if constexpr (is_same_v<T, SymbolFunction>) {
-      return {scope.root_scope()->lookup_function(SymbolTable::err_symbol), err};
+      return {scope.root_scope()->lookup_function(SymbolTable::err_symbol), full_id, err};
     }
     else {
-      return {scope.root_scope()->lookup_class(SymbolTable::err_symbol), err};
+      return {scope.root_scope()->lookup_class(SymbolTable::err_symbol), full_id, err};
     }
   }
-  return {it->second, err};
+  return {it->second, full_id, err};
 }
 
 template<typename T> void SymbolTemplate<T>::init_adl()
@@ -425,10 +426,14 @@ void SymbolClass::ensure_size_and_align()
   }
 }
 
-struct SymbolParser {
+struct SymbolParser : NodeErrorHandler {
   SymbolTable &table;
   SymbolScope &global;
-  ErrorHandler &err_handler;
+
+  SymbolParser(ErrorHandler &handler, SymbolTable &table, SymbolScope &global)
+      : NodeErrorHandler(handler), table(table), global(global)
+  {
+  }
 
   void parse_scope(SymbolScope &scope,
                    Node node,
@@ -997,6 +1002,11 @@ struct SymbolParser {
             return;
           }
         }
+
+        string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
+        NOTE(decl.identifier(),
+             "In instantiation of function template specialization '" + full_id +
+                 "' requested here");
         SymbolFunction *fn_inst = parse_func_decl(
             *parent, temp_decl.decl(), prefix, mangled.str, temp);
         fn->template_data->instances.emplace(mangled.str, fn_inst);
@@ -1012,6 +1022,9 @@ struct SymbolParser {
         auto [mangled,
               err] = SymbolTable::mangle_identifier(temp_decl.arguments(), tmp_params, scope);
         error(err);
+        string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
+        NOTE(decl.identifier(),
+             "In instantiation of class template specialization '" + full_id + "' requested here");
         int unused_offset = 0;
         parse_class_decl(scope,
                          temp_decl.decl(),
@@ -1039,6 +1052,10 @@ struct SymbolParser {
         auto [mangled,
               err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
         error(err);
+        string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
+        NOTE(decl.identifier(),
+             "In instantiation of function template specialization '" + full_id +
+                 "' requested here");
         SymbolFunction *spec = parse_func_decl(scope, decl, prefix, mangled.str);
         fn->template_data->instances.emplace(mangled.str, spec);
       }
@@ -1053,6 +1070,9 @@ struct SymbolParser {
         auto [mangled,
               err] = SymbolTable::mangle_identifier(temp_decl.arguments(), temp_params, scope);
         error(err);
+        string full_id = string(decl.identifier().str()) + "<" + mangled.str_debug.substr(2) + ">";
+        NOTE(decl.identifier(),
+             "In instantiation of class template specialization '" + full_id + "' requested here");
         int unused_offset = 0;
         SymbolClass *spec = parse_class_decl(
             scope, decl, Node{}, unused_offset, prefix, mangled.str);
@@ -1339,20 +1359,6 @@ struct SymbolParser {
 
     return {prefix, cls};
   }
-
- private:
-  void error(ast::Node node, const string &msg)
-  {
-    err_handler.report(node.front(), msg);
-  }
-
-  /* Pipe error if existing. */
-  void error(std::optional<AstNodeException> &err)
-  {
-    if (err) {
-      error(err->node, err->msg);
-    }
-  }
 };  // namespace blender::gpu::shader::parser
 
 void SymbolVariable::set_offset(bool is_union, int &offset)
@@ -1532,7 +1538,8 @@ static Result<T *> resolve_template_instantiation(T *sym, AstNodeT id, const Sym
   if (TemplateParamList param = id.template_params();
       param.is_valid() && sym && sym->template_data)
   {
-    return sym->template_data->lookup_inst(param, scope);
+    auto [inst, _, err] = sym->template_data->lookup_inst(param, scope);
+    return {inst, err};
   }
   return {sym, std::nullopt};
 }
@@ -1755,7 +1762,7 @@ T *SymbolScope::lookup_generic_nested(Id id, Id last, const SourceLocation &loc)
       LOOKUP_LOG("[Nested] Segment '" << id.str() << "' has template params. Checking classes.\n")
       if (auto it = classes.find(string(id.str())); it != classes.end()) {
         if (SymbolClass *cls = it->second->as_class(); cls && cls->template_data) {
-          if (auto [tmp, err] = cls->template_data->lookup_inst(list, *this); !tmp->is_error) {
+          if (auto [tmp, _, err] = cls->template_data->lookup_inst(list, *this); !tmp->is_error) {
             LOOKUP_LOG("[Nested] Found template instance scope '" << tmp->identifier << "'.\n")
             return tmp->lookup_generic_nested<T>(id.next_id(), last, loc);
           }
@@ -1982,7 +1989,7 @@ SymbolTable::SymbolTable(ParserBase &parser)
 
 void SymbolTable::parse(LocalScope node, ErrorHandler &err_handler)
 {
-  SymbolParser symbol_parser{*this, *flatten_root, err_handler};
+  SymbolParser symbol_parser(err_handler, *this, *flatten_root);
   symbol_parser.parse_scope(*root, node, "");
 
   if (err_handler.err.has_value()) {

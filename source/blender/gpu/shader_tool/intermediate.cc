@@ -153,6 +153,25 @@ void ErrorHandler::report(Token tok, std::string_view message)
   err = {std::string(message), full_report};
 }
 
+void ErrorHandler::report(const std::vector<std::pair<Token, std::string>> &reports)
+{
+  /* Only log the first error. */
+  if (err) {
+    return;
+  }
+
+  std::string message = reports.front().second;
+  std::string full_report;
+
+  for (const auto &[tok, msg] : reports) {
+    report(tok, msg);
+    full_report += "\n" + err->full_report;
+    err = std::nullopt;
+  }
+
+  err = {message, full_report};
+}
+
 void ErrorHandler::report(int row, int column, std::string line, std::string_view message)
 {
   /* Only log the first error. */
