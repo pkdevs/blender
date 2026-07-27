@@ -304,6 +304,10 @@ static void deg_debug_json_node_identifier(JSONStream &json, const Node &node)
     }
     json.object_key("owner_type");
     json.value(nodeTypeAsString((*op_node)->owner->type));
+    if (!(*op_node)->owner->name.empty()) {
+      json.object_key("owner_name");
+      json.value((*op_node)->owner->name);
+    }
     json.object_key("owner_uid");
     json.value((*op_node)->owner->owner->id_orig_session_uid);
   }
