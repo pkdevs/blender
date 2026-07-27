@@ -900,8 +900,7 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
   }
 
   /* Assign the key before sharing the final mesh component with the cage. Writable access after
-
-   * * sharing may copy the component and leave the edit-mesh runtime data on the cage only. */
+   * sharing may copy the component and leave the edit-mesh runtime data on the cage only. */
   mesh_eval_assign_key(geometry_set, mesh_input.key);
 
   /* In all likelihood, when `cageIndex == -1`. */
