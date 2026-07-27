@@ -1502,6 +1502,10 @@ class RequestDescription:
     `response_headers` will contain a copy of the HTTP response headers. The
     header names (i.e. the keys of the dictionary) will be converted to lower
     case.
+
+    This class is also used as a deduplication key for downloads, and
+    deliberately excludes the local path the download should be saved to.
+    See BackgroundDownloader for more info.
     """
 
     http_method: str
