@@ -470,7 +470,8 @@ struct Main : NonCopyable, NonMovable {
  */
 Main *BKE_main_new();
 /**
- * Create a new Main data-base, based on a reference for relative path and colorspace conversions.
+ * Initialize a new Main data-base, based on a reference for relative path and colorspace
+ * conversions.
  */
 void BKE_main_init_from_reference(Main &bmain, const Main &reference);
 /**
