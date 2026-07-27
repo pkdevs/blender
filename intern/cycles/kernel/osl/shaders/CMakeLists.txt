@@ -180,20 +180,44 @@ foreach(_file ${SRC_OSL})
   set_source_files_properties(${_file} PROPERTIES HEADER_FILE_ONLY TRUE)
   string(REPLACE ".osl" ".oso" _OSO_FILE ${_OSL_FILE})
   string(REPLACE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} _OSO_FILE ${_OSO_FILE})
-  add_custom_command(
-    OUTPUT ${_OSO_FILE}
-    COMMAND
-      ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
-      ${OSL_COMPILER} -q -O2
-        -I"${CMAKE_CURRENT_SOURCE_DIR}"
-        -I"${OSL_SHADER_DIR}"
-        -o ${_OSO_FILE}
-        ${_OSL_FILE}
-    DEPENDS ${_OSL_FILE} ${SRC_OSL_HEADERS} ${OSL_COMPILER}
-  )
-  list(APPEND SRC_OSO
-    ${_OSO_FILE}
-  )
+  if(_file MATCHES "node_penny_noise_texture")
+    # Penny Noise has 19 types; compiling all into one shader flattens to ~400 MB
+    # under oslc. Compile once per type (compile-time PENNY_TYPE selects the branch,
+    # oslc drops the rest) into 19 small .oso; the node picks one by noise_type.
+    get_filename_component(_PENNY_DIR ${_OSO_FILE} DIRECTORY)
+    foreach(_ptype RANGE 0 18)
+      set(_PENNY_OSO ${_PENNY_DIR}/node_penny_tex${_ptype}.oso)
+      add_custom_command(
+        OUTPUT ${_PENNY_OSO}
+        COMMAND
+          ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
+          ${OSL_COMPILER} -q -O2
+            "-DPENNY_TYPE=${_ptype}"
+            "-DPENNY_SHADER=node_penny_tex${_ptype}"
+            -I"${CMAKE_CURRENT_SOURCE_DIR}"
+            -I"${OSL_SHADER_DIR}"
+            -o ${_PENNY_OSO}
+            ${_OSL_FILE}
+        DEPENDS ${_OSL_FILE} ${SRC_OSL_HEADERS} ${OSL_COMPILER}
+      )
+      list(APPEND SRC_OSO ${_PENNY_OSO})
+    endforeach()
+  else()
+    add_custom_command(
+      OUTPUT ${_OSO_FILE}
+      COMMAND
+        ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
+        ${OSL_COMPILER} -q -O2
+          -I"${CMAKE_CURRENT_SOURCE_DIR}"
+          -I"${OSL_SHADER_DIR}"
+          -o ${_OSO_FILE}
+          ${_OSL_FILE}
+      DEPENDS ${_OSL_FILE} ${SRC_OSL_HEADERS} ${OSL_COMPILER}
+    )
+    list(APPEND SRC_OSO
+      ${_OSO_FILE}
+    )
+  endif()
 
   unset(_OSL_FILE)
   unset(_OSO_FILE)

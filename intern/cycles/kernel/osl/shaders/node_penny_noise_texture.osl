@@ -13,6 +13,13 @@
 /* ---- Foundation: fade, gradient, hash, tileable 4D Perlin ---- */
 
 /* Quintic fade curve (Perlin's improved interpolant): 6t^5 - 15t^4 + 10t^3. */
+#ifndef PENNY_TYPE
+#  define PENNY_TYPE 0
+#endif
+#ifndef PENNY_SHADER
+#  define PENNY_SHADER node_penny_noise_texture
+#endif
+
 float penny_fade(float t)
 {
   return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
@@ -1485,30 +1492,57 @@ vector penny_luka_tile(vector4 co, float detail, float roughness, vector4 period
 
 /* Helper: evaluate Penny noise at a single position, returning Factor (.x channel).
  * Used by the gradient central-difference computation. */
-float penny_eval_fac(vector4 p, float detail, float roughness, vector4 period, int nt, int bm,
+vector penny_eval_rgb(vector4 p, float detail, float roughness, vector4 period, int nt, int bm,
                      float lvl_lo, float lvl_mid, float lvl_hi)
 {
   vector rgb;
-  if      (nt == 1)  { rgb = penny_turbulence_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 2)  { rgb = penny_stupl_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 3)  { rgb = penny_luka_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 4)  { rgb = penny_blistered_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 5)  { rgb = penny_box_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 6)  { rgb = penny_mod_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 7)  { rgb = penny_nutous_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 8)  { rgb = penny_cranal_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 9)  { rgb = penny_buya_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 10) { rgb = penny_cell_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 11) { rgb = penny_disturb_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 12) { rgb = penny_hama_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 13) { rgb = penny_naki_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 14) { rgb = penny_poxo_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 15) { rgb = penny_pezo_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 16) { rgb = penny_dents_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 17) { rgb = penny_sema_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else if (nt == 18) { rgb = penny_vl_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  else               { rgb = penny_fbm_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi); }
-  return rgb[0];
+#if   PENNY_TYPE == 1
+  rgb = penny_turbulence_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 2
+  rgb = penny_stupl_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 3
+  rgb = penny_luka_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 4
+  rgb = penny_blistered_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 5
+  rgb = penny_box_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 6
+  rgb = penny_mod_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 7
+  rgb = penny_nutous_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 8
+  rgb = penny_cranal_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 9
+  rgb = penny_buya_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 10
+  rgb = penny_cell_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 11
+  rgb = penny_disturb_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 12
+  rgb = penny_hama_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 13
+  rgb = penny_naki_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 14
+  rgb = penny_poxo_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 15
+  rgb = penny_pezo_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 16
+  rgb = penny_dents_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 17
+  rgb = penny_sema_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#elif PENNY_TYPE == 18
+  rgb = penny_vl_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#else
+  rgb = penny_fbm_tile(p, detail, roughness, period, bm, lvl_lo, lvl_mid, lvl_hi);
+#endif
+  return rgb;
+}
+
+float penny_eval_fac(vector4 p, float detail, float roughness, vector4 period, int nt, int bm,
+                    float lvl_lo, float lvl_mid, float lvl_hi)
+{
+  vector r = penny_eval_rgb(p, detail, roughness, period, nt, bm, lvl_lo, lvl_mid, lvl_hi);
+  return r[0];
 }
 
 /* ---- OSL shader entry point ----
@@ -1516,7 +1550,7 @@ float penny_eval_fac(vector4 p, float detail, float roughness, vector4 period, i
  * assembles the coordinate per dimensionality ("1D"/"2D"/"3D"/"4D"),
  * dispatches to the appropriate penny_*_tile(), and writes Fac and Color.
  * When Coordinate is unconnected, defaults to object-space position. */
-shader node_penny_noise_texture(int use_mapping = 0,
+shader PENNY_SHADER(int use_mapping = 0,
                                 matrix mapping = matrix(0, 0, 0, 0,
                                                          0, 0, 0, 0,
                                                          0, 0, 0, 0,
@@ -1607,64 +1641,7 @@ shader node_penny_noise_texture(int use_mapping = 0,
     input_p = vector4(qx, qy, qz, qw);
   }
 
-  vector rgb;
-  if (noise_type == 1) {
-    rgb = penny_turbulence_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 2) {
-    rgb = penny_stupl_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 3) {
-    rgb = penny_luka_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 4) {
-    rgb = penny_blistered_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 5) {
-    rgb = penny_box_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 6) {
-    rgb = penny_mod_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 7) {
-    rgb = penny_nutous_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 8) {
-    rgb = penny_cranal_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 9) {
-    rgb = penny_buya_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 10) {
-    rgb = penny_cell_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 11) {
-    rgb = penny_disturb_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 12) {
-    rgb = penny_hama_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 13) {
-    rgb = penny_naki_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 14) {
-    rgb = penny_poxo_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 15) {
-    rgb = penny_pezo_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 16) {
-    rgb = penny_dents_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 17) {
-    rgb = penny_sema_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else if (noise_type == 18) {
-    rgb = penny_vl_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
-  else {
-    rgb = penny_fbm_tile(input_p, detail_f, roughness, period, blend_mode, LevelMin, LevelMid, LevelMax);
-  }
+  vector rgb = penny_eval_rgb(input_p, detail_f, roughness, period, noise_type, blend_mode, LevelMin, LevelMid, LevelMax);
   /* final Levels removed - LevelMin/Mid/Max now drive per-octave/output Levels in tiles. */
   Fac = rgb[0];
   Color = color(rgb[0], rgb[1], rgb[2]);

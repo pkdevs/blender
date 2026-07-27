@@ -1360,7 +1360,10 @@ void PennyNoiseTextureNode::compile(OSLCompiler &compiler)
   compiler.parameter(this, "blend_mode");
   compiler.parameter(this, "noise_type");
   compiler.parameter(this, "tileable");
-  compiler.add(this, "node_penny_noise_texture");
+  /* Penny compiles one OSL shader per noise type (kernel/osl/shaders/CMakeLists.txt)
+   * so each .oso stays a loadable size; select the per-type shader by noise_type. */
+  const int penny_type = clamp(noise_type, 0, 18);
+  compiler.add(this, string_printf("node_penny_tex%d", penny_type).c_str());
 }
 
 /* Gabor Texture */
