@@ -1123,7 +1123,11 @@ float2 g;)";
   float c;
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
-    EXPECT_EQ(error, "Implicit 12 bytes padding before 'b', add manual padding");
+    EXPECT_EQ(error,
+              "Implicit padding of 12 bytes per array element, use a 16 bytes type or use a "
+              "storage buffer");
+    auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error_ssbo, "Implicit 12 bytes padding before 'b', add manual padding");
   }
   {
     /* std140 arrays force 16-byte alignment. */
@@ -1133,7 +1137,40 @@ float2 g;)";
   float2 c;
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
-    EXPECT_EQ(error, "Implicit 8 bytes padding before 'b', add manual padding");
+    EXPECT_EQ(error,
+              "Implicit padding of 8 bytes per array element, use a 16 bytes type or use a "
+              "storage buffer");
+    auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error_ssbo, "Implicit 8 bytes padding before 'b', add manual padding");
+  }
+  {
+    /* std140 arrays force 16-byte alignment. */
+    string input = R"(
+  float b[2];
+  float a;
+  float c;
+  float d;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error,
+              "Implicit padding of 12 bytes per array element, use a 16 bytes type or use a "
+              "storage buffer");
+    auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error_ssbo, "");
+  }
+  {
+    /* std140 arrays force 16-byte alignment. */
+    string input = R"(
+  float2 b[2];
+  float2 a;
+  float2 c;
+  )";
+    auto [output, _, error] = process_test_uniform(input, Language::BSL);
+    EXPECT_EQ(error,
+              "Implicit padding of 8 bytes per array element, use a 16 bytes type or use a "
+              "storage buffer");
+    auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
+    EXPECT_EQ(error_ssbo, "");
   }
   {
     /* Unknown size. */
@@ -1150,7 +1187,7 @@ float2 g;)";
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
     EXPECT_EQ(error, "Implicit 12 bytes padding at the end of 'S' , add manual padding");
-    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "");
   }
   {
@@ -1160,7 +1197,7 @@ float2 g;)";
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
     EXPECT_EQ(error, "Implicit 8 bytes padding at the end of 'S' , add manual padding");
-    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "");
   }
   {
@@ -1194,7 +1231,7 @@ float2 g;)";
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
     EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S' , add manual padding");
-    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "");
   }
   {
@@ -1205,7 +1242,7 @@ T b[2];
 )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
     EXPECT_EQ(error, "Implicit 12 bytes padding at the end of 'T' , add manual padding");
-    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "Implicit 12 bytes padding before 'b', add manual padding");
   }
   {
@@ -1216,7 +1253,7 @@ T b;
 )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
     EXPECT_EQ(error, "Implicit 8 bytes padding at the end of 'T' , add manual padding");
-    auto [output_ssbo, _, error_ssbo] = process_test_storage(input, Language::BSL);
+    auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "Implicit 12 bytes padding before 'b', add manual padding");
   }
 }

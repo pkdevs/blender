@@ -531,18 +531,7 @@ struct SymbolVariable : Symbol {
    * The variable will be substituted to this statement. */
   Expr reference_value = {};
 
-  SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarator decl)
-      : Symbol(string(decl.identifier().str()), decl.front(), parent),
-        type(type),
-        array_dimensions(decl.array().dimensions()),
-        is_static(decl.type().is_static()),
-        is_compilation_const(AttrList(decl.type().prev()).contains_attr("compilation_constant"))
-  {
-    if (Const constant = decl.type().constant(); constant.is_valid()) {
-      is_constexpr = constant.front() == Constexpr;
-      is_const = true;
-    }
-  }
+  SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarator decl);
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, EnumValue decl)
       : Symbol(string(decl.identifier().str()), decl.front(), parent), type(type), is_static(true)
