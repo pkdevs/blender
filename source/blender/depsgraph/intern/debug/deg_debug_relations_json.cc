@@ -41,6 +41,12 @@ class JSONStream {
   std::stringstream ss_;
   Stack<int> items_;
 
+  /* Operation types and names together do not guarantee fully unique identifiers.
+   * Components can still have multiple operations with the same type and name.
+   * This UID is generated when exporting nodes to generate a fully unique id for each node. */
+  int next_node_uid_ = 0;
+  Map<const Node *, int> node_uid_;
+
  public:
   std::string str() const
   {
@@ -148,6 +154,16 @@ class JSONStream {
     ss_ << (value ? "true" : "false");
     return *this;
   }
+
+  int get_node_uid(const Node &node) const
+  {
+    return node_uid_.lookup(&node);
+  }
+
+  int ensure_node_uid(const Node &node)
+  {
+    return node_uid_.lookup_or_add_cb(&node, [&]() { return next_node_uid_++; });
+  }
 };
 
 /* The variants of nodes handled by the code. */
@@ -214,16 +230,18 @@ static void deg_debug_json_node_recursive(JSONStream &json,
 
   json.object_begin();
 
+  json.object_key("uid");
+  json.value(json.ensure_node_uid(node));
   json.object_key("type");
   json.value(nodeTypeAsString(node.type));
 
   if (const auto *const *id_node = std::get_if<const IDNode *>(&node_variant)) {
+    json.object_key("id_session_uid");
+    json.value((*id_node)->id_orig_session_uid);
     json.object_key("id_type");
     json.value(BKE_idtype_idcode_to_name(GS((*id_node)->id_orig->name)));
     json.object_key("id_name");
     json.value((*id_node)->id_orig->name + 2);
-    json.object_key("uid");
-    json.value((*id_node)->id_orig_session_uid);
     json.object_key("components");
     json.array_begin();
     for (const auto &item : (*id_node)->components.items()) {
@@ -273,46 +291,7 @@ static void deg_debug_json_node_recursive(JSONStream &json,
 
 static void deg_debug_json_node_identifier(JSONStream &json, const Node &node)
 {
-
-  json.object_begin();
-  json.object_key("type");
-  json.value(nodeTypeAsString(node.type));
-
-  const ConstNodeVariant node_variant = get_node_variant(node);
-  if (const auto *const *id_node = std::get_if<const IDNode *>(&node_variant)) {
-    json.object_key("uid");
-    json.value((*id_node)->id_orig_session_uid);
-  }
-  if (const auto *const *time_node = std::get_if<const TimeSourceNode *>(&node_variant)) {
-    /* No identifiers, time source node is unique. */
-    UNUSED_VARS(time_node);
-  }
-  if (const auto *const *comp_node = std::get_if<const ComponentNode *>(&node_variant)) {
-    if (!(*comp_node)->name.empty()) {
-      json.object_key("name");
-      json.value((*comp_node)->name);
-    }
-    json.object_key("owner_uid");
-    json.value((*comp_node)->owner->id_orig_session_uid);
-  }
-  if (const auto *const *op_node = std::get_if<const OperationNode *>(&node_variant)) {
-    json.object_key("operation");
-    json.value(operationCodeAsString((*op_node)->opcode));
-    if (!(*op_node)->name.empty()) {
-      json.object_key("name");
-      json.value((*op_node)->name);
-    }
-    json.object_key("owner_type");
-    json.value(nodeTypeAsString((*op_node)->owner->type));
-    if (!(*op_node)->owner->name.empty()) {
-      json.object_key("owner_name");
-      json.value((*op_node)->owner->name);
-    }
-    json.object_key("owner_uid");
-    json.value((*op_node)->owner->owner->id_orig_session_uid);
-  }
-
-  json.object_end();
+  json.value(json.get_node_uid(node));
 }
 
 static void deg_debug_json_node_relations(JSONStream &json, const Node &node)
