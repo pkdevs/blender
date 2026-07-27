@@ -1042,22 +1042,25 @@ static void init_symbol_table(SymbolTable &symbols)
     }
   }
 
-  symbols.add_finalize_value_fn(
-      ValueType::Vec2,
-      SOCK_VECTOR,
-      [](bNodeTree &tree, const Value &value, const eNodeSocketDatatype /*type*/) {
-        bNode &node = *bke::node_add_node(nullptr, tree, "ShaderNodeVectorMath"_ustr);
-        node.custom1 = NODE_VECTOR_MATH_MULTIPLY;
-        bNodeSocket *input0 = static_cast<bNodeSocket *>(node.inputs.first);
-        bNodeSocket *input1 = input0->next;
-        float *mul_value = input1->default_value_typed<bNodeSocketValueVector>()->value;
-        mul_value[0] = 1.0f;
-        mul_value[1] = 1.0f;
-        mul_value[2] = 0.0f;
-        mul_value[3] = 0.0f;
-        bke::node_add_link(tree, *value.sockets[0].node, *value.sockets[0].socket, node, *input0);
-        return NodeAndSocket{&node, static_cast<bNodeSocket *>(node.outputs.first)};
-      });
+  for (const eNodeSocketDatatype type : {SOCK_VECTOR, SOCK_RGBA, SOCK_ROTATION, SOCK_INT_VECTOR}) {
+    symbols.add_finalize_value_fn(
+        ValueType::Vec2,
+        type,
+        [](bNodeTree &tree, const Value &value, const eNodeSocketDatatype /*type*/) {
+          bNode &node = *bke::node_add_node(nullptr, tree, "ShaderNodeVectorMath"_ustr);
+          node.custom1 = NODE_VECTOR_MATH_MULTIPLY;
+          bNodeSocket *input0 = static_cast<bNodeSocket *>(node.inputs.first);
+          bNodeSocket *input1 = input0->next;
+          float *mul_value = input1->default_value_typed<bNodeSocketValueVector>()->value;
+          mul_value[0] = 1.0f;
+          mul_value[1] = 1.0f;
+          mul_value[2] = 0.0f;
+          mul_value[3] = 0.0f;
+          bke::node_add_link(
+              tree, *value.sockets[0].node, *value.sockets[0].socket, node, *input0);
+          return NodeAndSocket{&node, static_cast<bNodeSocket *>(node.outputs.first)};
+        });
+  }
 
   for (const eNodeSocketDatatype type : {SOCK_FLOAT, SOCK_INT, SOCK_BOOLEAN}) {
     symbols.add_finalize_value_fn(
