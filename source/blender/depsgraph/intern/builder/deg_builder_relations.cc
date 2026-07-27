@@ -2912,6 +2912,8 @@ void DepsgraphRelationBuilder::build_object_data_empty(Object *object)
       &object->id, NodeType::SYNCHRONIZATION, OperationCode::SYNCHRONIZE_TO_ORIGINAL);
   add_relation(final_geometry_key, synchronize_key, "Synchronize to Original");
 
+  /* If the it is an instanced collection, the geometry of the empty depends on the geometry of the
+   * collection (and hence all the geometry of all contained objects).*/
   if (object->instance_collection) {
     ComponentKey collection_geometry_key(&object->instance_collection->id, NodeType::GEOMETRY);
     add_relation(
