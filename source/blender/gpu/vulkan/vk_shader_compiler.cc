@@ -14,6 +14,8 @@
 #  include "BLI_winstuff.hh"
 #endif
 
+#include "vk_backend.hh"
+#include "vk_device.hh"
 #include "vk_shader.hh"
 #include "vk_shader_compiler.hh"
 
@@ -173,15 +175,15 @@ static StringRef to_stage_name(shaderc_shader_kind stage)
 }
 
 /**
- * Injects a standalone "OpString" holding the shader name into the SPIR-V binary.
- * This is not necessary when G_DEBUG_GPU_SHADER_DEBUG_INFO is used, as then shaderc/glslang will
- * generate this OpString together with an OpSource instruction that contains the GLSL source code.
+ * Injects an "OpString" holding the shader name into the SPIR-V binary, and references it via an
+ * "OpSource" instruction. This is not necessary when G_DEBUG_GPU_SHADER_DEBUG_INFO is used, as
+ * then shaderc/glslang will generate this OpString together with an OpSource instruction that
+ * contains the full GLSL source code.
  *
  * This way, the human-readable shader name can be found/referenced when inspecting the binary or
- * debugging even when not using the flag G_DEBUG_GPU_SHADER_DEBUG_INFO. The OpString instruction
- * ID is currently not used in OpSource or OpName instructions.
+ * debugging even when not using the flag G_DEBUG_GPU_SHADER_DEBUG_INFO.
  */
-static void spirv_inject_op_string(Vector<uint32_t> &spirv, StringRef name)
+static void spirv_inject_op_string(Vector<uint32_t> &spirv, StringRef name, uint32_t glsl_version)
 {
   /* The SPIR-V header contains: Magic, Version, Generator, Bound, Schema */
   constexpr uint32_t SPIRV_HEADER_WORD_COUNT = 5u;
@@ -200,14 +202,24 @@ static void spirv_inject_op_string(Vector<uint32_t> &spirv, StringRef name)
   Vector<uint32_t> string_words(num_string_words, 0u);
   memcpy(string_words.data(), name.data(), name.size());
 
-  const uint32_t word_count = 2u + num_string_words;
-  Vector<uint32_t> instruction;
-  instruction.append((word_count << SpvWordCountShift) | SpvOpString);
-  instruction.append(result_id);
-  instruction.extend(string_words);
+  Vector<uint32_t> instructions;
+
+  /* Inject OpString holding the shader name. */
+  const uint32_t op_string_word_count = 2u + num_string_words;
+  instructions.append((op_string_word_count << SpvWordCountShift) | SpvOpString);
+  instructions.append(result_id);
+  instructions.extend(string_words);
+
+  /* Inject OpSource referencing the OpString above as the source file so tools can associate the
+   * shader name with this module. */
+  constexpr uint32_t op_source_word_count = 4u;
+  instructions.append((op_source_word_count << SpvWordCountShift) | SpvOpSource);
+  instructions.append(SpvSourceLanguageGLSL);
+  instructions.append(glsl_version);
+  instructions.append(result_id);
 
   /* Insertion point = start of the debug section: After all OpCapability / OpExtension /
-   * OpExtInstImport / OpMemoryModel / OpEntryPoint / OpExecutionMode(Id) instructions. */
+   * OpExtInstImport / OpMemoryModel / OpEntryPoint / OpExecutionMode instructions. */
   int64_t pos = SPIRV_HEADER_WORD_COUNT;
   while (pos < spirv.size()) {
     const uint32_t opcode = spirv[pos] & SpvOpCodeMask;
@@ -230,7 +242,7 @@ static void spirv_inject_op_string(Vector<uint32_t> &spirv, StringRef name)
     pos += length;
   }
 
-  spirv.insert(pos, instruction.as_span());
+  spirv.insert(pos, instructions.as_span());
   spirv[SPIRV_BOUND_INDEX] = result_id + 1u;
 }
 
@@ -328,7 +340,11 @@ static bool compile_ex(shaderc::Compiler &compiler,
     const uint32_t *end = shader_module.compilation_result.end();
     shader_module.spirv_binary = Vector<uint32_t>(Span<uint32_t>(begin, end - begin));
     if ((G.debug & G_DEBUG_GPU_SHADER_DEBUG_INFO) == 0) {
-      spirv_inject_op_string(shader_module.spirv_binary, full_name);
+      const VKDevice &device = VKBackend::get().device;
+      const bool stage_use_ray_query = stage != shaderc_geometry_shader &&
+                                       shader.use_ray_query_get();
+      const uint32_t glsl_version = device.glsl_patch_version_get(stage_use_ray_query);
+      spirv_inject_op_string(shader_module.spirv_binary, full_name, glsl_version);
     }
     write_spirv_to_disk(shader_module);
   }
