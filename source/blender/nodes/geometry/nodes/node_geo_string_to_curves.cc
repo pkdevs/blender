@@ -20,7 +20,10 @@
 #include "BLT_translation.hh"
 
 #include "MEM_guardedalloc.h"
+
+#include "NOD_geo_string_to_curves.hh"
 #include "NOD_rna_define.hh"
+
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -434,6 +437,17 @@ struct CharCacheKey {
   }
 };
 
+struct CharCache {
+  Mutex mutex;
+  Map<CharCacheKey, GeometrySet> map;
+};
+
+static CharCache &get_char_cache()
+{
+  static CharCache char_cache;
+  return char_cache;
+}
+
 /** Returns a mapping of UTF32 character code to instance handle. */
 static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
                                             TextLayout &layout,
@@ -451,13 +465,12 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
   Vector<GeometrySet> char_geos(used_char_codes.size());
   {
     const UString font_path{vfont->filepath};
-    static Mutex mutex;
-    static Map<CharCacheKey, GeometrySet> cache;
-    std::lock_guard lock(mutex);
+    CharCache &char_cache = get_char_cache();
+    std::lock_guard lock(char_cache.mutex);
     for (const int i : used_char_codes.index_range()) {
       const char32_t char_code = used_char_codes[i];
       const CharCacheKey key{char_code, geometry::use_debug_randomization(), font_path};
-      const GeometrySet &char_geo = cache.lookup_or_add_cb(key, [&]() {
+      const GeometrySet &char_geo = char_cache.map.lookup_or_add_cb(key, [&]() {
         /* Isolate because a mutex is locked. */
         return threading::isolate_task([&]() {
           GeometrySet geo = GeometrySet::from_curves(create_character_curves(vfont, char_code));
@@ -632,3 +645,15 @@ static void node_register()
 NOD_REGISTER_NODE(node_register)
 
 }  // namespace blender::nodes::node_geo_string_to_curves_cc
+
+namespace blender::nodes {
+
+void string_to_curves_cache_clear()
+{
+  using namespace blender::nodes::node_geo_string_to_curves_cc;
+  CharCache &char_cache = get_char_cache();
+  std::lock_guard lock(char_cache.mutex);
+  char_cache.map.clear();
+}
+
+}  // namespace blender::nodes

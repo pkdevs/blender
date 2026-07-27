@@ -118,6 +118,8 @@
 
 #include "DRW_engine.hh"
 
+#include "NOD_geo_string_to_curves.hh"
+
 namespace blender {
 
 CLG_LOGREF_DECLARE_GLOBAL(WM_LOG_OPERATORS, "operator");
@@ -679,6 +681,7 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
   if (gpu_is_init) {
     DRW_gpu_context_enable_ex(false);
     ui::exit();
+    nodes::string_to_curves_cache_clear();
     GPU_shader_cache_dir_clear_old();
     BKE_image_free_gpu_fallback();
     GPU_exit();

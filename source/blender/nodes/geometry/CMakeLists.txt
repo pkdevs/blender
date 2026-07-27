@@ -321,6 +321,7 @@ set(SRC
   include/NOD_geo_menu_switch.hh
   include/NOD_geo_repeat.hh
   include/NOD_geo_simulation.hh
+  include/NOD_geo_string_to_curves.hh
   include/NOD_geo_tag_filter.hh
   include/NOD_geo_viewer.hh
 

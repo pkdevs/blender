@@ -11,6 +11,7 @@ set(INC
   ../editors/interface
   ../gpu
   ../makesrna
+  ../nodes/geometry/include
   ../../../intern/memutil
 
   # RNA_prototypes.hh
