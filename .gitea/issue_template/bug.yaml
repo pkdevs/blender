@@ -49,8 +49,8 @@ body:
                Broken: (If applicable: Previous version that is also broken)
                Worked: (Optional: Newest version of Blender that worked as expected)
       value: |
-               Broken:
-               Worked:
+               Broken Version:
+               Worked Version:
     validations:
       required: true
 
