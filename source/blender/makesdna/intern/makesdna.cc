@@ -457,12 +457,12 @@ static int compute_type_size_and_alignment(TypeTable &table,
              * to the struct to resolve the problem. */
             if ((size_64 % max_align_64 == 0) && (size_32 % max_align_32 == 4)) {
               fprintf(stderr,
-                      "Sizeerror in 32 bit struct: %s (add padding pointer)\n",
+                      "Size error in 32 bit struct: %s (add padding pointer)\n",
                       struct_info.name.c_str());
             }
             else {
               fprintf(stderr,
-                      "Sizeerror in 32 bit struct: %s (add %d bytes)\n",
+                      "Size error in 32 bit struct: %s (add %d bytes)\n",
                       struct_info.name.c_str(),
                       max_align_32 - (size_32 % max_align_32));
             }
@@ -471,7 +471,7 @@ static int compute_type_size_and_alignment(TypeTable &table,
 
           if (size_64 % max_align_64) {
             fprintf(stderr,
-                    "Sizeerror in 64 bit struct: %s (add %d bytes)\n",
+                    "Size error in 64 bit struct: %s (add %d bytes)\n",
                     struct_info.name.c_str(),
                     max_align_64 - (size_64 % max_align_64));
             dna_error = true;
@@ -479,7 +479,7 @@ static int compute_type_size_and_alignment(TypeTable &table,
 
           if (size_native % 4 && !ELEM(size_native, 1, 2)) {
             fprintf(stderr,
-                    "Sizeerror 4 in struct: %s (add %d bytes)\n",
+                    "Size error 4 in struct: %s (add %d bytes)\n",
                     struct_info.name.c_str(),
                     size_native % 4);
             dna_error = true;
@@ -526,7 +526,7 @@ static int compute_type_size_and_alignment(TypeTable &table,
 /** \name DNA File Writing
  * \{ */
 
-/** Construct the DNA.c file */
+/** Write the blob of the dna.cc file */
 static void dna_write(FILE *file, const void *pntr, const int size)
 {
   constexpr int MAX_DNA_LINE_LENGTH = 20;
@@ -928,7 +928,7 @@ static void make_bad_file(const StringRefNull filename, int line)
 {
   FILE *fp = fopen(filename.c_str(), "w");
   fprintf(fp,
-          "#error \"Error! can't make correct DNA.c file from %s:%d, check alignment.\"\n",
+          "#error \"Error! can't make correct dna.cc file from %s:%d, check alignment.\"\n",
           __FILE__,
           line);
   fclose(fp);
