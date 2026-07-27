@@ -2004,18 +2004,15 @@ static ProjPixel *project_paint_uvpixel_init(const ProjPaintState *ps,
   BLI_assert(tile_offset < (ED_IMAGE_UNDO_TILE_SIZE * ED_IMAGE_UNDO_TILE_SIZE));
 
   projPixel->valid = projima->valid[tile_index];
+  projPixel->pixel_offset = (x_px + y_px * ibuf->x) * 4;
 
   if (ibuf->float_data()) {
-    projPixel->pixel_offset = (x_px + y_px * ibuf->x) * 4;
-
     projPixel->origColor.f_pt = static_cast<float *>(
                                     const_cast<void *>(projima->undoRect[tile_index])) +
                                 4 * tile_offset;
     zero_v4(projPixel->newColor.f);
   }
   else {
-    projPixel->pixel_offset = (x_px + y_px * ibuf->x) * 4;
-
     projPixel->origColor.uint_pt = static_cast<uint *>(
                                        const_cast<void *>(projima->undoRect[tile_index])) +
                                    tile_offset;
