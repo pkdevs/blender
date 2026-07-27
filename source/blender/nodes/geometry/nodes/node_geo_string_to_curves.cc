@@ -417,14 +417,33 @@ static Curves *create_character_curves(VFont *vfont, const char32_t char_code)
 
 static GeometrySet get_or_create_character_geometry(VFont *vfont, const char32_t char_code)
 {
-  GeometrySet geo = GeometrySet::from_curves(create_character_curves(vfont, char_code));
-  {
-    const char32_t char_code_str[2] = {char_code, 0};
-    char inserted_utf8[8] = {0};
-    const size_t len = BLI_str_utf32_as_utf8(inserted_utf8, char_code_str, sizeof(inserted_utf8));
-    geo.set_name(std::string(inserted_utf8, len));
-  }
-  return geo;
+  struct Key {
+    char32_t char_code;
+    bool randomized;
+    std::string font_path;
+
+    bool operator==(const Key &other) const = default;
+
+    uint64_t hash() const
+    {
+      return get_default_hash(this->char_code, this->randomized, this->font_path);
+    }
+  };
+  static Mutex mutex;
+  static Map<Key, GeometrySet> cache;
+  Key key{char_code, geometry::use_debug_randomization(), vfont->filepath};
+  std::lock_guard lock(mutex);
+  return cache.lookup_or_add_cb(key, [&]() {
+    GeometrySet geo = GeometrySet::from_curves(create_character_curves(vfont, char_code));
+    {
+      const char32_t char_code_str[2] = {char_code, 0};
+      char inserted_utf8[8] = {0};
+      const size_t len = BLI_str_utf32_as_utf8(
+          inserted_utf8, char_code_str, sizeof(inserted_utf8));
+      geo.set_name(std::string(inserted_utf8, len));
+    }
+    return geo;
+  });
 }
 
 /** Returns a mapping of UTF32 character code to instance handle. */
