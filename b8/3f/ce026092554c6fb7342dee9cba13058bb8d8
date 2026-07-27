@@ -1,1 +1,2 @@
 Referenced by issue #158193, Assert when deleting object while rendering animation
+Referenced by pull request #161991, Fix #161861: Crash on motion path evaluation
