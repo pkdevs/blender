@@ -330,12 +330,12 @@ static bool bm_edge_is_face_visible_any(const BMEdge *e)
 bool BM_mesh_select_is_mixed(const BMesh *bm)
 {
   if (bm->selectmode & SCE_SELECT_VERTEX) {
-    return !ELEM(bm->totvertsel, 0, bm->totvert);
+    return !ELEM(bm->totvertsel, 0, bm->totvert) || !ELEM(bm->totvertsel_mirrored, 0, bm->totvert);
   }
   if (bm->selectmode & SCE_SELECT_EDGE) {
-    return !ELEM(bm->totedgesel, 0, bm->totedge);
+    return !ELEM(bm->totedgesel, 0, bm->totedge) || !ELEM(bm->totedgesel_mirrored, 0, bm->totedge);
   }
-  return !ELEM(bm->totfacesel, 0, bm->totface);
+  return !ELEM(bm->totfacesel, 0, bm->totface) || !ELEM(bm->totfacesel_mirrored, 0, bm->totface);
 }
 
 void BM_mesh_select_mode_clean_ex(BMesh *bm, const short selectmode)
@@ -420,20 +420,24 @@ static void bm_mesh_select_mode_flush_vert_to_edge_iter_fn(void * /*userdata*/,
   BMEdge *e = reinterpret_cast<BMEdge *>(iter);
   const bool is_selected = BM_elem_flag_test(e, BM_ELEM_SELECT);
   const bool is_hidden = BM_elem_flag_test(e, BM_ELEM_HIDDEN);
-  if (!is_hidden &&
-      (BM_elem_flag_test(e->v1, BM_ELEM_SELECT) && BM_elem_flag_test(e->v2, BM_ELEM_SELECT)))
-  {
-    BM_elem_flag_enable(e, BM_ELEM_SELECT);
-    chunk_data->delta_selection_len += is_selected ? 0 : 1;
-  }
-  else {
-    BM_elem_flag_disable(e, BM_ELEM_SELECT);
-    chunk_data->delta_selection_len += is_selected ? -1 : 0;
-  }
-  BM_elem_flag_set(e,
-                   BM_ELEM_MIRRORED_SELECT,
-                   !is_hidden && BM_elem_flag_test(e->v1, BM_ELEM_MIRRORED_SELECT) &&
-                       BM_elem_flag_test(e->v2, BM_ELEM_MIRRORED_SELECT));
+
+  const bool v1_select = BM_elem_flag_test(e->v1, BM_ELEM_SELECT);
+  const bool v2_select = BM_elem_flag_test(e->v2, BM_ELEM_SELECT);
+  const bool v1_mirrored = BM_elem_flag_test(e->v1, BM_ELEM_MIRRORED_SELECT);
+  const bool v2_mirrored = BM_elem_flag_test(e->v2, BM_ELEM_MIRRORED_SELECT);
+
+  const bool all_select = !is_hidden && v1_select && v2_select;
+  const bool all_mirrored = !is_hidden && v1_mirrored && v2_mirrored;
+  const bool covered = !is_hidden && (v1_select || v1_mirrored) && (v2_select || v2_mirrored);
+  const bool any_pure_select = (v1_select && !v1_mirrored) || (v2_select && !v2_mirrored);
+  const bool any_pure_mirror = (v1_mirrored && !v1_select) || (v2_mirrored && !v2_select);
+
+  const bool new_select = any_pure_select && (all_select || (covered && any_pure_mirror));
+  const bool new_mirrored = all_mirrored;
+
+  BM_elem_flag_set(e, BM_ELEM_SELECT, new_select);
+  chunk_data->delta_selection_len += int(new_select) - int(is_selected);
+  BM_elem_flag_set(e, BM_ELEM_MIRRORED_SELECT, new_mirrored);
 }
 
 static void bm_mesh_select_mode_flush_edge_to_face_iter_fn(void * /*userdata*/,
@@ -446,33 +450,56 @@ static void bm_mesh_select_mode_flush_edge_to_face_iter_fn(void * /*userdata*/,
   BMLoop *l_iter;
   BMLoop *l_first;
   const bool is_selected = BM_elem_flag_test(f, BM_ELEM_SELECT);
-  bool ok = true;
-  bool ok_mirrored = true;
+  bool covered = true;
+  bool all_select = true;
+  bool all_mirrored = true;
+  bool all_verts_mirrored = true;
+  bool any_pure_select = false;
+  bool any_pure_mirror = false;
   if (!BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      if (!BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT)) {
-        ok = false;
+      const bool e_select = BM_elem_flag_test(l_iter->e, BM_ELEM_SELECT);
+      const bool e_mirrored = BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT);
+      if (!(e_select || e_mirrored)) {
+        covered = false;
       }
-      if (!BM_elem_flag_test(l_iter->e, BM_ELEM_MIRRORED_SELECT)) {
-        ok_mirrored = false;
+      if (!e_select) {
+        all_select = false;
+      }
+      if (!e_mirrored) {
+        all_mirrored = false;
+      }
+      if (e_select && !e_mirrored) {
+        any_pure_select = true;
+      }
+      if (e_mirrored && !e_select) {
+        any_pure_mirror = true;
+      }
+      if (!BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT)) {
+        all_verts_mirrored = false;
       }
     } while ((l_iter = l_iter->next) != l_first);
   }
   else {
-    ok = false;
-    ok_mirrored = false;
+    covered = false;
+    all_select = false;
+    all_mirrored = false;
+    all_verts_mirrored = false;
   }
 
-  BM_elem_flag_set(f, BM_ELEM_MIRRORED_SELECT, ok_mirrored);
+  const bool new_select = any_pure_select && (all_select || (covered && any_pure_mirror));
+  const bool new_mirrored = all_mirrored || all_verts_mirrored;
 
-  BM_elem_flag_set(f, BM_ELEM_SELECT, ok);
-  if (is_selected && !ok) {
+  BM_elem_flag_set(f, BM_ELEM_SELECT, new_select);
+  if (is_selected && !new_select) {
     chunk_data->delta_selection_len -= 1;
   }
-  else if (ok && !is_selected) {
+  else if (new_select && !is_selected) {
     chunk_data->delta_selection_len += 1;
   }
+
+  BM_elem_flag_set(f, BM_ELEM_MIRRORED_SELECT, new_mirrored);
 }
 
 static void bm_mesh_select_mode_flush_reduce_fn(const void *__restrict /*userdata*/,
@@ -690,8 +717,6 @@ void BM_mesh_select_flush_from_verts(BMesh *bm, const bool select)
     BMIter eiter;
     BMIter fiter;
 
-    bool ok;
-
     BM_ITER_MESH (e, &eiter, bm, BM_EDGES_OF_MESH) {
       if (BM_elem_flag_test(e->v1, BM_ELEM_SELECT) && BM_elem_flag_test(e->v2, BM_ELEM_SELECT) &&
           !BM_elem_flag_test(e, BM_ELEM_HIDDEN))
@@ -708,43 +733,31 @@ void BM_mesh_select_flush_from_verts(BMesh *bm, const bool select)
     }
 
     BM_ITER_MESH (f, &fiter, bm, BM_FACES_OF_MESH) {
-      ok = true;
+      bool all_select = true;
+      bool all_mirrored = true;
 
       if (!BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
         l_iter = l_first = BM_FACE_FIRST_LOOP(f);
 
         do {
           if (!BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT)) {
-            ok = false;
-            break;
+            all_select = false;
+          }
+          if (!BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT)) {
+            all_mirrored = false;
           }
         } while ((l_iter = l_iter->next) != l_first);
       }
       else {
-        ok = false;
+        all_select = false;
+        all_mirrored = false;
       }
 
-      if (ok) {
+      if (all_select) {
         BM_elem_flag_enable(f, BM_ELEM_SELECT);
       }
 
-      ok = true;
-
-      if (!BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
-        l_iter = l_first = BM_FACE_FIRST_LOOP(f);
-
-        do {
-          if (!BM_elem_flag_test(l_iter->v, BM_ELEM_MIRRORED_SELECT)) {
-            ok = false;
-            break;
-          }
-        } while ((l_iter = l_iter->next) != l_first);
-      }
-      else {
-        ok = false;
-      }
-
-      if (ok) {
+      if (all_mirrored) {
         BM_elem_flag_enable(f, BM_ELEM_MIRRORED_SELECT);
       }
     }

@@ -484,8 +484,8 @@ bool uvedit_face_mirrored_select_test_ex(const ToolSettings *ts,
     }
     return true;
   }
-  const char hflag_test = (ts->uv_selectmode & UV_SELECT_VERT) ? BM_ELEM_SELECT_UV :
-                                                                 BM_ELEM_MIRRORED_SELECT_UV_EDGE;
+  const short hflag_test = (ts->uv_selectmode & UV_SELECT_VERT) ? BM_ELEM_MIRRORED_SELECT_UV :
+                                                                  BM_ELEM_MIRRORED_SELECT_UV_EDGE;
   const BMLoop *l_first = BM_FACE_FIRST_LOOP(efa);
   const BMLoop *l_iter = l_first;
   do {
@@ -752,10 +752,10 @@ bool uvedit_edge_mirrored_select_test_ex(const ToolSettings *ts,
   }
 
   if (ts->uv_selectmode & UV_SELECT_VERT) {
-    return uvedit_vert_select_get_no_sync(ts, bm, l) &&
-           uvedit_vert_select_get_no_sync(ts, bm, l->next);
+    return uvedit_vert_select_get_no_sync(ts, bm, l, BM_ELEM_MIRRORED_SELECT_UV) &&
+           uvedit_vert_select_get_no_sync(ts, bm, l->next, BM_ELEM_MIRRORED_SELECT_UV);
   }
-  return uvedit_edge_select_get_no_sync(ts, bm, l);
+  return BM_elem_flag_test_bool(l, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
 }
 
 bool uvedit_edge_mirrored_select_test(const Scene *scene,

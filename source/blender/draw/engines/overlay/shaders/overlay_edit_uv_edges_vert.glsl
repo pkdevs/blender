@@ -85,8 +85,8 @@ struct GeomOut {
 
 void export_vertex(GeomOut geom_out)
 {
-  /* 1.0f = Selected (Orange/White), 2.0f = Mirrored (Yellow), 0.0f = Unselected */
-  selection_fac = geom_out.selected ? 1.0f : (geom_out.mirrored ? 2.0f : 0.0f);
+  selected_fac = geom_out.selected ? 1.0f : 0.0f;
+  mirrored_fac = geom_out.mirrored ? 1.0f : 0.0f;
   stipple_start = geom_out.stipple_start;
   stipple_pos = geom_out.stipple_pos;
   edge_coord = geom_out.edge_coord;

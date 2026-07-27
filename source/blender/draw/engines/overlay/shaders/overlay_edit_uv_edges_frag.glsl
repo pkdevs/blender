@@ -19,7 +19,7 @@ void main()
   float2 dd = gpu_fwidth(stipple_pos);
   float line_distance = distance(stipple_pos, stipple_start) / max(dd.x, dd.y);
 
-  float sel_fac = clamp(selection_fac, 0.0, 1.0);
+  float sel_fac = clamp(selected_fac, 0.0, 1.0);
 
   if (OVERLAY_UVLineStyle(line_style) == OVERLAY_UV_LINE_STYLE_OUTLINE) {
     if (use_edge_select) {
@@ -50,7 +50,7 @@ void main()
     inner_color = theme.colors.uv_shadow;
   }
 
-  float mirror_fac = clamp(selection_fac - 1.0, 0.0, 1.0);
+  float mirror_fac = clamp(mirrored_fac, 0.0, 1.0) * (1.0 - sel_fac);
   inner_color = mix(inner_color, theme.colors.edge_mirror_selection, mirror_fac);
 
   float dist = abs(edge_coord) - max(theme.sizes.edge - 0.5, 0.0);

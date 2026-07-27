@@ -323,7 +323,8 @@ CREATE_INFO_VARIANT(overlay_edit_mesh_skin_root_clipped, overlay_edit_mesh_skin_
  * \{ */
 
 GPU_SHADER_INTERFACE_INFO(overlay_edit_uv_iface)
-SMOOTH(float, selection_fac)
+SMOOTH(float, selected_fac)
+SMOOTH(float, mirrored_fac)
 FLAT(float2, stipple_start)
 NO_PERSPECTIVE(float, edge_coord)
 NO_PERSPECTIVE(float2, stipple_pos)

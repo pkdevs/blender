@@ -3056,6 +3056,20 @@ static void edbm_strip_selections(BMEditMesh *em)
   }
 }
 
+static bool bm_vert_is_any_edge_flag_test(const BMVert *v, const int hflag)
+{
+  if (v->e) {
+    BMEdge *e_other;
+    BMIter eiter;
+    BM_ITER_ELEM (e_other, &eiter, (BMVert *)v, BM_EDGES_OF_VERT) {
+      if (BM_elem_flag_test(e_other, hflag)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
 {
   BMVert *eve;
@@ -3079,27 +3093,49 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
 
   if (em->selectmode & SCE_SELECT_VERTEX) {
     if (em->bm->totvertsel || em->bm->totvertsel_mirrored) {
-      EDBM_select_flush_from_verts(em, true);
+      EDBM_selectmode_flush(em);
     }
   }
   else if (em->selectmode & SCE_SELECT_EDGE) {
-    /* Deselect vertices, and select again based on edge select. */
     BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
-      BM_vert_select_set(em->bm, eve, false);
+      /* A vert that's purely mirror-selected must not be promoted to regular selection just
+       * because it happens to touch an unrelated, genuinely regular-selected edge - same
+       * "needs to be its own, not just coincidentally adjacent" rule as the edge/face
+       * mix-promotion in bmesh_marking.cc. */
+      const bool was_mirror_only = BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT) &&
+                                   !BM_elem_flag_test(eve, BM_ELEM_SELECT);
+      const bool touches_selected_edge = bm_vert_is_any_edge_flag_test(eve, BM_ELEM_SELECT);
+      const bool touches_mirrored_edge = bm_vert_is_any_edge_flag_test(eve,
+                                                                       BM_ELEM_MIRRORED_SELECT);
+
+      BM_vert_select_set(em->bm, eve, touches_selected_edge && !was_mirror_only);
+      BM_vert_select_set(em->bm, eve, touches_mirrored_edge, BM_ELEM_MIRRORED_SELECT);
     }
 
-    if (em->bm->totedgesel) {
-      BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
-        if (BM_elem_flag_test(eed, BM_ELEM_SELECT)) {
-          BM_edge_select_set(em->bm, eed, true);
-        }
-      }
-
+    if (em->bm->totedgesel || em->bm->totedgesel_mirrored) {
       /* Selects faces based on edge status. */
       EDBM_selectmode_flush(em);
     }
   }
   else if (em->selectmode & SCE_SELECT_FACE) {
+    Vector<BMVert *> verts_was_mirror_only;
+    BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
+      if (BM_elem_flag_test(eve, BM_ELEM_MIRRORED_SELECT) &&
+          !BM_elem_flag_test(eve, BM_ELEM_SELECT))
+      {
+        verts_was_mirror_only.append(eve);
+      }
+    }
+
+    Vector<BMEdge *> edges_was_mirror_only;
+    BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
+      if (BM_elem_flag_test(eed, BM_ELEM_MIRRORED_SELECT) &&
+          !BM_elem_flag_test(eed, BM_ELEM_SELECT))
+      {
+        edges_was_mirror_only.append(eed);
+      }
+    }
+
     /* Deselect edges, and select again based on face select. */
     BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
       BM_edge_select_set(em->bm, eed, false);
@@ -3108,13 +3144,25 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
 
     if (em->bm->totfacesel || em->bm->totfacesel_mirrored) {
       BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
-        if (BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
+        const bool f_select = BM_elem_flag_test(efa, BM_ELEM_SELECT);
+        const bool f_mirrored = BM_elem_flag_test(efa, BM_ELEM_MIRRORED_SELECT);
+        if (f_select) {
           BM_face_select_set(em->bm, efa, true);
         }
-        if (BM_elem_flag_test(efa, BM_ELEM_MIRRORED_SELECT)) {
+        if (f_mirrored) {
           BM_face_select_set(em->bm, efa, true, BM_ELEM_MIRRORED_SELECT);
         }
       }
+    }
+
+    for (BMVert *v : verts_was_mirror_only) {
+      BM_vert_select_set(em->bm, v, false);
+      BM_vert_select_set(em->bm, v, true, BM_ELEM_MIRRORED_SELECT);
+    }
+
+    for (BMEdge *e : edges_was_mirror_only) {
+      BM_edge_select_set_noflush(em->bm, e, false);
+      BM_edge_select_set_noflush(em->bm, e, true, BM_ELEM_MIRRORED_SELECT);
     }
   }
 
@@ -3219,7 +3267,7 @@ void EDBM_selectmode_convert(BMEditMesh *em,
         if (!BM_vert_is_all_edge_flag_test(eve, BM_ELEM_SELECT, true)) {
           BM_vert_select_set(bm, eve, false);
         }
-        if (!BM_vert_is_all_face_flag_test(eve, BM_ELEM_MIRRORED_SELECT, true)) {
+        if (!BM_vert_is_all_edge_flag_test(eve, BM_ELEM_MIRRORED_SELECT, true)) {
           BM_elem_flag_disable(eve, BM_ELEM_MIRRORED_SELECT);
         }
       }

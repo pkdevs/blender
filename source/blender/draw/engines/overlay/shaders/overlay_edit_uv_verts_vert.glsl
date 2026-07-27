@@ -14,7 +14,9 @@ void main()
   /* TODO: Theme? */
   constexpr float4 pinned_col = float4(1.0f, 0.0f, 0.0f, 1.0f);
 
-  bool is_selected = (flag.x & (VERT_UV_SELECT | FACE_UV_SELECT)) != 0u;
+  bool own_mirrored = (flag.x & VERT_MIRRORED_UV_SELECT) != 0u;
+  bool is_selected = ((flag.x & VERT_UV_SELECT) != 0u) ||
+                     (((flag.x & FACE_UV_SELECT) != 0u) && !own_mirrored);
   bool is_pinned = (flag.x & VERT_UV_PINNED) != 0u;
   bool is_mirrored = (flag.x & (VERT_MIRRORED_UV_SELECT | FACE_MIRRORED_UV_SELECT)) != 0u;
 
