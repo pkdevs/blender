@@ -477,6 +477,12 @@ class BackgroundDownloader:
     The downloader will run in a separate process, and the reporters will receive
     updates on the main process (or whatever process runs
     BackgroundDownloader.update()).
+
+    BackgroundDownloader assumes that a given request (method+URL) maps to
+    exactly one local path; downloads are deduplicated on the request alone.
+    Instead of downloading the same URL twice, to different locations, the
+    caller should download it once, and copy/link it to the other location once
+    the download is done.
     """
 
     num_downloads_ok: int
