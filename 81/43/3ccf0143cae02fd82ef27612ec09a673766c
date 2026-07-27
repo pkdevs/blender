@@ -1,2 +1,3 @@
 Referenced by issue #152115, VSE crash when displaying thumbnails
 Referenced by issue #145682, UI elements treat PropertyGroup w/ `name: StringProperty(get=some_getter)` inconsistently
+Referenced by pull request #161988, Fix #161520: crash when editing name of IDProperty from Python
