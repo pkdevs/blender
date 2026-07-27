@@ -10,3 +10,4 @@ Referenced by issue #147097, Merging Meshes with different Shape Keys causes cra
 Referenced by pull request #151536, Fix #151488: another crash joining specific objects
 Referenced by issue #151488, Blender crashes when trying to merge object A (the troublemaker) with any other object
 Referenced by pull request #161957, Fix #161952: Skin Modifier root and radii lost when joining objects
+Referenced by commit b48a3d79151fe9af7911dbcdbdc7ac295695c96f, Fix #161952: Skin Modifier root and radii lost when joining objects
