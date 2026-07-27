@@ -2718,7 +2718,9 @@ struct NodeTexPenny {
   int noise_type = 0;
   /** Number of dimensions to evaluate: 1 = W only, 2 = X/Y, 3 = X/Y/Z, 4 = X/Y/Z/W. */
   int dimensions = 4;
-  char _pad[4] = {};
+  /** Seamless tiling toggle. Non-zero: the noise repeats at the per-axis Period.
+   *  Zero: Period is ignored and Scale gives continuous, non-tiling features. */
+  int tileable = 1;
 };
 
 struct NodeTexVoronoi {

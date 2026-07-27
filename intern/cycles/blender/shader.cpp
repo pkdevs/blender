@@ -1087,6 +1087,7 @@ static ShaderNode *add_node(Scene *scene,
     penny->set_dimensions(storage.dimensions);
     penny->set_blend_mode(storage.blend_mode);
     penny->set_noise_type(storage.noise_type);
+    penny->set_tileable(storage.tileable);
     const blender::TexMapping &b_texture_mapping = storage.base.tex_mapping;
     get_tex_mapping(penny, &b_texture_mapping);
     node = penny;

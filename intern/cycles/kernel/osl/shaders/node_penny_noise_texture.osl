@@ -1540,6 +1540,7 @@ shader node_penny_noise_texture(int use_mapping = 0,
                                 string dimensions = "4D",
                                 int blend_mode = 0,
                                 int noise_type = 0,
+                                int tileable = 1,
                                 output float Fac = 0.0,
                                 output color Color = 0.0,
                                 output vector Gradient = 0.0)
@@ -1563,26 +1564,48 @@ shader node_penny_noise_texture(int use_mapping = 0,
   float fz_scale = max(global_factor * ScaleZ * 0.01, 1e-6) * 0.25;
   float fw_scale = max(global_factor * ScaleW * 0.01, 1e-6) * 0.25;
 
-  /* Assemble the sampled coordinate per dimension (matches Blender Noise + GN +
-   * EEVEE + Cycles): 1D -> (0,0,0,W); 2D -> (X,Y,0,0); 3D -> (X,Y,Z,0); 4D -> (X,Y,Z,W). */
-  vector4 input_p;
-  if (dimensions == "1D") {
-    input_p = vector4(0.0, 0.0, 0.0, W / fw_scale);
-  }
-  else if (dimensions == "2D") {
-    input_p = vector4(px / fx_scale, py / fy_scale, 0.0, 0.0);
-  }
-  else if (dimensions == "3D") {
-    input_p = vector4(px / fx_scale, py / fy_scale, pz / fz_scale, 0.0);
+  /* Period is an object-space tile size, independent of Scale. Snap the integer
+   * lattice period to round(Period / scale); sampling at coord * (lattice /
+   * Period) then repeats exactly every Period units while Scale still sets the
+   * feature size. */
+  float qx, qy, qz, qw;
+  vector4 period;
+  if (tileable != 0) {
+    float Px = clamp((int)PeriodX, 1, 256);
+    float Py = clamp((int)PeriodY, 1, 256);
+    float Pz = clamp((int)PeriodZ, 1, 256);
+    float Pw = clamp((int)PeriodW, 1, 256);
+    float Lx = clamp(round(Px / fx_scale), 1.0, 4096.0);
+    float Ly = clamp(round(Py / fy_scale), 1.0, 4096.0);
+    float Lz = clamp(round(Pz / fz_scale), 1.0, 4096.0);
+    float Lw = clamp(round(Pw / fw_scale), 1.0, 4096.0);
+    qx = px * (Lx / Px);
+    qy = py * (Ly / Py);
+    qz = pz * (Lz / Pz);
+    qw = W * (Lw / Pw);
+    period = vector4(Lx, Ly, Lz, Lw);
   }
   else {
-    input_p = vector4(px / fx_scale, py / fy_scale, pz / fz_scale, W / fw_scale);
+    qx = px / fx_scale;
+    qy = py / fy_scale;
+    qz = pz / fz_scale;
+    qw = W / fw_scale;
+    period = vector4(256, 256, 256, 256);
   }
 
-  vector4 period = vector4(clamp((int)PeriodX, 1, 256),
-                           clamp((int)PeriodY, 1, 256),
-                           clamp((int)PeriodZ, 1, 256),
-                           clamp((int)PeriodW, 1, 256));
+  vector4 input_p;
+  if (dimensions == "1D") {
+    input_p = vector4(0.0, 0.0, 0.0, qw);
+  }
+  else if (dimensions == "2D") {
+    input_p = vector4(qx, qy, 0.0, 0.0);
+  }
+  else if (dimensions == "3D") {
+    input_p = vector4(qx, qy, qz, 0.0);
+  }
+  else {
+    input_p = vector4(qx, qy, qz, qw);
+  }
 
   vector rgb;
   if (noise_type == 1) {

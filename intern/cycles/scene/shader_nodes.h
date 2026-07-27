@@ -307,6 +307,7 @@ class PennyNoiseTextureNode : public TextureNode {
   NODE_SOCKET_API(int, dimensions)
   NODE_SOCKET_API(int, blend_mode)
   NODE_SOCKET_API(int, noise_type)
+  NODE_SOCKET_API(int, tileable)
 };
 
 class GaborTextureNode : public TextureNode {

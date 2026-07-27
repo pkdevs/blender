@@ -2376,7 +2376,8 @@ ccl_device_noinline void svm_node_tex_penny(ccl_private float *ccl_restrict stac
 {
   const int blend_mode = (int)node.blend_mode;
   const int noise_type = (int)node.noise_type;
-  const int dimensions = (int)node.dimensions;
+  const int dimensions = (int)(node.dimensions & 0xFFu);
+  const bool tileable = ((node.dimensions >> 8u) & 1u) != 0u;
 
   /* Load Vector and W. */
   float3 vector = stack_load_float3(stack, node.coord);
@@ -2406,43 +2407,38 @@ ccl_device_noinline void svm_node_tex_penny(ccl_private float *ccl_restrict stac
   const float fz_scale = fmaxf(global_factor * scale_z_pct * 0.01f, 1e-6f) * 0.25f;
   const float fw_scale = fmaxf(global_factor * scale_w_pct * 0.01f, 1e-6f) * 0.25f;
 
-  /* Assemble the sampled coordinate per dimension (matches Blender Noise + GN + EEVEE):
-   * 1D -> (0,0,0,W); 2D -> (X,Y,0,0); 3D -> (X,Y,Z,0); 4D -> (X,Y,Z,W). */
+  /* Period is an object-space tile size, independent of Scale. Snap the integer
+   * lattice period to round(Period / scale); sampling at coord * (lattice /
+   * Period) then repeats exactly every Period units while Scale still sets the
+   * feature size. */
   float w_scaled;
-  if (dimensions == 1) {
-    w_scaled = w_in / fw_scale;
-    vector.x = 0.0f;
-    vector.y = 0.0f;
-    vector.z = 0.0f;
+  int4 period;
+  if (tileable) {
+    const int Px = clamp((int)stack_load(stack, node.period_x), 1, 256);
+    const int Py = clamp((int)stack_load(stack, node.period_y), 1, 256);
+    const int Pz = clamp((int)stack_load(stack, node.period_z), 1, 256);
+    const int Pw = clamp((int)stack_load(stack, node.period_w), 1, 256);
+    const int Lx = clamp((int)((float)Px / fx_scale + 0.5f), 1, 4096);
+    const int Ly = clamp((int)((float)Py / fy_scale + 0.5f), 1, 4096);
+    const int Lz = clamp((int)((float)Pz / fz_scale + 0.5f), 1, 4096);
+    const int Lw = clamp((int)((float)Pw / fw_scale + 0.5f), 1, 4096);
+    const float kx = (float)Lx / (float)Px;
+    const float ky = (float)Ly / (float)Py;
+    const float kz = (float)Lz / (float)Pz;
+    const float kw = (float)Lw / (float)Pw;
+    if (dimensions == 1) { w_scaled = w_in * kw; vector.x = 0.0f; vector.y = 0.0f; vector.z = 0.0f; }
+    else if (dimensions == 2) { vector.x *= kx; vector.y *= ky; vector.z = 0.0f; w_scaled = 0.0f; }
+    else if (dimensions == 3) { vector.x *= kx; vector.y *= ky; vector.z *= kz; w_scaled = 0.0f; }
+    else { vector.x *= kx; vector.y *= ky; vector.z *= kz; w_scaled = w_in * kw; }
+    period = make_int4(Lx, Ly, Lz, Lw);
   }
-  else if (dimensions == 2) {
-    vector.x /= fx_scale;
-    vector.y /= fy_scale;
-    vector.z = 0.0f;
-    w_scaled = 0.0f;
+  else {
+    if (dimensions == 1) { w_scaled = w_in / fw_scale; vector.x = 0.0f; vector.y = 0.0f; vector.z = 0.0f; }
+    else if (dimensions == 2) { vector.x /= fx_scale; vector.y /= fy_scale; vector.z = 0.0f; w_scaled = 0.0f; }
+    else if (dimensions == 3) { vector.x /= fx_scale; vector.y /= fy_scale; vector.z /= fz_scale; w_scaled = 0.0f; }
+    else { vector.x /= fx_scale; vector.y /= fy_scale; vector.z /= fz_scale; w_scaled = w_in / fw_scale; }
+    period = make_int4(256, 256, 256, 256);
   }
-  else if (dimensions == 3) {
-    vector.x /= fx_scale;
-    vector.y /= fy_scale;
-    vector.z /= fz_scale;
-    w_scaled = 0.0f;
-  }
-  else { /* 4D */
-    vector.x /= fx_scale;
-    vector.y /= fy_scale;
-    vector.z /= fz_scale;
-    w_scaled = w_in / fw_scale;
-  }
-
-  const float period_x_f = stack_load(stack, node.period_x);
-  const float period_y_f = stack_load(stack, node.period_y);
-  const float period_z_f = stack_load(stack, node.period_z);
-  const float period_w_f = stack_load(stack, node.period_w);
-
-  const int4 period = make_int4(clamp((int)period_x_f, 1, 256),
-                                clamp((int)period_y_f, 1, 256),
-                                clamp((int)period_z_f, 1, 256),
-                                clamp((int)period_w_f, 1, 256));
 
   int octaves = max((int)floorf(detail_f), 1);
 

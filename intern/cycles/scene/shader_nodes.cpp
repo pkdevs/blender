@@ -1292,6 +1292,7 @@ NODE_DEFINE(PennyNoiseTextureNode)
   SOCKET_ENUM(dimensions, "Dimensions", penny_dimensions_enum, 4);
   SOCKET_INT(blend_mode, "Blend Mode", 0);
   SOCKET_INT(noise_type, "Noise Type", 0);
+  SOCKET_INT(tileable, "Tileable", 1);
   SOCKET_OUT_FLOAT(fac, "Fac");
   SOCKET_OUT_COLOR(color, "Color");
   SOCKET_OUT_VECTOR(gradient, "Gradient");
@@ -1323,7 +1324,7 @@ void PennyNoiseTextureNode::compile(SVMCompiler &compiler)
   compiler.add_node(this,
                     NODE_TEX_PENNY,
                     SVMNodeTexPenny{
-                        .dimensions = uint(dimensions),
+                        .dimensions = uint(dimensions) | (uint(tileable) << 8),
                         .noise_type = uint(noise_type),
                         .blend_mode = uint(blend_mode),
                         .w = compiler.input_float("W"),
@@ -1358,6 +1359,7 @@ void PennyNoiseTextureNode::compile(OSLCompiler &compiler)
   compiler.parameter(this, "dimensions");
   compiler.parameter(this, "blend_mode");
   compiler.parameter(this, "noise_type");
+  compiler.parameter(this, "tileable");
   compiler.add(this, "node_penny_noise_texture");
 }
 

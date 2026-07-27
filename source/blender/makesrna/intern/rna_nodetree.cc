@@ -5957,6 +5957,14 @@ static void def_sh_tex_penny(BlenderRNA *brna, StructRNA *srna)
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_TEXTURE);
   RNA_def_property_update(prop, 0, "rna_ShaderNode_socket_update");
 
+  prop = RNA_def_property(srna, "tileable", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "tileable", 1);
+  RNA_def_property_ui_text(prop,
+                           "Tileable",
+                           "Repeat the noise seamlessly at the per-axis Period. When disabled, "
+                           "Period is ignored and Scale gives continuous, non-tiling features");
+  RNA_def_property_update(prop, 0, "rna_ShaderNode_socket_update");
+
   prop = RNA_def_property(srna, "period_x", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "period_x");
   RNA_def_property_range(prop, 1, 256);

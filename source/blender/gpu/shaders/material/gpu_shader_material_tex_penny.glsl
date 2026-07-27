@@ -1580,6 +1580,7 @@ void penny_field(float3 co,
                     float blend_mode,
                     float noise_type,
                     float dimensions,
+                    float tileable,
                     out float3 out_rgb)
 {
   g_lvl_lo = level_min;
@@ -1599,25 +1600,53 @@ void penny_field(float3 co,
 
   /* Assemble the sampled coordinate per dimension (matches Blender Noise + GN):
    * 1D -> (0,0,0,W); 2D -> (X,Y,0,0); 3D -> (X,Y,Z,0); 4D -> (X,Y,Z,W). */
+  /* Period is an object-space tile size, independent of Scale. Snap the integer
+   * lattice period to round(Period / scale), then sample at vec * (lattice /
+   * Period): the pattern repeats exactly every Period units (exact regardless
+   * of the rounding) while Scale still controls feature size. */
+  float qx, qy, qz, qw;
+  int4 period;
+  if (tileable > 0.5f) {
+    /* Tileable: snap the lattice period to Period/scale and sample at
+     * vec * (lattice / Period) so the pattern repeats exactly every Period. */
+    int Px = clamp(int(period_x), 1, 256);
+    int Py = clamp(int(period_y), 1, 256);
+    int Pz = clamp(int(period_z), 1, 256);
+    int Pw = clamp(int(period_w), 1, 256);
+    int Lx = clamp(int(round(float(Px) / fx_scale)), 1, 4096);
+    int Ly = clamp(int(round(float(Py) / fy_scale)), 1, 4096);
+    int Lz = clamp(int(round(float(Pz) / fz_scale)), 1, 4096);
+    int Lw = clamp(int(round(float(Pw) / fw_scale)), 1, 4096);
+    qx = vec.x * (float(Lx) / float(Px));
+    qy = vec.y * (float(Ly) / float(Py));
+    qz = vec.z * (float(Lz) / float(Pz));
+    qw = w * (float(Lw) / float(Pw));
+    period = int4(Lx, Ly, Lz, Lw);
+  }
+  else {
+    /* Non-tiling: continuous Scale; large fixed lattice so it effectively never
+     * repeats in normal use. */
+    qx = vec.x / fx_scale;
+    qy = vec.y / fy_scale;
+    qz = vec.z / fz_scale;
+    qw = w / fw_scale;
+    period = int4(256, 256, 256, 256);
+  }
+
   int dims = int(dimensions);
   float4 p;
   if (dims == 1) {
-    p = float4(0.0f, 0.0f, 0.0f, w / fw_scale);
+    p = float4(0.0f, 0.0f, 0.0f, qw);
   }
   else if (dims == 2) {
-    p = float4(vec.x / fx_scale, vec.y / fy_scale, 0.0f, 0.0f);
+    p = float4(qx, qy, 0.0f, 0.0f);
   }
   else if (dims == 3) {
-    p = float4(vec.x / fx_scale, vec.y / fy_scale, vec.z / fz_scale, 0.0f);
+    p = float4(qx, qy, qz, 0.0f);
   }
   else {
-    p = float4(vec.x / fx_scale, vec.y / fy_scale, vec.z / fz_scale, w / fw_scale);
+    p = float4(qx, qy, qz, qw);
   }
-
-  int4 period = int4(clamp(int(period_x), 1, 256),
-                     clamp(int(period_y), 1, 256),
-                     clamp(int(period_z), 1, 256),
-                     clamp(int(period_w), 1, 256));
 
   int nt = int(noise_type);
   int bm = int(blend_mode);
@@ -1667,6 +1696,7 @@ void node_tex_penny(float3 co,
                     float blend_mode,
                     float noise_type,
                     float dimensions,
+                    float tileable,
                     float compute_gradient,
                     out float fac,
                     out float4 color,
@@ -1674,7 +1704,7 @@ void node_tex_penny(float3 co,
 {
   /* Fac/Color use the user Levels. */
   float3 rgb;
-  penny_field(co, w, detail, scale_pct, scale_x_pct, scale_y_pct, scale_z_pct, scale_w_pct, roughness, level_min, level_mid, level_max, period_x, period_y, period_z, period_w, blend_mode, noise_type, dimensions, rgb);
+  penny_field(co, w, detail, scale_pct, scale_x_pct, scale_y_pct, scale_z_pct, scale_w_pct, roughness, level_min, level_mid, level_max, period_x, period_y, period_z, period_w, blend_mode, noise_type, dimensions, tileable, rgb);
   fac = rgb.x;
   color = float4(rgb.x, rgb.y, rgb.z, 1.0f);
 
@@ -1694,8 +1724,8 @@ void node_tex_penny(float3 co,
     float3 dp = float3(0.0f);
     dp[a] = eps3[a];
     float3 fp, fm;
-    penny_field(co + dp, w, detail, scale_pct, scale_x_pct, scale_y_pct, scale_z_pct, scale_w_pct, roughness, 0.0f, 0.5f, 1.0f, period_x, period_y, period_z, period_w, blend_mode, noise_type, dimensions, fp);
-    penny_field(co - dp, w, detail, scale_pct, scale_x_pct, scale_y_pct, scale_z_pct, scale_w_pct, roughness, 0.0f, 0.5f, 1.0f, period_x, period_y, period_z, period_w, blend_mode, noise_type, dimensions, fm);
+    penny_field(co + dp, w, detail, scale_pct, scale_x_pct, scale_y_pct, scale_z_pct, scale_w_pct, roughness, 0.0f, 0.5f, 1.0f, period_x, period_y, period_z, period_w, blend_mode, noise_type, dimensions, tileable, fp);
+    penny_field(co - dp, w, detail, scale_pct, scale_x_pct, scale_y_pct, scale_z_pct, scale_w_pct, roughness, 0.0f, 0.5f, 1.0f, period_x, period_y, period_z, period_w, blend_mode, noise_type, dimensions, tileable, fm);
     grad[a] = (fp.x - fm.x) / (2.0f * eps3[a]);
   }
   }

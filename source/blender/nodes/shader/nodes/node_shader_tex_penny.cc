@@ -91,6 +91,7 @@ static void node_shader_buts_tex_penny(ui::Layout &layout, bContext * /*C*/, Poi
   layout.prop(ptr, "penny_dimensions", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
   layout.prop(ptr, "noise_type", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
   layout.prop(ptr, "blend_mode", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+  layout.prop(ptr, "tileable", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void node_shader_init_tex_penny(bNodeTree * /*ntree*/, bNode *node)
@@ -105,6 +106,7 @@ static void node_shader_init_tex_penny(bNodeTree * /*ntree*/, bNode *node)
   tex->blend_mode = 0;
   tex->noise_type = 0;
   tex->dimensions = 4;
+  tex->tileable = 1;
   node->storage = tex;
 }
 
@@ -121,6 +123,7 @@ static int node_shader_gpu_tex_penny(GPUMaterial *mat,
   float blend_mode = (float)storage.blend_mode;
   float noise_type = (float)storage.noise_type;
   float dimensions = (float)storage.dimensions;
+  float tileable = (float)storage.tileable;
   /* Compile-time flag: skip the gradient taps unless its output is connected. */
   float gradient_connected = out[2].hasoutput ? 1.0f : 0.0f;
 
@@ -132,6 +135,7 @@ static int node_shader_gpu_tex_penny(GPUMaterial *mat,
                         GPU_constant(&blend_mode),
                         GPU_constant(&noise_type),
                         GPU_constant(&dimensions),
+                        GPU_constant(&tileable),
                         GPU_constant(&gradient_connected));
 }
 
@@ -140,11 +144,12 @@ class PennyFunction : public mf::MultiFunction {
   int dimensions_;
   int noise_type_;
   int blend_mode_;
+  int tileable_;
   mf::Signature signature_;
 
  public:
-  PennyFunction(int dimensions, int noise_type, int blend_mode)
-      : dimensions_(dimensions), noise_type_(noise_type), blend_mode_(blend_mode)
+  PennyFunction(int dimensions, int noise_type, int blend_mode, int tileable)
+      : dimensions_(dimensions), noise_type_(noise_type), blend_mode_(blend_mode), tileable_(tileable)
   {
     BLI_assert(dimensions_ >= 1 && dimensions_ <= 4);
     mf::SignatureBuilder builder{"Penny", signature_};
@@ -164,10 +169,12 @@ class PennyFunction : public mf::MultiFunction {
     builder.single_input<float>("Level Min");
     builder.single_input<float>("Level Mid");
     builder.single_input<float>("Level Max");
-    builder.single_input<float>("Period X");
-    builder.single_input<float>("Period Y");
-    builder.single_input<float>("Period Z");
-    builder.single_input<float>("Period W");
+    if (tileable_) {
+      builder.single_input<float>("Period X");
+      builder.single_input<float>("Period Y");
+      builder.single_input<float>("Period Z");
+      builder.single_input<float>("Period W");
+    }
     builder.single_output<float>("Fac", mf::ParamFlag::SupportsUnusedOutput);
     builder.single_output<ColorGeometry4f>("Color", mf::ParamFlag::SupportsUnusedOutput);
     builder.single_output<float3>("Gradient", mf::ParamFlag::SupportsUnusedOutput);
@@ -192,10 +199,10 @@ class PennyFunction : public mf::MultiFunction {
     const int lvl_min_index = p++;
     const int lvl_mid_index = p++;
     const int lvl_max_index = p++;
-    const int per_x_index = p++;
-    const int per_y_index = p++;
-    const int per_z_index = p++;
-    const int per_w_index = p++;
+    const int per_x_index = tileable_ ? p++ : -1;
+    const int per_y_index = tileable_ ? p++ : -1;
+    const int per_z_index = tileable_ ? p++ : -1;
+    const int per_w_index = tileable_ ? p++ : -1;
     const int fac_index = p++;
     const int color_index = p++;
     const int gradient_index = p++;
@@ -211,10 +218,13 @@ class PennyFunction : public mf::MultiFunction {
     const VArray<float> &lvl_min = params.readonly_single_input<float>(lvl_min_index, "Level Min");
     const VArray<float> &lvl_mid = params.readonly_single_input<float>(lvl_mid_index, "Level Mid");
     const VArray<float> &lvl_max = params.readonly_single_input<float>(lvl_max_index, "Level Max");
-    const VArray<float> &per_x = params.readonly_single_input<float>(per_x_index, "Period X");
-    const VArray<float> &per_y = params.readonly_single_input<float>(per_y_index, "Period Y");
-    const VArray<float> &per_z = params.readonly_single_input<float>(per_z_index, "Period Z");
-    const VArray<float> &per_w = params.readonly_single_input<float>(per_w_index, "Period W");
+    VArray<float> per_x, per_y, per_z, per_w;
+    if (tileable_) {
+      per_x = params.readonly_single_input<float>(per_x_index, "Period X");
+      per_y = params.readonly_single_input<float>(per_y_index, "Period Y");
+      per_z = params.readonly_single_input<float>(per_z_index, "Period Z");
+      per_w = params.readonly_single_input<float>(per_w_index, "Period W");
+    }
 
     VArray<float3> coord;
     if (has_coord) {
@@ -249,25 +259,39 @@ class PennyFunction : public mf::MultiFunction {
       const float3 p = has_coord ? coord[i] : float3(0.0f, 0.0f, 0.0f);
       const float wv = has_w ? w_in[i] : 0.0f;
       float px = 0.0f, py = 0.0f, pz = 0.0f, pw = 0.0f;
-      switch (dimensions_) {
-        case 1:
-          pw = wv / fw_scale;
-          break;
-        case 2:
-          px = p.x / fx_scale;
-          py = p.y / fy_scale;
-          break;
-        case 3:
-          px = p.x / fx_scale;
-          py = p.y / fy_scale;
-          pz = p.z / fz_scale;
-          break;
-        default: /* 4 */
-          px = p.x / fx_scale;
-          py = p.y / fy_scale;
-          pz = p.z / fz_scale;
-          pw = wv / fw_scale;
-          break;
+      int4 per_final;
+      if (tileable_) {
+        /* Tileable: snap the lattice to round(Period / scale) and sample at
+         * coord * (lattice / Period) so it repeats exactly every Period. */
+        const int Px = math::clamp(int(per_x[i]), 1, 256);
+        const int Py = math::clamp(int(per_y[i]), 1, 256);
+        const int Pz = math::clamp(int(per_z[i]), 1, 256);
+        const int Pw = math::clamp(int(per_w[i]), 1, 256);
+        const int Lx = math::clamp(int(float(Px) / fx_scale + 0.5f), 1, 4096);
+        const int Ly = math::clamp(int(float(Py) / fy_scale + 0.5f), 1, 4096);
+        const int Lz = math::clamp(int(float(Pz) / fz_scale + 0.5f), 1, 4096);
+        const int Lw = math::clamp(int(float(Pw) / fw_scale + 0.5f), 1, 4096);
+        const float kx = float(Lx) / float(Px);
+        const float ky = float(Ly) / float(Py);
+        const float kz = float(Lz) / float(Pz);
+        const float kw = float(Lw) / float(Pw);
+        switch (dimensions_) {
+          case 1: pw = wv * kw; break;
+          case 2: px = p.x * kx; py = p.y * ky; break;
+          case 3: px = p.x * kx; py = p.y * ky; pz = p.z * kz; break;
+          default: px = p.x * kx; py = p.y * ky; pz = p.z * kz; pw = wv * kw; break;
+        }
+        per_final = int4(Lx, Ly, Lz, Lw);
+      }
+      else {
+        /* Non-tiling: continuous Scale; large fixed lattice (effectively never repeats). */
+        switch (dimensions_) {
+          case 1: pw = wv / fw_scale; break;
+          case 2: px = p.x / fx_scale; py = p.y / fy_scale; break;
+          case 3: px = p.x / fx_scale; py = p.y / fy_scale; pz = p.z / fz_scale; break;
+          default: px = p.x / fx_scale; py = p.y / fy_scale; pz = p.z / fz_scale; pw = wv / fw_scale; break;
+        }
+        per_final = int4(256, 256, 256, 256);
       }
       const float4 pos(px, py, pz, pw);
 
@@ -277,7 +301,7 @@ class PennyFunction : public mf::MultiFunction {
       pp.detail = math::clamp(octaves[i], 1.0f, 15.0f);
       pp.roughness = math::max(roughness[i], 0.0f);
       pp.levels = float3(lvl_min[i], lvl_mid[i], lvl_max[i]);
-      pp.period = int4(int(per_x[i]), int(per_y[i]), int(per_z[i]), int(per_w[i]));
+      pp.period = per_final;
 
       const float3 rgb = noise::penny::penny(pos, pp);
       if (compute_fac) {
@@ -310,19 +334,31 @@ static void sh_node_penny_build_multi_function(NodeMultiFunctionBuilder &builder
   const bNode &node = builder.node();
   const NodeTexPenny &storage = node_storage(node);
   builder.construct_and_set_matching_fn<PennyFunction>(
-      storage.dimensions, storage.noise_type, storage.blend_mode);
+      storage.dimensions, storage.noise_type, storage.blend_mode, storage.tileable);
 }
 
 static void node_shader_update_tex_penny(bNodeTree *ntree, bNode *node)
 {
   bNodeSocket *sockCoordinate = bke::node_find_socket(*node, SOCK_IN, "Coordinate"_ustr);
   bNodeSocket *sockW = bke::node_find_socket(*node, SOCK_IN, "W"_ustr);
+  bNodeSocket *sockPX = bke::node_find_socket(*node, SOCK_IN, "Period X"_ustr);
+  bNodeSocket *sockPY = bke::node_find_socket(*node, SOCK_IN, "Period Y"_ustr);
+  bNodeSocket *sockPZ = bke::node_find_socket(*node, SOCK_IN, "Period Z"_ustr);
+  bNodeSocket *sockPW = bke::node_find_socket(*node, SOCK_IN, "Period W"_ustr);
 
   const NodeTexPenny &storage = node_storage(*node);
+  const bool tileable = storage.tileable != 0;
 
   bke::node_set_socket_availability(*ntree, *sockCoordinate, storage.dimensions != 1);
   bke::node_set_socket_availability(
       *ntree, *sockW, storage.dimensions == 1 || storage.dimensions == 4);
+  /* Period only applies to seamless tiling; hide it when Tileable is off, and
+   * respect the active Dimensions so unused axes stay hidden. */
+  bke::node_set_socket_availability(*ntree, *sockPX, tileable && storage.dimensions != 1);
+  bke::node_set_socket_availability(*ntree, *sockPY, tileable && storage.dimensions != 1);
+  bke::node_set_socket_availability(*ntree, *sockPZ, tileable && storage.dimensions >= 3);
+  bke::node_set_socket_availability(
+      *ntree, *sockPW, tileable && (storage.dimensions == 1 || storage.dimensions == 4));
 }
 
 }  // namespace nodes::node_shader_tex_penny_cc
