@@ -2,3 +2,4 @@ Referenced by pull request #161136, Fix: Compiler Warnings
 Referenced by commit 9cc84ad47255f61e1e4e51a4a0b646000adfccc4, Fix: Compiler Warnings
 Referenced by issue #161316, Cannot start Blender with Vulkan and ASAN anymore
 Referenced by pull request #161574, GPU: Metal support for Hardware Ray Queries
+Referenced by commit 06c5e7cebc7c6823c25ba191a07095eedfca482e, GPU: Metal support for Hardware Ray Queries
