@@ -379,11 +379,6 @@ def update_world(self, context):
     context.scene.world.update_tag()
 
 
-def update_pause(self, context):
-    if context.area:
-        context.area.tag_redraw()
-
-
 class CyclesRenderSettings(bpy.types.PropertyGroup):
     __slots__ = ()
 
@@ -401,9 +396,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
 
     preview_pause: BoolProperty(
         name="Pause Preview",
-        description="Pause all viewport preview renders",
-        default=False,
-        update=update_pause,
+        description="Deprecated, use RegionView3D.pause_render instead",
     )
 
     use_denoising: BoolProperty(
