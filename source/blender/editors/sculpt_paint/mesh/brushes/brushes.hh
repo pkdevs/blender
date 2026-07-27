@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "DNA_scene_types.h"
-
 #include "BLI_index_mask.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
+
+#include "DNA_scene_types.h"
 
 #include <optional>
 

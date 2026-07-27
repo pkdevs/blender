@@ -395,15 +395,9 @@ static void paint_blend_mask(const bool invert,
                              const int size,
                              const MutableSpan<PixelT> image_pixels,
                              const int img_x,
-                             const TileColorspaceProcessor &processors,
                              Vector<float4> &paint_pixels)
 {
   constexpr bool is_float = std::is_same_v<typename PixelT::base_type, float>;
-  const bool fast_colorspace = is_float ? processors.is_noop : processors.is_srgb_byte;
-  if (!fast_colorspace) {
-    return;
-  }
-
   PRF_scope(ProfileCategory::Editor);
 
   /* Keep variables in registers during the loop. */
@@ -817,9 +811,6 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
                                 image_buffer->x * image_buffer->y);
     }
 
-    const TileColorspaceProcessor *processors = image_data.processors.lookup_ptr(
-        tile_data.tile_number);
-
     const MutableSpan<uint32_t> undo_tile_pushed = image_data.undo_tile_pushed.lookup(
         tile_data.tile_number);
 
@@ -946,7 +937,6 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
                                    run_active_size,
                                    float_buffer,
                                    run_y * image_buffer->x + run_active_x,
-                                   *processors,
                                    tls.paint_blend_pixels);
         }
         else {
@@ -956,7 +946,6 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
                                    run_active_size,
                                    byte_buffer,
                                    run_y * image_buffer->x + run_active_x,
-                                   *processors,
                                    tls.paint_blend_pixels);
         }
       }

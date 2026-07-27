@@ -6124,7 +6124,6 @@ void SculptPaintStroke::update_step(wmOperator * /*op*/, PointerRNA *itemptr)
   copy_v3_v3(ss.cache->last_location, ss.cache->location);
 
   /* Cleanup. */
-
   if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_MASK) {
     if (SCULPT_use_image_mask_brush(*this->paint_mode_settings_)) {
       flush_update_step(this->vc, *this->object, UpdateType::Image);
