@@ -1008,6 +1008,19 @@ static FunctionSymbol float_function(const ValueType type)
   return implicit_conversion_node_function("float", type, ValueType::Float, SOCK_FLOAT);
 }
 
+static FunctionSymbol float_less_or_greater_than(const StringRef symbol,
+                                                 const NodeMathOperation mode)
+{
+  return FunctionSymbol(
+      symbol, {{ValueType::Float}, {ValueType::Float}}, [mode](InsertCallParams &params) {
+        bNode &node = params.add_node("ShaderNodeMath"_ustr);
+        node.custom1 = mode;
+        params.add_input(node, 0, ValueType::Float);
+        params.add_input(node, 1, ValueType::Float);
+        params.set_output(node, 0, ValueType::Boolean);
+      });
+}
+
 static void init_symbol_table(SymbolTable &symbols)
 {
   symbols.add(float_math_function("+", NODE_MATH_ADD, 2));
@@ -1037,6 +1050,9 @@ static void init_symbol_table(SymbolTable &symbols)
   symbols.add(float_math_function("pow", NODE_MATH_POWER, 2));
 
   symbols.add(negate_float_function());
+
+  symbols.add(float_less_or_greater_than("<", NODE_MATH_LESS_THAN));
+  symbols.add(float_less_or_greater_than(">", NODE_MATH_GREATER_THAN));
 
   for (const ValueType type : {ValueType::Vec2, ValueType::Vec3}) {
     for (const std::array<ValueType, 2> input_types : Span<std::array<ValueType, 2>>({
