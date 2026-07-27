@@ -261,20 +261,23 @@ static void zspan_rasterize_conservative_line(ZSpan *zspan,
                                               float *uv2,
                                               void (*func)(void *, int, int, float, float))
 {
-  float miny = min_ff(v1[1], v2[1]);
-  float maxy = max_ff(v1[1], v2[1]);
+  const float miny = min_ff(v1[1], v2[1]);
+  const float maxy = max_ff(v1[1], v2[1]);
 
   int y0 = ceil(miny) - 1;
   int y1 = floor(maxy);
 
   /* Clip and cull the line. */
-  if (y0 < 0)
+  if (y0 < 0) {
     y0 = 0;
-  if (y1 >= zspan->recty)
+  }
+  if (y1 >= zspan->recty) {
     y1 = zspan->recty - 1;
+  }
 
-  if (y0 > y1)
+  if (y0 > y1) {
     return;
+  }
 
   /* Line direction divided by length for uv interpolation. */
   float dir[2] = {v2[0] - v1[0], v2[1] - v1[1]};
@@ -316,13 +319,16 @@ static void zspan_rasterize_conservative_line(ZSpan *zspan,
     int x1 = floor(maxx);
 
     /* Clip and cull scanline. */
-    if (x0 < 0)
+    if (x0 < 0) {
       x0 = 0;
-    if (x1 >= zspan->rectx)
+    }
+    if (x1 >= zspan->rectx) {
       x1 = zspan->rectx - 1;
+    }
 
-    if (x0 > x1)
+    if (x0 > x1) {
       continue;
+    }
 
     for (; x0 <= x1; x0++) {
       float w = (x0 - v1[0] + 0.5f + 0.001f) * dir[0] + (y0 - v1[1] + 0.5f + 0.002f) * dir[1];

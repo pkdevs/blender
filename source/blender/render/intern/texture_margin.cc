@@ -513,7 +513,7 @@ static void generate_margin(ImBuf *ibuf,
                             const Span<int> corner_verts,
                             const Span<float2> uv_map,
                             const float uv_offset[2],
-                            bool conservative)
+                            const bool conservative)
 {
   Array<int3> corner_tris(poly_to_tri_count(faces.size(), corner_edges.size()));
   bke::mesh::corner_tris_calc(vert_positions, faces, corner_verts, corner_tris);
@@ -582,7 +582,7 @@ void RE_generate_texturemargin_adjacentfaces(ImBuf *ibuf,
                                              const Mesh *mesh,
                                              StringRef uv_layer,
                                              const float uv_offset[2],
-                                             bool conservative)
+                                             const bool conservative)
 {
   const StringRef name = uv_layer.is_empty() ? mesh->active_uv_map_name() : uv_layer;
   const bke::AttributeAccessor attributes = mesh->attributes();
