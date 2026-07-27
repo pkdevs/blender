@@ -74,6 +74,7 @@
 
 #include "CLG_log.h"
 
+#include "buttons/interface_label.hh"
 #include "interface_intern.hh"
 
 namespace blender::ui {
@@ -854,6 +855,10 @@ static bool but_equals_old(const Button *but, const Button *oldbut)
     }
   }
 
+  if (but->type == ButtonType::Label) {
+    return button_label_is_multiline(but) == button_label_is_multiline(oldbut);
+  }
+
   return true;
 }
 
@@ -989,6 +994,12 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
 
     std::swap(search_oldbut->arg_free_fn, search_but->arg_free_fn);
     std::swap(search_oldbut->arg, search_but->arg);
+  }
+  if (oldbut->type == ButtonType::Label) {
+    auto *label_oldbut = static_cast<ButtonLabel *>(oldbut);
+    auto *label_but = static_cast<ButtonLabel *>(but);
+    std::swap(label_oldbut->wrap_cache, label_but->wrap_cache);
+    std::swap(label_oldbut->max_lines, label_but->max_lines);
   }
 
   /* copy hardmin for list rows to prevent 'sticking' highlight to mouse position
@@ -2078,18 +2089,6 @@ bool button_context_poll_operator(bContext *C, wmOperatorType *ot, const Button 
   return button_context_poll_operator_ex(C, but, &params);
 }
 
-void block_post_layout_callbacks_exec(const bContext *C, ARegion *region, Block *block)
-{
-  if (const Vector<std::function<void(const bContext &C)>> *callbacks =
-          region->runtime->post_block_layout_fns.lookup_ptr_as(block->name))
-  {
-    for (const std::function<void(const bContext &C)> &callback : *callbacks) {
-      callback(*C);
-    }
-  }
-  region->runtime->post_block_layout_fns.remove_as(block->name);
-}
-
 void block_end_ex(const bContext *C,
                   Main *bmain,
                   wmWindow *window,
@@ -2098,8 +2097,7 @@ void block_end_ex(const bContext *C,
                   Depsgraph *depsgraph,
                   Block *block,
                   const int xy[2],
-                  int r_xy[2],
-                  bool postpone_callbacks)
+                  int r_xy[2])
 {
   BLI_assert(block->active);
 
@@ -2204,12 +2202,9 @@ void block_end_ex(const bContext *C,
   update_flexible_spacing(region, block);
 
   block->endblock = true;
-  if (!postpone_callbacks) {
-    block_post_layout_callbacks_exec(C, region, block);
-  }
 }
 
-void block_end(const bContext *C, Block *block, bool postpone_callbacks)
+void block_end(const bContext *C, Block *block)
 {
   wmWindow *window = CTX_wm_window(C);
 
@@ -2221,8 +2216,7 @@ void block_end(const bContext *C, Block *block, bool postpone_callbacks)
                CTX_data_depsgraph_pointer(C),
                block,
                window->runtime->eventstate->xy,
-               nullptr,
-               postpone_callbacks);
+               nullptr);
 }
 
 /* ************** BLOCK DRAWING FUNCTION ************* */
@@ -5201,7 +5195,7 @@ Button *uiDefButAlert(Block *block, AlertIcon icon, int x, int y, short width, s
       theme::get_color_4ubv(TH_ERROR, color);
       return uiDefButImage(block, ibuf, x, y, ibuf->x, ibuf->y, color);
     }
-    bTheme *btheme = theme::theme_get();
+    const bTheme *btheme = theme::theme_get();
     return uiDefButImage(block, ibuf, x, y, ibuf->x, ibuf->y, btheme->tui.wcol_menu_back.text);
   }
   return nullptr;
