@@ -17,11 +17,12 @@
 #  include <array>
 #  include <atomic>
 #  include <barrier>
-#  include <cmath>
 #  include <memory>
-#  include <numbers>
 #  include <stdexcept>
 #  include <thread>
+
+#  include "BLI_math_base.hh"
+#  include "BLI_math_constants.hh"
 
 #  include <IReader.h>
 #  include <ISound.h>
@@ -136,8 +137,8 @@ static std::shared_ptr<CountingSound> create_test_sound()
   aud::sample_t *samples = buffer->getBuffer();
   for (const int i : IndexRange(samples_num)) {
     const float time = float(i) / sample_rate;
-    samples[i] = 0.5f * std::sin(2.0f * std::numbers::pi_v<float> * 440.0f * time) +
-                 0.25f * std::sin(2.0f * std::numbers::pi_v<float> * 1234.0f * time);
+    samples[i] = 0.5f * math::sin(2.0f * float(M_PI) * 440.0f * time) +
+                 0.25f * math::sin(2.0f * float(M_PI) * 880.0f * time);
   }
   auto stream = std::make_shared<aud::StreamBuffer>(
       buffer, aud::Specs{aud::RATE_48000, aud::CHANNELS_MONO});
