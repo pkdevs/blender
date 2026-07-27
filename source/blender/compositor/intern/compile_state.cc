@@ -370,7 +370,7 @@ bool CompileState::pixel_compile_unit_has_too_many_inputs()
         continue;
       }
 
-      /* Single values are baked into the shader so they do not count toward inputs count. */
+      /* Single values are folded into the shader so they do not count toward inputs count. */
       const Result &result = this->get_result_from_output_socket(*output);
       if (result.is_single_value()) {
         continue;
