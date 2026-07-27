@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import random
 import sys
 import unittest
 from pathlib import PurePosixPath, PureWindowsPath
@@ -133,12 +132,7 @@ class HashingTest(unittest.TestCase):
             )))
 
 
-INF_NEG = float('-inf')
-INF_POS = float('inf')
-
 # This test is using pure paths to make it independent of the platform it runs on.
-
-
 class BlenderVersionFromFilenameTest(unittest.TestCase):
     maxDiff = None
 
@@ -168,12 +162,15 @@ class BlenderVersionFromFilenameTest(unittest.TestCase):
             # No marker.
             PurePosixPath("/path/to/alone.blend"),
 
+            # Only marker.
+            PurePosixPath("/path/to/@b5_5.blend"),
+
             # Double markers. These should be seen as two separate base names, as only the last marker is stripped to
             # form the base name.
             PurePosixPath("/path/to/double@b4_5.blend"),
             PurePosixPath("/path/to/double@b5_3@b6_0.blend"),
 
-            # Only markers.
+            # No markerless first version.
             PurePosixPath("/path/to/only_marked@b5_4.blend"),
             PurePosixPath("/path/to/only_marked@b6_0.blend"),
         ]
@@ -249,6 +246,13 @@ class BlenderVersionFromFilenameTest(unittest.TestCase):
                 blender_version_until=(),
             ),
 
+            # Only marker.
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/@b5_5.blend"),
+                blender_version_min=(),
+                blender_version_until=(),
+            ),
+
             # Double markers. These should be seen as two separate base names, as only the last marker is stripped to
             # form the base name.
             asset_finder.FileVersionInfo(
@@ -262,7 +266,7 @@ class BlenderVersionFromFilenameTest(unittest.TestCase):
                 blender_version_until=(),
             ),
 
-            # Only markers.
+            # No markerless first version.
             asset_finder.FileVersionInfo(
                 path=PurePosixPath("/path/to/only_marked@b5_4.blend"),
                 blender_version_min=(5, 4),
@@ -279,28 +283,64 @@ class BlenderVersionFromFilenameTest(unittest.TestCase):
         actual = asset_finder.investigate_filenames(paths)
         self.assertEqual(expect, actual)
 
+    def test_investigate_filenames_duplicate(self) -> None:
+        paths = [
+            # Two files with the same min version:
+            PurePosixPath("/path/to/asset.blend"),
+            PurePosixPath("/path/to/asset@b5_3.blend"),
+            PurePosixPath("/path/to/asset@B5_3.blend"),
+            PurePosixPath("/path/to/asset@b6_0.blend"),
+        ]
+
+        expect = [
+            # Two files with the same min version:
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/asset.blend"),
+                blender_version_min=(),
+                blender_version_until=(5, 3),
+            ),
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/asset@B5_3.blend"),
+                blender_version_min=(5, 3),
+                blender_version_until=(6, 0),
+            ),
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/asset@b5_3.blend"),
+                blender_version_min=(5, 3),
+                blender_version_until=(6, 0),
+            ),
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/asset@b6_0.blend"),
+                blender_version_min=(6, 0),
+                blender_version_until=(),
+            ),
+        ]
+
+        actual = asset_finder.investigate_filenames(paths)
+        self.assertEqual(expect, actual)
+
     def test_investigate_filenames__posix(self) -> None:
         paths = [
             # POSIX paths are case sensitive:
-            PurePosixPath(r'C:\path\to\case\insensitive.blend'),
-            PurePosixPath(r'C:\path\to\CASE\insensitive@b5_3.blend'),
-            PurePosixPath(r'C:\path\to\case\INSENSITIVE@B6_0.blend'),
+            PurePosixPath('/path/to/case/sensitive.blend'),
+            PurePosixPath('/path/to/CASE/sensitive@b5_3.blend'),
+            PurePosixPath('/path/to/case/SENSITIVE@B6_0.blend'),
         ]
 
         expect = [
             # POSIX paths are case sensitive:
             asset_finder.FileVersionInfo(
-                path=PurePosixPath(r'C:\path\to\case\insensitive.blend'),
+                path=PurePosixPath('/path/to/case/sensitive.blend'),
                 blender_version_min=(),
                 blender_version_until=(),
             ),
             asset_finder.FileVersionInfo(
-                path=PurePosixPath(r'C:\path\to\CASE\insensitive@b5_3.blend'),
+                path=PurePosixPath('/path/to/CASE/sensitive@b5_3.blend'),
                 blender_version_min=(5, 3),
                 blender_version_until=(),
             ),
             asset_finder.FileVersionInfo(
-                path=PurePosixPath(r'C:\path\to\case\INSENSITIVE@B6_0.blend'),
+                path=PurePosixPath('/path/to/case/SENSITIVE@B6_0.blend'),
                 blender_version_min=(6, 0),
                 blender_version_until=(),
             ),
@@ -384,6 +424,69 @@ class BlenderVersionFromFilenameTest(unittest.TestCase):
 
         actual = asset_finder.investigate_filenames(paths)
         self.assertEqual(expect, actual)
+
+    def test_asset_versions_min_until(self) -> None:
+        # Expected case: written by minimum blend version, with 'until' version.
+        actual = asset_finder._asset_versions_min_until(
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/library/subdir/filéname@b5_3.blend"),
+                blender_version_min=(5, 3),
+                blender_version_until=(6, 0),
+            ),
+            file_written_version=(5, 3),
+        )
+        expected = api_models.AssetBlenderVersionsV1(min="5.3", until="6.0")
+        self.assertEqual(expected, actual)
+
+        # Expected case: written by minimum blend version, without 'until' version.
+        actual = asset_finder._asset_versions_min_until(
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/library/subdir/filéname@b5_3.blend"),
+                blender_version_min=(5, 3),
+                blender_version_until=(),
+            ),
+            file_written_version=(5, 3),
+        )
+        expected = api_models.AssetBlenderVersionsV1(min="5.3")
+        self.assertEqual(expected, actual)
+
+        # Expected case: written by minimum blend version, no versions in the filename.
+        actual = asset_finder._asset_versions_min_until(
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/library/subdir/filéname.blend"),
+                blender_version_min=(),
+                blender_version_until=(),
+            ),
+            file_written_version=(5, 3),
+        )
+        expected = api_models.AssetBlenderVersionsV1(min="5.3")
+        self.assertEqual(expected, actual)
+
+        # Weird case case: written by version newer than the minimal one.
+        actual = asset_finder._asset_versions_min_until(
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/library/subdir/filéname@b5_3.blend"),
+                blender_version_min=(5, 3),
+                blender_version_until=(6, 0),
+            ),
+            file_written_version=(5, 4),
+        )
+
+        expected = api_models.AssetBlenderVersionsV1(min="5.4", until="6.0")
+        self.assertEqual(expected, actual)
+
+        # Weird case case: written by version newer than the 'until' one.
+        actual = asset_finder._asset_versions_min_until(
+            asset_finder.FileVersionInfo(
+                path=PurePosixPath("/path/to/library/subdir/filéname@b5_3.blend"),
+                blender_version_min=(5, 3),
+                blender_version_until=(6, 0),
+            ),
+            file_written_version=(6, 2),
+        )
+
+        expected = api_models.AssetBlenderVersionsV1(min="6.2", until="6.0")
+        self.assertEqual(expected, actual)
 
 
 def main():

@@ -6,15 +6,14 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-import math
 import os
 import re
 import shutil
 import unicodedata
 import urllib.parse
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import bpy
 
@@ -36,7 +35,7 @@ class FileVersionInfo:
 
     It contains information not just based on the file itself, but also based
     on the other discovered files. For example, `asset.blend` will get a
-    `blender_version_until = "6.0"` when a file `asset@b6_0.blend` is found.
+    `blender_version_until = (6, 0)` when a file `asset@b6_0.blend` is found.
     """
 
     # Make these keyword-only, so that they can be listed first, and thus are the first key when sorting.
@@ -47,10 +46,14 @@ class FileVersionInfo:
     path: Path
 
 
+# Match numbers after `@b`, but do not allow leading zeroes. This prevents having different markers (and thus different
+# filenames) for the same version. Case-sensitive filesystems can still have two files (lower & upper case `b`) so this
+# still has to be taken into account.
+_filename_re = re.compile('(.*?)@b(0|[1-9][0-9]*)_(0|[1-9][0-9]*)', flags=re.IGNORECASE)
+
+
 def investigate_filenames(paths: Iterable[Path]) -> list[FileVersionInfo]:
     """Determine min/until versions for the given filenames."""
-
-    filename_re = re.compile('^(.*?)@b([0-9]+)_([0-9]+)$', flags=re.IGNORECASE)
 
     def _extract_version(file_stem: str) -> tuple[str, BlenderVersion]:
         """'file_name@b5_4' -> ('file_name', (5, 4))
@@ -58,17 +61,18 @@ def investigate_filenames(paths: Iterable[Path]) -> list[FileVersionInfo]:
         If there is no (valid) '@bX_Y' marker, returns (file_stem, ()).
         """
 
-        match = filename_re.search(file_stem)
+        match = _filename_re.fullmatch(file_stem)
         if not match:
             return file_stem, ()
 
         name_without_marker, marker_major, marker_minor = match.groups()
-        try:
-            version_major = int(marker_major, 10)
-            version_minor = int(marker_minor, 10)
-        except ValueError:
-            # This was not a blend file version marker, so treat the entire filename as base name.
+        if not name_without_marker:
+            # The marker was not put _after_ an existing filename, and thus doesn't follow the specs.
             return file_stem, ()
+
+        # int() will work because of the regexp.
+        version_major = int(marker_major, 10)
+        version_minor = int(marker_minor, 10)
 
         return name_without_marker, (version_major, version_minor)
 
@@ -76,8 +80,6 @@ def investigate_filenames(paths: Iterable[Path]) -> list[FileVersionInfo]:
     #
     # Keys: Base names, so the path without `@bX_Y` marker and without `.blend` suffix.
     # Values: List of FileVersionInfo of all paths that have the same base name.
-    #
-    # Markerless files have -inf as version.
     clusters: dict[Path, list[FileVersionInfo]] = defaultdict(list)
     for path in paths:
         base_name, version = _extract_version(path.stem)
@@ -86,17 +88,26 @@ def investigate_filenames(paths: Iterable[Path]) -> list[FileVersionInfo]:
         clusters[base_path].append(version_info)
 
     # For each cluster, determine the 'until' Blender version fields.
-    version_infoes: list[FileVersionInfo] = []
-    for base_path, cluster in clusters.items():
+    version_infos: list[FileVersionInfo] = []
+    for cluster in clusters.values():
         cluster.sort()  # Sort cluster by version.
 
         # Set the 'until' version based on the 'min' version of the next item in the cluster.
-        for version_info, next_info in zip(cluster[:-1], cluster[1:]):
-            version_info.blender_version_until = next_info.blender_version_min
+        for index, version_info in enumerate(cluster[:-1]):
+            # Duplicates are anticipated, and so the 'next item' is the next one with a different version_min than the
+            # current item, not just the item with the next index.
+            for next_info in cluster[index + 1:]:
+                if version_info.blender_version_min == next_info.blender_version_min:
+                    # This is a duplicate, keep going.
+                    log.warning("Blend files %s and %s have the same version marker",
+                                version_info.path, next_info.path)
+                    continue
+                version_info.blender_version_until = next_info.blender_version_min
+                break
 
-        version_infoes.extend(cluster)
+        version_infos.extend(cluster)
 
-    return version_infoes
+    return version_infos
 
 
 def list_assets(blendfile_version_info: FileVersionInfo,
@@ -118,11 +129,12 @@ def list_assets(blendfile_version_info: FileVersionInfo,
             setattr(data_to, attr, getattr(data_from, attr))
 
         # For the assets' min version only (major, minor) is relevant.
-        file_written_version = data_from.version[:2]
+        file_written_version = tuple(data_from.version[:2])
 
         # Store the entire version (including patch) in the api_models.FileV1.
         blendfile_info.blender_version = _version_to_string(data_from.version)
 
+    # TODO: when multiple files are supported, take the maximum of the files.
     bl_versions = _asset_versions_min_until(blendfile_version_info, file_written_version)
 
     # Get the last modification timestamp of the blend file, to compare against
@@ -356,7 +368,7 @@ def _blendfile_info(filepath: Path, asset_library_root: Path) -> api_models.File
     )
 
 
-def _version_to_string(version: BlenderVersion) -> str:
+def _version_to_string(version: Iterable[int]) -> str:
     """(6, 40) -> '6.40'."""
     return ".".join(map(str, version))
 
@@ -385,5 +397,16 @@ def _asset_versions_min_until(
     )
     if filename_version_info.blender_version_until:
         bl_versions.until = _version_to_string(filename_version_info.blender_version_until)
+
+        # Warn about version weirdnesses.
+        ver_until = filename_version_info.blender_version_until
+        if ver_until and ver_until <= version_min:
+            log.warning(
+                "Assets from %s will not be visible, because their 'until' version %s is before or "
+                "at the 'min' version %s",
+                filename_version_info.path,
+                _version_to_string(ver_until),
+                _version_to_string(version_min),
+            )
 
     return bl_versions
