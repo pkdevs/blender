@@ -231,8 +231,13 @@ static void deg_debug_json_node_recursive(JSONStream &json,
     json.array_end();
   }
   if (const auto *const *time_node = std::get_if<const TimeSourceNode *>(&node_variant)) {
+    UNUSED_VARS(time_node);
   }
   if (const auto *const *comp_node = std::get_if<const ComponentNode *>(&node_variant)) {
+    if (!(*comp_node)->name.empty()) {
+      json.object_key("name");
+      json.value((*comp_node)->name);
+    }
     json.object_key("operations");
     json.array_begin();
     for (const auto *op_node : (*comp_node)->operations) {
@@ -246,6 +251,10 @@ static void deg_debug_json_node_recursive(JSONStream &json,
   if (const auto *const *op_node = std::get_if<const OperationNode *>(&node_variant)) {
     json.object_key("operation");
     json.value(operationCodeAsString((*op_node)->opcode));
+    if (!(*op_node)->name.empty()) {
+      json.object_key("name");
+      json.value((*op_node)->name);
+    }
     json.object_key("is_entry");
     json.value(is_entry);
     json.object_key("is_exit");
@@ -273,14 +282,23 @@ static void deg_debug_json_node_identifier(JSONStream &json, const Node &node)
   }
   if (const auto *const *time_node = std::get_if<const TimeSourceNode *>(&node_variant)) {
     /* No identifiers, time source node is unique. */
+    UNUSED_VARS(time_node);
   }
   if (const auto *const *comp_node = std::get_if<const ComponentNode *>(&node_variant)) {
+    if (!(*comp_node)->name.empty()) {
+      json.object_key("name");
+      json.value((*comp_node)->name);
+    }
     json.object_key("owner_uid");
     json.value((*comp_node)->owner->id_orig_session_uid);
   }
   if (const auto *const *op_node = std::get_if<const OperationNode *>(&node_variant)) {
     json.object_key("operation");
     json.value(operationCodeAsString((*op_node)->opcode));
+    if (!(*op_node)->name.empty()) {
+      json.object_key("name");
+      json.value((*op_node)->name);
+    }
     json.object_key("owner_type");
     json.value(nodeTypeAsString((*op_node)->owner->type));
     json.object_key("owner_uid");
