@@ -769,7 +769,7 @@ static std::optional<Token> next_token(StringRef path, const int from_char)
 namespace bke::path_templates {
 
 std::optional<ExpressionInfo> next_template_variable_expression(StringRef text,
-                                                                int starting_offset)
+                                                                size_t starting_offset)
 {
   while (const std::optional<Token> token = next_token(text, starting_offset)) {
     switch (token->type) {

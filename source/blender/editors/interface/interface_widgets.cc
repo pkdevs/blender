@@ -1521,7 +1521,7 @@ static void text_clip_give_next_off(Button *but, const char *str, const char *st
  *
  * If no variable expression is found, -1 is returned.
  */
-static int text_shorten_next_template_var(char *str, int byte_position)
+static size_t text_shorten_next_template_var(char *str, size_t byte_position)
 {
   const std::optional<bke::path_templates::ExpressionInfo> info =
       bke::path_templates::next_template_variable_expression(str, byte_position);
@@ -1531,9 +1531,9 @@ static int text_shorten_next_template_var(char *str, int byte_position)
 
   char short_expression[MAX_NAME];
   short_expression[0] = '{';
-  int short_expression_len = 1 + bke::abbreviate_variable_name(short_expression + 1,
-                                                               sizeof(short_expression) - 3,
-                                                               info->variable_name);
+  size_t short_expression_len = 1 + bke::abbreviate_variable_name(short_expression + 1,
+                                                                  sizeof(short_expression) - 3,
+                                                                  info->variable_name);
   short_expression[short_expression_len++] = '}';
   short_expression[short_expression_len] = '\0';
 
@@ -1601,7 +1601,7 @@ float text_clip_middle_ex(const uiFontStyle *fstyle,
 
   /* Shorten template variables. */
   if (shorten_template_variables) {
-    int byte_position = 0;
+    size_t byte_position = 0;
     while ((okwidth > 0.0f) && (strwidth > okwidth)) {
       byte_position = text_shorten_next_template_var(str, byte_position);
       strwidth = BLF_width(fstyle->uifont_id, str, max_len);

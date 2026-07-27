@@ -112,7 +112,7 @@ void with_blender_project_write_lock(FunctionRef<void()> lambda);
  *
  * \returns The length of the abbreviated variable name stored in dst.
  */
-int abbreviate_variable_name(char *dst, int dst_max_size, StringRef name);
+size_t abbreviate_variable_name(char *dst, size_t dst_max_size, StringRef name);
 
 }  // namespace bke
 

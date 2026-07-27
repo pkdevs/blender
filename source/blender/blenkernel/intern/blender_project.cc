@@ -96,7 +96,7 @@ void with_blender_project_write_lock(FunctionRef<void()> lambda)
   lambda();
 }
 
-int abbreviate_variable_name(char *dst, int dst_max_size, StringRef name)
+size_t abbreviate_variable_name(char *dst, size_t dst_max_size, StringRef name)
 {
   if (name.is_empty()) {
     return 0;
@@ -116,11 +116,11 @@ int abbreviate_variable_name(char *dst, int dst_max_size, StringRef name)
    * In the future we could expand this to also handle camel-case names if
    * desired. But all built-in variables are snake-case, and hopefully most
    * user-defined variables will follow that example. */
-  const int first_length = BLI_str_utf8_size_safe(name.data());
-  std::memcpy(dst, name.data(), first_length);
+  const size_t first_character_length = BLI_str_utf8_size_safe(name.data());
+  std::memcpy(dst, name.data(), first_character_length);
 
-  int dst_i = first_length;
-  int name_i = first_length;
+  size_t dst_i = first_character_length;
+  size_t name_i = first_character_length;
   while (dst_i < dst_max_size && name_i < name.size()) {
     if (!is_alphabetic(name[name_i - 1]) && is_alphabetic(name[name_i])) {
       dst[dst_i] = name[name_i];

@@ -280,7 +280,7 @@ bool operator==(const Error &left, const Error &right);
  * there are no variable expressions in the string after the given offset.
  */
 std::optional<ExpressionInfo> next_template_variable_expression(StringRef text,
-                                                                int starting_offset);
+                                                                size_t starting_offset);
 
 }  // namespace bke::path_templates
 
