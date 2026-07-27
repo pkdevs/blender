@@ -65,12 +65,11 @@ def cli_main(arguments_raw: argparse.Namespace) -> None:
     toplevel_meta = _toplevel_meta_read(meta_json_path)
 
     # Find all .blend files.
-    filepaths: list[Path] = []
     logger.info("Traversing %s", arguments.repository)
-    for filepath in arguments.repository.rglob("*.blend"):
-        filepaths.append(filepath)
+    filepaths = arguments.repository.rglob("*.blend")
+    file_version_infoes = asset_finder.investigate_filenames(filepaths)
 
-    files_total = len(filepaths)
+    files_total = len(file_version_infoes)
     logger.info(f"* {files_total} .blend files found.")
 
     limit = _total_files_to_process(arguments, files_total)
@@ -80,10 +79,11 @@ def cli_main(arguments_raw: argparse.Namespace) -> None:
     assets: list[api_models.AssetV1] = []
     files: list[api_models.FileV1] = []
 
-    for i, filepath in enumerate(filepaths[:limit]):
+    for i, file_version_info in enumerate(file_version_infoes[:limit]):
+        filepath = file_version_info.path
         logger.info(f"* {i + 1}/{limit}: {filepath.relative_to(arguments.repository)}")
 
-        bfile_info, assets_in_file = asset_finder.list_assets(filepath, arguments.repository)
+        bfile_info, assets_in_file = asset_finder.list_assets(file_version_info, arguments.repository)
         if not assets_in_file:
             continue
 

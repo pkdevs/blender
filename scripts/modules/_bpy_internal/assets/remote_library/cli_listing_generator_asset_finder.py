@@ -4,13 +4,17 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
+import math
 import os
 import re
 import shutil
 import unicodedata
 import urllib.parse
+from collections import defaultdict
 from pathlib import Path
+from typing import Iterable
 
 import bpy
 
@@ -20,13 +24,92 @@ from . import hashing
 log = logging.getLogger(__name__)
 
 
-def list_assets(blendfile: Path, asset_library_root: Path) -> tuple[api_models.FileV1, list[api_models.AssetV1]]:
+# Empty tuple: no version.
+# Two-item tuple: (major, minor)
+# Other variations are not allowed.
+type BlenderVersion = tuple[int, ...]
+
+
+@dataclasses.dataclass(order=True)
+class FileVersionInfo:
+    """Version information of a single blend file.
+
+    It contains information not just based on the file itself, but also based
+    on the other discovered files. For example, `asset.blend` will get a
+    `blender_version_until = "6.0"` when a file `asset@b6_0.blend` is found.
+    """
+
+    # Make these keyword-only, so that they can be listed first, and thus are the first key when sorting.
+    # The tuples are (major, minor) versions; micro/patch release numbers are ignored.
+    blender_version_min: BlenderVersion = dataclasses.field(default=(), kw_only=True)
+    blender_version_until: BlenderVersion = dataclasses.field(default=(), kw_only=True)
+
+    path: Path
+
+
+def investigate_filenames(paths: Iterable[Path]) -> list[FileVersionInfo]:
+    """Determine min/until versions for the given filenames."""
+
+    filename_re = re.compile('^(.*?)@b([0-9]+)_([0-9]+)$', flags=re.IGNORECASE)
+
+    def _extract_version(file_stem: str) -> tuple[str, BlenderVersion]:
+        """'file_name@b5_4' -> ('file_name', (5, 4))
+
+        If there is no (valid) '@bX_Y' marker, returns (file_stem, ()).
+        """
+
+        match = filename_re.search(file_stem)
+        if not match:
+            return file_stem, ()
+
+        name_without_marker, marker_major, marker_minor = match.groups()
+        try:
+            version_major = int(marker_major, 10)
+            version_minor = int(marker_minor, 10)
+        except ValueError:
+            # This was not a blend file version marker, so treat the entire filename as base name.
+            return file_stem, ()
+
+        return name_without_marker, (version_major, version_minor)
+
+    # Cluster the paths by their base name, so excluding any `@bX_Y` marker.
+    #
+    # Keys: Base names, so the path without `@bX_Y` marker and without `.blend` suffix.
+    # Values: List of FileVersionInfo of all paths that have the same base name.
+    #
+    # Markerless files have -inf as version.
+    clusters: dict[Path, list[FileVersionInfo]] = defaultdict(list)
+    for path in paths:
+        base_name, version = _extract_version(path.stem)
+        base_path = path.with_name(base_name)
+        version_info = FileVersionInfo(path, blender_version_min=version)
+        clusters[base_path].append(version_info)
+
+    # For each cluster, determine the 'until' Blender version fields.
+    version_infoes: list[FileVersionInfo] = []
+    for base_path, cluster in clusters.items():
+        cluster.sort()  # Sort cluster by version.
+
+        # Set the 'until' version based on the 'min' version of the next item in the cluster.
+        for version_info, next_info in zip(cluster[:-1], cluster[1:]):
+            version_info.blender_version_until = next_info.blender_version_min
+
+        version_infoes.extend(cluster)
+
+    return version_infoes
+
+
+def list_assets(blendfile_version_info: FileVersionInfo,
+                asset_library_root: Path) -> tuple[api_models.FileV1,
+                                                   list[api_models.AssetV1]]:
+    blendfile = blendfile_version_info.path
+
     # Start by erasing everything from memory.
     bpy.ops.wm.read_homefile(use_factory_startup=True, use_empty=True, load_ui=False)
 
     blendfile_info = _blendfile_info(blendfile, asset_library_root)
 
-    # Tell Blender to only load asset data-blocks.
+    # Load asset datablocks from the blend file, and check the version of Blender used to write it.
     with bpy.data.libraries.load(str(blendfile), assets_only=True) as (
         data_from,
         data_to,
@@ -34,9 +117,13 @@ def list_assets(blendfile: Path, asset_library_root: Path) -> tuple[api_models.F
         for attr in dir(data_to):
             setattr(data_to, attr, getattr(data_from, attr))
 
-        # Convert the Blender version to a string.
-        blend_version = ".".join(map(str, data_from.version))
-        blendfile_info.blender_version = blend_version
+        # For the assets' min version only (major, minor) is relevant.
+        file_written_version = data_from.version[:2]
+
+        # Store the entire version (including patch) in the api_models.FileV1.
+        blendfile_info.blender_version = _version_to_string(data_from.version)
+
+    bl_versions = _asset_versions_min_until(blendfile_version_info, file_written_version)
 
     # Get the last modification timestamp of the blend file, to compare against
     # the thumbnails.
@@ -68,7 +155,8 @@ def list_assets(blendfile: Path, asset_library_root: Path) -> tuple[api_models.F
         datablocks = getattr(data_from, attr)
         datablocks_assets = _find_assets(
             asset_library_root,
-            blendfile_info,
+            blendfile_info.path,
+            bl_versions,
             datablocks,
             thumbnail_dir,
             should_write_thumbnails,
@@ -87,16 +175,12 @@ def list_assets(blendfile: Path, asset_library_root: Path) -> tuple[api_models.F
 
 def _find_assets(
     asset_library_root: Path,
-    file: api_models.FileV1,
+    blendfile_relpath: str,
+    bl_versions: api_models.AssetBlenderVersionsV1,
     datablocks: bpy.types.BlendData,
     thumbnail_dir: Path,
     should_write_thumbnails: bool,
 ) -> list[api_models.AssetV1]:
-
-    # TODO: when multiple files are supported, take the maximum of the files.
-    bl_versions = api_models.AssetBlenderVersionsV1(
-        min='.'.join(file.blender_version.split('.')[:2]),
-    )
 
     assets = []
     for datablock in datablocks:
@@ -120,7 +204,7 @@ def _find_assets(
         asset = api_models.AssetV1(
             name=datablock.name,
             id_type=datablock.id_type,
-            files=[file.path],
+            files=[blendfile_relpath],
             thumbnail=thumbnail,
             bl_versions=bl_versions,
             meta=_get_asset_meta(asset_data),
@@ -270,3 +354,36 @@ def _blendfile_info(filepath: Path, asset_library_root: Path) -> api_models.File
         size_in_bytes=stat.st_size,
         blender_version="",  # Determined later when the file is opened to find assets.
     )
+
+
+def _version_to_string(version: BlenderVersion) -> str:
+    """(6, 40) -> '6.40'."""
+    return ".".join(map(str, version))
+
+
+def _asset_versions_min_until(
+    filename_version_info: FileVersionInfo,
+    file_written_version: BlenderVersion,
+) -> api_models.AssetBlenderVersionsV1:
+    """Determine min/until Blender versions for assets in a blend file."""
+
+    if filename_version_info.blender_version_min and file_written_version > filename_version_info.blender_version_min:
+        log.warning(
+            "blend file %s was written with newer version of Blender (%s) than its marker suggests (%s)",
+            filename_version_info.path,
+            _version_to_string(file_written_version),
+            _version_to_string(filename_version_info.blender_version_min),
+        )
+
+    # The minimal version of Blender to use for this asset is limited both by the version info from the filename and the
+    # blender version that wrote the file.
+    version_min = max(filename_version_info.blender_version_min, file_written_version)
+    assert version_min
+
+    bl_versions = api_models.AssetBlenderVersionsV1(
+        min=_version_to_string(version_min),
+    )
+    if filename_version_info.blender_version_until:
+        bl_versions.until = _version_to_string(filename_version_info.blender_version_until)
+
+    return bl_versions
