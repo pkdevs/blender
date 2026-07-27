@@ -1,0 +1,1 @@
+Referenced by issue #162001, Blender freezes for ~4 seconds every time I update a shader value in a node group (Im guessing its triggering my modifier stacks to recalculate???)
