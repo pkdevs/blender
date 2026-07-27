@@ -403,7 +403,11 @@ EditMeshSymmetryHelper::EditMeshSymmetryHelper(
             continue;
           }
           BMVert *v_mirr = EDBM_verts_mirror_get(em_, v_curr);
-          if (v_mirr && v_mirr != v_curr) {
+          if (v_mirr == v_curr) {
+            vert_to_mirror_map_.lookup_or_add(v_curr, {}).append(v_curr);
+            processed_verts.add(v_curr);
+          }
+          else if (v_mirr) {
             BMVert *v_mirr_check = EDBM_verts_mirror_get(em_, v_mirr);
             if (v_mirr_check == v_curr) {
               vert_to_mirror_map_.lookup_or_add(v_curr, {}).append(v_mirr);
@@ -422,7 +426,11 @@ EditMeshSymmetryHelper::EditMeshSymmetryHelper(
             continue;
           }
           BMEdge *e_mirr = EDBM_verts_mirror_get_edge(em_, e_curr);
-          if (e_mirr && e_mirr != e_curr) {
+          if (e_mirr == e_curr) {
+            edge_to_mirror_map_.lookup_or_add(e_curr, {}).append(e_curr);
+            processed_edges.add(e_curr);
+          }
+          else if (e_mirr) {
             BMEdge *e_mirr_check = EDBM_verts_mirror_get_edge(em_, e_mirr);
             if (e_mirr_check == e_curr) {
               edge_to_mirror_map_.lookup_or_add(e_curr, {}).append(e_mirr);
