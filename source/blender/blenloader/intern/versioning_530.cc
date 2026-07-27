@@ -199,6 +199,19 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       }
     }
   }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 10)) {
+    FOREACH_NODETREE_BEGIN (bmain, node_tree, id_owner) {
+      for (bNode &node : node_tree->nodes) {
+        if (STREQ(node.idname, "GeometryNodeStringToCurves")) {
+          auto &storage = *reinterpret_cast<NodeGeometryStringToCurves *>(node.storage);
+          storage.apply_scale_legacy = true;
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.

@@ -3414,6 +3414,9 @@ struct NodeGeometryStringToCurves {
   GeometryNodeStringToCurvesAlignXMode align_x = GEO_NODE_STRING_TO_CURVES_ALIGN_X_LEFT;
   GeometryNodeStringToCurvesAlignYMode align_y = GEO_NODE_STRING_TO_CURVES_ALIGN_Y_TOP_BASELINE;
   GeometryNodeStringToCurvesPivotMode pivot_mode = GEO_NODE_STRING_TO_CURVES_PIVOT_MODE_MIDPOINT;
+
+  int8_t apply_scale_legacy = 0;
+  char _pad[3] = {};
 };
 
 struct NodeGeometryDeleteGeometry {

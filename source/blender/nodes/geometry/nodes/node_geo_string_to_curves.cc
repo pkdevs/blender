@@ -20,6 +20,7 @@
 #include "BLT_translation.hh"
 
 #include "MEM_guardedalloc.h"
+#include "NOD_rna_define.hh"
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -213,6 +214,11 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   /* Still used for forward compatibility. */
   NodeGeometryStringToCurves *data = MEM_new<NodeGeometryStringToCurves>(__func__);
   node->storage = data;
+}
+
+static void node_layout_ex(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
+{
+  layout.prop(ptr, "apply_scale_legacy", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static float3 get_pivot_point(GeoNodeExecParams &params, const bke::CurvesGeometry &curves)
@@ -450,7 +456,8 @@ static GeometrySet get_or_create_character_geometry(VFont *vfont, const char32_t
 /** Returns a mapping of UTF32 character code to instance handle. */
 static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
                                             TextLayout &layout,
-                                            bke::Instances &instances)
+                                            bke::Instances &instances,
+                                            const bool apply_scale_legacy)
 {
   VFont *vfont = params.get_input<VFont *>("Font"_ustr);
   Map<int, int> handles;
@@ -461,6 +468,12 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
       continue;
     }
     GeometrySet curves_geo = get_or_create_character_geometry(vfont, layout.char_codes[i]);
+    if (apply_scale_legacy) {
+      const float4x4 size_matrix = math::from_scale<float4x4>(float3(layout.final_font_size));
+      if (Curves *curves_id = curves_geo.get_curves_for_write()) {
+        curves_id->geometry.wrap().transform(size_matrix);
+      }
+    }
     const Curves *curves_id = curves_geo.get_curves();
     if (curves_id == nullptr) {
       if (pivot_required) {
@@ -484,7 +497,8 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
 
 static void add_instances_from_handles(bke::Instances &instances,
                                        const Map<int, int> &char_handles,
-                                       const TextLayout &layout)
+                                       const TextLayout &layout,
+                                       const bool apply_scale_legacy)
 {
   instances.resize(layout.positions.size());
   MutableSpan<int> handles = instances.reference_handles_for_write();
@@ -493,8 +507,14 @@ static void add_instances_from_handles(bke::Instances &instances,
   threading::parallel_for(IndexRange(layout.positions.size()), 256, [&](IndexRange range) {
     for (const int i : range) {
       handles[i] = char_handles.lookup(layout.char_codes[i]);
-      transforms[i] = math::from_loc_scale<float4x4>(
-          {layout.positions[i].x, layout.positions[i].y, 0}, float3(layout.final_font_size));
+      if (apply_scale_legacy) {
+        transforms[i] = math::from_location<float4x4>(
+            {layout.positions[i].x, layout.positions[i].y, 0});
+      }
+      else {
+        transforms[i] = math::from_loc_scale<float4x4>(
+            {layout.positions[i].x, layout.positions[i].y, 0}, float3(layout.final_font_size));
+      }
     }
   });
 }
@@ -554,14 +574,27 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_default_remaining_outputs();
     return;
   }
+  auto &storage = *reinterpret_cast<NodeGeometryStringToCurves *>(params.node().storage);
+  const bool apply_scale_legacy = storage.apply_scale_legacy;
 
   /* Create and add instances. */
   auto instances = std::make_unique<bke::Instances>();
-  Map<int, int> char_handles = create_curve_instances(params, *layout, *instances);
-  add_instances_from_handles(*instances, char_handles, *layout);
+  Map<int, int> char_handles = create_curve_instances(
+      params, *layout, *instances, apply_scale_legacy);
+  add_instances_from_handles(*instances, char_handles, *layout, apply_scale_legacy);
   create_attributes(params, *layout, *instances);
 
   params.set_output("Curve Instances"_ustr, GeometrySet::from_instances(std::move(instances)));
+}
+
+static void node_rna(StructRNA *srna)
+{
+  RNA_def_node_boolean(srna,
+                       "apply_scale_legacy",
+                       "Legacy Apply Scale",
+                       "Enable the legacy behavior which applied the scale in each instance. The "
+                       "new behavior just scales the instances which improves geometry reuse",
+                       NOD_storage_boolean_accessors(apply_scale_legacy, 1));
 }
 
 static void node_register()
@@ -579,9 +612,12 @@ static void node_register()
   ntype.geometry_node_execute = node_geo_exec;
   ntype.initfunc = node_init;
   ntype.default_width = bke::NodeWidth::_200;
+  ntype.draw_buttons_ex = node_layout_ex;
   bke::node_type_storage(
       ntype, "NodeGeometryStringToCurves", node_free_standard_storage, node_copy_standard_storage);
   bke::node_register_type(ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 
