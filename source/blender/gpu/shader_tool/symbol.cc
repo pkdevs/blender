@@ -1300,10 +1300,11 @@ struct SymbolParser : NodeErrorHandler {
     const bool is_srt_local_ref = type->is_srt() && cls == nullptr;
 
     string anon_prefix;
-    SymbolScope *named_parent = nullptr;
+    SymbolScope *named_parent = cls;
     if (cls && cls->is_anonymous) {
       auto prefix = anonymous_scope_prefix(cls);
-      anon_prefix = prefix.prefix, named_parent = prefix.non_anonymous_parent;
+      anon_prefix = prefix.prefix;
+      named_parent = prefix.non_anonymous_parent;
     }
 
     const bool is_ref = var.is_reference();
@@ -1367,10 +1368,12 @@ struct SymbolParser : NodeErrorHandler {
         sym->set_offset(cls->is_union, offset);
 
         /* Alias to the parent class for anonymous structs. */
-        if (cls->is_anonymous) {
+        if (cls->is_anonymous || cls->is_union) {
+          /* Append accessor function. */
+          string suffix = cls->is_union ? "()" : "";
           /* Create a resolved symbol. */
           SymbolVariable *resolved = table.var_arena.alloc(&scope, type, decl);
-          resolved->identifier = anon_prefix + resolved->identifier + "()";
+          resolved->identifier = anon_prefix + resolved->identifier + suffix;
           sym->resolved = resolved;
           /* Alias to the first, non-anonymous parent. */
           named_parent->variables.emplace(sym->identifier, sym);

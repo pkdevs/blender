@@ -370,6 +370,7 @@ class SourceProcessor {
    */
   void lower_union_accessor_templates(Parser &parser);
   void lower_union_accessor_templates_ast(Parser &parser);
+  void lower_union_setters(Parser &parser);
   /**
    * For safety reason, nested resource tables need to be declared with the srt_t template.
    * This avoid chained member access which isn't well defined with the preprocessing we are doing.

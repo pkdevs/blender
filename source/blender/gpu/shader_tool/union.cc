@@ -414,6 +414,11 @@ void SourceProcessor::lower_unions(Parser &parser)
     });
   });
 
+  lower_union_setters(parser);
+}
+
+void SourceProcessor::lower_union_setters(Parser &parser)
+{
   /* Replace assignment pattern.
    * Example: `a.b() = c;` >  `a.b_set_(c);`
    * This pattern is currently only allowed for `union_t`. */

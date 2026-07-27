@@ -311,6 +311,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     // lower_resource_access_functions(parser);
     /* Lower class methods. */
     // lower_function_default_arguments(parser);
+    lower_union_setters(parser);
     lower_method_calls(parser);
     /* Lower SRT accesses. */
     // lower_srt_member_access(parser);
