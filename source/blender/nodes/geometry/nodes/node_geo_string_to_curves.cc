@@ -215,7 +215,7 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->storage = data;
 }
 
-static float3 get_pivot_point(GeoNodeExecParams &params, bke::CurvesGeometry &curves)
+static float3 get_pivot_point(GeoNodeExecParams &params, const bke::CurvesGeometry &curves)
 {
   const GeometryNodeStringToCurvesPivotMode pivot_mode =
       params.get_input<GeometryNodeStringToCurvesPivotMode>("Pivot Point"_ustr);
@@ -410,7 +410,21 @@ static Curves *create_character_curves(VFont *vfont, const char32_t char_code)
   BKE_vfont_char_build(cu, &cu.nurb, char_code, &charinfo, false, char_offset, 0, 0, 1);
   Curves *curves_id = bke::curve_legacy_to_curves(cu);
   BKE_nurbList_free(&cu.nurb);
+
+  geometry::debug_randomize_curve_order(&curves_id->geometry.wrap());
   return curves_id;
+}
+
+static GeometrySet get_or_create_character_geometry(VFont *vfont, const char32_t char_code)
+{
+  GeometrySet geo = GeometrySet::from_curves(create_character_curves(vfont, char_code));
+  {
+    const char32_t char_code_str[2] = {char_code, 0};
+    char inserted_utf8[8] = {0};
+    const size_t len = BLI_str_utf32_as_utf8(inserted_utf8, char_code_str, sizeof(inserted_utf8));
+    geo.set_name(std::string(inserted_utf8, len));
+  }
+  return geo;
 }
 
 /** Returns a mapping of UTF32 character code to instance handle. */
@@ -426,7 +440,8 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
     if (handles.contains(layout.char_codes[i])) {
       continue;
     }
-    Curves *curves_id = create_character_curves(vfont, layout.char_codes[i]);
+    GeometrySet curves_geo = get_or_create_character_geometry(vfont, layout.char_codes[i]);
+    const Curves *curves_id = curves_geo.get_curves();
     if (curves_id == nullptr) {
       if (pivot_required) {
         layout.pivot_points.add_new(layout.char_codes[i], float3(0));
@@ -435,28 +450,14 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
       continue;
     }
 
-    bke::CurvesGeometry &curves = curves_id->geometry.wrap();
-
-    geometry::debug_randomize_curve_order(&curves);
-
-    float4x4 size_matrix = math::from_scale<float4x4>(float3(layout.final_font_size));
-    curves.transform(size_matrix);
+    const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
 
     if (pivot_required) {
       float3 pivot_point = get_pivot_point(params, curves);
       layout.pivot_points.add_new(layout.char_codes[i], pivot_point);
     }
 
-    GeometrySet geometry_set = GeometrySet::from_curves(curves_id);
-
-    {
-      const char32_t char_code[2] = {layout.char_codes[i], 0};
-      char inserted_utf8[8] = {0};
-      const size_t len = BLI_str_utf32_as_utf8(inserted_utf8, char_code, sizeof(inserted_utf8));
-      geometry_set.set_name(std::string(inserted_utf8, len));
-    }
-
-    handles.add_new(layout.char_codes[i], instances.add_reference(std::move(geometry_set)));
+    handles.add_new(layout.char_codes[i], instances.add_reference(std::move(curves_geo)));
   }
   return handles;
 }
@@ -472,8 +473,8 @@ static void add_instances_from_handles(bke::Instances &instances,
   threading::parallel_for(IndexRange(layout.positions.size()), 256, [&](IndexRange range) {
     for (const int i : range) {
       handles[i] = char_handles.lookup(layout.char_codes[i]);
-      transforms[i] = math::from_location<float4x4>(
-          {layout.positions[i].x, layout.positions[i].y, 0});
+      transforms[i] = math::from_loc_scale<float4x4>(
+          {layout.positions[i].x, layout.positions[i].y, 0}, float3(layout.final_font_size));
     }
   });
 }
