@@ -99,7 +99,7 @@ else()
   unset(_cltools_pkg_info_result)
 endif()
 
-# Require a relatively recent Xcode version.
+# Require a relatively recent Xcode version, to support more C++20 features.
 if(${XCODE_VERSION} VERSION_LESS 16.3)
   message(FATAL_ERROR "Only Xcode version 16.3 and newer is supported")
 endif()
