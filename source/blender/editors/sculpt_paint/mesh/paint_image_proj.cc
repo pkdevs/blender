@@ -221,8 +221,8 @@ struct ProjPaintImage {
   ImBuf *ibuf;
 
   /* Regenerated in project_paint_op to avoid calling `_for_write()` in threaded loops. */
-  float *float_start_mut = nullptr;
-  uint8_t *byte_start_mut = nullptr;
+  float *float_data_mut = nullptr;
+  uint8_t *byte_data_mut = nullptr;
 
   ImagePaintPartialRedraw *partRedrawRect;
   /** Only used to build undo tiles during painting. */
@@ -5050,7 +5050,7 @@ struct ProjectHandle {
 
 static void do_projectpaint_clone(ProjPaintState *ps, ProjPixel *projPixel, float mask)
 {
-  uint8_t *start = ps->projImages[projPixel->image_index].byte_start_mut;
+  uint8_t *data = ps->projImages[projPixel->image_index].byte_data_mut;
   const uchar *clone_pt = (reinterpret_cast<ProjPixelClone *>(projPixel))->clonepx.ch;
 
   if (clone_pt[3]) {
@@ -5062,14 +5062,14 @@ static void do_projectpaint_clone(ProjPaintState *ps, ProjPixel *projPixel, floa
     clone_rgba[3] = uchar(clone_pt[3] * mask);
 
     if (ps->do_masking) {
-      IMB_blend_color_byte(start + projPixel->pixel_offset,
+      IMB_blend_color_byte(data + projPixel->pixel_offset,
                            projPixel->origColor.ch_pt,
                            clone_rgba,
                            IMB_BlendMode(ps->blend));
     }
     else {
-      IMB_blend_color_byte(start + projPixel->pixel_offset,
-                           start + projPixel->pixel_offset,
+      IMB_blend_color_byte(data + projPixel->pixel_offset,
+                           data + projPixel->pixel_offset,
                            clone_rgba,
                            IMB_BlendMode(ps->blend));
     }
@@ -5078,7 +5078,7 @@ static void do_projectpaint_clone(ProjPaintState *ps, ProjPixel *projPixel, floa
 
 static void do_projectpaint_clone_f(ProjPaintState *ps, ProjPixel *projPixel, float mask)
 {
-  float *start = ps->projImages[projPixel->image_index].float_start_mut;
+  float *data = ps->projImages[projPixel->image_index].float_data_mut;
   const float *clone_pt = (reinterpret_cast<ProjPixelClone *>(projPixel))->clonepx.f;
 
   if (clone_pt[3]) {
@@ -5087,14 +5087,14 @@ static void do_projectpaint_clone_f(ProjPaintState *ps, ProjPixel *projPixel, fl
     mul_v4_v4fl(clone_rgba, clone_pt, mask);
 
     if (ps->do_masking) {
-      IMB_blend_color_float(start + projPixel->pixel_offset,
+      IMB_blend_color_float(data + projPixel->pixel_offset,
                             projPixel->origColor.f_pt,
                             clone_rgba,
                             IMB_BlendMode(ps->blend));
     }
     else {
-      IMB_blend_color_float(start + projPixel->pixel_offset,
-                            start + projPixel->pixel_offset,
+      IMB_blend_color_float(data + projPixel->pixel_offset,
+                            data + projPixel->pixel_offset,
                             clone_rgba,
                             IMB_BlendMode(ps->blend));
     }
@@ -5113,7 +5113,7 @@ static void do_projectpaint_smear(ProjPaintState *ps,
                                   LinkNode **smearPixels,
                                   const float co[2])
 {
-  const uint8_t *start = ps->projImages[projPixel->image_index].byte_start_mut;
+  const uint8_t *data = ps->projImages[projPixel->image_index].byte_data_mut;
   uchar rgba_ub[4];
 
   if (project_paint_PickColor(ps, co, nullptr, rgba_ub, true) == 0) {
@@ -5121,7 +5121,7 @@ static void do_projectpaint_smear(ProjPaintState *ps,
   }
 
   blend_color_interpolate_byte((reinterpret_cast<ProjPixelClone *>(projPixel))->clonepx.ch,
-                               start + projPixel->pixel_offset,
+                               data + projPixel->pixel_offset,
                                rgba_ub,
                                mask);
   BLI_linklist_prepend_arena(smearPixels, static_cast<void *>(projPixel), smearArena);
@@ -5134,7 +5134,7 @@ static void do_projectpaint_smear_f(ProjPaintState *ps,
                                     LinkNode **smearPixels_f,
                                     const float co[2])
 {
-  const float *start = ps->projImages[projPixel->image_index].float_start_mut;
+  const float *data = ps->projImages[projPixel->image_index].float_data_mut;
   float rgba[4];
 
   if (project_paint_PickColor(ps, co, rgba, nullptr, true) == 0) {
@@ -5142,7 +5142,7 @@ static void do_projectpaint_smear_f(ProjPaintState *ps,
   }
 
   blend_color_interpolate_float((reinterpret_cast<ProjPixelClone *>(projPixel))->clonepx.f,
-                                start + projPixel->pixel_offset,
+                                data + projPixel->pixel_offset,
                                 rgba,
                                 mask);
   BLI_linklist_prepend_arena(smearPixels_f, static_cast<void *>(projPixel), smearArena);
@@ -5154,7 +5154,7 @@ static void do_projectpaint_soften_f(ProjPaintState *ps,
                                      MemArena *softenArena,
                                      LinkNode **softenPixels)
 {
-  float *start = ps->projImages[projPixel->image_index].float_start_mut;
+  float *data = ps->projImages[projPixel->image_index].float_data_mut;
   float accum_tot = 0.0f;
   int xk, yk;
   BlurKernel *kernel = ps->blurkernel;
@@ -5184,17 +5184,17 @@ static void do_projectpaint_soften_f(ProjPaintState *ps,
 
     if (ps->mode == BrushStrokeMode::Invert) {
       /* subtract blurred image from normal image gives high pass filter */
-      sub_v3_v3v3(rgba, start + projPixel->pixel_offset, rgba);
+      sub_v3_v3v3(rgba, data + projPixel->pixel_offset, rgba);
 
       /* now rgba_ub contains the edge result, but this should be converted to luminance to avoid
        * colored speckles appearing in final image, and also to check for threshold */
       rgba[0] = rgba[1] = rgba[2] = IMB_colormanagement_get_luminance(rgba);
       if (fabsf(rgba[0]) > ps->brush->sharp_threshold) {
-        float alpha = (start + projPixel->pixel_offset)[3];
-        (start + projPixel->pixel_offset)[3] = rgba[3] = mask;
+        float alpha = (data + projPixel->pixel_offset)[3];
+        (data + projPixel->pixel_offset)[3] = rgba[3] = mask;
 
         /* add to enhance edges */
-        blend_color_add_float(rgba, start + projPixel->pixel_offset, rgba);
+        blend_color_add_float(rgba, data + projPixel->pixel_offset, rgba);
         rgba[3] = alpha;
       }
       else {
@@ -5202,7 +5202,7 @@ static void do_projectpaint_soften_f(ProjPaintState *ps,
       }
     }
     else {
-      blend_color_interpolate_float(rgba, start + projPixel->pixel_offset, rgba, mask);
+      blend_color_interpolate_float(rgba, data + projPixel->pixel_offset, rgba, mask);
     }
 
     BLI_linklist_prepend_arena(softenPixels, static_cast<void *>(projPixel), softenArena);
@@ -5215,7 +5215,7 @@ static void do_projectpaint_soften(ProjPaintState *ps,
                                    MemArena *softenArena,
                                    LinkNode **softenPixels)
 {
-  uint8_t *start = ps->projImages[projPixel->image_index].byte_start_mut;
+  uint8_t *data = ps->projImages[projPixel->image_index].byte_data_mut;
   float accum_tot = 0;
   int xk, yk;
   BlurKernel *kernel = ps->blurkernel;
@@ -5249,7 +5249,7 @@ static void do_projectpaint_soften(ProjPaintState *ps,
     if (ps->mode == BrushStrokeMode::Invert) {
       float rgba_pixel[4];
 
-      straight_uchar_to_premul_float(rgba_pixel, start + projPixel->pixel_offset);
+      straight_uchar_to_premul_float(rgba_pixel, data + projPixel->pixel_offset);
 
       /* subtract blurred image from normal image gives high pass filter */
       sub_v3_v3v3(rgba, rgba_pixel, rgba);
@@ -5272,7 +5272,7 @@ static void do_projectpaint_soften(ProjPaintState *ps,
     }
     else {
       premul_float_to_straight_uchar(rgba_ub, rgba);
-      blend_color_interpolate_byte(rgba_ub, start + projPixel->pixel_offset, rgba_ub, mask);
+      blend_color_interpolate_byte(rgba_ub, data + projPixel->pixel_offset, rgba_ub, mask);
     }
     BLI_linklist_prepend_arena(softenPixels, static_cast<void *>(projPixel), softenArena);
   }
@@ -5287,7 +5287,7 @@ static void do_projectpaint_draw(ProjPaintState *ps,
                                  int v)
 {
   const ProjPaintImage *img = &ps->projImages[projPixel->image_index];
-  uint8_t *start = ps->projImages[projPixel->image_index].byte_start_mut;
+  uint8_t *data = ps->projImages[projPixel->image_index].byte_data_mut;
   float rgb[3];
   uchar rgba_ub[4];
 
@@ -5315,14 +5315,14 @@ static void do_projectpaint_draw(ProjPaintState *ps,
   rgba_ub[3] = f_to_char(mask);
 
   if (ps->do_masking) {
-    IMB_blend_color_byte(start + projPixel->pixel_offset,
+    IMB_blend_color_byte(data + projPixel->pixel_offset,
                          projPixel->origColor.ch_pt,
                          rgba_ub,
                          IMB_BlendMode(ps->blend));
   }
   else {
-    IMB_blend_color_byte(start + projPixel->pixel_offset,
-                         start + projPixel->pixel_offset,
+    IMB_blend_color_byte(data + projPixel->pixel_offset,
+                         data + projPixel->pixel_offset,
                          rgba_ub,
                          IMB_BlendMode(ps->blend));
   }
@@ -5333,7 +5333,7 @@ static void do_projectpaint_draw_f(ProjPaintState *ps,
                                    const float texrgb[3],
                                    float mask)
 {
-  float *start = ps->projImages[projPixel->image_index].float_start_mut;
+  float *data = ps->projImages[projPixel->image_index].float_data_mut;
   float rgba[4];
 
   copy_v3_v3(rgba, ps->paint_color_linear);
@@ -5346,14 +5346,14 @@ static void do_projectpaint_draw_f(ProjPaintState *ps,
   rgba[3] = mask;
 
   if (ps->do_masking) {
-    IMB_blend_color_float(start + projPixel->pixel_offset,
+    IMB_blend_color_float(data + projPixel->pixel_offset,
                           projPixel->origColor.f_pt,
                           rgba,
                           IMB_BlendMode(ps->blend));
   }
   else {
-    IMB_blend_color_float(start + projPixel->pixel_offset,
-                          start + projPixel->pixel_offset,
+    IMB_blend_color_float(data + projPixel->pixel_offset,
+                          data + projPixel->pixel_offset,
                           rgba,
                           IMB_BlendMode(ps->blend));
   }
@@ -5361,20 +5361,20 @@ static void do_projectpaint_draw_f(ProjPaintState *ps,
 
 static void do_projectpaint_mask(ProjPaintState *ps, ProjPixel *projPixel, float mask)
 {
-  uint8_t *start = ps->projImages[projPixel->image_index].byte_start_mut;
+  uint8_t *data = ps->projImages[projPixel->image_index].byte_data_mut;
   uchar rgba_ub[4];
   rgba_ub[0] = rgba_ub[1] = rgba_ub[2] = ps->stencil_value * 255.0f;
   rgba_ub[3] = f_to_char(mask);
 
   if (ps->do_masking) {
-    IMB_blend_color_byte(start + projPixel->pixel_offset,
+    IMB_blend_color_byte(data + projPixel->pixel_offset,
                          projPixel->origColor.ch_pt,
                          rgba_ub,
                          IMB_BlendMode(ps->blend));
   }
   else {
-    IMB_blend_color_byte(start + projPixel->pixel_offset,
-                         start + projPixel->pixel_offset,
+    IMB_blend_color_byte(data + projPixel->pixel_offset,
+                         data + projPixel->pixel_offset,
                          rgba_ub,
                          IMB_BlendMode(ps->blend));
   }
@@ -5382,20 +5382,20 @@ static void do_projectpaint_mask(ProjPaintState *ps, ProjPixel *projPixel, float
 
 static void do_projectpaint_mask_f(ProjPaintState *ps, ProjPixel *projPixel, float mask)
 {
-  float *start = ps->projImages[projPixel->image_index].float_start_mut;
+  float *data = ps->projImages[projPixel->image_index].float_data_mut;
   float rgba[4];
   rgba[0] = rgba[1] = rgba[2] = ps->stencil_value;
   rgba[3] = mask;
 
   if (ps->do_masking) {
-    IMB_blend_color_float(start + projPixel->pixel_offset,
+    IMB_blend_color_float(data + projPixel->pixel_offset,
                           projPixel->origColor.f_pt,
                           rgba,
                           IMB_BlendMode(ps->blend));
   }
   else {
-    IMB_blend_color_float(start + projPixel->pixel_offset,
-                          start + projPixel->pixel_offset,
+    IMB_blend_color_float(data + projPixel->pixel_offset,
+                          data + projPixel->pixel_offset,
                           rgba,
                           IMB_BlendMode(ps->blend));
   }
@@ -5414,17 +5414,17 @@ static void copy_original_alpha_channel(ProjPaintState *ps, ProjPixel *pixel, bo
 {
   /* Use the original alpha channel data instead of the modified one */
   if (is_floatbuf) {
-    float *start = ps->projImages[pixel->image_index].float_start_mut;
+    float *data = ps->projImages[pixel->image_index].float_data_mut;
     /* slightly more involved case since floats are in premultiplied space we need
      * to make sure alpha is consistent, see #44627 */
     float rgb_straight[4];
-    premul_to_straight_v4_v4(rgb_straight, start + pixel->pixel_offset);
+    premul_to_straight_v4_v4(rgb_straight, data + pixel->pixel_offset);
     rgb_straight[3] = pixel->origColor.f_pt[3];
-    straight_to_premul_v4_v4(start + pixel->pixel_offset, rgb_straight);
+    straight_to_premul_v4_v4(data + pixel->pixel_offset, rgb_straight);
   }
   else {
-    uint8_t *start = ps->projImages[pixel->image_index].byte_start_mut;
-    (start + pixel->pixel_offset)[3] = pixel->origColor.ch_pt[3];
+    uint8_t *data = ps->projImages[pixel->image_index].byte_data_mut;
+    (data + pixel->pixel_offset)[3] = pixel->origColor.ch_pt[3];
   }
 }
 
@@ -5520,8 +5520,8 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
           is_floatbuf = (last_projIma->ibuf->float_data() != nullptr);
         }
 
-        uint8_t *start_byte = ps->projImages[projPixel->image_index].byte_start_mut;
-        float *start_float = ps->projImages[projPixel->image_index].float_start_mut;
+        uint8_t *data_byte = ps->projImages[projPixel->image_index].byte_data_mut;
+        float *data_float = ps->projImages[projPixel->image_index].float_data_mut;
 
         /* end copy */
 
@@ -5560,7 +5560,7 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
             if (is_floatbuf) {
               /* Convert to premutliplied. */
               mul_v3_fl(color_f, color_f[3]);
-              IMB_blend_color_float(start_float + projPixel->pixel_offset,
+              IMB_blend_color_float(data_float + projPixel->pixel_offset,
                                     projPixel->origColor.f_pt,
                                     color_f,
                                     IMB_BlendMode(ps->blend));
@@ -5582,7 +5582,7 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
                 unit_float_to_uchar_clamp_v3(projPixel->newColor.ch, color_f);
               }
               projPixel->newColor.ch[3] = unit_float_to_uchar_clamp(color_f[3]);
-              IMB_blend_color_byte(start_byte + projPixel->pixel_offset,
+              IMB_blend_color_byte(data_byte + projPixel->pixel_offset,
                                    projPixel->origColor.ch_pt,
                                    projPixel->newColor.ch,
                                    IMB_BlendMode(ps->blend));
@@ -5594,7 +5594,7 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
               newColor_f[3] = float(projPixel->mask) * (1.0f / 65535.0f) * brush_alpha;
               copy_v3_v3(newColor_f, ps->paint_color_linear);
 
-              IMB_blend_color_float(start_float + projPixel->pixel_offset,
+              IMB_blend_color_float(data_float + projPixel->pixel_offset,
                                     projPixel->origColor.f_pt,
                                     newColor_f,
                                     IMB_BlendMode(ps->blend));
@@ -5605,7 +5605,7 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
               projPixel->newColor.ch[3] = mask * 255 * brush_alpha;
 
               rgb_float_to_uchar(projPixel->newColor.ch, img->paint_color_byte);
-              IMB_blend_color_byte(start_byte + projPixel->pixel_offset,
+              IMB_blend_color_byte(data_byte + projPixel->pixel_offset,
                                    projPixel->origColor.ch_pt,
                                    projPixel->newColor.ch,
                                    IMB_BlendMode(ps->blend));
@@ -5632,7 +5632,7 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
 
               mul_v4_v4fl(projPixel->newColor.f, projPixel->newColor.f, mask);
 
-              blend_color_mix_float(start_float + projPixel->pixel_offset,
+              blend_color_mix_float(data_float + projPixel->pixel_offset,
                                     projPixel->origColor.f_pt,
                                     projPixel->newColor.f);
             }
@@ -5647,7 +5647,7 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
               float mask = float(projPixel->mask) * (1.0f / 65535.0f);
               projPixel->newColor.ch[3] *= mask;
 
-              blend_color_mix_byte(start_byte + projPixel->pixel_offset,
+              blend_color_mix_byte(data_byte + projPixel->pixel_offset,
                                    projPixel->origColor.ch_pt,
                                    projPixel->newColor.ch);
             }
@@ -5827,8 +5827,8 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
 
     for (node = smearPixels; node; node = node->next) { /* this won't run for a float image */
       projPixel = static_cast<ProjPixel *>(node->link);
-      uint8_t *start = ps->projImages[projPixel->image_index].byte_start_mut;
-      *(start +
+      uint8_t *data = ps->projImages[projPixel->image_index].byte_data_mut;
+      *(data +
         projPixel->pixel_offset) = (reinterpret_cast<ProjPixelClone *>(projPixel))->clonepx.uint_;
       if (lock_alpha) {
         copy_original_alpha_channel(ps, projPixel, false);
@@ -5837,8 +5837,8 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
 
     for (node = smearPixels_f; node; node = node->next) {
       projPixel = static_cast<ProjPixel *>(node->link);
-      float *start = ps->projImages[projPixel->image_index].float_start_mut;
-      copy_v4_v4(start + projPixel->pixel_offset,
+      float *data = ps->projImages[projPixel->image_index].float_data_mut;
+      copy_v4_v4(data + projPixel->pixel_offset,
                  (reinterpret_cast<ProjPixelClone *>(projPixel))->clonepx.f);
       if (lock_alpha) {
         copy_original_alpha_channel(ps, projPixel, true);
@@ -5851,8 +5851,8 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
 
     for (node = softenPixels; node; node = node->next) { /* this won't run for a float image */
       projPixel = static_cast<ProjPixel *>(node->link);
-      uint8_t *start = ps->projImages[projPixel->image_index].byte_start_mut;
-      *(start + projPixel->pixel_offset) = projPixel->newColor.uint_;
+      uint8_t *data = ps->projImages[projPixel->image_index].byte_data_mut;
+      *(data + projPixel->pixel_offset) = projPixel->newColor.uint_;
       if (lock_alpha) {
         copy_original_alpha_channel(ps, projPixel, false);
       }
@@ -5860,8 +5860,8 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
 
     for (node = softenPixels_f; node; node = node->next) {
       projPixel = static_cast<ProjPixel *>(node->link);
-      float *start = ps->projImages[projPixel->image_index].float_start_mut;
-      copy_v4_v4(start + projPixel->pixel_offset, projPixel->newColor.f);
+      float *data = ps->projImages[projPixel->image_index].float_data_mut;
+      copy_v4_v4(data + projPixel->pixel_offset, projPixel->newColor.f);
       if (lock_alpha) {
         copy_original_alpha_channel(ps, projPixel, true);
       }
@@ -5920,9 +5920,9 @@ static bool project_paint_op(void *state, const float lastpos[2], const float po
   }
 
   for (i = 0; i < ps->image_tot; i++) {
-    ps->projImages[i].float_start_mut = ps->projImages[i].ibuf->float_data_for_write();
-    ps->projImages[i].byte_start_mut = ps->projImages[i].ibuf->byte_data_for_write();
-    BLI_assert(ps->projImages[i].float_start_mut || ps->projImages[i].byte_start_mut);
+    ps->projImages[i].float_data_mut = ps->projImages[i].ibuf->float_data_for_write();
+    ps->projImages[i].byte_data_mut = ps->projImages[i].ibuf->byte_data_for_write();
+    BLI_assert(ps->projImages[i].float_data_mut || ps->projImages[i].byte_data_mut);
   }
 
   /* get the threads running */
