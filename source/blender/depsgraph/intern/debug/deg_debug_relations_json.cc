@@ -11,6 +11,7 @@
 #include <cstdarg>
 
 #include "BLI_stack.hh"
+#include "BLI_string_utils.hh"
 
 #include "BKE_idtype.hh"
 
@@ -112,8 +113,10 @@ class JSONStream {
 
   JSONStream &value(const StringRef value)
   {
-    /* No careful escaping here, we just expect names to not include quotes. */
-    ss_ << "\"" << value << "\"";
+    /* Escape quotation marks. */
+    std::string safe_value = value;
+    BLI_string_replace(safe_value, "\"", "\\\"");
+    ss_ << "\"" << safe_value << "\"";
     return *this;
   }
 
