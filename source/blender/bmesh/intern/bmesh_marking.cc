@@ -431,8 +431,11 @@ static void bm_mesh_select_mode_flush_vert_to_edge_iter_fn(void * /*userdata*/,
   const bool covered = !is_hidden && (v1_select || v1_mirrored) && (v2_select || v2_mirrored);
   const bool any_pure_select = (v1_select && !v1_mirrored) || (v2_select && !v2_mirrored);
   const bool any_pure_mirror = (v1_mirrored && !v1_select) || (v2_mirrored && !v2_select);
+  const bool both_verts_both_types = !is_hidden && (v1_select && v1_mirrored) &&
+                                     (v2_select && v2_mirrored);
 
-  const bool new_select = any_pure_select && (all_select || (covered && any_pure_mirror));
+  const bool new_select = both_verts_both_types ||
+                          (any_pure_select && (all_select || (covered && any_pure_mirror)));
   const bool new_mirrored = all_mirrored;
 
   BM_elem_flag_set(e, BM_ELEM_SELECT, new_select);
