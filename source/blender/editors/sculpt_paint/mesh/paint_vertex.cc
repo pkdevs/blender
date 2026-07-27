@@ -240,7 +240,7 @@ IndexMask pbvh_gather_generic(const Depsgraph &depsgraph,
     const DistRayAABB_Precalc ray_dist_precalc = dist_squared_ray_to_aabb_v3_precalc(
         ss.cache->location_symm, ss.cache->view_normal_symm);
     nodes = bke::pbvh::search_nodes(pbvh, memory, [&](const bke::pbvh::Node &node) {
-      return node_in_cylinder(ray_dist_precalc, node, ss.cache->radius_squared);
+      return node_in_cylinder(ray_dist_precalc, node, ss.cache->radius_squared, true);
     });
 
     ss.cache->sculpt_normal_symm = use_normal ? ss.cache->view_normal_symm : float3(0);
