@@ -289,20 +289,20 @@ static void zspan_rasterize_conservative_line(ZSpan *zspan,
   }
 
   /* Line equation. */
-  float ax, bx;
+  const float eps = 0.0001f;
+  float ax;
 
-  if (maxy - miny > FLT_EPSILON) {
+  if (maxy - miny > eps) {
     ax = (v2[0] - v1[0]) / (v2[1] - v1[1]);
-    bx = v1[0] - v1[1] * ax;
   }
 
   for (; y0 <= y1; y0++) {
     float minx, maxx;
 
     /* Calculate line x range inside current scanline. */
-    if (maxy - miny > FLT_EPSILON) {
-      minx = clamp_f(y0, miny, maxy) * ax + bx;
-      maxx = clamp_f(y0 + 1, miny, maxy) * ax + bx;
+    if (maxy - miny > eps) {
+      minx = (clamp_f(y0, miny, maxy) - v1[1]) * ax + v1[0];
+      maxx = (clamp_f(y0 + 1, miny, maxy) - v1[1]) * ax + v1[0];
 
       if (minx > maxx) {
         float tmp = minx;
