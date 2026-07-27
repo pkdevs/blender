@@ -2417,8 +2417,13 @@ int add_face_constraints(CDT_state<T> *cdt_state,
   const bool need_orig_face_ids = (cdt_state->needed_ids & CDT_ORIG_FACES) ||
                                   ELEM(output_type,
                                        CDT_CONSTRAINTS_VALID_BMESH,
-                                       CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES);
-  const bool skip_cw_ids = need_orig_face_ids && !(cdt_state->needed_ids & CDT_CW_ORIG_FACES);
+                                       CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES,
+                                       CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES_NONZERO);
+  const bool skip_cw_ids = need_orig_face_ids && !(cdt_state->needed_ids & CDT_CW_ORIG_FACES) &&
+                           !ELEM(output_type,
+                                 CDT_CONSTRAINTS_VALID_BMESH,
+                                 CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES,
+                                 CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES_NONZERO);
 
   for (const int f : input_faces.index_range()) {
     const Span<int> face = input_faces[f];
