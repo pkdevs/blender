@@ -2,15 +2,16 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifndef GPU_SHADER
+#ifdef GPU_SHADER
+
+#else
 
 /**
  * Dummy functions for gpu_shader_dependency.
- * Functions need parameters to be reflected, but we don't really rely on the reflection data.
  */
 [[node]]
-void LIGHT_ITER_BEGIN(float dummy) {};
+void LIGHT_ITER_BEGIN(float &light_index) {};
 [[node]]
-void LIGHT_ITER_END(float dummy) {};
+void LIGHT_ITER_END(Closure shader, Closure &r_shader) {};
 
 #endif

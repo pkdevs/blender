@@ -823,6 +823,22 @@ void scene_time_uniforms(float &seconds, float &frame)
   frame = uni.uniform_buf.scene.frame;
 }
 
+#define LIGHT_ITER_BEGIN(light_index) \
+  { \
+    eevee::light::VisibleLightIterator iter; \
+    iter.init(gl_FragCoord.xy, \
+              dot(view_matrices_get().forward(), g_data.P) - \
+                  dot(view_matrices_get().forward(), view_matrices_get().position())); \
+    while (iter.next()) { \
+      if (iter.should_skip()) { \
+        continue; \
+      } \
+      g_data.light_index = iter.index;
+
+#define LIGHT_ITER_END(shader, r_shader) \
+  } \
+  }
+
 void node_light_info_impl(const int /*light_index*/,
                           float4 &color,
                           float &power,

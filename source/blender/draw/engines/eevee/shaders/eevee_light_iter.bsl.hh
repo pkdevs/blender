@@ -7,6 +7,7 @@
 #include "gpu_shader_compat.hh"
 
 #include "eevee_light_data.bsl.hh"
+#include "eevee_light_lib.bsl.hh"
 
 namespace eevee::light {
 
@@ -51,6 +52,132 @@ void foreach([[resource_table]] const LightRenderData &srt,
     cb.eval_local(res, index, light);
   }
 }
+
+struct VisibleLightIterator {
+  int index;
+
+  uint tile_word_offset;
+  uint local_min_index;
+  uint local_max_index;
+  uint local_word_idx;
+  uint local_word;
+
+  int phase;
+
+  void init(float2 pixel, float linear_view_z)
+  {
+    /* clang-format off */ /* Multiline macros would break line count. */
+    [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+    /* clang-format on */
+    const LightCullingData &culling = lrd.light_cull_buf;
+    const auto &zbins = lrd.light_zbin_buf;
+    const auto &words = lrd.light_tile_buf;
+
+    uint2 tile_co = uint2(pixel / culling.tile_size);
+    tile_word_offset = (tile_co.x + tile_co.y * culling.tile_x_len) * culling.tile_word_len;
+    int zbin_index = culling_z_to_zbin(culling.zbin_scale, culling.zbin_bias, linear_view_z);
+    zbin_index = clamp(zbin_index, 0, CULLING_ZBIN_COUNT - 1);
+    uint zbin_data = zbins[zbin_index];
+    local_min_index = zbin_data & 0xFFFFu;
+    local_max_index = zbin_data >> 16u;
+    /* Ensure all threads inside a subgroup get the same value to reduce VGPR usage. */
+#ifdef GPU_METAL
+    /* Waiting to implement extensions support. We need:
+     * - GL_KHR_shader_subgroup_ballot
+     * - GL_KHR_shader_subgroup_arithmetic
+     * or
+     * - Vulkan 1.1
+     */
+    local_min_index = simd_broadcast_first(simd_min(local_min_index));
+    local_max_index = simd_broadcast_first(simd_max(local_max_index));
+#endif
+
+    phase = 0;
+  }
+
+  bool next()
+  {
+    /* clang-format off */ /* Multiline macros would break line count. */
+    [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+    /* clang-format on */
+    const LightCullingData &culling = lrd.light_cull_buf;
+    const auto &words = lrd.light_tile_buf;
+
+    switch (phase) {
+      case 0: {
+        /* Initialize. */
+        index = int(culling.local_lights_len) - 1;
+        phase = 1;
+      }
+      case 1: {
+        /* Directional Lights. */
+        index++;
+        if (index < culling.items_count) {
+          return true;
+        }
+        else {
+          /* Swap to local. */
+          phase = 2;
+          /* Same as divide by 32 but avoid integer division. */
+          uint word_min = local_min_index >> 5u;
+          local_word_idx = word_min;
+        }
+      }
+      case 2: {
+        /* Local Lights. */
+        local_word = words[tile_word_offset + local_word_idx];
+        local_word &= zbin_mask(local_word_idx, local_min_index, local_max_index);
+/* Ensure all threads inside a subgroup get the same value to reduce VGPR usage. */
+#ifdef GPU_METAL
+        /* Waiting to implement extensions support. We need:
+         * - GL_KHR_shader_subgroup_ballot
+         * - GL_KHR_shader_subgroup_arithmetic
+         * or
+         * - Vulkan 1.1
+         */
+        local_word = simd_broadcast_first(simd_or(local_word));
+#endif
+        int bit_index;
+        while ((bit_index = findLSB(local_word)) != -1) {
+          local_word &= ~1u << uint(bit_index);
+          index = local_word_idx * 32u + uint(bit_index);
+          return true;
+        }
+        local_word_idx++;
+        /* Same as divide by 32 but avoid integer division. */
+        uint word_max = local_max_index >> 5u;
+        if (local_word_idx > word_max) {
+          /* Finished */
+          phase = 3;
+        }
+      }
+      case 3:
+        /* Iteration finished. */
+      default:
+        return false;
+    }
+  }
+
+  bool is_directional()
+  {
+    return phase == 1;
+  }
+
+  bool should_skip(float3 P)
+  {
+    /* clang-format off */ /* Multiline macros would break line count. */
+    [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+    /* clang-format on */
+    LightVector lv = light_vector_get(lrd.light_buf[index], is_directional(), P);
+    if (light_attenuation_surface(lrd.light_buf[index], false, lv) < LIGHT_ATTENUATION_THRESHOLD) {
+      return true;
+    }
+    if (all(lessThan(lrd.light_buf[index].color, float3(1e-6f)))) {
+      return true;
+    }
+    return false;
+  }
+};
 
 /* To be instantiated with a callback class that implement eval_directional and eval_local.
  * If ResourceT is not needed, just pass LightRenderData again. */

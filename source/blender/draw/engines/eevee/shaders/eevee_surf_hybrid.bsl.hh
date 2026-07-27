@@ -196,6 +196,7 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
 
   fragment_displacement();
 
+#if 0
   HybridNodetreeSurfaceCtx ctx;
   ctx.closure_rand = closure_rand;
   ctx.emission = float3(0.0f);
@@ -210,6 +211,9 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
   }
 
   g_emission = ctx.emission;
+#else
+  nodetree_surface(closure_rand);
+#endif
 
   g_holdout = saturate(g_holdout);
 
