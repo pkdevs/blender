@@ -8,7 +8,7 @@
 
 #include <cstdlib>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_math_constants.h"
 #include "BLI_string_utf8_symbols.h"
 
