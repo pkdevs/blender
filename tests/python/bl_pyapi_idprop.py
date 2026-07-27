@@ -627,6 +627,7 @@ class TestIdPropertyChangeName(TestHelper, unittest.TestCase):
         bpy.utils.register_class(MyGroup)
         id = self.id
         type(id).my_group_a = bpy.props.PointerProperty(type=MyGroup)
+
         assert id.my_group_a.name == ""
         with self.assertRaises(AttributeError):
             id.my_group_a.name = "test"
@@ -642,9 +643,11 @@ class TestIdPropertyChangeName(TestHelper, unittest.TestCase):
         bpy.utils.register_class(MyGroup)
         id = self.id
         type(id).my_group_b = bpy.props.PointerProperty(type=MyGroup)
+
         assert id.my_group_b.name == ""
         id.my_group_b.name = "hello"
         assert id.my_group_b.name == "hello"
+
         del type(id).my_group_b
         bpy.utils.unregister_class(MyGroup)
 
