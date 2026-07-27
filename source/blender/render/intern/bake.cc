@@ -715,45 +715,56 @@ static void bakepixels_add_margin(BakePixel pixel_array[], const BakeTargets *ta
   for (int image_id = 0; image_id < targets->images_num; image_id++) {
     BakeImage *image = &targets->images[image_id];
 
-    int width = image->width;
-    int height = image->height;
-    size_t image_size = width * height;
-    size_t image_offset = image->offset;
+    const int width = image->width;
+    const int height = image->height;
+    const size_t pixels_num = size_t(width) * size_t(height);
+    const size_t image_offset = image->offset;
 
-    BakePixel *bk_pixels = pixel_array + image->offset;
+    BakePixel *bk_pixels = pixel_array + image_offset;
 
-    char *mask = MEM_new_array_zeroed<char>(image_size, "Bake denoise margin mask");
-    RE_bake_mask_fill(bk_pixels, image_size, mask);
+    char *mask = MEM_new_array_zeroed<char>(pixels_num, "Bake denoise margin mask");
+    RE_bake_mask_fill(bk_pixels, pixels_num, mask);
 
     for (int r = 0; r < margin; r++) {
       for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-          size_t px_ptr = x + y * width;
-          size_t copy_ptr;
+          const size_t px_index = size_t(x) + size_t(y) * width;
+          size_t copy_index;
 
-          if (mask[px_ptr] != 0)
+          if (mask[px_index] != FILTER_MASK_NULL) {
             continue;
+          }
 
-          if (y != 0 && mask[px_ptr - width] == FILTER_MASK_USED + r) {
-            copy_ptr = px_ptr - width;
+          if (y != 0 && mask[px_index - width] == FILTER_MASK_USED) {
+            copy_index = px_index - width;
           }
-          else if (y != height - 1 && mask[px_ptr + width] == FILTER_MASK_USED + r) {
-            copy_ptr = px_ptr + width;
+          else if (y != height - 1 && mask[px_index + width] == FILTER_MASK_USED) {
+            copy_index = px_index + width;
           }
-          else if (x != 0 && mask[px_ptr - 1] == FILTER_MASK_USED + r) {
-            copy_ptr = px_ptr - 1;
+          else if (x != 0 && mask[px_index - 1] == FILTER_MASK_USED) {
+            copy_index = px_index - 1;
           }
-          else if (x != width - 1 && mask[px_ptr + 1] == FILTER_MASK_USED + r) {
-            copy_ptr = px_ptr + 1;
+          else if (x != width - 1 && mask[px_index + 1] == FILTER_MASK_USED) {
+            copy_index = px_index + 1;
           }
           else {
             continue;
           }
 
-          mask[px_ptr] = FILTER_MASK_USED + r + 1;
-          bk_pixels[px_ptr] = bk_pixels[copy_ptr];
-          bk_pixels[px_ptr].seed = px_ptr + image_offset;
-          bk_pixels[px_ptr].keep_original = true;
+          mask[px_index] = FILTER_MASK_MARGIN;
+          bk_pixels[px_index] = bk_pixels[copy_index];
+          bk_pixels[px_index].seed = px_index + image_offset;
+          bk_pixels[px_index].keep_original = true;
+        }
+      }
+
+      for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+          const size_t px_index = size_t(x) + size_t(y) * width;
+
+          if (mask[px_index] == FILTER_MASK_MARGIN) {
+            mask[px_index] = FILTER_MASK_USED;
+          }
         }
       }
     }
