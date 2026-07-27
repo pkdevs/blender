@@ -609,7 +609,11 @@ struct CodegenContext : NodeErrorHandler {
       }
     }
 
-    /* Rollback to front. */
+    if (cls.is_srt()) {
+      /* Rollback to front. */
+      builder.ss << "\n#pragma resource_defines " + cls.resolved->identifier + "\n";
+    }
+
     jump_to(decl.front());
 
     /* Then emit the class itself. */

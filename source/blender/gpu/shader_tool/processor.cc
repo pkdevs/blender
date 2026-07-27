@@ -302,10 +302,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
 
     /* All mutations that needs to also be applied on template definitions. */
     lower_pre_template_ast(parser, symbols);
-    /* Lower templates. */
-    // lower_templates(parser);
     /* Lower SRT and Interfaces. */
-    // lower_entry_points(parser);
     // lower_pipeline_definition(parser, filename);
     // lower_resource_table(parser);
     // lower_resource_access_functions(parser);
@@ -313,17 +310,13 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     // lower_function_default_arguments(parser);
     lower_union_setters(parser);
     lower_method_calls(parser);
-    /* Lower SRT accesses. */
-    // lower_srt_member_access(parser);
-    // lower_srt_arguments(parser);
-    // lower_entry_points_signature(parser);
-    // lower_stage_function(parser);
     /* Lower string, assert, printf. */
     // lower_strings(parser);
     // lower_printf(parser);
     /* Lower other C++ constructs. */
-    // lower_array_initializations(parser);
     // lower_tests(parser);
+    /* Needs to be last. */
+    lower_resource_macro_placeholder_ast(parser);
 
     parser.language = Language::IL;
     parser.apply_mutations();
