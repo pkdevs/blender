@@ -3,3 +3,4 @@ Referenced by issue #157627, Right mouse drag keybindings no longer work in the 
 Referenced by pull request #157632, Fix #157626: Regression: Context menu doesn't work in panels
 Referenced by commit eedbf3aa55e53a3d93675d90aac51eed4ea3bd36, Fix #157626: Regression: Context menu doesn't work in panels
 Referenced by issue #157988, 5.2 Regression: Opening/closing panels by press A doesn't work properly
+Referenced by issue #162007, Keymap: Right-click to view2d.pan does not work since blender 5.2
