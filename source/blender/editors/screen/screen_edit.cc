@@ -1073,7 +1073,8 @@ static void screen_cursor_set(wmWindow *win, const int xy[2])
   }
 }
 
-void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
+void ED_screen_set_active_region(
+    bContext *C, wmWindow *win, const int xy[2], ScrArea *target_area, ARegion *target_region)
 {
   bScreen *screen = WM_window_get_active_screen(win);
   if (screen == nullptr) {
@@ -1083,31 +1084,37 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
   ScrArea *area = nullptr;
   ARegion *region_prev = screen->active_region;
 
-  ED_screen_areas_iter (win, screen, area_iter) {
-    if (xy[0] > (area_iter->totrct.xmin + BORDERPADDING) &&
-        xy[0] < (area_iter->totrct.xmax - BORDERPADDING))
-    {
-      if (xy[1] > (area_iter->totrct.ymin + BORDERPADDING) &&
-          xy[1] < (area_iter->totrct.ymax - BORDERPADDING))
+  if (target_region != nullptr) {
+    area = target_area;
+    screen->active_region = target_region;
+  }
+  else {
+    ED_screen_areas_iter (win, screen, area_iter) {
+      if (xy[0] > (area_iter->totrct.xmin + BORDERPADDING) &&
+          xy[0] < (area_iter->totrct.xmax - BORDERPADDING))
       {
-        if (ED_area_azones_update(area_iter, xy) == nullptr) {
-          area = area_iter;
+        if (xy[1] > (area_iter->totrct.ymin + BORDERPADDING) &&
+            xy[1] < (area_iter->totrct.ymax - BORDERPADDING))
+        {
+          if (ED_area_azones_update(area_iter, xy) == nullptr) {
+            area = area_iter;
+            break;
+          }
+        }
+      }
+    }
+    if (area) {
+      /* Make overlap active when mouse over. */
+      for (ARegion &region : area->regionbase) {
+        if (ED_region_contains_xy(&region, xy)) {
+          screen->active_region = &region;
           break;
         }
       }
     }
-  }
-  if (area) {
-    /* Make overlap active when mouse over. */
-    for (ARegion &region : area->regionbase) {
-      if (ED_region_contains_xy(&region, xy)) {
-        screen->active_region = &region;
-        break;
-      }
+    else {
+      screen->active_region = nullptr;
     }
-  }
-  else {
-    screen->active_region = nullptr;
   }
 
   if (region_prev != screen->active_region || !screen->active_region) {

@@ -1445,8 +1445,8 @@ static bool wm_xr_surface_interaction_raycast_target(const wmXrUiRegion *ui_regi
 
 static void wm_xr_surface_interaction_event_add(const bContext * /*C*/,
                                                 wmWindow *win,
-                                                ScrArea * /*area*/,
-                                                ARegion * /*region*/,
+                                                ScrArea *area,
+                                                ARegion *region,
                                                 short type,
                                                 short val,
                                                 const int xy[2])
@@ -1457,6 +1457,8 @@ static void wm_xr_surface_interaction_event_add(const bContext * /*C*/,
   copy_v2_v2_int(event.prev_xy, win->runtime->eventstate->xy);
   event.type = static_cast<wmEventType>(type);
   event.val = val;
+  event.target_area = area;
+  event.target_region = region;
 
   const int g_flag_prev = G.f;
   G.f |= G_FLAG_EVENT_SIMULATE;

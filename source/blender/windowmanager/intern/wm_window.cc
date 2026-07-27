@@ -996,7 +996,7 @@ static void wm_window_ensure_eventstate(wmWindow *win)
     return;
   }
 
-  win->runtime->eventstate = MEM_new<wmEvent>("window event state");
+  win->runtime->eventstate = MEM_new_zeroed<wmEvent>("window event state");
   wm_window_update_eventstate(win);
 }
 

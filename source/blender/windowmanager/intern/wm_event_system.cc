@@ -317,6 +317,9 @@ void wm_event_free_all(wmWindow *win)
 void wm_event_init_from_window(wmWindow *win, wmEvent *event)
 {
   *event = *(win->runtime->eventstate);
+  /* These runtime-only dispatch overrides must only be set explicitly by the caller. */
+  event->target_area = nullptr;
+  event->target_region = nullptr;
 }
 
 /** \} */
@@ -3891,6 +3894,21 @@ static ScrArea *area_event_inside(bContext *C, const int xy[2])
   return nullptr;
 }
 
+static ScrArea *area_event_dispatch_target(bContext *C, const wmEvent *event)
+{
+  return (event->target_area != nullptr) ? event->target_area : area_event_inside(C, event->xy);
+}
+
+static bool wm_event_has_dispatch_target(const wmEvent *event)
+{
+  return event->target_area != nullptr || event->target_region != nullptr;
+}
+
+static bool wm_event_dispatch_target_matches_area(const wmEvent *event, const ScrArea *area)
+{
+  return event->target_area == nullptr || area == event->target_area;
+}
+
 static ARegion *region_event_inside(bContext *C, const int xy[2])
 {
   bScreen *screen = CTX_wm_screen(C);
@@ -3904,6 +3922,11 @@ static ARegion *region_event_inside(bContext *C, const int xy[2])
     }
   }
   return nullptr;
+}
+
+static ARegion *region_event_dispatch_target(bContext *C, const wmEvent *event)
+{
+  return (event->target_region != nullptr) ? event->target_region : region_event_inside(C, event->xy);
 }
 
 static void wm_paintcursor_tag(bContext *C, wmWindowManager *wm, ARegion *region)
@@ -4205,6 +4228,12 @@ static eHandlerActionFlag wm_event_do_handlers_area_regions(bContext *C,
     return action;
   }
 
+  if (event->target_region != nullptr &&
+      (event->target_area == nullptr || event->target_area == area))
+  {
+    return wm_event_do_region_handlers(C, event, event->target_region);
+  }
+
   /* Case 2. */
   ARegion *region_hovered = ED_area_find_region_xy_visual(area, RGN_TYPE_ANY, event->xy);
   if (!region_hovered) {
@@ -4335,8 +4364,8 @@ void wm_event_do_handlers(bContext *C)
       }
 
       /* We let modal handlers get active area/region, also wm_paintcursor_test needs it. */
-      CTX_wm_area_set(C, area_event_inside(C, event->xy));
-      CTX_wm_region_set(C, region_event_inside(C, event->xy));
+      CTX_wm_area_set(C, area_event_dispatch_target(C, event));
+      CTX_wm_region_set(C, region_event_dispatch_target(C, event));
 
       /* MVC demands to not draw in event handlers...
        * but we need to leave it for GPU selecting etc. */
@@ -4373,7 +4402,8 @@ void wm_event_do_handlers(bContext *C)
           /* State variables in screen, cursors.
            * Also used in `wm_draw.cc`, fails for modal handlers though. */
           if (win.runtime == nullptr || win.runtime->ghostwin != nullptr) {
-            ED_screen_set_active_region(C, &win, event->xy);
+            ED_screen_set_active_region(
+                C, &win, event->xy, event->target_area, event->target_region);
           }
           /* For regions having custom cursors. */
           wm_paintcursor_test(C, event);
@@ -4399,7 +4429,10 @@ void wm_event_do_handlers(bContext *C)
             ED_area_azones_update(area, event->xy);
           }
 
-          if (wm_event_inside_rect(event, &area->totrct)) {
+          if ((wm_event_has_dispatch_target(event) &&
+               wm_event_dispatch_target_matches_area(event, area)) ||
+              (!wm_event_has_dispatch_target(event) && wm_event_inside_rect(event, &area->totrct)))
+          {
             CTX_wm_area_set(C, area);
 
             action |= wm_event_do_handlers_area_regions(C, event, area);
@@ -4427,8 +4460,8 @@ void wm_event_do_handlers(bContext *C)
 
         if ((action & WM_HANDLER_BREAK) == 0) {
           /* Also some non-modal handlers need active area/region. */
-          CTX_wm_area_set(C, area_event_inside(C, event->xy));
-          CTX_wm_region_set(C, region_event_inside(C, event->xy));
+          CTX_wm_area_set(C, area_event_dispatch_target(C, event));
+          CTX_wm_region_set(C, region_event_dispatch_target(C, event));
 
           wm_region_mouse_co(C, event);
 

@@ -121,6 +121,7 @@ struct CLG_LogRef;
 
 namespace blender {
 
+struct ARegion;
 struct ID;
 struct ImBuf;
 struct bContext;
@@ -128,6 +129,7 @@ struct bContextStore;
 struct GreasePencil;
 struct GreasePencilLayerTreeNode;
 struct ReportList;
+struct ScrArea;
 struct wmDrag;
 struct wmDropBox;
 struct wmEvent;
@@ -847,6 +849,13 @@ struct wmEvent {
    * - #TIMER: uses #wmTimer (also #wmEvent::custom == #EVT_DATA_TIMER).
    */
   void *customdata;
+
+  /**
+   * Optional explicit dispatch target for simulated events that should not be re-routed from
+   * their window coordinates.
+   */
+  ScrArea *target_area;
+  ARegion *target_region;
 
   /* Previous State. */
 
