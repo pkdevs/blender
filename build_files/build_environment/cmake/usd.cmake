@@ -113,14 +113,6 @@ set(USD_EXTRA_ARGS
 )
 
 if(WITH_APPLE_CROSSPLATFORM)
-
-  # Use iOS utility to set some env vars to help us build for iOS
-  include(cmake/ios_defines.cmake)
-  ios_get_dependency_env_vars(MATERIALX)
-  set(USD_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${IOSDEP_INCLUDES_STRING}")
-  set(USD_CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${IOSDEP_INCLUDES_STRING}")
-  set(USD_CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} ${IOSDEP_LIBDIRS_STRING}")
-
   set(USD_EXTRA_ARGS
     ${USD_EXTRA_ARGS}
     # Disable OpenGL for iOS.
@@ -129,10 +121,8 @@ if(WITH_APPLE_CROSSPLATFORM)
     # NOTE: Temporarily disables: PXR_BUILD_GPU_SUPPORT, which will disable hydra storm.
     -DPXR_ENABLE_METAL_SUPPORT=OFF
 
-    # Override CXX flags to directly provide required headers.	
-    -DCMAKE_CXX_FLAGS=${USD_CMAKE_CXX_FLAGS} 
-    -DCMAKE_C_FLAGS=${USD_CMAKE_C_FLAGS}
-    -DCMAKE_CXX_STANDARD_LIBRARIES=${USD_CMAKE_CXX_STANDARD_LIBRARIES} 
+    -DMATERIALX_STDLIB_DIR=${LIBDIR}/materialx/lib/
+    -DMATERIALX_BASE_DIR=${LIBDIR}/materialx/
   )
   set(USD_BASE_PATCH ${PATCH_DIR}/usd_ios.diff)
 else()

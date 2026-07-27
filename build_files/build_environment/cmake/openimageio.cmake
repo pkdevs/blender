@@ -126,25 +126,11 @@ endif()
 
 #Override library search dirs for iOS, as these are not correctly found.
 if(WITH_APPLE_CROSSPLATFORM)
-
-  # Use iOS utility to set some env vars to help us build for iOS
-  include(cmake/ios_defines.cmake)
-  ios_get_dependency_env_vars(OPENEXR IMATH ROBINMAP DEFLATE PYBIND11 JPEG OPENJPEG WEBP FMT TBB LIBHEIF AOM)
-
   set(OPENIMAGEIO_EXTRA_ARGS
     ${OPENIMAGEIO_EXTRA_ARGS}
-    -DCMAKE_POLICY_DEFAULT_CMP0111:STRING=OLD
-    -DCMAKE_C_FLAGS="-DIMATH_HALF_NO_LOOKUP_TABLE ${IOSDEP_INCLUDES_STRING}"
-    -DCMAKE_CXX_FLAGS="-DIMATH_HALF_NO_LOOKUP_TABLE ${IOSDEP_INCLUDES_STRING}"
-    -DCMAKE_SHARED_LINKER_FLAGS=-laom
-    -DEXTRA_DSO_LINK_ARGS=${IOSDEP_LIBDIRS_STRING}
     -DUSE_WEBP=OFF
-    ${IOSDEP_DEFINES}
   )
-endif()
-
-# Patch
-if(WITH_APPLE_CROSSPLATFORM)
+  # Patch
   set(OIIO_PATCH_PATH ${PATCH_DIR}/openimageio_ios.diff)
 else()
   set(OIIO_PATCH_PATH ${PATCH_DIR}/openimageio.diff)

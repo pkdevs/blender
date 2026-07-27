@@ -69,24 +69,15 @@ endif()
 
 # IOS build has trouble locating correct builds
 if(WITH_APPLE_CROSSPLATFORM)
-
-  # Use iOS utility to set some env vars to help us build for iOS
-  include(cmake/ios_defines.cmake)
-  ios_get_dependency_env_vars(OPENIMAGEIO OPENEXR IMATH LLVM PNG PUGIXML ROBINMAP DEFLATE PYBIND11)
-
-  set(OSL_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${IOSDEP_INCLUDES_STRING}")
-  set(OSL_CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${IOSDEP_INCLUDES_STRING}")
-  set(OSL_CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} ${IOSDEP_LIBDIRS_STRING} ${IOSDEP_LIBRARIES_STRING}")
-
   # Disable bitcode for now as issues finding llvm bitcode generator
   set(OSL_EXTRA_ARGS
     ${OSL_EXTRA_ARGS}
-    -DCMAKE_C_FLAGS=${OSL_CMAKE_C_FLAGS}
-    -DCMAKE_CXX_FLAGS=${OSL_CMAKE_CXX_FLAGS}
-    -DCMAKE_CXX_STANDARD_LIBRARIES=${OSL_CMAKE_CXX_STANDARD_LIBRARIES}
+    -DLLVM_FOUND=YES
+    -DLLVM_VERSION=${LLVM_VERSION}
+    -DLLVM_INCLUDES=${LIBDIR}/llvm/include
+    -DLLVM_LIB_DIR=${LIBDIR}/llvm/lib
     -DOSL_BUILD_SHADERS=OFF
     -DUSE_LLVM_BITCODE=OFF
-    ${IOSDEP_DEFINES}
   )
 
   # iOS patch removes system() calls and ensures bundles can build with correct compatibility.

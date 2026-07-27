@@ -38,15 +38,10 @@ set(OPENCOLORIO_EXTRA_ARGS
 )
 
 if(WITH_APPLE_CROSSPLATFORM)
-  # Use iOS utility to set some env vars to help us build for iOS
-  include(cmake/ios_defines.cmake)
-  ios_get_dependency_env_vars(IMATH)
-  
   set(OPENCOLORIO_EXTRA_ARGS
     ${OPENCOLORIO_EXTRA_ARGS}
     -DOCIO_BUILD_PYTHON=OFF
     -DOCIO_USE_HEADLESS=ON
-    ${IOSDEP_DEFINES}
   )
 endif()
 

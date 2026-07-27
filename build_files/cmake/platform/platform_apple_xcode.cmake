@@ -229,7 +229,7 @@ if(WITH_APPLE_CROSSPLATFORM)
   # Set the find root to the iOS developer roots and to user defined paths
   if (NOT DEFINED CMAKE_APPLE_CROSSPLATFORM_DEVELOPER_ROOT)
     set (CMAKE_APPLE_CROSSPLATFORM_DEVELOPER_ROOT "${XCODE_PLATFORM_DIR}/Developer")
-  endif (NOT DEFINED CMAKE_APPLE_CROSSPLATFORM_DEVELOPER_ROOT)
+  endif()
   set (CMAKE_APPLE_CROSSPLATFORM_DEVELOPER_ROOT ${CMAKE_APPLE_CROSSPLATFORM_DEVELOPER_ROOT} CACHE PATH "Location of ${CMAKE_SYSTEM_NAME} Platform")
   set (CMAKE_FIND_ROOT_PATH ${CMAKE_APPLE_CROSSPLATFORM_DEVELOPER_ROOT} ${CMAKE_APPLE_CROSSPLATFORM_SDK_ROOT} ${CMAKE_PREFIX_PATH} CACHE STRING  "${CMAKE_SYSTEM_NAME} find search path root")
 
@@ -247,6 +247,8 @@ if(WITH_APPLE_CROSSPLATFORM)
   ## To enable cross-compiled programs, we set to NEVER to use host tools. e.g. Git, Perl
   # Note: This may possibly break some things if use of programs is inconsistent.
   set (CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+
+  set (CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
 
   # Some libraries also require macOS sdk root.
   # TOOD: Remove duplication
