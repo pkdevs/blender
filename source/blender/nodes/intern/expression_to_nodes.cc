@@ -12,6 +12,7 @@
 #include "BLI_listbase.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLT_translation.hh"
 
 #include "NOD_expression_parse.hh"
@@ -894,6 +895,25 @@ static FunctionSymbol vec2_from_vec3()
   });
 }
 
+static FunctionSymbol implicit_conversion_node_function(
+    const StringRef name,
+    const ValueType input_type,
+    const ValueType output_type,
+    const eNodeSocketDatatype output_socket_type)
+{
+  return FunctionSymbol(name,
+                        {{input_type}},
+                        [input_type, output_type, output_socket_type](InsertCallParams &params) {
+                          const bke::bNodeSocketType *stype = bke::node_socket_type_find_static(
+                              output_socket_type);
+                          bNode &node = params.add_node("NodeImplicitConversion"_ustr);
+                          auto &storage = *static_cast<NodeImplicitConversion *>(node.storage);
+                          STRNCPY_UTF8(storage.type_idname, stype->idname.c_str());
+                          params.add_input(node, 0, input_type);
+                          params.set_output(node, 0, output_type);
+                        });
+}
+
 static FunctionSymbol vec3_from_vec2()
 {
   return FunctionSymbol("vec3", {{ValueType::Vec2}}, [](InsertCallParams &params) {
@@ -943,6 +963,15 @@ static FunctionSymbol rgba_from_scalars()
       });
 }
 
+static FunctionSymbol vec3_length()
+{
+  return FunctionSymbol("length", {{ValueType::Vec3}}, [](InsertCallParams &params) {
+    bNode &node = params.add_node("ShaderNodeVectorMath"_ustr);
+    node.custom1 = NODE_VECTOR_MATH_LENGTH;
+    params.use_node_sockets(node);
+  });
+}
+
 static UString get_separate_color_node_idname(const int tree_type)
 {
   switch (tree_type) {
@@ -969,14 +998,44 @@ static FunctionSymbol create_color_member_access(const ValueType type, const int
       });
 }
 
+static FunctionSymbol int_function(const ValueType type)
+{
+  return implicit_conversion_node_function("int", type, ValueType::Integer, SOCK_INT);
+}
+
+static FunctionSymbol float_function(const ValueType type)
+{
+  return implicit_conversion_node_function("float", type, ValueType::Float, SOCK_FLOAT);
+}
+
 static void init_symbol_table(SymbolTable &symbols)
 {
   symbols.add(float_math_function("+", NODE_MATH_ADD, 2));
   symbols.add(float_math_function("-", NODE_MATH_SUBTRACT, 2));
   symbols.add(float_math_function("*", NODE_MATH_MULTIPLY, 2));
   symbols.add(float_math_function("/", NODE_MATH_DIVIDE, 2));
+
+  symbols.add(float_math_function("min", NODE_MATH_MINIMUM, 2));
+  symbols.add(float_math_function("max", NODE_MATH_MAXIMUM, 2));
+  symbols.add(float_math_function("radians", NODE_MATH_RADIANS, 1));
+  symbols.add(float_math_function("degrees", NODE_MATH_DEGREES, 1));
+  symbols.add(float_math_function("abs", NODE_MATH_ABSOLUTE, 1));
+  symbols.add(float_math_function("floor", NODE_MATH_FLOOR, 1));
+  symbols.add(float_math_function("ceil", NODE_MATH_CEIL, 1));
+  symbols.add(float_math_function("trunc", NODE_MATH_TRUNC, 1));
+  symbols.add(float_math_function("round", NODE_MATH_ROUND, 1));
   symbols.add(float_math_function("sin", NODE_MATH_SINE, 1));
   symbols.add(float_math_function("cos", NODE_MATH_COSINE, 1));
+  symbols.add(float_math_function("tan", NODE_MATH_TANGENT, 1));
+  symbols.add(float_math_function("asin", NODE_MATH_ARCSINE, 1));
+  symbols.add(float_math_function("acos", NODE_MATH_ARCCOSINE, 1));
+  symbols.add(float_math_function("atan", NODE_MATH_ARCTANGENT, 1));
+  symbols.add(float_math_function("atan2", NODE_MATH_ARCTAN2, 2));
+  symbols.add(float_math_function("exp", NODE_MATH_EXPONENT, 1));
+  symbols.add(float_math_function("log", NODE_MATH_LOGARITHM, 1));
+  symbols.add(float_math_function("sqrt", NODE_MATH_SQRT, 1));
+  symbols.add(float_math_function("pow", NODE_MATH_POWER, 2));
+
   symbols.add(negate_float_function());
 
   for (const ValueType type : {ValueType::Vec2, ValueType::Vec3}) {
@@ -1000,8 +1059,17 @@ static void init_symbol_table(SymbolTable &symbols)
   symbols.add(rgb_from_scalars());
   symbols.add(rgba_from_scalars());
 
-  for (const ValueType type :
-       {ValueType::Vec2, ValueType::Vec3, ValueType::Rgb, ValueType::Rgba, ValueType::Float})
+  symbols.add(vec3_length());
+
+  symbols.add(int_function(ValueType::Float));
+  symbols.add(int_function(ValueType::Integer));
+  symbols.add(int_function(ValueType::Boolean));
+
+  symbols.add(float_function(ValueType::Integer));
+  symbols.add(float_function(ValueType::Boolean));
+  symbols.add(float_function(ValueType::Float));
+
+  for (const ValueType type : {ValueType::Vec2, ValueType::Vec3, ValueType::Rgb, ValueType::Rgba})
   {
     symbols.add(vector_member_access(type, 0));
     symbols.add(vector_member_access(type, 1));
@@ -1029,18 +1097,9 @@ static void init_symbol_table(SymbolTable &symbols)
     symbols.add(ternary_conditional_operator(type));
   }
 
-  {
-    std::array implicit_convertable_types = {
-        ValueType::Float, ValueType::Integer, ValueType::Boolean};
-    for (const ValueType from_type : implicit_convertable_types) {
-      for (const ValueType to_type : implicit_convertable_types) {
-        if (from_type == to_type) {
-          continue;
-        }
-        symbols.add_implicit_conversion(from_type, to_type);
-      }
-    }
-  }
+  symbols.add_implicit_conversion(ValueType::Integer, ValueType::Float);
+  symbols.add_implicit_conversion(ValueType::Boolean, ValueType::Float);
+  symbols.add_implicit_conversion(ValueType::Boolean, ValueType::Integer);
 
   for (const eNodeSocketDatatype type : {SOCK_VECTOR, SOCK_RGBA, SOCK_ROTATION, SOCK_INT_VECTOR}) {
     symbols.add_finalize_value_fn(
@@ -1145,7 +1204,7 @@ ExpressionNodeGroup::~ExpressionNodeGroup()
 {
   if (this->tree) {
     if (this->tree->id.tag & ID_TAG_NO_MAIN) {
-      BKE_id_free(nullptr, const_cast<ID *>(&this->tree->id));
+      BKE_id_free(nullptr, &this->tree->id);
     }
   }
 }
