@@ -131,7 +131,10 @@ static void bm_vert_chain_extract_from_boundary_edges(BMesh *bm,
   BM_mesh_edgeloops_free(&eloops);
 }
 
-/** Computes the local coordinate system defining the 2D plane of the vertex chain. */
+/**
+ * Computes the local coordinate system defining the 2D plane of the vertex chain.
+ * \return success, false when the matrix could not be computed.
+ */
 static bool bm_vert_chain_orientation_matrix_calc(Span<BMVert *> chain,
                                                   float3 &r_center,
                                                   float3x3 &r_mat)
