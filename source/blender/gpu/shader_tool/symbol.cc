@@ -2166,6 +2166,8 @@ void SymbolTable::register_builtins(LocalScope node)
       {"uint32_t", 4, 4},
       {"bool32_t", 4, 4},
 
+      {"string_t", 4, 4},
+
       {"samplerBuffer", 0, 1},
       {"sampler1D", 0, 1},
       {"sampler2D", 0, 1},

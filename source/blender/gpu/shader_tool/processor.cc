@@ -311,8 +311,8 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     lower_union_setters(parser);
     lower_method_calls(parser);
     /* Lower string, assert, printf. */
-    // lower_strings(parser);
-    // lower_printf(parser);
+    lower_strings(parser);
+    lower_printf(parser);
     /* Lower other C++ constructs. */
     // lower_tests(parser);
     /* Needs to be last. */

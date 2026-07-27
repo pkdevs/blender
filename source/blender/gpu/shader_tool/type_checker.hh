@@ -54,7 +54,7 @@ struct ExpressionTypeParser {
     float_cls = root.lookup_class("float");
     int_cls = root.lookup_class("int");
     uint_cls = root.lookup_class("uint");
-    // str_cls = root.lookup_class("string");
+    str_cls = root.lookup_class("string_t");
     err_cls = root.lookup_class(SymbolTable::err_symbol);
   }
 

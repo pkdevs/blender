@@ -545,6 +545,9 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
   /* Start with the error symbol. */
   vector<BuiltinFunc> functions = {{"void", err_symbol, {}}};
 
+  /* Special functions */
+  functions.push_back({"void", "printf", {"string_t"}});
+
   /* Type definition vectors for vectorized generation */
   const vector<string> f_types = {"float", "float2", "float3", "float4"};
   const vector<string> i_types = {"int", "int2", "int3", "int4"};

@@ -581,6 +581,7 @@ struct ScopeParser {
         case Default:  /* For C++ constructor. */
         case Typename: /* For MSL / C++. */
         case Word:
+        case String:
         case Number:
         case EXPRESSION_TOKENS:
           next();
@@ -664,6 +665,7 @@ struct ScopeParser {
         case Return:
         case SemiColon:
         case Word:
+        case String:
         case Number:
         case Typename: /* For MSL / C++. */
         case EXPRESSION_TOKENS:
