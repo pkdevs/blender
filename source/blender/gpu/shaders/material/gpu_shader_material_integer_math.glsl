@@ -2,70 +2,137 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-[[node]]
-void integer_math_add(float a, float b, out float result)
+int divide_floor(int a, int b)
 {
-  result = float(int(a) + int(b));
+  int d = a / b;
+  int r = a % b;
+  return (r != 0) ? (d - int((a < 0) != (b < 0))) : d;
+}
+
+int euclid_gcd(int a, int b)
+{
+  a = abs(a);
+  b = abs(b);
+  while (b != 0) {
+    int t = b;
+    b = a % b;
+    a = t;
+  }
+  return a;
 }
 
 [[node]]
-void integer_math_subtract(float a, float b, out float result)
+void integer_math_add(int a, int b, out int result)
 {
-  result = float(int(a) - int(b));
+  result = a + b;
 }
 
 [[node]]
-void integer_math_multiply(float a, float b, out float result)
+void integer_math_subtract(int a, int b, out int result)
 {
-  result = float(int(a) * int(b));
+  result = a - b;
 }
 
 [[node]]
-void integer_math_divide(float a, float b, out float result)
+void integer_math_multiply(int a, int b, out int result)
 {
-  const int ib = int(b);
-  result = float((ib != 0) ? (int(a) / ib) : 0);
+  result = a * b;
 }
 
 [[node]]
-void integer_math_power(float base, float exponent, out float result)
+void integer_math_divide(int a, int b, out int result)
 {
-  result = float(int(pow(int(base), int(exponent))));
+  result = (b != 0) ? (a / b) : 0;
 }
 
 [[node]]
-void integer_math_multiply_add(float a, float b, float c, out float result)
+void integer_math_multiply_add(int a, int b, int c, out int result)
 {
-  result = float(int(a) * int(b) + int(c));
+  result = a * b + c;
 }
 
 [[node]]
-void integer_math_absolute(float a, out float result)
+void integer_math_power(int base, int exponent, out int result)
 {
-  result = float(abs(int(a)));
+  result = int(pow(float(base), float(exponent)));
 }
 
 [[node]]
-void integer_math_sign(float a, out float result)
+void integer_math_floored_modulo(int a, int b, out int result)
 {
-  const int ia = int(a);
-  result = float(int(ia > 0) - int(ia < 0));
+  result = (b != 0) ? (((a % b) + b) % b) : 0;
 }
 
 [[node]]
-void integer_math_minimum(float a, float b, out float result)
+void integer_math_absolute(int a, out int result)
 {
-  result = float(min(int(a), int(b)));
+  result = abs(a);
 }
 
 [[node]]
-void integer_math_maximum(float a, float b, out float result)
+void integer_math_minimum(int a, int b, out int result)
 {
-  result = float(max(int(a), int(b)));
+  result = min(a, b);
 }
 
 [[node]]
-void integer_math_negate(float a, out float result)
+void integer_math_maximum(int a, int b, out int result)
 {
-  result = float(-int(a));
+  result = max(a, b);
+}
+
+[[node]]
+void integer_math_gcd(int a, int b, out int result)
+{
+  result = euclid_gcd(a, b);
+}
+
+[[node]]
+void integer_math_lcm(int a, int b, out int result)
+{
+  int gcd = euclid_gcd(a, b);
+  result = (gcd != 0) ? abs(a * b / gcd) : 0;
+}
+
+[[node]]
+void integer_math_negate(int a, out int result)
+{
+  result = -a;
+}
+
+[[node]]
+void integer_math_sign(int a, out int result)
+{
+  result = int(0 < a) - int(a < 0);
+}
+
+[[node]]
+void integer_math_divide_floor(int a, int b, out int result)
+{
+  result = (b != 0) ? divide_floor(a, b) : 0;
+}
+
+[[node]]
+void integer_math_divide_ceil(int a, int b, out int result)
+{
+  result = (b != 0) ? -divide_floor(a, -b) : 0;
+}
+
+[[node]]
+void integer_math_divide_round(int a, int b, out int result)
+{
+  int c = abs(b);
+  int sign_b = int(0 < b) - int(b < 0);
+  if (a >= 0) {
+    result = ((c != 0) ? ((2 * a + c) / (2 * c)) : 0) * sign_b;
+  }
+  else {
+    result = -((c != 0) ? ((2 * -a + c) / (2 * c)) : 0) * sign_b;
+  }
+}
+
+[[node]]
+void integer_math_modulo(int a, int b, out int result)
+{
+  result = (b != 0) ? (a % b) : 0;
 }
