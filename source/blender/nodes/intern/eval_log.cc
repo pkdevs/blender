@@ -1189,8 +1189,10 @@ Span<debug_view::Candidate> NodesEvalLog::debug_view_candidates()
             reversed_context_names.append(context_logger->context_name);
           }
           else {
-            /* The first non-group tree logger is the root tree. Its parent is the object/data-block
-             * compute context, which intentionally has no node-tree identity. */
+            /* The first non-group tree logger is the root tree. Its parent is the
+             * object/data-block
+             * compute context, which intentionally has no
+             * node-tree identity. */
             break;
           }
           if (!context_logger->parent_hash) {

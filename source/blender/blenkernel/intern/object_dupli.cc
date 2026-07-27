@@ -1874,6 +1874,7 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
   Vector<int> enabled_candidate_indices;
   std::shared_ptr<nodes::eval_log::NodesEvalLog> selected_eval_log;
   /* A later applicable modifier is closer to the final stack result and therefore takes
+   *
    * precedence when multiple modifiers have Debug Views enabled. */
   for (ModifierData &md_orig : ob_orig->modifiers.items_reversed()) {
     if (md_orig.type != eModifierType_Nodes) {
@@ -1904,8 +1905,11 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
   }
   BLI_assert(selected_eval_log);
   /* Candidate and geometry pointers below borrow from this owner. The original modifier runtime
-   * retains the same shared owner after this function returns, and depsgraph object iteration
-   * consumes the dupli list synchronously before another modifier evaluation can replace it. This
+
+   * * retains the same shared owner after this function returns, and depsgraph object iteration
+
+   * * consumes the dupli list synchronously before another modifier evaluation can replace it.
+   * This
    * is the same lifetime model used by the active Viewer preview path above. */
 
   DupliContext ctx;
@@ -1930,7 +1934,8 @@ bool object_duplilist_debug_view(Depsgraph *depsgraph, Object *ob_eval, DupliLis
     const bke::GeometrySet &viewer_geometry = *candidate.viewer_log->main_geometry();
 
     /* Add one parent persistent-ID level to namespace otherwise corresponding components and
-     * instances generated from different top-level preview sources. */
+
+     * * instances generated from different top-level preview sources. */
     DupliContext preview_ctx = ctx;
     preview_ctx.persistent_id[preview_ctx.level] =
         nodes::debug_view::unique_persistent_id_namespace(candidate.identifier,

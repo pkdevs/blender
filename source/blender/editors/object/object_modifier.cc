@@ -3778,7 +3778,8 @@ static wmOperatorStatus geometry_nodes_debug_view_test_toggle_exec(bContext *C, 
                OPERATOR_FINISHED :
                OPERATOR_CANCELLED;
   }
-  if (!nodes::debug_view::toggle_candidate(candidates, identifier, nmd.runtime->debug_view_state)) {
+  if (!nodes::debug_view::toggle_candidate(candidates, identifier, nmd.runtime->debug_view_state))
+  {
     return OPERATOR_CANCELLED;
   }
   geometry_nodes_debug_view_notify(C, *object);
