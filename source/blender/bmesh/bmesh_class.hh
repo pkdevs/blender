@@ -325,10 +325,6 @@ struct BMesh {
   int totvertsel = 0;
   int totedgesel = 0;
   int totfacesel = 0;
-  /**
-   * Number of verts/edges/faces with #BM_ELEM_MIRRORED_SELECT set,
-   * mirror-select counterparts to #totvertsel/#totedgesel/#totfacesel.
-   */
   int totvertsel_mirrored = 0;
   int totedgesel_mirrored = 0;
   int totfacesel_mirrored = 0;
@@ -560,11 +556,8 @@ enum {
    */
   BM_ELEM_INTERNAL_TAG = (1 << 7),
 
-  /** Tagged for mirrored selection when X/Y/Z symmetry editing is enabled. */
   BM_ELEM_MIRRORED_SELECT = (1 << 8),
 
-  /** Tagged to disable mirrored selection for pre-existing selection when symmetry is turned on.
-   */
   BM_ELEM_MIRRORED_SELECT_UV = (1 << 9),
   BM_ELEM_MIRRORED_SELECT_UV_EDGE = (1 << 10),
 };

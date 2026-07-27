@@ -2167,9 +2167,10 @@ static PyObject *bpy_bmesh_uv_select_foreach_set_from_mesh(BPy_BMesh *self,
     BM_mesh_uvselect_set_elem_from_mesh(bm,
                                         use_select,
                                         uv_pick_params,
-                                        {Span(vert_array, vert_array_num),
-                                         Span(edge_array, edge_array_num),
-                                         Span(face_array, face_array_num)});
+                                        Span(vert_array, vert_array_num),
+                                        Span(edge_array, edge_array_num),
+                                        Span(face_array, face_array_num),
+                                        false);
   }
 
   PyMem_FREE(vert_array);

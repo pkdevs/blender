@@ -545,7 +545,7 @@ void EditMeshSymmetryHelper::set_hflag_on_mirror_verts(BMVert *v,
                                                        const bool value) const
 {
   apply_on_mirror_verts(v, [this, hflag, value](BMVert *v_mirr) {
-    BM_vert_select_set(this->em_->bm, v_mirr, value, hflag);
+    BM_vert_select_set(this->em_->bm, v_mirr, value, hflag == BM_ELEM_MIRRORED_SELECT);
   });
 }
 
@@ -554,7 +554,7 @@ void EditMeshSymmetryHelper::set_hflag_on_mirror_edges(BMEdge *e,
                                                        const bool value) const
 {
   apply_on_mirror_edges(e, [this, hflag, value](BMEdge *e_mirr) {
-    BM_edge_select_set(this->em_->bm, e_mirr, value, hflag);
+    BM_edge_select_set(this->em_->bm, e_mirr, value, hflag == BM_ELEM_MIRRORED_SELECT);
   });
 }
 
@@ -563,7 +563,7 @@ void EditMeshSymmetryHelper::set_hflag_on_mirror_faces(BMFace *f,
                                                        const bool value) const
 {
   apply_on_mirror_faces(f, [this, hflag, value](BMFace *f_mirr) {
-    BM_face_select_set(this->em_->bm, f_mirr, value, hflag);
+    BM_face_select_set(this->em_->bm, f_mirr, value, hflag == BM_ELEM_MIRRORED_SELECT);
   });
 }
 

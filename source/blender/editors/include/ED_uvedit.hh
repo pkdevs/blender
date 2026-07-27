@@ -166,21 +166,17 @@ void ED_uvedit_sync_uvselect_ensure_if_needed(const ToolSettings *ts, BMesh *bm)
 /* Visibility and selection tests. */
 
 bool uvedit_face_visible_test_ex(const ToolSettings *ts, const BMFace *efa);
-bool uvedit_face_select_test_ex(const ToolSettings *ts, const BMesh *bm, const BMFace *efa);
-
-bool uvedit_face_mirrored_select_test_ex(const ToolSettings *ts,
-                                         const BMesh *bm,
-                                         const BMFace *efa);
+bool uvedit_face_select_test_ex(const ToolSettings *ts,
+                                const BMesh *bm,
+                                const BMFace *efa,
+                                const bool mirrored);
 bool uvedit_face_mirrored_select_test(const Scene *scene, const BMesh *bm, const BMFace *efa);
 
 bool uvedit_edge_select_test_ex(const ToolSettings *ts,
                                 const BMesh *bm,
                                 const BMLoop *l,
-                                const BMUVOffsets &offsets);
-bool uvedit_edge_mirrored_select_test_ex(const ToolSettings *ts,
-                                         const BMesh *bm,
-                                         const BMLoop *l,
-                                         const BMUVOffsets &offsets);
+                                const BMUVOffsets &offsets,
+                                const bool mirrored);
 bool uvedit_uv_select_test_ex(const ToolSettings *ts,
                               const BMesh *bm,
                               const BMLoop *l,

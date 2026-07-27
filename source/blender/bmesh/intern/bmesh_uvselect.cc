@@ -1092,34 +1092,26 @@ static void bm_mesh_uvselect_mode_flush_down_deselect_only(BMesh *bm,
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                          const bool select,
                                          const BMUVSelectPickParams &params,
-                                         const BMUVSelectSetElemFromMeshLists &elems)
+                                         const VectorList<BMVert *> &verts,
+                                         const VectorList<BMEdge *> &edges,
+                                         const VectorList<BMFace *> &faces,
+                                         const bool mirrored)
 {
-  const bool check_verts = !elems.verts.is_empty();
-  const bool check_edges = !elems.edges.is_empty();
-  const bool check_verts_mirrored = !elems.verts_mirrored.is_empty();
-  const bool check_edges_mirrored = !elems.edges_mirrored.is_empty();
+  const bool check_verts = !verts.is_empty();
+  const bool check_edges = !edges.is_empty();
+  const UVSelectFlagSet &flags = mirrored ? uv_select_flags_mirrored : uv_select_flags_regular;
 
   /* TODO(@ideasman42): select picking may be slow because it does flushing too.
    * Although in practice it seems fast-enough. This should be handled more efficiently. */
 
-  for (BMVert *v : elems.verts) {
-    bm_vert_uvselect_set_pick_ex(bm, v, select, uv_select_flags_regular, true);
+  for (BMVert *v : verts) {
+    bm_vert_uvselect_set_pick_ex(bm, v, select, flags, true);
   }
-  for (BMEdge *e : elems.edges) {
-    bm_edge_uvselect_set_pick_ex(bm, e, select, params, uv_select_flags_regular, true);
+  for (BMEdge *e : edges) {
+    bm_edge_uvselect_set_pick_ex(bm, e, select, params, flags, true);
   }
-  for (BMFace *f : elems.faces) {
-    bm_face_uvselect_set_pick_ex(bm, f, select, params, uv_select_flags_regular);
-  }
-
-  for (BMVert *v : elems.verts_mirrored) {
-    bm_vert_uvselect_set_pick_ex(bm, v, select, uv_select_flags_mirrored, true);
-  }
-  for (BMEdge *e : elems.edges_mirrored) {
-    bm_edge_uvselect_set_pick_ex(bm, e, select, params, uv_select_flags_mirrored, true);
-  }
-  for (BMFace *f : elems.faces_mirrored) {
-    BM_face_uvselect_set_pick(bm, f, select, params, /*mirrored*/ true);
+  for (BMFace *f : faces) {
+    bm_face_uvselect_set_pick_ex(bm, f, select, params, flags);
   }
 
   bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
@@ -1128,44 +1120,28 @@ void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                                  params.shared,
                                                  check_verts,
                                                  check_edges,
-                                                 uv_select_flags_regular);
-  bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
-                                                 bm->selectmode,
-                                                 params.cd_loop_uv_offset,
-                                                 params.shared,
-                                                 check_verts_mirrored,
-                                                 check_edges_mirrored,
-                                                 uv_select_flags_mirrored);
+                                                 flags);
 }
 
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
-                                         bool select,
+                                         const bool select,
                                          const BMUVSelectPickParams &params,
-                                         const BMUVSelectSetElemFromMeshSpans &elems)
+                                         const Span<BMVert *> verts,
+                                         const Span<BMEdge *> edges,
+                                         const Span<BMFace *> faces,
+                                         const bool mirrored)
 {
-  const bool check_verts = !elems.verts.is_empty();
-  const bool check_edges = !elems.edges.is_empty();
-  const bool check_verts_mirrored = !elems.verts_mirrored.is_empty();
-  const bool check_edges_mirrored = !elems.edges_mirrored.is_empty();
+  const bool check_verts = !verts.is_empty();
+  const bool check_edges = !edges.is_empty();
 
-  for (BMVert *v : elems.verts) {
-    BM_vert_uvselect_set_pick(bm, v, select, params);
+  for (BMVert *v : verts) {
+    BM_vert_uvselect_set_pick(bm, v, select, params, mirrored);
   }
-  for (BMEdge *e : elems.edges) {
-    BM_edge_uvselect_set_pick(bm, e, select, params);
+  for (BMEdge *e : edges) {
+    BM_edge_uvselect_set_pick(bm, e, select, params, mirrored);
   }
-  for (BMFace *f : elems.faces) {
-    BM_face_uvselect_set_pick(bm, f, select, params);
-  }
-
-  for (BMVert *v : elems.verts_mirrored) {
-    BM_vert_uvselect_set_pick(bm, v, select, params, /*mirrored*/ true);
-  }
-  for (BMEdge *e : elems.edges_mirrored) {
-    BM_edge_uvselect_set_pick(bm, e, select, params, /*mirrored*/ true);
-  }
-  for (BMFace *f : elems.faces_mirrored) {
-    BM_face_uvselect_set_pick(bm, f, select, params, /*mirrored*/ true);
+  for (BMFace *f : faces) {
+    BM_face_uvselect_set_pick(bm, f, select, params, mirrored);
   }
 
   bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
@@ -1174,14 +1150,8 @@ void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                                  params.shared,
                                                  check_verts,
                                                  check_edges,
-                                                 uv_select_flags_regular);
-  bm_mesh_uvselect_mode_flush_down_deselect_only(bm,
-                                                 bm->selectmode,
-                                                 params.cd_loop_uv_offset,
-                                                 params.shared,
-                                                 check_verts_mirrored,
-                                                 check_edges_mirrored,
-                                                 uv_select_flags_mirrored);
+                                                 mirrored ? uv_select_flags_mirrored :
+                                                            uv_select_flags_regular);
 }
 
 /** \} */
@@ -1438,13 +1408,13 @@ void BM_mesh_uvselect_flush_from_loop_verts(BMesh *bm)
 
       const bool mirrored = (BM_elem_flag_test(l_iter, BM_ELEM_MIRRORED_SELECT_UV) &&
                              BM_elem_flag_test(l_iter->next, BM_ELEM_MIRRORED_SELECT_UV));
-      BM_loop_edge_uvselect_set_noflush(bm, l_iter, mirrored, /*mirrored*/ true);
+      BM_loop_edge_uvselect_set_noflush(bm, l_iter, mirrored, true);
       if (mirrored == false) {
         mirrored_all = false;
       }
     } while ((l_iter = l_iter->next) != l_first);
     BM_face_uvselect_set_noflush(bm, f, select_all);
-    BM_face_uvselect_set_noflush(bm, f, mirrored_all, /*mirrored*/ true);
+    BM_face_uvselect_set_noflush(bm, f, mirrored_all, true);
   }
 }
 
@@ -1464,11 +1434,11 @@ void BM_mesh_uvselect_flush_from_loop_edges(BMesh *bm, bool flush_down)
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       do {
         BM_loop_vert_uvselect_set_noflush(bm, l_iter, false);
-        BM_loop_vert_uvselect_set_noflush(bm, l_iter, false, /*mirrored*/ true);
+        BM_loop_vert_uvselect_set_noflush(bm, l_iter, false, true);
       } while ((l_iter = l_iter->next) != l_first);
     }
     BM_face_uvselect_set_noflush(bm, f, false);
-    BM_face_uvselect_set_noflush(bm, f, false, /*mirrored*/ true);
+    BM_face_uvselect_set_noflush(bm, f, false, true);
   }
 
   BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
@@ -1507,7 +1477,7 @@ void BM_mesh_uvselect_flush_from_loop_edges(BMesh *bm, bool flush_down)
       BM_face_uvselect_set_noflush(bm, f, true);
     }
     if (mirrored_all) {
-      BM_face_uvselect_set_noflush(bm, f, true, /*mirrored*/ true);
+      BM_face_uvselect_set_noflush(bm, f, true, true);
     }
   }
 }
@@ -2225,7 +2195,7 @@ void BM_mesh_uvselect_sync_to_mesh(BMesh *bm)
         BM_face_select_set(bm, f, true);
       }
       if (face_mirrored) {
-        BM_face_select_set(bm, f, true, BM_ELEM_MIRRORED_SELECT);
+        BM_face_select_set(bm, f, true, true);
       }
     }
   }

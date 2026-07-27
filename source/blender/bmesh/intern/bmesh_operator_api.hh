@@ -676,7 +676,7 @@ void BMO_slot_buffer_hflag_enable(BMesh *bm,
                                   BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
                                   const char *slot_name,
                                   char htype,
-                                  char hflag,
+                                  short hflag,
                                   bool do_flush);
 /**
  * \brief BMO_FLAG_BUFFER
@@ -688,7 +688,7 @@ void BMO_slot_buffer_hflag_disable(BMesh *bm,
                                    BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
                                    const char *slot_name,
                                    char htype,
-                                   char hflag,
+                                   short hflag,
                                    bool do_flush);
 
 /**

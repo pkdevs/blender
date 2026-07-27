@@ -568,7 +568,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
       BM_vert_select_set(bm, v, true);
     }
     if (!select_vert_mirrored.is_empty() && select_vert_mirrored[i]) {
-      BM_vert_select_set(bm, v, true, BM_ELEM_MIRRORED_SELECT);
+      BM_vert_select_set(bm, v, true, true);
     }
 
     if (!vert_normals.is_empty()) {
@@ -608,14 +608,11 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
     if (!hide_edge.is_empty() && hide_edge[i]) {
       BM_elem_flag_enable(e, BM_ELEM_HIDDEN);
     }
-    /* Verts already have their own final select/mirrored state set above, from their own
-     * independent attribute - use the non-flushing setters here so a genuinely-selected edge
-     * doesn't stomp a deliberately different (e.g. mirror-only) state on its own verts. */
     if (!select_edge.is_empty() && select_edge[i]) {
       BM_edge_select_set_noflush(bm, e, true);
     }
     if (!select_edge_mirrored.is_empty() && select_edge_mirrored[i]) {
-      BM_edge_select_set_noflush(bm, e, true, BM_ELEM_MIRRORED_SELECT);
+      BM_edge_select_set_noflush(bm, e, true, true);
     }
     if (!(!sharp_edges.is_empty() && sharp_edges[i])) {
       BM_elem_flag_enable(e, BM_ELEM_SMOOTH);
@@ -671,7 +668,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
       BM_face_select_set_noflush(bm, f, true);
     }
     if (!select_poly_mirrored.is_empty() && select_poly_mirrored[i]) {
-      BM_face_select_set_noflush(bm, f, true, BM_ELEM_MIRRORED_SELECT);
+      BM_face_select_set_noflush(bm, f, true, true);
     }
 
     f->mat_nr = material_indices.is_empty() ? 0 : material_indices[i];

@@ -873,7 +873,7 @@ Array<TransDataEdgeSlideVert> transform_mesh_uv_edge_slide_data_create(const Tra
 
         if (check_edge) {
           BMLoop *l_edge = l_dst == l->prev ? l_dst : l;
-          if (!uvedit_edge_select_test_ex(t->settings, bm, l_edge, offsets)) {
+          if (!uvedit_edge_select_test_ex(t->settings, bm, l_edge, offsets, false)) {
             continue;
           }
         }

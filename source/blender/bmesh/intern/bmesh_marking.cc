@@ -570,8 +570,8 @@ static void bm_mesh_select_mode_flush_edge_to_vert(BMesh *bm)
       any_mirrored = true;
     }
     else {
-      BM_vert_select_set(bm, e->v1, false, BM_ELEM_MIRRORED_SELECT);
-      BM_vert_select_set(bm, e->v2, false, BM_ELEM_MIRRORED_SELECT);
+      BM_vert_select_set(bm, e->v1, false, true);
+      BM_vert_select_set(bm, e->v2, false, true);
     }
   }
   if (any_select || any_mirrored) {
@@ -584,8 +584,8 @@ static void bm_mesh_select_mode_flush_edge_to_vert(BMesh *bm)
         BM_vert_select_set(bm, e->v2, true);
       }
       if (any_mirrored && BM_elem_flag_test(e, BM_ELEM_MIRRORED_SELECT)) {
-        BM_vert_select_set(bm, e->v1, true, BM_ELEM_MIRRORED_SELECT);
-        BM_vert_select_set(bm, e->v2, true, BM_ELEM_MIRRORED_SELECT);
+        BM_vert_select_set(bm, e->v1, true, true);
+        BM_vert_select_set(bm, e->v2, true, true);
       }
     }
   }
@@ -625,8 +625,8 @@ static void bm_mesh_select_mode_flush_face_to_vert_and_edge(BMesh *bm)
       BMLoop *l_first = BM_FACE_FIRST_LOOP(f);
       BMLoop *l_iter = l_first;
       do {
-        BM_vert_select_set(bm, l_iter->v, false, BM_ELEM_MIRRORED_SELECT);
-        BM_edge_select_set_noflush(bm, l_iter->e, false, BM_ELEM_MIRRORED_SELECT);
+        BM_vert_select_set(bm, l_iter->v, false, true);
+        BM_edge_select_set_noflush(bm, l_iter->e, false, true);
       } while ((l_iter = l_iter->next) != l_first);
     }
   }
@@ -647,8 +647,8 @@ static void bm_mesh_select_mode_flush_face_to_vert_and_edge(BMesh *bm)
         BMLoop *l_first = BM_FACE_FIRST_LOOP(f);
         BMLoop *l_iter = l_first;
         do {
-          BM_vert_select_set(bm, l_iter->v, true, BM_ELEM_MIRRORED_SELECT);
-          BM_edge_select_set_noflush(bm, l_iter->e, true, BM_ELEM_MIRRORED_SELECT);
+          BM_vert_select_set(bm, l_iter->v, true, true);
+          BM_edge_select_set_noflush(bm, l_iter->e, true, true);
         } while ((l_iter = l_iter->next) != l_first);
       }
     }
@@ -812,7 +812,7 @@ void BM_mesh_select_flush_from_verts(BMesh *bm, const bool select)
   recount_totsels(bm);
 }
 
-void BM_vert_select_set(BMesh *bm, BMVert *v, const bool select, const short hflag)
+void BM_vert_select_set(BMesh *bm, BMVert *v, const bool select, const bool mirrored)
 {
   BLI_assert(v->head.htype == BM_VERT);
 
@@ -820,59 +820,61 @@ void BM_vert_select_set(BMesh *bm, BMVert *v, const bool select, const short hfl
     return;
   }
 
+  const short hflag = mirrored ? BM_ELEM_MIRRORED_SELECT : BM_ELEM_SELECT;
+
   if (select) {
     if (!BM_elem_flag_test(v, hflag)) {
       BM_elem_flag_enable(v, hflag);
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totvertsel += 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totvertsel_mirrored += 1;
+      }
+      else {
+        bm->totvertsel += 1;
       }
     }
   }
   else {
     if (BM_elem_flag_test(v, hflag)) {
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totvertsel -= 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totvertsel_mirrored -= 1;
+      }
+      else {
+        bm->totvertsel -= 1;
       }
       BM_elem_flag_disable(v, hflag);
     }
   }
 }
 
-void BM_edge_select_set(BMesh *bm, BMEdge *e, const bool select, const short hflag)
+void BM_edge_select_set(BMesh *bm, BMEdge *e, const bool select, const bool mirrored)
 {
   BLI_assert(e->head.htype == BM_EDGE);
-
   if (BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
     return;
   }
 
+  const short hflag = mirrored ? BM_ELEM_MIRRORED_SELECT : BM_ELEM_SELECT;
   if (select) {
     if (!BM_elem_flag_test(e, hflag)) {
       BM_elem_flag_enable(e, hflag);
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totedgesel += 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totedgesel_mirrored += 1;
       }
+      else {
+        bm->totedgesel += 1;
+      }
     }
-    BM_vert_select_set(bm, e->v1, true, hflag);
-    BM_vert_select_set(bm, e->v2, true, hflag);
+    BM_vert_select_set(bm, e->v1, true, mirrored);
+    BM_vert_select_set(bm, e->v2, true, mirrored);
   }
   else {
     if (BM_elem_flag_test(e, hflag)) {
       BM_elem_flag_disable(e, hflag);
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totedgesel -= 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totedgesel_mirrored -= 1;
+      }
+      else {
+        bm->totedgesel -= 1;
       }
     }
 
@@ -883,18 +885,18 @@ void BM_edge_select_set(BMesh *bm, BMEdge *e, const bool select, const short hfl
       for (i = 0; i < 2; i++) {
         BMVert *v = *((&e->v1) + i);
         if (bm_vert_is_edge_select_any_other(v, e, hflag) == false) {
-          BM_vert_select_set(bm, v, false, hflag);
+          BM_vert_select_set(bm, v, false, mirrored);
         }
       }
     }
     else {
-      BM_vert_select_set(bm, e->v1, false, hflag);
-      BM_vert_select_set(bm, e->v2, false, hflag);
+      BM_vert_select_set(bm, e->v1, false, mirrored);
+      BM_vert_select_set(bm, e->v2, false, mirrored);
     }
   }
 }
 
-void BM_face_select_set(BMesh *bm, BMFace *f, const bool select, const short hflag)
+void BM_face_select_set(BMesh *bm, BMFace *f, const bool select, const bool mirrored)
 {
   BMLoop *l_iter;
   BMLoop *l_first;
@@ -905,32 +907,34 @@ void BM_face_select_set(BMesh *bm, BMFace *f, const bool select, const short hfl
     return;
   }
 
+  const short hflag = mirrored ? BM_ELEM_MIRRORED_SELECT : BM_ELEM_SELECT;
+
   if (select) {
     if (!BM_elem_flag_test(f, hflag)) {
       BM_elem_flag_enable(f, hflag);
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totfacesel += 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totfacesel_mirrored += 1;
+      }
+      else {
+        bm->totfacesel += 1;
       }
     }
 
     l_iter = l_first = BM_FACE_FIRST_LOOP(f);
     do {
-      BM_vert_select_set(bm, l_iter->v, true, hflag);
-      BM_edge_select_set(bm, l_iter->e, true, hflag);
+      BM_vert_select_set(bm, l_iter->v, true, mirrored);
+      BM_edge_select_set(bm, l_iter->e, true, mirrored);
     } while ((l_iter = l_iter->next) != l_first);
   }
   else {
 
     if (BM_elem_flag_test(f, hflag)) {
       BM_elem_flag_disable(f, hflag);
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totfacesel -= 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totfacesel_mirrored -= 1;
+      }
+      else {
+        bm->totfacesel -= 1;
       }
     }
     /**
@@ -944,8 +948,8 @@ void BM_face_select_set(BMesh *bm, BMFace *f, const bool select, const short hfl
     if (bm->selectmode & SCE_SELECT_VERTEX) {
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       do {
-        BM_vert_select_set(bm, l_iter->v, false, hflag);
-        BM_edge_select_set_noflush(bm, l_iter->e, false, hflag);
+        BM_vert_select_set(bm, l_iter->v, false, mirrored);
+        BM_edge_select_set_noflush(bm, l_iter->e, false, mirrored);
       } while ((l_iter = l_iter->next) != l_first);
     }
     else {
@@ -956,14 +960,14 @@ void BM_face_select_set(BMesh *bm, BMFace *f, const bool select, const short hfl
       if (bm->selectmode & SCE_SELECT_EDGE) {
         l_iter = l_first = BM_FACE_FIRST_LOOP(f);
         do {
-          BM_edge_select_set_noflush(bm, l_iter->e, false, hflag);
+          BM_edge_select_set_noflush(bm, l_iter->e, false, mirrored);
         } while ((l_iter = l_iter->next) != l_first);
       }
       else {
         l_iter = l_first = BM_FACE_FIRST_LOOP(f);
         do {
           if (bm_edge_is_face_select_any_other(l_iter, hflag) == false) {
-            BM_edge_select_set_noflush(bm, l_iter->e, false, hflag);
+            BM_edge_select_set_noflush(bm, l_iter->e, false, mirrored);
           }
         } while ((l_iter = l_iter->next) != l_first);
       }
@@ -972,7 +976,7 @@ void BM_face_select_set(BMesh *bm, BMFace *f, const bool select, const short hfl
       l_iter = l_first = BM_FACE_FIRST_LOOP(f);
       do {
         if (bm_vert_is_edge_select_any_other(l_iter->v, l_iter->e, hflag) == false) {
-          BM_vert_select_set(bm, l_iter->v, false, hflag);
+          BM_vert_select_set(bm, l_iter->v, false, mirrored);
         }
       } while ((l_iter = l_iter->next) != l_first);
     }
@@ -983,7 +987,7 @@ void BM_face_select_set(BMesh *bm, BMFace *f, const bool select, const short hfl
 /** \name Non Flushing Versions Element Selection
  * \{ */
 
-void BM_edge_select_set_noflush(BMesh *bm, BMEdge *e, const bool select, const short hflag)
+void BM_edge_select_set_noflush(BMesh *bm, BMEdge *e, const bool select, const bool mirrored)
 {
   BLI_assert(e->head.htype == BM_EDGE);
 
@@ -991,31 +995,33 @@ void BM_edge_select_set_noflush(BMesh *bm, BMEdge *e, const bool select, const s
     return;
   }
 
+  const short hflag = mirrored ? BM_ELEM_MIRRORED_SELECT : BM_ELEM_SELECT;
+
   if (select) {
     if (!BM_elem_flag_test(e, hflag)) {
       BM_elem_flag_enable(e, hflag);
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totedgesel += 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totedgesel_mirrored += 1;
+      }
+      else {
+        bm->totedgesel += 1;
       }
     }
   }
   else {
     if (BM_elem_flag_test(e, hflag)) {
       BM_elem_flag_disable(e, hflag);
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totedgesel -= 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totedgesel_mirrored -= 1;
+      }
+      else {
+        bm->totedgesel -= 1;
       }
     }
   }
 }
 
-void BM_face_select_set_noflush(BMesh *bm, BMFace *f, const bool select, const short hflag)
+void BM_face_select_set_noflush(BMesh *bm, BMFace *f, const bool select, const bool mirrored)
 {
   BLI_assert(f->head.htype == BM_FACE);
 
@@ -1023,25 +1029,27 @@ void BM_face_select_set_noflush(BMesh *bm, BMFace *f, const bool select, const s
     return;
   }
 
+  const short hflag = mirrored ? BM_ELEM_MIRRORED_SELECT : BM_ELEM_SELECT;
+
   if (select) {
     if (!BM_elem_flag_test(f, hflag)) {
       BM_elem_flag_enable(f, hflag);
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totfacesel += 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totfacesel_mirrored += 1;
+      }
+      else {
+        bm->totfacesel += 1;
       }
     }
   }
   else {
     if (BM_elem_flag_test(f, hflag)) {
       BM_elem_flag_disable(f, hflag);
-      if (hflag == BM_ELEM_SELECT) {
-        bm->totfacesel -= 1;
-      }
-      else if (hflag == BM_ELEM_MIRRORED_SELECT) {
+      if (mirrored) {
         bm->totfacesel_mirrored -= 1;
+      }
+      else {
+        bm->totfacesel -= 1;
       }
     }
   }
@@ -1164,17 +1172,17 @@ int BM_mesh_elem_hflag_count_disabled(BMesh *bm,
   return bm_mesh_flag_count(bm, htype, hflag, respecthide, false);
 }
 
-void BM_elem_select_set(BMesh *bm, BMElem *ele, const bool select)
+void BM_elem_select_set(BMesh *bm, BMElem *ele, const bool select, const bool mirrored)
 {
   switch (ele->head.htype) {
     case BM_VERT:
-      BM_vert_select_set(bm, reinterpret_cast<BMVert *>(ele), select);
+      BM_vert_select_set(bm, reinterpret_cast<BMVert *>(ele), select, mirrored);
       break;
     case BM_EDGE:
-      BM_edge_select_set(bm, reinterpret_cast<BMEdge *>(ele), select);
+      BM_edge_select_set(bm, reinterpret_cast<BMEdge *>(ele), select, mirrored);
       break;
     case BM_FACE:
-      BM_face_select_set(bm, reinterpret_cast<BMFace *>(ele), select);
+      BM_face_select_set(bm, reinterpret_cast<BMFace *>(ele), select, mirrored);
       break;
     default:
       BLI_assert(0);

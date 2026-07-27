@@ -288,25 +288,6 @@ void BM_edge_uvselect_set_pick(
 void BM_face_uvselect_set_pick(
     BMesh *bm, BMFace *f, bool select, const BMUVSelectPickParams &params, bool mirrored = false);
 
-struct BMUVSelectSetElemFromMeshSpans {
-  Span<BMVert *> verts;
-  Span<BMEdge *> edges;
-  Span<BMFace *> faces;
-
-  Span<BMVert *> verts_mirrored;
-  Span<BMEdge *> edges_mirrored;
-  Span<BMFace *> faces_mirrored;
-};
-struct BMUVSelectSetElemFromMeshLists {
-  const VectorList<BMVert *> &verts;
-  const VectorList<BMEdge *> &edges;
-  const VectorList<BMFace *> &faces;
-
-  const VectorList<BMVert *> &verts_mirrored;
-  const VectorList<BMEdge *> &edges_mirrored;
-  const VectorList<BMFace *> &faces_mirrored;
-};
-
 /**
  * Select/deselect elements in the viewport,
  * then integrate the selection with the UV selection,
@@ -316,12 +297,18 @@ struct BMUVSelectSetElemFromMeshLists {
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                          bool select,
                                          const BMUVSelectPickParams &params,
-                                         const BMUVSelectSetElemFromMeshSpans &elems);
+                                         Span<BMVert *> verts,
+                                         Span<BMEdge *> edges,
+                                         Span<BMFace *> faces,
+                                         const bool mirrored);
 /** \copydoc #BM_mesh_uvselect_set_elem_from_mesh. */
 void BM_mesh_uvselect_set_elem_from_mesh(BMesh *bm,
                                          bool select,
                                          const BMUVSelectPickParams &params,
-                                         const BMUVSelectSetElemFromMeshLists &elems);
+                                         const VectorList<BMVert *> &verts,
+                                         const VectorList<BMEdge *> &edges,
+                                         const VectorList<BMFace *> &faces,
+                                         const bool mirrored);
 
 /** \} */
 

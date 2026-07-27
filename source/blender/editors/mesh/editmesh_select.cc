@@ -2798,8 +2798,8 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         }
         case SEL_OP_SUB: {
           BM_select_history_remove(bm, efa);
-          BM_face_select_set(bm, efa, false, BM_ELEM_SELECT);
-          BM_face_select_set(bm, efa, false, BM_ELEM_MIRRORED_SELECT);
+          BM_face_select_set(bm, efa, false);
+          BM_face_select_set(bm, efa, false, true);
           if (BM_elem_flag_test(efa, BM_ELEM_SELECT) && symmetry_helper.has_value()) {
             symmetry_helper->set_hflag_on_mirror_faces(efa, BM_ELEM_MIRRORED_SELECT, false);
           }
@@ -2822,8 +2822,8 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
 
           else {
             BM_select_history_remove(bm, efa);
-            BM_face_select_set(bm, efa, false, BM_ELEM_SELECT);
-            BM_face_select_set(bm, efa, false, BM_ELEM_MIRRORED_SELECT);
+            BM_face_select_set(bm, efa, false);
+            BM_face_select_set(bm, efa, false, true);
             if (bm->uv_select_sync_valid) {
               BM_face_uvselect_set_pick(bm, efa, false, uv_pick_params);
             }
@@ -2871,14 +2871,14 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         }
         case SEL_OP_SUB: {
           BM_select_history_remove(bm, eed);
-          BM_edge_select_set(bm, eed, false, BM_ELEM_SELECT);
-          BM_edge_select_set(bm, eed, false, BM_ELEM_MIRRORED_SELECT);
+          BM_edge_select_set(bm, eed, false);
+          BM_edge_select_set(bm, eed, false, true);
           if (BM_elem_flag_test(eed, BM_ELEM_SELECT) && symmetry_helper.has_value()) {
             symmetry_helper->set_hflag_on_mirror_edges(eed, BM_ELEM_MIRRORED_SELECT, false);
           }
           if (bm->uv_select_sync_valid) {
-            BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params, BM_ELEM_SELECT);
-            BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params, BM_ELEM_MIRRORED_SELECT);
+            BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params, false);
+            BM_edge_uvselect_set_pick(bm, eed, false, uv_pick_params, true);
           }
           break;
         }
@@ -2894,8 +2894,8 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
           }
           else {
             BM_select_history_remove(bm, eed);
-            BM_edge_select_set(bm, eed, false, BM_ELEM_SELECT);
-            BM_edge_select_set(bm, eed, false, BM_ELEM_MIRRORED_SELECT);
+            BM_edge_select_set(bm, eed, false);
+            BM_edge_select_set(bm, eed, false, true);
           }
           break;
         }
@@ -2938,7 +2938,7 @@ bool EDBM_select_pick(bContext *C, const int mval[2], const SelectPick_Params &p
         case SEL_OP_SUB: {
           BM_select_history_remove(bm, eve);
           BM_vert_select_set(bm, eve, false);
-          BM_vert_select_set(bm, eve, false, BM_ELEM_MIRRORED_SELECT);
+          BM_vert_select_set(bm, eve, false, true);
           if (BM_elem_flag_test(eve, BM_ELEM_SELECT) && symmetry_helper.has_value()) {
             symmetry_helper->set_hflag_on_mirror_verts(eve, BM_ELEM_MIRRORED_SELECT, false);
           }
@@ -3109,7 +3109,7 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
                                                                        BM_ELEM_MIRRORED_SELECT);
 
       BM_vert_select_set(em->bm, eve, touches_selected_edge && !was_mirror_only);
-      BM_vert_select_set(em->bm, eve, touches_mirrored_edge, BM_ELEM_MIRRORED_SELECT);
+      BM_vert_select_set(em->bm, eve, touches_mirrored_edge, true);
     }
 
     if (em->bm->totedgesel || em->bm->totedgesel_mirrored) {
@@ -3139,7 +3139,7 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
     /* Deselect edges, and select again based on face select. */
     BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
       BM_edge_select_set(em->bm, eed, false);
-      BM_edge_select_set(em->bm, eed, false, BM_ELEM_MIRRORED_SELECT);
+      BM_edge_select_set(em->bm, eed, false, true);
     }
 
     if (em->bm->totfacesel || em->bm->totfacesel_mirrored) {
@@ -3150,19 +3150,19 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
           BM_face_select_set(em->bm, efa, true);
         }
         if (f_mirrored) {
-          BM_face_select_set(em->bm, efa, true, BM_ELEM_MIRRORED_SELECT);
+          BM_face_select_set(em->bm, efa, true, true);
         }
       }
     }
 
     for (BMVert *v : verts_was_mirror_only) {
       BM_vert_select_set(em->bm, v, false);
-      BM_vert_select_set(em->bm, v, true, BM_ELEM_MIRRORED_SELECT);
+      BM_vert_select_set(em->bm, v, true, true);
     }
 
     for (BMEdge *e : edges_was_mirror_only) {
       BM_edge_select_set_noflush(em->bm, e, false);
-      BM_edge_select_set_noflush(em->bm, e, true, BM_ELEM_MIRRORED_SELECT);
+      BM_edge_select_set_noflush(em->bm, e, true, true);
     }
   }
 
@@ -5394,6 +5394,7 @@ static void walker_deselect_nth_vertex_chain(BMEditMesh *em,
     /* Apply checker pattern based on position in loop. */
     if (!WM_operator_properties_checker_interval_test(op_params, index)) {
       BM_elem_select_set(bm, reinterpret_cast<BMElem *>(v_curr), false);
+      BM_elem_select_set(bm, reinterpret_cast<BMElem *>(v_curr), false, true);
     }
 
     /* Find next vertex in the loop. */
@@ -5427,6 +5428,7 @@ static void walker_deselect_nth_edge_chain(BMEditMesh *em,
     /* Apply checker pattern based on position in loop. */
     if (!WM_operator_properties_checker_interval_test(op_params, index)) {
       BM_elem_select_set(bm, reinterpret_cast<BMElem *>(e_curr), false);
+      BM_elem_select_set(bm, reinterpret_cast<BMElem *>(e_curr), false, true);
     }
 
     /* Find next edge in the loop. */
@@ -5461,6 +5463,7 @@ static void walker_deselect_nth_face_chain(BMEditMesh *em,
     /* Apply checker pattern to current face. */
     if (!WM_operator_properties_checker_interval_test(op_params, index)) {
       BM_elem_select_set(bm, reinterpret_cast<BMElem *>(f_curr), false);
+      BM_elem_select_set(bm, reinterpret_cast<BMElem *>(f_curr), false, true);
     }
 
     if (ELEM(f_next, nullptr, f_start)) {
@@ -5589,6 +5592,7 @@ static void walker_deselect_nth(BMEditMesh *em,
       const int depth = BMW_current_depth(&walker) - 1;
       if (!WM_operator_properties_checker_interval_test(op_params, depth)) {
         BM_elem_select_set(bm, ele, false);
+        BM_elem_select_set(bm, ele, false, true);
       }
       BM_elem_flag_enable(ele, BM_ELEM_TAG);
     }

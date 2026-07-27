@@ -405,6 +405,13 @@ void BM_elem_select_copy(BMesh *bm_dst, void *ele_dst_v, const void *ele_src_v)
     BM_elem_select_set(
         bm_dst, reinterpret_cast<BMElem *>(ele_dst), (ele_src->hflag & BM_ELEM_SELECT) != 0);
   }
+
+  if ((ele_src->hflag & BM_ELEM_MIRRORED_SELECT) != (ele_dst->hflag & BM_ELEM_MIRRORED_SELECT)) {
+    BM_elem_select_set(bm_dst,
+                       reinterpret_cast<BMElem *>(ele_dst),
+                       (ele_src->hflag & BM_ELEM_MIRRORED_SELECT) != 0,
+                       true);
+  }
 }
 
 /* helper function for 'BM_mesh_copy' */

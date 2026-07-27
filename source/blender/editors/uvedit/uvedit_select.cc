@@ -432,25 +432,31 @@ bool uvedit_face_visible_test(const Scene *scene, const BMFace *efa)
   return uvedit_face_visible_test_ex(scene->toolsettings, efa);
 }
 
-bool uvedit_face_select_test_ex(const ToolSettings *ts, const BMesh *bm, const BMFace *efa)
+bool uvedit_face_select_test_ex(const ToolSettings *ts,
+                                const BMesh *bm,
+                                const BMFace *efa,
+                                const bool mirrored)
 {
+  const short elem_hflag = mirrored ? BM_ELEM_MIRRORED_SELECT : BM_ELEM_SELECT;
+  const short uv_face_hflag = mirrored ? BM_ELEM_MIRRORED_SELECT_UV : BM_ELEM_SELECT_UV;
+  const short uv_edge_hflag = mirrored ? BM_ELEM_MIRRORED_SELECT_UV_EDGE : BM_ELEM_SELECT_UV_EDGE;
+
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     if (bm->uv_select_sync_valid == false || ED_uvedit_sync_uvselect_ignore(ts)) {
-      return BM_elem_flag_test(efa, BM_ELEM_SELECT);
+      return BM_elem_flag_test(efa, elem_hflag);
     }
     /* Caller checks for visibility. */
     BLI_assert(!BM_elem_flag_test(efa, BM_ELEM_HIDDEN));
-    return BM_elem_flag_test(efa, BM_ELEM_SELECT_UV);
+    return BM_elem_flag_test(efa, uv_face_hflag);
   }
 
   if (ts->uv_selectmode == UV_SELECT_FACE) {
-    if (!BM_elem_flag_test(efa, BM_ELEM_SELECT_UV)) {
+    if (!BM_elem_flag_test(efa, uv_face_hflag)) {
       return false;
     }
     return true;
   }
-  const char hflag_test = (ts->uv_selectmode & UV_SELECT_VERT) ? BM_ELEM_SELECT_UV :
-                                                                 BM_ELEM_SELECT_UV_EDGE;
+  const short hflag_test = (ts->uv_selectmode & UV_SELECT_VERT) ? uv_face_hflag : uv_edge_hflag;
   const BMLoop *l_first = BM_FACE_FIRST_LOOP(efa);
   const BMLoop *l_iter = l_first;
   do {
@@ -462,42 +468,12 @@ bool uvedit_face_select_test_ex(const ToolSettings *ts, const BMesh *bm, const B
 }
 bool uvedit_face_select_test(const Scene *scene, const BMesh *bm, const BMFace *efa)
 {
-  return uvedit_face_select_test_ex(scene->toolsettings, bm, efa);
+  return uvedit_face_select_test_ex(scene->toolsettings, bm, efa, false);
 }
 
-bool uvedit_face_mirrored_select_test_ex(const ToolSettings *ts,
-                                         const BMesh *bm,
-                                         const BMFace *efa)
-{
-  if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
-    if (bm->uv_select_sync_valid == false || ED_uvedit_sync_uvselect_ignore(ts)) {
-      return BM_elem_flag_test(efa, BM_ELEM_MIRRORED_SELECT);
-    }
-    /* Caller checks for visibility. */
-    BLI_assert(!BM_elem_flag_test(efa, BM_ELEM_HIDDEN));
-    return BM_elem_flag_test(efa, BM_ELEM_MIRRORED_SELECT_UV);
-  }
-
-  if (ts->uv_selectmode == UV_SELECT_FACE) {
-    if (!BM_elem_flag_test(efa, BM_ELEM_MIRRORED_SELECT_UV)) {
-      return false;
-    }
-    return true;
-  }
-  const short hflag_test = (ts->uv_selectmode & UV_SELECT_VERT) ? BM_ELEM_MIRRORED_SELECT_UV :
-                                                                  BM_ELEM_MIRRORED_SELECT_UV_EDGE;
-  const BMLoop *l_first = BM_FACE_FIRST_LOOP(efa);
-  const BMLoop *l_iter = l_first;
-  do {
-    if (!BM_elem_flag_test(l_iter, hflag_test)) {
-      return false;
-    }
-  } while ((l_iter = l_iter->next) != l_first);
-  return true;
-}
 bool uvedit_face_mirrored_select_test(const Scene *scene, const BMesh *bm, const BMFace *efa)
 {
-  return uvedit_face_mirrored_select_test_ex(scene->toolsettings, bm, efa);
+  return uvedit_face_select_test_ex(scene->toolsettings, bm, efa, true);
 }
 
 void uvedit_face_select_set_with_sticky(
@@ -655,27 +631,34 @@ void uvedit_face_select_disable(const Scene *scene, BMesh *bm, BMFace *efa)
 bool uvedit_edge_select_test_ex(const ToolSettings *ts,
                                 const BMesh *bm,
                                 const BMLoop *l,
-                                const BMUVOffsets &offsets)
+                                const BMUVOffsets &offsets,
+                                const bool mirrored)
 {
+  const short elem_hflag = mirrored ? BM_ELEM_MIRRORED_SELECT : BM_ELEM_SELECT;
+  const short uv_edge_hflag = mirrored ? BM_ELEM_MIRRORED_SELECT_UV_EDGE : BM_ELEM_SELECT_UV_EDGE;
+  const int uv_vert_hflag = mirrored ? BM_ELEM_MIRRORED_SELECT_UV : BM_ELEM_SELECT_UV;
+
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
     if ((bm->uv_select_sync_valid == false) && (ts->selectmode == SCE_SELECT_FACE)) {
       /* Face only is a special case that can respect sticky modes. */
       switch (ts->uv_sticky) {
         case UV_STICKY_LOCATION: {
-          if (BM_elem_flag_test(l->f, BM_ELEM_SELECT)) {
+          if (BM_elem_flag_test(l->f, elem_hflag)) {
             return true;
           }
-          if (uvedit_edge_is_face_select_any_other(ts, bm, l, offsets)) {
+          if (mirrored ? uvedit_edge_is_face_mirrored_select_any_other(ts, bm, l, offsets) :
+                         uvedit_edge_is_face_select_any_other(ts, bm, l, offsets))
+          {
             return true;
           }
           return false;
         }
         case UV_STICKY_DISABLE: {
-          return BM_elem_flag_test_bool(l->f, BM_ELEM_SELECT);
+          return BM_elem_flag_test_bool(l->f, elem_hflag);
         }
         default: {
           /* #UV_STICKY_VERT */
-          return BM_elem_flag_test_bool(l->e, BM_ELEM_SELECT);
+          return BM_elem_flag_test_bool(l->e, elem_hflag);
         }
       }
       BLI_assert_unreachable();
@@ -683,23 +666,22 @@ bool uvedit_edge_select_test_ex(const ToolSettings *ts,
 
     if (bm->uv_select_sync_valid == false || ED_uvedit_sync_uvselect_ignore(ts)) {
       if (ts->selectmode & SCE_SELECT_FACE) {
-        return BM_elem_flag_test(l->f, BM_ELEM_SELECT);
+        return BM_elem_flag_test(l->f, elem_hflag);
       }
       if ((ts->selectmode & ~SCE_SELECT_FACE) == SCE_SELECT_EDGE) {
-        return BM_elem_flag_test(l->e, BM_ELEM_SELECT);
+        return BM_elem_flag_test(l->e, elem_hflag);
       }
-      return BM_elem_flag_test(l->v, BM_ELEM_SELECT) &&
-             BM_elem_flag_test(l->next->v, BM_ELEM_SELECT);
+      return BM_elem_flag_test(l->v, elem_hflag) && BM_elem_flag_test(l->next->v, elem_hflag);
     }
 
-    return BM_elem_flag_test(l, BM_ELEM_SELECT_UV_EDGE);
+    return BM_elem_flag_test(l, uv_edge_hflag);
   }
 
   if (ts->uv_selectmode & UV_SELECT_VERT) {
-    return uvedit_vert_select_get_no_sync(ts, bm, l) &&
-           uvedit_vert_select_get_no_sync(ts, bm, l->next);
+    return uvedit_vert_select_get_no_sync(ts, bm, l, uv_vert_hflag) &&
+           uvedit_vert_select_get_no_sync(ts, bm, l->next, uv_vert_hflag);
   }
-  return uvedit_edge_select_get_no_sync(ts, bm, l);
+  return BM_elem_flag_test_bool(l, uv_edge_hflag);
 }
 
 bool uvedit_edge_select_test(const Scene *scene,
@@ -707,55 +689,7 @@ bool uvedit_edge_select_test(const Scene *scene,
                              const BMLoop *l,
                              const BMUVOffsets &offsets)
 {
-  return uvedit_edge_select_test_ex(scene->toolsettings, bm, l, offsets);
-}
-
-bool uvedit_edge_mirrored_select_test_ex(const ToolSettings *ts,
-                                         const BMesh *bm,
-                                         const BMLoop *l,
-                                         const BMUVOffsets &offsets)
-{
-  if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
-    if ((bm->uv_select_sync_valid == false) && (ts->selectmode == SCE_SELECT_FACE)) {
-      switch (ts->uv_sticky) {
-        case UV_STICKY_LOCATION: {
-          if (BM_elem_flag_test(l->f, BM_ELEM_MIRRORED_SELECT)) {
-            return true;
-          }
-          if (uvedit_edge_is_face_mirrored_select_any_other(ts, bm, l, offsets)) {
-            return true;
-          }
-          return false;
-        }
-        case UV_STICKY_DISABLE: {
-          return BM_elem_flag_test_bool(l->f, BM_ELEM_MIRRORED_SELECT);
-        }
-        default: {
-          return BM_elem_flag_test_bool(l->e, BM_ELEM_MIRRORED_SELECT);
-        }
-      }
-      BLI_assert_unreachable();
-    }
-
-    if (bm->uv_select_sync_valid == false || ED_uvedit_sync_uvselect_ignore(ts)) {
-      if (ts->selectmode & SCE_SELECT_FACE) {
-        return BM_elem_flag_test(l->f, BM_ELEM_MIRRORED_SELECT);
-      }
-      if ((ts->selectmode & ~SCE_SELECT_FACE) == SCE_SELECT_EDGE) {
-        return BM_elem_flag_test(l->e, BM_ELEM_MIRRORED_SELECT);
-      }
-      return BM_elem_flag_test(l->v, BM_ELEM_MIRRORED_SELECT) &&
-             BM_elem_flag_test(l->next->v, BM_ELEM_MIRRORED_SELECT);
-    }
-
-    return BM_elem_flag_test(l, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
-  }
-
-  if (ts->uv_selectmode & UV_SELECT_VERT) {
-    return uvedit_vert_select_get_no_sync(ts, bm, l, BM_ELEM_MIRRORED_SELECT_UV) &&
-           uvedit_vert_select_get_no_sync(ts, bm, l->next, BM_ELEM_MIRRORED_SELECT_UV);
-  }
-  return BM_elem_flag_test_bool(l, BM_ELEM_MIRRORED_SELECT_UV_EDGE);
+  return uvedit_edge_select_test_ex(scene->toolsettings, bm, l, offsets, false);
 }
 
 bool uvedit_edge_mirrored_select_test(const Scene *scene,
@@ -763,7 +697,7 @@ bool uvedit_edge_mirrored_select_test(const Scene *scene,
                                       const BMLoop *l,
                                       const BMUVOffsets &offsets)
 {
-  return uvedit_edge_mirrored_select_test_ex(scene->toolsettings, bm, l, offsets);
+  return uvedit_edge_select_test_ex(scene->toolsettings, bm, l, offsets, true);
 }
 
 void uvedit_edge_select_set_with_sticky(
@@ -1822,7 +1756,7 @@ bool uvedit_vert_is_edge_select_any_other(const ToolSettings *ts,
        * and #l_radial_iter for the actual edge selection test. */
       BMLoop *l_other = (l_radial_iter->v != l->v) ? l_radial_iter->next : l_radial_iter;
       if (BM_loop_uv_share_vert_check(l, l_other, offsets.uv) &&
-          uvedit_edge_select_test_ex(ts, bm, l_radial_iter, offsets))
+          uvedit_edge_select_test_ex(ts, bm, l_radial_iter, offsets, false))
       {
         return true;
       }
@@ -1847,7 +1781,7 @@ bool uvedit_edge_is_face_select_any_other(const ToolSettings *ts,
       continue;
     }
     if (BM_loop_uv_share_edge_check(l, l_radial_iter, offsets.uv) &&
-        uvedit_face_select_test_ex(ts, bm, l_radial_iter->f))
+        uvedit_face_select_test_ex(ts, bm, l_radial_iter->f, false))
     {
       return true;
     }
@@ -1871,7 +1805,7 @@ bool uvedit_edge_is_face_mirrored_select_any_other(const ToolSettings *ts,
       continue;
     }
     if (BM_loop_uv_share_edge_check(l, l_radial_iter, offsets.uv) &&
-        uvedit_face_mirrored_select_test_ex(ts, bm, l_radial_iter->f))
+        uvedit_face_select_test_ex(ts, bm, l_radial_iter->f, true))
     {
       return true;
     }
@@ -1893,7 +1827,7 @@ bool uvedit_vert_is_face_select_any_other(const ToolSettings *ts,
       continue;
     }
     if (BM_loop_uv_share_vert_check(l, l_iter, offsets.uv) &&
-        uvedit_face_select_test_ex(ts, bm, l_iter->f))
+        uvedit_face_select_test_ex(ts, bm, l_iter->f, false))
     {
       return true;
     }
@@ -1914,7 +1848,7 @@ bool uvedit_vert_is_all_other_faces_selected(const ToolSettings *ts,
       continue;
     }
     if (BM_loop_uv_share_vert_check(l, l_iter, offsets.uv) &&
-        !uvedit_face_select_test_ex(ts, bm, l_iter->f))
+        !uvedit_face_select_test_ex(ts, bm, l_iter->f, false))
     {
       return false;
     }
@@ -2050,22 +1984,27 @@ void UVSyncSelectFromMesh::apply()
   BM_mesh_uvselect_set_elem_from_mesh(&bm_,
                                       false,
                                       uv_pick_params,
-                                      {bm_verts_deselect_,
-                                       bm_edges_deselect_,
-                                       bm_faces_deselect_,
-                                       bm_verts_mirrored_deselect_,
-                                       bm_edges_mirrored_deselect_,
-                                       bm_faces_mirrored_deselect_});
+                                      bm_verts_deselect_,
+                                      bm_edges_deselect_,
+                                      bm_faces_deselect_,
+                                      false);
+  BM_mesh_uvselect_set_elem_from_mesh(&bm_,
+                                      false,
+                                      uv_pick_params,
+                                      bm_verts_mirrored_deselect_,
+                                      bm_edges_mirrored_deselect_,
+                                      bm_faces_mirrored_deselect_,
+                                      true);
 
+  BM_mesh_uvselect_set_elem_from_mesh(
+      &bm_, true, uv_pick_params, bm_verts_select_, bm_edges_select_, bm_faces_select_, false);
   BM_mesh_uvselect_set_elem_from_mesh(&bm_,
                                       true,
                                       uv_pick_params,
-                                      {bm_verts_select_,
-                                       bm_edges_select_,
-                                       bm_faces_select_,
-                                       bm_verts_mirrored_select_,
-                                       bm_edges_mirrored_select_,
-                                       bm_faces_mirrored_select_});
+                                      bm_verts_mirrored_select_,
+                                      bm_edges_mirrored_select_,
+                                      bm_faces_mirrored_select_,
+                                      true);
 }
 
 /* Select. */

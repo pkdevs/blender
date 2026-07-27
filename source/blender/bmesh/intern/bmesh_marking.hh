@@ -58,7 +58,7 @@ void BM_face_hide_set(BMFace *f, bool hide);
  * \note use BM_elem_flag_test(ele, BM_ELEM_SELECT) to test selection
  * \note by design, this will not touch the editselection history stuff
  */
-void BM_elem_select_set(BMesh *bm, BMElem *ele, bool select);
+void BM_elem_select_set(BMesh *bm, BMElem *ele, bool select, bool mirrored = false);
 
 void BM_mesh_elem_hflag_enable_test(
     BMesh *bm, char htype, short hflag, bool respecthide, bool overwrite, short hflag_test);
@@ -77,25 +77,25 @@ void BM_mesh_elem_hflag_disable_all(BMesh *bm, char htype, short hflag, bool res
  * Changes selection state of a single vertex
  * in a mesh
  */
-void BM_vert_select_set(BMesh *bm, BMVert *v, bool select, short hflag = BM_ELEM_SELECT);
+void BM_vert_select_set(BMesh *bm, BMVert *v, bool select, bool mirrored = false);
 /**
  * \brief Select Edge
  *
  * Changes selection state of a single edge in a mesh.
  */
-void BM_edge_select_set(BMesh *bm, BMEdge *e, bool select, short hflag = BM_ELEM_SELECT);
+void BM_edge_select_set(BMesh *bm, BMEdge *e, bool select, bool mirrored = false);
 /**
  * \brief Select Face
  *
  * Changes selection state of a single
  * face in a mesh.
  */
-void BM_face_select_set(BMesh *bm, BMFace *f, bool select, short hflag = BM_ELEM_SELECT);
+void BM_face_select_set(BMesh *bm, BMFace *f, bool select, bool mirrored = false);
 
 /* Lower level functions which don't do flushing. */
 
-void BM_edge_select_set_noflush(BMesh *bm, BMEdge *e, bool select, short hflag = BM_ELEM_SELECT);
-void BM_face_select_set_noflush(BMesh *bm, BMFace *f, bool select, short hflag = BM_ELEM_SELECT);
+void BM_edge_select_set_noflush(BMesh *bm, BMEdge *e, bool select, bool mirrored = false);
+void BM_face_select_set_noflush(BMesh *bm, BMFace *f, bool select, bool mirrored = false);
 
 /**
  * Return true when there are a mix of selected/unselected elements.

@@ -175,7 +175,7 @@ static bool verttag_test_cb(BMVert *v, void *user_data_v)
 static void verttag_set_cb(BMVert *v, bool val, void *user_data_v)
 {
   UserData *user_data = static_cast<UserData *>(user_data_v);
-  BM_vert_select_set(user_data->bm, v, val, user_data->select_flag);
+  BM_vert_select_set(user_data->bm, v, val, user_data->select_flag == BM_ELEM_MIRRORED_SELECT);
 }
 
 static void mouse_mesh_shortest_path_vert(Scene * /*scene*/,
@@ -329,7 +329,7 @@ static void edgetag_set_cb(BMEdge *e, bool val, void *user_data_v)
 
   switch (edge_mode) {
     case EDGE_MODE_SELECT:
-      BM_edge_select_set(bm, e, val, user_data->select_flag);
+      BM_edge_select_set(bm, e, val, user_data->select_flag == BM_ELEM_MIRRORED_SELECT);
       break;
     case EDGE_MODE_TAG_SEAM:
       BM_elem_flag_set(e, BM_ELEM_SEAM, val);
@@ -476,9 +476,9 @@ static void mouse_mesh_shortest_path_edge(Scene *scene,
     if (op_params->track_active && select_flag == BM_ELEM_SELECT) {
       /* simple rules - last edge is _always_ active and selected */
       if (e_act) {
-        BM_edge_select_set(bm, e_act, false, select_flag);
+        BM_edge_select_set(bm, e_act, false, select_flag == BM_ELEM_MIRRORED_SELECT);
       }
-      BM_edge_select_set(bm, e_dst_last, true, select_flag);
+      BM_edge_select_set(bm, e_dst_last, true, select_flag == BM_ELEM_MIRRORED_SELECT);
       BM_select_history_store(bm, e_dst_last);
     }
   }
@@ -530,7 +530,7 @@ static bool facetag_test_cb(BMFace *f, void *user_data_v)
 static void facetag_set_cb(BMFace *f, bool val, void *user_data_v)
 {
   UserData *user_data = static_cast<UserData *>(user_data_v);
-  BM_face_select_set(user_data->bm, f, val, user_data->select_flag);
+  BM_face_select_set(user_data->bm, f, val, user_data->select_flag == BM_ELEM_MIRRORED_SELECT);
 }
 
 static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
