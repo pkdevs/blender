@@ -397,6 +397,22 @@ static std::optional<TextLayout> get_text_layout(GeoNodeExecParams &params)
   return layout;
 }
 
+static Curves *create_character_curves(VFont *vfont, const char32_t char_code)
+{
+  Curve cu = dna::shallow_zero_initialize();
+  cu.ob_type = OB_FONT;
+  cu.resolu = 12;
+  cu.vfont = vfont;
+  CharInfo charinfo = {0};
+  charinfo.mat_nr = 1;
+
+  const float2 char_offset = {0, 0};
+  BKE_vfont_char_build(cu, &cu.nurb, char_code, &charinfo, false, char_offset, 0, 0, 1);
+  Curves *curves_id = bke::curve_legacy_to_curves(cu);
+  BKE_nurbList_free(&cu.nurb);
+  return curves_id;
+}
+
 /** Returns a mapping of UTF32 character code to instance handle. */
 static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
                                             TextLayout &layout,
@@ -410,17 +426,7 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
     if (handles.contains(layout.char_codes[i])) {
       continue;
     }
-    Curve cu = dna::shallow_zero_initialize();
-    cu.ob_type = OB_FONT;
-    cu.resolu = 12;
-    cu.vfont = vfont;
-    CharInfo charinfo = {0};
-    charinfo.mat_nr = 1;
-
-    const float2 char_offset = {0, 0};
-    BKE_vfont_char_build(
-        cu, &cu.nurb, layout.char_codes[i], &charinfo, false, char_offset, 0, i, 1);
-    Curves *curves_id = bke::curve_legacy_to_curves(cu);
+    Curves *curves_id = create_character_curves(vfont, layout.char_codes[i]);
     if (curves_id == nullptr) {
       if (pivot_required) {
         layout.pivot_points.add_new(layout.char_codes[i], float3(0));
@@ -430,7 +436,6 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
     }
 
     bke::CurvesGeometry &curves = curves_id->geometry.wrap();
-    BKE_nurbList_free(&cu.nurb);
 
     geometry::debug_randomize_curve_order(&curves);
 
