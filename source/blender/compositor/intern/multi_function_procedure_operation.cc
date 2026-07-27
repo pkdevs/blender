@@ -382,14 +382,16 @@ mf::Variable *MultiFunctionProcedureOperation::get_multi_function_input_variable
     const bNodeSocket &input_socket, const bNodeSocket &output_socket)
 {
   /* The output is a single value, so create a constant variable instead of declaring an input for
-   * it. */
-  const Result &result = compile_state_.get_result_from_output_socket(output_socket);
+   * it, it follows that the result needs to be released since it will no longer be referenced by
+   * the operation.*/
+  Result &result = compile_state_.get_result_from_output_socket(output_socket);
   if (result.is_single_value()) {
     const mf::MultiFunction &constant_function =
         procedure_.construct_function<mf::CustomMF_GenericConstant>(
             *result.single_value().type(), result.single_value().get(), false);
     mf::Variable *constant_variable = procedure_builder_.add_call<1>(constant_function)[0];
     implicit_variables_.append(constant_variable);
+    result.release();
     return constant_variable;
   }
 

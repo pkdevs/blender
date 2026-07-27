@@ -478,12 +478,14 @@ void ShaderOperation::link_node_input_external(const bNodeSocket &input_socket,
   GPUNodeStack &stack = node.get_input(input_socket.identifier);
 
   /* The output is a single value, so create an internal constant link instead of declaring an
-   * input for it. */
-  const Result &result = compile_state_.get_result_from_output_socket(output_socket);
+   * input for it, it follows that the result needs to be released since it will no longer be
+   * referenced by the operation. */
+  Result &result = compile_state_.get_result_from_output_socket(output_socket);
   if (result.is_single_value()) {
     GPUNodeLink *link = get_result_single_value_link(result);
     const char *function_name = get_set_function_name(result.type());
     GPU_link(material_, function_name, link, &stack.link);
+    result.release();
     return;
   }
 
