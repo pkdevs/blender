@@ -1529,21 +1529,21 @@ static int text_shorten_next_template_var(char *str, int byte_position)
     return -1;
   }
 
-  char short_expression[64];
+  char short_expression[MAX_NAME];
   short_expression[0] = '{';
-  int short_size = 1 + bke::abbreviate_variable_name(short_expression + 1,
-                                                     sizeof(short_expression) - 3,
-                                                     info->variable_name);
-  short_expression[short_size++] = '}';
-  short_expression[short_size] = '\0';
+  int short_expression_len = 1 + bke::abbreviate_variable_name(short_expression + 1,
+                                                               sizeof(short_expression) - 3,
+                                                               info->variable_name);
+  short_expression[short_expression_len++] = '}';
+  short_expression[short_expression_len] = '\0';
 
   /* Substitute in the abbreviated expression. */
-  std::memcpy(str + info->byte_range.first(), short_expression, short_size);
-  std::memmove(str + info->byte_range.first() + short_size,
+  std::memcpy(str + info->byte_range.first(), short_expression, short_expression_len);
+  std::memmove(str + info->byte_range.first() + short_expression_len,
                str + info->byte_range.one_after_last(),
                strlen(str) + 1 - info->byte_range.one_after_last());
 
-  return info->byte_range.first() + short_size;
+  return info->byte_range.first() + short_expression_len;
 }
 
 /**
