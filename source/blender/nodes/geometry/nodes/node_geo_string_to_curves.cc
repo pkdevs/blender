@@ -417,6 +417,7 @@ static Curves *create_character_curves(VFont *vfont, const char32_t char_code)
 
 static GeometrySet get_or_create_character_geometry(VFont *vfont, const char32_t char_code)
 {
+  // TODO: Reduce cache contention.
   struct Key {
     char32_t char_code;
     bool randomized;
