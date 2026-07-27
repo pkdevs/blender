@@ -276,11 +276,9 @@ static wmOperatorStatus node_clipboard_paste_exec(bContext *C, wmOperator *op)
 
   char filepath[FILE_MAX];
   node_copybuffer_filepath_get(filepath, sizeof(filepath));
-  Main *bmain_src = BKE_main_new();
-  bmain_src->colorspace = bmain_dst->colorspace;
-  if (!BKE_copybuffer_read(bmain_src, filepath, op->reports, FILTER_ID_NT)) {
+  Main *bmain_src = BKE_copybuffer_read(*bmain_dst, filepath, op->reports, FILTER_ID_NT);
+  if (!bmain_src) {
     BKE_report(op->reports, RPT_ERROR, "No data to paste");
-    BKE_main_free(bmain_src);
     return OPERATOR_CANCELLED;
   }
 
