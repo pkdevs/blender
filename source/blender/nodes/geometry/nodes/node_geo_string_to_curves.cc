@@ -421,37 +421,18 @@ static Curves *create_character_curves(VFont *vfont, const char32_t char_code)
   return curves_id;
 }
 
-static GeometrySet get_or_create_character_geometry(VFont *vfont, const char32_t char_code)
-{
-  // TODO: Reduce cache contention.
-  struct Key {
-    char32_t char_code;
-    bool randomized;
-    std::string font_path;
+struct CharCacheKey {
+  char32_t char_code;
+  bool randomized;
+  UString font_path;
 
-    bool operator==(const Key &other) const = default;
+  bool operator==(const CharCacheKey &other) const = default;
 
-    uint64_t hash() const
-    {
-      return get_default_hash(this->char_code, this->randomized, this->font_path);
-    }
-  };
-  static Mutex mutex;
-  static Map<Key, GeometrySet> cache;
-  Key key{char_code, geometry::use_debug_randomization(), vfont->filepath};
-  std::lock_guard lock(mutex);
-  return cache.lookup_or_add_cb(key, [&]() {
-    GeometrySet geo = GeometrySet::from_curves(create_character_curves(vfont, char_code));
-    {
-      const char32_t char_code_str[2] = {char_code, 0};
-      char inserted_utf8[8] = {0};
-      const size_t len = BLI_str_utf32_as_utf8(
-          inserted_utf8, char_code_str, sizeof(inserted_utf8));
-      geo.set_name(std::string(inserted_utf8, len));
-    }
-    return geo;
-  });
-}
+  uint64_t hash() const
+  {
+    return get_default_hash(this->char_code, this->randomized, this->font_path);
+  }
+};
 
 /** Returns a mapping of UTF32 character code to instance handle. */
 static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
@@ -463,35 +444,64 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
   Map<int, int> handles;
   bool pivot_required = params.anonymous_attribute_output_is_required("Pivot Point"_ustr);
 
-  for (int i : layout.char_codes.index_range()) {
-    if (handles.contains(layout.char_codes[i])) {
-      continue;
+  VectorSet<char32_t> used_char_codes;
+  for (const char32_t char_code : layout.char_codes) {
+    used_char_codes.add(char_code);
+  }
+  Vector<GeometrySet> char_geos(used_char_codes.size());
+  {
+    const UString font_path{vfont->filepath};
+    static Mutex mutex;
+    static Map<CharCacheKey, GeometrySet> cache;
+    std::lock_guard lock(mutex);
+    for (const int i : used_char_codes.index_range()) {
+      const char32_t char_code = used_char_codes[i];
+      const CharCacheKey key{char_code, geometry::use_debug_randomization(), font_path};
+      const GeometrySet &char_geo = cache.lookup_or_add_cb(key, [&]() {
+        /* Isolate because a mutex is locked. */
+        return threading::isolate_task([&]() {
+          GeometrySet geo = GeometrySet::from_curves(create_character_curves(vfont, char_code));
+          {
+            const char32_t char_code_str[2] = {char_code, 0};
+            char inserted_utf8[8] = {0};
+            const size_t len = BLI_str_utf32_as_utf8(
+                inserted_utf8, char_code_str, sizeof(inserted_utf8));
+            geo.set_name(std::string(inserted_utf8, len));
+          }
+          return geo;
+        });
+      });
+      char_geos[i] = char_geo;
     }
-    GeometrySet curves_geo = get_or_create_character_geometry(vfont, layout.char_codes[i]);
-    if (apply_scale_legacy) {
-      const float4x4 size_matrix = math::from_scale<float4x4>(float3(layout.final_font_size));
-      if (Curves *curves_id = curves_geo.get_curves_for_write()) {
+  }
+  if (apply_scale_legacy) {
+    const float4x4 size_matrix = math::from_scale<float4x4>(float3(layout.final_font_size));
+    for (GeometrySet &char_geo : char_geos) {
+      if (Curves *curves_id = char_geo.get_curves_for_write()) {
         curves_id->geometry.wrap().transform(size_matrix);
       }
     }
-    const Curves *curves_id = curves_geo.get_curves();
-    if (curves_id == nullptr) {
+  }
+
+  for (const int i : used_char_codes.index_range()) {
+    const char32_t char_code = used_char_codes[i];
+    GeometrySet &char_geo = char_geos[i];
+    const Curves *curves_id = char_geo.get_curves();
+    if (!curves_id) {
       if (pivot_required) {
-        layout.pivot_points.add_new(layout.char_codes[i], float3(0));
+        layout.pivot_points.add_new(char_code, float3(0));
       }
-      handles.add_new(layout.char_codes[i], instances.add_reference({}));
+      handles.add_new(char_code, instances.add_reference({}));
       continue;
     }
-
     const bke::CurvesGeometry &curves = curves_id->geometry.wrap();
-
     if (pivot_required) {
-      float3 pivot_point = get_pivot_point(params, curves);
-      layout.pivot_points.add_new(layout.char_codes[i], pivot_point);
+      const float3 pivot_point = get_pivot_point(params, curves);
+      layout.pivot_points.add_new(char_code, pivot_point);
     }
-
-    handles.add_new(layout.char_codes[i], instances.add_reference(std::move(curves_geo)));
+    handles.add_new(char_code, instances.add_reference(std::move(char_geo)));
   }
+
   return handles;
 }
 
