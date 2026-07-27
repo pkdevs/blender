@@ -156,6 +156,8 @@ enum bPoseChannelRuntimeFlag : uint8_t {
   POSE_RUNTIME_TRANSFORM_CHILD = (1 << 2),
   /** Set on bones during selection to tell following code that this bone should be operated on. */
   POSE_RUNTIME_IN_SELECTION_AREA = (1 << 3),
+  /** Pose bones that have been modified, the pose should be copied to original data. */
+  POSE_RUNTIME_FLUSH_TO_ORIG = (1 << 4),
 };
 ENUM_OPERATORS(bPoseChannelRuntimeFlag);
 
