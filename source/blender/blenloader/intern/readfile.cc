@@ -3459,7 +3459,7 @@ static BHead *read_libblock(FileData *fd,
 {
   const bool do_partial_undo = (fd->skip_flags & BLO_READ_SKIP_UNDO_OLD_MAIN) == 0;
 
-  auto process_packed_id = [&fd, &main](ID &id) -> void {
+  auto process_packed_id = [](FileData *fd, [[maybe_unused]] const Main *main, ID &id) -> void {
     if (!ID_IS_PACKED(&id)) {
       return;
     }
@@ -3487,7 +3487,7 @@ static BHead *read_libblock(FileData *fd,
         if (main->id_map != nullptr) {
           BKE_main_idmap_insert_id(main->id_map, id_old);
         }
-        process_packed_id(*id_old);
+        process_packed_id(fd, main, *id_old);
       }
 
       return blo_bhead_next(fd, bhead);
@@ -3592,7 +3592,7 @@ static BHead *read_libblock(FileData *fd,
     if (main->id_map != nullptr) {
       BKE_main_idmap_insert_id(main->id_map, id_target);
     }
-    process_packed_id(*id_target);
+    process_packed_id(fd, main, *id_target);
     if (fd->file_stat) {
       id->runtime->src_blend_modifification_time = fd->file_stat->st_mtime;
     }
