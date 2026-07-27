@@ -14,6 +14,140 @@ TEST(shader_tool, Union)
 {
   {
     string input = R"(
+struct A {
+  float2 a[2];
+};
+
+struct B {
+  float2 b;
+};
+
+struct C {
+  B b;
+  float2 c;
+  float2 d;
+};
+
+union U {
+  A a;
+  B b;
+  C c;
+};
+
+C f(A a)
+{
+  U u;
+  u.a = a;
+  return u.c;
+}
+)";
+    string expect =
+        R"(
+struct A {
+  float2 a[2];
+};
+#line 2
+A A_ctor_() {A r;for(int a =0;a < 2;++a) {r.a[a]=float2(0);}return r;}
+#line 6
+struct B {
+  float2 b;
+};
+#line 6
+B B_ctor_() {B r;r.b=float2(0);return r;}
+#line 10
+struct C {
+  B b;
+  float2 c;
+  float2 d;
+};
+#line 10
+C C_ctor_() {C r;r.b=B_ctor_();r.c=float2(0);r.d=float2(0);return r;}
+#line 16
+struct U {
+  float4 _0; float2 _1;
+
+
+};
+#line 16
+U U_ctor_() {U r;r._0=float4(0);r._1=float2(0);return r;}
+
+A _a(U this_) {
+  A r;
+  r.a[0] = this_._0.xy;
+  r.a[1] = this_._0.zw;
+  return r;
+}
+void _a_set_(_ref(U ,this_), A v) {
+  this_._0.xy = v.a[0];
+  this_._0.zw = v.a[1];
+}
+B _b(U this_) {
+  B r;
+  r.b = this_._0.xy;
+  return r;
+}
+void _b_set_(_ref(U ,this_), B v) {
+  this_._0.xy = v.b;
+}
+C _c(U this_) {
+  C r;
+  r.b.b = this_._0.xy;
+  r.c = this_._0.zw;
+  r.d = this_._1.xy;
+  return r;
+}
+void _c_set_(_ref(U ,this_), C v) {
+  this_._0.xy = v.b.b;
+  this_._0.zw = v.c;
+  this_._1.xy = v.d;
+}
+#line 22
+C f(A a)
+{
+  U u;
+  _a_set_(u, a);
+  return _c(u);
+}
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(output, expect);
+    EXPECT_EQ(error, "");
+  }
+  {
+    string input = R"(
+union U {
+  struct A {
+    float2 a[2][2];
+  };
+  A a;
+};
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Multi-dimensional arrays are not supported");
+  }
+  {
+    string input = R"(
+union U {
+  struct A {
+    float2 a[SOME_CONST];
+  };
+  A a;
+};
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Array size is not a constant expression");
+  }
+  {
+    string input = R"(
+union U {
+  float2 a[2];
+};
+)";
+    auto [output, _, error] = process_test_string(input, Language::BSL);
+    EXPECT_EQ(error, "Unsupported array at union base scope; wrap it inside a named struct");
+  }
+  {
+    string input = R"(
 struct [[host_shared]] T {
   union {
     union_t<uint4> a;
@@ -415,11 +549,11 @@ A_a0_a0 _a0_(A_a0 this_) {
   A_a0_a0 r;
   r.a = floatBitsToUint(this_._0);
   r.b = floatBitsToInt(this_._1);
-  return val;
+  return r;
 }
 void _a0__set_(_ref(A_a0 ,this_), A_a0_a0 v) {
-  this_._0 = uintBitsToFloat(val.a);
-  this_._1 = intBitsToFloat(val.b);
+  this_._0 = uintBitsToFloat(v.a);
+  this_._1 = intBitsToFloat(v.b);
 }
 uint4 _c(A_a0 this_) {
   return floatBitsToUint(this_._0);
@@ -438,10 +572,10 @@ A_a1 A_a1_ctor_() {A_a1 r;r._0=float4(0);return r;}
 T _d(A_a1 this_) {
   T r;
   r.i = floatBitsToInt(this_._0.x);
-  return val;
+  return r;
 }
 void _d_set_(_ref(A_a1 ,this_), T v) {
-  this_._0.x = intBitsToFloat(val.i);
+  this_._0.x = intBitsToFloat(v.i);
 }
 uint4 _e(A_a1 this_) {
   return floatBitsToUint(this_._0);
@@ -460,8 +594,8 @@ struct A {
   A A_ctor_() {A r;r.a0_=A_a0_ctor_();r.a1_=A_a1_ctor_();return r;}
 #line 19
 void f(A a) {
-_a(_a0_(a.a0_));
-_b(_a0_(a.a0_));
+_a0_(a.a0_).a;
+_a0_(a.a0_).b;
 _c(a.a0_);
 _d(a.a1_).i;
 _e(a.a1_);

@@ -645,6 +645,8 @@ struct CodegenContext : NodeErrorHandler {
 
     if (cls.is_union) {
       builder.ss << "\n";
+      NOTE(decl,
+           "In declaration of union '" + string(decl.identifier().str()) + "' requested here");
 
       /* Emit getter and setters. */
       for (SymbolVariable *var : cls.non_static_variables_in_declaration_order()) {
@@ -855,10 +857,10 @@ struct CodegenContext : NodeErrorHandler {
     return cls_id + " " + cls_id + "_ctor_() {" + cls_id + " r;" + members + "return r;}";
   }
 
-  string union_data_access(const SymbolVariable &var, const size_t union_size)
+  string union_data_access(const size_t member_offset,
+                           const size_t member_size,
+                           const size_t union_size)
   {
-    const size_t member_offset = var.offset;
-    const size_t member_size = var.type->size;
     string access = "_" + to_string(member_offset / 16);
 
     if (member_size == 12) {
@@ -890,7 +892,7 @@ struct CodegenContext : NodeErrorHandler {
   string member_from_float(const SymbolClass &member_type, const string &access)
   {
     /* Account for trivial types. */
-    const string &type = member_type.resolved->identifier;
+    const string &type = member_type.identifier;
 
     if (type.starts_with("uint")) {
       return "floatBitsToUint(" + access + ")";
@@ -907,7 +909,7 @@ struct CodegenContext : NodeErrorHandler {
   string member_to_float(const SymbolClass &member_type, const string &access)
   {
     /* Account for trivial types. */
-    const string &type = member_type.resolved->identifier;
+    const string &type = member_type.identifier;
 
     if (type.starts_with("uint")) {
       return "uintBitsToFloat(" + access + ")";
@@ -931,18 +933,26 @@ struct CodegenContext : NodeErrorHandler {
     string fn_args = "(" + union_type_id + " this_)";
     string fn_body = "{\n";
     if (member_type.is_builtin) {
-      string access = "this_." + union_data_access(member, union_type.size);
+      if (member.array_dimensions > 0) {
+        error(member.loc.tok,
+              "Unsupported array at union base scope; wrap it inside a named struct");
+      }
+      string access = "this_." +
+                      union_data_access(member.offset, member_type.size, union_type.size);
       fn_body += "  return " + member_from_float(*member.type, access) + ";\n";
     }
     else {
       /* Declare return variable of the same type as the accessed member. */
       fn_body += "  " + fn_type_id + " r;\n";
-      for (SymbolVariable *var : member_type.non_static_variables_in_declaration_order()) {
-        string to_var = "r." + var->identifier;
-        string access = "this_." + union_data_access(*var, union_type.size);
-        fn_body += "  " + to_var + " = " + member_from_float(*var->type, access) + ";\n";
+      auto [members, err] = get_all_members_flat(&member_type);
+      error(err);
+      for (const auto &var : members) {
+        string to_var = "r." + var.path;
+        string access = "this_." +
+                        union_data_access(var.absolute_offset, var.type->size, union_type.size);
+        fn_body += "  " + to_var + " = " + member_from_float(*var.type, access) + ";\n";
       }
-      fn_body += "  return val;\n";
+      fn_body += "  return r;\n";
     }
     fn_body += "}";
     return fn_type_id + " " + fn_name + fn_args + " " + fn_body;
@@ -958,16 +968,23 @@ struct CodegenContext : NodeErrorHandler {
     string fn_args = "(" + union_type_id + " &this_, " + member_type_id + " v)";
     string fn_body = "{\n";
     if (member_type.is_builtin) {
-      string to_var = "this_." + union_data_access(member, union_type.size);
+      if (member.array_dimensions > 0) {
+        error(member.loc.tok,
+              "Unsupported array at union base scope; wrap the array inside a named struct");
+      }
+      string to_var = "this_." +
+                      union_data_access(member.offset, member_type.size, union_type.size);
       string access = "v." + member.identifier;
       fn_body += "  " + to_var + " = " + member_to_float(*member.type, access) + ";\n";
     }
     else {
-      /* Declare return variable of the same type as the accessed member. */
-      for (SymbolVariable *var : member_type.non_static_variables_in_declaration_order()) {
-        string to_var = "this_." + union_data_access(*var, union_type.size);
-        string access = "val." + var->identifier;
-        fn_body += "  " + to_var + " = " + member_to_float(*var->type, access) + ";\n";
+      auto [members, err] = get_all_members_flat(&member_type);
+      error(err);
+      for (const auto &var : members) {
+        string to_var = "this_." +
+                        union_data_access(var.absolute_offset, var.type->size, union_type.size);
+        string access = "v." + var.path;
+        fn_body += "  " + to_var + " = " + member_to_float(*var.type, access) + ";\n";
       }
     }
     fn_body += "}";

@@ -157,15 +157,22 @@ struct AstNodeException {
   AstNodeException(Node node, const string &msg) : node(node), msg(msg) {}
 };
 
-template<typename T> struct Result {
-  T value;
-  std::optional<AstNodeException> err;
+struct TokenException {
+  Token tok;
+  string msg;
+
+  TokenException(Token tok, const string &msg) : tok(tok), msg(msg) {}
 };
 
-template<typename T, typename U> struct ResultPair {
+template<typename T, typename ExceptionT = AstNodeException> struct Result {
+  T value;
+  std::optional<ExceptionT> err;
+};
+
+template<typename T, typename U, typename ExceptionT = AstNodeException> struct ResultPair {
   T first;
   U second;
-  std::optional<AstNodeException> err;
+  std::optional<ExceptionT> err;
 };
 
 struct NodeErrorHandler {
@@ -198,6 +205,12 @@ struct NodeErrorHandler {
   {
     if (err) {
       error(err->node, err->msg);
+    }
+  }
+  void error(std::optional<TokenException> &err)
+  {
+    if (err) {
+      error(err->tok, err->msg);
     }
   }
 
@@ -374,7 +387,7 @@ struct SymbolScope : Symbol {
   /* Returns true if the function is an overload or redefines the symbol. */
   bool function_emplace(SymbolFunction *fn);
 
-  vector<SymbolVariable *> non_static_variables_in_declaration_order();
+  vector<SymbolVariable *> non_static_variables_in_declaration_order() const;
 
  private:
   template<typename T> T *lookup_generic(IdQualified id, const SourceLocation &loc) const;
@@ -590,11 +603,11 @@ inline bool SymbolScope::function_emplace(SymbolFunction *fn)
   return result;
 }
 
-inline vector<SymbolVariable *> SymbolScope::non_static_variables_in_declaration_order()
+inline vector<SymbolVariable *> SymbolScope::non_static_variables_in_declaration_order() const
 {
   assert(this->type == CLASS);
   vector<SymbolVariable *> members;
-  for (auto &[k, v] : variables) {
+  for (const auto &[k, v] : variables) {
     members.emplace_back(v);
   }
 
@@ -604,6 +617,75 @@ inline vector<SymbolVariable *> SymbolScope::non_static_variables_in_declaration
   });
 
   return members;
+}
+
+/* Structure to hold the flattened member data */
+struct MemberNode {
+  SymbolClass *type;
+  string path;
+  int absolute_offset;
+};
+
+namespace detail {
+
+/* Recursive helper to accumulate path and offsets */
+static inline optional<TokenException> get_flat_members_recursive(const SymbolClass *cls,
+                                                                  const string &current_path,
+                                                                  int current_offset,
+                                                                  vector<MemberNode> &out_buffer)
+{
+  /* Iterate through variables in their declaration order */
+  for (SymbolVariable *var : cls->non_static_variables_in_declaration_order()) {
+    /* Construct the full access path. */
+    /* If the identifier is empty (e.g., an anonymous union/struct), we skip adding the dot. */
+    std::string next_path = current_path;
+    if (!var->identifier.empty()) {
+      if (!next_path.empty()) {
+        next_path += ".";
+      }
+      next_path += var->identifier;
+    }
+    /* Accumulate the total offset from the root struct. */
+    int offset = current_offset + var->offset;
+
+    if (var->array_dimensions > 1) {
+      /* TODO */
+      return TokenException(var->loc.tok, "Multi-dimensional arrays are not supported");
+    }
+    int elements = (var->array_dimensions == 0) ? 1 : var->array_elements;
+    if (elements == -1) {
+      return TokenException(var->loc.tok, "Array size is not a constant expression");
+    }
+
+    for (int i = 0; i < elements; ++i) {
+      string array_accessor = var->array_dimensions > 0 ? "[" + to_string(i) + "]" : "";
+      if (var->type->resolved->is_builtin) {
+        /* Base case: It's a primitive/builtin type. Add to the flat buffer. */
+        out_buffer.emplace_back(var->type->resolved, next_path + array_accessor, offset);
+        offset += var->type->resolved->size;
+      }
+      else {
+        /* Recursive step: It's a nested user-defined structure. */
+        auto err = get_flat_members_recursive(
+            var->type, next_path + array_accessor, offset, out_buffer);
+        offset += var->type->size;
+        if (err) {
+          return err;
+        }
+      }
+    }
+  }
+  return {};
+}
+
+}  // namespace detail
+
+static inline Result<vector<MemberNode>, TokenException> get_all_members_flat(
+    const SymbolClass *root_class)
+{
+  vector<MemberNode> flat_buffer;
+  auto err = detail::get_flat_members_recursive(root_class, "", 0, flat_buffer);
+  return {flat_buffer, err};
 }
 
 /* Left is nullptr for unary operators. */
