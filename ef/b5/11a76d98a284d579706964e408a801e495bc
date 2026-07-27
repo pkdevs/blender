@@ -4,3 +4,4 @@ Referenced by commit 0e8e219d71c, Undo: support implicit-sharing in memfile undo
 Referenced by issue #132644, Autosave keeps re-saving even if user does nothing
 Referenced by issue #126821, Blender 4.2 - Compress Saving option gets removed when recovering from AutoSave
 Referenced by issue #140898, Autosave not saving
+Referenced by issue #161938, Blender Auto Save and Session Recovery Issue
