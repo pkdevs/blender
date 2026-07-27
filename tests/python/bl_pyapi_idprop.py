@@ -619,6 +619,36 @@ class TestRNAData(TestHelper, unittest.TestCase):
         self.assertEqual(rna_data["items"], ui_data_test_prop_enum_items_full)
 
 
+class TestIdPropertyChangeName(TestHelper, unittest.TestCase):
+    def test_name_not_editable(self):
+        class MyGroup(bpy.types.PropertyGroup):
+            value: bpy.props.IntProperty()
+
+        bpy.utils.register_class(MyGroup)
+        id = self.id
+        type(id).my_group_a = bpy.props.PointerProperty(type=MyGroup)
+        assert id.my_group_a.name == ""
+        with self.assertRaises(AttributeError):
+            id.my_group_a.name = "test"
+
+        del type(id).my_group_a
+        bpy.utils.unregister_class(MyGroup)
+
+    def test_name_editable(self):
+        class MyGroup(bpy.types.PropertyGroup):
+            name: bpy.props.StringProperty()
+            value: bpy.props.IntProperty()
+
+        bpy.utils.register_class(MyGroup)
+        id = self.id
+        type(id).my_group_b = bpy.props.PointerProperty(type=MyGroup)
+        assert id.my_group_b.name == ""
+        id.my_group_b.name = "hello"
+        assert id.my_group_b.name == "hello"
+        del type(id).my_group_b
+        bpy.utils.unregister_class(MyGroup)
+
+
 if __name__ == '__main__':
     import sys
     sys.argv = [__file__] + (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
