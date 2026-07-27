@@ -10739,6 +10739,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("FunctionNode", "FunctionNodeTransposeMatrix");
   define("FunctionNode", "FunctionNodeTrimString");
   define("FunctionNode", "FunctionNodeValueToString");
+  define("FunctionNode", "FunctionNodeVectorComponent");
 
   define("GeometryNode", "GeometryNodeAccumulateField");
   define("GeometryNode", "GeometryNodeApplySimulatedData");

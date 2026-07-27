@@ -330,6 +330,7 @@ class NODE_MT_compositor_node_vector_base(node_add_menu.NodeMenu):
         ops.name = "data_type"
         ops.value = "'VECTOR'"
         self.node_operator(layout, "ShaderNodeSeparateXYZ")
+        self.node_operator(layout, "FunctionNodeVectorComponent")
         layout.separator()
         self.node_operator(layout, "ShaderNodeRadialTiling")
         self.node_operator(layout, "ShaderNodeVectorCurve")
