@@ -1702,6 +1702,10 @@ void node_tex_penny(float3 co,
                     out float4 color,
                     out float3 gradient)
 {
+  /* Recenter the default generated coordinate so Scale pivots at the box center
+   * (= object origin for a centered mesh) instead of the corner. */
+  co -= float3(0.5f, 0.5f, 0.5f);
+
   /* Fac/Color use the user Levels. */
   float3 rgb;
   penny_field(co, w, detail, scale_pct, scale_x_pct, scale_y_pct, scale_z_pct, scale_w_pct, roughness, level_min, level_mid, level_max, period_x, period_y, period_z, period_w, blend_mode, noise_type, dimensions, tileable, rgb);

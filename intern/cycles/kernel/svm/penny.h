@@ -2383,6 +2383,11 @@ ccl_device_noinline void svm_node_tex_penny(ccl_private float *ccl_restrict stac
   float3 vector = stack_load_float3(stack, node.coord);
   float w_in = stack_load(stack, node.w);
 
+  /* Recenter the default generated coordinate so Scale pivots at the box center
+   * (= object origin for a centered mesh) instead of the -X/-Y/-Z corner. XYZ
+   * only; W is a separate user axis. */
+  vector -= make_float3(0.5f, 0.5f, 0.5f);
+
   /* Scale values are percentages (display = 100 means factor 1.0). */
   const float scale_pct = stack_load(stack, node.scale);
   const float scale_x_pct = stack_load(stack, node.scale_x);

@@ -1585,6 +1585,10 @@ shader PENNY_SHADER(int use_mapping = 0,
   if (use_mapping)
     p = transform(mapping, p);
 
+  /* Recenter the default generated coordinate so Scale pivots at the box center
+   * (= object origin for a centered mesh) instead of the corner. */
+  p = p - point(0.5, 0.5, 0.5);
+
   float px = p[0];
   float py = p[1];
   float pz = p[2];
