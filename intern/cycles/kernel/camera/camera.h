@@ -324,7 +324,7 @@ ccl_device_inline Spectrum camera_sample_custom(KernelGlobals kg,
   sd->prim = PRIM_NONE;
   sd->shader = SHADER_NONE;
   sd->type = PRIMITIVE_NONE;
-  sd->closure_flag = 0;
+  sd->runtime_flag = 0;
   sd->shader_flag = 0;
 
   /* Execute OSL shader to sample position, direction and transmission. */
@@ -332,7 +332,7 @@ ccl_device_inline Spectrum camera_sample_custom(KernelGlobals kg,
   r_cache_miss = false;
   throughput = osl_eval_camera(
       kg, sd, sensor, dSdx, dSdy, rand_lens, P, dPdx, dPdy, D, dDdx, dDdy);
-  if (sd->closure_flag & SD_CACHE_MISS) {
+  if (sd->runtime_flag & SR_CACHE_MISS) {
     r_cache_miss = true;
     return zero_spectrum();
   }

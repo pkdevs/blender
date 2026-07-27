@@ -86,7 +86,7 @@ ccl_device void volume_stack_enter_exit(KernelGlobals kg,
     return;
   }
 
-  if (sd->closure_flag & SD_BACKFACING) {
+  if (sd->runtime_flag & SR_BACKFACING) {
     /* Exit volume object: remove from stack. */
     for (int i = 0;; i++) {
       const VolumeStack entry = volume_stack_read<shadow>(state, i);

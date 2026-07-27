@@ -54,7 +54,7 @@ ccl_device_inline void shaderdata_to_shaderglobals(ccl_private ShaderData *sd,
   globals->surfacearea = 1.0f;
   globals->raytype = OSL_RAYTYPE_PACK(path_visibility, path_flag);
   globals->flipHandedness = 0;
-  globals->backfacing = (sd->closure_flag & SD_BACKFACING);
+  globals->backfacing = (sd->runtime_flag & SR_BACKFACING);
 
   /* shader data to be used in services callbacks */
   globals->sd = sd;

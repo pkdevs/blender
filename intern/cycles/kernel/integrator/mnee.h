@@ -130,7 +130,7 @@ ccl_device_inline void mnee_setup_manifold_vertex(KernelGlobals kg,
                                                     isect->object;
 
   sd_vtx->type = isect->type;
-  sd_vtx->closure_flag = 0;
+  sd_vtx->runtime_flag = 0;
   sd_vtx->shader_flag = 0;
   sd_vtx->object_flag = kernel_data_fetch(object_flag, sd_vtx->object);
 
@@ -826,7 +826,7 @@ ccl_device_inline ShaderEvalResult mnee_path_contribution(KernelGlobals kg,
                                                              1;
   INTEGRATOR_STATE_WRITE(state, path, bounce) = bounce + vertex_count;
 
-  if (sd_mnee->closure_flag & SD_CACHE_MISS) {
+  if (sd_mnee->runtime_flag & SR_CACHE_MISS) {
     /* Restore original state path bounce info. */
     INTEGRATOR_STATE_WRITE(state, path, transmission_bounce) = transmission_bounce;
     INTEGRATOR_STATE_WRITE(state, path, diffuse_bounce) = diffuse_bounce;
@@ -916,7 +916,7 @@ ccl_device_inline ShaderEvalResult mnee_path_contribution(KernelGlobals kg,
     /* Evaluate shader nodes at solution vi. */
     surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
         kg, state, sd_mnee, nullptr, PATH_RAY_VISIBILITY_DIFFUSE, PATH_RAY_FLAG_NONE, true);
-    if (sd_mnee->closure_flag & SD_CACHE_MISS) {
+    if (sd_mnee->runtime_flag & SR_CACHE_MISS) {
       /* Restore original state path bounce info. */
       INTEGRATOR_STATE_WRITE(state, path, transmission_bounce) = transmission_bounce;
       INTEGRATOR_STATE_WRITE(state, path, diffuse_bounce) = diffuse_bounce;
@@ -1022,7 +1022,7 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
       /* Last bool argument is the MNEE flag (for TINY_MAX_CLOSURE cap in kernel_shader.h). */
       surface_shader_eval<KERNEL_FEATURE_NODE_MASK_SURFACE_SHADOW>(
           kg, state, sd_mnee, nullptr, PATH_RAY_VISIBILITY_DIFFUSE, PATH_RAY_FLAG_NONE, true);
-      if (sd_mnee->closure_flag & SD_CACHE_MISS) {
+      if (sd_mnee->runtime_flag & SR_CACHE_MISS) {
         return SHADER_EVAL_CACHE_MISS;
       }
 
@@ -1037,7 +1037,7 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
           ccl_private MicrofacetBsdf *microfacet_bsdf = (ccl_private MicrofacetBsdf *)bsdf;
 
           /* Figure out appropriate index of refraction ratio. */
-          const float eta = (sd_mnee->closure_flag & SD_BACKFACING) ? 1.0f / microfacet_bsdf->ior :
+          const float eta = (sd_mnee->runtime_flag & SR_BACKFACING) ? 1.0f / microfacet_bsdf->ior :
                                                                       microfacet_bsdf->ior;
 
           float2 h = zero_float2();

@@ -123,7 +123,7 @@ ccl_device int subsurface_bounce(KernelGlobals kg,
     INTEGRATOR_STATE_WRITE(state, subsurface, N) = sd->N;
   }
 
-  if (sd->closure_flag & SD_BACKFACING) {
+  if (sd->runtime_flag & SR_BACKFACING) {
     path_flag |= PATH_RAY_SUBSURFACE_BACKFACING;
   }
 
@@ -161,7 +161,7 @@ ccl_device void subsurface_shader_data_setup(KernelGlobals kg, ccl_private Shade
   }
 
   /* Setup diffuse BSDF at the exit point. This replaces shader_eval_surface. */
-  sd->closure_flag = 0;
+  sd->runtime_flag = 0;
   sd->num_closure = 0;
   sd->num_closure_left = kernel_data.max_closures;
 

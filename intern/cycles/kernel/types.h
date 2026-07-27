@@ -900,34 +900,34 @@ struct ccl_align(16) ShaderClosure {
  * are in world space.
  */
 
-/* Shader closure flags, determined during rendering. */
-enum ShaderClosureFlag {
+/* Shader runtime flags, determined during rendering. */
+enum ShaderRuntimeFlag {
   /* Set when ray hits backside of surface. */
-  SD_BACKFACING = (1 << 0),
+  SR_BACKFACING = (1 << 0),
   /* Shader has non-zero emission. */
-  SD_EMISSION = (1 << 1),
+  SR_EMISSION = (1 << 1),
   /* Shader has BSDF closure. */
-  SD_BSDF = (1 << 2),
+  SR_BSDF = (1 << 2),
   /* Shader has non-singular BSDF closure. */
-  SD_BSDF_HAS_EVAL = (1 << 3),
+  SR_BSDF_HAS_EVAL = (1 << 3),
   /* Shader has BSSRDF closure. */
-  SD_BSSRDF = (1 << 4),
+  SR_BSSRDF = (1 << 4),
   /* Shader has holdout closure. */
-  SD_HOLDOUT = (1 << 5),
+  SR_HOLDOUT = (1 << 5),
   /* Shader has non-zero volume extinction. */
-  SD_EXTINCTION = (1 << 6),
+  SR_EXTINCTION = (1 << 6),
   /* Shader has a volume phase (scatter) closure. */
-  SD_SCATTER = (1 << 7),
+  SR_SCATTER = (1 << 7),
   /* Shader is being evaluated in a volume. */
-  SD_IS_VOLUME_SHADER_EVAL = (1 << 8),
+  SR_IS_VOLUME_SHADER_EVAL = (1 << 8),
   /* Shader has transparent closure. */
-  SD_TRANSPARENT = (1 << 9),
+  SR_TRANSPARENT = (1 << 9),
   /* BSDF has a transmissive component. */
-  SD_BSDF_HAS_TRANSMISSION = (1 << 10),
+  SR_BSDF_HAS_TRANSMISSION = (1 << 10),
   /* Shader has ray portal closure. */
-  SD_RAY_PORTAL = (1 << 11),
+  SR_RAY_PORTAL = (1 << 11),
   /* Shader evaluation needs to be redone, because of texture cache miss */
-  SD_CACHE_MISS = (1 << 12),
+  SR_CACHE_MISS = (1 << 12),
 };
 
 /* Shader flags that are set after compiling the shaders. */
@@ -1027,8 +1027,8 @@ struct ccl_align(16) ShaderData {
 
   /* shader id */
   int shader;
-  /* booleans describing shader, see ShaderClosureFlag */
-  int closure_flag;
+  /* booleans describing shader, see ShaderRuntimeFlag */
+  int runtime_flag;
   /* booleans describing shader, see ShaderDataFlag */
   int shader_flag;
   /* booleans describing object of the shader, see ShaderDataObjectFlag */
