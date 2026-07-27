@@ -449,7 +449,11 @@ EditMeshSymmetryHelper::EditMeshSymmetryHelper(
             continue;
           }
           BMFace *f_mirr = EDBM_verts_mirror_get_face(em_, f_curr);
-          if (f_mirr && f_mirr != f_curr) {
+          if (f_mirr == f_curr) {
+            face_to_mirror_map_.lookup_or_add(f_curr, {}).append(f_curr);
+            processed_faces.add(f_curr);
+          }
+          else if (f_mirr) {
             BMFace *f_mirr_check = EDBM_verts_mirror_get_face(em_, f_mirr);
             if (f_mirr_check == f_curr) {
               face_to_mirror_map_.lookup_or_add(f_curr, {}).append(f_mirr);
