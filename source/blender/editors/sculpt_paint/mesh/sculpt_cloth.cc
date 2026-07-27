@@ -201,7 +201,7 @@ IndexMask brush_affected_nodes_gather(const Object &object,
       const float radius_squared = math::square(ss.cache->initial_radius *
                                                 (1.0 + brush.cloth_sim_limit));
       return bke::pbvh::search_nodes(pbvh, memory, [&](const bke::pbvh::Node &node) {
-        return node_in_sphere(node, ss.cache->initial_location_symm, radius_squared);
+        return node_in_sphere(node, ss.cache->initial_location_symm, radius_squared, false);
       });
     }
     case BRUSH_CLOTH_SIMULATION_AREA_GLOBAL:
@@ -209,7 +209,7 @@ IndexMask brush_affected_nodes_gather(const Object &object,
     case BRUSH_CLOTH_SIMULATION_AREA_DYNAMIC: {
       const float radius_squared = math::square(ss.cache->radius * (1.0 + brush.cloth_sim_limit));
       return bke::pbvh::search_nodes(pbvh, memory, [&](const bke::pbvh::Node &node) {
-        return node_in_sphere(node, ss.cache->location_symm, radius_squared);
+        return node_in_sphere(node, ss.cache->location_symm, radius_squared, false);
       });
     }
   }

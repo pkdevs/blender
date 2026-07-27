@@ -230,7 +230,7 @@ IndexMask pbvh_gather_generic(const Depsgraph &depsgraph,
   /* Build a list of all nodes that are potentially within the brush's area of influence */
   if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE) {
     nodes = bke::pbvh::search_nodes(pbvh, memory, [&](const bke::pbvh::Node &node) {
-      return node_in_sphere(node, ss.cache->location_symm, ss.cache->radius_squared);
+      return node_in_sphere(node, ss.cache->location_symm, ss.cache->radius_squared, true);
     });
 
     ss.cache->sculpt_normal_symm =
