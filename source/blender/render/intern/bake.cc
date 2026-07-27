@@ -56,9 +56,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_index_range.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 
 #include "BKE_attribute.hh"
@@ -692,7 +692,7 @@ static void bake_differentials(BakeDataZSpan *bd,
   A = (uv2[0] - uv1[0]) * (uv3[1] - uv1[1]) - (uv3[0] - uv1[0]) * (uv2[1] - uv1[1]);
 
   if (fabsf(A) > FLT_EPSILON) {
-    A = 0.5f / A;
+    A = 1.0f / A;
 
     bd->du_dx = (uv2[1] - uv3[1]) * A;
     bd->dv_dx = (uv3[1] - uv1[1]) * A;

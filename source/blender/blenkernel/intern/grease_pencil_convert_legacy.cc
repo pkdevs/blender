@@ -37,13 +37,13 @@
 
 #include "BLI_color_types.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_vector.hh"
 
@@ -1519,7 +1519,7 @@ static ModifierData &legacy_object_modifier_common(ConversionData &conversion_da
   if (mti->flags & eModifierTypeFlag_RequiresOriginalData) {
     ModifierData *md;
     for (md = static_cast<ModifierData *>(object.modifiers.first);
-         md && BKE_modifier_get_info(ModifierType(md->type))->type == ModifierTypeType::OnlyDeform;
+         md && BKE_modifier_get_info(md->type)->type == ModifierTypeType::OnlyDeform;
          md = md->next)
     {
       ;
@@ -3038,6 +3038,7 @@ static void legacy_gpencil_sanitize_annotations(Main &bmain)
           case SPACE_TOPBAR:
           case SPACE_STATUSBAR:
           case SPACE_SPREADSHEET:
+          case SPACE_PROJECT:
             break;
         }
       }

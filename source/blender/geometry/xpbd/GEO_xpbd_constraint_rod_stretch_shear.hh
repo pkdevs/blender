@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 
 #include "GEO_xpbd_constraint_coloring_utils.hh"
 #include "GEO_xpbd_constraint_set_templated.hh"
@@ -166,7 +166,7 @@ class RodStretchAndShearConstraintSet
     }
   }
 
-  ConstraintColoring color_constraints(IndexMaskMemory & /*memory*/) const override
+  ConstraintColoring color_constraints(LinearAllocator<> & /*memory*/) const override
   {
     return color_constraints__all_independent(constraints_num_);
   }

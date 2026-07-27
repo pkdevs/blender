@@ -4,8 +4,8 @@
 
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_copybuffer.hh"
@@ -37,9 +37,7 @@
 
 #include "node_intern.hh"
 
-namespace blender {
-
-namespace ed::space_node {
+namespace blender::ed::space_node {
 
 /* -------------------------------------------------------------------- */
 /** \name Local Utilities
@@ -104,7 +102,7 @@ static int node_copy_local(bNodeTree &from_tree,
   }
 
   if (node_map.is_empty()) {
-    return false;
+    return 0;
   }
 
   for (bNode *new_node : node_map.values()) {
@@ -255,8 +253,6 @@ void NODE_OT_clipboard_copy(wmOperatorType *ot)
 
   ot->exec = node_clipboard_copy_exec;
   ot->poll = ED_operator_node_active;
-
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /** \} */
@@ -413,5 +409,4 @@ void NODE_OT_clipboard_paste(wmOperatorType *ot)
 
 /** \} */
 
-}  // namespace ed::space_node
-}  // namespace blender
+}  // namespace blender::ed::space_node

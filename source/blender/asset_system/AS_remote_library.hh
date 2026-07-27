@@ -16,6 +16,8 @@
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
+#include "AS_asset_file_status.hh"
+
 namespace blender {
 struct bContext;
 struct bUserAssetLibrary;
@@ -24,9 +26,26 @@ struct ReportList;
 
 namespace asset_system {
 
+struct RemoteLibraryDefinitionRef {
+  StringRefNull remote_url;
+  StringRefNull cache_dirpath;
+
+  RemoteLibraryDefinitionRef(const bUserAssetLibrary &library_definition);
+  RemoteLibraryDefinitionRef(StringRefNull remote_url, StringRefNull cache_dirpath)
+      : remote_url(remote_url), cache_dirpath(cache_dirpath)
+  {
+  }
+};
+
 constexpr StringRefNull REMOTE_LIBRARY_TOP_META_FILE_NAME = "_asset-library-meta.json";
 constexpr StringRefNull REMOTE_LIBRARY_TOP_META_FILE_NAME_LEADING_SLASH =
     "/_asset-library-meta.json";
+
+/**
+ * Get the absolute file path to the `_asset-library-meta.json` of the given library's cache
+ * directory.
+ */
+std::string remote_library_top_meta_file_path(const RemoteLibraryDefinitionRef &library);
 
 bool remote_library_url_ends_with_top_meta_file_name(const StringRef url);
 
@@ -94,17 +113,6 @@ class AssetRepresentation;
 float remote_library_total_asset_downloads_progress();
 /** Return true if there is any asset file (any file in an assets file set) being downloaded. */
 bool remote_library_has_unfinished_asset_downloads();
-
-struct RemoteLibraryDefinitionRef {
-  StringRefNull remote_url;
-  StringRefNull cache_dirpath;
-
-  RemoteLibraryDefinitionRef(const bUserAssetLibrary &library_definition);
-  RemoteLibraryDefinitionRef(StringRefNull remote_url, StringRefNull cache_dirpath)
-      : remote_url(remote_url), cache_dirpath(cache_dirpath)
-  {
-  }
-};
 
 /**
  * Ensures the remote library cache directory exists, and calls the Python downloader. Doesn't do
@@ -213,12 +221,14 @@ class RemoteLibraryLoadingStatus {
   /** Should be called when an asset file download has completed successfully. */
   static void ping_asset_file_download_succeeded(const bContext &C,
                                                  StringRef library_url,
-                                                 StringRef absolute_file_url);
+                                                 StringRef absolute_file_url,
+                                                 StringRef local_file_abspath);
   /** Should be called when an asset file download has failed. Partial progress for the file is
    * reset to zero, since a future retry has to start from scratch. */
   static void ping_asset_file_download_failed(const bContext &C,
                                               StringRef library_url,
-                                              StringRef absolute_file_url);
+                                              StringRef absolute_file_url,
+                                              StringRef local_file_abspath);
   /** Inform the asset system that there are no more pending asset file downloads for any asset
    * library. */
   static void ping_download_queue_done(const bContext &C);

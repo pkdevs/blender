@@ -267,7 +267,12 @@ struct StripTransform {
   float scale_x = 0;
   float scale_y = 0;
   float rotation = 0;
-  /** 0-1 range, `seq::image_transform_origin_offset_pixelspace_get` to convert to pixel-space. */
+  /**
+   * Relative 0-1 range, where (0,0) is the bottom-left of the image.
+   * NOTE: Do not access directly outside of internal transform code!
+   * Either call #image_transform_origin_get, or convert to absolute view-space pixel offset from
+   * the preview center with #image_transform_origin_preview_offset_get.
+   */
   float origin[2] = {};
   eStripTransformFilter filter = SEQ_TRANSFORM_FILTER_AUTO;
 };
@@ -352,7 +357,8 @@ struct Strip {
 
   eStripFlag flag = SEQ_FLAG_NONE;
   StripType type = STRIP_TYPE_IMAGE;
-  /** The length of the contents of this strip before handles are applied. */
+  /** The length of the contents of this strip before handles are applied. To be used with
+   * #content_length() and #content_length_set(). */
   int len = 0;
   /**
    * Start frame of contents of strip in absolute frame coordinates.
@@ -522,6 +528,10 @@ struct Strip {
    */
   void handles_set(const Scene *scene, int left_frame, int right_frame);
   /**
+   * Set the strip's channel, clamped between 1 and #MAX_CHANNELS.
+   */
+  void channel_set(int channel);
+  /**
    * Test if this strip intersects with timeline frame.
    * \note This checks if strip would be rendered at this frame. For rendering it is assumed, that
    * timeline frame has width of 1 frame and therefore ends at timeline_frame + 1
@@ -540,6 +550,18 @@ struct Strip {
    * Returns 0 for unsupported strip or if media can't be loaded.
    */
   float media_fps(Scene *scene);
+
+  /**
+   * Raw frame count before any handles are applied.
+   * */
+  int content_length() const;
+  void content_length_set(int new_length);
+
+  /**
+   * Frame distance from the right handle to the content end.
+   */
+  float end_offset() const;
+  void end_offset_set(float new_end_offset);
 
 #endif
 };
@@ -569,7 +591,7 @@ struct SeqTimelineChannel {
   }
   bool is_muted() const
   {
-    return (this->flag & SEQ_CHANNEL_LOCK) != 0;
+    return (this->flag & SEQ_CHANNEL_MUTE) != 0;
   }
 #endif
 };
@@ -700,6 +722,7 @@ enum eEffectTextFlags : uint8_t {
   SEQ_TEXT_BOLD = (1 << 2),
   SEQ_TEXT_ITALIC = (1 << 3),
   SEQ_TEXT_OUTLINE = (1 << 4),
+  SEQ_TEXT_USE_ABSOLUTE_LINE_SPACING = (1 << 5),
 };
 ENUM_OPERATORS(eEffectTextFlags);
 
@@ -771,7 +794,8 @@ struct TransformVarsLegacy {
 
 struct SolidColorVars {
   float col[3] = {};
-  char _pad[4] = {};
+  int width;
+  int height;
 };
 
 struct SpeedControlVars {
@@ -809,6 +833,7 @@ struct TextVars {
   int text_blf_id = 0;
   float text_size = 0;
   float space_line = 1.0f;
+  float abs_space_line = 1.0f;
   float color[4] = {}, shadow_color[4] = {}, box_color[4] = {}, outline_color[4] = {};
   float loc[2] = {};
   float wrap_width = 0;
@@ -832,7 +857,7 @@ struct TextVars {
 
   eEffectTextAnchorX anchor_x = SEQ_TEXT_ANCHOR_X_LEFT;
   eEffectTextAnchorY anchor_y = SEQ_TEXT_ANCHOR_Y_TOP;
-  char _pad1[5] = {};
+  char _pad1[1] = {};
   seq::TextVarsRuntime *runtime = nullptr;
 
   /* Fixed size text buffer, only exists for forward/backward compatibility.

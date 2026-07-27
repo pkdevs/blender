@@ -17,8 +17,8 @@
 #include "DNA_sequence_types.h"
 #include "DNA_shader_fx_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_collection.hh"
@@ -163,7 +163,7 @@ static void do_outliner_item_mode_toggle_generic(bContext *C,
                                                  const TreeViewContext &tvc,
                                                  Base *base)
 {
-  const eObjectMode active_mode = eObjectMode(tvc.obact->mode);
+  const eObjectMode active_mode = tvc.obact->mode;
   ED_undo_group_begin(C);
 
   if (object::mode_set(C, OB_MODE_OBJECT)) {
@@ -207,7 +207,10 @@ void outliner_item_mode_toggle(bContext *C,
       do_outliner_item_mode_toggle_generic(C, tvc, base);
     }
     else if (tvc.ob_edit && OB_TYPE_SUPPORT_EDITMODE(ob->type)) {
-      do_outliner_item_editmode_toggle(C, tvc.scene, base);
+      /* Grease Pencil does not support multi-object editing yet. */
+      if (ob->type != OB_GREASE_PENCIL) {
+        do_outliner_item_editmode_toggle(C, tvc.scene, base);
+      }
     }
     else if (tvc.ob_pose && ob->type == OB_ARMATURE) {
       do_outliner_item_posemode_toggle(C, tvc.scene, base);
@@ -333,7 +336,7 @@ static void tree_element_object_activate(bContext *C,
   if (scene->toolsettings->object_flag & SCE_OBJECT_MODE_LOCK) {
     if (base != nullptr) {
       Object *obact = BKE_view_layer_active_object_get(view_layer);
-      const eObjectMode object_mode = obact ? eObjectMode(obact->mode) : OB_MODE_OBJECT;
+      const eObjectMode object_mode = obact ? obact->mode : OB_MODE_OBJECT;
       if (base && !BKE_object_is_mode_compat(base->object, object_mode)) {
         if (object_mode == OB_MODE_OBJECT) {
           Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -855,9 +858,19 @@ void tree_element_activate(bContext *C,
   }
 }
 
-static void tree_elemment_shapekey_active_set(Object &ob, TreeElement &te)
+static void tree_elemment_shapekey_active_set(bContext *C, TreeElement *te)
 {
-  ob.shapenr = te.index + 1;
+  if (TreeElement *parent_te = outliner_search_back_te(te, ID_OB)) {
+    TreeStoreElem *parent_tselem = TREESTORE(parent_te);
+    Object *ob = id_cast<Object *>(parent_tselem->id);
+
+    if (ob) {
+      PointerRNA object_ptr = RNA_pointer_create_discrete(&ob->id, RNA_Object, ob);
+      PropertyRNA *prop = RNA_struct_find_property(&object_ptr, "active_shape_key_index");
+      RNA_property_int_set(&object_ptr, prop, te->index);
+      RNA_property_update(C, &object_ptr, prop);
+    }
+  }
 }
 
 void tree_element_type_active_set(bContext *C,
@@ -922,7 +935,8 @@ void tree_element_type_active_set(bContext *C,
       tree_element_layer_collection_activate(C, te);
       break;
     case TSE_SHAPE_KEY_BLOCK:
-      tree_elemment_shapekey_active_set(*tvc.obact, *te);
+      tree_elemment_shapekey_active_set(C, te);
+      break;
     default:
       break;
   }
@@ -1197,10 +1211,14 @@ eOLDrawState tree_element_active_state_get(const TreeViewContext &tvc,
   return OL_DRAWSEL_NONE;
 }
 
-static eOLDrawState tree_element_shapekey_state_get(const Object &ob, const TreeElement *te)
+static eOLDrawState tree_element_shapekey_state_get(const TreeElement *te)
 {
-  if (ob.shapenr == te->index + 1) {
-    return OL_DRAWSEL_NORMAL;
+  if (const Object *ob = id_cast<Object *>(
+          outliner_search_back(const_cast<TreeElement *>(te), ID_OB)))
+  {
+    if (ob->shapenr == te->index + 1) {
+      return OL_DRAWSEL_NORMAL;
+    }
   }
   return OL_DRAWSEL_NONE;
 }
@@ -1248,7 +1266,7 @@ eOLDrawState tree_element_type_active_state_get(const TreeViewContext &tvc,
     case TSE_BONE_COLLECTION:
       return tree_element_bone_collection_state_get(te, tselem);
     case TSE_SHAPE_KEY_BLOCK:
-      return tree_element_shapekey_state_get(*tvc.obact, te);
+      return tree_element_shapekey_state_get(te);
     default:
       break;
   }
@@ -1329,14 +1347,19 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
       case ID_WO:
         context = BCONTEXT_WORLD;
         break;
-      case ID_KE:
-        context = BCONTEXT_DATA;
-        ptr = RNA_id_pointer_create(te->parent->store_elem->id);
-        break;
     }
   }
   else {
     switch (tselem->type) {
+      case TSE_SHAPE_KEY_BASE:
+      case TSE_SHAPE_KEY_BLOCK:
+        if (TreeElement *parent_te = outliner_search_back_te(te, ID_OB)) {
+          TreeStoreElem *parent_tselem = TREESTORE(parent_te);
+          Object *ob = id_cast<Object *>(parent_tselem->id);
+          ptr = RNA_id_pointer_create(static_cast<ID *>(ob->data));
+          context = BCONTEXT_DATA;
+        }
+        break;
       case TSE_DEFGROUP_BASE:
       case TSE_DEFGROUP:
         ptr = RNA_id_pointer_create(tselem->id);
@@ -1370,7 +1393,7 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
         if (tselem->type != TSE_MODIFIER_BASE) {
           ModifierData *md = static_cast<ModifierData *>(te->directdata);
 
-          switch (ModifierType(md->type)) {
+          switch (md->type) {
             case eModifierType_ParticleSystem:
               context = BCONTEXT_PARTICLE;
               break;

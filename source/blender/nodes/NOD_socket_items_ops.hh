@@ -129,9 +129,12 @@ inline void remove_active_item(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
+    if (!node_ptr.data) {
+      return OPERATOR_CANCELLED;
+    }
     bNode &node = *static_cast<bNode *>(node_ptr.data);
     SocketItemsRef ref = Accessor::get_items_from_node(node);
-    if (*ref.items_num > 0) {
+    if (*ref.items_num > 0 && ref.active_index) {
       dna::array::remove_index(
           ref.items, ref.items_num, ref.active_index, *ref.active_index, Accessor::destruct_item);
       update_after_node_change(C, node_ptr);
@@ -156,6 +159,9 @@ inline void remove_item_by_index(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
+    if (!node_ptr.data) {
+      return OPERATOR_CANCELLED;
+    }
     bNode &node = *static_cast<bNode *>(node_ptr.data);
     const int index_to_remove = RNA_int_get(op->ptr, "index");
     SocketItemsRef ref = Accessor::get_items_from_node(node);
@@ -307,6 +313,10 @@ inline void add_item(wmOperatorType *ot,
         nullptr,
         nullptr,
         [](bContext *C, PointerRNA * /*ptr*/, PropertyRNA * /*prop*/, bool *r_free) {
+          if (!C) {
+            *r_free = false;
+            return rna_enum_node_socket_data_type_items;
+          }
           *r_free = true;
           SpaceNode *snode = CTX_wm_space_node(C);
           return enum_items_filter(rna_enum_node_socket_data_type_items,
@@ -342,6 +352,9 @@ inline void move_active_item(wmOperatorType *ot,
 
   ot->exec = [](bContext *C, wmOperator *op) -> wmOperatorStatus {
     PointerRNA node_ptr = get_active_node_to_operate_on(C, op, Accessor::node_idname);
+    if (!node_ptr.data) {
+      return OPERATOR_CANCELLED;
+    }
     bNode &node = *static_cast<bNode *>(node_ptr.data);
     const MoveDirection direction = MoveDirection(RNA_enum_get(op->ptr, "direction"));
 
@@ -371,11 +384,11 @@ inline void move_active_item(wmOperatorType *ot,
 }
 
 /**
- * Creates simple operators for adding, removing and moving items.
- * The idnames are passed in explicitly, so that they are more searchable compared to when they
- * would be computed automatically.
+ * Creates operator to add a node item.
+ * The idname is passed in explicitly, so that it is more searchable compared to when it would be
+ * computed automatically.
  */
-template<typename Accessor> inline void make_common_operators()
+template<typename Accessor> inline void make_add_item_operator()
 {
   WM_operatortype_append([](wmOperatorType *ot) {
     socket_items::ops::add_item<Accessor>(ot,
@@ -383,14 +396,57 @@ template<typename Accessor> inline void make_common_operators()
                                           Accessor::operator_idnames::add_item.c_str(),
                                           "Add item below active item");
   });
+}
+
+/**
+ * Creates operator to remove the active item.
+ * The idname is passed in explicitly, so that it is more searchable compared to when it would be
+ * computed automatically.
+ */
+template<typename Accessor> inline void make_remove_active_item_operator()
+{
   WM_operatortype_append([](wmOperatorType *ot) {
     socket_items::ops::remove_active_item<Accessor>(
         ot, "Remove Item", Accessor::operator_idnames::remove_item.c_str(), "Remove active item");
   });
+}
+
+/**
+ * Creates operator to remove an item by index.
+ * The idname is passed in explicitly, so that it is more searchable compared to when it would be
+ * computed automatically.
+ */
+template<typename Accessor> inline void make_remove_item_by_index_operator()
+{
+  WM_operatortype_append([](wmOperatorType *ot) {
+    socket_items::ops::remove_item_by_index<Accessor>(
+        ot, "Remove Item", Accessor::operator_idnames::remove_item.c_str(), "Remove active item");
+  });
+}
+
+/**
+ * Creates operator to move a node item.
+ * The idname is passed in explicitly, so that it is more searchable compared to when it would be
+ * computed automatically.
+ */
+template<typename Accessor> inline void make_move_item_operator()
+{
   WM_operatortype_append([](wmOperatorType *ot) {
     socket_items::ops::move_active_item<Accessor>(
         ot, "Move Item", Accessor::operator_idnames::move_item.c_str(), "Move active item");
   });
+}
+
+/**
+ * Creates simple operators for adding, removing and moving items.
+ * The idnames are passed in explicitly, so that they are more searchable compared to when they
+ * would be computed automatically.
+ */
+template<typename Accessor> inline void make_common_operators()
+{
+  make_add_item_operator<Accessor>();
+  make_remove_active_item_operator<Accessor>();
+  make_move_item_operator<Accessor>();
 }
 
 }  // namespace blender::nodes::socket_items::ops

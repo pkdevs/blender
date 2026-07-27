@@ -6,12 +6,14 @@
 
 #include "node_shader_util.hh"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "BKE_node_runtime.hh"
+
+#include "NOD_socket_usage_inference.hh"
 
 namespace blender {
 
@@ -99,6 +101,13 @@ static void node_declare(NodeDeclarationBuilder &b)
   PanelDeclarationBuilder &sss = b.add_panel("Subsurface"_ustr).default_closed(true);
   sss.add_layout([](ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr) {
     layout.prop(ptr, "subsurface_method", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+    /* Not used by Thin Wall. Infer the value from Subsurface Radius. */
+    const bNode &node = *ptr->data_as<bNode>();
+    const bNodeSocket &radius_socket = *bke::node_find_socket(
+        node, SOCK_IN, "Subsurface Radius"_ustr);
+    if (radius_socket.is_inactive()) {
+      layout.active_set(false);
+    }
   });
   sss.add_input<decl::Float>("Subsurface Weight"_ustr)
       .default_value(0.0f)
@@ -115,15 +124,17 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(100.0f)
       .short_label("Radius")
-      .description("Scattering radius per color channel (RGB), multiplied with Scale");
+      .description("Scattering radius per color channel (RGB), multiplied with Scale")
+      .usage_by_bool("Thin Wall"_ustr, false);
 #define SOCK_SUBSURFACE_RADIUS_ID 10
   sss.add_input<decl::Float>("Subsurface Scale"_ustr)
-      .default_value(0.05f)
+      .default_value(0.005f)
       .min(0.0f)
       .max(10.0f)
       .subtype(PROP_DISTANCE)
       .short_label("Scale")
-      .description("Scale factor of the subsurface scattering radius");
+      .description("Scale factor of the subsurface scattering radius")
+      .usage_by_bool("Thin Wall"_ustr, false);
 #define SOCK_SUBSURFACE_SCALE_ID 11
   sss.add_input<decl::Float>("Subsurface IOR"_ustr)
       .default_value(1.4f)
@@ -145,7 +156,12 @@ static void node_declare(NodeDeclarationBuilder &b)
           "Zero scatters uniformly in all directions, positive values scatter more in the forward "
           "direction, and negative values scatter more backwards. "
           "For example, skin has been measured to have an anisotropy of 0.8")
-      .make_available([](bNode &node) { node.custom2 = SHD_SUBSURFACE_RANDOM_WALK; });
+      .make_available([](bNode &node) { node.custom2 = SHD_SUBSURFACE_RANDOM_WALK; })
+      .usage_inference(
+          [](const socket_usage_inference::SocketUsageParams &params) -> std::optional<bool> {
+            return params.bool_input_may_be("Thin Wall"_ustr, true) ||
+                   params.node.custom2 != SHD_SUBSURFACE_BURLEY;
+          });
 #define SOCK_SUBSURFACE_ANISOTROPY_ID 13
 
   /* Panel for Specular settings. */
@@ -362,6 +378,15 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
   bool use_coat = in[SOCK_COAT_WEIGHT_ID].socket_not_zero();
   bool use_translucent = use_subsurf && in[SOCK_THIN_WALL_ID].socket_not_zero();
 
+  /* EEVEE's subsurface closure still uses the legacy approximation where the radius is scaled by
+   * 1/(4pi) (e.g., SHD_SUBSURFACE_RANDOM_WALK_LEGACY) */
+  GPUNodeLink *subsurface_random_walk_radius_scale = nullptr;
+  float random_walk_scale = 1.0f;
+  if (node->custom2 == SHD_SUBSURFACE_RANDOM_WALK) {
+    random_walk_scale = 4.0f * M_PI;
+  }
+  subsurface_random_walk_radius_scale = GPU_constant(&random_walk_scale);
+
   eGPUMaterialFlag flag = GPU_MATFLAG_GLOSSY;
   if (use_diffuse) {
     flag |= GPU_MATFLAG_DIFFUSE;
@@ -382,12 +407,16 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
     flag |= GPU_MATFLAG_TRANSLUCENT;
   }
 
+  const bool refraction_might_be_tinted = use_refract && in[SOCK_BASE_COLOR_ID].might_be_tinted();
+
   if (might_have_tinted_specular(
-          in[SOCK_BASE_COLOR_ID], in[SOCK_METALLIC_ID], in[SOCK_SPECULAR_TINT_ID]))
+          in[SOCK_BASE_COLOR_ID], in[SOCK_METALLIC_ID], in[SOCK_SPECULAR_TINT_ID]) ||
+      /* Multiscatter GGX can tint the reflection lobe. See `bsdf_lut`. */
+      (refraction_might_be_tinted && node->custom1 == SHD_GLOSSY_MULTI_GGX))
   {
     flag |= GPU_MATFLAG_REFLECTION_MAYBE_COLORED;
   }
-  if (use_refract && in[SOCK_BASE_COLOR_ID].might_be_tinted()) {
+  if (refraction_might_be_tinted) {
     flag |= GPU_MATFLAG_REFRACTION_MAYBE_COLORED;
   }
   if (use_coat && in[SOCK_COAT_TINT_ID].might_be_tinted()) {
@@ -418,8 +447,13 @@ static int node_shader_gpu_bsdf_principled(GPUMaterial *mat,
 
   float use_multi_scatter = (node->custom1 == SHD_GLOSSY_MULTI_GGX) ? 1.0f : 0.0f;
 
-  return GPU_stack_link(
-      mat, node, "node_bsdf_principled", in, out, GPU_constant(&use_multi_scatter));
+  return GPU_stack_link(mat,
+                        node,
+                        "node_bsdf_principled",
+                        in,
+                        out,
+                        GPU_constant(&use_multi_scatter),
+                        subsurface_random_walk_radius_scale);
 }
 
 static void node_shader_update_principled(bNodeTree *ntree, bNode *node)

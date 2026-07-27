@@ -31,9 +31,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
@@ -74,6 +74,29 @@
 #include "armature_intern.hh"
 
 namespace blender {
+
+static bool pose_slide_poll(bContext *C)
+{
+  Object *obact = CTX_data_active_object(C);
+  if (!obact) {
+    return false;
+  }
+  const eContextObjectMode mode = CTX_data_mode_enum(C);
+  if (mode == CTX_MODE_OBJECT) {
+    return true;
+  }
+
+  if (!(obact->mode & OB_MODE_EDIT)) {
+    Object *obpose = BKE_object_pose_armature_get(obact);
+    if (obpose != nullptr) {
+      if ((obact == obpose) || (obact->mode & OB_MODE_ALL_WEIGHT_PAINT)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 /* **************************************************** */
 /* A) Push & Relax, Breakdowner */
@@ -302,8 +325,8 @@ static void pose_slide_exit(bContext *C, wmOperator *op)
 static void pose_slide_refresh(bContext *C, tPoseSlideOp *pso)
 {
   /* Wrapper around the generic version, allowing us to add some custom stuff later still. */
-  for (ObjectFrameRange &object_range : pso->ob_data_array) {
-    slide_subjects_refresh(C, &object_range.object->id);
+  for (SlideSubject &slide_subject : pso->slide_subjects) {
+    slide_subjects_refresh(C, slide_subject);
   }
 }
 
@@ -685,7 +708,7 @@ static void pose_slide_apply(bContext *C, tPoseSlideOp *pso)
 static void pose_slide_autoKeyframe(bContext *C, tPoseSlideOp *pso)
 {
   /* Wrapper around the generic call. */
-  slide_subjects_autokey(C, pso->scene, &pso->slide_subjects, float(pso->current_frame));
+  slide_subjects_autokey(C, pso->scene, &pso->slide_subjects);
 }
 
 /**
@@ -932,11 +955,7 @@ static wmOperatorStatus pose_slide_modal(bContext *C, wmOperator *op, const wmEv
 {
   tPoseSlideOp *pso = static_cast<tPoseSlideOp *>(op->customdata);
   wmWindow *win = CTX_wm_window(C);
-  bool do_pose_update = false;
-
-  const bool has_numinput = hasNumInput(&pso->num);
-
-  do_pose_update = ED_slider_modal(pso->slider, event);
+  bool do_pose_update = ED_slider_modal(pso->slider, event);
 
   switch (event->type) {
     case LEFTMOUSE: /* Confirm. */
@@ -983,13 +1002,11 @@ static wmOperatorStatus pose_slide_modal(bContext *C, wmOperator *op, const wmEv
     }
 
     /* Factor Change... */
-    case MOUSEMOVE: /* Calculate new position. */
-    {
-      /* Only handle mouse-move if not doing numinput. */
-      if (has_numinput == false) {
-        /* Update pose to reflect the new values (see below). */
-        do_pose_update = true;
-      }
+    case MOUSEMOVE: {
+      /* `ED_slider_modal` already set `do_pose_update`. */
+      /* Reset numInput so the cursor movement can take over again. This allows to type in a number
+       * and then continue sliding around from there. */
+      initNumInput(&pso->num);
       break;
     }
     default: {
@@ -1247,7 +1264,7 @@ void POSE_OT_push(wmOperatorType *ot)
   ot->invoke = pose_slide_push_invoke;
   ot->modal = pose_slide_modal;
   ot->cancel = pose_slide_cancel;
-  ot->poll = ED_operator_posemode;
+  ot->poll = pose_slide_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
@@ -1304,7 +1321,7 @@ void POSE_OT_relax(wmOperatorType *ot)
   ot->invoke = pose_slide_relax_invoke;
   ot->modal = pose_slide_modal;
   ot->cancel = pose_slide_cancel;
-  ot->poll = ED_operator_posemode;
+  ot->poll = pose_slide_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
@@ -1366,7 +1383,7 @@ void POSE_OT_blend_with_rest(wmOperatorType *ot)
   ot->invoke = pose_slide_blend_rest_invoke;
   ot->modal = pose_slide_modal;
   ot->cancel = pose_slide_cancel;
-  ot->poll = ED_operator_posemode;
+  ot->poll = pose_slide_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
@@ -1425,7 +1442,7 @@ void POSE_OT_breakdown(wmOperatorType *ot)
   ot->invoke = pose_slide_breakdown_invoke;
   ot->modal = pose_slide_modal;
   ot->cancel = pose_slide_cancel;
-  ot->poll = ED_operator_posemode;
+  ot->poll = pose_slide_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
@@ -1477,7 +1494,7 @@ void POSE_OT_blend_to_neighbors(wmOperatorType *ot)
   ot->invoke = pose_slide_blend_to_neighbors_invoke;
   ot->modal = pose_slide_modal;
   ot->cancel = pose_slide_cancel;
-  ot->poll = ED_operator_posemode;
+  ot->poll = pose_slide_poll;
 
   /* Flags. */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_X;
@@ -1697,7 +1714,7 @@ static wmOperatorStatus pose_propagate_exec(bContext *C, wmOperator *op)
   target_frames.free_no_destruct();
 
   for (SlideSubject &slide_subject : slide_subjects) {
-    slide_subjects_refresh(C, slide_subject.ptr.owner_id);
+    slide_subjects_refresh(C, slide_subject);
   }
 
   /* Free temp data. */

@@ -9,17 +9,17 @@
 #include <algorithm>
 
 #include "BLI_array.hh"
-#include "BLI_math_base.h"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_geom_c.hh"
 
-#include "BLI_math_bits.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_bits.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -349,7 +349,7 @@ float closest_seg_seg_v2(float r_closest_a[2],
   const float dist_sq3 = len_squared_v2v2(p3, b1);
   const float dist_sq4 = len_squared_v2v2(p4, b2);
 
-  const float min_dist_sq = min_ffff(dist_sq1, dist_sq2, dist_sq3, dist_sq4);
+  const float min_dist_sq = std::min({dist_sq1, dist_sq2, dist_sq3, dist_sq4});
   if (min_dist_sq == dist_sq1) {
     copy_v2_v2(r_closest_a, a1);
     copy_v2_v2(r_closest_b, p1);
@@ -1031,7 +1031,7 @@ float dist_seg_seg_v2(const float a1[3], const float a2[3], const float b1[3], c
   const float d2 = dist_squared_to_line_segment_v2(a2, b1, b2);
   const float d3 = dist_squared_to_line_segment_v2(b1, a1, a2);
   const float d4 = dist_squared_to_line_segment_v2(b2, a1, a2);
-  return sqrtf(min_ffff(d1, d2, d3, d4));
+  return sqrtf(std::min({d1, d2, d3, d4}));
 }
 
 void closest_on_tri_to_point_v3(
@@ -1965,7 +1965,7 @@ bool isect_ray_tri_watertight_v3(const float ray_origin[3],
 
   /* Calculate determinant. */
   det = u + v + w;
-  if (UNLIKELY(det == 0.0f || !isfinite(det))) {
+  if (det == 0.0f || !isfinite(det)) [[unlikely]] {
     return false;
   }
 
@@ -3011,11 +3011,11 @@ int isect_line_line_epsilon_v3(const float v1[3],
 
   /* important not to use an epsilon here, see: #45919 */
   /* test zero length line */
-  if (UNLIKELY(div == 0.0f)) {
+  if (div == 0.0f) [[unlikely]] {
     return 0;
   }
   /* test if the two lines are coplanar */
-  if (UNLIKELY(fabsf(d) <= epsilon)) {
+  if (fabsf(d) <= epsilon) [[unlikely]] {
     cross_v3_v3v3(cb, c, b);
 
     mul_v3_fl(a, dot_v3v3(cb, ab) / div);
@@ -3086,11 +3086,11 @@ bool isect_line_line_strict_v3(const float v1[3],
 
   /* important not to use an epsilon here, see: #45919 */
   /* test zero length line */
-  if (UNLIKELY(div == 0.0f)) {
+  if (div == 0.0f) [[unlikely]] {
     return false;
   }
   /* test if the two lines are coplanar */
-  if (UNLIKELY(fabsf(d) < epsilon)) {
+  if (fabsf(d) < epsilon) [[unlikely]] {
     return false;
   }
 
@@ -3129,7 +3129,7 @@ bool isect_ray_ray_epsilon_v3(const float ray_origin_a[3],
   const float nlen = len_squared_v3(n);
 
   /* `nlen` is the square of the area formed by the two vectors. */
-  if (UNLIKELY(nlen < epsilon)) {
+  if (nlen < epsilon) [[unlikely]] {
     /* The lines are parallel. */
     return false;
   }
@@ -3276,7 +3276,7 @@ float closest_to_ray_v3(float r_close[3],
 {
   float h[3], lambda;
 
-  if (UNLIKELY(is_zero_v3(ray_dir))) {
+  if (is_zero_v3(ray_dir)) [[unlikely]] {
     lambda = 0.0f;
     copy_v3_v3(r_close, ray_orig);
     return lambda;
@@ -3912,19 +3912,19 @@ void barycentric_weights_v2_quad(const float v1[2],
   };
 
   /* avoid divide by zero */
-  if (UNLIKELY(lens[0] < FLT_EPSILON)) {
+  if (lens[0] < FLT_EPSILON) [[unlikely]] {
     w[0] = 1.0f;
     w[1] = w[2] = w[3] = 0.0f;
   }
-  else if (UNLIKELY(lens[1] < FLT_EPSILON)) {
+  else if (lens[1] < FLT_EPSILON) [[unlikely]] {
     w[1] = 1.0f;
     w[0] = w[2] = w[3] = 0.0f;
   }
-  else if (UNLIKELY(lens[2] < FLT_EPSILON)) {
+  else if (lens[2] < FLT_EPSILON) [[unlikely]] {
     w[2] = 1.0f;
     w[0] = w[1] = w[3] = 0.0f;
   }
-  else if (UNLIKELY(lens[3] < FLT_EPSILON)) {
+  else if (lens[3] < FLT_EPSILON) [[unlikely]] {
     w[3] = 1.0f;
     w[0] = w[1] = w[2] = 0.0f;
   }
@@ -4170,7 +4170,7 @@ static float mean_value_half_tan_v3(const Float3_Len *d_curr, const Float3_Len *
   cross_v3_v3v3(cross, d_curr->dir, d_next->dir);
   const float area = len_v3(cross);
   /* Compare against zero since 'FLT_EPSILON' can be too large, see: #73348. */
-  if (LIKELY(area != 0.0f)) {
+  if (area != 0.0f) [[likely]] {
     const float dot = dot_v3v3(d_curr->dir, d_next->dir);
     const float len = d_curr->len * d_next->len;
     const float result = (len - dot) / area;
@@ -4195,7 +4195,7 @@ static double mean_value_half_tan_v2_db(const Double2_Len *d_curr, const Double2
   /* Different from the 3d version but still correct. */
   const double area = cross_v2v2_db(d_curr->dir, d_next->dir);
   /* Compare against zero since 'FLT_EPSILON' can be too large, see: #73348. */
-  if (LIKELY(area != 0.0)) {
+  if (area != 0.0) [[likely]] {
     const double dot = dot_v2v2_db(d_curr->dir, d_next->dir);
     const double len = d_curr->len * d_next->len;
     const double result = (len - dot) / area;
@@ -4246,11 +4246,11 @@ void interp_weights_poly_v3(float *w, float v[][3], const int n, const float co[
      * In that case, do simple linear interpolation between the two edge vertices */
 
     /* 'd_next.len' is in fact 'd_curr.len', just avoid copy to begin with */
-    if (UNLIKELY(d_next.len < eps)) {
+    if (d_next.len < eps) [[unlikely]] {
       ix_flag = IS_POINT_IX;
       break;
     }
-    if (UNLIKELY(dist_squared_to_line_segment_v3(co, v_curr, v_next) < eps_sq)) {
+    if (dist_squared_to_line_segment_v3(co, v_curr, v_next) < eps_sq) [[unlikely]] {
       ix_flag = IS_SEGMENT_IX;
       break;
     }
@@ -4331,11 +4331,11 @@ void interp_weights_poly_v2(float *w, float v[][2], const int n, const float co[
      * do simple linear interpolation between the two edge vertices */
 
     /* 'd_next.len' is in fact 'd_curr.len', just avoid copy to begin with */
-    if (UNLIKELY(d_next.len < eps)) {
+    if (d_next.len < eps) [[unlikely]] {
       ix_flag = IS_POINT_IX;
       break;
     }
-    if (UNLIKELY(dist_squared_to_line_segment_v2(co, v_curr, v_next) < eps_sq)) {
+    if (dist_squared_to_line_segment_v2(co, v_curr, v_next) < eps_sq) [[unlikely]] {
       ix_flag = IS_SEGMENT_IX;
       break;
     }
@@ -4820,7 +4820,13 @@ void projmat_dimensions(const float winmat[4][4],
     *r_bottom = near * ((winmat[2][1] - 1.0f) / winmat[1][1]);
     *r_top = near * ((winmat[2][1] + 1.0f) / winmat[1][1]);
     *r_near = near;
-    *r_far = winmat[3][2] / (winmat[2][2] + 1.0f);
+    if (winmat[2][2] == -1.0f) {
+      /* Case of infinite projection matrix. Assume large clip end. */
+      *r_far = near + 1e9f;
+    }
+    else {
+      *r_far = winmat[3][2] / (winmat[2][2] + 1.0f);
+    }
   }
   else {
     *r_left = (-winmat[3][0] - 1.0f) / winmat[0][0];
@@ -5069,8 +5075,8 @@ static float snap_coordinate(float u)
   if (u < 0.0f) {
     u += 1.0f; /* Get back into the unit interval. */
   }
-  BLI_assert(0.0f <= u);
-  BLI_assert(u <= 1.0f);
+  BLI_assert(!(0.0f > u));
+  BLI_assert(!(1.0f < u));
   const float epsilon = 0.25f / 65536.0f; /* i.e. Quarter of a texel on a 65536 x 65536 texture. */
   if (u < epsilon) {
     return 0.0f; /* `u` is close to 0, just return 0. */
@@ -5679,7 +5685,15 @@ float geodesic_distance_propagate_across_triangle(
          * the edge between v1 and v2. */
         const float x_intercept = S_[0] + h * (v0_[0] - S_[0]) / (v0_[1] + h);
         if (x_intercept >= 0.0f && x_intercept <= d12) {
-          return len_v2v2(S_, v0_);
+          const float dist0 = len_v2v2(S_, v0_);
+
+          /* Only valid if the wavefront reaches v0 after both v1 and v2, as it has to
+           * travel through the edge between them. Otherwise dist1 and dist2 did not
+           * originate from a common source, and the virtual source point is bogus and
+           * can give a distance much shorter than the actual one. */
+          if (dist0 >= std::max(dist1, dist2)) {
+            return dist0;
+          }
         }
       }
     }

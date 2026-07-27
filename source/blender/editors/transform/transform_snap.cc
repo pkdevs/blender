@@ -7,11 +7,11 @@
  */
 
 #include "BLI_bounds.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_time.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_time.hh"
 
 #include "DNA_userdef_types.h"
 
@@ -223,7 +223,7 @@ void drawSnapping(TransInfo *t)
     ui::theme::get_color_3ubv(TH_SEQ_ACTIVE, col);
     col[3] = 128;
   }
-  else if (t->spacetype != SPACE_IMAGE) {
+  else {
     ui::theme::get_color_3ubv(TH_TRANSFORM, col);
     col[3] = 128;
 
@@ -301,22 +301,41 @@ void drawSnapping(TransInfo *t)
   else if (t->spacetype == SPACE_IMAGE) {
     uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
+    GPU_matrix_push_projection();
+    wmOrtho2_region_pixelspace(t->region);
+    float radius = 2.5f * ui::theme::get_value_f(TH_VERTEX_SIZE) * U.pixelsize;
+    GPU_blend(GPU_BLEND_ALPHA);
+
+    if (!t->tsnap.points.is_empty()) {
+      immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+      for (TransSnapPoint &p : t->tsnap.points) {
+        if (&p == t->tsnap.selectedPoint) {
+          immUniformColor4ubv(selectedCol);
+        }
+        else {
+          immUniformColor4ubv(col);
+        }
+        float x, y;
+        const float2 snap_point = float2(p.co) / float2(t->aspect);
+        ui::view2d_view_to_region_fl(&t->region->v2d, snap_point.x, snap_point.y, &x, &y);
+        imm_draw_circle_wire_2d(pos, x, y, radius, 8);
+      }
+      immUnbindProgram();
+    }
+
     float x, y;
     const float snap_point[2] = {
         t->tsnap.snap_target[0] / t->aspect[0],
         t->tsnap.snap_target[1] / t->aspect[1],
     };
     ui::view2d_view_to_region_fl(&t->region->v2d, UNPACK2(snap_point), &x, &y);
-    float radius = 2.5f * ui::theme::get_value_f(TH_VERTEX_SIZE) * U.pixelsize;
-
-    GPU_matrix_push_projection();
-    wmOrtho2_region_pixelspace(t->region);
 
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     immUniformColor3ub(255, 255, 255);
     imm_draw_circle_wire_2d(pos, x, y, radius, 8);
     immUnbindProgram();
 
+    GPU_blend(GPU_BLEND_NONE);
     GPU_matrix_pop_projection();
   }
   else if (t->spacetype == SPACE_SEQ) {
@@ -392,6 +411,10 @@ static bool applyFaceProject(TransInfo *t,
                              TransData *td,
                              TransDataExtension *td_ext)
 {
+  if (t->spacetype != SPACE_VIEW3D) [[unlikely]] {
+    return false;
+  }
+
   float iloc[3], loc[3], no[3];
   float mval_fl[2];
 
@@ -896,25 +919,28 @@ void transform_snap_grid_init(const TransInfo *t, float r_snap[3], float *r_snap
 
   if (t->spacetype == SPACE_VIEW3D) {
     /* Used by incremental snap. */
-    if (t->region->regiontype == RGN_TYPE_WINDOW) {
+    if (t->region && t->region->regiontype == RGN_TYPE_WINDOW) {
       View3D *v3d = static_cast<View3D *>(t->area->spacedata.first);
       r_snap[0] = r_snap[1] = r_snap[2] = ED_view3d_grid_view_scale(
           t->scene, v3d, t->region, nullptr);
     }
   }
   else if (t->spacetype == SPACE_IMAGE) {
-    SpaceImage *sima = static_cast<SpaceImage *>(t->area->spacedata.first);
-    const View2D *v2d = &t->region->v2d;
-    int grid_size = SI_GRID_STEPS_LEN;
-    float zoom_factor = ED_space_image_zoom_level(v2d, grid_size);
-    float grid_steps_x[SI_GRID_STEPS_LEN];
-    float grid_steps_y[SI_GRID_STEPS_LEN];
+    if (t->region && t->region->regiontype == RGN_TYPE_WINDOW) {
+      SpaceImage *sima = static_cast<SpaceImage *>(t->area->spacedata.first);
+      const View2D *v2d = &t->region->v2d;
+      int grid_size = SI_GRID_STEPS_LEN;
+      float zoom_factor = ED_space_image_zoom_level(v2d, grid_size);
+      float grid_steps_x[SI_GRID_STEPS_LEN];
+      float grid_steps_y[SI_GRID_STEPS_LEN];
 
-    ED_space_image_grid_steps(sima, grid_steps_x, grid_steps_y, grid_size);
-    /* Snapping value based on what type of grid is used (adaptive-subdividing or custom-grid). */
-    r_snap[0] = ED_space_image_increment_snap_value(grid_size, grid_steps_x, zoom_factor);
-    r_snap[1] = ED_space_image_increment_snap_value(grid_size, grid_steps_y, zoom_factor);
-    *r_snap_precision = 0.5f;
+      ED_space_image_grid_steps(sima, grid_steps_x, grid_steps_y, grid_size);
+      /* Snapping value based on what type of grid is used (adaptive-subdividing or custom-grid).
+       */
+      r_snap[0] = ED_space_image_increment_snap_value(grid_size, grid_steps_x, zoom_factor);
+      r_snap[1] = ED_space_image_increment_snap_value(grid_size, grid_steps_y, zoom_factor);
+      *r_snap_precision = 0.5f;
+    }
   }
   else if (t->spacetype == SPACE_CLIP) {
     r_snap[0] = r_snap[1] = 0.125f;
@@ -1153,8 +1179,7 @@ static void setSnappingCallback(TransInfo *t)
 
 void addSnapPoint(TransInfo *t)
 {
-  /* Currently only 3D viewport works for snapping points. */
-  if (t->tsnap.status & SNAP_TARGET_FOUND && t->spacetype == SPACE_VIEW3D) {
+  if (t->tsnap.status & SNAP_TARGET_FOUND && ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE)) {
     TransSnapPoint *p = MEM_new_zeroed<TransSnapPoint>("SnapPoint");
 
     t->tsnap.selectedPoint = p;
@@ -1179,9 +1204,22 @@ eRedrawFlag updateSelectedSnapPoint(TransInfo *t)
     for (TransSnapPoint &p : t->tsnap.points) {
       float dist_sq;
 
-      if (ED_view3d_project_float_global(t->region, p.co, screen_loc, V3D_PROJ_TEST_NOP) !=
-          V3D_PROJ_RET_OK)
-      {
+      if (t->spacetype == SPACE_VIEW3D) {
+        if (ED_view3d_project_float_global(t->region, p.co, screen_loc, V3D_PROJ_TEST_NOP) !=
+            V3D_PROJ_RET_OK)
+        {
+          continue;
+        }
+      }
+      else if (t->spacetype == SPACE_IMAGE) {
+        float x, y;
+        const float2 snap_point = float2(p.co) / float2(t->aspect);
+        ui::view2d_view_to_region_fl(&t->region->v2d, snap_point.x, snap_point.y, &x, &y);
+        screen_loc[0] = x;
+        screen_loc[1] = y;
+      }
+      else {
+        BLI_assert_unreachable();
         continue;
       }
 

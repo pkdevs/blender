@@ -7,9 +7,10 @@
  */
 
 #include "BLI_math_axis_angle.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
@@ -20,6 +21,7 @@
 #include "IMB_colormanagement.hh"
 
 #include "GPU_material.hh"
+#include "GPU_texture.hh"
 
 #include "draw_cache.hh"
 #include "draw_view_data.hh"
@@ -140,7 +142,9 @@ LookdevWorld::LookdevWorld()
   /* TODO: This works around the issue that the first time the texture is accessed the image would
    * overwrite the set GPU texture. A better solution would be to use image data-blocks as part of
    * the studio-lights, but that requires a larger refactoring. */
-  BKE_image_get_gpu_texture(image, &environment_storage->iuser);
+  if (gpu::Texture *tex = BKE_image_acquire_gpu_texture(image, &environment_storage->iuser)) {
+    GPU_texture_free(tex);
+  }
 }
 
 LookdevWorld::~LookdevWorld()
@@ -156,7 +160,7 @@ bool LookdevWorld::sync(const LookdevParameters &new_parameters)
   if (parameters_changed) {
     intensity_socket_->value = parameters_.intensity;
 
-    GPU_TEXTURE_FREE_SAFE(image->runtime->gputexture[TEXTARGET_2D][0]);
+    BKE_image_assign_gpu_texture(image, nullptr);
     environment_node_->id = nullptr;
 
     StudioLight *sl = BKE_studiolight_find(parameters_.hdri.c_str(),
@@ -166,7 +170,7 @@ bool LookdevWorld::sync(const LookdevParameters &new_parameters)
       gpu::Texture *texture = sl->equirect_radiance_gputexture;
       if (texture != nullptr) {
         GPU_texture_ref(texture);
-        image->runtime->gputexture[TEXTARGET_2D][0] = texture;
+        BKE_image_assign_gpu_texture(image, texture);
         environment_node_->id = &image->id;
       }
     }
@@ -218,8 +222,8 @@ gpu::Batch *LookdevModule::sphere_get(const SphereLOD level_of_detail)
 {
   BLI_assert(level_of_detail >= SphereLOD::LOW && level_of_detail < SphereLOD::MAX);
 
-  /* GCC 15.x triggers an array-bounds warning without this. */
-#if (defined(__GNUC__) && (__GNUC__ >= 15) && !defined(__clang__))
+  /* GCC 14.x and newer trigger an array-bounds warning without this. */
+#if (defined(__GNUC__) && (__GNUC__ >= 14) && !defined(__clang__))
   [[assume((level_of_detail >= 0) && (level_of_detail < SphereLOD::MAX))]];
 #endif
 
@@ -374,7 +378,7 @@ void LookdevModule::sync()
   const Camera &cam = inst_.camera;
   float sphere_distance = cam.data_get().clip_near;
   int2 display_extent = inst_.film.display_extent_get();
-  float pixel_radius = ShadowModule::screen_pixel_radius(
+  float pixel_radius = View::screen_pixel_radius(
       cam.data_get().wininv, cam.is_perspective(), display_extent);
 
   if (cam.is_perspective()) {

@@ -6,12 +6,12 @@
 #include <limits>
 #include <string>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_hash.hh"
 #include "BLI_memory_utils.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
 
 #include "DNA_packedFile_types.h"
 #include "DNA_vfont_types.h"
@@ -179,7 +179,11 @@ StringImage::StringImage(Context &context,
   BLI_SCOPED_DEFER([&]() { BLF_unload_id(font_identifier); });
 
   BLF_size(font_identifier, size);
-  BLF_enable(font_identifier, BLF_NO_FALLBACK);
+  /* Only fallback to default fonts for unknown characters if this is the built-in font, otherwise,
+   * the image might change across setups and versions if fonts we fallback to change. */
+  if (!BLF_is_builtin(font_identifier)) {
+    BLF_enable(font_identifier, BLF_NO_FALLBACK);
+  }
 
   Vector<StringRef> lines = BLF_string_wrap(
       font_identifier, string, wrap_width.value_or(-1), BLFWrapMode::Typographical);

@@ -15,16 +15,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_mempool.h"
+#include "BLI_mempool.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_threads.h"
+#include "BLI_string.hh"
+#include "BLI_threads.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_ID.h"
+#include "DNA_collection_types.h"
 
 #include "BKE_bpath.hh"
 #include "BKE_global.hh"
@@ -36,6 +37,7 @@
 #include "BKE_main.hh"
 #include "BKE_main_idmap.hh"
 #include "BKE_main_namemap.hh"
+#include "BKE_node.hh"
 #include "BKE_report.hh"
 
 #include "IMB_colormanagement.hh"
@@ -564,6 +566,63 @@ void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &report
   BKE_main_merge(bmain_dst, nullptr, r_bmain_src, reports);
 }
 
+void BKE_main_merge_as_archive_library(Main &bmain_dst,
+                                       Main *&r_bmain_src,
+                                       Library &dst_external_library,
+                                       MainMergeReport &reports)
+{
+  BLI_assert(dst_external_library.flag & LIBRARY_FLAG_IS_ARCHIVE);
+  BLI_assert(dst_external_library.flag & LIBRARY_FLAG_IS_EXTERNAL);
+
+  Main &bmain_src = *r_bmain_src;
+  Vector<ID *> ids_to_move;
+
+  /* Collect all non-Library IDs from the source Main. Library IDs are dropped: the destination
+   * already has the authoritative external_library representing this import source. */
+  for (ID &id_iter : MainAllIDsIterator(bmain_src)) {
+    if (GS(id_iter.name) == ID_LI) {
+      BLI_assert_msg(false,
+                     "Unexpected Library ID in source Main when merging as archive library");
+      continue;
+    }
+    ids_to_move.append(&id_iter);
+  }
+
+  reports.num_merged_ids = int(ids_to_move.size());
+
+  /* Remove IDs from the source Main and assign them to the external library namespace. */
+  for (ID *id : ids_to_move) {
+    BKE_libblock_management_main_remove(&bmain_src, id);
+    id->lib = &dst_external_library;
+
+    /* Consider these IDs as linked and packed. */
+    id->flag |= ID_FLAG_LINKED_AND_PACKED;
+
+    /* Need to tag embedded IDs as well. */
+    bNodeTree *ntree = bke::node_tree_from_id(id);
+    if (ntree != nullptr) {
+      ntree->id.flag |= ID_FLAG_LINKED_AND_PACKED;
+    }
+    if (GS(id->name) == ID_SCE) {
+      Collection *master_collection = (id_cast<Scene *>(id))->master_collection;
+      if (master_collection != nullptr) {
+        master_collection->id.flag |= ID_FLAG_LINKED_AND_PACKED;
+      }
+    }
+  }
+
+  /* Add all IDs into the destination Main under the external library. */
+  for (ID *id : ids_to_move) {
+    BLI_assert((id->tag & ID_TAG_NO_MAIN) != 0);
+    BKE_libblock_management_main_add(&bmain_dst, id);
+  }
+
+  BLI_assert(BKE_main_namemap_validate(bmain_dst));
+
+  BKE_main_free(&bmain_src);
+  r_bmain_src = nullptr;
+}
+
 bool BKE_main_is_empty(Main *bmain)
 {
   bool result = true;
@@ -611,7 +670,8 @@ static int main_relations_create_idlink_cb(LibraryIDLinkCallbackData *cb_data)
     {
       MainIDRelationsEntry *entry = bmain_relations->relations_from_pointers->lookup_or_add_cb(
           self_id, [&]() {
-            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(__func__);
+            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(
+                "main_relations_create_idlink_cb entry");
             entry->session_uid = self_id->session_uid;
             return entry;
           });
@@ -630,7 +690,8 @@ static int main_relations_create_idlink_cb(LibraryIDLinkCallbackData *cb_data)
     if (*id_pointer != nullptr) {
       MainIDRelationsEntry *entry = bmain_relations->relations_from_pointers->lookup_or_add_cb(
           *id_pointer, [&]() {
-            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(__func__);
+            auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(
+                "main_relations_create_idlink_cb entry");
             entry->session_uid = (*id_pointer)->session_uid;
             return entry;
           });
@@ -672,7 +733,7 @@ void BKE_main_relations_create(Main *bmain, const short flag)
     /* Ensure all IDs do have an entry, even if they are not connected to any other. */
     MainIDRelationsEntry *entry = bmain->relations->relations_from_pointers->lookup_or_add_cb(
         id, [&]() {
-          auto *entry = MEM_new_zeroed<MainIDRelationsEntry>(__func__);
+          auto *entry = MEM_new_zeroed<MainIDRelationsEntry>("BKE_main_relations_create entry");
           entry->session_uid = id->session_uid;
           return entry;
         });

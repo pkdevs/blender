@@ -5,9 +5,9 @@
 #include <cstring>
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_screen.hh"
 #include "BKE_viewer_path.hh"
@@ -314,6 +314,7 @@ Object *spreadsheet_get_object_eval(const SpaceSpreadsheet *sspreadsheet,
   }
   Object *object_orig = id_cast<Object *>(used_id);
   if (!ELEM(object_orig->type,
+            OB_EMPTY,
             OB_MESH,
             OB_POINTCLOUD,
             OB_VOLUME,

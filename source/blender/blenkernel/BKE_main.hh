@@ -25,15 +25,17 @@
 
 #include "DNA_listBase.h"
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_map.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_set.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector_set.hh"
 
+#include "BKE_blender_project.hh"
 #include "BKE_lib_query.hh" /* For LibraryForeachIDCallbackFlag. */
+
 struct MainLock;
 namespace blender {
 
@@ -362,6 +364,17 @@ struct Main : NonCopyable, NonMovable {
    */
   MainColorspace colorspace;
 
+  /**
+   * Whether this bmain belongs to the global Blender Project or not.
+   *
+   * NOTE: this is currently always true, as we haven't yet determined which
+   * cases it should be false for, and at the moment it's unlikely to hurt much
+   * of anything to be erroneously true. However, in principle this can be false
+   * and likely will be false in some cases of temp mains in the future, so code
+   * should never assume that it's true.
+   */
+  bool is_part_of_project = true;
+
   /* List bases for all ID types, containing all IDs for the current #Main. */
 
   ListBaseT<Scene> scenes = {};
@@ -524,6 +537,21 @@ void BKE_main_merge(Main *bmain_dst,
                     MainMergeReport &reports);
 /** Simpler overload of the other #BKE_main_merge. */
 void BKE_main_merge(Main *bmain_dst, Main **r_bmain_src, MainMergeReport &reports);
+
+/**
+ * Simplified merge that moves all non-Library IDs from `bmain_src` into `bmain_dst`, assigning
+ * them all to `dst_external_library` as their owning library namespace.
+ *
+ * Unlike the general #BKE_main_merge, this overload skips deduplication and filepath rebasing.
+ * It is intended for merging data imported from an external (non-blend) source that has already
+ * been given a dedicated archive library in `bmain_dst`.
+ *
+ * The source Main is always freed and `*r_bmain_src` is set to nullptr on return.
+ */
+void BKE_main_merge_as_archive_library(Main &bmain_dst,
+                                       Main *&r_bmain_src,
+                                       Library &dst_external_library,
+                                       MainMergeReport &reports);
 
 /**
  * Check whether given `bmain` is empty or contains some IDs.

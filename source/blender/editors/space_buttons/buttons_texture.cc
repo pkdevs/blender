@@ -11,9 +11,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -234,7 +234,7 @@ static void buttons_texture_modifier_foreach(void *user_data,
     }
   }
   else {
-    const ModifierTypeInfo *modifier_type = BKE_modifier_get_info(ModifierType(md->type));
+    const ModifierTypeInfo *modifier_type = BKE_modifier_get_info(md->type);
 
     buttons_texture_user_property_add(
         users, &ob->id, *ptr, texture_prop, N_("Modifiers"), modifier_type->icon, md->name);

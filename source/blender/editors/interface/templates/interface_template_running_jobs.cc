@@ -15,11 +15,11 @@
 #include "BKE_global.hh"
 #include "BKE_main.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
 
-#include "BLI_timecode.h"
+#include "BLI_timecode.hh"
 #include "BLT_translation.hh"
 
 #include "ED_screen.hh"
@@ -319,7 +319,7 @@ void template_running_jobs(Layout *layout, bContext *C)
   if (ED_screen_animation_no_scrub(wm)) {
     Button *but = uiDefIconTextBut(block,
                                    ButtonType::But,
-                                   ICON_CANCEL,
+                                   ICON_STATUS_ERROR_FILLED,
                                    IFACE_("Anim Player"),
                                    0,
                                    0,

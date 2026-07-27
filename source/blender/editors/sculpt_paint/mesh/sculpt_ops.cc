@@ -610,7 +610,7 @@ static void SCULPT_OT_sculptmode_toggle(wmOperatorType *ot)
   ot->description = "Toggle sculpt mode in 3D view";
 
   ot->exec = sculpt_mode_toggle_exec;
-  ot->poll = ED_operator_object_active_editable_mesh;
+  ot->poll = ED_operator_object_active_editable_mesh_from_view_layer;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
@@ -775,8 +775,7 @@ static wmOperatorStatus mask_by_color(bContext *C, wmOperator *op, const float2 
 
   /* Tools that are not brushes do not have the brush gizmo to update the vertex as the mouse move,
    * so it needs to be updated here. */
-  CursorGeometryInfo cgi;
-  cursor_geometry_info_update(C, &cgi, region_location, false);
+  cursor_geometry_info_update(C, region_location, false);
 
   if (std::holds_alternative<std::monostate>(ss.active_vert())) {
     return OPERATOR_CANCELLED;

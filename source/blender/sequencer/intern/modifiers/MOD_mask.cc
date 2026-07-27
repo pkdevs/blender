@@ -6,13 +6,15 @@
  * \ingroup sequencer
  */
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_matrix.hh"
 
 #include "BLT_translation.hh"
 
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
+
+#include "PRF_profile.hh"
 
 #include "SEQ_modifier.hh"
 #include "SEQ_render.hh"
@@ -55,15 +57,16 @@ struct MaskApplyOp {
 
 static void maskmodifier_apply(ModifierApplyContext &context, StripModifierData *smd)
 {
+  PRF_scope_with_name("SeqModMask", ProfileCategory::Draw);
   ImBuf *mask = modifier_render_mask_input(context, *smd);
   if (mask != nullptr && (mask->byte_data() != nullptr || mask->float_data() != nullptr)) {
-    ensure_ibuf_is_sequencer_space(context.render_data.scene, context.image, false);
+    ensure_ibuf_is_sequencer_space(context.render_data.scene, context.result.image, false);
 
     MaskApplyOp op;
-    apply_modifier_op(op, context.image, mask, context.transform);
+    apply_modifier_op(op, context.result.image, mask, context.transform);
 
     /* Image has gained transparency. */
-    context.image->color_mode = ImColorMode::RGBA;
+    context.result.image->color_mode = ImColorMode::RGBA;
   }
 
   if (mask != nullptr) {

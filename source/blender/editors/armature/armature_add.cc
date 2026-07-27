@@ -15,14 +15,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "BLT_translation.hh"
@@ -1878,7 +1878,7 @@ static wmOperatorStatus armature_bone_primitive_add_exec(bContext *C, wmOperator
   switch (align) {
     case BoneAlign::VIEW_3D: {
       const RegionView3D *rv3d = CTX_wm_region_view3d(C);
-      const float3x3 view_mat = float3x3(float4x4(rv3d->viewinv));
+      const float3x3 view_mat = rv3d ? float3x3(float4x4(rv3d->viewinv)) : float3x3::identity();
       bone_orient_mat = imat * view_mat;
       roll_vector = bone_orient_mat.z_axis();
       break;
@@ -1985,8 +1985,8 @@ static wmOperatorStatus armature_bone_primitive_add_exec(bContext *C, wmOperator
   }
 
   /* Disable Deform if applicable. */
-  const bool deform = RNA_boolean_get(op->ptr, "deform");
-  if (!deform) {
+  const bool use_deform = RNA_boolean_get(op->ptr, "use_deform");
+  if (!use_deform) {
     bone->flag |= BONE_NO_DEFORM;
   }
 
@@ -2079,7 +2079,7 @@ void ARMATURE_OT_bone_primitive_add(wmOperatorType *ot)
                 "Length of the new bone",
                 0.001f,
                 100.0f);
-  RNA_def_boolean(ot->srna, "deform", true, "Enable Deform", "Enable bone to deform geometry");
+  RNA_def_boolean(ot->srna, "use_deform", true, "Deform", "Enable bone to deform geometry");
 }
 
 /* ********************** Subdivide *******************************/
