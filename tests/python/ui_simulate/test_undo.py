@@ -258,6 +258,22 @@ def _view3d_startup_area_single(e):
     assert len(e.window.screen.areas) == 1
 
 
+def view3d_mesh_edit_shape_key():
+    e, t, window = ui.test_window()
+    yield e.shift.f5()                  # 3D Viewport.
+    yield e.ctrl.alt.space()            # Full-screen.
+
+    cube = window.view_layer.objects.active
+    t.assertEqual(cube.name, "Cube")
+    cube.shape_key_add(name="Basis")
+
+    yield e.tab()                       # Edit mode and redraw.
+    t.assertEqual(cube.mode, 'EDIT')
+    yield                               # Allow another View3D redraw.
+    yield e.tab()                       # Object mode.
+    t.assertEqual(cube.mode, 'OBJECT')
+
+
 def view3d_simple():
     e, t, window = ui.test_window()
     yield from _view3d_startup_area_maximized(e)
