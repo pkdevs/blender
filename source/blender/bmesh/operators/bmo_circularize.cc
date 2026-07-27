@@ -50,6 +50,8 @@ struct VertChain {
   Vector<BMVert *> verts;
   /** This is true if the path forms a closed chain, for open chains it's false. */
   bool is_closed;
+  /** True if the chain is formed entirely from wire edges. */
+  bool is_wire;
 };
 
 /**
@@ -124,6 +126,7 @@ static void bm_vert_chain_extract_from_boundary_edges(BMesh *bm,
   for (BMEdgeLoopStore &el_store : eloops) {
     VertChain chain;
     chain.is_closed = BM_edgeloop_is_closed(&el_store);
+    chain.is_wire = extract_wire_edges;
     for (LinkData &node : *BM_edgeloop_verts_get(&el_store)) {
       chain.verts.append(static_cast<BMVert *>(node.data));
     }
@@ -552,6 +555,9 @@ void bmo_circularize_exec(BMesh *bm, BMOperator *op)
   /* Uses two passes to detect if edges are wire edges or they have face regions.
    * Wire edges are rejected in the first pass but included in the second pass. */
   for (const bool extract_wire_edges : {false, true}) {
+    if (!extract_wire_edges && bm->totface == 0) {
+      continue;
+    }
     bm_vert_chain_extract_from_boundary_edges(
         bm, chains, BM_ELEM_TAG, check_axis, extract_wire_edges);
   }
@@ -567,22 +573,20 @@ void bmo_circularize_exec(BMesh *bm, BMOperator *op)
   NearestTriUserData bvh_data = {};
   FaceTessellationCache tess_cache;
 
-  if (flatten < 1.0f) {
+  if ((flatten < 1.0f) && (bm->totface > 0)) {
     const int tot_tri = poly_to_tri_count(bm->totface, bm->totloop);
-    if (tot_tri > 0) {
-      looptris.reinitialize(tot_tri);
-      BM_mesh_calc_tessellation(bm, looptris);
+    looptris.reinitialize(tot_tri);
+    BM_mesh_calc_tessellation(bm, looptris);
 
-      bvh_tree = BLI_bvhtree_new(tot_tri, 0.0f, 8, 8);
-      for (const int i : looptris.index_range()) {
-        const std::array<BMLoop *, 3> &ltri = looptris[i];
-        float3 tri_coords[3] = {
-            float3(ltri[0]->v->co), float3(ltri[1]->v->co), float3(ltri[2]->v->co)};
-        BLI_bvhtree_insert(bvh_tree, i, reinterpret_cast<float *>(tri_coords), 3);
-      }
-      BLI_bvhtree_balance(bvh_tree);
-      bvh_data.looptris = looptris;
+    bvh_tree = BLI_bvhtree_new(tot_tri, 0.0f, 8, 8);
+    for (const int i : looptris.index_range()) {
+      const std::array<BMLoop *, 3> &ltri = looptris[i];
+      float3 tri_coords[3] = {
+          float3(ltri[0]->v->co), float3(ltri[1]->v->co), float3(ltri[2]->v->co)};
+      BLI_bvhtree_insert(bvh_tree, i, reinterpret_cast<float *>(tri_coords), 3);
     }
+    BLI_bvhtree_balance(bvh_tree);
+    bvh_data.looptris = looptris;
   }
 
   for (VertChain &chain_data : chains) {
@@ -659,7 +663,7 @@ void bmo_circularize_exec(BMesh *bm, BMOperator *op)
       const float3 target_local(cv.target_2d.x, cv.target_2d.y, 0.0f);
       float3 final_pos = center_3d + mat * target_local;
 
-      if (flatten < 1.0f) {
+      if (flatten < 1.0f && !chain_data.is_wire) {
         float3 projected_pos;
         project_on_mesh(
             bvh_tree, &bvh_data, cv.v, final_pos, mat.z_axis(), projected_pos, tess_cache);
