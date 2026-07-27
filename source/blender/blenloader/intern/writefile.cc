@@ -1358,10 +1358,15 @@ static void write_id_placeholder(WriteData *wd, ID *id)
   mywrite_id_end(wd, id);
 }
 
-static void write_library(WriteData *wd,
-                          MultiValueMap<Library *, ID *> &linked_ids_by_library,
-                          Set<Library *> &written_libraries,
-                          Library &library)
+/**
+ * Write a single library and its content, if needed.
+ *
+ * \return `true` if the library was written, false if it did not need to be written.
+ */
+static bool write_library_if_needed(WriteData *wd,
+                                    MultiValueMap<Library *, ID *> &linked_ids_by_library,
+                                    Set<Library *> &written_libraries,
+                                    Library &library)
 {
   const bool is_undo = wd->use_memfile;
 
@@ -1415,7 +1420,7 @@ static void write_library(WriteData *wd,
 
   if (!should_write_library) {
     /* Nothing from the library is used, so it does not have to be written. */
-    return;
+    return false;
   }
 
   /* Since code below checking that archive libraries' parents have already been written, may
@@ -1427,12 +1432,14 @@ static void write_library(WriteData *wd,
   if (written_libraries.contains(&library)) {
     CLOG_ERROR(
         &LOG, "Attempt to re-write already written library '%s', skipping", library.id.name);
-    return;
+    return false;
   }
 
   if (library.flag & LIBRARY_FLAG_IS_ARCHIVE) {
     if (!library.archive_parent_library) {
-      CLOG_ERROR(&LOG, "Written archive library '%s' has no parent library", library.id.name);
+      CLOG_ERROR(
+          &LOG, "Written archive library '%s' has no parent library, skipping", library.id.name);
+      return false;
     }
     if (!written_libraries.contains(library.archive_parent_library)) {
       CLOG_ERROR(
@@ -1470,6 +1477,7 @@ static void write_library(WriteData *wd,
       write_id_placeholder(wd, id);
     }
   }
+  return true;
 }
 
 /** Keep it last of `write_*_data` functions. */
@@ -1492,10 +1500,17 @@ static void write_libraries(WriteData *wd, Main *bmain)
     if (library.flag & LIBRARY_FLAG_IS_ARCHIVE) {
       continue;
     }
-    write_library(wd, linked_ids_by_library, written_libraries, library);
+    const bool is_mainlib_written = write_library_if_needed(
+        wd, linked_ids_by_library, written_libraries, library);
+    UNUSED_VARS_NDEBUG(is_mainlib_written);
     for (Library *archive_library : library.runtime->archived_libraries) {
       BLI_assert(archive_library->flag & LIBRARY_FLAG_IS_ARCHIVE);
-      write_library(wd, linked_ids_by_library, written_libraries, *archive_library);
+      const bool is_archivelib_written = write_library_if_needed(
+          wd, linked_ids_by_library, written_libraries, *archive_library);
+      BLI_assert_msg(
+          is_mainlib_written || !is_archivelib_written,
+          "Archive libraries should never be written if their owner 'parent' library is not");
+      UNUSED_VARS_NDEBUG(is_archivelib_written);
     }
   }
 
