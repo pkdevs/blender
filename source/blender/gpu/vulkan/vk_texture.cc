@@ -413,16 +413,17 @@ void VKTexture::update_sub(int mip,
    * it has overhead of the render graph, pipeline barriers and layout transitions.  Staging
    * buffers are optimized for sequential access which adds overhead when using multi-threading. */
   const bool needs_data_conversion = needs_conversion(format, format_, device_format_);
-  Vector<uint8_t> device_compatible_data;
-  if (needs_data_conversion && is_sequential_packed) {
-    device_compatible_data.resize(device_memory_size);
-    convert_host_to_device(
-        device_compatible_data.data(), data, sample_len, format, format_, device_format_);
-    data = device_compatible_data.data();
-  }
-
   const bool use_host_image_copy = !has_data_ && data != nullptr && allow_host_image_copy_;
   if (use_host_image_copy) {
+    /* For host image copy we perform the data conversion on a separate CPU buffer. */
+    Vector<uint8_t> device_compatible_data;
+    if (needs_data_conversion && is_sequential_packed) {
+      device_compatible_data.resize(device_memory_size);
+      convert_host_to_device(
+          device_compatible_data.data(), data, sample_len, format, format_, device_format_);
+      data = device_compatible_data.data();
+    }
+
     VkImageAspectFlags vk_image_aspects = to_vk_image_aspect_single_bit(
         to_vk_image_aspect_flag_bits(device_format_), false);
     VkHostImageLayoutTransitionInfoEXT image_layout_transition = {
@@ -478,10 +479,13 @@ void VKTexture::update_sub(int mip,
      * other cases we unpack the rows to reduce the size of the staging buffer and data transfer.
      */
     if (is_sequential_packed) {
-      /* Data has already been converted, only need to copy.
-       * NOTE: Don't use multi-threaded copy as staging buffer is optimized for sequential access.
-       */
-      memcpy(staging_buffer.mapped_memory_get(), data, device_memory_size);
+      if (needs_data_conversion) {
+        convert_host_to_device(
+            staging_buffer.mapped_memory_get(), data, sample_len, format, format_, device_format_);
+      }
+      else {
+        memcpy(staging_buffer.mapped_memory_get(), data, device_memory_size);
+      }
     }
     else {
       BLI_assert_msg(!is_compressed,
