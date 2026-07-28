@@ -19,6 +19,8 @@
 #include "ED_grease_pencil.hh"
 #include "ED_view3d.hh"
 
+#include "BLI_bounds.hh"
+
 #include "DNA_brush_types.h"
 #include "DNA_material_types.h"
 #include "DNA_windowmanager_types.h"
@@ -117,27 +119,66 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
       bke::attribute_filter_from_skip_ref({"fill_id", "cyclic", "curve_type"}),
       clipping_curves);
 
-  /* WORKAROUND. Currently only poly curves are supported. */
+  /* WORKAROUND. Currently only poly curves are supported. Convert any curve close to the clipping
+   * shape to poly. */
   if (!input_curves.is_single_type(CURVE_TYPE_POLY)) {
-    input_curves = geometry::resample_to_evaluated(input_curves, input_curves.curves_range());
-    *r_converted = true;
-
-    /* Recompute screen space positions. */
-    bke::SpanAttributeWriter<float2> pos_writer = attributes.lookup_or_add_for_write_span<float2>(
+    const OffsetIndices<int> points_by_curve = input_curves.points_by_curve();
+    const VArray<float2> src_positions_2d_attribute = *attributes.lookup<float2>(
         ".positions_2d", bke::AttrDomain::Point);
-    const Span<float3> positions = input_curves.positions();
-    const IndexRange subject_points = IndexRange(
-        input_curves.points_by_curve()[src.curves_num()].last());
-    MutableSpan<float2> screen_space_positions = pos_writer.span;
+    BLI_assert(src_positions_2d_attribute.is_span());
+    const Span<float2> src_positions_2d = src_positions_2d_attribute.get_internal_span();
 
-    threading::parallel_for(subject_points, 4096, [&](const IndexRange src_points) {
-      for (const int src_point : src_points) {
-        screen_space_positions[src_point] = ED_view3d_project_float_v2_m4(
-            &region, positions[src_point], projection);
+    Array<Bounds<float2>> screen_space_bbox(input_curves.curves_num());
+    threading::parallel_for(points_by_curve.index_range(), 512, [&](const IndexRange curves_i) {
+      for (const int curve_i : curves_i) {
+        const IndexRange points_i = points_by_curve[curve_i];
+        screen_space_bbox[curve_i] = *bounds::min_max(src_positions_2d.slice(points_i));
       }
     });
 
-    pos_writer.finish();
+    const VArray<int8_t> curve_types = input_curves.curve_types();
+
+    const Bounds<float2> bbox_j = screen_space_bbox.last();
+
+    IndexMaskMemory memory;
+    IndexMask curves_to_convert = IndexMask::from_predicate(
+        input_curves.curves_range(), memory, [&](const int64_t curve_i) {
+          const Bounds<float2> bbox_i = screen_space_bbox[curve_i];
+
+          /* Poly curve do not need to be converted. */
+          if (curve_types[curve_i] == CURVE_TYPE_POLY) {
+            return false;
+          }
+
+          if (bounds::intersect(bbox_i, bbox_j).has_value()) {
+            return true;
+          }
+          return false;
+        });
+    curves_to_convert = bke::greasepencil::selected_mask_to_fills(
+        curves_to_convert, input_curves, bke::AttrDomain::Curve, memory);
+
+    if (!curves_to_convert.is_empty()) {
+      input_curves = geometry::resample_to_evaluated(input_curves, curves_to_convert);
+      *r_converted = true;
+
+      /* Recompute screen space positions. */
+      bke::SpanAttributeWriter<float2> pos_writer =
+          attributes.lookup_or_add_for_write_span<float2>(".positions_2d", bke::AttrDomain::Point);
+      MutableSpan<float2> screen_space_positions = pos_writer.span;
+      const Span<float3> positions = input_curves.positions();
+      const IndexRange subject_points = IndexRange(
+          input_curves.points_by_curve()[src.curves_num()].last());
+
+      threading::parallel_for(subject_points, 4096, [&](const IndexRange src_points) {
+        for (const int src_point : src_points) {
+          screen_space_positions[src_point] = ED_view3d_project_float_v2_m4(
+              &region, positions[src_point], projection);
+        }
+      });
+
+      pos_writer.finish();
+    }
   }
 
   carver::CurveBooleanOpParameters op_params;
