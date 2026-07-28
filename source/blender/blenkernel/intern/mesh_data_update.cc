@@ -271,9 +271,6 @@ static MeshEditHints &geometry_mesh_edit_hints_ensure(GeometrySet &geometry)
 
 static void mesh_eval_assign_key(GeometrySet &geometry, Key *key)
 {
-  if (!key) {
-    return;
-  }
   BLI_assert(DEG_is_evaluated_id(&key->id));
   if (const Mesh *mesh = geometry.get_mesh(); mesh && mesh->key != key) {
     geometry.get_mesh_for_write()->key = key;
@@ -878,7 +875,9 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
     }
 
     if (i == cageIndex) {
-      mesh_eval_assign_key(geometry_set, mesh_input.key);
+      if (Key *key = mesh_input.key) {
+        mesh_eval_assign_key(geometry_set, key);
+      }
       cage_mesh = cage_mesh_or_fallback(ob, geometry_set, mesh_input, final_datamask);
     }
   }
@@ -900,8 +899,10 @@ static GeometrySet editbmesh_calc_modifiers(Depsgraph &depsgraph,
   }
 
   /* Assign the key before sharing the final mesh component with the cage. Writable access after
-   * sharing may copy the component and leave the edit-mesh runtime data on the cage only. */
-  mesh_eval_assign_key(geometry_set, mesh_input.key);
+   * sharing can copy the BMesh wrapper without the required Edit Mode runtime state. */
+  if (Key *key = mesh_input.key) {
+    mesh_eval_assign_key(geometry_set, key);
+  }
 
   /* In all likelihood, when `cageIndex == -1`. */
   if (!cage_mesh) {
@@ -948,9 +949,11 @@ static void mesh_build_data(Depsgraph &depsgraph,
 
   /* Make sure that drivers can target shapekey properties.
    * Note that this causes a potential
-   * inconsistency, as the shapekey may have a
-   * different topology than the evaluated mesh. */
-  mesh_eval_assign_key(geometry_set, mesh_input.key);
+   * inconsistency, as the shapekey may have a different topology
+   * than the evaluated mesh. */
+  if (Key *key = mesh_input.key) {
+    mesh_eval_assign_key(geometry_set, key);
+  }
   const Mesh *mesh_eval = geometry_set.get_mesh();
 
   BKE_object_eval_assign_data(&ob, &const_cast<ID &>(mesh_eval->id), false);
