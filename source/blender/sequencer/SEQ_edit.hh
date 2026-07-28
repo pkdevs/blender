@@ -44,10 +44,16 @@ bool edit_move_strip_to_meta(Scene *scene,
                              Strip *src_strip,
                              Strip *dst_stripm,
                              const char **r_error_str);
+
 /**
  * Flag strip and its users (effects) for removal.
  */
 void edit_flag_for_removal(const Scene *scene, Strip *strip);
+/**
+ * Clears the list of strips flagged for deletion.
+ */
+void edit_cancel_removal(const Scene *scene);
+bool edit_strip_flagged_for_removal(const Scene *scene, Strip *strip);
 /**
  * Remove all flagged strips, return true if strip is removed.
  */

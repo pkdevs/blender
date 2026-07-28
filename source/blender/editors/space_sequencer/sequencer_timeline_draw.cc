@@ -50,6 +50,7 @@
 
 #include "SEQ_channels.hh"
 #include "SEQ_connect.hh"
+#include "SEQ_edit.hh"
 #include "SEQ_effects.hh"
 #include "SEQ_prefetch.hh"
 #include "SEQ_relations.hh"
@@ -102,7 +103,7 @@ Vector<Strip *> sequencer_visible_strips_get(const Scene *scene, const View2D *v
   Vector<Strip *> strips;
 
   for (Strip &strip : *ed->current_strips()) {
-    if (flag_is_set(strip.runtime->flag, seq::StripRuntimeFlag::MarkForDelete)) {
+    if (seq::edit_strip_flagged_for_removal(scene, &strip)) {
       continue;
     }
     if (min_ii(strip.left_handle(), strip.content_start()) > v2d->cur.xmax) {

@@ -143,42 +143,57 @@ void edit_update_muting(Editing *ed)
 void edit_flag_for_removal(const Scene *scene, Strip *strip)
 {
   Editing *ed = editing_get(scene);
-  if (strip == nullptr || ed == nullptr ||
-      flag_is_set(strip->runtime->flag, StripRuntimeFlag::MarkForDelete))
-  {
+  if (strip == nullptr || ed == nullptr || edit_strip_flagged_for_removal(scene, strip)) {
     return;
   }
 
-  VectorSet<Strip *> strips_to_delete;
-  strips_to_delete.add_new(strip);
+  VectorSet<Strip *> new_strips_to_delete;
+  new_strips_to_delete.add_new(strip);
 
   /* Delete effects that use `strip` as an input (either directly or through another effect).
    * Effect inputs are always in the same seqbase as the effect. */
-  iterator_set_expand(ed, strips_to_delete, query_strip_direct_effect_chain);
+  iterator_set_expand(ed, new_strips_to_delete, query_strip_direct_effect_chain);
   /* Delete meta strip contents. */
-  iterator_set_expand(ed, strips_to_delete, query_strip_recursive);
-
-  for (Strip *strip_to_mark : strips_to_delete) {
-    strip_to_mark->runtime->flag |= StripRuntimeFlag::MarkForDelete;
-  }
+  iterator_set_expand(ed, new_strips_to_delete, query_strip_recursive);
 
   /* Clear deleted strips from modifiers. The user strip can be in a different seqbase. */
   foreach_strip(&ed->seqbase, [&](Strip *user_strip) {
     for (StripModifierData &smd : user_strip->modifiers) {
-      if (strips_to_delete.contains(smd.mask_strip)) {
-        smd.mask_strip = nullptr;
+      if (new_strips_to_delete.contains(smd.mask_strip)) {
+        ed->runtime->pointers_to_clear.add(&smd.mask_strip);
       }
     }
     return true;
   });
+
+  ed->runtime->strips_to_delete.add_multiple(new_strips_to_delete);
 }
 
-void edit_remove_flagged_strips(Scene *scene, ListBaseT<Strip> *seqbase)
+void edit_cancel_removal(const Scene *scene)
+{
+  Editing *ed = editing_get(scene);
+  if (ed == nullptr) {
+    return;
+  }
+  ed->runtime->strips_to_delete.clear();
+  ed->runtime->pointers_to_clear.clear();
+}
+
+bool edit_strip_flagged_for_removal(const Scene *scene, Strip *strip)
+{
+  Editing *ed = editing_get(scene);
+  if (ed == nullptr) {
+    return false;
+  }
+  return ed->runtime->strips_to_delete.contains(strip);
+}
+
+static void edit_remove_flagged_strips_ex(Scene *scene, ListBaseT<Strip> *seqbase)
 {
   for (Strip &strip : seqbase->items_mutable()) {
-    if (flag_is_set(strip.runtime->flag, StripRuntimeFlag::MarkForDelete)) {
+    if (edit_strip_flagged_for_removal(scene, &strip)) {
       if (strip.type == STRIP_TYPE_META) {
-        edit_remove_flagged_strips(scene, &strip.seqbase);
+        edit_remove_flagged_strips_ex(scene, &strip.seqbase);
       }
       free_animdata(scene, &strip);
       BLI_remlink(seqbase, &strip);
@@ -186,6 +201,18 @@ void edit_remove_flagged_strips(Scene *scene, ListBaseT<Strip> *seqbase)
       strip_lookup_invalidate(scene->ed);
     }
   }
+}
+
+void edit_remove_flagged_strips(Scene *scene, ListBaseT<Strip> *seqbase)
+{
+  /* If a strip that's being deleted is used as a mask to another strip, clear that input field. */
+  for (Strip **strip_pointer : scene->ed->runtime->pointers_to_clear) {
+    *strip_pointer = nullptr;
+  }
+
+  edit_remove_flagged_strips_ex(scene, seqbase);
+
+  scene->ed->runtime->strips_to_delete.clear();
 }
 
 bool edit_move_strip_to_seqbase(Scene *scene,

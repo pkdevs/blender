@@ -73,7 +73,6 @@ enum class StripRuntimeFlag {
   ClampedLH = (1 << 0),
   ClampedRH = (1 << 1),
   Overlap = (1 << 2),
-  MarkForDelete = (1 << 4),
   IgnoreChannelLock = (1 << 5), /* For #SEQUENCER_OT_duplicate_move macro. */
   ShowOffsets = (1 << 6),       /* Set during #SEQUENCER_OT_slip. */
 };
@@ -121,6 +120,12 @@ struct EditingRuntime {
    * blade tool. */
   int transform_preview_frame = 0;
   bool show_transform_preview = false;
+
+  /**
+   * Deletion data stored between calls to #edit_flag_for_removal and #edit_remove_flagged_strips
+   */
+  VectorSet<Strip *> strips_to_delete;
+  VectorSet<Strip **> pointers_to_clear;
 
   CompositorCache &ensure_compositor_cache();
 };

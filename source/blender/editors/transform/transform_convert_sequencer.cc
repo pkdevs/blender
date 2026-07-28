@@ -265,9 +265,7 @@ static void seq_transform_cancel(TransInfo *t, Span<Strip *> transformed_strips)
   Scene *scene = CTX_data_sequencer_scene(t->context);
   ListBaseT<Strip> *seqbase = seq::active_seqbase_get(seq::editing_get(scene));
 
-  for (Strip &strip : *seqbase) {
-    strip.runtime->flag &= ~seq::StripRuntimeFlag::MarkForDelete;
-  }
+  seq::edit_cancel_removal(scene);
 
   if (t->remove_on_cancel) {
     for (Strip *strip : transformed_strips) {

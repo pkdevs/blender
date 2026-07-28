@@ -78,7 +78,7 @@ bool transform_test_invalid_overlap(const Scene *scene, ListBaseT<Strip> *seqbas
     if (strip.is_same_channel_transition()) {
       continue;
     }
-    if (flag_is_set(strip.runtime->flag, seq::StripRuntimeFlag::MarkForDelete)) {
+    if (edit_strip_flagged_for_removal(scene, &strip)) {
       continue;
     }
     if (transform_test_overlap(scene, test, &strip)) {
@@ -93,9 +93,9 @@ void transform_set_overlap_flags(const Scene *scene,
                                  ListBaseT<Strip> *seqbasep,
                                  VectorSet<Strip *> &strips)
 {
-  for (Strip &strip : *seqbasep) {
-    strip.runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
-    strip.runtime->flag &= ~seq::StripRuntimeFlag::MarkForDelete;
+  edit_cancel_removal(scene);
+  for (Strip *strip : strips) {
+    strip->runtime->flag &= ~seq::StripRuntimeFlag::Overlap;
   }
 
   /* First flag transitions for deletion. */
@@ -117,7 +117,7 @@ void transform_set_overlap_flags(const Scene *scene,
 
   /* Then test overlap. */
   for (Strip *strip : strips) {
-    if (flag_is_set(strip->runtime->flag, seq::StripRuntimeFlag::MarkForDelete)) {
+    if (edit_strip_flagged_for_removal(scene, strip)) {
       continue;
     }
     if (strip->is_same_channel_transition()) {
@@ -127,7 +127,7 @@ void transform_set_overlap_flags(const Scene *scene,
       continue;
     }
 
-    strip->runtime->flag |= seq::StripRuntimeFlag::Overlap;
+    strip->runtime->flag |= StripRuntimeFlag::Overlap;
   }
 }
 

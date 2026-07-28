@@ -35,8 +35,8 @@ bool transform_single_image_check(const Strip *strip);
 bool transform_test_invalid_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test);
 bool transform_test_overlap(const Scene *scene, Strip *strip1, Strip *strip2);
 /**
- * First clears the #StripRuntimeFlag::Overlap and #StripRuntimeFlag::MarkForDelete flags,
- * then sets them based on how the strips overlap.
+ * First clears the #StripRuntimeFlag::Overlap flag and cancels old deletion, then updates overlap
+ * and deletion.
  */
 void transform_set_overlap_flags(const Scene *scene,
                                  ListBaseT<Strip> *seqbasep,
