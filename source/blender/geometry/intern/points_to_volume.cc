@@ -439,9 +439,9 @@ struct KernelTransferBase : public openvdb::points::TransformTransfer,
   /* Point attribute name for input values. */
   StringRef value_attribute_;
   /* Point attribute handle for positions in the current leaf. */
-  std::unique_ptr<openvdb::points::AttributeHandle<openvdb::Vec3f>> position_handle_;
+  std::optional<openvdb::points::AttributeHandle<openvdb::Vec3f>> position_handle_;
   /* Point attribute handle for input values in the current leaf. */
-  std::unique_ptr<openvdb::points::AttributeHandle<AttributeType>> value_handle_;
+  std::optional<openvdb::points::AttributeHandle<AttributeType>> value_handle_;
 
   KernelTransferBase(const KernelType kernel_type,
                      const openvdb::points::PointDataGrid &source,
@@ -451,9 +451,7 @@ struct KernelTransferBase : public openvdb::points::TransformTransfer,
         openvdb::points::VolumeTransfer<TreeType>(dest.tree()),
         kernel_type_(kernel_type),
         kernel_size_(kernel_functions::kernel_size(kernel_type)),
-        value_attribute_(value_attribute),
-        position_handle_(nullptr),
-        value_handle_(nullptr)
+        value_attribute_(value_attribute)
   {
   }
 
@@ -462,9 +460,7 @@ struct KernelTransferBase : public openvdb::points::TransformTransfer,
         openvdb::points::VolumeTransfer<TreeType>(other),
         kernel_type_(other.kernel_type_),
         kernel_size_(other.kernel_size_),
-        value_attribute_(other.value_attribute_),
-        position_handle_(nullptr),
-        value_handle_(nullptr)
+        value_attribute_(other.value_attribute_)
   {
   }
 
@@ -486,11 +482,11 @@ struct KernelTransferBase : public openvdb::points::TransformTransfer,
 
   bool startPointLeaf(const openvdb::points::PointDataTree::LeafNodeType &leaf)
   {
-    position_handle_.reset(
-        new openvdb::points::AttributeHandle<openvdb::Vec3f>(leaf.constAttributeArray("P")));
+    position_handle_.emplace(
+        openvdb::points::AttributeHandle<openvdb::Vec3f>(leaf.constAttributeArray("P")));
 
     BLI_assert(leaf.hasAttribute(value_attribute_));
-    value_handle_.reset(new openvdb::points::AttributeHandle<AttributeType>(
+    value_handle_.emplace(openvdb::points::AttributeHandle<AttributeType>(
         leaf.constAttributeArray(value_attribute_)));
     return true;
   }
