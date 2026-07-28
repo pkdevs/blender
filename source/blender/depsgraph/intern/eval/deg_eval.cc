@@ -403,11 +403,16 @@ void depsgraph_ensure_view_layer(Depsgraph *graph)
   }
 
   IDNode *scene_id_node = graph->find_id_node(&graph->scene->id);
-  deg_update_eval_copy_datablock(graph, scene_id_node);
-  /* If the id_cow was deleted and re-copied in `deg_update_eval_copy_datablock`, the ViewLayer is
-   * left without `object_bases_array`. That array is only created during the evaluation (see
-   * `layer.cc/layer_eval_view_layer`). This can lead to a crash in the evaluation. See #161861. */
-  scene_id_node->tag_update(graph, DEG_UPDATE_SOURCE_SIDE_EFFECT_REQUEST);
+  bool is_cow_reallocated;
+  deg_update_eval_copy_datablock(graph, scene_id_node, &is_cow_reallocated);
+  if (is_cow_reallocated) {
+    /* If the id_cow was deleted and re-copied in `deg_update_eval_copy_datablock`, the ViewLayer
+     * is left without `object_bases_array`. That array is only created during the evaluation (see
+     * `layer.cc/layer_eval_view_layer`). This can lead to a crash in the evaluation.
+     * See #161861.
+     * The below update happens during evaluation. */
+    scene_id_node->tag_update(graph, DEG_UPDATE_SOURCE_SIDE_EFFECT_REQUEST);
+  }
 }
 
 TaskPool *deg_evaluate_task_pool_create(DepsgraphEvalState *state)

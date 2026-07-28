@@ -841,7 +841,9 @@ ID *deg_expand_eval_copy_datablock(const Depsgraph *depsgraph, const IDNode *id_
 
 }  // namespace
 
-ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph, const IDNode *id_node)
+ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph,
+                                   const IDNode *id_node,
+                                   bool *is_cow_reallocated)
 {
   const ID *id_orig = id_node->id_orig;
   ID *id_cow = id_node->id_cow;
@@ -876,19 +878,26 @@ ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph, const IDNode *id_
 
   RuntimeBackup backup(depsgraph);
   backup.init_from_id(id_cow);
-  deg_free_eval_copy_datablock(id_cow);
+  if (deg_eval_copy_is_expanded(id_cow)) {
+    deg_free_eval_copy_datablock(id_cow);
+    if (is_cow_reallocated) {
+      *is_cow_reallocated = true;
+    }
+  }
   deg_expand_eval_copy_datablock(depsgraph, id_node);
   backup.restore_to_id(id_cow);
   return id_cow;
 }
 
-ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph, ID *id_orig)
+ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph,
+                                   ID *id_orig,
+                                   bool *is_cow_reallocated)
 {
   /* NOTE: Depsgraph is supposed to have ID node already. */
 
   IDNode *id_node = depsgraph->find_id_node(id_orig);
   BLI_assert(id_node != nullptr);
-  return deg_update_eval_copy_datablock(depsgraph, id_node);
+  return deg_update_eval_copy_datablock(depsgraph, id_node, is_cow_reallocated);
 }
 
 namespace {

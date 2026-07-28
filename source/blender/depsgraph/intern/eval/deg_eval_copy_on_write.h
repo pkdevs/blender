@@ -39,8 +39,12 @@ struct IDNode;
  * Makes sure given evaluated data-block is brought back to state of the original
  * data-block.
  */
-ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph, const IDNode *id_node);
-ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph, struct ID *id_orig);
+ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph,
+                                   const IDNode *id_node,
+                                   bool *is_cow_reallocated = nullptr);
+ID *deg_update_eval_copy_datablock(const Depsgraph *depsgraph,
+                                   struct ID *id_orig,
+                                   bool *is_cow_reallocated = nullptr);
 
 /** Helper function which frees memory used by copy-on-written data-block. */
 void deg_free_eval_copy_datablock(struct ID *id_cow);
