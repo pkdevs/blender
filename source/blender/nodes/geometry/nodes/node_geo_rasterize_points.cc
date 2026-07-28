@@ -352,6 +352,7 @@ static void node_register()
   ntype.ui_name = "Rasterize Points";
   ntype.ui_description = "Create volume grids from points with a weighted sum";
   ntype.nclass = NODE_CLASS_GEOMETRY;
+  ntype.default_width = bke::NodeWidth::_200;
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
   ntype.blend_write_storage_content = node_blend_write;
