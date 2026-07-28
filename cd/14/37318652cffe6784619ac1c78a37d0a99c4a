@@ -2,3 +2,4 @@ Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
 Referenced by issue #161868, Error display when opening a file
 Referenced by issue #161972, Regression: Texture Paint: Bleed not working
 Referenced by pull request #162010, Fix #161972: Texture Paint bleed does not work
+Referenced by commit 956efd911f297c3d729c309b056a1bbf50080416, Fix #161972: Texture Paint bleed does not work
