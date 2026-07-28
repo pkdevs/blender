@@ -590,12 +590,12 @@ static bool eval_callback(Depsgraph *dg,
   const int point_index = frame - buffer->start_frame;
   const bool is_data_different = buffer->points[point_index] != motion_path_point;
   buffer->points[point_index] = motion_path_point;
+  buffer->ready_to_copy[point_index].store(true, std::memory_order_release);
   return is_data_different || !(buffer->flags[point_index] & MOTIONPATH_VERT_EVALUATED);
 }
 
 /* Runs on main thread. */
-static void update_callback(const bke::animviz::EvaluationTarget &target,
-                            Bounds<int> evaluated_range)
+static void update_callback(const bke::animviz::EvaluationTarget &target)
 {
   Object *ob = id_cast<Object *>(target.id);
   bMotionPath *mpath = get_motion_path(*ob, target.component_name);
@@ -613,8 +613,7 @@ static void update_callback(const bke::animviz::EvaluationTarget &target,
   }
 
   for (int i = 0; i < mpath->length; i++) {
-    const int frame = mpath->start_frame + i;
-    if (!evaluated_range.contains(frame)) {
+    if (!buffer->ready_to_copy[i].load(std::memory_order_acquire)) {
       continue;
     }
     bMotionPathVert &mpv = mpath->points[i];
@@ -624,6 +623,7 @@ static void update_callback(const bke::animviz::EvaluationTarget &target,
     copy_v3_v3(mpv.co, buffer->points[i]);
     mpv.flag &= ~MOTIONPATH_VERT_STALE;
     mpv.flag |= MOTIONPATH_VERT_EVALUATED;
+    buffer->ready_to_copy[i].store(false, std::memory_order_release);
   }
   DEG_id_tag_update(&ob->id, ID_RECALC_ANIMATION_NO_FLUSH);
   WM_main_add_notifier(NC_OBJECT | ND_DRAW_ANIMVIZ, ob);

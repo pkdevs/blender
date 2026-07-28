@@ -61,17 +61,15 @@ struct WorkerData {
   /* Can be set from the main thread to tell the evaluating thread to start over.
    * Is used because we cannot just stop the depsgraph evaluation. */
   std::atomic<bool> restart;
-  /* The center frame around which to run the evaluation. */
-  std::atomic<int> evaluation_center;
-  /* The range of frames that were already evaluated. Inclusive/Inclusive. Any frames in that range
-   * are safe to read in the main thread. */
-  std::atomic<Bounds<int>> evaluated_range;
 
   TicketMutex *data_mutex;
   /* The depsgraph to evaluate in the background. All copy on eval nodes have to be
    * evaluated before it is sent to the thread. */
   Depsgraph *dg = nullptr;
   Vector<TargetData> target_data;
+  /* All frames on which animation data was changed. The range around those frames will be
+   * evaluated. */
+  VectorSet<int> dirty_frames;
 
   WorkerData()
   {
@@ -110,59 +108,93 @@ struct BGEvalJobData {
   Set<EvaluationTarget> active_targets;
 };
 
-static bool evaluate_motionpath_range(WorkerData *eval_data, wmJobWorkerStatus *worker_status)
+/* Evaluate all dirty frames and a range around them for which the `eval` callback returns true. */
+static bool evaluate_dirty_frames(WorkerData *eval_data, wmJobWorkerStatus *worker_status)
 {
-  const int center_frame = eval_data->evaluation_center.load(std::memory_order_acquire);
-  Bounds<int> evaluated_range = {center_frame, center_frame};
+  eval_data->lock();
+  /* Making a copy for threadsafe access. */
+  VectorSet<int> dirty_frames = eval_data->dirty_frames;
+  eval_data->unlock();
+  if (dirty_frames.is_empty()) {
+    return true;
+  }
 
-  bool all_done_left = true;
-  bool all_done_right = true;
-  while (true) {
-    int frame;
-    /* TODO what about frame skipping i.e. every second frame. Would be determined by the
-     * evaluation targets. */
-    const bool update_left = abs(evaluated_range.min - center_frame) <
-                             abs(evaluated_range.max - center_frame);
-    if ((update_left && !all_done_left) || all_done_right) {
-      frame = evaluated_range.min - 1;
-      evaluated_range.min -= 1;
-    }
-    else {
-      frame = evaluated_range.max + 1;
-      evaluated_range.max += 1;
-    }
+  while (!dirty_frames.is_empty()) {
+    Vector<int> dirty_frames_in_range;
+    /* TODO pass in current frame to choose appropriate priority for dirty frames. */
+    int center_frame = dirty_frames[0];
+    dirty_frames_in_range.append(center_frame);
 
-    all_done_left = true;
-    all_done_right = true;
     eval_data->lock();
-    DEG_evaluate_on_framechange(eval_data->dg, frame);
+    /* Always evaluate center frame. */
+    DEG_evaluate_on_framechange(eval_data->dg, center_frame);
     for (TargetData &target_data : eval_data->target_data) {
       const EvaluationTarget &target = target_data.target;
-      const bool modified_data = target_data.eval(eval_data->dg, target, frame);
-      if (!modified_data) {
-        if (frame < center_frame) {
-          target_data.finished_left = true;
-        }
-        else {
-          target_data.finished_right = true;
-        }
-      }
-      all_done_left &= target_data.finished_left;
-      all_done_right &= target_data.finished_right;
+      target_data.eval(eval_data->dg, target, center_frame);
     }
     eval_data->unlock();
-    eval_data->evaluated_range.store(evaluated_range, std::memory_order_release);
-    worker_status->do_update = true;
-    if (eval_data->restart.load(std::memory_order_acquire)) {
-      return false;
+
+    Bounds<int> evaluated_range = {center_frame, center_frame};
+
+    bool all_done_left = false;
+    bool all_done_right = false;
+    while (!all_done_left || !all_done_right) {
+      int frame;
+      /* TODO what about frame skipping i.e. every second frame. Would be determined by the
+       * evaluation targets. */
+      const bool update_left = abs(evaluated_range.min - center_frame) <
+                               abs(evaluated_range.max - center_frame);
+      if ((update_left && !all_done_left) || all_done_right) {
+        frame = evaluated_range.min - 1;
+        evaluated_range.min -= 1;
+      }
+      else {
+        frame = evaluated_range.max + 1;
+        evaluated_range.max += 1;
+      }
+
+      if (dirty_frames.contains(frame)) {
+        /* Happens if the modifications overlap in their affected range. */
+        dirty_frames_in_range.append(frame);
+      }
+
+      all_done_left = true;
+      all_done_right = true;
+      eval_data->lock();
+      DEG_evaluate_on_framechange(eval_data->dg, frame);
+      for (TargetData &target_data : eval_data->target_data) {
+        const EvaluationTarget &target = target_data.target;
+        const bool modified_data = target_data.eval(eval_data->dg, target, frame);
+        if (!modified_data) {
+          if (frame < center_frame) {
+            target_data.finished_left = true;
+          }
+          else {
+            target_data.finished_right = true;
+          }
+        }
+        all_done_left &= target_data.finished_left;
+        all_done_right &= target_data.finished_right;
+      }
+      eval_data->unlock();
+      worker_status->do_update = true;
+      if (eval_data->restart.load(std::memory_order_acquire)) {
+        return false;
+      }
+
+      /* TODO remove before flight. */
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
-    if (all_done_left && all_done_right) {
-      return true;
+    /* Only remove dirty frames when their full range was evaluated. */
+    for (const int frame : dirty_frames_in_range) {
+      dirty_frames.remove(frame);
     }
-    /* TODO remove before flight. */
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    eval_data->lock();
+    eval_data->dirty_frames = dirty_frames;
+    eval_data->unlock();
   }
+
   return true;
 }
 
@@ -172,15 +204,7 @@ static void run_job(void *job_data, wmJobWorkerStatus *worker_status)
   bool completed = false;
   while (!completed) {
     eval_data->restart.store(false, std::memory_order_release);
-    const int center_frame = eval_data->evaluation_center.load(std::memory_order_acquire);
-    eval_data->lock();
-    DEG_evaluate_on_framechange(eval_data->dg, center_frame);
-    for (TargetData &target_data : eval_data->target_data) {
-      const EvaluationTarget &target = target_data.target;
-      target_data.eval(eval_data->dg, target, center_frame);
-    }
-    eval_data->unlock();
-    completed = evaluate_motionpath_range(eval_data, worker_status);
+    completed = evaluate_dirty_frames(eval_data, worker_status);
   }
 }
 
@@ -207,9 +231,8 @@ static Depsgraph *build_worker_depsgraph(Main &bmain,
 static void update_job(void *job_data)
 {
   WorkerData *eval_data = static_cast<WorkerData *>(job_data);
-  Bounds<int> evaluated_range = eval_data->evaluated_range.load(std::memory_order_acquire);
   for (TargetData &target_data : eval_data->target_data) {
-    target_data.update(target_data.target, evaluated_range);
+    target_data.update(target_data.target);
   }
 }
 
@@ -255,6 +278,9 @@ void background_eval_register(Main &bmain,
       TargetData &data = eval_data->worker_data.target_data[target_index];
       data.finished_left = false;
       data.finished_right = false;
+      /* TODO explicitly pass in the dirty frame so it can be anywhere in the timeline, not just
+       * the current frame. */
+      eval_data->worker_data.dirty_frames.add(BKE_scene_frame_get(&scene));
       DEG_set_allow_read_from_main(eval_data->worker_data.dg, true);
       DEG_evaluate_on_refresh(eval_data->worker_data.dg);
       DEG_set_allow_read_from_main(eval_data->worker_data.dg, false);
@@ -271,6 +297,7 @@ void background_eval_register(Main &bmain,
     eval_data->worker_data.dg = build_worker_depsgraph(
         bmain, scene, view_layer, eval_data->active_targets);
     eval_data->worker_data.target_data.append({target, eval_cb, update_cb, free_cb});
+    eval_data->worker_data.dirty_frames.add(BKE_scene_frame_get(&scene));
 
     eval_data->worker_data.restart.store(true, std::memory_order_release);
     eval_data->worker_data.unlock();
@@ -282,10 +309,7 @@ void background_eval_register(Main &bmain,
   eval_data->worker_data.target_data.append({target, eval_cb, update_cb, free_cb});
   eval_data->worker_data.dg = build_worker_depsgraph(
       bmain, scene, view_layer, eval_data->active_targets);
-  const int center_frame = BKE_scene_frame_get(&scene);
-  eval_data->worker_data.evaluation_center.store(center_frame, std::memory_order_release);
-  eval_data->worker_data.evaluated_range.store({center_frame, center_frame},
-                                               std::memory_order_release);
+  eval_data->worker_data.dirty_frames.add(BKE_scene_frame_get(&scene));
 
   WM_jobs_customdata_set(wm_job, eval_data, free_job_data);
   WM_jobs_callbacks(wm_job, run_job, nullptr, update_job, finish_job);
@@ -354,13 +378,12 @@ void async_eval_allocate(bMotionPath &motion_path,
     return;
   }
 
-  WorkerBuffer *buffer = MEM_new<WorkerBuffer>(__func__);
-  buffer->start_frame = motion_path.start_frame;
-  buffer->points.reinitialize(motion_path.length);
-  buffer->flags.reinitialize(motion_path.length);
+  WorkerBuffer *buffer = MEM_new<WorkerBuffer>(
+      __func__, motion_path.start_frame, motion_path.length);
   for (const int i : IndexRange(motion_path.length)) {
     copy_v3_v3(buffer->points[i], motion_path.points[i].co);
     buffer->flags[i] = motion_path.points[i].flag;
+    buffer->ready_to_copy[i].store(false, std::memory_order_release);
   }
 
   motion_path.runtime->worker_buffer = buffer;

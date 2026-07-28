@@ -59,8 +59,7 @@ struct EvaluationTarget {
 using EvalCallback = FunctionRef<bool(Depsgraph *dg, const EvaluationTarget &target, int frame)>;
 /* Callback that runs on the main thread periodically. Can be used to copy back data from the
  * buffer. The given range is guaranteed to be evaluated and can be read in a thread safe way. */
-using UpdateCallback =
-    FunctionRef<void(const EvaluationTarget &target, Bounds<int> evaluated_range)>;
+using UpdateCallback = FunctionRef<void(const EvaluationTarget &target)>;
 /* Called when the given target is done with the evaluation. Use to free any heap allocated data
  * passed into the system. */
 using FinishCallback = FunctionRef<void(const EvaluationTarget &target)>;
@@ -107,6 +106,16 @@ struct WorkerBuffer {
   int start_frame;
   Array<float3> points;
   Array<eMotionPathVert_Flag> flags;
+  /* Set once the worker thread has created the data to copy, unset on the main thread once the
+   * copying happened. */
+  Array<std::atomic<bool>> ready_to_copy;
+
+  WorkerBuffer(int start_frame, int length) : start_frame(start_frame)
+  {
+    points.reinitialize(length);
+    flags.reinitialize(length);
+    ready_to_copy.reinitialize(length);
+  }
 };
 
 struct Runtime;
