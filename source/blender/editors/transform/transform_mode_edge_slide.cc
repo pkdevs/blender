@@ -488,7 +488,8 @@ struct CloneNeighborInfo {
 };
 
 /**
- * Recompute each cloned vert's side neighbors and chain continuations from the stored original verts.
+ * Recompute each cloned vert's side neighbors and chain continuations from the stored original
+ * verts.
  */
 static Vector<CloneNeighborInfo> edge_slide_clone_neighbors_calc(const EdgeSlideData *sld)
 {
@@ -1072,6 +1073,46 @@ static void edge_slide_transform_matrix_fn(TransInfo *t, float mat_xform[4][4])
   add_v3_v3(mat_xform[3], delta);
 }
 
+/**
+ * Copy loop data into f from the face across e_shared, matching corners by vertex.
+ * Follows #bm_extrude_copy_face_loop_attributes: created side geometry inherits from the surface
+ * it was built out of, so the band ends up a zero width UV strip.
+ */
+static void edge_slide_clone_loops_copy_across(BMesh *bm, BMFace *f, BMEdge *e_shared)
+{
+  BMLoop *l_dst = e_shared ? BM_face_edge_share_loop(f, e_shared) : nullptr;
+  if (!l_dst) {
+    return;
+  }
+  BMLoop *l_src = l_dst->radial_next;
+  if (l_src == l_dst || l_src->f == f) {
+    return;
+  }
+  const bool aligned = (l_src->v == l_dst->v);
+  BM_elem_attrs_copy(bm, aligned ? l_src : l_src->next, l_dst);
+  BM_elem_attrs_copy(bm, aligned ? l_src->next : l_src, l_dst->next);
+}
+
+/**
+ * Give a link edge the data its two rungs agree on: a boolean flag continues across the band only
+ * when both rungs carry it, scalar layers take the average of the two.
+ */
+static void edge_slide_clone_link_edge_data(BMesh *bm,
+                                            BMEdge *e_link,
+                                            BMEdge *e_rung_a,
+                                            BMEdge *e_rung_b)
+{
+  if (!e_link || !e_rung_a || !e_rung_b) {
+    return;
+  }
+  BM_data_interp_from_edges(bm, e_rung_a, e_rung_b, e_link, 0.5f);
+
+  const char hflag_and = e_rung_a->head.hflag & e_rung_b->head.hflag;
+  const char hflag_or = e_rung_a->head.hflag | e_rung_b->head.hflag;
+  BM_elem_flag_set(e_link, BM_ELEM_SEAM, (hflag_and & BM_ELEM_SEAM) != 0);
+  BM_elem_flag_set(e_link, BM_ELEM_SMOOTH, (hflag_or & BM_ELEM_SMOOTH) != 0);
+}
+
 void transform_mode_edge_slide_clone_confirm(TransInfo *t)
 {
   if (t->mode != TFM_EDGE_SLIDE) {
@@ -1101,17 +1142,13 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
     Map<BMVert *, BMVert *> orig_to_clone;
     orig_to_clone.reserve(sld->sv.size());
     for (int i = 0; i < int(sld->sv.size()); i++) {
-      orig_to_clone.add(sld->original_verts[i],
-                        static_cast<BMVert *>(sld->sv[i].td->extra));
+      orig_to_clone.add(sld->original_verts[i], static_cast<BMVert *>(sld->sv[i].td->extra));
     }
 
     /* Tag keep-side neighbor verts so we can identify keep-side faces. */
     Set<BMVert *> keep_nb_set;
     Set<BMVert *> other_nb_set;
     for (const CloneNeighborInfo &nd : neighbor_infos) {
-      /* Chain verts of parallel selected loops can appear as side neighbors. 
-       * Keep them out of the neighbor sets as tagging a chain vert would make 
-       * every face of that vert's own loop pass the separation filter below. */
       for (BMVert *nb : nd.neighbors[keep_side]) {
         if (!orig_to_clone.contains(nb)) {
           keep_nb_set.add(nb);
@@ -1175,9 +1212,6 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
             has_endpoint_keep_nb = true;
           }
           else if (nd.neighbors[1 - keep_side].contains(l->v)) {
-            /* A face containing one of this vert's own other-side neighbors lies on the other
-             * side of the chain at this vert. With multiple parallel loops selected, another 
-             * loop's tagged keep-side neighbors may sit in this face and would wrongly accept it. */
             has_endpoint_keep_nb = true;
           }
           else if (BM_elem_flag_test(l->v, BM_ELEM_TAG)) {
@@ -1244,6 +1278,30 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
       }
     }
 
+    /* The band subdivides the keep side faces rather than adding surface, so both it and their own
+     * moved corners take their loop data from the pre-slide face. */
+    Set<BMVert *> sep_verts;
+    Map<BMFace *, BMFace *> keep_face_orig;
+    BMeshCreateParams bm_orig_params{};
+    bm_orig_params.use_toolflags = false;
+    BMesh *bm_orig = BM_mesh_create(&bm_mesh_allocsize_default, &bm_orig_params);
+    BM_mesh_copy_init_customdata_all_layers(bm_orig, bm, BM_LOOP, nullptr);
+    {
+      const BMCustomDataCopyMap cd_face_map = CustomData_bmesh_copy_map_calc(bm->pdata,
+                                                                             bm_orig->pdata);
+      const BMCustomDataCopyMap cd_loop_map = CustomData_bmesh_copy_map_calc(bm->ldata,
+                                                                             bm_orig->ldata);
+      for (BMVert *v_sep : orig_to_sep.values()) {
+        sep_verts.add(v_sep);
+        BMFace *f;
+        BMIter f_iter;
+        BM_ITER_ELEM (f, &f_iter, v_sep, BM_FACES_OF_VERT) {
+          keep_face_orig.lookup_or_add_cb(
+              f, [&]() { return BM_face_copy(bm_orig, cd_face_map, cd_loop_map, f, true, true); });
+        }
+      }
+    }
+
     /* Reposition separated verts to clone positions, then kill clone verts. */
     for (const CloneNeighborInfo &nd : neighbor_infos) {
       BMVert *v_orig = nd.v;
@@ -1256,6 +1314,17 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
       BM_vert_kill(bm, v_clone);
     }
 
+    /* The keep side faces kept the loop data of the corners they were separated from, which now
+     * sit a slide away. Re-interpolate them so the texture stays where it was. */
+    for (const auto item : keep_face_orig.items()) {
+      BMLoop *l_iter = BM_FACE_FIRST_LOOP(item.key);
+      for (int i = 0; i < item.key->len; i++, l_iter = l_iter->next) {
+        if (sep_verts.contains(l_iter->v)) {
+          BM_loop_interp_from_face(bm, l_iter, item.value, false, false);
+        }
+      }
+    }
+
     /* Create band faces from original vertices to the separated vertices. */
     for (const EdgeSlideData::CloneChainEdge &ce : sld->clone_chain_edges) {
       BMVert *v_sep1 = orig_to_sep.lookup_default(ce.v1, nullptr);
@@ -1265,13 +1334,22 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
         continue;
       }
 
+      BMEdge *e_sep = BM_edge_exists(v_sep1, v_sep2);
+      BMEdge *e_orig = BM_edge_exists(ce.v1, ce.v2);
+
+      /* The band fills the area the keep side face vacated, so it inherits that face's attributes
+       * (material, shading) */
+      BMFace *f_example = (e_sep && e_sep->l)   ? e_sep->l->f :
+                          (e_orig && e_orig->l) ? e_orig->l->f :
+                                                  nullptr;
+
       BMVert *quad[4] = {ce.v1, v_sep1, v_sep2, ce.v2};
-      BMFace *f_band = BM_face_create_verts(bm, quad, 4, nullptr, BM_CREATE_NOP, true);
+      BMFace *f_band = BM_face_create_verts(bm, quad, 4, f_example, BM_CREATE_NOP, true);
       if (f_band) {
-        BMVert *ref_edges[2][2] = {{v_sep1, v_sep2}, {ce.v1, ce.v2}};
+        BM_elem_flag_disable(f_band, BM_ELEM_HIDDEN);
+        BMEdge *ref_edges[2] = {e_sep, e_orig};
         for (int r = 0; r < 2; r++) {
-          BMEdge *e_ref = BM_edge_exists(ref_edges[r][0], ref_edges[r][1]);
-          BMLoop *l_band = e_ref ? BM_face_edge_share_loop(f_band, e_ref) : nullptr;
+          BMLoop *l_band = ref_edges[r] ? BM_face_edge_share_loop(f_band, ref_edges[r]) : nullptr;
           BMLoop *l_ref = l_band ? l_band->radial_next : nullptr;
           if (l_band && l_ref && l_ref != l_band) {
             if (l_ref->v == l_band->v) {
@@ -1280,10 +1358,22 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
             break;
           }
         }
+        BMFace *f_orig = f_example ? keep_face_orig.lookup_default(f_example, nullptr) : nullptr;
+        if (f_orig) {
+          BMLoop *l_iter = BM_FACE_FIRST_LOOP(f_band);
+          for (int i = 0; i < f_band->len; i++, l_iter = l_iter->next) {
+            BM_loop_interp_from_face(bm, l_iter, f_orig, false, false);
+          }
+        }
+        else {
+          edge_slide_clone_loops_copy_across(bm, f_band, e_orig);
+          edge_slide_clone_loops_copy_across(bm, f_band, e_sep);
+        }
       }
     }
 
-    /* At chain endpoints, we need to replace the edge connecting the endpoint and neighbor to the adjacent face. */
+    /* At chain endpoints, we need to replace the edge connecting the endpoint and neighbor to the
+     * adjacent face. */
     for (const CloneNeighborInfo &nd : neighbor_infos) {
       BMVert *v_orig = nd.v;
       BMVert *v_sep = orig_to_sep.lookup_default(v_orig, nullptr);
@@ -1342,6 +1432,17 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
           BMFace *new_face = BM_face_create_verts(
               bm, new_verts.data(), new_verts.size(), face, BM_CREATE_NOP, true);
           if (new_face) {
+            /* Face creation copies face data only. */
+            BMLoop *l_new = BM_FACE_FIRST_LOOP(new_face);
+            for (int i = 0; i < new_face->len; i++, l_new = l_new->next) {
+              if (l_new->v == v_sep) {
+                BM_loop_interp_from_face(bm, l_new, face, false, true);
+                continue;
+              }
+              if (BMLoop *l_old = BM_face_vert_share_loop(face, l_new->v)) {
+                BM_elem_attrs_copy(bm, l_old, l_new);
+              }
+            }
             BM_face_kill(bm, face);
             BMEdge *stale_edge = BM_edge_exists(v_orig, nb_keep);
             if (stale_edge && BM_edge_is_wire(stale_edge)) {
@@ -1350,6 +1451,40 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
           }
         }
       }
+    }
+
+    for (const CloneNeighborInfo &nd : neighbor_infos) {
+      BMVert *v_orig = nd.v;
+      BMVert *v_sep = orig_to_sep.lookup_default(v_orig, nullptr);
+      if (!v_sep) {
+        continue;
+      }
+      BMEdge *e_link = BM_edge_exists(v_orig, v_sep);
+      if (!e_link) {
+        continue;
+      }
+
+      BMEdge *e_rung_keep = nullptr;
+      for (BMVert *nb : nd.neighbors[keep_side]) {
+        if (orig_to_clone.contains(nb)) {
+          continue;
+        }
+        e_rung_keep = BM_edge_exists(v_sep, nb);
+        if (e_rung_keep) {
+          break;
+        }
+      }
+      BMEdge *e_rung_other = nullptr;
+      for (BMVert *nb : nd.neighbors[1 - keep_side]) {
+        if (orig_to_clone.contains(nb)) {
+          continue;
+        }
+        e_rung_other = BM_edge_exists(v_orig, nb);
+        if (e_rung_other) {
+          break;
+        }
+      }
+      edge_slide_clone_link_edge_data(bm, e_link, e_rung_keep, e_rung_other);
     }
 
     /* Leave the slid loop selected so the result is chainable. */
@@ -1378,6 +1513,8 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
         }
       }
     }
+
+    BM_mesh_free(bm_orig);
 
     BM_mesh_elem_hflag_disable_all(bm, BM_VERT, BM_ELEM_TAG, false);
     EDBM_selectmode_flush(em);
