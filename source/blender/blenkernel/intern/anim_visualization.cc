@@ -394,7 +394,7 @@ void async_eval_allocate(bMotionPath &motion_path,
   }
 
   WorkerBuffer *buffer = MEM_new<WorkerBuffer>(
-      __func__, motion_path.start_frame, motion_path.length);
+      __func__, motion_path.start_frame, motion_path.flag, motion_path.length);
   for (const int i : IndexRange(motion_path.length)) {
     copy_v3_v3(buffer->points[i], motion_path.points[i].co);
     buffer->flags[i] = motion_path.points[i].flag;
@@ -421,7 +421,7 @@ void async_eval_free(bMotionPath &motion_path)
   motion_path.runtime->job_owner = nullptr;
 }
 
-WorkerBuffer *get_worker_buffer(bMotionPath &motion_path)
+WorkerBuffer *get_worker_buffer(const bMotionPath &motion_path)
 {
   if (!motion_path.runtime) {
     return nullptr;

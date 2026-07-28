@@ -545,7 +545,7 @@ static bool eval_callback(Depsgraph *dg,
                           const int frame)
 {
   Object *ob = id_cast<Object *>(target.id);
-  bMotionPath *mpath = get_motion_path(*ob, target.component_name);
+  const bMotionPath *mpath = get_motion_path(*ob, target.component_name);
   if (!mpath) {
     return false;
   }
@@ -575,9 +575,8 @@ static bool eval_callback(Depsgraph *dg,
     BLI_assert(ob_eval->type == OB_ARMATURE);
     bPoseChannel *pchan_eval = BKE_pose_channel_find_name(ob_eval->pose,
                                                           target.component_name.c_str());
-    /* TODO pass in motion path flags. */
-    // mpath->flag & MOTIONPATH_FLAG_BHEAD
-    if (true) {
+
+    if (buffer->motionpath_flag & MOTIONPATH_FLAG_BHEAD) {
       motion_path_point = pchan_eval->pose_head;
     }
     else {

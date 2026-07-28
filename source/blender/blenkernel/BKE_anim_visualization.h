@@ -103,14 +103,16 @@ namespace bke::motionpath {
 
 /* Data owned by the thread which calculates the motion path. */
 struct WorkerBuffer {
-  int start_frame;
+  const int start_frame;
+  const eMotionPath_Flag motionpath_flag;
   Array<float3> points;
   Array<eMotionPathVert_Flag> flags;
   /* Set once the worker thread has created the data to copy, unset on the main thread once the
    * copying happened. */
   Array<std::atomic<bool>> ready_to_copy;
 
-  WorkerBuffer(int start_frame, int length) : start_frame(start_frame)
+  WorkerBuffer(const int start_frame, const eMotionPath_Flag motionpath_flag, int length)
+      : start_frame(start_frame), motionpath_flag(motionpath_flag)
   {
     points.reinitialize(length);
     flags.reinitialize(length);
@@ -126,7 +128,7 @@ void async_eval_allocate(bMotionPath &motionpath,
                          Scene &job_owner,
                          bke::animviz::EvaluationTarget &target);
 void async_eval_free(bMotionPath &motion_path);
-WorkerBuffer *get_worker_buffer(bMotionPath &motion_path);
+WorkerBuffer *get_worker_buffer(const bMotionPath &motion_path);
 
 }  // namespace bke::motionpath
 
