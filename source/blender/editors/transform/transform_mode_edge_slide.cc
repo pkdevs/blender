@@ -1301,6 +1301,33 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
       }
     }
 
+    /* Leave the slid loop selected so the result is chainable. */
+    if (orig_to_sep.is_empty()) {
+      for (const CloneNeighborInfo &nd : neighbor_infos) {
+        BM_vert_select_set(bm, nd.v, true);
+      }
+    }
+    else {
+      for (const CloneNeighborInfo &nd : neighbor_infos) {
+        BM_vert_select_set(bm, nd.v, false);
+        if (BMVert *v_sep = orig_to_sep.lookup_default(nd.v, nullptr)) {
+          BM_vert_select_set(bm, v_sep, true);
+        }
+      }
+      for (const EdgeSlideData::CloneChainEdge &ce : sld->clone_chain_edges) {
+        if (BMEdge *e_orig = BM_edge_exists(ce.v1, ce.v2)) {
+          BM_edge_select_set(bm, e_orig, false);
+        }
+        BMVert *v_sep1 = orig_to_sep.lookup_default(ce.v1, nullptr);
+        BMVert *v_sep2 = orig_to_sep.lookup_default(ce.v2, nullptr);
+        if (v_sep1 && v_sep2) {
+          if (BMEdge *e_new = BM_edge_exists(v_sep1, v_sep2)) {
+            BM_edge_select_set(bm, e_new, true);
+          }
+        }
+      }
+    }
+
     BM_mesh_elem_hflag_disable_all(bm, BM_VERT, BM_ELEM_TAG, false);
     EDBM_selectmode_flush(em);
 
