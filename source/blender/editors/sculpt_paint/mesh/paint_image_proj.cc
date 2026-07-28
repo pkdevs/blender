@@ -5470,6 +5470,7 @@ static void do_projectpaint_thread(TaskPool *__restrict /*pool*/, void *ph_v)
 
       for (node = ps->bucketRect[bucket_index]; node; node = node->next) {
         projPixel = static_cast<ProjPixel *>(node->link);
+
         /* copy of code below */
         if (last_index != projPixel->image_index) {
           last_index = projPixel->image_index;
