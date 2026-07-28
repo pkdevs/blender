@@ -206,9 +206,6 @@ struct CodegenContext : NodeErrorHandler {
         case NodeType::UsingStmt:
           skip_node(node);
           break;
-        case NodeType::PipelineDecl:
-          skip_node(node);
-          break;
         case NodeType::ForLoop:
           for_loop(node, *symbol.scopes[to_string(local_scope_id++)]);
           break;

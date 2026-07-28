@@ -303,7 +303,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     /* All mutations that needs to also be applied on template definitions. */
     lower_pre_template_ast(parser, symbols);
     /* Lower SRT and Interfaces. */
-    // lower_pipeline_definition(parser, filename);
+    lower_pipeline_definition(parser, filename);
     // lower_resource_table(parser);
     // lower_resource_access_functions(parser);
     /* Lower class methods. */
