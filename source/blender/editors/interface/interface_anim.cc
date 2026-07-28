@@ -123,7 +123,7 @@ void button_anim_flag(Button *but, const AnimationEvalContext *anim_eval_context
   }
 }
 
-static Button *but_anim_decorate_find_attached_button(ButtonDecorator *but)
+Button *but_anim_decorate_find_attached_button(ButtonDecorator *but)
 {
   Button *but_iter = nullptr;
 
@@ -338,6 +338,7 @@ void button_anim_decorate_cb(bContext *C, void *arg_but, void * /*arg_dummy*/)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
   auto *but_decorate = static_cast<ButtonDecorator *>(arg_but);
+
   if (!but_decorate->toggle_keyframe_on_click) {
     return;
   }

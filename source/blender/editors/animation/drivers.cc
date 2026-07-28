@@ -1127,9 +1127,7 @@ static wmOperatorStatus edit_driver_button_exec(bContext *C, wmOperator *op)
 
   ui::context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop) {
-    ui::popover_panel_invoke(C, "GRAPH_PT_drivers_popover", true, op->reports);
-  }
+  ui::popover_panel_invoke(C, "GRAPH_PT_drivers_popover", true, op->reports);
 
   return OPERATOR_INTERFACE;
 }

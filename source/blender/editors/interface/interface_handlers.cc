@@ -10007,6 +10007,26 @@ Button *region_active_but_prop_get(const ARegion *region,
   return activebut;
 }
 
+Button *region_active_but_from_decorator_prop_get(const ARegion *region,
+                                               PointerRNA *r_ptr,
+                                               PropertyRNA **r_prop,
+                                               int *r_index)
+{
+  Button *activebut = region_active_but_prop_get(region, r_ptr, r_prop, r_index);
+
+  if (activebut && activebut->icon == ICON_DECORATE_DRIVER) {
+    ButtonDecorator *decorator = static_cast<ButtonDecorator *>(activebut);
+    activebut = but_anim_decorate_find_attached_button(decorator);
+    if (activebut && activebut->rnapoin.data) {
+      *r_ptr = activebut->rnapoin;
+      *r_prop = activebut->rnaprop;
+      *r_index = activebut->rnaindex;
+    }
+  }
+
+  return activebut;
+}
+
 Button *context_active_but_prop_get(const bContext *C,
                                     PointerRNA *r_ptr,
                                     PropertyRNA **r_prop,
@@ -10684,6 +10704,7 @@ static int handle_button_event(bContext *C, const wmEvent *event, Button *but)
       data->multi_data.skip = true;
 #endif
     }
+
 
     button_activate_exit(C, but, data, (post_but == nullptr), false);
 
@@ -12209,6 +12230,15 @@ static int handle_menu_event(bContext *C,
     }
   }
 
+#ifdef USE_UI_POPOVER_ONCE
+  if (block->flag & BLOCK_POPOVER_ONCE) {
+    if ((event->type == LEFTMOUSE) && (event->val == KM_RELEASE)) {
+      popover_once_clear(static_cast<Popover *>(menu->popup_create_vars.arg));
+      block->flag &= ~BLOCK_POPOVER_ONCE;
+    }
+  }
+#endif
+
   /* if we are didn't handle the event yet, lets pass it on to
    * buttons inside this region. disabled inside check .. not sure
    * anymore why it was there? but it meant enter didn't work
@@ -12219,15 +12249,6 @@ static int handle_menu_event(bContext *C,
   {
     retval = handle_menu_button(C, event, menu);
   }
-
-#ifdef USE_UI_POPOVER_ONCE
-  if (block->flag & BLOCK_POPOVER_ONCE) {
-    if ((event->type == LEFTMOUSE) && (event->val == KM_RELEASE)) {
-      popover_once_clear(static_cast<Popover *>(menu->popup_create_vars.arg));
-      block->flag &= ~BLOCK_POPOVER_ONCE;
-    }
-  }
-#endif
 
   /* Don't handle double click events, re-handle as regular press/release. */
   if (retval == WM_UI_HANDLER_CONTINUE && event->val == KM_DBL_CLICK) {
