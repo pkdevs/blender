@@ -18,6 +18,7 @@
 
 #include "BKE_context.hh"
 
+#include "SEQ_edit.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_retiming.hh"
@@ -122,12 +123,16 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   dependant.add_multiple(transformed_strips);
   dependant.remove_if([&](Strip *strip) { return seq::transform_strip_can_be_translated(strip); });
 
-  /* Last, handle overlap. `transform_handle_overlap` removes invalid transitions. */
+  /* Last, handle overlap. `transform_handle_overlap` removes invalid transitions after the overlap
+   * has been handled. If there's no overlap delete them here. */
   if (seq_transform_check_overlap_flags(transformed_strips)) {
     const bool use_sync_markers = ((static_cast<SpaceSeq *>(t->area->spacedata.first))->flag &
                                    SEQ_MARKER_TRANS) != 0;
     seq::transform_handle_overlap(
         scene, seqbasep, transformed_strips, dependant, use_sync_markers);
+  }
+  else {
+    seq::edit_remove_flagged_strips(scene, seqbasep);
   }
 
   if ((custom_data->data != nullptr) && custom_data->use_free) {

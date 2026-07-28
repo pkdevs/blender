@@ -339,7 +339,8 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
     return;
   }
 
-  /* Last, handle overlap. `transform_handle_overlap` removes invalid transitions. */
+  /* Last, handle overlap. `transform_handle_overlap` removes invalid transitions after the overlap
+   * has been handled. If there's no overlap delete them here. */
   TransSeq *ts = static_cast<TransSeq *>(tc->custom.type.data);
   ListBaseT<Strip> *seqbasep = seqbase_active_get(t);
   const bool use_sync_markers = ((static_cast<SpaceSeq *>(t->area->spacedata.first))->flag &
@@ -347,6 +348,9 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   if (seq_transform_check_overlap_flags(transformed_strips)) {
     seq::transform_handle_overlap(
         scene, seqbasep, transformed_strips, ts->time_dependent_strips, use_sync_markers);
+  }
+  else {
+    seq::edit_remove_flagged_strips(scene, seqbasep);
   }
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
