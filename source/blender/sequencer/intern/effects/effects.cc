@@ -324,7 +324,7 @@ static float transition_fader_calc(const Scene *scene, const Strip *strip, float
 float effect_fader_calc(Scene *scene, Strip *strip, float timeline_frame)
 {
   if (strip->flag & SEQ_USE_EFFECT_DEFAULT_FADE) {
-    if (strip->is_same_channel_transition()) {
+    if (strip_type_can_be_transition(strip->type) && strip->effect_num_inputs_get() == 2) {
       return transition_fader_calc(scene, strip, timeline_frame);
     }
     return 1.0f;
