@@ -948,8 +948,7 @@ static void mesh_build_data(Depsgraph &depsgraph,
       depsgraph, scene, ob, true, need_mapping, dataMask, true);
 
   /* Make sure that drivers can target shapekey properties.
-   * Note that this causes a potential
-   * inconsistency, as the shapekey may have a different topology
+   * Note that this causes a potential inconsistency, as the shapekey may have a different topology
    * than the evaluated mesh. */
   if (Key *key = mesh_input.key) {
     mesh_eval_assign_key(geometry_set, key);
