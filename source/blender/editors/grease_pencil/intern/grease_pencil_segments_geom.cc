@@ -1026,6 +1026,51 @@ static void follow_segment_connections(const Span<Segment> all_segments,
   }
 }
 
+/* Compute bounding boxes of curves in screen space. The bounding boxes are used to speed
+ * up the search for intersecting curves. */
+static void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
+                                   const Span<float2> screen_space_positions,
+                                   MutableSpan<Bounds<float2>> screen_space_bbox)
+{
+  threading::parallel_for(
+      src_points_by_curve.index_range(), 512, [&](const IndexRange src_curves) {
+        for (const int src_curve : src_curves) {
+          Bounds<float2> &bbox = screen_space_bbox[src_curve];
+
+          const IndexRange src_points = src_points_by_curve[src_curve];
+          bbox = *bounds::min_max(screen_space_positions.slice(src_points));
+
+          /* Add some padding, otherwise we could just miss intersections. */
+          bbox.pad(BBOX_PADDING);
+        }
+      });
+}
+
+static void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
+                                   const GroupedSpan<int> shapes,
+                                   const Span<float2> screen_space_positions,
+                                   MutableSpan<Bounds<float2>> screen_space_bbox)
+{
+  threading::parallel_for(shapes.index_range(), 512, [&](const IndexRange shape_ids) {
+    for (const int shape_id : shape_ids) {
+      std::optional<Bounds<float2>> bbox;
+
+      const Span<int> shape = shapes[shape_id];
+      for (const int curve_i : shape) {
+        const IndexRange src_points = src_points_by_curve[curve_i];
+        bbox = bounds::merge(bbox, *bounds::min_max(screen_space_positions.slice(src_points)));
+      }
+
+      BLI_assert(bbox);
+
+      /* Add some padding, otherwise we could just miss intersections. */
+      bbox->pad(BBOX_PADDING);
+
+      screen_space_bbox[shape_id] = *bbox;
+    }
+  });
+}
+
 namespace trim {
 
 static bool check_line_segment_lasso_intersection(const int2 &pos_a,
@@ -1141,26 +1186,6 @@ static void check_segments_in_lasso(const Span<float2> screen_space_positions,
         }
       },
       exec_mode::grain_size(128));
-}
-
-/* Compute bounding boxes of curves in screen space. The bounding boxes are used to speed
- * up the search for intersecting curves. */
-static void compute_bounding_boxes(const OffsetIndices<int> src_points_by_curve,
-                                   const Span<float2> screen_space_positions,
-                                   MutableSpan<Bounds<float2>> screen_space_bbox)
-{
-  threading::parallel_for(
-      src_points_by_curve.index_range(), 512, [&](const IndexRange src_curves) {
-        for (const int src_curve : src_curves) {
-          Bounds<float2> &bbox = screen_space_bbox[src_curve];
-
-          const IndexRange src_points = src_points_by_curve[src_curve];
-          bbox = *bounds::min_max(screen_space_positions.slice(src_points));
-
-          /* Add some padding, otherwise we could just miss intersections. */
-          bbox.pad(BBOX_PADDING);
-        }
-      });
 }
 
 bke::CurvesGeometry trim_curve_segments(const bke::CurvesGeometry &src,
@@ -1961,13 +1986,23 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
 }
 
 static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
-                                     const Span<float2> points,
+                                     const Span<float2> positions_2d,
                                      const OffsetIndices<int> points_by_curve,
                                      const IndexMask &clipping_shapes,
                                      const GroupedSpan<int> shapes,
                                      const VArray<int> &fill_ids,
                                      const VArray<bool> &is_cyclic)
 {
+  BooleanResult results_all;
+  results_all.segment_offsets.append(0);
+
+  if (points_by_curve.is_empty()) {
+    return results_all;
+  }
+
+  IndexMaskMemory memory;
+  const IndexMask subject_shapes = clipping_shapes.complement(shapes.index_range(), memory);
+
   /* Treat filled curves as cyclical. */
   const VArray<bool> cyclic = VArray<bool>::from_func(points_by_curve.size(), [&](int64_t index) {
     return is_cyclic[index] || (fill_ids[index] != 0);
@@ -1983,30 +2018,65 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
     return fill_ids[index] != 0;
   });
 
-  BooleanResult results_all;
-  results_all.segment_offsets.append(0);
+  Array<Bounds<float2>> screen_space_bbox(shapes.size());
+  compute_bounding_boxes(points_by_curve, shapes, positions_2d, screen_space_bbox);
 
-  if (points_by_curve.is_empty()) {
-    return results_all;
-  }
+  Array<bool> shapes_bbox_intersecting(shapes.size(), false);
+  index_mask::masked_fill(shapes_bbox_intersecting.as_mutable_span(), true, clipping_shapes);
+
+  /* Calculate which bounding boxes intersect the clipping shapes. */
+  subject_shapes.foreach_index([&](const int64_t shape_i) {
+    const Bounds<float2> bbox_i = screen_space_bbox[shape_i];
+
+    bool box_intersects = false;
+
+    clipping_shapes.foreach_index([&](const int64_t shape_j) {
+      const Bounds<float2> bbox_j = screen_space_bbox[shape_j];
+
+      if (bounds::intersect(bbox_i, bbox_j).has_value()) {
+        box_intersects = true;
+      }
+    });
+
+    if (box_intersects) {
+      shapes_bbox_intersecting[shape_i] = true;
+    }
+  });
 
   Vector<IntersectionPoint> intersections;
 
-  IndexMaskMemory memory;
-  const IndexMask subject_shapes = clipping_shapes.complement(shapes.index_range(), memory);
-
   subject_shapes.foreach_index([&](const int64_t shape_i) {
-    const BooleanResult result = execute_single_boolean(op_params,
-                                                        shape_i,
-                                                        points,
-                                                        shapes,
-                                                        points_by_curve,
-                                                        clipping_shapes,
-                                                        intersections,
-                                                        is_fill,
-                                                        cyclic);
+    /* Only do full calculation with the bounding boxes are intersecting. */
+    if (shapes_bbox_intersecting[shape_i]) {
+      const BooleanResult result = execute_single_boolean(op_params,
+                                                          shape_i,
+                                                          positions_2d,
+                                                          shapes,
+                                                          points_by_curve,
+                                                          clipping_shapes,
+                                                          intersections,
+                                                          is_fill,
+                                                          cyclic);
 
-    results_all.append_result(result, shape_i);
+      results_all.append_result(result, shape_i);
+    }
+    else {
+      BooleanResult result;
+      result.segment_offsets.append(0);
+
+      const Span<int> shape = shapes[shape_i];
+      for (const int pos_j : shape.index_range()) {
+        const int curve_j = shape[pos_j];
+
+        result.segments.append(
+            Segment::from_curve(curve_j, points_by_curve[curve_j], is_cyclic[curve_j]));
+        result.cyclic.append(is_cyclic[curve_j]);
+        result.segment_offsets.append(pos_j + 1);
+        result.segment_reversed.append(false);
+      }
+
+      results_all.append_result(result, shape_i);
+    }
   });
 
   if (results_all.segments.is_empty()) {
