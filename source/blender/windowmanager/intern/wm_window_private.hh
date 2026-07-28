@@ -38,8 +38,9 @@ void wm_test_gpu_backend_fallback(bContext *C);
 
 /**
  * Set the theme context (space type & region id) used to source colors for the window's
- * title bar decoration, matching the space/region whose header color represents the window
- * (main window uses the top-bar, a single-editor floating window uses that editor, etc).
+ * title bar decoration, matching the space/region whose header color represents the window.
+ *  - Main window: the top-bar header.
+ *  - Single-editor floating window: that editor's header.
  * \param screen: May be null, in which case the window is used as a theme provider.
  */
 void wm_window_titlebar_theme_context_set(const wmWindow *win, const bScreen *screen);
