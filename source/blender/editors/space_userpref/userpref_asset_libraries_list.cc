@@ -110,7 +110,7 @@ struct AssetLibraryListItem : public ui::AbstractTreeViewItem {
       row.label(label_, is_remote_library ? ICON_INTERNET : ICON_DISK_DRIVE);
     }
     else {
-      row.label(label_, ICON_NONE);
+      row.label(label_, ICON_BLANK1);
 
       ui::Layout &sub = row.row(true);
       /* Draw text grayed out. */
