@@ -2716,8 +2716,8 @@ int handler_panel_region(bContext *C,
 
     if (has_panel_header && event->type == RIGHTMOUSE) {
       if (ELEM(mouse_state, PANEL_MOUSE_INSIDE_HEADER, PANEL_MOUSE_INSIDE_CONTENT)) {
-       retval = popup_context_menu_for_panel(C, region, block.panel);
-       break;
+        retval = popup_context_menu_for_panel(C, region, block.panel);
+        break;
       }
     }
 
