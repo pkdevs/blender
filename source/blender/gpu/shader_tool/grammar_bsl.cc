@@ -249,11 +249,13 @@ struct BSLParser {
 
   void pipeline_or_func_or_var_decl()
   {
-    auto state = save_state();
-    if (pipeline_decl()) {
-      return;
+    {
+      auto state = save_state();
+      if (pipeline_decl()) {
+        return;
+      }
+      restore_state(state);
     }
-    restore_state(state);
     func_or_var_decl();
   }
 
@@ -281,13 +283,14 @@ struct BSLParser {
 
   void struct_decl_or_var_decl(bool is_member = false)
   {
-    /* C++ explicit member type. Needed for legacy codestyle. */
-    auto state = save_state();
-    if (var_decl(is_member)) {
-      return;
+    {
+      /* C++ explicit member type. Needed for legacy codestyle. */
+      auto state = save_state();
+      if (var_decl(is_member)) {
+        return;
+      }
+      restore_state(state);
     }
-    restore_state(state);
-
     if (peek() == Enum) {
       enum_decl();
       return;
@@ -297,11 +300,13 @@ struct BSLParser {
 
   void func_or_var_decl(bool is_member = false)
   {
-    auto state = save_state();
-    if (var_decl(is_member)) {
-      return;
+    {
+      auto state = save_state();
+      if (var_decl(is_member)) {
+        return;
+      }
+      restore_state(state);
     }
-    restore_state(state);
     func_decl();
   }
 
@@ -927,12 +932,14 @@ struct BSLParser {
 
   void local_statement(bool expect_semicolon = true)
   {
-    auto state = save_state();
-    if (var_decl(false, expect_semicolon)) {
-      return;
+    {
+      auto state = save_state();
+      if (var_decl(false, expect_semicolon)) {
+        return;
+      }
+      /* Restore state after failing to parse a declaration. */
+      restore_state(state);
     }
-    /* Restore state after failing to parse a declaration. */
-    restore_state(state);
 
     if (curr.str() == "auto" && peek_next(1) == '[') {
       structured_bindings();
@@ -1228,7 +1235,9 @@ struct BSLParser {
 
   void error(const std::string &str)
   {
-    error_handler.report(curr, str);
+    if (!no_error) {
+      error_handler.report(curr, str);
+    }
     /* Set token to EndOfFile/Invalid. */
     curr = Token(parser);
   }
@@ -1285,15 +1294,27 @@ struct BSLParser {
   }
 
   struct ParserState {
+    BSLParser *parser;
     Token curr;
     NodeID curr_node;
     size_t node_count;
     Node node;
+
+    ~ParserState()
+    {
+      parser->no_error = false;
+    }
   };
 
+  /* Reporting error is super costly (has to find the source filename and line).
+   * Disable it when doing backtracing. */
+  bool no_error = false;
+
+  /* No error can be generated until the ParserState is destroyed. */
   ParserState save_state()
   {
-    return {curr, curr_node, nodes.size(), nodes[curr_node]};
+    no_error = true;
+    return {this, curr, curr_node, nodes.size(), nodes[curr_node]};
   }
 
   void restore_state(const ParserState &state)
