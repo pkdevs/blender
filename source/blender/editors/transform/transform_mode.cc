@@ -762,83 +762,82 @@ void ElementRotation_ex(const TransInfo *t,
 
     /* Rotation. */
     if ((t->flag & T_V3D_ALIGN) == 0) { /* Align mode doesn't rotate objects itself. */
-      if (td_ext) {
-        /* Euler or quaternion? */
-        if ((td_ext->rotOrder == ROT_MODE_QUAT) || (td->flag & TD_USEQUAT)) {
-          /* Can be called for texture space translate for example, then opt out. */
-          if (td_ext->quat) {
-            mul_m3_series(fmat, td->smtx, mat, td->mtx);
-
-            if (!is_zero_v3(td_ext->dquat)) {
-              /* Correct for delta quat. */
-              float tmp_mat[3][3];
-              quat_to_mat3(tmp_mat, td_ext->dquat);
-              mul_m3_m3m3(fmat, fmat, tmp_mat);
-            }
-
-            mat3_to_quat(quat, fmat); /* Actual transform. */
-
-            if (!is_zero_v4(td_ext->dquat)) {
-              /* Correct back for delta quaternion. */
-              float idquat[4];
-              invert_qt_qt_normalized(idquat, td_ext->dquat);
-              mul_qt_qtqt(quat, idquat, quat);
-            }
-
-            mul_qt_qtqt(td_ext->quat, quat, td_ext->iquat);
-
-            /* This function works on end result. */
-            protectedQuaternionBits(td->protectflag, td_ext->quat, td_ext->iquat);
-          }
-        }
-        else if (td_ext->rotOrder == ROT_MODE_AXISANGLE) {
-          /* Calculate effect based on quaternions. */
-          float iquat[4], tquat[4];
-
-          axis_angle_to_quat(iquat, td_ext->irotAxis, td_ext->irotAngle);
-
+      /* Euler or quaternion? */
+      if ((td_ext->rotOrder == ROT_MODE_QUAT) || (td->flag & TD_USEQUAT)) {
+        /* Can be called for texture space translate for example, then opt out. */
+        if (td_ext->quat) {
           mul_m3_series(fmat, td->smtx, mat, td->mtx);
-          mat3_to_quat(quat, fmat); /* Actual transform. */
-          mul_qt_qtqt(tquat, quat, iquat);
 
-          quat_to_axis_angle(td_ext->rotAxis, td_ext->rotAngle, tquat);
+          if (!is_zero_v3(td_ext->dquat)) {
+            /* Correct for delta quat. */
+            float tmp_mat[3][3];
+            quat_to_mat3(tmp_mat, td_ext->dquat);
+            mul_m3_m3m3(fmat, fmat, tmp_mat);
+          }
+
+          mat3_to_quat(quat, fmat); /* Actual transform. */
+
+          if (!is_zero_v4(td_ext->dquat)) {
+            /* Correct back for delta quaternion. */
+            float idquat[4];
+            invert_qt_qt_normalized(idquat, td_ext->dquat);
+            mul_qt_qtqt(quat, idquat, quat);
+          }
+
+          mul_qt_qtqt(td_ext->quat, quat, td_ext->iquat);
 
           /* This function works on end result. */
-          protectedAxisAngleBits(td->protectflag,
-                                 td_ext->rotAxis,
-                                 td_ext->rotAngle,
-                                 td_ext->irotAxis,
-                                 td_ext->irotAngle);
-        }
-        else {
-          /* Calculate the total rotation in eulers. */
-          float obmat[3][3];
-
-          mul_m3_m3m3(totmat, mat, td->mtx);
-          mul_m3_m3m3(smat, td->smtx, totmat);
-
-          if (!is_zero_v3(td_ext->drot)) {
-            /* Correct for delta rot. */
-            add_eul_euleul(eul, td_ext->irot, td_ext->drot, td_ext->rotOrder);
-          }
-          else {
-            copy_v3_v3(eul, td_ext->irot);
-          }
-
-          eulO_to_mat3(obmat, eul, td_ext->rotOrder);
-          mul_m3_m3m3(fmat, smat, obmat);
-          mat3_to_compatible_eulO(eul, td_ext->rot, td_ext->rotOrder, fmat);
-
-          if (!is_zero_v3(td_ext->drot)) {
-            /* Correct back for delta rot. */
-            sub_eul_euleul(eul, eul, td_ext->drot, td_ext->rotOrder);
-          }
-
-          /* And apply. */
-          protectedRotateBits(td->protectflag, eul, td_ext->irot);
-          copy_v3_v3(td_ext->rot, eul);
+          protectedQuaternionBits(td->protectflag, td_ext->quat, td_ext->iquat);
         }
       }
+      else if (td_ext->rotOrder == ROT_MODE_AXISANGLE) {
+        /* Calculate effect based on quaternions. */
+        float iquat[4], tquat[4];
+
+        axis_angle_to_quat(iquat, td_ext->irotAxis, td_ext->irotAngle);
+
+        mul_m3_series(fmat, td->smtx, mat, td->mtx);
+        mat3_to_quat(quat, fmat); /* Actual transform. */
+        mul_qt_qtqt(tquat, quat, iquat);
+
+        quat_to_axis_angle(td_ext->rotAxis, td_ext->rotAngle, tquat);
+
+        /* This function works on end result. */
+        protectedAxisAngleBits(td->protectflag,
+                               td_ext->rotAxis,
+                               td_ext->rotAngle,
+                               td_ext->irotAxis,
+                               td_ext->irotAngle);
+      }
+      else {
+        /* Calculate the total rotation in eulers. */
+        float obmat[3][3];
+
+        mul_m3_m3m3(totmat, mat, td->mtx);
+        mul_m3_m3m3(smat, td->smtx, totmat);
+
+        if (!is_zero_v3(td_ext->drot)) {
+          /* Correct for delta rot. */
+          add_eul_euleul(eul, td_ext->irot, td_ext->drot, td_ext->rotOrder);
+        }
+        else {
+          copy_v3_v3(eul, td_ext->irot);
+        }
+
+        eulO_to_mat3(obmat, eul, td_ext->rotOrder);
+        mul_m3_m3m3(fmat, smat, obmat);
+        mat3_to_compatible_eulO(eul, td_ext->rot, td_ext->rotOrder, fmat);
+
+        if (!is_zero_v3(td_ext->drot)) {
+          /* Correct back for delta rot. */
+          sub_eul_euleul(eul, eul, td_ext->drot, td_ext->rotOrder);
+        }
+
+        /* And apply. */
+        protectedRotateBits(td->protectflag, eul, td_ext->irot);
+        copy_v3_v3(td_ext->rot, eul);
+      }
+
       constraintRotLim(t, td, td_ext);
     }
   }
