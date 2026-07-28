@@ -735,9 +735,17 @@ cache_end:
   /* See if there are any selected bones in this group */
   if (hits > 0) {
     if (hits == 1) {
-      result_bias.select_id = buffer.storage[0].id;
-      result_bias.base = ED_armature_base_and_ebone_from_select_buffer(
-          bases, result_bias.select_id, &result_bias.ebone);
+      const uint select_id = buffer.storage[0].id;
+      if ((select_id & BONESEL_ANY) != 0) {
+        result_bias.base = ED_armature_base_and_ebone_from_select_buffer(
+            bases, select_id, &result_bias.ebone);
+
+        /* If this fails, selection code is setting the selection IDs incorrectly. */
+        BLI_assert(result_bias.base && result_bias.ebone);
+        if (result_bias.base != nullptr && result_bias.ebone != nullptr) {
+          result_bias.select_id = select_id;
+        }
+      }
     }
     else {
       int bias_max = INT_MIN;
@@ -775,11 +783,19 @@ cache_end:
         const GPUSelectResult &hit_result = buffer.storage[i];
         const uint select_id = hit_result.id;
 
-        Base *base = nullptr;
-        EditBone *ebone;
-        base = ED_armature_base_and_ebone_from_select_buffer(bases, select_id, &ebone);
+        if ((select_id & BONESEL_ANY) == 0) {
+          /* Avoid including objects in selection. */
+          continue;
+        }
+
+        EditBone *ebone = nullptr;
+        Base *base = ED_armature_base_and_ebone_from_select_buffer(bases, select_id, &ebone);
+
         /* If this fails, selection code is setting the selection ID's incorrectly. */
         BLI_assert(base && ebone);
+        if (base == nullptr || ebone == nullptr) {
+          continue;
+        }
 
         if (ebone->flag & BONE_UNSELECTABLE) {
           continue;
