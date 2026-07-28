@@ -278,6 +278,17 @@ void query_strip_transitions(Strip *strip, Editing *ed, VectorSet<Strip *> &r_st
   }
 }
 
+void query_strip_recursive(Strip *strip, Editing *ed, VectorSet<Strip *> &r_strips)
+{
+  r_strips.add(strip);
+
+  if (strip->type == STRIP_TYPE_META) {
+    for (Strip &meta_child : strip->seqbase) {
+      query_strip_recursive(&meta_child, ed, r_strips);
+    }
+  }
+}
+
 void query_strip_direct_effect_chain(Strip *strip, Editing *ed, VectorSet<Strip *> &r_strips)
 {
   if (r_strips.contains(strip)) {

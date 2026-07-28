@@ -103,6 +103,11 @@ VectorSet<Strip *> query_strips_recursive_at_frame(const Scene *scene,
 void query_strip_transitions(Strip *strip, Editing *ed, VectorSet<Strip *> &r_strips);
 
 /**
+ * Recursively queries all meta strip contents.
+ */
+void query_strip_recursive(Strip *strip, Editing *ed, VectorSet<Strip *> &r_strips);
+
+/**
  * Query the effect strips attached to a given reference \a strip, and recursively the effects
  * attached to those effects. The result is placed in the return parameter \a r_strips.
  * Unlike #query_strip_effect_chain this only recursively includes the effects attached to the
