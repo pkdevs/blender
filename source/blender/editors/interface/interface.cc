@@ -2143,6 +2143,7 @@ void block_post_layout_callbacks_exec(const bContext *C, ARegion *region, Block 
       callback(*C, *block);
     }
   }
+  block->post_block_layout_fns_pending = false;
 }
 
 void block_end_ex(const bContext *C,
@@ -2261,6 +2262,9 @@ void block_end_ex(const bContext *C,
   block->endblock = true;
   if (!postpone_callbacks) {
     block_post_layout_callbacks_exec(C, region, block);
+  }
+  else {
+    block->post_block_layout_fns_pending = true;
   }
 }
 
@@ -3911,6 +3915,8 @@ void block_set_active_operator(Block *block, wmOperator *op, const bool free)
 
 void block_free(const bContext *C, Block *block)
 {
+  BLI_assert(!block->post_block_layout_fns_pending);
+
   butstore_clear(block);
 
   for (Button &but : block->buttons()) {

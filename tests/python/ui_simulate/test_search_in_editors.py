@@ -127,11 +127,10 @@ def test_properties_search():
     bpy.context.view_layer.objects.active = bpy.data.objects["__search_test_cube__"]
     yield
 
-
     e.cursor_position_set(*ui.get_area_center(area), move=True)
 
     yield from _space_hide_region_header(space, e, t)
-    
+
     yield e.ctrl.f()
     yield e.text("subdivision")
     yield e.ret()
