@@ -67,7 +67,7 @@ def cli_main(arguments_raw: argparse.Namespace) -> None:
     # Find all .blend files and get their filename-based version info.
     logger.info("Traversing %s", arguments.repository)
     filepaths = arguments.repository.rglob("*.blend")
-    file_version_infos = asset_finder.investigate_filenames(filepaths)
+    file_version_infos = asset_finder.filenames_group_by_version_metadata(filepaths)
 
     files_total = len(file_version_infos)
     logger.info(f"* {files_total} .blend files found.")

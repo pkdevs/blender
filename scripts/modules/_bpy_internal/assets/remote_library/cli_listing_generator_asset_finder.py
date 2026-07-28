@@ -40,6 +40,9 @@ class FileVersionInfo:
 
     # Make these keyword-only, so that they can be listed first, and thus are the first key when sorting.
     # The tuples are (major, minor) versions; micro/patch release numbers are ignored.
+    #
+    # These fields have the same semantics as #api_model.AssetBlenderVersionsV1, so `min` is inclusive and `until` is
+    # exclusive. In other words, an asset is shown if the current Blender version is in [min, until).
     blender_version_min: BlenderVersion = dataclasses.field(default=(), kw_only=True)
     blender_version_until: BlenderVersion = dataclasses.field(default=(), kw_only=True)
 
@@ -52,7 +55,7 @@ class FileVersionInfo:
 _filename_re = re.compile('(.*?)@b(0|[1-9][0-9]*)_(0|[1-9][0-9]*)', flags=re.IGNORECASE)
 
 
-def investigate_filenames(paths: Iterable[Path]) -> list[FileVersionInfo]:
+def filenames_group_by_version_metadata(paths: Iterable[Path]) -> list[FileVersionInfo]:
     """Determine min/until versions for the given filenames."""
 
     def _extract_version(file_stem: str) -> tuple[str, BlenderVersion]:

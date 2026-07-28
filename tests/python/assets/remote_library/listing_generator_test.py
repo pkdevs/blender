@@ -136,7 +136,7 @@ class HashingTest(unittest.TestCase):
 class BlenderVersionFromFilenameTest(unittest.TestCase):
     maxDiff = None
 
-    def test_investigate_filenames(self) -> None:
+    def test_filenames_group_by_version_metadata(self) -> None:
         paths = [
             # One asset with three versions.
             # - Mis-matched case of `@b` shouldn't matter.
@@ -280,10 +280,10 @@ class BlenderVersionFromFilenameTest(unittest.TestCase):
 
         ]
 
-        actual = asset_finder.investigate_filenames(paths)
+        actual = asset_finder.filenames_group_by_version_metadata(paths)
         self.assertEqual(expect, actual)
 
-    def test_investigate_filenames_duplicate(self) -> None:
+    def test_filenames_group_by_version_metadata_duplicate(self) -> None:
         paths = [
             # Two files with the same min version:
             PurePosixPath("/path/to/asset.blend"),
@@ -316,10 +316,10 @@ class BlenderVersionFromFilenameTest(unittest.TestCase):
             ),
         ]
 
-        actual = asset_finder.investigate_filenames(paths)
+        actual = asset_finder.filenames_group_by_version_metadata(paths)
         self.assertEqual(expect, actual)
 
-    def test_investigate_filenames__posix(self) -> None:
+    def test_filenames_group_by_version_metadata__posix(self) -> None:
         paths = [
             # POSIX paths are case sensitive:
             PurePosixPath('/path/to/case/sensitive.blend'),
@@ -346,10 +346,10 @@ class BlenderVersionFromFilenameTest(unittest.TestCase):
             ),
         ]
 
-        actual = asset_finder.investigate_filenames(paths)
+        actual = asset_finder.filenames_group_by_version_metadata(paths)
         self.assertEqual(expect, actual)
 
-    def test_investigate_filenames__windows(self) -> None:
+    def test_filenames_group_by_version_metadata__windows(self) -> None:
         paths = [
             # One asset with three versions.
             # - Mis-matched case of `@b` shouldn't matter.
@@ -422,7 +422,7 @@ class BlenderVersionFromFilenameTest(unittest.TestCase):
             ),
         ]
 
-        actual = asset_finder.investigate_filenames(paths)
+        actual = asset_finder.filenames_group_by_version_metadata(paths)
         self.assertEqual(expect, actual)
 
     def test_asset_versions_min_until(self) -> None:
