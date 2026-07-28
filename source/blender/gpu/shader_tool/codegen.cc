@@ -17,6 +17,14 @@ using namespace shader::parser;
 using namespace shader::parser::ast;
 using namespace metadata;
 
+static string to_uppercase(string str)
+{
+  for (char &c : str) {
+    c = toupper(c);
+  }
+  return str;
+}
+
 struct CodegenContext : NodeErrorHandler {
   SourceProcessor::Parser &parser;
   SymbolTable &symbols;
@@ -1285,6 +1293,148 @@ struct CodegenContext : NodeErrorHandler {
     if (!cond.empty()) {
       builder.ss << string("#endif\n");
     }
+
+    if (inst_fn->is_entry_point()) {
+      entry_point_arg_list_metadata(decl, *inst_fn);
+    }
+  }
+
+  void entry_point_arg_list_metadata(FuncDecl decl, SymbolFunction &fn)
+  {
+    /* For now, just emit good old create info macros. */
+    string create_info_decl;
+
+    for (Attr attr : decl.attributes().children_of_type<Attr>()) {
+      string_view id = attr.identifier().str();
+      if (id == "clip_control") {
+        create_info_decl += "BUILTINS(BuiltinBits::CLIP_CONTROL)\n";
+      }
+      else if (id == "texture_atomic") {
+        create_info_decl += "BUILTINS(BuiltinBits::TEXTURE_ATOMIC)\n";
+      }
+      else if (id == "early_fragment_tests") {
+        create_info_decl += "EARLY_FRAGMENT_TEST(true)\n";
+      }
+      else if (id == "local_size") {
+        create_info_decl += "LOCAL_GROUP_SIZE" + string(attr.parameters().str()) + "\n";
+      }
+      else if (id == "metal_max_total_threads_per_threadgroup") {
+        create_info_decl += "MTL_MAX_TOTAL_THREADS_PER_THREADGROUP" +
+                            string(attr.parameters().str()) + "\n";
+      }
+    }
+
+    for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
+      auto [res_packed, err_attr] = resource_type_from_attributes(arg.attributes());
+      auto [res_type, srt_type] = res_packed;
+      error(err_attr);
+
+      SymbolVariable *var = fn.lookup_variable(arg.identifier());
+
+      const string &resolved_type = var->type->resolved->identifier;
+
+      switch (res_type) {
+        case ResourceType::VERTEX_ID:
+        case ResourceType::INSTANCE_ID:
+        case ResourceType::POINT_SIZE:
+        case ResourceType::CLIP_DISTANCES:
+        case ResourceType::LAYER:
+        case ResourceType::VIEWPORT_INDEX:
+        case ResourceType::FRAG_COORD:
+        case ResourceType::POINT_COORD:
+        case ResourceType::FRONT_FACING:
+        case ResourceType::GLOBAL_INVOCATION_ID:
+        case ResourceType::LOCAL_INVOCATION_ID:
+        case ResourceType::LOCAL_INVOCATION_INDEX:
+        case ResourceType::WORK_GROUP_ID:
+        case ResourceType::BASE_INSTANCE:
+        case ResourceType::NUM_WORK_GROUP:
+        case ResourceType::INSTANCE_INDEX:
+        case ResourceType::POSITION:
+        case ResourceType::FRAG_STENCIL_REF:
+          create_info_decl += "BUILTINS(BuiltinBits::" + to_str(res_type) + ")\n";
+          break;
+        case ResourceType::FRAG_DEPTH:
+          for (Attr attr : decl.attributes().children_of_type<Attr>()) {
+            string_view id = attr.identifier().str();
+            if (id == "frag_depth") {
+              create_info_decl += "DEPTH_WRITE(DepthWrite::" +
+                                  to_uppercase(string(attr.parameters().str())) + ")\n";
+            }
+          }
+          break;
+        case ResourceType::RESOURCE_TABLE: {
+          string res_condition_lambda = parse_condition(arg.attributes());
+          if (res_condition_lambda.empty()) {
+            create_info_decl += "ADDITIONAL_INFO(" + resolved_type + ")\n";
+          }
+          else {
+            create_info_decl += ".additional_info_with_condition(\"" + resolved_type + "\"" +
+                                res_condition_lambda + ")\n";
+          }
+          break;
+        }
+        case ResourceType::OUT:
+          if (fn.entry_point_type == SymbolFunction::EntryPointType::VERT) {
+            create_info_decl += "VERTEX_OUT(" + resolved_type + "_t)\n";
+          }
+          else {
+            create_info_decl += "ADDITIONAL_INFO(" + resolved_type + ")\n";
+          }
+          break;
+        case ResourceType::SUBPASS_IN:
+        case ResourceType::IN:
+          create_info_decl += "ADDITIONAL_INFO(" + resolved_type + ")\n";
+          break;
+        case ResourceType::LEGACY_INFO:
+        case ResourceType::COMPILATION_CONST:
+        case ResourceType::SPECIALIZATION_CONST:
+        case ResourceType::PUSH_CONST:
+        case ResourceType::SAMPLER:
+        case ResourceType::IMAGE:
+        case ResourceType::UNIFORM_BUF:
+        case ResourceType::STORAGE_BUF:
+        case ResourceType::ACCELERATION_STRUCTURE:
+        case ResourceType::SHARED:
+        case ResourceType::VERT_ATTR_IN:
+        case ResourceType::VERT_ATTR_OUT:
+        case ResourceType::FRAG_IN:
+        case ResourceType::FRAG_OUT:
+        case ResourceType::CLIP_CONTROL:
+        case ResourceType::NONE:
+          break;
+      }
+    }
+
+    if (create_info_decl.empty()) {
+      create_info_decl += "DEFINE(\"EMPTY_CREATE_INFO\")\n";
+    }
+
+    create_info_decl = "GPU_SHADER_CREATE_INFO(" + fn.resolved->identifier + "_infos_)\n" +
+                       create_info_decl + "GPU_SHADER_CREATE_END()\n";
+    metadata.create_infos_declarations.emplace_back(create_info_decl);
+  }
+
+  string parse_condition(AttrList attributes)
+  {
+    string cond;
+    for (Attr attr : attributes.children_of_type<Attr>()) {
+      if (attr.identifier().str() == "condition") {
+        if (!cond.empty()) {
+          error(attr.identifier(), "Only one condition attribute is allowed.");
+          break;
+        }
+        for (LocalVar var : attributes.children_of_type<LocalVar>()) {
+          string id = string(var.identifier().str());
+          cond += "int " + id + " = ShaderCreateInfo::find_constant(constants, \"" + id + "\"); ";
+        }
+        cond += "return " + string(attr.parameters().str()) + ";";
+      }
+    }
+    if (!cond.empty()) {
+      cond = ", [](blender::Span<CompilationConstant> constants) { " + cond + "}";
+    }
+    return cond;
   }
 
   void func_arg_list(FuncArgList list, SymbolScope &scope, bool with_trivia = true)

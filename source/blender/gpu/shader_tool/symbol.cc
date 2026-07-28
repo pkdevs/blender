@@ -61,7 +61,7 @@ Result<pair<ResourceType, ResourceTableType>> resource_type_from_attributes(Attr
       /* Entry point argument. */
       {"base_instance", {ResourceType::BASE_INSTANCE, ResourceTableType::ENTRY_POINT}},
       {"clip_control", {ResourceType::CLIP_CONTROL, ResourceTableType::ENTRY_POINT}},
-      {"clip_distance", {ResourceType::CLIP_DISTANCE, ResourceTableType::ENTRY_POINT}},
+      {"clip_distance", {ResourceType::CLIP_DISTANCES, ResourceTableType::ENTRY_POINT}},
       {"front_facing", {ResourceType::FRONT_FACING, ResourceTableType::ENTRY_POINT}},
       {"global_invocation_id",
        {ResourceType::GLOBAL_INVOCATION_ID, ResourceTableType::ENTRY_POINT}},
@@ -693,6 +693,7 @@ struct SymbolParser : NodeErrorHandler {
   {
     SymbolFunction *fn_sym = static_cast<SymbolFunction *>(&scope);
     const bool is_entry_point = fn_sym->is_entry_point();
+    const auto entry_point_type = fn_sym->entry_point_type;
 
     for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
       auto [res_packed, err_attr] = resource_type_from_attributes(arg.attributes());
@@ -726,7 +727,7 @@ struct SymbolParser : NodeErrorHandler {
         case ResourceType::POINT_SIZE:
           generate_resolved_builtin("gl_PointSize");
           break;
-        case ResourceType::CLIP_DISTANCE:
+        case ResourceType::CLIP_DISTANCES:
           generate_resolved_builtin("gl_ClipDistance");
           break;
         case ResourceType::LAYER:
@@ -771,13 +772,65 @@ struct SymbolParser : NodeErrorHandler {
         case ResourceType::NUM_WORK_GROUP:
           generate_resolved_builtin("gl_NumWorkGroups");
           break;
-          /* TODO  */
-        // case ResourceType::IN:
-        //   generate_resolved_builtin("");
-        //   break;
-        // case ResourceType::OUT:
-        //   generate_resolved_builtin("");
-        //   break;
+        case ResourceType::RESOURCE_TABLE:
+          if (type->srt_type != ResourceTableType::RESOURCE_TABLE) {
+            error(arg.type(),
+                  "Expected resource of type '" + to_str(ResourceTableType::RESOURCE_TABLE) +
+                      "' but got '" + to_str(type->srt_type) + "'");
+          }
+          break;
+        case ResourceType::OUT:
+          switch (entry_point_type) {
+            case SymbolFunction::EntryPointType::COMP:
+              error(arg.type(), "'out' attribute is only allowed in vertex and fragment shaders");
+              break;
+            case SymbolFunction::EntryPointType::FRAG:
+              if (type->srt_type != ResourceTableType::FRAGMENT_IN &&
+                  type->srt_type != ResourceTableType::VERTEX_OUT)
+              {
+                error(arg.type(),
+                      "Expected resource of type '" + to_str(ResourceTableType::FRAGMENT_IN) +
+                          "' or '" + to_str(ResourceTableType::VERTEX_OUT) + "' but got '" +
+                          to_str(type->srt_type) + "'");
+              }
+            case SymbolFunction::EntryPointType::VERT:
+              if (type->srt_type != ResourceTableType::VERTEX_OUT) {
+                error(arg.type(),
+                      "Expected resource of type '" + to_str(ResourceTableType::VERTEX_IN) +
+                          "' but got '" + to_str(type->srt_type) + "'");
+              }
+              break;
+            case SymbolFunction::EntryPointType::NONE:
+              error(arg.type(), "Only entry points can use 'out' attribute");
+              break;
+          }
+          break;
+        case ResourceType::IN:
+          switch (entry_point_type) {
+            case SymbolFunction::EntryPointType::COMP:
+              error(arg.type(), "'in' attribute is only allowed in vertex and fragment shaders");
+              break;
+            case SymbolFunction::EntryPointType::FRAG:
+              if (type->srt_type != ResourceTableType::FRAGMENT_IN &&
+                  type->srt_type != ResourceTableType::VERTEX_OUT)
+              {
+                error(arg.type(),
+                      "Expected resource of type '" + to_str(ResourceTableType::FRAGMENT_IN) +
+                          "' or '" + to_str(ResourceTableType::VERTEX_OUT) + "' but got '" +
+                          to_str(type->srt_type) + "'");
+              }
+            case SymbolFunction::EntryPointType::VERT:
+              if (type->srt_type != ResourceTableType::VERTEX_IN) {
+                error(arg.type(),
+                      "Expected resource of type '" + to_str(ResourceTableType::VERTEX_IN) +
+                          "' but got '" + to_str(type->srt_type) + "'");
+              }
+              break;
+            case SymbolFunction::EntryPointType::NONE:
+              error(arg.type(), "Only entry points can use 'in' attribute");
+              break;
+          }
+          break;
         default:
           break;
       }

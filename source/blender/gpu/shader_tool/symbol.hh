@@ -9,6 +9,7 @@
 #pragma once
 
 #include "ast.hh"
+#include "metadata.hh"
 #include "token.hh"
 #include <unordered_map>
 
@@ -42,7 +43,7 @@ enum class ResourceType {
 
   BASE_INSTANCE,
   CLIP_CONTROL,
-  CLIP_DISTANCE,
+  CLIP_DISTANCES,
   FRONT_FACING,
   GLOBAL_INVOCATION_ID,
   IN,
@@ -88,7 +89,7 @@ static inline string to_str(ResourceType type)
     SERIALIZE(FRAG_OUT);
     SERIALIZE(BASE_INSTANCE);
     SERIALIZE(CLIP_CONTROL);
-    SERIALIZE(CLIP_DISTANCE);
+    SERIALIZE(CLIP_DISTANCES);
     SERIALIZE(FRONT_FACING);
     SERIALIZE(GLOBAL_INVOCATION_ID);
     SERIALIZE(IN);

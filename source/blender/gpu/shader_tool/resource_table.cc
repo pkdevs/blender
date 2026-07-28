@@ -400,8 +400,7 @@ void SourceProcessor::lower_resource_table(Parser &parser)
       array_str = parser.substr(array.front(), array_end.back(), true);
     }
 
-    metadata::ParsedResource resource{
-        0, string(type.str()), string(name.str()), string(array_str)};
+    metadata::ParsedResource resource{0, string(name.str()), string(array_str)};
     attributes.foreach_scope(ScopeType::Attribute, [&](const Scope &attribute) {
       string_view type = attribute[0].str();
       if (type == "sampler") {
