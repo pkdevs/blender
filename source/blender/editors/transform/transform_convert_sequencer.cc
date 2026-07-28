@@ -1155,8 +1155,10 @@ bool transform_convert_sequencer_clamp(const TransInfo *t, float r_val[2])
     }
   }
 
-  r_val[0] = float(val[0]);
-  r_val[1] = float(val[1]);
+  if (clamped) {
+    r_val[0] = static_cast<float>(val[0]);
+    r_val[1] = static_cast<float>(val[1]);
+  }
   return clamped;
 }
 
