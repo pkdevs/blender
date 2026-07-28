@@ -95,13 +95,39 @@ struct VisibleLightIterator {
     phase = 0;
   }
 
+  void next_local_word_()
+  {
+    /* clang-format off */ /* Multiline macros would break line count. */
+    [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+    /* clang-format on */
+    const auto &words = lrd.light_tile_buf;
+
+    /* Same as divide by 32 but avoid integer division. */
+    uint word_max = local_max_index >> 5u;
+    if (local_word_idx > word_max) {
+      return;
+    }
+
+    local_word = words[tile_word_offset + local_word_idx];
+    local_word &= zbin_mask(local_word_idx, local_min_index, local_max_index);
+/* Ensure all threads inside a subgroup get the same value to reduce VGPR usage. */
+#ifdef GPU_METAL
+    /* Waiting to implement extensions support. We need:
+     * - GL_KHR_shader_subgroup_ballot
+     * - GL_KHR_shader_subgroup_arithmetic
+     * or
+     * - Vulkan 1.1
+     */
+    local_word = simd_broadcast_first(simd_or(local_word));
+#endif
+  }
+
   bool next()
   {
     /* clang-format off */ /* Multiline macros would break line count. */
     [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
     /* clang-format on */
     const LightCullingData &culling = lrd.light_cull_buf;
-    const auto &words = lrd.light_tile_buf;
 
     switch (phase) {
       case 0: {
@@ -121,35 +147,25 @@ struct VisibleLightIterator {
           /* Same as divide by 32 but avoid integer division. */
           uint word_min = local_min_index >> 5u;
           local_word_idx = word_min;
+          next_local_word_();
         }
       }
       case 2: {
         /* Local Lights. */
-        local_word = words[tile_word_offset + local_word_idx];
-        local_word &= zbin_mask(local_word_idx, local_min_index, local_max_index);
-/* Ensure all threads inside a subgroup get the same value to reduce VGPR usage. */
-#ifdef GPU_METAL
-        /* Waiting to implement extensions support. We need:
-         * - GL_KHR_shader_subgroup_ballot
-         * - GL_KHR_shader_subgroup_arithmetic
-         * or
-         * - Vulkan 1.1
-         */
-        local_word = simd_broadcast_first(simd_or(local_word));
-#endif
-        int bit_index;
-        while ((bit_index = findLSB(local_word)) != -1) {
-          local_word &= ~1u << uint(bit_index);
-          index = int(local_word_idx * 32u + uint(bit_index));
-          return true;
-        }
-        local_word_idx++;
         /* Same as divide by 32 but avoid integer division. */
         uint word_max = local_max_index >> 5u;
-        if (local_word_idx > word_max) {
-          /* Finished */
-          phase = 3;
+        while (local_word_idx <= word_max) {
+          int bit_index = findLSB(local_word);
+          if (bit_index != -1) {
+            local_word &= ~1u << uint(bit_index);
+            index = int(local_word_idx * 32u + uint(bit_index));
+            return true;
+          }
+          local_word_idx++;
+          next_local_word_();
         }
+        /* Finished */
+        phase = 3;
       }
       case 3:
         /* Iteration finished. */
