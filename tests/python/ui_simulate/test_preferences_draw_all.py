@@ -22,7 +22,7 @@ def _find_preferences_window():
 
 
 def test_preferences_draw_all():
-    """Test that all Preferences sections and sub-panes draw correctly."""
+    """Test that all Preferences sections draw correctly."""
     import bpy
 
     _, t, window = ui.test_window()
@@ -39,19 +39,13 @@ def test_preferences_draw_all():
     t.assertIsNotNone(prefs_area, "Preferences area was not found")
 
     prefs = bpy.context.preferences
-    original_section = prefs.active_section
+    original_save = prefs.use_preferences_save
+    prefs.use_preferences_save = False
 
     try:
         for item in prefs.bl_rna.properties["active_section"].enum_items:
-            section_id = item.identifier
-
-            # Switch to this section cleanly using context overrides.
             with bpy.context.temp_override(window=prefs_window, area=prefs_area):
-                prefs.active_section = section_id
+                prefs.active_section = item.identifier
             yield
-
     finally:
-        # Restore the original state and cleanup window contexts.
-        with bpy.context.temp_override(window=prefs_window, area=prefs_area):
-            prefs.active_section = original_section
-        yield
+        prefs.use_preferences_save = original_save
