@@ -1873,12 +1873,10 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
                                             const GroupedSpan<int> shapes,
                                             const OffsetIndices<int> points_by_curve,
                                             const IndexMask &clipping_shapes,
-                                            const Span<IntersectionPoint> clipping_intersections,
                                             const VArray<bool> &is_fill,
                                             const VArray<bool> &cyclic)
 {
   Vector<IntersectionPoint> intersections;
-  intersections.extend(clipping_intersections);
 
   Array<Vector<int>> inters_per_curves(points_by_curve.size());
 
@@ -2043,8 +2041,6 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
     }
   });
 
-  Vector<IntersectionPoint> intersections;
-
   subject_shapes.foreach_index([&](const int64_t shape_i) {
     /* Only do full calculation with the bounding boxes are intersecting. */
     if (shapes_bbox_intersecting[shape_i]) {
@@ -2054,7 +2050,6 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
                                                           shapes,
                                                           points_by_curve,
                                                           clipping_shapes,
-                                                          intersections,
                                                           is_fill,
                                                           cyclic);
 
