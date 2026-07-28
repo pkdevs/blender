@@ -91,7 +91,6 @@ struct ButtonExtraOpIcon;
 struct TooltipData;
 struct PopupBlockHandle;
 struct Block;
-struct ButtonDecorator;
 
 /**
  * Character used for splitting labels (right align text after this character).
@@ -2853,11 +2852,9 @@ Button *region_active_but_prop_get(const ARegion *region,
                                    PropertyRNA **r_prop,
                                    int *r_index);
 Button *region_active_but_from_decorator_prop_get(const ARegion *region,
-                                         PointerRNA *r_ptr,
-                                         PropertyRNA **r_prop,
-                                         int *r_index);
-
-Button *but_anim_decorate_find_attached_button(ButtonDecorator *but);
+                                                  PointerRNA *r_ptr,
+                                                  PropertyRNA **r_prop,
+                                                  int *r_index);
 
 void context_active_but_prop_handle(bContext *C, bool handle_undo);
 void context_active_but_clear(bContext *C, wmWindow *win, ARegion *region);

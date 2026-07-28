@@ -10007,26 +10007,6 @@ Button *region_active_but_prop_get(const ARegion *region,
   return activebut;
 }
 
-Button *region_active_but_from_decorator_prop_get(const ARegion *region,
-                                               PointerRNA *r_ptr,
-                                               PropertyRNA **r_prop,
-                                               int *r_index)
-{
-  Button *activebut = region_active_but_prop_get(region, r_ptr, r_prop, r_index);
-
-  if (activebut && activebut->icon == ICON_DECORATE_DRIVER) {
-    ButtonDecorator *decorator = static_cast<ButtonDecorator *>(activebut);
-    activebut = but_anim_decorate_find_attached_button(decorator);
-    if (activebut && activebut->rnapoin.data) {
-      *r_ptr = activebut->rnapoin;
-      *r_prop = activebut->rnaprop;
-      *r_index = activebut->rnaindex;
-    }
-  }
-
-  return activebut;
-}
-
 Button *context_active_but_prop_get(const bContext *C,
                                     PointerRNA *r_ptr,
                                     PropertyRNA **r_prop,
@@ -10704,7 +10684,6 @@ static int handle_button_event(bContext *C, const wmEvent *event, Button *but)
       data->multi_data.skip = true;
 #endif
     }
-
 
     button_activate_exit(C, but, data, (post_but == nullptr), false);
 

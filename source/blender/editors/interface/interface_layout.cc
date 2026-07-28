@@ -3157,8 +3157,7 @@ void Layout::decorator(PointerRNA *ptr, PropertyRNA *prop, int index)
                                                                        TIP_("Animate property")));
 
     button_func_set(but, button_anim_decorate_cb, but, nullptr);
-    button_func_pushed_state_set(but,
- [&](const Button &but) {
+    button_func_pushed_state_set(but, [&](const Button &but) {
       const ButtonDecorator *but_decorate = static_cast<const ButtonDecorator *>(&but);
       if (but_decorate->active && (but_decorate->icon == ICON_DECORATE_DRIVER)) {
         wmOperatorType *ot = WM_operatortype_find("ANIM_OT_driver_button_edit", false);

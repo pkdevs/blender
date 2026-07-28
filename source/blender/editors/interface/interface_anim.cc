@@ -123,7 +123,7 @@ void button_anim_flag(Button *but, const AnimationEvalContext *anim_eval_context
   }
 }
 
-Button *but_anim_decorate_find_attached_button(ButtonDecorator *but)
+static Button *but_anim_decorate_find_attached_button(ButtonDecorator *but)
 {
   Button *but_iter = nullptr;
 
@@ -147,6 +147,26 @@ Button *but_anim_decorate_find_attached_button(ButtonDecorator *but)
   } while (i != start);
 
   return nullptr;
+}
+
+Button *region_active_but_from_decorator_prop_get(const ARegion *region,
+                                                  PointerRNA *r_ptr,
+                                                  PropertyRNA **r_prop,
+                                                  int *r_index)
+{
+  Button *activebut = region_active_but_prop_get(region, r_ptr, r_prop, r_index);
+
+  if (activebut && activebut->icon == ICON_DECORATE_DRIVER) {
+    ButtonDecorator *decorator = static_cast<ButtonDecorator *>(activebut);
+    activebut = but_anim_decorate_find_attached_button(decorator);
+    if (activebut && activebut->rnapoin.data) {
+      *r_ptr = activebut->rnapoin;
+      *r_prop = activebut->rnaprop;
+      *r_index = activebut->rnaindex;
+    }
+  }
+
+  return activebut;
 }
 
 void button_anim_decorate_update_from_flag(ButtonDecorator *but)
