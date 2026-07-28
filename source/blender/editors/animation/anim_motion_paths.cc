@@ -113,25 +113,29 @@ void animviz_build_motionpath_targets(Object *ob, Vector<MPathTarget> &r_targets
 /* ........ */
 
 /* Converts the given point into NDC space. */
-static void transform_mpath_point_to_camera(Depsgraph &depsgraph,
-                                            Object &camera,
-                                            bMotionPathVert &mpv)
+static float3 transform_mpath_point_to_camera(Depsgraph &depsgraph,
+                                              Object &camera,
+                                              const float3 point)
 {
   Object *cam_eval = DEG_get_evaluated(&depsgraph, &camera);
+  if (!cam_eval) {
+    BLI_assert_unreachable();
+    return point;
+  }
   /* Aka projection matrix. */
   float4x4 window_matrix;
   Scene *scene = DEG_get_input_scene(&depsgraph);
   BKE_camera_multiview_window_matrix(&scene->r, cam_eval, nullptr, window_matrix.ptr());
   /* World to Object is the view matrix. */
   float4x4 perspective_matrix = window_matrix * cam_eval->world_to_object();
-  const float4 co_clip_space = perspective_matrix * float4(mpv.co[0], mpv.co[1], mpv.co[2], 1.0);
+  const float4 co_clip_space = perspective_matrix * float4(point[0], point[1], point[2], 1.0);
   /* Storing the verts in NDC space which contains lens effects like sensor offset. See
    * `overlay_motion_path.hh/motion_path_sync`. Negative w values are behind the camera, thus
    * can't be correctly projected into the scene. Using abs(w) is consistent with
    * `project_point` in shader code. */
   const float3 co_ndc_space = float3(co_clip_space) /
                               math::max(math::abs(co_clip_space.w), 0.0001f);
-  copy_v3_v3(mpv.co, co_ndc_space);
+  return co_ndc_space;
 }
 
 /* Perform baking for the targets on the current frame. */
@@ -181,7 +185,8 @@ static void motionpaths_calc_bake_target(const MPathTarget &mpt,
   }
 
   if (mpath->flag & MOTIONPATH_FLAG_BAKE_CAMERA && camera) {
-    transform_mpath_point_to_camera(*depsgraph, *camera, mpv);
+    const float3 point_ndc = transform_mpath_point_to_camera(*depsgraph, *camera, mpv.co);
+    copy_v3_v3(mpv.co, point_ndc);
   }
 
   /* Tag if it's a keyframe. */
@@ -583,8 +588,11 @@ static bool eval_callback(Depsgraph *dg,
       motion_path_point = pchan_eval->pose_tail;
     }
   }
-
-  /* TODO transform to camera space if required. */
+  Scene *scene = DEG_get_input_scene(dg);
+  Object *camera = scene->camera;
+  if (mpath->flag & MOTIONPATH_FLAG_BAKE_CAMERA && camera) {
+    motion_path_point = transform_mpath_point_to_camera(*dg, *camera, motion_path_point);
+  }
 
   const int point_index = frame - buffer->start_frame;
   const bool is_data_different = buffer->points[point_index] != motion_path_point;
