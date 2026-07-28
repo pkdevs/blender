@@ -47,8 +47,8 @@ class DenoiserGPU : public Denoiser {
 
   /* Run corresponding filter kernels, preparing data for the denoiser or copying data from the
    * denoiser result to the render buffer. */
-  bool denoise_filter_color_preprocess(const DenoiseContext &context, const DenoisePass &pass);
-  bool denoise_filter_color_postprocess(const DenoiseContext &context, const DenoisePass &pass);
+  virtual bool denoise_filter_color_preprocess(const DenoiseContext &context, const DenoisePass &pass);
+  virtual bool denoise_filter_color_postprocess(const DenoiseContext &context, const DenoisePass &pass);
   bool denoise_filter_color_flip_y(const DenoiseContext &context,
                                    const BufferParams &buffer_params,
                                    const DenoisePass &pass);
@@ -60,7 +60,7 @@ class DenoiserGPU : public Denoiser {
    *
    * Pre-processing of the guiding passes is to only happen once per context lifetime. DO not
    * preprocess them for every pass which is being denoised. */
-  bool denoise_filter_guiding_preprocess(const DenoiseContext &context);
+  virtual bool denoise_filter_guiding_preprocess(const DenoiseContext &context);
 
   bool denoise_pass(DenoiseContext &context, PassType pass_type);
 

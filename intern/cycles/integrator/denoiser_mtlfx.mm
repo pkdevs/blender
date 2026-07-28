@@ -24,26 +24,23 @@ MetalFXDenoiser::MetalFXDenoiser(Device *denoiser_device, const DenoiseParams &p
 
 MetalFXDenoiser::~MetalFXDenoiser()
 {
-  
-}
-
-bool MetalFXDenoiser::denoise_buffer(const BufferParams &buffer_params,
-                                     const BufferParams &denoised_buffer_params,
-                                     RenderBuffers *render_buffers,
-                                     int num_samples,
-                                     bool allow_inplace_modification,
-                                     float2 pixel_jitter)
-{
-  return true;
+  // TODO: Destroy everything.
 }
 
 bool MetalFXDenoiser::is_device_supported(const DeviceInfo &device)
 {
-  if (device.type == DEVICE_METAL) {
-    if (@available(macos 26.0, *)) {
+  if (device.type != DEVICE_METAL) {
+    return false;
+  }
+  
+  // TODO: insert denoising device instead of System Default Device
+  
+  if (@available(macOS 26.0, *)) {
+    if ([MTLFXTemporalDenoisedScalerDescriptor supportsDevice: MTLCreateSystemDefaultDevice()]) {
       return device.denoisers & DENOISER_MTLFX;
     }
   }
+  
   return false;
 }
 
@@ -87,21 +84,49 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
 
 bool MetalFXDenoiser::denoise_configure_if_needed(DenoiseContext &context)
 {
+  
+//  MTLTextureDescriptor *desc = [MTLTextureDescriptor
+//                                texture2DDescriptorWithPixelFormat: MTLPixelFormatRGBA16Float
+//                                width: context.render_buffers->params.width
+//                                height: context.render_buffers->params.height
+//                                mipmapped: NO
+//  ];
+//  
+//  id<MTLBuffer> mtl_buffer = (id<MTLBuffer>)denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
+//  [mtl_buffer newTextureWithDescriptor:desc offset: 0 bytesPerRow: 4];
+  
   return true;
+}
+
+bool MetalFXDenoiser::denoise_filter_color_preprocess(const DenoiseContext &context, const DenoisePass &pass)
+{
+  return false;
+}
+
+bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &context, const DenoisePass &pass)
+{
+  return false;
+}
+
+bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &context)
+{
+  // prepare work size and arguments.
+  // return denoiser_queue_->enqueue(DEVICE_KERNEL_FILTER_GUIDING_PREPROCESS_TO_TEXTURE, work_size, args)
 }
 
 bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass &pass)
 {
+  // TODO: Add proper textures to enable denoising, right now this crashes blender.
+  
+  // encode and denoise
   id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
   id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
-  
-  printf("mtlfx_denoiser_ = %p\n", mtlfx_denoiser_);
   
   [(id<MTLFXTemporalDenoisedScaler>) mtlfx_denoiser_ encodeToCommandBuffer:command_buffer];
     
   [command_buffer commit];
   [command_buffer waitUntilCompleted];
-  
+
   return true;
 }
 

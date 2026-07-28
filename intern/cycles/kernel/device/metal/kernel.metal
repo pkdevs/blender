@@ -744,3 +744,10 @@ __intersection__point_shadow_all(constant KernelParamsMetal &launch_params_metal
 }
 
 #endif /* __KERNEL_METALRT__ */
+
+// Small kernels for processing MetalFX denoising textures.
+#  ifdef WITH_METALFX
+
+
+
+#  endif
