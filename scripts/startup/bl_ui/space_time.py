@@ -196,8 +196,8 @@ def marker_menu_generic(layout, context):
 
     layout.separator()
 
-    layout.operator("marker.clipboard_copy", icon='COPYDOWN')
-    layout.operator("marker.clipboard_paste", icon='PASTEDOWN')
+    layout.operator("marker.clipboard_copy", icon='COPYDOWN', text="Copy")
+    layout.operator("marker.clipboard_paste", icon='PASTEDOWN', text="Paste")
 
     layout.separator()
 
