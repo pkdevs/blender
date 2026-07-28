@@ -681,7 +681,7 @@ static eWMXrUiRegionMountPoint wm_xr_ui_region_mount_point_resolve(const wmXrDat
   eWMXrUiRegionMountPoint mount_point = XR_UI_REGION_MOUNT_NONE;
   for (PanelType *panel_type : ListBaseWrapper<PanelType>(region->runtime->type->paneltypes)) {
     const eWMXrUiRegionMountPoint ui_region_mount = eWMXrUiRegionMountPoint(
-        panel_type->xr_panel_mount_point);
+        panel_type->xr_mount_point);
     if (ui_region_mount == XR_UI_REGION_MOUNT_NONE) {
       continue;
     }
@@ -697,8 +697,8 @@ static eWMXrUiRegionMountPoint wm_xr_ui_region_mount_point_resolve(const wmXrDat
 static eWMXrUiRegionMountPoint wm_xr_ui_region_type_mount_point_get(const PanelType *panel_type)
 {
   for (const PanelType *current = panel_type; current != nullptr; current = current->parent) {
-    if (current->xr_panel_mount_point != XR_UI_REGION_MOUNT_NONE) {
-      return eWMXrUiRegionMountPoint(current->xr_panel_mount_point);
+    if (current->xr_mount_point != XR_UI_REGION_MOUNT_NONE) {
+      return eWMXrUiRegionMountPoint(current->xr_mount_point);
     }
   }
   return XR_UI_REGION_MOUNT_NONE;

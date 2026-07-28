@@ -44,6 +44,7 @@ struct wmRegionMessageSubscribeParams;
 struct wmSpaceTypeListenerParams;
 struct wmWindow;
 struct wmWindowManager;
+struct GPUOffScreen;
 
 namespace ui {
 struct Layout;
@@ -138,7 +139,6 @@ void ED_region_panels_settle_active_state(const bContext *C, ARegion *region);
 void ED_region_panels_exit_active_state(const bContext *C, ARegion *region);
 
 /* Expose world-space panel building blocks for reuse (e.g. XR paths). */
-struct GPUOffScreen;
 void ED_region_panels_draw_offscreen(const bContext *C,
                                      ARegion *region,
                                      const rcti *panel_rect,
@@ -372,12 +372,11 @@ void ED_screen_scene_change(bContext *C, wmWindow *win, Scene *scene, bool refre
  * Called in `wm_event_system.cc`. sets state vars in screen, cursors.
  * event type is mouse move.
  */
-void ED_screen_set_active_region(
-    bContext *C,
-    wmWindow *win,
-    const int xy[2],
-    ScrArea *target_area = nullptr,
-    ARegion *target_region = nullptr);
+void ED_screen_set_active_region(bContext *C,
+                                 wmWindow *win,
+                                 const int xy[2],
+                                 ScrArea *target_area = nullptr,
+                                 ARegion *target_region = nullptr);
 void ED_screen_exit(bContext *C, wmWindow *window, bScreen *screen);
 /**
  * redraws: uses defines from `stime->redraws`

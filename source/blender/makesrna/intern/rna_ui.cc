@@ -2000,8 +2000,8 @@ static void rna_def_panel(BlenderRNA *brna)
       {4, "WORLD", 0, "World", "Keep the XR panel fixed in world space"},
       {0, nullptr, 0, nullptr, nullptr},
   };
-  prop = RNA_def_property(srna, "bl_xr_panel_mount_point", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "type->xr_panel_mount_point");
+  prop = RNA_def_property(srna, "bl_xr_mount_point", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "type->xr_mount_point");
   RNA_def_property_enum_items(prop, panel_xr_mount_point_items);
   RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
   RNA_def_property_ui_text(

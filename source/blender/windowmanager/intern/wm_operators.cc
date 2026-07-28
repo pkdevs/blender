@@ -729,18 +729,10 @@ std::optional<std::string> WM_prop_pystring_assign(bContext *C,
 
   if (!lhs.has_value()) {
     /* Fall back to `bpy.data.foo[id]` if we don't find in the context. */
-    try {
-      if (std::optional<std::string> lhs_str = RNA_path_full_property_py(ptr, prop, index)) {
-        lhs = lhs_str;
-      }
-      else {
-        return std::nullopt;
-      }
+    if (std::optional<std::string> lhs_str = RNA_path_full_property_py(ptr, prop, index)) {
+      lhs = lhs_str;
     }
-    catch (const fmt::format_error &) {
-      return std::nullopt;
-    }
-    catch (...) {
+    else {
       return std::nullopt;
     }
   }

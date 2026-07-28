@@ -35,7 +35,7 @@ class VRButtonsPanel:
 class VIEW3D_PT_vr_world_space_panel(VRButtonsPanel):
     bl_region_type = 'XR'
     bl_category = ""
-    bl_xr_panel_mount_point = 'HEAD_FOLLOW'
+    bl_xr_mount_point = 'HEAD_FOLLOW'
 
 
 def vr_world_space_panel_id(panel_id):
@@ -81,7 +81,7 @@ def vr_world_space_panel_class(panel_cls, *, class_name=None, **attrs):
                 "bl_category",
                 "bl_idname",
                 "bl_parent_id",
-                "bl_xr_panel_mount_point",
+                "bl_xr_mount_point",
             }:
                 continue
             if attr_name.endswith("_panel_id") and isinstance(attr_value, str):
@@ -465,7 +465,7 @@ classes = (
 )
 
 world_space_classes = (
-    vr_world_space_panel_class(VIEW3D_PT_vr_session, bl_xr_panel_mount_point='LEFT_HAND'),
+    vr_world_space_panel_class(VIEW3D_PT_vr_session, bl_xr_mount_point='LEFT_HAND'),
     vr_world_space_panel_class(VIEW3D_PT_vr_session_view),
     vr_world_space_panel_class(VIEW3D_PT_vr_location_scouting),
     vr_world_space_panel_class(VIEW3D_PT_vr_location_scouting_captures),
