@@ -1,3 +1,4 @@
 Referenced by pull request #157100, Tests: add tests for BLF buffer & VFont text
 Referenced by pull request #157390, Fix: VFont cursor placement fails with combining characters
 Referenced by commit 3dc243f6fe60bfd899998d8f98a3f06bd4b4f2ea, Fix: VFont cursor placement fails with combining characters
+Referenced by issue #162036, Unexpected Font action
