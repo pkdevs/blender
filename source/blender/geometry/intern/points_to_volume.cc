@@ -129,18 +129,6 @@ bke::VolumeGridData *fog_volume_grid_add_from_points(Volume *volume,
   return BKE_volume_grid_add_vdb(*volume, name, std::move(new_grid));
 }
 
-static openvdb::math::Transform get_vdb_transform(const float4x4 &transform)
-{
-  openvdb::math::Mat4f matrix_openvdb;
-  for (int col = 0; col < 4; col++) {
-    for (int row = 0; row < 4; row++) {
-      matrix_openvdb(col, row) = transform[col][row];
-    }
-  }
-
-  return openvdb::math::Transform(std::make_shared<openvdb::math::AffineMap>(matrix_openvdb));
-}
-
 bool is_point_attribute_grid_supported(const CPPType &cpp_type)
 {
   return ELEM(cpp_type,
@@ -236,8 +224,8 @@ MappedPointDataGrid points_to_point_data_grid(const Span<float3> positions,
    * transform is corner-centered! The internal PointPartitioner can be configured, but that
    * argument is not exposed. */
   const float4x4 transform_cell_centered = transform * math::from_location<float4x4>(float3(0.5f));
-  const openvdb::math::Transform vdb_transform = get_vdb_transform(transform);
-  const openvdb::math::Transform vdb_transform_cell_centered = get_vdb_transform(
+  const openvdb::math::Transform vdb_transform = BKE_volume_transform_to_openvdb(transform);
+  const openvdb::math::Transform vdb_transform_cell_centered = BKE_volume_transform_to_openvdb(
       transform_cell_centered);
 
   /* Create point index grid in advance so it can be used for all attribute grids. */
@@ -607,7 +595,7 @@ static typename GridType::Ptr prepare_destination_grid(
     const KernelType kernel_type)
 {
   typename std::shared_ptr<GridType> dst_grid = GridType::create();
-  dst_grid->transform() = get_vdb_transform(transform);
+  dst_grid->transform() = BKE_volume_transform_to_openvdb(transform);
   {
     /* Activate all voxels with particles in them. */
 #  ifdef DEBUG_TIME
