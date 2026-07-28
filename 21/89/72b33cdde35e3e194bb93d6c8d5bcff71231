@@ -1,1 +1,2 @@
 Referenced by commit 96ae7ff32d6061a53d4e9ba294e5436a94e58332, Fix: out-of-bounds read in mathutils.geometry.delaunay_2d_cdt
+Referenced by pull request #162017, Fix: Use-after-free in mask rasterization
