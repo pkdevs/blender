@@ -17,7 +17,7 @@
 #include "list_function_eval.hh"
 #include "node_geometry_util.hh"
 
-namespace blender::nodes::node_geo_curves_cc {
+namespace blender::nodes::node_geo_construct_curves_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
@@ -148,9 +148,9 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeCurves"_ustr);
-  ntype.ui_name = "Curves";
-  ntype.ui_description = "Create new curves from positions and curve offsets";
+  geo_node_type_base(&ntype, "GeometryNodeConstructCurves"_ustr);
+  ntype.ui_name = "Construct Curves";
+  ntype.ui_description = "Construct new curves from positions and curve offsets";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
@@ -158,4 +158,4 @@ static void node_register()
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_geo_curves_cc
+}  // namespace blender::nodes::node_geo_construct_curves_cc

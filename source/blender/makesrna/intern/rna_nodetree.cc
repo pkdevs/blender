@@ -10755,6 +10755,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeClusterByDistance");
   define("GeometryNode", "GeometryNodeCollectionChildren");
   define("GeometryNode", "GeometryNodeCollectionInfo");
+  define("GeometryNode", "GeometryNodeConstructCurves");
   define("GeometryNode", "GeometryNodeConvexHull");
   define("GeometryNode", "GeometryNodeCornersOfEdge");
   define("GeometryNode", "GeometryNodeCornersOfFace");
@@ -10777,7 +10778,6 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeCurvesToGreasePencil");
   define("GeometryNode", "GeometryNodeCurveToMesh");
   define("GeometryNode", "GeometryNodeCurveToPoints");
-  define("GeometryNode", "GeometryNodeCurves");
   define("GeometryNode", "GeometryNodeDeformCurvesOnSurface");
   define("GeometryNode", "GeometryNodeDeleteGeometry");
   define("GeometryNode", "GeometryNodeDistributePointsInGrid");
