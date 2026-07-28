@@ -7,7 +7,7 @@
 #include <string>
 #include <variant>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_cpp_type.hh"
 #include "BLI_generic_array.hh"
 #include "BLI_generic_pointer.hh"
@@ -15,6 +15,8 @@
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_quaternion_types.hh"
 #include "BLI_math_vector_types.hh"
+
+#include "BLT_translation.hh"
 
 #include "GPU_shader.hh"
 #include "GPU_state.hh"
@@ -800,40 +802,38 @@ void Result::share_data(const Result &source)
   *this = source;
   reference_count_ = reference_count;
 
-  if (sharing_info_) {
-    sharing_info_->add_user();
-  }
-
   /* Derived resources can't be shared, so reset them. */
   derived_resources_ = nullptr;
 }
 
-/* Returns true if the given GPU texture is compatible with the type and precision of the given
- * result. */
+/* Returns true if the given GPU texture is compatible with the type of the given result. */
 [[maybe_unused]] static bool is_compatible_texture(const gpu::Texture *texture,
                                                    const Result &result)
 {
   /* Float3 and Int3 types are an exception, see the documentation on the get_gpu_texture_format
    * method for more information. */
   if (result.type() == ResultType::Float3) {
-    if (GPU_texture_format(texture) ==
-        Result::gpu_texture_format(gpu::TextureFormat::SFLOAT_32_32_32, result.precision()))
+    if (ELEM(GPU_texture_format(texture),
+             gpu::TextureFormat::SFLOAT_32_32_32,
+             gpu::TextureFormat::SFLOAT_16_16_16))
     {
       return true;
     }
   }
   else if (result.type() == ResultType::Int3) {
-    if (GPU_texture_format(texture) ==
-        Result::gpu_texture_format(gpu::TextureFormat::SINT_32_32_32, result.precision()))
+    if (ELEM(GPU_texture_format(texture),
+             gpu::TextureFormat::SINT_32_32_32,
+             gpu::TextureFormat::SINT_16_16_16))
     {
       return true;
     }
   }
 
-  return GPU_texture_format(texture) == result.get_gpu_texture_format();
+  return Result::gpu_texture_format(GPU_texture_format(texture), result.precision()) ==
+         result.get_gpu_texture_format();
 }
 
-void Result::share_data(gpu::Texture *texture, ImplicitSharingInfo *sharing_info)
+void Result::share_data(gpu::Texture *texture, ImplicitSharingPtr<> sharing_info)
 {
   BLI_assert(is_compatible_texture(texture, *this));
   BLI_assert(!this->is_allocated());
@@ -842,13 +842,10 @@ void Result::share_data(gpu::Texture *texture, ImplicitSharingInfo *sharing_info
   storage_type_ = ResultStorageType::GPU;
   is_single_value_ = false;
   domain_ = Domain(int2(GPU_texture_width(texture), GPU_texture_height(texture)));
-  sharing_info_ = sharing_info;
-  if (sharing_info) {
-    sharing_info_->add_user();
-  }
+  sharing_info_ = std::move(sharing_info);
 }
 
-void Result::share_data(const void *data, const int2 size, ImplicitSharingInfo *sharing_info)
+void Result::share_data(const void *data, const int2 size, ImplicitSharingPtr<> sharing_info)
 {
   BLI_assert(!this->is_allocated());
 
@@ -856,10 +853,7 @@ void Result::share_data(const void *data, const int2 size, ImplicitSharingInfo *
   cpu_data_ = GSpan(this->get_cpp_type(), data, array_size);
   storage_type_ = ResultStorageType::CPU;
   domain_ = Domain(size);
-  sharing_info_ = sharing_info;
-  if (sharing_info) {
-    sharing_info_->add_user();
-  }
+  sharing_info_ = std::move(sharing_info);
 }
 
 void Result::set_transformation(const float3x3 &transformation)
@@ -885,11 +879,6 @@ const RealizationOptions &Result::get_realization_options() const
 void Result::set_reference_count(int count)
 {
   reference_count_ = count;
-}
-
-void Result::increment_reference_count(int count)
-{
-  reference_count_ += count;
 }
 
 void Result::decrement_reference_count(int count)
@@ -918,10 +907,7 @@ void Result::free()
   delete derived_resources_;
   derived_resources_ = nullptr;
 
-  if (sharing_info_) {
-    sharing_info_->remove_user_and_delete_if_last();
-  }
-  sharing_info_ = nullptr;
+  sharing_info_ = {};
   switch (storage_type_) {
     case ResultStorageType::GPU:
       gpu_texture_ = nullptr;
@@ -1140,7 +1126,7 @@ class GPUData {
           __func__, size.x, size.y, 4, 1, format, usage, nullptr);
     }
     else if (is_from_pool) {
-      this->texture = gpu::TexturePool::get().acquire_texture(size, format, usage);
+      this->texture = gpu::TexturePool::get().acquire_texture_2d(size, 1, format, usage);
     }
     else {
       this->texture = GPU_texture_create_2d(__func__, size.x, size.y, 1, format, usage, nullptr);
@@ -1170,16 +1156,29 @@ void Result::allocate_data(const int2 size,
     storage_type_ = ResultStorageType::GPU;
     auto *new_texture = new ImplicitSharedValue<GPUData>(
         size, this->type(), this->precision(), from_pool);
-    sharing_info_ = new_texture;
+    sharing_info_ = ImplicitSharingPtr<>(new_texture);
     gpu_texture_ = new_texture->data.texture;
   }
   else {
     storage_type_ = ResultStorageType::CPU;
     const int64_t array_size = int64_t(size.x) * int64_t(size.y);
     auto *new_array = new ImplicitSharedValue<GArray<>>(this->get_cpp_type(), array_size);
-    sharing_info_ = new_array;
+    sharing_info_ = ImplicitSharingPtr<>(new_array);
     cpu_data_ = new_array->data.as_span();
   }
+}
+
+StringRefNull to_string(const ResultPrecision &precision)
+{
+  switch (precision) {
+    case ResultPrecision::Full:
+      return N_("Full");
+    case ResultPrecision::Half:
+      return N_("Half");
+  }
+
+  BLI_assert_unreachable();
+  return "None";
 }
 
 }  // namespace blender::compositor

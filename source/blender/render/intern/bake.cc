@@ -56,9 +56,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_index_range.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 
 #include "BKE_attribute.hh"
@@ -160,7 +160,7 @@ void RE_bake_margin(ImBuf *ibuf,
       break;
   }
 
-  if (ibuf->planes != R_IMF_PLANES_RGBA) {
+  if (!ibuf->can_contain_alpha()) {
     /* clear alpha added by filtering */
     IMB_rectfill_alpha(ibuf, 1.0f);
   }
@@ -692,7 +692,7 @@ static void bake_differentials(BakeDataZSpan *bd,
   A = (uv2[0] - uv1[0]) * (uv3[1] - uv1[1]) - (uv3[0] - uv1[0]) * (uv2[1] - uv1[1]);
 
   if (fabsf(A) > FLT_EPSILON) {
-    A = 0.5f / A;
+    A = 1.0f / A;
 
     bd->du_dx = (uv2[1] - uv3[1]) * A;
     bd->dv_dx = (uv3[1] - uv1[1]) * A;
@@ -1035,10 +1035,10 @@ void RE_bake_ibuf_clear(Image *image, const bool is_tangent)
   BLI_assert(ibuf);
 
   if (is_tangent) {
-    IMB_rectfill(ibuf, (ibuf->planes == R_IMF_PLANES_RGBA) ? nor_alpha : nor_solid);
+    IMB_rectfill(ibuf, ibuf->can_contain_alpha() ? nor_alpha : nor_solid);
   }
   else {
-    IMB_rectfill(ibuf, (ibuf->planes == R_IMF_PLANES_RGBA) ? vec_alpha : vec_solid);
+    IMB_rectfill(ibuf, ibuf->can_contain_alpha() ? vec_alpha : vec_solid);
   }
 
   BKE_image_release_ibuf(image, ibuf, lock);

@@ -231,9 +231,6 @@ find_package(PNG REQUIRED)
 set(JPEG_ROOT ${LIBDIR}/jpeg)
 find_package(JPEG REQUIRED)
 
-set(TIFF_ROOT ${LIBDIR}/tiff)
-find_package(TIFF REQUIRED)
-
 set(fmt_ROOT ${LIBDIR}/fmt)
 find_package(fmt REQUIRED)
 
@@ -327,6 +324,7 @@ endif()
 if(WITH_XR_OPENXR)
   find_package(XR_OpenXR_SDK REQUIRED)
 endif()
+add_bundled_libraries(xr_openxr_sdk/lib)
 
 if(WITH_GMP)
   find_package(GMP REQUIRED)

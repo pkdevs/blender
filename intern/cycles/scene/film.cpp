@@ -123,6 +123,11 @@ NODE_DEFINE(Film)
 
   SOCKET_BOOLEAN(use_sample_count, "Use Sample Count Pass", false);
 
+  SOCKET_BOOLEAN(denoising_pass_follow_reflections, "Denoising Pass Reflections", true);
+  SOCKET_BOOLEAN(denoising_pass_use_albedo_roughness_weighting,
+                 "Denoising Pass Albedo Roughness Weighting",
+                 true);
+
   return type;
 }
 
@@ -202,6 +207,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->pass_denoising_roughness = PASS_UNUSED;
   kfilm->pass_denoising_depth = PASS_UNUSED;
   kfilm->pass_denoising_backward_motion = PASS_UNUSED;
+  kfilm->pass_denoising_specular_motion = PASS_UNUSED;
   kfilm->pass_sample_count = PASS_UNUSED;
   kfilm->pass_render_time = PASS_UNUSED;
   kfilm->pass_adaptive_aux_buffer = PASS_UNUSED;
@@ -239,8 +245,12 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
     }
 
     /* Can't do motion pass if no motion vectors are available. */
-    if (pass->get_type() == PASS_MOTION || pass->get_type() == PASS_MOTION_WEIGHT) {
-      if (scene->need_motion() != Scene::MOTION_PASS) {
+    if (pass->get_type() == PASS_MOTION || pass->get_type() == PASS_MOTION_WEIGHT ||
+        pass->get_type() == PASS_DENOISING_BACKWARD_MOTION ||
+        pass->get_type() == PASS_DENOISING_SPECULAR_MOTION)
+    {
+      const Scene::MotionType need_motion = scene->need_motion();
+      if (need_motion != Scene::MOTION_PASS && need_motion != Scene::MOTION_PASS_INTERACTIVE) {
         kfilm->pass_stride += pass->get_info().num_components;
         continue;
       }
@@ -395,6 +405,9 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
       case PASS_DENOISING_BACKWARD_MOTION:
         kfilm->pass_denoising_backward_motion = kfilm->pass_stride;
         break;
+      case PASS_DENOISING_SPECULAR_MOTION:
+        kfilm->pass_denoising_specular_motion = kfilm->pass_stride;
+        break;
 
       case PASS_SHADOW_CATCHER:
         kfilm->pass_shadow_catcher = kfilm->pass_stride;
@@ -458,6 +471,15 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 
   kfilm->cryptomatte_passes = cryptomatte_passes;
   kfilm->cryptomatte_depth = cryptomatte_depth;
+
+  /* denoiser pass parameters */
+  kfilm->denoising_pass_options_flag = 0;
+  if (denoising_pass_follow_reflections) {
+    kfilm->denoising_pass_options_flag |= DENOISING_PASS_FOLLOW_REFLECTIONS;
+  }
+  if (denoising_pass_use_albedo_roughness_weighting) {
+    kfilm->denoising_pass_options_flag |= DENOISING_PASS_USE_ALBEDO_ROUGHNESS_WEIGHTING;
+  }
 
   clear_modified();
 }
@@ -574,6 +596,9 @@ void Film::update_passes(Scene *scene)
     if (denoiser_passes & DENOISER_PASS_BACKWARD_MOTION) {
       add_auto_pass(scene, PASS_DENOISING_BACKWARD_MOTION);
     }
+    if (denoiser_passes & DENOISER_PASS_SPECULAR_MOTION) {
+      add_auto_pass(scene, PASS_DENOISING_SPECULAR_MOTION);
+    }
   }
 
   /* Create passes for shadow catcher. */
@@ -649,7 +674,8 @@ void Film::update_passes(Scene *scene)
 
   /* Flush scene updates. */
   const bool have_uv_pass = Pass::contains(scene->passes, PASS_UV);
-  const bool have_motion_pass = Pass::contains(scene->passes, PASS_MOTION);
+  const bool have_motion_pass = Pass::contains(scene->passes, PASS_MOTION) ||
+                                Pass::contains(scene->passes, PASS_DENOISING_BACKWARD_MOTION);
   const bool have_ao_pass = Pass::contains(scene->passes, PASS_AO);
 
   if (have_uv_pass != prev_have_uv_pass) {
@@ -800,7 +826,7 @@ uint Film::get_kernel_features(const Scene *scene) const
                                   !is_volume_guiding_pass(pass_type);
 
     if (has_denoise_pass ||
-        (pass_type >= PASS_DENOISING_ALBEDO && pass_type <= PASS_DENOISING_BACKWARD_MOTION))
+        (pass_type >= PASS_DENOISING_ALBEDO && pass_type <= PASS_DENOISING_SPECULAR_MOTION))
     {
       kernel_features |= KERNEL_FEATURE_DENOISING;
     }

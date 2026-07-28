@@ -121,7 +121,7 @@ struct PaintStroke : NonCopyable, NonMovable {
   Brush *brush = nullptr;
   UnifiedPaintSettings *ups = nullptr;
 
-  /* TODO: These are only public so that cursor drawing code can use them. Find a better place.*/
+  /* TODO: These are only public so that cursor drawing code can use them. Find a better place. */
   float2 last_mouse_position = float2(0.0f, 0.0f);
   bool constrain_line = false;
   float2 constrained_pos = float2(0.0f, 0.0f);
@@ -159,7 +159,7 @@ struct PaintStroke : NonCopyable, NonMovable {
   int event_type_ = 0;
   /* check if stroke variables have been initialized */
   bool stroke_init_ = false;
-  /* check if input variables have been initialized (e.g. cursor position & pressure)*/
+  /** Check if input variables have been initialized (e.g. cursor position & pressure). */
   bool input_init_ = false;
   float2 initial_mouse_ = float2(0.0f, 0.0f);
   float cached_size_pressure_ = 0.0f;
@@ -229,7 +229,7 @@ struct PaintStroke : NonCopyable, NonMovable {
 
  protected:
   ~PaintStroke() = default;
-  PaintStroke(bContext *C, wmOperator *op, int event_type);
+  PaintStroke(bContext *C, wmOperator *op, const wmEvent *event);
 
   /**
    * Callback function to retrieve the object space coordinates based on screen space coordinates.
@@ -452,8 +452,7 @@ struct ImagePaintPartialRedraw {
 
 bool image_texture_paint_poll(bContext *C);
 bool image_paint_poll_ignore_tool(bContext *C);
-void imapaint_image_update(
-    SpaceImage *sima, Image *image, ImBuf *ibuf, ImageUser *iuser, short texpaint);
+void imapaint_image_update(ImBuf *ibuf);
 ImagePaintPartialRedraw *get_imapaintpartial();
 void set_imapaintpartial(ImagePaintPartialRedraw *ippr);
 void imapaint_region_tiles(

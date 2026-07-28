@@ -12,10 +12,11 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_array_utils.hh"
 #include "BLI_color_types.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
@@ -286,7 +287,7 @@ static void pointcloud_extract_attribute(const PointCloud &pointcloud,
   GPU_vertbuf_init_with_format_ex(attr_buf, format, usage_flag);
   GPU_vertbuf_data_alloc(attr_buf, pointcloud.totpoint);
 
-  attribute.varray.materialize(attr_buf.data<ColorGeometry4f>());
+  array_utils::copy(attribute.varray, attr_buf.data<ColorGeometry4f>());
 }
 
 /** \} */

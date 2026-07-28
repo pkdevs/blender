@@ -13,10 +13,10 @@
 
 #include "CLG_log.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_linklist.h"
+#include "BLI_linklist.hh"
 
 #include "DNA_collection_types.h"
 #include "DNA_key_types.h"
@@ -206,10 +206,17 @@ bool BLO_main_validate_shapekeys(Main *bmain, ReportList *reports)
                 "ShapeKey %s has an invalid 'from' pointer (%p), it will be deleted",
                 shapekey.id.name,
                 shapekey.from);
-    /* NOTE: also need to remap UI data ID pointers here, since `bmain` is not the current
-     * `G_MAIN`, default UI-handling remapping callback (defined by call to
-     * `BKE_library_callback_remap_editor_id_reference_set`) won't work on expected data here. */
-    BKE_id_delete(bmain, &shapekey, {.extra_remapping_flags = ID_REMAP_FORCE_UI_POINTERS});
+
+    BKE_id_delete(bmain,
+                  &shapekey,
+                  {/* NOTE: also need to remap UI data ID pointers here, since `bmain` is not the
+                    * current `G_MAIN`, default UI-handling remapping callback (defined by call to
+                    * `BKE_library_callback_remap_editor_id_reference_set`) won't work on expected
+                    * data here. */
+                   .extra_remapping_flags = ID_REMAP_FORCE_UI_POINTERS,
+                   /* Do not attempt to update invariants from here, Main is not yet fully read and
+                    * in a state allowing that kind of processes. */
+                   .prevent_invariants_update = true});
   }
 
   return is_valid;

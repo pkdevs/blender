@@ -13,9 +13,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
@@ -48,7 +48,9 @@ static SpaceLink *console_create(const ScrArea * /*area*/, const Scene * /*scene
   sconsole = MEM_new<SpaceConsole>("initconsole");
   sconsole->spacetype = SPACE_CONSOLE;
 
-  sconsole->lheight = 14;
+  sconsole->line_height = 14;
+
+  sconsole->runtime = MEM_new<SpaceConsole_Runtime>(__func__);
 
   /* header */
   region = BKE_area_region_new();
@@ -89,6 +91,8 @@ static void console_free(SpaceLink *sl)
   while (sc->history.first) {
     console_history_free(sc, static_cast<ConsoleLine *>(sc->history.first));
   }
+
+  MEM_delete(sc->runtime);
 }
 
 /* spacetype; init callback */
@@ -101,8 +105,11 @@ static SpaceLink *console_duplicate(SpaceLink *sl)
   /* clear or remove stuff from old */
 
   /* TODO: duplicate?, then we also need to duplicate the py namespace. */
-  BLI_listbase_clear(&sconsolen->scrollback);
-  BLI_listbase_clear(&sconsolen->history);
+  sconsolen->scrollback.clear_no_delete();
+  sconsolen->history.clear_no_delete();
+
+  /* Add its own runtime data. */
+  sconsolen->runtime = MEM_new<SpaceConsole_Runtime>(__func__);
 
   return reinterpret_cast<SpaceLink *>(sconsolen);
 }
@@ -212,13 +219,47 @@ static void console_dropboxes()
 
 /* ************* end drop *********** */
 
+#ifdef WITH_INPUT_IME
+static std::optional<rcti> console_main_region_cursor_ime(wmWindow * /*win*/,
+                                                          const ScrArea *area,
+                                                          const ARegion *region)
+{
+  /* Defer during View2D navigation (pan, zoom, scroll). */
+  if (region->v2d.flag & V2D_IS_NAVIGATING) {
+    return std::nullopt;
+  }
+  SpaceConsole *sc = static_cast<SpaceConsole *>(area->spacedata.first);
+  /* Font metrics are cached during draw; zero means the region hasn't been drawn yet. */
+  const int line_height = sc->runtime->line_height_px;
+  if (line_height == 0) {
+    return std::nullopt;
+  }
+  const ConsoleLine *cl = static_cast<const ConsoleLine *>(sc->history.last);
+  if (cl == nullptr) {
+    return std::nullopt;
+  }
+  const std::optional<blender::int2> xy_region = console_cursor_region_xy_get(
+      sc, region, cl->cursor);
+  if (!xy_region) {
+    return std::nullopt;
+  }
+  /* Convert to pixel space, X is pinned by #V2D_LOCKOFS_X. */
+  const int2 xy = {xy_region->x, xy_region->y - int(region->v2d.cur.ymin)};
+
+  /* Extend the caret position upward by the line height; the caller clamps to the region
+   * bounds (the cursor may be scrolled out of view). */
+  return rcti{xy.x, xy.x, xy.y, xy.y + line_height};
+}
+
+#endif
+
 static void console_main_region_draw(const bContext *C, ARegion *region)
 {
   /* draw entirely, view changes should be handled here */
   SpaceConsole *sc = CTX_wm_space_console(C);
   View2D *v2d = &region->v2d;
 
-  if (BLI_listbase_is_empty(&sc->scrollback)) {
+  if (sc->scrollback.is_empty()) {
     WM_operator_name_call(const_cast<bContext *>(C),
                           "CONSOLE_OT_banner",
                           wm::OpCallContext::ExecDefault,
@@ -318,6 +359,8 @@ static void console_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
 {
   SpaceConsole *sconsole = reinterpret_cast<SpaceConsole *>(sl);
 
+  sconsole->runtime = MEM_new<SpaceConsole_Runtime>(__func__);
+
   BLO_read_struct_list(reader, ConsoleLine, &sconsole->scrollback);
   BLO_read_struct_list(reader, ConsoleLine, &sconsole->history);
 
@@ -376,6 +419,9 @@ void ED_spacetype_console()
   art->cursor = console_cursor;
   art->event_cursor = true;
   art->listener = console_main_region_listener;
+#ifdef WITH_INPUT_IME
+  art->cursor_ime = console_main_region_cursor_ime;
+#endif
 
   BLI_addhead(&st->regiontypes, art);
 

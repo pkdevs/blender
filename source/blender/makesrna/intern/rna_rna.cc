@@ -298,9 +298,9 @@ const EnumPropertyItem rna_enum_property_string_search_flag_items[] = {
 
 #ifdef RNA_RUNTIME
 
-#  include "BLI_ghash.h"
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
+#  include "BLI_ghash.hh"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
 
 #  include "MEM_guardedalloc.h"
 
@@ -317,6 +317,10 @@ const EnumPropertyItem rna_enum_property_string_search_flag_items[] = {
 namespace blender {
 
 static CLG_LogRef LOG_COMPARE_OVERRIDE = {"rna.rna_compare_override"};
+
+/* -------------------------------------------------------------------- */
+/** \name RNA Runtime Callbacks
+ * \{ */
 
 /* Struct */
 
@@ -1547,10 +1551,10 @@ static void rna_property_override_diff_propptr_validate_diffing(
         //              printf("%s: different names\n", rna_path ? rna_path : "<UNKNOWN>");
       }
     }
-    if (UNLIKELY(rna_itemname_a && rna_itemname_a != buff_a)) {
+    if (rna_itemname_a && rna_itemname_a != buff_a) [[unlikely]] {
       MEM_delete(rna_itemname_a);
     }
-    if (UNLIKELY(rna_itemname_b && rna_itemname_b != buff_b)) {
+    if (rna_itemname_b && rna_itemname_b != buff_b) [[unlikely]] {
       MEM_delete(rna_itemname_b);
     }
   }
@@ -2752,7 +2756,7 @@ bool rna_property_override_apply_default(Main *bmain,
 
   const bool is_array = len_dst > 0;
   const int index = is_array ? opop->subitem_reference_index : 0;
-  const short override_op = opop->operation;
+  const eID_OverrideLib_Op override_op = opop->operation;
 
   bool ret_success = true;
 
@@ -2773,7 +2777,9 @@ bool rna_property_override_apply_default(Main *bmain,
             RNA_property_boolean_set_array(ptr_dst, prop_dst, array_a);
             break;
           default:
-            BLI_assert_msg(0, "Unsupported RNA override operation on boolean");
+            CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                       "Unsupported '%s' RNA override operation on boolean array",
+                       BKE_lib_override_operation_as_string(override_op).c_str());
             return false;
         }
 
@@ -2789,7 +2795,9 @@ bool rna_property_override_apply_default(Main *bmain,
             RNA_PROPERTY_SET_SINGLE(boolean, ptr_dst, prop_dst, index, value);
             break;
           default:
-            BLI_assert_msg(0, "Unsupported RNA override operation on boolean");
+            CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                       "Unsupported '%s' RNA override operation on boolean",
+                       BKE_lib_override_operation_as_string(override_op).c_str());
             return false;
         }
       }
@@ -2831,7 +2839,9 @@ bool rna_property_override_apply_default(Main *bmain,
             }
             break;
           default:
-            BLI_assert_msg(0, "Unsupported RNA override operation on integer");
+            CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                       "Unsupported '%s' RNA override operation on integer array",
+                       BKE_lib_override_operation_as_string(override_op).c_str());
             return false;
         }
 
@@ -2869,7 +2879,9 @@ bool rna_property_override_apply_default(Main *bmain,
                                         storage_value);
             break;
           default:
-            BLI_assert_msg(0, "Unsupported RNA override operation on integer");
+            CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                       "Unsupported '%s' RNA override operation on integer",
+                       BKE_lib_override_operation_as_string(override_op).c_str());
             return false;
         }
       }
@@ -2917,7 +2929,9 @@ bool rna_property_override_apply_default(Main *bmain,
             }
             break;
           default:
-            BLI_assert_msg(0, "Unsupported RNA override operation on float");
+            CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                       "Unsupported '%s' RNA override operation on float array",
+                       BKE_lib_override_operation_as_string(override_op).c_str());
             return false;
         }
 
@@ -2963,7 +2977,9 @@ bool rna_property_override_apply_default(Main *bmain,
                                         storage_value);
             break;
           default:
-            BLI_assert_msg(0, "Unsupported RNA override operation on float");
+            CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                       "Unsupported '%s' RNA override operation on float",
+                       BKE_lib_override_operation_as_string(override_op).c_str());
             return false;
         }
       }
@@ -2977,7 +2993,9 @@ bool rna_property_override_apply_default(Main *bmain,
           break;
         /* TODO: support add/sub, for bitflags? */
         default:
-          BLI_assert_msg(0, "Unsupported RNA override operation on enum");
+          CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                     "Unsupported '%s' RNA override operation on enum",
+                     BKE_lib_override_operation_as_string(override_op).c_str());
           return false;
       }
       break;
@@ -2990,7 +3008,9 @@ bool rna_property_override_apply_default(Main *bmain,
           RNA_property_pointer_set(ptr_dst, prop_dst, value, nullptr);
           break;
         default:
-          BLI_assert_msg(0, "Unsupported RNA override operation on pointer");
+          CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                     "Unsupported '%s' RNA override operation on pointer",
+                     BKE_lib_override_operation_as_string(override_op).c_str());
           return false;
       }
       break;
@@ -3004,7 +3024,9 @@ bool rna_property_override_apply_default(Main *bmain,
           RNA_property_string_set(ptr_dst, prop_dst, value);
           break;
         default:
-          BLI_assert_msg(0, "Unsupported RNA override operation on string");
+          CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                     "Unsupported '%s' RNA override operation on string",
+                     BKE_lib_override_operation_as_string(override_op).c_str());
           return false;
       }
 
@@ -3087,7 +3109,9 @@ bool rna_property_override_apply_default(Main *bmain,
           break;
         }
         default:
-          BLI_assert_msg(0, "Unsupported RNA override operation on collection");
+          CLOG_ERROR(&LOG_COMPARE_OVERRIDE,
+                     "Unsupported '%s' RNA override operation on collection",
+                     BKE_lib_override_operation_as_string(override_op).c_str());
           return false;
       }
       break;
@@ -3168,6 +3192,7 @@ static void rna_def_struct(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "Struct", nullptr);
   RNA_def_struct_ui_text(srna, "Struct Definition", "RNA structure definition");
   RNA_def_struct_ui_icon(srna, ICON_RNA);
+  RNA_def_struct_flag(srna, STRUCT_RNA_DEFINITION);
 
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -3273,6 +3298,7 @@ static void rna_def_property(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Property Definition", "RNA property definition");
   RNA_def_struct_refine_func(srna, "rna_Property_refine");
   RNA_def_struct_ui_icon(srna, ICON_RNA);
+  RNA_def_struct_flag(srna, STRUCT_RNA_DEFINITION);
 
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -3486,6 +3512,12 @@ static void rna_def_function(BlenderRNA *brna)
   PropertyRNA *prop;
 
   srna = RNA_def_struct(brna, "Function", nullptr);
+  /* While this is technically a meta-data definition, functions never really wrap actual data, so
+   * all of there parameters should always be accessible.
+   *
+   * TODO: Re-check this and see if maybe all parameters of functions should automatically be
+   * tagged as `PROP_INTERN_RNA_DEFINITION` instead? */
+  // RNA_def_struct_flag(srna, STRUCT_RNA_DEFINITION);
   RNA_def_struct_ui_text(srna, "Function Definition", "RNA function definition");
   RNA_def_struct_ui_icon(srna, ICON_RNA);
 
@@ -3778,6 +3810,7 @@ static void rna_def_enum_property(BlenderRNA *brna, StructRNA *srna)
       "Includes UI elements (separators and section headings).");
 
   srna = RNA_def_struct(brna, "EnumPropertyItem", nullptr);
+  RNA_def_struct_flag(srna, STRUCT_RNA_DEFINITION);
   RNA_def_struct_ui_text(
       srna, "Enum Item Definition", "Definition of a choice in an RNA enum property");
   RNA_def_struct_ui_icon(srna, ICON_RNA);
@@ -3928,6 +3961,7 @@ void RNA_def_rna(BlenderRNA *brna)
 
   /* Blender RNA */
   srna = RNA_def_struct(brna, "BlenderRNA", nullptr);
+  RNA_def_struct_flag(srna, STRUCT_RNA_DEFINITION);
   RNA_def_struct_ui_text(srna, "Blender RNA", "Blender RNA structure definitions");
   RNA_def_struct_ui_icon(srna, ICON_RNA);
 

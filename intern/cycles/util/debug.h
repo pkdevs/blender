@@ -101,9 +101,11 @@ class DebugFlags {
     /* Whether async PSO creation is enabled or not. */
     bool use_async_pso_creation = true;
 
-    /* Whether to use per-component motion interpolation.
-     */
+    /* Whether to use per-component motion interpolation. */
     bool use_metalrt_pcmi = true;
+
+    /* Whether to use residency sets. */
+    bool use_residency_sets_if_available = true;
   };
 
   /* Descriptor of Texture Cache feature-set to be used. */
@@ -118,6 +120,10 @@ class DebugFlags {
 
     /* Preserve unused image cache tile memory in megabytes. */
     int preserve_unused = 0;
+
+    /* Minimum tile size, loading multiple smaller file tiles at once if
+     * a tx files contains tiles smaller than this. */
+    int min_tile_size = 64;
   };
 
   /* Get instance of debug flags registry. */

@@ -17,9 +17,9 @@
 #include "BKE_report.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_assert.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_assert.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
@@ -50,7 +50,7 @@ enum class SampleResult {
 };
 
 struct BoneDropper {
-  /* The ptr.owner_id is the ID for which we are searching the property.*/
+  /** The `ptr.owner_id` is the ID for which we are searching the property. */
   PointerRNA ptr = {};
   PropertyRNA *prop = nullptr;
   /* The property we are looking for. */

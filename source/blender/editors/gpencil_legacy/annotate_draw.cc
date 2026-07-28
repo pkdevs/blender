@@ -11,11 +11,11 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_scene_types.h"
@@ -910,7 +910,7 @@ void ED_annotation_draw_view3d(
    * deal with the camera border, otherwise map the coords to the camera border. */
   if ((rv3d->persp == RV3D_CAMOB) && !(G.f & G_FLAG_RENDER_VIEWPORT)) {
     rctf rectf;
-    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, true, &rectf);
+    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, true, true, &rectf);
 
     offsx = round_fl_to_int(rectf.xmin);
     offsy = round_fl_to_int(rectf.ymin);
