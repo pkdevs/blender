@@ -3821,20 +3821,24 @@ typedef struct NodeGeometryRasterizePointsItem {
    * names change.
    */
   int identifier;
-  /** #NodeGridItemFlag */
-  int flag;
-  char _pad2[4];
 } NodeGeometryRasterizePointsItem;
 
+/* Note: The field/grid type combination of an item is using this enum instead of a simple
+ * eNodeSocketDatatype. This is because in the future other modes of attribute rasterization will
+ * likely be added, such as
+ *   scalar -> vector gradients
+ *   vector -> scalar divergence
+ *   3x3 matrix -> vector divergence
+ *   full APIC transfer schemes (4x4 matrix -> vector)
+ *
+ * In these modes the input field type does not match the output grid type, so identifying an item
+ * by socket type would require additional mode selection, which is unnecessarily complicated.
+ * A dedicated enum for these modes makes it easier to add such advanced conversions later.
+ */
 typedef enum NodeGeometryRasterizePointsItemType {
   GEO_NODE_RASTERIZE_POINTS_ITEM_TYPE_SCALAR = 0,
   GEO_NODE_RASTERIZE_POINTS_ITEM_TYPE_VECTOR = 1,
 } NodeGeometryRasterizePointsItemType;
-
-typedef enum NodeGeometryRasterizePointsItemFlag {
-  /* Classify the output as a staggered vector grid. */
-  GEO_NODE_RASTERIZE_POINTS_ITEM_VECTOR_STAGGERED = 1 << 1,
-} NodeGeometryRasterizePointsItemFlag;
 
 typedef struct NodeGeometryRasterizePoints {
   DNA_DEFINE_CXX_METHODS(NodeGeometryRasterizePoints)
