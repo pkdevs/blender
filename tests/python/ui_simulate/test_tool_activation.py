@@ -147,16 +147,18 @@ def _activate_tools_for_context(space_type, *, mode=None, setup_fn=None):
     e, t, window, area = yield from setup_fn()
 
     if space_type == "SEQUENCE_EDITOR":
-        mode = area.spaces.active.view_type
+        if mode is None:
+            mode = area.spaces.active.view_type
         region = next(r for r in area.regions if r.type == "WINDOW")
     elif space_type == "IMAGE_EDITOR":
-        mode = area.spaces.active.mode
+        if mode is None:
+            mode = area.spaces.active.mode
         region = next(r for r in area.regions if r.type == "WINDOW")
     else:
         region = None
 
+    center = ui.get_area_center(area)
     for tool in _get_tool_items(space_type, mode):
-        center = ui.get_area_center(area)
         yield e.cursor_position_set(*center, move=True)
         yield
 
@@ -166,8 +168,8 @@ def _activate_tools_for_context(space_type, *, mode=None, setup_fn=None):
                 space_type=space_type,
             )
         else:
-            # The Sequencer requires an active window/area/region override for
-            # `wm.tool_set_by_id` to resolve and activate workspace tools.
+            # Some editors (e.g. the Image Editor and Sequencer) require an
+            # active window/area/region override for `wm.tool_set_by_id`.
             with bpy.context.temp_override(
                 window=window,
                 area=area,
@@ -185,7 +187,7 @@ def _activate_tools_for_context(space_type, *, mode=None, setup_fn=None):
         t.assertEqual(active_tool_id, tool.idname)
 
 
-def view3d_tool_settings_header_regression():
+def view3d_tool_settings_header():
     for mode in ("OBJECT", "EDIT_MESH", "SCULPT"):
         yield from _activate_tools_for_context(
             "VIEW_3D",
@@ -194,7 +196,7 @@ def view3d_tool_settings_header_regression():
         )
 
 
-def image_editor_tool_settings_header_regression():
+def image_editor_tool_settings_header():
     for mode in ("VIEW", "PAINT", "UV", "MASK"):
         yield from _activate_tools_for_context(
             "IMAGE_EDITOR",
@@ -203,11 +205,11 @@ def image_editor_tool_settings_header_regression():
         )
 
 
-def node_editor_tool_settings_header_regression():
+def node_editor_tool_settings_header():
     yield from _activate_tools_for_context("NODE_EDITOR")
 
 
-def sequencer_tool_settings_header_regression():
+def sequencer_tool_settings_header():
     for view_type in (
         "SEQUENCER",
         "PREVIEW",
