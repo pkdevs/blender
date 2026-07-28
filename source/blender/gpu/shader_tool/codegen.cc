@@ -285,7 +285,10 @@ struct CodegenContext : NodeErrorHandler {
     jump_to(stmt.front());
     builder << stmt.type();
     builder << pipeline->resolved->identifier;
+    builder.curr = params.front();
     match_if('(');
+
+    Expr constants_init = Node{};
 
     if (is_graphic) {
       Expr vert_fn = params.child_first();
@@ -301,6 +304,8 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       builder << fn->resolved->identifier;
+      builder.curr = vert_fn.back().next();
+      match_if(',');
 
       Expr frag_fn = vert_fn.next();
       if (!frag_fn.is_valid() || frag_fn.child_count() != 1) {
@@ -315,11 +320,10 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       builder << fn2->resolved->identifier;
+      builder.curr = frag_fn.back().next();
+      match_if(',');
 
-      Expr constants_init = frag_fn.next();
-      while (constants_init.is_valid()) {
-        constants_init = constants_init.next();
-      }
+      constants_init = frag_fn.next();
     }
     else {
       Expr comp_fn = params.child_first();
@@ -335,11 +339,23 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       builder << fn->resolved->identifier;
+      builder.curr = comp_fn.back().next();
+      match_if(',');
 
-      Expr constants_init = comp_fn.next();
-      while (constants_init.is_valid()) {
-        constants_init = constants_init.next();
+      constants_init = comp_fn.next();
+    }
+
+    while (constants_init.is_valid()) {
+      if (Constructor ctor(constants_init.child_first()); ctor.is_valid()) {
+        auto [cls, err] = scope.lookup_class(ctor.id());
+        error(err);
+        builder << cls->resolved->identifier;
+        builder << ctor.initializer_list();
       }
+      else {
+        error(constants_init, "Expected resource table initializer");
+      }
+      constants_init = constants_init.next();
     }
 
     builder.curr = params.back();
@@ -1754,11 +1770,13 @@ struct CodegenContext : NodeErrorHandler {
       if (child.type() == NodeType::VarDecl) {
         var_decl(child, scope, false);
       }
-      else if (do_implicit_conversion && child.type() == NodeType::LocalStmt) {
+      else if (child.type() == NodeType::LocalStmt) {
         local_statement(child, scope);
 
         /* In for loops, only the center statement is a condition. */
-        if (!is_for_loop || (child.prev().is_valid() && child.next().is_valid())) {
+        if (do_implicit_conversion &&
+            (!is_for_loop || (child.prev().is_valid() && child.next().is_valid())))
+        {
           auto [type, err] = symbols.expr_type_analysis(scope, LocalStmt(child).expr());
           error(err);
           if (type->resolved->identifier == "int") {

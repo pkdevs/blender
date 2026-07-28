@@ -788,49 +788,49 @@ struct SymbolParser : NodeErrorHandler {
               error(arg.type(), "'out' attribute is only allowed in vertex and fragment shaders");
               break;
             case SymbolFunction::EntryPointType::FRAG:
-              if (type->srt_type != ResourceTableType::FRAGMENT_IN &&
-                  type->srt_type != ResourceTableType::VERTEX_OUT)
-              {
-                error(arg.type(),
-                      "Expected resource of type '" + to_str(ResourceTableType::FRAGMENT_IN) +
-                          "' or '" + to_str(ResourceTableType::VERTEX_OUT) + "' but got '" +
-                          to_str(type->srt_type) + "'");
+              if (type->srt_type != ResourceTableType::FRAGMENT_OUT) {
+                error(arg.type().id(),
+                      "Expected resource of type '" + to_str(ResourceTableType::FRAGMENT_OUT) +
+                          "' but got '" + to_str(type->srt_type) + "'");
               }
+              break;
             case SymbolFunction::EntryPointType::VERT:
               if (type->srt_type != ResourceTableType::VERTEX_OUT) {
-                error(arg.type(),
+                error(arg.type().id(),
                       "Expected resource of type '" + to_str(ResourceTableType::VERTEX_IN) +
                           "' but got '" + to_str(type->srt_type) + "'");
               }
               break;
             case SymbolFunction::EntryPointType::NONE:
-              error(arg.type(), "Only entry points can use 'out' attribute");
+              error(arg.type().id(), "Only entry points can use 'out' attribute");
               break;
           }
           break;
         case ResourceType::IN:
           switch (entry_point_type) {
             case SymbolFunction::EntryPointType::COMP:
-              error(arg.type(), "'in' attribute is only allowed in vertex and fragment shaders");
+              error(arg.type().id(),
+                    "'in' attribute is only allowed in vertex and fragment shaders");
               break;
             case SymbolFunction::EntryPointType::FRAG:
               if (type->srt_type != ResourceTableType::FRAGMENT_IN &&
                   type->srt_type != ResourceTableType::VERTEX_OUT)
               {
-                error(arg.type(),
+                error(arg.type().id(),
                       "Expected resource of type '" + to_str(ResourceTableType::FRAGMENT_IN) +
                           "' or '" + to_str(ResourceTableType::VERTEX_OUT) + "' but got '" +
                           to_str(type->srt_type) + "'");
               }
+              break;
             case SymbolFunction::EntryPointType::VERT:
               if (type->srt_type != ResourceTableType::VERTEX_IN) {
-                error(arg.type(),
+                error(arg.type().id(),
                       "Expected resource of type '" + to_str(ResourceTableType::VERTEX_IN) +
                           "' but got '" + to_str(type->srt_type) + "'");
               }
               break;
             case SymbolFunction::EntryPointType::NONE:
-              error(arg.type(), "Only entry points can use 'in' attribute");
+              error(arg.type().id(), "Only entry points can use 'in' attribute");
               break;
           }
           break;
