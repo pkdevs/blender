@@ -1250,6 +1250,11 @@ static void TRANSFORM_OT_edge_slide(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "use_clone", false, "Clone", "Clone in place and slide the edge loop");
   RNA_def_boolean(ot->srna, "use_clamp", true, "Clamp", "Clamp within the edge extents");
 
+  /* Direction a positive factor slid last time, so repeats stay consistent. */
+  prop = RNA_def_float_vector(
+      ot->srna, "clone_dir", 3, nullptr, -FLT_MAX, FLT_MAX, "Clone Direction", "", -1.0f, 1.0f);
+  RNA_def_property_flag(prop, PROP_HIDDEN);
+
   properties_register(ot, P_MIRROR | P_GEO_SNAP | P_CORRECT_UV);
 }
 

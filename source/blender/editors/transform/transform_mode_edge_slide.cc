@@ -356,9 +356,37 @@ static void calcEdgeSlide_mval_range(TransInfo *t,
   }
 }
 
+/** Orient each loop group so `dir_side[0]` points along `align_dir`. */
+static void edge_slide_clone_align_sides(EdgeSlideData *sld,
+                                         const int group_len,
+                                         const float3 &align_dir)
+{
+  if (group_len <= 0) {
+    return;
+  }
+
+  Array<float3> net(group_len, float3(0));
+  for (const TransDataEdgeSlideVert &sv : sld->sv) {
+    if (sv.loop_nr < 0) {
+      continue;
+    }
+    const float3 side = sv.dir_side[0] - sv.dir_side[1];
+    if (!math::is_zero(side)) {
+      net[sv.loop_nr] += math::normalize(side);
+    }
+  }
+
+  for (TransDataEdgeSlideVert &sv : sld->sv) {
+    if (sv.loop_nr >= 0 && math::dot(net[sv.loop_nr], align_dir) < 0.0f) {
+      swap_v3_v3(sv.dir_side[0], sv.dir_side[1]);
+    }
+  }
+}
+
 static EdgeSlideData *createEdgeSlideVerts(TransInfo *t,
                                            TransDataContainer *tc,
-                                           const bool use_double_side)
+                                           const bool use_double_side,
+                                           const float3 *clone_align_dir)
 {
   int group_len;
   EdgeSlideData *sld = MEM_new<EdgeSlideData>("sld");
@@ -401,6 +429,10 @@ static EdgeSlideData *createEdgeSlideVerts(TransInfo *t,
       sv.dir_side[1] = float3(0);
       sv.edge_len = math::length(sv.dir_side[0]);
     }
+  }
+
+  if (clone_align_dir && use_double_side) {
+    edge_slide_clone_align_sides(sld, group_len, *clone_align_dir);
   }
 
   sld->curr_sv_index = 0;
@@ -1052,6 +1084,7 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
   }
 
   bool clone_topology_skipped = false;
+  bool clone_dir_written = false;
 
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     EdgeSlideData *sld = static_cast<EdgeSlideData *>(tc->custom.mode.data);
@@ -1191,6 +1224,24 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
 
     if (orig_to_sep.is_empty()) {
       clone_topology_skipped = true;
+    }
+
+    /* Record the direction a positive factor produced, for the next run to align to. */
+    if (slp->op && !clone_dir_written && !orig_to_sep.is_empty()) {
+      float3 dir(0);
+      for (const CloneNeighborInfo &nd : neighbor_infos) {
+        BMVert *v_clone = orig_to_clone.lookup(nd.v);
+        dir += float3(v_clone->co) - float3(nd.v->co);
+      }
+      if (!math::is_zero(dir)) {
+        dir = math::normalize(dir);
+        if (t->values_final[0] < 0.0f) {
+          dir = -dir;
+        }
+        const float dir_arr[3] = {dir.x, dir.y, dir.z};
+        RNA_float_set_array(slp->op->ptr, "clone_dir", dir_arr);
+        clone_dir_written = true;
+      }
     }
 
     /* Reposition separated verts to clone positions, then kill clone verts. */
@@ -1378,8 +1429,21 @@ static void initEdgeSlide_ex(TransInfo *t,
     t->custom.mode.use_free = true;
   }
 
+  float3 clone_align_dir(0);
+  bool has_clone_align = false;
+  if (use_clone && op) {
+    PropertyRNA *prop = RNA_struct_find_property(op->ptr, "clone_dir");
+    if (prop && RNA_property_is_set(op->ptr, prop)) {
+      float dir[3];
+      RNA_property_float_get_array(op->ptr, prop, dir);
+      clone_align_dir = float3(dir);
+      has_clone_align = !math::is_zero(clone_align_dir);
+    }
+  }
+
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    sld = createEdgeSlideVerts(t, tc, use_double_side);
+    sld = createEdgeSlideVerts(
+        t, tc, use_double_side, has_clone_align ? &clone_align_dir : nullptr);
     if (sld) {
       tc->custom.mode.data = sld;
       tc->custom.mode.free_cb = freeEdgeSlideVerts;
