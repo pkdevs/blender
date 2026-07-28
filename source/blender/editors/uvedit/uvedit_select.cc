@@ -4632,7 +4632,8 @@ static void uvedit_uv_select_flush_from_tag_sticky_loc_internal(
 static void uvedit_edge_select_flush_from_tag_sticky_loc_internal(
     const Scene *scene, BMesh *bm, BMLoop *l, const bool select, const BMUVOffsets &offsets)
 {
-  uvedit_edge_select_set(scene, bm, l, select);
+  const ToolSettings *ts = scene->toolsettings;
+  uvedit_loop_edge_select_set(ts, bm, l, select);
   if (l->radial_next != l) {
     BMLoop *l_iter = l->radial_next;
     do {
@@ -4640,7 +4641,7 @@ static void uvedit_edge_select_flush_from_tag_sticky_loc_internal(
         continue;
       }
       if (BM_loop_uv_share_edge_check(l, l_iter, offsets.uv)) {
-        uvedit_edge_select_set(scene, bm, l_iter, select);
+        uvedit_loop_edge_select_set(ts, bm, l_iter, select);
       }
     } while ((l_iter = l_iter->radial_next) != l);
   }
