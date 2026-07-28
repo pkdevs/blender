@@ -20,6 +20,9 @@ from bpy.app.translations import (
 
 logger = logging.getLogger(__name__)
 
+# Only increment for backwards-incompatible changes.
+PROJECT_SCHEMA_VERSION = 1
+
 # Directory and file name where the project is read/written to disk.
 PROJECT_DIR = ".blender_project"
 PROJECT_CONFIG = "project.toml"
@@ -34,12 +37,16 @@ PROJECT_DEFAULT_NAME = "Untitled Project"
 
 @dataclass
 class ProjectConfig:
+    schema_version: int
     name: str
 
     @staticmethod
     def new_from_project(project):
         """Create a ProjectConfig object from an existing real project."""
-        return ProjectConfig(name=project.name)
+        return ProjectConfig(
+            schema_version=PROJECT_SCHEMA_VERSION,
+            name=project.name,
+        )
 
     def populate_project(self, project):
         """Fills in an existing real project's data from this ProjectConfig object."""
@@ -251,6 +258,19 @@ def read_project_toml_config(root_path, report=None):
         if report:
             report({'ERROR'}, str(e))
         raise ProjectLoadException
+
+    # If there's no version schema, that means it's version 1.
+    if "schema_version" not in config_dict:
+        config_dict["schema_version"] = 1
+
+    # Handle project config versioning.
+    if config_dict["schema_version"] > PROJECT_SCHEMA_VERSION:
+        if report:
+            report({'ERROR'}, rpt_("Project configuration is newer than this version of Blender supports"))
+        raise ProjectLoadException
+    elif config_dict["schema_version"] < PROJECT_SCHEMA_VERSION:
+        # Put versioning upgrade code here when needed.
+        pass
 
     # Validate schema and convert to ProjectConfig class.
     converter = cattrs.Converter()
