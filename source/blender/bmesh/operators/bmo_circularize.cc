@@ -663,6 +663,8 @@ void bmo_circularize_exec(BMesh *bm, BMOperator *op)
       const float3 target_local(cv.target_2d.x, cv.target_2d.y, 0.0f);
       float3 final_pos = center_3d + mat * target_local;
 
+      /* Projecting the circle onto the mesh only makes sense for edge chains
+       * that have faces attached. */
       if (flatten < 1.0f && !chain_data.is_wire) {
         float3 projected_pos;
         project_on_mesh(
