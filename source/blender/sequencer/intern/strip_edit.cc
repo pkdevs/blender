@@ -142,7 +142,7 @@ void edit_update_muting(Editing *ed)
 
 void edit_flag_for_removal(Scene *scene, Strip *strip)
 {
-  Editing *ed = seq::editing_get(scene);
+  Editing *ed = editing_get(scene);
   if (strip == nullptr || ed == nullptr ||
       flag_is_set(strip->runtime->flag, StripRuntimeFlag::MarkForDelete))
   {
@@ -154,16 +154,16 @@ void edit_flag_for_removal(Scene *scene, Strip *strip)
 
   /* Delete effects that use `strip` as an input (either directly or through another effect).
    * Effect inputs are always in the same seqbase as the effect. */
-  iterator_set_expand(scene->ed, strips_to_delete, query_strip_direct_effect_chain);
+  iterator_set_expand(ed, strips_to_delete, query_strip_direct_effect_chain);
   /* Delete meta strip contents. */
-  iterator_set_expand(scene->ed, strips_to_delete, query_strip_recursive);
+  iterator_set_expand(ed, strips_to_delete, query_strip_recursive);
 
   for (Strip *strip_to_mark : strips_to_delete) {
     strip_to_mark->runtime->flag |= StripRuntimeFlag::MarkForDelete;
   }
 
   /* Clear deleted strips from modifiers. The user strip can be in a different seqbase. */
-  seq::foreach_strip(active_seqbase_get(ed), [=](Strip *user_strip) {
+  foreach_strip(&ed->seqbase, [&](Strip *user_strip) {
     for (StripModifierData &smd : user_strip->modifiers) {
       if (strips_to_delete.contains(smd.mask_strip)) {
         smd.mask_strip = nullptr;
