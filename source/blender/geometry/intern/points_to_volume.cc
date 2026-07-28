@@ -642,7 +642,7 @@ template<typename AttributeT, typename GridValueT, typename TransferT>
 static bke::GVolumeGrid points_rasterize_with_static_type(
     const openvdb::points::PointDataGrid &point_data_grid,
     const StringRef value_attribute,
-    const PointRasterizeAttributeInfo &attribute_info,
+    const PointRasterizeAttributeInfo & /*attribute_info*/,
     const float4x4 &transform,
     const KernelType kernel_type)
 {
@@ -651,24 +651,6 @@ static bke::GVolumeGrid points_rasterize_with_static_type(
   using GridType = openvdb::Grid<TreeType>;
 
   typename std::shared_ptr<GridType> dst_grid;
-  auto finalize_grid = [&]<typename GridType>() {
-    if constexpr (std::is_same_v<GridValueT, float3>) {
-      if (attribute_info.use_staggered_vector) {
-        /* Note: Due to the separable kernel function the weight at each of the face centers is
-         * the same as the weight at the voxel corner. Rasterizing a staggered velocity is no
-         * different from rasterizing a centered vector, and only require declaring the output
-         * staggered, and then moving the grid origin to make the transform voxel-centered. */
-        dst_grid->setGridClass(openvdb::GridClass::GRID_STAGGERED);
-        dst_grid->transform().preTranslate(openvdb::Vec3d(0.5, 0.5, 0.5));
-      }
-      else {
-        dst_grid->setGridClass(openvdb::GridClass::GRID_FOG_VOLUME);
-      }
-    }
-    else {
-      dst_grid->setGridClass(openvdb::GridClass::GRID_FOG_VOLUME);
-    }
-  };
 
   {
 #  ifdef DEBUG_TIME
@@ -690,7 +672,7 @@ static bke::GVolumeGrid points_rasterize_with_static_type(
 #  ifdef DEBUG_TIME
     SCOPED_TIMER("    finalize_grid");
 #  endif
-    finalize_grid.template operator()<GridType>();
+    dst_grid->setGridClass(openvdb::GridClass::GRID_FOG_VOLUME);
   }
 
   if (dst_grid) {

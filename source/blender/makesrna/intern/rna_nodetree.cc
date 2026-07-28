@@ -8520,14 +8520,6 @@ static void rna_def_rasterize_points_item(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(
       prop, NC_NODE | NA_EDITED, "rna_Node_ItemArray_item_update<RasterizePointsItemsAccessor>");
-
-  prop = RNA_def_property(srna, "use_staggered_vector", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(
-      prop, nullptr, "flag", GEO_NODE_RASTERIZE_POINTS_ITEM_VECTOR_STAGGERED);
-  RNA_def_property_ui_text(
-      prop, "Use Staggered Vector", "Classify the output as a staggered vector grid");
-  RNA_def_property_update(
-      prop, NC_NODE | NA_EDITED, "rna_Node_ItemArray_item_update<RasterizePointsItemsAccessor>");
 }
 
 static void rna_def_geo_rasterize_points_items(BlenderRNA *brna)
