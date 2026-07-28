@@ -36,16 +36,27 @@ using DeltaProjectionFunc =
     std::function<float3(const float3 position, const float2 &screen_delta)>;
 
 struct InputSample {
-  float2 mouse_position = float2(0.0f, 0.0f);
-  float3 controller_position = float3(0.0f, 0.0f, 0.0f);
-  float pressure = 0.0f;
-  bool is_xr = false;
+  float2 mouse_position;
+  float pressure;
+};
+
+struct XRInputSample {
+  float2 mouse_position;
+  float3 controller_position;
+  float pressure;
 };
 
 class GreasePencilStrokeOperation : public PaintModeData {
  public:
   virtual void on_stroke_begin(const bContext &C, const InputSample &start_sample) = 0;
   virtual void on_stroke_extended(const bContext &C, const InputSample &extension_sample) = 0;
+  virtual void on_stroke_done(const bContext &C) = 0;
+};
+
+class GreasePencilXRStrokeOperation : public PaintModeData {
+ public:
+  virtual void on_stroke_begin(const bContext &C, const XRInputSample &start_sample) = 0;
+  virtual void on_stroke_extended(const bContext &C, const XRInputSample &extension_sample) = 0;
   virtual void on_stroke_done(const bContext &C) = 0;
 };
 
@@ -230,6 +241,8 @@ class GreasePencilStrokeOperationCommon : public GreasePencilStrokeOperation {
 /* Operations */
 
 std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation(bool do_fill_guides = false);
+std::unique_ptr<GreasePencilXRStrokeOperation> new_xr_paint_operation(
+    bool do_fill_guides = false);
 std::unique_ptr<GreasePencilStrokeOperation> new_erase_operation(bool temp_eraser = false);
 std::unique_ptr<GreasePencilStrokeOperation> new_tint_operation(bool temp_eraser = false);
 std::unique_ptr<GreasePencilStrokeOperation> new_weight_paint_draw_operation(

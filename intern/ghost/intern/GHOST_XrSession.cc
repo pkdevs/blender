@@ -796,8 +796,11 @@ bool GHOST_XrSession::attachActionSets()
     bindings_info.countSuggestedBindings = uint32_t(bindings.size());
     bindings_info.suggestedBindings = bindings.data();
 
-    CHECK_XR(xrSuggestInteractionProfileBindings(instance, &bindings_info),
-             "Failed to suggest interaction profile bindings.");
+    XrResult suggest_result = xrSuggestInteractionProfileBindings(instance, &bindings_info);
+    if (suggest_result == XR_ERROR_PATH_UNSUPPORTED) {
+      continue;
+    }
+    CHECK_XR(suggest_result, "Failed to suggest interaction profile bindings.");
   }
 
   /* Attach action sets. */

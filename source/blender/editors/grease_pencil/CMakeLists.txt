@@ -60,6 +60,10 @@ set(LIB
   PRIVATE bf::extern::curve_fit_nd
 )
 
+if(WITH_XR_OPENXR)
+  add_definitions(-DWITH_XR_OPENXR)
+endif()
+
 blender_add_lib(bf_editor_grease_pencil "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_dependencies(bf_editor_grease_pencil bf_rna)
 

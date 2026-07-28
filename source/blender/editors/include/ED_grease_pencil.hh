@@ -65,6 +65,7 @@ wmOperatorStatus ED_grease_pencil_join_objects_exec(bContext *C, wmOperator *op)
 
 void ED_operatortypes_grease_pencil();
 void ED_operatortypes_grease_pencil_draw();
+void ED_operatortypes_grease_pencil_draw_xr();
 void ED_operatortypes_grease_pencil_frames();
 void ED_operatortypes_grease_pencil_layers();
 void ED_operatortypes_grease_pencil_select();
@@ -88,7 +89,7 @@ void ED_interpolatetool_modal_keymap(wmKeyConfig *keyconf);
 void ED_grease_pencil_pentool_modal_keymap(wmKeyConfig *keyconf);
 
 void GREASE_PENCIL_OT_stroke_trim(wmOperatorType *ot);
-void GREASE_PENCIL_XR_OT_brush_stroke_xr(wmOperatorType *ot);
+void GREASE_PENCIL_XR_OT_brush_stroke(wmOperatorType *ot);
 
 void ED_undosys_type_grease_pencil(UndoType *ut);
 

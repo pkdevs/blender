@@ -470,12 +470,7 @@ float2 paint_stroke_jitter_pos(Paint *paint,
 }
 
 /* Put the location of the next stroke dot into the stroke RNA and apply it to the mesh */
-void PaintStroke::add_step(bContext *C,
-                           wmOperator *op,
-                           const float2 mval,
-                           const float pressure,
-                           const float3 controller,
-                           const bool is_xr)
+void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float pressure)
 {
   PRF_scope(ProfileCategory::Editor);
   const PaintMode mode = BKE_paintmode_get_active_from_context(C);
@@ -512,9 +507,6 @@ void PaintStroke::add_step(bContext *C,
   /* copy last position -before- jittering, or space fill code
    * will create too many dabs */
   this->last_mouse_position = mval;
-  if (is_xr) {
-    this->last_controller_position = controller;
-  }
   last_pressure_ = pressure;
 
   if (paint_stroke_use_scene_spacing(brush, mode)) {
@@ -538,7 +530,6 @@ void PaintStroke::add_step(bContext *C,
   bool is_location_is_set;
   paint_runtime->last_hit = update(
       C, brush, mode, mval, mouse_out, pressure, location, &is_location_is_set);
-
   if (is_location_is_set) {
     copy_v3_v3(paint_runtime->last_location, location);
   }
@@ -559,16 +550,13 @@ void PaintStroke::add_step(bContext *C,
   /* Add to stroke */
   if (add_step) {
     PointerRNA itemptr;
-    const float controller_array[3] = {controller.x, controller.y, controller.z};
     RNA_collection_add(op->ptr, "stroke", &itemptr);
     RNA_float_set(&itemptr, "size", paint_runtime->pixel_radius);
     RNA_float_set_array(&itemptr, "location", location);
     /* Mouse coordinates modified by the stroke type options. */
     RNA_float_set_array(&itemptr, "mouse", mouse_out);
-    RNA_float_set_array(&itemptr, "controller", controller_array);
     /* Original mouse coordinates. */
     RNA_float_set_array(&itemptr, "mouse_event", mval);
-    RNA_float_set_array(&itemptr, "controller_event", controller_array);
     RNA_float_set(&itemptr, "pressure", pressure);
     RNA_float_set(&itemptr, "x_tilt", tilt_.x);
     RNA_float_set(&itemptr, "y_tilt", tilt_.y);
@@ -839,7 +827,7 @@ int PaintStroke::space_stroke(bContext *C,
           brush, spacing / no_pressure_spacing);
 
       stroke_distance_ += spacing / zoom_2d_;
-      this->add_step(C, op, mouse, pressure, float3(0.0f, 0.0f, 0.0f), false);
+      this->add_step(C, op, mouse, pressure);
 
       length -= spacing;
       pressure = last_pressure_;
@@ -864,9 +852,6 @@ static bool print_pressure_status_enabled()
 
 PaintStroke::PaintStroke(bContext *C, wmOperator *op, int event_type) : event_type_(event_type)
 {
-  printf("=== GREASE PENCIL DRAW PATH: PaintStroke::constructor ===\n");
-  printf("  -> Stored event_type_: %d\n", event_type_);
-  fflush(stdout);
   this->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   this->paint = BKE_paint_get_active_from_context(C);
   this->ups = &paint->unified_paint_settings;
@@ -942,7 +927,6 @@ PaintStroke::PaintStroke(bContext *C, wmOperator *op, int event_type) : event_ty
 
 void PaintStroke::done(bContext *C, const bool is_cancel)
 {
-  printf("=== GREASE PENCIL DRAW PATH: PaintStroke::%s ===\n", __func__); fflush(stdout);
   PRF_scope(ProfileCategory::Editor);
   if (print_pressure_status_enabled()) {
     ED_workspace_status_text(C, nullptr);
@@ -1137,9 +1121,7 @@ wmKeyMap *paint_stroke_modal_keymap(wmKeyConfig *keyconf)
 void PaintStroke::add_sample(const int input_samples,
                              const float x,
                              const float y,
-                             const float pressure,
-                             const float3 controller,
-                             const bool is_xr)
+                             const float pressure)
 {
   PRF_scope(ProfileCategory::Editor);
   PaintSample *sample = &samples_[cur_sample_];
@@ -1147,9 +1129,7 @@ void PaintStroke::add_sample(const int input_samples,
 
   sample->mouse[0] = x;
   sample->mouse[1] = y;
-  sample->controller = controller;
   sample->pressure = pressure;
-  sample->is_xr = is_xr;
 
   cur_sample_++;
   if (cur_sample_ >= max_samples) {
@@ -1166,13 +1146,10 @@ void PaintStroke::calc_average_sample(PaintSample *average)
 
   for (int i = 0; i < num_samples_; i++) {
     average->mouse += samples_[i].mouse;
-    average->controller += samples_[i].controller;
     average->pressure += samples_[i].pressure;
-    average->is_xr |= samples_[i].is_xr;
   }
 
   average->mouse /= num_samples_;
-  average->controller /= num_samples_;
   average->pressure /= num_samples_;
 
   // printf("avg=(%f, %f), num=%d\n", average->mouse[0], average->mouse[1], stroke->num_samples);
@@ -1261,7 +1238,7 @@ void PaintStroke::lines_spacing(bContext *C,
       paint_runtime->overlap_factor = paint_stroke_integrate_overlap(brush, 1.0);
 
       stroke_distance_ += spacing / zoom_2d_;
-      this->add_step(C, op, mouse, 1.0, float3(0.0f, 0.0f, 0.0f), false);
+      this->add_step(C, op, mouse, 1.0);
 
       length -= spacing;
       spacing_final = spacing;
@@ -1282,8 +1259,7 @@ void PaintStroke::line_end(bContext *C, wmOperator *op, const float2 mouse)
   if (stroke_started_ && br->stroke_method == BRUSH_STROKE_LINE) {
     paint_runtime->overlap_factor = paint_stroke_integrate_overlap(*br, 1.0);
 
-    this->add_step(
-        C, op, this->last_mouse_position, 1.0, float3(0.0f, 0.0f, 0.0f), false);
+    this->add_step(C, op, this->last_mouse_position, 1.0);
     this->space_stroke(C, op, mouse, 1.0);
   }
 }
@@ -1362,7 +1338,7 @@ bool PaintStroke::curve_end(bContext *C, wmOperator *op)
         stroke_started_ = this->test_start(op, this->last_mouse_position);
 
         if (stroke_started_) {
-          this->add_step(C, op, data + 2 * j, 1.0, float3(0.0f, 0.0f, 0.0f), false);
+          this->add_step(C, op, data + 2 * j, 1.0);
           this->lines_spacing(
               C, op, no_pressure_spacing, &length_residue, data + 2 * j, data + 2 * (j + 1));
         }
@@ -1424,7 +1400,6 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   bool first_dab = false;
   bool first_modal = false;
   bool needs_redraw = false;
-  bool defer_to_first_dab_step = false;
 
   if (event->type == INBETWEEN_MOUSEMOVE &&
       !paint_brush_type_require_inbetween_mouse_events(*br, mode))
@@ -1434,18 +1409,10 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
 
   /* see if tablet affects event. Line, anchored and drag dot strokes do not support pressure */
   const float tablet_pressure = WM_event_tablet_data(event, &pen_flip_, nullptr);
-  const bool is_xr = event->type == EVT_XR_ACTION;
   float pressure =
       ELEM(br->stroke_method, BRUSH_STROKE_LINE, BRUSH_STROKE_ANCHORED, BRUSH_STROKE_DRAG_DOT) ?
           1.0f :
           tablet_pressure;
-
-  if (is_xr) {
-    const wmXrActionData *actiondata = static_cast<const wmXrActionData *>(event->customdata);
-    if (actiondata != nullptr) {
-      pressure = actiondata->state[0];
-    }
-  }
 
   if (print_pressure_status_enabled() && WM_event_is_tablet(event)) {
     std::string msg = fmt::format("Tablet Pressure: {:.4f}", pressure);
@@ -1462,20 +1429,7 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   }
 
   const int input_samples = BKE_brush_input_samples_get(paint, br);
-  float3 controller_position = float3(0.0f);
-  if (is_xr) {
-    BLI_assert(event->custom == EVT_DATA_XR);
-    const wmXrActionData *actiondata = static_cast<const wmXrActionData *>(event->customdata);
-    if (actiondata != nullptr) {
-      controller_position = float3(actiondata->controller_loc);
-    }
-  }
-  this->add_sample(input_samples,
-                   event->mval[0],
-                   event->mval[1],
-                   pressure,
-                   controller_position,
-                   is_xr);
+  this->add_sample(input_samples, event->mval[0], event->mval[1], pressure);
 
   PaintSample sample_average;
   this->calc_average_sample(&sample_average);
@@ -1511,9 +1465,6 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
 
     last_pressure_ = sample_average.pressure;
     this->last_mouse_position = sample_average.mouse;
-    if (sample_average.is_xr) {
-      this->last_controller_position = sample_average.controller;
-    }
     if (paint_stroke_use_scene_spacing(*br, mode)) {
       BLI_assert(mode != PaintMode::Texture2D);
       stroke_over_mesh_ = this->get_location(
@@ -1577,14 +1528,16 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   }
 
   float2 mouse;
-  if (event->type == event_type_ && !first_modal && event->val == KM_RELEASE) {
-    mouse = {float(event->mval[0]), float(event->mval[1])};
-    if (this->constrain_line) {
-      paint_stroke_line_constrain(this->last_mouse_position, this->constrained_pos, mouse);
+  if (event->type == event_type_ && !first_modal) {
+    if (event->val == KM_RELEASE) {
+      mouse = {float(event->mval[0]), float(event->mval[1])};
+      if (this->constrain_line) {
+        paint_stroke_line_constrain(this->last_mouse_position, this->constrained_pos, mouse);
+      }
+      this->line_end(C, op, mouse);
+      this->done(C, false);
+      return OPERATOR_FINISHED;
     }
-    this->line_end(C, op, mouse);
-    this->done(C, false);
-    return OPERATOR_FINISHED;
   }
   else if (ELEM(event->type, EVT_RETKEY, EVT_SPACEKEY)) {
     this->line_end(C, op, sample_average.mouse);
@@ -1610,19 +1563,6 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
         copy_v2_v2(paint_runtime.last_rake, this->last_mouse_position);
       }
       paint_calculate_rake_rotation(*paint, *br, mouse, mode, true);
-    }
-  }
-  else if (is_xr) {
-    if (stroke_started_) {
-      defer_to_first_dab_step = first_dab && paint_space_stroke_enabled(*br, mode) &&
-                                !(br->flag & BRUSH_SMOOTH_STROKE);
-      if (!defer_to_first_dab_step) {
-        float dist = math::distance(sample_average.controller, this->last_controller_position);
-        stroke_distance_ += dist;
-
-        this->add_step(C, op, sample_average.mouse, pressure, sample_average.controller, true);
-        needs_redraw = true;
-      }
     }
   }
   else if (first_modal ||
@@ -1651,8 +1591,7 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
         else {
           const float2 mouse_delta = mouse - this->last_mouse_position;
           stroke_distance_ += math::length(mouse_delta);
-
-          this->add_step(C, op, mouse, pressure, float3(0.0f, 0.0f, 0.0f), false);
+          this->add_step(C, op, mouse, pressure);
           needs_redraw = true;
         }
       }
@@ -1661,12 +1600,9 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
 
   /* we want the stroke to have the first daub at the start location
    * instead of waiting till we have moved the space distance */
-  if (first_dab && paint_space_stroke_enabled(*br, mode) &&
-      !(br->flag & BRUSH_SMOOTH_STROKE))
-  {
+  if (first_dab && paint_space_stroke_enabled(*br, mode) && !(br->flag & BRUSH_SMOOTH_STROKE)) {
     paint_runtime.overlap_factor = paint_stroke_integrate_overlap(*br, 1.0);
-    this->add_step(
-        C, op, sample_average.mouse, sample_average.pressure, sample_average.controller, is_xr);
+    this->add_step(C, op, sample_average.mouse, sample_average.pressure);
     needs_redraw = true;
   }
 

@@ -74,18 +74,18 @@ def ami_data_from_args(ami, args):
         ami.user_paths.new(path)
 
     if ami.type == 'FLOAT' or ami.type == 'VECTOR2D':
-        ami.op = args.get("op", "")
-        ami.op_mode = args.get("op_mode", "")
-        ami.bimanual = True if (args.get("bimanual", 'False') == 'True') else False
-        ami.haptic_name = args.get("haptic_name", "")
-        ami.haptic_match_user_paths = True if (args.get("haptic_match_user_paths", 'False') == 'True') else False
-        ami.haptic_duration = float(args.get("haptic_duration", 0.0))
-        ami.haptic_frequency = float(args.get("haptic_frequency", 0.0))
-        ami.haptic_amplitude = float(args.get("haptic_amplitude", 0.0))
-        ami.haptic_mode = args.get("haptic_mode", 'ACTION')
+        ami.op = args["op"]
+        ami.op_mode = args["op_mode"]
+        ami.bimanual = True if (args["bimanual"] == 'True') else False
+        ami.haptic_name = args["haptic_name"]
+        ami.haptic_match_user_paths = True if (args["haptic_match_user_paths"] == 'True') else False
+        ami.haptic_duration = float(args["haptic_duration"])
+        ami.haptic_frequency = float(args["haptic_frequency"])
+        ami.haptic_amplitude = float(args["haptic_amplitude"])
+        ami.haptic_mode = args["haptic_mode"]
     elif ami.type == 'POSE':
-        ami.pose_is_controller_grip = True if (args.get("pose_is_controller_grip", 'False') == 'True') else False
-        ami.pose_is_controller_aim = True if (args.get("pose_is_controller_aim", 'False') == 'True') else False
+        ami.pose_is_controller_grip = True if (args["pose_is_controller_grip"] == 'True') else False
+        ami.pose_is_controller_aim = True if (args["pose_is_controller_aim"] == 'True') else False
 
 
 def _ami_properties_to_lines_recursive(level, properties, lines):
@@ -179,20 +179,14 @@ def amb_data_from_args(amb, args, type):
             amb.axis0_region = args["axis0_region"]
             amb.axis1_region = args["axis1_region"]
     elif type == 'POSE':
-        def parse_pose_value(value):
-            if isinstance(value, tuple):
-                return value
-            return value.strip(')(').split(', ')
-
-        loc = parse_pose_value(args["pose_location"])
-        amb.pose_location.x = float(loc[0])
-        amb.pose_location.y = float(loc[1])
-        amb.pose_location.z = float(loc[2])
-
-        rot = parse_pose_value(args["pose_rotation"])
-        amb.pose_rotation.x = float(rot[0])
-        amb.pose_rotation.y = float(rot[1])
-        amb.pose_rotation.z = float(rot[2])
+        l = args["pose_location"].strip(')(').split(', ')
+        amb.pose_location.x = float(l[0])
+        amb.pose_location.y = float(l[1])
+        amb.pose_location.z = float(l[2])
+        l = args["pose_rotation"].strip(')(').split(', ')
+        amb.pose_rotation.x = float(l[0])
+        amb.pose_rotation.y = float(l[1])
+        amb.pose_rotation.z = float(l[2])
 
 
 def actionconfig_export_as_data(session_state, filepath, *, sort=False):

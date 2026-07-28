@@ -1659,6 +1659,11 @@ namespace blender {
 /* -------------------------------------------------------------------- */
 
 static const EnumPropertyItem rna_enum_xr_action_types[] = {
+    {XR_BOOLEAN_INPUT,
+     "BOOLEAN",
+     0,
+     "Boolean",
+     "Boolean action, representing a digital button"},
     {XR_FLOAT_INPUT,
      "FLOAT",
      0,

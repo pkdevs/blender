@@ -22,10 +22,10 @@ def vr_actionset_active_update(context):
 
     scene = context.scene
 
-    if scene.vr_actions_use_nextlab and session_state.actionmaps.find(
+    if scene.vr_actions_use_grease_pencil and session_state.actionmaps.find(
             session_state,
-            defaults.VRDefaultActionmaps.NEXTLAB.value):
-        session_state.active_action_set_set(context, defaults.VRDefaultActionmaps.NEXTLAB.value)
+            defaults.VRDefaultActionmaps.GREASE_PENCIL.value):
+        session_state.active_action_set_set(context, defaults.VRDefaultActionmaps.GREASE_PENCIL.value)
     elif scene.vr_actions_use_gamepad and session_state.actionmaps.find(
             session_state,
             defaults.VRDefaultActionmaps.GAMEPAD.value):
@@ -39,9 +39,8 @@ def vr_actions_use_gamepad_update(self, context):
     vr_actionset_active_update(context)
 
 
-def vr_actions_use_nextlab_update(self, context):
+def vr_actions_use_grease_pencil_update(self, context):
     vr_actionset_active_update(context)
-
 
 
 @persistent
@@ -144,10 +143,10 @@ def register():
         default=False,
         update=vr_actions_use_gamepad_update,
     )
-    bpy.types.Scene.vr_actions_use_nextlab = bpy.props.BoolProperty(
-        description="Use input from NextLab custom build for GreasePencil XR",
+    bpy.types.Scene.vr_actions_use_grease_pencil = bpy.props.BoolProperty(
+        description="Use input from Grease Pencil XR action map",
         default=False,
-        update=vr_actions_use_nextlab_update,
+        update=vr_actions_use_grease_pencil_update,
     )
     bpy.types.Scene.vr_actions_enable_huawei = bpy.props.BoolProperty(
         description=(
@@ -184,7 +183,7 @@ def register():
 def unregister():
     del bpy.types.Scene.vr_actions_enable
     del bpy.types.Scene.vr_actions_use_gamepad
-    del bpy.types.Scene.vr_actions_use_nextlab
+    del bpy.types.Scene.vr_actions_use_grease_pencil
     del bpy.types.Scene.vr_actions_enable_huawei
     del bpy.types.Scene.vr_actions_enable_reverb_g2
     del bpy.types.Scene.vr_actions_enable_vive_cosmos

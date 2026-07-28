@@ -95,9 +95,7 @@ using StrokeDone = void (*)(PaintStroke *stroke, bool is_cancel);
 
 struct PaintSample {
   float2 mouse = float2(0.0f, 0.0f);
-  float3 controller = float3(0.0f, 0.0f, 0.0f);
   float pressure = 0.0f;
-  bool is_xr = false;
 };
 
 /**
@@ -125,7 +123,6 @@ struct PaintStroke : NonCopyable, NonMovable {
 
   /* TODO: These are only public so that cursor drawing code can use them. Find a better place. */
   float2 last_mouse_position = float2(0.0f, 0.0f);
-  float3 last_controller_position = float3(0.0f, 0.0f, 0.0f);
   bool constrain_line = false;
   float2 constrained_pos = float2(0.0f, 0.0f);
 
@@ -285,15 +282,9 @@ struct PaintStroke : NonCopyable, NonMovable {
 
  private:
   void done(bContext *C, bool is_cancel);
-  void add_step(
-      bContext *C, wmOperator *op, float2 mval, float pressure, float3 controller, bool is_xr);
+  void add_step(bContext *C, wmOperator *op, float2 mval, float pressure);
 
-  void add_sample(int input_samples,
-                  float x,
-                  float y,
-                  float pressure,
-                  float3 controller,
-                  bool is_xr);
+  void add_sample(int input_samples, float x, float y, float pressure);
   void calc_average_sample(PaintSample *average);
 
   void lines_spacing(bContext *C,

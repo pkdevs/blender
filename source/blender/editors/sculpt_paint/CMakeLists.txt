@@ -185,7 +185,8 @@ if(WITH_XR_OPENXR)
   add_definitions(-DWITH_XR_OPENXR)
 
   list(APPEND SRC
-    grease_pencil_xr_draw_ops.cc
+    grease_pencil/draw_ops_xr.cc
+    grease_pencil/paint_xr.cc
   )
 endif()
 

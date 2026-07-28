@@ -20,7 +20,8 @@ from bpy.types import (
     UIList,
 )
 # Add space_view3d.py to module search path for VIEW3D_PT_object_type_visibility import.
-import os.path, sys
+import os.path
+import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../startup/bl_ui')))
 from space_view3d import VIEW3D_PT_object_type_visibility
 
@@ -108,7 +109,7 @@ class VIEW3D_PT_vr_session_view(VRButtonsPanel, Panel):
 class VIEW3D_PT_vr_session_view_object_type_visibility(VIEW3D_PT_object_type_visibility):
     def draw(self, context):
         session_settings = context.window_manager.xr_session_settings
-        self.draw_ex(context, session_settings, False) # Pass session settings instead of 3D view.
+        self.draw_ex(context, session_settings, False)  # Pass session settings instead of 3D view.
 
 
 # Location Scouting.
@@ -285,6 +286,7 @@ class VIEW3D_PT_vr_landmarks(VRButtonsPanel, Panel):
 # Actions.
 class VIEW3D_PT_vr_actionmaps(VRButtonsPanel, Panel):
     bl_label = "Action Maps"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -295,7 +297,7 @@ class VIEW3D_PT_vr_actionmaps(VRButtonsPanel, Panel):
 
         col = layout.column(align=True)
         col.prop(scene, "vr_actions_use_gamepad", text="Gamepad")
-        col.prop(scene, "vr_actions_use_nextlab", text="Grease Pencil XR")
+        col.prop(scene, "vr_actions_use_grease_pencil", text="Grease Pencil XR")
 
         col = layout.column(align=True, heading="Extensions")
         col.prop(scene, "vr_actions_enable_reverb_g2", text="HP Reverb G2")

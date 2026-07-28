@@ -4060,14 +4060,18 @@ static bool wm_event_xr_handler_matches_actiondata(const wmEventHandler_Op *op_h
   }
 
   const bool handler_op_type_match = (op_handler->op->type == actiondata->ot);
-  const bool is_grease_pencil_xr_stroke = handler_op_type_match &&
-                                          STREQ(op_handler->op->type->idname,
-                                                "GREASE_PENCIL_XR_OT_brush_stroke_xr");
+  const bool handler_is_grease_pencil_xr_stroke = STREQ(
+      op_handler->op->type->idname, "GREASE_PENCIL_XR_OT_brush_stroke");
+  const bool action_is_grease_pencil_xr_stroke =
+      actiondata->ot && STREQ(actiondata->ot->idname, "GREASE_PENCIL_XR_OT_brush_stroke");
+  const bool is_grease_pencil_xr_stroke = handler_is_grease_pencil_xr_stroke &&
+                                          action_is_grease_pencil_xr_stroke;
   const bool handler_op_properties_match = is_grease_pencil_xr_stroke ||
                                            IDP_EqualsProperties(op_handler->op->properties,
                                                                actiondata->op_properties);
 
-  return (handler_op_type_match && handler_op_properties_match);
+  return ((handler_op_type_match || is_grease_pencil_xr_stroke) &&
+          handler_op_properties_match);
 }
 
 static void wm_event_handle_xrevent(wmWindowManager *wm,

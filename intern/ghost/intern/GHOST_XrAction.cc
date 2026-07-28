@@ -100,7 +100,11 @@ GHOST_XrActionProfile::GHOST_XrActionProfile(XrInstance instance,
 
     /* Although the bindings will be re-suggested in GHOST_XrSession::attachActionSets(), it
      * greatly improves error checking to suggest them here first. */
-    CHECK_XR(xrSuggestInteractionProfileBindings(instance, &bindings_info),
+    XrResult suggest_result = xrSuggestInteractionProfileBindings(instance, &bindings_info);
+    if (suggest_result == XR_ERROR_PATH_UNSUPPORTED) {
+      continue;
+    }
+    CHECK_XR(suggest_result,
              (std::string("Failed to create binding for action \"") + info.action_name +
               "\" and profile \"" + info.profile_path +
               "\". Are the action and profile paths correct?")

@@ -309,6 +309,9 @@ static void keymap_grease_pencil_fill_tool(wmKeyConfig *keyconf)
 void ED_operatortypes_grease_pencil()
 {
   ED_operatortypes_grease_pencil_draw();
+#ifdef WITH_XR_OPENXR
+  ED_operatortypes_grease_pencil_draw_xr();
+#endif
   ED_operatortypes_grease_pencil_frames();
   ED_operatortypes_grease_pencil_layers();
   ED_operatortypes_grease_pencil_select();
