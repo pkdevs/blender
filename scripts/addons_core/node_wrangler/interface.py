@@ -330,7 +330,7 @@ class NWAttributeMenuBase:
     def draw(self, context):
         l = self.layout
         nodes, links = get_nodes_links(context)
-        mat = next(m for m in context.blend_data.materials if m.node_tree == context.space_data.node_tree)
+        mat = context.space_data.id
 
         objs = []
         for obj in bpy.data.objects:
