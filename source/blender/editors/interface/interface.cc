@@ -2136,6 +2136,7 @@ bool button_context_poll_operator(bContext *C, wmOperatorType *ot, const Button 
 
 void block_post_layout_callbacks_exec(const bContext *C, ARegion *region, Block *block)
 {
+  BLI_assert(block->active);
   for (const std::function<void(const bContext &C, ui::Block &block)> &callback :
        region->runtime->post_block_layout_fns)
   {
