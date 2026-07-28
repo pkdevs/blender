@@ -20,7 +20,22 @@ from bpy.app.translations import (
 
 logger = logging.getLogger(__name__)
 
-# Only increment for backwards-incompatible changes.
+# Only increment for breaking changes.
+#
+# In general, schema changes should as much as possible be made in a way that is
+# both backwards and forwards compatible:
+# - Forwards compatibility is basically free when strictly adding to the schema,
+#   and not changing any existing fields. This is due to unsupported fields in
+#   the TOML file simply being ignored.
+# - Backwards compatibility needs a little more attention, but boils down to:
+#   make sure that new fields are always optional.
+#
+# Only when that's not reasonably possible should this version number be
+# incremented.
+#
+# NOTE: when incrementing this version number, ensure that the versioning code
+# in `read_project_toml_config()` is appropriately expanded to auto-upgrade
+# between versions
 PROJECT_SCHEMA_VERSION = 1
 
 # Directory and file name where the project is read/written to disk.
