@@ -650,13 +650,13 @@ static void rna_def_render_engine(BlenderRNA *brna)
   func = RNA_def_function(srna, "view_pause", nullptr);
   RNA_def_function_ui_description(func, "Pause viewport render");
   RNA_def_function_flag(func, FUNC_REGISTER_OPTIONAL | FUNC_ALLOW_WRITE);
-  parm = RNA_def_pointer(func, "context", "Context", "", "");
+  parm = RNA_def_pointer(func, "context", "Context", "", "The context");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   func = RNA_def_function(srna, "view_resume", nullptr);
   RNA_def_function_ui_description(func, "Resume viewport render");
   RNA_def_function_flag(func, FUNC_REGISTER_OPTIONAL | FUNC_ALLOW_WRITE);
-  parm = RNA_def_pointer(func, "context", "Context", "", "");
+  parm = RNA_def_pointer(func, "context", "Context", "", "The context");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   /* shader script callbacks */
