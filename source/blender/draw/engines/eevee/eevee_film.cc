@@ -662,7 +662,6 @@ void Film::init_pass(PassSimple &pass, gpu::Shader *sh)
   eVelocityStep step_next = inst_.is_viewport() ? STEP_PREVIOUS : STEP_NEXT;
 
   pass.bind_resources(inst_.uniform_data);
-  inst_.sampling.bind_resources(pass);
   pass.bind_ubo("camera_prev", &(*velocity.camera_steps[STEP_PREVIOUS]));
   pass.bind_ubo("camera_curr", &(*velocity.camera_steps[STEP_CURRENT]));
   pass.bind_ubo("camera_next", &(*velocity.camera_steps[step_next]));
@@ -685,6 +684,7 @@ void Film::init_pass(PassSimple &pass, gpu::Shader *sh)
   pass.bind_image("cryptomatte_img", &cryptomatte_tx_);
   pass.bind_image("denoising_depth_img", &denoising_depth_tx_);
   pass.bind_resources(inst_.uniform_data);
+  pass.bind_resources(inst_.sampling);
 }
 
 void Film::end_sync()
