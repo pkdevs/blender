@@ -1509,17 +1509,18 @@ static void text_clip_give_next_off(Button *but, const char *str, const char *st
 }
 
 /**
- * Shorten the next template variable expression (e.g. from {project_root} to {pr}).
+ * Shorten the next template variable expression.
  *
  * This searches for the next template variable expression starting at
  * `byte_position` in the passed string.
  *
- * If a variable expression is found, it is substituted with an abbreviated
- * version, and the byte position just after that new abbreviated expression is
+ * If a variable expression is found, it is substituted with a short/collapsed
+ * version, and the byte position just after that new short expression is
  * returned, which can be used as the starting position to search for a
  * subsequent variable expression.
  *
- * If no variable expression is found, -1 is returned.
+ * If no variable expression is found or a syntactically invalid expression is
+ * encountered, -1 is returned.
  */
 static size_t text_shorten_next_template_var(char *str, size_t byte_position)
 {
@@ -1529,21 +1530,19 @@ static size_t text_shorten_next_template_var(char *str, size_t byte_position)
     return -1;
   }
 
-  char short_expression[MAX_NAME];
-  short_expression[0] = '{';
-  size_t short_expression_len = 1 + bke::abbreviate_variable_name(short_expression + 1,
-                                                                  sizeof(short_expression) - 3,
-                                                                  info->variable_name);
-  short_expression[short_expression_len++] = '}';
-  short_expression[short_expression_len] = '\0';
+  const StringRef short_expression{"{…}"};
 
-  /* Substitute in the abbreviated expression. */
-  std::memcpy(str + info->byte_range.first(), short_expression, short_expression_len);
-  std::memmove(str + info->byte_range.first() + short_expression_len,
+  /* Don't substitute if the short expression isn't actually shorter. */
+  if (info->byte_range.size() <= short_expression.size()) {
+    return info->byte_range.one_after_last();
+  }
+
+  std::memcpy(str + info->byte_range.first(), short_expression.data(), short_expression.size());
+  std::memmove(str + info->byte_range.first() + short_expression.size(),
                str + info->byte_range.one_after_last(),
                strlen(str) + 1 - info->byte_range.one_after_last());
 
-  return info->byte_range.first() + short_expression_len;
+  return info->byte_range.first() + short_expression.size();
 }
 
 /**

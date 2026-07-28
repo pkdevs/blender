@@ -96,42 +96,6 @@ void with_blender_project_write_lock(FunctionRef<void()> lambda)
   lambda();
 }
 
-size_t abbreviate_variable_name(char *dst, size_t dst_max_size, StringRef name)
-{
-  if (name.is_empty()) {
-    return 0;
-  }
-
-  auto is_alphabetic = [](char c) -> bool {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-  };
-
-  /* The strategy for abbreviating variable names is to include each alphabetic
-   * character that follows a non-alphabetic character. Additionally, the first
-   * character is always unconditionally included, both in case it's alphabetic
-   * and to ensure no empty abbreviations in cases like all-underscore names.
-   *
-   * This approach is simple, but effective for ascii snake-case variable names.
-   *
-   * In the future we could expand this to also handle camel-case names if
-   * desired. But all built-in variables are snake-case, and hopefully most
-   * user-defined variables will follow that example. */
-  const size_t first_character_length = BLI_str_utf8_size_safe(name.data());
-  std::memcpy(dst, name.data(), first_character_length);
-
-  size_t dst_i = first_character_length;
-  size_t name_i = first_character_length;
-  while (dst_i < dst_max_size && name_i < name.size()) {
-    if (!is_alphabetic(name[name_i - 1]) && is_alphabetic(name[name_i])) {
-      dst[dst_i] = name[name_i];
-      dst_i++;
-    }
-    name_i++;
-  }
-
-  return dst_i;
-}
-
 }  // namespace bke
 
 bke::BlenderProject *BKE_blender_project_get(const Main *bmain)
