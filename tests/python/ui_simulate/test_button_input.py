@@ -113,16 +113,18 @@ def test_string_buttons_interactions():
     t.assertEqual(area.type, 'TEXT_EDITOR')
 
     area.spaces.active.show_region_ui = True
+    yield
+
     t.assertTrue(area.spaces.active.show_region_ui)
 
-    # Let UI to refresh so 'Test String Property Buttons' can be set as ARegion::active_panel_category
+    # Let UI to refresh so 'Test String Property Buttons' can be set as `ARegion::active_panel_category``
     yield
 
     region = area.regions[2]
     t.assertEqual(region.type, 'UI')
-    area.regions[2].active_panel_category = 'Test String Property Buttons'
-    t.assertEqual(region.active_panel_category, 'Test String Property Buttons')
+    region.active_panel_category = 'Test String Property Buttons'
     yield
+    t.assertEqual(region.active_panel_category, 'Test String Property Buttons')
 
     import bpy
     data = bpy.data.scenes['Scene'].test_property_group
@@ -274,19 +276,19 @@ def test_string_buttons_interactions():
 
     yield from _button_reset_value(wm, region, data, "string_search_prop", t, e, "", 0)
 
-    # `StringProperty(search=_string_search_property_cb)` as prop_search button
+    # `StringProperty(search=_string_search_property_cb)` as `prop_search` button
 
-    # Text edit button, type "C" and return, value will not be set as it don't matches a prop_search suggestion
+    # Text edit button, type "C" and return, value will not be set as it don't matches a `prop_search` suggestion
     t.assertTrue(wm.try_activate_rna_button(region, data, "string_search_prop_search", 'TEXT_EDITING'))
     yield e.text("C").ret()
     t.assertEqual(data.string_search_prop_search, "")
 
-    # Text edit button, type "B" and return, value will be set since it matches a prop_search suggestion
+    # Text edit button, type "B" and return, value will be set since it matches a `prop_search` suggestion
     t.assertTrue(wm.try_activate_rna_button(region, data, "string_search_prop_search", 'TEXT_EDITING'))
     yield e.text("B").ret()
     t.assertEqual(data.string_search_prop_search, "B")
 
-    # Highlight button, pasted clipboard value which will not be set as it don't matches a prop_search suggestion
+    # Highlight button, pasted clipboard value which will not be set as it don't matches a `prop_search` suggestion
     t.assertTrue(wm.try_activate_rna_button(region, data, "string_search_prop_search", 'HIGHLIGHT'))
     yield e.ctrl.v()
     t.assertEqual(data.string_search_prop_search, "B")
@@ -316,7 +318,7 @@ def test_string_buttons_interactions():
     yield e.text("A").down_arrow.ret()
     t.assertEqual(data.string_force_search_value_prop, "AB")
 
-    # Highlight button, pasted clipboard value which will not be set as it don't matches a prop_search suggestion
+    # Highlight button, pasted clipboard value which will not be set as it don't matches a `prop_search` suggestion
     t.assertTrue(wm.try_activate_rna_button(region, data, "string_force_search_value_prop", 'HIGHLIGHT'))
     yield e.ctrl.v()
     t.assertEqual(data.string_force_search_value_prop, "AB")
