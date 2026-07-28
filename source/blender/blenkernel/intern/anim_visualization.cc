@@ -122,7 +122,7 @@ static bool evaluate_dirty_frames(WorkerData *eval_data, wmJobWorkerStatus *work
     return true;
   }
   const int cfra = eval_data->current_frame.load(std::memory_order_acquire);
-  while (!dirty_frames.is_empty()) {
+  while (!dirty_frames.is_empty() && !worker_status->stop) {
     Vector<int> dirty_frames_in_range;
 
     /* Start with the dirty frame closest to the current scene frame. */
@@ -147,7 +147,7 @@ static bool evaluate_dirty_frames(WorkerData *eval_data, wmJobWorkerStatus *work
 
     bool all_done_left = false;
     bool all_done_right = false;
-    while (!all_done_left || !all_done_right) {
+    while ((!all_done_left || !all_done_right) && !worker_status->stop) {
       int frame;
       /* TODO what about frame skipping i.e. every second frame. Would be determined by the
        * evaluation targets. */
@@ -169,6 +169,9 @@ static bool evaluate_dirty_frames(WorkerData *eval_data, wmJobWorkerStatus *work
 
       all_done_left = true;
       all_done_right = true;
+      if (worker_status->stop) {
+        return true;
+      }
       eval_data->lock();
       DEG_graph_relations_update(eval_data->dg);
       DEG_evaluate_on_framechange(eval_data->dg, frame);
@@ -212,7 +215,7 @@ static void run_job(void *job_data, wmJobWorkerStatus *worker_status)
 {
   WorkerData *eval_data = static_cast<WorkerData *>(job_data);
   bool completed = false;
-  while (!completed) {
+  while (!completed && !worker_status->stop) {
     eval_data->restart.store(false, std::memory_order_release);
     completed = evaluate_dirty_frames(eval_data, worker_status);
   }
@@ -349,22 +352,25 @@ void background_eval_deregister(wmWindowManager &wm,
     /* Given target not registered. */
     return;
   }
-
-  eval_data->worker_data.lock();
-
   eval_data->active_targets.remove(target);
-  const int target_index = eval_data->worker_data.find_target_index(target);
-  BLI_assert(target_index != -1);
-  eval_data->worker_data.target_data.remove_and_reorder(target_index);
-  Main *bmain = DEG_get_bmain(eval_data->worker_data.dg);
-  ViewLayer *view_layer = DEG_get_input_view_layer(eval_data->worker_data.dg);
-  DEG_graph_free(eval_data->worker_data.dg);
-  eval_data->worker_data.dg = build_worker_depsgraph(
-      *bmain, scene, *view_layer, eval_data->active_targets);
 
-  /* No need to restart the job since no data was added to the worker that would need
-   * evaluation. */
-  eval_data->worker_data.unlock();
+  if (eval_data->active_targets.size() > 0) {
+    eval_data->worker_data.lock();
+    const int target_index = eval_data->worker_data.find_target_index(target);
+    BLI_assert(target_index != -1);
+    eval_data->worker_data.target_data.remove_and_reorder(target_index);
+    Main *bmain = DEG_get_bmain(eval_data->worker_data.dg);
+    ViewLayer *view_layer = DEG_get_input_view_layer(eval_data->worker_data.dg);
+    DEG_graph_free(eval_data->worker_data.dg);
+    eval_data->worker_data.dg = build_worker_depsgraph(
+        *bmain, scene, *view_layer, eval_data->active_targets);
+    /* No need to restart the job since no data was added to the worker that would need
+     * evaluation. */
+    eval_data->worker_data.unlock();
+  }
+  else {
+    WM_jobs_kill_type(&wm, &scene, WM_JOB_TYPE_MOTION_PATH_EVAL);
+  }
 }
 
 }  // namespace bke::animviz
@@ -411,7 +417,6 @@ void async_eval_allocate(bMotionPath &motion_path,
 void async_eval_free(bMotionPath &motion_path)
 {
   if (!motion_path.runtime->worker_buffer) {
-    BLI_assert_unreachable();
     return;
   }
   MEM_delete(motion_path.runtime->worker_buffer);
