@@ -411,7 +411,8 @@ void depsgraph_ensure_view_layer(Depsgraph *graph)
      * `layer.cc/layer_eval_view_layer`). This can lead to a crash in the evaluation.
      * See #161861.
      * The below update happens during evaluation. */
-    scene_id_node->tag_update(graph, DEG_UPDATE_SOURCE_SIDE_EFFECT_REQUEST);
+    Node *layer_collections_node = scene_id_node->find_component(NodeType::LAYER_COLLECTIONS);
+    layer_collections_node->tag_update(graph, DEG_UPDATE_SOURCE_SIDE_EFFECT_REQUEST);
   }
 }
 
