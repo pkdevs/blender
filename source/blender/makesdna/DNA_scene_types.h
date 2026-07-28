@@ -996,7 +996,6 @@ struct RenderData {
   char seq_prev_type = OB_SOLID;
   /** Flag use for sequence render/draw. */
   char seq_flag = 0;
-  
   char _pad5[4] = {};
 
   /* Render simplify. */
