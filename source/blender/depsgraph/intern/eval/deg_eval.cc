@@ -431,6 +431,53 @@ TaskPool *deg_evaluate_task_pool_create(DepsgraphEvalState *state)
 
 }  // namespace
 
+void deg_evaluate_copy_on_eval(Depsgraph *graph)
+{
+  /* Nothing to update, early out. */
+  if (graph->entry_tags.is_empty()) {
+    return;
+  }
+  if (!graph->is_allowed_to_read_main) {
+    return;
+  }
+
+  static std::atomic<uint64_t> global_update_count = 0;
+  graph->update_count = global_update_count.fetch_add(1) + 1;
+
+  graph->debug.begin_graph_evaluation();
+
+#ifdef WITH_PYTHON
+  /* Release the GIL so that Python drivers can be evaluated. See #91046. */
+  BPy_BEGIN_ALLOW_THREADS;
+#endif
+
+  graph->is_evaluating = true;
+
+  DepsgraphEvalState state;
+  state.graph = graph;
+  state.do_stats = graph->debug.do_time_debug();
+
+  /* Prepare all nodes for evaluation. */
+  initialize_execution(&state, graph);
+
+  TaskPool *task_pool = deg_evaluate_task_pool_create(&state);
+  evaluate_graph_threaded_stage(&state, task_pool, EvaluationStage::COPY_ON_EVAL);
+  BLI_task_pool_free(task_pool);
+
+  if (state.do_stats) {
+    deg_eval_stats_aggregate(graph);
+  }
+
+  deg_graph_clear_tags(graph);
+  graph->is_evaluating = false;
+
+#ifdef WITH_PYTHON
+  BPy_END_ALLOW_THREADS;
+#endif
+
+  graph->debug.end_graph_evaluation();
+}
+
 void deg_evaluate_on_refresh(Depsgraph *graph)
 {
   /* Nothing to update, early out. */

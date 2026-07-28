@@ -89,6 +89,17 @@ void DEG_evaluate_on_framechange(Depsgraph *graph,
   deg_flush_updates_and_refresh(deg_graph, sync_writeback);
 }
 
+void DEG_evaluate_buffer_main(Depsgraph *graph)
+{
+  deg::Depsgraph *deg_graph = reinterpret_cast<deg::Depsgraph *>(graph);
+  BLI_assert_msg(deg_graph->is_allowed_to_read_main,
+                 "This function is a no-op when not allowed to read main");
+
+  deg::graph_tag_ids_for_visible_update(deg_graph);
+  deg::deg_graph_flush_updates(deg_graph);
+  deg::deg_evaluate_copy_on_eval(deg_graph);
+}
+
 void DEG_set_allow_read_from_main(Depsgraph *graph, bool allow)
 {
   deg::Depsgraph *deg_graph = reinterpret_cast<deg::Depsgraph *>(graph);

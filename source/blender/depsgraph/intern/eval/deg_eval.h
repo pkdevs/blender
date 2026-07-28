@@ -23,4 +23,10 @@ struct Depsgraph;
  */
 void deg_evaluate_on_refresh(Depsgraph *graph);
 
+/**
+ * Evaluate all Copy On Eval nodes in the depsgraph. This ensures the depsgraph is in a state where
+ * it doesn't have to read from Main anymore.
+ */
+void deg_evaluate_copy_on_eval(Depsgraph *graph);
+
 }  // namespace blender::deg

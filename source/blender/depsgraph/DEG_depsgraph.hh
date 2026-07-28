@@ -202,6 +202,13 @@ void DEG_evaluate_on_refresh(
     Depsgraph *graph,
     DepsgraphEvaluateSyncWriteback sync_writeback = DEG_EVALUATE_SYNC_WRITEBACK_NO);
 
+/**
+ * Evaluate all nodes that read from main and store the result. After this call, the Depsgraph can
+ * be executed on a worker thread since it won't be touching Main anymore.
+ * See `DEG_set_allow_read_from_main`.
+ */
+void DEG_evaluate_buffer_main(Depsgraph *graph);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
