@@ -59,6 +59,8 @@ class NODE_MT_gn_curve_base(node_add_menu.NodeMenu):
         self.draw_menu(layout, path="Curve/Operations")
         self.draw_menu(layout, path="Curve/Primitives")
         self.draw_menu(layout, path="Curve/Topology")
+        layout.separator()
+        self.node_operator(layout, "GeometryNodeConstructCurves")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -143,7 +145,6 @@ class NODE_MT_gn_curve_primitives_base(node_add_menu.NodeMenu):
 
     def draw(self, _context):
         layout = self.layout
-        self.node_operator(layout, "GeometryNodeCurves")
         self.node_operator(layout, "GeometryNodeCurveArc")
         self.node_operator(layout, "GeometryNodeCurvePrimitiveBezierSegment")
         self.node_operator(layout, "GeometryNodeCurvePrimitiveCircle")
