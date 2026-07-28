@@ -615,6 +615,9 @@ struct SymbolParser : NodeErrorHandler {
               parse_local_scope(scope, local, prefix);
             }
             break;
+          case NodeType::PipelineDecl:
+            parse_pipeline_decl(scope, child, prefix);
+            break;
           default:
             break;
         }
@@ -1240,6 +1243,22 @@ struct SymbolParser : NodeErrorHandler {
         cls->template_data->instances.emplace(mangled.str, spec);
       }
     }
+  }
+
+  void parse_pipeline_decl(SymbolScope &scope, PipelineDecl decl, const std::string &prefix)
+  {
+    SymbolClass *type = scope.lookup_class("void");
+    SymbolVariable *sym = table.var_arena.alloc(
+        &scope, type, decl.front(), string(decl.identifier().str()));
+    sym->is_static = true;
+    scope.variables.emplace(sym->identifier, sym);
+
+    /* Instantiate in global resolved namespace. */
+    SymbolVariable *flat_var = table.var_arena.alloc(*sym);
+    sym->resolved = flat_var;
+    flat_var->resolved = sym;
+    flat_var->identifier = prefix + sym->identifier;
+    global.variables.try_emplace(flat_var->identifier, flat_var);
   }
 
   void parse_structured_binding(SymbolScope &scope, StructuredBinding decl)

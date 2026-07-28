@@ -250,6 +250,9 @@ struct CodegenContext : NodeErrorHandler {
         case NodeType::LocalScope:
           local_scope(LocalScope(node), *symbol.scopes[to_string(local_scope_id++)]);
           break;
+        case NodeType::PipelineDecl:
+          pipeline_decl(node, symbol);
+          break;
         default:
           builder << node;
           break;
@@ -269,6 +272,79 @@ struct CodegenContext : NodeErrorHandler {
         match_if('}');
       }
     }
+  }
+
+  void pipeline_decl(PipelineDecl stmt, SymbolScope &scope)
+  {
+    SymbolVariable *pipeline = scope.lookup_variable(stmt.identifier());
+
+    const bool is_graphic = stmt.type().str() == "PipelineGraphic";
+
+    FuncParamList params = stmt.parameters();
+
+    jump_to(stmt.front());
+    builder << stmt.type();
+    builder << pipeline->resolved->identifier;
+    match_if('(');
+
+    if (is_graphic) {
+      Expr vert_fn = params.child_first();
+      if (!vert_fn.is_valid() || vert_fn.child_count() != 1) {
+        error(params, "Expected vertex shader entry point function");
+        return;
+      }
+      /* Resolve vertex function. */
+      auto [fn, err] = scope.lookup_function(LocalVar(vert_fn.child_first()).identifier());
+      error(err);
+      if (fn->entry_point_type != SymbolFunction::EntryPointType::VERT) {
+        error(vert_fn, "Expected vertex shader entry point function");
+        return;
+      }
+      builder << fn->resolved->identifier;
+
+      Expr frag_fn = vert_fn.next();
+      if (!frag_fn.is_valid() || frag_fn.child_count() != 1) {
+        error(frag_fn, "Expected fragment shader entry point function");
+        return;
+      }
+      /* Resolve vertex function. */
+      auto [fn2, err2] = scope.lookup_function(LocalVar(frag_fn.child_first()).identifier());
+      error(err2);
+      if (fn2->entry_point_type != SymbolFunction::EntryPointType::FRAG) {
+        error(frag_fn, "Expected fragment shader entry point function");
+        return;
+      }
+      builder << fn2->resolved->identifier;
+
+      Expr constants_init = frag_fn.next();
+      while (constants_init.is_valid()) {
+        constants_init = constants_init.next();
+      }
+    }
+    else {
+      Expr comp_fn = params.child_first();
+      if (!comp_fn.is_valid() || comp_fn.child_count() != 1) {
+        error(comp_fn, "Expected compute shader entry point function");
+        return;
+      }
+      /* Resolve vertex function. */
+      auto [fn, err] = scope.lookup_function(LocalVar(comp_fn.child_first()).identifier());
+      error(err);
+      if (fn->entry_point_type != SymbolFunction::EntryPointType::COMP) {
+        error(comp_fn, "Expected compute shader entry point function");
+        return;
+      }
+      builder << fn->resolved->identifier;
+
+      Expr constants_init = comp_fn.next();
+      while (constants_init.is_valid()) {
+        constants_init = constants_init.next();
+      }
+    }
+
+    builder.curr = params.back();
+    match_if(')');
+    match_if(';');
   }
 
   void return_statement(ReturnStmt stmt, SymbolScope &scope)

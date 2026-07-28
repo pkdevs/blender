@@ -1051,6 +1051,25 @@ struct FuncCall : Node {
   }
 };
 
+struct PipelineDecl : Node {
+  NODE_COMMON(PipelineDecl);
+
+  IdQualified type() const
+  {
+    return child_first();
+  }
+
+  IdQualified identifier() const
+  {
+    return type().next();
+  }
+
+  FuncParamList parameters() const
+  {
+    return child_last();
+  }
+};
+
 struct EnumValue : Node {
   NODE_COMMON(EnumValue);
 

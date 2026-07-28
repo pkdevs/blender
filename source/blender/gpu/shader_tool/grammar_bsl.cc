@@ -271,9 +271,9 @@ struct BSLParser {
 
     NODE(PipelineDecl);
     /* PipelineGraphic / PipelineCompute. */
-    unqualified_id();
+    qualified_id();
     /* Name. */
-    unqualified_id();
+    qualified_id();
     function_parameter_list();
     match(';');
     return true;
