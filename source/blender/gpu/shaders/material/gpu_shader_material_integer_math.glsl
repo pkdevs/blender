@@ -91,7 +91,7 @@ void integer_math_gcd(int a, int b, int c, out int result)
 void integer_math_lcm(int a, int b, int c, out int result)
 {
   int gcd = euclid_gcd(a, b);
-  result = (gcd != 0) ? abs(a * b / gcd) : 0;
+  result = (gcd != 0) ? abs(a / gcd * b) : 0;
 }
 
 [[node]]
