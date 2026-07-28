@@ -1612,7 +1612,7 @@ float text_clip_middle_ex(const uiFontStyle *fstyle,
 
       size_t r_offset, r_len;
       r_offset = BLF_width_to_rstrlen(fstyle->uifont_id, str, max_len, parts_strwidth, nullptr);
-      StringRef r_trimmed = StringRef(str + r_offset).trim_left();
+      const StringRef r_trimmed = StringRef(str + r_offset).trim_left();
       r_offset = r_trimmed.data() - str;
       r_len = r_trimmed.size() + 1; /* +1 for the trailing '\0'. */
 
