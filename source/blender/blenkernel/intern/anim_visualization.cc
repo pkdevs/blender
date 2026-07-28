@@ -170,6 +170,7 @@ static bool evaluate_dirty_frames(WorkerData *eval_data, wmJobWorkerStatus *work
       all_done_left = true;
       all_done_right = true;
       eval_data->lock();
+      DEG_graph_relations_update(eval_data->dg);
       DEG_evaluate_on_framechange(eval_data->dg, frame);
       for (TargetData &target_data : eval_data->target_data) {
         const EvaluationTarget &target = target_data.target;
