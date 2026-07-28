@@ -15,6 +15,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_math_base.hh"
 #include "BLI_math_base_c.hh"
 
 /* own includes */
@@ -149,9 +150,9 @@ static void zbuf_add_to_span(ZSpan *zspan, const float v1[2], const float v2[2])
 
 void zspan_rasterize_triangle(ZSpan *zspan,
                               void *handle,
-                              float *v1_in,
-                              float *v2_in,
-                              float *v3_in,
+                              const float *v1_in,
+                              const float *v2_in,
+                              const float *v3_in,
                               void (*func)(void *, int, int, float, float))
 {
   float x0, y0, x1, y1, x2, y2, z0, z1, z2;
@@ -255,22 +256,20 @@ void zspan_rasterize_triangle(ZSpan *zspan,
 
 static void zspan_rasterize_conservative_line(ZSpan *zspan,
                                               void *handle,
-                                              float *v1,
-                                              float *v2,
-                                              float *uv1,
-                                              float *uv2,
+                                              const float *v1,
+                                              const float *v2,
+                                              const float *uv1,
+                                              const float *uv2,
                                               void (*func)(void *, int, int, float, float))
 {
-  const float miny = min_ff(v1[1], v2[1]);
-  const float maxy = max_ff(v1[1], v2[1]);
+  const float miny = std::min(v1[1], v2[1]);
+  const float maxy = std::max(v1[1], v2[1]);
 
   int y0 = ceil(miny) - 1;
   int y1 = floor(maxy);
 
   /* Clip and cull the line. */
-  if (y0 < 0) {
-    y0 = 0;
-  }
+  y0 = std::max(y0, 0);
   if (y1 >= zspan->recty) {
     y1 = zspan->recty - 1;
   }
@@ -288,40 +287,26 @@ static void zspan_rasterize_conservative_line(ZSpan *zspan,
     dir[1] /= len_sqr;
   }
 
-  /* Line equation. */
-  const float eps = 0.0001f;
-  float ax;
-
-  if (maxy - miny > eps) {
-    ax = (v2[0] - v1[0]) / (v2[1] - v1[1]);
-  }
+  /* X coordinates of the line endpoints. */
+  const float x_miny = (v1[1] < v2[1]) ? v1[0] : v2[0];
+  const float x_maxy = (v1[1] < v2[1]) ? v2[0] : v1[0];
+  const float inv_dy = math::safe_divide(1.0f, maxy - miny);
 
   for (; y0 <= y1; y0++) {
-    float minx, maxx;
+    /* Compute line x range inside current scanline, interpolating between endpoints. */
+    const float ta = (clamp_f(y0, miny, maxy) - miny) * inv_dy;
+    const float tb = (maxy - clamp_f(y0 + 1, miny, maxy)) * inv_dy;
+    const float xa = math::interpolate(x_miny, x_maxy, ta);
+    const float xb = math::interpolate(x_miny, x_maxy, 1.0f - tb);
 
-    /* Calculate line x range inside current scanline. */
-    if (maxy - miny > eps) {
-      minx = (clamp_f(y0, miny, maxy) - v1[1]) * ax + v1[0];
-      maxx = (clamp_f(y0 + 1, miny, maxy) - v1[1]) * ax + v1[0];
-
-      if (minx > maxx) {
-        float tmp = minx;
-        minx = maxx;
-        maxx = tmp;
-      }
-    }
-    else {
-      minx = min_ff(v1[0], v2[0]);
-      maxx = max_ff(v1[0], v2[0]);
-    }
+    const float minx = std::min(xa, xb);
+    const float maxx = std::max(xa, xb);
 
     int x0 = ceil(minx) - 1;
     int x1 = floor(maxx);
 
     /* Clip and cull scanline. */
-    if (x0 < 0) {
-      x0 = 0;
-    }
+    x0 = std::max(x0, 0);
     if (x1 >= zspan->rectx) {
       x1 = zspan->rectx - 1;
     }
@@ -344,9 +329,9 @@ static void zspan_rasterize_conservative_line(ZSpan *zspan,
 
 void zspan_rasterize_conservative_wireframe(ZSpan *zspan,
                                             void *handle,
-                                            float *v1,
-                                            float *v2,
-                                            float *v3,
+                                            const float *v1,
+                                            const float *v2,
+                                            const float *v3,
                                             void (*func)(void *, int, int, float, float))
 {
   float uv1[2] = {1, 0};
