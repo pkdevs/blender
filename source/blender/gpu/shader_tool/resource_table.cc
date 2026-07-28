@@ -609,6 +609,78 @@ void SourceProcessor::lower_resource_table(Parser &parser)
                                  Scope array,
                                  Token decl_end) {
       SrtType decl_type = SrtType::undefined;
+      if (attributes.is_invalid()) {
+        decl_type = SrtType::none;
+      }
+      else if (is_resource_table_attribute(attributes[1])) {
+        decl_type = SrtType::resource_table;
+      }
+      else if (is_vertex_input_attribute(attributes[1])) {
+        decl_type = SrtType::vertex_input;
+      }
+      else if (is_vertex_output_attribute(attributes[1])) {
+        decl_type = SrtType::vertex_output;
+      }
+      else if (is_fragment_output_attribute(attributes[1])) {
+        decl_type = SrtType::fragment_output;
+      }
+      else if (is_fragment_input_attribute(attributes[1])) {
+        decl_type = SrtType::fragment_input;
+      }
+      else {
+        return;
+      }
+
+      if (srt_type == SrtType::undefined) {
+        srt_type = decl_type;
+      }
+      else if (srt_type != decl_type) {
+        switch (srt_type) {
+          case SrtType::resource_table:
+            report_error(struct_name, "Structure expected to contain resources...");
+            break;
+          case SrtType::vertex_input:
+            report_error(struct_name, "Structure expected to contain vertex inputs...");
+            break;
+          case SrtType::vertex_output:
+            report_error(struct_name, "Structure expected to contain vertex outputs...");
+            break;
+          case SrtType::fragment_output:
+            report_error(struct_name, "Structure expected to contain fragment outputs...");
+            break;
+          case SrtType::fragment_input:
+            report_error(struct_name, "Structure expected to contain fragment inputs...");
+            break;
+          case SrtType::none:
+            report_error(struct_name, "Structure expected to contain plain data...");
+            break;
+          case SrtType::undefined:
+            break;
+        }
+
+        switch (decl_type) {
+          case SrtType::resource_table:
+            report_error(attributes[1], "...but member declared as resource.");
+            break;
+          case SrtType::vertex_input:
+            report_error(attributes[1], "...but member declared as vertex input.");
+            break;
+          case SrtType::vertex_output:
+            report_error(attributes[1], "...but member declared as vertex output.");
+            break;
+          case SrtType::fragment_output:
+            report_error(attributes[1], "...but member declared as fragment output.");
+            break;
+          case SrtType::fragment_input:
+            report_error(attributes[1], "...but member declared as fragment input.");
+            break;
+          case SrtType::none:
+            report_error(name, "...but member declared as plain data.");
+            break;
+          case SrtType::undefined:
+            break;
+        }
+      }
 
       switch (decl_type) {
         case SrtType::resource_table:
