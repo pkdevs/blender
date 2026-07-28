@@ -239,7 +239,7 @@ static StripEarlyOut early_out_compositor(const Strip *strip, float /*fac*/)
   return StripEarlyOut::DoEffect;
 }
 
-void compositor_effect_nodes_update_interface(Scene &sequencer_scene, Strip &strip)
+void compositor_effect_nodes_update_interface(Main &bmain, Scene &sequencer_scene, Strip &strip)
 {
   if (strip.type != STRIP_TYPE_COMPOSITOR || strip.effectdata == nullptr) {
     return;
@@ -251,7 +251,7 @@ void compositor_effect_nodes_update_interface(Scene &sequencer_scene, Strip &str
   }
   PointerRNA properties_ptr = RNA_pointer_create_discrete(
       &sequencer_scene.id, RNA_SequencerCompositorEffectProperties, comp);
-  RNA_ensure_and_sync_system_properties(properties_ptr, *comp->system_properties);
+  RNA_ensure_and_sync_system_properties(bmain, properties_ptr, *comp->system_properties);
 
   DEG_id_tag_update(&sequencer_scene.id, ID_RECALC_SEQUENCER_STRIPS);
 }

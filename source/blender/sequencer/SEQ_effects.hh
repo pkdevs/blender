@@ -19,6 +19,7 @@ namespace blender {
  * \ingroup sequencer
  */
 
+struct Main;
 struct Scene;
 struct Strip;
 struct VFont;
@@ -30,7 +31,7 @@ struct RenderData;
 void effect_ensure_initialized(Strip *strip);
 void effect_free(Strip *strip);
 
-void compositor_effect_nodes_update_interface(Scene &sequencer_scene, Strip &strip);
+void compositor_effect_nodes_update_interface(Main &bmain, Scene &sequencer_scene, Strip &strip);
 
 /**
  * For a compositor strip, compute per-input usage of the node group:

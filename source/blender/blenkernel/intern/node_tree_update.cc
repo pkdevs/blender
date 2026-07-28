@@ -464,7 +464,8 @@ class NodeTreeMainUpdater {
             ModifierData *md = pair.second;
 
             if (md->type == eModifierType_Nodes) {
-              MOD_nodes_update_interface(object, reinterpret_cast<NodesModifierData *>(md));
+              MOD_nodes_update_interface(
+                  *bmain_, object, reinterpret_cast<NodesModifierData *>(md));
             }
           }
         }
@@ -476,11 +477,11 @@ class NodeTreeMainUpdater {
 
             if (md->type == eSeqModifierType_Compositor) {
               seq::compositor_modifier_nodes_update_interface(
-                  *scene, *reinterpret_cast<SequencerCompositorModifierData *>(md));
+                  *bmain_, *scene, *reinterpret_cast<SequencerCompositorModifierData *>(md));
             }
           }
           for (const StripEffectPair &pair : relations_.get_compositor_effect_users(ntree)) {
-            seq::compositor_effect_nodes_update_interface(*pair.first, *pair.second);
+            seq::compositor_effect_nodes_update_interface(*bmain_, *pair.first, *pair.second);
           }
         }
       }
@@ -600,6 +601,11 @@ class NodeTreeMainUpdater {
     ntree.runtime->link_errors.clear();
     ntree.runtime->invalid_zone_output_node_ids.clear();
     ntree.runtime->shader_node_errors.clear();
+
+    if (ntree.runtime->changed_flag & NTREE_CHANGED_ANY) {
+      result.interface_changed = true;
+      result.output_changed = true;
+    }
 
     if (this->update_panel_toggle_names(ntree)) {
       result.interface_changed = true;
