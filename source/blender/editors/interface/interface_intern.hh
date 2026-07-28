@@ -198,7 +198,6 @@ struct Button : NonMovable {
   Layout *layout = nullptr;
   int64_t flag = 0;
   int drawflag = 0;
-  char flag2 = 0;
 
   TextDirection text_direction = TextDirection::Default;
 
@@ -388,6 +387,8 @@ struct ButtonText : public Button {
    */
   std::function<void(StringRefNull new_name)> rename_full_func = nullptr;
   std::string rename_full_new;
+  /** Allow double click editing on text buttons with no emboss styled like labels. */
+  bool use_label_style = false;
 };
 
 /** Derived struct for #ButtonType::TextBox */
@@ -501,6 +502,18 @@ struct ButtonLabel : public Button {
   float alpha_factor = 1.0f;
   /** When the button draws an icon, also draw a mono-colored border for it. */
   bool draw_icon_border = false;
+
+  bool is_multiline = false;
+  /**
+   * Wrap cache from last layout pass.
+   * This is also referenced in the button owning #Block so it can be looked up and reused in
+   * following layout passes. Wrapped text references an allocated string, so it can't be just
+   * copied/moved around.
+   */
+  std::shared_ptr<TextWrapCache> wrap_cache;
+  /** Maximum lines to be drawn in multi-line labels, 0 means all. */
+  int max_lines = 0;
+  FontStyleAlign text_align = UI_STYLE_TEXT_LEFT;
 };
 
 /** Derived struct for #ButtonType::Scroll. */
@@ -675,6 +688,8 @@ struct Block {
   Block *next = nullptr, *prev = nullptr;
 
   Vector<std::unique_ptr<Button>> buttons_ptrs;
+  Vector<std::shared_ptr<TextWrapCache>> text_wrap_cache;
+
   Panel *panel = nullptr;
   Block *oldblock = nullptr;
 
@@ -1029,6 +1044,12 @@ struct PopupBlockHandle {
   void (*popup_func)(bContext *C, void *arg, int event) = nullptr;
   void (*cancel_func)(bContext *C, void *arg) = nullptr;
   void *popup_arg = nullptr;
+
+  /**
+   * The StructRNA type that owns this popup, this popup should be removed if this type gets
+   * unregistered.
+   */
+  StructRNA *srna_owner = nullptr;
 
   /** Store data for refreshing popups. */
   PopupBlockCreate popup_create_vars;
@@ -1689,7 +1710,9 @@ Block *block_find_mouse_over_ex(const ARegion *region, const int xy[2], bool onl
     ATTR_NONNULL(1, 2);
 Block *block_find_mouse_over(const ARegion *region, const wmEvent *event, bool only_clip);
 
-Button *region_find_first_but_test_flag(ARegion *region, int flag_include, int flag_exclude);
+Button *region_find_first_but_test_flag(ARegion *region,
+                                        int64_t flag_include,
+                                        int64_t flag_exclude);
 Button *region_find_active_but(ARegion *region) ATTR_WARN_UNUSED_RESULT;
 bool region_contains_point_px(const ARegion *region, const int xy[2])
     ATTR_NONNULL(1, 2) ATTR_WARN_UNUSED_RESULT;
