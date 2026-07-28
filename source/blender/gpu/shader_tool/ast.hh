@@ -912,6 +912,33 @@ struct FuncParamList : Node {
   NODE_COMMON(FuncParamList);
 
   bool is_empty() const;
+
+  struct Splat1 {
+    Expr arg1;
+  };
+  struct Splat2 {
+    Expr arg1, arg2;
+  };
+  struct Splat3 {
+    Expr arg1, arg2, arg3;
+  };
+
+  Splat1 splat_1() const
+  {
+    return {child_first()};
+  }
+
+  Splat2 splat_2() const
+  {
+    Node node = child_first();
+    return {node, node.next()};
+  }
+
+  Splat3 splat_3() const
+  {
+    Node node = child_first();
+    return {node, node.next(), node.next().next()};
+  }
 };
 
 inline FuncParamList Attr::parameters() const
