@@ -5285,9 +5285,6 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
         BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_TAG, false);
       }
       BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
-        if (!uvedit_face_visible_test(scene, efa)) {
-          continue;
-        }
         if (use_select_linked) {
           if (linked_helper->face_check(efa)) {
             continue;
@@ -5295,9 +5292,12 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
         }
         else {
           BM_elem_flag_disable(efa, BM_ELEM_TAG);
-          if (select == uvedit_face_select_test(scene, bm, efa)) {
-            continue;
-          }
+        }
+        if (!uvedit_face_visible_test(scene, efa)) {
+          continue;
+        }
+        if (!use_select_linked && select == uvedit_face_select_test(scene, bm, efa)) {
+          continue;
         }
 
         float cent[2];
@@ -5523,9 +5523,6 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
         BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_TAG, false);
       }
       BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
-        if (!uvedit_face_visible_test(scene, efa)) {
-          continue;
-        }
         if (use_select_linked) {
           if (linked_helper->face_check(efa)) {
             continue;
@@ -5533,9 +5530,12 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
         }
         else {
           BM_elem_flag_disable(efa, BM_ELEM_TAG);
-          if (select == uvedit_face_select_test(scene, bm, efa)) {
-            continue;
-          }
+        }
+        if (!uvedit_face_visible_test(scene, efa)) {
+          continue;
+        }
+        if (!use_select_linked && select == uvedit_face_select_test(scene, bm, efa)) {
+          continue;
         }
 
         float cent[2];
