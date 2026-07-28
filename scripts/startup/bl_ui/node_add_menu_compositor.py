@@ -357,6 +357,7 @@ class NODE_MT_compositor_node_math_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "FunctionNodeCompare")
         self.node_operator_with_searchable_enum(context, layout, "FunctionNodeFloatToInt", "rounding_mode")
         self.node_operator(layout, "ShaderNodeFloatCurve")
+        self.node_operator(layout, "FunctionNodeHashValue")
         self.node_operator(layout, "ShaderNodeMapRange")
         self.node_operator_with_searchable_enum(
             context,
