@@ -140,7 +140,7 @@ struct VisibleLightIterator {
         int bit_index;
         while ((bit_index = findLSB(local_word)) != -1) {
           local_word &= ~1u << uint(bit_index);
-          index = local_word_idx * 32u + uint(bit_index);
+          index = int(local_word_idx * 32u + uint(bit_index));
           return true;
         }
         local_word_idx++;

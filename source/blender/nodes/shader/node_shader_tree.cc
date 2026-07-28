@@ -1043,10 +1043,10 @@ void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
 
   if (valid_tree) {
     ntree_shader_pruned_unused(localtree, output);
-    // ntree_shader_setup_custom_lighting_zone(localtree);
     if (output != nullptr) {
       ntree_shader_shader_to_rgba_branches(localtree);
       ntree_shader_weight_tree_invert(localtree, output);
+      ntree_shader_setup_custom_lighting_zone(localtree);
     }
   }
 

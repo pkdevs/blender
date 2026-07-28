@@ -823,19 +823,43 @@ void scene_time_uniforms(float &seconds, float &frame)
   frame = uni.uniform_buf.scene.frame;
 }
 
-#define LIGHT_ITER_BEGIN(light_index) \
+void light_iter_init(eevee::light::VisibleLightIterator &iter)
+{
+#ifdef GPU_FRAGMENT_SHADER
+  iter.init(gl_FragCoord.xy,
+            dot(view_matrices_get().forward(), g_data.P) -
+                dot(view_matrices_get().forward(), view_matrices_get().position()));
+#endif
+}
+bool light_iter_next(eevee::light::VisibleLightIterator &iter)
+{
+#ifdef GPU_FRAGMENT_SHADER
+  return iter.next();
+#else
+  return false;
+#endif
+}
+bool light_iter_should_skip(eevee::light::VisibleLightIterator &iter)
+{
+#ifdef GPU_FRAGMENT_SHADER
+  return iter.should_skip(g_data.P);
+#else
+  return true;
+#endif
+}
+
+#define LIGHT_ITER_BEGIN(light_index_) \
   { \
     eevee::light::VisibleLightIterator iter; \
-    iter.init(gl_FragCoord.xy, \
-              dot(view_matrices_get().forward(), g_data.P) - \
-                  dot(view_matrices_get().forward(), view_matrices_get().position())); \
-    while (iter.next()) { \
-      if (iter.should_skip()) { \
+    light_iter_init(iter); \
+    while (light_iter_next(iter)) { \
+      if (light_iter_should_skip(iter)) { \
         continue; \
       } \
+      light_index_ = iter.index; \
       g_data.light_index = iter.index;
 
-#define LIGHT_ITER_END(shader, r_shader) \
+#define LIGHT_ITER_END() \
   } \
   }
 

@@ -16,6 +16,9 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
   b.add_output<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
+
+  b.add_input<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
 }
 
 static int node_shader_fn(GPUMaterial *mat,
@@ -37,8 +40,8 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNodeTree *ntree = b.tree_or_null();
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
-  b.add_input<decl::Shader>("Shader"_ustr).available(is_gpu_internal);
-  b.add_output<decl::Shader>("Shader"_ustr).available(is_gpu_internal);
+  b.add_input<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
 }
 
 static int node_shader_fn(GPUMaterial *mat,
@@ -48,7 +51,7 @@ static int node_shader_fn(GPUMaterial *mat,
                           GPUNodeStack *out)
 {
   int zone_id = node->identifier;
-  return GPU_stack_link_zone(mat, node, "LIGHT_ITER_END", in, out, zone_id, true, 1, 1);
+  return GPU_stack_link_zone(mat, node, "LIGHT_ITER_END", in, out, zone_id, true, 0, 0);
 }
 
 }  // namespace light_iter_output_node
