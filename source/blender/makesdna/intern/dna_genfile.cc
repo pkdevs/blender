@@ -315,7 +315,7 @@ static const StringRef sdna_data_pointer_read_string(const char *&data,
                                                      const char **r_error_message)
 {
   BLI_assert(static_cast<const char *>(data_pointer_end) >= data);
-  const char *str_end = std::char_traits<const char>::find(
+  const char *str_end = std::char_traits<char>::find(
       data, size_t(static_cast<const char *>(data_pointer_end) - data), '\0');
   if (!str_end) [[unlikely]] {
     *r_error_message = "Invalid string data in SDNA file";
@@ -336,7 +336,7 @@ static const StringRef sdna_data_pointer_read_string(const char *&data,
 /**
  * Check a struct's declared size matches the sum of its member sizes.
  *
- * Blender's own DNA always satisfies this (makesdna uses explicit `_pad` members, never implicit
+ * Blender's own DNA always satisfies this (`makesdna` uses explicit `_pad` members, never implicit
  * padding), so a mismatch means corrupt sizes - which would let struct reconstruction stride
  * `old_block` past the end of the file data.
  *
