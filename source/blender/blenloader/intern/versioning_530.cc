@@ -203,7 +203,6 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 10)) {
     for (Brush &brush : bmain->brushes) {
       if (ELEM(brush.ob_mode, OB_MODE_SCULPT, OB_MODE_VERTEX_PAINT)) {
-        printf("  Brush %s\n", brush.id.name + 2);
         brush.flag2 |= BRUSH_USE_UNIFIED_PAINT_SIZE | BRUSH_USE_UNIFIED_PAINT_COLOR;
       }
       if (ELEM(brush.ob_mode, OB_MODE_WEIGHT_PAINT)) {
