@@ -110,20 +110,9 @@ struct BGEvalJobData {
   Set<EvaluationTarget> active_targets;
 };
 
-static void run_job(void *job_data, wmJobWorkerStatus *worker_status)
+static bool evaluate_motionpath_range(WorkerData *eval_data, wmJobWorkerStatus *worker_status)
 {
-  WorkerData *eval_data = static_cast<WorkerData *>(job_data);
-restart:
-  eval_data->restart.store(false, std::memory_order_release);
   const int center_frame = eval_data->evaluation_center.load(std::memory_order_acquire);
-  eval_data->lock();
-  DEG_evaluate_on_framechange(eval_data->dg, center_frame);
-  for (TargetData &target_data : eval_data->target_data) {
-    const EvaluationTarget &target = target_data.target;
-    target_data.eval(eval_data->dg, target, center_frame);
-  }
-  eval_data->unlock();
-
   Bounds<int> evaluated_range = {center_frame, center_frame};
 
   bool all_done_left = true;
@@ -165,14 +154,33 @@ restart:
     eval_data->evaluated_range.store(evaluated_range, std::memory_order_release);
     worker_status->do_update = true;
     if (eval_data->restart.load(std::memory_order_acquire)) {
-      goto restart;
+      return false;
     }
 
     if (all_done_left && all_done_right) {
-      break;
+      return true;
     }
     /* TODO remove before flight. */
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+  return true;
+}
+
+static void run_job(void *job_data, wmJobWorkerStatus *worker_status)
+{
+  WorkerData *eval_data = static_cast<WorkerData *>(job_data);
+  bool completed = false;
+  while (!completed) {
+    eval_data->restart.store(false, std::memory_order_release);
+    const int center_frame = eval_data->evaluation_center.load(std::memory_order_acquire);
+    eval_data->lock();
+    DEG_evaluate_on_framechange(eval_data->dg, center_frame);
+    for (TargetData &target_data : eval_data->target_data) {
+      const EvaluationTarget &target = target_data.target;
+      target_data.eval(eval_data->dg, target, center_frame);
+    }
+    eval_data->unlock();
+    completed = evaluate_motionpath_range(eval_data, worker_status);
   }
 }
 
