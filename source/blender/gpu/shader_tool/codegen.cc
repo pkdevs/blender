@@ -1328,7 +1328,7 @@ struct CodegenContext : NodeErrorHandler {
   {
     string str;
     for (auto &[k, var] : scope->variables) {
-      if (var->type->is_srt()) {
+      if (var->type->is_srt() && var->type->srt_type != ResourceTableType::VERTEX_OUT) {
         str += " && defined(CREATE_INFO_" + var->type->resolved->identifier + ")";
       }
     }
@@ -1442,7 +1442,6 @@ struct CodegenContext : NodeErrorHandler {
         case ResourceType::BASE_INSTANCE:
         case ResourceType::NUM_WORK_GROUP:
         case ResourceType::INSTANCE_INDEX:
-        case ResourceType::POSITION:
         case ResourceType::FRAG_STENCIL_REF:
           create_info_decl += "BUILTINS(BuiltinBits::" + to_str(res_type) + ")\n";
           break;
@@ -1466,18 +1465,17 @@ struct CodegenContext : NodeErrorHandler {
           }
           break;
         }
+        case ResourceType::SUBPASS_IN:
         case ResourceType::OUT:
-          if (fn.entry_point_type == SymbolFunction::EntryPointType::VERT) {
+        case ResourceType::IN:
+          if (var->type->srt_type == ResourceTableType::VERTEX_OUT) {
             create_info_decl += "VERTEX_OUT(" + resolved_type + "_t)\n";
           }
           else {
             create_info_decl += "ADDITIONAL_INFO(" + resolved_type + ")\n";
           }
           break;
-        case ResourceType::SUBPASS_IN:
-        case ResourceType::IN:
-          create_info_decl += "ADDITIONAL_INFO(" + resolved_type + ")\n";
-          break;
+        case ResourceType::POSITION:
         case ResourceType::LEGACY_INFO:
         case ResourceType::COMPILATION_CONST:
         case ResourceType::SPECIALIZATION_CONST:
@@ -1539,8 +1537,17 @@ struct CodegenContext : NodeErrorHandler {
       if (decl.is_const()) {
         builder.ss << "const ";
       }
-      id_type_resolved(cls.identifier(), scope);
-      builder.ss << "&this_";
+      SymbolClass *cls_resolved = id_type_resolved(cls.identifier(), scope);
+      if (cls_resolved->is_srt()) {
+        /* WORKAROUND: Do not pass SRT by reference otherwise we get a compilation error on metal
+         * we cannot bind to a temporary when the caller is just calling a constructor as the
+         * parameter. */
+        builder.ss << "this_";
+      }
+      else {
+        builder.ss << "&this_";
+      }
+
       if (!list.is_empty()) {
         builder.ss << ", ";
       }
@@ -1920,21 +1927,23 @@ struct CodegenContext : NodeErrorHandler {
   {
     node = node.next();
     if (node.type() == NodeType::Op && node.front() == TokenType::Dot) {
-      if (cls->is_srt()) {
-        /* Remove access to SRT type (makes the resource global). */
-        skip_node(node);
-      }
-      else {
-        builder << node;
+      if (cls == nullptr) {
+        error(node, "Cannot access member of unknown class");
+        return;
       }
       Node member = node.next();
-      if (cls == nullptr) {
-        /* TODO(fclem): Error. */
-      }
-      else if (member.type() == NodeType::FuncCall) {
+      if (member.type() == NodeType::FuncCall) {
+        builder << node;
         func_call(expr_scope, member, *cls, true);
       }
       else {
+        if (cls->is_srt()) {
+          /* Remove access to SRT type (makes the resource global). */
+          skip_node(node);
+        }
+        else {
+          builder << node;
+        }
         local_var(expr_scope, member, *cls, true);
       }
     }
@@ -2086,17 +2095,25 @@ struct CodegenContext : NodeErrorHandler {
 
   void declarator(Declarator decl, SymbolScope &scope, bool skip_value = false)
   {
+    ArrayDecl array = decl.array();
+    SymbolVariable *var = scope.lookup_variable(decl.identifier());
+
     const bool par = match_if('(');
-    match_if('&');
+    if (var->type->is_srt()) {
+      /* WORKAROUND: Do not pass SRT by reference because it causes issue on metal when the caller
+       * is just calling the constructor in place. */
+      skip_if('&');
+    }
+    else {
+      match_if('&');
+    }
     id_var_decl_resolved(decl.identifier(), scope);
     if (par) {
       match_if(')');
     }
 
-    ArrayDecl array = decl.array();
     array_decl(array, decl, scope);
 
-    SymbolVariable *var = scope.lookup_variable(decl.identifier());
     if (!var->is_error && var->is_constexpr) {
       builder.curr = decl.back();
       builder << "= " + to_string(var->value);
@@ -2263,11 +2280,12 @@ struct CodegenContext : NodeErrorHandler {
     return cls;
   }
 
-  void id_type_resolved(IdQualified id, const SymbolScope &scope)
+  SymbolClass *id_type_resolved(IdQualified id, const SymbolScope &scope)
   {
     auto *cls_resolved = id_type_lookup_resolved(id, scope);
     builder.curr = id.back();
     builder << cls_resolved->identifier + trivia(id);
+    return cls_resolved;
   }
 
   /* Lookup only in the give scope. */
@@ -2316,7 +2334,7 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     if (var->type->is_srt()) {
-      if (id.back().next() == TokenType::Dot) {
+      if (id.back().next() == TokenType::Dot && id.parent().next().next() != NodeType::FuncCall) {
         /* Remove access to SRT type (makes the resource global). */
         skip_node(id);
       }

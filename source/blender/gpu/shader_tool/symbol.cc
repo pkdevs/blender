@@ -1021,14 +1021,14 @@ struct SymbolParser : NodeErrorHandler {
       cls->classes.emplace(alias_name, cls);
     }
 
+    parse_scope(*cls, decl.body(), prefix + cls->identifier + ns_sep, temp);
+
     /* Instantiate in global resolved namespace. */
     SymbolClass *flat_cls = table.cls_arena.alloc(*cls);
     cls->resolved = flat_cls;
     flat_cls->resolved = cls;
     flat_cls->identifier = prefix + cls->identifier;
     global.classes.try_emplace(flat_cls->identifier, flat_cls);
-
-    parse_scope(*cls, decl.body(), prefix + cls->identifier + ns_sep, temp);
 
     if (cls->is_enum) {
       auto [underlying_type, err] = scope.lookup_class(decl.parent_class());
@@ -1443,9 +1443,10 @@ struct SymbolParser : NodeErrorHandler {
         if (cls->is_anonymous || cls->is_union) {
           /* Append accessor function. */
           string suffix = cls->is_union ? "()" : "";
+          string prefix = cls->is_union ? "_" : "";
           /* Create a resolved symbol. */
           SymbolVariable *resolved = table.var_arena.alloc(&scope, type, decl);
-          resolved->identifier = anon_prefix + resolved->identifier + suffix;
+          resolved->identifier = anon_prefix + prefix + resolved->identifier + suffix;
           sym->resolved = resolved;
           /* Alias to the first, non-anonymous parent. */
           named_parent->variables.emplace(sym->identifier, sym);
@@ -2489,6 +2490,9 @@ void SymbolTable::register_builtins(LocalScope node)
     }
     sym->resolved = sym;
     root->function_emplace(sym);
+    /* function_emplace will mutate the identifier if this is an overload.
+     * Fix that. */
+    sym->identifier = fn.id;
   }
 
   struct BuiltinConst {

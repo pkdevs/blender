@@ -306,7 +306,7 @@ SourceProcessor::Result SourceProcessor::convert_bsl()
     lower_pipeline_definition(parser, filename);
     /* Lower class methods. */
     lower_union_setters(parser);
-    lower_method_calls(parser);
+    lower_method_calls(parser, false);
     /* Lower string, assert, printf. */
     lower_strings(parser);
     lower_printf(parser);

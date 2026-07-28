@@ -336,7 +336,7 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
 }
 
 /* Transform `a.fn(b)` into `fn(a, b)`. */
-void SourceProcessor::lower_method_calls(Parser &parser)
+void SourceProcessor::lower_method_calls(Parser &parser, bool with_prefix)
 {
   do {
     parser().foreach_scope(ScopeType::Function, [&](Scope scope) {
@@ -374,7 +374,7 @@ void SourceProcessor::lower_method_calls(Parser &parser)
           break;
         }
         string this_str = parser.substr_range_inclusive(start_of_this, end_of_this);
-        string func_str = method_call_prefix + string(func.str());
+        string func_str = (with_prefix ? method_call_prefix : "") + string(func.str());
         const bool has_no_arg = par_open.next() == ')';
         /* `a.fn(b)` -> `_fn(a, b)` */
         parser.replace_try(
