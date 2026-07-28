@@ -1276,6 +1276,13 @@ static void rna_def_node_interface_socket(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Description", "Socket description");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeTreeInterfaceItem_update");
 
+  prop = RNA_def_property(srna, "short_label", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop,
+      "Short Label",
+      "Optional shorter label of the socket that is shown when panel names are shown too");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeTreeInterfaceItem_update");
+
   prop = RNA_def_property(srna, "socket_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_dummy_DEFAULT_items);
   RNA_def_property_enum_funcs(prop,

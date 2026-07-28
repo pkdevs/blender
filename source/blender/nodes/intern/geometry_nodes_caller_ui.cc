@@ -488,7 +488,9 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
     return;
   }
 
-  std::string name = socket.name ? IFACE_(socket.name) : "";
+  std::string name = socket.short_label ? IFACE_(socket.short_label) :
+                     socket.name        ? IFACE_(socket.name) :
+                                          "";
 
   /* If the property has a prefix that's the same string as the name of the panel it's in, remove
    * the prefix so it appears less verbose. */

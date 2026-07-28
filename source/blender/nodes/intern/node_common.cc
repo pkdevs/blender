@@ -435,6 +435,7 @@ static BaseSocketDeclarationBuilder &build_interface_socket_declaration(
                 .idname(io_socket.socket_type)
                 .init_socket_fn(get_init_socket_fn(tree.tree_interface, io_socket));
   }
+  decl->short_label(UString(io_socket.short_label ? io_socket.short_label : ""));
   decl->description(io_socket.description ? io_socket.description : "");
   decl->hide_value(io_socket.flag & NODE_INTERFACE_SOCKET_HIDE_VALUE);
   decl->compact(io_socket.flag & NODE_INTERFACE_SOCKET_COMPACT);

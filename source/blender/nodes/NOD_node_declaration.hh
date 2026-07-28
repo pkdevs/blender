@@ -171,6 +171,15 @@ struct OutputStructureTypeDependency {
 class SocketDeclaration : public ItemDeclaration {
  public:
   UString name;
+  /**
+   * Optional shorter label of the socket that is used when drawing name in a place where the panel
+   * names are visible and provide additional context. For example, a socket named "Subsurface
+   * Radius" can have a short label "Radius" if it's in a "Subsurface" panel.
+   *
+   * In some cases the short labels can be generated automatically if they have the panel name as
+   * prefix. However, sometimes this would lead to weird socket names and it does not work well
+   * with translations.
+   */
   UString short_label;
   UString identifier;
   std::string description;

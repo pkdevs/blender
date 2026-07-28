@@ -713,6 +713,7 @@ static void item_copy(bNodeTreeInterfaceItem &dst,
       BLI_assert(src_socket.socket_type != nullptr);
 
       dst_socket.name = BLI_strdup_null(src_socket.name);
+      dst_socket.short_label = BLI_strdup_null(src_socket.short_label);
       dst_socket.description = BLI_strdup_null(src_socket.description);
       dst_socket.socket_type = BLI_strdup(src_socket.socket_type);
       dst_socket.default_attribute_name = BLI_strdup_null(src_socket.default_attribute_name);
@@ -752,6 +753,7 @@ static void item_free(bNodeTreeInterfaceItem &item, const bool do_id_user)
       }
 
       MEM_SAFE_DELETE(socket.name);
+      MEM_SAFE_DELETE(socket.short_label);
       MEM_SAFE_DELETE(socket.description);
       MEM_SAFE_DELETE(socket.socket_type);
       MEM_SAFE_DELETE(socket.default_attribute_name);
@@ -782,6 +784,7 @@ static void item_write_data(BlendWriter *writer, bNodeTreeInterfaceItem &item)
     case NodeTreeInterfaceItemType::Socket: {
       bNodeTreeInterfaceSocket &socket = reinterpret_cast<bNodeTreeInterfaceSocket &>(item);
       writer->write_string(socket.name);
+      writer->write_string(socket.short_label);
       writer->write_string(socket.identifier);
       writer->write_string(socket.description);
       writer->write_string(socket.socket_type);
@@ -891,6 +894,7 @@ static void item_read_data(BlendDataReader *reader, bNodeTreeInterfaceItem &item
     case NodeTreeInterfaceItemType::Socket: {
       bNodeTreeInterfaceSocket &socket = reinterpret_cast<bNodeTreeInterfaceSocket &>(item);
       BLO_read_string(reader, &socket.name);
+      BLO_read_string(reader, &socket.short_label);
       BLO_read_string(reader, &socket.description);
       BLO_read_string(reader, &socket.socket_type);
       BLO_read_string(reader, &socket.default_attribute_name);

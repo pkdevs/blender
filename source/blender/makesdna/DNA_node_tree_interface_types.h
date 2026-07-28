@@ -130,6 +130,7 @@ struct bNodeTreeInterfaceSocket {
 
   /* UI name of the socket. */
   char *name = nullptr;
+  char *short_label = nullptr;
   char *description = nullptr;
   /* Type idname of the socket to generate, e.g. "NodeSocketFloat". */
   char *socket_type = nullptr;

@@ -77,6 +77,7 @@ void node_tree_interface_draw(bContext &C, ui::Layout &layout, bNodeTree &tree)
     const bke::bNodeSocketType *stype = socket->socket_typeinfo();
     layout.prop(&active_item_ptr, "socket_type", UI_ITEM_NONE, IFACE_("Type"), ICON_NONE);
     layout.prop(&active_item_ptr, "description", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(&active_item_ptr, "short_label", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     if (tree.type == NTREE_GEOMETRY) {
       if (nodes::socket_type_supports_attributes(stype->type)) {
         if (socket->flag & NODE_INTERFACE_SOCKET_OUTPUT) {
