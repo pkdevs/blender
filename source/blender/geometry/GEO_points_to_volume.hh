@@ -118,6 +118,8 @@ const CPPType &points_rasterize_grid_type(const PointRasterizeType rasterize_typ
 struct PointRasterizeAttributeInfo {
   StringRef name;
   PointRasterizeType type;
+  /** Only for vector grids: compute vector components located on faces instead of corners. */
+  bool use_staggered_vector;
 };
 
 /** Kernel functions for weighting point influence on surrounding voxels. */

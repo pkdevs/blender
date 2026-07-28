@@ -224,6 +224,9 @@ static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
           panel->use_property_split_set(true);
           panel->use_property_decorate_set(false);
           panel->prop(item_ptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+          if (output_type == SOCK_VECTOR) {
+            panel->prop(item_ptr, "use_staggered_vector", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+          }
         });
   }
 }
@@ -290,11 +293,13 @@ static void node_geo_exec(GeoNodeExecParams params)
     const geometry::PointRasterizeType rasterize_type = get_rasterize_item_type(
         NodeGeometryRasterizePointsItemType(item.type));
     const CPPType &attribute_type = geometry::points_rasterize_attribute_type(rasterize_type);
+    const bool use_staggered_vector = (item.flag &
+                                       GEO_NODE_RASTERIZE_POINTS_ITEM_VECTOR_STAGGERED);
 
     value_buffers[i] = GArray<>(attribute_type, points_num);
     /* Note: Item name is unique and can be used as an attribute identifier. */
     point_data_grid_attributes.append({item.name, value_buffers[i].as_span()});
-    point_rasterize_attributes.append({item.name, rasterize_type});
+    point_rasterize_attributes.append({item.name, rasterize_type, use_staggered_vector});
   }
 
   for (const int component_i : component_types.index_range()) {
