@@ -97,6 +97,7 @@ set(DEFSRC
   rna_volume.cc
   rna_wm.cc
   rna_wm_gizmo.cc
+  rna_wm_undo.cc
   rna_workspace.cc
   rna_world.cc
   rna_xr.cc
@@ -484,6 +485,7 @@ target_compile_definitions(bf_rna PRIVATE RNA_RUNTIME)
 if(WITH_GTESTS)
   set(TEST_SRC
     makesrna_test.cc
+    rna_path_test.cc
   )
   set(TEST_LIB
     ${LIB}

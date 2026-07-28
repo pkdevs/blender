@@ -157,9 +157,7 @@ static void node_declare(NodeDeclarationBuilder &b)
           .align_with_previous();
     }
   }
-  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr)
-      .structure_type(StructureType::Field)
-      .custom_draw(socket_items::ui::draw_extend_socket_fn<RasterizePointsItemsAccessor>());
+  b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr).structure_type(StructureType::Field);
   b.add_output<decl::Extend>(""_ustr, "__extend__"_ustr)
       .structure_type(StructureType::Field)
       .align_with_previous();
@@ -224,9 +222,6 @@ static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
           panel->use_property_split_set(true);
           panel->use_property_decorate_set(false);
           panel->prop(item_ptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-          if (output_type == SOCK_VECTOR) {
-            panel->prop(item_ptr, "use_staggered_vector", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-          }
         });
   }
 }
@@ -293,13 +288,11 @@ static void node_geo_exec(GeoNodeExecParams params)
     const geometry::PointRasterizeType rasterize_type = get_rasterize_item_type(
         NodeGeometryRasterizePointsItemType(item.type));
     const CPPType &attribute_type = geometry::points_rasterize_attribute_type(rasterize_type);
-    const bool use_staggered_vector = (item.flag &
-                                       GEO_NODE_RASTERIZE_POINTS_ITEM_VECTOR_STAGGERED);
 
     value_buffers[i] = GArray<>(attribute_type, points_num);
     /* Note: Item name is unique and can be used as an attribute identifier. */
     point_data_grid_attributes.append({item.name, value_buffers[i].as_span()});
-    point_rasterize_attributes.append({item.name, rasterize_type, use_staggered_vector});
+    point_rasterize_attributes.append({item.name, rasterize_type});
   }
 
   for (const int component_i : component_types.index_range()) {
@@ -367,6 +360,7 @@ static void node_register()
   ntype.ui_name = "Rasterize Points";
   ntype.ui_description = "Create volume grids from points with a weighted sum";
   ntype.nclass = NODE_CLASS_GEOMETRY;
+  ntype.default_width = bke::NodeWidth::_200;
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
   ntype.blend_write_storage_content = node_blend_write;
@@ -397,68 +391,6 @@ void RasterizePointsItemsAccessor::blend_read_data_item(BlendDataReader *reader,
 {
   BLO_read_string(reader, &item.name);
 }
-
-// TODO
-// std::string RasterizePointsItemsAccessor::custom_initial_name(const bNode &node, StringRef
-// src_name)
-// {
-//   /* The goal is to find a single-letter name that is not used already. Ideally, it starts with
-//   the
-//    * same letter as the given name. */
-
-//   const auto &storage = *static_cast<NodeFunctionFormatString *>(node.storage);
-//   char initial = 'a';
-//   if (!src_name.is_empty()) {
-//     const char first_c = src_name[0];
-//     if (first_c >= 'a' && first_c <= 'z') {
-//       initial = first_c;
-//     }
-//     else if (first_c >= 'A' && first_c <= 'Z') {
-//       initial = first_c - 'A' + 'a';
-//     }
-//   }
-//   for (const int i : IndexRange('z' - 'a' + 1)) {
-//     char c = initial + i;
-//     if (c > 'z') {
-//       /* Start at 'a' again. */
-//       c = c - 'z' + 'a' - 1;
-//     }
-//     const std::string potential_name = std::string(1, c);
-//     const bool name_exists = std::any_of(
-//         storage.items,
-//         storage.items + storage.items_num,
-//         [&](const NodeFunctionFormatStringItem &item) { return item.name == potential_name; });
-//     if (!name_exists) {
-//       return potential_name;
-//     }
-//   }
-//   return src_name;
-// }
-
-// std::string RasterizePointsItemsAccessor::validate_name(const StringRef name)
-// {
-//   /* The name has to start with a letter or underscore. The remaining letters may additionally
-//   be
-//    * digits. */
-//   std::string result;
-//   if (name.is_empty()) {
-//     return result;
-//   }
-//   const char first_char = name[0];
-//   if (!std::isalpha(first_char) && first_char != '_') {
-//     result += '_';
-//   }
-//   for (const char c : name) {
-//     if (std::isalnum(c) || c == '_') {
-//       result += c;
-//     }
-//     if (ELEM(c, '-', '.', ' ', '\t')) {
-//       result += '_';
-//     }
-//   }
-
-//   return result;
-// }
 
 }  // namespace blender::nodes
 

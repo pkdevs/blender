@@ -24,6 +24,7 @@
 #include "gl_backend.hh"
 #include "gl_debug.hh"
 #include "gl_state.hh"
+#include "gpu_texture_private.hh"
 
 #include "gl_texture.hh"
 
@@ -275,10 +276,10 @@ void GLTexture::update_sub(int mip,
     }
   }
 
-  /* TextureFormat::SINT_16_16 formats with integer data does not seem to work correctly in all GPU
-   * drivers, so convert to short and use GL_SHORT. */
+  /* 16-bit integer formats with integer data does not seem to work correctly in all GPU drivers,
+   * so convert to short and use GL_SHORT. */
   std::unique_ptr<int16_t, MEM_smart_ptr_deleter<int16_t>> short_buffer = nullptr;
-  if (type == GPU_DATA_INT && format_ == TextureFormat::SINT_16_16) {
+  if (type == GPU_DATA_INT && is_half_integer(format_)) {
     size_t dst_pixel_count = max_ii(extent[0], 1) * max_ii(extent[1], 1) * max_ii(extent[2], 1);
     size_t dst_total_count = to_component_len(format_) * dst_pixel_count;
 
@@ -815,27 +816,23 @@ void GLTexture::check_feedback_loop()
     return;
   }
   GLFrameBuffer *fb = static_cast<GLFrameBuffer *>(GLContext::get()->active_fb);
-  for (int i = 0; i < ARRAY_SIZE(fb_); i++) {
-    if (fb_[i] == fb) {
-      GPUAttachmentType type = fb_attachment_[i];
-      GPUAttachment attachment = fb->attachments_[type];
-      /* Check for when texture is used with texture barrier. */
-      GPUAttachment attachment_read = fb->tmp_detached_[type];
-      if (attachment.mip <= mip_max_ && attachment.mip >= mip_min_ &&
-          attachment_read.tex == nullptr)
-      {
-        char msg[256];
-        SNPRINTF(msg,
-                 "Feedback loop: Trying to bind a texture (%s) with mip range %d-%d but mip %d is "
-                 "attached to the active framebuffer (%s)",
-                 name_.c_str(),
-                 mip_min_,
-                 mip_max_,
-                 attachment.mip,
-                 fb->name_);
-        debug::raise_gl_error(msg);
-      }
-      return;
+  std::optional<GPUAttachmentType> type = fb_attachments_.lookup_try(fb);
+  if (type.has_value()) {
+    GPUAttachment attachment = fb->attachments_[*type];
+    /* Check for when texture is used with texture barrier. */
+    GPUAttachment attachment_read = fb->tmp_detached_[*type];
+    if (attachment.mip <= mip_max_ && attachment.mip >= mip_min_ && attachment_read.tex == nullptr)
+    {
+      char msg[256];
+      SNPRINTF(msg,
+               "Feedback loop: Trying to bind a texture (%s) with mip range %d-%d but mip %d is "
+               "attached to the active framebuffer (%s)",
+               name_.c_str(),
+               mip_min_,
+               mip_max_,
+               attachment.mip,
+               fb->name_);
+      debug::raise_gl_error(msg);
     }
   }
 }
