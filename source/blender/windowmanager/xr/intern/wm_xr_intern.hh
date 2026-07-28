@@ -203,6 +203,10 @@ struct wmXrUiRegion {
   bool ui_region_valid;
   bool ui_region_dirty;
   bool ui_region_host_initialized;
+  bool ui_region_suppress_hover_refresh_while_settling;
+  bool ui_region_reorder_preserve_active;
+  int ui_region_reorder_grace_remaining;
+  int ui_region_reorder_settle_retry_remaining;
   uint64_t ui_region_frame_tag;
   uint64_t ui_region_last_rebuild_tag;
   uint64_t ui_region_last_update_tag;
@@ -213,6 +217,7 @@ struct wmXrUiRegion {
   bool ui_region_hovered;
   bool ui_region_cursor_visible;
   int ui_region_window_xy[2];
+  int ui_region_reorder_base_width;
   float ui_region_cursor_world[3];
   char ui_region_hover_subaction_path[64];
   ListBaseT<wmXrTempRegion> child_regions;

@@ -134,6 +134,7 @@ bool ED_region_property_search(const bContext *C,
 
 void ED_region_panels_layout(const bContext *C, ARegion *region);
 void ED_region_panels_draw(const bContext *C, ARegion *region);
+void ED_region_panels_settle_active_state(const bContext *C, ARegion *region);
 void ED_region_panels_exit_active_state(const bContext *C, ARegion *region);
 
 /* Expose world-space panel building blocks for reuse (e.g. XR paths). */

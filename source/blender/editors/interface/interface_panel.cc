@@ -333,6 +333,24 @@ static void panel_exit_state_recursive(const bContext *C, Panel &panel)
   }
 }
 
+static Panel *panel_reorder_source_find_recursive(ListBaseT<Panel> *panels)
+{
+  for (Panel &panel : *panels) {
+    if (HandlePanelData *data = static_cast<HandlePanelData *>(panel.activedata)) {
+      if (ELEM(data->state, PANEL_STATE_DRAG, PANEL_STATE_ANIMATION)) {
+        return &panel;
+      }
+    }
+    if (panel_is_dragging(&panel)) {
+      return &panel;
+    }
+    if (Panel *child = panel_reorder_source_find_recursive(&panel.children)) {
+      return child;
+    }
+  }
+  return nullptr;
+}
+
 void panels_free_instanced(const bContext *C, ARegion *region)
 {
   /* Delete panels with the instanced flag. */
@@ -867,7 +885,6 @@ static void panel_calculate_size_recursive(ARegion *region, Panel *panel)
       panel->runtime_flag |= PANEL_ANIM_ALIGN;
     }
   }
-
 }
 
 void panel_end(Panel *panel, int width, int height)
@@ -2175,13 +2192,13 @@ static void panel_drag_collapse(const bContext *C,
       rect.ymax = block.rect.ymax + header.end_y;
 
       if (BLI_rctf_isect_segment(&rect, xy_a_block, xy_b_block)) {
-        const bool was_open = RNA_boolean_get(&header.open_owner_ptr, header.open_prop_name.c_str());
+        const bool was_open = RNA_boolean_get(&header.open_owner_ptr,
+                                              header.open_prop_name.c_str());
         const bool is_open = !dragcol_data->was_first_open;
         if (was_open == is_open) {
           continue;
         }
-        RNA_boolean_set(
-            &header.open_owner_ptr, header.open_prop_name.c_str(), is_open);
+        RNA_boolean_set(&header.open_owner_ptr, header.open_prop_name.c_str(), is_open);
         RNA_property_update(
             const_cast<bContext *>(C),
             &header.open_owner_ptr,
@@ -3027,6 +3044,23 @@ void ED_region_panels_exit_active_state(const bContext *C, ARegion *region)
   }
 }
 
+void ED_region_panels_settle_active_state(const bContext *C, ARegion *region)
+{
+  if (C == nullptr || region == nullptr) {
+    return;
+  }
+
+  /* Snap any in-flight panel animation to its final offsets before dropping handlers. */
+  uiAlignPanelStep(region, 1.0f, false);
+
+  Panel *drag_panel = panel_reorder_source_find_recursive(&region->panels);
+  if (drag_panel != nullptr) {
+    reorder_instanced_panel_list(const_cast<bContext *>(C), region, drag_panel);
+  }
+
+  ui::ED_region_panels_exit_active_state(C, region);
+}
+
 /** \} */
 
 }  // namespace blender::ui
@@ -3036,6 +3070,11 @@ namespace blender {
 void ED_region_panels_exit_active_state(const bContext *C, ARegion *region)
 {
   ui::ED_region_panels_exit_active_state(C, region);
+}
+
+void ED_region_panels_settle_active_state(const bContext *C, ARegion *region)
+{
+  ui::ED_region_panels_settle_active_state(C, region);
 }
 
 }  // namespace blender

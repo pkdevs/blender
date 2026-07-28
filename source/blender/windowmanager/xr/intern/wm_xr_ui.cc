@@ -1497,9 +1497,12 @@ static int wm_xr_panel_real_ofsy(const Panel *panel)
   return ui::panel_is_closed(panel) ? (panel->ofsy + panel->sizey) : panel->ofsy;
 }
 
-static void wm_xr_panels_current_size(const ARegion *region, int *r_x, int *r_y)
+static void wm_xr_panels_current_size(const ARegion *region,
+                                      const int base_width,
+                                      int *r_x,
+                                      int *r_y)
 {
-  int sizex = 0;
+  int max_ofsx = 0;
   int sizey = 0;
   bool has_active_panel = false;
 
@@ -1510,20 +1513,17 @@ static void wm_xr_panels_current_size(const ARegion *region, int *r_x, int *r_y)
       continue;
     }
     has_active_panel = true;
-    sizex = std::max(sizex, panel->ofsx + panel->sizex);
+    max_ofsx = std::max(max_ofsx, panel->ofsx);
     sizey = std::min(sizey, wm_xr_panel_real_ofsy(panel));
   }
 
-  if (sizex == 0) {
-    sizex = UI_PANEL_WIDTH;
-  }
+  const int sizex = std::max({base_width, int(region->winx), 1});
   if (sizey == 0) {
     sizey = -UI_PANEL_WIDTH;
   }
   if (has_active_panel) {
     sizey -= UI_PANEL_MARGIN_Y;
   }
-
   *r_x = sizex;
   *r_y = -sizey;
 }
@@ -1556,6 +1556,8 @@ static bool wm_xr_ui_region_cache_update(const bContext *C, wmXrUiRegion *ui_reg
   rcti ui_region_rect = ui_region->ui_region_rect;
   int w = 0;
   int h = 0;
+  bool needs_followup_transient_settle = false;
+  bool needs_followup_post_resize_settle = false;
   const bool needs_layout = !ui_region->ui_region_valid ||
                             (ui_region->ui_region_last_rebuild_tag !=
                              ui_region->ui_region_frame_tag) ||
@@ -1580,8 +1582,51 @@ static bool wm_xr_ui_region_cache_update(const bContext *C, wmXrUiRegion *ui_reg
     const bool has_dragging_panel_state = wm_xr_panels_have_dragging_state(xr_region->panels);
     const bool has_transient_reorder_offset = wm_xr_panels_have_transient_reorder_offset(
         xr_region->panels);
-    const bool has_reorder_transition = has_dragging_panel_state;
-    const bool defer_second_layout_for_reorder = has_reorder_transition;
+    constexpr int reorder_drag_grace_updates = 2;
+    constexpr int reorder_settle_retry_updates = 2;
+    const bool within_reorder_drag_grace = ui_region->ui_region_reorder_preserve_active &&
+                                           has_transient_reorder_offset &&
+                                           !has_dragging_panel_state &&
+                                           (ui_region->ui_region_reorder_grace_remaining > 0);
+    const bool has_reorder_start = has_dragging_panel_state;
+    if (has_reorder_start && !ui_region->ui_region_reorder_preserve_active) {
+      ui_region->ui_region_reorder_preserve_active = true;
+      ui_region->ui_region_reorder_base_width = std::max(BLI_rcti_size_x(&ui_region_rect) + 1, 1);
+      ui_region->ui_region_reorder_grace_remaining = reorder_drag_grace_updates;
+      ui_region->ui_region_reorder_settle_retry_remaining = reorder_settle_retry_updates;
+    }
+    else if (has_reorder_start) {
+      ui_region->ui_region_reorder_grace_remaining = reorder_drag_grace_updates;
+      ui_region->ui_region_reorder_settle_retry_remaining = reorder_settle_retry_updates;
+    }
+    else if (ui_region->ui_region_reorder_preserve_active && !has_dragging_panel_state &&
+             !has_transient_reorder_offset)
+    {
+      ui_region->ui_region_reorder_preserve_active = false;
+      ui_region->ui_region_reorder_base_width = 0;
+      ui_region->ui_region_reorder_grace_remaining = 0;
+      ui_region->ui_region_reorder_settle_retry_remaining = 0;
+    }
+    else if (within_reorder_drag_grace) {
+      ui_region->ui_region_reorder_grace_remaining--;
+    }
+    else if (ui_region->ui_region_reorder_preserve_active && !has_dragging_panel_state) {
+      ui_region->ui_region_reorder_preserve_active = false;
+      ui_region->ui_region_reorder_grace_remaining = 0;
+    }
+    const bool has_reorder_transition = ui_region->ui_region_reorder_preserve_active;
+    const bool clamp_width_during_transient_settle =
+        !has_reorder_transition && has_transient_reorder_offset &&
+        (ui_region->ui_region_reorder_base_width > 0) &&
+        (ui_region->ui_region_reorder_settle_retry_remaining > 0);
+    const bool force_final_transient_settle = !has_reorder_transition &&
+                                              has_transient_reorder_offset &&
+                                              (ui_region->ui_region_reorder_base_width > 0) &&
+                                              !clamp_width_during_transient_settle;
+    needs_followup_transient_settle = clamp_width_during_transient_settle &&
+                                      has_transient_reorder_offset;
+    const bool defer_second_layout_for_reorder = has_reorder_transition ||
+                                                 clamp_width_during_transient_settle;
     const bool preserve_active_panel_state = has_reorder_transition;
     const bool preserve_existing_layout_for_reorder = preserve_active_panel_state &&
                                                       !BLI_listbase_is_empty(
@@ -1592,7 +1637,10 @@ static bool wm_xr_ui_region_cache_update(const bContext *C, wmXrUiRegion *ui_reg
       if (preserve_existing_layout_for_reorder) {
         /* Preserve the current transient drag geometry instead of rebuilding the panel stack,
          * which snaps the reorder offsets back to their settled positions. */
-        wm_xr_panels_current_size(xr_region, &content_width, &content_height);
+        wm_xr_panels_current_size(xr_region,
+                                  std::max(ui_region->ui_region_reorder_base_width, 1),
+                                  &content_width,
+                                  &content_height);
         ui::view2d_totRect_set(&xr_region->v2d, content_width, content_height);
         ui::blocklist_update_window_matrix(mutable_C, &xr_region->runtime->uiblocks);
         ui::blocklist_update_view_for_buttons(mutable_C, &xr_region->runtime->uiblocks);
@@ -1608,9 +1656,28 @@ static bool wm_xr_ui_region_cache_update(const bContext *C, wmXrUiRegion *ui_reg
 
         content_width = std::max(1, int(std::ceil(BLI_rctf_size_x(&xr_region->v2d.tot))));
         content_height = std::max(1, int(std::ceil(BLI_rctf_size_y(&xr_region->v2d.tot))));
+        if (clamp_width_during_transient_settle) {
+          content_width = ui_region->ui_region_reorder_base_width;
+        }
+        if (force_final_transient_settle) {
+          ED_region_panels_settle_active_state(mutable_C, xr_region);
+          ui::blocklist_free(mutable_C, xr_region);
+          ED_region_panels_layout(mutable_C, xr_region);
+          wm_xr_panels_current_size(xr_region,
+                                    std::max(ui_region->ui_region_reorder_base_width, 1),
+                                    &content_width,
+                                    &content_height);
+        }
+        if ((force_final_transient_settle || !has_transient_reorder_offset) &&
+            ui_region->ui_region_reorder_base_width > 0)
+        {
+          ui_region->ui_region_reorder_base_width = 0;
+          ui_region->ui_region_reorder_settle_retry_remaining = 0;
+        }
       }
 
       if (content_width != xr_region->winx || content_height != xr_region->winy) {
+        const bool settled_resize = !has_transient_reorder_offset;
         BLI_rcti_init(&xr_region->winrct, 0, content_width - 1, 0, content_height - 1);
         xr_region->sizex = content_width;
         xr_region->sizey = content_height;
@@ -1623,7 +1690,25 @@ static bool wm_xr_ui_region_cache_update(const bContext *C, wmXrUiRegion *ui_reg
           ED_region_panels_layout(mutable_C, xr_region);
           content_width = std::max(1, int(std::ceil(BLI_rctf_size_x(&xr_region->v2d.tot))));
           content_height = std::max(1, int(std::ceil(BLI_rctf_size_y(&xr_region->v2d.tot))));
+          if (force_final_transient_settle &&
+              (content_width != xr_region->winx || content_height != xr_region->winy))
+          {
+            BLI_rcti_init(&xr_region->winrct, 0, content_width - 1, 0, content_height - 1);
+            xr_region->sizex = content_width;
+            xr_region->sizey = content_height;
+            ED_region_update_rect(xr_region);
+            view2d_region_reinit(
+                &xr_region->v2d, ui::V2D_COMMONVIEW_PANELS_UI, xr_region->winx, xr_region->winy);
+            ED_region_panels_settle_active_state(mutable_C, xr_region);
+            ui::blocklist_free(mutable_C, xr_region);
+            ED_region_panels_layout(mutable_C, xr_region);
+            wm_xr_panels_current_size(xr_region,
+                                      std::max(ui_region->ui_region_reorder_base_width, 1),
+                                      &content_width,
+                                      &content_height);
+          }
         }
+        needs_followup_post_resize_settle = settled_resize;
       }
       BLI_rcti_init(&ui_region_rect, 0, content_width - 1, 0, content_height - 1);
     }
@@ -1658,8 +1743,9 @@ static bool wm_xr_ui_region_cache_update(const bContext *C, wmXrUiRegion *ui_reg
       return false;
     }
 
-    /* Ensure semantically checked XR toggles draw as selected in the cached world-space UI even
-     * when their runtime button flags only carry hover state at this point in the draw pipeline.
+    /* Ensure semantically checked XR toggles draw as selected in the cached world-space UI
+     * even when their runtime button flags only carry hover state at this point in the draw
+     * pipeline.
      */
     wmXrSelectedToggleDrawStateScope selected_toggle_draw_state_scope(xr_region);
     ED_region_panels_draw_offscreen(C, xr_region, &ui_region_rect, ui_region->ui_region_offscreen);
@@ -1671,12 +1757,21 @@ static bool wm_xr_ui_region_cache_update(const bContext *C, wmXrUiRegion *ui_reg
                 ui_region_rect.ymin,
                 ui_region_rect.ymax);
   ui_region->ui_region_valid = true;
-  ui_region->ui_region_dirty = false;
+  ui_region->ui_region_dirty = needs_followup_transient_settle ||
+                               needs_followup_post_resize_settle;
   ui_region->ui_region_last_rebuild_tag = ui_region->ui_region_frame_tag;
   ui_region->ui_region_host_win = CTX_wm_window(C);
   ui_region->ui_region_host_area = area;
   ui_region->ui_region_host_region = xr_region;
   xr_region->runtime->do_draw &= ~RGN_REFRESH_UI;
+  if (!wm_xr_panels_have_transient_reorder_offset(xr_region->panels)) {
+    ui_region->ui_region_suppress_hover_refresh_while_settling = false;
+  }
+  if (needs_followup_transient_settle || needs_followup_post_resize_settle) {
+    ui_region->ui_region_reorder_settle_retry_remaining = std::max(
+        ui_region->ui_region_reorder_settle_retry_remaining - 1, 0);
+    ED_region_tag_redraw(xr_region);
+  }
 
   xr_region->runtime->visible = prev_visible;
   ED_region_panels_world_layout_end(mutable_C, xr_region, prev_alignment, prev_region);
@@ -1918,6 +2013,18 @@ void wm_xr_surface_interaction_update(const bContext *C, wmXrData *xr)
       hit_ui_region->ui_region_window_xy[1] != hit_win_xy[1] ||
       !STREQ(hit_ui_region->ui_region_hover_subaction_path, subaction_path))
   {
+    const bool suppress_hover_refresh =
+        hit_ui_region->ui_region_suppress_hover_refresh_while_settling &&
+        wm_xr_panels_have_transient_reorder_offset(hit_ui_region->ui_region_host_region->panels);
+    if (suppress_hover_refresh) {
+      copy_v2_v2_int(hit_ui_region->ui_region_window_xy, hit_win_xy);
+      hit_ui_region->ui_region_hover_region = hit_region;
+      hit_ui_region->ui_region_hovered = true;
+      BLI_strncpy(
+          hit_ui_region->ui_region_hover_subaction_path, subaction_path, XR_MAX_USER_PATH_LENGTH);
+      return;
+    }
+    hit_ui_region->ui_region_suppress_hover_refresh_while_settling = false;
     wm_xr_ui_region_cache_refresh_host(C, hit_ui_region);
     wm_xr_surface_interaction_event_add(C,
                                         hit_ui_region->ui_region_host_win,
@@ -1997,8 +2104,8 @@ bool wm_xr_surface_interaction_apply_action(const bContext *C,
     if (ui_region->ui_region_pointer.pressed &&
         STREQ(ui_region->ui_region_pointer.subaction_path, subaction_path))
     {
-      /* Keep consuming held press events for an active ui_region drag so the ui_region interaction
-       * keeps ownership of this controller until release. */
+      /* Keep consuming held press events for an active ui_region drag so the ui_region
+       * interaction keeps ownership of this controller until release. */
       return true;
     }
     if (!action_is_ui_region_click) {
@@ -2042,6 +2149,10 @@ bool wm_xr_surface_interaction_apply_action(const bContext *C,
                                         LEFTMOUSE,
                                         KM_RELEASE,
                                         ui_region->ui_region_window_xy);
+    /* Releasing while still hovering the same panel can immediately trigger a hover-refresh
+     * relayout that reintroduces transient reorder geometry. Delay that hover-refresh until
+     * transient settle completes. */
+    ui_region->ui_region_suppress_hover_refresh_while_settling = true;
     wm_xr_ui_region_pointer_clear(ui_region);
     /* Keep the active XR ui_region alive through release handling so any popup opened by the
      * dispatched mouse-release event can still inherit XR ownership. Hover updates clear it
@@ -2087,15 +2198,17 @@ void wm_xr_draw_ui_regions_world_space(const bContext *C, ARegion * /*region*/, 
       continue;
     }
     found_host = true;
-    if (ui_region->ui_region_last_update_tag == surface_data->ui_regions_frame_tag) {
+    if (ui_region->ui_region_last_update_tag == surface_data->ui_regions_frame_tag &&
+        !ui_region->ui_region_dirty)
+    {
       continue;
     }
     const rcti prev_rect = ui_region->ui_region_rect;
     wm_xr_ui_region_mount_update(ui_region, xr);
     wm_xr_ui_region_cache_refresh_host(C, ui_region);
     if (!BLI_rcti_compare(&prev_rect, &ui_region->ui_region_rect)) {
-      /* If layout changes the rect this frame, refresh the mount transform so placement matches
-       * the newly sized offscreen content immediately. */
+      /* If layout changes the rect this frame, refresh the mount transform so placement
+       * matches the newly sized offscreen content immediately. */
       wm_xr_ui_region_mount_update(ui_region, xr);
     }
 
