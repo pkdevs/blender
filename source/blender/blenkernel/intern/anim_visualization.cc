@@ -231,7 +231,7 @@ static Depsgraph *build_worker_depsgraph(Main &bmain,
   Depsgraph *dg = DEG_graph_new(&bmain, &scene, &view_layer, DAG_EVAL_VIEWPORT);
   DEG_graph_build_from_ids(dg, ids);
   /* Evaluate once on the main thread so the copy on eval nodes have run. */
-  DEG_evaluate_buffer_main(dg);
+  DEG_evaluate_from_main(dg);
   /* Don't allow reading main from the worker thread. */
   DEG_set_allow_read_from_main(dg, false);
   return dg;
@@ -295,7 +295,7 @@ void background_eval_register(Main &bmain,
       eval_data->worker_data.dirty_frames.add(dirty_frame);
       eval_data->worker_data.current_frame.store(current_frame, std::memory_order_release);
       DEG_set_allow_read_from_main(eval_data->worker_data.dg, true);
-      DEG_evaluate_buffer_main(eval_data->worker_data.dg);
+      DEG_evaluate_from_main(eval_data->worker_data.dg);
       DEG_set_allow_read_from_main(eval_data->worker_data.dg, false);
       eval_data->worker_data.restart.store(true, std::memory_order_release);
       eval_data->worker_data.unlock();

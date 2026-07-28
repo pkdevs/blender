@@ -207,7 +207,7 @@ void DEG_evaluate_on_refresh(
  * be executed on a worker thread since it won't be touching Main anymore.
  * See `DEG_set_allow_read_from_main`.
  */
-void DEG_evaluate_buffer_main(Depsgraph *graph);
+void DEG_evaluate_from_main(Depsgraph *graph);
 
 /** \} */
 

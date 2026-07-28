@@ -89,7 +89,7 @@ void DEG_evaluate_on_framechange(Depsgraph *graph,
   deg_flush_updates_and_refresh(deg_graph, sync_writeback);
 }
 
-void DEG_evaluate_buffer_main(Depsgraph *graph)
+void DEG_evaluate_from_main(Depsgraph *graph)
 {
   deg::Depsgraph *deg_graph = reinterpret_cast<deg::Depsgraph *>(graph);
   BLI_assert_msg(deg_graph->is_allowed_to_read_main,
