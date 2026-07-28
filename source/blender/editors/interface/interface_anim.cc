@@ -358,7 +358,6 @@ void button_anim_decorate_cb(bContext *C, void *arg_but, void * /*arg_dummy*/)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
   auto *but_decorate = static_cast<ButtonDecorator *>(arg_but);
-
   if (!but_decorate->toggle_keyframe_on_click) {
     return;
   }
