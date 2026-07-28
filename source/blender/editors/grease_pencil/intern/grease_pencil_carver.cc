@@ -25,6 +25,7 @@
 
 #include "WM_api.hh"
 
+#include "GEO_resample_curves.hh"
 #include "GEO_smooth_curves.hh"
 
 namespace blender {
@@ -44,7 +45,8 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
                                       const DrawingPlacement &placement,
                                       const Span<float2> mcoords,
                                       const bool keep_caps,
-                                      bke::greasepencil::Drawing &drawing)
+                                      bke::greasepencil::Drawing &drawing,
+                                      bool *r_converted)
 {
   const bke::CurvesGeometry &src = drawing.strokes();
   const OffsetIndices<int> src_points_by_curve = src.points_by_curve();
@@ -115,6 +117,29 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
       bke::attribute_filter_from_skip_ref({"fill_id", "cyclic", "curve_type"}),
       clipping_curves);
 
+  /* WORKAROUND. Currently only poly curves are supported. */
+  if (!input_curves.is_single_type(CURVE_TYPE_POLY)) {
+    input_curves = geometry::resample_to_evaluated(input_curves, input_curves.curves_range());
+    *r_converted = true;
+
+    /* Recompute screen space positions. */
+    bke::SpanAttributeWriter<float2> pos_writer = attributes.lookup_or_add_for_write_span<float2>(
+        ".positions_2d", bke::AttrDomain::Point);
+    const Span<float3> positions = input_curves.positions();
+    const IndexRange subject_points = IndexRange(
+        input_curves.points_by_curve()[src.curves_num()].last());
+    MutableSpan<float2> screen_space_positions = pos_writer.span;
+
+    threading::parallel_for(subject_points, 4096, [&](const IndexRange src_points) {
+      for (const int src_point : src_points) {
+        screen_space_positions[src_point] = ED_view3d_project_float_v2_m4(
+            &region, positions[src_point], projection);
+      }
+    });
+
+    pos_writer.finish();
+  }
+
   carver::CurveBooleanOpParameters op_params;
   op_params.boolean_mode = carver::Operation::Difference;
   op_params.keep_caps = keep_caps;
@@ -138,7 +163,9 @@ static bool execute_carver_on_drawing(const int /*layer_index*/,
 /**
  * Apply the stroke carver to all layers.
  */
-static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2> mcoords)
+static wmOperatorStatus stroke_carver_execute(const bContext *C,
+                                              wmOperator *op,
+                                              const Span<int2> mcoords)
 {
   const Scene *scene = CTX_data_scene(C);
   const ARegion *region = CTX_wm_region(C);
@@ -176,6 +203,7 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
   const bool keep_caps = (brush->gpencil_settings->flag & GP_BRUSH_ERASER_KEEP_CAPS) != 0;
   const bool active_layer_only = (brush->gpencil_settings->flag & GP_BRUSH_ACTIVE_LAYER_ONLY) != 0;
   std::atomic<bool> changed = false;
+  std::atomic<bool> converted = false;
 
   if (active_layer_only) {
     /* Apply carver on drawings of active layer. */
@@ -193,6 +221,7 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
         *scene, *region, *view3d, *ob_eval, &layer);
 
     threading::parallel_for_each(drawings, [&](const ed::greasepencil::MutableDrawingInfo &info) {
+      bool r_converted = false;
       if (execute_carver_on_drawing(info.layer_index,
                                     info.frame_number,
                                     *ob_eval,
@@ -203,14 +232,19 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
                                     placement,
                                     lasso_pos.as_span(),
                                     keep_caps,
-                                    info.drawing))
+                                    info.drawing,
+                                    &r_converted))
       {
         changed = true;
+      }
+
+      if (r_converted) {
+        converted = true;
       }
     });
   }
   else {
-    /* Apply cutter on every editable drawing. */
+    /* Apply carver on every editable drawing. */
     const Vector<ed::greasepencil::MutableDrawingInfo> drawings =
         ed::greasepencil::retrieve_editable_drawings(*scene, grease_pencil);
     threading::parallel_for_each(drawings, [&](const ed::greasepencil::MutableDrawingInfo &info) {
@@ -222,6 +256,7 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
       DrawingPlacement placement = ed::greasepencil::DrawingPlacement(
           *scene, *region, *view3d, *ob_eval, &layer);
 
+      bool r_converted = false;
       if (execute_carver_on_drawing(info.layer_index,
                                     info.frame_number,
                                     *ob_eval,
@@ -232,11 +267,20 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C, const Span<int2
                                     placement,
                                     lasso_pos,
                                     keep_caps,
-                                    info.drawing))
+                                    info.drawing,
+                                    &r_converted))
       {
         changed = true;
       }
+
+      if (r_converted) {
+        converted = true;
+      }
     });
+  }
+
+  if (converted) {
+    BKE_report(op->reports, RPT_WARNING, "Some curves were converted to Poly");
   }
 
   if (changed) {
@@ -255,7 +299,7 @@ static wmOperatorStatus grease_pencil_stroke_carver_exec(bContext *C, wmOperator
     return OPERATOR_PASS_THROUGH;
   }
 
-  return stroke_carver_execute(C, mcoords);
+  return stroke_carver_execute(C, op, mcoords);
 }
 
 }  // namespace ed::greasepencil
