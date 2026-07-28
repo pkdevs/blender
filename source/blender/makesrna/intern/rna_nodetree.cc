@@ -21,15 +21,17 @@
 #include "DNA_object_types.h"
 #include "DNA_texture_types.h"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_attribute.hh"
 #include "BKE_context.hh"
 #include "BKE_geometry_set.hh"
+#include "BKE_global.hh"
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
+#include "RNA_path.hh"
 
 #include "NOD_common.hh"
 
@@ -37,6 +39,8 @@
 #include "rna_internal_types.hh"
 
 #include "IMB_colormanagement.hh"
+
+#include "UI_interface_c.hh"
 
 #include "WM_types.hh"
 
@@ -582,6 +586,35 @@ const EnumPropertyItem rna_enum_node_compositor_interpolation_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+const EnumPropertyItem rna_enum_node_grease_pencil_merge_mode_items[] = {
+    {GEO_NODE_MERGE_LAYERS_BY_NAME,
+     "MERGE_BY_NAME",
+     0,
+     "By Name",
+     "Combine all layers which have the same name"},
+    {GEO_NODE_MERGE_LAYERS_BY_ID,
+     "MERGE_BY_ID",
+     0,
+     "By Group ID",
+     "Provide a custom group ID for each layer and all layers with the same ID will be merged "
+     "into one"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+const EnumPropertyItem rna_enum_node_grease_pencil_stroke_type_items[] = {
+    {GEO_NODE_GREASE_PENCIL_STROKE,
+     "STROKE",
+     ICON_GP_DRAW_STROKE,
+     "Stroke",
+     "Set the color and opacity for the points of the stroke"},
+    {GEO_NODE_GREASE_PENCIL_FILL,
+     "FILL",
+     ICON_GP_DRAW_FILL,
+     "Fill",
+     "Set the color and opacity for the stroke fills"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 #ifndef RNA_RUNTIME
 
 static const EnumPropertyItem prop_shader_output_target_items[] = {
@@ -776,6 +809,11 @@ const EnumPropertyItem *rna_node_tree_type_itemf(void *data,
 int rna_node_socket_idname_to_enum(const char *idname)
 {
   bke::bNodeSocketType *socket_type = bke::node_socket_type_find(idname);
+  if (socket_type == nullptr) {
+    /* May happen when reading newer files with undefined types. In this case the socket is
+     * undefined and no enum item will be selected. */
+    return -1;
+  }
 
   /* Regular socket types use the base type as their enum value.
    * Custom sockets don't have a base type and are used directly as the enum entry. */
@@ -1071,6 +1109,7 @@ static bool rna_NodeTree_unregister(Main *bmain, StructRNA *type)
   if (!nt) {
     return false;
   }
+  ui::refresh_for_srna_unregister(bmain, type);
 
   RNA_struct_free_extension(type, &nt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
@@ -1995,6 +2034,7 @@ static bool rna_Node_unregister(Main *bmain, StructRNA *type)
   if (!nt || rna_Node_is_builtin(nt)) {
     return false;
   }
+  ui::refresh_for_srna_unregister(bmain, type);
 
   RNA_struct_free_extension(type, &nt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
@@ -2707,7 +2747,12 @@ static void rna_Node_name_set(PointerRNA *ptr, const char *value)
   bke::node_unique_name(*ntree, *node);
 
   /* fix all the animation data which may link to this */
-  BKE_animdata_fix_paths_rename_all(nullptr, "nodes", oldname, node->name);
+  BKE_animdata_fix_paths(ntree->id,
+                         "nodes",
+                         RNA_path_name_to_infix(oldname),
+                         RNA_path_name_to_infix(node->name),
+                         /*verify_paths=*/true,
+                         *G_MAIN);
 }
 
 static int rna_Node_color_tag_get(PointerRNA *ptr)
@@ -4307,6 +4352,48 @@ static const EnumPropertyItem *rna_NodeImplicitConversion_data_type_itemf(bConte
         }
         return true;
       });
+}
+
+static int rna_MergeLayers_mode_get(PointerRNA *ptr)
+{
+  bNode *node = ptr->data_as<bNode>();
+  const bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Mode"_ustr);
+  return socket->default_value_typed<bNodeSocketValueMenu>()->value;
+}
+
+static void rna_MergeLayers_mode_set(PointerRNA *ptr, int value)
+{
+  bNode *node = ptr->data_as<bNode>();
+  bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Mode"_ustr);
+  socket->default_value_typed<bNodeSocketValueMenu>()->value = value;
+}
+
+static int rna_SetGreasePencilColor_mode_get(PointerRNA *ptr)
+{
+  bNode *node = ptr->data_as<bNode>();
+  const bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Mode"_ustr);
+  return socket->default_value_typed<bNodeSocketValueMenu>()->value;
+}
+
+static void rna_SetGreasePencilColor_mode_set(PointerRNA *ptr, int value)
+{
+  bNode *node = ptr->data_as<bNode>();
+  bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Mode"_ustr);
+  socket->default_value_typed<bNodeSocketValueMenu>()->value = value;
+}
+
+static int rna_SetGreasePencilDepth_depth_order_get(PointerRNA *ptr)
+{
+  bNode *node = ptr->data_as<bNode>();
+  const bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Depth Order"_ustr);
+  return socket->default_value_typed<bNodeSocketValueMenu>()->value;
+}
+
+static void rna_SetGreasePencilDepth_depth_order_set(PointerRNA *ptr, int value)
+{
+  bNode *node = ptr->data_as<bNode>();
+  bNodeSocket *socket = bke::node_find_socket(*node, SOCK_IN, "Depth Order"_ustr);
+  socket->default_value_typed<bNodeSocketValueMenu>()->value = value;
 }
 
 static void rna_NodeInputVector_vector_get(PointerRNA *ptr, float *values)
@@ -7649,6 +7736,41 @@ static void def_geo_simulation_output(BlenderRNA *brna, StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE, nullptr);
 }
 
+static void def_geo_merge_layers(BlenderRNA * /*brna*/, StructRNA *srna)
+{
+  PropertyRNA *prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_node_grease_pencil_merge_mode_items);
+  RNA_def_property_ui_text(prop, "Mode", "Determines how to choose which layers are merged");
+  RNA_def_property_enum_funcs(
+      prop, "rna_MergeLayers_mode_get", "rna_MergeLayers_mode_set", nullptr);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+  RNA_def_property_deprecated(prop, "Replaced by '.inputs[\"Mode\"]'.", 530, 600);
+}
+
+static void def_geo_set_grease_pencil_color(BlenderRNA * /*brna*/, StructRNA *srna)
+{
+  PropertyRNA *prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_node_grease_pencil_stroke_type_items);
+  RNA_def_property_ui_text(prop, "Mode", "Set the color and opacity for strokes or fills");
+  RNA_def_property_enum_funcs(
+      prop, "rna_SetGreasePencilColor_mode_get", "rna_SetGreasePencilColor_mode_set", nullptr);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+  RNA_def_property_deprecated(prop, "Replaced by '.inputs[\"Mode\"]'.", 530, 600);
+}
+
+static void def_geo_set_grease_pencil_depth(BlenderRNA * /*brna*/, StructRNA *srna)
+{
+  PropertyRNA *prop = RNA_def_property(srna, "depth_order", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_stroke_depth_order_items);
+  RNA_def_property_ui_text(prop, "Depth Order", "");
+  RNA_def_property_enum_funcs(prop,
+                              "rna_SetGreasePencilDepth_depth_order_get",
+                              "rna_SetGreasePencilDepth_depth_order_set",
+                              nullptr);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+  RNA_def_property_deprecated(prop, "Replaced by '.inputs[\"Depth Order\"]'.", 530, 600);
+}
+
 static void rna_def_geo_repeat_item(BlenderRNA *brna)
 {
   StructRNA *srna = RNA_def_struct(brna, "RepeatItem", nullptr);
@@ -10770,7 +10892,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeMaterialSelection");
   define("GeometryNode", "GeometryNodeMenuSwitch", def_geo_menu_switch);
   define("GeometryNode", "GeometryNodeMergeByDistance");
-  define("GeometryNode", "GeometryNodeMergeLayers");
+  define("GeometryNode", "GeometryNodeMergeLayers", def_geo_merge_layers);
   define("GeometryNode", "GeometryNodeMergePoints");
   define("GeometryNode", "GeometryNodeMeshBevel");
   define("GeometryNode", "GeometryNodeMeshBoolean");
@@ -10836,8 +10958,8 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeSetCurveTilt");
   define("GeometryNode", "GeometryNodeSetGeometryBundle");
   define("GeometryNode", "GeometryNodeSetGeometryName");
-  define("GeometryNode", "GeometryNodeSetGreasePencilColor");
-  define("GeometryNode", "GeometryNodeSetGreasePencilDepth");
+  define("GeometryNode", "GeometryNodeSetGreasePencilColor", def_geo_set_grease_pencil_color);
+  define("GeometryNode", "GeometryNodeSetGreasePencilDepth", def_geo_set_grease_pencil_depth);
   define("GeometryNode", "GeometryNodeSetGreasePencilSoftness");
   define("GeometryNode", "GeometryNodeSetGridBackground");
   define("GeometryNode", "GeometryNodeSetGridTransform");
