@@ -17,6 +17,7 @@
 
 #include "BKE_editmesh.hh"
 #include "BKE_editmesh_bvh.hh"
+#include "BKE_report.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"
@@ -1050,6 +1051,8 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
     return;
   }
 
+  bool clone_topology_skipped = false;
+
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     EdgeSlideData *sld = static_cast<EdgeSlideData *>(tc->custom.mode.data);
     if (!sld || sld->original_verts.is_empty()) {
@@ -1186,6 +1189,10 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
       orig_to_sep.add(v_orig, v_sep);
     }
 
+    if (orig_to_sep.is_empty()) {
+      clone_topology_skipped = true;
+    }
+
     /* Reposition separated verts to clone positions, then kill clone verts. */
     for (const CloneNeighborInfo &nd : neighbor_infos) {
       BMVert *v_orig = nd.v;
@@ -1303,6 +1310,11 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
     update_params.is_destructive = true;
     EDBM_update(id_cast<Mesh *>(tc->obedit->data), &update_params);
   }
+
+  if (clone_topology_skipped) {
+    BKE_report(
+        t->reports, RPT_WARNING, "Clone slide skipped: no adjacent edge loop on the slide side");
+  }
 }
 
 static void initEdgeSlide_ex(TransInfo *t,
@@ -1369,7 +1381,6 @@ static void initEdgeSlide_ex(TransInfo *t,
 
           /* transform clones, not originals */
           BM_elem_flag_disable(v, BM_ELEM_SELECT);
-          BM_elem_flag_enable(v_clone, BM_ELEM_SELECT);
 
           sv.td->loc = v_clone->co;
           sv.td->extra = v_clone;
@@ -1391,6 +1402,12 @@ static void initEdgeSlide_ex(TransInfo *t,
               sld->clone_chain_edges.append({e->v1, e->v2});
             }
           }
+        }
+
+        /* Keep the clones out of the evaluated mesh, the overlay draws them.
+         * Runs after the chain edges exist so they are hidden along with the verts. */
+        for (BMVert *v_orig : sld->original_verts) {
+          BM_vert_hide_set(vert_map.lookup(v_orig), true);
         }
 
         EDBM_selectmode_flush(em);

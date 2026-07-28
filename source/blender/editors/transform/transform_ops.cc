@@ -1247,8 +1247,8 @@ static void TRANSFORM_OT_edge_slide(wmOperatorType *ot)
                   false,
                   "Flipped",
                   "When Even mode is active, flips between the two adjacent edge loops");
-  RNA_def_boolean(ot->srna, "use_clamp", true, "Clamp", "Clamp within the edge extents");
   RNA_def_boolean(ot->srna, "use_clone", false, "Clone", "Clone in place and slide the edge loop");
+  RNA_def_boolean(ot->srna, "use_clamp", true, "Clamp", "Clamp within the edge extents");
 
   properties_register(ot, P_MIRROR | P_GEO_SNAP | P_CORRECT_UV);
 }
