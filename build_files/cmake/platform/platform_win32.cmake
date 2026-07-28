@@ -1199,6 +1199,10 @@ get_filename_component(_msvc_path ${CMAKE_C_COMPILER} DIRECTORY)
 # Environment variables to run precompiled executables that needed libraries.
 list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ";" _library_paths)
 set(PLATFORM_ENV_BUILD_DIRS "${_msvc_path}\;${LIBDIR}/epoxy/bin\;${LIBDIR}/tbb/bin\;${LIBDIR}/OpenImageIO/bin\;${LIBDIR}/boost/lib\;${LIBDIR}/openexr/bin\;${LIBDIR}/imath/bin\;${LIBDIR}/shaderc/bin\;${LIBDIR}/opencolorio/bin\;${LIBDIR}/aom/bin\;${LIBDIR}/openjph/bin\;${PATH}")
+if(WITH_COMPILER_ASAN AND MSVC_CLANG AND COMPILER_ASAN_LIBRARY_DLL)
+  get_filename_component(COMPILER_ASAN_LIBRARY_DIR "${COMPILER_ASAN_LIBRARY_DLL}" DIRECTORY)
+  set(PLATFORM_ENV_BUILD_DIRS "${PLATFORM_ENV_BUILD_DIRS}\;${COMPILER_ASAN_LIBRARY_DIR}")
+endif()
 set(PLATFORM_ENV_BUILD "PATH=${PLATFORM_ENV_BUILD_DIRS}")
 # Install needs the additional folders from PLATFORM_ENV_BUILD_DIRS as well, as tools like:
 # `idiff` and `abcls` use the release mode dlls.

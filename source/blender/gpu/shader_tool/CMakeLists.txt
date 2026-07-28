@@ -50,6 +50,8 @@ endif()
 
 add_executable(shader_tool shader_tool.cc ${SRC})
 optimize_debug_target(shader_tool)
+setup_platform_linker_flags(shader_tool)
+setup_platform_linker_libs(shader_tool)
 
 if(WITH_GTESTS)
   set(TEST_SRC

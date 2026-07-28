@@ -11,4 +11,6 @@ set(SRC
 
 # `SRC_DNA_INC` is defined in the parent directory.
 add_executable(datatoc ${SRC})
+setup_platform_linker_flags(datatoc)
+setup_platform_linker_libs(datatoc)
 optimize_debug_target(datatoc)

@@ -1043,24 +1043,31 @@ if(WITH_COMPILER_CODE_COVERAGE)
 endif()
 
 if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang"))
+  if(MSVC)
+    set(_asan_prefix /clang:)
+  endif()
   if(WITH_COMPILER_ASAN)
     set(_asan_defaults "\
--fsanitize=address \
--fsanitize=bool \
--fsanitize=bounds \
--fsanitize=enum \
--fsanitize=float-cast-overflow \
--fsanitize=float-divide-by-zero \
--fsanitize=nonnull-attribute \
--fsanitize=returns-nonnull-attribute \
--fsanitize=signed-integer-overflow \
--fsanitize=undefined \
--fsanitize=vla-bound \
--fno-sanitize=alignment \
+${_asan_prefix}-fsanitize=address \
+${_asan_prefix}-fsanitize=bool \
+${_asan_prefix}-fsanitize=bounds \
+${_asan_prefix}-fsanitize=enum \
+${_asan_prefix}-fsanitize=float-cast-overflow \
+${_asan_prefix}-fsanitize=float-divide-by-zero \
+${_asan_prefix}-fsanitize=nonnull-attribute \
+${_asan_prefix}-fsanitize=returns-nonnull-attribute \
+${_asan_prefix}-fsanitize=signed-integer-overflow \
+${_asan_prefix}-fsanitize=undefined \
+${_asan_prefix}-fsanitize=vla-bound \
+${_asan_prefix}-fno-sanitize=alignment \
 ")
     # Make sure we don't omit frame pointers as the leak backtraces might not be able to
     # correctly track the source otherwise.
-    string(APPEND _asan_defaults " -fno-omit-frame-pointer")
+    if(NOT MSVC)
+      string(APPEND _asan_defaults " -fno-omit-frame-pointer")
+    else()
+      string(APPEND _asan_defaults " /Oy- /clang:-D_DISABLE_VECTOR_ANNOTATION /clang:-D_DISABLE_STRING_ANNOTATION ")
+    endif()
 
     if(MSVC)
       # clang-cl doesn't support all sanitizers, but leak and object-size give errors/warnings.
@@ -1088,13 +1095,30 @@ if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang")
     unset(_asan_defaults)
 
     if(MSVC)
-      find_library(
-        COMPILER_ASAN_LIBRARY NAMES clang_rt.asan-x86_64
-        PATHS
-        [HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\LLVM\\LLVM;]/lib/clang/7.0.0/lib/windows
-        [HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\LLVM\\LLVM;]/lib/clang/6.0.0/lib/windows
-      )
-      mark_as_advanced(COMPILER_ASAN_LIBRARY)
+        execute_process(
+            COMMAND ${CMAKE_CXX_COMPILER} --print-resource-dir
+            OUTPUT_VARIABLE CLANG_RESOURCE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        set(CLANG_RUNTIME_DIR "${CLANG_RESOURCE_DIR}/lib/windows")
+        find_library(COMPILER_ASAN_LIBRARY
+            NAMES clang_rt.asan_dynamic-x86_64
+            PATHS "${CLANG_RUNTIME_DIR}"
+            NO_DEFAULT_PATH
+        )
+        find_file(COMPILER_ASAN_LIBRARY_DLL
+            NAMES clang_rt.asan_dynamic-x86_64.dll
+            PATHS "${CLANG_RUNTIME_DIR}"
+            NO_DEFAULT_PATH
+        )
+        find_library(COMPILER_ASAN_THUNK_LIBRARY
+            NAMES clang_rt.asan_dynamic_runtime_thunk-x86_64
+            PATHS "${CLANG_RUNTIME_DIR}"
+            NO_DEFAULT_PATH
+        )
+        mark_as_advanced(COMPILER_ASAN_LIBRARY)
+        mark_as_advanced(COMPILER_ASAN_LIBRARY_DLL)
+        mark_as_advanced(COMPILER_ASAN_THUNK_LIBRARY)
     elseif(APPLE)
       execute_process(COMMAND ${CMAKE_CXX_COMPILER}
         -print-file-name=lib
@@ -1515,8 +1539,10 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
       unset(_list_COMPILER_ASAN_CFLAGS)
       unset(_is_CONFIG_DEBUG)
     elseif(COMPILER_ASAN_LIBRARY)
-      set(PLATFORM_LINKLIBS "${PLATFORM_LINKLIBS};${COMPILER_ASAN_LIBRARY}")
-      set(PLATFORM_LINKFLAGS "${COMPILER_ASAN_LIBRARY}")
+      list(APPEND PLATFORM_LINKLIBS "${COMPILER_ASAN_LIBRARY}")
+      if(COMPILER_ASAN_THUNK_LIBRARY)
+        list(APPEND PLATFORM_LINKLIBS "${COMPILER_ASAN_THUNK_LIBRARY}")
+      endif()
       set(PLATFORM_LINKFLAGS_DEBUG "${COMPILER_ASAN_LIBRARY}")
       if(DEFINED COMPILER_ASAN_LINKER_FLAGS)
         set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} ${COMPILER_ASAN_LINKER_FLAGS}")

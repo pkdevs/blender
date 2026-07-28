@@ -229,9 +229,15 @@ void BLI_system_max_open_files_ensure()
   bool ok = true;
 
 #if defined(WIN32)
+/* asan on windows is not happy with _setmaxstdio causing a runtime error to occur
+ * ms fixed it for msvc in
+ * https://developercommunity.visualstudio.com/t/Crash-with-ASAN-and-_setmaxstdio/1439907/ but
+ * upstream clang 22 still has this issue, so for now just skip this when building with clang. */
+#  if !defined(__SANITIZE_ADDRESS__) || !defined(__clang__)
   if (_getmaxstdio() < max_open_files) {
     ok = _setmaxstdio(max_open_files) == max_open_files;
   }
+#  endif
 #else
   struct rlimit limit;
   ok = getrlimit(RLIMIT_NOFILE, &limit) == 0;

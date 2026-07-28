@@ -353,7 +353,10 @@ else()
       )
     endif()
     target_compile_definitions(blender-launcher PRIVATE -D_UNICODE -DUNICODE)
-    target_link_libraries(blender-launcher Pathcch.lib)
+    target_link_libraries(blender-launcher PRIVATE Pathcch.lib)
+    if(WITH_COMPILER_ASAN)
+      setup_platform_linker_libs(blender-launcher)
+    endif()
   endif()
 endif()
 
@@ -1096,6 +1099,13 @@ elseif(WIN32)
     )
     unset(ASAN_DLL)
     unset(ASAN_DEBUG_DLL)
+  endif()
+  if(WITH_COMPILER_ASAN AND MSVC_CLANG AND COMPILER_ASAN_LIBRARY_DLL)
+    install(
+      FILES ${COMPILER_ASAN_LIBRARY_DLL}
+      DESTINATION ${TARGETDIR_EXE}
+      CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+    )
   endif()
   if(EXISTS ${LIBDIR}/openexr/bin/Iex.dll)
     windows_install_shared_manifest(
