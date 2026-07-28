@@ -3,3 +3,4 @@ Referenced by issue #159873, 5.3.0 a: Crash when trying to draw
 Referenced by commit 2a1ca5553bac329e8c55502e83e45f0fd2eacd57, Fix #159873: Potential crash in 2D image painting
 Referenced by issue #161709, [5.2.0] Texture Paint - Painting surface glitches/crashes while saving image textures
 Referenced by pull request #161879, Fix #161709: Crash when saving an image while painting
+Referenced by commit 6d1273270e36ea73eedbad676ceabb4f698037e7, Fix #161709: Crash when saving an image while painting
