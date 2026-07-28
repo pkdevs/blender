@@ -1775,6 +1775,10 @@ if(WITH_UI_TESTS)
     test_pie_menus.test_clip_view_pie_view_all
     test_pie_menus.test_anim_keyframe_insert_pie_location
     test_pie_menus.test_weight_paint_vgroup_lock_pie
+    test_view3d_selection.test_view3d_selection_solid
+    test_view3d_selection.test_view3d_selection_wireframe
+    test_view3d_selection.test_view3d_selection_material
+    test_view3d_selection.test_view3d_selection_rendered
   )
   foreach(ui_test ${_ui_tests})
     add_blender_test_ui(
