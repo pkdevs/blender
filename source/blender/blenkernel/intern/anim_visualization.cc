@@ -61,6 +61,9 @@ struct WorkerData {
   /* Can be set from the main thread to tell the evaluating thread to start over.
    * Is used because we cannot just stop the depsgraph evaluation. */
   std::atomic<bool> restart;
+  /* The frame of the scene at the last registration. Is used to compute the dirty frames in a
+   * reasonable order. */
+  std::atomic<int> current_frame;
 
   TicketMutex *data_mutex;
   /* The depsgraph to evaluate in the background. All copy on eval nodes have to be
@@ -118,11 +121,17 @@ static bool evaluate_dirty_frames(WorkerData *eval_data, wmJobWorkerStatus *work
   if (dirty_frames.is_empty()) {
     return true;
   }
-
+  const int cfra = eval_data->current_frame.load(std::memory_order_acquire);
   while (!dirty_frames.is_empty()) {
     Vector<int> dirty_frames_in_range;
-    /* TODO pass in current frame to choose appropriate priority for dirty frames. */
+
+    /* Start with the dirty frame closest to the current scene frame. */
     int center_frame = dirty_frames[0];
+    for (const int frame : dirty_frames) {
+      if (abs(frame - cfra) < abs(center_frame - cfra)) {
+        center_frame = frame;
+      }
+    }
     dirty_frames_in_range.append(center_frame);
 
     eval_data->lock();
@@ -219,7 +228,6 @@ static Depsgraph *build_worker_depsgraph(Main &bmain,
     ids.append(target.id);
   }
   Depsgraph *dg = DEG_graph_new(&bmain, &scene, &view_layer, DAG_EVAL_VIEWPORT);
-  /* TODO merge ID list with existing IDs. */
   DEG_graph_build_from_ids(dg, ids);
   /* Evaluate once on the main thread so the copy on eval nodes have run. */
   DEG_evaluate_on_refresh(dg);
@@ -268,6 +276,11 @@ void background_eval_register(Main &bmain,
   wmJob *wm_job = WM_jobs_get(
       &wm, &window, &scene, job_name, eWM_JobFlag(0), WM_JOB_TYPE_MOTION_PATH_EVAL);
 
+  /* For the future, explicitly passing in a dirty frame lets us compute the depsgraph from an
+   * arbitrary frame, not just the scene frame. This could be useful when modifying data in the
+   * Graph Editor. */
+  const int dirty_frame = BKE_scene_frame_get(&scene);
+  const int current_frame = BKE_scene_frame_get(&scene);
   if (WM_jobs_is_running(wm_job)) {
     BGEvalJobData *eval_data = static_cast<BGEvalJobData *>(WM_jobs_customdata_get(wm_job));
 
@@ -278,9 +291,8 @@ void background_eval_register(Main &bmain,
       TargetData &data = eval_data->worker_data.target_data[target_index];
       data.finished_left = false;
       data.finished_right = false;
-      /* TODO explicitly pass in the dirty frame so it can be anywhere in the timeline, not just
-       * the current frame. */
-      eval_data->worker_data.dirty_frames.add(BKE_scene_frame_get(&scene));
+      eval_data->worker_data.dirty_frames.add(dirty_frame);
+      eval_data->worker_data.current_frame.store(current_frame, std::memory_order_release);
       DEG_set_allow_read_from_main(eval_data->worker_data.dg, true);
       DEG_evaluate_on_refresh(eval_data->worker_data.dg);
       DEG_set_allow_read_from_main(eval_data->worker_data.dg, false);
@@ -297,7 +309,8 @@ void background_eval_register(Main &bmain,
     eval_data->worker_data.dg = build_worker_depsgraph(
         bmain, scene, view_layer, eval_data->active_targets);
     eval_data->worker_data.target_data.append({target, eval_cb, update_cb, free_cb});
-    eval_data->worker_data.dirty_frames.add(BKE_scene_frame_get(&scene));
+    eval_data->worker_data.dirty_frames.add(dirty_frame);
+    eval_data->worker_data.current_frame.store(current_frame, std::memory_order_release);
 
     eval_data->worker_data.restart.store(true, std::memory_order_release);
     eval_data->worker_data.unlock();
@@ -309,7 +322,8 @@ void background_eval_register(Main &bmain,
   eval_data->worker_data.target_data.append({target, eval_cb, update_cb, free_cb});
   eval_data->worker_data.dg = build_worker_depsgraph(
       bmain, scene, view_layer, eval_data->active_targets);
-  eval_data->worker_data.dirty_frames.add(BKE_scene_frame_get(&scene));
+  eval_data->worker_data.dirty_frames.add(dirty_frame);
+  eval_data->worker_data.current_frame.store(current_frame, std::memory_order_release);
 
   WM_jobs_customdata_set(wm_job, eval_data, free_job_data);
   WM_jobs_callbacks(wm_job, run_job, nullptr, update_job, finish_job);
