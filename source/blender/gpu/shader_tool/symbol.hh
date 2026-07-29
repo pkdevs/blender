@@ -167,17 +167,6 @@ struct TokenException {
   TokenException(Token tok, const string &msg) : tok(tok), msg(msg) {}
 };
 
-template<typename T, typename ExceptionT = AstNodeException> struct Result {
-  T value;
-  std::optional<ExceptionT> err;
-};
-
-template<typename T, typename U, typename ExceptionT = AstNodeException> struct ResultPair {
-  T first;
-  U second;
-  std::optional<ExceptionT> err;
-};
-
 struct NodeErrorHandler {
   ErrorHandler &err_handler;
 
@@ -245,6 +234,29 @@ struct NodeErrorHandler {
   }
 
 #define NOTE(node, msg) auto n = note(node, msg)
+};
+
+template<typename T, typename ExceptionT = AstNodeException> struct Result {
+  T value;
+  std::optional<ExceptionT> err;
+
+  T unwrap(NodeErrorHandler *handler)
+  {
+    handler->error(err);
+    return value;
+  }
+};
+
+template<typename T, typename U, typename ExceptionT = AstNodeException> struct ResultPair {
+  T first;
+  U second;
+  std::optional<ExceptionT> err;
+
+  pair<T, U> unwrap(NodeErrorHandler *handler)
+  {
+    handler->error(err);
+    return {first, second};
+  }
 };
 
 Result<pair<ResourceType, ResourceTableType>> resource_type_from_attributes(AttrList list);

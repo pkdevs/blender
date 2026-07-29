@@ -1316,9 +1316,9 @@ struct SymbolParser : NodeErrorHandler {
      * Deduce type using only the first declarator. */
     Declarator first_decl = var.child_first(NodeType::Declarator);
 
-    auto [type, err] = (type_id_str == "auto") ? table.resolve_auto_type(scope, first_decl) :
-                                                 scope.lookup_class(type_id);
-    error(err);
+    SymbolClass *type = ((type_id_str == "auto") ? table.resolve_auto_type(scope, first_decl) :
+                                                   scope.lookup_class(type_id))
+                            .unwrap(this);
 
     if (type->is_error) {
       error(var, "Unknown type name '" + string(type_id_str) + "'");
@@ -1402,8 +1402,8 @@ struct SymbolParser : NodeErrorHandler {
           /* Run analysis to check if we bind a temporary. */
           /* Run const analysis to check if we bind a const expr. */
           ExpressionTypeParser parser(&table, &scope, stmt.expr().child_first());
-          auto [expr_cls, err] = parser.eval();
-          error(err);
+          SymbolClass *expr_cls = parser.eval().unwrap(this);
+
           if (parser.first_temporary.is_valid()) {
             error(parser.first_temporary, "Reference cannot bind to a temporary");
           }
@@ -1494,9 +1494,7 @@ struct SymbolParser : NodeErrorHandler {
       if (node.type() == NodeType::InitializerList) {
         return eval_scalar_initializer_list(scope, node);
       }
-      auto [val, err] = SymbolTable::evaluate_constexpr(scope, node.child_first());
-      error(err);
-      return val;
+      return SymbolTable::evaluate_constexpr(scope, node.child_first()).unwrap(this);
     }
     return 0;
   }
@@ -1511,9 +1509,7 @@ struct SymbolParser : NodeErrorHandler {
       if (InitializerList list = assign.initializer_list(); list.is_valid()) {
         return eval_scalar_initializer_list(scope, list);
       }
-      auto [val, err] = SymbolTable::evaluate_constexpr(scope, assign.expr().child_first());
-      error(err);
-      return val;
+      return SymbolTable::evaluate_constexpr(scope, assign.expr().child_first()).unwrap(this);
     }
     if (InitializerList list = decl.initializer_list(); list.is_valid()) {
       return eval_scalar_initializer_list(scope, list);

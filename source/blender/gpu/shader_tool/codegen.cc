@@ -297,8 +297,7 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       /* Resolve vertex function. */
-      auto [fn, err] = scope.lookup_function(LocalVar(vert_fn.child_first()).identifier());
-      error(err);
+      auto *fn = scope.lookup_function(LocalVar(vert_fn.child_first()).identifier()).unwrap(this);
       if (fn->entry_point_type != SymbolFunction::EntryPointType::VERT) {
         error(vert_fn, "Expected vertex shader entry point function");
         return;
@@ -313,8 +312,7 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       /* Resolve vertex function. */
-      auto [fn2, err2] = scope.lookup_function(LocalVar(frag_fn.child_first()).identifier());
-      error(err2);
+      auto *fn2 = scope.lookup_function(LocalVar(frag_fn.child_first()).identifier()).unwrap(this);
       if (fn2->entry_point_type != SymbolFunction::EntryPointType::FRAG) {
         error(frag_fn, "Expected fragment shader entry point function");
         return;
@@ -332,8 +330,7 @@ struct CodegenContext : NodeErrorHandler {
         return;
       }
       /* Resolve vertex function. */
-      auto [fn, err] = scope.lookup_function(LocalVar(comp_fn.child_first()).identifier());
-      error(err);
+      auto *fn = scope.lookup_function(LocalVar(comp_fn.child_first()).identifier()).unwrap(this);
       if (fn->entry_point_type != SymbolFunction::EntryPointType::COMP) {
         error(comp_fn, "Expected compute shader entry point function");
         return;
@@ -347,8 +344,7 @@ struct CodegenContext : NodeErrorHandler {
 
     while (constants_init.is_valid()) {
       if (Constructor ctor(constants_init.child_first()); ctor.is_valid()) {
-        auto [cls, err] = scope.lookup_class(ctor.id());
-        error(err);
+        auto *cls = scope.lookup_class(ctor.id()).unwrap(this);
         builder << cls->resolved->identifier;
         builder << ctor.initializer_list();
       }
@@ -468,11 +464,7 @@ struct CodegenContext : NodeErrorHandler {
             "Loop variable needs to be assigned a value (using assignment) for unrolled loops");
       return;
     }
-    auto [val, err] = SymbolTable::evaluate_constexpr(scope, init_expr.child_first());
-    if (err) {
-      error(err->node, err->msg);
-      return;
-    }
+    int64_t val = SymbolTable::evaluate_constexpr(scope, init_expr.child_first()).unwrap(this);
     /* Check if loop statement assign to and only to the loop variable. */
     for (Node node : end_expr.children_range()) {
       if (node.type() == NodeType::Op && node.front() == ',') {
@@ -489,11 +481,8 @@ struct CodegenContext : NodeErrorHandler {
     /* Run a small virtual machine. For each iteration, check the condition, and run the loop
      * statement. Break only if we  */
     for (int i = 0;; i++) {
-      auto [cond_val, err] = SymbolTable::evaluate_constexpr(scope, cond_expr.child_first());
-      if (err) {
-        error(err->node, err->msg);
-        break;
-      }
+      int64_t cond_val =
+          SymbolTable::evaluate_constexpr(scope, cond_expr.child_first()).unwrap(this);
       /* Break if condition is false. */
       if (cond_val == 0) {
         break;
@@ -688,9 +677,7 @@ struct CodegenContext : NodeErrorHandler {
     SymbolClass *cls_ptr = inst_cls;
     if (!cls_ptr) {
       if (decl.identifier().is_valid()) {
-        auto [res, err] = scope.lookup_class(decl.identifier());
-        error(err);
-        cls_ptr = res;
+        cls_ptr = scope.lookup_class(decl.identifier()).unwrap(this);
       }
       else {
         cls_ptr = scope.lookup_class("a" + to_string(nested_id));
@@ -1264,9 +1251,7 @@ struct CodegenContext : NodeErrorHandler {
     else {
       /* Declare return variable of the same type as the accessed member. */
       fn_body += "  " + fn_type_id + " r;\n";
-      auto [members, err] = get_all_members_flat(&member_type);
-      error(err);
-      for (const auto &var : members) {
+      for (const auto &var : get_all_members_flat(&member_type).unwrap(this)) {
         string to_var = "r." + var.path;
         string access = "this_." +
                         union_data_access(var.absolute_offset, var.type->size, union_type.size);
@@ -1298,9 +1283,7 @@ struct CodegenContext : NodeErrorHandler {
       fn_body += "  " + to_var + " = " + member_to_float(*member.type, access) + ";\n";
     }
     else {
-      auto [members, err] = get_all_members_flat(&member_type);
-      error(err);
-      for (const auto &var : members) {
+      for (const auto &var : get_all_members_flat(&member_type).unwrap(this)) {
         string to_var = "this_." +
                         union_data_access(var.absolute_offset, var.type->size, union_type.size);
         string access = "v." + var.path;
@@ -1733,10 +1716,10 @@ struct CodegenContext : NodeErrorHandler {
       LocalStmt stmt(cond.child_first());
       int unused_count = 0;
       /* Checks that condition is made of compilation constants or constexpr. */
-      auto [cond_str, err] = SymbolTable::expr_to_string(
-          parent_scope, stmt.expr().child_first(), unused_count, true);
-      error(err);
-      builder.ss << (first ? "#if " : "#elif ") + string(cond_str) + "\n";
+      auto cond_str = SymbolTable::expr_to_string(
+                          parent_scope, stmt.expr().child_first(), unused_count, true)
+                          .unwrap(this);
+      builder.ss << (first ? "#if " : "#elif ") + cond_str + "\n";
     }
     else {
       builder.ss << "#else\n";
@@ -1784,8 +1767,7 @@ struct CodegenContext : NodeErrorHandler {
         if (do_implicit_conversion &&
             (!is_for_loop || (child.prev().is_valid() && child.next().is_valid())))
         {
-          auto [type, err] = symbols.expr_type_analysis(scope, LocalStmt(child).expr());
-          error(err);
+          auto *type = symbols.expr_type_analysis(scope, LocalStmt(child).expr()).unwrap(this);
           if (type->resolved->identifier == "int") {
             builder.ss << "!=0";
           }
@@ -1892,10 +1874,8 @@ struct CodegenContext : NodeErrorHandler {
     skip_node(decl.attributes());
 
     if (decl.type().id().str() == "auto") {
-      auto [cls, err] = symbols.resolve_auto_type(scope, decl.child_first(NodeType::Declarator));
-      if (err) {
-        error(err->node, err->msg);
-      }
+      Declarator d = decl.child_first(NodeType::Declarator);
+      auto *cls = symbols.resolve_auto_type(scope, d).unwrap(this);
       builder << cls->resolved->identifier + trivia(decl.type().id());
     }
     else {
@@ -2153,8 +2133,7 @@ struct CodegenContext : NodeErrorHandler {
 
   void constructor(Constructor construct, SymbolScope &scope)
   {
-    auto [cls, err] = scope.lookup_class(construct.id());
-    error(err);
+    auto *cls = scope.lookup_class(construct.id()).unwrap(this);
     if (cls->is_srt()) {
       error(construct,
             "Calling resource table constructor '" + cls->identifier +
@@ -2266,8 +2245,7 @@ struct CodegenContext : NodeErrorHandler {
   SymbolClass *id_type_lookup_resolved(IdQualified id, const SymbolScope &scope)
   {
     assert(id.is_valid());
-    auto [cls, err] = scope.lookup_class(id);
-    error(err);
+    auto *cls = scope.lookup_class(id).unwrap(this);
     if (cls->template_data && !id.template_params().is_valid()) {
       error(id, "Missing explicit template arguments");
     }
@@ -2303,9 +2281,7 @@ struct CodegenContext : NodeErrorHandler {
                                           const SymbolScope &scope)
   {
     assert(id.is_valid());
-    auto [func, err] = scope.lookup_function(id, params, symbols);
-    error(err);
-    return func;
+    return scope.lookup_function(id, params, symbols).unwrap(this);
   }
 
   template<typename ArgOrParamList>
