@@ -33,8 +33,11 @@ namespace blender::nodes::gizmos {
 
 bool is_builtin_gizmo_node(const bNode &node)
 {
-  return ELEM(
-      node.type_legacy, GEO_NODE_GIZMO_LINEAR, GEO_NODE_GIZMO_DIAL, GEO_NODE_GIZMO_TRANSFORM);
+  return ELEM(node.type_legacy,
+              GEO_NODE_GIZMO_LINEAR,
+              GEO_NODE_GIZMO_DIAL,
+              GEO_NODE_GIZMO_TRANSFORM,
+              CMP_NODE_GIZMO_LINEAR);
 }
 
 /**
@@ -43,6 +46,10 @@ bool is_builtin_gizmo_node(const bNode &node)
 static ie::ElemVariant get_gizmo_socket_elem(const bNode &node, const bNodeSocket &socket)
 {
   switch (node.type_legacy) {
+    case CMP_NODE_GIZMO_LINEAR: {
+      // todo(habib): verify side effects.
+      break;
+    }
     case GEO_NODE_GIZMO_LINEAR: {
       return {ie::FloatElem::all()};
     }
@@ -238,6 +245,57 @@ static void foreach_gizmo_for_input(const ie::SocketElem &input_socket,
   }
 }
 
+/**
+ * Collect the gizmo inputs whose gizmo is currently active because its owning node is selected or
+ * its output socket is pinned. Shared between the geometry-nodes and compositor node editors.
+ */
+static void collect_used_gizmo_inputs(const TreeGizmoPropagation &gizmo_propagation,
+                                      Set<ie::SocketElem> &used_gizmo_inputs)
+{
+  /* Check gizmos on value nodes. */
+  for (auto &&item : gizmo_propagation.gizmo_inputs_by_value_nodes.items()) {
+    const bNode &node = *item.key.node;
+    const bNodeSocket &output_socket = node.output_socket(0);
+    if ((node.flag & NODE_SELECT) || (output_socket.flag & SOCK_GIZMO_PIN)) {
+      used_gizmo_inputs.add_multiple(item.value);
+      continue;
+    }
+    for (const ie::SocketElem &socket_elem : item.value) {
+      if (socket_elem.socket->owner_node().flag & NODE_SELECT) {
+        used_gizmo_inputs.add(socket_elem);
+      }
+    }
+  }
+  /* Check gizmos on input sockets. */
+  for (auto &&item : gizmo_propagation.gizmo_inputs_by_node_inputs.items()) {
+    const bNodeSocket &socket = *item.key.socket;
+    if (socket.is_inactive()) {
+      continue;
+    }
+    const bNode &node = socket.owner_node();
+    if ((node.flag & NODE_SELECT) || (socket.flag & SOCK_GIZMO_PIN)) {
+      used_gizmo_inputs.add_multiple(item.value);
+      continue;
+    }
+    for (const ie::SocketElem &socket_elem : item.value) {
+      if (socket_elem.socket->owner_node().flag & NODE_SELECT) {
+        used_gizmo_inputs.add(socket_elem);
+      }
+    }
+  }
+  /* Check built-in gizmo nodes. */
+  for (const bNode *gizmo_node : gizmo_propagation.gizmo_nodes) {
+    if (gizmo_node->is_muted()) {
+      continue;
+    }
+    const bNodeSocket &gizmo_input_socket = gizmo_node->input_socket(0);
+    if ((gizmo_node->flag & NODE_SELECT) || (gizmo_input_socket.flag & SOCK_GIZMO_PIN)) {
+      used_gizmo_inputs.add(
+          {&gizmo_input_socket, *ie::get_elem_variant_for_socket_type(gizmo_input_socket.type)});
+    }
+  }
+}
+
 static void foreach_active_gizmo_in_open_node_editor(
     const SpaceNode &snode,
     const Object *object_filter,
@@ -284,49 +342,8 @@ static void foreach_active_gizmo_in_open_node_editor(
   snode.edittree->ensure_topology_cache();
   const TreeGizmoPropagation &gizmo_propagation = *snode.edittree->runtime->gizmo_propagation;
   Set<ie::SocketElem> used_gizmo_inputs;
+  collect_used_gizmo_inputs(gizmo_propagation, used_gizmo_inputs);
 
-  /* Check gizmos on value nodes. */
-  for (auto &&item : gizmo_propagation.gizmo_inputs_by_value_nodes.items()) {
-    const bNode &node = *item.key.node;
-    const bNodeSocket &output_socket = node.output_socket(0);
-    if ((node.flag & NODE_SELECT) || (output_socket.flag & SOCK_GIZMO_PIN)) {
-      used_gizmo_inputs.add_multiple(item.value);
-      continue;
-    }
-    for (const ie::SocketElem &socket_elem : item.value) {
-      if (socket_elem.socket->owner_node().flag & NODE_SELECT) {
-        used_gizmo_inputs.add(socket_elem);
-      }
-    }
-  }
-  /* Check gizmos on input sockets. */
-  for (auto &&item : gizmo_propagation.gizmo_inputs_by_node_inputs.items()) {
-    const bNodeSocket &socket = *item.key.socket;
-    if (socket.is_inactive()) {
-      continue;
-    }
-    const bNode &node = socket.owner_node();
-    if ((node.flag & NODE_SELECT) || (socket.flag & SOCK_GIZMO_PIN)) {
-      used_gizmo_inputs.add_multiple(item.value);
-      continue;
-    }
-    for (const ie::SocketElem &socket_elem : item.value) {
-      if (socket_elem.socket->owner_node().flag & NODE_SELECT) {
-        used_gizmo_inputs.add(socket_elem);
-      }
-    }
-  }
-  /* Check built-in gizmo nodes. */
-  for (const bNode *gizmo_node : gizmo_propagation.gizmo_nodes) {
-    if (gizmo_node->is_muted()) {
-      continue;
-    }
-    const bNodeSocket &gizmo_input_socket = gizmo_node->input_socket(0);
-    if ((gizmo_node->flag & NODE_SELECT) || (gizmo_input_socket.flag & SOCK_GIZMO_PIN)) {
-      used_gizmo_inputs.add(
-          {&gizmo_input_socket, *ie::get_elem_variant_for_socket_type(gizmo_input_socket.type)});
-    }
-  }
   for (const ie::SocketElem &gizmo_input : used_gizmo_inputs) {
     foreach_gizmo_for_input(gizmo_input,
                             compute_context_cache,
@@ -482,6 +499,62 @@ void foreach_active_gizmo(const bContext &C,
   }
 }
 
+static void foreach_active_gizmo_in_open_compositor_editor(
+    const SpaceNode &snode,
+    bke::ComputeContextCache &compute_context_cache,
+    const ForeachGizmoInModifierFn fn)
+{
+  if (snode.edittree == nullptr || snode.edittree->type != NTREE_COMPOSIT) {
+    return;
+  }
+  if (!snode.edittree->runtime->gizmo_propagation) {
+    return;
+  }
+  const ComputeContext *current_compute_context = ed::space_node::compute_context_for_edittree(
+      snode, compute_context_cache);
+  if (!current_compute_context) {
+    return;
+  }
+
+  snode.edittree->ensure_topology_cache();
+  const TreeGizmoPropagation &gizmo_propagation = *snode.edittree->runtime->gizmo_propagation;
+  Set<ie::SocketElem> used_gizmo_inputs;
+  collect_used_gizmo_inputs(gizmo_propagation, used_gizmo_inputs);
+
+  for (const ie::SocketElem &gizmo_input : used_gizmo_inputs) {
+    foreach_gizmo_for_input(
+        gizmo_input, compute_context_cache, current_compute_context, *snode.edittree, fn);
+  }
+}
+
+void foreach_active_compositor_gizmo(const bContext &C,
+                                     bke::ComputeContextCache &compute_context_cache,
+                                     const ForeachGizmoInModifierFn fn)
+{
+  const wmWindowManager *wm = CTX_wm_manager(&C);
+  if (!wm) {
+    return;
+  }
+  for (const wmWindow &window : wm->windows) {
+    const bScreen *active_screen = BKE_workspace_active_screen_get(window.workspace_hook);
+    Vector<const bScreen *> screens = {active_screen};
+    if (ELEM(active_screen->state, SCREENMAXIMIZED, SCREENFULL)) {
+      const ScrArea *area = static_cast<const ScrArea *>(active_screen->areabase.first);
+      screens.append(area->full);
+    }
+    for (const bScreen *screen : screens) {
+      for (const ScrArea &area : screen->areabase) {
+        const SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
+        if (sl == nullptr || sl->spacetype != SPACE_NODE) {
+          continue;
+        }
+        const SpaceNode &snode = *reinterpret_cast<const SpaceNode *>(sl);
+        foreach_active_gizmo_in_open_compositor_editor(snode, compute_context_cache, fn);
+      }
+    }
+  }
+}
+
 void foreach_compute_context_on_gizmo_path(const ComputeContext &gizmo_context,
                                            const bNode &gizmo_node,
                                            const bNodeSocket &gizmo_socket,
@@ -525,8 +598,8 @@ ie::ElemVariant get_editable_gizmo_elem(const ComputeContext &gizmo_context,
 
 void apply_gizmo_change(
     bContext &C,
-    Object &object,
-    NodesModifierData &nmd,
+    Object *object,
+    NodesModifierData *nmd,
     eval_log::NodesEvalLog &eval_log,
     const ComputeContext &gizmo_context,
     const bNodeSocket &gizmo_socket,
@@ -536,6 +609,9 @@ void apply_gizmo_change(
 
   const bNodeTree &gizmo_node_tree = gizmo_socket.owner_tree();
   eval_log::NodeTreeLog &gizmo_tree_log = eval_log.get_tree_log(gizmo_context.hash());
+  /* Reduce the logged socket values before reading them. This is a no-op if already done (e.g. by
+   * the geometry-nodes viewport gizmo update), but is required for the compositor. */
+  gizmo_tree_log.ensure_socket_values();
 
   /* Gather all sockets to update together with their new values. */
   for (const bNodeLink *link : gizmo_socket.directly_linked_links()) {

@@ -28,6 +28,9 @@ class NODE_MT_compositor_node_input_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "CompositorNodeStringToImage")
 
         layout.separator()
+        self.node_operator(layout, "CompositorNodeGizmoLinear")
+
+        layout.separator()
         self.draw_menu(layout, path="Input/Scene")
 
         self.draw_assets_for_catalog(layout, self.bl_label)

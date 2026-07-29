@@ -103,5 +103,16 @@ void transform_setup(const bContext *C, wmGizmoGroup *gzgroup);
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Linear Gizmo
+ * \{ */
+
+// todo(habib): support backdrop gizmo
+void gizmo_linear_setup(const bContext *C, wmGizmoGroup *gzgroup);
+void gizmo_linear_refresh(const bContext *C, wmGizmoGroup *gzgroup);
+bool gizmo_linear_poll_space_image(const bContext *C, wmGizmoGroupType *gzgt);
+
+/** \} */
+
 }  // namespace nodes::gizmos
 }  // namespace blender

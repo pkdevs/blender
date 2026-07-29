@@ -80,6 +80,13 @@ void foreach_active_gizmo_in_modifier(const Object &object,
                                       ForeachGizmoInModifierFn fn);
 
 /**
+ * todo(habib): docu
+ */
+void foreach_active_compositor_gizmo(const bContext &C,
+                                     bke::ComputeContextCache &compute_context_cache,
+                                     ForeachGizmoInModifierFn fn);
+
+/**
  * Iterates over all compute contexts that are touched by a specific gizmo back-propagation path.
  * This is used to make sure that all sockets on the path are logged.
  */
@@ -112,8 +119,7 @@ ie::ElemVariant get_editable_gizmo_elem(const ComputeContext &gizmo_context,
  * place.
  *
  * \param C: The context the gizmo is changed in. Required for propagating updates correctly.
- * \param object: The object with the modifier that the gizmo belongs to.
- * \param nmd: The modifier that the gizmo belongs to.
+ * todo(habib): docu: obj and nmd may be null
  * \param eval_log: The logged evaluation data that should be used to compute the backpropagated
  *   value. This may not be the most recent logged data, because generally the same logged data is
  *   used while interacting with a gizmo.
@@ -126,8 +132,8 @@ ie::ElemVariant get_editable_gizmo_elem(const ComputeContext &gizmo_context,
  *
  */
 void apply_gizmo_change(bContext &C,
-                        Object &object,
-                        NodesModifierData &nmd,
+                        Object *object,
+                        NodesModifierData *nmd,
                         eval_log::NodesEvalLog &eval_log,
                         const ComputeContext &gizmo_context,
                         const bNodeSocket &gizmo_socket,

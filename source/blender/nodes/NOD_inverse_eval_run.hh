@@ -33,10 +33,11 @@ struct SocketToUpdate {
 
 /**
  * Try to change socket/node/modifier values so that the given sockets will have a specific value.
+ * // todo(habib): support compositor modifiers.
  */
 bool backpropagate_socket_values(bContext &C,
-                                 Object &object,
-                                 NodesModifierData &nmd,
+                                 Object *object,
+                                 NodesModifierData *nmd,
                                  eval_log::NodesEvalLog &eval_log,
                                  Span<SocketToUpdate> sockets_to_update);
 

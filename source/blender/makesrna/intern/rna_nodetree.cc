@@ -10711,6 +10711,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("CompositorNode", "CompositorNodeFilter");
   define("CompositorNode", "CompositorNodeFlip");
   define("CompositorNode", "CompositorNodeGamma");
+  define("CompositorNode", "CompositorNodeGizmoLinear");
   define("CompositorNode", "CompositorNodeGlare");
   define("CompositorNode", "CompositorNodeHueCorrect", def_cmp_huecorrect);
   define("CompositorNode", "CompositorNodeHueSat");

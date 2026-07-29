@@ -692,12 +692,14 @@ static void backpropagate_socket_values_through_node(
 }
 
 bool backpropagate_socket_values(bContext &C,
-                                 Object &object,
-                                 NodesModifierData &nmd,
+                                 Object *object,
+                                 NodesModifierData *nmd,
                                  eval_log::NodesEvalLog &eval_log,
                                  const Span<SocketToUpdate> sockets_to_update)
 {
-  nmd.node_group->ensure_topology_cache();
+  if (nmd && nmd->node_group) {
+    nmd->node_group->ensure_topology_cache();
+  }
 
   bke::ComputeContextCache compute_context_cache;
   Map<SocketInContext, SocketValueVariant> value_by_socket;
@@ -781,16 +783,19 @@ bool backpropagate_socket_values(bContext &C,
       any_success |= set_value_node_value(C, node_mutable, *value);
     }
   }
-  /* Set new values for modifier inputs. */
-  const bke::DataBlockComputeContext data_block_context{nullptr, object.id};
-  const bke::GeometryNodesModifierComputeContext modifier_context{&data_block_context, nmd};
-  for (const bNode *group_input_node : nmd.node_group->group_input_nodes()) {
-    for (const bNodeSocket *socket : group_input_node->output_sockets().drop_back(1)) {
-      if (const SocketValueVariant *value = value_by_socket.lookup_ptr(
-              {&modifier_context, socket}))
-      {
-        any_success |= set_modifier_value(
-            C, object, nmd, *nmd.node_group->interface_inputs()[socket->index()], *value);
+  /* Set new values for modifier inputs. This only applies to geometry nodes; the compositor has no
+   * modifier wrapping the node tree. */
+  if (object && nmd) {
+    const bke::DataBlockComputeContext data_block_context{nullptr, object->id};
+    const bke::GeometryNodesModifierComputeContext modifier_context{&data_block_context, *nmd};
+    for (const bNode *group_input_node : nmd->node_group->group_input_nodes()) {
+      for (const bNodeSocket *socket : group_input_node->output_sockets().drop_back(1)) {
+        if (const SocketValueVariant *value = value_by_socket.lookup_ptr(
+                {&modifier_context, socket}))
+        {
+          any_success |= set_modifier_value(
+              C, *object, *nmd, *nmd->node_group->interface_inputs()[socket->index()], *value);
+        }
       }
     }
   }

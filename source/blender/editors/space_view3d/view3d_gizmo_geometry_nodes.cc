@@ -1075,8 +1075,8 @@ static void WIDGETGROUP_geometry_nodes_refresh(const bContext *C, wmGizmoGroup *
                 const bNodeSocket &socket = *gizmo_node->input_by_identifier(socket_identifier);
 
                 nodes::gizmos::apply_gizmo_change(*const_cast<bContext *>(C),
-                                                  const_cast<Object &>(*object_orig),
-                                                  const_cast<NodesModifierData &>(*nmd),
+                                                  const_cast<Object *>(object_orig),
+                                                  const_cast<NodesModifierData *>(nmd),
                                                   *eval_log,
                                                   *compute_context,
                                                   socket,

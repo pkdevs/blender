@@ -609,6 +609,20 @@ static void IMAGE_GGT_compositor_split(wmGizmoGroupType *gzgt)
   gzgt->refresh = nodes::gizmos::split_refresh;
 }
 
+static void IMAGE_GGT_compositor_gizmo_linear(wmGizmoGroupType *gzgt)
+{
+  gzgt->name = "Linear Gizmo Node Widget";
+  gzgt->idname = "IMAGE_GGT_compositor_gizmo_linear";
+
+  gzgt->flag |= WM_GIZMOGROUPTYPE_PERSISTENT | WM_GIZMOGROUPTYPE_DRAW_MODAL_ALL;
+
+  gzgt->poll = nodes::gizmos::gizmo_linear_poll_space_image;
+  gzgt->setup = nodes::gizmos::gizmo_linear_setup;
+  gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
+  gzgt->draw_prepare = nodes::gizmos::bbox_draw_prepare_space_image;
+  gzgt->refresh = nodes::gizmos::gizmo_linear_refresh;
+}
+
 static void image_widgets()
 {
   const wmGizmoMapType_Params params{SPACE_IMAGE, RGN_TYPE_WINDOW};
@@ -627,6 +641,7 @@ static void image_widgets()
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_corner_pin);
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_ellipse_mask);
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_split);
+  WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_gizmo_linear);
 }
 
 /************************** main region ***************************/

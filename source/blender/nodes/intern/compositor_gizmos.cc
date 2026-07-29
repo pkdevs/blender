@@ -9,13 +9,16 @@
 #include "BLI_rect.hh"
 #include "BLI_string.hh"
 
+#include "BKE_compute_context_cache.hh"
 #include "BKE_context.hh"
 #include "BKE_image.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_scene_runtime.hh"
 
 #include "DNA_listBase.h"
 #include "DNA_node_types.h"
+#include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
@@ -32,6 +35,7 @@
 #include "WM_types.hh"
 
 #include "NOD_compositor_gizmos.hh" /* Own include. */
+#include "NOD_geometry_nodes_gizmos.hh"
 
 namespace blender::nodes::gizmos {
 
@@ -855,6 +859,177 @@ void glare_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 
   BKE_image_release_ibuf(ima, ibuf, lock);
 }
+
+//* -------------------------------------------------------------------- */
+/** \name Linear Gizmo
+ *
+ * Unlike the direct-RNA gizmos in this file, the value of this gizmo is propagated backwards
+ * through the node tree (see #TreeGizmoPropagation) to reach the editable target it controls.
+ * Dragging the widget reports a delta which is added to the logged value and back-propagated via
+ * #apply_gizmo_change.
+ * \{ */
+
+struct NodeGizmoLinearWidgetGroup {
+  wmGizmo *gizmo;
+  float2 position;
+
+  bke::ComputeContextCache compute_context_cache;
+  const ComputeContext *gizmo_context = nullptr;
+  const bNodeSocket *gizmo_socket = nullptr;
+  bContext *context = nullptr;
+  // todo(habib): verify always correct scene used like geometry nodes?
+  Scene *scene = nullptr;
+
+  struct {
+    // todo(habib): how to handle display offset?
+    float2 offset;
+  } state;
+};
+
+static void gizmo_linear_value_get(const wmGizmo *gz, wmGizmoProperty *gz_prop, void *value_p)
+{
+  float *gz_offset = static_cast<float *>(value_p);
+  BLI_assert(gz_prop->type->array_length == 3);
+
+  const NodeGizmoLinearWidgetGroup *group = static_cast<NodeGizmoLinearWidgetGroup *>(
+      gz->parent_gzgroup->customdata);
+
+  gz_offset[0] = group->position.x;
+  gz_offset[1] = group->position.y;
+
+  // float loc[3] = {group->position, 0.0f, 0.0f};
+  // float rot[3][3];
+  // unit_m3(rot);
+  // float size[3] = {1.0f, 1.0f, 1.0f};
+  // loc_rot_size_to_mat4(matrix, loc, rot, size);
+}
+
+static void gizmo_linear_value_set(const wmGizmo *gz,
+                                   wmGizmoProperty *gz_prop,
+                                   const void *value_p)
+{
+  const float *gz_offset = static_cast<const float(*)>(value_p);
+  BLI_assert(gz_prop->type->array_length == 3);
+
+  NodeGizmoLinearWidgetGroup *group = static_cast<NodeGizmoLinearWidgetGroup *>(
+      gz->parent_gzgroup->customdata);
+
+  // float loc[3], rot[3][3], size[3];
+  // mat4_to_loc_rot_size(loc, rot, size, matrix);
+  // const float new_value = loc[0];
+  // group->current_value = new_value;
+
+  if (!group->gizmo_context || !group->gizmo_socket || !group->context || !group->scene) {
+    return;
+  }
+  eval_log::NodesEvalLog *eval_log = group->scene->runtime->compositor.nodes_evaluation_log.get();
+  if (!eval_log) {
+    return;
+  }
+
+  group->position = float2(gz_offset[0], gz_offset[1]);
+
+  // todo(habib): verify value is propagated properly.
+  apply_gizmo_change(*group->context,
+                     nullptr,
+                     nullptr,
+                     *eval_log,
+                     *group->gizmo_context,
+                     *group->gizmo_socket,
+                     [&](bke::SocketValueVariant &value) {
+                       // todo(habib): support 2d vector
+                       value.set(float3(group->position, 0.0f));
+                     });
+
+  WM_main_add_notifier(NC_NODE | NA_EDITED, nullptr);
+}
+
+static bool show_gizmo_linear(const SpaceNode &snode)
+{
+  bNodeTree *node_tree = snode.edittree;
+  BLI_assert(node_tree != nullptr);
+  if (node_tree->type != NTREE_COMPOSIT) {
+    return false;
+  }
+  const bNode *node = bke::node_get_active(*node_tree);
+  return node && node->is_type("CompositorNodeGizmoLinear"_ustr);
+}
+
+bool gizmo_linear_poll_space_image(const bContext *C, wmGizmoGroupType * /*gzgt*/)
+{
+  const SpaceImage *sima = CTX_wm_space_image(C);
+  if (sima == nullptr) {
+    return false;
+  }
+  if (!image_gizmo_is_set_visible(*sima)) {
+    return false;
+  }
+  const SpaceNode *snode = find_active_node_editor(C);
+  if (snode == nullptr || snode->edittree == nullptr) {
+    return false;
+  }
+  return show_gizmo_linear(*snode);
+}
+
+void gizmo_linear_setup(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  NodeGizmoLinearWidgetGroup *group = MEM_new<NodeGizmoLinearWidgetGroup>(__func__);
+  group->gizmo = WM_gizmo_new("GIZMO_GT_move_3d", gzgroup, nullptr);
+  RNA_enum_set(group->gizmo->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
+
+  gzgroup->customdata = group;
+  gzgroup->customdata_free = [](void *customdata) {
+    MEM_delete(static_cast<NodeGizmoLinearWidgetGroup *>(customdata));
+  };
+}
+
+void gizmo_linear_refresh(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  NodeGizmoLinearWidgetGroup *group = static_cast<NodeGizmoLinearWidgetGroup *>(
+      gzgroup->customdata);
+  wmGizmo *gz = group->gizmo;
+
+  SpaceNode *snode = find_active_node_editor(C);
+  BLI_assert(snode != nullptr);
+  bNode *node = bke::node_get_active(*snode->edittree);
+
+  wmGizmoPropertyFnParams fn_params{};
+  fn_params.value_get_fn = gizmo_linear_value_get;
+  fn_params.value_set_fn = gizmo_linear_value_set;
+  fn_params.user_data = node;
+  WM_gizmo_target_property_def_func(group->gizmo, "offset", &fn_params);
+
+  /* Locate the active gizmo and remember what is needed to back-propagate changes on drag. Take
+   * the first one found; supporting multiple gizmos at once is a follow-up. */
+  group->gizmo_context = nullptr;
+  group->gizmo_socket = nullptr;
+  group->context = const_cast<bContext *>(C);
+  group->scene = CTX_data_scene(C);
+  foreach_active_compositor_gizmo(*C,
+                                  group->compute_context_cache,
+                                  [&](const ComputeContext &compute_context,
+                                      const bNode & /*gizmo_node*/,
+                                      const bNodeSocket &gizmo_socket) {
+                                    if (group->gizmo_socket == nullptr) {
+                                      group->gizmo_context = &compute_context;
+                                      group->gizmo_socket = &gizmo_socket;
+                                    }
+                                  });
+
+  if (group->gizmo_socket == nullptr) {
+    WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
+    return;
+  }
+
+  // todo(habib): should gizmo reset position or should it be a position gizmo?
+  // if (gz->interaction_data == nullptr) {
+  //   group->position = float2(0.0f);
+  // }
+
+  WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
+}
+
+/** \} */
 
 struct NodeCornerPinWidgetGroup {
   wmGizmo *gizmos[4];

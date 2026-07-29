@@ -63,6 +63,7 @@ set(SRC
   nodes/node_composite_file_output.cc
   nodes/node_composite_filter.cc
   nodes/node_composite_flip.cc
+  nodes/node_composite_gizmo_linear.cc
   nodes/node_composite_glare.cc
   nodes/node_composite_group.cc
   nodes/node_composite_hue_correct.cc
