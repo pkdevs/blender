@@ -326,6 +326,7 @@ static Block *menu_add_shortcut(bContext *C, ARegion *region, void *arg)
 #endif
 
   wm_keymap_item_free_data(kmi_copy);
+  MEM_delete(kmi_copy);
   return block;
 }
 
