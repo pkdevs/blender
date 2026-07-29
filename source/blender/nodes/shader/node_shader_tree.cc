@@ -1004,6 +1004,7 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
     }
     else if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
       ensure_nodes();
+      /** WATCH: This can add multiple links into the same input socket. */
       bke::node_add_link(*ntree,
                          node,
                          *ntree_shader_node_output_get(&node, 0),
