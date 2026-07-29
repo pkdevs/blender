@@ -9,6 +9,8 @@
  */
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 
 #include "MEM_guardedalloc.h"
 
@@ -846,14 +848,14 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
 {
   BMVert *verts[8];
   float mat[4][4];
-  float off = 0.5f;
+  float off = 1.0f;
 
   const float rad = BMO_slot_float_get(op->slots_in, "radius");
   const int subdiv = BMO_slot_int_get(op->slots_in, "subdivisions");
   const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
   const bool calc_uvs = (cd_loop_uv_offset != -1) && BMO_slot_bool_get(op->slots_in, "calc_uvs");
 
-  /* rotation order set to match 'BM_mesh_calc_uvs_cube' */
+  /* TODO: Add UV map for the quad sphere */
   const char faces[6][4] = {
       {0, 1, 3, 2},
       {2, 3, 7, 6},
@@ -909,7 +911,7 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
                  "subdivide_edges edges=%fe "
                  "smooth=% f "
                  "cuts=%i "
-                 "use_grid_fill=%b use_sphere=%b",
+                 "use_grid_fill=%b",
                  EDGE_MARK,
                  rad,
                  (1 << (subdiv - 1)) - 1,
@@ -919,6 +921,24 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
     BMO_slot_buffer_flag_enable(bm, bmop.slots_out, "geom.out", BM_VERT, VERT_MARK);
     BMO_slot_buffer_flag_enable(bm, bmop.slots_out, "geom.out", BM_EDGE, EDGE_MARK);
     BMO_op_finish(bm, &bmop);
+    BMVert *v;
+    BMIter viter;
+    BM_ITER_MESH(v, &viter, bm, BM_VERTS_OF_MESH) {
+      float co[3];
+      copy_v3_v3(co, v->co);
+      // Nowell Sphere https://mathproofs.blogspot.com/2005/07/mapping-cube-to-sphere.html
+      float x = co[0];
+      float y = co[1];
+      float z = co[2];
+      co[0] = x * std::sqrt(1 - (y * y) / 2 - (z * z) / 2 + (y * y) * (z * z) / 3);
+      co[1] = y * std::sqrt(1 - (z * z) / 2 - (x * x) / 2 + (z * z) * (x * x) / 3);
+      co[2] = z * std::sqrt(1 - (x * x) / 2 - (y * y) / 2 + (x * x) * (y * y) / 3);
+      // Apply the radius
+      co[0] = co[0] * rad;
+      co[1] = co[1] * rad;
+      co[2] = co[2] * rad;
+      copy_v3_v3(v->co, co);
+    }
     BMO_slot_buffer_from_enabled_flag(bm, op, op->slots_out, "verts.out", BM_VERT, VERT_MARK);
 }
 
