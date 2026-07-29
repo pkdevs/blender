@@ -336,6 +336,7 @@ enum eKeyMap_Flag : short {
   KEYMAP_UPDATE = (1 << 6),
   /** key-map for active tool system. */
   KEYMAP_TOOL = (1 << 7),
+  KEYMAP_RESET = (1 << 8),
 };
 ENUM_OPERATORS(eKeyMap_Flag)
 
