@@ -218,7 +218,7 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
         break;
       }
       default: {
-        /* Other types don't need depsgraph dependencies currently. */
+        DEG_add_generic_id_relation(ctx->node, id, "Nodes Modifier");
         break;
       }
     }
