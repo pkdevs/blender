@@ -2,15 +2,16 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+// #include "BLI_hash_c.hh"
 #include "BLI_noise.hh"
+
+#include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 #include "NOD_socket_search_link.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
-
-#include "node_function_util.hh"
-#include "node_shader_util.hh"
 
 namespace blender::nodes::node_fn_random_value_cc {
 
