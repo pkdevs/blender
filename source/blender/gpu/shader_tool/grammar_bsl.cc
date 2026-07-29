@@ -167,7 +167,7 @@ struct BSLParser {
   }
 
   /* Example : `struct [[a]] A {}`. */
-  void struct_decl(bool expect_template_params = false, bool expect_body = true)
+  bool struct_decl(bool expect_template_params = false, bool expect_body = true)
   {
     NODE(ClassDecl);
     match(Union, Struct, Class);
@@ -181,22 +181,21 @@ struct BSLParser {
       qualified_id(expect_template_params);
       if (!expect_body) {
         match(';');
-        return;
+        return curr.is_valid();
       }
       if (match_if(';')) {
         if (!expect_body) {
-          return; /* Template explicit instantiation. */
+          return true; /* Template explicit instantiation. */
         }
         curr = curr.prev(2); /* For correct error token. */
         error("Forward declaration of classes is not supported");
         curr = curr.next(2);
-        return;
+        return false;
       }
       if (peek() == Word) {
         /* Struct keyword usage in variable declaration. */
         /* Supported because of explicit host shared struct members and C++ shared code. */
-        next();
-        return;
+        return next().is_valid();
       }
     }
     {
@@ -205,7 +204,7 @@ struct BSLParser {
       members_decl();
       match('}');
     }
-    match(';');
+    return match(';').is_valid();
   }
 
   void members_decl()
@@ -382,7 +381,7 @@ struct BSLParser {
     }
   }
 
-  void func_decl(bool expect_template_params = false, bool expect_body = true)
+  bool func_decl(bool expect_template_params = false, bool expect_body = true)
   {
     NODE(FuncDecl);
     attribute_optional();
@@ -403,17 +402,18 @@ struct BSLParser {
     }
     if (!expect_body) {
       nodes[curr_node].type = NodeType::FuncForwardDecl;
-      match(';');
-      return;
+      return match(';').is_valid();
     }
     if (match_if(';')) {
       /* Template instantiation or forward declaration. */
       nodes[curr_node].type = NodeType::FuncForwardDecl;
-      return;
+      return true;
     }
     if (peek() == '{') {
       local_scope();
+      return true;
     }
+    return false;
   }
 
   /* Example: `enum [[a]] A : a {}`. */
@@ -603,21 +603,18 @@ struct BSLParser {
                              bool expect_body,
                              const char *template_type_msg)
   {
-    switch (peek()) {
-      case Class:
-      case Struct:
-      case Union:
-        struct_decl(expect_template_params, expect_body);
-        break;
-      case Static:
-      case Word:
-        func_decl(expect_template_params, expect_body);
-        break;
-      default:
-        error("Unexpected token \"" + to_str(peek()) + "\", expected template " +
-              template_type_msg);
+    {
+      auto state = save_state();
+      if (struct_decl(expect_template_params, expect_body)) {
         return;
+      }
+      restore_state(state);
+      if (func_decl(expect_template_params, expect_body)) {
+        return;
+      }
+      restore_state(state);
     }
+    error("Unexpected token \"" + to_str(peek()) + "\", expected template " + template_type_msg);
   }
 
   void template_argument_list()
