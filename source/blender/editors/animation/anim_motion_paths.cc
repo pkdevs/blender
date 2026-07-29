@@ -310,7 +310,6 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
   }
 
   for (MPathTarget &mpt : targets) {
-
     AnimData *adt = BKE_animdata_from_id(&mpt.ob->id);
 
     /* Build list of all keyframes in active action for object or pchan. */
@@ -341,51 +340,67 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
     ED_keylist_prepare_for_direct_access(mpt.keylist);
   }
 
-  bool finished_left = false;
-  bool finished_right = false;
-  int frame = modified_frame;
-  Bounds<int> evaluated_range;
-  /* Counts how many times the result of `motionpaths_calc_bake_target` hasn't changed existing
-   * data. */
-  int stable_result_counter = 0;
-  /* Using 2 so in case interpolation changed through a key we don't stop too early. */
-  constexpr int stable_result_threshold = 2;
-  while (!finished_left || !finished_right) {
-    /* Update relevant data for new frame. */
-    DEG_evaluate_on_framechange(depsgraph, frame);
+  Bounds<int> evaluated_range = {INT_MAX, INT_MIN};
 
-    /* Perform baking for targets. */
-    bool any_modified = false;
-    for (const MPathTarget &target : targets) {
-      any_modified |= motionpaths_calc_bake_target(target, frame, depsgraph, scene->camera);
-    }
-    if (frame == modified_frame) {
-      evaluated_range = {frame, frame};
-      frame--;
+  /* We need this extra loop for the edge case when the ranges of the motion paths don't overlap.
+   * We need to touch at least one frame of each motion path to ensure it has the
+   * `MOTIONPATH_VERT_EVALUATED` flag. In practice this will almost always be the case and this
+   * loop will trigger the `continue` immeditaly below. */
+  for (MPathTarget &mpt : targets) {
+    if (evaluated_range.contains(mpt.mpath->start_frame) ||
+        evaluated_range.contains(mpt.mpath->end_frame))
+    {
       continue;
     }
 
-    if (any_modified) {
-      stable_result_counter = 0;
-    }
-    else {
-      stable_result_counter++;
-    }
+    const int start_frame = clamp_i(modified_frame, mpt.mpath->start_frame, mpt.mpath->end_frame);
+    int frame = start_frame;
 
-    if (frame < modified_frame) {
-      finished_left |= stable_result_counter >= stable_result_threshold;
-      evaluated_range.min = frame;
-    }
-    else {
-      finished_right |= stable_result_counter >= stable_result_threshold;
-      evaluated_range.max = frame;
-    }
+    bool finished_left = false;
+    bool finished_right = false;
+    /* Counts how many times the result of `motionpaths_calc_bake_target` hasn't changed existing
+     * data. */
+    int stable_result_counter = 0;
+    /* Using 2 so in case interpolation changed through a key we don't stop too early. */
+    constexpr int stable_result_threshold = 2;
 
-    if (!finished_left) {
-      frame = evaluated_range.min - 1;
-    }
-    else {
-      frame = evaluated_range.max + 1;
+    while (!finished_left || !finished_right) {
+      /* Update relevant data for new frame. */
+      DEG_evaluate_on_framechange(depsgraph, frame);
+
+      /* Perform baking for targets. */
+      bool any_modified = false;
+      for (const MPathTarget &target : targets) {
+        any_modified |= motionpaths_calc_bake_target(target, frame, depsgraph, scene->camera);
+      }
+      if (frame == start_frame) {
+        evaluated_range = {frame, frame};
+        frame--;
+        continue;
+      }
+
+      if (any_modified) {
+        stable_result_counter = 0;
+      }
+      else {
+        stable_result_counter++;
+      }
+
+      if (frame < start_frame) {
+        finished_left |= stable_result_counter >= stable_result_threshold;
+        evaluated_range.min = frame;
+      }
+      else {
+        finished_right |= stable_result_counter >= stable_result_threshold;
+        evaluated_range.max = frame;
+      }
+
+      if (!finished_left) {
+        frame = evaluated_range.min - 1;
+      }
+      else {
+        frame = evaluated_range.max + 1;
+      }
     }
   }
 
