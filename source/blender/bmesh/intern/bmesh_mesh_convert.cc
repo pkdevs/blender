@@ -298,7 +298,6 @@ static CustomData get_mesh_to_bm_custom_data(const Mesh &mesh,
     CustomData_add_layer_named(&custom_data, data_type, CD_SET_DEFAULT, 0, attr.name());
   }
   const CustomData &mesh_data = get_mesh_custom_data(mesh, domain);
-
   for (const CustomDataLayer &layer : Span(mesh_data.layers, mesh_data.totlayer)) {
     if ((CD_TYPE_AS_MASK(eCustomDataType(layer.type)) & cd_type_mask) == 0) {
       continue;
