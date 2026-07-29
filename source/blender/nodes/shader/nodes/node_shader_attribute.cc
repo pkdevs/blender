@@ -65,8 +65,7 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
     uint hash_code = BLI_ghashutil_strhash_p(attr->name) << 1 | (use_dupli ? 0 : 1);
 
     attr_hash = *reinterpret_cast<float *>(&hash_code);
-    // TODO: Should be uniform?
-    GPU_stack_link(mat, node, "node_attribute_light", in, out, GPU_constant(&attr_hash));
+    GPU_stack_link(mat, node, "node_attribute_light", in, out, GPU_uniform(&attr_hash));
     return 1;
   }
 
