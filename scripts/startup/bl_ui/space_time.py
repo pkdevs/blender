@@ -67,33 +67,48 @@ def playback_controls(layout, context):
         )
 
     row = layout.row(align=True)
-    row.operator("screen.frame_jump", text="", icon='REW').end = False
-    row.operator("screen.keyframe_jump", text="", icon='PREV_KEYFRAME').next = False
-
+    sub = row.row(align=True)
     if not screen.is_animation_playing:
         # if using JACK and A/V sync:
         #   hide the play-reversed button
         #   since JACK transport doesn't support reversed playback
         if scene and scene.sync_mode == 'AUDIO_SYNC' and context.preferences.system.audio_device == 'JACK':
-            row.scale_x = 2
-            row.operator("screen.animation_play", text="", icon='PLAY')
-            row.scale_x = 1
+            sub.scale_x = 2
+            sub.operator("screen.animation_play", text="", icon='PLAY')
+            sub.scale_x = 1
         else:
-            row.operator("screen.animation_play", text="", icon='PLAY_REVERSE').reverse = True
-            row.operator("screen.animation_play", text="", icon='PLAY')
+            sub.operator("screen.animation_play", text="", icon='PLAY_REVERSE').reverse = True
+            sub.operator("screen.animation_play", text="", icon='PLAY')
     else:
-        row.scale_x = 2
-        row.operator("screen.animation_pause", text="", icon='PAUSE')
-        row.scale_x = 1
+        sub.scale_x = 2
+        sub.operator("screen.animation_pause", text="", icon='PAUSE')
+        sub.scale_x = 1
 
-    row.operator("screen.keyframe_jump", text="", icon='NEXT_KEYFRAME').next = True
-    row.operator("screen.frame_jump", text="", icon='FF').end = True
+    separation_factor = 0.2
+    row.separator(factor=separation_factor)
+
+    sub = row.row(align=True)
+    sub.operator("screen.keyframe_jump", text="", icon='PREV_KEYFRAME').next = False
+    sub.operator("screen.keyframe_jump", text="", icon='NEXT_KEYFRAME').next = True
+
+    row.separator(factor=separation_factor)
+
+    # Frame Jump
+    sub = row.row(align=True)
+    sub.operator("screen.frame_jump", text="", icon='REW').end = False
+    sub.operator("screen.frame_jump", text="", icon='FF').end = True
+
+    row.separator(factor=separation_factor)
 
     # Time jump
-    row = layout.row(align=True)
-    row.operator("screen.time_jump", text="", icon='FRAME_PREV').backward = True
-    row.operator("screen.time_jump", text="", icon='FRAME_NEXT').backward = False
-    row.popover(panel="TIME_PT_jump", text="")
+    sub = row.row(align=True)
+    sub.operator("screen.time_jump", text="", icon='FRAME_PREV').backward = True
+    sub.operator("screen.time_jump", text="", icon='FRAME_NEXT').backward = False
+
+    row.separator(factor=separation_factor)
+
+    sub = row.row(align=True)
+    sub.popover(panel="TIME_PT_jump", text="")
 
     if tool_settings:
         row = layout.row(align=True)
