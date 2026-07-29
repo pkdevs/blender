@@ -1630,7 +1630,6 @@ static void rna_Object_constraints_remove_all(Object *object, Main *bmain)
   }
 
   ed::object::constraint_update(bmain, object);
-  ed::object::constraint_active_set(object, nullptr);
   WM_main_add_notifier(NC_OBJECT | ND_CONSTRAINT | NA_REMOVED, object);
 }
 
@@ -1645,33 +1644,32 @@ static void rna_Object_constraints_remove_constraints(Object *object,
     return;
   }
 
-  const Span<int> indices(indices_ptr, indices_num);
-  if (!std::is_sorted(indices.begin(), indices.end())) {
-    BKE_report(reports, RPT_ERROR, "Indices must be sorted in ascending order");
-    return;
-  }
-  if (std::adjacent_find(indices.begin(), indices.end(), std::greater_equal<>()) != indices.end())
-  {
-    BKE_report(reports, RPT_ERROR, "Indices cannot have duplicates");
-    return;
-  }
+  Span<int> indices(indices_ptr, indices_num);
+
+  blender::Vector<int> sorted(indices);
+  std::sort(sorted.begin(), sorted.end());
+  /* Make all indices unique, and resize the vector to the new index count. */
+  sorted.resize(std::unique(sorted.begin(), sorted.end()) - sorted.begin());
+
+  indices = sorted.as_span();
+
   if (indices.first() < 0 || indices.last() >= object->constraints.count()) {
     BKE_report(reports, RPT_ERROR, "Indices must be in range");
     return;
   }
 
-  ListBaseMutableIterator<bConstraint> con_iter = object->constraints.items_mutable().begin();
-  int last = 0;
-  int diff = 0;
-  for (int index : indices) {
-    diff = index - last;
-    last = index;
-    while (diff) {
-      con_iter++;
-      diff--;
+  /* Construct a list of constraints to remove, visiting each constraint only once. */
+  Vector<bConstraint *> to_be_removed;
+  for (const auto &[index, constraint] : object->constraints.enumerate()) {
+    if (index != indices[0]) {
+      continue;
     }
-
-    BKE_constraint_remove_ex(&object->constraints, object, &*con_iter);
+    to_be_removed.append(&constraint);
+    indices = indices.drop_front(1);
+  }
+  /* Remove the listed constraints. */
+  for (bConstraint *constraint : to_be_removed) {
+    BKE_constraint_remove_ex(&object->constraints, object, constraint);
   }
 
   ed::object::constraint_update(bmain, object);
@@ -2548,7 +2546,6 @@ static void rna_def_object_constraints(BlenderRNA *brna, PropertyRNA *cprop)
                                   "Remove multiple constraints from this object specified by "
                                   "indices. If no indices are provided, remove all constraints.");
   RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS);
-  /* constraint indices to remove */
   parm = RNA_def_int_array(func,
                            "indices",
                            1,
