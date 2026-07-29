@@ -358,22 +358,6 @@ static void join_generic_attributes(const Span<const Object *> objects_to_join,
 
   bke::MutableAttributeAccessor dst_attributes = dst_mesh.attributes_for_write();
 
-  const Set<StringRefNull> attribute_names = dst_attributes.all_names();
-  for (const int attr_i : names.index_range()) {
-    const StringRef name = names[attr_i];
-    const bke::AttrDomain domain = kinds[attr_i].domain;
-    const bke::AttrType data_type = kinds[attr_i].data_type;
-    if (const std::optional<bke::AttributeMetaData> meta_data = dst_attributes.lookup_meta_data(
-            name))
-    {
-      if (meta_data->domain != domain || meta_data->data_type != data_type) {
-        AttributeOwner owner = AttributeOwner::from_id(&dst_mesh.id);
-        geometry::convert_attribute(
-            owner, dst_attributes, name, meta_data->domain, meta_data->data_type, nullptr);
-      }
-    }
-  }
-
   for (const int attr_i : names.index_range()) {
     const StringRef name = names[attr_i];
     const bke::AttrDomain domain = kinds[attr_i].domain;
@@ -741,6 +725,23 @@ wmOperatorStatus join_objects_exec(bContext *C, wmOperator *op)
           CustomData_copy_elements(
               CD_GRID_PAINT_MASK, src, &dst[corner_ranges[i].first()], src_mesh.corners_num);
         }
+      }
+    }
+  }
+
+  /* Copy skin data to the out-of-main mesh. */
+  if (std::any_of(objects_to_join.begin(), objects_to_join.end(), [](const Object *object) {
+        const Mesh &src_mesh = *id_cast<const Mesh *>(object->data);
+        return CustomData_has_layer(&src_mesh.vert_data, CD_MVERT_SKIN);
+      }))
+  {
+    MVertSkin *dst = static_cast<MVertSkin *>(CustomData_add_layer(
+        &dst_mesh->vert_data, CD_MVERT_SKIN, CD_SET_DEFAULT, dst_mesh->verts_num));
+    for (const int i : objects_to_join.index_range()) {
+      const Mesh &src_mesh = *id_cast<const Mesh *>(objects_to_join[i]->data);
+      if (const void *src = CustomData_get_layer(&src_mesh.vert_data, CD_MVERT_SKIN)) {
+        CustomData_copy_elements(
+            CD_MVERT_SKIN, src, &dst[vert_ranges[i].first()], src_mesh.verts_num);
       }
     }
   }

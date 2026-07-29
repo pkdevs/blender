@@ -44,8 +44,6 @@ struct ImbFormatOptions;
 struct Library;
 struct Main;
 struct Object;
-struct PartialUpdateRegister;
-struct PartialUpdateUser;
 struct RenderResult;
 struct RenderSlot;
 struct ReportList;
@@ -64,11 +62,6 @@ struct ImageRuntime {
   Mutex cache_mutex;
 
   ImBufCache *cache = nullptr;
-
-  /** Register containing partial updates. */
-  PartialUpdateRegister *partial_update_register = nullptr;
-  /** Partial update user for gpu::Textures stored inside the Image. */
-  PartialUpdateUser *partial_update_user = nullptr;
 
   /* The image's current update count. See deg::set_id_update_count for more information. */
   uint64_t update_count = 0;
@@ -207,8 +200,14 @@ ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock);
  * Identical to BKE_image_acquire_ibuf but assumes the caller will use the GPU data of the image
  * buffer if it exists without the need to make it available on the host. This essentially skips
  * GPU data reading to the host and is thus more performant.
+ *
+ * If #r_load_failed is provided, it is set to true when the image is known to have failed
+ * loading when the #ImBuf is null, as opposed to not having been loaded yet.
  */
-ImBuf *BKE_image_acquire_ibuf_gpu(Image *ima, ImageUser *iuser, void **r_lock);
+ImBuf *BKE_image_acquire_ibuf_gpu(Image *ima,
+                                  ImageUser *iuser,
+                                  void **r_lock,
+                                  bool *r_load_failed = nullptr);
 
 /**
  * Return image buffer for given image, user, pass, and view.
@@ -332,6 +331,10 @@ void BKE_image_ensure_viewer_views(const RenderData *rd, Image *ima, ImageUser *
  */
 void BKE_image_user_frame_calc(Image *ima, ImageUser *iuser, int cfra);
 int BKE_image_user_frame_get(const ImageUser *iuser, int cfra, bool *r_is_in_range);
+/**
+ * Test if two image users resolve to the same image buffer.
+ */
+bool BKE_image_user_match(const ImageUser &a, const ImageUser &b);
 void BKE_image_user_file_path(const ImageUser *iuser, const Image *ima, char *filepath);
 void BKE_image_user_file_path_ex(const Main *bmain,
                                  const ImageUser *iuser,
@@ -569,7 +572,6 @@ float *BKE_image_get_float_pixels_for_frame(Image *image, int frame, int tile);
 /* Image modifications */
 
 bool BKE_image_is_dirty(Image *image);
-void BKE_image_mark_dirty(Image *image, ImBuf *ibuf);
 bool BKE_image_buffer_format_writable(ImBuf *ibuf);
 
 bool BKE_image_is_dirty_writable(Image *image, bool *r_is_writable);
@@ -611,28 +613,5 @@ RenderSlot *BKE_image_add_renderslot(Image *ima, const char *name);
 bool BKE_image_remove_renderslot(Image *ima, ImageUser *iuser, int slot);
 RenderSlot *BKE_image_get_renderslot(Image *ima, int index);
 bool BKE_image_clear_renderslot(Image *ima, ImageUser *iuser, int slot);
-
-/* --- image_partial_update.cc --- */
-/** Image partial updates. */
-/**
- * \brief Create a new PartialUpdateUser. An Object that contains data to use partial updates.
- */
-PartialUpdateUser *BKE_image_partial_update_create(const Image *image);
-
-/**
- * \brief free a partial update user.
- */
-void BKE_image_partial_update_free(PartialUpdateUser *user);
-
-/* --- partial updater (image side) --- */
-
-void BKE_image_partial_update_register_free(Image *image);
-/** \brief Mark a region of the image to update. */
-void BKE_image_partial_update_mark_region(Image *image,
-                                          const ImageTile *image_tile,
-                                          const ImBuf *image_buffer,
-                                          const rcti *updated_region);
-/** \brief Mark the whole image to be updated. */
-void BKE_image_partial_update_mark_full_update(Image *image);
 
 }  // namespace blender

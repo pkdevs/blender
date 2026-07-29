@@ -536,8 +536,9 @@ static bool asset_library_reload_listing_poll(bContext *C)
     return false;
   }
 
-  /* Check the flag after checking for the remote library to have an online component. Because if
-   * there is not, then enabling the online access in the prefs isn't going to do anything. */
+  /* Check the flag after checking for the remote library to have an online component.
+   * Because if there is not, then enabling the online access in the preferences
+   * isn't going to do anything. */
   if ((G.f & G_FLAG_INTERNET_ALLOW) == 0) {
     CTX_wm_operator_poll_msg_set(C, "Online access is disabled in the Preferences");
     return false;
@@ -1794,6 +1795,15 @@ static wmOperatorStatus asset_download_exec(bContext *C, wmOperator *op)
 {
   const asset_system::AssetRepresentation *asset =
       operator_asset_reference_props_get_asset_from_all_library(*C, *op->ptr, op->reports);
+
+  if (!asset) {
+    const std::string asset_relpath = RNA_string_get(op->ptr, "relative_asset_identifier");
+    BKE_reportf(op->reports,
+                RPT_ERROR,
+                "Asset could not be found (relative identifier: '%s')",
+                asset_relpath.c_str());
+    return OPERATOR_CANCELLED;
+  }
 
   if (!asset->needs_download()) {
     BKE_reportf(

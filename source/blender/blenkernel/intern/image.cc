@@ -41,6 +41,7 @@
 #include "IMB_imbuf_types.hh"
 #include "IMB_metadata.hh"
 #include "IMB_openexr.hh"
+#include "IMB_partial_update.hh"
 
 #include "MOV_read.hh"
 
@@ -131,15 +132,6 @@ static void copy_image_packedfiles(ListBaseT<ImagePackedFile> *lb_dst,
 /** \name Image #IDTypeInfo API
  * \{ */
 
-static void image_runtime_free_data(Image *image)
-{
-  if (image->runtime->partial_update_user != nullptr) {
-    BKE_image_partial_update_free(image->runtime->partial_update_user);
-    image->runtime->partial_update_user = nullptr;
-  }
-  BKE_image_partial_update_register_free(image);
-}
-
 static void image_init_data(ID *id)
 {
   Image *image = id_cast<Image *>(id);
@@ -215,7 +207,6 @@ static void image_free_data(ID *id)
 
   image->tiles.free_no_destruct();
 
-  image_runtime_free_data(image);
   MEM_delete(image->runtime);
 }
 
@@ -508,7 +499,7 @@ IDTypeInfo IDType_ID_IM = {
     .main_listbase_index = INDEX_ID_IM,
     .struct_size = sizeof(Image),
     .name = "Image",
-    .name_plural = "images",
+    .name_plural = N_("images"),
     .translation_context = BLT_I18NCONTEXT_ID_IMAGE,
     .flags = IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
     .asset_type_info = nullptr,
@@ -539,7 +530,8 @@ static ImBuf *image_load_image_file(
 static ImBuf *image_acquire_ibuf(Image *ima,
                                  ImageUser *iuser,
                                  void **r_lock,
-                                 const bool ensure_host_buffer);
+                                 const bool ensure_host_buffer,
+                                 bool *r_load_failed = nullptr);
 static void image_update_views_format(Image *ima, ImageUser *iuser);
 static void image_add_view(Image *ima, const char *viewname, const char *filepath);
 
@@ -693,8 +685,6 @@ void BKE_image_free_buffers_ex(Image *ima, bool do_lock)
     ima->rr = nullptr;
   }
 
-  BKE_image_free_gputextures(ima);
-
   if (do_lock) {
     ima->runtime->cache_mutex.unlock();
   }
@@ -742,11 +732,13 @@ void BKE_image_free_old_buffers(Main *bmain)
         if (ibuf != nullptr) {
           /* GPU buffers: free when past timeout and image buffer is not used elsewhere. */
           bool freed_gpu = false;
-          if (ibuf->gpu.texture != nullptr && ibuf->refcounter == 0 &&
-              (ctime - ibuf->gpu.lastused > U.textimeout))
-          {
-            IMB_free_gpu_textures(ibuf);
-            freed_gpu = true;
+          if (ctime - ibuf->gpu.lastused > U.textimeout) {
+            if ((ibuf->gpu.texture || ibuf->gpu.flag & IMB_GPU_LOAD_FAILED) &&
+                ibuf->refcounter == 0)
+            {
+              IMB_free_gpu_textures(ibuf);
+              freed_gpu = true;
+            }
           }
 
           /* CPU buffers: free whole image buffer if past timeout, and image has not been
@@ -939,7 +931,8 @@ bool BKE_image_scale(Image *image, int width, int height, ImageUser *iuser)
 
   if (ibuf) {
     IMB_scale(ibuf, width, height, IMBScaleFilter::Box, false);
-    BKE_image_mark_dirty(image, ibuf);
+    IMB_partial_update_mark_full(ibuf);
+    IMB_mark_dirty(ibuf);
   }
 
   BKE_image_release_ibuf(image, ibuf, lock);
@@ -1509,7 +1502,7 @@ void BKE_image_replace_imbuf(Image *image, ImBuf *ibuf)
 
   /* Consider image dirty since its content can not be re-created unless the image is explicitly
    * saved. */
-  BKE_image_mark_dirty(image, ibuf);
+  IMB_mark_dirty(ibuf);
 }
 
 /** Pack image buffer to memory as PNG or EXR. */
@@ -1757,6 +1750,14 @@ void BKE_image_packfiles_from_mem(ReportList *reports,
 void BKE_image_packfile_ensure(
     Main *bmain, Image *image, ReportList *reports, const char *data, const int data_len)
 {
+  if (ID_IS_LINKED(image)) {
+    BKE_reportf(reports, RPT_ERROR, "Cannot pack linked image '%s'", image->id.name + 2);
+    return;
+  }
+  if (ELEM(image->type, IMA_TYPE_R_RESULT, IMA_TYPE_COMPOSITE)) {
+    BKE_report(reports, RPT_ERROR, "Cannot pack render result or viewer node images");
+    return;
+  }
   const bool is_packed = BKE_image_has_packedfile(image);
   const bool is_dirty = BKE_image_is_dirty(image);
 
@@ -1768,6 +1769,7 @@ void BKE_image_packfile_ensure(
      *
      * See #152638.
      */
+    BKE_report(reports, RPT_INFO, "Image is already packed");
     return;
   }
 
@@ -3269,7 +3271,6 @@ static void image_tag_reload(Image *ima, ID *iuser_id, ImageUser *iuser, void *c
       /* Must copy image user changes to evaluated data-block. */
       DEG_id_tag_update(iuser_id, ID_RECALC_SYNC_TO_EVAL);
     }
-    BKE_image_partial_update_mark_full_update(ima);
   }
 }
 
@@ -3296,7 +3297,6 @@ static void image_free_tile(Image *ima, ImageTile *tile)
 {
   /* UDIM tiles are packed into an atlas for the GPU, so need to free all. */
   BKE_image_free_gpu_udim_textures(ima);
-  BKE_image_partial_update_mark_full_update(ima);
 
   if (BKE_image_is_multiview(ima)) {
     const int totviews = ima->views.count();
@@ -3421,7 +3421,6 @@ void BKE_image_signal(Main *bmain, Image *ima, ImageUser *iuser, int signal)
         image_tag_frame_recalc(ima, nullptr, iuser, ima);
       }
       BKE_image_walk_all_users(bmain, ima, image_tag_frame_recalc);
-      BKE_image_partial_update_mark_full_update(ima);
 
       break;
 
@@ -3684,7 +3683,6 @@ ImageTile *BKE_image_add_tile(Image *ima, int tile_number, const char *label)
   }
 
   BKE_image_free_gpu_udim_textures(ima);
-  BKE_image_partial_update_mark_full_update(ima);
 
   return tile;
 }
@@ -3728,7 +3726,6 @@ void BKE_image_reassign_tile(Image *ima, ImageTile *tile, int new_tile_number)
   }
 
   BKE_image_free_gpu_udim_textures(ima);
-  BKE_image_partial_update_mark_full_update(ima);
 }
 
 static int tile_sort_cb(const void *a, const void *b)
@@ -4039,7 +4036,6 @@ RenderResult *BKE_image_acquire_renderresult(Scene *scene, Image *ima)
     }
     else {
       rr = BKE_image_get_renderslot(ima, ima->render_slot)->render;
-      BKE_image_partial_update_mark_full_update(ima);
     }
 
     /* set proper views */
@@ -4879,13 +4875,17 @@ BLI_INLINE bool image_quick_test(Image *ima, const ImageUser *iuser)
 static ImBuf *image_acquire_ibuf(Image *ima,
                                  ImageUser *iuser,
                                  void **r_lock,
-                                 const bool ensure_host_buffer)
+                                 const bool ensure_host_buffer,
+                                 bool *r_load_failed)
 {
   ImBuf *ibuf = nullptr;
   int entry = 0, index = 0;
 
   if (r_lock) {
     *r_lock = nullptr;
+  }
+  if (r_load_failed) {
+    *r_load_failed = false;
   }
 
   /* quick reject tests */
@@ -4896,6 +4896,9 @@ static ImBuf *image_acquire_ibuf(Image *ima,
   bool is_cached_empty = false;
   ibuf = image_get_cached_ibuf(ima, iuser, &entry, &index, &is_cached_empty);
   if (is_cached_empty) {
+    if (r_load_failed) {
+      *r_load_failed = true;
+    }
     return nullptr;
   }
 
@@ -5018,14 +5021,14 @@ ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock)
 
 /* Identical to BKE_image_acquire_ibuf but passing false to the ensure_host_buffer argument for the
  * image_acquire_ibuf function. */
-ImBuf *BKE_image_acquire_ibuf_gpu(Image *ima, ImageUser *iuser, void **r_lock)
+ImBuf *BKE_image_acquire_ibuf_gpu(Image *ima, ImageUser *iuser, void **r_lock, bool *r_load_failed)
 {
   if (ima == nullptr) {
     return nullptr;
   }
 
   std::scoped_lock lock(ima->runtime->cache_mutex);
-  return image_acquire_ibuf(ima, iuser, r_lock, false);
+  return image_acquire_ibuf(ima, iuser, r_lock, false, r_load_failed);
 }
 
 static int get_multilayer_view_index(const Image &image,
@@ -5280,6 +5283,13 @@ void BKE_image_pool_release_ibuf(Image *ima, ImBuf *ibuf, ImagePool *pool)
   if (pool == nullptr) {
     BKE_image_release_ibuf(ima, ibuf, nullptr);
   }
+}
+
+bool BKE_image_user_match(const ImageUser &a, const ImageUser &b)
+{
+  return a.frames == b.frames && a.offset == b.offset && a.sfra == b.sfra && a.cycl == b.cycl &&
+         a.multi_index == b.multi_index && a.view == b.view && a.layer == b.layer &&
+         a.pass == b.pass && a.tile == b.tile;
 }
 
 int BKE_image_user_frame_get(const ImageUser *iuser, int cfra, bool *r_is_in_range)
@@ -5673,11 +5683,6 @@ bool BKE_image_is_dirty_writable(Image *image, bool *r_is_writable)
 bool BKE_image_is_dirty(Image *image)
 {
   return BKE_image_is_dirty_writable(image, nullptr);
-}
-
-void BKE_image_mark_dirty(Image * /*image*/, ImBuf *ibuf)
-{
-  ibuf->userflags |= IB_BITMAPDIRTY;
 }
 
 bool BKE_image_buffer_format_writable(ImBuf *ibuf)

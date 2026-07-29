@@ -662,6 +662,13 @@ enum eCompositorDevice : int {
   SCE_COMPOSITOR_DEVICE_GPU = 1,
 };
 
+/** #RenderData::cache_flags */
+enum eCompositorCacheFlags : uint8_t {
+  SCE_COMPOSITOR_CACHE_NONE = 0,
+  SCE_COMPOSITOR_CACHE_FRAMES = (1 << 0),
+};
+ENUM_OPERATORS(eCompositorCacheFlags);
+
 /** #RenderData::compositor_precision */
 enum eCompositorPrecision : int {
   SCE_COMPOSITOR_PRECISION_AUTO = 0,
@@ -1037,6 +1044,11 @@ struct RenderData {
   /** Device to use for compositor engine. */
   eCompositorDevice compositor_device = SCE_COMPOSITOR_DEVICE_GPU;
 
+  /** Cache options for the interactive compositor. */
+  eCompositorCacheFlags compositor_cache_flags = SCE_COMPOSITOR_CACHE_FRAMES;
+
+  char _pad10[3] = {};
+
   /** Precision used by the GPU execution of the compositor tree. */
   eCompositorPrecision compositor_precision = SCE_COMPOSITOR_PRECISION_AUTO;
 
@@ -1050,7 +1062,6 @@ struct RenderData {
   /** Frames to jump manually. */
   float time_jump_delta = 1.0;
   int time_jump_unit = 1;
-  char _pad10[4] = {};
 };
 
 /** \} */
@@ -1191,8 +1202,8 @@ struct MeshAutomaskingSettings {
   int flags = 0;
 
   int boundary_edges_propagation_steps = 1;
-  int cavity_blur_steps = 0;
-  float cavity_factor = 0.0f;
+  int cavity_blur_steps = 2;
+  float cavity_factor = 0.5f;
 
   float start_normal_limit = 0.34906585f; /* 20 / 180 * pi. */
   float start_normal_falloff = 0.25f;
@@ -1845,6 +1856,7 @@ enum eTool_TransformFlag : int {
   SCE_XFORM_AXIS_ALIGN = (1 << 0),
   SCE_XFORM_DATA_ORIGIN = (1 << 1),
   SCE_XFORM_SKIP_CHILDREN = (1 << 2),
+  SCE_XFORM_SCULPT_PIVOT = (1 << 3),
 };
 ENUM_OPERATORS(eTool_TransformFlag)
 
