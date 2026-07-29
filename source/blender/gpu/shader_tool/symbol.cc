@@ -19,97 +19,174 @@ using namespace std;
 static const char *subscript_operator_id = "arr_op_";
 static const char *ns_sep = SourceProcessor::namespace_separator;
 
-Result<pair<ResourceType, ResourceTableType>> resource_type_from_attributes(AttrList list)
+string ParsedAttribute::parse_condition() const
 {
-  static unordered_map<string, pair<ResourceType, ResourceTableType>> attr_map = {
-      /* Noop, to remove. */
-      {"host_shared", {ResourceType::NONE, ResourceTableType::NONE}},
-      /* Vertex inputs. */
-      {"attribute", {ResourceType::VERT_ATTR_IN, ResourceTableType::VERTEX_IN}},
-      /* Vertex outputs. */
-      {"flat", {ResourceType::VERT_ATTR_OUT, ResourceTableType::VERTEX_OUT}},
-      {"no_perspective", {ResourceType::VERT_ATTR_OUT, ResourceTableType::VERTEX_OUT}},
-      {"smooth", {ResourceType::VERT_ATTR_OUT, ResourceTableType::VERTEX_OUT}},
-      /* Fragment outputs. */
-      {"frag_color", {ResourceType::FRAG_OUT, ResourceTableType::FRAGMENT_OUT}},
-      {"frag_stencil_ref", {ResourceType::FRAG_OUT, ResourceTableType::FRAGMENT_OUT}},
-      /* Fragment inputs. */
-      {"subpass_input", {ResourceType::FRAG_IN, ResourceTableType::NONE}},
-      /* Entry point type. */
-      {"vertex", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"fragment", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"compute", {ResourceType::NONE, ResourceTableType::NONE}},
-      /* Entry point attrib. */
-      {"early_fragment_tests", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"num_work_groups", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"texture_atomic", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"metal_max_total_threads_per_threadgroup", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"local_size", {ResourceType::NONE, ResourceTableType::NONE}},
-      /* Resource table. */
-      {"compilation_constant",
-       {ResourceType::COMPILATION_CONST, ResourceTableType::RESOURCE_TABLE}},
-      {"legacy_info", {ResourceType::LEGACY_INFO, ResourceTableType::RESOURCE_TABLE}},
-      {"push_constant", {ResourceType::PUSH_CONST, ResourceTableType::RESOURCE_TABLE}},
-      {"resource_table", {ResourceType::RESOURCE_TABLE, ResourceTableType::RESOURCE_TABLE}},
-      {"shared", {ResourceType::SHARED, ResourceTableType::RESOURCE_TABLE}},
-      {"sampler", {ResourceType::SAMPLER, ResourceTableType::RESOURCE_TABLE}},
-      {"specialization_constant",
-       {ResourceType::SPECIALIZATION_CONST, ResourceTableType::RESOURCE_TABLE}},
-      {"uniform", {ResourceType::UNIFORM_BUF, ResourceTableType::RESOURCE_TABLE}},
-      {"storage", {ResourceType::STORAGE_BUF, ResourceTableType::RESOURCE_TABLE}},
-      {"image", {ResourceType::IMAGE, ResourceTableType::RESOURCE_TABLE}},
-      /* Entry point argument. */
-      {"base_instance", {ResourceType::BASE_INSTANCE, ResourceTableType::ENTRY_POINT}},
-      {"clip_control", {ResourceType::CLIP_CONTROL, ResourceTableType::ENTRY_POINT}},
-      {"clip_distance", {ResourceType::CLIP_DISTANCES, ResourceTableType::ENTRY_POINT}},
-      {"front_facing", {ResourceType::FRONT_FACING, ResourceTableType::ENTRY_POINT}},
-      {"global_invocation_id",
-       {ResourceType::GLOBAL_INVOCATION_ID, ResourceTableType::ENTRY_POINT}},
-      {"in", {ResourceType::IN, ResourceTableType::ENTRY_POINT}},
-      {"instance_id", {ResourceType::INSTANCE_ID, ResourceTableType::ENTRY_POINT}},
-      {"instance_index", {ResourceType::INSTANCE_INDEX, ResourceTableType::ENTRY_POINT}},
-      {"layer", {ResourceType::LAYER, ResourceTableType::ENTRY_POINT}},
-      {"local_invocation_id", {ResourceType::LOCAL_INVOCATION_ID, ResourceTableType::ENTRY_POINT}},
-      {"local_invocation_index",
-       {ResourceType::LOCAL_INVOCATION_INDEX, ResourceTableType::ENTRY_POINT}},
-      {"out", {ResourceType::OUT, ResourceTableType::ENTRY_POINT}},
-      {"point_coord", {ResourceType::POINT_COORD, ResourceTableType::ENTRY_POINT}},
-      {"point_size", {ResourceType::POINT_SIZE, ResourceTableType::ENTRY_POINT}},
-      {"position", {ResourceType::POSITION, ResourceTableType::ENTRY_POINT}},
-      {"subpass_in", {ResourceType::SUBPASS_IN, ResourceTableType::ENTRY_POINT}},
-      {"vertex_id", {ResourceType::VERTEX_ID, ResourceTableType::ENTRY_POINT}},
-      {"viewport_index", {ResourceType::VIEWPORT_INDEX, ResourceTableType::ENTRY_POINT}},
-      {"work_group_id", {ResourceType::WORK_GROUP_ID, ResourceTableType::ENTRY_POINT}},
-      {"num_work_groups", {ResourceType::NUM_WORK_GROUP, ResourceTableType::ENTRY_POINT}},
-      {"frag_depth", {ResourceType::FRAG_DEPTH, ResourceTableType::ENTRY_POINT}},
-      {"frag_coord", {ResourceType::FRAG_COORD, ResourceTableType::ENTRY_POINT}},
-      {"frag_stencil_ref", {ResourceType::FRAG_STENCIL_REF, ResourceTableType::ENTRY_POINT}},
-      /* Misc. */
-      {"fallthrough", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"maybe_unused", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"nodiscard", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"node", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"static_branch", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"unroll", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"condition", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"frequency", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"unroll_n", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"index", {ResourceType::NONE, ResourceTableType::NONE}},
-      {"raster_order_group", {ResourceType::NONE, ResourceTableType::NONE}},
+  if (!condition.is_valid()) {
+    return "";
+  }
+  string str;
+  for (LocalVar node : condition.children_of_type<LocalVar>()) {
+    str += "int " + string(node.str()) + " = ";
+    str += "ShaderCreateInfo::find_constant(constants, \"" + string(node.str()) + "\"); ";
+  }
+  str += "return " + string(condition.str()) + ";";
+  return str;
+}
+
+Result<ParsedAttribute> resource_type_from_attributes(AttrList list)
+{
+  struct AttributeDescriptor {
+    ResourceTableType srt_type;
+    ResourceType res_type;
+    /**
+     * Number of arguments to expect.
+     * Positive values mean exactly 'args' attributes are expected.
+     * Negative values means between 1 and 'abs(args)' attributes are expected.
+     */
+    /* TODO(fclem): Could be replaced by complete set of possible arguments once we support folding
+     * preprocessor directives. */
+    int args;
   };
 
-  Result<pair<ResourceType, ResourceTableType>> result;
+  static unordered_map<string, AttributeDescriptor> attr_map = {
+      /* clang-format off */
+      /* Noop, to remove. */
+      {"host_shared",                             {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      /* Vertex inputs. */
+      {"attribute",                               {ResourceTableType::VERTEX_IN,      ResourceType::VERT_ATTR_IN,            1}},
+      /* Vertex outputs. */
+      {"flat",                                    {ResourceTableType::VERTEX_OUT,     ResourceType::VERT_ATTR_OUT,           0}},
+      {"no_perspective",                          {ResourceTableType::VERTEX_OUT,     ResourceType::VERT_ATTR_OUT,           0}},
+      {"smooth",                                  {ResourceTableType::VERTEX_OUT,     ResourceType::VERT_ATTR_OUT,           0}},
+      /* Fragment outputs. */
+      {"frag_color",                              {ResourceTableType::FRAGMENT_OUT,   ResourceType::FRAG_OUT,                1}},
+      {"frag_stencil_ref",                        {ResourceTableType::FRAGMENT_OUT,   ResourceType::FRAG_OUT,                0}},
+      /* Fragment inputs. */
+      {"subpass_input",                           {ResourceTableType::NONE,           ResourceType::FRAG_IN,                 0}},
+      /* Entry point type. */
+      {"vertex",                                  {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"fragment",                                {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"compute",                                 {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      /* Entry point attrib. */
+      {"early_fragment_tests",                    {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"texture_atomic",                          {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"metal_max_total_threads_per_threadgroup", {ResourceTableType::NONE,           ResourceType::NONE,                    1}},
+      {"local_size",                              {ResourceTableType::NONE,           ResourceType::NONE,                    -3}},
+      /* Resource table. */
+      {"compilation_constant",                    {ResourceTableType::RESOURCE_TABLE, ResourceType::COMPILATION_CONST,       0}},
+      {"legacy_info",                             {ResourceTableType::RESOURCE_TABLE, ResourceType::LEGACY_INFO,             0}},
+      {"push_constant",                           {ResourceTableType::RESOURCE_TABLE, ResourceType::PUSH_CONST,              0}},
+      {"resource_table",                          {ResourceTableType::RESOURCE_TABLE, ResourceType::RESOURCE_TABLE,          0}},
+      {"shared",                                  {ResourceTableType::RESOURCE_TABLE, ResourceType::SHARED,                  0}},
+      {"sampler",                                 {ResourceTableType::RESOURCE_TABLE, ResourceType::SAMPLER,                 1}},
+      {"specialization_constant",                 {ResourceTableType::RESOURCE_TABLE, ResourceType::SPECIALIZATION_CONST,    1}},
+      {"uniform",                                 {ResourceTableType::RESOURCE_TABLE, ResourceType::UNIFORM_BUF,             1}},
+      {"storage",                                 {ResourceTableType::RESOURCE_TABLE, ResourceType::STORAGE_BUF,             2}},
+      {"image",                                   {ResourceTableType::RESOURCE_TABLE, ResourceType::IMAGE,                   3}},
+      /* Entry point argument. */
+      {"base_instance",                           {ResourceTableType::ENTRY_POINT,    ResourceType::BASE_INSTANCE,           0}},
+      {"clip_control",                            {ResourceTableType::ENTRY_POINT,    ResourceType::CLIP_CONTROL,            0}},
+      {"clip_distance",                           {ResourceTableType::ENTRY_POINT,    ResourceType::CLIP_DISTANCES,          0}},
+      {"front_facing",                            {ResourceTableType::ENTRY_POINT,    ResourceType::FRONT_FACING,            0}},
+      {"global_invocation_id",                    {ResourceTableType::ENTRY_POINT,    ResourceType::GLOBAL_INVOCATION_ID,    0}},
+      {"in",                                      {ResourceTableType::ENTRY_POINT,    ResourceType::IN,                      0}},
+      {"instance_id",                             {ResourceTableType::ENTRY_POINT,    ResourceType::INSTANCE_ID,             0}},
+      {"instance_index",                          {ResourceTableType::ENTRY_POINT,    ResourceType::INSTANCE_INDEX,          0}},
+      {"layer",                                   {ResourceTableType::ENTRY_POINT,    ResourceType::LAYER,                   0}},
+      {"local_invocation_id",                     {ResourceTableType::ENTRY_POINT,    ResourceType::LOCAL_INVOCATION_ID,     0}},
+      {"local_invocation_index",                  {ResourceTableType::ENTRY_POINT,    ResourceType::LOCAL_INVOCATION_INDEX,  0}},
+      {"out",                                     {ResourceTableType::ENTRY_POINT,    ResourceType::OUT,                     0}},
+      {"num_work_groups",                         {ResourceTableType::ENTRY_POINT,    ResourceType::NONE,                    0}},
+      {"point_coord",                             {ResourceTableType::ENTRY_POINT,    ResourceType::POINT_COORD,             0}},
+      {"point_size",                              {ResourceTableType::ENTRY_POINT,    ResourceType::POINT_SIZE,              0}},
+      {"position",                                {ResourceTableType::ENTRY_POINT,    ResourceType::POSITION,                0}},
+      {"subpass_in",                              {ResourceTableType::ENTRY_POINT,    ResourceType::SUBPASS_IN,              0}},
+      {"vertex_id",                               {ResourceTableType::ENTRY_POINT,    ResourceType::VERTEX_ID,               0}},
+      {"viewport_index",                          {ResourceTableType::ENTRY_POINT,    ResourceType::VIEWPORT_INDEX,          0}},
+      {"work_group_id",                           {ResourceTableType::ENTRY_POINT,    ResourceType::WORK_GROUP_ID,           0}},
+      {"num_work_groups",                         {ResourceTableType::ENTRY_POINT,    ResourceType::NUM_WORK_GROUP,          0}},
+      {"frag_depth",                              {ResourceTableType::ENTRY_POINT,    ResourceType::FRAG_DEPTH,              1}},
+      {"frag_coord",                              {ResourceTableType::ENTRY_POINT,    ResourceType::FRAG_COORD,              0}},
+      {"frag_stencil_ref",                        {ResourceTableType::ENTRY_POINT,    ResourceType::FRAG_STENCIL_REF,        0}},
+      /* Misc. */
+      {"fallthrough",                             {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"maybe_unused",                            {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"nodiscard",                               {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"node",                                    {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"static_branch",                           {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"unroll",                                  {ResourceTableType::NONE,           ResourceType::NONE,                    0}},
+      {"condition",                               {ResourceTableType::NONE,           ResourceType::CONDITION,               1}},
+      {"frequency",                               {ResourceTableType::NONE,           ResourceType::FREQUENCY,               1}},
+      {"index",                                   {ResourceTableType::NONE,           ResourceType::DUAL_SOURCE_INDEX,       1}},
+      {"raster_order_group",                      {ResourceTableType::NONE,           ResourceType::RASTER_ORDER_GROUP,      1}},
+      /* clang-format on */
+  };
+
+  Result<ParsedAttribute> result;
   for (Attr attr : list.children_of_type<Attr>()) {
-    if (auto it = attr_map.find(string(attr.identifier().str())); it != attr_map.end()) {
-      if (it->second.first != ResourceType::NONE) {
-        if (result.value.first == ResourceType::NONE) {
-          result.value = it->second;
+    string attr_str(attr.identifier().str());
+    if (auto it = attr_map.find(attr_str); it != attr_map.end()) {
+      auto [str_type, res_type, expected_param_count] = it->second;
+
+      FuncParamList params = attr.parameters();
+      int param_count = params.child_count();
+      if (expected_param_count >= 0) {
+        if (param_count != expected_param_count) {
+          result.err = AstNodeException(params,
+                                        "Expected " + to_string(expected_param_count) +
+                                            " parameter(s) for attribute '" + attr_str + "'");
+          continue;
+        }
+      }
+      else {
+        if (param_count != expected_param_count) {
+          result.err = AstNodeException(params,
+                                        "Expected between 1 and " +
+                                            to_string(expected_param_count) +
+                                            " parameter(s) for attribute '" + attr_str + "'");
+          continue;
+        }
+      }
+
+      if (res_type == ResourceType::CONDITION) {
+        result.value.condition = params.child_first();
+      }
+      else if (res_type == ResourceType::FREQUENCY) {
+        result.value.frequency = params.child_first();
+      }
+      else if (res_type == ResourceType::DUAL_SOURCE_INDEX) {
+        result.value.dual_source_index = params.child_first();
+      }
+      else if (res_type == ResourceType::RASTER_ORDER_GROUP) {
+        result.value.raster_order_group = params.child_first();
+      }
+      else if (res_type != ResourceType::NONE) {
+        if (result.value.res_type == ResourceType::NONE) {
+          result.value.res_type = res_type;
+          result.value.srt_type = str_type;
+          result.value.attr = attr;
+
+          Expr param1 = params.child_first();
+          if (param1.is_valid()) {
+            result.value.param1 = param1;
+          }
+          Expr param2 = param1.next();
+          if (param2.is_valid()) {
+            result.value.param2 = param2;
+          }
+          Expr param3 = param2.next();
+          if (param3.is_valid()) {
+            result.value.param3 = param3;
+          }
         }
         else {
           result.err = AstNodeException(
-              attr, "Declaration is already of type '" + to_str(result.value.first) + "'");
+              attr, "Declaration is already of type '" + to_str(result.value.res_type) + "'");
         }
       }
+    }
+    else {
+      result.err = AstNodeException(attr, "Unknown attribute '" + attr_str + "'");
     }
   }
   return result;
@@ -699,9 +776,7 @@ struct SymbolParser : NodeErrorHandler {
     const auto entry_point_type = fn_sym->entry_point_type;
 
     for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
-      auto [res_packed, err_attr] = resource_type_from_attributes(arg.attributes());
-      auto [res_type, srt_type] = res_packed;
-      error(err_attr);
+      auto attr = resource_type_from_attributes(arg.attributes()).unwrap(this);
 
       auto [type, err] = scope.lookup_class(arg.type().id());
       error(err);
@@ -717,7 +792,7 @@ struct SymbolParser : NodeErrorHandler {
         var->resolved = resolved;
         resolved->identifier = builtin;
       };
-      switch (res_type) {
+      switch (attr.res_type) {
         case ResourceType::BASE_INSTANCE:
           generate_resolved_builtin("gpu_BaseInstance");
           break;
@@ -838,13 +913,14 @@ struct SymbolParser : NodeErrorHandler {
           break;
       }
 
-      if (is_entry_point && srt_type != ResourceTableType::ENTRY_POINT &&
-          res_type != ResourceType::RESOURCE_TABLE)
+      if (is_entry_point && attr.srt_type != ResourceTableType::ENTRY_POINT &&
+          attr.res_type != ResourceType::RESOURCE_TABLE)
       {
-        error(arg, "Expected entry point resource attribute but got '" + to_str(srt_type) + "'");
+        error(arg,
+              "Expected entry point resource attribute but got '" + to_str(attr.srt_type) + "'");
       }
-      else if (!is_entry_point && srt_type != ResourceTableType::NONE &&
-               res_type != ResourceType::RESOURCE_TABLE)
+      else if (!is_entry_point && attr.srt_type != ResourceTableType::NONE &&
+               attr.res_type != ResourceType::RESOURCE_TABLE)
       {
         error(arg, "Resource attributes are only supported on entry point arguments");
       }
@@ -1327,45 +1403,43 @@ struct SymbolParser : NodeErrorHandler {
 
     SymbolClass *cls = scope.as_class();
 
-    auto [res_packed, err_attr] = resource_type_from_attributes(var.attributes());
-    auto [res_type, srt_type] = res_packed;
-    error(err_attr);
+    auto attr = resource_type_from_attributes(var.attributes()).unwrap(this);
 
-    if (res_type == ResourceType::UNIFORM_BUF && !type->is_std140_compatible) {
+    if (attr.res_type == ResourceType::UNIFORM_BUF && !type->is_std140_compatible) {
       NOTE(type_id, "In this uniform buffer declaration");
       type->ensure_size_and_align(this);
     }
-    else if (res_type == ResourceType::STORAGE_BUF && !type->is_std430_compatible) {
+    else if (attr.res_type == ResourceType::STORAGE_BUF && !type->is_std430_compatible) {
       NOTE(type_id, "In this storage buffer declaration");
       type->ensure_size_and_align(this, true);
     }
 
     if (cls) {
-      if (cls->srt_type == ResourceTableType::NONE && srt_type != ResourceTableType::NONE) {
+      if (cls->srt_type == ResourceTableType::NONE && attr.srt_type != ResourceTableType::NONE) {
         if (cls->is_anonymous) {
           error(var, "Resources cannot be declared in an anonymous struct");
         }
-        if (srt_type != ResourceTableType::VERTEX_IN &&
-            srt_type != ResourceTableType::VERTEX_OUT &&
-            srt_type != ResourceTableType::FRAGMENT_OUT &&
-            srt_type != ResourceTableType::RESOURCE_TABLE)
+        if (attr.srt_type != ResourceTableType::VERTEX_IN &&
+            attr.srt_type != ResourceTableType::VERTEX_OUT &&
+            attr.srt_type != ResourceTableType::FRAGMENT_OUT &&
+            attr.srt_type != ResourceTableType::RESOURCE_TABLE)
         {
           error(var,
                 "Invalid resource of type '" + to_str(cls->srt_type) +
                     "' for resource table class");
         }
-        cls->srt_type = srt_type;
+        cls->srt_type = attr.srt_type;
       }
-      else if (cls->srt_type != srt_type) {
+      else if (cls->srt_type != attr.srt_type) {
         error(var,
               "Expected resource definition of type '" + to_str(cls->srt_type) + "' but got '" +
-                  to_str(srt_type) + "'");
+                  to_str(attr.srt_type) + "'");
       }
     }
-    else if (res_type == ResourceType::RESOURCE_TABLE) {
+    else if (attr.res_type == ResourceType::RESOURCE_TABLE) {
       /* Currently supported as noop for legacy resource table reference getter. */
     }
-    else if (res_type != ResourceType::NONE) {
+    else if (attr.res_type != ResourceType::NONE) {
       error(var, "Out of class resource declaration");
     }
 
@@ -1387,8 +1461,8 @@ struct SymbolParser : NodeErrorHandler {
       }
 
       SymbolVariable *sym = table.var_arena.alloc(&scope, type, decl);
-      sym->res_type = res_type;
-      sym->is_static |= res_type != ResourceType::NONE;
+      sym->res_type = attr.res_type;
+      sym->is_static |= attr.res_type != ResourceType::NONE;
       scope.variables.emplace(sym->identifier, sym);
 
       if (is_srt_local_ref && !is_ref) {
@@ -1458,7 +1532,9 @@ struct SymbolParser : NodeErrorHandler {
         SymbolVariable *flat_var = table.var_arena.alloc(*sym);
         sym->resolved = flat_var;
         flat_var->resolved = sym;
-        if (res_type != ResourceType::VERT_ATTR_OUT && res_type != ResourceType::FRAG_OUT) {
+        if (attr.res_type != ResourceType::VERT_ATTR_OUT &&
+            attr.res_type != ResourceType::FRAG_OUT)
+        {
           /* Some resource are declared in global namespace without prefix. */
           flat_var->identifier = sym->identifier;
         }

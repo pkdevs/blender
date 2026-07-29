@@ -64,6 +64,11 @@ enum class ResourceType {
   FRAG_DEPTH,
   FRAG_COORD,
   FRAG_STENCIL_REF,
+
+  CONDITION,
+  FREQUENCY,
+  DUAL_SOURCE_INDEX,
+  RASTER_ORDER_GROUP,
 };
 
 static inline string to_str(ResourceType type)
@@ -112,6 +117,10 @@ static inline string to_str(ResourceType type)
     SERIALIZE(SHARED);
     SERIALIZE(NUM_WORK_GROUP);
     SERIALIZE(FRAG_STENCIL_REF);
+    SERIALIZE(CONDITION);
+    SERIALIZE(FREQUENCY);
+    SERIALIZE(DUAL_SOURCE_INDEX);
+    SERIALIZE(RASTER_ORDER_GROUP);
   }
   return "Unknown";
 #undef SERIALIZE
@@ -259,7 +268,20 @@ template<typename T, typename U, typename ExceptionT = AstNodeException> struct 
   }
 };
 
-Result<pair<ResourceType, ResourceTableType>> resource_type_from_attributes(AttrList list);
+struct ParsedAttribute {
+  ResourceType res_type = ResourceType::NONE;
+  ResourceTableType srt_type = ResourceTableType::NONE;
+  Expr param1, param2, param3;
+  Attr attr;
+  Expr condition;
+  Expr frequency;
+  Expr dual_source_index;
+  Expr raster_order_group;
+
+  string parse_condition() const;
+};
+
+Result<ParsedAttribute> resource_type_from_attributes(AttrList list);
 
 struct SourceLocation {
   Token tok;

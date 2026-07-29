@@ -808,220 +808,8 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     if (cls.is_srt()) {
-      string &cls_id = cls.resolved->identifier;
-      metadata::ResourceTable srt;
-      metadata::VertexInputs vertex_in;
-      metadata::StageInterface vertex_out;
-      metadata::FragmentOutputs fragment_out;
-      metadata::FragmentInputs fragment_in;
-      srt.name = cls_id;
-      vertex_in.name = cls_id;
-      vertex_out.name = cls_id;
-      fragment_out.name = cls_id;
-      fragment_in.name = cls_id;
-
-      for (VarDecl decl : body.children_of_type<VarDecl>()) {
-        Declarator d = decl.child_first(NodeType::Declarator);
-        SymbolVariable *var = cls.lookup_variable(d.identifier());
-        const string &type_name = var->type->resolved->identifier;
-        const string &var_name = var->identifier;
-        switch (cls.srt_type) {
-          case ResourceTableType::RESOURCE_TABLE:
-            srt.emplace_back(parse_resource(decl.attributes(), type_name, var_name, d.array()));
-            break;
-          case ResourceTableType::VERTEX_IN:
-            vertex_in.emplace_back(parse_vertex_input(decl.attributes(), type_name, var_name));
-            break;
-          case ResourceTableType::VERTEX_OUT:
-            vertex_out.emplace_back(
-                parse_vertex_output(decl.attributes(), cls_id, type_name, var_name));
-            break;
-          case ResourceTableType::FRAGMENT_OUT:
-            fragment_out.emplace_back(
-                parse_fragment_output(decl.attributes(), cls_id, type_name, var_name));
-            break;
-          case ResourceTableType::FRAGMENT_IN:
-            fragment_in.emplace_back(
-                parse_fragment_input(decl.attributes(), cls_id, type_name, var_name));
-            break;
-          default:
-            break;
-        }
-      }
-
-      switch (cls.srt_type) {
-        case ResourceTableType::RESOURCE_TABLE:
-          metadata.resource_tables.emplace_back(srt);
-          break;
-        case ResourceTableType::VERTEX_IN:
-          metadata.vertex_inputs.emplace_back(vertex_in);
-          break;
-        case ResourceTableType::VERTEX_OUT:
-          metadata.stage_interfaces.emplace_back(vertex_out);
-          break;
-        case ResourceTableType::FRAGMENT_OUT:
-          metadata.fragment_outputs.emplace_back(fragment_out);
-          break;
-        case ResourceTableType::FRAGMENT_IN:
-          metadata.fragment_inputs.emplace_back(fragment_in);
-          break;
-        case ResourceTableType::ENTRY_POINT:
-        case ResourceTableType::NONE:
-          break;
-      }
+      parse_class_metadata(cls, body);
     }
-  }
-
-  metadata::ParsedVertInput parse_vertex_input(AttrList attributes,
-                                               const string &type,
-                                               const string &name)
-  {
-    /* Note: No array or matrix error linting here. Done by SymbolParser. */
-    metadata::ParsedVertInput vert_in{0, type, name};
-
-    for (Attr attr : attributes.children_of_type<Attr>()) {
-      string_view attr_type = attr.identifier().str();
-      if (attr_type == "attribute") {
-        auto [slot] = attr.parameters().splat_1();
-        vert_in.slot = slot.str();
-      }
-    }
-    return vert_in;
-  }
-
-  metadata::ParsedAttribute parse_vertex_output(AttrList attributes,
-                                                const string &struct_name,
-                                                const string &type,
-                                                const string &name)
-  {
-    /* Defaulting interpolation to smooth. Overridden if explicit attribute exists. */
-    metadata::ParsedAttribute attr{0, type, struct_name + "_" + name, "smooth"};
-
-    for (Attr attr_node : attributes.children_of_type<Attr>()) {
-      string_view attr_type = attr_node.identifier().str();
-      if (attr_type == "smooth" || attr_type == "flat" || attr_type == "no_perspective") {
-        attr.interpolation_mode = string(attr_type);
-      }
-    }
-    return attr;
-  }
-
-  metadata::ParsedFragOuput parse_fragment_output(AttrList attributes,
-                                                  const string &struct_name,
-                                                  const string &type,
-                                                  const string &name)
-  {
-    metadata::ParsedFragOuput frag_out{0, type, struct_name + "_" + name};
-
-    for (Attr attr : attributes.children_of_type<Attr>()) {
-      string_view attr_type = attr.identifier().str();
-      if (attr_type == "frag_color") {
-        auto [slot] = attr.parameters().splat_1();
-        frag_out.slot = slot.str();
-      }
-      else if (attr_type == "raster_order_group") {
-        auto [group] = attr.parameters().splat_1();
-        frag_out.raster_order_group = group.str();
-      }
-      else if (attr_type == "index") {
-        auto [dual_source] = attr.parameters().splat_1();
-        frag_out.dual_source = dual_source.str();
-      }
-    }
-    return frag_out;
-  }
-
-  metadata::ParsedFragInput parse_fragment_input(AttrList attributes,
-                                                 const string &struct_name,
-                                                 const string &type,
-                                                 const string &name)
-  {
-    metadata::ParsedFragInput frag_in{0, type, struct_name + "_" + name};
-
-    for (Attr attr : attributes.children_of_type<Attr>()) {
-      string_view attr_type = attr.identifier().str();
-      if (attr_type == "subpass_input") {
-        auto [slot, image_type] = attr.parameters().splat_2();
-        frag_in.slot = slot.str();
-        frag_in.image_type = image_type.str();
-      }
-      else if (attr_type == "raster_order_group") {
-        auto [group] = attr.parameters().splat_1();
-        frag_in.raster_order_group = group.str();
-      }
-    }
-    return frag_in;
-  }
-
-  metadata::ParsedResource parse_resource(AttrList attributes,
-                                          const string &type,
-                                          const string &name,
-                                          ArrayDecl array)
-  {
-    metadata::ParsedResource resource{0, type, name, string(array.str())};
-    for (Attr attr : attributes.children_of_type<Attr>()) {
-      string_view type = attr.identifier().str();
-      /* Note: no error linting here. This should have already been done by #SymbolParser. */
-      if (type == "sampler") {
-        auto [slot] = attr.parameters().splat_1();
-        resource.res_type = type;
-        resource.res_slot = slot.str();
-      }
-      else if (type == "image") {
-        auto [slot, qual, fmt] = attr.parameters().splat_3();
-        resource.res_type = type;
-        resource.res_slot = slot.str();
-        resource.res_qualifier = qual.str();
-        resource.res_format = fmt.str();
-      }
-      else if (type == "uniform") {
-        auto [slot] = attr.parameters().splat_1();
-        resource.res_type = type;
-        resource.res_slot = slot.str();
-      }
-      else if (type == "storage") {
-        auto [slot, qual] = attr.parameters().splat_2();
-        resource.res_type = type;
-        resource.res_slot = slot.str();
-        resource.res_qualifier = qual.str();
-      }
-      else if (type == "shared") {
-        resource.res_type = type;
-      }
-      else if (type == "push_constant") {
-        resource.res_type = type;
-      }
-      else if (type == "compilation_constant") {
-        resource.res_type = type;
-      }
-      else if (type == "specialization_constant") {
-        resource.res_type = type;
-        resource.res_value = attr.parameters().str();
-      }
-      else if (type == "condition") {
-        auto [node] = attr.parameters().splat_1();
-        for (LocalVar node : node.children_of_type<LocalVar>()) {
-          resource.res_condition += "int " + string(node.str()) + " = ";
-          resource.res_condition += "ShaderCreateInfo::find_constant(constants, \"" +
-                                    string(node.str()) + "\"); ";
-        }
-        resource.res_condition += "return " + string(node.str()) + ";";
-      }
-      else if (type == "frequency") {
-        auto [slot] = attr.parameters().splat_1();
-        resource.res_frequency = slot.str();
-      }
-      else if (type == "resource_table") {
-        resource.res_type = type;
-      }
-      else if (type == "legacy_info") {
-        resource.res_type = type;
-      }
-      else {
-        error(attr, "Invalid attribute in resource table");
-      }
-    }
-    return resource;
   }
 
   void union_members_decl(SymbolClass &cls)
@@ -1400,15 +1188,13 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     for (FuncArg arg : decl.arguments().children_of_type<FuncArg>()) {
-      auto [res_packed, err_attr] = resource_type_from_attributes(arg.attributes());
-      auto [res_type, srt_type] = res_packed;
-      error(err_attr);
+      auto attr = resource_type_from_attributes(arg.attributes()).unwrap(this);
 
       SymbolVariable *var = fn.lookup_variable(arg.identifier());
 
       const string &resolved_type = var->type->resolved->identifier;
 
-      switch (res_type) {
+      switch (attr.res_type) {
         case ResourceType::VERTEX_ID:
         case ResourceType::INSTANCE_ID:
         case ResourceType::POINT_SIZE:
@@ -1426,7 +1212,7 @@ struct CodegenContext : NodeErrorHandler {
         case ResourceType::NUM_WORK_GROUP:
         case ResourceType::INSTANCE_INDEX:
         case ResourceType::FRAG_STENCIL_REF:
-          create_info_decl += "BUILTINS(BuiltinBits::" + to_str(res_type) + ")\n";
+          create_info_decl += "BUILTINS(BuiltinBits::" + to_str(attr.res_type) + ")\n";
           break;
         case ResourceType::FRAG_DEPTH:
           for (Attr attr : decl.attributes().children_of_type<Attr>()) {
@@ -1474,6 +1260,10 @@ struct CodegenContext : NodeErrorHandler {
         case ResourceType::FRAG_IN:
         case ResourceType::FRAG_OUT:
         case ResourceType::CLIP_CONTROL:
+        case ResourceType::CONDITION:
+        case ResourceType::FREQUENCY:
+        case ResourceType::DUAL_SOURCE_INDEX:
+        case ResourceType::RASTER_ORDER_GROUP:
         case ResourceType::NONE:
           break;
       }
@@ -1852,11 +1642,9 @@ struct CodegenContext : NodeErrorHandler {
   /* Return true if declaration was issued. */
   bool var_decl(VarDecl decl, SymbolScope &scope, bool jump = true)
   {
-    auto [res_packed, err_attr] = resource_type_from_attributes(decl.attributes());
-    auto [res_type, srt_type] = res_packed;
-    error(err_attr);
+    auto attr = resource_type_from_attributes(decl.attributes()).unwrap(this);
 
-    if (res_type != ResourceType::NONE) {
+    if (attr.res_type != ResourceType::NONE) {
       /* Resources are defined in global space at runtime. */
       return false;
     }
@@ -2361,6 +2149,210 @@ struct CodegenContext : NodeErrorHandler {
     }
     return var;
   }
+
+  /* -------------------------------------------------------------------- */
+  /** \name Metadata Parsing
+   *
+   * \{ */
+
+  void parse_class_metadata(SymbolClass &cls, LocalScope body)
+  {
+    string &cls_id = cls.resolved->identifier;
+    metadata::ResourceTable srt;
+    metadata::VertexInputs vertex_in;
+    metadata::StageInterface vertex_out;
+    metadata::FragmentOutputs fragment_out;
+    metadata::FragmentInputs fragment_in;
+    srt.name = cls_id;
+    vertex_in.name = cls_id;
+    vertex_out.name = cls_id;
+    fragment_out.name = cls_id;
+    fragment_in.name = cls_id;
+
+    for (VarDecl decl : body.children_of_type<VarDecl>()) {
+      Declarator d = decl.child_first(NodeType::Declarator);
+      SymbolVariable *var = cls.lookup_variable(d.identifier());
+      const string &type_name = var->type->resolved->identifier;
+      const string &var_name = var->identifier;
+      switch (cls.srt_type) {
+        case ResourceTableType::RESOURCE_TABLE:
+          srt.emplace_back(parse_resource(decl.attributes(), type_name, var_name, d.array()));
+          break;
+        case ResourceTableType::VERTEX_IN:
+          vertex_in.emplace_back(parse_vertex_input(decl.attributes(), type_name, var_name));
+          break;
+        case ResourceTableType::VERTEX_OUT:
+          vertex_out.emplace_back(
+              parse_vertex_output(decl.attributes(), cls_id, type_name, var_name));
+          break;
+        case ResourceTableType::FRAGMENT_OUT:
+          fragment_out.emplace_back(
+              parse_fragment_output(decl.attributes(), cls_id, type_name, var_name));
+          break;
+        case ResourceTableType::FRAGMENT_IN:
+          fragment_in.emplace_back(
+              parse_fragment_input(decl.attributes(), cls_id, type_name, var_name));
+          break;
+        default:
+          break;
+      }
+    }
+
+    switch (cls.srt_type) {
+      case ResourceTableType::RESOURCE_TABLE:
+        metadata.resource_tables.emplace_back(srt);
+        break;
+      case ResourceTableType::VERTEX_IN:
+        metadata.vertex_inputs.emplace_back(vertex_in);
+        break;
+      case ResourceTableType::VERTEX_OUT:
+        metadata.stage_interfaces.emplace_back(vertex_out);
+        break;
+      case ResourceTableType::FRAGMENT_OUT:
+        metadata.fragment_outputs.emplace_back(fragment_out);
+        break;
+      case ResourceTableType::FRAGMENT_IN:
+        metadata.fragment_inputs.emplace_back(fragment_in);
+        break;
+      case ResourceTableType::ENTRY_POINT:
+      case ResourceTableType::NONE:
+        break;
+    }
+  }
+
+  metadata::ParsedVertInput parse_vertex_input(AttrList attributes,
+                                               const string &type,
+                                               const string &name)
+  {
+    auto attr = resource_type_from_attributes(attributes).unwrap(this);
+    return {
+        .line = 0,
+        .var_type = type,
+        .var_name = name,
+        .slot = string(attr.param1.str()),
+    };
+  }
+
+  metadata::ParsedAttribute parse_vertex_output(AttrList attributes,
+                                                const string &struct_name,
+                                                const string &type,
+                                                const string &name)
+  {
+    auto attr = resource_type_from_attributes(attributes).unwrap(this);
+    return {
+        .line = 0,
+        .var_type = type,
+        .var_name = struct_name + "_" + name,
+        .interpolation_mode = string(attr.attr.str()),
+    };
+  }
+
+  metadata::ParsedFragOuput parse_fragment_output(AttrList attributes,
+                                                  const string &struct_name,
+                                                  const string &type,
+                                                  const string &name)
+  {
+    auto attr = resource_type_from_attributes(attributes).unwrap(this);
+    return {
+        .line = 0,
+        .var_type = type,
+        .var_name = struct_name + "_" + name,
+        .slot = string(attr.param1.str()),
+        .dual_source = string(attr.param3.str()),
+        .raster_order_group = string(attr.param2.str()),
+    };
+  }
+
+  metadata::ParsedFragInput parse_fragment_input(AttrList attributes,
+                                                 const string &struct_name,
+                                                 const string &type,
+                                                 const string &name)
+  {
+    auto attr = resource_type_from_attributes(attributes).unwrap(this);
+    return {
+        .line = 0,
+        .var_type = type,
+        .var_name = struct_name + "_" + name,
+        .slot = string(attr.param1.str()),
+        .image_type = string(attr.param2.str()),
+        .raster_order_group = string(attr.param3.str()),
+    };
+  }
+
+  metadata::ParsedResource parse_resource(AttrList attributes,
+                                          const string &type,
+                                          const string &name,
+                                          ArrayDecl array)
+  {
+    auto attr = resource_type_from_attributes(attributes).unwrap(this);
+    switch (attr.res_type) {
+      case ResourceType::LEGACY_INFO:
+      case ResourceType::RESOURCE_TABLE:
+      case ResourceType::COMPILATION_CONST:
+      case ResourceType::PUSH_CONST:
+      case ResourceType::SHARED:
+        return {.line = 0,
+                .var_type = type,
+                .var_name = name,
+                .var_array = string(array.str()),
+                .res_type = string(attr.attr.str()),
+                .res_condition = attr.parse_condition()};
+      case ResourceType::SPECIALIZATION_CONST:
+        return {.line = 0,
+                .var_type = type,
+                .var_name = name,
+                .var_array = string(array.str()),
+                .res_type = string(attr.attr.str()),
+                .res_value = string(attr.param1.str()),
+                .res_condition = attr.parse_condition()};
+      case ResourceType::SAMPLER:
+        return {.line = 0,
+                .var_type = type,
+                .var_name = name,
+                .var_array = string(array.str()),
+                .res_type = string(attr.attr.str()),
+                .res_slot = string(attr.param1.str()),
+                .res_condition = attr.parse_condition(),
+                .res_frequency = string(attr.frequency.str())};
+      case ResourceType::UNIFORM_BUF:
+        return {.line = 0,
+                .var_type = type,
+                .var_name = name,
+                .var_array = string(array.str()),
+                .res_type = string(attr.attr.str()),
+                .res_value = string(attr.param1.str()),
+                .res_condition = attr.parse_condition(),
+                .res_frequency = string(attr.frequency.str())};
+      case ResourceType::STORAGE_BUF:
+        return {.line = 0,
+                .var_type = type,
+                .var_name = name,
+                .var_array = string(array.str()),
+                .res_type = string(attr.attr.str()),
+                .res_slot = string(attr.param1.str()),
+                .res_qualifier = string(attr.param2.str()),
+                .res_condition = attr.parse_condition(),
+                .res_frequency = string(attr.frequency.str())};
+      case ResourceType::IMAGE:
+        return {.line = 0,
+                .var_type = type,
+                .var_name = name,
+                .var_array = string(array.str()),
+                .res_type = string(attr.attr.str()),
+                .res_slot = string(attr.param1.str()),
+                .res_qualifier = string(attr.param2.str()),
+                .res_format = string(attr.param3.str()),
+                .res_condition = attr.parse_condition(),
+                .res_frequency = string(attr.frequency.str())};
+        break;
+      default:
+        assert(0);
+        break;
+    }
+    return {};
+  }
+
+  /** \} */
 };
 
 /* Lower namespaces by adding namespace prefix to all the contained structs and functions. */
