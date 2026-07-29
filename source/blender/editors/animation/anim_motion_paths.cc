@@ -341,7 +341,11 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
   bool finished_right = false;
   int frame = modified_frame;
   Bounds<int> evaluated_range;
-
+  /* Counts how many times the result of `motionpaths_calc_bake_target` hasn't changed existing
+   * data. */
+  int stable_result_counter = 0;
+  /* Using 2 so in case interpolation changed through a key we don't stop too early. */
+  constexpr int stable_result_threshold = 2;
   while (!finished_left || !finished_right) {
     /* Update relevant data for new frame. */
     DEG_evaluate_on_framechange(depsgraph, frame);
@@ -357,12 +361,19 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
       continue;
     }
 
+    if (any_modified) {
+      stable_result_counter = 0;
+    }
+    else {
+      stable_result_counter++;
+    }
+
     if (frame < modified_frame) {
-      finished_left |= !any_modified;
+      finished_left |= stable_result_counter >= stable_result_threshold;
       evaluated_range.min = frame;
     }
     else {
-      finished_right |= !any_modified;
+      finished_right |= stable_result_counter >= stable_result_threshold;
       evaluated_range.max = frame;
     }
 
