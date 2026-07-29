@@ -954,14 +954,9 @@ static SlipData *slip_data_init(bContext *C, const wmOperator *op, const wmEvent
   data->clamp_warning = false;
   data->can_clamp = false;
 
-  data->clamp = true;
   for (Strip *strip : strips) {
     strip->runtime->flag |= seq::StripRuntimeFlag::ShowOffsets;
 
-    /* If any strips start out with hold offsets visible, disable clamping on initialization. */
-    if (strip->startofs < 0 || strip->end_offset() < 0) {
-      data->clamp = false;
-    }
     /* If any strips do not have enough underlying content to
      * fill their bounds, show a warning. */
     if (strip->content_length() < strip->right_handle(scene) - strip->left_handle()) {
