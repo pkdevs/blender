@@ -184,7 +184,9 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 100)) {
+    /* Note: Setting version number high to avoid conflicts during review. It'll be adjusted before
+     * final merge. */
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &space : area.spacedata) {
@@ -193,6 +195,22 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
             space_outliner->flag |= SO_EXPAND_ON_FOCUS;
           }
         }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 9)) {
+    for (Brush &brush : bmain->brushes) {
+      if (brush.curve_hardness == nullptr) {
+        brush.curve_hardness = brush.paint_flags & BRUSH_PAINT_HARDNESS_PRESSURE_INVERT ?
+                                   BKE_paint_default_curve_inverted() :
+                                   BKE_paint_default_curve();
+      }
+      if (brush.curve_auto_smooth == nullptr) {
+        brush.curve_auto_smooth = BKE_paint_default_curve_inverted();
+      }
+      if (brush.curve_spacing == nullptr) {
+        brush.curve_spacing = BKE_paint_default_curve();
       }
     }
   }
