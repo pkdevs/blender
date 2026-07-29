@@ -23,25 +23,34 @@ namespace bke {
 /* ---------------------------------------------------- */
 /* Animation Visualization */
 
+namespace animviz {
+
 /**
  * Initialize the default settings for animation visualization.
  */
-void animviz_settings_init(struct bAnimVizSettings *avs);
+void settings_init(struct bAnimVizSettings *avs);
+
+}  // namespace animviz
+
+/* ---------------------------------------------------- */
+/* Motion Path */
+
+namespace motionpath {
 
 /**
  * Make a copy of motion-path data, so that viewing with copy on write works.
  */
-struct bMotionPath *animviz_copy_motionpath(const struct bMotionPath *mpath_src);
+struct bMotionPath *copy(const struct bMotionPath *mpath_src);
 
 /**
  * Free the given motion path's cache.
  */
-void animviz_free_motionpath_cache(struct bMotionPath *mpath);
+void free_cache(struct bMotionPath *mpath);
 /**
  * Free the given motion path instance and its data.
  * \note this frees the motion path given!
  */
-void animviz_free_motionpath(struct bMotionPath *mpath);
+void free(struct bMotionPath *mpath);
 
 /**
  * Esnures that a motion path exists for the given data and that the settings correctly adhere to
@@ -52,13 +61,15 @@ void animviz_free_motionpath(struct bMotionPath *mpath);
  * \param pchan: Pose-channel to add paths for
  * (optional; if not provided, object-paths are assumed).
  */
-struct bMotionPath *animviz_ensure_motionpath(struct ReportList *reports,
-                                              struct Scene *scene,
-                                              struct Object *ob,
-                                              struct bPoseChannel *pchan);
+struct bMotionPath *ensure(struct ReportList *reports,
+                           struct Scene *scene,
+                           struct Object *ob,
+                           struct bPoseChannel *pchan);
 
-void animviz_motionpath_blend_write(struct BlendWriter *writer, struct bMotionPath *mpath);
-void animviz_motionpath_blend_read_data(struct BlendDataReader *reader, struct bMotionPath *mpath);
+void blend_write(struct BlendWriter *writer, struct bMotionPath *mpath);
+void blend_read_data(struct BlendDataReader *reader, struct bMotionPath *mpath);
+
+}  // namespace motionpath
 
 }  // namespace bke
 }  // namespace blender

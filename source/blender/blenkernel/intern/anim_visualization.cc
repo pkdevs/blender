@@ -23,8 +23,9 @@ namespace blender::bke {
 
 /* ******************************************************************** */
 /* Animation Visualization */
+namespace animviz {
 
-void animviz_settings_init(bAnimVizSettings *avs)
+void settings_init(bAnimVizSettings *avs)
 {
   if (avs == nullptr) {
     return;
@@ -43,9 +44,14 @@ void animviz_settings_init(bAnimVizSettings *avs)
   avs->path_bakeflag |= MOTIONPATH_BAKE_HEADS;
 }
 
-/* ------------------- */
+}  // namespace animviz
 
-void animviz_free_motionpath_cache(bMotionPath *mpath)
+/* ******************************************************************** */
+/* Motion Path */
+
+namespace motionpath {
+
+void free_cache(bMotionPath *mpath)
 {
   if (mpath == nullptr) {
     return;
@@ -65,19 +71,19 @@ void animviz_free_motionpath_cache(bMotionPath *mpath)
   mpath->length = 0;
 }
 
-void animviz_free_motionpath(bMotionPath *mpath)
+void free(bMotionPath *mpath)
 {
   if (mpath == nullptr) {
     return;
   }
 
-  animviz_free_motionpath_cache(mpath);
+  free_cache(mpath);
   MEM_delete(mpath);
 }
 
 /* ------------------- */
 
-bMotionPath *animviz_copy_motionpath(const bMotionPath *mpath_src)
+bMotionPath *copy(const bMotionPath *mpath_src)
 {
   bMotionPath *mpath_dst;
 
@@ -98,10 +104,7 @@ bMotionPath *animviz_copy_motionpath(const bMotionPath *mpath_src)
 
 /* ------------------- */
 
-bMotionPath *animviz_ensure_motionpath(ReportList *reports,
-                                       Scene *scene,
-                                       Object *ob,
-                                       bPoseChannel *pchan)
+bMotionPath *ensure(ReportList *reports, Scene *scene, Object *ob, bPoseChannel *pchan)
 {
   if (ELEM(nullptr, scene, ob)) {
     return nullptr;
@@ -157,7 +160,7 @@ bMotionPath *animviz_ensure_motionpath(ReportList *reports,
     }
 
     /* Clear the existing cache, to allocate a new one below. */
-    animviz_free_motionpath_cache(mpath);
+    free_cache(mpath);
   }
   else {
     mpath = MEM_new<bMotionPath>("bMotionPath");
@@ -204,7 +207,7 @@ bMotionPath *animviz_ensure_motionpath(ReportList *reports,
   return mpath;
 }
 
-void animviz_motionpath_blend_write(BlendWriter *writer, bMotionPath *mpath)
+void blend_write(BlendWriter *writer, bMotionPath *mpath)
 {
   if (mpath == nullptr) {
     return;
@@ -214,7 +217,7 @@ void animviz_motionpath_blend_write(BlendWriter *writer, bMotionPath *mpath)
   writer->write_struct_array(mpath->length, mpath->points);
 }
 
-void animviz_motionpath_blend_read_data(BlendDataReader *reader, bMotionPath *mpath)
+void blend_read_data(BlendDataReader *reader, bMotionPath *mpath)
 {
   if (mpath == nullptr) {
     return;
@@ -227,5 +230,6 @@ void animviz_motionpath_blend_read_data(BlendDataReader *reader, bMotionPath *mp
   mpath->batch_line = nullptr;
   mpath->batch_points = nullptr;
 }
+}  // namespace motionpath
 
 }  // namespace blender::bke
