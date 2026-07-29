@@ -104,7 +104,7 @@ std::optional<float2x2> RealizeOnDomainOperation::compute_jacobian(const float3x
   /* The Jacobian of a 2D transformation matrix is the matrix itself. */
   const float2x2 jacobian = float2x2(transformation);
 
-  /* The gradients are the rows of the Jacobian. */
+  /* The gradients of the input across the output are the rows of the Jacobian. */
   const float2 x_gradient = float2(jacobian[0][0], jacobian[1][0]);
   const float2 y_gradient = float2(jacobian[0][1], jacobian[1][1]);
 
