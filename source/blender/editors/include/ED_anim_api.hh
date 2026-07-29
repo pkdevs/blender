@@ -1296,7 +1296,7 @@ Depsgraph *animviz_depsgraph_build(Main *bmain,
 void animviz_calc_motionpaths(Depsgraph *depsgraph,
                               Scene *scene,
                               MutableSpan<MPathTarget> targets,
-                              const int modified_frame);
+                              int modified_frame);
 
 /**
  * Update motion path computation range (in `ob.avs` or `armature.avs`) from user choice in
