@@ -350,7 +350,7 @@ void ED_markers_make_cfra_list(ListBaseT<TimeMarker> *markers,
   }
 }
 
-void ED_markers_deselect_all(ListBaseT<TimeMarker> *markers, int action)
+void ED_markers_select_all(ListBaseT<TimeMarker> *markers, int action)
 {
   if (action == SEL_TOGGLE) {
     action = ED_markers_get_first_selected(markers) ? SEL_DESELECT : SEL_SELECT;
@@ -1653,7 +1653,7 @@ static wmOperatorStatus ed_marker_box_select_exec(bContext *C, wmOperator *op)
   const eSelectOp sel_op = eSelectOp(RNA_enum_get(op->ptr, "mode"));
   const bool select = (sel_op != SEL_OP_SUB);
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
-    ED_markers_deselect_all(markers, SEL_DESELECT);
+    ED_markers_select_all(markers, SEL_DESELECT);
   }
 
   for (TimeMarker &marker : *markers) {
@@ -1711,7 +1711,7 @@ static wmOperatorStatus ed_marker_select_all_exec(bContext *C, wmOperator *op)
   }
 
   int action = RNA_enum_get(op->ptr, "action");
-  ED_markers_deselect_all(markers, action);
+  ED_markers_select_all(markers, action);
 
   WM_event_add_notifier(C, NC_SCENE | ND_MARKERS, nullptr);
   WM_event_add_notifier(C, NC_ANIMATION | ND_MARKERS, nullptr);
