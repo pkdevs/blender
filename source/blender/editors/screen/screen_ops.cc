@@ -4226,10 +4226,16 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
   if (next) {
     ak = ED_keylist_find_next(keylist, cfra);
     while ((ak != nullptr) && (done == false)) {
-      /* Ignore keyframes outside of playback_range */
-      if (wrap_timeline_navigation && !playback_range.contains(ak->cfra)) {
-        ak = ak->next;
-        continue;
+      if (wrap_timeline_navigation) {
+        /* Ignore keyframes before playback_range */
+        if (ak->cfra < playback_range.start_frame) {
+          ak = ak->next;
+          continue;
+        }
+        /* No more keyframes within playback_range */
+        if (ak->cfra > playback_range.end_frame) {
+          break;
+        }
       }
 
       if (cfra < ak->cfra) {
@@ -4251,10 +4257,16 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
   else {
     ak = ED_keylist_find_prev(keylist, cfra);
     while ((ak != nullptr) && (done == false)) {
-      /* Ignore keyframes outside of playback_range */
-      if (wrap_timeline_navigation && !playback_range.contains(ak->cfra)) {
-        ak = ak->prev;
-        continue;
+      if (wrap_timeline_navigation) {
+        /* Ignore keyframes after playback_range */
+        if (ak->cfra > playback_range.end_frame) {
+          ak = ak->prev;
+          continue;
+        }
+        /* No more keyframes within playback_range */
+        if (ak->cfra < playback_range.start_frame) {
+          break;
+        }
       }
 
       if (cfra > ak->cfra) {
