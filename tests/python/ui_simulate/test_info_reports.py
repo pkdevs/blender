@@ -15,31 +15,6 @@ Tests for Info Editor / Reports functionality:
 import modules.ui_test_utils as ui
 
 
-def _register_info_report_generator():
-    import bpy
-
-    if hasattr(bpy.types, "TEST_OT_info_report_generator"):
-        return
-
-    class TEST_OT_info_report_generator(bpy.types.Operator):
-        bl_idname = "wm.test_info_report_generator"
-        bl_label = "Test Info Report Generator"
-        bl_options = {'INTERNAL'}
-
-        def execute(self, context):
-            self.report({'DEBUG'}, "DEBUG_TEST_REPORT")
-            self.report({'INFO'}, "INFO_TEST_REPORT")
-            self.report({'OPERATOR'}, "OPERATOR_TEST_REPORT")
-            self.report({'WARNING'}, "WARNING_TEST_REPORT")
-            self.report({'ERROR'}, "ERROR_TEST_REPORT")
-            self.report({'ERROR_INVALID_INPUT'}, "ERROR_INVALID_INPUT_TEST_REPORT")
-            self.report({'ERROR_INVALID_CONTEXT'}, "ERROR_INVALID_CONTEXT_TEST_REPORT")
-            self.report({'ERROR_OUT_OF_MEMORY'}, "ERROR_OUT_OF_MEMORY_TEST_REPORT")
-            return {'FINISHED'}
-
-    bpy.utils.register_class(TEST_OT_info_report_generator)
-
-
 def _get_window_region(area):
     for region in area.regions:
         if region.type == "WINDOW":
@@ -57,23 +32,13 @@ def _setup_info_area():
     area = ui.largest_area(window.screen)
     area.type = 'INFO'
 
-    _register_info_report_generator()
-
-    try:
-        bpy.ops.wm.test_info_report_generator()
-    except RuntimeError:
-        # The test operator intentionally reports ERROR-level messages
-        # to populate the Info editor for these tests. `bpy.ops` raises
-        # RuntimeError whenever a called operator generates an
-        # ERROR-level report, even though the operator itself finished
-        # normally and its reports were already added to
-        # CTX_wm_reports(). Safe to ignore here.
-        pass
-
+    # Perform operations to populate the Info editor with operator reports
     bpy.ops.mesh.primitive_cube_add()
     bpy.ops.transform.translate(value=(1.0, 2.0, 3.0))
-
+    bpy.ops.object.shade_smooth()
+    bpy.ops.object.modifier_add(type='BEVEL')
     yield
+    
     return e, t, window, area
 
 
