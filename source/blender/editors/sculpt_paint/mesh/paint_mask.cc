@@ -29,6 +29,7 @@
 #include "BKE_paint.hh"
 #include "BKE_paint_bvh.hh"
 #include "BKE_subdiv_ccg.hh"
+#include "BLI_math_matrix.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -803,6 +804,9 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
   const MaskOperation &op = *reinterpret_cast<const MaskOperation *>(gesture_data.operation);
   Object &object = *gesture_data.vc.obact;
   const Depsgraph &depsgraph = *gesture_data.vc.depsgraph;
+  RegionView3D *rv3d = gesture_data.vc.rv3d;
+  const bool is_clipping = (rv3d && (rv3d->rflag & RV3D_CLIPPING));
+  const float4x4 obmat = object.object_to_world();
   switch (bke::object::pbvh_get(object)->type()) {
     case bke::pbvh::Type::Mesh: {
       const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, object);
@@ -811,6 +815,19 @@ static void gesture_apply_for_symmetry_pass(bContext & /*C*/, gesture::GestureDa
           depsgraph, object, node_mask, [&](MutableSpan<float> node_mask, const Span<int> verts) {
             for (const int i : verts.index_range()) {
               const int vert = verts[i];
+              if (is_clipping) {
+                bool is_clipped = false;
+                const float3 p_pworld = math::transform_point(obmat, float3(positions[vert]));
+                for (int p = 0; p < 6; ++p) {
+                  const float dot = math::dot(float3(rv3d->clip[p]), p_pworld) + rv3d->clip[p][3];
+                  if (dot < 0.0f) {
+                    is_clipped = true;
+                    break;
+                  }
+                }
+                if (is_clipped)
+                  continue;
+              }
               if (gesture::is_affected(gesture_data, positions[vert], normals[vert])) {
                 node_mask[i] = mask_gesture_get_new_value(node_mask[i], op.mode, op.value);
               }
