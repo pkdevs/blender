@@ -876,10 +876,7 @@ static wmOperatorStatus ed_marker_add_exec(bContext *C, wmOperator * /*op*/)
     }
   }
 
-  /* deselect all */
-  for (TimeMarker &marker : *markers) {
-    marker.flag &= ~SELECT;
-  }
+  ED_markers_select_all(markers, SEL_DESELECT);
 
   TimeMarker *marker = MEM_new<TimeMarker>("TimeMarker");
   marker->flag = SELECT;
@@ -1384,13 +1381,6 @@ static void MARKER_OT_duplicate(wmOperatorType *ot)
  * Select/de-select time-marker at the current frame.
  * \{ */
 
-static void deselect_markers(ListBaseT<TimeMarker> *markers)
-{
-  for (TimeMarker &marker : *markers) {
-    marker.flag &= ~SELECT;
-  }
-}
-
 static void select_marker_camera_switch(
     bContext *C, bool camera, bool extend, ListBaseT<TimeMarker> *markers, int cfra)
 {
@@ -1474,8 +1464,7 @@ static wmOperatorStatus ed_marker_select(bContext *C,
       ret_val = OPERATOR_RUNNING_MODAL;
     }
     else {
-      /* Deselect all markers. */
-      deselect_markers(markers);
+      ED_markers_select_all(markers, SEL_DESELECT);
     }
   }
 
@@ -1771,7 +1760,7 @@ static wmOperatorStatus ed_marker_select_leftright_exec(bContext *C, wmOperator 
   }
 
   if (!extend) {
-    deselect_markers(markers);
+    ED_markers_select_all(markers, SEL_DESELECT);
   }
 
   const float cfra = BKE_scene_frame_get(scene);
@@ -2090,6 +2079,9 @@ static wmOperatorStatus ed_marker_camera_bind_exec(bContext *C, wmOperator *op)
 
   marker = ED_markers_find_nearest_marker(markers, scene->r.cfra);
   if ((marker == nullptr) || (marker->frame != scene->r.cfra)) {
+    /* Deselect other markers, so that the user can move the camera marker more easily. */
+    ED_markers_select_all(markers, SEL_DESELECT);
+
     marker = MEM_new<TimeMarker>("Camera TimeMarker");
     /* This marker's name is only displayed in the viewport statistics, animation editors use the
      * camera's name when bound to a marker. */
@@ -2097,13 +2089,6 @@ static wmOperatorStatus ed_marker_camera_bind_exec(bContext *C, wmOperator *op)
     marker->flag = SELECT;
     marker->frame = scene->r.cfra;
     BLI_addtail(markers, marker);
-
-    /* deselect all others, so that the user can then move it without problems */
-    for (TimeMarker &m : *markers) {
-      if (&m != marker) {
-        m.flag &= ~SELECT;
-      }
-    }
   }
 
   /* bind to the nominated camera (as set in operator props) */
