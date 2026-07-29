@@ -252,8 +252,6 @@ struct GlobalData {
   uchar ray_type;
   /** Is hair. */
   bool is_strand;
-
-  uint light_index;
 };
 
 GlobalData g_data;
