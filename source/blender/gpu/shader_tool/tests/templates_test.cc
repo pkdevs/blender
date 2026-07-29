@@ -174,7 +174,7 @@ const char      E_A = 0;
 const char         E_B  = 1;
                                int fooT17T2T_3() {
 #line 3
-                                           return int1(17 + 2 + -3); }
+                                           return int(17 + 2 + -3); }
 
                            E fT1T2() {
 #line 5

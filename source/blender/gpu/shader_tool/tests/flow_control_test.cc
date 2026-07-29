@@ -723,8 +723,19 @@ void f(Res res)
     string expect = R"(
 
 const int E_ENUM  = 1;
-
-
+#ifdef CREATE_INFO_RES_PASS_Res
+CREATE_INFO_RES_PASS_Res
+#endif
+#ifdef CREATE_INFO_RES_BATCH_Res
+CREATE_INFO_RES_BATCH_Res
+#endif
+#ifdef CREATE_INFO_RES_GEOMETRY_Res
+CREATE_INFO_RES_GEOMETRY_Res
+#endif
+#ifdef CREATE_INFO_RES_SHARED_VARS_Res
+CREATE_INFO_RES_SHARED_VARS_Res
+#endif
+#line 6
 struct Res {
   int _pad;
 };

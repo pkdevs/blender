@@ -282,8 +282,8 @@ Result<StringPair> SymbolTable::mangle_identifier(TemplateArgList args,
                                  "Use of undeclared identifier '" + string(type_id.str()) + "'");
         }
         else {
-          result.str += "T" + type->resolved->identifier;
-          result.str_debug += ", " + type->resolved->identifier;
+          result.str += "T" + type->identifier;
+          result.str_debug += ", " + type->identifier;
         }
       }
     }
@@ -372,8 +372,8 @@ Result<StringPair> SymbolTable::mangle_identifier(const SymbolFunctionTemplate &
   StringPair result;
   for (int i : tmp.temp_arg_index_in_fn_arg) {
     if (i < arg_cls.size()) {
-      result.str += "T" + arg_cls[i]->resolved->identifier;
-      result.str_debug += ", " + arg_cls[i]->resolved->identifier;
+      result.str += "T" + arg_cls[i]->identifier;
+      result.str_debug += ", " + arg_cls[i]->identifier;
     }
     else {
       result.str += "T" + err_symbol;
@@ -496,31 +496,31 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
       if (cls.is_enum) {
         hint = " because its underlying type is not 'uint' or 'int'";
       }
-      else if (cls.resolved->identifier == "float3") {
+      else if (cls.identifier == "float3") {
         hint = "; use 'packed_float3' instead";
       }
-      else if (cls.resolved->identifier == "int3") {
+      else if (cls.identifier == "int3") {
         hint = "; use 'packed_int3' instead";
       }
-      else if (cls.resolved->identifier == "uint3") {
+      else if (cls.identifier == "uint3") {
         hint = "; use 'packed_uint3' instead";
       }
-      else if (cls.resolved->identifier == "bool") {
+      else if (cls.identifier == "bool") {
         hint = "; use 'bool32_t' instead";
       }
-      else if (cls.resolved->identifier == "float3x3") {
+      else if (cls.identifier == "float3x3") {
         hint = "; use 'float3x4' instead";
       }
 
       if (!is_std140_compatible && !check_st430) {
         err_handler->error(var->loc.tok,
-                           "Type '" + var->type->identifier +
+                           "Type '" + var->type->original +
                                "' is not allowed in uniform and storage buffer" + hint);
       }
       else if (!is_std430_compatible) {
         err_handler->error(var->loc.tok,
-                           "Type '" + var->type->identifier +
-                               "' is not allowed in storage buffer" + hint);
+                           "Type '" + var->type->original + "' is not allowed in storage buffer" +
+                               hint);
       }
     }
 
@@ -538,7 +538,7 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
       if (err_handler && padded != size) {
         err_handler->error(var->loc.tok,
                            "Implicit " + to_string(padded - size) + " bytes padding before '" +
-                               var->identifier + "', add manual padding");
+                               var->original + "', add manual padding");
       }
       size = padded;
       /* Add member size. */
@@ -552,7 +552,7 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
       if (err_handler && !check_st430) {
         err_handler->error(
             var->loc.tok,
-            "Type '" + var->type->identifier +
+            "Type '" + var->type->original +
                 "' is not allowed in uniform buffer because it contains implicit padding");
       }
     }
@@ -568,8 +568,8 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
       if (err_handler) {
         err_handler->error(loc.tok,
                            "Implicit " + to_string(padded - size) +
-                               " bytes padding at the end of '" + identifier +
-                               "' , add manual padding");
+                               " bytes padding at the end of '" + this->original +
+                               "', add manual padding");
       }
     }
     size = padded;
@@ -595,18 +595,16 @@ void SymbolClass::ensure_size_and_align(NodeErrorHandler *err_handler, bool chec
     if (err_handler && !check_st430) {
       err_handler->error(loc.tok,
                          "Implicit " + to_string(16 - (size % 16)) +
-                             " bytes padding at the end of '" + identifier +
-                             "' , add manual padding");
+                             " bytes padding at the end of '" + this->original +
+                             "', add manual padding");
     }
   }
 }
 
 struct SymbolParser : NodeErrorHandler {
   SymbolTable &table;
-  SymbolScope &global;
 
-  SymbolParser(ErrorHandler &handler, SymbolTable &table, SymbolScope &global)
-      : NodeErrorHandler(handler), table(table), global(global)
+  SymbolParser(ErrorHandler &handler, SymbolTable &table) : NodeErrorHandler(handler), table(table)
   {
   }
 
@@ -730,15 +728,8 @@ struct SymbolParser : NodeErrorHandler {
           return;
         }
         IdQualified type_id(LocalVar(param.child_first()).identifier());
-        SymbolClass *cls = table.cls_arena.alloc(&scope, arg.id().front(), id);
-        auto [resolved, err] = inst_scope.lookup_class(type_id);
-        error(err);
-        /* Note: Bind to the resolved type to only have one level resolution. */
-        cls->resolved = resolved->resolved ? resolved->resolved : resolved;
-        if (resolved->is_error) {
-          error(param, "Unknown type in template instantiation");
-        }
-        scope.classes.emplace(id, cls);
+        SymbolClass *resolved = inst_scope.lookup_class(type_id).unwrap(this);
+        scope.classes.emplace(id, resolved);
       }
       else {
         IdQualified type = arg.type();
@@ -788,68 +779,63 @@ struct SymbolParser : NodeErrorHandler {
       fn_sym->arg_types.emplace_back(type);
       fn_sym->arg_defaults.emplace_back(arg.declarator().initial_value().expr());
 
-      auto generate_resolved_builtin = [&](const char *builtin) {
-        SymbolVariable *resolved = table.var_arena.alloc(*var);
-        var->resolved = resolved;
-        resolved->identifier = builtin;
-      };
       switch (attr.res_type) {
         case ResourceType::BASE_INSTANCE:
-          generate_resolved_builtin("gpu_BaseInstance");
+          var->identifier = "gpu_BaseInstance";
           break;
         case ResourceType::FRONT_FACING:
-          generate_resolved_builtin("gl_FrontFacing");
+          var->identifier = "gl_FrontFacing";
           break;
         case ResourceType::INSTANCE_ID:
-          generate_resolved_builtin("gl_InstanceID");
+          var->identifier = "gl_InstanceID";
           break;
         case ResourceType::POINT_SIZE:
-          generate_resolved_builtin("gl_PointSize");
+          var->identifier = "gl_PointSize";
           break;
         case ResourceType::CLIP_DISTANCES:
-          generate_resolved_builtin("gl_ClipDistance");
+          var->identifier = "gl_ClipDistance";
           break;
         case ResourceType::LAYER:
-          generate_resolved_builtin("gl_Layer");
+          var->identifier = "gl_Layer";
           break;
         case ResourceType::INSTANCE_INDEX:
-          generate_resolved_builtin("gpu_InstanceIndex");
+          var->identifier = "gpu_InstanceIndex";
           break;
         case ResourceType::VIEWPORT_INDEX:
-          generate_resolved_builtin("gpu_ViewportIndex");
+          var->identifier = "gpu_ViewportIndex";
           break;
         case ResourceType::VERTEX_ID:
-          generate_resolved_builtin("gl_VertexID");
+          var->identifier = "gl_VertexID";
           break;
         case ResourceType::POSITION:
-          generate_resolved_builtin("gl_Position");
+          var->identifier = "gl_Position";
           break;
         case ResourceType::FRAG_DEPTH:
-          generate_resolved_builtin("gl_FragDepth");
+          var->identifier = "gl_FragDepth";
           break;
         case ResourceType::FRAG_COORD:
-          generate_resolved_builtin("gl_FragCoord");
+          var->identifier = "gl_FragCoord";
           break;
         case ResourceType::FRAG_STENCIL_REF:
-          generate_resolved_builtin("gl_FragStencilRefARB");
+          var->identifier = "gl_FragStencilRefARB";
           break;
         case ResourceType::POINT_COORD:
-          generate_resolved_builtin("gl_PointCoord");
+          var->identifier = "gl_PointCoord";
           break;
         case ResourceType::LOCAL_INVOCATION_ID:
-          generate_resolved_builtin("gl_GlobalInvocationID");
+          var->identifier = "gl_GlobalInvocationID";
           break;
         case ResourceType::LOCAL_INVOCATION_INDEX:
-          generate_resolved_builtin("gl_LocalInvocationIndex");
+          var->identifier = "gl_LocalInvocationIndex";
           break;
         case ResourceType::GLOBAL_INVOCATION_ID:
-          generate_resolved_builtin("gl_GlobalInvocationID");
+          var->identifier = "gl_GlobalInvocationID";
           break;
         case ResourceType::WORK_GROUP_ID:
-          generate_resolved_builtin("gl_WorkGroupID");
+          var->identifier = "gl_WorkGroupID";
           break;
         case ResourceType::NUM_WORK_GROUP:
-          generate_resolved_builtin("gl_NumWorkGroups");
+          var->identifier = "gl_NumWorkGroups";
           break;
         case ResourceType::RESOURCE_TABLE:
           if (type->srt_type != ResourceTableType::RESOURCE_TABLE) {
@@ -1056,20 +1042,12 @@ struct SymbolParser : NodeErrorHandler {
     scope.variables.emplace(sym->identifier, sym);
     /* Save value for the next member. */
     enum_cls->enum_last_val = sym->value;
-
-    /* Instantiate in global resolved namespace. */
-    {
-      SymbolVariable *flat_sym = table.var_arena.alloc(*sym);
-      sym->resolved = flat_sym;
-      flat_sym->resolved = sym;
-      flat_sym->identifier = prefix + sym->identifier;
-      global.variables.try_emplace(flat_sym->identifier, flat_sym);
-    }
-
+    /* Alias to the parent namespace for non-anonymous, non-class enum. */
     if (!cls.is_enum_class()) {
-      /* Alias to the parent namespace for non-anonymous, non-class enum. */
       scope.parent->variables.emplace(sym->identifier, sym);
     }
+    /* Set resolved identifier. */
+    sym->identifier = prefix + sym->identifier;
   }
 
   SymbolClass *parse_class_decl(SymbolScope &scope,
@@ -1100,11 +1078,8 @@ struct SymbolParser : NodeErrorHandler {
 
     parse_scope(*cls, decl.body(), prefix + cls->identifier + ns_sep, temp);
 
-    /* Instantiate in global resolved namespace. */
-    SymbolClass *flat_cls = table.cls_arena.alloc(*cls);
-    cls->resolved = flat_cls;
-    flat_cls->identifier = prefix + cls->identifier;
-    global.classes.try_emplace(flat_cls->identifier, flat_cls);
+    /* Set identifier to resolved symbol. */
+    cls->identifier = prefix + cls->identifier;
 
     if (cls->is_enum) {
       auto [underlying_type, err] = scope.lookup_class(decl.parent_class());
@@ -1121,8 +1096,8 @@ struct SymbolParser : NodeErrorHandler {
     if (cls->is_anonymous) {
       /* Instantiate into parent class as member. */
       SymbolVariable *var = table.var_arena.alloc(
-          &scope, cls, decl.front(), cls->identifier + ns_sep);
-      scope.variables.emplace(cls->identifier, var);
+          &scope, cls, decl.front(), cls->original + ns_sep);
+      scope.variables.emplace(cls->original, var);
 
       var->type = cls;
       var->set_offset(parent_class.is_union(), offset);
@@ -1145,24 +1120,16 @@ struct SymbolParser : NodeErrorHandler {
 
     parse_scope(*fn, func.body(), prefix + fn->identifier + ns_sep, temp);
 
-    {
-      /* Instantiate in global resolved namespace. */
-      string identifier_mangled;
-      switch (fn->fn_type) {
-        case SymbolFunction::GLOBAL:
-        case SymbolFunction::STATIC:
-          identifier_mangled = prefix + fn->identifier;
-          break;
-        case SymbolFunction::MEMBER:
-          /* Member function use overload resolution. */
-          identifier_mangled = "_" + fn->identifier;
-          break;
-      }
-      SymbolFunction *flat_func = table.fun_arena.alloc(*fn);
-      fn->resolved = flat_func;
-      flat_func->resolved = fn;
-      flat_func->identifier = identifier_mangled;
-      global.functions.try_emplace(identifier_mangled, flat_func);
+    /* Set resolved identifier. */
+    switch (fn->fn_type) {
+      case SymbolFunction::GLOBAL:
+      case SymbolFunction::STATIC:
+        fn->identifier = prefix + fn->identifier;
+        break;
+      case SymbolFunction::MEMBER:
+        /* Member function use overload resolution. */
+        fn->identifier = "_" + fn->identifier;
+        break;
     }
 
     return fn;
@@ -1328,13 +1295,8 @@ struct SymbolParser : NodeErrorHandler {
         &scope, type, decl.front(), string(decl.identifier().str()));
     sym->is_static = true;
     scope.variables.emplace(sym->identifier, sym);
-
-    /* Instantiate in global resolved namespace. */
-    SymbolVariable *flat_var = table.var_arena.alloc(*sym);
-    sym->resolved = flat_var;
-    flat_var->resolved = sym;
-    flat_var->identifier = prefix + sym->identifier;
-    global.variables.try_emplace(flat_var->identifier, flat_var);
+    /* Set resolved identifier. */
+    sym->identifier = prefix + sym->identifier;
   }
 
   void parse_structured_binding(SymbolScope &scope, StructuredBinding decl)
@@ -1370,10 +1332,7 @@ struct SymbolParser : NodeErrorHandler {
       sym->parent = &scope;
       scope.variables.emplace(sym->identifier, sym);
       /* Resolve to the tmp variable member. */
-      SymbolVariable *res = table.var_arena.alloc(*var);
-      res->identifier = tmp->identifier + '.' + var->identifier;
-      res->parent = &scope;
-      sym->resolved = res;
+      sym->identifier = tmp->identifier + '.' + var->identifier;
 
       id = id.next();
     }
@@ -1495,9 +1454,9 @@ struct SymbolParser : NodeErrorHandler {
                       string(parser.first_non_const_var_in_subscript.str()) +
                       "' is not defined as 'const'");
           }
-          else if (type->resolved != expr_cls->resolved) {
+          else if (type != expr_cls) {
             error(decl,
-                  "Reference to type '" + type->resolved->identifier +
+                  "Reference to type '" + type->identifier +
                       "' cannot bind to a value of unrelated type '" + expr_cls->identifier + "'");
           }
 
@@ -1518,36 +1477,31 @@ struct SymbolParser : NodeErrorHandler {
           /* Append accessor function. */
           string suffix = cls->is_union ? "()" : "";
           string prefix = cls->is_union ? "_" : "";
-          /* Create a resolved symbol. */
-          SymbolVariable *resolved = table.var_arena.alloc(&scope, type, decl);
-          resolved->identifier = anon_prefix + prefix + resolved->identifier + suffix;
-          sym->resolved = resolved;
           /* Alias to the first, non-anonymous parent. */
           named_parent->variables.emplace(sym->identifier, sym);
+          /* Rename to the resolved symbol. */
+          sym->identifier = anon_prefix + prefix + sym->identifier + suffix;
+
+          if (sym->is_static) {
+            error(var,
+                  "Static data member '" + string(decl.identifier().str()) + "' not allowed in " +
+                      (cls->is_anonymous ? "anonymous " : "local ") +
+                      (cls->is_union ? "union" : "struct"));
+          }
         }
       }
 
       if (sym->is_static) {
-        /* Instantiate in global resolved namespace. */
-        SymbolVariable *flat_var = table.var_arena.alloc(*sym);
-        sym->resolved = flat_var;
-        flat_var->resolved = sym;
-        if (attr.res_type != ResourceType::VERT_ATTR_OUT &&
-            attr.res_type != ResourceType::FRAG_OUT)
+        if (attr.res_type == ResourceType::VERT_ATTR_OUT ||
+            attr.res_type == ResourceType::FRAG_OUT)
         {
-          /* Some resource are declared in global namespace without prefix. */
-          flat_var->identifier = sym->identifier;
+          sym->identifier = prefix + sym->identifier;
         }
-        else {
-          flat_var->identifier = prefix + sym->identifier;
-        }
-        global.variables.try_emplace(flat_var->identifier, flat_var);
       }
 
       if (sym->is_constexpr) {
         if (sym->is_static) {
           sym->value = initialize_constexpr(scope, sym->type, decl);
-          sym->resolved->value = sym->value;
         }
         else {
           error(var.type(), "Constexpr declaration must also be static");
@@ -1609,8 +1563,8 @@ struct SymbolParser : NodeErrorHandler {
     do {
       /* Union members need to go through the getter functions. */
       parent = cls->parent->as_class();
-      string access = parent && parent->is_union && parent->is_anonymous ? "()" : "";
-      prefix = cls->identifier + "_" + access + "." + prefix;
+      bool access = parent && parent->is_union && parent->is_anonymous;
+      prefix = (access ? "_" : "") + cls->original + "_" + (access ? "()" : "") + "." + prefix;
     } while ((cls = parent, cls && cls->is_anonymous));
 
     return {prefix, cls};
@@ -1618,7 +1572,8 @@ struct SymbolParser : NodeErrorHandler {
 };  // namespace blender::gpu::shader::parser
 
 SymbolVariable::SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarator decl)
-    : Symbol(string(decl.identifier().str()), decl.front(), parent),
+    : Symbol(
+          string(decl.identifier().str()), string(decl.identifier().str()), decl.front(), parent),
       type(type),
       array_dimensions(decl.array().dimensions()),
       is_static(decl.type().is_static()),
@@ -1875,10 +1830,8 @@ Result<SymbolFunction *> SymbolScope::lookup_function(IdQualified id,
   }
   else if (func->is_error) {
     /* Try to resolve type constructors (only for builtins for now). */
-    if (auto [cls, err_cls] = lookup_class(id);
-        !cls->is_error && cls->resolved && cls->resolved->is_builtin)
-    {
-      func = root_scope()->lookup_function(cls->resolved->identifier);
+    if (auto [cls, err_cls] = lookup_class(id); !cls->is_error && cls && cls->is_builtin) {
+      func = root_scope()->lookup_function(cls->identifier);
       err = {};
     }
     else {
@@ -2215,7 +2168,7 @@ void SymbolScope::print() const
   auto print_node = [&](auto &self, auto *node, int depth, const vector<bool> &is_last) -> void {
     struct Child {
       SymbolType type;
-      const Symbol *sym;
+      string sym;
       const Symbol *resolved;
       const SymbolClass *cls;
     };
@@ -2223,20 +2176,20 @@ void SymbolScope::print() const
     vector<Child> children;
     /* Gather children based on the current node type. */
     for (const auto &[name, var] : node->variables) {
-      children.emplace_back(SymbolType::Variable, var, var->resolved, var->type);
+      children.emplace_back(SymbolType::Variable, var->identifier, var, var->type);
     }
     for (const auto &[name, func] : node->functions) {
-      children.emplace_back(SymbolType::Function, func, func->resolved, nullptr);
+      children.emplace_back(SymbolType::Function, func->identifier, func, nullptr);
     }
     for (const auto &[name, cls] : node->classes) {
-      children.emplace_back(SymbolType::Class, cls, cls->resolved, nullptr);
+      children.emplace_back(SymbolType::Class, name, cls, nullptr);
     }
     for (const auto &[name, scope_ptr] : node->scopes) {
-      children.emplace_back(SymbolType::Scope, scope_ptr, nullptr, nullptr);
+      children.emplace_back(SymbolType::Scope, scope_ptr->identifier, nullptr, nullptr);
     }
     /* Sort elements to guarantee deterministic output (Row -> Col -> Alphabetical). */
     sort(children.begin(), children.end(), [](const Child &a, const Child &b) {
-      return a.sym->loc < b.sym->loc;
+      return a.resolved->loc < b.resolved->loc;
     });
 
     /* Iterate and print the sorted children. */
@@ -2246,16 +2199,16 @@ void SymbolScope::print() const
       vector<bool> next_is_last = is_last;
       next_is_last.push_back(child_is_last);
 
-      print_line(children[i].sym->loc,
+      print_line(children[i].resolved->loc,
                  children[i].type,
-                 children[i].sym->identifier,
+                 children[i].sym,
                  children[i].cls,
                  children[i].resolved ? children[i].resolved->identifier : "",
                  depth + 1,
                  next_is_last);
 
       if (children[i].type == SymbolType::Scope) {
-        const auto *next_node = static_cast<const SymbolScope *>(children[i].sym);
+        const auto *next_node = static_cast<const SymbolScope *>(children[i].resolved);
         /* Recurse deeper if the child acts as a container for other symbols. */
         self(self, next_node, depth + 1, next_is_last);
       }
@@ -2269,13 +2222,12 @@ SymbolTable::SymbolTable(ParserBase &parser)
 {
   LocalScope node = parser.root();
   root = scp_arena.alloc(node);
-  flatten_root = scp_arena.alloc(node);
   register_builtins(node);
 }
 
 void SymbolTable::parse(LocalScope node, ErrorHandler &err_handler)
 {
-  SymbolParser symbol_parser(err_handler, *this, *flatten_root);
+  SymbolParser symbol_parser(err_handler, *this);
   symbol_parser.parse_scope(*root, node, "");
 
   if (err_handler.err.has_value()) {
@@ -2381,10 +2333,7 @@ void SymbolTable::register_builtins(LocalScope node)
     cls.is_error = t.id == err_symbol;
 
     SymbolClass *sym = cls_arena.alloc(cls);
-    SymbolClass *sym_resolved = cls_arena.alloc(cls);
-    sym->resolved = sym_resolved;
     root->classes.emplace(t.id, sym);
-    flatten_root->classes.emplace(t.id, sym_resolved);
   }
 
   struct BuiltinVector {
@@ -2443,10 +2392,6 @@ void SymbolTable::register_builtins(LocalScope node)
     cls->operator_subscript = sub_op;
     cls->functions.emplace(subscript_operator_id, sub_op);
 
-    SymbolClass *sym_resolved = cls_arena.alloc(*cls);
-    cls->resolved = sym_resolved;
-    flatten_root->classes.emplace(t.id, sym_resolved);
-
     for (int i = 0; i < t.comp; i++) {
       {
         string id(swizzle_xyzw[i]);
@@ -2501,10 +2446,7 @@ void SymbolTable::register_builtins(LocalScope node)
     SymbolFunction *sym = fun_arena.alloc(root, tok, string(f.id), SymbolFunction::GLOBAL);
     sym->is_error = f.id == err_symbol;
     sym->return_type = root->lookup_class(f.return_type);
-    SymbolFunction *sym_resolved = fun_arena.alloc(*sym);
-    sym->resolved = sym_resolved;
     root->functions.emplace(sym->identifier, sym);
-    flatten_root->functions.emplace(sym->identifier, sym_resolved);
   }
 
   /* Builtin operators. */
@@ -2560,7 +2502,6 @@ void SymbolTable::register_builtins(LocalScope node)
     for (auto arg : fn.arg_types) {
       sym->arg_types.emplace_back(root->lookup_class(arg));
     }
-    sym->resolved = sym;
     root->function_emplace(sym);
     /* function_emplace will mutate the identifier if this is an overload.
      * Fix that. */
@@ -2624,14 +2565,11 @@ void SymbolTable::register_builtins(LocalScope node)
   /* Boolean constants. */
   for (auto c : consts) {
     SymbolVariable *sym = var_arena.alloc(root, root->lookup_class(c.type), tok, string(c.id));
-    SymbolVariable *sym_resolved = var_arena.alloc(*sym);
     sym->is_error = c.id == err_symbol;
-    sym->resolved = sym_resolved;
     sym->is_static = c.is_constexpr;
     sym->is_constexpr = c.is_constexpr;
     sym->value = c.value;
     root->variables.emplace(sym->identifier, sym);
-    flatten_root->variables.emplace(sym->identifier, sym_resolved);
   }
 }
 

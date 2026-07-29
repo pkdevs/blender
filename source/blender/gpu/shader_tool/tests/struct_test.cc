@@ -1320,7 +1320,7 @@ float2 g;)";
   float a;
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
-    EXPECT_EQ(error, "Implicit 12 bytes padding at the end of 'S' , add manual padding");
+    EXPECT_EQ(error, "Implicit 12 bytes padding at the end of 'S', add manual padding");
     auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "");
   }
@@ -1330,7 +1330,7 @@ float2 g;)";
   float2 a;
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
-    EXPECT_EQ(error, "Implicit 8 bytes padding at the end of 'S' , add manual padding");
+    EXPECT_EQ(error, "Implicit 8 bytes padding at the end of 'S', add manual padding");
     auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "");
   }
@@ -1348,14 +1348,14 @@ float2 g;)";
   float b;
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
-    EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S' , add manual padding");
+    EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S', add manual padding");
   }
   {
     string input = R"(
   packed_float3 a;
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
-    EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S' , add manual padding");
+    EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S', add manual padding");
   }
   {
     string input = R"(
@@ -1364,7 +1364,7 @@ float2 g;)";
   float c;
   )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
-    EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S' , add manual padding");
+    EXPECT_EQ(error, "Implicit 4 bytes padding at the end of 'S', add manual padding");
     auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "");
   }
@@ -1375,7 +1375,7 @@ T a;
 T b[2];
 )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
-    EXPECT_EQ(error, "Implicit 12 bytes padding at the end of 'T' , add manual padding");
+    EXPECT_EQ(error, "Implicit 12 bytes padding at the end of 'T', add manual padding");
     auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "Implicit 12 bytes padding before 'b', add manual padding");
   }
@@ -1386,7 +1386,7 @@ float a;
 T b;
 )";
     auto [output, _, error] = process_test_uniform(input, Language::BSL);
-    EXPECT_EQ(error, "Implicit 8 bytes padding at the end of 'T' , add manual padding");
+    EXPECT_EQ(error, "Implicit 8 bytes padding at the end of 'T', add manual padding");
     auto [output_ssbo, m, error_ssbo] = process_test_storage(input, Language::BSL);
     EXPECT_EQ(error_ssbo, "Implicit 12 bytes padding before 'b', add manual padding");
   }

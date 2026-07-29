@@ -155,7 +155,7 @@ struct ExpressionTypeParser {
     }
 
     if (node.type() != NodeType::Op) {
-      error(node, "Invalid operator for type '" + left->resolved->identifier + "'");
+      error(node, "Invalid operator for type '" + left->identifier + "'");
     }
 
     /* Member access operator. */
@@ -440,7 +440,7 @@ struct ExpressionTypeParser {
     ctx.is_subscript_expr = true;
     auto [type, err] = ctx.eval();
     error(err);
-    if (type->resolved != int_cls->resolved && type->resolved != uint_cls->resolved) {
+    if (type != int_cls && type != uint_cls) {
       error(node, "Array subscript is not an integer");
     }
     /* Discard checking for temporary. It is allowed to have temporary inside subscript

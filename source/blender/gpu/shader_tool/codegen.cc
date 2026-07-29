@@ -284,7 +284,7 @@ struct CodegenContext : NodeErrorHandler {
 
     jump_to(stmt.front());
     builder << stmt.type();
-    builder << pipeline->resolved->identifier;
+    builder << pipeline->identifier;
     builder.curr = params.front();
     match_if('(');
 
@@ -302,7 +302,7 @@ struct CodegenContext : NodeErrorHandler {
         error(vert_fn, "Expected vertex shader entry point function");
         return;
       }
-      builder << fn->resolved->identifier;
+      builder << fn->identifier;
       builder.curr = vert_fn.back().next();
       match_if(',');
 
@@ -317,7 +317,7 @@ struct CodegenContext : NodeErrorHandler {
         error(frag_fn, "Expected fragment shader entry point function");
         return;
       }
-      builder << fn2->resolved->identifier;
+      builder << fn2->identifier;
       builder.curr = frag_fn.back().next();
       match_if(',');
 
@@ -335,7 +335,7 @@ struct CodegenContext : NodeErrorHandler {
         error(comp_fn, "Expected compute shader entry point function");
         return;
       }
-      builder << fn->resolved->identifier;
+      builder << fn->identifier;
       builder.curr = comp_fn.back().next();
       match_if(',');
 
@@ -345,7 +345,7 @@ struct CodegenContext : NodeErrorHandler {
     while (constants_init.is_valid()) {
       if (Constructor ctor(constants_init.child_first()); ctor.is_valid()) {
         auto *cls = scope.lookup_class(ctor.id()).unwrap(this);
-        builder << cls->resolved->identifier;
+        builder << cls->identifier;
         builder << ctor.initializer_list();
       }
       else {
@@ -384,7 +384,7 @@ struct CodegenContext : NodeErrorHandler {
 
     jump_to(decl_front);
     /* Replace 'auto [a, b]' by the tmp variable declaration. */
-    string decl_str = tmp_var->type->resolved->identifier + " " + tmp_var->identifier;
+    string decl_str = tmp_var->type->identifier + " " + tmp_var->identifier;
     /* Add padding until the assign statement. */
     builder.ss << decl_str + string(max(0, pad - int(decl_str.size())), ' ');
 
@@ -697,7 +697,7 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     if (cls.is_srt()) {
-      builder.ss << "\n#pragma resource_defines " + cls.resolved->identifier + "\n";
+      builder.ss << "\n#pragma resource_defines " + cls.identifier + "\n";
     }
 
     /* Rollback to front. */
@@ -709,10 +709,10 @@ struct CodegenContext : NodeErrorHandler {
     skip_node(decl.attributes());
 
     if (cls.is_anonymous) {
-      builder.ss << cls.resolved->identifier << " ";
+      builder.ss << cls.identifier << " ";
     }
     else {
-      builder << cls.resolved->identifier + trivia(decl.identifier());
+      builder << cls.identifier + trivia(decl.identifier());
     }
 
     match_if('{');
@@ -884,7 +884,7 @@ struct CodegenContext : NodeErrorHandler {
 
   string class_default_constructor(ClassDecl decl, SymbolClass &cls)
   {
-    const string &cls_id = cls.resolved->identifier;
+    const string &cls_id = cls.identifier;
 
     string members;
     if (cls.is_union) {
@@ -915,7 +915,7 @@ struct CodegenContext : NodeErrorHandler {
                   access += "[" + var + "]";
                   sub = sub.next();
                 }
-                members += "r." + var->identifier + access + "=" + default_value(*type) + ";";
+                members += "r." + var->original + access + "=" + default_value(*type) + ";";
                 members += close;
               }
             }
@@ -927,7 +927,7 @@ struct CodegenContext : NodeErrorHandler {
               /* Anonymous class are instantiated as regular members. */
               jump_to(decl.front());
               string type_id = "a" + to_string(class_id);
-              SymbolClass *type = cls.lookup_class(type_id)->resolved;
+              SymbolClass *type = cls.lookup_class(type_id);
               string member_id = type_id + "_";
 
               members += "r." + member_id + "=" + default_value(*type) + ";";
@@ -1018,10 +1018,9 @@ struct CodegenContext : NodeErrorHandler {
   string union_getter(SymbolClass &union_type, SymbolVariable &member)
   {
     SymbolClass &member_type = *member.type;
-    const string &member_id = member.identifier;
-    string union_type_id = union_type.resolved->identifier;
-    string fn_type_id = member_type.resolved->identifier;
-    string fn_name = "_" + member_id;
+    string union_type_id = union_type.identifier;
+    string fn_type_id = member_type.identifier;
+    string fn_name = "_" + member.original;
     string fn_args = "(" + union_type_id + " this_)";
     string fn_body = "{\n";
     if (member_type.is_builtin) {
@@ -1051,10 +1050,9 @@ struct CodegenContext : NodeErrorHandler {
   string union_setter(SymbolClass &union_type, SymbolVariable &member)
   {
     SymbolClass &member_type = *member.type;
-    const string &member_id = member.identifier;
-    string union_type_id = union_type.resolved->identifier;
-    string member_type_id = member_type.resolved->identifier;
-    string fn_name = "_" + member_id + "_set_";
+    string union_type_id = union_type.identifier;
+    string member_type_id = member_type.identifier;
+    string fn_name = "_" + member.original + "_set_";
     string fn_args = "(" + union_type_id + " &this_, " + member_type_id + " v)";
     string fn_body = "{\n";
     if (member_type.is_builtin) {
@@ -1064,7 +1062,7 @@ struct CodegenContext : NodeErrorHandler {
       }
       string to_var = "this_." +
                       union_data_access(member.offset, member_type.size, union_type.size);
-      string access = "v." + member.identifier;
+      string access = "v." + member.original;
       fn_body += "  " + to_var + " = " + member_to_float(*member.type, access) + ";\n";
     }
     else {
@@ -1097,7 +1095,7 @@ struct CodegenContext : NodeErrorHandler {
     string str;
     for (auto &[k, var] : scope->variables) {
       if (var->type->is_srt() && var->type->srt_type != ResourceTableType::VERTEX_OUT) {
-        str += " && defined(CREATE_INFO_" + var->type->resolved->identifier + ")";
+        str += " && defined(CREATE_INFO_" + var->type->identifier + ")";
       }
     }
     return str.empty() ? str : str.substr(4);
@@ -1107,7 +1105,7 @@ struct CodegenContext : NodeErrorHandler {
   {
     string str;
     if (fn->is_entry_point()) {
-      str += " && defined(ENTRY_POINT_" + fn->resolved->identifier + ")";
+      str += " && defined(ENTRY_POINT_" + fn->identifier + ")";
     }
     if (string scope_str = condition(static_cast<SymbolScope *>(fn)); !scope_str.empty()) {
       str += " && " + scope_str;
@@ -1138,7 +1136,7 @@ struct CodegenContext : NodeErrorHandler {
     id_type(decl.return_type(), *inst_fn);
 
     builder.curr = decl.identifier().back();
-    builder << inst_fn->resolved->identifier + trivia(decl.identifier());
+    builder << inst_fn->identifier + trivia(decl.identifier());
 
     if (inst_fn->is_entry_point()) {
       builder.curr = decl.arguments().back();
@@ -1189,7 +1187,7 @@ struct CodegenContext : NodeErrorHandler {
 
       SymbolVariable *var = fn.lookup_variable(arg.identifier());
 
-      const string &resolved_type = var->type->resolved->identifier;
+      const string &resolved_type = var->type->identifier;
 
       switch (attr.res_type) {
         case ResourceType::VERTEX_ID:
@@ -1270,7 +1268,7 @@ struct CodegenContext : NodeErrorHandler {
       create_info_decl += "DEFINE(\"EMPTY_CREATE_INFO\")\n";
     }
 
-    create_info_decl = "GPU_SHADER_CREATE_INFO(" + fn.resolved->identifier + "_infos_)\n" +
+    create_info_decl = "GPU_SHADER_CREATE_INFO(" + fn.identifier + "_infos_)\n" +
                        create_info_decl + "GPU_SHADER_CREATE_END()\n";
     metadata.create_infos_declarations.emplace_back(create_info_decl);
   }
@@ -1555,15 +1553,15 @@ struct CodegenContext : NodeErrorHandler {
             (!is_for_loop || (child.prev().is_valid() && child.next().is_valid())))
         {
           auto *type = symbols.expr_type_analysis(scope, LocalStmt(child).expr()).unwrap(this);
-          if (type->resolved->identifier == "int") {
+          if (type->identifier == "int") {
             builder.ss << "!=0";
           }
-          else if (type->resolved->identifier == "uint") {
+          else if (type->identifier == "uint") {
             builder.ss << "!=0u";
           }
-          else if (type->resolved->identifier != "bool") {
+          else if (type->identifier != "bool") {
             error(child,
-                  "Value of type '" + type->resolved->identifier +
+                  "Value of type '" + type->identifier +
                       "' is not contextually convertible to 'bool'");
           }
         }
@@ -1661,7 +1659,7 @@ struct CodegenContext : NodeErrorHandler {
     if (decl.type().id().str() == "auto") {
       Declarator d = decl.child_first(NodeType::Declarator);
       auto *cls = symbols.resolve_auto_type(scope, d).unwrap(this);
-      builder << cls->resolved->identifier + trivia(decl.type().id());
+      builder << cls->identifier + trivia(decl.type().id());
     }
     else {
       id_type(decl.type(), scope);
@@ -1755,7 +1753,7 @@ struct CodegenContext : NodeErrorHandler {
     SymbolVariable *sym = id_var_resolved(var.identifier(), scope);
 
     if (!sym->is_constexpr) {
-      member_access(expr_scope, var, sym->type->resolved, sym);
+      member_access(expr_scope, var, sym->type, sym);
     }
 
     builder.curr = var.back().next();
@@ -1953,23 +1951,23 @@ struct CodegenContext : NodeErrorHandler {
       /* Only use aggregate syntax for arrays. */
       match_if('{');
     }
-    else if (cls->resolved->is_builtin) {
+    else if (cls->is_builtin) {
       /* Use constructor syntax for builtin types. */
-      builder << cls->resolved->identifier + "(" + trivia(builder.curr);
+      builder << cls->identifier + "(" + trivia(builder.curr);
     }
     else if (is_empty) {
       /* Call default constructor. */
-      if (cls->resolved->is_builtin) {
-        builder << cls->resolved->identifier + "(0" + trivia(builder.curr);
+      if (cls->is_builtin) {
+        builder << cls->identifier + "(0" + trivia(builder.curr);
       }
       else {
-        builder << cls->resolved->identifier + "_ctor_(" + trivia(builder.curr);
+        builder << cls->identifier + "_ctor_(" + trivia(builder.curr);
       }
     }
     else {
       /* '_ctor' macro resolve to either aggregate or default constructor depending on target
        * language. */
-      builder << "_ctor(" + cls->resolved->identifier + ")" + trivia(builder.curr);
+      builder << "_ctor(" + cls->identifier + ")" + trivia(builder.curr);
     }
 
     DesignatedInitializer designated(list.child_first());
@@ -2018,7 +2016,7 @@ struct CodegenContext : NodeErrorHandler {
       /* Only use aggregate syntax for arrays. */
       match_if('}');
     }
-    else if (cls->resolved->is_builtin || is_empty) {
+    else if (cls->is_builtin || is_empty) {
       /* Use constructor syntax for builtin types. */
       builder << ")" + trivia(builder.curr);
     }
@@ -2037,9 +2035,6 @@ struct CodegenContext : NodeErrorHandler {
     else if (cls->is_error) {
       error(id, "Unknown type name");
     }
-    if (cls->resolved) {
-      return cls->resolved;
-    }
     return cls;
   }
 
@@ -2056,7 +2051,7 @@ struct CodegenContext : NodeErrorHandler {
   {
     auto it = scope.classes.find(id);
     SymbolClass *cls = it->second;
-    builder.ss << cls->resolved->identifier;
+    builder.ss << cls->identifier;
     return cls;
   }
 
@@ -2074,7 +2069,7 @@ struct CodegenContext : NodeErrorHandler {
   {
     SymbolFunction *func = id_func_resolved_lookup(id, params, scope);
     builder.curr = id.back();
-    builder << func->resolved->identifier + trivia(id);
+    builder << func->identifier + trivia(id);
     return func;
   }
 
@@ -2101,7 +2096,7 @@ struct CodegenContext : NodeErrorHandler {
       }
       else {
         /* SRT type is used in an expression (likely as function argument). Call the ctor. */
-        builder << var->type->resolved->identifier + "_ctor_()" + trivia(id);
+        builder << var->type->identifier + "_ctor_()" + trivia(id);
       }
       return var;
     }
@@ -2116,13 +2111,8 @@ struct CodegenContext : NodeErrorHandler {
       builder.ss << "this_.";
     }
 
-    if (var->resolved) {
-      builder.curr = id.back();
-      builder << var->resolved->identifier + trivia(id);
-    }
-    else {
-      builder << id;
-    }
+    builder.curr = id.back();
+    builder << var->identifier + trivia(id);
     return var;
   }
 
@@ -2139,7 +2129,7 @@ struct CodegenContext : NodeErrorHandler {
     /* Note we only resolve static variable. */
     if (var->is_static) {
       builder.curr = id.back();
-      builder << var->resolved->identifier + trivia(id);
+      builder << var->identifier + trivia(id);
     }
     else {
       builder << id;
@@ -2154,7 +2144,7 @@ struct CodegenContext : NodeErrorHandler {
 
   void parse_class_metadata(SymbolClass &cls, LocalScope body)
   {
-    string &cls_id = cls.resolved->identifier;
+    string &cls_id = cls.identifier;
     metadata::ResourceTable srt;
     metadata::VertexInputs vertex_in;
     metadata::StageInterface vertex_out;
@@ -2169,7 +2159,7 @@ struct CodegenContext : NodeErrorHandler {
     for (VarDecl decl : body.children_of_type<VarDecl>()) {
       Declarator d = decl.child_first(NodeType::Declarator);
       SymbolVariable *var = cls.lookup_variable(d.identifier());
-      const string &type_name = var->type->resolved->identifier;
+      const string &type_name = var->type->identifier;
       const string &var_name = var->identifier;
       switch (cls.srt_type) {
         case ResourceTableType::RESOURCE_TABLE:

@@ -315,6 +315,8 @@ struct SourceLocation {
 
 struct Symbol {
   string identifier;
+  /* Unresolved identifier */
+  string original;
   SourceLocation loc;
   SymbolScope *parent = nullptr;
 };
@@ -372,10 +374,10 @@ struct SymbolScope : Symbol {
   /* Function scope act as anonymous scopes but still have identifier. */
   enum Type { FUNCTION, CLASS, NAMESPACE, LOCAL, ROOT } type = ROOT;
 
-  SymbolScope(LocalScope decl) : Symbol("" /* Root */, decl.back(), nullptr) {}
+  SymbolScope(LocalScope decl) : Symbol("" /* Root */, "", decl.back(), nullptr) {}
 
   SymbolScope(SymbolScope *parent, Token tok, const string &id, Type type)
-      : Symbol(id, tok, parent), type(type)
+      : Symbol(id, id, tok, parent), type(type)
   {
   }
 
@@ -441,8 +443,6 @@ struct SymbolScope : Symbol {
 };
 
 struct SymbolClass : SymbolScope {
-  SymbolClass *resolved = nullptr;
-
   ResourceTableType srt_type = ResourceTableType::NONE;
 
   SymbolFunction *operator_subscript = nullptr;
@@ -485,7 +485,6 @@ struct SymbolClass : SymbolScope {
 };
 
 struct SymbolFunction : SymbolScope {
-  SymbolFunction *resolved = nullptr;
   /* Single linked list of overloads. */
   SymbolFunction *overload_next = nullptr;
 
@@ -556,8 +555,6 @@ struct SymbolFunction : SymbolScope {
 };
 
 struct SymbolVariable : Symbol {
-  SymbolVariable *resolved = nullptr;
-
   SymbolClass *type = nullptr; /* TODO rename to type */
 
   ResourceType res_type = ResourceType::NONE;
@@ -584,12 +581,17 @@ struct SymbolVariable : Symbol {
   SymbolVariable(SymbolScope *parent, SymbolClass *type, Declarator decl);
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, EnumValue decl)
-      : Symbol(string(decl.identifier().str()), decl.front(), parent), type(type), is_static(true)
+      : Symbol(string(decl.identifier().str()),
+               string(decl.identifier().str()),
+               decl.front(),
+               parent),
+        type(type),
+        is_static(true)
   {
   }
 
   SymbolVariable(SymbolScope *parent, SymbolClass *type, Token id, const string &str)
-      : Symbol(str, id, parent), type(type)
+      : Symbol(str, str, id, parent), type(type)
   {
   }
 
@@ -680,7 +682,7 @@ static inline optional<TokenException> get_flat_members_recursive(const SymbolCl
       if (!next_path.empty()) {
         next_path += ".";
       }
-      next_path += var->identifier;
+      next_path += var->original;
     }
     /* Accumulate the total offset from the root struct. */
     int offset = current_offset + var->offset;
@@ -696,10 +698,10 @@ static inline optional<TokenException> get_flat_members_recursive(const SymbolCl
 
     for (int i = 0; i < elements; ++i) {
       string array_accessor = var->array_dimensions > 0 ? "[" + to_string(i) + "]" : "";
-      if (var->type->resolved->is_builtin) {
+      if (var->type->is_builtin) {
         /* Base case: It's a primitive/builtin type. Add to the flat buffer. */
-        out_buffer.emplace_back(var->type->resolved, next_path + array_accessor, offset);
-        offset += var->type->resolved->size;
+        out_buffer.emplace_back(var->type, next_path + array_accessor, offset);
+        offset += var->type->size;
       }
       else {
         /* Recursive step: It's a nested user-defined structure. */
@@ -775,7 +777,6 @@ struct SymbolTable {
   template<typename SymbolT> SymbolT *alloc(SymbolT &&sym);
 
   SymbolScope *root = nullptr;
-  SymbolScope *flatten_root = nullptr;
 
   SymbolTable(ParserBase &builtin_parser);
 
