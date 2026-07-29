@@ -27,7 +27,7 @@ static int node_shader_fn(GPUMaterial *mat,
                           GPUNodeStack *in,
                           GPUNodeStack *out)
 {
-  int zone_id = *reinterpret_cast<int *>(&node->custom3);  // TODO: Assign.
+  int zone_id = *reinterpret_cast<int *>(&node->custom3);
   return GPU_stack_link_zone(mat, node, "LIGHT_ITER_BEGIN", in, out, zone_id, false, 0, 1);
 }
 
