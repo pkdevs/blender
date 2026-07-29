@@ -304,7 +304,7 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/,
     }
     else if (file->typeflag & FILE_TYPE_FTFONT) {
       float color[4];
-      bTheme *btheme = ui::theme::theme_get();
+      const bTheme *btheme = ui::theme::theme_get();
       rgba_uchar_to_float(color, btheme->tui.wcol_tooltip.text);
       thumb = IMB_font_preview(file->redirection_path ? file->redirection_path : full_path,
                                512 * UI_SCALE_FAC,
@@ -314,9 +314,9 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/,
     }
 
     const time_t file_time = (time_t)file->time;
-    const std::tm mod_time = *std::localtime(&file_time);
+    const std::tm mod_time = date_string::localtime_safe(file_time);
     const time_t ts_now = time(nullptr);
-    const std::tm now = *std::localtime(&ts_now);
+    const std::tm now = date_string::localtime_safe(ts_now);
     const char *lang = BLT_lang_get();
     std::string modified_s = blender::date_string::datetime(mod_time,
                                                             lang,
@@ -1081,7 +1081,7 @@ static void file_draw_indicator_icons(const FileList *files,
       /* This on-disk asset no longer matches the asset listing it was downloaded from. */
       ui::icon_draw_ex(icon_x,
                        icon_y,
-                       ICON_ERROR,
+                       ICON_STATUS_WARNING_FILLED,
                        1.0f / UI_SCALE_FAC,
                        1.0f,
                        0.0f,
@@ -1311,9 +1311,9 @@ static const char *filelist_get_details_column_string(
       if (!(file->typeflag & FILE_TYPE_BLENDERLIB) && !FILENAME_IS_CURRPAR(file->relpath)) {
         if (file->draw_data.datetime_str[0] == '\0' || update_stat_strings) {
           const time_t file_time = (time_t)file->time;
-          const std::tm mod_time = *std::localtime(&file_time);
+          const std::tm mod_time = date_string::localtime_safe(file_time);
           const time_t ts_now = time(nullptr);
-          const std::tm now = *std::localtime(&ts_now);
+          const std::tm now = date_string::localtime_safe(ts_now);
           const char *lang = BLT_lang_get();
           std::string modified_s =
               compact ? date_string::date(mod_time, lang, date_string::DateFormat(U.date_format)) :
@@ -1507,6 +1507,10 @@ void file_draw_list(const bContext *C, ARegion *region)
   }
 
   BLF_batch_draw_begin();
+
+  /* Default text color, used for the empty/not-ready message and column headers when the
+   * per-file loop below does not run (empty directory, no search matches, still loading). */
+  ui::theme::get_color_4ubv(TH_TEXT, text_col);
 
   const bool filelist_loading = !filelist_is_ready(files);
 
@@ -1837,7 +1841,7 @@ static void file_draw_invalid_asset_library_hint(const bContext *C,
   sy -= line_height * 2.2f;
 
   {
-    ui::icon_draw(sx, sy - UI_UNIT_Y, ICON_INFO);
+    ui::icon_draw(sx, sy - UI_UNIT_Y, ICON_STATUS_INFO);
 
     const char *suggestion = RPT_(
         "Asset Libraries are local directories that can contain .blend files with assets inside.\n"
@@ -2034,7 +2038,7 @@ static void file_draw_asset_library_remote_loading_failed_hint(const bContext *C
   {
     uiDefIconTextBut(block,
                      ui::ButtonType::Label,
-                     ICON_CANCEL,
+                     ICON_STATUS_ERROR_FILLED,
                      "Asset Library Download Failed",
                      sx,
                      sy - heading_height,
@@ -2092,9 +2096,9 @@ static void file_draw_invalid_library_hint(const bContext * /*C*/,
       continue;
     }
 
-    int icon = ICON_INFO;
+    int icon = ICON_STATUS_INFO;
     if (report_type > RPT_WARNING) {
-      icon = ICON_ERROR;
+      icon = ICON_STATUS_WARNING_FILLED;
     }
     ui::icon_draw(sx, sy - UI_UNIT_Y, icon);
 

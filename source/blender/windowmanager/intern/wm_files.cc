@@ -559,7 +559,6 @@ static void wm_init_userdef(Main *bmain)
   BLO_sanitize_experimental_features_userpref_blend(&U);
 
   wm_gpu_backend_override_from_userdef();
-  GPU_backend_type_selection_detect();
 }
 
 /* Return codes. */
@@ -3312,9 +3311,9 @@ static std::string wm_open_mainfile_get_description(bContext * /*C*/,
   }
 
   /* Date. */
-  const tm mod_time = *localtime(&stats.st_mtime);
+  const tm mod_time = date_string::localtime_safe(stats.st_mtime);
   const time_t ts_now = time(nullptr);
-  const tm now_tm = *localtime(&ts_now);
+  const tm now_tm = date_string::localtime_safe(ts_now);
   const char *lang = BLT_lang_get();
   std::string modified_s = blender::date_string::datetime(mod_time,
                                                           lang,

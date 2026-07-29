@@ -37,12 +37,12 @@
 
 namespace blender::ed::transform {
 
-#define STRIP_EDGE_PAN_INSIDE_PAD 3.5
-#define STRIP_EDGE_PAN_OUTSIDE_PAD 0 /* Disable clamping for panning, use whole screen. */
-#define STRIP_EDGE_PAN_SPEED_RAMP 1
-#define STRIP_EDGE_PAN_MAX_SPEED 4 /* In UI units per second, slower than default. */
-#define STRIP_EDGE_PAN_DELAY 1.0f
-#define STRIP_EDGE_PAN_ZOOM_INFLUENCE 0.5f
+#define STRIP_EDGE_PAN_INSIDE_PAD 3.5f
+#define STRIP_EDGE_PAN_OUTSIDE_PAD 0.0f /* Disable clamping for panning, use whole screen. */
+#define STRIP_EDGE_PAN_SPEED_RAMP 1.0f
+#define STRIP_EDGE_PAN_MAX_SPEED 26.0f /* In UI units per second, slower than default. */
+#define STRIP_EDGE_PAN_DELAY 0.5f
+#define STRIP_EDGE_PAN_ZOOM_INFLUENCE 0.0f
 
 namespace {
 
@@ -56,24 +56,6 @@ struct TransDataSeq {
   int start_offset;
   /** One of #SEQ_SELECT, #SEQ_LEFTSEL and #SEQ_RIGHTSEL. */
   short sel_flag;
-};
-
-/**
- * Sequencer transform customdata (stored in #TransCustomDataContainer).
- */
-struct TransSeq {
-  TransDataSeq *tdseq;
-  /* Maximum delta allowed along x and y before clamping selected strips/handles. Always active. */
-  rcti offset_clamp;
-  /* Maximum delta before clamping handles to the bounds of underlying content. May be disabled. */
-  int hold_clamp_min, hold_clamp_max;
-
-  /* Initial rect of the view2d, used for computing offset during edge panning. */
-  rctf initial_v2d_cur;
-  ui::View2DEdgePanData edge_pan;
-
-  /* Strips that aren't selected, but their position entirely depends on transformed strips. */
-  VectorSet<Strip *> time_dependent_strips;
 };
 
 }  // namespace
@@ -269,7 +251,7 @@ static void free_transform_custom_data(TransCustomData *custom_data)
 {
   if ((custom_data->data != nullptr) && custom_data->use_free) {
     TransSeq *ts = static_cast<TransSeq *>(custom_data->data);
-    MEM_delete(ts->tdseq);
+    MEM_delete(static_cast<TransDataSeq *>(ts->tdseq));
     MEM_delete(ts);
     custom_data->data = nullptr;
   }
@@ -283,7 +265,7 @@ static void seq_transform_cancel(TransInfo *t, Span<Strip *> transformed_strips)
 
   if (t->remove_on_cancel) {
     for (Strip *strip : transformed_strips) {
-      seq::edit_flag_for_removal(scene, seqbase, strip);
+      seq::edit_flag_for_removal(scene, strip);
     }
     seq::edit_remove_flagged_strips(scene, seqbase);
     vse::sync_active_scene_and_time_with_scene_strip(*t->context);
@@ -505,13 +487,16 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
     bool right_sel = (strip->flag & SEQ_RIGHTSEL);
 
     /* If any strips start out with hold offsets visible, disable handle clamping on init. */
-    if ((strip->startofs < 0 || strip->endofs < 0) && !seq::transform_single_image_check(strip)) {
+    if ((strip->startofs < 0 || strip->end_offset() < 0) &&
+        !seq::transform_single_image_check(strip))
+    {
       t->modifiers &= ~MOD_STRIP_CLAMP_HOLDS;
     }
 
     /* If both handles are selected, there must be enough underlying content to clamp holds. */
     bool can_clamp_holds = !(left_sel && right_sel) ||
-                           (strip->len >= strip->right_handle(scene) - strip->left_handle());
+                           (strip->content_length() >=
+                            strip->right_handle(scene) - strip->left_handle());
     can_clamp_holds &= !seq::transform_single_image_check(strip);
 
     /* A handle is selected. Update x-axis clamping data. */
@@ -537,7 +522,7 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
 
         if (can_clamp_holds) {
           /* Ensure that the right handle's frame is less than or equal to the content end. */
-          ts->hold_clamp_max = min_ii(ts->hold_clamp_max, strip->endofs);
+          ts->hold_clamp_max = min_ii(ts->hold_clamp_max, strip->end_offset());
         }
       }
     }
