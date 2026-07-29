@@ -110,9 +110,9 @@ void animviz_build_motionpath_targets(Object *ob, Vector<MPathTarget> &r_targets
 /* ........ */
 
 /* Converts the given point into NDC space. */
-static void transform_mpath_point_to_camera(Depsgraph &depsgraph,
-                                            Object &camera,
-                                            bMotionPathVert &mpv)
+static float3 transform_mpath_point_to_camera(Depsgraph &depsgraph,
+                                              Object &camera,
+                                              const float3 point)
 {
   Object *cam_eval = DEG_get_evaluated(&depsgraph, &camera);
   /* Aka projection matrix. */
@@ -121,18 +121,18 @@ static void transform_mpath_point_to_camera(Depsgraph &depsgraph,
   BKE_camera_multiview_window_matrix(&scene->r, cam_eval, nullptr, window_matrix.ptr());
   /* World to Object is the view matrix. */
   float4x4 perspective_matrix = window_matrix * cam_eval->world_to_object();
-  const float4 co_clip_space = perspective_matrix * float4(mpv.co[0], mpv.co[1], mpv.co[2], 1.0);
+  const float4 co_clip_space = perspective_matrix * float4(point.x, point.y, point.z, 1.0);
   /* Storing the verts in NDC space which contains lens effects like sensor offset. See
    * `overlay_motion_path.hh/motion_path_sync`. Negative w values are behind the camera, thus
    * can't be correctly projected into the scene. Using abs(w) is consistent with
    * `project_point` in shader code. */
   const float3 co_ndc_space = float3(co_clip_space) /
                               math::max(math::abs(co_clip_space.w), 0.0001f);
-  copy_v3_v3(mpv.co, co_ndc_space);
+  return co_ndc_space;
 }
 
-/* Perform baking for the targets on the current frame. */
-static void motionpaths_calc_bake_target(const MPathTarget &mpt,
+/* Perform baking for the targets on the current frame. Returns true if data was modified. */
+static bool motionpaths_calc_bake_target(const MPathTarget &mpt,
                                          const int cframe,
                                          Depsgraph *depsgraph,
                                          Object *camera)
@@ -144,11 +144,14 @@ static void motionpaths_calc_bake_target(const MPathTarget &mpt,
    * - is inclusive of the first frame, but not the last otherwise we get buffer overruns.
    */
   if ((cframe < mpath->start_frame) || (cframe >= mpath->end_frame)) {
-    return;
+    return false;
   }
 
   /* Get the relevant cache vert to write to. */
   bMotionPathVert &mpv = mpath->points[cframe - mpath->start_frame];
+  float3 calculated_point;
+  float3 previous_point;
+  copy_v3_v3(previous_point, mpv.co);
 
   Object *ob_eval = DEG_get_evaluated(depsgraph, mpt.ob);
 
@@ -163,23 +166,25 @@ static void motionpaths_calc_bake_target(const MPathTarget &mpt,
   if (pchan_eval) {
     /* Heads or tails. */
     if (mpath->flag & MOTIONPATH_FLAG_BHEAD) {
-      copy_v3_v3(mpv.co, pchan_eval->pose_head);
+      copy_v3_v3(calculated_point, pchan_eval->pose_head);
     }
     else {
-      copy_v3_v3(mpv.co, pchan_eval->pose_tail);
+      copy_v3_v3(calculated_point, pchan_eval->pose_tail);
     }
 
     /* Result must be in world-space. */
-    mul_m4_v3(ob_eval->object_to_world().ptr(), mpv.co);
+    mul_m4_v3(ob_eval->object_to_world().ptr(), calculated_point);
   }
   else {
     /* World-space object location. */
-    copy_v3_v3(mpv.co, ob_eval->object_to_world().location());
+    copy_v3_v3(calculated_point, ob_eval->object_to_world().location());
   }
 
   if (mpath->flag & MOTIONPATH_FLAG_BAKE_CAMERA && camera) {
-    transform_mpath_point_to_camera(*depsgraph, *camera, mpv);
+    calculated_point = transform_mpath_point_to_camera(*depsgraph, *camera, calculated_point);
   }
+
+  copy_v3_v3(mpv.co, calculated_point);
 
   /* Tag if it's a keyframe. */
   if (ED_keylist_find_exact(mpt.keylist, cframe)) {
@@ -207,6 +212,13 @@ static void motionpaths_calc_bake_target(const MPathTarget &mpt,
     GPU_BATCH_DISCARD_SAFE(mpath_eval->batch_line);
     GPU_BATCH_DISCARD_SAFE(mpath_eval->batch_points);
   }
+
+  const bool was_already_evaluated = mpv.flag & MOTIONPATH_VERT_EVALUATED;
+  mpv.flag |= MOTIONPATH_VERT_EVALUATED;
+  const bool has_changed = previous_point != calculated_point;
+  /* If the data was not evaluated before, by definition it changed even if the values are the
+   * same. */
+  return has_changed || !was_already_evaluated;
 }
 
 /* Get pointer to animviz settings for the given target. */
@@ -216,133 +228,6 @@ static bAnimVizSettings *animviz_target_settings_get(const MPathTarget &mpt)
     return &mpt.ob->pose->avs;
   }
   return &mpt.ob->avs;
-}
-
-/* Returns the combined range of all `MPathTarget` start and end frames. */
-static Bounds<int> motionpath_get_global_framerange(const Span<MPathTarget> targets)
-{
-  Bounds<int> frame_range = {INT_MAX, INT_MIN};
-  for (const MPathTarget &mpt : targets) {
-    frame_range.min = min_ii(frame_range.min, mpt.mpath->start_frame);
-    frame_range.max = max_ii(frame_range.max, mpt.mpath->end_frame);
-  }
-  return frame_range;
-}
-
-static int motionpath_get_prev_keyframe(MPathTarget &mpt,
-                                        AnimKeylist *keylist,
-                                        const int current_frame)
-{
-  /* TODO(jbakker): Remove complexity, key-lists are ordered. */
-
-  if (current_frame <= mpt.mpath->start_frame) {
-    return mpt.mpath->start_frame;
-  }
-
-  float current_frame_float = current_frame;
-  const ActKeyColumn *ak = ED_keylist_find_prev(keylist, current_frame_float);
-  if (ak == nullptr) {
-    return mpt.mpath->start_frame;
-  }
-
-  return ak->cfra;
-}
-
-static int motionpath_get_prev_prev_keyframe(MPathTarget &mpt,
-                                             AnimKeylist *keylist,
-                                             const int current_frame)
-{
-  int frame = motionpath_get_prev_keyframe(mpt, keylist, current_frame);
-  return motionpath_get_prev_keyframe(mpt, keylist, frame);
-}
-
-static int motionpath_get_next_keyframe(MPathTarget &mpt,
-                                        AnimKeylist *keylist,
-                                        const int current_frame)
-{
-  if (current_frame >= mpt.mpath->end_frame) {
-    return mpt.mpath->end_frame;
-  }
-
-  float current_frame_float = current_frame;
-  const ActKeyColumn *ak = ED_keylist_find_next(keylist, current_frame_float);
-  if (ak == nullptr) {
-    return mpt.mpath->end_frame;
-  }
-
-  return ak->cfra;
-}
-
-static int motionpath_get_next_next_keyframe(MPathTarget &mpt,
-                                             AnimKeylist *keylist,
-                                             const int current_frame)
-{
-  int frame = motionpath_get_next_keyframe(mpt, keylist, current_frame);
-  return motionpath_get_next_keyframe(mpt, keylist, frame);
-}
-
-static bool motionpath_check_can_use_keyframe_range(AnimData *adt, const Span<FCurve *> fcurves)
-{
-  if (adt == nullptr || fcurves.is_empty()) {
-    return false;
-  }
-  /* NOTE: We might needed to do a full frame range update if there is a specific setup of NLA
-   * or drivers or modifiers on the f-curves. */
-  return true;
-}
-
-static Bounds<int> motionpath_calculate_update_range(MPathTarget &mpt,
-                                                     AnimData *adt,
-                                                     const Span<FCurve *> fcurves,
-                                                     const int current_frame)
-{
-  /* If the current frame is outside of the configured motion path range we ignore update of this
-   * motion path by using invalid frame range where start frame is above the end frame. */
-  if (current_frame < mpt.mpath->start_frame || current_frame > mpt.mpath->end_frame) {
-    return {INT_MAX, INT_MIN};
-  }
-
-  /* Similar to the case when there is only a single keyframe: need to update en entire range to
-   * a constant value. */
-  if (!motionpath_check_can_use_keyframe_range(adt, fcurves)) {
-    return {mpt.mpath->start_frame, mpt.mpath->end_frame};
-  }
-
-  Bounds<int> frame_range = {INT_MAX, INT_MIN};
-  /* NOTE: Iterate over individual f-curves, and check their keyframes individually and pick a
-   * widest range from them. This is because it's possible to have more narrow keyframe on a
-   * channel which wasn't edited.
-   * Could be optimized further by storing some flags about which channels has been modified so
-   * we ignore all others (which can potentially make an update range unnecessary wide). */
-  for (FCurve *fcu : fcurves) {
-    AnimKeylist *keylist = ED_keylist_create();
-    fcurve_to_keylist(adt, fcu, keylist, 0, {-FLT_MAX, FLT_MAX}, true);
-    ED_keylist_prepare_for_direct_access(keylist);
-
-    int fcu_sfra = motionpath_get_prev_prev_keyframe(mpt, keylist, current_frame);
-    int fcu_efra = motionpath_get_next_next_keyframe(mpt, keylist, current_frame);
-
-    /* Extend range further, since acceleration compensation propagates even further away. */
-    if (fcu->auto_smoothing != FCURVE_SMOOTH_NONE) {
-      fcu_sfra = motionpath_get_prev_prev_keyframe(mpt, keylist, fcu_sfra);
-      fcu_efra = motionpath_get_next_next_keyframe(mpt, keylist, fcu_efra + 1);
-    }
-
-    if (fcu_sfra <= fcu_efra) {
-      frame_range.min = min_ii(frame_range.min, fcu_sfra);
-      frame_range.max = max_ii(frame_range.max, fcu_efra + 1);
-    }
-
-    ED_keylist_free(keylist);
-  }
-  return frame_range;
-}
-
-static void motionpath_free_free_tree_data(MutableSpan<MPathTarget> targets)
-{
-  for (MPathTarget &mpt : targets) {
-    ED_keylist_free(mpt.keylist);
-  }
 }
 
 void animviz_motionpath_compute_range(Object *ob, Scene *scene)
@@ -410,7 +295,7 @@ static void build_keylist_for_target(MPathTarget &target, AnimKeylist &keylist)
 void animviz_calc_motionpaths(Depsgraph *depsgraph,
                               Scene *scene,
                               MutableSpan<MPathTarget> targets,
-                              eAnimvizCalcRange range)
+                              const int modified_frame)
 {
   using namespace blender::animrig;
   BLI_assert_msg(!DEG_is_active(depsgraph),
@@ -418,20 +303,6 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
 
   if (targets.is_empty()) {
     return;
-  }
-
-  /* The frame range to calculate. Inclusive/Exclusive. */
-  Bounds<int> frame_range = {INT_MAX, INT_MIN};
-  switch (range) {
-    case ANIMVIZ_CALC_RANGE_CHANGED:
-      /* Nothing to do here, will be handled later when iterating through the targets. */
-      break;
-    case ANIMVIZ_CALC_RANGE_FULL:
-      frame_range = motionpath_get_global_framerange(targets);
-      if (frame_range.is_empty()) {
-        return;
-      }
-      break;
   }
 
   for (MPathTarget &mpt : targets) {
@@ -464,36 +335,42 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
       }
     }
     ED_keylist_prepare_for_direct_access(mpt.keylist);
-
-    if (range == ANIMVIZ_CALC_RANGE_CHANGED) {
-      const Bounds<int> target_bounds = motionpath_calculate_update_range(
-          mpt, adt, fcurves, scene->r.cfra);
-      if (!target_bounds.is_empty()) {
-        frame_range.min = min_ii(frame_range.min, target_bounds.min);
-        frame_range.max = max_ii(frame_range.max, target_bounds.max);
-      }
-    }
   }
 
-  if (frame_range.is_empty()) {
-    motionpath_free_free_tree_data(targets);
-    return;
-  }
+  bool finished_left = false;
+  bool finished_right = false;
+  int frame = modified_frame;
+  Bounds<int> evaluated_range;
 
-  /* Calculate path over requested range. */
-  CLOG_INFO(&LOG,
-            "Calculating MotionPaths between frames %d - %d (%d frames)",
-            frame_range.min,
-            frame_range.max,
-            frame_range.max - frame_range.min + 1);
-
-  for (int frame = frame_range.min; frame < frame_range.max; frame++) {
+  while (!finished_left || !finished_right) {
     /* Update relevant data for new frame. */
     DEG_evaluate_on_framechange(depsgraph, frame);
 
     /* Perform baking for targets. */
+    bool any_modified = false;
     for (const MPathTarget &target : targets) {
-      motionpaths_calc_bake_target(target, frame, depsgraph, scene->camera);
+      any_modified |= motionpaths_calc_bake_target(target, frame, depsgraph, scene->camera);
+    }
+    if (frame == modified_frame) {
+      evaluated_range = {frame, frame};
+      frame--;
+      continue;
+    }
+
+    if (frame < modified_frame) {
+      finished_left |= !any_modified;
+      evaluated_range.min = frame;
+    }
+    else {
+      finished_right |= !any_modified;
+      evaluated_range.max = frame;
+    }
+
+    if (!finished_left) {
+      frame = evaluated_range.min - 1;
+    }
+    else {
+      frame = evaluated_range.max + 1;
     }
   }
 

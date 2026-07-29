@@ -1755,7 +1755,7 @@ static void special_aftertrans_update__pose(bContext *C, TransInfo *t)
     if (!canceled) {
       /* Update motion paths once for all transformed bones in an object. */
       for (Object *ob : motionpath_updates) {
-        ED_pose_recalculate_paths(C, t->scene, ob, ANIMVIZ_CALC_RANGE_CHANGED);
+        ED_pose_recalculate_paths(C, t->scene, ob);
       }
     }
   }

@@ -1279,10 +1279,7 @@ static bool has_pose_motion_paths(Object *ob)
   return ob->pose && (ob->pose->avs.path_bakeflag & MOTIONPATH_BAKE_HAS_PATHS) != 0;
 }
 
-void motion_paths_recalc(bContext *C,
-                         Scene *scene,
-                         const eAnimvizCalcRange range,
-                         const Span<Object *> objects)
+void motion_paths_recalc(bContext *C, Scene *scene, const Span<Object *> objects)
 {
   BLI_assert(C != nullptr);
   Main *bmain = CTX_data_main(C);
@@ -1304,7 +1301,7 @@ void motion_paths_recalc(bContext *C,
 
   Depsgraph *depsgraph = animviz_depsgraph_build(bmain, scene, view_layer, targets);
 
-  animviz_calc_motionpaths(depsgraph, scene, targets, range);
+  animviz_calc_motionpaths(depsgraph, scene, targets, BKE_scene_frame_get(scene));
 
   /* Tag objects for copy-on-eval - so paths will draw/redraw
    * For currently frame only we update evaluated object directly. */
@@ -1318,7 +1315,7 @@ void motion_paths_recalc(bContext *C,
   DEG_graph_free(depsgraph);
 }
 
-void motion_paths_recalc_selected(bContext *C, Scene *scene, const eAnimvizCalcRange range)
+void motion_paths_recalc_selected(bContext *C, Scene *scene)
 {
   Vector<Object *> selected_objects;
   CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
@@ -1326,10 +1323,10 @@ void motion_paths_recalc_selected(bContext *C, Scene *scene, const eAnimvizCalcR
   }
   CTX_DATA_END;
 
-  motion_paths_recalc(C, scene, range, selected_objects);
+  motion_paths_recalc(C, scene, selected_objects);
 }
 
-void motion_paths_recalc_visible(bContext *C, Scene *scene, const eAnimvizCalcRange range)
+void motion_paths_recalc_visible(bContext *C, Scene *scene)
 {
   Vector<Object *> visible_objects;
   CTX_DATA_BEGIN (C, Object *, ob, visible_objects) {
@@ -1337,7 +1334,7 @@ void motion_paths_recalc_visible(bContext *C, Scene *scene, const eAnimvizCalcRa
   }
   CTX_DATA_END;
 
-  motion_paths_recalc(C, scene, range, visible_objects);
+  motion_paths_recalc(C, scene, visible_objects);
 }
 
 /* show popup to determine settings */
@@ -1381,7 +1378,7 @@ static wmOperatorStatus object_calculate_paths_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
 
   /* calculate the paths for objects that have them (and are tagged to get refreshed) */
-  motion_paths_recalc_selected(C, scene, ANIMVIZ_CALC_RANGE_FULL);
+  motion_paths_recalc_selected(C, scene);
 
   /* notifiers for updates */
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, nullptr);
@@ -1453,7 +1450,7 @@ static wmOperatorStatus object_update_paths_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
 
   /* calculate the paths for objects that have them (and are tagged to get refreshed) */
-  motion_paths_recalc_selected(C, scene, ANIMVIZ_CALC_RANGE_FULL);
+  motion_paths_recalc_selected(C, scene);
 
   /* notifiers for updates */
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, nullptr);
@@ -1498,7 +1495,7 @@ static wmOperatorStatus object_update_all_paths_exec(bContext *C, wmOperator * /
     return OPERATOR_CANCELLED;
   }
 
-  motion_paths_recalc_visible(C, scene, ANIMVIZ_CALC_RANGE_FULL);
+  motion_paths_recalc_visible(C, scene);
 
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE | ND_TRANSFORM, nullptr);
 
