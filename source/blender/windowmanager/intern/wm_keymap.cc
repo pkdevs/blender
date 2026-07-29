@@ -769,7 +769,7 @@ static wmKeyMap *wm_keymap_patch_update(ListBaseT<wmKeyMap> *lb,
   bool is_new = false;
   if (km) {
     expanded = (km->flag & (KEYMAP_EXPANDED | KEYMAP_CHILDREN_EXPANDED));
-    if (usermap || (km->flag & KEYMAP_RESET)){
+    if (usermap || (km->flag & KEYMAP_RESET)) {
       WM_keymap_clear(km);
     }
   }
