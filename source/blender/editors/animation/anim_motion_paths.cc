@@ -215,6 +215,10 @@ static bool motionpaths_calc_bake_target(const MPathTarget &mpt,
 
   const bool was_already_evaluated = mpv.flag & MOTIONPATH_VERT_EVALUATED;
   mpv.flag |= MOTIONPATH_VERT_EVALUATED;
+  /* This does a floating point equality comparison. While that is usually a bad idea, the code
+   * that arrives at those numbers is deterministic. So the result will be *identical* as long as
+   * the input values are the same. Since we care about equality of the input values bitwise
+   * equality is the only correct metric here. */
   const bool has_changed = previous_point != calculated_point;
   /* If the data was not evaluated before, by definition it changed even if the values are the
    * same. */
