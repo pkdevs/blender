@@ -31,3 +31,4 @@ Referenced by commit 0ef16753fefa9a246000a8ef93b48457835ae3be, Fix #159881: Auto
 Referenced by issue #161397, Default Materials for Geometry Nodes Don't Populate In Modifier Panel (5.2)
 Referenced by issue #161520, Writing `NodesModifier.properties.inputs.name` corrupts IDProperty storage -> crash on save
 Referenced by issue #161652, Regression: Linking to group input does not set default value
+Referenced by issue #162064, Regression: Geometry Nodes: "Layer Selection" using separate geometry node doesn't work in 5.2
