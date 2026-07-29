@@ -402,7 +402,7 @@ class CYCLES_RENDER_PT_sampling_path_guiding(CyclesButtonsPanel, Panel):
             render_area = render_size_x * render_size_y
 
             if render_area > tile_area and render_size_x <= 8192 and render_size_y <= 8192:
-                layout.label(text="May work poorly with render tiling", icon='INFO')
+                layout.label(text="May work poorly with render tiling", icon='STATUS_INFO')
 
 
 class CYCLES_RENDER_PT_sampling_path_guiding_debug(CyclesDebugButtonsPanel, Panel):
@@ -907,7 +907,9 @@ class CYCLES_RENDER_PT_performance_texture_cache(CyclesButtonsPanel, Panel):
 
         row = col.split(factor=0.4)
         row.label()
-        row.operator("render.generate_texture_cache", text="Generate All")
+        sub = row.row(align=True)
+        sub.operator("render.generate_texture_cache", text="Generate")
+        sub.operator("render.clear_texture_cache", text="Clear")
 
         prefs = context.preferences
         if prefs.experimental.use_cycles_debug and prefs.view.show_developer_ui:
@@ -1068,7 +1070,20 @@ class CYCLES_RENDER_PT_passes_data(CyclesButtonsPanel, Panel):
         col.prop(view_layer, "use_pass_uv")
         col.prop(view_layer, "use_pass_grease_pencil", text="Grease Pencil")
 
-        col.prop(cycles_view_layer, "denoising_store_passes", text="Denoising Data")
+        prefs = context.preferences
+        use_debug = prefs.experimental.use_cycles_debug and prefs.view.show_developer_ui
+        if use_debug:
+            col = layout.column(heading="Denoising", align=True)
+            col.prop(cycles_view_layer, "denoising_store_passes", text="Data Passes")
+            sub = col.column()
+            sub.active = cycles_view_layer.denoising_store_passes
+            sub.prop(cycles_view_layer, "denoising_pass_follow_reflections", text="Follow Reflections")
+            sub.prop(
+                cycles_view_layer,
+                "denoising_pass_use_albedo_roughness_weighting",
+                text="Albedo Roughness Weighting")
+        else:
+            col.prop(cycles_view_layer, "denoising_store_passes", text="Denoising Data")
 
         col = layout.column(heading="Indexes", align=True)
         col.prop(view_layer, "use_pass_object_index")
@@ -1492,6 +1507,7 @@ class CYCLES_OBJECT_PT_visibility_ray_visibility(CyclesButtonsPanel, Panel):
         if ob.type != 'LIGHT':
             sub = col.column()
             sub.prop(ob, "visible_shadow", text="Shadow")
+            sub.prop(ob, "visible_raycast", text="Raycast")
 
 
 class CYCLES_OBJECT_PT_visibility_culling(CyclesButtonsPanel, Panel):

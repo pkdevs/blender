@@ -158,9 +158,10 @@ struct [[host_shared]] SeqStripDrawData {
   float _pad0;
   float _pad1;
 };
-/* clang-format off */ /* Keep one line. Avoid issues with shader error line. */
-BLI_STATIC_ASSERT(sizeof(SeqStripDrawData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384, "SeqStripDrawData UBO must not exceed minspec UBO size (16384)")
-/* clang-format on */
+#ifndef GPU_SHADER
+BLI_STATIC_ASSERT(sizeof(SeqStripDrawData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384,
+                  "SeqStripDrawData UBO must not exceed minspec UBO size (16384)")
+#endif
 
 /* VSE per-thumbnail data for timeline rendering. */
 struct [[host_shared]] SeqStripThumbData {
@@ -181,9 +182,10 @@ struct [[host_shared]] SeqStripThumbData {
   float v2;
   float4 tint_color;
 };
-/* clang-format off */ /* Keep one line. Avoid issues with shader error line. */
-BLI_STATIC_ASSERT(sizeof(SeqStripThumbData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384, "SeqStripThumbData UBO must not exceed minspec UBO size (16384)")
-/* clang-format on */
+#ifndef GPU_SHADER
+BLI_STATIC_ASSERT(sizeof(SeqStripThumbData) * GPU_SEQ_STRIP_DRAW_DATA_LEN <= 16384,
+                  "SeqStripThumbData UBO must not exceed minspec UBO size (16384)")
+#endif
 
 /* VSE global data for timeline rendering. */
 struct [[host_shared]] SeqContextDrawData {
@@ -255,14 +257,12 @@ struct [[host_shared]] TestOutput {
 };
 
 #ifdef GPU_SHADER
-TestOutput test_output(
-    TestOutputRawData expect, TestOutputRawData result, bool status, int line, uint type)
+TestOutput test_output(TestOutputRawData expect, TestOutputRawData result, bool status, uint type)
 {
   TestOutput test;
   test.expect = expect;
   test.result = result;
   test.status = status ? TEST_STATUS_PASSED : TEST_STATUS_FAILED;
-  test.line = line;
   test.type = type;
   return test;
 }

@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "BKE_node_tree_update.hh"
 #include "CLG_log.h"
 
 #include "MEM_guardedalloc.h"
@@ -27,14 +28,14 @@
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -311,7 +312,12 @@ void BKE_blendfile_link_append_context_item_newid_set(BlendfileLinkAppendContext
   BLI_assert(lapp_context->process_stage != BlendfileLinkAppendContext::ProcessStage::Init);
   BLI_assert(item->new_id);
   BLI_assert(!item->liboverride_id);
-  BLI_assert(new_id->lib == item->new_id->lib);
+  /* The only cases where library pointers should be different is when:
+   * - A linked ID is replaced by a matching local ID (append case).
+   * - A linked ID is replaced by a matching linked packed ID. */
+  BLI_assert(new_id->lib == item->new_id->lib ||
+             (ID_IS_LINKED(item->new_id) && !ID_IS_LINKED(new_id)) ||
+             (ID_IS_PACKED(new_id) && new_id->lib->archive_parent_library == item->new_id->lib));
   BLI_assert(!lapp_context->new_id_to_item.contains(new_id));
 
   lapp_context->new_id_to_item.remove(item->new_id);
@@ -374,6 +380,16 @@ void BKE_blendfile_link_append_context_finalize(BlendfileLinkAppendContext *lapp
                   BlendfileLinkAppendContext::ProcessStage::Instantiating));
   lapp_context->process_stage = BlendfileLinkAppendContext::ProcessStage::Done;
 
+  /* Tag node trees to update generated RNA with potentially updated session uid values from
+   * data-block defaults in interfaces. This is only necessary because RNA types were already
+   * generated before these data-blocks were local; theoretically that shouldn't be necessary. */
+  for (ID *id : lapp_context->new_id_to_item.keys()) {
+    if (GS(id->name) == ID_NT) {
+      bNodeTree *ntree = id_cast<bNodeTree *>(id);
+      BKE_ntree_update_tag_all(ntree);
+    }
+  }
+
   BKE_main_ensure_invariants(*lapp_context->params->bmain);
 
   PointerRNA ctx_ptr = RNA_pointer_create_discrete(nullptr, RNA_BlendImportContext, lapp_context);
@@ -393,7 +409,7 @@ struct LooseDataInstantiateContext {
   BlendfileLinkAppendContext *lapp_context;
 
   /* The collection in which to add loose collections/objects. */
-  Collection *active_collection;
+  Collection *target_collection;
 };
 
 static bool object_in_any_scene(Main *bmain, Object *ob)
@@ -465,7 +481,7 @@ static ID *loose_data_instantiate_process_check(LooseDataInstantiateContext *ins
   return id;
 }
 
-static void loose_data_instantiate_ensure_active_collection(
+static void loose_data_instantiate_ensure_target_collection(
     LooseDataInstantiateContext *instantiate_context)
 {
 
@@ -474,23 +490,34 @@ static void loose_data_instantiate_ensure_active_collection(
   Scene *scene = instantiate_context->lapp_context->params->context.scene;
   ViewLayer *view_layer = instantiate_context->lapp_context->params->context.view_layer;
 
-  /* Find or add collection as needed. When `active_collection` is non-null, it is assumed to be
+  /* Find or add collection as needed. When `target_collection` is non-null, it is assumed to be
    * editable. */
-  if (instantiate_context->active_collection == nullptr) {
+  if (instantiate_context->target_collection == nullptr) {
+    auto add_instantiating_collection =
+        [&bmain, &lapp_context](Collection *parent_collection) -> Collection * {
+      if (lapp_context->params->flag & FILE_LINK) {
+        return BKE_collection_add(bmain, parent_collection, DATA_("Linked Data"));
+      }
+      return BKE_collection_add(bmain, parent_collection, DATA_("Appended Data"));
+    };
+
     if (lapp_context->params->flag & FILE_ACTIVE_COLLECTION) {
       LayerCollection *lc = BKE_layer_collection_get_active(view_layer);
-      instantiate_context->active_collection = BKE_collection_parent_editable_find_recursive(
+      instantiate_context->target_collection = BKE_collection_parent_editable_find_recursive(
           view_layer, lc->collection);
+      /* In all 'sane' cases, `BKE_collection_parent_editable_find_recursive` should find a valid
+       * parent collection. This is only a minimal backup in case the link/append operation happens
+       * in a very weird, broken context. */
+      if (!instantiate_context->target_collection) {
+        instantiate_context->target_collection = add_instantiating_collection(nullptr);
+      }
     }
     else {
-      if (lapp_context->params->flag & FILE_LINK) {
-        instantiate_context->active_collection = BKE_collection_add(
-            bmain, scene->master_collection, DATA_("Linked Data"));
-      }
-      else {
-        instantiate_context->active_collection = BKE_collection_add(
-            bmain, scene->master_collection, DATA_("Appended Data"));
-      }
+      Collection *parent_collection = BKE_collection_is_content_editable(
+                                          scene->master_collection) ?
+                                          scene->master_collection :
+                                          nullptr;
+      instantiate_context->target_collection = add_instantiating_collection(parent_collection);
     }
   }
 }
@@ -535,7 +562,7 @@ static void loose_data_instantiate_object_base_instance_init(Main *bmain,
 }
 
 /* Tag obdata that actually need to be instantiated (those referenced by an object do not, since
- * the object will be instantiated instead if needed. */
+ * the object will be instantiated instead if needed). */
 static void loose_data_instantiate_obdata_preprocess(
     LooseDataInstantiateContext *instantiate_context)
 {
@@ -683,8 +710,8 @@ static void loose_data_instantiate_collection_process(
       continue;
     }
 
-    loose_data_instantiate_ensure_active_collection(instantiate_context);
-    Collection *active_collection = instantiate_context->active_collection;
+    loose_data_instantiate_ensure_target_collection(instantiate_context);
+    Collection *target_collection = instantiate_context->target_collection;
 
     if (do_instantiate_as_empty) {
       /* BKE_object_add(...) messes with the selection. */
@@ -697,7 +724,7 @@ static void loose_data_instantiate_collection_process(
        * See other callers of #object_base_instance_init */
       const bool set_active = set_selected;
       loose_data_instantiate_object_base_instance_init(bmain,
-                                                       active_collection,
+                                                       target_collection,
                                                        ob,
                                                        scene,
                                                        view_layer,
@@ -712,8 +739,8 @@ static void loose_data_instantiate_collection_process(
       copy_v3_v3(ob->loc, scene->cursor.location);
     }
     else {
-      /* Add collection as child of active collection. */
-      BKE_collection_child_add(bmain, active_collection, collection);
+      /* Add collection as child of target collection. */
+      BKE_collection_child_add(bmain, target_collection, collection);
       BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
 
       if ((lapp_context->params->flag & FILE_AUTOSELECT) != 0) {
@@ -853,8 +880,8 @@ static void loose_data_instantiate_object_process(LooseDataInstantiateContext *i
       continue;
     }
 
-    loose_data_instantiate_ensure_active_collection(instantiate_context);
-    Collection *active_collection = instantiate_context->active_collection;
+    loose_data_instantiate_ensure_target_collection(instantiate_context);
+    Collection *target_collection = instantiate_context->target_collection;
 
     CLAMP_MIN(ob->id.us, 0);
     ob->mode = OB_MODE_OBJECT;
@@ -862,7 +889,7 @@ static void loose_data_instantiate_object_process(LooseDataInstantiateContext *i
     object_set_active = do_object_active_done && (ob->flag & OB_FLAG_ACTIVE_CLIPBOARD);
 
     loose_data_instantiate_object_base_instance_init(bmain,
-                                                     active_collection,
+                                                     target_collection,
                                                      ob,
                                                      scene,
                                                      view_layer,
@@ -901,8 +928,8 @@ static void loose_data_instantiate_obdata_process(LooseDataInstantiateContext *i
       continue;
     }
 
-    loose_data_instantiate_ensure_active_collection(instantiate_context);
-    Collection *active_collection = instantiate_context->active_collection;
+    loose_data_instantiate_ensure_target_collection(instantiate_context);
+    Collection *target_collection = instantiate_context->target_collection;
 
     const int type = BKE_object_obdata_to_type(id);
     BLI_assert(type != -1);
@@ -912,7 +939,7 @@ static void loose_data_instantiate_obdata_process(LooseDataInstantiateContext *i
     BKE_object_materials_sync_length(bmain, ob, ob->data);
 
     loose_data_instantiate_object_base_instance_init(bmain,
-                                                     active_collection,
+                                                     target_collection,
                                                      ob,
                                                      scene,
                                                      view_layer,
@@ -1097,7 +1124,7 @@ void BKE_blendfile_link_pack(BlendfileLinkAppendContext *lapp_context, ReportLis
     /* Calling code may want to access newly packed embedded IDs from the link/append context
      * items. */
     if (id->newid) {
-      item.new_id = id->newid;
+      BKE_blendfile_link_append_context_item_newid_set(lapp_context, &item, id->newid);
     }
 
     /* If packing failed for a linked ID, do not delete its linked version. */
@@ -1127,7 +1154,8 @@ static int foreach_libblock_append_add_dependencies_callback(LibraryIDLinkCallba
       static_cast<BlendfileLinkAppendContextCallBack *>(cb_data->user_data);
 
   /* NOTE: In append case, all dependencies are needed in the items list, to cover potential
-   * complex cases (e.g. linked data from another library referencing other IDs from the  */
+   * complex cases (e.g. linked data from another library referencing other IDs from the main
+   * appended library). */
 
   BlendfileLinkAppendContextItem *item = data->lapp_context->new_id_to_item.lookup_default(
       id, nullptr);
@@ -1586,7 +1614,7 @@ void BKE_blendfile_append(BlendfileLinkAppendContext *lapp_context, ReportList *
     BLI_assert(id->newid != nullptr);
 
     /* Calling code may want to access newly appended IDs from the link/append context items. */
-    item.new_id = id->newid;
+    BKE_blendfile_link_append_context_item_newid_set(lapp_context, &item, id->newid);
 
     /* Only the 'reuse local' action should leave unused newly linked data behind. */
     if (item.action != LINK_APPEND_ACT_REUSE_LOCAL) {
@@ -1700,8 +1728,52 @@ void BKE_blendfile_link_append_instantiate_loose(BlendfileLinkAppendContext *lap
 
   LooseDataInstantiateContext instantiate_context{};
   instantiate_context.lapp_context = lapp_context;
-  instantiate_context.active_collection = nullptr;
+  instantiate_context.target_collection = lapp_context->target_collection;
   loose_data_instantiate(&instantiate_context);
+}
+
+void BKE_blendfile_link_append_instantiate_loose_from_bmain(Main *bmain,
+                                                            Scene *scene,
+                                                            ViewLayer *view_layer,
+                                                            Collection *target_collection,
+                                                            ReportList *reports)
+{
+  if (!scene) {
+    return;
+  }
+
+  /* Build a minimal link/append context populated with only the new IDs from bmain,
+   * so the standard loose-data instantiation functions can be reused directly.
+   */
+  LibraryLink_Params lapp_params{};
+  lapp_params.bmain = bmain;
+  lapp_params.flag = FILE_LINK;
+  lapp_params.id_tag_extra = 0;
+  lapp_params.context.scene = scene;
+  lapp_params.context.view_layer = view_layer;
+  lapp_params.context.v3d = nullptr;
+
+  BlendfileLinkAppendContext lapp_context{};
+  lapp_context.params = &lapp_params;
+  lapp_context.process_stage = BlendfileLinkAppendContext::ProcessStage::Linking;
+  lapp_context.target_collection = target_collection;
+
+  for (ID &id : MainAllIDsIterator(*bmain)) {
+    if (id.tag & ID_TAG_PRE_EXISTING) {
+      continue;
+    }
+
+    BlendfileLinkAppendContextItem *item = BKE_blendfile_link_append_context_item_add(
+        &lapp_context, BKE_id_name(id), GS(id.name), nullptr);
+
+    item->new_id = &id;
+    item->tag = 0;
+    item->action = LINK_APPEND_ACT_COPY_LOCAL;
+  }
+
+  BKE_blendfile_link_append_instantiate_loose(&lapp_context, reports);
+
+  BKE_main_id_tag_all(bmain, ID_TAG_DOIT, false);
 }
 
 void BKE_blendfile_link(BlendfileLinkAppendContext *lapp_context, ReportList *reports)

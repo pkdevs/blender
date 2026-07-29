@@ -11,11 +11,11 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -30,7 +30,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
@@ -71,6 +71,7 @@ namespace blender {
  * 2) that the set of markers being shown are the scene markers, not the list we're merging
  * 3) that the mode will have an active action available
  * 4) that there are some selected markers
+ * 5) that the markers are not locked
  */
 static bool act_markers_make_local_poll(bContext *C)
 {
@@ -95,7 +96,13 @@ static bool act_markers_make_local_poll(bContext *C)
   }
 
   /* 4) */
-  return ED_markers_get_first_selected(ED_context_get_markers(C)) != nullptr;
+  if (ED_markers_get_first_selected(ED_context_get_markers(C)) == nullptr) {
+    return false;
+  }
+
+  /* 5) */
+  ToolSettings *ts = CTX_data_tool_settings(C);
+  return !ts->lock_markers;
 }
 
 static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*op*/)
@@ -138,9 +145,9 @@ static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*
 void ACTION_OT_markers_make_local(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Make Markers Local";
+  ot->name = "Convert to Pose Markers";
   ot->idname = "ACTION_OT_markers_make_local";
-  ot->description = "Move selected scene markers to the active Action as local 'pose' markers";
+  ot->description = "Move selected scene markers to the active action as pose markers";
 
   /* callbacks */
   ot->exec = act_markers_make_local_exec;
@@ -460,7 +467,7 @@ void ACTION_OT_view_all(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = actkeys_viewall_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
 
   /* flags */
   ot->flag = 0;
@@ -475,7 +482,7 @@ void ACTION_OT_view_selected(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = actkeys_viewsel_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
 
   /* flags */
   ot->flag = 0;

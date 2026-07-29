@@ -113,8 +113,8 @@ kernel_image_tile_map(KernelGlobals kg,
   const int level = clamp(int(flevel), 0, tex.tile_levels - 1);
 
   /* Compute width of this mipmap level. */
-  const int width = divide_up_by_shift(tex.width, level);
-  const int height = divide_up_by_shift(tex.height, level);
+  const int width = max(1, tex.width >> level);
+  const int height = max(1, tex.height >> level);
 
   /* Convert coordinates to pixel space.
    * Flip Y convention for tiles to match tx files. */
@@ -152,7 +152,7 @@ kernel_image_tile_map(KernelGlobals kg,
           image_texture_tile_access_state)[access_index] = KERNEL_TILE_ACCESS_REQUESTED;
     }
     if (tile_descriptor == KERNEL_TILE_LOAD_REQUEST) {
-      sd->flag |= SD_CACHE_MISS;
+      sd->runtime_flag |= SR_CACHE_MISS;
     }
     return tile_descriptor;
 #else
