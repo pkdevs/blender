@@ -101,24 +101,27 @@ float2 RealizeOnDomainOperation::compute_corrective_translation()
 
 std::optional<float2x2> RealizeOnDomainOperation::compute_jacobian(const float3x3 &transformation)
 {
-  /* Compute the area of the input and output pixels in normalized space. */
-  const float input_pixel_area = math::reduce_mul(
-      math::rcp(float2(this->get_input().domain().data_size)));
+  /* The Jacobian of a 2D transformation matrix is the matrix itself. */
+  const float2x2 jacobian = float2x2(transformation);
 
-  /* The determinant of a 2D transformation matrix is the area scaling factor is thus the area of
-   * the output pixel in normalized space. */
-  const float output_pixel_area = math::abs(math::determinant(float2x2(transformation)));
+  /* The gradients are the rows of the Jacobian. */
+  const float2 x_gradient = float2(jacobian[0][0], jacobian[1][0]);
+  const float2 y_gradient = float2(jacobian[0][1], jacobian[1][1]);
 
-  /* If the area of the output pixel is less than the area of the input pixel with a tolerance
-   * ration of 1.1, then each output pixel does not cover multiple input pixels and we can do
-   * simple point sampling, otherwise, each output pixel covers multiple input pixels and we do
-   * area sampling. */
-  if (output_pixel_area < input_pixel_area * 1.1f) {
+  /* Compute the size of the input pixels in normalized space. */
+  const float2 pixel_size = math::rcp(float2(this->get_input().domain().data_size));
+
+  /* If both gradients are less than that the input pixel size with a tolerance ratio of 1.1, then
+   * each output pixel does not cover multiple input pixels and we can do simple point sampling,
+   * otherwise, each output pixel covers multiple input pixels and we do area sampling. */
+  constexpr float tolerance_ratio = 1.1f;
+  if (math::length(x_gradient) < pixel_size.x * tolerance_ratio &&
+      math::length(y_gradient) < pixel_size.y * tolerance_ratio)
+  {
     return std::nullopt;
   }
 
-  /* The Jacobian of a 2D transformation matrix is the matrix itself. */
-  return float2x2(transformation);
+  return jacobian;
 }
 
 void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &transformation)
