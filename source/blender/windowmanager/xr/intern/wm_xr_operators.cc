@@ -190,6 +190,38 @@ static void WM_OT_xr_session_toggle(wmOperatorType *ot)
   ot->flag = OPTYPE_INTERNAL;
 }
 
+static wmOperatorStatus wm_xr_ui_refresh_exec(bContext *C, wmOperator * /*op*/)
+{
+  wmWindowManager *wm = CTX_wm_manager(C);
+  if (!WM_xr_session_is_ready(&wm->xr) || wm->xr.runtime == nullptr ||
+      wm->xr.runtime->b_context == nullptr)
+  {
+    return OPERATOR_CANCELLED;
+  }
+
+  bContext *xr_context = wm->xr.runtime->b_context;
+  CTX_wm_window_set(xr_context, wm->xr.runtime->xr_window);
+  CTX_wm_screen_set(xr_context, wm->xr.runtime->xr_screen);
+  CTX_wm_area_set(xr_context, wm->xr.runtime->xr_operator_area);
+  CTX_wm_region_set(xr_context, wm->xr.runtime->xr_operator_region);
+  WM_xr_surface_ui_regions_update(xr_context, &wm->xr);
+  WM_xr_surface_ui_regions_tag_refresh(xr_context, &wm->xr);
+
+  WM_event_add_notifier(C, NC_WM | ND_XR_DATA_CHANGED, nullptr);
+  return OPERATOR_FINISHED;
+}
+
+static void WM_OT_xr_ui_refresh(wmOperatorType *ot)
+{
+  ot->name = "Refresh XR UI";
+  ot->idname = "WM_OT_xr_ui_refresh";
+  ot->description = "Refresh world-space XR UI regions";
+
+  ot->exec = wm_xr_ui_refresh_exec;
+  ot->poll = wm_xr_operator_sessionactive;
+  ot->flag = OPTYPE_INTERNAL;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1951,6 +1983,7 @@ static void WM_OT_xr_navigation_swap_hands(wmOperatorType *ot)
 void wm_xr_operatortypes_register()
 {
   WM_operatortype_append(WM_OT_xr_session_toggle);
+  WM_operatortype_append(WM_OT_xr_ui_refresh);
   WM_operatortype_append(WM_OT_xr_navigation_grab);
   WM_operatortype_append(WM_OT_xr_navigation_fly);
   WM_operatortype_append(WM_OT_xr_navigation_teleport);

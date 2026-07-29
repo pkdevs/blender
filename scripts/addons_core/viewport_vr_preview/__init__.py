@@ -21,12 +21,13 @@ bl_info = {
 if "bpy" in locals():
     import importlib
     importlib.reload(action_map)
+    importlib.reload(xr_ui)
     importlib.reload(gui)
     importlib.reload(operators)
     importlib.reload(properties)
     importlib.reload(preferences)
 else:
-    from . import action_map, gui, operators, properties, preferences
+    from . import action_map, gui, operators, properties, preferences, xr_ui
 
 import bpy
 

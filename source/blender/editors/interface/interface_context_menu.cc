@@ -12,6 +12,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_space_types.h"
 #include "DNA_screen_types.h"
 
 #include "AS_asset_representation.hh"
@@ -55,6 +56,19 @@
 #define USE_KEYMAP_ADD_HACK
 
 namespace blender::ui {
+
+static void panel_world_space_idname_with_suffix(const PanelType *panel_type,
+                                                 StringRef suffix,
+                                                 char r_idname[BKE_ST_MAXNAME])
+{
+  constexpr int max_panel_id_len = 64;
+  const size_t max_base_len = max_panel_id_len - suffix.size();
+  const size_t base_len = std::min(strlen(panel_type->idname), max_base_len);
+
+  memcpy(r_idname, panel_type->idname, base_len);
+  memcpy(r_idname + base_len, suffix.data(), suffix.size());
+  r_idname[base_len + suffix.size()] = '\0';
+}
 
 /* -------------------------------------------------------------------- */
 /** \name Button Context Menu
@@ -1383,6 +1397,36 @@ void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel)
       but->flag |= BUT_HAS_SEP_CHAR;
     }
     layout.separator();
+  }
+
+  if (panel && panel->type != nullptr && panel->type->space_type == SPACE_VIEW3D &&
+      panel->type->region_type == RGN_TYPE_UI)
+  {
+    char builtin_panel_idname[BKE_ST_MAXNAME];
+    panel_world_space_idname_with_suffix(panel->type, "_ws", builtin_panel_idname);
+    const bool has_builtin_world_space_clone = WM_paneltype_find(builtin_panel_idname, true) !=
+                                               nullptr;
+
+    char dynamic_panel_idname[BKE_ST_MAXNAME];
+    panel_world_space_idname_with_suffix(panel->type, "_ws_dyn", dynamic_panel_idname);
+    const bool has_dynamic_world_space_clone = WM_paneltype_find(dynamic_panel_idname, true) !=
+                                               nullptr;
+
+    if (wmOperatorType *ot = WM_operatortype_find("VIEW3D_OT_xr_toggle_panel_clone", false)) {
+      PointerRNA op_ptr = layout.op(ot,
+                                    has_builtin_world_space_clone ?
+                                        IFACE_("Disable Built-In World-Space Clone") :
+                                    has_dynamic_world_space_clone ?
+                                        IFACE_("Remove World-Space Clone") :
+                                        IFACE_("Add World-Space Clone"),
+                                    (has_builtin_world_space_clone || has_dynamic_world_space_clone) ?
+                                        ICON_CHECKBOX_HLT :
+                                        ICON_CHECKBOX_DEHLT,
+                                    wm::OpCallContext::InvokeDefault,
+                                    UI_ITEM_NONE);
+      RNA_string_set(&op_ptr, "panel_id", panel->type->idname);
+      layout.separator();
+    }
   }
 
   PointerRNA prefs_ptr = RNA_pointer_create_discrete(nullptr, RNA_PreferencesSystem, &U);

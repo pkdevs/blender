@@ -405,6 +405,7 @@ bool wm_xr_surface_interaction_apply_action(const bContext *C,
                                             short event_val);
 void WM_xr_surface_ui_regions_register(const bContext *C);
 void WM_xr_surface_ui_regions_update(const bContext *C, const wmXrData *xr);
+void WM_xr_surface_ui_regions_tag_refresh(const bContext *C, const wmXrData *xr);
 void wm_xr_ui_region_host_free(wmXrUiRegion *panel);
 
 /**

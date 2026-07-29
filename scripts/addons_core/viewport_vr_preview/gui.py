@@ -5,8 +5,9 @@
 if "bpy" in locals():
     import importlib
     importlib.reload(properties)
+    importlib.reload(xr_ui)
 else:
-    from . import properties
+    from . import properties, xr_ui
 
 import bpy
 from bpy.app.translations import (
@@ -31,66 +32,27 @@ class VRButtonsPanel:
     bl_region_type = 'UI'
     bl_category = "VR"
 
-
-class VIEW3D_PT_vr_world_space_panel(VRButtonsPanel):
-    bl_region_type = 'XR'
-    bl_category = ""
-    bl_xr_mount_point = 'HEAD_FOLLOW'
-
-
-def vr_world_space_panel_id(panel_id):
-    suffix = "_ws"
-    max_base_len = 64 - len(suffix)
-    return f"{panel_id[:max_base_len]}{suffix}"
+XR_DEFAULT_MOUNT_POINT = 'HEAD_FOLLOW'
+XR_MOUNT_POINT_OVERRIDES = {
+    "VIEW3D_PT_vr_session": 'LEFT_HAND',
+}
+XR_PANEL_EXCLUDE = {
+    "VIEW3D_PT_vr_session_view_object_type_visibility",
+}
+world_space_source_classes = ()
+world_space_classes = ()
 
 
-def vr_world_space_panel_class(panel_cls, *, class_name=None, **attrs):
-    if class_name is None:
-        class_name = vr_world_space_panel_id(panel_cls.__name__)
-    world_space_attrs = {
-        "__module__": __name__,
-        "bl_idname": class_name,
-        "bl_category": "",
-    }
-    for attr_name in (
-        "bl_label",
-        "bl_options",
-        "bl_order",
-        "bl_ui_units_x",
-        "bl_context",
-    ):
-        if hasattr(panel_cls, attr_name):
-            world_space_attrs[attr_name] = getattr(panel_cls, attr_name)
-    parent_id = getattr(panel_cls, "bl_parent_id", None)
-    if parent_id and "bl_parent_id" not in attrs:
-        world_space_attrs["bl_parent_id"] = vr_world_space_panel_id(parent_id)
-    for base_cls in reversed(panel_cls.mro()):
-        if base_cls in {object, Panel, bpy.types.Panel, VRButtonsPanel}:
-            continue
-        for attr_name, attr_value in base_cls.__dict__.items():
-            if attr_name.startswith("__"):
-                continue
-            if attr_name in world_space_attrs:
-                continue
-            if attr_name in {
-                "bl_rna",
-                "rna_type",
-                "is_registered",
-                "bl_space_type",
-                "bl_region_type",
-                "bl_category",
-                "bl_idname",
-                "bl_parent_id",
-                "bl_xr_mount_point",
-            }:
-                continue
-            if attr_name.endswith("_panel_id") and isinstance(attr_value, str):
-                world_space_attrs[attr_name] = vr_world_space_panel_id(attr_value)
-                continue
-            if callable(attr_value) or isinstance(attr_value, (classmethod, staticmethod)):
-                world_space_attrs[attr_name] = attr_value
-    world_space_attrs.update(attrs)
-    return type(class_name, (VIEW3D_PT_vr_world_space_panel, Panel), world_space_attrs)
+def build_world_space_classes():
+    source_panel_classes = tuple(
+        cls for cls in classes
+        if isinstance(cls, type) and issubclass(cls, Panel) and
+        getattr(cls, "bl_space_type", None) == 'VIEW_3D' and
+        getattr(cls, "bl_region_type", None) == 'UI' and
+        xr_ui.panel_idname(cls) not in XR_PANEL_EXCLUDE and
+        not getattr(cls, "bl_parent_id", None)
+    )
+    return source_panel_classes
 
 
 # Session.
@@ -125,43 +87,6 @@ class VIEW3D_PT_vr_session(VRButtonsPanel, Panel):
 
 
 # View.
-def draw_vr_session_view_panel(layout, session_settings, object_visibility_panel):
-    layout.use_property_split = True
-    layout.use_property_decorate = False  # No animation.
-
-    col = layout.column(align=True, heading="Show")
-    col.prop(session_settings, "show_floor", text="Floor")
-    col.prop(session_settings, "show_passthrough", text="Passthrough")
-    col.prop(session_settings, "show_annotation", text="Annotations")
-
-    col.prop(session_settings, "show_selection", text="Selection")
-    col.prop(session_settings, "show_controllers", text="Controllers")
-    col.prop(session_settings, "show_custom_overlays", text="Custom Overlays")
-    col.prop(session_settings, "show_object_extras", text="Object Extras")
-
-    if object_visibility_panel:
-        col = col.row(align=True, heading=" ")
-        col.scale_x = 2.0
-        col.popover(
-            panel=object_visibility_panel,
-            icon_value=session_settings.icon_from_show_object_viewport,
-            text="",
-        )
-
-    col = layout.column(align=True)
-    col.prop(session_settings, "controller_draw_style", text="Controller Style")
-
-    col = layout.column(align=True)
-    col.prop(session_settings, "clip_start", text="Clip Start")
-    col.prop(session_settings, "clip_end", text="End", text_ctxt=i18n_contexts.id_camera)
-
-    col = layout.column(align=True)
-    col.prop(session_settings, "view_scale", text="View Scale")
-
-    col = layout.column(align=True)
-    col.prop(session_settings, "fly_speed", text="Fly Speed")
-
-
 class VIEW3D_PT_vr_session_view(VRButtonsPanel, Panel):
     bl_label = "View"
 
@@ -182,16 +107,13 @@ class VIEW3D_PT_vr_session_view(VRButtonsPanel, Panel):
         col.prop(session_settings, "show_custom_overlays", text="Custom Overlays")
         col.prop(session_settings, "show_object_extras", text="Object Extras")
 
-        # Drawing object visibility panel in XR will cause issues.
-        # Only draw it when rendering to desktop.
-        if self.bl_region_type != "XR":
-            col = col.row(align=True, heading=" ")
-            col.scale_x = 2.0
-            col.popover(
-                panel="VIEW3D_PT_vr_session_view_object_type_visibility",
-                icon_value=session_settings.icon_from_show_object_viewport,
-                text="",
-            )
+        col = col.row(align=True, heading=" ")
+        col.scale_x = 2.0
+        col.popover(
+            panel="VIEW3D_PT_vr_session_view_object_type_visibility",
+            icon_value=session_settings.icon_from_show_object_viewport,
+            text="",
+        )
 
         col = layout.column(align=True)
         col.prop(session_settings, "controller_draw_style", text="Controller Style")
@@ -211,6 +133,7 @@ class VIEW3D_PT_vr_session_view_object_type_visibility(VIEW3D_PT_object_type_vis
     def draw(self, context):
         session_settings = context.window_manager.xr_session_settings
         self.draw_ex(context, session_settings, False)  # Pass session settings instead of 3D view.
+
 
 # Location Scouting.
 class VIEW3D_UL_vr_captures(UIList):
@@ -464,23 +387,25 @@ classes = (
     VIEW3D_MT_vr_landmark_menu,
 )
 
-world_space_classes = (
-    vr_world_space_panel_class(VIEW3D_PT_vr_session, bl_xr_mount_point='LEFT_HAND'),
-    vr_world_space_panel_class(VIEW3D_PT_vr_session_view),
-    vr_world_space_panel_class(VIEW3D_PT_vr_location_scouting),
-    vr_world_space_panel_class(VIEW3D_PT_vr_location_scouting_captures),
-    vr_world_space_panel_class(VIEW3D_PT_vr_location_scouting_viewfinder),
-    vr_world_space_panel_class(VIEW3D_PT_vr_location_scouting_viewfinder_passepartout),
-    vr_world_space_panel_class(VIEW3D_PT_vr_landmarks),
-    vr_world_space_panel_class(VIEW3D_PT_vr_actionmaps),
-    vr_world_space_panel_class(VIEW3D_PT_vr_viewport_feedback),
-)
 
 def register():
+    global world_space_source_classes
+    global world_space_classes
+    world_space_source_classes = build_world_space_classes()
+    xr_ui.register()
     for cls in classes:
         bpy.utils.register_class(cls)
-    for cls in world_space_classes:
-        bpy.utils.register_class(cls)
+    world_space_classes = tuple(
+        world_space_cls
+        for source_panel_cls in world_space_source_classes
+        for world_space_cls in xr_ui.register_builtin_world_space_panel(
+            xr_ui.panel_idname(source_panel_cls),
+            default_mount_point=XR_DEFAULT_MOUNT_POINT,
+            mount_overrides=XR_MOUNT_POINT_OVERRIDES,
+        )
+    )
+    xr_ui.set_builtin_world_space_classes(world_space_source_classes, world_space_classes)
+    xr_ui.schedule_xr_world_space_ui_refresh()
 
     # View3DShading is the only per 3D-View struct with custom property
     # support, so "abusing" that to get a per 3D-View option.
@@ -503,10 +428,15 @@ def register():
 
 
 def unregister():
+    global world_space_source_classes
+    global world_space_classes
+    xr_ui.unregister()
     for cls in reversed(world_space_classes):
         bpy.utils.unregister_class(cls)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
+    world_space_source_classes = ()
+    world_space_classes = ()
 
     del bpy.types.View3DShading.vr_show_virtual_camera
     del bpy.types.View3DShading.vr_show_controllers
