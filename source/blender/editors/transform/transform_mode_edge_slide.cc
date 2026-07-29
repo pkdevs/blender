@@ -485,6 +485,8 @@ struct CloneNeighborInfo {
   BMVert *v;
   Vector<BMVert *> neighbors[2];
   Vector<BMVert *> continuations;
+  /*  True when the chain passes through #v rather than ending or turning a corner. */
+  bool is_loop_interior;
 };
 
 /**
@@ -510,6 +512,7 @@ static Vector<CloneNeighborInfo> edge_slide_clone_neighbors_calc(const EdgeSlide
 
     CloneNeighborInfo info;
     info.v = v;
+    info.is_loop_interior = false;
 
     const float3 dir0 = !math::is_zero(sv.dir_side[0]) ? math::normalize(sv.dir_side[0]) :
                                                          float3(0);
@@ -522,18 +525,22 @@ static Vector<CloneNeighborInfo> edge_slide_clone_neighbors_calc(const EdgeSlide
     /* Chain-exit direction for open-chain endpoints (exactly one chain edge). */
     float3 dir_chain_out(0);
     {
-      BMVert *v_chain_prev = nullptr;
-      int chain_edges = 0;
+      Vector<float3, 4> chain_dirs;
       BM_ITER_ELEM (ne, &ne_iter, v, BM_EDGES_OF_VERT) {
         if (chain_edge_set.contains(ne)) {
-          chain_edges++;
-          v_chain_prev = BM_edge_other_vert(ne, v);
+          const float3 vec = float3(BM_edge_other_vert(ne, v)->co) - float3(v->co);
+          chain_dirs.append(!math::is_zero(vec) ? math::normalize(vec) : float3(0));
         }
       }
-      if (chain_edges == 1) {
-        const float3 vec = float3(v->co) - float3(v_chain_prev->co);
-        if (!math::is_zero(vec)) {
-          dir_chain_out = math::normalize(vec);
+      if (chain_dirs.size() == 1) {
+        dir_chain_out = -chain_dirs[0];
+      }
+      for (int a = 0; a < chain_dirs.size() && !info.is_loop_interior; a++) {
+        for (int b = a + 1; b < chain_dirs.size(); b++) {
+          if (math::dot(chain_dirs[a], chain_dirs[b]) < -0.5f) {
+            info.is_loop_interior = true;
+            break;
+          }
         }
       }
     }
@@ -1220,9 +1227,7 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
           else {
             for (BMVert *nb : nd.neighbors[keep_side]) {
               if (l->v == nb) {
-                if (orig_to_clone.contains(nb)) {
-                  /* The keep-side neighbor is a chain vert of a parallel selected loop;
-                   * the face between the two loops is a regular keep-side face of this vert. */
+                if (orig_to_clone.contains(nb) || nd.is_loop_interior) {
                   has_tagged_keep_nb = true;
                 }
                 else {
@@ -1253,6 +1258,9 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
 
       /* Separates keep side faces from the original loop. Creates separated vertices. */
       BMVert *v_sep = BM_face_loop_separate_multi(bm, keep_loops.data(), keep_loops.size());
+      if (v_sep == v_orig) {
+        v_sep = BM_face_loop_separate_multi_isolated(bm, keep_loops[0]);
+      }
       orig_to_sep.add(v_orig, v_sep);
     }
 
@@ -1511,6 +1519,12 @@ void transform_mode_edge_slide_clone_confirm(TransInfo *t)
             BM_edge_select_set(bm, e_new, true);
           }
         }
+      }
+    }
+
+    for (const CloneNeighborInfo &nd : neighbor_infos) {
+      if (orig_to_sep.contains(nd.v) && nd.v->e == nullptr) {
+        BM_vert_kill(bm, nd.v);
       }
     }
 
