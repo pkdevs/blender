@@ -150,5 +150,6 @@ int midpoint(int a, int b)
 {
   uint smaller = uint(min(a, b));
   uint larger = uint(max(a, b));
-  return a + sign(b - a) * int((larger - smaller) / 2u);
+  int sign = (b > a) ? 1 : -1;
+  return a + sign * int((larger - smaller) / 2u);
 }
