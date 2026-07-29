@@ -1,3 +1,4 @@
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
 Referenced by issue #162084, Regression: Texture Paint: Smear Brush only affects red channel
 Referenced by pull request #162115, Fix #162084: Smear & Blur brush only affect red channel for byte images
+Referenced by commit 2b13539dffa4e2cb5933a3f41636111c5a0bb8cc, Fix #162084: Smear & Blur brush only affect red channel for byte images
