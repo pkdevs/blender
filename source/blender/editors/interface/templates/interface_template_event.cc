@@ -55,6 +55,9 @@ int template_status_bar_modal_item(Layout *layout,
     return 1;
   }
 
+  if (STREQ(item->identifier, "NOP")){
+    return 1;
+  }
   /* Try to merge some known triplet items to save horizontal space. */
   const EnumPropertyItem *item_y = (item[1].identifier) ? item + 1 : nullptr;
   const EnumPropertyItem *item_z = (item_y && item[2].identifier) ? item + 2 : nullptr;
@@ -128,6 +131,14 @@ int template_status_bar_modal_item(Layout *layout,
   /* Try to merge some known paired items to save horizontal space. */
   if (kmi_y && keymap_item_can_collapse(kmi, kmi_y)) {
     const char *ab_label = nullptr;
+    if (STREQ(item->identifier, "ADD") && STREQ(item_y->identifier, "SUBTRACT")) {
+      if (kmi->type == WHEELDOWNMOUSE) {
+        layout->label("", ICON_MOUSE_MMB_SCROLL);
+        layout->label(IFACE_("Resize"), ICON_NONE);
+        layout->separator(0.6f);
+        return 2;
+      }
+    }
 
     if (STREQ(item->identifier, "PROPORTIONAL_SIZE_UP") &&
         STREQ(item_y->identifier, "PROPORTIONAL_SIZE_DOWN"))
