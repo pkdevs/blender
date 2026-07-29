@@ -733,7 +733,8 @@ struct SymbolParser : NodeErrorHandler {
         SymbolClass *cls = table.cls_arena.alloc(&scope, arg.id().front(), id);
         auto [resolved, err] = inst_scope.lookup_class(type_id);
         error(err);
-        cls->resolved = resolved;
+        /* Note: Bind to the resolved type to only have one level resolution. */
+        cls->resolved = resolved->resolved ? resolved->resolved : resolved;
         if (resolved->is_error) {
           error(param, "Unknown type in template instantiation");
         }
@@ -1102,7 +1103,6 @@ struct SymbolParser : NodeErrorHandler {
     /* Instantiate in global resolved namespace. */
     SymbolClass *flat_cls = table.cls_arena.alloc(*cls);
     cls->resolved = flat_cls;
-    flat_cls->resolved = cls;
     flat_cls->identifier = prefix + cls->identifier;
     global.classes.try_emplace(flat_cls->identifier, flat_cls);
 
@@ -2580,6 +2580,46 @@ void SymbolTable::register_builtins(LocalScope node)
 
       {"true", "bool", true, 1},
       {"false", "bool", true, 0},
+
+      {"SNORM_8", "int", true, 0}, /* TODO real values of the enum. */
+      {"SNORM_8_8", "int", true, 1},
+      {"SNORM_8_8_8_8", "int", true, 2},
+      {"SNORM_16", "int", true, 3},
+      {"SNORM_16_16", "int", true, 4},
+      {"SNORM_16_16_16_16", "int", true, 5},
+      {"UNORM_8", "int", true, 6},
+      {"UNORM_8_8", "int", true, 7},
+      {"UNORM_8_8_8_8", "int", true, 8},
+      {"UNORM_16", "int", true, 9},
+      {"UNORM_16_16", "int", true, 10},
+      {"UNORM_16_16_16_16", "int", true, 11},
+      {"SINT_8", "int", true, 12},
+      {"SINT_8_8", "int", true, 13},
+      {"SINT_8_8_8_8", "int", true, 14},
+      {"SINT_16", "int", true, 15},
+      {"SINT_16_16", "int", true, 16},
+      {"SINT_16_16_16_16", "int", true, 17},
+      {"SINT_32", "int", true, 18},
+      {"SINT_32_32", "int", true, 19},
+      {"SINT_32_32_32_32", "int", true, 20},
+      {"UINT_8", "int", true, 21},
+      {"UINT_8_8", "int", true, 22},
+      {"UINT_8_8_8_8", "int", true, 23},
+      {"UINT_16", "int", true, 24},
+      {"UINT_16_16", "int", true, 25},
+      {"UINT_16_16_16_16", "int", true, 26},
+      {"UINT_32", "int", true, 27},
+      {"UINT_32_32", "int", true, 28},
+      {"UINT_32_32_32_32", "int", true, 29},
+      {"SFLOAT_16", "int", true, 30},
+      {"SFLOAT_16_16", "int", true, 31},
+      {"SFLOAT_16_16_16_16", "int", true, 32},
+      {"SFLOAT_32", "int", true, 33},
+      {"SFLOAT_32_32", "int", true, 34},
+      {"SFLOAT_32_32_32_32", "int", true, 35},
+      {"UNORM_10_10_10_2", "int", true, 36},
+      {"UINT_10_10_10_2", "int", true, 37},
+      {"UFLOAT_11_11_10", "int", true, 38},
   };
   /* Boolean constants. */
   for (auto c : consts) {

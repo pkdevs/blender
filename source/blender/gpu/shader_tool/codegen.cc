@@ -1755,7 +1755,7 @@ struct CodegenContext : NodeErrorHandler {
     SymbolVariable *sym = id_var_resolved(var.identifier(), scope);
 
     if (!sym->is_constexpr) {
-      member_access(expr_scope, var, sym->type, sym);
+      member_access(expr_scope, var, sym->type->resolved, sym);
     }
 
     builder.curr = var.back().next();

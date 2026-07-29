@@ -104,8 +104,17 @@ struct ExpressionTypeParser {
         return local_var(node);
       case NodeType::NumConst:
         return num_const(node);
+        return expr(unary_binding_power);
       case NodeType::Op:
         return op(node, expr(unary_binding_power));
+      case NodeType::Expr: {
+        ExpressionTypeParser ctx(table, scope, Expr(node).child_first());
+        ctx.is_subscript_expr = this->is_subscript_expr;
+        auto [cls, err] = ctx.eval();
+        error(err);
+        merge_errors(ctx, false);
+        return cls;
+      }
       case NodeType::ExprSub: {
         ExpressionTypeParser ctx(table, scope, ExprSub(node).expr().child_first());
         ctx.is_subscript_expr = this->is_subscript_expr;
@@ -115,7 +124,7 @@ struct ExpressionTypeParser {
         return cls;
       }
       default:
-        error(node.is_valid() ? node : start, "Invalid expression");
+        error(node.is_valid() ? node : start, "Invalid expression in type checker");
         this->node = Node(start.p, -1);
         return err_cls;
     }
@@ -317,7 +326,7 @@ struct ExpressionTypeParser {
         return sym->type;
       }
       default:
-        error(node.is_valid() ? node : start, "Invalid expression");
+        error(node.is_valid() ? node : start, "Invalid expression in type checker");
         this->node = Node{};
         return err_cls;
     }

@@ -773,6 +773,16 @@ vector<SymbolTable::BuiltinFunc> SymbolTable::generate_all_builtin_functions()
     functions.push_back({"int3", "textureSize", {samplers[i], "int"}});
   }
 
+  const vector<string> images = {"image2D", "image2DArray"};
+
+  for (size_t i = 0; i < images.size(); ++i) {
+    string coord_type = f_types[i == 0 ? 1 : 2];
+    functions.push_back({"float4", "imageLoad", {images[i], coord_type}});
+    functions.push_back({"void", "imageStore", {images[i], coord_type, "float4"}});
+    /* TODO atomics */
+    functions.push_back({"int3", "imageSize", {images[i]}});
+  }
+
   return functions;
 }
 
