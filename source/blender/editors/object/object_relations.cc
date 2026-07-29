@@ -1563,14 +1563,109 @@ static bool allow_make_links_data(const int type, Object *ob_src, Object *ob_dst
   return false;
 }
 
+static void make_links_data_object(Main *bmain, Object *ob_src, Object *ob_dst)
+{
+  id_us_min(ob_dst->data);
+  id_us_plus(ob_src->data);
+
+  ob_dst->data = ob_src->data;
+
+  BKE_sculptsession_free_pbvh(*ob_dst);
+  /* if amount of material indices changed: */
+  BKE_object_materials_sync_length(bmain, ob_dst, ob_dst->data);
+
+  if (ob_dst->type == OB_ARMATURE) {
+    BKE_pose_rebuild(bmain, ob_dst, id_cast<bArmature *>(ob_dst->data), true);
+  }
+  DEG_id_tag_update(&ob_dst->id, ID_RECALC_GEOMETRY);
+}
+static void make_links_data_material(Main *bmain, Object *ob_src, Object *ob_dst)
+{
+  /* new approach, using functions from kernel */
+  for (int a = 0; a < ob_src->totcol; a++) {
+    Material *ma = BKE_object_material_get(ob_src, a + 1);
+    /* also works with `ma == nullptr` */
+    BKE_object_material_assign(bmain, ob_dst, ma, a + 1, BKE_MAT_ASSIGN_USERPREF);
+  }
+  DEG_id_tag_update(&ob_dst->id, ID_RECALC_GEOMETRY);
+}
+static void make_links_data_animdata(Main *bmain, Object *ob_src, Object *ob_dst, bool &r_is_lib)
+{
+  BKE_animdata_copy_id(bmain, id_cast<ID *>(ob_dst), id_cast<ID *>(ob_src), 0);
+  if (ob_dst->data && ob_src->data) {
+    if (BKE_id_is_editable(bmain, ob_dst->data)) {
+      BKE_animdata_copy_id(bmain, ob_dst->data, ob_src->data, 0);
+    }
+    else {
+      r_is_lib = true;
+    }
+  }
+  DEG_id_tag_update(&ob_dst->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+}
+static void make_links_data_group(
+    Main *bmain, Scene *scene, LinkNode *ob_collections, Object *ob_dst, bool &r_is_cycle)
+{
+  LinkNode *collection_node;
+
+  /* first clear collections */
+  BKE_object_groups_clear(bmain, scene, ob_dst);
+
+  /* now add in the collections from the link nodes */
+  for (collection_node = ob_collections; collection_node; collection_node = collection_node->next)
+  {
+    if (ob_dst->instance_collection != collection_node->link) {
+      BKE_collection_object_add(bmain, static_cast<Collection *>(collection_node->link), ob_dst);
+    }
+    else {
+      r_is_cycle = true;
+    }
+  }
+}
+static void make_links_data_duplicollection(Object *ob_src, Object *ob_dst)
+{
+  ob_dst->instance_collection = ob_src->instance_collection;
+  if (ob_dst->instance_collection) {
+    id_us_plus(&ob_dst->instance_collection->id);
+    ob_dst->transflag |= OB_DUPLICOLLECTION;
+  }
+  DEG_id_tag_update(&ob_dst->id, ID_RECALC_SYNC_TO_EVAL);
+}
+static void make_links_data_fonts(Main *bmain, Object *ob_src, Object *ob_dst, bool &r_is_lib)
+{
+  Curve *cu_src = id_cast<Curve *>(ob_src->data);
+  Curve *cu_dst = id_cast<Curve *>(ob_dst->data);
+
+  if (!BKE_id_is_editable(bmain, ob_dst->data)) {
+    r_is_lib = true;
+    return;
+  }
+
+#define CURVE_VFONT_SET(vfont_member) \
+  { \
+    if (cu_dst->vfont_member) { \
+      id_us_min(&cu_dst->vfont_member->id); \
+    } \
+    cu_dst->vfont_member = cu_src->vfont_member; \
+    id_us_plus((ID *)cu_dst->vfont_member); \
+  } \
+  ((void)0)
+
+  CURVE_VFONT_SET(vfont);
+  CURVE_VFONT_SET(vfontb);
+  CURVE_VFONT_SET(vfonti);
+  CURVE_VFONT_SET(vfontbi);
+
+#undef CURVE_VFONT_SET
+
+  DEG_id_tag_update(&ob_dst->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+}
+
 static wmOperatorStatus make_links_data_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
   Main *bmain = CTX_data_main(C);
   const int type = RNA_enum_get(op->ptr, "type");
   Object *ob_src;
-  ID *obdata_id;
-  int a;
 
   /* collection */
   LinkNode *ob_collections = nullptr;
@@ -1584,135 +1679,63 @@ static wmOperatorStatus make_links_data_exec(bContext *C, wmOperator *op)
     ob_collections = BKE_object_groups(bmain, scene, ob_src);
   }
 
+  int count_linked = 0;
+
   CTX_DATA_BEGIN (C, Base *, base_dst, selected_editable_bases) {
     Object *ob_dst = base_dst->object;
 
-    if (ob_src != ob_dst) {
-      if (allow_make_links_data(type, ob_src, ob_dst)) {
-        obdata_id = ob_dst->data;
-
-        switch (type) {
-          case MAKE_LINKS_OBDATA: /* obdata */
-            id_us_min(obdata_id);
-
-            obdata_id = ob_src->data;
-            id_us_plus(obdata_id);
-            ob_dst->data = obdata_id;
-
-            BKE_sculptsession_free_pbvh(*ob_dst);
-            /* if amount of material indices changed: */
-            BKE_object_materials_sync_length(bmain, ob_dst, ob_dst->data);
-
-            if (ob_dst->type == OB_ARMATURE) {
-              BKE_pose_rebuild(bmain, ob_dst, id_cast<bArmature *>(ob_dst->data), true);
-            }
-            DEG_id_tag_update(&ob_dst->id, ID_RECALC_GEOMETRY);
-            break;
-          case MAKE_LINKS_MATERIALS:
-            /* new approach, using functions from kernel */
-            for (a = 0; a < ob_src->totcol; a++) {
-              Material *ma = BKE_object_material_get(ob_src, a + 1);
-              /* also works with `ma == nullptr` */
-              BKE_object_material_assign(bmain, ob_dst, ma, a + 1, BKE_MAT_ASSIGN_USERPREF);
-            }
-            DEG_id_tag_update(&ob_dst->id, ID_RECALC_GEOMETRY);
-            break;
-          case MAKE_LINKS_ANIMDATA:
-            BKE_animdata_copy_id(bmain, id_cast<ID *>(ob_dst), id_cast<ID *>(ob_src), 0);
-            if (ob_dst->data && ob_src->data) {
-              if (BKE_id_is_editable(bmain, obdata_id)) {
-                BKE_animdata_copy_id(bmain, ob_dst->data, ob_src->data, 0);
-              }
-              else {
-                is_lib = true;
-              }
-            }
-            DEG_id_tag_update(&ob_dst->id,
-                              ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
-            break;
-          case MAKE_LINKS_GROUP: {
-            LinkNode *collection_node;
-
-            /* first clear collections */
-            BKE_object_groups_clear(bmain, scene, ob_dst);
-
-            /* now add in the collections from the link nodes */
-            for (collection_node = ob_collections; collection_node;
-                 collection_node = collection_node->next)
-            {
-              if (ob_dst->instance_collection != collection_node->link) {
-                BKE_collection_object_add(
-                    bmain, static_cast<Collection *>(collection_node->link), ob_dst);
-              }
-              else {
-                is_cycle = true;
-              }
-            }
-            break;
-          }
-          case MAKE_LINKS_DUPLICOLLECTION:
-            ob_dst->instance_collection = ob_src->instance_collection;
-            if (ob_dst->instance_collection) {
-              id_us_plus(&ob_dst->instance_collection->id);
-              ob_dst->transflag |= OB_DUPLICOLLECTION;
-            }
-            DEG_id_tag_update(&ob_dst->id, ID_RECALC_SYNC_TO_EVAL);
-            break;
-          case MAKE_LINKS_MODIFIERS:
-            BKE_object_link_modifiers(ob_dst, ob_src);
-            DEG_id_tag_update(&ob_dst->id,
-                              ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
-            break;
-          case MAKE_LINKS_CONSTRAINTS:
-            BKE_constraints_free(&ob_dst->constraints);
-            BKE_constraints_copy(&ob_dst->constraints, &ob_src->constraints, true);
-            DEG_id_tag_update(&ob_dst->id, ID_RECALC_GEOMETRY | ID_RECALC_TRANSFORM);
-            WM_event_add_notifier(C, NC_OBJECT | ND_CONSTRAINT, nullptr);
-            break;
-          case MAKE_LINKS_FONTS: {
-            Curve *cu_src = id_cast<Curve *>(ob_src->data);
-            Curve *cu_dst = id_cast<Curve *>(ob_dst->data);
-
-            if (!BKE_id_is_editable(bmain, obdata_id)) {
-              is_lib = true;
-              break;
-            }
-
-#define CURVE_VFONT_SET(vfont_member) \
-  { \
-    if (cu_dst->vfont_member) { \
-      id_us_min(&cu_dst->vfont_member->id); \
-    } \
-    cu_dst->vfont_member = cu_src->vfont_member; \
-    id_us_plus((ID *)cu_dst->vfont_member); \
-  } \
-  ((void)0)
-
-            CURVE_VFONT_SET(vfont);
-            CURVE_VFONT_SET(vfontb);
-            CURVE_VFONT_SET(vfonti);
-            CURVE_VFONT_SET(vfontbi);
-
-#undef CURVE_VFONT_SET
-
-            DEG_id_tag_update(&ob_dst->id,
-                              ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
-            break;
-          }
-          case MAKE_LINKS_SHADERFX:
-            shaderfx_link(ob_dst, ob_src);
-            DEG_id_tag_update(&ob_dst->id,
-                              ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
-            break;
-          case MAKE_LINKS_LIGHT_LINKING:
-            BKE_light_linking_copy_receiver_collection(bmain, *ob_dst, *ob_src);
-            break;
-          case MAKE_LINKS_SHADOW_LINKING:
-            BKE_light_linking_copy_blocker_collection(bmain, *ob_dst, *ob_src);
-            break;
-        }
-      }
+    if (ob_src == ob_dst) {
+      continue;
     }
+    if (allow_make_links_data(type, ob_src, ob_dst)) {
+      continue;
+    }
+
+    switch (type) {
+      case MAKE_LINKS_OBDATA: /* obdata */
+        make_links_data_object(bmain, ob_src, ob_dst);
+        break;
+      case MAKE_LINKS_MATERIALS:
+        make_links_data_material(bmain, ob_src, ob_dst);
+        break;
+      case MAKE_LINKS_ANIMDATA:
+        make_links_data_animdata(bmain, ob_src, ob_dst, is_lib);
+        break;
+      case MAKE_LINKS_GROUP:
+        make_links_data_group(bmain, scene, ob_collections, ob_dst, is_cycle);
+        break;
+      case MAKE_LINKS_DUPLICOLLECTION:
+        make_links_data_duplicollection(ob_src, ob_dst);
+        break;
+      case MAKE_LINKS_MODIFIERS:
+        BKE_object_link_modifiers(ob_dst, ob_src);
+        DEG_id_tag_update(&ob_dst->id,
+                          ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+        break;
+      case MAKE_LINKS_CONSTRAINTS:
+        BKE_constraints_free(&ob_dst->constraints);
+        BKE_constraints_copy(&ob_dst->constraints, &ob_src->constraints, true);
+        DEG_id_tag_update(&ob_dst->id, ID_RECALC_GEOMETRY | ID_RECALC_TRANSFORM);
+        WM_event_add_notifier(C, NC_OBJECT | ND_CONSTRAINT, nullptr);
+        break;
+      case MAKE_LINKS_FONTS:
+        make_links_data_fonts(bmain, ob_dst, ob_src, is_lib);
+        break;
+      case MAKE_LINKS_SHADERFX:
+        shaderfx_link(ob_dst, ob_src);
+        DEG_id_tag_update(&ob_dst->id,
+                          ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
+        break;
+      case MAKE_LINKS_LIGHT_LINKING:
+        BKE_light_linking_copy_receiver_collection(bmain, *ob_dst, *ob_src);
+        break;
+      case MAKE_LINKS_SHADOW_LINKING:
+        BKE_light_linking_copy_blocker_collection(bmain, *ob_dst, *ob_src);
+        break;
+      default:
+        continue;
+    }
+    count_linked++;
   }
   CTX_DATA_END;
 
@@ -1728,6 +1751,10 @@ static wmOperatorStatus make_links_data_exec(bContext *C, wmOperator *op)
 
   if (is_lib) {
     BKE_report(op->reports, RPT_WARNING, "Skipped editing library object data");
+  }
+
+  if (count_linked == 0) {
+    BKE_report(op->reports, RPT_INFO, "No links performed");
   }
 
   DEG_relations_tag_update(bmain);
