@@ -3230,6 +3230,7 @@ static void rna_def_constraint_spline_ik(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   /* TODO: this should really check the max length of the chain the constraint is attached to */
   RNA_def_property_range(prop, 1, 255);
+  RNA_def_property_ui_range(prop, 1, 100, 1, -1);
   RNA_def_property_ui_text(prop, "Chain Length", "How many bones are included in the chain");
   /* XXX: this update goes wrong... needs extra flush? */
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
