@@ -94,7 +94,7 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
     GPU_link(mat, "node_attribute_uniform", cd_attr, GPU_constant(&attr_hash), &cd_attr);
   }
 
-  GPU_stack_link(mat, node, "node_attribute", in, out, cd_attr);
+  GPU_link(mat, "node_attribute", cd_attr, &out[0].link, &out[1].link, &out[2].link, &out[3].link);
 
   if (is_varying) {
 
